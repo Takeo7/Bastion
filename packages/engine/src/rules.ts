@@ -801,6 +801,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     if (!holds) return { ok: false, error: 'No tienes el mando.' };
     if (!ctx.connected.includes(partner)) return { ok: false, error: 'Tu compañero no está conectado.' };
     if (s.ready[partner]) return { ok: false, error: 'Tu compañero ya ha terminado el turno.' };
+    if (!sim.hasActions(partner)) return { ok: false, error: 'A tu compañero no le quedan acciones.' };
     sim.passCommand(partner);
     return { ok: true, events: sim.events };
   }

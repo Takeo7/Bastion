@@ -264,6 +264,12 @@
   color: #fff;
 }
 
+/* The mouse is still over a button right after pressing it: keep it green, not the paper hover. */
+.x-btn.ready:hover:not(:disabled) {
+  background: var(--good);
+  filter: brightness(1.1);
+}
+
 .x-btn.waiting {
   animation: x-pulse 1.4s ease-in-out infinite;
 }
@@ -663,13 +669,15 @@
   color: var(--stamp);
 }
 
+/* Top-left corner, on the tab's edge: the pending count sits at the right end of the label. */
 .strat-nav .partner-dot {
   position: absolute;
-  top: 6px;
-  right: 8px;
+  top: -4px;
+  left: 8px;
   width: 9px;
   height: 9px;
   border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--paper);
 }
 
 /* Narrow sheets that are as tall as their content (never the whole height),

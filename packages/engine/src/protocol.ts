@@ -119,7 +119,7 @@ export interface HostAddress {
 export type ServerMessage =
   /** `hosts`: this machine's network addresses, so the menu can tell the partner where to connect. */
   | { t: 'welcome'; token: string; slot: Slot; hosts?: HostAddress[] }
-  | { t: 'room'; players: PlayerInfo[]; phase: RoomPhase; savedCampaign: { day: number; doom: number } | null }
+  | { t: 'room'; players: PlayerInfo[]; phase: RoomPhase; savedCampaign: { day: number; doom: number; level: number } | null }
   | { t: 'campaign'; state: CampaignState }
   | { t: 'baseView'; slot: Slot; view: BaseView }
   | { t: 'snapshot'; state: GameState }

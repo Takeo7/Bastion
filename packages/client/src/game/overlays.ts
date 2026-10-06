@@ -73,6 +73,8 @@ function fatLine(color: number, width: number): Line2 {
 export class Overlays {
   readonly group = new THREE.Group();
   private readonly tiles: THREE.InstancedMesh;
+  /** Red frames on the tiles where the squad would be noticed, over the cost colour (which still shows). */
+  private readonly detect: THREE.InstancedMesh;
   private readonly blast: THREE.InstancedMesh;
   private readonly path = fatLine(0xd9f4ff, 4);
   private readonly aim = fatLine(0xff5a5a, 3);
@@ -98,6 +100,14 @@ export class Overlays {
     );
     this.tiles.count = 0;
     this.tiles.position.y = 0.02;
+    // A four-segment ring is a square frame; turned 45° its sides follow the tile's.
+    this.detect = new THREE.InstancedMesh(
+      new THREE.RingGeometry(0.46, 0.63, 4).rotateZ(Math.PI / 4).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.95, depthWrite: false }),
+      capacity,
+    );
+    this.detect.count = 0;
+    this.detect.position.y = 0.025;
     this.blast = new THREE.InstancedMesh(
       tileGeometry,
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false }),
@@ -139,7 +149,7 @@ export class Overlays {
       this.shields.push(s);
     }
 
-    this.group.add(this.beacons, this.flares, this.smoke, this.evac, this.item, this.tiles, this.blast, this.path, this.aim, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.beacons, this.flares, this.smoke, this.evac, this.item, this.tiles, this.detect, this.blast, this.path, this.aim, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -247,16 +257,21 @@ export class Overlays {
     if (pos) this.item.position.copy(tileToWorld(pos));
   }
 
+  /** The fill says what the move costs (blue: one action, yellow: dash); a red frame, that it gets the squad noticed. */
   showMoveRange(tiles: MoveTile[]): void {
     const m = new THREE.Matrix4();
+    let frames = 0;
     tiles.slice(0, this.tiles.instanceMatrix.count).forEach((t, i) => {
       m.setPosition(tileToWorld(t.pos));
       this.tiles.setMatrixAt(i, m);
-      this.tiles.setColorAt(i, t.detected ? COLOR_DETECT : t.dash ? COLOR_DASH : COLOR_MOVE);
+      this.tiles.setColorAt(i, t.dash ? COLOR_DASH : COLOR_MOVE);
+      if (t.detected) this.detect.setMatrixAt(frames++, m);
     });
     this.tiles.count = tiles.length;
     this.tiles.instanceMatrix.needsUpdate = true;
     if (this.tiles.instanceColor) this.tiles.instanceColor.needsUpdate = true;
+    this.detect.count = frames;
+    this.detect.instanceMatrix.needsUpdate = true;
   }
 
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {

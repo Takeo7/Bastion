@@ -4,6 +4,7 @@ import {
   addPlayer,
   activeOffer,
   applyMissionResult,
+  bastionLevel,
   buildSquad,
   campaignHackBonus,
   campaignMessageSchema,
@@ -362,7 +363,7 @@ export class Room {
   }
 
   private broadcastRoom(): void {
-    const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, doom: this.campaign.doom } : null;
+    const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, doom: this.campaign.doom, level: bastionLevel(this.campaign) } : null;
     this.broadcast({ t: 'room', players: this.players(), phase: this.phase, savedCampaign });
   }
 

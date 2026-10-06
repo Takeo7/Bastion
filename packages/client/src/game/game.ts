@@ -121,6 +121,13 @@ const SHOUTED: ReadonlySet<AbilityId> = new Set<AbilityId>(['runAndGun', 'rapidF
 const PRIMARY_ATTACKS: AbilityId[] = ['shoot', 'pistol', 'slash'];
 
 /** "las cintas" → "Las cintas". */
+/** Players with a soldier that still has actions. */
+function busySlots(s: GameState): Set<Slot> {
+  const busy = new Set<Slot>();
+  for (const u of s.units) if (u.alive && u.team === 'xcom' && u.ap > 0 && u.owner !== null) busy.add(u.owner);
+  return busy;
+}
+
 function capitalize(text: string): string {
   return text[0]!.toUpperCase() + text.slice(1);
 }
@@ -186,6 +193,11 @@ export class Game {
   private lastPresence = '';
   private presenceTimer = 0;
   private lastPing = 0;
+  /** End turn pressed once with soldiers still able to act: the next press ends it. */
+  private endArmed = false;
+  private endArmTimer = 0;
+  /** `unit|x,y` of a move that would break concealment, clicked once: the next click on it moves. */
+  private concealWarn: string | null = null;
 
   private readonly raycaster = new THREE.Raycaster();
   private drag: { x: number; y: number; moved: boolean } | null = null;
@@ -328,6 +340,7 @@ export class Game {
   }
 
   destroy(): void {
+    window.clearTimeout(this.endArmTimer);
     for (const d of this.disposers) d();
     this.renderer.dispose();
     clear(this.root);
@@ -336,6 +349,7 @@ export class Game {
 
   private send(cmd: Command): void {
     if (this.awaitingReply && cmd.type !== 'endTurn') return;
+    if (cmd.type !== 'endTurn') this.disarmEndTurn();
     this.awaitingReply = cmd.type !== 'endTurn';
     this.net.send({ t: 'cmd', cmd });
     window.setTimeout(() => (this.awaitingReply = false), 1500);
@@ -370,6 +384,7 @@ export class Game {
       if (!secured && this.view.mission.objectiveDone) this.storyRadio('objective');
       if (item.e.t === 'tileChanged') this.mapView.rebuild(this.view);
       this.refreshView();
+      this.refreshStatus();
       if (item.by === this.mySlot && --this.myPending === 0) {
         // Let the player see the outcome before the selection moves on.
         await wait(HOLD_AFTER[item.e.t] ?? 0.2);
@@ -966,7 +981,8 @@ export class Game {
     const selected = this.selected ? getUnit(this.view, this.selected) : undefined;
     this.units.sync(this.view, this.visibleAliens, (u) => {
       if (u.team === 'xcom') {
-        if (!watchers.length) return hasAnyCover(this.view, u.pos) ? (Math.max(...coverSides(this.view, u.pos)) as 0 | 1 | 2) : 0;
+        // With no enemy in sight nobody flanks anyone: the shield only shows cover, never the red "flanked".
+        if (!watchers.length) return hasAnyCover(this.view, u.pos) ? (Math.max(...coverSides(this.view, u.pos)) as 0 | 1 | 2) : null;
         return Math.min(...watchers.map((a) => coverAgainst(this.view, u.pos, a.pos))) as 0 | 1 | 2;
       }
       if (selected?.alive && sightOrigin(this.view, selected.pos, u.pos, TEMPLATES[selected.template].sight)) {
@@ -1021,6 +1037,7 @@ export class Game {
     const partner = this.partnerHere();
     if (!partner) this.hud.toast('Tu compañero no está conectado.');
     else if (this.state.ready[partner.slot]) this.hud.toast(`${partner.name} ya ha terminado el turno.`);
+    else if (!busySlots(this.state).has(partner.slot)) this.hud.toast(`A ${partner.name} no le quedan acciones.`);
     else this.send({ type: 'pass' });
   }
 
@@ -1036,6 +1053,7 @@ export class Game {
       this.selected = id;
       this.mode = { kind: 'move' };
       this.targetId = null;
+      this.concealWarn = null;
     }
     this.units.setSelected(id);
     const u = this.selectedUnit();
@@ -1157,6 +1175,7 @@ export class Game {
   private cancelMode(): void {
     this.mode = { kind: 'move' };
     this.targetId = null;
+    this.concealWarn = null;
     this.refreshInteractive();
   }
 
@@ -1236,11 +1255,41 @@ export class Game {
 
   private toggleReady(): void {
     if (!this.canAct()) return;
-    if (!this.hasCommand() && !this.state.ready[this.mySlot]) {
+    const ready = this.state.ready[this.mySlot];
+    if (!this.hasCommand() && !ready) {
       this.hud.toast(`Tiene el mando ${this.playerName(this.state.command)}.`);
       return;
     }
-    this.send({ type: 'endTurn', ready: !this.state.ready[this.mySlot] });
+    // Ending the turn with soldiers that can still act asks first (Backspace is easy to hit by mistake).
+    const idle = this.idleSoldiers();
+    if (!ready && idle && !this.endArmed) {
+      this.armEndTurn(idle);
+      return;
+    }
+    this.disarmEndTurn();
+    this.send({ type: 'endTurn', ready: !ready });
+  }
+
+  /** My soldiers that still have actions this turn. */
+  private idleSoldiers(): number {
+    return this.myUnits().filter((u) => u.ap > 0).length;
+  }
+
+  private armEndTurn(idle: number): void {
+    this.endArmed = true;
+    window.clearTimeout(this.endArmTimer);
+    this.endArmTimer = window.setTimeout(() => this.disarmEndTurn(), 4000);
+    const partner = this.partnerHere();
+    const next = partner && !this.state.ready[partner.slot] ? `el mando pasa a ${partner.name}` : 'juega el enemigo';
+    this.hud.toast(`${idle === 1 ? 'Un soldado tiene' : `${idle} soldados tienen`} acciones. Pulsa otra vez para terminar: ${next}.`);
+    this.refreshHud();
+  }
+
+  private disarmEndTurn(): void {
+    if (!this.endArmed) return;
+    this.endArmed = false;
+    window.clearTimeout(this.endArmTimer);
+    this.refreshHud();
   }
 
   // ================================================================ refresh
@@ -1278,7 +1327,7 @@ export class Game {
   }
 
   private missionView(): MissionView {
-    const s = this.state;
+    const s = this.view;
     const m = s.mission;
     const after = 'eliminad a los hostiles o evacuad';
     let objective = 'Eliminad a todos los hostiles';
@@ -1314,24 +1363,12 @@ export class Game {
   }
 
   private refreshHud(): void {
+    this.refreshStatus();
     const s = this.state;
-    this.hud.setTurn(s.turn, s.activeTeam, s.concealed);
-    this.hud.setMission(this.missionView());
-    const busy = new Set<Slot>();
-    for (const u of s.units) if (u.alive && u.team === 'xcom' && u.ap > 0 && u.owner !== null) busy.add(u.owner);
+    const busy = busySlots(s);
     const partner = this.partnerHere();
     const sharing = !!partner && s.activeTeam === 'xcom' && !s.outcome;
     const mine = this.hasCommand();
-    this.hud.setPlayers(this.players, s.ready, this.mySlot, busy, sharing ? (mine ? this.mySlot : s.command ?? null) : null);
-    this.hud.setSquad(
-      s.units.filter((u) => u.team === 'xcom' || u.controlledBy),
-      this.mySlot,
-      this.selected,
-      { 0: PLAYER_COLORS[0], 1: PLAYER_COLORS[1] },
-      s.mission.item?.carrier ?? null,
-    );
-    const u = this.selectedUnit();
-    this.hud.setSelected(u ?? null);
     this.hud.setAbilities(this.abilities());
 
     const panel = this.targetPanel();
@@ -1339,8 +1376,35 @@ export class Game {
 
     const ready = s.ready[this.mySlot];
     const waiting = partner && busy.has(partner.slot) && !s.ready[partner.slot] ? partner.name : null;
-    this.hud.setEndTurn(!this.canAct() ? 'disabled' : ready ? 'ready' : !mine ? 'waiting' : 'act', !mine && !ready ? this.playerName(s.command) : waiting);
-    this.hud.setCommand(sharing && this.canAct() ? { mine, holder: this.playerName(s.command), color: PLAYER_COLORS[s.command ?? this.mySlot], canPass: mine && !s.ready[partner!.slot] } : null);
+    const idle = this.idleSoldiers();
+    const mode = !this.canAct() ? 'disabled' : ready ? 'ready' : !mine ? 'waiting' : this.endArmed && idle ? 'confirm' : 'act';
+    const detail = mode === 'confirm' ? `${idle} ${idle === 1 ? 'soldado' : 'soldados'} con acciones` : !mine && !ready ? this.playerName(s.command) : waiting;
+    this.hud.setEndTurn(mode, detail);
+    this.hud.setCommand(sharing && this.canAct() ? { mine, holder: this.playerName(s.command), color: PLAYER_COLORS[s.command ?? this.mySlot], canPass: mine && !s.ready[partner!.slot] && busySlots(s).has(partner!.slot) } : null);
+  }
+
+  /**
+   * What the player reads about the fight (turn, objective, players, squad, the
+   * selected soldier) is painted from `view`, what has been animated so far: a
+   * death or a new turn must not show before it is seen. Orders and their
+   * checks (abilities, end turn, the command) stay on `state`.
+   */
+  private refreshStatus(): void {
+    const v = this.view;
+    this.hud.setTurn(v.turn, v.activeTeam, v.concealed);
+    this.hud.setMission(this.missionView());
+    const sharing = !!this.partnerHere() && v.activeTeam === 'xcom' && !v.outcome;
+    const holder = v.command === undefined || !this.players.some((p) => p.slot === v.command && p.connected) ? this.mySlot : v.command;
+    this.hud.setPlayers(this.players, v.ready, this.mySlot, busySlots(v), sharing ? holder : null);
+    this.hud.setSquad(
+      v.units.filter((u) => u.team === 'xcom' || u.controlledBy),
+      this.mySlot,
+      this.selected,
+      { 0: PLAYER_COLORS[0], 1: PLAYER_COLORS[1] },
+      v.mission.item?.carrier ?? null,
+    );
+    const shown = this.selected ? getUnit(v, this.selected) : undefined;
+    this.hud.setSelected(shown?.alive ? shown : null);
   }
 
   /** Builds the target panel and draws the aim line for the current target. */
@@ -1366,7 +1430,7 @@ export class Game {
         suppression: '−50 de puntería al objetivo hasta tu próximo turno; si se mueve, le disparas',
         combatProtocol: `${TEMPLATES[target.template].robotic ? 4 : 2} de daño. Nunca falla e ignora el blindaje`,
       };
-      return { kind: 'support', title: def.name, targetName: target.name, effect: effects[ability] ?? def.description, index, total: list.length };
+      return { kind: 'support', title: def.name, action: def.name, targetName: target.name, effect: effects[ability] ?? def.description, index, total: list.length };
     }
     const attack = ability as AttackAbility;
     const shot = previewShot(this.state, u, target, { ability: attack, from: option.tile });
@@ -1378,6 +1442,7 @@ export class Game {
     return {
       kind: 'attack',
       title: `${def.name} · ${attackWeapon(u, attack).name}`,
+      action: def.name,
       targetName: target.name,
       hit: shot.hit,
       crit: Math.min(shot.crit, shot.hit),
@@ -1528,9 +1593,12 @@ export class Game {
           this.primaryAttack();
           break;
         case 'Escape':
-          // Esc backs out of aiming first; otherwise it opens the menu.
+          // Esc backs out of aiming or of a pending confirmation first; otherwise it opens the menu.
           if (this.mode.kind !== 'move') this.cancelMode();
-          else this.hud.toggleMenu();
+          else if (this.endArmed || this.concealWarn) {
+            this.concealWarn = null;
+            this.disarmEndTurn();
+          } else this.hud.toggleMenu();
           break;
         case 'KeyC':
           this.passCommand();
@@ -1631,7 +1699,16 @@ export class Game {
     const dest = this.reach()?.tiles.find((t) => sameTile(t.pos, tile));
     if (dest) {
       const cost = this.reachCache!.reach.cost.get(tile.y * this.state.width + tile.x)!;
-      if (apForCost(u, cost) <= u.ap) this.send({ type: 'move', unit: u.id, to: tile });
+      if (apForCost(u, cost) > u.ap) return;
+      // Breaking concealment cannot be undone: the first click on such a tile only warns.
+      const key = `${u.id}|${tile.x},${tile.y}`;
+      if (dest.detected && this.concealWarn !== key) {
+        this.concealWarn = key;
+        this.hud.toast('Desde ahí os ven: se rompe la ocultación. Haz clic otra vez para mover.');
+        return;
+      }
+      this.concealWarn = null;
+      this.send({ type: 'move', unit: u.id, to: tile });
     }
   }
 }

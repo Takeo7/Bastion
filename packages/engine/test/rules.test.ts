@@ -308,6 +308,9 @@ describe('turn flow', () => {
     expect(s.units.find((u) => u.id === 's2')!.pos).toEqual({ x: 1, y: 2 });
     // Alone, there's nobody to pass it to.
     expect(executeCommand(s, { type: 'pass' }, ctx(1, [1])).ok).toBe(false);
+    // Nor to a partner with nothing left to do.
+    s.units.find((u) => u.id === 's1')!.ap = 0;
+    expect(executeCommand(s, { type: 'pass' }, ctx(1, both))).toMatchObject({ ok: false, error: expect.stringMatching(/acciones/) });
   });
 
   it('ending the turn hands the command over, and the other player opens the next turn', () => {

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MISSION_NAMES, type MissionKind, type PlayerInfo, type SkirmishMap, type Slot } from '@bastion/engine';
+import { doomName, MISSION_NAMES, type MissionKind, type PlayerInfo, type SkirmishMap, type Slot } from '@bastion/engine';
 import { inviteLinks, type NetStatus } from '../net';
 import { GeoscapeSet } from '../strategy/geoscape';
 import { Stage } from '../strategy/stage';
@@ -43,7 +43,7 @@ export class Lobby {
   private status: NetStatus = 'closed';
   private players: PlayerInfo[] = [];
   private mySlot: Slot | null = null;
-  private savedCampaign: { day: number; doom: number } | null = null;
+  private savedCampaign: { day: number; doom: number; level: number } | null = null;
   private page: 'main' | 'skirmish' | 'settings' = 'main';
   private mission: MissionKind = 'elimination';
   private map: SkirmishMap = 'city';
@@ -67,7 +67,7 @@ export class Lobby {
     this.render();
   }
 
-  update(players: PlayerInfo[], mySlot: Slot | null, savedCampaign: { day: number; doom: number } | null = null): void {
+  update(players: PlayerInfo[], mySlot: Slot | null, savedCampaign: { day: number; doom: number; level: number } | null = null): void {
     this.players = players;
     this.mySlot = mySlot;
     this.savedCampaign = savedCampaign;
@@ -167,7 +167,7 @@ export class Lobby {
     const ok = this.canPlay();
     append(
       this.column,
-      saved ? h('button.menu-item.primary', { disabled: !ok, onclick: () => this.handlers.onContinueCampaign() }, 'Continuar campaña', h('small', {}, `Día ${saved.day} · Proyecto ${saved.doom}/12`)) : null,
+      saved ? h('button.menu-item.primary', { disabled: !ok, onclick: () => this.handlers.onContinueCampaign() }, 'Continuar campaña', h('small', {}, `Día ${saved.day} · Nivel ${saved.level} · ${doomName(saved.level)} ${saved.doom}/12`)) : null,
       h(
         'button.menu-item',
         {

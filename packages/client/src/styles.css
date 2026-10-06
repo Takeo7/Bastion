@@ -363,6 +363,12 @@ button:disabled {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  /* When the strip is short of room, the timer or an alert ("Refuerzos en
+     camino") drops to a second line instead of being cut or squeezing the
+     objective to nothing. */
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 3px;
 }
 
 .mission-kind,
@@ -377,8 +383,12 @@ button:disabled {
   color: var(--ink-blue);
 }
 
+/* A small basis decides the wrap (the objective keeps at least this much on
+   the first line); then it grows into whatever room is left, up to its text. */
 .mission-goal {
+  flex: 1 1 6em;
   min-width: 0;
+  max-width: max-content;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1011,6 +1021,19 @@ em.psi {
   color: var(--ink-soft);
 }
 
+/* Pressed once with soldiers still able to act: the stamp turns into a question. */
+.end-turn.is-confirm {
+  color: var(--stamp);
+  background: var(--paper-grain), var(--paper);
+  outline: 2px solid var(--stamp);
+  outline-offset: -2px;
+  animation: pulse 0.6s ease-in-out infinite alternate;
+}
+
+.end-turn.is-confirm small {
+  color: var(--ink);
+}
+
 .pass-command {
   display: flex;
   justify-content: space-between;
@@ -1056,6 +1079,8 @@ em.psi {
   width: 214px;
   padding: 8px 10px;
   display: grid;
+  /* minmax(0, …): a long line must wrap, not push the panel past the screen edge. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 5px;
 }
 
@@ -1069,7 +1094,7 @@ em.psi {
 
 .shot-head {
   display: grid;
-  grid-template-columns: 22px 1fr 22px;
+  grid-template-columns: 22px minmax(0, 1fr) 22px;
   align-items: center;
   text-align: center;
 }
@@ -1191,7 +1216,7 @@ em.psi {
 
 .shot-actions {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 5px;
 }
 

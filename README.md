@@ -177,7 +177,7 @@ Para usar otro puerto: `npm start -- --port 8080`.
 | Acción | Control |
 |---|---|
 | Seleccionar soldado | Clic sobre él, en la lista de la izquierda o **Tab** / **Mayús+Tab** |
-| Mover | Clic en una casilla: azul = 1 acción, amarillo = carrera de 2 acciones, rojo = te descubrirían estando ocultos |
+| Mover | Clic en una casilla: azul = 1 acción, amarillo = carrera de 2 acciones. Un borde rojo = ahí os descubrirían estando ocultos: el primer clic avisa y el segundo mueve |
 | Disparar | **Espacio** apunta al mejor objetivo y **Espacio** otra vez dispara. **Tab** cambia de objetivo. También puedes hacer clic sobre el enemigo y pulsar **Espacio** |
 | Habilidades | **1-9** y **0** según la barra de cada soldado (los números aparecen en cada botón). Las de casilla (granadas, humo, descarga) se lanzan con clic; las de objetivo se confirman con **Espacio**. Los botones con borde discontinuo son acciones gratuitas |
 | Marcar para el compañero | **G** o **clic central**: posición o enemigo |
@@ -185,7 +185,7 @@ Para usar otro puerto: `npm start -- --port 8080`.
 | Cancelar | **Esc** o clic derecho |
 | Menú | **Esc** (si no estás apuntando) o el botón **Menú**: controles, ajustes y abandonar la misión (termina para los dos) |
 | Ceder el mando | **C** o el botón junto a Terminar turno: tu compañero pasa a dar las órdenes |
-| Terminar turno | **Retroceso**. Si tu compañero no ha terminado, el mando pasa a él; cuando los dos habéis terminado, juega el enemigo |
+| Terminar turno | **Retroceso**. Si a tus soldados les quedan acciones, el botón pregunta «¿Terminar?» y hay que pulsar otra vez (**Esc** lo cancela). Si tu compañero no ha terminado, el mando pasa a él; cuando los dos habéis terminado, juega el enemigo |
 | Cámara | **WASD** o arrastrar con clic derecho · **Q/E** girar · rueda para zoom · **F** centrar en el soldado |
 | Sonido | **M** activa o desactiva los efectos |
 | Ajustes gráficos | En **Ajustes** (menú de Esc o menú principal): límite de FPS (sin límite, 60, 30), efectos (altos, medios, bajos), sombras, resolución (100, 75 o 50 %) y contador de FPS. Se guardan en tu navegador y se aplican al momento |

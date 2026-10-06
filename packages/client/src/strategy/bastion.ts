@@ -551,7 +551,8 @@ export class BastionSet implements StageSet {
       // rock / empty: the screens show these only where they can be acted on (Instalaciones).
       const kind = !slot.excavated ? ' rock' : !slot.facility && !building ? ' empty' : '';
       const tag = label(title, `room-label${slot.facility ? ' built' : ''}${building ? ' busy' : ''}${building ? '' : kind}`);
-      tag.position.set(0, ROOM_H + 0.1, ROOM_D / 2);
+      // Inside the room, under its ceiling: on the ceiling line it read as the label of the row above.
+      tag.position.set(0, ROOM_H - 0.6, ROOM_D / 2);
       g.add(tag);
       this.grid.add(g);
       const hit = hotspot(`slot:${slot.id}`, ROOM_W, o);

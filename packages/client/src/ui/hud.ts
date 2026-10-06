@@ -50,6 +50,8 @@ export type TargetView =
   | {
       kind: 'attack';
       title: string;
+      /** The confirm button: the ability alone ("Disparar"); the title also names the weapon. */
+      action: string;
       targetName: string;
       hit: number;
       crit: number;
@@ -61,7 +63,7 @@ export type TargetView =
       /** What the ability changes besides the odds ("+50 % de daño"). */
       note?: string;
     }
-  | { kind: 'support'; title: string; targetName: string; effect: string; index: number; total: number };
+  | { kind: 'support'; title: string; action: string; targetName: string; effect: string; index: number; total: number };
 
 export interface MissionView {
   kind: MissionKind;
@@ -203,16 +205,18 @@ export class Hud {
 
   setPlayers(players: PlayerInfo[], ready: [boolean, boolean], mySlot: Slot, busy: Set<Slot>, commander: Slot | null = null): void {
     clear(this.players);
+    // Alone, the turn state is the end-turn button's business: a status here read as "you are waiting".
+    const alone = !players.some((p) => p.slot !== mySlot && p.connected);
     for (const p of players) {
       const holds = commander === p.slot;
-      const status = !p.connected ? 'Desconectado' : holds ? 'Mando' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Espera' : 'Sin acciones';
+      const status = !p.connected ? 'Desconectado' : alone ? '' : holds ? 'Mando' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
       this.players.append(
         h(
           `div.player${p.slot === mySlot ? '.me' : ''}${ready[p.slot] ? '.ready' : ''}${p.connected ? '' : '.offline'}${holds ? '.command' : ''}`,
           { style: { '--accent': p.color } },
           h('span.dot'),
           h('span.name', {}, p.name),
-          h('span.status', {}, status),
+          status ? h('span.status', {}, status) : null,
         ),
       );
     }
@@ -331,7 +335,7 @@ export class Hud {
     const actions = h(
       'div.shot-actions',
       {},
-      h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio' }, view.title.toUpperCase()),
+      h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio' }, view.action.toUpperCase()),
       h('button.cancel', { onclick: () => this.handlers.onCancel(), title: 'Esc' }, 'Cancelar'),
     );
     if (view.kind === 'support') {
@@ -357,13 +361,19 @@ export class Hud {
     );
   }
 
-  /** `waiting`: the partner has the command. */
-  setEndTurn(mode: 'act' | 'ready' | 'waiting' | 'disabled', waitingFor: string | null): void {
+  /**
+   * `waiting`: the partner has the command (`waitingFor` names them).
+   * `confirm`: pressed once with soldiers still able to act (`waitingFor` says how many).
+   */
+  setEndTurn(mode: 'act' | 'ready' | 'waiting' | 'disabled' | 'confirm', waitingFor: string | null): void {
     this.endTurn.disabled = mode === 'disabled' || mode === 'waiting';
     this.endTurn.classList.toggle('is-ready', mode === 'ready');
     this.endTurn.classList.toggle('is-waiting', mode === 'waiting');
+    this.endTurn.classList.toggle('is-confirm', mode === 'confirm');
     clear(this.endTurn);
-    if (mode === 'ready') {
+    if (mode === 'confirm') {
+      this.endTurn.append(h('span', {}, '¿TERMINAR?'), h('small', {}, waitingFor ?? 'Pulsa otra vez'));
+    } else if (mode === 'ready') {
       this.endTurn.append(h('span', {}, 'LISTO ✓'), h('small', {}, waitingFor ? `Esperando a ${waitingFor}` : 'Pulsa para cancelar'));
     } else if (mode === 'waiting') {
       this.endTurn.append(h('span', {}, `MANDO: ${(waitingFor ?? '').toUpperCase()}`), h('small', {}, 'Espera a que te lo ceda'));
