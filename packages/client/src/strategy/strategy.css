@@ -1,0 +1,2137 @@
+/*
+ * Strategy layer and main menu, in the "Expediente" art direction: the base
+ * is the commanders' desk and every screen a sheet of the campaign file.
+ * The --x-* names map onto the shared tokens in styles.css.
+ */
+.strat,
+.menu {
+  --x-font: var(--font);
+  --x-accent: var(--ink-blue);
+  --x-accent-soft: var(--ink-blue-soft);
+  --x-line: rgba(42, 35, 24, 0.28);
+  --x-text: var(--ink);
+  --x-muted: var(--ink-soft);
+  --x-warn: var(--warn);
+  --x-bad: var(--stamp);
+  --x-good: var(--good);
+  --x-alien: var(--stamp);
+  font-family: var(--x-font);
+  color: var(--x-text);
+}
+
+/* ------------------------------------------------------------------ stage */
+
+.stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* CSS2D labels set their own z-index; keep them below the screen's panels. */
+  isolation: isolate;
+}
+
+.stage canvas {
+  display: block;
+}
+
+.stage-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stage-fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.stage-fade.on {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------- building blocks */
+
+.x-panel {
+  position: relative;
+  padding: 10px 12px 12px;
+  background: var(--paper-bg);
+  box-shadow: var(--paper-shadow);
+  border-radius: 2px;
+}
+
+.x-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.x-head::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--x-line);
+}
+
+/* Sections after the first get their own breathing room. */
+.x-panel > .x-head:not(:first-child) {
+  margin-top: 14px;
+}
+
+.x-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.x-sub {
+  margin: 2px 0 8px;
+  font-size: 13px;
+  color: var(--x-muted);
+}
+
+.x-text {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+/* Expediente pages: the story, smaller so it doesn't drown the sheet. */
+.x-text.page {
+  font-size: 12.5px;
+}
+
+.x-muted {
+  font-size: 12.5px;
+}
+
+.x-muted {
+  color: var(--x-muted);
+}
+
+.x-good {
+  color: var(--x-good);
+}
+
+.x-bad {
+  color: var(--x-bad);
+}
+
+.x-warn {
+  color: var(--x-warn);
+}
+
+/* Why a button can't be used, noted in pen under it. */
+.x-why {
+  margin: 4px 0 0;
+  font-family: var(--font-hand);
+  font-size: 17px;
+  line-height: 1.1;
+  color: var(--stamp);
+}
+
+/* A signed note in the margin of a page (the Expediente). */
+.x-note {
+  margin: 2px 0 10px;
+  font-family: var(--font-hand);
+  font-size: 19px;
+  line-height: 1.1;
+  color: var(--pen);
+  rotate: -1deg;
+}
+
+.x-list {
+  display: grid;
+}
+
+.x-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 0 3px;
+  padding-bottom: 2px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--x-line);
+}
+
+.x-row {
+  display: grid;
+  grid-template-columns: 4px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 0;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dotted var(--x-line);
+  color: var(--x-text);
+}
+
+.x-row::before {
+  content: '';
+  align-self: stretch;
+  background: var(--row-accent, transparent);
+}
+
+.x-row:hover:not(:disabled) {
+  background: var(--x-accent-soft);
+}
+
+.x-row.selected {
+  background: var(--x-accent-soft);
+  --row-accent: var(--x-accent);
+}
+
+.x-row.dim {
+  opacity: 0.5;
+}
+
+.x-row b {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.x-row small {
+  display: block;
+  color: var(--x-muted);
+  font-size: 11.5px;
+}
+
+.x-row .x-side {
+  font-size: 12px;
+  color: var(--x-muted);
+  text-align: right;
+}
+
+.x-btn {
+  padding: 5px 12px;
+  font-size: 13px;
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--paper-grain), var(--paper-light);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+.x-btn:hover:not(:disabled) {
+  background: #fff;
+}
+
+.x-btn:disabled {
+  opacity: 0.45;
+}
+
+/* The main action of each sheet is the red rubber stamp. */
+.x-btn.primary {
+  background: var(--stamp);
+  border-color: var(--stamp);
+  color: #fff;
+  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.45);
+}
+
+.x-btn.primary:hover:not(:disabled) {
+  background: #c9302a;
+}
+
+.x-btn.danger {
+  border-color: var(--stamp);
+  color: var(--stamp);
+}
+
+.x-btn.big {
+  padding: 8px 22px;
+  font-size: 18px;
+  letter-spacing: 0.16em;
+}
+
+.x-btn.ready {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.x-btn.waiting {
+  animation: x-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes x-pulse {
+  50% {
+    box-shadow:
+      0 0 0 3px var(--paper),
+      0 0 0 5px var(--stamp);
+  }
+}
+
+/* Progress shaded in pencil. */
+.x-bar {
+  height: 11px;
+  margin: 6px 0 2px;
+  border: 1px solid var(--ink);
+}
+
+.x-bar > i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(-45deg, var(--ink) 0 1.5px, transparent 1.5px 5px);
+}
+
+/* Stats as a filled-in form. */
+/* (Old filled-in form for stats, still used by the main menu.) */
+.x-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 12px;
+  margin: 8px 0 12px;
+}
+
+.x-stats div {
+  display: grid;
+  border-bottom: 1px solid var(--ink);
+}
+
+.x-stats small {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.x-stats b {
+  font-family: var(--font-hand);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--pen);
+}
+
+.x-stats b:is(.x-good, .x-warn, .x-bad) {
+  color: inherit;
+}
+
+.x-stats b.x-good {
+  color: var(--good);
+}
+
+.x-stats b.x-warn {
+  color: var(--warn);
+}
+
+.x-stats b.x-bad {
+  color: var(--stamp);
+}
+
+/* A form field that opens a list of choices (replaces the native select). */
+.x-pick {
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.x-pick-field {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 2px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  color: var(--ink);
+}
+
+.x-pick-field small {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.x-pick-field b {
+  flex: 1;
+  font-family: var(--font-hand);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--pen);
+}
+
+.x-pick-field::after {
+  content: '▾';
+}
+
+.x-pick-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 3;
+  display: grid;
+  padding: 4px;
+  background: var(--paper-grain), var(--paper-light);
+  box-shadow: var(--paper-shadow);
+}
+
+.x-pick-list button {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 8px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dotted var(--x-line);
+  color: var(--ink);
+}
+
+.x-pick-list button:hover,
+.x-pick-list button.on {
+  background: var(--x-accent-soft);
+}
+
+.x-pick-list small {
+  color: var(--x-muted);
+}
+
+/* Tabs inside a sheet: folder tabs. */
+.x-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--x-line);
+}
+
+.x-tabs button {
+  flex: 1;
+  padding: 5px 6px 4px;
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--paper-grain), var(--paper-dark);
+  border: 0;
+  border-radius: 6px 6px 0 0;
+  color: var(--ink-soft);
+}
+
+.x-tabs button.on {
+  background: var(--paper-grain), var(--paper-light);
+  color: var(--ink);
+}
+
+.x-tabs button:disabled {
+  opacity: 0.45;
+}
+
+/* ---------------------------------------------------------------- shell */
+
+.strat {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #000;
+}
+
+/* The file's header strip. */
+.strat-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 5px 14px;
+  background: var(--paper-bg);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  z-index: 5;
+}
+
+.strat-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1;
+}
+
+.strat-brand b {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+}
+
+.strat-brand span {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--x-muted);
+}
+
+.strat-res {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.strat-credits,
+.strat-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.strat-res small {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--x-muted);
+}
+
+.strat-res b {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.strat-res i {
+  font-style: normal;
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--x-muted);
+}
+
+.strat-level .x-bar {
+  width: 56px;
+  height: 8px;
+  margin: 0;
+}
+
+.strat-doom {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.strat-doom small {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--stamp);
+}
+
+.strat-doom b {
+  font-size: 12px;
+  color: var(--stamp);
+  font-variant-numeric: tabular-nums;
+}
+
+.strat-doom .pips {
+  display: flex;
+  gap: 2px;
+}
+
+.strat-doom .pips i {
+  width: 11px;
+  height: 8px;
+  border: 1.5px solid var(--stamp);
+}
+
+.strat-doom .pips i.on {
+  background: var(--stamp);
+}
+
+.strat-players {
+  display: flex;
+  gap: 12px;
+}
+
+.strat-player {
+  display: grid;
+  grid-template-columns: 10px auto;
+  column-gap: 6px;
+  align-items: center;
+  line-height: 1.1;
+}
+
+.strat-player .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  grid-row: span 2;
+}
+
+.strat-player.offline .dot {
+  background: transparent;
+  border: 2px solid var(--accent);
+}
+
+.strat-player b {
+  font-size: 13px;
+}
+
+.strat-player small {
+  color: var(--x-muted);
+  font-size: 11px;
+}
+
+.strat-top > .x-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+/* A proposal from the partner is a sticky note in their handwriting. */
+.strat-proposal {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-1.2deg);
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  max-width: min(760px, 92vw);
+  font-family: var(--font-hand);
+  font-size: 21px;
+  line-height: 1.1;
+  color: var(--ink);
+  background: #fff27a;
+  box-shadow: 2px 6px 12px rgba(0, 0, 0, 0.45);
+  z-index: 6;
+}
+
+.strat-proposal.show {
+  display: flex;
+}
+
+.strat-proposal .x-btn {
+  flex: none;
+  font-size: 13px;
+}
+
+/* Bottom navigation: the file's divider tabs. */
+.strat-nav {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  z-index: 5;
+}
+
+.strat-nav button {
+  position: relative;
+  white-space: nowrap;
+  min-width: 96px;
+  padding: 6px 10px 8px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--paper-grain), var(--paper-dark);
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.35);
+  color: var(--ink-soft);
+}
+
+.strat-nav button:hover {
+  color: var(--ink);
+}
+
+.strat-nav button.on {
+  padding-bottom: 12px;
+  background: var(--paper-grain), var(--paper);
+  color: var(--ink);
+}
+
+.strat-nav button.urgent {
+  color: var(--stamp);
+}
+
+.strat-nav .partner-dot {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+/* Narrow sheets that are as tall as their content (never the whole height),
+   so the Bastion and the globe keep the middle of the screen. */
+.strat-left,
+.strat-right {
+  position: absolute;
+  top: 50px;
+  max-height: calc(100% - 50px - 46px);
+  width: clamp(250px, 25vw, 340px);
+  /* Room for the paper's shadow inside the scroll box. */
+  padding: 4px 8px 10px 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  z-index: 4;
+}
+
+.strat-left {
+  left: 10px;
+}
+
+.strat-right {
+  right: 10px;
+}
+
+/* The open sheet on the right is taped on, a little crooked. */
+.strat-right > .x-panel {
+  margin-top: 10px;
+  transform: rotate(0.6deg);
+}
+
+.strat-right > .x-panel::before,
+.strat-right > .x-panel::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  width: 70px;
+  height: 22px;
+  background: rgba(255, 246, 200, 0.6);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.strat-right > .x-panel::before {
+  left: 22px;
+  transform: rotate(-6deg);
+}
+
+.strat-right > .x-panel::after {
+  right: 22px;
+  transform: rotate(5deg);
+}
+
+/* Operations carry the classified stamp. */
+.strat-right > .x-panel:has(dl.briefing) {
+  padding-bottom: 46px;
+}
+
+.strat-right > .x-panel dl.briefing::after {
+  content: 'Clasificado';
+  position: absolute;
+  right: 26px;
+  bottom: 12px;
+  padding: 1px 8px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  border: 3px solid var(--stamp);
+  color: var(--stamp);
+  background: transparent;
+  transform: rotate(-10deg);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.strat-center-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: 50px;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  z-index: 4;
+}
+
+/* Lines that sit straight on the 3D scene get their own slip of paper. */
+.strat-center-bottom > small,
+.scan-day {
+  padding: 1px 10px;
+  background: var(--paper-grain), var(--paper);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+.strat-center-top {
+  position: absolute;
+  left: 50%;
+  top: 52px;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 4;
+  width: min(560px, calc(100vw - 2 * clamp(250px, 25vw, 340px) - 48px));
+}
+
+/* The mission's paragraph in the hangar: three lines at most (it is in the geoscape in full). */
+.strat-center-top .briefing-head .x-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+/* Squad select: the roster stays short so the lineup is visible. */
+.strat-left.compact {
+  max-height: calc(100vh - 330px);
+}
+
+.strat-left.compact > .x-panel {
+  min-height: 0;
+}
+
+.strat-ticker {
+  position: absolute;
+  left: 10px;
+  bottom: 52px;
+  width: clamp(230px, 24vw, 300px);
+  z-index: 4;
+}
+
+.strat-ticker .x-row {
+  grid-template-columns: 4px 1fr;
+}
+
+/* Labels over the 3D rooms and regions: slips of paper. Three.js positions
+   them with an inline transform, so they tilt and bob with rotate/translate. */
+.room-label,
+.globe-label,
+.partner-tag {
+  padding: 1px 8px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--paper-grain), var(--paper);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.6);
+  rotate: -1.5deg;
+}
+
+.room-label.command {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stamp);
+  outline: 2px solid var(--stamp);
+  outline-offset: -4px;
+  padding: 4px 10px;
+}
+
+/* Rock and empty rooms are only labelled where something can be done with them. */
+.strat:not([data-view='facilities']) .room-label:is(.rock, .empty) {
+  display: none;
+}
+
+.room-label.rock {
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: var(--paper-grain), var(--paper-dark);
+}
+
+.room-label.built {
+  background: var(--paper-grain), var(--paper-light);
+}
+
+.room-label.busy {
+  color: var(--stamp);
+}
+
+.room-label.fixed {
+  color: var(--ink-soft);
+}
+
+.globe-label.contacted {
+  color: var(--ink-blue);
+}
+
+.globe-label.facility {
+  color: var(--stamp);
+}
+
+.room-label.selected,
+.globe-label.selected {
+  outline: 2px solid var(--ink-blue);
+  outline-offset: 1px;
+}
+
+.partner-tag {
+  font-family: var(--font-hand);
+  font-size: 20px;
+  background: #fff27a;
+  border-left: 4px solid var(--accent);
+  rotate: 2deg;
+  animation: x-bob 1.6s ease-in-out infinite;
+}
+
+@keyframes x-bob {
+  50% {
+    translate: 0 -4px;
+  }
+}
+
+/* ----------------------------------------------------------- geoscape */
+
+.scan-btn {
+  min-width: 240px;
+  display: grid;
+  gap: 2px;
+}
+
+/* Scanning is this screen's main action: the red stamp. */
+.scan-btn:not(.ready):not(:disabled) {
+  background: var(--stamp);
+  border-color: var(--stamp);
+  color: #fff;
+  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.45);
+}
+
+.scan-btn small {
+  font-family: var(--font);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  opacity: 0.85;
+}
+
+.scan-day {
+  font-size: 14px;
+  letter-spacing: 0.24em;
+}
+
+.mission-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--icon, var(--warn));
+  border: 2px solid var(--icon, var(--warn));
+  transform: rotate(45deg);
+}
+
+.mission-icon > span {
+  transform: rotate(-45deg);
+}
+
+.x-row.mission {
+  grid-template-columns: 4px 30px 1fr auto;
+}
+
+.briefing dl,
+dl.briefing {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 12px;
+}
+
+.briefing dt {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.briefing dd {
+  margin: 0;
+}
+
+.stars {
+  color: var(--stamp);
+  letter-spacing: 0.1em;
+}
+
+/* --------------------------------------------------------- squad / debrief */
+
+.lineup-cards {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* File photos taped to the board, one under each soldier. */
+.lineup-card {
+  position: absolute;
+  width: var(--card-w, 132px);
+  transform: translateX(-50%) rotate(-1.5deg);
+  padding: 12px 8px 8px;
+  pointer-events: auto;
+  background: var(--paper-grain), var(--paper-light);
+  box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  font-size: 13px;
+}
+
+.lineup-card:nth-child(even) {
+  transform: translateX(-50%) rotate(1.2deg);
+}
+
+.lineup-card::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 54px;
+  height: 18px;
+  transform: translateX(-50%) rotate(-4deg);
+  background: color-mix(in srgb, var(--accent, #d8cfa8) 55%, rgba(255, 246, 200, 0.5));
+  opacity: 0.9;
+}
+
+.lineup-card b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.lineup-card small {
+  display: block;
+  color: var(--x-muted);
+  font-size: 12px;
+}
+
+.lineup-card.empty {
+  background: rgba(241, 230, 198, 0.55);
+  color: var(--x-muted);
+  box-shadow: none;
+  outline: 2px dashed rgba(241, 230, 198, 0.7);
+  outline-offset: -4px;
+}
+
+.lineup-card.empty::before {
+  display: none;
+}
+
+.lineup-card .x-btn {
+  margin-top: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.lineup-card.dead {
+  background: #ddd5c0;
+}
+
+.lineup-card.dead::after {
+  content: 'Caído';
+  position: absolute;
+  top: 58%;
+  left: 50%;
+  padding: 0 8px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 3px solid var(--stamp);
+  color: var(--stamp);
+  transform: translate(-50%, -50%) rotate(-16deg);
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.lineup-card .promo {
+  font-family: var(--font-hand);
+  font-size: 20px;
+  color: var(--pen);
+}
+
+.briefing-head h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+}
+
+/* The mission result is stamped on the report. */
+.briefing-head:is(.victory, .defeat) h1 {
+  display: inline-block;
+  margin: 4px 0 6px;
+  padding: 2px 16px;
+  border: 4px solid currentColor;
+  transform: rotate(-3deg);
+}
+
+.briefing-head.victory h1 {
+  color: var(--good);
+}
+
+.briefing-head.defeat h1 {
+  color: var(--stamp);
+}
+
+/* --------------------------------------------------------------- armory */
+
+.perk-grid {
+  display: grid;
+  grid-template-columns: 96px 1fr 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.perk-grid .rank {
+  display: grid;
+  align-content: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Abilities are index cards; the chosen ones are ticked in pen. */
+.perk-cell {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--paper-grain), var(--paper-light);
+  border: 0;
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.35);
+  color: var(--x-muted);
+}
+
+.perk-cell b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.perk-cell small {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.perk-cell.chosen::after {
+  content: '✓';
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  font-family: var(--font-hand);
+  font-size: 40px;
+  color: var(--pen);
+}
+
+.perk-cell.pickable {
+  outline: 2px dashed var(--stamp);
+  outline-offset: -5px;
+  animation: x-pulse 1.4s ease-in-out infinite;
+}
+
+.perk-cell.locked {
+  opacity: 0.4;
+}
+
+.perk-cell:disabled {
+  cursor: default;
+}
+
+/* --------------------------------------------------------------- modal */
+
+.strat-modal {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  background: rgba(10, 8, 5, 0.6);
+  z-index: 10;
+}
+
+.strat-modal.show {
+  display: grid;
+}
+
+.strat-modal .x-panel {
+  width: min(520px, 92vw);
+  transform: rotate(-0.4deg);
+}
+
+.strat-modal .x-panel.wide {
+  width: min(920px, 94vw);
+}
+
+.alert-kicker {
+  margin-bottom: 4px;
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--stamp);
+}
+
+.alert-kicker.bad {
+  color: var(--stamp);
+}
+
+.alert-kicker.good {
+  color: var(--good);
+}
+
+.alert-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.event-options {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.event-option {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--paper-grain), var(--paper-light);
+  border: 0;
+  box-shadow: 1px 3px 6px rgba(0, 0, 0, 0.35);
+  color: var(--ink);
+}
+
+.event-option b {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.event-option:hover:not(:disabled) {
+  background: #fff;
+}
+
+.event-option:disabled {
+  opacity: 0.5;
+}
+
+.event-option small {
+  color: var(--x-muted);
+}
+
+.strat-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 140px;
+  transform: translateX(-50%) rotate(-1deg);
+  padding: 4px 16px;
+  font-family: var(--font-hand);
+  font-size: 22px;
+  color: var(--stamp);
+  background: var(--paper-grain), var(--paper);
+  box-shadow: var(--paper-shadow);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: 12;
+}
+
+.strat-toast.show {
+  opacity: 1;
+}
+
+/* Take-off: a "DESPEGUE" stamp; it lasts LAUNCH_SECONDS (bastion.ts). */
+.launch-banner {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  padding: 6px 28px;
+  font-family: var(--font-display);
+  font-size: 46px;
+  letter-spacing: 0.24em;
+  color: var(--stamp);
+  border: 5px solid var(--stamp);
+  border-radius: 6px;
+  background: rgba(241, 230, 198, 0.9);
+  transform: translate(-50%, -50%) rotate(-6deg);
+  z-index: 11;
+  animation: x-launch 3.4s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes x-launch {
+  0% {
+    opacity: 0;
+    scale: 1.4;
+  }
+  12% {
+    opacity: 1;
+    scale: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Narrow screens keep the labels (they are what tells a new player what the numbers are). */
+@media (max-width: 1100px) {
+  .strat-top {
+    gap: 12px;
+  }
+  .strat-nav button {
+    min-width: 0;
+    padding: 6px 9px 8px;
+    font-size: 11px;
+  }
+}
+
+/* ------------------------------------------------------------ main menu */
+
+.menu {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+  overflow: hidden;
+}
+
+.menu-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(20, 14, 8, 0.9) 0%, rgba(20, 14, 8, 0.45) 45%, rgba(20, 14, 8, 0) 70%);
+  pointer-events: none;
+}
+
+/* The campaign folder. */
+/* The menu sheet is as tall as what it lists, so most of the Earth stays in view. */
+.menu-column {
+  position: absolute;
+  top: 6vh;
+  left: 40px;
+  max-height: 88vh;
+  width: min(400px, calc(100vw - 80px));
+  padding: 36px 32px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  background:
+    var(--paper-grain),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(80, 110, 160, 0.14) 31px 32px),
+    linear-gradient(135deg, #ecdcae, #d9c58e);
+  box-shadow: 8px 10px 24px rgba(0, 0, 0, 0.6);
+  transform: rotate(-0.8deg);
+}
+
+/* Stamped in the corner, clear of the content (the column scrolls). */
+.menu-column::after {
+  content: 'Alto secreto';
+  position: absolute;
+  right: 14px;
+  top: 6px;
+  padding: 0 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 3px solid var(--stamp);
+  color: var(--stamp);
+  transform: rotate(4deg);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.menu-column,
+.strat-left,
+.strat-right {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(42, 35, 24, 0.35) transparent;
+}
+
+.menu-title h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(44px, 5vw, 64px);
+  font-weight: 400;
+  letter-spacing: 0.16em;
+}
+
+.menu-title p {
+  margin: 0 0 4vh;
+  color: var(--x-muted);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.menu-item {
+  display: grid;
+  text-align: left;
+  padding: 8px 0 8px 14px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--x-line);
+  color: var(--ink);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.menu-item small {
+  font-family: var(--font);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--x-muted);
+}
+
+.menu-item:hover:not(:disabled) {
+  background: rgba(179, 38, 30, 0.08);
+  color: var(--stamp);
+}
+
+.menu-item.primary {
+  color: var(--stamp);
+}
+
+.menu-item.back {
+  font-size: 18px;
+  color: var(--x-muted);
+}
+
+.menu-item:disabled {
+  opacity: 0.45;
+}
+
+.menu-label {
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.menu-input {
+  font: inherit;
+  font-family: var(--font-hand);
+  font-size: 30px;
+  padding: 4px 6px;
+  margin-bottom: 8px;
+  color: var(--pen);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  outline: none;
+}
+
+.menu-input:focus {
+  border-bottom-color: var(--stamp);
+}
+
+/* Inside the folder, sheets lose their own paper. */
+.menu-column .x-panel {
+  margin-bottom: 8px;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.menu-options {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.menu-options.two {
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.menu-option {
+  display: grid;
+  text-align: left;
+  padding: 5px 10px;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  color: var(--x-muted);
+}
+
+.menu-option b {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.menu-option small {
+  font-size: 12px;
+}
+
+.menu-option:hover {
+  background: var(--x-accent-soft);
+}
+
+.menu-option.on {
+  border-left-color: var(--stamp);
+  background: rgba(179, 38, 30, 0.08);
+}
+
+.menu-squad {
+  position: absolute;
+  right: 28px;
+  bottom: 28px;
+  width: min(320px, 80vw);
+}
+
+.menu-seat {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dotted var(--x-line);
+}
+
+.menu-seat .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.menu-seat.offline .dot,
+.menu-seat.empty .dot {
+  background: transparent;
+  border: 2px solid var(--accent);
+}
+
+.menu-seat small,
+.menu-hint {
+  color: var(--x-muted);
+  font-size: 13px;
+}
+
+.menu-hint {
+  margin: 10px 0 2px;
+}
+
+.menu-address {
+  display: block;
+  font-size: 15px;
+  user-select: all;
+}
+
+.menu-error {
+  color: var(--x-bad);
+  min-height: 1em;
+  margin-top: 6px;
+}
+
+/* Confirmation over the menu (replaces the browser's confirm()). */
+.menu-modal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 8, 5, 0.6);
+  z-index: 3;
+}
+
+.menu-modal .x-panel {
+  width: min(460px, 92vw);
+  transform: rotate(-0.5deg);
+}
+
+@media (max-width: 820px) {
+  .menu-squad {
+    position: static;
+    width: auto;
+    margin: 0 16px 16px;
+  }
+  .menu-column {
+    left: 16px;
+    padding: 24px 20px 16px;
+  }
+}
+
+/* Take-off: everything but the 3D stage and the banner fades away. */
+.strat.launching > :not(.stage):not(.launch-banner) {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+/* ------------------------------------------------------- soldier customizer */
+
+.x-btn.small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.x-field {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.x-field > small {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+/* Written on the form in pen, like the other fields. */
+.x-input {
+  width: 100%;
+  padding: 2px;
+  font-family: var(--font-hand);
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--pen);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  outline: none;
+}
+
+.x-input:focus {
+  border-bottom-color: var(--stamp);
+}
+
+.x-input::placeholder {
+  color: var(--ink-soft);
+  opacity: 0.6;
+}
+
+.x-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.x-swatch,
+.x-swatch-any {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.x-swatch {
+  background: var(--swatch);
+}
+
+/* The chosen swatch is circled in pen. */
+.x-swatch.on {
+  outline: 2px solid var(--pen);
+  outline-offset: 2px;
+}
+
+.x-swatch-any {
+  background: conic-gradient(#e64a4a, #e6c84a, #4ae66a, #4ac8e6, #6a4ae6, #e64ac8, #e64a4a);
+}
+
+.x-swatch-any::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.x-swatch-any::-webkit-color-swatch {
+  border: 0;
+  opacity: 0;
+}
+
+.x-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.x-chips button {
+  padding: 3px 8px;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--paper-grain), var(--paper-dark);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.x-chips button.on {
+  color: var(--ink);
+  background: var(--paper-grain), var(--paper-light);
+  border-color: var(--pen);
+}
+
+.x-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* ---------------------------------------------- readable at a glance (2026-10-06) */
+
+/* Small typed tags for costs, days and requirements (the long version in the title). */
+.x-chip {
+  display: inline-block;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: nowrap;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(42, 35, 24, 0.45);
+  border-radius: 2px;
+}
+
+.x-chip.good {
+  color: var(--good);
+  border-color: currentColor;
+}
+
+.x-chip.bad {
+  color: var(--stamp);
+  border-color: currentColor;
+}
+
+.x-chip.warn {
+  color: var(--warn);
+  border-color: currentColor;
+}
+
+.x-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 8px;
+}
+
+.x-row .x-chips {
+  margin: 2px 0 0;
+}
+
+/* "2 of 3" as marks: contacts, slots. */
+.x-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.x-meter i {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ink-blue);
+}
+
+.x-meter i.on {
+  background: var(--ink-blue);
+}
+
+.x-meter b {
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+/* Symbols drawn with the stat masks of the combat HUD. */
+.agenda-icon {
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+
+.agenda-icon.flag {
+  --icon: var(--i-flag);
+  color: var(--ink-blue);
+}
+
+.agenda-icon.xp {
+  --icon: var(--i-xp);
+  color: var(--good);
+}
+
+.agenda-icon.pick {
+  --icon: var(--i-pick);
+  color: var(--warn);
+}
+
+.agenda-icon.clock {
+  --icon: var(--i-clock);
+  color: var(--ink-soft);
+}
+
+.agenda-icon.will {
+  --icon: var(--i-will);
+  color: var(--psi);
+}
+
+.agenda-icon.hp {
+  --icon: var(--i-hp);
+  color: var(--c-hp);
+}
+
+/* Agenda of the Bastion: one line per pending thing, each a shortcut. */
+.x-row.agenda {
+  grid-template-columns: 4px 16px 1fr auto;
+}
+
+/* Unlocks: symbol, name, one-line effect, and the price tag under it. */
+.x-row.unlock {
+  grid-template-columns: 4px 16px 1fr;
+}
+
+.x-row.unlock .x-chip {
+  margin-top: 3px;
+}
+
+.x-row.unlock small {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+/* Level track: a numbered circle per level, green once reached. */
+.x-row.level {
+  grid-template-columns: 4px 22px 1fr auto;
+}
+
+.level-num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.x-row.level.reached .level-num {
+  color: var(--good);
+}
+
+.x-row.level b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Weapon and armour tiers: diamonds like the guns (steel, magnetic, plasma). */
+.x-row.tier-row {
+  grid-template-columns: 4px 40px 1fr auto;
+}
+
+.x-list.items .x-row {
+  grid-template-columns: 4px 1fr auto auto;
+}
+
+/* Soldiers: class, name, chevrons, state, all on one line. */
+.x-row.soldier {
+  grid-template-columns: 4px 30px 1fr auto auto;
+}
+
+.x-row.soldier .cls {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.x-row.soldier b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.x-row.soldier .rank {
+  align-self: center;
+}
+
+/* The soldier sheet's numbers, with the combat HUD's symbols and colours. */
+.x-statline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 6px 0 4px;
+}
+
+.x-statline .stat b {
+  font-size: 16px;
+}
+
+.x-statline .stat-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.x-state {
+  margin-left: auto;
+  font-family: var(--font-hand);
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.stat.will {
+  --c: var(--psi);
+  --icon: var(--i-will);
+}
+
+.stat.flag {
+  --c: var(--ink-blue);
+  --icon: var(--i-flag);
+}
+
+.stat.skull {
+  --c: var(--ink);
+  --icon: var(--i-skull);
+}
+
+.x-gear,
+.x-effect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.x-gear .x-chip {
+  margin-left: auto;
+}
+
+dl.x-pairs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 2px 0 8px;
+  font-size: 13px;
+}
+
+dl.x-pairs dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+dl.x-pairs dd {
+  margin: 0;
+}
+
+/* Buildable facilities: name, two-line description, cost and days. */
+.x-row.build small:first-of-type {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+  .strat-left,
+  .strat-right {
+    width: clamp(230px, 27vw, 300px);
+  }
+  .strat-nav button {
+    min-width: 0;
+  }
+  .strat-player small {
+    display: none;
+  }
+}
+
+/* With operations waiting, scanning (which lets them expire) is a plain button,
+   not the red stamp: choosing an operation is what comes first. */
+.scan-btn.secondary {
+  min-width: 190px;
+  padding: 5px 16px;
+  font-size: 14px;
+}
+
+.scan-btn.secondary:not(.ready):not(:disabled) {
+  background: var(--paper-grain), var(--paper-light);
+  border-color: var(--ink);
+  color: var(--ink);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+/* Days left: a little clock before the number. */
+.x-side.days {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.x-side.days:empty {
+  display: none;
+}
+
+.x-side.days::before {
+  content: '';
+  width: 11px;
+  height: 11px;
+  background: currentColor;
+  -webkit-mask: var(--i-clock) center / contain no-repeat;
+  mask: var(--i-clock) center / contain no-repeat;
+}
+
+/* Rooms list (Instalaciones): number, state, action. */
+.x-row.room {
+  grid-template-columns: 4px 30px 1fr auto;
+}
+
+.x-row.room .cls {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* Narrow screens: a briefing folds the list away; a tab brings it back. */
+.strat-fold {
+  display: none;
+}
+
+@media (max-width: 1200px) {
+  .strat-left.has-detail {
+    display: none;
+  }
+  .strat-fold {
+    position: absolute;
+    top: 54px;
+    left: 10px;
+    z-index: 4;
+    display: block;
+    box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* The hangar's label sits right under the top strip in the overview: nudge it down. */
+.room-label.fixed {
+  translate: 0 20px;
+}
+
+/* "Ahora": the one next thing to do, on top of the Agenda. A red stamp when it
+   is urgent (a partner waiting, an operation about to expire), ink otherwise. */
+.strat-now {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0 8px;
+  margin: 0 0 10px;
+  padding: 6px 10px 7px;
+  text-align: left;
+  background: var(--paper-grain), var(--paper-light);
+  border: 2px solid var(--ink-blue);
+  border-radius: 2px;
+  color: var(--ink-blue);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.35);
+}
+
+.strat-now small {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  opacity: 0.8;
+}
+
+.strat-now b {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.strat-now .ico {
+  width: 20px;
+  height: 20px;
+}
+
+.strat-now:hover:not(:disabled) {
+  background: var(--paper-grain), #fff;
+}
+
+.strat-now:disabled {
+  cursor: default;
+}
+
+.strat-now.urgent {
+  color: #fff;
+  background: var(--stamp);
+  border-color: var(--stamp);
+}
+
+.strat-now.urgent:hover:not(:disabled) {
+  background: #c9302a;
+}
+
+.x-row.agenda.urgent b {
+  color: var(--stamp);
+}
+
+/* Pending things on each tab: a number in a pen circle (red if urgent). */
+.nav-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 6px;
+  padding: 0 4px;
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: #fff;
+  background: var(--ink-blue);
+  border-radius: 9px;
+  /* Negative margins: the badge must not make its tab taller than the others. */
+  margin-block: -4px;
+  vertical-align: 1px;
+}
+
+.nav-count.urgent {
+  background: var(--stamp);
+}
+
+/* Lore's Novedades tray button, in the top strip. */
+.strat-top > .strat-news {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+/* The partner's invitation in the main menu: label and an address to copy. */
+.menu-invite {
+  display: grid;
+  gap: 1px;
+  margin: 4px 0;
+}
+
+.menu-invite small {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.menu-address {
+  padding: 2px 6px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px dashed rgba(42, 35, 24, 0.45);
+}

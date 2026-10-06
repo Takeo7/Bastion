@@ -1,0 +1,395 @@
+/* Interface art directions. Each block sets the theme's tokens, then adds
+   its own shapes and decorations on top of the shared layout. */
+
+/* ============================================================ HOLOTÁCTICO */
+
+.uil-stage[data-theme='holo'] {
+  --ui-panel: linear-gradient(180deg, rgba(10, 30, 42, 0.9), rgba(4, 14, 22, 0.86));
+  --ui-border: 1px solid rgba(84, 209, 255, 0.35);
+  --ui-btn-active: rgba(84, 209, 255, 0.2);
+  --ui-pip-on: #6dff9a;
+  --cut: 10px;
+}
+
+.uil-stage[data-theme='holo'] .ui :is(.h-turn, .h-objective, .h-squad, .h-unit, .h-target, .h-log, .ab, .h-end button, .s-panel, .s-scan button, .h-flag, .ab-tip) {
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  box-shadow: inset 0 2px 0 var(--ui-accent);
+  backdrop-filter: blur(6px);
+}
+
+.uil-stage[data-theme='holo'] .ab {
+  --cut: 8px;
+}
+
+.uil-stage[data-theme='holo'] .ab .ico {
+  filter: drop-shadow(0 0 4px rgba(84, 209, 255, 0.8));
+}
+
+.uil-stage[data-theme='holo'] .ab.active {
+  box-shadow: inset 0 2px 0 var(--ui-accent), inset 0 0 18px rgba(84, 209, 255, 0.35);
+}
+
+.uil-stage[data-theme='holo'] .h-turn b,
+.uil-stage[data-theme='holo'] .s-brand b {
+  text-shadow: 0 0 10px rgba(84, 209, 255, 0.7);
+}
+
+/* Probability as a ring gauge (drawn behind the number). */
+.uil-stage[data-theme='holo'] .t-odds .hit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  width: 96px;
+  height: 96px;
+}
+
+.uil-stage[data-theme='holo'] .t-odds .hit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--ui-accent) calc(var(--p) * 1%), rgba(84, 209, 255, 0.12) 0);
+  -webkit-mask: radial-gradient(circle, transparent 38px, #000 39px);
+  mask: radial-gradient(circle, transparent 38px, #000 39px);
+  filter: drop-shadow(0 0 4px rgba(84, 209, 255, 0.6));
+}
+
+.uil-stage[data-theme='holo'] .t-odds .hit .num {
+  font-size: 30px;
+}
+
+.uil-stage[data-theme='holo'] .t-odds .hit .lbl {
+  font-size: 10px;
+}
+
+.uil-stage[data-theme='holo'] .h-banner span {
+  border-top: 1px solid var(--ui-warn);
+  border-bottom: 1px solid var(--ui-warn);
+  text-shadow: 0 0 12px rgba(255, 201, 58, 0.8);
+}
+
+.uil-stage[data-theme='holo'] .h-flag {
+  --cut: 5px;
+}
+
+/* ============================================================= EXPEDIENTE */
+
+.uil-stage[data-theme='expediente'] {
+  --ui-font: 'Courier Prime', 'Courier New', monospace;
+  --ui-display: 'Special Elite', 'Courier New', monospace;
+  --ui-num: 'Special Elite', 'Courier New', monospace;
+  --ui-text: #2a2318;
+  --ui-muted: #6e6250;
+  --ui-accent: #2a4a7a;
+  --ui-good: #2f6b2f;
+  --ui-bad: #b3261e;
+  --ui-warn: #b3261e;
+  --ui-alien: #b3261e;
+  --ui-panel: #ece0bd;
+  --ui-border: 0 solid transparent;
+  --ui-radius: 2px;
+  --ui-shadow: 2px 4px 10px rgba(0, 0, 0, 0.45);
+  --ui-btn-active: rgba(42, 74, 122, 0.12);
+  --ui-pip-on: #2a2318;
+  --ui-pip-off: rgba(42, 35, 24, 0.18);
+}
+
+.uil-stage[data-theme='expediente'] .ui :is(.h-squad, .h-unit, .h-target, .h-log, .s-panel, .s-top, .h-turn, .h-objective) {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 23px, rgba(80, 110, 160, 0.16) 23px 24px),
+    linear-gradient(135deg, #f1e6c6, #e2d3aa);
+}
+
+/* Over a dark scene the players line needs its own strip of paper. */
+.uil-stage[data-theme='expediente'] .h-players {
+  justify-self: center;
+  padding: 1px 12px;
+  background: #f1e6c6;
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+.uil-stage[data-theme='expediente'] .h-unit {
+  transform: rotate(-1deg);
+}
+
+.uil-stage[data-theme='expediente'] .h-target {
+  transform: translateY(-50%) rotate(1.2deg);
+}
+
+/* Paper clip on the selected soldier's card. */
+.uil-stage[data-theme='expediente'] .h-unit::before {
+  content: '';
+  position: absolute;
+  top: -14px;
+  right: 22px;
+  width: 14px;
+  height: 40px;
+  border: 3px solid #8a8f96;
+  border-radius: 8px;
+}
+
+/* Tape on the briefing. */
+.uil-stage[data-theme='expediente'] .s-detail::before,
+.uil-stage[data-theme='expediente'] .s-detail::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  width: 70px;
+  height: 22px;
+  background: rgba(255, 246, 200, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.uil-stage[data-theme='expediente'] .s-detail::before {
+  left: 20px;
+  transform: rotate(-6deg);
+}
+
+.uil-stage[data-theme='expediente'] .s-detail::after {
+  right: 20px;
+  transform: rotate(5deg);
+}
+
+.uil-stage[data-theme='expediente'] .s-detail {
+  transform: rotate(0.8deg);
+}
+
+.uil-stage[data-theme='expediente'] .h-turn {
+  font-size: 22px;
+  letter-spacing: 0.1em;
+}
+
+.uil-stage[data-theme='expediente'] .chip {
+  color: var(--ui-bad);
+  border-width: 2px;
+  font-family: var(--ui-display);
+  transform: rotate(-3deg);
+}
+
+.uil-stage[data-theme='expediente'] .chip.ok {
+  color: var(--ui-good);
+}
+
+/* HP as tally marks. */
+.uil-stage[data-theme='expediente'] .pip {
+  width: 2px;
+  height: 11px;
+  margin-right: 3px;
+  background: transparent;
+}
+
+.uil-stage[data-theme='expediente'] .pip.on {
+  background: #2a2318;
+}
+
+.uil-stage[data-theme='expediente'] .pip:not(.on) {
+  background: rgba(42, 35, 24, 0.2);
+}
+
+.uil-stage[data-theme='expediente'] .ap {
+  transform: none;
+  border-radius: 50%;
+  border: 1.5px solid #2a2318;
+  background: transparent;
+}
+
+.uil-stage[data-theme='expediente'] .ap.on {
+  background: #2a2318;
+}
+
+/* Abilities as index cards. */
+.uil-stage[data-theme='expediente'] .ab {
+  background: #fbf7ea;
+  border-radius: 3px;
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+  border-bottom: 4px solid #2a4a7a;
+  font-family: var(--ui-display);
+  font-size: 13px;
+}
+
+.uil-stage[data-theme='expediente'] .ab .ico {
+  color: #2a2318;
+}
+
+.uil-stage[data-theme='expediente'] .ab.active {
+  transform: translateY(-8px) rotate(-2deg);
+  border-bottom-color: #b3261e;
+  box-shadow: 2px 6px 10px rgba(0, 0, 0, 0.5);
+}
+
+.uil-stage[data-theme='expediente'] .ab.free {
+  border-style: solid;
+  border-bottom-color: #2f6b2f;
+}
+
+.uil-stage[data-theme='expediente'] .ab .why {
+  font-family: 'Caveat', cursive;
+  font-size: 16px;
+}
+
+.uil-stage[data-theme='expediente'] .ab-tip {
+  background: #fbf7ea;
+  border: 0;
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+/* Probability circled in red marker. */
+.uil-stage[data-theme='expediente'] .t-odds .hit {
+  padding: 6px 14px;
+  border: 3px solid #b3261e;
+  border-radius: 50% 45% 55% 48%;
+  transform: rotate(-4deg);
+}
+
+.uil-stage[data-theme='expediente'] .t-odds .hit .num {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 54px;
+  color: #b3261e;
+}
+
+.uil-stage[data-theme='expediente'] .t-odds .crit .num {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  color: #2a4a7a;
+}
+
+.uil-stage[data-theme='expediente'] .t-actions button {
+  border: 2px solid #2a2318;
+  background: #fbf7ea;
+  font-family: var(--ui-display);
+}
+
+.uil-stage[data-theme='expediente'] .t-actions .go {
+  background: #b3261e;
+  color: #fff;
+  border-color: #b3261e;
+}
+
+.uil-stage[data-theme='expediente'] .h-target .note,
+.uil-stage[data-theme='expediente'] .s-note {
+  display: block;
+  font-family: 'Caveat', cursive;
+  font-size: 22px;
+  color: #1d4fb0;
+  transform: rotate(-3deg);
+}
+
+.uil-stage[data-theme='expediente'] .h-end button {
+  background: #b3261e;
+  color: #fff;
+  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.uil-stage[data-theme='expediente'] .h-end span {
+  color: #f4d6d0;
+}
+
+.uil-stage[data-theme='expediente'] .h-log li {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.uil-stage[data-theme='expediente'] .h-log li::before {
+  content: '— ';
+}
+
+/* The banner is a rubber stamp. */
+.uil-stage[data-theme='expediente'] .h-banner span {
+  padding: 6px 26px;
+  background: none;
+  border: 5px solid #b3261e;
+  border-radius: 6px;
+  color: #b3261e;
+  font-size: 52px;
+  letter-spacing: 0.1em;
+  transform: rotate(-8deg);
+  mix-blend-mode: multiply;
+  text-shadow: none;
+  opacity: 0.9;
+}
+
+.uil-stage[data-theme='expediente'] .h-flag {
+  background: #fbf7ea;
+  border-radius: 2px;
+  font-family: var(--ui-display);
+}
+
+.uil-stage[data-theme='expediente'] .h-flag .ico {
+  color: #2a2318;
+}
+
+.uil-stage[data-theme='expediente'] .h-float {
+  font-family: 'Caveat', cursive;
+  font-size: 50px;
+  color: #b3261e;
+  text-shadow: none;
+}
+
+.uil-stage[data-theme='expediente'] .s-brand b {
+  color: #2a2318;
+}
+
+.uil-stage[data-theme='expediente'] .s-res .ico {
+  color: #2a2318;
+}
+
+.uil-stage[data-theme='expediente'] .s-stamp {
+  display: block;
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  padding: 2px 10px;
+  border: 3px solid #b3261e;
+  color: #b3261e;
+  font-family: var(--ui-display);
+  font-size: 20px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-12deg);
+  opacity: 0.8;
+}
+
+.uil-stage[data-theme='expediente'] .s-cta,
+.uil-stage[data-theme='expediente'] .s-scan button {
+  background: #b3261e;
+  color: #fff;
+  border: 0;
+  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.5);
+  font-family: var(--ui-display);
+}
+
+.uil-stage[data-theme='expediente'] .s-scan .ico,
+.uil-stage[data-theme='expediente'] .s-scan span {
+  color: #fff;
+}
+
+.uil-stage[data-theme='expediente'] .s-scan small {
+  color: #f1e6c6;
+}
+
+.uil-stage[data-theme='expediente'] .s-tabs {
+  background: none;
+  box-shadow: none;
+  gap: 4px;
+}
+
+.uil-stage[data-theme='expediente'] .s-tabs button {
+  background: #e2d3aa;
+  border-radius: 6px 6px 0 0;
+  color: #2a2318;
+  font-family: var(--ui-display);
+}
+
+.uil-stage[data-theme='expediente'] .s-tabs button.on {
+  background: #f1e6c6;
+  box-shadow: none;
+  transform: translateY(-4px);
+}
+
+.uil-stage[data-theme='expediente'] .s-list .g {
+  background: none;
+  color: #b3261e;
+  border: 2px solid #b3261e;
+}

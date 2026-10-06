@@ -1,0 +1,617 @@
+/* Campaign screens: the shared pieces every base screen is built from.
+   Defaults follow the shipped strategy screens; themes-base.css restyles
+   them per theme. Positions live here. */
+
+/* ------------------------------------------------------------- 3D stage */
+
+.uil-base .stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.uil-base .stage canvas {
+  display: block;
+}
+
+.uil-base .stage-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.uil-base .stage-fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Labels the 3D sets put over rooms and regions. */
+.uil-stage :is(.room-label, .globe-label, .partner-tag) {
+  font-family: var(--ui-font);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  white-space: nowrap;
+  color: #c8d3dc;
+  background: rgba(3, 9, 14, 0.8);
+  border-left: 2px solid rgba(255, 255, 255, 0.25);
+}
+
+.uil-stage .room-label.command {
+  color: var(--ui-text);
+  border-left-color: var(--ui-accent);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.uil-stage .room-label.built {
+  color: #9fe8ff;
+  border-left-color: var(--ui-accent);
+}
+
+.uil-stage .room-label.busy {
+  color: var(--ui-warn);
+  border-left-color: var(--ui-warn);
+}
+
+.uil-stage .globe-label.contacted {
+  color: #9fd8ff;
+  border-left-color: #3fa9ff;
+}
+
+.uil-stage .globe-label.facility {
+  color: #ff9a9a;
+  border-left-color: var(--ui-alien);
+}
+
+.uil-stage .partner-tag {
+  color: #fff;
+  border-left: 3px solid var(--accent);
+  background: rgba(3, 9, 14, 0.9);
+}
+
+/* ------------------------------------------------------------- surfaces */
+
+.ui :is(.s-card, .s-proposal) {
+  background: var(--ui-panel);
+  border: var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+}
+
+.ui h1 {
+  margin: 0;
+}
+
+.who {
+  font-style: normal;
+  font-weight: 700;
+}
+
+.who.p1 {
+  color: var(--p1);
+}
+
+.who.p2 {
+  color: var(--p2);
+}
+
+/* --------------------------------------------------------------- panels */
+
+.s-left.compact {
+  width: 300px;
+}
+
+.s-ticker {
+  top: auto;
+  left: 16px;
+  bottom: 74px;
+  width: 360px;
+}
+
+.s-ticker .s-list li {
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+  padding-left: 12px;
+}
+
+.s-ctop {
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, 56%);
+  justify-items: center;
+  text-align: center;
+}
+
+.s-ctop h1 {
+  font-family: var(--ui-display);
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.s-ctop.victory h1 {
+  color: var(--ui-good);
+}
+
+.strat .kicker.good {
+  color: var(--ui-good);
+}
+
+.s-group {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+
+.strat .s-muted {
+  font-size: 13px;
+  color: var(--ui-muted);
+}
+
+.strat .s-warn {
+  color: var(--ui-warn);
+}
+
+.strat .s-good {
+  color: var(--ui-good);
+}
+
+/* ------------------------------------------------------------ list rows */
+
+.s-list li.dim {
+  opacity: 0.5;
+}
+
+.s-list li.p1 {
+  box-shadow: inset 3px 0 0 var(--p1);
+}
+
+.s-list li.p2 {
+  box-shadow: inset 3px 0 0 var(--p2);
+}
+
+.s-list em.ok {
+  color: var(--ui-good);
+}
+
+.s-list em.warn {
+  color: var(--ui-warn);
+}
+
+.s-list.build li {
+  align-items: start;
+}
+
+.s-list.build small.cost {
+  color: var(--ui-text);
+}
+
+.s-list.build small.why {
+  color: var(--ui-warn);
+}
+
+/* ------------------------------------------------- bars, stats, controls */
+
+.s-bar {
+  height: 6px;
+  background: var(--ui-pip-off);
+}
+
+.s-bar i {
+  display: block;
+  width: var(--v);
+  min-width: 2px;
+  height: 100%;
+  background: var(--ui-accent);
+}
+
+.s-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.s-stats div {
+  display: grid;
+  padding: 5px 8px;
+  background: var(--ui-btn-active);
+}
+
+.s-stats small {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+
+.s-stats b {
+  font-family: var(--ui-num);
+  font-size: 20px;
+}
+
+.s-stats b.ok {
+  color: var(--ui-good);
+}
+
+.s-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.s-seg button,
+.s-btn {
+  padding: 5px 12px;
+  border: var(--ui-border);
+  background: transparent;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ui-text);
+}
+
+.s-seg button.on {
+  background: var(--ui-btn-active);
+}
+
+.s-btn {
+  justify-self: start;
+}
+
+.s-btn.danger {
+  color: var(--ui-bad);
+}
+
+.s-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.s-select {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  border: var(--ui-border);
+  background: transparent;
+  font-family: var(--ui-font);
+  text-align: left;
+  color: var(--ui-text);
+}
+
+.s-select span {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+
+.s-select b {
+  flex: 1;
+  font-size: 15px;
+}
+
+.s-select::after {
+  content: '▾';
+  color: var(--ui-accent);
+}
+
+.s-cta.big {
+  padding: 12px 44px;
+  font-family: var(--ui-display);
+  font-size: 22px;
+  letter-spacing: 0.24em;
+}
+
+.s-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------ hangar / debrief */
+
+.s-cards {
+  inset: 0;
+  pointer-events: none !important;
+}
+
+.s-card {
+  position: absolute;
+  transform: translateX(-50%);
+  width: var(--card-w, 120px);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  text-align: center;
+  pointer-events: auto;
+  border-top: 3px solid var(--accent, transparent) !important;
+}
+
+.s-card.p1 {
+  --accent: var(--p1);
+}
+
+.s-card.p2 {
+  --accent: var(--p2);
+}
+
+.s-card b {
+  font-size: 15px;
+}
+
+.s-card small {
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.s-card small.ok {
+  color: var(--ui-good);
+}
+
+.s-card small.warn {
+  color: var(--ui-warn);
+}
+
+.s-card small.late {
+  color: var(--ui-bad);
+}
+
+.s-card .promo {
+  color: var(--ui-warn) !important;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.s-card .s-btn {
+  justify-self: center;
+  margin-top: 4px;
+  padding: 2px 10px;
+  font-size: 11px;
+}
+
+.s-card.empty {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.s-card.dead {
+  filter: grayscale(1);
+}
+
+.s-launch {
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+/* Sits over the 3D hangar, so it carries its own backing. */
+.s-launch > small {
+  padding: 2px 10px;
+  font-size: 13px;
+  color: var(--ui-text);
+  background: var(--ui-panel);
+  border-radius: var(--ui-radius);
+}
+
+/* --------------------------------------------------------------- modals */
+
+.s-backdrop {
+  inset: 0;
+  background: rgba(2, 6, 10, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+.s-modal {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+}
+
+.s-modal.wide {
+  width: 880px;
+}
+
+.s-perks {
+  display: grid;
+  grid-template-columns: 96px 1fr 1fr;
+  gap: 6px;
+}
+
+.s-perks .rank {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+
+.s-perks .rank.pick {
+  color: var(--ui-warn);
+}
+
+.perk {
+  display: grid;
+  gap: 2px;
+  padding: 7px 10px;
+  border: var(--ui-border);
+  background: transparent;
+  font-family: var(--ui-font);
+  text-align: left;
+  color: var(--ui-text);
+}
+
+.perk b {
+  font-size: 15px;
+}
+
+.perk small {
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
+.perk.chosen {
+  background: var(--ui-btn-active);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+
+.perk.pickable {
+  box-shadow: inset 0 0 0 1px var(--ui-warn);
+}
+
+.perk:is(.locked, .skipped) {
+  opacity: 0.4;
+}
+
+.s-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.s-options button {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: var(--ui-border);
+  background: transparent;
+  font-family: var(--ui-font);
+  text-align: left;
+  color: var(--ui-text);
+}
+
+.s-options b {
+  font-family: var(--ui-display);
+  font-size: 18px;
+}
+
+.s-options small {
+  font-size: 13px;
+  color: var(--ui-muted);
+}
+
+.s-options .voted {
+  box-shadow: inset 0 0 0 2px var(--p2);
+}
+
+.s-options .who {
+  position: absolute;
+  top: -9px;
+  right: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: #10161c;
+  background: var(--p2);
+}
+
+/* Co-op vote bar, under the top bar. */
+.s-proposal {
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.s-proposal .s-cta,
+.s-proposal .s-btn {
+  padding: 4px 14px;
+}
+
+/* ------------------------------------------------------------ main menu */
+
+.m-shade {
+  inset: 0;
+  background: linear-gradient(90deg, rgba(3, 8, 12, 0.92), rgba(3, 8, 12, 0.55) 40%, transparent 70%);
+}
+
+.m-column {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 520px;
+  padding: 7vh 48px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.m-title h1 {
+  font-family: var(--ui-display);
+  font-size: 84px;
+  letter-spacing: 0.3em;
+  color: var(--ui-accent);
+}
+
+.m-title p {
+  margin: 0 0 4vh;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ui-muted);
+}
+
+.m-item {
+  display: grid;
+  padding: 10px 0 10px 18px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  font-family: var(--ui-display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--ui-text);
+}
+
+.m-item small {
+  font-family: var(--ui-font);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  color: var(--ui-muted);
+}
+
+.m-item.primary {
+  color: var(--ui-accent);
+}
+
+.m-item.on {
+  padding-left: 26px;
+  border-left-color: var(--ui-accent);
+  background: linear-gradient(90deg, var(--ui-btn-active), transparent);
+}
+
+.m-squad {
+  right: 24px;
+  bottom: 24px;
+  top: auto;
+  width: 300px;
+}

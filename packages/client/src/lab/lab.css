@@ -1,0 +1,294 @@
+:root {
+  --bg: #0a1016;
+  --panel: rgba(9, 18, 26, 0.86);
+  --panel-border: rgba(84, 209, 255, 0.28);
+  --accent: #54d1ff;
+  --text: #dcecf5;
+  --muted: #8aa1b0;
+  --good: #7ee08a;
+  --bad: #ff8a7a;
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  color: var(--text);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#lab {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.view {
+  position: fixed;
+  inset: 0;
+}
+
+.lab-view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.lab-view canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.lab-view.pixelated canvas.gl {
+  image-rendering: pixelated;
+}
+
+.lab-view canvas.hud {
+  pointer-events: none;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(6px);
+}
+
+.side {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  bottom: 84px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.side header {
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.kicker {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+h1 {
+  margin: 2px 0 4px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.hint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.hint a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.styles {
+  padding: 6px 12px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  max-height: 46%;
+  overflow-y: auto;
+}
+
+.styles summary {
+  margin: 6px 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.styles .list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.styles button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.1;
+  background: rgba(84, 209, 255, 0.04);
+  border: 1px solid transparent;
+}
+
+.styles button:hover {
+  background: rgba(84, 209, 255, 0.1);
+}
+
+.styles button.on {
+  border-color: var(--accent);
+  background: rgba(84, 209, 255, 0.16);
+}
+
+kbd {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font: 600 12px 'Rajdhani', sans-serif;
+  color: var(--accent);
+  border: 1px solid var(--panel-border);
+}
+
+.info {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 18px 18px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.info h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.info h3 {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.info p {
+  margin: 0;
+}
+
+.tagline {
+  margin-top: 4px !important;
+  color: var(--muted);
+}
+
+.refs {
+  font-weight: 600;
+}
+
+.cost {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 3px 10px;
+  font-size: 14px;
+  border: 1px solid var(--panel-border);
+}
+
+.cost-muy-bajo b,
+.cost-bajo b {
+  color: var(--good);
+}
+
+.cost-medio b {
+  color: #ffc94a;
+}
+
+.cost-alto b {
+  color: var(--bad);
+}
+
+.info ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.info li {
+  margin: 2px 0;
+}
+
+.pros li::marker {
+  color: var(--good);
+}
+
+.cons li::marker {
+  color: var(--bad);
+}
+
+.toolbar {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+}
+
+.toolbar .group {
+  display: flex;
+  gap: 4px;
+}
+
+.toolbar button {
+  padding: 6px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  background: rgba(84, 209, 255, 0.05);
+  border: 1px solid var(--panel-border);
+}
+
+.toolbar button:hover {
+  background: rgba(84, 209, 255, 0.14);
+}
+
+.toolbar button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fps {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+#lab.bare .side,
+#lab.bare .toolbar {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .side {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 120px;
+    width: auto;
+    max-height: 45vh;
+  }
+
+  .toolbar {
+    left: 8px;
+    right: 8px;
+    flex-wrap: wrap;
+  }
+}

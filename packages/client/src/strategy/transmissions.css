@@ -1,0 +1,187 @@
+/* The radio panel (transmissions.ts): a slip of paper docked in the bottom
+   right corner, above the tabs, which is the free corner of the base screens
+   (the hub's Agenda and "Ahora" sit bottom left, the hangar's mission line
+   top centre). It never blocks them. Uses the Expediente tokens from styles.css. */
+
+.radio {
+  position: absolute;
+  right: 12px;
+  bottom: 40px;
+  z-index: 13;
+  display: none;
+  gap: 10px;
+  width: min(400px, calc(100vw - 32px));
+  padding: 10px 12px;
+  color: var(--ink);
+  background: var(--paper-bg);
+  box-shadow: var(--paper-shadow);
+  transform: rotate(0.4deg);
+  cursor: pointer;
+  user-select: none;
+}
+
+.radio.show {
+  display: flex;
+  animation: radio-in 0.25s ease-out;
+}
+
+/* On the geoscape the bottom right belongs to the briefing's Desplegar: the
+   radio goes top centre, over the globe, between the two panels. */
+.strat[data-view='geoscape'] .radio {
+  top: 40px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+}
+
+@keyframes radio-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) rotate(0.4deg);
+  }
+}
+
+/* Placeholder portrait: the initials stamped on a card. */
+.radio-portrait {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--ink);
+  background: var(--paper-dark);
+}
+
+.radio-portrait span {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--stamp);
+  rotate: -6deg;
+}
+
+.radio-portrait[data-speaker='coro'] {
+  background: #0d1612;
+  border-color: #0d1612;
+}
+
+.radio-portrait[data-speaker='coro'] span {
+  color: #7dffb0;
+  rotate: 0deg;
+  text-shadow: 0 0 8px #7dffb0;
+}
+
+.radio-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.radio-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.radio-channel {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.radio-close {
+  padding: 0 4px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.radio-close:hover {
+  color: var(--stamp);
+}
+
+.radio-who {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 2px;
+}
+
+.radio-who b {
+  font-family: var(--font-display);
+}
+
+.radio-who small {
+  color: var(--ink-soft);
+}
+
+.radio-text {
+  min-height: 2.6em;
+  margin: 4px 0 2px;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+/* The Coro is not typed by anyone. */
+.radio-text.coro {
+  font-style: italic;
+  color: var(--psi);
+}
+
+.radio-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  color: var(--ink-soft);
+}
+
+.radio-next {
+  font-family: var(--font-hand);
+  font-size: 18px;
+  color: var(--pen);
+}
+
+/* Voxel bust (strategy/portraits.ts) on a photo backdrop, like a file's ID photo. */
+.radio-portrait.voxel {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 35%, #7d8a94, #3a434b 75%);
+}
+
+.radio-portrait.voxel img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* At the panel's small size the face matters most: zoom in on it (not on the Coro's column). */
+.radio-portrait.voxel:not([data-speaker='coro']) img {
+  transform: scale(1.3);
+  transform-origin: 50% 30%;
+}
+
+/* The Coro: no face, a signal; dark backdrop and a moving band of static. */
+.radio-portrait.voxel[data-speaker='coro'] {
+  background: radial-gradient(circle at 50% 50%, #12261c, #050a07 75%);
+}
+
+.radio-portrait.voxel[data-speaker='coro']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(125, 255, 176, 0.08) 0 1px, transparent 1px 3px);
+  animation: coro-static 0.6s steps(6) infinite;
+  pointer-events: none;
+}
+
+@keyframes coro-static {
+  to {
+    background-position: 0 6px;
+  }
+}

@@ -1,0 +1,1911 @@
+/*
+ * Interface art direction "Expediente" (M5): the campaign is a classified
+ * file. Paper, typewriter, rubber stamps and notes in pen. Every colour and
+ * font comes from these tokens; strategy.css maps its --x-* names onto them,
+ * so combat, base and menu share one palette.
+ */
+@import '@fontsource/courier-prime/latin-400.css';
+@import '@fontsource/courier-prime/latin-700.css';
+@import '@fontsource/special-elite/latin-400.css';
+@import '@fontsource/caveat/latin-600.css';
+@import '@fontsource/caveat/latin-700.css';
+
+:root {
+  --font: 'Courier Prime', 'Courier New', monospace;
+  --font-display: 'Special Elite', 'Courier New', monospace;
+  --font-hand: 'Caveat', 'Segoe Print', cursive;
+
+  --paper: #f1e6c6;
+  --paper-dark: #e2d3aa;
+  --paper-light: #fbf7ea;
+  /* Materials, generated and tileable (assets/expediente): paper grain as a
+     shade layer for any paper tone, ballpoint and ribbon ink as light speckle
+     laid over the ink colour, and the wear of a rubber stamp as a mask. */
+  --paper-grain: url('./assets/expediente/paper.webp') 0 0 / 512px 512px;
+  --ink-pen-tex: url('./assets/expediente/ink-pen.png') 0 0 / 64px 64px;
+  --ink-type-tex: url('./assets/expediente/ink-type.png') 0 0 / 96px 48px;
+  --stamp-wear: url('./assets/expediente/stamp.png') 0 0 / 128px 128px;
+  --paper-bg: var(--paper-grain), repeating-linear-gradient(0deg, transparent 0 23px, rgba(80, 110, 160, 0.16) 23px 24px), linear-gradient(135deg, #f1e6c6, #e2d3aa);
+  --paper-shadow: 2px 4px 10px rgba(0, 0, 0, 0.45);
+
+  --ink: #2a2318;
+  --ink-soft: #6e6250;
+  --ink-blue: #2a4a7a;
+  --ink-blue-soft: rgba(42, 74, 122, 0.12);
+  --pen: #1d4fb0;
+  --stamp: #b3261e;
+  --good: #2f6b2f;
+  --warn: #9a5a00;
+  --psi: #6a2c8a;
+  /* One colour per quantity, everywhere: health, actions, ammo, armour. */
+  --c-hp: #2e7d3a;
+  --c-ap: var(--pen);
+  --c-ammo: #b0651a;
+  --c-armor: #5b6b7c;
+  --c-aim: var(--ink);
+
+  /* Stat symbols (masks, coloured by currentColor): drawn once, used by the sheet. */
+  --i-hp: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21s-8.5-5-8.5-11A4.7 4.7 0 0 1 12 6.6 4.7 4.7 0 0 1 20.5 10c0 6-8.5 11-8.5 11z'/%3E%3C/svg%3E");
+  --i-ap: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4.5 5l7 7-7 7M12.5 5l7 7-7 7' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='3.4'/%3E%3C/svg%3E");
+  --i-ammo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 9.5C9 5 12 2 12 2s3 3 3 7.5V19H9z'/%3E%3Crect x='8' y='20' width='8' height='2.6' rx='.6'/%3E%3C/svg%3E");
+  --i-aim: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='7' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3Cpath d='M12 1.5v6M12 16.5v6M1.5 12h6M16.5 12h6' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3C/svg%3E");
+  --i-grenade: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='14.5' r='7'/%3E%3Cpath d='M9 7.5V4.5h5l3 3' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.4'/%3E%3C/svg%3E");
+  --i-medkit: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M3 7.5h18V21H3z M10 10v3H7v3h3v3h4v-3h3v-3h-3v-3z'/%3E%3Cpath d='M9 7.5V4.5h6v3' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2'/%3E%3C/svg%3E");
+  --i-armor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l9 3.5v6.5c0 5-3.8 8.8-9 10-5.2-1.2-9-5-9-10V5.5z'/%3E%3C/svg%3E");
+  --i-weapon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 24'%3E%3Cpath d='M1 9.5h29l2-2.5h9v3.5h5v3.5H34l-2.5 2.5H26l-2.2 5.5h-4.6l1.1-5.5H10.5L6 19.5H1.5z'/%3E%3C/svg%3E");
+  --i-will: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.4'/%3E%3Ccircle cx='12' cy='12' r='4.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.4'/%3E%3Ccircle cx='12' cy='12' r='1.6'/%3E%3C/svg%3E");
+  --i-flag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 21V3.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3Cpath d='M5.5 4h12l-3 4.5 3 4.5h-12z'/%3E%3C/svg%3E");
+  --i-skull: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 2.5a8 8 0 0 0-8 8c0 2.8 1.4 4.6 3.2 5.6V20h9.6v-3.9c1.8-1 3.2-2.8 3.2-5.6a8 8 0 0 0-8-8z M9 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4z M15 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/%3E%3C/svg%3E");
+  --i-clock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3Cpath d='M12 6.5V12l3.5 2.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3C/svg%3E");
+  --i-pick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 8.5C7 3.5 15 3 21 7.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.8'/%3E%3Cpath d='M12 5.5L8.5 21' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.8'/%3E%3C/svg%3E");
+  --i-xp: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z'/%3E%3C/svg%3E");
+
+  /* Text drawn straight over the 3D scene. */
+  --on-scene: #f1e6c6;
+  --scene-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.8);
+
+  /* Older names, still used by inline styles. */
+  --bg: #0a1016;
+  --text: var(--ink);
+  --muted: var(--ink-soft);
+  --danger: var(--stamp);
+  --alien: var(--stamp);
+  --xcom: var(--ink-blue);
+  --accent-ui: var(--ink-blue);
+
+  font-family: var(--font);
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* A sheet of the file: ruled paper with a soft shadow. */
+.panel {
+  background: var(--paper-bg);
+  box-shadow: var(--paper-shadow);
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------- materials */
+
+/* Ballpoint pen: the ink thins and skips with the pressure. The texture is
+   clipped to the letters; \`color\` stays, so borders in currentColor (the
+   circled odds) keep the ink colour. */
+.pen,
+.shot-numbers .big,
+.shot-panel .effect {
+  background: var(--ink-pen-tex);
+  background-color: currentColor;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 0.6px color-mix(in srgb, currentColor 40%, transparent);
+}
+
+/* Typewriter: uneven strike from a worn ribbon, a little ink bleed. */
+.type-ink,
+.unit-name,
+.card-name,
+.mission-kind,
+.shot-target,
+.outcome-card h2,
+.modal-card h2,
+.mission-intro h1,
+.typed > span {
+  background: var(--ink-type-tex);
+  background-color: currentColor;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 0.7px color-mix(in srgb, currentColor 55%, transparent);
+}
+
+/* Small typed text keeps full ink (legibility) and only bleeds a little. */
+.unit-class,
+.unit-stats,
+.squad-card .cls,
+.mods,
+.log-line,
+.graze,
+.player {
+  text-shadow: 0 0 0.6px color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* Rubber stamps: the ink did not take everywhere. Only on big stamps without
+   a paper backing of their own (small ones keep full ink to stay legible). */
+.outcome-card h1,
+.stamp-wear {
+  -webkit-mask: var(--stamp-wear);
+  mask: var(--stamp-wear);
+}
+
+/* Letters from ui/typed.ts: each struck slightly off, some light, some
+   hard enough to leave a ghost. */
+.typed {
+  white-space: pre;
+}
+
+.typed > span {
+  display: inline-block;
+  transform: translateY(var(--dy, 0)) rotate(var(--rot, 0));
+  opacity: var(--ink, 1);
+}
+
+.typed > span.struck {
+  text-shadow:
+    0.05em 0.02em 0 color-mix(in srgb, currentColor 30%, transparent),
+    0 0 0.7px color-mix(in srgb, currentColor 55%, transparent);
+}
+
+/* --------------------------------------------------------------- buttons */
+
+.hud button.fire {
+  padding: 8px 14px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.1em;
+  background: var(--stamp);
+  border: 0;
+  border-radius: 2px;
+  color: #fff;
+  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.45);
+}
+
+.hud button.fire:hover:not(:disabled) {
+  background: #c9302a;
+}
+
+.hud button.fire:disabled {
+  opacity: 0.45;
+}
+
+.hud button.secondary,
+.hud button.cancel,
+.hud button.small {
+  padding: 6px 12px;
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  background: var(--paper-grain), var(--paper-light);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+.hud button.secondary:hover,
+.hud button.cancel:hover,
+.hud button.small:hover {
+  background: #fff;
+}
+
+.hud button.small {
+  padding: 4px 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.hud button.danger {
+  padding: 10px 18px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  background: var(--paper-grain), var(--paper-light);
+  border: 2px solid var(--stamp);
+  border-radius: 2px;
+  color: var(--stamp);
+}
+
+.hud button.danger:hover {
+  background: #fff;
+}
+
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.offline .dot {
+  background: transparent;
+  border: 2px solid var(--accent);
+}
+
+/* ------------------------------------------------------------------ game */
+
+.game {
+  position: fixed;
+  inset: 0;
+}
+
+.game canvas {
+  display: block;
+}
+
+.labels-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* CSS2D labels set their own z-index; keep them below the HUD. */
+  isolation: isolate;
+}
+
+/* Compact by design: the scene is the game, the paper only frames it. */
+.hud {
+  /* Bottom row: soldier sheet | abilities | turn buttons. The ability bar
+     takes exactly the space between the other two, so they never overlap. */
+  --unit-w: 236px;
+  --end-w: 172px;
+  --edge: 8px;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: 13px;
+}
+
+.hud button,
+.hud .squad,
+.hud .shot-panel,
+.hud .unit-panel,
+.hud .log.open {
+  pointer-events: auto;
+}
+
+/* ------------------------------------------------- top: one strip of tape */
+
+/* Turn and players never shrink; the mission gives way (its objective is
+   cut, or on narrow screens drops to a second row where it may wrap). */
+.top {
+  position: absolute;
+  top: var(--edge);
+  /* Centred with auto margins, not left: 50%, so it can size itself to the
+     whole width it is allowed (left: 50% leaves it only half to measure). */
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin-inline: auto;
+  max-width: calc(100% - 2 * 232px);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  background: var(--paper-grain), var(--paper);
+  box-shadow: 1px 2px 6px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.top > * {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+}
+
+.top > * + * {
+  border-left: 1px dashed rgba(42, 35, 24, 0.35);
+}
+
+.turn-label {
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}
+
+.turn-label.alien {
+  color: var(--stamp);
+}
+
+/* Concealment is a small stamp next to the turn. */
+.conceal {
+  padding: 1px 4px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  border: 1.5px solid;
+  transform: rotate(-5deg);
+}
+
+.conceal.on {
+  color: var(--good);
+}
+
+.conceal.off {
+  color: var(--stamp);
+}
+
+.hud .mission {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mission-kind,
+.timer {
+  flex: none;
+}
+
+.mission-kind {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink-blue);
+}
+
+.mission-goal {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.turn,
+.players,
+.player {
+  flex: none;
+}
+
+.timer {
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--warn);
+  border: 1.5px solid currentColor;
+}
+
+.timer.urgent {
+  color: #fff;
+  background: var(--stamp);
+  border-color: var(--stamp);
+  animation: pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.65;
+  }
+}
+
+.players {
+  gap: 12px;
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.player .dot {
+  width: 8px;
+  height: 8px;
+}
+
+.player.me .name::after {
+  content: ' (tú)';
+  color: var(--ink-soft);
+}
+
+.player .status {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.player.ready .status {
+  color: var(--good);
+  font-weight: 700;
+}
+
+/* Who gives the orders: the name underlined in pen. */
+.player.command .name {
+  box-shadow: inset 0 -2px 0 var(--pen);
+}
+
+.player.command .status {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pen);
+}
+
+.player.offline {
+  opacity: 0.6;
+}
+
+/* ----------------------------------------------------------- squad list */
+
+.squad {
+  position: absolute;
+  top: var(--edge);
+  left: var(--edge);
+  width: 206px;
+  padding: 4px 5px;
+  display: grid;
+  gap: 1px;
+}
+
+.squad-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px 6px;
+  padding: 2px 5px;
+  border-left: 3px solid var(--accent);
+  opacity: 0.7;
+}
+
+.squad-card.mine {
+  opacity: 1;
+  cursor: pointer;
+}
+
+.squad-card.mine:hover {
+  background: var(--ink-blue-soft);
+}
+
+.squad-card.selected {
+  background: var(--ink-blue-soft);
+  box-shadow: inset 0 0 0 1px var(--ink-blue);
+}
+
+.squad-card.dead {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.squad-card.evacuated {
+  opacity: 0.55;
+  border-left-color: var(--good);
+}
+
+.card-name {
+  flex: 1 1 96px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.squad-card .cls {
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.card-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px 6px;
+  align-items: center;
+}
+
+/* Health as tally marks, actions as ticked circles, each in its own colour. */
+.hp,
+.ap {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.hp i {
+  display: inline-block;
+  width: 2px;
+  height: 9px;
+  background: color-mix(in srgb, var(--c-hp) 22%, transparent);
+}
+
+.hp i.on {
+  background: var(--c-hp);
+}
+
+.ap i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--c-ap);
+  border-radius: 50%;
+}
+
+.ap i.on {
+  background: var(--c-ap);
+}
+
+/* Statuses are small rubber stamps. */
+em.ow,
+em.hk,
+em.aid,
+em.stun,
+em.data,
+em.evac,
+em.psi {
+  padding: 0 3px;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  border: 1.5px solid currentColor;
+  transform: rotate(-2deg);
+}
+
+em.ow {
+  color: var(--warn);
+}
+
+em.hk {
+  color: var(--ink-blue);
+}
+
+em.aid,
+em.data,
+em.evac {
+  color: var(--good);
+}
+
+em.stun {
+  color: var(--stamp);
+}
+
+em.psi {
+  color: var(--psi);
+}
+
+/* ------------------------------------------------- soldier sheet: symbols */
+
+.unit-panel {
+  position: absolute;
+  left: var(--edge);
+  bottom: var(--edge);
+  width: var(--unit-w);
+  padding: 6px 10px 7px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 5px 8px;
+  transform: rotate(-0.6deg);
+}
+
+/* Paper clip. */
+.unit-panel::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  right: 18px;
+  width: 10px;
+  height: 28px;
+  border: 2.5px solid #8a8f96;
+  border-radius: 6px;
+}
+
+.unit-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding-right: 34px;
+}
+
+/* Rank chevrons, stacked. */
+.rank {
+  display: inline-grid;
+  gap: 1px;
+  align-self: center;
+}
+
+.rank i {
+  width: 11px;
+  height: 4px;
+  background: var(--ink);
+  clip-path: polygon(0 100%, 50% 0, 100% 100%, 78% 100%, 50% 45%, 22% 100%);
+}
+
+.unit-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 17px;
+}
+
+.unit-class {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+}
+
+.unit-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--c, var(--ink));
+}
+
+.stat-icon {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+
+.stat b {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.stat.hp {
+  --c: var(--c-hp);
+  --icon: var(--i-hp);
+}
+
+.stat.ap {
+  --c: var(--c-ap);
+  --icon: var(--i-ap);
+}
+
+.stat.ammo {
+  --c: var(--c-ammo);
+  --icon: var(--i-ammo);
+}
+
+.stat.aim {
+  --c: var(--c-aim);
+  --icon: var(--i-aim);
+}
+
+.stat.grenade {
+  --c: var(--c-aim);
+  --icon: var(--i-grenade);
+}
+
+.stat.medkit {
+  --c: var(--c-hp);
+  --icon: var(--i-medkit);
+}
+
+.stat.armor {
+  --c: var(--c-armor);
+  --icon: var(--i-armor);
+}
+
+.pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.pips i {
+  display: inline-block;
+  background: color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.pips i.on {
+  background: currentColor;
+}
+
+.stat.hp .pips i {
+  width: 3px;
+  height: 11px;
+}
+
+.stat.ap .pips i {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  background: none;
+}
+
+.stat.ap .pips i.on {
+  background: currentColor;
+}
+
+/* Cartridges. */
+.stat.ammo .pips i {
+  width: 4px;
+  height: 10px;
+  border-radius: 2px 2px 0 0;
+}
+
+/* The weapon and its tier, coloured like the guns: steel, magnetic, plasma. */
+.unit-weapon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-soft);
+}
+
+.unit-weapon .stat-icon {
+  width: 24px;
+  height: 12px;
+  --icon: var(--i-weapon);
+}
+
+.tier {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.tier i {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  transform: rotate(45deg);
+}
+
+.tier.t2 {
+  color: #2a8fc9;
+}
+
+.tier.t3 {
+  color: #8a4fd6;
+}
+
+/* ------------------------------------------------- abilities: index cards */
+
+.abilities {
+  position: absolute;
+  bottom: var(--edge);
+  left: calc(var(--unit-w) + var(--edge) * 2.5);
+  right: calc(var(--end-w) + var(--edge) * 2.5);
+  display: flex;
+  flex-wrap: wrap-reverse;
+  justify-content: center;
+  gap: 6px 5px;
+  transition: opacity 0.2s;
+}
+
+/* The partner gives the orders: our cards rest. */
+.hud.waiting-command .abilities {
+  opacity: 0.5;
+}
+
+.ability {
+  position: relative;
+  width: 62px;
+  min-height: 54px;
+  padding: 14px 2px 3px;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 2px;
+  background: var(--paper-grain), var(--paper-light);
+  border: 0;
+  border-bottom: 3px solid var(--ink-blue);
+  border-radius: 3px;
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.45);
+  color: var(--ink);
+  transition: transform 0.12s ease;
+}
+
+.ability:hover:not(:disabled) {
+  transform: translateY(-3px);
+}
+
+.ability.active {
+  transform: translateY(-6px) rotate(-2deg);
+  border-bottom-color: var(--stamp);
+  box-shadow: 2px 5px 8px rgba(0, 0, 0, 0.5);
+}
+
+.ability.free {
+  border-bottom-color: var(--good);
+}
+
+.ability:disabled {
+  background: var(--paper-grain), #e9e2cf;
+}
+
+.ability:disabled > :is(.ico, .label) {
+  opacity: 0.45;
+}
+
+.ability .ico {
+  width: 21px;
+  height: 21px;
+}
+
+.ability .key {
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.ability .label {
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 10px;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  text-align: center;
+  hyphens: auto;
+  overflow-wrap: anywhere;
+}
+
+.ability .count {
+  position: absolute;
+  top: 1px;
+  right: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--stamp);
+}
+
+.ability .cd {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-hand);
+  font-size: 28px;
+  color: var(--stamp);
+  background: rgba(241, 230, 198, 0.75);
+  pointer-events: none;
+}
+
+/* Nothing left to use it with: stamped across the card. A small stamp wears
+   less (a solid layer keeps 60 % of the ink everywhere), so the word reads. */
+.ability.depleted > :is(.ico, .label) {
+  opacity: 0.25;
+}
+
+.ability .stamp {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.ability .stamp::before {
+  content: 'AGOTADO';
+  padding: 1px 3px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--stamp);
+  border: 2px solid currentColor;
+  border-radius: 2px;
+  transform: rotate(-16deg);
+  -webkit-mask: var(--stamp-wear), linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6));
+  mask: var(--stamp-wear), linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6));
+}
+
+/* Description on hover, typed on a slip above the card. */
+.ability[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 260px;
+  padding: 3px 8px;
+  font-size: 12px;
+  text-align: left;
+  background: var(--paper-grain), var(--paper-light);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+  color: var(--ink);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ------------------------------------------------- turn and command buttons */
+
+.turn-actions {
+  position: absolute;
+  right: var(--edge);
+  bottom: var(--edge);
+  width: var(--end-w);
+  display: grid;
+  gap: 5px;
+}
+
+.end-turn {
+  padding: 7px 8px 6px;
+  display: grid;
+  gap: 1px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  background: var(--stamp);
+  border: 0;
+  border-radius: 2px;
+  color: #fff;
+  box-shadow: 2px 3px 6px rgba(0, 0, 0, 0.5);
+}
+
+.end-turn small {
+  font-family: var(--font);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #f4d6d0;
+}
+
+.end-turn.is-ready {
+  background: var(--good);
+}
+
+.end-turn.is-ready small {
+  color: #d8eed8;
+}
+
+.end-turn:disabled {
+  opacity: 0.45;
+}
+
+/* The partner has the command: a slip saying who, not a dead red button. */
+.end-turn.is-waiting {
+  opacity: 1;
+  color: var(--pen);
+  background: var(--paper-grain), var(--paper);
+  border: 1.5px dashed var(--pen);
+}
+
+.end-turn.is-waiting small {
+  color: var(--ink-soft);
+}
+
+.pass-command {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--pen);
+  background: var(--paper-grain), var(--paper-light);
+  border: 1.5px solid var(--pen);
+  border-radius: 2px;
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.pass-command:hover:not(:disabled) {
+  background: var(--paper-grain), #fff;
+}
+
+.pass-command:disabled {
+  opacity: 0.45;
+}
+
+/* Key cap. */
+.pass-command small {
+  padding: 0 4px;
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  border-bottom-width: 2px;
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------------- shot panel */
+
+.shot-panel {
+  position: absolute;
+  right: var(--edge);
+  top: 50%;
+  transform: translateY(-50%) rotate(1deg);
+  width: 214px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.shot-title {
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.shot-head {
+  display: grid;
+  grid-template-columns: 22px 1fr 22px;
+  align-items: center;
+  text-align: center;
+}
+
+.hud .shot-head .cycle {
+  width: 22px;
+  height: 24px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--pen);
+}
+
+.hud .shot-head .cycle:hover {
+  color: var(--stamp);
+}
+
+.shot-head .cycle .ico {
+  width: 20px;
+  height: 20px;
+}
+
+.shot-target {
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.1;
+  color: var(--stamp);
+}
+
+.shot-panel.support .shot-target {
+  color: var(--good);
+}
+
+.shot-target small {
+  font-family: var(--font);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.shot-numbers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The odds, written in marker. */
+.shot-numbers .big {
+  font-family: var(--font-hand);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 0.9;
+  text-align: center;
+  color: var(--stamp);
+}
+
+.shot-numbers .big:not(.crit) {
+  justify-self: center;
+  padding: 2px 10px 3px;
+  border: 2.5px solid var(--stamp);
+  border-radius: 50% 45% 55% 48%;
+  transform: rotate(-4deg);
+}
+
+.shot-numbers .big.crit {
+  font-size: 26px;
+  color: var(--ink-blue);
+}
+
+.shot-numbers .big small {
+  display: block;
+  font-family: var(--font);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--ink-soft);
+}
+
+.mods {
+  display: grid;
+  gap: 1px;
+  padding-top: 4px;
+  font-size: 12px;
+  border-top: 1px solid rgba(42, 35, 24, 0.25);
+}
+
+.mod {
+  display: flex;
+  justify-content: space-between;
+}
+
+.mod .pos {
+  color: var(--good);
+}
+
+.mod .neg {
+  color: var(--stamp);
+}
+
+.mods.crit .mod span:first-child::before {
+  content: 'Crít. · ';
+  color: var(--ink-soft);
+}
+
+.graze {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.shot-panel .effect {
+  padding: 2px 0;
+  text-align: center;
+  font-family: var(--font-hand);
+  font-size: 19px;
+  color: var(--pen);
+}
+
+.shot-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+}
+
+.hud .shot-actions button.fire {
+  padding: 6px 8px;
+  font-size: 14px;
+}
+
+.hud .shot-actions button.cancel {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+/* --------------------------------------------------- menu tab and log */
+
+.side {
+  position: absolute;
+  right: var(--edge);
+  top: var(--edge);
+  width: 224px;
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+}
+
+.hud .menu-button {
+  padding: 3px 10px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  background: var(--paper-grain), var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  color: var(--ink);
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.hud .menu-button:hover {
+  background: var(--paper-grain), var(--paper-light);
+}
+
+/* The log is typed on a strip of paper; folded, only the last two lines. */
+.log {
+  width: 100%;
+  display: grid;
+  padding: 4px 8px;
+  background: var(--paper-bg);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+.log.empty {
+  display: none;
+}
+
+.log.open {
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.log-line {
+  padding: 1px 0 1px 6px;
+  font-size: 11px;
+  line-height: 1.25;
+  border-left: 2px solid rgba(42, 35, 24, 0.25);
+  animation: fade-in 0.25s ease-out;
+}
+
+.hud .log-toggle {
+  justify-self: end;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-family: var(--font-hand);
+  font-size: 15px;
+  line-height: 1.1;
+  color: var(--pen);
+}
+
+/* ------------------------------------------------------------ feedback */
+
+/* Big notices are rubber stamps on a slip. */
+.banner {
+  position: absolute;
+  top: 24%;
+  left: 50%;
+  padding: 4px 20px;
+  font-family: var(--font-display);
+  font-size: 36px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  border: 4px solid currentColor;
+  border-radius: 5px;
+  background: rgba(241, 230, 198, 0.9);
+  box-shadow: var(--paper-shadow);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-6deg) scale(1.5);
+  transition:
+    opacity 0.18s,
+    transform 0.18s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.banner.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(-6deg) scale(1);
+}
+
+.banner.xcom {
+  color: var(--ink-blue);
+}
+
+.banner.alien {
+  color: var(--stamp);
+}
+
+.banner.warn {
+  color: var(--warn);
+}
+
+.toast {
+  position: absolute;
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-1deg);
+  padding: 3px 12px;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  color: var(--stamp);
+  background: var(--paper-grain), var(--paper);
+  box-shadow: var(--paper-shadow);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.toast.show {
+  opacity: 1;
+}
+
+.connection {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 12px;
+  font-weight: 700;
+  color: var(--warn);
+  background: var(--paper-grain), var(--paper);
+  box-shadow: var(--paper-shadow);
+  display: none;
+}
+
+.connection.show {
+  display: block;
+}
+
+/* ----------------------------------------------------------- Esc menu */
+
+.game-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: none;
+  place-items: center;
+  background: rgba(10, 8, 5, 0.55);
+  pointer-events: auto;
+}
+
+.game-menu.show {
+  display: grid;
+}
+
+.game-menu-card {
+  width: min(360px, 90vw);
+  padding: 16px 22px 14px;
+  display: grid;
+  gap: 0;
+  transform: rotate(-0.6deg);
+}
+
+.game-menu-card h2 {
+  margin: 0 0 6px;
+  padding-bottom: 4px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--ink);
+}
+
+.hud .menu-entry {
+  display: block;
+  width: 100%;
+  padding: 7px 4px;
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed rgba(42, 35, 24, 0.3);
+  color: var(--ink);
+}
+
+.hud .menu-entry:hover {
+  background: var(--ink-blue-soft);
+}
+
+/* An entry like the others, only in red (not the big .danger button). */
+.hud .menu-entry.danger {
+  padding: 7px 4px;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed rgba(42, 35, 24, 0.3);
+  border-radius: 0;
+  color: var(--stamp);
+}
+
+.hud .menu-entry.danger:hover {
+  background: rgba(179, 38, 30, 0.08);
+}
+
+.hud .menu-entry.toggle {
+  font-family: var(--font);
+  font-size: 15px;
+}
+
+.hud .menu-back {
+  justify-self: start;
+  margin-top: 10px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  color: var(--pen);
+}
+
+dl.controls {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 5px 12px;
+  font-size: 13px;
+}
+
+/* Keys are little key caps. */
+dl.controls dt {
+  justify-self: start;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--paper-grain), var(--paper-light);
+  border: 1px solid var(--ink);
+  border-bottom-width: 2.5px;
+  border-radius: 3px;
+}
+
+dl.controls dd {
+  margin: 0;
+}
+
+/* -------------------------------------------------- outcome and modals */
+
+.outcome,
+.modal {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  background: rgba(10, 8, 5, 0.6);
+  pointer-events: auto;
+}
+
+.modal {
+  z-index: 20;
+}
+
+.outcome.show,
+.modal.show {
+  display: grid;
+}
+
+.outcome-card,
+.modal-card {
+  position: relative;
+  text-align: center;
+  background: var(--paper-bg);
+  box-shadow: var(--paper-shadow);
+}
+
+.outcome-card {
+  padding: 30px 48px 26px;
+  transform: rotate(-0.6deg);
+}
+
+/* The result is stamped on the report. */
+.outcome-card h1 {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 4px 18px;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  border: 5px solid currentColor;
+  border-radius: 6px;
+  transform: rotate(-4deg);
+}
+
+.outcome-card.victory h1 {
+  color: var(--good);
+}
+
+.outcome-card.defeat h1 {
+  color: var(--stamp);
+}
+
+.outcome-card h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.outcome-card p,
+.modal-card p {
+  margin: 0 0 18px;
+  color: var(--ink-soft);
+}
+
+.modal-card {
+  padding: 20px 26px;
+  max-width: 440px;
+}
+
+.modal-card h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+.modal-actions,
+.outcome-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Mission arrival: a typed strip across the screen. */
+.mission-intro {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  width: min(760px, 92vw);
+  padding: 16px 28px 18px;
+  text-align: center;
+  background: var(--paper-bg);
+  box-shadow: var(--paper-shadow);
+  transform: translate(-50%, -50%) rotate(-1deg);
+  pointer-events: none;
+  animation: intro-in 0.5s ease;
+  transition: opacity 0.8s ease;
+  z-index: 20;
+}
+
+.mission-intro.out {
+  opacity: 0;
+}
+
+.mission-intro small {
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: var(--stamp);
+}
+
+.mission-intro h1 {
+  margin: 4px 0 6px;
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mission-intro p {
+  margin: 2px 0;
+}
+
+@keyframes intro-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-1deg) scale(1.08);
+  }
+}
+
+/* ------------------------------------------- unit flags (CSS2D, in 3D) */
+
+.uflag {
+  font-family: var(--font);
+  pointer-events: none;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  transform: translateY(-4px);
+}
+
+.uflag-name {
+  display: none;
+  padding: 0 6px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--paper-grain), var(--paper);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.uflag.named .uflag-name {
+  display: block;
+}
+
+/* A paper tag, edged with the owner's colour. */
+.uflag-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  background: var(--paper-grain), var(--paper-light);
+  border-bottom: 3px solid var(--accent);
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.55);
+}
+
+.uflag.alien .uflag-row {
+  border-bottom-color: var(--stamp);
+}
+
+.uflag .hp i {
+  height: 10px;
+}
+
+/* Aliens keep the enemy's red; the off marks fade from it too. */
+.uflag.alien .hp i {
+  background: color-mix(in srgb, var(--stamp) 22%, transparent);
+}
+
+.uflag.alien .hp i.on {
+  background: var(--stamp);
+}
+
+.uflag em {
+  font-size: 10px;
+}
+
+.uflag .armor {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.uflag .armor i {
+  display: inline-block;
+  width: 6px;
+  height: 8px;
+  background: var(--c-armor);
+}
+
+.uflag .cover {
+  width: 12px;
+  height: 13px;
+  clip-path: polygon(50% 0, 100% 15%, 92% 60%, 50% 100%, 8% 60%, 0 15%);
+  background: rgba(42, 35, 24, 0.2);
+}
+
+.uflag .cover.c2 {
+  background: var(--ink-blue);
+}
+
+.uflag .cover.c1 {
+  background: linear-gradient(180deg, rgba(42, 35, 24, 0.2) 50%, var(--ink-blue) 50%);
+}
+
+.uflag .cover.c0 {
+  background: var(--stamp);
+}
+
+/* Numbers that rise over the units, written in marker. */
+.float-text {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  color: var(--on-scene);
+  text-shadow: var(--scene-shadow);
+  white-space: nowrap;
+  animation: float-up 1.5s ease-out forwards;
+  pointer-events: none;
+}
+
+.float-text:is(.damage, .crit, .heal) {
+  font-family: var(--font-hand);
+  font-weight: 700;
+  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.6);
+}
+
+.float-text.damage {
+  color: #ff5a46;
+  font-size: 38px;
+}
+
+.float-text.crit {
+  color: #ffd23a;
+  font-size: 44px;
+}
+
+.float-text.heal {
+  color: #7be08a;
+  font-size: 30px;
+}
+
+.float-text.alert {
+  color: #ff4a3a;
+  font-size: 40px;
+  line-height: 1;
+}
+
+.float-text.miss {
+  color: var(--on-scene);
+}
+
+.float-text.info {
+  color: #bcd6ff;
+  font-size: 17px;
+}
+
+.float-text.warn {
+  color: #ffc35a;
+  font-size: 17px;
+}
+
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -36px;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Narrower screens: slimmer sheet and buttons, smaller cards, so seven
+   abilities still fit in one row at 1024 px. */
+@media (max-width: 1200px) {
+  .hud {
+    --unit-w: 206px;
+    --end-w: 150px;
+  }
+  /* The strip gets two rows: turn and players, then the mission (whose
+     objective may wrap) across the whole width. */
+  .top {
+    max-width: calc(100% - 2 * 214px);
+    flex-wrap: wrap;
+  }
+  .top > * {
+    padding: 4px 8px;
+  }
+  .hud .mission {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: center;
+    border-left: 0;
+    border-top: 1px dashed rgba(42, 35, 24, 0.35);
+    white-space: normal;
+  }
+  .mission-goal {
+    text-align: center;
+    line-height: 1.15;
+  }
+  .turn-label {
+    font-size: 14px;
+    letter-spacing: 0.05em;
+  }
+  .conceal {
+    font-size: 9px;
+  }
+  .players {
+    gap: 8px;
+  }
+  .player {
+    font-size: 11px;
+  }
+  .squad {
+    width: 190px;
+  }
+  .unit-name {
+    font-size: 15px;
+  }
+  .end-turn {
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+  .ability {
+    width: 58px;
+    min-height: 50px;
+  }
+}
+
+@media (max-width: 900px) {
+  .hud {
+    --unit-w: 0px;
+  }
+  .squad,
+  .log,
+  .unit-panel {
+    display: none;
+  }
+  .top {
+    max-width: calc(100% - 140px);
+  }
+  .ability {
+    width: 52px;
+  }
+}
+
+/* ------------------------------------------- graphics settings and FPS */
+
+/* The frame counter: a tiny typed slip in a free corner of each screen. */
+.fps-counter {
+  display: none;
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 100;
+  padding: 2px 6px;
+  font: 700 11px var(--font);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--paper-grain), var(--paper);
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.4);
+  transform: rotate(-1deg);
+  pointer-events: none;
+}
+
+.fps-counter.show {
+  display: block;
+}
+
+/* Combat: next to the Menú tab. */
+body:has(.hud) .fps-counter {
+  right: 74px;
+}
+
+/* Base: the header owns the top, the bottom-right corner is free. */
+body:has(.strat) .fps-counter {
+  top: auto;
+  bottom: 8px;
+}
+
+/* Settings are a typed form: the name as a field label, the options printed
+   on the line, the chosen one circled in pen (like the odds of a shot). */
+.settings {
+  display: grid;
+  margin: 4px 0 6px;
+}
+
+.setting {
+  display: grid;
+  grid-template-columns: 8.5em 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dotted rgba(42, 35, 24, 0.35);
+}
+
+.setting-name {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.setting-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+}
+
+.setting-choices button {
+  padding: 1px 7px;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--ink-soft);
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 50% 45% 55% 48% / 60% 55% 50% 45%;
+}
+
+.setting-choices button:hover {
+  color: var(--ink);
+}
+
+.setting-choices button.on {
+  color: var(--ink);
+  border-color: var(--pen);
+  transform: rotate(-2deg);
+}
