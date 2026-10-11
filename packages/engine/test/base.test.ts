@@ -72,15 +72,20 @@ describe('the compound', () => {
     expect(walkways(c)).toHaveLength(3);
   });
 
-  it('grows by clearing ground next to cleared ground, and builds next to buildings; one project at a time', () => {
+  it('grows by clearing ground next to cleared ground, and builds next to buildings; two crews, three with the brigade', () => {
     const c = solo();
     expect(() => run(c, { type: 'build', plot: '0,0', facility: 'infirmary' })).toThrow(/despejar/);
     expect(() => run(c, { type: 'clear', plot: '0,0' })).toThrow(/a su lado/);
     const credits = c.credits;
     run(c, { type: 'clear', plot: '3,5' });
     expect(c.credits).toBe(credits - clearCost(plotById(c, '3,5')!).cost);
-    expect(() => run(c, { type: 'build', plot: '2,2', facility: 'infirmary' })).toThrow(/obra/);
-    advanceUntil(c, () => !c.base.construction);
+    expect(() => run(c, { type: 'clear', plot: '3,5' })).toThrow(/esa parcela/);
+    run(c, { type: 'build', plot: '2,2', facility: 'infirmary' });
+    expect(() => run(c, { type: 'build', plot: '4,2', facility: 'workshop' })).toThrow(/cuadrillas/);
+    plotById(c, '4,4')!.building = 'crew';
+    run(c, { type: 'build', plot: '4,2', facility: 'workshop' });
+    expect(c.base.works).toHaveLength(3);
+    advanceUntil(c, () => !c.base.works.length);
     expect(plotById(c, '3,5')!.terrain).toBe('clear');
     // Cleared, but nothing built beside it yet.
     expect(() => run(c, { type: 'build', plot: '3,5', facility: 'infirmary' })).toThrow(/pegado/);
@@ -91,14 +96,14 @@ describe('the compound', () => {
     const ruins = c.base.plots.find((p) => p.terrain === 'ruins' && !clearable(c, p))!;
     const before = c.credits;
     run(c, { type: 'clear', plot: ruins.id });
-    advanceUntil(c, () => !c.base.construction);
+    advanceUntil(c, () => !c.base.works.length);
     expect(c.credits).toBe(before - clearCost(ruins).cost + 15);
   });
 
   it('the workshop makes accessories cheaper, more so next to the armoury; facilities unlock with the Bastion level', () => {
     const c = solo();
     run(c, { type: 'build', plot: '2,2', facility: 'workshop' });
-    advanceUntil(c, () => !c.base.construction);
+    advanceUntil(c, () => !c.base.works.length);
     expect(plotById(c, '2,2')!.building).toBe('workshop');
     expect(shopPrice(c, 'smokeGrenade')).toBe(19);
     expect(() => run(c, { type: 'build', plot: '4,4', facility: 'workshop' })).toThrow(/Solo/);
@@ -132,7 +137,7 @@ describe('the compound', () => {
     const c = solo();
     c.xp = LEVEL_XP[2]!;
     run(c, { type: 'build', plot: '4,4', facility: 'simulation' });
-    advanceUntil(c, () => !c.base.construction);
+    advanceUntil(c, () => !c.base.works.length);
     const offer = c.offers[0]!;
     run(c, { type: 'chooseMission', id: offer.id });
     const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(2), kind: offer.kind, pods: offer.pods });
@@ -167,19 +172,19 @@ describe('buildings and their levels', () => {
   it('a facility rises to levels 2 and 3 with the Bastion, one work at a time', () => {
     const c = solo();
     run(c, { type: 'build', plot: '2,2', facility: 'workshop' });
-    advanceUntil(c, () => !c.base.construction);
+    advanceUntil(c, () => !c.base.works.length);
     expect(plotById(c, '2,2')!.level).toBe(1);
     expect(() => run(c, { type: 'upgrade', plot: '2,2' })).toThrow(/nivel 3/);
     c.xp = LEVEL_XP[2]!;
     const credits = c.credits;
     run(c, { type: 'upgrade', plot: '2,2' });
     expect(c.credits).toBe(credits - upgradeCost('workshop', 2).cost);
-    advanceUntil(c, () => !c.base.construction);
+    advanceUntil(c, () => !c.base.works.length);
     expect(plotById(c, '2,2')!.level).toBe(2);
     expect(shopPrice(c, 'smokeGrenade')).toBe(Math.round(25 * 0.65));
     c.xp = LEVEL_XP[4]!;
     run(c, { type: 'upgrade', plot: '2,2' });
-    advanceUntil(c, () => !c.base.construction);
+    advanceUntil(c, () => !c.base.works.length);
     expect(() => run(c, { type: 'upgrade', plot: '2,2' })).toThrow(/máximo/);
     expect(shopPrice(c, 'smokeGrenade')).toBe(Math.round(25 * 0.55));
   });
@@ -206,8 +211,8 @@ describe('buildings and their levels', () => {
     // Works brigade: a quarter off the days of every work.
     put('4,2', 'crew');
     run(c, { type: 'build', plot: '4,4', facility: 'infirmary' });
-    expect(c.base.construction!.total).toBe(Math.round(FACILITIES.infirmary.days * 0.75));
-    c.base.construction = null;
+    expect(c.base.works[0]!.total).toBe(Math.round(FACILITIES.infirmary.days * 0.75));
+    c.base.works = [];
     // Listening post: the enemy clock steps later.
     put('2,2', 'listening', 2);
     expect(listeningDelay(c)).toBe(4);
@@ -296,8 +301,8 @@ describe('alien bodies', () => {
     mission.outcome = 'victory';
     const credits = c.credits;
     const report = applyMissionResult(c, mission, new Rng(1));
-    expect(report).toMatchObject({ bodies: 2, salvage: 10 + 4 });
-    expect(c.credits).toBe(credits + (offer.reward.credits ?? 0) + 14);
+    expect(report).toMatchObject({ bodies: 2, salvage: 5 + 2 });
+    expect(c.credits).toBe(credits + (offer.reward.credits ?? 0) + 7);
 
     run(c, { type: 'chooseMission', id: c.offers[0]!.id });
     mission.outcome = 'defeat';
@@ -391,7 +396,7 @@ describe('migration', () => {
       expect(p.terrain).toBe('clear');
       if (p.building !== 'command') expect(neighbours(m, p).some((q) => q.building)).toBe(true);
     }
-    const work = m.base.construction!;
+    const work = m.base.works[0]!;
     expect(work).toMatchObject({ kind: 'build', facility: 'infirmary', daysLeft: 4, total: 6 });
     const site = plotById(m, work.plot)!;
     expect(site).toMatchObject({ terrain: 'clear', building: null });

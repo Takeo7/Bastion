@@ -523,7 +523,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
         label: 'Repararlo con calma',
         effect: 'Las obras en curso se retrasan 4 días',
         apply: (c) => {
-          if (c.base.construction) c.base.construction.daysLeft += 4;
+          for (const w of c.base.works) w.daysLeft += 4;
         },
       },
     ],
@@ -632,7 +632,7 @@ const MONTH = 30;
 /** Monthly payment from the Council before region income. */
 const BASE_INCOME = 60;
 /** Credits for each alien body sold after a won mission. */
-const BODY_VALUE: Partial<Record<TemplateId, number>> = { trooper: 4, officer: 8, lancer: 6, xenoid: 8, mec: 12, sectoid: 10 };
+const BODY_VALUE: Partial<Record<TemplateId, number>> = { trooper: 2, officer: 4, lancer: 3, xenoid: 4, mec: 6, sectoid: 5 };
 
 export interface Loadout {
   utility: ItemId | null;
@@ -774,7 +774,7 @@ export interface Rumor {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 7;
+export const CAMPAIGN_VERSION = 8;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -788,7 +788,8 @@ export interface CampaignState {
   soldiers: CampaignSoldier[];
   /** Accessories bought: copies owned (equipped ones included). */
   inventory: Partial<Record<ItemId, number>>;
-  base: { plots: BasePlot[]; construction: Construction | null };
+  /** `works`: the projects going on, one per crew (two, three with the works brigade). */
+  base: { plots: BasePlot[]; works: Construction[] };
   regions: RegionState[];
   offers: MissionOffer[];
   activeMission: string | null;
@@ -970,6 +971,18 @@ export function workDays(c: CampaignState, days: number): number {
   return level ? Math.max(1, Math.round(days * (1 - [0.25, 0.4, 0.5][level - 1]!))) : days;
 }
 
+/** Works that can go on at once: two crews, three with the works brigade. */
+export function workCrews(c: CampaignState): number {
+  return 2 + (facilityLevel(c, 'crew') ? 1 : 0);
+}
+
+/** Why no new work can start on `plot`: every crew busy, or that plot already in works. */
+export function worksBlocker(c: CampaignState, plot: BasePlot): string | null {
+  if (c.base.works.some((w) => w.plot === plot.id)) return 'Ya hay obras en esa parcela.';
+  if (c.base.works.length >= workCrews(c)) return `Todas las cuadrillas están ocupadas (${workCrews(c)}).`;
+  return null;
+}
+
 /** Why the facility on `plot` can't be raised a level, or null if it can. */
 export function upgradable(c: CampaignState, plot: BasePlot): string | null {
   const id = plot.building as FacilityId;
@@ -1008,7 +1021,7 @@ export function buildable(c: CampaignState, plot: BasePlot, id: FacilityId): str
   if (plot.building) return 'Ya hay un edificio aquí.';
   if (!neighbours(c, plot).some((q) => q.building)) return 'Tiene que estar pegado a otro edificio.';
   if (bastionLevel(c) < def.level) return `Requiere nivel ${def.level} del Bastión.`;
-  if (def.unique && (facilityCount(c, id) > 0 || c.base.construction?.facility === id)) return 'Solo se puede construir una.';
+  if (def.unique && (facilityCount(c, id) > 0 || c.base.works.some((w) => w.kind === 'build' && w.facility === id))) return 'Solo se puede construir una.';
   return null;
 }
 
@@ -1344,7 +1357,7 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
   for (const [item, n] of Object.entries(outcome.items ?? {}) as [ItemId, number][]) c.inventory[item] = (c.inventory[item] ?? 0) + n;
   if (outcome.doom) c.doom = Math.max(0, c.doom + outcome.doom);
   if (outcome.tech && !c.techs.includes(outcome.tech)) c.techs.push(outcome.tech);
-  if (outcome.delay && c.base.construction) c.base.construction.daysLeft += outcome.delay;
+  if (outcome.delay) for (const w of c.base.works) w.daysLeft += outcome.delay;
   const soldier = c.soldiers.find((s) => s.id === q.soldier && s.alive);
   if (outcome.trait && soldier && !soldier.traits.includes(outcome.trait)) soldier.traits.push(outcome.trait);
   if (outcome.recruit) {
@@ -1458,7 +1471,7 @@ function freshBase(): CampaignState['base'] {
       plots.push({ id: `${x},${y}`, x, y, terrain: terrainAt(x, y), building: fixed ?? null });
     }
   }
-  return { plots, construction: null };
+  return { plots, works: [] };
 }
 
 function freshRegions(): RegionState[] {
@@ -1705,7 +1718,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   const short =
     needed && bedsFree(c) > 0 && canAfford(c, recruitCost(c))
       ? { view: 'barracks' as const, label: `${fewReady}: recluta (${recruitCost(c)} ₡)`, tone: 'info' as const }
-      : needed && bedsFree(c) <= 0 && !c.base.construction && canAfford(c, FACILITIES.quarters.cost)
+      : needed && bedsFree(c) <= 0 && c.base.works.length < workCrews(c) && canAfford(c, FACILITIES.quarters.cost)
         ? { view: 'facilities' as const, label: `${fewReady} y sin camas: construye un barracón`, tone: 'info' as const }
         : null;
   if (short && !mission) steps.push(short);
@@ -1754,8 +1767,8 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     if (fillable && first) steps.push({ view: 'barracks', label: 'Equipa a tu escuadra con lo del almacén', count: fillable, tone: 'info', go: { soldier: first.id } });
   }
 
-  if (!c.base.construction) {
-    // Something affordable to build on a free plot, else ground to clear next to the compound.
+  if (c.base.works.length < workCrews(c)) {
+    // A crew is free: something affordable to build on a free plot, else ground to clear next to the compound.
     const options = c.base.plots.flatMap((p) => Object.values(FACILITIES).filter((f) => !buildable(c, p, f.id) && canAfford(c, f.cost)).map((f) => ({ p, f })));
     const best = options.find((o) => adjacencyAt(c, o.p, o.f.id)) ?? options[0];
     const wild = c.base.plots
@@ -1814,7 +1827,8 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
     case 'clear': {
       const plot = plotById(c, action.plot);
       if (!plot) return 'Esa parcela no existe.';
-      if (c.base.construction) return 'Ya hay una obra en marcha.';
+      const busy = worksBlocker(c, plot);
+      if (busy) return busy;
       const blocker = clearable(c, plot);
       if (blocker) return blocker;
       if (!canAfford(c, clearCost(plot).cost)) return 'No hay créditos suficientes.';
@@ -1823,7 +1837,8 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
     case 'build': {
       const plot = plotById(c, action.plot);
       if (!plot) return 'Esa parcela no existe.';
-      if (c.base.construction) return 'Ya hay una obra en marcha.';
+      const busy = worksBlocker(c, plot);
+      if (busy) return busy;
       const blocker = buildable(c, plot, action.facility);
       if (blocker) return blocker;
       if (!canAfford(c, FACILITIES[action.facility].cost)) return 'No hay créditos suficientes.';
@@ -1832,7 +1847,8 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
     case 'upgrade': {
       const plot = plotById(c, action.plot);
       if (!plot) return 'Esa parcela no existe.';
-      if (c.base.construction) return 'Ya hay una obra en marcha.';
+      const busy = worksBlocker(c, plot);
+      if (busy) return busy;
       const blocker = upgradable(c, plot);
       if (blocker) return blocker;
       if (!canAfford(c, upgradeCost(plot.building as FacilityId, (plot.level ?? 1) + 1).cost)) return 'No hay créditos suficientes.';
@@ -1872,7 +1888,7 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       const { cost } = clearCost(plot);
       const days = workDays(c, clearCost(plot).days);
       pay(c, cost);
-      c.base.construction = { plot: plot.id, kind: 'clear', facility: null, daysLeft: days, total: days };
+      c.base.works.push({ plot: plot.id, kind: 'clear', facility: null, daysLeft: days, total: days });
       if (plot.terrain !== 'clear') log(c, TERRAINS[plot.terrain].start.replace('{parcela}', plotName(plot)));
       break;
     }
@@ -1881,7 +1897,7 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       const def = FACILITIES[action.facility];
       const days = workDays(c, def.days);
       pay(c, def.cost);
-      c.base.construction = { plot: plot.id, kind: 'build', facility: def.id, daysLeft: days, total: days };
+      c.base.works.push({ plot: plot.id, kind: 'build', facility: def.id, daysLeft: days, total: days });
       log(c, `Empiezan las obras: ${def.name}, en ${plotName(plot)}.`);
       break;
     }
@@ -1891,7 +1907,7 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       const next = upgradeCost(id, (plot.level ?? 1) + 1);
       const days = workDays(c, next.days);
       pay(c, next.cost);
-      c.base.construction = { plot: plot.id, kind: 'upgrade', facility: id, daysLeft: days, total: days };
+      c.base.works.push({ plot: plot.id, kind: 'upgrade', facility: id, daysLeft: days, total: days });
       log(c, `Empiezan las obras: ${FACILITIES[id].name} a nivel ${(plot.level ?? 1) + 1}.`);
       break;
     }
@@ -2134,8 +2150,8 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     if (s.woundedDays === 0) log(c, `${s.name} se ha recuperado de sus heridas.`, 'good');
   }
 
-  const work = c.base.construction;
-  if (work && --work.daysLeft <= 0) {
+  for (const work of [...c.base.works]) {
+    if (--work.daysLeft > 0) continue;
     const plot = plotById(c, work.plot)!;
     if (work.kind === 'clear') {
       const { salvage } = clearCost(plot);
@@ -2158,7 +2174,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
         'good',
       );
     }
-    c.base.construction = null;
+    c.base.works = c.base.works.filter((w) => w !== work);
     stop = true;
   }
 
@@ -2542,7 +2558,8 @@ export function migrateCampaign(old: CampaignState): CampaignState {
       LEVEL_XP[kept - 1]!,
     );
     for (const slot of (c.base as unknown as LegacyBase).slots ?? []) if ((slot.facility as string) === 'lab') slot.facility = 'simulation';
-    if (c.base.construction && (c.base.construction.facility as string) === 'lab') c.base.construction.facility = 'simulation';
+    const legacyWork = (c.base as unknown as LegacyBase).construction;
+    if (legacyWork && (legacyWork.facility as string) === 'lab') legacyWork.facility = 'simulation';
     delete legacy.resources;
     delete legacy.research;
     delete legacy.upgrades;
@@ -2579,6 +2596,12 @@ export function migrateCampaign(old: CampaignState): CampaignState {
   }
   // Version 7: the base moves to the surface.
   if ((c.base as unknown as LegacyBase).slots) c.base = surfaceBase(c.base as unknown as LegacyBase);
+  // Version 8: several works at once (the single `construction` becomes a list).
+  const single = c.base as unknown as { construction?: Construction | null; works?: Construction[] };
+  if (!single.works) {
+    single.works = single.construction ? [single.construction] : [];
+    delete single.construction;
+  }
   c.launchReady = [false, false];
   return c;
 }
@@ -2614,10 +2637,10 @@ function surfaceBase(old: LegacyBase): CampaignState['base'] {
     const plot = c.base.plots
       .filter((p) => p.terrain === 'clear' && !p.building && neighbours(c, p).some((q) => q.building))
       .sort((a, b) => plotRing(a) - plotRing(b))[0];
-    if (plot) c.base.construction = { plot: plot.id, kind: 'build', facility: work.facility, daysLeft: work.daysLeft, total: work.total };
+    if (plot) c.base.works = [{ plot: plot.id, kind: 'build', facility: work.facility, daysLeft: work.daysLeft, total: work.total }];
   } else if (work) {
     const plot = c.base.plots.filter((p) => !clearable(c, p)).sort((a, b) => plotRing(a) - plotRing(b))[0];
-    if (plot) c.base.construction = { plot: plot.id, kind: 'clear', facility: null, daysLeft: work.daysLeft, total: work.total };
+    if (plot) c.base.works = [{ plot: plot.id, kind: 'clear', facility: null, daysLeft: work.daysLeft, total: work.total }];
   }
   return c.base;
 }

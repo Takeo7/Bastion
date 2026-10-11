@@ -224,7 +224,7 @@ function sampleCampaign(): CampaignState {
   plot('2,2').building = 'simulation';
   plot('4,2').building = 'workshop';
   plot('1,3').terrain = 'clear';
-  c.base.construction = { plot: '2,4', kind: 'build', facility: 'infirmary', daysLeft: 3, total: 6 };
+  c.base.works = [{ plot: '2,4', kind: 'build', facility: 'infirmary', daysLeft: 3, total: 6 }];
   for (const r of c.regions) {
     if (r.id === 'na') r.contacted = true;
     if (r.id === 'me') r.facility = { nextDoomDay: 20 };

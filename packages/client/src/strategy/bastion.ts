@@ -673,12 +673,12 @@ export class BastionSet implements StageSet {
     this.grid.clear();
     this.labels.clear();
     for (const h of [...this.hotspots]) if (h.userData.hotspot !== 'hangar') this.hotspots.splice(this.hotspots.indexOf(h), 1);
-    const work = c.base.construction;
     for (const plot of c.base.plots) {
       const o = plotCentre(plot.x, plot.y);
       const g = new THREE.Group();
       g.position.copy(o);
-      const busy = work?.plot === plot.id;
+      const work = c.base.works.find((w) => w.plot === plot.id);
+      const busy = !!work;
       const fixed = plot.building && plot.building in FIXED_BUILDINGS ? (plot.building as FixedBuildingId) : null;
       let title: string;
       let kind = '';

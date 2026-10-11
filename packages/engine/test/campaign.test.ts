@@ -66,9 +66,9 @@ describe('shared decisions', () => {
     const c = createCampaign(both, new Rng(1));
     run(c, { type: 'clear', plot: '3,5' }, 1);
     run(c, { type: 'vote', accept: false }, 0);
-    expect(c.base.construction).toBeNull();
+    expect(c.base.works).toEqual([]);
     run(c, { type: 'clear', plot: '3,5' }, 1, [1]);
-    expect(c.base.construction?.plot).toBe('3,5');
+    expect(c.base.works[0]?.plot).toBe('3,5');
   });
 });
 
@@ -81,7 +81,7 @@ describe('time', () => {
     expect(c.day).toBe(1);
     run(c, { type: 'advance', ready: true }, 1);
     expect(c.day).toBeGreaterThan(1);
-    for (let i = 0; i < 8 && c.base.construction; i++) {
+    for (let i = 0; i < 8 && c.base.works.length; i++) {
       run(c, { type: 'advance', ready: true }, 0);
       run(c, { type: 'advance', ready: true }, 1);
     }

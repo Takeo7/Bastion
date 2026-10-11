@@ -35,6 +35,7 @@ import {
   upgradable,
   upgradeCost,
   workDays,
+  workCrews,
   xpMultiplier,
   clearCost,
   clearable,
@@ -583,8 +584,8 @@ export class StrategyScreen {
         action: { label: 'Ver en la geoesfera', go: () => this.focusOffer(o.id) },
       });
     }
-    const work = prev.base.construction;
-    if (work && c.base.construction?.plot !== work.plot) {
+    // Works that were going on and are no longer: finished.
+    for (const work of prev.base.works.filter((w) => !c.base.works.some((x) => x.plot === w.plot && x.kind === w.kind))) {
       const plot = plotById(c, work.plot)!;
       fresh.push({
         tone: 'good',
@@ -954,8 +955,7 @@ export class StrategyScreen {
         step.count && step.count > 1 ? this.chip(String(step.count)) : h('span'),
       ),
     );
-    const work = c.base.construction;
-    if (work) {
+    for (const work of c.base.works) {
       rows.push(
         h(
           'button.x-row.agenda',
@@ -1764,6 +1764,7 @@ export class StrategyScreen {
     const lines: [string, string][] = [];
     const alive = c.soldiers.filter((s) => s.alive).length;
     lines.push(['flag', `Camas: ${alive}/${beds(c)}`]);
+    lines.push(['pick', `Cuadrillas: ${c.base.works.length}/${workCrews(c)} en obra`]);
     if (facilityCount(c, 'simulation')) lines.push(['xp', `XP de misión +${Math.round((xpMultiplier(c) - 1) * 100)} %`]);
     if (facilityCount(c, 'workshop')) lines.push(['flag', `Accesorios −${Math.round((1 - shopPrice(c, 'smokeGrenade') / ITEMS.smokeGrenade.cost) * 100)} %`]);
     if (facilityCount(c, 'infirmary')) lines.push(['hp', `Heridas ×${healRate(c)} de rápido`]);
@@ -1774,19 +1775,24 @@ export class StrategyScreen {
     if (facilityLevel(c, 'crew')) lines.push(['flag', `Obras −${[25, 40, 50][facilityLevel(c, 'crew') - 1]} %`]);
     lines.push(['will', `Contactos: ${contactCapacity(c)} regiones`]);
     const bonuses = adjacencyBonuses(c);
-    const work = c.base.construction;
+    const works = c.base.works;
+    const workOn = (id: string) => works.find((w) => w.plot === id);
+    // Every crew busy: nothing new starts until one finishes.
+    const crewsFull = works.length >= workCrews(c);
+    const crewsText = `Todas las cuadrillas están ocupadas (${workCrews(c)})`;
     // Every plot that can be acted on, with its state and its action: the same as clicking it in 3D.
     const pick = (id: string) => {
       this.plot = id;
       this.render();
       void this.stage.show('bastion', this.shotFor('facilities'));
     };
-    const rank = (p: BasePlot) => (work?.plot === p.id ? 0 : p.building ? 1 : p.terrain === 'clear' ? 2 : 3);
+    const rank = (p: BasePlot) => (workOn(p.id) ? 0 : p.building ? 1 : p.terrain === 'clear' ? 2 : 3);
     const plots = c.base.plots
-      .filter((p) => work?.plot === p.id || (p.building && !(p.building in FIXED_NAMES_SET)) || (p.terrain === 'clear' && !p.building) || !clearable(c, p))
+      .filter((p) => workOn(p.id) || (p.building && !(p.building in FIXED_NAMES_SET)) || (p.terrain === 'clear' && !p.building) || !clearable(c, p))
       .sort((a, b) => rank(a) - rank(b) || plotRing(a) - plotRing(b) || a.y - b.y || a.x - b.x)
       .map((p) => {
-        const busy = work?.plot === p.id;
+        const work = workOn(p.id);
+        const busy = !!work;
         const level = p.building && p.building in FACILITIES ? ` · N${p.level ?? 1}` : '';
         const state = busy
           ? work!.kind === 'clear'
@@ -1838,9 +1844,9 @@ export class StrategyScreen {
     );
     const plot = this.plot ? plotById(c, this.plot) : undefined;
     if (!plot) return;
-    const busy = work?.plot === plot.id;
+    const work = workOn(plot.id);
     const content: (HTMLElement | null)[] = [h('div.alert-kicker', {}, `PARCELA ${plotCode(plot)}`)];
-    if (busy && work) {
+    if (work) {
       content.push(
         h('h2.x-title', {}, work.kind === 'clear' ? 'Despejando el terreno' : work.kind === 'upgrade' ? `${FACILITIES[work.facility!].name} → nivel ${(plot.level ?? 1) + 1}` : FACILITIES[work.facility!].name),
         this.bar(work.total - work.daysLeft, work.total),
@@ -1852,7 +1858,7 @@ export class StrategyScreen {
       const days = workDays(c, clearCost(plot).days);
       const blocked = this.why(
         [!!clearable(c, plot), clearable(c, plot) ?? ''],
-        [!!work, 'Ya hay una obra en marcha'],
+        [crewsFull, crewsText],
         [!!c.proposal, 'Hay una propuesta pendiente'],
         [!canAfford(c, cost), this.shortfall(cost)],
       );
@@ -1883,7 +1889,7 @@ export class StrategyScreen {
         const blocker = upgradable(c, plot);
         const why = this.why(
           [!!blocker, blocker ?? ''],
-          [!!work, 'Ya hay una obra en marcha'],
+          [crewsFull, crewsText],
           [!!c.proposal, 'Hay una propuesta pendiente'],
           [!canAfford(c, next.cost), this.shortfall(next.cost)],
         );
@@ -1898,7 +1904,7 @@ export class StrategyScreen {
         content.push(h('p.x-muted', {}, 'Al máximo.'));
       }
     } else {
-      content.push(h('h2.x-title', {}, 'Terreno libre'), work ? h('p.x-why', {}, 'Hay otra obra en marcha') : null);
+      content.push(h('h2.x-title', {}, 'Terreno libre'), crewsFull ? h('p.x-why', {}, crewsText) : null);
       for (const def of Object.values(FACILITIES)) {
         const blocker = buildable(c, plot, def.id);
         const bonus = blocker ? null : adjacencyAt(c, plot, def.id);
@@ -1918,11 +1924,11 @@ export class StrategyScreen {
                   h('small', {}, def.description),
                   bonus ? h('small.x-good', { title: bonus.text }, `Junto a ${buildingName(bonus.next)}: ${bonus.text.split('.')[0]}`) : null,
                   h('small', {}, `${workDays(c, def.days)} días de obras`),
-                  why && !work ? h('small.x-why', {}, why) : null,
+                  why && !crewsFull ? h('small.x-why', {}, why) : null,
                 ),
                 h(
                   'button.x-btn.small',
-                  { disabled: !!work || !!why, onclick: () => this.send({ type: 'build', plot: plot.id, facility: def.id }) },
+                  { disabled: crewsFull || !!why, onclick: () => this.send({ type: 'build', plot: plot.id, facility: def.id }) },
                   `${this.decide('construir')} · ${def.cost} ₡`,
                 ),
               ),
