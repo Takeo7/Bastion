@@ -52,7 +52,18 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
       redraw,
     ),
     row('shadows', 'Sombras', [[true, 'Sí'], [false, 'No']], 'Las sombras del sol.', redraw),
-    row('resolution', 'Resolución', [[1, '100 %'], [0.75, '75 %'], [0.5, '50 %']], 'Dibuja a menos resolución y la escala a la pantalla.', redraw),
+    row(
+      'resolution',
+      'Resolución',
+      [
+        [0, 'Auto', 'Nítida, salvo en ventanas muy grandes, donde baja un poco para ir fluida'],
+        [1, '100 %', 'Siempre la de la pantalla: la más nítida y la que más cuesta'],
+        [0.75, '75 %'],
+        [0.5, '50 %'],
+      ],
+      'Dibuja la escena a menos resolución y la escala a la pantalla. La interfaz siempre se ve nítida.',
+      redraw,
+    ),
     row('showFps', 'Mostrar FPS', [[true, 'Sí'], [false, 'No']], 'Un contador de imágenes por segundo en una esquina.', redraw),
   );
 }

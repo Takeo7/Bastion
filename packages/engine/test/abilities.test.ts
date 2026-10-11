@@ -160,8 +160,11 @@ describe('support', () => {
     const s = field();
     squad(s, 's1', 'specialist', 2, 2, ['combatProtocol'], { charges: { combatProtocol: 2, medkit: 2, grenade: 1 } });
     const mec = addUnit(s, 'a1', 'mec', 8, 2);
+    const specialist = s.units.find((u) => u.id === 's1')!;
     run(s, use('s1', 'combatProtocol', { target: 'a1' }));
     expect(mec.hp).toBe(7 - 4);
+    // An attack, so it ends the turn (as in XCOM 2).
+    expect(specialist.ap).toBe(0);
   });
 
   it('Threat Assessment: Aid Protocol also puts the ally on overwatch', () => {

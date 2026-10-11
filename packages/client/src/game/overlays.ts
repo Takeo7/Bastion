@@ -16,6 +16,8 @@ const COLOR_MOVE = new THREE.Color(0x3aa0ff);
 const COLOR_DASH = new THREE.Color(0xffc93a);
 const COLOR_DETECT = new THREE.Color(0xff4a4a);
 const COLOR_BLAST = new THREE.Color(0xff8a2a);
+/** A blast that can't be thrown there. */
+const COLOR_OFF = new THREE.Color(0x8a939c);
 const COLOR_EVAC = new THREE.Color(0x4dff9a);
 
 /** Draws a shield icon on a canvas: full (2) or half (1) cover. */
@@ -70,14 +72,31 @@ function fatLine(color: number, width: number): Line2 {
   return line;
 }
 
+/**
+ * Gives a fat line a new shape. Disposing first matters: three.js caps the
+ * segments it draws at the count of the first shape it uploaded (a longer
+ * path came out cut short), and frees the old buffers only on dispose.
+ */
+function reshape(line: Line2, points: number[]): void {
+  const geometry = line.geometry as LineGeometry;
+  geometry.dispose();
+  geometry.setPositions(points);
+}
+
 export class Overlays {
   readonly group = new THREE.Group();
   private readonly tiles: THREE.InstancedMesh;
   /** Red frames on the tiles where the squad would be noticed, over the cost colour (which still shows). */
   private readonly detect: THREE.InstancedMesh;
   private readonly blast: THREE.InstancedMesh;
-  private readonly path = fatLine(0xd9f4ff, 4);
+  private readonly path = fatLine(0xeafaff, 4);
+  private readonly pathCasing = new Line2(
+    this.path.geometry,
+    new LineMaterial({ color: 0x081018, linewidth: 8, transparent: true, opacity: 0.6, depthTest: false }),
+  );
   private readonly aim = fatLine(0xff5a5a, 3);
+  /** How far a grenade reaches from the thrower. */
+  private readonly rangeRing = fatLine(0xffb070, 2);
   private readonly hover = flatRing(0.3, 0.42, 0xffffff, 0.9);
   private readonly targetRing = flatRing(0.5, 0.62, 0xff4a4a, 0.95);
   private readonly blastCenter = flatRing(0.2, 0.32, 0xff8a2a, 1);
@@ -149,7 +168,17 @@ export class Overlays {
       this.shields.push(s);
     }
 
-    this.group.add(this.beacons, this.flares, this.smoke, this.evac, this.item, this.tiles, this.detect, this.blast, this.path, this.aim, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    // three.js works out an instanced mesh's bounds once, from wherever its
+    // instances were then (nowhere, for an empty one), and culls it by them
+    // from then on: a grenade area or a move range elsewhere on the map would
+    // vanish whenever that first spot left the screen. They are cheap to draw.
+    for (const mesh of [this.tiles, this.detect, this.blast, this.evac]) mesh.frustumCulled = false;
+
+    // The path gets a dark casing, so it reads over the blue and the yellow tiles alike.
+    this.pathCasing.renderOrder = 9;
+    this.pathCasing.visible = false;
+    this.rangeRing.renderOrder = 9;
+    this.group.add(this.beacons, this.flares, this.smoke, this.evac, this.item, this.tiles, this.detect, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -276,14 +305,26 @@ export class Overlays {
 
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {
     if (!from || !path?.length) {
-      this.path.visible = false;
+      this.path.visible = this.pathCasing.visible = false;
       return;
     }
     const pts = [from, ...path].flatMap((p) => tileToWorld(p, 0.08).toArray());
-    (this.path.geometry as LineGeometry).setPositions(pts);
-    this.path.computeLineDistances();
-    (this.path.material as LineMaterial).color.set(dash ? 0xffe08a : 0xd9f4ff);
-    this.path.visible = true;
+    reshape(this.path, pts);
+    (this.path.material as LineMaterial).color.set(dash ? 0xffd34d : 0xeafaff);
+    this.path.visible = this.pathCasing.visible = true;
+  }
+
+  /** The circle a thrower can reach, or none. */
+  showRange(center: Vec2 | null, radius = 0): void {
+    this.rangeRing.visible = !!center && radius > 0;
+    if (!center || radius <= 0) return;
+    const c = tileToWorld(center, 0.06);
+    const pts: number[] = [];
+    for (let i = 0; i <= 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      pts.push(c.x + Math.cos(a) * radius, c.y, c.z + Math.sin(a) * radius);
+    }
+    reshape(this.rangeRing, pts);
   }
 
   setHover(tile: Vec2 | null, color = 0xffffff): void {
@@ -314,11 +355,13 @@ export class Overlays {
     (this.targetRing.material as THREE.MeshBasicMaterial).color.set(friendly ? 0x4dff9a : 0xff4a4a);
     (this.aim.material as LineMaterial).color.set(friendly ? 0x4dff9a : 0xff5a5a);
     this.targetRing.position.copy(tileToWorld(to, 0.05));
-    (this.aim.geometry as LineGeometry).setPositions([...tileToWorld(from, 1.1).toArray(), ...tileToWorld(to, 1.1).toArray()]);
-    this.aim.computeLineDistances();
+    reshape(this.aim, [...tileToWorld(from, 1.1).toArray(), ...tileToWorld(to, 1.1).toArray()]);
   }
 
-  /** Grenade preview; `danger` tiles (own soldiers inside the blast) are drawn red. */
+  /**
+   * Grenade preview; `danger` tiles (own soldiers inside the blast) are drawn
+   * red. A throw that can't be made still shows its area, greyed out.
+   */
   showBlast(center: Vec2 | null, tiles: Vec2[], valid: boolean, danger: Vec2[] = []): void {
     this.blastCenter.visible = !!center;
     if (!center) {
@@ -328,13 +371,12 @@ export class Overlays {
     this.blastCenter.position.copy(tileToWorld(center, 0.05));
     (this.blastCenter.material as THREE.MeshBasicMaterial).color.set(valid ? COLOR_BLAST : COLOR_DETECT);
     const m = new THREE.Matrix4();
-    const shown = valid ? tiles : [];
-    shown.forEach((t, i) => {
+    tiles.forEach((t, i) => {
       m.setPosition(tileToWorld(t));
       this.blast.setMatrixAt(i, m);
-      this.blast.setColorAt(i, danger.some((d) => d.x === t.x && d.y === t.y) ? COLOR_DETECT : COLOR_BLAST);
+      this.blast.setColorAt(i, danger.some((d) => d.x === t.x && d.y === t.y) ? COLOR_DETECT : valid ? COLOR_BLAST : COLOR_OFF);
     });
-    this.blast.count = shown.length;
+    this.blast.count = tiles.length;
     this.blast.instanceMatrix.needsUpdate = true;
     if (this.blast.instanceColor) this.blast.instanceColor.needsUpdate = true;
   }
@@ -353,5 +395,6 @@ export class Overlays {
     this.showCover(null);
     this.showAim(null, null);
     this.showBlast(null, [], false);
+    this.showRange(null);
   }
 }

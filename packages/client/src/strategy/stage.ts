@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { voxelPost, type VoxelPost } from '../game/post';
+import { fitPostToPixelRatio, voxelPost, type VoxelPost } from '../game/post';
 import { FrameLimiter, onGraphics, pixelRatio, type GraphicsSettings } from '../settings';
 import { easeInOut, tween } from '../game/tween';
 
@@ -82,7 +82,6 @@ export class Stage {
         });
       }
     }
-    this.gl.setPixelRatio(pixelRatio());
     this.resize();
   }
 
@@ -192,8 +191,10 @@ export class Stage {
     const w = this.element.clientWidth;
     const h = this.element.clientHeight;
     if (!w || !h) return;
+    this.gl.setPixelRatio(pixelRatio(w, h));
     this.gl.setSize(w, h);
     this.post.composer.setPixelRatio(this.gl.getPixelRatio());
+    fitPostToPixelRatio(this.post, this.gl.getPixelRatio());
     this.post.composer.setSize(w, h);
     for (const labels of this.labels.values()) labels.setSize(w, h);
     this.camera.aspect = w / h;

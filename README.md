@@ -188,7 +188,7 @@ Para usar otro puerto: `npm start -- --port 8080`.
 | Terminar turno | **Retroceso**. Si a tus soldados les quedan acciones, el botón pregunta «¿Terminar?» y hay que pulsar otra vez (**Esc** lo cancela). Si tu compañero no ha terminado, el mando pasa a él; cuando los dos habéis terminado, juega el enemigo |
 | Cámara | **WASD** o arrastrar con clic derecho · **Q/E** girar · rueda para zoom · **F** centrar en el soldado |
 | Sonido | **M** activa o desactiva los efectos |
-| Ajustes gráficos | En **Ajustes** (menú de Esc o menú principal): límite de FPS (sin límite, 60, 30), efectos (altos, medios, bajos), sombras, resolución (100, 75 o 50 %) y contador de FPS. Se guardan en tu navegador y se aplican al momento |
+| Ajustes gráficos | En **Ajustes** (menú de Esc o menú principal): límite de FPS (sin límite, 60, 30), efectos (altos, medios, bajos), sombras, resolución (automática, 100, 75 o 50 %) y contador de FPS. La automática dibuja la escena a la densidad de la pantalla salvo en ventanas muy grandes, donde baja un poco para ir fluida; la interfaz siempre se ve nítida. Se guardan en tu navegador y se aplican al momento |
 
 **El mando.** En el turno de la escuadra solo da órdenes quien tiene el mando (arriba se ve quién). Lo cede cuando quiere, aunque a sus soldados les queden acciones, y pasa solo cuando ya no puede hacer nada más o termina su turno. Un turno lo abre cada jugador por turnos. Si tu compañero se desconecta, el mando es tuyo.
 

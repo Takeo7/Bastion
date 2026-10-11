@@ -13,17 +13,22 @@ export interface GraphicsSettings {
   fps: FpsCap;
   effects: EffectsLevel;
   shadows: boolean;
-  /** Fraction of the screen's pixel density rendered (1, 0.75 or 0.5). */
+  /** Fraction of the screen's pixel density rendered (1, 0.75 or 0.5); 0 for automatic. */
   resolution: number;
   showFps: boolean;
 }
 
-const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 1, showFps: false };
+const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false };
 const KEY = storageKey('graphics');
+/** Version of the stored settings: 2 made the resolution automatic by default. */
+const VERSION = 2;
 
 function load(): GraphicsSettings {
   try {
-    const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<GraphicsSettings>;
+    const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<GraphicsSettings> & { v?: number };
+    // Before version 2, "100 %" was simply the default: move it to automatic.
+    if (stored.v !== VERSION && stored.resolution === 1) delete stored.resolution;
+    delete stored.v;
     return { ...DEFAULTS, ...stored };
   } catch {
     return { ...DEFAULTS };
@@ -40,7 +45,7 @@ export function graphics(): GraphicsSettings {
 export function setGraphics(patch: Partial<GraphicsSettings>): void {
   current = { ...current, ...patch };
   try {
-    localStorage.setItem(KEY, JSON.stringify(current));
+    localStorage.setItem(KEY, JSON.stringify({ ...current, v: VERSION }));
   } catch {
     /* private mode: the settings last until the page closes */
   }
@@ -55,9 +60,25 @@ export function onGraphics(fn: (g: GraphicsSettings) => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** Pixel ratio to render at: the screen's (capped at 2) scaled by the resolution setting. */
-export function pixelRatio(): number {
-  return Math.min(window.devicePixelRatio, 2) * current.resolution;
+/**
+ * Pixels a frame may have in automatic resolution: about a 1440p screen. The
+ * post-processing reads and writes every pixel several times, so its cost
+ * grows with the window: a large Retina window has twice as many and ran at
+ * 44 FPS on an M4.
+ */
+const PIXEL_BUDGET = 2560 * 1600;
+
+/**
+ * Pixel ratio to render a `width` × `height` view at: the screen's (capped at
+ * 2) scaled by the resolution setting. Automatic keeps the screen's density
+ * unless that goes over the budget, and then lowers it, never below 1. Only the
+ * 3D view changes: the interface is HTML and stays sharp.
+ */
+export function pixelRatio(width: number, height: number): number {
+  const screen = Math.min(window.devicePixelRatio, 2);
+  if (current.resolution > 0) return screen * current.resolution;
+  const fit = Math.sqrt(PIXEL_BUDGET / Math.max(1, width * height));
+  return Math.min(screen, Math.max(1, fit));
 }
 
 /**

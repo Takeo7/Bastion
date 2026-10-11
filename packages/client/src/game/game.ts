@@ -7,6 +7,7 @@ import {
   apForCost,
   applyEvent,
   attackWeapon,
+  blastRadius,
   blastTiles,
   buildPath,
   canTargetTile,
@@ -16,6 +17,7 @@ import {
   coverAgainst,
   coverSides,
   destinations,
+  distance,
   getUnit,
   hackChance,
   hasAnyCover,
@@ -120,7 +122,6 @@ const SHOUTED: ReadonlySet<AbilityId> = new Set<AbilityId>(['runAndGun', 'rapidF
 /** Order used by the Space key: the first usable attack. */
 const PRIMARY_ATTACKS: AbilityId[] = ['shoot', 'pistol', 'slash'];
 
-/** "las cintas" → "Las cintas". */
 /** Players with a soldier that still has actions. */
 function busySlots(s: GameState): Set<Slot> {
   const busy = new Set<Slot>();
@@ -128,6 +129,23 @@ function busySlots(s: GameState): Set<Slot> {
   return busy;
 }
 
+/**
+ * Where a throw aimed at `tile` lands: the tile itself if it is in range, else
+ * the farthest tile in range on the way there (as in XCOM, the aim stops at
+ * the edge of the circle instead of losing the preview).
+ */
+function throwTile(u: Unit, ability: AbilityId, tile: Vec2): Vec2 {
+  const range = ABILITIES[ability].range ?? 0;
+  const far = distance(u.pos, tile);
+  if (far <= range) return tile;
+  for (let k = range / far; k > 0; k -= 0.01) {
+    const p = { x: Math.round(u.pos.x + (tile.x - u.pos.x) * k), y: Math.round(u.pos.y + (tile.y - u.pos.y) * k) };
+    if (distance(u.pos, p) <= range) return p;
+  }
+  return u.pos;
+}
+
+/** "las cintas" → "Las cintas". */
 function capitalize(text: string): string {
   return text[0]!.toUpperCase() + text.slice(1);
 }
@@ -933,7 +951,7 @@ export class Game {
     }
     this.sfx.explosion();
     if (cam()) this.rig.shake(0.45, 0.6);
-    void this.fx.explosion(to, def.radius ?? 2.5);
+    void this.fx.explosion(to, blastRadius(u, e.ability) || 2.5);
     await wait(0.4);
   }
 
@@ -1461,6 +1479,7 @@ export class Game {
     this.overlays.showPath(null, null);
     this.overlays.showCover(null);
     this.overlays.showBlast(null, [], false);
+    this.overlays.showRange(null);
     this.overlays.setHover(tile);
     const hovered = tile ? unitAt(this.view, tile) : undefined;
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
@@ -1469,17 +1488,19 @@ export class Game {
     // Melee: show the run to the strike position.
     const option = this.currentTarget();
     if (option?.path?.length) this.overlays.showPath(u.pos, option.path);
-    if (!tile) return;
 
     if (this.mode.kind === 'tile') {
       const ability = this.mode.ability;
-      const valid = canTargetTile(this.state, u, ability, tile);
-      const area = blastTiles(this.state, ability, tile);
+      this.overlays.showRange(u.pos, ABILITIES[ability].range);
+      if (!tile) return;
+      const center = throwTile(u, ability, tile);
+      const area = blastTiles(this.state, ability, center, u);
       const allies = area.filter((t) => unitAt(this.state, t)?.team === 'xcom');
-      this.overlays.showBlast(tile, area, valid, allies);
+      this.overlays.showBlast(center, area, canTargetTile(this.state, u, ability, center), allies);
       this.overlays.setHover(null);
       return;
     }
+    if (!tile) return;
     if (this.mode.kind !== 'move') return;
 
     const occupant = unitAt(this.state, tile);
@@ -1669,11 +1690,12 @@ export class Game {
     }
 
     if (this.mode.kind === 'tile') {
-      if (canTargetTile(this.state, u, this.mode.ability, tile)) {
-        this.send({ type: 'ability', unit: u.id, ability: this.mode.ability, tile });
+      const center = throwTile(u, this.mode.ability, tile);
+      if (canTargetTile(this.state, u, this.mode.ability, center)) {
+        this.send({ type: 'ability', unit: u.id, ability: this.mode.ability, tile: center });
         this.cancelMode();
       } else {
-        this.hud.toast('Fuera de alcance o fuera de la vista de la escuadra.');
+        this.hud.toast('La escuadra no ve esa zona.');
       }
       return;
     }

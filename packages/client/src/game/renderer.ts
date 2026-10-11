@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { FrameLimiter, onGraphics, pixelRatio, type GraphicsSettings } from '../settings';
-import { voxelPost, type VoxelPost } from './post';
+import { fitPostToPixelRatio, voxelPost, type VoxelPost } from './post';
 
 type FrameFn = (dt: number, time: number) => void;
 
@@ -78,7 +78,6 @@ export class Renderer {
         for (const mat of Array.isArray(m) ? m : m ? [m] : []) mat.needsUpdate = true;
       });
     }
-    this.gl.setPixelRatio(pixelRatio());
     this.resize();
   }
 
@@ -114,8 +113,10 @@ export class Renderer {
   private resize(): void {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
+    this.gl.setPixelRatio(pixelRatio(w, h));
     this.gl.setSize(w, h);
     this.post.composer.setPixelRatio(this.gl.getPixelRatio());
+    fitPostToPixelRatio(this.post, this.gl.getPixelRatio());
     this.post.composer.setSize(w, h);
     this.labels.setSize(w, h);
     this.camera.aspect = w / h;
