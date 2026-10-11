@@ -856,8 +856,9 @@
   padding: 4px 10px;
 }
 
-/* Rock and empty rooms are only labelled where something can be done with them. */
-.strat:not([data-view='facilities']) .room-label:is(.rock, .empty) {
+/* Terrain and free plots are only labelled when pointed at or selected: with
+   49 plots, a label on each was noise. Buildings always carry theirs. */
+.room-label:is(.rock, .empty):not(.hovered, .selected) {
   display: none;
 }
 

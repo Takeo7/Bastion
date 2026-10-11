@@ -458,6 +458,10 @@ export class BastionSet implements StageSet {
   private showcaseRig: UnitRig | null = null;
   private partnerKey = '';
   private launching = 0;
+  /** Each plot's label, by hotspot id: terrain labels only show on the hovered or selected plot. */
+  private readonly labels = new Map<string, HTMLElement>();
+  private hovered: string | null = null;
+  private selected: string | null = null;
 
   constructor(private readonly onPick: (hotspot: string) => void) {
     // A clear winter afternoon in the Pyrenees.
@@ -667,6 +671,7 @@ export class BastionSet implements StageSet {
       if (o instanceof CSS2DObject) o.element.remove();
     });
     this.grid.clear();
+    this.labels.clear();
     for (const h of [...this.hotspots]) if (h.userData.hotspot !== 'hangar') this.hotspots.splice(this.hotspots.indexOf(h), 1);
     const work = c.base.construction;
     for (const plot of c.base.plots) {
@@ -720,6 +725,7 @@ export class BastionSet implements StageSet {
       tag.position.set(0, (fixed === 'command' ? 1.8 : WALL_H) + 0.5, PLOT / 2 - 0.2);
       g.add(tag);
       this.grid.add(g);
+      this.labels.set(fixed ?? `plot:${plot.id}`, tag.element);
       const hit = hotspot(fixed ?? `plot:${plot.id}`, o);
       this.grid.add(hit);
       this.hotspots.push(hit);
@@ -757,6 +763,8 @@ export class BastionSet implements StageSet {
   select(plot: string | null): void {
     this.frame.visible = !!plot;
     if (plot) this.frame.position.copy(this.roomCentre(plot)).add(new THREE.Vector3(0, 0.08, 0));
+    this.selected = plot ? (plot.includes(',') && !plot.startsWith('plot:') ? `plot:${plot}` : plot) : null;
+    this.markLabels();
   }
 
   /** Coloured marker over the building the partner is looking at. */
@@ -852,6 +860,16 @@ export class BastionSet implements StageSet {
     const onPlot = !!hot && hot !== 'hangar';
     this.hoverFrame.visible = onPlot;
     if (onPlot) this.hoverFrame.position.copy(this.roomCentre(hot!)).add(new THREE.Vector3(0, 0.1, 0));
+    this.hovered = onPlot ? hot : null;
+    this.markLabels();
+  }
+
+  /** Terrain and free plots name themselves only when pointed at or selected (49 labels were noise). */
+  private markLabels(): void {
+    for (const [id, el] of this.labels) {
+      el.classList.toggle('hovered', id === this.hovered);
+      el.classList.toggle('selected', id === this.selected);
+    }
   }
 
   tick(dt: number, time: number): void {
