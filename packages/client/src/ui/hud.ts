@@ -149,7 +149,7 @@ export class Hud {
   private readonly bannerEl = h('div.banner');
   private readonly toastEl = h('div.toast');
   /** A key moment the partner caused, with «Ver (F)» (UX-REVISION-2 #36). */
-  private readonly noticeEl = h('div.toast.partner-notice', { style: { bottom: '140px' } });
+  private readonly noticeEl = h('div.toast.partner-notice');
   private readonly outcome = h('div.outcome');
   private readonly modal = h('div.modal');
   private readonly connection = h('div.connection');
@@ -420,7 +420,8 @@ export class Hud {
     this.noticeEl.classList.toggle('show', !!text);
     if (!text) return;
     this.noticeEl.style.setProperty('--accent', color);
-    append(this.noticeEl, h('span', { style: { color } }, text), ' ', h('button.x-btn.small', { onclick: () => onSee?.() }, 'Ver (F)'));
+    // The partner's colour goes on the tape (styles.css): as text on paper, orange and light blue read poorly.
+    append(this.noticeEl, h('span', {}, text), h('button.x-btn.small', { onclick: () => onSee?.() }, 'Ver (F)'));
   }
 
   toast(text: string): void {

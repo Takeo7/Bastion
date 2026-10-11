@@ -1368,6 +1368,25 @@ em.psi {
   opacity: 1;
 }
 
+/* The partner's key moment (#36): a slip over the usual toast, taped on the
+   left in their colour, the line in ink and «Ver (F)». It stays 8 s. */
+.toast.partner-notice {
+  bottom: 140px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px 4px 12px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  border-left: 7px solid var(--accent, var(--pen));
+  transform: translateX(-50%) rotate(0.8deg);
+}
+
+.toast.partner-notice .x-btn {
+  font-weight: 400;
+}
+
 .connection {
   position: absolute;
   top: 48px;
@@ -2000,6 +2019,7 @@ body:has(.strat) .fps-counter {
 /* Arrows at the screen's edge toward the objective and the evacuation (#33):
    a paper tag with an arrow drawn in pen (the JS turns .edge-arrow inline). */
 .edge-mark {
+  display: flex;
   align-items: center;
   gap: 4px;
   padding: 3px 9px 3px 5px;
@@ -2010,13 +2030,17 @@ body:has(.strat) .fps-counter {
   box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.5);
 }
 
-/* The JS shows it with display: block; flex keeps arrow and label on one line. */
-.edge-mark[style*='display: block'] {
-  display: flex !important;
-}
-
 .edge-mark.evac {
   color: var(--good);
+}
+
+/* Towards the partner's key moment (#36): stamp red, as anything that may
+   hurt you, and it beats for as long as the notice lasts. */
+.edge-mark.alert {
+  color: var(--stamp);
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+  animation: pulse 0.7s ease-in-out infinite alternate;
 }
 
 .edge-mark:hover {
