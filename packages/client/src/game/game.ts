@@ -194,6 +194,11 @@ export class Game {
   private readonly edge = new EdgeMarks((m) => this.lookAt(m.pos));
   /** Which mark the O key centres next. */
   private markCycle = 0;
+  /** A key moment the partner just caused, until it fades or the player looks (UX-REVISION-2 #36). */
+  private moment: { pos: Vec2; who: string } | null = null;
+  private momentTimer = 0;
+  /** The partner's soldier that acted last: where a broken concealment happened. */
+  private partnerLast: string | null = null;
   private readonly sfx = new Sfx();
   private overlays!: Overlays;
   private readonly hud: Hud;
@@ -421,6 +426,7 @@ export class Game {
 
   destroy(): void {
     window.clearTimeout(this.endArmTimer);
+    window.clearTimeout(this.momentTimer);
     this.tips.destroy();
     for (const d of this.disposers) d();
     this.renderer.dispose();
@@ -499,6 +505,7 @@ export class Game {
    */
   private async play(item: QueuedEvent): Promise<void> {
     const { e, by } = item;
+    if (by !== null && by !== this.mySlot) this.notePartner(e, by);
     const v = this.view;
     const alienPhase = v.activeTeam === 'alien';
     const cinematic = by === this.mySlot || alienPhase;
@@ -1086,7 +1093,77 @@ export class Game {
     this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
     this.overlays.setSmoke(this.view.smoke);
     this.drawPlans();
-    this.edge.set(this.missionMarks());
+    this.edge.set(this.marks());
+  }
+
+  private marks(): EdgeMark[] {
+    const marks = this.missionMarks();
+    return this.moment ? [...marks, { kind: 'alert', label: this.moment.who, pos: this.moment.pos }] : marks;
+  }
+
+  /**
+   * The camera never follows the partner, but the moments that matter (a
+   * contact, a soldier down, concealment broken, the objective) get a notice
+   * with «Ver (F)» and an arrow at the screen edge towards them (#36).
+   */
+  private notePartner(e: GameEvent, by: Slot): void {
+    const v = this.view;
+    const actor = unitOf(e);
+    if (actor && getUnit(v, actor)?.team === 'xcom') this.partnerLast = actor;
+    const who = this.playerName(by);
+    const at = (id: string | null) => (id ? getUnit(v, id)?.pos : undefined);
+    let pos: Vec2 | undefined;
+    let text: string;
+    switch (e.t) {
+      case 'podActivated': {
+        const pod = v.pods.find((p) => p.id === e.pod);
+        const first = pod?.unitIds.map((id) => getUnit(v, id)).find((m) => m?.alive);
+        pos = first?.pos;
+        text = `${who}: ¡contacto!`;
+        break;
+      }
+      case 'concealmentBroken':
+        pos = at(this.partnerLast);
+        text = `${who} ha roto la ocultación`;
+        break;
+      case 'died': {
+        const u = getUnit(v, e.unit);
+        if (u?.team === 'xcom') text = `${u.name} ha caído`;
+        else if (u?.objective) text = `${who} ha derribado el retransmisor`;
+        else return;
+        pos = u.pos;
+        break;
+      }
+      case 'itemPicked':
+        pos = at(e.unit);
+        text = `${who} ha recuperado los datos`;
+        break;
+      case 'hacked':
+        if (!e.success) return;
+        pos = at(e.unit);
+        text = `${who}: terminal hackeado`;
+        break;
+      default:
+        return;
+    }
+    if (!pos) return;
+    this.moment = { pos: { ...pos }, who };
+    this.hud.notice(text, PLAYER_COLORS[by], () => this.seeMoment());
+    window.clearTimeout(this.momentTimer);
+    this.momentTimer = window.setTimeout(() => this.clearMoment(), 8000);
+    this.edge.set(this.marks());
+  }
+
+  private seeMoment(): void {
+    if (this.moment) this.lookAt(this.moment.pos);
+    this.clearMoment();
+  }
+
+  private clearMoment(): void {
+    window.clearTimeout(this.momentTimer);
+    this.moment = null;
+    this.hud.notice(null);
+    this.edge.set(this.marks());
   }
 
   /**
@@ -1839,6 +1916,11 @@ export class Game {
           this.hud.toast(this.sfx.toggleMute() ? 'Sonido desactivado (M)' : 'Sonido activado (M)');
           break;
         case 'KeyF': {
+          // With a partner's moment on screen, F goes there; otherwise to the soldier.
+          if (this.moment) {
+            this.seeMoment();
+            break;
+          }
           const u = this.selectedUnit();
           if (u) this.rig.focus(tileToWorld(u.pos));
           break;

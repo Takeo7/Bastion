@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { previewShot } from '../src/aim';
 import {
   addPlayer,
+  LATE_KIT,
   applyMissionResult,
   buildSquad,
   contactCost,
@@ -267,6 +268,25 @@ describe('helping the players', () => {
     expect(veteran.owner).toBe(0);
     expect(soldierCap(c)).toBe(6);
     expect(addPlayer(c, 1, new Rng(1))).toBe(0);
+  });
+
+  it('a partner who arrives never takes the reserves the first commander needs: fresh recruits instead', () => {
+    const c = createCampaign([0], new Rng(3));
+    // After a hard mission only three soldiers are fit, and they have never fought.
+    c.soldiers.forEach((s, i) => (s.woundedDays = i < 5 ? 6 : 0));
+    const fit = c.soldiers.filter((s) => s.woundedDays === 0).map((s) => s.id);
+    addPlayer(c, 1, new Rng(1));
+    // The fit three stay; the wounded rookies may change hands.
+    expect(c.soldiers.filter((s) => fit.includes(s.id)).every((s) => s.owner === 0)).toBe(true);
+    expect(c.soldiers.filter((s) => s.owner === 1)).toHaveLength(LATE_KIT);
+    expect(c.log.some((l) => /Llega el segundo comandante/.test(l.text))).toBe(true);
+    // Three fit rookies are all the first commander has (the veterans are wounded): they stay, and the partner gets recruits.
+    const d = createCampaign([0], new Rng(3));
+    d.soldiers.slice(3).forEach((s) => ((s.missions = 1), (s.woundedDays = 6)));
+    addPlayer(d, 1, new Rng(1));
+    expect(d.soldiers.slice(0, 8).every((s) => s.owner === 0)).toBe(true);
+    expect(d.soldiers.filter((s) => s.owner === 1)).toHaveLength(LATE_KIT);
+    expect(d.log.some((l) => /Se alistan a sus órdenes/.test(l.text))).toBe(true);
   });
 
   it('what to do now: the most pressing thing first', () => {

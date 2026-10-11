@@ -148,6 +148,8 @@ export class Hud {
   private readonly menu = h('div.game-menu');
   private readonly bannerEl = h('div.banner');
   private readonly toastEl = h('div.toast');
+  /** A key moment the partner caused, with «Ver (F)» (UX-REVISION-2 #36). */
+  private readonly noticeEl = h('div.toast.partner-notice', { style: { bottom: '140px' } });
   private readonly outcome = h('div.outcome');
   private readonly modal = h('div.modal');
   private readonly connection = h('div.connection');
@@ -169,6 +171,7 @@ export class Hud {
       h('div.side', {}, menuButton, this.logEl),
       this.bannerEl,
       this.toastEl,
+      this.noticeEl,
       this.outcome,
       this.menu,
       this.modal,
@@ -409,6 +412,15 @@ export class Hud {
     this.root.append(el);
     window.setTimeout(() => el.classList.add('out'), 4200);
     window.setTimeout(() => el.remove(), 5000);
+  }
+
+  /** Shows (or, with null, hides) the partner's key moment: its text in their colour and «Ver (F)». */
+  notice(text: string | null, color = '', onSee?: () => void): void {
+    clear(this.noticeEl);
+    this.noticeEl.classList.toggle('show', !!text);
+    if (!text) return;
+    this.noticeEl.style.setProperty('--accent', color);
+    append(this.noticeEl, h('span', { style: { color } }, text), ' ', h('button.x-btn.small', { onclick: () => onSee?.() }, 'Ver (F)'));
   }
 
   toast(text: string): void {

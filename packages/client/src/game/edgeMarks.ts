@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { distance, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
 
-/** A place the squad has to reach: the objective or the evacuation zone. */
+/** A place the squad has to reach (the objective, the evacuation zone), or where the partner just made something happen. */
 export interface EdgeMark {
-  kind: 'objective' | 'evac';
+  kind: 'objective' | 'evac' | 'alert';
   label: string;
   pos: Vec2;
 }

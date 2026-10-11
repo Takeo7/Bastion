@@ -695,7 +695,8 @@ export class BastionSet implements StageSet {
             ),
           ),
         );
-        title = FIXED_NAMES[fixed];
+        // The bunker's label is short over the map (it sits between two others); the panels give the full name.
+        title = fixed === 'command' ? 'Búnker' : FIXED_NAMES[fixed];
         kind = ' command';
       } else if (plot.building) {
         const facility = plot.building as FacilityId;
@@ -721,7 +722,9 @@ export class BastionSet implements StageSet {
           kind = plot.terrain === 'clear' ? ' empty' : ' rock';
         }
       }
-      const tag = label(title, `room-label${kind}`);
+      // Every other column's label sits a line lower, so neighbours in a row never overlap when zoomed out.
+      const tag = label(title, `room-label${kind}${plot.x % 2 === 0 ? ' low' : ''}`);
+      if (fixed) tag.element.title = FIXED_NAMES[fixed];
       tag.position.set(0, (fixed === 'command' ? 1.8 : WALL_H) + 0.5, PLOT / 2 - 0.2);
       g.add(tag);
       this.grid.add(g);

@@ -439,8 +439,14 @@ export class StrategyScreen {
     return r ? `${r.day ?? ''}:${r.missionName}:${r.victory}` : '';
   }
 
+  /**
+   * The debrief is shown to whoever took part: a commander who joins after the
+   * mission lands in the base instead (UX-REVISION-2 #37), where Lore's arrival
+   * scene sums the campaign up.
+   */
   private reportPending(c: CampaignState): boolean {
-    return !!c.lastReport && !c.activeMission && this.reportKey(c) !== this.seenReport;
+    const r = c.lastReport;
+    return !!r && !c.activeMission && this.reportKey(c) !== this.seenReport && r.squad.some((s) => s.owner === this.mySlot);
   }
 
   private bar(value: number, max: number): HTMLElement {
@@ -2009,7 +2015,8 @@ export class StrategyScreen {
                 this.render();
               },
             },
-            `Reclutar · ${cost} ₡`,
+            // The price never splits from its sign on a narrow photo.
+            `Reclutar · ${cost}\u00a0₡`,
           ),
     );
   }

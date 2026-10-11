@@ -1415,6 +1415,8 @@ export function defaultSquad(c: CampaignState, connected: readonly Slot[]): stri
 
 /** Soldiers a partner who joins a campaign started without them gets to command. */
 export const LATE_KIT = 4;
+/** Ready soldiers a commander keeps when a partner arrives: a squad share. */
+const KEEP_READY = 3;
 
 /**
  * Brings a player into a campaign started without them. They take over the
@@ -1424,10 +1426,16 @@ export const LATE_KIT = 4;
 export function addPlayer(c: CampaignState, slot: Slot, rng: Rng): number {
   if (c.players.includes(slot)) return 0;
   c.players = [...c.players, slot].sort() as Slot[];
-  const rookies = c.soldiers
-    .filter((s) => s.owner !== slot && s.alive && s.rank === 0 && s.missions === 0)
-    .reverse()
-    .slice(0, LATE_KIT);
+  // Untouched rookies change hands, but never the reserves the commander already there
+  // needs: they keep at least a squad share of ready soldiers (UX-REVISION-2 #37).
+  // Whatever is missing comes as fresh recruits.
+  const ready = (owner: Slot) => c.soldiers.filter((s) => s.owner === owner && soldierReady(s)).length;
+  const rookies: CampaignSoldier[] = [];
+  for (const s of c.soldiers.filter((x) => x.owner !== slot && x.alive && x.rank === 0 && x.missions === 0).reverse()) {
+    if (rookies.length >= LATE_KIT) break;
+    if (soldierReady(s) && ready(s.owner) - rookies.filter((r) => r.owner === s.owner && soldierReady(r)).length <= KEEP_READY) continue;
+    rookies.push(s);
+  }
   // A squad being picked is redone for both by whoever calls this (see the server's bringPlayersIn).
   c.squad = c.squad.filter((id) => !rookies.some((s) => s.id === id));
   for (const s of rookies) {
@@ -1437,15 +1445,16 @@ export function addPlayer(c: CampaignState, slot: Slot, rng: Rng): number {
     s.loadout = { utility: null, ammo: null };
   }
   const classes: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'];
-  const given = [...rookies];
+  const recruits: CampaignSoldier[] = [];
   for (let i = rookies.length; i < LATE_KIT; i++) {
     const have = c.soldiers.filter((s) => s.owner === slot && s.alive).map((s) => s.cls);
-    given.push(addSoldier(c, slot, classes.find((cls) => !have.includes(cls)) ?? classes[i % classes.length]!, rng));
+    recruits.push(addSoldier(c, slot, classes.find((cls) => !have.includes(cls)) ?? classes[i % classes.length]!, rng));
   }
-  // Whoever was already there learns who changed hands.
-  const names = given.map((s) => s.name);
-  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : (names[0] ?? '');
-  log(c, `Llega el segundo comandante. Pasan a su mando: ${list}.`, 'good', { kicker: 'RELEVO', title: 'Llega el segundo comandante' });
+  // Whoever was already there learns who changed hands, and who joined.
+  const list = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : (names[0] ?? ''));
+  const moved = rookies.length ? `Pasan a su mando: ${list(rookies.map((s) => s.name))}.` : '';
+  const joined = recruits.length ? `${rookies.length ? 'Además, se alistan' : 'Se alistan a sus órdenes'}: ${list(recruits.map((s) => s.name))}.` : '';
+  log(c, ['Llega el segundo comandante.', moved, joined].filter(Boolean).join(' '), 'good', { kicker: 'RELEVO', title: 'Llega el segundo comandante' });
   return LATE_KIT;
 }
 

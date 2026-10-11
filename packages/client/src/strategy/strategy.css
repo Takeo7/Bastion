@@ -2070,6 +2070,35 @@ dl.x-pairs dd {
   translate: 0 20px;
 }
 
+/* Labels of neighbouring plots alternate height (bastion.ts marks every other
+   column): zoomed out, «Cuartel · Búnker · Armería» no longer run together. */
+.room-label.low {
+  translate: 0 26px;
+}
+
+/* «Reclutar» on a free hangar place (#39): the four classes as a short list,
+   symbol and full name, as wide as the photo. */
+.recruit-classes {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.lineup-card .recruit-classes .x-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  margin: 0;
+  padding: 2px 6px;
+  text-align: left;
+}
+
+/* The symbol only: the button already says the class in full. */
+.recruit-classes .cls {
+  font-size: 0;
+}
+
 /* "Ahora": the one next thing to do, on top of the Agenda. A red stamp when it
    is urgent (a partner waiting, an operation about to expire), ink otherwise. */
 .strat-now {
