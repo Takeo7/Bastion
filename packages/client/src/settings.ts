@@ -16,9 +16,11 @@ export interface GraphicsSettings {
   /** Fraction of the screen's pixel density rendered (1, 0.75 or 0.5); 0 for automatic. */
   resolution: number;
   showFps: boolean;
+  /** Interface size (0.9 to 1.3): scales the HUD and the base's sheets, not the 3D view. */
+  uiScale: number;
 }
 
-const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false };
+const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1 };
 const KEY = storageKey('graphics');
 /** Version of the stored settings: 2 made the resolution automatic by default. */
 const VERSION = 2;
@@ -51,6 +53,12 @@ export function setGraphics(patch: Partial<GraphicsSettings>): void {
   }
   for (const fn of listeners) fn(current);
   fpsCounter.classList.toggle('show', current.showFps);
+  applyUiScale();
+}
+
+/** The interface size goes to CSS as --ui-scale (styles.css and strategy.css apply it). */
+function applyUiScale(): void {
+  document.documentElement.style.setProperty('--ui-scale', String(current.uiScale));
 }
 
 /** Calls `fn` now and on every change; returns the unsubscribe. */
@@ -104,6 +112,7 @@ const fpsCounter = document.createElement('div');
 fpsCounter.className = 'fps-counter';
 fpsCounter.classList.toggle('show', current.showFps);
 document.body.append(fpsCounter);
+applyUiScale();
 
 let frames = 0;
 let windowStart = 0;

@@ -5,6 +5,7 @@ import {
   abilityBlocker,
   abilityTargets,
   apForCost,
+  apNeeded,
   applyEvent,
   attackWeapon,
   blastRadius,
@@ -17,6 +18,7 @@ import {
   coverAgainst,
   coverSides,
   destinations,
+  ENEMY_FILES,
   distance,
   getUnit,
   hackChance,
@@ -65,7 +67,9 @@ import { Overlays, type MoveTile } from './overlays';
 import { Renderer } from './renderer';
 import { Sfx } from './sfx';
 import { setTimeScale, wait } from './tween';
-import { UnitViews } from './unitViews';
+import { UnitViews, type EnemyTag } from './unitViews';
+import { EdgeMarks, type EdgeMark } from './edgeMarks';
+import { CombatTips } from './combatTips';
 
 type Mode = { kind: 'move' } | { kind: 'target'; ability: AbilityId } | { kind: 'tile'; ability: AbilityId };
 
@@ -186,9 +190,15 @@ export class Game {
   private readonly mapView = new MapView();
   private readonly units = new UnitViews();
   private readonly fx = new Fx();
+  /** Arrows to the objective and the evacuation when they are off screen. */
+  private readonly edge = new EdgeMarks((m) => this.lookAt(m.pos));
+  /** Which mark the O key centres next. */
+  private markCycle = 0;
   private readonly sfx = new Sfx();
   private overlays!: Overlays;
   private readonly hud: Hud;
+  /** Morse's first-time warnings (UX-REVISION-2 #30, UX/UI and Lore). */
+  private readonly tips: CombatTips;
 
   private state!: GameState;
   private view!: GameState;
@@ -249,6 +259,9 @@ export class Game {
       onToggleSound: () => !this.sfx.toggleMute(),
       soundOn: () => !this.sfx.muted,
     });
+    // Above the 3D labels, under the HUD panels.
+    this.root.insertBefore(this.edge.root, this.hud.root);
+    this.tips = new CombatTips(this.hud.root, this.mySlot);
 
     this.disposers.push(this.renderer.onFrame((dt, time) => this.frame(dt, time)));
     this.bindInput();
@@ -261,6 +274,8 @@ export class Game {
     this.units.tick(dt, time);
     this.fx.tick(dt);
     this.overlays?.tick(time);
+    const from = this.selected ? getUnit(this.view, this.selected) : undefined;
+    this.edge.update(this.renderer.camera, from?.alive ? from.pos : null);
   }
 
   // ================================================================ network
@@ -302,7 +317,41 @@ export class Game {
       s.campaignMission?.name ?? MISSION_NAMES[s.mission.kind],
       [s.mapName, mission.objective, mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
     );
+    // The briefing stays 4.2 s and fades for 0.8: no warning plays over it.
+    this.tips.intro(5000, s);
     this.storyRadio('start');
+    void this.openingShot();
+  }
+
+  /**
+   * Opening shot (UX-REVISION-2 #32). The squad lands in a corner of the map:
+   * centred on it, most of the screen was empty ground off the map. Frame it
+   * with the map (or the enemies already in sight) in front of it instead,
+   * and, while the briefing is up, pass over the objective and come back, as
+   * XCOM 2 does. Any camera input from the player ends it.
+   */
+  private async openingShot(): Promise<void> {
+    const v = this.view;
+    const squad = v.units.filter((u) => u.alive && u.team === 'xcom' && !u.captive && !u.objective);
+    if (!squad.length) return;
+    const centre = (ps: Vec2[]) => ({ x: ps.reduce((a, p) => a + p.x, 0) / ps.length, y: ps.reduce((a, p) => a + p.y, 0) / ps.length });
+    const here = centre(squad.map((u) => u.pos));
+    const seen = v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id));
+    const toward = seen.length ? centre(seen.map((a) => a.pos)) : { x: v.width / 2, y: v.height / 2 };
+    // At most six tiles towards it, so the squad stays well inside the frame.
+    const gap = distance(here, toward);
+    const k = gap > 0 ? Math.min(6, gap / 2) / gap : 0;
+    const home = tileToWorld({ x: Math.round(here.x + (toward.x - here.x) * k), y: Math.round(here.y + (toward.y - here.y) * k) });
+    this.rig.focus(home, true);
+    const epoch = this.rig.epoch;
+    const goal = this.missionMarks()[0];
+    if (!goal || distance(here, goal.pos) < 8) return;
+    await wait(0.9);
+    if (this.rig.epoch !== epoch) return;
+    this.rig.focus(tileToWorld(goal.pos));
+    await wait(2.1);
+    if (this.rig.epoch !== epoch) return;
+    this.rig.focus(home);
   }
 
   onEvents(events: GameEvent[], seq: number, by: Slot | null): void {
@@ -359,6 +408,7 @@ export class Game {
 
   destroy(): void {
     window.clearTimeout(this.endArmTimer);
+    this.tips.destroy();
     for (const d of this.disposers) d();
     this.renderer.dispose();
     clear(this.root);
@@ -403,6 +453,7 @@ export class Game {
       if (item.e.t === 'tileChanged') this.mapView.rebuild(this.view);
       this.refreshView();
       this.refreshStatus();
+      this.tips.event(item.e, this.view);
       if (item.by === this.mySlot && --this.myPending === 0) {
         // Let the player see the outcome before the selection moves on.
         await wait(HOLD_AFTER[item.e.t] ?? 0.2);
@@ -1018,6 +1069,46 @@ export class Game {
     this.overlays.setBeacons(beacons);
     this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
     this.overlays.setSmoke(this.view.smoke);
+    this.edge.set(this.missionMarks());
+  }
+
+  /**
+   * Where the squad has to go next: the objective while it is pending (the
+   * item on the ground, the relay, the terminal, the captive), otherwise the
+   * evacuation zone if the mission has one.
+   */
+  private missionMarks(): EdgeMark[] {
+    const s = this.view;
+    const m = s.mission;
+    let goal: Vec2 | null = null;
+    if (!m.objectiveDone) {
+      if (m.kind === 'recovery' && m.item && !m.item.carrier && !m.item.evacuated) goal = m.item.pos;
+      if (m.kind === 'hack') goal = m.terminal;
+      if (m.kind === 'sabotage' || m.kind === 'rescue') {
+        const target = m.objectiveUnit ? getUnit(s, m.objectiveUnit) : undefined;
+        if (target?.alive && (m.kind === 'sabotage' || target.captive)) goal = target.pos;
+      }
+    }
+    if (goal) return [{ kind: 'objective', label: 'Objetivo', pos: goal }];
+    if (!m.evacZone.length) return [];
+    const cx = m.evacZone.reduce((sum, t) => sum + t.x, 0) / m.evacZone.length;
+    const cy = m.evacZone.reduce((sum, t) => sum + t.y, 0) / m.evacZone.length;
+    const centre = m.evacZone.reduce((best, t) => (distance(t, { x: cx, y: cy }) < distance(best, { x: cx, y: cy }) ? t : best));
+    return [{ kind: 'evac', label: 'Evacuación', pos: centre }];
+  }
+
+  private showEnemyFile(u: Unit): void {
+    const file = ENEMY_FILES[u.template];
+    if (!file) return;
+    const t = TEMPLATES[u.template];
+    const stats = [`Salud ${u.hp}/${u.maxHp}`, u.armor ? `Blindaje ${u.armor}` : '', `Puntería ${t.aim}`, t.defense ? `Defensa ${t.defense}` : ''];
+    this.hud.enemyFile(t.name, stats.filter(Boolean).join(' · '), file);
+  }
+
+  /** The player asked to look somewhere (O, or an edge arrow): it ends any camera pass. */
+  private lookAt(pos: Vec2): void {
+    this.rig.takeControl();
+    this.rig.focus(tileToWorld(pos));
   }
 
   // ============================================================ interaction
@@ -1335,7 +1426,10 @@ export class Game {
   private storyRadio(moment: 'start' | 'objective'): void {
     const chapter = this.state.campaignMission?.story;
     const line = chapter ? STORY_RADIO[chapter - 1]?.[moment] : undefined;
-    if (line) this.hud.log(`Morse · ${line}`, '#1d4fb0');
+    if (line) {
+      this.hud.log(`Morse · ${line}`, '#1d4fb0');
+      this.tips.story(line);
+    }
   }
 
   /** What a recovery carries out: story chapters and side quests name it ("las cintas"). */
@@ -1391,6 +1485,7 @@ export class Game {
 
     const panel = this.targetPanel();
     this.hud.setTarget(panel);
+    if (panel?.kind === 'attack') this.tips.shotPanel();
 
     const ready = s.ready[this.mySlot];
     const waiting = partner && busy.has(partner.slot) && !s.ready[partner.slot] ? partner.name : null;
@@ -1423,6 +1518,7 @@ export class Game {
     );
     const shown = this.selected ? getUnit(v, this.selected) : undefined;
     this.hud.setSelected(shown?.alive ? shown : null);
+    this.tips.state(v, this.visibleAliens, sharing);
   }
 
   /** Builds the target panel and draws the aim line for the current target. */
@@ -1483,6 +1579,7 @@ export class Game {
     this.overlays.setHover(tile);
     const hovered = tile ? unitAt(this.view, tile) : undefined;
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
+    this.units.setTags(this.enemyTags(u, tile));
     if (!u || !this.canAct() || this.isBusy(u.id)) return;
 
     // Melee: show the run to the strike position.
@@ -1515,6 +1612,43 @@ export class Game {
     this.overlays.showPath(u.pos, path, dest.dash);
     this.overlays.showCover(tile, coverSides(this.state, tile));
     this.overlays.setHover(tile, dest.detected ? 0xff4a4a : dest.dash ? 0xffc93a : 0x9fe8ff);
+    if (dest.detected) this.tips.redTile();
+  }
+
+  /**
+   * Hit chances over the enemies' flags, as in XCOM 2. Over an enemy: the
+   * chance to hit it from where the soldier stands. Over a destination: every
+   * known enemy the soldier would see from there, yellow if flanked, with the
+   * chance when there would still be an action left to shoot. Only to look:
+   * it needs no command, so the partner who waits can plan too.
+   */
+  private enemyTags(u: Unit | undefined, tile: Vec2 | null): Map<string, EnemyTag> {
+    const tags = new Map<string, EnemyTag>();
+    if (!u || !tile || this.mode.kind !== 'move' || !this.canAct() || !this.isMine(u) || this.isBusy(u.id)) return tags;
+    if (!abilitiesOf(u).includes('shoot')) return tags;
+    const occupant = unitAt(this.state, tile);
+    if (occupant) {
+      if (occupant.team !== 'alien' || !this.visibleAliens.has(occupant.id)) return tags;
+      const shot = previewShot(this.state, u, occupant, { ability: 'shoot' });
+      tags.set(
+        occupant.id,
+        shot
+          ? { kind: shot.flanked ? 'flank' : 'aim', text: `${shot.hit} % · crít. ${Math.min(shot.crit, shot.hit)} %` }
+          : { kind: 'none', text: 'Sin línea de tiro' },
+      );
+      return tags;
+    }
+    const dest = this.reach()?.tiles.find((t) => sameTile(t.pos, tile));
+    if (!dest) return tags;
+    const canShoot = !dest.dash && u.ap - 1 >= apNeeded(u, 'shoot');
+    for (const a of this.state.units) {
+      if (!a.alive || a.team !== 'alien' || !this.visibleAliens.has(a.id)) continue;
+      const shot = previewShot(this.state, u, a, { ability: 'shoot', from: tile });
+      if (!shot) continue;
+      const chance = canShoot ? `${shot.hit} %` : '';
+      tags.set(a.id, shot.flanked ? { kind: 'flank', text: chance ? `Flanco · ${chance}` : 'Flanco' } : { kind: 'sight', text: chance || 'A la vista' });
+    }
+    return tags;
   }
 
   private sendPresence(): void {
@@ -1552,7 +1686,12 @@ export class Game {
     });
     window.addEventListener('pointerup', (e) => {
       if (e.button === 2 && this.drag) {
-        if (!this.drag.moved) this.cancelMode();
+        if (!this.drag.moved) {
+          // A right click (not a drag) on a known enemy opens its file; elsewhere it backs out of aiming.
+          const enemy = this.mode.kind === 'move' && this.hoverTile ? unitAt(this.view, this.hoverTile) : undefined;
+          if (enemy?.team === 'alien' && this.visibleAliens.has(enemy.id)) this.showEnemyFile(enemy);
+          else this.cancelMode();
+        }
         this.drag = null;
       }
     });
@@ -1637,6 +1776,12 @@ export class Game {
         case 'KeyF': {
           const u = this.selectedUnit();
           if (u) this.rig.focus(tileToWorld(u.pos));
+          break;
+        }
+        case 'KeyO': {
+          const marks = this.missionMarks();
+          if (!marks.length) this.hud.toast('Esta misión no tiene un punto al que ir: eliminad a los hostiles.');
+          else this.lookAt(marks[this.markCycle++ % marks.length]!.pos);
           break;
         }
       }

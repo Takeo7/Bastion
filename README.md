@@ -97,7 +97,7 @@ Base, créditos y nivel del Bastión son **compartidos**; los soldados son **de 
 
 La campaña va **por fases, como XCOM 2**:
 
-1. **El Bastión.** La base en corte, a pantalla completa: hangar con la nave en superficie, las cuatro salas de mando y debajo la cuadrícula de 3×3 que se excava. Pulsa una sala para entrar (la cámara se acerca) o usa la barra de abajo.
+1. **El Bastión.** La base vista desde arriba, en ángulo, a pantalla completa: el búnker de mando en el centro, sus tres edificios (Cuartel, Progreso, Armería) y alrededor una cuadrícula de 7 × 7 parcelas donde crece. Fuera, al sur, el hangar con la nave y la pista. Pulsa un edificio para entrar (la cámara se acerca) o usa la barra de abajo.
 2. **Geoesfera** (desde Mando). El globo a pantalla completa con regiones, misiones y Órganos. **ESCANEAR** corre los días hasta que pasa algo, y entonces salta un **aviso**: misión nueva, obra terminada, hoja nueva del Expediente (al subir de nivel el Bastión), Órgano nuevo, carta del Consejo a fin de mes o avance de la Partitura. Pulsa una misión para ver su **informe** y **Desplegar**.
 3. **Selección de escuadra** en el hangar: los soldados formados en 3D delante de la nave, cada uno con su ficha.
 4. **Despegue.** Con los dos listos, la escuadra embarca, se abre el techo del hangar y la nave sale. La misión empieza con su presentación (operación, zona y objetivo).
@@ -106,7 +106,7 @@ La campaña va **por fases, como XCOM 2**:
 Las salas:
 
 - **Mando:** abre la geoesfera.
-- **Instalaciones:** la cuadrícula del Bastión. Pulsa una sala para **excavarla** (las de abajo cuestan más) o **construir** en ella. Las obras se hacen de una en una.
+- **Instalaciones:** las parcelas del Bastión. Se **construye** en una parcela despejada pegada a otro edificio (una pasarela los une sola) y se **despeja** terreno (roca, bosque o ruinas, que dan chatarra) junto a lo ya despejado; más lejos del búnker cuesta más. Algunas instalaciones rinden más **pared con pared** con un edificio concreto: enfermería con el cuartel (heridas ×3), taller con la armería (accesorios −40 %), simulación con Progreso (+40 % de experiencia), comunicaciones con el búnker (+1 región) y entrenamiento con el cuartel (reclutar cuesta 20). Las obras se hacen de una en una.
 - **Cuartel:** el soldado elegido en un pedestal, con sus datos, su equipo su arma y armadura, sus accesorios y reclutamiento (30 créditos; máximo 6 soldados por jugador, 12 si juegas solo). Los ascensos abren la **cuadrícula de habilidades**: una columna por rama y una fila por rango. **Personalizar** cambia el nombre, el apodo (sale en su etiqueta en combate), los colores de armadura, detalles y visor, la cabeza (casco, capucha, boina, gorra, máscara o a cara descubierta) y la complexión, viéndolo en el pedestal mientras eliges. El anillo y la etiqueta siguen con el color de su jugador.
 - **Progreso:** el nivel del Bastión, la experiencia que falta y lo que desbloquea cada nivel.
 - **Armería:** los niveles de arma y armadura, y la tienda de **accesorios**.
@@ -126,7 +126,7 @@ Las salas:
 
 **Armas y armadura.** No se compran. Cada soldado lleva el mejor nivel que permitan a la vez el Bastión y su rango: el nivel 2 (magnético, placas) desde **Cabo**, el nivel 3 (plasma, depredadora) desde **Teniente**. Así, un ascenso se nota en el arma y en la armadura, que también cambian de aspecto. Armas magnéticas: +2 de daño; plasma: +4. Placas: +2 de salud; depredadora: +4 de salud y +1 de blindaje.
 
-**Decisiones conjuntas.** Construir, excavar, contactar regiones, elegir misión y responder a los acontecimientos son *propuestas*: aparecen en una franja para el compañero, que las acepta o las rechaza. Si juegas solo (o tu compañero no está conectado) se aplican directamente. Reclutar, ascender, comprar accesorios y equipar a tus propios soldados no necesita permiso.
+**Decisiones conjuntas.** Construir, despejar terreno, contactar regiones, elegir misión y responder a los acontecimientos son *propuestas*: aparecen en una franja para el compañero, que las acepta o las rechaza. Si juegas solo (o tu compañero no está conectado) se aplican directamente. Reclutar, ascender, comprar accesorios y equipar a tus propios soldados no necesita permiso.
 
 **Instalaciones.**
 
@@ -138,7 +138,7 @@ Las salas:
 | Sala de simulación | Las misiones dan un 25 % más de experiencia al Bastión | 3 |
 | Centro de comunicaciones | +2 regiones contactables | 5 |
 
-Todo se paga con **créditos**, la única moneda: construir y excavar, comprar accesorios, reclutar y contactar regiones. Llegan con las recompensas de misión, con el pago mensual del Consejo y con la venta de los **cuerpos enemigos** que se recuperan al ganar una misión (la morgue del Consejo paga por sus teselas).
+Todo se paga con **créditos**, la única moneda: construir y despejar terreno, comprar accesorios, reclutar y contactar regiones. Llegan con las recompensas de misión, con el pago mensual del Consejo y con la venta de los **cuerpos enemigos** que se recuperan al ganar una misión (la morgue del Consejo paga por sus teselas).
 
 **El mundo.** Empezáis con Europa Occidental. Contactar otras regiones cuesta créditos, y cada región contactada aumenta el **pago del Consejo a fin de mes**. El Coro levanta **Órganos** en distintas regiones: cada uno hace avanzar la Partitura cada 14 días. Para asaltarlo (una misión de sabotaje que no caduca y que hace retroceder la Partitura) necesitáis contacto en esa región. Cada región tiene su situación y un aliado que firma los informes de sus misiones.
 

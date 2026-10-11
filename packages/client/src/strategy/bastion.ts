@@ -1,42 +1,56 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { BASE_COLS, BASE_ROWS, FACILITIES, type Appearance, type CampaignState, type FacilityId, type TemplateId } from '@bastion/engine';
+import {
+  adjacencyBonuses,
+  BASE_SIZE,
+  FACILITIES,
+  FIXED_BUILDINGS,
+  FIXED_NAMES,
+  TERRAINS,
+  walkways,
+  type Appearance,
+  type BasePlot,
+  type CampaignState,
+  type FacilityId,
+  type FixedBuildingId,
+  type TemplateId,
+} from '@bastion/engine';
 import { buildUnit, IDLE_POSE, isFigure, type UnitRig } from '../game/models';
 import type { Gear } from '../game/figures';
 import { easeInOut } from '../game/tween';
 import { voxelizeStatic, type StaticVoxelOptions } from '../game/voxel';
 import type { Shot, StageSet } from './stage';
 
-const ROOM_W = 6;
+// The Bastion on the surface, seen from above at an angle: a 7×7 grid of
+// plots in the Pyrenees snow, the bunker in the middle, the command rooms
+// around it and the installations the players build next to them, joined by
+// walkways. Buildings are roofless dioramas (low walls, a door to the south),
+// so their insides read from above and the close-ups still work. The hangar
+// with the dropship and its apron stand south of the compound, outside the grid.
+
+/** Side of a plot, and the strip between two plots where the walkways go. */
+const PLOT = 5;
+const GAP = 1.4;
+const PITCH = PLOT + GAP;
+const HALF = (BASE_SIZE - 1) / 2;
+/** Low walls: rooms are seen from above. */
+const WALL_H = 1.4;
+/** Reference height the facility props were made for (a 3.2 m room); they are scaled down to fit. */
 const ROOM_H = 3.2;
-const ROOM_D = 4;
-const GAP = 0.6;
-/** Ground level: the fixed rooms sit just under it, the dug rooms further down. */
-const SURFACE = ROOM_H + GAP;
-const GRID_W = BASE_COLS * ROOM_W + (BASE_COLS - 1) * GAP;
-/** The four command rooms share the width of the facility grid. */
-const FIXED_W = (GRID_W - 3 * GAP) / 4;
-const HANGAR_X = -6;
+const PROP_SCALE = 0.82;
+const COMPOUND = BASE_SIZE * PITCH;
+/** The hangar, south of the compound, its open front facing the camera. */
+const HANGAR = new THREE.Vector3(0, 0, COMPOUND / 2 + 9);
 /** Take-off timing: the squad boards, then the ship lifts. */
 const BOARD_SECONDS = 1.1;
 export const LAUNCH_SECONDS = 3.4;
 const LINEUP = 8;
 
 /** Rooms with a fixed purpose: each opens one strategy screen. */
-export type FixedRoom = 'command' | 'research' | 'engineering' | 'barracks';
-const FIXED: { id: FixedRoom; name: string }[] = [
-  { id: 'command', name: 'Mando' },
-  { id: 'research', name: 'Progreso' },
-  { id: 'engineering', name: 'Armería' },
-  { id: 'barracks', name: 'Cuartel' },
-];
+export type FixedRoom = FixedBuildingId;
 
 const mats = new Map<string, THREE.Material>();
-/** `front` wins depth ties: for surfaces that lie flush on the rock (room floors and ceilings). */
-function mat(
-  color: number,
-  opts: { emissive?: number; intensity?: number; metal?: number; rough?: number; opacity?: number; front?: boolean } = {},
-): THREE.Material {
+function mat(color: number, opts: { emissive?: number; intensity?: number; metal?: number; rough?: number; opacity?: number } = {}): THREE.Material {
   const key = JSON.stringify([color, opts]);
   let m = mats.get(key);
   if (!m) {
@@ -48,9 +62,6 @@ function mat(
       roughness: opts.rough ?? 0.7,
       transparent: opts.opacity !== undefined,
       opacity: opts.opacity ?? 1,
-      polygonOffset: !!opts.front,
-      polygonOffsetFactor: opts.front ? -1 : 0,
-      polygonOffsetUnits: opts.front ? -4 : 0,
     });
     mats.set(key, m);
   }
@@ -79,14 +90,26 @@ function label(text: string, className: string): CSS2DObject {
   return new CSS2DObject(el);
 }
 
-/** Floor centre of a dug room (row 0 is the first level under the command rooms). */
-function slotOrigin(row: number, col: number): THREE.Vector3 {
-  return new THREE.Vector3((col - (BASE_COLS - 1) / 2) * (ROOM_W + GAP), -(row + 1) * (ROOM_H + GAP), 0);
+/** Ground centre of plot (x, y); y grows towards the camera (south). */
+function plotCentre(x: number, y: number): THREE.Vector3 {
+  return new THREE.Vector3((x - HALF) * PITCH, 0, (y - HALF) * PITCH);
 }
 
-function fixedOrigin(index: number): THREE.Vector3 {
-  return new THREE.Vector3(-GRID_W / 2 + FIXED_W / 2 + index * (FIXED_W + GAP), 0, 0);
+/** A small deterministic random in [0, 1) for a plot and a draw. */
+function rand(x: number, y: number, k: number): number {
+  const h = Math.sin(x * 127.1 + y * 311.7 + k * 74.7) * 43758.5453;
+  return h - Math.floor(h);
 }
+
+// ------------------------------------------------------------- palette
+
+const SNOW = 0xd2dbe2;
+const GRAVEL = 0x8f8a7c;
+const DIRT = 0x7a6a50;
+const CONCRETE = 0x8c9094;
+const WALL = 0x5d6670;
+const PINE = 0x2f4a32;
+const TRUNK = 0x5a4030;
 
 /** Props that make each facility recognisable at a glance. */
 function facilityProps(id: FacilityId): THREE.Group {
@@ -160,58 +183,205 @@ function facilityProps(id: FacilityId): THREE.Group {
   return g;
 }
 
+/** What each command room holds: the holo table, the lab tubes, the forge, the lockers. */
+function fixedProps(id: FixedBuildingId): THREE.Group {
+  const g = new THREE.Group();
+  switch (id) {
+    case 'command': {
+      g.add(box(2.2, 0.9, 1.4, mat(0x2a3036, { metal: 0.4 }), 0, 0, -0.4));
+      const holo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), mat(0x3fa9ff, { emissive: 0x3fa9ff, intensity: 1.2, opacity: 0.5 }));
+      holo.position.set(0, 1.7, -0.4);
+      holo.userData.spinY = true;
+      g.add(holo);
+      for (const x of [-1.6, 1.6]) g.add(box(0.7, 1.1, 0.5, mat(0x1a2430, { metal: 0.4 }), x, 0, -1.4), box(0.6, 0.4, 0.05, mat(0x0a1a2a, { emissive: 0x3fb8ff, intensity: 1.4 }), x, 1.2, -1.15));
+      break;
+    }
+    case 'research':
+      g.add(box(2.4, 0.85, 0.9, mat(0xb8c2cc, { metal: 0.4 }), -0.4, 0, -0.9));
+      g.add(box(1.4, 0.6, 0.05, mat(0x0a1a2a, { emissive: 0x3fb8ff, intensity: 1.6 }), -0.4, 1.15, -1.3));
+      for (const x of [-1.6, 1.5]) {
+        const tube = cylinder(0.32, 1.9, mat(0x6dff9a, { emissive: 0x2fd97a, intensity: 0.9, opacity: 0.55 }), x, 0, 0.4);
+        tube.userData.pulse = true;
+        g.add(tube);
+      }
+      break;
+    case 'engineering': {
+      // Workbench with a rifle on it, a welding spark, a robot arm and parts shelves.
+      g.add(box(2.2, 0.9, 1.1, mat(0x5a5048, { metal: 0.5 }), -0.5, 0, -0.6));
+      g.add(box(1.1, 0.12, 0.18, mat(0x2a3036, { metal: 0.7 }), -0.7, 0.9, -0.5), box(0.3, 0.2, 0.12, mat(0x3a444e, { metal: 0.6 }), -0.2, 0.9, -0.5));
+      const spark = box(0.12, 0.12, 0.12, mat(0x2a1a00, { emissive: 0xffa020, intensity: 3 }), -1.2, 0.95, -0.4);
+      spark.userData.blink = 1.3;
+      g.add(spark);
+      g.add(cylinder(0.22, 1.2, mat(0xffa630, { metal: 0.6 }), 1.0, 0, -0.5));
+      const arm = box(0.18, 1.2, 0.18, mat(0xffa630, { metal: 0.6 }));
+      arm.position.set(1.0, 1.4, -0.5);
+      arm.userData.swing = true;
+      g.add(arm);
+      for (const y of [0.5, 1.3]) {
+        g.add(box(1.0, 0.06, 0.5, mat(0x3a444e, { metal: 0.5 }), 1.55, y, -1.65));
+        g.add(box(0.3, 0.3, 0.3, mat(0x8f6c45), 1.35, y + 0.06, -1.65), box(0.25, 0.2, 0.3, mat(0x56606a, { metal: 0.5 }), 1.8, y + 0.06, -1.65));
+      }
+      break;
+    }
+    case 'barracks':
+      for (const x of [-1.6, -0.6, 0.6, 1.6]) g.add(box(0.8, 1.6, 0.45, mat(0x4a5560, { metal: 0.4 }), x, 0, -1.7));
+      // Bunks along the side walls.
+      for (const x of [-2.1, 2.1]) g.add(box(0.7, 0.4, 1.8, mat(0x6a5a48), x, 0, 0.4), box(0.6, 0.12, 1.6, mat(0xc8c0b0), x, 0.4, 0.4));
+      break;
+  }
+  return g;
+}
+
 /** Scaffolding, crates and a hazard stripe: a facility being built. */
 function constructionProps(progress: number): THREE.Group {
   const g = new THREE.Group();
   const steel = mat(0x9aa4ad, { metal: 0.6 });
-  for (const x of [-2.4, -0.8, 0.8, 2.4]) g.add(box(0.08, ROOM_H * 0.85, 0.08, steel, x, 0, -1.2));
+  for (const x of [-2.4, -0.8, 0.8, 2.4]) g.add(box(0.08, ROOM_H * 0.7, 0.08, steel, x, 0, -1.2));
   for (const y of [0.9, 1.9]) g.add(box(5, 0.08, 0.08, steel, 0, y, -1.2));
+  // The walls rise with the work.
   const p = Math.max(0.05, progress);
-  g.add(box(5.6 * p, 0.12, 0.12, mat(0x2a2a10, { emissive: 0xffc93a, intensity: 1.6 }), -2.8 + 2.8 * p, 0.02, 1.6));
+  g.add(box(5.4, WALL_H * p, 0.25, mat(WALL), 0, 0, -2.4));
+  g.add(box(5.6 * p, 0.12, 0.12, mat(0x2a2a10, { emissive: 0xffc93a, intensity: 1.6 }), -2.8 + 2.8 * p, 0.02, 2.2));
   g.add(box(0.9, 0.7, 0.9, mat(0x8f6c45), 1.8, 0, 0.6), box(0.7, 0.5, 0.7, mat(0x8f6c45), 2.6, 0, 0.9));
-  const lamp = box(0.2, 0.2, 0.2, mat(0x2a1a00, { emissive: 0xffa020, intensity: 2.5 }), -2.6, ROOM_H * 0.8, 1);
+  const lamp = box(0.2, 0.2, 0.2, mat(0x2a1a00, { emissive: 0xffa020, intensity: 2.5 }), -2.4, ROOM_H * 0.7, -1.2);
   lamp.userData.blink = 0;
   g.add(lamp);
   return g;
 }
 
-/** Bare rock with loose boulders (and a drill when it is being dug out). */
-function rockProps(digging: boolean, seed: number): THREE.Group {
+// ------------------------------------------------------------- terrain
+
+/** A pine, snow on its shoulders. */
+function pine(scale: number): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(ROOM_W, ROOM_H, ROOM_D, mat(0x3a332c, { rough: 1 })));
-  for (let i = 0; i < 4; i++) {
-    const r = ((seed * 13 + i * 7) % 10) / 10;
-    const b = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + r * 0.3, 0), mat(0x4a4038, { rough: 1 }));
-    b.position.set((r - 0.5) * ROOM_W * 0.8 + i * 0.3, 0.3, ROOM_D / 2 + 0.2);
-    g.add(b);
+  g.add(cylinder(0.12 * scale, 0.7 * scale, mat(TRUNK)));
+  for (const [y, r, h] of [[0.5, 0.75, 1.1], [1.2, 0.58, 0.95], [1.8, 0.4, 0.8]] as const) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(r * scale, h * scale, 8), mat(PINE, { rough: 0.9 }));
+    cone.position.y = (y + h / 2) * scale;
+    cone.castShadow = true;
+    g.add(cone);
   }
-  if (digging) {
-    const drill = new THREE.Group();
-    drill.add(box(1.2, 0.8, 1, mat(0xffa630, { metal: 0.5 })));
-    const bit = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.2, 10), mat(0xb8c2cc, { metal: 0.8 }));
-    bit.rotation.z = Math.PI / 2;
-    bit.position.set(-1.1, 0.45, 0);
-    bit.userData.spinX = true;
-    drill.add(bit);
-    drill.position.set(0.5, 0, ROOM_D / 2 + 0.6);
-    g.add(drill);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.22 * scale, 0.35 * scale, 8), mat(SNOW, { rough: 1 }));
+  cap.position.y = 2.45 * scale;
+  g.add(cap);
+  return g;
+}
+
+/** Rocks, pines or the ruins of the old 1989 station on an uncleared plot (variant 0–2). */
+function terrainProps(terrain: BasePlot['terrain'], variant: number): THREE.Group {
+  const g = new THREE.Group();
+  const r = (k: number) => rand(variant, terrain.length, k);
+  switch (terrain) {
+    case 'rocks': {
+      g.add(box(PLOT, 0.12, PLOT, mat(0x8a8478, { rough: 1 })));
+      for (let i = 0; i < 7; i++) {
+        const size = 0.45 + r(i) * 0.9;
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), mat(i % 3 ? 0x6e6a64 : 0x5a5650, { rough: 1 }));
+        rock.position.set((r(i + 10) - 0.5) * PLOT * 0.8, size * 0.55, (r(i + 20) - 0.5) * PLOT * 0.8);
+        rock.rotation.set(r(i + 30) * 3, r(i + 40) * 3, 0);
+        rock.castShadow = true;
+        g.add(rock);
+        if (size > 0.9) {
+          const snow = new THREE.Mesh(new THREE.DodecahedronGeometry(size * 0.55, 0), mat(SNOW, { rough: 1 }));
+          snow.position.copy(rock.position).add(new THREE.Vector3(0, size * 0.55, 0));
+          g.add(snow);
+        }
+      }
+      break;
+    }
+    case 'forest': {
+      g.add(box(PLOT, 0.1, PLOT, mat(0x56603e, { rough: 1 })));
+      for (let i = 0; i < 6; i++) {
+        const tree = pine(0.75 + r(i) * 0.6);
+        tree.position.set((r(i + 10) - 0.5) * PLOT * 0.8, 0.1, (r(i + 20) - 0.5) * PLOT * 0.8);
+        g.add(tree);
+      }
+      break;
+    }
+    case 'ruins': {
+      g.add(box(PLOT, 0.14, PLOT, mat(0x77756e, { rough: 1 })));
+      // Broken walls of the old barracks, a collapsed roof beam, rusty drums.
+      g.add(box(3.6, 1.2 + r(1) * 0.6, 0.3, mat(0x9a9488), -0.3, 0.14, -1.6), box(0.3, 0.9, 2.2, mat(0x9a9488), 1.6, 0.14, -0.6));
+      g.add(box(1.4, 0.5, 0.3, mat(0x9a9488), -1.6, 0.14, 1.2));
+      const beam = box(3.4, 0.2, 0.25, mat(0x5a4a38), 0.2, 0.6, 0.2);
+      beam.rotation.z = 0.25;
+      g.add(beam);
+      for (let i = 0; i < 3; i++) g.add(cylinder(0.25, 0.6, mat(0x8a4a2a, { metal: 0.4 }), 1.4 - i * 0.55, 0.14, 1.6 - (i % 2) * 0.5));
+      for (let i = 0; i < 5; i++) g.add(box(0.4 + r(i) * 0.4, 0.25, 0.35, mat(0x8a8478), (r(i + 5) - 0.5) * 3.6, 0.14, (r(i + 9) - 0.2) * 2));
+      break;
+    }
+    case 'clear':
+      // A levelled plot, staked out for building.
+      g.add(box(PLOT, 0.08, PLOT, mat(DIRT, { rough: 1 })));
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+        g.add(box(0.1, 0.6, 0.1, mat(0x8a6a40), x * (PLOT / 2 - 0.3), 0, z * (PLOT / 2 - 0.3)));
+        g.add(box(0.14, 0.14, 0.14, mat(0x2a2a10, { emissive: 0xffc93a, intensity: 1.2 }), x * (PLOT / 2 - 0.3), 0.6, z * (PLOT / 2 - 0.3)));
+      }
+      break;
   }
   return g;
 }
 
-/** Floor, back wall, side walls, ceiling and a light: a room cut into the rock. */
-function roomShell(width: number, wallColor: number): THREE.Group {
+/** Clearing a plot: an orange bulldozer working and a pile of spoil. */
+function clearingProps(): THREE.Group {
   const g = new THREE.Group();
-  // Floor and ceiling lie flush on the rock storeys: they must win the depth tie.
-  g.add(box(width, 0.15, ROOM_D, mat(0x4a525c, { front: true }), 0, -0.15, 0));
-  g.add(box(width, ROOM_H, 0.15, mat(wallColor), 0, 0, -ROOM_D / 2));
-  for (const x of [-width / 2, width / 2]) g.add(box(0.15, ROOM_H, ROOM_D, mat(wallColor), x, 0, 0));
-  g.add(box(width, 0.15, ROOM_D, mat(0x2a3036, { front: true }), 0, ROOM_H, 0));
-  const light = new THREE.PointLight(0xdfefff, 6, 7, 2);
-  light.position.set(0, ROOM_H - 0.4, 0.5);
-  g.add(light);
+  const dozer = new THREE.Group();
+  dozer.add(box(1.6, 0.6, 1.0, mat(0xffa630, { metal: 0.4 }), 0, 0.25, 0), box(0.8, 0.6, 0.9, mat(0xffa630, { metal: 0.4 }), -0.3, 0.85, 0));
+  dozer.add(box(0.6, 0.4, 0.05, mat(0x0a1a2a, { emissive: 0xbfe6ff, intensity: 0.6 }), -0.3, 1.05, 0.46));
+  dozer.add(box(0.15, 0.6, 1.4, mat(0x5a5a52, { metal: 0.6 }), 1.0, 0.05, 0));
+  for (const z of [-0.55, 0.55]) dozer.add(box(1.8, 0.35, 0.25, mat(0x2a2a28), 0, 0, z));
+  const beacon = box(0.14, 0.14, 0.14, mat(0x2a1a00, { emissive: 0xffa020, intensity: 2.5 }), -0.3, 1.45, 0);
+  beacon.userData.blink = 2;
+  dozer.add(beacon);
+  dozer.position.set(-0.6, 0.12, 1.4);
+  dozer.rotation.y = -0.3;
+  g.add(dozer);
+  const spoil = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.8, 8), mat(DIRT, { rough: 1 }));
+  spoil.position.set(1.6, 0.5, 1.6);
+  g.add(spoil);
   return g;
 }
+
+// ------------------------------------------------------------- rooms
+
+/** A roofless room on a concrete slab: low walls and a door to the south (towards the camera). */
+function roomShell(wall: number, trim: number, thick = 0.25, height = WALL_H): THREE.Group {
+  const g = new THREE.Group();
+  const half = PLOT / 2;
+  const door = 1.6;
+  g.add(box(PLOT, 0.2, PLOT, mat(CONCRETE), 0, -0.08, 0));
+  g.add(box(PLOT - 0.3, 0.04, PLOT - 0.3, mat(0x4a525c), 0, 0.12, 0));
+  g.add(box(PLOT, height, thick, mat(wall), 0, 0, -half + thick / 2));
+  for (const x of [-1, 1]) g.add(box(thick, height, PLOT, mat(wall), x * (half - thick / 2), 0, 0));
+  const side = (PLOT - door) / 2;
+  for (const x of [-1, 1]) g.add(box(side, height, thick, mat(wall), x * (door / 2 + side / 2), 0, half - thick / 2));
+  // A coloured band on the wall tops tells the room's kind at a glance.
+  g.add(box(PLOT, 0.08, thick + 0.04, mat(trim), 0, height, -half + thick / 2));
+  for (const x of [-1, 1]) g.add(box(thick + 0.04, 0.08, PLOT, mat(trim), x * (half - thick / 2), height, 0));
+  return g;
+}
+
+/** The bunker: thicker, taller walls, sandbags at the door, radar and masts on its corners. */
+function bunkerExtras(): THREE.Group {
+  const g = new THREE.Group();
+  const half = PLOT / 2;
+  for (let i = 0; i < 6; i++) g.add(box(0.5, 0.3, 0.35, mat(0xa89a70, { rough: 1 }), -1.4 + i * 0.56 + (i > 2 ? 0.9 : 0) - 0.45, 0, half + 0.45));
+  const radar = new THREE.Mesh(new THREE.SphereGeometry(0.9, 20, 12, 0, Math.PI * 2, 0, Math.PI / 3), mat(0xd8dee4, { metal: 0.6, rough: 0.3 }));
+  radar.rotation.x = -Math.PI / 2.5;
+  // On the front corners: the bunker is never seen close up, but the rooms behind it are.
+  radar.position.set(half - 0.6, 3.2, half - 0.6);
+  radar.userData.spinY = true;
+  g.add(radar, cylinder(0.1, 3, mat(0x8a96a3), half - 0.6, 0, half - 0.6));
+  for (const [x, h] of [[-half + 0.4, 4.2], [-half + 1.1, 3]] as const) {
+    g.add(cylinder(0.06, h, mat(0x9aa4ad, { metal: 0.6 }), x, 0, half - 0.4));
+    const light = box(0.18, 0.18, 0.18, mat(0x2a0a0a, { emissive: 0xff3a3a, intensity: 2.5 }), x, h, half - 0.4);
+    light.userData.blink = x;
+    g.add(light);
+  }
+  return g;
+}
+
+const TRIM: Record<FixedBuildingId, number> = { command: 0xb3261e, research: 0x2fd97a, engineering: 0xffa630, barracks: 0x3fa9ff };
 
 /**
  * Voxel art (M5): parts that tick() animates by transform or visibility are
@@ -223,7 +393,7 @@ const VOXEL_SET: StaticVoxelOptions = {
   keep: ['engine', 'hotspot', 'roofSide'],
 };
 
-/** Room props are voxelized once per kind and then cloned, so rebuilding the base stays cheap. */
+/** Plot contents are voxelized once per kind and then cloned, so rebuilding the base stays cheap. */
 const voxelTemplates = new Map<string, THREE.Group>();
 function voxelProps(key: string, build: () => THREE.Group): THREE.Group {
   let template = voxelTemplates.get(key);
@@ -235,10 +405,21 @@ function voxelProps(key: string, build: () => THREE.Group): THREE.Group {
   return template.clone();
 }
 
-/** Invisible box covering a room: what the pointer actually hits. */
-function hotspot(id: string, width: number, origin: THREE.Vector3): THREE.Mesh {
-  const hit = new THREE.Mesh(new THREE.BoxGeometry(width, ROOM_H, ROOM_D), new THREE.MeshBasicMaterial({ visible: false }));
-  hit.position.copy(origin).add(new THREE.Vector3(0, ROOM_H / 2, 0));
+/** A room with its props, scaled into the plot. */
+function room(shell: () => THREE.Group, props: () => THREE.Group): THREE.Group {
+  const g = new THREE.Group();
+  g.add(shell());
+  const inside = props();
+  inside.scale.setScalar(PROP_SCALE);
+  inside.position.set(0, 0.14, -0.2);
+  g.add(inside);
+  return g;
+}
+
+/** Invisible box over a plot: what the pointer actually hits. */
+function hotspot(id: string, origin: THREE.Vector3): THREE.Mesh {
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(PLOT, 2.4, PLOT), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.copy(origin).add(new THREE.Vector3(0, 1.2, 0));
   hit.userData.hotspot = id;
   return hit;
 }
@@ -253,10 +434,10 @@ export interface LineupEntry {
 }
 
 /**
- * The Bastion in cross-section, like the Avenger: hangar on the surface, the
- * four command rooms below it and a 3×3 grid of rooms dug into the rock. Every
- * room is a hotspot that opens its screen; the hangar holds the squad lineup
- * and the barracks a pedestal for the soldier being inspected.
+ * The Bastion as a compound on the surface. Every building and plot is a
+ * hotspot that opens its screen (`command`, `research`, `engineering`,
+ * `barracks`, `plot:x,y`, `hangar`); the hangar holds the squad lineup and
+ * the barracks a pedestal for the soldier being inspected.
  */
 export class BastionSet implements StageSet {
   readonly scene = new THREE.Scene();
@@ -279,101 +460,127 @@ export class BastionSet implements StageSet {
   private launching = 0;
 
   constructor(private readonly onPick: (hotspot: string) => void) {
-    this.scene.background = new THREE.Color(0x070c11);
-    this.scene.add(new THREE.HemisphereLight(0xc4dcff, 0x2a241e, 1.2));
-    const key = new THREE.DirectionalLight(0xfff0dc, 1.6);
-    key.position.set(8, 16, 16);
-    key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
-    Object.assign(key.shadow.camera, { left: -18, right: 18, top: 10, bottom: -18 });
-    this.scene.add(key);
+    // A clear winter afternoon in the Pyrenees.
+    this.scene.background = new THREE.Color(0xa9c4da);
+    this.scene.fog = new THREE.FogExp2(0xc6d4de, 0.0065);
+    this.scene.add(new THREE.HemisphereLight(0xdce8ff, 0x8a8070, 1.05));
+    const sun = new THREE.DirectionalLight(0xfff0dc, 2.3);
+    sun.position.set(-26, 42, 30);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.03;
+    Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 140 });
+    this.scene.add(sun, sun.target);
     this.buildShell();
     voxelizeStatic(this.scene, VOXEL_SET);
+    this.scene.add(this.woods());
     this.scene.add(this.grid, this.lineup, this.showcase, this.partnerMarker);
-    const edges = (w: number, color: number) =>
-      new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.1, ROOM_H + 0.1, 0.1)), new THREE.LineBasicMaterial({ color, transparent: true }));
-    this.frame = edges(ROOM_W, 0x54d1ff);
-    this.hoverFrame = edges(ROOM_W, 0xffffff);
+    const square = (color: number) =>
+      new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(PLOT + 0.4, 0.06, PLOT + 0.4)), new THREE.LineBasicMaterial({ color, transparent: true }));
+    this.frame = square(0x54d1ff);
+    this.hoverFrame = square(0xffffff);
     this.frame.visible = this.hoverFrame.visible = false;
     this.scene.add(this.frame, this.hoverFrame);
   }
 
   // ------------------------------------------------------------- shots
 
+  /** The whole compound from above at an angle, the hangar at the bottom. */
   overview(): Shot {
-    const target = new THREE.Vector3(-3.4, -2.2, 0);
-    return { pos: target.clone().add(new THREE.Vector3(-3, 3.8, 34)), target };
+    const target = new THREE.Vector3(0, 0, 9);
+    return { pos: target.clone().add(new THREE.Vector3(0, 58, 44)), target, fov: 40 };
   }
 
-  /** Close-up of a command room (or a dug room), seen from the front. */
+  /** Close-up of a building (or a plot), from above its door. */
   room(id: FixedRoom | string): Shot {
-    const centre = this.roomCentre(id);
-    const target = centre.clone().add(new THREE.Vector3(0, 1.3, 0));
-    return { pos: target.clone().add(new THREE.Vector3(0.6, 1.1, 8.8)), target };
+    const target = this.roomCentre(id).add(new THREE.Vector3(0, 0.6, 0.4));
+    return { pos: target.clone().add(new THREE.Vector3(0, 9.6, 6.4)), target, fov: 40 };
   }
 
   /** The squad lined up in the hangar, in front of the dropship. */
   hangar(): Shot {
-    const target = new THREE.Vector3(HANGAR_X, SURFACE + 1.05, 0.9);
-    return { pos: new THREE.Vector3(HANGAR_X, SURFACE + 1.9, 10.2), target, fov: 42 };
+    const target = HANGAR.clone().add(new THREE.Vector3(0, 1.05, 0.9));
+    return { pos: HANGAR.clone().add(new THREE.Vector3(0, 1.9, 10.2)), target, fov: 42 };
   }
 
-  /** The whole facility grid, framed to the right of the side panel. */
+  /** The grid of plots, closer than the overview. */
   facilities(): Shot {
-    const target = new THREE.Vector3(-4.8, -6.2, 0);
-    return { pos: target.clone().add(new THREE.Vector3(0, 1.4, 27)), target };
+    const target = new THREE.Vector3(0, 0, 0);
+    return { pos: new THREE.Vector3(0, 46, 34), target, fov: 40 };
   }
 
   /** Low and wide on the hangar, looking up at the roof the dropship leaves through. */
   takeoff(): Shot {
-    const target = new THREE.Vector3(HANGAR_X, SURFACE + 2.8, -1.2);
-    return { pos: new THREE.Vector3(HANGAR_X + 2.2, SURFACE + 0.8, 8.6), target, fov: 56 };
+    const target = HANGAR.clone().add(new THREE.Vector3(0, 2.8, -1.2));
+    return { pos: HANGAR.clone().add(new THREE.Vector3(2.2, 0.8, 8.6)), target, fov: 56 };
   }
 
-  /** The soldier on the barracks pedestal, framed between the side panels. */
+  /** The soldier on the barracks pedestal, seen through its door. */
   armory(): Shot {
-    const p = this.pedestalPos();
-    const target = p.clone().add(new THREE.Vector3(0, 1.15, 0));
-    return { pos: target.clone().add(new THREE.Vector3(0, 0.3, 5.3)), target, fov: 38 };
+    // High enough to look over the low front wall.
+    const target = this.pedestalPos().add(new THREE.Vector3(0, 1.0, 0));
+    return { pos: target.clone().add(new THREE.Vector3(0, 2.4, 4.3)), target, fov: 38 };
   }
 
   private roomCentre(id: string): THREE.Vector3 {
-    const fixed = FIXED.findIndex((f) => f.id === id);
-    if (fixed >= 0) return fixedOrigin(fixed);
-    const m = /^r(\d)c(\d)$/.exec(id.replace('slot:', ''));
-    return m ? slotOrigin(Number(m[1]), Number(m[2])) : new THREE.Vector3();
+    if (id in FIXED_BUILDINGS) {
+      const p = FIXED_BUILDINGS[id as FixedBuildingId];
+      return plotCentre(p.x, p.y);
+    }
+    const m = /^(?:plot:)?(\d+),(\d+)$/.exec(id);
+    return m ? plotCentre(Number(m[1]), Number(m[2])) : new THREE.Vector3();
   }
 
   private pedestalPos(): THREE.Vector3 {
-    return fixedOrigin(3).add(new THREE.Vector3(0, 0, 0.6));
+    const p = FIXED_BUILDINGS.barracks;
+    return plotCentre(p.x, p.y).add(new THREE.Vector3(0, 0.16, 0.7));
   }
 
   // ------------------------------------------------------------- shell
 
+  /** Snowfield, the compound's gravel and fence, watchtowers, the road and the hangar with the dropship. */
   private buildShell(): void {
-    const rock = mat(0x2a241f, { rough: 1 });
-    const width = GRID_W + 8;
-    const bottom = -(BASE_ROWS + 1) * (ROOM_H + GAP) + ROOM_H - 2.5;
-    this.scene.add(box(width, SURFACE - bottom, 1, rock, 0, bottom, -ROOM_D / 2 - 0.5));
-    const half = GRID_W / 2;
-    const side = (width - GRID_W) / 2;
-    for (let row = -1; row <= BASE_ROWS; row++) {
-      const top = row === -1 ? 0 : slotOrigin(row, 0).y;
-      if (row === BASE_ROWS) {
-        this.scene.add(box(width, top + ROOM_H - bottom, ROOM_D, rock, 0, bottom, 0));
-        continue;
-      }
-      this.scene.add(box(width, GAP, ROOM_D, rock, 0, top - GAP, 0));
-      this.scene.add(box(side, ROOM_H, ROOM_D, rock, -half - side / 2, top, 0), box(side, ROOM_H, ROOM_D, rock, half + side / 2, top, 0));
-      if (row === -1) {
-        for (let i = 1; i < 4; i++) this.scene.add(box(GAP, ROOM_H, ROOM_D, rock, fixedOrigin(i).x - FIXED_W / 2 - GAP / 2, top, 0));
-      } else {
-        for (let col = 1; col < BASE_COLS; col++) this.scene.add(box(GAP, ROOM_H, ROOM_D, rock, slotOrigin(row, col).x - (ROOM_W + GAP) / 2, top, 0));
-      }
+    // Snow all round, with pines and the mountains to the north.
+    this.scene.add(box(260, 0.6, 260, mat(SNOW, { rough: 1 }), 0, -0.7, 0));
+    this.scene.add(box(COMPOUND + 3, 0.12, COMPOUND + 3, mat(GRAVEL, { rough: 1 }), 0, -0.2, 0));
+    for (let i = 0; i < 7; i++) {
+      const h = 18 + rand(i, 7, 3) * 22;
+      const peak = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.ConeGeometry(h * 0.9, h, 6), mat(0x6e747c, { rough: 1 }));
+      body.position.y = h / 2;
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(h * 0.36, h * 0.4, 6), mat(SNOW, { rough: 1 }));
+      cap.position.y = h * 0.8;
+      peak.add(body, cap);
+      peak.position.set(-110 + i * 36 + rand(i, 1, 1) * 10, -0.5, -110 - rand(i, 2, 2) * 25);
+      this.scene.add(peak);
     }
 
-    // Surface: ground, hangar with the dropship, comms mast and radar.
-    this.scene.add(box(width + 20, GAP, ROOM_D + 14, mat(0x3d4a33, { rough: 1 }), 0, SURFACE - GAP, 0));
+    // Concrete barriers round the compound, a gate to the south, a watchtower at each corner.
+    const edge = COMPOUND / 2 + 1.2;
+    for (let t = -edge; t < edge; t += 2.4) {
+      for (const [x, z, along] of [[t + 1.2, -edge, 'x'], [-edge, t + 1.2, 'z'], [edge, t + 1.2, 'z'], [t + 1.2, edge, 'x']] as const) {
+        if (z === edge && Math.abs(x) < 4) continue;
+        const barrier = along === 'x' ? box(2.1, 0.7, 0.45, mat(0xb4b2aa), x, -0.15, z) : box(0.45, 0.7, 2.1, mat(0xb4b2aa), x, -0.15, z);
+        this.scene.add(barrier);
+      }
+    }
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const tower = new THREE.Group();
+        for (const [px, pz] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]] as const) tower.add(box(0.14, 4, 0.14, mat(0x5a4a38), px, 0, pz));
+        tower.add(box(1.8, 0.15, 1.8, mat(0x6a5a48), 0, 4, 0), box(1.8, 0.6, 0.1, mat(0x6a5a48), 0, 4.15, 0.85), box(2.1, 0.15, 2.1, mat(0x4a525c), 0, 5.3, 0));
+        const lamp = box(0.25, 0.2, 0.25, mat(0x2a2a10, { emissive: 0xfff0b0, intensity: 1.6 }), 0, 4.8, 0.7);
+        tower.add(lamp);
+        tower.position.set(sx * (edge + 0.6), -0.15, sz * (edge + 0.6));
+        this.scene.add(tower);
+      }
+    }
+    // Road from the gate to the hangar's apron.
+    this.scene.add(box(4, 0.1, HANGAR.z - edge, mat(0x4a4e52, { rough: 0.9 }), 0, -0.18, edge + (HANGAR.z - edge) / 2));
+    this.scene.add(box(18, 0.12, 9, mat(0x55595d, { rough: 0.9 }), HANGAR.x, -0.18, HANGAR.z + 1));
+
+    // The hangar and the dropship.
     const hangar = new THREE.Group();
     hangar.add(box(12, 0.15, 6, mat(0x56606a), 0, 0, 0));
     hangar.add(box(12, 3.4, 0.2, mat(0x4a525c), 0, 0, -3));
@@ -396,45 +603,16 @@ export class BastionSet implements StageSet {
     this.buildShip();
     this.ship.position.set(0, 0.15, -1.2);
     hangar.add(this.ship);
-    hangar.position.set(HANGAR_X, SURFACE, 0);
+    hangar.position.copy(HANGAR);
     const hangarHit = new THREE.Mesh(new THREE.BoxGeometry(12, 3.4, 6), new THREE.MeshBasicMaterial({ visible: false }));
-    hangarHit.position.set(HANGAR_X, SURFACE + 1.7, 0);
+    hangarHit.position.copy(HANGAR).add(new THREE.Vector3(0, 1.7, 0));
     hangarHit.userData.hotspot = 'hangar';
     this.hotspots.push(hangarHit);
     const hangarLabel = label('Hangar', 'room-label fixed');
-    hangarLabel.position.set(HANGAR_X, SURFACE + 3.9, 3);
+    hangarLabel.position.copy(HANGAR).add(new THREE.Vector3(0, 3.9, 3));
     this.scene.add(hangar, hangarHit, hangarLabel);
-    for (const [x, h] of [[6, 4.5], [8.4, 3]] as const) {
-      this.scene.add(cylinder(0.07, h, mat(0x9aa4ad, { metal: 0.6 }), x, SURFACE, -1));
-      const light = box(0.2, 0.2, 0.2, mat(0x2a0a0a, { emissive: 0xff3a3a, intensity: 2.5 }), x, SURFACE + h, -1);
-      light.userData.blink = x;
-      this.scene.add(light);
-    }
-    const radar = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 3), mat(0xd8dee4, { metal: 0.6, rough: 0.3 }));
-    radar.rotation.x = -Math.PI / 2.5;
-    radar.position.set(3.4, SURFACE + 1.6, -0.5);
-    radar.userData.spinY = true;
-    this.scene.add(radar, cylinder(0.1, 1.2, mat(0x8a96a3), 3.4, SURFACE, -0.5));
 
-    // Stars over the surface.
-    const stars: number[] = [];
-    for (let i = 0; i < 500; i++) stars.push((Math.random() - 0.5) * 160, SURFACE + 8 + Math.random() * 50, -30 - Math.random() * 40);
-    this.scene.add(new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(stars, 3)), new THREE.PointsMaterial({ color: 0x9fb8cc, size: 0.25 })));
-
-    // The four command rooms.
-    FIXED.forEach((room, i) => {
-      const o = fixedOrigin(i);
-      const g = roomShell(FIXED_W, 0x223040);
-      g.position.copy(o);
-      g.add(this.fixedProps(room.id));
-      const tag = label(room.name, 'room-label command');
-      tag.position.set(0, ROOM_H + 0.1, ROOM_D / 2);
-      g.add(tag);
-      this.scene.add(g);
-      const hit = hotspot(room.id, FIXED_W, o);
-      this.scene.add(hit);
-      this.hotspots.push(hit);
-    });
+    // The barracks' pedestal for the soldier being inspected (the room around it comes with the plots).
     const pedestal = cylinder(0.55, 0.25, mat(0x2a3036, { metal: 0.5 }), 0, 0, 0);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.03, 6, 32).rotateX(Math.PI / 2), mat(0x0a1a2a, { emissive: 0x54d1ff, intensity: 1.8 }));
     ring.position.y = 0.26;
@@ -445,51 +623,19 @@ export class BastionSet implements StageSet {
     this.showcase.position.copy(this.pedestalPos()).add(new THREE.Vector3(0, 0.25, 0));
   }
 
-  private fixedProps(id: FixedRoom): THREE.Group {
+  /** Pines all round the compound (already voxel clones: added after the scene is voxelized). */
+  private woods(): THREE.Group {
     const g = new THREE.Group();
-    switch (id) {
-      case 'command': {
-        g.add(box(2.2, 0.9, 1.4, mat(0x2a3036, { metal: 0.4 }), 0, 0, -0.4));
-        const holo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), mat(0x3fa9ff, { emissive: 0x3fa9ff, intensity: 1.2, opacity: 0.5 }));
-        holo.position.set(0, 1.7, -0.4);
-        holo.userData.spinY = true;
-        g.add(holo);
-        for (const x of [-1.6, 1.6]) g.add(box(0.7, 1.1, 0.5, mat(0x1a2430, { metal: 0.4 }), x, 0, -1.4), box(0.6, 0.4, 0.05, mat(0x0a1a2a, { emissive: 0x3fb8ff, intensity: 1.4 }), x, 1.2, -1.15));
-        break;
-      }
-      case 'research':
-        g.add(box(2.4, 0.85, 0.9, mat(0xb8c2cc, { metal: 0.4 }), -0.4, 0, -0.9));
-        g.add(box(1.4, 0.6, 0.05, mat(0x0a1a2a, { emissive: 0x3fb8ff, intensity: 1.6 }), -0.4, 1.15, -1.3));
-        for (const x of [-1.6, 1.5]) {
-          const tube = cylinder(0.32, 1.9, mat(0x6dff9a, { emissive: 0x2fd97a, intensity: 0.9, opacity: 0.55 }), x, 0, 0.4);
-          tube.userData.pulse = true;
-          g.add(tube);
-        }
-        break;
-      case 'engineering': {
-        // Workbench with a rifle on it, a welding spark, a robot arm and parts shelves.
-        g.add(box(2.2, 0.9, 1.1, mat(0x5a5048, { metal: 0.5 }), -0.5, 0, -0.6));
-        g.add(box(1.1, 0.12, 0.18, mat(0x2a3036, { metal: 0.7 }), -0.7, 0.9, -0.5), box(0.3, 0.2, 0.12, mat(0x3a444e, { metal: 0.6 }), -0.2, 0.9, -0.5));
-        const spark = box(0.12, 0.12, 0.12, mat(0x2a1a00, { emissive: 0xffa020, intensity: 3 }), -1.2, 0.95, -0.4);
-        spark.userData.blink = 1.3;
-        g.add(spark);
-        g.add(cylinder(0.22, 1.2, mat(0xffa630, { metal: 0.6 }), 1.0, 0, -0.5));
-        const arm = box(0.18, 1.2, 0.18, mat(0xffa630, { metal: 0.6 }));
-        arm.position.set(1.0, 1.4, -0.5);
-        arm.userData.swing = true;
-        g.add(arm);
-        for (const y of [0.5, 1.3, 2.1]) {
-          g.add(box(1.0, 0.06, 0.5, mat(0x3a444e, { metal: 0.5 }), 1.55, y, -1.65));
-          g.add(box(0.3, 0.3, 0.3, mat(0x8f6c45), 1.35, y + 0.06, -1.65), box(0.25, 0.2, 0.3, mat(0x56606a, { metal: 0.5 }), 1.8, y + 0.06, -1.65));
-        }
-        const forge = new THREE.PointLight(0xffa040, 4, 4, 2);
-        forge.position.set(-1, 1.4, 0);
-        g.add(forge);
-        break;
-      }
-      case 'barracks':
-        for (const x of [-1.6, -0.6, 0.6, 1.6]) g.add(box(0.8, 1.9, 0.45, mat(0x4a5560, { metal: 0.4 }), x, 0, -1.65));
-        break;
+    for (let i = 0; i < 46; i++) {
+      const a = rand(i, 3, 1) * Math.PI * 2;
+      const d = COMPOUND / 2 + 8 + rand(i, 5, 2) * 34;
+      const x = Math.cos(a) * d;
+      const z = Math.sin(a) * d;
+      // Keep the road and the hangar clear.
+      if (z > COMPOUND / 2 && Math.abs(x) < 16) continue;
+      const tree = voxelProps(`pine:${i % 4}`, () => pine(1.1 + (i % 4) * 0.25));
+      tree.position.set(x, -0.1, z);
+      g.add(tree);
     }
     return g;
   }
@@ -512,7 +658,7 @@ export class BastionSet implements StageSet {
 
   // ------------------------------------------------------------ update
 
-  /** Rebuilds the dug rooms when the base changes. */
+  /** Rebuilds the plots, their walkways and labels when the base changes. */
   setBase(c: CampaignState): void {
     const key = JSON.stringify(c.base);
     if (key === this.gridKey) return;
@@ -521,60 +667,99 @@ export class BastionSet implements StageSet {
       if (o instanceof CSS2DObject) o.element.remove();
     });
     this.grid.clear();
-    for (const h of [...this.hotspots]) if (String(h.userData.hotspot).startsWith('slot:')) this.hotspots.splice(this.hotspots.indexOf(h), 1);
+    for (const h of [...this.hotspots]) if (h.userData.hotspot !== 'hangar') this.hotspots.splice(this.hotspots.indexOf(h), 1);
     const work = c.base.construction;
-    for (const slot of c.base.slots) {
-      const o = slotOrigin(slot.row, slot.col);
+    for (const plot of c.base.plots) {
+      const o = plotCentre(plot.x, plot.y);
       const g = new THREE.Group();
       g.position.copy(o);
-      const building = work?.slot === slot.id;
+      const busy = work?.plot === plot.id;
+      const fixed = plot.building && plot.building in FIXED_BUILDINGS ? (plot.building as FixedBuildingId) : null;
       let title: string;
-      if (!slot.excavated) {
-        const seed = slot.row * 3 + slot.col;
-        g.add(voxelProps(`rock:${building}:${seed}`, () => rockProps(building, seed)));
-        title = building ? `Excavando · ${work!.daysLeft} d` : 'Roca';
+      let kind = '';
+      if (fixed) {
+        g.add(
+          voxelProps(`fixed:${fixed}`, () =>
+            room(
+              () => {
+                const shell = roomShell(fixed === 'command' ? 0x6a6a62 : WALL, TRIM[fixed], fixed === 'command' ? 0.5 : 0.25, fixed === 'command' ? 1.8 : WALL_H);
+                if (fixed === 'command') shell.add(bunkerExtras());
+                return shell;
+              },
+              () => fixedProps(fixed),
+            ),
+          ),
+        );
+        title = FIXED_NAMES[fixed];
+        kind = ' command';
+      } else if (plot.building) {
+        const facility = plot.building as FacilityId;
+        g.add(voxelProps(`facility:${facility}`, () => room(() => roomShell(0x6a7480, 0xd8dee4), () => facilityProps(facility))));
+        title = FACILITIES[facility].name;
+        kind = ' built';
+      } else if (busy && work!.kind === 'build' && work!.facility) {
+        const progress = 1 - work!.daysLeft / work!.total;
+        g.add(voxelProps('terrain:clear:0', () => terrainProps('clear', 0)));
+        g.add(voxelProps(`build:${Math.round(progress * 6)}`, () => constructionProps(progress)));
+        title = `${FACILITIES[work!.facility].name} · ${work!.daysLeft} d`;
+        kind = ' busy';
       } else {
-        const shell = roomShell(ROOM_W, slot.facility ? 0x2a3a4a : 0x2a3036);
-        voxelizeStatic(shell, VOXEL_SET);
-        g.add(shell);
-        if (slot.facility) {
-          const facility = slot.facility;
-          g.add(voxelProps(`facility:${facility}`, () => facilityProps(facility)));
-          title = FACILITIES[slot.facility].name;
-        } else if (building && work?.facility) {
-          g.add(voxelProps(`build:${work.daysLeft}/${work.total}`, () => constructionProps(1 - work.daysLeft / work.total)));
-          title = `${FACILITIES[work.facility].name} · ${work.daysLeft} d`;
+        const variant = (plot.x * 7 + plot.y * 13) % 3;
+        g.add(voxelProps(`terrain:${plot.terrain}:${variant}`, () => terrainProps(plot.terrain, variant)));
+        if (busy) {
+          g.add(voxelProps('clearing', clearingProps));
+          title = `Despejando · ${work!.daysLeft} d`;
+          kind = ' busy';
         } else {
-          title = 'Sala vacía';
+          title = plot.terrain === 'clear' ? 'Libre' : TERRAINS[plot.terrain].name;
+          // rock / empty: the screens show these only where they can be acted on (Instalaciones).
+          kind = plot.terrain === 'clear' ? ' empty' : ' rock';
         }
       }
-      // rock / empty: the screens show these only where they can be acted on (Instalaciones).
-      const kind = !slot.excavated ? ' rock' : !slot.facility && !building ? ' empty' : '';
-      const tag = label(title, `room-label${slot.facility ? ' built' : ''}${building ? ' busy' : ''}${building ? '' : kind}`);
-      // Inside the room, under its ceiling: on the ceiling line it read as the label of the row above.
-      tag.position.set(0, ROOM_H - 0.6, ROOM_D / 2);
+      const tag = label(title, `room-label${kind}`);
+      tag.position.set(0, (fixed === 'command' ? 1.8 : WALL_H) + 0.5, PLOT / 2 - 0.2);
       g.add(tag);
       this.grid.add(g);
-      const hit = hotspot(`slot:${slot.id}`, ROOM_W, o);
+      const hit = hotspot(fixed ?? `plot:${plot.id}`, o);
       this.grid.add(hit);
       this.hotspots.push(hit);
     }
+
+    // Walkways between buildings side by side; the ones that give a bonus carry a lit strip.
+    const lit = new Set(adjacencyBonuses(c).flatMap((b) => [`${b.plot}|${b.next}`, `${b.next}|${b.plot}`]));
+    for (const [a, b] of walkways(c)) {
+      const from = plotCentre(a.x, a.y);
+      const to = plotCentre(b.x, b.y);
+      const mid = from.clone().add(to).multiplyScalar(0.5);
+      const alongX = a.y === b.y;
+      const way = new THREE.Group();
+      const len = GAP + 0.6;
+      way.add(alongX ? box(len, 0.16, 1.7, mat(0xa8aaa4)) : box(1.7, 0.16, len, mat(0xa8aaa4)));
+      for (const s of [-1, 1]) way.add(alongX ? box(len, 0.32, 0.1, mat(0x6a7480), 0, 0.16, s * 0.8) : box(0.1, 0.32, len, mat(0x6a7480), s * 0.8, 0.16, 0));
+      if (lit.has(`${a.id}|${b.id}`)) {
+        const strip = alongX ? box(len, 0.06, 0.24, mat(0x0a2a1a, { emissive: 0x4dffb0, intensity: 1.8 }), 0, 0.16, 0) : box(0.24, 0.06, len, mat(0x0a2a1a, { emissive: 0x4dffb0, intensity: 1.8 }), 0, 0.16, 0);
+        way.add(strip);
+      }
+      way.position.copy(mid).add(new THREE.Vector3(0, -0.06, 0));
+      voxelizeStatic(way, VOXEL_SET);
+      this.grid.add(way);
+    }
   }
 
-  /** Room labels only make sense in the overview shots; close-ups hide them. */
+  /** Building labels only make sense in the overview shots; close-ups hide them. */
   setLabels(on: boolean): void {
     this.scene.traverse((o) => {
       if (o instanceof CSS2DObject && !o.element.classList.contains('partner-tag')) o.visible = on;
     });
   }
 
-  /** Highlights a dug room (facilities screen) or nothing. */
-  select(slot: string | null): void {
-    this.frame.visible = !!slot;
-    if (slot) this.frame.position.copy(this.roomCentre(slot)).add(new THREE.Vector3(0, ROOM_H / 2, ROOM_D / 2 + 0.05));
+  /** Highlights a plot (Instalaciones) or nothing. Takes "x,y" or "plot:x,y". */
+  select(plot: string | null): void {
+    this.frame.visible = !!plot;
+    if (plot) this.frame.position.copy(this.roomCentre(plot)).add(new THREE.Vector3(0, 0.08, 0));
   }
 
-  /** Coloured marker over the room the partner is looking at. */
+  /** Coloured marker over the building the partner is looking at. */
   setPartner(room: string | null, color: string, name: string): void {
     const key = `${room}:${color}:${name}`;
     if (key === this.partnerKey) return;
@@ -586,7 +771,7 @@ export class BastionSet implements StageSet {
     if (!room) return;
     const tag = label(`${name} está aquí`, 'partner-tag');
     tag.element.style.setProperty('--accent', color);
-    const pos = room === 'hangar' ? new THREE.Vector3(HANGAR_X, SURFACE + 4.4, 3) : this.roomCentre(room).add(new THREE.Vector3(0, ROOM_H + 0.7, ROOM_D / 2));
+    const pos = room === 'hangar' ? HANGAR.clone().add(new THREE.Vector3(0, 4.4, 3)) : this.roomCentre(room).add(new THREE.Vector3(0, WALL_H + 1.6, 0));
     tag.position.copy(pos);
     this.partnerMarker.add(tag);
   }
@@ -600,19 +785,19 @@ export class BastionSet implements StageSet {
     this.rigs.length = 0;
     const shown = entries.slice(0, LINEUP);
     shown.forEach((entry, i) => {
-      const x = this.padPosition(i, shown.length).x;
+      const at = this.padPosition(i, shown.length);
       const pad = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: entry ? new THREE.Color(entry.color) : 0x3a4652, transparent: true, opacity: 0.8 }));
-      pad.position.set(x, SURFACE + 0.17, 1.2);
+      pad.position.copy(at).add(new THREE.Vector3(0, 0.02, 0));
       this.lineup.add(pad);
       if (!entry) return;
       if (entry.status === 'dead') {
         // A memorial: a dark plinth with a candle-like glow.
-        this.lineup.add(box(0.5, 0.9, 0.3, mat(0x1a1d22, { metal: 0.3 }), x, SURFACE + 0.15, 1.2));
-        this.lineup.add(box(0.12, 0.12, 0.12, mat(0x2a1a00, { emissive: 0xffb050, intensity: 2.2 }), x, SURFACE + 1.06, 1.2));
+        this.lineup.add(box(0.5, 0.9, 0.3, mat(0x1a1d22, { metal: 0.3 }), at.x, at.y, at.z));
+        this.lineup.add(box(0.12, 0.12, 0.12, mat(0x2a1a00, { emissive: 0xffb050, intensity: 2.2 }), at.x, at.y + 0.91, at.z));
         return;
       }
       const rig = buildUnit(entry.template, entry.color, entry.appearance, entry.gear);
-      rig.root.position.set(x, SURFACE + 0.15, 1.2);
+      rig.root.position.copy(at);
       // Pose state, applied every frame in tick().
       Object.assign(rig.root.userData, { yaw: 0.15 - i * 0.04, phase: i * 0.7, wounded: entry.status === 'wounded', running: 0 });
       if (entry.status === 'wounded' && !isFigure(rig)) {
@@ -626,7 +811,7 @@ export class BastionSet implements StageSet {
 
   /** Where soldier `i` of a lineup of `count` stands (on the launch pad, centred). */
   padPosition(i: number, count: number): THREE.Vector3 {
-    return new THREE.Vector3(HANGAR_X + (i - (count - 1) / 2) * 1.3, SURFACE + 0.15, 1.2);
+    return HANGAR.clone().add(new THREE.Vector3((i - (count - 1) / 2) * 1.3, 0.15, 1.2));
   }
 
   /** The soldier being inspected in the barracks. */
@@ -664,16 +849,9 @@ export class BastionSet implements StageSet {
   }
 
   hover(hot: string | null): void {
-    const slot = hot?.startsWith('slot:') ? hot.slice(5) : null;
-    const fixed = FIXED.findIndex((f) => f.id === hot);
-    this.hoverFrame.visible = !!slot || fixed >= 0;
-    if (slot) {
-      this.hoverFrame.scale.x = 1;
-      this.hoverFrame.position.copy(this.roomCentre(slot)).add(new THREE.Vector3(0, ROOM_H / 2, ROOM_D / 2 + 0.06));
-    } else if (fixed >= 0) {
-      this.hoverFrame.scale.x = FIXED_W / ROOM_W;
-      this.hoverFrame.position.copy(fixedOrigin(fixed)).add(new THREE.Vector3(0, ROOM_H / 2, ROOM_D / 2 + 0.06));
-    }
+    const onPlot = !!hot && hot !== 'hangar';
+    this.hoverFrame.visible = onPlot;
+    if (onPlot) this.hoverFrame.position.copy(this.roomCentre(hot!)).add(new THREE.Vector3(0, 0.1, 0));
   }
 
   tick(dt: number, time: number): void {
@@ -691,7 +869,7 @@ export class BastionSet implements StageSet {
     // Take-off: the squad walks into the ship, the engines flare, and it leaves through the roof.
     const since = this.launching ? (performance.now() - this.launching) / 1000 : -1;
     if (since >= 0) {
-      const door = new THREE.Vector3(HANGAR_X, SURFACE + 0.15, -0.6);
+      const door = HANGAR.clone().add(new THREE.Vector3(0, 0.15, -0.6));
       this.rigs.forEach((rig, i) => {
         const k = Math.min(1, Math.max(0, (since - i * 0.08) / BOARD_SECONDS));
         const from = rig.root.userData.from as THREE.Vector3;

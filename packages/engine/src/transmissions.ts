@@ -4,10 +4,13 @@
  * scene once, when its condition first holds, and keeps it in the Progreso
  * archive; nothing here changes the campaign.
  *
- * `{saludo}` becomes "Comandantes Ana y Luis" (or "Comandante Ana" alone).
+ * `{saludo}` becomes "Comandantes Ana y Luis" (or "Comandante Ana" alone);
+ * `{yo}`, "Comandante Ana" for the player reading it.
  */
-import { DOOM_MAX, type CampaignState } from './campaign';
+import { DOOM_MAX, nextSteps, type CampaignState } from './campaign';
+import { doomName, PARTITURA_LEVEL, STORY } from './lore';
 import { bastionLevel } from './progression';
+import type { Slot } from './types';
 
 export type SpeakerId = 'morse' | 'teo' | 'nwosu' | 'simon' | 'voz' | 'halvorsen' | 'coro';
 
@@ -29,6 +32,8 @@ export const SPEAKERS: Record<SpeakerId, Speaker> = {
 export interface SceneLine {
   who: SpeakerId;
   text: string;
+  /** The rule behind it, in small print under the line (the radio's warnings). */
+  rule?: string;
   /** Said only when this holds (Simón speaks only if he was let in). */
   if?: (c: CampaignState) => boolean;
 }
@@ -51,7 +56,10 @@ export type SceneId =
   | 'eve'
   | 'endingBreak'
   | 'endingRecord'
-  | 'granCoral';
+  | 'granCoral'
+  /** Built on the spot: the recap for whoever opens a campaign already under way, and the warnings in combat. */
+  | 'recap'
+  | 'tip';
 
 export interface Scene {
   id: SceneId;
@@ -329,3 +337,89 @@ export const STORY_RADIO: { start: string; objective: string }[] = [
   { start: 'El observatorio arde por el ala norte. Las cintas antes que nada.', objective: 'Las cintas están a salvo. Teo no respira.' },
   { start: 'Está en antena ahora mismo. La oigo. Id a por ella.', objective: 'La tenéis. Viva, por favor.' },
 ];
+
+// ---------------------------------------------------------------- recap
+
+/** Played to whoever opens a campaign already under way (a partner arriving late, another browser). */
+export const RECAP: Scene = { id: 'recap', title: 'Relevo', channel: 'Línea interna · Estación Atalaya', when: () => false, lines: [] };
+
+/** Where the campaign stands, for `slot`: the day, the Bastion, the enemy, their soldiers and the first thing to do. */
+export function recapLines(c: CampaignState, slot: Slot): SceneLine[] {
+  const level = bastionLevel(c);
+  const enemy = `${doomName(level)}: ${c.doom} de ${DOOM_MAX}${level >= PARTITURA_LEVEL ? ' compases' : ''}`;
+  const story = c.story.done ? `Llevamos ${c.story.done} de ${STORY.length} hojas del Expediente.` : 'El Expediente está en la primera hoja.';
+  const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).map((s) => s.name);
+  const names = mine.length > 1 ? `${mine.slice(0, -1).join(', ')} y ${mine[mine.length - 1]}` : (mine[0] ?? 'nadie todavía');
+  const first = nextSteps(c, slot)[0];
+  const lines: SceneLine[] = [
+    { who: 'morse', text: `{yo}: Atalaya le esperaba. Llega el día ${c.day}, con el Bastión en el nivel ${level}.` },
+    { who: 'morse', text: `${enemy}. ${story}` },
+    { who: 'teo', text: `A su mando: ${names}. Los tiene en el Cuartel.` },
+  ];
+  if (first) lines.push({ who: 'morse', text: `Lo más urgente: ${first.label[0]!.toLowerCase()}${first.label.slice(1)}.` });
+  return lines;
+}
+
+// ------------------------------------------------------------------ tips
+
+/** Morse's first-time warnings in combat: each plays once per browser, the first time it matters. */
+export type TipId = 'concealed' | 'redTile' | 'contact' | 'shot' | 'flanked' | 'wounded' | 'command' | 'flare' | 'psionic';
+
+export interface RadioTip {
+  who: SpeakerId;
+  /** What Morse says. */
+  line: string;
+  /** The rule, in small print. */
+  rule: string;
+}
+
+export const RADIO_TIPS: Record<TipId, RadioTip> = {
+  concealed: {
+    who: 'morse',
+    line: 'Aún no os han oído. Que siga así.',
+    rule: 'Ocultos: el enemigo no os ha visto. Las casillas con borde rojo os delatan, y disparar también.',
+  },
+  redTile: {
+    who: 'morse',
+    line: 'Ahí os ven. Pensadlo dos veces.',
+    rule: 'Acabar el movimiento en una casilla roja rompe la ocultación. El primer clic avisa y el segundo mueve.',
+  },
+  contact: {
+    who: 'morse',
+    line: 'Contacto. Ahora juegan ellos también.',
+    rule: 'Al veros corren a cubrirse. Buscad cobertura (el escudo) antes de terminar el turno.',
+  },
+  shot: {
+    who: 'morse',
+    line: 'Mirad el número antes de apretar.',
+    rule: 'El porcentaje ya cuenta cobertura, distancia y altura. Por el flanco, más acierto y más crítico.',
+  },
+  flanked: {
+    who: 'morse',
+    line: 'Ese está al descubierto. Movedlo.',
+    rule: 'Escudo rojo: sin cobertura frente a un enemigo, cualquier disparo puede ser crítico.',
+  },
+  wounded: {
+    who: 'morse',
+    line: 'Herido no es caído. Que no se convierta.',
+    rule: 'En misión, la salud solo vuelve con botiquín o protocolo médico; en la base cuesta días. Los caídos no vuelven.',
+  },
+  command: {
+    who: 'morse',
+    line: 'Una voz manda; la otra escucha. Luego se cambian.',
+    rule: 'Quien tiene el mando da las órdenes. La tecla C se lo cede al compañero.',
+  },
+  flare: {
+    who: 'morse',
+    line: 'Bengala roja. Llegan más.',
+    rule: 'Caen ahí al final del próximo turno enemigo. Apartaos o dejad a alguien en vigilancia.',
+  },
+  psionic: {
+    who: 'morse',
+    line: 'Un Cantor os está cantando en la cabeza. Primero el Cantor.',
+    rule: 'La voluntad resiste, y sube con el rango. Si cae el Cantor, quien esté bajo su control vuelve con vosotros.',
+  },
+};
+
+/** The scene a warning plays as. */
+export const TIP_SCENE: Scene = { id: 'tip', title: 'Aviso', channel: 'Radio de campaña', when: () => false, lines: [] };

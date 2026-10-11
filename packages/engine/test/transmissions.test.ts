@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createCampaign, gainXp } from '../src/campaign';
-import { STORY } from '../src/lore';
+import { addPlayer, createCampaign, gainXp } from '../src/campaign';
+import { ENEMY_FILES, STORY } from '../src/lore';
 import { LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
-import { nextScene, sceneLines, SCENES, SPEAKERS, STORY_RADIO, unlockedScenes, type SceneId } from '../src/transmissions';
+import { nextScene, RADIO_TIPS, recapLines, sceneLines, SCENES, SPEAKERS, STORY_RADIO, unlockedScenes, type SceneId } from '../src/transmissions';
 
 const ids = (c: Parameters<typeof unlockedScenes>[0]) => unlockedScenes(c).map((s) => s.id);
 
@@ -49,5 +49,37 @@ describe('transmissions', () => {
     expect(nextScene(c, seen, true)?.id).toBe('ch2Before');
     c.event = 'simon';
     expect(nextScene(c, seen, false)?.id).toBe('simon');
+  });
+
+  it("Morse's warnings say something and the rule behind it", () => {
+    for (const tip of Object.values(RADIO_TIPS)) {
+      expect(SPEAKERS[tip.who]).toBeDefined();
+      expect(tip.line.length).toBeGreaterThan(5);
+      expect(tip.rule.length).toBeGreaterThan(tip.line.length);
+    }
+  });
+
+  it('the recap tells a late commander where things stand and who is theirs', () => {
+    const c = createCampaign([0], new Rng(1));
+    c.day = 12;
+    addPlayer(c, 1, new Rng(2));
+    const lines = recapLines(c, 1);
+    expect(lines[0]!.text).toContain('día 12');
+    const mine = c.soldiers.filter((s) => s.owner === 1);
+    expect(mine).toHaveLength(4);
+    for (const s of mine) expect(lines.map((l) => l.text).join(' ')).toContain(s.name);
+    // Whoever was already there gets a pop-up naming them.
+    expect(c.log[0]!.alert?.kicker).toBe('RELEVO');
+    expect(c.log[0]!.text).toContain(mine[0]!.name);
+  });
+});
+
+describe('enemy files', () => {
+  it('every enemy kind has its file', () => {
+    for (const id of ['trooper', 'officer', 'xenoid', 'lancer', 'mec', 'sectoid', 'zombie', 'relay'] as const) {
+      expect(ENEMY_FILES[id]?.what).toBeTruthy();
+      expect(ENEMY_FILES[id]?.does).toBeTruthy();
+      expect(ENEMY_FILES[id]?.tip).toBeTruthy();
+    }
   });
 });

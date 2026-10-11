@@ -4,7 +4,7 @@
  * (`STORY`), which the campaign reads, it is text only.
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
-import type { Biome, MissionKind } from './types';
+import type { Biome, MissionKind, TemplateId } from './types';
 
 /** Bastion level at which the doom track gets its name: until then nobody knows what it measures. */
 export const PARTITURA_LEVEL = 4;
@@ -42,6 +42,61 @@ export const GLOSSARY: Record<string, string> = {
   Consejo: 'La red de la resistencia: paga cada mes en créditos según las regiones contactadas.',
   Rumor: 'Algo que se oye en una región. Si lo escucháis unos días al escanear, sabréis qué era.',
   Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
+};
+
+// ---------------------------------------------------------- enemy files
+
+export interface EnemyFile {
+  /** What it is, in the world's words. */
+  what: string;
+  /** What it does on the field. */
+  does: string;
+  /** How to deal with it. */
+  tip: string;
+}
+
+/** The Bastion's file on each enemy, for the enemy sheet in combat. */
+export const ENEMY_FILES: Partial<Record<TemplateId, EnemyFile>> = {
+  trooper: {
+    what: 'Un cuerpo impreso con el patrón de alguien escaneado. No piensa: lo mueve el Coro por los retransmisores.',
+    does: 'Fusil y una granada. Corre a cubrirse en cuanto os ve y se queda en vigilancia.',
+    tip: 'Es el más débil. Rompedle la cobertura con una granada o buscadle el flanco.',
+  },
+  officer: {
+    what: 'Un Afinado: un humano con la nota detrás de la oreja. Oye al Coro y manda a los Impresos.',
+    does: 'Mejor fusil y más salud que un Impreso. Aguanta en vigilancia.',
+    tip: 'Sin él, el grupo sigue luchando, pero peor coordinado. Merece el mejor disparo del turno.',
+  },
+  xenoid: {
+    what: 'Un Heraldo: la forma de caza del Coro, diseñada para la Tierra.',
+    does: 'Mucha puntería y ve más lejos que nadie: os detecta antes de que lleguéis a sus casillas rojas.',
+    tip: 'No os confiéis estando ocultos cerca de él. Agazapaos si os toca recibir su disparo.',
+  },
+  lancer: {
+    what: 'Un Recolector: un Impreso que no mata, captura. Lleva a la gente a los Archivos.',
+    does: 'Lanza aturdidora cuerpo a cuerpo: el soldado aturdido empieza su siguiente turno con una sola acción.',
+    tip: 'Corre mucho y no necesita línea de tiro. Vigilancia en su camino, y no dejéis a nadie solo.',
+  },
+  mec: {
+    what: 'Un Gólem: una máquina de guerra impresa con patrones industriales.',
+    does: 'Blindaje 1 (resta daño a cada impacto) y micromisiles que destrozan la cobertura.',
+    tip: 'Los explosivos le quitan el blindaje. Separaos para que los misiles no os pillen juntos.',
+  },
+  sectoid: {
+    what: 'Un Cantor: el primer cuerpo que el Coro imprimió con su propio patrón. Frágil, y canta dentro de las cabezas.',
+    does: 'Canto: desorienta, aterroriza o toma el control de un soldado. También levanta a los muertos como Huecos.',
+    tip: 'Primero el Cantor: si cae, quien tenga bajo control vuelve con vosotros. Los Huecos que ya levantó siguen en pie.',
+  },
+  zombie: {
+    what: 'Un Hueco: un cadáver que mueve un Cantor. Un cuerpo sin canción.',
+    does: 'Garras cuerpo a cuerpo. Lento, pero aguanta golpes y no tiene miedo.',
+    tip: 'Mantened la distancia y disparadle antes de que llegue. Matar a su Cantor no lo para.',
+  },
+  relay: {
+    what: 'Un retransmisor: la antena que lleva las órdenes del Coro a los Impresos.',
+    does: 'No dispara. Tiene salud y blindaje 1.',
+    tip: 'Es el objetivo: derribadlo antes de que termine la transmisión. Los explosivos ayudan.',
+  },
 };
 
 // ------------------------------------------------------------------ regions

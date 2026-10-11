@@ -215,22 +215,16 @@ const SQUAD: LineupEntry[] = [
   { template: 'specialist', color: P2 },
 ];
 
-/** Day 12 of a two-player campaign: simulation room and workshop built, the infirmary half done. */
+/** Day 12 of a two-player campaign: simulation room and workshop built next to their partners (both bonuses on), the infirmary half done. */
 function sampleCampaign(): CampaignState {
   const c = createCampaign([0, 1], new Rng(7));
   c.day = 12;
   c.doom = 4;
-  const slot = (id: string) => c.base.slots.find((x) => x.id === id)!;
-  slot('r0c0').facility = 'simulation';
-  slot('r0c1').facility = 'workshop';
-  slot('r1c0').excavated = true;
-  c.base.construction = {
-    slot: 'r0c2',
-    kind: 'build',
-    facility: 'infirmary',
-    daysLeft: 3,
-    total: 6,
-  };
+  const plot = (id: string) => c.base.plots.find((x) => x.id === id)!;
+  plot('2,2').building = 'simulation';
+  plot('4,2').building = 'workshop';
+  plot('1,3').terrain = 'clear';
+  c.base.construction = { plot: '2,4', kind: 'build', facility: 'infirmary', daysLeft: 3, total: 6 };
   for (const r of c.regions) {
     if (r.id === 'na') r.contacted = true;
     if (r.id === 'me') r.facility = { nextDoomDay: 20 };

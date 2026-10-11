@@ -110,6 +110,8 @@ const CONTROLS: [string, string][] = [
   ['Q / E', 'Girar la cámara'],
   ['WASD', 'Mover la cámara'],
   ['F', 'Centrar en el soldado'],
+  ['O', 'Centrar en el objetivo'],
+  ['Clic derecho', 'Expediente del enemigo'],
   ['M', 'Sonido'],
   ['Esc', 'Cancelar o abrir este menú'],
 ];
@@ -197,7 +199,7 @@ export class Hud {
     append(
       this.mission,
       h('span.mission-kind', { title: m.area }, type(MISSION_NAMES[m.kind].toUpperCase())),
-      h('span.mission-goal', {}, type(m.objective)),
+      h('span.mission-goal', { title: m.objective }, type(m.objective)),
       m.turnsLeft !== null ? h(`span.timer${m.turnsLeft <= 3 ? '.urgent' : ''}`, {}, `${m.turnsLeft} ${m.turnsLeft === 1 ? 'TURNO' : 'TURNOS'}`) : null,
       m.alert ? h('span.timer.urgent.alert', {}, m.alert) : null,
     );
@@ -520,6 +522,26 @@ export class Hud {
           h('button.danger', { onclick: () => (close(), this.handlers.onAbandon()) }, 'ABANDONAR'),
           h('button.fire', { onclick: close }, 'SEGUIR JUGANDO'),
         ),
+      ),
+    );
+  }
+
+  /** The Bastion's file on an enemy (right click): what it is, what it does, how to beat it. */
+  enemyFile(name: string, stats: string, file: { what: string; does: string; tip: string }): void {
+    clear(this.modal);
+    this.modal.classList.add('show');
+    const close = () => this.modal.classList.remove('show');
+    this.modal.append(
+      h(
+        'div.modal-card.panel.enemy-file',
+        {},
+        h('small.enemy-file-kicker', {}, 'EXPEDIENTE DEL BASTIÓN'),
+        h('h2', {}, name),
+        h('p.enemy-file-stats', {}, stats),
+        h('p', {}, file.what),
+        h('p', {}, file.does),
+        h('p.enemy-file-tip', {}, file.tip),
+        h('div.modal-actions', {}, h('button.fire', { onclick: close }, 'CERRAR')),
       ),
     );
   }

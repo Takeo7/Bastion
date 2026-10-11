@@ -35,7 +35,7 @@ import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecis
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
 import { podPlan, soldierStats, type MapSource, type SquadMember } from './setup';
-import type { Appearance, Biome, ClassId, EndReason, GameState, ItemId, ItemSlot, MissionKind, PerkId, Slot, TemplateId } from './types';
+import type { Appearance, Biome, ClassId, EndReason, GameState, ItemId, ItemSlot, MissionKind, PerkId, Slot, TemplateId, Vec2 } from './types';
 
 // --------------------------------------------------------------- facilities
 
@@ -62,28 +62,188 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   relay: { id: 'relay', name: 'Centro de comunicaciones', description: '+2 regiones contactables.', cost: 110, days: 8, level: 5, unique: false },
 };
 
-export const BASE_ROWS = 3;
-export const BASE_COLS = 3;
+// ----------------------------------------------------------- the compound
 
-/** Clearing rock: deeper rows cost more. */
-export function excavationCost(row: number): { cost: number; days: number } {
-  return row <= 1 ? { cost: 25, days: 3 } : { cost: 40, days: 5 };
+// Atalaya on the surface (the user's redesign, 2026-10-11): from above, the
+// 1989 bunker in the middle of a square grid of plots. New buildings go next
+// to what is already built and are joined by walkways; some pairs side by
+// side work better (adjacency). Growing means clearing the rock, the forest
+// or the ruins around. La Mula's hangar and airstrip lie outside the grid.
+
+/** Side of the square grid of plots. */
+export const BASE_SIZE = 7;
+/** The command bunker, in the middle. */
+export const BUNKER: Readonly<Vec2> = { x: 3, y: 3 };
+
+/** Buildings that come with the bunker and open the strategy screens; they can't be moved. */
+export type FixedBuildingId = 'command' | 'barracks' | 'research' | 'engineering';
+export type BuildingId = FixedBuildingId | FacilityId;
+
+/** Where the fixed buildings stand: the bunker and three around it (the side to the airstrip stays free). */
+export const FIXED_BUILDINGS: Readonly<Record<FixedBuildingId, Vec2>> = {
+  command: BUNKER,
+  barracks: { x: 2, y: 3 },
+  research: { x: 3, y: 2 },
+  engineering: { x: 4, y: 3 },
+};
+
+export const FIXED_NAMES: Record<FixedBuildingId, string> = {
+  command: 'Búnker de mando',
+  barracks: 'Cuartel',
+  research: 'Progreso',
+  engineering: 'Armería',
+};
+
+export type Terrain = 'clear' | 'rocks' | 'forest' | 'ruins';
+
+export interface TerrainDef {
+  name: string;
+  description: string;
+  /** Credits recovered when it is cleared. */
+  salvage: number;
+  /** Extra days to clear it. */
+  days: number;
+  /** Log line when the work starts; `{parcela}` is the plot's name. */
+  start: string;
 }
 
-export interface BaseSlot {
+export const TERRAINS: Record<Exclude<Terrain, 'clear'>, TerrainDef> = {
+  rocks: { name: 'Roca', description: 'Roca viva del Pirineo. Barrenos, carretillas y paciencia.', salvage: 0, days: 1, start: 'Empiezan los barrenos en {parcela}.' },
+  forest: { name: 'Bosque', description: 'Pinar cerrado. La madera va a las estufas, que solo se encienden de noche.', salvage: 0, days: 0, start: 'Empieza la tala en {parcela}.' },
+  ruins: {
+    name: 'Ruinas',
+    description: 'Barracones de la vieja estación de 1989. Se desmontan a mano; la chatarra se vende: +15 ₡.',
+    salvage: 15,
+    days: 0,
+    start: 'Empieza el desmontaje de las ruinas de {parcela}.',
+  },
+};
+
+/** A facility works better next to a certain building: wall to wall. */
+export interface AdjacencyDef {
+  facility: FacilityId;
+  next: BuildingId;
+  /** Effect first, then a touch of the world. */
+  text: string;
+}
+
+export const ADJACENCY: AdjacencyDef[] = [
+  { facility: 'infirmary', next: 'barracks', text: 'Las heridas curan 3× en vez de 2×. Nadie cruza la nieve con una herida abierta.' },
+  { facility: 'workshop', next: 'engineering', text: 'Accesorios −40 % en vez de −25 %. Las piezas pasan por un ventanuco.' },
+  { facility: 'simulation', next: 'research', text: '+40 % de experiencia en vez de +25 %. Teo corrige los ejercicios en caliente.' },
+  { facility: 'relay', next: 'command', text: '+1 región contactable. La antena de válvulas, pegada a la sala de Morse, llega más lejos.' },
+  { facility: 'training', next: 'barracks', text: 'Reclutar cuesta 20 ₡ en vez de 30. Los novatos se forman en casa.' },
+];
+
+export interface BasePlot {
+  /** "x,y" */
   id: string;
-  row: number;
-  col: number;
-  excavated: boolean;
-  facility: FacilityId | null;
+  x: number;
+  y: number;
+  terrain: Terrain;
+  building: BuildingId | null;
 }
 
 export interface Construction {
-  slot: string;
-  kind: 'excavate' | 'build';
+  plot: string;
+  kind: 'clear' | 'build';
   facility: FacilityId | null;
   daysLeft: number;
   total: number;
+}
+
+const DIRS: readonly Vec2[] = [
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 },
+];
+
+export function plotAt(c: CampaignState, x: number, y: number): BasePlot | undefined {
+  return x < 0 || y < 0 || x >= BASE_SIZE || y >= BASE_SIZE ? undefined : c.base.plots[y * BASE_SIZE + x];
+}
+
+export function plotById(c: CampaignState, id: string): BasePlot | undefined {
+  return c.base.plots.find((p) => p.id === id);
+}
+
+/** The plots wall to wall with `p` (no diagonals). */
+export function neighbours(c: CampaignState, p: Vec2): BasePlot[] {
+  return DIRS.map((d) => plotAt(c, p.x + d.x, p.y + d.y)).filter((q): q is BasePlot => !!q);
+}
+
+/** Rings out from the bunker: 1 around it, 3 at the edge. */
+export function plotRing(p: Vec2): number {
+  return Math.max(Math.abs(p.x - BUNKER.x), Math.abs(p.y - BUNKER.y));
+}
+
+/** "la parcela C2": columns A–G from west to east, rows 1–7 from north to south. */
+export function plotName(p: Vec2): string {
+  return `la parcela ${'ABCDEFG'[p.x] ?? '?'}${p.y + 1}`;
+}
+
+export function buildingName(id: BuildingId): string {
+  return id in FIXED_NAMES ? FIXED_NAMES[id as FixedBuildingId] : FACILITIES[id as FacilityId].name;
+}
+
+/** Clearing a plot: farther from the bunker costs more; the terrain adds days and maybe scrap. */
+export function clearCost(p: BasePlot): { cost: number; days: number; salvage: number } {
+  const terrain = p.terrain === 'clear' ? null : TERRAINS[p.terrain];
+  const ring = plotRing(p);
+  return { cost: ring <= 2 ? 25 : 40, days: (ring <= 2 ? 3 : 5) + (terrain?.days ?? 0), salvage: terrain?.salvage ?? 0 };
+}
+
+/**
+ * What grows around the bunker, the same for every campaign: a hash of the
+ * plot, so both players (and old saves) see the same ground.
+ */
+function terrainAt(x: number, y: number): Terrain {
+  if (plotRing({ x, y }) <= 1) return 'clear';
+  const h = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+  const roll = h % 10;
+  return roll < 4 ? 'forest' : roll < 7 ? 'rocks' : 'ruins';
+}
+
+/** Why the plot can't be cleared, or null if it can. */
+export function clearable(c: CampaignState, p: BasePlot): string | null {
+  if (p.terrain === 'clear') return 'Ese terreno ya está despejado.';
+  if (!neighbours(c, p).some((q) => q.terrain === 'clear')) return 'Hay que despejar antes una parcela a su lado.';
+  return null;
+}
+
+/** Built pairs wall to wall: they get a walkway. */
+export function walkways(c: CampaignState): [BasePlot, BasePlot][] {
+  const pairs: [BasePlot, BasePlot][] = [];
+  for (const p of c.base.plots) {
+    if (!p.building) continue;
+    for (const d of [DIRS[0]!, DIRS[2]!]) {
+      const q = plotAt(c, p.x + d.x, p.y + d.y);
+      if (q?.building) pairs.push([p, q]);
+    }
+  }
+  return pairs;
+}
+
+/** The adjacency bonus a facility would get standing on `p`, if any. */
+export function adjacencyAt(c: CampaignState, p: Vec2, facility: FacilityId): AdjacencyDef | null {
+  const def = ADJACENCY.find((a) => a.facility === facility);
+  return def && neighbours(c, p).some((q) => q.building === def.next) ? def : null;
+}
+
+/** Adjacency bonuses in force: the facility's plot, its partner's plot and what it does. */
+export function adjacencyBonuses(c: CampaignState): { plot: string; next: string; def: AdjacencyDef }[] {
+  const out: { plot: string; next: string; def: AdjacencyDef }[] = [];
+  for (const p of c.base.plots) {
+    const def = ADJACENCY.find((a) => a.facility === p.building);
+    const partner = def && neighbours(c, p).find((q) => q.building === def.next);
+    if (def && partner) out.push({ plot: p.id, next: partner.id, def });
+  }
+  return out;
+}
+
+/** Whether some built `facility` has its adjacency bonus. */
+export function hasAdjacency(c: CampaignState, facility: FacilityId): boolean {
+  return c.base.plots.some((p) => p.building === facility && !!adjacencyAt(c, p, facility));
 }
 
 // ------------------------------------------------------------------ regions
@@ -396,8 +556,8 @@ export interface MissionOffer {
 
 export type ProposalAction =
   | { type: 'chooseMission'; id: string }
-  | { type: 'excavate'; slot: string }
-  | { type: 'build'; slot: string; facility: FacilityId }
+  | { type: 'clear'; plot: string }
+  | { type: 'build'; plot: string; facility: FacilityId }
   | { type: 'contact'; region: RegionId }
   | { type: 'event'; option: 0 | 1 }
   | { type: 'investigate'; id: string };
@@ -478,7 +638,7 @@ export interface Rumor {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 6;
+export const CAMPAIGN_VERSION = 7;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -492,7 +652,7 @@ export interface CampaignState {
   soldiers: CampaignSoldier[];
   /** Accessories bought: copies owned (equipped ones included). */
   inventory: Partial<Record<ItemId, number>>;
-  base: { slots: BaseSlot[]; construction: Construction | null };
+  base: { plots: BasePlot[]; construction: Construction | null };
   regions: RegionState[];
   offers: MissionOffer[];
   activeMission: string | null;
@@ -599,13 +759,19 @@ function neediestPlayer(c: CampaignState): Slot {
 }
 
 export function facilityCount(c: CampaignState, id: FacilityId): number {
-  return c.base.slots.filter((s) => s.facility === id).length;
+  return c.base.plots.filter((p) => p.building === id).length;
 }
 
-/** The workshop takes a quarter off accessories. */
+/** The workshop takes a quarter off accessories, 40 % next to the armoury. */
 export function shopPrice(c: CampaignState, id: ItemId): number {
   const cost = ITEMS[id].cost;
-  return facilityCount(c, 'workshop') ? Math.round(cost * 0.75) : cost;
+  if (!facilityCount(c, 'workshop')) return cost;
+  return Math.round(cost * (hasAdjacency(c, 'workshop') ? 0.6 : 0.75));
+}
+
+/** A recruit costs less with the training centre next to the barracks. */
+export function recruitCost(c: CampaignState): number {
+  return hasAdjacency(c, 'training') ? 20 : RECRUIT_COST;
 }
 
 /** Copies not equipped by any living soldier. */
@@ -620,18 +786,19 @@ export function soldierReady(s: CampaignSoldier): boolean {
 
 export function contactCapacity(c: CampaignState): number {
   const quests = questOutcomes(c).reduce((sum, q) => sum + (q.outcome.contacts ?? 0), 0);
-  return 2 + 2 * facilityCount(c, 'relay') + (hasTech(c, 'encryption') ? 1 : 0) + quests;
+  return 2 + 2 * facilityCount(c, 'relay') + (hasAdjacency(c, 'relay') ? 1 : 0) + (hasTech(c, 'encryption') ? 1 : 0) + quests;
 }
 
 export function contactCost(c: CampaignState): number {
   return 30 + 20 * c.regions.filter((r) => r.contacted).length;
 }
 
-/** Why `id` can't be built in `slot`, or null if it can. */
-export function buildable(c: CampaignState, slot: BaseSlot, id: FacilityId): string | null {
+/** Why `id` can't be built on `plot`, or null if it can. */
+export function buildable(c: CampaignState, plot: BasePlot, id: FacilityId): string | null {
   const def = FACILITIES[id];
-  if (!slot.excavated) return 'Hay que excavar primero.';
-  if (slot.facility) return 'Ya hay una instalación aquí.';
+  if (plot.terrain !== 'clear') return 'Hay que despejar el terreno primero.';
+  if (plot.building) return 'Ya hay un edificio aquí.';
+  if (!neighbours(c, plot).some((q) => q.building)) return 'Tiene que estar pegado a otro edificio.';
   if (bastionLevel(c) < def.level) return `Requiere nivel ${def.level} del Bastión.`;
   if (def.unique && (facilityCount(c, id) > 0 || c.base.construction?.facility === id)) return 'Solo se puede construir una.';
   return null;
@@ -1074,12 +1241,16 @@ function resolveRumor(c: CampaignState, rumor: Rumor, rng: Rng): void {
 
 // ------------------------------------------------------------------- create
 
+/** The bunker and its three buildings, cleared ground around them and the wild beyond. */
 function freshBase(): CampaignState['base'] {
-  const slots: BaseSlot[] = [];
-  for (let row = 0; row < BASE_ROWS; row++) {
-    for (let col = 0; col < BASE_COLS; col++) slots.push({ id: `r${row}c${col}`, row, col, excavated: row === 0, facility: null });
+  const plots: BasePlot[] = [];
+  for (let y = 0; y < BASE_SIZE; y++) {
+    for (let x = 0; x < BASE_SIZE; x++) {
+      const fixed = (Object.keys(FIXED_BUILDINGS) as FixedBuildingId[]).find((id) => FIXED_BUILDINGS[id].x === x && FIXED_BUILDINGS[id].y === y);
+      plots.push({ id: `${x},${y}`, x, y, terrain: terrainAt(x, y), building: fixed ?? null });
+    }
   }
-  return { slots, construction: null };
+  return { plots, construction: null };
 }
 
 function freshRegions(): RegionState[] {
@@ -1145,8 +1316,8 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
 
 export type CampaignCommand =
   | { type: 'chooseMission'; id: string }
-  | { type: 'excavate'; slot: string }
-  | { type: 'build'; slot: string; facility: FacilityId }
+  | { type: 'clear'; plot: string }
+  | { type: 'build'; plot: string; facility: FacilityId }
   | { type: 'contact'; region: RegionId }
   | { type: 'answerEvent'; option: 0 | 1 }
   | { type: 'investigate'; id: string }
@@ -1221,11 +1392,15 @@ export function addPlayer(c: CampaignState, slot: Slot, rng: Rng): number {
     s.loadout = { utility: null, ammo: null };
   }
   const classes: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'];
+  const given = [...rookies];
   for (let i = rookies.length; i < LATE_KIT; i++) {
     const have = c.soldiers.filter((s) => s.owner === slot && s.alive).map((s) => s.cls);
-    addSoldier(c, slot, classes.find((cls) => !have.includes(cls)) ?? classes[i % classes.length]!, rng);
+    given.push(addSoldier(c, slot, classes.find((cls) => !have.includes(cls)) ?? classes[i % classes.length]!, rng));
   }
-  log(c, `Llega el segundo comandante: ${LATE_KIT} soldados pasan a su mando.`, 'good');
+  // Whoever was already there learns who changed hands.
+  const names = given.map((s) => s.name);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : (names[0] ?? '');
+  log(c, `Llega el segundo comandante. Pasan a su mando: ${list}.`, 'good', { kicker: 'RELEVO', title: 'Llega el segundo comandante' });
   return LATE_KIT;
 }
 
@@ -1237,7 +1412,7 @@ export interface NextStep {
   label: string;
   count?: number;
   tone: 'urgent' | 'info';
-  go?: { offer?: string; soldier?: string; slot?: string; region?: RegionId; rumor?: string };
+  go?: { offer?: string; soldier?: string; plot?: string; region?: RegionId; rumor?: string };
 }
 
 /**
@@ -1256,6 +1431,17 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   if (event) steps.push({ view: 'hub', label: `Decidid: ${event.title}`, tone: 'urgent' });
 
   const mission = activeOffer(c);
+  const mine = c.soldiers.filter((s) => s.owner === slot && s.alive);
+
+  // Short of soldiers for a full share of the squad (after a bad mission): recruiting comes
+  // before choosing an operation, or the squad flies half empty.
+  const ready = mine.filter(soldierReady).length;
+  const short =
+    ready < squadLimit(c, c.players) && mine.length < soldierCap(c) && canAfford(c, recruitCost(c))
+      ? { view: 'barracks' as const, label: `${ready === 0 ? 'Ningún soldado listo' : `Solo ${ready} ${ready === 1 ? 'soldado listo' : 'soldados listos'}`}: recluta (${recruitCost(c)} ₡)`, tone: 'info' as const }
+      : null;
+  if (short && !mission) steps.push(short);
+
   if (mission) {
     const partnerReady = shared && c.launchReady[partner] && !c.launchReady[slot];
     steps.push({
@@ -1264,6 +1450,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
       tone: partnerReady ? 'urgent' : 'info',
       go: { offer: mission.id },
     });
+    if (short) steps.push(short);
   } else if (c.offers.length) {
     // Expiring soon first; then story chapters, which move the campaign on.
     const left = (o: MissionOffer) => (o.expiresDay === null ? Infinity : o.expiresDay - c.day);
@@ -1278,7 +1465,6 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     });
   }
 
-  const mine = c.soldiers.filter((s) => s.owner === slot && s.alive);
   const promotions = mine.filter((s) => s.pendingTiers.length);
   if (promotions.length) {
     steps.push({ view: 'barracks', label: promotions.length === 1 ? `Ascenso pendiente: ${promotions[0]!.name}` : 'Ascensos pendientes', count: promotions.length, tone: 'info', go: { soldier: promotions[0]!.id } });
@@ -1301,11 +1487,16 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   }
 
   if (!c.base.construction) {
-    const empty = c.base.slots.find((x) => x.excavated && !x.facility);
-    const cheapest = Math.min(...Object.values(FACILITIES).filter((f) => empty && !buildable(c, empty, f.id)).map((f) => f.cost));
-    const rock = c.base.slots.find((x) => !x.excavated && !c.base.slots.some((y) => y.col === x.col && y.row === x.row - 1 && !y.excavated));
-    if (empty && canAfford(c, cheapest)) steps.push({ view: 'facilities', label: 'Construye en una sala vacía', tone: 'info', go: { slot: empty.id } });
-    else if (!empty && rock && canAfford(c, excavationCost(rock.row).cost)) steps.push({ view: 'facilities', label: 'Excava una sala nueva', tone: 'info', go: { slot: rock.id } });
+    // Something affordable to build on a free plot, else ground to clear next to the compound.
+    const options = c.base.plots.flatMap((p) => Object.values(FACILITIES).filter((f) => !buildable(c, p, f.id) && canAfford(c, f.cost)).map((f) => ({ p, f })));
+    const best = options.find((o) => adjacencyAt(c, o.p, o.f.id)) ?? options[0];
+    const wild = c.base.plots
+      .filter((p) => !clearable(c, p) && canAfford(c, clearCost(p).cost))
+      .sort((a, b) => plotRing(a) - plotRing(b))[0];
+    if (best) steps.push({ view: 'facilities', label: 'Construye junto a la base', tone: 'info', go: { plot: best.p.id } });
+    else if (!c.base.plots.some((p) => p.terrain === 'clear' && !p.building) && wild) {
+      steps.push({ view: 'facilities', label: 'Despeja terreno para crecer', tone: 'info', go: { plot: wild.id } });
+    }
   }
 
   if (c.regions.filter((r) => r.contacted).length < contactCapacity(c) && canAfford(c, contactCost(c))) steps.push({ view: 'geoscape', label: 'Contacta una región', tone: 'info' });
@@ -1316,18 +1507,17 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   return [...steps.filter((x) => x.tone === 'urgent'), ...steps.filter((x) => x.tone === 'info')];
 }
 
-export function slotName(slot: Pick<BaseSlot, 'row' | 'col'>): string {
-  return `la sala ${slot.row + 1}-${slot.col + 1}`;
-}
 
 function proposalText(c: CampaignState, action: ProposalAction): string {
   switch (action.type) {
     case 'chooseMission':
       return `ir a la misión ${c.offers.find((o) => o.id === action.id)?.name ?? ''}`;
-    case 'excavate':
-      return `excavar ${slotName(c.base.slots.find((s) => s.id === action.slot)!)}`;
+    case 'clear': {
+      const plot = plotById(c, action.plot)!;
+      return `despejar ${plotName(plot)}${plot.terrain === 'clear' ? '' : ` (${TERRAINS[plot.terrain].name.toLowerCase()})`}`;
+    }
     case 'build':
-      return `construir ${FACILITIES[action.facility].name} en ${slotName(c.base.slots.find((s) => s.id === action.slot)!)}`;
+      return `construir ${FACILITIES[action.facility].name} en ${plotName(plotById(c, action.plot)!)}`;
     case 'contact':
       return `contactar con ${REGIONS[action.region].name}`;
     case 'event':
@@ -1345,20 +1535,20 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (c.activeMission) return 'Ya hay una misión elegida.';
       if (!c.offers.some((o) => o.id === action.id)) return 'Esa misión ya no está disponible.';
       return null;
-    case 'excavate': {
-      const slot = c.base.slots.find((s) => s.id === action.slot);
-      if (!slot || slot.excavated) return 'Esa sala ya está excavada.';
+    case 'clear': {
+      const plot = plotById(c, action.plot);
+      if (!plot) return 'Esa parcela no existe.';
       if (c.base.construction) return 'Ya hay una obra en marcha.';
-      const above = c.base.slots.find((s) => s.col === slot.col && s.row === slot.row - 1);
-      if (above && !above.excavated) return 'Primero hay que excavar la sala de encima.';
-      if (!canAfford(c, excavationCost(slot.row).cost)) return 'No hay créditos suficientes.';
+      const blocker = clearable(c, plot);
+      if (blocker) return blocker;
+      if (!canAfford(c, clearCost(plot).cost)) return 'No hay créditos suficientes.';
       return null;
     }
     case 'build': {
-      const slot = c.base.slots.find((s) => s.id === action.slot);
-      if (!slot) return 'Esa sala no existe.';
+      const plot = plotById(c, action.plot);
+      if (!plot) return 'Esa parcela no existe.';
       if (c.base.construction) return 'Ya hay una obra en marcha.';
-      const blocker = buildable(c, slot, action.facility);
+      const blocker = buildable(c, plot, action.facility);
       if (blocker) return blocker;
       if (!canAfford(c, FACILITIES[action.facility].cost)) return 'No hay créditos suficientes.';
       return null;
@@ -1392,20 +1582,20 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       log(c, `Misión elegida: ${c.offers.find((o) => o.id === action.id)!.name}. Revisad la escuadra.`);
       break;
     }
-    case 'excavate': {
-      const slot = c.base.slots.find((s) => s.id === action.slot)!;
-      const { cost, days } = excavationCost(slot.row);
+    case 'clear': {
+      const plot = plotById(c, action.plot)!;
+      const { cost, days } = clearCost(plot);
       pay(c, cost);
-      c.base.construction = { slot: slot.id, kind: 'excavate', facility: null, daysLeft: days, total: days };
-      log(c, `Empieza la excavación de ${slotName(slot)}.`);
+      c.base.construction = { plot: plot.id, kind: 'clear', facility: null, daysLeft: days, total: days };
+      if (plot.terrain !== 'clear') log(c, TERRAINS[plot.terrain].start.replace('{parcela}', plotName(plot)));
       break;
     }
     case 'build': {
-      const slot = c.base.slots.find((s) => s.id === action.slot)!;
+      const plot = plotById(c, action.plot)!;
       const def = FACILITIES[action.facility];
       pay(c, def.cost);
-      c.base.construction = { slot: slot.id, kind: 'build', facility: def.id, daysLeft: def.days, total: def.days };
-      log(c, `Empiezan las obras: ${def.name}.`);
+      c.base.construction = { plot: plot.id, kind: 'build', facility: def.id, daysLeft: def.days, total: def.days };
+      log(c, `Empiezan las obras: ${def.name}, en ${plotName(plot)}.`);
       break;
     }
     case 'contact': {
@@ -1465,10 +1655,10 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
   switch (cmd.type) {
     case 'chooseMission':
       return propose(c, { type: 'chooseMission', id: cmd.id }, ctx);
-    case 'excavate':
-      return propose(c, { type: 'excavate', slot: cmd.slot }, ctx);
+    case 'clear':
+      return propose(c, { type: 'clear', plot: cmd.plot }, ctx);
     case 'build':
-      return propose(c, { type: 'build', slot: cmd.slot, facility: cmd.facility }, ctx);
+      return propose(c, { type: 'build', plot: cmd.plot, facility: cmd.facility }, ctx);
     case 'contact':
       return propose(c, { type: 'contact', region: cmd.region }, ctx);
     case 'answerEvent':
@@ -1548,8 +1738,8 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
     case 'recruit': {
       const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).length;
       if (mine >= soldierCap(c)) return { ok: false, error: `Máximo ${soldierCap(c)} soldados por jugador.` };
-      if (!canAfford(c, RECRUIT_COST)) return { ok: false, error: 'No hay créditos suficientes.' };
-      pay(c, RECRUIT_COST);
+      if (!canAfford(c, recruitCost(c))) return { ok: false, error: 'No hay créditos suficientes.' };
+      pay(c, recruitCost(c));
       const s = addSoldier(c, slot, cmd.cls, ctx.rng);
       log(c, `Reclutado: ${s.name} (${TEMPLATES[cmd.cls].name}).`);
       return { ok: true };
@@ -1614,7 +1804,7 @@ export function advanceTime(c: CampaignState, rng: Rng): void {
     c.day++;
     let stop = false;
 
-    const heal = facilityCount(c, 'infirmary') ? 2 : 1;
+    const heal = facilityCount(c, 'infirmary') ? (hasAdjacency(c, 'infirmary') ? 3 : 2) : 1;
     for (const s of c.soldiers) {
       if (!s.alive || s.woundedDays === 0) continue;
       s.woundedDays = Math.max(0, s.woundedDays - heal);
@@ -1623,13 +1813,23 @@ export function advanceTime(c: CampaignState, rng: Rng): void {
 
     const work = c.base.construction;
     if (work && --work.daysLeft <= 0) {
-      const slot = c.base.slots.find((s) => s.id === work.slot)!;
-      if (work.kind === 'excavate') {
-        slot.excavated = true;
-        log(c, `Excavación terminada: ${slotName(slot)} está lista para construir.`, 'good');
+      const plot = plotById(c, work.plot)!;
+      if (work.kind === 'clear') {
+        const { salvage } = clearCost(plot);
+        const ruins = plot.terrain === 'ruins';
+        plot.terrain = 'clear';
+        c.credits += salvage;
+        log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} ₡ de chatarra.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
       } else {
-        slot.facility = work.facility;
-        log(c, `Instalación terminada: ${FACILITIES[work.facility!].name}.`, 'good');
+        plot.building = work.facility;
+        const bonus = adjacencyAt(c, plot, work.facility!);
+        log(
+          c,
+          bonus
+            ? `${FACILITIES[work.facility!].name} y ${buildingName(bonus.next)}, pared con pared: ${bonus.text.split('.')[0]}.`
+            : `Instalación terminada: ${FACILITIES[work.facility!].name}.`,
+          'good',
+        );
       }
       c.base.construction = null;
       stop = true;
@@ -1924,7 +2124,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   // Combat is what makes the Bastion grow.
   const kills = report.squad.reduce((sum, e) => sum + e.kills, 0);
   const earned = missionXp(victory, offer?.difficulty ?? 1, kills);
-  report.xp = facilityCount(c, 'simulation') ? Math.round(earned * 1.25) : earned;
+  report.xp = facilityCount(c, 'simulation') ? Math.round(earned * (hasAdjacency(c, 'simulation') ? 1.4 : 1.25)) : earned;
   gainXp(c, report.xp, rng);
   report.levelTo = bastionLevel(c);
 
@@ -2009,7 +2209,7 @@ export function migrateCampaign(old: CampaignState): CampaignState {
       c.soldiers.reduce((sum, s) => sum + s.xp, 0),
       LEVEL_XP[kept - 1]!,
     );
-    for (const slot of c.base.slots) if ((slot.facility as string) === 'lab') slot.facility = 'simulation';
+    for (const slot of (c.base as unknown as LegacyBase).slots ?? []) if ((slot.facility as string) === 'lab') slot.facility = 'simulation';
     if (c.base.construction && (c.base.construction.facility as string) === 'lab') c.base.construction.facility = 'simulation';
     delete legacy.resources;
     delete legacy.research;
@@ -2045,8 +2245,49 @@ export function migrateCampaign(old: CampaignState): CampaignState {
     report.salvage ??= 0;
     report.story ??= null;
   }
+  // Version 7: the base moves to the surface.
+  if ((c.base as unknown as LegacyBase).slots) c.base = surfaceBase(c.base as unknown as LegacyBase);
   c.launchReady = [false, false];
   return c;
+}
+
+/** The underground base, up to version 6: a 3 × 3 grid of rooms dug one under another. */
+interface LegacyBase {
+  slots: { id: string; row: number; col: number; excavated: boolean; facility: FacilityId | null }[];
+  construction: { slot: string; kind: 'excavate' | 'build'; facility: FacilityId | null; daysLeft: number; total: number } | null;
+}
+
+/**
+ * Moves an underground base to the surface: every facility keeps working on a
+ * plot next to the compound (nearest first), and the work in progress carries
+ * on with the days it had left. A half-dug room becomes ground being cleared.
+ */
+function surfaceBase(old: LegacyBase): CampaignState['base'] {
+  const c = { base: freshBase() } as CampaignState;
+  const place = (facility: FacilityId): BasePlot => {
+    for (;;) {
+      const free = c.base.plots
+        .filter((p) => !p.building && neighbours(c, p).some((q) => q.building))
+        .sort((a, b) => plotRing(a) - plotRing(b) || a.y - b.y || a.x - b.x)[0]!;
+      free.terrain = 'clear';
+      if (!free.building) {
+        free.building = facility;
+        return free;
+      }
+    }
+  };
+  for (const slot of old.slots) if (slot.facility) place(slot.facility);
+  const work = old.construction;
+  if (work?.kind === 'build' && work.facility) {
+    const plot = c.base.plots
+      .filter((p) => p.terrain === 'clear' && !p.building && neighbours(c, p).some((q) => q.building))
+      .sort((a, b) => plotRing(a) - plotRing(b))[0];
+    if (plot) c.base.construction = { plot: plot.id, kind: 'build', facility: work.facility, daysLeft: work.daysLeft, total: work.total };
+  } else if (work) {
+    const plot = c.base.plots.filter((p) => !clearable(c, p)).sort((a, b) => plotRing(a) - plotRing(b))[0];
+    if (plot) c.base.construction = { plot: plot.id, kind: 'clear', facility: null, daysLeft: work.daysLeft, total: work.total };
+  }
+  return c.base;
 }
 
 /** Shapes of version 3 and older, before credits and Bastion levels. */

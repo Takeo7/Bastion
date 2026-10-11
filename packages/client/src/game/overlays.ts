@@ -4,6 +4,8 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { DIRS4, type CoverLevel, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
+import eyeUrl from '../assets/expediente/eye.png';
+import hatchUrl from '../assets/expediente/hatch.png';
 
 export interface MoveTile {
   pos: Vec2;
@@ -88,6 +90,9 @@ export class Overlays {
   private readonly tiles: THREE.InstancedMesh;
   /** Red frames on the tiles where the squad would be noticed, over the cost colour (which still shows). */
   private readonly detect: THREE.InstancedMesh;
+  /** Patterns besides colour (UX-REVISION-2 #49): hatching on dash tiles, an eye where the squad would be seen. */
+  private readonly hatch: THREE.InstancedMesh;
+  private readonly eyes: THREE.InstancedMesh;
   private readonly blast: THREE.InstancedMesh;
   private readonly path = fatLine(0xeafaff, 4);
   private readonly pathCasing = new Line2(
@@ -127,6 +132,23 @@ export class Overlays {
     );
     this.detect.count = 0;
     this.detect.position.y = 0.025;
+    const loader = new THREE.TextureLoader();
+    const hatchTexture = loader.load(hatchUrl);
+    hatchTexture.wrapS = hatchTexture.wrapT = THREE.RepeatWrapping;
+    this.hatch = new THREE.InstancedMesh(
+      tileGeometry,
+      new THREE.MeshBasicMaterial({ map: hatchTexture, color: 0x2a2318, transparent: true, opacity: 0.32, depthWrite: false }),
+      capacity,
+    );
+    this.hatch.count = 0;
+    this.hatch.position.y = 0.022;
+    this.eyes = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(0.34, 0.34).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: loader.load(eyeUrl), color: 0xff4a4a, transparent: true, opacity: 0.95, depthWrite: false }),
+      capacity,
+    );
+    this.eyes.count = 0;
+    this.eyes.position.y = 0.03;
     this.blast = new THREE.InstancedMesh(
       tileGeometry,
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false }),
@@ -172,13 +194,13 @@ export class Overlays {
     // instances were then (nowhere, for an empty one), and culls it by them
     // from then on: a grenade area or a move range elsewhere on the map would
     // vanish whenever that first spot left the screen. They are cheap to draw.
-    for (const mesh of [this.tiles, this.detect, this.blast, this.evac]) mesh.frustumCulled = false;
+    for (const mesh of [this.tiles, this.detect, this.hatch, this.eyes, this.blast, this.evac]) mesh.frustumCulled = false;
 
     // The path gets a dark casing, so it reads over the blue and the yellow tiles alike.
     this.pathCasing.renderOrder = 9;
     this.pathCasing.visible = false;
     this.rangeRing.renderOrder = 9;
-    this.group.add(this.beacons, this.flares, this.smoke, this.evac, this.item, this.tiles, this.detect, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.beacons, this.flares, this.smoke, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -290,17 +312,27 @@ export class Overlays {
   showMoveRange(tiles: MoveTile[]): void {
     const m = new THREE.Matrix4();
     let frames = 0;
+    let dashes = 0;
     tiles.slice(0, this.tiles.instanceMatrix.count).forEach((t, i) => {
       m.setPosition(tileToWorld(t.pos));
       this.tiles.setMatrixAt(i, m);
       this.tiles.setColorAt(i, t.dash ? COLOR_DASH : COLOR_MOVE);
-      if (t.detected) this.detect.setMatrixAt(frames++, m);
+      // Not only colour: a dash is also hatched, and a tile that gives the squad away carries an eye.
+      if (t.dash) this.hatch.setMatrixAt(dashes++, m);
+      if (t.detected) {
+        this.detect.setMatrixAt(frames, m);
+        this.eyes.setMatrixAt(frames++, m);
+      }
     });
     this.tiles.count = tiles.length;
     this.tiles.instanceMatrix.needsUpdate = true;
     if (this.tiles.instanceColor) this.tiles.instanceColor.needsUpdate = true;
+    this.hatch.count = dashes;
+    this.hatch.instanceMatrix.needsUpdate = true;
     this.detect.count = frames;
     this.detect.instanceMatrix.needsUpdate = true;
+    this.eyes.count = frames;
+    this.eyes.instanceMatrix.needsUpdate = true;
   }
 
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {

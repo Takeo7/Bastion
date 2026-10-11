@@ -8,7 +8,16 @@ import {
   executeCampaignCommand,
   itemsFree,
   CAMPAIGN_VERSION,
+  adjacencyBonuses,
+  BASE_SIZE,
+  clearable,
+  clearCost,
   migrateCampaign,
+  neighbours,
+  plotAt,
+  plotById,
+  recruitCost,
+  walkways,
   shopPrice,
   squadLimit,
   squadMember,
@@ -42,31 +51,81 @@ function advanceUntil(c: CampaignState, done: () => boolean) {
   for (let i = 0; i < 30 && !done(); i++) run(c, { type: 'advance', ready: true });
 }
 
-describe('facilities', () => {
-  it('rooms below the surface must be excavated before building; one project at a time', () => {
+describe('the compound', () => {
+  it('starts as the bunker and three buildings, with cleared ground around and the wild beyond', () => {
     const c = solo();
-    expect(() => run(c, { type: 'build', slot: 'r1c0', facility: 'infirmary' })).toThrow(/excavar/);
-    expect(() => run(c, { type: 'excavate', slot: 'r2c0' })).toThrow(/encima/);
-    run(c, { type: 'excavate', slot: 'r1c0' });
-    expect(() => run(c, { type: 'build', slot: 'r0c0', facility: 'infirmary' })).toThrow(/obra/);
-    advanceUntil(c, () => !c.base.construction);
-    expect(c.base.slots.find((s) => s.id === 'r1c0')!.excavated).toBe(true);
+    expect(plotAt(c, 3, 3)!.building).toBe('command');
+    expect(plotAt(c, 2, 3)!.building).toBe('barracks');
+    expect(plotAt(c, 3, 2)!.building).toBe('research');
+    expect(plotAt(c, 4, 3)!.building).toBe('engineering');
+    // The four diagonals and the side towards the airstrip are free to build on.
+    const free = c.base.plots.filter((p) => p.terrain === 'clear' && !p.building).map((p) => p.id);
+    expect(free.sort()).toEqual(['2,2', '2,4', '3,4', '4,2', '4,4']);
+    expect(c.base.plots.filter((p) => p.terrain === 'clear')).toHaveLength(9);
+    // Built pairs wall to wall get a walkway: the bunker to each of its three buildings.
+    expect(walkways(c)).toHaveLength(3);
   });
 
-  it('the workshop makes accessories cheaper; facilities unlock with the Bastion level', () => {
+  it('grows by clearing ground next to cleared ground, and builds next to buildings; one project at a time', () => {
     const c = solo();
-    run(c, { type: 'build', slot: 'r0c0', facility: 'workshop' });
+    expect(() => run(c, { type: 'build', plot: '0,0', facility: 'infirmary' })).toThrow(/despejar/);
+    expect(() => run(c, { type: 'clear', plot: '0,0' })).toThrow(/a su lado/);
+    const credits = c.credits;
+    run(c, { type: 'clear', plot: '3,5' });
+    expect(c.credits).toBe(credits - clearCost(plotById(c, '3,5')!).cost);
+    expect(() => run(c, { type: 'build', plot: '2,2', facility: 'infirmary' })).toThrow(/obra/);
     advanceUntil(c, () => !c.base.construction);
-    expect(c.base.slots[0]!.facility).toBe('workshop');
+    expect(plotById(c, '3,5')!.terrain).toBe('clear');
+    // Cleared, but nothing built beside it yet.
+    expect(() => run(c, { type: 'build', plot: '3,5', facility: 'infirmary' })).toThrow(/pegado/);
+  });
+
+  it('ruins pay back in scrap when cleared', () => {
+    const c = solo();
+    const ruins = c.base.plots.find((p) => p.terrain === 'ruins' && !clearable(c, p))!;
+    const before = c.credits;
+    run(c, { type: 'clear', plot: ruins.id });
+    advanceUntil(c, () => !c.base.construction);
+    expect(c.credits).toBe(before - clearCost(ruins).cost + 15);
+  });
+
+  it('the workshop makes accessories cheaper, more so next to the armoury; facilities unlock with the Bastion level', () => {
+    const c = solo();
+    run(c, { type: 'build', plot: '2,2', facility: 'workshop' });
+    advanceUntil(c, () => !c.base.construction);
+    expect(plotById(c, '2,2')!.building).toBe('workshop');
     expect(shopPrice(c, 'smokeGrenade')).toBe(19);
-    expect(() => run(c, { type: 'build', slot: 'r0c2', facility: 'workshop' })).toThrow(/Solo/);
-    expect(() => run(c, { type: 'build', slot: 'r0c1', facility: 'simulation' })).toThrow(/nivel 3/);
+    expect(() => run(c, { type: 'build', plot: '4,4', facility: 'workshop' })).toThrow(/Solo/);
+    expect(() => run(c, { type: 'build', plot: '4,4', facility: 'simulation' })).toThrow(/nivel 3/);
+    // Moved next to the armoury (4,3): 40 % off.
+    plotById(c, '2,2')!.building = null;
+    plotById(c, '4,4')!.building = 'workshop';
+    expect(adjacencyBonuses(c).map((b) => [b.plot, b.next])).toEqual([['4,4', '4,3']]);
+    expect(shopPrice(c, 'smokeGrenade')).toBe(15);
+  });
+
+  it('wall to wall bonuses: infirmary and barracks, training and barracks, relay and the bunker', () => {
+    const c = solo();
+    expect(recruitCost(c)).toBe(30);
+    plotById(c, '2,4')!.building = 'training';
+    expect(recruitCost(c)).toBe(20);
+    const capacity = contactCapacity(c);
+    plotById(c, '4,4')!.building = 'relay';
+    expect(contactCapacity(c)).toBe(capacity + 2);
+    plotById(c, '4,4')!.building = null;
+    plotById(c, '3,4')!.building = 'relay';
+    expect(contactCapacity(c)).toBe(capacity + 3);
+    plotById(c, '2,2')!.building = 'infirmary';
+    const s = c.soldiers[0]!;
+    s.woundedDays = 9;
+    run(c, { type: 'advance', ready: true });
+    expect(s.woundedDays).toBeLessThanOrEqual(9 - 3);
   });
 
   it('the simulation room makes missions worth more experience', () => {
     const c = solo();
     c.xp = LEVEL_XP[2]!;
-    run(c, { type: 'build', slot: 'r0c1', facility: 'simulation' });
+    run(c, { type: 'build', plot: '4,4', facility: 'simulation' });
     advanceUntil(c, () => !c.base.construction);
     const offer = c.offers[0]!;
     run(c, { type: 'chooseMission', id: offer.id });
@@ -79,7 +138,7 @@ describe('facilities', () => {
   it('the training centre lets each player bring one more soldier', () => {
     const c = createCampaign(both, new Rng(1));
     expect(squadLimit(c, both)).toBe(3);
-    c.base.slots[0]!.facility = 'training';
+    plotById(c, '2,2')!.building = 'training';
     expect(squadLimit(c, both)).toBe(4);
   });
 });
@@ -105,7 +164,7 @@ describe('the world', () => {
     if (!region.contacted) {
       expect(c.offers.some((o) => o.facility)).toBe(false);
       c.credits = 2000;
-      if (c.regions.filter((r) => r.contacted).length >= contactCapacity(c)) c.base.slots[0]!.facility = 'relay';
+      if (c.regions.filter((r) => r.contacted).length >= contactCapacity(c)) plotById(c, '2,2')!.building = 'relay';
       run(c, { type: 'contact', region: region.id });
     }
     const assault = c.offers.find((o) => o.facility === region.id)!;
@@ -216,7 +275,7 @@ describe('migration', () => {
     delete (soldiers[0] as Record<string, unknown>).appearance;
     delete (soldiers[0] as Record<string, unknown>).nickname;
     const m = migrateCampaign(c as unknown as CampaignState);
-    expect(m.base.slots).toHaveLength(9);
+    expect(m.base.plots).toHaveLength(BASE_SIZE * BASE_SIZE);
     expect(m.regions.find((r) => r.id === 'weu')!.contacted).toBe(true);
     expect(m.soldiers[0]!.perks).toEqual(['pointBlank']);
     expect(m.soldiers[0]!.pendingTiers).toEqual([2]);
@@ -230,6 +289,30 @@ describe('migration', () => {
     expect(bastionLevel(m)).toBe(5);
     expect(m).not.toHaveProperty('research');
     expect(m).not.toHaveProperty('resources');
+  });
+
+  it('an underground base moves to the surface: facilities keep working and the work carries on', () => {
+    const c = createCampaign([0], new Rng(1));
+    const slots = [0, 1, 2].flatMap((row) => [0, 1, 2].map((col) => ({ id: `r${row}c${col}`, row, col, excavated: row < 2, facility: null as string | null })));
+    slots[0]!.facility = 'workshop';
+    slots[1]!.facility = 'relay';
+    slots[3]!.facility = 'relay';
+    (c as unknown as { base: unknown }).base = { slots, construction: { slot: 'r1c1', kind: 'build', facility: 'infirmary', daysLeft: 4, total: 6 } };
+    (c as { version: number }).version = 6;
+    const m = migrateCampaign(c);
+    expect(m.base.plots).toHaveLength(BASE_SIZE * BASE_SIZE);
+    expect(m.base.plots.filter((p) => p.building === 'workshop')).toHaveLength(1);
+    expect(m.base.plots.filter((p) => p.building === 'relay')).toHaveLength(2);
+    // Every facility stands next to another building, on cleared ground.
+    for (const p of m.base.plots.filter((x) => x.building)) {
+      expect(p.terrain).toBe('clear');
+      if (p.building !== 'command') expect(neighbours(m, p).some((q) => q.building)).toBe(true);
+    }
+    const work = m.base.construction!;
+    expect(work).toMatchObject({ kind: 'build', facility: 'infirmary', daysLeft: 4, total: 6 });
+    const site = plotById(m, work.plot)!;
+    expect(site).toMatchObject({ terrain: 'clear', building: null });
+    expect(neighbours(m, site).some((q) => q.building)).toBe(true);
   });
 });
 

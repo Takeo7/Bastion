@@ -257,21 +257,26 @@ export class Lobby {
           option(this.veterans, false, (v) => (this.veterans = v), 'Novatos', 'Sin rango ni habilidades'),
         ),
       ),
+      // Start and back stay at the foot of the sheet, in view however long the options get.
       h(
-        'button.menu-item.primary',
-        { disabled: !this.canPlay(), onclick: () => this.handlers.onStart(this.mission, this.map, this.veterans) },
-        connected < 2 ? 'Empezar en solitario' : 'Empezar escaramuza',
-        h('small', {}, connected < 2 ? 'Controlarás a todos los soldados' : 'Cada uno manda a la mitad'),
-      ),
-      h(
-        'button.menu-item.back',
-        {
-          onclick: () => {
-            this.page = 'main';
-            this.render();
+        'div.menu-foot',
+        {},
+        h(
+          'button.menu-item.primary',
+          { disabled: !this.canPlay(), onclick: () => this.handlers.onStart(this.mission, this.map, this.veterans) },
+          connected < 2 ? 'Empezar en solitario' : 'Empezar escaramuza',
+          h('small', {}, connected < 2 ? 'Controlarás a todos los soldados' : 'Cada uno manda a la mitad'),
+        ),
+        h(
+          'button.menu-item.back',
+          {
+            onclick: () => {
+              this.page = 'main';
+              this.render();
+            },
           },
-        },
-        'Volver',
+          'Volver',
+        ),
       ),
     );
   }

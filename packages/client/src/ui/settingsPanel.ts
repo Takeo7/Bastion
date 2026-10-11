@@ -65,5 +65,17 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
       redraw,
     ),
     row('showFps', 'Mostrar FPS', [[true, 'Sí'], [false, 'No']], 'Un contador de imágenes por segundo en una esquina.', redraw),
+    row(
+      'uiScale',
+      'Interfaz',
+      [
+        [0.9, '90 %'],
+        [1, '100 %'],
+        [1.15, '115 %'],
+        [1.3, '130 %'],
+      ],
+      'El tamaño de los textos y paneles del juego. La vista 3D no cambia.',
+      redraw,
+    ),
   );
 }

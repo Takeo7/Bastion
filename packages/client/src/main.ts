@@ -123,9 +123,9 @@ function handle(m: ServerMessage): void {
       else {
         lobby.hide();
         game = new Game(app, net, slot, players, m.state);
-        // A fresh mission opens with its briefing.
-        if (m.state.seq === 0) game.intro();
       }
+      // A fresh mission opens with its briefing, also a new skirmish on the same screen.
+      if (m.state.seq === 0) game.intro();
       break;
     case 'events':
       game?.onEvents(m.events, m.seq, m.by);

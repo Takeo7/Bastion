@@ -160,7 +160,7 @@
   margin: 10px 0 3px;
   padding-bottom: 2px;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--x-line);
@@ -206,7 +206,7 @@
 .x-row small {
   display: block;
   color: var(--x-muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .x-row .x-side {
@@ -247,9 +247,18 @@
   background: #c9302a;
 }
 
+/* Destructive actions (Cancelar misión, Rechazar) are typed in red, not stamped:
+   the red stamp is the screen's main action, and the two must not compete. */
 .x-btn.danger {
-  border-color: var(--stamp);
+  background: none;
+  border-color: transparent;
   color: var(--stamp);
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+}
+
+.x-btn.danger:hover:not(:disabled) {
+  background: rgba(179, 38, 30, 0.08);
 }
 
 .x-btn.big {
@@ -310,7 +319,7 @@
 }
 
 .x-stats small {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--x-muted);
@@ -359,7 +368,7 @@
 }
 
 .x-pick-field small {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--x-muted);
@@ -497,7 +506,7 @@
 }
 
 .strat-res small {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   color: var(--x-muted);
 }
@@ -529,10 +538,21 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
+  overflow: hidden;
 }
 
+.strat-doom .pips,
+.strat-doom b {
+  flex: none;
+}
+
+/* Under pressure (narrow window, large interface) the label gives way, never the numbers. */
 .strat-doom small {
-  font-size: 10px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
   letter-spacing: 0.18em;
   color: var(--stamp);
 }
@@ -590,7 +610,7 @@
 
 .strat-player small {
   color: var(--x-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .strat-top > .x-btn {
@@ -842,7 +862,7 @@
 }
 
 .room-label.rock {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-soft);
   background: var(--paper-grain), var(--paper-dark);
 }
@@ -906,7 +926,7 @@
 
 .scan-btn small {
   font-family: var(--font);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: none;
   opacity: 0.85;
@@ -1027,7 +1047,7 @@ dl.briefing {
 .lineup-card .x-btn {
   margin-top: 6px;
   padding: 3px 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .lineup-card.dead {
@@ -1037,7 +1057,8 @@ dl.briefing {
 .lineup-card.dead::after {
   content: 'Caído';
   position: absolute;
-  top: 58%;
+  /* Over the photo's top edge, not over the "caído en combate" line. */
+  top: -6px;
   left: 50%;
   padding: 0 8px;
   font-family: var(--font-display);
@@ -1298,7 +1319,7 @@ dl.briefing {
   .strat-nav button {
     min-width: 0;
     padding: 6px 9px 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 
@@ -1596,7 +1617,7 @@ dl.briefing {
 .x-field > small {
   display: block;
   margin-bottom: 3px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--x-muted);
@@ -1700,7 +1721,7 @@ dl.briefing {
 .x-chip {
   display: inline-block;
   padding: 0 5px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   white-space: nowrap;
   color: var(--ink);
@@ -1811,7 +1832,7 @@ dl.briefing {
 }
 
 .x-row.unlock small {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.25;
 }
 
@@ -1856,7 +1877,7 @@ dl.briefing {
 }
 
 .x-row.soldier .cls {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--ink-soft);
@@ -1935,7 +1956,7 @@ dl.x-pairs {
 }
 
 dl.x-pairs dt {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--ink-soft);
@@ -1945,12 +1966,24 @@ dl.x-pairs dd {
   margin: 0;
 }
 
-/* Buildable facilities: name, two-line description, cost and days. */
-.x-row.build small:first-of-type {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+/* Buildable facilities: name, the whole description, days, and the button with the price under them. */
+.x-row.build {
+  grid-template-columns: 4px 1fr;
+  align-items: start;
+}
+
+.x-row.build > .x-btn {
+  grid-column: 2;
+  justify-self: start;
+  margin: 2px 0 2px;
+  white-space: nowrap;
+}
+
+/* The ones that can't be built yet: one line. */
+.x-row.build.dim small {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1200px) {
@@ -2003,11 +2036,11 @@ dl.x-pairs dd {
 
 /* Rooms list (Instalaciones): number, state, action. */
 .x-row.room {
-  grid-template-columns: 4px 30px 1fr auto;
+  grid-template-columns: 4px 30px minmax(0, 1fr) auto;
 }
 
 .x-row.room .cls {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-soft);
 }
@@ -2056,7 +2089,7 @@ dl.x-pairs dd {
 
 .strat-now small {
   grid-column: 1 / -1;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.2em;
   opacity: 0.8;
 }
@@ -2097,12 +2130,12 @@ dl.x-pairs dd {
 .nav-count {
   display: inline-grid;
   place-items: center;
-  min-width: 17px;
-  height: 17px;
+  min-width: 19px;
+  height: 19px;
   margin-left: 6px;
-  padding: 0 4px;
+  padding: 0 5px;
   font-family: var(--font);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
   color: #fff;
@@ -2131,7 +2164,7 @@ dl.x-pairs dd {
 }
 
 .menu-invite small {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--x-muted);
@@ -2142,4 +2175,137 @@ dl.x-pairs dd {
   font-size: 14px;
   background: rgba(255, 255, 255, 0.4);
   border: 1px dashed rgba(42, 35, 24, 0.45);
+}
+
+/* ---------------------------------------------------------- UX review 2 (2026-10-11) */
+
+/* Classes: a symbol before the short code (the full name on hover). */
+.cls {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cls > i,
+.x-recruit button > i {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+
+.cls-assault {
+  --icon: var(--i-assault);
+}
+
+.cls-grenadier {
+  --icon: var(--i-grenade);
+}
+
+.cls-sharpshooter {
+  --icon: var(--i-aim);
+}
+
+.cls-specialist {
+  --icon: var(--i-specialist);
+}
+
+.x-row.soldier {
+  grid-template-columns: 4px 40px 1fr auto auto;
+}
+
+/* Recruiting: the whole class name, two per row. */
+.x-recruit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.x-recruit button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  text-align: left;
+  background: var(--paper-grain), var(--paper-light);
+  border: 1px solid rgba(42, 35, 24, 0.45);
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+.x-recruit button:hover:not(:disabled) {
+  background: var(--paper-grain), #fff;
+}
+
+.x-recruit button:disabled {
+  opacity: 0.45;
+}
+
+/* A proposal's data under it, typed (the proposal itself is handwritten). */
+.proposal-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.proposal-detail {
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+
+/* The skirmish sheet's actions stay at its foot while the options scroll. */
+.menu-foot {
+  position: sticky;
+  bottom: -22px;
+  display: grid;
+  gap: 6px;
+  margin: 4px -32px -22px;
+  padding: 8px 32px 14px;
+  background: var(--paper-grain), #e2d0a0;
+  border-top: 1px dashed rgba(42, 35, 24, 0.35);
+}
+
+/* Interface size: the base's sheets zoom with --ui-scale (the lineup cards follow the 3D soldiers, so they don't). */
+.strat-top,
+.strat-left,
+.strat-right,
+.strat-ticker,
+.strat-nav,
+.strat-center-top,
+.strat-center-bottom,
+.strat-modal > .x-panel,
+.strat-proposal,
+.strat-fold,
+.menu-column,
+.radio {
+  zoom: var(--ui-scale, 1);
+}
+
+/* Over the 3D scene (the hangar's buttons) the typed red needs its slip of paper. */
+.strat-center-bottom .x-btn.danger {
+  background: var(--paper-grain), var(--paper);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+/* Adjacency (new base): the facility gains a bonus on this plot, and the active
+   bonuses in the effects list. Green like the lit walkways in 3D. */
+.x-row.build.bonus {
+  --row-accent: var(--good);
+  background: rgba(47, 107, 47, 0.07);
+}
+
+.x-row.build.bonus small.x-good {
+  font-weight: 700;
+}
+
+.x-effect.bonus {
+  color: var(--good);
+  font-weight: 700;
 }

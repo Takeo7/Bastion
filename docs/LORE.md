@@ -71,6 +71,10 @@ Otros términos:
 
 **El Bastión (Estación Atalaya).** Es un búnker de 1989 con electrónica de válvulas, relés mecánicos y cinta magnética, sin un solo chip. Para el Coro, el Bastión es **sordo** y por eso es invisible. En el hangar está **La Mula**, un transporte de hélice con mandos mecánicos.
 
+**En superficie.** El búnker de 1989 es el corazón. Alrededor, en un claro del pinar, la resistencia levanta barracones de chapa y madera unidos por pasarelas. Lo que se despeja son rocas, bosque y los barracones en ruinas de la vieja estación.
+- **Por qué no lo ven:** los satélites del Coro miran desde arriba, pero desde arriba Atalaya parece un aserradero abandonado: redes de camuflaje sobre los tejados, chapa vieja y musgo.
+- **Por qué no lo oyen:** nada emite. Las válvulas trabajan dentro de jaulas de Faraday hechas con tela de gallinero, los cables van enterrados, el generador está bajo tierra y de noche hay apagón total. El Coro solo oye lo que tiene chip, y aquí no hay ninguno.
+
 **El Consejo.** Es la mesa de las ocho regiones. Se comunica por correos a pie y por onda corta con libretas de un solo uso. Paga cada mes en créditos (vales de papel) y su morgue compra teselas. La consejera Halvorsen firma las cartas.
 
 **La doble llave.** Ninguna decisión importante la toma una sola cabeza, porque una sola cabeza se puede cantar. Cada comandante trae su célula (sus soldados, con sus colores) y gira su llave. Si un comandante falta, el otro lleva las dos llaves: el Consejo lo tolera, pero no lo aprueba.
@@ -286,7 +290,18 @@ Son conversaciones cortas por radio entre la gente del Bastión, en los momentos
 | Silencio · Bobina 214 | Cada uno de los dos finales |
 | El Gran Coral | Derrota por la Partitura |
 
-**En combate:** en las misiones de historia, Morse dice una frase por radio al aterrizar y otra al cumplir el objetivo. Salen en el registro del HUD.
+**En combate:** en las misiones de historia, Morse dice una frase por radio al aterrizar y otra al cumplir el objetivo.
+
+**Avisos de Morse** (`RADIO_TIPS`; `docs/UX-REVISION-2.md`, punto 30):
+- Una tarjeta de radio en combate, abajo a la izquierda, explica cada regla la primera vez que importa: misión oculta, primera casilla roja, primer contacto, primer panel de disparo, primer soldado flanqueado, primer herido, primer turno con el mando, primera bengala y primer ataque mental.
+- Cada aviso lleva la frase de Morse y debajo la regla en letra pequeña. Suena una vez por navegador, en cualquier campaña o escaramuza.
+- El panel es `RadioTips`, en `client/src/strategy/transmissions.ts`. Los disparadores son de UX/UI (`client/src/game/combatTips.ts`).
+
+**Relevo** (punto 37):
+- Quien abre una campaña ya empezada oye una escena de bienvenida (`recapLines`): el día, el nivel, la actividad enemiga, las hojas del Expediente, los soldados a su mando y lo más urgente según `nextSteps`.
+- A quien ya estaba le salta un aviso «RELEVO» con los nombres de los soldados que cambian de mando.
+
+**Fichas de enemigo** (`ENEMY_FILES` en `lore.ts`; punto 50): qué es cada enemigo, qué hace y cómo enfrentarse a él, para la ficha que abre el clic derecho en combate.
 
 **Avisos.** Siguen la revisión de experiencia (`docs/UX-REVISION.md`, punto 21):
 - Al volver a la base o tras un escaneo sale una sola ventana: la más importante (hoja del Expediente, misión de historia, Órgano…).

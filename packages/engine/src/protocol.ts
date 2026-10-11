@@ -64,8 +64,8 @@ const appearanceSchema = z.object({ primary: color, secondary: color, visor: col
 
 export const campaignCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chooseMission'), id }),
-  z.object({ type: z.literal('excavate'), slot: id }),
-  z.object({ type: z.literal('build'), slot: id, facility: facilityId }),
+  z.object({ type: z.literal('clear'), plot: id }),
+  z.object({ type: z.literal('build'), plot: id, facility: facilityId }),
   z.object({ type: z.literal('contact'), region: regionId }),
   z.object({ type: z.literal('answerEvent'), option: z.union([z.literal(0), z.literal(1)]) }),
   z.object({ type: z.literal('investigate'), id }),

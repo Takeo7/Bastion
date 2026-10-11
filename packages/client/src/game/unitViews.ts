@@ -46,6 +46,19 @@ interface UnitView {
   dead: boolean;
   /** The support drone is away on a mission. */
   droneAway: boolean;
+  /** Flag contents from the unit's state, and the hover line above them. */
+  body: string;
+  tag: string;
+}
+
+/**
+ * A line over an enemy's flag while the player aims a move or hovers it:
+ * `aim` the hit chance against it, `sight` it would be in sight from the
+ * hovered tile, `flank` in sight and flanked from there, `none` no line of fire.
+ */
+export interface EnemyTag {
+  kind: 'aim' | 'sight' | 'flank' | 'none';
+  text: string;
 }
 
 const ringGeometry = new THREE.RingGeometry(0.36, 0.44, 32).rotateX(-Math.PI / 2);
@@ -124,7 +137,7 @@ export class UnitViews {
     };
     this.group.add(rig.root);
 
-    const view: UnitView = { id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false };
+    const view: UnitView = { id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, body: '', tag: '' };
     this.views.set(u.id, view);
     flagEl.classList.toggle('named', u.id === this.selectedId);
     if (!u.alive) {
@@ -195,8 +208,24 @@ export class UnitViews {
     // Like XCOM 2, a soldier with a nickname goes by it in the field.
     const called = u.nickname ? `«${u.nickname}»` : u.name;
     const name = u.team === 'xcom' && u.template !== 'vip' ? `${TEMPLATES[u.template].short} · ${called}` : u.name;
-    const html = `<div class="uflag-name">${name}</div><div class="uflag-row">${coverIcon}<span class="hp">${pips}</span>${armor}${status}</div>`;
+    v.body = `<div class="uflag-name">${name}</div><div class="uflag-row">${coverIcon}<span class="hp">${pips}</span>${armor}${status}</div>`;
+    this.paintFlag(v);
+  }
+
+  private paintFlag(v: UnitView): void {
+    const html = v.tag + v.body;
     if (v.flagEl.innerHTML !== html) v.flagEl.innerHTML = html;
+  }
+
+  /** Hover lines over the enemies' flags (hit chances, sight and flanks); units left out lose theirs. */
+  setTags(tags: Map<string, EnemyTag>): void {
+    for (const v of this.views.values()) {
+      const t = tags.get(v.id);
+      const tag = t ? `<div class="uflag-tag ${t.kind}">${t.text}</div>` : '';
+      if (tag === v.tag) continue;
+      v.tag = tag;
+      this.paintFlag(v);
+    }
   }
 
   has(id: string): boolean {

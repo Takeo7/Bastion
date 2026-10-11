@@ -4,18 +4,25 @@
 //
 // Each browser remembers which scenes it has played, per campaign, and plays at
 // most one per "moment" (back at the base, or after a scan); the rest wait for
-// the next moment, and every unlocked scene stays in the archive.
+// the next moment, and every unlocked scene stays in the archive. RadioTips puts
+// the same panel in combat for Morse's first-time warnings.
 import {
   nextScene,
+  RADIO_TIPS,
+  RECAP,
+  recapLines,
   sceneLines,
   SCENES,
   SPEAKERS,
+  TIP_SCENE,
   unlockedScenes,
   type CampaignState,
   type Scene,
   type SceneId,
   type SceneLine,
+  type Slot,
   type SpeakerId,
+  type TipId,
 } from '@bastion/engine';
 import { storageKey } from '../net';
 import { append, clear, h } from '../ui/dom';
@@ -87,6 +94,7 @@ class RadioSound {
 /** Plays one scene at a time in a panel docked over the screen. */
 export class RadioPanel {
   readonly el = h('div.radio', { role: 'log', 'aria-live': 'polite' });
+  private scene: Scene | null = null;
   private lines: SceneLine[] = [];
   private index = 0;
   private shown = 0;
@@ -96,18 +104,21 @@ export class RadioPanel {
   private readonly sound = new RadioSound();
   private readonly textEl = h('p.radio-text');
   private onEnd: (() => void) | null = null;
+  private readonly onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && this.active) {
+      e.stopPropagation();
+      this.close();
+    }
+  };
 
-  constructor() {
+  /** `combat`: the warnings' card in battle, placed by `.radio.combat`; Esc is left to the battle's menu. */
+  constructor(variant?: 'combat') {
+    if (variant) this.el.classList.add(variant);
     this.el.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('.radio-close')) return;
       this.advance();
     });
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.active) {
-        e.stopPropagation();
-        this.close();
-      }
-    });
+    if (!variant) window.addEventListener('keydown', this.onKey);
   }
 
   get active(): boolean {
@@ -117,22 +128,33 @@ export class RadioPanel {
   /** `vars` fills the placeholders ({saludo}); `onEnd` runs when it finishes or is closed. */
   play(scene: Scene, lines: SceneLine[], vars: Record<string, string>, onEnd?: () => void): void {
     this.stop();
-    this.lines = lines.map((l) => ({ ...l, text: l.text.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m) }));
+    const fill = (text: string) => text.replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
+    this.lines = lines.map((l) => ({ ...l, text: fill(l.text) }));
+    this.scene = scene;
     this.index = 0;
     this.onEnd = onEnd ?? null;
     this.el.dataset.scene = scene.id;
     this.el.classList.add('show');
     this.sound.static_();
-    this.showLine(scene);
+    this.showLine();
   }
 
   close(): void {
     this.stop();
     this.lines = [];
+    this.scene = null;
     this.el.classList.remove('show');
     const end = this.onEnd;
     this.onEnd = null;
     end?.();
+  }
+
+  /** Stops it for good and takes it off the page. */
+  dispose(): void {
+    this.onEnd = null;
+    this.close();
+    window.removeEventListener('keydown', this.onKey);
+    this.el.remove();
   }
 
   private stop(): void {
@@ -140,9 +162,11 @@ export class RadioPanel {
     window.clearTimeout(this.wait);
   }
 
-  private showLine(scene: Scene): void {
+  private showLine(): void {
+    const scene = this.scene!;
     const line = this.lines[this.index]!;
     const speaker = SPEAKERS[line.who];
+    const many = this.lines.length > 1;
     this.text = line.text;
     this.shown = 0;
     clear(this.el);
@@ -162,40 +186,118 @@ export class RadioPanel {
         ),
         h('div.radio-who', {}, h('b', {}, speaker.name), h('small', {}, speaker.role)),
         this.textEl,
-        h('div.radio-foot', {}, h('small', {}, `${scene.title} · ${this.index + 1}/${this.lines.length}`), h('span.radio-next', {}, this.index + 1 < this.lines.length ? 'Seguir ▸' : 'Fin ▸')),
+        line.rule ? h('p.radio-rule', {}, line.rule) : null,
+        h(
+          'div.radio-foot',
+          {},
+          h('small', {}, many ? `${scene.title} · ${this.index + 1}/${this.lines.length}` : scene.title),
+          h('span.radio-next', {}, this.index + 1 < this.lines.length ? 'Seguir ▸' : many ? 'Fin ▸' : 'Entendido ▸'),
+        ),
       ),
     );
     if (this.index > 0) this.sound.static_();
-    this.timer = window.setInterval(() => this.type(scene), 26);
+    this.timer = window.setInterval(() => this.type(), 26);
   }
 
-  private type(scene: Scene): void {
+  private type(): void {
     this.shown++;
     this.textEl.textContent = this.text.slice(0, this.shown);
     if (this.shown % 3 === 0 && this.text[this.shown - 1] !== ' ') this.sound.key();
-    if (this.shown >= this.text.length) this.typed(scene);
+    if (this.shown >= this.text.length) this.typed();
   }
 
-  /** The whole line is on paper: it moves on by itself after a reading pause. */
-  private typed(scene: Scene): void {
+  /** The whole line is on paper: it moves on by itself after a reading pause (longer with a rule to read). */
+  private typed(): void {
     window.clearInterval(this.timer);
     this.textEl.textContent = this.text;
     this.shown = this.text.length;
-    this.wait = window.setTimeout(() => this.next(scene), 1600 + this.text.length * 38);
+    const rule = this.lines[this.index]?.rule?.length ?? 0;
+    this.wait = window.setTimeout(() => this.next(), 1600 + (this.text.length + rule) * 38);
   }
 
   /** A click finishes the line being typed, or goes to the next one. */
   private advance(): void {
     if (!this.active) return;
-    const scene = SCENES.find((s) => s.id === this.el.dataset.scene)!;
-    if (this.shown < this.text.length) this.typed(scene);
-    else this.next(scene);
+    if (this.shown < this.text.length) this.typed();
+    else this.next();
   }
 
-  private next(scene: Scene): void {
+  private next(): void {
     this.stop();
     if (++this.index >= this.lines.length) this.close();
-    else this.showLine(scene);
+    else this.showLine();
+  }
+}
+
+// --------------------------------------------------------------- warnings
+
+/**
+ * Morse's first-time warnings in combat (RADIO_TIPS), one at a time on a card
+ * of its own. Each plays once per browser, whatever the campaign: the rules
+ * don't change. The game decides when each one matters and calls `show`.
+ */
+export class RadioTips {
+  private readonly panel = new RadioPanel('combat');
+  private readonly key = storageKey('tips');
+  private readonly heard: Set<TipId>;
+  private readonly queue: { tip?: TipId; line: SceneLine }[] = [];
+  private heldUntil = 0;
+  private holdTimer = 0;
+  private gone = false;
+
+  constructor(container: HTMLElement) {
+    container.append(this.panel.el);
+    let stored: TipId[] = [];
+    try {
+      stored = JSON.parse(localStorage.getItem(this.key) ?? '[]') as TipId[];
+    } catch {
+      /* storage unavailable: every warning plays */
+    }
+    this.heard = new Set(stored);
+  }
+
+  /** Queues the warning unless this browser has heard it; false if it won't play. */
+  show(id: TipId): boolean {
+    if (this.gone || this.heard.has(id) || this.queue.some((q) => q.tip === id)) return false;
+    const tip = RADIO_TIPS[id];
+    this.queue.push({ tip: id, line: { who: tip.who, text: tip.line, rule: tip.rule } });
+    this.pump();
+    return true;
+  }
+
+  /** A one-off line from Morse (the story chapters), queued like the warnings and never remembered. */
+  say(text: string): void {
+    if (this.gone) return;
+    this.queue.push({ line: { who: 'morse', text } });
+    this.pump();
+  }
+
+  /** Nothing plays until `ms` from now (the mission's arrival briefing); the queue waits. */
+  holdFor(ms: number): void {
+    this.heldUntil = Math.max(this.heldUntil, Date.now() + ms);
+    window.clearTimeout(this.holdTimer);
+    this.holdTimer = window.setTimeout(() => this.pump(), this.heldUntil - Date.now());
+  }
+
+  destroy(): void {
+    this.gone = true;
+    this.queue.length = 0;
+    window.clearTimeout(this.holdTimer);
+    this.panel.dispose();
+  }
+
+  private pump(): void {
+    if (this.gone || this.panel.active || !this.queue.length || Date.now() < this.heldUntil) return;
+    const next = this.queue.shift()!;
+    if (next.tip) {
+      this.heard.add(next.tip);
+      try {
+        localStorage.setItem(this.key, JSON.stringify([...this.heard]));
+      } catch {
+        /* private mode: the warnings may play again after a reload */
+      }
+    }
+    this.panel.play(TIP_SCENE, [next.line], {}, () => this.pump());
   }
 }
 
@@ -208,9 +310,14 @@ export class Transmissions {
   private seen = new Set<SceneId>();
   private lastDay: number | null = null;
   private moment = false;
+  /** This browser opens a campaign already under way: it gets the recap first. */
+  private recap = false;
 
-  /** `vars()`: values for the placeholders, such as the commanders' names. */
-  constructor(private readonly vars: () => Record<string, string>) {}
+  /** `vars()`: values for the placeholders, such as the commanders' names; `slot`: this player's seat. */
+  constructor(
+    private readonly vars: () => Record<string, string>,
+    private readonly slot: Slot,
+  ) {}
 
   get element(): HTMLElement {
     return this.panel.el;
@@ -227,6 +334,12 @@ export class Transmissions {
       this.moment = true;
     }
     if (hold || this.panel.active) return;
+    if (this.recap) {
+      this.recap = false;
+      this.moment = false;
+      this.panel.play(RECAP, recapLines(c, this.slot), this.vars());
+      return;
+    }
     const scene = nextScene(c, this.seen, this.moment);
     this.moment = false;
     if (scene) this.start(c, scene);
@@ -249,7 +362,11 @@ export class Transmissions {
     this.panel.play(scene, sceneLines(scene, c), this.vars(), onEnd);
   }
 
-  /** Per campaign: the first time this browser sees one, what already happened counts as heard (bar the welcome in its first days). */
+  /**
+   * Per campaign. The first time this browser sees one, what already happened
+   * counts as heard; in its first days the welcome still plays, later a recap
+   * of where things stand plays instead.
+   */
   private load(c: CampaignState): void {
     const key = storageKey(`scenes.${c.uid ?? c.soldiers.slice(0, 2).map((s) => s.name).join('|')}`);
     if (key === this.key) return;
@@ -261,7 +378,9 @@ export class Transmissions {
     } catch {
       /* storage unavailable: start afresh */
     }
-    this.seen = new Set(stored ?? unlockedScenes(c).map((s) => s.id).filter((id) => id !== 'welcome' || c.day > 5));
+    const underWay = c.day > 5;
+    this.seen = new Set(stored ?? unlockedScenes(c).map((s) => s.id).filter((id) => id !== 'welcome' || underWay));
+    this.recap = !stored && underWay;
     if (!stored) this.save();
   }
 

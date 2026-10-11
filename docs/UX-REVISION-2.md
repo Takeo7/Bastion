@@ -1,6 +1,6 @@
 # Revisión de UX 2: combate, cooperativo y el bucle entero
 
-**Estado (2026-10-06):** aplicados 22–29, 31 y 34 (sesión UX/UI, con el visto bueno de Gameplay), probados en el juego con dos jugadores. El resto sigue pendiente. Sigue a [UX-REVISION.md](UX-REVISION.md), que revisó los menús y la base y ya está aplicada. La numeración sigue desde el 22.
+**Estado (2026-10-06):** aplicados 22–29, 31 y 34 (sesión UX/UI, con el visto bueno de Gameplay), probados en el juego con dos jugadores. **2026-10-11:** Gameplay aplicó 32 (plano de apertura), 33 (flechas al borde, tecla O, objetivo entero al pasar el ratón), 50 (porcentaje al pasar por un enemigo y expediente con clic derecho, textos de Lore) y 51 (enemigos a la vista y flanqueados desde el destino); Lore y UX/UI, el 30 (avisos de Morse); UX/UI, el 40; Arte, 38, 41–46, 48 y 49; Lore, la bienvenida del 37. Pendientes: 35, 36, 39 y llevar a la base a quien entra (37). Sigue a [UX-REVISION.md](UX-REVISION.md), que revisó los menús y la base y ya está aplicada. La numeración sigue desde el 22.
 
 Cómo quedó lo aplicado:
 

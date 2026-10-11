@@ -24,7 +24,18 @@ import {
   epilogue,
   eventDef,
   eventOptionAvailable,
-  excavationCost,
+  ADJACENCY,
+  clearCost,
+  clearable,
+  neighbours,
+  adjacencyAt,
+  adjacencyBonuses,
+  buildingName,
+  plotById,
+  plotRing,
+  TERRAINS,
+  type BasePlot,
+  type FacilityId,
   EXPEDIENTE,
   FACILITIES,
   facilityCount,
@@ -60,7 +71,7 @@ import {
   REGIONS,
   Rng,
   shopPrice,
-  slotName,
+  plotName,
   soldierReady,
   soldierWeaponName,
   squadLimit,
@@ -118,6 +129,8 @@ interface Alert {
   action?: { label: string; go: () => void };
   /** Higher first: a moment pops up only its most important alert. */
   rank?: number;
+  /** Where it happens: the globe turns there when it pops up (rumours). */
+  region?: RegionId;
 }
 
 /** The Novedades tray keeps this many alerts at most. */
@@ -160,6 +173,24 @@ const VIEW_NAMES: Record<BaseView, string> = {
   debrief: 'Informe',
 };
 
+/** "la parcela C2" → "La parcela C2". */
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** The bunker's own buildings: shown in 3D, not in the list of plots. */
+const FIXED_NAMES_SET: Record<string, true> = { command: true, barracks: true, research: true, engineering: true };
+
+/** Whether `facility` stands wall to wall with its partner building. */
+function hasBonus(c: CampaignState, facility: FacilityId): boolean {
+  return adjacencyBonuses(c).some((b) => b.def.facility === facility);
+}
+
+/** "C2": the plot's column letter and row number, as on a map. */
+function plotCode(p: BasePlot): string {
+  return `${'ABCDEFG'[p.x] ?? '?'}${p.y + 1}`;
+}
+
 function loadSeenReport(): string {
   try {
     return localStorage.getItem(REPORT_KEY) ?? '';
@@ -195,7 +226,8 @@ export class StrategyScreen {
   /** Everything else that happened, in the Novedades tray, newest first. */
   private news: Alert[] = [];
   private newsOpen = false;
-  private readonly radio = new Transmissions(() => ({ saludo: greeting(this.commanderNames()) }));
+  /** The story's radio scenes (strategy/transmissions.ts); made in the constructor, which knows this player's seat. */
+  private readonly radio: Transmissions;
   private toastTimer = 0;
   private anchorFrame = 0;
   private scroll = new Map<string, number>();
@@ -208,14 +240,18 @@ export class StrategyScreen {
   private soldier: string | null = null;
   /** The barracks customizer's draft; saved only when the player confirms. */
   private custom: { soldier: string; name: string; nickname: string; appearance: Appearance } | null = null;
-  private slot: string | null = null;
+  /** The plot picked in the facilities view ("x,y"). */
+  private plot: string | null = null;
   private promoting = false;
   /** Open equipment picker ("soldierId:slot"). */
   private picking: string | null = null;
+  /** The alert on screen last time, so turning the globe to it happens once. */
+  private shownAlert: Alert | null = null;
   /** "Volver al menú" asked: it takes both players, so it is confirmed first. */
   private leaving = false;
 
   constructor(container: HTMLElement, private readonly mySlot: Slot, private readonly handlers: StrategyHandlers) {
+    this.radio = new Transmissions(() => ({ saludo: greeting(this.commanderNames()), yo: greeting([this.playerName(mySlot)]) }), mySlot);
     this.bastion = new BastionSet((hot) => this.pickRoom(hot));
     this.geo = new GeoscapeSet((region) => {
       this.region = region;
@@ -236,6 +272,13 @@ export class StrategyScreen {
   update(c: CampaignState): void {
     const prev = this.state;
     this.state = c;
+    const proposed = c.proposal?.by !== this.mySlot && c.proposal?.action.type === 'chooseMission' && prev?.proposal?.text !== c.proposal.text ? c.proposal.action.id : null;
+    if (proposed && this.view !== 'squad' && this.view !== 'debrief') {
+      this.offer = proposed;
+      this.region = c.offers.find((o) => o.id === proposed)?.region ?? null;
+      if (this.region) this.geo.focus(this.region);
+      if (this.view !== 'geoscape') void this.go('geoscape');
+    }
     this.bastion.setBase(c);
     this.geo.flyTo(this.offerById(c.activeMission)?.region ?? HOME_REGION);
     if (prev) this.collectAlerts(prev, c);
@@ -308,7 +351,7 @@ export class StrategyScreen {
       case 'debrief':
         return this.bastion.hangar();
       case 'facilities':
-        return this.slot ? this.bastion.room(this.slot) : this.bastion.facilities();
+        return this.plot ? this.bastion.room(this.plot) : this.bastion.facilities();
       default:
         return this.bastion.overview();
     }
@@ -316,8 +359,8 @@ export class StrategyScreen {
 
   /** Clicking a room of the Bastion opens its screen. */
   private pickRoom(hot: string): void {
-    if (hot.startsWith('slot:')) {
-      this.slot = hot.slice(5);
+    if (hot.startsWith('plot:')) {
+      this.plot = hot.slice(5);
       if (this.view === 'facilities') {
         this.render();
         void this.stage.show('bastion', this.shotFor('facilities'));
@@ -409,6 +452,19 @@ export class StrategyScreen {
   /** A stat with its symbol, in the same colour as in combat (health green, aim ink…). */
   private stat(kind: string, value: string, title: string): HTMLElement {
     return h(`span.stat.${kind}`, { title }, h('span.stat-icon'), h('b', {}, value));
+  }
+
+  /** "Tienes 2 (1 libre)", or nothing when there are none. */
+  private stockText(c: CampaignState, item: ItemId): string {
+    const have = c.inventory[item] ?? 0;
+    const free = itemsFree(c, item);
+    if (!have) return '';
+    return free === have ? `Tienes ${have}` : `Tienes ${have} (${free} ${free === 1 ? 'libre' : 'libres'})`;
+  }
+
+  /** A soldier's class: its symbol and short code, the full name on hover. */
+  private clsTag(cls: ClassId): HTMLElement {
+    return h(`span.cls.cls-${cls}`, { title: TEMPLATES[cls].name }, h('i'), TEMPLATES[cls].short);
   }
 
   /** Tier diamonds, coloured like the guns: steel, magnetic, plasma. */
@@ -507,17 +563,18 @@ export class StrategyScreen {
       });
     }
     const work = prev.base.construction;
-    if (work && c.base.construction?.slot !== work.slot) {
+    if (work && c.base.construction?.plot !== work.plot) {
+      const plot = plotById(c, work.plot)!;
       fresh.push({
         tone: 'good',
         kicker: 'OBRAS TERMINADAS',
         rank: 20,
-        title: work.kind === 'excavate' ? 'Sala excavada' : FACILITIES[work.facility!].name,
-        text: work.kind === 'excavate' ? `${slotName(c.base.slots.find((s) => s.id === work.slot)!)} está lista para construir.` : FACILITIES[work.facility!].description,
+        title: work.kind === 'clear' ? 'Terreno despejado' : FACILITIES[work.facility!].name,
+        text: work.kind === 'clear' ? `${capitalize(plotName(plot))} está lista para construir.` : FACILITIES[work.facility!].description,
         action: {
           label: 'Ver instalaciones',
           go: () => {
-            this.slot = work.slot;
+            this.plot = work.plot;
             void this.go('facilities');
           },
         },
@@ -566,9 +623,10 @@ export class StrategyScreen {
       title: alert.title,
       text,
       rank: alert.kicker.startsWith('ENCARGO CUMPLIDO') || alert.kicker.startsWith('ENCARGO CERRADO') ? 70 : alert.kicker.startsWith('ENCARGO') ? 60 : 30,
+      region: rumor?.region,
       action: rumor
         ? {
-            label: `${this.decide('escuchar')} · ${rumor.daysLeft} d`,
+            label: `${this.decide('escuchar')} · ${rumor.daysLeft} días`,
             go: () => {
               const now = this.state;
               if (now?.rumors.some((r) => r.id === rumor.id) && now.listening !== rumor.id) this.send({ type: 'investigate', id: rumor.id });
@@ -636,8 +694,8 @@ export class StrategyScreen {
     const room = this.partnerView ? ROOM_OF[this.partnerView] : undefined;
     const partner = this.partner();
     this.bastion.setPartner(partner?.connected && room ? room : null, partner?.color ?? '#fff', partner?.name ?? '');
-    this.bastion.select(this.view === 'facilities' ? this.slot : null);
-    this.bastion.setLabels(this.view === 'hub' || (this.view === 'facilities' && !this.slot));
+    this.bastion.select(this.view === 'facilities' ? this.plot : null);
+    this.bastion.setLabels(this.view === 'hub' || (this.view === 'facilities' && !this.plot));
     switch (this.view) {
       case 'hub':
         this.renderHub(c);
@@ -715,21 +773,60 @@ export class StrategyScreen {
     );
   }
 
+  /** What a proposal costs, takes and does, and where to see it: whoever decides should know as much as whoever proposed. */
+  private proposalDetail(c: CampaignState, action: NonNullable<CampaignState['proposal']>['action']): { line: string; see: (() => void) | null } {
+    switch (action.type) {
+      case 'chooseMission': {
+        const o = this.offerById(action.id);
+        if (!o) return { line: '', see: null };
+        const reward = o.reward.credits ? ` · ${o.reward.credits} ₡` : '';
+        return { line: `${MISSION_NAMES[o.kind]} · ${REGIONS[o.region].name} · ${'★'.repeat(o.difficulty)}${reward}`, see: () => this.focusOffer(o.id) };
+      }
+      case 'clear': {
+        const plot = plotById(c, action.plot);
+        if (!plot) return { line: '', see: null };
+        const { cost, days, salvage } = clearCost(plot);
+        return { line: `${costText(cost)} · ${days} días${salvage ? ` · +${salvage} ₡ de chatarra` : ''}`, see: () => ((this.plot = plot.id), void this.go('facilities')) };
+      }
+      case 'build': {
+        const def = FACILITIES[action.facility];
+        const plot = plotById(c, action.plot);
+        const bonus = plot ? adjacencyAt(c, plot, def.id) : null;
+        const extra = bonus ? ` · Junto a ${buildingName(bonus.next)}: ${bonus.text.split('.')[0]}` : '';
+        return { line: `${costText(def.cost)} · ${def.days} días · ${def.description}${extra}`, see: () => ((this.plot = action.plot), void this.go('facilities')) };
+      }
+      case 'contact':
+        return { line: `${costText(contactCost(c))} · +${regionIncome(c, action.region)} ₡ al mes`, see: () => this.focusRegion(action.region) };
+      case 'investigate': {
+        const rumor = c.rumors.find((r) => r.id === action.id);
+        return rumor ? { line: `Escuchar ${rumor.daysLeft} días · ${REGIONS[rumor.region].name}`, see: () => this.focusRegion(rumor.region) } : { line: '', see: null };
+      }
+      case 'event': {
+        const def = eventDef(c);
+        return { line: def ? def.options[action.option].effect : '', see: null };
+      }
+    }
+  }
+
   private renderProposal(c: CampaignState): void {
     clear(this.proposalEl);
     const p = c.proposal;
     this.proposalEl.classList.toggle('show', !!p);
     if (!p) return;
+    const { line, see } = this.proposalDetail(c, p.action);
+    const detail = line ? h('small.proposal-detail', {}, line) : null;
+    const seeBtn = see ? h('button.x-btn.small', { onclick: see }, 'Ver') : null;
     if (p.by === this.mySlot) {
       append(
         this.proposalEl,
-        h('span', {}, `Has propuesto ${p.text}. Esperando a ${this.partner()?.name ?? 'tu compañero'}…`),
+        h('div.proposal-text', {}, h('span', {}, `Has propuesto ${p.text}. Esperando a ${this.partner()?.name ?? 'tu compañero'}…`), detail),
         h('button.x-btn', { onclick: () => this.send({ type: 'withdraw' }) }, 'Retirar'),
       );
     } else {
       append(
         this.proposalEl,
-        h('span', {}, h('b', { style: { color: this.playerColor(p.by) } }, this.playerName(p.by)), ` propone ${p.text}.`),
+        h('div.proposal-text', {}, h('span', {}, h('b', { style: { color: this.playerColor(p.by) } }, this.playerName(p.by)), ` propone ${p.text}.`), detail),
+        seeBtn,
         h('button.x-btn.primary', { onclick: () => this.send({ type: 'vote', accept: true }) }, 'Aceptar'),
         h('button.x-btn.danger', { onclick: () => this.send({ type: 'vote', accept: false }) }, 'Rechazar'),
       );
@@ -746,6 +843,8 @@ export class StrategyScreen {
     const pending = new Map<BaseView, { n: number; urgent: boolean; what: string[] }>();
     for (const step of nextSteps(c, this.mySlot)) {
       if (step.view === 'hub') continue;
+      // The geoscape's number counts operations (and what is urgent), not regions to contact or rumours.
+      if (step.view === 'geoscape' && !step.go?.offer && step.tone !== 'urgent') continue;
       const e = pending.get(step.view) ?? { n: 0, urgent: false, what: [] };
       e.n += step.count ?? 1;
       e.urgent ||= step.tone === 'urgent';
@@ -780,7 +879,7 @@ export class StrategyScreen {
       void this.go('barracks');
       return;
     }
-    if (go.slot) this.slot = go.slot;
+    if (go.plot) this.plot = go.plot;
     if (step.view !== this.view) void this.go(step.view);
   }
 
@@ -826,9 +925,9 @@ export class StrategyScreen {
       rows.push(
         h(
           'button.x-row.agenda',
-          { onclick: () => ((this.slot = work.slot), void this.go('facilities')), title: 'Obras en marcha' },
+          { onclick: () => ((this.plot = work.plot), void this.go('facilities')), title: 'Obras en marcha' },
           h('span.agenda-icon.pick'),
-          h('b', {}, work.kind === 'excavate' ? 'Excavación' : FACILITIES[work.facility!].name),
+          h('b', {}, work.kind === 'clear' ? 'Desbroce' : FACILITIES[work.facility!].name),
           this.chip(`${work.daysLeft} d`),
         ),
       );
@@ -1021,14 +1120,15 @@ export class StrategyScreen {
               h('b', {}, REGIONS[r.region].name),
               h('small', {}, `Se habla de ${r.text}.`),
               listening
-                ? h('small.x-good', {}, `Escuchando · ${r.daysLeft} d`)
+                ? h('small.x-good', {}, `Escuchando · faltan ${r.daysLeft} días`)
                 : h(
                     'button.x-btn.small',
                     { disabled: !!blocked, title: blocked || `Hacen falta ${r.daysLeft} días de escaneo`, onclick: () => this.send({ type: 'investigate', id: r.id }) },
-                    this.decide('escuchar'),
+                    `${this.decide('escuchar')} · ${r.daysLeft} días`,
                   ),
             ),
-            h('span.x-side', {}, listening ? '' : `${Math.max(0, r.expiresDay - c.day)} d`),
+            // The clock is always "caduca en", as for the operations.
+            h('span.x-side.days', { title: `Caduca en ${Math.max(0, r.expiresDay - c.day)} días` }, listening ? '' : `${Math.max(0, r.expiresDay - c.day)} d`),
           );
         }),
       ),
@@ -1277,7 +1377,7 @@ export class StrategyScreen {
                 unlocked ? this.chip(costText(shopPrice(c, item.id))) : this.chip(`Nv ${item.level}`, '', `Se desbloquea con el nivel ${item.level} del Bastión`),
               ),
             ),
-            h('span.x-side', { title: 'Libres / en el almacén' }, `${itemsFree(c, item.id)}/${c.inventory[item.id] ?? 0}`),
+            h('span.x-side', { title: 'Se equipan en el Cuartel' }, this.stockText(c, item.id)),
           ),
         );
       }
@@ -1303,7 +1403,7 @@ export class StrategyScreen {
         h(
           'p.x-chips',
           {},
-          this.chip(`${itemsFree(c, item.id)}/${c.inventory[item.id] ?? 0} libres`, '', 'Se equipa en el Cuartel; si el soldado cae, se pierde'),
+          this.chip(this.stockText(c, item.id) || 'No tienes ninguno', '', 'Se equipa en el Cuartel; si el soldado cae, se pierde'),
           unlocked ? this.chip(costText(cost), '', 'No necesita votación') : this.chip(`Nivel ${item.level} del Bastión`, 'warn'),
         ),
         unlocked ? h('button.x-btn.primary', { disabled: !canAfford(c, cost), onclick: () => this.send({ type: 'buy', item: item.id }) }, 'Comprar') : null,
@@ -1364,7 +1464,7 @@ export class StrategyScreen {
             this.render();
           },
         },
-        h('span.cls', { title: TEMPLATES[s.cls].name }, TEMPLATES[s.cls].short),
+        this.clsTag(s.cls),
         h('b', { title: RANKS[s.rank]!.name }, displayName(s.name, s.nickname)),
         h('span.rank', { title: RANKS[s.rank]!.name }, ...Array.from({ length: s.rank }, () => h('i'))),
         s.pendingTiers.length && s.alive
@@ -1379,9 +1479,9 @@ export class StrategyScreen {
       {},
       h('div.x-group', { title: `Cada recluta cuesta ${RECRUIT_COST} créditos; como mucho ${cap} soldados por jugador` }, 'Reclutar ', this.chip(costText(RECRUIT_COST)), ' ', this.chip(`${count}/${cap}`)),
       h(
-        'div.x-tabs',
+        'div.x-recruit',
         {},
-        ...CLASSES.map((cls) => h('button', { disabled: !!blockedRecruit, onclick: () => this.send({ type: 'recruit', cls }) }, TEMPLATES[cls].short)),
+        ...CLASSES.map((cls) => h(`button.cls-${cls}`, { disabled: !!blockedRecruit, onclick: () => this.send({ type: 'recruit', cls }) }, h('i'), TEMPLATES[cls].name)),
       ),
       this.whyEl(blockedRecruit),
     );
@@ -1618,41 +1718,48 @@ export class StrategyScreen {
 
   private renderFacilities(c: CampaignState): void {
     const lines: [string, string][] = [];
-    if (facilityCount(c, 'simulation')) lines.push(['xp', 'XP de misión +25 %']);
-    if (facilityCount(c, 'workshop')) lines.push(['flag', 'Accesorios −25 %']);
-    if (facilityCount(c, 'infirmary')) lines.push(['hp', 'Heridas ×2 de rápido']);
+    if (facilityCount(c, 'simulation')) lines.push(['xp', `XP de misión +${hasBonus(c, 'simulation') ? 40 : 25} %`]);
+    if (facilityCount(c, 'workshop')) lines.push(['flag', `Accesorios −${hasBonus(c, 'workshop') ? 40 : 25} %`]);
+    if (facilityCount(c, 'infirmary')) lines.push(['hp', `Heridas ×${hasBonus(c, 'infirmary') ? 3 : 2} de rápido`]);
     if (facilityCount(c, 'training')) lines.push(['flag', `Escuadra de ${squadMax(c)}`]);
     lines.push(['will', `Contactos: ${contactCapacity(c)} regiones`]);
+    const bonuses = adjacencyBonuses(c);
     const work = c.base.construction;
-    // Every room that can be acted on, with its state and its action: the same as clicking it in 3D.
+    // Every plot that can be acted on, with its state and its action: the same as clicking it in 3D.
     const pick = (id: string) => {
-      this.slot = id;
+      this.plot = id;
       this.render();
       void this.stage.show('bastion', this.shotFor('facilities'));
     };
-    const rooms = c.base.slots
-      .filter((sl) => sl.excavated || sl.row === 0 || c.base.slots.some((up) => up.col === sl.col && up.row === sl.row - 1 && up.excavated))
-      .sort((a, b) => a.row - b.row || a.col - b.col)
-      .map((sl) => {
-        const busy = work?.slot === sl.id;
+    const rank = (p: BasePlot) => (work?.plot === p.id ? 0 : p.building ? 1 : p.terrain === 'clear' ? 2 : 3);
+    const plots = c.base.plots
+      .filter((p) => work?.plot === p.id || (p.building && !(p.building in FIXED_NAMES_SET)) || (p.terrain === 'clear' && !p.building) || !clearable(c, p))
+      .sort((a, b) => rank(a) - rank(b) || plotRing(a) - plotRing(b) || a.y - b.y || a.x - b.x)
+      .map((p) => {
+        const busy = work?.plot === p.id;
         const state = busy
-          ? `${work!.kind === 'excavate' ? 'Excavando' : FACILITIES[work!.facility!].name}`
-          : !sl.excavated
-            ? 'Roca'
-            : sl.facility
-              ? FACILITIES[sl.facility].name
-              : 'Vacía';
+          ? work!.kind === 'clear'
+            ? `Despejando · ${TERRAINS[p.terrain as keyof typeof TERRAINS]?.name ?? ''}`
+            : FACILITIES[work!.facility!].name
+          : p.building
+            ? buildingName(p.building)
+            : p.terrain === 'clear'
+              ? 'Libre'
+              : TERRAINS[p.terrain].name;
+        const cost = p.terrain === 'clear' ? null : clearCost(p);
         const tag = busy
           ? this.chip(`${work!.daysLeft} d`)
-          : !sl.excavated
-            ? this.chip(`Excavar · ${costText(excavationCost(sl.row).cost)}`, '', `${excavationCost(sl.row).days} días`)
-            : sl.facility
-              ? h('span.x-side', {}, '✓')
-              : this.chip('Construir', 'good');
+          : p.building
+            ? h('span.x-side', {}, bonuses.some((b) => b.plot === p.id) ? '✓ +' : '✓')
+            : cost
+              ? this.chip(`Despejar · ${cost.cost} ₡`, '', `${costText(cost.cost)} · ${cost.days} días${cost.salvage ? ` · +${cost.salvage} ₡ de chatarra` : ''}`)
+              : neighbours(c, p).some((q) => q.building)
+                ? this.chip('Construir', 'good')
+                : this.chip('Sin acceso', '', 'Para construir aquí, levanta antes un edificio a su lado');
         return h(
-          `button.x-row.room${this.slot === sl.id ? '.selected' : ''}${sl.excavated || busy ? '' : '.dim'}`,
-          { onclick: () => pick(sl.id) },
-          h('span.cls', {}, `${sl.row + 1}-${sl.col + 1}`),
+          `button.x-row.room${this.plot === p.id ? '.selected' : ''}${p.terrain === 'clear' || busy ? '' : '.dim'}`,
+          { onclick: () => pick(p.id) },
+          h('span.cls', {}, plotCode(p)),
           h('b', {}, state),
           tag,
         );
@@ -1661,58 +1768,86 @@ export class StrategyScreen {
       this.panel(
         'fac-left',
         'left',
-        h('div.x-head', { title: 'Pulsa una sala aquí o en el Bastión para excavarla o construir en ella. Las obras se hacen de una en una.' }, 'Salas'),
-        h('div.x-list', {}, ...rooms),
+        h(
+          'div.x-head',
+          { title: 'Pulsa una parcela aquí o en el Bastión. Se construye pegado a otro edificio y se despeja junto a terreno ya despejado. Las obras van de una en una.' },
+          'Parcelas',
+        ),
+        h('div.x-list', {}, ...plots),
         h('div.x-head', {}, 'Efectos'),
         ...lines.map(([icon, text]) => h('div.x-effect', {}, h(`span.agenda-icon.${icon}`), h('span', {}, text))),
+        ...bonuses.map((b) =>
+          h('div.x-effect.bonus', { title: b.def.text }, h('span.agenda-icon.flag'), h('span', {}, `${FACILITIES[b.def.facility].name} + ${buildingName(b.def.next)}`)),
+        ),
       ),
     );
-    const slot = c.base.slots.find((s) => s.id === this.slot);
-    if (!slot) return;
-    const busy = work?.slot === slot.id;
-    const content: (HTMLElement | null)[] = [h('div.alert-kicker', {}, `SALA ${slot.row + 1}-${slot.col + 1}`)];
+    const plot = this.plot ? plotById(c, this.plot) : undefined;
+    if (!plot) return;
+    const busy = work?.plot === plot.id;
+    const content: (HTMLElement | null)[] = [h('div.alert-kicker', {}, `PARCELA ${plotCode(plot)}`)];
     if (busy && work) {
-      content.push(h('h2.x-title', {}, work.kind === 'excavate' ? 'Excavando' : FACILITIES[work.facility!].name), this.bar(work.total - work.daysLeft, work.total), h('p.x-muted', {}, `Faltan ${work.daysLeft} días`));
-    } else if (!slot.excavated) {
-      const { cost, days } = excavationCost(slot.row);
-      const above = c.base.slots.find((s) => s.col === slot.col && s.row === slot.row - 1);
+      content.push(
+        h('h2.x-title', {}, work.kind === 'clear' ? 'Despejando el terreno' : FACILITIES[work.facility!].name),
+        this.bar(work.total - work.daysLeft, work.total),
+        h('p.x-muted', {}, `Faltan ${work.daysLeft} días`),
+      );
+    } else if (plot.terrain !== 'clear') {
+      const terrain = TERRAINS[plot.terrain];
+      const { cost, days, salvage } = clearCost(plot);
       const blocked = this.why(
-        [!!above && !above.excavated, 'Primero hay que excavar la sala de encima'],
+        [!!clearable(c, plot), clearable(c, plot) ?? ''],
         [!!work, 'Ya hay una obra en marcha'],
         [!!c.proposal, 'Hay una propuesta pendiente'],
         [!canAfford(c, cost), this.shortfall(cost)],
       );
       content.push(
-        h('h2.x-title', {}, 'Roca'),
-        h('p.x-chips', {}, this.chip(costText(cost)), this.chip(`${days} días`)),
-        h('button.x-btn.primary', { disabled: !!blocked, onclick: () => this.send({ type: 'excavate', slot: slot.id }) }, this.decide('excavar')),
+        h('h2.x-title', {}, terrain.name),
+        h('p.x-text', {}, terrain.description),
+        h('p.x-chips', {}, this.chip(costText(cost)), this.chip(`${days} días`), salvage ? this.chip(`+${salvage} ₡`, 'good') : null),
+        h('button.x-btn.primary', { disabled: !!blocked, onclick: () => this.send({ type: 'clear', plot: plot.id }) }, this.decide('despejar')),
         this.whyEl(blocked),
       );
-    } else if (slot.facility) {
-      const def = FACILITIES[slot.facility];
-      content.push(h('h2.x-title', {}, def.name), h('p.x-good', {}, 'En servicio'), h('p.x-text', {}, def.description));
+    } else if (plot.building && plot.building in FIXED_NAMES_SET) {
+      content.push(h('h2.x-title', {}, buildingName(plot.building)), h('p.x-muted', {}, 'Del búnker original: no se mueve.'));
+    } else if (plot.building) {
+      const def = FACILITIES[plot.building as keyof typeof FACILITIES];
+      const adj = ADJACENCY.find((a) => a.facility === def.id);
+      const active = bonuses.find((b) => b.plot === plot.id);
+      content.push(
+        h('h2.x-title', {}, def.name),
+        h('p.x-good', {}, 'En servicio'),
+        h('p.x-text', {}, def.description),
+        adj ? h(active ? 'p.x-good' : 'p.x-muted', {}, `${active ? 'Pared con pared con' : 'Mejor junto a'} ${buildingName(adj.next)}: ${adj.text}`) : null,
+      );
     } else {
-      content.push(h('h2.x-title', {}, 'Sala vacía'), work ? h('p.x-why', {}, 'Hay otra obra en marcha') : null);
+      content.push(h('h2.x-title', {}, 'Terreno libre'), work ? h('p.x-why', {}, 'Hay otra obra en marcha') : null);
       for (const def of Object.values(FACILITIES)) {
-        const blocker = buildable(c, slot, def.id);
+        const blocker = buildable(c, plot, def.id);
+        const bonus = blocker ? null : adjacencyAt(c, plot, def.id);
         // The ongoing work is already explained above the list.
         const why = blocker ? '' : this.why([!!c.proposal, 'Hay una propuesta pendiente'], [!canAfford(c, def.cost), this.shortfall(def.cost)]);
+        // What can be built reads in full, its price on the button; what can't, in one line.
         content.push(
-          h(
-            `div.x-row.build${blocker ? '.dim' : ''}`,
-            { title: def.description },
-            h(
-              'div',
-              {},
-              h('b', {}, def.name),
-              h('small', {}, def.description),
-              blocker ? h('small.x-warn', {}, blocker) : h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.days} d`)),
-              why && !work ? h('small.x-why', {}, why) : null,
-            ),
-            blocker
-              ? null
-              : h('button.x-btn', { disabled: !!work || !!why, onclick: () => this.send({ type: 'build', slot: slot.id, facility: def.id }) }, this.decide('construir')),
-          ),
+          blocker
+            ? h('div.x-row.build.dim', { title: `${def.description} ${blocker}` }, h('div', {}, h('b', {}, def.name), h('small.x-warn', {}, blocker)))
+            : h(
+                `div.x-row.build${bonus ? '.bonus' : ''}`,
+                {},
+                h(
+                  'div',
+                  {},
+                  h('b', {}, def.name),
+                  h('small', {}, def.description),
+                  bonus ? h('small.x-good', { title: bonus.text }, `Junto a ${buildingName(bonus.next)}: ${bonus.text.split('.')[0]}`) : null,
+                  h('small', {}, `${def.days} días de obras`),
+                  why && !work ? h('small.x-why', {}, why) : null,
+                ),
+                h(
+                  'button.x-btn.small',
+                  { disabled: !!work || !!why, onclick: () => this.send({ type: 'build', plot: plot.id, facility: def.id }) },
+                  `${this.decide('construir')} · ${def.cost} ₡`,
+                ),
+              ),
         );
       }
     }
@@ -1763,7 +1898,7 @@ export class StrategyScreen {
             return h(
               `button.x-row.soldier${on ? '.selected' : ''}${ready ? '' : '.dim'}`,
               { disabled: !ready && !on, onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
-              h('span.cls', { title: TEMPLATES[s.cls].name }, TEMPLATES[s.cls].short),
+              this.clsTag(s.cls),
               h('b', { title: [RANKS[s.rank]!.name, ...gear].join(' · ') }, displayName(s.name, s.nickname)),
               h('span.rank', { title: RANKS[s.rank]!.name }, ...Array.from({ length: s.rank }, () => h('i'))),
               on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
@@ -1805,7 +1940,7 @@ export class StrategyScreen {
             { style: { '--accent': this.playerColor(s.owner) } },
             h('b', {}, displayName(s.name, s.nickname)),
             h('small', {}, `${TEMPLATES[s.cls].name} · ${RANKS[s.rank]!.name}`),
-            h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`),
+            c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
             s.owner === this.mySlot ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
           )
         : h('div.lineup-card.empty', { title: myCount < limit ? 'Elige un soldado a la izquierda' : '' }, h('b', {}, 'Libre'));
@@ -1835,6 +1970,18 @@ export class StrategyScreen {
 
   // ------------------------------------------------------------ debrief
 
+  /** What the wounds mean: who can't deploy, and until when. */
+  private woundedLine(c: CampaignState, squad: NonNullable<CampaignState['lastReport']>['squad']): HTMLElement | null {
+    const wounded = squad.filter((e) => e.status === 'wounded');
+    if (!wounded.length) return null;
+    const last = Math.max(...wounded.map((e) => e.woundedDays));
+    const text =
+      wounded.length === 1
+        ? `${displayName(wounded[0]!.name, c.soldiers.find((x) => x.id === wounded[0]!.id)?.nickname)} no podrá desplegar hasta el día ${c.day + last}.`
+        : `${wounded.length} heridos: no podrán desplegar hasta el día ${c.day + last} como mucho.`;
+    return h('p.x-text.x-warn', { title: 'La enfermería cura las heridas el doble de rápido' }, text);
+  }
+
   private renderDebrief(c: CampaignState): void {
     const report = c.lastReport;
     if (!report) {
@@ -1863,6 +2010,7 @@ export class StrategyScreen {
           report.doomChange ? h(`p.x-text.${report.doomChange > 0 ? 'x-bad' : 'x-good'}`, {}, doomChangeText(report.levelTo, report.doomChange)) : null,
           report.bodies ? h('p.x-text.x-good', {}, `La morgue del Consejo compra ${report.bodies} cuerpos · ${report.salvage} créditos`) : null,
           report.xp ? h('p.x-text', {}, `Experiencia del Bastión: +${report.xp}`) : null,
+          this.woundedLine(c, report.squad),
           report.levelTo > report.levelFrom
             ? h('p.x-text.x-good', {}, `¡El Bastión sube al nivel ${report.levelTo}! ${Array.from({ length: report.levelTo - report.levelFrom }, (_, i) => this.unlocksText(report.levelFrom + i + 1)).join(' ')}`)
             : null,
@@ -2010,6 +2158,12 @@ export class StrategyScreen {
       );
     } else if (this.alerts.length && this.view !== 'debrief') {
       const alert = this.alerts[0]!;
+      // Like XCOM 2: a rumour's pop-up takes you to the globe, turned to where it happens.
+      if (alert.region && this.shownAlert !== alert) {
+        const region = alert.region;
+        queueMicrotask(() => this.focusRegion(region));
+      }
+      this.shownAlert = alert;
       const close = () => {
         this.alerts.shift();
         this.render();

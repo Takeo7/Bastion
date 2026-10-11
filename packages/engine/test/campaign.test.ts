@@ -63,11 +63,11 @@ describe('shared decisions', () => {
 
   it('a rejected proposal changes nothing; alone, decisions apply directly', () => {
     const c = createCampaign(both, new Rng(1));
-    run(c, { type: 'excavate', slot: 'r1c0' }, 1);
+    run(c, { type: 'clear', plot: '3,5' }, 1);
     run(c, { type: 'vote', accept: false }, 0);
     expect(c.base.construction).toBeNull();
-    run(c, { type: 'excavate', slot: 'r1c0' }, 1, [1]);
-    expect(c.base.construction?.slot).toBe('r1c0');
+    run(c, { type: 'clear', plot: '3,5' }, 1, [1]);
+    expect(c.base.construction?.plot).toBe('3,5');
   });
 });
 
@@ -75,7 +75,7 @@ describe('time', () => {
   it('only advances when everyone is ready, and stops when the works finish', () => {
     const c = createCampaign(both, new Rng(1));
     c.nextEventDay = 999;
-    run(c, { type: 'excavate', slot: 'r1c0' }, 0, [0]);
+    run(c, { type: 'clear', plot: '3,5' }, 0, [0]);
     run(c, { type: 'advance', ready: true }, 0);
     expect(c.day).toBe(1);
     run(c, { type: 'advance', ready: true }, 1);
@@ -84,7 +84,7 @@ describe('time', () => {
       run(c, { type: 'advance', ready: true }, 0);
       run(c, { type: 'advance', ready: true }, 1);
     }
-    expect(c.base.slots.find((s) => s.id === 'r1c0')!.excavated).toBe(true);
+    expect(c.base.plots.find((p) => p.id === '3,5')!.terrain).toBe('clear');
     expect(c.advanceReady).toEqual([false, false]);
   });
 
@@ -261,5 +261,19 @@ describe('helping the players', () => {
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'squad' });
     // Starting stock: 2 extra grenades and a medkit, all utility.
     expect(nextSteps(c, 0).find((x) => x.label.startsWith('Equipa'))?.count).toBe(3);
+  });
+
+  it('after a bad mission, too few ready soldiers puts recruiting before the next operation', () => {
+    const c = createCampaign([0], new Rng(1));
+    const mine = c.soldiers.filter((s) => s.owner === 0);
+    for (const s of mine.slice(1)) s.woundedDays = 8;
+    expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'barracks', label: 'Solo 1 soldado listo: recluta (30 ₡)' });
+    // An operation about to expire still comes first.
+    c.offers.find((o) => o.expiresDay !== null)!.expiresDay = c.day + 1;
+    expect(nextSteps(c, 0)[0]).toMatchObject({ tone: 'urgent' });
+    expect(nextSteps(c, 0)[1]).toMatchObject({ view: 'barracks' });
+    // Without the credits (or at the cap) there is nothing to do about it here.
+    c.credits = 0;
+    expect(nextSteps(c, 0).some((x) => x.label.includes('recluta'))).toBe(false);
   });
 });
