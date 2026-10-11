@@ -217,6 +217,8 @@ export class Game {
   private targetId: string | null = null;
   private hoverTile: Vec2 | null = null;
   private reachCache: { key: string; reach: Reach; tiles: MoveTile[] } | null = null;
+  /** Moves planned without the command, by unit: mine and the partner's (UX-REVISION-2 #35). */
+  private plans = new Map<string, { slot: Slot; tile: Vec2 }>();
   private awaitingReply = false;
   private lastPresence = '';
   private presenceTimer = 0;
@@ -281,6 +283,7 @@ export class Game {
   // ================================================================ network
 
   loadSnapshot(s: GameState): void {
+    this.plans.clear();
     this.state = cloneState(s);
     this.view = cloneState(s);
     this.queue = [];
@@ -384,6 +387,16 @@ export class Game {
     this.overlays.setPartnerHover(tile, color);
   }
 
+  /** The partner planned a move (or withdrew one, `tile: null`). */
+  onPlan(slot: Slot, unit: string, tile: Vec2 | null): void {
+    if (slot === this.mySlot) return;
+    if (tile) this.plans.set(unit, { slot, tile });
+    else this.plans.delete(unit);
+    this.drawPlans();
+    const u = getUnit(this.state, unit);
+    if (tile && u) this.hud.log(`${this.playerName(slot)} planea mover a ${u.name}`, PLAYER_COLORS[slot]);
+  }
+
   onPing(slot: Slot, tile: Vec2, kind: PingKind): void {
     this.fx.ping(tileToWorld(tile), PLAYER_COLORS[slot], kind === 'enemy');
     this.sfx.ui();
@@ -449,6 +462,9 @@ export class Game {
       this.current = null;
       const secured = this.view.mission.objectiveDone;
       applyEvent(this.view, item.e);
+      const e = item.e;
+      if (e.t === 'turnBegan') this.plans.clear();
+      else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') this.plans.delete(e.unit);
       if (!secured && this.view.mission.objectiveDone) this.storyRadio('objective');
       if (item.e.t === 'tileChanged') this.mapView.rebuild(this.view);
       this.refreshView();
@@ -1069,6 +1085,7 @@ export class Game {
     this.overlays.setBeacons(beacons);
     this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
     this.overlays.setSmoke(this.view.smoke);
+    this.drawPlans();
     this.edge.set(this.missionMarks());
   }
 
@@ -1112,6 +1129,45 @@ export class Game {
   }
 
   // ============================================================ interaction
+
+  // ================================================== planning without the command
+
+  /** Plans a move for `u` (or withdraws it, clicking the same tile again); the partner sees it. */
+  private togglePlan(u: Unit, tile: Vec2): void {
+    const current = this.plans.get(u.id);
+    const withdraw = !!current && sameTile(current.tile, tile);
+    if (withdraw) this.plans.delete(u.id);
+    else this.plans.set(u.id, { slot: this.mySlot, tile });
+    this.net.send({ t: 'plan', unit: u.id, tile: withdraw ? null : tile });
+    this.drawPlans();
+    this.hud.toast(withdraw ? 'Plan retirado.' : `Plan para ${u.name}: lo ve ${this.playerName(this.state.command)}. Otro clic ahí lo quita.`);
+  }
+
+  /** Draws every plan along the path it would take now; a plan that no longer fits is dropped. */
+  private drawPlans(): void {
+    const list: { from: Vec2; path: Vec2[]; color: string }[] = [];
+    for (const [id, plan] of this.plans) {
+      const u = getUnit(this.state, id);
+      const reach = u?.alive ? computeReach(this.state, u, maxMoveCost(u)) : null;
+      if (!u || !reach?.cost.has(plan.tile.y * this.state.width + plan.tile.x)) {
+        this.plans.delete(id);
+        continue;
+      }
+      const path = buildPath(this.state, u, reach, plan.tile);
+      if (path?.length) list.push({ from: u.pos, path, color: PLAYER_COLORS[plan.slot] });
+    }
+    this.overlays.setPlans(list);
+  }
+
+  /** Why an order cannot go out yet: the partner holds the command. */
+  private commandLock(): string {
+    return `Tiene el mando ${this.playerName(this.state.command)}: puedes apuntar y planear, pero no dar la orden.`;
+  }
+
+  /** The confirm button's text while planning (null with the command). */
+  private lockLabel(): string | undefined {
+    return this.hasCommand() ? undefined : `MANDO: ${this.playerName(this.state.command).toUpperCase()}`;
+  }
 
   private isMine(u: Unit): boolean {
     return u.team === 'xcom' && (u.owner === this.mySlot || u.owner === null);
@@ -1277,6 +1333,11 @@ export class Game {
   private confirmTarget(): void {
     const u = this.selectedUnit();
     if (!u || this.mode.kind !== 'target' || !this.targetId) return;
+    // Without the command, aiming only shows the odds.
+    if (!this.hasCommand()) {
+      this.hud.toast(this.commandLock());
+      return;
+    }
     this.send({ type: 'ability', unit: u.id, ability: this.mode.ability, target: this.targetId });
     this.cancelMode();
   }
@@ -1309,6 +1370,10 @@ export class Game {
         this.refreshInteractive();
         return;
       case 'self':
+        if (!this.hasCommand()) {
+          this.hud.toast(this.commandLock());
+          return;
+        }
         this.send({ type: 'ability', unit: u.id, ability: id });
         this.cancelMode();
     }
@@ -1339,9 +1404,7 @@ export class Game {
       const charge = def.charge ? u.charges[def.charge] ?? 0 : undefined;
       let reason: string | null = !this.canAct()
         ? 'No es vuestro turno.'
-        : !this.hasCommand()
-          ? `Tiene el mando ${this.playerName(this.state.command)}.`
-          : abilityBlocker(this.state, u, id);
+        : abilityBlocker(this.state, u, id);
       if (!reason && (def.target === 'enemy' || def.target === 'melee' || def.target === 'ally') && !this.targetOptions(id).length) {
         reason = def.target === 'ally' ? 'No hay aliados válidos.' : def.target === 'melee' ? 'Ningún enemigo a su alcance.' : 'Sin enemigos a la vista.';
       }
@@ -1411,8 +1474,9 @@ export class Game {
       const u = this.selectedUnit();
       if (!u || abilityBlocker(this.state, u, this.mode.ability)) this.cancelModeSilently();
     }
-    const r = this.mode.kind === 'move' && this.hasCommand() && !this.isBusy(this.selected) ? this.reach() : null;
-    this.overlays.showMoveRange(r?.tiles ?? []);
+    // Without the command the range is still shown, fainter: it is for planning (#35).
+    const r = this.mode.kind === 'move' && !this.isBusy(this.selected) ? this.reach() : null;
+    this.overlays.showMoveRange(r?.tiles ?? [], !this.hasCommand());
     this.updateHover();
     this.refreshHud();
   }
@@ -1544,7 +1608,7 @@ export class Game {
         suppression: '−50 de puntería al objetivo hasta tu próximo turno; si se mueve, le disparas',
         combatProtocol: `${TEMPLATES[target.template].robotic ? 4 : 2} de daño. Nunca falla e ignora el blindaje`,
       };
-      return { kind: 'support', title: def.name, action: def.name, targetName: target.name, effect: effects[ability] ?? def.description, index, total: list.length };
+      return { kind: 'support', title: def.name, action: def.name, locked: this.lockLabel(), targetName: target.name, effect: effects[ability] ?? def.description, index, total: list.length };
     }
     const attack = ability as AttackAbility;
     const shot = previewShot(this.state, u, target, { ability: attack, from: option.tile });
@@ -1566,6 +1630,7 @@ export class Game {
       index,
       total: list.length,
       note: ATTACK_NOTES[attack],
+      locked: this.lockLabel(),
     };
   }
 
@@ -1829,12 +1894,14 @@ export class Game {
       return;
     }
     if (!this.canAct() || !u) return;
-    if (!this.hasCommand()) {
-      this.hud.toast(`Tiene el mando ${this.playerName(this.state.command)}: espera a que te lo ceda.`);
-      return;
-    }
+    // Without the command a click plans instead of ordering (#35): aiming and areas only preview.
+    const planning = !this.hasCommand();
 
     if (this.mode.kind === 'tile') {
+      if (planning) {
+        this.hud.toast(this.commandLock());
+        return;
+      }
       const center = throwTile(u, this.mode.ability, tile);
       if (canTargetTile(this.state, u, this.mode.ability, center)) {
         this.send({ type: 'ability', unit: u.id, ability: this.mode.ability, tile: center });
@@ -1867,6 +1934,10 @@ export class Game {
     if (dest) {
       const cost = this.reachCache!.reach.cost.get(tile.y * this.state.width + tile.x)!;
       if (apForCost(u, cost) > u.ap) return;
+      if (planning) {
+        this.togglePlan(u, tile);
+        return;
+      }
       // Breaking concealment cannot be undone: the first click on such a tile only warns.
       const key = `${u.id}|${tile.x},${tile.y}`;
       if (dest.detected && this.concealWarn !== key) {

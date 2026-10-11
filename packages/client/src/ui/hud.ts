@@ -52,6 +52,8 @@ export type TargetView =
       title: string;
       /** The confirm button: the ability alone ("Disparar"); the title also names the weapon. */
       action: string;
+      /** Planning without the command: the button is off and says who holds it ("MANDO: ANA"). */
+      locked?: string;
       targetName: string;
       hit: number;
       crit: number;
@@ -63,7 +65,7 @@ export type TargetView =
       /** What the ability changes besides the odds ("+50 % de daño"). */
       note?: string;
     }
-  | { kind: 'support'; title: string; action: string; targetName: string; effect: string; index: number; total: number };
+  | { kind: 'support'; title: string; action: string; locked?: string; targetName: string; effect: string; index: number; total: number };
 
 export interface MissionView {
   kind: MissionKind;
@@ -337,7 +339,9 @@ export class Hud {
     const actions = h(
       'div.shot-actions',
       {},
-      h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio' }, view.action.toUpperCase()),
+      view.locked
+        ? h('button.fire', { disabled: true, title: 'Sin el mando solo se puede apuntar: el porcentaje sirve para planear' }, view.locked)
+        : h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio' }, view.action.toUpperCase()),
       h('button.cancel', { onclick: () => this.handlers.onCancel(), title: 'Esc' }, 'Cancelar'),
     );
     if (view.kind === 'support') {
@@ -378,7 +382,7 @@ export class Hud {
     } else if (mode === 'ready') {
       this.endTurn.append(h('span', {}, 'LISTO ✓'), h('small', {}, waitingFor ? `Esperando a ${waitingFor}` : 'Pulsa para cancelar'));
     } else if (mode === 'waiting') {
-      this.endTurn.append(h('span', {}, `MANDO: ${(waitingFor ?? '').toUpperCase()}`), h('small', {}, 'Espera a que te lo ceda'));
+      this.endTurn.append(h('span', {}, `MANDO: ${(waitingFor ?? '').toUpperCase()}`), h('small', {}, 'Puedes planear: clic en una casilla'));
     } else {
       this.endTurn.append(h('span', {}, 'TERMINAR TURNO'), h('small', {}, 'Retroceso'));
     }

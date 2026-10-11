@@ -113,7 +113,11 @@ export class Overlays {
   private readonly beacons = new THREE.Group();
   private readonly flares = new THREE.Group();
   private readonly smoke = new THREE.Group();
+  /** Moves planned without the command (UX-REVISION-2 #35): a dashed line in the planner's colour. */
+  private readonly plans = new THREE.Group();
   private readonly shieldTextures = { 1: shieldTexture(1), 2: shieldTexture(2) };
+  /** The move range's layers and their full opacity: planning shows them fainter. */
+  private rangeLayers: [THREE.InstancedMesh, number][] = [];
 
   constructor(capacity: number) {
     const tileGeometry = new THREE.PlaneGeometry(0.9, 0.9).rotateX(-Math.PI / 2);
@@ -195,12 +199,13 @@ export class Overlays {
     // from then on: a grenade area or a move range elsewhere on the map would
     // vanish whenever that first spot left the screen. They are cheap to draw.
     for (const mesh of [this.tiles, this.detect, this.hatch, this.eyes, this.blast, this.evac]) mesh.frustumCulled = false;
+    this.rangeLayers = [this.tiles, this.hatch, this.detect, this.eyes].map((mesh) => [mesh, (mesh.material as THREE.MeshBasicMaterial).opacity]);
 
     // The path gets a dark casing, so it reads over the blue and the yellow tiles alike.
     this.pathCasing.renderOrder = 9;
     this.pathCasing.visible = false;
     this.rangeRing.renderOrder = 9;
-    this.group.add(this.beacons, this.flares, this.smoke, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -309,7 +314,9 @@ export class Overlays {
   }
 
   /** The fill says what the move costs (blue: one action, yellow: dash); a red frame, that it gets the squad noticed. */
-  showMoveRange(tiles: MoveTile[]): void {
+  /** `planning`: without the command the range is only for planning, so it is drawn fainter. */
+  showMoveRange(tiles: MoveTile[], planning = false): void {
+    for (const [mesh, opacity] of this.rangeLayers) (mesh.material as THREE.MeshBasicMaterial).opacity = planning ? opacity * 0.5 : opacity;
     const m = new THREE.Matrix4();
     let frames = 0;
     let dashes = 0;
@@ -333,6 +340,34 @@ export class Overlays {
     this.detect.instanceMatrix.needsUpdate = true;
     this.eyes.count = frames;
     this.eyes.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Planned moves, each a dashed line from the soldier to a ring on its destination. */
+  setPlans(list: { from: Vec2; path: Vec2[]; color: string }[]): void {
+    const key = JSON.stringify(list);
+    if (this.plans.userData.key === key) return;
+    this.plans.userData.key = key;
+    for (const child of [...this.plans.children]) {
+      this.plans.remove(child);
+      if (child instanceof Line2 || child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+    for (const plan of list) {
+      const line = new Line2(
+        new LineGeometry(),
+        new LineMaterial({ color: plan.color, linewidth: 3, dashed: true, dashSize: 0.28, gapSize: 0.18, transparent: true, opacity: 0.9, depthTest: false }),
+      );
+      line.geometry.setPositions([plan.from, ...plan.path].flatMap((p) => tileToWorld(p, 0.1).toArray()));
+      line.computeLineDistances();
+      line.renderOrder = 10;
+      const ring = flatRing(0.3, 0.44, 0xffffff, 0.9);
+      (ring.material as THREE.MeshBasicMaterial).color.set(plan.color);
+      ring.position.copy(tileToWorld(plan.path[plan.path.length - 1]!, 0.05));
+      ring.visible = true;
+      this.plans.add(line, ring);
+    }
   }
 
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {

@@ -185,6 +185,7 @@ Para usar otro puerto: `npm start -- --port 8080`.
 | Cancelar | **Esc** o clic derecho |
 | Menú | **Esc** (si no estás apuntando) o el botón **Menú**: controles, ajustes y abandonar la misión (termina para los dos) |
 | Ceder el mando | **C** o el botón junto a Terminar turno: tu compañero pasa a dar las órdenes |
+| Planear sin el mando | Mientras tu compañero tiene el mando, eliges a tus soldados, ves su alcance (más tenue) y apuntas para ver el porcentaje. Un clic en una casilla deja un **plan**: una línea discontinua de tu color que tu compañero también ve. Otro clic en la misma casilla lo quita; desaparece cuando el soldado se mueve o al empezar el turno siguiente |
 | Terminar turno | **Retroceso**. Si a tus soldados les quedan acciones, el botón pregunta «¿Terminar?» y hay que pulsar otra vez (**Esc** lo cancela). Si tu compañero no ha terminado, el mando pasa a él; cuando los dos habéis terminado, juega el enemigo |
 | Cámara | **WASD** o arrastrar con clic derecho · **Q/E** girar · rueda para zoom · **F** centrar en el soldado |
 | Sonido | **M** activa o desactiva los efectos |

@@ -25,7 +25,7 @@ let campaign: CampaignState | null = null;
 /** The dropship take-off; mission traffic is held until it is over. */
 let takeoff: Promise<void> | null = null;
 const held: ServerMessage[] = [];
-const MISSION_TRAFFIC = new Set<ServerMessage['t']>(['snapshot', 'events', 'presence', 'ping', 'rejected']);
+const MISSION_TRAFFIC = new Set<ServerMessage['t']>(['snapshot', 'events', 'presence', 'ping', 'plan', 'rejected']);
 
 const lobby = new Lobby(
   app,
@@ -135,6 +135,9 @@ function handle(m: ServerMessage): void {
       break;
     case 'ping':
       game?.onPing(m.slot, m.tile, m.kind);
+      break;
+    case 'plan':
+      game?.onPlan(m.slot, m.unit, m.tile);
       break;
     case 'rejected':
       game?.onRejected(m.message);

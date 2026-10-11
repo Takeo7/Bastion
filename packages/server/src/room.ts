@@ -253,6 +253,13 @@ export class Room {
       case 'presence':
         this.toPartner(seat, { t: 'presence', slot: seat.slot, unit: msg.unit, tile: msg.tile });
         break;
+      case 'plan': {
+        // Only with one's own soldiers, and only in a mission.
+        const unit = this.phase === 'mission' ? this.state?.units.find((u) => u.id === msg.unit) : undefined;
+        if (!unit || unit.team !== 'xcom' || (unit.owner !== null && unit.owner !== seat.slot)) return;
+        this.toPartner(seat, { t: 'plan', slot: seat.slot, unit: msg.unit, tile: msg.tile });
+        break;
+      }
     }
   }
 

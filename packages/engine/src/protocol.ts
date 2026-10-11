@@ -48,6 +48,8 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('presence'), unit: unitId.nullable(), tile: vec2.nullable() }),
   /** Marks a tile for the partner ("go here", "this enemy"). */
   z.object({ t: z.literal('ping'), tile: vec2, kind: pingKindSchema }),
+  /** A move planned without the command, shown to the partner; `tile: null` withdraws it. */
+  z.object({ t: z.literal('plan'), unit: unitId, tile: vec2.nullable() }),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
@@ -126,5 +128,6 @@ export type ServerMessage =
   | { t: 'events'; events: GameEvent[]; seq: number; by: Slot | null }
   | { t: 'presence'; slot: Slot; unit: string | null; tile: Vec2 | null }
   | { t: 'ping'; slot: Slot; tile: Vec2; kind: PingKind }
+  | { t: 'plan'; slot: Slot; unit: string; tile: Vec2 | null }
   | { t: 'rejected'; message: string }
   | { t: 'error'; message: string };
