@@ -138,7 +138,7 @@ button:disabled {
 .outcome-card h2,
 .modal-card h2,
 .mission-intro h1,
-.typed > span {
+.typed .w > span {
   background: var(--ink-type-tex);
   background-color: currentColor;
   -webkit-background-clip: text;
@@ -167,18 +167,23 @@ button:disabled {
 }
 
 /* Letters from ui/typed.ts: each struck slightly off, some light, some
-   hard enough to leave a ghost. */
+   hard enough to leave a ghost. A word (.w) never breaks; the label only
+   wraps at its spaces where it allows it (pre-wrap). */
 .typed {
   white-space: pre;
 }
 
-.typed > span {
+.typed .w {
+  white-space: nowrap;
+}
+
+.typed .w > span {
   display: inline-block;
   transform: translateY(var(--dy, 0)) rotate(var(--rot, 0));
   opacity: var(--ink, 1);
 }
 
-.typed > span.struck {
+.typed .w > span.struck {
   text-shadow:
     0.05em 0.02em 0 color-mix(in srgb, currentColor 30%, transparent),
     0 0 0.7px color-mix(in srgb, currentColor 55%, transparent);
@@ -1092,6 +1097,13 @@ em.psi {
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-soft);
+  text-wrap: balance;
+}
+
+/* A long weapon («Disparar · Fusil de precisión») goes onto a second line
+   rather than being cut: the weapon is the point of the title. */
+.shot-title .typed {
+  white-space: pre-wrap;
 }
 
 .shot-head {

@@ -19,7 +19,12 @@ function hashText(text: string): number {
   return h;
 }
 
-/** A typed label, ready to append: `<span class="typed" aria-label=…>` with one span per letter. */
+/**
+ * A typed label, ready to append: `<span class="typed" aria-label=…>` with one
+ * span per letter, grouped by word in `span.w`. A line may break between any
+ * two inline-blocks, so the words keep their letters together and a label that
+ * wraps only breaks at the spaces.
+ */
 export function typed(text: string): DocumentFragment {
   const fragment = document.createDocumentFragment();
   const wrap = document.createElement('span');
@@ -27,6 +32,7 @@ export function typed(text: string): DocumentFragment {
   wrap.setAttribute('aria-label', text);
   const seed = hashText(text);
   let run = '';
+  let word: HTMLElement | null = null;
   const flush = () => {
     if (run) wrap.append(run);
     run = '';
@@ -34,9 +40,15 @@ export function typed(text: string): DocumentFragment {
   [...text].forEach((ch, i) => {
     if (ch === ' ') {
       run += ch;
+      word = null;
       return;
     }
     flush();
+    if (!word) {
+      word = document.createElement('span');
+      word.className = 'w';
+      wrap.append(word);
+    }
     const r = (k: number) => rand(seed + i * 7 + k);
     const letter = document.createElement('span');
     letter.textContent = ch;
@@ -47,7 +59,7 @@ export function typed(text: string): DocumentFragment {
     const strike = r(3);
     letter.style.setProperty('--ink', strike < 0.12 ? '0.62' : strike > 0.9 ? '1' : (0.82 + r(4) * 0.14).toFixed(2));
     if (strike > 0.93) letter.classList.add('struck');
-    wrap.append(letter);
+    word.append(letter);
   });
   flush();
   fragment.append(wrap);
