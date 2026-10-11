@@ -27,6 +27,7 @@ import {
   missionXp,
   TECHS,
   type TechId,
+  upgradeLevel,
   WEAPON_TIER_DAMAGE,
   weaponTier,
 } from './progression';
@@ -39,12 +40,25 @@ import type { Appearance, Biome, ClassId, EndReason, GameState, ItemId, ItemSlot
 
 // --------------------------------------------------------------- facilities
 
-export type FacilityId = 'simulation' | 'workshop' | 'infirmary' | 'training' | 'relay';
+export type FacilityId =
+  | 'simulation'
+  | 'workshop'
+  | 'infirmary'
+  | 'training'
+  | 'relay'
+  | 'quarters'
+  | 'range'
+  | 'garage'
+  | 'listening'
+  | 'crew';
 
 export interface FacilityDef {
   id: FacilityId;
   name: string;
+  /** What it does at level 1. */
   description: string;
+  /** What levels 2 and 3 bring. */
+  upgrades: [string, string];
   /** Price in credits. */
   cost: number;
   days: number;
@@ -54,13 +68,120 @@ export interface FacilityDef {
   unique: boolean;
 }
 
+// Works are short (4–6 days): with one project at a time and ten buildings with three
+// levels, the balance simulation (2026-10-11) left most of the base unbuilt at the
+// longer times, with credits piling up.
 export const FACILITIES: Record<FacilityId, FacilityDef> = {
-  workshop: { id: 'workshop', name: 'Taller', description: 'Los accesorios cuestan un 25 % menos.', cost: 85, days: 6, level: 1, unique: true },
-  infirmary: { id: 'infirmary', name: 'Enfermería', description: 'Las heridas se curan el doble de rápido.', cost: 60, days: 6, level: 1, unique: true },
-  training: { id: 'training', name: 'Centro de entrenamiento', description: 'Cada jugador puede llevar un soldado más a las misiones.', cost: 140, days: 10, level: 2, unique: true },
-  simulation: { id: 'simulation', name: 'Sala de simulación', description: 'Las misiones dan un 25 % más de experiencia al Bastión.', cost: 100, days: 8, level: 3, unique: true },
-  relay: { id: 'relay', name: 'Centro de comunicaciones', description: '+2 regiones contactables.', cost: 110, days: 8, level: 5, unique: false },
+  workshop: {
+    id: 'workshop',
+    name: 'Taller',
+    description: 'Los accesorios cuestan un 25 % menos.',
+    upgrades: ['Accesorios −35 %. Un torno de verdad.', 'Accesorios −45 %. Teo deja de quejarse.'],
+    cost: 85,
+    days: 4,
+    level: 1,
+    unique: true,
+  },
+  infirmary: {
+    id: 'infirmary',
+    name: 'Enfermería',
+    description: 'Las heridas se curan el doble de rápido.',
+    upgrades: ['Las heridas curan el triple de rápido. Agua caliente en la sala de curas.', 'Las heridas curan el cuádruple de rápido. Tejido impreso, sin el Coro dentro.'],
+    cost: 60,
+    days: 4,
+    level: 1,
+    unique: true,
+  },
+  quarters: {
+    id: 'quarters',
+    name: 'Barracón',
+    description: '+2 camas para soldados (+1 junto al Cuartel). Literas de madera y una estufa que solo se enciende de noche.',
+    upgrades: ['+3 camas (+1 junto al Cuartel). Un segundo piso de literas.', '+4 camas (+1 junto al Cuartel). Mantas de verdad.'],
+    cost: 40,
+    days: 2,
+    level: 1,
+    unique: false,
+  },
+  training: {
+    id: 'training',
+    name: 'Centro de entrenamiento',
+    description: 'Cada jugador puede llevar un soldado más a las misiones.',
+    upgrades: ['Los reclutas llegan con rango de Soldado.', 'Los reclutas llegan con rango de Cabo. Ya saben agacharse.'],
+    cost: 140,
+    days: 6,
+    level: 2,
+    unique: true,
+  },
+  range: {
+    id: 'range',
+    name: 'Campo de tiro',
+    description: '+3 de puntería para todos los soldados (+2 junto al centro de entrenamiento). Dianas de cartón en una trinchera del pinar.',
+    upgrades: ['+6 de puntería (+2 junto al entrenamiento). Siluetas de Impreso a cincuenta metros.', '+10 de puntería (+2 junto al entrenamiento). Blancos móviles, con una polea de Teo.'],
+    cost: 90,
+    days: 4,
+    level: 2,
+    unique: true,
+  },
+  crew: {
+    id: 'crew',
+    name: 'Brigada de obras',
+    description: 'Obras y desbroces un 25 % más rápidos. Carretillas, poleas y manos del Sindicato.',
+    upgrades: ['Obras y desbroces un 40 % más rápidos.', 'Obras y desbroces un 50 % más rápidos.'],
+    cost: 70,
+    days: 3,
+    level: 2,
+    unique: true,
+  },
+  simulation: {
+    id: 'simulation',
+    name: 'Sala de simulación',
+    description: 'Las misiones dan un 25 % más de experiencia al Bastión.',
+    upgrades: ['+40 % de experiencia en las misiones. Mapas de arena con los combates de verdad.', '+55 % de experiencia. Cintas de cada misión, fotograma a fotograma.'],
+    cost: 100,
+    days: 5,
+    level: 3,
+    unique: true,
+  },
+  garage: {
+    id: 'garage',
+    name: 'Taller de La Mula',
+    description: 'Las misiones duran 1 día menos. La Mula vuelve antes, con el depósito lleno.',
+    upgrades: ['1 día menos por misión, y las heridas curan 1 día antes: la Mula lleva camilla.', '2 días menos por misión y 2 días menos de heridas. La Mula ya no para a repostar.'],
+    cost: 110,
+    days: 5,
+    level: 3,
+    unique: true,
+  },
+  listening: {
+    id: 'listening',
+    name: 'Estación de escucha',
+    description: 'El reloj enemigo avanza 2 días más tarde (+2 junto al centro de comunicaciones) y hay una misión más a la vista. Morse oye antes lo que viene.',
+    upgrades: ['El reloj enemigo, 4 días más tarde (+2 junto a comunicaciones).', 'El reloj enemigo, 6 días más tarde (+2 junto a comunicaciones).'],
+    cost: 120,
+    days: 5,
+    level: 4,
+    unique: true,
+  },
+  relay: {
+    id: 'relay',
+    name: 'Centro de comunicaciones',
+    description: '+2 regiones contactables.',
+    upgrades: ['+3 regiones contactables por centro. Más válvulas, misma sordera.', '+4 regiones por centro. La antena llega hasta el mar.'],
+    cost: 110,
+    days: 5,
+    level: 5,
+    unique: false,
+  },
 };
+
+/** Price, days and Bastion level of raising a facility to `to` (2 or 3). */
+export function upgradeCost(id: FacilityId, to: number): { cost: number; days: number; level: number } {
+  const def = FACILITIES[id];
+  return to <= 2 ? { cost: def.cost, days: def.days, level: upgradeLevel(def.level, 2) } : { cost: Math.round(def.cost * 1.5), days: def.days + 2, level: upgradeLevel(def.level, 3) };
+}
+
+/** The 8 starting soldiers sleep in the bunker; recruits need a barracón. */
+export const BUNKER_BEDS = 8;
 
 // ----------------------------------------------------------- the compound
 
@@ -128,11 +249,14 @@ export interface AdjacencyDef {
 }
 
 export const ADJACENCY: AdjacencyDef[] = [
-  { facility: 'infirmary', next: 'barracks', text: 'Las heridas curan 3× en vez de 2×. Nadie cruza la nieve con una herida abierta.' },
-  { facility: 'workshop', next: 'engineering', text: 'Accesorios −40 % en vez de −25 %. Las piezas pasan por un ventanuco.' },
-  { facility: 'simulation', next: 'research', text: '+40 % de experiencia en vez de +25 %. Teo corrige los ejercicios en caliente.' },
+  { facility: 'infirmary', next: 'barracks', text: 'Las heridas curan un grado más rápido (×3 a nivel 1). Nadie cruza la nieve con una herida abierta.' },
+  { facility: 'workshop', next: 'engineering', text: 'Accesorios un 15 % más baratos aún (−40 % a nivel 1). Las piezas pasan por un ventanuco.' },
+  { facility: 'simulation', next: 'research', text: '+15 % de experiencia más (+40 % a nivel 1). Teo corrige los ejercicios en caliente.' },
   { facility: 'relay', next: 'command', text: '+1 región contactable. La antena de válvulas, pegada a la sala de Morse, llega más lejos.' },
   { facility: 'training', next: 'barracks', text: 'Reclutar cuesta 20 ₡ en vez de 30. Los novatos se forman en casa.' },
+  { facility: 'quarters', next: 'barracks', text: 'Una cama más. El Cuartel presta la estufa.' },
+  { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
+  { facility: 'listening', next: 'relay', text: 'El enemigo avanza 2 días más tarde aún. Dos antenas oyen más que una.' },
 ];
 
 export interface BasePlot {
@@ -142,11 +266,13 @@ export interface BasePlot {
   y: number;
   terrain: Terrain;
   building: BuildingId | null;
+  /** A facility's level, 1–3 (missing in saves from before upgrades: 1). */
+  level?: number;
 }
 
 export interface Construction {
   plot: string;
-  kind: 'clear' | 'build';
+  kind: 'clear' | 'build' | 'upgrade';
   facility: FacilityId | null;
   daysLeft: number;
   total: number;
@@ -567,6 +693,7 @@ export type ProposalAction =
   | { type: 'chooseMission'; id: string }
   | { type: 'clear'; plot: string }
   | { type: 'build'; plot: string; facility: FacilityId }
+  | { type: 'upgrade'; plot: string }
   | { type: 'contact'; region: RegionId }
   | { type: 'event'; option: 0 | 1 }
   | { type: 'investigate'; id: string };
@@ -773,16 +900,85 @@ export function facilityCount(c: CampaignState, id: FacilityId): number {
   return c.base.plots.filter((p) => p.building === id).length;
 }
 
-/** The workshop takes a quarter off accessories, 40 % next to the armoury. */
+/** Level of a facility: its best copy's (0 when not built). */
+export function facilityLevel(c: CampaignState, id: FacilityId): number {
+  return Math.max(0, ...c.base.plots.filter((p) => p.building === id).map((p) => p.level ?? 1));
+}
+
+/** The workshop takes 25/35/45 % off accessories, 15 % more next to the armoury. */
 export function shopPrice(c: CampaignState, id: ItemId): number {
   const cost = ITEMS[id].cost;
-  if (!facilityCount(c, 'workshop')) return cost;
-  return Math.round(cost * (hasAdjacency(c, 'workshop') ? 0.6 : 0.75));
+  const level = facilityLevel(c, 'workshop');
+  if (!level) return cost;
+  const off = 0.25 + 0.1 * (level - 1) + (hasAdjacency(c, 'workshop') ? 0.15 : 0);
+  return Math.round(cost * (1 - off));
 }
 
 /** A recruit costs less with the training centre next to the barracks. */
 export function recruitCost(c: CampaignState): number {
   return hasAdjacency(c, 'training') ? 20 : RECRUIT_COST;
+}
+
+/** Beds in the Bastion: the bunker's, and each barracón's (2/3/4, one more next to the Cuartel). */
+export function beds(c: CampaignState): number {
+  return (
+    BUNKER_BEDS +
+    c.base.plots
+      .filter((p) => p.building === 'quarters')
+      .reduce((sum, p) => sum + 1 + (p.level ?? 1) + (adjacencyAt(c, p, 'quarters') ? 1 : 0), 0)
+  );
+}
+
+/** Beds nobody sleeps in: recruiting needs one. */
+export function bedsFree(c: CampaignState): number {
+  return beds(c) - c.soldiers.filter((s) => s.alive).length;
+}
+
+/** Wound days healed each day: 1, and 2/3/4 with the infirmary (one more next to the Cuartel). */
+export function healRate(c: CampaignState): number {
+  const level = facilityLevel(c, 'infirmary');
+  return level ? 1 + level + (hasAdjacency(c, 'infirmary') ? 1 : 0) : 1;
+}
+
+/** Bastion experience a mission's earned XP becomes: +25/40/55 % with simulation, 15 % more next to Progreso. */
+export function xpMultiplier(c: CampaignState): number {
+  const level = facilityLevel(c, 'simulation');
+  return level ? 1.25 + 0.15 * (level - 1) + (hasAdjacency(c, 'simulation') ? 0.15 : 0) : 1;
+}
+
+/** Aim every soldier gets from the shooting range: 3/6/10, two more next to the training centre. */
+export function rangeAim(c: CampaignState): number {
+  const level = facilityLevel(c, 'range');
+  return level ? [3, 6, 10][level - 1]! + (hasAdjacency(c, 'range') ? 2 : 0) : 0;
+}
+
+/** Days a mission takes off the flight (La Mula's workshop) and off each wound. */
+export function garageCut(c: CampaignState): { days: number; wounds: number } {
+  const level = facilityLevel(c, 'garage');
+  return { days: level >= 3 ? 2 : level ? 1 : 0, wounds: level >= 3 ? 2 : level === 2 ? 1 : 0 };
+}
+
+/** Extra days between the enemy clock's steps: 2 per level of the listening post, 2 more next to the relay. */
+export function listeningDelay(c: CampaignState): number {
+  const level = facilityLevel(c, 'listening');
+  return level ? 2 * level + (hasAdjacency(c, 'listening') ? 2 : 0) : 0;
+}
+
+/** Days a work takes with the works brigade (−25/40/50 %), at least one. */
+export function workDays(c: CampaignState, days: number): number {
+  const level = facilityLevel(c, 'crew');
+  return level ? Math.max(1, Math.round(days * (1 - [0.25, 0.4, 0.5][level - 1]!))) : days;
+}
+
+/** Why the facility on `plot` can't be raised a level, or null if it can. */
+export function upgradable(c: CampaignState, plot: BasePlot): string | null {
+  const id = plot.building as FacilityId;
+  if (!plot.building || !(plot.building in FACILITIES)) return 'Aquí no hay nada que mejorar.';
+  const level = plot.level ?? 1;
+  if (level >= 3) return 'Ya está al máximo.';
+  const next = upgradeCost(id, level + 1);
+  if (bastionLevel(c) < next.level) return `Requiere nivel ${next.level} del Bastión.`;
+  return null;
 }
 
 /** Copies not equipped by any living soldier. */
@@ -797,7 +993,8 @@ export function soldierReady(s: CampaignSoldier): boolean {
 
 export function contactCapacity(c: CampaignState): number {
   const quests = questOutcomes(c).reduce((sum, q) => sum + (q.outcome.contacts ?? 0), 0);
-  return 2 + 2 * facilityCount(c, 'relay') + (hasAdjacency(c, 'relay') ? 1 : 0) + (hasTech(c, 'encryption') ? 1 : 0) + quests;
+  const relays = c.base.plots.filter((p) => p.building === 'relay').reduce((sum, p) => sum + 1 + (p.level ?? 1), 0);
+  return 2 + relays + (hasAdjacency(c, 'relay') ? 1 : 0) + (hasTech(c, 'encryption') ? 1 : 0) + quests;
 }
 
 export function contactCost(c: CampaignState): number {
@@ -1329,6 +1526,7 @@ export type CampaignCommand =
   | { type: 'chooseMission'; id: string }
   | { type: 'clear'; plot: string }
   | { type: 'build'; plot: string; facility: FacilityId }
+  | { type: 'upgrade'; plot: string }
   | { type: 'contact'; region: RegionId }
   | { type: 'answerEvent'; option: 0 | 1 }
   | { type: 'investigate'; id: string }
@@ -1501,10 +1699,15 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   // Short of soldiers for a full share of the squad (after a bad mission): recruiting comes
   // before choosing an operation, or the squad flies half empty.
   const ready = mine.filter(soldierReady).length;
+  // With no bed free, the answer is a barracón first.
+  const fewReady = `${ready === 0 ? 'Ningún soldado listo' : `Solo ${ready} ${ready === 1 ? 'soldado listo' : 'soldados listos'}`}`;
+  const needed = ready < squadLimit(c, c.players) && mine.length < soldierCap(c);
   const short =
-    ready < squadLimit(c, c.players) && mine.length < soldierCap(c) && canAfford(c, recruitCost(c))
-      ? { view: 'barracks' as const, label: `${ready === 0 ? 'Ningún soldado listo' : `Solo ${ready} ${ready === 1 ? 'soldado listo' : 'soldados listos'}`}: recluta (${recruitCost(c)} ₡)`, tone: 'info' as const }
-      : null;
+    needed && bedsFree(c) > 0 && canAfford(c, recruitCost(c))
+      ? { view: 'barracks' as const, label: `${fewReady}: recluta (${recruitCost(c)} ₡)`, tone: 'info' as const }
+      : needed && bedsFree(c) <= 0 && !c.base.construction && canAfford(c, FACILITIES.quarters.cost)
+        ? { view: 'facilities' as const, label: `${fewReady} y sin camas: construye un barracón`, tone: 'info' as const }
+        : null;
   if (short && !mission) steps.push(short);
 
   if (mission) {
@@ -1558,9 +1761,13 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     const wild = c.base.plots
       .filter((p) => !clearable(c, p) && canAfford(c, clearCost(p).cost))
       .sort((a, b) => plotRing(a) - plotRing(b))[0];
+    // A level up for what is already built, when it can be paid.
+    const raise = c.base.plots.find((p) => !upgradable(c, p) && canAfford(c, upgradeCost(p.building as FacilityId, (p.level ?? 1) + 1).cost));
     if (best) steps.push({ view: 'facilities', label: 'Construye junto a la base', tone: 'info', go: { plot: best.p.id } });
     else if (!c.base.plots.some((p) => p.terrain === 'clear' && !p.building) && wild) {
       steps.push({ view: 'facilities', label: 'Despeja terreno para crecer', tone: 'info', go: { plot: wild.id } });
+    } else if (raise) {
+      steps.push({ view: 'facilities', label: `Mejora ${FACILITIES[raise.building as FacilityId].name}`, tone: 'info', go: { plot: raise.id } });
     }
   }
 
@@ -1583,6 +1790,10 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
     }
     case 'build':
       return `construir ${FACILITIES[action.facility].name} en ${plotName(plotById(c, action.plot)!)}`;
+    case 'upgrade': {
+      const plot = plotById(c, action.plot)!;
+      return `mejorar ${FACILITIES[plot.building as FacilityId].name} a nivel ${(plot.level ?? 1) + 1}`;
+    }
     case 'contact':
       return `contactar con ${REGIONS[action.region].name}`;
     case 'event':
@@ -1618,6 +1829,15 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (!canAfford(c, FACILITIES[action.facility].cost)) return 'No hay créditos suficientes.';
       return null;
     }
+    case 'upgrade': {
+      const plot = plotById(c, action.plot);
+      if (!plot) return 'Esa parcela no existe.';
+      if (c.base.construction) return 'Ya hay una obra en marcha.';
+      const blocker = upgradable(c, plot);
+      if (blocker) return blocker;
+      if (!canAfford(c, upgradeCost(plot.building as FacilityId, (plot.level ?? 1) + 1).cost)) return 'No hay créditos suficientes.';
+      return null;
+    }
     case 'contact': {
       const region = c.regions.find((r) => r.id === action.region);
       if (!region || region.contacted) return 'Ya tenemos contacto con esa región.';
@@ -1649,7 +1869,8 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
     }
     case 'clear': {
       const plot = plotById(c, action.plot)!;
-      const { cost, days } = clearCost(plot);
+      const { cost } = clearCost(plot);
+      const days = workDays(c, clearCost(plot).days);
       pay(c, cost);
       c.base.construction = { plot: plot.id, kind: 'clear', facility: null, daysLeft: days, total: days };
       if (plot.terrain !== 'clear') log(c, TERRAINS[plot.terrain].start.replace('{parcela}', plotName(plot)));
@@ -1658,9 +1879,20 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
     case 'build': {
       const plot = plotById(c, action.plot)!;
       const def = FACILITIES[action.facility];
+      const days = workDays(c, def.days);
       pay(c, def.cost);
-      c.base.construction = { plot: plot.id, kind: 'build', facility: def.id, daysLeft: def.days, total: def.days };
+      c.base.construction = { plot: plot.id, kind: 'build', facility: def.id, daysLeft: days, total: days };
       log(c, `Empiezan las obras: ${def.name}, en ${plotName(plot)}.`);
+      break;
+    }
+    case 'upgrade': {
+      const plot = plotById(c, action.plot)!;
+      const id = plot.building as FacilityId;
+      const next = upgradeCost(id, (plot.level ?? 1) + 1);
+      const days = workDays(c, next.days);
+      pay(c, next.cost);
+      c.base.construction = { plot: plot.id, kind: 'upgrade', facility: id, daysLeft: days, total: days };
+      log(c, `Empiezan las obras: ${FACILITIES[id].name} a nivel ${(plot.level ?? 1) + 1}.`);
       break;
     }
     case 'contact': {
@@ -1724,6 +1956,8 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
       return propose(c, { type: 'clear', plot: cmd.plot }, ctx);
     case 'build':
       return propose(c, { type: 'build', plot: cmd.plot, facility: cmd.facility }, ctx);
+    case 'upgrade':
+      return propose(c, { type: 'upgrade', plot: cmd.plot }, ctx);
     case 'contact':
       return propose(c, { type: 'contact', region: cmd.region }, ctx);
     case 'answerEvent':
@@ -1801,12 +2035,21 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
     case 'recruit': {
       const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).length;
       if (mine >= soldierCap(c)) return { ok: false, error: `Máximo ${soldierCap(c)} soldados por jugador.` };
+      if (bedsFree(c) <= 0) return { ok: false, error: 'No quedan camas: construid un barracón.' };
       if (!canAfford(c, recruitCost(c))) return { ok: false, error: 'No hay créditos suficientes.' };
       const place = cmd.squad ? (c.activeMission ? squadPlace(c, slot, ctx.connected) : { error: 'Primero elegid una misión.' }) : null;
       if (place?.error) return { ok: false, error: place.error };
       pay(c, recruitCost(c));
       const s = addSoldier(c, slot, cmd.cls, ctx.rng);
-      log(c, `Reclutado: ${s.name} (${TEMPLATES[cmd.cls].name}).`);
+      // The training centre sends them in already trained: Soldado at level 2, Cabo at 3.
+      const trained = Math.max(0, facilityLevel(c, 'training') - 1);
+      for (let r = 1; r <= trained; r++) {
+        s.rank = r;
+        s.xp = RANKS[r]!.xp;
+        const tier = RANKS[r]?.perkTier;
+        if (tier) s.pendingTiers.push(tier);
+      }
+      log(c, `Reclutado: ${s.name} (${TEMPLATES[cmd.cls].name}${trained ? `, ${RANKS[trained]!.name}` : ''}).`);
       if (place) {
         joinSquad(c, s, place);
         c.launchReady = [false, false];
@@ -1884,7 +2127,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   c.day++;
   let stop = false;
 
-  const heal = facilityCount(c, 'infirmary') ? (hasAdjacency(c, 'infirmary') ? 3 : 2) : 1;
+  const heal = healRate(c);
   for (const s of c.soldiers) {
     if (!s.alive || s.woundedDays === 0) continue;
     s.woundedDays = Math.max(0, s.woundedDays - heal);
@@ -1900,8 +2143,12 @@ function passDay(c: CampaignState, rng: Rng): boolean {
       plot.terrain = 'clear';
       c.credits += salvage;
       log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} ₡ de chatarra.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
+    } else if (work.kind === 'upgrade') {
+      plot.level = (plot.level ?? 1) + 1;
+      log(c, `${FACILITIES[work.facility!].name}, nivel ${plot.level}: ${FACILITIES[work.facility!].upgrades[plot.level - 2]!.split('.')[0]}.`, 'good');
     } else {
       plot.building = work.facility;
+      plot.level = 1;
       const bonus = adjacencyAt(c, plot, work.facility!);
       log(
         c,
@@ -1949,7 +2196,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 
   if (c.day >= c.nextMissionDay) {
     c.nextMissionDay = c.day + 5 + rng.int(3);
-    if (c.offers.filter((o) => !o.final && !o.facility && !o.story).length < MAX_OFFERS) {
+    if (c.offers.filter((o) => !o.final && !o.facility && !o.story).length < MAX_OFFERS + (facilityLevel(c, 'listening') ? 1 : 0)) {
       const offer = makeOffer(c, rng);
       c.offers.push(offer);
       log(c, `Nueva misión en ${REGIONS[offer.region].name}: ${offer.name}.`);
@@ -1958,7 +2205,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   }
 
   if (c.day >= c.nextDoomDay) {
-    c.nextDoomDay = c.day + DOOM_INTERVAL;
+    c.nextDoomDay = c.day + DOOM_INTERVAL + listeningDelay(c);
     c.doom++;
     log(c, doomChangeText(bastionLevel(c), 1), 'bad');
     stop = true;
@@ -2034,7 +2281,7 @@ export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
     if (charges.medkit !== undefined) charges.medkit += 1;
   }
   const traits = s.traits.map((t) => TRAITS[t]);
-  mods = addMods(mods, { aim: traits.reduce((sum, t) => sum + t.aim, 0) });
+  mods = addMods(mods, { aim: traits.reduce((sum, t) => sum + t.aim, 0) + rangeAim(c) });
   return {
     campaignId: s.id,
     name: s.name,
@@ -2133,7 +2380,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     }
     const lost = u.maxHp - u.hp;
     if (lost > 0) {
-      s.woundedDays = 2 + lost * 2;
+      s.woundedDays = Math.max(1, 2 + lost * 2 - garageCut(c).wounds);
       entry.status = 'wounded';
       entry.woundedDays = s.woundedDays;
     }
@@ -2207,7 +2454,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   // Combat is what makes the Bastion grow.
   const kills = report.squad.reduce((sum, e) => sum + e.kills, 0);
   const earned = missionXp(victory, offer?.difficulty ?? 1, kills);
-  report.xp = facilityCount(c, 'simulation') ? Math.round(earned * (hasAdjacency(c, 'simulation') ? 1.4 : 1.25)) : earned;
+  report.xp = Math.round(earned * xpMultiplier(c));
   gainXp(c, report.xp, rng);
   report.levelTo = bastionLevel(c);
 
@@ -2224,7 +2471,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   c.lastReport = report;
   maybeFaces(c, report, rng);
   // The flight back and the recovery. Not after the final mission: the campaign is being decided.
-  if (!offer?.final) passDays(c, MISSION_DAYS + rng.int(2), rng);
+  if (!offer?.final) passDays(c, Math.max(1, MISSION_DAYS + rng.int(2) - garageCut(c).days), rng);
   else c.day++;
   return report;
 }

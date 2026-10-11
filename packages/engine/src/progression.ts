@@ -126,11 +126,17 @@ export function nextTierBlocker(c: Pick<CampaignState, 'xp'>, s: Pick<CampaignSo
   return `${TECHS[tech].name}: requiere ${needs.join(' y ')}`;
 }
 
+/** Bastion level that lets a facility unlocked at `base` rise to level `to` (2 or 3). */
+export function upgradeLevel(base: number, to: number): number {
+  return Math.min(8, base + (to <= 2 ? 2 : 4));
+}
+
 /** Everything a level brings, for the progression screen and level-up alerts. */
 export function levelUnlocks(level: number, facilities: Record<FacilityId, { name: string; level: number }>): string[] {
   return [
     ...Object.values(TECHS).filter((t) => t.level === level).map((t) => t.name),
     ...Object.values(ITEMS).filter((i) => i.level === level).map((i) => i.name),
     ...Object.values(facilities).filter((f) => f.level === level).map((f) => f.name),
+    ...Object.values(facilities).flatMap((f) => [2, 3].filter((to) => upgradeLevel(f.level, to) === level).map((to) => `${f.name}, nivel ${to}`)),
   ];
 }

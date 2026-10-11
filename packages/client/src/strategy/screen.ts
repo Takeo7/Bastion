@@ -25,6 +25,17 @@ import {
   eventDef,
   eventOptionAvailable,
   ADJACENCY,
+  beds,
+  bedsFree,
+  facilityLevel,
+  garageCut,
+  healRate,
+  listeningDelay,
+  rangeAim,
+  upgradable,
+  upgradeCost,
+  workDays,
+  xpMultiplier,
   clearCost,
   clearable,
   neighbours,
@@ -579,8 +590,13 @@ export class StrategyScreen {
         tone: 'good',
         kicker: 'OBRAS TERMINADAS',
         rank: 20,
-        title: work.kind === 'clear' ? 'Terreno despejado' : FACILITIES[work.facility!].name,
-        text: work.kind === 'clear' ? `${capitalize(plotName(plot))} está lista para construir.` : FACILITIES[work.facility!].description,
+        title: work.kind === 'clear' ? 'Terreno despejado' : work.kind === 'upgrade' ? `${FACILITIES[work.facility!].name} · nivel ${plot.level ?? 2}` : FACILITIES[work.facility!].name,
+        text:
+          work.kind === 'clear'
+            ? `${capitalize(plotName(plot))} está lista para construir.`
+            : work.kind === 'upgrade'
+              ? FACILITIES[work.facility!].upgrades[(plot.level ?? 2) - 2]!
+              : FACILITIES[work.facility!].description,
         action: {
           label: 'Ver instalaciones',
           go: () => {
@@ -805,6 +821,14 @@ export class StrategyScreen {
         const extra = bonus ? ` · Junto a ${buildingName(bonus.next)}: ${bonus.text.split('.')[0]}` : '';
         return { line: `${costText(def.cost)} · ${def.days} días · ${def.description}${extra}`, see: () => ((this.plot = action.plot), void this.go('facilities')) };
       }
+      case 'upgrade': {
+        const plot = plotById(c, action.plot);
+        if (!plot?.building || !(plot.building in FACILITIES)) return { line: '', see: null };
+        const id = plot.building as FacilityId;
+        const to = (plot.level ?? 1) + 1;
+        const next = upgradeCost(id, to);
+        return { line: `${costText(next.cost)} · ${workDays(c, next.days)} días · ${FACILITIES[id].upgrades[to - 2]}`, see: () => ((this.plot = plot.id), void this.go('facilities')) };
+      }
       case 'contact':
         return { line: `${costText(contactCost(c))} · +${regionIncome(c, action.region)} ₡ al mes`, see: () => this.focusRegion(action.region) };
       case 'investigate': {
@@ -937,7 +961,7 @@ export class StrategyScreen {
           'button.x-row.agenda',
           { onclick: () => ((this.plot = work.plot), void this.go('facilities')), title: 'Obras en marcha' },
           h('span.agenda-icon.pick'),
-          h('b', {}, work.kind === 'clear' ? 'Desbroce' : FACILITIES[work.facility!].name),
+          h('b', {}, work.kind === 'clear' ? 'Desbroce' : work.kind === 'upgrade' ? `Mejora: ${FACILITIES[work.facility!].name}` : FACILITIES[work.facility!].name),
           this.chip(`${work.daysLeft} d`),
         ),
       );
@@ -1484,7 +1508,7 @@ export class StrategyScreen {
     const count = mine.filter((s) => s.alive).length;
     const cap = soldierCap(c);
     const price = recruitCost(c);
-    const blockedRecruit = this.why([count >= cap, 'El cuartel está lleno'], [true, this.shortfall(price)]);
+    const blockedRecruit = this.why([count >= cap, 'El cuartel está lleno'], [bedsFree(c) <= 0, 'No quedan camas: construid un barracón'], [true, this.shortfall(price)]);
     const recruit = h(
       'div',
       {},
@@ -1495,6 +1519,8 @@ export class StrategyScreen {
         this.chip(costText(price)),
         ' ',
         this.chip(`${count}/${cap}`),
+        ' ',
+        this.chip(`Camas ${c.soldiers.filter((s) => s.alive).length}/${beds(c)}`, bedsFree(c) <= 0 ? 'warn' : '', 'Cada recluta necesita cama: el búnker tiene 8 y cada barracón suma más'),
       ),
       h(
         'div.x-recruit',
@@ -1736,10 +1762,16 @@ export class StrategyScreen {
 
   private renderFacilities(c: CampaignState): void {
     const lines: [string, string][] = [];
-    if (facilityCount(c, 'simulation')) lines.push(['xp', `XP de misión +${hasBonus(c, 'simulation') ? 40 : 25} %`]);
-    if (facilityCount(c, 'workshop')) lines.push(['flag', `Accesorios −${hasBonus(c, 'workshop') ? 40 : 25} %`]);
-    if (facilityCount(c, 'infirmary')) lines.push(['hp', `Heridas ×${hasBonus(c, 'infirmary') ? 3 : 2} de rápido`]);
+    const alive = c.soldiers.filter((s) => s.alive).length;
+    lines.push(['flag', `Camas: ${alive}/${beds(c)}`]);
+    if (facilityCount(c, 'simulation')) lines.push(['xp', `XP de misión +${Math.round((xpMultiplier(c) - 1) * 100)} %`]);
+    if (facilityCount(c, 'workshop')) lines.push(['flag', `Accesorios −${Math.round((1 - shopPrice(c, 'smokeGrenade') / ITEMS.smokeGrenade.cost) * 100)} %`]);
+    if (facilityCount(c, 'infirmary')) lines.push(['hp', `Heridas ×${healRate(c)} de rápido`]);
     if (facilityCount(c, 'training')) lines.push(['flag', `Escuadra de ${squadMax(c)}`]);
+    if (rangeAim(c)) lines.push(['xp', `Puntería +${rangeAim(c)}`]);
+    if (garageCut(c).days) lines.push(['flag', `Misiones −${garageCut(c).days} d${garageCut(c).wounds ? ` · heridas −${garageCut(c).wounds} d` : ''}`]);
+    if (listeningDelay(c)) lines.push(['will', `Reloj enemigo +${listeningDelay(c)} d`]);
+    if (facilityLevel(c, 'crew')) lines.push(['flag', `Obras −${[25, 40, 50][facilityLevel(c, 'crew') - 1]} %`]);
     lines.push(['will', `Contactos: ${contactCapacity(c)} regiones`]);
     const bonuses = adjacencyBonuses(c);
     const work = c.base.construction;
@@ -1755,12 +1787,15 @@ export class StrategyScreen {
       .sort((a, b) => rank(a) - rank(b) || plotRing(a) - plotRing(b) || a.y - b.y || a.x - b.x)
       .map((p) => {
         const busy = work?.plot === p.id;
+        const level = p.building && p.building in FACILITIES ? ` · N${p.level ?? 1}` : '';
         const state = busy
           ? work!.kind === 'clear'
             ? `Despejando · ${TERRAINS[p.terrain as keyof typeof TERRAINS]?.name ?? ''}`
-            : FACILITIES[work!.facility!].name
+            : work!.kind === 'upgrade'
+              ? `${FACILITIES[work!.facility!].name} → N${(p.level ?? 1) + 1}`
+              : FACILITIES[work!.facility!].name
           : p.building
-            ? buildingName(p.building)
+            ? `${buildingName(p.building)}${level}`
             : p.terrain === 'clear'
               ? 'Libre'
               : TERRAINS[p.terrain].name;
@@ -1768,7 +1803,9 @@ export class StrategyScreen {
         const tag = busy
           ? this.chip(`${work!.daysLeft} d`)
           : p.building
-            ? h('span.x-side', {}, bonuses.some((b) => b.plot === p.id) ? '✓ +' : '✓')
+            ? !upgradable(c, p)
+              ? this.chip('Mejorar', 'good', `A nivel ${(p.level ?? 1) + 1} · ${costText(upgradeCost(p.building as FacilityId, (p.level ?? 1) + 1).cost)}`)
+              : h('span.x-side', {}, bonuses.some((b) => b.plot === p.id) ? '✓ +' : '✓')
             : cost
               ? this.chip(`Despejar · ${cost.cost} ₡`, '', `${costText(cost.cost)} · ${cost.days} días${cost.salvage ? ` · +${cost.salvage} ₡ de chatarra` : ''}`)
               : neighbours(c, p).some((q) => q.building)
@@ -1805,13 +1842,14 @@ export class StrategyScreen {
     const content: (HTMLElement | null)[] = [h('div.alert-kicker', {}, `PARCELA ${plotCode(plot)}`)];
     if (busy && work) {
       content.push(
-        h('h2.x-title', {}, work.kind === 'clear' ? 'Despejando el terreno' : FACILITIES[work.facility!].name),
+        h('h2.x-title', {}, work.kind === 'clear' ? 'Despejando el terreno' : work.kind === 'upgrade' ? `${FACILITIES[work.facility!].name} → nivel ${(plot.level ?? 1) + 1}` : FACILITIES[work.facility!].name),
         this.bar(work.total - work.daysLeft, work.total),
         h('p.x-muted', {}, `Faltan ${work.daysLeft} días`),
       );
     } else if (plot.terrain !== 'clear') {
       const terrain = TERRAINS[plot.terrain];
-      const { cost, days, salvage } = clearCost(plot);
+      const { cost, salvage } = clearCost(plot);
+      const days = workDays(c, clearCost(plot).days);
       const blocked = this.why(
         [!!clearable(c, plot), clearable(c, plot) ?? ''],
         [!!work, 'Ya hay una obra en marcha'],
@@ -1831,12 +1869,34 @@ export class StrategyScreen {
       const def = FACILITIES[plot.building as keyof typeof FACILITIES];
       const adj = ADJACENCY.find((a) => a.facility === def.id);
       const active = bonuses.find((b) => b.plot === plot.id);
+      const level = plot.level ?? 1;
+      const now = level === 1 ? def.description : def.upgrades[level - 2]!;
       content.push(
-        h('h2.x-title', {}, def.name),
+        h('h2.x-title', {}, `${def.name} · nivel ${level}`),
         h('p.x-good', {}, 'En servicio'),
-        h('p.x-text', {}, def.description),
+        h('p.x-text', {}, now),
         adj ? h(active ? 'p.x-good' : 'p.x-muted', {}, `${active ? 'Pared con pared con' : 'Mejor junto a'} ${buildingName(adj.next)}: ${adj.text}`) : null,
       );
+      if (level < 3) {
+        // The next level: what it brings, its price and why it can't be done yet.
+        const next = upgradeCost(def.id, level + 1);
+        const blocker = upgradable(c, plot);
+        const why = this.why(
+          [!!blocker, blocker ?? ''],
+          [!!work, 'Ya hay una obra en marcha'],
+          [!!c.proposal, 'Hay una propuesta pendiente'],
+          [!canAfford(c, next.cost), this.shortfall(next.cost)],
+        );
+        content.push(
+          h('div.x-head', {}, `Nivel ${level + 1}`),
+          h('p.x-text', {}, def.upgrades[level - 1]!),
+          h('p.x-chips', {}, this.chip(costText(next.cost)), this.chip(`${workDays(c, next.days)} días`), this.chip(`Bastión nivel ${next.level}`)),
+          h('button.x-btn.primary', { disabled: !!why, onclick: () => this.send({ type: 'upgrade', plot: plot.id }) }, this.decide('mejorar')),
+          this.whyEl(why),
+        );
+      } else {
+        content.push(h('p.x-muted', {}, 'Al máximo.'));
+      }
     } else {
       content.push(h('h2.x-title', {}, 'Terreno libre'), work ? h('p.x-why', {}, 'Hay otra obra en marcha') : null);
       for (const def of Object.values(FACILITIES)) {
@@ -1857,7 +1917,7 @@ export class StrategyScreen {
                   h('b', {}, def.name),
                   h('small', {}, def.description),
                   bonus ? h('small.x-good', { title: bonus.text }, `Junto a ${buildingName(bonus.next)}: ${bonus.text.split('.')[0]}`) : null,
-                  h('small', {}, `${def.days} días de obras`),
+                  h('small', {}, `${workDays(c, def.days)} días de obras`),
                   why && !work ? h('small.x-why', {}, why) : null,
                 ),
                 h(
@@ -1957,7 +2017,7 @@ export class StrategyScreen {
     const entries = Array.from({ length: max }, (_, i) => squad[i] ?? null);
     // A free place this player could take but has nobody ready to put in: recruit straight into it (#39).
     const spare = roster.some((s) => soldierReady(s) && !c.squad.includes(s.id));
-    const recruitable = !spare && roster.length < soldierCap(c) && !squadPlace(c, this.mySlot, this.connected()).error;
+    const recruitable = !spare && roster.length < soldierCap(c) && bedsFree(c) > 0 && !squadPlace(c, this.mySlot, this.connected()).error;
     const cost = recruitCost(c);
     entries.forEach((s, i) => {
       const card = s

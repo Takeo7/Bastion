@@ -18,11 +18,17 @@ import {
   plotById,
   recruitCost,
   walkways,
+  beds,
+  bedsFree,
+  upgradeCost,
+  FACILITIES,
+  listeningDelay,
   shopPrice,
   squadLimit,
   squadMember,
   type CampaignCommand,
   type CampaignState,
+  type FacilityId,
 } from '../src/campaign';
 import { abilitiesOf } from '../src/abilities';
 import { defaultAppearance } from '../src/appearance';
@@ -140,6 +146,83 @@ describe('the compound', () => {
     expect(squadLimit(c, both)).toBe(3);
     plotById(c, '2,2')!.building = 'training';
     expect(squadLimit(c, both)).toBe(4);
+  });
+});
+
+describe('buildings and their levels', () => {
+  it('the bunker sleeps the first eight; recruiting needs a barracón (2/3/4 beds, one more by the Cuartel)', () => {
+    const c = solo();
+    expect(beds(c)).toBe(8);
+    expect(() => run(c, { type: 'recruit', cls: 'assault' })).toThrow(/camas/);
+    plotById(c, '4,4')!.building = 'quarters';
+    expect(beds(c)).toBe(10);
+    plotById(c, '4,4')!.level = 3;
+    expect(beds(c)).toBe(12);
+    plotById(c, '2,4')!.building = 'quarters';
+    expect(beds(c)).toBe(12 + 3);
+    run(c, { type: 'recruit', cls: 'assault' });
+    expect(bedsFree(c)).toBe(15 - 9);
+  });
+
+  it('a facility rises to levels 2 and 3 with the Bastion, one work at a time', () => {
+    const c = solo();
+    run(c, { type: 'build', plot: '2,2', facility: 'workshop' });
+    advanceUntil(c, () => !c.base.construction);
+    expect(plotById(c, '2,2')!.level).toBe(1);
+    expect(() => run(c, { type: 'upgrade', plot: '2,2' })).toThrow(/nivel 3/);
+    c.xp = LEVEL_XP[2]!;
+    const credits = c.credits;
+    run(c, { type: 'upgrade', plot: '2,2' });
+    expect(c.credits).toBe(credits - upgradeCost('workshop', 2).cost);
+    advanceUntil(c, () => !c.base.construction);
+    expect(plotById(c, '2,2')!.level).toBe(2);
+    expect(shopPrice(c, 'smokeGrenade')).toBe(Math.round(25 * 0.65));
+    c.xp = LEVEL_XP[4]!;
+    run(c, { type: 'upgrade', plot: '2,2' });
+    advanceUntil(c, () => !c.base.construction);
+    expect(() => run(c, { type: 'upgrade', plot: '2,2' })).toThrow(/máximo/);
+    expect(shopPrice(c, 'smokeGrenade')).toBe(Math.round(25 * 0.55));
+  });
+
+  it('range, works brigade, listening post, La Mula and training do what they say', () => {
+    const c = solo();
+    c.xp = LEVEL_XP[7]!;
+    const put = (id: string, building: FacilityId, level = 1) => Object.assign(plotById(c, id)!, { terrain: 'clear', building, level });
+    // Shooting range: aim for every soldier, two more next to the training centre.
+    const s0 = c.soldiers[0]!;
+    const aim = squadMember(c, s0).mods.aim;
+    put('2,4', 'range');
+    expect(squadMember(c, s0).mods.aim).toBe(aim + 3);
+    put('2,4', 'range', 3);
+    expect(squadMember(c, s0).mods.aim).toBe(aim + 10);
+    put('3,4', 'training', 3);
+    expect(squadMember(c, s0).mods.aim).toBe(aim + 12);
+    // Training at level 3: recruits arrive as Cabo, with their two promotions to choose.
+    put('1,3', 'quarters');
+    run(c, { type: 'recruit', cls: 'assault' });
+    const recruit = c.soldiers[c.soldiers.length - 1]!;
+    expect(recruit.rank).toBe(2);
+    expect(recruit.pendingTiers).toEqual([1, 2]);
+    // Works brigade: a quarter off the days of every work.
+    put('4,2', 'crew');
+    run(c, { type: 'build', plot: '4,4', facility: 'infirmary' });
+    expect(c.base.construction!.total).toBe(Math.round(FACILITIES.infirmary.days * 0.75));
+    c.base.construction = null;
+    // Listening post: the enemy clock steps later.
+    put('2,2', 'listening', 2);
+    expect(listeningDelay(c)).toBe(4);
+    c.nextDoomDay = c.day + 1;
+    run(c, { type: 'advance', ready: true });
+    expect(c.nextDoomDay - c.day).toBe(12 + 4);
+    // La Mula's workshop: a mission takes a day less.
+    put('5,3', 'garage');
+    const offer = c.offers[0]!;
+    run(c, { type: 'chooseMission', id: offer.id });
+    const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(2), kind: offer.kind, pods: offer.pods });
+    mission.outcome = 'victory';
+    const report = applyMissionResult(c, mission, new Rng(1));
+    expect(c.day - report.day).toBeGreaterThanOrEqual(2);
+    expect(c.day - report.day).toBeLessThanOrEqual(3);
   });
 });
 

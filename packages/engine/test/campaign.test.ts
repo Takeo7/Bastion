@@ -125,6 +125,8 @@ describe('missions', () => {
   it('a share the partner cannot fill is lent to the other player, and comes back when they can', () => {
     const c = createCampaign(both, new Rng(2));
     c.credits = 500;
+    // The bunker sleeps the eight starting soldiers: recruiting needs a barracón.
+    c.base.plots.find((p) => p.id === '2,4')!.building = 'quarters';
     const theirs = c.soldiers.filter((s) => s.owner === 1);
     // Player 1 has a single soldier fit to fight.
     for (const s of theirs.slice(1)) s.woundedDays = 5;
@@ -317,6 +319,9 @@ describe('helping the players', () => {
     const c = createCampaign([0], new Rng(1));
     const mine = c.soldiers.filter((s) => s.owner === 0);
     for (const s of mine.slice(1)) s.woundedDays = 8;
+    // The bunker is full: first a barracón for the recruits to sleep in.
+    expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'facilities', label: 'Solo 1 soldado listo y sin camas: construye un barracón' });
+    c.base.plots.find((p) => p.id === '2,4')!.building = 'quarters';
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'barracks', label: 'Solo 1 soldado listo: recluta (30 ₡)' });
     // An operation about to expire still comes first.
     c.offers.find((o) => o.expiresDay !== null)!.expiresDay = c.day + 1;
