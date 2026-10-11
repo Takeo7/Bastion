@@ -27,8 +27,9 @@ export class CombatTips {
         this.show('contact');
         return;
       case 'damaged': {
+        // Only a soldier still standing: "herido no es caído" over a fallen one would jar.
         const u = getUnit(view, e.unit);
-        if (e.amount && u && this.mine(u)) this.show('wounded');
+        if (e.amount && u && this.mine(u) && u.alive && u.hp > 0) this.show('wounded');
         return;
       }
       case 'psi': {
