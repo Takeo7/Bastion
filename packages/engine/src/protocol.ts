@@ -71,7 +71,7 @@ export const campaignCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('investigate'), id }),
   z.object({ type: z.literal('cancelMission') }),
   z.object({ type: z.literal('squad'), soldier: id, on: z.boolean() }),
-  z.object({ type: z.literal('recruit'), cls: classId }),
+  z.object({ type: z.literal('recruit'), cls: classId, squad: z.boolean().optional() }),
   z.object({ type: z.literal('promote'), soldier: id, perk: perkId }),
   z.object({ type: z.literal('buy'), item: itemId }),
   z.object({ type: z.literal('equip'), soldier: id, slot: z.enum(['utility', 'ammo']), item: itemId.nullable() }),

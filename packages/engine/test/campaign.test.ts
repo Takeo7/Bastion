@@ -121,6 +121,30 @@ describe('missions', () => {
     expect(executeCampaignCommand(c, { type: 'squad', soldier: theirs[3]!.id, on: true }, { slot: 0, connected: both, rng: new Rng(1) }).ok).toBe(false);
   });
 
+  it('a share the partner cannot fill is lent to the other player, and comes back when they can', () => {
+    const c = createCampaign(both, new Rng(2));
+    c.credits = 500;
+    const theirs = c.soldiers.filter((s) => s.owner === 1);
+    // Player 1 has a single soldier fit to fight.
+    for (const s of theirs.slice(1)) s.woundedDays = 5;
+    run(c, { type: 'chooseMission', id: c.offers[0]!.id }, 0, both);
+    run(c, { type: 'vote', accept: true }, 1, both);
+    const count = (slot: Slot) => c.squad.filter((id) => c.soldiers.find((s) => s.id === id)!.owner === slot).length;
+    // The squad comes as full as it can: player 0's fourth soldier takes a place player 1 can't fill.
+    expect([count(0), count(1)]).toEqual([4, 1]);
+    // Recruiting from a free place in the hangar goes straight into the squad.
+    run(c, { type: 'recruit', cls: 'sharpshooter', squad: true }, 0, both);
+    expect([count(0), count(1)]).toEqual([5, 1]);
+    // Player 1's wounded soldier heals: the lent place comes back, and the last of player 0's lent soldiers leaves.
+    theirs[1]!.woundedDays = 0;
+    run(c, { type: 'squad', soldier: theirs[1]!.id, on: true }, 1, both);
+    expect([count(0), count(1)]).toEqual([4, 2]);
+    // While player 1 still has someone ready to bring, their share is theirs.
+    run(c, { type: 'squad', soldier: theirs[1]!.id, on: false }, 1, both);
+    const out = c.soldiers.find((s) => s.owner === 0 && !c.squad.includes(s.id))!;
+    expect(() => run(c, { type: 'squad', soldier: out.id, on: true }, 0, both)).toThrow(/compañero/);
+  });
+
   it('launches only when both are ready', () => {
     const { c } = ready();
     expect(run(c, { type: 'launch', ready: true }, 0).launch).toBeUndefined();

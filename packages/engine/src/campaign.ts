@@ -1323,7 +1323,8 @@ export type CampaignCommand =
   | { type: 'investigate'; id: string }
   | { type: 'cancelMission' }
   | { type: 'squad'; soldier: string; on: boolean }
-  | { type: 'recruit'; cls: ClassId }
+  /** `squad`: straight into the squad of the chosen mission (a free place in the hangar). */
+  | { type: 'recruit'; cls: ClassId; squad?: boolean }
   | { type: 'promote'; soldier: string; perk: PerkId }
   | { type: 'buy'; item: ItemId }
   | { type: 'equip'; soldier: string; slot: ItemSlot; item: ItemId | null }
@@ -1351,6 +1352,45 @@ export function squadMax(c: CampaignState): number {
   return facilityCount(c, 'training') > 0 ? 8 : 6;
 }
 
+function squadCount(c: CampaignState, slot: Slot): number {
+  return c.squad.filter((id) => c.soldiers.find((s) => s.id === id)?.owner === slot).length;
+}
+
+/**
+ * Whether `slot` can put one more soldier in the squad (UX-REVISION-2 #39).
+ * Each player has a share; a share the partner can't fill (no ready soldier
+ * left out) can be taken by the other. A place lent that way comes back when
+ * its owner wants it: `evict` is the soldier that leaves to make room.
+ */
+export function squadPlace(c: CampaignState, slot: Slot, connected: readonly Slot[]): { error: string | null; evict?: string } {
+  const limit = squadLimit(c, connected);
+  const mine = squadCount(c, slot);
+  if (c.squad.length >= squadMax(c)) {
+    const lent = mine < limit ? [...c.squad].reverse().find((id) => {
+      const owner = c.soldiers.find((s) => s.id === id)?.owner;
+      return owner !== undefined && owner !== slot && squadCount(c, owner) > limit;
+    }) : undefined;
+    return lent ? { error: null, evict: lent } : { error: 'La escuadra está completa.' };
+  }
+  if (mine < limit) return { error: null };
+  const partner = c.players.find((p) => p !== slot);
+  const spare =
+    partner !== undefined &&
+    connected.includes(partner) &&
+    squadCount(c, partner) < limit &&
+    c.soldiers.some((s) => s.owner === partner && soldierReady(s) && !c.squad.includes(s.id));
+  return spare ? { error: `Máximo ${limit} soldados por jugador: tu compañero aún puede completar su parte.` } : { error: null };
+}
+
+function joinSquad(c: CampaignState, soldier: CampaignSoldier, place: { evict?: string }): void {
+  if (place.evict) {
+    const out = c.soldiers.find((s) => s.id === place.evict)!;
+    c.squad = c.squad.filter((id) => id !== place.evict);
+    log(c, `${out.name} deja su hueco a ${soldier.name}.`);
+  }
+  c.squad.push(soldier.id);
+}
+
 /**
  * The squad a mission starts with: each connected player's best ready soldiers,
  * one of each class first (a balanced team), then by rank and experience.
@@ -1365,6 +1405,11 @@ export function defaultSquad(c: CampaignState, connected: readonly Slot[]): stri
     for (const s of ready) if (picked.length < limit && !picked.includes(s)) picked.push(s);
     squad.push(...picked.map((s) => s.id));
   }
+  // A share left short (wounded, fallen) is filled with the other player's best soldiers left out.
+  const spare = c.soldiers
+    .filter((s) => connected.includes(s.owner) && c.players.includes(s.owner) && soldierReady(s) && !squad.includes(s.id))
+    .sort((a, b) => b.rank - a.rank || b.xp - a.xp);
+  for (const s of spare) if (squad.length < squadMax(c)) squad.push(s.id);
   return squad.slice(0, squadMax(c));
 }
 
@@ -1702,11 +1747,9 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
         c.squad = c.squad.filter((id) => id !== s.id);
       } else if (!c.squad.includes(s.id)) {
         if (!soldierReady(s)) return { ok: false, error: `${s.name} no está en condiciones.` };
-        const mine = c.squad.filter((id) => c.soldiers.find((x) => x.id === id)?.owner === slot).length;
-        const limit = squadLimit(c, ctx.connected);
-        if (mine >= limit) return { ok: false, error: `Máximo ${limit} soldados por jugador.` };
-        if (c.squad.length >= squadMax(c)) return { ok: false, error: 'La escuadra está completa.' };
-        c.squad.push(s.id);
+        const place = squadPlace(c, slot, ctx.connected);
+        if (place.error) return { ok: false, error: place.error };
+        joinSquad(c, s, place);
       }
       c.launchReady = [false, false];
       return { ok: true };
@@ -1739,9 +1782,15 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
       const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).length;
       if (mine >= soldierCap(c)) return { ok: false, error: `Máximo ${soldierCap(c)} soldados por jugador.` };
       if (!canAfford(c, recruitCost(c))) return { ok: false, error: 'No hay créditos suficientes.' };
+      const place = cmd.squad ? (c.activeMission ? squadPlace(c, slot, ctx.connected) : { error: 'Primero elegid una misión.' }) : null;
+      if (place?.error) return { ok: false, error: place.error };
       pay(c, recruitCost(c));
       const s = addSoldier(c, slot, cmd.cls, ctx.rng);
       log(c, `Reclutado: ${s.name} (${TEMPLATES[cmd.cls].name}).`);
+      if (place) {
+        joinSquad(c, s, place);
+        c.launchReady = [false, false];
+      }
       return { ok: true };
     }
 

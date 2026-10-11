@@ -75,6 +75,8 @@ import {
   soldierReady,
   soldierWeaponName,
   squadLimit,
+  squadPlace,
+  recruitCost,
   squadMax,
   squadMember,
   STORY,
@@ -242,6 +244,8 @@ export class StrategyScreen {
   private custom: { soldier: string; name: string; nickname: string; appearance: Appearance } | null = null;
   /** The plot picked in the facilities view ("x,y"). */
   private plot: string | null = null;
+  /** The free hangar place whose recruit choice (one button per class) is open. */
+  private recruitPad: number | null = null;
   private promoting = false;
   /** Open equipment picker ("soldierId:slot"). */
   private picking: string | null = null;
@@ -1473,11 +1477,19 @@ export class StrategyScreen {
       );
     const count = mine.filter((s) => s.alive).length;
     const cap = soldierCap(c);
-    const blockedRecruit = this.why([count >= cap, 'El cuartel está lleno'], [true, this.shortfall(RECRUIT_COST)]);
+    const price = recruitCost(c);
+    const blockedRecruit = this.why([count >= cap, 'El cuartel está lleno'], [true, this.shortfall(price)]);
     const recruit = h(
       'div',
       {},
-      h('div.x-group', { title: `Cada recluta cuesta ${RECRUIT_COST} créditos; como mucho ${cap} soldados por jugador` }, 'Reclutar ', this.chip(costText(RECRUIT_COST)), ' ', this.chip(`${count}/${cap}`)),
+      h(
+        'div.x-group',
+        { title: `Cada recluta cuesta ${price} créditos${price < RECRUIT_COST ? ' (el centro de entrenamiento está junto al cuartel)' : ''}; como mucho ${cap} soldados por jugador` },
+        'Reclutar ',
+        this.chip(costText(price)),
+        ' ',
+        this.chip(`${count}/${cap}`),
+      ),
       h(
         'div.x-recruit',
         {},
@@ -1887,7 +1899,11 @@ export class StrategyScreen {
       this.panel(
         'squad-left',
         'left.compact',
-        h('div.x-head', { title: 'Pulsa un soldado para meterlo o sacarlo. El equipo se cambia en el Cuartel.' }, `Tus soldados · ${myCount}/${limit}`),
+        h(
+          'div.x-head',
+          { title: 'Pulsa un soldado para meterlo o sacarlo. Si tu compañero no llena su parte, puedes ocupar sus huecos; los recupera cuando tenga a quién llevar. El equipo se cambia en el Cuartel.' },
+          myCount > limit ? `Tus soldados · ${myCount} (${myCount - limit} en huecos de ${this.partner()?.name ?? 'tu compañero'})` : `Tus soldados · ${myCount}/${limit}`,
+        ),
         h(
           'div.x-list',
           {},
@@ -1933,6 +1949,10 @@ export class StrategyScreen {
 
     const cards = h('div.lineup-cards');
     const entries = Array.from({ length: max }, (_, i) => squad[i] ?? null);
+    // A free place this player could take but has nobody ready to put in: recruit straight into it (#39).
+    const spare = roster.some((s) => soldierReady(s) && !c.squad.includes(s.id));
+    const recruitable = !spare && roster.length < soldierCap(c) && !squadPlace(c, this.mySlot, this.connected()).error;
+    const cost = recruitCost(c);
     entries.forEach((s, i) => {
       const card = s
         ? h(
@@ -1943,12 +1963,55 @@ export class StrategyScreen {
             c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
             s.owner === this.mySlot ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
           )
-        : h('div.lineup-card.empty', { title: myCount < limit ? 'Elige un soldado a la izquierda' : '' }, h('b', {}, 'Libre'));
+        : recruitable
+          ? this.recruitCard(c, i, cost)
+          : h('div.lineup-card.empty', { title: spare ? 'Elige un soldado a la izquierda' : '' }, h('b', {}, 'Libre'));
       card.dataset.pad = String(i);
       cards.append(card);
     });
     this.viewEl.append(cards);
     this.anchorCards(cards, max);
+  }
+
+  /** A free hangar place: «Reclutar» opens one button per class, and the recruit goes straight into the squad. */
+  private recruitCard(c: CampaignState, pad: number, cost: number): HTMLElement {
+    const afford = canAfford(c, cost);
+    return h(
+      'div.lineup-card.empty.recruit',
+      {},
+      h('b', {}, 'Libre'),
+      this.recruitPad === pad
+        ? h(
+            'div.recruit-classes',
+            {},
+            ...CLASSES.map((cls) =>
+              h(
+                'button.x-btn.small',
+                {
+                  title: `Reclutar ${TEMPLATES[cls].name.toLowerCase()} · ${cost} ₡`,
+                  onclick: () => {
+                    this.recruitPad = null;
+                    this.send({ type: 'recruit', cls, squad: true });
+                  },
+                },
+                this.clsTag(cls),
+                TEMPLATES[cls].name,
+              ),
+            ),
+          )
+        : h(
+            'button.x-btn',
+            {
+              disabled: !afford,
+              title: afford ? 'Un soldado nuevo, directo a la escuadra' : this.shortfall(cost),
+              onclick: () => {
+                this.recruitPad = pad;
+                this.render();
+              },
+            },
+            `Reclutar · ${cost} ₡`,
+          ),
+    );
   }
 
   /** Keeps the lineup cards under each soldier while the camera moves. */
