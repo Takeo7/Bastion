@@ -9,6 +9,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   root: import.meta.dirname,
   base: './',
+  assetsInclude: ['**/*.vox'],
   build: {
     target: 'es2022',
     emptyOutDir: true,

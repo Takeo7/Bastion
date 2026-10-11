@@ -106,6 +106,58 @@ Se eligió "Todo vóxel": los modelos se siguen construyendo con primitivas y se
   - Se construye una sola vez (unos 100 ms) y se reutiliza al volver de cada misión.
 - **Coste** (M4): un mapa completo son unos 600 000 triángulos y 1,4 ms de render; el posproceso añade alrededor de 1 ms. Convertir un soldado tarda unos 13 ms; el decorado, unos 350 ms una sola vez.
 
+## Modelos vóxel hechos a mano (2026-10-11)
+
+![Reparto hecho a mano: soldados y alienígenas](arte/voxel-reparto.jpg)
+
+Todas las unidades del juego están dibujadas vóxel a vóxel; ya no se convierten desde primitivas.
+
+- **Soldados:** las cuatro clases con su equipo, las seis cabezas del personalizador, las tres complexiones y los tres niveles de blindaje y de arma:
+  - **Clases:** el especialista lleva mochila de radio, antena y dron; el asalto, escopeta y espada a la espalda; el granadero, lanzagranadas, mochila pesada y granadas al cinto; el francotirador, rifle largo, capa y pistolera.
+  - **Cabezas:** casco táctico, capucha, boina, gorra con gafas, máscara y a cara descubierta.
+  - **Complexiones:** delgada (sin hombreras, con brazalete), normal y robusta (hombreras grandes y placa en la espalda).
+  - **Blindaje:** el kevlar; el de placas (muslos, espinillas, brazos y gola); el motorizado (costuras y rodillas que brillan en el color del visor, y una batería a la espalda).
+- **Alienígenas y especiales:**
+  - **Sectoide:** al lanzar se lleva la mano a la sien.
+  - **ADVENT:** soldado, oficial (hombreras y cresta doradas, visor naranja, capa) y lancero (esbelto, visor cian, porra de punta brillante). Llevan casco ovalado con una sola ranura de visor y una cresta.
+  - **Xenoide:** cráneo alargado, ojos verdes y manos de tres dedos.
+  - **MEC:** patas invertidas, lanzamisiles con cuatro tubos, puño y brazo-cañón.
+  - **Zombi:** harapos, una placa de armadura, mandíbula colgando, ojos violeta y garras.
+  - **Retransmisor:** con su anillo girando.
+  - **VIP:** abrigo, gafas, bufanda del color del equipo y maletín.
+
+![Modelo actual y hecho a mano: especialista de frente y de espaldas, personalizado con arma magnética, y sectoide](arte/voxel-a-mano.jpg)
+
+- **Formato:** archivos de MagicaVoxel en `client/src/assets/voxel/` (`soldier`, `advent`, `sectoid`, `xenoid`, `mec`, `zombie`, `relay`, `vip`).
+  - Cada archivo es un *kit*: un modelo con nombre por hueso del esqueleto, colocados como en la pose de reposo.
+  - Las variantes llevan etiquetas tras los dos puntos: `spine:normal` (cuerpo de cada complexión), `spine:normal.a2` (blindaje encima), `spine:normal.specialist` (equipo de la clase), `head:hood`, `gun:sniper`.
+  - El juego se pone las piezas cuyas etiquetas tiene. Las de un mismo hueso se funden en orden, así que una capa puede repintar la de debajo y no hay parpadeos.
+  - Se pueden abrir y retocar en MagicaVoxel. Al abrirse solo se ve el especialista por defecto; el resto de variantes están ocultas en la lista de objetos.
+- **Mismo esqueleto:** cada pieza va en su hueso de `figures.ts`, así que poses, animaciones y puntería no cambian (`game/voxFigures.ts`). Las articulaciones de cada kit están en `game/voxBodies.ts`, que comparten el juego y las herramientas de dibujo, para que nunca se desajusten.
+- **Colores por unidad:** el kit reserva índices de su paleta que el juego repinta (`SLOT` en `vox.ts`):
+  - armadura, placas y visor del personalizador;
+  - la **marca de equipo**, siempre en el color del jugador aunque se personalice el resto: raya del casco, canto de las hombreras o brazalete;
+  - la tela de capucha y capa;
+  - el arma por nivel: acero; azul acerado con bobinas cian; blanco con emisor violeta.
+
+  En ADVENT se repintan la placa y el visor de cada tipo.
+- **Paleta:**
+  - **XCOM:** uniforme oliva, correaje y bolsas caqui, botas oscuras; el color del jugador solo en casco, chaleco, hombreras y rodilleras.
+  - **ADVENT:** mono oscuro y armadura granate.
+  - **Lo psiónico:** violeta (sectoide, zombi).
+  - **El rojo:** sigue reservado a lo que te amenaza.
+- **Cómo se dibujan:** no hay MagicaVoxel en la sesión, así que los modelos se esculpen en código. `client/tools/vox/` tiene cajas, elipsoides, líneas, simetría y pintura sobre la rejilla. `npx tsx packages/client/tools/vox/build.ts [kit…]` escribe los `.vox`. **Ojo:** volver a generarlos sobrescribe los retoques hechos en MagicaVoxel.
+- **Rendimiento:** construir una unidad cuesta ~1 ms la primera vez (incluye leer el kit) y ~0,1 ms después, frente a 1,2–2,4 ms de las convertidas. La geometría se comparte entre unidades con los mismos colores.
+- **Laboratorio:** `http://localhost:5173/modelos.html` pone cada modelo antiguo al lado del hecho a mano, en varias poses, con la luz del juego. Vistas:
+  - `#todos`;
+  - `#par0`…, `#atras0`… y `#grande0`… para cada pareja;
+  - `#desfile0` y `#desfile1` para el reparto;
+  - `#tactico` y `#lejos` con la cámara del juego.
+
+**Luz de relleno (2026-10-11):** con la cámara por defecto, el sol del combate llega desde detrás de las unidades, así que el jugador veía sus caras en sombra, teñidas del azul del cielo. Ahora una luz suave sigue a la cámara (`Renderer.fill`, intensidad 0,7, sin sombras). Ilumina lo que ves sin cambiar las sombras del sol; a más intensidad empieza a lavar el suelo.
+
+![Combate sin y con la luz de relleno](arte/luz-relleno.jpg)
+
 ## Modelos articulados (2026-10-04)
 
 Los muñecos de cápsula se sustituyen por figuras con esqueleto (`game/figures.ts`): columna, cuello, hombros, codos, caderas, rodillas y tobillos. Los brazos alcanzan las empuñaduras del arma por cinemática inversa, las piernas se doblan para agacharse y correr, y hay animación de lanzamiento y de caída. Cada clase tiene su equipo:
@@ -191,4 +243,4 @@ Datos comprobados en la tienda y en sus licencias (resumen; leer las licencias c
 1. ~~Elegir uno o dos estilos finalistas~~: Vóxel y Low-poly sci-fi (2026-10-05).
 2. Validar el flujo con un soldado, un alien y unas coberturas hechos de verdad. Para vóxel, con MagicaVoxel. Para low-poly, con un pack pequeño de Synty convertido a glTF, o modelado propio. Hay que comprobar importación, materiales, animación y rendimiento.
 3. ~~Aplicar la interfaz Expediente al juego~~ (2026-10-05) y ~~pasar todo el juego a vóxel~~ (2026-10-05).
-4. Definir la paleta de equipos (colores de jugador y alienígenas) y sustituir las primitivas convertidas por modelos hechos a mano en MagicaVoxel donde se note la diferencia (soldados y alienígenas primero).
+4. Definir la paleta de equipos (colores de jugador y alienígenas) y sustituir las primitivas convertidas por modelos hechos a mano en MagicaVoxel donde se note la diferencia (soldados y alienígenas primero). **Hecho (2026-10-11):** todas las unidades, ver "Modelos vóxel hechos a mano".

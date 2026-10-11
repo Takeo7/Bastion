@@ -79,7 +79,7 @@ function mat(color: THREE.ColorRepresentation, o: { glow?: THREE.ColorRepresenta
   return m;
 }
 
-interface Palette {
+export interface Palette {
   suit: THREE.Material;
   armour: THREE.Material;
   plate: THREE.Material;
@@ -100,7 +100,7 @@ function visorMat(color: THREE.ColorRepresentation): THREE.MeshStandardMaterial 
 }
 
 /** Squad colours; a customized soldier (`look`) brings its own armour, plates and visor. */
-function soldierPalette(accent: string, look?: Appearance): Palette {
+export function soldierPalette(accent: string, look?: Appearance): Palette {
   const armour = look ? new THREE.Color(look.primary) : new THREE.Color(accent).lerp(new THREE.Color(0x56605a), 0.55);
   return {
     suit: mat(0x30373a, { rough: 0.85 }),
@@ -129,7 +129,7 @@ function advent(plate: number, visor: number): Palette {
 
 // ------------------------------------------------------------- skeleton
 
-interface Body {
+export interface Body {
   /** Gap from the pelvis pivot down to the hip joints. */
   hipDrop: number;
   hipX: number;
@@ -175,7 +175,7 @@ const HUMAN: Body = {
 /** Standing angles of the reverse-jointed legs. */
 const DIGI = { thigh: -0.5, knee: 1.05 };
 
-class Figure {
+export class Figure {
   readonly root = new THREE.Group();
   readonly yaw = new THREE.Group();
   readonly pivot = new THREE.Group();
@@ -950,7 +950,7 @@ function mec(): Figure {
 }
 
 /** Hit flash on the torso, sized for each body. */
-function flashOn(f: Figure, radius: number, length: number, y: number): void {
+export function flashOn(f: Figure, radius: number, length: number, y: number): void {
   f.flash = f.part(
     f.spine,
     new THREE.CapsuleGeometry(radius, length, 4, 12),

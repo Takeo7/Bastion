@@ -28,6 +28,8 @@ function devSnapshots(): Plugin {
 
 export default defineConfig({
   plugins: [devSnapshots()],
+  // Hand-made voxel kits (MagicaVoxel), imported inline by game/voxFigures.ts.
+  assetsInclude: ['**/*.vox'],
   server: {
     host: true,
     port: 5173,

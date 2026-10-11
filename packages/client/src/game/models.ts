@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Appearance, TemplateId, Tier } from '@bastion/engine';
 import { buildFigure, FIGURE_TEMPLATES, type FigurePose, type FigureRig, type Gear } from './figures';
 import { voxelizeUnit } from './voxel';
+import { voxFigure } from './voxFigures';
 
 // Placeholder models built from primitives, with a minimal "skeleton" so the
 // animation code can pose them:
@@ -282,8 +283,17 @@ export function buildModel(template: TemplateId, accent: string): UnitRig {
 /** Templates with an articulated figure (figures.ts); the rest keep the placeholder model. */
 const FIGURES = new Set<string>(FIGURE_TEMPLATES);
 
-/** The model a unit is shown with: an articulated figure when there is one, in voxels (M5 art). */
+/**
+ * The model a unit is shown with, in voxels (M5 art): hand-made when the kits
+ * can dress it (voxFigures.ts), otherwise an articulated figure (or the old
+ * placeholder) converted to voxels.
+ */
 export function buildUnit(template: TemplateId, accent: string, appearance?: Appearance, gear?: Gear): UnitRig | FigureRig {
+  const hand = voxFigure(template, accent, appearance, gear);
+  if (hand) {
+    hand.applyPose(IDLE_POSE, 0);
+    return hand;
+  }
   const rig = FIGURES.has(template) ? buildFigure(template, accent, appearance, gear) : buildModel(template, accent);
   voxelizeUnit(rig);
   return rig;

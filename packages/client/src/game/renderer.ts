@@ -28,6 +28,13 @@ export class Renderer {
   readonly labels = new CSS2DRenderer();
   // Voxel art (M5): a warm afternoon sun under a pale sky, as in the art lab.
   private readonly sun = new THREE.DirectionalLight(0xffe0b0, 3.3);
+  /**
+   * Soft light from the camera, without shadows. The sun comes from behind
+   * the default camera, so without it the sides of the soldiers you see are
+   * in shade and take the sky's blue.
+   */
+  readonly fill = new THREE.DirectionalLight(0xfff1e0, 0.7);
+  private readonly look = new THREE.Vector3();
   private readonly frameFns = new Set<FrameFn>();
   private readonly clock = new THREE.Timer();
   /** Voxel post-processing: ambient occlusion in corners and contacts, bloom on lights. */
@@ -56,7 +63,7 @@ export class Renderer {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.02;
-    this.scene.add(this.sun, this.sun.target);
+    this.scene.add(this.sun, this.sun.target, this.fill, this.fill.target);
 
     this.post = voxelPost(this.gl, this.scene, this.camera);
 
@@ -125,6 +132,9 @@ export class Renderer {
 
   /** Draws one frame as the player sees it: scene with post-processing, then the CSS2D labels. */
   render(dt = 0): void {
+    this.camera.getWorldDirection(this.look);
+    this.fill.position.copy(this.camera.position);
+    this.fill.target.position.copy(this.camera.position).add(this.look);
     if (this.effects === 'low') this.gl.render(this.scene, this.camera);
     else this.post.composer.render(dt);
     this.labels.render(this.scene, this.camera);
