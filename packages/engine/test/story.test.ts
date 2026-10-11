@@ -59,6 +59,10 @@ describe('story', () => {
     expect(chapter(c, 1)).toBeUndefined();
     expect(chapter(c, 2)).toBeUndefined();
     gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
+    // Chapters don't chain back to back: the next one waits some days after the last win.
+    expect(chapter(c, 2)).toBeUndefined();
+    for (let i = 0; i < 10 && !chapter(c, 2); i++) run(c, { type: 'advance', ready: true });
+    expect(c.day).toBeGreaterThanOrEqual(c.story.nextDay!);
     expect(chapter(c, 2)).toMatchObject({ kind: 'rescue', region: 'afr', expiresDay: null });
     expect(offerVip(c, chapter(c, 2)!)).toBe('Dra. Amara Nwosu');
   });

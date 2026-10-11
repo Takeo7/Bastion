@@ -171,7 +171,13 @@ describe('missions', () => {
     expect(report.squad.find((e) => e.id === soldiers[1]!.campaignId)).toMatchObject({ status: 'wounded', woundedDays: 6, xpGained: 2 });
     expect(report.squad.find((e) => e.id === soldiers[2]!.campaignId)).toMatchObject({ kills: 6, xpGained: 8, promotedTo: 2 });
     expect(c.soldiers.find((s) => s.id === soldiers[0]!.campaignId)!.alive).toBe(false);
-    expect(c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays).toBe(6);
+    // The report says how bad it was; the flight back and the recovery already healed some of it.
+    const wounded = c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays;
+    expect(wounded).toBeGreaterThan(0);
+    expect(wounded).toBeLessThan(6);
+    // A mission takes days: three or four go by.
+    expect(c.day - report.day).toBeGreaterThanOrEqual(3);
+    expect(c.day - report.day).toBeLessThanOrEqual(4);
     const veteran = c.soldiers.find((s) => s.id === soldiers[2]!.campaignId)!;
     expect(veteran.xp).toBe(8);
     expect(veteran.rank).toBe(2);

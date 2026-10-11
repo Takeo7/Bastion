@@ -490,6 +490,15 @@ export function soldierCap(c: Pick<CampaignState, 'players'>): number {
 }
 export const DOOM_MAX = 12;
 const DOOM_INTERVAL = 12;
+/**
+ * Days a mission takes: the flight there and back, and recovering. They pass
+ * like any other (wounds, works, the enemy clock), so missions are not free in
+ * time (balance simulation, 2026-10-11: chaining them won the campaign in
+ * under a month and left the base unbuilt).
+ */
+const MISSION_DAYS = 3;
+/** Least days between one story chapter won and the next one opening. */
+const STORY_GAP = 8;
 const FACILITY_DOOM_INTERVAL = 14;
 const MAX_FACILITIES = 3;
 const MAX_OFFERS = 3;
@@ -697,6 +706,8 @@ export interface StoryState {
   done: number;
   /** Answer to Simón's visit, which opens chapter 5. */
   simon: SimonChoice;
+  /** The next chapter can't open before this day: chapters don't chain back to back. */
+  nextDay?: number;
 }
 
 // ------------------------------------------------------------------ helpers
@@ -919,7 +930,7 @@ function makeStoryOffer(c: CampaignState, chapter: number, rng: Rng): MissionOff
 function refreshStory(c: CampaignState, rng: Rng): void {
   if (c.outcome) return;
   const next = c.story.done + 1;
-  if (next <= STORY.length && bastionLevel(c) >= next) {
+  if (next <= STORY.length && bastionLevel(c) >= next && c.day >= (c.story.nextDay ?? 0)) {
     if (next === SIMON_CHAPTER && !c.story.simon) {
       if (!c.event) {
         c.event = 'simon';
@@ -1859,134 +1870,147 @@ export function advanceTime(c: CampaignState, rng: Rng): void {
   // Catches up with story beats that had to wait (another event was pending).
   refreshNarrative(c, rng);
   for (let i = 0; i < 40 && !c.outcome && !c.event; i++) {
-    c.day++;
-    let stop = false;
-
-    const heal = facilityCount(c, 'infirmary') ? (hasAdjacency(c, 'infirmary') ? 3 : 2) : 1;
-    for (const s of c.soldiers) {
-      if (!s.alive || s.woundedDays === 0) continue;
-      s.woundedDays = Math.max(0, s.woundedDays - heal);
-      if (s.woundedDays === 0) log(c, `${s.name} se ha recuperado de sus heridas.`, 'good');
-    }
-
-    const work = c.base.construction;
-    if (work && --work.daysLeft <= 0) {
-      const plot = plotById(c, work.plot)!;
-      if (work.kind === 'clear') {
-        const { salvage } = clearCost(plot);
-        const ruins = plot.terrain === 'ruins';
-        plot.terrain = 'clear';
-        c.credits += salvage;
-        log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} ₡ de chatarra.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
-      } else {
-        plot.building = work.facility;
-        const bonus = adjacencyAt(c, plot, work.facility!);
-        log(
-          c,
-          bonus
-            ? `${FACILITIES[work.facility!].name} y ${buildingName(bonus.next)}, pared con pared: ${bonus.text.split('.')[0]}.`
-            : `Instalación terminada: ${FACILITIES[work.facility!].name}.`,
-          'good',
-        );
-      }
-      c.base.construction = null;
-      stop = true;
-    }
-
-    for (const o of [...c.offers]) {
-      if (o.expiresDay === null || o.expiresDay >= c.day) continue;
-      c.offers = c.offers.filter((x) => x.id !== o.id);
-      const q = questOf(c, o);
-      if (q) {
-        // A side quest's operation that expires loses the quest instead.
-        log(c, `La misión ${o.name} ha expirado.`, 'bad');
-        finishQuest(c, q, 'failure', rng);
-      } else {
-        c.doom++;
-        log(c, `La misión ${o.name} ha expirado. El enemigo avanza.`, 'bad');
-      }
-      stop = true;
-    }
-
-    const listened = c.rumors.find((r) => r.id === c.listening);
-    if (listened && --listened.daysLeft <= 0) {
-      resolveRumor(c, listened, rng);
-      stop = true;
-    }
-    for (const r of c.rumors.filter((x) => x.id !== c.listening && x.expiresDay < c.day)) {
-      c.rumors = c.rumors.filter((x) => x.id !== r.id);
-      log(c, `El rumor de ${REGIONS[r.region].name} se ha enfriado.`);
-    }
-    if (c.day >= c.nextRumorDay) {
-      c.nextRumorDay = c.day + 7 + rng.int(5);
-      if (c.rumors.length < MAX_RUMORS) {
-        newRumor(c, rng);
-        stop = true;
-      }
-    }
-
-    if (c.day >= c.nextMissionDay) {
-      c.nextMissionDay = c.day + 5 + rng.int(3);
-      if (c.offers.filter((o) => !o.final && !o.facility && !o.story).length < MAX_OFFERS) {
-        const offer = makeOffer(c, rng);
-        c.offers.push(offer);
-        log(c, `Nueva misión en ${REGIONS[offer.region].name}: ${offer.name}.`);
-        stop = true;
-      }
-    }
-
-    if (c.day >= c.nextDoomDay) {
-      c.nextDoomDay = c.day + DOOM_INTERVAL;
-      c.doom++;
-      log(c, doomChangeText(bastionLevel(c), 1), 'bad');
-      stop = true;
-    }
-
-    for (const r of c.regions) {
-      if (!r.facility || c.day < r.facility.nextDoomDay) continue;
-      r.facility.nextDoomDay = c.day + FACILITY_DOOM_INTERVAL;
-      c.doom++;
-      log(c, bastionLevel(c) >= PARTITURA_LEVEL ? `El Órgano de ${REGIONS[r.id].name} escribe un compás.` : `El Órgano de ${REGIONS[r.id].name} hace avanzar ${doomSubject(bastionLevel(c))}.`, 'bad');
-      stop = true;
-    }
-
-    if (c.day >= c.nextFacilityDay) {
-      c.nextFacilityDay = c.day + 20 + rng.int(7);
-      const free = c.regions.filter((r) => !r.facility);
-      if (c.regions.filter((r) => r.facility).length < MAX_FACILITIES && free.length) {
-        const region = rng.pick(free);
-        region.facility = { nextDoomDay: c.day + FACILITY_DOOM_INTERVAL };
-        log(c, `El Coro levanta un Órgano en ${REGIONS[region.id].name}.`, 'bad');
-        if (region.contacted) c.offers.push(makeFacilityOffer(c, region.id, rng));
-        else log(c, `Contactad con ${REGIONS[region.id].name} para poder asaltarlo.`);
-        stop = true;
-      }
-    }
-
-    if (c.day >= c.nextSupplyDay) {
-      c.nextSupplyDay = c.day + MONTH;
-      const income = BASE_INCOME + c.regions.filter((r) => r.contacted).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
-      c.credits += income;
-      log(c, `Carta del Consejo: la consejera Halvorsen envía ${income} créditos.`, 'good');
-      stop = true;
-    }
-
-    if (c.day >= c.nextEventDay) {
-      c.nextEventDay = c.day + 9 + rng.int(5);
-      const id = rng.pick((Object.keys(EVENTS) as Exclude<CampaignEventId, 'quest'>[]).filter((x) => !EVENTS[x].story));
-      c.event = id;
-      c.seen[id] = (c.seen[id] ?? 0) + 1;
-      log(c, `Acontecimiento: ${EVENTS[id].title}.`);
-      stop = true;
-    }
-
-    if (c.doom >= DOOM_MAX) {
-      c.outcome = 'defeat';
-      log(c, 'La Partitura se ha completado. El Coro canta.', 'bad');
-      return;
-    }
-    if (stop) return;
+    if (passDay(c, rng)) return;
   }
+}
+
+/** Lets `days` go by whatever happens on them (a mission's flight and recovery). */
+function passDays(c: CampaignState, days: number, rng: Rng): void {
+  for (let i = 0; i < days && !c.outcome; i++) passDay(c, rng);
+}
+
+/** One day in the Bastion. True when something happened that should stop the clock. */
+function passDay(c: CampaignState, rng: Rng): boolean {
+  c.day++;
+  let stop = false;
+
+  const heal = facilityCount(c, 'infirmary') ? (hasAdjacency(c, 'infirmary') ? 3 : 2) : 1;
+  for (const s of c.soldiers) {
+    if (!s.alive || s.woundedDays === 0) continue;
+    s.woundedDays = Math.max(0, s.woundedDays - heal);
+    if (s.woundedDays === 0) log(c, `${s.name} se ha recuperado de sus heridas.`, 'good');
+  }
+
+  const work = c.base.construction;
+  if (work && --work.daysLeft <= 0) {
+    const plot = plotById(c, work.plot)!;
+    if (work.kind === 'clear') {
+      const { salvage } = clearCost(plot);
+      const ruins = plot.terrain === 'ruins';
+      plot.terrain = 'clear';
+      c.credits += salvage;
+      log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} ₡ de chatarra.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
+    } else {
+      plot.building = work.facility;
+      const bonus = adjacencyAt(c, plot, work.facility!);
+      log(
+        c,
+        bonus
+          ? `${FACILITIES[work.facility!].name} y ${buildingName(bonus.next)}, pared con pared: ${bonus.text.split('.')[0]}.`
+          : `Instalación terminada: ${FACILITIES[work.facility!].name}.`,
+        'good',
+      );
+    }
+    c.base.construction = null;
+    stop = true;
+  }
+
+  for (const o of [...c.offers]) {
+    if (o.expiresDay === null || o.expiresDay >= c.day) continue;
+    c.offers = c.offers.filter((x) => x.id !== o.id);
+    const q = questOf(c, o);
+    if (q) {
+      // A side quest's operation that expires loses the quest instead.
+      log(c, `La misión ${o.name} ha expirado.`, 'bad');
+      finishQuest(c, q, 'failure', rng);
+    } else {
+      c.doom++;
+      log(c, `La misión ${o.name} ha expirado. El enemigo avanza.`, 'bad');
+    }
+    stop = true;
+  }
+
+  const listened = c.rumors.find((r) => r.id === c.listening);
+  if (listened && --listened.daysLeft <= 0) {
+    resolveRumor(c, listened, rng);
+    stop = true;
+  }
+  for (const r of c.rumors.filter((x) => x.id !== c.listening && x.expiresDay < c.day)) {
+    c.rumors = c.rumors.filter((x) => x.id !== r.id);
+    log(c, `El rumor de ${REGIONS[r.region].name} se ha enfriado.`);
+  }
+  if (c.day >= c.nextRumorDay) {
+    c.nextRumorDay = c.day + 7 + rng.int(5);
+    if (c.rumors.length < MAX_RUMORS) {
+      newRumor(c, rng);
+      stop = true;
+    }
+  }
+
+  if (c.day >= c.nextMissionDay) {
+    c.nextMissionDay = c.day + 5 + rng.int(3);
+    if (c.offers.filter((o) => !o.final && !o.facility && !o.story).length < MAX_OFFERS) {
+      const offer = makeOffer(c, rng);
+      c.offers.push(offer);
+      log(c, `Nueva misión en ${REGIONS[offer.region].name}: ${offer.name}.`);
+      stop = true;
+    }
+  }
+
+  if (c.day >= c.nextDoomDay) {
+    c.nextDoomDay = c.day + DOOM_INTERVAL;
+    c.doom++;
+    log(c, doomChangeText(bastionLevel(c), 1), 'bad');
+    stop = true;
+  }
+
+  for (const r of c.regions) {
+    if (!r.facility || c.day < r.facility.nextDoomDay) continue;
+    r.facility.nextDoomDay = c.day + FACILITY_DOOM_INTERVAL;
+    c.doom++;
+    log(c, bastionLevel(c) >= PARTITURA_LEVEL ? `El Órgano de ${REGIONS[r.id].name} escribe un compás.` : `El Órgano de ${REGIONS[r.id].name} hace avanzar ${doomSubject(bastionLevel(c))}.`, 'bad');
+    stop = true;
+  }
+
+  if (c.day >= c.nextFacilityDay) {
+    c.nextFacilityDay = c.day + 20 + rng.int(7);
+    const free = c.regions.filter((r) => !r.facility);
+    if (c.regions.filter((r) => r.facility).length < MAX_FACILITIES && free.length) {
+      const region = rng.pick(free);
+      region.facility = { nextDoomDay: c.day + FACILITY_DOOM_INTERVAL };
+      log(c, `El Coro levanta un Órgano en ${REGIONS[region.id].name}.`, 'bad');
+      if (region.contacted) c.offers.push(makeFacilityOffer(c, region.id, rng));
+      else log(c, `Contactad con ${REGIONS[region.id].name} para poder asaltarlo.`);
+      stop = true;
+    }
+  }
+
+  if (c.day >= c.nextSupplyDay) {
+    c.nextSupplyDay = c.day + MONTH;
+    const income = BASE_INCOME + c.regions.filter((r) => r.contacted).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
+    c.credits += income;
+    log(c, `Carta del Consejo: la consejera Halvorsen envía ${income} créditos.`, 'good');
+    stop = true;
+  }
+
+  if (c.day >= c.nextEventDay) {
+    c.nextEventDay = c.day + 9 + rng.int(5);
+    const id = rng.pick((Object.keys(EVENTS) as Exclude<CampaignEventId, 'quest'>[]).filter((x) => !EVENTS[x].story));
+    c.event = id;
+    c.seen[id] = (c.seen[id] ?? 0) + 1;
+    log(c, `Acontecimiento: ${EVENTS[id].title}.`);
+    stop = true;
+  }
+
+  if (c.doom >= DOOM_MAX) {
+    c.outcome = 'defeat';
+    log(c, 'La Partitura se ha completado. El Coro canta.', 'bad');
+    return true;
+  }
+  // A story chapter whose wait is over opens today.
+  const offers = c.offers.length;
+  refreshNarrative(c, rng);
+  return stop || c.offers.length > offers || !!c.event;
 }
 
 // ------------------------------------------------------------- deployment
@@ -2162,6 +2186,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     if (quest) advanceQuest(c, quest, rng);
     if (offer.story && offer.story > c.story.done) {
       c.story.done = offer.story;
+      c.story.nextDay = c.day + STORY_GAP;
       log(c, STORY[offer.story - 1]!.after, 'good');
     }
     // The campaign ends when both keys decide what to do with the Coro.
@@ -2196,9 +2221,11 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   c.activeMission = null;
   c.squad = [];
   c.launchReady = [false, false];
-  c.day++;
   c.lastReport = report;
   maybeFaces(c, report, rng);
+  // The flight back and the recovery. Not after the final mission: the campaign is being decided.
+  if (!offer?.final) passDays(c, MISSION_DAYS + rng.int(2), rng);
+  else c.day++;
   return report;
 }
 

@@ -158,7 +158,7 @@ Todo se paga con **créditos**, la única moneda: construir y despejar terreno, 
 
 **Accesorios.** Cada soldado lleva un objeto de **utilidad** (granada extra, de humo, aturdidora, botiquín, nanochaleco, Zumbador) y un tipo de **munición** (perforante, trazadora). Se compran en la Armería cuando el nivel del Bastión los desbloquea. Si el soldado cae, se pierden.
 
-**Tiempo.** **Escanear** corre los días hasta el siguiente acontecimiento (obra terminada, misión nueva, avance enemigo, fin de mes…), pero solo cuando los dos estáis listos. El botón avisa si tu compañero ya lo ha pulsado.
+**Tiempo.** **Escanear** corre los días hasta el siguiente acontecimiento (obra terminada, misión nueva, avance enemigo, fin de mes…), pero solo cuando los dos estáis listos. El botón avisa si tu compañero ya lo ha pulsado. Cada misión también gasta tiempo: entre la ida, la vuelta y la recuperación pasan 3 o 4 días, con sus heridas curándose, sus obras avanzando y el enemigo moviendo ficha. Y tras ganar un capítulo de la historia, el siguiente tarda al menos 8 días en abrirse.
 
 **Misiones.** Cada misión ocurre en una región y en un mapa generado para ella. Elegida una misión, la escuadra viene **ya montada** con los mejores soldados listos de cada uno (una de cada clase primero) y cada jugador cambia a quien quiera, **hasta 3 de sus soldados** (4 con el centro de entrenamiento; los heridos no pueden ir) y se despega cuando los dos estáis listos. Al volver veis el informe: bajas, experiencia de cada soldado y del Bastión, heridas, ascensos, recompensa y cuerpos vendidos.
 
