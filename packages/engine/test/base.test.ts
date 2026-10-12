@@ -329,7 +329,7 @@ describe('equipment', () => {
 
   it('equipment reaches the battlefield and is lost with its bearer', () => {
     const c = solo();
-    const s = c.soldiers.find((x) => x.cls === 'assault')!;
+    const s = c.soldiers[0]!;
     c.xp = LEVEL_XP[3]!;
     run(c, { type: 'buy', item: 'apRounds' });
     run(c, { type: 'buy', item: 'smokeGrenade' });
@@ -384,6 +384,17 @@ describe('migration', () => {
     expect(m).not.toHaveProperty('resources');
   });
 
+  it('the first player turns violet: soldiers in the old blue default follow, customised ones keep theirs', () => {
+    const c = createCampaign([0, 1], new Rng(1));
+    const [plain, custom] = c.soldiers.filter((s) => s.owner === 0);
+    plain!.appearance = defaultAppearance(plain!.cls, 0, '#3fa9ff');
+    custom!.appearance = { ...defaultAppearance(custom!.cls, 0, '#3fa9ff'), visor: '#ffffff' };
+    (c as { version: number }).version = 10;
+    const m = migrateCampaign(c);
+    expect(m.soldiers.find((s) => s.id === plain!.id)!.appearance).toEqual(defaultAppearance(plain!.cls, 0));
+    expect(m.soldiers.find((s) => s.id === custom!.id)!.appearance.secondary).toBe('#3fa9ff');
+  });
+
   it('an underground base moves to the surface: facilities keep working and the work carries on', () => {
     const c = createCampaign([0], new Rng(1));
     const slots = [0, 1, 2].flatMap((row) => [0, 1, 2].map((col) => ({ id: `r${row}c${col}`, row, col, excavated: row < 2, facility: null as string | null })));
@@ -433,7 +444,7 @@ describe('customization', () => {
 
   it('the default look is the armour soldiers had before customization', () => {
     // The client used to mix the player colour into grey with THREE.Color.lerp (linear space).
-    expect(defaultAppearance('assault', 0).primary).toBe('#4d87bd');
+    expect(defaultAppearance('assault', 0).primary).toBe('#826cbd');
     expect(defaultAppearance('assault', 1).primary).toBe('#bc854b');
   });
 

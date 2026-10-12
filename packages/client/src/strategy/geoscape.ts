@@ -341,31 +341,81 @@ function part(key: string, build: () => THREE.Mesh, opacity = 1, additive = fals
   return template.clone();
 }
 
-/** The Bastion's dropship: hull, wings and a glowing engine. */
-function voxelShip(): THREE.Group {
-  const hull = new THREE.MeshStandardMaterial({
-    color: 0xc8d3dc,
-    metalness: 0.5,
-    roughness: 0.5,
-  });
+/** How high La Mula flies over the ground, and how far from a region's marker it parks (degrees of latitude, longitude). */
+const SHIP_ALT = 0.95;
+const PARK: [number, number] = [4, 8];
+
+/**
+ * La Mula seen from above, nose along +z and up along +y: a pale hull with a
+ * dark outline (it reads on ocean and on land alike), an amber band and tail
+ * beacon, and two rotors that turn (`rotors`, to spin in tick()). Not the
+ * players' colours: those are the commanders', and the ship is everyone's.
+ */
+function voxelShip(): { model: THREE.Group; rotors: THREE.Group[] } {
+  const hull = new THREE.MeshStandardMaterial({ color: 0xf4efe2, metalness: 0.2, roughness: 0.55 });
+  const band = new THREE.MeshStandardMaterial({ color: 0xffb020, metalness: 0.2, roughness: 0.5 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x24384a, metalness: 0.5, roughness: 0.3 });
   const at = (x: number, y: number, z: number) => new THREE.Matrix4().makeTranslation(x, y, z);
-  return voxelize(
+  const parts: [number, number, number, number, number, number, THREE.Material][] = [
+    // w, h, l, x, y, z
+    [0.17, 0.11, 0.6, 0, 0, 0, hull],
+    [0.15, 0.09, 0.12, 0, -0.01, 0.34, hull],
+    [0.13, 0.05, 0.08, 0, 0.04, 0.33, glass],
+    [0.14, 0.08, 0.18, 0, 0.08, -0.22, hull],
+    [0.175, 0.115, 0.05, 0, 0, -0.08, band],
+    [0.06, 0.05, 0.06, 0, 0.06, 0.2, hull],
+  ];
+  const model = voxelize(
     [
-      {
-        mesh: new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42, 4).rotateX(Math.PI / 2), hull),
-        matrix: at(0, 0, 0),
-      },
-      {
-        mesh: new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.03, 0.14), hull),
-        matrix: at(0, 0, -0.04),
-      },
-      {
-        mesh: new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, 0.04), glow(0x3fa9ff, 2)),
-        matrix: at(0, 0, -0.23),
-      },
+      ...parts.map(([w, h, l, x, y, z, m]) => ({ mesh: new THREE.Mesh(new THREE.BoxGeometry(w, h, l), m), matrix: at(x, y, z) })),
+      { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.04), glow(0xff5a3a, 2.4)), matrix: at(0, 0.14, -0.28) },
     ],
-    0.03,
+    0.02,
   );
+  // The outline: the hull's boxes a little fatter, dark, drawn inside out so only their rim shows round the ship.
+  const rim = new THREE.MeshBasicMaterial({ color: 0x0b0f14, side: THREE.BackSide });
+  for (const [w, h, l, x, y, z] of parts.slice(0, 4)) {
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(w + 0.05, h + 0.05, l + 0.05), rim);
+    shell.position.set(x, y, z);
+    model.add(shell);
+  }
+  // Two three-bladed rotors: the forward one low over the cockpit, the aft one on the tail pylon.
+  const rotors = [
+    [0.22, 0.08],
+    [-0.22, 0.13],
+  ].map(([z, y]) => {
+    const blades = new THREE.MeshStandardMaterial({ color: 0x1d2124, roughness: 0.6 });
+    const tips = new THREE.MeshStandardMaterial({ color: 0xffb020, roughness: 0.5 });
+    const sources = [0, 1, 2].flatMap((k) => {
+      const a = (k * Math.PI * 2) / 3;
+      const turn = new THREE.Matrix4().makeRotationY(a);
+      return [
+        { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.035), blades), matrix: turn.clone().multiply(at(0.1, 0, 0)) },
+        { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.016, 0.036), tips), matrix: turn.clone().multiply(at(0.215, 0, 0)) },
+      ];
+    });
+    const rotor = voxelize(sources, 0.015);
+    rotor.position.set(0, y!, z!);
+    model.add(rotor);
+    return rotor;
+  });
+  return { model, rotors };
+}
+
+/** A soft round glow, for the halo behind the ship. */
+function haloTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+  grad.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 /** Point on the sphere for a latitude/longitude, matching SphereGeometry's UV layout. */
@@ -398,6 +448,17 @@ export class GeoscapeSet implements StageSet {
   private readonly ring: THREE.Group;
   private readonly ringFade: THREE.Material[];
   private readonly ship = new THREE.Group();
+  private readonly shipRotors: THREE.Group[];
+  private readonly halo: THREE.Sprite;
+  private readonly tether: THREE.Line;
+  private readonly shipLabel: CSS2DObject;
+  /** Where the ship's nose points (globe space), eased towards the way it moves. */
+  private readonly heading = new THREE.Vector3(0, 0, 1);
+  private readonly lastShipPos = new THREE.Vector3();
+  /** Seconds since the ship reached its region, for its slow circling. */
+  private loiter = 0;
+  /** The menu's backdrop never gets a campaign: the ship's name only shows once update() has run. */
+  private inCampaign = false;
   private readonly scanRing: THREE.Group;
   private readonly scanFade: THREE.Material[];
   private shipFrom = new THREE.Vector3();
@@ -457,8 +518,33 @@ export class GeoscapeSet implements StageSet {
     );
     this.ringFade = seeThrough(this.ring, 0.9);
     this.ring.visible = false;
-    // The Bastion's dropship flying over the globe.
-    this.ship.add(voxelShip());
+    // La Mula flying over the globe: a soft halo behind it, a line down to the ground under it, and its name.
+    const mula = voxelShip();
+    // About twice the old dropship's size: a ship's length is a good finger's width at the default zoom.
+    mula.model.scale.setScalar(1.4);
+    this.ship.add(mula.model);
+    this.shipRotors = mula.rotors;
+    this.halo = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: haloTexture(), color: 0xffcf73, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.5 }),
+    );
+    // Just under the hull, so from the camera it glows round the ship rather than over it.
+    this.halo.position.y = -0.18;
+    this.halo.scale.set(2, 2, 1);
+    this.ship.add(this.halo);
+    this.tether = new THREE.Line(
+      new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3)),
+      new THREE.LineBasicMaterial({ color: 0xffcf73, transparent: true, opacity: 0.65 }),
+    );
+    this.tether.frustumCulled = false;
+    const name = document.createElement('div');
+    name.className = 'globe-label ship';
+    name.textContent = 'La Mula';
+    name.style.fontWeight = '700';
+    name.style.borderLeft = '3px solid #ffb020';
+    this.shipLabel = new CSS2DObject(name);
+    this.shipLabel.position.set(0, 0.5, 0);
+    this.shipLabel.visible = false;
+    this.ship.add(this.shipLabel);
     this.scanRing = voxelize(
       [
         {
@@ -469,7 +555,7 @@ export class GeoscapeSet implements StageSet {
       SMALL_VOXEL,
     );
     this.scanFade = seeThrough(this.scanRing, 0);
-    this.globe.add(earth.model, this.markerGroup, this.ring, this.ship, this.scanRing);
+    this.globe.add(earth.model, this.markerGroup, this.ring, this.ship, this.tether, this.scanRing);
     this.scene.add(this.globe, atmosphere);
     this.yaw = this.targetYaw = this.yawFacing(REGIONS.weu.lon);
     this.placeShip(REGIONS.weu.lat, REGIONS.weu.lon, true);
@@ -502,11 +588,14 @@ export class GeoscapeSet implements StageSet {
     this.placeShip(def.lat, def.lon, false);
   }
 
+  /** Sends the ship to park beside a region's marker (not on it: its beacon and label stay in sight). */
   private placeShip(lat: number, lon: number, instant: boolean): void {
-    this.shipFrom.copy(this.ship.position.lengthSq() ? this.ship.position : latLonToVector(lat, lon, RADIUS + 0.55));
-    this.shipTo.copy(latLonToVector(lat, lon, RADIUS + 0.55));
+    const to = latLonToVector(lat + PARK[0], lon + PARK[1], RADIUS + SHIP_ALT);
+    this.shipFrom.copy(this.ship.position.lengthSq() ? this.ship.position : to);
+    this.shipTo.copy(to);
     this.shipT = instant ? 1 : 0;
     if (instant) this.ship.position.copy(this.shipTo);
+    else this.loiter = 0;
   }
 
   /** Scanning: the ring under the ship pulses and the globe turns faster. */
@@ -515,6 +604,7 @@ export class GeoscapeSet implements StageSet {
   }
 
   update(c: CampaignState, selected: RegionId | null): void {
+    this.inCampaign = true;
     const key = JSON.stringify([c.regions, c.offers.map((o) => [o.id, o.region, o.facility, o.final, o.story, o.quest]), c.rumors.map((x) => [x.id, x.region]), c.listening, selected]);
     if (key === this.lastKey) return;
     this.lastKey = key;
@@ -619,17 +709,46 @@ export class GeoscapeSet implements StageSet {
       });
     }
     for (const m of this.ringFade) m.opacity = 0.6 + Math.sin(time * 4) * 0.3;
-    // Dropship: a great-circle hop to its destination, then a slow orbit over it.
+    // La Mula: a great-circle hop to its destination, then slow circles over it, nose first.
     if (this.shipT < 1) {
       this.shipT = Math.min(1, this.shipT + dt * 0.6);
       const k = this.shipT * this.shipT * (3 - 2 * this.shipT);
       this.ship.position
         .copy(this.shipFrom)
         .lerp(this.shipTo, k)
-        .setLength(RADIUS + 0.55 + Math.sin(k * Math.PI) * 0.6);
+        .setLength(RADIUS + SHIP_ALT + Math.sin(k * Math.PI) * 0.6);
+    } else {
+      this.loiter += dt;
+      const n = this.shipTo.clone().normalize();
+      const east = new THREE.Vector3(0, 1, 0).cross(n).normalize();
+      const north = n.clone().cross(east);
+      const a = this.loiter * 0.45;
+      const r = 0.16 * Math.min(1, this.loiter / 2);
+      this.ship.position
+        .copy(this.shipTo)
+        .addScaledVector(east, Math.cos(a) * r)
+        .addScaledVector(north, Math.sin(a) * r)
+        .setLength(RADIUS + SHIP_ALT + Math.sin(time * 1.6) * 0.02);
     }
-    this.ship.lookAt(this.ship.position.clone().multiplyScalar(2));
-    this.ship.rotateX(Math.PI / 2);
+    const up = this.ship.position.clone().normalize();
+    const moved = this.ship.position.clone().sub(this.lastShipPos);
+    if (moved.lengthSq() > 1e-10 && this.lastShipPos.lengthSq()) this.heading.lerp(moved.normalize(), 1 - Math.exp(-dt * 4));
+    this.lastShipPos.copy(this.ship.position);
+    const forward = this.heading.clone().addScaledVector(up, -this.heading.dot(up));
+    if (forward.lengthSq() < 1e-6) forward.set(0, 1, 0).addScaledVector(up, -up.y);
+    forward.normalize();
+    this.ship.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(up, forward), up, forward));
+    for (const [i, rotor] of this.shipRotors.entries()) rotor.rotation.y += dt * (i ? -9 : 9);
+    (this.halo.material as THREE.SpriteMaterial).opacity = 0.42 + Math.sin(time * 2.6) * 0.16;
+    this.halo.scale.setScalar(1.95 + Math.sin(time * 2.6) * 0.12);
+    // The line down to the ground, under the hull.
+    const line = this.tether.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const foot = up.clone().multiplyScalar(this.surface(up) + VOXEL * 0.2);
+    const top = this.ship.position.clone().addScaledVector(up, -0.08);
+    line.setXYZ(0, foot.x, foot.y, foot.z);
+    line.setXYZ(1, top.x, top.y, top.z);
+    line.needsUpdate = true;
+    this.shipLabel.visible = this.inCampaign && this.ship.getWorldPosition(new THREE.Vector3()).normalize().dot(toCamera) > 0.2;
     const pulse = this.scanning > 0 ? (time * 1.2) % 1 : 0;
     this.scanRing.position.copy(this.shipTo.clone().setLength(this.surface(this.shipTo.clone().normalize()) + VOXEL * 0.6));
     this.scanRing.lookAt(this.shipTo.clone().multiplyScalar(2));

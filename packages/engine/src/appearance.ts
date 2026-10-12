@@ -22,8 +22,8 @@ export const BUILD_IDS = Object.keys(BUILDS) as BuildId[];
 
 /** Armour swatches offered in the barracks (any `#rrggbb` is accepted). */
 export const ARMOR_COLORS = [
-  '#3fa9ff', '#ffa630', '#56605a', '#2f3a44', '#6b7d5a', '#8a7a5c',
-  '#c9ccd1', '#1d2124', '#8f2f2f', '#2f6b4f', '#5a3f7a', '#c9a13a',
+  '#a678ff', '#ffa630', '#56605a', '#2f3a44', '#6b7d5a', '#8a7a5c',
+  '#c9ccd1', '#1d2124', '#8f2f2f', '#2f6b4f', '#3fa9ff', '#c9a13a',
 ];
 
 export const VISOR_COLORS = ['#9fe3ff', '#7dffb0', '#ffd27a', '#ff6a5a', '#d79fff', '#ffffff'];
@@ -48,8 +48,7 @@ function mix(a: string, b: string, t: number): string {
 }
 
 /** The look soldiers had before customization: their player's colour, class head and build. */
-export function defaultAppearance(cls: ClassId | null, owner: Slot): Appearance {
-  const accent = PLAYER_COLORS[owner];
+export function defaultAppearance(cls: ClassId | null, owner: Slot, accent = PLAYER_COLORS[owner]): Appearance {
   return {
     primary: mix(accent, '#56605a', 0.55),
     secondary: accent,

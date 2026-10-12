@@ -134,13 +134,25 @@ export const BIOME_NAMES: Record<Biome, string> = {
   facility: 'Imprenta',
 };
 
-/** XCOM turns to secure each objective. */
+/** XCOM turns to secure each objective, tuned on 36×36 maps (see `missionTurns`). */
 export const MISSION_TURNS: Partial<Record<MissionKind, number>> = {
   recovery: RECOVERY_TURNS,
   sabotage: 10,
   hack: 10,
   rescue: 14,
 };
+
+/**
+ * Turns to secure the objective on a map `size` tiles across: on bigger maps
+ * the objective lies further away, so every 6 tiles beyond 36 add a turn, half
+ * as much again when the data or the VIP has to be brought back to the evac.
+ */
+export function missionTurns(kind: MissionKind, size: number): number | null {
+  const base = MISSION_TURNS[kind];
+  if (base === undefined) return null;
+  const extra = Math.max(0, (size - 36) / 6);
+  return base + Math.round(kind === 'recovery' || kind === 'rescue' ? extra * 1.5 : extra);
+}
 
 /** Pods by difficulty for procedural maps. */
 export function podPlan(difficulty: number): TemplateId[][] {
@@ -280,7 +292,7 @@ export function createMission(opts: MissionOptions): GameState {
 
   const mission: MissionState = {
     kind,
-    turnsLeft: kind === 'elimination' ? null : opts.turns ?? MISSION_TURNS[kind] ?? null,
+    turnsLeft: kind === 'elimination' ? null : opts.turns ?? missionTurns(kind, Math.max(layout.width, layout.height)),
     item: kind === 'recovery' && layout.item ? { pos: { ...layout.item }, carrier: null, evacuated: false } : null,
     evacZone: kind === 'elimination' ? [] : layout.evacZone,
     terminal: kind === 'hack' ? layout.terminal : null,
@@ -303,6 +315,8 @@ export function createMission(opts: MissionOptions): GameState {
     height: layout.height,
     tiles,
     elev: [...layout.elev],
+    ...(layout.ground ? { ground: [...layout.ground] } : {}),
+    ...(layout.decor ? { decor: [...layout.decor] } : {}),
     units,
     pods,
     mission,

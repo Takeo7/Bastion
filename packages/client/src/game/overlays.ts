@@ -115,6 +115,8 @@ export class Overlays {
   private readonly smoke = new THREE.Group();
   /** Moves planned without the command (UX-REVISION-2 #35): a dashed line in the planner's colour. */
   private readonly plans = new THREE.Group();
+  /** While concealed: how close each enemy in sight lets a soldier get unseen (a dashed red circle). */
+  private readonly detection = new THREE.Group();
   private readonly shieldTextures = { 1: shieldTexture(1), 2: shieldTexture(2) };
   /** The move range's layers and their full opacity: planning shows them fainter. */
   private rangeLayers: [THREE.InstancedMesh, number][] = [];
@@ -205,7 +207,7 @@ export class Overlays {
     this.pathCasing.renderOrder = 9;
     this.pathCasing.visible = false;
     this.rangeRing.renderOrder = 9;
-    this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -367,6 +369,38 @@ export class Overlays {
       ring.position.copy(tileToWorld(plan.path[plan.path.length - 1]!, 0.05));
       ring.visible = true;
       this.plans.add(line, ring);
+    }
+  }
+
+  /**
+   * Detection radii (playtest: «no he entendido por qué me han visto»): a
+   * concealed soldier ending a move inside one, in the enemy's line of sight,
+   * is noticed. The red frames on the move range say which tiles exactly.
+   */
+  setDetection(list: { pos: Vec2; radius: number }[]): void {
+    const key = JSON.stringify(list);
+    if (this.detection.userData.key === key) return;
+    this.detection.userData.key = key;
+    for (const child of [...this.detection.children] as Line2[]) {
+      this.detection.remove(child);
+      child.geometry.dispose();
+      child.material.dispose();
+    }
+    for (const d of list) {
+      const c = tileToWorld(d.pos, 0.07);
+      const points: number[] = [];
+      for (let i = 0; i <= 96; i++) {
+        const a = (i / 96) * Math.PI * 2;
+        points.push(c.x + Math.cos(a) * d.radius, c.y, c.z + Math.sin(a) * d.radius);
+      }
+      const ring = new Line2(
+        new LineGeometry(),
+        new LineMaterial({ color: 0xff4a4a, linewidth: 2, dashed: true, dashSize: 0.4, gapSize: 0.3, transparent: true, opacity: 0.6, depthTest: false }),
+      );
+      ring.geometry.setPositions(points);
+      ring.computeLineDistances();
+      ring.renderOrder = 8;
+      this.detection.add(ring);
     }
   }
 

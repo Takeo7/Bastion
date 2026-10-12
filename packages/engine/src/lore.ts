@@ -45,7 +45,7 @@ export const GLOSSARY: Record<string, string> = {
   Velmar: 'Un mundo que el Coro se cantó hace mil años. Su gente aprendió a usar el canto como magia; sus recuerdos están en los Archivos.',
   Canto: 'El idioma del Coro. Los Cantores lo usan para entrar en las cabezas; los soldados que lo aprenden en la Cámara de Ecos, como magia.',
   'Cámara de Ecos': 'Sala de válvulas donde los soldados escuchan las cintas de Velmar y aprenden a cantar. Abre la rama de Canto.',
-  Recluta: 'Soldado todavía sin clase, con fusil. Se especializa al gastar 2 puntos en un eje de la Rosa.',
+  Recluta: 'Soldado todavía sin clase, con fusil. Al llegar a Capitán se especializa en el eje de la Rosa en que más haya aprendido.',
 };
 
 // ---------------------------------------------------------- enemy files

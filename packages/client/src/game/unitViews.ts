@@ -62,7 +62,8 @@ export interface EnemyTag {
   text: string;
 }
 
-const ringGeometry = new THREE.RingGeometry(0.36, 0.44, 32).rotateX(-Math.PI / 2);
+/** The owner's ring: wide enough to tell whose soldier it is at a glance, whatever its armour. */
+const ringGeometry = new THREE.RingGeometry(0.33, 0.46, 32).rotateX(-Math.PI / 2);
 
 export function unitColor(u: Unit): string {
   if (u.team === 'alien') return ALIEN_COLOR;
@@ -90,10 +91,20 @@ export class UnitViews {
   private partnerId: string | null = null;
 
   constructor() {
+    // Selection is white, never a player's colour (playtest: a selected soldier looked like Arturo's),
+    // and a dark edge keeps it apart from the owner's ring just inside it.
     this.selection = new THREE.Mesh(
-      new THREE.RingGeometry(0.46, 0.56, 40).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false }),
+      new THREE.RingGeometry(0.55, 0.65, 40).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false }),
     );
+    const edge = new THREE.Mesh(
+      new THREE.RingGeometry(0.49, 0.69, 40).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false }),
+    );
+    edge.position.y = -0.003;
+    edge.renderOrder = 1;
+    this.selection.renderOrder = 2;
+    this.selection.add(edge);
     this.partnerSelection = new THREE.Mesh(
       new THREE.RingGeometry(0.5, 0.58, 40).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthWrite: false }),
@@ -117,7 +128,7 @@ export class UnitViews {
     const rig = buildUnit(u.template, color, u.appearance, gearOf(u.weaponTier, u.armorTier));
     const ring = new THREE.Mesh(
       ringGeometry,
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
     );
     ring.position.y = 0.03;
 
@@ -147,6 +158,7 @@ export class UnitViews {
     const view: UnitView = { id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, body: '', tag: '' };
     this.views.set(u.id, view);
     flagEl.classList.toggle('named', u.id === this.selectedId);
+    flagEl.classList.toggle('selected', u.id === this.selectedId);
     if (!u.alive) {
       ring.visible = false;
       flag.visible = false;
@@ -313,6 +325,7 @@ export class UnitViews {
   private updateNames(): void {
     for (const v of this.views.values()) {
       v.flagEl.classList.toggle('named', v.id === this.selectedId || v.id === this.hoveredId);
+      v.flagEl.classList.toggle('selected', v.id === this.selectedId);
     }
   }
 

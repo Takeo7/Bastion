@@ -1,4 +1,5 @@
 import type { CampaignMessage, ClientMessage, HostAddress, ServerMessage } from '@bastion/engine';
+import { post } from './report';
 
 export type NetStatus = 'connecting' | 'open' | 'closed';
 
@@ -15,9 +16,12 @@ const TOKEN_KEY = storageKey('token');
 
 /** The host's network addresses, from the server's welcome. */
 let hosts: HostAddress[] = [];
+/** Where the server also serves the game over https (server/src/tls.ts). */
+let httpsPort: number | undefined;
 
-export function setHosts(list: HostAddress[]): void {
+export function setHosts(list: HostAddress[], https?: number): void {
   hosts = list;
+  httpsPort = https;
 }
 
 export interface InviteLink {
@@ -26,13 +30,16 @@ export interface InviteLink {
 }
 
 /**
- * Where the partner opens the game: this page's port (dev or built) on the
- * host's network addresses. `localhost` only works on this machine, so it is
- * never offered; if the page was opened through a network address, that one.
+ * Where the partner opens the game: the server's https port when it has one
+ * (Safari is fifty times slower over plain http), otherwise this page's port
+ * (dev or built), on the host's network addresses. `localhost` only works on
+ * this machine, so it is never offered; if the page was opened through a
+ * network address, that one.
  */
 export function inviteLinks(): InviteLink[] {
-  const port = location.port ? `:${location.port}` : '';
-  const url = (address: string) => `${location.protocol}//${address}${port}/`;
+  const secure = httpsPort !== undefined && !import.meta.env.DEV;
+  const port = secure ? `:${httpsPort}` : location.port ? `:${location.port}` : '';
+  const url = (address: string) => `${secure ? 'https:' : location.protocol}//${address}${port}/`;
   const links = hosts.map((h) => ({ label: h.kind === 'tailscale' ? 'Por internet (Tailscale)' : 'En tu misma red', url: url(h.address) }));
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   if (!local && !hosts.some((h) => h.address === location.hostname)) links.unshift({ label: 'Esta dirección', url: url(location.hostname) });
@@ -53,6 +60,8 @@ export class Net {
   private name = '';
   private retry = 0;
   private stopped = false;
+  /** Whether a connection ever opened: if not, the host hears about it (a browser turning the certificate down). */
+  private opened = false;
   private readonly messageHandlers = new Set<(m: ServerMessage) => void>();
   private readonly statusHandlers = new Set<(s: NetStatus) => void>();
 
@@ -82,6 +91,7 @@ export class Net {
     this.ws = ws;
     ws.onopen = () => {
       this.retry = 0;
+      this.opened = true;
       this.emitStatus('open');
       const token = storage()?.getItem(TOKEN_KEY) ?? undefined;
       this.send({ t: 'hello', name: this.name, token });
@@ -94,6 +104,7 @@ export class Net {
     ws.onclose = (ev) => {
       if (this.ws !== ws) return;
       this.emitStatus('closed');
+      if (!this.opened && this.retry === 2) post(`el WebSocket no abre (${this.url}, código ${ev.code})`);
       // 4000: this seat was opened in another window — do not fight over it.
       if (this.stopped || ev.code === 4000) return;
       const delay = Math.min(5000, 500 * 2 ** this.retry++);

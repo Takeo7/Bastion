@@ -38,14 +38,27 @@ describe('cooldowns and free actions', () => {
     expect(u.cooldowns.runAndGun).toBe(3);
   });
 
-  it('Lightning Hands fires the pistol without spending an action; Quickdraw keeps the turn going', () => {
+  it('Lightning Hands fires the pistol without spending an action', () => {
     const s = field();
-    const u = squad(s, 's1', 'sharpshooter', 2, 2, ['lightningHands', 'quickdraw']);
+    const u = squad(s, 's1', 'sharpshooter', 2, 2, ['lightningHands']);
     addUnit(s, 'a1', 'trooper', 6, 2, { hp: 99, maxHp: 99 });
     run(s, use('s1', 'lightningHands', { target: 'a1' }));
     expect(u.ap).toBe(2);
     run(s, use('s1', 'pistol', { target: 'a1' }));
     expect(u.ap).toBe(1);
+  });
+
+  it('a shot spends one action, and the sniper rifle both', () => {
+    const s = field();
+    const rifle = squad(s, 's1', 'grenadier', 2, 2, []);
+    const sniper = squad(s, 's2', 'sharpshooter', 2, 4, []);
+    addUnit(s, 'a1', 'trooper', 8, 3, { hp: 99, maxHp: 99 });
+    run(s, use('s1', 'shoot', { target: 'a1' }));
+    expect(rifle.ap).toBe(1);
+    run(s, use('s1', 'shoot', { target: 'a1' }));
+    expect(rifle.ap).toBe(0);
+    run(s, use('s2', 'shoot', { target: 'a1' }));
+    expect(sniper.ap).toBe(0);
   });
 
   it('Salvo: a grenade no longer ends the turn', () => {

@@ -124,8 +124,8 @@ export interface HostAddress {
 }
 
 export type ServerMessage =
-  /** `hosts`: this machine's network addresses, so the menu can tell the partner where to connect. */
-  | { t: 'welcome'; token: string; slot: Slot; hosts?: HostAddress[] }
+  /** `hosts`: this machine's network addresses, so the menu can tell the partner where to connect; `httpsPort`: where the game is also served over https. */
+  | { t: 'welcome'; token: string; slot: Slot; hosts?: HostAddress[]; httpsPort?: number }
   | { t: 'room'; players: PlayerInfo[]; phase: RoomPhase; savedCampaign: { day: number; doom: number; level: number } | null }
   | { t: 'campaign'; state: CampaignState }
   | { t: 'baseView'; slot: Slot; view: BaseView }

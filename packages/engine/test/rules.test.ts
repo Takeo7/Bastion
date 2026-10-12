@@ -221,6 +221,34 @@ describe('concealment and pods', () => {
     const types = events.map((e) => e.t);
     expect(types).toContain('concealmentBroken');
     expect(types).toContain('podActivated');
+    expect(events.find((e) => e.t === 'concealmentBroken')).toMatchObject({ reason: 'attack', unit: 's1', by: 'a1' });
+    expect(events.find((e) => e.t === 'podActivated')).toMatchObject({ cause: 'attacked', unit: 's1', by: 'a1' });
+  });
+
+  it('says who saw the squad and from how far, before the contact', () => {
+    const s = ambushSetup();
+    const events = run(s, { type: 'move', unit: 's2', to: { x: 13, y: 12 } });
+    const broken = events.findIndex((e) => e.t === 'concealmentBroken');
+    const contact = events.findIndex((e) => e.t === 'podActivated');
+    expect(broken).toBeGreaterThanOrEqual(0);
+    expect(contact).toBeGreaterThan(broken);
+    const e = events[broken] as Extract<GameEvent, { t: 'concealmentBroken' }>;
+    expect(e).toMatchObject({ reason: 'spotted', unit: 's2', range: 8 });
+    expect(['a1', 'a2']).toContain(e.by);
+    expect(events[contact]).toMatchObject({ cause: 'sighted', unit: 's2', by: e.by });
+  });
+
+  it('a patrol that walks up to the squad is the one that saw it', () => {
+    const s = field(30, 20);
+    s.concealed = true;
+    addUnit(s, 's1', 'specialist', 0, 10);
+    const a = addUnit(s, 'a1', 'trooper', 20, 10, { podId: 'p1' });
+    s.pods.push({ id: 'p1', active: false, unitIds: ['a1'], patrol: [{ x: 2, y: 10 }], patrolIndex: 0 });
+    const sim = new Sim(s, new Rng(1), [0]);
+    sim.moveAlong(a, Array.from({ length: 15 }, (_, i) => ({ x: 19 - i, y: 10 })), 0);
+    expect(s.concealed).toBe(false);
+    expect(sim.events.find((e) => e.t === 'concealmentBroken')).toMatchObject({ reason: 'patrol', unit: 's1', by: 'a1', range: 8 });
+    expect(sim.events.find((e) => e.t === 'podActivated')).toMatchObject({ cause: 'patrol', unit: 's1', by: 'a1' });
   });
 });
 
@@ -379,7 +407,7 @@ describe('alien AI', () => {
       const spots = [{ x: 12, y: 15 }, { x: 13, y: 15 }, { x: 14, y: 16 }, { x: 11, y: 16 }, { x: 15, y: 15 }, { x: 10, y: 15 }];
       s.units.filter((u) => u.team === 'xcom').forEach((u, i) => (u.pos = spots[i]!));
       s.concealed = false;
-      sim.activatePods(s.pods.map((p) => p.id));
+      sim.activatePods(s.pods.map((p) => p.id), { cause: 'sighted' });
       for (const a of s.units.filter((u) => u.team === 'alien' && u.alive && u.template !== 'lancer')) {
         const nearest = Math.min(...s.units.filter((u) => u.team === 'xcom' && u.alive).map((x) => Math.hypot(x.pos.x - a.pos.x, x.pos.y - a.pos.y)));
         expect(nearest, `seed ${seed}: ${a.id} at ${a.pos.x},${a.pos.y}`).toBeGreaterThanOrEqual(2);

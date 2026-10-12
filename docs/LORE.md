@@ -99,7 +99,7 @@ Otros términos:
 | Personaje | Papel | Voz | Arco |
 |---|---|---|---|
 | **Inés Albarrán, «Morse»** | Comunicaciones. Firma los informes de misión | 60 años, radioaficionada de Teruel. Seca e irónica | Su maestro desapareció en el Día 0 y su indicativo vuelve a sonar (encargo «La estación de números») |
-| **Teodoro Vidal, «el Relojero»** | Armería y Progreso | 69 años. Lo arregla todo con un destornillador | Fue él quien respondió en 1989 (hoja 6) |
+| **Teodoro Vidal, «el Relojero»** | Armería y Expediente | 69 años. Lo arregla todo con un destornillador | Fue él quien respondió en 1989 (hoja 6) |
 | **Dra. Amara Nwosu** | Científica escapada de la Imprenta 14 | Bióloga nigeriana. Precisa y con culpa | La obligaron a escanear gente. Hay otra Amara (encargo) |
 | **Simón Ferreira, «el Desafinado»** | Ex-Afinado que perdió la nota | Encantador y poco fiable | ¿Vuelve a afinarse? (encargos «Los originales» y «El topo») |
 | **Ruth Halvorsen** | Consejera; manda la carta con el pago mensual | Política y fría | Si la Partitura avanza, el Consejo se impacienta |
@@ -260,14 +260,14 @@ Son conversaciones cortas por radio entre la gente del Bastión, en los momentos
 **Cómo se presentan**
 - En un panel de papel que **no bloquea**: se puede seguir usando la base mientras habla. Va abajo a la derecha, sobre las pestañas; en la geoesfera, arriba en el centro, para no tapar el informe.
 - Cada personaje tiene su retrato vóxel, hecho por Arte en `client/src/strategy/portraits.ts`.
-- Cada línea se escribe sola y pasa a la siguiente tras una pausa de lectura. Un clic la completa o la pasa, y ✕ o Esc la cierra.
+- Cada línea se escribe a máquina y espera: un clic, Intro o Espacio la completa o pasa a la siguiente, así que cada uno lee a su ritmo. ✕ o Esc la cierra.
 - Suenan estática al abrir el canal y teclas al escribir, sintetizadas y en silencio si el juego está silenciado.
 
 **Cuándo suenan**
 - Como mucho una por **momento**: al volver a la base o tras un escaneo.
 - Si se desbloquean varias a la vez, suenan de una en una en los momentos siguientes, en orden de historia.
 - Las ligadas a lo que hay en pantalla suenan en cuanto se desbloquean: Simón en la puerta y los finales.
-- Cada navegador recuerda cuáles ha oído, por campaña. Todas quedan en el **Archivo de transmisiones** de Progreso.
+- Cada navegador recuerda cuáles ha oído, por campaña. Todas quedan en el **Archivo de transmisiones** del Expediente.
 - Al abrir por primera vez una campaña empezada, lo ya ocurrido cuenta como oído, salvo la bienvenida en los primeros días.
 
 **Personajes que hablan:** Morse, el Relojero, la Dra. Nwosu, Simón, la Voz, la consejera Halvorsen y el Coro (en cursiva y sin nadie que lo escriba).
@@ -382,7 +382,7 @@ Cada talento dice entre corchetes cómo se podría implementar: qué habilidad q
 **A dos voces** (cooperativo). Es una regla de toda la rama, no un talento: cada clase ya tiene su talento de llave doble en las otras ramas. Si un soldado del compañero que también sabe cantar está a 2 casillas o menos, Saeta, Bola de fuego y Tormenta hacen +1 de daño, y Silencio gana +1 de radio.
 
 **Con el árbol común (la «Rosa»):**
-- Los reclutas llegan sin clase: son «Reclutas», con fusil, y se especializan al gastar 2 puntos en un eje.
+- Todos los soldados empiezan como «Reclutas», sin clase y con fusil. Al llegar a Capitán se especializan en el eje de la Rosa en que más hayan aprendido (las aptitudes deshacen los empates). Los reclutas también pueden cantar si la Cámara de Ecos lo permite.
 - El Canto es la cuarta rama de cada eje, y sus puntos no cuentan para especializarse.
 - El eje secundario llega hasta la tercera fila, también en su Canto.
 - Los umbrales de la rama de Canto son 0/1/2/3/4 puntos (`SONG_GATES`).
@@ -399,12 +399,12 @@ Cada talento dice entre corchetes cómo se podría implementar: qué habilidad q
   - Morse: «Esta noche alguien ha cantado en la Cámara de Ecos. La aguja de la sala de escucha ni se ha movido.»
   - Teo: «Lo que se canta entre válvulas se queda en el Bastión. En el campo, comandantes, eso se oye. Cantad con cabeza.»
   - Coro: «Conocemos esa canción.»
-- **Especialización** (registro, cuando un recluta gasta sus 2 puntos en un eje):
+- **Especialización** (registro, cuando un recluta llega a Capitán):
   - Asalto: «{nombre} se especializa como Asalto. Teo le entrega una escopeta y una hoja.»
   - Granadero: «{nombre} se especializa como Granadero. Le toca el cañón, y las granadas.»
   - Francotirador: «{nombre} se especializa como Francotirador. Teo le ajusta la mira de un fusil de precisión.»
   - Especialista: «{nombre} se especializa como Especialista. El Grillo ya tiene dueño.»
-- **Recluta** (descripción de la clase): «Todavía sin clase. Lleva fusil y aprende lo que le enseñen. Se especializa al gastar 2 puntos en un eje de la Rosa.»
+- **Recluta** (descripción de la clase): «Todavía sin clase. Lleva fusil y aprende lo que le enseñen. Al llegar a Capitán se especializa en el eje de la Rosa en que más haya aprendido.»
 - **Aviso de Morse en combate** (la primera vez que alguien canta):
   - «Eso se oye. Que valga la pena.»
   - Regla: «Cantar rompe la ocultación, y quien canta es más fácil de cantar para un Cantor.»
@@ -431,7 +431,7 @@ Cada talento dice entre corchetes cómo se podría implementar: qué habilidad q
 
 | Fase | Contenido | Toca el guardado |
 |---|---|---|
-| 1 · Textos | **Hecho (2026-10-05).** Nombres en `content.ts`, `campaign.ts` y `progression.ts` (con los mismos ids), los 8 acontecimientos, informes por tipo y región (`missionBriefing`), situación y aliado de cada región, el reloj sin nombre hasta el nivel 4, la hoja del Expediente al subir de nivel (aviso y vista de Progreso) y los epílogos. El final todavía es único: el dilema llega en la fase 2 | No |
+| 1 · Textos | **Hecho (2026-10-05).** Nombres en `content.ts`, `campaign.ts` y `progression.ts` (con los mismos ids), los 8 acontecimientos, informes por tipo y región (`missionBriefing`), situación y aliado de cada región, el reloj sin nombre hasta el nivel 4, la hoja del Expediente al subir de nivel (aviso y vista del Expediente) y los epílogos. El final todavía es único: el dilema llega en la fase 2 | No |
 | 2 · Historia | **Hecho (2026-10-05).** Siete capítulos (`STORY` en `lore.ts`, `CampaignState.story`, `MissionOffer.story`), con informes firmados, VIP y objetos con nombre en combate. La Dra. Nwosu sube el valor de los cuerpos y Simón tiene su acontecimiento. El dilema final es el acontecimiento «La Contranota» (`CampaignState.ending`). Campaña versión 5: una campaña antigua retoma la historia en el capítulo de su nivel | Sí (versión 5) |
 | 3 · Encargos y rumores | **Hecho (2026-10-06).** Diez encargos en `quests.ts`: pasos, desenlaces, rasgos y efectos regionales. El estado está en `CampaignState.quests` y `questLog`; las decisiones son el acontecimiento `quest`. Rumores (`rumors`, `listening`) con la orden compartida `investigate`, y avisos emergentes desde el registro (`LogEntry.alert`). Campaña versión 6 | Sí (versión 6) |
 | 4 · Transmisiones | **Hecho (2026-10-06 y 2026-10-11).** Escenas de radio (`transmissions.ts` en el motor; panel y reglas de cuándo suenan en `client/src/strategy/transmissions.ts`), radio de Morse en combate y glosario para las ayudas emergentes (`GLOSSARY` en `lore.ts`). Retratos vóxel de Arte. Después, los avisos de Morse en combate, el relevo y las fichas de enemigo (revisión de UX 2) | No (cada navegador recuerda lo que ha oído) |

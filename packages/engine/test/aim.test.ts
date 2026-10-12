@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { previewShot, rollDamage, rollShot } from '../src/aim';
+import { previewShot, resolveShot, rollDamage, rollShot } from '../src/aim';
 import { WEAPONS } from '../src/content';
+import { applyEvent, type GameEvent } from '../src/events';
 import { Rng } from '../src/rng';
+import type { GameState, ShotResult, Unit } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
 
 const open = () => stateFrom(Array.from({ length: 12 }, () => '.'.repeat(12)));
@@ -66,5 +68,65 @@ describe('rolls', () => {
       if (r === 'hit') expect(d).toBeLessThanOrEqual(5);
       if (r === 'crit') expect(d).toBeGreaterThanOrEqual(5);
     }
+  });
+});
+
+describe('the die on screen', () => {
+  it('the roll runs 1–100 and hits exactly when it is at most the chance', () => {
+    const rng = new Rng(7);
+    const p = { origin: { x: 0, y: 0 }, hit: 93, crit: 10, graze: 0, flanked: false, cover: 0 as const, distance: 5, squadsight: false, mods: [], critMods: [] };
+    for (let i = 0; i < 300; i++) {
+      const { result, roll } = resolveShot(p, rng);
+      expect(roll).toBeGreaterThanOrEqual(1);
+      expect(roll).toBeLessThanOrEqual(100);
+      expect(result === 'miss').toBe(roll > 93);
+      if (result === 'crit') expect(roll).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('gives the same result as rollShot for the same seed', () => {
+    const p = { origin: { x: 0, y: 0 }, hit: 55, crit: 15, graze: 10, flanked: false, cover: 0 as const, distance: 5, squadsight: false, mods: [], critMods: [] };
+    const a = new Rng(3);
+    const b = new Rng(3);
+    for (let i = 0; i < 100; i++) expect(resolveShot(p, a).result).toBe(rollShot(p, b));
+  });
+});
+
+describe('bad luck (aim assist)', () => {
+  const shot = (s: GameState, unit: Unit, target: Unit, result: ShotResult): void => {
+    const e: GameEvent = { t: 'shot', unit: unit.id, target: target.id, ability: 'shoot', from: unit.pos, result, chance: 70, roll: result === 'miss' ? 90 : 10, reaction: false };
+    applyEvent(s, e);
+  };
+  const luck = (s: GameState, shooter: Unit, target: Unit) => previewShot(s, shooter, target)!.mods.find((m) => m.label === 'Mala racha')?.value ?? 0;
+
+  it('each miss in a row gives that player +10, up to +20, and a hit clears it', () => {
+    const s = open();
+    const mine = addUnit(s, 's1', 'specialist', 0, 0, { owner: 0 });
+    const partner = addUnit(s, 's2', 'specialist', 2, 0, { owner: 1 });
+    const alien = addUnit(s, 'a1', 'trooper', 0, 10);
+    const base = previewShot(s, mine, alien)!.hit;
+    shot(s, mine, alien, 'miss');
+    expect(luck(s, mine, alien)).toBe(10);
+    expect(previewShot(s, mine, alien)!.hit).toBe(Math.min(100, base + 10));
+    // Per player: the partner's odds don't move.
+    expect(luck(s, partner, alien)).toBe(0);
+    shot(s, mine, alien, 'miss');
+    shot(s, mine, alien, 'miss');
+    expect(luck(s, mine, alien)).toBe(20);
+    shot(s, mine, alien, 'graze');
+    expect(luck(s, mine, alien)).toBe(0);
+  });
+
+  it('counts any of that player\'s soldiers, never the aliens', () => {
+    const s = open();
+    const a = addUnit(s, 's1', 'specialist', 0, 0, { owner: 0 });
+    const b = addUnit(s, 's2', 'sharpshooter', 2, 0, { owner: 0 });
+    const alien = addUnit(s, 'a1', 'trooper', 0, 10);
+    shot(s, a, alien, 'miss');
+    expect(luck(s, b, alien)).toBe(10);
+    shot(s, alien, a, 'miss');
+    shot(s, alien, a, 'miss');
+    expect(luck(s, alien, a)).toBe(0);
+    expect(luck(s, b, alien)).toBe(10);
   });
 });

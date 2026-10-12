@@ -1,11 +1,16 @@
-import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { X509Certificate } from 'node:crypto';
+import { appendFileSync, createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
+import type { Socket } from 'node:net';
+import type { TLSSocket } from 'node:tls';
 import { networkInterfaces } from 'node:os';
-import { extname, join, normalize, resolve } from 'node:path';
+import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { SaveStore } from './persistence';
 import type { HostAddress } from '@bastion/engine';
 import { Room } from './room';
+import { certificate, type Tls } from './tls';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -14,9 +19,13 @@ function arg(name: string): string | undefined {
 
 /** `--port 3000` wins over the PORT env var (dev tooling sometimes sets PORT for the web client). */
 const PORT = Number(arg('port') ?? process.env.PORT ?? 3000);
+/** The same game over https (Safari needs it, see tls.ts); `--https-port 0` turns it off. */
+const HTTPS_PORT = Number(arg('https-port') ?? PORT + 1);
 const ROOT = resolve(import.meta.dirname, '../../..');
 const CLIENT_DIST = join(ROOT, 'packages/client/dist');
 const SAVE_PATH = resolve(arg('save') ?? process.env.SAVE_PATH ?? join(ROOT, 'data/save.json'));
+/** Who connects, how, and what their browser reports: kept next to the save to diagnose a partner who cannot play. */
+const NET_LOG = join(dirname(SAVE_PATH), 'red.log');
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -27,12 +36,59 @@ const MIME: Record<string, string> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.json': 'application/json',
+  '.webp': 'image/webp',
 };
 
 /** Debug only (`--snapshots <dir>`): the client's `__bastion.snap()` posts frames here. */
 const SNAPSHOT_DIR = arg('snapshots');
 
-const http = createServer((req, res) => {
+function netLog(line: string): void {
+  try {
+    appendFileSync(NET_LOG, `${new Date().toISOString()} ${line}\n`);
+  } catch {
+    /* the log helps, it never stops the game */
+  }
+}
+
+function peer(socket: Socket): string {
+  return socket.remoteAddress?.replace(/^::ffff:/, '') ?? '?';
+}
+
+/** The host's own browser: it stays on http, which is fast on localhost. */
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * A page asked for on the http port from another computer goes over to https:
+ * Safari runs plain http pages from the network some fifty times slower
+ * (tls.ts), and the old address is easy to type out of habit. `?http` stays,
+ * in case https gives trouble.
+ */
+function toHttps(req: IncomingMessage, res: ServerResponse): boolean {
+  if (!https || req.method !== 'GET' || !req.headers.accept?.includes('text/html')) return false;
+  const host = req.headers.host?.replace(/:\d+$/, '');
+  const url = new URL(req.url ?? '/', 'http://x');
+  if (!host || LOOPBACK.has(host) || url.searchParams.has('http')) return false;
+  netLog(`http → https ${peer(req.socket)} (${host})`);
+  res.writeHead(302, { location: `https://${host}:${HTTPS_PORT}${url.pathname}${url.search}` });
+  res.end();
+  return true;
+}
+
+function handle(req: IncomingMessage, res: ServerResponse): void {
+  // The partner's browser reports its errors and hangs here (client report.ts): the host sees them.
+  if (req.method === 'POST' && req.url === '/__report') {
+    let body = '';
+    req.on('data', (chunk) => {
+      if (body.length < 2000) body += chunk;
+    });
+    req.on('end', () => {
+      const line = `[navegador ${peer(req.socket)}] ${body.slice(0, 2000)}`;
+      console.log(line);
+      netLog(line);
+      res.end('ok');
+    });
+    return;
+  }
   if (SNAPSHOT_DIR && req.method === 'POST' && req.url?.startsWith('/__snap')) {
     let body = '';
     req.on('data', (chunk) => (body += chunk));
@@ -42,6 +98,13 @@ const http = createServer((req, res) => {
       writeFileSync(join(SNAPSHOT_DIR, `${name}.jpg`), Buffer.from(body.replace(/^data:image\/\w+;base64,/, ''), 'base64'));
       res.end('ok');
     });
+    return;
+  }
+  // The https certificate, for the partner to trust it in their keychain: then
+  // Safari takes the page as secure, with no warning and its JavaScript compiler on.
+  if (tls && req.url === '/certificado') {
+    res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="Bastion.cer"' });
+    res.end(new X509Certificate(tls.cert).raw);
     return;
   }
   if (!existsSync(CLIENT_DIST)) {
@@ -55,7 +118,7 @@ const http = createServer((req, res) => {
   if (!existsSync(file) || statSync(file).isDirectory()) file = join(CLIENT_DIST, 'index.html');
   res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
   createReadStream(file).pipe(res);
-});
+}
 
 /** IPv4 addresses a partner can reach: same network, or Tailscale (100.64.0.0/10). */
 function hostAddresses(): HostAddress[] {
@@ -70,11 +133,35 @@ function hostAddresses(): HostAddress[] {
   return out;
 }
 
-const room = new Room(new SaveStore(SAVE_PATH), hostAddresses());
-const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 64 * 1024 });
+const hosts = hostAddresses();
+const tls: Tls | null = HTTPS_PORT ? certificate(join(dirname(SAVE_PATH), 'tls'), hosts.map((h) => h.address)) : null;
+const http = createServer((req, res) => toHttps(req, res) || handle(req, res));
+const https = tls ? createHttpsServer(tls, handle) : null;
+// A browser that turns the certificate down (the warning page, or Safari refusing it for the WebSocket) ends
+// here. By then its TLS socket has forgotten the address: it is noted when the TCP connection arrives.
+const tcpPeers = new WeakMap<Socket, string>();
+https?.on('connection', (raw: Socket) => tcpPeers.set(raw, peer(raw)));
+https?.on('tlsClientError', (e: Error & { code?: string }, socket) => {
+  const raw = (socket as Socket & { _parent?: Socket })._parent;
+  netLog(`certificado rechazado por ${(raw && tcpPeers.get(raw)) ?? '?'} (${e.code ?? e.message.trim()})`);
+});
+
+const room = new Room(new SaveStore(SAVE_PATH), hosts, https ? HTTPS_PORT : null);
+// One WebSocket server for both: the game is the same over http and https.
+const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 const alive = new WeakSet<WebSocket>();
 
-wss.on('connection', (socket) => {
+for (const server of [http, https].filter((s): s is Server => !!s)) {
+  server.on('upgrade', (req, socket, head) => {
+    if (new URL(req.url ?? '/', 'http://x').pathname !== '/ws') return socket.destroy();
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  });
+}
+
+wss.on('connection', (socket, req) => {
+  const who = `${peer(req.socket)} ${(req.socket as TLSSocket).encrypted ? 'wss' : 'ws'}`;
+  netLog(`conecta ${who}`);
+  socket.on('close', (code) => netLog(`desconecta ${who} (${code})`));
   alive.add(socket);
   socket.on('pong', () => alive.add(socket));
   room.connect(socket);
@@ -93,8 +180,13 @@ setInterval(() => {
 }, 15_000);
 
 http.listen(PORT, () => {
+  netLog(`servidor arrancado: http ${PORT}${https ? `, https ${HTTPS_PORT}` : ''} · ${hosts.map((h) => h.address).join(', ')}`);
   console.log(`\n  Bastión — servidor listo en el puerto ${PORT}`);
   console.log(`    Tú:              http://localhost:${PORT}`);
-  for (const h of hostAddresses()) console.log(`    Tu compañero:    http://${h.address}:${PORT}${h.kind === 'tailscale' ? '  (Tailscale)' : ''}`);
+  for (const h of hosts) console.log(`    Tu compañero:    ${https ? `https://${h.address}:${HTTPS_PORT}` : `http://${h.address}:${PORT}`}${h.kind === 'tailscale' ? '  (Tailscale)' : ''}`);
+  if (https) console.log('    (la primera vez su navegador avisa del certificado: es el de este ordenador, que lo acepte)');
+  else if (HTTPS_PORT) console.log('    Sin https (falta openssl): en Safari, tu compañero irá muy lento.');
   console.log('');
 });
+https?.on('error', (e) => console.log(`  No se pudo abrir https en el puerto ${HTTPS_PORT}: ${e.message}`));
+https?.listen(HTTPS_PORT);

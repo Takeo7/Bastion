@@ -7,6 +7,7 @@ import {
   ATTR_IDS,
   ATTR_MAX,
   attrBlocker,
+  attrPointsFree,
   attrCap,
   autoBuild,
   AXES,
@@ -15,12 +16,15 @@ import {
   BRANCHES,
   CENTER,
   CLASS_TOP,
+  dormant,
+  leaningClass,
   learnTalent,
   pointsAbove,
   rowGate,
   ROW_GATES,
   SONG_GATES,
   soldierStats,
+  specialize,
   talentBlocker,
   talentPointsFree,
   talentsOf,
@@ -145,29 +149,42 @@ describe('the rosa', () => {
     expect(talentBlocker(build('specialist', 7, { marksman: 2 }), 'battery')).toMatch(/Antes hace falta Protocolo de combate/);
   });
 
-  it('a recruit specialises with two points in an axis, and gets that class’s aptitudes', () => {
-    const b = build(null, 2);
-    expect(talentBlocker(b, 'coolHead')).toBeNull();
+  it('a recruit learns from two axes without a class, and leans to the one taught most', () => {
+    const b = build(null, 4);
     learnTalent(b, 'coolHead');
-    expect(b.cls).toBeNull();
-    // The Canto doesn't teach a class: a recruit can't sing.
-    expect(talentBlocker(b, 'bolt', 3)).toMatch(/Un recluta no canta/);
+    // A recruit may sing too, when the Cámara de Ecos allows it.
+    expect(talentBlocker(b, 'bolt', 3)).toBeNull();
     learnTalent(b, 'patience');
+    learnTalent(b, 'hawkEye');
+    learnTalent(b, 'runner');
     expect(b.cls).toBeNull();
-    expect(wouldSpecialize(b, 'hawkEye')).toBe('sharpshooter');
-    expect(wouldSpecialize(b, 'runner')).toBeNull();
+    expect(wouldSpecialize(b, 'hawkEye')).toBeNull();
+    expect(leaningClass(b)).toBe('sharpshooter');
+    // The last two rows of an axis wait for the class.
+    expect(talentBlocker(build(null, 4, { runner: 1, light: 2, feline: 2, evasion: 2 }), 'untouchable')).toMatch(/al especializarse, en Capitán/);
+    // Aptitudes count too: Reflejos raised tips a tie towards the Asalto.
+    expect(leaningClass(build(null, 2, { hawkEye: 1, runner: 1 }, { ref: 7 }))).toBe('assault');
+    // Specialising adds the class's +1 + 1, with the new base: the free points don't change.
     const before = { ...b.attrs };
-    expect(learnTalent(b, 'hawkEye')).toEqual({ specialized: 'sharpshooter' });
-    expect(b.cls).toBe('sharpshooter');
+    const free = attrPointsFree(b);
+    specialize(b, 'sharpshooter');
     expect(b.attrs.pul).toBe(before.pul + 1);
     expect(b.attrs.tem).toBe(before.tem + 1);
-    // The class's +1 + 1 come with the new base: the free points don't change.
+    expect(attrPointsFree(b)).toBe(free);
     expect(soldierStats(b).template).toBe('sharpshooter');
+    // A retrained captain specialises again with two points in an axis.
+    const captain = build(null, 5, { patience: 1 });
+    expect(wouldSpecialize(captain, 'hawkEye')).toBe('sharpshooter');
+    expect(learnTalent(captain, 'hawkEye')).toEqual({ specialized: 'sharpshooter' });
   });
 
-  it('a recruit may take a kit talent only when it makes them that class', () => {
-    expect(talentBlocker(build(null, 2), 'keenBlade')).toMatch(/Necesita la espada del Asalto/);
-    expect(talentBlocker(build(null, 2, { runner: 1 }), 'keenBlade')).toBeNull();
+  it('a recruit may learn a kit talent ahead: it sleeps until the soldier carries the kit', () => {
+    expect(talentBlocker(build(null, 2), 'keenBlade')).toBeNull();
+    const recruit = build(null, 2, { slug: 1 });
+    expect(dormant(recruit, 'slug')).toBe(true);
+    expect(soldierStats(recruit).perks).toEqual([]);
+    expect(soldierStats(recruit).mods.damage).toBe(soldierStats(build(null, 2)).mods.damage);
+    expect(soldierStats(build('assault', 2, { slug: 1 })).perks).toEqual(['slug']);
     expect(talentBlocker(build('sharpshooter', 7), 'keenBlade')).toMatch(/Necesita la espada del Asalto/);
   });
 
@@ -245,7 +262,8 @@ describe('the rosa', () => {
 describe('training in the barracks', () => {
   function campaign() {
     const c = createCampaign([0, 1], new Rng(3));
-    const s = c.soldiers.find((x) => x.owner === 0 && x.cls === 'sharpshooter')!;
+    const s = c.soldiers.find((x) => x.owner === 0)!;
+    specialize(s, 'sharpshooter');
     s.rank = 1;
     return { c, s };
   }
@@ -264,7 +282,7 @@ describe('training in the barracks', () => {
     expect(run(c, { type: 'talent', soldier: s.id, talent: 'deadeye' }, 1).ok).toBe(false);
   });
 
-  it('a recruit arrives without a class and specialises with the Rosa', () => {
+  it('a recruit arrives without a class and keeps it until Capitán', () => {
     const { c } = campaign();
     c.soldiers.at(-1)!.alive = false;
     expect(run(c, { type: 'recruit' })).toMatchObject({ ok: true });
@@ -273,8 +291,8 @@ describe('training in the barracks', () => {
     r.rank = 1;
     run(c, { type: 'talent', soldier: r.id, talent: 'marksman' });
     run(c, { type: 'talent', soldier: r.id, talent: 'marksman' });
-    expect(r.cls).toBe('specialist');
-    expect(c.log[0]!.text).toMatch(/se especializa como Especialista. El Grillo ya tiene dueño/);
+    expect(r.cls).toBeNull();
+    expect(leaningClass(r)).toBe('specialist');
   });
 
   it('retraining gives every point back for credits, and the soldier is a recruit again', () => {

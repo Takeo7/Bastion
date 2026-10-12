@@ -21,9 +21,12 @@ import {
   attrPointsFree,
   baseAttrs,
   cleanTalents,
+  leaningClass,
   learnTalent,
   soldierStats,
   soldierTemplate,
+  specialize,
+  SPECIALIZE_RANK,
   SPECIALIZE_TEXT,
   talentBlocker,
   TALENT_POINTS_PER_RANK,
@@ -241,7 +244,7 @@ export const FIXED_BUILDINGS: Readonly<Record<FixedBuildingId, Vec2>> = {
 export const FIXED_NAMES: Record<FixedBuildingId, string> = {
   command: 'Búnker de mando',
   barracks: 'Cuartel',
-  research: 'Progreso',
+  research: 'Expediente',
   engineering: 'Armería',
 };
 
@@ -491,7 +494,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
         available: (c) => c.credits >= 30,
         apply: (c, rng) => {
           credit(c, -30);
-          const s = addSoldier(c, neediestPlayer(c), rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const), rng);
+          const s = addSoldier(c, neediestPlayer(c), null, rng);
           log(c, `${s.name} se une al Bastión (${TEMPLATES[soldierTemplate(s.cls)].name}).`, 'good');
         },
       },
@@ -656,6 +659,11 @@ const DOOM_INTERVAL = 12;
  * under a month and left the base unbuilt).
  */
 const MISSION_DAYS = 3;
+
+/** Days a mission keeps the squad away, shortest and longest (the garage takes some off). */
+export function missionDays(c: CampaignState): [number, number] {
+  return [Math.max(1, MISSION_DAYS - garageCut(c).days), Math.max(1, MISSION_DAYS + 1 - garageCut(c).days)];
+}
 /** Least days between one story chapter won and the next one opening. */
 const STORY_GAP = 8;
 const FACILITY_DOOM_INTERVAL = 14;
@@ -751,6 +759,8 @@ export interface ReportSoldier {
   xpGained: number;
   /** Rank reached when the mission promoted the soldier. */
   promotedTo: number | null;
+  /** Class taken on reaching Capitán in this mission. */
+  specializedAs?: ClassId;
 }
 
 export interface MissionReport {
@@ -809,7 +819,7 @@ export interface Rumor {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 10;
+export const CAMPAIGN_VERSION = 11;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -829,6 +839,8 @@ export interface CampaignState {
   offers: MissionOffer[];
   activeMission: string | null;
   squad: string[];
+  /** Hangar pad of each squad member (squadPads): nobody moves when others come and go. */
+  pads?: Record<string, number>;
   doom: number;
   nextMissionDay: number;
   nextDoomDay: number;
@@ -977,7 +989,7 @@ export function healRate(c: CampaignState): number {
   return level ? 1 + level + (hasAdjacency(c, 'infirmary') ? 1 : 0) : 1;
 }
 
-/** Bastion experience a mission's earned XP becomes: +25/40/55 % with simulation, 15 % more next to Progreso. */
+/** Bastion experience a mission's earned XP becomes: +25/40/55 % with simulation, 15 % more next to the Expediente. */
 export function xpMultiplier(c: CampaignState): number {
   const level = facilityLevel(c, 'simulation');
   return level ? 1.25 + 0.15 * (level - 1) + (hasAdjacency(c, 'simulation') ? 0.15 : 0) : 1;
@@ -1398,9 +1410,9 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
   if (outcome.trait && soldier && !soldier.traits.includes(outcome.trait)) soldier.traits.push(outcome.trait);
   if (outcome.recruit) {
     const r = outcome.recruit;
-    const s = addSoldier(c, q.owner ?? neediestPlayer(c), r.cls ?? rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const), rng);
+    const s = addSoldier(c, q.owner ?? neediestPlayer(c), null, rng);
     if (r.name) s.name = fill(r.name, q.names);
-    if (r.rank) promoteTo(s, r.rank);
+    if (r.rank) promoteTo(s, r.rank, r.cls);
     if (r.trait) s.traits.push(r.trait);
     log(c, `${s.name} se une al Bastión (${TEMPLATES[soldierTemplate(s.cls)].name}).`, 'good');
   }
@@ -1409,9 +1421,17 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
 }
 
 /** A newcomer who arrives with a rank: the points of every promotion wait to be spent. */
-function promoteTo(s: CampaignSoldier, rank: number): void {
+function promoteTo(s: CampaignSoldier, rank: number, cls?: ClassId): void {
   s.rank = rank;
   s.xp = Math.max(s.xp, RANKS[rank]!.xp);
+  if (rank >= SPECIALIZE_RANK && !s.cls) specializeSoldier(s, cls ?? leaningClass(s));
+}
+
+/** A recruit reaching Capitán takes its class (classes.ts), and the look that goes with it if it had the default one. */
+function specializeSoldier(s: CampaignSoldier, cls: ClassId): void {
+  const wasDefault = JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, s.owner));
+  specialize(s, cls);
+  if (wasDefault) s.appearance = defaultAppearance(cls, s.owner);
 }
 
 /** Level of the Cámara de Ecos, which opens the rows of the Canto (0 = not built). */
@@ -1564,15 +1584,8 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     seen: {},
     nextId: 0,
   };
-  const kits: ClassId[][] = [
-    ['assault', 'sharpshooter', 'specialist', 'grenadier'],
-    ['grenadier', 'assault', 'specialist', 'sharpshooter'],
-  ];
-  if (players.length > 1) {
-    players.forEach((slot, i) => kits[i]!.forEach((cls) => addSoldier(c, slot, cls, rng)));
-  } else {
-    [...kits[0]!, ...kits[1]!].forEach((cls) => addSoldier(c, players[0]!, cls, rng));
-  }
+  // Everyone starts as a recruit: classes come at Capitán.
+  for (let i = 0; i < 2 * START_KIT; i++) addSoldier(c, players.length > 1 ? players[i % 2]! : players[0]!, null, rng);
   c.offers.push(makeOffer(c, rng), makeOffer(c, rng));
   log(c, 'El Bastión entra en servicio. Elegid la primera misión: el combate hará subir de nivel al Bastión.', 'good');
   refreshNarrative(c, rng);
@@ -1690,6 +1703,8 @@ export function defaultSquad(c: CampaignState, connected: readonly Slot[]): stri
 
 /** Soldiers a partner who joins a campaign started without them gets to command. */
 export const LATE_KIT = 4;
+/** Soldiers each player starts with. */
+const START_KIT = 4;
 /** Ready soldiers a commander keeps when a partner arrives: a squad share. */
 const KEEP_READY = 3;
 
@@ -1719,12 +1734,8 @@ export function addPlayer(c: CampaignState, slot: Slot, rng: Rng): number {
     if (wasDefault) s.appearance = defaultAppearance(s.cls, slot);
     s.loadout = { utility: null, ammo: null };
   }
-  const classes: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'];
   const recruits: CampaignSoldier[] = [];
-  for (let i = rookies.length; i < LATE_KIT; i++) {
-    const have = c.soldiers.filter((s) => s.owner === slot && s.alive).map((s) => s.cls);
-    recruits.push(addSoldier(c, slot, classes.find((cls) => !have.includes(cls)) ?? classes[i % classes.length]!, rng));
-  }
+  for (let i = rookies.length; i < LATE_KIT; i++) recruits.push(addSoldier(c, slot, null, rng));
   // Whoever was already there learns who changed hands, and who joined.
   const list = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : (names[0] ?? ''));
   const moved = rookies.length ? `Pasan a su mando: ${list(rookies.map((s) => s.name))}.` : '';
@@ -2018,6 +2029,49 @@ function everyoneReady(ready: [boolean, boolean], connected: readonly Slot[]): b
 }
 
 export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: CampaignContext): CampaignResult {
+  const result = runCampaignCommand(c, cmd, ctx);
+  if (result.ok) syncPads(c);
+  return result;
+}
+
+/**
+ * The hangar pads of the squad, `squadMax` long. Each commander has a half of
+ * their own (the first player the left one) and keeps each soldier on the pad
+ * it took; a place lent by the partner is taken from the middle of their half.
+ * Pure: both commanders work out the same pads from the same campaign.
+ */
+export function squadPads(c: CampaignState): (string | null)[] {
+  const max = squadMax(c);
+  const out: (string | null)[] = Array.from({ length: max }, () => null);
+  const kept = c.pads ?? {};
+  for (const id of c.squad) {
+    const pad = kept[id];
+    if (pad !== undefined && pad < max && out[pad] === null) out[pad] = id;
+  }
+  const half = Math.ceil(max / 2);
+  const all = Array.from({ length: max }, (_, i) => i);
+  const left = all.slice(0, half);
+  const right = all.slice(half);
+  for (const id of c.squad) {
+    if (out.includes(id)) continue;
+    const owner = c.soldiers.find((s) => s.id === id)?.owner;
+    const order = c.players.length < 2 ? all : owner === c.players[0] ? [...left, ...right] : [...right, ...[...left].reverse()];
+    const pad = order.find((i) => out[i] === null);
+    if (pad !== undefined) out[pad] = id;
+  }
+  return out;
+}
+
+/** Writes down the pads the squad stands on now, so they stay put. */
+export function syncPads(c: CampaignState): void {
+  const pads: Record<string, number> = {};
+  squadPads(c).forEach((id, i) => {
+    if (id) pads[id] = i;
+  });
+  c.pads = pads;
+}
+
+function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: CampaignContext): CampaignResult {
   if (c.outcome) return { ok: false, error: 'La campaña ha terminado.' };
   const { slot } = ctx;
 
@@ -2107,7 +2161,7 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
     case 'recruit': {
       const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).length;
       if (mine >= soldierCap(c)) return { ok: false, error: `Máximo ${soldierCap(c)} soldados por jugador.` };
-      if (bedsFree(c) <= 0) return { ok: false, error: 'No quedan camas: construid un barracón.' };
+      if (bedsFree(c) <= 0) return { ok: false, error: 'Para reclutar más soldados, construid un barracón: no quedan camas.' };
       if (!canAfford(c, recruitCost(c))) return { ok: false, error: 'No hay créditos suficientes.' };
       const place = cmd.squad ? (c.activeMission ? squadPlace(c, slot, ctx.connected) : { error: 'Primero elegid una misión.' }) : null;
       if (place?.error) return { ok: false, error: place.error };
@@ -2483,6 +2537,11 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       s.rank = rank;
       entry.promotedTo = rank;
       log(c, `${s.name} asciende a ${RANKS[rank]!.name}.`, 'good');
+      if (rank >= SPECIALIZE_RANK && !s.cls) {
+        specializeSoldier(s, leaningClass(s));
+        entry.specializedAs = s.cls!;
+        log(c, SPECIALIZE_TEXT[s.cls!].replace('{name}', s.name), 'good');
+      }
     }
   }
 
@@ -2508,8 +2567,8 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       report.doomChange = -r.doom;
     }
     if (r.recruit) {
-      const s = addSoldier(c, neediestPlayer(c), r.recruit, rng);
-      log(c, `${s.name} se une al Bastión (${TEMPLATES[r.recruit].name}).`, 'good');
+      const s = addSoldier(c, neediestPlayer(c), null, rng);
+      log(c, `${s.name} se une al Bastión como recluta.`, 'good');
     }
     if (offer.facility) {
       const region = c.regions.find((x) => x.id === offer.facility);
@@ -2683,6 +2742,10 @@ export function migrateCampaign(old: CampaignState): CampaignState {
       kicker: 'Cuartel',
       title: 'Nueva instrucción',
     });
+  }
+  // Version 11: the first player's colour goes from blue to violet; soldiers still in the old default follow it.
+  for (const s of c.soldiers) {
+    if (s.owner === 0 && JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, 0, '#3fa9ff'))) s.appearance = defaultAppearance(s.cls, 0);
   }
   c.launchReady = [false, false];
   return c;

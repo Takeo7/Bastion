@@ -63,6 +63,8 @@ class AudioEngine {
     }
     this.muted = muted;
     if (typeof window === 'undefined') return;
+    // `?sinsonido`: no audio at all, for a browser whose sound gets in the way.
+    if (new URLSearchParams(location.search).has('sinsonido')) return;
     const unlock = () => this.unlock();
     window.addEventListener('pointerdown', unlock, { once: true, capture: true });
     window.addEventListener('keydown', unlock, { once: true, capture: true });

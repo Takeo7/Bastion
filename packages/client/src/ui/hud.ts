@@ -12,7 +12,6 @@ import {
   type PlayerInfo,
   type SkirmishMap,
   type Slot,
-  type Team,
   type Unit,
 } from '@bastion/engine';
 import { sound } from '../audio/bank';
@@ -28,7 +27,14 @@ export interface AbilityView {
   label: string;
   hotkey: string;
   enabled: boolean;
+  /** Why it can't be used now. */
   reason?: string;
+  /** The hover card: name, cost («1 acción», «Termina el turno»…), limits and what it does. */
+  name: string;
+  cost: string;
+  /** Cooldown and uses left («Disponible en 2 turnos · Usos: 1»). */
+  limits?: string;
+  description: string;
   active?: boolean;
   count?: number;
   /** Turns left before it can be used again. */
@@ -38,6 +44,12 @@ export interface AbilityView {
   /** Nothing left to use (no ammo, no charges): stamped, not explained. */
   depleted?: boolean;
 }
+
+/**
+ * Whose turn the screen shows: mine (I give the orders), the partner's (they
+ * hold the command) or the enemy's. It colours the frame and the turn label.
+ */
+export type TurnOwner = { kind: 'mine'; color: string } | { kind: 'partner'; name: string; color: string } | { kind: 'enemy' };
 
 /** Who holds the command (el mando) while playing with a partner. */
 export interface CommandView {
@@ -67,7 +79,9 @@ export type TargetView =
       /** What the ability changes besides the odds ("+50 % de daño"). */
       note?: string;
     }
-  | { kind: 'support'; title: string; action: string; locked?: string; targetName: string; effect: string; index: number; total: number };
+  | { kind: 'support'; title: string; action: string; locked?: string; targetName: string; effect: string; index: number; total: number }
+  /** A self ability armed by its first press: what it costs and does, until the second press or Enter. */
+  | { kind: 'self'; title: string; action: string; locked?: string; cost: string; limits?: string; effect: string; detail?: string };
 
 export interface MissionView {
   kind: MissionKind;
@@ -107,7 +121,8 @@ const CONTROLS: [string, string][] = [
   ['Clic', 'Seleccionar y mover'],
   ['Tab', 'Siguiente soldado u objetivo'],
   ['Espacio', 'Disparar'],
-  ['1–9', 'Habilidades'],
+  ['1–9', 'Elegir habilidad (otra vez para usarla)'],
+  ['Intro', 'Confirmar la acción elegida'],
   ['C', 'Ceder el mando'],
   ['Retroceso', 'Terminar turno'],
   ['G · clic central', 'Marcar'],
@@ -135,6 +150,8 @@ const LOG_FOLDED = 2;
 /** DOM overlay for everything that is not in the 3D scene. */
 export class Hud {
   readonly root = h('div.hud');
+  /** Round the screen, in the colour of whoever plays now (playtest: «que se note de quién es el turno»). */
+  private readonly frame = h('div.turn-frame');
   private readonly turn = h('div.turn');
   private readonly mission = h('div.mission');
   private readonly players = h('div.players');
@@ -164,6 +181,7 @@ export class Hud {
     this.passBtn.append(h('span', {}, 'CEDER EL MANDO'), h('small', {}, 'C'));
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
     this.root.append(
+      this.frame,
       h('div.top', {}, this.turn, this.mission, this.players),
       this.squad,
       this.unitPanel,
@@ -187,13 +205,30 @@ export class Hud {
   private turnKey = '';
   private missionKey = '';
 
-  setTurn(turn: number, team: Team, concealed: boolean): void {
-    const key = `${turn}|${team}|${concealed}`;
+  /**
+   * Whose turn it is, three ways at once: the label on the strip («TU TURNO»,
+   * «TURNO DE ANA», «TURNO ENEMIGO») on a tab of that player's colour, a frame
+   * round the screen in it (dashed for the partner's), and the ability cards
+   * resting when the orders aren't ours. `owner` null: the mission is over.
+   */
+  setTurn(turn: number, owner: TurnOwner | null, concealed: boolean): void {
+    const key = `${turn}|${JSON.stringify(owner)}|${concealed}`;
     if (key === this.turnKey) return;
     this.turnKey = key;
+    const kind = owner?.kind ?? 'over';
+    for (const k of ['mine', 'partner', 'enemy'] as const) this.root.classList.toggle(`turn-${k}`, kind === k);
+    // --turn colours the frame, the tab and the slip over the cards.
+    this.root.style.setProperty('--turn', owner && owner.kind !== 'enemy' ? owner.color : 'var(--stamp)');
+    this.frame.className = `turn-frame ${kind}`;
+    const label = !owner ? 'FIN DE LA MISIÓN' : owner.kind === 'mine' ? 'TU TURNO' : owner.kind === 'partner' ? `TURNO DE ${owner.name.toUpperCase()}` : 'TURNO ENEMIGO';
+    // Why the cards rest: the bar says it over itself.
+    if (owner?.kind === 'partner') this.abilities.dataset.lock = `Turno de ${owner.name}: puedes apuntar y planear`;
+    else if (owner?.kind === 'enemy') this.abilities.dataset.lock = 'Turno enemigo';
+    else delete this.abilities.dataset.lock;
     clear(this.turn);
     this.turn.append(
-      h(`span.turn-label.${team}`, {}, type(team === 'xcom' ? `TURNO ${turn} · ESCUADRA` : 'TURNO ENEMIGO')),
+      // The number goes in the tooltip: the strip has no room for it next to a partner's name.
+      h(`span.turn-label.${kind}`, { title: `Turno ${turn}` }, type(label)),
       h(`span.conceal.${concealed ? 'on' : 'off'}`, {}, concealed ? 'OCULTOS' : 'DETECTADOS'),
     );
   }
@@ -218,7 +253,8 @@ export class Hud {
     const alone = !players.some((p) => p.slot !== mySlot && p.connected);
     for (const p of players) {
       const holds = commander === p.slot;
-      const status = !p.connected ? 'Desconectado' : alone ? '' : holds ? 'Mando' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
+      // Who holds the command is the turn label's business now («TURNO DE ANA»): here only the underline.
+      const status = !p.connected ? 'Desconectado' : alone || holds ? '' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
       this.players.append(
         h(
           `div.player${p.slot === mySlot ? '.me' : ''}${ready[p.slot] ? '.ready' : ''}${p.connected ? '' : '.offline'}${holds ? '.command' : ''}`,
@@ -308,32 +344,65 @@ export class Hud {
 
   setAbilities(list: AbilityView[]): void {
     clear(this.abilities);
-    // No explanations on the cards: the reason lives in the tooltip, and an empty one gets a stamp.
+    // No explanations on the cards: they live in the card shown on hover, and an empty one gets a stamp.
     for (const a of list) {
       this.abilities.append(
         h(
           `button.ability${a.active ? '.active' : ''}${a.free ? '.free' : ''}${a.depleted ? '.depleted' : ''}`,
           {
             disabled: !a.enabled,
-            'data-tip': a.reason ?? a.label,
+            'aria-label': `${a.name}. ${a.cost}. ${a.description}`,
             onclick: () => this.handlers.onAbility(a.id),
           },
           h('span.key', {}, a.hotkey),
           abilityIcon(a.id),
           h('span.label', {}, a.label),
           a.count !== undefined ? h('span.count', {}, `×${a.count}`) : null,
-          a.cooldown ? h('span.cd', { title: `Disponible en ${a.cooldown} turnos` }, String(a.cooldown)) : null,
+          a.cooldown ? h('span.cd', {}, String(a.cooldown)) : null,
           a.depleted ? h('span.stamp', { 'aria-label': 'Agotado' }) : null,
+          this.abilityCard(a),
         ),
       );
     }
+  }
+
+  /** What hovering a card tells before anything is pressed: name, cost, limits, what it does and why not now. */
+  private abilityCard(a: AbilityView): HTMLElement {
+    return h(
+      'span.ability-card',
+      { 'aria-hidden': 'true' },
+      h('span.ac-head', {}, h('b', {}, a.name), a.hotkey ? h('span.ac-key', {}, a.hotkey) : null),
+      h('span.ac-cost', {}, [a.cost, a.limits].filter(Boolean).join(' · ')),
+      h('span.ac-desc', {}, a.description),
+      a.reason ? h('span.ac-why', {}, a.reason) : null,
+    );
   }
 
   setTarget(view: TargetView | null): void {
     clear(this.target);
     this.target.classList.toggle('hidden', !view);
     this.target.classList.toggle('support', view?.kind === 'support');
+    this.target.classList.toggle('self', view?.kind === 'self');
     if (!view) return;
+    if (view.kind === 'self') {
+      append(
+        this.target,
+        h('div.shot-title', {}, type(view.title)),
+        h('div.self-cost', {}, [view.cost, view.limits].filter(Boolean).join(' · ')),
+        h('div.self-desc', {}, view.effect),
+        view.detail ? h('div.effect', {}, view.detail) : null,
+        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : 'Pulsa otra vez o Intro para usar · Esc para cancelar'),
+        h(
+          'div.shot-actions',
+          {},
+          view.locked
+            ? h('button.fire', { disabled: true, title: 'Tiene el mando tu compañero' }, view.locked)
+            : h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Intro' }, view.action.toUpperCase()),
+          h('button.cancel', { onclick: () => this.handlers.onCancel(), title: 'Esc' }, 'Cancelar'),
+        ),
+      );
+      return;
+    }
     const head = h(
       'div.shot-head',
       {},
@@ -401,13 +470,15 @@ export class Hud {
     this.root.classList.toggle('waiting-command', !!view && !view.mine);
   }
 
-  banner(text: string, kind: 'xcom' | 'alien' | 'warn' = 'xcom'): void {
+  /** `detail`: a line under the stamp saying why (who saw the squad…); it stays longer, to be read. */
+  banner(text: string, kind: 'xcom' | 'alien' | 'warn' = 'xcom', detail?: string): void {
     // The banner is a rubber stamp coming down.
     uiSound('stamp', { gain: 0.55 });
-    this.bannerEl.textContent = text;
+    clear(this.bannerEl);
+    append(this.bannerEl, text, detail ? h('small.banner-detail', {}, detail) : null);
     this.bannerEl.className = `banner show ${kind}`;
     window.clearTimeout(this.bannerTimer);
-    this.bannerTimer = window.setTimeout(() => this.bannerEl.classList.remove('show'), 1500);
+    this.bannerTimer = window.setTimeout(() => this.bannerEl.classList.remove('show'), detail ? 3600 : 1500);
   }
 
   /** Arrival briefing: operation, area and objective, then it fades away. */
@@ -504,7 +575,8 @@ export class Hud {
     return this.menu.classList.contains('show');
   }
 
-  showOutcome(outcome: Outcome | null, title = '', summary = '', campaign = false): void {
+  /** The stamp, one short line (`line`) and the way on: nothing more (playtest: «devuelve mucho texto»). */
+  showOutcome(outcome: Outcome | null, line = '', campaign = false): void {
     // The result is stamped on the report as it appears (not again on a reconnect).
     if (outcome && !this.outcome.classList.contains('show')) uiSound('stamp', { delay: 0.25 });
     clear(this.outcome);
@@ -515,9 +587,8 @@ export class Hud {
         `div.outcome-card.${outcome}`,
         {},
         h('h1', {}, outcome === 'victory' ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'),
-        title ? h('h2', {}, title) : '',
         // In a campaign the numbers are in the hangar's debrief, one screen later: here only the result.
-        campaign ? '' : h('p', {}, summary),
+        line ? h('p.outcome-line', {}, line) : null,
         campaign
           ? h('div.outcome-actions', {}, h('button.fire', { onclick: () => this.handlers.onReturnToBase() }, 'VOLVER A LA BASE'))
           : h(

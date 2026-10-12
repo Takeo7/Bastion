@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DIRS4, type Biome, type GameState, type TileKind } from '@bastion/engine';
+import { carPartner, decorOf, DIRS4, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
 import { STOREY } from './coords';
 import { propModel, propVariants, type PropSet } from './props';
 import { voxelSurface } from './voxel';
@@ -12,6 +12,8 @@ const FOG_TINT_AMOUNT = 0.3;
 interface Palette {
   ground: number;
   street: number;
+  /** Floor inside walled buildings (seen from above: they have no roof). */
+  floor: number;
   roof: number;
   facade: number;
   wall: number;
@@ -30,6 +32,7 @@ const PALETTES: Record<Biome, Palette> = {
   city: {
     ground: 0x9a9384,
     street: 0x585d63,
+    floor: 0x8a705a,
     roof: 0x7d7a74,
     facade: 0xa08a72,
     wall: 0x8a5a48,
@@ -44,6 +47,7 @@ const PALETTES: Record<Biome, Palette> = {
   wilds: {
     ground: 0x6a8a45,
     street: 0x9a8460,
+    floor: 0x86705a,
     roof: 0x7a6a50,
     facade: 0x8a7458,
     wall: 0x9a8668,
@@ -58,6 +62,7 @@ const PALETTES: Record<Biome, Palette> = {
   facility: {
     ground: 0x6a7078,
     street: 0x4a4f56,
+    floor: 0x7f8892,
     roof: 0x5a6068,
     facade: 0x7a8088,
     wall: 0x8a9098,
@@ -79,6 +84,68 @@ const PROP_SETS: Record<Biome, { low: PropSet; high: PropSet }> = {
   wilds: { low: 'wildsLow', high: 'wildsHigh' },
   facility: { low: 'facilityLow', high: 'facilityHigh' },
 };
+
+/**
+ * The prop that draws a decor hint on cover of kind `tile` (procedural maps),
+ * or null if the hint has none for it: something blown up from full to low
+ * cover falls back to the biome's random props, unless it has a low version
+ * (a fallen tree, a shelf knocked down to its lower levels).
+ */
+function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet | null {
+  const low = tile === 'low';
+  switch (kind) {
+    case 'carFront':
+    case 'carRear':
+    case 'planter':
+    case 'bin':
+    case 'streetTree':
+    case 'fountain':
+    case 'fountainCorner':
+    case 'counter':
+    case 'table':
+    case 'sofa':
+    case 'bed':
+    case 'pipe':
+    case 'bush':
+      return low ? kind : null;
+    case 'kiosk':
+    case 'statue':
+    case 'wardrobe':
+    case 'cabinet':
+    case 'rack':
+    case 'tank':
+    case 'pylon':
+      return low ? null : kind;
+    case 'fence':
+      return low ? 'fencePost' : null;
+    case 'gatePost':
+      return low ? 'gatePost' : null;
+    case 'hay':
+      return low ? 'hayBale' : 'hayStack';
+    case 'shelf':
+      return low ? 'shelfLow' : 'shelfHigh';
+    case 'desk':
+      return low ? (biome === 'facility' ? 'labBench' : 'desk') : null;
+    case 'crates':
+      return low ? (biome === 'facility' ? 'techCrate' : 'crates') : 'containers';
+    case 'barricade':
+      return low ? (biome === 'facility' ? 'techBarrier' : biome === 'wilds' ? 'sandbags' : 'barricade') : null;
+    case 'tree':
+      return low ? 'logs' : biome === 'wilds' ? 'forest' : 'tree';
+    case 'rock':
+      return low ? 'rock' : 'spire';
+    case 'log':
+      return low ? 'logs' : null;
+    case 'rubble':
+      return low ? 'rubble' : 'wallStub';
+  }
+}
+
+/** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
+const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log']);
+
+/** Quarter turns (counter-clockwise from above, as `placed` turns) that make a prop modelled facing north face DIRS4[f]. */
+const turnTo = (f: number) => (4 - f) % 4;
 
 /** Instanced meshes of one shape, remembering which tile each instance belongs to (for fog). */
 class Layer {
@@ -148,8 +215,9 @@ const isWallLike = (k: TileKind) => k === 'wall' || k === 'door' || k === 'doorO
  * Terrain: floors at every elevation, raised blocks, walls with their doors and
  * windows, ladders and cover objects, all tinted by the biome and the fog of war.
  * Voxel art (M5): surfaces are painted in voxel cells, cover is a voxel prop
- * (crates, sandbags, kiosks, trees, server racks…) and everything sits on the
- * grid in quarter turns.
+ * (what the generator meant it to be on procedural maps: a parked car, a fence,
+ * a shelf…; else crates, sandbags, kiosks, trees, server racks… at random) and
+ * everything sits on the grid in quarter turns.
  */
 export class MapView {
   readonly group = new THREE.Group();
@@ -199,7 +267,9 @@ export class MapView {
     };
     const slabs = layer(new THREE.BoxGeometry(1, 0.1, 1), std({ roughness: 0.95 }, 0.24), false);
     // Raised buildings: their facades get a row of windows per storey.
-    const columnMaterial = voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }), { storey: STOREY, windows: true });
+    // In the wilds a raised tile is a hill: bare earth with grass on top, no windows.
+    const hills = s.biome === 'wilds';
+    const columnMaterial = voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: hills ? 0.95 : 0.8 }), { storey: STOREY, windows: !hills });
     this.materials.push(columnMaterial);
     const columns = layer(unitBox, columnMaterial);
     const walls = layer(unitBox, std({ roughness: 0.8 }));
@@ -231,9 +301,45 @@ export class MapView {
     };
     const props = PROP_SETS[s.biome] ?? PROP_SETS.city;
 
+    // Procedural maps say which tiles are streets (or dirt tracks) and rooms; older saves had streets on a 13-tile grid.
     const generated = s.mapId.startsWith('gen-');
-    const street = (x: number, y: number) => generated && (x % 13 >= 10 || y % 13 >= 10);
+    const street = (x: number, y: number) => (s.ground ? s.ground[y * s.width + x] === 1 : generated && s.width === 36 && (x % 13 >= 10 || y % 13 >= 10));
+    const indoor = (x: number, y: number) => s.ground?.[y * s.width + x] === 2;
     const at = (x: number, y: number): TileKind => (x < 0 || y < 0 || x >= s.width || y >= s.height ? 'floor' : s.tiles[y * s.width + x]!);
+    const decor = s.decor ?? [];
+    /** A fence or gate post still standing: the fences beside it run their rails to it. */
+    const fenceAt = (x: number, y: number) => {
+      const kind = at(x, y) === 'low' ? decorOf(decor[y * s.width + x])?.kind : undefined;
+      return kind === 'fence' || kind === 'gatePost';
+    };
+    const rails: PropSet = s.biome === 'city' ? 'fenceBoards' : 'fenceRails';
+    /**
+     * Draws the cover on tile i as its decor hint says, if it has one for what
+     * the tile is now; false to fall back to the biome's random props.
+     */
+    const dressed = (i: number, x: number, y: number, kind: 'low' | 'high', base: number): boolean => {
+      const look = decorOf(decor[i]);
+      const set = look && decorSet(look.kind, kind, s.biome);
+      if (!look || !set) return false;
+      const cx = x + 0.5;
+      const cz = y + 0.5;
+      const turn = FACING.has(look.kind) ? turnTo(look.facing) : Math.floor(hash(x, y, 2) * 4);
+      let pick = hash(x, y, 1);
+      if (look.kind === 'carFront' || look.kind === 'carRear') {
+        // Half a car is drawn only while the other half stands; both halves take the colour of the front one.
+        const j = carPartner(decor, s.width, i);
+        if (j < 0 || s.tiles[j] !== 'low') return false;
+        const front = look.kind === 'carFront' ? i : j;
+        pick = hash(front % s.width, Math.floor(front / s.width), 1);
+      }
+      addProp(i, set, cx, base, cz, pick, turn);
+      if (look.kind === 'fence' || look.kind === 'gatePost') {
+        DIRS4.forEach((d, k) => {
+          if (fenceAt(x + d.x, y + d.y)) addProp(i, rails, cx, base, cz, 0, turnTo(k));
+        });
+      }
+      return true;
+    };
 
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
@@ -246,9 +352,9 @@ export class MapView {
         const jitter = (hash(x, y) - 0.5) * 0.05;
 
         // Floor slab on top, and the solid block under a rooftop.
-        const ground = new THREE.Color(e > 0 ? pal.roof : street(x, y) ? pal.street : pal.ground).offsetHSL(0, 0, jitter);
+        const ground = new THREE.Color(e > 0 ? (hills ? pal.ground : pal.roof) : indoor(x, y) ? pal.floor : street(x, y) ? pal.street : pal.ground).offsetHSL(0, 0, jitter);
         slabs.add(i, placed(cx, base - 0.05, cz, 1, 1, 1), ground);
-        if (e > 0) columns.add(i, placed(cx, 0, cz, 1, base - 0.1, 1), new THREE.Color(pal.facade).offsetHSL(0, 0, jitter));
+        if (e > 0) columns.add(i, placed(cx, 0, cz, 1, base - 0.1, 1), new THREE.Color(hills ? pal.street : pal.facade).offsetHSL(0, 0, hills ? jitter - 0.08 : jitter));
 
         // Doors and windows run along the wall they belong to.
         const alongX = isWallLike(at(x - 1, y)) || isWallLike(at(x + 1, y));
@@ -261,10 +367,11 @@ export class MapView {
             trims.add(i, placed(cx, base + STOREY - 0.14, cz, 1.05, 0.14, 1.05), new THREE.Color(pal.facade).offsetHSL(0, 0, 0.05));
             break;
           case 'high':
-            addProp(i, props.high, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4));
+            if (!dressed(i, x, y, kind, base)) addProp(i, props.high, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4));
             break;
           case 'low':
-            // On a rooftop, low cover is the parapet along the edge.
+            // On a rooftop, low cover is the parapet along the edge (unless it is something else, crates on a platform).
+            if (dressed(i, x, y, kind, base)) break;
             if (e > 0 && s.biome !== 'wilds') lows.add(i, placed(cx, base, cz, 1, 0.5, 1), new THREE.Color(pal.facade).offsetHSL(0, 0, 0.06));
             else addProp(i, props.low, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4));
             break;

@@ -29,14 +29,17 @@ El servidor muestra varias direcciones:
 ```
 Bastión — servidor listo en el puerto 3000
   Tú:              http://localhost:3000
-  Tu compañero:    http://192.168.1.42:3000
-  Tu compañero:    http://100.101.140.9:3000
+  Tu compañero:    https://192.168.1.42:3001
+  Tu compañero:    https://100.101.140.9:3001  (Tailscale)
 ```
 
 - **El host** abre `http://localhost:3000`.
-- **El compañero** abre una de las direcciones "Tu compañero":
+- **El compañero** abre una de las direcciones "Tu compañero" (https, en el puerto siguiente):
   - En la misma red: la dirección `192.168.x.x`.
   - Por internet: lo más sencillo es [Tailscale](https://tailscale.com). Ambos lo instaláis, entráis con vuestras cuentas en la misma red de Tailscale y el compañero usa la dirección `100.x.x.x`. No hace falta abrir puertos en el router.
+  - Si escribe la dirección antigua (`http://…:3000`), el servidor le lleva solo a la de https (`?http` al final de la dirección lo evita).
+  - La primera vez su navegador avisa de que la conexión no es privada: el certificado lo crea el servidor con `openssl` (en `data/tls`) y es el de tu ordenador, así que puede aceptarlo (en Safari, "Mostrar detalles" → "visitar este sitio web"). Va por https porque Safari ejecuta las páginas http de otro ordenador sin su compilador de JavaScript y el juego va unas 50 veces más lento.
+  - En macOS, Chrome necesita permiso de **Red local** (Ajustes del Sistema → Privacidad y seguridad → Red local) para abrir direcciones de tu red.
 - Cada uno escribe su nombre y elegís en el menú principal (con la Tierra de fondo):
   - **Continuar** retoma la campaña guardada; **Nueva campaña** empieza otra: la base compartida, con soldados que suben de rango y mueren de verdad (ver más abajo).
   - **Escaramuza**: una misión suelta, sin consecuencias. Eliges el tipo de misión, el mapa (ciudad, afueras o Imprenta generados al azar, o el Distrito Comercial hecho a mano) y si la escuadra es veterana (sargentos a capitanes con habilidades al azar) o novata.
@@ -59,7 +62,7 @@ Con el objetivo cumplido, la misión se gana al abatir a los hostiles o al evacu
 
 ### Terreno
 
-Los mapas generados se montan con parcelas (oficinas, bloques de pisos, plazas, aparcamientos, contenedores, bosques, cabañas, colinas, laboratorios, plataformas…) separadas por calles.
+Los mapas generados miden 48 × 48 casillas. La ciudad son manzanas de tamaños distintos entre calles que se tuercen o acaban (casas, tiendas, oficinas, bloques de pisos, naves, plazas y aparcamientos); las afueras, un camino de tierra entre bosquecillos, colinas, campos vallados y una granja o unas ruinas; la imprenta, un recinto vallado con laboratorios, hangares, plataformas y almacenes, en el que la escuadra entra por una puerta o, la mitad de las veces, aterriza ya dentro. Los edificios tienen habitaciones de verdad, puertas a la calle y ventanas a intervalos regulares.
 
 - **Alturas:** azoteas, colinas y plataformas. Solo se sube por **escaleras**; se puede saltar hacia abajo desde cualquier borde. Disparar desde más altura da **+20 de puntería**. Desde arriba se ve por encima de los muros; el borde de una azotea no protege a quien está encima, pero la pared de un bloque sí protege a quien está al pie.
 - **Puertas:** tapan la vista hasta que alguien las cruza (se quedan abiertas).
@@ -97,7 +100,7 @@ Base, créditos y nivel del Bastión son **compartidos**; los soldados son **de 
 
 La campaña va **por fases, como XCOM 2**:
 
-1. **El Bastión.** La base vista desde arriba, en ángulo, a pantalla completa: el búnker de mando en el centro, sus tres edificios (Cuartel, Progreso, Armería) y alrededor una cuadrícula de 7 × 7 parcelas donde crece. Fuera, al sur, el hangar con la nave y la pista. Pulsa un edificio para entrar (la cámara se acerca) o usa la barra de abajo.
+1. **El Bastión.** La base vista desde arriba, en ángulo, a pantalla completa: el búnker de mando en el centro, sus tres edificios (Cuartel, Expediente, Armería) y alrededor una cuadrícula de 7 × 7 parcelas donde crece. Fuera, al sur, el hangar con la nave y la pista. Pulsa un edificio para entrar (la cámara se acerca) o usa la barra de abajo.
 2. **Geoesfera** (desde Mando). El globo a pantalla completa con regiones, misiones y Órganos. **ESCANEAR** corre los días hasta que pasa algo, y entonces salta un **aviso**: misión nueva, obra terminada, hoja nueva del Expediente (al subir de nivel el Bastión), Órgano nuevo, carta del Consejo a fin de mes o avance de la Partitura. Pulsa una misión para ver su **informe** y **Desplegar**.
 3. **Selección de escuadra** en el hangar: los soldados formados en 3D delante de la nave, cada uno con su ficha.
 4. **Despegue.** Con los dos listos, la escuadra embarca, se abre el techo del hangar y la nave sale. La misión empieza con su presentación (operación, zona y objetivo).
@@ -106,15 +109,15 @@ La campaña va **por fases, como XCOM 2**:
 Las salas:
 
 - **Mando:** abre la geoesfera.
-- **Instalaciones:** las parcelas del Bastión. Se **construye** en una parcela despejada pegada a otro edificio (una pasarela los une sola) y se **despeja** terreno (roca, bosque o ruinas, que dan chatarra) junto a lo ya despejado; más lejos del búnker cuesta más. Algunas instalaciones rinden más **pared con pared** con un edificio concreto: enfermería con el cuartel, taller con la armería, simulación con Progreso, comunicaciones con el búnker, entrenamiento con el cuartel (reclutar cuesta 20), barracón con el cuartel (+1 cama), campo de tiro con el entrenamiento (+2 de puntería) y estación de escucha con comunicaciones (el enemigo, 2 días más tarde). Hay **dos cuadrillas**: dos obras a la vez (tres con la brigada de obras), nunca dos en la misma parcela.
+- **Instalaciones:** las parcelas del Bastión. Se **construye** en una parcela despejada pegada a otro edificio (una pasarela los une sola) y se **despeja** terreno (roca, bosque o ruinas, que dan chatarra) junto a lo ya despejado; más lejos del búnker cuesta más. Algunas instalaciones rinden más **pared con pared** con un edificio concreto: enfermería con el cuartel, taller con la armería, simulación con el Expediente, comunicaciones con el búnker, entrenamiento con el cuartel (reclutar cuesta 20), barracón con el cuartel (+1 cama), campo de tiro con el entrenamiento (+2 de puntería) y estación de escucha con comunicaciones (el enemigo, 2 días más tarde). Hay **dos cuadrillas**: dos obras a la vez (tres con la brigada de obras), nunca dos en la misma parcela.
   - **Camas:** el búnker aloja a los 8 soldados del principio; para reclutar más hace falta cama libre, y cada **barracón** suma 2 (3 y 4 mejorado). Puede haber varios.
   - **Edificios:** taller (accesorios más baratos), enfermería (heridas más rápidas), barracón, centro de entrenamiento (+1 soldado por jugador; mejorado, reclutas con rango), campo de tiro (puntería para todos), brigada de obras (obras más cortas), sala de simulación (más experiencia), taller de La Mula (misiones más cortas y heridas más leves), estación de escucha (frena el reloj enemigo y da una misión más) y centro de comunicaciones (más regiones).
   - **Mejoras:** cada edificio sube a **nivel 2 y 3** (pulsa el edificio: «Mejorar»), con el nivel del Bastión. Cuesta lo mismo que construirlo y la mitad más para el nivel 3.
 - **Cuartel:** el soldado elegido en un pedestal, con sus datos, su equipo su arma y armadura, sus accesorios y reclutamiento (30 créditos; máximo 6 soldados por jugador, 12 si juegas solo). Los ascensos abren la **cuadrícula de habilidades**: una columna por rama y una fila por rango. **Personalizar** cambia el nombre, el apodo (sale en su etiqueta en combate), los colores de armadura, detalles y visor, la cabeza (casco, capucha, boina, gorra, máscara o a cara descubierta) y la complexión, viéndolo en el pedestal mientras eliges. El anillo y la etiqueta siguen con el color de su jugador.
-- **Progreso:** el nivel del Bastión, la experiencia que falta y lo que desbloquea cada nivel.
+- **Expediente:** el nivel del Bastión, la experiencia que falta, las hojas del Expediente CORO y lo que desbloquea cada nivel.
 - **Armería:** los niveles de arma y armadura, y la tienda de **accesorios**.
 
-**Progreso: nivel del Bastión.** No hay investigación: el Bastión gana **experiencia en combate** (+2 por cada misión, +3 y su dificultad si se gana, +1 por cada baja; un 25 % más con la sala de simulación) y sube de nivel. Cada nivel añade una hoja al **Expediente CORO**, con lo que el Bastión ha descubierto del enemigo, y desbloquea tecnología, accesorios e instalaciones:
+**Expediente: nivel del Bastión.** No hay investigación: el Bastión gana **experiencia en combate** (+2 por cada misión, +3 y su dificultad si se gana, +1 por cada baja; un 25 % más con la sala de simulación) y sube de nivel. Cada nivel añade una hoja al **Expediente CORO**, con lo que el Bastión ha descubierto del enemigo, y desbloquea tecnología, accesorios e instalaciones:
 
 | Nivel | Experiencia | Desbloquea |
 |---|---|---|
@@ -173,7 +176,9 @@ Todo se paga con **créditos**, la única moneda: construir y despejar terreno, 
 
 La partida se guarda sola en `data/save.json`. Si cierras el servidor o se cae la conexión, al volver a entrar retomáis la misión donde estaba. Al actualizar el juego a una versión con otro formato de guardado, la campaña se conserva, pero una misión a medias se pierde (volvéis a la base).
 
-Para usar otro puerto: `npm start -- --port 8080`.
+Para usar otro puerto: `npm start -- --port 8080` (el https va en el siguiente, 8081; `--https-port` lo cambia y `--https-port 0` lo apaga).
+
+Si tu compañero no consigue entrar, `data/red.log` dice quién se ha conectado, cómo (ws o wss), si su navegador ha rechazado el certificado y los errores que ha tenido.
 
 ## Controles
 

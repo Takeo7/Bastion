@@ -39,6 +39,55 @@ export type TileKind =
 /** Visual and generation theme of a map. */
 export type Biome = 'city' | 'wilds' | 'facility';
 
+/** What a tile's floor is, on procedural maps: 0 open ground, 1 street or dirt track, 2 inside a building. */
+export type GroundKind = 0 | 1 | 2;
+
+/**
+ * What a piece of cover on a procedural map is meant to be, so the client can
+ * draw it as such: a parked car (two tiles, front and rear), a fence, a shelf…
+ * Purely cosmetic: cover, sight and movement only ever look at the tile kind.
+ */
+export type DecorKind =
+  // Streets and car parks.
+  | 'carFront'
+  | 'carRear'
+  | 'planter'
+  | 'bin'
+  | 'streetTree'
+  | 'kiosk'
+  | 'fountain'
+  | 'fountainCorner'
+  | 'statue'
+  // Farms and yards.
+  | 'fence'
+  | 'gatePost'
+  | 'hay'
+  // Indoors.
+  | 'shelf'
+  | 'counter'
+  | 'table'
+  | 'sofa'
+  | 'bed'
+  | 'desk'
+  | 'wardrobe'
+  | 'cabinet'
+  | 'rack'
+  // Yards and facilities.
+  | 'crates'
+  | 'barricade'
+  | 'pipe'
+  | 'tank'
+  | 'pylon'
+  // Country.
+  | 'tree'
+  | 'bush'
+  | 'rock'
+  | 'log'
+  | 'rubble';
+
+/** A tile's decor hint packed in one number (0: none); see decor.ts. */
+export type Decor = number;
+
 /** 0 = none, 1 = half (low), 2 = full (high). */
 export type CoverLevel = 0 | 1 | 2;
 
@@ -165,6 +214,20 @@ export type ItemSlot = 'utility' | 'ammo';
 export type PsiEffect = 'disoriented' | 'panicked' | 'controlled';
 
 export type ShotResult = 'miss' | 'graze' | 'hit' | 'crit';
+
+/**
+ * Why the squad lost its concealment (the client explains it): an alien saw a
+ * soldier walk into its detection range (`spotted`) or a patrol walked up to
+ * one (`patrol`); a soldier attacked, set off an explosive or sang; a failed
+ * hack raised the alarm; reinforcements landed.
+ */
+export type ConcealReason = 'spotted' | 'patrol' | 'attack' | 'explosive' | 'song' | 'alarm' | 'reinforcements';
+
+/**
+ * Why a pod came alive: a soldier came into its sight (`sighted`), it ran into
+ * the squad on patrol, it was attacked, or it heard an explosion (`noise`).
+ */
+export type PodCause = 'sighted' | 'patrol' | 'attacked' | 'noise';
 
 export type Outcome = 'victory' | 'defeat';
 export type EndReason = 'objective' | 'wiped' | 'timer' | 'abandoned' | 'objectiveLost';
@@ -539,12 +602,25 @@ export interface GameState {
   tiles: TileKind[];
   /** Elevation of each tile in storeys (same indexing as `tiles`). */
   elev: number[];
+  /** Floor of each tile (procedural maps; missing on hand-made maps and older saves). */
+  ground?: GroundKind[];
+  /**
+   * What the cover of each tile is meant to look like (procedural maps; see
+   * decor.ts). Cosmetic and never updated: a tile whose kind has changed since
+   * (blown up) is drawn from its kind.
+   */
+  decor?: Decor[];
   units: Unit[];
   pods: Pod[];
   mission: MissionState;
   turn: number;
   activeTeam: Team;
   concealed: boolean;
+  /**
+   * Misses in a row by each player's soldiers (bad luck, XCOM 2's aim assist):
+   * the next shot gets +10 per miss, up to +20. Missing in older saves.
+   */
+  missStreak?: [number, number];
   ready: [boolean, boolean];
   /**
    * Who has the command (el mando) in the squad's turn: only that player gives

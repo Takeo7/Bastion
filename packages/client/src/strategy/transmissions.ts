@@ -101,9 +101,15 @@ export class RadioPanel {
   private readonly textEl = h('p.radio-text');
   private onEnd: (() => void) | null = null;
   private readonly onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && this.active) {
+    if (!this.active) return;
+    if (e.key === 'Escape') {
+      // Taken: the base screen's Esc (back to the Bastión) leaves it alone.
+      e.preventDefault();
       e.stopPropagation();
       this.close();
+    } else if ((e.key === 'Enter' || e.key === ' ') && !(e.target as HTMLElement | null)?.closest?.('input, textarea, button')) {
+      e.preventDefault();
+      this.advance();
     }
   };
 
@@ -168,6 +174,7 @@ export class RadioPanel {
     this.text = line.text;
     this.shown = 0;
     clear(this.el);
+    this.el.classList.remove('ready');
     this.textEl.textContent = '';
     this.textEl.classList.toggle('coro', line.who === 'coro');
     append(
@@ -205,13 +212,12 @@ export class RadioPanel {
     if (this.shown >= this.text.length) this.typed();
   }
 
-  /** The whole line is on paper: it moves on by itself after a reading pause (longer with a rule to read). */
+  /** The whole line is on paper: it waits for the reader (a click, Intro or Espacio), however long they take. */
   private typed(): void {
     window.clearInterval(this.timer);
     this.textEl.textContent = this.text;
     this.shown = this.text.length;
-    const rule = this.lines[this.index]?.rule?.length ?? 0;
-    this.wait = window.setTimeout(() => this.next(), 1600 + (this.text.length + rule) * 38);
+    this.el.classList.add('ready');
   }
 
   /** A click finishes the line being typed, or goes to the next one. */

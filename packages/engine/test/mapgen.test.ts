@@ -1,19 +1,83 @@
 import { describe, expect, it } from 'vitest';
-import { canStandOn } from '../src/grid';
-import { generateLayout } from '../src/mapgen';
-import { computeReach } from '../src/path';
+import { canStandOn, DIRS4, DIRS8, isWalkable } from '../src/grid';
+import { carPartner, decorOf } from '../src/decor';
+import { GEN_SIZE, generateLayout, type MissionLayout } from '../src/mapgen';
+import { computeReach, stepCost } from '../src/path';
 import { Rng } from '../src/rng';
-import { createMission, podPlan } from '../src/setup';
-import type { Biome, MissionKind, Vec2 } from '../src/types';
+import { createMission, MISSION_TURNS, missionTurns, podPlan } from '../src/setup';
+import type { Biome, GameState, MissionKind, TileKind, Vec2 } from '../src/types';
 
 const BIOMES: Biome[] = ['city', 'wilds', 'facility'];
 const KINDS: MissionKind[] = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue'];
+/** `ground` codes (GroundKind). */
+const ROAD = 1;
+const INDOOR = 2;
+
+const layout = (biome: Biome, kind: MissionKind, seed: number) => generateLayout({ biome, kind, podSizes: [2, 3, 3, 2], seed: seed * 104729 });
+
+/** Walkable tiles reachable from `start` with the movement rules. */
+function reachable(l: MissionLayout, start: Vec2): Set<number> {
+  const s = { width: l.width, height: l.height, tiles: l.tiles, elev: l.elev } as unknown as GameState;
+  const seen = new Set([start.y * l.width + start.x]);
+  const queue = [start];
+  while (queue.length) {
+    const p = queue.pop()!;
+    for (const d of DIRS8) {
+      if (stepCost(s, p.x, p.y, d.x, d.y) === null) continue;
+      const q = { x: p.x + d.x, y: p.y + d.y };
+      const i = q.y * l.width + q.x;
+      if (seen.has(i)) continue;
+      seen.add(i);
+      queue.push(q);
+    }
+  }
+  return seen;
+}
+
+/** Bounding boxes of the 4-connected areas of tiles that pass `inside`, with their tile count. */
+function areas(l: MissionLayout, inside: (i: number) => boolean): { w: number; h: number; n: number }[] {
+  const seen = new Set<number>();
+  const out: { w: number; h: number; n: number }[] = [];
+  for (let i = 0; i < l.tiles.length; i++) {
+    if (seen.has(i) || !inside(i)) continue;
+    const queue = [i];
+    seen.add(i);
+    let [x0, y0, x1, y1, n] = [Infinity, Infinity, -1, -1, 0];
+    while (queue.length) {
+      const j = queue.pop()!;
+      const x = j % l.width;
+      const y = (j - x) / l.width;
+      [x0, y0, x1, y1, n] = [Math.min(x0, x), Math.min(y0, y), Math.max(x1, x), Math.max(y1, y), n + 1];
+      for (const d of DIRS4) {
+        const k = (y + d.y) * l.width + x + d.x;
+        if (x + d.x < 0 || y + d.y < 0 || x + d.x >= l.width || y + d.y >= l.height || seen.has(k) || !inside(k)) continue;
+        seen.add(k);
+        queue.push(k);
+      }
+    }
+    out.push({ w: x1 - x0 + 1, h: y1 - y0 + 1, n });
+  }
+  return out;
+}
+
+const centroid = (ps: Vec2[]): Vec2 => ({ x: ps.reduce((s, p) => s + p.x, 0) / ps.length, y: ps.reduce((s, p) => s + p.y, 0) / ps.length });
+const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 
 describe('procedural maps', () => {
   it('are deterministic for a seed', () => {
     const a = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [2, 2, 3], seed: 42 });
     const b = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [2, 2, 3], seed: 42 });
     expect(a).toEqual(b);
+  });
+
+  it('are GEN_SIZE square, with streets or tracks on the ground layer', () => {
+    for (const biome of BIOMES) {
+      const l = layout(biome, 'elimination', 3);
+      expect(l.width).toBe(GEN_SIZE);
+      expect(l.height).toBe(GEN_SIZE);
+      for (const layer of [l.tiles, l.elev, l.ground!]) expect(layer.length).toBe(GEN_SIZE * GEN_SIZE);
+      expect(l.ground!.filter((g) => g === ROAD).length, biome).toBeGreaterThan(40);
+    }
   });
 
   it('every biome and mission kind places the squad, pods and objective where the squad can reach them', () => {
@@ -30,8 +94,7 @@ describe('procedural maps', () => {
           const scout = { ...soldiers[0]! };
           const alone = { ...s, units: [scout] };
           const reach = computeReach(alone, scout, 100_000);
-          const near = (p: Vec2) => [p, { x: p.x + 1, y: p.y }, { x: p.x - 1, y: p.y }, { x: p.x, y: p.y + 1 }, { x: p.x, y: p.y - 1 }, { x: p.x + 1, y: p.y + 1 }, { x: p.x - 1, y: p.y - 1 }, { x: p.x + 1, y: p.y - 1 }, { x: p.x - 1, y: p.y + 1 }]
-            .some((q) => reach.cost.has(q.y * s.width + q.x) || (q.x === scout.pos.x && q.y === scout.pos.y));
+          const near = (p: Vec2) => [p, ...DIRS8.map((d) => ({ x: p.x + d.x, y: p.y + d.y }))].some((q) => reach.cost.has(q.y * s.width + q.x) || (q.x === scout.pos.x && q.y === scout.pos.y));
           for (const u of s.units) expect(near(u.pos), `${label}: ${u.id} at ${u.pos.x},${u.pos.y}`).toBe(true);
           for (const z of s.mission.evacZone) {
             expect(canStandOn(s.tiles[z.y * s.width + z.x]!), label).toBe(true);
@@ -43,23 +106,189 @@ describe('procedural maps', () => {
           expect(aliens.length, label).toBe(plan.flat().length);
           for (const a of aliens) {
             const d = Math.min(...soldiers.map((x) => Math.hypot(x.pos.x - a.pos.x, x.pos.y - a.pos.y)));
-            expect(d, `${label}: ${a.id} too close`).toBeGreaterThanOrEqual(10);
+            expect(d, `${label}: ${a.id} too close`).toBeGreaterThanOrEqual(12);
           }
         }
       }
     }
   });
 
-  it('city maps have rooftops and openings; every pod gets a patrol route', () => {
+  it('leave no walkable pocket out of reach (rooftops, rooms, the heart of a grove)', () => {
+    for (const biome of BIOMES) {
+      for (let seed = 1; seed <= 20; seed++) {
+        const l = layout(biome, seed % 2 ? 'recovery' : 'hack', seed);
+        const reach = reachable(l, l.spawns[0]!);
+        const lost = l.tiles.map((t, i) => (isWalkable(t) && !reach.has(i) ? i : -1)).filter((i) => i >= 0);
+        expect(lost, `${biome}/${seed}`).toEqual([]);
+      }
+    }
+  });
+
+  it('build walled buildings of believable sizes, with rooms at least 3×3 off corridors 2 wide', () => {
+    const openings = new Set<TileKind>(['wall', 'door', 'doorOpen', 'window', 'windowBroken']);
+    for (const biome of BIOMES) {
+      let rooms = 0;
+      for (let seed = 1; seed <= 12; seed++) {
+        const l = layout(biome, 'recovery', seed);
+        // A building is a full rectangle from 7 tiles (cabins, houses) to 16 (halls), walls included.
+        for (const b of areas(l, (i) => l.ground![i] === INDOOR)) {
+          expect(b.n, `${biome}/${seed}: ragged building`).toBe(b.w * b.h);
+          expect(Math.min(b.w, b.h), `${biome}/${seed}`).toBeGreaterThanOrEqual(7);
+          expect(Math.max(b.w, b.h), `${biome}/${seed}`).toBeLessThanOrEqual(16);
+        }
+        for (const r of areas(l, (i) => l.ground![i] === INDOOR && !openings.has(l.tiles[i]!))) {
+          const corridor = Math.min(r.w, r.h) === 2 && Math.max(r.w, r.h) >= 6;
+          if (!corridor) expect(Math.min(r.w, r.h), `${biome}/${seed}: room ${r.w}×${r.h}`).toBeGreaterThanOrEqual(3);
+          rooms++;
+        }
+      }
+      expect(rooms, biome).toBeGreaterThan(12);
+    }
+  });
+
+  it('start the squad on the ground in a corner, with the objective in the far half and the evac on a side', () => {
+    for (const biome of BIOMES) {
+      for (const kind of ['recovery', 'sabotage', 'hack', 'rescue'] as MissionKind[]) {
+        for (let seed = 1; seed <= 6; seed++) {
+          const l = layout(biome, kind, seed);
+          const label = `${biome}/${kind}/${seed}`;
+          expect(l.spawns.length, label).toBe(8);
+          const corner = { x: l.spawns[0]!.x < GEN_SIZE / 2 ? 0 : GEN_SIZE - 1, y: l.spawns[0]!.y < GEN_SIZE / 2 ? 0 : GEN_SIZE - 1 };
+          for (const p of l.spawns) {
+            expect(dist(p, corner), label).toBeLessThan(6);
+            expect(l.elev[p.y * GEN_SIZE + p.x], label).toBe(0);
+          }
+          const squad = centroid(l.spawns);
+          const objective = l.item ?? l.objectiveSpot ?? l.terminal;
+          expect(objective, label).not.toBeNull();
+          expect(dist(objective!, squad), label).toBeGreaterThan(GEN_SIZE * 0.55);
+          // The evac sits near one of the two side corners, far from the squad.
+          const evac = centroid(l.evacZone);
+          expect(dist(evac, squad), label).toBeGreaterThan(GEN_SIZE * 0.5);
+          expect(l.evacZone.every((z) => l.ground![z.y * GEN_SIZE + z.x] !== INDOOR && l.elev[z.y * GEN_SIZE + z.x] === 0), label).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('put the data and the VIP indoors, and a hack console with room around it', () => {
+    for (const biome of BIOMES) {
+      for (let seed = 1; seed <= 8; seed++) {
+        for (const kind of ['recovery', 'rescue'] as MissionKind[]) {
+          const l = layout(biome, kind, seed);
+          const spot = (kind === 'recovery' ? l.item : l.objectiveSpot)!;
+          expect(l.ground![spot.y * GEN_SIZE + spot.x], `${biome}/${kind}/${seed}`).toBe(INDOOR);
+        }
+        const l = layout(biome, 'hack', seed);
+        const t = l.terminal!;
+        expect(l.tiles[t.y * GEN_SIZE + t.x]).toBe('console');
+        const free = DIRS8.filter((d) => canStandOn(l.tiles[(t.y + d.y) * GEN_SIZE + t.x + d.x] ?? 'wall')).length;
+        expect(free, `${biome}/${seed}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it('spread the pods away from the squad, each with a patrol route', () => {
+    for (const biome of BIOMES) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const l = layout(biome, 'elimination', seed);
+        const squad = centroid(l.spawns);
+        expect(l.pods.length).toBe(4);
+        for (const pod of l.pods) {
+          expect(pod.tiles.length).toBeGreaterThan(0);
+          expect(pod.patrol.length).toBeGreaterThan(1);
+          for (const p of pod.tiles) expect(dist(p, squad), `${biome}/${seed}`).toBeGreaterThanOrEqual(13);
+        }
+        const anchors = l.pods.map((p) => p.patrol[0]!);
+        const closest = Math.min(...anchors.flatMap((a, i) => anchors.slice(i + 1).map((b) => dist(a, b))));
+        expect(closest, `${biome}/${seed}`).toBeGreaterThanOrEqual(6);
+      }
+    }
+  });
+
+  it('city maps have rooftops and openings; wilds have hills', () => {
     let roofs = 0;
     let openings = 0;
+    let hills = 0;
     for (let seed = 1; seed <= 10; seed++) {
       const s = createMission({ map: { kind: 'generated', biome: 'city', seed }, slots: [0], rng: new Rng(seed), kind: 'elimination' });
       roofs += s.elev.filter((e) => e > 0).length;
       openings += s.tiles.filter((t) => t === 'door' || t === 'window').length;
       for (const pod of s.pods) expect(pod.patrol.length).toBeGreaterThan(0);
+      hills += layout('wilds', 'elimination', seed).elev.filter((e) => e > 0).length;
     }
     expect(roofs).toBeGreaterThan(0);
     expect(openings).toBeGreaterThan(0);
+    expect(hills).toBeGreaterThan(0);
+  });
+
+  it('say what their cover is meant to be, only on cover, with cars whole', () => {
+    for (const biome of BIOMES) {
+      const kinds = new Set<string>();
+      for (let seed = 1; seed <= 6; seed++) {
+        const l = layout(biome, seed % 2 ? 'recovery' : 'elimination', seed);
+        const label = `${biome}/${seed}`;
+        expect(l.decor!.length).toBe(GEN_SIZE * GEN_SIZE);
+        expect(generateLayout({ biome, kind: seed % 2 ? 'recovery' : 'elimination', podSizes: [2, 3, 3, 2], seed: seed * 104729 }).decor, label).toEqual(l.decor);
+        l.decor!.forEach((code, i) => {
+          const look = decorOf(code);
+          if (!look) return;
+          kinds.add(look.kind);
+          expect(['low', 'high'], `${label}: ${look.kind} on ${l.tiles[i]}`).toContain(l.tiles[i]);
+          if (look.kind === 'carFront' || look.kind === 'carRear') expect(carPartner(l.decor!, l.width, i), `${label}: half a car`).toBeGreaterThanOrEqual(0);
+        });
+        // Everything on the ground is dressed; only rooftop parapets are left to the client.
+        const plain = l.tiles.filter((t, i) => (t === 'low' || t === 'high') && !l.decor![i] && l.elev[i] === 0).length;
+        expect(plain, label).toBe(0);
+      }
+      const expected = { city: ['carFront', 'streetTree', 'shelf', 'desk', 'fountain'], wilds: ['fence', 'gatePost', 'hay', 'tree', 'bush', 'rock'], facility: ['pipe', 'rack', 'crates', 'carRear'] }[biome];
+      for (const k of expected) expect(kinds, `${biome}: ${k}`).toContain(k);
+    }
+    // The mission keeps the hints; hand-made maps have none.
+    const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 3 }, slots: [0], rng: new Rng(3), kind: 'elimination' });
+    expect(s.decor!.some((code) => decorOf(code)?.kind === 'carFront')).toBe(true);
+    expect(createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(3) }).decor).toBeUndefined();
+  });
+
+  it('a facility is entered from the apron half the time; the other half the squad lands inside its fence', () => {
+    let outside = 0;
+    for (let seed = 1; seed <= 24; seed++) {
+      const m = layout('facility', 'sabotage', seed);
+      // The corner the squad starts in, and the wall line four to seven tiles away from it.
+      const cx = m.spawns.every((p) => p.x < GEN_SIZE / 2) ? 0 : GEN_SIZE - 1;
+      const cy = m.spawns.every((p) => p.y < GEN_SIZE / 2) ? 0 : GEN_SIZE - 1;
+      const wallAt = (d: number) => {
+        const x = Math.abs(cx - d);
+        const y = Math.abs(cy - d);
+        let n = 0;
+        for (let k = 0; k < GEN_SIZE; k++) n += (m.tiles[k * GEN_SIZE + x] === 'wall' ? 1 : 0) + (m.tiles[y * GEN_SIZE + k] === 'wall' ? 1 : 0);
+        return n;
+      };
+      if ([4, 5, 6, 7].some((d) => wallAt(d) >= 60)) outside++;
+    }
+    expect(outside).toBeGreaterThan(4);
+    expect(outside).toBeLessThan(20);
+  });
+
+  it('generate quickly', () => {
+    const start = Date.now();
+    for (const biome of BIOMES) for (let seed = 1; seed <= 10; seed++) layout(biome, 'hack', seed);
+    expect((Date.now() - start) / 30).toBeLessThan(60);
+  });
+});
+
+describe('mission timers', () => {
+  it('keep the values tuned on 36-tile maps and add turns on bigger ones, more when the objective comes back', () => {
+    expect(missionTurns('hack', 36)).toBe(MISSION_TURNS.hack);
+    expect(missionTurns('rescue', 30)).toBe(MISSION_TURNS.rescue);
+    expect(missionTurns('elimination', 48)).toBeNull();
+    expect(missionTurns('hack', 48)! - MISSION_TURNS.hack!).toBe(2);
+    expect(missionTurns('sabotage', 48)! - MISSION_TURNS.sabotage!).toBe(2);
+    expect(missionTurns('recovery', 48)! - MISSION_TURNS.recovery!).toBe(3);
+    expect(missionTurns('rescue', 48)! - MISSION_TURNS.rescue!).toBe(3);
+    const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 5 }, slots: [0], rng: new Rng(5), kind: 'recovery' });
+    expect(s.mission.turnsLeft).toBe(missionTurns('recovery', GEN_SIZE));
+    const plaza = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(5), kind: 'recovery' });
+    expect(plaza.mission.turnsLeft).toBe(MISSION_TURNS.recovery);
   });
 });

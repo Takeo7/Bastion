@@ -55,7 +55,7 @@ Cliente A ──comando──▶ Host (Node) ──eventos──▶ Cliente A y 
 
 | Mecánica | Valor | Origen en XCOM 2 |
 |---|---|---|
-| Puntos de acción | 2 por turno; disparo, vigilancia, agazaparse y granada terminan el turno | `bConsumeAllPoints` de esas habilidades |
+| Puntos de acción | 2 por turno. Disparar gasta una acción (el fusil de precisión, las dos: `apCost` 2); vigilancia, agazaparse, granada y cuerpo a cuerpo terminan el turno | `bConsumeAllPoints`. **Cambio sobre XCOM 2** (prueba del 2026-10-12): allí disparar termina el turno. La IA sigue disparando una vez por turno |
 | Movimiento | 8 casillas por acción, 16 en carrera; las diagonales cuestan 1,5 | Movilidad 12 m |
 | Visión | 18 casillas | `SightRadius` 27 m |
 | Cobertura | Baja −20, alta −40; direccional; sin cobertura = flanqueado | `LOW/HIGH_COVER_BONUS` |
@@ -102,7 +102,7 @@ Cliente A ──comando──▶ Host (Node) ──eventos──▶ Cliente A y 
 - **Listo:** el tiempo avanza y la misión despega solo cuando todos los jugadores conectados están listos. Un acontecimiento sin responder congela el tiempo y no deja despegar.
 - **Tiempo:** cada misión lleva 3–4 días (ida, vuelta y recuperación) en los que pasa lo de cada día: heridas, obras, misiones nuevas y el reloj enemigo (`passDay`). Entre un capítulo de la historia ganado y el siguiente pasan al menos 8 días (`STORY_GAP`). La simulación de equilibrio del 2026-10-11 mostró que, si las misiones no gastaban tiempo, encadenarlas ganaba la campaña en menos de un mes con la base sin construir.
 - **Personalización:** cada soldado de campaña tiene `nickname` y `appearance` (`engine/src/appearance.ts`: colores, cabeza, complexión). Es una orden personal (`customize`), sin propuesta. Viaja con el soldado a la misión (`Unit.appearance`, opcional: alienígenas y escaramuza no la tienen) y `buildFigure` la interpreta. `defaultAppearance` reproduce el aspecto de antes de que existiera (mezcla en espacio lineal, como THREE.Color), y `migrateCampaign` la rellena (campaña versión 3).
-- **El recinto (campaña versión 7):** la base está en la superficie (`BASE_SIZE` 7 × 7 parcelas, `c.base.plots`). El búnker de mando (`BUNKER`, en el centro) y sus tres edificios fijos (`FIXED_BUILDINGS`: cuartel, Progreso y Armería) vienen hechos; el lado sur queda libre hacia el hangar, que está fuera de la cuadrícula. Se construye en una parcela despejada pegada (sin diagonales) a otro edificio, y se despeja (`clear`) una parcela junto a otra ya despejada; el coste sube con el anillo (`plotRing`) y el terreno (`TERRAINS`: roca +1 día, ruinas +15 ₡ de chatarra) sale de un hash de la parcela, igual para todos. Las pasarelas (`walkways`) unen los edificios contiguos y las **adyacencias** (`ADJACENCY`, `adjacencyBonuses`) mejoran cinco instalaciones pared con pared con su pareja. `migrateCampaign` sube la base subterránea de 3 × 3: cada instalación a la parcela libre más cercana y la obra en curso sigue con sus días.
+- **El recinto (campaña versión 7):** la base está en la superficie (`BASE_SIZE` 7 × 7 parcelas, `c.base.plots`). El búnker de mando (`BUNKER`, en el centro) y sus tres edificios fijos (`FIXED_BUILDINGS`: cuartel, Expediente y Armería) vienen hechos; el lado sur queda libre hacia el hangar, que está fuera de la cuadrícula. Se construye en una parcela despejada pegada (sin diagonales) a otro edificio, y se despeja (`clear`) una parcela junto a otra ya despejada; el coste sube con el anillo (`plotRing`) y el terreno (`TERRAINS`: roca +1 día, ruinas +15 ₡ de chatarra) sale de un hash de la parcela, igual para todos. Las pasarelas (`walkways`) unen los edificios contiguos y las **adyacencias** (`ADJACENCY`, `adjacencyBonuses`) mejoran cinco instalaciones pared con pared con su pareja. `migrateCampaign` sube la base subterránea de 3 × 3: cada instalación a la parcela libre más cercana y la obra en curso sigue con sus días.
 - **Edificios y niveles (2026-10-11):** diez instalaciones (`FACILITIES`), cada una con `description` (nivel 1) y `upgrades` (niveles 2 y 3), y `BasePlot.level`. Mejorar (`upgrade`, propuesta como construir) cuesta lo de construir y ×1,5 para el nivel 3, y pide el nivel del Bastión de la instalación +2 / +4 (`upgradeLevel`). Los efectos salen de funciones del motor: `shopPrice`, `healRate`, `xpMultiplier`, `beds`/`bedsFree` (8 del búnker + barracones), `rangeAim` (en `squadMember`), `garageCut` (días de misión y de herida), `listeningDelay` (reloj enemigo), `workDays` (brigada de obras) y `contactCapacity`. Las obras duran 2–6 días y hay dos cuadrillas (`c.base.works`, tres con la brigada: `workCrews`; campaña versión 8): con una sola obra a la vez, la simulación dejaba la base a medias y casi sin mejoras, con los créditos amontonándose. Los cuerpos pagan la mitad que antes (2–6 ₡). Con todo ello, la simulación da ~50 % de campañas ganadas a un jugador normal, ~9 mejoras por campaña y un saldo que ya no pasa de unos cientos de créditos.
 - **Escuadra:** cada jugador aporta hasta 3 soldados propios (4 con el centro de entrenamiento). Los soldados de la campaña llegan al combate con su rango, habilidades, equipo y mejoras ya calculados (`UnitMods`, `charges`, `gear`), así que las reglas de combate no saben nada de la campaña.
 
@@ -127,12 +127,13 @@ Elegida el 2026-10-12 entre tres propuestas (ramas, tablero, especialidades; maq
   - Cada eje tiene tres ramas normales y una cuarta de Canto (`BRANCHES`). 116 talentos en total (`TALENTS`), con niveles (`max`), aptitud mínima (`req`) y talento previo (`needs`).
   - Las filas se abren con 0, 2, 4, 7 y 10 puntos en las filas de arriba de la rama (`ROW_GATES`); en el Canto, con 0, 1, 2, 3 y 4 (`SONG_GATES`).
   - Las 40 habilidades de antes siguen con su id.
-- **La clase sale de las elecciones:** un recluta (`CampaignSoldier.cls` null, plantilla de combate `rookie`: fusil y granada) se especializa al llegar a 2 puntos en las ramas normales de un eje (`SPECIALIZE_POINTS`, `learnTalent`, `wouldSpecialize`).
-  - El Canto y el centro no especializan, y un recluta no canta.
-  - La clase queda fija hasta reentrenar. Los soldados iniciales, los de encargos y acontecimientos y los del relevo llegan ya especializados; los que se reclutan, no.
+- **La clase sale de las elecciones, en Capitán** (prueba del 2026-10-12): todo soldado empieza como recluta (`CampaignSoldier.cls` null, plantilla de combate `rookie`: fusil y granada), también los iniciales, los del relevo y los de encargos y acontecimientos (salvo quien llegue con rango de Capitán o más).
+  - Hasta Capitán aprende de dos ejes como mucho, hasta su tercera fila, y también puede cantar si la Cámara de Ecos lo permite.
+  - Al ascender a Capitán (`SPECIALIZE_RANK`, en `applyMissionResult`) toma la clase del eje en que más ha aprendido (`leaningClass`: 2 por punto de talento del eje, Canto incluido, más los puntos subidos en sus dos aptitudes; desempatan los talentos). Sale en el informe (`ReportSoldier.specializedAs`) y en el registro (`SPECIALIZE_TEXT`).
+  - La clase queda fija hasta reentrenar. Un Capitán reentrenado se vuelve a especializar con 2 puntos en las ramas normales de un eje (`SPECIALIZE_POINTS`, `wouldSpecialize`).
 - **Ejes y equipo:**
   - Se puede abrir un segundo eje hasta su tercera fila (`SECOND_AXIS_ROWS`), también en su Canto. Nunca un tercero (`axesOf`).
-  - Los talentos que usan el equipo propio de una clase (`kit`: espada, escopeta, cañón, fusil de precisión, pistola, Grillo) solo los coge esa clase, o el recluta al que ese talento especializa.
+  - Los talentos que usan el equipo propio de una clase (`kit`: espada, escopeta, cañón, fusil de precisión, pistola, Grillo) los puede aprender un recluta, pero «duermen» (`dormant`: sin efecto ni habilidad) hasta que el soldado lleve ese equipo. Un soldado ya especializado solo coge los de su clase.
   - Cada eje tiene un talento de **llave doble** (`coop`) que solo funciona junto a soldados del compañero (`partnerNear` en `aim.ts`, `bridged` en `rules.ts`).
 - **El Canto:** su rama se abre con la Cámara de Ecos: el nivel 1 abre las filas 1–2, el 2 las 3–4 y el 3 la 5 (`songRowsOpen`, `echoesLevel`). Los conjuros mayores piden Temple 7.
   - Quien sabe cantar tiene `mods.singer` y `mods.songOpen` (+10 para el Cantor, 0 con Temple 10).
@@ -140,7 +141,8 @@ Elegida el 2026-10-12 entre tres propuestas (ramas, tablero, especialidades; maq
 - **Ascensos:** cada uno da 2 puntos de aptitud y 2 de talento. Los puntos libres no se guardan: son lo que da el rango menos lo gastado (`pointsToSpend`). La veteranía suma sola +2 de puntería, +2 de voluntad y +3 de hackeo por ascenso.
 - **Órdenes personales**, sin propuesta:
   - `train`: un punto de aptitud.
-  - `talent`: un nivel; especializa y lo apunta en el registro (`SPECIALIZE_TEXT`).
+  - `talent`: un nivel (y, en un Capitán reentrenado, puede especializar).
+  - La Hoja de servicio prepara el ascenso como borrador (`plan` en `screen.ts`) y manda las órdenes al pulsar «Guardar», aptitudes primero; un sello «GUARDADO» lo confirma.
   - `retrain`: devuelve todo por `RETRAIN_COST` ₡ (la mitad con centro de entrenamiento) y deja al soldado como recluta.
   - `recruit`: va sin clase.
   - Los motivos de bloqueo salen de `attrBlocker` y `talentBlocker(build, id, echoes)`.
@@ -206,7 +208,7 @@ El flujo imita a XCOM 2: Bastión → geoesfera (escanear, avisos) → informe d
 
 ### Mapas procedurales (M4)
 
-- `engine/src/mapgen.ts`: mapa de 36×36 = 3×3 parcelas de 10×10 separadas por calles de 3. Cada parcela la rellena un generador del bioma (`city`, `wilds`, `facility`).
+- `engine/src/mapgen.ts`: mapa de `GEN_SIZE` (48×48). Ciudad e imprenta parten el terreno en manzanas con una división binaria con ruido (calles de 2 a 4 que pueden torcerse o acabar) y cada manzana o parcela lleva un programa (casas, tiendas, oficinas, pisos, naves, plaza, aparcamiento; laboratorios, hangares, plataformas, almacén, reactor). Las afueras salen de ruido: bosquecillos, colinas con forma de mancha, campos vallados y un camino con la granja o las ruinas. Los edificios tienen habitaciones de 3×3 como mínimo y todos los de un mapa comparten escala (`Style`). `ground` dice qué suelo es calle o interior. Los temporizadores suben con el tamaño del mapa (`missionTurns`). En la imprenta la escuadra empieza al azar fuera del muro, en la explanada, o dentro, en un patio de llegada con el muro en los lados lejanos. `decor` dice qué es cada cobertura (coche, valla, estantería, mueble…) para que el cliente la dibuje (`decor.ts`).
 - La escuadra empieza en una esquina y el objetivo está en la opuesta; la evacuación, en una de las otras dos.
 - Una pasada final garantiza que todo lo transitable es alcanzable (añade escaleras, puertas o quita objetos) y solo se colocan unidades y objetivos en casillas alcanzables. Un test recorre biomas × tipos de misión × semillas comprobándolo.
 - El mapa hecho a mano (`maps.ts`) sigue disponible y admite todos los tipos de misión en su punto `D`.
@@ -222,6 +224,7 @@ El flujo imita a XCOM 2: Bastión → geoesfera (escanear, avisos) → informe d
 | **M3b · Base viva** | **Hecho.** Bastión en 3D con salas que se excavan y 5 instalaciones, globo con 8 regiones, contactos e ingresos mensuales, instalaciones alienígenas y su asalto, 8 acontecimientos con decisión conjunta, autopsias que requieren cuerpos, 11 investigaciones, 5 mejoras y 8 objetos de equipo por soldado |
 | **M4 · Variedad táctica** | **Hecho.** Mapas procedurales en 3 biomas, 5 tipos de misión (eliminación, recuperación, sabotaje, pirateo, rescate), patrullas, refuerzos con bengala |
 | **Clases** | **Hecho (2026-10-12).** Cinco aptitudes que se reparten al ascender. La Rosa: un árbol común de 116 talentos (centro, cuatro ejes con tres ramas y el Canto de Velmar), reclutas sin clase que se especializan, segundo eje, kits, llave doble, reentrenamiento y la Hoja de servicio en el Cuartel |
+| **Prueba 2026-10-12** | **Hecho.** Las notas de la primera partida cooperativa de Arturo y Ana: disparar gasta una acción, la clase en Capitán, mapas de combate de 48 × 48, el ascenso como borrador, puestos fijos en el hangar y más ([PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md)) |
 | M5 · Arte y pulido | **En curso:** laboratorio de estilos para elegir la dirección de arte ([ARTE.md](ARTE.md)). Después: modelos y animaciones reales, sonido, menús; ejecutable opcional (Electron o Steam) |
 
 ## Habilidades: una sola fuente de verdad

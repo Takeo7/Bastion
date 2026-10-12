@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { previewShot } from '../src/aim';
-import { VETERAN_AIM } from '../src/classes';
+import { specialize, VETERAN_AIM } from '../src/classes';
 import {
   addPlayer,
   LATE_KIT,
@@ -11,6 +11,7 @@ import {
   nextSteps,
   pointsToSpend,
   soldierCap,
+  squadPads,
   DOOM_MAX,
   executeCampaignCommand,
   squadMember,
@@ -194,9 +195,28 @@ describe('missions', () => {
     expect(c.activeMission).toBeNull();
   });
 
+  it('everyone starts as a recruit; reaching Capitán makes them the class they were taught most', () => {
+    const { c, offer } = ready();
+    expect(c.soldiers.every((s) => s.cls === null)).toBe(true);
+    const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
+    const unit = mission.units.find((u) => u.team === 'xcom')!;
+    const s = c.soldiers.find((x) => x.id === unit.campaignId)!;
+    s.rank = 4;
+    s.xp = 19;
+    s.talents = { demolition: 2, bandolier: 1, runner: 1 };
+    mission.outcome = 'victory';
+    mission.outcomeReason = 'objective';
+    const report = applyMissionResult(c, mission, new Rng(4));
+    expect(report.squad.find((e) => e.id === s.id)).toMatchObject({ promotedTo: 5, specializedAs: 'grenadier' });
+    expect(s.cls).toBe('grenadier');
+    expect(c.log.some((l) => /se especializa como Granadero/.test(l.text))).toBe(true);
+    expect(pointsToSpend(s)).toEqual({ attrs: 10, talents: 6 });
+  });
+
   it('aptitudes, talents, ranks and weapon and armour tiers reach the battlefield', () => {
     const c = createCampaign([0], new Rng(5));
-    const sniper = c.soldiers.find((s) => s.cls === 'sharpshooter')!;
+    const sniper = c.soldiers[0]!;
+    specialize(sniper, 'sharpshooter');
     sniper.rank = 4;
     run(c, { type: 'train', soldier: sniper.id, attr: 'pul' }, 0, [0]);
     run(c, { type: 'talent', soldier: sniper.id, talent: 'hawkEye' }, 0, [0]);
@@ -258,7 +278,9 @@ describe('progression', () => {
 describe('helping the players', () => {
   it('a chosen mission comes with its squad: best ready soldiers, one of each class first', () => {
     const c = createCampaign(both, new Rng(2));
-    const veteran = c.soldiers.find((s) => s.owner === 0 && s.cls === 'assault')!;
+    const mine = c.soldiers.filter((s) => s.owner === 0);
+    (['assault', 'grenadier', 'sharpshooter'] as const).forEach((cls, i) => specialize(mine[i]!, cls));
+    const veteran = mine[0]!;
     veteran.rank = 3;
     c.soldiers.find((s) => s.owner === 1)!.woundedDays = 3;
     run(c, { type: 'chooseMission', id: c.offers[0]!.id }, 0, [0, 1]);
@@ -272,6 +294,23 @@ describe('helping the players', () => {
     // Adding someone already in it is fine; swapping is out then in.
     run(c, { type: 'squad', soldier: veteran.id, on: true }, 0, [0, 1]);
     expect(c.squad).toHaveLength(6);
+  });
+
+  it('in the hangar each commander has a half, and nobody moves when others come and go', () => {
+    const c = createCampaign(both, new Rng(2));
+    run(c, { type: 'chooseMission', id: c.offers[0]!.id }, 0);
+    run(c, { type: 'vote', accept: true }, 1);
+    const owner = (id: string | null) => c.soldiers.find((s) => s.id === id)?.owner;
+    const before = squadPads(c);
+    expect(before.map(owner)).toEqual([0, 0, 0, 1, 1, 1]);
+    // The first commander takes out their second soldier: that pad is left free, the rest stay put.
+    run(c, { type: 'squad', soldier: before[1]!, on: false }, 0);
+    expect(squadPads(c)).toEqual([before[0], null, before[2], before[3], before[4], before[5]]);
+    // The partner swaps one of theirs: the newcomer takes the pad that was freed in their half.
+    const spare = c.soldiers.find((s) => s.owner === 1 && !c.squad.includes(s.id))!;
+    run(c, { type: 'squad', soldier: before[4]!, on: false }, 1);
+    run(c, { type: 'squad', soldier: spare.id, on: true }, 1);
+    expect(squadPads(c)).toEqual([before[0], null, before[2], before[3], spare.id, before[5]]);
   });
 
   it('alone, a commander keeps both kits; a partner who arrives later takes over the untouched rookies', () => {

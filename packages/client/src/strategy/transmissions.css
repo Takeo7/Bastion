@@ -142,9 +142,32 @@
 }
 
 .radio-next {
+  display: inline-block;
   font-family: var(--font-hand);
   font-size: 18px;
   color: var(--pen);
+  opacity: 0.35;
+  transition: opacity 0.2s;
+}
+
+/* The line is typed: it waits for the reader, and says so. */
+.radio.ready .radio-next {
+  opacity: 1;
+  animation: radio-wait 1.4s ease-in-out infinite;
+}
+
+.radio.ready .radio-next::after {
+  content: ' · clic o Intro';
+  font-family: var(--font-body, inherit);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+@keyframes radio-wait {
+  50% {
+    transform: translateX(3px);
+  }
 }
 
 /* Voxel bust (strategy/portraits.ts) on a photo backdrop, like a file's ID photo. */

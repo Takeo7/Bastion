@@ -165,8 +165,8 @@ export interface AbilityDef {
 }
 
 export const ABILITIES: Record<AbilityId, AbilityDef> = {
-  shoot: { id: 'shoot', name: 'Disparar', description: 'Dispara el arma principal. Termina el turno.', target: 'enemy', ap: 1, endsTurn: true, weapon: 'primary' },
-  pistol: { id: 'pistol', name: 'Pistola', description: 'Dispara la pistola: munición infinita. Termina el turno.', target: 'enemy', ap: 1, endsTurn: true, weapon: 'secondary' },
+  shoot: { id: 'shoot', name: 'Disparar', description: 'Dispara el arma principal. Gasta una acción; el fusil de precisión, las dos.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'primary' },
+  pistol: { id: 'pistol', name: 'Pistola', description: 'Dispara la pistola: munición infinita. Gasta una acción.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'secondary' },
   slash: { id: 'slash', name: 'Tajo', description: 'Corre hasta un enemigo a tu alcance y atácalo con la espada. Ignora la cobertura.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   stunLance: { id: 'stunLance', name: 'Lanza aturdidora', description: 'Ataque cuerpo a cuerpo que aturde.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   claw: { id: 'claw', name: 'Garras', description: 'Ataque cuerpo a cuerpo.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
@@ -189,11 +189,11 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
     range: 10,
   },
   runAndGun: { id: 'runAndGun', name: 'Correr y disparar', description: 'Acción gratuita: +1 acción este turno.', target: 'self', ap: 0, endsTurn: false, cooldown: 4 },
-  rapidFire: { id: 'rapidFire', name: 'Fuego rápido', description: 'Dos disparos seguidos, cada uno con −15 de puntería. Gasta 2 balas.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, weapon: 'primary', aim: -15, ammo: 2 },
+  rapidFire: { id: 'rapidFire', name: 'Fuego rápido', description: 'Dos disparos seguidos, cada uno con −15 de puntería. Gasta 2 balas.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -15, ammo: 2 },
   suppression: { id: 'suppression', name: 'Supresión', description: 'Inmoviliza al objetivo: −50 de puntería hasta tu próximo turno, y si se mueve, le disparas. Gasta 2 balas.', target: 'enemy', ap: 1, endsTurn: true, ammo: 2 },
-  chainShot: { id: 'chainShot', name: 'Disparo en cadena', description: 'Disparo con −15 de puntería; si acierta, vuelves a disparar.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, weapon: 'primary', aim: -15 },
-  rupture: { id: 'rupture', name: 'Ruptura', description: 'Disparo con +3 de daño; el objetivo recibe +3 de daño de todos los ataques.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 4, weapon: 'primary', damageBonus: 3 },
-  aimedShot: { id: 'aimedShot', name: 'Ojo letal', description: 'Disparo con −25 de puntería y +50 % de daño.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, weapon: 'primary', aim: -25, damageMult: 1.5 },
+  chainShot: { id: 'chainShot', name: 'Disparo en cadena', description: 'Disparo con −15 de puntería; si acierta, vuelves a disparar.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -15 },
+  rupture: { id: 'rupture', name: 'Ruptura', description: 'Disparo con +3 de daño; el objetivo recibe +3 de daño de todos los ataques.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 4, weapon: 'primary', damageBonus: 3 },
+  aimedShot: { id: 'aimedShot', name: 'Ojo letal', description: 'Disparo con −25 de puntería y +50 % de daño.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -25, damageMult: 1.5 },
   lightningHands: { id: 'lightningHands', name: 'Manos rápidas', description: 'Acción gratuita: un disparo de pistola.', target: 'enemy', ap: 0, endsTurn: false, cooldown: 4, weapon: 'secondary' },
   faceoff: { id: 'faceoff', name: 'Cara a cara', description: 'Un disparo de pistola a cada enemigo que veas.', target: 'self', ap: 1, endsTurn: true, cooldown: 4, weapon: 'secondary' },
   killZone: { id: 'killZone', name: 'Zona letal', description: 'Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno.', target: 'self', ap: 1, endsTurn: true, cooldown: 4 },
@@ -216,7 +216,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   fireball: { id: 'fireball', name: 'Bola de fuego', description: '4 de daño en radio 2,5 y destruye la cobertura. Daña también a los tuyos.', target: 'tile', ap: 1, endsTurn: true, charge: 'fireball', range: 12, radius: 2.5, explosive: 'songFire', song: true },
   velmarStorm: { id: 'velmarStorm', name: 'Tormenta de Velmar', description: 'Rayos sobre hasta 3 enemigos a la vista: 4 de daño a cada uno. Nunca fallan.', target: 'self', ap: 1, endsTurn: true, charge: 'velmarStorm', song: true },
   huntersMark: { id: 'huntersMark', name: 'Marca del cazador', description: 'Tus disparos al enemigo marcado tienen +15 de puntería y +15 de crítico hasta que muera.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, range: 30, song: true },
-  spectralArrow: { id: 'spectralArrow', name: 'Flecha espectral', description: 'Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, weapon: 'primary', aim: -10, ignoreCover: true, song: true },
+  spectralArrow: { id: 'spectralArrow', name: 'Flecha espectral', description: 'Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -10, ignoreCover: true, song: true },
   shadowStep: { id: 'shadowStep', name: 'Paso de sombra', description: 'Te teletransportas a una casilla a la vista, a 8 o menos. Si está más alta, ganas +10 de puntería este turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 8, radius: 0, teleport: true, song: true },
   lightRain: { id: 'lightRain', name: 'Lluvia de luz', description: 'Una flecha espectral a cada enemigo a la vista, con −15 de puntería.', target: 'self', ap: 1, endsTurn: true, charge: 'lightRain', weapon: 'primary', aim: -15, ignoreCover: true, song: true },
   counterSong: { id: 'counterSong', name: 'Contracanto', description: 'Libera a un aliado del control mental, el pánico y la desorientación, y lo hace inmune al Canto durante 2 turnos.', target: 'ally', ap: 1, endsTurn: false, cooldown: 3, range: 10, song: true },
@@ -407,7 +407,8 @@ export const SOLDIER_NAMES = [
   'Irene Galán', 'Pablo Rey', 'Clara Bosch', 'Adrián Gil', 'Julia Font', 'Marcos Vela',
 ];
 
-export const PLAYER_COLORS: [string, string] = ['#3fa9ff', '#ffa630'];
+// Violet and orange: apart from the interfaces' own blues and cyans, and from the aliens' red.
+export const PLAYER_COLORS: [string, string] = ['#a678ff', '#ffa630'];
 
 // ------------------------------------------------------------ ranks & perks
 

@@ -137,7 +137,8 @@ function soldierRepaint(accent: string, look: Appearance | undefined, gear: Gear
   set(SLOT.secondaryLight, secondary.clone().lerp(white, 0.3));
   set(SLOT.secondaryDark, secondary.clone().lerp(black, 0.4));
   set(SLOT.visor, look?.visor ?? 0x9fe3ff, true);
-  set(SLOT.team, accent);
+  // The owner's mark glows, so whose soldier it is shows even under customised armour (playtest).
+  set(SLOT.team, accent, true);
   set(SLOT.gun, tier.gun);
   set(SLOT.gunDark, tier.dark);
   set(SLOT.gunGlow, tier.glow[0], tier.glow[1]);

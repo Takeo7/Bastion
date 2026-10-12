@@ -339,15 +339,18 @@ export class Fx {
 
   // ----------------------------------------------------------------- text
 
-  /** Rising text above a world point ("−4", "FALLO", "VIGILANCIA"...). */
-  floatText(at: THREE.Vector3, text: string, kind: 'damage' | 'crit' | 'miss' | 'info' | 'warn' | 'alert' | 'heal' = 'info'): void {
+  /**
+   * Rising text above a world point ("−4", "FALLO", "VIGILANCIA"...). A
+   * `callout` («¡APARECE UN IMPRESO!») is a slip that stays a while, to be read.
+   */
+  floatText(at: THREE.Vector3, text: string, kind: 'damage' | 'crit' | 'miss' | 'info' | 'warn' | 'alert' | 'heal' | 'callout' = 'info'): void {
     const el = document.createElement('div');
     el.className = `float-text ${kind}`;
     el.textContent = text;
     const label = new CSS2DObject(el);
     label.position.copy(at).setY(at.y + 1.4);
     this.group.add(label);
-    void wait(1.6).then(() => {
+    void wait(kind === 'callout' ? 2.7 : 1.6).then(() => {
       this.group.remove(label);
       el.remove();
     });

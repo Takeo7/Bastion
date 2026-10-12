@@ -14,7 +14,7 @@ import {
   type MeleeOption,
 } from './abilities';
 import { chooseScamperTile, patrolPod, takeAlienTurn } from './ai';
-import { adjacent, inMeleeReach, previewShot, rollDamage, rollShot, shotDamageMods } from './aim';
+import { adjacent, inMeleeReach, previewShot, resolveShot, rollDamage, shotDamageMods } from './aim';
 import {
   ABILITIES,
   AID_DEFENSE,
@@ -41,8 +41,10 @@ import type {
   AbilityId,
   AttackAbility,
   BlastAbility,
+  ConcealReason,
   GameState,
   Pod,
+  PodCause,
   PsiEffect,
   Reinforcement,
   ShotResult,
@@ -81,6 +83,20 @@ const BLAST_RESULT: Partial<Record<TileKind, TileKind>> = {
   door: 'doorOpen',
   window: 'windowBroken',
 };
+
+/** Why pods come alive (podActivated), and who was involved. */
+export interface Activation {
+  cause: PodCause;
+  /** The soldier they saw, or who attacked them. */
+  unit?: string;
+  /** The alien that saw the soldier, or that was attacked. */
+  by?: string;
+}
+
+/** What gave the squad away: a concealmentBroken event without its tag. */
+export type Exposure = Omit<Extract<GameEvent, { t: 'concealmentBroken' }>, 't'>;
+
+const EXPOSURE: Record<PodCause, ConcealReason> = { sighted: 'spotted', patrol: 'patrol', attacked: 'attack', noise: 'explosive' };
 
 export interface CommandContext {
   slot: Slot;
@@ -166,8 +182,8 @@ export class Sim {
         break;
       case 'suppression':
         this.emit({ t: 'suppressed', unit: u.id, target: target!.id });
-        if (u.team === 'xcom') this.breakConcealment();
-        this.activatePodOf(target!);
+        if (u.team === 'xcom') this.breakConcealment({ reason: 'attack', unit: u.id, by: target!.id });
+        this.activatePodOf(target!, u);
         break;
       case 'medkit':
         this.emit({ t: 'healed', unit: u.id, target: target!.id, amount: Math.min(MEDKIT_HEAL + u.mods.heal + (bridged(u, target!) ? 2 : 0), target!.maxHp - target!.hp) });
@@ -250,7 +266,7 @@ export class Sim {
       case 'bolt':
         this.emit({ t: 'sung', unit: u.id, ability, targets: [target!.id] });
         this.damage(target!, BOLT_DAMAGE + u.mods.songDamage + this.duet(u), 0, u);
-        if (target!.team !== u.team) this.activatePodOf(target!);
+        if (target!.team !== u.team) this.activatePodOf(target!, u);
         this.checkOutcome();
         break;
       case 'velmarStorm': {
@@ -258,7 +274,7 @@ export class Sim {
         this.emit({ t: 'sung', unit: u.id, ability, targets: struck.map((t) => t.id) });
         for (const t of struck) {
           this.damage(t, STORM_DAMAGE + u.mods.songDamage + this.duet(u), 0, u);
-          this.activatePodOf(t);
+          this.activatePodOf(t, u);
         }
         this.checkOutcome();
         break;
@@ -295,7 +311,7 @@ export class Sim {
     }
     // A song is heard: it breaks concealment like a shot, unless the Cámara de Ecos is
     // wall to wall with the listening post (Morse filters it).
-    if (ABILITIES[ability].song && u.team === 'xcom' && !u.controlledBy && !this.s.quietSongs) this.breakConcealment();
+    if (ABILITIES[ability].song && u.team === 'xcom' && !u.controlledBy && !this.s.quietSongs) this.breakConcealment({ reason: 'song', unit: u.id });
   }
 
   // ------------------------------------------------------------- the Canto
@@ -329,7 +345,7 @@ export class Sim {
     this.emit({ t: 'teleported', unit: u.id, from, to: { ...to } });
     if (ability === 'shadowStep' && elevAt(this.s, to.x, to.y) > elevAt(this.s, from.x, from.y)) this.emit({ t: 'blessed', unit: u.id, aim: SHADOW_AIM });
     const noticing = u.team === 'xcom' ? this.podsNoticing(to) : [];
-    if (noticing.length) this.activatePods(noticing);
+    if (noticing.length) this.activatePods(noticing, this.sighting(noticing, u, to));
   }
 
   /** Silencio: the Cantores in the zone can't sing for two turns, and every enemy there is disoriented. */
@@ -339,7 +355,7 @@ export class Sim {
     this.emit({ t: 'sung', unit: u.id, ability: 'silence', targets: hit.map((v) => v.id), tile: center });
     this.emit({ t: 'silenced', pos: { ...center }, radius, turns: SONG_TURNS });
     for (const v of hit) this.emit({ t: 'disoriented', unit: v.id });
-    this.activatePods([...new Set(hit.map((v) => v.podId).filter((p): p is string => !!p))]);
+    this.activatePods([...new Set(hit.map((v) => v.podId).filter((p): p is string => !!p))], { cause: 'attacked', unit: u.id, by: hit[0]?.id });
   }
 
   /** Último verso: whoever fell this turn stands again; if nobody did, everyone near is healed. */
@@ -373,7 +389,7 @@ export class Sim {
     if (!attacker.alive || !target.alive || this.over) return null;
     const preview = previewShot(this.s, attacker, target, { ability, reaction });
     if (!preview) return null;
-    const result = rollShot(preview, this.rng);
+    const { result, roll } = resolveShot(preview, this.rng);
     this.emit({
       t: 'shot',
       unit: attacker.id,
@@ -382,6 +398,7 @@ export class Sim {
       from: preview.origin,
       result,
       chance: preview.hit,
+      roll,
       reaction,
     });
     const weapon = attackWeapon(attacker, ability);
@@ -393,8 +410,8 @@ export class Sim {
       if (ability === 'rupture' && target.alive) this.emit({ t: 'ruptured', unit: target.id, amount: RUPTURE_DAMAGE });
       if (!target.alive && !reaction) this.afterKill(attacker, target, ability, preview.origin);
     }
-    if (attacker.team === 'xcom' && !attacker.controlledBy) this.breakConcealment();
-    if (target.team === 'alien') this.activatePodOf(target);
+    if (attacker.team === 'xcom' && !attacker.controlledBy) this.breakConcealment({ reason: 'attack', unit: attacker.id, by: target.id });
+    if (target.team === 'alien') this.activatePodOf(target, attacker);
     this.checkOutcome();
     return result;
   }
@@ -474,9 +491,10 @@ export class Sim {
         if (next) this.emit({ t: 'tileChanged', pos: p, kind: next });
       }
     }
-    if (source.team === 'xcom') this.breakConcealment();
+    if (source.team === 'xcom') this.breakConcealment({ reason: 'explosive', unit: source.id });
     const alerted = new Set<string>();
     for (const v of victims) if (v.podId) alerted.add(v.podId);
+    const hit = new Set(alerted);
     for (const pod of this.s.pods) {
       if (pod.active) continue;
       const near = pod.unitIds.some((id) => {
@@ -485,7 +503,9 @@ export class Sim {
       });
       if (near) alerted.add(pod.id);
     }
-    this.activatePods([...alerted]);
+    // Pods caught in the blast were attacked; the rest only heard it.
+    const soldier = source.team === 'xcom' ? source.id : undefined;
+    this.activatePods([...alerted], (pod) => ({ cause: hit.has(pod.id) ? 'attacked' : 'noise', unit: soldier }));
     this.checkOutcome();
   }
 
@@ -496,8 +516,8 @@ export class Sim {
       .map((p) => unitAt(this.s, p))
       .filter((v): v is Unit => !!v && v.team !== u.team && !TEMPLATES[v.template].robotic && !v.objective);
     for (const v of hit) this.emit({ t: 'disoriented', unit: v.id });
-    if (u.team === 'xcom') this.breakConcealment();
-    this.activatePods([...new Set(hit.map((v) => v.podId).filter((p): p is string => !!p))]);
+    if (u.team === 'xcom') this.breakConcealment({ reason: 'explosive', unit: u.id });
+    this.activatePods([...new Set(hit.map((v) => v.podId).filter((p): p is string => !!p))], { cause: 'attacked', unit: u.id, by: hit[0]?.id });
   }
 
   /** Combat Protocol: never misses, ignores armour, hurts machines more. */
@@ -505,8 +525,8 @@ export class Sim {
     this.emit({ t: 'zapped', unit: u.id, target: target.id });
     const dmg = WEAPONS.droneZap.damage + (TEMPLATES[target.template].robotic ? 2 : 0) + u.mods.protocolDamage;
     this.damage(target, dmg, 0, u, Infinity);
-    if (u.team === 'xcom') this.breakConcealment();
-    if (target.team === 'alien') this.activatePodOf(target);
+    if (u.team === 'xcom') this.breakConcealment({ reason: 'attack', unit: u.id, by: target.id });
+    if (target.team === 'alien') this.activatePodOf(target, u);
     this.checkOutcome();
   }
 
@@ -550,7 +570,7 @@ export class Sim {
     const chance = hackChance(this.s, u);
     const success = this.rng.int(100) < chance;
     this.emit({ t: 'hacked', unit: u.id, success, chance, remote: !adjacent(u.pos, this.s.mission.terminal!) });
-    if (!success) this.raiseAlarm(alarmSquad(this.s));
+    if (!success) this.raiseAlarm(alarmSquad(this.s), u);
     else this.checkOutcome();
   }
 
@@ -599,9 +619,10 @@ export class Sim {
         }
       }
       // A patrolling pod that walks into sight of the squad stops and takes cover.
-      if (patrolling && this.podSpotsSquad(u, step)) {
+      const spotted = patrolling ? this.spottedFrom(u, step) : undefined;
+      if (spotted) {
         flush();
-        this.activatePods([u.podId!]);
+        this.activatePods([u.podId!], { cause: 'patrol', unit: spotted.id, by: u.id });
         return;
       }
 
@@ -628,7 +649,7 @@ export class Sim {
         this.attack(r, u, 'shoot', true);
         this.emit({ t: 'suppressionEnded', unit: r.id });
       }
-      if (noticing.length && !this.over) this.activatePods(noticing);
+      if (noticing.length && !this.over) this.activatePods(noticing, this.sighting(noticing, u, step));
       if (!u.alive || this.over) return;
     }
     flush();
@@ -647,41 +668,60 @@ export class Sim {
 
   /** Whether a patrolling alien standing on `p` spots any soldier (detection range while the squad is concealed). */
   podSpotsSquad(u: Unit, p: Vec2): boolean {
+    return this.spottedFrom(u, p) !== undefined;
+  }
+
+  /** The first soldier an alien standing on `p` would spot. */
+  spottedFrom(u: Unit, p: Vec2): Unit | undefined {
     const t = TEMPLATES[u.template];
     const range = this.s.concealed ? t.detection : t.sight;
-    return combatants(this.s, 'xcom').some((soldier) => sightOrigin(this.s, p, soldier.pos, range) !== null);
+    return combatants(this.s, 'xcom').find((soldier) => sightOrigin(this.s, p, soldier.pos, range) !== null);
+  }
+
+  /** The member of `pod` that would notice an XCOM soldier standing on `p`, if any. */
+  private noticer(pod: Pod, p: Vec2): Unit | undefined {
+    for (const id of pod.unitIds) {
+      const m = getUnit(this.s, id);
+      if (!m?.alive) continue;
+      const t = TEMPLATES[m.template];
+      if (sightOrigin(this.s, m.pos, p, this.s.concealed ? t.detection : t.sight) !== null) return m;
+    }
+    return undefined;
   }
 
   /** Inactive pods that would notice an XCOM soldier standing on `p`. */
   podsNoticing(p: Vec2): string[] {
-    const found: string[] = [];
-    for (const pod of this.s.pods) {
-      if (pod.active) continue;
-      const notices = pod.unitIds.some((id) => {
-        const m = getUnit(this.s, id);
-        if (!m?.alive) return false;
-        const t = TEMPLATES[m.template];
-        return sightOrigin(this.s, m.pos, p, this.s.concealed ? t.detection : t.sight) !== null;
-      });
-      if (notices) found.push(pod.id);
-    }
-    return found;
+    return this.s.pods.filter((pod) => !pod.active && this.noticer(pod, p)).map((pod) => pod.id);
   }
 
-  breakConcealment(): void {
-    if (this.s.concealed) this.emit({ t: 'concealmentBroken' });
+  /** `soldier`, standing on `p`, has been seen by these pods: by whom, for the players. */
+  private sighting(podIds: string[], soldier: Unit, p: Vec2): Activation {
+    const pod = this.s.pods.find((x) => podIds.includes(x.id));
+    return { cause: 'sighted', unit: soldier.id, by: pod && this.noticer(pod, p)?.id };
   }
 
-  activatePodOf(u: Unit): void {
-    if (u.podId) this.activatePods([u.podId]);
+  breakConcealment(why: Exposure): void {
+    if (this.s.concealed) this.emit({ t: 'concealmentBroken', ...why });
   }
 
-  /** Activates pods and lets every member "scamper" to cover, XCOM 2 style. */
-  activatePods(podIds: string[]): void {
+  /** `u` was attacked (by `attacker`): its pod comes alive. */
+  activatePodOf(u: Unit, attacker?: Unit): void {
+    if (u.podId) this.activatePods([u.podId], { cause: 'attacked', unit: attacker?.team === 'xcom' ? attacker.id : undefined, by: u.id });
+  }
+
+  /**
+   * Activates pods and lets every member "scamper" to cover, XCOM 2 style. If
+   * that gives the squad away, the reason goes out first, then the contact.
+   */
+  activatePods(podIds: string[], why: Activation | ((pod: Pod) => Activation)): void {
     const pods = this.s.pods.filter((p) => podIds.includes(p.id) && !p.active);
     if (!pods.length) return;
-    for (const pod of pods) this.emit({ t: 'podActivated', pod: pod.id });
-    this.breakConcealment();
+    const whyOf = (pod: Pod) => (typeof why === 'function' ? why(pod) : why);
+    const first = whyOf(pods[0]!);
+    const spotter = first.by ? getUnit(this.s, first.by) : undefined;
+    const seen = first.cause === 'sighted' || first.cause === 'patrol';
+    this.breakConcealment({ reason: EXPOSURE[first.cause], unit: first.unit, by: first.by, ...(seen && spotter ? { range: TEMPLATES[spotter.template].detection } : {}) });
+    for (const pod of pods) this.emit({ t: 'podActivated', pod: pod.id, ...whyOf(pod) });
     for (const pod of pods) this.scamper(pod.unitIds);
   }
 
@@ -741,9 +781,9 @@ export class Sim {
     }
   }
 
-  /** The alarm went off (failed hack): a drop at the end of this alien turn. */
-  raiseAlarm(units: TemplateId[]): void {
-    this.breakConcealment();
+  /** The alarm went off (`hacker` failed the hack): a drop at the end of this alien turn. */
+  raiseAlarm(units: TemplateId[], hacker?: Unit): void {
+    this.breakConcealment({ reason: 'alarm', unit: hacker?.id });
     const zone = this.chooseDropZone(units.length);
     if (!zone) return;
     const id = `r${this.s.mission.reinforcements.length + 1}`;
@@ -763,7 +803,7 @@ export class Sim {
         return makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? r.pos!, pod.id);
       });
       this.emit({ t: 'spawned', units, pod, reinforcement: r.id });
-      this.breakConcealment();
+      this.breakConcealment({ reason: 'reinforcements', by: units[0]?.id });
       this.scamper(pod.unitIds);
     }
   }
@@ -907,7 +947,7 @@ export class Sim {
     if (this.over) return;
     for (const u of combatants(this.s, 'xcom')) {
       const noticing = this.podsNoticing(u.pos);
-      if (noticing.length) this.activatePods(noticing);
+      if (noticing.length) this.activatePods(noticing, this.sighting(noticing, u, u.pos));
       if (this.over) return;
     }
     this.checkOutcome();

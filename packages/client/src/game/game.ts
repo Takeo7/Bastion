@@ -9,6 +9,8 @@ import {
   applyEvent,
   attackWeapon,
   abilityRange,
+  BAD_LUCK_AIM,
+  BAD_LUCK_MISSES,
   blastRadius,
   blastTiles,
   buildPath,
@@ -21,6 +23,7 @@ import {
   destinations,
   ENEMY_FILES,
   distance,
+  endsTurn,
   getUnit,
   hackChance,
   hasAnyCover,
@@ -34,6 +37,7 @@ import {
   rangedTargets,
   sameTile,
   sightOrigin,
+  songTargets,
   STORY,
   STORY_RADIO,
   teamVisibility,
@@ -59,7 +63,7 @@ import {
 } from '@bastion/engine';
 import type { Net, NetStatus } from '../net';
 import { clear } from '../ui/dom';
-import { Hud, type AbilityView, type MissionView, type TargetView } from '../ui/hud';
+import { Hud, type AbilityView, type MissionView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
 import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
@@ -73,7 +77,8 @@ import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
 import { CombatTips } from './combatTips';
 
-type Mode = { kind: 'move' } | { kind: 'target'; ability: AbilityId } | { kind: 'tile'; ability: AbilityId };
+/** `self`: a self ability pressed once, waiting for the second press (or Enter) that uses it. */
+type Mode = { kind: 'move' } | { kind: 'target'; ability: AbilityId } | { kind: 'tile'; ability: AbilityId } | { kind: 'self'; ability: AbilityId };
 
 interface QueuedEvent {
   e: GameEvent;
@@ -156,6 +161,30 @@ function capitalize(text: string): string {
   return text[0]!.toUpperCase() + text.slice(1);
 }
 
+/** What using an ability costs, in the cards' words, from the rules the server charges by. */
+function costText(u: Unit, id: AbilityId): string {
+  const need = apNeeded(u, id);
+  if (need === 0) return 'Gratis';
+  if (endsTurn(u, id)) return 'Termina el turno';
+  return need === 1 ? '1 acción' : `${need} acciones`;
+}
+
+/** What is left of an ability: its cooldown and its uses. */
+function limitsText(u: Unit, id: AbilityId): string | undefined {
+  const def = ABILITIES[id];
+  const left = u.cooldowns[id] ?? 0;
+  const parts: string[] = [];
+  if (left > 0) parts.push(`Disponible en ${left} ${left === 1 ? 'turno' : 'turnos'}`);
+  else if (def.cooldown) parts.push(`Recarga en ${def.cooldown} turnos`);
+  if (def.charge) parts.push(`Usos: ${u.charges[def.charge] ?? 0}`);
+  return parts.join(' · ') || undefined;
+}
+
+/** "Impreso" → "un Impreso" (every enemy's name is masculine). */
+function anEnemy(u: Unit | undefined): string {
+  return u ? `un ${TEMPLATES[u.template].name}` : 'un enemigo';
+}
+
 function unitOf(e: GameEvent): string | undefined {
   return 'unit' in e ? e.unit : undefined;
 }
@@ -201,6 +230,8 @@ export class Game {
   private momentTimer = 0;
   /** The partner's soldier that acted last: where a broken concealment happened. */
   private partnerLast: string | null = null;
+  /** How the squad lost its concealment, once it has: the contact that follows says who saw whom. */
+  private exposure: Extract<GameEvent, { t: 'concealmentBroken' }> | null = null;
   private readonly sfx = new Sfx();
   /** Velmar's Canto: the songs' light tiles, and what stays on the field (Silencio, Juramento). */
   private readonly songFx = new SongFx();
@@ -296,6 +327,7 @@ export class Game {
 
   loadSnapshot(s: GameState): void {
     this.plans.clear();
+    this.exposure = null;
     this.state = cloneState(s);
     this.view = cloneState(s);
     this.queue = [];
@@ -468,6 +500,7 @@ export class Game {
       setTimeScale(this.queue.length > 24 ? 2.5 : this.queue.length > 12 ? 1.6 : 1);
       const item = this.queue.shift()!;
       this.current = item;
+      const epoch = this.rig.epoch;
       try {
         await this.play(item);
       } catch (err) {
@@ -475,6 +508,7 @@ export class Game {
       }
       this.current = null;
       const secured = this.view.mission.objectiveDone;
+      const seen = this.visibleAliens;
       applyEvent(this.view, item.e);
       const e = item.e;
       if (e.t === 'turnBegan') this.plans.clear();
@@ -484,6 +518,11 @@ export class Game {
       this.refreshView();
       this.refreshStatus();
       this.tips.event(item.e, this.view);
+      try {
+        await this.announceSighted(item, seen, epoch);
+      } catch (err) {
+        console.error('[anim]', err);
+      }
       if (item.by === this.mySlot && --this.myPending === 0) {
         // Let the player see the outcome before the selection moves on.
         await wait(HOLD_AFTER[item.e.t] ?? 0.2);
@@ -504,6 +543,38 @@ export class Game {
 
   private shownToSquad(u: Unit): boolean {
     return u.team === 'xcom' || this.visibleAliens.has(u.id);
+  }
+
+  /**
+   * Enemies that have just come into the squad's sight (`before`: who was in
+   * sight until this event) get a callout over them and a line in the log, so
+   * nobody «appears out of nowhere» (playtest). In the alien turn the camera
+   * holds on the newcomer long enough to read it, unless the player took the
+   * camera during the event (`epoch`); after our own action there is a short
+   * pause before control comes back, and the partner's actions only get the
+   * callout. Contacts, drops and raised corpses have their own show.
+   */
+  private async announceSighted(item: QueuedEvent, before: ReadonlySet<string>, epoch: number): Promise<void> {
+    const e = item.e;
+    if (e.t === 'podActivated' || e.t === 'spawned' || e.t === 'reanimated' || e.t === 'missionEnded') return;
+    const v = this.view;
+    const fresh = v.units.filter((a) => a.alive && this.visibleAliens.has(a.id) && !before.has(a.id) && !a.objective && TEMPLATES[a.template].team === 'alien');
+    if (!fresh.length) return;
+    const alert = (a: Unit) => !!v.pods.find((p) => p.id === a.podId)?.active;
+    for (const a of fresh) {
+      const name = TEMPLATES[a.template].name.toUpperCase();
+      this.fx.floatText(this.units.chestPos(a.id), alert(a) ? `¡APARECE UN ${name}!` : `A LA VISTA: ${name}`, 'callout');
+    }
+    const names = fresh.map((a) => a.name).join(', ');
+    // A pod that hasn't noticed the squad yet: the chance to set up an ambush.
+    const unaware = !fresh.some(alert);
+    this.hud.log(unaware ? `A la vista: ${names}${v.concealed ? ' (aún no os han visto)' : ''}` : fresh.length === 1 ? `¡Aparece ${anEnemy(fresh[0])}!` : `¡Aparecen: ${names}!`, '#ff6b5a');
+    if (v.activeTeam === 'alien') {
+      if (this.rig.epoch === epoch) this.rig.focus(this.units.worldPos(fresh[0]!.id));
+      await wait(0.9);
+    } else if (item.by === this.mySlot) {
+      await wait(0.5);
+    }
   }
 
   /**
@@ -882,13 +953,17 @@ export class Game {
       }
       case 'spawned': {
         const spots = e.units.map((u) => tileToWorld(u.pos));
-        const seen = e.units.some((u) => this.mapView.isVisible(u.pos.x, u.pos.y));
+        const seen = e.units.filter((u) => this.mapView.isVisible(u.pos.x, u.pos.y));
         this.hud.log(`Cápsulas de impresión: ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
-        if (!seen) return;
+        // Nobody drops in unannounced: the stamp says how many, and where if the squad sees it.
+        this.hud.banner('¡REFUERZOS!', 'alien', `${e.units.length === 1 ? 'Ha aterrizado un enemigo' : `Han aterrizado ${e.units.length} enemigos`}${seen.length ? '' : ' fuera de vuestra vista'}`);
+        if (!seen.length) return;
         look(spots[0]!);
         this.sfx.pods(spots[0]);
         for (const p of spots) this.fx.evacBeam(p);
         await wait(0.9);
+        for (const u of seen) this.fx.floatText(tileToWorld(u.pos, 1), `¡APARECE UN ${TEMPLATES[u.template].name.toUpperCase()}!`, 'callout');
+        await wait(cam() ? 0.8 : 0.2);
         return;
       }
       case 'patrol':
@@ -907,28 +982,47 @@ export class Game {
           void this.units.alert(m.id);
         }
         this.sfx.contact();
-        this.hud.banner('¡CONTACTO!', 'alien');
-        this.hud.log(`Contacto: ${members.map((m) => m.name).join(', ')}`, '#ff6b5a');
+        const how = this.contactCause(e);
+        this.hud.banner('¡CONTACTO!', 'alien', how);
+        this.hud.log(`Contacto: ${members.map((m) => m.name).join(', ')} · ${how}`, '#ff6b5a');
         await wait(0.9);
         return;
       }
-      case 'concealmentBroken':
+      case 'concealmentBroken': {
+        // Who gave the squad away and how (playtest: «no he entendido por qué me han visto»).
+        this.exposure = e;
         this.sfx.reveal();
-        this.hud.banner('OCULTACIÓN ROTA', 'warn');
-        await wait(0.6);
+        const why = this.exposureText(e);
+        this.hud.banner('OCULTACIÓN ROTA', 'warn', why);
+        this.hud.log(`Ocultación rota: ${why}`, '#ffc93a');
+        const spotter = e.by ? getUnit(v, e.by) : undefined;
+        if (spotter?.alive && spotter.team === 'alien' && (e.reason === 'spotted' || e.reason === 'patrol')) {
+          // A glimpse of whoever saw them, even from the fog.
+          this.units.forceVisible(spotter.id);
+          this.units.face(spotter.id, e.unit ? this.units.worldPos(e.unit) : this.closestSoldier(spotter.pos));
+          this.fx.floatText(this.units.chestPos(spotter.id), 'OS HA VISTO', 'callout');
+          look(this.units.worldPos(spotter.id));
+          await wait(cam() ? 1.4 : 0.6);
+          return;
+        }
+        await wait(0.8);
         return;
+      }
       case 'turnBegan': {
         if (e.team === 'xcom') this.rig.restoreZoom();
         this.sfx.turn(e.team === 'alien', !v.concealed);
-        // With a partner, the banner says who opens the turn.
-        const opener = e.team === 'xcom' && this.partnerHere() && e.command !== undefined ? (e.command === this.mySlot ? ' · TIENES EL MANDO' : ` · MANDO: ${this.playerName(e.command).toUpperCase()}`) : '';
-        this.hud.banner(e.team === 'xcom' ? `TURNO ${e.turn}${opener}` : 'TURNO ENEMIGO', e.team === 'xcom' ? 'xcom' : 'alien');
+        // Whose turn opens: mine, the partner's (they hold the command) or the enemy's.
+        const partner = e.team === 'xcom' && !!this.partnerHere() && e.command !== undefined && e.command !== this.mySlot;
+        this.hud.banner(e.team === 'alien' ? 'TURNO ENEMIGO' : partner ? `TURNO DE ${this.playerName(e.command).toUpperCase()}` : 'TU TURNO', e.team === 'xcom' ? 'xcom' : 'alien');
         await wait(1);
         return;
       }
       case 'commandPassed': {
         this.sfx.command();
-        if (e.to === this.mySlot) this.hud.banner('TIENES EL MANDO', 'xcom');
+        if (this.partnerHere()) {
+          if (e.to === this.mySlot) this.hud.banner('TU TURNO', 'xcom', 'Tienes el mando: das tú las órdenes');
+          else this.hud.banner(`TURNO DE ${this.playerName(e.to).toUpperCase()}`, 'xcom', this.state.ready[this.mySlot] ? 'Has terminado: juega tu compañero' : 'Mientras, puedes apuntar y planear');
+        }
         this.hud.log(e.to === this.mySlot ? 'Tienes el mando' : `${this.playerName(e.to)} tiene el mando`, PLAYER_COLORS[e.to]);
         return;
       }
@@ -1051,8 +1145,7 @@ export class Game {
         this.sfx.melee(stun ? 'stun' : e.ability === 'claw' ? 'claw' : 'sword', chest);
         this.sfx.impact(this.sfx.body(target), chest, e.result === 'crit');
       } else {
-        this.fx.floatText(chest, 'FALLO', 'miss');
-        this.hud.log(`${shooter.name} falla a ${target.name} (${e.chance}%)`);
+        this.showMiss(e, shooter, target, chest);
       }
       await wait(0.25);
       return;
@@ -1091,8 +1184,7 @@ export class Game {
     await wait(heavy ? 0.25 : 0.15);
 
     if (!hit) {
-      this.fx.floatText(chest, 'FALLO', 'miss');
-      this.hud.log(`${shooter.name} falla a ${target.name} (${e.chance}%)`);
+      this.showMiss(e, shooter, target, chest);
       await wait(0.35);
     }
     // Lower the weapon (and step back into cover) once the outcome has been seen.
@@ -1100,6 +1192,21 @@ export class Game {
       this.units.lowerWeapon(shooter.id);
       if (stepOut) void this.units.slide(shooter.id, tileToWorld(shooter.pos), 0.25);
     });
+  }
+
+  /**
+   * A miss, with the die (playtest: «he fallado con un 93 %»): short over the
+   * target, whole in the log. A player's miss also says what bad luck adds to
+   * that player's next shot (aim.ts badLuckAim).
+   */
+  private showMiss(e: ShotEvent, shooter: Unit, target: Unit, chest: THREE.Vector3): void {
+    this.fx.floatText(chest, e.roll ? `FALLO · SACÓ ${e.roll}` : 'FALLO', 'miss');
+    this.hud.log(e.roll ? `${shooter.name} falla a ${target.name}: sacó ${e.roll} y necesitaba ${e.chance} o menos` : `${shooter.name} falla a ${target.name} (${e.chance}%)`);
+    const owner = shooter.team === 'xcom' && !shooter.controlledBy ? shooter.owner : null;
+    if (owner === null) return;
+    const bonus = BAD_LUCK_AIM * Math.min(BAD_LUCK_MISSES, (this.view.missStreak?.[owner] ?? 0) + 1);
+    const whose = owner === this.mySlot ? 'tu próximo disparo' : `el próximo disparo de ${this.playerName(owner)}`;
+    this.hud.log(`Mala racha: ${whose} tendrá +${bonus} de puntería`, PLAYER_COLORS[owner]);
   }
 
   private async playExplosive(
@@ -1208,10 +1315,11 @@ export class Game {
       abandoned: 'Misión abandonada',
       objectiveLost: vip ? `${vip} ha muerto` : 'El VIP ha muerto',
     };
-    const parts = [`Turnos: ${s.turn}`, `Enemigos abatidos: ${killed}`, `Bajas propias: ${lost}`];
-    if (s.mission.kind !== 'elimination') parts.push(`Evacuados: ${evacuated}`);
-    const title = [s.campaignMission?.name, reason ? titles[reason] : ''].filter(Boolean).join(' · ');
-    this.hud.showOutcome(outcome, title, parts.join(' · '), !!s.campaignMission);
+    // One short line: why it ended. A skirmish has no debrief after, so it adds the count.
+    const why = reason ? titles[reason] : '';
+    const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+    const line = s.campaignMission ? why : [why, count(killed, 'abatido', 'abatidos'), lost ? count(lost, 'baja', 'bajas') : 'sin bajas'].filter(Boolean).join(' · ');
+    this.hud.showOutcome(outcome, line, !!s.campaignMission);
   }
 
   /** Re-derives fog, alien visibility, flags and mission markers from the shown state. */
@@ -1244,7 +1352,20 @@ export class Game {
     this.songMarks.setSilences((this.view.silences ?? []).map((z) => ({ at: tileToWorld(z.pos), radius: z.radius })));
     this.songMarks.setOaths(this.view.units.filter((u) => u.alive && (u.oath ?? 0) > 0).map((u) => tileToWorld(u.pos)));
     this.drawPlans();
+    this.drawDetection();
     this.edge.set(this.marks());
+  }
+
+  /**
+   * While the squad is concealed and a soldier is selected, every enemy in
+   * sight shows its detection radius: how close a soldier can end a move
+   * without being noticed (playtest: «no he entendido por qué me han visto»).
+   */
+  private drawDetection(): void {
+    const v = this.view;
+    const show = v.concealed && !v.outcome && !!this.selectedUnit();
+    const watchers = show ? v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && TEMPLATES[a.template].detection > 0) : [];
+    this.overlays.setDetection(watchers.map((a) => ({ pos: a.pos, radius: TEMPLATES[a.template].detection })));
   }
 
   private marks(): EdgeMark[] {
@@ -1273,10 +1394,13 @@ export class Game {
         text = `${who}: ¡contacto!`;
         break;
       }
-      case 'concealmentBroken':
-        pos = at(this.partnerLast);
+      case 'concealmentBroken': {
+        // Where it happened: the enemy that saw the squad, else the soldier who gave it away.
+        const spotter = e.by ? getUnit(v, e.by) : undefined;
+        pos = spotter?.team === 'alien' ? spotter.pos : at(e.unit ?? this.partnerLast);
         text = `${who} ha roto la ocultación`;
         break;
+      }
       case 'died': {
         const u = getUnit(v, e.unit);
         if (u?.team === 'xcom') text = `${u.name} ha caído`;
@@ -1303,6 +1427,56 @@ export class Game {
     window.clearTimeout(this.momentTimer);
     this.momentTimer = window.setTimeout(() => this.clearMoment(), 8000);
     this.edge.set(this.marks());
+  }
+
+  /** Why the squad was found, in plain words: who saw whom and from how far, or what gave it away. */
+  private exposureText(e: Extract<GameEvent, { t: 'concealmentBroken' }>): string {
+    const v = this.view;
+    const soldier = e.unit ? getUnit(v, e.unit) : undefined;
+    const alien = e.by ? getUnit(v, e.by) : undefined;
+    const who = soldier?.name ?? 'un soldado';
+    const range = e.range ? ` (${e.range} casillas)` : '';
+    switch (e.reason) {
+      case 'spotted': {
+        // From the fog: the squad couldn't have seen it coming, and should know.
+        const unseen = alien && !this.visibleAliens.has(alien.id) ? ' que no veíais' : '';
+        return `${capitalize(anEnemy(alien))}${unseen} ha visto a ${who}: entró en su radio de detección${range}.`;
+      }
+      case 'patrol':
+        return `${capitalize(anEnemy(alien))} de patrulla se ha acercado hasta tener a ${who} en su radio de detección${range}.`;
+      case 'attack':
+        return `${capitalize(who)} ha atacado${alien ? ` a ${anEnemy(alien)}` : ''}: el combate os delata.`;
+      case 'explosive':
+        return `La explosión de ${who} se ha oído en toda la zona.`;
+      case 'song':
+        return `El canto de ${who} se oye desde lejos.`;
+      case 'alarm':
+        return `${soldier ? `${who} ha fallado el hackeo` : 'El hackeo ha fallado'}: ha saltado la alarma.`;
+      case 'reinforcements':
+        return 'Los refuerzos llegan alertados: saben dónde estáis.';
+      default:
+        return 'El enemigo sabe dónde estáis.';
+    }
+  }
+
+  /** Who found whom in a contact: they saw the squad, the squad came upon them, they were attacked or heard it. */
+  private contactCause(e: Extract<GameEvent, { t: 'podActivated' }>): string {
+    const soldier = e.unit ? getUnit(this.view, e.unit) : undefined;
+    const who = soldier?.name ?? 'la escuadra';
+    switch (e.cause) {
+      case 'sighted':
+        // The concealment that just broke over this very sighting: they saw the squad first.
+        if (this.exposure?.reason === 'spotted' && this.exposure.by === e.by && this.exposure.unit === e.unit) return `Os han visto: han descubierto a ${who}`;
+        return `${capitalize(who)} los ha avistado`;
+      case 'patrol':
+        return `Una patrulla ha dado con ${who}`;
+      case 'attacked':
+        return soldier ? `Responden al ataque de ${who}` : 'Responden al ataque';
+      case 'noise':
+        return 'Han oído la explosión';
+      default:
+        return 'Os han localizado';
+    }
   }
 
   private seeMoment(): void {
@@ -1559,6 +1733,10 @@ export class Game {
   }
 
   private confirmTarget(): void {
+    if (this.mode.kind === 'self') {
+      this.confirmSelf();
+      return;
+    }
     const u = this.selectedUnit();
     if (!u || this.mode.kind !== 'target' || !this.targetId) return;
     // Without the command, aiming only shows the odds.
@@ -1598,13 +1776,28 @@ export class Game {
         this.refreshInteractive();
         return;
       case 'self':
-        if (!this.hasCommand()) {
-          this.hud.toast(this.commandLock());
-          return;
+        // Nothing fires on the first press (playtest: «sin arriesgarme a clicar y que se activen»):
+        // it is armed and explained; the second press, Enter or the panel's button uses it.
+        if (this.mode.kind === 'self' && this.mode.ability === id) this.confirmSelf();
+        else {
+          this.mode = { kind: 'self', ability: id };
+          this.targetId = null;
+          this.concealWarn = null;
+          this.refreshInteractive();
         }
-        this.send({ type: 'ability', unit: u.id, ability: id });
-        this.cancelMode();
     }
+  }
+
+  /** Uses the armed self ability. */
+  private confirmSelf(): void {
+    const u = this.selectedUnit();
+    if (!u || this.mode.kind !== 'self') return;
+    if (!this.hasCommand()) {
+      this.hud.toast(this.commandLock());
+      return;
+    }
+    this.send({ type: 'ability', unit: u.id, ability: this.mode.ability });
+    this.cancelMode();
   }
 
   /** Space: confirm the current target, or aim with the first usable attack. */
@@ -1636,14 +1829,18 @@ export class Game {
       if (!reason && (def.target === 'enemy' || def.target === 'melee' || def.target === 'ally') && !this.targetOptions(id).length) {
         reason = def.target === 'ally' ? 'No hay aliados válidos.' : def.target === 'melee' ? 'Ningún enemigo a su alcance.' : 'Sin enemigos a la vista.';
       }
-      const active = (this.mode.kind === 'target' || this.mode.kind === 'tile') && this.mode.ability === id;
+      const active = this.mode.kind !== 'move' && this.mode.ability === id;
       const cooldown = u.cooldowns[id] ?? 0;
       return {
         id,
         label: id === 'hack' ? `${def.name} · ${hackChance(this.state, u)}%` : def.name,
         hotkey: i < 9 ? (id === 'shoot' ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '',
         enabled: !reason,
-        reason: reason ? `${def.description} — ${reason}` : def.description,
+        reason: reason ?? undefined,
+        name: def.name,
+        cost: costText(u, id),
+        limits: limitsText(u, id),
+        description: def.description,
         active,
         count: charge,
         cooldown: cooldown || undefined,
@@ -1698,10 +1895,11 @@ export class Game {
   private refreshInteractive(): void {
     this.autoSelect();
     if (this.mode.kind === 'target' && !this.currentTarget()) this.cancelModeSilently();
-    if (this.mode.kind === 'tile') {
+    if (this.mode.kind === 'tile' || this.mode.kind === 'self') {
       const u = this.selectedUnit();
-      if (!u || abilityBlocker(this.state, u, this.mode.ability)) this.cancelModeSilently();
+      if (!u || !this.canAct() || abilityBlocker(this.state, u, this.mode.ability)) this.cancelModeSilently();
     }
+    this.drawDetection();
     // Without the command the range is still shown, fainter: it is for planning (#35).
     const r = this.mode.kind === 'move' && !this.isBusy(this.selected) ? this.reach() : null;
     this.overlays.showMoveRange(r?.tiles ?? [], !this.hasCommand());
@@ -1796,10 +1994,18 @@ export class Game {
    */
   private refreshStatus(): void {
     const v = this.view;
-    this.hud.setTurn(v.turn, v.activeTeam, v.concealed);
-    this.hud.setMission(this.missionView());
     const sharing = !!this.partnerHere() && v.activeTeam === 'xcom' && !v.outcome;
     const holder = v.command === undefined || !this.players.some((p) => p.slot === v.command && p.connected) ? this.mySlot : v.command;
+    // Whose turn it is, unmistakably (playtest): mine, the partner's while they hold the command, or the enemy's.
+    const owner: TurnOwner | null = v.outcome
+      ? null
+      : v.activeTeam === 'alien'
+        ? { kind: 'enemy' }
+        : sharing && holder !== this.mySlot
+          ? { kind: 'partner', name: this.playerName(holder), color: PLAYER_COLORS[holder] }
+          : { kind: 'mine', color: PLAYER_COLORS[this.mySlot] };
+    this.hud.setTurn(v.turn, owner, v.concealed);
+    this.hud.setMission(this.missionView());
     this.hud.setPlayers(this.players, v.ready, this.mySlot, busySlots(v), sharing ? holder : null);
     this.hud.setSquad(
       v.units.filter((u) => u.team === 'xcom' || u.controlledBy),
@@ -1816,6 +2022,12 @@ export class Game {
   /** Builds the target panel and draws the aim line for the current target. */
   private targetPanel(): TargetView | null {
     const u = this.selectedUnit();
+    if (u && this.mode.kind === 'self') {
+      const id = this.mode.ability;
+      const def = ABILITIES[id];
+      this.overlays.showAim(null, null);
+      return { kind: 'self', title: def.name, action: def.name, locked: this.lockLabel(), cost: costText(u, id), limits: limitsText(u, id), effect: def.description, detail: this.selfDetail(u, id) };
+    }
     const option = this.currentTarget();
     if (!u || !option || this.mode.kind !== 'target') {
       this.overlays.showAim(null, null);
@@ -1862,6 +2074,24 @@ export class Game {
     };
   }
 
+  /** What an armed self ability would do right now: whom it reaches, the odds, the clip. */
+  private selfDetail(u: Unit, id: AbilityId): string | undefined {
+    const s = this.state;
+    const enemies = (n: number) => (n ? `${n} ${n === 1 ? 'enemigo' : 'enemigos'} a su alcance` : 'Ningún enemigo a su alcance');
+    switch (id) {
+      case 'faceoff':
+        return enemies(rangedTargets(s, u, 'faceoff').filter((t) => this.visibleAliens.has(t.id)).length);
+      case 'lightRain':
+      case 'velmarStorm':
+        return enemies(songTargets(s, u, id).filter((t) => this.visibleAliens.has(t.id)).length);
+      case 'hack':
+        return `Probabilidad: ${hackChance(s, u)} %`;
+      case 'reload':
+        return `Cargador: ${u.ammo}/${attackWeapon(u, 'shoot').clip}`;
+    }
+    return undefined;
+  }
+
   private updateHover(): void {
     const tile = this.hoverTile;
     const u = this.selectedUnit();
@@ -1888,6 +2118,12 @@ export class Game {
       const allies = area.filter((t) => unitAt(this.state, t)?.team === 'xcom');
       this.overlays.showBlast(center, area, canTargetTile(this.state, u, ability, center), allies);
       this.overlays.setHover(null);
+      return;
+    }
+    if (this.mode.kind === 'self') {
+      // A song or Restoration reaches the allies around: the circle says how far.
+      const range = ABILITIES[this.mode.ability].range;
+      if (range && this.mode.ability !== 'hack') this.overlays.showRange(u.pos, range);
       return;
     }
     if (!tile) return;
@@ -2035,7 +2271,7 @@ export class Game {
           break;
         case 'Enter':
         case 'NumpadEnter':
-          if (this.mode.kind === 'target') {
+          if (this.mode.kind === 'target' || this.mode.kind === 'self') {
             e.preventDefault();
             this.confirmTarget();
           }
@@ -2159,7 +2395,8 @@ export class Game {
       else this.hud.toast('No puede atacar a ese enemigo desde aquí.');
       return;
     }
-    if (this.mode.kind === 'target') {
+    // A click on the ground backs out of aiming, or of an armed self ability.
+    if (this.mode.kind === 'target' || this.mode.kind === 'self') {
       this.cancelMode();
       return;
     }

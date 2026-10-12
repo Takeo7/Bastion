@@ -310,10 +310,42 @@
   mask: none;
 }
 
-:root[data-ui='holo'] .ability[data-tip]:hover::after {
+/* The cut corner is a clip-path, which would clip the hover card too: on hover
+   the clip also takes in the room above the card, the corner still cut. */
+:root[data-ui='holo'] .ability:hover {
+  clip-path: polygon(-110px -400px, calc(100% + 110px) -400px, calc(100% + 110px) 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%, 0 0, -110px 0);
+}
+
+:root[data-ui='holo'] .ability-card {
   background: var(--h-glass-hi);
   border: 1px solid var(--h-line);
+  border-top: 2px solid var(--h-cyan);
   color: var(--ink);
+}
+
+/* Whose turn: the frame glows a little, the slip over the cards sits straight. */
+:root[data-ui='holo'] .turn-frame {
+  border-width: 2px;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.45),
+    inset 0 0 44px color-mix(in srgb, var(--turn) 34%, transparent);
+}
+
+:root[data-ui='holo'] .abilities[data-lock]::before {
+  transform: translateX(-50%);
+  border: 1px solid var(--h-line);
+  border-left: 4px solid var(--turn);
+}
+
+/* Selected is neutral light, never a player's colour. */
+:root[data-ui='holo'] .squad-card.selected {
+  background: rgba(220, 236, 245, 0.1);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+:root[data-ui='holo'] .float-text.callout {
+  border: 1px solid rgba(255, 90, 90, 0.5);
+  border-left: 4px solid var(--stamp);
 }
 
 :root[data-ui='holo'] .end-turn {
@@ -443,6 +475,12 @@
   border: 1px solid #ffc93a;
   color: #ffe6a0;
   box-shadow: 0 0 12px rgba(255, 201, 58, 0.35);
+}
+
+/* The name tag keeps the partner's colour on its edge, and stays small. */
+:root[data-ui='holo'] .partner-tag {
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
 }
 
 :root[data-ui='holo'] :is(.x-chip, .menu-address) {

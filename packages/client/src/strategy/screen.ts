@@ -29,6 +29,14 @@ import {
   soldierTemplate,
   songRowLevel,
   wouldSpecialize,
+  attrPointsFree,
+  dormant,
+  KIT_CLASS,
+  KIT_NAMES,
+  leaningClass,
+  learnTalent,
+  SPECIALIZE_RANK_NAME,
+  talentPointsFree,
   contactCapacity,
   contactCost,
   costText,
@@ -65,6 +73,7 @@ import {
   plotRing,
   TERRAINS,
   type BasePlot,
+  type BuildingId,
   type FacilityId,
   EXPEDIENTE,
   FACILITIES,
@@ -82,6 +91,7 @@ import {
   MAX_LEVEL,
   soldierCap,
   MISSION_NAMES,
+  missionDays,
   NAME_MAX,
   nextSteps,
   nextTierBlocker,
@@ -107,6 +117,7 @@ import {
   soldierReady,
   soldierWeaponName,
   squadLimit,
+  squadPads,
   squadPlace,
   recruitCost,
   squadMax,
@@ -137,6 +148,8 @@ import {
   type MissionOffer,
   type NextStep,
   type AttrId,
+  type Build,
+  type PerkId,
   type TalentDef,
   type PlayerInfo,
   type RegionId,
@@ -153,6 +166,7 @@ import { GeoscapeSet } from './geoscape';
 import { Stage, type Shot } from './stage';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
+import { plotIcon } from './plotIcons';
 
 export interface StrategyHandlers {
   send(cmd: CampaignCommand): void;
@@ -188,7 +202,7 @@ const CLASSES: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'
 const NAV: { view: BaseView; label: string }[] = [
   { view: 'hub', label: 'Bastión' },
   { view: 'geoscape', label: 'Geoesfera' },
-  { view: 'research', label: 'Progreso' },
+  { view: 'research', label: 'Expediente' },
   { view: 'engineering', label: 'Armería' },
   { view: 'barracks', label: 'Cuartel' },
   { view: 'facilities', label: 'Instalaciones' },
@@ -207,7 +221,7 @@ const ROOM_OF: Partial<Record<BaseView, FixedRoom | 'hangar'>> = {
 const VIEW_NAMES: Record<BaseView, string> = {
   hub: 'Bastión',
   geoscape: 'Geoesfera',
-  research: 'Progreso',
+  research: 'Expediente',
   engineering: 'Armería',
   barracks: 'Cuartel',
   facilities: 'Instalaciones',
@@ -227,6 +241,19 @@ const FIXED_NAMES_SET: Record<string, true> = { command: true, barracks: true, r
 function hasBonus(c: CampaignState, facility: FacilityId): boolean {
   return adjacencyBonuses(c).some((b) => b.def.facility === facility);
 }
+
+/** «el Cuartel», «la Armería»: a building's name with its article. */
+function withArticle(id: BuildingId): string {
+  const name = buildingName(id);
+  return /^(Armería|Enfermería|Sala|Estación|Brigada|Cámara)\b/.test(name) ? `la ${name}` : `el ${name}`;
+}
+
+/** «junto al Cuartel», «junto a la Armería». */
+function nextTo(id: BuildingId): string {
+  return `junto ${withArticle(id).replace(/^el /, 'al ').replace(/^la /, 'a la ')}`;
+}
+
+const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** "C2": the plot's column letter and row number, as on a map. */
 function plotCode(p: BasePlot): string {
@@ -284,11 +311,19 @@ export class StrategyScreen {
   private custom: { soldier: string; name: string; nickname: string; appearance: Appearance } | null = null;
   /** The plot picked in the facilities view ("x,y"). */
   private plot: string | null = null;
+  /** The plot under the pointer, in 3D or in the grid. */
+  private plotHovered: string | null = null;
   private promoting = false;
   /** Soldier whose Reentrenar button waits for a second click. */
   private retrainArmed: string | null = null;
   /** Axis of the Rosa open in the Hoja de servicio (null = the soldier's main one). */
   private sheetAxis: ClassId | null = null;
+  /** The Hoja de servicio shows the whole Rosa instead of what can be learnt (or was). */
+  private wholeRosa = false;
+  /** A promotion being laid out on the sheet; nothing is sent until «Guardar». */
+  private plan: { soldier: string; attrs: AttrId[]; talents: PerkId[] } | null = null;
+  /** The sheet just saved: it shows its stamp for a moment. */
+  private savedStamp: { soldier: string; until: number } | null = null;
   /** Open equipment picker ("soldierId:slot"). */
   private picking: string | null = null;
   /** The alert on screen last time, so turning the globe to it happens once. */
@@ -299,6 +334,7 @@ export class StrategyScreen {
   constructor(container: HTMLElement, private readonly mySlot: Slot, private readonly handlers: StrategyHandlers) {
     this.radio = new Transmissions(() => ({ saludo: greeting(this.commanderNames()), yo: greeting([this.playerName(mySlot)]) }), mySlot);
     this.bastion = new BastionSet((hot) => this.pickRoom(hot));
+    this.bastion.onHover = (hot) => this.onPlotHover(hot);
     this.geo = new GeoscapeSet((region) => {
       this.region = region;
       this.offer = this.state?.offers.find((o) => o.region === region)?.id ?? null;
@@ -311,20 +347,48 @@ export class StrategyScreen {
     container.append(this.root);
     void this.stage.show('bastion', this.bastion.overview(), true);
     handlers.onView(this.view);
+    window.addEventListener('keydown', this.onKey);
+  }
+
+  private readonly onKey = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || !this.state || this.root.classList.contains('launching')) return;
+    if ((e.target as HTMLElement | null)?.closest?.('input, textarea')) return;
+    e.preventDefault();
+    this.back();
+  };
+
+  /** Esc: closes what is open, lets go of what is picked, and otherwise goes back to the Bastión. */
+  private back(): void {
+    if (this.picking || this.custom || this.promoting || this.leaving || this.newsOpen) {
+      this.picking = null;
+      this.custom = null;
+      this.promoting = false;
+      this.plan = null;
+      this.wholeRosa = false;
+      this.leaving = false;
+      this.newsOpen = false;
+      this.render();
+      return;
+    }
+    // Alerts and events are answered with their own buttons.
+    if (this.modal.classList.contains('show')) return;
+    if (this.view === 'facilities' && this.plot) this.pickPlot(null);
+    else if (this.view !== 'hub' && this.view !== 'debrief') void this.go('hub');
   }
 
   // ------------------------------------------------------------ public
 
-  update(c: CampaignState): void {
-    const prev = this.state;
+  /**
+   * `before`: what the base looked like when the squad took off. A screen made
+   * anew after a mission compares with it, so the mission's news (levels, new
+   * operations, the clock) still pop up, after the debrief, for both commanders.
+   */
+  update(c: CampaignState, before?: CampaignState | null): void {
+    const prev = this.state ?? before ?? null;
     this.state = c;
-    const proposed = c.proposal?.by !== this.mySlot && c.proposal?.action.type === 'chooseMission' && prev?.proposal?.text !== c.proposal.text ? c.proposal.action.id : null;
-    if (proposed && this.view !== 'squad' && this.view !== 'debrief') {
-      this.offer = proposed;
-      this.region = c.offers.find((o) => o.id === proposed)?.region ?? null;
-      if (this.region) this.geo.focus(this.region);
-      if (this.view !== 'geoscape') void this.go('geoscape');
-    }
+    // The partner's proposal waits on its note (with «Ver»): it never takes this player away from what they are doing.
+    const proposed = !!c.proposal && c.proposal.by !== this.mySlot && prev?.proposal?.text !== c.proposal.text;
+    if (proposed) this.blink('.strat-proposal');
     this.bastion.setBase(c);
     this.geo.flyTo(this.offerById(c.activeMission)?.region ?? HOME_REGION);
     if (prev) this.collectAlerts(prev, c);
@@ -367,6 +431,7 @@ export class StrategyScreen {
   }
 
   destroy(): void {
+    window.removeEventListener('keydown', this.onKey);
     cancelAnimationFrame(this.anchorFrame);
     this.stage.dispose();
     this.root.remove();
@@ -406,18 +471,79 @@ export class StrategyScreen {
   /** Clicking a room of the Bastion opens its screen. */
   private pickRoom(hot: string): void {
     if (hot.startsWith('plot:')) {
-      this.plot = hot.slice(5);
-      if (this.view === 'facilities') {
-        this.render();
-        void this.stage.show('bastion', this.shotFor('facilities'));
-      } else {
-        void this.go('facilities');
-      }
+      this.pickPlot(hot.slice(5));
       return;
     }
     const target: Record<string, BaseView> = { command: 'geoscape', research: 'research', engineering: 'engineering', barracks: 'barracks' };
     if (hot === 'hangar') void this.go(this.state?.activeMission ? 'squad' : 'geoscape');
     else if (target[hot]) void this.go(target[hot]!);
+  }
+
+  /**
+   * Picks a plot of the facilities view, here or in 3D. Picking it again lets
+   * it go (`toggle`); «Ver» buttons pick without letting go, and make it blink.
+   */
+  private pickPlot(id: string | null, toggle = true): void {
+    this.plot = toggle && id === this.plot ? null : id;
+    if (this.view !== 'facilities') {
+      void this.go('facilities');
+    } else {
+      this.render();
+      void this.stage.show('bastion', this.shotFor('facilities'));
+    }
+    if (!toggle && id) this.blink(`[data-plot="${id}"], .strat-right .x-title`);
+  }
+
+  /** The pointer on a plot, in 3D or in the grid: both light the same one, without redrawing the panel. */
+  private onPlotHover(hot: string | null): void {
+    this.plotHovered = hot?.startsWith('plot:') ? hot.slice(5) : null;
+    if (this.view !== 'facilities' || !this.state) return;
+    for (const el of this.viewEl.querySelectorAll<HTMLElement>('.plot-cell')) el.classList.toggle('hovered', el.dataset.plot === this.plotHovered);
+    const line = this.viewEl.querySelector('.plot-hover');
+    if (line) {
+      clear(line);
+      append(line, ...this.plotHoverLine(this.state, this.plotHovered ?? this.plot));
+    }
+  }
+
+  private plotHoverLine(c: CampaignState, id: string | null): (HTMLElement | string)[] {
+    const p = id ? plotById(c, id) : undefined;
+    if (!p) return ['Pasa por encima de una parcela para ver qué hay; púlsala para elegirla.'];
+    return [h('b', {}, plotCode(p)), ` · ${this.plotLine(c, p.id)}`, id === this.plot && !this.plotHovered ? ' · pulsa otra vez o Esc para soltarla' : ''];
+  }
+
+  /** What stands on a plot and what can be done with it, in one line. */
+  private plotLine(c: CampaignState, id: string): string {
+    const p = plotById(c, id)!;
+    const work = c.base.works.find((w) => w.plot === p.id);
+    const level = p.building && p.building in FACILITIES ? (p.level ?? 1) : 0;
+    if (work) {
+      const what =
+        work.kind === 'clear'
+          ? `Despejando: ${TERRAINS[p.terrain as keyof typeof TERRAINS]?.name.toLowerCase() ?? ''}`
+          : work.kind === 'upgrade'
+            ? `${FACILITIES[work.facility!].name} → nivel ${level + 1}`
+            : `En obras: ${FACILITIES[work.facility!].name}`;
+      return `${what} · faltan ${work.daysLeft} días`;
+    }
+    if (p.building && p.building in FIXED_NAMES_SET) return `${buildingName(p.building)} · del búnker original`;
+    if (p.building) {
+      const pair = adjacencyBonuses(c).some((b) => b.plot === p.id);
+      return `${buildingName(p.building)} · nivel ${level}${!upgradable(c, p) ? ' · se puede mejorar' : pair ? ' · con su pareja al lado' : ''}`;
+    }
+    if (p.terrain !== 'clear') return `${TERRAINS[p.terrain].name} · ${clearable(c, p) ? 'aún no se puede despejar: despeja antes a su lado' : `despejar cuesta ${clearCost(p).cost} ₡`}`;
+    return neighbours(c, p).some((q) => q.building) ? 'Libre · se puede construir' : 'Libre · sin acceso: construye antes a su lado';
+  }
+
+  /** Makes what a «Ver» points at blink, so it is found even when it is already on screen. */
+  private blink(selector: string): void {
+    window.setTimeout(() => {
+      for (const el of this.root.querySelectorAll<HTMLElement>(selector)) {
+        el.classList.remove('blink');
+        void el.offsetWidth;
+        el.classList.add('blink');
+      }
+    }, 60);
   }
 
   // ------------------------------------------------------------ helpers
@@ -565,7 +691,6 @@ export class StrategyScreen {
 
   /** XCOM-style pop-ups for what happened while time passed. */
   private collectAlerts(prev: CampaignState, c: CampaignState): void {
-    const newReport = c.lastReport !== prev.lastReport && this.reportKey(c) !== this.reportKey(prev);
     const fresh: Alert[] = [];
     // Each level adds a page to the Expediente. After a mission it waits until the debrief is closed.
     for (let level = bastionLevel(prev) + 1; level <= bastionLevel(c); level++) {
@@ -578,7 +703,7 @@ export class StrategyScreen {
         body: page.paragraphs,
         text: `Bastión nivel ${level}. ${this.unlocksText(level)}`,
         note: page.note,
-        action: { label: 'Ver el progreso', go: () => void this.go('research') },
+        action: { label: 'Ver el expediente', go: () => void this.go('research') },
       });
     }
     // Story chapters and the final mission are announced whenever they open: after a level, a mission or an event.
@@ -601,7 +726,8 @@ export class StrategyScreen {
     }
     // The clock as the days pass.
     if (c.day > prev.day) sound('ui.tick');
-    if (c.day > prev.day && !newReport) this.timeAlerts(prev, c, fresh);
+    // Missions take days too: what happened meanwhile pops up after the debrief.
+    if (c.day > prev.day) this.timeAlerts(prev, c, fresh);
     this.flushAlerts(fresh);
   }
 
@@ -631,13 +757,7 @@ export class StrategyScreen {
             : work.kind === 'upgrade'
               ? FACILITIES[work.facility!].upgrades[(plot.level ?? 2) - 2]!
               : FACILITIES[work.facility!].description,
-        action: {
-          label: 'Ver instalaciones',
-          go: () => {
-            this.plot = work.plot;
-            void this.go('facilities');
-          },
-        },
+        action: { label: 'Ver instalaciones', go: () => this.pickPlot(work.plot, false) },
       });
     }
     for (const r of c.regions.filter((x) => x.facility && !prev.regions.find((p) => p.id === x.id)?.facility)) {
@@ -717,6 +837,7 @@ export class StrategyScreen {
     this.region = o.region;
     this.geo.focus(o.region);
     void this.go('geoscape');
+    this.blink('.strat-left .x-row.selected, .strat-right .x-title');
   }
 
   private focusRegion(id: RegionId): void {
@@ -724,6 +845,7 @@ export class StrategyScreen {
     this.offer = null;
     this.geo.focus(id);
     void this.go('geoscape');
+    this.blink('.strat-right .x-title');
   }
 
   // ------------------------------------------------------------- render
@@ -834,44 +956,86 @@ export class StrategyScreen {
   }
 
   /** What a proposal costs, takes and does, and where to see it: whoever decides should know as much as whoever proposed. */
-  private proposalDetail(c: CampaignState, action: NonNullable<CampaignState['proposal']>['action']): { line: string; see: (() => void) | null } {
+  /**
+   * What a proposal costs and brings, one kind per line in the same order
+   * (Tiempo, Créditos, Qué hace, Extra), and how to see what it is about.
+   */
+  private proposalDetail(c: CampaignState, action: NonNullable<CampaignState['proposal']>['action']): { rows: [string, string][]; see: (() => void) | null } {
     switch (action.type) {
       case 'chooseMission': {
         const o = this.offerById(action.id);
-        if (!o) return { line: '', see: null };
-        const reward = o.reward.credits ? ` · ${o.reward.credits} ₡` : '';
-        return { line: `${MISSION_NAMES[o.kind]} · ${REGIONS[o.region].name} · ${'★'.repeat(o.difficulty)}${reward}`, see: () => this.focusOffer(o.id) };
+        if (!o) return { rows: [], see: null };
+        const reward = [o.reward.credits ? `${o.reward.credits} ₡` : '', o.reward.recruit ? 'un recluta' : ''].filter(Boolean).join(' y ');
+        return {
+          rows: [
+            ['Tiempo', `${missionDays(c).join('–')} días fuera`],
+            ['Qué hace', `${MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}`],
+            ['Extra', `Dificultad ${'★'.repeat(o.difficulty)}${reward ? ` · recompensa: ${reward}` : ''}`],
+          ],
+          see: () => this.focusOffer(o.id),
+        };
       }
       case 'clear': {
         const plot = plotById(c, action.plot);
-        if (!plot) return { line: '', see: null };
+        if (!plot) return { rows: [], see: null };
         const { cost, days, salvage } = clearCost(plot);
-        return { line: `${costText(cost)} · ${days} días${salvage ? ` · +${salvage} ₡ de chatarra` : ''}`, see: () => ((this.plot = plot.id), void this.go('facilities')) };
+        return {
+          rows: [
+            ['Tiempo', `${workDays(c, days)} días`],
+            ['Créditos', costText(cost)],
+            ['Qué hace', `Despeja ${TERRAINS[plot.terrain as keyof typeof TERRAINS]?.name.toLowerCase() ?? 'el terreno'} en ${plotCode(plot)}`],
+            ...(salvage ? [['Extra', `+${salvage} ₡ de chatarra`] as [string, string]] : []),
+          ],
+          see: () => this.pickPlot(plot.id, false),
+        };
       }
       case 'build': {
         const def = FACILITIES[action.facility];
         const plot = plotById(c, action.plot);
         const bonus = plot ? adjacencyAt(c, plot, def.id) : null;
-        const extra = bonus ? ` · Junto a ${buildingName(bonus.next)}: ${bonus.text.split('.')[0]}` : '';
-        return { line: `${costText(def.cost)} · ${def.days} días · ${def.description}${extra}`, see: () => ((this.plot = action.plot), void this.go('facilities')) };
+        return {
+          rows: [
+            ['Tiempo', `${workDays(c, def.days)} días`],
+            ['Créditos', costText(def.cost)],
+            ['Qué hace', def.description],
+            ...(bonus ? [['Extra', `${cap(nextTo(bonus.next))}: ${bonus.text}`] as [string, string]] : []),
+          ],
+          see: () => this.pickPlot(action.plot, false),
+        };
       }
       case 'upgrade': {
         const plot = plotById(c, action.plot);
-        if (!plot?.building || !(plot.building in FACILITIES)) return { line: '', see: null };
+        if (!plot?.building || !(plot.building in FACILITIES)) return { rows: [], see: null };
         const id = plot.building as FacilityId;
         const to = (plot.level ?? 1) + 1;
         const next = upgradeCost(id, to);
-        return { line: `${costText(next.cost)} · ${workDays(c, next.days)} días · ${FACILITIES[id].upgrades[to - 2]}`, see: () => ((this.plot = plot.id), void this.go('facilities')) };
+        return {
+          rows: [
+            ['Tiempo', `${workDays(c, next.days)} días`],
+            ['Créditos', costText(next.cost)],
+            ['Qué hace', `Nivel ${to}: ${FACILITIES[id].upgrades[to - 2]}`],
+          ],
+          see: () => this.pickPlot(plot.id, false),
+        };
       }
       case 'contact':
-        return { line: `${costText(contactCost(c))} · +${regionIncome(c, action.region)} ₡ al mes`, see: () => this.focusRegion(action.region) };
+        return {
+          rows: [
+            ['Créditos', costText(contactCost(c))],
+            ['Qué hace', `Contacto con ${REGIONS[action.region].name}`],
+            ['Extra', `+${regionIncome(c, action.region)} ₡ al mes`],
+          ],
+          see: () => this.focusRegion(action.region),
+        };
       case 'investigate': {
         const rumor = c.rumors.find((r) => r.id === action.id);
-        return rumor ? { line: `Escuchar ${rumor.daysLeft} días · ${REGIONS[rumor.region].name}`, see: () => this.focusRegion(rumor.region) } : { line: '', see: null };
+        return rumor
+          ? { rows: [['Tiempo', `${rumor.daysLeft} días escuchando`], ['Qué hace', `Investigar el rumor de ${REGIONS[rumor.region].name}`]], see: () => this.focusRegion(rumor.region) }
+          : { rows: [], see: null };
       }
       case 'event': {
         const def = eventDef(c);
-        return { line: def ? def.options[action.option].effect : '', see: null };
+        return { rows: def ? [['Qué hace', def.options[action.option].effect]] : [], see: null };
       }
     }
   }
@@ -881,8 +1045,8 @@ export class StrategyScreen {
     const p = c.proposal;
     this.proposalEl.classList.toggle('show', !!p);
     if (!p) return;
-    const { line, see } = this.proposalDetail(c, p.action);
-    const detail = line ? h('small.proposal-detail', {}, line) : null;
+    const { rows, see } = this.proposalDetail(c, p.action);
+    const detail = rows.length ? h('dl.proposal-detail', {}, ...rows.flatMap(([label, text]) => [h('dt', {}, label), h('dd', {}, text)])) : null;
     const seeBtn = see ? h('button.x-btn.small', { onclick: see }, 'Ver') : null;
     if (p.by === this.mySlot) {
       append(
@@ -928,7 +1092,7 @@ export class StrategyScreen {
           { onclick: () => void this.go(item.view), title: todo ? todo.what.join(' · ') : '' },
           item.label,
           todo ? h(`span.nav-count${todo.urgent ? '.urgent' : ''}`, {}, String(todo.n)) : null,
-          here ? h('span.partner-dot', { style: { background: partner!.color }, title: `${partner!.name} está aquí` }) : null,
+          here ? h('span.partner-dot', { style: { '--accent': partner!.color }, title: `${partner!.name} está aquí` }, partner!.name.slice(0, 1).toUpperCase()) : null,
         ),
       );
     }
@@ -947,7 +1111,7 @@ export class StrategyScreen {
       void this.go('barracks');
       return;
     }
-    if (go.plot) this.plot = go.plot;
+    if (go.plot) return this.pickPlot(go.plot, false);
     if (step.view !== this.view) void this.go(step.view);
   }
 
@@ -992,7 +1156,7 @@ export class StrategyScreen {
       rows.push(
         h(
           'button.x-row.agenda',
-          { onclick: () => ((this.plot = work.plot), void this.go('facilities')), title: 'Obras en marcha' },
+          { onclick: () => this.pickPlot(work.plot, false), title: 'Obras en marcha' },
           h('span.agenda-icon.pick'),
           h('b', {}, work.kind === 'clear' ? 'Desbroce' : work.kind === 'upgrade' ? `Mejora: ${FACILITIES[work.facility!].name}` : FACILITIES[work.facility!].name),
           this.chip(`${work.daysLeft} d`),
@@ -1394,7 +1558,7 @@ export class StrategyScreen {
     const tabs = h(
       'div.x-tabs',
       {},
-      ...(['gear', 'items'] as const).map((t) =>
+      ...(['items', 'gear'] as const).map((t) =>
         h(`button${this.engTab === t ? '.on' : ''}`, { onclick: () => ((this.engTab = t), (this.engPick = null), this.render()) }, t === 'gear' ? 'Armamento' : 'Accesorios'),
       ),
     );
@@ -1449,7 +1613,7 @@ export class StrategyScreen {
         );
       }
     }
-    const note = this.engTab === 'items' && facilityCount(c, 'workshop') ? 'Taller: −25 %' : '';
+    const note = this.engTab === 'items' && facilityCount(c, 'workshop') ? `Taller: −${Math.round((1 - shopPrice(c, 'smokeGrenade') / ITEMS.smokeGrenade.cost) * 100)} %` : '';
     this.viewEl.append(this.panel('eng-left', 'left', h('div.x-head', {}, 'Armería'), tabs, h('div.x-list', {}, ...rows), note ? h('p.x-muted', {}, note) : null));
     if (!this.engPick) return;
     if (this.engTab === 'gear') {
@@ -1522,7 +1686,7 @@ export class StrategyScreen {
       h(
         `button.x-row.soldier${this.soldier === s.id ? '.selected' : ''}${s.alive ? '' : '.dim'}`,
         {
-          style: { '--row-accent': this.soldier === s.id ? 'var(--x-accent)' : this.playerColor(s.owner) },
+          style: { '--row-accent': this.playerColor(s.owner) },
           onclick: () => {
             this.soldier = s.id;
             this.promoting = false;
@@ -1541,7 +1705,7 @@ export class StrategyScreen {
     const count = mine.filter((s) => s.alive).length;
     const cap = soldierCap(c);
     const price = recruitCost(c);
-    const blockedRecruit = this.why([count >= cap, 'El cuartel está lleno'], [bedsFree(c) <= 0, 'No quedan camas: construid un barracón'], [true, this.shortfall(price)]);
+    const blockedRecruit = this.why([count >= cap, 'El cuartel está lleno'], [bedsFree(c) <= 0, 'Para reclutar más soldados, construid un barracón: no quedan camas.'], [true, this.shortfall(price)]);
     const recruit = h(
       'div',
       {},
@@ -1631,7 +1795,12 @@ export class StrategyScreen {
         'right',
         h('div.alert-kicker', {}, `${TEMPLATES[soldierTemplate(s.cls)].name.toUpperCase()} · ${isMine ? 'TUYO' : `DE ${this.playerName(s.owner).toUpperCase()}`}`),
         h('h2.x-title', { title: `Misiones: ${s.missions} · Bajas: ${s.kills}` }, displayName(s.name, s.nickname)),
-        h('p.x-sub', {}, `${RANKS[s.rank]!.name} · ${soldierWeaponName(soldierTemplate(s.cls), weaponTier(c, s))}`),
+        h(
+          'p.x-sub',
+          { title: s.cls ? '' : RECRUIT_DESCRIPTION },
+          `${RANKS[s.rank]!.name} · ${soldierWeaponName(soldierTemplate(s.cls), weaponTier(c, s))}`,
+          !s.cls && AXES.some((a) => pointsInAxis(s.talents, a) > 0) ? ` · en ${SPECIALIZE_RANK_NAME}, ${TEMPLATES[leaningClass(s)].name}` : '',
+        ),
         isMine && s.alive
           ? h(
               'button.x-btn.small',
@@ -1775,99 +1944,186 @@ export class StrategyScreen {
   }
 
   /**
-   * Hoja de servicio: aptitudes on the left; on the right the Rosa, the talent
-   * tree everyone shares: its centre, one tab per axis and that axis's four
-   * branches (the fourth is the Canto). A stopgap until UX/UI's compass.
+   * The promotion being prepared: points laid on the sheet, sent only with
+   * «Guardar», step by step as the server checks them, so nothing is lost and
+   * nothing is spent by a stray click.
+   */
+  private planned(s: CampaignSoldier, echoes: number): { b: Build; attrs: AttrId[]; talents: PerkId[] } {
+    const plan = this.plan?.soldier === s.id ? this.plan : null;
+    const b: Build = { cls: s.cls, rank: s.rank, attrs: { ...s.attrs }, talents: { ...s.talents } };
+    const attrs: AttrId[] = [];
+    const talents: PerkId[] = [];
+    // Checked again in order: taking one back can leave a later one without what it asked for.
+    for (const id of plan?.attrs ?? []) {
+      if (attrBlocker(b, id)) continue;
+      b.attrs[id]++;
+      attrs.push(id);
+    }
+    for (const id of plan?.talents ?? []) {
+      if (talentBlocker(b, id, echoes)) continue;
+      learnTalent(b, id);
+      talents.push(id);
+    }
+    return { b, attrs, talents };
+  }
+
+  private savePlan(s: CampaignSoldier, attrs: AttrId[], talents: PerkId[]): void {
+    for (const attr of attrs) this.send({ type: 'train', soldier: s.id, attr });
+    for (const talent of talents) this.send({ type: 'talent', soldier: s.id, talent });
+    this.plan = null;
+    this.savedStamp = { soldier: s.id, until: performance.now() + 2600 };
+    uiSound('stamp');
+    const what = [...new Set(attrs)].map((id) => `${ATTRS[id].name} +${attrs.filter((x) => x === id).length}`).concat([...new Set(talents)].map((id) => TALENTS[id].name));
+    this.toast(`Guardado en la hoja de ${s.name}: ${what.join(', ')}.`);
+    window.setTimeout(() => this.render(), 2700);
+  }
+
+  /**
+   * Hoja de servicio. With points to spend it is the promotion: aptitudes with
+   * + and −, and only the talents that can be learnt now, laid out as a draft
+   * and saved at once. Otherwise it reads as the soldier's file, and the whole
+   * Rosa is one click away.
    */
   private promotionPanel(c: CampaignState, s: CampaignSoldier): HTMLElement {
-    const isMine = s.owner === this.mySlot && s.alive;
-    const free = pointsToSpend(s);
+    const mine = s.owner === this.mySlot && s.alive;
     const echoes = echoesLevel(c);
-    const base = baseAttrs(s.cls);
+    const { b, attrs: planAttrs, talents: planTalents } = this.planned(s, echoes);
+    const free = { attrs: attrPointsFree(b), talents: talentPointsFree(b) };
+    const drafted = planAttrs.length + planTalents.length;
+    const promoting = mine && (free.attrs + free.talents > 0 || drafted > 0);
+    const setPlan = (attrs: AttrId[], talents: PerkId[]) => {
+      this.plan = { soldier: s.id, attrs, talents };
+      this.render();
+    };
+    const without = <T,>(list: T[], item: T) => {
+      const i = list.lastIndexOf(item);
+      return list.filter((_, j) => j !== i);
+    };
+
+    // Aptitudes: the value, ten boxes (inked = base, pen = spent, pencil = in this draft) and what the next mark brings.
+    const base = baseAttrs(b.cls);
     const apts = ATTR_IDS.map((id: AttrId) => {
       const def = ATTRS[id];
-      const value = s.attrs[id];
-      const cap = attrCap(s.cls, id);
-      const blocked = attrBlocker(s, id);
-      const boxes = Array.from({ length: 10 }, (_, i) => h(`i${i < base[id] ? '.base' : i < value ? '.add' : i < cap ? '' : '.cap'}${i === 6 || i === 9 ? '.mark' : ''}`));
-      const own = !!s.cls && CLASS_TOP[s.cls].includes(id);
+      const saved = s.attrs[id];
+      const value = b.attrs[id];
+      const cap = attrCap(b.cls, id);
+      const added = value - saved;
+      const blocked = attrBlocker(b, id);
+      const next = ATTR_THRESHOLDS.findIndex((n) => value < n);
+      const boxes = Array.from({ length: 10 }, (_, i) =>
+        h(`i${i < base[id] ? '.base' : i < saved ? '.add' : i < value ? '.plan' : i < cap ? '' : '.cap'}${i === 6 || i === 9 ? '.mark' : ''}`),
+      );
       return h(
-        'div.apt',
-        {},
-        h('div.apt-head', {}, h('b', {}, def.name), h('small', {}, def.short), h('span.apt-val', {}, String(value))),
+        `div.apt${added ? '.drafted' : ''}`,
+        { title: ATTR_THRESHOLDS.map((n, i) => `${n}: ${def.thresholds[i]}`).join('\n') },
+        h('div.apt-head', {}, h('b', {}, def.name), h('small.apt-effect', {}, def.effect), h('span.apt-val', {}, String(value)), added ? h('small.apt-added', {}, `+${added}`) : null),
         h(
           'div.apt-row',
           {},
-          h('span.apt-boxes', { title: s.cls ? `Tope ${cap}${own ? ' (aptitud de la clase)' : ''}` : 'Tope 8 · especialízate para subir a 10 las de tu clase' }, ...boxes),
-          isMine ? h('button.apt-plus', { disabled: !!blocked, title: blocked ?? `Subir ${def.name}`, onclick: () => this.send({ type: 'train', soldier: s.id, attr: id }) }, '+') : null,
+          h('span.apt-boxes', { title: b.cls ? `Tope ${cap}` : `Tope ${cap}: al especializarse, las dos de su clase llegan a 10` }, ...boxes),
+          promoting ? h('button.apt-minus', { disabled: !added, title: 'Quitar un punto', onclick: () => setPlan(without(planAttrs, id), planTalents) }, '−') : null,
+          promoting ? h('button.apt-plus', { disabled: !!blocked, title: blocked ?? `Subir ${def.name}`, onclick: () => setPlan([...planAttrs, id], planTalents) }, '+') : null,
         ),
-        h('small.apt-effect', {}, def.effect),
-        h('ul.apt-th', {}, ...ATTR_THRESHOLDS.map((n, i) => h(`li${value >= n ? '.got' : ''}`, {}, h('b', {}, String(n)), def.thresholds[i]!))),
+        next >= 0 ? h('small.apt-next', {}, `A ${ATTR_THRESHOLDS[next]}: ${def.thresholds[next]}`) : h('small.apt-next.got', {}, 'Todo lo de esta aptitud'),
       );
     });
 
-    const card = (d: TalentDef) => {
-      const level = s.talents[d.id] ?? 0;
-      const blocked = talentBlocker(s, d.id, echoes);
-      const open = isMine && !blocked;
-      const shut = !level && !!blocked && level < d.max && !/No quedan puntos/.test(blocked);
-      const becomes = wouldSpecialize(s, d.id);
-      const req = d.req ? h(`span.talent-req${s.attrs[d.req[0]] < d.req[1] ? '.miss' : ''}`, { title: `Pide ${ATTRS[d.req[0]].name} ${d.req[1]}` }, `${ATTRS[d.req[0]].short} ${d.req[1]}`) : null;
+    // A talent card; in a draft a click adds a level and its ✕ takes one back.
+    const card = (d: TalentDef, where = false) => {
+      const level = b.talents[d.id] ?? 0;
+      const fresh = level - (s.talents[d.id] ?? 0);
+      const blocked = talentBlocker(b, d.id, echoes);
+      const open = promoting && !blocked;
+      const sleeping = level > 0 && dormant(b, d.id);
+      const becomes = wouldSpecialize(b, d.id);
+      const req = d.req ? h(`span.talent-req${b.attrs[d.req[0]] < d.req[1] ? '.miss' : ''}`, { title: `Pide ${ATTRS[d.req[0]].name} ${d.req[1]}` }, `${ATTRS[d.req[0]].short} ${d.req[1]}`) : null;
       return h(
-        `button.talent${level ? '.taken' : ''}${open ? '.open' : ''}${shut ? '.shut' : ''}${d.coop ? '.coop' : ''}${d.song ? '.song' : ''}`,
-        { disabled: !open, title: isMine && blocked && level < d.max ? blocked : d.coop ? 'Llave doble: solo funciona junto a soldados de tu compañero.' : '', onclick: () => this.send({ type: 'talent', soldier: s.id, talent: d.id }) },
+        `button.talent${level ? '.taken' : ''}${fresh ? '.drafted' : ''}${open ? '.open' : ''}${!level && blocked && !/No quedan puntos/.test(blocked) ? '.shut' : ''}${d.coop ? '.coop' : ''}${d.song ? '.song' : ''}`,
+        {
+          disabled: !open,
+          title: blocked && level < d.max && mine ? blocked : d.coop ? 'Llave doble: solo funciona junto a soldados de tu compañero.' : '',
+          onclick: () => setPlan(planAttrs, [...planTalents, d.id]),
+        },
+        where && d.axis ? h('small.talent-where', {}, `${BRANCHES[d.axis][d.branch].name} · fila ${d.row + 1}`) : null,
         h('b', {}, d.name, d.ability ? ' ◆' : '', d.coop ? ' ⚷⚷' : ''),
-        h('span.talent-levels', {}, ...Array.from({ length: d.max }, (_, i) => h(`i${i < level ? '.on' : ''}`)), h('small', {}, `${level}/${d.max}`), req),
+        h('span.talent-levels', {}, ...Array.from({ length: d.max }, (_, i) => h(`i${i < level - fresh ? '.on' : i < level ? '.plan' : ''}`)), h('small', {}, `${level}/${d.max}`), req),
         h('small.talent-desc', {}, d.description),
+        d.kit && b.cls !== KIT_CLASS[d.kit] ? h('small.talent-becomes', {}, `${sleeping ? 'Dormido' : 'Duerme'} hasta llevar ${KIT_NAMES[d.kit]}`) : null,
         becomes && open ? h('small.talent-becomes', {}, `Te especializa como ${TEMPLATES[becomes].name}`) : null,
+        fresh
+          ? h(
+              'span.talent-undo',
+              {
+                title: 'Quitar',
+                onclick: (e: Event) => {
+                  e.stopPropagation();
+                  setPlan(planAttrs, without(planTalents, d.id));
+                },
+              },
+              '✕',
+            )
+          : null,
       );
     };
 
-    const { second } = axesOf(s);
-    const axis = this.sheetAxis ?? s.cls ?? 'assault';
-    const tabs = h(
+    // Where the soldier is heading: the class, or the axis a recruit leans to.
+    const leaning = b.cls ? null : leaningClass(b);
+    const { second } = axesOf(b);
+    const path = b.cls
+      ? `${TEMPLATES[b.cls].name}${second ? ` · segundo eje: ${TEMPLATES[second].name}` : ''}`
+      : `Recluta · en ${SPECIALIZE_RANK_NAME} se especializa en el eje en que más haya aprendido${AXES.some((a) => pointsInAxis(b.talents, a) > 0) ? `: ahora, ${TEMPLATES[leaning!].name}` : ''}`;
+
+    // Talents: in a draft, only what can be learnt now (and what this draft took): the centre, then one axis at a time.
+    const shown = (d: TalentDef) => (promoting ? !talentBlocker(b, d.id, echoes) || (b.talents[d.id] ?? 0) > (s.talents[d.id] ?? 0) : (b.talents[d.id] ?? 0) > 0);
+    const order = [b.cls ?? leaning!, ...AXES.filter((a) => a !== (b.cls ?? leaning))];
+    const counts = new Map(order.map((a) => [a, talentsOf(a).filter(shown).length]));
+    const started = AXES.some((a) => pointsInAxis(b.talents, a) > 0);
+    const axis = this.sheetAxis ?? (b.cls ?? (started ? leaning : null) ?? order.find((a) => counts.get(a)) ?? order[0]!);
+    const centre = CENTER.filter(shown);
+    const axisTabs = h(
       'div.rosa-axes',
       {},
-      ...AXES.map((a) => {
-        const role = a === s.cls ? 'principal' : a === second ? 'segundo eje' : '';
-        const points = pointsInAxis(s.talents, a);
-        return h(
+      ...order.map((a) =>
+        h(
           `button.x-btn.small${a === axis ? '.on' : ''}`,
-          { onclick: () => ((this.sheetAxis = a), this.render()) },
+          { onclick: () => ((this.sheetAxis = a), this.render()), title: a === b.cls ? 'Su clase' : a === leaning && started ? 'Hacia donde se inclina' : '' },
           this.clsTag(a),
           ` ${TEMPLATES[a].name}`,
-          points ? h('small', {}, ` · ${points}`) : null,
-          role ? h('small', {}, ` · ${role}`) : null,
-        );
-      }),
-    );
-    const grid = h('div.talent-grid.four');
-    grid.append(h('div'));
-    BRANCHES[axis].forEach((b, i) =>
-      grid.append(
-        h(
-          `div.talent-branch${b.song ? '.song' : ''}`,
-          {},
-          h('b', {}, b.name),
-          h('small', {}, b.song ? (echoes ? `Cámara de Ecos · nivel ${echoes}` : 'Hace falta la Cámara de Ecos') : b.focus),
-          h('span', {}, `${pointsInBranch(s.talents, axis, i)} puntos`),
+          h('small', {}, ` · ${counts.get(a)}`),
         ),
       ),
     );
-    ROW_GATES.forEach((gate, row) => {
-      grid.append(h('div.talent-gate', { title: `Esta fila pide ${gate} puntos en la rama, en las filas de arriba (en el Canto, uno por fila)` }, h('b', {}, String(gate)), h('small', {}, 'puntos')));
-      for (const branch of [0, 1, 2, 3]) {
-        const cards = talentsOf(axis).filter((d) => d.branch === branch && d.row === row);
-        const songLocked = branch === 3 && songRowLevel(row) > echoes;
-        grid.append(h(`div.talent-cell${songLocked ? '.locked' : ''}`, { title: songLocked ? `Cámara de Ecos · nivel ${songRowLevel(row)}` : '' }, ...cards.map(card)));
-      }
-    });
+    const axisCards = talentsOf(axis).filter(shown);
+    const picker = h(
+      'div.talent-picker',
+      {},
+      centre.length ? h('div.x-group', {}, CENTER_NAME) : null,
+      centre.length ? h('div.talent-pick', {}, ...centre.map((d) => card(d))) : null,
+      axisTabs,
+      axisCards.length
+        ? h('div.talent-pick', {}, ...axisCards.map((d) => card(d, true)))
+        : h('p.x-muted', {}, promoting ? 'Nada que aprender en este eje ahora: hacen falta más puntos en una rama o una aptitud más alta.' : 'Nada aprendido en este eje.'),
+    );
+    const rosa = this.wholeRosa ? this.rosaGrid(b, axis, card, echoes) : null;
+    const talentsPart = promoting
+      ? h(
+          'div.service-tree',
+          {},
+          h('div.x-group', {}, '2 · Talentos', this.chip(free.talents ? `Quedan ${free.talents}` : 'Repartidos', free.talents ? 'good' : '')),
+          this.wholeRosa ? rosa : picker,
+        )
+      : h(
+          'div.service-tree',
+          {},
+          h('div.x-group', {}, 'Talentos'),
+          this.wholeRosa ? rosa : talentIds(b.talents).length ? picker : h('p.x-muted', {}, `Cada ascenso da ${TALENT_POINTS_PER_RANK} puntos de talento, desde ${RANKS[1]!.name}.`),
+        );
 
     const cost = retrainCost(c);
-    const spent = free.attrs < ATTR_POINTS_PER_RANK * s.rank || free.talents < TALENT_POINTS_PER_RANK * s.rank;
+    const spent = attrPointsFree(s) < ATTR_POINTS_PER_RANK * s.rank || talentPointsFree(s) < TALENT_POINTS_PER_RANK * s.rank;
     const armed = this.retrainArmed === s.id;
     const retrain =
-      isMine && spent
+      mine && spent && !drafted
         ? h(
             `button.x-btn.small${armed ? '.danger' : ''}`,
             {
@@ -1886,37 +2142,89 @@ export class StrategyScreen {
             armed ? `Confirmar: devolver todo por ${costText(cost)}` : `Reentrenar · ${costText(cost)}`,
           )
         : null;
-    const pending = isMine && free.attrs + free.talents > 0;
+    const close = () => {
+      this.promoting = false;
+      this.retrainArmed = null;
+      this.sheetAxis = null;
+      this.wholeRosa = false;
+      this.plan = null;
+      this.render();
+    };
+    const stamped = this.savedStamp?.soldier === s.id && this.savedStamp.until > performance.now();
     return h(
-      'div.x-panel.wide.service',
+      `div.x-panel.wide.service${promoting ? '.promoting' : ''}`,
       {},
-      h('div.alert-kicker', {}, `${TEMPLATES[soldierTemplate(s.cls)].name.toUpperCase()} · ${RANKS[s.rank]!.name.toUpperCase()}`),
+      stamped ? h('div.saved-stamp', {}, 'GUARDADO') : null,
+      h('div.alert-kicker', {}, promoting ? `ASCENSO · ${RANKS[s.rank]!.name.toUpperCase()}` : `HOJA DE SERVICIO · ${RANKS[s.rank]!.name.toUpperCase()}`),
       h('h2.x-title', {}, displayName(s.name, s.nickname)),
-      h(
-        'p.x-sub',
-        {},
-        s.cls ? '' : `${TEMPLATES.rookie.name}: 2 puntos en un eje te especializan. `,
-        pending
-          ? `Por repartir: ${free.attrs} de aptitud y ${free.talents} de talento.`
-          : `Cada ascenso da ${ATTR_POINTS_PER_RANK} puntos de aptitud y ${TALENT_POINTS_PER_RANK} de talento.`,
-        ' ◆ activa · ⚷⚷ llave doble: solo junto a soldados de tu compañero.',
-      ),
+      h('p.x-sub', {}, path),
+      promoting
+        ? h(
+            'p.service-help',
+            {},
+            free.attrs + free.talents
+              ? `Reparte ${free.attrs ? `${free.attrs} de aptitud` : ''}${free.attrs && free.talents ? ' y ' : ''}${free.talents ? `${free.talents} de talento` : ''}. Nada cuenta hasta que pulses «Guardar»; lo que no gastes queda para luego.`
+              : 'Todo repartido. Pulsa «Guardar» para apuntarlo en la hoja.',
+          )
+        : null,
       h(
         'div.service-sheet',
         {},
-        h('div.service-apts', {}, h('div.x-group', {}, 'Aptitudes', isMine ? this.chip(`${free.attrs} libres`, free.attrs ? 'good' : '') : null), ...apts, retrain),
+        h('div.service-apts', {}, h('div.x-group', {}, promoting ? '1 · Aptitudes' : 'Aptitudes', promoting ? this.chip(free.attrs ? `Quedan ${free.attrs}` : 'Repartidas', free.attrs ? 'good' : '') : null), ...apts, retrain),
+        talentsPart,
+      ),
+      h(
+        'div.alert-actions',
+        {},
+        promoting ? h('button.x-btn.primary', { disabled: !drafted, onclick: () => this.savePlan(s, planAttrs, planTalents) }, drafted ? `Guardar (${drafted})` : 'Guardar') : null,
+        promoting && drafted ? h('button.x-btn', { onclick: () => setPlan([], []) }, 'Deshacer todo') : null,
+        h('button.x-btn', { onclick: () => ((this.wholeRosa = !this.wholeRosa), this.render()) }, this.wholeRosa ? (promoting ? 'Solo lo que puedo aprender' : 'Solo lo aprendido') : 'Ver la Rosa entera'),
+        h('button.x-btn', { onclick: close }, drafted ? 'Cerrar sin guardar' : 'Cerrar'),
+      ),
+    );
+  }
+
+  /** The whole Rosa of one axis, row by row with its gates: for those who want to plan far ahead. */
+  private rosaGrid(b: Build, axis: ClassId, card: (d: TalentDef) => HTMLElement, echoes: number): HTMLElement {
+    const { second } = axesOf(b);
+    const tabs = h(
+      'div.rosa-axes',
+      {},
+      ...AXES.map((a) => {
+        const role = a === b.cls ? 'principal' : a === second ? 'segundo eje' : '';
+        const points = pointsInAxis(b.talents, a);
+        return h(
+          `button.x-btn.small${a === axis ? '.on' : ''}`,
+          { onclick: () => ((this.sheetAxis = a), this.render()) },
+          this.clsTag(a),
+          ` ${TEMPLATES[a].name}`,
+          points ? h('small', {}, ` · ${points}`) : null,
+          role ? h('small', {}, ` · ${role}`) : null,
+        );
+      }),
+    );
+    const grid = h('div.talent-grid.four');
+    grid.append(h('div'));
+    BRANCHES[axis].forEach((br, i) =>
+      grid.append(
         h(
-          'div.service-tree',
+          `div.talent-branch${br.song ? '.song' : ''}`,
           {},
-          h('div.x-group', {}, 'La Rosa', isMine ? this.chip(`${free.talents} libres`, free.talents ? 'good' : '') : null),
-          h('div.x-group', {}, CENTER_NAME),
-          h('div.talent-center', {}, ...CENTER.map(card)),
-          tabs,
-          grid,
+          h('b', {}, br.name),
+          h('small', {}, br.song ? (echoes ? `Cámara de Ecos · nivel ${echoes}` : 'Hace falta la Cámara de Ecos') : br.focus),
+          h('span', {}, `${pointsInBranch(b.talents, axis, i)} puntos`),
         ),
       ),
-      h('div.alert-actions', {}, h('button.x-btn', { onclick: () => ((this.promoting = false), (this.retrainArmed = null), (this.sheetAxis = null), this.render()) }, 'Cerrar')),
     );
+    ROW_GATES.forEach((gate, row) => {
+      grid.append(h('div.talent-gate', { title: `Esta fila pide ${gate} puntos en la rama, en las filas de arriba (en el Canto, uno por fila)` }, h('b', {}, String(gate)), h('small', {}, 'puntos')));
+      for (const branch of [0, 1, 2, 3]) {
+        const cards = talentsOf(axis).filter((d) => d.branch === branch && d.row === row);
+        const songLocked = branch === 3 && songRowLevel(row) > echoes;
+        grid.append(h(`div.talent-cell${songLocked ? '.locked' : ''}`, { title: songLocked ? `Cámara de Ecos · nivel ${songRowLevel(row)}` : '' }, ...cards.map((d) => card(d))));
+      }
+    });
+    return h('div.rosa-whole', {}, h('div.x-group', {}, CENTER_NAME), h('div.talent-center', {}, ...CENTER.map((d) => card(d))), tabs, grid);
   }
 
   // -------------------------------------------------------- facilities
@@ -1942,61 +2250,43 @@ export class StrategyScreen {
     const crewsFull = works.length >= workCrews(c);
     const crewsText = `Todas las cuadrillas están ocupadas (${workCrews(c)})`;
     // Every plot that can be acted on, with its state and its action: the same as clicking it in 3D.
-    const pick = (id: string) => {
-      this.plot = id;
-      this.render();
-      void this.stage.show('bastion', this.shotFor('facilities'));
-    };
-    const rank = (p: BasePlot) => (workOn(p.id) ? 0 : p.building ? 1 : p.terrain === 'clear' ? 2 : 3);
-    const plots = c.base.plots
-      .filter((p) => workOn(p.id) || (p.building && !(p.building in FIXED_NAMES_SET)) || (p.terrain === 'clear' && !p.building) || !clearable(c, p))
-      .sort((a, b) => rank(a) - rank(b) || plotRing(a) - plotRing(b) || a.y - b.y || a.x - b.x)
-      .map((p) => {
-        const work = workOn(p.id);
-        const busy = !!work;
-        const level = p.building && p.building in FACILITIES ? ` · N${p.level ?? 1}` : '';
-        const state = busy
-          ? work!.kind === 'clear'
-            ? `Despejando · ${TERRAINS[p.terrain as keyof typeof TERRAINS]?.name ?? ''}`
-            : work!.kind === 'upgrade'
-              ? `${FACILITIES[work!.facility!].name} → N${(p.level ?? 1) + 1}`
-              : FACILITIES[work!.facility!].name
-          : p.building
-            ? `${buildingName(p.building)}${level}`
-            : p.terrain === 'clear'
-              ? 'Libre'
-              : TERRAINS[p.terrain].name;
-        const cost = p.terrain === 'clear' ? null : clearCost(p);
-        const tag = busy
-          ? this.chip(`${work!.daysLeft} d`)
-          : p.building
-            ? !upgradable(c, p)
-              ? this.chip('Mejorar', 'good', `A nivel ${(p.level ?? 1) + 1} · ${costText(upgradeCost(p.building as FacilityId, (p.level ?? 1) + 1).cost)}`)
-              : h('span.x-side', {}, bonuses.some((b) => b.plot === p.id) ? '✓ +' : '✓')
-            : cost
-              ? this.chip(`Despejar · ${cost.cost} ₡`, '', `${costText(cost.cost)} · ${cost.days} días${cost.salvage ? ` · +${cost.salvage} ₡ de chatarra` : ''}`)
-              : neighbours(c, p).some((q) => q.building)
-                ? this.chip('Construir', 'good')
-                : this.chip('Sin acceso', '', 'Para construir aquí, levanta antes un edificio a su lado');
-        return h(
-          `button.x-row.room${this.plot === p.id ? '.selected' : ''}${p.terrain === 'clear' || busy ? '' : '.dim'}`,
-          { onclick: () => pick(p.id) },
-          h('span.cls', {}, plotCode(p)),
-          h('b', {}, state),
-          tag,
-        );
-      });
+    // The compound as it is seen from above: a 7 × 7 grid, each plot with the mark of what stands on it.
+    const cells = c.base.plots.map((p) => {
+      const work = workOn(p.id);
+      const fixed = !!p.building && p.building in FIXED_NAMES_SET;
+      const level = p.building && p.building in FACILITIES ? (p.level ?? 1) : 0;
+      const kind = work ? 'work' : (p.building ?? (p.terrain === 'clear' ? null : p.terrain));
+      const state = work ? '.work' : fixed ? '.fixed' : p.building ? '.built' : p.terrain === 'clear' ? (neighbours(c, p).some((q) => q.building) ? '.free' : '.free.far') : `.terrain${clearable(c, p) ? '.far' : ''}`;
+      return h(
+        `button.plot-cell${state}${this.plot === p.id ? '.selected' : ''}${this.plotHovered === p.id ? '.hovered' : ''}${!work && p.building && !upgradable(c, p) ? '.can-up' : ''}`,
+        {
+          title: `${plotCode(p)} · ${this.plotLine(c, p.id)}`,
+          'aria-label': `${plotCode(p)}: ${this.plotLine(c, p.id)}`,
+          'data-plot': p.id,
+          onclick: () => this.pickPlot(p.id),
+          onmouseenter: () => this.bastion.hover(`plot:${p.id}`),
+          onmouseleave: () => this.bastion.hover(null),
+        },
+        kind ? plotIcon(kind) : null,
+        level > 1 ? h('small.plot-level', {}, String(level)) : null,
+        work ? h('small.plot-days', {}, `${work.daysLeft} d`) : null,
+      );
+    });
+    const pointed = this.plotHovered ?? this.plot;
     this.viewEl.append(
       this.panel(
         'fac-left',
         'left',
         h(
           'div.x-head',
-          { title: 'Pulsa una parcela aquí o en el Bastión. Se construye pegado a otro edificio y se despeja junto a terreno ya despejado. Las obras van de una en una.' },
+          { title: 'Pulsa una parcela aquí o en el Bastión. Se construye pegado a otro edificio y se despeja junto a terreno ya despejado.' },
           'Parcelas',
+          this.plot ? h('button.x-btn.small.plot-drop', { title: 'Soltar la parcela (Esc)', onclick: () => this.pickPlot(null) }, 'Soltar ✕') : null,
         ),
-        h('div.x-list', {}, ...plots),
+        h('div.plot-grid', {}, ...cells),
+        h('p.plot-hover', {}, ...this.plotHoverLine(c, pointed)),
         h('div.x-head', {}, 'Efectos'),
+
         ...lines.map(([icon, text]) => h('div.x-effect', {}, h(`span.agenda-icon.${icon}`), h('span', {}, text))),
         ...bonuses.map((b) =>
           h('div.x-effect.bonus', { title: b.def.text }, h('span.agenda-icon.flag'), h('span', {}, `${FACILITIES[b.def.facility].name} + ${buildingName(b.def.next)}`)),
@@ -2042,7 +2332,7 @@ export class StrategyScreen {
         h('h2.x-title', {}, `${def.name} · nivel ${level}`),
         h('p.x-good', {}, 'En servicio'),
         h('p.x-text', {}, now),
-        adj ? h(active ? 'p.x-good' : 'p.x-muted', {}, `${active ? 'Pared con pared con' : 'Mejor junto a'} ${buildingName(adj.next)}: ${adj.text}`) : null,
+        adj ? h(active ? 'p.x-good' : 'p.x-muted', {}, `${active ? `Pared con pared con ${withArticle(adj.next)}` : `Mejor ${nextTo(adj.next)}`}: ${adj.text}`) : null,
       );
       if (level < 3) {
         // The next level: what it brings, its price and why it can't be done yet.
@@ -2083,7 +2373,7 @@ export class StrategyScreen {
                   {},
                   h('b', {}, def.name),
                   h('small', {}, def.description),
-                  bonus ? h('small.x-good', { title: bonus.text }, `Junto a ${buildingName(bonus.next)}: ${bonus.text.split('.')[0]}`) : null,
+                  bonus ? h('small.x-good', { title: bonus.text }, `${cap(nextTo(bonus.next))}: ${bonus.text.split('.')[0]}`) : null,
                   h('small', {}, `${workDays(c, def.days)} días de obras`),
                   why && !crewsFull ? h('small.x-why', {}, why) : null,
                 ),
@@ -2111,7 +2401,8 @@ export class StrategyScreen {
     const max = squadMax(c);
     const limit = squadLimit(c, this.connected());
     const squad = c.squad.map((id) => c.soldiers.find((s) => s.id === id)).filter((s): s is CampaignSoldier => !!s);
-    this.bastion.setLineup(Array.from({ length: max }, (_, i) => (squad[i] ? { template: soldierTemplate(squad[i]!.cls), color: this.playerColor(squad[i]!.owner), appearance: squad[i]!.appearance, gear: this.gearFor(c, squad[i]!) } : null)));
+    const pads = squadPads(c).map((id) => squad.find((s) => s.id === id) ?? null);
+    this.bastion.setLineup(pads.map((s) => (s ? { template: soldierTemplate(s.cls), color: this.playerColor(s.owner), appearance: s.appearance, gear: this.gearFor(c, s) } : null)));
     const myCount = squad.filter((s) => s.owner === this.mySlot).length;
 
     this.viewEl.append(
@@ -2161,14 +2452,31 @@ export class StrategyScreen {
     const partner = this.partner();
     const waiting = partner?.connected && c.players.length > 1 && !c.launchReady[partner.slot];
     const partnerReady = partner?.connected && !ready && c.launchReady[partner.slot];
+    // Who has said «listo», in each one's colour: the partner's yes is seen at a glance.
+    const together = c.players.length > 1 && partner?.connected;
+    const readyBoard = together
+      ? h(
+          'div.ready-board',
+          {},
+          ...[this.mySlot, partner!.slot].map((slot) =>
+            h(
+              `span.ready-mark${c.launchReady[slot] ? '.on' : ''}`,
+              { style: { '--accent': this.playerColor(slot) } },
+              h('b', {}, slot === this.mySlot ? 'Tú' : this.playerName(slot)),
+              c.launchReady[slot] ? ' · LISTO ✓' : ' · eligiendo…',
+            ),
+          ),
+        )
+      : null;
     this.viewEl.append(
       h(
         'div.strat-center-bottom',
         { style: { bottom: '24px' } },
+        readyBoard,
         h(
           `button.x-btn.big${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
           { disabled: !c.squad.length, onclick: () => this.send({ type: 'launch', ready: !ready }) },
-          ready ? 'LISTOS PARA DESPEGAR' : 'LANZAR MISIÓN',
+          ready ? 'LISTOS PARA DESPEGAR' : partnerReady ? `DESPEGAR: ${partner!.name.toUpperCase()} YA ESTÁ LISTO` : 'LANZAR MISIÓN',
         ),
         h('small.x-muted', {}, ready && waiting ? `Esperando a ${partner!.name}` : partnerReady ? `${partner!.name} espera para despegar` : `${squad.length}/${max} soldados`),
         h(
@@ -2181,15 +2489,15 @@ export class StrategyScreen {
     );
 
     const cards = h('div.lineup-cards');
-    const entries = Array.from({ length: max }, (_, i) => squad[i] ?? null);
     // A free place this player could take but has nobody ready to put in: recruit straight into it (#39).
     const spare = roster.some((s) => soldierReady(s) && !c.squad.includes(s.id));
-    const recruitable = !spare && roster.length < soldierCap(c) && bedsFree(c) > 0 && !squadPlace(c, this.mySlot, this.connected()).error;
+    const room = !spare && roster.length < soldierCap(c) && !squadPlace(c, this.mySlot, this.connected()).error;
+    const recruitable = room && bedsFree(c) > 0;
     const cost = recruitCost(c);
-    entries.forEach((s, i) => {
+    pads.forEach((s, i) => {
       const card = s
         ? h(
-            'div.lineup-card',
+            `div.lineup-card${together && c.launchReady[s.owner] ? '.ready' : ''}`,
             { style: { '--accent': this.playerColor(s.owner) } },
             h('b', {}, displayName(s.name, s.nickname)),
             h('small', {}, `${TEMPLATES[soldierTemplate(s.cls)].name} · ${RANKS[s.rank]!.name}`),
@@ -2198,7 +2506,12 @@ export class StrategyScreen {
           )
         : recruitable
           ? this.recruitCard(c, cost)
-          : h('div.lineup-card.empty', { title: spare ? 'Elige un soldado a la izquierda' : '' }, h('b', {}, 'Libre'));
+          : h(
+              'div.lineup-card.empty',
+              { title: spare ? 'Elige un soldado a la izquierda' : '' },
+              h('b', {}, 'Libre'),
+              room && this.padSide(c, i) === this.mySlot ? h('small', {}, 'Para reclutar más soldados, construid un barracón') : null,
+            );
       card.dataset.pad = String(i);
       cards.append(card);
     });
@@ -2224,6 +2537,11 @@ export class StrategyScreen {
         `Reclutar · ${cost}\u00a0₡`,
       ),
     );
+  }
+
+  /** Whose half of the hangar a pad is in. */
+  private padSide(c: CampaignState, pad: number): Slot {
+    return c.players.length < 2 || pad < Math.ceil(squadMax(c) / 2) ? c.players[0]! : c.players[1]!;
   }
 
   /** Keeps the lineup cards under each soldier while the camera moves. */
@@ -2268,8 +2586,22 @@ export class StrategyScreen {
       return { template: soldierTemplate(e.cls), color: this.playerColor(e.owner), status: e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined };
     });
     this.bastion.setLineup(entries);
-    const r = report.reward;
-    const rewards = r?.credits ? `${r.credits} créditos` : '';
+    // The outcome in a line of figures; the details are in each chip's title, the story's page one click away.
+    const credits = (report.reward?.credits ?? 0) + report.salvage;
+    const creditsWhy = [report.reward?.credits ? `Recompensa: ${report.reward.credits}` : '', report.bodies ? `${report.bodies} cuerpos a la morgue del Consejo: ${report.salvage}` : ''].filter(Boolean).join(' · ');
+    const wounded = report.squad.filter((e) => e.status === 'wounded');
+    const fallen = report.squad.filter((e) => e.status === 'dead').length;
+    const tally = h(
+      'p.x-chips.debrief-tally',
+      {},
+      credits ? this.chip(`+${credits} ₡`, 'good', creditsWhy) : null,
+      report.xp ? this.chip(`Bastión +${report.xp} XP`, '', 'Experiencia del Bastión: sube de nivel y desbloquea') : null,
+      report.levelTo > report.levelFrom ? this.chip(`¡Nivel ${report.levelTo}!`, 'good', Array.from({ length: report.levelTo - report.levelFrom }, (_, i) => this.unlocksText(report.levelFrom + i + 1)).join(' ')) : null,
+      report.doomChange ? this.chip(report.doomChange > 0 ? `Reloj +${report.doomChange}` : `Reloj ${report.doomChange}`, report.doomChange > 0 ? 'bad' : 'good', doomChangeText(report.levelTo, report.doomChange)) : null,
+      fallen ? this.chip(`${fallen} ${fallen === 1 ? 'caído' : 'caídos'}`, 'bad') : null,
+      wounded.length ? this.chip(`${wounded.length} ${wounded.length === 1 ? 'herido' : 'heridos'}`, 'warn', this.woundedLine(c, report.squad)?.textContent ?? '') : null,
+    );
+    const story = report.victory && report.story ? STORY[report.story - 1]!.after : '';
     this.viewEl.append(
       h(
         'div.strat-center-top',
@@ -2280,15 +2612,8 @@ export class StrategyScreen {
           h('div.alert-kicker', { className: `alert-kicker ${report.victory ? 'good' : 'bad'}` }, 'INFORME DE MISIÓN'),
           h('h1', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'),
           h('p.x-sub', {}, report.missionName),
-          report.victory && report.story ? h('p.x-text', {}, STORY[report.story - 1]!.after) : null,
-          rewards ? h('p.x-text', {}, `Recompensa: ${rewards}`) : null,
-          report.doomChange ? h(`p.x-text.${report.doomChange > 0 ? 'x-bad' : 'x-good'}`, {}, doomChangeText(report.levelTo, report.doomChange)) : null,
-          report.bodies ? h('p.x-text.x-good', {}, `La morgue del Consejo compra ${report.bodies} cuerpos · ${report.salvage} créditos`) : null,
-          report.xp ? h('p.x-text', {}, `Experiencia del Bastión: +${report.xp}`) : null,
-          this.woundedLine(c, report.squad),
-          report.levelTo > report.levelFrom
-            ? h('p.x-text.x-good', {}, `¡El Bastión sube al nivel ${report.levelTo}! ${Array.from({ length: report.levelTo - report.levelFrom }, (_, i) => this.unlocksText(report.levelFrom + i + 1)).join(' ')}`)
-            : null,
+          tally,
+          story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
         ),
       ),
     );
@@ -2301,7 +2626,7 @@ export class StrategyScreen {
         h('b', {}, displayName(e.name, c.soldiers.find((x) => x.id === e.id)?.nickname)),
         h(`small${e.status === 'dead' ? '.x-bad' : e.status === 'wounded' ? '.x-warn' : ''}`, {}, status),
         h('small', {}, `${e.kills} baja${e.kills === 1 ? '' : 's'}${e.status === 'dead' ? '' : ` · +${e.xpGained} XP`}`),
-        e.promotedTo !== null ? h('small.promo', {}, `▲ ${RANKS[e.promotedTo]!.name.toUpperCase()}`) : null,
+        e.promotedTo !== null ? h('small.promo', {}, `▲ ${RANKS[e.promotedTo]!.name.toUpperCase()}${e.specializedAs ? ` · ${TEMPLATES[e.specializedAs].name.toUpperCase()}` : ''}`) : null,
       );
       card.dataset.pad = String(i);
       cards.append(card);
@@ -2328,6 +2653,11 @@ export class StrategyScreen {
           },
           'CONTINUAR',
         ),
+        // What comes next, the same for both commanders, so nobody wonders what the other was told.
+        (() => {
+          const now = nextSteps(c, this.mySlot)[0];
+          return now ? h('small.debrief-next', {}, h('b', {}, now.tone === 'urgent' ? 'Lo más urgente: ' : 'Después: '), now.label) : null;
+        })(),
       ),
     );
   }

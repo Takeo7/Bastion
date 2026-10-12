@@ -89,7 +89,6 @@ export function apNeeded(u: Unit, ability: AbilityId): number {
 /** Whether using the ability spends every action left (perks can lift that). */
 export function endsTurn(u: Unit, ability: AbilityId): boolean {
   if ((ability === 'grenade' || ability === 'launch') && hasPerk(u, 'salvo')) return false;
-  if (ability === 'pistol' && hasPerk(u, 'quickdraw')) return false;
   return ABILITIES[ability].endsTurn;
 }
 

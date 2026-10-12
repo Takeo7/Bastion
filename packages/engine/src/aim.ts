@@ -59,6 +59,16 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 /** Marca del cazador: aim and crit the marker gets against its prey. */
 const HUNTERS_MARK = 15;
 
+/** Bad luck (XCOM 2's aim assist): aim per miss in a row by a player's soldiers, counting up to two. */
+export const BAD_LUCK_AIM = 10;
+export const BAD_LUCK_MISSES = 2;
+
+/** The bad-luck aim `u`'s next shot gets: only a player's own soldiers, never the aliens. */
+export function badLuckAim(s: GameState, u: Unit): number {
+  if (u.team !== 'xcom' || u.owner === null || u.controlledBy) return 0;
+  return BAD_LUCK_AIM * Math.min(BAD_LUCK_MISSES, s.missStreak?.[u.owner] ?? 0);
+}
+
 /** Melee reach: the eight surrounding tiles. */
 export function adjacent(a: Vec2, b: Vec2): boolean {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) === 1;
@@ -122,6 +132,8 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   const hunted = target.huntedBy === shooter.id;
   if (hunted) mods.push({ label: 'Marca del cazador', value: HUNTERS_MARK });
   if (shooter.blessed) mods.push({ label: 'Canto', value: shooter.blessed });
+  const luck = badLuckAim(s, shooter);
+  if (luck) mods.push({ label: 'Mala racha', value: luck });
   if (!weapon.melee) {
     const range = rangeModifier(weapon.range, dist);
     if (range) mods.push({ label: 'Alcance', value: range });
@@ -184,13 +196,19 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
 
 /** Single d100 roll; crit and graze bands sit inside the hit band. */
 export function rollShot(p: ShotPreview, rng: Rng): ShotResult {
+  return resolveShot(p, rng).result;
+}
+
+/**
+ * The same roll, with the die shown to the players: `roll` runs 1–100 and the
+ * shot hits when it is at most `p.hit` (a crit at most `p.crit`).
+ */
+export function resolveShot(p: ShotPreview, rng: Rng): { result: ShotResult; roll: number } {
   const roll = rng.int(100);
-  if (roll >= p.hit) return 'miss';
   const crit = Math.min(p.crit, p.hit);
-  if (roll < crit) return 'crit';
   const graze = Math.min(p.graze, p.hit - crit);
-  if (roll < crit + graze) return 'graze';
-  return 'hit';
+  const result: ShotResult = roll >= p.hit ? 'miss' : roll < crit ? 'crit' : roll < crit + graze ? 'graze' : 'hit';
+  return { result, roll: roll + 1 };
 }
 
 export function rollDamage(weapon: WeaponDef, result: ShotResult, rng: Rng, bonus = 0, mult = 1, critBonus = 0): number {

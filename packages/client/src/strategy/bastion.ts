@@ -26,7 +26,8 @@ import type { Shot, StageSet } from './stage';
 // around it and the installations the players build next to them, joined by
 // walkways. Buildings are roofless dioramas (low walls, a door to the south),
 // so their insides read from above and the close-ups still work. The hangar
-// with the dropship and its apron stand south of the compound, outside the grid.
+// with La Mula, the Bastion's tandem-rotor transport, and its apron stand south
+// of the compound, outside the grid.
 
 /** Side of a plot, and the strip between two plots where the walkways go. */
 const PLOT = 5;
@@ -41,8 +42,24 @@ const PROP_SCALE = 0.82;
 const COMPOUND = BASE_SIZE * PITCH;
 /** The hangar, south of the compound, its open front facing the camera. */
 const HANGAR = new THREE.Vector3(0, 0, COMPOUND / 2 + 9);
-/** Take-off timing: the squad boards, then the ship lifts. */
+/** Inside of the hangar: width (x), depth (z) and the height of its sliding roof. */
+const HANGAR_W = 13;
+const HANGAR_D = 8;
+const HANGAR_H = 4.3;
+/** La Mula stands at the back of the hangar, the squad lines up at the front with a gap between the two commanders' halves. */
+const SHIP_Z = -1.7;
+const PAD_Z = 1.6;
+const PAD_STEP = 1.22;
+const PAD_SPLIT = 0.7;
+/** The side door's ramp, in the hangar's space: where it meets the floor, and the hatch above it inside the hull. */
+const RAMP_FOOT = new THREE.Vector3(0, 0.15, SHIP_Z + 2.25);
+const HATCH = new THREE.Vector3(0, 0.7, SHIP_Z + 0.3);
+/** Take-off timing: the squad boards one after another, then the ship lifts. */
 const BOARD_SECONDS = 1.1;
+const BOARD_STAGGER = 0.05;
+/** The ramp's turn about its hinge: down to the floor, and up against the door. */
+const RAMP_DOWN = Math.asin(0.55 / 1.32);
+const RAMP_UP = -Math.PI / 2 + 0.04;
 export const LAUNCH_SECONDS = 3.4;
 const LINEUP = 8;
 
@@ -677,11 +694,12 @@ const TRIM: Record<FixedBuildingId, number> = { command: 0xb3261e, research: 0x2
 /**
  * Voxel art (M5): parts that tick() animates by transform or visibility are
  * voxelized one by one and keep their userData; the ship's engine glows (their
- * material is animated), hotspots and the roof doors stay as they are.
+ * material is animated), its rotors' blur, hotspots and the roof doors stay as
+ * they are.
  */
 const VOXEL_SET: StaticVoxelOptions = {
   animated: ['spinY', 'spinX', 'swing', 'pulse', 'blink', 'showcase'],
-  keep: ['engine', 'hotspot', 'roofSide'],
+  keep: ['engine', 'hotspot', 'roofSide', 'blur'],
 };
 
 /** Plot contents are voxelized once per kind and then cloned, so rebuilding the base stays cheap. */
@@ -793,10 +811,12 @@ export class BastionSet implements StageSet {
     return { pos: target.clone().add(new THREE.Vector3(0, 9.6, 6.4)), target, fov: 40 };
   }
 
-  /** The squad lined up in the hangar, in front of the dropship. */
+  /** The squad lined up in the hangar, La Mula behind them; far enough back that a full lineup fits a narrow screen too. */
   hangar(): Shot {
-    const target = HANGAR.clone().add(new THREE.Vector3(0, 1.05, 0.9));
-    return { pos: HANGAR.clone().add(new THREE.Vector3(0, 1.9, 10.2)), target, fov: 42 };
+    const aspect = Math.max(1, window.innerWidth / Math.max(1, window.innerHeight));
+    const back = Math.max(9.2, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * aspect));
+    const target = HANGAR.clone().add(new THREE.Vector3(0, 1.5, 0.3));
+    return { pos: HANGAR.clone().add(new THREE.Vector3(0, 2.75, PAD_Z + back)), target, fov: 42 };
   }
 
   /** The grid of plots, closer than the overview. */
@@ -805,10 +825,10 @@ export class BastionSet implements StageSet {
     return { pos: new THREE.Vector3(0, 46, 34), target, fov: 40 };
   }
 
-  /** Low and wide on the hangar, looking up at the roof the dropship leaves through. */
+  /** Low and wide on the hangar, looking up at the roof La Mula leaves through. */
   takeoff(): Shot {
-    const target = HANGAR.clone().add(new THREE.Vector3(0, 2.8, -1.2));
-    return { pos: HANGAR.clone().add(new THREE.Vector3(2.2, 0.8, 8.6)), target, fov: 56 };
+    const target = HANGAR.clone().add(new THREE.Vector3(0, 3.2, SHIP_Z));
+    return { pos: HANGAR.clone().add(new THREE.Vector3(2.4, 0.9, 9.4)), target, fov: 56 };
   }
 
   /** The soldier on the barracks pedestal, seen through its door. */
@@ -875,36 +895,46 @@ export class BastionSet implements StageSet {
     this.scene.add(box(4, 0.1, HANGAR.z - edge, mat(0x4a4e52, { rough: 0.9 }), 0, -0.18, edge + (HANGAR.z - edge) / 2));
     this.scene.add(box(18, 0.12, 9, mat(0x55595d, { rough: 0.9 }), HANGAR.x, -0.18, HANGAR.z + 1));
 
-    // The hangar and the dropship.
+    // The hangar: a shed open to the south, its roof in two halves that slide apart for take-off.
     const hangar = new THREE.Group();
-    hangar.add(box(12, 0.15, 6, mat(0x56606a), 0, 0, 0));
-    hangar.add(box(12, 3.4, 0.2, mat(0x4a525c), 0, 0, -3));
-    for (const x of [-6, 6]) hangar.add(box(0.2, 3.4, 6, mat(0x6d7782), x, 0, 0));
-    // Roof doors: they slide apart for take-off.
+    const hw = HANGAR_W / 2;
+    const hd = HANGAR_D / 2;
+    hangar.add(box(HANGAR_W + 0.4, 0.15, HANGAR_D, mat(0x56606a), 0, 0, 0));
+    hangar.add(box(HANGAR_W + 0.4, HANGAR_H, 0.2, mat(0x5d6670), 0, 0, -hd));
+    for (const x of [-1, 1]) hangar.add(box(0.2, HANGAR_H, HANGAR_D, mat(0x6d7782), x * (hw + 0.1), 0, 0));
+    // Ribs on the back wall and a lit band under the eaves, so the ship stands out against it.
+    for (const x of [-4.8, -1.6, 1.6, 4.8]) hangar.add(box(0.3, HANGAR_H, 0.16, mat(0x4a525c), x, 0, -hd + 0.18));
+    hangar.add(box(HANGAR_W - 0.6, 0.12, 0.06, mat(0x2a2a10, { emissive: 0xfff0b0, intensity: 1.1 }), 0, HANGAR_H - 0.55, -hd + 0.13));
     for (const side of [-1, 1]) {
-      const door = box(6, 0.2, 6, mat(0x6d7782, { opacity: 0.25 }), side * 3, 3.4, 0);
+      const door = box(hw, 0.2, HANGAR_D, mat(0x6d7782, { opacity: 0.25 }), (side * hw) / 2, HANGAR_H, 0);
       door.userData.roofSide = side;
       this.roofDoors.push(door);
       hangar.add(door);
     }
     for (const x of [-4, 0, 4]) {
-      const lamp = new THREE.SpotLight(0xdfefff, 30, 12, 0.7, 0.5, 1.5);
-      lamp.position.set(x, 3.2, 1);
-      lamp.target.position.set(x, 0, 1);
+      const lamp = new THREE.SpotLight(0xdfefff, 30, 13, 0.75, 0.5, 1.5);
+      lamp.position.set(x, HANGAR_H - 0.3, 0.6);
+      lamp.target.position.set(x, 0, 0.2);
       hangar.add(lamp, lamp.target);
     }
-    // Hazard stripes along the edge of the launch pad.
-    hangar.add(box(11.6, 0.02, 0.18, mat(0x2a2a10, { emissive: 0xffc93a, intensity: 0.8 }), 0, 0.16, 2.7));
+    // Floor paint: the ship's parking box and the hazard stripe along the open front.
+    const paint = mat(0x2a2a10, { emissive: 0xffc93a, intensity: 0.5 });
+    for (const z of [-1, 1]) hangar.add(box(10.2, 0.02, 0.1, paint, 0, 0.15, SHIP_Z + z * 1.6));
+    for (const x of [-1, 1]) hangar.add(box(0.1, 0.02, 3.2, paint, x * 5.1, 0.15, SHIP_Z));
+    hangar.add(box(HANGAR_W - 0.4, 0.02, 0.18, mat(0x2a2a10, { emissive: 0xffc93a, intensity: 0.8 }), 0, 0.16, hd - 0.3));
+    // Stores in the back corners, clear of the ship and the lineup: fuel drums, crates, a tool trolley.
+    for (const [x, z] of [[-5.9, -3.4], [-5.3, -3.5], [-5.9, -2.8]] as const) hangar.add(cylinder(0.28, 0.85, mat(0x4f5d3c, { metal: 0.4 }), x, 0.15, z));
+    hangar.add(box(0.9, 0.7, 0.8, mat(0x8f6c45), 5.7, 0.15, -3.3), box(0.7, 0.55, 0.6, mat(0x8f6c45), 5.75, 0.85, -3.3), box(0.8, 0.6, 0.7, mat(0x8f6c45), 5.8, 0.15, -2.4));
     this.buildShip();
-    this.ship.position.set(0, 0.15, -1.2);
+    this.ship.position.set(0, 0.15, SHIP_Z);
     hangar.add(this.ship);
     hangar.position.copy(HANGAR);
-    const hangarHit = new THREE.Mesh(new THREE.BoxGeometry(12, 3.4, 6), new THREE.MeshBasicMaterial({ visible: false }));
-    hangarHit.position.copy(HANGAR).add(new THREE.Vector3(0, 1.7, 0));
+    const hangarHit = new THREE.Mesh(new THREE.BoxGeometry(HANGAR_W, HANGAR_H, HANGAR_D), new THREE.MeshBasicMaterial({ visible: false }));
+    hangarHit.position.copy(HANGAR).add(new THREE.Vector3(0, HANGAR_H / 2, 0));
     hangarHit.userData.hotspot = 'hangar';
     this.hotspots.push(hangarHit);
     const hangarLabel = label('Hangar', 'room-label fixed');
-    hangarLabel.position.copy(HANGAR).add(new THREE.Vector3(0, 3.9, 3));
+    hangarLabel.position.copy(HANGAR).add(new THREE.Vector3(0, HANGAR_H + 0.5, hd));
     this.scene.add(hangar, hangarHit, hangarLabel);
 
     // The barracks' pedestal for the soldier being inspected (the room around it comes with the plots).
@@ -935,20 +965,100 @@ export class BastionSet implements StageSet {
     return g;
   }
 
+  /**
+   * La Mula, the Bastion's transport (LORE: a propeller transport with
+   * mechanical controls): a boxy tandem-rotor in olive drab, nose to the west,
+   * its side door and ramp facing the squad. The rotors and the ramp are
+   * groups of their own, so they keep moving once the ship is voxelized.
+   */
   private buildShip(): void {
-    const hull = mat(0x4a5560, { metal: 0.5, rough: 0.45 });
-    this.ship.add(box(5.2, 1.1, 1.6, hull, 0, 0.5, 0));
-    this.ship.add(box(1.4, 0.4, 5.4, mat(0x3a444e, { metal: 0.5 }), 0.5, 0.9, 0));
-    this.ship.add(box(0.8, 0.45, 1.0, mat(0x0a1a2a, { emissive: 0x3fb8ff, intensity: 1.3 }), -2.6, 0.9, 0));
-    for (const z of [-2.4, 2.4]) {
-      const engine = cylinder(0.32, 0.9, mat(0x2a3036, { metal: 0.6 }), 0.5, 0.7, z);
+    const s = this.ship;
+    const olive = mat(0x6f7a55, { metal: 0.3, rough: 0.6 });
+    const dark = mat(0x4c553a, { metal: 0.3, rough: 0.6 });
+    const glass = mat(0x14232b, { metal: 0.6, rough: 0.2 });
+    const steel = mat(0x2a2e33, { metal: 0.6 });
+    const yellow = mat(0xffc93a, { rough: 0.5 });
+    // Fuselage (cabin floor at 0.55), a pale belly, and fuel sponsons along the sides.
+    s.add(box(7.2, 1.75, 1.9, olive, 0, 0.45, 0));
+    s.add(box(6.9, 0.14, 1.7, mat(0x8a8f80, { metal: 0.3 }), 0, 0.34, 0));
+    for (const z of [-1, 1]) s.add(box(3.2, 0.55, 0.3, dark, 0.9, 0.5, z * 1.1));
+    // The nose: a lower cockpit with its windscreen, and a row of cabin portholes.
+    s.add(box(1.5, 1.4, 1.7, olive, -4.3, 0.55, 0));
+    s.add(box(0.06, 0.55, 1.4, glass, -5.06, 1.2, 0));
+    for (const z of [-1, 1]) {
+      s.add(box(0.9, 0.45, 0.06, glass, -4.3, 1.25, z * 0.86));
+      for (const x of [-2.6, -1.6, 1.4, 2.3]) s.add(box(0.4, 0.34, 0.06, glass, x, 1.5, z * 0.96));
+    }
+    // The side door, framed in yellow so it reads where the squad boards.
+    s.add(box(1.25, 1.35, 0.06, mat(0x1d2124), 0, 0.55, 0.96));
+    s.add(box(1.45, 0.09, 0.08, yellow, 0, 1.9, 0.98));
+    for (const x of [-1, 1]) s.add(box(0.09, 1.35, 0.08, yellow, x * 0.68, 0.55, 0.98));
+    // Tail: the rear pylon lifts the aft rotor above the forward one, with an engine on each flank.
+    s.add(box(1.9, 1.0, 1.2, olive, 2.9, 2.2, 0));
+    s.add(box(1.0, 1.45, 1.6, olive, 4.0, 0.7, 0));
+    s.add(box(0.3, 1.77, 1.93, yellow, 3.35, 0.44, 0));
+    s.add(box(1.1, 0.45, 0.9, olive, -3.3, 2.2, 0));
+    s.add(cylinder(0.1, 0.4, steel, -3.3, 2.6, 0), cylinder(0.1, 0.4, steel, 2.9, 3.15, 0));
+    for (const z of [-1, 1]) {
+      const engine = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 1.6, 12), dark);
       engine.rotation.z = Math.PI / 2;
-      const glow = new THREE.Mesh(new THREE.CircleGeometry(0.26, 16), mat(0x0a1a2a, { emissive: 0x6ad8ff, intensity: 0.6 }));
-      glow.position.set(1.0, 1.15, z);
+      engine.position.set(2.75, 2.55, z * 0.85);
+      engine.castShadow = true;
+      const glow = new THREE.Mesh(new THREE.CircleGeometry(0.24, 14), mat(0x2a1000, { emissive: 0xff9a3a, intensity: 0.2 }));
+      glow.position.set(3.57, 2.55, z * 0.85);
       glow.rotation.y = Math.PI / 2;
       glow.userData.engine = true;
-      this.ship.add(engine, glow);
+      s.add(engine, glow);
     }
+    // Landing gear.
+    for (const x of [-3.4, 2.6]) {
+      for (const z of [-0.75, 0.75]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.16, 12), mat(0x1e2022));
+        wheel.rotation.x = Math.PI / 2;
+        wheel.position.set(x, 0.22, z);
+        s.add(wheel, box(0.12, 0.25, 0.12, steel, x, 0.3, z * 0.85));
+      }
+    }
+    const tail = box(0.14, 0.14, 0.14, mat(0x2a0a0a, { emissive: 0xff3a3a, intensity: 2.5 }), 4.52, 1.9, 0);
+    tail.userData.blink = 1;
+    s.add(tail);
+    // Two three-bladed rotors, still while parked; they spin up for take-off.
+    for (const [x, y, dir] of [
+      [-3.3, 3.0, 1],
+      [2.9, 3.55, -1],
+    ] as const) {
+      const rotor = new THREE.Group();
+      rotor.position.set(x, y, 0);
+      rotor.add(cylinder(0.24, 0.16, steel, 0, -0.04, 0));
+      for (let k = 0; k < 3; k++) {
+        const a = (dir > 0 ? Math.PI : 0) + (k * Math.PI * 2) / 3;
+        for (const [len, at, m] of [
+          [1.75, 0.95, steel],
+          [0.3, 1.97, yellow],
+        ] as const) {
+          const blade = box(len, 0.05, 0.24, m, 0, 0.02, 0);
+          blade.rotation.y = a;
+          blade.position.x = Math.cos(a) * at;
+          blade.position.z = -Math.sin(a) * at;
+          rotor.add(blade);
+        }
+      }
+      // The blur of the blades at speed, faded in as they spin up.
+      const blur = new THREE.Mesh(new THREE.CircleGeometry(2.1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x1d2124, transparent: true, opacity: 0, depthWrite: false }));
+      blur.position.y = 0.05;
+      blur.userData.blur = true;
+      rotor.add(blur);
+      rotor.userData.rotor = dir;
+      s.add(rotor);
+    }
+    // The ramp, hinged at the foot of the door: down while parked, up once the squad is aboard.
+    const ramp = new THREE.Group();
+    ramp.position.set(0, 0.55, 0.96);
+    ramp.add(box(1.2, 0.07, 1.32, dark, 0, -0.07, 0.66));
+    for (const x of [-0.55, 0.55]) ramp.add(box(0.06, 0.1, 1.3, yellow, x, -0.02, 0.66));
+    ramp.rotation.x = RAMP_DOWN;
+    ramp.userData.ramp = true;
+    s.add(ramp);
   }
 
   // ------------------------------------------------------------ update
@@ -1093,7 +1203,7 @@ export class BastionSet implements StageSet {
     if (!room) return;
     const tag = label(`${name} está aquí`, 'partner-tag');
     tag.element.style.setProperty('--accent', color);
-    const pos = room === 'hangar' ? HANGAR.clone().add(new THREE.Vector3(0, 4.4, 3)) : this.roomCentre(room).add(new THREE.Vector3(0, WALL_H + 1.6, 0));
+    const pos = room === 'hangar' ? HANGAR.clone().add(new THREE.Vector3(0, HANGAR_H + 1.0, HANGAR_D / 2)) : this.roomCentre(room).add(new THREE.Vector3(0, WALL_H + 1.6, 0));
     tag.position.copy(pos);
     this.partnerMarker.add(tag);
   }
@@ -1106,6 +1216,17 @@ export class BastionSet implements StageSet {
     this.lineup.clear();
     this.rigs.length = 0;
     const shown = entries.slice(0, LINEUP);
+    // A lane painted from the ship's ramp to the open front, between the two commanders' halves.
+    if (shown.length > 1) {
+      const half = Math.ceil(shown.length / 2);
+      const x = (this.padPosition(half - 1, shown.length).x + this.padPosition(half, shown.length).x) / 2;
+      const paint = mat(0x2a2a10, { emissive: 0xffc93a, intensity: 0.7 });
+      for (let k = 0; k < 6; k++) {
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.32), paint);
+        dash.position.set(x, HANGAR.y + 0.16, HANGAR.z + RAMP_FOOT.z + 0.35 + k * 0.55);
+        this.lineup.add(dash);
+      }
+    }
     shown.forEach((entry, i) => {
       const at = this.padPosition(i, shown.length);
       const pad = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 28).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: entry ? new THREE.Color(entry.color) : 0x3a4652, transparent: true, opacity: 0.8 }));
@@ -1131,9 +1252,14 @@ export class BastionSet implements StageSet {
     });
   }
 
-  /** Where soldier `i` of a lineup of `count` stands (on the launch pad, centred). */
+  /**
+   * Where soldier `i` of a lineup of `count` stands: in a row across the front
+   * of the hangar, clear of the ship, split in two halves (the first
+   * ceil(count / 2) pads and the rest, one per commander) with a gap between.
+   */
   padPosition(i: number, count: number): THREE.Vector3 {
-    return HANGAR.clone().add(new THREE.Vector3((i - (count - 1) / 2) * 1.3, 0.15, 1.2));
+    const split = count > 1 ? (i < Math.ceil(count / 2) ? -PAD_SPLIT / 2 : PAD_SPLIT / 2) : 0;
+    return HANGAR.clone().add(new THREE.Vector3((i - (count - 1) / 2) * PAD_STEP + split, 0.15, PAD_Z));
   }
 
   /** The soldier being inspected in the barracks. */
@@ -1170,12 +1296,17 @@ export class BastionSet implements StageSet {
     this.onPick(hot);
   }
 
+  /** Told when the pointer moves onto or off a plot (the facilities list lights the same one). */
+  onHover: ((hot: string | null) => void) | null = null;
+
   hover(hot: string | null): void {
     const onPlot = !!hot && hot !== 'hangar';
     this.hoverFrame.visible = onPlot;
     if (onPlot) this.hoverFrame.position.copy(this.roomCentre(hot!)).add(new THREE.Vector3(0, 0.1, 0));
+    const was = this.hovered;
     this.hovered = onPlot ? hot : null;
     this.markLabels();
+    if (this.hovered !== was) this.onHover?.(this.hovered);
   }
 
   /** Terrain and free plots name themselves only when pointed at or selected (49 labels were noise). */
@@ -1198,15 +1329,22 @@ export class BastionSet implements StageSet {
     });
     (this.frame.material as THREE.LineBasicMaterial).color.setHSL(0.55, 1, 0.55 + Math.sin(time * 5) * 0.15);
     (this.hoverFrame.material as THREE.LineBasicMaterial).opacity = 0.5 + Math.sin(time * 6) * 0.2;
-    // Take-off: the squad walks into the ship, the engines flare, and it leaves through the roof.
+    // Take-off: the rotors spin up and the squad runs up the ramp in two files, one from each half.
     const since = this.launching ? (performance.now() - this.launching) / 1000 : -1;
+    const boarded = BOARD_SECONDS + BOARD_STAGGER * Math.max(0, this.rigs.length - 1);
     if (since >= 0) {
-      const door = HANGAR.clone().add(new THREE.Vector3(0, 0.15, -0.6));
       this.rigs.forEach((rig, i) => {
-        const k = Math.min(1, Math.max(0, (since - i * 0.08) / BOARD_SECONDS));
+        const k = THREE.MathUtils.clamp((since - i * BOARD_STAGGER) / BOARD_SECONDS, 0, 1);
         const from = rig.root.userData.from as THREE.Vector3;
-        rig.root.position.lerpVectors(from, door, k * k);
-        if (k > 0) rig.root.userData.yaw = Math.atan2(door.x - from.x, door.z - from.z);
+        const lane = THREE.MathUtils.clamp(from.x - HANGAR.x, -1, 1) * 0.28;
+        const foot = HANGAR.clone().add(RAMP_FOOT).add(new THREE.Vector3(lane, 0, 0));
+        const hatch = HANGAR.clone().add(HATCH).add(new THREE.Vector3(lane * 0.5, 0, 0));
+        // Three quarters of the time to reach the foot of the ramp, the rest to climb it into the hull.
+        const climb = Math.max(0, (k - 0.75) / 0.25);
+        if (climb > 0) rig.root.position.lerpVectors(foot, hatch, climb);
+        else rig.root.position.lerpVectors(from, foot, k / 0.75);
+        const [a, b] = climb > 0 ? [foot, hatch] : [from, foot];
+        if (k > 0) rig.root.userData.yaw = Math.atan2(b.x - a.x, b.z - a.z);
         rig.root.userData.running = k > 0 && k < 1 ? 1 : 0;
         rig.root.visible = k < 1;
       });
@@ -1222,13 +1360,20 @@ export class BastionSet implements StageSet {
       }
     }
     if (this.showcaseRig && isFigure(this.showcaseRig)) this.showcaseRig.applyPose(IDLE_POSE, time);
+    // The ramp closes once all are aboard, the roof slides open and La Mula lifts away, nose down.
+    const spin = since >= 0 ? 26 * Math.min(1, since / 1.5) ** 2 : 0;
+    const closing = since >= 0 ? easeInOut(THREE.MathUtils.clamp((since - boarded - 0.05) / 0.4, 0, 1)) : 0;
     this.ship.traverse((o) => {
-      if (o.userData.engine) ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity = since >= 0 ? 3 + Math.sin(time * 40) : 0.6;
+      const d = o.userData;
+      if (d.engine) ((o as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveIntensity = since >= 0 ? 2.2 + Math.sin(time * 40) * 0.6 : 0.15;
+      if (d.rotor) o.rotation.y += dt * spin * d.rotor;
+      if (d.blur) ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.32 * Math.min(1, spin / 18);
+      if (d.ramp) o.rotation.x = RAMP_DOWN + (RAMP_UP - RAMP_DOWN) * closing;
     });
     const open = since >= 0 ? Math.min(1, Math.max(0, (since - 0.4) / 1.2)) : 0;
-    for (const door of this.roofDoors) door.position.x = door.userData.roofSide * (3 + easeInOut(open) * 5.4);
-    const lift = since - BOARD_SECONDS - 0.3;
-    this.ship.position.y = 0.15 + (lift > 0 ? Math.pow(lift, 2) * 3.2 : Math.sin(time * 1.2) * 0.04);
-    this.ship.rotation.x = lift > 0 ? Math.min(0.12, lift * 0.1) : 0;
+    for (const door of this.roofDoors) door.position.x = door.userData.roofSide * (HANGAR_W / 4 + easeInOut(open) * (HANGAR_W / 2 + 0.6));
+    const lift = since - Math.max(BOARD_SECONDS + 0.3, boarded + 0.12);
+    this.ship.position.y = 0.15 + (lift > 0 ? lift ** 2 * 4.2 : 0);
+    this.ship.rotation.z = lift > 0 ? Math.min(0.1, lift * 0.08) : 0;
   }
 }

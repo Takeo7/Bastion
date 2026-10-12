@@ -47,6 +47,31 @@ const DIRS: [number, number, number][] = [
   [0, 0, -1],
 ];
 
+/**
+ * Per face direction: the normal, the two axes spanning the face, and its two
+ * triangles for either diagonal, wound by the face direction.
+ */
+const FACES = DIRS.map(([dx, dy, dz]) => {
+  const axis = dx ? 0 : dy ? 1 : 2;
+  const wind = (q: number[]) => (dx + dy + dz > 0 ? q : [q[0]!, q[2]!, q[1]!, q[3]!, q[5]!, q[4]!]);
+  return {
+    dx,
+    dy,
+    dz,
+    u: axis === 0 ? [0, 1, 0] : axis === 1 ? [0, 0, 1] : [1, 0, 0],
+    v: axis === 0 ? [0, 0, 1] : axis === 1 ? [1, 0, 0] : [0, 1, 0],
+    quads: [wind([0, 1, 2, 0, 2, 3]), wind([1, 2, 3, 1, 3, 0])],
+  };
+});
+
+/** A face's corners along its (u, v) axes, in vertex order. */
+const CORNERS = [
+  [0, 0],
+  [1, 0],
+  [1, 1],
+  [0, 1],
+] as const;
+
 const AO_LEVELS = [0.5, 0.68, 0.84, 1];
 
 function colourOf(material: THREE.Material | THREE.Material[]): Colour {
@@ -159,21 +184,27 @@ export function voxelize(sources: VoxelSource[], options: number | VoxelOptions)
   }
 
   // 2. Flood the outside from the padded border; whatever it cannot reach is inside.
-  const queue: number[] = [];
-  const push = (x: number, y: number, z: number) => {
-    if (x < 0 || y < 0 || z < 0 || x >= nx || y >= ny || z >= nz) return;
-    const i = at(x, y, z);
-    if (state[i] !== EMPTY) return;
-    state[i] = OUTSIDE;
-    queue.push(i);
-  };
-  push(0, 0, 0);
-  while (queue.length) {
-    const i = queue.pop()!;
-    const x = i % nx;
-    const y = Math.floor(i / nx) % ny;
-    const z = Math.floor(i / (nx * ny));
-    for (const [dx, dy, dz] of DIRS) push(x + dx, y + dy, z + dz);
+  // A flat loop over a typed-array stack with integer maths: the plain array,
+  // the call per neighbour and the float divisions this used to have made it
+  // 30 times slower in Safari than in Chrome (seconds per base).
+  const layer = nx * ny;
+  const stack = new Int32Array(state.length); // each cell is pushed at most once
+  let top = 0;
+  if (state[0] === EMPTY) {
+    state[0] = OUTSIDE;
+    stack[top++] = 0;
+  }
+  while (top > 0) {
+    const i = stack[--top]!;
+    const z = (i / layer) | 0;
+    const y = ((i - z * layer) / nx) | 0;
+    const x = i - z * layer - y * nx;
+    if (x < nx - 1 && state[i + 1] === EMPTY) (state[i + 1] = OUTSIDE), (stack[top++] = i + 1);
+    if (x > 0 && state[i - 1] === EMPTY) (state[i - 1] = OUTSIDE), (stack[top++] = i - 1);
+    if (y < ny - 1 && state[i + nx] === EMPTY) (state[i + nx] = OUTSIDE), (stack[top++] = i + nx);
+    if (y > 0 && state[i - nx] === EMPTY) (state[i - nx] = OUTSIDE), (stack[top++] = i - nx);
+    if (z < nz - 1 && state[i + layer] === EMPTY) (state[i + layer] = OUTSIDE), (stack[top++] = i + layer);
+    if (z > 0 && state[i - layer] === EMPTY) (state[i - layer] = OUTSIDE), (stack[top++] = i - layer);
   }
   return meshGrid({ nx, ny, nz, min, state, colour, palette }, opts);
 }
@@ -201,7 +232,8 @@ function meshGrid(grid: Grid, opts: VoxelOptions): THREE.Group {
   const at = (x: number, y: number, z: number) => (z * ny + y) * nx + x;
   const solid = (x: number, y: number, z: number) => x >= 0 && y >= 0 && z >= 0 && x < nx && y < ny && z < nz && state[at(x, y, z)] !== OUTSIDE;
 
-  const size = [sx, sy, sz];
+  /** The current face's corner AO levels. */
+  const ao = [3, 3, 3, 3];
   const buffers = {
     lit: {
       pos: [] as number[],
@@ -229,25 +261,23 @@ function meshGrid(grid: Grid, opts: VoxelOptions): THREE.Group {
         if (opts.studs && !solid(x, y + 1, z)) {
           buf.studs.push((x + min[0]! + 0.5) * sx, (y + min[1]! + 1) * sy, (z + min[2]! + 0.5) * sz, col.r * shade, col.g * shade, col.b * shade);
         }
-        for (const [dx, dy, dz] of DIRS) {
-          if (solid(x + dx, y + dy, z + dz)) continue;
-          const axis = dx ? 0 : dy ? 1 : 2;
-          const sign = dx + dy + dz;
-          const u: [number, number, number] = axis === 0 ? [0, 1, 0] : axis === 1 ? [0, 0, 1] : [1, 0, 0];
-          const v: [number, number, number] = axis === 0 ? [0, 0, 1] : axis === 1 ? [1, 0, 0] : [0, 1, 0];
+        // Plain loops over the precomputed FACES and CORNERS: the small arrays
+        // this used to build per face cost Safari several seconds per base.
+        for (let d = 0; d < 6; d++) {
+          const { dx, dy, dz, u, v, quads } = FACES[d]!;
+          const ox = x + dx;
+          const oy = y + dy;
+          const oz = z + dz;
+          if (solid(ox, oy, oz)) continue;
           const base = buf.pos.length / 3;
-          const ao: number[] = [];
-          for (const [cu, cv] of [
-            [0, 0],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-          ] as const) {
+          const cx = x + min[0]! + (dx > 0 ? 1 : 0);
+          const cy = y + min[1]! + (dy > 0 ? 1 : 0);
+          const cz = z + min[2]! + (dz > 0 ? 1 : 0);
+          for (let c = 0; c < 4; c++) {
+            const cu = CORNERS[c]![0];
+            const cv = CORNERS[c]![1];
             const su = cu ? 1 : -1;
             const sv = cv ? 1 : -1;
-            const ox = x + dx;
-            const oy = y + dy;
-            const oz = z + dz;
             let level = 3;
             if (useAo) {
               const s1 = solid(ox + u[0] * su, oy + u[1] * su, oz + u[2] * su);
@@ -255,22 +285,15 @@ function meshGrid(grid: Grid, opts: VoxelOptions): THREE.Group {
               const cr = solid(ox + u[0] * su + v[0] * sv, oy + u[1] * su + v[1] * sv, oz + u[2] * su + v[2] * sv);
               level = s1 && s2 ? 0 : 3 - (Number(s1) + Number(s2) + Number(cr));
             }
-            ao.push(level);
-            const corner = [
-              x + min[0]! + (dx > 0 ? 1 : 0) + u[0] * cu + v[0] * cv,
-              y + min[1]! + (dy > 0 ? 1 : 0) + u[1] * cu + v[1] * cv,
-              z + min[2]! + (dz > 0 ? 1 : 0) + u[2] * cu + v[2] * cv,
-            ];
-            buf.pos.push(corner[0]! * size[0]!, corner[1]! * size[1]!, corner[2]! * size[2]!);
+            ao[c] = level;
+            buf.pos.push((cx + u[0] * cu + v[0] * cv) * sx, (cy + u[1] * cu + v[1] * cv) * sy, (cz + u[2] * cu + v[2] * cv) * sz);
             buf.nrm.push(dx, dy, dz);
             const k = col.glow ? 1 : shade * AO_LEVELS[level]!;
             buf.col.push(col.r * k, col.g * k, col.b * k);
           }
-          // Winding depends on the face direction; flip the diagonal to keep AO smooth.
-          const flip = ao[0]! + ao[2]! < ao[1]! + ao[3]!;
-          const quad = flip ? [1, 2, 3, 1, 3, 0] : [0, 1, 2, 0, 2, 3];
-          const ordered = sign > 0 ? quad : [quad[0]!, quad[2]!, quad[1]!, quad[3]!, quad[5]!, quad[4]!];
-          for (const q of ordered) buf.idx.push(base + q);
+          // Flip the diagonal to keep AO smooth.
+          const quad = quads[ao[0]! + ao[2]! < ao[1]! + ao[3]! ? 1 : 0]!;
+          for (let q = 0; q < 6; q++) buf.idx.push(base + quad[q]!);
         }
       }
     }

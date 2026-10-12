@@ -1,16 +1,18 @@
 // Soldier growth: five aptitudes the player raises at each promotion, and one
 // talent tree shared by everyone, «la Rosa». Its centre is open to all; each of
 // its four axes leads to a class (three branches plus the Canto of Velmar).
-// A recruit has no class: the first axis that gets two points in its ordinary
-// branches makes the soldier that class for good (until a retrain), with its
-// weapons, its own abilities and its two aptitudes able to reach 10. A second
-// axis is allowed up to its third row.
+// Every soldier starts as a recruit with no class and may learn from two axes,
+// up to their third row. On reaching Capitán (SPECIALIZE_RANK) the soldier
+// becomes the class of the axis it was taught most (aptitudes break ties), for
+// good until a retrain: its weapons, its own abilities, the last two rows of
+// its axis and its two aptitudes able to reach 10. Talents that need a class's
+// equipment can be learnt earlier, but sleep until the soldier carries it.
 //
 // Every promotion gives ATTR_POINTS_PER_RANK aptitude points and
 // TALENT_POINTS_PER_RANK talent points. Free points are never stored: they're
 // what the rank allows minus what has been spent, so a retrain only has to
 // reset the choices.
-import { addMods, ITEMS, TEMPLATES, ZERO_MODS } from './content';
+import { addMods, ITEMS, RANKS, TEMPLATES, ZERO_MODS } from './content';
 import type { Rng } from './rng';
 import type { AbilityId, ChargeId, ClassId, ItemId, PerkId, TemplateId, UnitMods } from './types';
 
@@ -108,7 +110,10 @@ export const SONG_GATES = [0, 1, 2, 3, 4] as const;
 export const SONG_ROWS_OPEN = [0, 2, 4, 5] as const;
 /** A secondary axis stops above this row; the last two are the main axis's. */
 export const SECOND_AXIS_ROWS = 3;
-/** Points in an axis's ordinary branches that turn a recruit into that class. */
+/** Rank that turns a recruit into the class it leans to (Capitán). */
+export const SPECIALIZE_RANK = 5;
+export const SPECIALIZE_RANK_NAME = RANKS[SPECIALIZE_RANK]!.name;
+/** A retrained soldier past SPECIALIZE_RANK specialises again with this many points in an axis's ordinary branches. */
 export const SPECIALIZE_POINTS = 2;
 
 export interface BranchDef {
@@ -178,7 +183,7 @@ export const SPECIALIZE_TEXT: Record<ClassId, string> = {
   specialist: '{name} se especializa como Especialista. El Grillo ya tiene dueño.',
 };
 
-export const RECRUIT_DESCRIPTION = 'Todavía sin clase. Lleva fusil y aprende lo que le enseñen. Se especializa al gastar 2 puntos en un eje de la Rosa.';
+export const RECRUIT_DESCRIPTION = 'Todavía sin clase. Lleva fusil y aprende lo que le enseñen. Al llegar a Capitán se especializa en el eje de la Rosa en que más haya aprendido.';
 
 /** Combat template a soldier fights with. */
 export function soldierTemplate(cls: ClassId | null): TemplateId {
@@ -314,7 +319,7 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   serenity: t('sharpshooter', 0, 4, 'serenity', 1, 'Serenidad', 'Tus disparos de fusil nunca se quedan en roce y los críticos hacen +2 de daño.', { mods: { critDamage: 2 }, req: ['tem', 7], kit: 'rifle' }),
   // Sharpshooter · Pistolero
   gunslinger: t('sharpshooter', 1, 0, 'gunslinger', 3, 'Pistolero', '+5 de puntería con la pistola por nivel.', { mods: { pistolAim: 5 }, kit: 'pistol' }),
-  quickdraw: t('sharpshooter', 1, 0, 'quickdraw', 1, 'Desenfunde', 'Disparar la pistola ya no termina el turno.', { kit: 'pistol' }),
+  quickdraw: t('sharpshooter', 1, 0, 'quickdraw', 1, 'Desenfunde', '+10 de puntería y +10 de crítico con la pistola.', { mods: { pistolAim: 10, pistolCrit: 10 }, kit: 'pistol' }),
   lightningHands: t('sharpshooter', 1, 1, 'lightningHands', 1, 'Manos rápidas', 'Acción gratuita: un disparo de pistola (enfriamiento 4).', { ability: 'lightningHands', kit: 'pistol' }),
   magnum: t('sharpshooter', 1, 1, 'magnum', 2, 'Calibre .45', '+1 de daño con la pistola por nivel.', { mods: { pistolDamage: 1 }, kit: 'pistol' }),
   dancer: t('sharpshooter', 1, 2, 'dancer', 2, 'Bailarín', '+5 de defensa por nivel.', { mods: { defense: 5 }, req: ['ref', 6] }),
@@ -419,11 +424,33 @@ export function axesOf(b: Pick<Build, 'cls' | 'talents'>): { main: ClassId | nul
   return { main: b.cls, second: b.cls ? (open[0] ?? null) : null, open };
 }
 
-/** The class this talent would make a recruit, or null. */
-export function wouldSpecialize(b: Pick<Build, 'cls' | 'talents'>, id: PerkId): ClassId | null {
+/** The class this talent would make a retrained recruit already past SPECIALIZE_RANK, or null. */
+export function wouldSpecialize(b: Pick<Build, 'cls' | 'rank' | 'talents'>, id: PerkId): ClassId | null {
   const d = TALENTS[id];
-  if (b.cls || !d?.axis || d.song) return null;
+  if (b.cls || b.rank < SPECIALIZE_RANK || !d?.axis || d.song) return null;
   return pointsInAxis(b.talents, d.axis, true) + 1 >= SPECIALIZE_POINTS ? d.axis : null;
+}
+
+/** Whether a learnt talent waits for equipment the soldier doesn't carry (it does nothing yet). */
+export function dormant(b: Pick<Build, 'cls'>, id: PerkId): boolean {
+  const kit = TALENTS[id]?.kit;
+  return !!kit && KIT_CLASS[kit] !== b.cls;
+}
+
+/**
+ * The class a recruit leans to: the axis with the most talent points, counting
+ * the points raised in its two aptitudes too. Ties go to talent points, then
+ * to the order of the axes.
+ */
+export function leaningClass(b: Pick<Build, 'attrs' | 'talents'>): ClassId {
+  const score = (a: ClassId) => 2 * pointsInAxis(b.talents, a) + CLASS_TOP[a].reduce((sum, id) => sum + b.attrs[id] - RECRUIT_ATTRS[id], 0);
+  return [...AXES].sort((x, y) => score(y) - score(x) || pointsInAxis(b.talents, y) - pointsInAxis(b.talents, x))[0]!;
+}
+
+/** Makes the recruit that class: +1 to its two aptitudes. */
+export function specialize(b: Build, cls: ClassId): void {
+  b.cls = cls;
+  for (const attr of CLASS_TOP[cls]) b.attrs[attr]++;
 }
 
 /** Why the talent can't take one more level, or null if it can. `echoes` is the Cámara de Ecos's level. */
@@ -435,7 +462,8 @@ export function talentBlocker(b: Build, id: PerkId, echoes = 0): string | null {
   if (!d.axis) return null;
   const axis = d.axis;
   const becomes = wouldSpecialize(b, id);
-  if (d.kit && b.cls !== KIT_CLASS[d.kit] && becomes !== KIT_CLASS[d.kit]) return `Necesita ${KIT_NAMES[d.kit]}.`;
+  // A recruit may learn it ahead: it sleeps until the soldier carries the kit.
+  if (d.kit && b.cls && b.cls !== KIT_CLASS[d.kit]) return `Necesita ${KIT_NAMES[d.kit]}.`;
   if (axis !== b.cls) {
     const { open } = axesOf(b);
     const others = b.cls ? open : open.filter((a) => a !== axis);
@@ -443,10 +471,9 @@ export function talentBlocker(b: Build, id: PerkId, echoes = 0): string | null {
       const names = [b.cls, ...open].filter((a): a is ClassId => !!a).map((a) => TEMPLATES[a].name);
       return `Ya tienes dos ejes: ${names.join(' y ')}.`;
     }
-    if (d.row >= SECOND_AXIS_ROWS && becomes !== axis) return 'Las dos últimas filas son solo de tu eje principal.';
+    if (d.row >= SECOND_AXIS_ROWS && becomes !== axis) return b.cls ? 'Las dos últimas filas son solo de tu eje principal.' : `Las dos últimas filas se abren al especializarse, en ${SPECIALIZE_RANK_NAME}.`;
   }
   if (d.song) {
-    if (!b.cls) return 'Un recluta no canta: especialízate antes.';
     if (d.row >= songRowsOpen(echoes)) return echoes ? `Hace falta la Cámara de Ecos a nivel ${songRowLevel(d.row)}.` : 'Hace falta la Cámara de Ecos.';
   }
   const gate = rowGate(d);
@@ -458,16 +485,14 @@ export function talentBlocker(b: Build, id: PerkId, echoes = 0): string | null {
 }
 
 /**
- * Takes one level of the talent (check `talentBlocker` first). A recruit whose
- * axis reaches SPECIALIZE_POINTS becomes that class: +1 to its two aptitudes.
+ * Takes one level of the talent (check `talentBlocker` first). A retrained
+ * recruit past SPECIALIZE_RANK whose axis reaches SPECIALIZE_POINTS becomes
+ * that class again; younger recruits wait for the rank (campaign promotions).
  */
 export function learnTalent(b: Build, id: PerkId): { specialized: ClassId | null } {
+  const becomes = wouldSpecialize(b, id);
   b.talents[id] = (b.talents[id] ?? 0) + 1;
-  const becomes = !b.cls && TALENTS[id].axis && !TALENTS[id].song && pointsInAxis(b.talents, TALENTS[id].axis!, true) >= SPECIALIZE_POINTS ? TALENTS[id].axis : null;
-  if (becomes) {
-    b.cls = becomes;
-    for (const attr of CLASS_TOP[becomes]) b.attrs[attr]++;
-  }
+  if (becomes) specialize(b, becomes);
   return { specialized: becomes };
 }
 
@@ -529,7 +554,8 @@ export function soldierStats(b: Build, gear: ItemId[] = []): SoldierStats {
   if (ofi >= 7) addCharges({ grenade: 1 });
   if (ofi >= 10) mods = addMods(mods, { heal: 1, grenadeDamage: 1 });
 
-  const perks = talentIds(b.talents);
+  // Talents asleep for want of their class's equipment do nothing yet.
+  const perks = talentIds(b.talents).filter((id) => !dormant(b, id));
   for (const id of perks) {
     const d = TALENTS[id];
     const level = b.talents[id]!;

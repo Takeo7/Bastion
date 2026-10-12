@@ -18,6 +18,7 @@ import {
   missionInfo,
   PLAYER_COLORS,
   Rng,
+  syncPads,
   syncTurn,
   type BaseView,
   type CampaignMessage,
@@ -75,6 +76,8 @@ export class Room {
   constructor(
     private readonly store: SaveStore,
     private readonly hosts: HostAddress[] = [],
+    /** The game's https port (index.ts), offered to the partner; null when there is none. */
+    private readonly httpsPort: number | null = null,
   ) {
     const saved = store.load();
     if (!saved) return;
@@ -155,7 +158,7 @@ export class Room {
     seat.name = name;
     console.log(`[room] ${name} ocupa el puesto ${seat.slot + 1}.`);
 
-    this.send(socket, { t: 'welcome', token: seat.token, slot: seat.slot, hosts: this.hosts });
+    this.send(socket, { t: 'welcome', token: seat.token, slot: seat.slot, hosts: this.hosts, httpsPort: this.httpsPort ?? undefined });
     // A partner joining a campaign started without them gets soldiers of their own.
     if (this.phase === 'base') this.bringPlayersIn();
     this.broadcastRoom();
@@ -289,6 +292,7 @@ export class Room {
     // A squad being picked is redone with both commanders' soldiers.
     if (c.activeMission) {
       c.squad = defaultSquad(c, this.connectedSlots());
+      syncPads(c);
       c.launchReady = [false, false];
     }
     this.broadcast({ t: 'campaign', state: c });

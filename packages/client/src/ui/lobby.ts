@@ -317,13 +317,16 @@ export class Lobby {
   }
 
   /** How the partner joins: this game's network addresses (never localhost, which only works here). */
-  private invite(): HTMLElement[] {
+  private invite(): (HTMLElement | null)[] {
     if (this.players.filter((p) => p.connected).length >= 2) return [];
     const links = inviteLinks();
     if (!links.length) return [h('p.menu-hint', {}, 'Tu compañero necesita la dirección de red de este ordenador: está en la ventana del servidor.')];
     return [
       h('p.menu-hint', {}, 'Tu compañero entra abriendo en su navegador:'),
       ...links.map((l) => h('div.menu-invite', {}, h('small', {}, l.label), h('code.menu-address', {}, l.url))),
+      links.some((l) => l.url.startsWith('https:'))
+        ? h('p.menu-hint', {}, 'La primera vez su navegador avisará de que la conexión no es privada: el certificado es el de este ordenador, que lo acepte.')
+        : null,
     ];
   }
 }

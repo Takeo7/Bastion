@@ -189,9 +189,10 @@
   background: var(--x-accent-soft);
 }
 
+/* Selected reads as «this one», in plain ink: never a player's colour, which means «theirs». */
 .x-row.selected {
-  background: var(--x-accent-soft);
-  --row-accent: var(--x-accent);
+  background: color-mix(in srgb, var(--x-text) 11%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--x-text);
 }
 
 .x-row.dim {
@@ -690,14 +691,22 @@
 }
 
 /* Top-left corner, on the tab's edge: the pending count sits at the right end of the label. */
+/* Where the partner is: their initial on a tag of their colour, not a dot that reads as a notice. */
 .strat-nav .partner-dot {
   position: absolute;
-  top: -4px;
-  left: 8px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--paper);
+  top: -7px;
+  left: 6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border: 1.5px solid var(--accent);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
 }
 
 /* Narrow sheets that are as tall as their content (never the whole height),
@@ -896,7 +905,7 @@
 
 .partner-tag {
   font-family: var(--font-hand);
-  font-size: 20px;
+  font-size: 15px;
   background: #fff27a;
   border-left: 4px solid var(--accent);
   rotate: 2deg;
@@ -2572,10 +2581,28 @@ dl.x-pairs dd {
 }
 
 .proposal-detail {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 8px;
+  margin: 4px 0 0;
   font-family: var(--font);
   font-size: 13px;
   line-height: 1.3;
   color: var(--ink-soft);
+}
+
+/* One kind per line, always in the same order: Tiempo, Créditos, Qué hace, Extra. */
+.proposal-detail dt {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding-top: 2px;
+}
+
+.proposal-detail dd {
+  margin: 0;
+  color: var(--ink);
 }
 
 /* The skirmish sheet's actions stay at its foot while the options scroll. */
@@ -2626,4 +2653,339 @@ dl.x-pairs dd {
 .x-effect.bonus {
   color: var(--good);
   font-weight: 700;
+}
+
+/* ------------------------------------------------------- the plots grid */
+
+/* The compound seen from above, 7 × 7: what stands on each plot, marked like a site plan. */
+.plot-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin: 6px 0 4px;
+}
+
+.plot-cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1.5px solid var(--x-line);
+  background: transparent;
+  color: var(--x-text);
+  cursor: pointer;
+}
+
+.plot-ico {
+  display: grid;
+  width: 64%;
+  height: 64%;
+}
+
+.plot-ico .ico {
+  width: 100%;
+  height: 100%;
+}
+
+/* Free and buildable: an empty frame; out of reach: fainter. */
+.plot-cell.free {
+  border-style: dashed;
+  border-color: var(--x-good);
+}
+
+.plot-cell.far {
+  opacity: 0.45;
+}
+
+.plot-cell.terrain {
+  color: var(--x-muted);
+  background: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--x-muted) 22%, transparent) 4px 5px);
+}
+
+.plot-cell.built {
+  border-color: var(--x-text);
+  background: color-mix(in srgb, var(--x-text) 9%, transparent);
+}
+
+.plot-cell.fixed {
+  border-color: var(--x-text);
+  background: var(--x-text);
+  color: var(--paper);
+}
+
+.plot-cell.work {
+  border-color: var(--x-warn);
+  color: var(--x-warn);
+  background: repeating-linear-gradient(-45deg, transparent 0 4px, color-mix(in srgb, var(--x-warn) 20%, transparent) 4px 7px);
+}
+
+.plot-cell:hover,
+.plot-cell.hovered {
+  outline: 2px solid var(--x-text);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.plot-cell.selected {
+  outline: 3px solid var(--x-text);
+  outline-offset: 1px;
+  opacity: 1;
+  z-index: 1;
+}
+
+/* A building that can go up a level: a small arrow in the corner. */
+.plot-cell.can-up::after {
+  content: '▲';
+  position: absolute;
+  top: 0;
+  right: 2px;
+  font-size: 8px;
+  color: var(--x-good);
+}
+
+.plot-level,
+.plot-days {
+  position: absolute;
+  bottom: 0;
+  right: 2px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  line-height: 1.1;
+}
+
+.plot-days {
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+.plot-hover {
+  min-height: 2.6em;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.plot-hover b {
+  color: var(--x-text);
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+.x-head .plot-drop {
+  margin-left: auto;
+}
+
+/* What a «Ver» points at blinks, even when it is already on screen. */
+.blink {
+  animation: x-blink 0.45s ease-in-out 3;
+}
+
+@keyframes x-blink {
+  50% {
+    outline: 3px solid var(--x-warn);
+    outline-offset: 2px;
+    background-color: color-mix(in srgb, var(--x-warn) 25%, transparent);
+  }
+}
+
+/* ----------------------------------------------------- ready to take off */
+
+/* Who has said «listo»: each commander in their colour, ticked when ready. */
+.ready-board {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.ready-mark {
+  padding: 3px 10px;
+  border: 1.5px dashed var(--accent);
+  background: var(--paper-grain), var(--paper-light);
+  color: var(--x-muted);
+  font-size: 13px;
+}
+
+.ready-mark b {
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+.ready-mark.on {
+  border-style: solid;
+  color: var(--x-text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* The soldiers of a commander who is ready carry a «LISTO» stamp. */
+.lineup-card.ready::after {
+  content: 'LISTO';
+  position: absolute;
+  top: -14px;
+  right: -8px;
+  padding: 0 4px;
+  border: 2px solid var(--good);
+  color: var(--good);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  transform: rotate(12deg);
+  background: var(--paper-light);
+}
+
+/* ------------------------------------------------------------- debrief */
+
+.debrief-tally {
+  justify-content: center;
+  margin: 6px 0 2px;
+}
+
+/* The story's page after a chapter: there to read, not in the way. */
+.debrief-story summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--x-muted);
+}
+
+.debrief-story p {
+  max-width: 60ch;
+  margin: 4px auto 0;
+  text-align: left;
+}
+
+.debrief-next {
+  display: block;
+  margin-top: 6px;
+  max-width: 52ch;
+  text-align: center;
+  color: var(--x-text);
+}
+
+/* ------------------------------------------------------- the promotion */
+
+/* A promotion is a draft in pencil until «Guardar»: what is drafted reads apart from what is saved. */
+.service-help {
+  margin: 2px 0 8px;
+  font-size: 13px;
+  color: var(--x-text);
+}
+
+.apt-head .apt-effect {
+  flex: 1;
+  min-width: 0;
+}
+
+.apt-added {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--pen);
+}
+
+.apt-boxes i.plan {
+  background: repeating-linear-gradient(-45deg, var(--paper-light) 0 2px, var(--pen) 2px 3.5px);
+  border-color: var(--pen);
+}
+
+.apt-minus {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1.5px solid var(--x-muted);
+  background: var(--paper-light);
+  color: var(--x-muted);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.apt-minus:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.apt-next {
+  font-size: 11.5px;
+  color: var(--x-muted);
+}
+
+.apt-next.got {
+  color: var(--x-good);
+}
+
+.apt.drafted .apt-val {
+  color: var(--pen);
+}
+
+/* Only what can be learnt now: cards in a few loose columns, not a spreadsheet. */
+.talent-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+
+.talent-where {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.talent.drafted {
+  outline: 2px solid var(--pen);
+  outline-offset: -3px;
+  background: linear-gradient(color-mix(in srgb, var(--pen) 10%, transparent), color-mix(in srgb, var(--pen) 10%, transparent)), var(--paper-grain), var(--paper-light);
+}
+
+.talent-levels i.plan {
+  background: repeating-linear-gradient(-45deg, transparent 0 2px, var(--pen) 2px 3.5px);
+}
+
+.talent-undo {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  padding: 0 4px;
+  font-size: 13px;
+  color: var(--pen);
+  cursor: pointer;
+}
+
+.talent-undo:hover {
+  color: var(--x-bad);
+}
+
+.rosa-whole {
+  display: grid;
+  gap: 6px;
+}
+
+/* «GUARDADO»: the sheet is stamped when a promotion is written down. */
+.saved-stamp {
+  position: absolute;
+  top: 14px;
+  right: 24px;
+  z-index: 2;
+  padding: 2px 12px;
+  border: 3px solid var(--x-good);
+  color: var(--x-good);
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.14em;
+  transform: rotate(-8deg);
+  pointer-events: none;
+  animation: x-stamp 0.35s ease-out;
+}
+
+@keyframes x-stamp {
+  from {
+    transform: rotate(-8deg) scale(1.8);
+    opacity: 0;
+  }
 }

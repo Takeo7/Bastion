@@ -1,3 +1,4 @@
+import { BAD_LUCK_MISSES } from './aim';
 import { AP_PER_TURN, attackWeapon, CONTROL_TURNS, TEMPLATES, WEAPONS } from './content';
 import { getUnit, tileIndex } from './grid';
 import type {
@@ -5,10 +6,12 @@ import type {
   AttackAbility,
   BlastAbility,
   ChargeId,
+  ConcealReason,
   EndReason,
   GameState,
   Outcome,
   Pod,
+  PodCause,
   PsiEffect,
   Reinforcement,
   ShotResult,
@@ -39,6 +42,8 @@ export type GameEvent =
       from: Vec2;
       result: ShotResult;
       chance: number;
+      /** The d100, 1–100: it hits when `roll ≤ chance`. */
+      roll: number;
       reaction: boolean;
     }
   /** `amount` is what got through armour; `mitigated` what the armour stopped. */
@@ -74,8 +79,13 @@ export type GameEvent =
   | { t: 'itemPicked'; unit: string }
   | { t: 'itemDropped'; pos: Vec2 }
   | { t: 'tileChanged'; pos: Vec2; kind: TileKind }
-  | { t: 'podActivated'; pod: string }
-  | { t: 'concealmentBroken' }
+  /** `unit`: the soldier they saw (or who attacked them); `by`: the alien that saw it. */
+  | { t: 'podActivated'; pod: string; cause: PodCause; unit?: string; by?: string }
+  /**
+   * Who gave the squad away and how: `unit` is the soldier seen (or who fired,
+   * sang or hacked), `by` the alien that saw it, `range` its detection in tiles.
+   */
+  | { t: 'concealmentBroken'; reason: ConcealReason; unit?: string; by?: string; range?: number }
   | { t: 'ready'; slot: Slot; ready: boolean }
   | { t: 'missionEnded'; outcome: Outcome; reason: EndReason }
   /** Hack attempt on the objective terminal; `remote` when the drone did it. */
@@ -199,6 +209,11 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       if (e.reaction && u.overwatch) {
         if (u.killZone) u.reactedTo.push(e.target);
         else u.overwatch = false;
+      }
+      // Bad luck: a player's misses in a row add up (aim.ts badLuckAim), a hit clears them.
+      if (u.team === 'xcom' && u.owner !== null && !u.controlledBy) {
+        const streak = (s.missStreak ??= [0, 0]);
+        streak[u.owner] = e.result === 'miss' ? Math.min(BAD_LUCK_MISSES, streak[u.owner] + 1) : 0;
       }
       break;
     }

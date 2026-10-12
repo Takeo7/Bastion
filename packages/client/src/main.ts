@@ -5,6 +5,7 @@ import { music } from './audio/music';
 import { installUiSounds } from './audio/ui';
 import { Game } from './game/game';
 import { Net, serverUrl, setHosts, storageKey } from './net';
+import { installReport, trace } from './report';
 import { StrategyScreen } from './strategy/screen';
 import { applyUiTheme } from './ui/theme';
 import { Lobby } from './ui/lobby';
@@ -19,6 +20,8 @@ function savedName(): string {
   }
 }
 
+// First of all: the partner's errors and hangs reach the host's terminal.
+installReport();
 const app = document.getElementById('app')!;
 // The interface's look (Expediente or Holotáctico), before the first screen is drawn.
 applyUiTheme();
@@ -31,6 +34,8 @@ let players: PlayerInfo[] = [];
 let game: Game | null = null;
 let base: StrategyScreen | null = null;
 let campaign: CampaignState | null = null;
+/** The campaign when the squad took off: the base made after the mission compares with it for its pop-ups. */
+let tookOff: CampaignState | null = null;
 /** The dropship take-off; mission traffic is held until it is over. */
 let takeoff: Promise<void> | null = null;
 const held: ServerMessage[] = [];
@@ -45,6 +50,7 @@ const lobby = new Lobby(
       } catch {
         /* private mode: the name just will not be remembered */
       }
+      trace('entrar: conectando');
       net.connect(name);
     },
     onStart: (mission, map, veterans) => net.send({ t: 'start', mission, map, veterans }),
@@ -79,16 +85,20 @@ function showPhase(phase: 'lobby' | 'base' | 'mission'): void {
   if (phase === 'base') {
     closeGame();
     if (!base && slot !== null) {
+      trace('base: creando la escena');
       base = new StrategyScreen(app, slot, {
         send: (cmd) => net.send({ t: 'ccmd', cmd }),
         onView: (view) => net.send({ t: 'baseView', view }),
         onLeave: () => net.send({ t: 'backToMenu' }),
       });
+      trace('base: escena creada');
     }
     base?.setPlayers(players);
-    if (campaign) base?.update(campaign);
+    if (campaign) base?.update(campaign, tookOff);
+    tookOff = null;
   } else if (base) {
     // Take-off: the dropship leaves the hangar; the mission is built once the screen is black.
+    tookOff = campaign;
     const leaving = base;
     base = null;
     takeoff = leaving.launch().then(() => {
@@ -111,8 +121,9 @@ function handle(m: ServerMessage): void {
   }
   switch (m.t) {
     case 'welcome':
+      trace('servidor: bienvenida');
       slot = m.slot;
-      setHosts(m.hosts ?? []);
+      setHosts(m.hosts ?? [], m.httpsPort);
       break;
     case 'room':
       players = m.players;

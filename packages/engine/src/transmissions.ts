@@ -1,7 +1,7 @@
 /**
  * "Transmisiones": short radio conversations between the Bastion's people at
  * the story's turning points (docs/LORE.md). Text only. Each client plays a
- * scene once, when its condition first holds, and keeps it in the Progreso
+ * scene once, when its condition first holds, and keeps it in the radio
  * archive; nothing here changes the campaign.
  *
  * `{saludo}` becomes "Comandantes Ana y Luis" (or "Comandante Ana" alone);
