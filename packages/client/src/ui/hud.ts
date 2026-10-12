@@ -15,10 +15,12 @@ import {
   type Team,
   type Unit,
 } from '@bastion/engine';
+import { sound } from '../audio/bank';
+import { uiSound } from '../audio/ui';
 import type { NetStatus } from '../net';
 import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
-import { graphicsSettings } from './settingsPanel';
+import { graphicsSettings, soundSettings, themeSettings } from './settingsPanel';
 import { typed } from './typed';
 
 export interface AbilityView {
@@ -400,6 +402,8 @@ export class Hud {
   }
 
   banner(text: string, kind: 'xcom' | 'alien' | 'warn' = 'xcom'): void {
+    // The banner is a rubber stamp coming down.
+    uiSound('stamp', { gain: 0.55 });
     this.bannerEl.textContent = text;
     this.bannerEl.className = `banner show ${kind}`;
     window.clearTimeout(this.bannerTimer);
@@ -419,6 +423,7 @@ export class Hud {
     clear(this.noticeEl);
     this.noticeEl.classList.toggle('show', !!text);
     if (!text) return;
+    sound('radio.static', { gain: 0.6 });
     this.noticeEl.style.setProperty('--accent', color);
     // The partner's colour goes on the tape (styles.css): as text on paper, orange and light blue read poorly.
     append(this.noticeEl, h('span', {}, text), h('button.x-btn.small', { onclick: () => onSee?.() }, 'Ver (F)'));
@@ -459,6 +464,7 @@ export class Hud {
 
   /** Esc menu: controls, settings and abandoning the mission. */
   toggleMenu(open = !this.menu.classList.contains('show')): void {
+    if (open !== this.menu.classList.contains('show')) uiSound('paper');
     this.menu.classList.toggle('show', open);
     if (open) this.renderMenu('main');
   }
@@ -489,7 +495,7 @@ export class Hud {
         },
         `Sonido: ${this.handlers.soundOn() ? 'activado' : 'desactivado'}`,
       );
-      append(card, h('h2', {}, 'Ajustes'), sound, graphicsSettings(() => this.renderMenu('settings')), back);
+      append(card, h('h2', {}, 'Ajustes'), sound, themeSettings(() => this.renderMenu('settings')), soundSettings(() => this.renderMenu('settings')), graphicsSettings(() => this.renderMenu('settings')), back);
     }
     this.menu.append(card);
   }
@@ -499,6 +505,8 @@ export class Hud {
   }
 
   showOutcome(outcome: Outcome | null, title = '', summary = '', campaign = false): void {
+    // The result is stamped on the report as it appears (not again on a reconnect).
+    if (outcome && !this.outcome.classList.contains('show')) uiSound('stamp', { delay: 0.25 });
     clear(this.outcome);
     this.outcome.classList.toggle('show', !!outcome);
     if (!outcome) return;
@@ -524,6 +532,7 @@ export class Hud {
   }
 
   private confirmAbandon(): void {
+    uiSound('paper');
     clear(this.modal);
     this.modal.classList.add('show');
     const close = () => this.modal.classList.remove('show');

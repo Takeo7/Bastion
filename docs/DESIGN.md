@@ -96,7 +96,7 @@ Cliente A ──comando──▶ Host (Node) ──eventos──▶ Cliente A y 
 
 ### Base (implementado, M3a y M3b)
 
-- Base y recursos compartidos; cada jugador tiene sus soldados, los asciende, elige sus habilidades y los equipa.
+- Base y recursos compartidos; cada jugador tiene sus soldados, los asciende, reparte sus aptitudes y talentos y los equipa.
 - Los dos usáis la base a la vez, cada uno en su pantalla. Se ve en cuál está el compañero.
 - **Propuestas:** despejar terreno, construir, contactar regiones, elegir misión y responder a acontecimientos las propone uno y las acepta o rechaza el otro. Solo hay una propuesta abierta a la vez. Si solo hay un jugador conectado, se aplican directamente. Lo personal (reclutar, ascender, comprar y equipar accesorios, personalizar) no se vota.
 - **Listo:** el tiempo avanza y la misión despega solo cuando todos los jugadores conectados están listos. Un acontecimiento sin responder congela el tiempo y no deja despegar.
@@ -114,6 +114,45 @@ Sustituye a la investigación y a los tres recursos (suministros, inteligencia, 
 - **Nivel del Bastión** (`engine/src/progression.ts`): `c.xp` sube con cada misión (`missionXp`: +2, +3 y la dificultad si se gana, +1 por baja; ×1,25 con la sala de simulación) y con algunos acontecimientos (`gainXp`). `LEVEL_XP` da 8 niveles. Tecnologías (`TECHS`), accesorios (`ItemDef.level`) e instalaciones (`FacilityDef.level`) se desbloquean por nivel; el nivel 8 revela la misión final.
 - **Armas y armadura por soldado**, sin compra: `weaponTier(c, s)` y `armorTier(c, s)` son el mínimo entre lo que el Bastión ha desbloqueado y lo que permite el rango (`TIER_RANK`: nivel 2 desde Cabo, nivel 3 desde Teniente). `squadMember` aplica el daño (`WEAPON_TIER_DAMAGE`) y la salud y blindaje (`ARMOR_TIERS`), y los pasa a la unidad (`Unit.weaponTier`, `Unit.armorTier`) para que `buildFigure` dibuje el arma y la armadura de su nivel.
 - `migrateCampaign` convierte campañas antiguas: créditos = suministros + 2 × inteligencia + 3 × aleaciones; experiencia = la suma de la de sus soldados, y como mínimo la del nivel de lo que ya se había investigado o fabricado; los laboratorios pasan a salas de simulación.
+
+### Clases: aptitudes y la Rosa (campaña versión 10)
+
+Elegida el 2026-10-12 entre tres propuestas (ramas, tablero, especialidades; maqueta en https://claude.ai/artifact/3PS1PmQ2mDWC86XN7khTpp). Primero se hicieron ramas por clase (versión 9). El mismo día, a petición del usuario, pasaron a ser un árbol común, «la Rosa», con el Canto de Velmar dentro (`LORE.md`). Todo vive en `engine/src/classes.ts`.
+
+- **Aptitudes** (`ATTRS`): Pulso (+3 de puntería por punto), Aguante (+1 de salud cada 2), Reflejos (+2 de defensa por encima de 3), Temple (+6 de voluntad) y Oficio (+5 de hackeo por encima de 5). Van del 1 al 10.
+  - Un recluta empieza con 5/5/5/4/3 (`RECRUIT_ATTRS`) y todo tope en 8.
+  - Al especializarse gana +1 en las dos aptitudes de su clase (`CLASS_TOP`), que además llegan a 10 (`baseAttrs`, `attrCap`).
+  - Llegar a 7 y a 10 da un extra: crítico, daño crítico, heridas más cortas (`woundDays`), blindaje, movimiento, −20 a la reacción enemiga, sin pánico, sin control mental (`UnitMods.psiGuard`), granada extra, curación y daño de granada.
+- **La Rosa:** un centro («Recluta», `CENTER`: 4 talentos para todos) y cuatro ejes (`AXES`), uno por clase.
+  - Cada eje tiene tres ramas normales y una cuarta de Canto (`BRANCHES`). 116 talentos en total (`TALENTS`), con niveles (`max`), aptitud mínima (`req`) y talento previo (`needs`).
+  - Las filas se abren con 0, 2, 4, 7 y 10 puntos en las filas de arriba de la rama (`ROW_GATES`); en el Canto, con 0, 1, 2, 3 y 4 (`SONG_GATES`).
+  - Las 40 habilidades de antes siguen con su id.
+- **La clase sale de las elecciones:** un recluta (`CampaignSoldier.cls` null, plantilla de combate `rookie`: fusil y granada) se especializa al llegar a 2 puntos en las ramas normales de un eje (`SPECIALIZE_POINTS`, `learnTalent`, `wouldSpecialize`).
+  - El Canto y el centro no especializan, y un recluta no canta.
+  - La clase queda fija hasta reentrenar. Los soldados iniciales, los de encargos y acontecimientos y los del relevo llegan ya especializados; los que se reclutan, no.
+- **Ejes y equipo:**
+  - Se puede abrir un segundo eje hasta su tercera fila (`SECOND_AXIS_ROWS`), también en su Canto. Nunca un tercero (`axesOf`).
+  - Los talentos que usan el equipo propio de una clase (`kit`: espada, escopeta, cañón, fusil de precisión, pistola, Grillo) solo los coge esa clase, o el recluta al que ese talento especializa.
+  - Cada eje tiene un talento de **llave doble** (`coop`) que solo funciona junto a soldados del compañero (`partnerNear` en `aim.ts`, `bridged` en `rules.ts`).
+- **El Canto:** su rama se abre con la Cámara de Ecos: el nivel 1 abre las filas 1–2, el 2 las 3–4 y el 3 la 5 (`songRowsOpen`, `echoesLevel`). Los conjuros mayores piden Temple 7.
+  - Quien sabe cantar tiene `mods.singer` y `mods.songOpen` (+10 para el Cantor, 0 con Temple 10).
+  - Las mecánicas de cada canto, «A dos voces» y la ocultación son de Gameplay (`rules.ts`, `test/songs.test.ts`).
+- **Ascensos:** cada uno da 2 puntos de aptitud y 2 de talento. Los puntos libres no se guardan: son lo que da el rango menos lo gastado (`pointsToSpend`). La veteranía suma sola +2 de puntería, +2 de voluntad y +3 de hackeo por ascenso.
+- **Órdenes personales**, sin propuesta:
+  - `train`: un punto de aptitud.
+  - `talent`: un nivel; especializa y lo apunta en el registro (`SPECIALIZE_TEXT`).
+  - `retrain`: devuelve todo por `RETRAIN_COST` ₡ (la mitad con centro de entrenamiento) y deja al soldado como recluta.
+  - `recruit`: va sin clase.
+  - Los motivos de bloqueo salen de `attrBlocker` y `talentBlocker(build, id, echoes)`.
+- **Cálculo:** `soldierStats(build, gear)` da la plantilla (`soldierTemplate`), los `mods`, la salud, las cargas, la voluntad, el blindaje y la lista de talentos que el combate ve como `Unit.perks`.
+  - Puntería = 50 + 3 × Pulso + veteranía; salud = 3 + Aguante ÷ 2.
+  - `squadMember` añade el nivel de arma y armadura, las tecnologías, los rasgos y el campo de tiro.
+  - Los soldados de escaramuza salen de la misma hoja (`autoBuild`).
+- **Interfaz:** «Hoja de servicio» en el Cuartel (`promotionPanel` en `strategy/screen.ts`).
+  - A la izquierda, las aptitudes.
+  - A la derecha, el centro, una pestaña por eje y las cuatro ramas del eje elegido, con la de Canto apagada hasta la Cámara.
+  - Es provisional: UX/UI la va a sustituir por una brújula con los cuatro ejes.
+- `migrateCampaign`: los soldados de antes de la versión 9 recuperan todos sus puntos, porque las habilidades viejas no encajan. Los de la 9 conservan sus talentos. Todos rehacen las aptitudes desde las bases nuevas, conservan su clase y lo anuncia el aviso «Nueva instrucción». `persistence.ts` rellena con ceros los `mods` de una misión guardada antes.
 
 ### Ayudas al jugador
 
@@ -182,6 +221,7 @@ El flujo imita a XCOM 2: Bastión → geoesfera (escanear, avisos) → informe d
 | **M3a · Campaña cooperativa** | **Hecho.** Base compartida en 2D (mando, cuartel, investigación, ingeniería), recursos, propuestas entre jugadores, avance del tiempo, misiones con caducidad y dificultad creciente, escuadra mixta, experiencia, rangos y habilidades a elegir, heridas y muerte permanente, reclutamiento, reloj del Proyecto Ascensión, misión final, informe de misión, guardado de campaña |
 | **M3b · Base viva** | **Hecho.** Bastión en 3D con salas que se excavan y 5 instalaciones, globo con 8 regiones, contactos e ingresos mensuales, instalaciones alienígenas y su asalto, 8 acontecimientos con decisión conjunta, autopsias que requieren cuerpos, 11 investigaciones, 5 mejoras y 8 objetos de equipo por soldado |
 | **M4 · Variedad táctica** | **Hecho.** Mapas procedurales en 3 biomas, 5 tipos de misión (eliminación, recuperación, sabotaje, pirateo, rescate), patrullas, refuerzos con bengala |
+| **Clases** | **Hecho (2026-10-12).** Cinco aptitudes que se reparten al ascender. La Rosa: un árbol común de 116 talentos (centro, cuatro ejes con tres ramas y el Canto de Velmar), reclutas sin clase que se especializan, segundo eje, kits, llave doble, reentrenamiento y la Hoja de servicio en el Cuartel |
 | M5 · Arte y pulido | **En curso:** laboratorio de estilos para elegir la dirección de arte ([ARTE.md](ARTE.md)). Después: modelos y animaciones reales, sonido, menús; ejecutable opcional (Electron o Steam) |
 
 ## Habilidades: una sola fuente de verdad

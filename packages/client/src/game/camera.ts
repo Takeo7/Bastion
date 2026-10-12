@@ -42,6 +42,11 @@ export class CameraRig {
     this.bounds = new THREE.Box2(new THREE.Vector2(0, 0), new THREE.Vector2(width, height));
   }
 
+  /** Where the camera looks (the sound hears from here). */
+  get focusPoint(): THREE.Vector3 {
+    return this.target;
+  }
+
   /** The player explicitly took the camera: cancels any cinematic in progress. */
   takeControl(): void {
     this.epoch++;

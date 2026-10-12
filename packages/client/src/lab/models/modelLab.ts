@@ -4,6 +4,8 @@ import { buildFigure, type FigurePose, type FigureRig, type Gear } from '../../g
 import { IDLE_POSE } from '../../game/models';
 import { Renderer } from '../../game/renderer';
 import { voxelizeUnit, voxelSurface } from '../../game/voxel';
+import { sound } from '../../audio/bank';
+import { SONG, SongFx, singerMark } from '../../game/songFx';
 import { voxFigure } from '../../game/voxFigures';
 
 // Model lab (/modelos.html): the hand-made voxel figures next to the ones
@@ -133,6 +135,59 @@ window.addEventListener('hashchange', () => {
   (VIEWS[view] ?? VIEWS.todos!)();
 });
 
+// ---------------------------------------------------------------- songs
+// A small stage for the Canto de Velmar's effects: a singer (with the
+// singer's mark) and three troopers in front, away from the pairs.
+const songFx = new SongFx();
+scene.add(songFx.group);
+renderer.onFrame((dt) => songFx.tick(dt));
+const STAGE = new THREE.Vector3(-8, 0, 0);
+const singer = voxFigure('specialist', P1)!;
+singer.root.position.copy(STAGE);
+singer.yaw.rotation.y = Math.PI / 2;
+singer.applyPose({ ...IDLE_POSE, aim: 1 }, 0);
+const singerGlow = singerMark();
+singerGlow.position.set(0, 1.78, 0);
+singer.yaw.add(singerGlow);
+scene.add(singer.root);
+const foes = [new THREE.Vector3(-3, 0, -1.6), new THREE.Vector3(-2, 0, 0), new THREE.Vector3(-3, 0, 1.6)].map((p) => {
+  const r = voxFigure('trooper', '#ff4a4a')!;
+  r.root.position.copy(p);
+  r.yaw.rotation.y = -Math.PI / 2;
+  r.applyPose(IDLE_POSE, 0);
+  scene.add(r.root);
+  return p.clone().setY(1.1);
+});
+const stageGround = new THREE.Mesh(new THREE.BoxGeometry(10, 0.2, 8), voxelSurface(new THREE.MeshStandardMaterial({ color: 0x8c918a, roughness: 0.9 })));
+stageGround.position.set(-5, -0.1, 0);
+stageGround.receiveShadow = true;
+scene.add(stageGround);
+const hands = STAGE.clone().add(new THREE.Vector3(0.4, 1.2, 0));
+VIEWS.canto = () => look(new THREE.Vector3(-5, 4.2, 7.5), new THREE.Vector3(-5, 0.9, 0), 40);
+
+/** Each song with its sound, as game.ts will play it. */
+const SONGS: Record<string, () => Promise<void> | void> = {
+  bolt: () => (sound('song.bolt'), songFx.bolt(hands, foes[1]!)),
+  fireball: () => (sound('song.fire'), songFx.fireball(hands, foes[1]!.clone().setY(0.1), 2.5)),
+  arrow: () => (sound('song.arrow'), songFx.arrow(hands, foes[0]!)),
+  rain: () => (sound('song.arrow'), songFx.arrows(hands, foes)),
+  vanish: () => (sound('song.vanish'), songFx.vanish(STAGE)),
+  appear: () => (sound('song.appear'), songFx.appear(STAGE.clone().add(new THREE.Vector3(1.5, 0, 1.5)))),
+  dome: () => (sound('song.dome'), songFx.dome(foes[1]!.clone().setY(0), 2)),
+  storm: () => {
+    sound('song.storm');
+    foes.forEach((_, i) => sound('song.thunder', { delay: i * 0.18 }));
+    return songFx.storm(foes);
+  },
+  hymn: () => (sound('song.aura'), songFx.aura(STAGE, 3, [STAGE.clone().add(new THREE.Vector3(0, 0, 1.4))], SONG.green)),
+  aegis: () => (sound('song.aura'), songFx.aura(STAGE, 1.6, [STAGE], SONG.cyan)),
+  heal: () => (sound('song.heal'), songFx.heal(STAGE)),
+  revive: () => (sound('song.revive'), songFx.revive(STAGE.clone().add(new THREE.Vector3(1.5, 0, -1.5)))),
+  cleanse: () => (sound('song.cleanse'), songFx.cleanse(STAGE)),
+  mark: () => (sound('song.mark'), songFx.mark(foes[2]!)),
+  blade: () => (sound('song.blade'), songFx.blade(foes[1]!, new THREE.Vector3(1, 0, 0))),
+};
+
 // Studio light from the camera's side, to judge the sculpt (the game's sun
 // comes from behind the default camera, so the faces you see are in shade).
 const studio = new THREE.DirectionalLight(0xfff2e0, 0);
@@ -147,6 +202,15 @@ renderer.onFrame((_dt, time) => {
 
 Object.assign(window, {
   __models: {
+    /** Plays a song's effect and sound; with `still`, freezes the scene `at` seconds in for a capture. */
+    async song(name: string, at?: number) {
+      void SONGS[name]?.();
+      if (at !== undefined) {
+        const steps = Math.round(at * 60);
+        for (let i = 0; i < steps; i++) songFx.tick(1 / 60);
+      }
+    },
+    songs: Object.keys(SONGS),
     /** Freezes the animation at `time` and shows a view. */
     still(name: string, time = 0.35, light = false) {
       frozen = time;

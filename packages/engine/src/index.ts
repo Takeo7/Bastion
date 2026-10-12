@@ -1,5 +1,6 @@
 export * from './types';
 export * from './content';
+export * from './classes';
 export * from './maps';
 export * from './rng';
 export * from './grid';

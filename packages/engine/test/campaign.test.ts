@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { previewShot } from '../src/aim';
+import { VETERAN_AIM } from '../src/classes';
 import {
   addPlayer,
   LATE_KIT,
@@ -8,6 +9,7 @@ import {
   contactCost,
   createCampaign,
   nextSteps,
+  pointsToSpend,
   soldierCap,
   DOOM_MAX,
   executeCampaignCommand,
@@ -136,7 +138,7 @@ describe('missions', () => {
     // The squad comes as full as it can: player 0's fourth soldier takes a place player 1 can't fill.
     expect([count(0), count(1)]).toEqual([4, 1]);
     // Recruiting from a free place in the hangar goes straight into the squad.
-    run(c, { type: 'recruit', cls: 'sharpshooter', squad: true }, 0, both);
+    run(c, { type: 'recruit', squad: true }, 0, both);
     expect([count(0), count(1)]).toEqual([5, 1]);
     // Player 1's wounded soldier heals: the lent place comes back, and the last of player 0's lent soldiers leaves.
     theirs[1]!.woundedDays = 0;
@@ -183,7 +185,7 @@ describe('missions', () => {
     const veteran = c.soldiers.find((s) => s.id === soldiers[2]!.campaignId)!;
     expect(veteran.xp).toBe(8);
     expect(veteran.rank).toBe(2);
-    expect(veteran.pendingTiers).toEqual([1, 2]);
+    expect(pointsToSpend(veteran)).toEqual({ attrs: 4, talents: 4 });
     expect(c.credits).toBe(credits + (offer.reward.credits ?? 0) + report.salvage);
     // The Bastion learns from every mission: showing up, winning and the kills.
     expect(report.xp).toBe(missionXp(true, offer.difficulty, 6));
@@ -192,19 +194,26 @@ describe('missions', () => {
     expect(c.activeMission).toBeNull();
   });
 
-  it('perks, ranks and weapon and armour tiers reach the battlefield', () => {
+  it('aptitudes, talents, ranks and weapon and armour tiers reach the battlefield', () => {
     const c = createCampaign([0], new Rng(5));
     const sniper = c.soldiers.find((s) => s.cls === 'sharpshooter')!;
     sniper.rank = 4;
-    sniper.pendingTiers = [1, 2, 3, 4];
-    run(c, { type: 'promote', soldier: sniper.id, perk: 'hawkEye' }, 0, [0]);
+    run(c, { type: 'train', soldier: sniper.id, attr: 'pul' }, 0, [0]);
+    run(c, { type: 'talent', soldier: sniper.id, talent: 'hawkEye' }, 0, [0]);
+    run(c, { type: 'talent', soldier: sniper.id, talent: 'hawkEye' }, 0, [0]);
+    expect(sniper.attrs.pul).toBe(7);
+    expect(pointsToSpend(sniper)).toEqual({ attrs: 7, talents: 6 });
     // Level 4: magnetic weapons and plate armour, and a lieutenant may carry both.
     c.xp = LEVEL_XP[3]!;
     const member = squadMember(c, sniper);
     expect(member).toMatchObject({ weaponTier: 2, armorTier: 2 });
-    expect(member.mods.aim).toBe(4 * 5 + 10);
+    // Pulso 7 (and its +10 critical), four promotions of veterancy and Ojo de halcón 2/2.
+    expect(member.mods.aim).toBe(50 + 3 * 7 - 70 + 4 * VETERAN_AIM + 10);
+    expect(member.mods.crit).toBe(10);
     expect(member.mods.damage).toBe(2);
-    expect(member.maxHp).toBe(5 + 2 + 2);
+    // Aguante 5 and plate armour.
+    expect(member.maxHp).toBe(5 + 2);
+    expect(member.perks).toEqual(['hawkEye']);
 
     const mission = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(1), squad: [member] });
     const shooter = mission.units.find((u) => u.campaignId === sniper.id)!;
@@ -212,7 +221,7 @@ describe('missions', () => {
     const target = mission.units.find((u) => u.id === 'a3')!;
     shooter.pos = { x: target.pos.x, y: target.pos.y + 5 };
     const shot = previewShot(mission, shooter, target);
-    expect(shot?.mods[0]).toEqual({ label: 'Puntería', value: 70 + 30 });
+    expect(shot?.mods[0]).toEqual({ label: 'Puntería', value: 70 + member.mods.aim });
   });
 });
 
@@ -304,7 +313,7 @@ describe('helping the players', () => {
     expiring.expiresDay = c.day + 1;
     expect(nextSteps(c, 0)[0]).toMatchObject({ tone: 'urgent', label: `${expiring.name} caduca en 1 día`, go: { offer: expiring.id } });
     const promoted = c.soldiers.find((s) => s.owner === 1)!;
-    promoted.pendingTiers = [1];
+    promoted.rank = 1;
     expect(nextSteps(c, 1).some((x) => x.view === 'barracks' && x.go?.soldier === promoted.id)).toBe(true);
     expect(nextSteps(c, 0).some((x) => x.view === 'barracks' && x.label.startsWith('Ascenso'))).toBe(false);
     // Equipment only nags before a mission, and only for what can actually be fitted.

@@ -3,6 +3,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { PLAYER_COLORS, TEMPLATES, type GameState, type Unit, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
 import { buildUnit, gearOf, isFigure, type UnitRig } from './models';
+import { singerMark } from './songFx';
 import { easeInOut, tween } from './tween';
 
 const ALIEN_COLOR = '#ff4d4d';
@@ -128,6 +129,12 @@ export class UnitViews {
     flag.center.set(0.5, 1);
 
     rig.root.add(ring, flag);
+    // Who knows Velmar's Canto carries a few light tiles orbiting the head.
+    if ((u.mods?.singer ?? 0) > 0) {
+      const mark = singerMark();
+      mark.position.y = rig.chest + 0.62;
+      rig.yaw.add(mark);
+    }
     rig.root.position.copy(tileToWorld(u.pos));
     const facing = u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
@@ -181,6 +188,8 @@ export class UnitViews {
         v.pose.fall = 1;
         v.ring.visible = false;
       }
+      // Último verso brought it back (when the rise wasn't played, e.g. on a reload).
+      if (u.alive && v.dead && !v.animating) this.standUp(v);
     }
     this.placeRings();
   }
@@ -201,6 +210,10 @@ export class UnitViews {
       u.suppressedBy ? '<em class="stun">SUPRIMIDO</em>' : '',
       u.marked ? '<em class="aid">MARCADO</em>' : '',
       u.ruptured ? '<em class="stun">VULNERABLE</em>' : '',
+      u.oath ? '<em class="song">JURAMENTO</em>' : '',
+      u.ward ? '<em class="song">GUARDA</em>' : '',
+      u.blessed ? '<em class="song">HIMNO</em>' : '',
+      u.huntedBy ? '<em class="hunt">PRESA</em>' : '',
       carrier ? '<em class="data">DATOS</em>' : '',
       u.captive ? '<em class="data">CAUTIVO</em>' : '',
       u.objective ? '<em class="stun">OBJETIVO</em>' : '',
@@ -261,6 +274,14 @@ export class UnitViews {
     if (!v) return new THREE.Vector3();
     v.rig.root.updateMatrixWorld(true);
     return v.rig.muzzle.getWorldPosition(new THREE.Vector3());
+  }
+
+  /** Hides a unit for a moment (a song taking it apart and putting it back elsewhere). */
+  setHidden(id: string, hidden: boolean): void {
+    const v = this.views.get(id);
+    if (!v) return;
+    v.animating = hidden;
+    v.rig.root.visible = !hidden;
   }
 
   forceVisible(id: string): void {
@@ -463,6 +484,30 @@ export class UnitViews {
       if (o instanceof THREE.Mesh) o.castShadow = false;
     });
     v.animating = false;
+  }
+
+  /** Último verso: the fallen soldier gets back on its feet. */
+  async rise(id: string): Promise<void> {
+    const v = this.views.get(id);
+    if (!v || !v.dead) return;
+    v.animating = true;
+    await tween(0.6, (t) => {
+      v.pose.fall = 1 - t * (2 - t);
+      v.pose.flash = 0.5 * (1 - t);
+    });
+    this.standUp(v);
+    v.animating = false;
+  }
+
+  private standUp(v: UnitView): void {
+    v.dead = false;
+    v.pose.fall = 0;
+    v.pose.flash = 0;
+    v.ring.visible = true;
+    v.flag.visible = true;
+    v.rig.root.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.castShadow = true;
+    });
   }
 
   async reload(id: string): Promise<void> {

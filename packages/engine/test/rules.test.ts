@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { abilitiesOf, abilityBlocker, abilityTargets, allyTargets, canTargetTile, meleeTargets } from '../src/abilities';
-import { ABILITIES, isAttack, perksFor } from '../src/content';
+import { autoBuild, soldierStats } from '../src/classes';
+import { ABILITIES, isAttack } from '../src/content';
 import { previewShot } from '../src/aim';
 import { cloneState, applyEvent, type GameEvent } from '../src/events';
 import { MAPS, parseMap } from '../src/maps';
@@ -422,16 +423,13 @@ describe('replication', () => {
     return { type: 'move', unit: u.id, to: { x: u.pos.x + dx, y: u.pos.y + dy } };
   }
 
-  /** Gives every soldier a random pick of their class's perks (all tiers). */
+  /** Makes every soldier a colonel with a random spread of aptitudes and talents. */
   function veterans(s: GameState, rng: Rng): void {
     for (const u of s.units) {
       if (u.team !== 'xcom' || u.template === 'vip') continue;
-      for (const tier of [1, 2, 3, 4, 5] as const) {
-        const options = perksFor(u.template as ClassId, tier);
-        const perk = rng.pick(options);
-        u.perks.push(perk.id);
-        for (const [c, n] of Object.entries(perk.charges ?? {})) u.charges[c as keyof typeof u.charges] = (u.charges[c as keyof typeof u.charges] ?? 0) + n;
-      }
+      const cls = u.template as ClassId;
+      const stats = soldierStats(autoBuild(cls, 7, rng));
+      Object.assign(u, { rank: 7, perks: stats.perks, mods: stats.mods, charges: stats.charges, maxHp: stats.maxHp, hp: stats.maxHp, will: stats.will, armor: stats.armor });
     }
   }
 

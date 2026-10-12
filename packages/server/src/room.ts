@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   abandonMission,
-  addPlayer,
   activeOffer,
+  addPlayer,
   applyMissionResult,
   bastionLevel,
   buildSquad,
@@ -14,16 +14,17 @@ import {
   defaultSquad,
   executeCampaignCommand,
   executeCommand,
+  hasAdjacency,
   missionInfo,
   PLAYER_COLORS,
   Rng,
   syncTurn,
+  type BaseView,
   type CampaignMessage,
   type CampaignState,
-  type HostAddress,
-  type BaseView,
   type ClientMessage,
   type GameState,
+  type HostAddress,
   type MapSource,
   type MissionKind,
   type PlayerInfo,
@@ -321,6 +322,8 @@ export class Room {
       vipName: info.vipName,
       leader: info.leader,
     });
+    // The Cámara de Ecos wall to wall with the listening post: songs don't give the squad away.
+    if (hasAdjacency(c, 'echoes')) this.state.quietSongs = true;
     this.resultApplied = false;
     this.phase = 'mission';
     console.log(`[room] Misión de campaña: ${offer.name}.`);

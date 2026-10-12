@@ -5,7 +5,8 @@ import { GeoscapeSet } from '../strategy/geoscape';
 import { Stage } from '../strategy/stage';
 import '../strategy/strategy.css';
 import { append, clear, h } from './dom';
-import { graphicsSettings } from './settingsPanel';
+import { graphicsSettings, soundSettings, themeSettings } from './settingsPanel';
+import { otherUiTheme, setUiTheme, UI_THEMES, uiTheme } from './theme';
 
 export interface LobbyHandlers {
   onJoin(name: string): void;
@@ -35,7 +36,7 @@ const MAPS: { id: SkirmishMap; name: string; text: string }[] = [
  */
 export class Lobby {
   private readonly root = h('div.menu');
-  private readonly stage = new Stage();
+  private readonly stage = Object.assign(new Stage(), { soundtrack: false });
   private readonly column = h('div.menu-column');
   private readonly squadBox = h('div.menu-squad.x-panel');
   private readonly errorEl = h('div.menu-error');
@@ -205,6 +206,19 @@ export class Lobby {
         'Ajustes',
         h('small', {}, 'Gráficos y rendimiento'),
       ),
+      // The interface's look, one click from the start (also in Ajustes and the in-game menu).
+      h(
+        'button.menu-item',
+        {
+          title: UI_THEMES[otherUiTheme()].hint,
+          onclick: () => {
+            setUiTheme(otherUiTheme());
+            this.render();
+          },
+        },
+        `Interfaz: ${UI_THEMES[uiTheme()].name}`,
+        h('small', {}, `Cambiar a ${UI_THEMES[otherUiTheme()].name}`),
+      ),
       ok ? null : h('p.menu-hint', {}, 'Conectando con el servidor…'),
     );
   }
@@ -212,7 +226,7 @@ export class Lobby {
   private renderSettings(): void {
     append(
       this.column,
-      h('div.x-panel.menu-panel', {}, h('div.x-head', {}, 'Ajustes'), graphicsSettings(() => this.render())),
+      h('div.x-panel.menu-panel', {}, h('div.x-head', {}, 'Ajustes'), themeSettings(() => this.render()), soundSettings(() => this.render()), graphicsSettings(() => this.render())),
       h(
         'button.menu-item.back',
         {

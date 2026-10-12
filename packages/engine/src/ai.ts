@@ -172,7 +172,7 @@ export function takeAlienTurn(sim: Sim, u: Unit): void {
 
     // Sectoids go for the mind first, and raise the dead when they can.
     if (usable('mindspin') && sim.alienBudget.psi > 0) {
-      const victims = abilityTargets(s, u, 'mindspin').sort((a, b) => b.rank - a.rank || psiChance(b) - psiChance(a) || a.id.localeCompare(b.id));
+      const victims = abilityTargets(s, u, 'mindspin').sort((a, b) => b.rank - a.rank || psiChance(b, s) - psiChance(a, s) || a.id.localeCompare(b.id));
       if (victims.length) {
         sim.alienBudget.psi--;
         sim.perform(u, 'mindspin', { target: victims[0]! });

@@ -87,7 +87,24 @@ export type GameEvent =
   /** New units on the battlefield (reinforcements), already formed. */
   | { t: 'spawned'; units: Unit[]; pod: Pod; reinforcement: string | null }
   /** An inactive pod heads for its next patrol waypoint. */
-  | { t: 'patrol'; pod: string; index: number };
+  | { t: 'patrol'; pod: string; index: number }
+  // Velmar's Canto.
+  /** A song is sung (for the effects): on whom, or where. */
+  | { t: 'sung'; unit: string; ability: AbilityId; targets: string[]; tile?: Vec2 }
+  /** Salto de eco, Paso de sombra. */
+  | { t: 'teleported'; unit: string; from: Vec2; to: Vec2 }
+  /** Juramento de Velmar: turns it lasts. */
+  | { t: 'oath'; unit: string; turns: number }
+  /** Contracanto: turns of immunity to the Cantores. */
+  | { t: 'warded'; unit: string; turns: number }
+  /** Himno, Paso de sombra: aim until the unit's next turn. */
+  | { t: 'blessed'; unit: string; aim: number }
+  /** Marca del cazador: `by` gets +15 aim and crit against `unit` until it dies. */
+  | { t: 'hunted'; unit: string; by: string }
+  /** Último verso: back on its feet. */
+  | { t: 'revived'; unit: string; hp: number }
+  /** Silencio: a zone where the Cantores can't sing. */
+  | { t: 'silenced'; pos: Vec2; radius: number; turns: number };
 
 function unit(s: GameState, id: string) {
   const u = getUnit(s, id);
@@ -123,6 +140,8 @@ export function applyEvent(s: GameState, e: GameEvent): void {
         for (const u of s.units) u.marked = 0;
         for (const cloud of s.smoke) cloud.turns--;
         s.smoke = s.smoke.filter((cloud) => cloud.turns > 0);
+        for (const zone of s.silences ?? []) zone.turns--;
+        if (s.silences) s.silences = s.silences.filter((zone) => zone.turns > 0);
       }
       for (const u of s.units) {
         if (!u.alive) continue;
@@ -139,6 +158,10 @@ export function applyEvent(s: GameState, e: GameEvent): void {
         u.hunkered = false;
         u.aided = 0;
         u.refunded = false;
+        // Songs that last a number of the unit's own turns.
+        if (u.blessed) u.blessed = 0;
+        if (u.oath) u.oath--;
+        if (u.ward) u.ward--;
         endSuppression(s, u);
         for (const id of Object.keys(u.cooldowns) as AbilityId[]) {
           const left = (u.cooldowns[id] ?? 0) - 1;
@@ -189,6 +212,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       const u = unit(s, e.unit);
       u.alive = false;
       u.hp = 0;
+      u.fellTurn = s.turn;
       u.ap = 0;
       u.overwatch = false;
       u.hunkered = false;
@@ -307,6 +331,36 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     }
     case 'smokeDeployed':
       s.smoke.push({ pos: { ...e.pos }, radius: e.radius, turns: e.turns });
+      break;
+    case 'sung':
+      break;
+    case 'teleported':
+      unit(s, e.unit).pos = { ...e.to };
+      break;
+    case 'oath':
+      unit(s, e.unit).oath = e.turns;
+      break;
+    case 'warded':
+      unit(s, e.unit).ward = e.turns;
+      break;
+    case 'blessed': {
+      const u = unit(s, e.unit);
+      u.blessed = Math.max(u.blessed ?? 0, e.aim);
+      break;
+    }
+    case 'hunted':
+      unit(s, e.unit).huntedBy = e.by;
+      break;
+    case 'revived': {
+      const u = unit(s, e.unit);
+      u.alive = true;
+      u.hp = Math.min(u.maxHp, e.hp);
+      u.ap = 0;
+      u.fellTurn = undefined;
+      break;
+    }
+    case 'silenced':
+      (s.silences ??= []).push({ pos: { ...e.pos }, radius: e.radius, turns: e.turns });
       break;
     case 'disoriented':
       unit(s, e.unit).disoriented = 1;

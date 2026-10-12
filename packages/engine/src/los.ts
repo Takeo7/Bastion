@@ -78,8 +78,13 @@ export function sightOrigin(s: GameState, from: Vec2, to: Vec2, range: number): 
   return null;
 }
 
+/** Tiles a unit sees: its kind's, plus Ojos del viento. */
+export function sightOf(u: Unit): number {
+  return TEMPLATES[u.template].sight + (u.mods?.sight ?? 0);
+}
+
 export function canSee(s: GameState, viewer: Unit, target: Unit, viewerPos: Vec2 = viewer.pos): boolean {
-  return sightOrigin(s, viewerPos, target.pos, TEMPLATES[viewer.template].sight) !== null;
+  return sightOrigin(s, viewerPos, target.pos, sightOf(viewer)) !== null;
 }
 
 /** Whether a viewer standing at `from` can see the tile `to` (no peeks on the target side). */
@@ -98,7 +103,7 @@ export function teamVisibility(s: GameState, team: Unit['team']): boolean[] {
   const mask = new Array<boolean>(s.width * s.height).fill(false);
   const viewers = s.units.filter((u) => isViewer(u, team));
   for (const u of viewers) {
-    const range = TEMPLATES[u.template].sight;
+    const range = sightOf(u);
     const origins = peekOrigins(s, u.pos);
     const minX = Math.max(0, Math.floor(u.pos.x - range));
     const maxX = Math.min(s.width - 1, Math.ceil(u.pos.x + range));

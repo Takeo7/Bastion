@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { baseAttrs } from '../src/classes';
 import {
   applyMissionResult,
   buildSquad,
@@ -16,6 +17,7 @@ import {
   neighbours,
   plotAt,
   plotById,
+  pointsToSpend,
   recruitCost,
   walkways,
   beds,
@@ -158,14 +160,14 @@ describe('buildings and their levels', () => {
   it('the bunker sleeps the first eight; recruiting needs a barracón (2/3/4 beds, one more by the Cuartel)', () => {
     const c = solo();
     expect(beds(c)).toBe(8);
-    expect(() => run(c, { type: 'recruit', cls: 'assault' })).toThrow(/camas/);
+    expect(() => run(c, { type: 'recruit' })).toThrow(/camas/);
     plotById(c, '4,4')!.building = 'quarters';
     expect(beds(c)).toBe(10);
     plotById(c, '4,4')!.level = 3;
     expect(beds(c)).toBe(12);
     plotById(c, '2,4')!.building = 'quarters';
     expect(beds(c)).toBe(12 + 3);
-    run(c, { type: 'recruit', cls: 'assault' });
+    run(c, { type: 'recruit' });
     expect(bedsFree(c)).toBe(15 - 9);
   });
 
@@ -202,12 +204,12 @@ describe('buildings and their levels', () => {
     expect(squadMember(c, s0).mods.aim).toBe(aim + 10);
     put('3,4', 'training', 3);
     expect(squadMember(c, s0).mods.aim).toBe(aim + 12);
-    // Training at level 3: recruits arrive as Cabo, with their two promotions to choose.
+    // Training at level 3: recruits arrive as Cabo, with the points of two promotions to spend.
     put('1,3', 'quarters');
-    run(c, { type: 'recruit', cls: 'assault' });
+    run(c, { type: 'recruit' });
     const recruit = c.soldiers[c.soldiers.length - 1]!;
     expect(recruit.rank).toBe(2);
-    expect(recruit.pendingTiers).toEqual([1, 2]);
+    expect(pointsToSpend(recruit)).toEqual({ attrs: 4, talents: 4 });
     // Works brigade: a quarter off the days of every work.
     put('4,2', 'crew');
     run(c, { type: 'build', plot: '4,4', facility: 'infirmary' });
@@ -351,11 +353,11 @@ describe('equipment', () => {
 });
 
 describe('migration', () => {
-  it('an old campaign gets a base, regions, loadouts and its perks re-tiered', () => {
+  it('an old campaign gets a base, regions, loadouts and its promotion points back', () => {
     const c = createCampaign([0], new Rng(1)) as unknown as Record<string, unknown>;
     for (const key of ['base', 'regions', 'inventory', 'credits', 'xp', 'nextFacilityDay', 'nextSupplyDay', 'nextEventDay', 'event']) delete c[key];
     // Version 3 and older: three resources, research and engineering upgrades.
-    Object.assign(c, { resources: { supplies: 100, intel: 20, alloys: 10 }, research: { done: ['alienEncryption'] }, upgrades: ['magWeapons'], corpses: ['sectoid'] });
+    Object.assign(c, { version: 3, resources: { supplies: 100, intel: 20, alloys: 10 }, research: { done: ['alienEncryption'] }, upgrades: ['magWeapons'], corpses: ['sectoid'] });
     const soldiers = c.soldiers as { rank: number; perks: string[]; loadout?: unknown }[];
     soldiers[0]!.rank = 2;
     soldiers[0]!.perks = ['pointBlank', 'elusive'];
@@ -365,8 +367,11 @@ describe('migration', () => {
     const m = migrateCampaign(c as unknown as CampaignState);
     expect(m.base.plots).toHaveLength(BASE_SIZE * BASE_SIZE);
     expect(m.regions.find((r) => r.id === 'weu')!.contacted).toBe(true);
-    expect(m.soldiers[0]!.perks).toEqual(['pointBlank']);
-    expect(m.soldiers[0]!.pendingTiers).toEqual([2]);
+    // The old perks don't fit the talent trees: every point of the rank comes back.
+    expect(m.soldiers[0]!.attrs).toEqual(baseAttrs(m.soldiers[0]!.cls));
+    expect(m.soldiers[0]!.talents).toEqual({});
+    expect(pointsToSpend(m.soldiers[0]!)).toEqual({ attrs: 4, talents: 4 });
+    expect('perks' in m.soldiers[0]!).toBe(false);
     expect(m.soldiers[0]!.loadout).toEqual({ utility: null, ammo: null });
     // Soldiers from before customization keep their old look.
     expect(m.soldiers[0]!.appearance).toEqual(defaultAppearance(m.soldiers[0]!.cls, 0));
@@ -432,12 +437,13 @@ describe('customization', () => {
     expect(defaultAppearance('assault', 1).primary).toBe('#bc854b');
   });
 
-  it('new recruits start with their class look in their player colours', () => {
+  it('new recruits come without a class, with a recruit look in their player colours', () => {
     const c = solo();
     for (const s of c.soldiers.slice(2)) s.alive = false;
-    run(c, { type: 'recruit', cls: 'sharpshooter' });
+    run(c, { type: 'recruit' });
     const s = c.soldiers.at(-1)!;
-    expect(s.appearance).toEqual(defaultAppearance('sharpshooter', 0));
-    expect(s.appearance.head).toBe('hood');
+    expect(s.cls).toBeNull();
+    expect(s.appearance).toEqual(defaultAppearance(null, 0));
+    expect(s.appearance.head).toBe('helmet');
   });
 });

@@ -2,15 +2,33 @@ import './strategy.css';
 import {
   ARMOR_COLORS,
   ARMOR_TIERS,
+  ATTR_IDS,
+  ATTR_POINTS_PER_RANK,
+  ATTR_THRESHOLDS,
+  attrBlocker,
+  attrCap,
+  ATTRS,
   armorTier,
   baseArmorTier,
   baseWeaponTier,
   bastionLevel,
   BIOME_NAMES,
+  BRANCHES,
   BUILD_IDS,
   buildable,
   BUILDS,
   canAfford,
+  CLASS_TOP,
+  CENTER,
+  CENTER_NAME,
+  AXES,
+  axesOf,
+  baseAttrs,
+  echoesLevel,
+  RECRUIT_DESCRIPTION,
+  soldierTemplate,
+  songRowLevel,
+  wouldSpecialize,
   contactCapacity,
   contactCost,
   costText,
@@ -71,12 +89,14 @@ import {
   offerBriefing,
   offerSignature,
   PARTITURA_LEVEL,
-  PERKS,
   QUESTS,
-  perksFor,
+  pointsInAxis,
+  pointsInBranch,
+  pointsToSpend,
   randomAppearance,
-  RANK_AIM,
   RANKS,
+  retrainCost,
+  ROW_GATES,
   RECRUIT_COST,
   REGION_LORE,
   regionIncome,
@@ -92,10 +112,16 @@ import {
   squadMax,
   squadMember,
   STORY,
+  TALENT_POINTS_PER_RANK,
+  talentBlocker,
+  talentIds,
+  talentsOf,
+  TALENTS,
   TECHS,
   TEMPLATES,
   TIER_RANK,
   TRAITS,
+  VETERAN_AIM,
   VISOR_COLORS,
   WEAPON_TIER_DAMAGE,
   weaponTier,
@@ -110,7 +136,8 @@ import {
   type MissionKind,
   type MissionOffer,
   type NextStep,
-  type PerkTier,
+  type AttrId,
+  type TalentDef,
   type PlayerInfo,
   type RegionId,
   type Slot,
@@ -124,6 +151,8 @@ import { arrowIcon } from '../ui/icons';
 import { BastionSet, LAUNCH_SECONDS, type FixedRoom, type LineupEntry } from './bastion';
 import { GeoscapeSet } from './geoscape';
 import { Stage, type Shot } from './stage';
+import { sound } from '../audio/bank';
+import { uiSound } from '../audio/ui';
 
 export interface StrategyHandlers {
   send(cmd: CampaignCommand): void;
@@ -155,7 +184,6 @@ const REPORT_KEY = storageKey('seenReport');
 const KIND_ICON: Record<MissionKind, string> = { elimination: '✕', recovery: '◆', sabotage: 'ϟ', hack: '⌘', rescue: '✚' };
 const DIFFICULTY = ['', 'Moderada', 'Difícil', 'Muy difícil', 'Extrema'];
 const CLASSES: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'];
-const TIERS: PerkTier[] = [1, 2, 3, 4, 5];
 
 const NAV: { view: BaseView; label: string }[] = [
   { view: 'hub', label: 'Bastión' },
@@ -256,9 +284,11 @@ export class StrategyScreen {
   private custom: { soldier: string; name: string; nickname: string; appearance: Appearance } | null = null;
   /** The plot picked in the facilities view ("x,y"). */
   private plot: string | null = null;
-  /** The free hangar place whose recruit choice (one button per class) is open. */
-  private recruitPad: number | null = null;
   private promoting = false;
+  /** Soldier whose Reentrenar button waits for a second click. */
+  private retrainArmed: string | null = null;
+  /** Axis of the Rosa open in the Hoja de servicio (null = the soldier's main one). */
+  private sheetAxis: ClassId | null = null;
   /** Open equipment picker ("soldierId:slot"). */
   private picking: string | null = null;
   /** The alert on screen last time, so turning the globe to it happens once. */
@@ -485,8 +515,9 @@ export class StrategyScreen {
   }
 
   /** A soldier's class: its symbol and short code, the full name on hover. */
-  private clsTag(cls: ClassId): HTMLElement {
-    return h(`span.cls.cls-${cls}`, { title: TEMPLATES[cls].name }, h('i'), TEMPLATES[cls].short);
+  private clsTag(cls: ClassId | null): HTMLElement {
+    const t = soldierTemplate(cls);
+    return h(`span.cls.cls-${t}`, { title: cls ? TEMPLATES[t].name : RECRUIT_DESCRIPTION }, h('i'), TEMPLATES[t].short);
   }
 
   /** Tier diamonds, coloured like the guns: steel, magnetic, plasma. */
@@ -568,6 +599,8 @@ export class StrategyScreen {
     for (const e of c.log.slice(0, seen === -1 ? c.log.length : seen).reverse()) {
       if (e.alert) fresh.push(this.logAlert(c, e.tone, e.alert, e.text));
     }
+    // The clock as the days pass.
+    if (c.day > prev.day) sound('ui.tick');
     if (c.day > prev.day && !newReport) this.timeAlerts(prev, c, fresh);
     this.flushAlerts(fresh);
   }
@@ -1501,8 +1534,8 @@ export class StrategyScreen {
         this.clsTag(s.cls),
         h('b', { title: RANKS[s.rank]!.name }, displayName(s.name, s.nickname)),
         h('span.rank', { title: RANKS[s.rank]!.name }, ...Array.from({ length: s.rank }, () => h('i'))),
-        s.pendingTiers.length && s.alive
-          ? this.chip('▲', 'good', 'Ascenso pendiente: elige habilidad')
+        this.hasPoints(s)
+          ? this.chip('▲', 'good', 'Ascenso: puntos de aptitud y de talento por repartir')
           : h(`span.x-side${!s.alive ? '.x-bad' : s.woundedDays ? '.x-warn' : ''}`, {}, !s.alive ? 'Caído' : s.woundedDays ? `${s.woundedDays} d` : 'Listo'),
       );
     const count = mine.filter((s) => s.alive).length;
@@ -1525,7 +1558,7 @@ export class StrategyScreen {
       h(
         'div.x-recruit',
         {},
-        ...CLASSES.map((cls) => h(`button.cls-${cls}`, { disabled: !!blockedRecruit, onclick: () => this.send({ type: 'recruit', cls }) }, h('i'), TEMPLATES[cls].name)),
+        h('button.cls-rookie', { disabled: !!blockedRecruit, title: RECRUIT_DESCRIPTION, onclick: () => this.send({ type: 'recruit' }) }, h('i'), `Reclutar ${TEMPLATES.rookie.name.toLowerCase()}`),
       ),
       this.whyEl(blockedRecruit),
     );
@@ -1596,9 +1629,9 @@ export class StrategyScreen {
       this.panel(
         'barracks-right',
         'right',
-        h('div.alert-kicker', {}, `${TEMPLATES[s.cls].name.toUpperCase()} · ${isMine ? 'TUYO' : `DE ${this.playerName(s.owner).toUpperCase()}`}`),
+        h('div.alert-kicker', {}, `${TEMPLATES[soldierTemplate(s.cls)].name.toUpperCase()} · ${isMine ? 'TUYO' : `DE ${this.playerName(s.owner).toUpperCase()}`}`),
         h('h2.x-title', { title: `Misiones: ${s.missions} · Bajas: ${s.kills}` }, displayName(s.name, s.nickname)),
-        h('p.x-sub', {}, `${RANKS[s.rank]!.name} · ${soldierWeaponName(s.cls, weaponTier(c, s))}`),
+        h('p.x-sub', {}, `${RANKS[s.rank]!.name} · ${soldierWeaponName(soldierTemplate(s.cls), weaponTier(c, s))}`),
         isMine && s.alive
           ? h(
               'button.x-btn.small',
@@ -1612,7 +1645,7 @@ export class StrategyScreen {
           'div.x-statline',
           {},
           this.stat('hp', String(stats.maxHp), 'Salud'),
-          this.stat('aim', String(TEMPLATES[s.cls].aim + stats.mods.aim), `Puntería (cada rango da +${RANK_AIM})`),
+          this.stat('aim', String(TEMPLATES[soldierTemplate(s.cls)].aim + stats.mods.aim), `Puntería: 50 + 3 por punto de Pulso + ${VETERAN_AIM} por ascenso`),
           this.stat('will', String(stats.will), 'Voluntad'),
           h(`b.x-state${!s.alive ? '.x-bad' : s.woundedDays ? '.x-warn' : '.x-good'}`, {}, !s.alive ? 'Caído' : s.woundedDays ? `Herido · ${s.woundedDays} d` : 'Listo'),
         ),
@@ -1621,7 +1654,7 @@ export class StrategyScreen {
         h('div.x-group', {}, 'Equipo'),
         ...(['weapon', 'armor'] as const).map((kind) => {
           const tier = kind === 'weapon' ? weaponTier(c, s) : armorTier(c, s);
-          const name = kind === 'weapon' ? soldierWeaponName(s.cls, tier) : ARMOR_TIERS[tier - 1]!.name;
+          const name = kind === 'weapon' ? soldierWeaponName(soldierTemplate(s.cls), tier) : ARMOR_TIERS[tier - 1]!.name;
           const blocker = s.alive ? nextTierBlocker(c, s, kind) : null;
           const tech = tier < 3 ? (kind === 'weapon' ? [TECHS.magWeapons, TECHS.plasmaWeapons] : [TECHS.plateArmor, TECHS.predatorArmor])[tier - 1]! : null;
           const short = tech ? `→ Nv ${tech.level} · ${RANKS[TIER_RANK[tier as 1 | 2]]!.name}` : '';
@@ -1629,14 +1662,23 @@ export class StrategyScreen {
         }),
         loadout('utility', 'Utilidad'),
         loadout('ammo', 'Munición'),
-        h('div.x-group', {}, 'Habilidades'),
-        s.perks.length
-          ? h('p.x-chips', {}, ...s.perks.map((p) => this.chip(PERKS[p].name, '', PERKS[p].description)))
-          : h('p.x-muted', {}, `Llegan al ascender a ${RANKS[1]!.name}.`),
+        h('div.x-group', {}, 'Aptitudes'),
+        h('p.x-chips', {}, ...ATTR_IDS.map((id) => this.chip(`${ATTRS[id].short} ${s.attrs[id]}`, '', `${ATTRS[id].name}: ${ATTRS[id].effect}`))),
+        h('div.x-group', {}, 'Talentos'),
+        talentIds(s.talents).length
+          ? h(
+              'p.x-chips',
+              {},
+              ...talentIds(s.talents).map((id) => {
+                const d = TALENTS[id];
+                return this.chip(d.max > 1 ? `${d.name} ${s.talents[id]}/${d.max}` : d.name, '', d.description);
+              }),
+            )
+          : h('p.x-muted', {}, `Cada ascenso da ${TALENT_POINTS_PER_RANK} puntos de talento, desde ${RANKS[1]!.name}.`),
         h(
-          `button.x-btn${s.pendingTiers.length && isMine && s.alive ? '.primary.waiting' : ''}`,
-          { onclick: () => ((this.promoting = true), this.render()) },
-          s.pendingTiers.length && isMine && s.alive ? '¡Ascenso! Elegir habilidad' : 'Árbol de habilidades',
+          `button.x-btn${this.hasPoints(s) && isMine ? '.primary.waiting' : ''}`,
+          { onclick: () => ((this.promoting = true), (this.retrainArmed = null), this.render()) },
+          this.hasPoints(s) && isMine ? '¡Ascenso! Repartir puntos' : 'Hoja de servicio',
         ),
       ),
     );
@@ -1690,7 +1732,7 @@ export class StrategyScreen {
       );
     const blocked = this.why([!d.name.trim(), 'Ponle un nombre']);
     return [
-      h('div.alert-kicker', {}, `PERSONALIZAR · ${TEMPLATES[s.cls].name.toUpperCase()}`),
+      h('div.alert-kicker', {}, `PERSONALIZAR · ${TEMPLATES[soldierTemplate(s.cls)].name.toUpperCase()}`),
       h('h2.x-title', {}, displayName(d.name.trim() || s.name, d.nickname.trim())),
       text('name', 'Nombre', NAME_MAX, s.name),
       text('nickname', 'Apodo', NICKNAME_MAX, 'Sin apodo'),
@@ -1726,35 +1768,154 @@ export class StrategyScreen {
     ];
   }
 
-  /** XCOM-style promotion screen: ranks down, the two choices across. */
-  private promotionPanel(s: CampaignSoldier): HTMLElement {
+  /** Alive and with aptitude or talent points waiting. */
+  private hasPoints(s: CampaignSoldier): boolean {
+    const free = pointsToSpend(s);
+    return s.alive && free.attrs + free.talents > 0;
+  }
+
+  /**
+   * Hoja de servicio: aptitudes on the left; on the right the Rosa, the talent
+   * tree everyone shares: its centre, one tab per axis and that axis's four
+   * branches (the fourth is the Canto). A stopgap until UX/UI's compass.
+   */
+  private promotionPanel(c: CampaignState, s: CampaignSoldier): HTMLElement {
     const isMine = s.owner === this.mySlot && s.alive;
-    const grid = h('div.perk-grid');
-    for (const tier of TIERS) {
-      const rank = RANKS.findIndex((r) => r.perkTier === tier);
-      const pending = s.pendingTiers.includes(tier);
-      grid.append(h('div.rank', {}, RANKS[rank]!.name));
-      for (const perk of perksFor(s.cls, tier)) {
-        const chosen = s.perks.includes(perk.id);
-        const pickable = pending && isMine;
-        grid.append(
-          h(
-            `button.perk-cell${chosen ? '.chosen' : ''}${pickable ? '.pickable' : ''}${s.rank < rank ? '.locked' : ''}`,
-            { disabled: !pickable, onclick: () => this.send({ type: 'promote', soldier: s.id, perk: perk.id }) },
-            h('b', {}, `${perk.name}${perk.ability ? ' ◆' : ''}`),
-            h('small', {}, perk.description),
-          ),
-        );
-      }
-    }
-    return h(
-      'div.x-panel.wide',
+    const free = pointsToSpend(s);
+    const echoes = echoesLevel(c);
+    const base = baseAttrs(s.cls);
+    const apts = ATTR_IDS.map((id: AttrId) => {
+      const def = ATTRS[id];
+      const value = s.attrs[id];
+      const cap = attrCap(s.cls, id);
+      const blocked = attrBlocker(s, id);
+      const boxes = Array.from({ length: 10 }, (_, i) => h(`i${i < base[id] ? '.base' : i < value ? '.add' : i < cap ? '' : '.cap'}${i === 6 || i === 9 ? '.mark' : ''}`));
+      const own = !!s.cls && CLASS_TOP[s.cls].includes(id);
+      return h(
+        'div.apt',
+        {},
+        h('div.apt-head', {}, h('b', {}, def.name), h('small', {}, def.short), h('span.apt-val', {}, String(value))),
+        h(
+          'div.apt-row',
+          {},
+          h('span.apt-boxes', { title: s.cls ? `Tope ${cap}${own ? ' (aptitud de la clase)' : ''}` : 'Tope 8 · especialízate para subir a 10 las de tu clase' }, ...boxes),
+          isMine ? h('button.apt-plus', { disabled: !!blocked, title: blocked ?? `Subir ${def.name}`, onclick: () => this.send({ type: 'train', soldier: s.id, attr: id }) }, '+') : null,
+        ),
+        h('small.apt-effect', {}, def.effect),
+        h('ul.apt-th', {}, ...ATTR_THRESHOLDS.map((n, i) => h(`li${value >= n ? '.got' : ''}`, {}, h('b', {}, String(n)), def.thresholds[i]!))),
+      );
+    });
+
+    const card = (d: TalentDef) => {
+      const level = s.talents[d.id] ?? 0;
+      const blocked = talentBlocker(s, d.id, echoes);
+      const open = isMine && !blocked;
+      const shut = !level && !!blocked && level < d.max && !/No quedan puntos/.test(blocked);
+      const becomes = wouldSpecialize(s, d.id);
+      const req = d.req ? h(`span.talent-req${s.attrs[d.req[0]] < d.req[1] ? '.miss' : ''}`, { title: `Pide ${ATTRS[d.req[0]].name} ${d.req[1]}` }, `${ATTRS[d.req[0]].short} ${d.req[1]}`) : null;
+      return h(
+        `button.talent${level ? '.taken' : ''}${open ? '.open' : ''}${shut ? '.shut' : ''}${d.coop ? '.coop' : ''}${d.song ? '.song' : ''}`,
+        { disabled: !open, title: isMine && blocked && level < d.max ? blocked : d.coop ? 'Llave doble: solo funciona junto a soldados de tu compañero.' : '', onclick: () => this.send({ type: 'talent', soldier: s.id, talent: d.id }) },
+        h('b', {}, d.name, d.ability ? ' ◆' : '', d.coop ? ' ⚷⚷' : ''),
+        h('span.talent-levels', {}, ...Array.from({ length: d.max }, (_, i) => h(`i${i < level ? '.on' : ''}`)), h('small', {}, `${level}/${d.max}`), req),
+        h('small.talent-desc', {}, d.description),
+        becomes && open ? h('small.talent-becomes', {}, `Te especializa como ${TEMPLATES[becomes].name}`) : null,
+      );
+    };
+
+    const { second } = axesOf(s);
+    const axis = this.sheetAxis ?? s.cls ?? 'assault';
+    const tabs = h(
+      'div.rosa-axes',
       {},
-      h('div.alert-kicker', {}, `${TEMPLATES[s.cls].name.toUpperCase()} · ${RANKS[s.rank]!.name.toUpperCase()}`),
+      ...AXES.map((a) => {
+        const role = a === s.cls ? 'principal' : a === second ? 'segundo eje' : '';
+        const points = pointsInAxis(s.talents, a);
+        return h(
+          `button.x-btn.small${a === axis ? '.on' : ''}`,
+          { onclick: () => ((this.sheetAxis = a), this.render()) },
+          this.clsTag(a),
+          ` ${TEMPLATES[a].name}`,
+          points ? h('small', {}, ` · ${points}`) : null,
+          role ? h('small', {}, ` · ${role}`) : null,
+        );
+      }),
+    );
+    const grid = h('div.talent-grid.four');
+    grid.append(h('div'));
+    BRANCHES[axis].forEach((b, i) =>
+      grid.append(
+        h(
+          `div.talent-branch${b.song ? '.song' : ''}`,
+          {},
+          h('b', {}, b.name),
+          h('small', {}, b.song ? (echoes ? `Cámara de Ecos · nivel ${echoes}` : 'Hace falta la Cámara de Ecos') : b.focus),
+          h('span', {}, `${pointsInBranch(s.talents, axis, i)} puntos`),
+        ),
+      ),
+    );
+    ROW_GATES.forEach((gate, row) => {
+      grid.append(h('div.talent-gate', { title: `Esta fila pide ${gate} puntos en la rama, en las filas de arriba (en el Canto, uno por fila)` }, h('b', {}, String(gate)), h('small', {}, 'puntos')));
+      for (const branch of [0, 1, 2, 3]) {
+        const cards = talentsOf(axis).filter((d) => d.branch === branch && d.row === row);
+        const songLocked = branch === 3 && songRowLevel(row) > echoes;
+        grid.append(h(`div.talent-cell${songLocked ? '.locked' : ''}`, { title: songLocked ? `Cámara de Ecos · nivel ${songRowLevel(row)}` : '' }, ...cards.map(card)));
+      }
+    });
+
+    const cost = retrainCost(c);
+    const spent = free.attrs < ATTR_POINTS_PER_RANK * s.rank || free.talents < TALENT_POINTS_PER_RANK * s.rank;
+    const armed = this.retrainArmed === s.id;
+    const retrain =
+      isMine && spent
+        ? h(
+            `button.x-btn.small${armed ? '.danger' : ''}`,
+            {
+              disabled: !canAfford(c, cost),
+              title: canAfford(c, cost) ? 'Devuelve todos los puntos de aptitud y de talento, y deja al soldado sin clase' : this.shortfall(cost),
+              onclick: () => {
+                if (!armed) {
+                  this.retrainArmed = s.id;
+                  this.render();
+                  return;
+                }
+                this.retrainArmed = null;
+                this.send({ type: 'retrain', soldier: s.id });
+              },
+            },
+            armed ? `Confirmar: devolver todo por ${costText(cost)}` : `Reentrenar · ${costText(cost)}`,
+          )
+        : null;
+    const pending = isMine && free.attrs + free.talents > 0;
+    return h(
+      'div.x-panel.wide.service',
+      {},
+      h('div.alert-kicker', {}, `${TEMPLATES[soldierTemplate(s.cls)].name.toUpperCase()} · ${RANKS[s.rank]!.name.toUpperCase()}`),
       h('h2.x-title', {}, displayName(s.name, s.nickname)),
-      h('p.x-sub', {}, isMine && s.pendingTiers.length ? 'Elige una habilidad para cada ascenso pendiente.' : 'Las habilidades con ◆ son activas (enfriamiento o usos limitados).'),
-      grid,
-      h('div.alert-actions', {}, h('button.x-btn', { onclick: () => ((this.promoting = false), this.render()) }, 'Cerrar')),
+      h(
+        'p.x-sub',
+        {},
+        s.cls ? '' : `${TEMPLATES.rookie.name}: 2 puntos en un eje te especializan. `,
+        pending
+          ? `Por repartir: ${free.attrs} de aptitud y ${free.talents} de talento.`
+          : `Cada ascenso da ${ATTR_POINTS_PER_RANK} puntos de aptitud y ${TALENT_POINTS_PER_RANK} de talento.`,
+        ' ◆ activa · ⚷⚷ llave doble: solo junto a soldados de tu compañero.',
+      ),
+      h(
+        'div.service-sheet',
+        {},
+        h('div.service-apts', {}, h('div.x-group', {}, 'Aptitudes', isMine ? this.chip(`${free.attrs} libres`, free.attrs ? 'good' : '') : null), ...apts, retrain),
+        h(
+          'div.service-tree',
+          {},
+          h('div.x-group', {}, 'La Rosa', isMine ? this.chip(`${free.talents} libres`, free.talents ? 'good' : '') : null),
+          h('div.x-group', {}, CENTER_NAME),
+          h('div.talent-center', {}, ...CENTER.map(card)),
+          tabs,
+          grid,
+        ),
+      ),
+      h('div.alert-actions', {}, h('button.x-btn', { onclick: () => ((this.promoting = false), (this.retrainArmed = null), (this.sheetAxis = null), this.render()) }, 'Cerrar')),
     );
   }
 
@@ -1950,7 +2111,7 @@ export class StrategyScreen {
     const max = squadMax(c);
     const limit = squadLimit(c, this.connected());
     const squad = c.squad.map((id) => c.soldiers.find((s) => s.id === id)).filter((s): s is CampaignSoldier => !!s);
-    this.bastion.setLineup(Array.from({ length: max }, (_, i) => (squad[i] ? { template: squad[i]!.cls, color: this.playerColor(squad[i]!.owner), appearance: squad[i]!.appearance, gear: this.gearFor(c, squad[i]!) } : null)));
+    this.bastion.setLineup(Array.from({ length: max }, (_, i) => (squad[i] ? { template: soldierTemplate(squad[i]!.cls), color: this.playerColor(squad[i]!.owner), appearance: squad[i]!.appearance, gear: this.gearFor(c, squad[i]!) } : null)));
     const myCount = squad.filter((s) => s.owner === this.mySlot).length;
 
     this.viewEl.append(
@@ -2031,12 +2192,12 @@ export class StrategyScreen {
             'div.lineup-card',
             { style: { '--accent': this.playerColor(s.owner) } },
             h('b', {}, displayName(s.name, s.nickname)),
-            h('small', {}, `${TEMPLATES[s.cls].name} · ${RANKS[s.rank]!.name}`),
+            h('small', {}, `${TEMPLATES[soldierTemplate(s.cls)].name} · ${RANKS[s.rank]!.name}`),
             c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
             s.owner === this.mySlot ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
           )
         : recruitable
-          ? this.recruitCard(c, i, cost)
+          ? this.recruitCard(c, cost)
           : h('div.lineup-card.empty', { title: spare ? 'Elige un soldado a la izquierda' : '' }, h('b', {}, 'Libre'));
       card.dataset.pad = String(i);
       cards.append(card);
@@ -2045,45 +2206,23 @@ export class StrategyScreen {
     this.anchorCards(cards, max);
   }
 
-  /** A free hangar place: «Reclutar» opens one button per class, and the recruit goes straight into the squad. */
-  private recruitCard(c: CampaignState, pad: number, cost: number): HTMLElement {
+  /** A free hangar place: «Reclutar» brings a recruit (no class yet) straight into the squad. */
+  private recruitCard(c: CampaignState, cost: number): HTMLElement {
     const afford = canAfford(c, cost);
     return h(
       'div.lineup-card.empty.recruit',
       {},
       h('b', {}, 'Libre'),
-      this.recruitPad === pad
-        ? h(
-            'div.recruit-classes',
-            {},
-            ...CLASSES.map((cls) =>
-              h(
-                'button.x-btn.small',
-                {
-                  title: `Reclutar ${TEMPLATES[cls].name.toLowerCase()} · ${cost} ₡`,
-                  onclick: () => {
-                    this.recruitPad = null;
-                    this.send({ type: 'recruit', cls, squad: true });
-                  },
-                },
-                this.clsTag(cls),
-                TEMPLATES[cls].name,
-              ),
-            ),
-          )
-        : h(
-            'button.x-btn',
-            {
-              disabled: !afford,
-              title: afford ? 'Un soldado nuevo, directo a la escuadra' : this.shortfall(cost),
-              onclick: () => {
-                this.recruitPad = pad;
-                this.render();
-              },
-            },
-            // The price never splits from its sign on a narrow photo.
-            `Reclutar · ${cost}\u00a0₡`,
-          ),
+      h(
+        'button.x-btn',
+        {
+          disabled: !afford,
+          title: afford ? `Un recluta nuevo, directo a la escuadra. ${RECRUIT_DESCRIPTION}` : this.shortfall(cost),
+          onclick: () => this.send({ type: 'recruit', squad: true }),
+        },
+        // The price never splits from its sign on a narrow photo.
+        `Reclutar · ${cost}\u00a0₡`,
+      ),
     );
   }
 
@@ -2126,7 +2265,7 @@ export class StrategyScreen {
     }
     const entries: LineupEntry[] = report.squad.map((e) => {
       const s = c.soldiers.find((x) => x.id === e.id);
-      return { template: e.cls, color: this.playerColor(e.owner), status: e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined };
+      return { template: soldierTemplate(e.cls), color: this.playerColor(e.owner), status: e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined };
     });
     this.bastion.setLineup(entries);
     const r = report.reward;
@@ -2334,8 +2473,10 @@ export class StrategyScreen {
       content = this.newsPanel();
     } else if (this.promoting && this.view === 'barracks') {
       const s = c.soldiers.find((x) => x.id === this.soldier);
-      if (s) content = this.promotionPanel(s);
+      if (s) content = this.promotionPanel(c, s);
     }
+    // A sheet of paper when a notice or a panel opens.
+    if (content && !this.modal.classList.contains('show')) uiSound('paper');
     this.modal.classList.toggle('show', !!content);
     if (content) this.modal.append(content);
   }

@@ -46,7 +46,8 @@ export type ClassId = 'assault' | 'grenadier' | 'sharpshooter' | 'specialist';
 export type AlienId = 'trooper' | 'officer' | 'xenoid' | 'lancer' | 'mec' | 'sectoid' | 'zombie';
 /** Mission objectives that are units: the alien relay to destroy and the VIP to extract. */
 export type ObjectiveId = 'relay' | 'vip';
-export type TemplateId = ClassId | AlienId | ObjectiveId;
+/** 'rookie': a recruit with no class yet (classes.ts), a rifle and the basic actions. */
+export type TemplateId = ClassId | 'rookie' | AlienId | ObjectiveId;
 
 /** Head pieces a soldier can wear (barracks customization). */
 export type HeadId = 'helmet' | 'hood' | 'beret' | 'cap' | 'mask' | 'bare';
@@ -101,7 +102,23 @@ export type AbilityId =
   // Granted by equipment.
   | 'smoke'
   | 'flashbang'
-  | 'firstAid';
+  | 'firstAid'
+  // Velmar's Canto (the Cámara de Ecos): songs, `song: true` in ABILITIES.
+  | 'aegis'
+  | 'echoStep'
+  | 'layOnHands'
+  | 'velmarOath'
+  | 'bolt'
+  | 'silence'
+  | 'fireball'
+  | 'velmarStorm'
+  | 'huntersMark'
+  | 'spectralArrow'
+  | 'shadowStep'
+  | 'lightRain'
+  | 'counterSong'
+  | 'hymn'
+  | 'lastVerse';
 
 /** Abilities that roll to hit against a single unit. */
 export type AttackAbility =
@@ -115,13 +132,30 @@ export type AttackAbility =
   | 'aimedShot'
   | 'rupture'
   | 'lightningHands'
-  | 'faceoff';
+  | 'faceoff'
+  | 'spectralArrow'
+  | 'lightRain';
 
 /** Area abilities thrown or fired at a tile. */
-export type BlastAbility = 'grenade' | 'launch' | 'missiles' | 'discharge' | 'smoke' | 'flashbang';
+export type BlastAbility = 'grenade' | 'launch' | 'missiles' | 'discharge' | 'smoke' | 'flashbang' | 'echoStep' | 'shadowStep' | 'silence' | 'fireball';
 
 /** Limited-use items. */
-export type ChargeId = 'grenade' | 'medkit' | 'missiles' | 'combatProtocol' | 'smoke' | 'flashbang' | 'firstAid';
+export type ChargeId =
+  | 'grenade'
+  | 'medkit'
+  | 'missiles'
+  | 'combatProtocol'
+  | 'smoke'
+  | 'flashbang'
+  | 'firstAid'
+  // Songs with uses: named after their ability.
+  | 'layOnHands'
+  | 'velmarOath'
+  | 'silence'
+  | 'fireball'
+  | 'velmarStorm'
+  | 'lightRain'
+  | 'lastVerse';
 
 /** Equipment fabricated in the base: one utility item and one ammo type per soldier. */
 export type ItemId = 'fragGrenade' | 'smokeGrenade' | 'flashbang' | 'firstAid' | 'nanoVest' | 'mindShield' | 'apRounds' | 'tracerRounds';
@@ -144,7 +178,34 @@ export type EndReason = 'objective' | 'wiped' | 'timer' | 'abandoned' | 'objecti
  */
 export type MissionKind = 'elimination' | 'recovery' | 'sabotage' | 'hack' | 'rescue';
 
+/** Talents of the Rosa (classes.ts TALENTS); the first ten of each class are the original perks. */
 export type PerkId =
+  // Centre: open to every soldier
+  | 'drill'
+  | 'fitness'
+  | 'coolHead'
+  | 'spareGrenade'
+  // Canto (Velmar), one branch per class
+  | 'songBlade'
+  | 'aegis'
+  | 'echoStep'
+  | 'layOnHands'
+  | 'velmarOath'
+  | 'bolt'
+  | 'silence'
+  | 'fireball'
+  | 'highFlame'
+  | 'velmarStorm'
+  | 'huntersMark'
+  | 'spectralArrow'
+  | 'shadowStep'
+  | 'windEyes'
+  | 'lightRain'
+  | 'calmSong'
+  | 'counterSong'
+  | 'hymn'
+  | 'lightHands'
+  | 'lastVerse'
   // Assault
   | 'pointBlank'
   | 'keenBlade'
@@ -156,6 +217,19 @@ export type PerkId =
   | 'toughSkin'
   | 'bladeMaster'
   | 'hunter'
+  | 'steadyHand'
+  | 'bladeCrit'
+  | 'instinct'
+  | 'slug'
+  | 'sideBySide'
+  | 'buckshot'
+  | 'relentless'
+  | 'closeKill'
+  | 'light'
+  | 'feline'
+  | 'evasion'
+  | 'scoutEye'
+  | 'untouchable'
   // Grenadier
   | 'demolition'
   | 'heavyFire'
@@ -167,6 +241,20 @@ export type PerkId =
   | 'armoured'
   | 'chainShot'
   | 'rupture'
+  | 'bandolier'
+  | 'shrapnel'
+  | 'longArm'
+  | 'safeBlast'
+  | 'blastWave'
+  | 'steadyCannon'
+  | 'apCannon'
+  | 'heavyCrit'
+  | 'tripod'
+  | 'marker'
+  | 'bulwark'
+  | 'suppressor'
+  | 'ironNerves'
+  | 'dugIn'
   // Sharpshooter
   | 'deadeye'
   | 'gunslinger'
@@ -178,6 +266,20 @@ export type PerkId =
   | 'hawkEye'
   | 'faceoff'
   | 'killZone'
+  | 'farsight'
+  | 'caliber'
+  | 'armorRounds'
+  | 'serenity'
+  | 'magnum'
+  | 'dancer'
+  | 'holster'
+  | 'fineTrigger'
+  | 'patience'
+  | 'nest'
+  | 'crossfire'
+  | 'post'
+  | 'coldBlood'
+  | 'guardCrit'
   // Specialist
   | 'fieldMedic'
   | 'guardian'
@@ -188,7 +290,18 @@ export type PerkId =
   | 'slippery'
   | 'marksman'
   | 'restoration'
-  | 'capacitorDischarge';
+  | 'capacitorDischarge'
+  | 'bigKit'
+  | 'vocation'
+  | 'surgeon'
+  | 'overcharge'
+  | 'battery'
+  | 'intrusion'
+  | 'tunedRifle'
+  | 'bridge'
+  | 'calm'
+  | 'mutualCover'
+  | 'instructor';
 
 /**
  * Bonuses baked into a unit when a mission starts (rank, perks and the
@@ -219,6 +332,56 @@ export interface UnitMods {
   will: number;
   /** Armour ignored by primary weapon hits (armour-piercing rounds). */
   pierce: number;
+  /** Graze chance against this unit (talents add to the template's). */
+  dodge: number;
+  /** Extra damage on critical hits. */
+  critDamage: number;
+  meleeCrit: number;
+  pistolDamage: number;
+  pistolCrit: number;
+  /** Extra damage within 4 tiles. */
+  closeDamage: number;
+  /** Aim when shooting down from a higher level. */
+  heightAim: number;
+  /** Aim lost to the reaction-shot penalty is cut by this many percentage points. */
+  reactionKeep: number;
+  /** Penalty taken off reaction shots aimed at this unit. */
+  reactionDefense: number;
+  /** Defence while on overwatch. */
+  watchDefense: number;
+  /** Squadsight costs this much less aim per tile. */
+  squadsightKeep: number;
+  /** "Llave doble": aim with a partner's soldier within 4 tiles of the shooter. */
+  pairAim: number;
+  /** "Llave doble": defence with a partner's soldier within 4 tiles. */
+  pairDefense: number;
+  /** "Llave doble": aim against targets within 4 tiles of a partner's soldier. */
+  spotterAim: number;
+  grenadeShred: number;
+  grenadeRange: number;
+  /** Extra aim allies get from this unit's holo-targeting. */
+  holoAim: number;
+  /** Extra aim this unit's Suppression takes away. */
+  suppressAim: number;
+  protocolDamage: number;
+  hack: number;
+  /** Against mindspin: 1 = never panics, 2 = can't be controlled either. */
+  psiGuard: number;
+  // Velmar's Canto (filled in by soldierStats from the Canto talents).
+  /** Knows some song (1/0): for «A dos voces». */
+  singer: number;
+  /** Extra chance a Cantor's song gets against this unit (10 for singers without Temple 10). */
+  songOpen: number;
+  /** Hoja cantada level 2: the Slash disorients on a hit. */
+  slashDisorient: number;
+  /** Llama alta: extra damage of Saeta, Bola de fuego and Tormenta. */
+  songDamage: number;
+  /** Ojos del viento: extra tiles of sight. */
+  sight: number;
+  /** Ojos del viento: smoke doesn't shield targets from this unit (1/0). */
+  smokeSight: number;
+  /** Canto de calma level: +10 will per level to allies within 4 tiles. */
+  calmAura: number;
 }
 
 export interface Unit {
@@ -290,6 +453,25 @@ export interface Unit {
   refunded: boolean;
   /** Equipment carried (grants abilities such as smoke grenades). */
   gear: ItemId[];
+  // Velmar's Canto (absent until a song touches the unit).
+  /** Juramento de Velmar: turns left (allies around can't panic or be controlled; half damage). */
+  oath?: number;
+  /** Contracanto: turns of immunity to the Cantor's songs. */
+  ward?: number;
+  /** Himno and Paso de sombra: extra aim until the unit's team's next turn. */
+  blessed?: number;
+  /** Marca del cazador: the shooter whose shots get +15 aim and crit against this unit. */
+  huntedBy?: string | null;
+  /** Turn it fell on (Último verso brings back those who fell this turn). */
+  fellTurn?: number;
+}
+
+/** Silencio: inside, the Cantores can't sing. */
+export interface SilenceZone {
+  pos: Vec2;
+  radius: number;
+  /** XCOM turns it still lasts. */
+  turns: number;
 }
 
 /** A smoke cloud: units inside are harder to hit. */
@@ -379,4 +561,8 @@ export interface GameState {
    */
   campaignMission: { id: string; name: string; story?: number; kicker?: string; item?: string } | null;
   smoke: SmokeCloud[];
+  /** Silencio zones (missing in missions saved before the Canto). */
+  silences?: SilenceZone[];
+  /** The Cámara de Ecos is next to the listening post: songs don't break concealment. */
+  quietSongs?: boolean;
 }

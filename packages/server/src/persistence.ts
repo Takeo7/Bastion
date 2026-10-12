@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { CAMPAIGN_VERSION, migrateCampaign, type CampaignState, type GameState, type MissionKind, type RoomPhase, type SkirmishMap, type Slot } from '@bastion/engine';
+import { CAMPAIGN_VERSION, migrateCampaign, ZERO_MODS, type CampaignState, type GameState, type MissionKind, type RoomPhase, type SkirmishMap, type Slot } from '@bastion/engine';
 
 /** Bump when the saved state shape changes; older saves are migrated when possible. */
 const SAVE_VERSION = 6;
@@ -34,6 +34,8 @@ function migrate(data: { version: number } & Record<string, unknown>): SaveFile 
   if (data.version === SAVE_VERSION) {
     const save = data as unknown as SaveFile;
     if (save.campaign && save.campaign.version !== CAMPAIGN_VERSION) save.campaign = migrateCampaign(save.campaign);
+    // A mission saved before a new kind of bonus existed: its units fight on with that bonus at zero.
+    for (const u of save.state?.units ?? []) u.mods = { ...ZERO_MODS, ...u.mods };
     return save;
   }
   if (data.version < 3) return null;

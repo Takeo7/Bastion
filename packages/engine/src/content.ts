@@ -64,7 +64,8 @@ export type WeaponId =
   | 'fragGrenade'
   | 'microMissiles'
   | 'droneZap'
-  | 'discharge';
+  | 'discharge'
+  | 'songFire';
 
 export interface WeaponDef {
   id: WeaponId;
@@ -122,6 +123,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   microMissiles: weapon({ id: 'microMissiles', name: 'Micromisiles', damage: 3, shred: 1, burst: 0 }),
   droneZap: weapon({ id: 'droneZap', name: 'Descarga del Grillo', damage: 2, burst: 0 }),
   discharge: weapon({ id: 'discharge', name: 'Descarga de condensador', damage: 3, burst: 0 }),
+  songFire: weapon({ id: 'songFire', name: 'Bola de fuego', damage: 4, burst: 0 }),
 };
 
 // ---------------------------------------------------------------- abilities
@@ -154,6 +156,12 @@ export interface AbilityDef {
   ammo?: number;
   /** Psionic: the victim's will resists it. */
   psi?: boolean;
+  /** Velmar's Canto: heard (breaks concealment) and learnt in the Cámara de Ecos. */
+  song?: boolean;
+  /** The target counts as flanked: cover doesn't count (Flecha espectral). */
+  ignoreCover?: boolean;
+  /** Tile ability that moves the user there (Salto de eco, Paso de sombra). */
+  teleport?: boolean;
 }
 
 export const ABILITIES: Record<AbilityId, AbilityDef> = {
@@ -198,6 +206,22 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   smoke: { id: 'smoke', name: 'Granada de humo', description: 'Cubre una zona de humo durante 2 turnos: −20 a la puntería contra quien esté dentro.', target: 'tile', ap: 1, endsTurn: true, charge: 'smoke', range: 10, radius: 2 },
   flashbang: { id: 'flashbang', name: 'Granada aturdidora', description: 'Desorienta a los enemigos de la zona (−20 de puntería, sin explosivos). No hace daño.', target: 'tile', ap: 1, endsTurn: true, charge: 'flashbang', range: 10, radius: 2.5 },
   firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Cura 4 de salud a un aliado contiguo (o a uno mismo).', target: 'ally', ap: 1, endsTurn: false, charge: 'firstAid', range: 1.5 },
+  // Velmar's Canto: learnt in the Cámara de Ecos. A song is heard: it breaks concealment.
+  aegis: { id: 'aegis', name: 'Égida', description: 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 3, song: true },
+  echoStep: { id: 'echoStep', name: 'Salto de eco', description: 'Desapareces y apareces en una casilla libre a la vista, a 6 o menos. No termina el turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 6, radius: 0, teleport: true, song: true },
+  layOnHands: { id: 'layOnHands', name: 'Imposición de manos', description: 'Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación.', target: 'ally', ap: 1, endsTurn: false, charge: 'layOnHands', range: 1.5, song: true },
+  velmarOath: { id: 'velmarOath', name: 'Juramento de Velmar', description: 'Durante 2 turnos, los aliados a 4 casillas no pueden entrar en pánico ni ser controlados, y tú recibes la mitad del daño.', target: 'self', ap: 1, endsTurn: false, charge: 'velmarOath', range: 4, song: true },
+  bolt: { id: 'bolt', name: 'Saeta', description: 'Un proyectil de luz a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 2, range: 20, song: true },
+  silence: { id: 'silence', name: 'Silencio', description: 'Zona de radio 2: los enemigos dentro quedan desorientados y los Cantores no pueden cantar durante 2 turnos.', target: 'tile', ap: 1, endsTurn: true, charge: 'silence', range: 10, radius: 2, song: true },
+  fireball: { id: 'fireball', name: 'Bola de fuego', description: '4 de daño en radio 2,5 y destruye la cobertura. Daña también a los tuyos.', target: 'tile', ap: 1, endsTurn: true, charge: 'fireball', range: 12, radius: 2.5, explosive: 'songFire', song: true },
+  velmarStorm: { id: 'velmarStorm', name: 'Tormenta de Velmar', description: 'Rayos sobre hasta 3 enemigos a la vista: 4 de daño a cada uno. Nunca fallan.', target: 'self', ap: 1, endsTurn: true, charge: 'velmarStorm', song: true },
+  huntersMark: { id: 'huntersMark', name: 'Marca del cazador', description: 'Tus disparos al enemigo marcado tienen +15 de puntería y +15 de crítico hasta que muera.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, range: 30, song: true },
+  spectralArrow: { id: 'spectralArrow', name: 'Flecha espectral', description: 'Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, weapon: 'primary', aim: -10, ignoreCover: true, song: true },
+  shadowStep: { id: 'shadowStep', name: 'Paso de sombra', description: 'Te teletransportas a una casilla a la vista, a 8 o menos. Si está más alta, ganas +10 de puntería este turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 8, radius: 0, teleport: true, song: true },
+  lightRain: { id: 'lightRain', name: 'Lluvia de luz', description: 'Una flecha espectral a cada enemigo a la vista, con −15 de puntería.', target: 'self', ap: 1, endsTurn: true, charge: 'lightRain', weapon: 'primary', aim: -15, ignoreCover: true, song: true },
+  counterSong: { id: 'counterSong', name: 'Contracanto', description: 'Libera a un aliado del control mental, el pánico y la desorientación, y lo hace inmune al Canto durante 2 turnos.', target: 'ally', ap: 1, endsTurn: false, cooldown: 3, range: 10, song: true },
+  hymn: { id: 'hymn', name: 'Himno', description: 'Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 4, range: 6, song: true },
+  lastVerse: { id: 'lastVerse', name: 'Último verso', description: 'Un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas.', target: 'self', ap: 1, endsTurn: true, charge: 'lastVerse', range: 6, song: true },
 };
 
 /** Base chance of hacking the objective terminal; specialists and rank add to it. */
@@ -331,6 +355,11 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
     id: 'sharpshooter', name: 'Francotirador', short: 'FRT', weapon: 'sniper', secondary: 'pistol', aim: 70, squadsight: true,
     abilities: ['shoot', 'pistol', 'overwatch', 'grenade', 'reload', 'hunker'], charges: { grenade: 1 },
   }),
+  // A recruit with no class yet: rifle, a grenade and the basic actions (classes.ts specialises them).
+  rookie: soldier({
+    id: 'rookie', name: 'Recluta', short: 'RCL', weapon: 'rifle',
+    abilities: ['shoot', 'overwatch', 'grenade', 'reload', 'hunker'], charges: { grenade: 1 },
+  }),
   specialist: soldier({
     id: 'specialist', name: 'Especialista', short: 'ESP', weapon: 'rifle',
     abilities: ['shoot', 'medkit', 'aid', 'overwatch', 'grenade', 'reload', 'hunker'], charges: { grenade: 1, medkit: 2 },
@@ -351,7 +380,7 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
 export const SQUAD_CLASSES: ClassId[] = ['assault', 'sharpshooter', 'specialist', 'grenadier', 'assault', 'specialist'];
 
 const ATTACKS: ReadonlySet<AbilityId> = new Set<AttackAbility>([
-  'shoot', 'pistol', 'slash', 'stunLance', 'claw', 'rapidFire', 'chainShot', 'aimedShot', 'rupture', 'lightningHands', 'faceoff',
+  'shoot', 'pistol', 'slash', 'stunLance', 'claw', 'rapidFire', 'chainShot', 'aimedShot', 'rupture', 'lightningHands', 'faceoff', 'spectralArrow', 'lightRain',
 ]);
 
 /** Abilities that fire a weapon (one roll to hit per shot). */
@@ -401,107 +430,56 @@ export const ZERO_MODS: UnitMods = {
   shred: 0,
   will: 0,
   pierce: 0,
+  dodge: 0,
+  critDamage: 0,
+  meleeCrit: 0,
+  pistolDamage: 0,
+  pistolCrit: 0,
+  closeDamage: 0,
+  heightAim: 0,
+  reactionKeep: 0,
+  reactionDefense: 0,
+  watchDefense: 0,
+  squadsightKeep: 0,
+  pairAim: 0,
+  pairDefense: 0,
+  spotterAim: 0,
+  grenadeShred: 0,
+  grenadeRange: 0,
+  holoAim: 0,
+  suppressAim: 0,
+  protocolDamage: 0,
+  hack: 0,
+  psiGuard: 0,
+  singer: 0,
+  songOpen: 0,
+  slashDisorient: 0,
+  songDamage: 0,
+  sight: 0,
+  smokeSight: 0,
+  calmAura: 0,
 };
-
-export type PerkTier = 1 | 2 | 3 | 4 | 5;
 
 export interface RankDef {
   name: string;
   /** Experience needed to reach this rank. */
   xp: number;
-  /** Ability tier unlocked when reaching this rank. */
-  perkTier?: PerkTier;
 }
 
-/** XP: 1 per mission, +1 for a victory, +1 per kill. One ability choice per rank up to captain. */
+/**
+ * XP: 1 per mission, +1 for a victory, +1 per kill. Every promotion brings
+ * aptitude and talent points (classes.ts).
+ */
 export const RANKS: RankDef[] = [
   { name: 'Novato', xp: 0 },
-  { name: 'Soldado', xp: 2, perkTier: 1 },
-  { name: 'Cabo', xp: 5, perkTier: 2 },
-  { name: 'Sargento', xp: 9, perkTier: 3 },
-  { name: 'Teniente', xp: 14, perkTier: 4 },
-  { name: 'Capitán', xp: 20, perkTier: 5 },
+  { name: 'Soldado', xp: 2 },
+  { name: 'Cabo', xp: 5 },
+  { name: 'Sargento', xp: 9 },
+  { name: 'Teniente', xp: 14 },
+  { name: 'Capitán', xp: 20 },
   { name: 'Comandante', xp: 27 },
   { name: 'Coronel', xp: 35 },
 ];
-
-/** Every rank above rookie adds aim and will; some add health. */
-export const RANK_AIM = 5;
-export const RANK_WILL = 4;
-export const RANK_HP: Record<number, number> = { 2: 1, 4: 1, 6: 1 };
-
-export interface PerkDef {
-  id: PerkId;
-  name: string;
-  description: string;
-  cls: ClassId;
-  tier: PerkTier;
-  mods?: Partial<UnitMods>;
-  hp?: number;
-  charges?: Partial<Record<ChargeId, number>>;
-  /** Active ability the perk grants. */
-  ability?: AbilityId;
-}
-
-const perk = (cls: ClassId, tier: PerkTier, id: PerkId, name: string, description: string, extra: Partial<PerkDef> = {}): PerkDef => ({
-  id,
-  name,
-  description,
-  cls,
-  tier,
-  ...extra,
-});
-
-export const PERKS: Record<PerkId, PerkDef> = {
-  // Assault
-  pointBlank: perk('assault', 1, 'pointBlank', 'Quemarropa', '+15 de puntería y +10 de crítico a 4 casillas o menos.', { mods: { closeRangeAim: 15, closeRangeCrit: 10 } }),
-  keenBlade: perk('assault', 1, 'keenBlade', 'Hoja afilada', 'El Tajo hace +2 de daño.', { mods: { meleeDamage: 2 } }),
-  shadowstep: perk('assault', 2, 'shadowstep', 'Paso sombrío', 'Moverse nunca provoca fuego de reacción.'),
-  runner: perk('assault', 2, 'runner', 'Corredor', '+1 casilla de movimiento por acción.', { mods: { mobility: 1 } }),
-  runAndGun: perk('assault', 3, 'runAndGun', 'Correr y disparar', 'Acción gratuita: +1 acción este turno (enfriamiento 4).', { ability: 'runAndGun' }),
-  implacable: perk('assault', 3, 'implacable', 'Implacable', 'Matar con el Tajo devuelve una acción (una vez por turno).'),
-  rapidFire: perk('assault', 4, 'rapidFire', 'Fuego rápido', 'Dos disparos seguidos con −15 de puntería (enfriamiento 3).', { ability: 'rapidFire' }),
-  toughSkin: perk('assault', 4, 'toughSkin', 'Piel dura', '+2 de salud.', { hp: 2 }),
-  bladeMaster: perk('assault', 5, 'bladeMaster', 'Maestro de la espada', 'El Tajo hace +2 de daño y gana +15 de puntería.', { mods: { meleeDamage: 2, meleeAim: 15 } }),
-  hunter: perk('assault', 5, 'hunter', 'Cazador', '+2 de daño contra objetivos flanqueados.', { mods: { flankDamage: 2 } }),
-  // Grenadier
-  demolition: perk('grenadier', 1, 'demolition', 'Demolición', 'Las granadas hacen +1 de daño.', { mods: { grenadeDamage: 1 } }),
-  heavyFire: perk('grenadier', 1, 'heavyFire', 'Fuego pesado', 'El cañón hace +1 de daño.', { mods: { damage: 1 } }),
-  shredder: perk('grenadier', 2, 'shredder', 'Destrozador', 'Los disparos del cañón destrozan 1 punto de blindaje.', { mods: { shred: 1 } }),
-  bigBore: perk('grenadier', 2, 'bigBore', 'Gran calibre', 'Las granadas tienen +1 de radio.', { mods: { grenadeRadius: 1 } }),
-  suppression: perk('grenadier', 3, 'suppression', 'Supresión', 'Inmoviliza a un enemigo: −50 de puntería, y si se mueve le disparas.', { ability: 'suppression' }),
-  holoTargeting: perk('grenadier', 3, 'holoTargeting', 'Holo-objetivo', 'Cada disparo del cañón marca al objetivo: +15 de puntería para tus aliados.'),
-  salvo: perk('grenadier', 4, 'salvo', 'Salva', 'Lanzar granadas ya no termina el turno.'),
-  armoured: perk('grenadier', 4, 'armoured', 'Blindado', '+2 de salud.', { hp: 2 }),
-  chainShot: perk('grenadier', 5, 'chainShot', 'Disparo en cadena', 'Disparo con −15; si acierta, disparas otra vez (enfriamiento 3).', { ability: 'chainShot' }),
-  rupture: perk('grenadier', 5, 'rupture', 'Ruptura', 'Disparo con +3 de daño que deja al objetivo recibiendo +3 de daño (enfriamiento 4).', { ability: 'rupture' }),
-  // Sharpshooter
-  deadeye: perk('sharpshooter', 1, 'deadeye', 'Precisión letal', '+10 de crítico.', { mods: { crit: 10 } }),
-  gunslinger: perk('sharpshooter', 1, 'gunslinger', 'Pistolero', '+15 de puntería con la pistola.', { mods: { pistolAim: 15 } }),
-  longWatch: perk('sharpshooter', 2, 'longWatch', 'Vigía lejano', 'La vigilancia dispara a todo lo que vea la escuadra (visión de escuadra).'),
-  quickdraw: perk('sharpshooter', 2, 'quickdraw', 'Desenfunde', 'Disparar la pistola ya no termina el turno.'),
-  aimedShot: perk('sharpshooter', 3, 'aimedShot', 'Ojo letal', 'Disparo con −25 de puntería y +50 % de daño (enfriamiento 3).', { ability: 'aimedShot' }),
-  lightningHands: perk('sharpshooter', 3, 'lightningHands', 'Manos rápidas', 'Acción gratuita: un disparo de pistola (enfriamiento 4).', { ability: 'lightningHands' }),
-  deathFromAbove: perk('sharpshooter', 4, 'deathFromAbove', 'Muerte desde arriba', 'Matar desde más altura devuelve una acción (una vez por turno).'),
-  hawkEye: perk('sharpshooter', 4, 'hawkEye', 'Ojo de halcón', '+10 de puntería.', { mods: { aim: 10 } }),
-  faceoff: perk('sharpshooter', 5, 'faceoff', 'Cara a cara', 'Un disparo de pistola a cada enemigo a la vista (enfriamiento 4).', { ability: 'faceoff' }),
-  killZone: perk('sharpshooter', 5, 'killZone', 'Zona letal', 'Vigilancia que dispara a cada enemigo que se mueva, una vez a cada uno (enfriamiento 4).', { ability: 'killZone' }),
-  // Specialist
-  fieldMedic: perk('specialist', 1, 'fieldMedic', 'Médico de campo', '+1 uso del botiquín y cura +2.', { mods: { heal: 2 }, charges: { medkit: 1 } }),
-  guardian: perk('specialist', 1, 'guardian', 'Protector', 'El Protocolo de ayuda da +10 de defensa extra.', { mods: { aid: 10 } }),
-  coveringFire: perk('specialist', 2, 'coveringFire', 'Fuego de cobertura', 'La vigilancia también dispara a quien ataque, no solo a quien se mueva.'),
-  combatProtocol: perk('specialist', 2, 'combatProtocol', 'Protocolo de combate', 'El Grillo electrocuta a un enemigo: 2 de daño (4 a robots), nunca falla. 2 usos.', { ability: 'combatProtocol', charges: { combatProtocol: 2 } }),
-  threatAssessment: perk('specialist', 3, 'threatAssessment', 'Evaluación de amenazas', 'El Protocolo de ayuda también pone al aliado en vigilancia.'),
-  revivalProtocol: perk('specialist', 3, 'revivalProtocol', 'Protocolo de reanimación', 'El Grillo libera a un aliado del aturdimiento, la desorientación y el pánico (usa el botiquín).', { ability: 'revival' }),
-  slippery: perk('specialist', 4, 'slippery', 'Escurridizo', '+10 de defensa.', { mods: { defense: 10 } }),
-  marksman: perk('specialist', 4, 'marksman', 'Tirador', '+10 de puntería.', { mods: { aim: 10 } }),
-  restoration: perk('specialist', 5, 'restoration', 'Restauración', 'Cura 2 a todos los aliados cercanos y les quita los estados alterados (enfriamiento 5).', { ability: 'restoration' }),
-  capacitorDischarge: perk('specialist', 5, 'capacitorDischarge', 'Descarga de condensador', 'El Grillo descarga en una zona: 3 de daño a todos (enfriamiento 4).', { ability: 'discharge' }),
-};
-
-export function perksFor(cls: ClassId, tier: PerkTier): PerkDef[] {
-  return Object.values(PERKS).filter((p) => p.cls === cls && p.tier === tier);
-}
 
 export function hasPerk(u: Pick<Unit, 'perks'>, id: PerkId): boolean {
   return u.perks.includes(id);

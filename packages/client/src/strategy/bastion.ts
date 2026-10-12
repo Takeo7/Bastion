@@ -111,8 +111,45 @@ const WALL = 0x5d6670;
 const PINE = 0x2f4a32;
 const TRUNK = 0x5a4030;
 
-/** Props that make each facility recognisable at a glance. */
-function facilityProps(id: FacilityId): THREE.Group {
+const STEEL = 0x9aa4ad;
+const TIMBER = 0xa07a4a;
+
+/** A double bunk: steel posts, two mattresses with army blankets and pillows. */
+function bunk(g: THREE.Group, x: number, z: number): void {
+  for (const dx of [-0.38, 0.38]) for (const dz of [-0.85, 0.85]) g.add(box(0.07, 2, 0.07, mat(0x56606a, { metal: 0.5 }), x + dx, 0, z + dz));
+  for (const y of [0.35, 1.25]) {
+    g.add(box(0.76, 0.14, 1.7, mat(0x5a6248), x, y, z));
+    g.add(box(0.6, 0.1, 0.3, mat(0xd8d4c8), x, y + 0.14, z - 0.65));
+  }
+}
+
+/** A lattice mast with crossbars on top and a lamp blinking at the tip. */
+function mast(g: THREE.Group, x: number, z: number, h: number): void {
+  const steel = mat(STEEL, { metal: 0.6 });
+  for (const dx of [-0.16, 0.16]) g.add(box(0.07, h, 0.07, steel, x + dx, 0, z));
+  for (let y = 0.45; y < h - 0.2; y += 0.55) g.add(box(0.38, 0.05, 0.06, steel, x, y, z));
+  g.add(box(1.3, 0.05, 0.05, steel, x, h - 0.45, z), box(0.05, 0.05, 1.0, steel, x, h - 0.9, z));
+  const light = box(0.18, 0.18, 0.18, mat(0x2a1a00, { emissive: 0xffc93a, intensity: 2.5 }), x, h, z);
+  light.userData.blink = x + z;
+  g.add(light);
+}
+
+/** A wheelbarrow: green tray, a wheel in front, handles behind. */
+function wheelbarrow(g: THREE.Group, x: number, z: number): void {
+  g.add(box(0.6, 0.3, 0.85, mat(0x4f6a3a, { metal: 0.3 }), x, 0.28, z));
+  const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.1, 12), mat(0x1e2022));
+  wheel.rotation.z = Math.PI / 2;
+  wheel.position.set(x, 0.2, z + 0.55);
+  g.add(wheel);
+  for (const dx of [-0.22, 0.22]) g.add(box(0.05, 0.05, 0.7, mat(0x6a5038), x + dx, 0.45, z - 0.65), box(0.05, 0.28, 0.05, mat(0x56606a), x + dx, 0, z - 0.3));
+}
+
+/**
+ * Props that make each facility recognisable at a glance. Levels 2 and 3 add
+ * to them (more bunks and targets, a hoist, a second antenna, a mixer).
+ */
+function facilityProps(id: FacilityId, level = 1): THREE.Group {
+  if ((id as string) === 'echoes') return echoesProps(level);
   const g = new THREE.Group();
   switch (id) {
     case 'simulation':
@@ -179,7 +216,261 @@ function facilityProps(id: FacilityId): THREE.Group {
       }
       break;
     }
+    case 'quarters': {
+      // Bunks along the back (two, three or four by level), a footlocker at each, a stove lent by the barracks.
+      const xs = [-1.95, -0.65, 0.65, 1.95].slice(0, level + 1);
+      for (const x of xs) {
+        bunk(g, x, -1.3);
+        g.add(box(0.6, 0.35, 0.4, mat(0x4f5d3c), x, 0, -0.1));
+      }
+      g.add(cylinder(0.32, 0.8, mat(0x2a2e33, { metal: 0.6 }), -2.0, 0, 1.7), cylinder(0.07, 1.6, mat(0x2a2e33, { metal: 0.6 }), -2.0, 0.8, 1.7));
+      const fire = box(0.3, 0.2, 0.05, mat(0x2a1000, { emissive: 0xff8a3a, intensity: 2.2 }), -2.0, 0.25, 2.03);
+      fire.userData.pulse = true;
+      g.add(fire);
+      g.add(box(0.9, 0.6, 0.6, mat(0x6a5038), 1.7, 0, 1.6), box(0.15, 0.25, 0.15, mat(0x2a1a00, { emissive: 0xffc93a, intensity: 1.8 }), 1.9, 0.6, 1.6));
+      break;
+    }
+    case 'range': {
+      // A lane dug between pine logs: an earth berm at the back, silhouettes, a firing line of sandbags, the range flag.
+      g.add(box(4.8, 0.06, 4.4, mat(DIRT), 0, 0, 0.2));
+      g.add(box(4.8, 1.2, 0.9, mat(0x6a5a42), 0, 0, -2.0));
+      for (const y of [0.3, 0.75]) g.add(box(4.8, 0.3, 0.3, mat(TRUNK), 0, y, -1.45));
+      for (const x of [-2.35, 2.35]) for (const y of [0, 0.32]) g.add(box(0.3, 0.3, 4.0, mat(TRUNK), x, y, 0.1));
+      const n = level + 1;
+      for (let i = 0; i < n; i++) {
+        const x = n === 1 ? 0 : -1.7 + (3.4 * i) / (n - 1);
+        g.add(box(0.08, 0.6, 0.08, mat(0x5a5048), x, 0, -1.15));
+        g.add(box(0.55, 0.75, 0.05, mat(0xd8c8a0), x, 0.6, -1.15), box(0.3, 0.3, 0.05, mat(0xd8c8a0), x, 1.35, -1.15));
+        g.add(box(0.16, 0.16, 0.06, mat(0xb3261e), x, 0.95, -1.12));
+      }
+      for (let i = 0; i < 7; i++) g.add(box(0.55, 0.3, 0.35, mat(0xa89a70, { rough: 1 }), -1.75 + i * 0.58, 0, 1.3));
+      for (let i = 0; i < 6; i++) g.add(box(0.55, 0.3, 0.35, mat(0xb8aa80, { rough: 1 }), -1.45 + i * 0.58, 0.3, 1.3));
+      g.add(cylinder(0.05, 2.6, mat(STEEL), 2.2, 0, 2.1), box(0.6, 0.35, 0.04, mat(0xb3261e), 2.52, 2.2, 2.1));
+      g.add(box(0.6, 0.35, 0.4, mat(0x4f5d3c), -2.0, 0, 2.2), box(0.5, 0.3, 0.35, mat(0x4f5d3c), -1.4, 0, 2.3));
+      break;
+    }
+    case 'garage': {
+      // La Mula's workshop: an engine on its stand, a tool wall, tyres, drums, a welder's spark.
+      g.add(box(2.6, 0.03, 2.0, mat(0x2e3236), 0, 0, 0.2));
+      g.add(box(1.2, 0.5, 0.9, mat(0x3a444e, { metal: 0.6 }), 0, 0, 0.2), box(1.0, 0.7, 0.8, mat(0x56606a, { metal: 0.7 }), 0, 0.5, 0.2));
+      for (const x of [-0.3, 0, 0.3]) g.add(cylinder(0.1, 0.22, mat(0xffa630, { metal: 0.5 }), x, 1.2, 0.2));
+      g.add(box(2.4, 1.3, 0.08, mat(0x6a5038), -0.7, 0.4, -2.3));
+      for (const [x, y] of [
+        [-1.6, 1.3],
+        [-1.1, 1.0],
+        [-0.6, 1.4],
+        [-0.1, 1.1],
+        [0.3, 1.35],
+      ] as const)
+        g.add(box(0.12, 0.4, 0.06, mat(0x2a2e33, { metal: 0.6 }), x, y, -2.24));
+      for (const y of [0, 0.27, 0.54]) g.add(cylinder(0.45, 0.25, mat(0x1e2022), 2.0, y, -1.6));
+      for (const [x, c] of [
+        [-2.0, 0x8f2f2f],
+        [-1.4, 0x4f5d3c],
+      ] as const)
+        g.add(cylinder(0.3, 0.9, mat(c, { metal: 0.4 }), x, 0, 1.9));
+      const spark = box(0.12, 0.12, 0.12, mat(0x2a1a00, { emissive: 0xffa020, intensity: 3 }), 0.65, 0.95, 0.65);
+      spark.userData.blink = 2.1;
+      g.add(spark);
+      if (level >= 2) {
+        // A hoist over the engine.
+        const orange = mat(0xffa630, { metal: 0.6 });
+        for (const x of [-1.25, 1.25]) g.add(box(0.12, 2.6, 0.12, orange, x, 0, 0.2));
+        g.add(box(2.6, 0.14, 0.14, orange, 0, 2.6, 0.2), box(0.04, 0.9, 0.04, mat(0x2a2e33), 0, 1.7, 0.2), box(0.2, 0.12, 0.12, mat(0x2a2e33), 0, 1.6, 0.2));
+      }
+      if (level >= 3) g.add(box(1.2, 0.15, 0.9, mat(0x8f6c45), 1.8, 0, 0.7), box(0.9, 0.6, 0.7, mat(0x56606a, { metal: 0.7 }), 1.8, 0.15, 0.7));
+      break;
+    }
+    case 'listening': {
+      // A radio desk with valve sets glowing, a telegraph key, a chair, and the mast you see from across the base.
+      g.add(box(3.2, 0.8, 0.8, mat(0x5a4632), -0.6, 0, -1.9));
+      for (const x of [-1.8, -0.9, 0]) {
+        g.add(box(0.75, 0.6, 0.55, mat(0x3a3530), x, 0.8, -2.0));
+        const dial = box(0.25, 0.15, 0.04, mat(0x2a1a00, { emissive: 0xffb04a, intensity: 1.8 }), x, 1.05, -1.71);
+        dial.userData.pulse = true;
+        g.add(dial);
+        for (const dx of [-0.15, 0.15]) g.add(cylinder(0.06, 0.18, mat(0x3a1a00, { emissive: 0xff8a3a, intensity: 2 }), x + dx, 1.4, -2.05));
+      }
+      g.add(box(0.3, 0.06, 0.15, mat(0x8a6a3a, { metal: 0.6 }), 0.6, 0.8, -1.7));
+      g.add(box(0.5, 0.45, 0.5, mat(0x3a444e), -0.9, 0, -0.9), box(0.5, 0.6, 0.08, mat(0x3a444e), -0.9, 0.45, -0.67));
+      mast(g, 1.9, -1.7, 5.6);
+      if (level >= 2) mast(g, -2.1, 1.7, 4.3);
+      if (level >= 3) {
+        const dish = new THREE.Mesh(new THREE.SphereGeometry(0.9, 20, 12, 0, Math.PI * 2, 0, Math.PI / 3), mat(0xd8dee4, { metal: 0.6, rough: 0.3 }));
+        dish.rotation.x = -Math.PI / 2.4;
+        dish.position.set(1.4, 1.3, 1.4);
+        dish.userData.spinY = true;
+        g.add(dish, cylinder(0.1, 1.2, mat(STEEL), 1.4, 0, 1.4));
+      }
+      break;
+    }
+    case 'crew': {
+      // The works brigade's yard: stacked timber, wheelbarrows, shovels, hard hats; a pulley tripod and a mixer as it grows.
+      for (let layer = 0; layer < 3; layer++) for (let k = 0; k < 3; k++) g.add(box(2.2, 0.16, 0.32, mat(layer % 2 ? 0x8f6c45 : TIMBER), -0.9, layer * 0.17, -2.1 + k * 0.36));
+      wheelbarrow(g, 1.3, 0.6);
+      if (level >= 2) wheelbarrow(g, 0.4, 1.4);
+      g.add(box(0.1, 1.4, 1.6, mat(0x6a5038), -2.45, 0, 0.6));
+      for (const z of [0.1, 0.5, 0.9, 1.2]) g.add(box(0.06, 1.2, 0.06, mat(0x6a5038), -2.3, 0.2, z), box(0.05, 0.3, 0.22, mat(0x56606a, { metal: 0.6 }), -2.3, 0.05, z));
+      g.add(box(1.2, 0.5, 0.45, mat(0x6a5038), 1.6, 0, -1.9));
+      for (const x of [1.25, 1.6, 1.95]) g.add(box(0.28, 0.14, 0.28, mat(0xffc93a), x, 0.5, -1.9));
+      if (level >= 2) {
+        // A pulley tripod with a crate hanging from it.
+        const leg = mat(0x6a5038);
+        for (let k = 0; k < 3; k++) {
+          const a = (k / 3) * Math.PI * 2;
+          const l = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.6, 0.08), leg);
+          l.position.set(-0.6 + Math.cos(a) * 0.5, 1.25, 0.8 + Math.sin(a) * 0.5);
+          l.rotation.set(Math.sin(a) * 0.22, 0, -Math.cos(a) * 0.22);
+          l.castShadow = true;
+          g.add(l);
+        }
+        g.add(box(0.03, 1.0, 0.03, mat(0x2a2e33), -0.6, 1.4, 0.8), box(0.5, 0.45, 0.5, mat(0x8f6c45), -0.6, 0.9, 0.8));
+      }
+      if (level >= 3) {
+        // A cement mixer.
+        const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.8, 14), mat(0xffa630, { metal: 0.4 }));
+        drum.rotation.x = 0.7;
+        drum.position.set(-1.6, 0.85, 1.9);
+        drum.castShadow = true;
+        g.add(drum, box(0.7, 0.45, 0.5, mat(0x56606a, { metal: 0.5 }), -1.6, 0, 1.9));
+      }
+      break;
+    }
   }
+  return g;
+}
+
+/** The Coro's colours: the glow of anything sung (Velmar's runes, the master's tape). */
+const CORO_GREEN = 0x6dffb0;
+const CORO_CYAN = 0x6ad8ff;
+
+/**
+ * The Cámara de Ecos ('echoes'): a sheet-metal shed lined with copper mesh (a
+ * Faraday cage: the Coro must not hear what is sung inside), shelves of tape
+ * reels, a valve amplifier, a brass speaker horn, chairs with headphones, and
+ * Velmar itself: a tapestry and a standing stone whose runes glow when it
+ * sings. Level 2 adds reels and a second horn; level 3 the master's tape,
+ * glowing on a lectern.
+ */
+function echoesProps(level: number): THREE.Group {
+  const g = new THREE.Group();
+  const copper = mat(0xb87333, { metal: 0.7, rough: 0.4 });
+  // Copper mesh over the back and side walls.
+  for (let x = -2.4; x <= 2.41; x += 0.4) g.add(box(0.07, 2.1, 0.07, copper, x, 0, -2.45));
+  for (const y of [0.5, 1.1, 1.7]) g.add(box(4.9, 0.07, 0.07, copper, 0, y, -2.45));
+  for (const sx of [-1, 1]) {
+    for (let z = -2.2; z <= 2.2; z += 0.45) g.add(box(0.07, 2.1, 0.07, copper, sx * 2.65, 0, z));
+    for (const y of [0.5, 1.1, 1.7]) g.add(box(0.07, 0.07, 4.6, copper, sx * 2.65, y, 0));
+  }
+  // Tape shelves along the left wall: reels standing on edge.
+  const shelves = level >= 2 ? [-1.9, -0.6, 0.7] : [-1.4, -0.1];
+  for (const z of shelves) {
+    g.add(box(0.5, 1.9, 1.1, mat(0x4a3a2a), -2.2, 0, z));
+    for (const y of [0.25, 0.85, 1.45])
+      for (const dz of [-0.3, 0.05, 0.4]) {
+        const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.07, 14), mat(dz > 0.2 ? 0xb08a5a : 0xaab3ba, { metal: 0.4 }));
+        reel.rotation.z = Math.PI / 2;
+        reel.position.set(-1.92, y + 0.22, z + dz);
+        reel.castShadow = true;
+        g.add(reel);
+      }
+  }
+  // The valve amplifier against the back wall, valves glowing on top.
+  g.add(box(1.8, 0.9, 0.7, mat(0x3a3530), 0.2, 0, -2.0));
+  for (let i = 0; i < 6; i++) g.add(cylinder(0.08, 0.26, mat(0x3a1a00, { emissive: 0xff8a3a, intensity: 2 }), -0.5 + i * 0.28, 0.9, -2.0));
+  const meter = box(0.5, 0.25, 0.04, mat(0x0a2a14, { emissive: CORO_GREEN, intensity: 1.4 }), 0.2, 0.45, -1.63);
+  meter.userData.pulse = true;
+  g.add(meter);
+  // Brass horns on stands, aimed at the chairs.
+  const horn = (x: number, z: number, turn: number) => {
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.1, 1.0, 18, 1, true), mat(0xc9a13a, { metal: 0.8, rough: 0.3 }));
+    cone.rotation.set(Math.PI / 2, 0, turn);
+    cone.position.set(x, 1.7, z);
+    cone.castShadow = true;
+    g.add(cone, cylinder(0.06, 1.7, mat(0x2a2e33, { metal: 0.6 }), x, 0, z));
+  };
+  horn(1.9, -1.6, -0.6);
+  if (level >= 2) horn(1.9, 1.5, -2.4);
+  // Chairs with headphones in the middle: here the soldiers listen.
+  for (const [x, z] of [
+    [-0.6, 0.3],
+    [0.5, 0.6],
+  ] as const) {
+    g.add(box(0.55, 0.45, 0.55, mat(0x5a4632), x, 0, z), box(0.55, 0.6, 0.08, mat(0x5a4632), x, 0.45, z + 0.24));
+    g.add(box(0.35, 0.12, 0.12, mat(0x1d2124), x, 0.5, z - 0.05));
+  }
+  // Velmar: a tapestry on the back wall and a standing stone with glowing runes.
+  g.add(box(1.1, 1.5, 0.05, mat(0x3a2a5a), -1.3, 0.5, -2.35), box(1.1, 0.12, 0.06, mat(0xc9a13a, { metal: 0.6 }), -1.3, 1.95, -2.34));
+  g.add(box(0.5, 0.5, 0.06, mat(0xc9a13a, { metal: 0.5 }), -1.3, 1.0, -2.32));
+  g.add(box(0.7, 1.8, 0.5, mat(0x8a8f86, { rough: 1 }), 1.2, 0, 0.2), box(0.5, 0.3, 0.4, mat(0x8a8f86, { rough: 1 }), 1.2, 1.8, 0.2));
+  for (const [y, w] of [
+    [0.5, 0.4],
+    [0.9, 0.25],
+    [1.3, 0.4],
+  ] as const) {
+    const rune = box(w, 0.08, 0.04, mat(0x0a2a1a, { emissive: CORO_GREEN, intensity: 2 }), 1.2, y, 0.46);
+    rune.userData.pulse = true;
+    g.add(rune);
+  }
+  if (level >= 3) {
+    // The master's tape on a lectern, glowing.
+    g.add(box(0.5, 1.0, 0.4, mat(0x4a3a2a), -0.1, 0, 1.6), box(0.6, 0.06, 0.45, mat(0x4a3a2a), -0.1, 1.0, 1.6));
+    const tape = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.08, 14), mat(0x0a2a2a, { emissive: CORO_CYAN, intensity: 2.2 }));
+    tape.position.set(-0.1, 1.12, 1.6);
+    tape.userData.pulse = true;
+    g.add(tape);
+  }
+  return g;
+}
+
+/** Names over the map, short where the full one would run into the neighbours' (the panels and the tooltip give it whole). */
+const SHORT_NAMES: Partial<Record<FacilityId, string>> = {
+  training: 'Entrenamiento',
+  relay: 'Comunicaciones',
+  simulation: 'Simulación',
+  garage: 'La Mula',
+  listening: 'Escucha',
+  crew: 'Brigada',
+};
+
+/** Three lamps on the front wall: as many lit as the facility's level. */
+function levelPips(level: number): THREE.Group {
+  const g = new THREE.Group();
+  const z = PLOT / 2 - 0.125;
+  for (let i = 0; i < 3; i++) {
+    const on = i < level;
+    g.add(box(0.32, 0.12, 0.22, on ? mat(0x2a1a00, { emissive: 0xffc93a, intensity: 2 }) : mat(0x2a3036), 1.25 + i * 0.45, WALL_H, z));
+  }
+  return g;
+}
+
+/** Scaffolding around a facility being raised a level: poles, rails, planks, a hazard stripe and a lamp. */
+function scaffoldProps(progress: number): THREE.Group {
+  const g = new THREE.Group();
+  const steel = mat(STEEL, { metal: 0.6 });
+  const half = PLOT / 2 + 0.25;
+  const h = ROOM_H * 0.85;
+  for (const [x, z] of [
+    [-half, -half],
+    [0, -half],
+    [half, -half],
+    [-half, 0],
+    [half, 0],
+    [-half, half],
+    [half, half],
+  ] as const)
+    g.add(box(0.08, h, 0.08, steel, x, 0, z));
+  for (const y of [1.2, 2.2]) {
+    g.add(box(half * 2, 0.07, 0.07, steel, 0, y, -half));
+    for (const x of [-half, half]) g.add(box(0.07, 0.07, half * 2, steel, x, y, 0));
+  }
+  g.add(box(half * 2, 0.06, 0.45, mat(TIMBER), 0, 2.2, -half + 0.25));
+  for (const x of [-half + 0.25, half - 0.25]) g.add(box(0.45, 0.06, half * 2, mat(TIMBER), x, 2.2, 0));
+  const p = Math.max(0.05, progress);
+  g.add(box(5.6 * p, 0.12, 0.12, mat(0x2a2a10, { emissive: 0xffc93a, intensity: 1.6 }), -2.8 + 2.8 * p, 0.02, half + 0.15));
+  const lamp = box(0.2, 0.2, 0.2, mat(0x2a1a00, { emissive: 0xffa020, intensity: 2.5 }), half, h, half);
+  lamp.userData.blink = 0;
+  g.add(lamp);
   return g;
 }
 
@@ -681,6 +972,7 @@ export class BastionSet implements StageSet {
       const busy = !!work;
       const fixed = plot.building && plot.building in FIXED_BUILDINGS ? (plot.building as FixedBuildingId) : null;
       let title: string;
+      let full: string | null = null;
       let kind = '';
       if (fixed) {
         g.add(
@@ -700,9 +992,27 @@ export class BastionSet implements StageSet {
         kind = ' command';
       } else if (plot.building) {
         const facility = plot.building as FacilityId;
-        g.add(voxelProps(`facility:${facility}`, () => room(() => roomShell(0x6a7480, 0xd8dee4), () => facilityProps(facility))));
-        title = FACILITIES[facility].name;
+        const level = plot.level ?? 1;
+        g.add(
+          voxelProps(`facility:${facility}:${level}`, () => {
+            // The Cámara de Ecos is a galvanised shed with the Coro's green on its walls; the rest, the usual rooms.
+            const echoes = (facility as string) === 'echoes';
+            const r = room(() => (echoes ? roomShell(0x7d848c, CORO_GREEN) : roomShell(0x6a7480, 0xd8dee4)), () => facilityProps(facility, level));
+            r.add(levelPips(level));
+            return r;
+          }),
+        );
+        // A building the engine does not describe yet (art can land before its rules) still gets a label.
+        full = FACILITIES[facility]?.name ?? (facility === ('echoes' as FacilityId) ? 'Cámara de Ecos' : facility);
+        title = SHORT_NAMES[facility] ?? full;
         kind = ' built';
+        // Being raised a level: scaffolding over the building, which keeps working.
+        if (busy && work!.kind === 'upgrade') {
+          const progress = 1 - work!.daysLeft / work!.total;
+          g.add(voxelProps(`upgrade:${Math.round(progress * 4)}`, () => scaffoldProps(progress)));
+          title = `${title} · mejora · ${work!.daysLeft} d`;
+          kind = ' busy';
+        }
       } else if (busy && work!.kind === 'build' && work!.facility) {
         const progress = 1 - work!.daysLeft / work!.total;
         g.add(voxelProps('terrain:clear:0', () => terrainProps('clear', 0)));
@@ -725,6 +1035,7 @@ export class BastionSet implements StageSet {
       // Every other column's label sits a line lower, so neighbours in a row never overlap when zoomed out.
       const tag = label(title, `room-label${kind}${plot.x % 2 === 0 ? ' low' : ''}`);
       if (fixed) tag.element.title = FIXED_NAMES[fixed];
+      else if (full) tag.element.title = full;
       tag.position.set(0, (fixed === 'command' ? 1.8 : WALL_H) + 0.5, PLOT / 2 - 0.2);
       g.add(tag);
       this.grid.add(g);

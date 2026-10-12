@@ -237,7 +237,7 @@ let base: { stage: Stage; bastion: BastionSet; geo: GeoscapeSet } | null = null;
 /** The game's own strategy sets, built the first time a base screen opens. */
 function ensureBase(): NonNullable<typeof base> {
   if (base) return base;
-  const st = new Stage();
+  const st = Object.assign(new Stage(), { soundtrack: false });
   const bastion = new BastionSet(() => {});
   const geo = new GeoscapeSet(() => {});
   st.add('bastion', bastion);

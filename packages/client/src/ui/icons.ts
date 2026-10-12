@@ -40,6 +40,23 @@ const cloud = svg('<path d="M7 18a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.5a3.5 3.5 0 
 const star = svg('<path d="M12 2v5M12 17v5M2 12h5M17 12h5M5 5l3.5 3.5M15.5 15.5L19 19M19 5l-3.5 3.5M8.5 15.5L5 19"/>');
 const fallback = svg('<path d="M12 3l9 9-9 9-9-9z"/>');
 
+// Velmar's songs: the same pen, with the Lengua's marks (sound arcs, light, dashed bodies).
+const aegis = svg('<path d="M12 6l6 2.2v4.6c0 3.4-2.6 6-6 6.8-3.4-.8-6-3.4-6-6.8V8.2z"/><path d="M7 3.5a7 7 0 0 1 10 0M4.5 1.8a10.5 10.5 0 0 1 15 0"/>');
+const echoStep = svg('<circle cx="6" cy="17" r="3" stroke-dasharray="2 2.2"/><circle cx="18" cy="7" r="3"/><path d="M8.5 14.5c2-4 4.5-6 7-6.5"/><path d="M13 7.5l2.6.5-.9 2.4"/>');
+const layOnHands = svg('<path d="M7 21v-6l-2-3a1.4 1.4 0 0 1 2.4-1.4L9 13V6a1.3 1.3 0 0 1 2.6 0v5-6.5a1.3 1.3 0 0 1 2.6 0V11V6a1.3 1.3 0 0 1 2.6 0v8c0 4-2.5 7-5 7z"/><path d="M19 3v4M17 5h4"/>');
+const oath = svg('<circle cx="12" cy="12" r="9"/><path d="M12 5v12M9 8h6M12 17l-1.5 2.5h3z"/>');
+const songBolt = svg('<path d="M3 21l11-11"/><path d="M14 10l-1.5 4.5L21 3l-11.5 8.5z"/><path d="M6 13l-2-1M9 16l-1 2"/>');
+const silenceIcon = svg('<path d="M3 19a9 9 0 0 1 18 0z"/><path d="M9 12l6 5M15 12l-6 5"/>');
+const fireballIcon = svg('<circle cx="15" cy="9" r="5"/><path d="M11 13c-3 2-5 4-7 7M10 8.5c-3 1-5 3-6.5 5.5M14.5 14c-1 3-3 5-5.5 6.5"/>');
+const storm = svg('<path d="M7 13a4 4 0 0 1-.4-8A5.5 5.5 0 0 1 17 4.5a3.5 3.5 0 0 1 .5 7"/><path d="M10 13l-2 4h3l-2 4M16 12l-2 3.5h3l-1.5 3.5"/>');
+const mark = svg('<path d="M12 3l9 9-9 9-9-9z"/><circle cx="12" cy="12" r="3"/><path d="M12 7v2M12 15v2M7 12h2M15 12h2"/>');
+const spectral = svg('<path d="M3 12h16"/><path d="M15.5 8l4 4-4 4"/><path d="M10 4v16" stroke-dasharray="2.2 2.2"/>');
+const shadowStep = svg('<path d="M3 20h6v-5h6v-5h6"/><circle cx="6" cy="11" r="2.4" stroke-dasharray="2 2"/><circle cx="18" cy="5" r="2.4"/>');
+const rain = svg('<path d="M5 3l5 9M11 3l5 9M17 3l5 9"/><path d="M8 12h2.5V9.5M14 12h2.5V9.5M20 12h2.5V9.5"/><path d="M3 20h18"/>');
+const counter = svg('<path d="M3 9c2-3 4 3 6 0s4 3 6 0 4 3 6 0"/><path d="M3 15c2 3 4-3 6 0s4-3 6 0 4-3 6 0" stroke-dasharray="2.2 2"/>');
+const hymnIcon = svg('<path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/><path d="M9 9.5l10-2"/>');
+const lastVerseIcon = svg('<path d="M3 19h18"/><path d="M7 19a5 5 0 0 1 10 0"/><path d="M12 4v4M5.6 7.6l2.1 2.1M18.4 7.6l-2.1 2.1"/>');
+
 const ICONS: Record<AbilityId, string> = {
   shoot: crosshair,
   pistol,
@@ -74,6 +91,21 @@ const ICONS: Record<AbilityId, string> = {
   smoke: cloud,
   flashbang: star,
   firstAid: medkit,
+  aegis,
+  echoStep,
+  layOnHands,
+  velmarOath: oath,
+  bolt: songBolt,
+  silence: silenceIcon,
+  fireball: fireballIcon,
+  velmarStorm: storm,
+  huntersMark: mark,
+  spectralArrow: spectral,
+  shadowStep,
+  lightRain: rain,
+  counterSong: counter,
+  hymn: hymnIcon,
+  lastVerse: lastVerseIcon,
 };
 
 /** An ability's icon, ready to append. */

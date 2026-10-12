@@ -1,21 +1,5 @@
-import {
-  addMods,
-  AP_PER_TURN,
-  ITEMS,
-  PERKS,
-  perksFor,
-  RANK_AIM,
-  RANK_HP,
-  RANK_WILL,
-  RANKS,
-  RECOVERY_TURNS,
-  SOLDIER_NAMES,
-  SQUAD_CLASSES,
-  TEMPLATES,
-  WEAPONS,
-  ZERO_MODS,
-  type PerkTier,
-} from './content';
+import { autoBuild, baseAttrs, soldierStats } from './classes';
+import { AP_PER_TURN, RECOVERY_TURNS, SOLDIER_NAMES, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS } from './content';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import type { Rng } from './rng';
@@ -47,7 +31,8 @@ export interface SquadMember {
   weaponTier?: number;
   armorTier?: number;
   owner: Slot;
-  template: ClassId;
+  /** The class, or 'rookie' for a recruit with no class yet. */
+  template: TemplateId;
   rank: number;
   perks: PerkId[];
   mods: UnitMods;
@@ -86,31 +71,6 @@ export interface MissionOptions {
   vipName?: string;
   /** Names the first enemy of this kind (a side quest's leader). */
   leader?: { template: TemplateId; name: string };
-}
-
-/** What rank, perks and equipment add to a soldier of a class (campaign upgrades come on top). */
-export function soldierStats(cls: ClassId, rank: number, perks: PerkId[], gear: ItemId[] = []): Pick<SquadMember, 'mods' | 'maxHp' | 'charges' | 'will'> {
-  const t = TEMPLATES[cls];
-  let mods = addMods({ ...ZERO_MODS }, { aim: RANK_AIM * rank });
-  let maxHp = t.hp;
-  for (let r = 1; r <= rank; r++) maxHp += RANK_HP[r] ?? 0;
-  const charges = { ...t.charges };
-  for (const source of [...perks.map((id) => PERKS[id]), ...gear.map((id) => ITEMS[id])]) {
-    if (source.mods) mods = addMods(mods, source.mods);
-    maxHp += source.hp ?? 0;
-    for (const [c, n] of Object.entries(source.charges ?? {}) as [ChargeId, number][]) charges[c] = (charges[c] ?? 0) + n;
-  }
-  return { mods, maxHp, charges, will: t.will + RANK_WILL * rank + mods.will };
-}
-
-/** A random pick of one perk per tier up to the soldier's rank. */
-export function randomPerks(cls: ClassId, rank: number, rng: Rng): PerkId[] {
-  const out: PerkId[] = [];
-  for (let r = 1; r <= rank; r++) {
-    const tier = RANKS[r]?.perkTier;
-    if (tier) out.push(rng.pick(perksFor(cls, tier as PerkTier)).id);
-  }
-  return out;
 }
 
 export function makeUnit(id: string, template: TemplateId, name: string, owner: Slot | null, pos: Vec2, podId: string | null): Unit {
@@ -277,14 +237,10 @@ export function createMission(opts: MissionOptions): GameState {
       const owner = opts.slots[Math.min(Math.floor(i / perPlayer), opts.slots.length - 1)]!;
       const cls = SQUAD_CLASSES[i % SQUAD_CLASSES.length]!;
       const u = makeUnit(`s${i + 1}`, cls, names[i]!, owner, layout.spawns[i]!, null);
-      if (opts.veterans) {
-        const rank = 3 + opts.rng.int(3);
-        const perks = randomPerks(cls, rank, opts.rng);
-        const stats = soldierStats(cls, rank, perks);
-        units.push({ ...u, rank, perks, mods: stats.mods, maxHp: stats.maxHp, hp: stats.maxHp, charges: stats.charges, will: stats.will });
-      } else {
-        units.push(u);
-      }
+      const rank = opts.veterans ? 3 + opts.rng.int(3) : 0;
+      const build = opts.veterans ? autoBuild(cls, rank, opts.rng) : { cls, rank, attrs: baseAttrs(cls), talents: {} };
+      const stats = soldierStats(build);
+      units.push({ ...u, rank, perks: stats.perks, mods: stats.mods, maxHp: stats.maxHp, hp: stats.maxHp, charges: stats.charges, will: stats.will, armor: stats.armor });
     }
   }
 

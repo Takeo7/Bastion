@@ -1107,69 +1107,349 @@ dl.briefing {
 
 /* --------------------------------------------------------------- armory */
 
-.perk-grid {
+/* Hoja de servicio: aptitudes typed in boxes, talents as index cards in three branches. */
+.strat-modal .x-panel.wide.service {
+  width: min(1180px, calc(96vw / var(--ui-scale, 1)));
+}
+
+.service-sheet {
   display: grid;
-  grid-template-columns: 96px 1fr 1fr;
+  grid-template-columns: minmax(230px, 0.9fr) minmax(0, 2.6fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.service-apts {
+  display: grid;
   gap: 8px;
-  align-items: stretch;
 }
 
-.perk-grid .rank {
-  display: grid;
-  align-content: center;
-  font-family: var(--font-display);
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.service-apts > .x-btn {
+  justify-self: start;
+  margin-top: 4px;
 }
 
-/* Abilities are index cards; the chosen ones are ticked in pen. */
-.perk-cell {
-  position: relative;
+.apt {
   display: grid;
   gap: 2px;
-  padding: 8px 10px;
-  text-align: left;
-  background: var(--paper-grain), var(--paper-light);
-  border: 0;
-  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.35);
+}
+
+.apt-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.apt-head b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.apt-head small {
+  font-size: 10px;
+  letter-spacing: 0.12em;
   color: var(--x-muted);
 }
 
-.perk-cell b {
+.apt-val {
+  margin-left: auto;
   font-family: var(--font-display);
+  font-size: 19px;
+  color: var(--pen);
+}
+
+.apt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Ten typed boxes: inked = the class's, pen = points spent, dotted = past the cap. */
+.apt-boxes {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+}
+
+.apt-boxes i {
+  position: relative;
+  height: 13px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-light);
+}
+
+.apt-boxes i.base {
+  background: var(--ink);
+}
+
+.apt-boxes i.add {
+  background: var(--pen);
+  border-color: var(--pen);
+}
+
+.apt-boxes i.cap {
+  border-style: dotted;
+  border-color: var(--x-muted);
+  background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(110, 98, 80, 0.35) 3px 4px);
+}
+
+.apt-boxes i.mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 1.5px;
+  height: 3px;
+  background: var(--x-muted);
+}
+
+.apt-plus {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 1.5px solid var(--pen);
+  background: var(--paper-light);
+  color: var(--pen);
+  font-weight: 700;
   font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.apt-plus:disabled {
+  opacity: 0.3;
+  cursor: default;
+  animation: none;
+}
+
+.apt-effect {
+  font-size: 11.5px;
+  color: var(--x-muted);
+}
+
+.apt-th {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--x-muted);
+}
+
+.apt-th b {
+  display: inline-block;
+  min-width: 2em;
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+.apt-th li.got {
+  color: var(--ink);
+}
+
+.apt-th li.got b {
+  color: var(--pen);
+}
+
+.talent-grid {
+  display: grid;
+  grid-template-columns: 44px repeat(3, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
+.talent-branch {
+  display: grid;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--ink);
+}
+
+.talent-branch b {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.talent-branch small {
+  font-size: 11px;
+  color: var(--x-muted);
+}
+
+.talent-branch span {
+  font-family: var(--font-hand);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--pen);
+}
+
+.talent-gate {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding-top: 6px;
+  border-right: 1.5px dashed var(--x-line);
+}
+
+.talent-gate b {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.talent-gate small {
+  font-size: 9px;
+  color: var(--x-muted);
+}
+
+.talent-cell {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+/* Talents are index cards: pen-tinted once taken, dashed in red while one can be added. */
+.talent {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px 7px;
+  text-align: left;
+  border: 0;
+  background: var(--paper-grain), var(--paper-light);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.32);
+  color: var(--x-muted);
+  cursor: default;
+}
+
+.talent b {
+  font-family: var(--font-display);
+  font-size: 13.5px;
   font-weight: 400;
   color: var(--ink);
 }
 
-.perk-cell small {
-  font-size: 12px;
-  line-height: 1.25;
+.talent.taken {
+  background: linear-gradient(var(--ink-blue-soft), var(--ink-blue-soft)), var(--paper-grain), var(--paper-light);
 }
 
-.perk-cell.chosen::after {
-  content: '✓';
-  position: absolute;
-  top: -8px;
-  right: 10px;
-  font-family: var(--font-hand);
-  font-size: 40px;
+.talent.open {
+  cursor: pointer;
+  /* What can be chosen is circled in pen, as everywhere in the file; red stays
+     for what blocks. No pulsing: with points to spend, a dozen cards would. */
+  outline: 2px dashed var(--pen);
+  outline-offset: -4px;
+}
+
+.talent.open:hover {
+  background: var(--paper-grain), #fff;
+}
+
+.talent.shut {
+  opacity: 0.42;
+}
+
+/* Talents that need the partner's soldiers close: in pen, the colour of the
+   partner's notes (red is kept for what threatens or blocks). */
+.talent.coop b {
   color: var(--pen);
 }
 
-.perk-cell.pickable {
-  outline: 2px dashed var(--stamp);
-  outline-offset: -5px;
-  animation: x-pulse 1.4s ease-in-out infinite;
+.talent-levels {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
 }
 
-.perk-cell.locked {
-  opacity: 0.4;
+.talent-levels i {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ink);
 }
 
-.perk-cell:disabled {
-  cursor: default;
+.talent-levels i.on {
+  background: var(--pen);
+  border-color: var(--pen);
+}
+
+.talent-levels small {
+  margin-left: 3px;
+}
+
+.talent-req {
+  margin-left: auto;
+  padding: 0 3px;
+  border: 1px solid var(--x-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.talent-req.miss {
+  border-color: var(--stamp);
+  color: var(--stamp);
+}
+
+.talent-desc {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.talent.taken .talent-desc {
+  color: var(--ink);
+}
+
+/* The Rosa: its centre, one tab per axis, and the axis's four branches (the fourth is the Canto). */
+.talent-grid.four {
+  grid-template-columns: 44px repeat(4, minmax(0, 1fr));
+}
+
+.talent-center {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.rosa-axes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.rosa-axes .x-btn.on {
+  background: var(--ink);
+  color: var(--paper-light);
+}
+
+.rosa-axes small {
+  color: inherit;
+  opacity: 0.75;
+}
+
+/* The Canto's branch carries the Coro's green, as songs do in combat. */
+.talent-branch.song b,
+.talent-branch.song small {
+  color: var(--song);
+}
+
+.talent-cell.locked {
+  opacity: 0.5;
+}
+
+.talent-becomes {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--pen);
+}
+
+@media (max-width: 900px) {
+  .service-sheet {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* --------------------------------------------------------------- modal */
@@ -1188,12 +1468,16 @@ dl.briefing {
 }
 
 .strat-modal .x-panel {
-  width: min(520px, 92vw);
+  /* The panel zooms with --ui-scale (bottom of this file), and so would 92vw:
+     dividing keeps it inside the screen at 115 and 130 %. Too tall, it scrolls. */
+  width: min(520px, calc(92vw / var(--ui-scale, 1)));
+  max-height: calc(94vh / var(--ui-scale, 1));
+  overflow-y: auto;
   transform: rotate(-0.4deg);
 }
 
 .strat-modal .x-panel.wide {
-  width: min(920px, 94vw);
+  width: min(920px, calc(94vw / var(--ui-scale, 1)));
 }
 
 .alert-kicker {
@@ -2236,6 +2520,10 @@ dl.x-pairs dd {
 
 .cls-sharpshooter {
   --icon: var(--i-aim);
+}
+
+.cls-rookie {
+  --icon: var(--i-rookie);
 }
 
 .cls-specialist {

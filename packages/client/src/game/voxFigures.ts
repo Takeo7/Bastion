@@ -447,6 +447,7 @@ function vip(accent: string): FigureRig {
 /** A hand-made figure for this unit, or null when the kits cannot dress it yet. */
 export function voxFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear): FigureRig | null {
   switch (template) {
+    case 'rookie':
     case 'assault':
     case 'grenadier':
     case 'sharpshooter':

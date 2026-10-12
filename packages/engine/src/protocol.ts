@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { BUILDS, HEADS, NAME_MAX, NICKNAME_MAX } from './appearance';
 import { FACILITIES, REGIONS } from './campaign';
-import { ABILITIES, ITEMS, PERKS } from './content';
+import { ATTRS, TALENTS } from './classes';
+import { ABILITIES, ITEMS } from './content';
 import type { CampaignState } from './campaign';
 import type { GameEvent } from './events';
 import type { AbilityId, GameState, Slot, Vec2 } from './types';
@@ -59,7 +60,8 @@ const keys = <K extends string>(record: Record<K, unknown>) => Object.keys(recor
 const facilityId = z.enum(keys(FACILITIES));
 const regionId = z.enum(keys(REGIONS));
 const itemId = z.enum(keys(ITEMS));
-const perkId = z.enum(keys(PERKS));
+const talentId = z.enum(keys(TALENTS));
+const attrId = z.enum(keys(ATTRS));
 const id = z.string().min(1).max(16);
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 const appearanceSchema = z.object({ primary: color, secondary: color, visor: color, head: z.enum(keys(HEADS)), build: z.enum(keys(BUILDS)) });
@@ -74,8 +76,10 @@ export const campaignCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('investigate'), id }),
   z.object({ type: z.literal('cancelMission') }),
   z.object({ type: z.literal('squad'), soldier: id, on: z.boolean() }),
-  z.object({ type: z.literal('recruit'), cls: classId, squad: z.boolean().optional() }),
-  z.object({ type: z.literal('promote'), soldier: id, perk: perkId }),
+  z.object({ type: z.literal('recruit'), squad: z.boolean().optional() }),
+  z.object({ type: z.literal('train'), soldier: id, attr: attrId }),
+  z.object({ type: z.literal('talent'), soldier: id, talent: talentId }),
+  z.object({ type: z.literal('retrain'), soldier: id }),
   z.object({ type: z.literal('buy'), item: itemId }),
   z.object({ type: z.literal('equip'), soldier: id, slot: z.enum(['utility', 'ammo']), item: itemId.nullable() }),
   z.object({ type: z.literal('customize'), soldier: id, name: z.string().max(NAME_MAX * 2), nickname: z.string().max(NICKNAME_MAX * 2), appearance: appearanceSchema }),

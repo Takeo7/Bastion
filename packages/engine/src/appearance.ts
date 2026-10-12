@@ -48,7 +48,7 @@ function mix(a: string, b: string, t: number): string {
 }
 
 /** The look soldiers had before customization: their player's colour, class head and build. */
-export function defaultAppearance(cls: ClassId, owner: Slot): Appearance {
+export function defaultAppearance(cls: ClassId | null, owner: Slot): Appearance {
   const accent = PLAYER_COLORS[owner];
   return {
     primary: mix(accent, '#56605a', 0.55),

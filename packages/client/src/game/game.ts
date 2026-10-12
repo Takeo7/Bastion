@@ -8,6 +8,7 @@ import {
   apNeeded,
   applyEvent,
   attackWeapon,
+  abilityRange,
   blastRadius,
   blastTiles,
   buildPath,
@@ -66,6 +67,7 @@ import { MapView } from './mapView';
 import { Overlays, type MoveTile } from './overlays';
 import { Renderer } from './renderer';
 import { Sfx } from './sfx';
+import { SONG, SongFx, SongMarks } from './songFx';
 import { setTimeScale, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
@@ -139,7 +141,7 @@ function busySlots(s: GameState): Set<Slot> {
  * the edge of the circle instead of losing the preview).
  */
 function throwTile(u: Unit, ability: AbilityId, tile: Vec2): Vec2 {
-  const range = ABILITIES[ability].range ?? 0;
+  const range = abilityRange(u, ability);
   const far = distance(u.pos, tile);
   if (far <= range) return tile;
   for (let k = range / far; k > 0; k -= 0.01) {
@@ -200,6 +202,9 @@ export class Game {
   /** The partner's soldier that acted last: where a broken concealment happened. */
   private partnerLast: string | null = null;
   private readonly sfx = new Sfx();
+  /** Velmar's Canto: the songs' light tiles, and what stays on the field (Silencio, Juramento). */
+  private readonly songFx = new SongFx();
+  private readonly songMarks = new SongMarks();
   private overlays!: Overlays;
   private readonly hud: Hud;
   /** Morse's first-time warnings (UX-REVISION-2 #30, UX/UI and Lore). */
@@ -250,7 +255,8 @@ export class Game {
     container.append(this.root);
     this.renderer = new Renderer(this.root);
     this.rig = new CameraRig(this.renderer.camera);
-    this.renderer.scene.add(this.mapView.group, this.units.group, this.fx.group);
+    this.sfx.attach(this.renderer.camera, () => this.rig.focusPoint);
+    this.renderer.scene.add(this.mapView.group, this.units.group, this.fx.group, this.songFx.group, this.songMarks.group);
     this.hud = new Hud(this.root, {
       onAbility: (id) => this.useAbility(id),
       onEndTurn: () => this.toggleReady(),
@@ -280,6 +286,7 @@ export class Game {
     this.rig.update(dt);
     this.units.tick(dt, time);
     this.fx.tick(dt);
+    this.songFx.tick(dt);
     this.overlays?.tick(time);
     const from = this.selected ? getUnit(this.view, this.selected) : undefined;
     this.edge.update(this.renderer.camera, from?.alive ? from.pos : null);
@@ -305,6 +312,7 @@ export class Game {
     setTerrain(this.view);
     this.mapView.build(this.view);
     this.units.build(this.view);
+    if (!s.outcome) this.sfx.start(s.biome, !s.concealed);
     this.selected = null;
     this.mode = { kind: 'move' };
     this.showOutcome();
@@ -404,7 +412,7 @@ export class Game {
 
   onPing(slot: Slot, tile: Vec2, kind: PingKind): void {
     this.fx.ping(tileToWorld(tile), PLAYER_COLORS[slot], kind === 'enemy');
-    this.sfx.ui();
+    this.sfx.command();
     if (slot !== this.mySlot) {
       const who = this.players.find((p) => p.slot === slot)?.name ?? 'Tu compañero';
       this.hud.log(`${who} marca ${kind === 'enemy' ? 'un enemigo' : 'una posición'}`, PLAYER_COLORS[slot]);
@@ -525,7 +533,7 @@ export class Game {
         let steps = 0;
         await this.units.moveAlong(u.id, e.path, (p) => {
           look(p);
-          if (steps++ % 2 === 0) this.sfx.step();
+          if (steps++ % 2 === 0) this.sfx.step(u, p);
         });
         return;
       }
@@ -544,7 +552,10 @@ export class Game {
           const label = crit ? `CRÍTICO −${e.amount}` : shot === 'graze' ? `ROZADURA −${e.amount}` : `−${e.amount}`;
           this.fx.floatText(chest, label, crit ? 'crit' : 'damage');
         }
-        if (e.mitigated) this.fx.floatText(chest.clone().setY(chest.y - 0.45), `BLINDAJE −${e.mitigated}`, 'info');
+        if (e.mitigated) {
+          this.fx.floatText(chest.clone().setY(chest.y - 0.45), `BLINDAJE −${e.mitigated}`, 'info');
+          this.sfx.impact('armor', chest);
+        }
         if (e.shred) this.fx.floatText(chest.clone().setY(chest.y + 0.45), 'BLINDAJE DAÑADO', 'warn');
         if (crit && cam()) this.rig.shake(0.18, 0.3);
         await this.units.hitReact(target.id, crit ? 1.5 : e.amount ? 1 : 0.4);
@@ -554,6 +565,7 @@ export class Game {
         const u = getUnit(v, e.unit)!;
         this.hud.log(u.team === 'xcom' ? `${u.name} ha caído en combate` : `${u.name} eliminado`, u.team === 'xcom' ? '#ff6b5a' : '#54d1ff');
         if (!this.shownToSquad(u)) return;
+        this.sfx.death(u, this.units.chestPos(u.id));
         await this.units.die(u.id);
         await wait(0.2);
         return;
@@ -563,6 +575,7 @@ export class Game {
         this.hud.log(`${u.name} queda aturdido`, '#6ad8ff');
         if (!this.shownToSquad(u)) return;
         this.fx.sparks(this.units.chestPos(u.id), 0x6ad8ff, 14);
+        this.sfx.stun(this.units.chestPos(u.id));
         this.fx.floatText(this.units.chestPos(u.id), 'ATURDIDO', 'warn');
         await wait(0.5);
         return;
@@ -574,7 +587,8 @@ export class Game {
         look(this.units.worldPos(u.id));
         const text = e.t === 'hunker' ? 'AGAZAPADO' : e.killZone ? 'ZONA LETAL' : 'VIGILANCIA';
         this.fx.floatText(this.units.chestPos(u.id), text, 'info');
-        this.sfx.ui();
+        if (e.t === 'hunker') this.sfx.hunker(this.units.worldPos(u.id));
+        else this.sfx.overwatch(this.units.chestPos(u.id));
         await wait(0.45);
         return;
       }
@@ -595,12 +609,50 @@ export class Game {
         const home = this.units.dronePos(u.id);
         const dest = this.units.chestPos(target.id).add(new THREE.Vector3(0, 0.7, 0));
         this.units.setDroneAway(u.id, true);
-        this.sfx.ui();
+        this.sfx.drone(home);
         await this.fx.droneFlight(home, dest);
         this.fx.sparks(this.units.chestPos(target.id), 0x8ad8ff, 18);
-        this.sfx.impact();
+        this.sfx.stun(this.units.chestPos(target.id));
         this.hud.log(`${u.name}: protocolo de combate contra ${target.name}`, '#54d1ff');
         void this.fx.droneFlight(dest, this.units.dronePos(u.id)).then(() => this.units.setDroneAway(u.id, false));
+        return;
+      }
+      // Velmar's Canto: the effects proper are Arte's; this shows what happened.
+      case 'sung': {
+        const u = getUnit(v, e.unit)!;
+        this.hud.log(`${u.name} canta: ${ABILITIES[e.ability].name}`, '#1f8a5c');
+        if (!this.shownToSquad(u)) return;
+        look(this.units.worldPos(u.id));
+        this.fx.floatText(this.units.chestPos(u.id), ABILITIES[e.ability].name.toUpperCase(), 'info');
+        await this.playSong(u, e);
+        return;
+      }
+      case 'teleported': {
+        // The body comes apart in light tiles and gathers again where the song sends it.
+        const u = getUnit(v, e.unit)!;
+        if (!this.shownToSquad(u)) return;
+        const from = tileToWorld(e.from);
+        const to = tileToWorld(e.to);
+        this.sfx.song('vanish', from);
+        void this.songFx.vanish(from);
+        await wait(0.15);
+        this.units.setHidden(u.id, true);
+        await this.units.slide(u.id, to, 0.01);
+        await wait(0.2);
+        look(to);
+        this.sfx.song('appear', to);
+        await this.songFx.appear(to);
+        this.units.setHidden(u.id, false);
+        await wait(0.15);
+        return;
+      }
+      case 'revived': {
+        const u = getUnit(v, e.unit)!;
+        this.hud.log(`${u.name} vuelve en pie`, '#6dff9a');
+        look(this.units.worldPos(u.id));
+        await this.units.rise(u.id);
+        this.fx.floatText(this.units.chestPos(u.id), 'EN PIE', 'heal');
+        await wait(0.3);
         return;
       }
       case 'cleansed': {
@@ -628,7 +680,7 @@ export class Game {
           const from = this.units.muzzlePos(u.id);
           this.units.recoil(u.id);
           this.fx.muzzleFlash(from, 0x9fe8ff);
-          this.sfx.shot(false);
+          this.sfx.shot(u, attackWeapon(u), from);
           const dest = missPoint(from, chest, i, 1.2);
           void this.fx.bullet(from, dest, 0x9fe8ff).then(() => this.fx.sparks(dest, 0xffd28a, 3));
           await wait(0.07);
@@ -665,7 +717,7 @@ export class Game {
         look(this.units.worldPos(u.id).lerp(this.units.worldPos(target.id), 0.5));
         this.units.forceVisible(u.id);
         this.units.face(u.id, this.units.worldPos(target.id));
-        this.sfx.alert();
+        this.sfx.psi(this.units.chestPos(u.id));
         await this.fx.psiBeam(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.35, 0)), this.units.chestPos(target.id));
         const texts: Record<string, string> = { disoriented: 'DESORIENTADO', panicked: 'PÁNICO', controlled: 'CONTROL MENTAL' };
         const text = e.effect ? texts[e.effect]! : 'RESISTE';
@@ -689,6 +741,7 @@ export class Game {
         const at = tileToWorld(corpse.pos, 0.5);
         look(at);
         this.units.forceVisible(u.id);
+        this.sfx.psi(at);
         await this.fx.psiBeam(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.35, 0)), at);
         this.fx.evacBeam(tileToWorld(corpse.pos));
         this.fx.floatText(at, 'REANIMADO', 'crit');
@@ -701,7 +754,7 @@ export class Game {
         if (!this.shownToSquad(u)) return;
         look(this.units.worldPos(u.id));
         this.fx.floatText(this.units.chestPos(u.id), 'RECARGANDO', 'info');
-        this.sfx.reload();
+        this.sfx.reload(this.units.chestPos(u.id));
         await this.units.reload(u.id);
         return;
       }
@@ -714,6 +767,7 @@ export class Game {
         if (e.t === 'healed' && this.lastUsed?.unit === u.id && this.lastUsed.ability === 'restoration') {
           // Restoration heals everyone at once: no drone trips.
           this.fx.heal(this.units.chestPos(target.id));
+          this.sfx.heal(this.units.chestPos(target.id));
           this.fx.floatText(this.units.chestPos(target.id), `+${e.amount}`, 'heal');
           this.hud.log(`${target.name} recupera ${e.amount}`, '#6dff9a');
           await wait(0.2);
@@ -723,14 +777,16 @@ export class Game {
         const home = this.units.dronePos(u.id);
         const dest = this.units.chestPos(target.id).add(new THREE.Vector3(0, 0.9, 0));
         this.units.setDroneAway(u.id, true);
-        this.sfx.ui();
+        this.sfx.drone(home);
         await this.fx.droneFlight(home, dest);
         if (e.t === 'healed') {
           this.fx.heal(this.units.chestPos(target.id));
+          this.sfx.heal(this.units.chestPos(target.id));
           this.fx.floatText(this.units.chestPos(target.id), `+${e.amount}`, 'heal');
           this.hud.log(`${u.name} cura ${e.amount} a ${target.name}`, '#6dff9a');
         } else {
           this.fx.shield(this.units.chestPos(target.id));
+          this.sfx.shield(this.units.chestPos(target.id));
           this.fx.floatText(this.units.chestPos(target.id), '+20 DEFENSA', 'info');
           this.hud.log(`${u.name} protege a ${target.name}`, '#54d1ff');
         }
@@ -744,7 +800,7 @@ export class Game {
         look(this.units.worldPos(u.id));
         this.hud.log(`${u.name} evacuado`, '#6dff9a');
         this.fx.evacBeam(this.units.worldPos(u.id));
-        this.sfx.throwWhoosh();
+        this.sfx.beam(this.units.worldPos(u.id));
         await this.units.evacuate(u.id);
         return;
       }
@@ -752,7 +808,7 @@ export class Game {
         const u = getUnit(v, e.unit)!;
         this.hud.log(`${u.name} recupera los datos`, '#6dff9a');
         this.fx.floatText(this.units.chestPos(u.id), 'DATOS RECUPERADOS', 'heal');
-        this.sfx.alert();
+        this.sfx.data();
         await wait(0.6);
         return;
       }
@@ -764,12 +820,12 @@ export class Game {
       case 'tileChanged': {
         const before = tileAt(v, e.pos.x, e.pos.y);
         if (e.kind === 'doorOpen' && before === 'door') {
-          if (this.mapView.isVisible(e.pos.x, e.pos.y)) this.sfx.reload();
+          if (this.mapView.isVisible(e.pos.x, e.pos.y)) this.sfx.door(tileToWorld(e.pos, 1));
           return;
         }
         if (e.kind === 'windowBroken') {
           this.fx.debris(tileToWorld(e.pos, 1.3), 0x9fd8ff, 10);
-          this.sfx.impact();
+          this.sfx.glass(tileToWorld(e.pos, 1.3));
           return;
         }
         this.fx.debris(tileToWorld(e.pos, before === 'high' ? 1.1 : 0.45), before === 'low' ? 0x8f6c45 : 0x3f7480, 7);
@@ -789,16 +845,14 @@ export class Game {
           this.units.face(u.id, screen);
           await this.units.raiseWeapon(u.id, screen);
         }
-        this.sfx.ui();
+        this.sfx.hack(screen);
         this.fx.sparks(screen, e.success ? 0x4dff9a : 0xff4a3a, 16);
         await wait(0.5);
         this.fx.floatText(screen, e.success ? 'HACKEO COMPLETADO' : 'HACKEO FALLIDO', e.success ? 'heal' : 'warn');
         this.hud.log(`${u.name} ${e.success ? 'hackea el terminal' : 'falla el hackeo'} (${e.chance}%)`, e.success ? '#6dff9a' : '#ffc93a');
+        this.sfx.hacked(e.success, screen);
         if (e.success) this.hud.banner('TERMINAL HACKEADO', 'xcom');
-        else {
-          this.sfx.alert();
-          this.hud.banner('¡ALARMA!', 'alien');
-        }
+        else this.hud.banner('¡ALARMA!', 'alien');
         if (e.remote) {
           await this.fx.droneFlight(screen.clone().add(new THREE.Vector3(0, 0.6, 0)), this.units.dronePos(u.id));
           this.units.setDroneAway(u.id, false);
@@ -812,7 +866,7 @@ export class Game {
         look(this.units.worldPos(vip.id));
         this.fx.floatText(this.units.chestPos(vip.id), 'VIP RESCATADO', 'heal');
         this.hud.log(`${vip.name} se une a la escuadra`, '#6dff9a');
-        this.sfx.alert();
+        this.sfx.rescue();
         await wait(0.6);
         return;
       }
@@ -822,7 +876,7 @@ export class Game {
         look(at);
         this.hud.banner('REFUERZOS EN CAMINO', 'alien');
         this.hud.log('Bengala roja: un dirigible soltará cápsulas de impresión al final del próximo turno enemigo', '#ff6b5a');
-        this.sfx.alert();
+        this.sfx.flare(at);
         await wait(cam() ? 0.9 : 0.3);
         return;
       }
@@ -832,7 +886,7 @@ export class Game {
         this.hud.log(`Cápsulas de impresión: ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
         if (!seen) return;
         look(spots[0]!);
-        this.sfx.throwWhoosh();
+        this.sfx.pods(spots[0]);
         for (const p of spots) this.fx.evacBeam(p);
         await wait(0.9);
         return;
@@ -852,19 +906,20 @@ export class Game {
           this.fx.floatText(this.units.chestPos(m.id), '!', 'alert');
           void this.units.alert(m.id);
         }
-        this.sfx.alert();
+        this.sfx.contact();
         this.hud.banner('¡CONTACTO!', 'alien');
         this.hud.log(`Contacto: ${members.map((m) => m.name).join(', ')}`, '#ff6b5a');
         await wait(0.9);
         return;
       }
       case 'concealmentBroken':
+        this.sfx.reveal();
         this.hud.banner('OCULTACIÓN ROTA', 'warn');
         await wait(0.6);
         return;
       case 'turnBegan': {
         if (e.team === 'xcom') this.rig.restoreZoom();
-        this.sfx.turn(e.team === 'alien');
+        this.sfx.turn(e.team === 'alien', !v.concealed);
         // With a partner, the banner says who opens the turn.
         const opener = e.team === 'xcom' && this.partnerHere() && e.command !== undefined ? (e.command === this.mySlot ? ' · TIENES EL MANDO' : ` · MANDO: ${this.playerName(e.command).toUpperCase()}`) : '';
         this.hud.banner(e.team === 'xcom' ? `TURNO ${e.turn}${opener}` : 'TURNO ENEMIGO', e.team === 'xcom' ? 'xcom' : 'alien');
@@ -872,17 +927,94 @@ export class Game {
         return;
       }
       case 'commandPassed': {
-        this.sfx.ui();
+        this.sfx.command();
         if (e.to === this.mySlot) this.hud.banner('TIENES EL MANDO', 'xcom');
         this.hud.log(e.to === this.mySlot ? 'Tienes el mando' : `${this.playerName(e.to)} tiene el mando`, PLAYER_COLORS[e.to]);
         return;
       }
       case 'missionEnded':
+        this.sfx.outcome(e.outcome === 'victory');
         await wait(0.8);
         this.showOutcome(e.outcome, e.reason);
         return;
       case 'ready':
         return;
+    }
+  }
+
+  /**
+   * A song's effect (songFx.ts) and voice, landing before the events that
+   * follow it (damage, healing, the teleport…): the Canto's light tiles in the
+   * Coro's green and cyan.
+   */
+  private async playSong(u: Unit, e: Extract<GameEvent, { t: 'sung' }>): Promise<void> {
+    const v = this.view;
+    const hands = this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.25, 0));
+    const targets = e.targets.map((id) => getUnit(v, id)).filter((t): t is Unit => !!t);
+    const first = targets[0];
+    const chest = (t: Unit) => this.units.chestPos(t.id);
+    const feet = (t: Unit) => this.units.worldPos(t.id);
+    if (first && first.id !== u.id) this.units.face(u.id, feet(first));
+    switch (e.ability) {
+      case 'bolt':
+        this.sfx.song('bolt', hands);
+        if (first) await this.songFx.bolt(hands, chest(first));
+        return;
+      case 'velmarStorm':
+        this.sfx.song('storm', hands);
+        targets.forEach((t, i) => this.sfx.song('thunder', chest(t), 0.2 + i * 0.18));
+        await this.songFx.storm(targets.map(chest));
+        return;
+      case 'aegis':
+      case 'hymn':
+        this.sfx.song('aura', hands);
+        this.songFx.aura(feet(u), ABILITIES[e.ability].range ?? 1.5, targets.map(feet), e.ability === 'aegis' ? SONG.cyan : SONG.green);
+        await wait(0.6);
+        return;
+      case 'velmarOath':
+        this.sfx.song('aura', hands);
+        this.songFx.aura(feet(u), 4, [feet(u)], SONG.gold);
+        await wait(0.6);
+        return;
+      case 'layOnHands':
+        this.sfx.song('heal', hands);
+        if (first) this.songFx.heal(feet(first));
+        await wait(0.4);
+        return;
+      case 'silence':
+        this.sfx.song('dome', e.tile ? tileToWorld(e.tile) : hands);
+        if (e.tile) await this.songFx.dome(tileToWorld(e.tile), ABILITIES.silence.radius ?? 2);
+        return;
+      case 'huntersMark':
+        this.sfx.song('mark', first ? chest(first) : hands);
+        if (first) this.songFx.mark(chest(first));
+        await wait(0.5);
+        return;
+      case 'counterSong':
+        this.sfx.song('cleanse', first ? chest(first) : hands);
+        if (first) await this.songFx.cleanse(feet(first));
+        return;
+      case 'lastVerse':
+        if (first && !first.alive) {
+          this.sfx.song('revive', feet(first));
+          await this.songFx.revive(feet(first));
+        } else {
+          this.sfx.song('heal', hands);
+          this.songFx.aura(feet(u), ABILITIES.lastVerse.range ?? 6, targets.map(feet), SONG.green);
+          await wait(0.6);
+        }
+        return;
+      case 'lightRain':
+        // The arrows themselves come with the shots that follow.
+        this.sfx.song('voice', hands);
+        this.songFx.rise(feet(u), SONG.cyan, 14);
+        await wait(0.35);
+        return;
+      default:
+        // Salto de eco, Paso de sombra (the teleport comes next) and anything new.
+        this.sfx.song('voice', hands);
+        this.songFx.rise(feet(u), SONG.green, 10);
+        await wait(0.2);
     }
   }
 
@@ -911,12 +1043,13 @@ export class Game {
 
     if (weapon.melee) {
       await wait(cam() ? 0.2 : 0.05);
-      this.sfx.throwWhoosh();
+      this.sfx.melee('swing', this.units.chestPos(shooter.id));
       await this.units.lunge(shooter.id, targetPos);
       if (hit) {
         const stun = e.ability === 'stunLance';
         this.fx.slash(chest, stun ? 0x6ad8ff : 0xe8f6ff);
-        this.sfx.impact();
+        this.sfx.melee(stun ? 'stun' : e.ability === 'claw' ? 'claw' : 'sword', chest);
+        this.sfx.impact(this.sfx.body(target), chest, e.result === 'crit');
       } else {
         this.fx.floatText(chest, 'FALLO', 'miss');
         this.hud.log(`${shooter.name} falla a ${target.name} (${e.chance}%)`);
@@ -931,21 +1064,26 @@ export class Game {
     await wait(cam() ? 0.25 : 0.08);
 
     const heavy = weapon.apCost > 1;
+    // Flecha espectral and Lluvia de luz: arrows of light instead of rounds.
+    const sung = !!ABILITIES[e.ability]?.song;
     const pellets = weapon.range === 'short' ? 6 : 0;
     const rounds = Math.max(1, weapon.burst);
     for (let i = 0; i < rounds; i++) {
       const from = this.units.muzzlePos(shooter.id);
       this.units.recoil(shooter.id);
-      this.fx.muzzleFlash(from, color);
-      this.sfx.shot(shooter.team === 'alien');
+      if (sung) this.sfx.song('arrow', from);
+      else {
+        this.fx.muzzleFlash(from, color);
+        this.sfx.shot(shooter, weapon, from);
+      }
       if (heavy && cam()) this.rig.shake(0.08, 0.15);
       const last = i === rounds - 1;
       const shots = pellets || 1;
       for (let p = 0; p < shots; p++) {
         const dest = hit ? chest.clone().add(jitter(pellets ? 0.6 : 0.25)) : missPoint(from, chest, i + p, pellets ? 1.6 : 1);
-        void this.fx.bullet(from, dest, color, heavy ? 45 : 60, heavy).then(() => {
+        void (sung ? this.songFx.arrow(from, dest) : this.fx.bullet(from, dest, color, heavy ? 45 : 60, heavy)).then(() => {
           this.fx.sparks(dest, hit ? 0xff7a5a : 0xffd28a, pellets ? 3 : hit ? 8 : 5);
-          if (hit && last && p === 0) this.sfx.impact();
+          if (last && p === 0) this.sfx.impact(hit ? this.sfx.body(target) : 'miss', dest, e.result === 'crit');
         });
       }
       await wait(weapon.burst > 3 ? 0.08 : 0.11);
@@ -983,9 +1121,9 @@ export class Game {
     if (e.ability === 'discharge') {
       const home = this.units.dronePos(u.id);
       this.units.setDroneAway(u.id, true);
-      this.sfx.ui();
+      this.sfx.drone(home);
       await this.fx.droneFlight(home, to.clone().add(new THREE.Vector3(0, 1.4, 0)));
-      this.sfx.explosion();
+      this.sfx.explosion(to);
       if (cam()) this.rig.shake(0.25, 0.4);
       void this.fx.explosion(to, def.radius ?? 1.5, true);
       void this.fx.droneFlight(to.clone().add(new THREE.Vector3(0, 1.4, 0)), this.units.dronePos(u.id)).then(() => this.units.setDroneAway(u.id, false));
@@ -994,36 +1132,47 @@ export class Game {
     } else if (e.ability === 'missiles') {
       const from = this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.5, 0));
       const spots = [to, ...Array.from({ length: 3 }, () => to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2)))];
-      this.sfx.throwWhoosh();
+      this.sfx.missile(from);
       await this.fx.missiles(from, spots);
+    } else if (e.ability === 'fireball') {
+      // Bola de fuego: lobbed burning tiles and a blast of fire and song (songFx.ts).
+      const hands = this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.3, 0));
+      this.fx.floatText(this.units.chestPos(u.id), def.name.toUpperCase(), 'info');
+      this.sfx.song('fire', hands);
+      await this.songFx.fireball(hands, to, blastRadius(u, e.ability) || 2.5);
+      if (cam()) this.rig.shake(0.4, 0.5);
+      await wait(0.4);
+      return;
     } else if (e.ability === 'launch') {
       await this.units.raiseWeapon(u.id, to);
       const from = this.units.muzzlePos(u.id);
       this.units.recoil(u.id);
       this.fx.muzzleFlash(from, 0xffc080);
-      this.sfx.throwWhoosh();
+      this.sfx.launch(from);
       await this.fx.grenadeArc(from, to);
+      this.sfx.land(to);
       this.units.lowerWeapon(u.id);
     } else {
-      this.sfx.throwWhoosh();
+      this.sfx.throw(this.units.chestPos(u.id));
       await this.units.throwMotion(u.id);
       await this.fx.grenadeArc(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.45, 0)), to);
+      this.sfx.land(to);
     }
     if (e.ability === 'smoke') {
-      this.sfx.throwWhoosh();
+      this.sfx.explosion(to, 'smoke');
       this.fx.sparks(to, 0xdfe6ec, 14);
       await wait(0.3);
       return;
     }
     if (e.ability === 'flashbang') {
-      this.sfx.impact();
+      this.sfx.explosion(to, 'flash');
       this.fx.muzzleFlash(to.clone().setY(to.y + 0.6), 0xffffff);
       this.fx.sparks(to.clone().setY(to.y + 0.6), 0xffffff, 24);
       if (cam()) this.rig.shake(0.15, 0.3);
       await wait(0.4);
       return;
     }
-    this.sfx.explosion();
+    this.sfx.explosion(to);
     if (cam()) this.rig.shake(0.45, 0.6);
     void this.fx.explosion(to, blastRadius(u, e.ability) || 2.5);
     await wait(0.4);
@@ -1092,6 +1241,8 @@ export class Game {
     this.overlays.setBeacons(beacons);
     this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
     this.overlays.setSmoke(this.view.smoke);
+    this.songMarks.setSilences((this.view.silences ?? []).map((z) => ({ at: tileToWorld(z.pos), radius: z.radius })));
+    this.songMarks.setOaths(this.view.units.filter((u) => u.alive && (u.oath ?? 0) > 0).map((u) => tileToWorld(u.pos)));
     this.drawPlans();
     this.edge.set(this.marks());
   }
@@ -1730,7 +1881,7 @@ export class Game {
 
     if (this.mode.kind === 'tile') {
       const ability = this.mode.ability;
-      this.overlays.showRange(u.pos, ABILITIES[ability].range);
+      this.overlays.showRange(u.pos, abilityRange(u, ability));
       if (!tile) return;
       const center = throwTile(u, ability, tile);
       const area = blastTiles(this.state, ability, center, u);

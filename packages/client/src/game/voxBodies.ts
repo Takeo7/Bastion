@@ -66,7 +66,9 @@ export const SOLDIER_GUNS: Record<SoldierGun, GunSpec> = {
   sniper: { pivot: [-1, 20, 2], muzzle: [0, 0.5, 13.5], gripR: [0, -2, 3], gripL: [0, -1.5, 5] },
 };
 
-export const CLASS_GUN: Record<'assault' | 'grenadier' | 'sharpshooter' | 'specialist', SoldierGun> = {
+/** A rookie carries the rifle and no class gear yet. */
+export const CLASS_GUN: Record<'assault' | 'grenadier' | 'sharpshooter' | 'specialist' | 'rookie', SoldierGun> = {
+  rookie: 'rifle',
   assault: 'shotgun',
   grenadier: 'cannon',
   sharpshooter: 'sniper',

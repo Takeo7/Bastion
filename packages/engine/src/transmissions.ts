@@ -49,6 +49,8 @@ export type SceneId =
   | 'partitura'
   | 'simon'
   | 'ch5After'
+  | 'velmar'
+  | 'firstSong'
   | 'confession'
   | 'ch6After'
   | 'contranota'
@@ -72,6 +74,15 @@ export interface Scene {
 }
 
 const trusted = (c: CampaignState) => c.story.simon === 'trusted';
+
+/**
+ * The Canto branch's talents (classes.ts, "El Canto de Velmar" in docs/LORE.md)
+ * and the building that teaches them. Written as plain strings so these scenes
+ * don't depend on the ids existing yet.
+ */
+const SONG_TALENTS = ['songBlade', 'aegis', 'echoStep', 'layOnHands', 'velmarOath', 'bolt', 'silence', 'fireball', 'highFlame', 'velmarStorm', 'huntersMark', 'spectralArrow', 'shadowStep', 'windEyes', 'lightRain', 'calmSong', 'counterSong', 'hymn', 'lightHands', 'lastVerse'];
+const hasEchoes = (c: CampaignState) => c.base.plots.some((p) => (p.building as string | null) === 'echoes');
+const someoneSings = (c: CampaignState) => c.soldiers.some((s) => SONG_TALENTS.some((id) => (s.talents as Record<string, number | undefined>)[id]));
 const chapterOpen = (c: CampaignState, n: number) => c.story.done >= n || c.offers.some((o) => o.story === n);
 
 /** In story order: when several unlock at once they play in this order. */
@@ -197,6 +208,30 @@ export const SCENES: Scene[] = [
       { who: 'nwosu', text: 'Una de ellas me ha reconocido. Fui yo quien la escaneó.' },
       { who: 'morse', text: '¿Y qué le ha dicho?' },
       { who: 'nwosu', text: 'Que le diera un fusil.' },
+    ],
+  },
+  {
+    id: 'velmar',
+    title: 'Velmar',
+    channel: 'Cámara de Ecos',
+    when: hasEchoes,
+    lines: [
+      { who: 'nwosu', text: 'Las cintas del Archivo no son solo de gente de aquí. Hay voces de otro sitio. De Velmar.' },
+      { who: 'teo', text: 'Un mundo que el Coro se cantó hace mil años. Su gente aprendió a usar el canto antes de desaparecer. Lo llamaban la Lengua.' },
+      { who: 'nwosu', text: 'Sus magos, sus caballeros, sus cazadores. Está todo en la cinta: cómo respiraban, cómo cantaban.' },
+      { who: 'morse', text: '¿Y queréis que nuestros soldados canten como ellos? ¿En el idioma del Coro?' },
+      { who: 'teo', text: 'Con válvulas no nos oye. Y con lo que hay ahí fuera, no podemos permitirnos no aprender.' },
+    ],
+  },
+  {
+    id: 'firstSong',
+    title: 'La primera canción',
+    channel: 'Sala de escucha',
+    when: someoneSings,
+    lines: [
+      { who: 'morse', text: 'Esta noche alguien ha cantado en la Cámara de Ecos. La aguja de la sala de escucha ni se ha movido.' },
+      { who: 'teo', text: 'Lo que se canta entre válvulas se queda en el Bastión. En el campo, comandantes, eso se oye. Cantad con cabeza.' },
+      { who: 'coro', text: 'Conocemos esa canción.' },
     ],
   },
   {
@@ -363,7 +398,7 @@ export function recapLines(c: CampaignState, slot: Slot): SceneLine[] {
 // ------------------------------------------------------------------ tips
 
 /** Morse's first-time warnings in combat: each plays once per browser, the first time it matters. */
-export type TipId = 'concealed' | 'redTile' | 'contact' | 'shot' | 'flanked' | 'wounded' | 'command' | 'flare' | 'psionic';
+export type TipId = 'concealed' | 'redTile' | 'contact' | 'shot' | 'flanked' | 'wounded' | 'command' | 'flare' | 'psionic' | 'song';
 
 export interface RadioTip {
   who: SpeakerId;
@@ -413,6 +448,11 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
     who: 'morse',
     line: 'Bengala roja. Llegan más.',
     rule: 'Caen ahí al final del próximo turno enemigo. Apartaos o dejad a alguien en vigilancia.',
+  },
+  song: {
+    who: 'morse',
+    line: 'Eso se oye. Que valga la pena.',
+    rule: 'Cantar rompe la ocultación, y quien canta es más fácil de cantar para un Cantor.',
   },
   psionic: {
     who: 'morse',

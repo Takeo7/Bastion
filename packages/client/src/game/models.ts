@@ -196,6 +196,8 @@ export function buildModel(template: TemplateId, accent: string): UnitRig {
       ).rig;
     case 'specialist':
       return soldierBody(new Builder({ shoulderY: 0.95 }), accent).weapon([[geo.rifle, GUNMETAL(), 0, -0.05, 0.24]], 0.58).drone().rig;
+    case 'rookie':
+      return soldierBody(new Builder({ shoulderY: 0.95 }), accent).weapon([[geo.rifle, GUNMETAL(), 0, -0.05, 0.24]], 0.58).rig;
     case 'trooper':
       return new Builder({ shoulderY: 0.95 })
         .part(geo.body, mat(0x4a3439), 0, 0.62, 0)

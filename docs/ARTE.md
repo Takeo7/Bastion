@@ -106,6 +106,100 @@ Se eligió "Todo vóxel": los modelos se siguen construyendo con primitivas y se
   - Se construye una sola vez (unos 100 ms) y se reutiliza al volver de cada misión.
 - **Coste** (M4): un mapa completo son unos 600 000 triángulos y 1,4 ms de render; el posproceso añade alrededor de 1 ms. Convertir un soldado tarda unos 13 ms; el decorado, unos 350 ms una sola vez.
 
+## El Canto de Velmar: la magia (2026-10-12)
+
+La magia (diseño en [LORE.md](LORE.md), «El Canto de Velmar») es el idioma del Coro usado contra él. Se ve y suena así: todo canto está hecho de **teselas**, cubitos de luz en el verde y el cian del Coro, y cualquier canto se oye con la **Lengua**, voces sintetizadas que cantan vocales, siempre varias a la vez, porque el Coro habla en plural.
+
+![Los efectos de cada canto](arte/canto-efectos.jpg)
+
+| Canto | Efecto | Sonido |
+|---|---|---|
+| Saeta | Un proyectil de luz que deja una estela de teselas y estalla en el blanco | «i» brillante, campanilla y silbido |
+| Bola de fuego | Una bola de teselas ardientes lanzada en parábola; al estallar, fuego y un anillo verde | «o» grave, rugido y estallido |
+| Flecha espectral, Lluvia de luz | Flechas pálidas que se dibujan a través de las paredes, porque atraviesan la cobertura | Silbido y una «e» rápida |
+| Salto de eco, Paso de sombra | El cuerpo se deshace en teselas que suben y se recompone donde lo manda el canto | Destello que sube y otro que baja con un acorde |
+| Silencio | Una cúpula de teselas que se cierra sobre la zona y se queda, tenue, mientras dura | Presión ahogada y voces que se hunden |
+| Tormenta de Velmar | Rayos de teselas desde un cielo de luz sobre cada objetivo | Acorde agudo y un trueno por rayo |
+| Himno, Égida, Juramento | Un anillo que se abre desde quien canta y luz que sube de cada aliado (verde, cian, dorado). El Juramento deja un anillo dorado de radio 4 mientras dura | Acorde mayor que crece |
+| Imposición de manos, Último verso | Luz que sube en espiral; para revivir, una columna del cielo y teselas que se juntan en el caído | Campanillas y un gran coro |
+| Contracanto | Un anillo de teselas que se cierra sobre el aliado y estalla | «u» que sube a «i» y un chasquido |
+| Marca del cazador | Una mira dorada girando sobre la cabeza | Campanilla dorada y un susurro |
+| Hoja cantada | El tajo deja un arco de teselas | La espada suena con una «e» |
+
+- **Cantores:** quien sabe cantar lleva tres teselas verdes girando sobre la cabeza.
+- **Estados en la etiqueta:** JURAMENTO, GUARDA e HIMNO van en verde del Coro; PRESA (la marca del cazador), en dorado.
+- **Iconos:** cada canto tiene el suyo en la barra de habilidades, dibujado con el mismo boli que los demás.
+- **Código:** los efectos están en `game/songFx.ts` (`SongFx` para los momentos, `SongMarks` para lo que se queda: zonas de Silencio y auras del Juramento). Se conectan en `game.ts` con los eventos `sung`, `teleported`, `revived` y `silenced`, y con los disparos y explosivos de los cantos. Las voces están en `audio/sounds.ts` (`song.*`).
+- **Laboratorio:** `/modelos.html#canto` tiene un escenario con un cantor y tres enemigos; `__models.song('bolt')` lanza cada canto. En `/sonido.html` se oyen todos los sonidos («Canto de Velmar»).
+
+### La Cámara de Ecos
+
+![La Cámara de Ecos a nivel 1 y 3](arte/camara-de-ecos.jpg)
+
+- Es un cobertizo de chapa galvanizada con el ribete verde del Coro y las paredes forradas de malla de cobre, una jaula de Faraday para que el Coro no oiga lo que se canta dentro.
+- Dentro hay estanterías de bobinas de cinta, un amplificador de válvulas encendidas con su aguja, una bocina de latón, sillas con auriculares y Velmar mismo: el tapiz que trajo Nwosu del Archivo y una piedra tallada cuyas runas brillan.
+- El nivel 2 añade más cintas y una segunda bocina; el 3, la cinta del maestro brillando en un atril.
+
+## Edificios nuevos y niveles (2026-10-12)
+
+![Los cinco edificios nuevos, a varios niveles, y uno mejorándose](arte/edificios-nuevos.jpg)
+
+Los cinco edificios que añadió Gameplay ya tienen su interior en vóxel (`strategy/bastion.ts`):
+
+| Edificio | Nivel 1 | Lo que añaden los niveles 2 y 3 |
+|---|---|---|
+| **Barracón** | Literas con mantas militares y un baúl a los pies, y una estufa | Una litera más por nivel (dos, tres, cuatro) |
+| **Campo de tiro** | Una calle entre troncos de pino, el terraplén al fondo, siluetas, sacos terreros y la bandera | Una silueta más por nivel |
+| **Taller de La Mula** | Un motor en su soporte, el panel de herramientas, neumáticos, bidones y el chispazo de la soldadura | Un polipasto sobre el motor; un motor de repuesto |
+| **Estación de escucha** | Radios de válvulas encendidas, la llave del telégrafo y un mástil alto con luz que se ve desde toda la base | Una segunda antena; una parábola girando |
+| **Brigada de obras** | Tablones apilados, una carretilla, palas y cascos | Otra carretilla y un trípode con polea; una hormigonera |
+
+- **Niveles:** todos los edificios llevan tres pilotos ámbar en la pared de la puerta, tantos encendidos como su nivel.
+- **Mejoras en marcha:** se monta un andamio alrededor del edificio, que sigue en pie y funcionando, con la franja de obra que avanza. El rótulo dice «Nombre · mejora · N d».
+- **Rótulos:** en el mapa los nombres largos se acortan (Entrenamiento, Comunicaciones, Simulación, La Mula, Escucha, Brigada) para no pisarse; el nombre completo sale al pasar el ratón y en los paneles.
+
+## Sonido (2026-10-12)
+
+Todo el sonido del juego está hecho en código, sin grabaciones ni licencias, como los modelos. El laboratorio `http://localhost:5173/sonido.html` tiene cada sonido en un botón, con su espectrograma, además de las piezas de música, los ambientes, el morse, una escena de combate de prueba y los volúmenes.
+
+- **Motor** (`client/src/audio/engine.ts`):
+  - Un solo contexto de audio, con un bus por tipo de sonido: efectos, interfaz, radio, música y ambiente.
+  - Compresor a la salida y reverberación compartida.
+  - La música baja sola bajo las explosiones, el «¡contacto!» y mientras habla la radio.
+  - Volúmenes en Ajustes (general, efectos, música, ambiente, interfaz y radio); la M sigue silenciándolo todo.
+  - Con la pestaña oculta no suena nada.
+- **Efectos** (`audio/sounds.ts`, `audio/bank.ts`):
+  - 89 recetas de síntesis: ruidos filtrados, osciladores, envolventes, distorsión, ecos y resonancias metálicas aditivas.
+  - Se renderizan una vez, con 3 a 6 variantes cada una, en ratos libres tras el primer clic, y se igualan de volumen antes de mezclarlas.
+  - Las armas suenan según la clase (fusil, escopeta, rifle de precisión, cañón, pistola) y el nivel: pólvora; magnética, con chasquido eléctrico y raíl que vibra; plasma, con descarga que cae y zumbido grave.
+  - Los alienígenas tienen voz propia: fusiles de ADVENT más ásperos, la pistola psiónica del sectoide, el emisor del xenoide y el cañón del MEC.
+  - Impactos según el blanco (cuerpo, blindaje, máquina) o el fallo (silbido, rebote, cobertura).
+  - Muertes por facción: los de ADVENT, que son «impresos», se deshacen en interferencias; las máquinas se apagan; el sectoide gime.
+  - Explosiones, humo, cegadoras, misiles, granadas, pasos (los del MEC y los del zombi, aparte), recargas, hackeo, alarma, curación, escudo, evacuación, cápsulas, bengala y dirigible.
+- **En combate** (`game/sfx.ts`):
+  - Cada sonido se coloca donde ocurre: panorama estéreo por su sitio en pantalla, y más bajo cuanto más lejos de donde mira la cámara o fuera de ella.
+  - El ambiente sigue al bioma: ciudad, afueras, imprenta.
+  - La música, al estado: oculta, tensa tras el contacto o la ocultación rota, y la del turno enemigo.
+  - Al terminar, la música se corta para el remate de victoria o de derrota.
+- **Interfaz** (`audio/ui.ts`), un único oyente en todo el documento:
+  - En Expediente cada botón es una tecla de máquina de escribir, confirmar es el retorno de carro con su campanilla, las pestañas pasan página, lo desactivado da un golpe sordo y escribir en un campo teclea.
+  - Los rótulos y el resultado de la misión son un sello de goma; abrir un panel es una hoja de papel.
+  - Con la interfaz Holotáctico, los mismos momentos son pitidos y clics electrónicos.
+- **Radio** (con Lore): la estática al abrir el canal y al cambiar de voz, teclas, unas letras de morse bajo las líneas de Morse, un murmullo psiónico bajo el Coro y el clic al cerrar.
+- **Música** (`audio/music.ts`): generada mientras suena, en re menor, lenta y con pocas notas, para quedar debajo del juego.
+  - **Base y menús:** acordes cálidos y unas notas sueltas.
+  - **Globo:** un bordón y campanas.
+  - **Combate oculto:** un bordón grave y un latido.
+  - **Combate tras el contacto:** batería, bajo en ostinato y acordes cortos.
+  - **Turno enemigo:** un tritono grave y metal.
+- **Ambientes** (`audio/ambience.ts`), en vivo, con sucesos al azar:
+  - **Ciudad:** viento y tráfico lejano, algún coche.
+  - **Afueras:** viento, hojas y pájaros.
+  - **Imprenta:** zumbido de máquinas, el golpe de la prensa y vapor.
+  - **Bastión:** viento de nieve, el generador y el radar.
+  - **Globo:** un bordón y datos.
+- **Pendiente de oído:** yo no puedo escuchar, así que los niveles y timbres están puestos por diseño y comprobados en espectrogramas, pero hay que oírlos. Cualquier sonido se ajusta en su receta.
+
 ## Modelos vóxel hechos a mano (2026-10-11)
 
 ![Reparto hecho a mano: soldados y alienígenas](arte/voxel-reparto.jpg)

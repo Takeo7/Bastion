@@ -24,6 +24,9 @@ import {
   type SpeakerId,
   type TipId,
 } from '@bastion/engine';
+import { sound } from '../audio/bank';
+import { audio } from '../audio/engine';
+import { morse } from '../audio/radio';
 import { storageKey } from '../net';
 import { append, clear, h } from '../ui/dom';
 import { portraitSrc } from './portraits';
@@ -41,51 +44,44 @@ export function portrait(speaker: SpeakerId): HTMLElement {
 
 // ------------------------------------------------------------------ sound
 
-/** Radio static and key clicks, synthesised; quiet, and silent when the game is muted. */
+/**
+ * Radio sound on the game's radio bus (audio/): it follows the volumes and the
+ * mute, and holds the music down while someone talks. Static when the channel
+ * opens and when the voice changes, a key click every few letters, a few
+ * letters of Morse as the operator comes on the air, a psionic murmur under the
+ * Coro's (no one is at a keyboard there), and a click when the channel closes.
+ */
 class RadioSound {
-  private ctx: AudioContext | null = null;
-  private noise: AudioBuffer | null = null;
+  private release: (() => void) | null = null;
+  /** Morse taps only as she comes on the air: on her first line of each transmission. */
+  private tapped = false;
 
-  private ready(): AudioContext | null {
-    try {
-      if (localStorage.getItem(storageKey('muted')) === '1') return null;
-    } catch {
-      /* storage unavailable: play */
-    }
-    if (document.hidden) return null;
-    if (!this.ctx) {
-      this.ctx = new AudioContext();
-      this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
-      const data = this.noise.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    }
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
-    return this.ctx;
+  open(): void {
+    sound('radio.static');
+    this.tapped = false;
+    this.release ??= audio.holdDuck(0.4);
   }
 
-  private burst(duration: number, type: BiquadFilterType, freq: number, gain: number): void {
-    const ctx = this.ready();
-    if (!ctx || !this.noise) return;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noise;
-    const filter = ctx.createBiquadFilter();
-    filter.type = type;
-    filter.frequency.value = freq;
-    const g = ctx.createGain();
-    const t = ctx.currentTime;
-    g.gain.setValueAtTime(gain, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
-    src.connect(filter).connect(g).connect(ctx.destination);
-    src.start(t, Math.random() * 0.5, duration);
-  }
-
-  /** The squelch of a channel opening, or of another voice coming in. */
   static_(): void {
-    this.burst(0.28, 'bandpass', 1800, 0.12);
+    sound('radio.static');
   }
 
   key(): void {
-    this.burst(0.018, 'highpass', 3200, 0.05);
+    sound('radio.key', { spread: 0.15 });
+  }
+
+  under(who: string): void {
+    if (who === 'coro') sound('psi', { bus: 'radio', gain: 0.35 });
+    else if (who === 'morse' && !this.tapped) {
+      this.tapped = true;
+      morse();
+    }
+  }
+
+  close(click: boolean): void {
+    if (click) sound('radio.close');
+    this.release?.();
+    this.release = null;
   }
 }
 
@@ -135,11 +131,13 @@ export class RadioPanel {
     this.onEnd = onEnd ?? null;
     this.el.dataset.scene = scene.id;
     this.el.classList.add('show');
-    this.sound.static_();
+    this.sound.open();
     this.showLine();
   }
 
-  close(): void {
+  /** `click`: the channel closing is heard (not when a mission ending takes the panel away). */
+  close(click = true): void {
+    this.sound.close(click && this.active);
     this.stop();
     this.lines = [];
     this.scene = null;
@@ -152,7 +150,7 @@ export class RadioPanel {
   /** Stops it for good and takes it off the page. */
   dispose(): void {
     this.onEnd = null;
-    this.close();
+    this.close(false);
     window.removeEventListener('keydown', this.onKey);
     this.el.remove();
   }
@@ -196,6 +194,7 @@ export class RadioPanel {
       ),
     );
     if (this.index > 0) this.sound.static_();
+    this.sound.under(line.who);
     this.timer = window.setInterval(() => this.type(), 26);
   }
 

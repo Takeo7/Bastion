@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { fitPostToPixelRatio, voxelPost, type VoxelPost } from '../game/post';
 import { FrameLimiter, onGraphics, pixelRatio, type GraphicsSettings } from '../settings';
+import { ambience } from '../audio/ambience';
+import { music } from '../audio/music';
 import { easeInOut, tween } from '../game/tween';
 
 /** A camera placement: where it stands, what it looks at, and its field of view. */
@@ -41,6 +43,8 @@ export class Stage {
   private readonly resizeObserver: ResizeObserver;
   private readonly raycaster = new THREE.Raycaster();
   private active = '';
+  /** Whether the set shown picks the music and ambience (the base does; the menu's backdrop does not). */
+  soundtrack = true;
   private frameId = 0;
   private moveId = 0;
   private drag: { x: number; y: number; moved: boolean } | null = null;
@@ -110,6 +114,10 @@ export class Stage {
       }
       for (const [key, labels] of this.labels) labels.domElement.style.display = key === id ? '' : 'none';
       this.active = id;
+      if (this.soundtrack) {
+        music.play(id === 'geo' ? 'geo' : 'base');
+        ambience.play(id === 'geo' ? 'geo' : 'base');
+      }
       this.place(shot);
       this.fade.classList.remove('on');
       return;

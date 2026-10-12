@@ -9,6 +9,7 @@ import {
   gainXp,
   migrateCampaign,
   missionInfo,
+  pointsToSpend,
   regionIncome,
   squadMember,
   type CampaignCommand,
@@ -126,7 +127,7 @@ describe('side quests', () => {
     run(c, { type: 'answerEvent', option: 0 });
     const ibarra = c.soldiers.find((s) => s.name === 'Elena Ibarra')!;
     expect(ibarra).toMatchObject({ cls: 'sharpshooter', rank: 3, traits: ['scarred'] });
-    expect(ibarra.pendingTiers.length).toBeGreaterThan(0);
+    expect(pointsToSpend(ibarra)).toEqual({ attrs: 6, talents: 6 });
     expect(squadMember(c, ibarra).will).toBeLessThan(squadMember(c, { ...ibarra, traits: [] }).will);
   });
 

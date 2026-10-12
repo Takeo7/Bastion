@@ -10,6 +10,7 @@ import {
   meleeTargets,
   psiChance,
   rangedTargets,
+  songTargets,
   type MeleeOption,
 } from './abilities';
 import { chooseScamperTile, patrolPod, takeAlienTurn } from './ai';
@@ -31,7 +32,7 @@ import {
 } from './content';
 import { applyEvent, type GameEvent } from './events';
 import { canStandOn, combatants, distance, elevAt, getUnit, inBounds, sameTile, tileAt, tileIndex, unitAt } from './grid';
-import { canSee, isViewer, sightOrigin } from './los';
+import { canSee, isViewer, sightOf, sightOrigin } from './los';
 import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost } from './path';
 import type { Command } from './protocol';
 import type { Rng } from './rng';
@@ -51,6 +52,23 @@ import type {
   Unit,
   Vec2,
 } from './types';
+
+// Velmar's Canto (docs/LORE.md, «El Canto de Velmar»).
+/** Égida: defence for the singer and the allies beside it. */
+const AEGIS_DEFENSE = 20;
+/** Himno: aim and defence for the allies around. */
+const HYMN_BONUS = 10;
+/** Paso de sombra to higher ground: aim for the rest of the turn. */
+const SHADOW_AIM = 10;
+/** Juramento, Contracanto and Silencio last two of the squad's turns. */
+const SONG_TURNS = 2;
+const BOLT_DAMAGE = 3;
+const STORM_DAMAGE = 4;
+const STORM_TARGETS = 3;
+const LAY_ON_HANDS = 3;
+/** Último verso: health of whoever stands again, or healing for those around. */
+const LAST_VERSE_HP = 3;
+const LAST_VERSE_HEAL = 4;
 
 /** Reinforcements drop this far (in tiles) from the nearest soldier. */
 const DROP_MIN = 7;
@@ -152,10 +170,10 @@ export class Sim {
         this.activatePodOf(target!);
         break;
       case 'medkit':
-        this.emit({ t: 'healed', unit: u.id, target: target!.id, amount: Math.min(MEDKIT_HEAL + u.mods.heal, target!.maxHp - target!.hp) });
+        this.emit({ t: 'healed', unit: u.id, target: target!.id, amount: Math.min(MEDKIT_HEAL + u.mods.heal + (bridged(u, target!) ? 2 : 0), target!.maxHp - target!.hp) });
         break;
       case 'aid':
-        this.emit({ t: 'aided', unit: u.id, target: target!.id, amount: AID_DEFENSE + u.mods.aid });
+        this.emit({ t: 'aided', unit: u.id, target: target!.id, amount: AID_DEFENSE + u.mods.aid + (bridged(u, target!) ? 10 : 0) });
         if (hasPerk(u, 'threatAssessment') && !target!.overwatch && (attackWeapon(target!, 'shoot').clip === 0 || target!.ammo > 0)) {
           this.emit({ t: 'overwatch', unit: target!.id, killZone: false });
         }
@@ -209,7 +227,139 @@ export class Sim {
       case 'reanimate':
         this.reanimate(u, target!);
         break;
+      // Velmar's Canto.
+      case 'aegis':
+        this.bless(u, ability, this.alliesWithin(u, 1.5), AEGIS_DEFENSE, 0);
+        break;
+      case 'hymn':
+        this.bless(u, ability, this.alliesWithin(u, ABILITIES.hymn.range ?? 0), HYMN_BONUS, HYMN_BONUS);
+        break;
+      case 'echoStep':
+      case 'shadowStep':
+        this.teleport(u, tile!, ability);
+        break;
+      case 'layOnHands':
+        this.emit({ t: 'sung', unit: u.id, ability, targets: [target!.id] });
+        if (target!.hp < target!.maxHp) this.emit({ t: 'healed', unit: u.id, target: target!.id, amount: Math.min(LAY_ON_HANDS + u.mods.heal, target!.maxHp - target!.hp) });
+        if (target!.panicked || target!.disoriented > 0) this.emit({ t: 'cleansed', unit: u.id, target: target!.id });
+        break;
+      case 'velmarOath':
+        this.emit({ t: 'sung', unit: u.id, ability, targets: [u.id] });
+        this.emit({ t: 'oath', unit: u.id, turns: SONG_TURNS });
+        break;
+      case 'bolt':
+        this.emit({ t: 'sung', unit: u.id, ability, targets: [target!.id] });
+        this.damage(target!, BOLT_DAMAGE + u.mods.songDamage + this.duet(u), 0, u);
+        if (target!.team !== u.team) this.activatePodOf(target!);
+        this.checkOutcome();
+        break;
+      case 'velmarStorm': {
+        const struck = songTargets(this.s, u, 'velmarStorm').sort((a, b) => a.hp - b.hp).slice(0, STORM_TARGETS);
+        this.emit({ t: 'sung', unit: u.id, ability, targets: struck.map((t) => t.id) });
+        for (const t of struck) {
+          this.damage(t, STORM_DAMAGE + u.mods.songDamage + this.duet(u), 0, u);
+          this.activatePodOf(t);
+        }
+        this.checkOutcome();
+        break;
+      }
+      case 'silence':
+        this.silence(u, tile!);
+        break;
+      case 'fireball':
+        this.explode(u, tile!, 'fireball');
+        break;
+      case 'huntersMark':
+        this.emit({ t: 'sung', unit: u.id, ability, targets: [target!.id] });
+        this.emit({ t: 'hunted', unit: target!.id, by: u.id });
+        break;
+      case 'spectralArrow':
+        this.attack(u, target!, 'spectralArrow');
+        break;
+      case 'lightRain':
+        this.emit({ t: 'sung', unit: u.id, ability, targets: songTargets(this.s, u, 'lightRain').map((t) => t.id) });
+        for (const t of songTargets(this.s, u, 'lightRain')) {
+          if (!u.alive || this.over) break;
+          if (t.alive) this.attack(u, t, 'lightRain');
+        }
+        break;
+      case 'counterSong':
+        this.emit({ t: 'sung', unit: u.id, ability, targets: [target!.id] });
+        if (target!.controlledBy) this.emit({ t: 'released', unit: target!.id });
+        if (hasBadStatus(target!)) this.emit({ t: 'cleansed', unit: u.id, target: target!.id });
+        this.emit({ t: 'warded', unit: target!.id, turns: SONG_TURNS });
+        break;
+      case 'lastVerse':
+        this.lastVerse(u);
+        break;
     }
+    // A song is heard: it breaks concealment like a shot, unless the Cámara de Ecos is
+    // wall to wall with the listening post (Morse filters it).
+    if (ABILITIES[ability].song && u.team === 'xcom' && !u.controlledBy && !this.s.quietSongs) this.breakConcealment();
+  }
+
+  // ------------------------------------------------------------- the Canto
+
+  /** «A dos voces»: a partner's singer within 2 tiles adds one more. */
+  duet(u: Unit): number {
+    const partner = this.s.units.some(
+      (a) => a.alive && a.id !== u.id && a.team === u.team && a.owner !== null && u.owner !== null && a.owner !== u.owner && a.mods.singer > 0 && distance(a.pos, u.pos) <= 2,
+    );
+    return partner ? 1 : 0;
+  }
+
+  /** The singer and its allies within `range` (on the battlefield, able to act). */
+  private alliesWithin(u: Unit, range: number): Unit[] {
+    return this.s.units.filter((a) => a.alive && a.team === u.team && !a.captive && !a.objective && distance(a.pos, u.pos) <= range);
+  }
+
+  /** Égida and Himno: defence (and aim) until the allies' next turn. */
+  private bless(u: Unit, ability: AbilityId, allies: Unit[], defense: number, aim: number): void {
+    this.emit({ t: 'sung', unit: u.id, ability, targets: allies.map((a) => a.id) });
+    for (const a of allies) {
+      if (defense > a.aided) this.emit({ t: 'aided', unit: u.id, target: a.id, amount: defense });
+      if (aim) this.emit({ t: 'blessed', unit: a.id, aim });
+    }
+  }
+
+  /** Salto de eco and Paso de sombra: gone from here, there at once. No overwatch sees the jump. */
+  private teleport(u: Unit, to: Vec2, ability: AbilityId): void {
+    const from = { ...u.pos };
+    this.emit({ t: 'sung', unit: u.id, ability, targets: [u.id], tile: to });
+    this.emit({ t: 'teleported', unit: u.id, from, to: { ...to } });
+    if (ability === 'shadowStep' && elevAt(this.s, to.x, to.y) > elevAt(this.s, from.x, from.y)) this.emit({ t: 'blessed', unit: u.id, aim: SHADOW_AIM });
+    const noticing = u.team === 'xcom' ? this.podsNoticing(to) : [];
+    if (noticing.length) this.activatePods(noticing);
+  }
+
+  /** Silencio: the Cantores in the zone can't sing for two turns, and every enemy there is disoriented. */
+  private silence(u: Unit, center: Vec2): void {
+    const radius = (ABILITIES.silence.radius ?? 2) + this.duet(u);
+    const hit = this.s.units.filter((v) => v.alive && v.team !== u.team && !v.objective && !TEMPLATES[v.template].robotic && distance(v.pos, center) <= radius);
+    this.emit({ t: 'sung', unit: u.id, ability: 'silence', targets: hit.map((v) => v.id), tile: center });
+    this.emit({ t: 'silenced', pos: { ...center }, radius, turns: SONG_TURNS });
+    for (const v of hit) this.emit({ t: 'disoriented', unit: v.id });
+    this.activatePods([...new Set(hit.map((v) => v.podId).filter((p): p is string => !!p))]);
+  }
+
+  /** Último verso: whoever fell this turn stands again; if nobody did, everyone near is healed. */
+  private lastVerse(u: Unit): void {
+    const fallen = this.s.units.find(
+      (a) => !a.alive && !a.evacuated && !a.reanimated && a.fellTurn === this.s.turn && TEMPLATES[a.template].team === u.team && a.template !== 'vip',
+    );
+    if (fallen) {
+      this.emit({ t: 'sung', unit: u.id, ability: 'lastVerse', targets: [fallen.id] });
+      this.emit({ t: 'revived', unit: fallen.id, hp: LAST_VERSE_HP });
+      return;
+    }
+    const near = this.alliesWithin(u, ABILITIES.lastVerse.range ?? 0).filter((a) => a.hp < a.maxHp);
+    this.emit({ t: 'sung', unit: u.id, ability: 'lastVerse', targets: near.map((a) => a.id) });
+    for (const a of near) this.emit({ t: 'healed', unit: u.id, target: a.id, amount: Math.min(LAST_VERSE_HEAL + u.mods.heal, a.maxHp - a.hp) });
+  }
+
+  /** Juramento de Velmar: some ally within 4 tiles (or the unit itself) keeps the oath. */
+  private underOath(u: Unit): boolean {
+    return this.s.units.some((a) => a.alive && a.team === u.team && (a.oath ?? 0) > 0 && distance(a.pos, u.pos) <= (ABILITIES.velmarOath.range ?? 0));
   }
 
   // ---------------------------------------------------------------- combat
@@ -236,10 +386,10 @@ export class Sim {
     });
     const weapon = attackWeapon(attacker, ability);
     const primary = (ABILITIES[ability].weapon ?? 'primary') === 'primary' && !weapon.melee;
-    if (primary && hasPerk(attacker, 'holoTargeting') && target.alive) this.emit({ t: 'marked', unit: target.id, amount: HOLO_AIM });
+    if (primary && hasPerk(attacker, 'holoTargeting') && target.alive) this.emit({ t: 'marked', unit: target.id, amount: HOLO_AIM + attacker.mods.holoAim });
     if (result !== 'miss') {
-      const dm = shotDamageMods(attacker, ability, preview.flanked);
-      this.damage(target, rollDamage(weapon, result, this.rng, dm.bonus, dm.mult), dm.shred, attacker, dm.pierce);
+      const dm = shotDamageMods(attacker, ability, preview.flanked, preview.distance);
+      this.damage(target, rollDamage(weapon, result, this.rng, dm.bonus, dm.mult, dm.critBonus), dm.shred, attacker, dm.pierce);
       if (ability === 'rupture' && target.alive) this.emit({ t: 'ruptured', unit: target.id, amount: RUPTURE_DAMAGE });
       if (!target.alive && !reaction) this.afterKill(attacker, target, ability, preview.origin);
     }
@@ -283,7 +433,8 @@ export class Sim {
    */
   damage(u: Unit, raw: number, shred: number, source?: Unit, pierce = 0): void {
     if (!u.alive) return;
-    const total = raw + u.ruptured;
+    // Juramento de Velmar: whoever swore it takes half.
+    const total = ((u.oath ?? 0) > 0 ? Math.ceil(raw / 2) : raw) + u.ruptured;
     const mitigated = Math.min(Math.max(0, u.armor - pierce), total);
     this.emit({ t: 'damaged', unit: u.id, amount: total - mitigated, mitigated, shred: Math.min(shred, u.armor) });
     if (u.hp > 0) return;
@@ -299,6 +450,8 @@ export class Sim {
     if (!u.alive || !target?.alive || this.over || !inMeleeReach(this.s, u.pos, target.pos)) return;
     const result = this.attack(u, target, ability);
     if (ability === 'stunLance' && result && result !== 'miss' && target.alive) this.emit({ t: 'stunned', unit: target.id });
+    // Hoja cantada: the singing blade leaves the enemy reeling.
+    if (ability === 'slash' && u.mods.slashDisorient && result && result !== 'miss' && target.alive && !TEMPLATES[target.template].robotic) this.emit({ t: 'disoriented', unit: target.id });
   }
 
   explode(source: Unit, center: Vec2, ability: BlastAbility): void {
@@ -307,9 +460,13 @@ export class Sim {
     const weapon = WEAPONS[ABILITIES[ability].explosive!];
     this.emit({ t: 'explosive', unit: source.id, ability, target: center });
     const tiles = blastTiles(this.s, ability, center, source);
-    const victims = tiles.map((p) => unitAt(this.s, p)).filter((u): u is Unit => !!u);
-    const bonus = ability === 'grenade' || ability === 'launch' ? source.mods.grenadeDamage : 0;
-    for (const v of victims) this.damage(v, rollDamage(weapon, 'hit', this.rng, bonus), weapon.shred, source);
+    const grenade = ability === 'grenade' || ability === 'launch';
+    // Controlled detonation: the grenadier's own squad is left out of the blast.
+    const spared = (u: Unit) => grenade && hasPerk(source, 'safeBlast') && u.team === source.team;
+    const victims = tiles.map((p) => unitAt(this.s, p)).filter((u): u is Unit => !!u && !spared(u));
+    const bonus = grenade ? source.mods.grenadeDamage : ability === 'fireball' ? source.mods.songDamage + this.duet(source) : 0;
+    const shred = weapon.shred + (grenade ? source.mods.grenadeShred : 0);
+    for (const v of victims) this.damage(v, rollDamage(weapon, 'hit', this.rng, bonus), shred, source);
     // The drone's discharge is pure electricity: it leaves the scenery alone.
     if (ability !== 'discharge') {
       for (const p of tiles) {
@@ -346,7 +503,7 @@ export class Sim {
   /** Combat Protocol: never misses, ignores armour, hurts machines more. */
   private zap(u: Unit, target: Unit): void {
     this.emit({ t: 'zapped', unit: u.id, target: target.id });
-    const dmg = WEAPONS.droneZap.damage + (TEMPLATES[target.template].robotic ? 2 : 0);
+    const dmg = WEAPONS.droneZap.damage + (TEMPLATES[target.template].robotic ? 2 : 0) + u.mods.protocolDamage;
     this.damage(target, dmg, 0, u, Infinity);
     if (u.team === 'xcom') this.breakConcealment();
     if (target.team === 'alien') this.activatePodOf(target);
@@ -367,12 +524,17 @@ export class Sim {
   private psionic(caster: Unit, target: Unit): void {
     this.coveringFire(caster);
     if (!caster.alive || !target.alive || this.over) return;
-    const chance = psiChance(target);
+    const chance = psiChance(target, this.s);
     const success = this.rng.int(100) < chance;
     let effect: PsiEffect | null = null;
     if (success) {
       const roll = this.rng.int(100);
       effect = roll < 50 ? 'disoriented' : roll < 80 ? 'panicked' : 'controlled';
+      // Temple: 7 keeps panic out, 10 keeps the Cantor out of the hands too.
+      if (effect === 'panicked' && target.mods.psiGuard >= 1) effect = 'disoriented';
+      if (effect === 'controlled' && target.mods.psiGuard >= 2) effect = 'disoriented';
+      // Juramento de Velmar: nobody near the oath panics or falls to the Cantor.
+      if ((effect === 'panicked' || effect === 'controlled') && this.underOath(target)) effect = 'disoriented';
     }
     this.emit({ t: 'psi', unit: caster.id, target: target.id, success, effect, chance });
     this.checkOutcome();
@@ -474,10 +636,10 @@ export class Sim {
 
   /** Whether an overwatcher covers `step`: own sight, or the squad's with Long Watch. */
   private watches(o: Unit, step: Vec2): boolean {
-    const sight = TEMPLATES[o.template].sight;
+    const sight = sightOf(o);
     if (sightOrigin(this.s, o.pos, step, sight)) return true;
     if (!hasPerk(o, 'longWatch') || !TEMPLATES[o.template].squadsight) return false;
-    const spotted = this.s.units.some((v) => isViewer(v, o.team) && sightOrigin(this.s, v.pos, step, TEMPLATES[v.template].sight));
+    const spotted = this.s.units.some((v) => isViewer(v, o.team) && sightOrigin(this.s, v.pos, step, sightOf(v)));
     return spotted && sightOrigin(this.s, o.pos, step, Infinity) !== null;
   }
 
@@ -768,6 +930,11 @@ export function tilesInRadius(s: GameState, center: Vec2, radius: number): Vec2[
 
 // ------------------------------------------------------------- commands
 
+/** Puente: the specialist's drone does more for the other player's soldiers. */
+function bridged(u: Unit, target: Unit): boolean {
+  return hasPerk(u, 'bridge') && u.owner !== null && target.owner !== null && u.owner !== target.owner;
+}
+
 function commandUnit(s: GameState, id: string, slot: Slot): Unit | string {
   const u = getUnit(s, id);
   if (!u || !u.alive) return 'Esa unidad no existe o está fuera de combate.';
@@ -775,6 +942,24 @@ function commandUnit(s: GameState, id: string, slot: Slot): Unit | string {
   if (u.owner !== null && u.owner !== slot) return 'Ese soldado pertenece a tu compañero.';
   if (u.ap <= 0) return 'Ese soldado no tiene acciones.';
   return u;
+}
+
+/** Why a support ability can't go to that ally: the reason, not just "no". */
+function allyRefusal(u: Unit, ability: AbilityId, target: Unit | undefined): string {
+  if (!target || !target.alive) return 'Aliado no válido.';
+  if (distance(u.pos, target.pos) > (ABILITIES[ability].range ?? Infinity)) return ABILITIES[ability].range && ABILITIES[ability].range! <= 1.5 ? 'Tiene que estar a tu lado.' : 'Está demasiado lejos.';
+  switch (ability) {
+    case 'medkit':
+    case 'firstAid':
+      return 'No está herido.';
+    case 'revival':
+      return 'No está aturdido, desorientado ni en pánico.';
+    case 'layOnHands':
+      return 'No está herido ni afectado.';
+    case 'aid':
+      return target.id === u.id ? 'No puedes protegerte a ti mismo.' : 'Ya está protegido.';
+  }
+  return 'Aliado no válido.';
 }
 
 export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext): CommandResult {
@@ -833,7 +1018,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     case 'ally':
     case 'corpse':
       if (!target || !abilityTargets(s, u, cmd.ability).includes(target)) {
-        return { ok: false, error: def.target === 'ally' ? 'Aliado no válido.' : 'Objetivo fuera de alcance o sin línea de visión.' };
+        return { ok: false, error: def.target === 'ally' ? allyRefusal(u, cmd.ability, target) : 'Objetivo fuera de alcance o sin línea de visión.' };
       }
       sim.perform(u, cmd.ability, { target });
       break;

@@ -1,8 +1,12 @@
 import './styles.css';
 import type { CampaignState, PlayerInfo, ServerMessage, Slot } from '@bastion/engine';
+import { ambience } from './audio/ambience';
+import { music } from './audio/music';
+import { installUiSounds } from './audio/ui';
 import { Game } from './game/game';
 import { Net, serverUrl, setHosts, storageKey } from './net';
 import { StrategyScreen } from './strategy/screen';
+import { applyUiTheme } from './ui/theme';
 import { Lobby } from './ui/lobby';
 
 const NAME_KEY = storageKey('name');
@@ -16,6 +20,11 @@ function savedName(): string {
 }
 
 const app = document.getElementById('app')!;
+// The interface's look (Expediente or Holotáctico), before the first screen is drawn.
+applyUiTheme();
+// The interface's typewriter sounds, and the menu's music once sound can start.
+installUiSounds();
+music.play('base');
 const net = new Net(serverUrl());
 let slot: Slot | null = null;
 let players: PlayerInfo[] = [];
@@ -61,6 +70,8 @@ function showPhase(phase: 'lobby' | 'base' | 'mission'): void {
     closeGame();
     closeBase();
     lobby.show();
+    music.play('base');
+    ambience.play(null);
     return;
   }
   lobby.hide();

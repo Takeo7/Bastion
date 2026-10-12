@@ -34,6 +34,9 @@
   --ink-blue-soft: rgba(42, 74, 122, 0.12);
   --pen: #1d4fb0;
   --stamp: #b3261e;
+  /* Velmar's Canto: the Coro's green, dark enough for paper; the hunter's gold. */
+  --song: #1f8a5c;
+  --hunt: #9a7414;
   --good: #2f6b2f;
   --warn: #9a5a00;
   --psi: #6a2c8a;
@@ -54,6 +57,8 @@
   --i-armor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l9 3.5v6.5c0 5-3.8 8.8-9 10-5.2-1.2-9-5-9-10V5.5z'/%3E%3C/svg%3E");
   --i-weapon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 24'%3E%3Cpath d='M1 9.5h29l2-2.5h9v3.5h5v3.5H34l-2.5 2.5H26l-2.2 5.5h-4.6l1.1-5.5H10.5L6 19.5H1.5z'/%3E%3C/svg%3E");
   --i-assault: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 20L17 7' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='3'/%3E%3Cpath d='M15 4.5l4.5 4.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='3'/%3E%3Cpath d='M3 17l4 4' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3C/svg%3E");
+  /* A recruit: one plain chevron, the first stripe. */
+  --i-rookie: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 15l7-6 7 6' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='3.2'/%3E%3C/svg%3E");
   --i-specialist: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 5l5 7-5 7-5-7z'/%3E%3Cellipse cx='12' cy='12' rx='10' ry='3.2' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2'/%3E%3C/svg%3E");
   --i-will: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.4'/%3E%3Ccircle cx='12' cy='12' r='4.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.4'/%3E%3Ccircle cx='12' cy='12' r='1.6'/%3E%3C/svg%3E");
   --i-flag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 21V3.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3Cpath d='M5.5 4h12l-3 4.5 3 4.5h-12z'/%3E%3C/svg%3E");
@@ -613,6 +618,27 @@ em.stun {
 
 em.psi {
   color: var(--psi);
+}
+
+/* Velmar's Canto on a unit (Juramento, Guarda, Himno) in the Coro's green;
+   the hunter's mark (Presa) in gold. */
+em.song,
+em.hunt {
+  padding: 0 3px;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  border: 1.5px solid currentColor;
+  transform: rotate(-2deg);
+}
+
+em.song {
+  color: var(--song);
+}
+
+em.hunt {
+  color: var(--hunt);
 }
 
 /* ------------------------------------------------- soldier sheet: symbols */

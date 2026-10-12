@@ -74,6 +74,19 @@ describe('transmissions', () => {
   });
 });
 
+describe('the song of Velmar', () => {
+  it('the Cámara de Ecos and the first soldier who sings unlock their scenes', () => {
+    const c = createCampaign([0], new Rng(1));
+    expect(ids(c)).not.toContain('velmar');
+    (c.base.plots[0] as { building: string | null }).building = 'echoes';
+    expect(ids(c)).toContain('velmar');
+    expect(ids(c)).not.toContain('firstSong');
+    (c.soldiers[0]!.talents as Record<string, number>).bolt = 1;
+    expect(ids(c)).toContain('firstSong');
+    expect(RADIO_TIPS.song.rule).toMatch(/ocultación/);
+  });
+});
+
 describe('enemy files', () => {
   it('every enemy kind has its file', () => {
     for (const id of ['trooper', 'officer', 'xenoid', 'lancer', 'mec', 'sectoid', 'zombie', 'relay'] as const) {

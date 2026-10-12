@@ -15,7 +15,26 @@
 // The campaign is small and changes rarely, so the server broadcasts it whole after
 // every command instead of streaming events like the tactical layer.
 import { defaultAppearance, displayName, isAppearance, NAME_MAX, NICKNAME_MAX } from './appearance';
-import { addMods, ITEMS, PERKS, RANKS, rankForXp, SOLDIER_NAMES, TEMPLATES, type PerkTier } from './content';
+import {
+  ATTR_POINTS_PER_RANK,
+  attrBlocker,
+  attrPointsFree,
+  baseAttrs,
+  cleanTalents,
+  learnTalent,
+  soldierStats,
+  soldierTemplate,
+  SPECIALIZE_TEXT,
+  talentBlocker,
+  TALENT_POINTS_PER_RANK,
+  talentPointsFree,
+  TALENTS,
+  woundDays,
+  type Attributes,
+  type AttrId,
+  type Talents,
+} from './classes';
+import { addMods, ITEMS, RANKS, rankForXp, SOLDIER_NAMES, TEMPLATES } from './content';
 import {
   ARMOR_TIERS,
   armorTier,
@@ -35,7 +54,7 @@ import { briefingSignature, doomChangeText, doomSubject, missionBriefing, NWOSU_
 import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecision, type QuestId, type QuestMission, type QuestOutcome, type TraitId } from './quests';
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
-import { podPlan, soldierStats, type MapSource, type SquadMember } from './setup';
+import { podPlan, type MapSource, type SquadMember } from './setup';
 import type { Appearance, Biome, ClassId, EndReason, GameState, ItemId, ItemSlot, MissionKind, PerkId, Slot, TemplateId, Vec2 } from './types';
 
 // --------------------------------------------------------------- facilities
@@ -50,7 +69,8 @@ export type FacilityId =
   | 'range'
   | 'garage'
   | 'listening'
-  | 'crew';
+  | 'crew'
+  | 'echoes';
 
 export interface FacilityDef {
   id: FacilityId;
@@ -162,6 +182,16 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
     level: 4,
     unique: true,
   },
+  echoes: {
+    id: 'echoes',
+    name: 'Cámara de Ecos',
+    description: 'Abre la rama de Canto de cada clase: sus dos primeras filas. Las cintas de Velmar, en una sala sin un solo chip.',
+    upgrades: ['Abre las filas tercera y cuarta. Más cintas, más voces.', 'Abre el conjuro mayor de cada rama. Nwosu ha encontrado la cinta de un maestro.'],
+    cost: 130,
+    days: 6,
+    level: 5,
+    unique: true,
+  },
   relay: {
     id: 'relay',
     name: 'Centro de comunicaciones',
@@ -257,6 +287,7 @@ export const ADJACENCY: AdjacencyDef[] = [
   { facility: 'quarters', next: 'barracks', text: 'Una cama más. El Cuartel presta la estufa.' },
   { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
   { facility: 'listening', next: 'relay', text: 'El enemigo avanza 2 días más tarde aún. Dos antenas oyen más que una.' },
+  { facility: 'echoes', next: 'listening', text: 'Cantar no rompe la ocultación. Morse filtra el canto antes de que salga.' },
 ];
 
 export interface BasePlot {
@@ -461,7 +492,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
         apply: (c, rng) => {
           credit(c, -30);
           const s = addSoldier(c, neediestPlayer(c), rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const), rng);
-          log(c, `${s.name} se une al Bastión (${TEMPLATES[s.cls].name}).`, 'good');
+          log(c, `${s.name} se une al Bastión (${TEMPLATES[soldierTemplate(s.cls)].name}).`, 'good');
         },
       },
       { label: 'Cambiarles provisiones por lo que saben', effect: '−10 créditos, +8 de experiencia del Bastión', apply: (c, rng) => (credit(c, -10), gainXp(c, 8, rng)) },
@@ -608,6 +639,8 @@ export function eventOptionAvailable(c: CampaignState, option: 0 | 1): boolean {
 // -------------------------------------------------------------------- state
 
 export const RECRUIT_COST = 30;
+/** Credits to give a soldier's aptitude and talent points back (half with a training centre). */
+export const RETRAIN_COST = 30;
 export const MAX_SOLDIERS_PER_PLAYER = 6;
 
 /** Soldiers each player may keep: a commander alone runs both kits. */
@@ -643,14 +676,16 @@ export interface CampaignSoldier {
   id: string;
   name: string;
   owner: Slot;
-  cls: ClassId;
+  /** Null for a recruit who hasn't specialised yet (classes.ts): it fights as a rookie. */
+  cls: ClassId | null;
   xp: number;
   rank: number;
   kills: number;
   missions: number;
-  perks: PerkId[];
-  /** Ability tiers earned but not chosen yet. */
-  pendingTiers: PerkTier[];
+  /** Aptitudes (classes.ts): the class's base plus the points spent. */
+  attrs: Attributes;
+  /** Talent levels. Free points are never stored: they're what the rank gives minus what's spent. */
+  talents: Talents;
   woundedDays: number;
   alive: boolean;
   loadout: Loadout;
@@ -709,7 +744,7 @@ export interface ReportSoldier {
   id: string;
   name: string;
   owner: Slot;
-  cls: ClassId;
+  cls: ClassId | null;
   status: 'ok' | 'wounded' | 'dead';
   woundedDays: number;
   kills: number;
@@ -774,7 +809,7 @@ export interface Rumor {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 8;
+export const CAMPAIGN_VERSION = 10;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -868,7 +903,8 @@ function soldierName(c: CampaignState, rng: Rng): string {
   return `${rng.pick(SOLDIER_NAMES)} ${c.soldiers.length + 1}`;
 }
 
-function addSoldier(c: CampaignState, owner: Slot, cls: ClassId, rng: Rng): CampaignSoldier {
+/** A new soldier: a veteran of a class, or a recruit (`cls` null) who specialises with the Rosa. */
+function addSoldier(c: CampaignState, owner: Slot, cls: ClassId | null, rng: Rng): CampaignSoldier {
   const s: CampaignSoldier = {
     id: newId(c, 'c'),
     name: soldierName(c, rng),
@@ -878,8 +914,8 @@ function addSoldier(c: CampaignState, owner: Slot, cls: ClassId, rng: Rng): Camp
     rank: 0,
     kills: 0,
     missions: 0,
-    perks: [],
-    pendingTiers: [],
+    attrs: baseAttrs(cls),
+    talents: {},
     woundedDays: 0,
     alive: true,
     loadout: { utility: null, ammo: null },
@@ -1366,20 +1402,31 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
     if (r.name) s.name = fill(r.name, q.names);
     if (r.rank) promoteTo(s, r.rank);
     if (r.trait) s.traits.push(r.trait);
-    log(c, `${s.name} se une al Bastión (${TEMPLATES[s.cls].name}).`, 'good');
+    log(c, `${s.name} se une al Bastión (${TEMPLATES[soldierTemplate(s.cls)].name}).`, 'good');
   }
   if (outcome.xp) gainXp(c, outcome.xp, rng);
   if (c.doom >= DOOM_MAX) c.outcome = 'defeat';
 }
 
-/** A newcomer who arrives with a rank: its ability tiers wait to be chosen. */
+/** A newcomer who arrives with a rank: the points of every promotion wait to be spent. */
 function promoteTo(s: CampaignSoldier, rank: number): void {
   s.rank = rank;
   s.xp = Math.max(s.xp, RANKS[rank]!.xp);
-  for (let r = 1; r <= rank; r++) {
-    const tier = RANKS[r]?.perkTier;
-    if (tier) s.pendingTiers.push(tier);
-  }
+}
+
+/** Level of the Cámara de Ecos, which opens the rows of the Canto (0 = not built). */
+export function echoesLevel(c: CampaignState): number {
+  return facilityLevel(c, 'echoes');
+}
+
+/** Aptitude and talent points the soldier's rank gives and haven't been spent yet. */
+export function pointsToSpend(s: CampaignSoldier): { attrs: number; talents: number } {
+  return { attrs: attrPointsFree(s), talents: talentPointsFree(s) };
+}
+
+/** Starting over costs less with a training centre. */
+export function retrainCost(c: CampaignState): number {
+  return facilityCount(c, 'training') > 0 ? RETRAIN_COST / 2 : RETRAIN_COST;
 }
 
 /** Side quests with their own trigger; at most one starts at a time. */
@@ -1546,8 +1593,14 @@ export type CampaignCommand =
   | { type: 'cancelMission' }
   | { type: 'squad'; soldier: string; on: boolean }
   /** `squad`: straight into the squad of the chosen mission (a free place in the hangar). */
-  | { type: 'recruit'; cls: ClassId; squad?: boolean }
-  | { type: 'promote'; soldier: string; perk: PerkId }
+  /** Recruits come without a class: they specialise with their first talent points. */
+  | { type: 'recruit'; squad?: boolean }
+  /** One aptitude point. */
+  | { type: 'train'; soldier: string; attr: AttrId }
+  /** One talent level. */
+  | { type: 'talent'; soldier: string; talent: PerkId }
+  /** Gives every aptitude and talent point back, for credits. */
+  | { type: 'retrain'; soldier: string }
   | { type: 'buy'; item: ItemId }
   | { type: 'equip'; soldier: string; slot: ItemSlot; item: ItemId | null }
   | { type: 'customize'; soldier: string; name: string; nickname: string; appearance: Appearance }
@@ -1746,7 +1799,10 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     });
   }
 
-  const promotions = mine.filter((s) => s.pendingTiers.length);
+  const promotions = mine.filter((s) => {
+    const free = pointsToSpend(s);
+    return s.alive && free.attrs + free.talents > 0;
+  });
   if (promotions.length) {
     steps.push({ view: 'barracks', label: promotions.length === 1 ? `Ascenso pendiente: ${promotions[0]!.name}` : 'Ascensos pendientes', count: promotions.length, tone: 'info', go: { soldier: promotions[0]!.id } });
   }
@@ -2056,16 +2112,11 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
       const place = cmd.squad ? (c.activeMission ? squadPlace(c, slot, ctx.connected) : { error: 'Primero elegid una misión.' }) : null;
       if (place?.error) return { ok: false, error: place.error };
       pay(c, recruitCost(c));
-      const s = addSoldier(c, slot, cmd.cls, ctx.rng);
+      const s = addSoldier(c, slot, null, ctx.rng);
       // The training centre sends them in already trained: Soldado at level 2, Cabo at 3.
       const trained = Math.max(0, facilityLevel(c, 'training') - 1);
-      for (let r = 1; r <= trained; r++) {
-        s.rank = r;
-        s.xp = RANKS[r]!.xp;
-        const tier = RANKS[r]?.perkTier;
-        if (tier) s.pendingTiers.push(tier);
-      }
-      log(c, `Reclutado: ${s.name} (${TEMPLATES[cmd.cls].name}${trained ? `, ${RANKS[trained]!.name}` : ''}).`);
+      if (trained) promoteTo(s, trained);
+      log(c, `Reclutado: ${s.name} (${TEMPLATES.rookie.name}${trained ? `, ${RANKS[trained]!.name}` : ''}).`);
       if (place) {
         joinSquad(c, s, place);
         c.launchReady = [false, false];
@@ -2087,14 +2138,39 @@ export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, c
       return { ok: true };
     }
 
-    case 'promote': {
+    case 'train': {
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
-      if (!s || s.owner !== slot) return { ok: false, error: 'Solo puedes ascender a tus soldados.' };
-      const perk = PERKS[cmd.perk];
-      if (!perk || perk.cls !== s.cls || !s.pendingTiers.includes(perk.tier)) return { ok: false, error: 'Esa habilidad no está disponible.' };
-      s.perks.push(perk.id);
-      s.pendingTiers = s.pendingTiers.filter((t) => t !== perk.tier);
-      log(c, `${s.name} aprende ${perk.name}.`, 'good');
+      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes instruir a tus soldados.' };
+      const blocked = attrBlocker(s, cmd.attr);
+      if (blocked) return { ok: false, error: blocked };
+      s.attrs[cmd.attr]++;
+      return { ok: true };
+    }
+
+    case 'talent': {
+      const s = c.soldiers.find((x) => x.id === cmd.soldier);
+      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes instruir a tus soldados.' };
+      const blocked = talentBlocker(s, cmd.talent, echoesLevel(c));
+      if (blocked) return { ok: false, error: blocked };
+      const { specialized } = learnTalent(s, cmd.talent);
+      if (s.talents[cmd.talent] === 1) log(c, `${s.name} aprende ${TALENTS[cmd.talent].name}.`, 'good');
+      if (specialized) log(c, SPECIALIZE_TEXT[specialized].replace('{name}', s.name), 'good');
+      return { ok: true };
+    }
+
+    case 'retrain': {
+      const s = c.soldiers.find((x) => x.id === cmd.soldier);
+      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes reentrenar a tus soldados.' };
+      const free = pointsToSpend(s);
+      if (free.attrs === ATTR_POINTS_PER_RANK * s.rank && free.talents === TALENT_POINTS_PER_RANK * s.rank) return { ok: false, error: 'No hay nada que reentrenar.' };
+      const cost = retrainCost(c);
+      if (!canAfford(c, cost)) return { ok: false, error: 'No hay créditos suficientes.' };
+      pay(c, cost);
+      // Back to the centre of the rosa: a recruit with every point of the rank to spend.
+      s.cls = null;
+      s.attrs = baseAttrs(null);
+      s.talents = {};
+      log(c, `${s.name} vuelve a la instrucción: sin clase, con aptitudes y talentos por repartir.`);
       return { ok: true };
     }
 
@@ -2281,10 +2357,10 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 /** Everything a soldier brings to a mission: rank, perks, accessories, and the weapon and armour tier they've earned. */
 export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
   const gear = [s.loadout.utility, s.loadout.ammo].filter((g): g is ItemId => !!g);
-  const base = soldierStats(s.cls, s.rank, s.perks, gear);
+  const base = soldierStats(s, gear);
   let mods = base.mods;
   let maxHp = base.maxHp;
-  let armor = 0;
+  let armor = base.armor;
   const charges = base.charges;
   const weapon = weaponTier(c, s);
   const suit = armorTier(c, s);
@@ -2306,9 +2382,9 @@ export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
     weaponTier: weapon,
     armorTier: suit,
     owner: s.owner,
-    template: s.cls,
+    template: base.template,
     rank: s.rank,
-    perks: [...s.perks],
+    perks: base.perks,
     mods,
     maxHp,
     hp: maxHp,
@@ -2396,17 +2472,13 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     }
     const lost = u.maxHp - u.hp;
     if (lost > 0) {
-      s.woundedDays = Math.max(1, 2 + lost * 2 - garageCut(c).wounds);
+      s.woundedDays = Math.max(1, woundDays(lost, s.attrs) - garageCut(c).wounds);
       entry.status = 'wounded';
       entry.woundedDays = s.woundedDays;
     }
     entry.xpGained = 1 + (victory ? 1 : 0) + u.kills;
     s.xp += entry.xpGained;
     const rank = rankForXp(s.xp);
-    for (let r = s.rank + 1; r <= rank; r++) {
-      const tier = RANKS[r]?.perkTier;
-      if (tier) s.pendingTiers.push(tier);
-    }
     if (rank > s.rank) {
       s.rank = rank;
       entry.promotedTo = rank;
@@ -2517,20 +2589,11 @@ export function migrateCampaign(old: CampaignState): CampaignState {
       reward: migrateReward(prev.reward),
     };
   });
-  const knownPerks = new Set(Object.keys(PERKS));
   for (const s of c.soldiers) {
     s.loadout ??= { utility: null, ammo: null };
     s.nickname ??= '';
     s.appearance ??= defaultAppearance(s.cls, s.owner);
     s.traits ??= [];
-    // Perks that no longer exist are dropped; every tier up to the rank can be chosen again.
-    s.perks = s.perks.filter((p) => knownPerks.has(p));
-    const chosen = new Set(s.perks.map((p) => PERKS[p].tier));
-    s.pendingTiers = [];
-    for (let r = 1; r <= s.rank; r++) {
-      const tier = RANKS[r]?.perkTier;
-      if (tier && !chosen.has(tier)) s.pendingTiers.push(tier);
-    }
   }
   loose.inventory ??= {};
   loose.base ??= freshBase();
@@ -2601,6 +2664,25 @@ export function migrateCampaign(old: CampaignState): CampaignState {
   if (!single.works) {
     single.works = single.construction ? [single.construction] : [];
     delete single.construction;
+  }
+  // Versions 9 and 10: aptitudes and the Rosa. The perks of before don't fit it: those soldiers
+  // get every talent point of their rank back (version 9 talents stay). Aptitudes start again
+  // from the new bases, and everyone keeps the class they had.
+  const beforeRosa = (old.version ?? 0) < 10;
+  const retrained = c.soldiers.filter((s) => beforeRosa || !s.attrs);
+  for (const s of c.soldiers as (CampaignSoldier & { perks?: unknown; pendingTiers?: unknown })[]) {
+    if (beforeRosa || !s.attrs) {
+      s.talents = s.attrs ? cleanTalents(s.talents) : {};
+      s.attrs = baseAttrs(s.cls);
+    }
+    delete s.perks;
+    delete s.pendingTiers;
+  }
+  if (retrained.some((s) => s.alive && s.rank > 0)) {
+    log(c, 'Cada soldado tiene ahora cinco aptitudes y un sitio en la Rosa, el árbol de talentos de todos. Los puntos de sus ascensos esperan en el Cuartel.', 'good', {
+      kicker: 'Cuartel',
+      title: 'Nueva instrucción',
+    });
   }
   c.launchReady = [false, false];
   return c;

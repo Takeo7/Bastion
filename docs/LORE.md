@@ -309,6 +309,116 @@ Son conversaciones cortas por radio entre la gente del Bastión, en los momentos
 - El aviso de rumor trae su botón **Escuchar**.
 - La jerga (Órgano, Encargo, Rumor, Partitura…) se explica al pasar el ratón con el glosario de `lore.ts`.
 
+## El Canto de Velmar (magia)
+
+**Estado:** diseño aprobado por el usuario el 2026-10-12 («inclúyelo en el árbol de mejora una vez desbloquees un edificio»). Implementado el 2026-10-12 por partes (ver «Reparto»): el edificio y las mecánicas (Gameplay), la rama en `classes.ts` (Clases), los textos y escenas (Lore). Arte prepara el modelo y los efectos.
+
+**La idea.** La magia del juego es el canto del Coro, aprendido de otro mundo.
+- **Velmar:** hace mil años, el Coro se cantó un mundo llamado Velmar. Su gente había aprendido a usar ese canto (lo llamaban la Lengua) y tenía magos, caballeros, cazadores y sanadores. Desaparecieron, pero sus recuerdos siguen en los Archivos.
+- **Las cintas:** la Dra. Nwosu saca de un Archivo unas cintas con esas voces.
+- **La Cámara de Ecos:** ahí los soldados las escuchan con válvulas, sin que el Coro los oiga, y aprenden a cantar como en Velmar.
+- **Por qué encaja:** la magia no es un portal ni un mundo aparte. Es el idioma del enemigo, usado contra él, y tiene precio.
+
+### El edificio: Cámara de Ecos
+
+- **Desbloqueo:** nivel 5 del Bastión. Solo puede haber una.
+- **Nivel 1** · «Abre la rama de Canto de cada clase: sus dos primeras filas. Las cintas de Velmar, en una sala sin un solo chip.»
+- **Nivel 2** · «Abre las filas tercera y cuarta. Más cintas, más voces.»
+- **Nivel 3** · «Abre el conjuro mayor de cada rama. Nwosu ha encontrado la cinta de un maestro.»
+- **Junto a la Estación de escucha:** «Cantar no rompe la ocultación. Morse filtra el canto antes de que salga.»
+
+### El precio del canto
+
+- **Se oye:** cantar estando ocultos rompe la ocultación, como disparar.
+- **Abre la cabeza:** quien sabe cantar es más fácil de cantar para un Cantor, que gana +10 a su Canto contra él. Con Temple 10 («Sordo al Coro») ese +10 no cuenta.
+- **Pide Temple:** los conjuros mayores piden Temple 7.
+
+### La rama de Canto
+
+Es una cuarta rama en la hoja de cada clase. Los puntos de talento se reparten con las otras tres, así que aprender a cantar es renunciar a otra cosa. Tiene un talento por fila y sus filas se abren con el nivel de la Cámara. Como solo hay uno por fila, los umbrales de puntos son más bajos que en las otras ramas; los decide Clases.
+
+Cada talento dice entre corchetes cómo se podría implementar: qué habilidad que ya existe reutiliza o qué mecánica es nueva.
+
+**Asalto · Juramento** (paladín: cuerpo a cuerpo que protege)
+
+| Fila | Talento | Tipo | Efecto |
+|---|---|---|---|
+| 1 | Hoja cantada | Pasivo, 2 niveles | El Tajo hace +1 de daño por nivel. En el nivel 2, además, desorienta al enemigo si acierta. [daño cuerpo a cuerpo; desorientar al acertar: nuevo] |
+| 2 | Égida | Activo | Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno (enfriamiento 3). [Protocolo de ayuda en área] |
+| 3 | Salto de eco | Activo | Desapareces y apareces en una casilla libre a la vista, a 6 o menos. Cuesta 1 acción y no termina el turno (enfriamiento 4). [teletransporte: nuevo] |
+| 4 | Imposición de manos | Activo, 2 usos | Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación. [Botiquín + Reanimación] |
+| 5 | Juramento de Velmar | Activo, una vez por misión, Temple 7 | Durante 2 turnos, los aliados a 4 casillas no pueden entrar en pánico ni ser controlados, y tú recibes la mitad del daño. [nuevo] |
+
+**Granadero · Evocación** (mago de batalla)
+
+| Fila | Talento | Tipo | Efecto |
+|---|---|---|---|
+| 1 | Saeta | Activo | Un proyectil de luz a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje (enfriamiento 2). [como el Protocolo de combate] |
+| 2 | Silencio | Activo, 2 cargas | Zona de radio 2 a 10 casillas: los enemigos dentro quedan desorientados y los Cantores no pueden cantar durante 2 turnos. [Granada aturdidora + bloqueo psiónico: nuevo] |
+| 3 | Bola de fuego | Activo, 2 cargas | 4 de daño en radio 2,5 a 12 casillas, y destruye la cobertura. Daña también a los tuyos. [como una granada] |
+| 4 | Llama alta | Pasivo, 2 niveles | Saeta y Bola de fuego hacen +1 de daño por nivel. |
+| 5 | Tormenta de Velmar | Activo, una vez por misión, Temple 7 | Rayos sobre hasta 3 enemigos a la vista: 4 de daño a cada uno. Nunca fallan. [Cara a cara sin tirada] |
+
+**Francotirador · Ojo de Velmar** (explorador arcano)
+
+| Fila | Talento | Tipo | Efecto |
+|---|---|---|---|
+| 1 | Marca del cazador | Activo | El enemigo marcado recibe +15 de puntería y +15 de crítico en todos tus disparos hasta que muera (enfriamiento 3). [Holo-objetivo que dura] |
+| 2 | Flecha espectral | Activo | Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería (enfriamiento 3). [ignorar la cobertura: nuevo] |
+| 3 | Paso de sombra | Activo | Te teletransportas a una casilla a la vista, a 8 o menos. Si está más alta, ganas +10 de puntería este turno (enfriamiento 4). [teletransporte: nuevo] |
+| 4 | Ojos del viento | Pasivo, 2 niveles | +2 casillas de visión por nivel, y ves a través del humo. |
+| 5 | Lluvia de luz | Activo, una vez por misión, Temple 7 | Una flecha espectral a cada enemigo a la vista, con −15 de puntería. [Cara a cara + Flecha espectral] |
+
+**Especialista · Voz** (clérigo y bardo)
+
+| Fila | Talento | Tipo | Efecto |
+|---|---|---|---|
+| 1 | Canto de calma | Pasivo, 2 niveles | +10 de voluntad por nivel a los aliados a 4 casillas o menos. [aura: nuevo] |
+| 2 | Contracanto | Activo | Libera a un aliado a 10 casillas o menos del control mental, el pánico y la desorientación, y lo hace inmune al Canto durante 2 turnos (enfriamiento 3). [Protocolo de reanimación + inmunidad] |
+| 3 | Himno | Activo | Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno (enfriamiento 4). [área como Restauración] |
+| 4 | Manos de luz | Pasivo, 2 niveles | Tus curas sanan +1 por nivel. |
+| 5 | Último verso | Activo, una vez por misión, Temple 7 | Un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas. [revivir: nuevo] |
+
+**A dos voces** (cooperativo). Es una regla de toda la rama, no un talento: cada clase ya tiene su talento de llave doble en las otras ramas. Si un soldado del compañero que también sabe cantar está a 2 casillas o menos, Saeta, Bola de fuego y Tormenta hacen +1 de daño, y Silencio gana +1 de radio.
+
+**Con el árbol común (la «Rosa»):**
+- Los reclutas llegan sin clase: son «Reclutas», con fusil, y se especializan al gastar 2 puntos en un eje.
+- El Canto es la cuarta rama de cada eje, y sus puntos no cuentan para especializarse.
+- El eje secundario llega hasta la tercera fila, también en su Canto.
+- Los umbrales de la rama de Canto son 0/1/2/3/4 puntos (`SONG_GATES`).
+
+### Textos
+
+- **Escena de radio «Velmar»** (al construir la Cámara de Ecos):
+  - Nwosu: «Las cintas del Archivo no son solo de gente de aquí. Hay voces de otro sitio. De Velmar.»
+  - Teo: «Un mundo que el Coro se cantó hace mil años. Su gente aprendió a usar el canto antes de desaparecer. Lo llamaban la Lengua.»
+  - Nwosu: «Sus magos, sus caballeros, sus cazadores. Está todo en la cinta: cómo respiraban, cómo cantaban.»
+  - Morse: «¿Y queréis que nuestros soldados canten como ellos? ¿En el idioma del Coro?»
+  - Teo: «Con válvulas no nos oye. Y con lo que hay ahí fuera, no podemos permitirnos no aprender.»
+- **Escena de radio «La primera canción»** (el primer soldado que aprende un talento de Canto):
+  - Morse: «Esta noche alguien ha cantado en la Cámara de Ecos. La aguja de la sala de escucha ni se ha movido.»
+  - Teo: «Lo que se canta entre válvulas se queda en el Bastión. En el campo, comandantes, eso se oye. Cantad con cabeza.»
+  - Coro: «Conocemos esa canción.»
+- **Especialización** (registro, cuando un recluta gasta sus 2 puntos en un eje):
+  - Asalto: «{nombre} se especializa como Asalto. Teo le entrega una escopeta y una hoja.»
+  - Granadero: «{nombre} se especializa como Granadero. Le toca el cañón, y las granadas.»
+  - Francotirador: «{nombre} se especializa como Francotirador. Teo le ajusta la mira de un fusil de precisión.»
+  - Especialista: «{nombre} se especializa como Especialista. El Grillo ya tiene dueño.»
+- **Recluta** (descripción de la clase): «Todavía sin clase. Lleva fusil y aprende lo que le enseñen. Se especializa al gastar 2 puntos en un eje de la Rosa.»
+- **Aviso de Morse en combate** (la primera vez que alguien canta):
+  - «Eso se oye. Que valga la pena.»
+  - Regla: «Cantar rompe la ocultación, y quien canta es más fácil de cantar para un Cantor.»
+
+### Reparto
+
+| Sesión | Qué hace |
+|---|---|
+| Lore | Este texto, los nombres y descripciones, las dos escenas de radio, el aviso de Morse y el glosario (Velmar, Canto, Cámara de Ecos) |
+| Gameplay | La Cámara de Ecos en `FACILITIES` (nivel 5, única, niveles 2 y 3, la cercanía con la Estación de escucha). Las mecánicas nuevas en las reglas: teletransporte, ignorar la cobertura, Silencio, Juramento, revivir, auras, que cantar rompa la ocultación y el +10 del Cantor |
+| Clases | La cuarta rama en `classes.ts` (`BRANCHES`, `TALENTS`), sus umbrales y que se abra con el nivel de la Cámara. Las habilidades nuevas en el contenido, de acuerdo con Gameplay. La rama en la Hoja de servicio, bloqueada con su motivo hasta tener la Cámara |
+| Arte | El modelo de la Cámara de Ecos en el recinto, el efecto visual de cada canto y un brillo en los soldados que saben cantar |
+| UX/UI | El disparador del aviso «primera vez que se canta» (`song`) en `combatTips.ts`, y cómo se ve la rama bloqueada y su desbloqueo |
+
 ## Voz y estilo
 
 - **Informes a máquina:** frases cortas, pocos adjetivos, fechas y lugares exactos. Morse firma con sus iniciales.
