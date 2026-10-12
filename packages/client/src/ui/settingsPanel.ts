@@ -1,5 +1,5 @@
 import { audio, type Volumes } from '../audio/engine';
-import { graphics, setGraphics, type GraphicsSettings } from '../settings';
+import { autoQuality, autoQualityNote, graphics, setAutoQuality, setGraphics, type GraphicsSettings } from '../settings';
 import { h } from './dom';
 import { setUiTheme, UI_THEMES, uiTheme, type UiTheme } from './theme';
 
@@ -68,6 +68,16 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
     ),
     row('showFps', 'Mostrar FPS', [[true, 'Sí'], [false, 'No']], 'Un contador de imágenes por segundo en una esquina.', redraw),
     row(
+      'models',
+      'Modelos',
+      [
+        ['synty', 'Synty'],
+        ['voxel', 'Vóxel', 'Los modelos de antes, mientras dura el cambio'],
+      ],
+      'Cómo se ven los soldados, los enemigos y los objetos del mapa. Se aplica en la próxima misión o al volver a la base.',
+      redraw,
+    ),
+    row(
       'uiScale',
       'Interfaz',
       [
@@ -79,6 +89,21 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
       'El tamaño de los textos y paneles del juego. La vista 3D no cambia.',
       redraw,
     ),
+    autoQualityRow(redraw),
+  );
+}
+
+/** The frame-rate guard (settings.ts): on or off, and what it has lowered on this machine. Shared by every Ajustes. */
+function autoQualityRow(redraw: () => void): HTMLElement {
+  const on = autoQuality().on;
+  const note = autoQualityNote();
+  const choice = (value: boolean, text: string, tip: string) => h(`button${value === on ? '.on' : ''}`, { title: tip, onclick: () => (setAutoQuality(value), redraw()) }, text);
+  return h(
+    'div.setting',
+    { title: 'Si el combate va a menos de 45 imágenes por segundo, baja poco a poco la resolución automática, la oclusión ambiental y el brillo. Lo que elijas tú en Efectos o Resolución no lo toca.' },
+    h('span.setting-name', {}, 'Ajuste auto'),
+    h('div.setting-choices', {}, choice(true, 'Sí', 'Baja la calidad si el combate no va fluido'), choice(false, 'No', 'Siempre la calidad elegida')),
+    note ? h('small.setting-note', {}, note) : null,
   );
 }
 

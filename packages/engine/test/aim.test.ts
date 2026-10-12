@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { previewShot, resolveShot, rollDamage, rollShot } from '../src/aim';
+import { damageRange, previewShot, resolveShot, rollDamage, rollShot, shotDamage } from '../src/aim';
 import { WEAPONS } from '../src/content';
 import { applyEvent, type GameEvent } from '../src/events';
 import { Rng } from '../src/rng';
+import { abilityDamage } from '../src/rules';
 import type { GameState, ShotResult, Unit } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
 
@@ -128,5 +129,46 @@ describe('bad luck (aim assist)', () => {
     shot(s, alien, a, 'miss');
     expect(luck(s, alien, a)).toBe(0);
     expect(luck(s, b, alien)).toBe(10);
+  });
+});
+
+describe('damage on screen', () => {
+  it('the range shown is exactly what the rolls give', () => {
+    for (const weapon of [WEAPONS.rifle, WEAPONS.pistol, WEAPONS.fragGrenade, WEAPONS.sniper]) {
+      for (const result of ['hit', 'crit', 'graze'] as const) {
+        for (const [bonus, mult, critBonus] of [[0, 1, 0], [2, 1.5, 1]] as const) {
+          const range = damageRange(weapon, result, bonus, mult, critBonus);
+          const rng = new Rng(7);
+          const rolls = Array.from({ length: 400 }, () => rollDamage(weapon, result, rng, bonus, mult, critBonus));
+          expect([Math.min(...rolls), Math.max(...rolls)]).toEqual([range.min, range.max]);
+        }
+      }
+    }
+  });
+
+  it('against a target: its armour soaks, Ruptura adds, the shred is named', () => {
+    const s = open();
+    const shooter = addUnit(s, 's1', 'specialist', 0, 0);
+    const target = addUnit(s, 'a1', 'mec', 0, 10, { ruptured: 3 });
+    const d = shotDamage(shooter, 'shoot', target, previewShot(s, shooter, target)!);
+    // Rifle 3–5 (+2 on a crit), +3 from Ruptura, −1 for the Gólem's armour.
+    expect(d.hit).toEqual({ min: 5, max: 7 });
+    expect(d.crit).toEqual({ min: 7, max: 9 });
+    expect(d.armor).toBe(1);
+    // Without a target, the weapon's own numbers.
+    expect(shotDamage(shooter, 'shoot').hit).toEqual({ min: 3, max: 5 });
+  });
+
+  it('grenades, songs and the Grillo use the same numbers as the rules', () => {
+    const s = open();
+    const grenadier = addUnit(s, 's1', 'grenadier', 0, 0);
+    grenadier.mods = { ...grenadier.mods, grenadeDamage: 2, songDamage: 1 };
+    const mec = addUnit(s, 'a1', 'mec', 0, 10);
+    // Frag 3 (+1 one time in five) +2, shreds 1; the Gólem's armour takes 1.
+    expect(abilityDamage(s, grenadier, 'grenade')).toMatchObject({ hit: { min: 5, max: 6 }, shred: 1, crit: null });
+    expect(abilityDamage(s, grenadier, 'grenade', mec)!.hit).toEqual({ min: 4, max: 5 });
+    expect(abilityDamage(s, grenadier, 'bolt', mec)!.hit).toEqual({ min: 3, max: 3 });
+    expect(abilityDamage(s, grenadier, 'combatProtocol', mec)).toMatchObject({ hit: { min: 4, max: 4 }, ignoresArmor: true });
+    expect(abilityDamage(s, grenadier, 'overwatch')).toBeNull();
   });
 });

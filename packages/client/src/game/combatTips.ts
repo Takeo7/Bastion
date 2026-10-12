@@ -40,7 +40,7 @@ export class CombatTips {
       case 'reinforcementsIncoming':
         if (e.r.pos) this.show('flare');
         return;
-      // Velmar's Canto: the first song one of mine sings.
+      // The Oficio: the first trade one of mine uses (noisy).
       case 'sung': {
         const u = getUnit(view, e.unit);
         if (u && this.mine(u)) this.show('song');

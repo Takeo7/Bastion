@@ -109,7 +109,7 @@ describe('aptitudes', () => {
 });
 
 describe('the rosa', () => {
-  it('a centre, and four axes of three branches plus the Canto, each closed by a capstone the rows above can pay for', () => {
+  it('a centre, and four axes of three branches plus the Oficio, each closed by a capstone the rows above can pay for', () => {
     expect(CENTER.length).toBe(4);
     for (const cls of AXES) {
       const talents = talentsOf(cls);
@@ -121,7 +121,7 @@ describe('the rosa', () => {
         const above = mine.filter((d) => d.row < 4).reduce((sum, d) => sum + d.max, 0);
         expect(above).toBeGreaterThanOrEqual(branch === 3 ? SONG_GATES[4] : ROW_GATES[4]);
       }
-      // The Canto: one talent per row, every one a song.
+      // The Oficio: one talent per row, every one flagged as a song (noisy).
       expect(talents.filter((d) => d.branch === 3).map((d) => d.row)).toEqual([0, 1, 2, 3, 4]);
       expect(talents.filter((d) => d.branch === 3).every((d) => d.song)).toBe(true);
       // One "llave doble" per axis, and every prerequisite comes from the same branch, no lower.
@@ -152,7 +152,7 @@ describe('the rosa', () => {
   it('a recruit learns from two axes without a class, and leans to the one taught most', () => {
     const b = build(null, 4);
     learnTalent(b, 'coolHead');
-    // A recruit may sing too, when the Cámara de Ecos allows it.
+    // A recruit may learn a trade too, when the Taller de oficios allows it.
     expect(talentBlocker(b, 'bolt', 3)).toBeNull();
     learnTalent(b, 'patience');
     learnTalent(b, 'hawkEye');
@@ -207,26 +207,26 @@ describe('the rosa', () => {
     expect(talentBlocker(recruit, 'steadyCannon')).toMatch(/Ya tienes dos ejes: Asalto y Francotirador/);
   });
 
-  it('the Canto opens row by row with the Cámara de Ecos, and the big songs ask for Temple 7', () => {
+  it('the Oficio opens row by row with the Taller de oficios, and the big trades ask for Temple 7', () => {
     const grenadier = build('grenadier', 7, {}, { tem: 7 });
-    expect(talentBlocker(grenadier, 'bolt')).toBe('Hace falta la Cámara de Ecos.');
+    expect(talentBlocker(grenadier, 'bolt')).toBe('Hace falta el Taller de oficios.');
     expect(talentBlocker(grenadier, 'bolt', 1)).toBeNull();
     grenadier.talents = { bolt: 1, silence: 1 };
-    expect(talentBlocker(grenadier, 'fireball', 1)).toBe('Hace falta la Cámara de Ecos a nivel 2.');
+    expect(talentBlocker(grenadier, 'fireball', 1)).toBe('Hace falta el Taller de oficios a nivel 2.');
     expect(talentBlocker(grenadier, 'fireball', 2)).toBeNull();
     grenadier.talents = { bolt: 1, silence: 1, fireball: 1, highFlame: 2 };
-    expect(talentBlocker(grenadier, 'velmarStorm', 2)).toBe('Hace falta la Cámara de Ecos a nivel 3.');
+    expect(talentBlocker(grenadier, 'velmarStorm', 2)).toBe('Hace falta el Taller de oficios a nivel 3.');
     expect(talentBlocker(grenadier, 'velmarStorm', 3)).toBeNull();
     expect(talentBlocker({ ...grenadier, attrs: baseAttrs('grenadier') }, 'velmarStorm', 3)).toMatch(/Pide Temple 7/);
   });
 
-  it('singers pay for the Canto: a Cantor reaches them more easily, unless they are deaf to the Coro', () => {
+  it('the Oficio has a price: the Chillón reaches its practitioners more easily, unless they have nerves of steel', () => {
     const singer = soldierStats(build('grenadier', 2, { bolt: 1 }));
     expect(singer.mods).toMatchObject({ singer: 1, songOpen: 10 });
     expect(singer.perks).toEqual(['bolt']);
     expect(soldierStats(build('grenadier', 2, { bolt: 1 }, { tem: 10 })).mods).toMatchObject({ singer: 1, songOpen: 0 });
     expect(soldierStats(build('grenadier', 2, { demolition: 1 })).mods).toMatchObject({ singer: 0, songOpen: 0 });
-    // Hoja cantada disorients only at its last level; Ojos del viento sees through smoke from the first.
+    // Hoja afilada disorients only at its last level; Prismáticos see through smoke from the first.
     expect(soldierStats(build('assault', 2, { songBlade: 1 })).mods.slashDisorient).toBe(0);
     expect(soldierStats(build('assault', 2, { songBlade: 2 })).mods).toMatchObject({ slashDisorient: 1, meleeDamage: 2 });
     expect(soldierStats(build('sharpshooter', 2, { windEyes: 1 })).mods).toMatchObject({ sight: 2, smokeSight: 1 });
@@ -366,7 +366,7 @@ describe('talents in combat', () => {
     expect(enemy.hp).toBeLessThan(20);
   });
 
-  it('Temple 10: the Cantor never takes control, and never panics a Temple 7', () => {
+  it('Temple 10: the Chillón never takes control, and never panics a Temple 7', () => {
     const effects = new Set<string>();
     for (let seed = 1; seed < 300; seed++) {
       const s = field();

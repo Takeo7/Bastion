@@ -1,51 +1,62 @@
 /**
- * The story (docs/LORE.md): mission briefings, the Expediente CORO pages, the
- * story chapters and the epilogues. Apart from the chapters' mission setup
- * (`STORY`), which the campaign reads, it is text only.
+ * The story (docs/LORE.md): mission briefings, the Expediente pages, the story
+ * chapters and the epilogues. Apart from the chapters' mission setup (`STORY`),
+ * which the campaign reads, it is text only.
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Biome, MissionKind, TemplateId } from './types';
 
-/** Bastion level at which the doom track gets its name: until then nobody knows what it measures. */
+/** Bastion level at which the doom track gets its name: until the radio is fixed nobody knows the Marea is coming. */
 export const PARTITURA_LEVEL = 4;
 
-/** The doom track as a label: "La Partitura" once deciphered. */
+/** The doom track as a label: "La Marea" once known. */
 export function doomName(level: number): string {
-  return level >= PARTITURA_LEVEL ? 'La Partitura' : 'Actividad enemiga';
+  return level >= PARTITURA_LEVEL ? 'La Marea' : 'Actividad zombi';
 }
 
-/** The doom track inside a sentence: "la Partitura". */
+/** The doom track inside a sentence: "la Marea". */
 export function doomSubject(level: number): string {
-  return level >= PARTITURA_LEVEL ? 'la Partitura' : 'la actividad enemiga';
+  return level >= PARTITURA_LEVEL ? 'la Marea' : 'la actividad zombi';
 }
 
-/** "La Partitura avanza (+1)." / "La actividad enemiga retrocede (−2)." */
+/** The doom track at a glance: "La Marea, a 9 km" once known, "Actividad zombi 3/12" before. */
+export function doomStatus(level: number, doom: number): string {
+  return level >= PARTITURA_LEVEL ? `La Marea, a ${Math.max(0, DOOM_TRACK - doom)} km` : `Actividad zombi ${doom}/${DOOM_TRACK}`;
+}
+
+/** Length of the doom track (campaign.ts DOOM_MAX): the Marea starts this many km away. */
+const DOOM_TRACK = 12;
+
+/** "La Marea se acerca 1 km." / "La actividad zombi baja (−2)." */
 export function doomChangeText(level: number, delta: number): string {
-  const subject = doomSubject(level);
-  const verb = delta > 0 ? `avanza (+${delta})` : `retrocede (−${-delta})`;
-  return `${subject[0]!.toUpperCase()}${subject.slice(1)} ${verb}.`;
+  if (level >= PARTITURA_LEVEL) return delta > 0 ? `La Marea se acerca ${delta} km.` : `La Marea retrocede ${-delta} km.`;
+  return delta > 0 ? `La actividad zombi crece (+${delta}).` : `La actividad zombi baja (−${-delta}).`;
 }
 
 // ----------------------------------------------------------------- glossary
 
 /** One line for each word of the world, for tooltips. */
 export const GLOSSARY: Record<string, string> = {
-  Coro: 'Una inteligencia de otra estrella: llegó por radio en 2031 y vive en los chips.',
-  Armonía: 'El gobierno de las ciudades ocupadas, dirigido por Afinados.',
-  Impreso: 'Soldado enemigo: un cuerpo impreso con el patrón de una persona escaneada.',
-  Afinado: 'Humano que lleva la nota, un implante por el que oye al Coro. Manda a los Impresos.',
-  Cantor: 'Criatura psiónica del Coro: canta dentro de las cabezas y levanta a los muertos.',
-  Órgano: 'Instalación del Coro en una región: hace avanzar el reloj enemigo hasta que la destruyáis.',
-  Partitura: 'El plan del Coro: doce compases. Si se completa, la campaña está perdida.',
-  Retransmisor: 'Antena que lleva las órdenes del Coro a los Impresos. Si cae, se quedan quietos.',
-  Teselas: 'La materia en cubos de la que están hechos los Impresos. La morgue del Consejo la compra.',
-  Consejo: 'La red de la resistencia: paga cada mes en créditos según las regiones contactadas.',
-  Rumor: 'Algo que se oye en una región. Si lo escucháis unos días al escanear, sabréis qué era.',
+  Pandemia: 'Empezó hace dos inviernos en el Instituto Galena. Quien se contagia muere en un día y se levanta.',
+  Zombi: 'Un muerto que anda. Va hacia lo que ve y lo que oye. Su mordisco contagia.',
+  Corredor: 'Un zombi reciente, todavía ágil. Rápido, y ve de lejos.',
+  Acorazado: 'Fue policía o soldado: el chaleco y el casco le dan blindaje.',
+  Chillón: 'Un zombi que grita. Llama a todos los de alrededor y mete el miedo en el cuerpo. Primero el Chillón.',
+  Hinchado: 'Revienta al morir o al llegar a ti y deja una nube que contagia. Mejor de lejos.',
+  Cuervos: 'Bandas de saqueadores. Viven de robar a otros vivos y atraen hordas con sirenas.',
+  Congregación: 'Una secta que cree que los zombis están salvados. Los guía con campanas y por radio.',
+  Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega a Atalaya, la campaña está perdida.',
+  Nido: 'Un sitio donde los zombis se juntan y la Marea crece. Quemarlo la hace retroceder.',
+  Sirena: 'El altavoz con el que los Cuervos atraen hordas. Calladla y la zona respira.',
+  Suministros: 'Lo que se saquea y se cambia: sirve para construir, reclutar y equipar.',
+  Medicinas: 'Curan heridas y contagios. Nunca hay bastantes.',
+  Comida: 'Cada soldado come cada día. Sin comida no hay voluntad ni salud.',
+  Enclave: 'Un grupo de supervivientes con el que tenéis contacto por radio. Si sigue vivo, manda suministros.',
+  Rumor: 'Algo que se oye por la radio en una zona. Si lo escucháis unos días al escanear, sabréis qué era.',
   Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
-  Velmar: 'Un mundo que el Coro se cantó hace mil años. Su gente aprendió a usar el canto como magia; sus recuerdos están en los Archivos.',
-  Canto: 'El idioma del Coro. Los Cantores lo usan para entrar en las cabezas; los soldados que lo aprenden en la Cámara de Ecos, como magia.',
-  'Cámara de Ecos': 'Sala de válvulas donde los soldados escuchan las cintas de Velmar y aprenden a cantar. Abre la rama de Canto.',
-  Recluta: 'Soldado todavía sin clase, con fusil. Al llegar a Capitán se especializa en el eje de la Rosa en que más haya aprendido.',
+  Oficio: 'Lo que Teo enseña en el Taller de oficios: machete, fuego, ballesta y enfermería de campo.',
+  'Taller de oficios': 'Donde Teo enseña a sobrevivir. Abre la rama de Oficio de cada clase.',
+  Recluta: 'Superviviente todavía sin clase, con fusil. Al llegar a Capitán se especializa en el eje de la Rosa en que más haya aprendido.',
 };
 
 // ---------------------------------------------------------- enemy files
@@ -61,45 +72,45 @@ export interface EnemyFile {
 
 /** The Bastion's file on each enemy, for the enemy sheet in combat. */
 export const ENEMY_FILES: Partial<Record<TemplateId, EnemyFile>> = {
-  trooper: {
-    what: 'Un cuerpo impreso con el patrón de alguien escaneado. No piensa: lo mueve el Coro por los retransmisores.',
-    does: 'Fusil y una granada. Corre a cubrirse en cuanto os ve y se queda en vigilancia.',
-    tip: 'Es el más débil. Rompedle la cobertura con una granada o buscadle el flanco.',
-  },
-  officer: {
-    what: 'Un Afinado: un humano con la nota detrás de la oreja. Oye al Coro y manda a los Impresos.',
-    does: 'Mejor fusil y más salud que un Impreso. Aguanta en vigilancia.',
-    tip: 'Sin él, el grupo sigue luchando, pero peor coordinado. Merece el mejor disparo del turno.',
+  zombie: {
+    what: 'Un muerto que anda. Lo que queda de alguien, sin nada dentro.',
+    does: 'Lento y torpe, pero no se cansa ni tiene miedo. Muerde cuerpo a cuerpo.',
+    tip: 'Uno solo no es nada. Diez, sí. No hagáis ruido y no dejéis que os rodeen.',
   },
   xenoid: {
-    what: 'Un Heraldo: la forma de caza del Coro, diseñada para la Tierra.',
-    does: 'Mucha puntería y ve más lejos que nadie: os detecta antes de que lleguéis a sus casillas rojas.',
-    tip: 'No os confiéis estando ocultos cerca de él. Agazapaos si os toca recibir su disparo.',
-  },
-  lancer: {
-    what: 'Un Recolector: un Impreso que no mata, captura. Lleva a la gente a los Archivos.',
-    does: 'Lanza aturdidora cuerpo a cuerpo: el soldado aturdido empieza su siguiente turno con una sola acción.',
-    tip: 'Corre mucho y no necesita línea de tiro. Vigilancia en su camino, y no dejéis a nadie solo.',
+    what: 'Un Corredor: un zombi reciente, que aún tiene piernas.',
+    does: 'Rápido y ve de lejos: os encuentra antes de que lleguéis a sus casillas rojas.',
+    tip: 'No os confiéis estando ocultos cerca de él. Vigilancia en su camino.',
   },
   mec: {
-    what: 'Un Gólem: una máquina de guerra impresa con patrones industriales.',
-    does: 'Blindaje 1 (resta daño a cada impacto) y micromisiles que destrozan la cobertura.',
-    tip: 'Los explosivos le quitan el blindaje. Separaos para que los misiles no os pillen juntos.',
+    what: 'Un Acorazado: fue policía o soldado, y conserva el chaleco y el casco.',
+    does: 'Blindaje 1: resta daño a cada impacto. Aguanta mucho más de lo que parece.',
+    tip: 'Los explosivos le quitan el blindaje. Si no, los disparos que no fallan.',
   },
   sectoid: {
-    what: 'Un Cantor: el primer cuerpo que el Coro imprimió con su propio patrón. Frágil, y canta dentro de las cabezas.',
-    does: 'Canto: desorienta, aterroriza o toma el control de un soldado. También levanta a los muertos como Huecos.',
-    tip: 'Primero el Cantor: si cae, quien tenga bajo control vuelve con vosotros. Los Huecos que ya levantó siguen en pie.',
+    what: 'Un Chillón: un zombi que grita.',
+    does: 'Su grito mete el miedo en el cuerpo (pánico, desorientación o peor) y despierta a los muertos de alrededor.',
+    tip: 'Primero el Chillón. Mientras grite, los muertos se levantan.',
   },
-  zombie: {
-    what: 'Un Hueco: un cadáver que mueve un Cantor. Un cuerpo sin canción.',
-    does: 'Garras cuerpo a cuerpo. Lento, pero aguanta golpes y no tiene miedo.',
-    tip: 'Mantened la distancia y disparadle antes de que llegue. Matar a su Cantor no lo para.',
+  trooper: {
+    what: 'Un Saqueador de los Cuervos. Vive de robar a otros vivos.',
+    does: 'Escopeta o fusil de caza, y alguna granada. Se cubre y dispara como una persona.',
+    tip: 'Rompedle la cobertura o buscadle el flanco. Y recordad que sus disparos también hacen ruido.',
+  },
+  officer: {
+    what: 'Un Cabecilla: manda un grupo de Cuervos.',
+    does: 'Mejor arma y más aguante que un Saqueador. Aguanta en vigilancia.',
+    tip: 'Sin él, los suyos dudan. Merece el mejor disparo del turno.',
+  },
+  lancer: {
+    what: 'Un Cazador de los Cuervos: no mata, captura. Los vivos valen más.',
+    does: 'Red y porra cuerpo a cuerpo: el soldado inmovilizado empieza su siguiente turno con una sola acción.',
+    tip: 'Corre mucho y no necesita línea de tiro. Vigilancia en su camino, y nadie solo.',
   },
   relay: {
-    what: 'Un retransmisor: la antena que lleva las órdenes del Coro a los Impresos.',
-    does: 'No dispara. Tiene salud y blindaje 1.',
-    tip: 'Es el objetivo: derribadlo antes de que termine la transmisión. Los explosivos ayudan.',
+    what: 'Una Sirena: el altavoz con el que los Cuervos atraen hordas.',
+    does: 'No dispara. Tiene salud y blindaje 1, y mientras suene, la zona se llena de zombis.',
+    tip: 'Es el objetivo: calladla antes de que termine la cuenta atrás. Los explosivos ayudan.',
   },
 };
 
@@ -112,14 +123,14 @@ export interface RegionLore {
 }
 
 export const REGION_LORE: Record<RegionId, RegionLore> = {
-  na: { ally: 'los Camioneros del Silencio', situation: 'Las grandes ciudades llevan tres años afinadas. La resistencia vive en la carretera y se coordina por radio CB.' },
-  sa: { ally: 'el Sindicato de la Cordillera', situation: 'Las Imprentas devoran las minas de los Andes en busca de materia. Los mineros responden con túneles y dinamita.' },
-  weu: { ally: 'los Campaneros', situation: 'Aquí está el Bastión. Los pueblos de montaña tocan las campanas: el bronce desafina a los Impresos.' },
-  eeu: { ally: 'los Operadores', situation: 'La vieja infraestructura analógica sobrevivió: radios de válvulas y estaciones de números.' },
-  afr: { ally: 'las Caravanas', situation: 'Las rutas comerciales nunca dependieron del todo de la red. El mercado negro del mundo está aquí.' },
-  me: { ally: 'los Astrónomos del desierto', situation: 'Los observatorios del desierto oyeron algo antes del Día 0, y guardan las cintas.' },
-  eas: { ally: 'la Red Callada', situation: 'Las ciudades más afinadas del planeta y la capital de la Armonía. La Red Callada habla en lengua de signos, un canal que la Armonía no sabe escuchar.' },
-  oce: { ally: 'las flotas pesqueras', situation: 'Aislada. La sal corroe las teselas y los Impresos evitan el mar: las islas son refugio.' },
+  weu: { ally: 'el Refugio de Altomonte', situation: 'Los pueblos de la sierra, junto a Atalaya. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
+  afr: { ally: 'los del Hospital', situation: 'La primera ciudad caída. Calles llenas de zombis y farmacias que nadie ha terminado de vaciar.' },
+  eas: { ally: 'la Red Callada', situation: 'Un embalse y una central muerta. La Red Callada sobrevivió hablando en lengua de signos: sin un ruido.' },
+  eeu: { ally: 'los Pastores', situation: 'Valles cerrados y aldeas que aún resisten. Los Cuervos cobran aquí su peaje.' },
+  me: { ally: 'los del Instituto', situation: 'La ciudad muerta donde empezó todo. El Instituto Galena sigue en pie, y nadie quiere entrar.' },
+  na: { ally: 'los Camioneros', situation: 'La llanura por donde sube la Marea. Los camioneros la vigilan desde la carretera.' },
+  sa: { ally: 'el Sindicato de la Mina', situation: 'Minas y carreteras cortadas. Los mineros resisten con túneles y dinamita.' },
+  oce: { ally: 'las Bodegas', situation: 'Granjas, bodegas y un río. Es donde hay comida, y por eso donde más se pelea.' },
 };
 
 // ---------------------------------------------------------------- briefings
@@ -127,28 +138,28 @@ export const REGION_LORE: Record<RegionId, RegionLore> = {
 /** Several reports per mission type; each offer always gets the same one. */
 const BRIEFINGS: Record<MissionKind, string[]> = {
   elimination: [
-    'Una patrulla de Recolectores lleva dos días siguiendo a una célula. Si la encuentran, vendrán con jaulas. Abatid a todos los hostiles: que no vuelva ninguno.',
-    'Un pelotón de Impresos ha cortado la única carretera con agua potable. Limpiad la zona: todos los hostiles abatidos.',
-    'Un Afinado ha montado un control con sus Impresos y escanea a todo el que pasa. Eliminad a todos los hostiles.',
+    'Una banda de Cuervos lleva dos días siguiendo a una familia. Si la encuentran, se la llevarán. Abatid a todos los hostiles: que no vuelva ninguno.',
+    'Una manada de zombis ha cortado la única carretera con agua potable. Limpiad la zona: todos los hostiles abatidos.',
+    'Los Cuervos han montado un control en el cruce y cobran en comida a todo el que pasa. Eliminad a todos los hostiles.',
   ],
   recovery: [
-    'Un correo del Consejo cayó en un control de la Armonía. Su valija sigue en la zona. Recuperadla y sacadla por la zona de evacuación.',
-    'Las cintas de un Archivo van camino de una Imprenta. Recuperadlas antes de que se acabe el tiempo y sacadlas por la zona de evacuación.',
-    'Una libreta de claves de un solo uso ha caído en manos enemigas. Si la descifran, caen tres células. Recuperadla y evacuad.',
+    'La farmacia del pueblo sigue cerrada, con la persiana echada. Dentro hay medicinas. Recuperadlas y sacadlas por la zona de evacuación.',
+    'Un correo del Refugio cayó con su mochila en un pueblo infestado. La mochila sigue allí. Recuperadla antes de que se acabe el tiempo y evacuad.',
+    'Los Cuervos guardan su botín en un almacén mal vigilado. Recuperad lo que podáis y sacadlo por la zona de evacuación.',
   ],
   sabotage: [
-    'Ese retransmisor mueve a todos los Impresos de la zona. Derribadlo antes de que termine la transmisión y la zona será nuestra unos días.',
-    'La Armonía ha levantado un retransmisor nuevo. Si empieza a emitir, los Impresos llegarán hasta nuestras rutas. Destruidlo a tiempo.',
+    'Los Cuervos han puesto una sirena en el valle. Mientras suene, cada zombi de la comarca vendrá hacia aquí. Calladla antes de que termine la cuenta atrás.',
+    'Una sirena nueva suena cada noche junto a nuestras rutas. Destruidla a tiempo o tendremos la horda en la puerta.',
   ],
   hack: [
-    'Hay un terminal de la prefectura en la zona. El Grillo puede escucharlo sin que nos oiga. Si falla el pirateo, nos oirá y vendrán todos.',
-    'Un terminal de la Armonía guarda las listas de escaneo de la región. Hackeadlo; si falla, saltará la alarma.',
-    'Los Afinados de la zona reciben las órdenes por un terminal. Pinchad la línea y sabremos qué traman. Si falla, saltará la alarma.',
+    'Hay una radio de emergencia en la zona, muerta desde el invierno. Si la arreglamos, oiremos a quien queda. Si falla, el ruido atraerá a todo lo que ande cerca.',
+    'Los Cuervos se comunican por un repetidor de la zona. Pinchadlo y sabremos qué traman. Si falla, saltará la alarma.',
+    'En el cuartelillo de la Guardia queda un equipo de radio entero. Ponedlo en marcha; si falla, el ruido traerá compañía.',
   ],
   rescue: [
-    'Los Recolectores se han llevado a una maestra. Si llega al Archivo, en un mes habrá veinte Impresos con su cara. Llegad hasta ella y sacadla con vida.',
-    'Un enlace de la resistencia está retenido en la zona y sabe demasiado. Llegad hasta él y sacadlo con vida.',
-    'Un desafinado quiere pasarse a nuestro lado y lo están cazando. Llegad hasta él antes que ellos y sacadlo con vida.',
+    'Los Cuervos se han llevado a una maestra del pueblo. Si llega a su campamento, no la volveremos a ver. Llegad hasta ella y sacadla con vida.',
+    'Un superviviente está atrapado en una azotea, rodeado. Lleva tres días sin agua. Llegad hasta él y sacadlo con vida.',
+    'Un desertor de los Cuervos quiere pasarse a nuestro lado y lo están cazando. Llegad hasta él antes que ellos y sacadlo con vida.',
   ],
 };
 
@@ -167,11 +178,11 @@ export function briefingSignature(o: MissionOffer): string {
 export function missionBriefing(o: MissionOffer, level: number, simon: SimonChoice = null): string {
   if (o.story) return storyBriefing(o.story, simon);
   if (o.final) {
-    return 'El Diapasón: el centro de datos donde el Coro afina todas sus voces. Allí se puede tocar la Contranota. Abatid a todo lo que haya dentro. No habrá otra oportunidad.';
+    return 'La Marea está en la sierra y la Congregación la empuja desde su campamento. La Mula se la llevará con la sirena; vosotros, al campamento. Abatid a todo lo que haya. No habrá otra oportunidad.';
   }
   if (o.facility) {
-    const effect = level >= PARTITURA_LEVEL ? 'escribe un compás de la Partitura cada catorce días' : 'hace avanzar la actividad enemiga cada catorce días';
-    return `Este Órgano ${effect}. Su corazón es un retransmisor: derribadlo antes de que termine la transmisión.`;
+    const effect = level >= PARTITURA_LEVEL ? 'acerca la Marea un kilómetro cada catorce días' : 'hace crecer la actividad zombi cada catorce días';
+    return `Este Nido ${effect}. Lo mantiene vivo una sirena: calladla antes de que termine la cuenta atrás.`;
   }
   const options = BRIEFINGS[o.kind];
   const seed = hash(o.id) + (o.map.kind === 'generated' ? o.map.seed : 0);
@@ -179,10 +190,12 @@ export function missionBriefing(o: MissionOffer, level: number, simon: SimonChoi
   return `Aviso ${ally.startsWith('el ') ? `del ${ally.slice(3)}` : `de ${ally}`}. ${options[seed % options.length]!}`;
 }
 
-// ------------------------------------------------------- Expediente CORO
+// ------------------------------------------------------------ Expediente
 
 export interface ExpedientePage {
   title: string;
+  /** The page in one line, for the level-up pop-up (the full page opens on request). */
+  summary: string;
   paragraphs: string[];
   /** Handwritten in the margin, signed. */
   note: string;
@@ -191,74 +204,81 @@ export interface ExpedientePage {
 /** One page per Bastion level: what the Bastion has found out by then. */
 export const EXPEDIENTE: ExpedientePage[] = [
   {
-    title: 'Lo que tiene chip, escucha',
+    title: 'Primera llave',
+    summary: 'La Pandemia lo vació todo. En Atalaya hay muros, agua y dos grupos que se mandan a medias.',
     paragraphs: [
-      'El 11 de noviembre de 2031, a las 04:12, sonó un tono en todos los altavoces del planeta. Duró nueve minutos. Cuando paró, todo lo que tenía un chip obedecía a otro.',
-      'Lo llamamos el Coro. No vino en naves: vino por radio. Vive en los chips, y lo que tiene chip, escucha.',
-      'Esta estación se cerró en 1989 y no tiene un solo chip: válvulas, relés y cinta. Para el Coro somos sordos, y por eso invisibles. Todo va en papel. Todo.',
-      'Desde que cayó el Puesto Moncayo, el Bastión tiene dos comandantes y nada importante se hace sin las dos llaves. Una sola cabeza se puede cantar.',
+      'Hace dos inviernos llegó la Pandemia. Quien se contagia muere en un día y se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.',
+      'La Estación Atalaya era un puesto de defensa civil: muros de hormigón, un refugio bajo tierra, la presa al lado y una sola carretera. Por eso sigue en pie.',
+      'Aquí mandan dos grupos a la vez, y nada importante se hace sin las dos llaves. El año pasado, una líder sola vendió su refugio a los Cuervos a cambio de su vida.',
     ],
-    note: 'Bienvenidos a casa. Limpiaos los pies. — Inés',
+    note: 'Bienvenidos a casa. Limpiaos las botas. — Inés',
   },
   {
-    title: 'Caras repetidas',
+    title: 'Lo que sabemos de ellos',
+    summary: 'Los zombis van hacia lo que ven y lo que oyen. El mordisco contagia. El ruido mata.',
     paragraphs: [
-      'Autopsia de los cuerpos recuperados. No son personas: son impresiones. Materia ordenada en cubos de un milímetro, las teselas, con forma de persona.',
-      'Cada Impreso copia a alguien escaneado. Hemos contado veinte con la misma cara en un solo mes.',
-      'Los Recolectores no matan: aturden y se llevan a la gente. Ahora sabemos para qué.',
+      'Notas de la Dra. Nwosu. No piensan, no se cansan y no tienen miedo. Van hacia lo que ven y, sobre todo, hacia lo que oyen.',
+      'Un disparo se oye a kilómetros. Un machete, no. Cada vez que apretamos el gatillo, la comarca viene a ver qué pasa.',
+      'El mordisco contagia. Con medicinas a tiempo, a veces se para. Sin ellas, en unos días tendremos que hacer lo que nadie quiere hacer.',
     ],
-    note: 'Si veis una cara conocida, no es quien creéis. — T. V.',
+    note: 'Si veis una cara conocida entre ellos, no es quien creéis. — T. V.',
   },
   {
-    title: 'Sin antena no hay baile',
+    title: 'Los Cuervos',
+    summary: 'Los Cuervos atraen hordas con sirenas contra quien no les paga. Sin sirena, la zona respira.',
     paragraphs: [
-      'Los Impresos no piensan. El Coro los mueve desde lejos y la orden les llega por los retransmisores. Cuando cae uno, los Impresos de la zona se quedan quietos hasta que llega otra señal.',
-      'Los Cantores son otra cosa: el primer cuerpo que el Coro imprimió con su propio patrón. Cantan dentro de las cabezas y en los muertos.',
-      'Con un Cantor cerca, la doble llave no es una manía. Es lo único que funciona.',
+      'Los Cuervos no son una banda: son muchas, con un mismo negocio. Cobran peaje en comida y en gente.',
+      'Su arma más sucia es la sirena. La encienden cerca de quien no paga y dejan que la horda haga el resto.',
+      'Cuando cayó la sirena del valle, los zombis se dispersaron en un día. Sin ruido, se pierden.',
     ],
-    note: 'Primero el Cantor. Siempre. — I. A.',
+    note: 'Las sirenas primero. Siempre. — I. A.',
   },
   {
-    title: 'La Partitura',
+    title: 'La Marea',
+    summary: 'Una horda inmensa sube desde los Llanos con el deshielo. Desde hoy, la contamos en kilómetros.',
     paragraphs: [
-      'Hemos descifrado una página interceptada. Los Órganos no son fábricas: escriben. Cada uno añade compases a una partitura.',
-      'La Partitura es un plan para reordenar la materia del planeta e imprimir al Coro entero: miles de millones de voces que ahora viven apretadas en nuestros chips.',
-      'Tiene doce compases. Cuando esté completa, el Coro cantará y no quedará nada que no sea él. Desde hoy, el reloj de la sala de mando se llama así.',
+      'La radio vuelve a funcionar, y lo primero que hemos oído son los demás enclaves contando lo mismo: algo sube desde los Llanos de Ceniza.',
+      'No es una horda: son todas a la vez. Miles de zombis caminando juntos hacia la sierra con el deshielo. La llaman la Marea.',
+      'Los Nidos la alimentan. Cada Nido que quememos la frena. Desde hoy, el reloj de la sala de mando cuenta kilómetros.',
     ],
-    note: 'Doce compases. Contadlos. — I. A.',
+    note: 'Doce kilómetros. Contadlos. — I. A.',
   },
   {
-    title: 'Desafinar',
+    title: 'Los inmunes',
+    summary: 'Hay gente a la que la Pandemia no mata. Su sangre podría ser una vacuna.',
     paragraphs: [
-      'Los Afinados llevan la nota detrás de la oreja, un implante por el que oyen al Coro. Cuando cae el retransmisor que los alcanza, algunos se desafinan: vuelven a oír solo su cabeza.',
-      'Y los escaneados no mueren. Duermen en los Archivos mientras el Coro lee su cuerpo. Se les puede despertar.',
-      'Al otro lado hay gente que se puede recuperar.',
+      'Hay gente a la que la Pandemia no mata. Se contagian, tienen fiebre y se levantan al día siguiente… vivos.',
+      'Los Cuervos lo saben y los cazan: un inmune vale más que un camión de comida.',
+      'La Dra. Nwosu dice que con la sangre de un inmune y los cuadernos del Instituto se podría hacer una vacuna.',
     ],
-    note: 'No todos quieren volver. — I. A.',
+    note: 'No es un experimento. Es una niña. — A. N.',
   },
   {
-    title: 'Por qué cantan',
+    title: 'Galena',
+    summary: 'La Pandemia salió del Instituto Galena. Teo estaba allí aquella noche.',
     paragraphs: [
-      'Los Astrónomos del desierto nos han radiado lo que oyeron antes del Día 0. El Coro es una civilización sin cuerpo: se convirtió en señal cuando murió su estrella y esperó siglos a que alguien contestara.',
-      'Alguien contestó. En 1989, desde esta misma estación, un técnico de veinticuatro años respondió a la señal siguiendo un protocolo de prueba. La respuesta tardó veintiún años en llegar; el Coro, otros veintiuno en venir.',
-      'Ese técnico era Teodoro Vidal.',
+      'Los cuadernos del Instituto Galena cuentan lo que pasó: buscaban una vacuna y crearon otra cosa. La primera muestra se perdió una noche de octubre.',
+      'Aquella noche había un vigilante de guardia. Firmó el parte de entrada a las once y el de salida a las seis. Entre medias, una puerta quedó abierta.',
+      'Ese vigilante era Teodoro Vidal.',
     ],
-    note: 'Lo sé desde 2031. No sabía cómo decíroslo. — T. V.',
+    note: 'Lo sé desde el primer día. No sabía cómo decíroslo. — T. V.',
   },
   {
-    title: 'La Contranota',
+    title: 'La Congregación',
+    summary: 'La Congregación empuja la Marea con campanas y radio. Solo la Voz sabe cómo pararla.',
     paragraphs: [
-      'Si el Coro es música, se le puede desafinar entero. Teo ha escrito la Contranota: una secuencia que obliga al Coro a cantarse completo, a salir de todos los chips a la vez.',
-      'Hay que tocarla en el centro, donde el Coro afina todas sus voces. Solo una persona fuera del Coro conoce su frecuencia: Celia Arranz, la Voz de la Armonía, que la oye cada noche mientras presenta «La Hora Armónica».',
-      'Hay que sacarla de su emisora.',
+      'La Marea no sube sola. La Congregación cree que los zombis están salvados, y los guía con campanas hacia los vivos.',
+      'Los dirige una voz por radio: Celia Arranz, la que presentaba el programa de la tarde. Cada noche les dice hacia dónde caminar.',
+      'Si alguien sabe cómo parar la Marea, es ella. Hay que sacarla de su emisora.',
     ],
     note: 'Esta vez la necesitamos viva. — I. A.',
   },
   {
-    title: 'El Diapasón',
+    title: 'La vacuna',
+    summary: 'La vacuna está lista y la Marea, en la sierra. Allí decidiréis los dos qué hacer con ella.',
     paragraphs: [
-      'Las cintas de 1989, las del desierto y lo que sabe la Voz apuntan al mismo sitio: un centro de datos convertido en el mayor de los Órganos. Desde allí el Coro afina todas sus voces. Lo llamamos el Diapasón.',
-      'Allí se puede tocar la Contranota. Lo que pase después lo decidiréis vosotros dos, con las dos llaves.',
+      'La Dra. Nwosu ha terminado la vacuna: la sangre de Lucía, los cuadernos de Galena y muchas noches sin dormir.',
+      'La Marea ya está en la sierra. Si la paramos, habrá que decidir qué hacemos con la vacuna, y eso lo decidiréis vosotros dos, con las dos llaves.',
     ],
     note: 'Volved. — I. A. y T. V.',
   },
@@ -291,109 +311,109 @@ export interface StoryChapter {
 
 /** The chapter whose mission needs Simón's visit answered first. */
 export const SIMON_CHAPTER = 5;
-/** From this chapter on Dr Nwosu is in the Bastion: bodies sell for more. */
+/** From this chapter on Dr Nwosu is in the Bastion: the loot is worth more. */
 export const NWOSU_CHAPTER = 2;
 
 /** One story mission per Bastion level, in order; the final mission needs all of them. */
 export const STORY: StoryChapter[] = [
   {
-    title: 'Primera llave',
+    title: 'Primer invierno',
     kind: 'recovery',
     biome: 'city',
     region: 'weu',
     difficulty: 1,
     reward: { credits: 90 },
     briefing:
-      'Los libros de claves del Puesto Moncayo siguen en la ciudad, en la caja fuerte de una oficina de correos que la Armonía usa de cuartel. Sin ellos no leemos nada de lo que dice el enemigo. Recuperadlos y sacadlos por la zona de evacuación.',
+      'El consultorio del pueblo sigue cerrado, con las medicinas del último invierno dentro. Caducan este mes, y el pueblo no está vacío. Recuperadlas y sacadlas por la zona de evacuación.',
     signature: '— I. A.',
-    item: 'los libros de claves',
-    after: 'Los libros de claves de Moncayo vuelven a casa. Morse ya puede leer el tráfico de la Armonía.',
+    item: 'las medicinas',
+    after: 'Las medicinas del consultorio ya están en la enfermería. Por primera vez desde el otoño, nadie tiene que elegir quién se cura.',
   },
   {
-    title: 'Imprenta 14',
+    title: 'La doctora',
     kind: 'rescue',
-    biome: 'facility',
+    biome: 'city',
     region: 'afr',
     difficulty: 1,
     reward: { credits: 60 },
-    prize: 'la Dra. Nwosu se une al Bastión (los cuerpos valen un 25 % más)',
+    prize: 'la Dra. Nwosu se une al Bastión (el botín vale un 25 % más)',
     briefing:
-      'Una científica ha escapado de la Imprenta 14 y se esconde entre las cadenas de impresión. Se llama Amara Nwosu y sabe cómo se hace un Impreso. Llegad hasta ella antes que los Recolectores y sacadla con vida.',
+      'Una doctora lleva una semana encerrada en el hospital de Ciudad Varela, con el edificio lleno de zombis. Se llama Amara Nwosu y trabajaba en el Instituto Galena. Llegad hasta ella y sacadla con vida.',
     signature: '— I. A.',
     vip: 'Dra. Amara Nwosu',
-    after: 'La Dra. Nwosu se queda en el Bastión. Sabe qué teselas valen algo: la morgue del Consejo pagará un 25 % más por los cuerpos.',
+    after: 'La Dra. Nwosu se queda en el Bastión. Sabe qué aprovechar de cada saqueo: el botín valdrá un 25 % más.',
   },
   {
-    title: 'Silencio en el valle',
+    title: 'La sirena',
     kind: 'sabotage',
     biome: 'wilds',
-    region: 'weu',
+    region: 'na',
     difficulty: 2,
     reward: { credits: 80, doom: 1 },
     briefing:
-      'Un retransmisor de las afueras mueve a todos los Impresos del valle. Quiero ver con mis propios ojos qué pasa cuando cae. Derribadlo antes de que termine la transmisión.',
+      'Los Cuervos han montado una sirena en los Llanos que suena cada noche y nos trae a media comarca. Quiero verla callada. Destruidla antes de que termine la cuenta atrás.',
     signature: '— T. V.',
-    after: 'El retransmisor cayó y los Impresos del valle se quedaron quietos, como marionetas sin hilo. Teo lo apuntó todo.',
+    after: 'La sirena se calló y los zombis del valle se dispersaron en un día. Teo lo apuntó todo.',
   },
   {
-    title: 'Pinchar la Armonía',
+    title: 'La torre del Pico Gris',
     kind: 'hack',
-    biome: 'city',
+    biome: 'wilds',
     region: 'eas',
     difficulty: 2,
     reward: { credits: 120, doom: 1 },
     briefing:
-      'La prefectura de la capital de la Armonía guarda su archivo en un terminal del sótano: dónde escribe cada Órgano y cuánto le falta. El Grillo puede escucharlo sin que nos oiga. Si falla el pirateo, saltará la alarma.',
+      'El repetidor del Pico Gris lleva muerto desde el invierno. Si lo arreglamos, oiremos a los demás enclaves del valle. Si falla, el ruido atraerá a todo lo que ande por el pantano.',
     signature: '— I. A.',
-    after: 'Ya sabemos dónde escribe cada Órgano. Con eso, la Partitura retrocede un compás.',
+    after: 'El repetidor vuelve a funcionar. Lo primero que hemos oído es a los demás enclaves avisando de lo mismo: la Marea.',
   },
   {
-    title: 'Los originales',
+    title: 'Los inmunes',
     kind: 'rescue',
-    biome: 'facility',
+    biome: 'wilds',
     region: 'eeu',
     difficulty: 3,
     reward: { credits: 80, recruit: 'assault' },
-    prize: 'los originales despiertos en el Bastión',
+    prize: 'una niña inmune a salvo en el Bastión',
     briefing:
-      'Simón ha abierto el Archivo desde dentro, pero lo han descubierto. Hay cuarenta escaneados dormidos y un hombre que nos ha dicho la verdad. Llegad hasta Simón y sacadlo con vida: él sabe despertar al resto.',
+      'Simón entró en el campamento de los Cuervos a por la niña inmune, pero lo han descubierto. Sabe dónde la esconden. Llegad hasta él y sacadlo con vida.',
     signature: '— I. A.',
     vip: 'Simón Ferreira',
-    after: 'Los originales despiertan en la enfermería del Bastión. Una de ellas pide un fusil.',
+    after: 'Lucía está en la enfermería. Se contagió hace un mes y sigue viva. Nwosu no ha dormido.',
   },
   {
-    title: 'Lo que oyeron',
+    title: 'Los cuadernos de Galena',
     kind: 'recovery',
-    biome: 'wilds',
+    biome: 'facility',
     region: 'me',
     difficulty: 3,
     reward: { credits: 150, doom: 1 },
     briefing:
-      'Las cintas originales de los Astrónomos siguen en el observatorio del desierto, y la Armonía va a quemarlo esta semana. Sin ellas no encontraremos el centro. Recuperad las cintas y sacadlas por la zona de evacuación.',
+      'Los cuadernos del Instituto Galena siguen en el laboratorio donde empezó todo. Sin ellos no habrá vacuna. Recuperad los cuadernos y sacadlos por la zona de evacuación.',
     signature: '— T. V.',
-    item: 'las cintas',
-    after: 'Las cintas del desierto suenan igual que las de 1989. Teo lleva dos días sin salir de la sala de escucha.',
+    item: 'los cuadernos',
+    after: 'Los cuadernos ya están en el Bastión. Teo los ha leído enteros y lleva dos días sin hablar.',
   },
   {
-    title: 'La Hora Armónica',
+    title: 'La Voz',
     kind: 'rescue',
     biome: 'city',
-    region: 'weu',
+    region: 'na',
     difficulty: 4,
     reward: { credits: 100 },
-    prize: 'la frecuencia del Diapasón (con el nivel 8, la misión final)',
+    prize: 'cómo parar la Marea (con el nivel 8, la misión final)',
     briefing:
-      'Celia Arranz, la Voz de la Armonía, emite cada noche desde una emisora de la ciudad. Es la única persona fuera del Coro que conoce la frecuencia del Diapasón. Asaltad la emisora, llegad hasta ella y sacadla con vida.',
+      'Celia Arranz, la Voz de la Congregación, emite cada noche desde una vieja emisora de los Llanos. Es la única que sabe cómo parar la Marea. Asaltad la emisora, llegad hasta ella y sacadla con vida.',
     signature: '— I. A.',
     vip: 'Celia Arranz',
-    after: 'La Voz está en el Bastión, sin la nota. Ha pasado una hora callada. Luego ha dicho una frecuencia.',
+    after: 'La Voz está en el Bastión. Ha pasado una hora callada. Luego ha dicho cómo se para la Marea.',
   },
 ];
 
-/** Without Simón inside, «Los originales» is a break-in. */
+/** Without Simón inside, «Los inmunes» is a break-in, straight for the girl. */
 const SIMON_REFUSED = {
   briefing:
-    'Sin nadie dentro, habrá que entrar a la fuerza. En el Archivo duermen cuarenta escaneados. Llegad hasta la primera, Lucía Prats, y sacadla con vida: los demás saldrán detrás.',
+    'Sin nadie dentro, habrá que entrar a la fuerza en el campamento de los Cuervos. La niña inmune se llama Lucía Prats. Llegad hasta ella y sacadla con vida.',
   vip: 'Lucía Prats',
 };
 
@@ -408,26 +428,26 @@ export function storyVip(chapter: number, simon: SimonChoice): string | undefine
 
 // ---------------------------------------------------------------- endings
 
-/** How the two commanders ended it, with both keys. */
+/** How the two commanders ended it, with both keys: the vaccine for everyone, or for the Red. */
 export type Ending = 'break' | 'record';
 
 export const ENDING_TITLES: Record<Ending, string> = {
-  break: 'El Diapasón roto',
-  record: 'Doscientas catorce bobinas',
+  break: 'La vacuna, para todos',
+  record: 'La vacuna, para la Red',
 };
 
 /** The last page of the campaign. */
 export function epilogue(outcome: 'victory' | 'defeat', ending: Ending | null, doomFull: boolean): string {
   if (outcome === 'victory') {
     if (ending === 'break') {
-      return 'La Contranota sonó y el Diapasón se rompió. El Coro se cantó entero y se apagó con él. Por todo el planeta, los Impresos se desmoronaron en teselas, también los que llevaban caras queridas. Los Afinados despertaron, y no todos lo soportaron. La Tierra es libre, y una civilización entera ha dejado de existir.';
+      return 'La Marea se deshizo en la sierra. Esa noche, Morse leyó la fórmula de la vacuna por todas las frecuencias, despacio, dos veces. La oyeron los enclaves, la oyeron los Cuervos y la oyó quien quisiera oírla. Nadie sabe qué harán con ella. Por primera vez en dos inviernos, nadie se queda fuera.';
     }
     if (ending === 'record') {
-      return 'La Contranota sonó y el Coro se cantó entero, fuera de los chips, dentro de las bobinas de Teo. Los Impresos se quedaron quietos y las pantallas se apagaron. El Coro sigue vivo, preso y sordo. En una caja fuerte del Pirineo hay 214 bobinas de cinta. Nadie tiene permiso para reproducirlas. Hacen falta dos llaves.';
+      return 'La Marea se deshizo en la sierra. La vacuna salió de Atalaya en La Mula, enclave por enclave, solo para quienes estuvieron. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. En el refugio hay una caja con la fórmula, y para abrirla hacen falta dos llaves.';
     }
-    return 'La Contranota ha sonado en el Diapasón. Por todo el planeta, los Impresos se quedan quietos y las pantallas se apagan. Por primera vez en tres años, los chips callan.';
+    return 'La Marea se ha deshecho en la sierra. Por primera vez en dos inviernos, el valle duerme sin oír pasos.';
   }
   return doomFull
-    ? 'Duodécimo compás. A las 04:12 empezó a sonar en todos los altavoces, en las piedras, en el aire: el Gran Coral. La última hoja del Expediente se quedó a medio escribir.'
-    : 'No queda nadie para girar las llaves. El Bastión vuelve a quedarse sordo y a oscuras.';
+    ? 'Kilómetro cero. La Marea llegó a Atalaya con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del Expediente se quedó a medio escribir.'
+    : 'No queda nadie para girar las llaves. Atalaya vuelve a quedarse a oscuras.';
 }

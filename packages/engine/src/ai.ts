@@ -2,7 +2,7 @@ import { abilitiesOf, abilityBlocker, abilityTargets, blastTiles, canTargetTile,
 import { previewShot, weaponOf } from './aim';
 import { ABILITIES, isAttack, TEMPLATES } from './content';
 import { coverAgainst, hasAnyCover } from './cover';
-import { combatants, DIRS8, distance, getUnit, sameTile, unitAt } from './grid';
+import { canStandOn, combatants, DIRS8, distance, getUnit, sameTile, tileAt, unitAt } from './grid';
 import { sightOrigin } from './los';
 import { buildPath, computeReach, costPerAp, destinations, type Reach } from './path';
 import type { Sim } from './rules';
@@ -122,6 +122,29 @@ function closestTo(s: GameState, u: Unit, reach: Reach, goal: Vec2, minGap = 0):
   return best && best.d < distance(u.pos, goal) ? best.pos : null;
 }
 
+/** How far ahead a patrol plans its walk, in actions: enough to go round a building to its door. */
+const PATROL_LOOKAHEAD = 4;
+
+/**
+ * A patrolling unit's walk this turn toward `goal`: the shortest way to the
+ * free tile nearest it (round by the doors: a pod on patrol keeps out of
+ * windows), as far along as one action goes. Null when it gets no closer.
+ */
+function patrolPath(s: GameState, u: Unit, goal: Vec2, minGap = 0): Vec2[] | null {
+  const all = computeReach(s, u, costPerAp(u) * PATROL_LOOKAHEAD);
+  const dest = closestTo(s, u, all, goal, minGap);
+  const path = dest && buildPath(s, u, all, dest);
+  if (!path) return null;
+  const budget = costPerAp(u);
+  let end = -1;
+  for (let i = 0; i < path.length; i++) {
+    const p = path[i]!;
+    if (all.cost.get(p.y * s.width + p.x)! > budget) break;
+    if (canStandOn(tileAt(s, p.x, p.y)) && !unitAt(s, p)) end = i;
+  }
+  return end >= 0 ? path.slice(0, end + 1) : null;
+}
+
 /**
  * Inactive pods walk their patrol route: the leader heads for the next
  * waypoint, the others follow. Walking into sight of the squad activates the
@@ -135,24 +158,18 @@ export function patrolPod(sim: Sim, pod: Pod): void {
   if (!leader || !pod.patrol.length) return;
 
   let index = pod.patrolIndex % pod.patrol.length;
-  const reachLeader = computeReach(s, leader, costPerAp(leader));
-  let dest = closestTo(s, leader, reachLeader, pod.patrol[index]!);
-  if (!dest || distance(leader.pos, pod.patrol[index]!) <= 2) {
+  let path = patrolPath(s, leader, pod.patrol[index]!);
+  if (!path || distance(leader.pos, pod.patrol[index]!) <= 2) {
     index = (index + 1) % pod.patrol.length;
     sim.emit({ t: 'patrol', pod: pod.id, index });
-    dest = closestTo(s, leader, reachLeader, pod.patrol[index]!);
+    path = patrolPath(s, leader, pod.patrol[index]!);
   }
-  if (dest) {
-    const path = buildPath(s, leader, reachLeader, dest);
-    if (path) sim.moveAlong(leader, path, 0);
-  }
+  if (path) sim.moveAlong(leader, path, 0);
   for (const f of members.slice(1)) {
     if (sim.over || isActive() || !leader.alive) return;
     if (!f.alive || distance(f.pos, leader.pos) <= 1.5) continue;
-    const reach = computeReach(s, f, costPerAp(f));
-    const spot = closestTo(s, f, reach, leader.pos, 1);
-    const path = spot ? buildPath(s, f, reach, spot) : null;
-    if (path) sim.moveAlong(f, path, 0);
+    const walk = patrolPath(s, f, leader.pos, 1);
+    if (walk) sim.moveAlong(f, walk, 0);
   }
 }
 

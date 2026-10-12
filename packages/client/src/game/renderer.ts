@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { FrameLimiter, onGraphics, pixelRatio, type GraphicsSettings } from '../settings';
-import { fitPostToPixelRatio, voxelPost, type VoxelPost } from './post';
+import { FrameLimiter, onGraphics, pixelRatio, postQuality, QualityGuard, type GraphicsSettings } from '../settings';
+import { fitPostToPixelRatio, lightenPost, voxelPost, type VoxelPost } from './post';
 
 type FrameFn = (dt: number, time: number) => void;
 
@@ -40,6 +40,10 @@ export class Renderer {
   /** Voxel post-processing: ambient occlusion in corners and contacts, bloom on lights. */
   private readonly post: VoxelPost;
   private readonly limiter = new FrameLimiter();
+  /** Lowers the quality if the mission doesn't run fluidly (playtest: «me va a 25 fps»). */
+  private readonly guard = new QualityGuard(() => this.onQualityLowered?.());
+  /** The guard took a step down: the game says so, once. */
+  onQualityLowered?: () => void;
   private effects: GraphicsSettings['effects'] = 'high';
   private readonly unsubscribe: () => void;
 
@@ -72,10 +76,12 @@ export class Renderer {
     this.gl.setAnimationLoop(() => this.frame());
   }
 
-  /** Graphics settings, live: resolution, shadows and how much post-processing. */
+  /** Graphics settings, live: resolution, shadows and how much post-processing (less what the guard took). */
   private applyGraphics(g: GraphicsSettings): void {
     this.effects = g.effects;
-    this.post.ao.enabled = g.effects === 'high';
+    const q = postQuality();
+    this.post.ao.enabled = q.ao !== 'off';
+    lightenPost(this.post, q.ao === 'light', q.bloom === 'light');
     if (this.gl.shadowMap.enabled !== g.shadows) {
       this.gl.shadowMap.enabled = g.shadows;
       this.sun.castShadow = g.shadows;
@@ -120,7 +126,7 @@ export class Renderer {
   private resize(): void {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
-    this.gl.setPixelRatio(pixelRatio(w, h));
+    this.gl.setPixelRatio(pixelRatio(w, h, true));
     this.gl.setSize(w, h);
     this.post.composer.setPixelRatio(this.gl.getPixelRatio());
     fitPostToPixelRatio(this.post, this.gl.getPixelRatio());
@@ -142,7 +148,9 @@ export class Renderer {
 
   private frame(): void {
     // With a frame-rate cap, skipped ticks neither simulate nor draw: dt spans them.
-    if (!this.limiter.ready()) return;
+    const now = performance.now();
+    if (!this.limiter.ready(now)) return;
+    this.guard.frame(now);
     this.clock.update();
     const dt = Math.min(this.clock.getDelta(), 0.1);
     const time = this.clock.getElapsed();

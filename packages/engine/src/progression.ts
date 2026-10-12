@@ -17,14 +17,14 @@ export interface TechDef {
 }
 
 export const TECHS: Record<TechId, TechDef> = {
-  magWeapons: { id: 'magWeapons', name: 'Armas de bobina', description: 'Condensadores y cobre, sin un solo chip: armas de nivel 2 (+2 de daño) para los soldados desde Cabo.', level: 3 },
+  magWeapons: { id: 'magWeapons', name: 'Armas de taller', description: 'Teo repara y pone a punto lo que encontráis: armas de nivel 2 (+2 de daño) para los soldados desde Cabo.', level: 3 },
   plateArmor: { id: 'plateArmor', name: 'Armadura de placas', description: 'Armadura de nivel 2 (+2 de salud) para los soldados desde Cabo.', level: 4 },
-  plasmaGrenades: { id: 'plasmaGrenades', name: 'Granadas de tesela', description: 'Teselas inestables en la carga: +2 de daño en todas las granadas.', level: 5 },
-  encryption: { id: 'encryption', name: 'Oído', description: 'Escuchar a la Armonía sin que nos oiga: +20 a hackear y una región contactable más.', level: 5 },
-  plasmaWeapons: { id: 'plasmaWeapons', name: 'Armas de plasma', description: 'Tecnología de Heraldo ensordecida: armas de nivel 3 (+4 de daño) para los soldados desde Teniente.', level: 6 },
-  nanoMedkit: { id: 'nanoMedkit', name: 'Teselas médicas', description: 'Tejido impreso sin el Coro dentro: las curas sanan +2 y los botiquines tienen un uso más.', level: 6 },
-  predatorArmor: { id: 'predatorArmor', name: 'Armadura de tesela', description: 'Armadura de nivel 3 (+4 de salud y +1 de blindaje) para los soldados desde Teniente.', level: 7 },
-  signal: { id: 'signal', name: 'Las cintas de 1989', description: 'Localizan el Diapasón: desbloquea la misión final.', level: 8 },
+  plasmaGrenades: { id: 'plasmaGrenades', name: 'Granadas de clavos', description: 'Clavos y tornillos en la carga: +2 de daño en todas las granadas.', level: 5 },
+  encryption: { id: 'encryption', name: 'Escáner de radio', description: 'Oír las frecuencias de los Cuervos sin que nos oigan: +20 a hackear y una zona contactable más.', level: 5 },
+  plasmaWeapons: { id: 'plasmaWeapons', name: 'Armas militares', description: 'Lo que quedaba en los cuarteles, limpio y con munición: armas de nivel 3 (+4 de daño) para los soldados desde Teniente.', level: 6 },
+  nanoMedkit: { id: 'nanoMedkit', name: 'Antibióticos', description: 'Amoxicilina y suturas de verdad: las curas sanan +2 y los botiquines tienen un uso más.', level: 6 },
+  predatorArmor: { id: 'predatorArmor', name: 'Equipo antidisturbios', description: 'Armadura de nivel 3 (+4 de salud y +1 de blindaje) para los soldados desde Teniente.', level: 7 },
+  signal: { id: 'signal', name: 'La sirena en la Mula', description: 'La sirena de los Cuervos, atornillada al techo de La Mula para llevarse a la Marea: desbloquea la misión final.', level: 8 },
 };
 
 /** Bastion experience needed for each level (index 0 is level 1). */
@@ -52,7 +52,7 @@ export function itemUnlocked(c: Pick<CampaignState, 'xp'>, id: ItemId): boolean 
 
 /**
  * Bastion experience from one mission: showing up, winning (harder is worth
- * more) and every alien the squad brought down.
+ * more) and every enemy the squad brought down.
  */
 export function missionXp(victory: boolean, difficulty: number, kills: number): number {
   return 2 + (victory ? 3 + difficulty : 0) + kills;
@@ -89,16 +89,16 @@ export function armorTier(c: Pick<CampaignState, 'xp'>, s: Pick<CampaignSoldier,
 export const WEAPON_TIER_DAMAGE = [0, 2, 4];
 
 export const ARMOR_TIERS = [
-  { name: 'Kevlar', hp: 0, armor: 0 },
+  { name: 'Ropa reforzada', hp: 0, armor: 0 },
   { name: 'Armadura de placas', hp: 2, armor: 0 },
-  { name: 'Armadura de tesela', hp: 4, armor: 1 },
+  { name: 'Equipo antidisturbios', hp: 4, armor: 1 },
 ];
 
 const TIER_NAMES: Partial<Record<WeaponId, [string, string]>> = {
-  rifle: ['Fusil de bobina', 'Fusil de plasma'],
-  shotgun: ['Escopeta de bobina', 'Escopeta de plasma'],
-  cannon: ['Cañón de bobina', 'Cañón de plasma'],
-  sniper: ['Fusil de precisión de bobina', 'Fusil de precisión de plasma'],
+  rifle: ['Fusil de taller', 'Fusil militar'],
+  shotgun: ['Escopeta de taller', 'Escopeta militar'],
+  cannon: ['Cañón de taller', 'Cañón militar'],
+  sniper: ['Fusil de precisión de taller', 'Fusil de precisión militar'],
 };
 
 export function weaponName(id: WeaponId, tier: number = 1): string {

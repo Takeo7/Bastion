@@ -18,7 +18,7 @@ export interface LobbyHandlers {
 const MISSIONS: { id: MissionKind; text: string }[] = [
   { id: 'elimination', text: 'Abatid a todos los hostiles del mapa.' },
   { id: 'recovery', text: 'Recuperad los datos y evacuad antes de que se acabe el tiempo.' },
-  { id: 'sabotage', text: 'Derribad el retransmisor antes de que termine la transmisión.' },
+  { id: 'sabotage', text: 'Callad la sirena antes de que llegue la horda.' },
   { id: 'hack', text: 'Hackead el terminal. Si falla, salta la alarma.' },
   { id: 'rescue', text: 'Llegad hasta el VIP y sacadlo con vida.' },
 ];
@@ -26,7 +26,7 @@ const MISSIONS: { id: MissionKind; text: string }[] = [
 const MAPS: { id: SkirmishMap; name: string; text: string }[] = [
   { id: 'city', name: 'Ciudad', text: 'Edificios, azoteas y calles' },
   { id: 'wilds', name: 'Afueras', text: 'Bosque, cabañas y colinas' },
-  { id: 'facility', name: 'Imprenta', text: 'Cadenas de impresión y archivos' },
+  { id: 'facility', name: 'Fábrica', text: 'Naves, maquinaria y almacenes' },
   { id: 'plaza', name: 'Distrito Comercial', text: 'El mapa hecho a mano' },
 ];
 

@@ -113,7 +113,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
   const ammo = ammoNeeded(u, ability);
   if (ammo > 0 && u.ammo < ammo) return ammo > 1 ? `Necesita ${ammo} balas en el cargador: recarga.` : 'Sin munición: recarga.';
   if (u.disoriented && def.target === 'tile' && !def.teleport) return 'Desorientado: no puede usar explosivos.';
-  if (def.psi && inSilence(s, u.pos)) return 'Silencio: aquí no se puede cantar.';
+  if (def.psi && inSilence(s, u.pos)) return 'Petardos: aquí no se puede gritar.';
   switch (ability) {
     case 'reload':
       if (u.ammo >= attackWeapon(u, 'shoot').clip) return 'El cargador está lleno.';

@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { carPartner, decorOf, DIRS4, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
+import { graphics } from '../settings';
 import { STOREY } from './coords';
+import { ExploredMemory } from './explored';
+import { FogOfWar } from './fogOfWar';
+import { GroundMap, scatterDetails } from './ground';
 import { propModel, propVariants, type PropSet } from './props';
+import { atlasTexture } from './synty';
+import type { AtlasId } from './syntyManifest';
+import { preloadSyntyProps, syntyProp, syntyPropsLoaded, syntySet } from './syntyProps';
 import { voxelSurface } from './voxel';
-
-const FOG_FACTOR = 0.5;
-/** Unseen tiles fade towards a cool slate, so in daylight they read as "unknown", not as mud. */
-const FOG_TINT = new THREE.Color(0x26303c);
-const FOG_TINT_AMOUNT = 0.3;
 
 interface Palette {
   ground: number;
@@ -78,6 +80,9 @@ const PALETTES: Record<Biome, Palette> = {
 
 const unitBox = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 
+// Synty props load in the background from the start, so the first map finds them ready.
+if (graphics().models === 'synty') preloadSyntyProps();
+
 /** Which voxel props stand on each kind of cover, per biome. */
 const PROP_SETS: Record<Biome, { low: PropSet; high: PropSet }> = {
   city: { low: 'cityLow', high: 'cityHigh' },
@@ -144,14 +149,35 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
 /** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
 const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log']);
 
+/**
+ * How far off the grid a prop may sit (second playtest: «demasiado
+ * cuadriculados»): free-standing things are nudged and turned a few degrees,
+ * trees, bushes, rocks and rubble any way at all. Rows (fences, shelves, a
+ * car's halves) and furniture against walls stay as they are, and nothing
+ * moves far enough to look like it stands on another tile.
+ */
+const WIGGLE: Partial<Record<DecorKind, 1 | 2>> = {
+  planter: 1,
+  bin: 1,
+  streetTree: 1,
+  kiosk: 1,
+  statue: 1,
+  crates: 1,
+  tank: 1,
+  pylon: 1,
+  tree: 2,
+  bush: 2,
+  rock: 2,
+  rubble: 2,
+};
+
 /** Quarter turns (counter-clockwise from above, as `placed` turns) that make a prop modelled facing north face DIRS4[f]. */
 const turnTo = (f: number) => (4 - f) % 4;
 
-/** Instanced meshes of one shape, remembering which tile each instance belongs to (for fog). */
+/** Instanced meshes of one shape. */
 class Layer {
   private matrices: THREE.Matrix4[] = [];
   private colors: THREE.Color[] = [];
-  private tiles: number[] = [];
   mesh: THREE.InstancedMesh | null = null;
 
   constructor(
@@ -160,8 +186,7 @@ class Layer {
     private readonly shadows = true,
   ) {}
 
-  add(tile: number, matrix: THREE.Matrix4, color: number | THREE.Color): void {
-    this.tiles.push(tile);
+  add(matrix: THREE.Matrix4, color: number | THREE.Color): void {
     this.matrices.push(matrix);
     this.colors.push(new THREE.Color(color));
   }
@@ -177,17 +202,6 @@ class Layer {
     });
     this.mesh = mesh;
     group.add(mesh);
-  }
-
-  fog(mask: boolean[], factor: number): void {
-    if (!this.mesh) return;
-    const c = new THREE.Color();
-    this.tiles.forEach((tile, i) => {
-      c.copy(this.colors[i]!);
-      if (!mask[tile]) c.multiplyScalar(factor).lerp(FOG_TINT, FOG_TINT_AMOUNT);
-      this.mesh!.setColorAt(i, c);
-    });
-    this.mesh.instanceColor!.needsUpdate = true;
   }
 
   dispose(): void {
@@ -216,31 +230,44 @@ const isWallLike = (k: TileKind) => k === 'wall' || k === 'door' || k === 'doorO
  * windows, ladders and cover objects, all tinted by the biome and the fog of war.
  * Voxel art (M5): surfaces are painted in voxel cells, cover is a voxel prop
  * (what the generator meant it to be on procedural maps: a parked car, a fence,
- * a shelf…; else crates, sandbags, kiosks, trees, server racks… at random) and
- * everything sits on the grid in quarter turns.
+ * a shelf…; else crates, sandbags, kiosks, trees, server racks… at random).
+ * The ground reads as continuous terrain with small details scattered over it
+ * (ground.ts); no grid lines, those only come with the overlays.
+ *
+ * Fog of war (fogOfWar.ts): tiles never seen this mission lie under a dark
+ * mist, tiles seen before keep a remembered look, and the squad's shared
+ * sight (both players' soldiers) clears it as they move.
  */
 export class MapView {
   readonly group = new THREE.Group();
+  private readonly fog = new FogOfWar();
+  private ground: GroundMap | null = null;
   private layers: Layer[] = [];
   private ladders = new THREE.Group();
   private visibility: boolean[] | null = null;
   private width = 0;
   private materials: THREE.Material[] = [];
   private geometries: THREE.BufferGeometry[] = [];
+  /** What the squad has seen this mission (shared sight: both players' soldiers). */
+  readonly explored = new ExploredMemory();
+  /** The state shown: the game applies events to it in place, so its seq is current. */
+  private shown: GameState | null = null;
+  /** The next sight update is the first of a mission: no fade. */
+  private fresh = true;
+  /** Some Synty props were still loading at the last rebuild (voxel ones stood in): rebuild when they arrive. */
+  private waitingForProps = false;
 
   build(s: GameState): void {
     this.width = s.width;
+    this.explored.begin(s);
+    this.shown = s;
+    this.visibility = null;
+    this.fresh = true;
+    this.fog.resize(s.width, s.height);
+    this.fog.set([], this.explored.tiles, true);
+    this.ground?.dispose();
+    this.ground = new GroundMap(s);
     this.rebuild(s);
-    const points: number[] = [];
-    // Grid lines only on the ground floor; rooftops get their own outline from the slabs.
-    for (let x = 0; x <= s.width; x++) points.push(x, 0.004, 0, x, 0.004, s.height);
-    for (let y = 0; y <= s.height; y++) points.push(0, 0.004, y, s.width, 0.004, y);
-    const grid = new THREE.LineSegments(
-      new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(points, 3)),
-      new THREE.LineBasicMaterial({ color: 0x7fb7d6, transparent: true, opacity: 0.07 }),
-    );
-    grid.name = 'grid';
-    this.group.add(grid);
   }
 
   /** Recreates every mesh from the state (called on build and whenever a tile changes). */
@@ -251,26 +278,30 @@ export class MapView {
     this.layers = [];
     this.materials = [];
     this.geometries = [];
-    for (const child of [...this.group.children]) if (child.name !== 'grid') this.group.remove(child);
+    this.group.clear();
     this.ladders = new THREE.Group();
+    const ground = this.ground ?? (this.ground = new GroundMap(s));
 
     const pal = PALETTES[s.biome] ?? PALETTES.city;
-    const std = (opts: THREE.MeshStandardMaterialParameters = {}, jitter?: number) => {
-      const m = voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, ...opts }), { storey: STOREY, jitter });
-      this.materials.push(m);
+    /** Every material of the map obeys the fog of war. */
+    const own = <T extends THREE.Material>(m: T): T => {
+      this.materials.push(this.fog.patch(m));
       return m;
     };
+    const std = (opts: THREE.MeshStandardMaterialParameters = {}, jitter?: number) =>
+      own(voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, ...opts }), { storey: STOREY, jitter }));
     const layer = (geometry: THREE.BufferGeometry, material: THREE.Material, shadows = true) => {
       const l = new Layer(geometry, material, shadows);
       this.layers.push(l);
       return l;
     };
-    const slabs = layer(new THREE.BoxGeometry(1, 0.1, 1), std({ roughness: 0.95 }, 0.24), false);
+    // Floors: the ground shader paints their tops as continuous terrain; the colour per tile is for their sides.
+    const groundMaterial = ground.material(voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }), { storey: STOREY, jitter: 0.1 }));
+    const slabs = layer(new THREE.BoxGeometry(1, 0.1, 1), own(groundMaterial), false);
     // Raised buildings: their facades get a row of windows per storey.
     // In the wilds a raised tile is a hill: bare earth with grass on top, no windows.
     const hills = s.biome === 'wilds';
-    const columnMaterial = voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: hills ? 0.95 : 0.8 }), { storey: STOREY, windows: !hills });
-    this.materials.push(columnMaterial);
+    const columnMaterial = own(voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: hills ? 0.95 : 0.8 }), { storey: STOREY, windows: !hills }));
     const columns = layer(unitBox, columnMaterial);
     const walls = layer(unitBox, std({ roughness: 0.8 }));
     // Plinth and cornice: the bands that make a block read as a building wall.
@@ -278,33 +309,60 @@ export class MapView {
     const lows = layer(unitBox, std({ roughness: 0.8 }));
     const doors = layer(unitBox, std({ roughness: 0.6 }));
     const frames = layer(unitBox, std({ roughness: 0.7, metalness: 0.3 }));
-    const glassMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, roughness: 0.1, metalness: 0.4, emissive: new THREE.Color(pal.glass), emissiveIntensity: 0.25 });
-    this.materials.push(glassMaterial);
+    const glassMaterial = own(new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, roughness: 0.1, metalness: 0.4, emissive: new THREE.Color(pal.glass), emissiveIntensity: 0.25 }));
     const glass = layer(unitBox, glassMaterial, false);
 
     // One instanced layer per prop variant (lit voxels + glowing voxels), created on first use.
     const propLayers = new Map<string, { lit: Layer | null; glow: Layer | null }>();
-    const addProp = (tile: number, set: PropSet, x: number, y: number, z: number, pick: number, turn: number) => {
+    // Synty props (Ajustes → Modelos): one instanced layer per mesh of each prop, on its pack's atlas.
+    const synty = graphics().models === 'synty';
+    const syntyLayers = new Map<string, Layer[]>();
+    const atlasMaterials = new Map<AtlasId, THREE.Material>();
+    const atlasMaterial = (id: AtlasId) => {
+      let m = atlasMaterials.get(id);
+      if (!m) atlasMaterials.set(id, (m = own(new THREE.MeshStandardMaterial({ map: atlasTexture(id), roughness: 0.85 }))));
+      return m;
+    };
+    /** A Synty prop for the set, or false (none in the manifest, or still loading: the voxel one stands in meanwhile). */
+    const addSynty = (set: PropSet, pick: number, matrix: THREE.Matrix4): boolean => {
+      const ids = synty ? syntySet(set) : undefined;
+      if (!ids?.length) return false;
+      const id = ids[Math.min(ids.length - 1, Math.floor(pick * ids.length))]!;
+      const prop = syntyProp(id);
+      if (!prop) {
+        this.waitingForProps = true;
+        return false;
+      }
+      let layers = syntyLayers.get(id);
+      if (!layers) syntyLayers.set(id, (layers = prop.map((part) => layer(part.geometry, atlasMaterial(part.atlas)))));
+      prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
+      return true;
+    };
+    /** `wiggle` takes a prop off the grid: 1 a nudge and a few degrees, 2 any turn at all (see WIGGLE). */
+    const addProp = (tile: number, set: PropSet, x: number, y: number, z: number, pick: number, turn: number, wiggle: 0 | 1 | 2 = 0) => {
+      const tx = tile % s.width;
+      const ty = Math.floor(tile / s.width);
+      const shift = wiggle === 2 ? 0.07 : wiggle ? 0.035 : 0;
+      const yaw = wiggle === 2 ? hash(tx, ty, 7) * Math.PI * 2 : turn * (Math.PI / 2) + (wiggle ? (hash(tx, ty, 6) - 0.5) * 0.16 : 0);
+      const matrix = placed(x + (hash(tx, ty, 4) - 0.5) * 2 * shift, y, z + (hash(tx, ty, 5) - 0.5) * 2 * shift, 1, 1, 1, yaw);
+      if (addSynty(set, pick, matrix)) return;
       const variant = Math.floor(pick * propVariants(set));
       const key = `${set}:${variant}`;
       let entry = propLayers.get(key);
       if (!entry) {
         const model = propModel(set, variant);
-        const lit = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, vertexColors: true });
-        const glow = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
-        this.materials.push(lit, glow);
+        const lit = own(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, vertexColors: true }));
+        const glow = own(new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true }));
         entry = { lit: model.lit ? layer(model.lit, lit) : null, glow: model.glow ? layer(model.glow, glow, false) : null };
         propLayers.set(key, entry);
       }
-      entry.lit?.add(tile, placed(x, y, z, 1, 1, 1, turn * (Math.PI / 2)), 0xffffff);
-      entry.glow?.add(tile, placed(x, y, z, 1, 1, 1, turn * (Math.PI / 2)), 0xffffff);
+      entry.lit?.add(matrix, 0xffffff);
+      entry.glow?.add(matrix, 0xffffff);
     };
     const props = PROP_SETS[s.biome] ?? PROP_SETS.city;
+    /** The biome's random props: in the wilds, rocks, bushes and trees can turn any way. */
+    const randomWiggle = s.biome === 'wilds' ? 2 : 1;
 
-    // Procedural maps say which tiles are streets (or dirt tracks) and rooms; older saves had streets on a 13-tile grid.
-    const generated = s.mapId.startsWith('gen-');
-    const street = (x: number, y: number) => (s.ground ? s.ground[y * s.width + x] === 1 : generated && s.width === 36 && (x % 13 >= 10 || y % 13 >= 10));
-    const indoor = (x: number, y: number) => s.ground?.[y * s.width + x] === 2;
     const at = (x: number, y: number): TileKind => (x < 0 || y < 0 || x >= s.width || y >= s.height ? 'floor' : s.tiles[y * s.width + x]!);
     const decor = s.decor ?? [];
     /** A fence or gate post still standing: the fences beside it run their rails to it. */
@@ -331,8 +389,17 @@ export class MapView {
         if (j < 0 || s.tiles[j] !== 'low') return false;
         const front = look.kind === 'carFront' ? i : j;
         pick = hash(front % s.width, Math.floor(front / s.width), 1);
+        // A Synty car is one model over both tiles: the front tile draws it, centred between the two.
+        const whole = synty ? syntySet('carFront') : undefined;
+        if (whole?.every((id) => syntyProp(id))) {
+          if (look.kind === 'carRear') return true;
+          const d = DIRS4[look.facing]!;
+          const at = placed(cx - d.x * 0.5, base, cz - d.y * 0.5, 1, 1, 1, turn * (Math.PI / 2));
+          if (addSynty('carFront', pick, at)) return true;
+        }
       }
-      addProp(i, set, cx, base, cz, pick, turn);
+      // A fallen tree is a row of logs: it keeps to the grid.
+      addProp(i, set, cx, base, cz, pick, turn, look.kind === 'tree' && kind === 'low' ? 1 : (WIGGLE[look.kind] ?? 0));
       if (look.kind === 'fence' || look.kind === 'gatePost') {
         DIRS4.forEach((d, k) => {
           if (fenceAt(x + d.x, y + d.y)) addProp(i, rails, cx, base, cz, 0, turnTo(k));
@@ -351,10 +418,10 @@ export class MapView {
         const cz = y + 0.5;
         const jitter = (hash(x, y) - 0.5) * 0.05;
 
-        // Floor slab on top, and the solid block under a rooftop.
-        const ground = new THREE.Color(e > 0 ? (hills ? pal.ground : pal.roof) : indoor(x, y) ? pal.floor : street(x, y) ? pal.street : pal.ground).offsetHSL(0, 0, jitter);
-        slabs.add(i, placed(cx, base - 0.05, cz, 1, 1, 1), ground);
-        if (e > 0) columns.add(i, placed(cx, 0, cz, 1, base - 0.1, 1), new THREE.Color(hills ? pal.street : pal.facade).offsetHSL(0, 0, hills ? jitter - 0.08 : jitter));
+        // Floor slab on top, and the solid block under a rooftop. Only the slab's sides take this colour (see ground.ts).
+        const floor = e > 0 ? (hills ? pal.ground : pal.roof) : [pal.ground, pal.street, pal.floor][ground.kinds[i]!] ?? pal.ground;
+        slabs.add(placed(cx, base - 0.05, cz, 1, 1, 1), floor);
+        if (e > 0) columns.add(placed(cx, 0, cz, 1, base - 0.1, 1), new THREE.Color(hills ? pal.street : pal.facade).offsetHSL(0, 0, hills ? jitter - 0.08 : jitter));
 
         // Doors and windows run along the wall they belong to.
         const alongX = isWallLike(at(x - 1, y)) || isWallLike(at(x + 1, y));
@@ -362,35 +429,36 @@ export class MapView {
         const v = hash(x, y, 1);
         switch (kind) {
           case 'wall':
-            walls.add(i, placed(cx, base, cz, 1, STOREY, 1), new THREE.Color(pal.wall).offsetHSL(0, 0, jitter));
-            trims.add(i, placed(cx, base, cz, 1.03, 0.3, 1.03), new THREE.Color(pal.facade).offsetHSL(0, 0, -0.08));
-            trims.add(i, placed(cx, base + STOREY - 0.14, cz, 1.05, 0.14, 1.05), new THREE.Color(pal.facade).offsetHSL(0, 0, 0.05));
+            walls.add(placed(cx, base, cz, 1, STOREY, 1), new THREE.Color(pal.wall).offsetHSL(0, 0, jitter));
+            trims.add(placed(cx, base, cz, 1.03, 0.3, 1.03), new THREE.Color(pal.facade).offsetHSL(0, 0, -0.08));
+            // The cornice stands a little proud of the wall's top (and of a rooftop beside it): flush, the two faces fought.
+            trims.add(placed(cx, base + STOREY - 0.14, cz, 1.05, 0.17, 1.05), new THREE.Color(pal.facade).offsetHSL(0, 0, 0.05));
             break;
           case 'high':
-            if (!dressed(i, x, y, kind, base)) addProp(i, props.high, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4));
+            if (!dressed(i, x, y, kind, base)) addProp(i, props.high, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4), randomWiggle);
             break;
           case 'low':
             // On a rooftop, low cover is the parapet along the edge (unless it is something else, crates on a platform).
             if (dressed(i, x, y, kind, base)) break;
-            if (e > 0 && s.biome !== 'wilds') lows.add(i, placed(cx, base, cz, 1, 0.5, 1), new THREE.Color(pal.facade).offsetHSL(0, 0, 0.06));
-            else addProp(i, props.low, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4));
+            if (e > 0 && s.biome !== 'wilds') lows.add(placed(cx, base, cz, 1, 0.5, 1), new THREE.Color(pal.facade).offsetHSL(0, 0, 0.06));
+            else addProp(i, props.low, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4), randomWiggle);
             break;
           // No lintels: seen from the tactical camera, doors and windows must read as gaps in the wall.
           case 'door':
           case 'doorOpen': {
             const h = STOREY * 0.88;
-            frames.add(i, placed(cx + (alongX ? -0.47 : 0), base, cz + (alongX ? 0 : -0.47), alongX ? 0.06 : 1, h, alongX ? 1 : 0.06), pal.frame);
-            if (kind === 'door') doors.add(i, placed(cx, base, cz, 0.9, h, 0.1, yaw), pal.door);
+            frames.add(placed(cx + (alongX ? -0.47 : 0), base, cz + (alongX ? 0 : -0.47), alongX ? 0.06 : 1, h, alongX ? 1 : 0.06), pal.frame);
+            if (kind === 'door') doors.add(placed(cx, base, cz, 0.9, h, 0.1, yaw), pal.door);
             // An open door has swung 90° on its hinge, into the room.
-            else if (alongX) doors.add(i, placed(cx - 0.42, base, cz + 0.45, 0.9, h, 0.1, Math.PI / 2), pal.door);
-            else doors.add(i, placed(cx + 0.45, base, cz - 0.42, 0.9, h, 0.1, 0), pal.door);
+            else if (alongX) doors.add(placed(cx - 0.42, base, cz + 0.45, 0.9, h, 0.1, Math.PI / 2), pal.door);
+            else doors.add(placed(cx + 0.45, base, cz - 0.42, 0.9, h, 0.1, 0), pal.door);
             break;
           }
           case 'window':
           case 'windowBroken': {
-            frames.add(i, placed(cx, base, cz, 1, 0.8, 1), pal.wall);
-            trims.add(i, placed(cx, base, cz, 1.03, 0.3, 1.03), new THREE.Color(pal.facade).offsetHSL(0, 0, -0.08));
-            if (kind === 'window') glass.add(i, placed(cx, base + 0.8, cz, 0.98, STOREY - 1.1, 0.14, yaw), pal.glass);
+            frames.add(placed(cx, base, cz, 1, 0.8, 1), pal.wall);
+            trims.add(placed(cx, base, cz, 1.03, 0.3, 1.03), new THREE.Color(pal.facade).offsetHSL(0, 0, -0.08));
+            if (kind === 'window') glass.add(placed(cx, base + 0.8, cz, 0.98, STOREY - 1.1, 0.14, yaw), pal.glass);
             break;
           }
           case 'console':
@@ -406,13 +474,19 @@ export class MapView {
     }
 
     for (const l of this.layers) l.build(this.group);
-    this.group.add(this.ladders, this.surroundings(s, pal));
-    if (this.visibility) this.setVisibility(this.visibility);
+    if (this.waitingForProps) {
+      this.waitingForProps = false;
+      void syntyPropsLoaded().then(() => {
+        if (this.shown === s) this.rebuild(s);
+      });
+    }
+    const details = own(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, vertexColors: true }));
+    this.group.add(this.ladders, this.surroundings(s, pal), scatterDetails(s, ground, details));
   }
 
-  /** Ground beyond the playable area, so the map sits in a landscape instead of floating. */
+  /** Ground beyond the playable area; the fog of war turns it into the mist a few tiles out. */
   private surroundings(s: GameState, pal: Palette): THREE.Mesh {
-    const material = voxelSurface(new THREE.MeshStandardMaterial({ color: new THREE.Color(pal.street).multiplyScalar(0.7), roughness: 0.95 }));
+    const material = this.fog.patch(voxelSurface(new THREE.MeshStandardMaterial({ color: new THREE.Color(pal.street).multiplyScalar(0.7), roughness: 0.95 })));
     this.materials.push(material);
     const margin = 160;
     const geometry = new THREE.PlaneGeometry(s.width + margin, s.height + margin).rotateX(-Math.PI / 2);
@@ -426,7 +500,7 @@ export class MapView {
   /** Rails and rungs against the face of the neighbour one storey up. */
   private addLadder(s: GameState, x: number, y: number, pal: Palette): void {
     const e = s.elev[y * s.width + x] ?? 0;
-    const material = voxelSurface(new THREE.MeshStandardMaterial({ color: pal.ladder, roughness: 0.5, metalness: 0.4 }));
+    const material = this.fog.patch(voxelSurface(new THREE.MeshStandardMaterial({ color: pal.ladder, roughness: 0.5, metalness: 0.4 })));
     this.materials.push(material);
     for (const d of DIRS4) {
       const nx = x + d.x;
@@ -451,13 +525,24 @@ export class MapView {
     }
   }
 
-  /** Darkens tiles the squad cannot currently see. */
+  /** What the squad sees now: it is remembered as explored, and the fog fades to match. */
   setVisibility(mask: boolean[]): void {
     this.visibility = mask;
-    for (const l of this.layers) l.fog(mask, FOG_FACTOR);
+    this.explored.see(mask, this.shown?.seq ?? 0);
+    this.fog.set(mask, this.explored.tiles, this.fresh);
+    this.fresh = false;
+  }
+
+  /** Advances the fog's fades and its drifting mist; called every frame. */
+  tick(dt: number): void {
+    this.fog.update(dt);
   }
 
   isVisible(x: number, y: number): boolean {
     return this.visibility?.[y * this.width + x] ?? true;
+  }
+
+  isExplored(x: number, y: number): boolean {
+    return this.explored.tiles[y * this.width + x] === 1;
   }
 }

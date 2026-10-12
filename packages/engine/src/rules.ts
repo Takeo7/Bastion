@@ -14,7 +14,20 @@ import {
   type MeleeOption,
 } from './abilities';
 import { chooseScamperTile, patrolPod, takeAlienTurn } from './ai';
-import { adjacent, inMeleeReach, previewShot, resolveShot, rollDamage, shotDamageMods } from './aim';
+import {
+  adjacent,
+  damageRange,
+  damageTaken,
+  inMeleeReach,
+  previewShot,
+  rangeOn,
+  resolveShot,
+  rollDamage,
+  shotDamage,
+  shotDamageMods,
+  type DamagePreview,
+  type ShotPreview,
+} from './aim';
 import {
   ABILITIES,
   AID_DEFENSE,
@@ -33,7 +46,7 @@ import {
 import { applyEvent, type GameEvent } from './events';
 import { canStandOn, combatants, distance, elevAt, getUnit, inBounds, sameTile, tileAt, tileIndex, unitAt } from './grid';
 import { canSee, isViewer, sightOf, sightOrigin } from './los';
-import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost } from './path';
+import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol } from './path';
 import type { Command } from './protocol';
 import type { Rng } from './rng';
 import { makeUnit } from './setup';
@@ -66,7 +79,8 @@ const SHADOW_AIM = 10;
 const SONG_TURNS = 2;
 const BOLT_DAMAGE = 3;
 const STORM_DAMAGE = 4;
-const STORM_TARGETS = 3;
+/** Tormenta de Velmar strikes this many of the enemies in sight, the weakest first. */
+export const STORM_TARGETS = 3;
 const LAY_ON_HANDS = 3;
 /** Último verso: health of whoever stands again, or healing for those around. */
 const LAST_VERSE_HP = 3;
@@ -316,12 +330,9 @@ export class Sim {
 
   // ------------------------------------------------------------- the Canto
 
-  /** «A dos voces»: a partner's singer within 2 tiles adds one more. */
+  /** «A dos voces»: one more for a song with a partner's singer near. */
   duet(u: Unit): number {
-    const partner = this.s.units.some(
-      (a) => a.alive && a.id !== u.id && a.team === u.team && a.owner !== null && u.owner !== null && a.owner !== u.owner && a.mods.singer > 0 && distance(a.pos, u.pos) <= 2,
-    );
-    return partner ? 1 : 0;
+    return duet(this.s, u);
   }
 
   /** The singer and its allies within `range` (on the battlefield, able to act). */
@@ -450,9 +461,7 @@ export class Sim {
    */
   damage(u: Unit, raw: number, shred: number, source?: Unit, pierce = 0): void {
     if (!u.alive) return;
-    // Juramento de Velmar: whoever swore it takes half.
-    const total = ((u.oath ?? 0) > 0 ? Math.ceil(raw / 2) : raw) + u.ruptured;
-    const mitigated = Math.min(Math.max(0, u.armor - pierce), total);
+    const { total, mitigated } = damageTaken(u, raw, pierce);
     this.emit({ t: 'damaged', unit: u.id, amount: total - mitigated, mitigated, shred: Math.min(shred, u.armor) });
     if (u.hp > 0) return;
     if (this.s.mission.item?.carrier === u.id) this.emit({ t: 'itemDropped', pos: { ...u.pos } });
@@ -481,8 +490,7 @@ export class Sim {
     // Controlled detonation: the grenadier's own squad is left out of the blast.
     const spared = (u: Unit) => grenade && hasPerk(source, 'safeBlast') && u.team === source.team;
     const victims = tiles.map((p) => unitAt(this.s, p)).filter((u): u is Unit => !!u && !spared(u));
-    const bonus = grenade ? source.mods.grenadeDamage : ability === 'fireball' ? source.mods.songDamage + this.duet(source) : 0;
-    const shred = weapon.shred + (grenade ? source.mods.grenadeShred : 0);
+    const { bonus, shred } = blastMods(this.s, source, ability);
     for (const v of victims) this.damage(v, rollDamage(weapon, 'hit', this.rng, bonus), shred, source);
     // The drone's discharge is pure electricity: it leaves the scenery alone.
     if (ability !== 'discharge') {
@@ -591,7 +599,7 @@ export class Sim {
       segment = [];
     };
 
-    const patrolling = u.team === 'alien' && !!u.podId && !this.s.pods.find((p) => p.id === u.podId)?.active;
+    const patrolling = onPatrol(this.s, u);
     for (let i = 0; i < path.length; i++) {
       const step = path[i]!;
       const blocker = unitAt(this.s, step);
@@ -954,6 +962,57 @@ export class Sim {
     this.maybeEndXcomTurn();
     this.autoPassCommand();
   }
+}
+
+/** «A dos voces»: a partner's singer within 2 tiles adds one more to a song. */
+export function duet(s: GameState, u: Unit): number {
+  const partner = s.units.some(
+    (a) => a.alive && a.id !== u.id && a.team === u.team && a.owner !== null && u.owner !== null && a.owner !== u.owner && a.mods.singer > 0 && distance(a.pos, u.pos) <= 2,
+  );
+  return partner ? 1 : 0;
+}
+
+/** What the thrower adds to an explosion: damage (grenade talents, a song's strength) and shred. */
+function blastMods(s: GameState, u: Unit, ability: BlastAbility): { bonus: number; shred: number } {
+  const weapon = WEAPONS[ABILITIES[ability].explosive!];
+  const grenade = ability === 'grenade' || ability === 'launch';
+  const bonus = grenade ? u.mods.grenadeDamage : ability === 'fireball' ? u.mods.songDamage + duet(s, u) : 0;
+  return { bonus, shred: weapon.shred + (grenade ? u.mods.grenadeShred : 0) };
+}
+
+/**
+ * What a damaging ability would take off `target` (or, with none, its own
+ * numbers, for the ability cards): attacks, explosives, Velmar's songs and the
+ * Grillo's Protocolo de combate. `shot` is the attack's preview against that
+ * target (flank and distance). Null for abilities that do no damage.
+ */
+export function abilityDamage(s: GameState, u: Unit, ability: AbilityId, target?: Unit, shot?: Pick<ShotPreview, 'flanked' | 'distance'>): DamagePreview | null {
+  if (isAttack(ability)) return shotDamage(u, ability, target, shot);
+  const flat = (raw: number, pierce = 0): DamagePreview => ({
+    hit: rangeOn(target, { min: raw, max: raw }, pierce),
+    crit: null,
+    graze: null,
+    armor: target ? Math.max(0, target.armor - pierce) : 0,
+    shred: 0,
+    ignoresArmor: pierce === Infinity,
+  });
+  switch (ability) {
+    case 'bolt':
+      return flat(BOLT_DAMAGE + u.mods.songDamage + duet(s, u));
+    case 'velmarStorm':
+      return flat(STORM_DAMAGE + u.mods.songDamage + duet(s, u));
+    case 'combatProtocol':
+      return flat(WEAPONS.droneZap.damage + (target && TEMPLATES[target.template].robotic ? 2 : 0) + u.mods.protocolDamage, Infinity);
+    case 'grenade':
+    case 'launch':
+    case 'missiles':
+    case 'discharge':
+    case 'fireball': {
+      const { bonus, shred } = blastMods(s, u, ability);
+      return { hit: rangeOn(target, damageRange(WEAPONS[ABILITIES[ability].explosive!], 'hit', bonus)), crit: null, graze: null, armor: target?.armor ?? 0, shred, ignoresArmor: false };
+    }
+  }
+  return null;
 }
 
 /** Tiles within `radius` of `center` (kept for UI previews of the basic grenade). */

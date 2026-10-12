@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Appearance, TemplateId } from '@bastion/engine';
+import { HEADS, partColor, type Appearance, type ArmorPart, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
 import adventVox from '../assets/voxel/advent.vox?inline';
 import mecVox from '../assets/voxel/mec.vox?inline';
 import relayVox from '../assets/voxel/relay.vox?inline';
@@ -9,7 +9,7 @@ import vipVox from '../assets/voxel/vip.vox?inline';
 import xenoidVox from '../assets/voxel/xenoid.vox?inline';
 import zombieVox from '../assets/voxel/zombie.vox?inline';
 import { Figure, flashOn, soldierPalette, type Body, type FigureRig, type Gear } from './figures';
-import { readVox, SLOT } from './vox';
+import { FATIGUES, readVox, SLOT } from './vox';
 import {
   ADVENT_BUILD,
   ADVENT_GUNS,
@@ -115,6 +115,15 @@ const plain = (c: THREE.Color): Colour => ({ r: c.r, g: c.g, b: c.b, glow: false
 /** Repaints: colour index → the colour to use instead, and whether it glows. */
 type Repaint = Map<number, { colour: THREE.Color; glow: boolean }>;
 
+/** A repaint and the key the models it paints are cached under. */
+interface Paint {
+  repaint: Repaint;
+  key: string;
+}
+
+/** The kit's own colours. */
+const KIT_COLOURS: Paint = { repaint: new Map(), key: '' };
+
 /** Gun colours by weapon tier: conventional steel, magnetic blue steel with cyan coils, plasma white with a violet chamber. */
 const GUN_TIERS = {
   1: { gun: 0x2e3438, dark: 0x1d2124, glow: [0x3a4046, false] },
@@ -122,12 +131,10 @@ const GUN_TIERS = {
   3: { gun: 0xc9ccd1, dark: 0x4a4f56, glow: [0xe2c8ff, true] },
 } as const;
 
-function soldierRepaint(accent: string, look: Appearance | undefined, gear: Gear | undefined): Repaint {
-  const primary = new THREE.Color(look ? look.primary : new THREE.Color(accent).lerp(new THREE.Color(0x56605a), 0.55));
-  const secondary = new THREE.Color(look?.secondary ?? accent);
+function soldierRepaint(primary: THREE.Color, secondary: THREE.Color, visor: THREE.Color, accent: string, weapon: Tier): Repaint {
   const white = new THREE.Color(1, 1, 1);
   const black = new THREE.Color(0, 0, 0);
-  const tier = GUN_TIERS[gear?.weapon ?? 1];
+  const tier = GUN_TIERS[weapon];
   const r: Repaint = new Map();
   const set = (index: number, colour: THREE.ColorRepresentation, glow = false) => r.set(index, { colour: new THREE.Color(colour), glow });
   set(SLOT.primary, primary);
@@ -136,7 +143,7 @@ function soldierRepaint(accent: string, look: Appearance | undefined, gear: Gear
   set(SLOT.secondary, secondary);
   set(SLOT.secondaryLight, secondary.clone().lerp(white, 0.3));
   set(SLOT.secondaryDark, secondary.clone().lerp(black, 0.4));
-  set(SLOT.visor, look?.visor ?? 0x9fe3ff, true);
+  set(SLOT.visor, visor, true);
   // The owner's mark glows, so whose soldier it is shows even under customised armour (playtest).
   set(SLOT.team, accent, true);
   set(SLOT.gun, tier.gun);
@@ -148,29 +155,78 @@ function soldierRepaint(accent: string, look: Appearance | undefined, gear: Gear
   return r;
 }
 
+/** The armour piece each bone of the soldier kit belongs to (the seat goes with the legs); the rest (spine, neck, gun, drone) go with the torso. */
+const PIECE_OF_BONE: Partial<Record<string, ArmorPart>> = {
+  head: 'helmet',
+  pivot: 'legs',
+  shoulderL: 'arms',
+  shoulderR: 'arms',
+  elbowL: 'arms',
+  elbowR: 'arms',
+  hipL: 'legs',
+  hipR: 'legs',
+  kneeL: 'legs',
+  kneeR: 'legs',
+  ankleL: 'legs',
+  ankleR: 'legs',
+};
+
+/** The hood's drape over the shoulders hangs from the spine but goes with the hood. */
+const pieceOf = (part: KitPart): ArmorPart => (part.tags.includes('hood') ? 'helmet' : (PIECE_OF_BONE[part.bone] ?? 'torso'));
+
+/**
+ * A soldier's colours piece by piece: each armour piece in its own colour
+ * (engine partColor), trim and visor shared, the owner's mark always theirs.
+ * On the head the helmet colour goes to the headgear: the shell of a helmet
+ * (the armour slots), or a beret, cap or hood (the trim and cloth slots).
+ * Legs with a colour of their own also dye the fatigues, like the hood's
+ * cloth: kevlar has no leg plates, so the colour shows from the first day.
+ * Without a look every piece wears the squad colours, as before customization.
+ */
+function soldierPaint(accent: string, look: Appearance | undefined, head: HeadId, gear: Gear | undefined): (part: KitPart) => Paint {
+  const armour = look ? new THREE.Color(look.primary) : new THREE.Color(accent).lerp(new THREE.Color(0x56605a), 0.55);
+  const trim = new THREE.Color(look?.secondary ?? accent);
+  const visor = new THREE.Color(look?.visor ?? 0x9fe3ff);
+  const weapon = gear?.weapon ?? 1;
+  const softHat = HEADS[head].paint === 'trim';
+  const paints = new Map<ArmorPart, Paint>();
+  return (part) => {
+    const piece = pieceOf(part);
+    let paint = paints.get(piece);
+    if (!paint) {
+      const own = look ? new THREE.Color(partColor({ ...look, head }, piece)) : piece === 'helmet' && softHat ? trim : armour;
+      const hat = piece === 'helmet' && softHat;
+      const primary = hat ? armour : own;
+      const secondary = hat ? own : trim;
+      const repaint = soldierRepaint(primary, secondary, visor, accent, weapon);
+      // A colour of their own, not the armour's (the engine stores that as none).
+      const trousers = piece === 'legs' && !!look?.legs && look.legs.toLowerCase() !== look.primary.toLowerCase();
+      if (trousers) {
+        repaint.set(FATIGUES.suit, { colour: own.clone().multiplyScalar(0.5), glow: false });
+        repaint.set(FATIGUES.suitDark, { colour: own.clone().multiplyScalar(0.35), glow: false });
+      }
+      const key = [piece, primary.getHexString(), secondary.getHexString(), visor.getHexString(), accent, weapon, trousers ? 'dyed' : ''].join('|');
+      paints.set(piece, (paint = { repaint, key }));
+    }
+    return paint;
+  };
+}
+
 // ----------------------------------------------------------------- meshes
 
 /** Built bone models by kit, worn parts and colours; each figure gets clones (shared geometry). */
 const built = new Map<string, THREE.Group>();
 
-function boneModel(kitName: string, parts: KitPart[], names: string, repaint: Repaint, repaintKey: string): THREE.Group {
-  const key = `${kitName}|${names}|${repaintKey}`;
+function boneModel(kitName: string, layers: { name: string; part: KitPart; paint: Paint }[]): THREE.Group {
+  const key = `${kitName}|${layers.map((l) => `${l.name}=${l.paint.key}`).join(',')}`;
   let model = built.get(key);
   if (!model) {
     const k = kit(kitName);
-    const cells = new Map<number, number>();
-    for (const p of parts) for (const [c, index] of p.cells) cells.set(c, index);
-    const min: [number, number, number] = [Infinity, Infinity, Infinity];
-    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-    for (const c of cells.keys()) {
-      const xyz = unpack(c);
-      for (let i = 0; i < 3; i++) {
-        min[i] = Math.min(min[i]!, xyz[i]!);
-        max[i] = Math.max(max[i]!, xyz[i]!);
-      }
-    }
-    const colours = new Map<number, Colour>();
-    const colourOf = (index: number): Colour => {
+    // Each part in its own paint (a soldier's pieces differ), later parts over earlier ones.
+    const byRepaint = new Map<Repaint, Map<number, Colour>>();
+    const colourOf = (repaint: Repaint, index: number): Colour => {
+      let colours = byRepaint.get(repaint);
+      if (!colours) byRepaint.set(repaint, (colours = new Map()));
       let c = colours.get(index);
       if (!c) {
         const over = repaint.get(index);
@@ -180,15 +236,18 @@ function boneModel(kitName: string, parts: KitPart[], names: string, repaint: Re
       }
       return c;
     };
-    model = voxelField(
-      min,
-      max,
-      (x, y, z) => {
-        const index = cells.get(pack(x, y, z));
-        return index ? colourOf(index) : null;
-      },
-      { size: U, jitter: 0.06 },
-    );
+    const cells = new Map<number, Colour>();
+    for (const { part, paint } of layers) for (const [c, index] of part.cells) cells.set(c, colourOf(paint.repaint, index));
+    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+    for (const c of cells.keys()) {
+      const xyz = unpack(c);
+      for (let i = 0; i < 3; i++) {
+        min[i] = Math.min(min[i]!, xyz[i]!);
+        max[i] = Math.max(max[i]!, xyz[i]!);
+      }
+    }
+    model = voxelField(min, max, (x, y, z) => cells.get(pack(x, y, z)) ?? null, { size: U, jitter: 0.06 });
     built.set(key, model);
   }
   return model.clone();
@@ -201,18 +260,18 @@ function bones(f: Figure, extra: Record<string, THREE.Object3D>): Record<string,
 
 /**
  * Dresses figure `f` (in its bind pose: no joint rotated) with the kit's
- * parts whose tags are all in `tags`. Each bone gets one model, placed so
- * that at rest it sits where the kit drew it.
+ * parts whose tags are all in `tags`, painted with `paint` (or each with its
+ * own). Each bone gets one model, placed so that at rest it sits where the
+ * kit drew it.
  */
-function dress(f: Figure, kitName: string, tags: Set<string>, repaint: Repaint, repaintKey: string, extra: Record<string, THREE.Object3D> = {}): void {
+function dress(f: Figure, kitName: string, tags: Set<string>, paint: Paint | ((part: KitPart) => Paint), extra: Record<string, THREE.Object3D> = {}): void {
   const map = bones(f, extra);
-  const byBone = new Map<string, { names: string[]; parts: KitPart[] }>();
+  const byBone = new Map<string, { name: string; part: KitPart; paint: Paint }[]>();
   for (const { name, part } of kit(kitName).parts) {
     if (!map[part.bone] || !part.tags.every((t) => tags.has(t))) continue;
-    let entry = byBone.get(part.bone);
-    if (!entry) byBone.set(part.bone, (entry = { names: [], parts: [] }));
-    entry.names.push(name);
-    entry.parts.push(part);
+    let layers = byBone.get(part.bone);
+    if (!layers) byBone.set(part.bone, (layers = []));
+    layers.push({ name, part, paint: typeof paint === 'function' ? paint(part) : paint });
   }
   // Kits draw the legs straight; reverse-jointed figures (MEC) are built already bent, so straighten them to measure.
   const b = f.body;
@@ -220,10 +279,10 @@ function dress(f: Figure, kitName: string, tags: Set<string>, repaint: Repaint, 
   f.pivot.position.y = b.hipDrop + b.thigh + b.shin + b.foot;
   f.root.updateMatrixWorld(true);
   const rest = new THREE.Vector3();
-  for (const [bone, { names, parts }] of byBone) {
+  for (const [bone, layers] of byBone) {
     const target = map[bone]!;
     target.getWorldPosition(rest);
-    const model = boneModel(kitName, parts, names.join(','), repaint, repaintKey);
+    const model = boneModel(kitName, layers);
     // x and z cells are centred on whole voxels; voxelField starts them there.
     model.position.set(-rest.x - U / 2, -rest.y, -rest.z - U / 2);
     target.add(model);
@@ -288,8 +347,7 @@ function soldier(cls: SoldierClass, accent: string, look: Appearance | undefined
     f.yaw.add(drone);
     f.drone = drone;
   }
-  const key = [accent, look?.primary, look?.secondary, look?.visor, gear?.weapon ?? 1].join('|');
-  dress(f, 'soldier', tags, soldierRepaint(accent, look, gear), key);
+  dress(f, 'soldier', tags, soldierPaint(accent, look, head, gear));
   return f.rig();
 }
 
@@ -322,7 +380,7 @@ function sectoid(): FigureRig {
   f.chest = f.standingHeight(0, 0) + v(SECTOID.spineY + 2.5);
   arm(f, SECTOID.gun, SECTOID.foot + SECTOID.shin + SECTOID.thigh + SECTOID.hipDrop + SECTOID.spineY);
   f.leftAim = new THREE.Vector3(v(3.6), v(10), v(1));
-  dress(f, 'sectoid', new Set(['pistol']), new Map(), '');
+  dress(f, 'sectoid', new Set(['pistol']), KIT_COLOURS);
   return f.rig();
 }
 
@@ -349,7 +407,7 @@ function advent(type: keyof typeof ADVENT_LOOK): FigureRig {
     [SLOT.secondaryDark, { colour: plate.clone().lerp(new THREE.Color(0, 0, 0), 0.35), glow: false }],
     [SLOT.visor, { colour: new THREE.Color(look.visor), glow: true }],
   ]);
-  dress(f, 'advent', new Set([build, type, gun]), repaint, type);
+  dress(f, 'advent', new Set([build, type, gun]), { repaint, key: type });
   return f.rig();
 }
 
@@ -385,7 +443,7 @@ function xenoid(): FigureRig {
   flashOn(f, 0.2, 0.3, v(3.5));
   f.chest = f.standingHeight(0, 0) + v(XENOID.spineY + 3.5);
   arm(f, XENOID.gun, spineOf(XENOID));
-  dress(f, 'xenoid', new Set(['emitter']), new Map(), '');
+  dress(f, 'xenoid', new Set(['emitter']), KIT_COLOURS);
   return f.rig();
 }
 
@@ -398,7 +456,7 @@ function mec(): FigureRig {
   arm(f, MEC.gun, spineOf(MEC));
   f.freeR = false;
   f.joints.shoulderR.visible = false;
-  dress(f, 'mec', new Set(['cannon']), new Map(), '');
+  dress(f, 'mec', new Set(['cannon']), KIT_COLOURS);
   return f.rig();
 }
 
@@ -410,7 +468,7 @@ function zombie(): FigureRig {
   flashOn(f, 0.22, 0.5, v(4));
   f.chest = f.standingHeight(0, 0) + v(SOLDIER.spineY + 4);
   arm(f, ZOMBIE_REACH, SPINE_Y);
-  dress(f, 'zombie', new Set(), new Map(), '');
+  dress(f, 'zombie', new Set(), KIT_COLOURS);
   return f.rig();
 }
 
@@ -429,7 +487,7 @@ function relay(): FigureRig {
   ring.position.y = v(RELAY.ring + 0.5 - RELAY.spineY);
   f.spine.add(ring);
   f.spinners.push({ obj: ring, speed: 1.4 });
-  dress(f, 'relay', new Set(), new Map(), '', { ring });
+  dress(f, 'relay', new Set(), KIT_COLOURS, { ring });
   return f.rig();
 }
 
@@ -441,7 +499,7 @@ function vip(accent: string): FigureRig {
   flashOn(f, 0.21, 0.5, v(4));
   f.chest = f.standingHeight(0, 0) + v(SOLDIER.spineY + 4);
   arm(f, VIP_HANDS, SPINE_Y);
-  dress(f, 'vip', new Set(), new Map([[SLOT.team, { colour: new THREE.Color(accent), glow: false }]]), accent);
+  dress(f, 'vip', new Set(), { repaint: new Map([[SLOT.team, { colour: new THREE.Color(accent), glow: false }]]), key: accent });
   return f.rig();
 }
 

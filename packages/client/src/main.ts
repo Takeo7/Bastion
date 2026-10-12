@@ -34,6 +34,9 @@ let players: PlayerInfo[] = [];
 let game: Game | null = null;
 let base: StrategyScreen | null = null;
 let campaign: CampaignState | null = null;
+/** The phase last shown, and whether the way back from a mission is on screen while the base is built. */
+let phaseNow: 'lobby' | 'base' | 'mission' = 'lobby';
+let returning = false;
 /** The campaign when the squad took off: the base made after the mission compares with it for its pop-ups. */
 let tookOff: CampaignState | null = null;
 /** The dropship take-off; mission traffic is held until it is over. */
@@ -82,7 +85,26 @@ function showPhase(phase: 'lobby' | 'base' | 'mission'): void {
   }
   lobby.hide();
   if (phase !== 'mission') held.length = 0;
+  phaseNow = phase;
   if (phase === 'base') {
+    // Coming back from a mission, «Volviendo al Bastión…» goes on screen first (also for the partner,
+    // who didn't click): building the base takes a moment and would otherwise freeze the battle.
+    if (game && !returning) {
+      returning = true;
+      game.returningToBase();
+      let done = false;
+      const build = () => {
+        if (done) return;
+        done = true;
+        returning = false;
+        if (phaseNow === 'base') showPhase('base');
+      };
+      requestAnimationFrame(() => window.setTimeout(build, 0));
+      // A hidden tab paints nothing: don't wait for it.
+      window.setTimeout(build, 150);
+      return;
+    }
+    if (returning) return;
     closeGame();
     if (!base && slot !== null) {
       trace('base: creando la escena');

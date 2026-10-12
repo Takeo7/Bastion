@@ -56,7 +56,7 @@ export interface ShotOptions {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** Marca del cazador: aim and crit the marker gets against its prey. */
+/** Rastreo (huntersMark): aim and crit the marker gets against its prey. */
 const HUNTERS_MARK = 15;
 
 /** Bad luck (XCOM 2's aim assist): aim per miss in a row by a player's soldiers, counting up to two. */
@@ -128,10 +128,10 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
     const by = s.units.find((u) => u.id === shooter.suppressedBy);
     mods.push({ label: 'Suprimido', value: -(SUPPRESSED_AIM + (by?.mods.suppressAim ?? 0)) });
   }
-  if (target.marked && shooter.team !== target.team) mods.push({ label: 'Holo-objetivo', value: target.marked });
+  if (target.marked && shooter.team !== target.team) mods.push({ label: 'Marcado', value: target.marked });
   const hunted = target.huntedBy === shooter.id;
-  if (hunted) mods.push({ label: 'Marca del cazador', value: HUNTERS_MARK });
-  if (shooter.blessed) mods.push({ label: 'Canto', value: shooter.blessed });
+  if (hunted) mods.push({ label: 'Rastreo', value: HUNTERS_MARK });
+  if (shooter.blessed) mods.push({ label: 'Arenga', value: shooter.blessed });
   const luck = badLuckAim(s, shooter);
   if (luck) mods.push({ label: 'Mala racha', value: luck });
   if (!weapon.melee) {
@@ -182,7 +182,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
     if (weapon.crit) critMods.push({ label: 'Arma', value: weapon.crit });
     if (close && sm.closeRangeCrit) critMods.push({ label: 'Quemarropa', value: sm.closeRangeCrit });
     if (flanked && st.flankCrit) critMods.push({ label: 'Flanqueo', value: st.flankCrit });
-    if (hunted) critMods.push({ label: 'Marca del cazador', value: HUNTERS_MARK });
+    if (hunted) critMods.push({ label: 'Rastreo', value: HUNTERS_MARK });
     if (squadsight) critMods.push({ label: 'Visión de escuadra', value: SQUADSIGHT_CRIT_MOD });
   }
   const crit = clamp(critMods.reduce((sum, m) => sum + m.value, 0), 0, 100);
@@ -213,12 +213,87 @@ export function resolveShot(p: ShotPreview, rng: Rng): { result: ShotResult; rol
 
 export function rollDamage(weapon: WeaponDef, result: ShotResult, rng: Rng, bonus = 0, mult = 1, critBonus = 0): number {
   if (result === 'miss') return 0;
-  let dmg = weapon.damage + bonus + (weapon.spread ? rng.range(-weapon.spread, weapon.spread) : 0);
-  if (weapon.plusOne && rng.int(100) < weapon.plusOne) dmg += 1;
+  const spread = weapon.spread ? rng.range(-weapon.spread, weapon.spread) : 0;
+  const plusOne = weapon.plusOne && rng.int(100) < weapon.plusOne ? 1 : 0;
+  return damageOf(weapon, result, spread + plusOne, bonus, mult, critBonus);
+}
+
+/** A roll's damage once its dice (the spread and the +1) have come up `dice`. */
+function damageOf(weapon: WeaponDef, result: Exclude<ShotResult, 'miss'>, dice: number, bonus: number, mult: number, critBonus: number): number {
+  let dmg = weapon.damage + bonus + dice;
   if (result === 'crit') dmg += weapon.critDamage + critBonus;
   if (mult !== 1) dmg = Math.ceil(dmg * mult);
   if (result === 'graze') dmg = Math.round(dmg * GRAZE_DAMAGE_MULT);
   return Math.max(1, dmg);
+}
+
+export interface DamageRange {
+  min: number;
+  max: number;
+}
+
+/** The lowest and the highest `rollDamage` can give for this result. */
+export function damageRange(weapon: WeaponDef, result: Exclude<ShotResult, 'miss'>, bonus = 0, mult = 1, critBonus = 0): DamageRange {
+  return {
+    min: damageOf(weapon, result, -weapon.spread, bonus, mult, critBonus),
+    max: damageOf(weapon, result, weapon.spread + (weapon.plusOne ? 1 : 0), bonus, mult, critBonus),
+  };
+}
+
+/**
+ * What a hit of `raw` does to `u`: Juramento de Velmar halves it, Ruptura
+ * adds to it, then armour (less what the attack pierces) soaks up to its value.
+ */
+export function damageTaken(u: Unit, raw: number, pierce = 0): { total: number; mitigated: number } {
+  const total = ((u.oath ?? 0) > 0 ? Math.ceil(raw / 2) : raw) + u.ruptured;
+  return { total, mitigated: Math.min(Math.max(0, u.armor - pierce), total) };
+}
+
+/**
+ * What an attack would take off, for the players to decide with: the health a
+ * hit, a critical and a graze remove (after the target's armour, Ruptura and
+ * Juramento; with no target, the weapon's own numbers), and the armour.
+ */
+export interface DamagePreview {
+  hit: DamageRange;
+  /** Null for what never crits or grazes (explosives, songs, the Grillo). */
+  crit: DamageRange | null;
+  graze: DamageRange | null;
+  /** Armour that soaks each hit, after what the attack pierces (0 without a target). */
+  armor: number;
+  /** Armour each hit strips. */
+  shred: number;
+  /** Goes straight through armour (Protocolo de combate). */
+  ignoresArmor: boolean;
+}
+
+/** `range` as it lands on `target` (unchanged without one). */
+export function rangeOn(target: Unit | undefined, range: DamageRange, pierce = 0): DamageRange {
+  if (!target) return range;
+  const dealt = (raw: number) => {
+    const d = damageTaken(target, raw, pierce);
+    return d.total - d.mitigated;
+  };
+  return { min: dealt(range.min), max: dealt(range.max) };
+}
+
+/**
+ * Damage of an attack (shots, blades, Cara a cara, Lluvia de luz): `shot`
+ * gives the flank and the distance it is fired from; without it, as from the
+ * front and out of point-blank range, which is what the cards show.
+ */
+export function shotDamage(shooter: Unit, ability: AttackAbility, target?: Unit, shot?: Pick<ShotPreview, 'flanked' | 'distance'>): DamagePreview {
+  const weapon = attackWeapon(shooter, ability);
+  const dm = shotDamageMods(shooter, ability, shot?.flanked ?? false, shot?.distance ?? Infinity);
+  const roll = (result: Exclude<ShotResult, 'miss'>) => rangeOn(target, damageRange(weapon, result, dm.bonus, dm.mult, dm.critBonus), dm.pierce);
+  return {
+    hit: roll('hit'),
+    crit: roll('crit'),
+    graze: roll('graze'),
+    armor: target ? Math.max(0, target.armor - dm.pierce) : 0,
+    shred: dm.shred,
+    ignoresArmor: false,
+  };
 }
 
 /** Extra damage, multiplier and shred a shot gets from the ability and the shooter's talents. */

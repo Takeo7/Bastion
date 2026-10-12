@@ -111,12 +111,20 @@ class MinHeap {
   }
 }
 
+/** An alien whose pod is still on patrol: the squad hasn't run into it yet. */
+export function onPatrol(s: GameState, u: Unit): boolean {
+  return u.team === 'alien' && !!u.podId && s.pods.some((p) => p.id === u.podId && !p.active);
+}
+
 /**
  * Dijkstra over 8 directions. Allies can be walked through (but not stopped on),
- * enemies block, and diagonals may not cut corners of blocked tiles.
+ * enemies block, and diagonals may not cut corners of blocked tiles. A pod on
+ * patrol keeps to doors and open ground (playtest: undiscovered aliens went
+ * into a building through a window): vaulting in is for aliens in the fight.
  */
 export function computeReach(s: GameState, u: Unit, maxCost: number, from: Vec2 = u.pos): Reach {
   const w = s.width;
+  const windows = !onPatrol(s, u);
   const blockedByEnemy = new Set<number>();
   for (const o of s.units) {
     if (o.alive && o.team !== u.team) blockedByEnemy.add(o.pos.y * w + o.pos.x);
@@ -138,7 +146,7 @@ export function computeReach(s: GameState, u: Unit, maxCost: number, from: Vec2 
       const step = stepCost(s, x, y, d.x, d.y);
       if (step === null) continue;
       const ni = ny * w + nx;
-      if (blockedByEnemy.has(ni)) continue;
+      if (blockedByEnemy.has(ni) || (!windows && isWindow(s.tiles[ni]!))) continue;
       if (d.x !== 0 && d.y !== 0 && (blockedByEnemy.has(y * w + nx) || blockedByEnemy.has(ny * w + x))) continue;
       const nc = c + step;
       if (nc > maxCost) continue;

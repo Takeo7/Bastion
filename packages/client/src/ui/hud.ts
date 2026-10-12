@@ -34,6 +34,8 @@ export interface AbilityView {
   cost: string;
   /** Cooldown and uses left («Disponible en 2 turnos · Usos: 1»). */
   limits?: string;
+  /** What it takes off, for what does damage («Daño 4–6 · crítico +2»). */
+  damage?: string;
   description: string;
   active?: boolean;
   count?: number;
@@ -60,6 +62,16 @@ export interface CommandView {
   canPass: boolean;
 }
 
+/** What the aimed ability takes off that target: ranges after its armour, and what armour does. */
+export interface DamageView {
+  hit: string;
+  crit?: string;
+  graze?: string;
+  notes: string[];
+  /** «Lo mata», «Puede matarlo», «Un crítico lo mata». */
+  kill?: string;
+}
+
 export type TargetView =
   | {
       kind: 'attack';
@@ -78,8 +90,9 @@ export type TargetView =
       total: number;
       /** What the ability changes besides the odds ("+50 % de daño"). */
       note?: string;
+      damage: DamageView;
     }
-  | { kind: 'support'; title: string; action: string; locked?: string; targetName: string; effect: string; index: number; total: number }
+  | { kind: 'support'; title: string; action: string; locked?: string; targetName: string; effect: string; damage?: DamageView; index: number; total: number }
   /** A self ability armed by its first press: what it costs and does, until the second press or Enter. */
   | { kind: 'self'; title: string; action: string; locked?: string; cost: string; limits?: string; effect: string; detail?: string };
 
@@ -120,9 +133,8 @@ export interface HudHandlers {
 const CONTROLS: [string, string][] = [
   ['Clic', 'Seleccionar y mover'],
   ['Tab', 'Siguiente soldado u objetivo'],
-  ['Espacio', 'Disparar'],
   ['1–9', 'Elegir habilidad (otra vez para usarla)'],
-  ['Intro', 'Confirmar la acción elegida'],
+  ['Espacio · Intro', 'Usar la habilidad elegida; sin ninguna, disparar'],
   ['C', 'Ceder el mando'],
   ['Retroceso', 'Terminar turno'],
   ['G · clic central', 'Marcar'],
@@ -142,6 +154,20 @@ function type(text: string): Node {
   if (!frag) typedCache.set(text, (frag = typed(text)));
   return frag.cloneNode(true);
 }
+
+/** The damage under the odds: «DAÑO 3–5 · crít. 5–7», what armour does, whether it kills. */
+function damageBlock(d: DamageView): HTMLElement {
+  return h(
+    'div.shot-damage',
+    {},
+    h('div.dmg-line', {}, h('span.dmg-label', {}, 'DAÑO'), h('b.dmg', {}, d.hit), d.crit ? h('span.dmg-crit', {}, `crít. ${d.crit}`) : null),
+    ...d.notes.map((n) => h('div.dmg-note', {}, n)),
+    d.kill ? h('div.dmg-kill', {}, d.kill) : null,
+  );
+}
+
+/** Room kept between a panel and the screen's edge. */
+const EDGE = 8;
 
 /** Log lines kept, and shown while folded. */
 const LOG_KEEP = 30;
@@ -373,12 +399,18 @@ export class Hud {
       { 'aria-hidden': 'true' },
       h('span.ac-head', {}, h('b', {}, a.name), a.hotkey ? h('span.ac-key', {}, a.hotkey) : null),
       h('span.ac-cost', {}, [a.cost, a.limits].filter(Boolean).join(' · ')),
+      a.damage ? h('span.ac-dmg', {}, a.damage) : null,
       h('span.ac-desc', {}, a.description),
       a.reason ? h('span.ac-why', {}, a.reason) : null,
     );
   }
 
   setTarget(view: TargetView | null): void {
+    this.fillTarget(view);
+    this.placeTarget(view?.kind === 'self');
+  }
+
+  private fillTarget(view: TargetView | null): void {
     clear(this.target);
     this.target.classList.toggle('hidden', !view);
     this.target.classList.toggle('support', view?.kind === 'support');
@@ -391,13 +423,13 @@ export class Hud {
         h('div.self-cost', {}, [view.cost, view.limits].filter(Boolean).join(' · ')),
         h('div.self-desc', {}, view.effect),
         view.detail ? h('div.effect', {}, view.detail) : null,
-        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : 'Pulsa otra vez o Intro para usar · Esc para cancelar'),
+        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : 'Otra vez, Espacio o Intro: usar · Esc: cancelar'),
         h(
           'div.shot-actions',
           {},
           view.locked
             ? h('button.fire', { disabled: true, title: 'Tiene el mando tu compañero' }, view.locked)
-            : h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Intro' }, view.action.toUpperCase()),
+            : h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio o Intro' }, view.action.toUpperCase()),
           h('button.cancel', { onclick: () => this.handlers.onCancel(), title: 'Esc' }, 'Cancelar'),
         ),
       );
@@ -415,11 +447,11 @@ export class Hud {
       {},
       view.locked
         ? h('button.fire', { disabled: true, title: 'Sin el mando solo se puede apuntar: el porcentaje sirve para planear' }, view.locked)
-        : h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio' }, view.action.toUpperCase()),
+        : h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio o Intro' }, view.action.toUpperCase()),
       h('button.cancel', { onclick: () => this.handlers.onCancel(), title: 'Esc' }, 'Cancelar'),
     );
     if (view.kind === 'support') {
-      append(this.target, h('div.shot-title', {}, type(view.title)), head, h('div.effect', {}, view.effect), actions);
+      append(this.target, h('div.shot-title', {}, type(view.title)), head, view.damage ? damageBlock(view.damage) : null, h('div.effect', {}, view.effect), actions);
       return;
     }
     const row = (m: Modifier) => h('div.mod', {}, h('span', {}, m.label), h(`span.${m.value >= 0 ? 'pos' : 'neg'}`, {}, `${m.value > 0 ? '+' : ''}${m.value}`));
@@ -433,12 +465,43 @@ export class Hud {
         h('div.big', {}, `${view.hit}%`, h('small', {}, 'IMPACTO')),
         h('div.big.crit', {}, `${view.crit}%`, h('small', {}, 'CRÍTICO')),
       ),
+      damageBlock(view.damage),
       h('div.mods', {}, ...view.mods.map(row)),
       view.critMods.length ? h('div.mods.crit', {}, ...view.critMods.map(row)) : null,
-      view.graze ? h('div.graze', {}, `Rozadura posible: ${view.graze}%`) : null,
+      view.graze ? h('div.graze', {}, `Rozadura posible: ${view.graze}%${view.damage.graze ? ` (daño ${view.damage.graze})` : ''}`) : null,
       view.note ? h('div.effect', {}, view.note) : null,
       actions,
     );
+  }
+
+  /**
+   * Where the target panel goes. Aiming, it waits on the right; a self ability
+   * armed by its first press (Vigilancia) shows its confirmation right over the
+   * card that was pressed (playtest: «se pone muy lejos del botón»), centred on
+   * it but never past the screen's edge.
+   */
+  private placeTarget(armed: boolean): void {
+    const card = armed ? this.abilities.querySelector<HTMLElement>('.ability.active') : null;
+    this.target.classList.toggle('anchored', !!card);
+    if (!card) {
+      this.target.style.left = '';
+      if (this.target.previousElementSibling !== this.abilities) this.abilities.after(this.target);
+      return;
+    }
+    if (this.target.parentElement !== this.abilities) this.abilities.append(this.target);
+    // Offsets are in the bar's own units; the screen's edges are not (the interface size zooms the bar).
+    const bar = this.abilities.getBoundingClientRect();
+    const scale = bar.width / (this.abilities.offsetWidth || 1) || 1;
+    const width = this.target.offsetWidth;
+    const left = card.offsetLeft + card.offsetWidth / 2 - width / 2;
+    const min = (EDGE - bar.left) / scale;
+    const max = (window.innerWidth - EDGE - bar.left) / scale - width;
+    this.target.style.left = `${Math.round(Math.max(min, Math.min(max, left)))}px`;
+  }
+
+  /** The menu or a modal is up: the keys are theirs. */
+  get covered(): boolean {
+    return this.menuOpen || this.modal.classList.contains('show');
   }
 
   /**
@@ -579,6 +642,7 @@ export class Hud {
   showOutcome(outcome: Outcome | null, line = '', campaign = false): void {
     // The result is stamped on the report as it appears (not again on a reconnect).
     if (outcome && !this.outcome.classList.contains('show')) uiSound('stamp', { delay: 0.25 });
+    if (!outcome) this.outcome.classList.remove('leaving');
     clear(this.outcome);
     this.outcome.classList.toggle('show', !!outcome);
     if (!outcome) return;
@@ -590,7 +654,7 @@ export class Hud {
         // In a campaign the numbers are in the hangar's debrief, one screen later: here only the result.
         line ? h('p.outcome-line', {}, line) : null,
         campaign
-          ? h('div.outcome-actions', {}, h('button.fire', { onclick: () => this.handlers.onReturnToBase() }, 'VOLVER A LA BASE'))
+          ? h('div.outcome-actions', {}, h('button.fire', { onclick: () => this.returnToBase() }, 'VOLVER A LA BASE'))
           : h(
               'div.outcome-actions',
               {},
@@ -600,6 +664,38 @@ export class Hud {
             ),
       ),
     );
+    // Drawn again on the way back (a reconnection): it still says so.
+    if (campaign && this.outcome.classList.contains('leaving')) this.returning();
+  }
+
+  /**
+   * «Volver a la base» (playtest, Ana: «tarda mucho, no sé si se espera a
+   * Arturo»): the server takes both players at once, then building the base
+   * holds the screen a moment. The report says so straight away, and the order
+   * only goes once that is on screen: sent at once, the build could freeze the
+   * screen before it is painted.
+   */
+  private returnToBase(): void {
+    if (this.outcome.classList.contains('leaving')) return;
+    this.returning();
+    // After the next paint; a hidden page paints nothing, so a timer sends it anyway.
+    let sent = false;
+    const send = () => {
+      if (sent) return;
+      sent = true;
+      this.handlers.onReturnToBase();
+    };
+    requestAnimationFrame(() => window.setTimeout(send, 0));
+    window.setTimeout(send, 150);
+  }
+
+  /** The report on its way to the Bastión: the button off and saying so, the screen dimmed. */
+  returning(): void {
+    this.outcome.classList.add('leaving');
+    const button = this.outcome.querySelector<HTMLButtonElement>('.outcome-actions button.fire');
+    if (!button) return;
+    button.disabled = true;
+    button.textContent = 'VOLVIENDO AL BASTIÓN…';
   }
 
   private confirmAbandon(): void {

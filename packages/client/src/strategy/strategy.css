@@ -2989,3 +2989,243 @@ dl.x-pairs dd {
     opacity: 0;
   }
 }
+
+/* ------------------------------------------------------------ calendar */
+
+/* What happens on which day: the date first, then what. */
+.calendar-day {
+  margin-right: 4px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--x-muted);
+}
+
+.calendar-note {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--x-muted);
+}
+
+/* The Camposanto's names. */
+.fallen-row {
+  grid-template-columns: 4px 1fr;
+  gap: 0 8px;
+}
+
+.fallen-row small {
+  grid-column: 2;
+  color: var(--x-muted);
+}
+
+/* ------------------------------------------------------- the build list */
+
+/* Cards in two columns, each with its mark: name, one line of effect, price and days, and the button. */
+.build-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.build-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 2px 8px;
+  align-content: start;
+  padding: 7px 8px;
+  border: 1.5px solid var(--x-line);
+  background: color-mix(in srgb, var(--x-text) 4%, transparent);
+}
+
+.build-card .plot-ico {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+}
+
+.build-card b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 13.5px;
+  line-height: 1.15;
+}
+
+.build-card small {
+  grid-column: 2;
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--x-muted);
+}
+
+.build-card .build-meta,
+.build-card .x-btn {
+  grid-column: 1 / -1;
+}
+
+.build-card .build-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.build-card .x-btn {
+  justify-self: stretch;
+  margin-top: 4px;
+}
+
+.build-card.bonus {
+  border-color: var(--x-good);
+}
+
+.build-card.locked {
+  opacity: 0.55;
+}
+
+.build-locked {
+  margin-top: 10px;
+}
+
+.build-locked summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.build-locked .build-grid {
+  margin-top: 6px;
+}
+
+/* ------------------------------------------------------------ recruiting */
+
+/* Recruiting on a card of its own: what it is, what it costs, and one big button. */
+.recruit-card {
+  margin: 10px 0 4px;
+  padding: 6px 10px 10px;
+  border: 1.5px dashed var(--x-line);
+}
+
+.recruit-card .x-text {
+  margin: 2px 0 6px;
+  font-size: 12.5px;
+}
+
+.recruit-card .recruit-btn {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.x-gear small {
+  color: var(--x-muted);
+}
+
+.gear-note {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+}
+
+.apt-next.capped {
+  color: var(--x-warn);
+}
+
+/* ------------------------------------- customizer: a colour per armour piece (2026-10-12) */
+
+/* The pieces as a list: each a line with its colour, its name and a note, the swatches under it. */
+.x-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.x-part-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  margin-bottom: 3px;
+}
+
+.x-part-head > small {
+  flex: none;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* The colour the piece wears now, also when it came from the picker. */
+.x-part-chip {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: var(--swatch, transparent);
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+}
+
+/* Notes give way to the name: they wrap, flush right. */
+.x-part-note {
+  min-width: 0;
+  margin-left: auto;
+  font-size: 11.5px;
+  line-height: 1.2;
+  text-align: right;
+  color: var(--x-muted);
+}
+
+/* A piece with its own colour can go back to following the armour. */
+.x-part-reset {
+  margin-left: auto;
+  padding: 0 2px;
+  font-family: var(--font);
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--pen);
+  background: none;
+  border: 0;
+  border-bottom: 1px dashed currentColor;
+  cursor: pointer;
+}
+
+/* Twelve swatches and the picker always on one line, as big as the sheet allows. */
+.x-parts .x-swatches {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.x-parts .x-swatch,
+.x-parts .x-swatch-any {
+  width: 100%;
+  max-width: 22px;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+/* A head with nothing to paint: the line stays, greyed, so the list does not jump. */
+.x-part.off {
+  opacity: 0.55;
+}
+
+.x-part.off .x-part-chip {
+  background: repeating-linear-gradient(45deg, transparent 0 2px, var(--ink-soft) 2px 3px);
+}
+
+/* The owner's mark: shown but locked, glowing as it does on the figure. */
+.x-part.locked {
+  padding-top: 6px;
+  border-top: 1px dashed var(--x-line);
+}
+
+.x-part-chip.glow {
+  border-color: transparent;
+  box-shadow: 0 0 6px 1px var(--swatch);
+}
+
+/* «Copiar a todos mis soldados» after the first click, waiting for the second. */
+.x-btn.small.armed {
+  color: var(--stamp);
+  border-color: var(--stamp);
+}

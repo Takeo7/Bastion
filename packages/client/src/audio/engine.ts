@@ -1,4 +1,5 @@
 import { storageKey } from '../net';
+import { trace } from '../report';
 
 // The game's sound: one AudioContext for everything, with a bus per kind of
 // sound so each has its own volume (Ajustes → Sonido), a compressor before the
@@ -52,6 +53,7 @@ class AudioEngine {
   volumes = load();
   muted: boolean;
   private readyFns: (() => void)[] = [];
+  private played = false;
   private volumeFns = new Set<() => void>();
 
   constructor() {
@@ -90,8 +92,10 @@ class AudioEngine {
 
   private unlock(): void {
     if (this.ctx) return;
+    trace('audio: creando el contexto');
     const ctx = new AudioContext({ latencyHint: 'interactive' });
     this.ctx = ctx;
+    trace(`audio: contexto ${ctx.state}, ${ctx.sampleRate} Hz`);
     // Compressor last: many shots and an explosion at once must not clip.
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
@@ -116,8 +120,10 @@ class AudioEngine {
     const wet = ctx.createGain();
     wet.gain.value = 0.55;
     this.reverbIn.connect(convolver).connect(wet).connect(this.master);
+    trace('audio: reverb lista');
     this.applyVolumes();
     for (const fn of this.readyFns.splice(0)) fn();
+    trace('audio: listo');
   }
 
   private applyVolumes(): void {
@@ -196,6 +202,10 @@ class AudioEngine {
       node.connect(send).connect(this.reverbIn);
     }
     src.start(ctx.currentTime + (o.delay ?? 0));
+    if (!this.played) {
+      this.played = true;
+      trace(`audio: primer sonido (${ctx.state})`);
+    }
     return src;
   }
 

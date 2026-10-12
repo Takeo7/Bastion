@@ -1,3 +1,4 @@
+import { trace } from '../report';
 import { audio, type PlayOptions } from './engine';
 import { SOUNDS } from './sounds';
 import { Synth } from './synth';
@@ -117,10 +118,16 @@ export function sound(name: string, o: PlayOptions & { spread?: number } = {}): 
 /** Renders every sound in idle moments, the most common first. */
 export function prerender(first: string[] = []): void {
   const names = [...new Set([...first, ...Object.keys(SOUNDS)])];
+  const total = names.length;
+  const start = performance.now();
+  // The host hears how the rendering goes in the partner's browser (report.ts).
+  const milestones = new Set([1, Math.ceil(total / 2), total]);
   const next = () => {
     const name = names.shift();
     if (!name) return;
     void render(name).then(() => {
+      const done = total - names.length;
+      if (milestones.has(done)) trace(`audio: ${done}/${total} sonidos en ${Math.round(performance.now() - start)} ms`);
       if (typeof requestIdleCallback === 'function') requestIdleCallback(next, { timeout: 500 });
       else setTimeout(next, 16);
     });

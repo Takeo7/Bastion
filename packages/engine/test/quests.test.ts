@@ -131,7 +131,7 @@ describe('side quests', () => {
     expect(squadMember(c, ibarra).will).toBeLessThan(squadMember(c, { ...ibarra, traits: [] }).will);
   });
 
-  it('the other Amara brings medical tesserae before their level', () => {
+  it("the doctor's assistant brings antibiotics before their level", () => {
     const c = solo();
     c.story.done = 2;
     c.regions.find((r) => r.id === 'afr')!.contacted = true;

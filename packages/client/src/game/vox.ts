@@ -33,6 +33,12 @@ export const SLOT = {
   clothDark: 13,
 } as const;
 
+/**
+ * The soldier kit's fatigues: fixed colours (indices 16+), except on legs
+ * with a colour of their own, where they are dyed like trousers (voxFigures.ts).
+ */
+export const FATIGUES = { suit: 16, suitDark: 17 } as const;
+
 /** One named model: its cells in game axes, scene position included. */
 export interface VoxPart {
   name: string;

@@ -15,13 +15,19 @@ export function post(text: string): void {
   }
 }
 
+/** The partner's browser: the host's own one (localhost) has its console at hand. */
+const REMOTE = !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+
 /**
  * Records a step; if the page then stops answering, the host hears which one
  * it was. In Safari a worker's requests go through the page's thread, so
- * there the report only gets out once the page answers again.
+ * there the watchdog's report only gets out once the page answers again; the
+ * partner's browser therefore also sends each step as it happens (a beacon
+ * leaves at once, even if the page hangs right after).
  */
 export function trace(label: string): void {
   watchdog?.postMessage(label);
+  if (REMOTE) post(`paso: ${label}`);
 }
 
 // A worker has its own thread: while the page's thread ticks it stays quiet;
@@ -70,6 +76,8 @@ export function installReport(): void {
     return; // no workers: errors are still reported
   }
   setInterval(() => watchdog?.postMessage('tick'), 500);
-  // Hidden tabs barely tick: that is not a hang.
-  document.addEventListener('visibilitychange', () => watchdog?.postMessage(document.hidden ? 'pause' : 'resume'));
+  // Hidden tabs barely tick: that is not a hang. A tab can also open hidden, with no change to hear.
+  const visibility = () => watchdog?.postMessage(document.hidden ? 'pause' : 'resume');
+  visibility();
+  document.addEventListener('visibilitychange', visibility);
 }

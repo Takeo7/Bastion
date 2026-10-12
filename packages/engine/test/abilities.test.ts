@@ -104,7 +104,7 @@ describe('attack variants', () => {
     expect(a.ruptured).toBe(3);
     expect(a.marked).toBe(15);
     const ally = addUnit(s, 's2', 'specialist', 2, 4);
-    expect(previewShot(s, ally, a)!.mods).toContainEqual({ label: 'Holo-objetivo', value: 15 });
+    expect(previewShot(s, ally, a)!.mods).toContainEqual({ label: 'Marcado', value: 15 });
     const sim = new Sim(s, new Rng(1), [0]);
     const before = a.hp;
     sim.damage(a, 1, 0);

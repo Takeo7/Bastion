@@ -1935,7 +1935,7 @@ function carveEvac(c: Canvas, r: Rect, corner: Vec2, rng: Rng): Vec2[] {
 const NAMES: Record<Biome, string[]> = {
   city: ['Distrito Portuario', 'Barrio Viejo', 'Centro Financiero', 'Polígono Norte', 'Ensanche', 'Mercado Central', 'Zona Universitaria'],
   wilds: ['Bosque de Lirio', 'Valle Hondo', 'Granjas del Sur', 'Pinar Quemado', 'Ruinas de Santa Úrsula', 'Afueras de Robledo'],
-  facility: ['Imprenta 9', 'Imprenta 14', 'Archivo Norte', 'Sala de Escaneo', 'Imprenta Profunda'],
+  facility: ['Conservera del Norte', 'Nave 14', 'Planta química', 'Almacén frigorífico', 'Fábrica de piensos'],
 };
 
 export interface GenOptions {

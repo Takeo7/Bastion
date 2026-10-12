@@ -9,14 +9,14 @@
 // ones paint over earlier ones. In MagicaVoxel only the default specialist
 // shows; the rest are there, hidden.
 
-import { SLOT } from '../../src/game/vox.ts';
+import { FATIGUES, SLOT } from '../../src/game/vox.ts';
 import { DRONE_AT, SOLDIER_BUILDS, SOLDIER_GUNS, type BuildShape, type SoldierBuild } from '../../src/game/voxBodies.ts';
 import { Kit, Part } from './sculpt.ts';
 
 const S = SLOT;
-// Fixed colours (indices 16+).
-const SUIT = 16;
-const SUIT_DK = 17;
+// Fixed colours (indices 16+); the game dyes the fatigues on legs painted their own colour.
+const SUIT = FATIGUES.suit;
+const SUIT_DK = FATIGUES.suitDark;
 const BOOT = 18;
 const SOLE = 19;
 const SKIN = 21;

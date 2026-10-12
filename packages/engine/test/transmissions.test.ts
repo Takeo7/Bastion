@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addPlayer, createCampaign, gainXp } from '../src/campaign';
-import { ENEMY_FILES, STORY } from '../src/lore';
+import { ENEMY_FILES, EXPEDIENTE, STORY } from '../src/lore';
 import { LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
 import { nextScene, RADIO_TIPS, recapLines, sceneLines, SCENES, SPEAKERS, STORY_RADIO, unlockedScenes, type SceneId } from '../src/transmissions';
@@ -75,7 +75,7 @@ describe('transmissions', () => {
 });
 
 describe('the song of Velmar', () => {
-  it('the Cámara de Ecos and the first soldier who sings unlock their scenes', () => {
+  it('the Taller de oficios and the first soldier who learns a trade unlock their scenes', () => {
     const c = createCampaign([0], new Rng(1));
     expect(ids(c)).not.toContain('velmar');
     (c.base.plots[0] as { building: string | null }).building = 'echoes';
@@ -83,7 +83,16 @@ describe('the song of Velmar', () => {
     expect(ids(c)).not.toContain('firstSong');
     (c.soldiers[0]!.talents as Record<string, number>).bolt = 1;
     expect(ids(c)).toContain('firstSong');
-    expect(RADIO_TIPS.song.rule).toMatch(/ocultación/);
+    expect(RADIO_TIPS.song.rule).toMatch(/ruido/);
+  });
+});
+
+describe('Expediente', () => {
+  it('every page has a one-line summary for the level-up pop-up', () => {
+    for (const page of EXPEDIENTE) {
+      expect(page.summary.length).toBeGreaterThan(20);
+      expect(page.summary.length).toBeLessThanOrEqual(110);
+    }
   });
 });
 

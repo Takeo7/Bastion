@@ -233,6 +233,34 @@ describe('buildings and their levels', () => {
   });
 });
 
+describe('the Camposanto', () => {
+  it('keeps the fallen with the day they fell, steadies everyone, and at level 3 the survivors learn from the losses', () => {
+    const c = solo();
+    const put = (level: number) => Object.assign(plotById(c, '2,4')!, { terrain: 'clear', building: 'memorial', level });
+    const s0 = c.soldiers[0]!;
+    const will = squadMember(c, s0).will;
+    put(1);
+    expect(squadMember(c, s0).will).toBe(will);
+    put(2);
+    expect(squadMember(c, s0).will).toBe(will + 5);
+    put(3);
+    expect(squadMember(c, s0).will).toBe(will + 10);
+    const offer = c.offers[0]!;
+    run(c, { type: 'chooseMission', id: offer.id });
+    const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(2), kind: offer.kind, squad: buildSquad(c), pods: offer.pods });
+    const [fallen, survivor] = mission.units.filter((u) => u.team === 'xcom');
+    fallen!.alive = false;
+    fallen!.hp = 0;
+    mission.outcome = 'victory';
+    const report = applyMissionResult(c, mission, new Rng(1));
+    const dead = c.soldiers.find((s) => s.id === fallen!.campaignId)!;
+    expect(dead).toMatchObject({ alive: false, fellDay: report.day });
+    expect(c.log.some((l) => l.text === `${dead.name} descansa en el Camposanto.`)).toBe(true);
+    // Showing up, winning and one more for the fallen.
+    expect(report.squad.find((e) => e.id === survivor!.campaignId)!.xpGained).toBe(1 + 1 + survivor!.kills + 1);
+  });
+});
+
 describe('the world', () => {
   it('contacting regions costs credits, grows the monthly payment and is capped by communications', () => {
     const c = solo();

@@ -89,7 +89,7 @@ describe('songs', () => {
     }
   });
 
-  it('Silencio: enemies in the zone are disoriented and the Cantores there cannot sing', () => {
+  it('Petardos: enemies in the zone are disoriented and the Chillones there cannot scream', () => {
     const s = field();
     const u = addUnit(s, 's1', 'grenadier', 2, 2);
     const sectoid = addUnit(s, 'a1', 'sectoid', 9, 2);
@@ -97,7 +97,7 @@ describe('songs', () => {
     expect(s.silences).toHaveLength(1);
     expect(sectoid.disoriented).toBeGreaterThan(0);
     sectoid.ap = 2;
-    expect(abilityBlocker(s, sectoid, 'mindspin')).toMatch(/Silencio/);
+    expect(abilityBlocker(s, sectoid, 'mindspin')).toMatch(/Petardos/);
   });
 
   it('the Cantor finds singers easier; Contracanto wards; Canto de calma steadies those around', () => {
@@ -113,7 +113,7 @@ describe('songs', () => {
     expect(psiChance(singer, s)).toBe(0);
   });
 
-  it('Himno and Marca del cazador show in the odds', () => {
+  it('Arenga and Rastreo show in the odds', () => {
     const s = field();
     const bard = addUnit(s, 's1', 'specialist', 2, 2);
     const sniper = addUnit(s, 's2', 'sharpshooter', 3, 2);
@@ -124,10 +124,10 @@ describe('songs', () => {
     expect(sniper.aided).toBe(10);
     sim(s).perform(sniper, 'huntersMark', { target: t });
     const marked = previewShot(s, sniper, t, { ability: 'shoot' })!;
-    expect(marked.mods.map((m) => m.label)).toEqual(expect.arrayContaining(['Canto', 'Marca del cazador']));
+    expect(marked.mods.map((m) => m.label)).toEqual(expect.arrayContaining(['Arenga', 'Rastreo']));
     expect(marked.hit).toBe(Math.min(100, plain.hit + 10 + 15));
     // The mark is the hunter's alone.
-    expect(previewShot(s, other, t, { ability: 'shoot' })!.mods.some((m) => m.label === 'Marca del cazador')).toBe(false);
+    expect(previewShot(s, other, t, { ability: 'shoot' })!.mods.some((m) => m.label === 'Rastreo')).toBe(false);
   });
 
   it('a support song refused says why: an ally at full health and calm is not hurt nor affected', () => {

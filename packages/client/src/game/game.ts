@@ -3,6 +3,7 @@ import {
   ABILITIES,
   abilitiesOf,
   abilityBlocker,
+  abilityDamage,
   abilityTargets,
   apForCost,
   apNeeded,
@@ -27,6 +28,7 @@ import {
   getUnit,
   hackChance,
   hasAnyCover,
+  hasPerk,
   isAttack,
   maxMoveCost,
   MEDKIT_HEAL,
@@ -38,6 +40,7 @@ import {
   sameTile,
   sightOrigin,
   songTargets,
+  STORM_TARGETS,
   STORY,
   STORY_RADIO,
   teamVisibility,
@@ -48,6 +51,8 @@ import {
   type AbilityId,
   type AttackAbility,
   type Command,
+  type DamagePreview,
+  type DamageRange,
   type EndReason,
   type GameEvent,
   type GameState,
@@ -58,6 +63,7 @@ import {
   type ShotResult,
   type SkirmishMap,
   type Slot,
+  type TemplateId,
   type Unit,
   type Vec2,
 } from '@bastion/engine';
@@ -180,9 +186,73 @@ function limitsText(u: Unit, id: AbilityId): string | undefined {
   return parts.join(' · ') || undefined;
 }
 
-/** "Impreso" → "un Impreso" (every enemy's name is masculine). */
+/** «4–6», or «4» when it can't vary. */
+function span(r: DamageRange): string {
+  return r.min === r.max ? String(r.min) : `${r.min}–${r.max}`;
+}
+
+/** A critical next to the hit: «crítico +2» when it adds the same to every roll, else its own range. */
+function critText(hit: DamageRange, crit: DamageRange): string {
+  const extra = crit.min - hit.min;
+  return extra === crit.max - hit.max ? `crítico +${extra}` : `crítico ${span(crit)}`;
+}
+
+/** How a damage figure spreads, after «Daño 4–6»: per shot, over an area, on several enemies. */
+const DAMAGE_EACH: Partial<Record<AbilityId, string>> = {
+  rapidFire: ' por disparo',
+  faceoff: ' a cada uno',
+  lightRain: ' por flecha',
+  velmarStorm: ` a hasta ${STORM_TARGETS} enemigos`,
+  grenade: ' en el área',
+  launch: ' en el área',
+  missiles: ' en el área',
+  discharge: ' en el área',
+  fireball: ' en el área',
+  combatProtocol: ' (+2 a robots)',
+};
+
+/** The hover card's damage line, from the rules' own numbers: «Daño 4–6 · crítico +2». */
+function damageText(s: GameState, u: Unit, id: AbilityId): string | undefined {
+  // Vigilancia fires the rifle at whoever moves: a reaction shot, which only crits with the talent.
+  const watch = id === 'overwatch' || id === 'killZone';
+  const d = abilityDamage(s, u, watch ? 'shoot' : id);
+  if (!d) return undefined;
+  const crit = d.crit && (!watch || hasPerk(u, 'guardCrit')) ? d.crit : null;
+  return [
+    `Daño ${span(d.hit)}${watch ? ' por disparo' : DAMAGE_EACH[id] ?? ''}`,
+    crit ? critText(d.hit, crit) : '',
+    d.shred ? `destroza ${d.shred} de blindaje` : '',
+    d.ignoresArmor ? 'ignora el blindaje' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Whether what `d` takes off kills `t`: surely, maybe, or only with a critical. */
+function lethality(d: DamagePreview, t: Unit): string | undefined {
+  if (d.hit.min >= t.hp) return 'Lo mata';
+  if (d.hit.max >= t.hp) return 'Puede matarlo';
+  if (d.crit && d.crit.max >= t.hp) return 'Un crítico lo mata';
+  return undefined;
+}
+
+/** What armour does to a hit on `t`: soaks, is pierced, is stripped. */
+function armorNotes(d: DamagePreview, t: Unit): string[] {
+  const notes: string[] = [];
+  if (d.ignoresArmor && t.armor) notes.push('Ignora su blindaje');
+  else if (d.armor) notes.push(`Blindaje ${d.armor}: −${d.armor} por impacto`);
+  if (!d.ignoresArmor && t.armor > d.armor) notes.push(`Perfora ${t.armor - d.armor} de blindaje`);
+  if (d.shred && t.armor) notes.push(`Destroza ${Math.min(d.shred, t.armor)} de blindaje`);
+  if (t.ruptured) notes.push(`Ruptura: +${t.ruptured} a cada impacto`);
+  return notes;
+}
+
+/** Enemies whose name is feminine: «una Sirena». */
+const FEMININE: Partial<Record<TemplateId, true>> = { relay: true };
+
+/** "Saqueador" → "un Saqueador", "Sirena" → "una Sirena". */
 function anEnemy(u: Unit | undefined): string {
-  return u ? `un ${TEMPLATES[u.template].name}` : 'un enemigo';
+  return u ? `${FEMININE[u.template] ? 'una' : 'un'} ${TEMPLATES[u.template].name}` : 'un enemigo';
 }
 
 function unitOf(e: GameEvent): string | undefined {
@@ -233,7 +303,7 @@ export class Game {
   /** How the squad lost its concealment, once it has: the contact that follows says who saw whom. */
   private exposure: Extract<GameEvent, { t: 'concealmentBroken' }> | null = null;
   private readonly sfx = new Sfx();
-  /** Velmar's Canto: the songs' light tiles, and what stays on the field (Silencio, Juramento). */
+  /** The Oficio: its light tiles, and what stays on the field (Petardos, ¡Aguantad!). */
   private readonly songFx = new SongFx();
   private readonly songMarks = new SongMarks();
   private overlays!: Overlays;
@@ -269,6 +339,8 @@ export class Game {
   private endArmTimer = 0;
   /** `unit|x,y` of a move that would break concealment, clicked once: the next click on it moves. */
   private concealWarn: string | null = null;
+  /** The frame-rate guard's notice has been shown. */
+  private qualityNoticed = false;
 
   private readonly raycaster = new THREE.Raycaster();
   private drag: { x: number; y: number; moved: boolean } | null = null;
@@ -308,8 +380,17 @@ export class Game {
     this.tips = new CombatTips(this.hud.root, this.mySlot);
 
     this.disposers.push(this.renderer.onFrame((dt, time) => this.frame(dt, time)));
+    this.renderer.onQualityLowered = () => this.qualityLowered();
     this.bindInput();
     this.loadSnapshot(snapshot);
+  }
+
+  /** The frame-rate guard took quality off: said once, quietly (the details are in Ajustes). */
+  private qualityLowered(): void {
+    if (this.qualityNoticed) return;
+    this.qualityNoticed = true;
+    this.hud.toast('Calidad ajustada para ir más fluido.');
+    this.hud.log('Calidad ajustada para ir más fluido (Menú → Ajustes).');
   }
 
   /** Advances camera, poses and particles; called by the render loop. */
@@ -319,6 +400,7 @@ export class Game {
     this.fx.tick(dt);
     this.songFx.tick(dt);
     this.overlays?.tick(time);
+    this.mapView.tick(dt);
     const from = this.selected ? getUnit(this.view, this.selected) : undefined;
     this.edge.update(this.renderer.camera, from?.alive ? from.pos : null);
   }
@@ -361,7 +443,7 @@ export class Game {
     const mission = this.missionView();
     const chapter = s.campaignMission?.story;
     this.hud.intro(
-      s.campaignMission?.kicker ?? (chapter ? `EXPEDIENTE CORO · HOJA ${chapter}` : s.campaignMission ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA'),
+      s.campaignMission?.kicker ?? (chapter ? `EXPEDIENTE · HOJA ${chapter}` : s.campaignMission ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA'),
       s.campaignMission?.name ?? MISSION_NAMES[s.mission.kind],
       [s.mapName, mission.objective, mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
     );
@@ -462,6 +544,14 @@ export class Game {
 
   toast(message: string): void {
     this.hud.toast(message);
+  }
+
+  /**
+   * The partner sent the squad back to the base: the report says «Volviendo al
+   * Bastión…» too. It shows only if the base is built a frame later (main.ts).
+   */
+  returningToBase(): void {
+    this.hud.returning();
   }
 
   destroy(): void {
@@ -688,10 +778,10 @@ export class Game {
         void this.fx.droneFlight(dest, this.units.dronePos(u.id)).then(() => this.units.setDroneAway(u.id, false));
         return;
       }
-      // Velmar's Canto: the effects proper are Arte's; this shows what happened.
+      // The Oficio: the effects proper are Arte's; this shows what happened.
       case 'sung': {
         const u = getUnit(v, e.unit)!;
-        this.hud.log(`${u.name} canta: ${ABILITIES[e.ability].name}`, '#1f8a5c');
+        this.hud.log(`${u.name}: ${ABILITIES[e.ability].name}`, '#1f8a5c');
         if (!this.shownToSquad(u)) return;
         look(this.units.worldPos(u.id));
         this.fx.floatText(this.units.chestPos(u.id), ABILITIES[e.ability].name.toUpperCase(), 'info');
@@ -790,11 +880,11 @@ export class Game {
         this.units.face(u.id, this.units.worldPos(target.id));
         this.sfx.psi(this.units.chestPos(u.id));
         await this.fx.psiBeam(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.35, 0)), this.units.chestPos(target.id));
-        const texts: Record<string, string> = { disoriented: 'DESORIENTADO', panicked: 'PÁNICO', controlled: 'CONTROL MENTAL' };
+        const texts: Record<string, string> = { disoriented: 'DESORIENTADO', panicked: 'PÁNICO', controlled: 'FUERA DE SÍ' };
         const text = e.effect ? texts[e.effect]! : 'RESISTE';
         this.fx.floatText(this.units.chestPos(target.id), text, e.success ? 'crit' : 'info');
-        this.hud.log(e.success ? `${target.name}: ${text.toLowerCase()} (${e.chance}%)` : `${target.name} resiste el ataque psiónico (${e.chance}%)`, e.success ? '#d29aff' : undefined);
-        if (e.effect === 'controlled') this.hud.banner('¡CONTROL MENTAL!', 'alien');
+        this.hud.log(e.success ? `${target.name}: ${text.toLowerCase()} (${e.chance}%)` : `${target.name} resiste el grito (${e.chance}%)`, e.success ? '#d29aff' : undefined);
+        if (e.effect === 'controlled') this.hud.banner('¡FUERA DE SÍ!', 'alien');
         await wait(0.7);
         return;
       }
@@ -802,7 +892,7 @@ export class Game {
         const u = getUnit(v, e.unit)!;
         this.fx.sparks(this.units.chestPos(u.id), 0xd29aff, 14);
         this.fx.floatText(this.units.chestPos(u.id), 'LIBERADO', 'heal');
-        this.hud.log(`${u.name} vuelve a ser dueño de su mente`, '#6dff9a');
+        this.hud.log(`${u.name} vuelve en sí`, '#6dff9a');
         await wait(0.5);
         return;
       }
@@ -815,8 +905,8 @@ export class Game {
         this.sfx.psi(at);
         await this.fx.psiBeam(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.35, 0)), at);
         this.fx.evacBeam(tileToWorld(corpse.pos));
-        this.fx.floatText(at, 'REANIMADO', 'crit');
-        this.hud.log(`Un sectoide levanta el cuerpo de ${corpse.name}`, '#d29aff');
+        this.fx.floatText(at, 'SE LEVANTA', 'crit');
+        this.hud.log(`El grito de un Chillón levanta el cuerpo de ${corpse.name}`, '#d29aff');
         await wait(0.6);
         return;
       }
@@ -895,6 +985,8 @@ export class Game {
           return;
         }
         if (e.kind === 'windowBroken') {
+          // Glass that breaks where no soldier sees is neither seen nor heard (playtest).
+          if (!this.mapView.isVisible(e.pos.x, e.pos.y)) return;
           this.fx.debris(tileToWorld(e.pos, 1.3), 0x9fd8ff, 10);
           this.sfx.glass(tileToWorld(e.pos, 1.3));
           return;
@@ -1304,7 +1396,7 @@ export class Game {
     const success: Record<typeof s.mission.kind, string> = {
       elimination: 'Todos los hostiles abatidos',
       recovery: `${capitalize(this.recoveryItem())} a salvo`,
-      sabotage: 'Retransmisor destruido',
+      sabotage: 'Sirena callada',
       hack: 'Terminal hackeado',
       rescue: vip ? `${vip}, a salvo` : 'VIP extraído',
     };
@@ -1404,7 +1496,7 @@ export class Game {
       case 'died': {
         const u = getUnit(v, e.unit);
         if (u?.team === 'xcom') text = `${u.name} ha caído`;
-        else if (u?.objective) text = `${who} ha derribado el retransmisor`;
+        else if (u?.objective) text = `${who} ha callado la sirena`;
         else return;
         pos = u.pos;
         break;
@@ -1449,7 +1541,7 @@ export class Game {
       case 'explosive':
         return `La explosión de ${who} se ha oído en toda la zona.`;
       case 'song':
-        return `El canto de ${who} se oye desde lejos.`;
+        return `${capitalize(who)} ha hecho ruido: se oye desde lejos.`;
       case 'alarm':
         return `${soldier ? `${who} ha fallado el hackeo` : 'El hackeo ha fallado'}: ha saltado la alarma.`;
       case 'reinforcements':
@@ -1800,11 +1892,24 @@ export class Game {
     this.cancelMode();
   }
 
-  /** Space: confirm the current target, or aim with the first usable attack. */
-  private primaryAttack(): void {
-    if (this.mode.kind === 'target') {
-      this.confirmTarget();
-      return;
+  /**
+   * Space and Enter use what is armed (playtest: Vigilancia armed, and Space
+   * aimed a shot instead): a self ability goes, an aimed one fires at its
+   * target, a throw lands where the cursor is. With nothing armed, Space aims
+   * the first usable attack.
+   */
+  private confirmOrAttack(): void {
+    switch (this.mode.kind) {
+      case 'self':
+        this.confirmSelf();
+        return;
+      case 'target':
+        this.confirmTarget();
+        return;
+      case 'tile':
+        if (this.hoverTile) this.throwAt(this.hoverTile);
+        else this.hud.toast('Señala con el ratón dónde lanzarla.');
+        return;
     }
     const views = this.abilities();
     const usable = PRIMARY_ATTACKS.map((id) => views.find((v) => v.id === id)).find((v) => v?.enabled);
@@ -1840,6 +1945,7 @@ export class Game {
         name: def.name,
         cost: costText(u, id),
         limits: limitsText(u, id),
+        damage: damageText(this.state, u, id),
         description: def.description,
         active,
         count: charge,
@@ -1945,7 +2051,7 @@ export class Game {
         break;
       }
       case 'sabotage':
-        objective = m.objectiveDone ? `Retransmisor destruido: ${after}` : 'Derribad el retransmisor';
+        objective = m.objectiveDone ? `Sirena callada: ${after}` : 'Callad la sirena';
         break;
       case 'hack':
         objective = m.objectiveDone ? `Terminal hackeado: ${after}` : 'Hackead el terminal (junto a él, o con el Grillo del especialista)';
@@ -2041,14 +2147,18 @@ export class Game {
     if (def.target === 'ally' || !isAttack(ability)) {
       const friendly = def.target === 'ally';
       this.overlays.showAim(u.pos, target.pos, friendly);
+      // Bengala and the Grillo's protocol never miss: the panel is all about their damage.
+      const dmg = friendly ? null : abilityDamage(this.state, u, ability, target);
       const effects: Partial<Record<AbilityId, string>> = {
         medkit: `Cura +${Math.min(MEDKIT_HEAL + u.mods.heal, target.maxHp - target.hp)} (salud ${target.hp}/${target.maxHp})`,
         aid: `+${20 + u.mods.aid} de defensa hasta vuestro próximo turno`,
         revival: 'Quita el aturdimiento, la desorientación y el pánico',
         suppression: '−50 de puntería al objetivo hasta tu próximo turno; si se mueve, le disparas',
-        combatProtocol: `${TEMPLATES[target.template].robotic ? 4 : 2} de daño. Nunca falla e ignora el blindaje`,
+        combatProtocol: 'Nunca falla',
+        bolt: 'Nunca falla e ignora la cobertura',
       };
-      return { kind: 'support', title: def.name, action: def.name, locked: this.lockLabel(), targetName: target.name, effect: effects[ability] ?? def.description, index, total: list.length };
+      const damage = dmg ? { hit: span(dmg.hit), notes: armorNotes(dmg, target), kill: lethality(dmg, target) } : undefined;
+      return { kind: 'support', title: def.name, action: def.name, locked: this.lockLabel(), targetName: target.name, effect: effects[ability] ?? def.description, damage, index, total: list.length };
     }
     const attack = ability as AttackAbility;
     const shot = previewShot(this.state, u, target, { ability: attack, from: option.tile });
@@ -2057,6 +2167,7 @@ export class Game {
       return null;
     }
     this.overlays.showAim(shot.origin, target.pos);
+    const dmg = abilityDamage(this.state, u, attack, target, shot)!;
     return {
       kind: 'attack',
       title: `${def.name} · ${attackWeapon(u, attack).name}`,
@@ -2067,6 +2178,13 @@ export class Game {
       graze: shot.graze,
       mods: shot.mods,
       critMods: shot.critMods,
+      damage: {
+        hit: span(dmg.hit),
+        crit: dmg.crit && shot.crit > 0 ? span(dmg.crit) : undefined,
+        graze: dmg.graze && shot.graze > 0 ? span(dmg.graze) : undefined,
+        notes: armorNotes(dmg, target),
+        kill: lethality(shot.crit > 0 ? dmg : { ...dmg, crit: null }, target),
+      },
       index,
       total: list.length,
       note: ATTACK_NOTES[attack],
@@ -2153,6 +2271,7 @@ export class Game {
    */
   private enemyTags(u: Unit | undefined, tile: Vec2 | null): Map<string, EnemyTag> {
     const tags = new Map<string, EnemyTag>();
+    if (u && tile && this.mode.kind === 'tile' && this.canAct() && this.isMine(u) && !this.isBusy(u.id)) return this.blastTags(u, this.mode.ability, tile);
     if (!u || !tile || this.mode.kind !== 'move' || !this.canAct() || !this.isMine(u) || this.isBusy(u.id)) return tags;
     if (!abilitiesOf(u).includes('shoot')) return tags;
     const occupant = unitAt(this.state, tile);
@@ -2176,6 +2295,30 @@ export class Game {
       if (!shot) continue;
       const chance = canShoot ? `${shot.hit} %` : '';
       tags.set(a.id, shot.flanked ? { kind: 'flank', text: chance ? `Flanco · ${chance}` : 'Flanco' } : { kind: 'sight', text: chance || 'A la vista' });
+    }
+    return tags;
+  }
+
+  /**
+   * Aiming a grenade or a fireball: what it would take off everyone caught,
+   * over their flags (playtest: «no sé dónde está el daño que hago»). Enemies
+   * in pen, with whether it kills them; our own in warning yellow.
+   */
+  private blastTags(u: Unit, ability: AbilityId, tile: Vec2): Map<string, EnemyTag> {
+    const tags = new Map<string, EnemyTag>();
+    const center = throwTile(u, ability, tile);
+    if (!canTargetTile(this.state, u, ability, center)) return tags;
+    // Controlled detonation leaves the grenadier's squad out of the blast.
+    const grenade = ability === 'grenade' || ability === 'launch';
+    const spared = (t: Unit) => grenade && hasPerk(u, 'safeBlast') && t.team === u.team;
+    for (const p of blastTiles(this.state, ability, center, u)) {
+      const t = unitAt(this.state, p);
+      if (!t || spared(t) || (t.team === 'alien' && !this.visibleAliens.has(t.id))) continue;
+      const d = abilityDamage(this.state, u, ability, t);
+      if (!d) return tags;
+      const text = `Daño ${span(d.hit)}`;
+      if (t.team === 'xcom') tags.set(t.id, { kind: 'flank', text: `¡Aliado! ${text}` });
+      else tags.set(t.id, { kind: 'aim', text: [text, lethality(d, t)].filter(Boolean).join(' · ') });
     }
     return tags;
   }
@@ -2271,15 +2414,13 @@ export class Game {
           break;
         case 'Enter':
         case 'NumpadEnter':
-          if (this.mode.kind === 'target' || this.mode.kind === 'self') {
-            e.preventDefault();
-            this.confirmTarget();
-          }
-          break;
         case 'Space':
+          // The menu and the modals keep their own buttons.
+          if (this.hud.covered) break;
+          // A card or button still focused from a click mustn't take the key too: it would go twice.
           e.preventDefault();
           (document.activeElement as HTMLElement | null)?.blur?.();
-          this.primaryAttack();
+          this.confirmOrAttack();
           break;
         case 'Escape':
           // Esc backs out of aiming or of a pending confirmation first; otherwise it opens the menu.
@@ -2344,6 +2485,23 @@ export class Game {
     return null;
   }
 
+  /** Throws (or casts) the area ability armed at `tile`, or as far toward it as it reaches. */
+  private throwAt(tile: Vec2): void {
+    const u = this.selectedUnit();
+    if (!u || this.mode.kind !== 'tile' || !this.canAct()) return;
+    if (!this.hasCommand()) {
+      this.hud.toast(this.commandLock());
+      return;
+    }
+    const center = throwTile(u, this.mode.ability, tile);
+    if (canTargetTile(this.state, u, this.mode.ability, center)) {
+      this.send({ type: 'ability', unit: u.id, ability: this.mode.ability, tile: center });
+      this.cancelMode();
+    } else {
+      this.hud.toast('La escuadra no ve esa zona.');
+    }
+  }
+
   private clickTile(tile: Vec2): void {
     const occupant = unitAt(this.state, tile);
     const u = this.selectedUnit();
@@ -2367,17 +2525,7 @@ export class Game {
     const planning = !this.hasCommand();
 
     if (this.mode.kind === 'tile') {
-      if (planning) {
-        this.hud.toast(this.commandLock());
-        return;
-      }
-      const center = throwTile(u, this.mode.ability, tile);
-      if (canTargetTile(this.state, u, this.mode.ability, center)) {
-        this.send({ type: 'ability', unit: u.id, ability: this.mode.ability, tile: center });
-        this.cancelMode();
-      } else {
-        this.hud.toast('La escuadra no ve esa zona.');
-      }
+      this.throwAt(tile);
       return;
     }
     if (occupant?.team === 'alien' && this.visibleAliens.has(occupant.id)) {

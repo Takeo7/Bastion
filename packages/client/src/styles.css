@@ -1076,6 +1076,12 @@ em.hunt {
   color: var(--c-ap);
 }
 
+/* What it takes off, in the stamp's red: what an attack is chosen for. */
+.ac-dmg {
+  font-weight: 700;
+  color: var(--stamp);
+}
+
 .ac-why {
   font-weight: 700;
   color: var(--stamp);
@@ -1329,6 +1335,49 @@ em.hunt {
   color: var(--ink-soft);
 }
 
+/* The damage, under the odds (playtest: «no sé dónde está el daño que hago»):
+   the range in pen, the critical's beside it, then what armour does. */
+.shot-damage {
+  display: grid;
+  gap: 1px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.dmg-line {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.dmg-label {
+  letter-spacing: 0.16em;
+  color: var(--ink-soft);
+}
+
+.shot-damage .dmg {
+  font-family: var(--font-hand);
+  font-size: 24px;
+  line-height: 1;
+  color: var(--stamp);
+}
+
+.dmg-crit {
+  font-weight: 700;
+  color: var(--ink-blue);
+}
+
+.dmg-note {
+  color: var(--ink-soft);
+}
+
+.dmg-kill {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--stamp);
+}
+
 .shot-panel .effect {
   padding: 2px 0;
   text-align: center;
@@ -1356,6 +1405,27 @@ em.hunt {
   font-size: 12px;
   color: var(--ink-soft);
   border-top: 1px solid rgba(42, 35, 24, 0.25);
+}
+
+/* ...and it sits right over the card that was pressed (playtest: «se pone muy
+   lejos del botón»), not across the screen: hud.ts sets its left. The bar is
+   already zoomed to the interface size, so the panel isn't zoomed again. */
+.abilities > .shot-panel.anchored {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 14px);
+  transform: rotate(-0.6deg);
+  zoom: 1;
+}
+
+/* The armed card's own hover slip would only repeat the panel. */
+.abilities:has(> .shot-panel.anchored) .ability.active .ability-card {
+  display: none;
+}
+
+/* Another card's hover slip still reads over the panel. */
+.abilities:has(> .shot-panel.anchored) .ability:hover {
+  z-index: 3;
 }
 
 .shot-actions {
@@ -1678,6 +1748,27 @@ dl.controls dd {
 .outcome.show,
 .modal.show {
   display: grid;
+}
+
+/* On the way back to the base: building it holds the screen a moment, so the
+   report dims and its button says so, pulsing (an opacity animation, which
+   the browser keeps running while the base is built). */
+.outcome.leaving {
+  background: rgba(10, 8, 5, 0.8);
+  cursor: progress;
+}
+
+.outcome.leaving .outcome-actions button.fire {
+  animation: leaving 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes leaving {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.55;
+  }
 }
 
 .outcome-card,
@@ -2162,6 +2253,13 @@ body:has(.strat) .fps-counter {
   color: var(--ink);
   border-color: var(--pen);
   transform: rotate(-2deg);
+}
+
+/* What the frame-rate guard has lowered, under its row. */
+.setting-note {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
 /* Interface size (Ajustes → Interfaz, --ui-scale from settings.ts): each panel

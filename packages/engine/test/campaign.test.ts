@@ -12,6 +12,7 @@ import {
   pointsToSpend,
   soldierCap,
   squadPads,
+  veteranEnemies,
   DOOM_MAX,
   executeCampaignCommand,
   squadMember,
@@ -213,6 +214,19 @@ describe('missions', () => {
     expect(pointsToSpend(s)).toEqual({ attrs: 10, talents: 6 });
   });
 
+  it('the Coro sends a little more with every few missions flown', () => {
+    const { c, offer } = ready();
+    expect(veteranEnemies(c)).toBe(0);
+    const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
+    mission.outcome = 'victory';
+    applyMissionResult(c, mission, new Rng(4));
+    expect(c.missionsFlown).toBe(1);
+    c.missionsFlown = 4;
+    expect(veteranEnemies(c)).toBe(1);
+    c.missionsFlown = 40;
+    expect(veteranEnemies(c)).toBe(2);
+  });
+
   it('aptitudes, talents, ranks and weapon and armour tiers reach the battlefield', () => {
     const c = createCampaign([0], new Rng(5));
     const sniper = c.soldiers[0]!;
@@ -370,7 +384,7 @@ describe('helping the players', () => {
     // The bunker is full: first a barracón for the recruits to sleep in.
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'facilities', label: 'Solo 1 soldado listo y sin camas: construye un barracón' });
     c.base.plots.find((p) => p.id === '2,4')!.building = 'quarters';
-    expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'barracks', label: 'Solo 1 soldado listo: recluta (30 ₡)' });
+    expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'barracks', label: 'Solo 1 soldado listo: recluta (30 §)' });
     // An operation about to expire still comes first.
     c.offers.find((o) => o.expiresDay !== null)!.expiresDay = c.day + 1;
     expect(nextSteps(c, 0)[0]).toMatchObject({ tone: 'urgent' });

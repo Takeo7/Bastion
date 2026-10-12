@@ -15,12 +15,16 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
  * normal pre-pass, so they neither cast nor receive occlusion.
  */
 export class SolidGTAO extends GTAOPass {
+  /** At a third of the size instead of half (lightenPost). */
+  light?: boolean;
+
   /**
    * Occlusion is soft by nature: at half resolution it costs a quarter and
    * looks the same once denoised and blended over the full-size image.
    */
   override setSize(width: number, height: number): void {
-    super.setSize(Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(height / 2)));
+    const k = this.light ? 3 : 2;
+    super.setSize(Math.max(1, Math.round(width / k)), Math.max(1, Math.round(height / k)));
   }
 
   override render(...args: Parameters<GTAOPass['render']>): void {
@@ -43,8 +47,12 @@ export class SolidGTAO extends GTAOPass {
  * high-density screen, saves a couple of milliseconds a frame.
  */
 class SoftBloomPass extends UnrealBloomPass {
+  /** At a quarter of the size instead of half (lightenPost). */
+  light?: boolean;
+
   override setSize(width: number, height: number): void {
-    super.setSize(Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(height / 2)));
+    const k = this.light ? 4 : 2;
+    super.setSize(Math.max(1, Math.round(width / k)), Math.max(1, Math.round(height / k)));
   }
 }
 
@@ -75,6 +83,25 @@ export interface VoxelPost {
   /** Scene pass: point it at another scene to render a different set. */
   scene: RenderPass;
   ao: SolidGTAO;
+  bloom: UnrealBloomPass;
+}
+
+/** The occlusion's samples, as it comes and lightened. */
+const AO_SAMPLES = 8;
+const AO_SAMPLES_LIGHT = 4;
+
+/**
+ * Lighter post-processing for a machine that can't keep up (the frame-rate
+ * guard, settings.ts): the occlusion at a third of the size with half the
+ * samples, the bloom at a quarter. Resize the composer after, so the passes
+ * take their new size.
+ */
+export function lightenPost(post: VoxelPost, ao: boolean, bloom: boolean): void {
+  post.ao.light = ao;
+  const samples = ao ? AO_SAMPLES_LIGHT : AO_SAMPLES;
+  post.ao.updateGtaoMaterial({ samples });
+  post.ao.updatePdMaterial({ samples });
+  (post.bloom as SoftBloomPass).light = bloom;
 }
 
 /**
@@ -98,12 +125,13 @@ export function voxelPost(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: T
   const pass = new RenderPass(scene, camera);
   composer.addPass(pass);
   const ao = new SolidGTAO(scene, camera, 4, 4);
-  ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 2, scale: 1, samples: 8 });
+  ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 2, scale: 1, samples: AO_SAMPLES });
   // Half the denoise taps: the occlusion is already soft at half resolution.
-  ao.updatePdMaterial({ samples: 8 });
+  ao.updatePdMaterial({ samples: AO_SAMPLES });
   ao.blendIntensity = 1;
   composer.addPass(ao);
-  composer.addPass(new SoftBloomPass(new THREE.Vector2(256, 256), 0.45, 0.4, 0.9));
+  const bloom = new SoftBloomPass(new THREE.Vector2(256, 256), 0.45, 0.4, 0.9);
+  composer.addPass(bloom);
   composer.addPass(new GradedOutputPass());
-  return { composer, scene: pass, ao };
+  return { composer, scene: pass, ao, bloom };
 }

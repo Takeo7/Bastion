@@ -165,6 +165,42 @@ function wheelbarrow(g: THREE.Group, x: number, z: number): void {
  * Props that make each facility recognisable at a glance. Levels 2 and 3 add
  * to them (more bunks and targets, a hoist, a second antenna, a mixer).
  */
+/**
+ * The Camposanto: no building, a fenced patch of snow with rows of pine
+ * crosses; a bench and a lamp at level 2, and Teo's brass plaques at level 3.
+ */
+function memorialProps(level: number): THREE.Group {
+  const g = new THREE.Group();
+  const pine = mat(0x8a6a44);
+  const dark = mat(0x5a4630);
+  const half = PLOT / 2 - 0.3;
+  // A low picket fence, open at the front.
+  for (let t = -half; t <= half + 0.01; t += 0.5) {
+    g.add(box(0.1, 0.55, 0.1, dark, t, 0, -half), box(0.1, 0.55, 0.1, dark, -half, 0, t), box(0.1, 0.55, 0.1, dark, half, 0, t));
+  }
+  for (const y of [0.18, 0.42]) g.add(box(PLOT - 0.6, 0.06, 0.06, dark, 0, y, -half), box(0.06, 0.06, PLOT - 0.6, dark, -half, y, 0), box(0.06, 0.06, PLOT - 0.6, dark, half, y, 0));
+  // Rows of crosses on little mounds of snow.
+  const rows = level >= 3 ? 4 : level >= 2 ? 3 : 2;
+  for (let r = 0; r < rows; r++) {
+    for (let i = 0; i < 5; i++) {
+      const x = -1.8 + i * 0.9;
+      const z = -1.6 + r * 0.95;
+      g.add(box(0.5, 0.12, 0.7, mat(0xe8eef2), x, 0, z + 0.15));
+      g.add(box(0.1, 0.75, 0.1, pine, x, 0.05, z), box(0.42, 0.09, 0.1, pine, x, 0.52, z));
+    }
+  }
+  if (level >= 2) {
+    g.add(box(1.2, 0.08, 0.35, dark, 1.6, 0.35, 2.0), box(0.08, 0.35, 0.3, dark, 1.1, 0, 2.0), box(0.08, 0.35, 0.3, dark, 2.1, 0, 2.0));
+    g.add(box(0.08, 1.6, 0.08, mat(STEEL, { metal: 0.6 }), -2.1, 0, 2.0), box(0.2, 0.2, 0.2, mat(0x2a1a00, { emissive: 0xffc93a, intensity: 1.6 }), -2.1, 1.6, 2.0));
+  }
+  if (level >= 3) {
+    // The brass plaques along the back fence.
+    g.add(box(4.2, 0.9, 0.12, mat(0x6a6460), 0, 0, -half + 0.2));
+    for (let i = 0; i < 6; i++) g.add(box(0.5, 0.3, 0.04, mat(0xb88a3a, { metal: 0.8, rough: 0.35 }), -1.6 + i * 0.64, 0.35, -half + 0.28));
+  }
+  return g;
+}
+
 function facilityProps(id: FacilityId, level = 1): THREE.Group {
   if ((id as string) === 'echoes') return echoesProps(level);
   const g = new THREE.Group();
@@ -799,10 +835,10 @@ export class BastionSet implements StageSet {
 
   // ------------------------------------------------------------- shots
 
-  /** The whole compound from above at an angle, the hangar at the bottom. */
+  /** The whole compound from above at an angle, the hangar at the bottom; the wheel zooms in. */
   overview(): Shot {
     const target = new THREE.Vector3(0, 0, 9);
-    return { pos: target.clone().add(new THREE.Vector3(0, 58, 44)), target, fov: 40 };
+    return { pos: target.clone().add(new THREE.Vector3(0, 58, 44)), target, fov: 40, zoom: { min: 0.4, reach: COMPOUND / 2 } };
   }
 
   /** Close-up of a building (or a plot), from above its door. */
@@ -819,10 +855,15 @@ export class BastionSet implements StageSet {
     return { pos: HANGAR.clone().add(new THREE.Vector3(0, 2.75, PAD_Z + back)), target, fov: 42 };
   }
 
-  /** The grid of plots, closer than the overview. */
+  /**
+   * The grid of plots, closer than the overview: the whole compound (to its
+   * barriers) framed between the panels, and the wheel zooms in on a corner.
+   */
   facilities(): Shot {
     const target = new THREE.Vector3(0, 0, 0);
-    return { pos: new THREE.Vector3(0, 46, 34), target, fov: 40 };
+    const edge = COMPOUND / 2 + 1.5;
+    const fit = new THREE.Box3(new THREE.Vector3(-edge, 0, -edge), new THREE.Vector3(edge, WALL_H, edge));
+    return { pos: new THREE.Vector3(0, 46, 34), target, fov: 40, fit, zoom: { min: 0.35, reach: COMPOUND / 2 } };
   }
 
   /** Low and wide on the hangar, looking up at the roof La Mula leaves through. */
@@ -864,8 +905,9 @@ export class BastionSet implements StageSet {
       const peak = new THREE.Group();
       const body = new THREE.Mesh(new THREE.ConeGeometry(h * 0.9, h, 6), mat(0x6e747c, { rough: 1 }));
       body.position.y = h / 2;
-      const cap = new THREE.Mesh(new THREE.ConeGeometry(h * 0.36, h * 0.4, 6), mat(SNOW, { rough: 1 }));
-      cap.position.y = h * 0.8;
+      // The snow sits a little proud of the rock: a cap with the peak's own slope lay in its faces and fought them.
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(h * 0.375, h * 0.4, 6), mat(SNOW, { rough: 1 }));
+      cap.position.y = h * 0.8 + h * 0.012;
       peak.add(body, cap);
       peak.position.set(-110 + i * 36 + rand(i, 1, 1) * 10, -0.5, -110 - rand(i, 2, 2) * 25);
       this.scene.add(peak);
@@ -1105,6 +1147,8 @@ export class BastionSet implements StageSet {
         const level = plot.level ?? 1;
         g.add(
           voxelProps(`facility:${facility}:${level}`, () => {
+            // The Camposanto is open ground, not a room.
+            if (facility === 'memorial') return memorialProps(level);
             // The Cámara de Ecos is a galvanised shed with the Coro's green on its walls; the rest, the usual rooms.
             const echoes = (facility as string) === 'echoes';
             const r = room(() => (echoes ? roomShell(0x7d848c, CORO_GREEN) : roomShell(0x6a7480, 0xd8dee4)), () => facilityProps(facility, level));

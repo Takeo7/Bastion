@@ -125,7 +125,7 @@ export class UnitViews {
 
   private create(u: Unit): UnitView {
     const color = unitColor(u);
-    const rig = buildUnit(u.template, color, u.appearance, gearOf(u.weaponTier, u.armorTier));
+    const rig = buildUnit(u.template, color, u.appearance, gearOf(u.weaponTier, u.armorTier), u.name);
     const ring = new THREE.Mesh(
       ringGeometry,
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -136,7 +136,8 @@ export class UnitViews {
     flagEl.className = `uflag ${u.team === 'alien' ? 'alien' : 'xcom'}`;
     flagEl.style.setProperty('--accent', color);
     const flag = new CSS2DObject(flagEl);
-    flag.position.set(0, 2.15, 0);
+    // Over the head: models that know their height say it, the voxel figures are all about as tall.
+    flag.position.set(0, rig.top !== undefined ? rig.top + 0.45 : 2.15, 0);
     flag.center.set(0.5, 1);
 
     rig.root.add(ring, flag);

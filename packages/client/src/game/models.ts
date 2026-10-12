@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { Appearance, TemplateId, Tier } from '@bastion/engine';
+import { graphics } from '../settings';
 import { buildFigure, FIGURE_TEMPLATES, type FigurePose, type FigureRig, type Gear } from './figures';
+import { preloadSynty, syntyFigure } from './syntyFigures';
 import { voxelizeUnit } from './voxel';
 import { voxFigure } from './voxFigures';
 
@@ -29,6 +31,8 @@ export interface UnitRig {
   hip: number;
   /** Height of the chest, for aiming and damage numbers. */
   chest: number;
+  /** Top of the head, where the flag floats (when the model knows it). */
+  top?: number;
 }
 
 const geo = {
@@ -285,12 +289,24 @@ export function buildModel(template: TemplateId, accent: string): UnitRig {
 /** Templates with an articulated figure (figures.ts); the rest keep the placeholder model. */
 const FIGURES = new Set<string>(FIGURE_TEMPLATES);
 
+// Synty models load in the background from the start, so the first battle finds them ready.
+if (graphics().models === 'synty') preloadSynty();
+
 /**
- * The model a unit is shown with, in voxels (M5 art): hand-made when the kits
- * can dress it (voxFigures.ts), otherwise an articulated figure (or the old
- * placeholder) converted to voxels.
+ * The model a unit is shown with: a Synty character (syntyFigures.ts), or
+ * with the voxel figures chosen in Ajustes, in voxels (M5 art): hand-made
+ * when the kits can dress it (voxFigures.ts), otherwise an articulated
+ * figure (or the old placeholder) converted to voxels. `seed` keeps the same
+ * Synty survivor for the same soldier (the soldier's name).
  */
-export function buildUnit(template: TemplateId, accent: string, appearance?: Appearance, gear?: Gear): UnitRig | FigureRig {
+export function buildUnit(template: TemplateId, accent: string, appearance?: Appearance, gear?: Gear, seed?: string): UnitRig | FigureRig {
+  if (graphics().models === 'synty') {
+    const synty = syntyFigure(template, accent, appearance, gear, seed);
+    if (synty) {
+      synty.applyPose(IDLE_POSE, 0);
+      return synty;
+    }
+  }
   const hand = voxFigure(template, accent, appearance, gear);
   if (hand) {
     hand.applyPose(IDLE_POSE, 0);

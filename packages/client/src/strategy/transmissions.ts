@@ -117,7 +117,7 @@ export class RadioPanel {
   constructor(variant?: 'combat') {
     if (variant) this.el.classList.add(variant);
     this.el.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('.radio-close')) return;
+      if ((e.target as HTMLElement).closest('.radio-close, .radio-next')) return;
       this.advance();
     });
     if (!variant) window.addEventListener('keydown', this.onKey);
@@ -196,7 +196,8 @@ export class RadioPanel {
           'div.radio-foot',
           {},
           h('small', {}, many ? `${scene.title} · ${this.index + 1}/${this.lines.length}` : scene.title),
-          h('span.radio-next', {}, this.index + 1 < this.lines.length ? 'Seguir ▸' : many ? 'Fin ▸' : 'Entendido ▸'),
+          // The button always moves on, even while the line is still being typed; a click elsewhere on the card finishes the line first.
+          h('button.radio-next', { onclick: () => this.next() }, this.index + 1 < this.lines.length ? 'Seguir ▸' : many ? 'Fin ▸' : 'Entendido ▸'),
         ),
       ),
     );

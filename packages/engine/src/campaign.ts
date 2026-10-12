@@ -14,7 +14,7 @@
 //
 // The campaign is small and changes rarely, so the server broadcasts it whole after
 // every command instead of streaming events like the tactical layer.
-import { defaultAppearance, displayName, isAppearance, NAME_MAX, NICKNAME_MAX } from './appearance';
+import { defaultAppearance, displayName, isAppearance, NAME_MAX, NICKNAME_MAX, normalizeAppearance } from './appearance';
 import {
   ATTR_POINTS_PER_RANK,
   attrBlocker,
@@ -73,7 +73,8 @@ export type FacilityId =
   | 'garage'
   | 'listening'
   | 'crew'
-  | 'echoes';
+  | 'echoes'
+  | 'memorial';
 
 export interface FacilityDef {
   id: FacilityId;
@@ -109,7 +110,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
     id: 'infirmary',
     name: 'Enfermería',
     description: 'Las heridas se curan el doble de rápido.',
-    upgrades: ['Las heridas curan el triple de rápido. Agua caliente en la sala de curas.', 'Las heridas curan el cuádruple de rápido. Tejido impreso, sin el Coro dentro.'],
+    upgrades: ['Las heridas curan el triple de rápido. Agua caliente en la sala de curas.', 'Las heridas curan el cuádruple de rápido. Un quirófano de verdad, con lámpara y generador propio.'],
     cost: 60,
     days: 4,
     level: 1,
@@ -139,7 +140,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
     id: 'range',
     name: 'Campo de tiro',
     description: '+3 de puntería para todos los soldados (+2 junto al centro de entrenamiento). Dianas de cartón en una trinchera del pinar.',
-    upgrades: ['+6 de puntería (+2 junto al entrenamiento). Siluetas de Impreso a cincuenta metros.', '+10 de puntería (+2 junto al entrenamiento). Blancos móviles, con una polea de Teo.'],
+    upgrades: ['+6 de puntería (+2 junto al entrenamiento). Siluetas de zombi a cincuenta metros.', '+10 de puntería (+2 junto al entrenamiento). Blancos móviles, con una polea de Teo.'],
     cost: 90,
     days: 4,
     level: 2,
@@ -148,7 +149,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   crew: {
     id: 'crew',
     name: 'Brigada de obras',
-    description: 'Obras y desbroces un 25 % más rápidos. Carretillas, poleas y manos del Sindicato.',
+    description: 'Obras y desbroces un 25 % más rápidos. Carretillas, poleas y manos de sobra.',
     upgrades: ['Obras y desbroces un 40 % más rápidos.', 'Obras y desbroces un 50 % más rápidos.'],
     cost: 70,
     days: 3,
@@ -187,19 +188,33 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   },
   echoes: {
     id: 'echoes',
-    name: 'Cámara de Ecos',
-    description: 'Abre la rama de Canto de cada clase: sus dos primeras filas. Las cintas de Velmar, en una sala sin un solo chip.',
-    upgrades: ['Abre las filas tercera y cuarta. Más cintas, más voces.', 'Abre el conjuro mayor de cada rama. Nwosu ha encontrado la cinta de un maestro.'],
+    name: 'Taller de oficios',
+    description: 'Abre la rama de Oficio de cada clase: sus dos primeras filas. Teo enseña lo que saben hacer sus manos.',
+    upgrades: ['Abre las filas tercera y cuarta. Más herramientas, más maestros.', 'Abre el último oficio de cada rama. Llegan maestros de otros enclaves.'],
     cost: 130,
     days: 6,
     level: 5,
+    unique: true,
+  },
+  // Asked for in the second playtest: the fallen leave the Cuartel's list. Texts by Lore.
+  memorial: {
+    id: 'memorial',
+    name: 'Camposanto',
+    description: 'Los caídos descansan aquí y salen de la lista del Cuartel; sus nombres se guardan. Cruces de pino bajo la nieve, una por cada uno.',
+    upgrades: [
+      '+5 de voluntad para todos los soldados. Saben que, si caen, alguien los recordará.',
+      '+10 de voluntad para todos. Y quien vuelve de una misión con bajas gana +1 de experiencia: por ellos. Teo graba cada nombre en latón.',
+    ],
+    cost: 40,
+    days: 3,
+    level: 1,
     unique: true,
   },
   relay: {
     id: 'relay',
     name: 'Centro de comunicaciones',
     description: '+2 regiones contactables.',
-    upgrades: ['+3 regiones contactables por centro. Más válvulas, misma sordera.', '+4 regiones por centro. La antena llega hasta el mar.'],
+    upgrades: ['+3 regiones contactables por centro. Una antena más alta, en el pino más alto.', '+4 regiones por centro. La antena llega hasta el mar.'],
     cost: 110,
     days: 5,
     level: 5,
@@ -262,11 +277,11 @@ export interface TerrainDef {
 }
 
 export const TERRAINS: Record<Exclude<Terrain, 'clear'>, TerrainDef> = {
-  rocks: { name: 'Roca', description: 'Roca viva del Pirineo. Barrenos, carretillas y paciencia.', salvage: 0, days: 1, start: 'Empiezan los barrenos en {parcela}.' },
+  rocks: { name: 'Roca', description: 'Roca viva de la sierra. Barrenos, carretillas y paciencia.', salvage: 0, days: 1, start: 'Empiezan los barrenos en {parcela}.' },
   forest: { name: 'Bosque', description: 'Pinar cerrado. La madera va a las estufas, que solo se encienden de noche.', salvage: 0, days: 0, start: 'Empieza la tala en {parcela}.' },
   ruins: {
     name: 'Ruinas',
-    description: 'Barracones de la vieja estación de 1989. Se desmontan a mano; la chatarra se vende: +15 ₡.',
+    description: 'Casas de antes de la Pandemia. Se desmontan a mano y lo que sirve se guarda: +15 §.',
     salvage: 15,
     days: 0,
     start: 'Empieza el desmontaje de las ruinas de {parcela}.',
@@ -285,12 +300,12 @@ export const ADJACENCY: AdjacencyDef[] = [
   { facility: 'infirmary', next: 'barracks', text: 'Las heridas curan un grado más rápido (×3 a nivel 1). Nadie cruza la nieve con una herida abierta.' },
   { facility: 'workshop', next: 'engineering', text: 'Accesorios un 15 % más baratos aún (−40 % a nivel 1). Las piezas pasan por un ventanuco.' },
   { facility: 'simulation', next: 'research', text: '+15 % de experiencia más (+40 % a nivel 1). Teo corrige los ejercicios en caliente.' },
-  { facility: 'relay', next: 'command', text: '+1 región contactable. La antena de válvulas, pegada a la sala de Morse, llega más lejos.' },
-  { facility: 'training', next: 'barracks', text: 'Reclutar cuesta 20 ₡ en vez de 30. Los novatos se forman en casa.' },
+  { facility: 'relay', next: 'command', text: '+1 región contactable. La antena, pegada a la sala de Morse, llega más lejos.' },
+  { facility: 'training', next: 'barracks', text: 'Reclutar cuesta 20 § en vez de 30. Los novatos se forman en casa.' },
   { facility: 'quarters', next: 'barracks', text: 'Una cama más. El Cuartel presta la estufa.' },
   { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
   { facility: 'listening', next: 'relay', text: 'El enemigo avanza 2 días más tarde aún. Dos antenas oyen más que una.' },
-  { facility: 'echoes', next: 'listening', text: 'Cantar no rompe la ocultación. Morse filtra el canto antes de que salga.' },
+  { facility: 'echoes', next: 'listening', text: 'Los oficios no rompen la ocultación. Junto a la escucha se aprende a no hacer ruido.' },
 ];
 
 export interface BasePlot {
@@ -421,14 +436,14 @@ export interface RegionDef {
 }
 
 export const REGIONS: Record<RegionId, RegionDef> = {
-  na: { id: 'na', name: 'Norteamérica', lat: 44, lon: -100, income: 35 },
-  sa: { id: 'sa', name: 'Sudamérica', lat: -15, lon: -60, income: 25 },
-  weu: { id: 'weu', name: 'Europa Occidental', lat: 45, lon: 2, income: 30 },
-  eeu: { id: 'eeu', name: 'Europa del Este', lat: 53, lon: 35, income: 25 },
-  afr: { id: 'afr', name: 'África', lat: 4, lon: 21, income: 25 },
-  me: { id: 'me', name: 'Oriente Medio', lat: 28, lon: 48, income: 30 },
-  eas: { id: 'eas', name: 'Asia Oriental', lat: 35, lon: 115, income: 35 },
-  oce: { id: 'oce', name: 'Oceanía', lat: -25, lon: 135, income: 25 },
+  na: { id: 'na', name: 'Los Llanos de Ceniza', lat: 44, lon: -100, income: 35 },
+  sa: { id: 'sa', name: 'Carboneda', lat: -15, lon: -60, income: 25 },
+  weu: { id: 'weu', name: 'Altomonte', lat: 45, lon: 2, income: 30 },
+  eeu: { id: 'eeu', name: 'Valdelobos', lat: 53, lon: 35, income: 25 },
+  afr: { id: 'afr', name: 'Ciudad Varela', lat: 4, lon: 21, income: 25 },
+  me: { id: 'me', name: 'Puerto Galena', lat: 28, lon: 48, income: 30 },
+  eas: { id: 'eas', name: 'El Pantano Gris', lat: 35, lon: 115, income: 35 },
+  oce: { id: 'oce', name: 'La Vega', lat: -25, lon: 135, income: 25 },
 };
 
 export const HOME_REGION: RegionId = 'weu';
@@ -469,11 +484,11 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
   smugglers: {
     id: 'smugglers',
     title: 'Contrabandistas',
-    text: 'Unos contrabandistas han asaltado un tren de teselas de la Armonía y ofrecen lo que sacaron.',
+    text: 'Unos contrabandistas han vaciado un cuartel abandonado y ofrecen lo que sacaron.',
     options: [
       {
         label: 'Comprárselo',
-        effect: '−40 créditos; dos granadas extra para la armería',
+        effect: '−40 suministros; dos granadas extra para la armería',
         available: (c) => c.credits >= 40,
         apply: (c) => {
           credit(c, -40);
@@ -486,11 +501,11 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
   refugees: {
     id: 'refugees',
     title: 'Refugiados',
-    text: 'Familias huidas de una ciudad afinada piden asilo en el Bastión. Entre ellas hay antiguos soldados.',
+    text: 'Familias huidas de un enclave caído piden asilo en el Bastión. Entre ellas hay antiguos soldados.',
     options: [
       {
         label: 'Acogerlas',
-        effect: '−30 créditos; se une un recluta',
+        effect: '−30 suministros; se une un recluta',
         available: (c) => c.credits >= 30,
         apply: (c, rng) => {
           credit(c, -30);
@@ -498,26 +513,26 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
           log(c, `${s.name} se une al Bastión (${TEMPLATES[soldierTemplate(s.cls)].name}).`, 'good');
         },
       },
-      { label: 'Cambiarles provisiones por lo que saben', effect: '−10 créditos, +8 de experiencia del Bastión', apply: (c, rng) => (credit(c, -10), gainXp(c, 8, rng)) },
+      { label: 'Cambiarles provisiones por lo que saben', effect: '−10 suministros, +8 de experiencia del Bastión', apply: (c, rng) => (credit(c, -10), gainXp(c, 8, rng)) },
     ],
   },
   signal: {
     id: 'signal',
     title: 'Transmisión interceptada',
-    text: 'Morse ha captado en onda corta una transmisión cifrada de la Armonía.',
+    text: 'Morse ha captado en onda corta una transmisión cifrada de los Cuervos.',
     options: [
       { label: 'Descifrarla', effect: '+10 de experiencia del Bastión', apply: (c, rng) => gainXp(c, 10, rng) },
-      { label: 'Venderla en el mercado negro', effect: '+30 créditos', apply: (c) => credit(c, 30) },
+      { label: 'Venderla en el mercado negro', effect: '+30 suministros', apply: (c) => credit(c, 30) },
     ],
   },
   convoy: {
     id: 'convoy',
     title: 'Convoy emboscado',
-    text: 'Un convoy de la resistencia ha caído en una emboscada de Recolectores cerca del Bastión.',
+    text: 'Un convoy de un enclave aliado ha caído en una emboscada de los Cazadores cerca del Bastión.',
     options: [
       {
         label: 'Enviar a alguien a socorrerlo',
-        effect: 'Un soldado al azar queda herido 4 días; +60 créditos',
+        effect: 'Un soldado al azar queda herido 4 días; +60 suministros',
         available: (c) => c.soldiers.some((s) => soldierReady(s)),
         apply: (c, rng) => {
           const s = rng.pick(c.soldiers.filter((x) => soldierReady(x)));
@@ -532,27 +547,27 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
   defector: {
     id: 'defector',
     title: 'Un desertor',
-    text: 'Un Afinado que ha perdido la nota quiere desertar y ofrece lo que sabe.',
+    text: 'Un Saqueador de los Cuervos quiere desertar y ofrece lo que sabe.',
     options: [
       { label: 'Interrogarlo', effect: '+12 de experiencia del Bastión', apply: (c, rng) => gainXp(c, 12, rng) },
-      { label: 'Usarlo de cebo en un Órgano', effect: 'El enemigo retrocede (−1)', apply: (c) => (c.doom = Math.max(0, c.doom - 1)) },
+      { label: 'Mandarlo a llevarse una horda lejos', effect: 'El enemigo retrocede (−1)', apply: (c) => (c.doom = Math.max(0, c.doom - 1)) },
     ],
   },
   blackMarket: {
     id: 'blackMarket',
     title: 'Mercado negro',
-    text: 'Las Caravanas han llegado al mercado negro con género interesante.',
+    text: 'Los Camioneros han montado mercado en la carretera, con género interesante.',
     options: [
-      { label: 'Comprar datos tácticos', effect: '−40 créditos, +15 de experiencia del Bastión', available: (c) => c.credits >= 40, apply: (c, rng) => (credit(c, -40), gainXp(c, 15, rng)) },
-      { label: 'Vender teselas sueltas', effect: '+35 créditos', apply: (c) => credit(c, 35) },
+      { label: 'Comprar mapas de la zona', effect: '−40 suministros, +15 de experiencia del Bastión', available: (c) => c.credits >= 40, apply: (c, rng) => (credit(c, -40), gainXp(c, 15, rng)) },
+      { label: 'Venderles la munición que sobra', effect: '+35 suministros', apply: (c) => credit(c, 35) },
     ],
   },
   sabotage: {
     id: 'sabotage',
     title: 'Sabotaje en la base',
-    text: 'Alguien ha cortado los cables de las válvulas del generador. Desde dentro.',
+    text: 'Alguien ha cortado los cables del generador. Desde dentro.',
     options: [
-      { label: 'Repararlo a toda prisa', effect: '−35 créditos', available: (c) => c.credits >= 35, apply: (c) => credit(c, -35) },
+      { label: 'Repararlo a toda prisa', effect: '−35 suministros', available: (c) => c.credits >= 35, apply: (c) => credit(c, -35) },
       {
         label: 'Repararlo con calma',
         effect: 'Las obras en curso se retrasan 4 días',
@@ -567,31 +582,31 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
     title: 'Una científica fugada',
     // Kept for campaigns saved with it pending; the story now tells it (chapter 2).
     story: true,
-    text: 'Una científica huida de una Imprenta pide protección. Dice que la obligaban a escanear gente.',
+    text: 'Una científica huida de un laboratorio de la Congregación pide protección. Dice que la obligaban a probar curas en gente.',
     options: [
       {
         label: 'Darle asilo',
-        effect: '−20 créditos, +12 de experiencia del Bastión',
+        effect: '−20 suministros, +12 de experiencia del Bastión',
         available: (c) => c.credits >= 20,
         apply: (c, rng) => (credit(c, -20), gainXp(c, 12, rng)),
       },
-      { label: 'Ayudarla a cruzar la frontera', effect: '+15 créditos', apply: (c) => credit(c, 15) },
+      { label: 'Llevarla con otro enclave', effect: '+15 suministros', apply: (c) => credit(c, 15) },
     ],
   },
   simon: {
     id: 'simon',
     title: 'Simón Ferreira',
-    text: 'Un Afinado que ha perdido la nota llama a la puerta del Bastión. Se llama Simón Ferreira. Dice que sabe abrir un Archivo desde dentro y sacar a los escaneados que duermen en él.',
+    text: 'Un desertor de los Cuervos llama a la puerta del Bastión. Se llama Simón Ferreira. Dice que sabe dónde tienen los Cuervos a la niña inmune, y cómo entrar sin que se enteren.',
     story: true,
     options: [
       {
         label: 'Confiar en él',
-        effect: 'Simón abrirá el Archivo desde dentro: «Los originales» a la dificultad prevista',
+        effect: 'Simón os guiará por dentro: «Los inmunes» a la dificultad prevista',
         apply: (c) => (c.story.simon = 'trusted'),
       },
       {
         label: 'Interrogarlo y echarlo',
-        effect: '+12 de experiencia del Bastión; «Los originales» sin ayuda, más difícil',
+        effect: '+12 de experiencia del Bastión; «Los inmunes» sin ayuda, más difícil',
         apply: (c, rng) => {
           c.story.simon = 'refused';
           gainXp(c, 12, rng);
@@ -601,18 +616,18 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
   },
   finale: {
     id: 'finale',
-    title: 'La Contranota',
-    text: 'La Contranota suena en el Diapasón y el Coro empieza a cantarse entero, fuera de los chips. Teo tiene la mano en el interruptor de las bobinas. Hay que decidir ahora, con las dos llaves.',
+    title: 'La vacuna',
+    text: 'La Marea se aleja detrás de la sirena de La Mula y el campamento de la Congregación ha caído. Nwosu tiene en la mano las primeras dosis de la vacuna, y no hay para todos. Hay que decidir ahora, con las dos llaves.',
     story: true,
     options: [
       {
-        label: 'Romper el Diapasón',
-        effect: 'El Coro muere entero. La Tierra queda libre.',
+        label: 'Para todos',
+        effect: 'Morse lee la fórmula por todas las frecuencias. La oyen los enclaves, y también los Cuervos.',
         apply: (c) => ((c.ending = 'break'), (c.outcome = 'victory')),
       },
       {
-        label: 'Grabar el Coro en las bobinas',
-        effect: 'El Coro sobrevive, preso y sordo, en una caja fuerte del Bastión.',
+        label: 'Para la Red',
+        effect: 'La Mula reparte las dosis enclave por enclave, solo a quienes estuvieron. La fórmula se queda en Atalaya, bajo dos llaves.',
         apply: (c) => ((c.ending = 'record'), (c.outcome = 'victory')),
       },
     ],
@@ -696,6 +711,8 @@ export interface CampaignSoldier {
   talents: Talents;
   woundedDays: number;
   alive: boolean;
+  /** Campaign day of the mission the soldier fell in (the Camposanto lists it). */
+  fellDay?: number;
   loadout: Loadout;
   /** Shown in quotes next to the name; empty for none. */
   nickname: string;
@@ -839,6 +856,8 @@ export interface CampaignState {
   offers: MissionOffer[];
   activeMission: string | null;
   squad: string[];
+  /** Missions flown so far: the operations get a little harder with them. */
+  missionsFlown?: number;
   /** Hangar pad of each squad member (squadPads): nobody moves when others come and go. */
   pads?: Record<string, number>;
   doom: number;
@@ -896,7 +915,7 @@ function pay(c: CampaignState, cost: number): void {
 }
 
 export function costText(cost: number): string {
-  return cost ? `${cost} créditos` : 'Gratis';
+  return cost ? `${cost} §` : 'Gratis';
 }
 
 function log(c: CampaignState, text: string, tone: LogEntry['tone'] = 'info', alert?: LogEntry['alert']): void {
@@ -996,6 +1015,11 @@ export function xpMultiplier(c: CampaignState): number {
 }
 
 /** Aim every soldier gets from the shooting range: 3/6/10, two more next to the training centre. */
+/** Will the Camposanto gives every soldier: +5 at level 2, +10 at level 3. */
+export function memorialWill(c: CampaignState): number {
+  return [0, 0, 5, 10][facilityLevel(c, 'memorial')]!;
+}
+
 export function rangeAim(c: CampaignState): number {
   const level = facilityLevel(c, 'range');
   return level ? [3, 6, 10][level - 1]! + (hasAdjacency(c, 'range') ? 2 : 0) : 0;
@@ -1097,8 +1121,14 @@ function pickKind(rng: Rng): MissionKind {
   return 'elimination';
 }
 
+/** Difficulty of a new operation: it grows with the days and, a little, with the missions flown (second playtest). */
 function difficultyNow(c: CampaignState, rng: Rng): number {
-  return Math.min(4, 1 + Math.floor(c.day / 18) + (rng.int(4) === 0 ? 1 : 0));
+  return Math.min(4, 1 + Math.floor(c.day / 18 + (c.missionsFlown ?? 0) / 10) + (rng.int(4) === 0 ? 1 : 0));
+}
+
+/** Every 4 missions flown the enemy sends one more to an operation, up to 2. */
+export function veteranEnemies(c: Pick<CampaignState, 'missionsFlown'>): number {
+  return Math.min(2, Math.floor((c.missionsFlown ?? 0) / 4));
 }
 
 /** The enemy groups of an operation, with what side quests left in its region. */
@@ -1106,6 +1136,7 @@ function regionPods(c: CampaignState, region: RegionId, difficulty: number): Tem
   const pods = podPlan(difficulty);
   const extra = regionEnemy(c, region);
   if (extra) pods[0]!.push(extra);
+  for (let i = 0; i < veteranEnemies(c); i++) pods[(i + 1) % pods.length]!.push(difficulty >= 3 ? 'lancer' : 'trooper');
   return pods;
 }
 
@@ -1123,7 +1154,7 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   if (!final && (kind === 'sabotage' || (kind === 'hack' && rng.int(3) === 0))) reward.doom = 1;
   return {
     id: newId(c, 'm'),
-    name: final ? 'Asalto al Diapasón' : `Operación ${rng.pick(OPERATION_A)} ${rng.pick(OPERATION_B)}`,
+    name: final ? 'El campamento de la sierra' : `Operación ${rng.pick(OPERATION_A)} ${rng.pick(OPERATION_B)}`,
     kind,
     difficulty,
     expiresDay: final ? null : c.day + 6 + rng.int(4),
@@ -1138,12 +1169,12 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   };
 }
 
-/** Assault on an alien facility (an Órgano): destroying its relay sets the doom track back. */
+/** Assault on a Nido (alien facility in the code): silencing its sirena sets the doom track back. */
 function makeFacilityOffer(c: CampaignState, region: RegionId, rng: Rng): MissionOffer {
   const difficulty = Math.min(4, difficultyNow(c, rng) + 1);
   return {
     id: newId(c, 'm'),
-    name: `Órgano de ${REGIONS[region].name}`,
+    name: `Nido de ${REGIONS[region].name}`,
     kind: 'sabotage',
     difficulty,
     expiresDay: null,
@@ -1197,12 +1228,12 @@ function refreshStory(c: CampaignState, rng: Rng): void {
     } else if (!c.offers.some((o) => o.story === next)) {
       const offer = makeStoryOffer(c, next, rng);
       c.offers.push(offer);
-      log(c, `Expediente CORO: nueva misión de historia, ${offer.name}.`, 'good');
+      log(c, `Expediente: nueva misión de historia, ${offer.name}.`, 'good');
     }
   }
   if (c.story.done >= STORY.length && hasTech(c, 'signal') && !c.offers.some((o) => o.final)) {
     c.offers.push(makeOffer(c, rng, true));
-    log(c, '¡Localizado el Diapasón! La misión final está disponible.', 'good');
+    log(c, '¡La Mula está lista! La misión final está disponible.', 'good');
   }
 }
 
@@ -1222,7 +1253,7 @@ export interface MissionInfo {
 
 export function missionInfo(c: CampaignState, offer: MissionOffer): MissionInfo {
   if (offer.story) {
-    return { kicker: `EXPEDIENTE CORO · HOJA ${offer.story}`, item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
+    return { kicker: `EXPEDIENTE · HOJA ${offer.story}`, item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
   }
   const q = questOf(c, offer);
   const step = q && QUESTS[q.id].steps[q.step];
@@ -1434,7 +1465,7 @@ function specializeSoldier(s: CampaignSoldier, cls: ClassId): void {
   if (wasDefault) s.appearance = defaultAppearance(cls, s.owner);
 }
 
-/** Level of the Cámara de Ecos, which opens the rows of the Canto (0 = not built). */
+/** Level of the Taller de oficios, which opens the rows of the Oficio (0 = not built). */
 export function echoesLevel(c: CampaignState): number {
   return facilityLevel(c, 'echoes');
 }
@@ -1466,7 +1497,7 @@ function refreshQuests(c: CampaignState, rng: Rng): void {
   if (next) startQuest(c, next[0], rng);
 }
 
-/** After a mission, a soldier with a nickname may recognise someone among the Impresos. */
+/** After a mission, a soldier with a nickname may hear of someone among the Cuervos' prisoners. */
 function maybeFaces(c: CampaignState, report: MissionReport, rng: Rng): void {
   if (c.outcome || c.quests.length >= MAX_QUESTS || bastionLevel(c) < 2 || !questAvailable(c, 'faces') || rng.int(4) !== 0) return;
   const seen = report.squad.map((e) => c.soldiers.find((s) => s.id === e.id)).filter((s): s is CampaignSoldier => !!s && s.alive && !!s.nickname);
@@ -1518,9 +1549,9 @@ function resolveRumor(c: CampaignState, rumor: Rumor, rng: Rng): void {
   } else if (roll < 60) {
     const credits = 30 + rng.int(4) * 10;
     c.credits += credits;
-    log(c, `El rumor de ${name} era un alijo de la resistencia: +${credits} créditos.`, 'good', alert);
+    log(c, `El rumor de ${name} era un alijo de otros supervivientes: +${credits} suministros.`, 'good', alert);
   } else if (roll < 80) {
-    log(c, `El rumor de ${name} era un Afinado que hablaba demasiado. Lo que sabía vale experiencia.`, 'good', alert);
+    log(c, `El rumor de ${name} era un Saqueador que hablaba demasiado. Lo que sabía vale experiencia.`, 'good', alert);
     gainXp(c, 6 + rng.int(5), rng);
   } else {
     log(c, `El rumor de ${name} era un bulo.`, 'info', alert);
@@ -1781,7 +1812,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   const needed = ready < squadLimit(c, c.players) && mine.length < soldierCap(c);
   const short =
     needed && bedsFree(c) > 0 && canAfford(c, recruitCost(c))
-      ? { view: 'barracks' as const, label: `${fewReady}: recluta (${recruitCost(c)} ₡)`, tone: 'info' as const }
+      ? { view: 'barracks' as const, label: `${fewReady}: recluta (${recruitCost(c)} §)`, tone: 'info' as const }
       : needed && bedsFree(c) <= 0 && c.base.works.length < workCrews(c) && canAfford(c, FACILITIES.quarters.cost)
         ? { view: 'facilities' as const, label: `${fewReady} y sin camas: construye un barracón`, tone: 'info' as const }
         : null;
@@ -1898,7 +1929,7 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (busy) return busy;
       const blocker = clearable(c, plot);
       if (blocker) return blocker;
-      if (!canAfford(c, clearCost(plot).cost)) return 'No hay créditos suficientes.';
+      if (!canAfford(c, clearCost(plot).cost)) return 'No hay suministros suficientes.';
       return null;
     }
     case 'build': {
@@ -1908,7 +1939,7 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (busy) return busy;
       const blocker = buildable(c, plot, action.facility);
       if (blocker) return blocker;
-      if (!canAfford(c, FACILITIES[action.facility].cost)) return 'No hay créditos suficientes.';
+      if (!canAfford(c, FACILITIES[action.facility].cost)) return 'No hay suministros suficientes.';
       return null;
     }
     case 'upgrade': {
@@ -1918,14 +1949,14 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (busy) return busy;
       const blocker = upgradable(c, plot);
       if (blocker) return blocker;
-      if (!canAfford(c, upgradeCost(plot.building as FacilityId, (plot.level ?? 1) + 1).cost)) return 'No hay créditos suficientes.';
+      if (!canAfford(c, upgradeCost(plot.building as FacilityId, (plot.level ?? 1) + 1).cost)) return 'No hay suministros suficientes.';
       return null;
     }
     case 'contact': {
       const region = c.regions.find((r) => r.id === action.region);
       if (!region || region.contacted) return 'Ya tenemos contacto con esa región.';
       if (c.regions.filter((r) => r.contacted).length >= contactCapacity(c)) return 'No podemos mantener más contactos: construid un centro de comunicaciones.';
-      if (!canAfford(c, contactCost(c))) return 'No hay créditos suficientes.';
+      if (!canAfford(c, contactCost(c))) return 'No hay suministros suficientes.';
       return null;
     }
     case 'event':
@@ -1985,7 +2016,7 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       log(c, `Contacto establecido con ${REGIONS[region.id].name}.`, 'good');
       if (region.facility && !c.offers.some((o) => o.facility === region.id)) {
         c.offers.push(makeFacilityOffer(c, region.id, rng));
-        log(c, `Ya podemos asaltar el Órgano de ${REGIONS[region.id].name}.`, 'good');
+        log(c, `Ya podemos quemar el Nido de ${REGIONS[region.id].name}.`, 'good');
       }
       break;
     }
@@ -2162,7 +2193,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).length;
       if (mine >= soldierCap(c)) return { ok: false, error: `Máximo ${soldierCap(c)} soldados por jugador.` };
       if (bedsFree(c) <= 0) return { ok: false, error: 'Para reclutar más soldados, construid un barracón: no quedan camas.' };
-      if (!canAfford(c, recruitCost(c))) return { ok: false, error: 'No hay créditos suficientes.' };
+      if (!canAfford(c, recruitCost(c))) return { ok: false, error: 'No hay suministros suficientes.' };
       const place = cmd.squad ? (c.activeMission ? squadPlace(c, slot, ctx.connected) : { error: 'Primero elegid una misión.' }) : null;
       if (place?.error) return { ok: false, error: place.error };
       pay(c, recruitCost(c));
@@ -2188,7 +2219,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       if (!isAppearance(cmd.appearance)) return { ok: false, error: 'Ese aspecto no es válido.' };
       s.name = name;
       s.nickname = nickname;
-      s.appearance = { ...cmd.appearance };
+      s.appearance = normalizeAppearance(cmd.appearance);
       return { ok: true };
     }
 
@@ -2218,7 +2249,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       const free = pointsToSpend(s);
       if (free.attrs === ATTR_POINTS_PER_RANK * s.rank && free.talents === TALENT_POINTS_PER_RANK * s.rank) return { ok: false, error: 'No hay nada que reentrenar.' };
       const cost = retrainCost(c);
-      if (!canAfford(c, cost)) return { ok: false, error: 'No hay créditos suficientes.' };
+      if (!canAfford(c, cost)) return { ok: false, error: 'No hay suministros suficientes.' };
       pay(c, cost);
       // Back to the centre of the rosa: a recruit with every point of the rank to spend.
       s.cls = null;
@@ -2232,7 +2263,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       const def = ITEMS[cmd.item];
       if (!itemUnlocked(c, cmd.item)) return { ok: false, error: `Se desbloquea con el nivel ${def.level} del Bastión.` };
       const cost = shopPrice(c, cmd.item);
-      if (!canAfford(c, cost)) return { ok: false, error: 'No hay créditos suficientes.' };
+      if (!canAfford(c, cost)) return { ok: false, error: 'No hay suministros suficientes.' };
       pay(c, cost);
       c.inventory[cmd.item] = (c.inventory[cmd.item] ?? 0) + 1;
       log(c, `Comprado: ${def.name}.`);
@@ -2288,7 +2319,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
       const ruins = plot.terrain === 'ruins';
       plot.terrain = 'clear';
       c.credits += salvage;
-      log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} ₡ de chatarra.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
+      log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} § en materiales.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
     } else if (work.kind === 'upgrade') {
       plot.level = (plot.level ?? 1) + 1;
       log(c, `${FACILITIES[work.facility!].name}, nivel ${plot.level}: ${FACILITIES[work.facility!].upgrades[plot.level - 2]!.split('.')[0]}.`, 'good');
@@ -2361,7 +2392,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     if (!r.facility || c.day < r.facility.nextDoomDay) continue;
     r.facility.nextDoomDay = c.day + FACILITY_DOOM_INTERVAL;
     c.doom++;
-    log(c, bastionLevel(c) >= PARTITURA_LEVEL ? `El Órgano de ${REGIONS[r.id].name} escribe un compás.` : `El Órgano de ${REGIONS[r.id].name} hace avanzar ${doomSubject(bastionLevel(c))}.`, 'bad');
+    log(c, bastionLevel(c) >= PARTITURA_LEVEL ? `El Nido de ${REGIONS[r.id].name} acerca la Marea.` : `El Nido de ${REGIONS[r.id].name} hace crecer ${doomSubject(bastionLevel(c))}.`, 'bad');
     stop = true;
   }
 
@@ -2371,7 +2402,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     if (c.regions.filter((r) => r.facility).length < MAX_FACILITIES && free.length) {
       const region = rng.pick(free);
       region.facility = { nextDoomDay: c.day + FACILITY_DOOM_INTERVAL };
-      log(c, `El Coro levanta un Órgano en ${REGIONS[region.id].name}.`, 'bad');
+      log(c, `Los zombis se juntan en un Nido en ${REGIONS[region.id].name}.`, 'bad');
       if (region.contacted) c.offers.push(makeFacilityOffer(c, region.id, rng));
       else log(c, `Contactad con ${REGIONS[region.id].name} para poder asaltarlo.`);
       stop = true;
@@ -2382,7 +2413,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     c.nextSupplyDay = c.day + MONTH;
     const income = BASE_INCOME + c.regions.filter((r) => r.contacted).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
     c.credits += income;
-    log(c, `Carta del Consejo: la consejera Halvorsen envía ${income} créditos.`, 'good');
+    log(c, `Llega el convoy de Altomonte: Ruth Halvorsen manda ${income} suministros.`, 'good');
     stop = true;
   }
 
@@ -2397,7 +2428,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 
   if (c.doom >= DOOM_MAX) {
     c.outcome = 'defeat';
-    log(c, 'La Partitura se ha completado. El Coro canta.', 'bad');
+    log(c, 'La Marea ha llegado a Atalaya.', 'bad');
     return true;
   }
   // A story chapter whose wait is over opens today.
@@ -2443,7 +2474,7 @@ export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
     maxHp,
     hp: maxHp,
     charges,
-    will: base.will + traits.reduce((sum, t) => sum + t.will, 0),
+    will: base.will + traits.reduce((sum, t) => sum + t.will, 0) + memorialWill(c),
     armor,
     gear,
   };
@@ -2481,6 +2512,7 @@ export function gainXp(c: CampaignState, amount: number, rng: Rng): void {
 export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rng): MissionReport {
   const offer = activeOffer(c);
   const victory = mission.outcome === 'victory';
+  c.missionsFlown = (c.missionsFlown ?? 0) + 1;
   const report: MissionReport = {
     day: c.day,
     missionName: offer?.name ?? 'Misión',
@@ -2497,11 +2529,14 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     story: offer?.story ?? null,
   };
 
+  // Abandoning counts as a retreat: whoever is still standing comes home.
+  const fell = (u: GameState['units'][number]) => !u.alive && !u.evacuated && u.hp <= 0;
+  // The Camposanto at level 3: whoever comes back from a mission with losses learns from it.
+  const mourning = facilityLevel(c, 'memorial') >= 3 && mission.units.some((u) => u.campaignId && fell(u)) ? 1 : 0;
   for (const u of mission.units) {
     const s = u.campaignId ? c.soldiers.find((x) => x.id === u.campaignId) : undefined;
     if (!s) continue;
-    // Abandoning counts as a retreat: whoever is still standing comes home.
-    const died = !u.alive && !u.evacuated && u.hp <= 0;
+    const died = fell(u);
     s.missions++;
     s.kills += u.kills;
     const entry: ReportSoldier = {
@@ -2518,7 +2553,9 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     report.squad.push(entry);
     if (died) {
       s.alive = false;
+      s.fellDay = report.day;
       entry.status = 'dead';
+      if (facilityCount(c, 'memorial')) log(c, `${s.name} descansa en el Camposanto.`);
       // Equipment is lost with its bearer.
       for (const item of [s.loadout.utility, s.loadout.ammo]) if (item) c.inventory[item] = Math.max(0, (c.inventory[item] ?? 0) - 1);
       s.loadout = { utility: null, ammo: null };
@@ -2530,7 +2567,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       entry.status = 'wounded';
       entry.woundedDays = s.woundedDays;
     }
-    entry.xpGained = 1 + (victory ? 1 : 0) + u.kills;
+    entry.xpGained = 1 + (victory ? 1 : 0) + u.kills + mourning;
     s.xp += entry.xpGained;
     const rank = rankForXp(s.xp);
     if (rank > s.rank) {
@@ -2556,7 +2593,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     // Dr Nwosu knows which tesserae are worth something.
     if (c.story.done >= NWOSU_CHAPTER) report.salvage = Math.round(report.salvage * 1.25);
     c.credits += report.salvage;
-    if (report.bodies) log(c, `La morgue del Consejo paga ${report.salvage} créditos por ${report.bodies} cuerpos.`, 'good');
+    if (report.bodies) log(c, `Registráis ${report.bodies} cuerpos: +${report.salvage} suministros.`, 'good');
   }
 
   if (victory && offer) {
@@ -2573,7 +2610,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     if (offer.facility) {
       const region = c.regions.find((x) => x.id === offer.facility);
       if (region) region.facility = null;
-      log(c, `Órgano de ${REGIONS[offer.facility].name} destruido.`, 'good');
+      log(c, `Nido de ${REGIONS[offer.facility].name} quemado.`, 'good');
     }
     log(c, `Misión cumplida: ${offer.name}.`, 'good');
     const quest = questOf(c, offer);
@@ -2583,10 +2620,10 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       c.story.nextDay = c.day + STORY_GAP;
       log(c, STORY[offer.story - 1]!.after, 'good');
     }
-    // The campaign ends when both keys decide what to do with the Coro.
+    // The campaign ends when both keys decide who gets the vaccine.
     if (offer.final) {
       c.event = 'finale';
-      log(c, 'La Contranota suena en el Diapasón.', 'good');
+      log(c, 'La sirena de La Mula se lleva a la Marea.', 'good');
     }
   } else {
     c.doom++;

@@ -102,10 +102,17 @@ export type TemplateId = ClassId | 'rookie' | AlienId | ObjectiveId;
 export type HeadId = 'helmet' | 'hood' | 'beret' | 'cap' | 'mask' | 'bare';
 /** Body builds. */
 export type BuildId = 'slim' | 'normal' | 'heavy';
+/** Armour pieces the barracks paints one by one (appearance.ts). */
+export type ArmorPart = 'helmet' | 'torso' | 'arms' | 'legs';
 
-/** How a soldier looks; colours are `#rrggbb`. Purely cosmetic. */
+/**
+ * How a soldier looks; colours are `#rrggbb`. Purely cosmetic. The pieces
+ * are optional: without one, the piece wears what it wore before pieces
+ * could be painted (`partColor`), so older looks stay as they were. The
+ * owner's mark is never part of the look: it always glows in their colour.
+ */
 export interface Appearance {
-  /** Main armour colour. */
+  /** Main armour colour: every piece without its own. */
   primary: string;
   /** Plates, trim and cloth. */
   secondary: string;
@@ -113,6 +120,14 @@ export interface Appearance {
   visor: string;
   head: HeadId;
   build: BuildId;
+  /** The headgear: a helmet's shell, or a beret, cap or hood (those follow `secondary` when unset). */
+  helmet?: string;
+  /** Chest, back, belt and packs. */
+  torso?: string;
+  /** Shoulder pads and bracers. */
+  arms?: string;
+  /** Thigh and shin plates. */
+  legs?: string;
 }
 
 export type AbilityId =

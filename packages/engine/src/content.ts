@@ -111,19 +111,19 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   sniper: weapon({ id: 'sniper', name: 'Fusil de precisión', damage: 5, spread: 1, critDamage: 2, clip: 3, crit: 10, range: 'long', apCost: 2, burst: 1 }),
   pistol: weapon({ id: 'pistol', name: 'Pistola', damage: 2, plusOne: 50, critDamage: 1, burst: 1 }),
   sword: weapon({ id: 'sword', name: 'Espada', damage: 4, spread: 1, critDamage: 2, aim: 20, crit: 10, range: 'none', melee: true, burst: 1 }),
-  trooperRifle: weapon({ id: 'trooperRifle', name: 'Fusil de Impreso', damage: 3, critDamage: 1, clip: 3 }),
-  officerRifle: weapon({ id: 'officerRifle', name: 'Fusil de Afinado', damage: 3, plusOne: 50, critDamage: 2, clip: 3 }),
-  xenoPistol: weapon({ id: 'xenoPistol', name: 'Arma de Heraldo', damage: 3, plusOne: 25, critDamage: 2, clip: 3 }),
+  trooperRifle: weapon({ id: 'trooperRifle', name: 'Fusil de caza', damage: 3, critDamage: 1, clip: 3 }),
+  officerRifle: weapon({ id: 'officerRifle', name: 'Fusil automático', damage: 3, plusOne: 50, critDamage: 2, clip: 3 }),
+  xenoPistol: weapon({ id: 'xenoPistol', name: 'Zarpazo', damage: 3, plusOne: 25, critDamage: 2, clip: 3 }),
   lancerRifle: weapon({ id: 'lancerRifle', name: 'Carabina', damage: 3, plusOne: 50, critDamage: 2, clip: 3 }),
-  stunLance: weapon({ id: 'stunLance', name: 'Lanza aturdidora', damage: 3, spread: 1, critDamage: 2, range: 'none', melee: true, burst: 1 }),
-  mecCannon: weapon({ id: 'mecCannon', name: 'Cañón de Gólem', damage: 5, spread: 1, critDamage: 2, clip: 4, shred: 1, burst: 4 }),
-  sectoidPistol: weapon({ id: 'sectoidPistol', name: 'Pistola de Cantor', damage: 3, plusOne: 50, critDamage: 1, clip: 3, burst: 1 }),
-  claws: weapon({ id: 'claws', name: 'Garras', damage: 4, spread: 1, critDamage: 2, aim: 10, range: 'none', melee: true, burst: 1 }),
+  stunLance: weapon({ id: 'stunLance', name: 'Red y porra', damage: 3, spread: 1, critDamage: 2, range: 'none', melee: true, burst: 1 }),
+  mecCannon: weapon({ id: 'mecCannon', name: 'Embestida', damage: 5, spread: 1, critDamage: 2, clip: 4, shred: 1, burst: 4 }),
+  sectoidPistol: weapon({ id: 'sectoidPistol', name: 'Chillido', damage: 3, plusOne: 50, critDamage: 1, clip: 3, burst: 1 }),
+  claws: weapon({ id: 'claws', name: 'Mordisco', damage: 4, spread: 1, critDamage: 2, aim: 10, range: 'none', melee: true, burst: 1 }),
   fragGrenade: weapon({ id: 'fragGrenade', name: 'Granada de fragmentación', damage: 3, plusOne: 20, shred: 1, burst: 0 }),
   microMissiles: weapon({ id: 'microMissiles', name: 'Micromisiles', damage: 3, shred: 1, burst: 0 }),
   droneZap: weapon({ id: 'droneZap', name: 'Descarga del Grillo', damage: 2, burst: 0 }),
   discharge: weapon({ id: 'discharge', name: 'Descarga de condensador', damage: 3, burst: 0 }),
-  songFire: weapon({ id: 'songFire', name: 'Bola de fuego', damage: 4, burst: 0 }),
+  songFire: weapon({ id: 'songFire', name: 'Cóctel molotov', damage: 4, burst: 0 }),
 };
 
 // ---------------------------------------------------------------- abilities
@@ -156,9 +156,9 @@ export interface AbilityDef {
   ammo?: number;
   /** Psionic: the victim's will resists it. */
   psi?: boolean;
-  /** Velmar's Canto: heard (breaks concealment) and learnt in the Cámara de Ecos. */
+  /** The Oficio: noisy (breaks concealment) and learnt in the Taller de oficios. */
   song?: boolean;
-  /** The target counts as flanked: cover doesn't count (Flecha espectral). */
+  /** The target counts as flanked: cover doesn't count (Flecha perforante). */
   ignoreCover?: boolean;
   /** Tile ability that moves the user there (Salto de eco, Paso de sombra). */
   teleport?: boolean;
@@ -168,14 +168,14 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   shoot: { id: 'shoot', name: 'Disparar', description: 'Dispara el arma principal. Gasta una acción; el fusil de precisión, las dos.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'primary' },
   pistol: { id: 'pistol', name: 'Pistola', description: 'Dispara la pistola: munición infinita. Gasta una acción.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'secondary' },
   slash: { id: 'slash', name: 'Tajo', description: 'Corre hasta un enemigo a tu alcance y atácalo con la espada. Ignora la cobertura.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
-  stunLance: { id: 'stunLance', name: 'Lanza aturdidora', description: 'Ataque cuerpo a cuerpo que aturde.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
-  claw: { id: 'claw', name: 'Garras', description: 'Ataque cuerpo a cuerpo.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
+  stunLance: { id: 'stunLance', name: 'Red y porra', description: 'Atrapa con la red y golpea con la porra: aturde.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
+  claw: { id: 'claw', name: 'Mordisco', description: 'Muerde cuerpo a cuerpo.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   overwatch: { id: 'overwatch', name: 'Vigilancia', description: 'Dispara al primer enemigo que se mueva a la vista.', target: 'self', ap: 1, endsTurn: true },
   hunker: { id: 'hunker', name: 'Agazaparse', description: '+30 de defensa y +50 de esquiva hasta tu próximo turno.', target: 'self', ap: 1, endsTurn: true },
   reload: { id: 'reload', name: 'Recargar', description: 'Llena el cargador.', target: 'self', ap: 1, endsTurn: false },
   grenade: { id: 'grenade', name: 'Granada', description: 'Lanza una granada: daña a todos en el área y destruye cobertura.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 10, radius: 2.5, explosive: 'fragGrenade' },
   launch: { id: 'launch', name: 'Lanzagranadas', description: 'Dispara una granada más lejos y con más radio.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 14, radius: 3.5, explosive: 'fragGrenade' },
-  missiles: { id: 'missiles', name: 'Micromisiles', description: 'Andanada explosiva.', target: 'tile', ap: 1, endsTurn: true, charge: 'missiles', range: 15, radius: 2.5, explosive: 'microMissiles' },
+  missiles: { id: 'missiles', name: 'Granada del chaleco', description: 'Le estalla una granada que aún cuelga del chaleco.', target: 'tile', ap: 1, endsTurn: true, charge: 'missiles', range: 15, radius: 2.5, explosive: 'microMissiles' },
   medkit: { id: 'medkit', name: 'Protocolo médico', description: 'El Grillo, el dron del especialista, cura 4 de salud a un aliado.', target: 'ally', ap: 1, endsTurn: false, charge: 'medkit', range: 15 },
   aid: { id: 'aid', name: 'Protocolo de ayuda', description: 'El Grillo protege a un aliado: +20 de defensa hasta vuestro próximo turno.', target: 'ally', ap: 1, endsTurn: false, range: 15 },
   evac: { id: 'evac', name: 'Evacuar', description: 'Sale de la misión desde la zona de evacuación.', target: 'self', ap: 1, endsTurn: true },
@@ -197,31 +197,31 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   lightningHands: { id: 'lightningHands', name: 'Manos rápidas', description: 'Acción gratuita: un disparo de pistola.', target: 'enemy', ap: 0, endsTurn: false, cooldown: 4, weapon: 'secondary' },
   faceoff: { id: 'faceoff', name: 'Cara a cara', description: 'Un disparo de pistola a cada enemigo que veas.', target: 'self', ap: 1, endsTurn: true, cooldown: 4, weapon: 'secondary' },
   killZone: { id: 'killZone', name: 'Zona letal', description: 'Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno.', target: 'self', ap: 1, endsTurn: true, cooldown: 4 },
-  combatProtocol: { id: 'combatProtocol', name: 'Protocolo de combate', description: 'El Grillo electrocuta a un enemigo a la vista de la escuadra: 2 de daño (4 a robots). Nunca falla e ignora el blindaje. Termina el turno.', target: 'enemy', ap: 1, endsTurn: true, charge: 'combatProtocol', range: 15 },
+  combatProtocol: { id: 'combatProtocol', name: 'Protocolo de combate', description: 'El Grillo electrocuta a un enemigo a la vista de la escuadra: 2 de daño (4 a Acorazados y Sirenas). Nunca falla e ignora el blindaje. Termina el turno.', target: 'enemy', ap: 1, endsTurn: true, charge: 'combatProtocol', range: 15 },
   revival: { id: 'revival', name: 'Protocolo de reanimación', description: 'El Grillo libera a un aliado del aturdimiento, la desorientación y el pánico.', target: 'ally', ap: 1, endsTurn: false, charge: 'medkit', range: 15 },
   restoration: { id: 'restoration', name: 'Restauración', description: 'Cura 2 a todos los aliados a 6 casillas o menos y les quita los estados alterados.', target: 'self', ap: 1, endsTurn: true, cooldown: 5, range: 6 },
   discharge: { id: 'discharge', name: 'Descarga de condensador', description: 'El Grillo descarga en una zona: 3 de daño a todos los que estén dentro, aliados incluidos.', target: 'tile', ap: 1, endsTurn: true, cooldown: 4, range: 10, radius: 1.5, explosive: 'discharge' },
-  mindspin: { id: 'mindspin', name: 'Canto', description: 'El Cantor canta dentro de la cabeza de un soldado: lo desorienta, lo aterroriza o lo controla.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, range: 14, psi: true },
-  reanimate: { id: 'reanimate', name: 'Levantar un Hueco', description: 'El Cantor canta en un cadáver y lo levanta como Hueco.', target: 'corpse', ap: 1, endsTurn: true, cooldown: 4, range: 12, psi: true },
+  mindspin: { id: 'mindspin', name: 'Grito', description: 'El Chillón le grita a un soldado: lo desorienta, lo aterroriza o le hace perder la cabeza y disparar a los suyos.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, range: 14, psi: true },
+  reanimate: { id: 'reanimate', name: 'Despertar a un muerto', description: 'El grito del Chillón despierta un cadáver, que se levanta como Zombi.', target: 'corpse', ap: 1, endsTurn: true, cooldown: 4, range: 12, psi: true },
   smoke: { id: 'smoke', name: 'Granada de humo', description: 'Cubre una zona de humo durante 2 turnos: −20 a la puntería contra quien esté dentro.', target: 'tile', ap: 1, endsTurn: true, charge: 'smoke', range: 10, radius: 2 },
   flashbang: { id: 'flashbang', name: 'Granada aturdidora', description: 'Desorienta a los enemigos de la zona (−20 de puntería, sin explosivos). No hace daño.', target: 'tile', ap: 1, endsTurn: true, charge: 'flashbang', range: 10, radius: 2.5 },
   firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Cura 4 de salud a un aliado contiguo (o a uno mismo).', target: 'ally', ap: 1, endsTurn: false, charge: 'firstAid', range: 1.5 },
-  // Velmar's Canto: learnt in the Cámara de Ecos. A song is heard: it breaks concealment.
-  aegis: { id: 'aegis', name: 'Égida', description: 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 3, song: true },
-  echoStep: { id: 'echoStep', name: 'Salto de eco', description: 'Desapareces y apareces en una casilla libre a la vista, a 6 o menos. No termina el turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 6, radius: 0, teleport: true, song: true },
-  layOnHands: { id: 'layOnHands', name: 'Imposición de manos', description: 'Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación.', target: 'ally', ap: 1, endsTurn: false, charge: 'layOnHands', range: 1.5, song: true },
-  velmarOath: { id: 'velmarOath', name: 'Juramento de Velmar', description: 'Durante 2 turnos, los aliados a 4 casillas no pueden entrar en pánico ni ser controlados, y tú recibes la mitad del daño.', target: 'self', ap: 1, endsTurn: false, charge: 'velmarOath', range: 4, song: true },
-  bolt: { id: 'bolt', name: 'Saeta', description: 'Un proyectil de luz a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 2, range: 20, song: true },
-  silence: { id: 'silence', name: 'Silencio', description: 'Zona de radio 2: los enemigos dentro quedan desorientados y los Cantores no pueden cantar durante 2 turnos.', target: 'tile', ap: 1, endsTurn: true, charge: 'silence', range: 10, radius: 2, song: true },
-  fireball: { id: 'fireball', name: 'Bola de fuego', description: '4 de daño en radio 2,5 y destruye la cobertura. Daña también a los tuyos.', target: 'tile', ap: 1, endsTurn: true, charge: 'fireball', range: 12, radius: 2.5, explosive: 'songFire', song: true },
-  velmarStorm: { id: 'velmarStorm', name: 'Tormenta de Velmar', description: 'Rayos sobre hasta 3 enemigos a la vista: 4 de daño a cada uno. Nunca fallan.', target: 'self', ap: 1, endsTurn: true, charge: 'velmarStorm', song: true },
-  huntersMark: { id: 'huntersMark', name: 'Marca del cazador', description: 'Tus disparos al enemigo marcado tienen +15 de puntería y +15 de crítico hasta que muera.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, range: 30, song: true },
-  spectralArrow: { id: 'spectralArrow', name: 'Flecha espectral', description: 'Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -10, ignoreCover: true, song: true },
-  shadowStep: { id: 'shadowStep', name: 'Paso de sombra', description: 'Te teletransportas a una casilla a la vista, a 8 o menos. Si está más alta, ganas +10 de puntería este turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 8, radius: 0, teleport: true, song: true },
-  lightRain: { id: 'lightRain', name: 'Lluvia de luz', description: 'Una flecha espectral a cada enemigo a la vista, con −15 de puntería.', target: 'self', ap: 1, endsTurn: true, charge: 'lightRain', weapon: 'primary', aim: -15, ignoreCover: true, song: true },
-  counterSong: { id: 'counterSong', name: 'Contracanto', description: 'Libera a un aliado del control mental, el pánico y la desorientación, y lo hace inmune al Canto durante 2 turnos.', target: 'ally', ap: 1, endsTurn: false, cooldown: 3, range: 10, song: true },
-  hymn: { id: 'hymn', name: 'Himno', description: 'Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 4, range: 6, song: true },
-  lastVerse: { id: 'lastVerse', name: 'Último verso', description: 'Un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas.', target: 'self', ap: 1, endsTurn: true, charge: 'lastVerse', range: 6, song: true },
+  // The Oficio: learnt in the Taller de oficios. It's noisy: it breaks concealment.
+  aegis: { id: 'aegis', name: 'Escudo antidisturbios', description: 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 3, song: true },
+  echoStep: { id: 'echoStep', name: 'Saltar por la ventana', description: 'Saltas a una casilla libre a la vista, a 6 o menos, por encima de lo que haya en medio. No termina el turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 6, radius: 0, teleport: true, song: true },
+  layOnHands: { id: 'layOnHands', name: 'Vendaje rápido', description: 'Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación.', target: 'ally', ap: 1, endsTurn: false, charge: 'layOnHands', range: 1.5, song: true },
+  velmarOath: { id: 'velmarOath', name: '¡Aguantad!', description: 'Durante 2 turnos, los aliados a 4 casillas no pueden entrar en pánico ni caer bajo el grito del Chillón, y tú recibes la mitad del daño.', target: 'self', ap: 1, endsTurn: false, charge: 'velmarOath', range: 4, song: true },
+  bolt: { id: 'bolt', name: 'Bengala', description: 'Una bengala encendida a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 2, range: 20, song: true },
+  silence: { id: 'silence', name: 'Petardos', description: 'Una traca en una zona de radio 2: los enemigos dentro quedan desorientados y los Chillones no pueden gritar durante 2 turnos.', target: 'tile', ap: 1, endsTurn: true, charge: 'silence', range: 10, radius: 2, song: true },
+  fireball: { id: 'fireball', name: 'Cóctel molotov', description: '4 de daño en radio 2,5 y destruye la cobertura. Daña también a los tuyos.', target: 'tile', ap: 1, endsTurn: true, charge: 'fireball', range: 12, radius: 2.5, explosive: 'songFire', song: true },
+  velmarStorm: { id: 'velmarStorm', name: 'El bidón', description: 'Haces estallar un bidón de gasolina y el fuego alcanza hasta 3 enemigos a la vista: 4 de daño a cada uno. Nunca falla.', target: 'self', ap: 1, endsTurn: true, charge: 'velmarStorm', song: true },
+  huntersMark: { id: 'huntersMark', name: 'Rastreo', description: 'Tus disparos al enemigo rastreado tienen +15 de puntería y +15 de crítico hasta que muera.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, range: 30, song: true },
+  spectralArrow: { id: 'spectralArrow', name: 'Flecha perforante', description: 'Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -10, ignoreCover: true, song: true },
+  shadowStep: { id: 'shadowStep', name: 'Encaramarse', description: 'Trepas o saltas a una casilla a la vista, a 8 o menos, por encima de lo que haya en medio. Si está más alta, ganas +10 de puntería este turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 8, radius: 0, teleport: true, song: true },
+  lightRain: { id: 'lightRain', name: 'Lluvia de flechas', description: 'Una flecha perforante a cada enemigo a la vista, con −15 de puntería.', target: 'self', ap: 1, endsTurn: true, charge: 'lightRain', weapon: 'primary', aim: -15, ignoreCover: true, song: true },
+  counterSong: { id: 'counterSong', name: 'Sedante', description: 'Libera a un aliado del grito del Chillón, el pánico y la desorientación, y lo hace inmune al grito durante 2 turnos.', target: 'ally', ap: 1, endsTurn: false, cooldown: 3, range: 10, song: true },
+  hymn: { id: 'hymn', name: 'Arenga', description: 'Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 4, range: 6, song: true },
+  lastVerse: { id: 'lastVerse', name: 'Desfibrilador', description: 'Un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas.', target: 'self', ap: 1, endsTurn: true, charge: 'lastVerse', range: 6, song: true },
 };
 
 /** Base chance of hacking the objective terminal; specialists and rank add to it. */
@@ -266,9 +266,9 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Un uso: cura 4 a un aliado contiguo.', slot: 'utility', cost: 25, level: 1, charges: { firstAid: 1 }, ability: 'firstAid' },
   flashbang: { id: 'flashbang', name: 'Granada aturdidora', description: 'Desorienta a los enemigos de la zona.', slot: 'utility', cost: 30, level: 2, charges: { flashbang: 1 }, ability: 'flashbang' },
   tracerRounds: { id: 'tracerRounds', name: 'Munición trazadora', description: '+10 de puntería.', slot: 'ammo', cost: 35, level: 2, mods: { aim: 10 } },
-  nanoVest: { id: 'nanoVest', name: 'Nanochaleco', description: '+2 de salud.', slot: 'utility', cost: 50, level: 4, hp: 2 },
+  nanoVest: { id: 'nanoVest', name: 'Chaleco antibalas', description: '+2 de salud.', slot: 'utility', cost: 50, level: 4, hp: 2 },
   apRounds: { id: 'apRounds', name: 'Munición perforante', description: 'El arma principal ignora 1 punto de blindaje.', slot: 'ammo', cost: 55, level: 4, mods: { pierce: 1 } },
-  mindShield: { id: 'mindShield', name: 'Zumbador', description: 'Una nota disonante detrás de la oreja: inmune a los ataques psiónicos.', slot: 'utility', cost: 75, level: 6, mods: { will: 100 } },
+  mindShield: { id: 'mindShield', name: 'Tapones', description: 'Cera en los oídos: el grito del Chillón no te afecta.', slot: 'utility', cost: 75, level: 6, mods: { will: 100 } },
 };
 
 // ---------------------------------------------------------------- templates
@@ -364,15 +364,15 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
     id: 'specialist', name: 'Especialista', short: 'ESP', weapon: 'rifle',
     abilities: ['shoot', 'medkit', 'aid', 'overwatch', 'grenade', 'reload', 'hunker'], charges: { grenade: 1, medkit: 2 },
   }),
-  trooper: alien({ id: 'trooper', name: 'Impreso', short: 'IMP', weapon: 'trooperRifle', abilities: ['shoot', 'overwatch', 'reload', 'grenade'], charges: { grenade: 1 } }),
-  officer: alien({ id: 'officer', name: 'Afinado', short: 'AFI', weapon: 'officerRifle', hp: 6, abilities: ['shoot', 'overwatch', 'reload'] }),
-  xenoid: alien({ id: 'xenoid', name: 'Heraldo', short: 'HER', weapon: 'xenoPistol', hp: 7, aim: 70, detection: 10, abilities: ['shoot', 'overwatch', 'reload'] }),
-  lancer: alien({ id: 'lancer', name: 'Recolector', short: 'REC', weapon: 'lancerRifle', meleeWeapon: 'stunLance', hp: 4, abilities: ['stunLance', 'shoot', 'reload'] }),
-  mec: alien({ id: 'mec', name: 'Gólem', short: 'GOL', weapon: 'mecCannon', hp: 7, armor: 1, aim: 70, robotic: true, abilities: ['shoot', 'missiles', 'overwatch', 'reload'], charges: { missiles: 1 } }),
-  sectoid: alien({ id: 'sectoid', name: 'Cantor', short: 'CAN', weapon: 'sectoidPistol', hp: 5, will: 80, abilities: ['shoot', 'mindspin', 'reanimate', 'reload'] }),
-  zombie: alien({ id: 'zombie', name: 'Hueco', short: 'HUE', weapon: 'claws', meleeWeapon: 'claws', hp: 6, aim: 60, defense: -10, mobility: 4, sight: 14, detection: 6, will: 100, abilities: ['claw'] }),
+  trooper: alien({ id: 'trooper', name: 'Saqueador', short: 'SAQ', weapon: 'trooperRifle', abilities: ['shoot', 'overwatch', 'reload', 'grenade'], charges: { grenade: 1 } }),
+  officer: alien({ id: 'officer', name: 'Cabecilla', short: 'CAB', weapon: 'officerRifle', hp: 6, abilities: ['shoot', 'overwatch', 'reload'] }),
+  xenoid: alien({ id: 'xenoid', name: 'Corredor', short: 'COR', weapon: 'xenoPistol', hp: 7, aim: 70, detection: 10, abilities: ['shoot', 'overwatch', 'reload'] }),
+  lancer: alien({ id: 'lancer', name: 'Cazador', short: 'CAZ', weapon: 'lancerRifle', meleeWeapon: 'stunLance', hp: 4, abilities: ['stunLance', 'shoot', 'reload'] }),
+  mec: alien({ id: 'mec', name: 'Acorazado', short: 'ACO', weapon: 'mecCannon', hp: 7, armor: 1, aim: 70, robotic: true, abilities: ['shoot', 'missiles', 'overwatch', 'reload'], charges: { missiles: 1 } }),
+  sectoid: alien({ id: 'sectoid', name: 'Chillón', short: 'CHI', weapon: 'sectoidPistol', hp: 5, will: 80, abilities: ['shoot', 'mindspin', 'reanimate', 'reload'] }),
+  zombie: alien({ id: 'zombie', name: 'Zombi', short: 'ZOM', weapon: 'claws', meleeWeapon: 'claws', hp: 6, aim: 60, defense: -10, mobility: 4, sight: 14, detection: 6, will: 100, abilities: ['claw'] }),
   // Objectives. The relay is an alien "unit" so every weapon can hit it; it never acts.
-  relay: alien({ id: 'relay', name: 'Retransmisor', short: 'RET', weapon: 'trooperRifle', hp: 8, armor: 1, aim: 0, mobility: 0, sight: 0, detection: 0, robotic: true, abilities: [] }),
+  relay: alien({ id: 'relay', name: 'Sirena', short: 'SIR', weapon: 'trooperRifle', hp: 8, armor: 1, aim: 0, mobility: 0, sight: 0, detection: 0, robotic: true, abilities: [] }),
   vip: soldier({ id: 'vip', name: 'VIP', short: 'VIP', weapon: 'pistol', hp: 4, aim: 50, will: 30, abilities: ['hunker'], charges: {} }),
 };
 

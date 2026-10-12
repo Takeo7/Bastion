@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { makeUnit } from '../src/setup';
 import { Rng } from '../src/rng';
+import { computeReach } from '../src/path';
 import { executeCommand, Sim } from '../src/rules';
 import type { Command } from '../src/protocol';
 import type { GameState, MissionKind } from '../src/types';
@@ -156,6 +157,33 @@ describe('patrols and reinforcements', () => {
     expect(s.pods[0]!.active).toBe(true);
     for (const e of sim.events) applyEvent(client, e);
     expect(client).toEqual(s);
+  });
+
+  it('a pod on patrol goes in by the door, never through a window', () => {
+    const s = field('elimination', [
+      '........................',
+      '........................',
+      '....#####...............',
+      '....#...#...............',
+      '....=...+...............',
+      '....#...#...............',
+      '....#####...............',
+      ...Array.from({ length: 17 }, () => '.'.repeat(24)),
+    ]);
+    s.concealed = true;
+    addUnit(s, 's1', 'specialist', 23, 23);
+    const a = addUnit(s, 'a1', 'trooper', 1, 4, { podId: 'p1' });
+    s.pods.push({ id: 'p1', active: false, unitIds: ['a1'], patrol: [{ x: 6, y: 4 }], patrolIndex: 0 });
+    const glass = 4 * 24 + 4;
+    expect(computeReach(s, a, 100).cost.has(glass)).toBe(false);
+    const sim = new Sim(s, new Rng(1), [0]);
+    for (let turn = 0; turn < 4; turn++) sim.runAlienTurn();
+    expect(s.tiles[glass]).toBe('window');
+    expect(s.tiles[4 * 24 + 8]).toBe('doorOpen');
+    expect(sim.events.some((e) => e.t === 'tileChanged' && e.kind === 'windowBroken')).toBe(false);
+    // Once the pod is in the fight, the window is a way in again.
+    s.pods[0]!.active = true;
+    expect(computeReach(s, a, 100).cost.has(glass)).toBe(true);
   });
 
   it('scheduled reinforcements are announced a turn early and land alert', () => {

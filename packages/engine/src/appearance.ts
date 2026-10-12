@@ -1,14 +1,27 @@
 import { PLAYER_COLORS } from './content';
 import type { Rng } from './rng';
-import type { Appearance, BuildId, ClassId, HeadId, Slot } from './types';
+import type { Appearance, ArmorPart, BuildId, ClassId, HeadId, Slot } from './types';
 
-export const HEADS: Record<HeadId, { id: HeadId; name: string }> = {
-  helmet: { id: 'helmet', name: 'Casco táctico' },
-  hood: { id: 'hood', name: 'Capucha' },
-  beret: { id: 'beret', name: 'Boina' },
-  cap: { id: 'cap', name: 'Gorra' },
-  mask: { id: 'mask', name: 'Máscara' },
-  bare: { id: 'bare', name: 'A cara descubierta' },
+/**
+ * Head pieces. `paint` is what the headgear is painted with until it gets a
+ * colour of its own (`helmet`): the armour (`primary`), the trim
+ * (`secondary`), or nothing (a mask, a bare head).
+ */
+export const HEADS: Record<HeadId, { id: HeadId; name: string; paint: 'armour' | 'trim' | null }> = {
+  helmet: { id: 'helmet', name: 'Casco táctico', paint: 'armour' },
+  hood: { id: 'hood', name: 'Capucha', paint: 'trim' },
+  beret: { id: 'beret', name: 'Boina', paint: 'trim' },
+  cap: { id: 'cap', name: 'Gorra', paint: 'trim' },
+  mask: { id: 'mask', name: 'Máscara', paint: null },
+  bare: { id: 'bare', name: 'A cara descubierta', paint: null },
+};
+
+/** Armour pieces with a colour of their own (barracks), head to feet. */
+export const ARMOR_PARTS: Record<ArmorPart, { id: ArmorPart; name: string }> = {
+  helmet: { id: 'helmet', name: 'Casco' },
+  torso: { id: 'torso', name: 'Torso' },
+  arms: { id: 'arms', name: 'Brazos' },
+  legs: { id: 'legs', name: 'Piernas' },
 };
 
 export const BUILDS: Record<BuildId, { id: BuildId; name: string }> = {
@@ -19,6 +32,7 @@ export const BUILDS: Record<BuildId, { id: BuildId; name: string }> = {
 
 export const HEAD_IDS = Object.keys(HEADS) as HeadId[];
 export const BUILD_IDS = Object.keys(BUILDS) as BuildId[];
+export const ARMOR_PART_IDS = Object.keys(ARMOR_PARTS) as ArmorPart[];
 
 /** Armour swatches offered in the barracks (any `#rrggbb` is accepted). */
 export const ARMOR_COLORS = [
@@ -34,7 +48,37 @@ export const NICKNAME_MAX = 16;
 const HEX = /^#[0-9a-f]{6}$/i;
 
 export function isAppearance(a: Appearance): boolean {
-  return HEX.test(a.primary) && HEX.test(a.secondary) && HEX.test(a.visor) && a.head in HEADS && a.build in BUILDS;
+  return (
+    HEX.test(a.primary) &&
+    HEX.test(a.secondary) &&
+    HEX.test(a.visor) &&
+    HEAD_IDS.includes(a.head) &&
+    BUILD_IDS.includes(a.build) &&
+    ARMOR_PART_IDS.every((part) => a[part] === undefined || HEX.test(a[part]))
+  );
+}
+
+/**
+ * The colour a piece is painted in: its own, or else what it wore before
+ * pieces could be painted — the armour colour, or the trim for a beret, cap
+ * or hood.
+ */
+export function partColor(a: Appearance, part: ArmorPart): string {
+  return a[part] ?? (part === 'helmet' && HEADS[a.head].paint === 'trim' ? a.secondary : a.primary);
+}
+
+/**
+ * A clean copy to store: the known fields only, in the order defaultAppearance
+ * writes them, and a piece only where it differs from what it would follow,
+ * so an unchanged look still compares equal to the default one.
+ */
+export function normalizeAppearance(a: Appearance): Appearance {
+  const out: Appearance = { primary: a.primary, secondary: a.secondary, visor: a.visor, head: a.head, build: a.build };
+  for (const part of ARMOR_PART_IDS) {
+    const own = a[part];
+    if (own !== undefined && own.toLowerCase() !== partColor(out, part).toLowerCase()) out[part] = own;
+  }
+  return out;
 }
 
 const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);

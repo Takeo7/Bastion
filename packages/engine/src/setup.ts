@@ -121,17 +121,17 @@ export function makeUnit(id: string, template: TemplateId, name: string, owner: 
 }
 
 export const MISSION_NAMES: Record<MissionKind, string> = {
-  elimination: 'Eliminación',
-  recovery: 'Recuperación',
+  elimination: 'Limpieza',
+  recovery: 'Botín',
   sabotage: 'Sabotaje',
-  hack: 'Pirateo',
+  hack: 'Arreglar la radio',
   rescue: 'Rescate',
 };
 
 export const BIOME_NAMES: Record<Biome, string> = {
   city: 'Ciudad',
   wilds: 'Afueras',
-  facility: 'Imprenta',
+  facility: 'Fábrica',
 };
 
 /** XCOM turns to secure each objective, tuned on 36×36 maps (see `missionTurns`). */
@@ -188,7 +188,7 @@ function reinforcementTurns(kind: MissionKind, difficulty: number): number[] {
   }
 }
 
-const VIP_NAMES = ['Dra. Irene Saldaña', 'Ing. Tomás Arrieta', 'Consejera Mara Velasco', 'Dr. Bruno Lasarte', 'Agente Inés Corral'];
+const VIP_NAMES = ['Dra. Irene Saldaña', 'Ing. Tomás Arrieta', 'Alcaldesa Mara Velasco', 'Dr. Bruno Lasarte', 'Agente Inés Corral'];
 
 export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[]): MissionLayout {
   if (map.kind === 'handmade') {

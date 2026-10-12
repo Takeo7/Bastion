@@ -1,6 +1,7 @@
 // Soldier growth: five aptitudes the player raises at each promotion, and one
 // talent tree shared by everyone, «la Rosa». Its centre is open to all; each of
-// its four axes leads to a class (three branches plus the Canto of Velmar).
+// its four axes leads to a class (three branches plus the Oficio, a trade Teo
+// teaches in the Taller de oficios).
 // Every soldier starts as a recruit with no class and may learn from two axes,
 // up to their third row. On reaching Capitán (SPECIALIZE_RANK) the soldier
 // becomes the class of the axis it was taught most (aptitudes break ties), for
@@ -57,7 +58,7 @@ export const ATTRS: Record<AttrId, AttrDef> = {
   pul: { id: 'pul', name: 'Pulso', short: 'PUL', effect: '+3 de puntería por punto.', thresholds: ['+10 de crítico.', '+1 de daño en los críticos.'] },
   agu: { id: 'agu', name: 'Aguante', short: 'AGU', effect: '+1 de salud cada 2 puntos.', thresholds: ['Las heridas curan un 30 % antes.', '+1 de blindaje.'] },
   ref: { id: 'ref', name: 'Reflejos', short: 'REF', effect: '+2 de defensa por punto por encima de 3.', thresholds: ['+1 casilla de movimiento.', 'Los disparos de reacción contra él tienen −20.'] },
-  tem: { id: 'tem', name: 'Temple', short: 'TEM', effect: '+6 de voluntad por punto.', thresholds: ['No entra en pánico.', 'Sordo al Coro: el Cantor no puede controlarlo.'] },
+  tem: { id: 'tem', name: 'Temple', short: 'TEM', effect: '+6 de voluntad por punto.', thresholds: ['No entra en pánico.', 'Nervios de acero: el grito del Chillón no puede con él.'] },
   ofi: { id: 'ofi', name: 'Oficio', short: 'OFI', effect: '+5 de hackeo por punto por encima de 5.', thresholds: ['+1 granada.', '+1 de curación y +1 de daño con granadas.'] },
 };
 
@@ -104,9 +105,9 @@ export const AXES: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'special
 
 /** Talent points the branch needs above a row before the row opens. */
 export const ROW_GATES = [0, 2, 4, 7, 10] as const;
-/** The Canto has one talent per row: each row opens once every row above has one point. */
+/** The Oficio has one talent per row: each row opens once every row above has one point. */
 export const SONG_GATES = [0, 1, 2, 3, 4] as const;
-/** Canto rows each level of the Cámara de Ecos opens (level 0 = not built). */
+/** Oficio rows each level of the Taller de oficios opens (level 0 = not built). */
 export const SONG_ROWS_OPEN = [0, 2, 4, 5] as const;
 /** A secondary axis stops above this row; the last two are the main axis's. */
 export const SECOND_AXIS_ROWS = 3;
@@ -120,7 +121,7 @@ export interface BranchDef {
   name: string;
   /** What the branch is about, in a few words. */
   focus: string;
-  /** The Canto of Velmar: opens with the Cámara de Ecos. */
+  /** The Oficio: opens with the Taller de oficios. */
   song?: boolean;
 }
 
@@ -129,25 +130,25 @@ export const BRANCHES: Record<ClassId, [BranchDef, BranchDef, BranchDef, BranchD
     { name: 'Hoja', focus: 'El Tajo y el cuerpo a cuerpo' },
     { name: 'Escopeta', focus: 'Corta distancia y flancos' },
     { name: 'Paso', focus: 'Movimiento y sigilo' },
-    { name: 'Juramento', focus: 'Canto de paladín: cuerpo a cuerpo que protege', song: true },
+    { name: 'Machete', focus: 'Oficio: cuerpo a cuerpo que protege', song: true },
   ],
   grenadier: [
     { name: 'Demolición', focus: 'Granadas y explosivos' },
     { name: 'Artillería', focus: 'El cañón y el blindaje' },
     { name: 'Control', focus: 'Supresión y marcas' },
-    { name: 'Evocación', focus: 'Canto de mago de batalla', song: true },
+    { name: 'Fuego', focus: 'Oficio: bengalas, petardos y molotov', song: true },
   ],
   sharpshooter: [
     { name: 'Tirador', focus: 'Fusil y distancia' },
     { name: 'Pistolero', focus: 'Pistola y movimiento' },
     { name: 'Vigía', focus: 'Vigilancia y altura' },
-    { name: 'Ojo de Velmar', focus: 'Canto de explorador arcano', song: true },
+    { name: 'Ballesta', focus: 'Oficio: rastreo y flechas', song: true },
   ],
   specialist: [
     { name: 'Médico', focus: 'Botiquín y reanimación' },
     { name: 'Grillo', focus: 'El dron como arma' },
     { name: 'Enlace', focus: 'Ayuda y cooperación' },
-    { name: 'Voz', focus: 'Canto de clérigo y bardo', song: true },
+    { name: 'Enfermería', focus: 'Oficio: curar y sostener', song: true },
   ],
 };
 
@@ -197,7 +198,7 @@ export interface TalentDef {
   description: string;
   /** Axis of the rosa; null for the centre (open to everyone). */
   axis: ClassId | null;
-  /** 3 = the axis's Canto. */
+  /** 3 = the axis's Oficio. */
   branch: 0 | 1 | 2 | 3;
   row: 0 | 1 | 2 | 3 | 4;
   /** Levels it can take (one talent point each). */
@@ -220,7 +221,7 @@ export interface TalentDef {
   coop?: boolean;
   /** Equipment it works with: only for soldiers of that class. */
   kit?: Kit;
-  /** A song of Velmar (Canto branch). */
+  /** A trade of the Oficio branch. */
   song?: boolean;
 }
 
@@ -269,12 +270,12 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   scoutEye: t('assault', 2, 2, 'scoutEye', 2, 'Ojo de explorador', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
   untouchable: t('assault', 2, 3, 'untouchable', 2, 'Inalcanzable', '+5 de defensa y +5 de esquiva por nivel.', { mods: { defense: 5, dodge: 5 } }),
   runAndGun: t('assault', 2, 4, 'runAndGun', 1, 'Correr y disparar', 'Acción gratuita: +1 acción este turno (enfriamiento 4).', { ability: 'runAndGun', req: ['ref', 8] }),
-  // Assault · Juramento (Canto)
-  songBlade: t('assault', 3, 0, 'songBlade', 2, 'Hoja cantada', 'El Tajo hace +1 de daño por nivel. En el nivel 2, además, desorienta al enemigo si acierta.', { mods: { meleeDamage: 1 }, maxMods: { slashDisorient: 1 } }),
-  aegis: t('assault', 3, 1, 'aegis', 1, 'Égida', 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno (enfriamiento 3).', { ability: 'aegis' }),
-  echoStep: t('assault', 3, 2, 'echoStep', 1, 'Salto de eco', 'Desapareces y apareces en una casilla libre a la vista, a 6 o menos. Cuesta 1 acción y no termina el turno (enfriamiento 4).', { ability: 'echoStep' }),
-  layOnHands: t('assault', 3, 3, 'layOnHands', 1, 'Imposición de manos', 'Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación. 2 usos.', { ability: 'layOnHands', charges: { layOnHands: 2 } }),
-  velmarOath: t('assault', 3, 4, 'velmarOath', 1, 'Juramento de Velmar', 'Una vez por misión: durante 2 turnos, los aliados a 4 casillas no pueden entrar en pánico ni ser controlados, y tú recibes la mitad del daño.', { ability: 'velmarOath', charges: { velmarOath: 1 }, req: ['tem', 7] }),
+  // Assault · Machete (Oficio)
+  songBlade: t('assault', 3, 0, 'songBlade', 2, 'Hoja afilada', 'El Tajo hace +1 de daño por nivel. En el nivel 2, además, desorienta al enemigo si acierta.', { mods: { meleeDamage: 1 }, maxMods: { slashDisorient: 1 } }),
+  aegis: t('assault', 3, 1, 'aegis', 1, 'Escudo antidisturbios', 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno (enfriamiento 3).', { ability: 'aegis' }),
+  echoStep: t('assault', 3, 2, 'echoStep', 1, 'Saltar por la ventana', 'Saltas a una casilla libre a la vista, a 6 o menos, por encima de lo que haya en medio. Cuesta 1 acción y no termina el turno (enfriamiento 4).', { ability: 'echoStep' }),
+  layOnHands: t('assault', 3, 3, 'layOnHands', 1, 'Vendaje rápido', 'Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación. 2 usos.', { ability: 'layOnHands', charges: { layOnHands: 2 } }),
+  velmarOath: t('assault', 3, 4, 'velmarOath', 1, '¡Aguantad!', 'Una vez por misión: durante 2 turnos, los aliados a 4 casillas no pueden entrar en pánico ni caer bajo el grito del Chillón, y tú recibes la mitad del daño.', { ability: 'velmarOath', charges: { velmarOath: 1 }, req: ['tem', 7] }),
   // Grenadier · Demolición
   demolition: t('grenadier', 0, 0, 'demolition', 2, 'Demolición', '+1 de daño de las granadas por nivel.', { mods: { grenadeDamage: 1 } }),
   bandolier: t('grenadier', 0, 0, 'bandolier', 2, 'Cinturón', '+1 granada por nivel.', { charges: { grenade: 1 } }),
@@ -302,12 +303,12 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   ironNerves: t('grenadier', 2, 2, 'ironNerves', 2, 'Nervios de acero', '+8 de voluntad por nivel.', { mods: { will: 8 } }),
   dugIn: t('grenadier', 2, 3, 'dugIn', 2, 'Atrincherado', '+5 de defensa por nivel.', { mods: { defense: 5 } }),
   rupture: t('grenadier', 2, 4, 'rupture', 1, 'Ruptura', 'Disparo con +3 de daño que deja al objetivo recibiendo +3 de daño (enfriamiento 4).', { ability: 'rupture', req: ['tem', 6] }),
-  // Grenadier · Evocación (Canto)
-  bolt: t('grenadier', 3, 0, 'bolt', 1, 'Saeta', 'Un proyectil de luz a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje (enfriamiento 2).', { ability: 'bolt' }),
-  silence: t('grenadier', 3, 1, 'silence', 1, 'Silencio', 'Zona de radio 2 a 10 casillas: los enemigos dentro quedan desorientados y los Cantores no pueden cantar durante 2 turnos. 2 cargas.', { ability: 'silence', charges: { silence: 2 } }),
-  fireball: t('grenadier', 3, 2, 'fireball', 1, 'Bola de fuego', '4 de daño en radio 2,5 a 12 casillas, y destruye la cobertura. Daña también a los tuyos. 2 cargas.', { ability: 'fireball', charges: { fireball: 2 } }),
-  highFlame: t('grenadier', 3, 3, 'highFlame', 2, 'Llama alta', 'Saeta, Bola de fuego y Tormenta hacen +1 de daño por nivel.', { mods: { songDamage: 1 } }),
-  velmarStorm: t('grenadier', 3, 4, 'velmarStorm', 1, 'Tormenta de Velmar', 'Una vez por misión: rayos sobre hasta 3 enemigos a la vista, 4 de daño a cada uno. Nunca fallan.', { ability: 'velmarStorm', charges: { velmarStorm: 1 }, req: ['tem', 7] }),
+  // Grenadier · Fuego (Oficio)
+  bolt: t('grenadier', 3, 0, 'bolt', 1, 'Bengala', 'Una bengala encendida a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje (enfriamiento 2).', { ability: 'bolt' }),
+  silence: t('grenadier', 3, 1, 'silence', 1, 'Petardos', 'Una traca en una zona de radio 2 a 10 casillas: los enemigos dentro quedan desorientados y los Chillones no pueden gritar durante 2 turnos. 2 cargas.', { ability: 'silence', charges: { silence: 2 } }),
+  fireball: t('grenadier', 3, 2, 'fireball', 1, 'Cóctel molotov', '4 de daño en radio 2,5 a 12 casillas, y destruye la cobertura. Daña también a los tuyos. 2 cargas.', { ability: 'fireball', charges: { fireball: 2 } }),
+  highFlame: t('grenadier', 3, 3, 'highFlame', 2, 'Gasolina extra', 'Bengala, Cóctel molotov y Bidón hacen +1 de daño por nivel.', { mods: { songDamage: 1 } }),
+  velmarStorm: t('grenadier', 3, 4, 'velmarStorm', 1, 'El bidón', 'Una vez por misión: haces estallar un bidón de gasolina y el fuego alcanza hasta 3 enemigos a la vista, 4 de daño a cada uno. Nunca falla.', { ability: 'velmarStorm', charges: { velmarStorm: 1 }, req: ['tem', 7] }),
   // Sharpshooter · Tirador
   deadeye: t('sharpshooter', 0, 0, 'deadeye', 3, 'Precisión letal', '+4 de crítico por nivel.', { mods: { crit: 4 } }),
   hawkEye: t('sharpshooter', 0, 0, 'hawkEye', 2, 'Ojo de halcón', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
@@ -335,12 +336,12 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   coldBlood: t('sharpshooter', 2, 2, 'coldBlood', 2, 'Sangre fría', '+8 de voluntad por nivel.', { mods: { will: 8 } }),
   guardCrit: t('sharpshooter', 2, 3, 'guardCrit', 1, 'Tirador de guardia', 'Los disparos de vigilancia pueden ser críticos.'),
   killZone: t('sharpshooter', 2, 4, 'killZone', 1, 'Zona letal', 'Vigilancia que dispara a cada enemigo que se mueva, una vez a cada uno (enfriamiento 4).', { ability: 'killZone' }),
-  // Sharpshooter · Ojo de Velmar (Canto)
-  huntersMark: t('sharpshooter', 3, 0, 'huntersMark', 1, 'Marca del cazador', 'El enemigo marcado recibe +15 de puntería y +15 de crítico en todos tus disparos hasta que muera (enfriamiento 3).', { ability: 'huntersMark' }),
-  spectralArrow: t('sharpshooter', 3, 1, 'spectralArrow', 1, 'Flecha espectral', 'Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería (enfriamiento 3).', { ability: 'spectralArrow' }),
-  shadowStep: t('sharpshooter', 3, 2, 'shadowStep', 1, 'Paso de sombra', 'Te teletransportas a una casilla a la vista, a 8 o menos. Si está más alta, ganas +10 de puntería este turno (enfriamiento 4).', { ability: 'shadowStep' }),
-  windEyes: t('sharpshooter', 3, 3, 'windEyes', 2, 'Ojos del viento', '+2 casillas de visión por nivel, y ves a través del humo.', { mods: { sight: 2 }, onceMods: { smokeSight: 1 } }),
-  lightRain: t('sharpshooter', 3, 4, 'lightRain', 1, 'Lluvia de luz', 'Una vez por misión: una flecha espectral a cada enemigo a la vista, con −15 de puntería.', { ability: 'lightRain', charges: { lightRain: 1 }, req: ['tem', 7] }),
+  // Sharpshooter · Ballesta (Oficio)
+  huntersMark: t('sharpshooter', 3, 0, 'huntersMark', 1, 'Rastreo', 'El enemigo rastreado recibe +15 de puntería y +15 de crítico en todos tus disparos hasta que muera (enfriamiento 3).', { ability: 'huntersMark' }),
+  spectralArrow: t('sharpshooter', 3, 1, 'spectralArrow', 1, 'Flecha perforante', 'Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería (enfriamiento 3).', { ability: 'spectralArrow' }),
+  shadowStep: t('sharpshooter', 3, 2, 'shadowStep', 1, 'Encaramarse', 'Trepas o saltas a una casilla a la vista, a 8 o menos, por encima de lo que haya en medio. Si está más alta, ganas +10 de puntería este turno (enfriamiento 4).', { ability: 'shadowStep' }),
+  windEyes: t('sharpshooter', 3, 3, 'windEyes', 2, 'Prismáticos', '+2 casillas de visión por nivel, y ves a través del humo.', { mods: { sight: 2 }, onceMods: { smokeSight: 1 } }),
+  lightRain: t('sharpshooter', 3, 4, 'lightRain', 1, 'Lluvia de flechas', 'Una vez por misión: una flecha perforante a cada enemigo a la vista, con −15 de puntería.', { ability: 'lightRain', charges: { lightRain: 1 }, req: ['tem', 7] }),
   // Specialist · Médico
   fieldMedic: t('specialist', 0, 0, 'fieldMedic', 2, 'Médico de campo', 'El botiquín cura +1 por nivel.', { mods: { heal: 1 }, kit: 'grillo' }),
   bigKit: t('specialist', 0, 0, 'bigKit', 2, 'Botiquín grande', '+1 uso del botiquín por nivel.', { charges: { medkit: 1 }, kit: 'grillo' }),
@@ -365,12 +366,12 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   mutualCover: t('specialist', 2, 2, 'mutualCover', 2, 'Cobertura mutua', '+5 de defensa por nivel.', { mods: { defense: 5 } }),
   instructor: t('specialist', 2, 3, 'instructor', 2, 'Instructor', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
   threatAssessment: t('specialist', 2, 4, 'threatAssessment', 1, 'Evaluación de amenazas', 'El Protocolo de ayuda también pone al aliado en vigilancia.', { req: ['tem', 6], kit: 'grillo' }),
-  // Specialist · Voz (Canto)
-  calmSong: t('specialist', 3, 0, 'calmSong', 2, 'Canto de calma', '+10 de voluntad por nivel a los aliados a 4 casillas o menos.', { mods: { calmAura: 1 } }),
-  counterSong: t('specialist', 3, 1, 'counterSong', 1, 'Contracanto', 'Libera a un aliado a 10 casillas o menos del control mental, el pánico y la desorientación, y lo hace inmune al Canto durante 2 turnos (enfriamiento 3).', { ability: 'counterSong' }),
-  hymn: t('specialist', 3, 2, 'hymn', 1, 'Himno', 'Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno (enfriamiento 4).', { ability: 'hymn' }),
-  lightHands: t('specialist', 3, 3, 'lightHands', 2, 'Manos de luz', 'Tus curas sanan +1 por nivel.', { mods: { heal: 1 } }),
-  lastVerse: t('specialist', 3, 4, 'lastVerse', 1, 'Último verso', 'Una vez por misión: un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas.', { ability: 'lastVerse', charges: { lastVerse: 1 }, req: ['tem', 7] }),
+  // Specialist · Enfermería (Oficio)
+  calmSong: t('specialist', 3, 0, 'calmSong', 2, 'Calma', '+10 de voluntad por nivel a los aliados a 4 casillas o menos.', { mods: { calmAura: 1 } }),
+  counterSong: t('specialist', 3, 1, 'counterSong', 1, 'Sedante', 'Libera a un aliado a 10 casillas o menos del grito del Chillón, el pánico y la desorientación, y lo hace inmune al grito durante 2 turnos (enfriamiento 3).', { ability: 'counterSong' }),
+  hymn: t('specialist', 3, 2, 'hymn', 1, 'Arenga', 'Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno (enfriamiento 4).', { ability: 'hymn' }),
+  lightHands: t('specialist', 3, 3, 'lightHands', 2, 'Manos de enfermero', 'Tus curas sanan +1 por nivel.', { mods: { heal: 1 } }),
+  lastVerse: t('specialist', 3, 4, 'lastVerse', 1, 'Desfibrilador', 'Una vez por misión: un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas.', { ability: 'lastVerse', charges: { lastVerse: 1 }, req: ['tem', 7] }),
 };
 
 /** The centre's talents. */
@@ -386,12 +387,12 @@ export function rowGate(d: Pick<TalentDef, 'row' | 'song'>): number {
   return (d.song ? SONG_GATES : ROW_GATES)[d.row];
 }
 
-/** Canto rows the Cámara de Ecos opens at this level. */
+/** Oficio rows the Taller de oficios opens at this level. */
 export function songRowsOpen(echoesLevel: number): number {
   return SONG_ROWS_OPEN[Math.max(0, Math.min(3, echoesLevel))]!;
 }
 
-/** Level of the Cámara de Ecos a Canto row needs. */
+/** Level of the Taller de oficios an Oficio row needs. */
 export function songRowLevel(row: number): number {
   return SONG_ROWS_OPEN.findIndex((open) => open > row);
 }
@@ -453,7 +454,7 @@ export function specialize(b: Build, cls: ClassId): void {
   for (const attr of CLASS_TOP[cls]) b.attrs[attr]++;
 }
 
-/** Why the talent can't take one more level, or null if it can. `echoes` is the Cámara de Ecos's level. */
+/** Why the talent can't take one more level, or null if it can. `echoes` is the Taller de oficios's level. */
 export function talentBlocker(b: Build, id: PerkId, echoes = 0): string | null {
   const d = TALENTS[id];
   if (!d) return 'Ese talento no existe.';
@@ -474,7 +475,7 @@ export function talentBlocker(b: Build, id: PerkId, echoes = 0): string | null {
     if (d.row >= SECOND_AXIS_ROWS && becomes !== axis) return b.cls ? 'Las dos últimas filas son solo de tu eje principal.' : `Las dos últimas filas se abren al especializarse, en ${SPECIALIZE_RANK_NAME}.`;
   }
   if (d.song) {
-    if (d.row >= songRowsOpen(echoes)) return echoes ? `Hace falta la Cámara de Ecos a nivel ${songRowLevel(d.row)}.` : 'Hace falta la Cámara de Ecos.';
+    if (d.row >= songRowsOpen(echoes)) return echoes ? `Hace falta el Taller de oficios a nivel ${songRowLevel(d.row)}.` : 'Hace falta el Taller de oficios.';
   }
   const gate = rowGate(d);
   const above = pointsAbove(b.talents, axis, d.branch, d.row);
@@ -565,7 +566,8 @@ export function soldierStats(b: Build, gear: ItemId[] = []): SoldierStats {
     maxHp += (d.hp ?? 0) * level;
     addCharges(d.charges, level);
   }
-  // The price of the Canto: whoever sings is easier for a Cantor to sing to, unless deaf to the Coro.
+  // The price of the Oficio: whoever practises it makes noise and is easier prey for the Chillón's
+  // scream, unless they have nerves of steel (Temple 10).
   if (perks.some((id) => TALENTS[id].song)) mods = addMods(mods, { singer: 1, songOpen: tem >= 10 ? 0 : 10 });
   for (const item of gear.map((id) => ITEMS[id])) {
     if (item.mods) mods = addMods(mods, item.mods);

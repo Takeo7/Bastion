@@ -143,6 +143,10 @@
 
 .radio-next {
   display: inline-block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
   font-family: var(--font-hand);
   font-size: 18px;
   color: var(--pen);

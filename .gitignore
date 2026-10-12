@@ -5,3 +5,6 @@ data/
 .DS_Store
 .dev-snapshots/
 .claude/
+
+# Synty source packs: the licence forbids redistributing the originals; only converted models are committed.
+assets-src/

@@ -64,7 +64,18 @@ const talentId = z.enum(keys(TALENTS));
 const attrId = z.enum(keys(ATTRS));
 const id = z.string().min(1).max(16);
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
-const appearanceSchema = z.object({ primary: color, secondary: color, visor: color, head: z.enum(keys(HEADS)), build: z.enum(keys(BUILDS)) });
+// The pieces are optional (appearance.ts): older clients and saves send none.
+const appearanceSchema = z.object({
+  primary: color,
+  secondary: color,
+  visor: color,
+  head: z.enum(keys(HEADS)),
+  build: z.enum(keys(BUILDS)),
+  helmet: color.optional(),
+  torso: color.optional(),
+  arms: color.optional(),
+  legs: color.optional(),
+});
 
 export const campaignCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chooseMission'), id }),
