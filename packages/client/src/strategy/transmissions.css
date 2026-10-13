@@ -174,31 +174,31 @@
   }
 }
 
-/* Voxel bust (strategy/portraits.ts) on a photo backdrop, like a file's ID photo. */
-.radio-portrait.voxel {
+/* A Synty bust (strategy/portraits.ts) on a photo backdrop, like a file's ID photo. */
+.radio-portrait.bust {
   position: relative;
   overflow: hidden;
   background: radial-gradient(circle at 50% 35%, #7d8a94, #3a434b 75%);
 }
 
-.radio-portrait.voxel img {
+.radio-portrait.bust img {
   display: block;
   width: 100%;
   height: 100%;
 }
 
 /* At the panel's small size the face matters most: zoom in on it (not on the Coro's column). */
-.radio-portrait.voxel:not([data-speaker='coro']) img {
+.radio-portrait.bust:not([data-speaker='coro']) img {
   transform: scale(1.3);
   transform-origin: 50% 30%;
 }
 
 /* The Coro: no face, a signal; dark backdrop and a moving band of static. */
-.radio-portrait.voxel[data-speaker='coro'] {
+.radio-portrait.bust[data-speaker='coro'] {
   background: radial-gradient(circle at 50% 50%, #12261c, #050a07 75%);
 }
 
-.radio-portrait.voxel[data-speaker='coro']::after {
+.radio-portrait.bust[data-speaker='coro']::after {
   content: '';
   position: absolute;
   inset: 0;

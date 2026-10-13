@@ -4,6 +4,7 @@ import { StaticBatch, type Dirty } from './batch';
 import { STOREY } from './coords';
 import { extendShader, type FogOfWar } from './fogOfWar';
 import { contactPatch, type GroundOcclusion } from './groundAO';
+import { ATLAS_RECTS, atlasIndex, atlasRect, mapAtlasTexture, PACKED } from './mapAtlas';
 import { NIGHT } from './night';
 import { atlasOf, atlasTexture, loadModel } from './synty';
 import { KIT_SCALE, PIECES, SYNTY_SCALE, type AtlasId, type PieceAsset, type PieceId, type PropId } from './syntyManifest';
@@ -250,9 +251,15 @@ export class BuildingPlan {
         else if (span >= 10) kind = 'office';
         const kit: KitId = kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
         const look = hash(r.x0, r.y0, 5);
-        // Town's shops and offices stand two or three storeys, some houses two; the rest one.
+        // As tall as the engine says (it stops sight up to its roof: GameState.storeys), read on a tile of its floor
+        // (a wall two share takes the taller one's); older saves and hand-made maps: town's shops and offices two or three, some houses two.
+        const floorTile = (() => {
+          for (let y = r.y0 + 1; y < r.y1; y++) for (let x = r.x0 + 1; x < r.x1; x++) if (!wallAt(y * w + x)) return y * w + x;
+          return r.y0 * w + r.x0;
+        })();
+        const told = s.storeys?.[floorTile];
         const tall = s.biome !== 'city' || base > 0 ? 0 : kind === 'shop' ? (look < 0.55 ? 1 : 2) : kind === 'office' ? (look < 0.6 ? 1 : 2) : kind === 'house' ? (look < 0.3 ? 1 : 0) : 0;
-        const storeys = 1 + tall;
+        const storeys = told && told > 0 ? told : 1 + tall;
         this.buildings.push({ index: own, ...r, kind, kit, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1 });
       });
       for (const i of tiles) if (this.inside[i]) this.floor[i] = 1;
@@ -616,6 +623,9 @@ function looksOf(b: Building) {
  * derivatives come from the continuous coordinates, so there is no seam where
  * it wraps.
  */
+/** Town's place in the packed texture: the swatches are Town's. */
+const TOWN = atlasRect('town')!;
+
 function swatchPatch(material: THREE.MeshStandardMaterial): void {
   extendShader(material, 'swatch', (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -624,8 +634,10 @@ function swatchPatch(material: THREE.MeshStandardMaterial): void {
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vPlane;\nvarying vec4 vSwatch;').replace(
       '#include <map_fragment>',
       `{
-        vec2 swUv = vSwatch.xy + fract(vPlane) * vSwatch.zw;
-        vec4 swTexel = textureGrad(map, swUv, dFdx(vPlane) * vSwatch.zw, dFdy(vPlane) * vSwatch.zw);
+        // Town's swatches, in Town's place in the packed texture (mapAtlas.ts).
+        vec2 swScale = vSwatch.zw * vec2(${TOWN[2].toFixed(4)}, ${TOWN[3].toFixed(4)});
+        vec2 swUv = vec2(${TOWN[0].toFixed(4)}, ${TOWN[1].toFixed(4)}) + vSwatch.xy * vec2(${TOWN[2].toFixed(4)}, ${TOWN[3].toFixed(4)}) + fract(vPlane) * swScale;
+        vec4 swTexel = textureGrad(map, swUv, dFdx(vPlane) * swScale, dFdy(vPlane) * swScale);
         diffuseColor *= swTexel;
       }`,
     );
@@ -841,7 +853,7 @@ const ON_ROOF = 9;
  */
 function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
   extendShader(material, 'wall-cut', (shader) => {
-    Object.assign(shader.uniforms, cut.uniforms);
+    Object.assign(shader.uniforms, cut.uniforms, { uAtlasRects: ATLAS_RECTS });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -850,6 +862,8 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
         attribute vec4 aCut;
         attribute vec3 aOuter;
         attribute vec3 aInner;
+        attribute float aAtlas;
+        varying float vAtlas;
         varying float vCutY;
         varying float vCutTop;
         varying float vCutFade;
@@ -870,6 +884,7 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
           vCutFade = 0.0;
           vOuter = aOuter;
           vInner = aInner;
+          vAtlas = aAtlas;
           if (aCut.x > 0.5 && aCut.y > ${ON_ROOF - 1}.0) {
             vCutFade = cutState(aCut.x).r;
           } else if (aCut.x > 0.5) {
@@ -882,14 +897,23 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
         }`,
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${DITHER_GLSL}\nvarying float vCutY;\nvarying float vCutTop;\nvarying float vCutFade;\nvarying vec3 vOuter;\nvarying vec3 vInner;`)
+      .replace(
+        '#include <common>',
+        `#include <common>\n${DITHER_GLSL}\nvarying float vCutY;\nvarying float vCutTop;\nvarying float vCutFade;\nvarying vec3 vOuter;\nvarying vec3 vInner;\nvarying float vAtlas;\nuniform vec4 uAtlasRects[${PACKED.length}];`,
+      )
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (vCutY > vCutTop || cutDither() < vCutFade) discard;')
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
         #ifdef USE_MAP
           // Town's atlas: plaster (left) and siding (right) along its top; the trims between keep their white.
-          if (vMapUv.y < 0.25) diffuseColor.rgb *= vMapUv.x < 0.4167 ? vInner : (vMapUv.x > 0.506 ? vOuter : vec3(1.0));
+          // The dye reads the UV in the piece's own atlas (its place in the packed texture: mapAtlas.ts).
+          vec2 dyeUv = vMapUv;
+          if (vAtlas > -0.5) {
+            vec4 dyeRect = uAtlasRects[int(vAtlas + 0.5)];
+            dyeUv = (vMapUv - dyeRect.xy) / dyeRect.zw;
+          }
+          if (dyeUv.y < 0.25) diffuseColor.rgb *= dyeUv.x < 0.4167 ? vInner : (dyeUv.x > 0.506 ? vOuter : vec3(1.0));
         #endif
         if (!gl_FrontFacing) diffuseColor.rgb = vec3(0.16, 0.15, 0.14);`,
       );
@@ -1349,10 +1373,10 @@ export class BuildingsView {
   ) {
     this.plan = new BuildingPlan(s);
     this.cutaway = new Cutaway(this.plan);
-    this.pieceMaterial = this.own(new THREE.MeshStandardMaterial({ map: atlasTexture('town'), roughness: 0.85, side: THREE.DoubleSide }));
+    // Every packed pack's pieces in one material (mapAtlas.ts): a draw for all of them.
+    this.pieceMaterial = this.own(new THREE.MeshStandardMaterial({ map: mapAtlasTexture(), roughness: 0.85, side: THREE.DoubleSide }));
     wallCutPatch(this.pieceMaterial, this.cutaway);
-    this.atlasMaterials.set('town', this.pieceMaterial);
-    this.blockMaterial = new THREE.MeshStandardMaterial({ map: atlasTexture('town'), vertexColors: true, roughness: 0.9 });
+    this.blockMaterial = new THREE.MeshStandardMaterial({ map: mapAtlasTexture(), vertexColors: true, roughness: 0.9 });
     swatchPatch(this.blockMaterial);
     this.own(this.blockMaterial);
     this.glassMaterial = this.own(
@@ -1409,7 +1433,7 @@ export class BuildingsView {
     this.raisedSurfaces(s, decks, solid);
     const make = (surfaces: Surfaces, roof: boolean, shadows = roof, weathered = roof, occludes = false) => {
       if (surfaces.empty) return;
-      const material = new THREE.MeshStandardMaterial({ map: atlasTexture('town'), vertexColors: true, roughness: roof ? 0.8 : 0.9 });
+      const material = new THREE.MeshStandardMaterial({ map: mapAtlasTexture(), vertexColors: true, roughness: roof ? 0.8 : 0.9 });
       swatchPatch(material);
       if (weathered) weatherPatch(material);
       if (roof) roofFadePatch(material, this.cutaway);
@@ -1816,6 +1840,9 @@ export class BuildingsView {
       const material = this.materialFor(batch.atlas);
       // What stands on roofs and hangs on walls is no ground's occluder (the roofs aren't in the height field).
       const occludes = !key.startsWith('roof:') && !key.startsWith('sign:');
+      // Its UVs moved into its pack's place in the packed texture, and which pack it is (for the dye).
+      const uv = atlasRect(batch.atlas) ?? undefined;
+      const aAtlas = [atlasIndex(batch.atlas)];
       batch.matrices.forEach((mm, k) =>
         merged.add(
           batch.geometry,
@@ -1826,8 +1853,10 @@ export class BuildingsView {
             aCut: batch.cut.slice(k * 4, k * 4 + 4),
             aOuter: batch.outer.slice(k * 3, k * 3 + 3),
             aInner: batch.inner.slice(k * 3, k * 3 + 3),
+            aAtlas,
           },
           occludes,
+          uv,
         ),
       );
     }
@@ -1836,7 +1865,7 @@ export class BuildingsView {
       pane.matrices.forEach((mm, k) => {
         const e = mm.elements;
         const glow = hash(Math.round(e[12]! * 2), Math.round(e[14]! * 2), 90) < 0.35 ? 1 : 0;
-        merged.add(geometry, this.glassMaterial, mm, false, { aCut: pane.cut.slice(k * 4, k * 4 + 4), aOuter: WHITE3, aInner: WHITE3, aGlow: [glow] });
+        merged.add(geometry, this.glassMaterial, mm, false, { aCut: pane.cut.slice(k * 4, k * 4 + 4), aOuter: WHITE3, aInner: WHITE3, aGlow: [glow], aAtlas: [-1] });
       });
     }
     const changed = merged.commit();
@@ -1975,6 +2004,7 @@ export class BuildingsView {
 
   /** The pieces' material on an atlas (walls are Town's; what stands on roofs comes from other packs too). */
   private materialFor(atlas: AtlasId): THREE.MeshStandardMaterial {
+    if (atlasRect(atlas)) return this.pieceMaterial;
     let m = this.atlasMaterials.get(atlas);
     if (!m) {
       m = this.own(new THREE.MeshStandardMaterial({ map: atlasTexture(atlas), roughness: 0.85, side: THREE.DoubleSide }));

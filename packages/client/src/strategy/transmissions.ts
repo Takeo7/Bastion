@@ -32,10 +32,10 @@ import { append, clear, h } from '../ui/dom';
 import { portraitSrc } from './portraits';
 import './transmissions.css';
 
-/** The speaker's voxel bust (strategy/portraits.ts); their initials on a card if it can't be rendered. */
+/** The speaker's bust (strategy/portraits.ts); their initials on a card if it can't be rendered. */
 export function portrait(speaker: SpeakerId): HTMLElement {
   try {
-    return h('div.radio-portrait.voxel', { 'data-speaker': speaker, title: SPEAKERS[speaker].name }, h('img', { src: portraitSrc(speaker), alt: SPEAKERS[speaker].name }));
+    return h('div.radio-portrait.bust', { 'data-speaker': speaker, title: SPEAKERS[speaker].name }, h('img', { src: portraitSrc(speaker), alt: SPEAKERS[speaker].name }));
   } catch {
     const initials = speaker === 'coro' ? '∿' : SPEAKERS[speaker].name.replace(/«.*»|,/g, '').split(' ').filter((w) => /^[A-ZÁÉÍÓÚ]/.test(w) && w !== 'Dra.').slice(0, 2).map((w) => w[0]).join('');
     return h('div.radio-portrait', { 'data-speaker': speaker }, h('span', {}, initials));

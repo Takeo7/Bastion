@@ -1,9 +1,11 @@
 // Campaign progression: the Bastion levels up with combat experience and each
 // level unlocks technology, accessories and facilities. Weapons and armour are
-// never bought: a soldier carries the best tier the Bastion has unlocked *and*
-// their rank allows, so promotions show up as better guns.
+// never bought: the Bastion's level allows each tier, the Taller makes it
+// (CRAFTS, docs/FASE4.md), and a soldier carries the best tier made *and*
+// their rank allows, so promotions show up as better guns. A found weapon
+// lifts one soldier a tier above the rest.
 import { ITEMS, RANKS, TEMPLATES, WEAPONS, type WeaponId } from './content';
-import type { CampaignSoldier, CampaignState, FacilityId } from './campaign';
+import type { CampaignSoldier, CampaignState, FacilityId, FoundWeapon } from './campaign';
 import type { ItemId, TemplateId } from './types';
 
 export type TechId = 'magWeapons' | 'plateArmor' | 'plasmaGrenades' | 'encryption' | 'plasmaWeapons' | 'nanoMedkit' | 'predatorArmor' | 'signal';
@@ -17,13 +19,13 @@ export interface TechDef {
 }
 
 export const TECHS: Record<TechId, TechDef> = {
-  magWeapons: { id: 'magWeapons', name: 'Armas de taller', description: 'Teo repara y pone a punto lo que encontráis: armas de nivel 2 (+2 de daño) para los soldados desde Cabo.', level: 3 },
-  plateArmor: { id: 'plateArmor', name: 'Armadura de placas', description: 'Armadura de nivel 2 (+2 de salud) para los soldados desde Cabo.', level: 4 },
+  magWeapons: { id: 'magWeapons', name: 'Armas de taller', description: 'Teo puede poner a punto armas de nivel 2 (+2 de daño) en el Taller, con piezas: para los soldados desde Cabo.', level: 3 },
+  plateArmor: { id: 'plateArmor', name: 'Armadura de placas', description: 'El Taller puede hacer armadura de nivel 2 (+2 de salud), con piezas: para los soldados desde Cabo.', level: 4 },
   plasmaGrenades: { id: 'plasmaGrenades', name: 'Granadas de clavos', description: 'Clavos y tornillos en la carga: +2 de daño en todas las granadas.', level: 5 },
   encryption: { id: 'encryption', name: 'Escáner de radio', description: 'Oír las frecuencias de los Cuervos sin que nos oigan: +20 a arreglar equipos y una zona contactable más.', level: 5 },
-  plasmaWeapons: { id: 'plasmaWeapons', name: 'Armas militares', description: 'Lo que quedaba en los cuarteles, limpio y con munición: armas de nivel 3 (+4 de daño) para los soldados desde Teniente.', level: 6 },
+  plasmaWeapons: { id: 'plasmaWeapons', name: 'Armas militares', description: 'Lo que quedaba en los cuarteles: el Taller, a nivel 2, puede dejarlas limpias y con munición. Armas de nivel 3 (+4 de daño) para los soldados desde Teniente.', level: 6 },
   nanoMedkit: { id: 'nanoMedkit', name: 'Antibióticos', description: 'Amoxicilina y suturas de verdad: las curas sanan +2 y los botiquines tienen un uso más.', level: 6 },
-  predatorArmor: { id: 'predatorArmor', name: 'Equipo antidisturbios', description: 'Armadura de nivel 3 (+4 de salud y +1 de blindaje) para los soldados desde Teniente.', level: 7 },
+  predatorArmor: { id: 'predatorArmor', name: 'Equipo antidisturbios', description: 'El Taller, a nivel 2, puede hacer armadura de nivel 3 (+4 de salud y +1 de blindaje) para los soldados desde Teniente.', level: 7 },
   signal: { id: 'signal', name: 'La sirena en la Mula', description: 'La sirena de los Cuervos, atornillada al techo de La Mula para llevarse a la Marea: desbloquea la misión final.', level: 8 },
 };
 
@@ -69,19 +71,67 @@ export function rankTier(rank: number): Tier {
   return rank >= TIER_RANK[2] ? 3 : rank >= TIER_RANK[1] ? 2 : 1;
 }
 
-export function baseWeaponTier(c: Pick<CampaignState, 'xp'>): Tier {
-  return hasTech(c, 'plasmaWeapons') ? 3 : hasTech(c, 'magWeapons') ? 2 : 1;
+// ----------------------------------------------------------------- crafts
+
+export type CraftId = 'weapons2' | 'weapons3' | 'armor2' | 'armor3';
+
+export interface CraftDef {
+  id: CraftId;
+  name: string;
+  kind: 'weapon' | 'armor';
+  tier: 2 | 3;
+  /** The technology (the Bastion's level) that allows it. */
+  tech: TechId;
+  /** Level of the Taller it needs. */
+  workshop: number;
+  /** What has to be made before it. */
+  after: CraftId | null;
+  /** Suministros, parts and days of work (a crew's). */
+  cost: number;
+  parts: number;
+  days: number;
 }
 
-export function baseArmorTier(c: Pick<CampaignState, 'xp'>): Tier {
-  return hasTech(c, 'predatorArmor') ? 3 : hasTech(c, 'plateArmor') ? 2 : 1;
+/** What the Taller makes (docs/FASE4.md): tiers 2 and 3 of weapons and armour, for everyone. Names are placeholders for Lore. */
+export const CRAFTS: Record<CraftId, CraftDef> = {
+  weapons2: { id: 'weapons2', name: 'Armas de nivel 2', kind: 'weapon', tier: 2, tech: 'magWeapons', workshop: 1, after: null, cost: 60, parts: 4, days: 3 },
+  weapons3: { id: 'weapons3', name: 'Armas de nivel 3', kind: 'weapon', tier: 3, tech: 'plasmaWeapons', workshop: 2, after: 'weapons2', cost: 120, parts: 8, days: 5 },
+  armor2: { id: 'armor2', name: 'Armadura de nivel 2', kind: 'armor', tier: 2, tech: 'plateArmor', workshop: 1, after: null, cost: 60, parts: 4, days: 3 },
+  armor3: { id: 'armor3', name: 'Armadura de nivel 3', kind: 'armor', tier: 3, tech: 'predatorArmor', workshop: 2, after: 'armor2', cost: 120, parts: 8, days: 5 },
+};
+
+/** What the Armería holds: the Taller's work and the weapons found. */
+type Armoury = { crafted?: readonly CraftId[]; foundWeapons?: readonly FoundWeapon[] };
+
+export function hasCrafted(c: Armoury, id: CraftId): boolean {
+  return !!c.crafted?.includes(id);
 }
 
-export function weaponTier(c: Pick<CampaignState, 'xp'>, s: Pick<CampaignSoldier, 'rank'>): Tier {
-  return Math.min(baseWeaponTier(c), rankTier(s.rank)) as Tier;
+/** The project of `kind` that makes `tier`. */
+export function craftFor(kind: 'weapon' | 'armor', tier: 2 | 3): CraftId {
+  return kind === 'weapon' ? (tier === 2 ? 'weapons2' : 'weapons3') : tier === 2 ? 'armor2' : 'armor3';
 }
 
-export function armorTier(c: Pick<CampaignState, 'xp'>, s: Pick<CampaignSoldier, 'rank'>): Tier {
+/** The tier the Taller has made for everyone. */
+export function baseWeaponTier(c: Armoury): Tier {
+  return hasCrafted(c, 'weapons3') ? 3 : hasCrafted(c, 'weapons2') ? 2 : 1;
+}
+
+export function baseArmorTier(c: Armoury): Tier {
+  return hasCrafted(c, 'armor3') ? 3 : hasCrafted(c, 'armor2') ? 2 : 1;
+}
+
+/** The found weapon a soldier carries, if any. */
+export function foundWeaponOf(c: Armoury, s: Pick<CampaignSoldier, 'id'>): FoundWeapon | undefined {
+  return c.foundWeapons?.find((w) => w.holder === s.id);
+}
+
+/** A soldier's weapon tier: what the Taller made, one more with a found weapon, never past 3 nor what the rank allows. */
+export function weaponTier(c: Armoury, s: Pick<CampaignSoldier, 'rank' | 'id'>): Tier {
+  return Math.min(3, baseWeaponTier(c) + (foundWeaponOf(c, s) ? 1 : 0), rankTier(s.rank)) as Tier;
+}
+
+export function armorTier(c: Armoury, s: Pick<CampaignSoldier, 'rank'>): Tier {
   return Math.min(baseArmorTier(c), rankTier(s.rank)) as Tier;
 }
 
@@ -112,18 +162,23 @@ export function soldierWeaponName(template: TemplateId, tier: number = 1): strin
 }
 
 /**
- * What stands between a soldier and the next tier, or null at the top:
- * the Bastion's technology or the soldier's rank.
+ * What stands between a soldier and the next tier, or null at the top: the
+ * Taller's work (and the Bastion's level that allows it) or the soldier's
+ * rank. A found weapon already counts one tier.
  */
-export function nextTierBlocker(c: Pick<CampaignState, 'xp'>, s: Pick<CampaignSoldier, 'rank'>, kind: 'weapon' | 'armor'): string | null {
+export function nextTierBlocker(c: Pick<CampaignState, 'xp'> & Armoury & { techs?: readonly TechId[] }, s: Pick<CampaignSoldier, 'rank' | 'id'>, kind: 'weapon' | 'armor'): string | null {
   const tier = kind === 'weapon' ? weaponTier(c, s) : armorTier(c, s);
   if (tier >= 3) return null;
   const next = (tier + 1) as 2 | 3;
-  const tech: TechId = kind === 'weapon' ? (next === 2 ? 'magWeapons' : 'plasmaWeapons') : next === 2 ? 'plateArmor' : 'predatorArmor';
+  const made = next - (kind === 'weapon' && foundWeaponOf(c, s) ? 1 : 0);
   const needs: string[] = [];
-  if (!hasTech(c, tech)) needs.push(`nivel ${TECHS[tech].level} del Bastión`);
+  const craft = made >= 2 ? CRAFTS[craftFor(kind, made as 2 | 3)] : null;
+  if (craft && !hasCrafted(c, craft.id)) {
+    if (!hasTech(c, craft.tech)) needs.push(`nivel ${TECHS[craft.tech].level} del Bastión`);
+    needs.push('fabricarlas en el Taller');
+  }
   if (rankTier(s.rank) < next) needs.push(`rango ${RANKS[TIER_RANK[next - 1]]!.name}`);
-  return `${TECHS[tech].name}: requiere ${needs.join(' y ')}`;
+  return `${craft?.name ?? `Nivel ${next}`}: requiere ${needs.join(' y ')}`;
 }
 
 /** Bastion level that lets a facility unlocked at `base` rise to level `to` (2 or 3). */

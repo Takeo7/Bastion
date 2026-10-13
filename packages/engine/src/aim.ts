@@ -24,7 +24,7 @@ import {
 } from './content';
 import { coverAgainst } from './cover';
 import { distance, elevAt } from './grid';
-import { canSee, isViewer, sightOf, sightOrigin } from './los';
+import { canSee, isViewer, sightOrigin, sightTo } from './los';
 import type { Rng } from './rng';
 import type { AttackAbility, CoverLevel, GameState, ShotResult, Unit, Vec2 } from './types';
 
@@ -105,7 +105,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   if (weapon.melee) {
     origin = inMeleeReach(s, from, target.pos) ? from : null;
   } else {
-    origin = sightOrigin(s, from, target.pos, sightOf(shooter));
+    origin = sightOrigin(s, from, target.pos, sightTo(s, shooter, target.pos));
     if (!origin && primary && st.squadsight && teamSees(s, shooter.team, target)) {
       origin = sightOrigin(s, from, target.pos, Infinity);
       squadsight = origin !== null;
@@ -148,7 +148,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   const close = !weapon.melee && dist <= 4;
   if (close && sm.closeRangeAim) mods.push({ label: 'Quemarropa', value: sm.closeRangeAim });
   if (squadsight) {
-    const beyond = Math.max(0, Math.floor(dist - sightOf(shooter)));
+    const beyond = Math.max(0, Math.floor(dist - sightTo(s, shooter, target.pos)));
     if (beyond) mods.push({ label: 'Visión de escuadra', value: Math.min(0, SQUADSIGHT_DISTANCE_MOD + sm.squadsightKeep) * beyond });
   }
   const defense = tt.defense + target.mods.defense;

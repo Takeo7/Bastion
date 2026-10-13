@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
-import { makeUnit } from '../src/setup';
+import { abilitiesOf } from '../src/abilities';
+import { buildSquad, createCampaign } from '../src/campaign';
+import { TALENTS } from '../src/classes';
+import { ABILITIES } from '../src/content';
+import { createMission, makeUnit } from '../src/setup';
 import { Rng } from '../src/rng';
 import { computeReach } from '../src/path';
 import { executeCommand, Sim } from '../src/rules';
@@ -204,6 +208,46 @@ describe('patrols and reinforcements', () => {
     for (const u of dropped) {
       const d = Math.hypot(u.pos.x - 15, u.pos.y - 15);
       expect(d).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+describe('skirmish veterans', () => {
+  const oficio = (u: { perks: (keyof typeof TALENTS)[] }) => u.perks.some((p) => TALENTS[p].song);
+
+  it('about one in three has learnt the Oficio, as if the Taller de oficios stood; the same seed, the same squad', () => {
+    let soldiers = 0;
+    let trades = 0;
+    let songs = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const veterans = (rng: Rng) => createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0, 1], rng, veterans: true }).units.filter((u) => u.team === 'xcom');
+      const squad = veterans(new Rng(seed));
+      expect(veterans(new Rng(seed)).map((u) => u.perks)).toEqual(squad.map((u) => u.perks));
+      for (const u of squad) {
+        soldiers++;
+        if (!oficio(u)) continue;
+        trades++;
+        expect(u.mods.singer).toBe(1);
+        if (abilitiesOf(u).some((a) => ABILITIES[a].song)) songs++;
+      }
+    }
+    expect(trades / soldiers).toBeGreaterThan(0.2);
+    expect(trades / soldiers).toBeLessThan(0.45);
+    // Many of them have an Oficio to use in the fight (Bengala, molotov…).
+    expect(songs).toBeGreaterThan(trades / 3);
+    // Rookies in a skirmish learn nothing.
+    const rookies = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(1) }).units.filter((u) => u.team === 'xcom');
+    expect(rookies.every((u) => !u.perks.length)).toBe(true);
+  });
+
+  it('the campaign is untouched: its soldiers bring exactly what they learnt', () => {
+    const c = createCampaign([0], new Rng(3));
+    c.squad = c.soldiers.slice(0, 6).map((s) => s.id);
+    const squad = buildSquad(c);
+    expect(squad).toHaveLength(6);
+    for (let seed = 1; seed <= 10; seed++) {
+      const mission = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(seed), squad, veterans: true });
+      expect(mission.units.filter((u) => u.team === 'xcom').map((u) => u.perks)).toEqual(squad.map((m) => m.perks));
     }
   });
 });

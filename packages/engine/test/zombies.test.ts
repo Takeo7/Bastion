@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { abilityBlocker, canTargetTile, noiseOf } from '../src/abilities';
-import { applyMissionResult, buildSquad, createCampaign, executeCampaignCommand, migrateCampaign, type CampaignState } from '../src/campaign';
+import { applyMissionResult, buildSquad, CAMPAIGN_VERSION, createCampaign, executeCampaignCommand, migrateCampaign, type CampaignState } from '../src/campaign';
 import { HORDE, hordePoints, NOISE, TEMPLATES } from '../src/content';
 import { decorCode } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
@@ -380,7 +380,8 @@ describe('searching', () => {
         if (difficulty === 1) expect(loot?.item).not.toBe('apRounds');
       }
     }
-    expect([...kinds].sort()).toEqual(['item', 'medicines', 'nothing', 'supplies']);
+    // Since phase 4, rations, parts and now and then a good weapon too (docs/FASE4.md).
+    expect([...kinds].sort()).toEqual(['food', 'item', 'medicines', 'nothing', 'parts', 'supplies', 'weapon']);
     expect(rollLoot('tree', 2, new Rng(1))).toBeNull();
   });
 });
@@ -412,7 +413,7 @@ describe('the Saqueo', () => {
     run.damage(fallen, 99, 0);
     run.checkOutcome();
     expect(s.outcome).toBe('victory');
-    expect(broughtBack(s)).toEqual({ supplies: 12, items: ['firstAid'], medicines: 0 });
+    expect(broughtBack(s)).toMatchObject({ supplies: 12, items: ['firstAid'], medicines: 0 });
 
     // Everyone down: lost, and nothing comes home.
     const t = field();
@@ -424,7 +425,7 @@ describe('the Saqueo', () => {
     lose.damage(last, 99, 0);
     lose.checkOutcome();
     expect(t.outcome).toBe('defeat');
-    expect(broughtBack(t)).toEqual({ supplies: 0, items: [], medicines: 0 });
+    expect(broughtBack(t)).toEqual({ supplies: 0, items: [], medicines: 0, food: 0, parts: 0, weapons: [] });
   });
 
   it('the standing squad brings its loot home from any mission it wins', () => {
@@ -435,7 +436,7 @@ describe('the Saqueo', () => {
     win.damage(a, 5, 0, u);
     win.checkOutcome();
     expect(s.outcome).toBe('victory');
-    expect(broughtBack(s)).toEqual({ supplies: 7, items: [], medicines: 1 });
+    expect(broughtBack(s)).toMatchObject({ supplies: 7, items: [], medicines: 1 });
   });
 
   it('the horde comes in by the edges every few turns, sooner the more noise, on the prowl', () => {
@@ -502,10 +503,13 @@ describe('loot in the campaign', () => {
     mission.outcomeReason = 'objective';
     const credits = c.credits;
     const smoke = c.inventory.smokeGrenade ?? 0;
+    // No enclave convoy while the squad flies back, to count only the loot (and the reward's).
+    c.nextMedicineDay = 999;
+    const medicines = c.medicines ?? 0;
     const report = applyMissionResult(c, mission, new Rng(4));
-    expect(report.loot).toEqual({ supplies: 12, items: ['smokeGrenade'], medicines: 2, line: lootSummary(12, ['smokeGrenade'], 2) });
+    expect(report.loot).toEqual({ supplies: 12, items: ['smokeGrenade'], medicines: 2, food: 0, parts: 0, weapons: [], line: lootSummary(12, ['smokeGrenade'], 2) });
     expect(report.loot!.line).toMatch(/12/);
-    expect(c.medicines).toBe(2);
+    expect(c.medicines).toBe(medicines + 2 + (offer.reward.medicines ?? 0));
     expect(c.inventory.smokeGrenade).toBe(smoke + 1);
     // The reward and the loot; no bodies from a Saqueo: the squad left by the evac.
     expect(report.bodies).toBe(0);
@@ -538,7 +542,7 @@ describe('loot in the campaign', () => {
     const old = createCampaign([0], new Rng(1)) as CampaignState & { medicines?: number };
     delete old.medicines;
     const c = migrateCampaign(old);
-    expect(c.version).toBe(11);
+    expect(c.version).toBe(CAMPAIGN_VERSION);
     expect(c.medicines ?? 0).toBe(0);
   });
 });

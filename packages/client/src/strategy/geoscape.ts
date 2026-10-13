@@ -1,610 +1,500 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { REGIONS, type CampaignState, type RegionId } from '@bastion/engine';
-import { voxelField, voxelize, type Colour } from '../game/voxel';
-import type { Shot, StageSet } from './stage';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { DOOM_MAX, HOME_REGION, REGIONS, type CampaignState, type RegionId } from '@bastion/engine';
+import { StaticBatch } from '../game/batch';
+import { extendShader } from '../game/fogOfWar';
+import type { BaseModelId } from '../game/syntyManifest';
+import { KitBatch, kitMesh, kitModel, loadBaseKit, type Finish } from './baseKit';
+import { skyTexture, type Shot, type StageMood, type StageSet } from './stage';
 
-const RADIUS = 4;
-/** Voxel art (M5): the globe is 72 voxels across, with land and mountains raised in steps. */
-const VOXEL = RADIUS / 36;
-/** Markers, rings and the dropship use finer voxels. */
-const SMALL_VOXEL = 0.045;
+// The map of the valley of Valdesombra (docs/LORE.md, «El mundo»), where the
+// globe was: a diorama in Synty's low-poly, seen from the south. The sierra to
+// the north with Atalaya under its peaks, closed valleys to the north-east,
+// the reservoir and its dead power station to the east, the mines in the
+// western hills, the farms of La Vega along the river in the middle, the two
+// dead cities (Ciudad Varela to the west, Puerto Galena by the sea), and the
+// ash plain to the south where the Marea comes up: a dark tide on the ground
+// that creeps towards Atalaya as the zombi activity grows. Each of the eight
+// zones carries its marker (contact, Nidos, operations, rumours); La Mula
+// drives the roads between them. The same set is the main menu's backdrop.
+//
+// Everything that stands still is merged by material (game/batch.ts); the
+// sun's shadow map is drawn only when something moves (stage.ts).
 
-/** Coarse continent outlines as [lon, lat] rings — enough to read as Earth. */
-const CONTINENTS: [number, number][][] = [
-  [
-    [-168, 65],
-    [-140, 70],
-    [-95, 72],
-    [-75, 62],
-    [-60, 50],
-    [-67, 44],
-    [-75, 35],
-    [-81, 25],
-    [-97, 26],
-    [-105, 20],
-    [-95, 16],
-    [-85, 10],
-    [-80, 8],
-    [-90, 15],
-    [-105, 22],
-    [-117, 32],
-    [-124, 40],
-    [-125, 49],
-    [-135, 58],
-    [-150, 60],
-    [-165, 60],
-  ],
-  [
-    [-55, 60],
-    [-45, 60],
-    [-20, 70],
-    [-25, 82],
-    [-60, 82],
-    [-70, 76],
-  ],
-  [
-    [-80, 8],
-    [-60, 10],
-    [-50, 0],
-    [-35, -7],
-    [-40, -22],
-    [-55, -35],
-    [-65, -55],
-    [-72, -50],
-    [-72, -30],
-    [-80, -5],
-  ],
-  [
-    [-10, 36],
-    [-9, 43],
-    [-5, 48],
-    [3, 51],
-    [8, 54],
-    [5, 60],
-    [15, 69],
-    [30, 70],
-    [40, 66],
-    [50, 55],
-    [40, 45],
-    [28, 41],
-    [20, 40],
-    [15, 38],
-    [12, 44],
-    [3, 42],
-    [-5, 36],
-  ],
-  [
-    [-5, 50],
-    [2, 52],
-    [-2, 57],
-    [-6, 58],
-    [-5, 54],
-  ],
-  [
-    [-17, 15],
-    [-10, 28],
-    [-5, 35],
-    [10, 37],
-    [32, 31],
-    [43, 12],
-    [51, 12],
-    [40, -15],
-    [32, -28],
-    [20, -35],
-    [12, -17],
-    [9, 4],
-    [-8, 5],
-  ],
-  [
-    [28, 41],
-    [40, 45],
-    [50, 55],
-    [40, 66],
-    [60, 70],
-    [100, 78],
-    [140, 72],
-    [170, 66],
-    [160, 58],
-    [140, 50],
-    [130, 42],
-    [122, 30],
-    [110, 20],
-    [105, 10],
-    [100, 13],
-    [95, 20],
-    [90, 22],
-    [80, 15],
-    [72, 20],
-    [60, 25],
-    [50, 30],
-    [45, 40],
-    [35, 37],
-  ],
-  [
-    [35, 32],
-    [45, 13],
-    [55, 17],
-    [58, 23],
-    [50, 29],
-  ],
-  [
-    [95, 5],
-    [105, -6],
-    [120, -8],
-    [140, -6],
-    [130, 0],
-    [118, 5],
-    [105, 2],
-  ],
-  [
-    [130, 32],
-    [140, 36],
-    [142, 44],
-    [140, 40],
-    [132, 34],
-  ],
-  [
-    [113, -22],
-    [115, -34],
-    [130, -32],
-    [140, -38],
-    [150, -37],
-    [153, -28],
-    [145, -15],
-    [136, -12],
-    [130, -12],
-    [122, -17],
-  ],
-];
+/** The valley's size: x from west to east, z from north (the sierra) to south (the plain), in map units. */
+const W = 30;
+const D = 22;
+const HW = W / 2;
+const HD = D / 2;
+/** Game units (a Synty model's own size) to map units. */
+const MINI = 0.075;
 
-/** Linear-space voxel colour from a hex value. */
-function tone(hex: number, glow = false): Colour {
-  const c = new THREE.Color(hex);
-  return { r: c.r, g: c.g, b: c.b, glow };
-}
-
-const GROUND = {
-  deep: tone(0x1d4a73),
-  shallow: tone(0x2e77a2),
-  seaIce: tone(0xc9dbe6),
-  jungle: tone(0x3b6a37),
-  savanna: tone(0x8f9550),
-  desert: tone(0xc8a469),
-  temperate: tone(0x5f8e49),
-  taiga: tone(0x4a6a4b),
-  rock: tone(0x7c705c),
-  core: tone(0x3a3530),
-  snow: tone(0xe6edf1),
+/** Where each zone lies in the valley (the engine's lat/lon stay for the rules). */
+const ZONES: Record<RegionId, { x: number; z: number }> = {
+  weu: { x: -4.6, z: -5.4 },
+  eeu: { x: 8.2, z: -5.6 },
+  eas: { x: 8.6, z: 0.7 },
+  sa: { x: -9.8, z: -0.4 },
+  oce: { x: 1.6, z: 1.4 },
+  afr: { x: -6.8, z: 5.0 },
+  me: { x: 8.4, z: 6.4 },
+  na: { x: -0.6, z: 8.9 },
 };
 
-/** Land mask painted from the outlines, 2 px per degree: 0 ocean, 1 shallows, 2 land. */
-function landMask(): (lat: number, lon: number) => number {
-  const W = 720;
-  const H = 360;
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const g = c.getContext('2d', { willReadFrequently: true })!;
-  const px = (lon: number, lat: number): [number, number] => [((lon + 180) / 360) * W, ((90 - lat) / 180) * H];
-  const trace = (ring: [number, number][]) => {
-    g.beginPath();
-    ring.forEach(([lon, lat], i) => (i ? g.lineTo(...px(lon, lat)) : g.moveTo(...px(lon, lat))));
-    g.closePath();
-  };
-  g.fillStyle = '#000';
-  g.fillRect(0, 0, W, H);
-  g.strokeStyle = '#800000';
-  g.lineWidth = 9;
-  g.lineJoin = 'round';
-  for (const ring of CONTINENTS) (trace(ring), g.stroke());
-  g.fillStyle = '#f00';
-  for (const ring of CONTINENTS) (trace(ring), g.fill());
-  g.fillRect(0, px(0, -68)[1], W, H);
-  const data = g.getImageData(0, 0, W, H).data;
-  return (lat, lon) => {
-    const [x, y] = px(lon, lat);
-    const i = (Math.min(H - 1, Math.max(0, Math.floor(y))) * W + (((Math.floor(x) % W) + W) % W)) * 4;
-    const red = data[i]!;
-    return red > 192 ? 2 : red > 64 ? 1 : 0;
-  };
+/** Atalaya: the station on its shelf under the peaks, above Altomonte's villages. */
+const ATALAYA = { x: -3.4, z: -7.0 };
+
+/** The roads between the zones (La Mula drives them), each with a bend to look less ruled. */
+const ROADS: [RegionId, RegionId, [number, number]][] = [
+  ['weu', 'oce', [-1.6, -1.8]],
+  ['weu', 'sa', [-8.6, -3.4]],
+  ['weu', 'eeu', [2.0, -6.4]],
+  ['eeu', 'eas', [6.8, -1.8]],
+  ['eas', 'oce', [5.4, 0.6]],
+  ['oce', 'afr', [-2.6, 3.6]],
+  ['oce', 'me', [4.6, 4.4]],
+  ['afr', 'na', [-4.0, 7.6]],
+  ['me', 'na', [4.0, 8.6]],
+  ['sa', 'afr', [-10.0, 3.0]],
+];
+
+/** The river: from under the dam, through La Vega and down to the sea in the south-east corner. */
+const RIVER: [number, number][] = [
+  [10.35, 0.95],
+  [8.8, 1.9],
+  [6.4, 2.6],
+  [3.8, 3.0],
+  [2.4, 3.9],
+  [3.2, 5.4],
+  [5.6, 6.9],
+  [7.9, 8.1],
+  [10.4, 9.2],
+  [13.0, 10.3],
+  [16.0, 12.0],
+];
+
+/** The ash plain: grey, burnt ground round Los Llanos (ragged at its edge). */
+function ashen(x: number, z: number): boolean {
+  const dx = (x - 0.4) / 5.4;
+  const dz = (z - 9.6) / 3.4;
+  return dx * dx + dz * dz < 0.75 + (noise(x * 0.8, z * 0.8) - 0.5) * 0.6;
 }
 
-/** Latitude and longitude (-180..180) of a unit direction: the inverse of latLonToVector. */
-function toLatLon(d: THREE.Vector3): [number, number] {
-  const lat = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)));
-  const lon = THREE.MathUtils.radToDeg(Math.atan2(d.z, -d.x)) - 180;
-  return [lat, ((lon + 540) % 360) - 180];
+/** The reservoir: its basin up on a shelf, its water level, and the dam across the gap where the river leaves it. */
+const RESERVOIR = { x: 11.2, z: -2.0, r: 2.6, level: 1.2, dam: 2.5 };
+
+// ------------------------------------------------------------- terrain
+
+function hash(x: number, z: number): number {
+  const h = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+  return h - Math.floor(h);
 }
 
-/** Smooth, seamless relief over the sphere (roughly -1.5..1.5). */
-function relief(d: THREE.Vector3): number {
-  return Math.sin(d.x * 5.1 + 1.7) * Math.sin(d.y * 4.3 + 0.4) * Math.sin(d.z * 5.7 + 2.2) + 0.45 * Math.sin(d.x * 11.3 - d.z * 9.1 + d.y * 7.7);
+/** Smooth value noise in [0, 1]. */
+function noise(x: number, z: number): number {
+  const xi = Math.floor(x);
+  const zi = Math.floor(z);
+  const xf = x - xi;
+  const zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf);
+  const v = zf * zf * (3 - 2 * zf);
+  const a = hash(xi, zi);
+  const b = hash(xi + 1, zi);
+  const c = hash(xi, zi + 1);
+  const d = hash(xi + 1, zi + 1);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-function biome(lat: number, lon: number, n: number): Colour {
-  const a = Math.abs(lat);
-  if (lat < -62 || a > 72 || (lat > 60 && lon > -75 && lon < -15)) return GROUND.snow;
-  if (a < 12) return GROUND.jungle;
-  if (a < 32) return n < 0.1 ? GROUND.desert : GROUND.savanna;
-  if (a < 55) return GROUND.temperate;
-  return GROUND.taiga;
+const fbm = (x: number, z: number) => noise(x, z) * 0.5 + noise(x * 2.1 + 5, z * 2.1 + 3) * 0.3 + noise(x * 4.3 + 1, z * 4.3 + 9) * 0.2;
+const smooth = (a: number, b: number, t: number) => {
+  const k = THREE.MathUtils.clamp((t - a) / (b - a), 0, 1);
+  return k * k * (3 - 2 * k);
+};
+const bump = (x: number, z: number, cx: number, cz: number, r: number) => {
+  const d2 = ((x - cx) ** 2 + (z - cz) ** 2) / (r * r);
+  return d2 >= 1 ? 0 : (1 - d2) ** 2;
+};
+
+function distToPolyline(x: number, z: number, line: [number, number][]): number {
+  let best = Infinity;
+  for (let i = 0; i + 1 < line.length; i++) {
+    const [ax, az] = line[i]!;
+    const [bx, bz] = line[i + 1]!;
+    const dx = bx - ax;
+    const dz = bz - az;
+    const t = THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1);
+    best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
+  }
+  return best;
 }
 
-/** The Earth never changes: built once (~100 ms), then cloned into every geoscape. */
-let earthCache: {
-  model: THREE.Group;
-  surface: (dir: THREE.Vector3) => number;
-} | null = null;
-function cachedEarth(): {
-  model: THREE.Group;
-  surface: (dir: THREE.Vector3) => number;
-} {
-  earthCache ??= voxelEarth();
-  return { model: earthCache.model.clone(), surface: earthCache.surface };
+/** How high the valley is at (x, z): the sierra, the hills, the reservoir's upland, the river's bed and the sea. */
+function heightAt(x: number, z: number): number {
+  const n = fbm(x * 0.35, z * 0.35);
+  let h = 0.2 + (n - 0.5) * 0.35;
+  // The sierra to the north, its ridge broken into peaks.
+  h += smooth(3.6, 9.2, -z) * (2.4 + 2.4 * fbm(x * 0.55 + 7, z * 0.4 + 2));
+  // Atalaya's shelf under the peaks, levelled.
+  h = THREE.MathUtils.lerp(h, 2.8, smooth(3.0, 1.3, Math.hypot(x - ATALAYA.x, z - ATALAYA.z)));
+  // The western hills (Carboneda) and the closed valleys to the north-east (Valdelobos).
+  h += 1.6 * bump(x, z, -12.2, -0.8, 4.8) * (0.55 + n);
+  h += 1.9 * bump(x, z, 9.6, -6.4, 5.2) * (0.45 + 0.9 * noise(x * 0.9, z * 0.9));
+  // The reservoir's shelf, its basin dug out under the water.
+  const d = Math.hypot(x - RESERVOIR.x, z - RESERVOIR.z);
+  h = THREE.MathUtils.lerp(h, Math.max(h, 1.5 + n * 0.2), smooth(4.2, 3.0, d));
+  h = THREE.MathUtils.lerp(h, 0.6, smooth(RESERVOIR.r, RESERVOIR.r - 0.8, d));
+  // The river's bed and the sea.
+  const r = distToPolyline(x, z, RIVER);
+  h = THREE.MathUtils.lerp(-0.22, h, smooth(0.14, 0.6, r));
+  h = THREE.MathUtils.lerp(h, -0.7, smooth(5.2, 2.4, Math.hypot(x - 15.5, z - 12)));
+  return h;
+}
+
+const C = (hex: number) => new THREE.Color(hex);
+const GROUND = {
+  bed: C(0x8f8463),
+  shore: C(0x9c9070),
+  snow: C(0xf0f3f7),
+  rock: C(0x8a857f),
+  darkRock: C(0x6e6a66),
+  meadow: C(0x8a985c),
+  grass: C(0x86a052),
+  grass2: C(0x739049),
+  forest: C(0x5d7a43),
+  ash: C(0x8f877b),
+  ash2: C(0x7d756b),
+  city: C(0x8c8981),
+  fields: [C(0xb3b25d), C(0x93a650), C(0xc6b06a), C(0x7f9a48), C(0xa5a75a)],
+};
+
+/** The colour of the ground at a face: by height, slope and what stands there. */
+function groundColour(x: number, z: number, h: number, up: number, out: THREE.Color): THREE.Color {
+  const n = noise(x * 1.3, z * 1.3);
+  if (h < -0.08) return out.copy(GROUND.bed);
+  if (h < 0.04) return out.copy(GROUND.shore);
+  if (h > 3.2 - n * 0.6 || (h > 2.2 && up > 0.8 && Math.hypot(x - ATALAYA.x, z - ATALAYA.z) < 2.4)) return out.copy(up > 0.55 ? GROUND.snow : GROUND.rock);
+  if (h > 2.3 || up < 0.62) return out.copy(n > 0.5 ? GROUND.rock : GROUND.darkRock);
+  if (h > 1.5) return out.copy(GROUND.meadow).lerp(GROUND.forest, n);
+  // The ash plain where the Marea comes up.
+  if (ashen(x, z)) return out.copy(GROUND.ash).lerp(GROUND.ash2, n);
+  // The dead cities' ground.
+  if (Math.hypot(x - ZONES.afr.x, z - ZONES.afr.z) < 1.9 || Math.hypot(x - ZONES.me.x - 0.6, z - ZONES.me.z + 0.2) < 1.5) return out.copy(GROUND.city);
+  // La Vega's patchwork of fields.
+  if (Math.hypot(x - ZONES.oce.x, z - ZONES.oce.z - 0.3) < 3.6) return out.copy(GROUND.fields[Math.floor(hash(Math.floor(x * 1.4), Math.floor(z * 1.4)) * GROUND.fields.length)]!);
+  return out.copy(GROUND.grass).lerp(GROUND.grass2, n);
 }
 
 /**
- * The voxel Earth: oceans at RADIUS (shallows lighter, sea ice at the pole),
- * land one voxel up, mountains two and three (rock, then snow).
- * `surface(dir)` is the ground radius under a unit direction, for markers.
+ * The ground as faceted low-poly (each triangle one colour), with the Marea
+ * drawn on it: past its front (a z that moves north as the zombi activity
+ * grows, ragged by noise) the land goes a bruised dark, a red glow along the
+ * edge.
  */
-function voxelEarth(): {
-  model: THREE.Group;
-  surface: (dir: THREE.Vector3) => number;
-} {
-  const mask = landMask();
-  const ground = (dir: THREE.Vector3) => {
-    const [lat, lon] = toLatLon(dir);
-    const kind = mask(lat, lon);
-    const n = kind === 2 ? relief(dir) : 0;
-    return {
-      lat,
-      lon,
-      kind,
-      n,
-      level: kind < 2 ? 0 : n > 1.12 ? 3 : n > 0.85 ? 2 : 1,
-    };
+function terrain(marea: { value: number }): THREE.Mesh {
+  const cols = 132;
+  const rows = 96;
+  const positions: number[] = [];
+  const colours: number[] = [];
+  const p = (i: number, j: number): [number, number, number] => {
+    const x = -HW + (i / cols) * W;
+    const z = -HD + (j / rows) * D;
+    return [x, heightAt(x, z), z];
   };
-  const d = new THREE.Vector3();
-  const n = Math.ceil(RADIUS / VOXEL) + 4;
-  const model = voxelField(
-    [-n, -n, -n],
-    [n - 1, n - 1, n - 1],
-    (x, y, z) => {
-      d.set(x + 0.5, y + 0.5, z + 0.5).multiplyScalar(VOXEL);
-      const r = d.length();
-      if (r > RADIUS + 3.5 * VOXEL) return null;
-      // The core is never seen.
-      if (r < RADIUS - 2 * VOXEL) return GROUND.core;
-      const g = ground(d.divideScalar(r));
-      if (r > RADIUS + g.level * VOXEL) return null;
-      if (g.kind === 0) return g.lat > 80 ? GROUND.seaIce : GROUND.deep;
-      if (g.kind === 1) return GROUND.shallow;
-      if (r > RADIUS + 2 * VOXEL) return g.level === 3 ? GROUND.snow : GROUND.rock;
-      if (r > RADIUS + VOXEL) return GROUND.rock;
-      return biome(g.lat, g.lon, g.n);
-    },
-    { size: VOXEL, jitter: 0.12 },
-  );
-  // Each face's normal is bent halfway towards the sphere's: the steps keep their
-  // facets, but the risers turned away from the sun do not go black.
-  model.traverse((o) => {
-    if (!(o instanceof THREE.Mesh)) return;
-    const pos = o.geometry.getAttribute('position');
-    const nrm = o.geometry.getAttribute('normal');
-    const face = new THREE.Vector3();
-    const radial = new THREE.Vector3();
-    for (let i = 0; i < nrm.count; i++) {
-      radial.fromBufferAttribute(pos, i).normalize();
-      face.fromBufferAttribute(nrm, i).add(radial).normalize();
-      nrm.setXYZ(i, face.x, face.y, face.z);
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const colour = new THREE.Color();
+  const tri = (pa: [number, number, number], pb: [number, number, number], pc: [number, number, number]) => {
+    a.set(...pa);
+    b.set(...pb);
+    c.set(...pc);
+    const normal = b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+    groundColour((a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3, (a.y + b.y + c.y) / 3, normal.y, colour);
+    positions.push(...pa, ...pb, ...pc);
+    for (let k = 0; k < 3; k++) colours.push(colour.r, colour.g, colour.b);
+  };
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const [p00, p10, p01, p11] = [p(i, j), p(i + 1, j), p(i, j + 1), p(i + 1, j + 1)];
+      // Alternate the diagonal: the facets don't line up into stripes.
+      if ((i + j) % 2) {
+        tri(p00, p01, p10);
+        tri(p10, p01, p11);
+      } else {
+        tri(p00, p01, p11);
+        tri(p00, p11, p10);
+      }
     }
-  });
-  return { model, surface: (dir) => RADIUS + ground(dir).level * VOXEL };
-}
-
-/** Glowing material: voxelize() turns emissive parts into unlit, bloom-bright voxels. */
-function glow(color: number, intensity = 1.2): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color,
-    emissive: color,
-    emissiveIntensity: intensity,
-  });
-}
-
-/** Makes a voxel model see-through (beacons, rings). Returns its materials, for fading. */
-function seeThrough(model: THREE.Object3D, opacity: number, additive = false): THREE.Material[] {
-  const materials: THREE.Material[] = [];
-  model.traverse((o) => {
-    if (!(o instanceof THREE.Mesh)) return;
-    const m = o.material as THREE.Material;
-    m.transparent = true;
-    m.opacity = opacity;
-    m.depthWrite = false;
-    if (additive) m.blending = THREE.AdditiveBlending;
-    o.castShadow = false;
-    materials.push(m);
-  });
-  return materials;
-}
-
-/** Marker parts are voxelized once per kind; markers get clones that share geometry and materials. */
-const parts = new Map<string, THREE.Group>();
-function part(key: string, build: () => THREE.Mesh, opacity = 1, additive = false): THREE.Group {
-  let template = parts.get(key);
-  if (!template) {
-    template = voxelize([{ mesh: build(), matrix: new THREE.Matrix4() }], SMALL_VOXEL);
-    if (opacity < 1) seeThrough(template, opacity, additive);
-    parts.set(key, template);
   }
-  return template.clone();
-}
-
-/** How high La Mula flies over the ground, and how far from a region's marker it parks (degrees of latitude, longitude). */
-const SHIP_ALT = 0.95;
-const PARK: [number, number] = [4, 8];
-
-/**
- * La Mula seen from above, nose along +z and up along +y: a pale hull with a
- * dark outline (it reads on ocean and on land alike), an amber band and tail
- * beacon, and two rotors that turn (`rotors`, to spin in tick()). Not the
- * players' colours: those are the commanders', and the ship is everyone's.
- */
-function voxelShip(): { model: THREE.Group; rotors: THREE.Group[] } {
-  const hull = new THREE.MeshStandardMaterial({ color: 0xf4efe2, metalness: 0.2, roughness: 0.55 });
-  const band = new THREE.MeshStandardMaterial({ color: 0xffb020, metalness: 0.2, roughness: 0.5 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x24384a, metalness: 0.5, roughness: 0.3 });
-  const at = (x: number, y: number, z: number) => new THREE.Matrix4().makeTranslation(x, y, z);
-  const parts: [number, number, number, number, number, number, THREE.Material][] = [
-    // w, h, l, x, y, z
-    [0.17, 0.11, 0.6, 0, 0, 0, hull],
-    [0.15, 0.09, 0.12, 0, -0.01, 0.34, hull],
-    [0.13, 0.05, 0.08, 0, 0.04, 0.33, glass],
-    [0.14, 0.08, 0.18, 0, 0.08, -0.22, hull],
-    [0.175, 0.115, 0.05, 0, 0, -0.08, band],
-    [0.06, 0.05, 0.06, 0, 0.06, 0.2, hull],
-  ];
-  const model = voxelize(
-    [
-      ...parts.map(([w, h, l, x, y, z, m]) => ({ mesh: new THREE.Mesh(new THREE.BoxGeometry(w, h, l), m), matrix: at(x, y, z) })),
-      { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.04), glow(0xff5a3a, 2.4)), matrix: at(0, 0.14, -0.28) },
-    ],
-    0.02,
-  );
-  // The outline: the hull's boxes a little fatter, dark, drawn inside out so only their rim shows round the ship.
-  const rim = new THREE.MeshBasicMaterial({ color: 0x0b0f14, side: THREE.BackSide });
-  for (const [w, h, l, x, y, z] of parts.slice(0, 4)) {
-    const shell = new THREE.Mesh(new THREE.BoxGeometry(w + 0.05, h + 0.05, l + 0.05), rim);
-    shell.position.set(x, y, z);
-    model.add(shell);
-  }
-  // Two three-bladed rotors: the forward one low over the cockpit, the aft one on the tail pylon.
-  const rotors = [
-    [0.22, 0.08],
-    [-0.22, 0.13],
-  ].map(([z, y]) => {
-    const blades = new THREE.MeshStandardMaterial({ color: 0x1d2124, roughness: 0.6 });
-    const tips = new THREE.MeshStandardMaterial({ color: 0xffb020, roughness: 0.5 });
-    const sources = [0, 1, 2].flatMap((k) => {
-      const a = (k * Math.PI * 2) / 3;
-      const turn = new THREE.Matrix4().makeRotationY(a);
-      return [
-        { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.015, 0.035), blades), matrix: turn.clone().multiply(at(0.1, 0, 0)) },
-        { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.016, 0.036), tips), matrix: turn.clone().multiply(at(0.215, 0, 0)) },
-      ];
-    });
-    const rotor = voxelize(sources, 0.015);
-    rotor.position.set(0, y!, z!);
-    model.add(rotor);
-    return rotor;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
+  g.computeVertexNormals();
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
+  extendShader(material, 'valley-marea', (shader) => {
+    Object.assign(shader.uniforms, { mareaFront: marea });
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vMapPos;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvMapPos = position;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vMapPos;\nuniform float mareaFront;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float mareaEdge = mareaFront + sin(vMapPos.x * 1.7) * 0.35 + sin(vMapPos.x * 4.1 + 1.3) * 0.15;
+        float mareaIn = smoothstep(mareaEdge - 0.05, mareaEdge + 0.5, vMapPos.z);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.36, 0.27, 0.32), mareaIn);`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance += vec3(0.85, 0.08, 0.05) * (1.0 - smoothstep(0.0, 0.16, abs(vMapPos.z - mareaEdge))) * 0.45;`,
+      );
   });
-  return { model, rotors };
+  const mesh = new THREE.Mesh(g, material);
+  mesh.receiveShadow = true;
+  mesh.castShadow = true;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
 }
 
-/** A soft round glow, for the halo behind the ship. */
-function haloTexture(): THREE.Texture {
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const g = c.getContext('2d')!;
-  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
-  grad.addColorStop(0.35, 'rgba(255,255,255,0.45)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 64, 64);
-  const texture = new THREE.CanvasTexture(c);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
+/** The diorama's sides: earth and rock down from the edge of the map. */
+function skirt(): THREE.Mesh {
+  const positions: number[] = [];
+  const colours: number[] = [];
+  const top = C(0x6b5a46);
+  const low = C(0x3c3129);
+  const bottom = -1.8;
+  const edge: [number, number][] = [];
+  const steps = 64;
+  for (let i = 0; i <= steps; i++) edge.push([-HW + (i / steps) * W, -HD]);
+  for (let i = 1; i <= steps; i++) edge.push([HW, -HD + (i / steps) * D]);
+  for (let i = 1; i <= steps; i++) edge.push([HW - (i / steps) * W, HD]);
+  for (let i = 1; i <= steps; i++) edge.push([-HW, HD - (i / steps) * D]);
+  for (let i = 0; i + 1 < edge.length; i++) {
+    const [ax, az] = edge[i]!;
+    const [bx, bz] = edge[i + 1]!;
+    const ha = Math.max(heightAt(ax, az), -0.04);
+    const hb = Math.max(heightAt(bx, bz), -0.04);
+    positions.push(ax, ha, az, ax, bottom, az, bx, hb, bz, bx, hb, bz, ax, bottom, az, bx, bottom, bz);
+    for (const k of [top, low, top, top, low, low]) colours.push(k.r, k.g, k.b);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
+  g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true, side: THREE.DoubleSide }));
+  mesh.matrixAutoUpdate = false;
+  return mesh;
 }
 
-/** Point on the sphere for a latitude/longitude, matching SphereGeometry's UV layout. */
-export function latLonToVector(lat: number, lon: number, radius = RADIUS): THREE.Vector3 {
-  const phi = ((lon + 180) / 360) * Math.PI * 2;
-  const theta = ((90 - lat) / 180) * Math.PI;
-  return new THREE.Vector3(-radius * Math.cos(phi) * Math.sin(theta), radius * Math.cos(theta), radius * Math.sin(phi) * Math.sin(theta));
+/** Water: the river and the sea at one level, the reservoir higher up behind its dam. */
+function water(): THREE.Group {
+  const g = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({ color: 0x4f8aa0, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.88 });
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(W, D).rotateX(-Math.PI / 2), material);
+  sea.position.y = -0.04;
+  const lake = new THREE.Mesh(new THREE.CircleGeometry(RESERVOIR.dam - 0.05, 40).rotateX(-Math.PI / 2), material);
+  lake.position.set(RESERVOIR.x, RESERVOIR.level, RESERVOIR.z);
+  for (const m of [sea, lake]) {
+    m.receiveShadow = true;
+    m.matrixAutoUpdate = false;
+    m.updateMatrix();
+    g.add(m);
+  }
+  return g;
 }
+
+/** A road as a ribbon over the ground, through its bend. */
+function roadPoints(a: { x: number; z: number }, b: { x: number; z: number }, bend: [number, number]): THREE.Vector3[] {
+  const curve = new THREE.QuadraticBezierCurve(new THREE.Vector2(a.x, a.z), new THREE.Vector2(...bend), new THREE.Vector2(b.x, b.z));
+  return curve.getSpacedPoints(Math.ceil(curve.getLength() / 0.22)).map((p) => new THREE.Vector3(p.x, Math.max(heightAt(p.x, p.y), 0.02) + 0.03, p.y));
+}
+
+function roadRibbon(points: THREE.Vector3[], width: number): THREE.BufferGeometry {
+  const positions: number[] = [];
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    const side = new THREE.Vector3(b.z - a.z, 0, a.x - b.x).normalize().multiplyScalar(width / 2);
+    const [a0, a1, b0, b1] = [a.clone().add(side), a.clone().sub(side), b.clone().add(side), b.clone().sub(side)];
+    positions.push(...a0.toArray(), ...a1.toArray(), ...b0.toArray(), ...b0.toArray(), ...a1.toArray(), ...b1.toArray());
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+// ------------------------------------------------------------- markers
+
+const glows = new Map<string, THREE.Material>();
+function glow(color: number, intensity = 1.4, opacity = 1, additive = false): THREE.Material {
+  const key = `${color}:${intensity}:${opacity}:${additive}`;
+  let m = glows.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: intensity, transparent: opacity < 1, opacity, depthWrite: opacity >= 1, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+    glows.set(key, m);
+  }
+  return m;
+}
+
+const SHAPES = {
+  pad: new THREE.CylinderGeometry(0.3, 0.34, 0.06, 24),
+  beacon: new THREE.CylinderGeometry(0.035, 0.035, 1, 8).translate(0, 0.5, 0),
+  nest: new THREE.ConeGeometry(0.26, 0.42, 7).translate(0, 0.21, 0),
+  offer: new THREE.OctahedronGeometry(0.15, 0),
+  rumour: new THREE.SphereGeometry(0.11, 12, 8),
+  hit: new THREE.SphereGeometry(0.75, 8, 6),
+};
+const PAD_GREY = new THREE.MeshStandardMaterial({ color: 0x8a8c88, roughness: 0.8 });
+const HIT = new THREE.MeshBasicMaterial({ visible: false });
 
 interface Marker {
   region: RegionId;
   group: THREE.Group;
   label: CSS2DObject;
-  normal: THREE.Vector3;
-  /** Distance from the centre to where the marker sits, above the ground. */
-  height: number;
 }
 
+/** How far the map pans (drag, focus) across and towards the camera: north is open, south its edge shows soon. */
+const PAN_X: [number, number] = [-8, 8];
+const PAN_Z: [number, number] = [-1.5, 7];
+
+/** The light after the scene (stage.ts): a little warmer and richer than the base, the shade cool. */
+const MAP_MOOD: StageMood = {
+  exposure: 1.12,
+  bloom: { strength: 0.42, threshold: 0.85 },
+  grade: { saturation: 1.02, contrast: 1.06, vignette: 0.3, shadowTint: [0.93, 0.95, 1.08], highlightTint: [1.05, 1.0, 0.93], lift: [0.055, 0.055, 0.075] },
+};
+
 /**
- * Geoscape: the Earth with the resistance regions, alien facilities, mission
- * sites and the Bastion's dropship. Drag to spin it, click a region to select it.
+ * The valley map: the eight zones with their markers, the Marea, La Mula on
+ * the roads. Drag to pan it, click a zone's marker to select it.
  */
 export class GeoscapeSet implements StageSet {
   readonly scene = new THREE.Scene();
-  private readonly globe = new THREE.Group();
+  /** No GTAO: at the map's scale it changes next to nothing and costs a whole pass of the scene. */
+  readonly ambientOcclusion = false;
+  readonly mood = MAP_MOOD;
+  /** The diorama, panned under the camera (drag, focus). */
+  private readonly valley = new THREE.Group();
   private readonly markerGroup = new THREE.Group();
   private readonly markers: Marker[] = [];
-  /** Ground radius under a direction (the voxel terrain has land and mountains). */
-  private readonly surface: (dir: THREE.Vector3) => number;
-  private readonly ring: THREE.Group;
-  private readonly ringFade: THREE.Material[];
-  private readonly ship = new THREE.Group();
-  private readonly shipRotors: THREE.Group[];
-  private readonly halo: THREE.Sprite;
-  private readonly tether: THREE.Line;
-  private readonly shipLabel: CSS2DObject;
-  /** Where the ship's nose points (globe space), eased towards the way it moves. */
-  private readonly heading = new THREE.Vector3(0, 0, 1);
-  private readonly lastShipPos = new THREE.Vector3();
-  /** Seconds since the ship reached its region, for its slow circling. */
-  private loiter = 0;
-  /** The menu's backdrop never gets a campaign: the ship's name only shows once update() has run. */
-  private inCampaign = false;
-  private readonly scanRing: THREE.Group;
-  private readonly scanFade: THREE.Material[];
-  private shipFrom = new THREE.Vector3();
-  private shipTo = new THREE.Vector3();
-  private shipT = 1;
-  private shipRegion: RegionId | null = null;
-  private yaw = 0;
-  private targetYaw = 0;
-  private pitch = 0.3;
+  private readonly statics = new StaticBatch(8);
+  private readonly ring: THREE.Mesh;
+  private readonly scanRing: THREE.Mesh;
+  private readonly bus = new THREE.Group();
+  private readonly busLabel: CSS2DObject;
+  private readonly clouds = new THREE.Group();
+  private readonly sun = new THREE.DirectionalLight(0xffdcb4, 3.0);
+  /** The Marea's front, in map z (south edge: none yet; Atalaya: the end); in the main menu, a little of it. */
+  private readonly marea = { value: THREE.MathUtils.lerp(HD + 1, ATALAYA.z, 0.15) };
+  private mareaGoal = this.marea.value;
+  /** The road graph's polylines, by both ends. */
+  private readonly roads = new Map<string, THREE.Vector3[]>();
+  /** La Mula's way to its zone, how far along it is, and where it is now. */
+  private path: THREE.Vector3[] = [];
+  private along = 0;
+  private busRegion: RegionId = HOME_REGION;
+  private moving = false;
+  /** In the main menu La Mula drives from zone to zone, stopping a while at each. */
   private idle = 0;
+  private readonly pan = new THREE.Vector2();
+  private readonly panGoal = new THREE.Vector2();
+  private inCampaign = false;
   private scanning = 0;
   private lastKey = '';
+  private shadowsStale = true;
 
   constructor(private readonly onPick: (region: RegionId) => void) {
-    this.scene.background = new THREE.Color(0x03070b);
-    this.scene.add(new THREE.AmbientLight(0x6a8aa8, 1.3));
-    const sun = new THREE.DirectionalLight(0xdfefff, 2.2);
-    sun.position.set(-6, 4, 8);
-    this.scene.add(sun);
-    const stars: number[] = [];
-    for (let i = 0; i < 1500; i++) {
-      const v = new THREE.Vector3().randomDirection().multiplyScalar(120 + Math.random() * 80);
-      stars.push(v.x, v.y, v.z);
-    }
-    this.scene.add(
-      new THREE.Points(
-        new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(stars, 3)),
-        new THREE.PointsMaterial({
-          color: 0xbfd8ee,
-          size: 0.6,
-          sizeAttenuation: true,
-        }),
-      ),
-    );
+    // A clear spring afternoon over the valley: a low, warm sun from the west, a cool sky in the shade.
+    this.scene.background = skyTexture(['#7d92bd', '#b6c1d8', '#ecd7c4']);
+    this.scene.fog = new THREE.Fog(0xd8d2d4, 34, 70);
+    this.scene.add(new THREE.HemisphereLight(0xb7c3e2, 0x87806f, 1.25));
+    this.sun.position.set(-20, 15, 8);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.bias = -0.0005;
+    this.sun.shadow.normalBias = 0.02;
+    Object.assign(this.sun.shadow.camera, { left: -20, right: 20, top: 16, bottom: -16, near: 1, far: 70 });
+    this.scene.add(this.sun, this.sun.target);
+    // A sea of cloud far under the diorama.
+    const cloudSea = new THREE.Mesh(new THREE.CircleGeometry(80, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe6e2e6, fog: true }));
+    cloudSea.position.y = -6;
+    this.scene.add(cloudSea);
 
-    const earth = cachedEarth();
-    this.surface = earth.surface;
-    const atmosphere = new THREE.Mesh(
-      new THREE.SphereGeometry(RADIUS * 1.07, 48, 32),
-      new THREE.MeshBasicMaterial({
-        color: 0x3fa9ff,
-        transparent: true,
-        opacity: 0.13,
-        side: THREE.BackSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      }),
-    );
-    this.ring = voxelize(
-      [
-        {
-          mesh: new THREE.Mesh(new THREE.RingGeometry(0.34, 0.44, 32), glow(0xffffff, 1)),
-          matrix: new THREE.Matrix4(),
-        },
-      ],
-      SMALL_VOXEL,
-    );
-    this.ringFade = seeThrough(this.ring, 0.9);
+    this.valley.add(terrain(this.marea), skirt(), water(), this.markerGroup, this.bus, this.statics.group, this.clouds);
+    this.scene.add(this.valley);
+    // The roads, one mesh; their polylines for La Mula.
+    const ribbons: THREE.BufferGeometry[] = [];
+    for (const [a, b, bend] of ROADS) {
+      const points = roadPoints(ZONES[a], ZONES[b], bend);
+      this.roads.set(`${a}|${b}`, points);
+      this.roads.set(`${b}|${a}`, points.slice().reverse());
+      ribbons.push(roadRibbon(points, 0.13));
+    }
+    const roads = new THREE.Mesh(mergeGeometries(ribbons), new THREE.MeshStandardMaterial({ color: 0x8a7a64, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }));
+    for (const r of ribbons) r.dispose();
+    roads.receiveShadow = true;
+    roads.matrixAutoUpdate = false;
+    this.valley.add(roads);
+
+    // The selected zone's ring and the scan's ring, flat on the ground.
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(0.46, 0.56, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false, toneMapped: false }));
     this.ring.visible = false;
-    // La Mula flying over the globe: a soft halo behind it, a line down to the ground under it, and its name.
-    const mula = voxelShip();
-    // About twice the old dropship's size: a ship's length is a good finger's width at the default zoom.
-    mula.model.scale.setScalar(1.4);
-    this.ship.add(mula.model);
-    this.shipRotors = mula.rotors;
-    this.halo = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: haloTexture(), color: 0xffcf73, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: 0.5 }),
-    );
-    // Just under the hull, so from the camera it glows round the ship rather than over it.
-    this.halo.position.y = -0.18;
-    this.halo.scale.set(2, 2, 1);
-    this.ship.add(this.halo);
-    this.tether = new THREE.Line(
-      new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3)),
-      new THREE.LineBasicMaterial({ color: 0xffcf73, transparent: true, opacity: 0.65 }),
-    );
-    this.tether.frustumCulled = false;
+    this.scanRing = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.36, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x54d1ff, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
+    this.valley.add(this.ring, this.scanRing);
+
     const name = document.createElement('div');
     name.className = 'globe-label ship';
     name.textContent = 'La Mula';
     name.style.fontWeight = '700';
     name.style.borderLeft = '3px solid #ffb020';
-    this.shipLabel = new CSS2DObject(name);
-    this.shipLabel.position.set(0, 0.5, 0);
-    this.shipLabel.visible = false;
-    this.ship.add(this.shipLabel);
-    this.scanRing = voxelize(
-      [
-        {
-          mesh: new THREE.Mesh(new THREE.RingGeometry(0.2, 0.26, 32), glow(0x54d1ff, 1.2)),
-          matrix: new THREE.Matrix4(),
-        },
-      ],
-      SMALL_VOXEL,
-    );
-    this.scanFade = seeThrough(this.scanRing, 0);
-    this.globe.add(earth.model, this.markerGroup, this.ring, this.ship, this.tether, this.scanRing);
-    this.scene.add(this.globe, atmosphere);
-    this.yaw = this.targetYaw = this.yawFacing(REGIONS.weu.lon);
-    this.placeShip(REGIONS.weu.lat, REGIONS.weu.lon, true);
+    this.busLabel = new CSS2DObject(name);
+    this.busLabel.position.set(0, 0.55, 0);
+    this.busLabel.visible = false;
+    this.bus.add(this.busLabel);
+    this.placeBus(HOME_REGION);
+    void loadBaseKit().then(() => this.build());
   }
 
   shot(): Shot {
-    return {
-      pos: new THREE.Vector3(0.6, 0.4, 19.5),
-      target: new THREE.Vector3(0.6, 0.4, 0),
-      fov: 36,
-    };
+    // The wheel looks closer (towards the pointer); a drag pans the map.
+    return { pos: new THREE.Vector3(-1.4, 17.5, 19.5), target: new THREE.Vector3(-1.4, 0, 2.2), fov: 40, zoom: { min: 0.4, reach: 9 } };
   }
 
-  private yawFacing(lon: number): number {
-    const p = latLonToVector(0, lon);
-    return -Math.atan2(p.x, p.z);
-  }
-
-  /** Turns the globe so a region faces the camera. */
+  /** Pans the map so a zone comes towards the middle (never so far that its south edge shows). */
   focus(region: RegionId): void {
-    this.targetYaw = this.yawFacing(REGIONS[region].lon);
-    this.idle = 0;
+    const z = ZONES[region];
+    this.panGoal.set(THREE.MathUtils.clamp(-z.x * 0.5, ...PAN_X), THREE.MathUtils.clamp(-z.z * 0.4, ...PAN_Z));
   }
 
-  /** The dropship flies to `region` (missions take it there). */
+  /** La Mula drives to `region` (missions take it there), along the roads. */
   flyTo(region: RegionId): void {
-    if (region === this.shipRegion) return;
-    this.shipRegion = region;
-    const def = REGIONS[region];
-    this.placeShip(def.lat, def.lon, false);
+    this.inCampaign = true;
+    this.drive(region);
   }
 
-  /** Sends the ship to park beside a region's marker (not on it: its beacon and label stay in sight). */
-  private placeShip(lat: number, lon: number, instant: boolean): void {
-    const to = latLonToVector(lat + PARK[0], lon + PARK[1], RADIUS + SHIP_ALT);
-    this.shipFrom.copy(this.ship.position.lengthSq() ? this.ship.position : to);
-    this.shipTo.copy(to);
-    this.shipT = instant ? 1 : 0;
-    if (instant) this.ship.position.copy(this.shipTo);
-    else this.loiter = 0;
+  /** La Mula along the roads to `region`, from wherever it is. */
+  private drive(region: RegionId): void {
+    if (region === this.busRegion && !this.moving) return;
+    const route = this.route(this.busRegion, region);
+    this.busRegion = region;
+    if (!route.length) return this.placeBus(region);
+    this.path = route;
+    this.along = 0;
+    this.moving = true;
   }
 
-  /** Scanning: the ring under the ship pulses and the globe turns faster. */
+  /** Scanning: a ring pulses out from La Mula. */
   setScanning(on: boolean): void {
     this.scanning = on ? 1.6 : 0;
   }
 
   update(c: CampaignState, selected: RegionId | null): void {
     this.inCampaign = true;
+    // The Marea: from beyond the south edge (none) to Atalaya (the end).
+    const k = THREE.MathUtils.clamp(c.doom / DOOM_MAX, 0, 1);
+    this.mareaGoal = THREE.MathUtils.lerp(HD + 1, ATALAYA.z, k);
     const key = JSON.stringify([c.regions, c.offers.map((o) => [o.id, o.region, o.facility, o.final, o.story, o.quest]), c.rumors.map((x) => [x.id, x.region]), c.listening, selected]);
     if (key === this.lastKey) return;
     this.lastKey = key;
@@ -615,66 +505,57 @@ export class GeoscapeSet implements StageSet {
     this.markers.length = 0;
     for (const r of c.regions) {
       const def = REGIONS[r.id];
-      const normal = latLonToVector(def.lat, def.lon, 1);
-      // Markers stand on the voxel ground, a little above its stepped top.
-      const height = this.surface(normal) + VOXEL * 0.8;
+      const at = ZONES[r.id];
       const group = new THREE.Group();
-      group.position.copy(normal.clone().multiplyScalar(height));
-      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+      group.position.set(at.x, Math.max(heightAt(at.x, at.z), 0) + 0.04, at.z);
       group.userData.hotspot = r.id;
-      const pad = r.contacted
-        ? part('pad:contacted', () => new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 20), glow(0x3fa9ff, 1)), 0.85)
-        : part('pad', () => new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 20), new THREE.MeshStandardMaterial({ color: 0x8a96a3 })));
+      const pad = new THREE.Mesh(SHAPES.pad, r.contacted ? glow(0x3fa9ff, 0.9) : PAD_GREY);
+      pad.castShadow = true;
       group.add(pad);
-      const tall = r.contacted ? 0.9 : 0.4;
-      const beacon = part(
-        `beacon:${r.contacted}`,
-        () => new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, tall, 6), glow(r.contacted ? 0x3fa9ff : 0x8a96a3, r.contacted ? 1.4 : 0.6)),
-        0.7,
-        true,
-      );
-      beacon.position.y = tall / 2;
-      group.add(beacon);
+      // A beam of light over the zone: tall and blue where we have contact, short and grey where not.
+      const beam = new THREE.Mesh(SHAPES.beacon, r.contacted ? glow(0x3fa9ff, 1.6, 0.75, true) : glow(0x9aa4ad, 0.6, 0.6, true));
+      beam.scale.y = r.contacted ? 1.3 : 0.55;
+      group.add(beam);
       if (r.facility) {
-        const pyramid = part('facility', () => new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.45, 4), glow(0xff2a3a)));
-        pyramid.position.set(0.32, 0.22, 0);
-        group.add(pyramid);
+        // A Nido: a dark mound glowing red.
+        const nest = new THREE.Mesh(SHAPES.nest, glow(0x8a1010, 1.2));
+        nest.position.set(0.42, 0, 0.05);
+        nest.userData.pulse = 3;
+        group.add(nest);
       }
       const offers = c.offers.filter((o) => o.region === r.id);
       offers.forEach((o, i) => {
         // Story chapters glow blue, like the pen on the Expediente; side quests green.
-        const tone = o.final ? 'final' : o.story ? 'story' : o.quest ? 'side' : 'op';
-        const diamond = part(`offer:${tone}`, () => new THREE.Mesh(new THREE.OctahedronGeometry(0.13, 0), glow({ final: 0xff2a5a, story: 0x4a7dff, side: 0x3fd68a, op: 0xff9a10 }[tone], 1.4)));
-        diamond.position.set(-0.3 - i * 0.24, 0.3, 0.1);
+        const tone = o.final ? 0xff2a5a : o.story ? 0x4a7dff : o.quest ? 0x3fd68a : 0xff9a10;
+        const diamond = new THREE.Mesh(SHAPES.offer, glow(tone, 1.5));
+        diamond.position.set(-0.36 - i * 0.3, 0.42, 0.1);
         diamond.userData.spin = true;
+        diamond.castShadow = true;
         group.add(diamond);
       });
-      // A rumour floats over its region, brighter while the Bastion listens to it.
+      // A rumour floats over its zone, brighter while the Bastion listens to it.
       const rumor = c.rumors.find((x) => x.region === r.id);
       if (rumor) {
         const listening = rumor.id === c.listening;
-        const orb = part(`rumour:${listening}`, () => new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), glow(listening ? 0x7dffb0 : 0xfff0c0, listening ? 1.8 : 1.1)));
-        orb.position.set(0.3, 0.62, -0.1);
-        // It breathes, faster while the Bastion listens.
+        const orb = new THREE.Mesh(SHAPES.rumour, glow(listening ? 0x7dffb0 : 0xfff0c0, listening ? 1.9 : 1.2));
+        orb.position.set(0.36, 0.8, -0.1);
         orb.userData.pulse = listening ? 5 : 2.5;
         group.add(orb);
       }
-      group.add(new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), new THREE.MeshBasicMaterial({ visible: false })));
+      group.add(new THREE.Mesh(SHAPES.hit, HIT));
       const el = document.createElement('div');
       el.className = `globe-label${r.contacted ? ' contacted' : ''}${r.facility ? ' facility' : ''}${r.id === selected ? ' selected' : ''}`;
       el.textContent = `${def.name}${offers.length ? ` · ${offers.length}` : ''}${rumor ? ' · ?' : ''}`;
       const tag = new CSS2DObject(el);
-      tag.position.set(0, 0.75, 0);
+      tag.position.set(0, 1.0, 0);
       group.add(tag);
       this.markerGroup.add(group);
-      this.markers.push({ region: r.id, group, label: tag, normal, height });
+      this.markers.push({ region: r.id, group, label: tag });
     }
-    const sel = this.markers.find((m) => m.region === selected);
+    const sel = selected ? ZONES[selected] : null;
     this.ring.visible = !!sel;
-    if (sel) {
-      this.ring.position.copy(sel.normal.clone().multiplyScalar(sel.height));
-      this.ring.lookAt(sel.normal.clone().multiplyScalar(RADIUS * 2));
-    }
+    if (sel) this.ring.position.set(sel.x, Math.max(heightAt(sel.x, sel.z), 0) + 0.12, sel.z);
+    this.shadowsStale = true;
   }
 
   hits(): THREE.Object3D[] {
@@ -685,75 +566,280 @@ export class GeoscapeSet implements StageSet {
     this.onPick(hot as RegionId);
   }
 
+  /** Dragging pans the map (within its edges). */
   drag(dx: number, dy: number): boolean {
-    this.targetYaw += dx * 0.008;
-    this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.005, -0.9, 0.9);
-    this.idle = 0;
+    this.panGoal.x = THREE.MathUtils.clamp(this.panGoal.x + dx * 0.03, ...PAN_X);
+    this.panGoal.y = THREE.MathUtils.clamp(this.panGoal.y + dy * 0.03, ...PAN_Z);
     return true;
   }
 
+  /** Before each frame (stage.ts): the shadow map only when something in it moved (La Mula casts none). */
+  beforeRender(gl: THREE.WebGLRenderer): void {
+    if (this.shadowsStale) {
+      gl.shadowMap.needsUpdate = true;
+      this.shadowsStale = false;
+    }
+  }
+
   tick(dt: number, time: number): void {
-    this.idle += dt;
-    if (this.scanning > 0) this.targetYaw += dt * 0.6;
-    else if (this.idle > 6) this.targetYaw += dt * 0.04;
-    this.yaw += (this.targetYaw - this.yaw) * (1 - Math.exp(-dt * 5));
-    this.globe.rotation.set(this.pitch, this.yaw, 0, 'XYZ');
-    this.globe.updateMatrixWorld(true);
-    const toCamera = new THREE.Vector3(0, 0, 1);
+    // The map eases to where it is panned.
+    // While it moves, the shadow map moves with it.
+    if (this.pan.distanceToSquared(this.panGoal) > 1e-6) {
+      this.pan.lerp(this.panGoal, 1 - Math.exp(-dt * 5));
+      if (this.pan.distanceToSquared(this.panGoal) < 1e-4) this.pan.copy(this.panGoal);
+      this.shadowsStale = true;
+    }
+    this.valley.position.set(this.pan.x, 0, this.pan.y);
+    this.sun.target.position.set(this.pan.x, 0, this.pan.y);
+    this.sun.position.set(this.pan.x - 20, 15, this.pan.y + 8);
+    // The Marea creeps to where the zombi activity puts it.
+    this.marea.value += (this.mareaGoal - this.marea.value) * (1 - Math.exp(-dt * 1.5));
     for (const m of this.markers) {
-      const facing = m.normal.clone().applyQuaternion(this.globe.quaternion).dot(toCamera);
-      m.label.visible = facing > 0.25;
-      m.group.traverse((child) => {
+      for (const child of m.group.children) {
         if (child.userData.spin) child.rotation.y = time * 2;
         if (child.userData.pulse) child.scale.setScalar(1 + Math.sin(time * child.userData.pulse) * 0.12);
-      });
+      }
     }
-    for (const m of this.ringFade) m.opacity = 0.6 + Math.sin(time * 4) * 0.3;
-    // La Mula: a great-circle hop to its destination, then slow circles over it, nose first.
-    if (this.shipT < 1) {
-      this.shipT = Math.min(1, this.shipT + dt * 0.6);
-      const k = this.shipT * this.shipT * (3 - 2 * this.shipT);
-      this.ship.position
-        .copy(this.shipFrom)
-        .lerp(this.shipTo, k)
-        .setLength(RADIUS + SHIP_ALT + Math.sin(k * Math.PI) * 0.6);
-    } else {
-      this.loiter += dt;
-      const n = this.shipTo.clone().normalize();
-      const east = new THREE.Vector3(0, 1, 0).cross(n).normalize();
-      const north = n.clone().cross(east);
-      const a = this.loiter * 0.45;
-      const r = 0.16 * Math.min(1, this.loiter / 2);
-      this.ship.position
-        .copy(this.shipTo)
-        .addScaledVector(east, Math.cos(a) * r)
-        .addScaledVector(north, Math.sin(a) * r)
-        .setLength(RADIUS + SHIP_ALT + Math.sin(time * 1.6) * 0.02);
+    if (this.ring.visible) (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.6 + Math.sin(time * 4) * 0.3;
+    // La Mula along its road, nose first.
+    if (this.moving && this.path.length > 1) {
+      const length = this.path.length - 1;
+      this.along = Math.min(length, this.along + dt * 12);
+      const i = Math.min(length - 1, Math.floor(this.along));
+      const a = this.path[i]!;
+      const b = this.path[i + 1]!;
+      this.bus.position.lerpVectors(a, b, this.along - i);
+      this.bus.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
+      if (this.along >= length) this.moving = false;
+    } else if (!this.inCampaign && (this.idle += dt) > 3) {
+      this.idle = 0;
+      const next = ROADS.flatMap(([a, b]) => (a === this.busRegion ? [b] : b === this.busRegion ? [a] : []));
+      this.drive(next[Math.floor(hash(time, 7) * next.length)]!);
     }
-    const up = this.ship.position.clone().normalize();
-    const moved = this.ship.position.clone().sub(this.lastShipPos);
-    if (moved.lengthSq() > 1e-10 && this.lastShipPos.lengthSq()) this.heading.lerp(moved.normalize(), 1 - Math.exp(-dt * 4));
-    this.lastShipPos.copy(this.ship.position);
-    const forward = this.heading.clone().addScaledVector(up, -this.heading.dot(up));
-    if (forward.lengthSq() < 1e-6) forward.set(0, 1, 0).addScaledVector(up, -up.y);
-    forward.normalize();
-    this.ship.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(up, forward), up, forward));
-    for (const [i, rotor] of this.shipRotors.entries()) rotor.rotation.y += dt * (i ? -9 : 9);
-    (this.halo.material as THREE.SpriteMaterial).opacity = 0.42 + Math.sin(time * 2.6) * 0.16;
-    this.halo.scale.setScalar(1.95 + Math.sin(time * 2.6) * 0.12);
-    // The line down to the ground, under the hull.
-    const line = this.tether.geometry.getAttribute('position') as THREE.BufferAttribute;
-    const foot = up.clone().multiplyScalar(this.surface(up) + VOXEL * 0.2);
-    const top = this.ship.position.clone().addScaledVector(up, -0.08);
-    line.setXYZ(0, foot.x, foot.y, foot.z);
-    line.setXYZ(1, top.x, top.y, top.z);
-    line.needsUpdate = true;
-    this.shipLabel.visible = this.inCampaign && this.ship.getWorldPosition(new THREE.Vector3()).normalize().dot(toCamera) > 0.2;
+    this.busLabel.visible = this.inCampaign;
+    // The scan's ring spreads from La Mula.
     const pulse = this.scanning > 0 ? (time * 1.2) % 1 : 0;
-    this.scanRing.position.copy(this.shipTo.clone().setLength(this.surface(this.shipTo.clone().normalize()) + VOXEL * 0.6));
-    this.scanRing.lookAt(this.shipTo.clone().multiplyScalar(2));
-    this.scanRing.scale.setScalar(1 + pulse * 5);
-    for (const m of this.scanFade) m.opacity = this.scanning > 0 ? 0.9 * (1 - pulse) : 0;
+    this.scanRing.position.copy(this.bus.position).setY(this.bus.position.y + 0.08);
+    this.scanRing.scale.setScalar(1 + pulse * 6);
+    (this.scanRing.material as THREE.MeshBasicMaterial).opacity = this.scanning > 0 ? 0.9 * (1 - pulse) : 0;
     if (this.scanning > 0) this.scanning = Math.max(0, this.scanning - dt);
+    // Clouds drift east over the sierra and come back round.
+    for (const cloud of this.clouds.children) {
+      cloud.position.x += dt * (0.25 + (cloud.userData.speed as number));
+      if (cloud.position.x > HW + 4) cloud.position.x = -HW - 4;
+    }
+  }
+
+  // ------------------------------------------------------------- inner
+
+  /** La Mula parked at a zone, beside its marker. */
+  private placeBus(region: RegionId): void {
+    const z = ZONES[region];
+    const x = z.x + 0.55;
+    const zz = z.z + 0.45;
+    this.bus.position.set(x, Math.max(heightAt(x, zz), 0) + 0.02, zz);
+    this.moving = false;
+  }
+
+  /** The roads from one zone to another (fewest roads first), as one polyline; empty if none. */
+  private route(from: RegionId, to: RegionId): THREE.Vector3[] {
+    if (from === to) return [];
+    const prev = new Map<RegionId, RegionId>([[from, from]]);
+    const queue: RegionId[] = [from];
+    while (queue.length) {
+      const at = queue.shift()!;
+      if (at === to) break;
+      for (const [a, b] of ROADS) {
+        const next = a === at ? b : b === at ? a : null;
+        if (next && !prev.has(next)) {
+          prev.set(next, at);
+          queue.push(next);
+        }
+      }
+    }
+    if (!prev.has(to)) return [];
+    const zones: RegionId[] = [to];
+    while (zones[0] !== from) zones.unshift(prev.get(zones[0]!)!);
+    const points: THREE.Vector3[] = [];
+    for (let i = 0; i + 1 < zones.length; i++) points.push(...(this.roads.get(`${zones[i]}|${zones[i + 1]}`) ?? []));
+    // From where it stands to the road, and off the road to its parking beside the marker.
+    const end = ZONES[to];
+    const park = new THREE.Vector3(end.x + 0.55, Math.max(heightAt(end.x + 0.55, end.z + 0.45), 0) + 0.02, end.z + 0.45);
+    return [this.bus.position.clone(), ...points, park];
+  }
+
+  /** The models: Atalaya and the zones' towns, farms, mines and works, the forests and peaks, La Mula and the clouds. */
+  private build(): void {
+    const kit = new KitBatch();
+    const put = (id: BaseModelId, x: number, z: number, o: { fit?: number; s?: number; sy?: number; yaw?: number; y?: number; finish?: Finish } = {}) => {
+      const size = kitModel(id)?.size;
+      if (!size) return;
+      const s = o.fit ? o.fit / Math.max(size.x, size.z) : (o.s ?? 1) * MINI;
+      kit.put(id, { x, z, y: o.y ?? Math.max(heightAt(x, z), 0) - 0.01, yaw: o.yaw ?? 0, s, sy: o.sy, finish: o.finish ?? 'map' });
+    };
+    const scatter = (cx: number, cz: number, r: number, n: number, seed: number, each: (x: number, z: number, k: number) => void) => {
+      for (let k = 0; k < n; k++) {
+        const a = hash(seed, k) * Math.PI * 2;
+        const d = Math.sqrt(hash(k, seed + 7)) * r;
+        each(cx + Math.cos(a) * d, cz + Math.sin(a) * d, k);
+      }
+    };
+
+    // The sierra's peaks along the north edge.
+    const ranges: BaseModelId[] = ['range1', 'range2', 'range3', 'range4'];
+    for (let i = 0; i < 11; i++) {
+      const x = -HW + 1.2 + i * 2.75 + (hash(i, 3) - 0.5) * 1.2;
+      const z = -HD + 1.4 + hash(i, 5) * 1.4;
+      put(ranges[i % 4]!, x, z, { s: 3.4 + hash(i, 9) * 1.6, sy: 2.2 + hash(i, 11) * 1.2, yaw: hash(i, 13) * 6.3, y: heightAt(x, z) - 0.6, finish: 'mapMountain' });
+    }
+
+    // Atalaya on its shelf: the bunker, its mast, two lookouts, the water tower; the dam beside it is the reservoir's.
+    const ax = ATALAYA.x;
+    const az = ATALAYA.z;
+    put('bunker', ax, az, { s: 1.8, yaw: Math.PI, finish: 'mapSnow' });
+    put('mast', ax - 0.75, az - 0.4, { s: 1.6, finish: 'mapSnow' });
+    put('waterTower', ax + 0.9, az - 0.25, { s: 1.2, finish: 'mapSnow' });
+    for (const [dx, dz] of [
+      [-1.0, 0.55],
+      [1.0, 0.6],
+    ] as const)
+      put('lookout', ax + dx, az + dz, { s: 1.5, finish: 'mapSnow' });
+    put('armyTent', ax + 0.1, az + 0.8, { s: 1.3, finish: 'mapSnow' });
+    for (let t = -1.2; t <= 1.2; t += 0.2) put('jersey', ax + t, az + 1.2, { s: 1.2, finish: 'mapSnow' });
+
+    // Altomonte's villages under the station.
+    const village = (cx: number, cz: number, seed: number, snow: boolean) => {
+      const houses: BaseModelId[] = ['mapHouse', 'mapHouseSquare', 'mapHouseL', 'mapHouse'];
+      scatter(cx, cz, 0.9, 6, seed, (x, z, k) => put(houses[k % houses.length]!, x, z, { fit: 0.38, yaw: hash(k, seed) * 6.3, finish: snow ? 'mapSnow' : 'map' }));
+      put('mapChurch', cx + 0.2, cz - 0.2, { fit: 0.5, yaw: 0.4, finish: snow ? 'mapSnow' : 'map' });
+    };
+    village(ZONES.weu.x - 1.0, ZONES.weu.z + 0.5, 11, true);
+    // Valdelobos: villages in the closed valleys.
+    village(ZONES.eeu.x - 0.6, ZONES.eeu.z + 0.6, 23, false);
+    village(ZONES.eeu.x + 3.2, ZONES.eeu.z - 1.0, 29, false);
+
+    // El Pantano Gris: the dam across the reservoir's lip, the dead power station below it, a line of pylons.
+    const gap = Math.atan2(RIVER[0]![1] - RESERVOIR.z, RIVER[0]![0] - RESERVOIR.x);
+    for (let i = 0; i < 10; i++) {
+      const a = gap + (i / 9 - 0.5) * 1.1;
+      const block = new THREE.Vector3(RESERVOIR.x + Math.cos(a) * RESERVOIR.dam, -0.3, RESERVOIR.z + Math.sin(a) * RESERVOIR.dam);
+      kit.prim(UNIT, DAM, new THREE.Matrix4().compose(block, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a), new THREE.Vector3(0.24, RESERVOIR.level + 0.45, 0.32)));
+    }
+    put('mapCooling', 12.6, 2.6, { fit: 1.0 });
+    put('mapChimney', 11.6, 3.2, { s: 0.9 });
+    put('mapWarehouse', 13.6, 1.4, { fit: 0.9, yaw: 0.3 });
+    for (let i = 0; i < 5; i++) {
+      const x = RESERVOIR.x - 2 - i * 2.6;
+      const z = RESERVOIR.z + 5.2 + i * 0.5;
+      put('pylon', x, z, { s: 0.45, yaw: 1.4 });
+    }
+
+    // Carboneda: mine mouths in the western hills, spoil heaps and a works shed.
+    for (const [dx, dz, yaw] of [
+      [-0.9, -1.2, 0.6],
+      [0.8, -1.5, -0.3],
+    ] as const)
+      put('mapMine', ZONES.sa.x + dx, ZONES.sa.z + dz, { fit: 0.5, yaw, y: heightAt(ZONES.sa.x + dx, ZONES.sa.z + dz) - 0.1 });
+    put('siteSpoil', ZONES.sa.x - 0.2, ZONES.sa.z - 0.2, { s: 1.6 });
+    put('siteSpoil', ZONES.sa.x + 1.2, ZONES.sa.z + 0.4, { s: 1.2, yaw: 1 });
+    put('mapWarehouse', ZONES.sa.x + 0.9, ZONES.sa.z + 1.3, { fit: 0.8, yaw: -0.5 });
+    put('siteDozer', ZONES.sa.x - 1.0, ZONES.sa.z + 0.6, { s: 0.9, yaw: 0.8 });
+
+    // La Vega: farms along the river, fields and orchards.
+    const vx = ZONES.oce.x;
+    const vz = ZONES.oce.z;
+    put('mapBarn', vx - 1.1, vz - 0.9, { fit: 0.6, yaw: 0.2 });
+    put('mapSilo', vx - 0.5, vz - 1.2, { fit: 0.22 });
+    put('mapSilo', vx - 0.25, vz - 1.15, { fit: 0.22 });
+    put('mapHouse', vx + 0.9, vz - 0.8, { fit: 0.4, yaw: -0.3 });
+    for (let i = 0; i < 10; i++) {
+      const x = vx - 3 + (i % 5) * 1.3 + hash(i, 41) * 0.3;
+      const z = vz + 0.1 + Math.floor(i / 5) * 1.25 + hash(i, 43) * 0.3;
+      if (distToPolyline(x, z, RIVER) < 0.7) continue;
+      put(i % 3 ? 'mapCrops' : 'mapField', x, z, { fit: 0.8, yaw: Math.round(hash(i, 47) * 4) * (Math.PI / 2) });
+    }
+    scatter(vx + 2.6, vz - 1.4, 0.8, 9, 53, (x, z) => put('mapTree', x, z, { fit: 0.22 }));
+
+    // Ciudad Varela: the first city to fall, a grid of dead blocks.
+    const city = (cx: number, cz: number, cols: number, rows: number, seed: number, kinds: BaseModelId[]) => {
+      for (let j = 0; j < rows; j++)
+        for (let i = 0; i < cols; i++) {
+          const x = cx + (i - (cols - 1) / 2) * 0.75;
+          const z = cz + (j - (rows - 1) / 2) * 0.75;
+          // A square left open round the zone's marker.
+          if (Object.values(ZONES).some((p) => Math.hypot(p.x - x, p.z - z) < 0.6)) continue;
+          put(kinds[Math.floor(hash(i + seed, j) * kinds.length)]!, x, z, { fit: 0.55, yaw: Math.round(hash(j, i + seed) * 4) * (Math.PI / 2) });
+        }
+    };
+    city(ZONES.afr.x, ZONES.afr.z, 4, 3, 61, ['mapFlats', 'mapOffice', 'mapShop', 'mapFactory', 'mapMotel', 'mapHouseSquare']);
+    // Puerto Galena: the dead city and the Instituto Galena by the river's mouth, warehouses on the bank, the lighthouse.
+    put('mapFactory', ZONES.me.x + 1.0, ZONES.me.z - 0.6, { fit: 0.9, yaw: 0.2 });
+    city(ZONES.me.x + 0.4, ZONES.me.z + 0.5, 3, 2, 71, ['mapFlats', 'mapOffice', 'mapShop', 'mapHouseSquare']);
+    put('mapWarehouse', ZONES.me.x - 0.8, ZONES.me.z + 1.6, { fit: 0.7, yaw: 0.5 });
+    put('mapLighthouse', 12.4, 8.6, { fit: 0.35 });
+
+    // Los Llanos de Ceniza: dead trees and wrecks on the ash.
+    scatter(ZONES.na.x, ZONES.na.z, 3.2, 14, 81, (x, z, k) => put(k % 4 ? 'pineDead' : 'rustyCar', x, z, { s: k % 4 ? 1.1 : 0.9, yaw: hash(k, 83) * 6.3 }));
+
+    // Forests on the slopes (snowy higher up), copses in the lowlands, crags in the hills.
+    const pines: BaseModelId[] = ['pine', 'pineSmall', 'pineTall'];
+    for (let k = 0; k < 420; k++) {
+      const x = -HW + 0.4 + hash(k, 101) * (W - 0.8);
+      const z = -HD + 0.4 + hash(k, 103) * (D - 0.8);
+      const h = heightAt(x, z);
+      if (h < 0.55 || h > 3.0 || fbm(x * 0.5 + 3, z * 0.5) < 0.45) continue;
+      if (Object.values(ZONES).some((p) => Math.hypot(p.x - x, p.z - z) < 1.3) || Math.hypot(ATALAYA.x - x, ATALAYA.z - z) < 1.6) continue;
+      put(pines[k % 3]!, x, z, { s: 1.0 + hash(k, 107) * 0.5, yaw: hash(k, 109) * 6.3, finish: h > 1.7 ? 'mapSnow' : 'map' });
+    }
+    for (let k = 0; k < 160; k++) {
+      const x = -HW + 1 + hash(k, 113) * (W - 2);
+      const z = -5 + hash(k, 117) * (HD + 4);
+      const h = heightAt(x, z);
+      if (h < 0.06 || h > 1.3 || fbm(x * 0.6, z * 0.6 + 4) < 0.5 || distToPolyline(x, z, RIVER) < 0.45) continue;
+      if (Object.values(ZONES).some((p) => Math.hypot(p.x - x, p.z - z) < 1.6)) continue;
+      if (ashen(x, z)) continue;
+      put(k % 2 ? 'mapTrees' : 'mapTreesWide', x, z, { fit: 0.7, yaw: hash(k, 119) * 6.3 });
+    }
+    const crags: BaseModelId[] = ['crag', 'crag2', 'crag3', 'crag4'];
+    for (let k = 0; k < 40; k++) {
+      const x = -HW + 1 + hash(k, 121) * (W - 2);
+      const z = -HD + 1 + hash(k, 123) * (D - 2);
+      const h = heightAt(x, z);
+      if (h < 1.2 || h > 3.4) continue;
+      put(crags[k % 4]!, x, z, { s: 0.8 + hash(k, 127) * 0.8, yaw: hash(k, 129) * 6.3, finish: 'mapMountain', y: h - 0.05 });
+    }
+
+    this.statics.begin(null);
+    kit.addTo(this.statics);
+    this.statics.commit();
+
+    // La Mula: the base's bus, merged (nothing moves on it at this size), nose along +z. It casts no
+    // shadow: at this size none shows, and the shadow map need not be drawn again as it drives.
+    const bus = kitModel('mulaBus');
+    if (bus) {
+      const parts = new StaticBatch(50);
+      parts.begin(null);
+      const still = new THREE.Matrix4();
+      for (const part of kitMesh('mulaBus', 'map').children) parts.add((part as THREE.Mesh).geometry, (part as THREE.Mesh).material as THREE.Material, still, false);
+      parts.commit();
+      parts.group.scale.setScalar(0.62 / bus.size.z);
+      this.bus.add(parts.group);
+    }
+
+    // Clouds drifting over the sierra (no shadows: they move all the time).
+    const cloudIds: BaseModelId[] = ['mapCloud', 'mapCloud2', 'mapCloud3'];
+    for (let i = 0; i < 7; i++) {
+      const g = new KitBatch();
+      g.put(cloudIds[i % 3]!, { s: 0.22 + hash(i, 131) * 0.12, finish: 'map' });
+      const cloud = g.build(false);
+      cloud.position.set(-HW + hash(i, 133) * W, 5.2 + hash(i, 137) * 1.6, -HD + 1 + hash(i, 139) * 9);
+      cloud.userData.speed = hash(i, 141) * 0.2;
+      this.clouds.add(cloud);
+    }
+    this.shadowsStale = true;
   }
 }
+
+/** A unit box standing on y = 0 (the dam's blocks). */
+const UNIT = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const DAM = new THREE.MeshStandardMaterial({ color: 0xa3a39e, roughness: 0.9 });

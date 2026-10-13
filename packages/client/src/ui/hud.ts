@@ -1,12 +1,14 @@
 import {
   displayName,
   weaponName,
+  FOUND_WEAPONS,
   ITEMS,
   MISSION_NAMES,
   RANKS,
   TEMPLATES,
   WEAPONS,
   type AbilityId,
+  type FoundWeaponId,
   type ItemId,
   type MissionKind,
   type Modifier,
@@ -127,13 +129,20 @@ export interface MissionView {
 }
 
 /** One thing in a backpack (docs/FASE2.md, «Mochila»): what it is, for the slot's icon and tooltip. */
-export type PackSlot = { kind: 'supplies'; amount: number } | { kind: 'item'; item: ItemId } | { kind: 'medicines'; amount: number };
+export type PackSlot =
+  | { kind: 'supplies'; amount: number }
+  | { kind: 'item'; item: ItemId }
+  | { kind: 'medicines'; amount: number }
+  /** docs/FASE4.md: rations, parts and a good weapon found (FOUND_WEAPONS). */
+  | { kind: 'food'; amount: number }
+  | { kind: 'parts'; amount: number }
+  | { kind: 'weapon'; weapon: FoundWeaponId };
 
 /** The soldier's backpack on the sheet, and what the whole squad carries. */
 export interface PackView {
   slots: PackSlot[];
   size: number;
-  squad: { supplies: number; items: number; medicines: number; text: string };
+  squad: { supplies: number; items: number; medicines: number; food: number; parts: number; weapons: number; text: string };
 }
 
 /** The symbol of an accessory found while searching, from the sheet's own set (styles.css). */
@@ -279,8 +288,12 @@ export class Hud {
    * round the screen in it (dashed for the partner's), and the ability cards
    * resting when the orders aren't ours. `owner` null: the mission is over.
    */
-  setTurn(turn: number, owner: TurnOwner | null, concealed: boolean): void {
-    const key = `${turn}|${JSON.stringify(owner)}|${concealed}`;
+  /**
+   * `night`: a night mission (docs/ALTURA-Y-NOCHE.md): a tag («De noche»)
+   * beside the concealment, whose tooltip says what the dark changes.
+   */
+  setTurn(turn: number, owner: TurnOwner | null, concealed: boolean, night: { label: string; rules: string } | null = null): void {
+    const key = `${turn}|${JSON.stringify(owner)}|${concealed}|${night?.label}`;
     if (key === this.turnKey) return;
     this.turnKey = key;
     const kind = owner?.kind ?? 'over';
@@ -294,10 +307,13 @@ export class Hud {
     else if (owner?.kind === 'enemy') this.abilities.dataset.lock = 'Turno enemigo';
     else delete this.abilities.dataset.lock;
     clear(this.turn);
-    this.turn.append(
+    append(
+      this.turn,
       // The number goes in the tooltip: the strip has no room for it next to a partner's name.
       h(`span.turn-label.${kind}`, { title: `Turno ${turn}` }, type(label)),
       h(`span.conceal.${concealed ? 'on' : 'off'}`, {}, concealed ? 'OCULTOS' : 'DETECTADOS'),
+      // The same stamp as the concealment, so every theme dresses it alike; `.night` gives its colour.
+      night ? h('span.conceal.night', { title: night.rules }, night.label.toUpperCase()) : null,
     );
   }
 
@@ -370,6 +386,8 @@ export class Hud {
           u.captive ? h('em.data', {}, 'CAUTIVO') : null,
           u.disoriented ? h('em.psi', {}, 'DESORIENTADO') : null,
           u.panicked ? h('em.psi', {}, 'PÁNICO') : null,
+          // Bitten (docs/FASE3.md): if it falls it rises, and back at the base it turns unless treated.
+          u.infected && u.alive ? h('em.bite', { title: 'Mordido: si cae, se levanta. En la base hay que tratarlo' }, 'MORDIDO') : null,
           u.evacuated ? h('em.evac', {}, 'EVACUADO') : null,
           carrier === u.id ? h('em.data', {}, 'DATOS') : null,
           u.overwatch ? h('em.ow', {}, u.killZone ? 'ZONA LETAL' : 'VIGILANCIA') : null,
@@ -392,7 +410,8 @@ export class Hud {
     if (!u) return;
     const t = TEMPLATES[u.template];
     const w = WEAPONS[t.weapon];
-    const weapon = weaponName(t.weapon, u.weaponTier ?? 1);
+    // A found weapon goes by its own name (docs/FASE4.md): «Fusil de caza».
+    const weapon = u.weaponName ?? weaponName(t.weapon, u.weaponTier ?? 1);
     const extras = [t.secondary && WEAPONS[t.secondary].name, t.meleeWeapon && WEAPONS[t.meleeWeapon].name].filter(Boolean).join(' · ');
     const rank = u.team === 'xcom' ? RANKS[u.rank]?.name ?? '' : '';
     const pips = (filled: number, total: number) => Array.from({ length: total }, (_, i) => h(`i${i < filled ? '.on' : ''}`));
@@ -437,10 +456,15 @@ export class Hud {
       if (!s) return h('span.pack-slot.empty', { title: 'Hueco libre' });
       if (s.kind === 'supplies') return h('span.pack-slot.supplies', { title: `Suministros: +${s.amount} §` }, h('b', {}, `${s.amount}§`));
       if (s.kind === 'medicines') return h('span.pack-slot.medicines', { title: s.amount === 1 ? 'Medicinas' : `Medicinas ×${s.amount}` }, h('span.stat-icon'));
+      if (s.kind === 'food') return h('span.pack-slot.food', { title: `Raciones: +${s.amount}` }, h('b', {}, `${s.amount}◍`));
+      if (s.kind === 'parts') return h('span.pack-slot.parts', { title: `Piezas: +${s.amount}` }, h('b', {}, `${s.amount}⚙`));
+      if (s.kind === 'weapon') return h('span.pack-slot.weapon', { title: `${FOUND_WEAPONS[s.weapon].name}: a la Armería, para un soldado` }, h('span.stat-icon'));
       return h(`span.pack-slot.item.i-${ITEM_ICONS[s.item]}`, { title: `${ITEMS[s.item].name}: ${ITEMS[s.item].description}` }, h('span.stat-icon'));
     };
     const q = pack.squad;
-    const total = (kind: string, n: number, text: string) => (n ? h(`span.pack-total.${kind}`, {}, kind === 'supplies' ? null : h('span.stat-icon'), h('b', {}, text)) : null);
+    // Supplies, rations and parts carry their sign in the number; the rest an icon.
+    const signed = ['supplies', 'food', 'parts'];
+    const total = (kind: string, n: number, text: string) => (n ? h(`span.pack-total.${kind}`, {}, signed.includes(kind) ? null : h('span.stat-icon'), h('b', {}, text)) : null);
     return h(
       'div.unit-pack',
       { title: `Mochila ${pack.slots.length}/${pack.size}. Cuenta si vuelve: lo que lleva un caído se pierde.` },
@@ -449,8 +473,17 @@ export class Hud {
         'span.pack-squad',
         { title: q.text },
         h('small', {}, 'ESCUADRA'),
-        q.supplies || q.items || q.medicines
-          ? h('span.pack-totals', {}, total('supplies', q.supplies, `${q.supplies}§`), total('item', q.items, `×${q.items}`), total('medicines', q.medicines, `×${q.medicines}`))
+        q.supplies || q.items || q.medicines || q.food || q.parts || q.weapons
+          ? h(
+              'span.pack-totals',
+              {},
+              total('supplies', q.supplies, `${q.supplies}§`),
+              total('food', q.food, `${q.food}◍`),
+              total('parts', q.parts, `${q.parts}⚙`),
+              total('weapon', q.weapons, `×${q.weapons}`),
+              total('item', q.items, `×${q.items}`),
+              total('medicines', q.medicines, `×${q.medicines}`),
+            )
           : h('span.pack-none', {}, '—'),
       ),
     );

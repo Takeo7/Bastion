@@ -13,10 +13,14 @@ import * as THREE from 'three';
 /** Values every vertex of one instance takes (an attribute's name → its components). */
 export type Consts = Record<string, readonly number[]>;
 
+/** Where in a packed texture a model's own atlas sits (UV x, y, width, height): its UVs are moved there (mapAtlas.ts). */
+export type UvRect = readonly [number, number, number, number];
+
 interface Source {
   geometry: THREE.BufferGeometry;
   matrix: THREE.Matrix4;
   consts?: Consts;
+  uv?: UvRect;
 }
 
 /** A source geometry decoded once to plain floats (Synty's come quantized and interleaved): merging then only does arithmetic. */
@@ -149,7 +153,7 @@ export class StaticBatch {
    * (everything receives them), `occlude` whether it darkens the ground round
    * it (by default what casts a shadow).
    */
-  add(geometry: THREE.BufferGeometry, material: THREE.Material, matrix: THREE.Matrix4, cast: boolean, consts?: Consts, occlude = cast): void {
+  add(geometry: THREE.BufferGeometry, material: THREE.Material, matrix: THREE.Matrix4, cast: boolean, consts?: Consts, occlude = cast, uv?: UvRect): void {
     const chunk = this.chunkOf(matrix);
     if (this.only && !this.only.has(chunk)) return;
     if (occlude) {
@@ -161,7 +165,7 @@ export class StaticBatch {
     const key = `${group}#${chunk}`;
     let bucket = this.pending.get(key);
     if (!bucket) this.pending.set(key, (bucket = { group, material, cast, chunk, sources: [] }));
-    bucket.sources.push({ geometry, matrix, consts });
+    bucket.sources.push({ geometry, matrix, consts, uv });
   }
 
   /** Brings the merged meshes up to date with what was added since the last commit; the tiles where something changed, or null. */
@@ -348,7 +352,16 @@ function merge(sources: Source[], names?: Map<string, number>): THREE.BufferGeom
         normal[o + 2] = wz * l;
       }
     }
-    if (uv && d.uv) uv.set(d.uv, base * 2);
+    if (uv && d.uv) {
+      if (s.uv) {
+        // Into its atlas's place in the packed texture.
+        const [ox, oy, sx, sy] = s.uv;
+        for (let i = 0, o = base * 2; i < d.count * 2; i += 2, o += 2) {
+          uv[o] = ox + d.uv[i]! * sx;
+          uv[o + 1] = oy + d.uv[i + 1]! * sy;
+        }
+      } else uv.set(d.uv, base * 2);
+    }
     for (const c of consts) {
       const values = s.consts?.[c.name];
       if (!values) continue;

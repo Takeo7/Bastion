@@ -79,6 +79,36 @@
       .choice:focus-visible strong {
         color: var(--stamp);
       }
+      #lan {
+        padding: 12px 0 14px;
+        border-top: 1px solid var(--paper-edge);
+      }
+      #games {
+        margin: 8px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .game {
+        display: block;
+        width: 100%;
+        margin-top: 6px;
+        padding: 8px 10px;
+        background: #f4ecd8;
+        border: 1px solid var(--paper-edge);
+        text-align: left;
+      }
+      .game strong {
+        display: block;
+        letter-spacing: 0.06em;
+      }
+      .game small {
+        color: var(--faded);
+        font-size: 12px;
+      }
+      .game:hover strong,
+      .game:focus-visible strong {
+        color: var(--stamp);
+      }
       form {
         padding: 12px 0 14px;
         border-top: 1px solid var(--paper-edge);
@@ -137,9 +167,14 @@
         <strong>SER ANFITRIÓN</strong>
         <small>La partida se abre en este ordenador. Tu compañero entra desde su app o desde Chrome.</small>
       </button>
+      <section id="lan">
+        <span class="label">PARTIDAS EN TU RED</span>
+        <span class="hint" id="lan-hint">Buscando partidas en tu red…</span>
+        <ul id="games"></ul>
+      </section>
       <form id="join">
-        <label class="label" for="address">UNIRSE A UN COMPAÑERO</label>
-        <span class="hint">La dirección que ve tu compañero en su pantalla de inicio.</span>
+        <label class="label" for="address">UNIRSE POR DIRECCIÓN</label>
+        <span class="hint">Por Tailscale, o si la partida no sale arriba: la dirección que ve tu compañero en su pantalla de inicio.</span>
         <div class="row">
           <input id="address" placeholder="192.168.1.20:3000" autocomplete="off" spellcheck="false" />
           <button id="go" type="submit">UNIRSE</button>
@@ -151,7 +186,6 @@
     <script>
       const api = window.bastion;
       const status = document.getElementById('status');
-      const buttons = [document.getElementById('host'), document.getElementById('go')];
       const address = document.getElementById('address');
       const say = (text, bad = false) => {
         status.textContent = text;
@@ -163,15 +197,45 @@
       async function attempt(run, waiting) {
         if (busy) return;
         busy = true;
-        buttons.forEach((b) => (b.disabled = true));
+        document.querySelectorAll('button').forEach((b) => (b.disabled = true));
         say(waiting);
         const problem = await run();
         // On success the window is already loading the game.
         if (!problem) return;
         say(problem, true);
         busy = false;
-        buttons.forEach((b) => (b.disabled = false));
+        document.querySelectorAll('button').forEach((b) => (b.disabled = false));
       }
+      const PHASES = { lobby: 'en el menú', base: 'en la base', mission: 'en misión' };
+      const lanHint = document.getElementById('lan-hint');
+      let searching = true;
+      setTimeout(() => {
+        searching = false;
+        if (!document.getElementById('games').children.length) showGames([]);
+      }, 4000);
+      // What the hosts on the network announce (main.ts, server lan.ts): one button each.
+      function showGames(games) {
+        const list = document.getElementById('games');
+        list.replaceChildren();
+        lanHint.textContent = games.length ? '' : searching ? 'Buscando partidas en tu red…' : 'Ninguna por ahora. Cuando tu compañero pulse «Ser anfitrión», saldrá aquí.';
+        for (const g of games) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'game';
+          button.disabled = busy;
+          const name = document.createElement('strong');
+          name.textContent = `Partida de ${g.name}`;
+          const about = document.createElement('small');
+          const n = g.players.length;
+          about.textContent = `${n} ${n === 1 ? 'jugador' : 'jugadores'} · ${PHASES[g.phase] ?? g.phase} · ${g.address}`;
+          button.append(name, about);
+          button.addEventListener('click', () => attempt(() => api.join(g.address), `Entrando en la partida de ${g.name}…`));
+          const item = document.createElement('li');
+          item.append(button);
+          list.append(item);
+        }
+      }
+      api.onGames(showGames);
       document.getElementById('host').addEventListener('click', () => attempt(() => api.host(), 'Abriendo la partida…'));
       document.getElementById('join').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -180,6 +244,7 @@
       api.info().then((info) => {
         if (!info) return;
         address.value = info.last;
+        if (info.games.length) showGames(info.games);
         document.getElementById('version').textContent = `versión ${info.version}${info.uncapped ? ' · sin tope de imágenes (medición)' : ''}`;
       });
     </script>

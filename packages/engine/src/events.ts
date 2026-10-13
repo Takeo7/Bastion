@@ -9,6 +9,7 @@ import type {
   ConcealReason,
   EndReason,
   GameState,
+  Light,
   Loot,
   Outcome,
   Pod,
@@ -72,7 +73,13 @@ export type GameEvent =
   /** Mind control ends: the soldier fights for XCOM again. Nothing takes control any more: kept for missions saved before. */
   | { t: 'released'; unit: string }
   | { t: 'controlTick'; unit: string }
-  | { t: 'reanimated'; unit: string; corpse: string; zombie: Unit }
+  /**
+   * A corpse rises as a zombie: raised by a Chillón (`unit`), or by itself, an
+   * infected soldier fallen in the fight (docs/FASE3.md): then `pod` is its own new group.
+   */
+  | { t: 'reanimated'; unit?: string; corpse: string; zombie: Unit; pod?: Pod }
+  /** Bitten and infected (`by`: the zombie, or the Hinchado that burst). */
+  | { t: 'infected'; unit: string; by: string }
   | { t: 'smokeDeployed'; unit: string; pos: Vec2; radius: number; turns: number }
   /** Flashbang: disoriented until the end of its own next turn. */
   | { t: 'disoriented'; unit: string }
@@ -110,6 +117,11 @@ export type GameEvent =
   | { t: 'forgot'; unit: string }
   /** A soldier searched the furniture on `tile`; `loot` went into the backpack (null: nothing). */
   | { t: 'searched'; unit: string; tile: Vec2; loot: Loot | null }
+  // Night (docs/ALTURA-Y-NOCHE.md).
+  /** A light goes on at night (a Bengala, a fire): whoever stands in it is seen from as far as by day. */
+  | { t: 'lightOn'; light: Light }
+  /** A Bengala or a fire burns out. */
+  | { t: 'lightOff'; id: string }
   // Velmar's Canto.
   /** A song is sung (for the effects): on whom, or where. */
   | { t: 'sung'; unit: string; ability: AbilityId; targets: string[]; tile?: Vec2 }
@@ -164,6 +176,8 @@ export function applyEvent(s: GameState, e: GameEvent): void {
         s.smoke = s.smoke.filter((cloud) => cloud.turns > 0);
         for (const zone of s.silences ?? []) zone.turns--;
         if (s.silences) s.silences = s.silences.filter((zone) => zone.turns > 0);
+        // Bengalas and fires burn down (the last turn goes out with a lightOff before this).
+        for (const light of s.lights ?? []) if (light.turns !== undefined) light.turns--;
       }
       for (const u of s.units) {
         if (!u.alive) continue;
@@ -353,10 +367,14 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       unit(s, e.corpse).reanimated = true;
       const z = JSON.parse(JSON.stringify(e.zombie)) as Unit;
       s.units.push(z);
+      if (e.pod) s.pods.push(JSON.parse(JSON.stringify(e.pod)) as Pod);
       const pod = s.pods.find((p) => p.id === z.podId);
       if (pod) pod.unitIds.push(z.id);
       break;
     }
+    case 'infected':
+      unit(s, e.unit).infected = true;
+      break;
     case 'smokeDeployed':
       s.smoke.push({ pos: { ...e.pos }, radius: e.radius, turns: e.turns });
       break;
@@ -489,6 +507,12 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       if (e.loot) (unit(s, e.unit).backpack ??= []).push({ ...e.loot });
       break;
     }
+    case 'lightOn':
+      (s.lights ??= []).push({ ...e.light, tile: { ...e.light.tile }, ...(e.light.tiles ? { tiles: [...e.light.tiles] } : {}) });
+      break;
+    case 'lightOff':
+      if (s.lights) s.lights = s.lights.filter((l) => l.id !== e.id);
+      break;
   }
 }
 

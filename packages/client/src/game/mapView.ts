@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { carPartner, decorOf, DIRS4, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
+import { carPartner, decorOf, DIRS4, litMask, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
-import { StaticBatch, type Dirty } from './batch';
+import { StaticBatch, type Dirty, type UvRect } from './batch';
+import { atlasRect, mapAtlasTexture } from './mapAtlas';
 import { BuildingsView, piecesLoaded, preloadPieces, RAISED_FLATS, RAISED_PLATFORM, syntyPiece, type Focus } from './buildings';
 import { STOREY } from './coords';
 import { dressEdges, dressStreets } from './dressing';
@@ -147,7 +148,8 @@ interface Kit {
   batch: StaticBatch;
   slab: THREE.BufferGeometry;
   ground: THREE.MeshStandardMaterial;
-  atlas: Map<AtlasId, THREE.Material>;
+  /** Props' materials: 'packed' for the packed texture's packs, else by pack. */
+  atlas: Map<AtlasId | 'packed', THREE.Material>;
   surroundings: THREE.Mesh;
 }
 
@@ -162,11 +164,13 @@ class Layer {
     private readonly tinted = false,
     /** It darkens the ground round it (groundAO.ts). */
     private readonly occlude = shadows,
+    /** Where its atlas sits in the packed texture (mapAtlas.ts), if it's packed. */
+    private readonly uv: UvRect | null = null,
   ) {}
 
   add(matrix: THREE.Matrix4, color: number | THREE.Color = 0xffffff): void {
     const c = this.tinted ? new THREE.Color(color) : null;
-    this.batch.add(this.geometry, this.material, matrix, this.shadows, c ? { color: [c.r, c.g, c.b] } : undefined, this.occlude);
+    this.batch.add(this.geometry, this.material, matrix, this.shadows, c ? { color: [c.r, c.g, c.b] } : undefined, this.occlude, this.uv ?? undefined);
   }
 }
 
@@ -229,6 +233,8 @@ export class MapView {
   private night: NightLights | null = null;
   /** Kept from one rebuild to the next (made by build). */
   private kit: Kit | null = null;
+  /** The lights (ids) the lit tiles were last worked out for. */
+  private lightsSeen = '';
   /** Where the night's lamps and headlights go, as of the last rebuild. */
   private nightPlan: { lamps: Glow[]; headlights: Glow[] } | null = null;
   /** The tiles and searches the last rebuild drew (what changed since is all a rebuild redoes); null: redo everything. */
@@ -251,6 +257,7 @@ export class MapView {
     this.fresh = true;
     this.fog.resize(s.width, s.height);
     this.fog.set([], this.explored.tiles, true);
+    this.fog.setFloors(s.elev);
     this.ground?.dispose();
     this.ground = new GroundMap(s);
     this.buildings?.dispose();
@@ -267,6 +274,8 @@ export class MapView {
     this.rebuild(s);
     // A new map: all of it (its texture starts empty, which would read as hidden everywhere).
     this.queueBake({ x0: 0, y0: 0, x1: s.width, y1: s.height });
+    // A night mission (docs/ALTURA-Y-NOCHE.md): the night's look and its lights (the game sets the renderer's).
+    this.setNight(!!s.mission.night);
   }
 
   /**
@@ -327,11 +336,16 @@ export class MapView {
 
     // Synty props: their meshes, each on its pack's atlas.
     const syntyLayers = new Map<string, Layer[]>();
+    /** The props' material: one for every pack in the packed texture (mapAtlas.ts: a draw for all of them), else the pack's own. */
     const atlasMaterial = (id: AtlasId) => {
-      let m = kit.atlas.get(id);
-      if (!m) kit.atlas.set(id, (m = this.own(new THREE.MeshStandardMaterial({ map: atlasTexture(id), roughness: 0.85 }))));
+      const key = atlasRect(id) ? 'packed' : id;
+      let m = kit.atlas.get(key);
+      if (!m) kit.atlas.set(key, (m = this.own(new THREE.MeshStandardMaterial({ map: key === 'packed' ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 }))));
       return m;
     };
+    /** A layer for one part of a prop, its UVs moved into its atlas's place. */
+    const partLayer = (part: { geometry: THREE.BufferGeometry; atlas: AtlasId }, shadows = true, occlude = shadows) =>
+      new Layer(batch, part.geometry, atlasMaterial(part.atlas), shadows, false, occlude, atlasRect(part.atlas));
     /** The Synty prop `id` at `matrix`; false while it loads. */
     const addSyntyId = (id: PropId, matrix: THREE.Matrix4, shadows = true): boolean => {
       const prop = syntyProp(id);
@@ -342,7 +356,7 @@ export class MapView {
       const key = shadows ? id : `${id}:flat`;
       let layers = syntyLayers.get(key);
       const occlude = shadows && !NO_OCCLUSION.has(id);
-      if (!layers) syntyLayers.set(key, (layers = prop.map((part) => new Layer(batch, part.geometry, atlasMaterial(part.atlas), shadows, false, occlude))));
+      if (!layers) syntyLayers.set(key, (layers = prop.map((part) => partLayer(part, shadows, occlude))));
       prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
       return true;
     };
@@ -381,7 +395,7 @@ export class MapView {
         else if (part.name.includes('Drawer')) local = new THREE.Matrix4().makeTranslation(0, 0, 0.1 + hash(k, Math.round(x * 7 + z), 3) * 0.18).multiply(part.matrix);
         const key = `wardrobeOpen:${part.name}`;
         let layers = syntyLayers.get(key);
-        if (!layers) syntyLayers.set(key, (layers = [layer(part.geometry, atlasMaterial(part.atlas))]));
+        if (!layers) syntyLayers.set(key, (layers = [partLayer(part)]));
         layers[0]!.add(at.clone().multiply(local), 0xffffff);
       });
       return true;
@@ -542,7 +556,9 @@ export class MapView {
 
     // The streets' dressing (street lights, poles and wires, bags, weeds…): cosmetic, merged with the rest.
     const lamps: Glow[] = [];
-    for (const d of dressStreets(s, ground, COVER_DENSITY[graphics().effects])) {
+    // The map's own lights (generated maps): a street light on each.
+    const fixed = s.lights ? s.lights.filter((l) => l.turns === undefined).map((l) => l.tile) : null;
+    for (const d of dressStreets(s, ground, COVER_DENSITY[graphics().effects], fixed)) {
       addSyntyId(d.id, d.matrix, d.cast);
       if (d.id !== 'streetLight') continue;
       // The lamp hangs at the end of the arm (its +x), over the road.
@@ -558,7 +574,7 @@ export class MapView {
         continue;
       }
       let layers = syntyLayers.get(`edge:${d.id}`);
-      if (!layers) syntyLayers.set(`edge:${d.id}`, (layers = prop.map((part) => new Layer(batch, part.geometry, atlasMaterial(part.atlas), true, false, false))));
+      if (!layers) syntyLayers.set(`edge:${d.id}`, (layers = prop.map((part) => partLayer(part, true, false))));
       prop.forEach((part, k) => layers[k]!.add(d.matrix.clone().multiply(part.matrix)));
     }
 
@@ -571,7 +587,7 @@ export class MapView {
         continue;
       }
       let layers = coverLayers.get(id);
-      if (!layers) coverLayers.set(id, (layers = prop.map((part) => layer(part.geometry, atlasMaterial(part.atlas), false))));
+      if (!layers) coverLayers.set(id, (layers = prop.map((part) => partLayer(part, false))));
       prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
     }
 
@@ -597,6 +613,8 @@ export class MapView {
       this.nightPlan = { lamps, headlights };
       if (NIGHT.value > 0.5) this.lightNight();
     } else if (this.night) this.group.add(this.night.group);
+    // What the lights reach may have changed (a door, a wall): the lit tiles again, and the night's lights if remade.
+    if (NIGHT.value > 0.5) this.lightsChanged(s);
     if (!dirty) return;
     shadowsChanged();
     this.queueBake(dirty);
@@ -676,18 +694,32 @@ export class MapView {
     return ground;
   }
 
-  /** Day or night (the reference block's night test). */
+  /** Day or night: the fog's tints, the street lights' heads, the real lights, the lit tiles. */
   setNight(on: boolean): void {
     NIGHT.value = on ? 1 : 0;
     this.fog.setNight(on);
     if (on && !this.night) this.lightNight();
     this.night?.setVisible(on);
+    this.lightsSeen = '';
+    if (this.shown) this.lightsChanged(this.shown);
   }
 
   private lightNight(): void {
     if (!this.nightPlan) return;
     this.night = new NightLights(this.nightPlan.lamps, this.nightPlan.headlights, this.fog);
     this.group.add(this.night.group);
+  }
+
+  /**
+   * The engine's lights changed (a Bengala, a fire, one gone out) or what
+   * they reach did (a rebuild: a door opened): the lit tiles are the
+   * engine's lit mask (its light stops at walls), and the night's Bengalas
+   * and fires follow the state.
+   */
+  private lightsChanged(s: GameState): void {
+    const night = NIGHT.value > 0.5;
+    this.fog.setLit(night ? litMask(s) : []);
+    this.night?.setBurning(s.lights ?? [], (x, y) => (s.elev[y * s.width + x] ?? 0) * STOREY);
   }
 
   /** What the squad sees now: it is remembered as explored, and the fog fades to match. */
@@ -703,7 +735,17 @@ export class MapView {
     this.fog.update(dt);
     // A search opened a piece of furniture: redraw (searches are few, a rebuild is cheap).
     if (this.shown && (this.shown.searched?.length ?? 0) !== this.searchedSeen) this.rebuild(this.shown);
-    this.night?.update(this.camera);
+    // Lights on and off (lightOn, lightOff: the game applies them to the state it shows).
+    if (this.shown && NIGHT.value > 0.5) {
+      const lights = this.shown.lights ?? [];
+      let key = '';
+      for (const l of lights) key += `${l.id},`;
+      if (key !== this.lightsSeen) {
+        this.lightsSeen = key;
+        this.lightsChanged(this.shown);
+      }
+    }
+    this.night?.update(dt, this.camera);
     if (this.buildings && this.shown) this.buildings.update(dt, this.shown, this.camera, this.focus?.() ?? null, this.visibility);
   }
 

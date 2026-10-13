@@ -3,7 +3,7 @@ import { inMeleeReach, previewShot, weaponOf } from './aim';
 import { ABILITIES, isAttack, TEMPLATES } from './content';
 import { coverAgainst, hasAnyCover } from './cover';
 import { canStandOn, combatants, DIRS8, distance, getUnit, inBounds, sameTile, tileAt, unitAt } from './grid';
-import { canSee, sightOrigin } from './los';
+import { canSee, sightOrigin, sightTo } from './los';
 import { buildPath, computeReach, costPerAp, destinations, type Reach } from './path';
 import type { Sim } from './rules';
 import type { AbilityId, AttackAbility, GameState, Pod, Unit, Vec2 } from './types';
@@ -22,7 +22,7 @@ function tileScore(s: GameState, u: Unit, pos: Vec2, enemies: Unit[], shotWeight
   let score = 0;
   let bestShot = 0;
   for (const e of enemies) {
-    if (sightOrigin(s, e.pos, pos, TEMPLATES[e.template].sight)) {
+    if (sightOrigin(s, e.pos, pos, sightTo(s, e, pos))) {
       const cover = coverAgainst(s, pos, e.pos);
       score += cover === 2 ? 25 : cover === 1 ? 10 : -30;
     }

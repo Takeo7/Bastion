@@ -36,8 +36,10 @@ import {
   hasPerk,
   HOLO_AIM,
   HORDE,
+  INFECTION,
   isAttack,
   MEDKIT_HEAL,
+  NIGHT,
   NOISE,
   RESTORATION_HEAL,
   RUPTURE_DAMAGE,
@@ -46,9 +48,9 @@ import {
   WEAPONS,
 } from './content';
 import { applyEvent, type GameEvent } from './events';
-import { canStandOn, combatants, distance, elevAt, getUnit, inBounds, sameTile, tileAt, tileIndex, unitAt } from './grid';
+import { canStandOn, combatants, DIRS8, distance, elevAt, getUnit, inBounds, sameTile, tileAt, tileIndex, unitAt } from './grid';
 import { rollLoot, searchSpot } from './loot';
-import { canSee, isViewer, sightOf, sightOrigin } from './los';
+import { canSee, detectionTo, isViewer, lightTiles, sightOrigin, sightTo } from './los';
 import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol } from './path';
 import type { Command } from './protocol';
 import type { Rng } from './rng';
@@ -298,6 +300,8 @@ export class Sim {
         this.emit({ t: 'sung', unit: u.id, ability, targets: [target!.id] });
         this.damage(target!, BOLT_DAMAGE + u.mods.songDamage + this.duet(u), 0, u);
         if (target!.team !== u.team) this.activatePodOf(target!, u);
+        // At night the flare lights whoever it struck, and round them.
+        this.light(target!.pos, NIGHT.flare);
         this.checkOutcome();
         break;
       case 'velmarStorm': {
@@ -306,6 +310,7 @@ export class Sim {
         for (const t of struck) {
           this.damage(t, STORM_DAMAGE + u.mods.songDamage + this.duet(u), 0, u);
           this.activatePodOf(t, u);
+          this.light(t.pos, NIGHT.fire);
         }
         this.checkOutcome();
         break;
@@ -315,6 +320,7 @@ export class Sim {
         break;
       case 'fireball':
         this.explode(u, tile!, 'fireball');
+        if (u.alive) this.light(tile!, NIGHT.fire);
         break;
       case 'huntersMark':
         this.emit({ t: 'sung', unit: u.id, ability, targets: [target!.id] });
@@ -346,6 +352,12 @@ export class Sim {
   }
 
   // ------------------------------------------------------------- the Canto
+
+  /** A Bengala or a fire lights what it sees round `tile` for `turns` of the squad's turns: at night only, by day nothing changes. */
+  private light(tile: Vec2, { radius, turns, height }: { radius: number; turns: number; height: number }): void {
+    if (!this.s.mission.night || this.over) return;
+    this.emit({ t: 'lightOn', light: { id: `f${this.s.seq}`, tile: { ...tile }, radius, turns, tiles: lightTiles(this.s, tile, radius, height) } });
+  }
 
   /** «A dos voces»: one more for a song with a partner's singer near. */
   duet(u: Unit): number {
@@ -434,7 +446,10 @@ export class Sim {
     if (primary && hasPerk(attacker, 'holoTargeting') && target.alive) this.emit({ t: 'marked', unit: target.id, amount: HOLO_AIM + attacker.mods.holoAim });
     if (result !== 'miss') {
       const dm = shotDamageMods(attacker, ability, preview.flanked, preview.distance);
+      const before = target.hp;
       this.damage(target, rollDamage(weapon, result, this.rng, dm.bonus, dm.mult, dm.critBonus), dm.shred, attacker, dm.pierce);
+      // A zombie's bite that draws blood may infect.
+      if (weapon.melee && TEMPLATES[attacker.template].undead && target.hp < before) this.infect(target, attacker, INFECTION.bite[attacker.template] ?? 0);
       if (ability === 'rupture' && target.alive) this.emit({ t: 'ruptured', unit: target.id, amount: RUPTURE_DAMAGE });
       if (!target.alive && !reaction) this.afterKill(attacker, target, ability, preview.origin);
     }
@@ -523,7 +538,11 @@ export class Sim {
     const spared = (u: Unit) => grenade && hasPerk(source, 'safeBlast') && u.team === source.team;
     const victims = tiles.map((p) => unitAt(this.s, p)).filter((u): u is Unit => !!u && !spared(u));
     const { bonus, shred } = blastMods(this.s, source, ability);
-    for (const v of victims) this.damage(v, rollDamage(weapon, 'hit', this.rng, bonus), shred, source);
+    for (const v of victims) {
+      const before = v.hp;
+      this.damage(v, rollDamage(weapon, 'hit', this.rng, bonus), shred, source);
+      if (bursting && v.hp < before) this.infect(v, source, INFECTION.burst);
+    }
     // The drone's discharge is pure electricity and the Hinchado's burst only gas: they leave the scenery alone.
     if (ability !== 'discharge' && !bursting) {
       for (const p of tiles) {
@@ -588,15 +607,49 @@ export class Sim {
   }
 
   private reanimate(caster: Unit, corpse: Unit): void {
-    const n = this.s.units.filter((x) => x.template === 'zombie').length + 1;
-    const zombie = makeUnit(`z${n}`, 'zombie', TEMPLATES.zombie.name, null, corpse.pos, caster.podId);
+    const zombie = makeUnit(this.zombieId(), 'zombie', risenName(corpse), null, corpse.pos, caster.podId);
     this.emit({ t: 'reanimated', unit: caster.id, corpse: corpse.id, zombie });
+  }
+
+  /** A fresh id for a zombie that rises (`z` and a number no unit has used). */
+  private zombieId(): string {
+    return `z${this.s.units.filter((x) => x.template === 'zombie').length + 1}`;
+  }
+
+  /**
+   * A bite (or a Hinchado's burst) that drew blood infects with `chance` out
+   * of 100, a Chaleco antibalas takes INFECTION.vest off (docs/FASE3.md). Only
+   * the squad's flesh and blood; once infected, it stays so.
+   */
+  private infect(u: Unit, by: Unit, chance: number): void {
+    const t = TEMPLATES[u.template];
+    if (u.infected || chance <= 0 || t.team !== 'xcom' || t.robotic || t.undead || u.objective) return;
+    const vest = u.gear.includes('nanoVest') ? INFECTION.vest : 0;
+    if (this.rng.int(100) < chance - vest) this.emit({ t: 'infected', unit: u.id, by: by.id });
+  }
+
+  /**
+   * The infected fallen rise as the zombies' turn begins (docs/FASE3.md), as
+   * the Chillón's corpses do but by themselves: each a group of its own, alert.
+   * One whose tile is taken rises beside it, or waits for a free one.
+   */
+  private riseInfected(): void {
+    for (const corpse of this.s.units.filter((x) => !x.alive && !x.evacuated && x.infected && !x.reanimated)) {
+      if (this.over) return;
+      const at = [corpse.pos, ...DIRS8.map((d) => ({ x: corpse.pos.x + d.x, y: corpse.pos.y + d.y }))].find(
+        (p) => inBounds(this.s, p.x, p.y) && canStandOn(tileAt(this.s, p.x, p.y)) && elevAt(this.s, p.x, p.y) === elevAt(this.s, corpse.pos.x, corpse.pos.y) && !unitAt(this.s, p),
+      );
+      if (!at) continue;
+      const zombie = makeUnit(this.zombieId(), 'zombie', risenName(corpse), null, at, null);
+      const pod: Pod = { id: `p${zombie.id}`, active: true, unitIds: [], patrol: [], patrolIndex: 0 };
+      this.emit({ t: 'reanimated', corpse: corpse.id, zombie: { ...zombie, podId: pod.id }, pod });
+    }
   }
 
   /** Searches the furniture on `tile` (docs/FASE2.md): what turns up goes into the backpack. */
   private search(u: Unit, tile: Vec2): void {
     const decor = searchSpot(this.s, tile);
-    const loot = decor ? rollLoot(decor, this.s.mission.difficulty ?? 2, this.rng) : null;
+    const loot = decor ? rollLoot(decor, this.s.mission.difficulty ?? 2, this.rng, !!this.s.mission.night) : null;
     this.emit({ t: 'searched', unit: u.id, tile: { ...tile }, loot });
   }
 
@@ -692,10 +745,9 @@ export class Sim {
 
   /** Whether an overwatcher covers `step`: own sight, or the squad's with Long Watch. */
   private watches(o: Unit, step: Vec2): boolean {
-    const sight = sightOf(o);
-    if (sightOrigin(this.s, o.pos, step, sight)) return true;
+    if (sightOrigin(this.s, o.pos, step, sightTo(this.s, o, step))) return true;
     if (!hasPerk(o, 'longWatch') || !TEMPLATES[o.template].squadsight) return false;
-    const spotted = this.s.units.some((v) => isViewer(v, o.team) && sightOrigin(this.s, v.pos, step, sightOf(v)));
+    const spotted = this.s.units.some((v) => isViewer(v, o.team) && sightOrigin(this.s, v.pos, step, sightTo(this.s, v, step)));
     return spotted && sightOrigin(this.s, o.pos, step, Infinity) !== null;
   }
 
@@ -706,11 +758,14 @@ export class Sim {
     return this.spottedFrom(u, p) !== undefined;
   }
 
+  /** How far `u` notices a soldier on `p`: its detection while the squad is hidden, its sight after (both shorter at night, unless lit). */
+  private noticeRange(u: Unit, p: Vec2): number {
+    return this.s.concealed ? detectionTo(this.s, u, p) : sightTo(this.s, u, p);
+  }
+
   /** The first soldier an alien standing on `p` would spot. */
   spottedFrom(u: Unit, p: Vec2): Unit | undefined {
-    const t = TEMPLATES[u.template];
-    const range = this.s.concealed ? t.detection : t.sight;
-    return combatants(this.s, 'xcom').find((soldier) => sightOrigin(this.s, p, soldier.pos, range) !== null);
+    return combatants(this.s, 'xcom').find((soldier) => sightOrigin(this.s, p, soldier.pos, this.noticeRange(u, soldier.pos)) !== null);
   }
 
   /** The member of `pod` that would notice an XCOM soldier standing on `p`, if any. */
@@ -718,8 +773,7 @@ export class Sim {
     for (const id of pod.unitIds) {
       const m = getUnit(this.s, id);
       if (!m?.alive) continue;
-      const t = TEMPLATES[m.template];
-      if (sightOrigin(this.s, m.pos, p, this.s.concealed ? t.detection : t.sight) !== null) return m;
+      if (sightOrigin(this.s, m.pos, p, this.noticeRange(m, p)) !== null) return m;
     }
     return undefined;
   }
@@ -786,8 +840,10 @@ export class Sim {
     const whyOf = (pod: Pod) => (typeof why === 'function' ? why(pod) : why);
     const first = whyOf(pods[0]!);
     const spotter = first.by ? getUnit(this.s, first.by) : undefined;
+    const spotted = first.unit ? getUnit(this.s, first.unit) : undefined;
     const seen = first.cause === 'sighted' || first.cause === 'patrol';
-    this.breakConcealment({ reason: EXPOSURE[first.cause], unit: first.unit, by: first.by, ...(seen && spotter ? { range: TEMPLATES[spotter.template].detection } : {}) });
+    const range = spotter && spotted ? detectionTo(this.s, spotter, spotted.pos) : spotter && TEMPLATES[spotter.template].detection;
+    this.breakConcealment({ reason: EXPOSURE[first.cause], unit: first.unit, by: first.by, ...(seen && spotter ? { range } : {}) });
     for (const pod of pods) this.emit({ t: 'podActivated', pod: pod.id, ...whyOf(pod) });
     for (const pod of pods) this.scamper(pod.unitIds);
   }
@@ -900,7 +956,8 @@ export class Sim {
     const m = this.s.mission;
     if (!m.horde?.length) return;
     const sent = m.reinforcements.filter((r) => r.horde).length;
-    const due = Math.floor((turn * HORDE.perTurn + (m.noise ?? 0)) / HORDE.wave);
+    // At night the dead are already on their way: the clock runs a turn ahead.
+    const due = Math.floor(((turn + (m.night ? NIGHT.hordeHead : 0)) * HORDE.perTurn + (m.noise ?? 0)) / HORDE.wave);
     if (due <= sent || combatants(this.s, 'alien').length >= HORDE.cap) return;
     const zone = this.chooseDropZone(m.horde.length, true);
     if (!zone) return;
@@ -984,6 +1041,8 @@ export class Sim {
     const turn = this.s.turn;
     this.alienBudget = { explosives: 1, psi: 1 };
     this.emit({ t: 'turnBegan', team: 'alien', turn });
+    // They rise now, but only act from the next turn on (they had no turn to begin).
+    this.riseInfected();
     const actors = this.s.units
       .filter((u) => u.alive && u.team === 'alien' && !u.objective && this.s.pods.find((p) => p.id === u.podId)?.active)
       .map((u) => u.id);
@@ -1013,6 +1072,8 @@ export class Sim {
       this.emit({ t: 'missionEnded', outcome: 'defeat', reason: 'timer' });
       return;
     }
+    // Bengalas and fires on their last turn burn out; the rest burn down as the squad's turn begins.
+    for (const l of [...(this.s.lights ?? [])]) if (l.turns !== undefined && l.turns <= 1) this.emit({ t: 'lightOff', id: l.id });
     this.emit({ t: 'turnBegan', team: 'xcom', turn: turn + 1, command: this.openingCommander(turn + 1) });
   }
 
@@ -1061,6 +1122,11 @@ export class Sim {
     this.maybeEndXcomTurn();
     this.autoPassCommand();
   }
+}
+
+/** What a corpse is called once it rises: a soldier keeps its name («Zombi · Clara Bosch»), anyone else is a Zombi. */
+export function risenName(corpse: Unit): string {
+  return TEMPLATES[corpse.template].team === 'xcom' ? `${TEMPLATES.zombie.name} · ${corpse.name}` : TEMPLATES.zombie.name;
 }
 
 /** «A dos voces»: a partner's singer within 2 tiles adds one more to a song. */

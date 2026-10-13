@@ -10,7 +10,7 @@ import { otherUiTheme, setUiTheme, UI_THEMES, uiTheme } from './theme';
 
 export interface LobbyHandlers {
   onJoin(name: string): void;
-  onStart(mission: MissionKind, map: SkirmishMap, veterans: boolean): void;
+  onStart(mission: MissionKind, map: SkirmishMap, veterans: boolean, night: boolean): void;
   onNewCampaign(): void;
   onContinueCampaign(): void;
 }
@@ -53,6 +53,8 @@ export class Lobby {
   private mission: MissionKind = 'elimination';
   private map: SkirmishMap = 'city';
   private veterans = true;
+  /** By night (docs/ALTURA-Y-NOCHE.md): less sight, lights matter, more of the dead and more loot. */
+  private night = false;
   /** Asking before a new campaign replaces the saved one, or starts without the partner. */
   private confirming = false;
 
@@ -60,7 +62,8 @@ export class Lobby {
     const globe = new GeoscapeSet(() => {});
     this.stage.add('geo', globe);
     const shot = globe.shot();
-    void this.stage.show('geo', { ...shot, pos: shot.pos.clone().add(new THREE.Vector3(-4.2, 0, 1)), target: shot.target.clone().add(new THREE.Vector3(-4.2, 0, 0)) }, true);
+    // The valley as one diorama behind the menu card (the old shift was for the globe).
+    void this.stage.show('geo', { ...shot, pos: shot.pos.clone().add(new THREE.Vector3(0, 0, 1)) }, true);
     this.root.append(this.stage.element, h('div.menu-shade'), this.column, this.squadBox);
     container.append(this.root);
     this.render();
@@ -276,6 +279,13 @@ export class Lobby {
           option(this.veterans, true, (v) => (this.veterans = v), 'Veteranos', 'Sargentos a capitanes con habilidades'),
           option(this.veterans, false, (v) => (this.veterans = v), 'Novatos', 'Sin rango ni habilidades'),
         ),
+        h('div.x-head', {}, 'Hora'),
+        h(
+          'div.menu-options.two',
+          {},
+          option(this.night, false, (v) => (this.night = v), 'De día', 'Como siempre'),
+          option(this.night, true, (v) => (this.night = v), 'De noche', 'Se ve poco: farolas y bengalas. Más muertos y más botín'),
+        ),
       ),
       // Start and back stay at the foot of the sheet, in view however long the options get.
       h(
@@ -283,7 +293,7 @@ export class Lobby {
         {},
         h(
           'button.menu-item.primary',
-          { disabled: !this.canPlay(), onclick: () => this.handlers.onStart(this.mission, map, this.veterans) },
+          { disabled: !this.canPlay(), onclick: () => this.handlers.onStart(this.mission, map, this.veterans, this.night) },
           connected < 2 ? 'Empezar en solitario' : 'Empezar escaramuza',
           h('small', {}, connected < 2 ? 'Controlarás a todos los soldados' : 'Cada uno manda a la mitad'),
         ),

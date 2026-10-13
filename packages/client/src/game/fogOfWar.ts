@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { STOREY } from './coords';
 
 // Fog of war on the map's materials (second playtest: «que las zonas que aún
 // no hemos descubierto no se pudieran ver»). Each tile keeps two values in a
@@ -17,9 +18,16 @@ import * as THREE from 'three';
 // so what lies unexplored or cut away (buildings.ts) is left out of it too:
 // no occlusion shading in the mist, no outline of a roof that has faded.
 
-/** Seconds a tile takes to come into sight or leave it, and to come out of the unexplored dark. */
+/** Seconds a tile takes to come into sight or leave it, and to come out of the unexplored dark; and to light up or go dark at night. */
 const SIGHT_FADE = 0.35;
 const EXPLORE_FADE = 0.9;
+const LIT_FADE = 0.6;
+/** The fog texture's alpha holds each tile's floor, this much per storey. */
+const FLOOR_STEP = 32;
+/** Night: what lit tiles get (a lamp's warm light over their own colours), and the darker tints of the remembered and the unknown. */
+const LAMP = new THREE.Color(1.0, 0.62, 0.3).multiplyScalar(1.4);
+const REMEMBERED_NIGHT = new THREE.Color(0x0e1a20);
+const UNKNOWN_NIGHT = new THREE.Color(0x070d11);
 
 /** Seen before, not in sight now: darker and towards a cool slate, so in daylight it reads as "not seen", not as mud. */
 const REMEMBERED_TINT = new THREE.Color(0x26303c);
@@ -69,11 +77,37 @@ export class FogOfWar {
     fowRemembered: { value: REMEMBERED_TINT.clone() },
     fowUnknown: { value: UNKNOWN.clone() },
     fowBeyond: { value: BEYOND_DAY.clone() },
+    /** 1 by night: lit tiles (blue channel) glow warm. */
+    fowNight: { value: 0 },
+    fowLamp: { value: LAMP.clone() },
   };
 
-  /** Day or night beyond the map's edge. */
+  /**
+   * Day or night: beyond the map's edge, the tints of what has been seen
+   * (darker, still legible) and the unknown, and whether lit tiles glow.
+   */
   setNight(on: boolean): void {
     this.uniforms.fowBeyond.value.copy(on ? BEYOND_NIGHT : BEYOND_DAY);
+    this.uniforms.fowRemembered.value.copy(on ? REMEMBERED_NIGHT : REMEMBERED_TINT);
+    this.uniforms.fowUnknown.value.copy(on ? UNKNOWN_NIGHT : UNKNOWN);
+    this.uniforms.fowNight.value = on ? 1 : 0;
+  }
+
+  /** Each tile's floor (storeys up): light from the ground stays on what stands at that floor, not on a roof above it. */
+  setFloors(elev: readonly number[]): void {
+    const data = this.uniforms.fowMap.value.image.data as Uint8Array;
+    for (let i = 0; i < this.size; i++) data[i * 4 + 3] = Math.min(255, (elev[i] ?? 0) * FLOOR_STEP);
+    this.uniforms.fowMap.value.needsUpdate = true;
+  }
+
+  /**
+   * Tiles lit at night (the engine's lit mask: street lights, a Bengala, a
+   * fire, as far as their light reaches past walls); they light up and go dark
+   * with a short fade.
+   */
+  setLit(mask: readonly boolean[]): void {
+    for (let i = 0; i < this.size; i++) this.litGoal[i] = mask[i] ? 1 : 0;
+    this.settled = false;
   }
   private size = 0;
   /** Shown now (0–1) and where each tile is heading (0 or 1). */
@@ -81,6 +115,8 @@ export class FogOfWar {
   private known = new Float32Array(0);
   private sightGoal = new Uint8Array(0);
   private knownGoal = new Uint8Array(0);
+  private lit = new Float32Array(0);
+  private litGoal = new Uint8Array(0);
   private settled = true;
 
   constructor() {
@@ -96,6 +132,8 @@ export class FogOfWar {
     this.known = new Float32Array(size);
     this.sightGoal = new Uint8Array(size);
     this.knownGoal = new Uint8Array(size);
+    this.lit = new Float32Array(size);
+    this.litGoal = new Uint8Array(size);
     this.uniforms.fowMap.value.dispose();
     const texture = new THREE.DataTexture(new Uint8Array(size * 4), width, height);
     texture.magFilter = THREE.LinearFilter;
@@ -125,16 +163,20 @@ export class FogOfWar {
     if (this.settled) return;
     const sightStep = dt / SIGHT_FADE;
     const knownStep = dt / EXPLORE_FADE;
+    const litStep = dt / LIT_FADE;
     const data = this.uniforms.fowMap.value.image.data as Uint8Array;
     let moving = false;
     for (let i = 0; i < this.size; i++) {
       const s = approach(this.sight[i]!, this.sightGoal[i]!, sightStep);
       const k = approach(this.known[i]!, this.knownGoal[i]!, knownStep);
+      const l = approach(this.lit[i]!, this.litGoal[i]!, litStep);
       this.sight[i] = s;
       this.known[i] = k;
-      if (s !== this.sightGoal[i] || k !== this.knownGoal[i]) moving = true;
+      this.lit[i] = l;
+      if (s !== this.sightGoal[i] || k !== this.knownGoal[i] || l !== this.litGoal[i]) moving = true;
       data[i * 4] = Math.round(s * 255);
       data[i * 4 + 1] = Math.round(k * 255);
+      data[i * 4 + 2] = Math.round(l * 255);
     }
     this.uniforms.fowMap.value.needsUpdate = true;
     this.settled = !moving;
@@ -174,6 +216,8 @@ export class FogOfWar {
           uniform vec3 fowRemembered;
           uniform vec3 fowUnknown;
           uniform vec3 fowBeyond;
+          uniform float fowNight;
+          uniform vec3 fowLamp;
           uniform float fowAoPass;
           ${NOISE_GLSL}`,
         )
@@ -207,6 +251,13 @@ export class FogOfWar {
         .replace(
           '#include <fog_fragment>',
           `#include <fog_fragment>
+          ${
+            lit
+              ? `// Night: a lit tile glows warm, so players read where they'd be seen.
+          float fowFloor = fowTile.a * ${(255 / FLOOR_STEP).toFixed(3)} * ${STOREY.toFixed(3)};
+          gl_FragColor.rgb += diffuseColor.rgb * fowLamp * fowTile.b * fowNight * fowInside * (1.0 - smoothstep(${(STOREY * 0.6).toFixed(2)}, ${(STOREY * 1.2).toFixed(2)}, vFowPos.y - fowFloor));`
+              : ''
+          }
           {
             // Unexplored: the mist, over the scene's haze (which would lift it to a grey where
             // everything reads), a little lighter higher up so tall shapes barely show.

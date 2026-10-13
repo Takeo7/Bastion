@@ -68,16 +68,6 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
     ),
     row('showFps', 'Mostrar FPS', [[true, 'Sí'], [false, 'No']], 'Un contador de imágenes por segundo en una esquina.', redraw),
     row(
-      'models',
-      'Modelos',
-      [
-        ['synty', 'Synty'],
-        ['voxel', 'Vóxel', 'Los modelos de antes, mientras dura el cambio'],
-      ],
-      'Cómo se ven los soldados, los enemigos, los objetos y los edificios del mapa. Se aplica en la próxima misión o al volver a la base.',
-      redraw,
-    ),
-    row(
       'uiScale',
       'Interfaz',
       [

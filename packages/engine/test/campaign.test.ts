@@ -237,8 +237,9 @@ describe('missions', () => {
     run(c, { type: 'talent', soldier: sniper.id, talent: 'hawkEye' }, 0, [0]);
     expect(sniper.attrs.pul).toBe(7);
     expect(pointsToSpend(sniper)).toEqual({ attrs: 7, talents: 6 });
-    // Level 4: magnetic weapons and plate armour, and a lieutenant may carry both.
+    // Level 4, and the Taller has made tier-2 weapons and plate armour (docs/FASE4.md): a lieutenant may carry both.
     c.xp = LEVEL_XP[3]!;
+    c.crafted = ['weapons2', 'armor2'];
     const member = squadMember(c, sniper);
     expect(member).toMatchObject({ weaponTier: 2, armorTier: 2 });
     // Pulso 7 (and its +10 critical), four promotions of veterancy and Ojo de halcón 2/2.
@@ -260,18 +261,22 @@ describe('missions', () => {
 });
 
 describe('progression', () => {
-  it('soldiers carry the best tier both their rank and the Bastion allow', () => {
+  it('soldiers carry the best tier both their rank and the Taller allow; the Bastion’s level only lets the Taller make it', () => {
     const c = createCampaign([0], new Rng(1));
-    expect(weaponTier(c, { rank: 7 })).toBe(1);
-    // Level 6: plasma weapons; predator armour still needs level 7.
+    const s = (rank: number) => ({ id: 'x', rank });
+    expect(weaponTier(c, s(7))).toBe(1);
+    // Level 6 allows tier-3 weapons, but nothing is carried until the Taller makes it.
     c.xp = LEVEL_XP[5]!;
-    expect(weaponTier(c, { rank: 0 })).toBe(1);
-    expect(weaponTier(c, { rank: 2 })).toBe(2);
-    expect(weaponTier(c, { rank: 4 })).toBe(3);
-    expect(armorTier(c, { rank: 4 })).toBe(2);
-    expect(nextTierBlocker(c, { rank: 4 }, 'armor')).toMatch(/nivel 7 del Bastión/);
-    expect(nextTierBlocker(c, { rank: 2 }, 'weapon')).toMatch(/rango Teniente/);
-    expect(nextTierBlocker(c, { rank: 4 }, 'weapon')).toBeNull();
+    expect(weaponTier(c, s(4))).toBe(1);
+    expect(nextTierBlocker(c, s(4), 'weapon')).toMatch(/fabricarlas en el Taller/);
+    c.crafted = ['weapons2', 'weapons3', 'armor2'];
+    expect(weaponTier(c, s(0))).toBe(1);
+    expect(weaponTier(c, s(2))).toBe(2);
+    expect(weaponTier(c, s(4))).toBe(3);
+    expect(armorTier(c, s(4))).toBe(2);
+    expect(nextTierBlocker(c, s(4), 'armor')).toMatch(/nivel 7 del Bastión/);
+    expect(nextTierBlocker(c, s(2), 'weapon')).toMatch(/rango Teniente/);
+    expect(nextTierBlocker(c, s(4), 'weapon')).toBeNull();
   });
 
   it('reaching the top level with every story chapter won reveals the final mission', () => {

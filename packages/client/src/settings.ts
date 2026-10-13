@@ -18,11 +18,9 @@ export interface GraphicsSettings {
   showFps: boolean;
   /** Interface size (0.9 to 1.3): scales the HUD and the base's sheets, not the 3D view. */
   uiScale: number;
-  /** How units and props look: Synty models, or the voxel ones they replace (kept while the migration lasts). */
-  models: 'synty' | 'voxel';
 }
 
-const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1, models: 'synty' };
+const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1 };
 const KEY = storageKey('graphics');
 /** Version of the stored settings: 2 made the resolution automatic by default. */
 const VERSION = 2;
@@ -33,6 +31,8 @@ function load(): GraphicsSettings {
     // Before version 2, "100 %" was simply the default: move it to automatic.
     if (stored.v !== VERSION && stored.resolution === 1) delete stored.resolution;
     delete stored.v;
+    // The «Modelos» choice (Synty or voxel) went with the voxel models.
+    delete (stored as { models?: unknown }).models;
     return { ...DEFAULTS, ...stored };
   } catch {
     return { ...DEFAULTS };

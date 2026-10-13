@@ -6,7 +6,7 @@
   "directories": {
     "output": "dist/release"
   },
-  "files": ["dist/app/main.cjs", "dist/app/preload.cjs", "dist/app/launcher.html", "package.json"],
+  "files": ["dist/app/main.cjs", "dist/app/preload.cjs", "dist/app/launcher.html", "dist/app/icon.png", "package.json"],
   "extraResources": [
     { "from": "dist/app/client", "to": "client" },
     { "from": "dist/app/server", "to": "server" }

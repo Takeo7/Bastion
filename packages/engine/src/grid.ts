@@ -79,6 +79,43 @@ export function sightTop(s: GameState, x: number, y: number): number {
   return elevAt(s, x, y) + OBSTACLE_HEIGHT[kind];
 }
 
+/** Storeys of the building a tile belongs to (GameState.storeys): 0 outside one, and on maps without them. */
+export function storeysAt(s: GameState, x: number, y: number): number {
+  return inBounds(s, x, y) ? s.storeys?.[tileIndex(s, x, y)] ?? 0 : 0;
+}
+
+/**
+ * Whether what stands on a tile stops a line of sight crossing it at height
+ * `h` (absolute storeys): below the top of its object, as ever, and in a
+ * building of two storeys or more, anywhere from the ground storey's ceiling
+ * up to its roof. So its walls and closed doors go all the way up, its windows
+ * and doorways are holes in the ground storey under a lintel, and above the
+ * ground storey its floors and ceilings fill the inside. The roof itself (also
+ * a one-storey building's) is lineClear's: see roofSide. A map without storeys
+ * is as it always was.
+ */
+export function blocksSightAt(s: GameState, x: number, y: number, h: number): boolean {
+  if (sightTop(s, x, y) > h + 1e-6) return true;
+  const n = storeysAt(s, x, y);
+  if (n < 2) return false;
+  const base = elevAt(s, x, y);
+  return h > base + 1 - 1e-6 && base + n > h + 1e-6;
+}
+
+/**
+ * Where a line at height `h` crossing a building's tile stands against it:
+ * 'under' its ground storey's ceiling, 'over' its roof, or null (no building,
+ * or inside its upper storeys, which blocksSightAt stops). A line that goes
+ * from one to the other between two tiles of a building went through its roof.
+ */
+export function roofSide(s: GameState, x: number, y: number, h: number): 'under' | 'over' | null {
+  const n = storeysAt(s, x, y);
+  if (n < 1) return null;
+  const base = elevAt(s, x, y);
+  if (h < base + 1 - 1e-6) return 'under';
+  return h > base + n - 1e-6 ? 'over' : null;
+}
+
 /** Legacy flat check: whether the object on a tile blocks sight at ground level. */
 export function blocksSight(kind: TileKind): boolean {
   return OBSTACLE_HEIGHT[kind] >= 0.75;

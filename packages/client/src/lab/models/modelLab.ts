@@ -63,7 +63,7 @@ const strip = document.getElementById('portraits')!;
 
 function card(title: string, speaker: string, src: string): HTMLImageElement {
   const frame = document.createElement('div');
-  frame.className = 'radio-portrait voxel';
+  frame.className = 'radio-portrait bust';
   frame.dataset.speaker = speaker;
   frame.style.cssText = 'width: 112px; height: 112px';
   const img = document.createElement('img');

@@ -15,12 +15,16 @@ import {
   type FixedBuildingId,
   type TemplateId,
 } from '@bastion/engine';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { StaticBatch, type Dirty } from '../game/batch';
 import { buildUnit, IDLE_POSE, isFigure, type UnitRig } from '../game/models';
+import { UNIT_LAYER } from '../game/post';
 import type { Gear } from '../game/figures';
 import { easeInOut } from '../game/tween';
+import { graphics } from '../settings';
 import { terrainFile, type BaseModelId } from '../game/syntyManifest';
-import { baseTexture, KitBatch, kitMesh, kitModel, loadBaseKit, type Put } from './baseKit';
-import type { Shot, StageSet } from './stage';
+import { BASE_OCCLUSION, baseMaterial, baseTexture, KitBatch, kitMesh, kitModel, loadBaseKit, type Put } from './baseKit';
+import { skyTexture, type Shot, type StageMood, type StageSet } from './stage';
 
 // The Bastion on the surface, seen from above at an angle: Atalaya, an old
 // civil-defence station high in the snow, in Synty's low-poly models. A 7×7
@@ -93,31 +97,38 @@ const FACE: Partial<Record<BaseModelId, number>> = {
   target: -Math.PI / 2,
   targetBoard: -Math.PI / 2,
   bottleRange: -Math.PI / 2,
-  gramophone: -Math.PI / 2,
   wallLamp: -Math.PI / 2,
 };
 
 // ------------------------------------------------------------- primitives
 
 const mats = new Map<string, THREE.Material>();
+/** A plain material of the base (pads, posts, lamps), shared by colour and sitting in the baked occlusion. */
 function mat(color: number, opts: { emissive?: number; intensity?: number; rough?: number; metal?: number } = {}): THREE.Material {
   const key = JSON.stringify([color, opts]);
   let m = mats.get(key);
   if (!m) {
-    m = new THREE.MeshStandardMaterial({
-      color,
-      emissive: opts.emissive ?? 0,
-      emissiveIntensity: opts.intensity ?? (opts.emissive ? 1.6 : 0),
-      roughness: opts.rough ?? 0.85,
-      metalness: opts.metal ?? 0,
-    });
+    m = baseMaterial(
+      new THREE.MeshStandardMaterial({
+        color,
+        emissive: opts.emissive ?? 0,
+        emissiveIntensity: opts.intensity ?? (opts.emissive ? 1.6 : 0),
+        roughness: opts.rough ?? 0.85,
+        metalness: opts.metal ?? 0,
+      }),
+    );
     mats.set(key, m);
   }
   return m;
 }
 
-/** A unit box standing on y = 0: primitives scale and place it. */
+/** A unit box standing on y = 0, and a unit cone (flames): primitives scale and place them. */
 const UNIT = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const CONE = new THREE.ConeGeometry(0.6, 1.4, 6).translate(0, 0.7, 0);
+/** The Huerto's: a pipe (a unit cylinder standing on y = 0), a plastic tunnel over a bed (a half cylinder along x, 1 high, 1 to each side) and one of its hoops. */
+const PIPE = new THREE.CylinderGeometry(0.5, 0.5, 1, 8).translate(0, 0.5, 0);
+const TUNNEL = new THREE.CylinderGeometry(1, 1, 1, 10, 1, true, -Math.PI / 2, Math.PI).rotateZ(Math.PI / 2).rotateX(-Math.PI / 2);
+const HOOP = new THREE.TorusGeometry(1, 0.03, 4, 12, Math.PI).rotateY(Math.PI / 2);
 
 function boxAt(w: number, h: number, d: number, x: number, y: number, z: number, yaw = 0): THREE.Matrix4 {
   return new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(w, h, d));
@@ -134,8 +145,10 @@ function box(w: number, h: number, d: number, material: THREE.Material, x = 0, y
 
 /** Furniture and gear that stays its own colour: it stands under a roof, or snow on it would only read as a white box. */
 const BARE = new Set<BaseModelId>([
-  'solarPanel', 'workbench', 'longTable', 'batteryTable', 'fuelTable', 'toolShelf', 'bunkBed', 'medShelf', 'gurney', 'hospitalBed', 'ivStand', 'radioSet',
-  'blackboard', 'foldingChair', 'campChair', 'ammoCrate', 'toolbox', 'vice', 'anvil', 'medKit', 'gramophone', 'speaker', 'deconShower', 'bottleRange',
+  'woodPallet', 'trestle', 'tableSaw', 'solarPanel', 'workbench', 'longTable', 'batteryTable', 'fuelTable', 'toolShelf', 'bunkBed', 'medShelf', 'gurney', 'hospitalBed', 'ivStand', 'radioSet',
+  'blackboard', 'foldingChair', 'campChair', 'ammoCrate', 'toolbox', 'vice', 'anvil', 'medKit', 'deconShower', 'bottleRange',
+  // The Huerto's beds under plastic, its plants and seed trays: green, not white.
+  'gardenBed', 'gardenLettuce', 'gardenCabbage', 'gardenPlant', 'gardenPlant2', 'gardenSeedlings', 'gardenSeeds', 'gardenTable',
 ]);
 
 /** Glowing bits: lamps, level pips, the walkways' lights. */
@@ -144,12 +157,20 @@ const GLOW = {
   red: () => mat(0x2a0a0a, { emissive: 0xff3a3a, intensity: 2.6 }),
   green: () => mat(0x0a2a1a, { emissive: 0x4dffb0, intensity: 2 }),
   white: () => mat(0x2a2a20, { emissive: 0xfff0c8, intensity: 1.8 }),
-  fire: () => mat(0x2a1000, { emissive: 0xff8a2a, intensity: 2.6 }),
-  coro: () => mat(0x0a2a1a, { emissive: 0x6dffb0, intensity: 1.8 }),
   pip: () => mat(0x2a1a00, { emissive: 0xffc93a, intensity: 1.1 }),
   off: () => mat(0x2a3036),
 };
 type Glow = keyof typeof GLOW;
+
+/**
+ * Lamps that blink and flames that flicker: merged with the rest, all of a
+ * kind share one material whose glow the tick animates (no meshes of their own).
+ */
+const BLINK = {
+  red: baseMaterial(new THREE.MeshStandardMaterial({ color: 0x2a0a0a, emissive: 0xff3a3a, emissiveIntensity: 2.6 })),
+  amber: baseMaterial(new THREE.MeshStandardMaterial({ color: 0x2a1a00, emissive: 0xffa020, emissiveIntensity: 2.5 })),
+};
+const FLAME = baseMaterial(new THREE.MeshStandardMaterial({ color: 0x2a1000, emissive: 0xff8a2a, emissiveIntensity: 2.6 }));
 
 let snowPad: THREE.Material | null = null;
 let dirtPad: THREE.Material | null = null;
@@ -163,9 +184,9 @@ function groundTexture(): THREE.Texture {
 const PAD_MAT = {
   concrete: () => mat(0x8d9094, { rough: 0.95 }),
   /** Levelled earth (the combat maps' dirt). */
-  dirt: () => (dirtPad ??= new THREE.MeshStandardMaterial({ map: groundTexture(), color: 0xc8b8a0, roughness: 1 })),
+  dirt: () => (dirtPad ??= baseMaterial(new THREE.MeshStandardMaterial({ map: groundTexture(), color: 0xc8b8a0, roughness: 1 }))),
   /** Untouched snow on the plots not cleared yet. */
-  snow: () => (snowPad ??= new THREE.MeshStandardMaterial({ map: baseTexture('snowGround', 1), color: 0xe8edf2, roughness: 1 })),
+  snow: () => (snowPad ??= baseMaterial(new THREE.MeshStandardMaterial({ map: baseTexture('snowGround', 1), color: 0xe8edf2, roughness: 1 }))),
 };
 
 function label(text: string, className: string): CSS2DObject {
@@ -200,33 +221,40 @@ function groundHeight(x: number, z: number): number {
   return 13 * t * t * (3 - 2 * t) + Math.max(0, d - 45) * 0.1 + bumps * Math.min(1, d / 12) * 2.4;
 }
 
+/**
+ * The base's light after the scene (stage.ts), set against Synty's captures
+ * (as the battle's day, renderer.ts) and kept snowy: a neutral exposure, the
+ * shade tinted cool and the light warm, the blacks lifted to a soft lavender.
+ */
+const BASE_MOOD: StageMood = {
+  exposure: 1.08,
+  bloom: { strength: 0.32, threshold: 0.9 },
+  grade: { saturation: 0.96, contrast: 1.06, vignette: 0.2, shadowTint: [0.93, 0.96, 1.07], highlightTint: [1.04, 1.0, 0.95], lift: [0.06, 0.064, 0.08] },
+};
+
 /** The dam across the gorge up the valley, and how it is turned. */
 const DAM = new THREE.Vector3(76, 0, -122);
 const DAM_YAW = -0.6;
 
 // ------------------------------------------------------------- animation
 
-/** Things the tick moves: lamps that blink, flames and glows that pulse, aerials that turn. */
+/** Aerials that turn: the few moving things of the plots, meshes of their own. */
 class Fx {
-  readonly blink: { o: THREE.Object3D; phase: number }[] = [];
-  readonly pulse: { o: THREE.Object3D; phase: number }[] = [];
   readonly spin: { o: THREE.Object3D; speed: number }[] = [];
 
   clear(): void {
-    this.blink.length = this.pulse.length = this.spin.length = 0;
+    this.spin.length = 0;
   }
 
   tick(time: number): void {
-    for (const { o, phase } of this.blink) o.visible = Math.sin(time * 3 + phase) > -0.3;
-    for (const { o, phase } of this.pulse) o.scale.setScalar(1 + Math.sin(time * 6 + phase) * 0.12);
     for (const { o, speed } of this.spin) o.rotation.y = time * speed;
   }
 }
 
 /**
  * One plot (or the hangar, or the land round the compound) being dressed:
- * models and primitives into the batch, under the plot's origin; lamps that
- * blink and flames into `fx`, as meshes of their own.
+ * models and primitives into the batch, under the plot's origin (merged
+ * after: baseKit.ts); aerials that turn into `group`, as meshes of their own.
  */
 class Site {
   private readonly origin: THREE.Matrix4;
@@ -246,40 +274,40 @@ class Site {
     this.batch.put(id, { ...o, yaw: (o.yaw ?? 0) + (FACE[id] ?? 0), finish: o.finish ?? (BARE.has(id) ? 'plain' : 'snow') }, this.origin);
   }
 
-  /** A plain box (a pad, a post, a lamp), instanced with the others of its kind. */
-  box(kind: string, material: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, yaw = 0, shadow = true): void {
-    this.batch.prim(kind, UNIT, material, boxAt(w, h, d, x, y, z, yaw).premultiply(this.origin), shadow);
+  /** A plain box (a pad, a post, a lamp). */
+  box(material: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, yaw = 0, shadow = true): void {
+    this.shape(UNIT, material, w, h, d, x, y, z, yaw, shadow);
+  }
+
+  /** Any primitive, scaled and placed like a box (a pipe, a plastic tunnel). */
+  shape(geometry: THREE.BufferGeometry, material: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, yaw = 0, shadow = true): void {
+    this.batch.prim(geometry, material, boxAt(w, h, d, x, y, z, yaw).premultiply(this.origin), shadow);
   }
 
   glow(kind: Glow, x: number, y: number, z: number, size = 0.14): void {
-    this.box(`glow:${kind}`, GLOW[kind](), size, size, size, x, y, z, 0, false);
+    this.box(GLOW[kind](), size, size, size, x, y, z, 0, false);
   }
 
-  /** The plot's ground: a concrete pad for buildings, levelled dirt for a cleared plot. */
+  /** The plot's ground: a concrete pad for buildings, levelled dirt for a cleared plot, snow on the rest. */
   pad(kind: keyof typeof PAD_MAT): void {
-    this.box(`pad:${kind}`, PAD_MAT[kind](), PLOT, 0.06, PLOT, 0, -0.02, 0, 0, false);
+    this.box(PAD_MAT[kind](), PLOT, 0.06, PLOT, 0, -0.02, 0, 0, false);
   }
 
-  /** A lamp of its own that blinks (beacons, aviation lights). */
-  beacon(kind: Glow, x: number, y: number, z: number, phase = 0, size = 0.16): void {
-    const lamp = box(size, size, size, GLOW[kind](), this.at.x + x, this.at.y + y, this.at.z + z);
-    lamp.castShadow = false;
-    this.group.add(lamp);
-    this.fx.blink.push({ o: lamp, phase });
+  /** A lamp that blinks (beacons, aviation lights). */
+  beacon(kind: keyof typeof BLINK, x: number, y: number, z: number, size = 0.16): void {
+    this.box(BLINK[kind], size, size, size, x, y, z, 0, false);
   }
 
-  /** A flame (a fire pit, a stove): a glowing cone that flickers. */
-  fire(x: number, y: number, z: number, size = 0.3, kind: Glow = 'fire'): void {
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(size * 0.6, size * 1.4, 6).translate(0, size * 0.7, 0), GLOW[kind]());
-    flame.position.set(this.at.x + x, this.at.y + y, this.at.z + z);
-    this.group.add(flame);
-    this.fx.pulse.push({ o: flame, phase: x * 3 + z });
+  /** A flame (a fire pit, a campfire): a glowing cone that flickers. */
+  fire(x: number, y: number, z: number, size = 0.3): void {
+    this.batch.prim(CONE, FLAME, boxAt(size, size, size, x, y, z).premultiply(this.origin), false);
   }
 
   /** A model of its own that turns (a radar, a dish). */
   spinner(id: BaseModelId, x: number, y: number, z: number, s = 1, speed = 0.8): void {
     const g = kitMesh(id);
     g.scale.setScalar(s);
+    g.traverse((o) => (o.castShadow = false));
     const pivot = new THREE.Group();
     pivot.position.set(this.at.x + x, this.at.y + y, this.at.z + z);
     pivot.add(g);
@@ -290,12 +318,36 @@ class Site {
 
 // ------------------------------------------------------------- the plots
 
+/** The Huerto's plastic sheeting: milky and see-through, a little snow along its crown. */
+const PLASTIC = baseMaterial(
+  new THREE.MeshStandardMaterial({ color: 0xe6eee4, roughness: 0.35, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
+  { amount: 0.6, low: 0.92, high: 0.99 },
+);
+
+/**
+ * A raised bed under a plastic tunnel at (x, z), along x: lettuces and
+ * cabbages in two rows inside, three hoops over it; with `drip`, two drip
+ * lines along the rows (level 3).
+ */
+function tunnelBed(k: Site, x: number, z: number, drip: boolean): void {
+  k.put('gardenBed', { x, z, yaw: Math.PI / 2, s: 0.39 });
+  for (let i = 0; i < 4; i++) {
+    for (const side of [-1, 1]) {
+      const px = x - 0.72 + i * 0.48;
+      k.put((i + (side > 0 ? 1 : 0)) % 2 ? 'gardenCabbage' : 'gardenLettuce', { x: px, z: z + side * 0.24, y: 0.1, yaw: i * 1.7 + side, s: 1.3 });
+    }
+  }
+  if (drip) for (const side of [-1, 1]) k.put('gardenHose', { x, z: z + side * 0.24 + 0.12, y: 0.12, yaw: Math.PI / 2 });
+  k.shape(TUNNEL, PLASTIC, 2.15, 0.62, 0.6, x, 0.08, z, 0, false);
+  for (const t of [-0.95, 0, 0.95]) k.shape(HOOP, mat(0x3a3f45), 1, 0.63, 0.61, x + t, 0.08, z);
+}
+
 /** Lamps on a little sign at the plot's front corner: as many lit as the facility's level. */
 function levelPips(k: Site, level: number): void {
   const x = PLOT / 2 - 0.35;
   const z = PLOT / 2 - 0.25;
-  k.box('pipPost', mat(0x3a3f45), 0.08, 0.7, 0.08, x, 0, z);
-  k.box('pipBoard', mat(0x2a2f35), 0.62, 0.22, 0.08, x, 0.62, z);
+  k.box(mat(0x3a3f45), 0.08, 0.7, 0.08, x, 0, z);
+  k.box(mat(0x2a2f35), 0.62, 0.22, 0.08, x, 0.62, z);
   for (let i = 0; i < 3; i++) k.glow(i < level ? 'pip' : 'off', x - 0.2 + i * 0.2, 0.84, z, 0.11);
 }
 
@@ -304,15 +356,21 @@ function bunkerArt(k: Site): void {
   k.put('bunker', { s: 0.66, z: -0.35 });
   for (const x of [-1.55, 1.55]) k.put('sandbagWall', { x, z: 2.05, yaw: Math.PI / 2, s: 0.75 });
   k.put('mast', { x: -2.0, z: -2.0, s: 0.78 });
-  k.beacon('red', -2.0, 4.35, -2.0, 0.4);
+  k.beacon('red', -2.0, 4.35, -2.0);
   k.put('floodlights', { x: 2.05, z: 1.55, s: 0.55, yaw: -0.6 });
   k.put('hatch', { x: 1.75, z: -1.85, s: 0.6 });
-  k.beacon('red', 1.75, 0.35, -1.85, 2.1, 0.12);
+  k.beacon('red', 1.75, 0.35, -1.85, 0.12);
 }
 
-/** The Cuartel: a lean-to with bunks and lockers, the pedestal under its roof. */
+/** Two pallets stacked under the Cuartel's roof: the soldier being inspected stands on them. */
+const STAND_PALLETS = 2;
+
+/** The Cuartel: a lean-to with bunks and lockers, two pallets under its roof for the soldier being inspected. */
 function barracksArt(k: Site): void {
   k.put('leanTo', { s: 1.35, z: -0.55 });
+  const pallet = kitModel('woodPallet')?.size.y ?? 0.15;
+  for (let i = 0; i < STAND_PALLETS; i++) k.put('woodPallet', { z: 0.7, y: 0.04 + i * pallet, yaw: i * 0.22, s: 1.05 });
+  k.put('tyreStack', { x: -1.15, z: 0.95, yaw: 0.6, s: 0.8 });
   for (const x of [-1.35, 1.35]) k.put('bunkBed', { x, z: -1.6, yaw: Math.PI / 2, s: 0.95 });
   k.put('toolShelf', { x: 0, z: -1.8, s: 0.9 });
   k.put('ammoCrate', { x: 2.0, z: 1.7 });
@@ -341,7 +399,7 @@ function engineeringArt(k: Site): void {
   k.put('ammoCrate', { x: 1.5, z: 1.3 });
   k.put('ammoCrate', { x: 1.85, z: 1.45, yaw: 0.5 });
   k.put('bigCrate', { x: 2.0, z: 2.0, s: 0.8 });
-  k.beacon('amber', -0.6, 0.62, 1.35, 1.1, 0.1);
+  k.beacon('amber', -0.6, 0.62, 1.35, 0.1);
 }
 
 type Art = (k: Site, level: number) => void;
@@ -383,8 +441,8 @@ const FACILITY_ART: Record<string, Art> = {
       k.put('deconShower', { x: 1.85, z: 1.7, s: 0.85 });
       k.put('ivStand', { x: -0.7, z: 1.4 });
       // The red cross over the door.
-      k.box('cross', GLOW.red(), 0.12, 0.5, 0.05, 0, 1.25, 0.95, 0, false);
-      k.box('cross', GLOW.red(), 0.5, 0.12, 0.05, 0, 1.44, 0.95, 0, false);
+      k.box(GLOW.red(), 0.12, 0.5, 0.05, 0, 1.25, 0.95, 0, false);
+      k.box(GLOW.red(), 0.5, 0.12, 0.05, 0, 1.44, 0.95, 0, false);
     }
   },
   // Taller: a shipping container for stores, a workbench and tyres; a second container stacked on top at level 3.
@@ -397,7 +455,7 @@ const FACILITY_ART: Record<string, Art> = {
     if (level >= 2) {
       k.put('powerGenerator', { x: 1.75, z: 0.1, yaw: -0.3 });
       k.put('batteryTable', { x: 0.2, z: 1.75 });
-      k.beacon('amber', -1.5, 0.62, 0.75, 1.6, 0.1);
+      k.beacon('amber', -1.5, 0.62, 0.75, 0.1);
     }
     if (level >= 3) {
       k.put('shipContainer', { z: -1.5, y: 1.73, yaw: 0.06, s: 0.97 });
@@ -424,29 +482,21 @@ const FACILITY_ART: Record<string, Art> = {
     if (level >= 2) k.put('bottleRange', { x: -2.0, z: 0.1, s: 0.8 });
     if (level >= 3) k.put('floodlights', { x: 2.0, z: 0.4, s: 0.5, yaw: Math.PI * 0.85 });
   },
-  // Brigada de obras: scaffolding, pallets of blocks, a wheelbarrow and cones; a site hut and a tractor as it grows.
+  // Brigada de obras: a scaffold, bricks, cement and a mixer, a wheelbarrow; the site office and then a portaloo and floodlights as it grows.
   crew: (k, level) => {
-    k.put('scaffold', { z: -1.6 });
-    k.put('scaffoldBoards', { z: -1.6, y: 1.9, s: 0.95 });
-    k.put('blockPallet', { x: 1.7, z: 0.35 });
-    k.put('blockPallet', { x: 1.7, z: 1.5, yaw: 0.2 });
-    k.put('wheelbarrow', { x: -1.5, z: 1.95, yaw: 0.3 });
-    for (const [x, z] of [
-      [0.2, 1.9],
-      [0.5, 2.1],
-      [0.0, 2.2],
-    ] as const)
-      k.put('cinderblock', { x, z, yaw: x * 3 });
-    k.put('bucket', { x: -0.4, z: 0.8 });
-    k.put('roadCone', { x: -2.15, z: 2.2 });
-    k.put('roadCone', { x: 2.2, z: 2.25 });
-    if (level >= 2) {
-      k.put('shackFrame', { x: -1.65, z: -0.1, s: 0.85 });
-      k.put('shackTarp', { x: -1.65, z: -0.1, y: 0.85 * 0.8, s: 0.85 });
-      k.put('pallet', { x: 0.4, z: 0.4 });
-      k.put('pallet', { x: 0.4, z: 0.4, y: 0.16, yaw: 0.15 });
+    k.put('siteScaffoldFull', { z: -1.65, yaw: Math.PI / 2 });
+    k.put('siteBricks', { x: 1.75, z: 0.25 });
+    k.put('siteCement', { x: 1.7, z: 1.35, yaw: 0.4 });
+    k.put('siteMixer', { x: 0.45, z: 0.75, yaw: -0.6 });
+    k.put('siteBarrow', { x: -0.3, z: 1.85, yaw: 0.5 });
+    k.put('siteBarricade', { x: 1.6, z: 2.15, yaw: Math.PI / 2 });
+    if (level >= 2) k.put('siteOffice', { x: -1.75, z: 0.45, s: 0.85 });
+    if (level >= 3) {
+      k.put('sitePortaloo', { x: 0.75, z: -0.35, s: 0.85, yaw: Math.PI });
+      k.put('sitePallets', { x: 1.9, z: -0.65, s: 0.8, yaw: 0.3 });
+      k.put('siteLamp', { x: -0.6, z: 2.1, yaw: 0.7 });
+      k.glow('white', -0.6, 0.78, 2.1, 0.14);
     }
-    if (level >= 3) k.put('tractor', { x: 0.1, z: 0.8, yaw: -1.3, s: 0.9 });
   },
   // Sala de simulación: an open army tent with long tables, chairs and a blackboard.
   simulation: (k, level) => {
@@ -478,7 +528,7 @@ const FACILITY_ART: Record<string, Art> = {
   // Estación de escucha: a lattice mast, a radio desk under a tarp; a second aerial and dishes later.
   listening: (k, level) => {
     k.put('mast', { x: 1.45, z: -1.35, s: 0.88 });
-    k.beacon('red', 1.45, 0.88 * 5.5, -1.35, 0.9);
+    k.beacon('red', 1.45, 0.88 * 5.5, -1.35);
     k.put('shackFrame', { x: -1.05, z: 0.1, s: 0.9 });
     k.put('shackTarp', { x: -1.05, z: 0.1, y: 0.9 * 0.8, s: 0.9 });
     k.put('longTable', { x: -1.05, z: 0.1 });
@@ -495,7 +545,7 @@ const FACILITY_ART: Record<string, Art> = {
   relay: (k, level) => {
     k.put('radioTower', { x: 0.2, z: -0.5 });
     k.spinner('radioTowerTop', 0.2, 4.5, -0.5, 1, 0.6);
-    k.beacon('red', 0.2, 5.5, -0.5, 1.7);
+    k.beacon('red', 0.2, 5.5, -0.5);
     k.put('powerBoxes', { x: -2.1, z: -1.8 });
     k.put('transformer', { x: 1.75, z: 1.45, s: 0.7 });
     k.put('powerGenerator', { x: -1.55, z: 1.5, yaw: 0.2 });
@@ -505,20 +555,58 @@ const FACILITY_ART: Record<string, Art> = {
       k.spinner('dish', -1.8, 0, -0.3, 1.5, -0.4);
     }
   },
-  // Taller de oficios: a craft shed with a workbench and wood stacked; a lean-to and the Canto's gramophone later.
+  // Taller de oficios: a craft shed, a workbench with its vice and toolbox, a plank on two sawhorses, wood stacked; a lean-to and a saw bench, then a timber rack.
   echoes: (k, level) => {
     k.put('gardenShed', { s: 1.3, x: -1.25, z: -1.05 });
     k.put('workbench', { x: 1.05, z: -1.4, s: 0.9 });
+    k.put('vice', { x: 1.25, z: -1.5, y: 0.56 });
+    k.put('toolbox', { x: 0.35, z: -1.15, yaw: 0.3 });
+    for (const x of [-0.6, 0.55]) k.put('sawhorse', { x, z: 0.75, yaw: Math.PI / 2 });
+    k.put('sitePlanks', { x: -0.02, z: 0.75, y: 0.47, s: 0.42 });
     k.put('woodPile', { x: 1.85, z: 1.1, yaw: Math.PI / 2 });
     k.put('woodPile', { x: 1.85, z: 1.85, yaw: Math.PI / 2 });
-    k.put('anvil', { x: 0.2, z: 0.6 });
-    if (level >= 2) k.put('leanTo', { x: 1.15, z: -1.0, s: 0.75 });
+    if (level >= 2) {
+      k.put('leanTo', { x: 1.15, z: -1.0, s: 0.75 });
+      k.put('trestle', { x: -1.9, z: 1.2 });
+      k.put('tableSaw', { x: -1.9, z: 1.2, y: 0.52, yaw: Math.PI / 2, s: 0.9 });
+    }
     if (level >= 3) {
-      k.put('gramophone', { x: -1.5, z: 1.3 });
-      k.glow('coro', -1.32, 0.9, 1.3, 0.1);
-      for (const x of [-2.15, -0.85]) k.put('speaker', { x, z: 1.0 });
-      k.put('campfire', { x: 0.1, z: 1.8 });
-      k.fire(0.1, 0.05, 1.8, 0.24, 'coro');
+      k.put('plankRack', { x: -0.2, z: 2.05, s: 0.7 });
+      k.put('anvil', { x: 0.95, z: 0.2 });
+    }
+  },
+  // Huerto: raised beds under plastic and rain barrels; a greenhouse with a stove; drip lines, seed trays and a scarecrow.
+  garden: (k, level) => {
+    for (const z of [0.62, 1.86]) tunnelBed(k, -0.55, z, level >= 3);
+    k.put('gardenBarrel', { x: 2.0, z: -0.85, s: 1.3 });
+    k.put('gardenBarrelShut', { x: 2.0, z: -0.05, yaw: 0.6, s: 1.3 });
+    k.put('gardenCan', { x: 1.45, z: 0.05, yaw: -0.5, s: 1.3 });
+    if (level < 2) {
+      // Before the greenhouse: a bed left to the snow, and the compost heap.
+      k.put('gardenBed', { x: -0.9, z: -1.45, yaw: Math.PI / 2, s: 0.39, finish: 'snow' });
+      k.put('siteSpoil', { x: 1.1, z: -1.65, s: 0.4 });
+    } else {
+      k.put('greenhouse', { x: -0.45, z: -1.3, yaw: Math.PI / 2, s: 0.64 });
+      // Inside, a bed of greens down its length.
+      k.put('gardenBed', { x: -0.8, z: -1.3, yaw: Math.PI / 2, s: 0.39 });
+      for (const z of [-1.55, -1.05]) for (let i = 0; i < 4; i++) k.put(i % 2 ? 'gardenPlant2' : 'gardenPlant', { x: -1.5 + i * 0.46, z, y: 0.1, yaw: i + z, s: 0.62 });
+      // The stove at its east end, its pipe out through the roof, its little window lit.
+      k.box(mat(0x2b2d30, { metal: 0.4, rough: 0.6 }), 0.36, 0.42, 0.32, 0.72, 0, -1.75);
+      k.glow('amber', 0.72, 0.2, -1.58, 0.08);
+      k.shape(PIPE, mat(0x3a3d40, { metal: 0.5, rough: 0.5 }), 0.09, 2.3, 0.09, 0.72, 0.42, -1.75);
+      k.box(mat(0x3a3d40, { metal: 0.5, rough: 0.5 }), 0.18, 0.05, 0.18, 0.72, 2.72, -1.75);
+      k.put('woodPile', { x: 1.85, z: -1.8, yaw: Math.PI / 2, s: 0.8 });
+    }
+    if (level >= 3) {
+      // The drip lines' feed from the barrels, the seed trays on a table, and a scarecrow over the beds.
+      k.put('gardenHose', { x: 1.0, z: 1.24, y: 0.02, yaw: Math.PI / 2, s: 0.6 });
+      k.put('gardenTable', { x: 1.4, z: 1.3, s: 1.1 });
+      for (const z of [0.75, 1.3, 1.85]) {
+        k.box(mat(0x4a3a2c), 0.5, 0.05, 0.42, 1.4, 0.65, z, 0, false);
+        k.put('gardenSeedlings', { x: 1.4, z, y: 0.7, s: 0.15 });
+      }
+      k.put('gardenSeeds', { x: 1.68, z: 2.08, y: 0.65, yaw: 0.3, s: 1.3 });
+      k.put('scarecrow', { x: -2.15, z: 1.25, s: 0.7 });
     }
   },
   // Camposanto: a fenced patch of snow with rows of crosses; a bench and a lamp, and stone crosses later.
@@ -543,7 +631,7 @@ const FACILITY_ART: Record<string, Art> = {
       k.put('lampPost', { x: -1.9, z: 2.0, s: 0.55 });
       k.glow('amber', -1.9, 1.75, 2.0, 0.16);
     }
-    if (level >= 3) for (const x of [-1.0, 0.0, 1.0]) k.glow('fire', x, 0.15, 2.1, 0.07);
+    if (level >= 3) for (const x of [-1.0, 0.0, 1.0]) k.fire(x, 0.08, 2.1, 0.09);
   },
 };
 
@@ -603,40 +691,54 @@ function terrainArt(k: Site, terrain: BasePlot['terrain'], variant: number, px: 
   }
 }
 
-/** Clearing a plot: a tractor working, a heap of spoil and a beacon. */
+/** Clearing a plot: a bulldozer at work, a heap of spoil, a beacon on its cab. */
 function clearingArt(k: Site): void {
-  k.put('tractor', { x: -0.7, z: 1.1, yaw: -0.9 });
-  k.put('rubbleHeap', { x: 1.3, z: 1.4, s: 0.8 });
-  k.beacon('amber', -0.7, 1.55, 1.1, 2);
+  k.put('siteDozer', { x: -0.75, z: 0.75, yaw: -0.9, s: 0.55 });
+  k.put('siteSpoil', { x: 1.25, z: 1.35, yaw: 0.5, s: 0.85 });
+  k.put('siteBarricade', { x: -1.7, z: 2.2, yaw: Math.PI / 2 });
+  k.beacon('amber', -0.75, 1.62, 0.75);
 }
 
-/** A facility going up: its slab rising with the work, scaffolding, pallets of blocks, cones and a progress strip. */
+/**
+ * A facility going up (POLYGON Construction): a concrete slab, rebar cages
+ * rising with the work at its corners, a scaffold once it is half done,
+ * bricks, cement and a mixer, barriers along the front and a progress strip.
+ */
 function constructionArt(k: Site, progress: number): void {
-  const p = Math.max(0.08, progress);
+  const p = Math.max(0.1, progress);
   k.pad('dirt');
-  k.put('slab', { z: -0.3, s: 1.3, sy: p });
-  k.put('scaffold', { z: -1.9, s: 0.95 });
-  k.put('blockPallet', { x: 1.75, z: 1.4 });
-  k.put('pallet', { x: -1.8, z: 1.7 });
-  k.put('roadCone', { x: -2.15, z: 2.2 });
-  k.put('roadCone', { x: 2.2, z: 2.25 });
+  k.put('siteSlab', { z: -0.45, s: 1.25 });
+  const slab = (kitModel('siteSlab')?.size.y ?? 0.33) * 1.25;
+  for (const [x, z] of [
+    [-1.6, -2.0],
+    [1.6, -2.0],
+    [-1.6, 1.1],
+    [1.6, 1.1],
+  ] as const)
+    k.put('siteRebar', { x, z, y: slab, s: 0.9, sy: 0.6 + p * 2.2 });
+  if (progress >= 0.5) k.put('siteScaffold', { z: -2.15, y: 0, yaw: Math.PI / 2, s: 0.95 });
+  k.put('siteBricks', { x: 1.85, z: 1.75, yaw: 0.2 });
+  k.put('siteCement', { x: 0.75, z: 1.95, yaw: -0.4 });
+  k.put('siteMixer', { x: -0.6, z: 1.85, yaw: 0.5 });
+  k.put('sitePallets', { x: -1.95, z: 1.7, s: 0.8, yaw: -0.2 });
+  for (const x of [-1.5, 1.5]) k.put('siteBarricade', { x, z: 2.3, yaw: Math.PI / 2 });
   progressStrip(k, progress);
-  k.beacon('amber', -2.2, 2.0, -1.9, 0);
+  k.beacon('amber', 1.6, slab + 0.75 + p * 1.5, 1.1);
 }
 
-/** Being raised a level: scaffolding over the building, which keeps working. */
+/** Being raised a level: scaffolding over the building, which keeps working, and barriers at its front. */
 function upgradeArt(k: Site, progress: number): void {
-  k.put('scaffold', { z: -2.1, s: 1.05 });
-  k.put('scaffold', { x: -2.15, yaw: Math.PI / 2, s: 1.0 });
-  k.put('scaffoldBoards', { z: -2.1, y: 2.0, s: 1.0 });
+  k.put('siteScaffold', { z: -2.15, yaw: Math.PI / 2 });
+  k.put('siteScaffold', { x: -2.2, z: -0.4 });
+  for (const x of [-1.5, 1.5]) k.put('siteBarricade', { x, z: 2.3, yaw: Math.PI / 2 });
   progressStrip(k, progress);
-  k.beacon('amber', 2.2, 2.2, -2.2, 0);
+  k.beacon('amber', 2.0, 1.8, -2.15);
 }
 
 /** A strip of light along the plot's front, as long as the work is done. */
 function progressStrip(k: Site, progress: number): void {
   const p = Math.max(0.05, progress);
-  k.box('progress', GLOW.amber(), (PLOT - 0.4) * p, 0.06, 0.1, -(PLOT - 0.4) / 2 + ((PLOT - 0.4) * p) / 2, 0.02, PLOT / 2 - 0.05, 0, false);
+  k.box(GLOW.amber(), (PLOT - 0.4) * p, 0.06, 0.1, -(PLOT - 0.4) / 2 + ((PLOT - 0.4) * p) / 2, 0.02, PLOT / 2 - 0.05, 0, false);
 }
 
 /** Names over the map, short where the full one would run into the neighbours' (the panels and the tooltip give it whole). */
@@ -657,23 +759,21 @@ function hotspot(id: string, origin: THREE.Vector3): THREE.Mesh {
   return hit;
 }
 
-/** A square frame round a plot, flat on the ground: the selected or the hovered one. */
-function plotFrame(color: number): THREE.Group {
-  const g = new THREE.Group();
-  const m = new THREE.MeshBasicMaterial({ color, transparent: true, toneMapped: false });
+/** A square frame round a plot, flat on the ground: the selected or the hovered one (one mesh). */
+function plotFrame(color: number): THREE.Mesh {
   const side = PLOT + 0.5;
   const w = 0.16;
-  for (const [x, z, sx, sz] of [
-    [0, -side / 2, side + w, w],
-    [0, side / 2, side + w, w],
-    [-side / 2, 0, w, side],
-    [side / 2, 0, w, side],
-  ] as const) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.05, sz), m);
-    bar.position.set(x, 0.05, z);
-    g.add(bar);
-  }
-  return g;
+  const bars = (
+    [
+      [0, -side / 2, side + w, w],
+      [0, side / 2, side + w, w],
+      [-side / 2, 0, w, side],
+      [side / 2, 0, w, side],
+    ] as const
+  ).map(([x, z, sx, sz]) => new THREE.BoxGeometry(sx, 0.05, sz).translate(x, 0.05, z));
+  const frame = new THREE.Mesh(mergeGeometries(bars), new THREE.MeshBasicMaterial({ color, transparent: true, toneMapped: false }));
+  for (const b of bars) b.dispose();
+  return frame;
 }
 
 export interface LineupEntry {
@@ -711,8 +811,8 @@ export class BastionSet implements StageSet {
   private readonly grid = new THREE.Group();
   private readonly lineup = new THREE.Group();
   private readonly showcase = new THREE.Group();
-  private readonly frame: THREE.Group;
-  private readonly hoverFrame: THREE.Group;
+  private readonly frame: THREE.Mesh;
+  private readonly hoverFrame: THREE.Mesh;
   private readonly partnerMarker = new THREE.Group();
   /** Lamps, flames and aerials of the land round the compound and of the plots. */
   private readonly shellFx = new Fx();
@@ -735,21 +835,45 @@ export class BastionSet implements StageSet {
   private selected: string | null = null;
   /** Whether the names show (overview shots): plots rebuilt later (the models load late) follow it. */
   private labelsOn = true;
+  /**
+   * Everything that stands still, merged by material (game/batch.ts): the
+   * land round the compound and the hangar (built once), what stands beyond
+   * the sun's shadow box (no shadows) and the plots (rebuilt with the base).
+   */
+  private readonly statics = new StaticBatch(12);
+  private shellKit: KitBatch | null = null;
+  private farKit: KitBatch | null = null;
+  private gridKit: KitBatch | null = null;
+  /** Where the contact occlusion is to be baked again (the next frame does it). */
+  private bakeRegion: Dirty | null = null;
+  /** The sun's shadow map is drawn only when something in it changed (stage.ts): this asks for it. */
+  private shadowsStale = true;
+  private sinceShadows = 0;
+  private readonly sun = new THREE.DirectionalLight();
+  /** The light after the scene (stage.ts): neutral tone mapping, a soft bloom and the captures' grade. */
+  readonly mood: StageMood = BASE_MOOD;
 
   constructor(private readonly onPick: (hotspot: string) => void) {
-    // A clear winter afternoon in the mountains.
-    this.scene.background = new THREE.Color(0x92b4d4);
-    this.scene.fog = new THREE.FogExp2(0xbccbd8, 0.0034);
-    this.scene.add(new THREE.HemisphereLight(0xd6e2f5, 0x7a7468, 0.95));
-    const sun = new THREE.DirectionalLight(0xfff0dc, 1.9);
-    sun.position.set(-26, 42, 30);
+    // A clear winter afternoon in the mountains, as Synty's captures light a scene: a low, warm sun from the
+    // west throws long shadows east (to the right of every shot), a cool sky fills the shade, the snow bounces
+    // a little warmth back up; the grade (BASE_MOOD) lifts the blacks and tints the shade.
+    this.scene.background = skyTexture(['#8a9cc0', '#bcc5da', '#ecd9c8']);
+    this.scene.fog = new THREE.FogExp2(0xc8c9d6, 0.0034);
+    this.scene.add(new THREE.HemisphereLight(0xb4c2e2, 0x857d72, 1.3));
+    const sun = this.sun;
+    sun.color.set(0xffdcb4);
+    sun.intensity = 3.1;
+    sun.position.set(-40, 24, 20);
+    sun.target.position.set(0, 0, 6);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
-    Object.assign(sun.shadow.camera, { left: -42, right: 42, top: 42, bottom: -42, near: 1, far: 150 });
+    Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 44, bottom: -44, near: 1, far: 160 });
+    // Characters live on their own layer (post.ts): the sun's shadows include them.
+    sun.shadow.camera.layers.enable(UNIT_LAYER);
     this.scene.add(sun, sun.target);
-    this.scene.add(this.grid, this.lineup, this.showcase, this.partnerMarker);
+    this.scene.add(this.grid, this.lineup, this.showcase, this.partnerMarker, this.statics.group);
     this.frame = plotFrame(0x54d1ff);
     this.hoverFrame = plotFrame(0xffc93a);
     this.frame.visible = this.hoverFrame.visible = false;
@@ -762,10 +886,11 @@ export class BastionSet implements StageSet {
     const hangarLabel = label('Hangar', 'room-label fixed');
     hangarLabel.position.copy(HANGAR).add(new THREE.Vector3(0, HANGAR_H + 0.5, HANGAR_D / 2));
     this.scene.add(hangarHit, hangarLabel);
-    this.buildPedestal();
+    this.placeShowcase();
     this.buildGround();
     void loadBaseKit().then(() => {
       this.ready = true;
+      this.placeShowcase();
       this.buildShell();
       if (this.base) {
         this.gridKey = '';
@@ -839,19 +964,10 @@ export class BastionSet implements StageSet {
 
   // ------------------------------------------------------------- shell
 
-  /** The barracks' pedestal for the soldier being inspected (the lean-to round it comes with the plots). */
-  private buildPedestal(): void {
-    const top = this.pedestalPos().y + 0.25;
-    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, top, 20), mat(0x2a3036, { metal: 0.5, rough: 0.5 }));
-    pedestal.position.y = top / 2;
-    pedestal.castShadow = pedestal.receiveShadow = true;
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.03, 6, 32).rotateX(Math.PI / 2), mat(0x0a1a2a, { emissive: 0x54d1ff, intensity: 1.1 }));
-    ring.position.y = top + 0.01;
-    const stand = new THREE.Group();
-    stand.add(pedestal, ring);
-    stand.position.copy(this.pedestalPos()).setY(0);
-    this.scene.add(stand);
-    this.showcase.position.copy(this.pedestalPos()).add(new THREE.Vector3(0, 0.25, 0));
+  /** Where the soldier being inspected stands: on the pallets under the Cuartel's roof (they come with the plot). */
+  private placeShowcase(): void {
+    const pallet = (kitModel('woodPallet')?.size.y ?? 0.15) * 1.05;
+    this.showcase.position.copy(this.pedestalPos()).setY(0.04 + STAND_PALLETS * pallet);
   }
 
   /** Snow all round, rolling up into hills; the compound's trodden yard and the roads (no models: shown at once). */
@@ -861,32 +977,47 @@ export class BastionSet implements StageSet {
     const pos = geo.getAttribute('position');
     for (let i = 0; i < pos.count; i++) pos.setY(i, groundHeight(pos.getX(i), pos.getZ(i)) - 0.02);
     geo.computeVertexNormals();
-    const snow = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: baseTexture('snowGround', 48), color: 0xe2e8ee, roughness: 1 }));
+    const snow = new THREE.Mesh(geo, baseMaterial(new THREE.MeshStandardMaterial({ map: baseTexture('snowGround', 48), color: 0xe2e8ee, roughness: 1 })));
     snow.receiveShadow = true;
+    snow.matrixAutoUpdate = false;
     this.scene.add(snow);
-    const trodden = (w: number, d: number, x: number, z: number, tint: number, repeat: number) => {
-      const t = baseTexture('snowGround', 1);
-      t.repeat.set((w / size) * repeat, (d / size) * repeat);
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: t, color: tint, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1 }));
-      m.position.set(x, 0.005, z);
-      m.receiveShadow = true;
-      this.scene.add(m);
+    // The yard inside the barriers, trodden grey; the road from the gate to the hangar and on east, ploughed
+    // darker: one mesh, each patch tinted by its vertices, the texture laid in world space (a tile every 2.6).
+    const patches: THREE.BufferGeometry[] = [];
+    const trodden = (w: number, d: number, x: number, z: number, tint: number) => {
+      const g = new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(x, 0.005, z);
+      const pos = g.getAttribute('position');
+      const uv = g.getAttribute('uv');
+      const colour = new THREE.Color(tint);
+      const colours = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) {
+        uv.setXY(i, pos.getX(i) / 2.6, pos.getZ(i) / 2.6);
+        colours.set([colour.r, colour.g, colour.b], i * 3);
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+      patches.push(g);
     };
-    // The yard inside the barriers, trodden grey; the road from the gate to the hangar and on east, ploughed darker.
-    trodden(COMPOUND + 3, COMPOUND + 3, 0, 0, 0x99978f, 160);
-    trodden(4.5, HANGAR.z - EDGE, 0, EDGE + (HANGAR.z - EDGE) / 2, 0x85837d, 160);
-    trodden(22, 13, HANGAR.x, HANGAR.z + 1.5, 0x8c8a84, 160);
-    trodden(110, 4.6, HANGAR.x + HANGAR_W / 2 + 55, HANGAR.z + BUS_Z, 0x85837d, 160);
+    trodden(COMPOUND + 3, COMPOUND + 3, 0, 0, 0x99978f);
+    trodden(4.5, HANGAR.z - EDGE, 0, EDGE + (HANGAR.z - EDGE) / 2, 0x85837d);
+    trodden(22, 13, HANGAR.x, HANGAR.z + 1.5, 0x8c8a84);
+    trodden(110, 4.6, HANGAR.x + HANGAR_W / 2 + 55, HANGAR.z + BUS_Z, 0x85837d);
+    const yard = new THREE.Mesh(
+      mergeGeometries(patches),
+      baseMaterial(new THREE.MeshStandardMaterial({ map: baseTexture('snowGround', 1), vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1 })),
+    );
+    for (const g of patches) g.dispose();
+    yard.receiveShadow = true;
+    yard.matrixAutoUpdate = false;
+    this.scene.add(yard);
   }
 
   /** The perimeter, the woods, the range and the dam, the hangar and La Mula (once the models have loaded). */
   private buildShell(): void {
-    const batch = new KitBatch();
+    const batch = (this.shellKit = new KitBatch());
     const shell = new THREE.Group();
     const land = new Site(batch, new THREE.Vector3(), shell, this.shellFx);
-    // What stands beyond the sun's shadow box goes in a batch of its own that casts none (an instanced mesh is culled whole).
-    const farBatch = new KitBatch();
-    const far = new Site(farBatch, new THREE.Vector3(), shell, this.shellFx);
+    // What stands beyond the sun's shadow box: no shadows, and left out of the baked occlusion.
+    const far = new Site((this.farKit = new KitBatch()), new THREE.Vector3(), shell, this.shellFx);
 
     // Concrete barriers round the compound, a gate to the south, a lookout at each corner.
     for (let t = -EDGE + 0.8; t < EDGE; t += 1.6) {
@@ -898,7 +1029,7 @@ export class BastionSet implements StageSet {
     for (const sx of [-1, 1])
       for (const sz of [-1, 1]) {
         land.put('lookout', { x: sx * (EDGE + 1.6), z: sz * (EDGE + 1.6), yaw: sx * sz > 0 ? 0 : Math.PI / 2 });
-        land.beacon('white', sx * (EDGE + 1.6), 3.95, sz * (EDGE + 1.6), sx + sz * 2, 0.2);
+        land.glow('white', sx * (EDGE + 1.6), 3.95, sz * (EDGE + 1.6), 0.2);
       }
     for (const x of [-3.1, 3.1]) {
       land.put('lampPost', { x, z: EDGE + 0.6, s: 0.8 });
@@ -919,11 +1050,11 @@ export class BastionSet implements StageSet {
 
     this.buildWoods(land, far);
     this.buildRange(far);
-    this.buildDam(shell, far);
+    this.buildDam(far);
     this.buildHangar(batch, shell);
 
-    shell.add(batch.build(), farBatch.build(false));
     this.scene.add(shell);
+    this.commitStatic();
   }
 
   /** Pines on the hills all round, crags among them, keeping the compound, the hangar and the roads clear. */
@@ -967,31 +1098,22 @@ export class BastionSet implements StageSet {
   }
 
   /** The dam up the valley to the north-east: a curved concrete wall across a gorge, the reservoir frozen behind it. */
-  private buildDam(shell: THREE.Group, land: Site): void {
+  private buildDam(far: Site): void {
+    const at = DAM.clone().setY(groundHeight(DAM.x, DAM.z) - 3);
+    const dam = new Site(this.farKit!, at, new THREE.Group(), this.shellFx, DAM_YAW);
     const concrete = mat(0x9a9c9c, { rough: 0.9 });
-    const dam = new THREE.Group();
     const r = 46;
     for (let i = 0; i < 16; i++) {
       const a = -0.55 + (i / 15) * 1.1;
-      const block = box(6.4, 24, 4, concrete, Math.sin(a) * r, -4, -Math.cos(a) * r + r);
-      block.rotation.y = -a;
-      dam.add(block);
-      if (i % 3 === 0) {
-        const buttress = box(1.2, 26, 4.6, mat(0x86888a), Math.sin(a) * r, -4, -Math.cos(a) * r + r);
-        buttress.rotation.y = -a;
-        dam.add(buttress);
-      }
+      dam.box(concrete, 6.4, 24, 4, Math.sin(a) * r, -4, -Math.cos(a) * r + r, -a, false);
+      if (i % 3 === 0) dam.box(mat(0x86888a), 1.2, 26, 4.6, Math.sin(a) * r, -4, -Math.cos(a) * r + r, -a, false);
     }
-    const ice = new THREE.Mesh(new THREE.CircleGeometry(60, 24).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xdfe9f2, roughness: 0.4 }));
-    ice.position.set(0, 17.5, -30);
-    dam.add(ice);
-    dam.position.copy(DAM).setY(groundHeight(DAM.x, DAM.z) - 3);
-    dam.rotation.y = DAM_YAW;
-    shell.add(dam);
+    // The frozen reservoir: a flat box of ice behind the wall.
+    dam.box(mat(0xdfe9f2, { rough: 0.4 }), 90, 0.2, 70, 0, 17.4, -36, 0, false);
     // The gorge's sides: two ranges against the dam's ends.
     for (const side of [-1, 1]) {
       const end = new THREE.Vector3(side * 40, 0, 6).applyAxisAngle(new THREE.Vector3(0, 1, 0), DAM_YAW).add(DAM);
-      land.put(side < 0 ? 'range2' : 'range3', { x: end.x, z: end.z, y: dam.position.y - 2, yaw: side * 0.7, s: side < 0 ? 4.2 : 5.4, sy: 2.6, finish: 'mountain' });
+      far.put(side < 0 ? 'range2' : 'range3', { x: end.x, z: end.z, y: at.y - 2, yaw: side * 0.7, s: side < 0 ? 4.2 : 5.4, sy: 2.6, finish: 'mountain' });
     }
   }
 
@@ -1003,7 +1125,7 @@ export class BastionSet implements StageSet {
     const k = new Site(batch, HANGAR, shell, this.shellFx);
     const hw = HANGAR_W / 2;
     const hd = HANGAR_D / 2;
-    k.box('hangarFloor', mat(0x6c7176, { rough: 0.9 }), HANGAR_W + 0.6, FLOOR, HANGAR_D + 0.3, 0, 0, 0, 0, false);
+    k.box(mat(0x6c7176, { rough: 0.9 }), HANGAR_W + 0.6, FLOOR, HANGAR_D + 0.3, 0, 0, 0, 0, false);
     // Back wall: four kit walls in two rows, their ribbed face inside.
     for (const y of [FLOOR, FLOOR + 2]) {
       for (let i = 0; i < 4; i++) k.put('hangarWall', { x: -hw + 1.667 + i * 3.333, y, z: -hd, yaw: -Math.PI / 2 });
@@ -1021,7 +1143,7 @@ export class BastionSet implements StageSet {
     k.put('wallLamp', { x: hw + 0.2, y: GATE_H + 0.35, z: BUS_Z, yaw: Math.PI / 2, s: 1.6 });
     k.glow('white', hw + 0.35, GATE_H + 0.25, BUS_Z, 0.22);
     for (const z of [BUS_Z - GATE_HALF - 0.05, BUS_Z + GATE_HALF + 0.05])
-      for (let y = 0; y < 5; y++) k.box('gateStripe', y % 2 ? mat(0x1d1f22) : mat(0xe0a020), 0.06, GATE_H / 5, 0.12, hw + 0.13, FLOOR + (y * GATE_H) / 5, z, 0, false);
+      for (let y = 0; y < 5; y++) k.box(y % 2 ? mat(0x1d1f22) : mat(0xe0a020), 0.06, GATE_H / 5, 0.12, hw + 0.13, FLOOR + (y * GATE_H) / 5, z, 0, false);
     // Pillars along the open front and a fascia over it.
     for (const x of [-hw, hw]) k.put('hangarPillar', { x, z: hd, sy: 1.95 });
     for (let i = 0; i < 4; i++) k.put('hangarWall', { x: -hw + 1.667 + i * 3.333, y: HANGAR_H - 0.75, z: hd, yaw: Math.PI / 2, sy: 0.38 });
@@ -1036,7 +1158,7 @@ export class BastionSet implements StageSet {
       k.put('wallLamp', { x, y: 3.2, z: -hd + 0.2, s: 1.6 });
       k.glow('white', x, 3.1, -hd + 0.35, 0.2);
     }
-    k.box('eaves', mat(0x2a2a20, { emissive: 0xfff0c8, intensity: 0.7 }), HANGAR_W - 0.8, 0.06, 0.05, 0, HANGAR_H - 0.85, hd - 0.12, 0, false);
+    k.box(mat(0x2a2a20, { emissive: 0xfff0c8, intensity: 0.7 }), HANGAR_W - 0.8, 0.06, 0.05, 0, HANGAR_H - 0.85, hd - 0.12, 0, false);
     for (const x of [-3.5, 3.5]) {
       const lamp = new THREE.SpotLight(0xdfefff, 30, 13, 0.8, 0.5, 1.5);
       lamp.position.set(HANGAR.x + x, HANGAR.y + HANGAR_H - 0.3, HANGAR.z + 0.6);
@@ -1045,9 +1167,9 @@ export class BastionSet implements StageSet {
     }
     // Floor paint: the bus's box and a hazard stripe along the open front.
     const paint = mat(0x2a2a10, { emissive: 0xffc93a, intensity: 0.5 });
-    for (const z of [-1, 1]) k.box('paint', paint, 9.6, 0.02, 0.1, BUS_X, FLOOR, BUS_Z + z * 1.55, 0, false);
-    k.box('paint', paint, 0.1, 0.02, 3.1, BUS_X - 4.8, FLOOR, BUS_Z, 0, false);
-    k.box('paint', mat(0x2a2a10, { emissive: 0xffc93a, intensity: 0.8 }), HANGAR_W - 0.4, 0.02, 0.18, 0, FLOOR + 0.005, hd - 0.3, 0, false);
+    for (const z of [-1, 1]) k.box(paint, 9.6, 0.02, 0.1, BUS_X, FLOOR, BUS_Z + z * 1.55, 0, false);
+    k.box(paint, 0.1, 0.02, 3.1, BUS_X - 4.8, FLOOR, BUS_Z, 0, false);
+    k.box(mat(0x2a2a10, { emissive: 0xffc93a, intensity: 0.8 }), HANGAR_W - 0.4, 0.02, 0.18, 0, FLOOR + 0.005, hd - 0.3, 0, false);
     // Stores in the west corners, clear of the bus and the lineup.
     k.put('drums', { x: -hw + 0.8, y: FLOOR, z: -hd + 0.9 });
     k.put('toolShelf', { x: -hw + 0.45, y: FLOOR, z: -0.6, yaw: Math.PI / 2, finish: 'plain' });
@@ -1096,7 +1218,7 @@ export class BastionSet implements StageSet {
    * doors and wheels are parts of their own, so they move.
    */
   private buildBus(shell: THREE.Group): void {
-    const model = kitModel('bus');
+    const model = kitModel('mulaBus');
     if (!model) return;
     const root = new THREE.Group();
     const body = new THREE.Group();
@@ -1108,7 +1230,11 @@ export class BastionSet implements StageSet {
     const wheels: THREE.Object3D[] = [];
     let wheelRadius = 0.35;
     const doorCentres: THREE.Vector3[] = [];
-    for (const part of kitMesh('bus', 'plain').children.slice()) {
+    // The body, its glass and its plates stand still on it: merged, they move with it.
+    const statics = new StaticBatch(50);
+    statics.begin(null);
+    const still = new THREE.Matrix4();
+    for (const part of kitMesh('mulaBus', 'plain').children.slice()) {
       const mesh = part as THREE.Mesh;
       mesh.geometry.computeBoundingBox();
       const bb = mesh.geometry.boundingBox!;
@@ -1132,7 +1258,7 @@ export class BastionSet implements StageSet {
         const along = Number(/Door_0(\d)/.exec(mesh.name)?.[1] ?? 1) % 2 ? 1 : -1;
         doors.push({ leaf, shut: new THREE.Vector3(), open: new THREE.Vector3(0.14, 0, along * width * 0.85) });
         if (!/glass/i.test(mesh.name)) doorCentres.push(centre);
-      } else body.add(mesh);
+      } else statics.add(mesh.geometry, mesh.material as THREE.Material, still, true, undefined, false);
     }
     // (A leaf's glass is a mesh of its own: its name gives it the same offset, so both move alike.)
     // Steel plates over the windows, both sides, leaving the doorways open.
@@ -1157,7 +1283,9 @@ export class BastionSet implements StageSet {
     const nose = model.size.z / 2 + 0.03;
     for (const x of [-0.55, 0.55]) plates.put('plateSlit', { x, y: windowY - 0.35, z: nose - 0.15, yaw: Math.PI / 2, s: 1.3, finish: 'plain' });
     for (let z = -2.6; z <= 2.6; z += 1.3) plates.put('plateRoof', { x: (Math.round(z) % 2) * 0.2, y: model.size.y + 0.01, z, yaw: 0.05 * z, s: 1.1 });
-    body.add(plates.build());
+    plates.addTo(statics);
+    statics.commit();
+    body.add(statics.group);
     // Headlights, off while parked.
     const lights = new THREE.MeshStandardMaterial({ color: 0x2a2a20, emissive: 0xfff2c0, emissiveIntensity: 0.2 });
     for (const x of [-0.75, 0.75]) {
@@ -1195,7 +1323,7 @@ export class BastionSet implements StageSet {
     this.gridFx.clear();
     this.labels.clear();
     for (const h of [...this.hotspots]) if (h.userData.hotspot !== 'hangar') this.hotspots.splice(this.hotspots.indexOf(h), 1);
-    const batch = new KitBatch();
+    const batch = (this.gridKit = new KitBatch());
     for (const plot of c.base.plots) {
       const o = plotCentre(plot.x, plot.y);
       const k = new Site(batch, o, this.grid, this.gridFx);
@@ -1214,8 +1342,8 @@ export class BastionSet implements StageSet {
       } else if (plot.building) {
         const facility = plot.building as FacilityId;
         const level = plot.level ?? 1;
-        // The Camposanto is open ground, not a pad.
-        if (facility !== 'memorial') k.pad('concrete');
+        // The Camposanto is open ground, not a pad; the Huerto, dug earth.
+        if (facility !== 'memorial') k.pad(facility === 'garden' ? 'dirt' : 'concrete');
         FACILITY_ART[facility]?.(k, level);
         levelPips(k, level);
         // A building the engine does not describe yet (art can land before its rules) still gets a label.
@@ -1265,11 +1393,59 @@ export class BastionSet implements StageSet {
       const alongX = a.y === b.y;
       const way = new Site(batch, mid, this.grid, this.gridFx, alongX ? 0 : Math.PI / 2);
       way.put('boardwalk', { y: 0.02, sx: (GAP + 0.7) / 2.35, sz: 1.05, finish: 'plain' });
-      for (const s of [-1, 1]) way.box('wayKerb', mat(0x5a4a3a), GAP + 0.7, 0.1, 0.08, 0, 0.02, s * 0.66);
+      for (const s of [-1, 1]) way.box(mat(0x5a4a3a), GAP + 0.7, 0.1, 0.08, 0, 0.02, s * 0.66);
       if (lit.has(`${a.id}|${b.id}`)) for (const t of [-0.6, 0, 0.6]) way.glow('green', t, 0.14, 0.7, 0.1);
     }
-    this.grid.add(batch.build());
+    this.commitStatic();
     this.markLabels();
+  }
+
+  /**
+   * Merges everything that stands still again (only the chunks that changed
+   * are merged and uploaded: batch.ts), and asks for the contact occlusion
+   * and the shadows to be drawn again where they did.
+   */
+  private commitStatic(): void {
+    const s = this.statics;
+    s.begin(null);
+    this.shellKit?.addTo(s);
+    this.farKit?.addTo(s, false);
+    this.gridKit?.addTo(s);
+    const dirty = s.commit();
+    if (!dirty) return;
+    const was = this.bakeRegion;
+    this.bakeRegion = was ? { x0: Math.min(was.x0, dirty.x0), y0: Math.min(was.y0, dirty.y0), x1: Math.max(was.x1, dirty.x1), y1: Math.max(was.y1, dirty.y1) } : dirty;
+    this.shadowsStale = true;
+  }
+
+  /**
+   * Before each frame (stage.ts): bakes the contact occlusion where it is
+   * due, and asks for the sun's shadow map only when it would change: after
+   * a rebuild, every frame while La Mula leaves, and ten times a second while
+   * soldiers stand in it (their idle poses).
+   */
+  beforeRender(gl: THREE.WebGLRenderer, dt: number): void {
+    // The shadow map's size by effects level, as in battle (renderer.ts): drawn rarely, its size costs little.
+    const size = graphics().effects === 'high' ? 4096 : 2048;
+    if (this.sun.shadow.mapSize.x !== size) {
+      this.sun.shadow.mapSize.set(size, size);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+      this.shadowsStale = true;
+    }
+    if (this.bakeRegion) {
+      BASE_OCCLUSION.bake(gl, this.statics.occluderGeometries(), this.bakeRegion);
+      this.bakeRegion = null;
+    }
+    this.sinceShadows += dt;
+    const since = this.launching ? (performance.now() - this.launching) / 1000 : -1;
+    const leaving = since >= 0 && since < LAUNCH_SECONDS + 0.5;
+    const posing = this.rigs.length > 0 || !!this.showcaseRig;
+    if (this.shadowsStale || leaving || (posing && this.sinceShadows >= 0.1)) {
+      gl.shadowMap.needsUpdate = true;
+      this.shadowsStale = false;
+      this.sinceShadows = 0;
+    }
   }
 
   /** Building labels only make sense in the overview shots; close-ups hide them. */
@@ -1310,8 +1486,10 @@ export class BastionSet implements StageSet {
     const key = JSON.stringify(entries);
     if (key === this.lineupKey) return;
     this.lineupKey = key;
+    for (const o of this.lineup.children) if (o.userData.lane) (o as THREE.Mesh).geometry.dispose();
     this.lineup.clear();
     this.rigs.length = 0;
+    this.shadowsStale = true;
     const shown = entries.slice(0, LINEUP);
     // A lane painted from the bus's doorway to the open front, between the two commanders' halves.
     if (shown.length > 1) {
@@ -1319,7 +1497,11 @@ export class BastionSet implements StageSet {
       const x = (this.padPosition(half - 1, shown.length).x + this.padPosition(half, shown.length).x) / 2;
       const paint = mat(0x2a2a10, { emissive: 0xffc93a, intensity: 0.7 });
       const from = HANGAR.z + BUS_Z + 1.55;
-      for (let k = 0; k < 6; k++) this.lineup.add(Object.assign(box(0.1, 0.02, 0.32, paint, x, HANGAR.y + FLOOR, from + 0.2 + k * 0.55), { castShadow: false }));
+      const dashes = Array.from({ length: 6 }, (_, k) => new THREE.BoxGeometry(0.1, 0.02, 0.32).translate(x, HANGAR.y + FLOOR + 0.01, from + 0.2 + k * 0.55));
+      const lane = new THREE.Mesh(mergeGeometries(dashes), paint);
+      for (const d of dashes) d.dispose();
+      lane.userData.lane = true;
+      this.lineup.add(lane);
     }
     shown.forEach((entry, i) => {
       const at = this.padPosition(i, shown.length);
@@ -1365,6 +1547,7 @@ export class BastionSet implements StageSet {
     const turned = this.showcaseRig?.root.rotation.y ?? 0;
     this.showcase.clear();
     this.showcaseRig = null;
+    this.shadowsStale = true;
     if (!template) return;
     const rig = buildUnit(template, color, appearance, gear, seed);
     rig.root.rotation.y = turned;
@@ -1413,9 +1596,13 @@ export class BastionSet implements StageSet {
   tick(dt: number, time: number): void {
     this.shellFx.tick(time);
     this.gridFx.tick(time);
+    // Beacons blink and flames flicker by their shared materials.
+    BLINK.red.emissiveIntensity = Math.sin(time * 3) > -0.3 ? 2.6 : 0.05;
+    BLINK.amber.emissiveIntensity = Math.sin(time * 3 + 2.1) > -0.3 ? 2.5 : 0.05;
+    FLAME.emissiveIntensity = 2.3 + Math.sin(time * 13) * 0.45 + Math.sin(time * 7.3) * 0.3;
     if (this.showcaseRig) this.showcaseRig.root.rotation.y += dt * 0.35;
-    for (const bar of this.frame.children) ((bar as THREE.Mesh).material as THREE.MeshBasicMaterial).color.setHSL(0.55, 1, 0.55 + Math.sin(time * 5) * 0.15);
-    ((this.hoverFrame.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.65 + Math.sin(time * 6) * 0.25;
+    ((this.frame as THREE.Mesh).material as THREE.MeshBasicMaterial).color.setHSL(0.55, 1, 0.55 + Math.sin(time * 5) * 0.15);
+    ((this.hoverFrame as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.65 + Math.sin(time * 6) * 0.25;
     // Take-off: the squad runs to the doors in two files and climbs in.
     const since = this.launching ? (performance.now() - this.launching) / 1000 : -1;
     const boarded = BOARD_SECONDS + BOARD_STAGGER * Math.max(0, this.rigs.length - 1);

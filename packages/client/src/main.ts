@@ -62,7 +62,7 @@ const lobby = new Lobby(
       trace('entrar: conectando');
       net.connect(name);
     },
-    onStart: (mission, map, veterans) => net.send({ t: 'start', mission, map, veterans }),
+    onStart: (mission, map, veterans, night) => net.send({ t: 'start', mission, map, veterans, night }),
     onNewCampaign: () => net.send({ t: 'newCampaign' }),
     onContinueCampaign: () => net.send({ t: 'continueCampaign' }),
   },

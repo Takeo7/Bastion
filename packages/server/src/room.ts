@@ -74,6 +74,7 @@ export class Room {
   /** The interface theme both players see: whoever changes it last, for the two (not saved). */
   private uiTheme: string | null = null;
   private skirmishVeterans = true;
+  private skirmishNight = false;
 
   constructor(
     private readonly store: SaveStore,
@@ -96,6 +97,7 @@ export class Room {
     this.missionKind = saved.missionKind;
     this.skirmishMap = saved.skirmishMap;
     this.skirmishVeterans = saved.skirmishVeterans ?? true;
+    this.skirmishNight = saved.skirmishNight ?? false;
     console.log(`[room] Partida restaurada (${this.phase}${this.campaign ? `, campaña día ${this.campaign.day}` : ''}).`);
   }
 
@@ -180,11 +182,14 @@ export class Room {
       case 'start':
         if (this.phase === 'lobby') {
           if (msg.veterans !== undefined) this.skirmishVeterans = msg.veterans;
+          if (msg.night !== undefined) this.skirmishNight = msg.night;
           this.startSkirmish(msg.mission, msg.map);
         }
         break;
       case 'newMission':
-        if (this.phase === 'mission' && this.mode === 'skirmish' && this.state?.outcome) this.startSkirmish(msg.mission, msg.map);
+        if (this.phase !== 'mission' || this.mode !== 'skirmish' || !this.state?.outcome) return;
+        if (msg.night !== undefined) this.skirmishNight = msg.night;
+        this.startSkirmish(msg.mission, msg.map);
         break;
 
       // ---- campaign
@@ -283,9 +288,9 @@ export class Room {
     this.skirmishMap = map;
     this.mode = 'skirmish';
     const source: MapSource = map === 'plaza' ? { kind: 'handmade', id: 'plaza' } : { kind: 'generated', biome: map, seed: this.rng.int(2 ** 31) };
-    this.state = createMission({ map: source, slots, rng: this.rng, kind, veterans: this.skirmishVeterans });
+    this.state = createMission({ map: source, slots, rng: this.rng, kind, veterans: this.skirmishVeterans, night: this.skirmishNight });
     this.phase = 'mission';
-    console.log(`[room] Escaramuza (${kind}, ${this.state.mapName}) con ${slots.length} jugador(es).`);
+    console.log(`[room] Escaramuza (${kind}${this.skirmishNight ? ', de noche' : ''}, ${this.state.mapName}) con ${slots.length} jugador(es).`);
     this.broadcastRoom();
     this.broadcast({ t: 'snapshot', state: this.state });
     this.persist();
@@ -327,6 +332,7 @@ export class Room {
       slots: c.players,
       rng: this.rng,
       kind: offer.kind,
+      night: offer.night,
       squad: buildSquad(c),
       pods: offer.pods,
       difficulty: offer.difficulty,
@@ -379,6 +385,11 @@ export class Room {
       .map((s) => s.slot);
   }
 
+  /** Who is playing and where, for the app's announcement on the local network (index.ts). */
+  summary(): { players: string[]; phase: RoomPhase } {
+    return { players: this.players().filter((p) => p.connected).map((p) => p.name), phase: this.phase };
+  }
+
   private players(): PlayerInfo[] {
     return this.seats
       .filter((s): s is Seat => s !== null)
@@ -415,6 +426,7 @@ export class Room {
       missionKind: this.missionKind,
       skirmishMap: this.skirmishMap,
       skirmishVeterans: this.skirmishVeterans,
+      skirmishNight: this.skirmishNight,
     });
   }
 }

@@ -233,8 +233,8 @@ export type ItemId = 'fragGrenade' | 'smokeGrenade' | 'flashbang' | 'firstAid' |
 export type ItemSlot = 'utility' | 'ammo';
 
 /**
- * One thing found searching (docs/FASE2.md): exactly one of the three is set.
- * Each takes a slot of the backpack. Same shape as lore.ts SearchFind.
+ * One thing found searching (docs/FASE2.md, FASE4.md): exactly one is set.
+ * Each takes a slot of the backpack. The first three are lore.ts SearchFind's.
  */
 export interface Loot {
   /** Suministros (credits in the campaign). */
@@ -243,7 +243,16 @@ export interface Loot {
   item?: ItemId;
   /** Medicines (a counter in the campaign; phase 3 uses them). */
   medicines?: number;
+  /** Rations (docs/FASE4.md): the Bastion eats every day. */
+  food?: number;
+  /** Parts, for the Taller to make weapons and armour. */
+  parts?: number;
+  /** A good weapon (content.ts FOUND_WEAPONS): to the Armería, for one soldier. */
+  weapon?: FoundWeaponId;
 }
+
+/** Weapons found searching (docs/FASE4.md, content.ts FOUND_WEAPONS): each counts as one class weapon. */
+export type FoundWeaponId = 'huntingRifle' | 'sawnOff' | 'scopedRifle' | 'lightMachineGun';
 
 /** What a successful Mindspin does to its victim ('controlled' only in missions saved before the zombies: the Chillón's scream never takes control). */
 export type PsiEffect = 'disoriented' | 'panicked' | 'controlled';
@@ -520,6 +529,8 @@ export interface Unit {
   /** Campaign soldiers: weapon and armour tier they carry (1 when absent). */
   weaponTier?: number;
   armorTier?: number;
+  /** Campaign soldiers carrying a found weapon (docs/FASE4.md): its name, for the card; absent, the class weapon of its tier. */
+  weaponName?: string;
   /** Mission objective (the relay): never acts, doesn't count as a hostile. */
   objective: boolean;
   /** VIP waiting to be reached: can't act and the aliens ignore them. */
@@ -567,6 +578,8 @@ export interface Unit {
   heard?: Vec2 | null;
   /** Soldiers: what they found searching (BACKPACK_SLOTS at most). It counts if they get out or stand at a victory. */
   backpack?: Loot[];
+  /** Bitten and infected (docs/FASE3.md): no effect in combat, but if it falls it rises, and back at base it turns. */
+  infected?: boolean;
 }
 
 /** Silencio: inside, the Cantores can't sing. */
@@ -575,6 +588,21 @@ export interface SilenceZone {
   radius: number;
   /** XCOM turns it still lasts. */
   turns: number;
+}
+
+/**
+ * Light at night (docs/ALTURA-Y-NOCHE.md): whoever stands on a tile it lights
+ * is seen from as far as by day. The map's street lights never go out; a
+ * Bengala's light and fire last `turns` of the squad's turns.
+ */
+export interface Light {
+  id: string;
+  tile: Vec2;
+  radius: number;
+  /** Squad turns it still lasts; absent for the map's own lights. */
+  turns?: number;
+  /** The tiles it lights (index = y * width + x): within `radius` and in its line of sight (los.ts lightTiles). */
+  tiles?: number[];
 }
 
 /** A smoke cloud: units inside are harder to hit. */
@@ -635,6 +663,8 @@ export interface MissionState {
   noise?: number;
   /** Saqueo: who comes in each wave of the horde; absent on missions without one. */
   horde?: TemplateId[];
+  /** A night mission (docs/ALTURA-Y-NOCHE.md): the living see less, light matters. Missing in older saves: day. */
+  night?: boolean;
 }
 
 export interface GameState {
@@ -658,6 +688,15 @@ export interface GameState {
    * (blown up) is drawn from its kind.
    */
   decor?: Decor[];
+  /**
+   * Storeys of the building each tile belongs to (its walls and its inside),
+   * 0 outside buildings (procedural maps; missing on hand-made maps and older
+   * saves, which see as if every building were one storey). In a building of
+   * two or more, walls and windows stop sight up to its roof (los.ts).
+   */
+  storeys?: number[];
+  /** Lit tiles at night: the map's street lights, Bengalas and fires (missing in older saves). */
+  lights?: Light[];
   units: Unit[];
   pods: Pod[];
   mission: MissionState;

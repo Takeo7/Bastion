@@ -1,5 +1,6 @@
-import { autoBuild, baseAttrs, soldierStats } from './classes';
-import { AP_PER_TURN, RECOVERY_TURNS, SOLDIER_NAMES, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS } from './content';
+import { autoBuild, baseAttrs, CENTER, learnTalent, soldierStats, talentBlocker, talentPointsFree, talentsOf, type Build, type TalentDef } from './classes';
+import { AP_PER_TURN, NIGHT, RECOVERY_TURNS, SOLDIER_NAMES, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS } from './content';
+import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import type { Rng } from './rng';
@@ -30,6 +31,8 @@ export interface SquadMember {
   appearance?: Appearance;
   weaponTier?: number;
   armorTier?: number;
+  /** A found weapon's name, when the soldier carries one (docs/FASE4.md). */
+  weaponName?: string;
   owner: Slot;
   /** The class, or 'rookie' for a recruit with no class yet. */
   template: TemplateId;
@@ -71,6 +74,35 @@ export interface MissionOptions {
   vipName?: string;
   /** Names the first enemy of this kind (a side quest's leader). */
   leader?: { template: TemplateId; name: string };
+  /** A night mission (docs/ALTURA-Y-NOCHE.md): one more group of the dead, and the living see less. */
+  night?: boolean;
+}
+
+/** The Taller de oficios skirmish veterans trained in, as if built at its top level: a skirmish has no base. */
+const SKIRMISH_ECHOES = 3;
+
+/**
+ * A skirmish veteran (classes.ts autoBuild). One in three also practises the
+ * Oficio of its class: its talents are spent again, about half of them on
+ * that branch (the Taller de oficios as if built), the rest as autoBuild
+ * spreads them, leaning on one main branch.
+ */
+function veteranBuild(cls: ClassId, rank: number, rng: Rng): Build {
+  const b = autoBuild(cls, rank, rng);
+  if (rng.int(3) !== 0) return b;
+  b.talents = {};
+  const learn = (pool: TalentDef[], keep: number, weight: (d: TalentDef) => number) => {
+    while (talentPointsFree(b) > keep) {
+      const open = pool.filter((d) => !talentBlocker(b, d.id, SKIRMISH_ECHOES));
+      if (!open.length) return;
+      let roll = rng.int(open.reduce((n, d) => n + weight(d), 0));
+      learnTalent(b, open.find((d) => (roll -= weight(d)) < 0)!.id);
+    }
+  };
+  learn(talentsOf(cls).filter((d) => d.song), Math.floor(talentPointsFree(b) / 2), () => 1);
+  const main = rng.int(3);
+  learn([...talentsOf(cls), ...CENTER], 0, (d) => (d.axis === null ? 1 : d.song ? 2 : d.branch === main ? 6 : 2));
+  return b;
 }
 
 export function makeUnit(id: string, template: TemplateId, name: string, owner: Slot | null, pos: Vec2, podId: string | null): Unit {
@@ -128,6 +160,14 @@ export const MISSION_NAMES: Record<MissionKind, string> = {
   rescue: 'Rescate',
   scavenge: 'Saqueo',
 };
+
+/** How a night mission is labelled (placeholder for Lore). */
+export const NIGHT_LABEL = 'De noche';
+
+/** The extra group of the dead a night mission starts with (NIGHT in content.ts). */
+export function nightPod(difficulty: number): TemplateId[] {
+  return difficulty >= 3 ? ['zombie', 'zombie', 'xenoid'] : ['zombie', 'zombie'];
+}
 
 export const BIOME_NAMES: Record<Biome, string> = {
   city: 'Ciudad',
@@ -239,7 +279,9 @@ export function createMission(opts: MissionOptions): GameState {
   const difficulty = opts.difficulty ?? 2;
   const handmade = opts.map.kind === 'handmade' ? MAPS[opts.map.id] : undefined;
   let kind = opts.kind ?? 'elimination';
-  const plan = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : kind === 'scavenge' ? scavengePlan(difficulty) : podPlan(difficulty));
+  const base = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : kind === 'scavenge' ? scavengePlan(difficulty) : podPlan(difficulty));
+  // At night the dead are out in force: one more group (a hand-made map has no room for it).
+  const plan = opts.night ? [...base, nightPod(difficulty)] : base;
   const layout = missionLayout(opts.map, kind, plan.map((p) => p.length));
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
@@ -273,6 +315,7 @@ export function createMission(opts: MissionOptions): GameState {
         appearance: m.appearance ? { ...m.appearance } : undefined,
         weaponTier: m.weaponTier,
         armorTier: m.armorTier,
+        ...(m.weaponName ? { weaponName: m.weaponName } : {}),
         will: m.will,
         armor: m.armor,
         gear: [...m.gear],
@@ -285,7 +328,7 @@ export function createMission(opts: MissionOptions): GameState {
       const cls = SQUAD_CLASSES[i % SQUAD_CLASSES.length]!;
       const u = makeUnit(`s${i + 1}`, cls, names[i]!, owner, layout.spawns[i]!, null);
       const rank = opts.veterans ? 3 + opts.rng.int(3) : 0;
-      const build = opts.veterans ? autoBuild(cls, rank, opts.rng) : { cls, rank, attrs: baseAttrs(cls), talents: {} };
+      const build = opts.veterans ? veteranBuild(cls, rank, opts.rng) : { cls, rank, attrs: baseAttrs(cls), talents: {} };
       const stats = soldierStats(build);
       units.push({ ...u, rank, perks: stats.perks, mods: stats.mods, maxHp: stats.maxHp, hp: stats.maxHp, charges: stats.charges, will: stats.will, armor: stats.armor });
     }
@@ -337,13 +380,14 @@ export function createMission(opts: MissionOptions): GameState {
     reinforcements,
     difficulty,
     ...(kind === 'scavenge' ? { horde: [...HORDE_WAVES[Math.max(1, Math.min(4, difficulty))]!] } : {}),
+    night: !!opts.night,
   };
 
   const tiles = [...layout.tiles];
   // The terminal only exists on hack missions (hand-made maps add it on demand).
   if (kind !== 'hack' && layout.terminal) tiles[layout.terminal.y * layout.width + layout.terminal.x] = 'floor';
 
-  return {
+  const state: GameState = {
     seq: 0,
     mapId: layout.id,
     mapName: layout.name,
@@ -354,6 +398,8 @@ export function createMission(opts: MissionOptions): GameState {
     elev: [...layout.elev],
     ...(layout.ground ? { ground: [...layout.ground] } : {}),
     ...(layout.decor ? { decor: [...layout.decor] } : {}),
+    ...(layout.storeys ? { storeys: [...layout.storeys] } : {}),
+    lights: [],
     units,
     pods,
     mission,
@@ -367,4 +413,12 @@ export function createMission(opts: MissionOptions): GameState {
     campaignMission: opts.campaignMission ?? null,
     smoke: [],
   };
+  // The map's street lights (they never go out): each lights what its lamp sees round it, worked out once.
+  state.lights = (layout.lights ?? []).map((tile, i) => ({
+    id: `l${i + 1}`,
+    tile: { ...tile },
+    radius: NIGHT.streetLight,
+    tiles: lightTiles(state, tile, NIGHT.streetLight, NIGHT.lampHeight),
+  }));
+  return state;
 }

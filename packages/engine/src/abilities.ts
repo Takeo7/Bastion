@@ -21,7 +21,7 @@ import { TALENTS } from './classes';
 import { hasAnyCover } from './cover';
 import { canStandOn, DIRS8, distance, inBounds, sameTile, tileAt, unitAt } from './grid';
 import { backpackRoom, reachesToSearch, searchable, searchableTiles, searchSpot } from './loot';
-import { canSee, canSeeTile, isViewer, sightOf } from './los';
+import { canSee, canSeeTile, isViewer, sightTo } from './los';
 import { buildPath, computeReach, costPerAp } from './path';
 import type { AbilityId, AttackAbility, BlastAbility, GameState, Unit, Vec2 } from './types';
 
@@ -46,7 +46,7 @@ export function canHackFrom(s: GameState, u: Unit, from: Vec2 = u.pos): boolean 
   const t = s.mission.terminal;
   if (!t) return false;
   if (adjacent(from, t)) return true;
-  return u.template === 'specialist' && distance(from, t) <= (ABILITIES.hack.range ?? 0) && canSeeTile(s, from, t, TEMPLATES[u.template].sight);
+  return u.template === 'specialist' && distance(from, t) <= (ABILITIES.hack.range ?? 0) && canSeeTile(s, from, t, sightTo(s, u, t));
 }
 
 export function hackChance(s: GameState, u: Unit): number {
@@ -224,7 +224,7 @@ export function corpseTargets(s: GameState, u: Unit): Unit[] {
       !TEMPLATES[t.template].robotic &&
       t.template !== 'zombie' &&
       distance(u.pos, t.pos) <= range &&
-      canSeeTile(s, u.pos, t.pos, sightOf(u)),
+      canSeeTile(s, u.pos, t.pos, sightTo(s, u, t.pos)),
   );
 }
 
@@ -267,8 +267,8 @@ export function canTargetTile(s: GameState, u: Unit, ability: AbilityId, tile: V
   if (def.target !== 'tile' || !inBounds(s, tile.x, tile.y)) return false;
   if (distance(u.pos, tile) > abilityRange(u, ability)) return false;
   if (ability === 'search') return searchable(s, tile) && reachesToSearch(s, u.pos, tile);
-  if (def.teleport) return !sameTile(u.pos, tile) && canStandOn(tileAt(s, tile.x, tile.y)) && !unitAt(s, tile) && canSeeTile(s, u.pos, tile, sightOf(u));
-  return s.units.some((o) => isViewer(o, u.team) && canSeeTile(s, o.pos, tile, sightOf(o)));
+  if (def.teleport) return !sameTile(u.pos, tile) && canStandOn(tileAt(s, tile.x, tile.y)) && !unitAt(s, tile) && canSeeTile(s, u.pos, tile, sightTo(s, u, tile));
+  return s.units.some((o) => isViewer(o, u.team) && canSeeTile(s, o.pos, tile, sightTo(s, o, tile)));
 }
 
 /** Reach of a targeted ability for this unit (talents can lengthen grenade throws). */

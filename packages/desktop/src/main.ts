@@ -9,6 +9,7 @@ import { app, BrowserWindow, ipcMain, Menu, shell, utilityProcess, type IpcMainI
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
+import { listen, type LanGame } from '../../server/src/lan';
 
 // Saves, settings and red.log in a folder with a plain name: …/Application Support/Bastion, %APPDATA%\Bastion.
 // BASTION_DATOS points it elsewhere (tests, a second copy on the same machine).
@@ -35,6 +36,9 @@ const SETTINGS = (): string => join(app.getPath('userData'), 'escritorio.json');
 let win: BrowserWindow | null = null;
 let server: UtilityProcess | null = null;
 let serverPort = 0;
+/** Games heard on the local network while the start screen is up, and the stop for that listening. */
+let games: LanGame[] = [];
+let stopListening: (() => void) | null = null;
 
 // ------------------------------------------------------------------ server
 
@@ -72,8 +76,8 @@ async function startServer(): Promise<number> {
   const port = await freePort(FIRST_PORT);
   const data = app.getPath('userData');
   mkdirSync(data, { recursive: true });
-  // No https port: no certificate to make or to accept.
-  const args = ['--port', String(port), '--https-port', '0', '--save', join(data, 'save.json'), '--client', CLIENT];
+  // No https port: no certificate to make or to accept. Announced on the local network, so partners find it.
+  const args = ['--port', String(port), '--https-port', '0', '--save', join(data, 'save.json'), '--client', CLIENT, '--anunciar'];
   const child = utilityProcess.fork(SERVER, args, { serviceName: 'Bastión (servidor)', stdio: 'pipe' });
   child.stdout?.on('data', (d: Buffer) => process.stdout.write(d));
   child.stderr?.on('data', (d: Buffer) => process.stderr.write(d));
@@ -122,7 +126,26 @@ function writeSettings(s: Settings): void {
 /** The start screen: host a game or join one. `note` says why we are back, if something went wrong. */
 async function showLauncher(note = ''): Promise<void> {
   if (!win || win.isDestroyed()) return;
+  listenForGames();
   await win.loadFile(join(__dirname, 'launcher.html'), { query: note ? { aviso: note } : {} });
+}
+
+/** While the start screen is up, the games announced on the network go to it (server lan.ts); not this app's own. */
+function listenForGames(): void {
+  if (stopListening) return;
+  stopListening = listen(
+    (heard) => {
+      games = heard;
+      if (win && !win.isDestroyed() && win.webContents.getURL().startsWith('file:')) win.webContents.send('bastion:games', games);
+    },
+    (port) => port === serverPort,
+  );
+}
+
+function stopListeningForGames(): void {
+  stopListening?.();
+  stopListening = null;
+  games = [];
 }
 
 function createWindow(): BrowserWindow {
@@ -132,6 +155,7 @@ function createWindow(): BrowserWindow {
     minWidth: 1024,
     minHeight: 640,
     title: 'Bastión',
+    icon: join(__dirname, 'icon.png'),
     backgroundColor: '#0d0f12',
     show: false,
     autoHideMenuBar: true,
@@ -167,13 +191,14 @@ function normalise(address: string): string | null {
 
 ipcMain.handle('bastion:info', (e) => {
   if (!fromLauncher(e)) return null;
-  return { last: readSettings().last ?? '', version: app.getVersion(), uncapped: UNCAPPED };
+  return { last: readSettings().last ?? '', version: app.getVersion(), uncapped: UNCAPPED, games };
 });
 
 ipcMain.handle('bastion:host', async (e): Promise<string | null> => {
   if (!fromLauncher(e) || !win) return null;
   try {
     const port = await startServer();
+    stopListeningForGames();
     await win.loadURL(`http://localhost:${port}/`);
     return null;
   } catch (err) {
@@ -189,6 +214,7 @@ ipcMain.handle('bastion:join', async (e, address: unknown): Promise<string | nul
     return `No responde nadie en ${target}. ¿Tiene abierta la partida (Ser anfitrión) y estáis en la misma red o en Tailscale?`;
   }
   writeSettings({ ...readSettings(), last: target });
+  stopListeningForGames();
   await win.loadURL(`http://${target}/`);
   return null;
 });
@@ -248,6 +274,8 @@ else {
   });
   void app.whenReady().then(async () => {
     app.setAboutPanelOptions({ applicationName: 'Bastión', applicationVersion: app.getVersion() });
+    // Packaged, the bundle carries the icon; running from the sources, the Dock would show Electron's.
+    if (!app.isPackaged) app.dock?.setIcon(join(__dirname, 'icon.png'));
     buildMenu();
     win = createWindow();
     await showLauncher();
@@ -258,5 +286,8 @@ else {
     void showLauncher();
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => server?.kill());
+  app.on('before-quit', () => {
+    stopListeningForGames();
+    server?.kill();
+  });
 }

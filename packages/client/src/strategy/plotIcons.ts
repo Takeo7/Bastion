@@ -24,6 +24,8 @@ const ICONS: Record<FacilityId | FixedBuildingId | Exclude<Terrain, 'clear'> | '
   listening: svg('<path d="M12 12v9M8 21h8"/><path d="M8.5 8.5a5 5 0 0 1 7 0M6 6a8.5 8.5 0 0 1 12 0"/><circle cx="12" cy="11" r="1.2" fill="currentColor"/>'),
   echoes: svg('<path d="M9 3v8a3 3 0 0 0 6 0V3"/><path d="M12 14v7"/><path d="M5 8c-1.5 2-1.5 4 0 6M19 8c1.5 2 1.5 4 0 6"/>'),
   memorial: svg('<path d="M12 3v18M7 8h10"/><path d="M4 21h16"/>'),
+  // Placeholder until UX/UI draws it (docs/FASE4.md): a sprout over a bed.
+  garden: svg('<path d="M3 20h18M5 20v-3h14v3"/><path d="M12 17V9"/><path d="M12 12c-3 0-5-2-5-5 3 0 5 2 5 5zM12 10c0-3 2-5 5-5 0 3-2 5-5 5z"/>'),
   relay: svg('<path d="M12 9l-5 12M12 9l5 12M9 16h6"/><circle cx="12" cy="7" r="2"/><path d="M7 4a7 7 0 0 0 0 6M17 4a7 7 0 0 1 0 6"/>'),
   // Terrain still to clear.
   rocks: svg('<path d="M3 19l5-9 3 4 3-6 7 11z"/>'),

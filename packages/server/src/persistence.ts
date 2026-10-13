@@ -23,6 +23,8 @@ export interface SaveFile {
   missionKind: MissionKind;
   skirmishMap: SkirmishMap;
   skirmishVeterans: boolean;
+  /** Skirmishes at night (docs/ALTURA-Y-NOCHE.md); missing in older saves: by day. */
+  skirmishNight?: boolean;
 }
 
 /**

@@ -107,11 +107,11 @@ async function molotovIcon(): Promise<THREE.Object3D> {
  */
 async function mulaIcon(): Promise<THREE.Object3D> {
   await loadBaseKit();
-  const model = kitModel('bus');
+  const model = kitModel('mulaBus');
   if (!model) throw new Error('La Mula did not load');
   const body = new THREE.Group();
   const doorCentres: THREE.Vector3[] = [];
-  for (const part of kitMesh('bus', 'plain').children.slice()) {
+  for (const part of kitMesh('mulaBus', 'plain').children.slice()) {
     const mesh = part as THREE.Mesh;
     if (/door/i.test(mesh.name) && !/glass/i.test(mesh.name)) {
       mesh.geometry.computeBoundingBox();

@@ -24,8 +24,10 @@ import {
   coverAgainst,
   coverSides,
   destinations,
+  detectionTo,
   DIRS8,
   ENEMY_FILES,
+  FOUND_WEAPONS,
   distance,
   endsTurn,
   getUnit,
@@ -34,6 +36,7 @@ import {
   hasPerk,
   HORDE,
   isAttack,
+  isLit,
   ITEM_FINDS,
   lootSummary,
   lootTotals,
@@ -41,6 +44,8 @@ import {
   MEDKIT_HEAL,
   meleeTargets,
   MISSION_NAMES,
+  NIGHT,
+  NIGHT_LABEL,
   NOISE,
   noiseOf,
   PLAYER_COLORS,
@@ -54,6 +59,7 @@ import {
   searchLine,
   searchSpot,
   sightOrigin,
+  sightTo,
   songTargets,
   STORM_TARGETS,
   STORY,
@@ -74,6 +80,7 @@ import {
   type GameEvent,
   type GameState,
   type Loot,
+  type LootTotals,
   type MissionKind,
   type PingKind,
   type PlayerInfo,
@@ -142,8 +149,19 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
   aided: 0.5,
   evacuated: 0.4,
   searched: 0.7,
+  infected: 0.75,
   moved: 0.12,
 };
+
+/**
+ * Night missions (docs/ALTURA-Y-NOCHE.md §2), as the HUD explains them; the
+ * lines are placeholders for Lore. `NIGHT_RULES` goes in the «De noche» tag's
+ * tooltip and the log, `NIGHT_RADIO` is Morse on the first turn, `LIGHT_LINES`
+ * what a Bengala or a fire lights up.
+ */
+const NIGHT_RULES = `De noche: los vivos ven ${NIGHT.sightCut} casillas menos (${NIGHT.minSight} como mínimo) y os detectan a la mitad de distancia. A la luz de una farola, una bengala o un fuego os ven como de día.`;
+const NIGHT_RADIO = 'Noche cerrada. Se ve poco: id pegados a las farolas o llevad bengalas.';
+const LIGHT_LINES = { bolt: 'La bengala ilumina la calle', fire: 'El fuego ilumina la zona' } as const;
 
 /** What attack variants do besides the odds shown in the panel. */
 const ATTACK_NOTES: Partial<Record<AttackAbility, string>> = {
@@ -274,18 +292,75 @@ function moveNoise(s: GameState, path: Vec2[], dash: boolean): string | null {
   return `Ruido ${parts[0]![0]}: ${parts.map((p) => p[1]).join(', ')}`;
 }
 
-/** What a search turned up, short, to float over the furniture: «+12 §», «Un botiquín», «Medicinas», «Nada». */
+/**
+ * What a search turned up, short, to float over the furniture: «+12 §», «Un
+ * botiquín», «Medicinas», «+2 ◍» (rations), «+1 ⚙» (parts), a found weapon's
+ * name, or «Nada».
+ */
 function findText(loot: Loot | null): string {
   const parts: string[] = [];
   if (loot?.supplies) parts.push(`+${loot.supplies} §`);
   if (loot?.item) parts.push(capitalize(ITEM_FINDS[loot.item]));
   if (loot?.medicines) parts.push('Medicinas');
+  if (loot?.food) parts.push(`+${loot.food} ◍`);
+  if (loot?.parts) parts.push(`+${loot.parts} ⚙`);
+  if (loot?.weapon) parts.push(FOUND_WEAPONS[loot.weapon].name);
   return parts.join(' · ') || 'Nada';
+}
+
+/** «4 raciones», «una pieza»: rations and parts (docs/FASE4.md) as the log and the haul say them. Placeholder words for Lore. */
+function rations(n: number): string {
+  return n === 1 ? 'una ración' : `${n} raciones`;
+}
+
+function partsOf(n: number): string {
+  return n === 1 ? 'una pieza' : `${n} piezas`;
+}
+
+function joinAnd(parts: string[]): string {
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : (parts[0] ?? '');
+}
+
+/**
+ * The log line for a search. Lore's `searchLine` names supplies, accessories
+ * and medicines; rations, parts and found weapons (docs/FASE4.md) are said
+ * here until it does.
+ */
+function findLine(who: string, decor: DecorKind, loot: Loot | null, seed: number): string {
+  if (!loot?.food && !loot?.parts && !loot?.weapon) return searchLine(who, decor, loot, seed);
+  const what = [loot.food ? rations(loot.food) : '', loot.parts ? partsOf(loot.parts) : '', loot.weapon ? FOUND_WEAPONS[loot.weapon].find : ''].filter(Boolean);
+  return `${who} registra ${SEARCH_SPOTS[decor]?.name ?? 'el mueble'}: ${joinAnd(what)}.`;
+}
+
+/**
+ * What a squad carries or brought home, in one line: Lore's `lootSummary`
+ * («El botín: +34 §, un botiquín y 2 medicinas.») with the rations, parts and
+ * weapons of docs/FASE4.md added. Null with nothing.
+ */
+function haulText(t: LootTotals): string | null {
+  const extra = [t.food ? rations(t.food) : '', t.parts ? partsOf(t.parts) : '', ...t.weapons.map((w) => FOUND_WEAPONS[w].find)].filter(Boolean);
+  const base = lootSummary(t.supplies, t.items, t.medicines);
+  if (!extra.length) return base;
+  const before = [t.supplies ? `+${t.supplies} §` : '', ...t.items.map((id) => ITEM_FINDS[id]), t.medicines ? (t.medicines === 1 ? '1 medicina' : `${t.medicines} medicinas`) : ''].filter(Boolean);
+  return `El botín: ${joinAnd([...before, ...extra])}.`;
+}
+
+/** The weapon an attack is made with, by name: a found weapon carried as the main one keeps its own («Fusil de caza», docs/FASE4.md). */
+function weaponLabel(u: Unit, ability: AttackAbility): string {
+  const weapon = attackWeapon(u, ability);
+  return u.weaponName && weapon.id === TEMPLATES[u.template].weapon ? u.weaponName : weapon.name;
 }
 
 /** A backpack's things, one slot each, for the sheet. */
 function packSlots(loot: readonly Loot[]): PackSlot[] {
-  return loot.map((l): PackSlot => (l.item ? { kind: 'item', item: l.item } : l.medicines ? { kind: 'medicines', amount: l.medicines } : { kind: 'supplies', amount: l.supplies ?? 0 }));
+  return loot.map((l): PackSlot => {
+    if (l.item) return { kind: 'item', item: l.item };
+    if (l.weapon) return { kind: 'weapon', weapon: l.weapon };
+    if (l.medicines) return { kind: 'medicines', amount: l.medicines };
+    if (l.food) return { kind: 'food', amount: l.food };
+    if (l.parts) return { kind: 'parts', amount: l.parts };
+    return { kind: 'supplies', amount: l.supplies ?? 0 };
+  });
 }
 
 /** Which edge of the map a tile is nearest to, as the radio says it (the map's top row is the north). */
@@ -425,6 +500,8 @@ export class Game {
   private hasSpots = false;
   /** With Registrar armed, the furniture it would search (Tab or a click picks another). */
   private searchPick: Vec2 | null = null;
+  /** A bitten soldier of ours has risen in this mission already: the stamp only comes the first time. */
+  private risenSeen = false;
 
   private readonly raycaster = new THREE.Raycaster();
   private drag: { x: number; y: number; moved: boolean } | null = null;
@@ -512,6 +589,8 @@ export class Game {
     this.hasSpots = false;
     for (let i = 0; i < s.width * s.height && !this.hasSpots; i++) this.hasSpots = searchSpot(s, { x: i % s.width, y: Math.floor(i / s.width) }) !== null;
     this.mapView.build(this.view);
+    // Night missions (docs/ALTURA-Y-NOCHE.md): the sky and the sun; a day mission after a night one turns them back.
+    this.renderer.setNight(!!this.view.mission.night);
     this.units.build(this.view);
     if (!s.outcome) this.sfx.start(s.biome, !s.concealed);
     this.selected = null;
@@ -532,11 +611,16 @@ export class Game {
     this.hud.intro(
       s.campaignMission?.kicker ?? (chapter ? `EXPEDIENTE · HOJA ${chapter}` : s.campaignMission ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA'),
       s.campaignMission?.name ?? MISSION_NAMES[s.mission.kind],
-      [s.mapName, mission.objective, mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
+      [s.mapName, s.mission.night ? NIGHT_LABEL : '', mission.objective, mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
     );
     // The briefing stays 4.2 s and fades for 0.8: no warning plays over it.
     this.tips.intro(5000, s);
     this.storyRadio('start');
+    // A night mission: Morse says so once the briefing is gone, and the log keeps the rules.
+    if (s.mission.night) {
+      this.tips.story(NIGHT_RADIO);
+      this.hud.log(NIGHT_RULES, '#2a4a7a');
+    }
     void this.openingShot();
   }
 
@@ -1004,20 +1088,37 @@ export class Game {
         return;
       }
       case 'reanimated': {
-        const u = getUnit(v, e.unit)!;
+        // No `unit`: an infected soldier rising by itself (docs/FASE3.md), with no Chillón to shriek.
+        const u = e.unit ? getUnit(v, e.unit) : undefined;
         const corpse = getUnit(v, e.corpse)!;
         const at = tileToWorld(corpse.pos, 0.5);
         look(at);
-        this.units.forceVisible(u.id);
+        if (u) this.units.forceVisible(u.id);
+        // A fallen soldier of ours: the camera settles on the body a moment before it moves.
+        if (!u && cam()) await wait(0.6);
         // The Chillón shrieks; the dead answer with a moan.
-        this.sfx.psi(this.units.chestPos(u.id));
+        if (u) this.sfx.psi(this.units.chestPos(u.id));
         this.sfx.moan(at);
-        await this.fx.psiBeam(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.35, 0)), at);
+        if (u) await this.fx.psiBeam(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.35, 0)), at);
         this.fx.evacBeam(tileToWorld(corpse.pos));
         await this.units.reanimate(corpse.id, e.zombie);
-        this.fx.floatText(at, 'SE LEVANTA', 'crit');
-        this.hud.log(`El grito de un Chillón levanta el cuerpo de ${corpse.name}`, '#e8d8c0');
-        await wait(0.6);
+        this.fx.floatText(tileToWorld(e.zombie.pos, 0.5), 'SE LEVANTA', 'crit');
+        this.hud.log(u ? `El grito de un Chillón levanta el cuerpo de ${corpse.name}` : `Mordieron a ${corpse.name}: se levanta`, '#e8d8c0');
+        // The first of the squad to rise gets the stamp (placeholder text for Lore).
+        if (!u && !this.risenSeen) {
+          this.risenSeen = true;
+          this.hud.banner('¡SE LEVANTA!', 'alien', `Mordieron a ${corpse.name}: ya no es de los vuestros`);
+        }
+        await wait(u ? 0.6 : 1);
+        return;
+      }
+      case 'infected': {
+        // Bitten (docs/FASE3.md): nothing changes in the fight, but if it falls it rises, and at the base it turns.
+        const u = getUnit(v, e.unit)!;
+        this.hud.log(`Han mordido a ${u.name}`, '#ff6b5a');
+        if (!this.shownToSquad(u)) return;
+        this.fx.floatText(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.5, 0)), 'MORDIDO', 'alert');
+        await wait(0.5);
         return;
       }
       case 'reload': {
@@ -1190,7 +1291,15 @@ export class Game {
       }
       case 'patrol':
       case 'forgot':
+      // A light going out fades on the map (MapView draws the lights from the state): nothing to say.
+      case 'lightOff':
         return;
+      case 'lightOn': {
+        // Only a Bengala or a fire lights up during a mission (the street lights come with the map).
+        const flare = this.lastUsed?.ability === 'bolt';
+        this.hud.log(flare ? LIGHT_LINES.bolt : LIGHT_LINES.fire, '#ffc93a');
+        return;
+      }
       case 'noise':
         this.playNoise(e);
         return;
@@ -1201,10 +1310,11 @@ export class Game {
         look(this.units.worldPos(u.id).lerp(at, 0.5));
         this.sfx.search(at);
         await this.units.rummage(u.id, at);
-        this.overlays.find(e.tile, findText(e.loot), !e.loot);
+        // A found weapon is the rare one: its own, more striking slip.
+        this.overlays.find(e.tile, findText(e.loot), !e.loot ? 'empty' : e.loot.weapon ? 'rare' : 'loot');
         if (e.loot) this.sfx.found(at);
         // The seed comes from the event, so both players read the same line.
-        if (decor) this.hud.log(searchLine(u.name, decor, e.loot, e.tile.x * 7 + e.tile.y * 13 + v.turn), e.loot ? '#6dff9a' : undefined);
+        if (decor) this.hud.log(findLine(u.name, decor, e.loot, e.tile.x * 7 + e.tile.y * 13 + v.turn), e.loot?.weapon ? '#ffd23a' : e.loot ? '#6dff9a' : undefined);
         await wait(0.5);
         return;
       }
@@ -1585,7 +1695,7 @@ export class Game {
     const vip = s.mission.kind === 'rescue' && s.mission.objectiveUnit ? getUnit(s, s.mission.objectiveUnit)?.name : undefined;
     // What came home (docs/FASE2.md): only what a soldier got out with, or stood with at the end.
     const haul = broughtBack(s);
-    const loot = lootSummary(haul.supplies, haul.items, haul.medicines);
+    const loot = haulText(haul);
     const success: Record<typeof s.mission.kind, string> = {
       elimination: 'Todos los hostiles abatidos',
       recovery: `${capitalize(this.recoveryItem())} a salvo`,
@@ -1623,7 +1733,8 @@ export class Game {
         if (!watchers.length) return hasAnyCover(this.view, u.pos) ? (Math.max(...coverSides(this.view, u.pos)) as 0 | 1 | 2) : null;
         return Math.min(...watchers.map((a) => coverAgainst(this.view, u.pos, a.pos))) as 0 | 1 | 2;
       }
-      if (selected?.alive && sightOrigin(this.view, selected.pos, u.pos, TEMPLATES[selected.template].sight)) {
+      // How far the soldier sees it: shorter at night, unless it stands in the light (los.ts sightTo).
+      if (selected?.alive && sightOrigin(this.view, selected.pos, u.pos, sightTo(this.view, selected, u.pos))) {
         return coverAgainst(this.view, u.pos, selected.pos);
       }
       return null;
@@ -1637,11 +1748,6 @@ export class Game {
     if (objective?.alive && !m.objectiveDone) beacons.push({ pos: objective.pos, color: objective.team === 'alien' ? 0xff4a6a : 0x4dff9a });
     this.overlays.setBeacons(beacons);
     this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
-    // Furniture already searched, where the squad has been (Arte gives it the opened look).
-    const w = this.view.width;
-    const searched = (this.view.searched ?? []).map((i) => ({ x: i % w, y: Math.floor(i / w) }));
-    // With Synty models the furniture itself shows it was searched (drawers out, boot up); the tick is for the voxel map.
-    this.overlays.setSearched(graphics().models === 'voxel' ? searched.filter((p) => this.mapView.isExplored(p.x, p.y) && searchSpot(this.view, p) !== null) : []);
     this.overlays.setSmoke(this.view.smoke);
     this.songMarks.setSilences((this.view.silences ?? []).map((z) => ({ at: tileToWorld(z.pos), radius: z.radius })));
     this.songMarks.setOaths(this.view.units.filter((u) => u.alive && (u.oath ?? 0) > 0).map((u) => tileToWorld(u.pos)));
@@ -1654,12 +1760,21 @@ export class Game {
    * While the squad is concealed and a soldier is selected, every enemy in
    * sight shows its detection radius: how close a soldier can end a move
    * without being noticed (playtest: «no he entendido por qué me han visto»).
+   * At night the ring is the one in the dark, half as wide (los.ts
+   * detectionTo); a lit tile is noticed from the whole day radius, and the
+   * move range frames those tiles in red.
    */
   private drawDetection(): void {
     const v = this.view;
     const show = v.concealed && !v.outcome && !!this.selectedUnit();
     const watchers = show ? v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && TEMPLATES[a.template].detection > 0) : [];
-    this.overlays.setDetection(watchers.map((a) => ({ pos: a.pos, radius: TEMPLATES[a.template].detection })));
+    this.overlays.setDetection(watchers.map((a) => ({ pos: a.pos, radius: this.darkDetection(a) })));
+  }
+
+  /** How close a soldier out of the light can get to `a` unseen: detectionTo's range on an unlit tile. */
+  private darkDetection(a: Unit): number {
+    const day = TEMPLATES[a.template].detection;
+    return this.view.mission.night ? day * NIGHT.detection : day;
   }
 
   private marks(): EdgeMark[] {
@@ -1818,7 +1933,8 @@ export class Game {
     if (!file) return;
     const t = TEMPLATES[u.template];
     const stats = [`Salud ${u.hp}/${u.maxHp}`, u.armor ? `Blindaje ${u.armor}` : '', `Puntería ${t.aim}`, t.defense ? `Defensa ${t.defense}` : ''];
-    this.hud.enemyFile(t.name, stats.filter(Boolean).join(' · '), file);
+    // Its own name: one of ours, risen (docs/FASE3.md), keeps it («Zombi · Clara Bosch»).
+    this.hud.enemyFile(u.name, stats.filter(Boolean).join(' · '), file);
   }
 
   /** The player asked to look somewhere (O, or an edge arrow): it ends any camera pass. */
@@ -1963,7 +2079,8 @@ export class Game {
     const tiles = destinations(this.state, u, reach).map((d) => ({
       pos: d.pos,
       dash: d.cost > perAp,
-      detected: watchers.some((a) => sightOrigin(this.state, a.pos, d.pos, TEMPLATES[a.template].detection) !== null),
+      // The rules' own range (rules.ts noticeRange): halved at night, unless the tile is lit.
+      detected: watchers.some((a) => sightOrigin(this.state, a.pos, d.pos, detectionTo(this.state, a, d.pos)) !== null),
     }));
     this.reachCache = { key, reach, tiles };
     return this.reachCache;
@@ -2436,7 +2553,7 @@ export class Game {
         : sharing && holder !== this.mySlot
           ? { kind: 'partner', name: this.playerName(holder), color: PLAYER_COLORS[holder] }
           : { kind: 'mine', color: PLAYER_COLORS[this.mySlot] };
-    this.hud.setTurn(v.turn, owner, v.concealed);
+    this.hud.setTurn(v.turn, owner, v.concealed, v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null);
     this.hud.setMission(this.missionView());
     this.hud.setPlayers(this.players, v.ready, this.mySlot, busySlots(v), sharing ? holder : null);
     this.hud.setSquad(
@@ -2463,7 +2580,10 @@ export class Game {
         supplies: squad.supplies,
         items: squad.items.length,
         medicines: squad.medicines,
-        text: lootSummary(squad.supplies, squad.items, squad.medicines) ?? 'La escuadra aún no lleva nada.',
+        food: squad.food,
+        parts: squad.parts,
+        weapons: squad.weapons.length,
+        text: haulText(squad) ?? 'La escuadra aún no lleva nada.',
       },
     };
   }
@@ -2519,7 +2639,7 @@ export class Game {
     const loud = noiseOf(this.state, u, attack);
     return {
       kind: 'attack',
-      title: `${def.name} · ${attackWeapon(u, attack).name}`,
+      title: `${def.name} · ${weaponLabel(u, attack)}`,
       action: def.name,
       targetName: target.name,
       hit: shot.hit,
@@ -2578,6 +2698,12 @@ export class Game {
     // Melee: show the run to the strike position.
     const option = this.currentTarget();
     if (option?.path?.length) this.overlays.showPath(u.pos, option.path);
+    // Aiming at night from a lit tile (where it strikes from, or where it stands): seen from far.
+    if (option) {
+      const from = option.tile ?? u.pos;
+      const lit = this.litNote(from);
+      if (lit) this.overlays.setNote(from, lit);
+    }
 
     if (this.searching()) {
       // The furniture within reach is marked; the pointer on one picks it, and the panel follows.
@@ -2599,7 +2725,9 @@ export class Game {
       this.overlays.showBlast(center, area, canTargetTile(this.state, u, ability, center), allies);
       this.overlays.setHover(null);
       const loud = noiseOf(this.state, u, ability);
-      if (loud) this.overlays.setNote(center, `Ruido ${loud}`);
+      // A jump lands the soldier there: at night, whether it is in the light.
+      const note = [loud ? `Ruido ${loud}` : '', ABILITIES[ability].teleport ? this.litNote(center) : ''].filter(Boolean).join(' · ');
+      if (note) this.overlays.setNote(center, note);
       return;
     }
     if (this.mode.kind === 'self') {
@@ -2630,9 +2758,15 @@ export class Game {
     this.overlays.showCover(tile, coverSides(this.state, tile));
     this.overlays.setHover(tile, dest.detected ? 0xff4a4a : dest.dash ? 0xffc93a : 0x9fe8ff);
     // Running, a door or a window is heard (docs/FASE2.md): said under the destination.
-    const loud = moveNoise(this.state, path ?? [], dest.dash);
-    if (loud) this.overlays.setNote(tile, loud);
+    // And at night, whether it ends in the light.
+    const note = [moveNoise(this.state, path ?? [], dest.dash), this.litNote(tile)].filter(Boolean).join(' · ');
+    if (note) this.overlays.setNote(tile, note);
     if (dest.detected) this.tips.redTile();
+  }
+
+  /** At night a tile in the light is seen from as far as by day (los.ts sightTo, detectionTo): the previews say so. */
+  private litNote(tile: Vec2): string {
+    return this.state.mission.night && isLit(this.state, tile) ? 'A la luz: os ven de lejos' : '';
   }
 
   /** The furniture beside `u` that Registrar reaches: to search, the one it would search, or searched already. */

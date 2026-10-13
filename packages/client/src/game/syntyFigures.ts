@@ -198,9 +198,13 @@ function plainMaterial(atlas: AtlasId): DyedMaterial {
   if (!m) {
     PLAIN.set(atlas, (m = dyedMaterial(atlas)));
     m.userData.shared = true;
+    m.userData.dyes.dyeRim.value = ENEMY_RIM;
   }
   return m;
 }
+
+/** The night rim (synty.ts dyeRim) of who has no owner's band: a trace, so the dead stay dark. */
+const ENEMY_RIM = 0.22;
 
 /** Puts a unit's meshes on the characters' layer (post.ts): seen and shadowed, left out of the occlusion's pre-pass. */
 function onUnitLayer(o: THREE.Object3D): void {
@@ -390,6 +394,8 @@ export class SyntyFigure implements FigureRig {
       dyes.dyeColors.value[5]!.set(band);
       dyes.dyeBand.value = 1;
     }
+    // By night the squad (and who it rescues) reads in the dark; the enemy only just; the radio's voices not at all.
+    dyes.dyeRim.value = band ? 1 : this.spec.weapon || this.spec.dead ? ENEMY_RIM : 0;
     if (this.spec.skin) {
       dyes.dyeSkin.value.set(this.spec.skin);
       dyes.dyeSkinOn.value = 1;
@@ -533,7 +539,10 @@ export class SyntyFigure implements FigureRig {
       return;
     }
     const lit = k > 0.005;
-    if (lit && !this.own) this.own = dyedMaterial(atlasOf(this.painted[0]!));
+    if (lit && !this.own) {
+      this.own = dyedMaterial(atlasOf(this.painted[0]!));
+      this.own.userData.dyes.dyeRim.value = ENEMY_RIM;
+    }
     const use = lit ? this.own! : m;
     if (this.painted[0]?.material !== use) for (const o of this.painted) o.material = use;
     if (lit) this.own!.userData.dyes.dyeFlash.value = k;

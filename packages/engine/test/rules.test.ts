@@ -473,7 +473,7 @@ describe('replication', () => {
       const rng = new Rng(seed);
       const map = seed <= 5 ? { kind: 'handmade' as const, id: 'plaza' } : { kind: 'generated' as const, biome: biomes[seed % 3]!, seed };
       const pods: TemplateId[][] = [['sectoid', 'trooper'], ['lancer', 'sectoid'], ['mec', 'officer'], ['xenoid', 'zombie', 'bloater']];
-      const host = createMission({ map, slots: [0, 1], rng, kind: kinds[seed % kinds.length]!, difficulty: 1 + (seed % 4), pods: seed % 2 ? pods : undefined });
+      const host = createMission({ map, slots: [0, 1], rng, kind: kinds[seed % kinds.length]!, difficulty: 1 + (seed % 4), pods: seed % 2 ? pods : undefined, night: seed % 3 === 1 });
       if (seed % 3 !== 0) veterans(host, rng);
       const client = cloneState(host);
       for (let i = 0; i < 700 && !host.outcome; i++) {

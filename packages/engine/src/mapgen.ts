@@ -50,6 +50,10 @@ export interface MissionLayout {
   ground?: GroundKind[];
   /** What each piece of cover is meant to be (procedural maps only; cosmetic). */
   decor?: Decor[];
+  /** Storeys of the building each tile belongs to, 0 outside (procedural maps only; GameState.storeys). */
+  storeys?: number[];
+  /** Where the map's street lights and floodlights stand (procedural maps only; GameState.lights). */
+  lights?: Vec2[];
   spawns: Vec2[];
   /** Spawn tiles and patrol route of each pod, in the order the pod plan lists them. */
   pods: { tiles: Vec2[]; patrol: Vec2[] }[];
@@ -147,6 +151,8 @@ class Canvas {
   readonly keep: boolean[];
   readonly ground: GroundKind[];
   readonly decor: Decor[];
+  /** Every walled building raised so far, for their storeys (storeysOf). */
+  readonly buildings: Building[] = [];
 
   constructor(
     readonly width: number,
@@ -338,6 +344,10 @@ type Furnish = 'home' | 'shop' | 'office' | 'lab' | 'store' | 'barn' | 'bare';
 interface Building {
   outer: Rect;
   rooms: Rect[];
+  /** What it was furnished as: it sets how tall it stands (storeysOf). */
+  furnish: Furnish;
+  /** Storeys when they aren't the furnishing's to say (a filling station's shop, a motel). */
+  storeys?: number;
 }
 
 /**
@@ -705,7 +715,9 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
   } else {
     rooms.forEach((room, k) => furnishRoom(c, room, rng, furnish === 'shop' && k > 0 ? 'store' : furnish));
   }
-  return { outer: b, rooms };
+  const raised: Building = { outer: b, rooms, furnish };
+  c.buildings.push(raised);
+  return raised;
 }
 
 /** A building left in ruins: stretches of wall knocked down, glass gone, rubble about. */
@@ -955,8 +967,8 @@ function sidewalk(c: Canvas, block: Rect, roads: boolean[], every: number, kind:
     for (let u = first; u <= n - 3; u += every) {
       const p = localPt(block, s, u, 0);
       const q = localPt(block, s, u, 1);
-      // Never in front of a door or right against a facade's opening.
-      if (c.get(q.x, q.y) === 'door' || c.get(q.x, q.y) === 'floor' && c.keep[c.i(q.x, q.y)]) continue;
+      // Never in front of a door or a window (a way in), or right against a facade's opening.
+      if (c.get(q.x, q.y) === 'door' || c.get(q.x, q.y) === 'window' || c.get(q.x, q.y) === 'floor' && c.keep[c.i(q.x, q.y)]) continue;
       put(c, p, kind, [what, s]);
     }
   }
@@ -1044,22 +1056,26 @@ function parking(c: Canvas, r: Rect, rng: Rng, front: number): void {
 function rowOfBuildings(c: Canvas, lot: Rect, front: number, roads: boolean[], rng: Rng, style: Style, plan: Plan, furnish: Furnish): Building[] {
   const L = sideLen(lot, front);
   const D = depthOf(lot, front);
-  const hw = Math.min(style.house, L);
-  const hd = Math.min(style.houseDepth, D);
-  if (hw < 7 || hd < 7) return [];
   const back = opposite(front);
-  // A second row along the back when the lot is deep enough (on a road, or onto the yards between them).
-  const rows = D >= 2 * hd + 2 ? [front, back] : [front];
+  // A second row along the back when the lot is deep enough, back to back across an alley or the yards
+  // between them. The houses take the depth there is: up to two tiles over the map's own in two rows, three in one.
+  const two = D >= 2 * 7 + 1;
+  const hd = two ? clamp(Math.floor((D - 1) / 2), 7, style.houseDepth + 2) : Math.min(D, style.houseDepth + 3);
+  const plot = Math.min(style.house, L);
+  if (plot < 7 || hd < 7) return [];
+  const rows = two ? [front, back] : [front];
   // A single row of houses with room to spare stands back from the street behind a front garden.
   const setback = plan === 'rooms' && rows.length === 1 && D - hd >= 4 ? 2 : 0;
   const out: Building[] = [];
-  const n = Math.max(1, Math.floor((L + style.gap) / (hw + style.gap)));
+  const n = Math.max(1, Math.floor((L + style.gap) / (plot + style.gap)));
+  // The row fills its side: what is left over widens the houses, up to two tiles each.
+  const hw = plot + Math.min(2, Math.floor((L - (n * plot + (n - 1) * style.gap)) / n));
   const spare = L - (n * hw + (n - 1) * style.gap);
   for (const side of rows) {
     let u = Math.floor(spare / 2) + (spare > 1 ? rng.range(-1, 1) : 0);
     u = clamp(u, 0, spare);
     // A long row keeps a garden in one of its middle plots now and then, and a house row may end in a corner shop.
-    const garden = n >= 3 && rng.next() < 0.3 ? rng.range(1, n - 2) : -1;
+    const garden = n >= 3 && rng.next() < 0.15 ? rng.range(1, n - 2) : -1;
     const shop = plan === 'rooms' && rng.next() < 0.3 ? rng.pick([0, n - 1]) : -1;
     for (let k = 0; k < n; k++) {
       const b = local(lot, side, u, setback, hw, hd);
@@ -1115,9 +1131,9 @@ function highStreet(c: Canvas, lot: Rect, front: number, rng: Rng, style: Style)
   const L = sideLen(lot, front);
   const D = depthOf(lot, front);
   if (L < 7 || D < 7) return [];
-  // Deep enough to fill the lot (a shop floor and a stockroom), or two rows back to back onto the street or yard behind.
-  const two = D >= 2 * 7 + 2;
-  const d = two ? clamp(Math.floor((D - 1) / 2), 7, 10) : clamp(D - rng.range(0, 2), 7, 10);
+  // Deep enough to fill the lot (a shop floor and a stockroom), or two rows back to back across an alley.
+  const two = D >= 2 * 7 + 1;
+  const d = two ? clamp(Math.floor((D - 1) / 2), 7, 10) : clamp(D - rng.range(0, 1), 7, 12);
   const out: Building[] = [];
   const rows = two ? [front, opposite(front)] : [front];
   for (const side of rows) out.push(...shopRow(c, lot, side, L, d, rng, style));
@@ -1162,7 +1178,8 @@ function shopRow(c: Canvas, lot: Rect, front: number, L: number, d: number, rng:
     }
     // Bins and crates out the back.
     if (D - d >= 3) groupNear(c, localPt(lot, front, u + Math.floor((x - u) / 2), d + 1), rng, [dressed(PAIR, 'bin', 'crates'), dressed(BARRICADE, 'bin')], 2, 0, 4);
-    u = x + 1 + rng.range(1, 2);
+    // An alley to the next row, a tile wide, now and then two.
+    u = x + 1 + (rng.next() < 0.7 ? 1 : 2);
   }
   return out;
 }
@@ -1178,6 +1195,8 @@ function gasStation(c: Canvas, lot: Rect, front: number, rng: Rng, style: Style)
   if (L < 13 || D < 10) return [];
   const left = rng.int(2) === 0;
   const b = building(c, local(lot, front, left ? 0 : L - 7, D - 7, 7, 7), rng, 'shop', front, style, 'shop');
+  // The shop is a kiosk: one storey.
+  b.storeys = 1;
   // Islands across the forecourt, two tiles long, a lane either side.
   const first = left ? 9 : 2;
   for (const du of [0, 3]) {
@@ -1239,7 +1258,9 @@ function motelWing(c: Canvas, b: Rect, front: number, rng: Rng): Building {
     c.force(localPt(b, front, 3 + 4 * k, 0).x, localPt(b, front, 3 + 4 * k, 0).y, 'window');
     furnishRoom(c, room, rng, 'home');
   }
-  return { outer: b, rooms };
+  const wing: Building = { outer: b, rooms, furnish: 'home', storeys: 1 };
+  c.buildings.push(wing);
+  return wing;
 }
 
 /**
@@ -1291,6 +1312,22 @@ interface Lot {
   roads: boolean[];
 }
 
+/** How wide the road along side `s` of `r` is (its narrowest stretch), 0 if none. */
+function roadWidth(c: Canvas, r: Rect, s: number): number {
+  const d = DIRS4[s]!;
+  let width = Infinity;
+  for (let u = 0; u < sideLen(r, s); u++) {
+    let p = add(localPt(r, s, u, 0), d);
+    let n = 0;
+    while (c.in(p.x, p.y) && c.groundAt(p.x, p.y) === ROAD) {
+      n++;
+      p = add(p, d);
+    }
+    if (n) width = Math.min(width, n);
+  }
+  return width === Infinity ? 0 : width;
+}
+
 /**
  * The buildable part of a block: one tile less on every side but the map's
  * edge, a sidewalk along streets and half an alley against a block behind.
@@ -1304,11 +1341,32 @@ function lotOf(c: Canvas, block: Rect): Rect {
   return lot;
 }
 
-/** A long lot is often split in two, back to back with an alley between them; each half is at least `min` long. */
-function splitLot(lot: Rect, roads: boolean[], rng: Rng, min: number, chance: number): Lot[] {
+/**
+ * A town block's buildable part, and the sides it keeps a sidewalk on: one
+ * along streets three or more tiles wide (on a lane the houses stand right on
+ * it), none on the map's edge. Against the block behind, the east and south
+ * sides give up a tile for the alley between them, the other block builds up
+ * to it.
+ */
+function townLot(c: Canvas, block: Rect, roads: boolean[]): { lot: Rect; walks: boolean[] } {
+  let lot = block;
+  const walks = [false, false, false, false];
+  for (let s = 0; s < 4; s++) {
+    const q = add(localPt(block, s, 0, 0), DIRS4[s]!);
+    if (!c.in(q.x, q.y)) continue;
+    const pave = roads[s] ? roadWidth(c, block, s) >= 3 : s === 1 || s === 2;
+    if (!pave) continue;
+    lot = cut(lot, s, 1);
+    walks[s] = roads[s]!;
+  }
+  return { lot, walks };
+}
+
+/** A long lot is often split in two, back to back with an alley (`alley` wide, else 1–2) between them; each half is at least `min` long. */
+function splitLot(lot: Rect, roads: boolean[], rng: Rng, min: number, chance: number, alley?: number): Lot[] {
   const alongX = lot.w >= lot.h;
   const span = alongX ? lot.w : lot.h;
-  const gap = rng.range(1, 2);
+  const gap = alley ?? rng.range(1, 2);
   if (span < 2 * min + gap || Math.min(lot.w, lot.h) < 7 || rng.next() >= chance) return [{ r: lot, roads }];
   const k = clamp(Math.round((span - gap) / 2 + rng.range(-2, 2)), min, span - min - gap);
   if (alongX) {
@@ -1321,6 +1379,45 @@ function splitLot(lot: Rect, roads: boolean[], rng: Rng, min: number, chance: nu
     { r: rect(lot.x, lot.y, lot.w, k), roads: [roads[0]!, roads[1]!, false, roads[3]!] },
     { r: rect(lot.x, lot.y + k + gap, lot.w, lot.h - k - gap), roads: [false, roads[1]!, roads[2]!, roads[3]!] },
   ];
+}
+
+/** Piece `r` of lot `l`: it keeps the lot's roads on the sides it shares with it. */
+function piece(l: Lot, r: Rect): Lot {
+  const o = l.r;
+  return { r, roads: [r.y === o.y && l.roads[0]!, r.x + r.w === o.x + o.w && l.roads[1]!, r.y + r.h === o.y + o.h && l.roads[2]!, r.x === o.x && l.roads[3]!] };
+}
+
+/**
+ * The end of a lot nearest `to`, about `area` tiles (7 to 11 deep), and the
+ * rest of it beyond a one-tile alley; null when the rest would be too small
+ * to build on.
+ */
+function endOf(l: Lot, to: Vec2, area: number): [Lot, Lot] | null {
+  const m = centre(l.r);
+  const s = l.r.w >= l.r.h ? (to.x > m.x ? 1 : 3) : to.y > m.y ? 2 : 0;
+  const across = sideLen(l.r, s);
+  const depth = depthOf(l.r, s);
+  const n = Math.min(clamp(Math.round(area / across), 7, 11), depth - 8);
+  if (n < 7) return null;
+  return [piece(l, local(l.r, s, 0, 0, across, n)), piece(l, local(l.r, s, 0, n + 1, across, depth - n - 1))];
+}
+
+/**
+ * A square `yard` tiles across in the north-west corner of a lot (north-east
+ * if `east`), and the lots left round it beyond a one-tile alley: the rest of
+ * its width beside the square and the rest of its depth below it, when they
+ * are 7 or more across (else the square takes that whole side).
+ */
+function cornerLots(lot: Lot, east: boolean, yard: number): { square: Rect; lots: Lot[] } {
+  const r = lot.r;
+  const wide = r.w >= yard + 8;
+  const deep = r.h >= yard + 8;
+  const sw = wide ? yard : r.w;
+  const square = rect(east ? r.x + r.w - sw : r.x, r.y, sw, deep ? yard : r.h);
+  const lots: Lot[] = [];
+  if (wide) lots.push(piece(lot, rect(east ? r.x : r.x + yard + 1, r.y, r.w - yard - 1, r.h)));
+  if (deep) lots.push(piece(lot, rect(square.x, r.y + yard + 1, sw, r.h - yard - 1)));
+  return { square, lots };
 }
 
 // -------------------------------------------------------------------- city
@@ -1338,7 +1435,7 @@ function weighted<T>(rng: Rng, options: [T, number][]): T {
   return options[options.length - 1]![0];
 }
 
-/** `used` counts the open lots already placed: besides the squad's square and the objective, one square and two car parks at most. */
+/** `used` counts the programs already placed: besides the squad's square and the objective, two open lots at most (a square, a car park, a site, a filling station, a motel), one of each. */
 function cityProgram(lot: Rect, rng: Rng, role: Role | null, used: Map<CityProgram, number>): CityProgram {
   const short = Math.min(lot.w, lot.h);
   const long = Math.max(lot.w, lot.h);
@@ -1346,70 +1443,118 @@ function cityProgram(lot: Rect, rng: Rng, role: Role | null, used: Map<CityProgr
   if (role === 'open') return rng.next() < 0.55 ? 'plaza' : 'parking';
   // Open lots stay small and few: a big empty block reads as a hole in the city.
   const area = lot.w * lot.h;
+  // Two at most on a map, besides the squad's square and the objective's.
+  const few = (['plaza', 'parking', 'site', 'gasStation', 'motel'] as const).reduce((n, p) => n + (used.get(p) ?? 0), 0) < 2;
   const options: [CityProgram, number][] = [];
-  if (!used.get('plaza') && area <= 180) options.push(['plaza', 0.5]);
-  if (!used.get('parking') && area <= 220) options.push(['parking', 0.5]);
+  if (few && !used.get('plaza') && area <= 130) options.push(['plaza', 0.35]);
+  if (few && !used.get('parking') && area <= 160) options.push(['parking', 0.35]);
   // Smaller buildings, more of them (Synty's captures: rows of shops, a filling station, a motel, houses with gardens).
   if (short >= 7) options.push(['houses', 2.5], ['shops', 1], ['highStreet', 2.5]);
   if (short >= 10) options.push(['office', 2]);
   if (short >= 9 && long >= 10) options.push(['flats', 2]);
   if (short >= 12) options.push(['warehouse', 1.2]);
-  if (!used.get('gasStation') && short >= 10 && long >= 13) options.push(['gasStation', 0.25]);
-  if (!used.get('motel') && short >= 11 && long >= 13) options.push(['motel', 0.9]);
-  if (!used.get('site') && short >= 8 && area <= 260) options.push(['site', 0.5]);
+  if (few && !used.get('gasStation') && short >= 10 && long >= 13 && area <= 180) options.push(['gasStation', 0.25]);
+  if (few && !used.get('motel') && short >= 11 && long >= 13) options.push(['motel', 0.9]);
+  if (few && !used.get('site') && short >= 8 && area <= 150) options.push(['site', 0.4]);
   if (!options.length) options.push(['parking', 1]);
   const pick = weighted(rng, options);
   used.set(pick, (used.get(pick) ?? 0) + 1);
   return pick;
 }
 
+/**
+ * Makes room beside a building `w` wide on the front of a lot: when what is
+ * left over along the front is wide enough, the building's part of the lot is
+ * at one end and a row of houses or shops fills the rest, beyond a one-tile
+ * alley. Returns the building's part (the whole lot if not) and that row.
+ */
+function alongside(c: Canvas, lot: Lot, front: number, w: number, rng: Rng, style: Style): { own: Rect; row: Building[] } {
+  const L = sideLen(lot.r, front);
+  const D = depthOf(lot.r, front);
+  if (L - w - 1 < 7) return { own: lot.r, row: [] };
+  const first = rng.int(2) === 0;
+  const rest = piece(lot, local(lot.r, front, first ? w + 1 : 0, 0, L - w - 1, D));
+  return { own: local(lot.r, front, first ? 0 : L - w, 0, w, D), row: cityLot(c, rest.r, rng.next() < 0.5 ? 'houses' : 'highStreet', rest.roads, rng, style) };
+}
+
+/** How deep and how long along the street the open programs go: bigger lots build up the rest, beyond an alley. */
+const OPEN_SIZE: Partial<Record<CityProgram, [number, number]>> = { plaza: [10, 12], parking: [10, 14], site: [10, 12], gasStation: [11, 15], motel: [13, 15] };
+
 /** Fills one city lot. Returns the walled buildings (the objective may go in one). */
 function cityLot(c: Canvas, lot: Rect, program: CityProgram, roads: boolean[], rng: Rng, style: Style): Building[] {
   const front = frontOf(c, lot, roads, rng);
   const L = sideLen(lot, front);
   const D = depthOf(lot, front);
+  const open = OPEN_SIZE[program];
+  if (open) {
+    // Open ground stays small: past its depth the back of the lot is built up, past its length one end.
+    const whole: Lot = { r: lot, roads };
+    const [depth, span] = open;
+    if (D - depth - 1 >= 7) {
+      const ahead = piece(whole, local(lot, front, 0, 0, L, depth));
+      const behind = piece(whole, local(lot, front, 0, depth + 1, L, D - depth - 1));
+      const row = cityLot(c, behind.r, rng.next() < 0.5 ? 'houses' : 'highStreet', behind.roads, rng, style);
+      return [...cityLot(c, ahead.r, program, ahead.roads, rng, style), ...row];
+    }
+    if (L - span - 1 >= 7) {
+      const first = rng.int(2) === 0;
+      const own = piece(whole, local(lot, front, first ? 0 : L - span, 0, span, D));
+      const rest = piece(whole, local(lot, front, first ? span + 1 : 0, 0, L - span - 1, D));
+      const row = cityLot(c, rest.r, rng.next() < 0.5 ? 'houses' : 'highStreet', rest.roads, rng, style);
+      return [...cityLot(c, own.r, program, own.roads, rng, style), ...row];
+    }
+  }
   switch (program) {
     case 'office': {
       const w = Math.min(style.office, L);
       const d = Math.min(style.officeDepth, D);
       if (w < 10 || d < 10) return cityLot(c, lot, 'houses', roads, rng, style);
-      const b = building(c, local(lot, front, Math.floor((L - w) / 2), 0, w, d), rng, rng.next() < 0.65 ? 'corridor' : 'open', front, style, 'office');
-      // Bins and crates out the back, planters and trees on the sides.
-      if (D - d >= 6) parking(c, local(lot, front, 0, d + 1, L, D - d - 1), rng, opposite(front));
-      else if (D - d >= 3) groupNear(c, localPt(lot, front, Math.floor(L / 2), d + 1), rng, [dressed(BARRICADE, 'bin'), dressed(PAIR, 'bin', 'crates')], 2);
-      for (const u of [1, L - 2]) if (Math.floor((L - w) / 2) >= 3) groupNear(c, localPt(lot, front, u, Math.floor(d / 2)), rng, [dressed(PAIR, 'planter', 'tree'), dressed(CORNER, 'planter', 'tree')], 1);
-      return [b];
+      const { own, row } = alongside(c, { r: lot, roads }, front, w, rng, style);
+      const l = sideLen(own, front);
+      const b = building(c, local(own, front, Math.floor((l - w) / 2), 0, w, d), rng, rng.next() < 0.65 ? 'corridor' : 'open', front, style, 'office');
+      // Behind it a row of houses back to back, or a car park, or bins and crates out the back; planters and trees on the sides.
+      const behind = piece({ r: lot, roads }, local(own, front, 0, d + 1, l, D - d - 1));
+      if (D - d - 1 >= 7) row.push(...cityLot(c, behind.r, 'houses', behind.roads, rng, style));
+      else if (D - d >= 6) parking(c, behind.r, rng, opposite(front));
+      else if (D - d >= 3) groupNear(c, localPt(own, front, Math.floor(l / 2), d + 1), rng, [dressed(BARRICADE, 'bin'), dressed(PAIR, 'bin', 'crates')], 2);
+      for (const u of [1, l - 2]) if (Math.floor((l - w) / 2) >= 3) groupNear(c, localPt(own, front, u, Math.floor(d / 2)), rng, [dressed(PAIR, 'planter', 'tree'), dressed(CORNER, 'planter', 'tree')], 1);
+      return [b, ...row];
     }
     case 'warehouse': {
       const w = Math.min(style.hall, L);
       const d = Math.min(style.hall - 1, D);
       if (w < 12 || d < 12) return cityLot(c, lot, 'office', roads, rng, style);
+      const { own, row } = alongside(c, { r: lot, roads }, front, w, rng, style);
+      const l = sideLen(own, front);
       // The hall sits at the back, its loading bay onto a yard of containers and crates.
       const yard = D - d;
-      const b = building(c, local(lot, front, Math.floor((L - w) / 2), yard, w, d), rng, 'hall', front, style, 'store');
+      const b = building(c, local(own, front, Math.floor((l - w) / 2), yard, w, d), rng, 'hall', front, style, 'store');
       if (yard >= 5) {
-        const box = local(lot, front, 1, 1, 2, 5);
+        const box = local(own, front, 1, 1, 2, 5);
         const fits = tilesIn(rect(box.x - 1, box.y - 1, box.w + 2, box.h + 2)).every((p) => c.free(p.x, p.y) || !c.in(p.x, p.y));
         if (yard >= 7 && fits && rng.next() < 0.6) platform(c, box, rng, 1);
-        groupNear(c, localPt(lot, front, L - 4, 2), rng, [dressed(CRATES, 'crates')], 1);
+        groupNear(c, localPt(own, front, l - 4, 2), rng, [dressed(CRATES, 'crates')], 1);
       } else if (yard >= 3) {
-        groupNear(c, localPt(lot, front, 2, 1), rng, [dressed(CRATES, 'crates'), dressed(BARRICADE, 'crates')], 1);
+        groupNear(c, localPt(own, front, 2, 1), rng, [dressed(CRATES, 'crates'), dressed(BARRICADE, 'crates')], 1);
       }
-      return [b];
+      return [b, ...row];
     }
     case 'flats': {
       const w = clamp(L - 2, 8, 12);
       const d = clamp(D - 3, 7, 10);
       if (w > L || d > D) return cityLot(c, lot, 'houses', roads, rng, style);
-      const u0 = Math.floor((L - w) / 2);
-      const b = local(lot, front, u0, 0, w, d);
+      // A row beside them when the lot is long (the terrace then always looks onto the courtyard).
+      const { own, row } = D - d >= 2 ? alongside(c, { r: lot, roads }, front, w + 2, rng, style) : { own: lot, row: [] };
+      const l = sideLen(own, front);
+      const u0 = Math.floor((l - w) / 2);
+      const b = local(own, front, u0, 0, w, d);
       // The terrace looks onto the courtyard behind, or onto a side passage.
       const back = opposite(front);
       const terrace = D - d >= 2 ? back : u0 >= 2 ? (front + 1) % 4 : front;
       flats(c, b, rng, terrace);
       // A hedge and a tree in the courtyard.
-      if (D - d >= 4) groupNear(c, localPt(lot, front, Math.floor(L / 2) + rng.range(-3, 3), D - 2), rng, [dressed(BARRICADE, 'bush'), dressed(PAIR, 'bush', 'tree')], 1);
-      return [];
+      if (D - d >= 4) groupNear(c, localPt(own, front, Math.floor(l / 2) + rng.range(-3, 3), D - 2), rng, [dressed(BARRICADE, 'bush'), dressed(PAIR, 'bush', 'tree')], 1);
+      return row;
     }
     case 'plaza':
       plaza(c, lot, rng);
@@ -1448,43 +1593,52 @@ function cityLot(c: Canvas, lot: Rect, program: CityProgram, roads: boolean[], r
 /** City: blocks of houses, shops, offices, flats and warehouses between streets, a square or a car park here and there. */
 function city(c: Canvas, rng: Rng, style: Style, role: Role): Rect {
   const S = c.width;
-  const plan = district(rect(0, 0, S, S), rng, { minBlock: 10, maxBlock: 24, widths: [[4, 4], [3, 3], [2, 3]], jog: 0.35, deadEnd: 0.25, stop: [0, 0.3, 0.7, 0.9] });
+  // Small blocks: an avenue, streets and lanes two tiles wide (on a lane the houses stand right on it).
+  const plan = district(rect(0, 0, S, S), rng, { minBlock: 9, maxBlock: 20, widths: [[4, 4], [3, 3], [2, 2]], jog: 0.35, deadEnd: 0.3, stop: [0, 0.2, 0.6, 0.9] });
   for (const road of plan.roads) c.paint(road.r, ROAD);
   const far = { x: S * 0.76, y: S * 0.76 };
   const spawnBlock = plan.blocks.find((b) => inRect(b, { x: 0, y: 0 }))!;
+  // The objective's block: the one nearest the far corner, a big one (an office fits) if it is nearly as far.
   const objBlock =
     best(
-      plan.blocks.filter((b) => b !== spawnBlock && Math.min(b.w, b.h) >= (role === 'indoor' ? 12 : 9)),
-      (b) => dist(centre(b), far),
+      plan.blocks.filter((b) => b !== spawnBlock && Math.min(b.w, b.h) >= 9),
+      (b) => dist(centre(b), far) - (Math.min(b.w, b.h) >= (role === 'indoor' ? 12 : 11) ? 3 : 0),
     ) ?? best(plan.blocks, (b) => (b === spawnBlock ? Infinity : dist(centre(b), far)))!;
   let objective: Rect = objBlock;
   const used = new Map<CityProgram, number>();
   for (const block of plan.blocks) {
     const roads = [0, 1, 2, 3].map((s) => facesRoad(c, block, s));
-    const lot = lotOf(c, block);
+    const { lot, walks } = townLot(c, block, roads);
     const lots: Lot[] = [];
     if (block === spawnBlock) {
-      // The squad's corner: an open square, with buildings beyond it if the block is big.
-      const yard = 10;
-      if (lot.w >= yard + 9) {
-        plaza(c, rect(lot.x, lot.y, yard, lot.h), rng);
-        lots.push({ r: rect(lot.x + yard + 1, lot.y, lot.w - yard - 1, lot.h), roads: [roads[0]!, roads[1]!, roads[2]!, false] });
-      } else if (lot.h >= yard + 9) {
-        plaza(c, rect(lot.x, lot.y, lot.w, yard), rng);
-        lots.push({ r: rect(lot.x, lot.y + yard + 1, lot.w, lot.h - yard - 1), roads: [false, roads[1]!, roads[2]!, roads[3]!] });
-      } else {
-        plaza(c, lot, rng);
-      }
+      // The squad's corner: an open square, with buildings round it if the block is big (on a small block, a narrower square).
+      const corner = cornerLots({ r: lot, roads }, false, lot.w >= 16 || lot.h >= 16 ? 8 : 6);
+      plaza(c, corner.square, rng);
+      lots.push(...corner.lots);
+    } else if (block !== objBlock && inRect(block, { x: S - 1, y: 0 })) {
+      // The other corner on the squad's side keeps a yard for the evac zone (generateLayout carves it there), a few crates in it.
+      const corner = [6, 5].map((yard) => cornerLots({ r: lot, roads }, true, yard)).find((k) => k.lots.length) ?? cornerLots({ r: lot, roads }, true, 6);
+      groupNear(c, centre(corner.square), rng, [dressed(CRATES, 'crates'), dressed(PAIR, 'crates')], 1, 0, 6);
+      lots.push(...corner.lots);
     } else {
-      lots.push(...splitLot(lot, roads, rng, 8, block === objBlock && role === 'indoor' ? 0 : 0.65));
+      lots.push(...splitLot(lot, roads, rng, 8, block === objBlock && role === 'indoor' ? 0 : 0.65, 1));
     }
     const objLot = block === objBlock ? best(lots, (l) => dist(centre(l.r), far)) : undefined;
     for (const l of lots) {
+      if (l === objLot && role === 'open') {
+        // The objective's square or car park: the far end of its lot, the rest built up.
+        const [open, rest] = endOf(l, far, 120) ?? [l, null];
+        if (cityProgram(open.r, rng, role, used) === 'plaza') plaza(c, open.r, rng);
+        else parking(c, open.r, rng, frontOf(c, open.r, open.roads, rng));
+        if (rest) cityLot(c, rest.r, cityProgram(rest.r, rng, null, used), rest.roads, rng, style);
+        objective = open.r;
+        continue;
+      }
       const isObj = l === objLot;
       const built = cityLot(c, l.r, cityProgram(l.r, rng, isObj ? role : null, used), l.roads, rng, style);
       if (isObj) objective = best(built, (b) => dist(centre(b.outer), far))?.outer ?? l.r;
     }
-    sidewalk(c, block, roads, style.furniture, 'low');
+    sidewalk(c, block, walks, style.furniture, 'low');
   }
   parkCars(c, plan.roads, rng, 0.4);
   checkpoint(c, plan.roads, rng);
@@ -2163,6 +2317,51 @@ function carveEvac(c: Canvas, r: Rect, corner: Vec2, rng: Rng): Vec2[] {
   return zone;
 }
 
+// ------------------------------------------------------- storeys and lights
+
+/**
+ * How tall each building stands, in storeys (docs/ALTURA-Y-NOCHE.md), by the
+ * rule the client drew them with: in town, shops and offices two or three,
+ * some houses two; halls, kiosks, motels and everything out of town, one.
+ * Every tile of a building (walls, doors, windows, the inside) gets its
+ * storeys; a wall two buildings share, the taller one's. Rolled on a seed of
+ * their own, so nothing else in the layout moves.
+ */
+function storeysOf(c: Canvas, biome: Biome, seed: number): number[] {
+  const rng = new Rng(seed ^ 0x5f0e75);
+  const out = new Array<number>(c.tiles.length).fill(0);
+  for (const b of c.buildings) {
+    const roll = rng.next();
+    const n =
+      b.storeys ??
+      (biome !== 'city' ? 1 : b.furnish === 'shop' ? (roll < 0.55 ? 2 : 3) : b.furnish === 'office' ? (roll < 0.6 ? 2 : 3) : b.furnish === 'home' && roll < 0.3 ? 2 : 1);
+    for (const p of tilesIn(b.outer)) if (c.in(p.x, p.y)) out[c.i(p.x, p.y)] = Math.max(out[c.i(p.x, p.y)]!, n);
+  }
+  return out;
+}
+
+/** How far apart the map's lights stand: street lights in town, floodlights in a facility, a lamp now and then along a track. */
+const LIGHT_SPACING: Record<Biome, number> = { city: 8, facility: 9, wilds: 15 };
+
+/**
+ * Where the map's lights stand (docs/ALTURA-Y-NOCHE.md): on the pavement
+ * beside a street (beside a track in the wilds), LIGHT_SPACING apart. At night
+ * they light NIGHT.streetLight tiles round them. Picked on a seed of their own.
+ */
+function streetLights(c: Canvas, biome: Biome, seed: number): Vec2[] {
+  const rng = new Rng(seed ^ 0x11647);
+  const kerb = (p: Vec2) =>
+    c.get(p.x, p.y) === 'floor' &&
+    c.elevAt(p.x, p.y) === 0 &&
+    c.groundAt(p.x, p.y) === OPEN &&
+    DIRS4.some((d) => c.in(p.x + d.x, p.y + d.y) && c.groundAt(p.x + d.x, p.y + d.y) === ROAD);
+  const out: Vec2[] = [];
+  for (const p of shuffle(tilesIn(rect(0, 0, c.width, c.height)).filter(kerb), rng)) {
+    if (out.every((q) => dist(p, q) >= LIGHT_SPACING[biome])) out.push(p);
+  }
+  return out;
+}
+
 const NAMES: Record<Biome, string[]> = {
   city: ['Distrito Portuario', 'Barrio Viejo', 'Centro Financiero', 'Polígono Norte', 'Ensanche', 'Mercado Central', 'Zona Universitaria'],
   wilds: ['Bosque de Lirio', 'Valle Hondo', 'Granjas del Sur', 'Pinar Quemado', 'Ruinas de Santa Úrsula', 'Afueras de Robledo'],
@@ -2275,6 +2474,8 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   }
 
   tidyDecor(c);
+  const tall = storeysOf(c, biome, opts.seed);
+  const lamps = streetLights(c, biome, opts.seed);
 
   // Mirror/transpose everything into the final frame.
   const T = (p: Vec2): Vec2 => {
@@ -2301,6 +2502,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   const elev = new Array<number>(S * S);
   const ground = new Array<GroundKind>(S * S);
   const decor = new Array<Decor>(S * S);
+  const storeys = new Array<number>(S * S);
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
       const q = T({ x, y });
@@ -2309,6 +2511,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
       elev[q.y * S + q.x] = c.elev[i]!;
       ground[q.y * S + q.x] = c.ground[i]!;
       decor[q.y * S + q.x] = Dc(c.decor[i]!);
+      storeys[q.y * S + q.x] = tall[i]!;
     }
   }
   const t = (p: Vec2 | null) => (p ? T(p) : null);
@@ -2323,6 +2526,8 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     elev,
     ground,
     decor,
+    storeys,
+    lights: lamps.map(T),
     spawns: spawns.map(T),
     pods: pods.map((p) => ({ tiles: p.tiles.map(T), patrol: p.patrol.map(T) })),
     item: t(item),

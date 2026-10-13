@@ -1,23 +1,28 @@
 import * as THREE from 'three';
+import type { Light } from '@bastion/engine';
 import type { FogOfWar } from './fogOfWar';
 
-// The map by night (reference block's night test, after Synty's Woodland
-// motel capture): a dense teal haze and a cold moon (renderer.ts), and the
-// warm light of what still works. Few real lights (their cost is per pixel
-// of everything lit): only the street lights nearest the view light the
-// scene; every lamp, every headlight left on, paints its pool on the ground
-// as an additive decal and glows (bloom), and some windows are lit. Built
-// with the map, hidden by day: a day frame draws none of it.
+// The map by night (docs/ALTURA-Y-NOCHE.md; set against Synty's Woodland
+// motel capture in the reference block): a dense teal haze and a cold moon
+// (renderer.ts), and the warm light of what still works. Which tiles are lit
+// is the engine's (its lit mask: street lights, a Bengala, a fire); the fog of
+// war paints them (fogOfWar.ts: setLit). Here, what shines: every street
+// light's head glows, a few headlights left on, and the Bengalas and fires
+// while they last. Few real lights (their cost is per pixel of everything
+// lit): a fixed pool, the Bengalas and fires first, then the street lights
+// nearest the view; the pool never changes size, so no shader is rebuilt.
 
 /** 1 by night, 0 by day: what glows only at night reads it (lit windows: buildings.ts). */
 export const NIGHT = { value: 0 };
 
-/** Real lights, at the street lights nearest what the camera looks at. */
+/** Real lights, wherever they're most needed. */
 const REAL_LIGHTS = 6;
 const LAMP = new THREE.Color(1.0, 0.62, 0.3);
-const HEADLIGHT = new THREE.Color(0.95, 0.9, 0.75);
-/** How bright the painted pools are (additive over the ground). */
-const POOL = 0.55;
+/** A Bengala burns red; a fire, orange. */
+const FLARE = new THREE.Color(1.0, 0.1, 0.08);
+const FIRE = new THREE.Color(1.0, 0.5, 0.15);
+/** Seconds a Bengala's or a fire's light takes to come up or die down. */
+const FADE = 0.5;
 
 /** Where a lamp shines from (a street light's head) or a car's front, and which way it faces. */
 export interface Glow {
@@ -29,62 +34,28 @@ export interface Glow {
   dz: number;
 }
 
-let pool: THREE.Texture | null = null;
-
-/** A soft round pool of light, bright in the middle (shared). */
-function poolTexture(): THREE.Texture {
-  if (pool) return pool;
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const g = c.getContext('2d')!;
-  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  r.addColorStop(0, 'rgba(255,255,255,1)');
-  r.addColorStop(0.35, 'rgba(255,255,255,0.55)');
-  r.addColorStop(0.7, 'rgba(255,255,255,0.15)');
-  r.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = r;
-  g.fillRect(0, 0, 128, 128);
-  pool = new THREE.CanvasTexture(c);
-  pool.colorSpace = THREE.SRGBColorSpace;
-  return pool;
+/** A Bengala or a fire as drawn: its glow, how far it has come up, whether it's going out. */
+interface Burning {
+  id: string;
+  at: THREE.Vector3;
+  color: THREE.Color;
+  /** Its light's reach (tiles). */
+  radius: number;
+  glow: THREE.Mesh;
+  level: number;
+  out: boolean;
 }
 
-/** Quads merged into one geometry: position, uv, colour. */
-class Quads {
+/** Small glowing boxes merged into one geometry: position, colour (HDR, for the bloom). */
+class Glows {
   readonly position: number[] = [];
-  readonly uv: number[] = [];
   readonly color: number[] = [];
 
-  /** A flat quad on the ground at (x, y, z): `length` along (dx, dz), `width` across, starting `back` behind the point. */
-  ground(x: number, y: number, z: number, dx: number, dz: number, length: number, width: number, back: number, c: THREE.Color): void {
-    const ax = -dz * width * 0.5;
-    const az = dx * width * 0.5;
-    const x0 = x - dx * back;
-    const z0 = z - dz * back;
-    const x1 = x0 + dx * length;
-    const z1 = z0 + dz * length;
-    const corners = [
-      [x0 - ax, z0 - az, 0, 0],
-      [x0 + ax, z0 + az, 1, 0],
-      [x1 + ax, z1 + az, 1, 1],
-      [x1 - ax, z1 - az, 0, 1],
-    ];
-    // Facing up.
-    for (const k of [0, 1, 2, 0, 2, 3]) {
-      const [px, pz, u, v] = corners[k]!;
-      this.position.push(px!, y, pz!);
-      this.uv.push(u!, v!);
-      this.color.push(c.r, c.g, c.b);
-    }
-  }
-
-  /** A small glowing box (a lamp's head, a headlight), all faces. */
   box(x: number, y: number, z: number, sx: number, sy: number, sz: number, c: THREE.Color): void {
     const b = new THREE.BoxGeometry(sx, sy, sz).toNonIndexed().translate(x, y, z);
     const p = b.attributes.position!;
     for (let i = 0; i < p.count; i++) {
       this.position.push(p.getX(i), p.getY(i), p.getZ(i));
-      this.uv.push(0.5, 0.5);
       this.color.push(c.r, c.g, c.b);
     }
     b.dispose();
@@ -93,7 +64,6 @@ class Quads {
   geometry(): THREE.BufferGeometry {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.position, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.color, 3));
     // The fog of war reads the normal (a face belongs to the tile behind it): without one it was NaN, and bloom spread it everywhere.
     g.computeVertexNormals();
@@ -102,52 +72,46 @@ class Quads {
   }
 }
 
+const flareGeometry = new THREE.SphereGeometry(0.16, 10, 8);
+
 /** The night's lights of one map. */
 export class NightLights {
   readonly group = new THREE.Group();
-  private readonly lamps: Glow[] = [];
+  private readonly lamps: Glow[];
   private readonly lights: THREE.PointLight[] = [];
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
+  private readonly burning = new Map<string, Burning>();
   private readonly focus = new THREE.Vector3();
   private readonly ray = new THREE.Vector3();
   private readonly chosen = new Int32Array(REAL_LIGHTS);
+  private time = 0;
 
-  constructor(lamps: Glow[], headlights: Glow[], fog: FogOfWar) {
+  constructor(
+    lamps: Glow[],
+    headlights: Glow[],
+    private readonly fog: FogOfWar,
+  ) {
     this.group.visible = NIGHT.value > 0.5;
     this.lamps = lamps;
-    const pools = new Quads();
-    const glows = new Quads();
-    for (const l of lamps) {
-      pools.ground(l.x, 0.02, l.z, 1, 0, 3.6, 3.6, 1.8, LAMP.clone().multiplyScalar(POOL));
-      glows.box(l.x, l.y, l.z, 0.32, 0.08, 0.2, new THREE.Color(3.2, 2.2, 1.3));
-    }
+    const glows = new Glows();
+    for (const l of lamps) glows.box(l.x, l.y, l.z, 0.32, 0.08, 0.2, new THREE.Color(3.2, 2.2, 1.3));
     for (const h of headlights) {
-      // A beam on the road ahead, and the two lamps.
-      pools.ground(h.x, 0.025, h.z, h.dx, h.dz, 3.2, 1.9, -0.1, HEADLIGHT.clone().multiplyScalar(POOL));
       const sx = -h.dz * 0.24;
       const sz = h.dx * 0.24;
       for (const s of [-1, 1]) glows.box(h.x + sx * s, h.y, h.z + sz * s, 0.1, 0.07, 0.1, new THREE.Color(3, 2.9, 2.4));
     }
-    const poolMaterial = fog.patch(
-      new THREE.MeshBasicMaterial({ map: poolTexture(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-    );
-    const glowMaterial = fog.patch(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: true }));
-    this.materials.push(poolMaterial, glowMaterial);
-    for (const [quads, material] of [
-      [pools, poolMaterial],
-      [glows, glowMaterial],
-    ] as const) {
-      if (!quads.position.length) continue;
-      const g = quads.geometry();
+    const glowMaterial = fog.patch(new THREE.MeshBasicMaterial({ vertexColors: true }));
+    this.materials.push(glowMaterial);
+    if (glows.position.length) {
+      const g = glows.geometry();
       this.geometries.push(g);
-      const mesh = new THREE.Mesh(g, material);
+      const mesh = new THREE.Mesh(g, glowMaterial);
       mesh.matrixAutoUpdate = false;
-      mesh.renderOrder = 1;
       this.group.add(mesh);
     }
-    for (let k = 0; k < Math.min(REAL_LIGHTS, lamps.length); k++) {
-      const light = new THREE.PointLight(LAMP, 22, 7, 2);
+    for (let k = 0; k < REAL_LIGHTS; k++) {
+      const light = new THREE.PointLight(LAMP, 0, 7, 2);
       this.lights.push(light);
       this.group.add(light);
     }
@@ -158,16 +122,63 @@ export class NightLights {
     this.group.visible = on;
   }
 
-  /** Puts the real lights at the street lights nearest the point the camera looks at (no allocation). */
-  update(camera: THREE.Camera | null): void {
-    if (!this.group.visible || !camera || !this.lights.length) return;
-    camera.getWorldDirection(this.ray);
-    const t = this.ray.y < -0.01 ? -camera.position.y / this.ray.y : 0;
-    this.focus.copy(camera.position).addScaledVector(this.ray, t);
-    // The few nearest, by a partial selection (few lamps, few lights).
+  /**
+   * The Bengalas and fires burning now (the engine's lights that last a few
+   * turns); `height` the floor under a tile. New ones come up, gone ones die
+   * down.
+   */
+  setBurning(lights: readonly Light[], height: (x: number, y: number) => number): void {
+    const now = new Set<string>();
+    for (const l of lights) {
+      if (l.turns === undefined) continue;
+      now.add(l.id);
+      if (this.burning.has(l.id)) continue;
+      const flare = l.radius >= 3;
+      const color = (flare ? FLARE : FIRE).clone();
+      const material = this.fog.patch(new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(flare ? 3 : 4), transparent: true, opacity: 0 }));
+      this.materials.push(material);
+      const glow = new THREE.Mesh(flareGeometry, material);
+      const at = new THREE.Vector3(l.tile.x + 0.5, height(l.tile.x, l.tile.y) + (flare ? 1.4 : 0.35), l.tile.y + 0.5);
+      glow.position.copy(at);
+      glow.scale.setScalar(flare ? 1 : 1.6);
+      this.group.add(glow);
+      this.burning.set(l.id, { id: l.id, at, color, radius: l.radius, glow, level: 0, out: false });
+    }
+    for (const b of this.burning.values()) if (!now.has(b.id)) b.out = true;
+  }
+
+  /** Fades, flicker, and the real lights put where they count (no allocation). */
+  update(dt: number, camera: THREE.Camera | null): void {
+    if (!this.group.visible) return;
+    this.time += dt;
+    for (const b of this.burning.values()) {
+      b.level = Math.max(0, Math.min(1, b.level + (b.out ? -dt : dt) / FADE));
+      (b.glow.material as THREE.MeshBasicMaterial).opacity = b.level;
+      if (b.out && b.level === 0) {
+        this.group.remove(b.glow);
+        (b.glow.material as THREE.Material).dispose();
+        this.burning.delete(b.id);
+      }
+    }
+    // The Bengalas and fires first.
+    let n = 0;
+    for (const b of this.burning.values()) {
+      if (n >= this.lights.length) break;
+      const light = this.lights[n++]!;
+      const flicker = b.radius >= 3 ? 0.9 + 0.1 * Math.sin(this.time * 23) : 0.75 + 0.25 * Math.sin(this.time * 11) * Math.sin(this.time * 7.3);
+      light.color.copy(b.color);
+      light.intensity = 30 * b.level * flicker;
+      light.distance = b.radius * 2.6;
+      light.position.copy(b.at);
+    }
+    // Then the street lights nearest the point the camera looks at.
+    if (camera) {
+      camera.getWorldDirection(this.ray);
+      const t = this.ray.y < -0.01 ? -camera.position.y / this.ray.y : 0;
+      this.focus.copy(camera.position).addScaledVector(this.ray, t);
+    }
     this.chosen.fill(-1);
-    for (let n = 0; n < this.lights.length; n++) {
-      const light = this.lights[n]!;
+    for (let k = 0; n < this.lights.length; k++) {
       let best = -1;
       let bestD = Infinity;
       for (let i = 0; i < this.lamps.length; i++) {
@@ -176,15 +187,23 @@ export class NightLights {
         const d = (l.x - this.focus.x) ** 2 + (l.z - this.focus.z) ** 2;
         if (d < bestD) [best, bestD] = [i, d];
       }
-      if (best < 0) break;
-      this.chosen[n] = best;
+      const light = this.lights[n++]!;
+      if (best < 0) {
+        light.intensity = 0;
+        continue;
+      }
+      this.chosen[k] = best;
       const l = this.lamps[best]!;
+      light.color.copy(LAMP);
+      light.intensity = 22;
+      light.distance = 7;
       // Well under the lamp's own head: a point light right at a surface overflows the half-float target (and bloom spreads it).
       light.position.set(l.x, l.y - 0.6, l.z);
     }
   }
 
   dispose(): void {
+    for (const b of this.burning.values()) (b.glow.material as THREE.Material).dispose();
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
   }

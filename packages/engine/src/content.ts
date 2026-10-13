@@ -1,7 +1,7 @@
 // Gameplay data. Combat numbers mirror XCOM 2's defaults (XComGameCore.ini /
 // XComGameData_*.ini) converted to tiles (1 tile = 1.5 m), so the game "feels"
 // like the original before we start tuning our own values.
-import type { AbilityId, AttackAbility, ChargeId, ClassId, ItemId, ItemSlot, PerkId, Team, TemplateId, Unit, UnitMods } from './types';
+import type { AbilityId, AttackAbility, ChargeId, ClassId, FoundWeaponId, ItemId, ItemSlot, PerkId, Team, TemplateId, Unit, UnitMods } from './types';
 
 export const AP_PER_TURN = 2;
 
@@ -51,6 +51,40 @@ export const OFICIO_QUIET = 2;
  * every 3. Tuned with a headless Saqueo against a scripted squad.
  */
 export const HORDE = { perTurn: 10, perNoise: 5, wave: 50, cap: 20 } as const;
+
+/**
+ * Night missions (docs/ALTURA-Y-NOCHE.md). The living see `sightCut` tiles
+ * less (never under `minSight`) and the dead as ever, but whoever stands in
+ * the light is seen from as far as by day; the enemy detects the hidden squad
+ * at `detection` of its range, unless lit. Lights: the map's street lights,
+ * the Bengala's flare and fire, for `turns` squad turns. One more group of
+ * the dead, the Saqueo's horde `hordeHead` turns sooner, and `supplies`
+ * times the suministros found and paid. A light reaches only what it sees
+ * from its `height` (storeys above its floor): a street lamp from high up, a
+ * flare or a fire from the ground.
+ */
+export const NIGHT = {
+  sightCut: 8,
+  minSight: 6,
+  detection: 0.5,
+  streetLight: 2,
+  lampHeight: 2,
+  flare: { radius: 3, turns: 2, height: 0.5 },
+  fire: { radius: 2, turns: 2, height: 0.5 },
+  hordeHead: 1,
+  supplies: 1.5,
+} as const;
+
+/**
+ * Infection (docs/FASE3.md): out of 100, the chance that a zombie's melee hit
+ * that draws blood infects, by who bites, and a Hinchado's burst to each it
+ * hurts; a Chaleco antibalas takes `vest` off.
+ */
+export const INFECTION = {
+  bite: { zombie: 25, xenoid: 20, mec: 35 } as Partial<Record<TemplateId, number>>,
+  burst: 50,
+  vest: 10,
+};
 
 /** What a noise of that radius made by the squad adds to the horde's clock. */
 export function hordePoints(radius: number): number {
@@ -311,6 +345,30 @@ export const SMOKE_TURNS = 2;
 
 /** Things a soldier can carry back from searching (docs/FASE2.md): a full backpack can't search. */
 export const BACKPACK_SLOTS = 3;
+
+export interface FoundWeaponDef {
+  id: FoundWeaponId;
+  /** As the soldier's card reads it («Fusil de caza · nivel 3»). */
+  name: string;
+  /** As it reads when found, with its article. */
+  find: string;
+  /** The class weapon it is: only a soldier who carries that one can take it. */
+  weapon: WeaponId;
+  /** How often it turns up, against the others. */
+  weight: number;
+}
+
+/**
+ * Good weapons found searching (docs/FASE4.md): a soldier who carries one fights
+ * a tier above everyone (to 3, and never past what the rank allows). Names are
+ * placeholders for Lore.
+ */
+export const FOUND_WEAPONS: Record<FoundWeaponId, FoundWeaponDef> = {
+  huntingRifle: { id: 'huntingRifle', name: 'Fusil de caza', find: 'un fusil de caza en buen estado', weapon: 'rifle', weight: 5 },
+  sawnOff: { id: 'sawnOff', name: 'Escopeta recortada', find: 'una escopeta recortada', weapon: 'shotgun', weight: 2 },
+  scopedRifle: { id: 'scopedRifle', name: 'Fusil con mira', find: 'un fusil con mira telescópica', weapon: 'sniper', weight: 1 },
+  lightMachineGun: { id: 'lightMachineGun', name: 'Ametralladora ligera', find: 'una ametralladora ligera', weapon: 'cannon', weight: 1 },
+};
 
 export interface ItemDef {
   id: ItemId;

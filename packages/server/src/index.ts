@@ -4,9 +4,10 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { createServer as createHttpsServer } from 'node:https';
 import type { Socket } from 'node:net';
 import type { TLSSocket } from 'node:tls';
-import { networkInterfaces } from 'node:os';
+import { hostname, networkInterfaces } from 'node:os';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { announce } from './lan';
 import { SaveStore } from './persistence';
 import type { HostAddress } from '@bastion/engine';
 import { Room } from './room';
@@ -211,8 +212,12 @@ setInterval(() => {
   }
 }, 15_000);
 
+/** `--anunciar`: the desktop app's server tells the local network there is a game here (lan.ts). */
+const ANNOUNCE = process.argv.includes('--anunciar');
+
 http.listen(PORT, () => {
-  netLog(`servidor arrancado: http ${PORT}${https ? `, https ${HTTPS_PORT}` : ''} · ${hosts.map((h) => h.address).join(', ')}`);
+  netLog(`servidor arrancado: http ${PORT}${https ? `, https ${HTTPS_PORT}` : ''} · ${hosts.map((h) => h.address).join(', ')}${ANNOUNCE ? ' · anunciado en la red' : ''}`);
+  if (ANNOUNCE) announce(PORT, hostname().replace(/\.local$/, ''), () => room.summary());
   console.log(`\n  Bastión — servidor listo en el puerto ${PORT}`);
   console.log(`    Tú:              http://localhost:${PORT}`);
   for (const h of hosts) console.log(`    Tu compañero:    ${https ? `https://${h.address}:${HTTPS_PORT}` : `http://${h.address}:${PORT}`}${h.kind === 'tailscale' ? '  (Tailscale)' : ''}`);

@@ -19,6 +19,7 @@ import {
   BUILDS,
   canAfford,
   CLASS_TOP,
+  CRAFTS,
   AXES,
   axesOf,
   baseAttrs,
@@ -109,6 +110,16 @@ import {
   shopPrice,
   plotName,
   soldierReady,
+  craftBlocker,
+  dailyRations,
+  FOUND_WEAPONS,
+  fitsWeapon,
+  weaponLabel,
+  MEDICATE_COST,
+  MEDICATE_DAYS,
+  treatCost,
+  TURNED_CAUSE,
+  turnDay,
   soldierWeaponName,
   squadLimit,
   squadPads,
@@ -138,6 +149,7 @@ import {
   type BaseView,
   type CampaignCommand,
   type CampaignSoldier,
+  type CraftDef,
   type CampaignState,
   type ClassId,
   type ItemId,
@@ -263,7 +275,7 @@ const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** The facilities by what they are for, in the build list (playtest: «mucha lista seguida, mucho que leer»). */
 const BUILD_GROUPS: [string, FacilityId[]][] = [
-  ['Soldados', ['quarters', 'infirmary', 'training', 'range', 'memorial']],
+  ['Soldados', ['quarters', 'infirmary', 'garden', 'training', 'range', 'memorial']],
   ['Equipo y obras', ['workshop', 'garage', 'crew']],
   ['Información', ['relay', 'listening', 'simulation']],
   ['El Oficio', ['echoes']],
@@ -649,6 +661,89 @@ export class StrategyScreen {
     return h('div.x-bar', {}, h('i', { style: { width: `${pct}%` } }));
   }
 
+  /** Opens a soldier's sheet in the Cuartel. */
+  private openSoldier(id: string): void {
+    this.soldier = id;
+    void this.go('barracks');
+  }
+
+  /**
+   * How a soldier is: fallen, with a fever from a bite (and the days left
+   * before turning), wounded, or ready. `short` for the Cuartel's list.
+   */
+  private healthTag(c: CampaignState, s: CampaignSoldier, short: boolean): HTMLElement {
+    const tag = (tone: string, text: string, title = '') => h(`${short ? 'span.x-side' : 'b.x-state'}${tone}`, title ? { title } : {}, text);
+    if (!s.alive) return tag('.x-bad', s.fellCause === 'turned' ? TURNED_CAUSE : 'Caído');
+    if (s.infection) {
+      const left = turnDay(c, s)! - c.day;
+      const when = left <= 0 ? 'hoy' : left === 1 ? 'mañana' : `en ${left} d`;
+      return tag('.x-bad', short ? `Fiebre · ${when}` : `Mordido · se convierte ${when}`, 'Un mordisco: tiene fiebre. Si no le tratáis con medicinas, se convierte.');
+    }
+    if (s.woundedDays) return tag('.x-warn', short ? `${s.woundedDays} d` : `Herido · ${s.woundedDays} d`);
+    return tag(short ? '' : '.x-good', 'Listo');
+  }
+
+  /**
+   * Medicines on a soldier's sheet (docs/FASE3.md): treating a bite takes both
+   * commanders, like launching; healing a wound faster is one click.
+   */
+  private careActions(c: CampaignState, s: CampaignSoldier): HTMLElement[] {
+    if (!s.alive) return [];
+    const have = c.medicines ?? 0;
+    const out: HTMLElement[] = [];
+    if (s.infection) {
+      const cost = treatCost(c);
+      const proposal = c.treatment;
+      const partner = this.partner();
+      const shared = !!partner?.connected;
+      const mine = proposal?.soldier === s.id && proposal.ready[this.mySlot];
+      const theirs = proposal?.soldier === s.id && !!partner && proposal.ready[partner.slot];
+      const other = proposal && proposal.soldier !== s.id ? c.soldiers.find((x) => x.id === proposal.soldier) : undefined;
+      const short = have < cost;
+      let row: HTMLElement;
+      if (theirs && !mine) {
+        row = h(
+          'div.alert-actions',
+          {},
+          h('button.x-btn.primary.waiting', { disabled: short, onclick: () => this.send({ type: 'treat', soldier: s.id, ready: true }) }, `Confirmar el tratamiento (${cost} ✚)`),
+          h('button.x-btn.danger', { onclick: () => this.send({ type: 'treat', soldier: s.id, ready: false }) }, 'Rechazar'),
+        );
+      } else if (mine) {
+        row = h(
+          'div.alert-actions',
+          {},
+          h('button.x-btn.ready', { onclick: () => this.send({ type: 'treat', soldier: s.id, ready: false }) }, 'Retirar la propuesta'),
+          h('small.x-muted', {}, `Esperando a ${partner?.name ?? 'tu compañero'}`),
+        );
+      } else {
+        const why = short ? `Hacen falta ${cost} ✚ y tenéis ${have}.` : other ? `Ya hay un tratamiento propuesto para ${other.name}: confirmadlo o rechazadlo antes.` : '';
+        row = h(
+          'button.x-btn.primary',
+          { disabled: short || !!other, title: why, onclick: () => this.send({ type: 'treat', soldier: s.id, ready: true }) },
+          shared ? `Proponer tratarle (${cost} ✚)` : `Tratar (${cost} ✚)`,
+        );
+      }
+      out.push(
+        h('div.x-group', {}, 'Mordido'),
+        h('p.x-muted', {}, shared ? `Las medicinas no llegan para todos: tratarle lo decidís los dos. Tenéis ${have} ✚.` : `Tratarle le quita la fiebre. Tenéis ${have} ✚.`),
+        row,
+      );
+    } else if (s.woundedDays > 0) {
+      out.push(
+        h(
+          'button.x-btn',
+          {
+            disabled: have < MEDICATE_COST,
+            title: have < MEDICATE_COST ? 'No quedan medicinas.' : `Gasta ${MEDICATE_COST} ✚ de las ${have} que tenéis.`,
+            onclick: () => this.send({ type: 'medicate', soldier: s.id }),
+          },
+          `Curar (${MEDICATE_COST} ✚): ${MEDICATE_DAYS} días menos`,
+        ),
+      );
+    }
+    return out;
+  }
+
   /** A small typed tag for costs, days and requirements; the long version goes in the title. */
   private chip(text: string, tone: '' | 'good' | 'bad' | 'warn' = '', title = ''): HTMLElement {
     return h(`span.x-chip${tone ? `.${tone}` : ''}`, title ? { title } : {}, text);
@@ -951,7 +1046,15 @@ export class StrategyScreen {
         'div.strat-res',
         {},
         h('span.strat-credits', { title: 'Suministros: construir, comprar accesorios, reclutar y contactar zonas' }, h('i', {}, '§'), h('b', {}, String(c.credits))),
-        h('span.strat-credits.medicines', { title: 'Medicinas: se traen de los saqueos. Curarán heridas e infecciones.' }, h('i', {}, '✚'), h('b', {}, String(c.medicines ?? 0))),
+        h('span.strat-credits.medicines', { title: 'Medicinas: se traen de los saqueos. Curan heridas y tratan a los mordidos.' }, h('i', {}, '✚'), h('b', {}, String(c.medicines ?? 0))),
+        // Food and parts (docs/FASE4.md): the base eats every day; the Taller makes weapons and armour with parts.
+        h(
+          `span.strat-credits.food${c.hungry ? '.x-bad' : ''}`,
+          { title: c.hungry ? 'Raciones: no quedan. El Bastión pasa hambre: −10 de voluntad en las misiones y las heridas curan más despacio.' : `Raciones: el Bastión come ${dailyRations(c)} al día` },
+          h('i', {}, '◍'),
+          h('b', {}, String(c.food ?? 0)),
+        ),
+        h('span.strat-credits.parts', { title: 'Piezas: el Taller hace con ellas armas y armaduras mejores' }, h('i', {}, '⚙'), h('b', {}, String(c.parts ?? 0))),
         this.levelBadge(c),
       ),
       h(
@@ -1066,6 +1169,11 @@ export class StrategyScreen {
       case 'event': {
         const def = eventDef(c);
         return { rows: def ? [['Qué hace', def.options[action.option].effect]] : [], see: null };
+      }
+      case 'craft': {
+        // The Taller's work (docs/FASE4.md): placeholder rows until the Taller's screen shows it.
+        const def = CRAFTS[action.project];
+        return { rows: [['Tiempo', `${def.days} días de obra`], ['Suministros', `${costText(def.cost)} y ${def.parts} piezas`], ['Qué hace', def.name]], see: null };
       }
     }
   }
@@ -1256,6 +1364,8 @@ export class StrategyScreen {
       dates.push({ day: c.day + work.daysLeft, icon: 'pick', text: what, go: () => this.pickPlot(work.plot, false) });
     }
     for (const s of c.soldiers.filter((x) => x.alive && x.woundedDays > 0 && x.owner === this.mySlot)) dates.push({ day: c.day + s.woundedDays, icon: 'hp', text: `${s.name} vuelve al servicio` });
+    // The bitten, both players': whoever has medicines can save them (docs/FASE3.md).
+    for (const s of c.soldiers.filter((x) => x.alive && x.infection)) dates.push({ day: turnDay(c, s)!, icon: 'hp', text: `${s.name} se convierte si no le tratáis`, go: () => this.openSoldier(s.id) });
     const rumor = c.rumors.find((r) => r.id === c.listening);
     if (rumor) dates.push({ day: c.day + rumor.daysLeft, icon: 'will', text: `Se sabrá qué pasa en ${REGIONS[rumor.region].name}` });
     for (const o of c.offers.filter((x) => x.expiresDay !== null)) dates.push({ day: o.expiresDay!, icon: 'flag', text: `Caduca «${o.name}»`, go: () => this.focusOffer(o.id) });
@@ -1690,7 +1800,21 @@ export class StrategyScreen {
             h('b', {}, name),
             unlocked
               ? h('span.x-side', {}, '✓')
-              : this.chip(`Nv ${lvl}${tier > 1 ? ` · ${RANKS[TIER_RANK[tier - 1]]!.name}` : ''}`, '', `Nivel ${lvl} del Bastión; cada soldado desde ${RANKS[TIER_RANK[tier - 1]]!.name}`),
+              : this.craftChip(c, key) ?? this.chip(`Nv ${lvl}${tier > 1 ? ` · ${RANKS[TIER_RANK[tier - 1]]!.name}` : ''}`, '', `Nivel ${lvl} del Bastión; cada soldado desde ${RANKS[TIER_RANK[tier - 1]]!.name}`),
+          ),
+        );
+      }
+      // Weapons found while searching (docs/FASE4.md): one soldier each, a tier above the rest.
+      const found = c.foundWeapons ?? [];
+      if (found.length) rows.push(h('div.x-group', {}, 'Encontradas'));
+      for (const w of found) {
+        const holder = w.holder ? c.soldiers.find((x) => x.id === w.holder) : undefined;
+        rows.push(
+          h(
+            `button.x-row${this.engPick === `f:${w.id}` ? '.selected' : ''}`,
+            { onclick: () => ((this.engPick = `f:${w.id}`), this.render()) },
+            h('b', {}, FOUND_WEAPONS[w.kind].name),
+            h('span.x-side', {}, holder ? displayName(holder.name, holder.nickname) : 'En la Armería'),
           ),
         );
       }
@@ -1722,7 +1846,8 @@ export class StrategyScreen {
     this.viewEl.append(this.panel('eng-left', 'left', h('div.x-head', {}, 'Armería'), tabs, h('div.x-list', {}, ...rows), note ? h('p.x-muted', {}, note) : null));
     if (!this.engPick) return;
     if (this.engTab === 'gear') {
-      this.viewEl.append(this.panel('eng-right', 'right', ...this.tierPanel(c, this.engPick)));
+      const panel = this.engPick.startsWith('f:') ? this.foundPanel(c, this.engPick.slice(2)) : this.tierPanel(c, this.engPick);
+      this.viewEl.append(this.panel('eng-right', 'right', ...panel));
       return;
     }
     const item = ITEMS[this.engPick as ItemId];
@@ -1757,6 +1882,73 @@ export class StrategyScreen {
     return lo === hi ? `daño ${lo}` : `daño ${lo}–${hi}`;
   }
 
+  /** The Taller's project that makes a tier (docs/FASE4.md). */
+  private craftFor(kind: 'weapon' | 'armor', tier: number): CraftDef | undefined {
+    return Object.values(CRAFTS).find((d) => d.kind === kind && d.tier === tier);
+  }
+
+  /** On the Armería's list: the days left while the Taller makes it, or nothing. */
+  private craftChip(c: CampaignState, key: string): HTMLElement | null {
+    const def = this.craftFor(key[0] === 'w' ? 'weapon' : 'armor', Number(key[1]));
+    const work = def && c.base.works.find((w) => w.project === def.id);
+    return work ? this.chip(`Taller · ${work.daysLeft} d`, 'good', `El Taller la está haciendo: ${work.daysLeft} días`) : null;
+  }
+
+  /** Make a tier in the Taller: a shared decision, like building, then a work for a crew. */
+  private craftRow(c: CampaignState, kind: 'weapon' | 'armor', tier: number): HTMLElement | null {
+    const def = this.craftFor(kind, tier);
+    if (!def) return null;
+    const work = c.base.works.find((w) => w.project === def.id);
+    if (work) return h('p.x-text', {}, `El Taller la está haciendo: ${work.daysLeft} ${work.daysLeft === 1 ? 'día' : 'días'}.`);
+    const blocker = craftBlocker(c, def.id);
+    return h(
+      'div',
+      {},
+      h('div.x-group', {}, 'Hacerla en el Taller'),
+      h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.parts} ⚙`, '', `${def.parts} piezas; tenéis ${c.parts ?? 0}`), this.chip(`${def.days} d`, '', `${def.days} días de obra`)),
+      h('button.x-btn.primary', { disabled: !!blocker, title: blocker ?? '', onclick: () => this.send({ type: 'craft', project: def.id }) }, `Hacer ${def.name.toLowerCase()}`),
+      blocker ? h('p.x-muted', {}, blocker) : null,
+    );
+  }
+
+  /** A weapon found while searching: who can carry it and who does. */
+  private foundPanel(c: CampaignState, id: string): (HTMLElement | null)[] {
+    const w = (c.foundWeapons ?? []).find((x) => x.id === id);
+    if (!w) return [h('p.x-muted', {}, 'Esa arma ya no está.')];
+    const def = FOUND_WEAPONS[w.kind];
+    const holder = w.holder ? c.soldiers.find((x) => x.id === w.holder) : undefined;
+    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && s.alive && fitsWeapon(s, w.kind));
+    return [
+      h('div.alert-kicker', {}, 'ARMA ENCONTRADA'),
+      h('h2.x-title', {}, def.name),
+      h('p.x-text', {}, 'Para un soldado: un nivel de arma por encima del resto, hasta el 3 y lo que permita su rango. Si cae, se pierde.'),
+      h('div.x-group', {}, 'La lleva'),
+      holder
+        ? h(
+            'div.x-gear',
+            {},
+            h('span', {}, displayName(holder.name, holder.nickname)),
+            holder.owner === this.mySlot ? h('button.x-btn.small', { onclick: () => this.send({ type: 'assignWeapon', weapon: w.id, soldier: null }) }, 'Quitársela') : null,
+          )
+        : h('p.x-muted', {}, 'Nadie: está en la Armería.'),
+      h('div.x-group', {}, 'Tus soldados que pueden llevarla'),
+      mine.length
+        ? h(
+            'div.x-list',
+            {},
+            ...mine.map((s) =>
+              h(
+                'div.x-gear',
+                {},
+                h('span', {}, displayName(s.name, s.nickname), h('small', {}, ` · ${weaponLabel(c, s)}`)),
+                s.id === w.holder ? this.chip('La lleva', 'good') : h('button.x-btn.small', { onclick: () => this.send({ type: 'assignWeapon', weapon: w.id, soldier: s.id }) }, 'Dársela'),
+              ),
+            ),
+          )
+        : h('p.x-muted', {}, 'Ninguno lleva esa clase de arma.'),
+    ];
+  }
+
   private tierPanel(c: CampaignState, key: string): (HTMLElement | null)[] {
     const weapon = key[0] === 'w';
     const tier = Number(key[1]) as 1 | 2 | 3;
@@ -1780,8 +1972,8 @@ export class StrategyScreen {
         'p.x-chips',
         { title: 'No se compra: cada soldado la lleva en cuanto cumple los requisitos' },
         tier === 1 ? this.chip('Todos', 'good') : this.chip(`Desde ${RANKS[TIER_RANK[tier - 1]]!.name}`),
-        tier === 1 || unlocked ? null : this.chip(`Nivel ${tech!.level} del Bastión`, 'warn'),
       ),
+      tier === 1 || unlocked ? null : this.craftRow(c, weapon ? 'weapon' : 'armor', tier),
       weapon ? h('div.x-group', {}, 'Por clase') : null,
       weapon ? h('dl.x-pairs', {}, ...CLASSES.flatMap((cls) => [h('dt', {}, TEMPLATES[cls].short), h('dd', {}, soldierWeaponName(cls, tier))])) : null,
       h('div.x-group', {}, 'Tus soldados con este nivel'),
@@ -1815,7 +2007,7 @@ export class StrategyScreen {
         h('span.rank', { title: RANKS[s.rank]!.name }, ...Array.from({ length: s.rank }, () => h('i'))),
         this.hasPoints(s)
           ? this.chip('▲', 'good', 'Ascenso: puntos de aptitud y de talento por repartir')
-          : h(`span.x-side${!s.alive ? '.x-bad' : s.woundedDays ? '.x-warn' : ''}`, {}, !s.alive ? 'Caído' : s.woundedDays ? `${s.woundedDays} d` : 'Listo'),
+          : this.healthTag(c, s, true),
       );
     const count = mine.filter((s) => s.alive).length;
     const cap = soldierCap(c);
@@ -1927,15 +2119,16 @@ export class StrategyScreen {
           this.stat('hp', String(stats.maxHp), 'Salud'),
           this.stat('aim', String(TEMPLATES[soldierTemplate(s.cls)].aim + stats.mods.aim), `Puntería: 50 + 3 por punto de Pulso + ${VETERAN_AIM} por ascenso`),
           this.stat('will', String(stats.will), 'Voluntad'),
-          h(`b.x-state${!s.alive ? '.x-bad' : s.woundedDays ? '.x-warn' : '.x-good'}`, {}, !s.alive ? 'Caído' : s.woundedDays ? `Herido · ${s.woundedDays} d` : 'Listo'),
+          this.healthTag(c, s, false),
         ),
+        ...this.careActions(c, s),
         s.traits?.length ? h('div.x-group', {}, 'Rasgos') : null,
         s.traits?.length ? h('p.x-chips', {}, ...s.traits.map((t) => this.chip(TRAITS[t].name, '', TRAITS[t].description))) : null,
         // What they carry, and what is chosen here and what isn't (playtest: «no se ve qué armas llevan ni dónde se elige»).
         h('div.x-group', { title: 'No se eligen: van con la clase y mejoran solas con el nivel del Bastión y el rango' }, 'Arma y armadura'),
         ...(['weapon', 'armor'] as const).map((kind) => {
           const tier = kind === 'weapon' ? weaponTier(c, s) : armorTier(c, s);
-          const name = kind === 'weapon' ? soldierWeaponName(soldierTemplate(s.cls), tier) : ARMOR_TIERS[tier - 1]!.name;
+          const name = kind === 'weapon' ? weaponLabel(c, s) : ARMOR_TIERS[tier - 1]!.name;
           const blocker = s.alive ? nextTierBlocker(c, s, kind) : null;
           const tech = tier < 3 ? (kind === 'weapon' ? [TECHS.magWeapons, TECHS.plasmaWeapons] : [TECHS.plateArmor, TECHS.predatorArmor])[tier - 1]! : null;
           const short = tech ? `→ Nv ${tech.level} · ${RANKS[TIER_RANK[tier as 1 | 2]]!.name}` : '';
@@ -2504,7 +2697,7 @@ export class StrategyScreen {
                     'div.x-row.fallen-row',
                     { style: { '--row-accent': this.playerColor(s.owner) } },
                     h('b', {}, displayName(s.name, s.nickname)),
-                    h('small', {}, `${RANKS[s.rank]!.name} · ${s.missions} ${s.missions === 1 ? 'misión' : 'misiones'}${s.fellDay !== undefined ? ` · cayó el día ${s.fellDay}` : ''}`),
+                    h('small', {}, `${RANKS[s.rank]!.name} · ${s.missions} ${s.missions === 1 ? 'misión' : 'misiones'}${s.fellCause === 'turned' ? ` · ${TURNED_CAUSE.toLowerCase()}` : ''}${s.fellDay !== undefined ? ` · ${s.fellCause === 'turned' ? 'el' : 'cayó el'} día ${s.fellDay}` : ''}`),
                   ),
                 ),
               )
@@ -2635,7 +2828,7 @@ export class StrategyScreen {
               this.clsTag(s.cls),
               h('b', { title: [RANKS[s.rank]!.name, ...gear].join(' · ') }, displayName(s.name, s.nickname)),
               h('span.rank', { title: RANKS[s.rank]!.name }, ...Array.from({ length: s.rank }, () => h('i'))),
-              on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
+              on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: hay que tratarle antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
             );
           }),
         ),
@@ -2820,7 +3013,8 @@ export class StrategyScreen {
     );
     const cards = h('div.lineup-cards');
     report.squad.forEach((e, i) => {
-      const status = e.status === 'dead' ? 'CAÍDO EN COMBATE' : e.status === 'wounded' ? `HERIDO · ${e.woundedDays} días` : 'ILESO';
+      const bitten = report.infected?.includes(e.id) ? ' · MORDIDO' : '';
+      const status = (e.status === 'dead' ? 'CAÍDO EN COMBATE' : e.status === 'wounded' ? `HERIDO · ${e.woundedDays} días` : 'ILESO') + bitten;
       const card = h(
         `div.lineup-card.${e.status}`,
         { style: { '--accent': this.playerColor(e.owner) } },

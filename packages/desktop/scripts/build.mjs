@@ -48,6 +48,8 @@ for (const name of ['main', 'preload']) {
   });
 }
 copyFileSync(join(desktop, 'src', 'launcher.html'), join(out, 'launcher.html'));
+// The window's icon (build/icon.png, from scripts/icon.py; the bundles take icon.icns and icon.ico).
+copyFileSync(join(desktop, 'build', 'icon.png'), join(out, 'icon.png'));
 rmSync(app, { recursive: true, force: true });
 renameSync(out, app);
 console.log(`Bastión (escritorio): compilado en ${app}`);

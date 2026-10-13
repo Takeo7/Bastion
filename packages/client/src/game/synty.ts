@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { NIGHT } from './night';
 import { ATLASES, atlasFile, fxTextureFile, modelFile, type AtlasId, type FxTextureId, type ModelKind, type PackId } from './syntyManifest';
 
 // Synty models at run time: the converted GLBs (tools/synty) carry geometry
@@ -122,6 +123,12 @@ export interface Dyes {
   /** A skin tone of its own (1 in dyeSkinOn), for the one swatch Synty paints every face and hand with. */
   dyeSkin: { value: THREE.Color };
   dyeSkinOn: { value: number };
+  /**
+   * How much the night's cool rim lights this unit's edges (night.ts NIGHT, so
+   * it comes and goes with the night and no shader is rebuilt): 1 the squad,
+   * a trace for the dead and the Cuervos, who should stay darker.
+   */
+  dyeRim: { value: number };
 }
 
 export type DyedMaterial = THREE.MeshStandardMaterial & { userData: { dyes: Dyes } };
@@ -135,11 +142,12 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
     dyeFlash: { value: 0 },
     dyeSkin: { value: new THREE.Color(1, 1, 1) },
     dyeSkinOn: { value: 0 },
+    dyeRim: { value: 0 },
   };
   const m = new THREE.MeshStandardMaterial({ map: atlasTexture(atlas), roughness: 0.82, metalness: 0 }) as DyedMaterial;
   m.userData.dyes = uniforms;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms);
+    Object.assign(shader.uniforms, uniforms, { unitNight: NIGHT });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -160,7 +168,9 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
         uniform float dyeBand;
         uniform float dyeFlash;
         uniform vec3 dyeSkin;
-        uniform float dyeSkinOn;`,
+        uniform float dyeSkinOn;
+        uniform float dyeRim;
+        uniform float unitNight;`,
       )
       .replace(
         '#include <map_fragment>',
@@ -184,7 +194,15 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
-        if (dyeBandHere) totalEmissiveRadiance += dyeColors[5] * 0.9;
+        if (dyeBandHere) totalEmissiveRadiance += dyeColors[5] * (0.9 + 1.1 * unitNight * dyeRim);
+        // By night a cool moonlit rim on the edges turning away from the camera, and a breath of the
+        // unit's own colours, so the squad reads in the dark without looking lit by day.
+        float nightK = unitNight * dyeRim;
+        if (nightK > 0.0) {
+          float rimFacing = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+          totalEmissiveRadiance += vec3(0.42, 0.62, 0.8) * pow(rimFacing, 3.0) * 0.5 * nightK;
+          totalEmissiveRadiance += diffuseColor.rgb * 0.07 * nightK;
+        }
         totalEmissiveRadiance += vec3(1.0, 0.23, 0.16) * dyeFlash;`,
       );
   };

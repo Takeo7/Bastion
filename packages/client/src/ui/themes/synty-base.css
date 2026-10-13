@@ -135,7 +135,7 @@
 }
 
 /* Straight, not crooked: every sheet, card and slip. */
-:root[data-uf='synty'] :is(.conceal, em.ow, em.hk, em.aid, em.stun, em.data, em.evac, em.psi, .unit-panel, .shot-numbers .big:not(.crit), .game-menu-card, .outcome-card, .outcome-card h1, .fps-counter, .setting-choices button.on, .strat-right > .x-panel, .briefing-head:is(.victory, .defeat) h1, .strat-modal .x-panel, .menu-column, .menu-modal .x-panel, .radio) {
+:root[data-uf='synty'] :is(.conceal, em.ow, em.hk, em.aid, em.stun, em.data, em.evac, em.psi, em.bite, .unit-panel, .shot-numbers .big:not(.crit), .game-menu-card, .outcome-card, .outcome-card h1, .fps-counter, .setting-choices button.on, .strat-right > .x-panel, .briefing-head:is(.victory, .defeat) h1, .strat-modal .x-panel, .menu-column, .menu-modal .x-panel, .radio) {
   transform: none;
 }
 
@@ -683,4 +683,16 @@
 /* A panel's kicker is a heading, not a warning: the accent. Red only for the bad ones (red is for danger). */
 :root[data-uf='synty'] .alert-kicker:not(.bad, .good) {
   color: var(--t-accent);
+}
+
+/* Bitten (Combate, styles.css em.bite): a flat danger tag, the bite mark in front. It is danger,
+   so it keeps the theme's red; a dark ground keeps it legible over the scene on the unit flag. */
+:root[data-uf='synty'] em.bite {
+  --c-bite: var(--t-danger-ink);
+  border-width: 1px;
+  border-color: var(--t-danger-edge);
+  background: var(--t-danger-bg);
+  font-family: var(--font);
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }

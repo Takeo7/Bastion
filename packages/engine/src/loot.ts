@@ -1,11 +1,11 @@
 // Searching (docs/FASE2.md, «Saqueo»): which furniture can be searched, what
 // turns up in it and what the squad brings home. The rolls happen on the host
 // (Sim.search); the `searched` event carries what was found.
-import { ITEMS, TEMPLATES } from './content';
+import { FOUND_WEAPONS, ITEMS, NIGHT, TEMPLATES } from './content';
 import { decorOf } from './decor';
 import { DIRS8, elevAt, inBounds, tileAt, tileIndex } from './grid';
 import type { Rng } from './rng';
-import type { DecorKind, GameState, ItemId, Loot, TileKind, Unit, Vec2 } from './types';
+import type { DecorKind, FoundWeaponId, GameState, ItemId, Loot, TileKind, Unit, Vec2 } from './types';
 
 /** What kind of place a searchable piece of furniture belongs to: it sets what turns up in it. */
 type Spot = 'home' | 'office' | 'shop' | 'store' | 'trunk' | 'glovebox';
@@ -28,41 +28,63 @@ const SPOTS: Partial<Record<DecorKind, Spot>> = {
 export const SEARCHABLE: readonly DecorKind[] = Object.keys(SPOTS) as DecorKind[];
 
 interface LootTable {
-  /** Chances out of 100; whatever is left turns up nothing. */
+  /** Chances out of 100, in this order; whatever is left turns up nothing. */
   supplies: number;
   item: number;
   medicines: number;
+  /** Rations: pantries, shops and stores most (docs/FASE4.md). */
+  food: number;
+  /** Parts: stores, car boots and offices. */
+  parts: number;
+  /** A good weapon (FOUND_WEAPONS): rare, in boots, stores and wardrobes. */
+  weapon: number;
   /** Accessories that turn up there (only those the difficulty opens: `level` ≤ difficulty + 2). */
   items: ItemId[];
 }
 
 const TABLES: Record<Spot, LootTable> = {
-  home: { supplies: 40, item: 10, medicines: 15, items: ['firstAid', 'smokeGrenade', 'nanoVest', 'mindShield'] },
-  office: { supplies: 40, item: 10, medicines: 10, items: ['firstAid', 'flashbang', 'tracerRounds', 'mindShield'] },
-  shop: { supplies: 50, item: 10, medicines: 15, items: ['firstAid', 'smokeGrenade', 'fragGrenade', 'tracerRounds'] },
-  store: { supplies: 45, item: 20, medicines: 5, items: ['fragGrenade', 'smokeGrenade', 'tracerRounds', 'apRounds', 'flashbang'] },
-  trunk: { supplies: 40, item: 20, medicines: 10, items: ['fragGrenade', 'firstAid', 'apRounds', 'nanoVest'] },
-  glovebox: { supplies: 30, item: 5, medicines: 15, items: ['firstAid', 'tracerRounds'] },
+  home: { supplies: 30, item: 8, medicines: 12, food: 20, parts: 0, weapon: 2, items: ['firstAid', 'smokeGrenade', 'nanoVest', 'mindShield'] },
+  office: { supplies: 30, item: 8, medicines: 8, food: 4, parts: 15, weapon: 0, items: ['firstAid', 'flashbang', 'tracerRounds', 'mindShield'] },
+  shop: { supplies: 35, item: 8, medicines: 12, food: 25, parts: 2, weapon: 0, items: ['firstAid', 'smokeGrenade', 'fragGrenade', 'tracerRounds'] },
+  store: { supplies: 30, item: 14, medicines: 4, food: 15, parts: 15, weapon: 3, items: ['fragGrenade', 'smokeGrenade', 'tracerRounds', 'apRounds', 'flashbang'] },
+  trunk: { supplies: 30, item: 14, medicines: 8, food: 5, parts: 15, weapon: 4, items: ['fragGrenade', 'firstAid', 'apRounds', 'nanoVest'] },
+  glovebox: { supplies: 25, item: 5, medicines: 12, food: 3, parts: 5, weapon: 1, items: ['firstAid', 'tracerRounds'] },
 };
 
-/** Suministros found at once: 5–14, and 2 more per difficulty step (up to 20). */
-function supplies(difficulty: number, rng: Rng): number {
-  return rng.range(5, 14) + 2 * (difficulty - 1);
+/** Rations and parts found at once. */
+const FOOD_FIND = [2, 4] as const;
+const PARTS_FIND = [1, 2] as const;
+
+/** Which good weapon turns up, by FOUND_WEAPONS weight. */
+function foundWeapon(rng: Rng): FoundWeaponId {
+  const all = Object.values(FOUND_WEAPONS);
+  let roll = rng.int(all.reduce((n, w) => n + w.weight, 0));
+  return all.find((w) => (roll -= w.weight) < 0)!.id;
 }
 
-/** What a search of `decor` turns up at that difficulty (1–4), or null for nothing. */
-export function rollLoot(decor: DecorKind, difficulty: number, rng: Rng): Loot | null {
+/** Suministros found at once: 5–14, and 2 more per difficulty step (up to 20); half as much again at night. */
+function supplies(difficulty: number, rng: Rng, night: boolean): number {
+  const found = rng.range(5, 14) + 2 * (difficulty - 1);
+  return night ? Math.round(found * NIGHT.supplies) : found;
+}
+
+/** What a search of `decor` turns up at that difficulty (1–4), or null for nothing; more suministros at night. */
+export function rollLoot(decor: DecorKind, difficulty: number, rng: Rng, night = false): Loot | null {
   const spot = SPOTS[decor];
   if (!spot) return null;
   const d = Math.max(1, Math.min(4, difficulty));
   const t = TABLES[spot];
   const roll = rng.int(100);
-  if (roll < t.supplies) return { supplies: supplies(d, rng) };
+  if (roll < t.supplies) return { supplies: supplies(d, rng, night) };
   if (roll < t.supplies + t.item) {
     const pool = t.items.filter((id) => ITEMS[id].level <= d + 2);
-    return pool.length ? { item: rng.pick(pool) } : { supplies: supplies(d, rng) };
+    return pool.length ? { item: rng.pick(pool) } : { supplies: supplies(d, rng, night) };
   }
-  if (roll < t.supplies + t.item + t.medicines) return { medicines: 1 };
+  let edge = t.supplies + t.item + t.medicines;
+  if (roll < edge) return { medicines: 1 };
+  if (roll < (edge += t.food)) return { food: rng.range(...FOOD_FIND) };
+  if (roll < (edge += t.parts)) return { parts: rng.range(...PARTS_FIND) };
+  if (roll < (edge += t.weapon)) return { weapon: foundWeapon(rng) };
   return null;
 }
 
@@ -113,14 +135,20 @@ export interface LootTotals {
   supplies: number;
   items: ItemId[];
   medicines: number;
+  food: number;
+  parts: number;
+  weapons: FoundWeaponId[];
 }
 
 export function lootTotals(loot: readonly Loot[]): LootTotals {
-  const out: LootTotals = { supplies: 0, items: [], medicines: 0 };
+  const out: LootTotals = { supplies: 0, items: [], medicines: 0, food: 0, parts: 0, weapons: [] };
   for (const l of loot) {
     out.supplies += l.supplies ?? 0;
     if (l.item) out.items.push(l.item);
     out.medicines += l.medicines ?? 0;
+    out.food += l.food ?? 0;
+    out.parts += l.parts ?? 0;
+    if (l.weapon) out.weapons.push(l.weapon);
   }
   return out;
 }

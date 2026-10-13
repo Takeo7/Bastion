@@ -25,6 +25,42 @@ export interface Shot {
   zoom?: { min: number; reach: number };
 }
 
+type RGB = readonly [number, number, number];
+
+/**
+ * A set's light after the scene: the tone mapping's exposure (neutral, as in
+ * battle: it keeps the atlases' colours), the bloom, and the colour grade of
+ * post.ts. The tints and lift are display values (the grade runs after tone
+ * mapping and sRGB).
+ */
+export interface StageMood {
+  exposure: number;
+  bloom: { strength: number; threshold: number };
+  grade: { saturation: number; contrast: number; vignette: number; shadowTint: RGB; highlightTint: RGB; lift: RGB };
+}
+
+/** The look before any set says otherwise. */
+const PLAIN_MOOD: StageMood = {
+  exposure: 1.1,
+  bloom: { strength: 0.45, threshold: 0.9 },
+  grade: { saturation: 1.0, contrast: 1.04, vignette: 0.22, shadowTint: [1, 1, 1], highlightTint: [1, 1, 1], lift: [0, 0, 0] },
+};
+
+/** A vertical sky gradient (top to horizon) as a scene's background. */
+export function skyTexture(stops: string[]): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  stops.forEach((c, i) => g.addColorStop(i / (stops.length - 1), c));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 /** Panels of the screens over the stage: a fitted shot keeps clear of them. */
 const PANELS = '.strat-top, .strat-nav, .strat-left, .strat-right';
 
@@ -38,8 +74,17 @@ export interface StageSet {
   hover?(hotspot: string | null): void;
   /** Drag with the pointer; return true when the set used it (e.g. spinning the globe). */
   drag?(dx: number, dy: number): boolean;
-  /** Screen-space ambient occlusion (voxel art): on for solid sets like the Bastion, off for the globe. */
+  /** Screen-space ambient occlusion: on for solid sets like the Bastion (only on «alto»). */
   readonly ambientOcclusion?: boolean;
+  /** Its light after the scene (exposure, bloom, grade), applied while it is shown. */
+  readonly mood?: StageMood;
+  /**
+   * Called before each frame with the renderer: GPU work the set has pending
+   * (a bake) and, as the shadow map is not drawn every frame, setting
+   * `gl.shadowMap.needsUpdate` when its shadows would change. A set without
+   * it has its shadows drawn every frame.
+   */
+  beforeRender?(gl: THREE.WebGLRenderer, dt: number): void;
 }
 
 /**
@@ -58,13 +103,15 @@ export class Stage {
   private readonly resizeObserver: ResizeObserver;
   private readonly raycaster = new THREE.Raycaster();
   private active = '';
+  /** The set whose mood the post-processing carries now. */
+  private moodOf: StageSet | null = null;
   /** Whether the set shown picks the music and ambience (the base does; the menu's backdrop does not). */
   soundtrack = true;
   private frameId = 0;
   private moveId = 0;
   private drag: { x: number; y: number; moved: boolean } | null = null;
   private disposed = false;
-  /** Voxel post-processing; it follows whichever set is active. */
+  /** Post-processing; it follows whichever set is active. */
   private readonly post: PostChain;
   private readonly limiter = new FrameLimiter();
   private effects: GraphicsSettings['effects'] = 'high';
@@ -80,10 +127,13 @@ export class Stage {
   constructor() {
     this.element.className = 'stage';
     this.fade.className = 'stage-fade';
-    this.gl.toneMapping = THREE.ACESFilmicToneMapping;
-    this.gl.toneMappingExposure = 1.15;
+    // Neutral, as in battle: it keeps the atlases' colours (ACES turned their reds orange).
+    this.gl.toneMapping = THREE.NeutralToneMapping;
+    this.gl.toneMappingExposure = PLAIN_MOOD.exposure;
     this.gl.shadowMap.enabled = true;
     this.gl.shadowMap.type = THREE.PCFShadowMap;
+    // Drawn when a set asks (beforeRender), not every frame.
+    this.gl.shadowMap.autoUpdate = false;
     // Characters live on their own layer (post.ts), like in battle.
     this.camera.layers.enable(UNIT_LAYER);
     this.post = postChain(this.gl, new THREE.Scene(), this.camera);
@@ -103,6 +153,7 @@ export class Stage {
   /** Graphics settings, live: resolution, shadows and how much post-processing. */
   private applyGraphics(g: GraphicsSettings): void {
     this.effects = g.effects;
+    this.gl.shadowMap.needsUpdate = true;
     if (this.gl.shadowMap.enabled !== g.shadows) {
       this.gl.shadowMap.enabled = g.shadows;
       for (const set of this.sets.values()) {
@@ -314,6 +365,23 @@ export class Stage {
     this.camera.lookAt(this.target);
   }
 
+  /** Exposure, bloom and grade of the set now shown (its shadows are drawn again: another scene's sun). */
+  private applyMood(set: StageSet): void {
+    this.moodOf = set;
+    const m = set.mood ?? PLAIN_MOOD;
+    this.gl.toneMappingExposure = m.exposure;
+    this.post.bloom.strength = m.bloom.strength;
+    this.post.bloom.threshold = m.bloom.threshold;
+    const g = this.post.grade;
+    g.saturation.value = m.grade.saturation;
+    g.contrast.value = m.grade.contrast;
+    g.vignette.value = m.grade.vignette;
+    g.shadowTint.value.setRGB(...m.grade.shadowTint, THREE.LinearSRGBColorSpace);
+    g.highlightTint.value.setRGB(...m.grade.highlightTint, THREE.LinearSRGBColorSpace);
+    g.lift.value.setRGB(...m.grade.lift, THREE.LinearSRGBColorSpace);
+    this.gl.shadowMap.needsUpdate = true;
+  }
+
   /** Fades the stage to black (e.g. before leaving for a mission). */
   blackout(): void {
     this.fade.classList.add('on');
@@ -400,6 +468,9 @@ export class Stage {
     const dt = Math.min(this.clock.getDelta(), 0.1);
     this.applyZoom(dt);
     set.tick(dt, this.clock.getElapsed());
+    if (set !== this.moodOf) this.applyMood(set);
+    if (set.beforeRender) set.beforeRender(this.gl, dt);
+    else this.gl.shadowMap.needsUpdate = true;
     this.post.scene.scene = set.scene;
     this.post.ao.scene = set.scene;
     this.post.ao.enabled = !!set.ambientOcclusion && this.effects === 'high';

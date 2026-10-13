@@ -37,11 +37,15 @@ import {
   type AttrId,
   type Talents,
 } from './classes';
-import { addMods, ITEMS, RANKS, rankForXp, SOLDIER_NAMES, TEMPLATES } from './content';
+import { addMods, FOUND_WEAPONS, ITEMS, NIGHT, RANKS, rankForXp, SOLDIER_NAMES, TEMPLATES } from './content';
 import {
   ARMOR_TIERS,
   armorTier,
   bastionLevel,
+  CRAFTS,
+  type CraftId,
+  foundWeaponOf,
+  hasCrafted,
   hasTech,
   itemUnlocked,
   LEVEL_XP,
@@ -51,15 +55,16 @@ import {
   type TechId,
   upgradeLevel,
   WEAPON_TIER_DAMAGE,
+  weaponName,
   weaponTier,
 } from './progression';
-import { broughtBack } from './loot';
-import { briefingSignature, doomChangeText, doomSubject, lootSummary, missionBriefing, NWOSU_CHAPTER, PARTITURA_LEVEL, SIMON_CHAPTER, STORY, storyVip, type Ending, type SimonChoice } from './lore';
+import { broughtBack, type LootTotals } from './loot';
+import { briefingSignature, doomChangeText, doomSubject, ITEM_FINDS, lootSummary, missionBriefing, NWOSU_CHAPTER, PARTITURA_LEVEL, SIMON_CHAPTER, STORY, storyVip, type Ending, type SimonChoice } from './lore';
 import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecision, type QuestId, type QuestMission, type QuestOutcome, type TraitId } from './quests';
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
 import { podPlan, scavengePlan, type MapSource, type SquadMember } from './setup';
-import type { Appearance, Biome, ClassId, EndReason, GameState, ItemId, ItemSlot, MissionKind, PerkId, Slot, TemplateId, Vec2 } from './types';
+import type { Appearance, Biome, ClassId, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Slot, TemplateId, Vec2 } from './types';
 
 // --------------------------------------------------------------- facilities
 
@@ -75,7 +80,8 @@ export type FacilityId =
   | 'listening'
   | 'crew'
   | 'echoes'
-  | 'memorial';
+  | 'memorial'
+  | 'garden';
 
 export interface FacilityDef {
   id: FacilityId;
@@ -211,6 +217,17 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
     level: 1,
     unique: true,
   },
+  // Food (docs/FASE4.md): costs and days like a barracón. Texts are placeholders for Lore.
+  garden: {
+    id: 'garden',
+    name: 'Huerto',
+    description: '+1 ración al día. Bancales bajo plástico y bidones para el agua de lluvia.',
+    upgrades: ['+2 raciones al día. Un invernadero de verdad, con estufa.', '+3 raciones al día. Riego por goteo y semillas de La Vega.'],
+    cost: 40,
+    days: 2,
+    level: 1,
+    unique: true,
+  },
   relay: {
     id: 'relay',
     name: 'Centro de comunicaciones',
@@ -322,10 +339,13 @@ export interface BasePlot {
 
 export interface Construction {
   plot: string;
-  kind: 'clear' | 'build' | 'upgrade';
+  /** `craft`: the Taller makes a tier of weapons or armour (docs/FASE4.md), on its own plot. */
+  kind: 'clear' | 'build' | 'upgrade' | 'craft';
   facility: FacilityId | null;
   daysLeft: number;
   total: number;
+  /** What a `craft` work makes. */
+  project?: CraftId;
 }
 
 const DIRS: readonly Vec2[] = [
@@ -720,6 +740,10 @@ export interface CampaignSoldier {
   appearance: Appearance;
   /** Left by side quests, for good (quests.ts TRAITS). */
   traits: TraitId[];
+  /** Came back from a mission bitten (docs/FASE3.md): turns on `turnDay` unless treated. Can't deploy meanwhile. */
+  infection?: { since: number };
+  /** Why the fallen fell, when it wasn't in combat: 'turned', the infection won (TURNED_CAUSE). */
+  fellCause?: 'turned';
 }
 
 export interface MissionReward {
@@ -727,6 +751,11 @@ export interface MissionReward {
   recruit?: ClassId;
   /** Slows the enemy project. */
   doom?: number;
+  /** Medicines (✚, docs/FASE3.md). */
+  medicines?: number;
+  /** Rations and parts (docs/FASE4.md). */
+  food?: number;
+  parts?: number;
 }
 
 export interface MissionOffer {
@@ -748,6 +777,8 @@ export interface MissionOffer {
   story: number | null;
   /** Side quest whose current step this is; losing it or letting it expire fails the quest. */
   quest: QuestId | null;
+  /** Flown at night (byNight): its reward already counts the night's half as much again. Missing: by day. */
+  night?: boolean;
 }
 
 export type ProposalAction =
@@ -757,7 +788,8 @@ export type ProposalAction =
   | { type: 'upgrade'; plot: string }
   | { type: 'contact'; region: RegionId }
   | { type: 'event'; option: 0 | 1 }
-  | { type: 'investigate'; id: string };
+  | { type: 'investigate'; id: string }
+  | { type: 'craft'; project: CraftId };
 
 export interface Proposal {
   by: Slot;
@@ -801,14 +833,24 @@ export interface MissionReport {
   story: number | null;
   /** What the squad brought back from searching (docs/FASE2.md), already added; missing in older reports. */
   loot?: MissionLoot;
+  /** It was a night mission (docs/ALTURA-Y-NOCHE.md). */
+  night?: boolean;
+  /** Soldiers (campaign ids) who came back bitten (docs/FASE3.md); missing in older reports. */
+  infected?: string[];
+  /** Parts stripped from the Acorazados brought down (docs/FASE4.md), already added. */
+  scrap?: number;
 }
 
-/** The haul of a mission: suministros (to the credits), accessories (to the inventory) and medicines. */
+/** The haul of a mission: suministros (to the credits), accessories (to the inventory), medicines, rations, parts and found weapons. */
 export interface MissionLoot {
   supplies: number;
   items: ItemId[];
   medicines: number;
-  /** The debrief's line (lore.ts lootSummary), or null when nothing came back. */
+  /** Missing in reports from before phase 4. */
+  food?: number;
+  parts?: number;
+  weapons?: FoundWeaponId[];
+  /** The debrief's line (lootLine), or null when nothing came back. */
   line: string | null;
 }
 
@@ -848,7 +890,7 @@ export interface Rumor {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 11;
+export const CAMPAIGN_VERSION = 13;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -862,8 +904,25 @@ export interface CampaignState {
   soldiers: CampaignSoldier[];
   /** Accessories bought: copies owned (equipped ones included). */
   inventory: Partial<Record<ItemId, number>>;
-  /** Medicines brought back from searching; only counted for now (phase 3 uses them). Missing in older campaigns: 0. */
+  /** Medicines (✚): from searching, some rewards and the enclaves; they treat the infected and heal wounds (docs/FASE3.md). */
   medicines?: number;
+  /** Next day the enclaves send medicines (ENCLAVES). */
+  nextMedicineDay?: number;
+  /** A treatment one commander has proposed, waiting for both keys (like launching); null for none. */
+  treatment?: { soldier: string; ready: [boolean, boolean] } | null;
+  // Food and the Taller (docs/FASE4.md); missing before version 13.
+  /** Rations: the Bastion eats every day (dailyRations). */
+  food?: number;
+  /** No rations for the day: −10 will on missions and wounds heal half as fast, until there are again. */
+  hungry?: boolean;
+  /** Next day La Vega sends rations. */
+  nextFoodDay?: number;
+  /** Parts, for the Taller's work. */
+  parts?: number;
+  /** What the Taller has made for everyone (CRAFTS). */
+  crafted?: CraftId[];
+  /** Good weapons found, kept in the Armería: each for one soldier at most. */
+  foundWeapons?: FoundWeapon[];
   /** `works`: the projects going on, one per crew (two, three with the works brigade). */
   base: { plots: BasePlot[]; works: Construction[] };
   regions: RegionState[];
@@ -907,6 +966,14 @@ export interface CampaignState {
   /** Tells campaigns apart in each browser (scenes already played); missing in campaigns from before it. */
   uid?: string;
   nextId: number;
+}
+
+/** A weapon found searching (docs/FASE4.md), in the Armería. */
+export interface FoundWeapon {
+  id: string;
+  kind: FoundWeaponId;
+  /** The soldier who carries it (a tier above the rest); null, on the rack. Lost with them if they fall. */
+  holder: string | null;
 }
 
 export interface StoryState {
@@ -1086,8 +1153,130 @@ export function itemsFree(c: CampaignState, id: ItemId): number {
   return (c.inventory[id] ?? 0) - used;
 }
 
+/** Fit to deploy: alive, healed, and not running a fever from a bite. */
 export function soldierReady(s: CampaignSoldier): boolean {
-  return s.alive && s.woundedDays === 0;
+  return s.alive && s.woundedDays === 0 && !s.infection;
+}
+
+// ------------------------------------------------------------ infection
+
+/** Medicines a campaign starts with. */
+export const START_MEDICINES = 2;
+/** Days a bitten soldier lasts at the base before turning; the Enfermería adds INFIRMARY_TURN_DAYS. */
+export const TURN_DAYS = 3;
+export const INFIRMARY_TURN_DAYS = 2;
+/** What curing a wound with medicines takes and gives: 1 ✚ for 3 recovery days fewer. */
+export const MEDICATE_COST = 1;
+export const MEDICATE_DAYS = 3;
+/** The enclaves that send medicines while they are allies (contacted) and stand (no Nido in their region), 1 ✚ each every ENCLAVE_DAYS. */
+export const ENCLAVES: RegionId[] = ['oce', 'afr'];
+export const ENCLAVE_DAYS = 6;
+/** The cause the Caídos read for a soldier who turned (placeholder for Lore). */
+export const TURNED_CAUSE = 'Se convirtió';
+
+/** Medicines a treatment takes: 2, or 1 with the Enfermería at level 2 or more. */
+export function treatCost(c: CampaignState): number {
+  return facilityLevel(c, 'infirmary') >= 2 ? 1 : 2;
+}
+
+/** The day a bitten soldier turns, unless treated: 3 days after coming back, 5 with an Enfermería. */
+export function turnDay(c: CampaignState, s: CampaignSoldier): number | null {
+  if (!s.infection) return null;
+  return s.infection.since + TURN_DAYS + (facilityCount(c, 'infirmary') ? INFIRMARY_TURN_DAYS : 0);
+}
+
+/** An enclave that is an ally (contacted) and stands (no Nido in its region). */
+function enclaveStands(c: CampaignState, id: RegionId): boolean {
+  const r = c.regions.find((x) => x.id === id);
+  return !!r?.contacted && !r.facility;
+}
+
+/** Enclaves that send medicines (ENCLAVES). */
+function livingEnclaves(c: CampaignState): RegionId[] {
+  return ENCLAVES.filter((id) => enclaveStands(c, id));
+}
+
+// ------------------------------------------------------------------- food
+
+/** Rations a campaign starts with (docs/FASE4.md). */
+export const START_FOOD = 16;
+/** The Bastion eats a ration a day for every 4 living soldiers, rounded up. */
+export const EATERS_PER_RATION = 4;
+/** La Vega, an ally standing, sends 2 rations every 4 days (besides its medicines). */
+export const LA_VEGA_FOOD = 2;
+export const LA_VEGA_FOOD_DAYS = 4;
+/** Will every soldier goes on a mission without, while the Bastion is hungry. */
+export const HUNGRY_WILL = 10;
+
+/** Rations the Bastion eats a day. */
+export function dailyRations(c: Pick<CampaignState, 'soldiers'>): number {
+  return Math.ceil(c.soldiers.filter((s) => s.alive).length / EATERS_PER_RATION);
+}
+
+/** Rations the Huerto grows a day: one a level. */
+export function gardenYield(c: CampaignState): number {
+  return facilityLevel(c, 'garden');
+}
+
+/** Rations come in; with enough for a day again, the hunger is over. */
+function addFood(c: CampaignState, n: number): void {
+  if (n <= 0) return;
+  c.food = (c.food ?? 0) + n;
+  if (c.hungry && c.food >= dailyRations(c)) {
+    c.hungry = false;
+    log(c, 'Vuelve a haber raciones: se acabó el hambre.', 'good');
+  }
+}
+
+// ---------------------------------------------------------- the Taller
+
+/** The Taller's plot, where its work is done. */
+function workshopPlot(c: CampaignState): BasePlot | undefined {
+  return c.base.plots.find((p) => p.building === 'workshop');
+}
+
+/** Why the Taller can't start making `id` now, or null (docs/FASE4.md). */
+export function craftBlocker(c: CampaignState, id: CraftId): string | null {
+  const def = CRAFTS[id];
+  if (hasCrafted(c, id)) return 'Ya está hecho.';
+  if (c.base.works.some((w) => w.project === id)) return 'Ya se está haciendo.';
+  const plot = workshopPlot(c);
+  if (!plot) return 'Hace falta el Taller.';
+  if ((plot.level ?? 1) < def.workshop) return `Hace falta el Taller a nivel ${def.workshop}.`;
+  if (!hasTech(c, def.tech)) return `Hace falta el nivel ${TECHS[def.tech].level} del Bastión.`;
+  if (def.after && !hasCrafted(c, def.after)) return `Antes hay que hacer las ${CRAFTS[def.after].name.toLowerCase()}.`;
+  const busy = worksBlocker(c, plot);
+  if (busy) return busy;
+  if (!canAfford(c, def.cost)) return 'No hay suministros suficientes.';
+  if ((c.parts ?? 0) < def.parts) return 'No hay piezas suficientes.';
+  return null;
+}
+
+/** What a soldier's card reads for the weapon: a found one by its name, otherwise the class weapon of its tier. */
+export function weaponLabel(c: CampaignState, s: CampaignSoldier): string {
+  const found = foundWeaponOf(c, s);
+  return found ? FOUND_WEAPONS[found.kind].name : weaponName(TEMPLATES[soldierTemplate(s.cls)].weapon, weaponTier(c, s));
+}
+
+/** Whether a soldier can take a found weapon: only one who carries that kind of weapon. */
+export function fitsWeapon(s: CampaignSoldier, kind: FoundWeaponId): boolean {
+  return TEMPLATES[soldierTemplate(s.cls)].weapon === FOUND_WEAPONS[kind].weapon;
+}
+
+/** A bitten soldier whose days ran out turns: one more of the Caídos (docs/FASE3.md). Gear stays in the base. */
+function turn(c: CampaignState, s: CampaignSoldier): void {
+  s.alive = false;
+  s.fellDay = c.day;
+  s.fellCause = 'turned';
+  delete s.infection;
+  s.loadout = { utility: null, ammo: null };
+  for (const w of c.foundWeapons ?? []) if (w.holder === s.id) w.holder = null;
+  c.squad = c.squad.filter((id) => id !== s.id);
+  if (c.treatment?.soldier === s.id) c.treatment = null;
+  log(c, `${s.name} no ha superado la fiebre: se ha convertido.${facilityCount(c, 'memorial') ? ' Descansa en el Camposanto.' : ''}`, 'bad', {
+    kicker: 'Enfermería',
+    title: `${s.name} se ha convertido`,
+  });
 }
 
 export function contactCapacity(c: CampaignState): number {
@@ -1167,7 +1356,7 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   const reward: MissionReward = final ? {} : { credits: 50 + difficulty * 25 + bonus + rng.int(4) * 5 };
   if (!final && (kind === 'rescue' || rng.int(5) === 0)) reward.recruit = rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const);
   if (!final && (kind === 'sabotage' || (kind === 'hack' && rng.int(3) === 0))) reward.doom = 1;
-  return {
+  return byNight(withProvisions(withMedicines({
     id: newId(c, 'm'),
     name: final ? 'El campamento de la sierra' : `Operación ${rng.pick(OPERATION_A)} ${rng.pick(OPERATION_B)}`,
     kind,
@@ -1181,13 +1370,48 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
     facility: null,
     story: null,
     quest: null,
-  };
+  })));
+}
+
+/** Rations and parts some operations pay (docs/FASE4.md), by seed: one in three pays rations, one in four parts. */
+export const REWARD_FOOD = 4;
+export const REWARD_PARTS = 2;
+
+function withProvisions(o: MissionOffer): MissionOffer {
+  if (o.final || o.map.kind !== 'generated') return o;
+  const roll = Math.imul(o.map.seed ^ 0x666f6f64, 0x2c1b3c6d) >>> 0;
+  const food = roll % 3 === 0 ? { food: REWARD_FOOD } : {};
+  const parts = (roll >>> 8) % 4 === 0 ? { parts: REWARD_PARTS } : {};
+  return { ...o, reward: { ...o.reward, ...food, ...parts } };
+}
+
+/** Some operations pay medicines too (docs/FASE3.md): the recoveries (a pharmacy, a courier's bag) and one in four of the rest, by seed. */
+function withMedicines(o: MissionOffer): MissionOffer {
+  if (o.final || o.map.kind !== 'generated') return o;
+  const lucky = (Math.imul(o.map.seed ^ 0x6d656473, 0x27d4eb2d) >>> 0) % 4 === 0;
+  return o.kind === 'recovery' || lucky ? { ...o, reward: { ...o.reward, medicines: 1 } } : o;
+}
+
+/** About one operation in three is flown at night (docs/ALTURA-Y-NOCHE.md), as its battlefield's seed says. */
+export function nightFor(seed: number): boolean {
+  return (Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) >>> 0) % 3 === 0;
+}
+
+/**
+ * An offer whose seed says night becomes a night mission, paying half as much
+ * again in suministros (NIGHT.supplies). Story chapters and the final mission
+ * are flown by day.
+ */
+export function byNight(o: MissionOffer): MissionOffer {
+  if (o.final || o.story || o.map.kind !== 'generated' || !nightFor(o.map.seed)) return o;
+  const credits = o.reward.credits ? { credits: Math.round(o.reward.credits * NIGHT.supplies) } : {};
+  return { ...o, night: true, reward: { ...o.reward, ...credits } };
 }
 
 /** Assault on a Nido (alien facility in the code): silencing its sirena sets the doom track back. */
 function makeFacilityOffer(c: CampaignState, region: RegionId, rng: Rng): MissionOffer {
   const difficulty = Math.min(4, difficultyNow(c, rng) + 1);
-  return {
+  return byNight({
     id: newId(c, 'm'),
     name: `Nido de ${REGIONS[region].name}`,
     kind: 'sabotage',
@@ -1201,7 +1425,7 @@ function makeFacilityOffer(c: CampaignState, region: RegionId, rng: Rng): Missio
     facility: region,
     story: null,
     quest: null,
-  };
+  });
 }
 
 /** The mission of a story chapter: fixed place and type, and it never expires. */
@@ -1388,7 +1612,7 @@ function makeQuestOffer(c: CampaignState, q: QuestState, step: QuestMission, rng
   const pods = regionPods(c, q.region, difficulty, step.kind);
   // The named enemy needs a body of its kind on the field.
   if (step.leader && !pods.some((p) => p.includes(step.leader!.template))) pods[0] = [step.leader.template, ...pods[0]!];
-  return {
+  return byNight({
     id: newId(c, 'm'),
     name: fill(step.name, q.names),
     kind: step.kind,
@@ -1402,7 +1626,7 @@ function makeQuestOffer(c: CampaignState, q: QuestState, step: QuestMission, rng
     facility: null,
     story: null,
     quest: q.id,
-  };
+  });
 }
 
 /** A quest waiting at a decision becomes the pending event when nothing else is. */
@@ -1600,7 +1824,15 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     xp: 0,
     soldiers: [],
     inventory: { fragGrenade: 2, firstAid: 1 },
-    medicines: 0,
+    medicines: START_MEDICINES,
+    nextMedicineDay: 1 + ENCLAVE_DAYS,
+    treatment: null,
+    food: START_FOOD,
+    hungry: false,
+    nextFoodDay: 1 + LA_VEGA_FOOD_DAYS,
+    parts: 0,
+    crafted: [],
+    foundWeapons: [],
     base: freshBase(),
     regions: freshRegions(),
     offers: [],
@@ -1666,6 +1898,14 @@ export type CampaignCommand =
   | { type: 'customize'; soldier: string; name: string; nickname: string; appearance: Appearance }
   | { type: 'advance'; ready: boolean }
   | { type: 'launch'; ready: boolean }
+  /** Treat a bitten soldier: two keys, like launching (docs/FASE3.md). */
+  | { type: 'treat'; soldier: string; ready: boolean }
+  /** 1 ✚ for 3 days fewer of a wound. */
+  | { type: 'medicate'; soldier: string }
+  /** The Taller makes a tier of weapons or armour (docs/FASE4.md): a shared decision, like building. */
+  | { type: 'craft'; project: CraftId }
+  /** A found weapon from the Armería to one of your soldiers (null: back on the rack). */
+  | { type: 'assignWeapon'; weapon: string; soldier: string | null }
   | { type: 'vote'; accept: boolean }
   | { type: 'withdraw' };
 
@@ -1867,6 +2107,24 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
 
   if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) steps.push({ view: 'geoscape', label: 'Tu compañero quiere escanear', tone: 'urgent' });
 
+  // Food (docs/FASE4.md): hunger, or the pantry running low.
+  const days = Math.floor((c.food ?? 0) / Math.max(1, dailyRations(c)));
+  if (c.hungry) steps.push({ view: 'facilities', label: 'Pasáis hambre: −10 de voluntad y heridas lentas. Buscad raciones o un Huerto', tone: 'urgent' });
+  else if (days < 3) steps.push({ view: 'facilities', label: `Quedan raciones para ${days} ${days === 1 ? 'día' : 'días'}`, tone: 'info' });
+  // The Taller has something within reach to make.
+  const craft = (Object.keys(CRAFTS) as CraftId[]).find((id) => !craftBlocker(c, id));
+  if (craft) steps.push({ view: 'engineering', label: `El Taller puede hacer ${CRAFTS[craft].name.toLowerCase()}`, tone: 'info' });
+
+  // The bitten (docs/FASE3.md): the partner's treatment to confirm, and every fever with its deadline.
+  const treating = c.treatment && c.soldiers.find((s) => s.id === c.treatment!.soldier);
+  if (treating && shared && c.treatment!.ready[partner] && !c.treatment!.ready[slot]) {
+    steps.push({ view: 'barracks', label: `Tu compañero quiere tratar a ${treating.name} (${treatCost(c)} ✚)`, tone: 'urgent', go: { soldier: treating.id } });
+  }
+  for (const s of c.soldiers.filter((x) => x.alive && x.infection).sort((a, b) => turnDay(c, a)! - turnDay(c, b)!)) {
+    const left = turnDay(c, s)! - c.day;
+    steps.push({ view: 'barracks', label: `${s.name} se convierte ${left <= 1 ? 'mañana' : `en ${left} días`}`, tone: 'urgent', go: { soldier: s.id } });
+  }
+
   if (c.listening === null && c.rumors.length) {
     const rumor = [...c.rumors].sort((a, b) => a.expiresDay - b.expiresDay)[0]!;
     steps.push({ view: 'geoscape', label: 'Escucha un rumor', count: c.rumors.length, tone: 'info', go: { region: rumor.region, rumor: rumor.id } });
@@ -1929,6 +2187,8 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
       const rumor = c.rumors.find((r) => r.id === action.id);
       return `escuchar el rumor de ${rumor ? REGIONS[rumor.region].name : '…'}`;
     }
+    case 'craft':
+      return `hacer en el Taller: ${CRAFTS[action.project].name.toLowerCase()}`;
   }
 }
 
@@ -1983,6 +2243,8 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (!c.rumors.some((r) => r.id === action.id)) return 'Ese rumor ya se ha enfriado.';
       if (c.listening === action.id) return 'Ya estamos escuchando ese rumor.';
       return null;
+    case 'craft':
+      return craftBlocker(c, action.project);
   }
 }
 
@@ -2052,6 +2314,17 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       const rumor = c.rumors.find((r) => r.id === action.id)!;
       c.listening = rumor.id;
       log(c, `Escuchamos el rumor de ${REGIONS[rumor.region].name}: faltan ${rumor.daysLeft} días de escucha.`);
+      break;
+    }
+    case 'craft': {
+      // A work like any other: a crew at the Taller, paid in suministros and parts.
+      const def = CRAFTS[action.project];
+      const plot = workshopPlot(c)!;
+      const days = workDays(c, def.days);
+      pay(c, def.cost);
+      c.parts = (c.parts ?? 0) - def.parts;
+      c.base.works.push({ plot: plot.id, kind: 'craft', facility: 'workshop', daysLeft: days, total: days, project: def.id });
+      log(c, `El Taller se pone con las ${def.name.toLowerCase()}: ${days} días.`);
       break;
     }
   }
@@ -2137,6 +2410,26 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       return propose(c, { type: 'event', option: cmd.option }, ctx);
     case 'investigate':
       return propose(c, { type: 'investigate', id: cmd.id }, ctx);
+    case 'craft':
+      return propose(c, { type: 'craft', project: cmd.project }, ctx);
+
+    case 'assignWeapon': {
+      // Personal, like equipping: each commander arms their own soldiers from the Armería.
+      const w = (c.foundWeapons ?? []).find((x) => x.id === cmd.weapon);
+      if (!w) return { ok: false, error: 'Esa arma no está en la Armería.' };
+      const holder = w.holder ? c.soldiers.find((s) => s.id === w.holder) : undefined;
+      if (holder && holder.owner !== slot) return { ok: false, error: `La lleva ${holder.name}, de tu compañero.` };
+      if (cmd.soldier === null) {
+        w.holder = null;
+        return { ok: true };
+      }
+      const s = c.soldiers.find((x) => x.id === cmd.soldier && x.alive);
+      if (!s || s.owner !== slot) return { ok: false, error: 'Solo puedes armar a tus soldados.' };
+      if (!fitsWeapon(s, w.kind)) return { ok: false, error: `Es para quien lleva ${weaponName(FOUND_WEAPONS[w.kind].weapon).toLowerCase()}.` };
+      for (const other of c.foundWeapons ?? []) if (other.holder === s.id) other.holder = null;
+      w.holder = s.id;
+      return { ok: true };
+    }
 
     case 'vote': {
       const p = c.proposal;
@@ -2173,12 +2466,44 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       if (!cmd.on) {
         c.squad = c.squad.filter((id) => id !== s.id);
       } else if (!c.squad.includes(s.id)) {
+        if (s.infection) return { ok: false, error: `${s.name} tiene fiebre: hay que tratarle antes.` };
         if (!soldierReady(s)) return { ok: false, error: `${s.name} no está en condiciones.` };
         const place = squadPlace(c, slot, ctx.connected);
         if (place.error) return { ok: false, error: place.error };
         joinSquad(c, s, place);
       }
       c.launchReady = [false, false];
+      return { ok: true };
+    }
+
+    case 'treat': {
+      // Two keys, like launching: one proposes, the other confirms (alone, one is enough).
+      const s = c.soldiers.find((x) => x.id === cmd.soldier && x.alive);
+      if (!s?.infection) return { ok: false, error: 'No está contagiado.' };
+      if (!cmd.ready) {
+        if (c.treatment?.soldier === s.id) c.treatment = null;
+        return { ok: true };
+      }
+      if ((c.medicines ?? 0) < treatCost(c)) return { ok: false, error: 'No hay medicinas suficientes.' };
+      if (c.treatment && c.treatment.soldier !== s.id) return { ok: false, error: 'Ya hay otro tratamiento propuesto: confirmadlo o rechazadlo antes.' };
+      c.treatment ??= { soldier: s.id, ready: [false, false] };
+      c.treatment.ready[slot] = true;
+      if (everyoneReady(c.treatment.ready, ctx.connected)) {
+        c.medicines = (c.medicines ?? 0) - treatCost(c);
+        delete s.infection;
+        c.treatment = null;
+        log(c, `${s.name} recibe el tratamiento: le baja la fiebre.`, 'good');
+      }
+      return { ok: true };
+    }
+
+    case 'medicate': {
+      const s = c.soldiers.find((x) => x.id === cmd.soldier && x.alive);
+      if (!s || s.woundedDays <= 0) return { ok: false, error: 'No está herido.' };
+      if ((c.medicines ?? 0) < MEDICATE_COST) return { ok: false, error: 'No hay medicinas.' };
+      c.medicines = (c.medicines ?? 0) - MEDICATE_COST;
+      s.woundedDays = Math.max(0, s.woundedDays - MEDICATE_DAYS);
+      log(c, s.woundedDays ? `${s.name} recibe medicinas: ${MEDICATE_DAYS} días menos de recuperación.` : `${s.name} recibe medicinas y se ha recuperado.`, 'good');
       return { ok: true };
     }
 
@@ -2320,9 +2645,10 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   c.day++;
   let stop = false;
 
-  const heal = healRate(c);
+  // Hungry, wounds heal only every other day.
+  const heal = c.hungry && c.day % 2 === 1 ? 0 : healRate(c);
   for (const s of c.soldiers) {
-    if (!s.alive || s.woundedDays === 0) continue;
+    if (!s.alive || s.woundedDays === 0 || !heal) continue;
     s.woundedDays = Math.max(0, s.woundedDays - heal);
     if (s.woundedDays === 0) log(c, `${s.name} se ha recuperado de sus heridas.`, 'good');
   }
@@ -2336,6 +2662,9 @@ function passDay(c: CampaignState, rng: Rng): boolean {
       plot.terrain = 'clear';
       c.credits += salvage;
       log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} § en materiales.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
+    } else if (work.kind === 'craft') {
+      (c.crafted ??= []).push(work.project!);
+      log(c, `El Taller ha terminado: ${CRAFTS[work.project!].name.toLowerCase()} para todos (cada uno, hasta lo que permita su rango).`, 'good');
     } else if (work.kind === 'upgrade') {
       plot.level = (plot.level ?? 1) + 1;
       log(c, `${FACILITIES[work.facility!].name}, nivel ${plot.level}: ${FACILITIES[work.facility!].upgrades[plot.level - 2]!.split('.')[0]}.`, 'good');
@@ -2425,6 +2754,48 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     }
   }
 
+  // The bitten whose days ran out turn.
+  for (const s of c.soldiers) {
+    const day = s.alive ? turnDay(c, s) : null;
+    if (day === null || c.day < day) continue;
+    turn(c, s);
+    stop = true;
+  }
+
+  // Food (docs/FASE4.md): the Huerto grows, La Vega sends, and the Bastion eats.
+  addFood(c, gardenYield(c));
+  if (c.day >= (c.nextFoodDay ?? 0)) {
+    c.nextFoodDay = c.day + LA_VEGA_FOOD_DAYS;
+    if (enclaveStands(c, 'oce')) {
+      addFood(c, LA_VEGA_FOOD);
+      log(c, `${REGIONS.oce.name} manda comida: +${LA_VEGA_FOOD} raciones.`, 'good');
+    }
+  }
+  const meal = dailyRations(c);
+  if ((c.food ?? 0) >= meal) {
+    c.food = (c.food ?? 0) - meal;
+  } else {
+    c.food = 0;
+    if (!c.hungry) {
+      c.hungry = true;
+      log(c, 'No quedan raciones: el Bastión pasa hambre. Hasta que vuelva a haberlas, −10 de voluntad en las misiones y las heridas curan más despacio.', 'bad', {
+        kicker: 'Despensa',
+        title: 'Hambre en el Bastión',
+      });
+      stop = true;
+    }
+  }
+
+  // The enclaves that still stand send medicines.
+  if (c.day >= (c.nextMedicineDay ?? 0)) {
+    c.nextMedicineDay = c.day + ENCLAVE_DAYS;
+    const enclaves = livingEnclaves(c);
+    if (enclaves.length) {
+      c.medicines = (c.medicines ?? 0) + enclaves.length;
+      log(c, `${enclaves.map((id) => REGIONS[id].name).join(' y ')} ${enclaves.length > 1 ? 'mandan' : 'manda'} medicinas: +${enclaves.length} ✚.`, 'good');
+    }
+  }
+
   if (c.day >= c.nextSupplyDay) {
     c.nextSupplyDay = c.day + MONTH;
     const income = BASE_INCOME + c.regions.filter((r) => r.contacted).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
@@ -2490,9 +2861,11 @@ export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
     maxHp,
     hp: maxHp,
     charges,
-    will: base.will + traits.reduce((sum, t) => sum + t.will, 0) + memorialWill(c),
+    // Hungry, nobody fights as well (docs/FASE4.md).
+    will: base.will + traits.reduce((sum, t) => sum + t.will, 0) + memorialWill(c) - (c.hungry ? HUNGRY_WILL : 0),
     armor,
     gear,
+    ...(foundWeaponOf(c, s) ? { weaponName: weaponLabel(c, s) } : {}),
   };
 }
 
@@ -2524,6 +2897,23 @@ export function gainXp(c: CampaignState, amount: number, rng: Rng): void {
   refreshNarrative(c, rng);
 }
 
+/**
+ * The debrief's loot line: lore.ts lootSummary's, and with rations, parts or
+ * found weapons in it, the same sentence with them (placeholders for Lore).
+ */
+function lootLine(h: LootTotals): string | null {
+  if (!h.food && !h.parts && !h.weapons.length) return lootSummary(h.supplies, h.items, h.medicines);
+  const parts: string[] = [];
+  if (h.supplies) parts.push(`+${h.supplies} §`);
+  for (const id of h.items) parts.push(ITEM_FINDS[id]);
+  if (h.medicines) parts.push(h.medicines === 1 ? '1 medicina' : `${h.medicines} medicinas`);
+  if (h.food) parts.push(h.food === 1 ? '1 ración' : `${h.food} raciones`);
+  if (h.parts) parts.push(h.parts === 1 ? '1 pieza' : `${h.parts} piezas`);
+  for (const w of h.weapons) parts.push(FOUND_WEAPONS[w].find);
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : parts[0]!;
+  return `El botín: ${list}.`;
+}
+
 /** Folds a finished tactical mission back into the campaign. */
 export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rng): MissionReport {
   const offer = activeOffer(c);
@@ -2543,6 +2933,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     bodies: 0,
     salvage: 0,
     story: offer?.story ?? null,
+    ...(mission.mission.night ? { night: true } : {}),
   };
 
   // Abandoning counts as a retreat: whoever is still standing comes home.
@@ -2572,9 +2963,14 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       s.fellDay = report.day;
       entry.status = 'dead';
       if (facilityCount(c, 'memorial')) log(c, `${s.name} descansa en el Camposanto.`);
-      // Equipment is lost with its bearer.
+      // Equipment is lost with its bearer, a found weapon too.
       for (const item of [s.loadout.utility, s.loadout.ammo]) if (item) c.inventory[item] = Math.max(0, (c.inventory[item] ?? 0) - 1);
       s.loadout = { utility: null, ammo: null };
+      const carried = foundWeaponOf(c, s);
+      if (carried) {
+        c.foundWeapons = c.foundWeapons!.filter((w) => w !== carried);
+        log(c, `Con ${s.name} se pierde su ${FOUND_WEAPONS[carried.kind].name.toLowerCase()}.`, 'bad');
+      }
       continue;
     }
     const lost = u.maxHp - u.hp;
@@ -2594,16 +2990,23 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
         specializeSoldier(s, leaningClass(s));
         entry.specializedAs = s.cls!;
         log(c, SPECIALIZE_TEXT[s.cls!].replace('{name}', s.name), 'good');
+        // A found weapon of another kind than the class's goes back to the rack.
+        const carried = foundWeaponOf(c, s);
+        if (carried && !fitsWeapon(s, carried.kind)) carried.holder = null;
       }
     }
   }
 
   // What the squad searched and brought back (docs/FASE2.md): a fallen soldier's is lost.
   const haul = broughtBack(mission);
-  report.loot = { ...haul, line: lootSummary(haul.supplies, haul.items, haul.medicines) };
+  report.loot = { ...haul, line: lootLine(haul) };
   c.credits += haul.supplies;
   for (const item of haul.items) c.inventory[item] = (c.inventory[item] ?? 0) + 1;
   c.medicines = (c.medicines ?? 0) + haul.medicines;
+  addFood(c, haul.food);
+  c.parts = (c.parts ?? 0) + haul.parts;
+  // Found weapons go to the Armería, for a soldier to take.
+  for (const kind of haul.weapons) (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind, holder: null });
   if (report.loot.line) log(c, report.loot.line, 'good');
 
   // Holding the field means the bodies come home, and the black market pays for them (not from a Saqueo: you leave by the evac).
@@ -2618,11 +3021,18 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     if (c.story.done >= NWOSU_CHAPTER) report.salvage = Math.round(report.salvage * 1.25);
     c.credits += report.salvage;
     if (report.bodies) log(c, `Registráis ${report.bodies} cuerpos: +${report.salvage} suministros.`, 'good');
+    // The Acorazados' plates and hinges: a part each (docs/FASE4.md).
+    report.scrap = mission.units.filter((u) => u.template === 'mec' && !u.alive).length;
+    c.parts = (c.parts ?? 0) + report.scrap;
+    if (report.scrap) log(c, `Desmontáis ${report.scrap === 1 ? 'un Acorazado' : `${report.scrap} Acorazados`}: +${report.scrap} ${report.scrap === 1 ? 'pieza' : 'piezas'}.`, 'good');
   }
 
   if (victory && offer) {
     const r = offer.reward;
     c.credits += r.credits ?? 0;
+    c.medicines = (c.medicines ?? 0) + (r.medicines ?? 0);
+    addFood(c, r.food ?? 0);
+    c.parts = (c.parts ?? 0) + (r.parts ?? 0);
     if (r.doom) {
       c.doom = Math.max(0, c.doom - r.doom);
       report.doomChange = -r.doom;
@@ -2681,6 +3091,15 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   // The flight back and the recovery. Not after the final mission: the campaign is being decided.
   if (!offer?.final) passDays(c, Math.max(1, MISSION_DAYS + rng.int(2) - garageCut(c).days), rng);
   else c.day++;
+  // The bitten come home with a fever: their days count from their arrival (docs/FASE3.md).
+  report.infected = [];
+  for (const u of mission.units) {
+    const s = u.infected && !fell(u) ? c.soldiers.find((x) => x.id === u.campaignId && x.alive) : undefined;
+    if (!s) continue;
+    s.infection = { since: c.day };
+    report.infected.push(s.id);
+    log(c, `${s.name} vuelve con un mordisco: tiene fiebre.`, 'bad');
+  }
   return report;
 }
 
@@ -2808,6 +3227,18 @@ export function migrateCampaign(old: CampaignState): CampaignState {
   for (const s of c.soldiers) {
     if (s.owner === 0 && JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, 0, '#3fa9ff'))) s.appearance = defaultAppearance(s.cls, 0);
   }
+  // Version 12: infection and medicines. Nobody comes in bitten; the medicines they had stay.
+  loose.medicines ??= 0;
+  loose.nextMedicineDay ??= c.day + ENCLAVE_DAYS;
+  loose.treatment ??= null;
+  // Version 13: food and the Taller. A full pantry to start; the tiers the Bastion's level
+  // already gave are kept, as if the Taller had made them.
+  loose.food ??= START_FOOD;
+  loose.hungry ??= false;
+  loose.nextFoodDay ??= c.day + LA_VEGA_FOOD_DAYS;
+  loose.parts ??= 0;
+  loose.foundWeapons ??= [];
+  loose.crafted ??= (Object.keys(CRAFTS) as CraftId[]).filter((id) => hasTech(c, CRAFTS[id].tech));
   c.launchReady = [false, false];
   return c;
 }

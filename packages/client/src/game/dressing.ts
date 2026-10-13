@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { DIRS4, type GameState, type TileKind } from '@bastion/engine';
+import { DIRS4, type GameState, type TileKind, type Vec2 } from '@bastion/engine';
+import { STOREY } from './coords';
 import { FLOOR, type GroundMap } from './ground';
 import type { PropId } from './syntyManifest';
 
@@ -42,11 +43,27 @@ function placed(id: PropId, x: number, y: number, z: number, dx: number, dz: num
   return { id, cast, matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(scale * size, size, size)) };
 }
 
-/** The dressing of a map's streets and pavements (towns and facilities; the wilds have their grass). */
-export function dressStreets(s: GameState, ground: GroundMap, density = 1): Dressing[] {
-  if (s.biome === 'wilds') return [];
+/**
+ * The dressing of a map's streets and pavements (towns and facilities; the
+ * wilds have their grass and only their lamps). The street lights stand where
+ * the engine says (`lamps`: the map's own lights, which light tiles at night),
+ * else every few tiles along the kerbs (older saves).
+ */
+export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps: readonly Vec2[] | null = null): Dressing[] {
   const out: Dressing[] = [];
   const { width: w, height: h } = s;
+  // The engine's lights: a street light on each, near the kerb, its arm over the road.
+  for (const p of lamps ?? []) {
+    const k = DIRS4.findIndex((d) => {
+      const x = p.x + d.x;
+      const y = p.y + d.y;
+      return x >= 0 && y >= 0 && x < w && y < h && ground.kinds[y * w + x] === FLOOR.STREET;
+    });
+    const d = DIRS4[k < 0 ? 0 : k]!;
+    const along = { x: -d.y, y: d.x };
+    out.push(placed('streetLight', p.x + 0.5 + d.x * 0.4 + along.x * 0.4, (s.elev[p.y * w + p.x] ?? 0) * STOREY, p.y + 0.5 + d.y * 0.4 + along.y * 0.4, d.x, d.y, true));
+  }
+  if (s.biome === 'wilds') return out;
   const kind = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? -1 : ground.kinds[y * w + x]!);
   const tile = (x: number, y: number): TileKind | null => (x < 0 || y < 0 || x >= w || y >= h ? null : s.tiles[y * w + x]!);
   const level = (x: number, y: number) => s.elev[y * w + x] ?? 0;
@@ -57,7 +74,7 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1): Dres
     const t = tile(x, y);
     return t === 'wall' || t === 'window' || t === 'windowBroken' || t === 'door' || t === 'doorOpen';
   };
-  const taken: { x: number; y: number }[] = [];
+  const taken: { x: number; y: number }[] = [...(lamps ?? [])];
   const near = (x: number, y: number, r: number) => taken.some((p) => Math.abs(p.x - x) + Math.abs(p.y - y) < r);
 
   // Power poles: along straight kerbs over a wire and a bit long, on about half of them, wired pole to pole.
@@ -115,8 +132,8 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1): Dres
             taken.push({ x, y });
             continue;
           }
-          // Street lights along the kerb, the arm over the road.
-          if (r(2) < 1 / LIGHT_EVERY + 0.04 && !near(x, y, LIGHT_EVERY - 2)) {
+          // Street lights along the kerb, the arm over the road (where the engine places none).
+          if (!lamps && r(2) < 1 / LIGHT_EVERY + 0.04 && !near(x, y, LIGHT_EVERY - 2)) {
             out.push(placed('streetLight', cx + d.x * 0.4 + along.x * 0.4, 0, cz + d.y * 0.4 + along.y * 0.4, d.x, d.y, true));
             taken.push({ x, y });
             continue;

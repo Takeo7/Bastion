@@ -167,7 +167,7 @@ export class UnitViews {
     flagEl.className = `uflag ${u.team === 'alien' ? 'alien' : 'xcom'}`;
     flagEl.style.setProperty('--accent', color);
     const flag = new CSS2DObject(flagEl);
-    // Over the head: models that know their height say it, the voxel figures are all about as tall.
+    // Over the head: models that know their height say it; the rest are all about as tall.
     flag.position.set(0, rig.top !== undefined ? rig.top + 0.45 : 2.15, 0);
     flag.center.set(0.5, 1);
 
@@ -277,6 +277,7 @@ export class UnitViews {
       u.stunned ? '<em class="stun">ATURDIDO</em>' : '',
       u.disoriented ? '<em class="psi">DESORIENTADO</em>' : '',
       u.panicked ? '<em class="psi">PÁNICO</em>' : '',
+      u.infected ? '<em class="bite">MORDIDO</em>' : '',
       u.suppressedBy ? '<em class="stun">SUPRIMIDO</em>' : '',
       u.marked ? '<em class="aid">MARCADO</em>' : '',
       u.ruptured ? '<em class="stun">VULNERABLE</em>' : '',

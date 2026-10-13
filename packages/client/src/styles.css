@@ -66,6 +66,8 @@
   --i-clock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3Cpath d='M12 6.5V12l3.5 2.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3C/svg%3E");
   --i-pick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 8.5C7 3.5 15 3 21 7.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.8'/%3E%3Cpath d='M12 5.5L8.5 21' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.8'/%3E%3C/svg%3E");
   --i-xp: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z'/%3E%3C/svg%3E");
+  /* A bite (docs/FASE3.md): two rows of teeth closing. */
+  --i-bite: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M2 4h20v3l-2.5 4-2.5-4-2.5 4-2.5-4-2.5 4-2.5-4-2.5 4L2 7z'/%3E%3Cpath d='M2 20h20v-3l-2.5-4-2.5 4-2.5-4-2.5 4-2.5-4-2.5 4-2.5-4L2 17z'/%3E%3C/svg%3E");
   /* Accessories found searching, counted together: a holdall. */
   --i-bag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='8' width='18' height='12.5' rx='2'/%3E%3Cpath d='M8.5 8V5h7v3' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2'/%3E%3C/svg%3E");
   /* Medicines found searching: a capsule. */
@@ -409,6 +411,12 @@ button:disabled {
   color: var(--stamp);
 }
 
+/* A night mission: the same stamp, in ink blue, a little less crooked. */
+.conceal.night {
+  color: var(--ink-blue);
+  transform: rotate(3deg);
+}
+
 .hud .mission {
   flex: 0 1 auto;
   min-width: 0;
@@ -671,6 +679,33 @@ em.song {
 
 em.hunt {
   color: var(--hunt);
+}
+
+/* Bitten (docs/FASE3.md): the stamp with a bite mark before it, on the squad
+   card and over the unit. Its colour is a token of its own (--c-bite) for the
+   themes to set. */
+em.bite {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 3px;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--c-bite, var(--stamp));
+  border: 1.5px solid currentColor;
+  transform: rotate(-2deg);
+}
+
+em.bite::before {
+  content: '';
+  flex: none;
+  width: 11px;
+  height: 11px;
+  background: currentColor;
+  -webkit-mask: var(--i-bite) center / contain no-repeat;
+  mask: var(--i-bite) center / contain no-repeat;
 }
 
 /* ------------------------------------------------- soldier sheet: symbols */
@@ -2453,6 +2488,20 @@ body:has(.strat) .fps-counter {
   border-left-color: var(--ink-soft);
 }
 
+/* A found weapon (docs/FASE4.md) is rare: bigger, in the found weapon's
+   violet, edged all round, and it stays up longer. */
+.float-text.find.rare {
+  padding: 3px 10px;
+  font-size: 24px;
+  color: var(--psi);
+  border: 2px solid var(--psi);
+  border-left-width: 6px;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--psi) 30%, transparent),
+    1px 2px 8px rgba(0, 0, 0, 0.7);
+  animation: callout-up 3.3s ease-out forwards;
+}
+
 /* How far the aimed action is heard, under the odds. */
 .shot-noise {
   text-align: center;
@@ -2558,6 +2607,32 @@ body:has(.strat) .fps-counter {
   --icon: var(--i-bag);
 }
 
+/* docs/FASE4.md: rations, parts and a found weapon (violet, as its slip). */
+.pack-slot.food,
+.pack-total.food {
+  --c: var(--warn);
+}
+
+.pack-slot.parts,
+.pack-total.parts {
+  --c: var(--c-armor);
+}
+
+.pack-slot.weapon,
+.pack-total.weapon {
+  --c: var(--psi);
+  --icon: var(--i-weapon);
+}
+
+.pack-slot.weapon {
+  border-width: 2px;
+}
+
+.pack-slot.weapon .stat-icon,
+.pack-total.weapon .stat-icon {
+  width: 20px;
+}
+
 .pack-slot.i-grenade {
   --icon: var(--i-grenade);
 }
@@ -2595,7 +2670,9 @@ body:has(.strat) .fps-counter {
 
 .pack-totals {
   display: inline-flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 6px;
 }
 
 .pack-total {

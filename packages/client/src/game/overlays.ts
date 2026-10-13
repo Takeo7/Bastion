@@ -177,8 +177,6 @@ export class Overlays {
   private rangeLayers: [THREE.InstancedMesh, number][] = [];
   /** Furniture marked for Registrar (armed, or under the pointer): a frame round the tile and a badge over it. */
   private readonly spots = new THREE.Group();
-  /** Furniture already searched, anywhere the squad has been: a faint tick. */
-  private readonly searched = new THREE.Group();
   private readonly spotTextures = { open: spotTexture(false), done: spotTexture(true) };
   /** A four-segment ring turned 45°: a square frame a little wider than the tile, round the furniture. */
   private readonly spotFrame = new THREE.RingGeometry(0.62, 0.74, 4).rotateZ(Math.PI / 4).rotateX(-Math.PI / 2);
@@ -277,7 +275,7 @@ export class Overlays {
     this.note.element.className = 'tile-note';
     this.note.visible = false;
     this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
-    this.group.add(this.searched, this.spots, this.noises, this.note);
+    this.group.add(this.spots, this.noises, this.note);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -377,21 +375,6 @@ export class Overlays {
     }
   }
 
-  /** A faint tick over every piece of furniture already searched that the squad has seen. */
-  setSearched(list: Vec2[]): void {
-    const key = JSON.stringify(list);
-    if (this.searched.userData.key === key) return;
-    this.searched.userData.key = key;
-    clearGroup(this.searched);
-    for (const p of list) {
-      const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.spotTextures.done, depthTest: false, transparent: true, opacity: 0.6 }));
-      badge.position.copy(tileToWorld(p, SPOT_HEIGHT));
-      badge.scale.setScalar(0.3);
-      badge.renderOrder = 11;
-      this.searched.add(badge);
-    }
-  }
-
   /** One short line on `tile` («Ruido 3: corre», «El armario · ya registrado»), or none. */
   setNote(tile: Vec2 | null, text = '', height = 0.15): void {
     this.note.visible = !!tile && !!text;
@@ -401,14 +384,15 @@ export class Overlays {
   }
 
   /** What a search turned up, rising over the furniture («+12 §», «Un botiquín», «Nada»). */
-  find(tile: Vec2, text: string, empty: boolean): void {
+  find(tile: Vec2, text: string, kind: 'loot' | 'empty' | 'rare' = 'loot'): void {
     const el = document.createElement('div');
-    el.className = `float-text find${empty ? ' empty' : ''}`;
+    el.className = `float-text find${kind === 'loot' ? '' : ` ${kind}`}`;
     el.textContent = text;
     const label = new CSS2DObject(el);
     label.position.copy(tileToWorld(tile, 1.2));
     this.group.add(label);
-    void wait(2.2).then(() => {
+    // A found weapon is rare: it stays up longer, to be read.
+    void wait(kind === 'rare' ? 3.4 : 2.2).then(() => {
       this.group.remove(label);
       el.remove();
     });

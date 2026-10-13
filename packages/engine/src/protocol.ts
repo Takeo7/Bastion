@@ -3,6 +3,7 @@ import { BUILDS, HEADS, NAME_MAX, NICKNAME_MAX } from './appearance';
 import { FACILITIES, REGIONS } from './campaign';
 import { ATTRS, TALENTS } from './classes';
 import { ABILITIES, ITEMS } from './content';
+import { CRAFTS } from './progression';
 import type { CampaignState } from './campaign';
 import type { GameEvent } from './events';
 import type { AbilityId, GameState, Slot, Vec2 } from './types';
@@ -39,8 +40,8 @@ export type PingKind = z.infer<typeof pingKindSchema>;
 
 export const clientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('hello'), name: z.string().trim().min(1).max(20), token: z.string().max(64).optional() }),
-  z.object({ t: z.literal('start'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional(), veterans: z.boolean().optional() }),
-  z.object({ t: z.literal('newMission'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional() }),
+  z.object({ t: z.literal('start'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional(), veterans: z.boolean().optional(), night: z.boolean().optional() }),
+  z.object({ t: z.literal('newMission'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional(), night: z.boolean().optional() }),
   /** Ends the current mission for both players. */
   z.object({ t: z.literal('abandon') }),
   /** Ask for a full snapshot (the client detected a gap in the event stream). */
@@ -99,6 +100,10 @@ export const campaignCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('customize'), soldier: id, name: z.string().max(NAME_MAX * 2), nickname: z.string().max(NICKNAME_MAX * 2), appearance: appearanceSchema }),
   z.object({ type: z.literal('advance'), ready: z.boolean() }),
   z.object({ type: z.literal('launch'), ready: z.boolean() }),
+  z.object({ type: z.literal('treat'), soldier: id, ready: z.boolean() }),
+  z.object({ type: z.literal('medicate'), soldier: id }),
+  z.object({ type: z.literal('craft'), project: z.enum(keys(CRAFTS)) }),
+  z.object({ type: z.literal('assignWeapon'), weapon: id, soldier: id.nullable() }),
   z.object({ type: z.literal('vote'), accept: z.boolean() }),
   z.object({ type: z.literal('withdraw') }),
 ]);
