@@ -90,6 +90,8 @@ interface Rest {
   p: THREE.Vector3[];
   /** Rotation that turns the T-posed right hand into one gripping a gun that points +Z. */
   gripTurn: THREE.Quaternion;
+  /** Rotation that turns the T-posed left hand into one holding the same gun from under its handguard. */
+  foreTurn: THREE.Quaternion;
   hip: number;
   chest: number;
   top: number;
@@ -101,6 +103,15 @@ const RIGHT_FINGERS = new THREE.Vector3(0.0, -0.55, 0.84).normalize();
 const RIGHT_PALM = new THREE.Vector3(1, 0, 0);
 /** Where a gun's grip sits from the right wrist, in the gun's frame. */
 const GRIP = RIGHT_FINGERS.clone().multiplyScalar(0.05).addScaledVector(RIGHT_PALM, 0.03);
+/**
+ * The support hand under the handguard, in the gun's frame: the palm up
+ * against it and turned to the gun's right, the fingers across and forward
+ * round its far side (the gun's right is −X).
+ */
+const LEFT_PALM = new THREE.Vector3(-0.4, 0.92, 0).normalize();
+const LEFT_FINGERS = new THREE.Vector3(-0.62, -0.1, 0.78).projectOnPlane(LEFT_PALM).normalize();
+/** From the middle of the support palm back to the left wrist, in the gun's frame. */
+const FORE_WRIST = LEFT_FINGERS.clone().multiplyScalar(-0.045).addScaledVector(LEFT_PALM, -0.018);
 
 function restOf(model: THREE.Object3D): Rest {
   let rest = rests.get(model);
@@ -129,6 +140,8 @@ function restOf(model: THREE.Object3D): Rest {
   const n0 = new THREE.Vector3(0, -1, 0);
   const basis = (f: THREE.Vector3, n: THREE.Vector3) => new THREE.Matrix4().makeBasis(f, n, f.clone().cross(n).normalize());
   const turn = basis(RIGHT_FINGERS, RIGHT_PALM).multiply(basis(f0, n0.clone().sub(f0.clone().multiplyScalar(n0.dot(f0))).normalize()).transpose());
+  const f0L = p[B.Hand_L]!.clone().sub(p[B.Elbow_L]!).normalize();
+  const foreTurn = basis(LEFT_FINGERS, LEFT_PALM).multiply(basis(f0L, n0.clone().sub(f0L.clone().multiplyScalar(n0.dot(f0L))).normalize()).transpose());
   const top = (model.getObjectByName('rig')?.userData.height as number | undefined) ?? 1.2;
   const rootQ = new THREE.Quaternion();
   const rootP = new THREE.Vector3();
@@ -140,6 +153,7 @@ function restOf(model: THREE.Object3D): Rest {
     q,
     p,
     gripTurn: new THREE.Quaternion().setFromRotationMatrix(turn),
+    foreTurn: new THREE.Quaternion().setFromRotationMatrix(foreTurn),
     hip: p[B.Hips]!.y,
     chest: p[B.Spine_03]!.y + 0.06,
     top,
@@ -241,6 +255,10 @@ export class SyntyFigure implements FigureRig {
   private melee = false;
   /** Foregrip distance along the barrel; 0 for one-handed weapons. */
   private fore = 0;
+  /** Height of the support palm in the gun's frame (WEAPONS fore). */
+  private foreY = 0;
+  /** How far the upper body is bladed to the gun this pose (a turn about the vertical). */
+  private blade = 0;
   private readonly d = Array.from({ length: N }, () => new THREE.Quaternion());
   private readonly w = Array.from({ length: N }, () => new THREE.Quaternion());
   private readonly p = Array.from({ length: N }, () => new THREE.Vector3());
@@ -365,7 +383,9 @@ export class SyntyFigure implements FigureRig {
       const g = gun.clone();
       const muzzle = (g.children[0]?.userData.muzzle as [number, number, number] | undefined) ?? [0, 0, 0.5];
       this.melee = !!(WEAPONS[spec.weapon] as { melee?: boolean }).melee;
-      this.fore = this.melee ? 0 : muzzle[2] * 0.45;
+      const fore = (WEAPONS[spec.weapon] as { fore?: [number, number] }).fore;
+      this.fore = this.melee || !fore ? 0 : fore[1];
+      this.foreY = fore?.[0] ?? 0;
       this.yaw.remove(this.gunPivot);
       this.gunPivot.position.set(0, 0, 0);
       onUnitLayer(g);
@@ -460,7 +480,10 @@ export class SyntyFigure implements FigureRig {
     const search = dead ? 0 : (p.search ?? 0) * live;
     const breathe = anim || dead ? 0 : Math.sin(time * 2.1 + p.phase) * 0.015;
     const lean = ((dead ? 0.38 : 0) + (anim ? 0 : 0.28 * p.crouch) + p.lean - p.hit * 0.38 - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
-    const twist = shamble * Math.sin(time * 1.7 + p.phase) * 0.12 * live;
+    // A two-handed gun blades the upper body: the support shoulder comes forward so that arm bends under
+    // the gun instead of reaching across the chest; the gun and the head keep facing ahead (holdWeapon, the neck).
+    this.blade = this.fore && !dead ? -(0.22 + 0.24 * p.aim) * live : 0;
+    const twist = shamble * Math.sin(time * 1.7 + p.phase) * 0.12 * live + this.blade;
     // Without clips the hips already roll (legs()); with them the roll goes on here.
     const roll = anim ? shamble * Math.sin(time * (p.run ? 3 : 1.3) + p.phase) * (0.05 + p.run * 0.08) * live : 0;
     if (anim) d[B.Hips]!.premultiply(rot(q1, Z, roll));
@@ -473,7 +496,8 @@ export class SyntyFigure implements FigureRig {
     const sight = this.spec.weapon && !this.melee ? p.aim * live : 0;
     const neck = rot(this.neckTurn, Z, shamble * 0.32 * live - sight * 0.12)
       .multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6) * live + sight * 0.16))
-      .premultiply(upper);
+      .premultiply(upper)
+      .premultiply(rot(q2, Y, -this.blade * 0.85));
     if (!anim) d[B.Neck]!.copy(d[B.Hips]!);
     d[B.Neck]!.premultiply(neck);
     if (anim) d[B.Head]!.premultiply(neck);
@@ -510,7 +534,7 @@ export class SyntyFigure implements FigureRig {
         // Rummaging: the gun stays low in the right hand, the left goes in among the things.
         const grip = tmpR.copy(this.fore ? this.leftHand(p) : this.p[B.Hand_L]!);
         this.reach('L', v3.lerpVectors(grip, this.rummage(1, time), search), v4.set(0.7, -1, 0.2));
-      } else if (this.fore) this.reach('L', this.leftHand(p), v4.set(lerp(0.7, 0.25, p.aim), -1, lerp(-0.2, 0.1, p.aim)));
+      } else if (this.fore) this.support(p);
       else if (anim) this.followArm('L', upper);
       else this.hang('L', p.run * Math.sin(time * 11 + p.phase) * 0.4);
     } else if (dead) {
@@ -704,7 +728,7 @@ export class SyntyFigure implements FigureRig {
     else {
       // A gun stays level however the clip bends the spine (a crouch, a hunch): only the chest's heading turns it.
       const ahead = v2.copy(Z).applyQuaternion(d[s3]!);
-      this.gunQ.premultiply(q1.setFromAxisAngle(Y, Math.atan2(ahead.x, ahead.z)));
+      this.gunQ.premultiply(q1.setFromAxisAngle(Y, Math.atan2(ahead.x, ahead.z) - this.blade));
     }
     this.gunP.copy(v1).sub(r.p[s3]!).applyQuaternion(d[s3]!).add(pos[s3]!);
     this.gunP.addScaledVector(v2.copy(Z).applyQuaternion(this.gunQ), -p.recoil * 0.05);
@@ -715,12 +739,25 @@ export class SyntyFigure implements FigureRig {
     d[B.Hand_R]!.copy(this.gunQ).multiply(r.gripTurn);
   }
 
-  /** Where the left hand goes: the foregrip, or during a reload to the magazine, a pouch at the hip and back. */
+  /**
+   * The support hand on the gun: the wrist to where the palm meets the
+   * handguard (two-bone IK, the elbow under the gun), the hand turned to hold
+   * it from below. During a reload it goes to the magazine and a pouch, and
+   * turns back as it leaves the handguard.
+   */
+  private support(p: FigurePose): void {
+    this.reach('L', this.leftHand(p), v4.set(lerp(0.7, 0.3, p.aim), -1, lerp(-0.2, 0.05, p.aim)));
+    const s = THREE.MathUtils.clamp(p.spin ?? 0, 0, 1);
+    const on = s <= 0 || s >= 1 ? 1 : Math.max(0, 1 - Math.min(s, 1 - s) / 0.12);
+    if (on > 0) this.d[B.Hand_L]!.slerp(q1.copy(this.gunQ).multiply(this.rest!.foreTurn), on);
+  }
+
+  /** Where the left wrist goes: on the foregrip, or during a reload to the magazine, a pouch at the hip and back. */
   private leftHand(p: FigurePose): THREE.Vector3 {
-    const grip = v3.set(0.03, -0.06, this.fore - 0.04).applyQuaternion(this.gunQ).add(this.gunP);
+    const grip = v3.set(0.012, this.foreY, this.fore).add(FORE_WRIST).applyQuaternion(this.gunQ).add(this.gunP);
     const s = THREE.MathUtils.clamp(p.spin ?? 0, 0, 1);
     if (s <= 0 || s >= 1) return grip;
-    const mag = v2.set(0.02, -0.15, this.fore * 0.5).applyQuaternion(this.gunQ).add(this.gunP);
+    const mag = v2.set(0.02, -0.11, 0.03).applyQuaternion(this.gunQ).add(this.gunP);
     if (s < 0.3) return grip.lerp(mag, s / 0.3);
     if (s > 0.75) return grip.lerp(mag, (1 - s) / 0.25);
     const r = this.rest!;

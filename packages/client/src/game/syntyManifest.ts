@@ -336,18 +336,24 @@ export const HEAD_GEAR: Record<HeadId, HeadgearId | null> = {
 // ----------------------------------------------------------------- weapons
 
 /** Guns and melee weapons, held in the right hand; the converter turns them barrel +Z, grip at the origin. */
+/**
+ * `fore`: where the support hand holds a two-handed gun, the middle of its
+ * palm as [height, length] in the gun's frame (as converted: grip near the
+ * origin, barrel +Z, up +Y; measured under each one's handguard, pump or
+ * forend). One-handed and melee weapons have none.
+ */
 export const WEAPONS = {
-  rifle: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_01' },
-  rifle2: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_02' },
-  rifle3: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_03' },
-  shotgun: { pack: 'apocalypse', fbx: 'SM_Wep_Shotgun_01' },
-  sniper: { pack: 'apocalypse', fbx: 'SM_Wep_SniperRifle_01' },
-  sniper2: { pack: 'apocalypse', fbx: 'SM_Wep_SniperRifle_02' },
-  machineGun: { pack: 'apocalypse', fbx: 'SM_Wep_MachineGun_01' },
-  huntingRifle: { pack: 'apocalypse', fbx: 'SM_Wep_HuntingRifle_01' },
-  smg: { pack: 'apocalypse', fbx: 'SM_Wep_SubMGun_01' },
+  rifle: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_01', fore: [0.002, 0.2] },
+  rifle2: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_02', fore: [0.012, 0.21] },
+  rifle3: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_03', fore: [0.03, 0.27] },
+  shotgun: { pack: 'apocalypse', fbx: 'SM_Wep_Shotgun_01', fore: [-0.014, 0.2] },
+  sniper: { pack: 'apocalypse', fbx: 'SM_Wep_SniperRifle_01', fore: [-0.02, 0.14] },
+  sniper2: { pack: 'apocalypse', fbx: 'SM_Wep_SniperRifle_02', fore: [-0.022, 0.18] },
+  machineGun: { pack: 'apocalypse', fbx: 'SM_Wep_MachineGun_01', fore: [0.018, 0.3] },
+  huntingRifle: { pack: 'apocalypse', fbx: 'SM_Wep_HuntingRifle_01', fore: [-0.04, 0.22] },
+  smg: { pack: 'apocalypse', fbx: 'SM_Wep_SubMGun_01', fore: [-0.008, 0.12] },
   baton: { pack: 'apocalypse', fbx: 'SM_Wep_Baton_01', melee: true },
-} satisfies Record<string, { pack: PackId; fbx: string; melee?: boolean }>;
+} satisfies Record<string, { pack: PackId; fbx: string; melee?: boolean; fore?: [number, number] }>;
 
 export type WeaponId = keyof typeof WEAPONS;
 
