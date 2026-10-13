@@ -2,15 +2,15 @@ import * as THREE from 'three';
 import { decorOf, DIRS4, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
 import { extendShader } from './fogOfWar';
 import { STOREY } from './coords';
-import { GAME_VOXEL, voxelField, type Colour } from './voxel';
+import { terrainFile, type PropId, type TerrainId } from './syntyManifest';
 
 // The ground as continuous terrain (second playtest: «los mapas siguen siendo
-// demasiado cuadrículas»). Tiles still say what the floor is, but the colour
-// is worked out in world space, per voxel cell: broad patches that run across
-// tiles, borders between open ground and streets that wander and fray (grass
-// over the edge of a dirt track, kerbs and gutters in town), worn patches,
-// cracks, puddles and road paint. On top, small voxel details (grass tufts,
-// pebbles, leaves, litter, rubble…) are scattered off the grid, cosmetic only.
+// demasiado cuadrículas»). Tiles still say what the floor is, but the look is
+// worked out in world space with Synty's tiling textures: broad patches that
+// run across tiles, borders between paving, lawns and streets that wander
+// (kerbs and gutters in town, grass over the edge of a dirt track), cracks
+// and road paint. On top, small Synty props (grass tufts, pebbles, leaves,
+// papers…) are scattered off the grid, cosmetic only.
 
 /** Floor kinds, as the ground shader reads them from the red channel. */
 const OPEN = 0;
@@ -22,236 +22,15 @@ const HILL = 4;
 /** A furrow of a ploughed field: one tile wide, along the field. */
 const FURROW = 5;
 
-interface Look {
-  open: number;
-  /** Open ground in its broad patches (drier grass, dirtier paving). */
-  openAlt: number;
-  worn: number;
-  /** Open ground along a street: the kerb, a trampled verge. */
-  kerb: number;
-  street: number;
-  streetAlt: number;
-  /** Street along open ground: the gutter, or the grass over a track's edge. */
-  gutter: number;
-  floor: number;
-  roof: number;
-  paint: number;
-  puddle: number;
-  /** How far borders wander (tiles), how much the paving cracks, how many puddles, how worn. */
-  amounts: [number, number, number, number];
-  /** The street's edge is only grass here and there (wilds). */
-  frayed: boolean;
-  /** Indoor floors: wooden boards, or steel plates (facilities). */
-  plates: boolean;
-}
+/** The floor kinds (GroundMap.kinds), for what dresses the ground (dressing.ts). */
+export const FLOOR = { OPEN, STREET, INDOOR, ROOF, HILL, FURROW } as const;
 
-// The base colours are mapView's palettes; the rest are their variations.
-const LOOKS: Record<Biome, Look> = {
-  city: {
-    open: 0x9a9384,
-    openAlt: 0x8d887b,
-    worn: 0x7c776b,
-    kerb: 0xb8b1a1,
-    street: 0x585d63,
-    streetAlt: 0x4f5359,
-    gutter: 0x45484d,
-    floor: 0x8a705a,
-    roof: 0x7d7a74,
-    paint: 0xd9d5c6,
-    puddle: 0x34404c,
-    amounts: [0.22, 1, 1, 0.55],
-    frayed: false,
-    plates: false,
-  },
-  wilds: {
-    open: 0x6a8a45,
-    openAlt: 0x83904a,
-    worn: 0x7d6c4b,
-    kerb: 0x748442,
-    street: 0x9a8460,
-    streetAlt: 0x8b7654,
-    gutter: 0x66843f,
-    floor: 0x86705a,
-    roof: 0x7a6a50,
-    paint: 0x9a8460,
-    puddle: 0x4d4a3e,
-    amounts: [0.62, 0, 0.6, 0.85],
-    frayed: true,
-    plates: false,
-  },
-  facility: {
-    open: 0x6a7078,
-    openAlt: 0x737880,
-    worn: 0x575b60,
-    kerb: 0x80868d,
-    street: 0x4a4f56,
-    streetAlt: 0x44494f,
-    gutter: 0x3d4147,
-    floor: 0x7f8892,
-    roof: 0x5a6068,
-    paint: 0xc9a23a,
-    puddle: 0x2c323a,
-    amounts: [0.14, 0.8, 0.45, 0.7],
-    frayed: false,
-    plates: true,
-  },
-};
-
-const GROUND_GLSL = /* glsl */ `
-  uniform sampler2D groundMap;
-  uniform vec2 groundSize;
-  uniform vec3 gOpen;
-  uniform vec3 gOpenAlt;
-  uniform vec3 gWorn;
-  uniform vec3 gKerb;
-  uniform vec3 gStreet;
-  uniform vec3 gStreetAlt;
-  uniform vec3 gGutter;
-  uniform vec3 gFloor;
-  uniform vec3 gRoof;
-  uniform vec3 gPaint;
-  uniform vec3 gPuddle;
-  uniform vec4 gAmounts;
-  float gHash(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-  }
-  float gNoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(gHash(i), gHash(i + vec2(1.0, 0.0)), f.x), mix(gHash(i + vec2(0.0, 1.0)), gHash(i + vec2(1.0, 1.0)), f.x), f.y);
-  }
-  /** The kind at world point p if it is open ground or street on the same level; -1 otherwise. */
-  float gOutdoorAt(vec2 p, float level) {
-    ivec2 t = ivec2(floor(p));
-    if (t.x < 0 || t.y < 0 || float(t.x) >= groundSize.x || float(t.y) >= groundSize.y) return -1.0;
-    vec4 g = texelFetch(groundMap, t, 0);
-    float k = floor(g.r * 255.0 + 0.5);
-    return k < 1.5 && abs(g.g - level) < 0.002 ? k : -1.0;
-  }
-  /** Distance to the nearest border of a jittered cell pattern: thin lines are cracks. */
-  float gCrack(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    float d1 = 9.0;
-    float d2 = 9.0;
-    for (int y = -1; y <= 1; y++) {
-      for (int x = -1; x <= 1; x++) {
-        vec2 o = vec2(float(x), float(y));
-        vec2 c = o + vec2(gHash(i + o), gHash(i + o + 17.31)) - f;
-        float d = dot(c, c);
-        if (d < d1) {
-          d2 = d1;
-          d1 = d;
-        } else if (d < d2) {
-          d2 = d;
-        }
-      }
-    }
-    return sqrt(d2) - sqrt(d1);
-  }`;
-
-function groundFragment(look: Look): string {
-  return /* glsl */ `
-  float gWetness = 0.0;
-  if (vVxNormal.y > 0.5) {
-    // Everything is worked out per voxel cell, so borders and patterns step like the art.
-    vec2 gp = (floor(vVxPos.xz * 16.0) + 0.5) / 16.0;
-    ivec2 gTile = clamp(ivec2(floor(gp)), ivec2(0), ivec2(groundSize) - 1);
-    vec4 gOwn = texelFetch(groundMap, gTile, 0);
-    float gBase = floor(gOwn.r * 255.0 + 0.5);
-    float gK = gBase;
-    float gEdge = 0.0;
-    float gFine = gNoise(gp * 3.1 + 57.0);
-    if (gBase < 1.5) {
-      // Open ground and streets on the same level: the border between them wanders and frays.
-      vec2 gw = vec2(gNoise(gp * 1.3), gNoise(gp * 1.3 + 17.0)) - 0.5;
-      gw += (vec2(gNoise(gp * 4.3 + 3.0), gNoise(gp * 4.3 + 9.0)) - 0.5) * 0.6;
-      vec2 gq = gp + gw * gAmounts.x;
-      float gWarped = gOutdoorAt(gq, gOwn.g);
-      if (gWarped >= 0.0) gK = gWarped;
-      float gOther = 1.0 - gK;
-      gEdge = max(
-        max(float(gOutdoorAt(gq + vec2(0.13, 0.0), gOwn.g) == gOther), float(gOutdoorAt(gq - vec2(0.13, 0.0), gOwn.g) == gOther)),
-        max(float(gOutdoorAt(gq + vec2(0.0, 0.13), gOwn.g) == gOther), float(gOutdoorAt(gq - vec2(0.0, 0.13), gOwn.g) == gOther))
-      );
-    }
-    float gBroad = gNoise(gp * 0.16) * 0.65 + gNoise(gp * 0.43 + 7.0) * 0.35;
-    float gPatch = gNoise(gp * 0.9 + 31.0);
-    float gCracks = 0.0;
-    vec3 gc;
-    if (gK < 0.5 || gK == ${HILL}.0) {
-      gc = mix(gOpen, gOpenAlt, smoothstep(0.35, 0.75, gBroad)) * (0.93 + 0.14 * gPatch);
-      float worn = smoothstep(0.64, 0.7, gNoise(gp * 0.6 + 41.0) * 0.75 + gFine * 0.25);
-      gc = mix(gc, gWorn, worn * gAmounts.w);
-      gc = mix(gc, gKerb, gEdge);
-      gCracks = 0.6;
-    } else if (gK < 1.5) {
-      gc = mix(gStreet, gStreetAlt, smoothstep(0.3, 0.8, gBroad)) * (0.93 + 0.14 * gPatch);
-      gc = mix(gc, gGutter, gEdge * ${look.frayed ? 'step(0.45, gFine)' : '1.0'});
-      // Road paint: a dashed centre line, worn away in places.
-      float gAxis = floor(gOwn.b * 255.0 + 0.5);
-      if (gAxis > 0.5 && gBase > 0.5) {
-        vec2 gLocal = gp - vec2(gTile);
-        float gAcross = gAxis < 1.5 ? gLocal.y : gLocal.x;
-        float gAlong = gAxis < 1.5 ? gp.x : gp.y;
-        float gLine = step(abs(gAcross - gOwn.a), 0.07) * step(fract(gAlong / 1.75), 0.5);
-        gc = mix(gc, gPaint, gLine * smoothstep(0.25, 0.4, gNoise(gp * 2.0 + 5.0)) * 0.85);
-      }
-      gWetness = smoothstep(0.72, 0.74, gNoise(gp * 0.55 + 90.0) * 0.75 + gFine * 0.25) * gAmounts.z * (1.0 - gEdge);
-      gCracks = 1.0;
-    } else if (gK < 2.5) {
-      ${
-        look.plates
-          ? `// Steel plates, staggered, that never line up with the tiles.
-      vec2 gPlate = gp / vec2(1.5, 0.75);
-      gPlate.x += floor(gPlate.y) * 0.5;
-      vec2 gIn = fract(gPlate) * vec2(1.5, 0.75);
-      float gSeam = max(step(gIn.x, 0.07), step(gIn.y, 0.07));
-      gc = gFloor * (0.94 + 0.1 * gHash(floor(gPlate))) * (1.0 - 0.18 * gSeam);`
-          : `// Boards of uneven lengths, their joints staggered.
-      float gRow = floor(gp.y * 4.0);
-      float gRun = gp.x + gHash(vec2(gRow, 1.7)) * 3.0;
-      gc = gFloor * (0.84 + 0.26 * gHash(vec2(floor(gRun / 1.4), gRow)));
-      gc *= 1.0 - 0.12 * step(fract(gp.y * 4.0), 0.25) - 0.2 * step(fract(gRun / 1.4) * 1.4, 0.0625);`
-      }
-      gc *= 0.93 + 0.1 * gBroad;
-    } else if (gK < 3.5) {
-      gc = gRoof * (0.9 + 0.12 * gPatch) * (0.96 + 0.08 * gFine);
-      gc *= 1.0 - 0.12 * smoothstep(0.6, 0.7, gBroad + gFine * 0.1);
-      gCracks = 0.8;
-    } else {
-      // Ridges along the furrow.
-      float gAcross = floor(gOwn.b * 255.0 + 0.5) < 1.5 ? gp.y : gp.x;
-      gc = gStreet * (0.8 + 0.28 * step(0.5, fract(gAcross * 3.0))) * (0.95 + 0.1 * gFine);
-    }
-    float gCrackLine = 1.0 - step(0.075, gCrack(gp * 1.5 + 3.0));
-    gc *= 1.0 - 0.42 * gCrackLine * smoothstep(0.55, 0.68, gNoise(gp * 0.33 + 61.0)) * gCracks * gAmounts.y;
-    gc = mix(gc, gc * 0.45 + gPuddle * 0.5, gWetness);
-    diffuseColor.rgb = gc;
-  }`;
-}
-
-/** The colours of a look as uniforms (linear, as three works). */
-function lookUniforms(look: Look): Record<string, THREE.IUniform> {
-  const c = (hex: number) => ({ value: new THREE.Color(hex) });
-  return {
-    gOpen: c(look.open),
-    gOpenAlt: c(look.openAlt),
-    gWorn: c(look.worn),
-    gKerb: c(look.kerb),
-    gStreet: c(look.street),
-    gStreetAlt: c(look.streetAlt),
-    gGutter: c(look.gutter),
-    gFloor: c(look.floor),
-    gRoof: c(look.roof),
-    gPaint: c(look.paint),
-    gPuddle: c(look.puddle),
-    gAmounts: { value: new THREE.Vector4(...look.amounts) },
-  };
-}
+/** Open ground marked as grass in a town (blue channel). */
+const LAWN = 3;
+/** A street tile of a zebra crossing (blue channel; +1 when the street runs along z). */
+const CROSSWALK = 4;
+/** Things that stand on paving: open ground round them stays paved. */
+const PAVED = new Set<DecorKind>(['planter', 'fountain', 'fountainCorner', 'statue', 'kiosk', 'carFront', 'carRear', 'crates', 'barricade', 'bin']);
 
 /** What each tile's floor is, for the ground shader and the scattered details. */
 export class GroundMap {
@@ -297,71 +76,132 @@ export class GroundMap {
         data.set([kind, e, axis, Math.round(offset * 255)], i * 4);
       }
     }
+    // Hand-made maps say nothing of streets: they stay paved.
+    if (s.biome === 'city' && s.ground) {
+      this.lawns(data);
+      this.crossings(data, isStreet);
+    }
     this.texture = new THREE.DataTexture(data, w, h);
     this.texture.needsUpdate = true;
   }
 
-  /** The material of the floor slabs: the voxel surface, painted as continuous terrain on top. */
-  material(base: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
-    const look = LOOKS[this.s.biome] ?? LOOKS.city;
-    const uniforms = { groundMap: { value: this.texture }, groundSize: { value: new THREE.Vector2(this.s.width, this.s.height) }, ...lookUniforms(look) };
-    extendShader(base, `ground-${this.s.biome}`, (shader) => {
+  /**
+   * Town ground away from the streets is grass (gardens, verges), unless
+   * something paved stands near it: a square, a car park, a kiosk. Marked
+   * LAWN in the blue channel of open ground, for the ground shader.
+   */
+  private lawns(data: Uint8Array): void {
+    const s = this.s;
+    const { width: w, height: h } = s;
+    const far = new Array<number>(w * h).fill(99);
+    const queue: number[] = [];
+    for (let i = 0; i < w * h; i++) {
+      if (this.kinds[i] === STREET) {
+        far[i] = 0;
+        queue.push(i);
+      }
+    }
+    for (let k = 0; k < queue.length; k++) {
+      const i = queue[k]!;
+      const x = i % w;
+      const y = (i - x) / w;
+      for (const d of DIRS4) {
+        const nx = x + d.x;
+        const ny = y + d.y;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h || far[ny * w + nx]! <= far[i]! + 1) continue;
+        far[ny * w + nx] = far[i]! + 1;
+        queue.push(ny * w + nx);
+      }
+    }
+    const paved = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const kind = decorOf(s.decor?.[i])?.kind;
+      if (!kind || !PAVED.has(kind)) continue;
+      const x = i % w;
+      const y = (i - x) / w;
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (x + dx >= 0 && y + dy >= 0 && x + dx < w && y + dy < h) paved[(y + dy) * w + x + dx] = 1;
+    }
+    for (let i = 0; i < w * h; i++) if (this.kinds[i] === OPEN && far[i]! >= 2 && !paved[i]) data[i * 4 + 2] = LAWN;
+  }
+
+  /**
+   * Zebra crossings: the row of street tiles just before a crossroads, across
+   * the street (blue channel CROSSWALK + 0 for a street along x, + 1 along z).
+   */
+  private crossings(data: Uint8Array, isStreet: (x: number, y: number) => boolean): void {
+    const { width: w, height: h } = this.s;
+    const span = (x: number, y: number, dx: number, dy: number) => {
+      let n = 1;
+      for (let k = 1; k < 8 && isStreet(x + dx * k, y + dy * k); k++) n++;
+      for (let k = 1; k < 8 && isStreet(x - dx * k, y - dy * k); k++) n++;
+      return n;
+    };
+    // A crossroads: street far both ways.
+    const cross = (x: number, y: number) => isStreet(x, y) && span(x, y, 1, 0) > 5 && span(x, y, 0, 1) > 5;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!isStreet(x, y) || cross(x, y)) continue;
+        const alongX = span(x, y, 1, 0) > span(x, y, 0, 1);
+        const next = alongX ? cross(x - 1, y) || cross(x + 1, y) : cross(x, y - 1) || cross(x, y + 1);
+        if (next) data[(y * w + x) * 4 + 2] = CROSSWALK + (alongX ? 0 : 1);
+      }
+    }
+  }
+
+  /** Open ground in town marked as a lawn (garden, verge), not paving. */
+  lawn(i: number): boolean {
+    return this.kinds[i] === OPEN && (this.texture.image.data as Uint8Array)[i * 4 + 2] === LAWN;
+  }
+
+  /** Tile i is open ground (the outer half of a wall drawn thin along its middle: buildings.ts). */
+  outdoors(i: number): void {
+    if (this.kinds[i] !== INDOOR) return;
+    this.kinds[i] = OPEN;
+    (this.texture.image.data as Uint8Array)[i * 4] = OPEN;
+    this.texture.needsUpdate = true;
+  }
+
+  /** The material of the floor slabs: their tops painted with the packs' tiling textures and flat colours. */
+  material(): THREE.MeshStandardMaterial {
+    // The slabs' sides take their tile's colour, per vertex (batch.ts); the tops are painted over it.
+    const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, vertexColors: true });
+    const biome = this.s.biome === 'wilds' ? 1 : this.s.biome === 'facility' ? 2 : 0;
+    const c = (hex: number) => ({ value: new THREE.Color(hex) });
+    const uniforms = {
+      groundMap: { value: this.texture },
+      groundSize: { value: new THREE.Vector2(this.s.width, this.s.height) },
+      gBiome: { value: biome },
+      tAsphalt: { value: terrainTexture('asphalt') },
+      tGrass: { value: terrainTexture('grass') },
+      tDirt: { value: terrainTexture('dirt') },
+      ...Object.fromEntries(Object.entries(SYNTY_LOOK).map(([k, v]) => [k, c(v)])),
+    };
+    extendShader(m, 'synty-ground', (shader) => {
       Object.assign(shader.uniforms, uniforms);
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGPos;\nvarying vec3 vGNormal;').replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+        {
+          vec4 gw = vec4(transformed, 1.0);
+          vec3 gn = objectNormal;
+          #ifdef USE_INSTANCING
+            gw = instanceMatrix * gw;
+            gn = mat3(instanceMatrix) * gn;
+          #endif
+          vGPos = (modelMatrix * gw).xyz;
+          vGNormal = normalize(mat3(modelMatrix) * gn);
+        }`,
+      );
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\n${GROUND_GLSL}`)
-        .replace('#include <color_fragment>', `#include <color_fragment>\n${groundFragment(look)}`)
-        // Puddles shine a little (a sharp highlight bloomed into a white blot).
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.5, gWetness);');
+        .replace('#include <common>', `#include <common>\n${SYNTY_GROUND_GLSL}`)
+        .replace('#include <color_fragment>', `#include <color_fragment>\n${SYNTY_GROUND_FRAGMENT}`);
     });
-    return base;
+    return m;
   }
 
   dispose(): void {
     this.texture.dispose();
   }
-}
-
-// ------------------------------------------------------------- details
-
-type Detail = 'tuft' | 'flower' | 'weed' | 'pebbles' | 'leaves' | 'litter' | 'rubble' | 'twig' | 'scrap';
-
-const VARIANTS: Record<Detail, number> = { tuft: 3, flower: 2, weed: 2, pebbles: 3, leaves: 2, litter: 2, rubble: 3, twig: 2, scrap: 2 };
-/** Lying flat: squashed, so a sheet of paper or a leaf isn't a whole voxel thick. */
-const FLAT: Partial<Record<Detail, number>> = { leaves: 0.5, litter: 0.4 };
-
-/** Details per tile on each floor (before the clumping), by biome. */
-const SCATTER: Record<Biome, Partial<Record<number, [Detail, number][]>>> = {
-  city: {
-    [OPEN]: [['litter', 0.08], ['pebbles', 0.12], ['weed', 0.07]],
-    [STREET]: [['litter', 0.05], ['pebbles', 0.14]],
-    [INDOOR]: [['litter', 0.1]],
-    [ROOF]: [['pebbles', 0.18]],
-  },
-  wilds: {
-    [OPEN]: [['tuft', 1.25], ['flower', 0.12], ['pebbles', 0.12], ['twig', 0.05]],
-    [STREET]: [['pebbles', 0.45], ['tuft', 0.1]],
-    [HILL]: [['tuft', 0.9], ['pebbles', 0.15]],
-    [FURROW]: [['pebbles', 0.08]],
-    [INDOOR]: [['twig', 0.06]],
-  },
-  facility: {
-    [OPEN]: [['scrap', 0.1], ['pebbles', 0.12], ['weed', 0.04]],
-    [STREET]: [['scrap', 0.05], ['pebbles', 0.1]],
-    [INDOOR]: [['scrap', 0.07], ['litter', 0.04]],
-    [ROOF]: [['pebbles', 0.1]],
-  },
-};
-
-const TREES = new Set<DecorKind>(['streetTree', 'tree', 'bush']);
-
-const colours = new Map<number, Colour>();
-function col(hex: number): Colour {
-  let c = colours.get(hex);
-  if (!c) {
-    const v = new THREE.Color(hex);
-    colours.set(hex, (c = { r: v.r, g: v.g, b: v.b, glow: false }));
-  }
-  return c;
 }
 
 function random(seed: number): () => number {
@@ -396,202 +236,327 @@ function noise2(x: number, y: number, salt: number): number {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
-/** A detail as voxels: cell → colour. */
-type Cells = Map<string, Colour>;
+// ------------------------------------------------------- textures and cover
 
-const GRASS = [col(0x4c7a3a), col(0x5c8c3e), col(0x76a14a)];
-const STONES = [col(0x8a8780), col(0x6e6c66), col(0x9d998e), col(0x7a7468)];
-const AUTUMN = [col(0xb5652a), col(0xc98a2e), col(0x8a5a2a), col(0x9aa03a)];
+const terrainTextures = new Map<TerrainId, THREE.Texture>();
 
-function makeCells(detail: Detail, r: () => number): Cells {
-  const cells: Cells = new Map();
-  const put = (x: number, y: number, z: number, c: Colour) => cells.set(`${x},${y},${z}`, c);
-  const spot = (n: number) => Math.floor(r() * (2 * n + 1)) - n;
-  const pick = <T>(list: T[]) => list[Math.floor(r() * list.length)]!;
-  switch (detail) {
-    case 'tuft':
-    case 'weed':
-    case 'flower': {
-      const blades = detail === 'tuft' ? 4 + Math.floor(r() * 3) : 3;
-      const tall = detail === 'weed' ? 2 : 3;
-      let top: [number, number, number] = [0, 0, 0];
-      for (let k = 0; k < blades; k++) {
-        const x = spot(2);
-        const z = spot(2);
-        const h = 1 + Math.floor(r() * tall);
-        for (let y = 0; y < h; y++) put(x, y, z, detail === 'weed' ? (y ? GRASS[0]! : col(0x40602f)) : y === h - 1 ? GRASS[2]! : y ? GRASS[1]! : GRASS[0]!);
-        // Some blades bend over at the tip.
-        if (h >= 3 && r() < 0.5) put(x + (r() < 0.5 ? -1 : 1), h - 1, z, GRASS[2]!);
-        if (h > top[1]) top = [x, h, z];
-      }
-      if (detail === 'flower') {
-        const petal = pick([col(0xe8c84a), col(0xeeeee6), col(0xa47ad6), col(0xd8584a)]);
-        put(top[0], top[1], top[2], petal);
-        put(top[0] + 1, top[1] - 1, top[2], petal);
-      }
-      break;
-    }
-    case 'pebbles': {
-      const n = 2 + Math.floor(r() * 2);
-      for (let k = 0; k < n; k++) {
-        const x = spot(3);
-        const z = spot(3);
-        const c = pick(STONES);
-        put(x, 0, z, c);
-        if (r() < 0.6) put(x + 1, 0, z, c);
-        if (r() < 0.4) put(x, 0, z + 1, c);
-        if (k === 0 && r() < 0.5) put(x, 1, z, c);
-      }
-      break;
-    }
-    case 'leaves':
-      for (let k = 0; k < 5 + Math.floor(r() * 3); k++) put(spot(3), 0, spot(3), pick(AUTUMN));
-      break;
-    case 'litter':
-      if (r() < 0.5) {
-        // A sheet of newspaper.
-        for (let x = -1; x <= 1; x++) for (let z = -2; z <= 1; z++) put(x, 0, z, (x + z) % 3 ? col(0xe2dccc) : col(0xb8b3a6));
-      } else {
-        // A crumpled sheet and a can.
-        for (const [x, z] of [[0, 0], [1, 0], [0, 1]] as const) put(x, 0, z, col(0xe8e2d2));
-        put(-2, 0, 1, col(0xb03a2a));
-        put(-2, 0, 2, col(0xb03a2a));
-        put(-2, 0, 3, col(0x9aa4ad));
-      }
-      break;
-    case 'rubble': {
-      const n = 4 + Math.floor(r() * 3);
-      for (let k = 0; k < n; k++) {
-        const x = spot(3);
-        const z = spot(3);
-        const c = pick([col(0x9a968c), col(0x8a5a48), col(0x6c6a64), col(0xa8a294)]);
-        put(x, 0, z, c);
-        if (r() < 0.5) put(x + 1, 0, z, c);
-        if (r() < 0.3) put(x, 1, z, c);
-      }
-      break;
-    }
-    case 'twig': {
-      const len = 5 + Math.floor(r() * 3);
-      for (let x = 0; x < len; x++) put(x - 3, 0, x > 3 && r() < 0.5 ? 1 : 0, col(0x5a4130));
-      put(0, 0, -1, col(0x6a4e38));
-      put(1, 0, -2, col(0x6a4e38));
-      break;
-    }
-    case 'scrap': {
-      for (let x = -1; x <= 1; x++) for (let z = -1; z <= 0; z++) put(x, 0, z, col(0x30353b));
-      put(2, 0, 2, col(0x7d8790));
-      for (let k = 0; k < 4; k++) put(-2 - (k > 2 ? 1 : 0), 0, 1 + k, col(0xc0652c));
-      break;
-    }
+/** A tiling ground texture (syntyManifest: TERRAIN), loaded once. */
+function terrainTexture(id: TerrainId): THREE.Texture {
+  let t = terrainTextures.get(id);
+  if (!t) {
+    t = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}${terrainFile(id)}`);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    terrainTextures.set(id, t);
   }
-  return cells;
+  return t;
 }
 
-const models = new Map<string, THREE.BufferGeometry | null>();
+/** How much the asphalt texture is lifted (its average is a 27 % grey): a whole apron of it read as black. */
+const ASPHALT_GAIN = 2.6;
 
-/** The voxel model of a detail variant, built on first use and shared. */
-function detailModel(detail: Detail, variant: number): THREE.BufferGeometry | null {
-  const key = `${detail}:${variant}`;
-  if (models.has(key)) return models.get(key) ?? null;
-  const cells = makeCells(detail, random(hash2(variant + 1, detail.length, 7) * 4294967296));
-  const keys = [...cells.keys()].map((k) => k.split(',').map(Number) as [number, number, number]);
-  const min = [0, 1, 2].map((a) => Math.min(...keys.map((k) => k[a]!))) as [number, number, number];
-  const max = [0, 1, 2].map((a) => Math.max(...keys.map((k) => k[a]!))) as [number, number, number];
-  const model = voxelField(min, max, (x, y, z) => cells.get(`${x},${y},${z}`) ?? null, { size: GAME_VOXEL, jitter: 0.12 });
-  const mesh = model.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh);
-  // Centred on its middle column, standing on y = 0.
-  const geometry = mesh ? mesh.geometry.translate(-GAME_VOXEL / 2, 0, -GAME_VOXEL / 2) : null;
-  models.set(key, geometry);
-  return geometry;
-}
+/** Colours of the Synty ground (sRGB): flat colours, and tints over the tiling textures. */
+const SYNTY_LOOK = {
+  // Warm, a little pink, as the paving in Synty's Apocalypse captures.
+  sPave: 0xb8aa9f,
+  sKerb: 0xcfc1b4,
+  sAsphalt: 0xc9b8b0,
+  /** Moss in clumps on the paving and in the gutters, and grime. */
+  sMoss: 0x6c6e3e,
+  sGrime: 0x564840,
+  sPaint: 0xe6e2d4,
+  sYellow: 0xd8aa3a,
+  sGrass: 0xd2dab8,
+  sGrassDry: 0xf0dca2,
+  sDirt: 0xffffff,
+  sConcrete: 0x9a9a96,
+  sDeck: 0x8a8c8e,
+};
 
-const blocksDetail = (k: TileKind) => k !== 'floor' && k !== 'doorOpen';
-
-/**
- * Small voxel details scattered over the ground, off the grid: where they
- * fall is noise (they clump and thin out across tiles), they turn any way and
- * keep clear of walls and cover. Purely cosmetic: no shadows, no picking.
- */
-export function scatterDetails(s: GameState, ground: GroundMap, material: THREE.Material): THREE.Group {
-  const group = new THREE.Group();
-  const { width: w, height: h } = s;
-  const plan = SCATTER[s.biome] ?? SCATTER.city;
-  const decor = s.decor ?? [];
-  const at = (x: number, y: number): TileKind | null => (x < 0 || y < 0 || x >= w || y >= h ? null : s.tiles[y * w + x]!);
-  const elev = (x: number, y: number) => s.elev[y * w + x] ?? 0;
-  const lists = new Map<string, { detail: Detail; variant: number; matrices: THREE.Matrix4[]; tints: THREE.Color[] }>();
-  const add = (detail: Detail, variant: number, matrix: THREE.Matrix4, tint: THREE.Color) => {
-    const key = `${detail}:${variant}`;
-    let list = lists.get(key);
-    if (!list) lists.set(key, (list = { detail, variant, matrices: [], tints: [] }));
-    list.matrices.push(matrix);
-    list.tints.push(tint);
-  };
-  // Trees drop leaves round them; blown-up cover leaves rubble.
-  const leafy = new Uint8Array(w * h);
-  const rubbly = new Uint8Array(w * h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      const look = decorOf(decor[i]);
-      const tree = (look && TREES.has(look.kind) && s.tiles[i] !== 'floor') || (s.biome === 'wilds' && !look && s.tiles[i] === 'high');
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const j = (y + dy) * w + x + dx;
-          if (x + dx < 0 || y + dy < 0 || x + dx >= w || y + dy >= h) continue;
-          if (tree) leafy[j] = 1;
-          if (look?.kind === 'rubble') rubbly[j] = 1;
+const SYNTY_GROUND_GLSL = /* glsl */ `
+  uniform sampler2D groundMap;
+  uniform vec2 groundSize;
+  uniform float gBiome;
+  uniform sampler2D tAsphalt;
+  uniform sampler2D tGrass;
+  uniform sampler2D tDirt;
+  ${Object.keys(SYNTY_LOOK).map((k) => `uniform vec3 ${k};`).join('\n  ')}
+  varying vec3 vGPos;
+  varying vec3 vGNormal;
+  float sHash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+  }
+  float sNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(sHash(i), sHash(i + vec2(1.0, 0.0)), f.x), mix(sHash(i + vec2(0.0, 1.0)), sHash(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+  float sFbm(vec2 p) {
+    return sNoise(p) * 0.55 + sNoise(p * 2.07 + 11.3) * 0.3 + sNoise(p * 4.13 + 5.7) * 0.15;
+  }
+  vec4 sTile(ivec2 t) {
+    return texelFetch(groundMap, clamp(t, ivec2(0), ivec2(groundSize) - 1), 0);
+  }
+  /** 1 if tile t is of kind k on this level (k −1: open ground marked as a lawn). */
+  float sIs(ivec2 t, float k, float level) {
+    vec4 g = sTile(t);
+    float kind = floor(g.r * 255.0 + 0.5);
+    if (abs(g.g - level) > 0.002) return 0.0;
+    if (k < -0.5) return kind < 0.5 && floor(g.b * 255.0 + 0.5) > 2.5 ? 1.0 : 0.0;
+    return abs(kind - k) < 0.5 ? 1.0 : 0.0;
+  }
+  /** How much point p is in tiles of kind k: 1 in their middle, blended between tile middles. */
+  float sMask(vec2 p, float k, float level) {
+    vec2 q = p - 0.5;
+    ivec2 i = ivec2(floor(q));
+    vec2 f = fract(q);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(sIs(i, k, level), sIs(i + ivec2(1, 0), k, level), f.x), mix(sIs(i + ivec2(0, 1), k, level), sIs(i + ivec2(1, 1), k, level), f.x), f.y);
+  }
+  /** Distance from p to the nearest tile of kind k round tile t (2 if none). */
+  float sNear(vec2 p, ivec2 t, float k, float level) {
+    float d = 2.0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        ivec2 n = t + ivec2(x, y);
+        if (sIs(n, k, level) < 0.5) continue;
+        d = min(d, length(max(abs(p - vec2(n) - 0.5) - 0.5, 0.0)));
+      }
+    }
+    return d;
+  }
+  /** Distance to the nearest border of a jittered cell pattern: thin lines are cracks. */
+  float sCrack(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    float d1 = 9.0;
+    float d2 = 9.0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 o = vec2(float(x), float(y));
+        vec2 c = o + vec2(sHash(i + o), sHash(i + o + 17.31)) - f;
+        float d = dot(c, c);
+        if (d < d1) {
+          d2 = d1;
+          d1 = d;
+        } else if (d < d2) {
+          d2 = d;
         }
       }
-      if (look && s.tiles[i] === 'floor') rubbly[i] = 2;
     }
+    return sqrt(d2) - sqrt(d1);
   }
+  /** Road paint along a street's middle (the tile says its axis and where across it the line is). */
+  float sLine(vec2 p, ivec2 t, vec4 own) {
+    float axis = floor(own.b * 255.0 + 0.5);
+    if (axis < 0.5 || axis > 2.5) return 0.0;
+    vec2 local = p - vec2(t);
+    float across = axis < 1.5 ? local.y : local.x;
+    float along = axis < 1.5 ? p.x : p.y;
+    return step(abs(across - own.a), 0.045) * step(fract(along / 1.75), 0.5) * smoothstep(0.2, 0.4, sNoise(p * 2.0 + 5.0));
+  }`;
+
+/**
+ * The ground of each biome, smooth: in town, paving with its slabs and a kerb
+ * along the streets (rounded at the corners), lawns away from them, asphalt
+ * with a centre line, a gutter, patches and cracks; in the wilds, grass in
+ * broad lush and dry patches, a dirt track whose edges wander, ploughed
+ * fields; in facilities, concrete with expansion joints and stains, asphalt
+ * yards with yellow lines. Tiles only say what the ground is: nothing lines
+ * up with them.
+ */
+const SYNTY_GROUND_FRAGMENT = /* glsl */ `
+  if (vGNormal.y > 0.5) {
+    vec2 p = vGPos.xz;
+    ivec2 t = ivec2(floor(p));
+    vec4 own = sTile(t);
+    float k = floor(own.r * 255.0 + 0.5);
+    float level = own.g;
+    float big = sFbm(p * 0.07);
+    float mid = sFbm(p * 0.33 + 3.1);
+    vec2 warp = (vec2(sNoise(p * 0.8), sNoise(p * 0.8 + 17.0)) - 0.5) * 0.7;
+    // Synty's road texture is nearly black (Town lights it hard): lifted to a dark grey that overlays read on.
+    vec3 asphalt = texture2D(tAsphalt, p / 2.2).rgb * sAsphalt * ${ASPHALT_GAIN.toFixed(2)} * (0.9 + 0.18 * big) * (0.97 + 0.06 * mid);
+    vec3 grass = texture2D(tGrass, p / 3.2).rgb * mix(sGrass, sGrassDry, smoothstep(0.42, 0.72, big)) * (0.94 + 0.12 * mid);
+    vec3 dirt = texture2D(tDirt, p / 2.6).rgb * sDirt * (0.92 + 0.14 * big);
+    vec3 c;
+    if (k > 2.5 && k < 3.5) {
+      // A deck or platform up a storey.
+      c = sDeck * (0.94 + 0.08 * mid);
+    } else if (gBiome < 0.5) {
+      if (k < 0.5) {
+        // Paving (slabs that never line up with the tiles), lawns away from the streets, a kerb along them.
+        vec2 sp = p / 0.62 + vec2(0.31, 0.17);
+        vec2 sf = fract(sp);
+        float joint = max(step(sf.x, 0.045), step(sf.y, 0.045));
+        vec3 pave = sPave * (0.96 + 0.06 * sHash(floor(sp))) * (1.0 - 0.14 * joint);
+        pave *= 1.0 - 0.14 * smoothstep(0.55, 0.8, big);
+        float lawn = smoothstep(0.42, 0.6, sMask(p + warp * 0.6, -1.0, level) + (mid - 0.5) * 0.25);
+        c = mix(pave, grass, lawn);
+        float ds = sNear(p, t, 1.0, level);
+        // Grime in broad patches, and moss in clumps, more of it by the kerb.
+        c = mix(c, c * sGrime * 2.2, smoothstep(0.55, 0.82, sFbm(p * 0.4 + 17.0)) * 0.35 * (1.0 - lawn));
+        float mossy = smoothstep(0.7, 0.73, sFbm(p * 0.6 + 29.0) + (1.0 - smoothstep(0.0, 0.7, ds)) * 0.08);
+        c = mix(c, sMoss * (0.8 + 0.4 * sNoise(p * 6.0)), mossy * 0.85 * (1.0 - lawn));
+        float kerb = 1.0 - smoothstep(0.105, 0.125, ds);
+        c = mix(c, sKerb * (0.82 + 0.18 * smoothstep(0.0, 0.03, ds)) * (0.96 + 0.06 * mid), kerb);
+      } else if (k < 1.5) {
+        c = asphalt;
+        // Repairs, a gutter by the kerb, the centre line, cracks.
+        c *= 1.0 - 0.09 * smoothstep(0.6, 0.62, sNoise(floor(p * 1.3) * 0.41 + 9.0) * 0.7 + sNoise(p * 0.5) * 0.3);
+        float dk = sNear(p, t, 0.0, level);
+        c *= mix(0.8, 1.0, smoothstep(0.02, 0.22, dk));
+        // Oil and dirt, and weeds in the gutter.
+        c *= 1.0 - 0.16 * smoothstep(0.62, 0.8, sFbm(p * 0.7 + 41.0));
+        c = mix(c, sMoss * (0.8 + 0.4 * sNoise(p * 6.0)), smoothstep(0.7, 0.74, sFbm(p * 0.9 + 5.0) + (1.0 - smoothstep(0.0, 0.25, dk)) * 0.2) * 0.8);
+        c = mix(c, sPaint, sLine(p, t, own) * 0.9);
+        // Zebra crossing: bars along the street, across its width, worn in places.
+        float zebra = floor(own.b * 255.0 + 0.5);
+        if (zebra > ${CROSSWALK - 0.5}) {
+          vec2 zl = p - vec2(t);
+          float across = zebra < ${CROSSWALK + 0.5} ? p.y : p.x;
+          float inTile = zebra < ${CROSSWALK + 0.5} ? zl.x : zl.y;
+          float bar = step(0.5, fract(across * 2.2)) * step(0.12, inTile) * step(inTile, 0.88);
+          c = mix(c, sPaint, bar * 0.88 * smoothstep(0.18, 0.4, sNoise(p * 2.6 + 9.0)));
+        }
+        // Cracks, in a few worn stretches only.
+        float crack = 1.0 - smoothstep(0.025, 0.045, sCrack(p * 0.9 + 3.0));
+        c *= 1.0 - 0.28 * crack * smoothstep(0.66, 0.76, sFbm(p * 0.22 + 61.0));
+      } else {
+        c = sPave;
+      }
+    } else if (gBiome < 1.5) {
+      // Grass, a dirt track with wandering edges, ploughed fields.
+      c = grass;
+      float track = smoothstep(0.36, 0.64, sMask(p + warp, 1.0, level) + (mid - 0.5) * 0.35);
+      c = mix(c, dirt, track);
+      // Worn ground: bare patches here and there.
+      c = mix(c, dirt * 0.95, smoothstep(0.7, 0.78, sFbm(p * 0.45 + 41.0)) * 0.8);
+      float rows = 0.0;
+      float axis = 0.0;
+      for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+          ivec2 n = t + ivec2(x, y);
+          if (sIs(n, 5.0, level) < 0.5) continue;
+          rows += 1.0;
+          axis = floor(sTile(n).b * 255.0 + 0.5);
+        }
+      }
+      if (k > 4.5 || rows > 1.5) {
+        float across = axis < 1.5 ? p.y : p.x;
+        float ridge = smoothstep(0.2, 0.5, abs(fract(across * 2.5) - 0.5) * 2.0);
+        c = dirt * (0.72 + 0.3 * ridge) * (0.95 + 0.1 * mid);
+      }
+    } else {
+      if (k < 0.5) {
+        // Concrete slabs with joints off the grid, oil stains.
+        vec2 sp = p / 2.4 + vec2(0.37, 0.71);
+        vec2 sf = fract(sp) * 2.4;
+        float joint = max(step(sf.x, 0.035), step(sf.y, 0.035));
+        c = sConcrete * (0.95 + 0.08 * sHash(floor(sp))) * (0.93 + 0.1 * big) * (1.0 - 0.2 * joint);
+        c *= 1.0 - 0.3 * smoothstep(0.72, 0.8, sFbm(p * 0.6 + 23.0));
+      } else if (k < 1.5) {
+        c = asphalt * 1.08;
+        float dk = sNear(p, t, 0.0, level);
+        // A yellow line along the yard's edge, and down its middle.
+        c = mix(c, sYellow, (1.0 - smoothstep(0.03, 0.045, abs(dk - 0.22))) * step(dk, 1.0) * smoothstep(0.2, 0.4, sNoise(p * 2.0 + 5.0)) * 0.85);
+        c = mix(c, sYellow, sLine(p, t, own) * 0.85);
+        float crack = 1.0 - smoothstep(0.025, 0.045, sCrack(p * 0.9 + 7.0));
+        c *= 1.0 - 0.28 * crack * smoothstep(0.66, 0.76, sFbm(p * 0.22 + 31.0));
+      } else {
+        c = sConcrete;
+      }
+    }
+    diffuseColor.rgb = c;
+  }`;
+
+/** Ground cover per tile, by what the floor is (before the clumping): Synty props, cosmetic. */
+const COVER: Record<Biome, Partial<Record<number, [PropId, number][]>>> = {
+  city: {
+    [OPEN]: [['papers', 0.035], ['pebbles', 0.04]],
+    [LAWN + 10]: [['tuftLow', 0.6], ['tuft', 0.25], ['flowers', 0.06]],
+    [STREET]: [['papers', 0.025], ['pebbles', 0.03]],
+    [ROOF]: [['pebbles', 0.06]],
+  },
+  wilds: {
+    [OPEN]: [['tuft', 0.55], ['tuftLow', 0.75], ['tuftWide', 0.3], ['flowers', 0.12], ['pebbles', 0.06]],
+    [STREET]: [['pebbles', 0.18], ['tuftLow', 0.12]],
+    [HILL]: [['tuft', 0.5], ['tuftLow', 0.5], ['pebbles', 0.08]],
+    [FURROW]: [['pebbles', 0.05]],
+  },
+  facility: {
+    [OPEN]: [['papers', 0.03], ['pebbles', 0.07], ['grassBlob', 0.03]],
+    [STREET]: [['papers', 0.02], ['pebbles', 0.05]],
+    [ROOF]: [['pebbles', 0.05]],
+  },
+};
+
+/**
+ * Small Synty props scattered off the grid: grass tufts and flowers in the
+ * wilds and on lawns, papers and pebbles in town, leaves under trees, weeds
+ * at the kerb, a drain now and then in the gutter and manholes down the
+ * middle of streets. Where they fall clumps and thins out across tiles.
+ * Cosmetic: no shadows, no picking. `density` scales how much (Ajustes →
+ * Efectos: fewer on slower machines).
+ */
+export function scatterCover(s: GameState, ground: GroundMap, density = 1): { id: PropId; matrix: THREE.Matrix4 }[] {
+  const out: { id: PropId; matrix: THREE.Matrix4 }[] = [];
+  const { width: w, height: h } = s;
+  const plan = COVER[s.biome] ?? COVER.city;
+  const decor = s.decor ?? [];
+  const data = ground.texture.image.data as Uint8Array;
+  const at = (x: number, y: number): TileKind | null => (x < 0 || y < 0 || x >= w || y >= h ? null : s.tiles[y * w + x]!);
+  const elev = (x: number, y: number) => s.elev[y * w + x] ?? 0;
   const quaternion = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
+  const put = (id: PropId, x: number, y: number, z: number, turn: number, size: number) => {
+    quaternion.setFromAxisAngle(up, turn);
+    out.push({ id, matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), quaternion, new THREE.Vector3(size, size, size)) });
+  };
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if (s.tiles[i] !== 'floor') continue;
       const e = elev(x, y);
       const kind = ground.kinds[i]!;
-      const list: [Detail, number][] = [...(plan[kind] ?? [])];
-      if (leafy[i]) list.push(['leaves', 1.1]);
-      if (rubbly[i]) list.push(['rubble', rubbly[i] === 2 ? 2.2 : 0.5]);
-      if (!list.length) continue;
-      const r = random(hash2(x, y, 11) * 4294967296);
-      // Keep a margin on the sides that walls, cover or a higher floor close.
+      if (kind === INDOOR) continue;
+      const lawn = s.biome === 'city' && kind === OPEN && data[i * 4 + 2] === LAWN;
+      const list: [PropId, number][] = [...(plan[lawn ? LAWN + 10 : kind] ?? [])];
+      const r = random(hash2(x, y, 23) * 4294967296);
+      const near = (test: (k: TileKind | null, x: number, y: number) => boolean) => DIRS4.some((d) => test(at(x + d.x, y + d.y), x + d.x, y + d.y));
+      // Leaves round trees, weeds where the paving meets the street.
+      const tree = (k: TileKind | null, nx: number, ny: number) => k === 'high' && ['tree', 'streetTree'].includes(decorOf(decor[ny * w + nx])?.kind ?? '');
+      if (near(tree)) list.push(['leaves', 0.5]);
+      if (s.biome === 'city' && kind === OPEN && near((_k, nx, ny) => ground.kinds[ny * w + nx] === STREET)) list.push(['grassBlob', 0.08]);
+      // Margins on the sides that walls, cover or a higher floor close.
       const margin = DIRS4.map((d) => {
         const k = at(x + d.x, y + d.y);
-        return k === null || blocksDetail(k) || elev(x + d.x, y + d.y) > e ? 0.16 : 0;
+        return k === null || (k !== 'floor' && k !== 'doorOpen') || elev(x + d.x, y + d.y) > e ? 0.2 : 0;
       });
-      const clump = 0.2 + 1.6 * noise2(x / 4.5, y / 4.5, 3);
-      for (const [detail, density] of list) {
-        let n = Math.floor(density * (detail === 'rubble' || detail === 'leaves' ? 1 : clump) + r());
+      const clump = 0.25 + 1.5 * noise2(x / 4.5, y / 4.5, 3);
+      for (const [id, amount] of list) {
+        let n = Math.floor(amount * density * (id === 'leaves' ? 1 : clump) + r());
         while (n-- > 0) {
           const px = THREE.MathUtils.clamp(x + r(), x + margin[3]!, x + 1 - margin[1]!);
           const pz = THREE.MathUtils.clamp(y + r(), y + margin[0]!, y + 1 - margin[2]!);
-          const size = 0.8 + r() * 0.4;
-          quaternion.setFromAxisAngle(up, r() * Math.PI * 2);
-          const matrix = new THREE.Matrix4().compose(new THREE.Vector3(px, e * STOREY, pz), quaternion, new THREE.Vector3(size, size * (FLAT[detail] ?? 1), size));
-          // Grass takes the dry patches' yellow, like the ground under it.
-          const dry = detail === 'tuft' || detail === 'flower' ? THREE.MathUtils.smoothstep(noise2(px / 6, pz / 6, 5), 0.35, 0.75) : 0;
-          const tint = new THREE.Color(1 + dry * 0.15, 1 + dry * 0.06, 1 - dry * 0.3).multiplyScalar(0.92 + r() * 0.16);
-          add(detail, Math.floor(r() * VARIANTS[detail]), matrix, tint);
+          put(id, px, e * STOREY, pz, r() * Math.PI * 2, 0.8 + r() * 0.45);
+        }
+      }
+      // Street furniture in the ground: drains in the gutter, manholes down the middle.
+      if (s.biome === 'city' && kind === STREET && e === 0) {
+        const axis = data[i * 4 + 2]!;
+        if (axis && hash2(x, y, 31) < 0.06) put('manhole', x + 0.5, 0.002, y + 0.5, (hash2(x, y, 32) * 4) | 0, 1);
+        const kerb = DIRS4.findIndex((d) => ground.kinds[(y + d.y) * w + x + d.x] === OPEN && at(x + d.x, y + d.y) !== null);
+        if (kerb >= 0 && hash2(x, y, 33) < 0.08) {
+          const d = DIRS4[kerb]!;
+          put('drain', x + 0.5 + d.x * 0.36, 0.002, y + 0.5 + d.y * 0.36, Math.atan2(d.x, d.y), 1);
         }
       }
     }
   }
-  for (const list of lists.values()) {
-    const geometry = detailModel(list.detail, list.variant);
-    if (!geometry) continue;
-    const mesh = new THREE.InstancedMesh(geometry, material, list.matrices.length);
-    list.matrices.forEach((m, k) => {
-      mesh.setMatrixAt(k, m);
-      mesh.setColorAt(k, list.tints[k]!);
-    });
-    mesh.receiveShadow = true;
-    group.add(mesh);
-  }
-  return group;
+  return out;
 }

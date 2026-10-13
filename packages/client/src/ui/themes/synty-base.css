@@ -1,0 +1,686 @@
+/*
+ * The shared layer of the three Synty proposals (ui/theme.ts): "Apocalipsis",
+ * "Moderna" and "Mixta". It undoes Expediente's paper habits (crooked sheets,
+ * tape, clips, rubber stamps, handwriting, typewriter ink) and paints every
+ * component with the theme's --t-* values, which each proposal file sets. No
+ * backdrop-filter or animated filters: the interface sits over the WebGL canvas
+ * and must not make it recomposite every frame (≤ 4.2 ms on the RTX 3090).
+ * Derived from ui/holo.css, the inventory of every surface that ignores tokens.
+ */
+
+/* ================================================================ tokens */
+
+:root[data-uf='synty'] {
+  --font: var(--t-font);
+  /* Everything the base styles set in their display face (names, numbers, small headings) uses
+     the theme's legible face; a character face only goes on the big titles (below). */
+  --font-display: var(--t-font);
+  --font-hand: var(--t-font);
+
+  --paper: var(--t-panel);
+  --paper-dark: var(--t-panel-lo);
+  --paper-light: var(--t-panel-hi);
+  /* No paper materials: the layers stay, empty. */
+  --paper-grain: linear-gradient(transparent, transparent);
+  --ink-pen-tex: none;
+  --ink-type-tex: none;
+  --stamp-wear: linear-gradient(#000, #000);
+  --paper-bg: var(--t-sheet);
+  --paper-shadow: var(--t-sheet-shadow);
+
+  --ink: var(--t-text);
+  --ink-soft: var(--t-muted);
+  --ink-blue: var(--t-accent);
+  --ink-blue-soft: var(--t-accent-soft);
+  --pen: var(--t-accent);
+  --stamp: var(--t-danger);
+  --song: var(--t-song);
+  --hunt: var(--t-hunt);
+  --good: var(--t-good);
+  --warn: var(--t-warn);
+  --psi: #c58cff;
+  --c-hp: var(--t-good);
+  --c-ap: var(--t-accent);
+  --c-ammo: #ffb05a;
+  --c-armor: #a9bccb;
+  --c-aim: var(--t-text);
+
+  --on-scene: var(--t-text);
+  --scene-shadow: 0 1px 2px #000, 0 0 8px rgba(0, 0, 0, 0.9);
+
+  /* Defaults every proposal may override. */
+  --t-panel-hover: color-mix(in srgb, var(--t-accent) 18%, var(--t-panel-hi));
+  --t-panel-faint: color-mix(in srgb, var(--t-panel) 60%, transparent);
+  --t-panel-solid: color-mix(in srgb, var(--t-panel) 92%, #000);
+  --t-tag: var(--t-panel-solid);
+  --t-select-bg: color-mix(in srgb, var(--t-text) 10%, transparent);
+  --t-select-bg-faint: color-mix(in srgb, var(--t-text) 4%, transparent);
+  --t-disabled-ink: color-mix(in srgb, var(--t-muted) 60%, transparent);
+  --t-danger-ink: color-mix(in srgb, var(--t-danger) 70%, #fff);
+  --t-danger-ink-soft: color-mix(in srgb, var(--t-danger) 35%, #fff);
+  --t-danger-edge: color-mix(in srgb, var(--t-danger) 45%, transparent);
+  --t-danger-bg: color-mix(in srgb, var(--t-danger) 18%, rgba(0, 0, 0, 0.6));
+  --t-danger-bg-strong: color-mix(in srgb, var(--t-danger) 22%, rgba(0, 0, 0, 0.85));
+  --t-danger-hover: color-mix(in srgb, var(--t-danger) 32%, rgba(0, 0, 0, 0.6));
+  --t-danger-glow: 0 0 12px color-mix(in srgb, var(--t-danger) 45%, transparent);
+  --t-note: color-mix(in srgb, var(--t-warn) 14%, rgba(0, 0, 0, 0.88));
+  --t-note-edge: var(--t-warn);
+  --t-note-ink: color-mix(in srgb, var(--t-warn) 45%, #fff);
+  --t-note-glow: 0 0 10px color-mix(in srgb, var(--t-warn) 30%, transparent);
+  --t-text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  --t-shade: linear-gradient(90deg, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.45) 45%, rgba(0, 0, 0, 0) 70%);
+
+  color: var(--ink);
+}
+
+/* The body face is narrow in every proposal: a touch heavier reads better over the scene. */
+:root[data-uf='synty'] body {
+  font-weight: 500;
+}
+
+:root[data-uf='synty'] :is(button, input, select, textarea) {
+  font-weight: 600;
+}
+
+:root[data-uf='synty'] :is(.strat, .menu) {
+  --x-line: var(--t-line);
+}
+
+/* The theme's character face (--t-font-title), only on titles of 16 px and more: never on
+   numbers, small headings or running text. Without one, the legible face in bold. */
+:root[data-uf='synty'] :is(.menu-title h1, .x-title, .outcome-card h1, .mission-intro h1, .banner, .launch-banner, .turn-label, .strat-brand b) {
+  font-family: var(--t-font-title, var(--t-font));
+  font-weight: var(--t-title-weight, 700);
+}
+
+/* ============================================================ materials */
+
+/* Typed and pen text: plain light letters with a faint glow, nothing crooked. */
+:root[data-uf='synty'] :is(.pen, .shot-numbers .big, .shot-panel .effect, .type-ink, .unit-name, .card-name, .mission-kind, .shot-target, .outcome-card h2, .modal-card h2, .mission-intro h1, .typed .w > span) {
+  text-shadow: var(--t-text-shadow);
+}
+
+/* No ink clipped to the letters: plain text fill, so a shadow can't show through it and
+   a theme's own background (the dial behind the odds) isn't cut to the digits' shape. */
+:root[data-uf='synty'] :is(.pen, .shot-numbers .big, .shot-panel .effect, .type-ink, .unit-name, .card-name, .mission-kind, .shot-target, .outcome-card h2, .modal-card h2, .mission-intro h1, .typed .w > span) {
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
+  background-color: transparent;
+}
+
+:root[data-uf='synty'] .typed .w > span {
+  transform: none;
+  opacity: 1;
+}
+
+:root[data-uf='synty'] .typed .w > span.struck {
+  text-shadow: var(--t-text-shadow);
+}
+
+:root[data-uf='synty'] :is(.unit-class, .unit-stats, .squad-card .cls, .mods, .log-line, .graze, .player) {
+  text-shadow: none;
+}
+
+/* Handwriting becomes the same face, in the accent colour. */
+:root[data-uf='synty'] :is(.x-why, .x-note, .x-state, .toast, .strat-toast, .strat-proposal, .partner-tag, .radio-next, .lineup-card .promo, .float-text) {
+  font-style: normal;
+  letter-spacing: 0.03em;
+}
+
+/* ================================================================ sheets */
+
+:root[data-uf='synty'] :is(.panel, .x-panel, .log, .outcome-card, .modal-card, .mission-intro, .radio, .strat-top, .menu-column, .game-menu-card) {
+  border-radius: 0;
+}
+
+/* Straight, not crooked: every sheet, card and slip. */
+:root[data-uf='synty'] :is(.conceal, em.ow, em.hk, em.aid, em.stun, em.data, em.evac, em.psi, .unit-panel, .shot-numbers .big:not(.crit), .game-menu-card, .outcome-card, .outcome-card h1, .fps-counter, .setting-choices button.on, .strat-right > .x-panel, .briefing-head:is(.victory, .defeat) h1, .strat-modal .x-panel, .menu-column, .menu-modal .x-panel, .radio) {
+  transform: none;
+}
+
+:root[data-uf='synty'] :is(.x-note, .room-label, .globe-label, .partner-tag, .radio-portrait span) {
+  rotate: none;
+}
+
+:root[data-uf='synty'] .ability.active {
+  transform: translateY(-6px);
+}
+
+:root[data-uf='synty'] .shot-panel {
+  transform: translateY(-50%);
+}
+
+:root[data-uf='synty'] .abilities > .shot-panel.anchored {
+  transform: none;
+}
+
+:root[data-uf='synty'] :is(.toast, .toast.partner-notice, .strat-toast, .strat-proposal) {
+  transform: translateX(-50%);
+}
+
+:root[data-uf='synty'] :is(.lineup-card, .lineup-card:nth-child(even)) {
+  transform: translateX(-50%);
+}
+
+:root[data-uf='synty'] :is(.banner, .launch-banner, .mission-intro) {
+  transform: translate(-50%, -50%);
+}
+
+:root[data-uf='synty'] .banner {
+  transform: translate(-50%, -50%) scale(1.25);
+}
+
+:root[data-uf='synty'] .banner.show {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+:root[data-uf='synty'] .mission-intro {
+  animation: synty-intro 0.4s ease;
+}
+
+:root[data-uf='synty'] .radio {
+  animation: synty-rise 0.3s ease;
+}
+
+@keyframes synty-intro {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleY(0.6);
+  }
+}
+
+@keyframes synty-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* No tape, clips or classified stamps on glass. */
+:root[data-uf='synty'] .strat-right > .x-panel::before,
+:root[data-uf='synty'] .strat-right > .x-panel::after,
+:root[data-uf='synty'] .lineup-card::before,
+:root[data-uf='synty'] .unit-panel::before,
+:root[data-uf='synty'] .menu-column::after {
+  display: none;
+}
+
+:root[data-uf='synty'] .strat-right > .x-panel:has(dl.briefing) {
+  padding-bottom: 12px;
+}
+
+:root[data-uf='synty'] .strat-right > .x-panel dl.briefing::after {
+  content: none;
+}
+
+/* Rubber stamps become flat warning bars. */
+:root[data-uf='synty'] :is(.outcome-card h1, .stamp-wear) {
+  -webkit-mask: none;
+  mask: none;
+}
+
+:root[data-uf='synty'] .lineup-card.dead::after {
+  transform: translate(-50%, -50%);
+}
+
+/* ================================================================ text */
+
+:root[data-uf='synty'] :is(.x-head, .x-title, h1, h2) {
+  letter-spacing: 0.12em;
+}
+
+:root[data-uf='synty'] .x-head {
+  color: var(--t-accent);
+}
+
+/* =============================================================== buttons */
+
+/* Glass buttons with a cut corner; the main action is lit cyan. */
+:root[data-uf='synty'] :is(.x-btn, .menu-item, .hud button.fire, .hud button.secondary, .end-turn, .pass-command, .setting-choices button) {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - var(--t-cut)) 0, 100% var(--t-cut), 100% 100%, var(--t-cut) 100%, 0 calc(100% - var(--t-cut)));
+}
+
+:root[data-uf='synty'] .x-btn {
+  background: var(--t-panel-hi);
+  border: 1px solid var(--t-line);
+  color: var(--ink);
+}
+
+:root[data-uf='synty'] .x-btn:hover:not(:disabled) {
+  background: var(--t-panel-hover);
+  border-color: var(--t-accent);
+}
+
+:root[data-uf='synty'] :is(.x-btn.primary, .hud button.fire) {
+  background: var(--t-primary);
+  border-color: var(--t-primary-edge);
+  color: var(--t-primary-ink);
+  box-shadow: var(--t-glow);
+}
+
+:root[data-uf='synty'] :is(.x-btn.primary, .hud button.fire):hover:not(:disabled) {
+  background: var(--t-primary-hover);
+}
+
+:root[data-uf='synty'] .x-btn.ready,
+:root[data-uf='synty'] .x-btn.ready:hover:not(:disabled) {
+  background: var(--t-ready);
+  border-color: var(--t-ready-edge);
+  color: var(--t-ready-ink);
+}
+
+:root[data-uf='synty'] .x-btn.danger {
+  color: var(--t-danger-ink);
+  text-decoration: none;
+  border: 1px solid var(--t-danger-edge);
+  background: var(--t-danger-bg);
+}
+
+:root[data-uf='synty'] .x-btn.danger:hover:not(:disabled) {
+  background: var(--t-danger-hover);
+}
+
+/* ================================================================ labels */
+
+/* Labels over the 3D scene: small glass tags with a cyan edge. */
+:root[data-uf='synty'] :is(.room-label, .globe-label, .partner-tag) {
+  background: var(--t-tag);
+  border: 1px solid var(--t-line);
+  border-left: 2px solid var(--t-accent);
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-uf='synty'] .room-label.command {
+  color: var(--t-accent);
+  outline: none;
+  border: 1px solid var(--t-accent);
+  box-shadow: var(--t-glow);
+}
+
+/* ================================================================ combat */
+
+:root[data-uf='synty'] .ability {
+  background: var(--t-panel);
+  border-bottom-color: var(--t-line);
+  box-shadow: 0 0 0 1px var(--t-line);
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%);
+}
+
+:root[data-uf='synty'] .ability:hover:not(:disabled) {
+  background: var(--t-panel-hi);
+}
+
+:root[data-uf='synty'] .ability.active {
+  border-bottom-color: var(--t-accent);
+  box-shadow: 0 0 0 1px var(--t-accent), var(--t-glow);
+}
+
+:root[data-uf='synty'] .ability:disabled {
+  background: var(--t-panel-lo);
+  color: var(--t-disabled-ink);
+}
+
+:root[data-uf='synty'] .ability .cd {
+  background: var(--t-panel-lo);
+  color: var(--warn);
+}
+
+/* "Agotado": a flat red bar across the button instead of a crooked stamp. */
+:root[data-uf='synty'] .ability .stamp::before {
+  transform: none;
+  border-width: 1px;
+  border-radius: 0;
+  background: var(--t-danger-bg-strong);
+  -webkit-mask: none;
+  mask: none;
+}
+
+/* The cut corner is a clip-path, which would clip the hover card too: on hover
+   the clip also takes in the room above the card, the corner still cut. */
+:root[data-uf='synty'] .ability:hover {
+  clip-path: polygon(-110px -400px, calc(100% + 110px) -400px, calc(100% + 110px) 0, calc(100% - 7px) 0, 100% 7px, 100% 100%, 0 100%, 0 0, -110px 0);
+}
+
+:root[data-uf='synty'] .ability-card {
+  background: var(--t-panel-hi);
+  border: 1px solid var(--t-line);
+  border-top: 2px solid var(--t-accent);
+  color: var(--ink);
+}
+
+/* Whose turn: the frame glows a little, the slip over the cards sits straight. */
+:root[data-uf='synty'] .turn-frame {
+  border-width: 2px;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.45),
+    inset 0 0 44px color-mix(in srgb, var(--turn) 34%, transparent);
+}
+
+:root[data-uf='synty'] .abilities[data-lock]::before {
+  transform: translateX(-50%);
+  border: 1px solid var(--t-line);
+  border-left: 4px solid var(--turn);
+}
+
+/* Selected is neutral light, never a player's colour. */
+:root[data-uf='synty'] .squad-card.selected {
+  background: var(--t-select-bg);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+:root[data-uf='synty'] .float-text.callout {
+  border: 1px solid var(--t-danger-edge);
+  border-left: 4px solid var(--stamp);
+}
+
+:root[data-uf='synty'] .end-turn {
+  background: var(--t-panel-hi);
+  border: 1px solid var(--t-accent);
+  color: var(--t-accent);
+  box-shadow: var(--t-glow);
+}
+
+:root[data-uf='synty'] .end-turn small {
+  color: var(--ink-soft);
+}
+
+:root[data-uf='synty'] .end-turn.is-ready {
+  background: var(--t-ready);
+  border-color: var(--t-ready-edge);
+  color: var(--t-ready-ink);
+}
+
+:root[data-uf='synty'] .end-turn.is-ready small {
+  color: var(--t-ready-ink-soft);
+}
+
+:root[data-uf='synty'] .end-turn.is-waiting {
+  background: var(--t-panel);
+  border: 1px dashed var(--t-accent);
+  box-shadow: none;
+}
+
+:root[data-uf='synty'] .end-turn.is-confirm {
+  background: var(--t-danger-bg-strong);
+  border-color: var(--stamp);
+  color: var(--t-danger-ink);
+  outline: none;
+  box-shadow: var(--t-danger-glow);
+}
+
+:root[data-uf='synty'] .end-turn.is-confirm small {
+  color: var(--t-danger-ink-soft);
+}
+
+:root[data-uf='synty'] :is(.hud button.secondary, .hud button.cancel, .hud button.danger) {
+  background: var(--t-panel-hi);
+  border: 1px solid var(--t-line);
+  color: var(--ink);
+}
+
+:root[data-uf='synty'] :is(.hud button.secondary, .hud button.cancel, .hud button.danger):hover {
+  background: var(--t-panel-hover);
+}
+
+:root[data-uf='synty'] .hud button.fire:disabled {
+  background: var(--t-panel-hi);
+  border: 1px solid var(--t-line);
+  color: var(--ink-soft);
+  box-shadow: none;
+}
+
+/* The odds: a crisp lit ring instead of a marker circle. */
+:root[data-uf='synty'] .shot-numbers .big:not(.crit) {
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  padding: 10px 8px;
+  color: var(--t-accent);
+  box-shadow: var(--t-glow), inset 0 0 10px var(--t-accent-soft);
+}
+
+:root[data-uf='synty'] .shot-numbers .big.crit {
+  color: var(--warn);
+}
+
+/* The damage: lit red figures, the critical in the critical's amber. */
+:root[data-uf='synty'] .shot-damage .dmg {
+  font-weight: 700;
+  text-shadow: var(--t-danger-glow);
+}
+
+:root[data-uf='synty'] .dmg-crit {
+  color: var(--warn);
+}
+
+/* On the way back to the base: the button lit, not greyed. */
+:root[data-uf='synty'] .outcome.leaving .outcome-actions button.fire:disabled {
+  border-color: var(--t-accent);
+  color: var(--t-accent);
+}
+
+:root[data-uf='synty'] :is(.banner, .launch-banner) {
+  background: var(--t-tag);
+  border-top: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 0 12px currentColor;
+}
+
+/* ============================================================== strategy */
+
+:root[data-uf='synty'] .strat-nav button {
+  background: var(--t-panel);
+  box-shadow: 0 0 0 1px var(--t-line);
+  color: var(--ink-soft);
+  border-radius: 0;
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+}
+
+/* The tab's cut corner is a clip-path: the partner's initial sits inside it, not over the edge. */
+:root[data-uf='synty'] .strat-nav .partner-dot {
+  top: 3px;
+  left: 10px;
+}
+
+:root[data-uf='synty'] .strat-nav button.on {
+  background: var(--t-panel-hi);
+  color: var(--t-accent);
+  box-shadow: inset 0 2px 0 var(--t-accent), 0 0 0 1px var(--t-line);
+}
+
+:root[data-uf='synty'] .nav-count {
+  color: var(--t-primary-ink);
+}
+
+:root[data-uf='synty'] .scan-btn:not(.ready):not(:disabled) {
+  background: var(--t-primary);
+  border-color: var(--t-primary-edge);
+  color: var(--t-primary-ink);
+  box-shadow: var(--t-glow);
+}
+
+:root[data-uf='synty'] .scan-btn.secondary:not(.ready):not(:disabled) {
+  background: var(--t-panel-hi);
+  border-color: var(--t-line);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+/* Urgent things are amber; red stays for danger. */
+:root[data-uf='synty'] .strat-now.urgent {
+  background: var(--t-urgent);
+  color: var(--t-urgent-ink);
+}
+
+:root[data-uf='synty'] .strat-now.urgent:hover:not(:disabled) {
+  background: var(--t-urgent-hover);
+}
+
+/* The partner's proposal and name tag: amber glass, not a sticky note. */
+:root[data-uf='synty'] :is(.strat-proposal, .partner-tag) {
+  background: var(--t-note);
+  border: 1px solid var(--t-note-edge);
+  color: var(--t-note-ink);
+  box-shadow: var(--t-note-glow);
+}
+
+/* The name tag keeps the partner's colour on its edge, and stays small. */
+:root[data-uf='synty'] .partner-tag {
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+}
+
+:root[data-uf='synty'] :is(.x-chip, .menu-address) {
+  background: var(--t-accent-soft);
+  border-color: var(--t-line);
+  color: var(--ink);
+}
+
+:root[data-uf='synty'] .event-option:hover:not(:disabled) {
+  background: var(--t-panel-hi);
+}
+
+:root[data-uf='synty'] .lineup-card.empty {
+  background: var(--t-panel-faint);
+}
+
+:root[data-uf='synty'] .lineup-card.dead {
+  background: var(--t-danger-bg-strong);
+}
+
+:root[data-uf='synty'] :is(.x-input, .menu-input) {
+  background: transparent;
+  color: var(--ink);
+  border-bottom-color: var(--t-accent);
+}
+
+/* ============================================================ main menu */
+
+:root[data-uf='synty'] .menu-shade {
+  background: var(--t-shade);
+}
+
+:root[data-uf='synty'] .menu-column {
+  background: var(--paper-bg);
+  box-shadow: var(--paper-shadow);
+  scrollbar-color: var(--t-line) transparent;
+}
+
+:root[data-uf='synty'] :is(.menu-column, .strat-left, .strat-right) {
+  scrollbar-color: var(--t-line) transparent;
+}
+
+:root[data-uf='synty'] .menu-title h1 {
+  color: var(--t-accent);
+  text-shadow: var(--t-glow);
+}
+
+:root[data-uf='synty'] .menu-item {
+  clip-path: none;
+}
+
+:root[data-uf='synty'] .menu-item.primary {
+  color: var(--t-accent);
+}
+
+:root[data-uf='synty'] .menu-item:hover:not(:disabled) {
+  background: linear-gradient(90deg, var(--t-accent-soft), transparent);
+  color: var(--t-accent);
+  box-shadow: inset 2px 0 0 var(--t-accent);
+}
+
+:root[data-uf='synty'] .menu-option.on {
+  border-left-color: var(--t-accent);
+  background: var(--t-accent-soft);
+}
+
+:root[data-uf='synty'] .menu-foot {
+  background: var(--t-panel-solid);
+  border-top: 1px solid var(--t-line);
+}
+
+:root[data-uf='synty'] .menu-input:focus {
+  border-bottom-color: var(--good);
+}
+
+/* ===================================================== remaining paper bits */
+
+:root[data-uf='synty'] :is(.strat-now, .x-recruit button, .pass-command):hover:not(:disabled) {
+  background: var(--t-panel-hover);
+}
+
+:root[data-uf='synty'] .pass-command {
+  background: var(--t-panel);
+  border: 1px solid var(--t-line);
+  color: var(--t-accent);
+}
+
+:root[data-uf='synty'] .uflag-tag.flank {
+  color: var(--t-urgent-ink);
+}
+
+/* Setting choices: the chosen one lit, the rest plain. */
+:root[data-uf='synty'] .setting-choices button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink-soft);
+}
+
+:root[data-uf='synty'] .setting-choices button.on {
+  background: var(--t-accent-soft);
+  border-color: var(--t-accent);
+  color: var(--ink);
+}
+
+/* Toasts are information, not alarms: light text on glass, a cyan edge. */
+:root[data-uf='synty'] :is(.toast, .strat-toast) {
+  font-size: 17px;
+  color: var(--ink);
+  background: var(--t-panel-hi);
+  border: 1px solid var(--t-line);
+  border-left: 3px solid var(--t-accent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-uf='synty'] .toast.partner-notice {
+  border-left: 3px solid var(--accent, var(--t-accent));
+}
+
+/* Phase 2 (styles.css): the find over the furniture, the note on a tile, the backpack. */
+:root[data-uf='synty'] .float-text.find {
+  border: 1px solid color-mix(in srgb, var(--good) 45%, transparent);
+  border-left: 4px solid var(--good);
+}
+
+:root[data-uf='synty'] .float-text.find.empty {
+  border-color: var(--t-line);
+  border-left-color: var(--ink-soft);
+}
+
+:root[data-uf='synty'] .tile-note {
+  font-family: var(--font);
+  font-size: 13px;
+  border: 1px solid var(--t-line);
+  border-left: 3px solid var(--warn);
+}
+
+:root[data-uf='synty'] .unit-pack {
+  border-top-color: var(--t-line);
+}
+
+:root[data-uf='synty'] .pack-slot {
+  border-radius: 0;
+  background: var(--t-select-bg-faint);
+}
+
+:root[data-uf='synty'] :is(.pack-slot.supplies, .pack-total.supplies) {
+  --c: #ffd25a;
+}
+
+/* A panel's kicker is a heading, not a warning: the accent. Red only for the bad ones (red is for danger). */
+:root[data-uf='synty'] .alert-kicker:not(.bad, .good) {
+  color: var(--t-accent);
+}

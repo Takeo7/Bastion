@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { fitPostToPixelRatio, voxelPost, type VoxelPost } from '../game/post';
+import { fitPostToPixelRatio, postChain, UNIT_LAYER, type PostChain } from '../game/post';
 import { FrameLimiter, onGraphics, pixelRatio, type GraphicsSettings } from '../settings';
+import { perfBegin, perfFrame } from '../perf';
 import { ambience } from '../audio/ambience';
 import { music } from '../audio/music';
 import { easeInOut, tween } from '../game/tween';
@@ -48,7 +49,7 @@ export interface StageSet {
 export class Stage {
   readonly element = document.createElement('div');
   readonly camera = new THREE.PerspectiveCamera(40, 1, 0.1, 600);
-  private readonly gl = new THREE.WebGLRenderer({ antialias: true });
+  private readonly gl = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   private readonly labels = new Map<string, CSS2DRenderer>();
   private readonly fade = document.createElement('div');
   private readonly sets = new Map<string, StageSet>();
@@ -64,7 +65,7 @@ export class Stage {
   private drag: { x: number; y: number; moved: boolean } | null = null;
   private disposed = false;
   /** Voxel post-processing; it follows whichever set is active. */
-  private readonly post: VoxelPost;
+  private readonly post: PostChain;
   private readonly limiter = new FrameLimiter();
   private effects: GraphicsSettings['effects'] = 'high';
   private readonly unsubscribe: () => void;
@@ -83,7 +84,9 @@ export class Stage {
     this.gl.toneMappingExposure = 1.15;
     this.gl.shadowMap.enabled = true;
     this.gl.shadowMap.type = THREE.PCFShadowMap;
-    this.post = voxelPost(this.gl, new THREE.Scene(), this.camera);
+    // Characters live on their own layer (post.ts), like in battle.
+    this.camera.layers.enable(UNIT_LAYER);
+    this.post = postChain(this.gl, new THREE.Scene(), this.camera);
     this.element.append(this.gl.domElement, this.fade);
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.element);
@@ -392,6 +395,7 @@ export class Stage {
     // Hidden (display: none) or detached: nothing to draw.
     if (!set || !this.element.isConnected || !this.element.clientWidth) return;
     if (!this.limiter.ready()) return;
+    perfBegin(this.gl);
     this.clock.update();
     const dt = Math.min(this.clock.getDelta(), 0.1);
     this.applyZoom(dt);
@@ -402,6 +406,7 @@ export class Stage {
     if (this.effects === 'low') this.gl.render(set.scene, this.camera);
     else this.post.composer.render(dt);
     this.labels.get(this.active)?.render(set.scene, this.camera);
+    perfFrame(this.gl, this.soundtrack ? this.active : 'menú');
   };
 
   dispose(): void {

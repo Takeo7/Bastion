@@ -32,6 +32,10 @@ export interface FigurePose {
   hop: number;
   yaw: number;
   phase: number;
+  /** Reload, 0 to 1 (rigs that move their own weapon for it, ownsReload). */
+  spin?: number;
+  /** Rummaging through furniture, 0 to 1 (the unit view also crouches the figure for it). */
+  search?: number;
 }
 
 export interface FigureRig extends UnitRig {

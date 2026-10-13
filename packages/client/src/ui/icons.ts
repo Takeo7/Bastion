@@ -56,6 +56,7 @@ const rain = svg('<path d="M5 3l5 9M11 3l5 9M17 3l5 9"/><path d="M8 12h2.5V9.5M1
 const counter = svg('<path d="M3 9c2-3 4 3 6 0s4 3 6 0 4 3 6 0"/><path d="M3 15c2 3 4-3 6 0s4-3 6 0 4-3 6 0" stroke-dasharray="2.2 2"/>');
 const hymnIcon = svg('<path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/><path d="M9 9.5l10-2"/>');
 const lastVerseIcon = svg('<path d="M3 19h18"/><path d="M7 19a5 5 0 0 1 10 0"/><path d="M12 4v4M5.6 7.6l2.1 2.1M18.4 7.6l-2.1 2.1"/>');
+const magnifier = svg('<circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L20 20"/>');
 
 const ICONS: Record<AbilityId, string> = {
   shoot: crosshair,
@@ -72,6 +73,7 @@ const ICONS: Record<AbilityId, string> = {
   aid: shieldPlus,
   evac,
   hack: chip,
+  search: magnifier,
   runAndGun: dash,
   rapidFire: burst,
   suppression: waves,
@@ -88,6 +90,7 @@ const ICONS: Record<AbilityId, string> = {
   claw,
   mindspin: spiral,
   reanimate: skull,
+  burst: star,
   smoke: cloud,
   flashbang: star,
   firstAid: medkit,

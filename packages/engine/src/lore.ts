@@ -4,7 +4,7 @@
  * which the campaign reads, it is text only.
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
-import type { Biome, MissionKind, TemplateId } from './types';
+import type { Biome, DecorKind, ItemId, MissionKind, TemplateId } from './types';
 
 /** Bastion level at which the doom track gets its name: until the radio is fixed nobody knows the Marea is coming. */
 export const PARTITURA_LEVEL = 4;
@@ -38,16 +38,20 @@ export function doomChangeText(level: number, delta: number): string {
 /** One line for each word of the world, for tooltips. */
 export const GLOSSARY: Record<string, string> = {
   Pandemia: 'Empezó hace dos inviernos en el Instituto Galena. Quien se contagia muere en un día y se levanta.',
-  Zombi: 'Un muerto que anda. Va hacia lo que ve y lo que oye. Su mordisco contagia.',
+  Zombi: 'Un muerto que anda. Va a por el vivo que ve y, si no ve a nadie, hacia el último ruido que oyó.',
   Corredor: 'Un zombi reciente, todavía ágil. Rápido, y ve de lejos.',
   Acorazado: 'Fue policía o soldado: el chaleco y el casco le dan blindaje.',
-  Chillón: 'Un zombi que grita. Llama a todos los de alrededor y mete el miedo en el cuerpo. Primero el Chillón.',
-  Hinchado: 'Revienta al morir o al llegar a ti y deja una nube que contagia. Mejor de lejos.',
+  Chillón: 'Un zombi que no muerde: grita. Su grito asusta a los que están cerca, llama a todos los zombis que lo oyen y levanta a los muertos. Primero el Chillón.',
+  Hinchado: 'Un zombi lento y lleno de gases. Revienta al morir o al llegar a vosotros, y hace daño a quien tenga al lado. Mejor de lejos.',
   Cuervos: 'Bandas de saqueadores. Viven de robar a otros vivos y atraen hordas con sirenas.',
   Congregación: 'Una secta que cree que los zombis están salvados. Los guía con campanas y por radio.',
   Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega a Atalaya, la campaña está perdida.',
   Nido: 'Un sitio donde los zombis se juntan y la Marea crece. Quemarlo la hace retroceder.',
   Sirena: 'El altavoz con el que los Cuervos atraen hordas. Calladla y la zona respira.',
+  Ruido: 'Cada acción suena: un disparo se oye a una docena de casillas, un registro a dos. Lo que lo oye va a mirar. El ruido no os delata: os delata que os vean.',
+  Saqueo: 'Misión de registrar un pueblo: llenad las mochilas y evacuad. No hay reloj, pero llegan zombis por los bordes, y antes cuanto más ruido.',
+  Registrar: 'Una acción junto a un mueble, un coche o unas cajas: suministros, algún accesorio y, a veces, medicinas. Hace un poco de ruido.',
+  Mochila: 'Cada soldado lleva tres cosas. El botín cuenta si vuelve: lo que llevaba un caído se pierde.',
   Suministros: 'Lo que se saquea y se cambia: sirve para construir, reclutar y equipar.',
   Medicinas: 'Curan heridas y contagios. Nunca hay bastantes.',
   Comida: 'Cada soldado come cada día. Sin comida no hay voluntad ni salud.',
@@ -56,7 +60,9 @@ export const GLOSSARY: Record<string, string> = {
   Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
   Oficio: 'Lo que Teo enseña en el Taller de oficios: machete, fuego, ballesta y enfermería de campo.',
   'Taller de oficios': 'Donde Teo enseña a sobrevivir. Abre la rama de Oficio de cada clase.',
-  Recluta: 'Superviviente todavía sin clase, con fusil. Al llegar a Capitán se especializa en el eje de la Rosa en que más haya aprendido.',
+  Maña: 'La aptitud de las manos: arreglar equipos, lanzar granadas y curar.',
+  Grillo: 'El dron del Especialista: uno de juguete con una batería de coche, montado por Teo. Cura, cubre, da calambres y arregla a distancia.',
+  Recluta: 'Superviviente todavía sin clase, con fusil. Al llegar a Capitán se especializa en el eje del árbol de habilidades en que más haya aprendido.',
 };
 
 // ---------------------------------------------------------- enemy files
@@ -74,23 +80,28 @@ export interface EnemyFile {
 export const ENEMY_FILES: Partial<Record<TemplateId, EnemyFile>> = {
   zombie: {
     what: 'Un muerto que anda. Lo que queda de alguien, sin nada dentro.',
-    does: 'Lento y torpe, pero no se cansa ni tiene miedo. Muerde cuerpo a cuerpo.',
-    tip: 'Uno solo no es nada. Diez, sí. No hagáis ruido y no dejéis que os rodeen.',
+    does: 'Lento, sin miedo y sin cubrirse. Va a por el vivo más cercano que vea; si no ve a nadie, adonde oyó el último ruido. Muerde cuerpo a cuerpo.',
+    tip: 'Uno solo no es nada. Diez, sí. Sin ruido pasan de largo; con ruido, vienen todos.',
   },
   xenoid: {
     what: 'Un Corredor: un zombi reciente, que aún tiene piernas.',
-    does: 'Rápido y ve de lejos: os encuentra antes de que lleguéis a sus casillas rojas.',
-    tip: 'No os confiéis estando ocultos cerca de él. Vigilancia en su camino.',
+    does: 'Corre mucho más que los otros y ve de lejos. Ataca con las uñas, cuerpo a cuerpo.',
+    tip: 'Llega antes de lo que creéis. Vigilancia en su camino, y que nadie se quede solo.',
   },
   mec: {
     what: 'Un Acorazado: fue policía o soldado, y conserva el chaleco y el casco.',
-    does: 'Blindaje 1: resta daño a cada impacto. Aguanta mucho más de lo que parece.',
-    tip: 'Los explosivos le quitan el blindaje. Si no, los disparos que no fallan.',
+    does: 'Blindaje 1: resta daño a cada golpe que recibe. Aguanta mucho y embiste cuerpo a cuerpo.',
+    tip: 'Los explosivos le quitan el blindaje y la munición perforante lo atraviesa. Que no llegue a vuestro lado.',
   },
   sectoid: {
     what: 'Un Chillón: un zombi que grita.',
-    does: 'Su grito mete el miedo en el cuerpo (pánico, desorientación o peor) y despierta a los muertos de alrededor.',
-    tip: 'Primero el Chillón. Mientras grite, los muertos se levantan.',
+    does: 'No muerde. Su grito desorienta o asusta a los soldados cercanos, y se oye a dieciséis casillas: todo zombi que lo oiga viene. Además, levanta a los muertos que tenga cerca.',
+    tip: 'Primero el Chillón. Cada grito trae más, y cada cadáver a su alcance puede volver a andar.',
+  },
+  bloater: {
+    what: 'Un Hinchado: un cuerpo lleno de gases, a punto de reventar.',
+    does: 'Lento. Al morir o al llegar a un soldado revienta: 3 de daño a quien tenga al lado.',
+    tip: 'Abatidlo de lejos, y nunca junto a los vuestros.',
   },
   trooper: {
     what: 'Un Saqueador de los Cuervos. Vive de robar a otros vivos.',
@@ -133,6 +144,108 @@ export const REGION_LORE: Record<RegionId, RegionLore> = {
   oce: { ally: 'las Bodegas', situation: 'Granjas, bodegas y un río. Es donde hay comida, y por eso donde más se pelea.' },
 };
 
+// ------------------------------------------------------------- searching
+
+/** A piece of furniture that can be searched, as the log and the button read it. */
+export interface SearchSpot {
+  /** With its article, as it reads after «Registrar»: «el armario». */
+  name: string;
+  /** What the supplies found in it were; one is picked by seed. */
+  supplies: string[];
+}
+
+/** Searchable furniture (docs/FASE2.md): what each decor is called and what tends to turn up in it. */
+export const SEARCH_SPOTS: Partial<Record<DecorKind, SearchSpot>> = {
+  wardrobe: { name: 'el armario', supplies: ['ropa de abrigo', 'mantas y un saco de dormir', 'una caja de zapatos con pilas y velas'] },
+  table: { name: 'la mesa', supplies: ['latas en una bolsa de la compra', 'cubiertos, cerillas y un mechero', 'un mapa de carreteras y una linterna'] },
+  desk: { name: 'el escritorio', supplies: ['pilas, cinta americana y un cúter', 'un cargador de manivela', 'un cajón lleno de herramientas pequeñas'] },
+  shelf: { name: 'la estantería', supplies: ['latas de conserva', 'botellas de agua', 'un tarro de clavos y tornillos'] },
+  counter: { name: 'el mostrador', supplies: ['tabaco y mecheros', 'chocolatinas y pilas', 'sal, azúcar y café'] },
+  cabinet: { name: 'el archivador', supplies: ['una linterna y un juego de llaves', 'una petaca y dos mecheros', 'pilas detrás de los expedientes'] },
+  bed: { name: 'la cama', supplies: ['mantas limpias', 'una linterna y pilas en la mesilla', 'una bolsa de deporte con ropa seca'] },
+  crates: { name: 'las cajas', supplies: ['herramientas', 'latas y bidones de agua', 'cuerda, alambre y clavos'] },
+  carRear: { name: 'el maletero', supplies: ['una garrafa de gasolina', 'herramientas y un gato', 'una compra que nadie llegó a sacar'] },
+  carFront: { name: 'la guantera', supplies: ['un mapa, un mechero y caramelos', 'pilas y una linterna', 'un paquete de tabaco a medias'] },
+  rack: { name: 'el estante', supplies: ['repuestos y cable', 'bidones de aceite', 'cajas de tornillería'] },
+};
+
+/** When a search turns up nothing. */
+export const EMPTY_FINDS = ['Nada. Alguien pasó antes.', 'Vacío. Solo polvo.', 'Nada que sirva.', 'Nada, salvo una foto de familia.', 'Ya lo registraron. Hace tiempo.'];
+
+/** What the medicines found were. */
+export const MEDICINE_FINDS = ['un blíster de antibióticos', 'una caja de ibuprofeno a medias', 'vendas sin abrir', 'un frasco de yodo', 'jarabe para la tos', 'un tubo de pomada antibiótica'];
+
+/** Accessories as they read when found: with their article. */
+export const ITEM_FINDS: Record<ItemId, string> = {
+  fragGrenade: 'una granada',
+  smokeGrenade: 'una granada de humo',
+  flashbang: 'una granada aturdidora',
+  firstAid: 'un botiquín',
+  nanoVest: 'un chaleco antibalas',
+  mindShield: 'unos tapones',
+  apRounds: 'munición perforante',
+  tracerRounds: 'munición trazadora',
+};
+
+/** What a search turned up, as the log needs it: Gameplay's loot, reduced to its parts. */
+export interface SearchFind {
+  supplies?: number;
+  item?: ItemId;
+  medicines?: number;
+}
+
+function joinAnd(parts: string[]): string {
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : (parts[0] ?? '');
+}
+
+/** The log line for a search: «Ana registra el maletero: una garrafa de gasolina (+12 §) y un botiquín.» */
+export function searchLine(who: string, decor: DecorKind, find: SearchFind | null, seed: number): string {
+  const spot = SEARCH_SPOTS[decor];
+  const where = spot?.name ?? 'el mueble';
+  const parts: string[] = [];
+  if (find?.supplies) parts.push(`${spot ? spot.supplies[seed % spot.supplies.length] : 'suministros'} (+${find.supplies} §)`);
+  if (find?.item) parts.push(ITEM_FINDS[find.item]);
+  if (find?.medicines) parts.push(MEDICINE_FINDS[seed % MEDICINE_FINDS.length]!);
+  if (!parts.length) return `${who} registra ${where}. ${EMPTY_FINDS[seed % EMPTY_FINDS.length]!}`;
+  return `${who} registra ${where}: ${joinAnd(parts)}.`;
+}
+
+/** The debrief's loot line: «El botín: +34 §, un botiquín y 2 medicinas.», or null with nothing brought back. */
+export function lootSummary(supplies: number, items: readonly ItemId[], medicines: number): string | null {
+  const parts: string[] = [];
+  if (supplies) parts.push(`+${supplies} §`);
+  for (const id of items) parts.push(ITEM_FINDS[id]);
+  if (medicines) parts.push(medicines === 1 ? '1 medicina' : `${medicines} medicinas`);
+  return parts.length ? `El botín: ${joinAnd(parts)}.` : null;
+}
+
+// --------------------------------------------------------------- scavenge
+
+/** Reports for the Saqueo mission (`scavenge`), in the style of BRIEFINGS. */
+export const SCAVENGE_BRIEFINGS = [
+  'Un pueblo que se vació a toda prisa, con las casas cerradas y las despensas llenas. Registrad lo que podáis y evacuad. Sin ruido: cada tiro llama a más.',
+  'Un polígono que nadie ha tocado desde el primer invierno: naves, oficinas y coches en el aparcamiento. Llenad las mochilas y salid por la zona de evacuación. Vendrán zombis, y antes cuanto más ruido hagáis.',
+  'Una urbanización a medio construir. Cuando empezó todo, la mitad de las casas tenía gente, y lo que dejaron sigue dentro. Registrad, cargad y evacuad antes de que la horda os encuentre.',
+];
+
+/** The Saqueo mission's lines for the combat screen and the debrief. */
+export const SCAVENGE = {
+  /** The mission's name (MISSION_NAMES). */
+  name: 'Saqueo',
+  /** Objective before anything is carried. */
+  objective: 'Registrad lo que podáis y evacuad',
+  /** Objective while the squad carries loot, short for the objective strip; `{n}` is how many things. */
+  carrying: 'Botín: {n} · registrad o evacuad',
+  /** The same, in full, for its tooltip. */
+  carryingTip: 'Lo que llevan las mochilas ({n}) cuenta si sale por la zona de evacuación o si seguís en pie al ganar. Lo que llevaba un caído se pierde.',
+  /** Debrief headline when loot came home. */
+  success: 'Botín a salvo',
+  /** Debrief headline when the squad came home with nothing. */
+  emptyHanded: 'Volvéis con las mochilas vacías',
+  /** The horde arrives at the edges. */
+  horde: 'Llegan más zombis por los bordes',
+};
+
 // ---------------------------------------------------------------- briefings
 
 /** Several reports per mission type; each offer always gets the same one. */
@@ -161,6 +274,7 @@ const BRIEFINGS: Record<MissionKind, string[]> = {
     'Un superviviente está atrapado en una azotea, rodeado. Lleva tres días sin agua. Llegad hasta él y sacadlo con vida.',
     'Un desertor de los Cuervos quiere pasarse a nuestro lado y lo están cazando. Llegad hasta él antes que ellos y sacadlo con vida.',
   ],
+  scavenge: SCAVENGE_BRIEFINGS,
 };
 
 function hash(text: string): number {

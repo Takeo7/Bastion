@@ -21,11 +21,15 @@ export function certificate(dir: string, addresses: string[]): Tls | null {
   const certPath = join(dir, 'bastion-cert.pem');
   const ips = ['127.0.0.1', ...addresses];
   if (existsSync(keyPath) && existsSync(certPath)) {
-    const cert = readFileSync(certPath);
-    const x509 = new X509Certificate(cert);
-    const covers = ips.every((ip) => x509.checkIP(ip) !== undefined);
-    const lasts = Date.parse(x509.validTo) - Date.now() > 7 * 24 * 3600 * 1000;
-    if (covers && lasts) return { key: readFileSync(keyPath), cert };
+    try {
+      const cert = readFileSync(certPath);
+      const x509 = new X509Certificate(cert);
+      const covers = ips.every((ip) => x509.checkIP(ip) !== undefined);
+      const lasts = Date.parse(x509.validTo) - Date.now() > 7 * 24 * 3600 * 1000;
+      if (covers && lasts) return { key: readFileSync(keyPath), cert };
+    } catch {
+      /* a damaged certificate: made again below */
+    }
   }
   mkdirSync(dir, { recursive: true });
   // Apple only accepts certificates that last at most 825 days and name their use.
@@ -41,8 +45,9 @@ export function certificate(dir: string, addresses: string[]): Tls | null {
       ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath, '-days', '825', '-subj', '/CN=Bastion (partida local)', ...extensions.flatMap((e) => ['-addext', e])],
       { stdio: 'ignore' },
     );
+    return { key: readFileSync(keyPath), cert: readFileSync(certPath) };
   } catch {
+    // No openssl (Windows, as it comes), or it failed: the game goes on over http only.
     return null;
   }
-  return { key: readFileSync(keyPath), cert: readFileSync(certPath) };
 }

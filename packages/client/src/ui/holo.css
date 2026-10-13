@@ -624,3 +624,34 @@
 :root[data-ui='holo'] .toast.partner-notice {
   border-left: 3px solid var(--accent, var(--h-cyan));
 }
+
+/* Phase 2 (styles.css): the find over the furniture, the note on a tile, the backpack. */
+:root[data-ui='holo'] .float-text.find {
+  border: 1px solid rgba(125, 255, 154, 0.45);
+  border-left: 4px solid var(--good);
+}
+
+:root[data-ui='holo'] .float-text.find.empty {
+  border-color: var(--h-line);
+  border-left-color: var(--ink-soft);
+}
+
+:root[data-ui='holo'] .tile-note {
+  font-family: var(--font);
+  font-size: 13px;
+  border: 1px solid var(--h-line);
+  border-left: 3px solid var(--warn);
+}
+
+:root[data-ui='holo'] .unit-pack {
+  border-top-color: var(--h-line);
+}
+
+:root[data-ui='holo'] .pack-slot {
+  border-radius: 0;
+  background: rgba(220, 236, 245, 0.04);
+}
+
+:root[data-ui='holo'] :is(.pack-slot.supplies, .pack-total.supplies) {
+  --c: #ffd25a;
+}

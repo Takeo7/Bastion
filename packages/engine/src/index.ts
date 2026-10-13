@@ -5,6 +5,7 @@ export * from './maps';
 export * from './rng';
 export * from './grid';
 export * from './decor';
+export * from './loot';
 export * from './los';
 export * from './cover';
 export * from './aim';

@@ -1,7 +1,7 @@
 // Soldier growth: five aptitudes the player raises at each promotion, and one
-// talent tree shared by everyone, «la Rosa». Its centre is open to all; each of
-// its four axes leads to a class (three branches plus the Oficio, a trade Teo
-// teaches in the Taller de oficios).
+// talent tree shared by everyone, the «Árbol de habilidades» (once «la Rosa»).
+// Its centre is open to all; each of its four axes leads to a class (three
+// branches plus the Oficio, a trade Teo teaches in the Taller de oficios).
 // Every soldier starts as a recruit with no class and may learn from two axes,
 // up to their third row. On reaching Capitán (SPECIALIZE_RANK) the soldier
 // becomes the class of the axis it was taught most (aptitudes break ties), for
@@ -59,7 +59,7 @@ export const ATTRS: Record<AttrId, AttrDef> = {
   agu: { id: 'agu', name: 'Aguante', short: 'AGU', effect: '+1 de salud cada 2 puntos.', thresholds: ['Las heridas curan un 30 % antes.', '+1 de blindaje.'] },
   ref: { id: 'ref', name: 'Reflejos', short: 'REF', effect: '+2 de defensa por punto por encima de 3.', thresholds: ['+1 casilla de movimiento.', 'Los disparos de reacción contra él tienen −20.'] },
   tem: { id: 'tem', name: 'Temple', short: 'TEM', effect: '+6 de voluntad por punto.', thresholds: ['No entra en pánico.', 'Nervios de acero: el grito del Chillón no puede con él.'] },
-  ofi: { id: 'ofi', name: 'Oficio', short: 'OFI', effect: '+5 de hackeo por punto por encima de 5.', thresholds: ['+1 granada.', '+1 de curación y +1 de daño con granadas.'] },
+  ofi: { id: 'ofi', name: 'Maña', short: 'MAÑ', effect: '+5 a arreglar por punto por encima de 5.', thresholds: ['+1 granada.', '+1 de curación y +1 de daño con granadas.'] },
 };
 
 /** Every recruit starts here (22 points). */
@@ -98,9 +98,9 @@ export function attrBlocker(b: Pick<Build, 'cls' | 'rank' | 'attrs'>, id: AttrId
   return null;
 }
 
-// ------------------------------------------------------------------ the rosa
+// --------------------------------------------------------------- the skill tree
 
-/** The four axes, in the order they sit around the rosa (neighbours share a side). */
+/** The four axes, in the order they sit around the centre of the skill tree (neighbours share a side). */
 export const AXES: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'];
 
 /** Talent points the branch needs above a row before the row opens. */
@@ -146,13 +146,13 @@ export const BRANCHES: Record<ClassId, [BranchDef, BranchDef, BranchDef, BranchD
   ],
   specialist: [
     { name: 'Médico', focus: 'Botiquín y reanimación' },
-    { name: 'Grillo', focus: 'El dron como arma' },
+    { name: 'Grillo', focus: 'El dron casero de Teo' },
     { name: 'Enlace', focus: 'Ayuda y cooperación' },
     { name: 'Enfermería', focus: 'Oficio: curar y sostener', song: true },
   ],
 };
 
-/** The centre of the rosa. */
+/** The centre of the skill tree. */
 export const CENTER_NAME = 'Recluta';
 
 /** Equipment only one class carries: talents that need it stay with that class's soldiers. */
@@ -184,7 +184,7 @@ export const SPECIALIZE_TEXT: Record<ClassId, string> = {
   specialist: '{name} se especializa como Especialista. El Grillo ya tiene dueño.',
 };
 
-export const RECRUIT_DESCRIPTION = 'Todavía sin clase. Lleva fusil y aprende lo que le enseñen. Al llegar a Capitán se especializa en el eje de la Rosa en que más haya aprendido.';
+export const RECRUIT_DESCRIPTION = 'Todavía sin clase. Lleva fusil y aprende lo que le enseñen. Al llegar a Capitán se especializa en el eje del árbol de habilidades en que más haya aprendido.';
 
 /** Combat template a soldier fights with. */
 export function soldierTemplate(cls: ClassId | null): TemplateId {
@@ -196,7 +196,7 @@ export interface TalentDef {
   name: string;
   /** Per level when `max` > 1. */
   description: string;
-  /** Axis of the rosa; null for the centre (open to everyone). */
+  /** Axis of the skill tree; null for the centre (open to everyone). */
   axis: ClassId | null;
   /** 3 = the axis's Oficio. */
   branch: 0 | 1 | 2 | 3;
@@ -255,14 +255,14 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   // Assault · Escopeta
   pointBlank: t('assault', 1, 0, 'pointBlank', 3, 'Quemarropa', '+5 de puntería y +4 de crítico a 4 casillas o menos, por nivel.', { mods: { closeRangeAim: 5, closeRangeCrit: 4 } }),
   slug: t('assault', 1, 0, 'slug', 1, 'Perdigón grueso', '+1 de daño con la escopeta.', { mods: { damage: 1 }, kit: 'shotgun' }),
-  hunter: t('assault', 1, 1, 'hunter', 2, 'Cazador', '+1 de daño contra objetivos flanqueados por nivel.', { mods: { flankDamage: 1 } }),
+  hunter: t('assault', 1, 1, 'hunter', 2, 'Rematador', '+1 de daño contra objetivos flanqueados por nivel.', { mods: { flankDamage: 1 } }),
   sideBySide: t('assault', 1, 1, 'sideBySide', 1, 'Codo con codo', '+15 de puntería si un soldado de tu compañero está a 4 casillas o menos.', { mods: { pairAim: 15 }, coop: true }),
   buckshot: t('assault', 1, 2, 'buckshot', 1, 'Postas', 'Tus disparos destrozan 1 de blindaje.', { mods: { shred: 1 } }),
   relentless: t('assault', 1, 2, 'relentless', 2, 'Sin tregua', '+5 de crítico por nivel.', { mods: { crit: 5 } }),
   closeKill: t('assault', 1, 3, 'closeKill', 2, 'Bocajarro', '+1 de daño a 4 casillas o menos por nivel.', { mods: { closeDamage: 1 } }),
   rapidFire: t('assault', 1, 4, 'rapidFire', 1, 'Fuego rápido', 'Dos disparos seguidos con −15 de puntería (enfriamiento 3).', { ability: 'rapidFire', req: ['pul', 7] }),
   // Assault · Paso
-  runner: t('assault', 2, 0, 'runner', 1, 'Corredor', '+1 casilla de movimiento por acción.', { mods: { mobility: 1 } }),
+  runner: t('assault', 2, 0, 'runner', 1, 'Zancada', '+1 casilla de movimiento por acción.', { mods: { mobility: 1 } }),
   light: t('assault', 2, 0, 'light', 2, 'Ligero', '+5 de defensa por nivel.', { mods: { defense: 5 } }),
   shadowstep: t('assault', 2, 1, 'shadowstep', 1, 'Paso sombrío', 'Moverse nunca provoca fuego de reacción.'),
   feline: t('assault', 2, 1, 'feline', 2, 'Reflejos felinos', 'Los disparos de reacción contra ti tienen −10 por nivel.', { mods: { reactionDefense: 10 } }),
@@ -271,7 +271,7 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   untouchable: t('assault', 2, 3, 'untouchable', 2, 'Inalcanzable', '+5 de defensa y +5 de esquiva por nivel.', { mods: { defense: 5, dodge: 5 } }),
   runAndGun: t('assault', 2, 4, 'runAndGun', 1, 'Correr y disparar', 'Acción gratuita: +1 acción este turno (enfriamiento 4).', { ability: 'runAndGun', req: ['ref', 8] }),
   // Assault · Machete (Oficio)
-  songBlade: t('assault', 3, 0, 'songBlade', 2, 'Hoja afilada', 'El Tajo hace +1 de daño por nivel. En el nivel 2, además, desorienta al enemigo si acierta.', { mods: { meleeDamage: 1 }, maxMods: { slashDisorient: 1 } }),
+  songBlade: t('assault', 3, 0, 'songBlade', 2, 'Machetazo', 'El Tajo hace +1 de daño por nivel. En el nivel 2, además, desorienta al enemigo si acierta.', { mods: { meleeDamage: 1 }, maxMods: { slashDisorient: 1 } }),
   aegis: t('assault', 3, 1, 'aegis', 1, 'Escudo antidisturbios', 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno (enfriamiento 3).', { ability: 'aegis' }),
   echoStep: t('assault', 3, 2, 'echoStep', 1, 'Saltar por la ventana', 'Saltas a una casilla libre a la vista, a 6 o menos, por encima de lo que haya en medio. Cuesta 1 acción y no termina el turno (enfriamiento 4).', { ability: 'echoStep' }),
   layOnHands: t('assault', 3, 3, 'layOnHands', 1, 'Vendaje rápido', 'Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación. 2 usos.', { ability: 'layOnHands', charges: { layOnHands: 2 } }),
@@ -295,17 +295,17 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   armoured: t('grenadier', 1, 3, 'armoured', 2, 'Blindado', '+1 de salud por nivel.', { hp: 1 }),
   chainShot: t('grenadier', 1, 4, 'chainShot', 1, 'Disparo en cadena', 'Disparo con −15; si acierta, disparas otra vez (enfriamiento 3).', { ability: 'chainShot', req: ['pul', 7] }),
   // Grenadier · Control
-  holoTargeting: t('grenadier', 2, 0, 'holoTargeting', 1, 'Holo-objetivo', 'Cada disparo del cañón marca al objetivo: +15 de puntería para tus aliados.', { kit: 'cannon' }),
-  marker: t('grenadier', 2, 0, 'marker', 2, 'Marcador', 'El holo-objetivo da +5 de puntería más por nivel.', { mods: { holoAim: 5 }, needs: 'holoTargeting', kit: 'cannon' }),
+  holoTargeting: t('grenadier', 2, 0, 'holoTargeting', 1, 'Marcar el blanco', 'Cada disparo del cañón marca al objetivo: +15 de puntería para tus aliados.', { kit: 'cannon' }),
+  marker: t('grenadier', 2, 0, 'marker', 2, 'Marcador', 'Marcar el blanco da +5 de puntería más por nivel.', { mods: { holoAim: 5 }, needs: 'holoTargeting', kit: 'cannon' }),
   suppression: t('grenadier', 2, 1, 'suppression', 1, 'Supresión', 'Inmoviliza a un enemigo: −50 de puntería, y si se mueve le disparas.', { ability: 'suppression' }),
   bulwark: t('grenadier', 2, 1, 'bulwark', 1, 'Parapeto', '+15 de defensa si un soldado de tu compañero está a 4 casillas o menos.', { mods: { pairDefense: 15 }, coop: true }),
   suppressor: t('grenadier', 2, 2, 'suppressor', 2, 'Supresor', 'Tu Supresión quita 10 de puntería más por nivel.', { mods: { suppressAim: 10 }, needs: 'suppression' }),
-  ironNerves: t('grenadier', 2, 2, 'ironNerves', 2, 'Nervios de acero', '+8 de voluntad por nivel.', { mods: { will: 8 } }),
+  ironNerves: t('grenadier', 2, 2, 'ironNerves', 2, 'Aplomo', '+8 de voluntad por nivel.', { mods: { will: 8 } }),
   dugIn: t('grenadier', 2, 3, 'dugIn', 2, 'Atrincherado', '+5 de defensa por nivel.', { mods: { defense: 5 } }),
   rupture: t('grenadier', 2, 4, 'rupture', 1, 'Ruptura', 'Disparo con +3 de daño que deja al objetivo recibiendo +3 de daño (enfriamiento 4).', { ability: 'rupture', req: ['tem', 6] }),
   // Grenadier · Fuego (Oficio)
   bolt: t('grenadier', 3, 0, 'bolt', 1, 'Bengala', 'Una bengala encendida a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje (enfriamiento 2).', { ability: 'bolt' }),
-  silence: t('grenadier', 3, 1, 'silence', 1, 'Petardos', 'Una traca en una zona de radio 2 a 10 casillas: los enemigos dentro quedan desorientados y los Chillones no pueden gritar durante 2 turnos. 2 cargas.', { ability: 'silence', charges: { silence: 2 } }),
+  silence: t('grenadier', 3, 1, 'silence', 1, 'Petardos', 'Una traca a 10 casillas o menos: suena donde cae (ruido 12) y atrae a los zombis hacia allí. Los enemigos en radio 2 quedan desorientados y los Chillones no pueden gritar durante 2 turnos. 2 cargas.', { ability: 'silence', charges: { silence: 2 } }),
   fireball: t('grenadier', 3, 2, 'fireball', 1, 'Cóctel molotov', '4 de daño en radio 2,5 a 12 casillas, y destruye la cobertura. Daña también a los tuyos. 2 cargas.', { ability: 'fireball', charges: { fireball: 2 } }),
   highFlame: t('grenadier', 3, 3, 'highFlame', 2, 'Gasolina extra', 'Bengala, Cóctel molotov y Bidón hacen +1 de daño por nivel.', { mods: { songDamage: 1 } }),
   velmarStorm: t('grenadier', 3, 4, 'velmarStorm', 1, 'El bidón', 'Una vez por misión: haces estallar un bidón de gasolina y el fuego alcanza hasta 3 enemigos a la vista, 4 de daño a cada uno. Nunca falla.', { ability: 'velmarStorm', charges: { velmarStorm: 1 }, req: ['tem', 7] }),
@@ -319,7 +319,7 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   deathFromAbove: t('sharpshooter', 0, 3, 'deathFromAbove', 1, 'Muerte desde arriba', 'Matar desde más altura devuelve una acción (una vez por turno).'),
   serenity: t('sharpshooter', 0, 4, 'serenity', 1, 'Serenidad', 'Tus disparos de fusil nunca se quedan en roce y los críticos hacen +2 de daño.', { mods: { critDamage: 2 }, req: ['tem', 7], kit: 'rifle' }),
   // Sharpshooter · Pistolero
-  gunslinger: t('sharpshooter', 1, 0, 'gunslinger', 3, 'Pistolero', '+5 de puntería con la pistola por nivel.', { mods: { pistolAim: 5 }, kit: 'pistol' }),
+  gunslinger: t('sharpshooter', 1, 0, 'gunslinger', 3, 'Pistola certera', '+5 de puntería con la pistola por nivel.', { mods: { pistolAim: 5 }, kit: 'pistol' }),
   quickdraw: t('sharpshooter', 1, 0, 'quickdraw', 1, 'Desenfunde', '+10 de puntería y +10 de crítico con la pistola.', { mods: { pistolAim: 10, pistolCrit: 10 }, kit: 'pistol' }),
   lightningHands: t('sharpshooter', 1, 1, 'lightningHands', 1, 'Manos rápidas', 'Acción gratuita: un disparo de pistola (enfriamiento 4).', { ability: 'lightningHands', kit: 'pistol' }),
   magnum: t('sharpshooter', 1, 1, 'magnum', 2, 'Calibre .45', '+1 de daño con la pistola por nivel.', { mods: { pistolDamage: 1 }, kit: 'pistol' }),
@@ -330,7 +330,7 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   // Sharpshooter · Vigía
   longWatch: t('sharpshooter', 2, 0, 'longWatch', 1, 'Vigía lejano', 'La vigilancia dispara a todo lo que vea la escuadra (visión de escuadra).', { kit: 'rifle' }),
   patience: t('sharpshooter', 2, 0, 'patience', 2, 'Paciencia', 'Los disparos de vigilancia pierden un 10 % menos de puntería por nivel.', { mods: { reactionKeep: 10 } }),
-  nest: t('sharpshooter', 2, 1, 'nest', 2, 'Nido', '+5 de puntería por nivel al disparar desde más altura.', { mods: { heightAim: 5 } }),
+  nest: t('sharpshooter', 2, 1, 'nest', 2, 'Tejado', '+5 de puntería por nivel al disparar desde más altura.', { mods: { heightAim: 5 } }),
   crossfire: t('sharpshooter', 2, 1, 'crossfire', 1, 'Fuego cruzado', '+15 de puntería contra enemigos a 4 casillas o menos de un soldado de tu compañero.', { mods: { spotterAim: 15 }, coop: true }),
   post: t('sharpshooter', 2, 2, 'post', 2, 'Puesto fijo', '+5 de defensa por nivel mientras vigilas.', { mods: { watchDefense: 5 } }),
   coldBlood: t('sharpshooter', 2, 2, 'coldBlood', 2, 'Sangre fría', '+8 de voluntad por nivel.', { mods: { will: 8 } }),
@@ -345,29 +345,29 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   // Specialist · Médico
   fieldMedic: t('specialist', 0, 0, 'fieldMedic', 2, 'Médico de campo', 'El botiquín cura +1 por nivel.', { mods: { heal: 1 }, kit: 'grillo' }),
   bigKit: t('specialist', 0, 0, 'bigKit', 2, 'Botiquín grande', '+1 uso del botiquín por nivel.', { charges: { medkit: 1 }, kit: 'grillo' }),
-  revivalProtocol: t('specialist', 0, 1, 'revivalProtocol', 1, 'Protocolo de reanimación', 'El Grillo libera a un aliado del aturdimiento, la desorientación y el pánico (usa el botiquín).', { ability: 'revival', kit: 'grillo' }),
+  revivalProtocol: t('specialist', 0, 1, 'revivalProtocol', 1, 'Espabilar', 'El Grillo libera a un aliado del aturdimiento, la desorientación y el pánico (usa el botiquín).', { ability: 'revival', kit: 'grillo' }),
   vocation: t('specialist', 0, 1, 'vocation', 2, 'Vocación', '+1 de salud por nivel.', { hp: 1 }),
   slippery: t('specialist', 0, 2, 'slippery', 2, 'Escurridizo', '+5 de defensa por nivel.', { mods: { defense: 5 } }),
   surgeon: t('specialist', 0, 3, 'surgeon', 2, 'Pulso de cirujano', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
   restoration: t('specialist', 0, 4, 'restoration', 1, 'Restauración', 'Cura 2 a todos los aliados cercanos y les quita los estados alterados (enfriamiento 5).', { ability: 'restoration', req: ['tem', 6], kit: 'grillo' }),
   // Specialist · Grillo
-  combatProtocol: t('specialist', 1, 0, 'combatProtocol', 1, 'Protocolo de combate', 'El Grillo electrocuta a un enemigo: 2 de daño (4 a robots), nunca falla. 2 usos.', { ability: 'combatProtocol', charges: { combatProtocol: 2 }, kit: 'grillo' }),
-  marksman: t('specialist', 1, 0, 'marksman', 2, 'Tirador', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
-  overcharge: t('specialist', 1, 1, 'overcharge', 2, 'Sobrecarga', 'El Protocolo de combate hace +1 de daño por nivel.', { mods: { protocolDamage: 1 }, needs: 'combatProtocol', kit: 'grillo' }),
-  battery: t('specialist', 1, 1, 'battery', 2, 'Batería extra', '+1 uso del Protocolo de combate por nivel.', { charges: { combatProtocol: 1 }, needs: 'combatProtocol', kit: 'grillo' }),
-  intrusion: t('specialist', 1, 2, 'intrusion', 2, 'Intrusión', '+10 de hackeo por nivel.', { mods: { hack: 10 } }),
+  combatProtocol: t('specialist', 1, 0, 'combatProtocol', 1, 'Calambrazo', 'El Grillo electrocuta a un enemigo: 2 de daño (4 a Acorazados y Sirenas), nunca falla. 2 usos.', { ability: 'combatProtocol', charges: { combatProtocol: 2 }, kit: 'grillo' }),
+  marksman: t('specialist', 1, 0, 'marksman', 2, 'Tiro tranquilo', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
+  overcharge: t('specialist', 1, 1, 'overcharge', 2, 'Sobrecarga', 'El Calambrazo hace +1 de daño por nivel.', { mods: { protocolDamage: 1 }, needs: 'combatProtocol', kit: 'grillo' }),
+  battery: t('specialist', 1, 1, 'battery', 2, 'Batería extra', '+1 uso del Calambrazo por nivel.', { charges: { combatProtocol: 1 }, needs: 'combatProtocol', kit: 'grillo' }),
+  intrusion: t('specialist', 1, 2, 'intrusion', 2, 'Manitas', '+10 a arreglar por nivel.', { mods: { hack: 10 } }),
   tunedRifle: t('specialist', 1, 3, 'tunedRifle', 2, 'Rifle afinado', '+5 de crítico por nivel.', { mods: { crit: 5 } }),
-  capacitorDischarge: t('specialist', 1, 4, 'capacitorDischarge', 1, 'Descarga de condensador', 'El Grillo descarga en una zona: 3 de daño a todos (enfriamiento 4).', { ability: 'discharge', req: ['ofi', 7], kit: 'grillo' }),
+  capacitorDischarge: t('specialist', 1, 4, 'capacitorDischarge', 1, 'Descarga de batería', 'El Grillo descarga en una zona: 3 de daño a todos (enfriamiento 4).', { ability: 'discharge', req: ['ofi', 7], kit: 'grillo' }),
   // Specialist · Enlace
-  guardian: t('specialist', 2, 0, 'guardian', 3, 'Protector', 'El Protocolo de ayuda da +5 de defensa más por nivel.', { mods: { aid: 5 }, kit: 'grillo' }),
+  guardian: t('specialist', 2, 0, 'guardian', 3, 'Protector', 'La Cobertura del Grillo da +5 de defensa más por nivel.', { mods: { aid: 5 }, kit: 'grillo' }),
   coveringFire: t('specialist', 2, 0, 'coveringFire', 1, 'Fuego de cobertura', 'La vigilancia también dispara a quien ataque, no solo a quien se mueva.'),
-  bridge: t('specialist', 2, 1, 'bridge', 1, 'Puente', 'Con los soldados de tu compañero, el botiquín cura +2 y el Protocolo de ayuda da +10 de defensa.', { coop: true, kit: 'grillo' }),
+  bridge: t('specialist', 2, 1, 'bridge', 1, 'Puente', 'Con los soldados de tu compañero, el botiquín cura +2 y la Cobertura del Grillo da +10 de defensa.', { coop: true, kit: 'grillo' }),
   calm: t('specialist', 2, 1, 'calm', 2, 'Calma', '+8 de voluntad por nivel.', { mods: { will: 8 } }),
   mutualCover: t('specialist', 2, 2, 'mutualCover', 2, 'Cobertura mutua', '+5 de defensa por nivel.', { mods: { defense: 5 } }),
   instructor: t('specialist', 2, 3, 'instructor', 2, 'Instructor', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
-  threatAssessment: t('specialist', 2, 4, 'threatAssessment', 1, 'Evaluación de amenazas', 'El Protocolo de ayuda también pone al aliado en vigilancia.', { req: ['tem', 6], kit: 'grillo' }),
+  threatAssessment: t('specialist', 2, 4, 'threatAssessment', 1, 'Evaluación de amenazas', 'La Cobertura del Grillo también pone al aliado en vigilancia.', { req: ['tem', 6], kit: 'grillo' }),
   // Specialist · Enfermería (Oficio)
-  calmSong: t('specialist', 3, 0, 'calmSong', 2, 'Calma', '+10 de voluntad por nivel a los aliados a 4 casillas o menos.', { mods: { calmAura: 1 } }),
+  calmSong: t('specialist', 3, 0, 'calmSong', 2, 'Mano en el hombro', '+10 de voluntad por nivel a los aliados a 4 casillas o menos.', { mods: { calmAura: 1 } }),
   counterSong: t('specialist', 3, 1, 'counterSong', 1, 'Sedante', 'Libera a un aliado a 10 casillas o menos del grito del Chillón, el pánico y la desorientación, y lo hace inmune al grito durante 2 turnos (enfriamiento 3).', { ability: 'counterSong' }),
   hymn: t('specialist', 3, 2, 'hymn', 1, 'Arenga', 'Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno (enfriamiento 4).', { ability: 'hymn' }),
   lightHands: t('specialist', 3, 3, 'lightHands', 2, 'Manos de enfermero', 'Tus curas sanan +1 por nivel.', { mods: { heal: 1 } }),
@@ -566,9 +566,8 @@ export function soldierStats(b: Build, gear: ItemId[] = []): SoldierStats {
     maxHp += (d.hp ?? 0) * level;
     addCharges(d.charges, level);
   }
-  // The price of the Oficio: whoever practises it makes noise and is easier prey for the Chillón's
-  // scream, unless they have nerves of steel (Temple 10).
-  if (perks.some((id) => TALENTS[id].song)) mods = addMods(mods, { singer: 1, songOpen: tem >= 10 ? 0 : 10 });
+  // Whoever knows a trade of the Oficio can work it in tandem with the partner's («A dos voces»).
+  if (perks.some((id) => TALENTS[id].song)) mods = addMods(mods, { singer: 1 });
   for (const item of gear.map((id) => ITEMS[id])) {
     if (item.mods) mods = addMods(mods, item.mods);
     maxHp += item.hp ?? 0;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { ATLASES, atlasFile, modelFile, type AtlasId, type ModelKind, type PackId } from './syntyManifest';
+import { ATLASES, atlasFile, fxTextureFile, modelFile, type AtlasId, type FxTextureId, type ModelKind, type PackId } from './syntyManifest';
 
 // Synty models at run time: the converted GLBs (tools/synty) carry geometry
 // and UVs only, with each material named after its pack's atlas. Every model
@@ -25,6 +25,19 @@ export function atlasTexture(id: AtlasId): THREE.Texture {
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 4;
     textures.set(id, t);
+  }
+  return t;
+}
+
+const fxTextures = new Map<FxTextureId, THREE.Texture>();
+
+/** One of Particle FX's sprites (white on transparent, tinted by the effect); usable at once, its image arrives when loaded. */
+export function fxTexture(id: FxTextureId): THREE.Texture {
+  let t = fxTextures.get(id);
+  if (!t) {
+    t = new THREE.TextureLoader().load(url(fxTextureFile(id)));
+    t.colorSpace = THREE.SRGBColorSpace;
+    fxTextures.set(id, t);
   }
   return t;
 }
@@ -106,6 +119,9 @@ export interface Dyes {
   /** The owner's band: 0 none, 1 painted. */
   dyeBand: { value: number };
   dyeFlash: { value: number };
+  /** A skin tone of its own (1 in dyeSkinOn), for the one swatch Synty paints every face and hand with. */
+  dyeSkin: { value: THREE.Color };
+  dyeSkinOn: { value: number };
 }
 
 export type DyedMaterial = THREE.MeshStandardMaterial & { userData: { dyes: Dyes } };
@@ -117,6 +133,8 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
     dyeAmount: { value: new THREE.Vector4(0, 0, 0, 0) },
     dyeBand: { value: 0 },
     dyeFlash: { value: 0 },
+    dyeSkin: { value: new THREE.Color(1, 1, 1) },
+    dyeSkinOn: { value: 0 },
   };
   const m = new THREE.MeshStandardMaterial({ map: atlasTexture(atlas), roughness: 0.82, metalness: 0 }) as DyedMaterial;
   m.userData.dyes = uniforms;
@@ -140,7 +158,9 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
         uniform vec3 dyeColors[6];
         uniform vec4 dyeAmount;
         uniform float dyeBand;
-        uniform float dyeFlash;`,
+        uniform float dyeFlash;
+        uniform vec3 dyeSkin;
+        uniform float dyeSkinOn;`,
       )
       .replace(
         '#include <map_fragment>',
@@ -149,6 +169,8 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
         int dyePart = int(vDyePart.x * 8.0);
         bool dyeCloth = vDyePart.y < 0.5;
         bool dyeBandHere = dyePart == 5 && dyeBand > 0.5;
+        // Synty's skin swatch (255, 204, 174), and the texels a distant mip blends it into.
+        if (dyeSkinOn > 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, dyeSkin, 1.0 - smoothstep(0.05, 0.14, distance(diffuseColor.rgb, vec3(1.0, 0.604, 0.423))));
         if (dyeBandHere) diffuseColor.rgb = dyeColors[5];
         else if (dyePart > 0 && dyePart < 5 && dyeCloth) {
           // Keep the cloth's shading, take the piece's colour.
@@ -168,4 +190,26 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
   };
   m.customProgramCacheKey = () => 'synty-dye';
   return m;
+}
+
+// -------------------------------------------------------------- animations
+
+/** A converted clip: the animation pack's skeleton (no meshes) and the clip that moves it. */
+export interface SyntyClip {
+  scene: THREE.Group;
+  clip: THREE.AnimationClip;
+}
+
+const clips = new Map<string, Promise<SyntyClip>>();
+
+/** An animation clip (tools/synty, kind 'anim'), loaded once and shared. */
+export function loadAnimation(pack: PackId, id: string): Promise<SyntyClip> {
+  const path = modelFile(pack, 'anim', id);
+  let p = clips.get(path);
+  if (!p) {
+    p = loader.loadAsync(url(path)).then((gltf) => ({ scene: gltf.scene, clip: gltf.animations[0]! }));
+    p.catch((e: unknown) => console.warn(`Synty: ${path} did not load`, e));
+    clips.set(path, p);
+  }
+  return p;
 }

@@ -72,6 +72,21 @@ Segunda fase del cambio a zombis ([LORE.md](LORE.md), [EQUIPO.md](EQUIPO.md)). E
   - en la previsión de cada acción, su ruido («Ruido 12»).
 - **Horda:** aviso cuando llegan zombis por los bordes.
 - **Informe:** el botín traído.
+- **Textos de Lore** (`lore.ts`):
+  - `SEARCH_SPOTS[decor].name` para el botón y la ficha («Registrar el armario»);
+  - `searchLine(...)` para el registro;
+  - `SCAVENGE.*` para el objetivo y el parte;
+  - `lootSummary(...)` (ya en el informe).
+- **Consejos de radio** (`transmissions.ts`):
+  - `heard`, la primera vez que salta «Os han oído»;
+  - `search`, el primer `searched` de uno de los míos;
+  - `horde`, la primera llegada por los bordes en un Saqueo;
+  - `bloater`, el primer Hinchado a la vista.
+
+## Decisiones (Gameplay)
+
+- **El Chillón:** sigue levantando cadáveres como zombis, pero ya no controla: su grito desorienta o asusta.
+- **El Oficio:** ya no rompe la ocultación por sí mismo. Cada habilidad tiene su ruido (ballesta 1, vendaje o escudo 0–2, molotov 10, petardos 12 como cebo), y lo que os delata es que os vean.
 
 ## Arte (`game/`, `public/models/`)
 
@@ -92,3 +107,4 @@ Segunda fase del cambio a zombis ([LORE.md](LORE.md), [EQUIPO.md](EQUIPO.md)). E
 1. Gameplay: el ruido, la IA de los zombis y el Hinchado en el motor, con sus tests.
 2. Gameplay: la acción `search`, la mochila, la misión `scavenge` y el botín en la campaña.
 3. En paralelo, en cuanto las reglas estén escritas: Combate, Arte y Lore.
+- Los zombis no buscan cobertura, pero si acaban detrás de una, les protege como a cualquiera (decidido tras la prueba de Combate).

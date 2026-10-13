@@ -7,7 +7,7 @@ import { Game } from './game/game';
 import { Net, serverUrl, setHosts, storageKey } from './net';
 import { installReport, trace } from './report';
 import { StrategyScreen } from './strategy/screen';
-import { applyUiTheme } from './ui/theme';
+import { applyUiTheme, setUiTheme, uiTheme, UI_THEMES, type UiTheme } from './ui/theme';
 import { Lobby } from './ui/lobby';
 
 const NAME_KEY = storageKey('name');
@@ -29,6 +29,12 @@ applyUiTheme();
 installUiSounds();
 music.play('base');
 const net = new Net(serverUrl());
+/** True while a theme from the room is being put on, so it isn't sent straight back. */
+let themeFromRoom = false;
+// The interface's look is shared: whoever changes it changes it for both (room.ts).
+window.addEventListener('bastion:theme', (e) => {
+  if (!themeFromRoom) net.send({ t: 'uiTheme', theme: (e as CustomEvent<UiTheme>).detail });
+});
 let slot: Slot | null = null;
 let players: PlayerInfo[] = [];
 let game: Game | null = null;
@@ -97,7 +103,10 @@ function showPhase(phase: 'lobby' | 'base' | 'mission'): void {
         if (done) return;
         done = true;
         returning = false;
-        if (phaseNow === 'base') showPhase('base');
+        if (phaseNow !== 'base') return;
+        // The battle goes first, or this branch would take the call again and wait forever.
+        closeGame();
+        showPhase('base');
       };
       requestAnimationFrame(() => window.setTimeout(build, 0));
       // A hidden tab paints nothing: don't wait for it.
@@ -149,6 +158,11 @@ function handle(m: ServerMessage): void {
       break;
     case 'room':
       players = m.players;
+      if (m.uiTheme && m.uiTheme !== uiTheme() && m.uiTheme in UI_THEMES) {
+        themeFromRoom = true;
+        setUiTheme(m.uiTheme as UiTheme);
+        themeFromRoom = false;
+      }
       lobby.update(players, slot, m.savedCampaign);
       game?.setPlayers(players);
       showPhase(m.phase);

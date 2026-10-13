@@ -5,18 +5,22 @@ import { adjacent, inMeleeReach, previewShot, teamSees } from './aim';
 import {
   ABILITIES,
   attackWeapon,
+  BACKPACK_SLOTS,
   HACK_BASE,
   HACK_PER_RANK,
   HACK_SPECIALIST,
   hasPerk,
   isAttack,
   ITEMS,
+  OFICIO_QUIET,
   PSI_BASE,
   TEMPLATES,
+  WEAPONS,
 } from './content';
 import { TALENTS } from './classes';
 import { hasAnyCover } from './cover';
 import { canStandOn, DIRS8, distance, inBounds, sameTile, tileAt, unitAt } from './grid';
+import { backpackRoom, reachesToSearch, searchable, searchableTiles, searchSpot } from './loot';
 import { canSee, canSeeTile, isViewer, sightOf } from './los';
 import { buildPath, computeReach, costPerAp } from './path';
 import type { AbilityId, AttackAbility, BlastAbility, GameState, Unit, Vec2 } from './types';
@@ -28,7 +32,7 @@ export function abilitiesOf(u: Unit): AbilityId[] {
   }
   if (u.team === 'xcom' && !u.captive && TEMPLATES[u.template].team === 'xcom') {
     list.push('evac');
-    if (u.template !== 'vip') list.push('hack');
+    if (u.template !== 'vip') list.push('hack', 'search');
   }
   return list;
 }
@@ -50,17 +54,17 @@ export function hackChance(s: GameState, u: Unit): number {
   return Math.max(5, Math.min(95, HACK_BASE + bonus));
 }
 
-/** Chance that a psionic attack takes hold of `target` (0 = immune). */
 /**
- * A Cantor's chance against `target`. Velmar's Canto shifts it: Contracanto
- * makes the target immune, a singer is easier to sing to (songOpen), and Canto
- * de calma adds +10 will per level to allies within 4 tiles (`s` needed).
+ * Chance that the Chillón's scream (or a psionic power) takes hold of
+ * `target`; 0 = immune: machines, the dead, Temple 10 («Nervios de acero»),
+ * Contracanto. Canto de calma adds +10 will per level to allies within 4
+ * tiles (`s` needed).
  */
 export function psiChance(target: Unit, s?: GameState): number {
-  if (TEMPLATES[target.template].robotic || target.will >= 100 || target.controlledBy || (target.ward ?? 0) > 0) return 0;
+  if (TEMPLATES[target.template].robotic || target.will >= 100 || target.controlledBy || (target.ward ?? 0) > 0 || target.mods.psiGuard >= 2) return 0;
   const calm = s ? Math.max(0, ...s.units.filter((a) => a.alive && a.team === target.team && a.mods.calmAura > 0 && distance(a.pos, target.pos) <= CALM_RANGE).map((a) => a.mods.calmAura)) : 0;
   const will = target.will + CALM_WILL * calm;
-  return Math.max(10, Math.min(90, PSI_BASE - (will - 40) + target.mods.songOpen));
+  return Math.max(10, Math.min(90, PSI_BASE - (will - 40)));
 }
 
 /** Canto de calma: reach and will per level. */
@@ -112,7 +116,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
   if (def.charge && !((u.charges[def.charge] ?? 0) > 0)) return 'No quedan usos.';
   const ammo = ammoNeeded(u, ability);
   if (ammo > 0 && u.ammo < ammo) return ammo > 1 ? `Necesita ${ammo} balas en el cargador: recarga.` : 'Sin munición: recarga.';
-  if (u.disoriented && def.target === 'tile' && !def.teleport) return 'Desorientado: no puede usar explosivos.';
+  if (u.disoriented && def.target === 'tile' && !def.teleport && ability !== 'search') return 'Desorientado: no puede usar explosivos.';
   if (def.psi && inSilence(s, u.pos)) return 'Petardos: aquí no se puede gritar.';
   switch (ability) {
     case 'reload':
@@ -129,9 +133,19 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
       if (!songTargets(s, u, ability).length) return 'Ningún enemigo a la vista.';
       break;
     case 'hack':
-      if (!s.mission.terminal) return 'No hay ningún terminal en esta misión.';
-      if (s.mission.objectiveDone) return 'El terminal ya está hackeado.';
-      if (!canHackFrom(s, u)) return u.template === 'specialist' ? 'Acércate al terminal o ponlo a la vista del dron (10 casillas).' : 'Ponte junto al terminal.';
+      if (!s.mission.terminal) return 'No hay ningún equipo que arreglar en esta misión.';
+      if (s.mission.objectiveDone) return 'El equipo ya está en marcha.';
+      if (!canHackFrom(s, u)) return u.template === 'specialist' ? 'Acércate al equipo o ponlo a la vista del Grillo (10 casillas).' : 'Ponte junto al equipo.';
+      break;
+    case 'search':
+      if (backpackRoom(u, BACKPACK_SLOTS) <= 0) return 'La mochila está llena.';
+      if (!searchableTiles(s, u).length) {
+        const done = DIRS8.some((d) => {
+          const p = { x: u.pos.x + d.x, y: u.pos.y + d.y };
+          return searchSpot(s, p) !== null && reachesToSearch(s, u.pos, p);
+        });
+        return done ? 'Ya está registrado.' : 'No hay nada que registrar al lado.';
+      }
       break;
   }
   return null;
@@ -252,6 +266,7 @@ export function canTargetTile(s: GameState, u: Unit, ability: AbilityId, tile: V
   const def = ABILITIES[ability];
   if (def.target !== 'tile' || !inBounds(s, tile.x, tile.y)) return false;
   if (distance(u.pos, tile) > abilityRange(u, ability)) return false;
+  if (ability === 'search') return searchable(s, tile) && reachesToSearch(s, u.pos, tile);
   if (def.teleport) return !sameTile(u.pos, tile) && canStandOn(tileAt(s, tile.x, tile.y)) && !unitAt(s, tile) && canSeeTile(s, u.pos, tile, sightOf(u));
   return s.units.some((o) => isViewer(o, u.team) && canSeeTile(s, o.pos, tile, sightOf(o)));
 }
@@ -282,6 +297,24 @@ export function blastTiles(s: GameState, ability: AbilityId, center: Vec2, throw
 
 export function isBlast(ability: AbilityId): ability is BlastAbility {
   return ABILITIES[ability].target === 'tile';
+}
+
+/**
+ * How far, in tiles, using the ability is heard (docs/FASE2.md, `NOISE` in
+ * content.ts): an attack sounds like its weapon, a blast like its explosive,
+ * unless the ability says otherwise; the Oficio is quieter with the Taller de
+ * oficios by the listening post. Heard where a tile ability lands, or where
+ * the user stands.
+ */
+export function noiseOf(s: GameState, u: Unit, ability: AbilityId): number {
+  const def = ABILITIES[ability];
+  let noise = def.noise;
+  if (noise === undefined) {
+    if (isAttack(ability)) noise = attackWeapon(u, ability).noise;
+    else if (ability === 'suppression') noise = attackWeapon(u, 'shoot').noise;
+    else noise = def.explosive ? WEAPONS[def.explosive].noise : 0;
+  }
+  return def.song && s.quietSongs ? Math.max(0, noise - OFICIO_QUIET) : noise;
 }
 
 /** Whether `p` lies inside a smoke cloud. */

@@ -7,8 +7,8 @@ import { hit, type Synth } from './synth';
 //
 // Families: weapons (by gun and tier, and alien guns), impacts, explosives,
 // steps and actions, deaths, combat stingers, the interface of the case file
-// (typewriter keys, carriage bell, rubber stamp, paper, pen), the radio and
-// the strategy layer.
+// (typewriter keys, carriage bell, rubber stamp, paper, pen), the Oficio's
+// trades and tools, the radio and the strategy layer.
 
 export interface SoundDef {
   bus: Bus;
@@ -146,133 +146,221 @@ function adventGun(level = 1): (s: Synth) => void {
   };
 }
 
-// ---------------------------------------------------------------- the Lengua (songs)
+// ---------------------------------------------------------------- the Oficio
 
-/** Formants of sung vowels (Hz): what makes a buzz sound like a voice. */
-const VOWELS = {
-  a: [730, 1090, 2440],
-  o: [570, 840, 2410],
-  u: [300, 870, 2240],
-  e: [530, 1840, 2480],
-  i: [270, 2290, 3010],
-} as const;
-type Vowel = keyof typeof VOWELS;
+// The Oficio's trades and tools (engine content.ts): machete, flares,
+// firecrackers, petrol, crossbow, bandages, syringes and the defibrillator.
+// The ids keep the old «song.*» names, so the battle (game.ts) plays them as it did.
 
-/**
- * Voices singing the Lengua, the Coro's language: one per note, each a buzz
- * through the formants of a vowel (sliding from one vowel to another),
- * wavering, with breath. Always several at once: the Coro sings in plural.
- */
-function chant(s: Synth, notes: number[], vowel: Vowel | [Vowel, Vowel], at: number, dur: number, level = 1, attack = 0.12): void {
-  const [from, to] = typeof vowel === 'string' ? [vowel, vowel] : vowel;
-  const end = Math.min(s.dur - 0.01, at + dur + 0.35);
-  for (const f of notes) {
-    const src = s.osc('sawtooth', f, at, end - at, s.r(-9, 9));
-    const vib = s.osc('sine', s.r(5, 6.2), at, end - at);
-    const depth = s.ctx.createGain();
-    depth.gain.value = f * 0.012;
-    vib.connect(depth).connect(src.frequency);
-    const sum = s.ctx.createGain();
-    VOWELS[from].forEach((fa, k) => {
-      const fb = VOWELS[to][k]!;
-      const band = s.filter(src, 'bandpass', [
-        [at, fa],
-        [at + dur, fb],
-      ], 9);
-      const g = s.ctx.createGain();
-      g.gain.value = [1, 0.55, 0.28][k]!;
-      band.connect(g).connect(sum);
-    });
-    const l = (level * 1.8) / notes.length;
-    s.to(s.amp(sum, [[at, 0], [at + attack, l], [at + dur, l * 0.8], [end, 0.0005]]));
-  }
-  s.to(s.amp(s.filter(s.noise('pink', at, end - at), 'bandpass', 1600, 0.7), [[at, 0], [at + attack, level * 0.12], [end, 0.0005]]));
+/** `input` pulsing in level `rate` times a second (a spinning bottle, a sputtering flame, a shock's buzz). */
+function pulse(s: Synth, input: AudioNode, rate: number, depth: number, at = 0, dur = s.dur - at): GainNode {
+  const g = s.ctx.createGain();
+  g.gain.value = 1 - depth;
+  const lfo = s.osc('sine', rate, at, dur);
+  const d = s.ctx.createGain();
+  d.gain.value = depth;
+  lfo.connect(d).connect(g.gain);
+  input.connect(g);
+  return g;
 }
 
-const NOTE = { D3: 146.8, A3: 220, D4: 293.7, E4: 329.6, F4: 349.2, Fs4: 370, G4: 392, A4: 440, C5: 523.3, D5: 587.3, E5: 659.3, A5: 880 };
+/** Something burning: the low roar of the flames and their crackle. */
+function flames(s: Synth, at: number, dur: number, level = 1): void {
+  const roar = s.filter(s.noise('brown', at, dur), 'lowpass', s.vary(700), 0.7);
+  s.to(s.amp(pulse(s, roar, s.vary(5), 0.3, at, dur), [[at, 0], [at + 0.15, level], [at + dur * 0.5, level * 0.6], [at + dur, 0.0005]]));
+  s.to(s.filter(s.grains(at, at + dur, Math.round(dur * 45), 0.004), 'bandpass', s.vary(2600), 0.8), level * 0.9);
+}
 
-const SONGS: Record<string, SoundDef> = {
-  // The cue of any song: a short phrase of voices.
-  'song.voice': def('sfx', 1.6, (s) => chant(s, [NOTE.D4, NOTE.F4, NOTE.A4, NOTE.E5], ['a', 'o'], 0, 1, 0.9), { reverb: 0.5 }),
-  // Saeta: a rising chime, a whoosh, a bright "i".
-  'song.bolt': def('sfx', 1, (s) => {
-    chant(s, [NOTE.A4, NOTE.E5], 'i', 0, 0.25, 0.6, 0.04);
-    s.to(s.amp(s.osc('sine', [[0, 900], [0.25, 2600]]), hit(0, 0.01, 0.35, 0.35)));
-    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 1200], [0.3, 4200]], 1.5), [[0, 0], [0.12, 0.5], [0.45, 0.001]]));
-    s.to(s.metal(0.28, [2350, 3520, 5280], 0.4, 0.25));
-  }, { reverb: 0.4 }),
-  // Bola de fuego: a low "o" and the roar of the fire, then the blast.
-  'song.fire': def('sfx', 2.4, (s) => {
-    chant(s, [NOTE.D3, NOTE.A3, NOTE.D4], 'o', 0, 0.7, 0.8);
-    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', [[0, 300], [0.7, 1400]]), [[0, 0], [0.6, 0.9], [0.75, 0.2], [2.2, 0.001]]));
-    s.to(s.shape(s.amp(s.filter(s.noise('brown'), 'lowpass', [[0.7, 900], [2, 150]]), hit(0.7, 0.006, 1.4, 1.6)), 2.5));
-    s.to(s.amp(s.osc('sine', [[0.7, 70], [1.5, 28]]), hit(0.7, 0.008, 0.9, 1.2)));
-  }, { reverb: 0.4, level: 2 }),
-  // Flecha espectral: a whistle and a quick "e".
-  'song.arrow': def('sfx', 0.8, (s) => {
-    chant(s, [NOTE.E5, NOTE.A5], 'e', 0, 0.18, 0.5, 0.03);
-    s.to(s.amp(s.osc('sine', [[0, 1900], [0.35, 3100]]), [[0, 0], [0.04, 0.25], [0.4, 0.001]]));
-    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 5000), [[0, 0], [0.05, 0.3], [0.35, 0.001]]));
-  }, { reverb: 0.35 }),
-  // Teleport: going (a shimmer rising away) and coming (a shimmer falling into place with a chord).
-  'song.vanish': def('sfx', 0.9, (s) => {
-    for (const k of [1, 1.5, 2.02]) s.to(s.amp(s.osc('sine', [[0, 500 * k], [0.6, 1600 * k]]), [[0, 0], [0.05, 0.2], [0.6, 0.001]]));
-    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 800], [0.6, 6000]], 2), [[0, 0], [0.1, 0.4], [0.6, 0.001]]));
-  }, { reverb: 0.4 }),
-  'song.appear': def('sfx', 1.2, (s) => {
-    for (const k of [1, 1.5, 2.02]) s.to(s.amp(s.osc('sine', [[0, 1600 * k], [0.4, 500 * k]]), [[0, 0], [0.05, 0.2], [0.45, 0.001]]));
-    chant(s, [NOTE.D4, NOTE.A4], 'a', 0.35, 0.4, 0.6, 0.05);
-  }, { reverb: 0.4 }),
-  // Silencio: a muffled pressure and the voices sinking.
-  'song.dome': def('sfx', 2, (s) => {
-    chant(s, [NOTE.D4, NOTE.F4, NOTE.A4], ['a', 'u'], 0, 1.1, 0.8);
-    s.to(s.amp(s.osc('sine', [[0, 120], [0.5, 50]]), hit(0.05, 0.02, 0.8, 1)));
-    s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', [[0, 3000], [1, 200]]), [[0, 0], [0.1, 0.5], [1.4, 0.001]]));
-  }, { reverb: 0.5 }),
-  // Tormenta: a high chord over a thunderclap; 'song.thunder' for each strike.
-  'song.storm': def('sfx', 2, (s) => chant(s, [NOTE.A4, NOTE.C5, NOTE.E5, NOTE.A5], ['e', 'a'], 0, 1.2, 0.9), { reverb: 0.5 }),
-  'song.thunder': def('sfx', 1.6, (s) => {
-    s.to(s.shape(s.amp(s.filter(s.noise('white'), 'highpass', 900), hit(0, 0.001, 0.12, 1.4)), 3));
-    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', [[0, 800], [1.4, 120]]), hit(0.02, 0.01, 1.4, 1.3)));
-  }, { reverb: 0.5, level: 1 }),
-  // Himno, Égida, Juramento, Canto de calma: a major chord swelling, with a shimmer.
-  'song.aura': def('sfx', 2.2, (s) => {
-    chant(s, [NOTE.D4, NOTE.Fs4, NOTE.A4, NOTE.D5], ['o', 'a'], 0, 1.3, 0.9, 0.4);
-    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 6000), [[0, 0], [0.5, 0.12], [1.6, 0.001]]));
-  }, { reverb: 0.55 }),
-  // Healing: a chime and a soft "a".
-  'song.heal': def('sfx', 1.6, (s) => {
-    [NOTE.D5, NOTE.Fs4 * 2, NOTE.A4 * 2].forEach((f, i) => s.to(s.metal(i * 0.08, [f, f * 2.01], 0.9, 0.3)));
-    chant(s, [NOTE.D4, NOTE.A4], 'a', 0.05, 0.8, 0.6, 0.2);
-  }, { reverb: 0.5 }),
-  // Último verso: a great swell of voices and a bell.
-  'song.revive': def('sfx', 3.2, (s) => {
-    chant(s, [NOTE.D3, NOTE.A3, NOTE.D4, NOTE.Fs4, NOTE.A4], ['u', 'a'], 0, 2, 1, 0.8);
-    s.to(s.metal(1.2, [587, 1174, 1762], 1.8, 0.4));
-  }, { reverb: 0.6, level: 1 }),
-  // Contracanto: a quick rising "i" and a pop.
-  'song.cleanse': def('sfx', 1.1, (s) => {
-    chant(s, [NOTE.A4, NOTE.D5], ['u', 'i'], 0, 0.4, 0.7, 0.05);
-    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 2500), hit(0.42, 0.002, 0.08, 0.6)));
-    s.to(s.metal(0.42, [1760, 2640], 0.4, 0.3));
-  }, { reverb: 0.4 }),
-  // Marca del cazador: a golden ping and a whisper.
-  'song.mark': def('sfx', 1.2, (s) => {
-    s.to(s.metal(0, [1568, 2352, 3920], 0.9, 0.4));
-    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 2400, 3), [[0, 0], [0.15, 0.2], [0.6, 0.001]]));
-  }, { reverb: 0.4 }),
-  // Hoja cantada: the slash rings with an "e".
-  'song.blade': def('sfx', 0.9, (s) => {
-    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 2200), hit(0, 0.002, 0.05, 0.8)));
-    s.to(s.metal(0.005, [2800, 4100], 0.5, 0.3));
-    chant(s, [NOTE.E5, NOTE.A5], 'e', 0.01, 0.25, 0.5, 0.03);
-  }, { reverb: 0.35 }),
+/** Petrol catching: a deep whoomp that opens up. */
+function whoomp(s: Synth, at: number, level = 1): void {
+  const body = s.filter(s.noise('brown', at, 1.2), 'lowpass', [[at, 180], [at + 0.25, 1400], [at + 1, 500]], 0.8);
+  s.to(s.shape(s.amp(body, [[at, 0], [at + 0.07, 1.4 * level], [at + 1.1, 0.0005]]), 1.8));
+  s.to(s.amp(s.osc('sine', [[at, 70], [at + 0.5, 32]]), hit(at, 0.03, 0.5, level)));
+}
+
+/** A bottle breaking: the snap, a dull knock and the shards scattering. */
+function smash(s: Synth, at: number, level = 1): void {
+  s.to(s.amp(s.filter(s.noise('white', at, 0.1), 'highpass', 2500), hit(at, 0.0005, 0.03, level)));
+  s.to(s.amp(s.osc('sine', [[at, 160], [at + 0.08, 70]]), hit(at, 0.002, 0.08, level * 0.6)));
+  for (const f of [3100, 4600, 6200, 8100]) s.to(s.filter(s.grains(at + 0.005, at + 0.4, 9, 0.018), 'bandpass', s.vary(f, 0.1), 10), level * 2.2);
+}
+
+/** A firecracker: a sharp crack with a little body. */
+function banger(s: Synth, at: number, level: number, out: AudioNode): void {
+  s.shape(s.amp(s.filter(s.noise('white', at, 0.08), 'highpass', s.vary(1800)), hit(at, 0.0004, s.vary(0.025), level)), 3).connect(out);
+  s.amp(s.filter(s.noise('pink', at, 0.1), 'bandpass', s.vary(700), 1.2), hit(at, 0.001, 0.05, level * 0.5)).connect(out);
+}
+
+// ---------------------------------------------------------------- the dead's throats
+
+/**
+ * A human throat torn ragged (the Chillón): the voice and its growl an octave
+ * down, the pitch jittering as it strains, through the formants of a scream
+ * opening from «a» towards «e», breath rasping through, all distorted.
+ * `rise` is the pitch and `level` the loudness: envelopes in seconds from the sound's start.
+ */
+function scream(s: Synth, at: number, rise: [number, number][], level: [number, number][]): void {
+  const voice = s.osc('sawtooth', rise, at);
+  const fry = s.osc('sawtooth', rise.map(([t, f]): [number, number] => [t, f / 2]), at);
+  const jitter = s.ctx.createGain();
+  jitter.gain.value = s.vary(110);
+  s.filter(s.noise('brown', at), 'lowpass', 40).connect(jitter);
+  jitter.connect(voice.detune);
+  jitter.connect(fry.detune);
+  const throat = s.ctx.createGain();
+  voice.connect(throat);
+  s.amp(fry, 0.5).connect(throat);
+  const sum = s.ctx.createGain();
+  s.amp(s.filter(throat, 'bandpass', [[at, 780], [at + 0.4, 950]], 4), 1).connect(sum);
+  s.amp(s.filter(throat, 'bandpass', [[at, 1250], [at + 0.4, 1900]], 5), 0.7).connect(sum);
+  s.amp(s.filter(throat, 'bandpass', s.vary(2900), 6), 0.45).connect(sum);
+  s.amp(s.filter(s.noise('white', at), 'bandpass', s.vary(3200), 1.2), 0.35).connect(sum);
+  const torn = s.filter(s.shape(pulse(s, sum, s.vary(33), 0.45, at), 5), 'lowpass', 6000);
+  s.to(s.amp(torn, level));
+}
+
+/** A wet gurgle: breath bubbling through a throat full of something, the voice under it sinking. */
+function gurgle(s: Synth, at: number, dur: number, level = 1): void {
+  const wet = s.filter(s.grains(at, at + dur, Math.round(dur * 60), 0.012, false), 'bandpass', s.vary(450), 1.2);
+  s.to(s.amp(wet, [[at, 0], [at + 0.04, level * 4], [at + dur * 0.7, level * 3], [at + dur, 0.001]]));
+  const voice = s.filter(s.osc('sawtooth', [[at, s.vary(120)], [at + dur, 70]], at, dur), 'bandpass', 500, 3);
+  s.to(s.amp(pulse(s, voice, s.vary(17), 0.8, at, dur), [[at, 0], [at + 0.04, level * 1.2], [at + dur * 0.7, level * 0.9], [at + dur, 0.001]]));
+}
+
+const OFICIO: Record<string, SoundDef> = {
+  // The cue of the Oficio's moves (Saltar por la ventana, Encaramarse, Lluvia de flechas): kit shifting, a buckle.
+  'song.voice': def('sfx', 0.6, (s) => {
+    s.to(s.amp(s.filter(s.grains(0, 0.4, 26, 0.025, false), 'bandpass', s.vary(1400), 0.8), [[0, 0], [0.05, 1.2], [0.45, 0.001]]));
+    s.to(s.metal(s.r(0.12, 0.2), [s.vary(2600), s.vary(3900), s.vary(5200)], 0.08, 0.3));
+  }, { level: -5 }),
+  // Bengala: the striker scraped, the flare catching with a pop, and its hiss as it flies, sputtering.
+  'song.bolt': def('sfx', 1.3, (s) => {
+    s.to(s.filter(s.grains(0, 0.09, 22, 0.006, false), 'bandpass', s.vary(3200), 1.2), 1.2);
+    s.to(s.amp(s.osc('sine', [[0.1, 340], [0.16, 120]]), hit(0.1, 0.002, 0.07, 0.6)));
+    s.to(s.amp(s.filter(s.noise('white', 0.1, 0.1), 'highpass', 900), hit(0.1, 0.001, 0.04, 0.7)));
+    const hiss = s.filter(s.noise('white', 0.1), 'bandpass', [[0.1, 2800], [1.2, 4200]], 0.9);
+    s.to(s.amp(pulse(s, hiss, s.vary(23), 0.3, 0.1), [[0.1, 0], [0.16, 0.9], [0.6, 0.6], [1.25, 0.001]]));
+  }, { reverb: 0.2 }),
+  // Cóctel molotov: the bottle spinning through the air, smashing, and the petrol going up in flames.
+  'song.fire': def('sfx', 2.6, (s) => {
+    const spin = s.filter(s.noise('pink', 0, 0.75), 'bandpass', [[0, 600], [0.7, 1100]], 1.5);
+    s.to(s.amp(pulse(s, spin, s.vary(9), 0.5, 0, 0.75), [[0, 0], [0.15, 0.5], [0.65, 0.4], [0.72, 0.001]]));
+    smash(s, 0.7);
+    whoomp(s, 0.74);
+    flames(s, 0.8, 1.7, 0.6);
+  }, { level: 2, reverb: 0.35 }),
+  // Flecha perforante, Lluvia de flechas: the crossbow's trigger, the string slapping home and the bolt hissing off.
+  'song.arrow': def('sfx', 0.7, (s) => {
+    s.to(s.amp(s.filter(s.noise('white', 0, 0.05), 'bandpass', s.vary(3000), 4), hit(0, 0.0005, 0.012, 0.6)));
+    const string = s.filter(s.osc('sawtooth', [[0.012, s.vary(190)], [0.2, 120]], 0.012, 0.3), 'lowpass', [[0.012, 2400], [0.2, 500]]);
+    s.to(s.amp(string, hit(0.012, 0.001, 0.18, 0.9)));
+    s.to(s.amp(s.filter(s.noise('pink', 0.012, 0.1), 'bandpass', s.vary(900), 1.5), hit(0.012, 0.001, 0.05, 1)));
+    s.to(s.amp(s.filter(s.noise('white', 0.02, 0.4), 'bandpass', [[0.02, 2600], [0.4, 1200]], 2), [[0.02, 0], [0.06, 0.35], [0.4, 0.001]]));
+  }, { level: -1, reverb: 0.15 }),
+  // Saltar por la ventana, Encaramarse: boots pushing off and the body going over...
+  'song.vanish': def('sfx', 0.6, (s) => {
+    s.to(s.filter(s.grains(0, 0.08, 12, 0.012, false), 'bandpass', s.vary(1100), 0.9), 1.2);
+    s.to(s.amp(s.osc('sine', [[0, 110], [0.06, 60]]), hit(0, 0.002, 0.07, 0.6)));
+    s.to(s.amp(s.filter(s.noise('pink', 0.05), 'bandpass', [[0.05, 500], [0.45, 1400]], 1), [[0.05, 0], [0.2, 0.5], [0.5, 0.001]]));
+    s.to(s.amp(s.filter(s.grains(0.06, 0.4, 14, 0.02, false), 'bandpass', 1600, 0.7), [[0.06, 0], [0.1, 0.8], [0.45, 0.001]]));
+  }, { level: -3 }),
+  // ...and landing: a heavy thud, grit under the boots and the kit rattling.
+  'song.appear': def('sfx', 0.8, (s) => {
+    s.to(s.amp(s.osc('sine', [[0, 95], [0.15, 42]]), hit(0, 0.003, 0.18, 1)));
+    s.to(s.amp(s.filter(s.noise('pink', 0, 0.3), 'lowpass', 900), hit(0, 0.002, 0.08, 0.9)));
+    s.to(s.filter(s.grains(0.01, 0.25, 30, 0.006), 'bandpass', s.vary(2400), 0.9), 1);
+    for (const at of [s.r(0.06, 0.12), s.r(0.16, 0.26)]) s.to(s.metal(at, [s.vary(2200), s.vary(3300)], 0.06, 0.25));
+  }, { level: -2 }),
+  // Petardos: the fuse fizzing, then the string of crackers going off and echoing down the street.
+  'song.dome': def('sfx', 2.8, (s) => {
+    s.to(s.amp(s.filter(s.noise('white', 0, 0.6), 'bandpass', s.vary(4200), 1.5), [[0, 0], [0.05, 0.3], [0.5, 0.25], [0.55, 0.001]]));
+    s.to(s.filter(s.grains(0, 0.55, 30, 0.003, false), 'highpass', 3000), 0.5);
+    // Close together at first, then the last few straggling.
+    const bangs = s.ctx.createGain();
+    let at = 0.55;
+    for (let i = 0; i < 16; i++) {
+      banger(s, at, s.r(0.6, 1), bangs);
+      at += i < 11 ? s.r(0.04, 0.11) : s.r(0.1, 0.22);
+    }
+    s.to(s.echo(bangs, 0.19, 0.3, 0.35, 2200));
+  }, { level: 2, reverb: 0.35 }),
+  // El bidón: a kick against a steel drum, petrol sloshing, then the drum going up in a ball of fire...
+  'song.storm': def('sfx', 2.4, (s) => {
+    s.to(s.metal(0, [s.vary(165), s.vary(262), s.vary(388), s.vary(611)], 0.9, 0.7));
+    s.to(s.amp(s.filter(s.noise('pink', 0, 0.1), 'lowpass', 600), hit(0, 0.002, 0.05, 0.8)));
+    s.to(s.amp(pulse(s, s.filter(s.noise('brown', 0.05, 0.4), 'lowpass', 500), 7, 0.6, 0.05, 0.4), [[0.05, 0], [0.12, 0.5], [0.4, 0.001]]));
+    whoomp(s, 0.28, 1.2);
+    flames(s, 0.35, 1.9, 0.8);
+  }, { level: 2, reverb: 0.4 }),
+  // ...and the fire reaching each enemy: a gust of flame and its crackle.
+  'song.thunder': def('sfx', 1.4, (s) => {
+    whoomp(s, 0, 0.9);
+    flames(s, 0.05, 1.2, 0.5);
+  }, { reverb: 0.3 }),
+  // Escudo antidisturbios, Arenga, ¡Aguantad!: two blows of a baton on a riot shield, to rally the others.
+  'song.aura': def('sfx', 1.1, (s) => {
+    for (const [at, l] of [
+      [0, 1],
+      [0.3, 0.85],
+    ] as const) {
+      // The shield's hollow plastic boom and its rim rattling.
+      s.to(s.amp(s.filter(s.noise('pink', at, 0.3), 'bandpass', s.vary(420), 2.5), hit(at, 0.001, 0.14, l)));
+      s.to(s.amp(s.osc('sine', [[at, s.vary(150)], [at + 0.12, 80]]), hit(at, 0.002, 0.14, l * 0.8)));
+      s.to(s.metal(at, [s.vary(1150), s.vary(1780)], 0.07, l * 0.25));
+      s.to(s.filter(s.grains(at + 0.01, at + 0.12, 6, 0.006), 'bandpass', 2600, 1), l * 0.5);
+    }
+  }, { level: -1, reverb: 0.3 }),
+  // Vendaje rápido (and the Desfibrilador with no one down): a strip torn off the roll, the gauze wound round, the tape pressed down.
+  'song.heal': def('sfx', 1.1, (s) => {
+    const tear = s.filter(s.grains(0, 0.28, 90, 0.004, false), 'bandpass', [[0, 1800], [0.28, 3400]], 0.9);
+    s.to(s.amp(tear, [[0, 0], [0.02, 1.4], [0.24, 1], [0.3, 0.001]]));
+    s.to(s.amp(s.filter(s.noise('white', 0, 0.3), 'bandpass', 2600, 1.2), [[0, 0], [0.03, 0.3], [0.28, 0.001]]));
+    s.to(s.amp(s.filter(s.noise('pink', 0.35, 0.5), 'bandpass', [[0.35, 900], [0.8, 1400]], 1), [[0.35, 0], [0.45, 0.35], [0.85, 0.001]]));
+    s.to(s.amp(s.filter(s.noise('pink', 0.9, 0.1), 'lowpass', 1200), hit(0.9, 0.002, 0.05, 0.5)));
+  }, { level: -3 }),
+  // Desfibrilador: the charge whining up, the ready beeps, the shock (a thump, a crack, a buzz) and the monitor beeping again.
+  'song.revive': def('sfx', 2.6, (s) => {
+    s.to(s.amp(s.osc('sine', [[0, 700], [0.75, 3600]]), [[0, 0], [0.1, 0.25], [0.75, 0.3], [0.8, 0.001]]));
+    s.to(s.amp(s.osc('sine', [[0, 1400], [0.75, 7200]]), [[0, 0], [0.1, 0.06], [0.75, 0.07], [0.8, 0.001]]));
+    for (const at of [0.8, 0.92]) s.to(s.amp(s.osc('square', 1760, at, 0.07), hit(at, 0.003, 0.06, 0.18)));
+    const at = 1.1;
+    s.to(s.amp(s.osc('sine', [[at, 110], [at + 0.2, 45]]), hit(at, 0.002, 0.22, 1.2)));
+    s.to(s.shape(s.amp(s.filter(s.noise('white', at, 0.15), 'highpass', 1500), hit(at, 0.0005, 0.05, 1)), 3));
+    s.to(s.amp(pulse(s, s.filter(s.noise('white', at, 0.2), 'bandpass', 3000, 1.2), 60, 1, at, 0.2), hit(at, 0.002, 0.15, 0.5)));
+    for (const beat of [1.75, 2.3]) s.to(s.amp(s.osc('sine', 1046, beat, 0.15), hit(beat, 0.005, 0.12, 0.25)));
+  }, { level: 1, reverb: 0.25 }),
+  // Sedante: the syringe's cap pulled off, a squirt to clear it and the plunger pressed home.
+  'song.cleanse': def('sfx', 0.8, (s) => {
+    s.to(s.amp(s.filter(s.noise('white', 0, 0.05), 'bandpass', s.vary(2400), 3), hit(0, 0.0005, 0.02, 0.8)));
+    s.to(s.amp(s.osc('sine', [[0, 900], [0.03, 500]]), hit(0, 0.001, 0.03, 0.3)));
+    s.to(s.amp(s.filter(s.noise('white', 0.14, 0.12), 'highpass', 5000), [[0.14, 0], [0.16, 0.4], [0.24, 0.001]]));
+    s.to(s.amp(s.filter(s.noise('white', 0.4, 0.05), 'bandpass', s.vary(3400), 5), hit(0.4, 0.0005, 0.015, 0.7)));
+    s.to(s.amp(s.filter(s.noise('pink', 0.42, 0.25), 'bandpass', 1200, 2), [[0.42, 0], [0.45, 0.2], [0.65, 0.001]]));
+  }, { level: -5 }),
+  // Rastreo: down on one knee, the scope's dial clicked round to the range, a breath held.
+  'song.mark': def('sfx', 0.9, (s) => {
+    s.to(s.amp(s.filter(s.grains(0, 0.2, 12, 0.025, false), 'bandpass', 1200, 0.7), [[0, 0], [0.04, 0.9], [0.25, 0.001]]));
+    for (let i = 0; i < 3; i++) {
+      const at = 0.3 + i * 0.09;
+      s.to(s.amp(s.filter(s.noise('white', at, 0.03), 'bandpass', s.vary(4200, 0.04), 6), hit(at, 0.0004, 0.01, 0.8)));
+      s.to(s.metal(at, [s.vary(5300, 0.03)], 0.02, 0.2));
+    }
+    s.to(s.amp(s.filter(s.noise('pink', 0.6, 0.3), 'bandpass', 800, 0.8), [[0.6, 0], [0.7, 0.12], [0.88, 0.001]]));
+  }, { level: -6 }),
+  // Machetazo: a heavy machete swung through the air and biting home. Nothing plays it yet: the Tajo has its own sound.
+  'song.blade': def('sfx', 0.7, (s) => {
+    s.to(s.amp(s.filter(s.noise('white', 0, 0.25), 'bandpass', [[0, 600], [0.16, 2400]], 1.8), [[0, 0], [0.13, 0.8], [0.17, 0.001]]));
+    const at = 0.17;
+    s.to(s.amp(s.osc('sine', [[at, 140], [at + 0.1, 60]]), hit(at, 0.002, 0.1, 1)));
+    s.to(s.amp(s.filter(s.noise('pink', at, 0.15), 'bandpass', s.vary(700), 1.2), hit(at, 0.001, 0.07, 1)));
+    s.to(s.metal(at, [s.vary(2100), s.vary(3200), s.vary(4700)], 0.18, 0.25));
+  }, { reverb: 0.15 }),
 };
 
 // ---------------------------------------------------------------- the list
 
 export const SOUNDS: Record<string, SoundDef> = {
-  ...SONGS,
+  ...OFICIO,
   ...Object.fromEntries(
     (Object.keys(GUNS) as (keyof typeof GUNS)[]).flatMap((gun) => ([1, 2, 3] as const).map((tier) => [`shot.${gun}.${tier}`, soldierGun(gun, tier)])),
   ),
@@ -488,6 +576,62 @@ export const SOUNDS: Record<string, SoundDef> = {
     { variants: 4, level: -6 },
   ),
   'step.drag': def('sfx', 0.35, (s) => s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 500), [[0, 0], [0.05, 0.8], [0.3, 0.001]])), { variants: 4, level: -12 }),
+  // The dead coming in from the edge of the map: a long throaty moan, far off. A buzzing
+  // voice through two vowel formants that slide from «aa» to «oo», a wobble in the pitch,
+  // rasp on top, and the distance taking the top end off.
+  'zombie.moan': def('sfx', 1.7, (s) => {
+    const low = s.vary(80, 0.15);
+    const voice = s.osc('sawtooth', [[0, low], [0.5, low * s.r(1.1, 1.25)], [1.45, low * 0.7]]);
+    const wobble = s.ctx.createGain();
+    wobble.gain.value = s.r(25, 45);
+    s.osc('sine', s.vary(4.5, 0.25)).connect(wobble).connect(voice.detune);
+    const sum = s.ctx.createGain();
+    s.amp(s.filter(voice, 'bandpass', [[0, s.vary(620)], [1.2, 430]], 4), 1).connect(sum);
+    s.amp(s.filter(voice, 'bandpass', [[0, s.vary(1150)], [1.2, 780]], 5), 0.5).connect(sum);
+    s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(1300), 1.2), 0.25).connect(sum);
+    const far = s.filter(s.shape(sum, 2), 'lowpass', s.vary(1700));
+    s.to(s.amp(far, [[0, 0], [0.28, 0.9], [1.0, 0.7], [1.6, 0.001]]));
+  }, { variants: 4, level: -4, reverb: 0.35 }),
+  // Raiders arriving: a pickup coming in fast, braking hard on loose ground (a squeal and the
+  // tyres crunching), idling for a moment and a door slammed.
+  'truck.engine': def('sfx', 2.7, (s) => {
+    // Firing rate of the engine: up as it comes in, down as it brakes, then idle.
+    const rpm: [number, number][] = [[0, s.vary(48)], [0.9, s.vary(66)], [1.15, 70], [1.75, 34], [2.7, 30]];
+    const engine = s.ctx.createGain();
+    s.osc('sawtooth', rpm).connect(engine);
+    const half = s.osc('square', rpm.map(([t, f]) => [t, f / 2] as [number, number]));
+    s.amp(half, 0.5).connect(engine);
+    const rough = s.ctx.createGain();
+    rough.gain.value = 0.6;
+    s.filter(s.noise('brown'), 'lowpass', 90).connect(rough.gain);
+    engine.connect(rough);
+    const body = s.filter(s.shape(rough, 2.5), 'lowpass', [[0, 700], [1.15, 900], [1.75, 380], [2.7, 320]], 1.5);
+    s.to(s.amp(body, [[0, 0], [0.4, 0.45], [1.15, 0.55], [1.75, 0.3], [2.2, 0.2], [2.65, 0.001]]));
+    // The brakes: a squeal wavering, and gravel under the tyres.
+    const squeal = s.osc('sine', [[1.2, s.vary(2300)], [1.75, 2050]]);
+    const trem = s.ctx.createGain();
+    trem.gain.value = 40;
+    s.osc('sine', 9).connect(trem).connect(squeal.detune);
+    s.to(s.amp(squeal, [[1.2, 0], [1.3, 0.25], [1.65, 0.2], [1.8, 0.001]]));
+    s.to(s.filter(s.grains(1.15, 1.85, 90, 0.01), 'bandpass', 1600, 0.7), 1.1);
+    s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 900), [[1.15, 0], [1.25, 0.6], [1.8, 0.001]]));
+    // A door slammed.
+    s.to(s.amp(s.osc('sine', [[2.3, 120], [2.4, 60]]), hit(2.3, 0.002, 0.1, 0.9)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 1800), hit(2.3, 0.001, 0.05, 0.8)));
+    s.to(s.metal(2.3, [s.vary(900), s.vary(1450)], 0.06, 0.25));
+  }, { variants: 2, level: -2 }),
+  // Registrar: a drawer (or a lid, a boot) dragged open and knocking against its stop, then
+  // hands rummaging through what is inside and a couple of small things clinking.
+  search: def('sfx', 0.7, (s) => {
+    const slide = s.filter(s.noise('pink'), 'bandpass', [[0, s.vary(380)], [0.2, s.vary(950)]], 2.5);
+    s.to(s.amp(slide, [[0, 0], [0.04, 0.55], [0.18, 0.45], [0.22, 0.001]]));
+    s.to(s.filter(s.grains(0.01, 0.2, 14, 0.008, false), 'bandpass', 1300, 1.2), 0.35);
+    s.to(s.amp(s.osc('sine', [[0.21, s.vary(150)], [0.3, 70]]), hit(0.21, 0.002, 0.08, 0.45)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 1400), hit(0.21, 0.001, 0.04, 0.35)));
+    const rustle = s.filter(s.grains(0.25, 0.68, 70, 0.016, false), 'bandpass', s.vary(2200), 0.8);
+    s.to(s.amp(rustle, [[0.25, 0], [0.3, 1.4], [0.55, 1], [0.68, 0.001]]));
+    for (const at of [s.r(0.33, 0.42), s.r(0.48, 0.58)]) s.to(s.metal(at, [s.vary(2900), s.vary(4300), s.vary(6100)], 0.05, 0.25));
+  }, { variants: 4, level: -6 }),
   // Magazine out, magazine in, bolt.
   reload: def('sfx', 0.95, (s) => {
     const click = (at: number, f: number, l: number) => {
@@ -574,18 +718,12 @@ export const SOUNDS: Record<string, SoundDef> = {
       s.to(s.amp(s.filter(o, 'lowpass', 1800), [[at, 0], [at + 0.02, 0.4], [at + 0.48, 0.4], [at + 0.5, 0]]));
     }
   }, { reverb: 0.3 }),
-  // Psionics: detuned voices wavering, swelling up.
-  psi: def('sfx', 1.6, (s) => {
-    for (const f of [440, 466, 622]) {
-      const o = s.osc('sine', s.vary(f, 0.01));
-      const vib = s.osc('sine', s.r(5, 7));
-      const d = s.ctx.createGain();
-      d.gain.value = 14;
-      vib.connect(d).connect(o.frequency);
-      s.to(s.amp(o, [[0, 0], [0.45, 0.35], [1.5, 0.001]]));
-    }
-    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 600], [0.5, 3000]], 2), [[0, 0], [0.45, 0.4], [0.6, 0.001]]));
-  }, { reverb: 0.5 }),
+  // The Chillón's shriek (its Grito, and the dead it raises; the id is the old psionics'): one
+  // human throat torn ragged, rising to a scream that cracks and falls, rasping and distorted.
+  psi: def('sfx', 1.8, (s) => {
+    const base = s.vary(240, 0.1);
+    scream(s, 0, [[0, base], [0.35, base * 2.6], [0.9, base * 2.8], [1.25, base * 2.2], [1.55, base * 1.3]], [[0, 0], [0.08, 0.6], [0.35, 1], [1.2, 0.85], [1.65, 0.001]]);
+  }, { variants: 4, reverb: 0.45 }),
   // A beam of light lifting someone out (evacuation, printed reinforcements arriving).
   beam: def('sfx', 1.4, (s) => {
     for (const k of [1, 1.5, 2.01]) {
@@ -609,6 +747,18 @@ export const SOUNDS: Record<string, SoundDef> = {
   data: def('ui', 0.6, (s) => {
     for (let i = 0; i < 6; i++) s.to(s.amp(s.osc('sine', 800 * Math.pow(1.25, i)), hit(i * 0.06, 0.003, 0.05, 0.3)));
   }),
+  // Something found while searching: the thing lifted out (a small knock), slipped into the
+  // pack (a cloth swish) and two soft notes going up, quieter than the data chime.
+  found: def('sfx', 0.6, (s) => {
+    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', s.vary(1800), 3), hit(0, 0.001, 0.03, 0.5)));
+    s.to(s.amp(s.osc('sine', [[0, s.vary(230)], [0.06, 120]]), hit(0, 0.002, 0.06, 0.5)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', [[0.06, 1200], [0.28, 3000]], 1.2), [[0.06, 0], [0.12, 0.5], [0.3, 0.001]]));
+    for (const [at, f] of [
+      [0.12, 660],
+      [0.24, 830],
+    ] as const)
+      s.to(s.amp(s.osc('sine', s.vary(f, 0.01)), hit(at, 0.004, 0.22, 0.22)));
+  }, { variants: 3, level: -8 }),
   rescue: def('ui', 1.2, (s) => {
     for (const [at, f] of [
       [0, 784],
@@ -641,17 +791,20 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.metal(0.95, [380, 710, 1150], 0.4, 0.6));
     s.to(s.amp(s.osc('sine', [[0.95, 80], [1.2, 40]]), hit(0.95, 0.003, 0.3, 1)));
   }, { reverb: 0.2 }),
-  // The sectoid's psionic wail.
-  'death.sectoid': def('sfx', 1.1, (s) => {
-    const o = s.osc('sine', [[0, 950], [0.7, 210]]);
-    const vib = s.osc('sine', 9);
-    const d = s.ctx.createGain();
-    d.gain.value = 40;
-    vib.connect(d).connect(o.frequency);
-    s.to(s.amp(o, [[0, 0], [0.05, 0.5], [0.8, 0.001]]));
-    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 1500, 1), [[0, 0], [0.05, 0.25], [0.6, 0.001]]));
-    death(s, 0.6);
-  }, { reverb: 0.4 }),
+  // The Chillón dying (the id is the old sectoid's): a last shriek choked off into a gurgle, and the body down.
+  'death.sectoid': def('sfx', 1.4, (s) => {
+    const base = s.vary(250, 0.1);
+    scream(s, 0, [[0, base], [0.2, base * 2.4], [0.4, base * 2.6], [0.46, base * 1.2]], [[0, 0], [0.05, 0.7], [0.3, 1], [0.42, 0.9], [0.46, 0.0005]]);
+    gurgle(s, 0.45, 0.35, 1.4);
+    death(s, 0.75);
+  }, { variants: 3, reverb: 0.35 }),
+  // The Corredor dying: a quick wet gurgle as it goes down mid-stride, knees then body.
+  'death.runner': def('sfx', 1, (s) => {
+    gurgle(s, 0, 0.4, 1.8);
+    s.to(s.amp(s.osc('sine', [[0.15, 90], [0.3, 50]]), hit(0.15, 0.003, 0.15, 0.6)));
+    s.to(s.amp(s.filter(s.noise('pink', 0.15, 0.2), 'lowpass', 900), hit(0.15, 0.002, 0.08, 0.5)));
+    death(s, 0.32);
+  }, { variants: 3 }),
   'death.zombie': def('sfx', 1, (s) => {
     const voice = s.osc('sawtooth', [[0, 95], [0.7, 70]]);
     const f1 = s.filter(voice, 'bandpass', 520, 5);
@@ -816,6 +969,19 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 2800, 4), hit(0, 0.0005, 0.02, 1)));
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 1800, 1), [[0.01, 0], [0.02, 0.4], [0.2, 0.001]]));
   }),
+  // Under the Congregación's voice: bells tolling somewhere in the sierra, through a set that drifts off the station.
+  'radio.bells': def('radio', 2.8, (s) => {
+    const bells = s.ctx.createGain();
+    for (const at of [0, 1.3]) {
+      const f = s.vary(233, 0.02);
+      // A church bell's partials: hum, prime, minor third, fifth, octave and above.
+      s.metal(at, [0.5, 1, 1.19, 1.5, 2, 2.52, 3].map((k) => f * k), 1.5, 0.7).connect(bells);
+    }
+    const band = s.filter(s.filter(bells, 'highpass', 350), 'lowpass', 2600);
+    s.to(pulse(s, band, s.vary(0.7), 0.35));
+    s.to(s.amp(s.osc('sine', [[0, 1830], [2.6, 1790]]), [[0, 0], [0.4, 0.02], [2.4, 0.015], [2.7, 0]]));
+    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 2000, 0.8), [[0, 0], [0.2, 0.05], [2.5, 0.04], [2.75, 0]]));
+  }, { reverb: 0.4 }),
 
   // ------------------------------------------------------------ strategy
   // The globe's scanner: a radar ping.

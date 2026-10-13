@@ -1,5 +1,5 @@
 import { BAD_LUCK_MISSES } from './aim';
-import { AP_PER_TURN, attackWeapon, CONTROL_TURNS, TEMPLATES, WEAPONS } from './content';
+import { AP_PER_TURN, attackWeapon, CONTROL_TURNS, hordePoints, TEMPLATES, WEAPONS } from './content';
 import { getUnit, tileIndex } from './grid';
 import type {
   AbilityId,
@@ -9,6 +9,7 @@ import type {
   ConcealReason,
   EndReason,
   GameState,
+  Loot,
   Outcome,
   Pod,
   PodCause,
@@ -68,7 +69,7 @@ export type GameEvent =
   | { t: 'marked'; unit: string; amount: number }
   | { t: 'ruptured'; unit: string; amount: number }
   | { t: 'psi'; unit: string; target: string; success: boolean; effect: PsiEffect | null; chance: number }
-  /** Mind control ends: the soldier fights for XCOM again. */
+  /** Mind control ends: the soldier fights for XCOM again. Nothing takes control any more: kept for missions saved before. */
   | { t: 'released'; unit: string }
   | { t: 'controlTick'; unit: string }
   | { t: 'reanimated'; unit: string; corpse: string; zombie: Unit }
@@ -98,6 +99,17 @@ export type GameEvent =
   | { t: 'spawned'; units: Unit[]; pod: Pod; reinforcement: string | null }
   /** An inactive pod heads for its next patrol waypoint. */
   | { t: 'patrol'; pod: string; index: number }
+  // Noise and searching (docs/FASE2.md).
+  /**
+   * Something `by` did was heard `radius` tiles around `tile`. `heard`: the
+   * enemies that now go to look (Unit.heard). The squad's noise also winds up
+   * the Saqueo's horde.
+   */
+  | { t: 'noise'; tile: Vec2; radius: number; by?: string; heard: string[] }
+  /** It reached what it heard and found nobody: it stops looking for it. */
+  | { t: 'forgot'; unit: string }
+  /** A soldier searched the furniture on `tile`; `loot` went into the backpack (null: nothing). */
+  | { t: 'searched'; unit: string; tile: Vec2; loot: Loot | null }
   // Velmar's Canto.
   /** A song is sung (for the effects): on whom, or where. */
   | { t: 'sung'; unit: string; ability: AbilityId; targets: string[]; tile?: Vec2 }
@@ -308,6 +320,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       const target = unit(s, e.target);
       if (e.effect === 'disoriented') target.disoriented = 1;
       else if (e.effect === 'panicked') target.panicked = true;
+      // Only in missions saved before the zombies: the scream never takes control.
       else if (e.effect === 'controlled') {
         const caster = unit(s, e.unit);
         target.team = 'alien';
@@ -460,6 +473,20 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     case 'patrol': {
       const pod = s.pods.find((p) => p.id === e.pod);
       if (pod) pod.patrolIndex = e.index;
+      break;
+    }
+    case 'noise': {
+      for (const id of e.heard) unit(s, id).heard = { ...e.tile };
+      const by = e.by ? getUnit(s, e.by) : undefined;
+      if (by?.team === 'xcom') s.mission.noise = (s.mission.noise ?? 0) + hordePoints(e.radius);
+      break;
+    }
+    case 'forgot':
+      unit(s, e.unit).heard = null;
+      break;
+    case 'searched': {
+      (s.searched ??= []).push(tileIndex(s, e.tile.x, e.tile.y));
+      if (e.loot) (unit(s, e.unit).backpack ??= []).push({ ...e.loot });
       break;
     }
   }

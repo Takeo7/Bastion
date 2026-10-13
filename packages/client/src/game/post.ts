@@ -4,15 +4,27 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { AO_PASS } from './fogOfWar';
 
-// Post-processing of the voxel art (M5), shared by the battle renderer and the
-// strategy stage: ambient occlusion in corners and contacts, a soft bloom on
-// lights and glowing voxels, tone mapping and a gentle colour grade.
+// Post-processing, shared by the battle renderer and the strategy stage:
+// ambient occlusion in corners and contacts, a soft bloom on lights and
+// glowing things, tone mapping and a gentle colour grade.
+
+/**
+ * The render layer of characters (soldiers, zombies, survivors): the battle
+ * camera sees it and the sun's shadows follow that camera, but the occlusion's
+ * pre-pass leaves it out, so characters add no draw calls to that pass.
+ */
+export const UNIT_LAYER = 1;
 
 /**
  * Ambient occlusion that leaves overlays and effects (transparent, additive or
  * line geometry: movement range, paths, tracers, glows) out of its depth and
- * normal pre-pass, so they neither cast nor receive occlusion.
+ * normal pre-pass, so they neither cast nor receive occlusion, and characters
+ * too (UNIT_LAYER). The map's own materials draw that pass themselves
+ * (AO_PASS, fogOfWar.ts), leaving out what is unexplored and the roofs and
+ * walls the cutaway has taken away. The pre-pass doesn't redraw the shadow
+ * maps: the scene pass before it has just drawn them.
  */
 export class SolidGTAO extends GTAOPass {
   /** At a third of the size instead of half (lightenPost). */
@@ -37,7 +49,19 @@ export class SolidGTAO extends GTAOPass {
       }
     });
     for (const o of hidden) o.visible = false;
-    super.render(...args);
+    const shadows = args[0].shadowMap;
+    const [auto, needs] = [shadows.autoUpdate, shadows.needsUpdate];
+    const units = this.camera.layers.isEnabled(UNIT_LAYER);
+    shadows.autoUpdate = shadows.needsUpdate = false;
+    this.camera.layers.disable(UNIT_LAYER);
+    AO_PASS.value = 1;
+    try {
+      super.render(...args);
+    } finally {
+      AO_PASS.value = 0;
+      [shadows.autoUpdate, shadows.needsUpdate] = [auto, needs];
+      if (units) this.camera.layers.enable(UNIT_LAYER);
+    }
     for (const o of hidden) o.visible = true;
   }
 }
@@ -56,11 +80,25 @@ class SoftBloomPass extends UnrealBloomPass {
   }
 }
 
-/** Gentle colour grade after tone mapping: a little saturation and contrast, a soft vignette. */
+/** The grade's controls, as uniforms. */
+export interface Grade {
+  saturation: { value: number };
+  contrast: { value: number };
+  vignette: { value: number };
+  /** Split toning: the shade multiplied by one colour, the light by another (Synty's captures: lavender shade, warm light). */
+  shadowTint: { value: THREE.Color };
+  highlightTint: { value: THREE.Color };
+  /** Blacks lifted to this colour: the captures' soft, pastel shade. */
+  lift: { value: THREE.Color };
+}
+
+/** Colour grade after tone mapping: saturation, contrast, split toning, lifted blacks and a soft vignette. */
 const GRADE_GLSL = /* glsl */ `
   float luma = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
   gl_FragColor.rgb = mix(vec3(luma), gl_FragColor.rgb, saturation);
   gl_FragColor.rgb = (gl_FragColor.rgb - 0.5) * contrast + 0.5;
+  gl_FragColor.rgb *= mix(shadowTint, highlightTint, smoothstep(0.12, 0.7, luma));
+  gl_FragColor.rgb = lift + gl_FragColor.rgb * (1.0 - lift);
   vec2 d = vUv - 0.5;
   gl_FragColor.rgb *= 1.0 - vignette * dot(d, d) * 2.0;`;
 
@@ -71,19 +109,31 @@ const GRADE_GLSL = /* glsl */ `
 class GradedOutputPass extends OutputPass {
   constructor() {
     super();
-    Object.assign(this.uniforms, { saturation: { value: 1.08 }, contrast: { value: 1.04 }, vignette: { value: 0.22 } });
+    Object.assign(this.uniforms, {
+      saturation: { value: 1.08 },
+      contrast: { value: 1.04 },
+      vignette: { value: 0.22 },
+      shadowTint: { value: new THREE.Color(1, 1, 1) },
+      highlightTint: { value: new THREE.Color(1, 1, 1) },
+      lift: { value: new THREE.Color(0, 0, 0) },
+    });
     this.material.fragmentShader = this.material.fragmentShader
-      .replace('uniform sampler2D tDiffuse;', 'uniform sampler2D tDiffuse;\nuniform float saturation;\nuniform float contrast;\nuniform float vignette;')
+      .replace(
+        'uniform sampler2D tDiffuse;',
+        'uniform sampler2D tDiffuse;\nuniform float saturation;\nuniform float contrast;\nuniform float vignette;\nuniform vec3 shadowTint;\nuniform vec3 highlightTint;\nuniform vec3 lift;',
+      )
       .replace(/#ifdef SRGB_TRANSFER[\s\S]*?#endif/, (block) => block + GRADE_GLSL);
   }
 }
 
-export interface VoxelPost {
+export interface PostChain {
   composer: EffectComposer;
   /** Scene pass: point it at another scene to render a different set. */
   scene: RenderPass;
   ao: SolidGTAO;
   bloom: UnrealBloomPass;
+  /** The colour grade after tone mapping (each view sets its own: renderer.ts). */
+  grade: Grade;
 }
 
 /** The occlusion's samples, as it comes and lightened. */
@@ -96,7 +146,7 @@ const AO_SAMPLES_LIGHT = 4;
  * samples, the bloom at a quarter. Resize the composer after, so the passes
  * take their new size.
  */
-export function lightenPost(post: VoxelPost, ao: boolean, bloom: boolean): void {
+export function lightenPost(post: PostChain, ao: boolean, bloom: boolean): void {
   post.ao.light = ao;
   const samples = ao ? AO_SAMPLES_LIGHT : AO_SAMPLES;
   post.ao.updateGtaoMaterial({ samples });
@@ -109,7 +159,7 @@ export function lightenPost(post: VoxelPost, ao: boolean, bloom: boolean): void 
  * ones (Retina) the pixels are already tiny and it was the costliest step:
  * at 2x it took most of a 29 ms frame. Call after every pixel-ratio change.
  */
-export function fitPostToPixelRatio(post: VoxelPost, pixelRatio: number): void {
+export function fitPostToPixelRatio(post: PostChain, pixelRatio: number): void {
   const samples = pixelRatio >= 1.5 ? 0 : 4;
   for (const target of [post.composer.renderTarget1, post.composer.renderTarget2]) {
     if (target.samples === samples) continue;
@@ -118,20 +168,29 @@ export function fitPostToPixelRatio(post: VoxelPost, pixelRatio: number): void {
   }
 }
 
-/** Builds the voxel post chain on `gl`, rendering `scene` through `camera`. */
-export function voxelPost(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): VoxelPost {
-  // HDR target with MSAA, so voxel edges stay clean through the passes.
+/** Builds the post chain on `gl`, rendering `scene` through `camera`. */
+export function postChain(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): PostChain {
+  // HDR target with MSAA, so edges stay clean through the passes.
   const composer = new EffectComposer(gl, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 }));
   const pass = new RenderPass(scene, camera);
   composer.addPass(pass);
   const ao = new SolidGTAO(scene, camera, 4, 4);
-  ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 2, scale: 1, samples: AO_SAMPLES });
+  // Wider than before: Synty's captures sit everything in a soft dark (the ground's own is baked: groundAO.ts).
+  ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 2, scale: 1.1, samples: AO_SAMPLES });
   // Half the denoise taps: the occlusion is already soft at half resolution.
   ao.updatePdMaterial({ samples: AO_SAMPLES });
   ao.blendIntensity = 1;
   composer.addPass(ao);
   const bloom = new SoftBloomPass(new THREE.Vector2(256, 256), 0.45, 0.4, 0.9);
   composer.addPass(bloom);
-  composer.addPass(new GradedOutputPass());
-  return { composer, scene: pass, ao, bloom };
+  const output = new GradedOutputPass();
+  composer.addPass(output);
+  const u = output.uniforms as unknown as Grade;
+  return {
+    composer,
+    scene: pass,
+    ao,
+    bloom,
+    grade: { saturation: u.saturation, contrast: u.contrast, vignette: u.vignette, shadowTint: u.shadowTint, highlightTint: u.highlightTint, lift: u.lift },
+  };
 }

@@ -8,6 +8,7 @@ import {
   hackChance,
   hasBadStatus,
   meleeTargets,
+  noiseOf,
   psiChance,
   rangedTargets,
   songTargets,
@@ -32,11 +33,12 @@ import {
   ABILITIES,
   AID_DEFENSE,
   attackWeapon,
-  EXPLOSION_ALERT_RADIUS,
   hasPerk,
   HOLO_AIM,
+  HORDE,
   isAttack,
   MEDKIT_HEAL,
+  NOISE,
   RESTORATION_HEAL,
   RUPTURE_DAMAGE,
   SMOKE_TURNS,
@@ -45,6 +47,7 @@ import {
 } from './content';
 import { applyEvent, type GameEvent } from './events';
 import { canStandOn, combatants, distance, elevAt, getUnit, inBounds, sameTile, tileAt, tileIndex, unitAt } from './grid';
+import { rollLoot, searchSpot } from './loot';
 import { canSee, isViewer, sightOf, sightOrigin } from './los';
 import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol } from './path';
 import type { Command } from './protocol';
@@ -89,6 +92,14 @@ const LAST_VERSE_HEAL = 4;
 /** Reinforcements drop this far (in tiles) from the nearest soldier. */
 const DROP_MIN = 7;
 const DROP_MAX = 13;
+/** The horde comes in this close to the map's edge, and at least this far from every soldier (fallbacks after). */
+const EDGE_BAND = 2;
+const EDGE_GAP = [12, 8, 0] as const;
+/** Nor this close to the evac zone. */
+const EDGE_EVAC_GAP = 3;
+
+/** The Chillón's scream (docs/FASE2.md): out of 100, this many disorient and the rest panic. It never takes control. */
+const SCREAM_DISORIENT = 60;
 
 /** What an explosion leaves of each kind of tile (null: unaffected). */
 const BLAST_RESULT: Partial<Record<TileKind, TileKind>> = {
@@ -249,6 +260,9 @@ export class Sim {
       case 'hack':
         this.hack(u);
         break;
+      case 'search':
+        this.search(u, tile!);
+        break;
       case 'runAndGun':
         break;
       case 'mindspin':
@@ -256,6 +270,9 @@ export class Sim {
         break;
       case 'reanimate':
         this.reanimate(u, target!);
+        break;
+      case 'burst':
+        this.burst(u);
         break;
       // Velmar's Canto.
       case 'aegis':
@@ -323,9 +340,9 @@ export class Sim {
         this.lastVerse(u);
         break;
     }
-    // A song is heard: it breaks concealment like a shot, unless the Cámara de Ecos is
-    // wall to wall with the listening post (Morse filters it).
-    if (ABILITIES[ability].song && u.team === 'xcom' && !u.controlledBy && !this.s.quietSongs) this.breakConcealment({ reason: 'song', unit: u.id });
+    // Then it is heard (docs/FASE2.md): where a tile ability lands, or where the user stands.
+    // Whoever fell doing it made no more noise than what already sounded (the Hinchado sounds as it bursts).
+    if (u.alive) this.makeNoise(tile ?? u.pos, noiseOf(this.s, u, ability), u);
   }
 
   // ------------------------------------------------------------- the Canto
@@ -424,6 +441,8 @@ export class Sim {
     if (attacker.team === 'xcom' && !attacker.controlledBy) this.breakConcealment({ reason: 'attack', unit: attacker.id, by: target.id });
     if (target.team === 'alien') this.activatePodOf(target, attacker);
     this.checkOutcome();
+    // Shots on someone else's move (overwatch, suppression, covering fire) are heard on their own; the rest with their ability.
+    if (reaction && attacker.alive) this.makeNoise(preview.origin, weapon.noise, attacker);
     return result;
   }
 
@@ -468,6 +487,17 @@ export class Sim {
     this.emit({ t: 'died', unit: u.id, by: source?.id });
     // A sectoid's death frees the minds it held.
     for (const v of this.s.units) if (v.alive && v.controlledBy === u.id) this.emit({ t: 'released', unit: v.id });
+    if (TEMPLATES[u.template].abilities.includes('burst')) this.burst(u);
+  }
+
+  /**
+   * The Hinchado bursts where it stands (docs/FASE2.md), when it dies or of its
+   * own will beside a soldier: it is gone, and everyone beside it takes the blast.
+   */
+  burst(u: Unit): void {
+    if (u.alive) this.emit({ t: 'died', unit: u.id });
+    this.explode(u, u.pos, 'burst');
+    this.makeNoise(u.pos, WEAPONS.bloaterBurst.noise, u);
   }
 
   meleeAttack(u: Unit, option: MeleeOption, ability: AttackAbility): void {
@@ -481,8 +511,10 @@ export class Sim {
   }
 
   explode(source: Unit, center: Vec2, ability: BlastAbility): void {
-    this.coveringFire(source);
-    if (!source.alive || this.over) return;
+    // The Hinchado's burst is its death: nobody gets to fire first, and it goes off without it.
+    const bursting = ability === 'burst';
+    if (!bursting) this.coveringFire(source);
+    if ((!source.alive && !bursting) || this.over) return;
     const weapon = WEAPONS[ABILITIES[ability].explosive!];
     this.emit({ t: 'explosive', unit: source.id, ability, target: center });
     const tiles = blastTiles(this.s, ability, center, source);
@@ -492,28 +524,18 @@ export class Sim {
     const victims = tiles.map((p) => unitAt(this.s, p)).filter((u): u is Unit => !!u && !spared(u));
     const { bonus, shred } = blastMods(this.s, source, ability);
     for (const v of victims) this.damage(v, rollDamage(weapon, 'hit', this.rng, bonus), shred, source);
-    // The drone's discharge is pure electricity: it leaves the scenery alone.
-    if (ability !== 'discharge') {
+    // The drone's discharge is pure electricity and the Hinchado's burst only gas: they leave the scenery alone.
+    if (ability !== 'discharge' && !bursting) {
       for (const p of tiles) {
         const next = BLAST_RESULT[tileAt(this.s, p.x, p.y)];
         if (next) this.emit({ t: 'tileChanged', pos: p, kind: next });
       }
     }
     if (source.team === 'xcom') this.breakConcealment({ reason: 'explosive', unit: source.id });
-    const alerted = new Set<string>();
-    for (const v of victims) if (v.podId) alerted.add(v.podId);
-    const hit = new Set(alerted);
-    for (const pod of this.s.pods) {
-      if (pod.active) continue;
-      const near = pod.unitIds.some((id) => {
-        const m = getUnit(this.s, id);
-        return m?.alive && distance(m.pos, center) <= EXPLOSION_ALERT_RADIUS;
-      });
-      if (near) alerted.add(pod.id);
-    }
-    // Pods caught in the blast were attacked; the rest only heard it.
-    const soldier = source.team === 'xcom' ? source.id : undefined;
-    this.activatePods([...alerted], (pod) => ({ cause: hit.has(pod.id) ? 'attacked' : 'noise', unit: soldier }));
+    // Pods caught in the blast were attacked; the rest only hear it (the noise, after the action).
+    const hit = new Set<string>();
+    for (const v of victims) if (v.podId) hit.add(v.podId);
+    this.activatePods([...hit], { cause: 'attacked', unit: source.team === 'xcom' ? source.id : undefined });
     this.checkOutcome();
   }
 
@@ -556,13 +578,10 @@ export class Sim {
     const success = this.rng.int(100) < chance;
     let effect: PsiEffect | null = null;
     if (success) {
-      const roll = this.rng.int(100);
-      effect = roll < 50 ? 'disoriented' : roll < 80 ? 'panicked' : 'controlled';
-      // Temple: 7 keeps panic out, 10 keeps the Cantor out of the hands too.
-      if (effect === 'panicked' && target.mods.psiGuard >= 1) effect = 'disoriented';
-      if (effect === 'controlled' && target.mods.psiGuard >= 2) effect = 'disoriented';
-      // Juramento de Velmar: nobody near the oath panics or falls to the Cantor.
-      if ((effect === 'panicked' || effect === 'controlled') && this.underOath(target)) effect = 'disoriented';
+      // The scream confuses or frightens; it never takes control (docs/FASE2.md).
+      effect = this.rng.int(100) < SCREAM_DISORIENT ? 'disoriented' : 'panicked';
+      // Temple 7 keeps panic out (Temple 10 is out of its reach: psiChance), and so does Juramento de Velmar.
+      if (effect === 'panicked' && (target.mods.psiGuard >= 1 || this.underOath(target))) effect = 'disoriented';
     }
     this.emit({ t: 'psi', unit: caster.id, target: target.id, success, effect, chance });
     this.checkOutcome();
@@ -572,6 +591,13 @@ export class Sim {
     const n = this.s.units.filter((x) => x.template === 'zombie').length + 1;
     const zombie = makeUnit(`z${n}`, 'zombie', TEMPLATES.zombie.name, null, corpse.pos, caster.podId);
     this.emit({ t: 'reanimated', unit: caster.id, corpse: corpse.id, zombie });
+  }
+
+  /** Searches the furniture on `tile` (docs/FASE2.md): what turns up goes into the backpack. */
+  private search(u: Unit, tile: Vec2): void {
+    const decor = searchSpot(this.s, tile);
+    const loot = decor ? rollLoot(decor, this.s.mission.difficulty ?? 2, this.rng) : null;
+    this.emit({ t: 'searched', unit: u.id, tile: { ...tile }, loot });
   }
 
   private hack(u: Unit): void {
@@ -611,6 +637,7 @@ export class Sim {
       if (kind === 'door' || kind === 'window') {
         flush();
         this.emit({ t: 'tileChanged', pos: step, kind: kind === 'door' ? 'doorOpen' : 'windowBroken' });
+        this.makeNoise(step, kind === 'door' ? NOISE.door : NOISE.breach, u);
       }
       if (blocker) continue; // passing through an ally: nothing can interrupt here
 
@@ -712,6 +739,38 @@ export class Sim {
     if (this.s.concealed) this.emit({ t: 'concealmentBroken', ...why });
   }
 
+  // ----------------------------------------------------------------- noise
+
+  /**
+   * A noise of `radius` tiles at `tile` (docs/FASE2.md): every enemy within it
+   * that isn't already fighting a soldier in sight remembers the spot and goes
+   * to look, inactive pods too, without waking up. It never breaks concealment.
+   * The one who made it, and its pod, know what it was.
+   */
+  makeNoise(tile: Vec2, radius: number, by?: Unit): void {
+    if (radius <= 0 || this.over) return;
+    const heard = this.s.units
+      .filter(
+        (o) =>
+          o.alive &&
+          o.team === 'alien' &&
+          !o.objective &&
+          !o.controlledBy &&
+          o.id !== by?.id &&
+          !(by?.podId && o.podId === by.podId) &&
+          distance(o.pos, tile) <= radius &&
+          !this.engaged(o),
+      )
+      .map((o) => o.id);
+    this.emit({ t: 'noise', tile: { ...tile }, radius, by: by?.id, heard });
+  }
+
+  /** An alert enemy with a soldier in sight: a noise elsewhere doesn't turn its head. */
+  private engaged(o: Unit): boolean {
+    if (!this.s.pods.some((p) => p.id === o.podId && p.active)) return false;
+    return combatants(this.s, 'xcom').some((e) => canSee(this.s, o, e));
+  }
+
   /** `u` was attacked (by `attacker`): its pod comes alive. */
   activatePodOf(u: Unit, attacker?: Unit): void {
     if (u.podId) this.activatePods([u.podId], { cause: 'attacked', unit: attacker?.team === 'xcom' ? attacker.id : undefined, by: u.id });
@@ -733,11 +792,11 @@ export class Sim {
     for (const pod of pods) this.scamper(pod.unitIds);
   }
 
-  /** Free move to the best nearby cover, without spending actions. */
+  /** Free move to the best nearby cover, without spending actions. The dead don't take cover. */
   scamper(unitIds: string[]): void {
     for (const id of unitIds) {
       const m = getUnit(this.s, id);
-      if (!m?.alive || this.over) continue;
+      if (!m?.alive || this.over || TEMPLATES[m.template].undead) continue;
       const dest = chooseScamperTile(this.s, m);
       if (!dest) continue;
       const path = buildPath(this.s, m, computeReach(this.s, m, costPerAp(m)), dest);
@@ -747,18 +806,26 @@ export class Sim {
 
   // -------------------------------------------------------- reinforcements
 
-  /** Picks open tiles for a drop: not too close to the squad, not too far, on the ground. */
-  chooseDropZone(count: number): Vec2[] | null {
+  /**
+   * Picks open tiles for a drop: not too close to the squad, not too far, on
+   * the ground. The horde (`edge`) comes in by the map's edges instead, well
+   * away from the squad and the evac zone.
+   */
+  chooseDropZone(count: number, edge = false): Vec2[] | null {
     const s = this.s;
     const soldiers = combatants(s, 'xcom');
     if (!soldiers.length) return null;
     const free = (x: number, y: number) =>
       inBounds(s, x, y) && canStandOn(tileAt(s, x, y)) && (s.elev[tileIndex(s, x, y)] ?? 0) === 0 && !unitAt(s, { x, y });
-    for (const [lo, hi] of [[DROP_MIN, DROP_MAX], [4, 20], [2, 60]] as const) {
+    const onEdge = (x: number, y: number) =>
+      (x < EDGE_BAND || y < EDGE_BAND || x >= s.width - EDGE_BAND || y >= s.height - EDGE_BAND) &&
+      !s.mission.evacZone.some((z) => distance(z, { x, y }) < EDGE_EVAC_GAP);
+    const bands = edge ? EDGE_GAP.map((lo) => [lo, Infinity] as const) : ([[DROP_MIN, DROP_MAX], [4, 20], [2, 60]] as const);
+    for (const [lo, hi] of bands) {
       const candidates: Vec2[] = [];
       for (let y = 0; y < s.height; y++) {
         for (let x = 0; x < s.width; x++) {
-          if (!free(x, y)) continue;
+          if (!free(x, y) || (edge && !onEdge(x, y))) continue;
           const d = Math.min(...soldiers.map((o) => distance(o.pos, { x, y })));
           if (d >= lo && d <= hi) candidates.push({ x, y });
         }
@@ -799,21 +866,46 @@ export class Sim {
     this.emit({ t: 'reinforcementsIncoming', r });
   }
 
-  /** Drops every announced reinforcement that is due, already alert. */
+  /**
+   * Drops every announced reinforcement that is due, already alert. The
+   * horde lands on the prowl instead: an inactive pod heading for the soldier
+   * nearest to it, which only wakes up (and gives the squad away) on seeing someone.
+   */
   landReinforcements(turn: number): void {
     for (const r of this.s.mission.reinforcements) {
       if (r.landed || !r.pos || r.turn > turn || this.over) continue;
       const zone = this.chooseDropZoneAround(r.pos, r.units.length);
-      const pod: Pod = { id: `p${r.id}`, active: true, unitIds: [], patrol: [], patrolIndex: 0 };
+      const pod: Pod = { id: `p${r.id}`, active: !r.horde, unitIds: [], patrol: [], patrolIndex: 0 };
+      const near = r.horde ? [...combatants(this.s, 'xcom')].sort((a, b) => distance(a.pos, r.pos!) - distance(b.pos, r.pos!))[0] : undefined;
       const units = r.units.map((template, i) => {
         const id = `${r.id}u${i + 1}`;
         pod.unitIds.push(id);
-        return makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? r.pos!, pod.id);
+        const u = makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? r.pos!, pod.id);
+        return near ? { ...u, heard: { ...near.pos } } : u;
       });
       this.emit({ t: 'spawned', units, pod, reinforcement: r.id });
+      if (r.horde) continue;
       this.breakConcealment({ reason: 'reinforcements', by: units[0]?.id });
       this.scamper(pod.unitIds);
     }
+  }
+
+  /**
+   * Saqueo (docs/FASE2.md): the horde's clock winds up with every turn and
+   * every noise the squad makes (HORDE in content.ts). When a wave is due, it
+   * is announced for the end of the next alien turn, by the map's edge; one a
+   * turn at most, and none while the field is already full.
+   */
+  callHorde(turn: number): void {
+    const m = this.s.mission;
+    if (!m.horde?.length) return;
+    const sent = m.reinforcements.filter((r) => r.horde).length;
+    const due = Math.floor((turn * HORDE.perTurn + (m.noise ?? 0)) / HORDE.wave);
+    if (due <= sent || combatants(this.s, 'alien').length >= HORDE.cap) return;
+    const zone = this.chooseDropZone(m.horde.length, true);
+    if (!zone) return;
+    const r: Reinforcement = { id: `r${m.reinforcements.length + 1}`, turn: turn + 1, pos: zone[0]!, units: [...m.horde], landed: false, horde: true };
+    this.emit({ t: 'reinforcementsIncoming', r });
   }
 
   /** Free tiles around a landing point (the flare tile first). */
@@ -853,6 +945,12 @@ export class Sim {
       else if (!squad.length) end('defeat', 'wiped');
       return;
     }
+    const someoneOut = s.units.some((u) => u.team === 'xcom' && u.evacuated);
+    // Saqueo: won by getting somebody out; the horde never runs dry.
+    if (m.kind === 'scavenge') {
+      if (!squad.length) end(someoneOut ? 'victory' : 'defeat', someoneOut ? 'objective' : 'wiped');
+      return;
+    }
     const target = m.objectiveUnit ? getUnit(s, m.objectiveUnit) : undefined;
     if (m.kind === 'rescue' && target && !target.alive && !target.evacuated) {
       end('defeat', 'objectiveLost');
@@ -862,7 +960,6 @@ export class Sim {
       m.objectiveDone ||
       (!hostiles.length && m.kind === 'recovery' && !!m.item?.carrier) ||
       (!hostiles.length && m.kind === 'rescue' && !!target?.alive && !target.captive);
-    const someoneOut = s.units.some((u) => u.team === 'xcom' && u.evacuated);
     if (secured && (!hostiles.length || (!squad.length && someoneOut))) end('victory', 'objective');
     else if (!squad.length) end('defeat', 'wiped');
   }
@@ -895,15 +992,17 @@ export class Sim {
       if (this.over) return;
       if (u.alive) takeAlienTurn(this, u);
     }
-    for (const pod of this.s.pods.filter((p) => !p.active && p.patrol.length)) {
+    // Pods still unaware walk their round, or go to look where they heard something.
+    for (const pod of this.s.pods.filter((p) => !p.active && (p.patrol.length || p.unitIds.some((id) => getUnit(this.s, id)?.heard)))) {
       if (this.over) return;
       patrolPod(this, pod);
     }
     if (this.over) return;
     this.landReinforcements(turn);
     if (this.over) return;
+    this.callHorde(turn);
     this.announceReinforcements(turn + 1);
-    // Mind control wears off with time.
+    // Mind control wears off with time. Nothing takes control any more (the scream never does): only missions saved before.
     for (const u of this.s.units.filter((x) => x.alive && x.controlledBy)) {
       this.emit(u.controlTurns <= 1 ? { t: 'released', unit: u.id } : { t: 'controlTick', unit: u.id });
     }
@@ -983,7 +1082,7 @@ function blastMods(s: GameState, u: Unit, ability: BlastAbility): { bonus: numbe
 /**
  * What a damaging ability would take off `target` (or, with none, its own
  * numbers, for the ability cards): attacks, explosives, Velmar's songs and the
- * Grillo's Protocolo de combate. `shot` is the attack's preview against that
+ * Grillo's Calambrazo. `shot` is the attack's preview against that
  * target (flank and distance). Null for abilities that do no damage.
  */
 export function abilityDamage(s: GameState, u: Unit, ability: AbilityId, target?: Unit, shot?: Pick<ShotPreview, 'flanked' | 'distance'>): DamagePreview | null {
@@ -1103,6 +1202,8 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     const ap = apForCost(u, cost);
     if (ap > u.ap) return { ok: false, error: 'No le quedan acciones para llegar ahí.' };
     sim.moveAlong(u, path, ap);
+    // Running is heard (docs/FASE2.md).
+    if (ap >= 2 && u.alive) sim.makeNoise(u.pos, NOISE.dash, u);
     sim.afterXcomAction();
     return { ok: true, events: sim.events };
   }
@@ -1128,7 +1229,9 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
       break;
     }
     case 'tile':
-      if (!cmd.tile || !canTargetTile(s, u, cmd.ability, cmd.tile)) return { ok: false, error: 'Fuera de alcance o fuera de la vista de la escuadra.' };
+      if (!cmd.tile || !canTargetTile(s, u, cmd.ability, cmd.tile)) {
+        return { ok: false, error: cmd.ability === 'search' ? 'No puede registrar eso desde ahí.' : 'Fuera de alcance o fuera de la vista de la escuadra.' };
+      }
       sim.perform(u, cmd.ability, { tile: cmd.tile });
       break;
     case 'self':

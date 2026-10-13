@@ -30,7 +30,7 @@ export const commandSchema = z.discriminatedUnion('type', [
 
 export type Command = z.infer<typeof commandSchema>;
 
-export const missionKindSchema = z.enum(['elimination', 'recovery', 'sabotage', 'hack', 'rescue']);
+export const missionKindSchema = z.enum(['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge']);
 /** Skirmish battlefield: the hand-made district or a procedural map of a biome. */
 export const skirmishMapSchema = z.enum(['plaza', 'city', 'wilds', 'facility']);
 export type SkirmishMap = z.infer<typeof skirmishMapSchema>;
@@ -51,6 +51,8 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('ping'), tile: vec2, kind: pingKindSchema }),
   /** A move planned without the command, shown to the partner; `tile: null` withdraws it. */
   z.object({ t: z.literal('plan'), unit: unitId, tile: vec2.nullable() }),
+  /** The interface theme chosen in this browser: the room shares it, so both players see the same one. */
+  z.object({ t: z.literal('uiTheme'), theme: z.string().regex(/^[a-z][a-z0-9-]{0,23}$/) }),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
@@ -75,6 +77,7 @@ const appearanceSchema = z.object({
   torso: color.optional(),
   arms: color.optional(),
   legs: color.optional(),
+  character: z.string().regex(/^[a-z][a-zA-Z0-9]{0,23}$/).optional(),
 });
 
 export const campaignCommandSchema = z.discriminatedUnion('type', [
@@ -137,7 +140,8 @@ export interface HostAddress {
 export type ServerMessage =
   /** `hosts`: this machine's network addresses, so the menu can tell the partner where to connect; `httpsPort`: where the game is also served over https. */
   | { t: 'welcome'; token: string; slot: Slot; hosts?: HostAddress[]; httpsPort?: number }
-  | { t: 'room'; players: PlayerInfo[]; phase: RoomPhase; savedCampaign: { day: number; doom: number; level: number } | null }
+  /** `uiTheme`: the interface theme the last player to choose one picked, for both (none until someone does). */
+  | { t: 'room'; players: PlayerInfo[]; phase: RoomPhase; savedCampaign: { day: number; doom: number; level: number } | null; uiTheme?: string }
   | { t: 'campaign'; state: CampaignState }
   | { t: 'baseView'; slot: Slot; view: BaseView }
   | { t: 'snapshot'; state: GameState }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canTargetTile } from '../src/abilities';
+import { abilityTargets, canTargetTile, psiChance } from '../src/abilities';
 import { previewShot } from '../src/aim';
 import { createCampaign, executeCampaignCommand, pointsToSpend, RETRAIN_COST, type CampaignCommand, type CampaignState } from '../src/campaign';
 import {
@@ -73,7 +73,7 @@ describe('aptitudes', () => {
   });
 
   it('aptitudes set aim, health, defence, will and hacking; 7 and 10 bring extras', () => {
-    // A rookie sniper: Pulso 6, Aguante 5, Reflejos 5, Temple 5, Oficio 3.
+    // A rookie sniper: Pulso 6, Aguante 5, Reflejos 5, Temple 5, Maña 3.
     const rookie = soldierStats(build('sharpshooter', 0));
     expect(rookie.template).toBe('sharpshooter');
     expect(70 + rookie.mods.aim).toBe(68);
@@ -108,7 +108,7 @@ describe('aptitudes', () => {
   });
 });
 
-describe('the rosa', () => {
+describe('the skill tree', () => {
   it('a centre, and four axes of three branches plus the Oficio, each closed by a capstone the rows above can pay for', () => {
     expect(CENTER.length).toBe(4);
     for (const cls of AXES) {
@@ -146,7 +146,7 @@ describe('the rosa', () => {
     const talents = { deadeye: 3, hawkEye: 2 } as const;
     expect(talentBlocker(build('sharpshooter', 7, talents), 'aimedShot')).toMatch(/Pide Pulso 7 \(tiene 6\)/);
     expect(talentBlocker(build('sharpshooter', 7, talents, { pul: 7 }), 'aimedShot')).toBeNull();
-    expect(talentBlocker(build('specialist', 7, { marksman: 2 }), 'battery')).toMatch(/Antes hace falta Protocolo de combate/);
+    expect(talentBlocker(build('specialist', 7, { marksman: 2 }), 'battery')).toMatch(/Antes hace falta Calambrazo/);
   });
 
   it('a recruit learns from two axes without a class, and leans to the one taught most', () => {
@@ -220,13 +220,14 @@ describe('the rosa', () => {
     expect(talentBlocker({ ...grenadier, attrs: baseAttrs('grenadier') }, 'velmarStorm', 3)).toMatch(/Pide Temple 7/);
   });
 
-  it('the Oficio has a price: the Chillón reaches its practitioners more easily, unless they have nerves of steel', () => {
+  it('knowing a trade of the Oficio makes a singer for «A dos voces», at no price against the Chillón', () => {
     const singer = soldierStats(build('grenadier', 2, { bolt: 1 }));
-    expect(singer.mods).toMatchObject({ singer: 1, songOpen: 10 });
+    const plain = soldierStats(build('grenadier', 2, { demolition: 1 }));
+    expect(singer.mods.singer).toBe(1);
     expect(singer.perks).toEqual(['bolt']);
-    expect(soldierStats(build('grenadier', 2, { bolt: 1 }, { tem: 10 })).mods).toMatchObject({ singer: 1, songOpen: 0 });
-    expect(soldierStats(build('grenadier', 2, { demolition: 1 })).mods).toMatchObject({ singer: 0, songOpen: 0 });
-    // Hoja afilada disorients only at its last level; Prismáticos see through smoke from the first.
+    expect(plain.mods.singer).toBe(0);
+    expect(singer.will).toBe(plain.will);
+    // Machetazo disorients only at its last level; Prismáticos see through smoke from the first.
     expect(soldierStats(build('assault', 2, { songBlade: 1 })).mods.slashDisorient).toBe(0);
     expect(soldierStats(build('assault', 2, { songBlade: 2 })).mods).toMatchObject({ slashDisorient: 1, meleeDamage: 2 });
     expect(soldierStats(build('sharpshooter', 2, { windEyes: 1 })).mods).toMatchObject({ sight: 2, smokeSight: 1 });
@@ -366,21 +367,26 @@ describe('talents in combat', () => {
     expect(enemy.hp).toBeLessThan(20);
   });
 
-  it('Temple 10: the Chillón never takes control, and never panics a Temple 7', () => {
+  it('Temple 7 never panics at the scream; Temple 10 («Nervios de acero») is out of its reach', () => {
     const effects = new Set<string>();
     for (let seed = 1; seed < 300; seed++) {
       const s = field();
       s.activeTeam = 'alien';
-      const soldier = addUnit(s, 's1', 'assault', 2, 2, { will: 0, mods: { ...soldierStats(build('assault', 0)).mods, psiGuard: seed % 2 ? 1 : 2 } });
+      const soldier = addUnit(s, 's1', 'assault', 2, 2, { will: 0, mods: { ...soldierStats(build('assault', 0)).mods, psiGuard: 1 } });
       const sectoid = addUnit(s, 'a1', 'sectoid', 9, 2, { podId: 'p1', ap: 2 });
       s.pods.push({ id: 'p1', active: true, unitIds: ['a1'], patrol: [], patrolIndex: 0 });
       const sim = new Sim(s, new Rng(seed), [0]);
       sim.perform(sectoid, 'mindspin', { target: soldier });
       const psi = sim.events.find((e) => e.t === 'psi') as Extract<GameEvent, { t: 'psi' }>;
-      if (psi.effect) effects.add(`${soldier.mods.psiGuard}:${psi.effect}`);
+      if (psi.effect) effects.add(psi.effect);
     }
-    expect(effects.has('1:panicked')).toBe(false);
-    expect(effects.has('1:controlled')).toBe(true);
-    expect([...effects].filter((e) => e.startsWith('2:'))).toEqual(['2:disoriented']);
+    expect([...effects]).toEqual(['disoriented']);
+
+    const s = field();
+    const steel = addUnit(s, 's1', 'assault', 2, 2, { will: 0, mods: { ...soldierStats(build('assault', 0, {}, { tem: 10 })).mods } });
+    const sectoid = addUnit(s, 'a1', 'sectoid', 9, 2, { ap: 2 });
+    expect(steel.mods.psiGuard).toBe(2);
+    expect(psiChance(steel, s)).toBe(0);
+    expect(abilityTargets(s, sectoid, 'mindspin')).not.toContain(steel);
   });
 });

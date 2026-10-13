@@ -47,6 +47,9 @@ export const NICKNAME_MAX = 16;
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
+/** A survivor model's id: the list lives in the client (Synty), the engine only checks its shape. */
+export const CHARACTER_ID = /^[a-z][a-zA-Z0-9]{0,23}$/;
+
 export function isAppearance(a: Appearance): boolean {
   return (
     HEX.test(a.primary) &&
@@ -54,7 +57,8 @@ export function isAppearance(a: Appearance): boolean {
     HEX.test(a.visor) &&
     HEAD_IDS.includes(a.head) &&
     BUILD_IDS.includes(a.build) &&
-    ARMOR_PART_IDS.every((part) => a[part] === undefined || HEX.test(a[part]))
+    ARMOR_PART_IDS.every((part) => a[part] === undefined || HEX.test(a[part])) &&
+    (a.character === undefined || CHARACTER_ID.test(a.character))
   );
 }
 
@@ -78,6 +82,7 @@ export function normalizeAppearance(a: Appearance): Appearance {
     const own = a[part];
     if (own !== undefined && own.toLowerCase() !== partColor(out, part).toLowerCase()) out[part] = own;
   }
+  if (a.character) out.character = a.character;
   return out;
 }
 

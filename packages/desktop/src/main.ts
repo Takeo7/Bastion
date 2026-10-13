@@ -1,0 +1,262 @@
+// Bastión's desktop app (Electron): one window with the game and, for the
+// host, the game's own server inside, so nobody needs a terminal. The server is
+// packages/server bundled into one file (scripts/build.mjs) and run by
+// Electron's Node in a utility process: a long AI turn or a save never stalls
+// the window. The partner joins from their own app or from Chrome at the
+// address the host's lobby shows. Plain http: both ends are Chromium, which
+// runs it at full speed, so there are no certificates (only Safari needed https).
+import { app, BrowserWindow, ipcMain, Menu, shell, utilityProcess, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type UtilityProcess } from 'electron';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { join } from 'node:path';
+
+// Saves, settings and red.log in a folder with a plain name: …/Application Support/Bastion, %APPDATA%\Bastion.
+// BASTION_DATOS points it elsewhere (tests, a second copy on the same machine).
+app.setPath('userData', process.env.BASTION_DATOS || join(app.getPath('appData'), 'Bastion'));
+
+/**
+ * Measuring only: frames as fast as the machine can draw them, with no vsync
+ * (BASTION_SIN_TOPE=1, or --sin-tope). Never on for players.
+ */
+const UNCAPPED = process.env.BASTION_SIN_TOPE === '1' || process.argv.includes('--sin-tope');
+if (UNCAPPED) {
+  app.commandLine.appendSwitch('disable-frame-rate-limit');
+  app.commandLine.appendSwitch('disable-gpu-vsync');
+}
+
+/** The built client and server: next to the app once packaged (extraResources), next to this file while developing. */
+const RESOURCES = app.isPackaged ? process.resourcesPath : __dirname;
+const CLIENT = join(RESOURCES, 'client');
+const SERVER = join(RESOURCES, 'server', 'server.mjs');
+/** The web game's port: a partner used to it finds the app's game at the same address. BASTION_PUERTO for tests. */
+const FIRST_PORT = Number(process.env.BASTION_PUERTO) || 3000;
+const SETTINGS = (): string => join(app.getPath('userData'), 'escritorio.json');
+
+let win: BrowserWindow | null = null;
+let server: UtilityProcess | null = null;
+let serverPort = 0;
+
+// ------------------------------------------------------------------ server
+
+/** A port nothing is listening on, from `first` up. */
+function freePort(first: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = (port: number) => {
+      if (port > first + 40) return reject(new Error('No hay ningún puerto libre.'));
+      const s = createServer();
+      s.once('error', () => probe(port + 1));
+      s.listen(port, () => s.close(() => resolve(port)));
+    };
+    probe(first);
+  });
+}
+
+/** Waits until `url` answers, for up to `ms`. */
+async function answers(url: string, ms: number): Promise<boolean> {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+      if (res.ok) return true;
+    } catch {
+      /* not yet */
+    }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return false;
+}
+
+/** Starts the game's server (once) and returns its port. The save and red.log live in userData. */
+async function startServer(): Promise<number> {
+  if (server) return serverPort;
+  const port = await freePort(FIRST_PORT);
+  const data = app.getPath('userData');
+  mkdirSync(data, { recursive: true });
+  // No https port: no certificate to make or to accept.
+  const args = ['--port', String(port), '--https-port', '0', '--save', join(data, 'save.json'), '--client', CLIENT];
+  const child = utilityProcess.fork(SERVER, args, { serviceName: 'Bastión (servidor)', stdio: 'pipe' });
+  child.stdout?.on('data', (d: Buffer) => process.stdout.write(d));
+  child.stderr?.on('data', (d: Buffer) => process.stderr.write(d));
+  child.once('exit', (code) => {
+    if (server !== child) return;
+    server = null;
+    serverPort = 0;
+    // The host's game has lost its server: back to the start, saying so.
+    if (win && !win.isDestroyed() && win.webContents.getURL().startsWith(`http://localhost:${port}`)) {
+      void showLauncher(`El servidor de la partida se ha cerrado (código ${code}). La partida está guardada: vuelve a abrirla.`);
+    }
+  });
+  server = child;
+  serverPort = port;
+  if (!(await answers(`http://127.0.0.1:${port}/`, 15_000))) {
+    child.kill();
+    throw new Error('El servidor de la partida no arranca.');
+  }
+  return port;
+}
+
+// ------------------------------------------------------------------ window
+
+interface Settings {
+  /** The address last joined: the start screen offers it again. */
+  last?: string;
+}
+
+function readSettings(): Settings {
+  try {
+    return JSON.parse(readFileSync(SETTINGS(), 'utf8')) as Settings;
+  } catch {
+    return {};
+  }
+}
+
+function writeSettings(s: Settings): void {
+  try {
+    mkdirSync(app.getPath('userData'), { recursive: true });
+    writeFileSync(SETTINGS(), JSON.stringify(s, null, 2));
+  } catch {
+    /* only a convenience */
+  }
+}
+
+/** The start screen: host a game or join one. `note` says why we are back, if something went wrong. */
+async function showLauncher(note = ''): Promise<void> {
+  if (!win || win.isDestroyed()) return;
+  await win.loadFile(join(__dirname, 'launcher.html'), { query: note ? { aviso: note } : {} });
+}
+
+function createWindow(): BrowserWindow {
+  const w = new BrowserWindow({
+    width: 1600,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 640,
+    title: 'Bastión',
+    backgroundColor: '#0d0f12',
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      spellcheck: false,
+    },
+  });
+  w.once('ready-to-show', () => w.show());
+  // Nothing in the game opens windows; a link that would goes to the system's browser.
+  w.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  w.on('closed', () => (win = null));
+  return w;
+}
+
+/** Only the start screen (a file of the app) may ask to host or join; never a game page from the network. */
+function fromLauncher(e: IpcMainInvokeEvent): boolean {
+  return e.senderFrame?.url.startsWith('file:') ?? false;
+}
+
+/** «192.168.1.20», «192.168.1.20:3002» or a pasted «http://…/» → «192.168.1.20:3000». */
+function normalise(address: string): string | null {
+  const bare = address.trim().replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '');
+  if (!/^[\w.-]+(:\d{1,5})?$/.test(bare)) return null;
+  return bare.includes(':') ? bare : `${bare}:${FIRST_PORT}`;
+}
+
+ipcMain.handle('bastion:info', (e) => {
+  if (!fromLauncher(e)) return null;
+  return { last: readSettings().last ?? '', version: app.getVersion(), uncapped: UNCAPPED };
+});
+
+ipcMain.handle('bastion:host', async (e): Promise<string | null> => {
+  if (!fromLauncher(e) || !win) return null;
+  try {
+    const port = await startServer();
+    await win.loadURL(`http://localhost:${port}/`);
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+});
+
+ipcMain.handle('bastion:join', async (e, address: unknown): Promise<string | null> => {
+  if (!fromLauncher(e) || !win) return null;
+  const target = typeof address === 'string' ? normalise(address) : null;
+  if (!target) return 'Escribe la dirección que ve tu compañero en su pantalla, por ejemplo 192.168.1.20:3000.';
+  if (!(await answers(`http://${target}/`, 4000))) {
+    return `No responde nadie en ${target}. ¿Tiene abierta la partida (Ser anfitrión) y estáis en la misma red o en Tailscale?`;
+  }
+  writeSettings({ ...readSettings(), last: target });
+  await win.loadURL(`http://${target}/`);
+  return null;
+});
+
+// ------------------------------------------------------------------ menu
+
+function buildMenu(): void {
+  const mac = process.platform === 'darwin';
+  const game: MenuItemConstructorOptions = {
+    label: 'Partida',
+    submenu: [
+      { label: 'Volver al inicio', accelerator: 'CmdOrCtrl+Shift+H', click: () => void showLauncher() },
+      { label: 'Recargar', accelerator: 'CmdOrCtrl+R', click: () => win?.webContents.reload() },
+      { type: 'separator' },
+      { label: 'Pantalla completa', role: 'togglefullscreen' },
+      ...(!app.isPackaged || UNCAPPED ? [{ label: 'Herramientas de desarrollo', role: 'toggleDevTools' } as MenuItemConstructorOptions] : []),
+      ...(mac ? [] : [{ type: 'separator' } as MenuItemConstructorOptions, { label: 'Salir', role: 'quit' } as MenuItemConstructorOptions]),
+    ],
+  };
+  // Without an Edit menu, macOS gives text fields no copy and paste.
+  const edit: MenuItemConstructorOptions = {
+    label: 'Edición',
+    submenu: [
+      { label: 'Deshacer', role: 'undo' },
+      { label: 'Rehacer', role: 'redo' },
+      { type: 'separator' },
+      { label: 'Cortar', role: 'cut' },
+      { label: 'Copiar', role: 'copy' },
+      { label: 'Pegar', role: 'paste' },
+      { label: 'Seleccionar todo', role: 'selectAll' },
+    ],
+  };
+  const appMenu: MenuItemConstructorOptions = {
+    label: 'Bastión',
+    submenu: [
+      { label: 'Acerca de Bastión', role: 'about' },
+      { type: 'separator' },
+      { label: 'Ocultar Bastión', role: 'hide' },
+      { label: 'Ocultar los demás', role: 'hideOthers' },
+      { label: 'Mostrar todo', role: 'unhide' },
+      { type: 'separator' },
+      { label: 'Salir de Bastión', role: 'quit' },
+    ],
+  };
+  Menu.setApplicationMenu(Menu.buildFromTemplate(mac ? [appMenu, game, edit] : [game, edit]));
+}
+
+// ------------------------------------------------------------------ life
+
+// One Bastión at a time: a second launch brings the first one forward (and never starts a second server).
+if (!app.requestSingleInstanceLock()) app.quit();
+else {
+  app.on('second-instance', () => {
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  });
+  void app.whenReady().then(async () => {
+    app.setAboutPanelOptions({ applicationName: 'Bastión', applicationVersion: app.getVersion() });
+    buildMenu();
+    win = createWindow();
+    await showLauncher();
+  });
+  app.on('activate', () => {
+    if (win) return;
+    win = createWindow();
+    void showLauncher();
+  });
+  app.on('window-all-closed', () => app.quit());
+  app.on('before-quit', () => server?.kill());
+}

@@ -1,8 +1,16 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { fxTexture, loadModel } from './synty';
+import { FX_MODELS, type FxModelId, type FxTextureId } from './syntyManifest';
 import { tween, wait } from './tween';
 
-/** Soft radial glow used for flashes, sparks and smoke. */
+// Transient effects, in the look of Synty's Particle FX (syntyManifest.ts,
+// FX_MODELS and FX_TEXTURES): smoke, dust and gas are faceted puffs that
+// swell and shrink away, blood and gore are flat polygon drops and low-poly
+// chunks, flashes are sparkle stars, fire is a lick of flame shapes. Light
+// itself (flashes, tracers, sparks) stays as soft additive glows.
+
+/** Soft radial glow used for flashes, sparks and tracers. */
 function glowTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
@@ -18,12 +26,100 @@ function glowTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+// ------------------------------------------------------------------ shapes
+
+/**
+ * Particle FX's meshes, a unit across and centred, positions only (faceted
+ * materials shade each face flat). A low-poly stand-in serves until each
+ * loads; the shapes load with the first Fx.
+ */
+const SHAPES = new Map<FxModelId, THREE.BufferGeometry>();
+const STAND_IN = new THREE.IcosahedronGeometry(0.5, 0);
+let shapesLoading = false;
+
+/** A Particle FX shape (shared: don't dispose it). */
+export function fxShape(id: FxModelId): THREE.BufferGeometry {
+  loadShapes();
+  return SHAPES.get(id) ?? STAND_IN;
+}
+
+const shape = fxShape;
+
+/** The model's first mesh as plain float positions, centred and scaled to a unit across. */
+function unitShape(model: THREE.Object3D): THREE.BufferGeometry | null {
+  let mesh: THREE.Mesh | null = null;
+  model.traverse((o) => {
+    if (!mesh && o instanceof THREE.Mesh) mesh = o;
+  });
+  if (!mesh) return null;
+  const m = mesh as THREE.Mesh;
+  model.updateMatrixWorld(true);
+  const src = m.geometry.getAttribute('position');
+  const out = new Float32Array(src.count * 3);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < src.count; i++) v.fromBufferAttribute(src, i).applyMatrix4(m.matrixWorld).toArray(out, i * 3);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(out, 3));
+  if (m.geometry.index) g.setIndex(Array.from(m.geometry.index.array));
+  g.computeBoundingBox();
+  const box = g.boundingBox!;
+  const size = box.getSize(v);
+  const centre = box.getCenter(new THREE.Vector3());
+  g.translate(-centre.x, -centre.y, -centre.z);
+  g.scale(1 / Math.max(size.x, size.y, size.z), 1 / Math.max(size.x, size.y, size.z), 1 / Math.max(size.x, size.y, size.z));
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  return g;
+}
+
+function loadShapes(): void {
+  if (shapesLoading) return;
+  shapesLoading = true;
+  for (const [id, f] of Object.entries(FX_MODELS) as [FxModelId, (typeof FX_MODELS)[FxModelId]][]) {
+    void loadModel(f.pack, 'fx', id)
+      .then((model) => {
+        const g = unitShape(model);
+        if (g) SHAPES.set(id, g);
+      })
+      .catch(() => undefined);
+  }
+}
+
+// --------------------------------------------------------------- materials
+
+const solids = new Map<number, THREE.MeshStandardMaterial>();
+const hots = new Map<number, THREE.MeshBasicMaterial>();
+
+/** Faceted and lit (smoke, dust, gore, chips): one per colour, shared. */
+function solid(color: number): THREE.MeshStandardMaterial {
+  let m = solids.get(color);
+  if (!m) solids.set(color, (m = new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.95 })));
+  return m;
+}
+
+/** Unlit and bright enough to bloom (flames, embers): one per colour, shared. */
+function hot(color: number, k = 1.6): THREE.MeshBasicMaterial {
+  const key = color * 10 + Math.round(k * 4);
+  let m = hots.get(key);
+  if (!m) hots.set(key, (m = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(k) })));
+  return m;
+}
+
+const GORE: FxModelId[] = ['goreChunk1', 'goreChunk2', 'goreChunk3'];
+const GORE_COLORS = [0x5a1410, 0x7a1e14, 0x3e0c08];
+const BLOOD = [0x6a0c08, 0x8a120c, 0x4a0805];
+/** The Chillón's shriek: a pale, dusty white, not a colour of magic. */
+const SHRIEK = 0xf0e4d4;
+
 interface Particle {
   obj: THREE.Object3D;
-  material: THREE.Material & { opacity: number };
+  /** Its own material, faded and disposed with it; null: a shared one, and it shrinks away instead. */
+  material: (THREE.Material & { opacity: number }) | null;
   velocity: THREE.Vector3;
   spin: THREE.Vector3;
   gravity: number;
+  /** How fast it slows down (smoke, dust), per second. */
+  drag: number;
   age: number;
   life: number;
   grow: number;
@@ -40,10 +136,14 @@ const beamGeometry = new THREE.CylinderGeometry(0.5, 0.5, 14, 20, 1, true);
 const pingRingGeometry = new THREE.RingGeometry(0.42, 0.55, 32).rotateX(-Math.PI / 2);
 const droneBodyGeometry = new THREE.OctahedronGeometry(0.13, 0);
 const droneRingGeometry = new THREE.TorusGeometry(0.16, 0.02, 6, 20).rotateX(Math.PI / 2);
-const blastGeometry = new THREE.SphereGeometry(1, 24, 16);
+/** Faceted, like Synty's blasts. */
+const blastGeometry = new THREE.IcosahedronGeometry(1, 1);
 const shellGeometry = new THREE.SphereGeometry(0.09, 10, 8);
 const debrisGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.12);
-const shockGeometry = new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2);
+const groundGeometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+const screamRingGeometry = new THREE.TorusGeometry(1, 0.04, 4, 40);
+
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 /** Transient visual effects. Particles advance in `tick`, driven by the render loop. */
 export class Fx {
@@ -51,17 +151,27 @@ export class Fx {
   private readonly glow = glowTexture();
   private particles: Particle[] = [];
 
+  constructor() {
+    loadShapes();
+  }
+
   tick(dt: number): void {
-    if (!this.particles.length) return;
-    this.particles = this.particles.filter((p) => {
+    const list = this.particles;
+    if (!list.length) return;
+    // Compacted in place: no new array a frame.
+    let kept = 0;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i]!;
       p.age += dt;
       const t = p.age / p.life;
       if (t >= 1) {
         this.group.remove(p.obj);
-        p.material.dispose();
-        return false;
+        p.material?.dispose();
+        continue;
       }
+      list[kept++] = p;
       p.velocity.y -= p.gravity * dt;
+      if (p.drag) p.velocity.multiplyScalar(Math.exp(-p.drag * dt));
       p.obj.position.addScaledVector(p.velocity, dt);
       if (p.gravity && p.obj.position.y < 0.06) {
         p.obj.position.y = 0.06;
@@ -71,10 +181,24 @@ export class Fx {
       }
       p.obj.rotation.x += p.spin.x * dt;
       p.obj.rotation.y += p.spin.y * dt;
-      p.obj.scale.copy(p.base).multiplyScalar(1 + p.grow * t);
-      p.material.opacity = p.opacity * (1 - t * t);
-      return true;
-    });
+      p.obj.rotation.z += p.spin.z * dt;
+      const size = 1 + p.grow * t;
+      if (p.material) {
+        p.obj.scale.copy(p.base).multiplyScalar(size);
+        p.material.opacity = p.opacity * (1 - t * t);
+      } else {
+        // Pops in, then shrinks away (no fading: Synty's shapes are opaque).
+        p.obj.scale.copy(p.base).multiplyScalar(size * Math.min(1, 0.3 + t * 7) * (1 - t * t * t));
+      }
+    }
+    list.length = kept;
+  }
+
+  /** Takes every effect away at once, lights and things in flight included. */
+  clear(): void {
+    for (const p of this.particles) p.material?.dispose();
+    this.particles = [];
+    this.group.clear();
   }
 
   private spawn(
@@ -88,12 +212,15 @@ export class Fx {
       velocity: opts.velocity ?? new THREE.Vector3(),
       spin: opts.spin ?? new THREE.Vector3(),
       gravity: opts.gravity ?? 0,
+      drag: opts.drag ?? 0,
       age: 0,
       life: opts.life ?? 0.5,
       grow: opts.grow ?? 0,
       base: opts.baseScale !== undefined ? new THREE.Vector3().setScalar(opts.baseScale) : obj.scale.clone(),
       opacity: opts.opacity ?? 1,
     };
+    // Its size at birth (it would otherwise show at full size until the next tick).
+    obj.scale.copy(p.base).multiplyScalar(material ? 1 : 0.3);
     this.particles.push(p);
     this.group.add(obj);
   }
@@ -105,19 +232,200 @@ export class Fx {
     return sprite;
   }
 
+  /** One of Particle FX's sprites, tinted; `additive` for light. */
+  private sprite(tex: FxTextureId, color: number, scale: number, opacity = 1, additive = false): THREE.Sprite {
+    const material = new THREE.SpriteMaterial({
+      map: fxTexture(tex),
+      color,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      rotation: Math.random() * Math.PI * 2,
+      blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    });
+    const s = new THREE.Sprite(material);
+    s.scale.setScalar(scale);
+    return s;
+  }
+
+  // ---------------------------------------------------------- the toolkit
+
+  /**
+   * Faceted puffs (smoke, dust, gas, a bandage's lint): opaque and lit, they
+   * swell and shrink away. `spread` scatters them round `at`, `rise` lifts
+   * them, `out` pushes them away from the middle.
+   */
+  puffs(at: THREE.Vector3, color: number, count: number, o: { size?: number; spread?: number; rise?: number; out?: number; life?: number; grow?: number } = {}): void {
+    const size = o.size ?? 0.4;
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.random() * (o.spread ?? 0.3);
+      const puff = new THREE.Mesh(shape('smokePuff'), solid(color));
+      puff.position.copy(at).add(new THREE.Vector3(Math.cos(a) * d, rand(0, 0.15), Math.sin(a) * d));
+      puff.rotation.set(rand(0, 6), rand(0, 6), rand(0, 6));
+      const out = o.out ?? 0.3;
+      this.spawn(puff, null, {
+        velocity: new THREE.Vector3(Math.cos(a) * out * rand(0.5, 1), (o.rise ?? 0.5) * rand(0.6, 1.2), Math.sin(a) * out * rand(0.5, 1)),
+        spin: new THREE.Vector3(rand(-0.6, 0.6), rand(-0.6, 0.6), 0),
+        drag: 1.2,
+        life: (o.life ?? 1.2) * rand(0.75, 1.25),
+        grow: o.grow ?? 0.8,
+        baseScale: size * rand(0.7, 1.3),
+      });
+    }
+  }
+
+  /** Licks of flame rising from round `at` (within `radius`), with a few embers. */
+  flames(at: THREE.Vector3, count: number, radius = 0.3, o: { size?: number; life?: number } = {}): void {
+    // Yellower than fire looks: past white the tone mapping turns a saturated orange pink.
+    const colors = [0xffb030, 0xffd050, 0xff9a20, 0xffe080];
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random()) * radius;
+      const flame = new THREE.Mesh(shape('flame'), hot(colors[i % colors.length]!, 1.3));
+      const size = (o.size ?? 0.45) * rand(0.6, 1.2);
+      flame.position.copy(at).add(new THREE.Vector3(Math.cos(a) * d, size * 0.4, Math.sin(a) * d));
+      flame.rotation.y = rand(0, 6);
+      this.spawn(flame, null, {
+        velocity: new THREE.Vector3(0, rand(0.3, 0.8), 0),
+        spin: new THREE.Vector3(0, rand(-2, 2), 0),
+        life: (o.life ?? 0.7) * rand(0.6, 1.3),
+        grow: 0.3,
+        baseScale: size,
+      });
+    }
+    this.embers(at, Math.ceil(count / 2), radius);
+  }
+
+  /** Embers (or a flare's sparks, in its colour) drifting up off a fire. */
+  embers(at: THREE.Vector3, count: number, radius = 0.3, color?: number): void {
+    for (let i = 0; i < count; i++) {
+      const s = this.glowSprite(color ?? (i % 2 ? 0xffa040 : 0xff6a20), rand(0.06, 0.11));
+      s.position.copy(at).add(new THREE.Vector3(rand(-radius, radius), rand(0.1, 0.5), rand(-radius, radius)));
+      this.spawn(s, s.material, { velocity: new THREE.Vector3(rand(-0.3, 0.3), rand(0.8, 1.6), rand(-0.3, 0.3)), life: rand(0.6, 1.2) });
+    }
+  }
+
+  /** A sparkle star and its light: a gun's mouth, a bang, a flare catching. */
+  flash(at: THREE.Vector3, color: number, size = 0.8, light = 9, life = 0.09): void {
+    const star = this.sprite('sparkle', color, size, 1, true);
+    star.position.copy(at);
+    this.spawn(star, star.material, { life, grow: 0.5 });
+    const core = this.glowSprite(0xffffff, size * 0.45);
+    core.position.copy(at);
+    this.spawn(core, core.material, { life: life * 0.7 });
+    if (!light) return;
+    const lamp = new THREE.PointLight(color, light, 6, 2);
+    lamp.position.copy(at);
+    this.group.add(lamp);
+    void tween(Math.max(0.08, life), (t) => (lamp.intensity = light * (1 - t))).then(() => this.group.remove(lamp));
+  }
+
+  /** A burning flare lying at `at`: a flickering glow and its light, for `life` seconds. */
+  flare(at: THREE.Vector3, color: number, life = 2.5): void {
+    const glow = this.glowSprite(color, 0.7, 0.9);
+    glow.position.copy(at).setY(at.y + 0.12);
+    this.spawn(glow, glow.material, { life, opacity: 0.9 });
+    const lamp = new THREE.PointLight(color, 6, 5, 2);
+    lamp.position.copy(at).setY(at.y + 0.35);
+    this.group.add(lamp);
+    void tween(life, (t) => (lamp.intensity = 6 * (1 - t * t) * (0.8 + Math.random() * 0.4))).then(() => this.group.remove(lamp));
+  }
+
+  /** An electric jolt at `at`: two crossed bolts, a cold flash and sparks (the defibrillator). */
+  zap(at: THREE.Vector3, color = 0xbfe8ff): void {
+    for (const turn of [0.5, -0.4]) {
+      const bolt = this.sprite('lightning', color, 1, 1, true);
+      bolt.material.rotation = turn;
+      bolt.scale.set(0.22, 1.1, 1);
+      bolt.position.copy(at);
+      this.spawn(bolt, bolt.material, { life: 0.16 });
+    }
+    this.flash(at, color, 0.45, 4, 0.1);
+    this.sparks(at, color, 8);
+  }
+
+  /** A sight closing on a target (at its chest), and a ring tightening on the ground under it. */
+  reticle(at: THREE.Vector3, color: number): void {
+    const sight = this.sprite('shockRing', color, 1.4, 0.9, true);
+    sight.position.copy(at);
+    this.spawn(sight, sight.material, { life: 0.7, grow: -0.65, opacity: 0.9 });
+    this.decal(at.clone().setY(0), 'shockRing', color, 1.6, 1.2, 0.8, -0.55);
+  }
+
+  /** A faint light left hanging in the air (a bolt's or a flare's trail). */
+  trail(at: THREE.Vector3, color: number, size = 0.14, life = 0.3): void {
+    const s = this.glowSprite(color, size, 0.6);
+    s.position.copy(at);
+    this.spawn(s, s.material, { life, opacity: 0.6 });
+  }
+
+  /** A sprite lying on the ground (a crack, a ring, a splash), fading over `life`. */
+  decal(at: THREE.Vector3, tex: FxTextureId, color: number, size: number, life: number, opacity = 0.85, grow = 0): THREE.Mesh {
+    const material = new THREE.MeshBasicMaterial({ map: fxTexture(tex), color, transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    const mesh = new THREE.Mesh(groundGeometry, material);
+    mesh.position.copy(at).setY(0.02 + Math.random() * 0.01);
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+    mesh.scale.setScalar(size);
+    this.spawn(mesh, material, { life, opacity, grow });
+    return mesh;
+  }
+
+  /** Low-poly gore flying out and bouncing. */
+  gore(at: THREE.Vector3, count: number, speed = 4): void {
+    for (let i = 0; i < count; i++) {
+      const chunk = new THREE.Mesh(shape(GORE[i % GORE.length]!), solid(GORE_COLORS[i % GORE_COLORS.length]!));
+      chunk.position.copy(at);
+      const dir = new THREE.Vector3(rand(-1, 1), rand(0.5, 1.4), rand(-1, 1)).normalize();
+      this.spawn(chunk, null, {
+        velocity: dir.multiplyScalar(speed * rand(0.5, 1)),
+        spin: new THREE.Vector3(rand(-10, 10), rand(-10, 10), 0),
+        gravity: 12,
+        life: rand(1.6, 2.6),
+        baseScale: rand(0.07, 0.15),
+      });
+    }
+  }
+
+  /** Splinters (wood, glass, paper) flying out. */
+  chips(at: THREE.Vector3, color: number, count: number, speed = 3): void {
+    for (let i = 0; i < count; i++) {
+      const chip = new THREE.Mesh(shape('woodChip'), solid(color));
+      chip.position.copy(at);
+      const dir = new THREE.Vector3(rand(-1, 1), rand(0.4, 1.2), rand(-1, 1)).normalize();
+      this.spawn(chip, null, {
+        velocity: dir.multiplyScalar(speed * rand(0.5, 1)),
+        spin: new THREE.Vector3(rand(-14, 14), rand(-14, 14), rand(-14, 14)),
+        gravity: 11,
+        life: rand(0.9, 1.5),
+        baseScale: rand(0.09, 0.16),
+      });
+    }
+  }
+
+  /** Small lights rising round a body (an aura, a heal). */
+  motes(at: THREE.Vector3, color: number, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const s = this.glowSprite(color, rand(0.1, 0.16));
+      s.position.copy(at).add(new THREE.Vector3(rand(-0.35, 0.35), rand(-0.4, 0.5), rand(-0.35, 0.35)));
+      this.spawn(s, s.material, { velocity: new THREE.Vector3(0, rand(0.7, 1.4), 0), life: rand(0.8, 1.3) });
+    }
+  }
+
+  /** A first-aid cross rising over someone and fading. */
+  cross(at: THREE.Vector3, color = 0x6dff9a): void {
+    const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(1.4), transparent: true, opacity: 0.95, depthWrite: false });
+    const mesh = new THREE.Mesh(shape('medCross'), material);
+    mesh.position.copy(at).setY(at.y + 0.7);
+    this.spawn(mesh, material, { velocity: new THREE.Vector3(0, 0.55, 0), spin: new THREE.Vector3(0, 2.2, 0), life: 1.2, baseScale: 0.26, opacity: 0.95 });
+  }
+
   // -------------------------------------------------------------- weapons
 
+  /** A star at the muzzle, its light, and a wisp of smoke off the barrel. */
   muzzleFlash(at: THREE.Vector3, color: number): void {
-    const sprite = this.glowSprite(color, 0.7);
-    sprite.position.copy(at);
-    this.spawn(sprite, sprite.material, { life: 0.09, grow: 0.6 });
-    const core = this.glowSprite(0xffffff, 0.35);
-    core.position.copy(at);
-    this.spawn(core, core.material, { life: 0.06 });
-    const light = new THREE.PointLight(color, 9, 6, 2);
-    light.position.copy(at);
-    this.group.add(light);
-    void tween(0.08, (t) => (light.intensity = 9 * (1 - t))).then(() => this.group.remove(light));
+    this.flash(at, color, 0.75);
+    this.puffs(at, 0x8a8a86, 1, { size: 0.12, spread: 0.02, rise: 0.4, out: 0.1, life: 0.6, grow: 1.2 });
   }
 
   /** A bright streak travelling from `from` to `to`; `heavy` for sniper rounds. */
@@ -155,13 +463,10 @@ export class Fx {
     this.sparks(at, color, 10);
   }
 
-  /** Green motes rising from a healed unit. */
+  /** A medkit: green motes rising and a first-aid cross. */
   heal(at: THREE.Vector3): void {
-    for (let i = 0; i < 14; i++) {
-      const s = this.glowSprite(0x6dff9a, 0.16);
-      s.position.copy(at).add(new THREE.Vector3((Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 0.7));
-      this.spawn(s, s.material, { velocity: new THREE.Vector3(0, 0.8 + Math.random() * 0.8, 0), life: 0.9 + Math.random() * 0.5 });
-    }
+    this.motes(at, 0x6dff9a, 12);
+    this.cross(at);
   }
 
   /** Brief protective bubble (Aid Protocol). */
@@ -204,11 +509,7 @@ export class Fx {
         missile.position.lerpVectors(from, to, t);
         missile.position.y += Math.sin(t * Math.PI) * height;
         missile.lookAt(missile.position.clone().add(missile.position.clone().sub(last)));
-        if (missile.position.distanceTo(last) > 0.4) {
-          const puff = this.glowSprite(0x777777, 0.3, 0.5);
-          puff.position.copy(missile.position);
-          this.spawn(puff, puff.material, { life: 0.6, grow: 1.5, opacity: 0.5 });
-        }
+        if (missile.position.distanceTo(last) > 0.4) this.puffs(missile.position, 0x8a8a86, 1, { size: 0.22, spread: 0, rise: 0.2, out: 0.05, life: 0.8, grow: 1.4 });
         last = missile.position.clone();
       });
       this.group.remove(missile);
@@ -217,12 +518,16 @@ export class Fx {
     await Promise.all(flights);
   }
 
-  /** Column of light where a soldier is picked up. */
+  /**
+   * Someone leaving the map, or a body getting up off the ground: dust
+   * kicked up round the spot and a little grit (the name is the old
+   * evacuation beam's; game.ts calls it for both).
+   */
   evacBeam(at: THREE.Vector3): void {
-    const material = new THREE.MeshBasicMaterial({ color: 0x8fffc0, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-    const beam = new THREE.Mesh(beamGeometry, material);
-    beam.position.copy(at).setY(at.y + 7);
-    this.spawn(beam, material, { life: 1.6, opacity: 0.45 });
+    const ground = at.clone().setY(0);
+    this.dust(ground, 8);
+    this.chips(ground.clone().setY(0.2), 0x6e6152, 5, 2);
+    this.decal(ground, 'shockRing', 0xb8a88e, 0.5, 0.6, 0.45, 2.2);
   }
 
   /** Player marker: a coloured beam and pulsing rings for a few seconds. */
@@ -263,23 +568,22 @@ export class Fx {
     const fireMat = new THREE.MeshBasicMaterial({ color: electric ? 0x8ad8ff : 0xffb050, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
     const fire = new THREE.Mesh(blastGeometry, fireMat);
     fire.position.copy(at).setY(at.y + 0.45);
+    fire.rotation.set(rand(0, 6), rand(0, 6), 0);
     const light = new THREE.PointLight(electric ? 0x5ac8ff : 0xff8a30, 45, radius * 6, 2);
     light.position.copy(at).setY(at.y + 1.35);
-    const shockMat = new THREE.MeshBasicMaterial({ color: electric ? 0xbfefff : 0xffd9a0, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-    const shock = new THREE.Mesh(shockGeometry, shockMat);
-    shock.position.copy(at).setY(at.y - 0.1);
-    this.group.add(fire, light, shock);
+    this.group.add(fire, light);
+    const shock = this.decal(at, 'shockRing', electric ? 0xbfefff : 0xffd9a0, radius * 0.6, 0.6, 0.8, 4.5);
+    (shock.material as THREE.MeshBasicMaterial).blending = THREE.AdditiveBlending;
+    this.flash(at.clone().setY(at.y + 0.6), electric ? 0xbfefff : 0xffe0a0, radius * 1.2, 0, 0.18);
 
     if (electric) {
       for (let i = 0; i < 3; i++) this.sparks(at.clone().add(new THREE.Vector3((Math.random() - 0.5) * radius, 0.6, (Math.random() - 0.5) * radius)), 0x8ad8ff, 10);
     } else {
       for (let i = 0; i < 14; i++) this.debrisPiece(at, i % 3 === 0 ? 0x5a4a3a : 0x2c2f33, 5 + Math.random() * 4);
-    }
-    for (let i = 0; i < (electric ? 0 : 7); i++) {
-      const smoke = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glow, color: 0x3a3a3a, transparent: true, opacity: 0.55, depthWrite: false }));
-      smoke.position.copy(at).add(new THREE.Vector3((Math.random() - 0.5) * radius, 0.4 + Math.random(), (Math.random() - 0.5) * radius));
-      smoke.scale.setScalar(1.2);
-      this.spawn(smoke, smoke.material, { velocity: new THREE.Vector3(0, 0.6 + Math.random() * 0.5, 0), life: 1.8 + Math.random(), grow: 2, opacity: 0.55 });
+      // The scorch left behind, and smoke rolling up out of the fire.
+      this.decal(at, 'groundCrack', 0x1a1714, radius * 1.3, 7, 0.9);
+      this.flames(at, 8, radius * 0.4, { size: 0.6, life: 0.6 });
+      void wait(0.15).then(() => this.puffs(at, 0x3b3936, 8, { size: 0.55, spread: radius * 0.5, rise: 1, out: 0.6, life: 2.2, grow: 1.4 }));
     }
 
     return tween(0.6, (t) => {
@@ -287,18 +591,16 @@ export class Fx {
       fireMat.opacity = 0.95 * (1 - t);
       if (!electric) fireMat.color.setHSL(0.08 - t * 0.06, 1, 0.6 - t * 0.3);
       light.intensity = 45 * (1 - t);
-      shock.scale.setScalar(0.5 + radius * 1.4 * t);
-      shockMat.opacity = 0.8 * (1 - t);
     }).then(() => {
-      this.group.remove(fire, light, shock);
+      this.group.remove(fire, light);
       fireMat.dispose();
-      shockMat.dispose();
     });
   }
 
   /** Chunks flying out of a destroyed cover block. */
   debris(at: THREE.Vector3, color: number, count = 8): void {
     for (let i = 0; i < count; i++) this.debrisPiece(at, color, 3 + Math.random() * 2);
+    this.puffs(at, 0x8f8676, 3, { size: 0.35, spread: 0.3, rise: 0.4, out: 0.5, life: 1.2 });
   }
 
   private debrisPiece(at: THREE.Vector3, color: number, speed: number): void {
@@ -316,25 +618,107 @@ export class Fx {
     });
   }
 
-  /** Psionic link: a flickering violet beam from the caster to its victim. */
-  async psiBeam(from: THREE.Vector3, to: THREE.Vector3, color = 0xb05aff): Promise<void> {
-    const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
-    const length = from.distanceTo(to);
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, length, 6, 1, true).rotateX(Math.PI / 2), material);
-    beam.position.copy(from).lerp(to, 0.5);
-    beam.lookAt(to);
-    this.group.add(beam);
-    const glow = this.glowSprite(color, 1.2);
-    glow.position.copy(to);
-    this.spawn(glow, glow.material, { life: 0.9, grow: 1.2 });
-    await tween(0.9, (t) => {
-      material.opacity = (0.5 + Math.random() * 0.5) * (1 - t * 0.6);
-      beam.scale.set(1 + Math.sin(t * 40) * 0.5, 1 + Math.sin(t * 40) * 0.5, 1);
-    });
-    this.group.remove(beam);
-    beam.geometry.dispose();
-    material.dispose();
-    this.sparks(to, color, 12);
+  // ------------------------------------------------------------- the dead
+
+  /**
+   * The Hinchado bursting (on top of the blast): a sickly green cloud that
+   * rolls out and hangs a while, gore flying and dark splashes left round
+   * where it stood.
+   */
+  burst(at: THREE.Vector3, radius: number): void {
+    const cloud = at.clone().setY(at.y + 0.3);
+    this.puffs(cloud, 0x7f9a3c, 9, { size: 0.7, spread: radius * 0.35, rise: 0.25, out: radius * 0.7, life: 3.2, grow: 1.6 });
+    this.puffs(cloud, 0xa3b452, 5, { size: 0.5, spread: radius * 0.25, rise: 0.35, out: radius * 0.5, life: 2.6, grow: 1.4 });
+    this.gore(at.clone().setY(at.y + 0.8), 14, 5);
+    for (let i = 0; i < 7; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = 0.2 + Math.random() * radius * 0.9;
+      this.decal(at.clone().add(new THREE.Vector3(Math.cos(a) * d, 0, Math.sin(a) * d)), 'polyDisc', BLOOD[i % BLOOD.length]!, rand(0.4, 0.9), 6 + Math.random() * 3, 0.9);
+    }
+  }
+
+  /** The Chillón's scream: rings of pressure rolling out from its head. */
+  scream(head: THREE.Vector3): void {
+    for (let i = 0; i < 3; i++) {
+      void wait(i * 0.13).then(() => {
+        const material = new THREE.MeshBasicMaterial({ color: SHRIEK, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+        const ring = new THREE.Mesh(screamRingGeometry, material);
+        ring.position.copy(head);
+        ring.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+        this.spawn(ring, material, { life: 0.75, grow: 7, opacity: 0.6, baseScale: 0.25 });
+      });
+    }
+  }
+
+  /** A bite or a claw that gets in: blood spurting away from the attacker (`from`), a drop or two on the ground. */
+  bite(at: THREE.Vector3, from: THREE.Vector3): void {
+    const away = at.clone().sub(from).setY(0).normalize();
+    for (let i = 0; i < 12; i++) {
+      const drop = this.sprite('polyDisc', BLOOD[i % BLOOD.length]!, rand(0.07, 0.14), 0.95);
+      drop.position.copy(at);
+      const dir = away.clone().multiplyScalar(0.8 + Math.random()).add(new THREE.Vector3((Math.random() - 0.5) * 0.9, 0.5 + Math.random() * 0.9, (Math.random() - 0.5) * 0.9));
+      this.spawn(drop, drop.material, { velocity: dir.multiplyScalar(1.8 + Math.random() * 1.6), gravity: 9, life: 0.45 + Math.random() * 0.3, opacity: 0.95 });
+    }
+    this.gore(at, 2, 2.5);
+    const ground = at.clone().addScaledVector(away, 0.5).setY(0);
+    this.decal(ground, 'polyDisc', BLOOD[1]!, rand(0.25, 0.4), 5, 0.85);
+  }
+
+  // ------------------------------------------------------------- arrivals
+
+  /** Dust kicked up by feet or wheels at the ground point `at`. */
+  dust(at: THREE.Vector3, amount = 6): void {
+    this.puffs(at.clone().setY(at.y + 0.1), 0x9a8a72, amount, { size: 0.32, spread: 0.45, rise: 0.35, out: 0.4, life: 1.3, grow: 1.4 });
+  }
+
+  /** A vehicle's headlights at the map's edge (`at`, looking along `dir`), coming on, holding, then gone. */
+  headlights(at: THREE.Vector3, dir: THREE.Vector3): void {
+    const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(0.45);
+    for (const s of [1, -1]) {
+      const lamp = this.glowSprite(0xfff2c8, 0.9, 0.95);
+      lamp.position.copy(at).addScaledVector(side, s).setY(at.y + 0.55);
+      this.spawn(lamp, lamp.material, { life: 1.8, opacity: 0.95 });
+    }
+    const light = new THREE.SpotLight(0xfff0c0, 0, 14, 0.45, 0.6, 1.5);
+    light.position.copy(at).setY(at.y + 0.6);
+    light.target.position.copy(at).addScaledVector(dir, 6);
+    this.group.add(light, light.target);
+    void tween(1.8, (t) => (light.intensity = 30 * Math.sin(Math.min(1, t * 1.4) * Math.PI))).then(() => this.group.remove(light, light.target));
+    this.dust(at, 8);
+  }
+
+  /**
+   * The Chillón's shriek reaching someone (a soldier it rattles, a corpse it
+   * raises): ripples of sound rolling from its mouth to them, and a jolt of
+   * pressure where they land. Resolves when the wave arrives. (The name is
+   * the old psionic beam's; game.ts still calls it that.)
+   */
+  async psiBeam(from: THREE.Vector3, to: THREE.Vector3, color = SHRIEK): Promise<void> {
+    const travel = 0.45;
+    const waves = Array.from({ length: 5 }, (_, i) =>
+      wait(i * 0.07).then(() => {
+        const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
+        const ring = new THREE.Mesh(screamRingGeometry, material);
+        ring.position.copy(from);
+        ring.lookAt(to);
+        ring.scale.setScalar(0.12);
+        this.group.add(ring);
+        return tween(travel, (t) => {
+          ring.position.lerpVectors(from, to, t);
+          ring.scale.setScalar(0.12 + t * 0.45);
+          material.opacity = 0.4 * (1 - t * 0.7);
+        }).then(() => {
+          this.group.remove(ring);
+          material.dispose();
+        });
+      }),
+    );
+    await wait(travel);
+    const jolt = this.sprite('shockRing', color, 0.4, 0.8, true);
+    jolt.position.copy(to);
+    this.spawn(jolt, jolt.material, { life: 0.35, grow: 3, opacity: 0.8 });
+    this.dust(to.clone().setY(0), 3);
+    await Promise.all(waves);
   }
 
   // ----------------------------------------------------------------- text

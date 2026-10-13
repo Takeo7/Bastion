@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { PLAYER_COLORS, TEMPLATES, type GameState, type Unit, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
-import { buildUnit, gearOf, isFigure, type UnitRig } from './models';
-import { singerMark } from './songFx';
-import { easeInOut, tween } from './tween';
+import type { FigurePose } from './figures';
+import { buildUnit, gearOf, IDLE_POSE, isFigure, type UnitRig } from './models';
+import { easeInOut, tween, wait } from './tween';
 
 const ALIEN_COLOR = '#ff4d4d';
 const POOL_COLOR = '#e8edf2';
+/** Enemies that cast shadows at most (the nearest to the squad). */
+const CROWD_SHADOWS = 24;
 /** Seconds per orthogonal tile while moving. */
 const STEP_SECONDS = 0.16;
 
@@ -30,6 +32,8 @@ interface Pose {
   lean: number;
   hop: number;
   spin: number;
+  /** Rummaging through furniture (rummage()). */
+  search: number;
   yaw: number;
   yawTarget: number;
   phase: number;
@@ -47,6 +51,8 @@ interface UnitView {
   dead: boolean;
   /** The support drone is away on a mission. */
   droneAway: boolean;
+  /** Casts a shadow (off for the dead, and for the far end of a big crowd). */
+  shadow: boolean;
   /** Flag contents from the unit's state, and the hover line above them. */
   body: string;
   tag: string;
@@ -61,6 +67,9 @@ export interface EnemyTag {
   kind: 'aim' | 'sight' | 'flank' | 'none';
   text: string;
 }
+
+/** The pose handed to a figure each frame (one object for all, filled in place). */
+const posed: FigurePose = { ...IDLE_POSE, spin: 0 };
 
 /** The owner's ring: wide enough to tell whose soldier it is at a glance, whatever its armour. */
 const ringGeometry = new THREE.RingGeometry(0.33, 0.46, 32).rotateX(-Math.PI / 2);
@@ -78,6 +87,18 @@ function angleTo(from: THREE.Vector3, to: THREE.Vector3): number | null {
 
 function wrapAngle(a: number): number {
   return Math.atan2(Math.sin(a), Math.cos(a));
+}
+
+/** The battle's unit views on screen (one battle at a time): see unitPosNow. */
+let onScreen: UnitViews | null = null;
+
+/**
+ * Where unit `id` stands on screen right now, mid-walk included, written into
+ * `out` (nothing allocated); false if it has no view. Read-only, for other
+ * views that follow the units (the buildings' cutaway, buildings.ts).
+ */
+export function unitPosNow(id: string, out: THREE.Vector3): boolean {
+  return onScreen?.livePos(id, out) ?? false;
 }
 
 /** 3D bodies, base rings, floating flags and procedural animation for every unit. */
@@ -112,6 +133,15 @@ export class UnitViews {
     this.selection.visible = false;
     this.partnerSelection.visible = false;
     this.group.add(this.selection, this.partnerSelection);
+    onScreen = this;
+  }
+
+  /** Where unit `id` stands now (mid-walk included), into `out`; false if it has no view. */
+  livePos(id: string, out: THREE.Vector3): boolean {
+    const v = this.views.get(id);
+    if (!v) return false;
+    out.copy(v.rig.root.position);
+    return true;
   }
 
   build(s: GameState): void {
@@ -125,7 +155,8 @@ export class UnitViews {
 
   private create(u: Unit): UnitView {
     const color = unitColor(u);
-    const rig = buildUnit(u.template, color, u.appearance, gearOf(u.weaponTier, u.armorTier), u.name);
+    // The soldier's campaign id picks the same survivor as in the base; skirmish units go by name.
+    const rig = buildUnit(u.template, color, u.appearance, gearOf(u.weaponTier, u.armorTier), u.campaignId ?? u.name);
     const ring = new THREE.Mesh(
       ringGeometry,
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -141,22 +172,16 @@ export class UnitViews {
     flag.center.set(0.5, 1);
 
     rig.root.add(ring, flag);
-    // Who knows Velmar's Canto carries a few light tiles orbiting the head.
-    if ((u.mods?.singer ?? 0) > 0) {
-      const mark = singerMark();
-      mark.position.y = rig.chest + 0.62;
-      rig.yaw.add(mark);
-    }
     rig.root.position.copy(tileToWorld(u.pos));
     const facing = u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
       crouch: 0, crouchTarget: 0, aim: 0, aimTarget: 0, aimFx: 0, run: 0, recoil: 0, hit: 0, flash: 0,
-      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, yaw: facing, yawTarget: facing,
+      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, yaw: facing, yawTarget: facing,
       phase: Math.random() * Math.PI * 2,
     };
     this.group.add(rig.root);
 
-    const view: UnitView = { id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, body: '', tag: '' };
+    const view: UnitView = { id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, shadow: true, body: '', tag: '' };
     this.views.set(u.id, view);
     flagEl.classList.toggle('named', u.id === this.selectedId);
     flagEl.classList.toggle('selected', u.id === this.selectedId);
@@ -204,7 +229,39 @@ export class UnitViews {
       // Último verso brought it back (when the rise wasn't played, e.g. on a reload).
       if (u.alive && v.dead && !v.animating) this.standUp(v);
     }
+    this.crowdShadows(s);
     this.placeRings();
+  }
+
+  /**
+   * In a big crowd only the enemies nearest the squad cast shadows: the far
+   * ones' are lost in the haze, and every shadow costs a draw call per frame.
+   */
+  private crowdShadows(s: GameState): void {
+    const squad = new THREE.Vector3();
+    let soldiers = 0;
+    const enemies: { v: UnitView; d: number }[] = [];
+    for (const u of s.units) {
+      if (!u.alive) continue;
+      const v = this.views.get(u.id);
+      if (!v || v.dead) continue;
+      if (u.team === 'xcom') {
+        squad.add(v.rig.root.position);
+        soldiers++;
+      } else enemies.push({ v, d: 0 });
+    }
+    if (soldiers) squad.divideScalar(soldiers);
+    for (const e of enemies) e.d = e.v.rig.root.position.distanceToSquared(squad);
+    enemies.sort((a, b) => a.d - b.d);
+    enemies.forEach((e, i) => this.castShadow(e.v, i < CROWD_SHADOWS));
+  }
+
+  private castShadow(v: UnitView, on: boolean): void {
+    if (v.shadow === on) return;
+    v.shadow = on;
+    v.rig.root.traverse((o) => {
+      if (o instanceof THREE.Mesh && o !== v.ring) o.castShadow = on;
+    });
   }
 
   private renderFlag(v: UnitView, u: Unit, cover: 0 | 1 | 2 | null, carrier: boolean): void {
@@ -366,8 +423,22 @@ export class UnitViews {
     const { rig, pose: p } = v;
     if (isFigure(rig)) {
       // Articulated figures pose their own skeleton; the reload twirl is layered on top.
-      rig.applyPose({ ...p, aim: Math.max(p.aim, p.aimFx) }, time);
-      rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
+      // Rummaging crouches every figure; the ones that can also lean in and reach (Synty) do.
+      posed.crouch = Math.max(p.crouch, p.search * 0.6);
+      posed.aim = Math.max(p.aim, p.aimFx);
+      posed.run = p.run;
+      posed.recoil = p.recoil;
+      posed.hit = p.hit;
+      posed.flash = p.flash;
+      posed.fall = p.fall;
+      posed.lean = p.lean;
+      posed.hop = p.hop;
+      posed.yaw = p.yaw;
+      posed.phase = p.phase;
+      posed.spin = p.spin;
+      posed.search = p.search;
+      rig.applyPose(posed, time);
+      if (!rig.ownsReload) rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
       return;
     }
     const alive = !v.dead;
@@ -490,6 +561,8 @@ export class UnitViews {
       v.pose.fall = t * t;
       v.pose.flash = Math.max(0, 0.6 - t);
     });
+    // The body hits the ground, bounces a little and settles.
+    await tween(0.3, (t) => (v.pose.fall = 1 - Math.sin(t * Math.PI) * 0.07 * (1 - t * 0.5)));
     v.pose.fall = 1;
     v.pose.flash = 0;
     v.dead = true;
@@ -497,6 +570,7 @@ export class UnitViews {
     v.rig.root.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = false;
     });
+    v.shadow = false;
     v.animating = false;
   }
 
@@ -522,6 +596,7 @@ export class UnitViews {
     v.rig.root.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = true;
     });
+    v.shadow = true;
   }
 
   async reload(id: string): Promise<void> {
@@ -580,6 +655,91 @@ export class UnitViews {
       v.rig.yaw.rotation.z = Math.sin(t * 6) * 0.05;
     });
     v.rig.root.visible = false;
+    v.animating = false;
+  }
+
+  /**
+   * Searching a piece of furniture at `at`: the unit turns to it, crouches,
+   * leans in and rummages, and straightens up (0.85 s in all).
+   */
+  async rummage(id: string, at: THREE.Vector3): Promise<void> {
+    const v = this.views.get(id);
+    if (!v) return;
+    this.face(id, at);
+    await tween(0.22, (t) => (v.pose.search = easeInOut(t)));
+    await wait(0.45);
+    await tween(0.18, (t) => (v.pose.search = 1 - easeInOut(t)));
+    v.pose.search = 0;
+  }
+
+  /** The Chillón's scream: head back and arms flung out (its aim pose), held, then let go. */
+  async scream(id: string): Promise<void> {
+    const v = this.views.get(id);
+    if (!v) return;
+    await tween(0.18, (t) => (v.pose.aimFx = easeInOut(t)));
+    await wait(0.55);
+    void tween(0.3, (t) => (v.pose.aimFx = 1 - easeInOut(t)));
+  }
+
+  /** The top of a unit's head, where a scream starts. */
+  headPos(id: string): THREE.Vector3 {
+    const v = this.views.get(id);
+    return this.worldPos(id).add(new THREE.Vector3(0, (v?.rig.top ?? 1.8) - 0.15, 0));
+  }
+
+  /**
+   * A unit that arrives (reinforcements, the horde): its view is made now, if
+   * the state has not got it yet, and it comes on foot from `from` to its
+   * tile, the dead staggering and the living running; the event that follows
+   * puts it in the state where it already stands.
+   */
+  async arrive(u: Unit, from: THREE.Vector3, seconds: number): Promise<void> {
+    const v = this.views.get(u.id) ?? this.create(u);
+    const to = tileToWorld(u.pos);
+    v.animating = true;
+    v.flag.visible = false;
+    v.rig.root.visible = true;
+    v.rig.root.position.copy(from);
+    this.face(u.id, to);
+    v.pose.yaw = v.pose.yawTarget;
+    v.pose.run = 1;
+    await tween(seconds, (t) => v.rig.root.position.lerpVectors(from, to, t));
+    void tween(0.2, (t) => (v.pose.run = 1 - t));
+    v.animating = false;
+  }
+
+  /** A unit that gets up where it stands (arrivals far from any edge): from a crouch, out of the dust. */
+  async getUp(u: Unit): Promise<void> {
+    const v = this.views.get(u.id) ?? this.create(u);
+    v.rig.root.position.copy(tileToWorld(u.pos));
+    v.rig.root.visible = true;
+    v.flag.visible = false;
+    v.pose.crouch = 1;
+    v.pose.crouchTarget = 0;
+    await tween(0.5, (t) => (v.pose.crouch = 1 - easeInOut(t)));
+  }
+
+  /**
+   * A corpse the Chillón's shriek raises: it twitches where it lies, then the
+   * dead it has become (the event's new unit) gets up stiffly in its place.
+   */
+  async reanimate(corpseId: string, zombie: Unit): Promise<void> {
+    const body = this.views.get(corpseId);
+    if (body) {
+      body.animating = true;
+      for (let i = 0; i < 3; i++) await tween(0.13 + i * 0.03, (t) => (body.pose.hit = Math.sin(t * Math.PI) * 0.6));
+      body.rig.root.visible = false;
+      body.animating = false;
+    }
+    const v = this.views.get(zombie.id) ?? this.create(zombie);
+    v.animating = true;
+    v.rig.root.position.copy(tileToWorld(zombie.pos));
+    v.rig.root.visible = true;
+    v.flag.visible = false;
+    if (body) v.pose.yaw = v.pose.yawTarget = body.pose.yaw;
+    v.pose.fall = 1;
+    await tween(0.9, (t) => (v.pose.fall = 1 - easeInOut(t)));
+    v.pose.fall = 0;
     v.animating = false;
   }
 

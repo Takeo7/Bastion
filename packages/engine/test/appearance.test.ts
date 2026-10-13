@@ -81,3 +81,13 @@ describe('armour pieces', () => {
     expect(m.soldiers[1]!.appearance).toEqual({ ...old, arms: '#ffffff' });
   });
 });
+
+describe('the survivor model', () => {
+  it('is an optional id the client resolves; the engine only checks its shape and keeps it', () => {
+    const look: Appearance = { ...defaultAppearance(null, 0), character: 'hunter' };
+    expect(isAppearance(look)).toBe(true);
+    expect(isAppearance({ ...look, character: 'No vale!' })).toBe(false);
+    expect(normalizeAppearance(look).character).toBe('hunter');
+    expect(normalizeAppearance(defaultAppearance(null, 0))).not.toHaveProperty('character');
+  });
+});

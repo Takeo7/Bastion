@@ -272,9 +272,15 @@ export class FrameLimiter {
 
   ready(now = performance.now()): boolean {
     const cap = current.fps;
-    // A small tolerance, so a 60 cap on a 60 Hz screen never drops frames.
-    if (cap && now - this.last < 1000 / cap - 2) return false;
-    this.last = now;
+    if (cap) {
+      const step = 1000 / cap;
+      // A small tolerance, so a 60 cap on a 60 Hz screen never drops frames.
+      if (now - this.last < step - 2) return false;
+      // Keep to the cap's own beat, not the tick's: a 60 cap on a 144 Hz screen
+      // then draws every 2nd or 3rd tick and averages 60, not 48. After a pause
+      // it starts afresh instead of catching up.
+      this.last = Math.max(this.last + step, now - step);
+    } else this.last = now;
     countFrame(now);
     return true;
   }

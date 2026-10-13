@@ -11,8 +11,6 @@ import type { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { BastionSet, type LineupEntry } from '../../strategy/bastion';
 import { GeoscapeSet } from '../../strategy/geoscape';
 import { Stage, type Shot, type StageSet } from '../../strategy/stage';
-import { STYLES } from '../catalog';
-import { CAMERA_PRESETS, LabView, preloadFonts } from '../view';
 import { ICONS } from './icons';
 import { CHROME, SCREEN_HTML, SCREENS, type ScreenId } from './screens';
 
@@ -191,16 +189,13 @@ const hudEl = root.querySelector<HTMLElement>('.hud')!;
 const flagSharp = root.querySelector<HTMLElement>('.f-sharp')!;
 const flagAlien = root.querySelector<HTMLElement>('.f-alien')!;
 const floatEl = root.querySelector<HTMLElement>('.h-float')!;
-void preloadFonts();
-
-const view = new LabView(sceneEl, { maxPixelRatio: 1.5 });
-const eye = new THREE.Vector3(...CAMERA_PRESETS.tactica.pos);
-const target = new THREE.Vector3(...CAMERA_PRESETS.tactica.target);
+// Combat backdrop: a stub. The old voxel style-lab scene it drew is gone; the
+// new lab will draw a real Synty map (game/renderer.ts, mapView.ts) instead.
+sceneEl.classList.add('uil-stub');
+sceneEl.textContent = 'Fondo de combate pendiente: mapa Synty real';
 
 function setArt(id: (typeof ARTS)[number]): void {
   art = id;
-  view.setPose(eye, target);
-  view.build(STYLES.find((s) => s.id === id)!);
   render();
 }
 
@@ -401,26 +396,20 @@ root.querySelector<HTMLButtonElement>('#uil-banner')!.onclick = () => {
 };
 root.querySelectorAll<HTMLButtonElement>('[data-art]').forEach((b) => (b.onclick = () => setArt(b.dataset.art as (typeof ARTS)[number])));
 
-/** Unit flags and the damage number follow the units on screen. */
-function anchor(el: HTMLElement, p: [number, number, number]): void {
-  const s = view.project(p);
-  el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+/** Unit flags and the damage number sit at fixed points of the stub backdrop (fractions of the stage). */
+function anchor(el: HTMLElement, p: [number, number]): void {
+  el.style.transform = `translate(${Math.round(p[0] * stage.clientWidth)}px, ${Math.round(p[1] * stage.clientHeight)}px)`;
 }
 
-let last = performance.now();
-function frame(now: number): void {
-  const dt = Math.min(0.1, (now - last) / 1000);
-  last = now;
-  if (screen === 'combate') {
-    view.setPose(eye, target);
-    view.advance(dt);
-    view.draw();
-    anchor(flagSharp, [4.5, 2.05, 6.5]);
-    anchor(flagAlien, [13.5, 2.1, 5.5]);
-    anchor(floatEl, [13.3, 2.6, 6.4]);
-  } else {
-    anchorCards();
-  }
+function anchorCombat(): void {
+  anchor(flagSharp, [0.3, 0.45]);
+  anchor(flagAlien, [0.62, 0.38]);
+  anchor(floatEl, [0.62, 0.32]);
+}
+
+function frame(): void {
+  if (screen === 'combate') anchorCombat();
+  else anchorCards();
   requestAnimationFrame(frame);
 }
 
@@ -449,16 +438,9 @@ Object.assign(window, {
     still(ticks = 60) {
       drawBaseNow(ticks);
     },
-    view,
-    async freeze(at = 1.5) {
-      view.restart();
-      view.paused = false;
-      for (let t = 0; t < at; t += 1 / 30) await view.step(1, 1 / 30);
-      view.paused = true;
-      view.draw();
-      anchor(flagSharp, [4.5, 2.05, 6.5]);
-      anchor(flagAlien, [13.5, 2.1, 5.5]);
-      anchor(floatEl, [13.3, 2.6, 6.4]);
+    /** Combat: places the flags over the stub backdrop now (for captures). */
+    freeze() {
+      anchorCombat();
     },
   },
 });

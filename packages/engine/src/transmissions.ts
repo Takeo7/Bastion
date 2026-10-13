@@ -409,7 +409,22 @@ export function recapLines(c: CampaignState, slot: Slot): SceneLine[] {
 // ------------------------------------------------------------------ tips
 
 /** Morse's first-time warnings in combat: each plays once per browser, the first time it matters. */
-export type TipId = 'concealed' | 'redTile' | 'contact' | 'shot' | 'flanked' | 'wounded' | 'command' | 'flare' | 'psionic' | 'song';
+export type TipId =
+  | 'concealed'
+  | 'redTile'
+  | 'contact'
+  | 'shot'
+  | 'flanked'
+  | 'wounded'
+  | 'command'
+  | 'flare'
+  | 'psionic'
+  | 'song'
+  // Phase 2 (docs/FASE2.md): noise, searching and the Hinchado.
+  | 'heard'
+  | 'search'
+  | 'horde'
+  | 'bloater';
 
 export interface RadioTip {
   who: SpeakerId;
@@ -422,8 +437,8 @@ export interface RadioTip {
 export const RADIO_TIPS: Record<TipId, RadioTip> = {
   concealed: {
     who: 'morse',
-    line: 'Aún no os han oído. Que siga así.',
-    rule: 'Ocultos: los zombis no os han visto ni oído. Las casillas con borde rojo os delatan, y un disparo también.',
+    line: 'Aún no os han visto. Que siga así.',
+    rule: 'Ocultos: el ruido no os delata, pero hace que vengan a mirar. Os delata que os vean: cuidado con las casillas de borde rojo.',
   },
   redTile: {
     who: 'morse',
@@ -438,7 +453,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   shot: {
     who: 'morse',
     line: 'Mirad el número antes de apretar. Y pensad en quién más lo oye.',
-    rule: 'El porcentaje ya cuenta cobertura, distancia y altura; por el flanco, más acierto y más crítico. Un disparo se oye lejos: rompe la ocultación.',
+    rule: 'El porcentaje ya cuenta cobertura, distancia y altura; por el flanco, más acierto y más crítico. Cada disparo suena: una pistola a 8 casillas, un fusil a 12, un francotirador a 16. Lo que lo oye, viene.',
   },
   flanked: {
     who: 'morse',
@@ -462,13 +477,33 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   song: {
     who: 'morse',
-    line: 'Eso se ha oído. Y no solo nosotros.',
-    rule: 'Los oficios hacen ruido: usar uno rompe la ocultación de la escuadra, salvo con el Taller de oficios junto a la Estación de escucha.',
+    line: 'Cada oficio suena distinto. Aprended cuál.',
+    rule: 'El machete y la ballesta apenas se oyen; un molotov, a 10 casillas. Los petardos suenan donde caen: sirven de cebo. La previsión de cada acción dice cuánto ruido hace.',
   },
   psionic: {
     who: 'morse',
     line: 'Un Chillón. Primero el Chillón.',
-    rule: 'Su grito mete el pánico en el cuerpo y despierta a los muertos de alrededor. La voluntad resiste, y sube con el rango. Si cae el Chillón, quien haya perdido los nervios vuelve en sí.',
+    rule: 'Su grito desorienta o asusta a los que estén cerca, y se oye a 16 casillas: todo zombi que lo oiga viene. También levanta a los muertos. La voluntad resiste, y sube con el rango.',
+  },
+  heard: {
+    who: 'morse',
+    line: 'Os han oído. Vienen a mirar.',
+    rule: 'Lo que oye un ruido va hacia él aunque no os vea, y un grupo dormido se pone en marcha. Apartaos de donde sonó, o esperadlos en vigilancia.',
+  },
+  search: {
+    who: 'teo',
+    line: 'Todo lo que traigáis, aquí se aprovecha.',
+    rule: 'Registrar: 1 acción junto a un mueble, un coche o unas cajas, con un poco de ruido. La mochila lleva 3 cosas. El botín cuenta si vuelve: lo que lleva un caído se pierde.',
+  },
+  horde: {
+    who: 'morse',
+    line: 'Vienen más. Por los bordes.',
+    rule: 'En el Saqueo no hay reloj, pero cada pocos turnos llegan zombis por los bordes del mapa, y antes cuanto más ruido hagáis. Evacuad cuando la mochila pese.',
+  },
+  bloater: {
+    who: 'morse',
+    line: 'Ese está hinchado. De lejos.',
+    rule: 'El Hinchado revienta al morir o al llegar a vosotros: 3 de daño a quien tenga al lado. Abatidlo antes de que se acerque, y nunca junto a los vuestros.',
   },
 };
 

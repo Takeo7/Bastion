@@ -48,8 +48,8 @@ export function portrait(speaker: SpeakerId): HTMLElement {
  * Radio sound on the game's radio bus (audio/): it follows the volumes and the
  * mute, and holds the music down while someone talks. Static when the channel
  * opens and when the voice changes, a key click every few letters, a few
- * letters of Morse as the operator comes on the air, a psionic murmur under the
- * Coro's (no one is at a keyboard there), and a click when the channel closes.
+ * letters of Morse as the operator comes on the air, distant bells under the
+ * Congregación's voice (no one is at a keyboard there), and a click when the channel closes.
  */
 class RadioSound {
   private release: (() => void) | null = null;
@@ -71,7 +71,7 @@ class RadioSound {
   }
 
   under(who: string): void {
-    if (who === 'coro') sound('psi', { bus: 'radio', gain: 0.35 });
+    if (who === 'coro') sound('radio.bells', { gain: 0.35 });
     else if (who === 'morse' && !this.tapped) {
       this.tapped = true;
       morse();

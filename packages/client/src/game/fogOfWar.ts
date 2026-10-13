@@ -4,13 +4,18 @@ import * as THREE from 'three';
 // no hemos descubierto no se pudieran ver»). Each tile keeps two values in a
 // small texture, how much it is in sight now and how much it has been
 // explored, and every material of the map samples it at the world position
-// of each fragment, stepped like the voxels. So the fog fades as soldiers
+// of each fragment, blended between tiles. So the fog fades as soldiers
 // move, with no per-instance work, and covers whatever stands on a tile:
 //  - never seen: a dark mist drifting slowly, where only the tallest shapes
 //    show as the faintest silhouettes;
 //  - seen before: the remembered look, darker and cooler;
 //  - in sight: as it is.
 // Beyond the map's edge the ground fades into the same mist.
+//
+// The screen-space ambient occlusion (post.ts) draws the scene once more for
+// its normals and depth. Map materials draw that pass themselves (AO_PASS),
+// so what lies unexplored or cut away (buildings.ts) is left out of it too:
+// no occlusion shading in the mist, no outline of a roof that has faded.
 
 /** Seconds a tile takes to come into sight or leave it, and to come out of the unexplored dark. */
 const SIGHT_FADE = 0.35;
@@ -20,6 +25,12 @@ const EXPLORE_FADE = 0.9;
 const REMEMBERED_TINT = new THREE.Color(0x26303c);
 /** Never seen. */
 const UNKNOWN = new THREE.Color(0x161e28);
+/** Beyond the map's edge: the haze of the day (renderer.ts), so the map fades into distance, not into a void. */
+const BEYOND_DAY = new THREE.Color(0x7a7380);
+const BEYOND_NIGHT = new THREE.Color(0x0c1a1e);
+
+/** 1 while the ambient occlusion draws its normals and depth (post.ts), else 0; shared by every map material. */
+export const AO_PASS = { value: 0 };
 
 /** Shared GLSL: a value noise for the mist. */
 const NOISE_GLSL = /* glsl */ `
@@ -37,7 +48,7 @@ const NOISE_GLSL = /* glsl */ `
 
 /**
  * Adds a shader patch to a material, after whatever patch it already has
- * (the voxel surface, the ground), keeping their program cache keys apart.
+ * (the ground, the buildings' cutaway), keeping their program cache keys apart.
  */
 export function extendShader(material: THREE.Material, key: string, patch: (shader: THREE.WebGLProgramParametersWithUniforms) => void): void {
   const before = material.onBeforeCompile;
@@ -57,7 +68,13 @@ export class FogOfWar {
     fowTime: { value: 0 },
     fowRemembered: { value: REMEMBERED_TINT.clone() },
     fowUnknown: { value: UNKNOWN.clone() },
+    fowBeyond: { value: BEYOND_DAY.clone() },
   };
+
+  /** Day or night beyond the map's edge. */
+  setNight(on: boolean): void {
+    this.uniforms.fowBeyond.value.copy(on ? BEYOND_NIGHT : BEYOND_DAY);
+  }
   private size = 0;
   /** Shown now (0–1) and where each tile is heading (0 or 1). */
   private sight = new Float32Array(0);
@@ -125,8 +142,11 @@ export class FogOfWar {
 
   /** Makes a material of the map obey the fog; returns it. */
   patch<T extends THREE.Material>(material: T): T {
+    // It draws the occlusion's normals itself (see AO_PASS); unlit materials (glows) stay out of that pass.
+    material.allowOverride = false;
+    const lit = 'isMeshStandardMaterial' in material || 'isMeshLambertMaterial' in material || 'isMeshPhongMaterial' in material;
     extendShader(material, 'fog-of-war', (shader) => {
-      Object.assign(shader.uniforms, this.uniforms);
+      Object.assign(shader.uniforms, this.uniforms, { fowAoPass: AO_PASS });
       shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFowPos;').replace(
         '#include <project_vertex>',
         `#include <project_vertex>
@@ -153,22 +173,36 @@ export class FogOfWar {
           uniform float fowTime;
           uniform vec3 fowRemembered;
           uniform vec3 fowUnknown;
+          uniform vec3 fowBeyond;
+          uniform float fowAoPass;
           ${NOISE_GLSL}`,
         )
         .replace(
           '#include <alphamap_fragment>',
-          `// Fog of war, sampled per eighth of a tile so its edges step like the voxels.
-          vec2 fowCell = (floor(vFowPos.xz * 8.0) + 0.5) / 8.0;
+          `// Fog of war, blended between tile middles (the texture filters linearly): soft edges, no steps.
+          vec2 fowCell = vFowPos.xz;
           vec4 fowTile = texture2D(fowMap, fowCell / fowSize);
           vec2 fowOut = max(max(-fowCell, fowCell - fowSize), 0.0);
-          float fowInside = 1.0 - smoothstep(0.0, 1.6, length(fowOut));
-          // A chunky mist (half-tile cells) drifting slowly; it also frays the edge of the unexplored.
-          float fowMist = fowNoise((floor(vFowPos.xz * 2.0) + 0.5) * 0.22 + vec2(fowTime * 0.05, fowTime * 0.03));
+          // Beyond the edge the town goes on for a few tiles (dressing.ts: dressEdges) and fades into the haze.
+          float fowInside = 1.0 - smoothstep(0.0, 6.0, length(fowOut));
+          // A mist drifting slowly; it also frays the edge of the unexplored.
+          float fowMist = fowNoise(vFowPos.xz * 0.44 + vec2(fowTime * 0.05, fowTime * 0.03));
           float fowSeen = smoothstep(0.3, 0.7, fowTile.r + (fowMist - 0.5) * 0.12) * fowInside;
           float fowKnown = smoothstep(0.22, 0.78, fowTile.g + (fowMist - 0.5) * 0.4) * fowInside;
           // Remembered: half as bright and towards the slate, as the per-instance tint it replaces.
           diffuseColor.rgb = mix(diffuseColor.rgb * 0.35 + fowRemembered * 0.3, diffuseColor.rgb, fowSeen);
+          ${lit ? '' : 'if (fowAoPass > 0.5) discard;'}
           #include <alphamap_fragment>`,
+        )
+        .replace(
+          '#include <normal_fragment_maps>',
+          `#include <normal_fragment_maps>
+          // The occlusion's pass: the view-space normal, packed as MeshNormalMaterial does; nothing where unexplored.
+          if (fowAoPass > 0.5) {
+            if (fowKnown < 0.5) discard;
+            gl_FragColor = vec4(normalize(normal) * 0.5 + 0.5, 1.0);
+            return;
+          }`,
         )
         .replace(
           '#include <fog_fragment>',
@@ -177,6 +211,8 @@ export class FogOfWar {
             // Unexplored: the mist, over the scene's haze (which would lift it to a grey where
             // everything reads), a little lighter higher up so tall shapes barely show.
             vec3 fowDark = fowUnknown * (0.55 + 1.1 * fowMist) * (1.0 + 0.15 * clamp(vFowPos.y / 5.0, 0.0, 1.0));
+            // Beyond the map's edge, the haze instead.
+            fowDark = mix(fowBeyond * (0.92 + 0.16 * fowMist), fowDark, fowInside);
             gl_FragColor.rgb = mix(fowDark, gl_FragColor.rgb, fowKnown);
           }`,
         );

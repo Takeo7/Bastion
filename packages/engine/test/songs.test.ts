@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { abilityBlocker, abilityTargets, apNeeded, canTargetTile, psiChance } from '../src/abilities';
+import { abilityBlocker, abilityTargets, apNeeded, canTargetTile, noiseOf, psiChance } from '../src/abilities';
 import { previewShot } from '../src/aim';
 import { Rng } from '../src/rng';
 import { executeCommand, Sim } from '../src/rules';
@@ -13,24 +13,34 @@ const field = (w = 20, h = 20) => stateFrom(Array.from({ length: h }, () => '.'.
 const sim = (s: GameState, seed = 1) => new Sim(s, new Rng(seed), [0]);
 
 describe('songs', () => {
-  it('Salto de eco: to a free tile in sight within 6; it is heard unless the Cámara is by the listening post', () => {
+  it('Salto de eco: to a free tile in sight within 6; the Oficio never gives the squad away, and is quieter with the Taller by the listening post', () => {
     const s = field();
     s.concealed = true;
     const u = addUnit(s, 's1', 'assault', 2, 2);
     addUnit(s, 's2', 'grenadier', 4, 2);
+    addUnit(s, 'a1', 'zombie', 7, 15);
     expect(canTargetTile(s, u, 'echoStep', { x: 4, y: 2 })).toBe(false);
     expect(canTargetTile(s, u, 'echoStep', { x: 9, y: 2 })).toBe(false);
     expect(canTargetTile(s, u, 'echoStep', { x: 6, y: 4 })).toBe(true);
-    sim(s).perform(u, 'echoStep', { tile: { x: 6, y: 4 } });
+    const run = sim(s);
+    run.perform(u, 'echoStep', { tile: { x: 6, y: 4 } });
     expect(u.pos).toEqual({ x: 6, y: 4 });
-    expect(s.concealed).toBe(false);
+    expect(s.concealed).toBe(true);
+    expect(run.events.find((e) => e.t === 'noise')).toMatchObject({ tile: { x: 6, y: 4 }, radius: 1 });
+    expect(noiseOf(s, u, 'silence')).toBe(12);
+    expect(noiseOf(s, u, 'fireball')).toBe(10);
 
     const q = field();
     q.concealed = true;
     q.quietSongs = true;
     const v = addUnit(q, 's1', 'assault', 2, 2);
-    sim(q).perform(v, 'echoStep', { tile: { x: 5, y: 2 } });
+    const quiet = sim(q);
+    quiet.perform(v, 'echoStep', { tile: { x: 5, y: 2 } });
     expect(q.concealed).toBe(true);
+    expect(quiet.events.some((e) => e.t === 'noise')).toBe(false);
+    expect(noiseOf(q, v, 'silence')).toBe(10);
+    // The shotgun is as loud as ever.
+    expect(noiseOf(q, v, 'shoot')).toBe(10);
   });
 
   it('a song costs its own action: the spectral arrow needs no sniper set-up', () => {
@@ -100,13 +110,10 @@ describe('songs', () => {
     expect(abilityBlocker(s, sectoid, 'mindspin')).toMatch(/Petardos/);
   });
 
-  it('the Cantor finds singers easier; Contracanto wards; Canto de calma steadies those around', () => {
+  it('Contracanto wards; Canto de calma steadies those around', () => {
     const s = field();
     const singer = addUnit(s, 's1', 'specialist', 2, 2);
     const base = psiChance(singer, s);
-    singer.mods.songOpen = 10;
-    expect(psiChance(singer, s)).toBe(base + 10);
-    singer.mods.songOpen = 0;
     addUnit(s, 's2', 'specialist', 4, 2, { mods: { ...singer.mods, calmAura: 2 } });
     expect(psiChance(singer, s)).toBe(base - 20);
     singer.ward = 2;

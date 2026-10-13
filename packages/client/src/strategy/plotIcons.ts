@@ -37,6 +37,8 @@ const ICONS: Record<FacilityId | FixedBuildingId | Exclude<Terrain, 'clear'> | '
 export function plotIcon(kind: keyof typeof ICONS): HTMLElement {
   const wrap = document.createElement('span');
   wrap.className = 'plot-ico';
+  // Which mark it is, so an interface theme can draw its own (ui/themes/).
+  wrap.dataset.plot = kind;
   wrap.innerHTML = ICONS[kind];
   return wrap;
 }

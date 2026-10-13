@@ -126,6 +126,7 @@ export const MISSION_NAMES: Record<MissionKind, string> = {
   sabotage: 'Sabotaje',
   hack: 'Arreglar la radio',
   rescue: 'Rescate',
+  scavenge: 'Saqueo',
 };
 
 export const BIOME_NAMES: Record<Biome, string> = {
@@ -168,6 +169,31 @@ export function podPlan(difficulty: number): TemplateId[][] {
   }
 }
 
+/**
+ * Saqueo: the dead scattered about the town in small groups, unaware. The
+ * horde comes later, by the edges (HORDE_WAVES).
+ */
+export function scavengePlan(difficulty: number): TemplateId[][] {
+  switch (Math.max(1, Math.min(4, difficulty))) {
+    case 1:
+      return [['zombie', 'zombie'], ['zombie'], ['zombie', 'zombie'], ['xenoid'], ['zombie', 'bloater']];
+    case 2:
+      return [['zombie', 'zombie'], ['zombie', 'xenoid'], ['zombie', 'zombie', 'bloater'], ['sectoid', 'zombie'], ['zombie', 'zombie']];
+    case 3:
+      return [['zombie', 'zombie', 'xenoid'], ['mec', 'zombie'], ['zombie', 'zombie', 'bloater'], ['sectoid', 'zombie', 'zombie'], ['xenoid', 'zombie']];
+    default:
+      return [['zombie', 'zombie', 'xenoid'], ['mec', 'zombie', 'zombie'], ['bloater', 'zombie', 'zombie'], ['sectoid', 'zombie', 'xenoid'], ['mec', 'xenoid'], ['zombie', 'zombie', 'bloater']];
+  }
+}
+
+/** Saqueo: who comes in each wave of the horde, by difficulty (rules.ts callHorde). */
+const HORDE_WAVES: Record<number, TemplateId[]> = {
+  1: ['zombie', 'zombie'],
+  2: ['zombie', 'zombie', 'xenoid'],
+  3: ['zombie', 'zombie', 'xenoid', 'bloater'],
+  4: ['zombie', 'zombie', 'zombie', 'xenoid', 'mec'],
+};
+
 const REINFORCEMENT_UNITS: Record<number, TemplateId[]> = {
   1: ['trooper', 'trooper'],
   2: ['trooper', 'lancer'],
@@ -183,6 +209,8 @@ function reinforcementTurns(kind: MissionKind, difficulty: number): number[] {
     case 'sabotage':
     case 'hack':
       return [4, 8];
+    case 'scavenge':
+      return [];
     default:
       return [5, 9];
   }
@@ -190,21 +218,28 @@ function reinforcementTurns(kind: MissionKind, difficulty: number): number[] {
 
 const VIP_NAMES = ['Dra. Irene Saldaña', 'Ing. Tomás Arrieta', 'Alcaldesa Mara Velasco', 'Dr. Bruno Lasarte', 'Agente Inés Corral'];
 
+/**
+ * The battlefield a kind asks the generator for, when it isn't its own: a
+ * Saqueo is laid out like a recovery (houses, shops and offices toward the
+ * evac), and the recovery's item is never placed.
+ */
+const LAYOUT_KIND: Partial<Record<MissionKind, MissionKind>> = { scavenge: 'recovery' };
+
 export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[]): MissionLayout {
   if (map.kind === 'handmade') {
     const def = MAPS[map.id];
     if (!def) throw new Error(`Unknown map ${map.id}`);
     return handmadeLayout(def, kind);
   }
-  return generateLayout({ biome: map.biome, kind, podSizes, seed: map.seed });
+  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed });
 }
 
 export function createMission(opts: MissionOptions): GameState {
   if (!opts.slots.length) throw new Error('A mission needs at least one player');
   const difficulty = opts.difficulty ?? 2;
   const handmade = opts.map.kind === 'handmade' ? MAPS[opts.map.id] : undefined;
-  const plan = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : podPlan(difficulty));
   let kind = opts.kind ?? 'elimination';
+  const plan = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : kind === 'scavenge' ? scavengePlan(difficulty) : podPlan(difficulty));
   const layout = missionLayout(opts.map, kind, plan.map((p) => p.length));
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
@@ -300,6 +335,8 @@ export function createMission(opts: MissionOptions): GameState {
     objectiveDone: false,
     hackBonus: opts.hackBonus ?? 0,
     reinforcements,
+    difficulty,
+    ...(kind === 'scavenge' ? { horde: [...HORDE_WAVES[Math.max(1, Math.min(4, difficulty))]!] } : {}),
   };
 
   const tiles = [...layout.tiles];

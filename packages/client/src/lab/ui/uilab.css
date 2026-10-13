@@ -157,21 +157,15 @@ button {
   inset: 0;
 }
 
-.uil-scene .lab-view,
-.uil-scene .lab-view canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.uil-scene .lab-view.pixelated canvas.gl {
-  image-rendering: pixelated;
-}
-
-.uil-scene canvas.hud {
-  display: none;
+/* Stub combat backdrop until the real Synty map is drawn here. */
+.uil-scene.uil-stub {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, #6f7a62 0%, #8a8470 45%, #5d6a5a 100%);
+  color: rgba(255, 255, 255, 0.55);
+  font: 600 14px/1 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .uil-base {

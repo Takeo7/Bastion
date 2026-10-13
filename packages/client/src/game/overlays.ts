@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { DIRS4, type CoverLevel, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
+import { wait } from './tween';
 import eyeUrl from '../assets/expediente/eye.png';
 import hatchUrl from '../assets/expediente/hatch.png';
 
@@ -21,6 +23,59 @@ const COLOR_BLAST = new THREE.Color(0xff8a2a);
 /** A blast that can't be thrown there. */
 const COLOR_OFF = new THREE.Color(0x8a939c);
 const COLOR_EVAC = new THREE.Color(0x4dff9a);
+
+/**
+ * Furniture to search (docs/FASE2.md, «Registrar»): `open` can be searched,
+ * `pick` is the one Registrar would search now, `done` was searched already.
+ */
+export type SpotKind = 'open' | 'pick' | 'done';
+
+const SPOT_COLORS: Record<SpotKind, number> = { open: 0xffd25a, pick: 0xffffff, done: 0x9aa3ab };
+/** The badge floats just over the furniture: higher, from the tilted camera it read as over the soldier beside it. */
+const SPOT_HEIGHT = 1.3;
+
+/** The badge over a piece of furniture: a magnifier while it can be searched, a tick once it has been. */
+function spotTexture(done: boolean): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const ink = done ? '#b7c0c7' : '#ffd25a';
+  g.beginPath();
+  g.arc(32, 32, 27, 0, Math.PI * 2);
+  g.fillStyle = 'rgba(10,20,30,0.82)';
+  g.fill();
+  g.lineWidth = 4;
+  g.strokeStyle = ink;
+  g.stroke();
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.lineWidth = 5.5;
+  g.beginPath();
+  if (done) {
+    g.moveTo(20, 33);
+    g.lineTo(29, 42);
+    g.lineTo(45, 23);
+  } else {
+    g.arc(28, 28, 10, 0, Math.PI * 2);
+    g.moveTo(35.5, 35.5);
+    g.lineTo(45, 45);
+  }
+  g.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** Empties a group of throwaway meshes, lines and sprites (shared geometries and textures stay). */
+function clearGroup(group: THREE.Group, shared: ReadonlySet<THREE.BufferGeometry> = new Set()): void {
+  for (const child of [...group.children]) {
+    group.remove(child);
+    if (child instanceof THREE.Mesh || child instanceof Line2 || child instanceof THREE.Sprite) {
+      if (!(child instanceof THREE.Sprite) && !shared.has(child.geometry)) child.geometry.dispose();
+      (child.material as THREE.Material).dispose();
+    }
+  }
+}
 
 /** Draws a shield icon on a canvas: full (2) or half (1) cover. */
 function shieldTexture(level: 1 | 2): THREE.CanvasTexture {
@@ -120,6 +175,18 @@ export class Overlays {
   private readonly shieldTextures = { 1: shieldTexture(1), 2: shieldTexture(2) };
   /** The move range's layers and their full opacity: planning shows them fainter. */
   private rangeLayers: [THREE.InstancedMesh, number][] = [];
+  /** Furniture marked for Registrar (armed, or under the pointer): a frame round the tile and a badge over it. */
+  private readonly spots = new THREE.Group();
+  /** Furniture already searched, anywhere the squad has been: a faint tick. */
+  private readonly searched = new THREE.Group();
+  private readonly spotTextures = { open: spotTexture(false), done: spotTexture(true) };
+  /** A four-segment ring turned 45°: a square frame a little wider than the tile, round the furniture. */
+  private readonly spotFrame = new THREE.RingGeometry(0.62, 0.74, 4).rotateZ(Math.PI / 4).rotateX(-Math.PI / 2);
+  /** Noise spreading from where it was made (docs/FASE2.md): a ring and a faint disc, gone once spread. */
+  private readonly noises = new THREE.Group();
+  private readonly noiseCircle = new THREE.CircleGeometry(1, 64).rotateX(-Math.PI / 2);
+  /** One short line on a tile: what a move or a throw sounds like, what a piece of furniture is. */
+  private readonly note = new CSS2DObject(document.createElement('div'));
 
   constructor(capacity: number) {
     const tileGeometry = new THREE.PlaneGeometry(0.9, 0.9).rotateX(-Math.PI / 2);
@@ -207,7 +274,10 @@ export class Overlays {
     this.pathCasing.renderOrder = 9;
     this.pathCasing.visible = false;
     this.rangeRing.renderOrder = 9;
+    this.note.element.className = 'tile-note';
+    this.note.visible = false;
     this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.searched, this.spots, this.noises, this.note);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -231,6 +301,116 @@ export class Overlays {
       const smoke = f.children[0] as THREE.Mesh;
       smoke.rotation.y = time * 0.6;
       (smoke.material as THREE.MeshBasicMaterial).opacity = 0.3 + Math.sin(time * 5 + i) * 0.08;
+    });
+    for (const badge of this.spots.children) if (badge.userData.pick) badge.scale.setScalar(0.6 + Math.sin(time * 5) * 0.06);
+    this.tickNoises(time);
+  }
+
+  /** Each noise spreads fast and slows to its radius as it fades; bigger noises take longer. */
+  private tickNoises(time: number): void {
+    for (const ring of [...this.noises.children]) {
+      const d = ring.userData as { radius: number; start: number | null; delay: number; duration: number; peak: number };
+      // The clock starts at the first frame after the noise.
+      d.start ??= time + d.delay;
+      const k = (time - d.start) / d.duration;
+      if (k < 0) continue;
+      const material = (ring as THREE.Mesh).material as THREE.Material;
+      if (k >= 1) {
+        this.noises.remove(ring);
+        if (ring instanceof Line2) ring.geometry.dispose();
+        material.dispose();
+        continue;
+      }
+      const r = Math.max(0.05, d.radius * (1 - (1 - k) ** 3));
+      ring.scale.set(r, 1, r);
+      material.opacity = d.peak * (k < 0.15 ? k / 0.15 : (1 - k) / 0.85);
+    }
+  }
+
+  /**
+   * How far a noise was heard (docs/FASE2.md): a ring spreading to its radius
+   * from where it was made, over a faint disc; a loud one sends a second ring
+   * after the first and lasts longer. Nothing moves the camera.
+   */
+  noise(tile: Vec2, radius: number, color: number): void {
+    if (radius <= 0) return;
+    const at = tileToWorld(tile, 0.08);
+    const duration = 0.8 + radius * 0.08;
+    const add = (obj: THREE.Object3D, delay: number, peak: number) => {
+      obj.position.copy(at);
+      obj.scale.setScalar(0.05);
+      obj.userData = { radius, start: null, delay, duration, peak };
+      this.noises.add(obj);
+    };
+    const disc = new THREE.Mesh(this.noiseCircle, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false }));
+    disc.renderOrder = 7;
+    add(disc, 0, 0.045);
+    const points: number[] = [];
+    for (let i = 0; i <= 72; i++) points.push(Math.cos((i / 72) * Math.PI * 2), 0, Math.sin((i / 72) * Math.PI * 2));
+    for (let i = 0; i < (radius >= 10 ? 2 : 1); i++) {
+      const ring = new Line2(new LineGeometry(), new LineMaterial({ color, linewidth: i ? 1.5 : 2.5, transparent: true, opacity: 0, depthTest: false }));
+      ring.geometry.setPositions(points);
+      ring.renderOrder = 8;
+      add(ring, i * 0.35, i ? 0.45 : 0.8);
+    }
+  }
+
+  /** Furniture marked for Registrar: a frame round each tile and a badge over it (the one it would search, pulsing). */
+  setSpots(list: { pos: Vec2; kind: SpotKind }[]): void {
+    const key = JSON.stringify(list);
+    if (this.spots.userData.key === key) return;
+    this.spots.userData.key = key;
+    clearGroup(this.spots, new Set([this.spotFrame]));
+    for (const s of list) {
+      const frame = new THREE.Mesh(
+        this.spotFrame,
+        new THREE.MeshBasicMaterial({ color: SPOT_COLORS[s.kind], transparent: true, opacity: s.kind === 'done' ? 0.55 : 0.95, depthTest: false, depthWrite: false }),
+      );
+      frame.position.copy(tileToWorld(s.pos, 0.04));
+      frame.renderOrder = 12;
+      const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.spotTextures[s.kind === 'done' ? 'done' : 'open'], depthTest: false, transparent: true }));
+      badge.position.copy(tileToWorld(s.pos, SPOT_HEIGHT));
+      badge.scale.setScalar(s.kind === 'pick' ? 0.6 : 0.44);
+      badge.renderOrder = 13;
+      badge.userData.pick = s.kind === 'pick';
+      this.spots.add(frame, badge);
+    }
+  }
+
+  /** A faint tick over every piece of furniture already searched that the squad has seen. */
+  setSearched(list: Vec2[]): void {
+    const key = JSON.stringify(list);
+    if (this.searched.userData.key === key) return;
+    this.searched.userData.key = key;
+    clearGroup(this.searched);
+    for (const p of list) {
+      const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.spotTextures.done, depthTest: false, transparent: true, opacity: 0.6 }));
+      badge.position.copy(tileToWorld(p, SPOT_HEIGHT));
+      badge.scale.setScalar(0.3);
+      badge.renderOrder = 11;
+      this.searched.add(badge);
+    }
+  }
+
+  /** One short line on `tile` («Ruido 3: corre», «El armario · ya registrado»), or none. */
+  setNote(tile: Vec2 | null, text = '', height = 0.15): void {
+    this.note.visible = !!tile && !!text;
+    if (!tile || !text) return;
+    if (this.note.element.textContent !== text) this.note.element.textContent = text;
+    this.note.position.copy(tileToWorld(tile, height));
+  }
+
+  /** What a search turned up, rising over the furniture («+12 §», «Un botiquín», «Nada»). */
+  find(tile: Vec2, text: string, empty: boolean): void {
+    const el = document.createElement('div');
+    el.className = `float-text find${empty ? ' empty' : ''}`;
+    el.textContent = text;
+    const label = new CSS2DObject(el);
+    label.position.copy(tileToWorld(tile, 1.2));
+    this.group.add(label);
+    void wait(2.2).then(() => {
+      this.group.remove(label);
+      el.remove();
     });
   }
 
@@ -497,5 +677,7 @@ export class Overlays {
     this.showAim(null, null);
     this.showBlast(null, [], false);
     this.showRange(null);
+    this.setSpots([]);
+    this.setNote(null);
   }
 }

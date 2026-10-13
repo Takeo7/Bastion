@@ -1,0 +1,38 @@
+{
+  "appId": "com.takeo7.bastion",
+  "productName": "Bastion",
+  "artifactName": "Bastion-${version}-${os}-${arch}.${ext}",
+  "copyright": "Arturo Wagener",
+  "directories": {
+    "output": "dist/release"
+  },
+  "files": ["dist/app/main.cjs", "dist/app/preload.cjs", "dist/app/launcher.html", "package.json"],
+  "extraResources": [
+    { "from": "dist/app/client", "to": "client" },
+    { "from": "dist/app/server", "to": "server" }
+  ],
+  "npmRebuild": false,
+  "mac": {
+    "category": "public.app-category.strategy-games",
+    "target": [
+      { "target": "dir", "arch": ["arm64"] },
+      { "target": "zip", "arch": ["arm64", "x64"] }
+    ],
+    "identity": null,
+    "hardenedRuntime": false,
+    "extendInfo": { "CFBundleDisplayName": "Bastión" }
+  },
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] },
+      { "target": "zip", "arch": ["x64"] }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "shortcutName": "Bastión"
+  }
+}

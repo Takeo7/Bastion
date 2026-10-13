@@ -53,11 +53,12 @@ import {
   WEAPON_TIER_DAMAGE,
   weaponTier,
 } from './progression';
-import { briefingSignature, doomChangeText, doomSubject, missionBriefing, NWOSU_CHAPTER, PARTITURA_LEVEL, SIMON_CHAPTER, STORY, storyVip, type Ending, type SimonChoice } from './lore';
+import { broughtBack } from './loot';
+import { briefingSignature, doomChangeText, doomSubject, lootSummary, missionBriefing, NWOSU_CHAPTER, PARTITURA_LEVEL, SIMON_CHAPTER, STORY, storyVip, type Ending, type SimonChoice } from './lore';
 import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecision, type QuestId, type QuestMission, type QuestOutcome, type TraitId } from './quests';
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
-import { podPlan, type MapSource, type SquadMember } from './setup';
+import { podPlan, scavengePlan, type MapSource, type SquadMember } from './setup';
 import type { Appearance, Biome, ClassId, EndReason, GameState, ItemId, ItemSlot, MissionKind, PerkId, Slot, TemplateId, Vec2 } from './types';
 
 // --------------------------------------------------------------- facilities
@@ -305,7 +306,7 @@ export const ADJACENCY: AdjacencyDef[] = [
   { facility: 'quarters', next: 'barracks', text: 'Una cama más. El Cuartel presta la estufa.' },
   { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
   { facility: 'listening', next: 'relay', text: 'El enemigo avanza 2 días más tarde aún. Dos antenas oyen más que una.' },
-  { facility: 'echoes', next: 'listening', text: 'Los oficios no rompen la ocultación. Junto a la escucha se aprende a no hacer ruido.' },
+  { facility: 'echoes', next: 'listening', text: 'Los oficios hacen menos ruido (−2). Junto a la escucha se aprende a no hacer ruido.' },
 ];
 
 export interface BasePlot {
@@ -688,7 +689,7 @@ const MONTH = 30;
 /** Monthly payment from the Council before region income. */
 const BASE_INCOME = 60;
 /** Credits for each alien body sold after a won mission. */
-const BODY_VALUE: Partial<Record<TemplateId, number>> = { trooper: 2, officer: 4, lancer: 3, xenoid: 4, mec: 6, sectoid: 5 };
+const BODY_VALUE: Partial<Record<TemplateId, number>> = { trooper: 2, officer: 4, lancer: 3, xenoid: 4, mec: 6, sectoid: 5, bloater: 3 };
 
 export interface Loadout {
   utility: ItemId | null;
@@ -798,6 +799,17 @@ export interface MissionReport {
   salvage: number;
   /** Story chapter the mission belonged to. */
   story: number | null;
+  /** What the squad brought back from searching (docs/FASE2.md), already added; missing in older reports. */
+  loot?: MissionLoot;
+}
+
+/** The haul of a mission: suministros (to the credits), accessories (to the inventory) and medicines. */
+export interface MissionLoot {
+  supplies: number;
+  items: ItemId[];
+  medicines: number;
+  /** The debrief's line (lore.ts lootSummary), or null when nothing came back. */
+  line: string | null;
 }
 
 export interface LogEntry {
@@ -850,6 +862,8 @@ export interface CampaignState {
   soldiers: CampaignSoldier[];
   /** Accessories bought: copies owned (equipped ones included). */
   inventory: Partial<Record<ItemId, number>>;
+  /** Medicines brought back from searching; only counted for now (phase 3 uses them). Missing in older campaigns: 0. */
+  medicines?: number;
   /** `works`: the projects going on, one per crew (two, three with the works brigade). */
   base: { plots: BasePlot[]; works: Construction[] };
   regions: RegionState[];
@@ -1109,6 +1123,7 @@ const OFFER_KINDS: [MissionKind, number][] = [
   ['hack', 2],
   ['rescue', 2],
   ['sabotage', 1],
+  ['scavenge', 2],
 ];
 
 function pickKind(rng: Rng): MissionKind {
@@ -1131,24 +1146,24 @@ export function veteranEnemies(c: Pick<CampaignState, 'missionsFlown'>): number 
   return Math.min(2, Math.floor((c.missionsFlown ?? 0) / 4));
 }
 
-/** The enemy groups of an operation, with what side quests left in its region. */
-function regionPods(c: CampaignState, region: RegionId, difficulty: number): TemplateId[][] {
-  const pods = podPlan(difficulty);
+/** The enemy groups of an operation, with what side quests left in its region. A Saqueo has the dead scattered about. */
+function regionPods(c: CampaignState, region: RegionId, difficulty: number, kind: MissionKind): TemplateId[][] {
+  const pods = kind === 'scavenge' ? scavengePlan(difficulty) : podPlan(difficulty);
   const extra = regionEnemy(c, region);
   if (extra) pods[0]!.push(extra);
-  for (let i = 0; i < veteranEnemies(c); i++) pods[(i + 1) % pods.length]!.push(difficulty >= 3 ? 'lancer' : 'trooper');
+  for (let i = 0; i < veteranEnemies(c); i++) pods[(i + 1) % pods.length]!.push(kind === 'scavenge' ? 'zombie' : difficulty >= 3 ? 'lancer' : 'trooper');
   return pods;
 }
 
 function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): MissionOffer {
   const difficulty = final ? 4 : difficultyNow(c, rng);
   const kind: MissionKind = final ? 'elimination' : pickKind(rng);
-  // Relays live in alien facilities; everything else happens in towns or the countryside.
-  const biome: Biome = final || kind === 'sabotage' ? 'facility' : rng.pick(['city', 'city', 'wilds'] as const);
+  // Relays live in alien facilities, Saqueos in towns; everything else happens in towns or the countryside.
+  const biome: Biome = final || kind === 'sabotage' ? 'facility' : kind === 'scavenge' ? 'city' : rng.pick(['city', 'city', 'wilds'] as const);
   const contacted = c.regions.filter((r) => r.contacted).map((r) => r.id);
   const region = at ?? (rng.int(10) < 7 && contacted.length ? rng.pick(contacted) : rng.pick(Object.keys(REGIONS) as RegionId[]));
-  // Data and relays are worth more to the Council than a firefight.
-  const bonus = kind === 'recovery' || kind === 'hack' || kind === 'sabotage' ? 20 : 0;
+  // Data and relays are worth more to the Council than a firefight; a Saqueo pays in what it brings back.
+  const bonus = kind === 'recovery' || kind === 'hack' || kind === 'sabotage' ? 20 : kind === 'scavenge' ? -30 : 0;
   const reward: MissionReward = final ? {} : { credits: 50 + difficulty * 25 + bonus + rng.int(4) * 5 };
   if (!final && (kind === 'rescue' || rng.int(5) === 0)) reward.recruit = rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const);
   if (!final && (kind === 'sabotage' || (kind === 'hack' && rng.int(3) === 0))) reward.doom = 1;
@@ -1160,7 +1175,7 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
     expiresDay: final ? null : c.day + 6 + rng.int(4),
     reward,
     map: { kind: 'generated', biome, seed: rng.int(2 ** 31) },
-    pods: regionPods(c, region, difficulty),
+    pods: regionPods(c, region, difficulty, kind),
     final,
     region,
     facility: null,
@@ -1370,7 +1385,7 @@ function enterStep(c: CampaignState, q: QuestState, rng: Rng): void {
 
 function makeQuestOffer(c: CampaignState, q: QuestState, step: QuestMission, rng: Rng): MissionOffer {
   const difficulty = Math.max(1, Math.min(4, difficultyNow(c, rng) + (step.difficulty ?? 0)));
-  const pods = regionPods(c, q.region, difficulty);
+  const pods = regionPods(c, q.region, difficulty, step.kind);
   // The named enemy needs a body of its kind on the field.
   if (step.leader && !pods.some((p) => p.includes(step.leader!.template))) pods[0] = [step.leader.template, ...pods[0]!];
   return {
@@ -1585,6 +1600,7 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     xp: 0,
     soldiers: [],
     inventory: { fragGrenade: 2, firstAid: 1 },
+    medicines: 0,
     base: freshBase(),
     regions: freshRegions(),
     offers: [],
@@ -2582,8 +2598,16 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     }
   }
 
-  // Holding the field means the bodies come home, and the black market pays for them.
-  if (victory) {
+  // What the squad searched and brought back (docs/FASE2.md): a fallen soldier's is lost.
+  const haul = broughtBack(mission);
+  report.loot = { ...haul, line: lootSummary(haul.supplies, haul.items, haul.medicines) };
+  c.credits += haul.supplies;
+  for (const item of haul.items) c.inventory[item] = (c.inventory[item] ?? 0) + 1;
+  c.medicines = (c.medicines ?? 0) + haul.medicines;
+  if (report.loot.line) log(c, report.loot.line, 'good');
+
+  // Holding the field means the bodies come home, and the black market pays for them (not from a Saqueo: you leave by the evac).
+  if (victory && mission.mission.kind !== 'scavenge') {
     for (const u of mission.units) {
       const value = BODY_VALUE[u.template];
       if (u.alive || u.objective || !value) continue;
@@ -2775,7 +2799,7 @@ export function migrateCampaign(old: CampaignState): CampaignState {
     delete s.pendingTiers;
   }
   if (retrained.some((s) => s.alive && s.rank > 0)) {
-    log(c, 'Cada soldado tiene ahora cinco aptitudes y un sitio en la Rosa, el árbol de talentos de todos. Los puntos de sus ascensos esperan en el Cuartel.', 'good', {
+    log(c, 'Cada soldado tiene ahora cinco aptitudes y un sitio en el árbol de habilidades, el mismo para todos. Los puntos de sus ascensos esperan en el Cuartel.', 'good', {
       kicker: 'Cuartel',
       title: 'Nueva instrucción',
     });

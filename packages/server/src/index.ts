@@ -22,7 +22,8 @@ const PORT = Number(arg('port') ?? process.env.PORT ?? 3000);
 /** The same game over https (Safari needs it, see tls.ts); `--https-port 0` turns it off. */
 const HTTPS_PORT = Number(arg('https-port') ?? PORT + 1);
 const ROOT = resolve(import.meta.dirname, '../../..');
-const CLIENT_DIST = join(ROOT, 'packages/client/dist');
+/** `--client <dir>`: a client built elsewhere (a test build that leaves the players' one alone). */
+const CLIENT_DIST = resolve(arg('client') ?? join(ROOT, 'packages/client/dist'));
 const SAVE_PATH = resolve(arg('save') ?? process.env.SAVE_PATH ?? join(ROOT, 'data/save.json'));
 /** Who connects, how, and what their browser reports: kept next to the save to diagnose a partner who cannot play. */
 const NET_LOG = join(dirname(SAVE_PATH), 'red.log');
@@ -37,6 +38,8 @@ const MIME: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.json': 'application/json',
   '.webp': 'image/webp',
+  '.glb': 'model/gltf-binary',
+  '.wav': 'audio/wav',
 };
 
 /** Debug only (`--snapshots <dir>`): the client's `__bastion.snap()` posts frames here. */
@@ -82,7 +85,9 @@ function handle(req: IncomingMessage, res: ServerResponse): void {
       if (body.length < 2000) body += chunk;
     });
     req.on('end', () => {
-      const line = `[navegador ${peer(req.socket)}] ${body.slice(0, 2000)}`;
+      const text = body.slice(0, 2000);
+      // How each browser draws (client perf.ts) comes tagged with the player's name, `[rend ana] …`; the address stands in for a missing one.
+      const line = /^\[rend[ \]]/.test(text) ? text.replace(/^\[rend\]/, `[rend ${peer(req.socket)}]`) : `[navegador ${peer(req.socket)}] ${text}`;
       console.log(line);
       netLog(line);
       res.end('ok');
@@ -115,15 +120,42 @@ function handle(req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const requested = normalize(join(CLIENT_DIST, decodeURIComponent(url.pathname)));
   let file = requested.startsWith(CLIENT_DIST) ? requested : CLIENT_DIST;
-  if (!existsSync(file) || statSync(file).isDirectory()) file = join(CLIENT_DIST, 'index.html');
-  res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
+  if (!existsSync(file) || statSync(file).isDirectory()) {
+    // A missing model or script is an error, not the page: a loader fed the page's HTML fails in odd ways.
+    if (extname(url.pathname)) {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end(`No existe: ${url.pathname}`);
+      return;
+    }
+    file = join(CLIENT_DIST, 'index.html');
+  }
+  // Vite names its bundles after their content, so they never change; the rest
+  // (the page, the models) is checked again each time and answered 304 when it is the same.
+  const modified = statSync(file).mtime;
+  modified.setMilliseconds(0);
+  const fresh = url.pathname.startsWith('/assets/');
+  const since = Date.parse(req.headers['if-modified-since'] ?? '');
+  if (!fresh && since >= modified.getTime()) {
+    res.writeHead(304);
+    res.end();
+    return;
+  }
+  res.writeHead(200, {
+    'content-type': MIME[extname(file)] ?? 'application/octet-stream',
+    'cache-control': fresh ? 'public, max-age=31536000, immutable' : 'no-cache',
+    'last-modified': modified.toUTCString(),
+  });
   createReadStream(file).pipe(res);
 }
+
+/** Windows' virtual adapters (Hyper-V, WSL, virtual machines): no partner is on the other side. */
+const VIRTUAL = /vEthernet|Hyper-V|WSL|VirtualBox|VMware/i;
 
 /** IPv4 addresses a partner can reach: same network, or Tailscale (100.64.0.0/10). */
 function hostAddresses(): HostAddress[] {
   const out: HostAddress[] = [];
-  for (const addrs of Object.values(networkInterfaces())) {
+  for (const [name, addrs] of Object.entries(networkInterfaces())) {
+    if (VIRTUAL.test(name)) continue;
     for (const a of addrs ?? []) {
       if (a.family !== 'IPv4' || a.internal) continue;
       const [first, second] = a.address.split('.').map(Number);
@@ -185,8 +217,13 @@ http.listen(PORT, () => {
   console.log(`    Tú:              http://localhost:${PORT}`);
   for (const h of hosts) console.log(`    Tu compañero:    ${https ? `https://${h.address}:${HTTPS_PORT}` : `http://${h.address}:${PORT}`}${h.kind === 'tailscale' ? '  (Tailscale)' : ''}`);
   if (https) console.log('    (la primera vez su navegador avisa del certificado: es el de este ordenador, que lo acepte)');
-  else if (HTTPS_PORT) console.log('    Sin https (falta openssl): en Safari, tu compañero irá muy lento.');
+  else if (HTTPS_PORT) console.log('    Sin https (no hay openssl en este ordenador): con Chrome, Edge o la app va bien; en Safari, tu compañero irá muy lento.');
   console.log('');
 });
 https?.on('error', (e) => console.log(`  No se pudo abrir https en el puerto ${HTTPS_PORT}: ${e.message}`));
+// The game's own port taken (another Bastión open?): say so plainly instead of a stack trace.
+http.on('error', (e: Error & { code?: string }) => {
+  console.log(`\n  No se pudo abrir el puerto ${PORT}${e.code === 'EADDRINUSE' ? ': ya lo usa otro programa (¿otro Bastión abierto?)' : `: ${e.message}`}\n`);
+  process.exit(1);
+});
 https?.listen(HTTPS_PORT);

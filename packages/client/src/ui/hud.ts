@@ -1,11 +1,13 @@
 import {
   displayName,
   weaponName,
+  ITEMS,
   MISSION_NAMES,
   RANKS,
   TEMPLATES,
   WEAPONS,
   type AbilityId,
+  type ItemId,
   type MissionKind,
   type Modifier,
   type Outcome,
@@ -36,6 +38,8 @@ export interface AbilityView {
   limits?: string;
   /** What it takes off, for what does damage («Daño 4–6 · crítico +2»). */
   damage?: string;
+  /** How far it is heard («ruido 12», «sin ruido»), after the cost (docs/FASE2.md). */
+  noise?: string;
   description: string;
   active?: boolean;
   count?: number;
@@ -91,22 +95,60 @@ export type TargetView =
       /** What the ability changes besides the odds ("+50 % de daño"). */
       note?: string;
       damage: DamageView;
+      /** «Ruido 12»: how far the shot is heard. */
+      noise?: string;
     }
-  | { kind: 'support'; title: string; action: string; locked?: string; targetName: string; effect: string; damage?: DamageView; index: number; total: number }
-  /** A self ability armed by its first press: what it costs and does, until the second press or Enter. */
-  | { kind: 'self'; title: string; action: string; locked?: string; cost: string; limits?: string; effect: string; detail?: string };
+  | { kind: 'support'; title: string; action: string; locked?: string; targetName: string; effect: string; damage?: DamageView; index: number; total: number; noise?: string }
+  /**
+   * A self ability armed by its first press: what it costs and does, until the
+   * second press or Enter. Registrar arms the same way, on the furniture it
+   * would search (`hint` then says how to pick another).
+   */
+  | { kind: 'self'; title: string; action: string; locked?: string; cost: string; limits?: string; effect: string; detail?: string; noise?: string; hint?: string };
+
+/** The Saqueo's horde (docs/FASE2.md): how near the next wave is, 0–1, and that in words. */
+export interface HordeView {
+  fill: number;
+  title: string;
+}
 
 export interface MissionView {
   kind: MissionKind;
   objective: string;
+  /** The objective in full, when the strip shows a short version. */
+  objectiveTip?: string;
   turnsLeft: number | null;
   /** Urgent notice under the objective (reinforcements on the way). */
   alert: string | null;
   /** Name of the area (map). */
   area: string;
+  /** Saqueo only: the horde's clock. */
+  horde?: HordeView | null;
 }
 
-const KINDS: MissionKind[] = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue'];
+/** One thing in a backpack (docs/FASE2.md, «Mochila»): what it is, for the slot's icon and tooltip. */
+export type PackSlot = { kind: 'supplies'; amount: number } | { kind: 'item'; item: ItemId } | { kind: 'medicines'; amount: number };
+
+/** The soldier's backpack on the sheet, and what the whole squad carries. */
+export interface PackView {
+  slots: PackSlot[];
+  size: number;
+  squad: { supplies: number; items: number; medicines: number; text: string };
+}
+
+/** The symbol of an accessory found while searching, from the sheet's own set (styles.css). */
+const ITEM_ICONS: Record<ItemId, string> = {
+  fragGrenade: 'grenade',
+  smokeGrenade: 'grenade',
+  flashbang: 'grenade',
+  firstAid: 'medkit',
+  nanoVest: 'armor',
+  mindShield: 'will',
+  apRounds: 'ammo',
+  tracerRounds: 'ammo',
+};
+
+const KINDS: MissionKind[] = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge'];
 const MAPS: SkirmishMap[] = ['city', 'wilds', 'facility'];
 const randomKind = () => KINDS[Math.floor(Math.random() * KINDS.length)]!;
 const randomMap = () => MAPS[Math.floor(Math.random() * MAPS.length)]!;
@@ -267,9 +309,21 @@ export class Hud {
     append(
       this.mission,
       h('span.mission-kind', { title: m.area }, type(MISSION_NAMES[m.kind].toUpperCase())),
-      h('span.mission-goal', { title: m.objective }, type(m.objective)),
+      h('span.mission-goal', { title: m.objectiveTip ?? m.objective }, type(m.objective)),
       m.turnsLeft !== null ? h(`span.timer${m.turnsLeft <= 3 ? '.urgent' : ''}`, {}, `${m.turnsLeft} ${m.turnsLeft === 1 ? 'TURNO' : 'TURNOS'}`) : null,
+      m.horde ? this.hordeGauge(m.horde) : null,
       m.alert ? h('span.timer.urgent.alert', {}, m.alert) : null,
+    );
+  }
+
+  /** The horde's clock in the strip: a short bar that fills towards the next wave (full: it comes this turn). */
+  private hordeGauge(horde: HordeView): HTMLElement {
+    const level = horde.fill >= 1 ? '.full' : horde.fill >= 0.7 ? '.near' : '';
+    return h(
+      `span.horde${level}`,
+      { title: horde.title, 'aria-label': horde.title },
+      h('span.horde-label', {}, 'HORDA'),
+      h('span.horde-bar', {}, h('i', { style: { width: `${Math.round(Math.min(1, horde.fill) * 100)}%` } })),
     );
   }
 
@@ -327,8 +381,12 @@ export class Hud {
     }
   }
 
-  /** The soldier sheet: symbols, pips and numbers, readable at a glance (full words in the tooltips). */
-  setSelected(u: Unit | null): void {
+  /**
+   * The soldier sheet: symbols, pips and numbers, readable at a glance (full
+   * words in the tooltips). `pack`: the backpack, when the map has anything to
+   * search or the soldier carries something.
+   */
+  setSelected(u: Unit | null, pack: PackView | null = null): void {
     clear(this.unitPanel);
     this.unitPanel.classList.toggle('hidden', !u);
     if (!u) return;
@@ -365,6 +423,36 @@ export class Hud {
         h('span.stat-icon'),
         h(`span.tier.t${u.weaponTier ?? 1}`, {}, ...Array.from({ length: u.weaponTier ?? 1 }, () => h('i'))),
       ),
+      pack ? this.backpack(pack) : null,
+    );
+  }
+
+  /**
+   * The backpack (docs/FASE2.md): one slot per thing carried, § for
+   * suministros, the accessory's symbol, a pill for medicines; then what the
+   * whole squad carries. It only counts if it gets home.
+   */
+  private backpack(pack: PackView): HTMLElement {
+    const slot = (s: PackSlot | undefined) => {
+      if (!s) return h('span.pack-slot.empty', { title: 'Hueco libre' });
+      if (s.kind === 'supplies') return h('span.pack-slot.supplies', { title: `Suministros: +${s.amount} §` }, h('b', {}, `${s.amount}§`));
+      if (s.kind === 'medicines') return h('span.pack-slot.medicines', { title: s.amount === 1 ? 'Medicinas' : `Medicinas ×${s.amount}` }, h('span.stat-icon'));
+      return h(`span.pack-slot.item.i-${ITEM_ICONS[s.item]}`, { title: `${ITEMS[s.item].name}: ${ITEMS[s.item].description}` }, h('span.stat-icon'));
+    };
+    const q = pack.squad;
+    const total = (kind: string, n: number, text: string) => (n ? h(`span.pack-total.${kind}`, {}, kind === 'supplies' ? null : h('span.stat-icon'), h('b', {}, text)) : null);
+    return h(
+      'div.unit-pack',
+      { title: `Mochila ${pack.slots.length}/${pack.size}. Cuenta si vuelve: lo que lleva un caído se pierde.` },
+      h('span.pack-slots', {}, ...Array.from({ length: pack.size }, (_, i) => slot(pack.slots[i]))),
+      h(
+        'span.pack-squad',
+        { title: q.text },
+        h('small', {}, 'ESCUADRA'),
+        q.supplies || q.items || q.medicines
+          ? h('span.pack-totals', {}, total('supplies', q.supplies, `${q.supplies}§`), total('item', q.items, `×${q.items}`), total('medicines', q.medicines, `×${q.medicines}`))
+          : h('span.pack-none', {}, '—'),
+      ),
     );
   }
 
@@ -377,6 +465,7 @@ export class Hud {
           `button.ability${a.active ? '.active' : ''}${a.free ? '.free' : ''}${a.depleted ? '.depleted' : ''}`,
           {
             disabled: !a.enabled,
+            'data-ability': a.id,
             'aria-label': `${a.name}. ${a.cost}. ${a.description}`,
             onclick: () => this.handlers.onAbility(a.id),
           },
@@ -398,7 +487,7 @@ export class Hud {
       'span.ability-card',
       { 'aria-hidden': 'true' },
       h('span.ac-head', {}, h('b', {}, a.name), a.hotkey ? h('span.ac-key', {}, a.hotkey) : null),
-      h('span.ac-cost', {}, [a.cost, a.limits].filter(Boolean).join(' · ')),
+      h('span.ac-cost', {}, [a.cost, a.limits, a.noise].filter(Boolean).join(' · ')),
       a.damage ? h('span.ac-dmg', {}, a.damage) : null,
       h('span.ac-desc', {}, a.description),
       a.reason ? h('span.ac-why', {}, a.reason) : null,
@@ -420,10 +509,10 @@ export class Hud {
       append(
         this.target,
         h('div.shot-title', {}, type(view.title)),
-        h('div.self-cost', {}, [view.cost, view.limits].filter(Boolean).join(' · ')),
+        h('div.self-cost', {}, [view.cost, view.limits, view.noise].filter(Boolean).join(' · ')),
         h('div.self-desc', {}, view.effect),
         view.detail ? h('div.effect', {}, view.detail) : null,
-        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : 'Otra vez, Espacio o Intro: usar · Esc: cancelar'),
+        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : view.hint ?? 'Otra vez, Espacio o Intro: usar · Esc: cancelar'),
         h(
           'div.shot-actions',
           {},
@@ -450,8 +539,9 @@ export class Hud {
         : h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio o Intro' }, view.action.toUpperCase()),
       h('button.cancel', { onclick: () => this.handlers.onCancel(), title: 'Esc' }, 'Cancelar'),
     );
+    const noise = view.noise ? h('div.shot-noise', { title: 'Todo enemigo a esa distancia lo oye y va a mirar' }, view.noise) : null;
     if (view.kind === 'support') {
-      append(this.target, h('div.shot-title', {}, type(view.title)), head, view.damage ? damageBlock(view.damage) : null, h('div.effect', {}, view.effect), actions);
+      append(this.target, h('div.shot-title', {}, type(view.title)), head, view.damage ? damageBlock(view.damage) : null, h('div.effect', {}, view.effect), noise, actions);
       return;
     }
     const row = (m: Modifier) => h('div.mod', {}, h('span', {}, m.label), h(`span.${m.value >= 0 ? 'pos' : 'neg'}`, {}, `${m.value > 0 ? '+' : ''}${m.value}`));
@@ -470,6 +560,7 @@ export class Hud {
       view.critMods.length ? h('div.mods.crit', {}, ...view.critMods.map(row)) : null,
       view.graze ? h('div.graze', {}, `Rozadura posible: ${view.graze}%${view.damage.graze ? ` (daño ${view.damage.graze})` : ''}`) : null,
       view.note ? h('div.effect', {}, view.note) : null,
+      noise,
       actions,
     );
   }

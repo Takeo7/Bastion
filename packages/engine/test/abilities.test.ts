@@ -262,22 +262,25 @@ describe('psionics', () => {
     expect(psiChance(addUnit(s, 'a9', 'mec', 0, 0))).toBe(0);
   });
 
-  it('a mind-controlled soldier fights for the aliens until the sectoid dies', () => {
-    let done = false;
-    for (let seed = 1; seed < 200 && !done; seed++) {
+  it('the scream disorients or panics but never takes control, and every zombie within 16 tiles hears it', () => {
+    const effects = new Set<string>();
+    for (let seed = 1; seed < 200; seed++) {
       const { s, soldier, sectoid } = sectoidField();
+      const near = addUnit(s, 'a2', 'zombie', 18, 2, { podId: 'p2' });
+      const far = addUnit(s, 'a3', 'zombie', 19, 19, { podId: 'p2' });
+      s.pods.push({ id: 'p2', active: false, unitIds: ['a2', 'a3'], patrol: [], patrolIndex: 0 });
       const sim = new Sim(s, new Rng(seed), [0]);
       sim.perform(sectoid, 'mindspin', { target: soldier });
       const psi = sim.events.find((e) => e.t === 'psi') as Extract<GameEvent, { t: 'psi' }>;
-      if (psi.effect !== 'controlled') continue;
-      expect(soldier.team).toBe('alien');
-      expect(soldier.controlledBy).toBe('a1');
-      sim.damage(sectoid, 99, 0);
+      if (psi.effect) effects.add(psi.effect);
       expect(soldier.team).toBe('xcom');
-      expect(soldier.controlledBy).toBeNull();
-      done = true;
+      expect(sim.events.find((e) => e.t === 'noise')).toMatchObject({ tile: sectoid.pos, radius: 16, by: 'a1', heard: ['a2'] });
+      expect(near.heard).toEqual(sectoid.pos);
+      expect(far.heard).toBeUndefined();
+      // Heard, not seen: the pod stays unaware.
+      expect(s.pods[1]!.active).toBe(false);
     }
-    expect(done).toBe(true);
+    expect([...effects].sort()).toEqual(['disoriented', 'panicked']);
   });
 
   it('panic costs the next turn; disorientation lowers aim and forbids explosives', () => {

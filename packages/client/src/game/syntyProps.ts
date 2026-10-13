@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { atlasOf, loadModel } from './synty';
-import { PROP_SETS, PROPS, type AtlasId, type PropId } from './syntyManifest';
+import { PROP_SETS, PROPS, type AtlasId, type PropId, type PropSet } from './syntyManifest';
 
 // Synty props for the map: each prop's meshes, normalised to a tile as the
 // manifest says (fit, yaw, shift) and standing on y = 0, ready to instance.
@@ -16,11 +16,12 @@ const parts = new Map<PropId, PropPart[]>();
 const pending = new Map<PropId, Promise<void>>();
 
 function prepare(id: PropId, model: THREE.Group): void {
-  const a = PROPS[id] as { fit?: number; stretch?: boolean; thick?: number; yaw?: number; shift?: [number, number] };
+  const a = PROPS[id] as { fit?: number; stretch?: boolean; thick?: number; yaw?: number; shift?: [number, number]; origin?: boolean };
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
-  const centre = box.getCenter(new THREE.Vector3());
+  // On its own origin (a pole with an arm) or its middle; on the floor either way.
+  const centre = a.origin ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
   // The longest side to `fit` tiles; with `stretch` only that side; height and depth times `thick`.
   const along = a.fit ? a.fit / Math.max(size.x, size.z) : 1;
   const across = (a.stretch ? 1 : along) * (a.thick ?? 1);
@@ -59,8 +60,8 @@ export function syntyPropsLoaded(): Promise<void> {
   return Promise.all(pending.values()).then(() => undefined);
 }
 
-/** The Synty props a prop set of props.ts draws; undefined: it keeps its voxel props. */
-export function syntySet(set: string): PropId[] | undefined {
+/** The Synty props a prop set draws (the map picks one per tile). */
+export function syntySet(set: PropSet): readonly PropId[] {
   return PROP_SETS[set];
 }
 

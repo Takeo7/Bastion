@@ -14,28 +14,22 @@ import {
   baseWeaponTier,
   bastionLevel,
   BIOME_NAMES,
-  BRANCHES,
   BUILD_IDS,
   buildable,
   BUILDS,
   canAfford,
   CLASS_TOP,
-  CENTER,
-  CENTER_NAME,
   AXES,
   axesOf,
   baseAttrs,
   echoesLevel,
   RECRUIT_DESCRIPTION,
   soldierTemplate,
-  songRowLevel,
-  wouldSpecialize,
   attrPointsFree,
-  dormant,
-  KIT_CLASS,
-  KIT_NAMES,
   leaningClass,
   learnTalent,
+  SPECIALIZE_POINTS,
+  SPECIALIZE_RANK,
   SPECIALIZE_RANK_NAME,
   talentPointsFree,
   contactCapacity,
@@ -103,12 +97,10 @@ import {
   PARTITURA_LEVEL,
   QUESTS,
   pointsInAxis,
-  pointsInBranch,
   pointsToSpend,
   randomAppearance,
   RANKS,
   retrainCost,
-  ROW_GATES,
   RECRUIT_COST,
   REGION_LORE,
   regionIncome,
@@ -156,7 +148,6 @@ import {
   type AttrId,
   type Build,
   type PerkId,
-  type TalentDef,
   type TemplateId,
   type PlayerInfo,
   type RegionId,
@@ -175,6 +166,8 @@ import { Stage, type Shot } from './stage';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
 import { plotIcon } from './plotIcons';
+import { skillTree } from './skillTree';
+import { SURVIVOR_CHOICES } from '../game/syntyManifest';
 
 export interface StrategyHandlers {
   send(cmd: CampaignCommand): void;
@@ -208,7 +201,7 @@ const TIME_HELP = 'El tiempo solo pasa al ESCANEAR (hasta que ocurre algo) y al 
 /** What each browser has already seen of every campaign's news (the tabs' numbers). */
 const NEWS_KEY = storageKey('seenNews');
 
-const KIND_ICON: Record<MissionKind, string> = { elimination: '✕', recovery: '◆', sabotage: 'ϟ', hack: '⌘', rescue: '✚' };
+const KIND_ICON: Record<MissionKind, string> = { elimination: '✕', recovery: '◆', sabotage: 'ϟ', hack: '⌘', rescue: '✚', scavenge: '⌂' };
 const DIFFICULTY = ['', 'Moderada', 'Difícil', 'Muy difícil', 'Extrema'];
 const CLASSES: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'];
 
@@ -337,10 +330,12 @@ export class StrategyScreen {
   private promoting = false;
   /** Soldier whose Reentrenar button waits for a second click. */
   private retrainArmed: string | null = null;
-  /** Axis of the Rosa open in the Hoja de servicio (null = the soldier's main one). */
+  /** Axis open in the Árbol de habilidades (null = the soldier's main one). */
   private sheetAxis: ClassId | null = null;
-  /** The Hoja de servicio shows the whole Rosa instead of what can be learnt (or was). */
-  private wholeRosa = false;
+  /** The Árbol de habilidades shows its four axes around the centre instead of one. */
+  private wholeTree = false;
+  /** The talent the tree's inspector shows when the pointer is elsewhere. */
+  private treeFocus: PerkId | null = null;
   /** A promotion being laid out on the sheet; nothing is sent until «Guardar». */
   private plan: { soldier: string; attrs: AttrId[]; talents: PerkId[] } | null = null;
   /** The sheet just saved: it shows its stamp for a moment. */
@@ -390,7 +385,8 @@ export class StrategyScreen {
       this.custom = null;
       this.promoting = false;
       this.plan = null;
-      this.wholeRosa = false;
+      this.wholeTree = false;
+      this.treeFocus = null;
       this.leaving = false;
       this.newsOpen = false;
       this.settingsOpen = false;
@@ -453,7 +449,7 @@ export class StrategyScreen {
     clear(this.modal);
     this.modal.classList.remove('show');
     this.root.classList.add('launching');
-    this.root.append(h('div.launch-banner', {}, 'DESPEGUE'));
+    this.root.append(h('div.launch-banner', {}, 'EN MARCHA'));
     void this.stage.show('bastion', this.bastion.takeoff());
     const gone = this.bastion.launch();
     window.setTimeout(() => this.stage.blackout(), (LAUNCH_SECONDS - 0.5) * 1000);
@@ -955,6 +951,7 @@ export class StrategyScreen {
         'div.strat-res',
         {},
         h('span.strat-credits', { title: 'Suministros: construir, comprar accesorios, reclutar y contactar zonas' }, h('i', {}, '§'), h('b', {}, String(c.credits))),
+        h('span.strat-credits.medicines', { title: 'Medicinas: se traen de los saqueos. Curarán heridas e infecciones.' }, h('i', {}, '✚'), h('b', {}, String(c.medicines ?? 0))),
         this.levelBadge(c),
       ),
       h(
@@ -1853,7 +1850,7 @@ export class StrategyScreen {
     );
     const s = c.soldiers.find((x) => x.id === this.soldier);
     const draft = this.custom && this.custom.soldier === s?.id ? this.custom : null;
-    this.bastion.setShowcase(s?.alive ? soldierTemplate(s.cls) : null, s ? this.playerColor(s.owner) : '#fff', draft?.appearance ?? s?.appearance, s ? this.gearFor(c, s) : undefined);
+    this.bastion.setShowcase(s?.alive ? soldierTemplate(s.cls) : null, s ? this.playerColor(s.owner) : '#fff', draft?.appearance ?? s?.appearance, s ? this.gearFor(c, s) : undefined, s?.id);
     if (!s) return;
     if (draft) {
       this.viewEl.append(this.panel('barracks-right', 'right', ...this.customizer(s, draft)));
@@ -1965,7 +1962,7 @@ export class StrategyScreen {
         h(
           `button.x-btn${this.hasPoints(s) && isMine ? '.primary.waiting' : ''}`,
           { onclick: () => ((this.promoting = true), (this.retrainArmed = null), this.render()) },
-          this.hasPoints(s) && isMine ? '¡Ascenso! Repartir puntos' : 'Hoja de servicio',
+          this.hasPoints(s) && isMine ? '¡Ascenso! Repartir puntos' : 'Árbol de habilidades',
         ),
       ),
     );
@@ -1996,7 +1993,7 @@ export class StrategyScreen {
       d.appearance = patched(patch);
       previewing ||= window.setTimeout(() => {
         previewing = 0;
-        if (this.custom === d) this.bastion.setShowcase(soldierTemplate(s.cls), this.playerColor(s.owner), d.appearance, this.gearFor(this.c(), s));
+        if (this.custom === d) this.bastion.setShowcase(soldierTemplate(s.cls), this.playerColor(s.owner), d.appearance, this.gearFor(this.c(), s), s.id);
       }, 90);
     };
     const text = (key: 'name' | 'nickname', label: string, max: number, placeholder: string) =>
@@ -2111,6 +2108,18 @@ export class StrategyScreen {
       h('h2.x-title', {}, displayName(d.name.trim() || s.name, d.nickname.trim())),
       text('name', 'Nombre', NAME_MAX, s.name),
       text('nickname', 'Apodo', NICKNAME_MAX, 'Sin apodo'),
+      // Which survivor the soldier is (Synty); unset, the one their id picks, the same in every screen.
+      h(
+        'div.x-field',
+        {},
+        h('small', {}, 'Personaje'),
+        h(
+          'div.x-chips',
+          {},
+          h(`button${look.character ? '' : '.on'}`, { title: 'El que le toque, siempre el mismo', onclick: () => set({ character: undefined }) }, 'Al azar'),
+          ...SURVIVOR_CHOICES.map((choice) => h(`button${look.character === choice.id ? '.on' : ''}`, { onclick: () => set({ character: choice.id }) }, choice.name)),
+        ),
+      ),
       chips('Cabeza', HEAD_IDS, HEADS, look.head, (head) => set({ head })),
       chips('Complexión', BUILD_IDS, BUILDS, look.build, (build) => set({ build })),
       h('div.x-head', {}, 'Colores'),
@@ -2195,15 +2204,15 @@ export class StrategyScreen {
     this.savedStamp = { soldier: s.id, until: performance.now() + 2600 };
     uiSound('stamp');
     const what = [...new Set(attrs)].map((id) => `${ATTRS[id].name} +${attrs.filter((x) => x === id).length}`).concat([...new Set(talents)].map((id) => TALENTS[id].name));
-    this.toast(`Guardado en la hoja de ${s.name}: ${what.join(', ')}.`);
+    this.toast(`Guardado para ${s.name}: ${what.join(', ')}.`);
     window.setTimeout(() => this.render(), 2700);
   }
 
   /**
-   * Hoja de servicio. With points to spend it is the promotion: aptitudes with
-   * + and −, and only the talents that can be learnt now, laid out as a draft
-   * and saved at once. Otherwise it reads as the soldier's file, and the whole
-   * Rosa is one click away.
+   * Árbol de habilidades (once the Hoja de servicio). With points to spend it is
+   * the promotion: aptitudes with + and −, and the tree's open nodes taking a
+   * level on click, laid out as a draft and saved at once. Otherwise it reads as
+   * the soldier's file. The tree itself is skillTree.ts.
    */
   private promotionPanel(c: CampaignState, s: CampaignSoldier): HTMLElement {
     const mine = s.owner === this.mySlot && s.alive;
@@ -2237,7 +2246,7 @@ export class StrategyScreen {
       return h(
         `div.apt${added ? '.drafted' : ''}`,
         { title: ATTR_THRESHOLDS.map((n, i) => `${n}: ${def.thresholds[i]}`).join('\n') },
-        h('div.apt-head', {}, h('b', {}, def.name), h('small.apt-effect', {}, def.effect), h('span.apt-val', {}, String(value)), added ? h('small.apt-added', {}, `+${added}`) : null),
+        h('div.apt-head', {}, h('span.apt-ico', { 'data-apt': id }), h('b', {}, def.name), h('small.apt-effect', {}, def.effect), h('span.apt-val', {}, String(value)), added ? h('small.apt-added', {}, `+${added}`) : null),
         h(
           'div.apt-row',
           {},
@@ -2260,96 +2269,46 @@ export class StrategyScreen {
       );
     });
 
-    // A talent card; in a draft a click adds a level and its ✕ takes one back.
-    const card = (d: TalentDef, where = false) => {
-      const level = b.talents[d.id] ?? 0;
-      const fresh = level - (s.talents[d.id] ?? 0);
-      const blocked = talentBlocker(b, d.id, echoes);
-      const open = promoting && !blocked;
-      const sleeping = level > 0 && dormant(b, d.id);
-      const becomes = wouldSpecialize(b, d.id);
-      const req = d.req ? h(`span.talent-req${b.attrs[d.req[0]] < d.req[1] ? '.miss' : ''}`, { title: `Pide ${ATTRS[d.req[0]].name} ${d.req[1]}` }, `${ATTRS[d.req[0]].short} ${d.req[1]}`) : null;
-      return h(
-        `button.talent${level ? '.taken' : ''}${fresh ? '.drafted' : ''}${open ? '.open' : ''}${!level && blocked && !/No quedan puntos/.test(blocked) ? '.shut' : ''}${d.coop ? '.coop' : ''}${d.song ? '.song' : ''}`,
-        {
-          disabled: !open,
-          title: blocked && level < d.max && mine ? blocked : d.coop ? 'Llave doble: solo funciona junto a soldados de tu compañero.' : '',
-          onclick: () => setPlan(planAttrs, [...planTalents, d.id]),
-        },
-        where && d.axis ? h('small.talent-where', {}, `${BRANCHES[d.axis][d.branch].name} · fila ${d.row + 1}`) : null,
-        h('b', {}, d.name, d.ability ? ' ◆' : '', d.coop ? ' ⚷⚷' : ''),
-        h('span.talent-levels', {}, ...Array.from({ length: d.max }, (_, i) => h(`i${i < level - fresh ? '.on' : i < level ? '.plan' : ''}`)), h('small', {}, `${level}/${d.max}`), req),
-        h('small.talent-desc', {}, d.description),
-        d.kit && b.cls !== KIT_CLASS[d.kit] ? h('small.talent-becomes', {}, `${sleeping ? 'Dormido' : 'Duerme'} hasta llevar ${KIT_NAMES[d.kit]}`) : null,
-        becomes && open ? h('small.talent-becomes', {}, `Te especializa como ${TEMPLATES[becomes].name}`) : null,
-        fresh
-          ? h(
-              'span.talent-undo',
-              {
-                title: 'Quitar',
-                onclick: (e: Event) => {
-                  e.stopPropagation();
-                  setPlan(planAttrs, without(planTalents, d.id));
-                },
-              },
-              '✕',
-            )
-          : null,
-      );
-    };
-
     // Where the soldier is heading: the class, or the axis a recruit leans to.
     const leaning = b.cls ? null : leaningClass(b);
     const { second } = axesOf(b);
+    const started = AXES.some((a) => pointsInAxis(b.talents, a) > 0);
     const path = b.cls
       ? `${TEMPLATES[b.cls].name}${second ? ` · segundo eje: ${TEMPLATES[second].name}` : ''}`
-      : `Recluta · en ${SPECIALIZE_RANK_NAME} se especializa en el eje en que más haya aprendido${AXES.some((a) => pointsInAxis(b.talents, a) > 0) ? `: ahora, ${TEMPLATES[leaning!].name}` : ''}`;
+      : b.rank >= SPECIALIZE_RANK
+        ? `Recluta reentrenado · se especializa en cuanto tenga ${SPECIALIZE_POINTS} puntos en un eje (el Oficio no cuenta)`
+        : `Recluta · en ${SPECIALIZE_RANK_NAME} se especializa en el eje en que más haya aprendido${started ? `: ahora, ${TEMPLATES[leaning!].name}` : ''}`;
 
-    // Talents: in a draft, only what can be learnt now (and what this draft took): the centre, then one axis at a time.
-    const shown = (d: TalentDef) => (promoting ? !talentBlocker(b, d.id, echoes) || (b.talents[d.id] ?? 0) > (s.talents[d.id] ?? 0) : (b.talents[d.id] ?? 0) > 0);
-    const order = [b.cls ?? leaning!, ...AXES.filter((a) => a !== (b.cls ?? leaning))];
-    const counts = new Map(order.map((a) => [a, talentsOf(a).filter(shown).length]));
-    const started = AXES.some((a) => pointsInAxis(b.talents, a) > 0);
-    const axis = this.sheetAxis ?? (b.cls ?? (started ? leaning : null) ?? order.find((a) => counts.get(a)) ?? order[0]!);
-    const centre = CENTER.filter(shown);
-    const axisTabs = h(
-      'div.rosa-axes',
+    // The axis open: the one picked, else the class, else where a recruit leans, else the first with something to learn.
+    const learnable = (a: ClassId) => promoting && talentsOf(a).some((d) => !talentBlocker(b, d.id, echoes));
+    const axis = this.sheetAxis ?? b.cls ?? (started ? leaning : null) ?? AXES.find(learnable) ?? AXES[0]!;
+    const { tree, inspect } = skillTree({
+      s,
+      b,
+      echoes,
+      promoting,
+      axis,
+      whole: this.wholeTree,
+      focus: this.treeFocus,
+      clsTag: (a) => this.clsTag(a),
+      onAxis: (a) => ((this.sheetAxis = a), (this.wholeTree = false), this.render()),
+      onAdd: (id) => ((this.treeFocus = id), setPlan(planAttrs, [...planTalents, id])),
+      onRemove: (id) => ((this.treeFocus = id), setPlan(planAttrs, without(planTalents, id))),
+      onFocus: (id) => (this.treeFocus = id),
+      onZoom: (a, id) => ((this.sheetAxis = a), (this.wholeTree = false), (this.treeFocus = id ?? this.treeFocus), this.render()),
+    });
+    const talentsPart = h(
+      'div.service-tree',
       {},
-      ...order.map((a) =>
-        h(
-          `button.x-btn.small${a === axis ? '.on' : ''}`,
-          { onclick: () => ((this.sheetAxis = a), this.render()), title: a === b.cls ? 'Su clase' : a === leaning && started ? 'Hacia donde se inclina' : '' },
-          this.clsTag(a),
-          ` ${TEMPLATES[a].name}`,
-          h('small', {}, ` · ${counts.get(a)}`),
-        ),
+      h(
+        'div.x-group',
+        {},
+        promoting ? '2 · Talentos' : 'Talentos',
+        promoting ? this.chip(free.talents ? `Quedan ${free.talents}` : 'Repartidos', free.talents ? 'good' : '') : null,
+        !promoting && !talentIds(b.talents).length ? h('small', {}, ` · cada ascenso da ${TALENT_POINTS_PER_RANK} puntos, desde ${RANKS[1]!.name}`) : null,
       ),
+      tree,
     );
-    const axisCards = talentsOf(axis).filter(shown);
-    const picker = h(
-      'div.talent-picker',
-      {},
-      centre.length ? h('div.x-group', {}, CENTER_NAME) : null,
-      centre.length ? h('div.talent-pick', {}, ...centre.map((d) => card(d))) : null,
-      axisTabs,
-      axisCards.length
-        ? h('div.talent-pick', {}, ...axisCards.map((d) => card(d, true)))
-        : h('p.x-muted', {}, promoting ? 'Nada que aprender en este eje ahora: hacen falta más puntos en una rama o una aptitud más alta.' : 'Nada aprendido en este eje.'),
-    );
-    const rosa = this.wholeRosa ? this.rosaGrid(b, axis, card, echoes) : null;
-    const talentsPart = promoting
-      ? h(
-          'div.service-tree',
-          {},
-          h('div.x-group', {}, '2 · Talentos', this.chip(free.talents ? `Quedan ${free.talents}` : 'Repartidos', free.talents ? 'good' : '')),
-          this.wholeRosa ? rosa : picker,
-        )
-      : h(
-          'div.service-tree',
-          {},
-          h('div.x-group', {}, 'Talentos'),
-          this.wholeRosa ? rosa : talentIds(b.talents).length ? picker : h('p.x-muted', {}, `Cada ascenso da ${TALENT_POINTS_PER_RANK} puntos de talento, desde ${RANKS[1]!.name}.`),
-        );
 
     const cost = retrainCost(c);
     const spent = attrPointsFree(s) < ATTR_POINTS_PER_RANK * s.rank || talentPointsFree(s) < TALENT_POINTS_PER_RANK * s.rank;
@@ -2378,7 +2337,8 @@ export class StrategyScreen {
       this.promoting = false;
       this.retrainArmed = null;
       this.sheetAxis = null;
-      this.wholeRosa = false;
+      this.wholeTree = false;
+      this.treeFocus = null;
       this.plan = null;
       this.render();
     };
@@ -2387,7 +2347,7 @@ export class StrategyScreen {
       `div.x-panel.wide.service${promoting ? '.promoting' : ''}`,
       {},
       stamped ? h('div.saved-stamp', {}, 'GUARDADO') : null,
-      h('div.alert-kicker', {}, promoting ? `ASCENSO · ${RANKS[s.rank]!.name.toUpperCase()}` : `HOJA DE SERVICIO · ${RANKS[s.rank]!.name.toUpperCase()}`),
+      h('div.alert-kicker', {}, promoting ? `ASCENSO · ${RANKS[s.rank]!.name.toUpperCase()}` : `ÁRBOL DE HABILIDADES · ${RANKS[s.rank]!.name.toUpperCase()}`),
       h('h2.x-title', {}, displayName(s.name, s.nickname)),
       h('p.x-sub', {}, path),
       promoting
@@ -2402,7 +2362,14 @@ export class StrategyScreen {
       h(
         'div.service-sheet',
         {},
-        h('div.service-apts', {}, h('div.x-group', {}, promoting ? '1 · Aptitudes' : 'Aptitudes', promoting ? this.chip(free.attrs ? `Quedan ${free.attrs}` : 'Repartidas', free.attrs ? 'good' : '') : null), ...apts, retrain),
+        h(
+          'div.service-apts',
+          {},
+          h('div.x-group', {}, promoting ? '1 · Aptitudes' : 'Aptitudes', promoting ? this.chip(free.attrs ? `Quedan ${free.attrs}` : 'Repartidas', free.attrs ? 'good' : '') : null),
+          ...apts,
+          retrain,
+          inspect,
+        ),
         talentsPart,
       ),
       h(
@@ -2410,53 +2377,10 @@ export class StrategyScreen {
         {},
         promoting ? h('button.x-btn.primary', { disabled: !drafted, onclick: () => this.savePlan(s, planAttrs, planTalents) }, drafted ? `Guardar (${drafted})` : 'Guardar') : null,
         promoting && drafted ? h('button.x-btn', { onclick: () => setPlan([], []) }, 'Deshacer todo') : null,
-        h('button.x-btn', { onclick: () => ((this.wholeRosa = !this.wholeRosa), this.render()) }, this.wholeRosa ? (promoting ? 'Solo lo que puedo aprender' : 'Solo lo aprendido') : 'Ver la Rosa entera'),
+        h('button.x-btn', { onclick: () => ((this.wholeTree = !this.wholeTree), this.render()) }, this.wholeTree ? 'Ver un eje de cerca' : 'Ver el árbol entero'),
         h('button.x-btn', { onclick: close }, drafted ? 'Cerrar sin guardar' : 'Cerrar'),
       ),
     );
-  }
-
-  /** The whole Rosa of one axis, row by row with its gates: for those who want to plan far ahead. */
-  private rosaGrid(b: Build, axis: ClassId, card: (d: TalentDef) => HTMLElement, echoes: number): HTMLElement {
-    const { second } = axesOf(b);
-    const tabs = h(
-      'div.rosa-axes',
-      {},
-      ...AXES.map((a) => {
-        const role = a === b.cls ? 'principal' : a === second ? 'segundo eje' : '';
-        const points = pointsInAxis(b.talents, a);
-        return h(
-          `button.x-btn.small${a === axis ? '.on' : ''}`,
-          { onclick: () => ((this.sheetAxis = a), this.render()) },
-          this.clsTag(a),
-          ` ${TEMPLATES[a].name}`,
-          points ? h('small', {}, ` · ${points}`) : null,
-          role ? h('small', {}, ` · ${role}`) : null,
-        );
-      }),
-    );
-    const grid = h('div.talent-grid.four');
-    grid.append(h('div'));
-    BRANCHES[axis].forEach((br, i) =>
-      grid.append(
-        h(
-          `div.talent-branch${br.song ? '.song' : ''}`,
-          {},
-          h('b', {}, br.name),
-          h('small', {}, br.song ? (echoes ? `Taller de oficios · nivel ${echoes}` : 'Hace falta el Taller de oficios') : br.focus),
-          h('span', {}, `${pointsInBranch(b.talents, axis, i)} puntos`),
-        ),
-      ),
-    );
-    ROW_GATES.forEach((gate, row) => {
-      grid.append(h('div.talent-gate', { title: `Esta fila pide ${gate} puntos en la rama, en las filas de arriba (en el Oficio, uno por fila)` }, h('b', {}, String(gate)), h('small', {}, 'puntos')));
-      for (const branch of [0, 1, 2, 3]) {
-        const cards = talentsOf(axis).filter((d) => d.branch === branch && d.row === row);
-        const songLocked = branch === 3 && songRowLevel(row) > echoes;
-        grid.append(h(`div.talent-cell${songLocked ? '.locked' : ''}`, { title: songLocked ? `Taller de oficios · nivel ${songRowLevel(row)}` : '' }, ...cards.map((d) => card(d))));
-      }
-    });
-    return h('div.rosa-whole', {}, h('div.x-group', {}, CENTER_NAME), h('div.talent-center', {}, ...CENTER.map((d) => card(d))), tabs, grid);
   }
 
   // -------------------------------------------------------- facilities
@@ -2672,7 +2596,7 @@ export class StrategyScreen {
     const limit = squadLimit(c, this.connected());
     const squad = c.squad.map((id) => c.soldiers.find((s) => s.id === id)).filter((s): s is CampaignSoldier => !!s);
     const pads = squadPads(c).map((id) => squad.find((s) => s.id === id) ?? null);
-    this.bastion.setLineup(pads.map((s) => (s ? { template: soldierTemplate(s.cls), color: this.playerColor(s.owner), appearance: s.appearance, gear: this.gearFor(c, s) } : null)));
+    this.bastion.setLineup(pads.map((s) => (s ? { template: soldierTemplate(s.cls), color: this.playerColor(s.owner), appearance: s.appearance, gear: this.gearFor(c, s), seed: s.id } : null)));
     const myCount = squad.filter((s) => s.owner === this.mySlot).length;
 
     this.viewEl.append(
@@ -2748,7 +2672,7 @@ export class StrategyScreen {
           { disabled: !c.squad.length, onclick: () => this.send({ type: 'launch', ready: !ready }) },
           ready ? 'LISTOS PARA DESPEGAR' : partnerReady ? `DESPEGAR: ${partner!.name.toUpperCase()} YA ESTÁ LISTO` : 'LANZAR MISIÓN',
         ),
-        h('small.x-muted', {}, ready && waiting ? `Esperando a ${partner!.name}` : partnerReady ? `${partner!.name} espera para despegar` : `${squad.length}/${max} soldados`),
+        h('small.x-muted', {}, ready && waiting ? `Esperando a ${partner!.name}` : partnerReady ? `${partner!.name} espera para salir` : `${squad.length}/${max} soldados`),
         h(
           'div.alert-actions',
           {},
@@ -2853,12 +2777,18 @@ export class StrategyScreen {
     }
     const entries: LineupEntry[] = report.squad.map((e) => {
       const s = c.soldiers.find((x) => x.id === e.id);
-      return { template: soldierTemplate(e.cls), color: this.playerColor(e.owner), status: e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined };
+      return { template: soldierTemplate(e.cls), color: this.playerColor(e.owner), status: e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined, seed: e.id };
     });
     this.bastion.setLineup(entries);
     // The outcome in a line of figures; the details are in each chip's title, the story's page one click away.
-    const credits = (report.reward?.credits ?? 0) + report.salvage;
-    const creditsWhy = [report.reward?.credits ? `Recompensa: ${report.reward.credits}` : '', report.bodies ? `${report.bodies} cuerpos registrados: ${report.salvage}` : ''].filter(Boolean).join(' · ');
+    const credits = (report.reward?.credits ?? 0) + report.salvage + (report.loot?.supplies ?? 0);
+    const creditsWhy = [
+      report.reward?.credits ? `Recompensa: ${report.reward.credits}` : '',
+      report.bodies ? `${report.bodies} cuerpos registrados: ${report.salvage}` : '',
+      report.loot?.supplies ? `Botín: ${report.loot.supplies}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
     const wounded = report.squad.filter((e) => e.status === 'wounded');
     const fallen = report.squad.filter((e) => e.status === 'dead').length;
     const tally = h(
@@ -2883,6 +2813,7 @@ export class StrategyScreen {
           h('h1', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'),
           h('p.x-sub', {}, report.missionName),
           tally,
+          report.loot?.line ? h('p.debrief-loot', {}, report.loot.line) : null,
           story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
         ),
       ),

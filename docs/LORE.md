@@ -14,7 +14,7 @@ Gameplay ha revisado el coste en reglas (ver «Orden de trabajo»). La fase 1 (n
 - capítulos, encargos y rumores;
 - radio y Expediente;
 - la base en superficie;
-- la Rosa y sus ramas;
+- el árbol de habilidades y sus ramas;
 - la doble llave.
 
 Lo nuevo de verdad es la supervivencia: saquear, el ruido, la infección y la escasez.
@@ -93,7 +93,7 @@ Se mantienen las voces de la radio que ya existen y cambian sus vidas.
 | Personaje | Papel nuevo |
 |---|---|
 | **Inés Albarrán, «Morse»** | Radioaficionada de toda la vida. Mantiene la radio de Atalaya y es la primera en oír a otros vivos. Firma los informes. |
-| **Teodoro Vidal, «el Relojero»** | Mecánico jubilado. Blindó La Mula, arregla armas y enseña oficios. Secreto: trabajó de vigilante en el Instituto Galena la noche en que todo empezó. |
+| **Teodoro Vidal, «el Relojero»** | Mecánico jubilado. Blindó La Mula, arregla armas y enseña oficios. Construyó el Grillo. Secreto: trabajó de vigilante en el Instituto Galena la noche en que todo empezó. |
 | **Dra. Amara Nwosu** | Viróloga del Instituto Galena. Huyó con sus cuadernos y cree que hay una vacuna. |
 | **Simón Ferreira** | Desertor de los Cuervos. Sabe dónde guardan lo que roban y a quién. |
 | **Ruth Halvorsen** | Portavoz del Refugio de Altomonte, el enclave más grande. Socia exigente. |
@@ -157,7 +157,7 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
 
 ## Clases y el oficio de superviviente
 
-La Rosa y sus ramas se quedan. La magia de Velmar desaparece, pero su rama no se tira: pasa a ser el **Oficio**, una cuarta rama de cada eje que abre un edificio, el **Taller de oficios**, donde Teo enseña. Las mecánicas que ya están hechas se reaprovechan con otro nombre:
+El árbol de habilidades (antes «la Rosa»; Arturo lo renombró el 2026-10-13) y sus ramas se quedan. La magia de Velmar desaparece, pero su rama no se tira: pasa a ser el **Oficio**, una cuarta rama de cada eje que abre un edificio, el **Taller de oficios**, donde Teo enseña. Las mecánicas que ya están hechas se reaprovechan con otro nombre:
 
 | Antes (Canto) | Ahora (Oficio) | Lo que hace |
 |---|---|---|
@@ -166,13 +166,26 @@ La Rosa y sus ramas se quedan. La magia de Velmar desaparece, pero su rama no se
 | Francotirador · Ojo de Velmar | **Ballesta** | Rastreo, flecha perforante (atraviesa la cobertura), encaramarse, prismáticos y lluvia de flechas |
 | Especialista · Voz | **Enfermería de campo** | Calma, sedante (quita el pánico), arenga, manos de enfermero y desfibrilador (levantar a alguien caído en el turno) |
 
-Además, el Temple 10 «Sordo al Coro» pasa a ser «Nervios de acero»: el grito del Chillón no le afecta.
+Además:
+- el Temple 10 «Sordo al Coro» pasa a ser «Nervios de acero»: el grito del Chillón no le afecta;
+- la aptitud que se llamaba Oficio pasa a ser **Maña** (MAÑ), para no confundirla con la rama: arreglar equipos, granadas y curas (Arturo, 2026-10-13).
+
+**El Grillo** se queda: es el dron del Especialista, uno de juguete con una batería de coche, que Teo montó en el taller y que hace cri-cri al volar. Cura, cubre, da calambres y arregla equipos a distancia. Sus acciones dejan de llamarse «protocolos» (Arturo, 2026-10-13):
+
+| Antes | Ahora |
+|---|---|
+| Protocolo médico | Botiquín volante |
+| Protocolo de ayuda | Cobertura del Grillo |
+| Protocolo de combate | Calambrazo |
+| Protocolo de reanimación | Espabilar |
+| Descarga de condensador | Descarga de batería |
+| Hackear | Arreglar |
 
 ## Lo que se queda y lo que cambia
 
 | Parte | Qué pasa |
 |---|---|
-| Rosa, ramas, aptitudes, rangos | Se quedan. Se renombran el Oficio y lo psiónico. |
+| Árbol de habilidades, ramas, aptitudes, rangos | Se quedan. Se renombran el Oficio y lo psiónico. |
 | Base en superficie, edificios, cercanías | Se quedan, con otra piel: huerto, barricadas, depósito de agua, Camposanto… |
 | Capítulos, encargos, rumores | Se quedan como sistema y se reescriben todos los textos. |
 | Radio, Expediente, avisos de Morse | Se quedan. Se reescriben las escenas, las hojas y las fichas. |

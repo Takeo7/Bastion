@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { TEMPLATES, type Biome, type Unit, type WeaponDef } from '@bastion/engine';
 import { ambience } from '../audio/ambience';
 import { sound } from '../audio/bank';
+import { SOUNDS } from '../audio/sounds';
 import { audio } from '../audio/engine';
 import { music, type Piece } from '../audio/music';
 
@@ -42,8 +43,13 @@ export class Sfx {
     return { pan, gain: g * gain };
   }
 
-  private at(name: string, at?: THREE.Vector3, gain = 1, extra: { delay?: number; spread?: number } = {}): void {
+  private at(name: string, at?: THREE.Vector3, gain = 1, extra: { delay?: number; spread?: number; rate?: number } = {}): void {
     sound(name, { ...this.place(at, gain), ...extra });
+  }
+
+  /** The first of these sounds that exists (newer recipes fall back to what is there). */
+  private pick(...names: string[]): string {
+    return names.find((n) => n in SOUNDS) ?? names[names.length - 1]!;
   }
 
   // ------------------------------------------------------------ weapons
@@ -104,6 +110,16 @@ export class Sfx {
     this.at('reload', at);
   }
 
+  /** Registrar: rummaging through a piece of furniture, a boot or crates. */
+  search(at?: THREE.Vector3): void {
+    this.at('search', at);
+  }
+
+  /** Something turned up while searching. */
+  found(at?: THREE.Vector3): void {
+    this.at('found', at);
+  }
+
   overwatch(at?: THREE.Vector3): void {
     this.at('overwatch', at);
   }
@@ -156,6 +172,22 @@ export class Sfx {
     this.at('pods', at);
   }
 
+  /** The dead arriving: a low moan or two, and feet dragging. */
+  moan(at?: THREE.Vector3, voices = 1): void {
+    const moan = this.pick('zombie.moan', 'death.zombie');
+    for (let i = 0; i < Math.min(3, voices); i++) this.at(moan, at, 0.75, { delay: i * 0.35, rate: moan === 'death.zombie' ? 0.72 : 1, spread: 0.08 });
+    for (let i = 0; i < 3; i++) this.at('step.drag', at, 0.6, { delay: 0.2 + i * 0.4 });
+  }
+
+  /** Raiders arriving: a pickup's engine and brakes at the edge if there is the sound for it, else boots running in. */
+  vehicle(at?: THREE.Vector3): void {
+    if ('truck.engine' in SOUNDS) {
+      this.at('truck.engine', at);
+      return;
+    }
+    for (let i = 0; i < 6; i++) this.at('step', at, 0.7, { delay: i * 0.17 });
+  }
+
   flare(at?: THREE.Vector3): void {
     this.at('flare', at);
   }
@@ -170,7 +202,7 @@ export class Sfx {
 
   death(u: Unit, at?: THREE.Vector3): void {
     const t = u.template;
-    const name = TEMPLATES[t].robotic ? 'death.robot' : t === 'sectoid' || t === 'xenoid' ? 'death.sectoid' : t === 'zombie' ? 'death.zombie' : u.team === 'alien' ? 'death.advent' : 'death.human';
+    const name = TEMPLATES[t].robotic ? 'death.robot' : t === 'sectoid' ? 'death.sectoid' : t === 'xenoid' ? 'death.runner' : t === 'zombie' ? 'death.zombie' : u.team === 'alien' ? 'death.advent' : 'death.human';
     this.at(name, at);
   }
 

@@ -1,0 +1,190 @@
+/*
+ * Proposal C · "Mixta" (ui/theme.ts): Moderna's skeleton (dark slate panels,
+ * Barlow, angled buttons) with Apocalipsis's material where it shows: the
+ * pack's torn white frames instead of the silver bevel, hazard yellow for the
+ * main action, hazard tape on what is urgent, Oswald titles and the
+ * Apocalypse HUD icons (synty-icons.css). The shared rules are in
+ * synty-base.css. Sprites: public/ui/synty/ (tools/ui/synty-sprites.py).
+ */
+
+:root[data-ui='mixta'] {
+  /* Two families: Barlow for everything, Oswald only for big titles. */
+  --t-font: 'Barlow', 'Segoe UI', sans-serif;
+  --t-font-title: 'Oswald', 'Barlow', sans-serif;
+  --t-title-weight: 600;
+
+  --t-text: #eef0ea;
+  --t-muted: #9da39a;
+  --t-accent: #f2c230;
+  --t-accent-soft: rgba(242, 194, 48, 0.13);
+  --t-line: rgba(255, 255, 255, 0.12);
+  --t-good: #8cc957;
+  --t-warn: #f2c230;
+  --t-danger: #f0503c;
+  --t-song: #86c4a4;
+  --t-hunt: #e0b04a;
+
+  --t-panel: rgba(19, 21, 22, 0.94);
+  --t-panel-hi: rgba(36, 39, 40, 0.96);
+  --t-panel-lo: rgba(11, 12, 13, 0.9);
+  --t-panel-hover: rgba(52, 55, 54, 0.97);
+  --t-glow: 0 0 0 1px rgba(242, 194, 48, 0.4);
+  --t-cut: 8px;
+
+  --t-primary: linear-gradient(180deg, #f6d050, #dca71e);
+  --t-primary-hover: linear-gradient(180deg, #ffde6e, #eab42c);
+  --t-primary-edge: #f6d050;
+  --t-primary-ink: #1c1608;
+  --t-ready: linear-gradient(180deg, #a3d86a, #6aa73a);
+  --t-ready-edge: #c2eb95;
+  --t-ready-ink: #0d1806;
+  --t-ready-ink-soft: #24390f;
+  --t-urgent: linear-gradient(180deg, #f6d050, #d9a41e);
+  --t-urgent-hover: linear-gradient(180deg, #ffde6e, #e8b52a);
+  --t-urgent-ink: #1c1608;
+
+  --t-sheet: linear-gradient(180deg, rgba(30, 33, 34, 0.95), rgba(16, 18, 19, 0.94));
+  --t-sheet-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+  --t-text-shadow: none;
+  --t-shade: linear-gradient(90deg, rgba(9, 10, 10, 0.9) 0%, rgba(9, 10, 10, 0.45) 45%, rgba(9, 10, 10, 0) 70%);
+
+  --c-frame: url('/ui/synty/hud/grunge-frame.webp') 32 / 8px / 3px stretch;
+  --c-hazard: url('/ui/synty/hud/hazard-yellow.webp');
+}
+
+/* ================================================================= sheets */
+
+/* The pack's torn frame, white like chalk on a crate. */
+:root[data-ui='mixta'] :is(.panel, .x-panel, .shot-panel, .unit-panel, .squad, .radio, .menu-column, .outcome-card, .modal-card, .game-menu-card, .mission-intro, .menu-squad, .log, .ability-card, .strat-top, .lineup-card) {
+  border-image: var(--c-frame);
+}
+
+:root[data-ui='mixta'] :is(.x-panel, .panel) :is(.x-panel, .panel),
+:root[data-ui='mixta'] .menu-column .x-panel {
+  border-image: none;
+}
+
+/* ================================================================== type */
+
+:root[data-ui='mixta'] .x-head {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] :is(.x-title, .menu-title h1, .outcome-card h1, .mission-intro h1, .turn-label, .banner) {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+:root[data-ui='mixta'] .menu-title h1 {
+  font-size: 48px;
+  color: #fff;
+}
+
+/* ================================================================ buttons */
+
+:root[data-ui='mixta'] :is(.x-btn, .hud button.fire, .hud button.secondary, .hud button.cancel, .pass-command, .end-turn, .scan-btn) {
+  border-radius: 0;
+  clip-path: polygon(var(--t-cut) 0, 100% 0, calc(100% - var(--t-cut)) 100%, 0 100%);
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+:root[data-ui='mixta'] .x-btn:not(.primary, .ready, .danger) {
+  background: var(--t-panel-hi);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--t-line);
+  color: var(--t-text);
+}
+
+:root[data-ui='mixta'] .end-turn {
+  background: var(--t-panel-hi);
+  border: 0;
+  border-bottom: 5px solid transparent;
+  border-image: var(--c-hazard) 0 0 64 0 / 0 0 5px 0 round;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .strat-now.urgent {
+  border-left: 8px solid transparent;
+  border-image: var(--c-hazard) 0 0 0 64 / 0 0 0 8px round;
+}
+
+:root[data-ui='mixta'] .strat-nav button {
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  background: rgba(19, 21, 22, 0.92);
+  box-shadow: none;
+  font-weight: 700;
+}
+
+:root[data-ui='mixta'] .strat-nav button.on {
+  background: var(--t-accent);
+  color: #1c1608;
+  box-shadow: none;
+}
+
+:root[data-ui='mixta'] .strat-nav button.on .nav-count {
+  background: #1c1608;
+  color: var(--t-accent);
+}
+
+/* ================================================================= combat */
+
+:root[data-ui='mixta'] .ability {
+  clip-path: none;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(38, 41, 42, 0.96), rgba(21, 23, 24, 0.96));
+  border: 0;
+  border-bottom: 3px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-ui='mixta'] .ability:hover {
+  clip-path: none;
+}
+
+:root[data-ui='mixta'] .ability.active {
+  border-bottom-color: var(--t-accent);
+  box-shadow: 0 0 0 2px var(--t-accent);
+}
+
+:root[data-ui='mixta'] .shot-numbers .big:not(.crit) {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 20px 16px;
+  color: var(--t-accent);
+  background: url('/ui/synty/hud/ring.webp') center / contain no-repeat;
+}
+
+:root[data-ui='mixta'] :is(.uflag, .room-label, .globe-label) {
+  border-radius: 0;
+  background: rgba(14, 15, 16, 0.9);
+  border: 0;
+  border-left: 3px solid var(--t-accent);
+}
+
+:root[data-ui='mixta'] .room-label.command {
+  background: var(--t-accent);
+  color: #1c1608;
+  border: 0;
+  box-shadow: none;
+  font-weight: 700;
+}
+
+:root[data-ui='mixta'] :is(.banner, .launch-banner) {
+  border-width: 6px 0;
+  border-style: solid;
+  border-color: transparent;
+  border-image: var(--c-hazard) 64 0 / 6px 0 round;
+  border-radius: 0;
+  background: rgba(14, 15, 16, 0.94);
+  text-shadow: none;
+}
+
+:root[data-ui='mixta'] .squad-card.selected {
+  background: rgba(242, 194, 48, 0.1);
+  box-shadow: inset 3px 0 0 var(--t-accent);
+}

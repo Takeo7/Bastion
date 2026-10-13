@@ -1,0 +1,963 @@
+/*
+ * The «Árbol de habilidades» (skillTree.ts): the centre as the root, then one
+ * path per branch, a node per talent. Everything is drawn with the shared
+ * tokens (--ink, --pen, --paper-light, --x-*), so it reads in Expediente's ink
+ * on paper and in the Synty proposals' light on dark (synty-base.css maps them).
+ * Each state has a shape or a pattern besides its colour: open = dashed ring,
+ * learnt = filled, in this promotion = striped, closed = faded with a dashed
+ * edge, ability = diamond; a path lit = solid line, still shut = dashed.
+ */
+
+.service-tree {
+  min-width: 0;
+}
+
+.skill-tree {
+  --tn-disc: 34px;
+  --tn-gap: 14px;
+  --trunk-off: color-mix(in srgb, var(--x-muted) 55%, transparent);
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ axes */
+
+.tree-axes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tree-axis {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  align-items: center;
+  padding: 3px 8px 4px;
+  text-align: left;
+  border: 1.5px solid var(--x-line);
+  background: var(--paper-light);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tree-axis .cls {
+  grid-row: 1 / 3;
+}
+
+.tree-axis b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.tree-axis small {
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.tree-axis:hover {
+  border-color: var(--pen);
+}
+
+.tree-axis.on {
+  border-color: var(--pen);
+  box-shadow: inset 0 -3px 0 var(--pen);
+}
+
+.tree-axis.role-main small,
+.tree-axis.role-lean small {
+  color: var(--pen);
+}
+
+.tree-axis.role-closed {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------ grid */
+
+.tree-grid {
+  display: grid;
+  grid-template-columns: 40px repeat(4, minmax(0, 1fr));
+  column-gap: 8px;
+  row-gap: 0;
+}
+
+.tree-note {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--x-warn);
+}
+
+/* The centre: the root everyone starts from, with a line down to the four paths. */
+.tree-root {
+  position: relative;
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 0 0 12px;
+}
+
+.tree-root::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  background: var(--pen);
+}
+
+.tree-root-name {
+  display: grid;
+  text-align: right;
+}
+
+.tree-root-name b {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.tree-root-name small {
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.tree-root-nodes {
+  display: flex;
+  gap: 6px;
+}
+
+/* Branch heads hang from a rail under the root. */
+.tree-branch {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  min-width: 0;
+  padding: 12px 2px 2px;
+  text-align: center;
+}
+
+.tree-branch::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  right: -4px;
+  height: 2px;
+  background: var(--pen);
+}
+
+.tree-branch.b0::before {
+  left: 50%;
+}
+
+.tree-branch.b3::before {
+  right: 50%;
+}
+
+.tree-branch::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  background: var(--pen);
+}
+
+.tree-branch-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tree-branch b {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.tree-branch small {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--x-muted);
+}
+
+.tree-branch-focus {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tree-branch .tree-branch-points {
+  color: var(--pen);
+}
+
+.tree-branch.song b,
+.tree-branch.song .tree-branch-focus {
+  color: var(--song);
+}
+
+.tnode-disc.emblem {
+  --tn-disc: 22px;
+  border-width: 1.5px;
+  color: var(--x-muted);
+}
+
+.tree-gutter {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding-top: calc(12px + var(--tn-disc) / 2 - 12px);
+  color: var(--x-muted);
+  white-space: nowrap;
+}
+
+.tree-gutter b {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.tree-gutter small {
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* The bar before the last two rows: only the soldier's main axis goes past it. */
+.tree-bar {
+  grid-column: 1 / -1;
+  margin: 6px 0 2px;
+  padding: 3px 8px;
+  text-align: center;
+  border-block: 1.5px dashed var(--x-muted);
+  background: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--x-muted) 14%, transparent) 6px 12px);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.tree-bar.own {
+  border-block-style: solid;
+  border-color: var(--pen);
+  background: none;
+  color: var(--pen);
+}
+
+/* ----------------------------------------------------------------- steps */
+
+/* One row of a branch: the path runs through its middle, the nodes sit on it. */
+.tstep {
+  --trunk: repeating-linear-gradient(180deg, var(--trunk-off) 0 4px, transparent 4px 8px);
+  --tick: var(--trunk-off);
+  --pad: 12px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: var(--pad) 0 2px;
+}
+
+.tstep.lit {
+  --trunk: var(--pen);
+  --tick: var(--pen);
+}
+
+.tstep::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--trunk);
+}
+
+/* A lone node sits on the path: the line stops at its disc and goes on under its name (.tnode-tail). */
+.tstep:not(.pair)::before,
+.tstep.last::before {
+  bottom: auto;
+  height: calc(var(--pad) + var(--tn-disc) / 2);
+}
+
+.tstep-nodes {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  gap: var(--tn-gap);
+}
+
+.tnode-tail {
+  display: none;
+  flex: 1;
+  width: 2px;
+  min-height: 0;
+  margin-bottom: -2px;
+  background: var(--trunk);
+}
+
+.tstep:not(.pair, .last) .tnode-tail {
+  display: block;
+}
+
+/* A row the Taller de oficios still holds: its lock sits on the path, beside the node. */
+.tstep-lock {
+  position: absolute;
+  top: calc(var(--pad) + var(--tn-disc) / 2 - 8px);
+  left: calc(50% + var(--tn-disc) / 2 + 6px);
+  z-index: 2;
+  padding: 0 5px;
+  border: 1.5px dashed var(--song);
+  border-radius: 9px;
+  background: var(--paper-light);
+  font-size: 12px;
+  line-height: 15px;
+  white-space: nowrap;
+  color: var(--song);
+}
+
+/* Shut, past the bar or in a closed axis: muted, never see-through, so the path stays behind the disc. */
+:is(.tnode.shut, .tstep.barred .tnode:not(.taken), .tree-grid.closed .tnode:not(.taken)) .tnode-disc {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--x-muted) 70%, transparent);
+  color: color-mix(in srgb, var(--x-muted) 60%, transparent);
+}
+
+:is(.tnode.shut, .tstep.barred .tnode:not(.taken), .tree-grid.closed .tnode:not(.taken)) .tnode-name {
+  color: color-mix(in srgb, var(--x-muted) 80%, transparent);
+}
+
+:is(.tnode.shut, .tstep.barred .tnode:not(.taken), .tree-grid.closed .tnode:not(.taken)) .tnode-pips {
+  opacity: 0.6;
+}
+
+/* ----------------------------------------------------------------- nodes */
+
+.tnode {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 88px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: default;
+}
+
+.tnode.open {
+  cursor: pointer;
+}
+
+/* Two nodes on one row: a short line from each to the path between them. */
+.tstep.pair .tnode::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--tn-disc) / 2 - 1px);
+  height: 2px;
+  background: var(--tick);
+}
+
+.tstep.pair .tnode:first-child::before {
+  left: 50%;
+  right: calc(var(--tn-gap) / -2);
+}
+
+.tstep.pair .tnode:last-child::before {
+  left: calc(var(--tn-gap) / -2);
+  right: 50%;
+}
+
+.tnode-disc {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: var(--tn-disc);
+  height: var(--tn-disc);
+  border: 2px solid var(--x-muted);
+  border-radius: 50%;
+  background: var(--paper-light);
+  color: var(--x-muted);
+}
+
+.tnode-disc svg.ico {
+  width: calc(var(--tn-disc) * 0.56);
+  height: calc(var(--tn-disc) * 0.56);
+}
+
+/* Abilities (a button more in combat) are diamonds. */
+.tnode.ab .tnode-disc,
+.tnode-disc.ab {
+  border-radius: 4px;
+  transform: rotate(45deg) scale(0.86);
+}
+
+.tnode.ab .tnode-disc svg.ico,
+.tnode-disc.ab svg.ico {
+  transform: rotate(-45deg);
+}
+
+.tnode.song .tnode-disc {
+  border-color: var(--song);
+}
+
+.tnode.taken .tnode-disc,
+.tnode-disc.taken {
+  border-color: var(--pen);
+  background: var(--pen);
+  color: var(--paper-light);
+}
+
+/* In this promotion, not saved yet: striped, like the pencilled boxes of the aptitudes. */
+.tnode.drafted .tnode-disc {
+  border-color: var(--pen);
+  background: repeating-linear-gradient(-45deg, var(--paper-light) 0 3px, color-mix(in srgb, var(--pen) 55%, var(--paper-light)) 3px 6px);
+  color: var(--ink);
+}
+
+.tnode.taken.drafted .tnode-disc {
+  background: repeating-linear-gradient(-45deg, var(--pen) 0 3px, color-mix(in srgb, var(--pen) 55%, var(--paper-light)) 3px 6px);
+  color: var(--paper-light);
+}
+
+/* Can take a level now: a dashed ring around it. No pulsing: a dozen would. */
+.tnode.open .tnode-disc {
+  border-color: var(--pen);
+  color: var(--pen);
+  outline: 2px dashed var(--pen);
+  outline-offset: 3px;
+}
+
+.tnode.open.taken .tnode-disc {
+  color: var(--paper-light);
+}
+
+.tnode.open:hover .tnode-disc,
+.tnode.open:focus-visible .tnode-disc {
+  outline-style: solid;
+}
+
+/* Learnt but asleep until the soldier carries its class's kit: a dashed edge, half filled, a «z». */
+.tnode.sleeping .tnode-disc {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--pen) 35%, var(--paper-light));
+  color: var(--ink);
+}
+
+.tnode.sleeping .tnode-disc::before {
+  content: 'z';
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--pen);
+}
+
+.tnode.ab.sleeping .tnode-disc::before {
+  transform: rotate(-45deg);
+}
+
+/* Needs the partner's soldiers close: a double key on its corner. */
+.tnode.coop .tnode-disc::after {
+  content: '⚷⚷';
+  position: absolute;
+  right: -10px;
+  bottom: -5px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--pen);
+}
+
+.tnode.ab.coop .tnode-disc::after {
+  transform: rotate(-45deg);
+}
+
+.tnode-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.tnode.focus .tnode-name,
+.tnode:hover .tnode-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tnode-pips {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+}
+
+/* The disc with its levels on its foot, on a small plate so they read over the path. */
+.tnode-mark {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  margin-bottom: 4px;
+}
+
+.tnode-mark .tnode-pips {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 1px 2px;
+  background: var(--paper-light);
+}
+
+.tnode-pips i {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--x-muted);
+}
+
+.tnode-pips i.on {
+  border-color: var(--pen);
+  background: var(--pen);
+}
+
+.tnode-pips i.plan {
+  border-color: var(--pen);
+  background: repeating-linear-gradient(-45deg, transparent 0 1.5px, var(--pen) 1.5px 3px);
+}
+
+.tnode-undo {
+  position: absolute;
+  top: -6px;
+  right: 8px;
+  z-index: 2;
+  padding: 0 3px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--pen);
+  cursor: pointer;
+}
+
+.tnode-undo:hover {
+  color: var(--x-bad);
+}
+
+/* ----------------------------------------------------------------- whole */
+
+/* The four axes around the centre: the two above grow up from it, the two below grow down. */
+.tree-whole {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 22px;
+}
+
+.tw-quarter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tw-quarter.tw-down {
+  flex-direction: column-reverse;
+}
+
+.tw-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 6px;
+  border: 1.5px solid var(--x-line);
+  background: var(--paper-light);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tw-head:hover {
+  border-color: var(--pen);
+}
+
+.tw-head b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.tw-head small {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.tw-quarter.role-main .tw-head {
+  border-color: var(--pen);
+}
+
+.tw-quarter.role-closed {
+  opacity: 0.55;
+}
+
+.tw-body {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 4px;
+}
+
+.tw-branch {
+  display: flex;
+  flex-direction: column;
+}
+
+.tw-quarter.tw-up .tw-branch {
+  flex-direction: column-reverse;
+}
+
+.tw-branch-name {
+  padding: 0 0 2px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--x-muted);
+}
+
+.tw-branch.song .tw-branch-name {
+  color: var(--song);
+}
+
+.tw-quarter.tw-up .tw-branch-name {
+  padding: 0 0 2px;
+}
+
+.tw-quarter.tw-down .tw-branch-name {
+  padding: 2px 0 0;
+}
+
+.tree-whole .tstep {
+  --tn-disc: 22px;
+  --tn-gap: 6px;
+  --pad: 4px;
+  padding-bottom: 4px;
+}
+
+.tree-whole .tnode-tail {
+  margin-bottom: -4px;
+}
+
+/* Above the centre the paths grow upwards: the outermost row ends at its disc, on the other side. */
+.tw-quarter.tw-up .tstep.last:not(.pair)::before {
+  display: none;
+}
+
+.tw-quarter.tw-up .tstep.last.pair::before {
+  top: calc(var(--pad) + var(--tn-disc) / 2);
+  bottom: 0;
+  height: auto;
+}
+
+.tw-quarter.tw-up .tstep.last:not(.pair) .tnode-tail {
+  display: block;
+}
+
+.tnode.mini {
+  width: auto;
+  gap: 2px;
+}
+
+.tnode.mini .tnode-mark {
+  margin-bottom: 2px;
+}
+
+.tnode.mini .tnode-mark .tnode-pips {
+  bottom: -4px;
+  padding: 0 1px;
+}
+
+.tnode.mini .tnode-pips i {
+  width: 4px;
+  height: 4px;
+  border-width: 1px;
+}
+
+.tnode.mini.open .tnode-disc {
+  outline-offset: 1px;
+  outline-width: 1.5px;
+}
+
+.tnode.mini.coop .tnode-disc::after {
+  content: none;
+}
+
+.tnode.mini:hover .tnode-disc {
+  border-color: var(--pen);
+}
+
+.tw-centre {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-block: 1.5px solid var(--x-line);
+}
+
+.tw-centre {
+  --tn-disc: 26px;
+}
+
+.tw-centre > b {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.tw-centre-nodes {
+  display: flex;
+  gap: 8px;
+}
+
+.tw-centre small {
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+/* -------------------------------------------------------------- inspector */
+
+/* Next to the aptitudes: what the node under the pointer does, and what it lacks. */
+.tree-inspect {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 180px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1.5px dashed var(--x-line);
+  --tn-disc: 40px;
+}
+
+.ti-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--x-muted);
+}
+
+.ti-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ti-head > div {
+  display: grid;
+  gap: 1px;
+}
+
+.ti-name {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.ti-kind {
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.ti-head .tnode-pips {
+  justify-content: start;
+  align-items: center;
+}
+
+.ti-head .tnode-pips small {
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.ti-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.ti-notes {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0 0 0 14px;
+  font-size: 12px;
+}
+
+.ti-notes .miss {
+  color: var(--x-warn);
+}
+
+.ti-notes .ok {
+  color: var(--x-good);
+}
+
+.ti-notes .sleep {
+  color: var(--x-muted);
+}
+
+.ti-notes .coop {
+  color: var(--pen);
+}
+
+.ti-status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--x-warn);
+}
+
+.ti-status.open {
+  color: var(--x-good);
+}
+
+.ti-status.done {
+  color: var(--x-muted);
+}
+
+.ti-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* ----------------------------------------------------------------- legend */
+
+.tree-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.tree-legend .lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tree-legend i {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--x-muted);
+  border-radius: 50%;
+  background: var(--paper-light);
+}
+
+.tree-legend .open i {
+  border-color: var(--pen);
+  outline: 1.5px dashed var(--pen);
+  outline-offset: 2px;
+}
+
+.tree-legend .taken i {
+  border-color: var(--pen);
+  background: var(--pen);
+}
+
+.tree-legend .plan i {
+  border-color: var(--pen);
+  background: repeating-linear-gradient(-45deg, var(--paper-light) 0 2px, var(--pen) 2px 3.5px);
+}
+
+.tree-legend .shut i {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.tree-legend .sleep i {
+  border-style: dashed;
+  border-color: var(--pen);
+  background: color-mix(in srgb, var(--pen) 35%, var(--paper-light));
+}
+
+.tree-legend .ab i {
+  border-radius: 2px;
+  transform: rotate(45deg) scale(0.85);
+}
+
+/* The pack's silhouettes on the nodes, where a theme uses them (synty-icons.css). */
+:root[data-ui-icons='synty'] .tnode-disc[data-ability] {
+  --sicon-w: calc(var(--tn-disc) * 0.6);
+}
+
+:root[data-ui-icons='synty'] .tnode-disc[data-ability] svg.ico {
+  width: var(--sicon-w);
+  height: calc(var(--tn-disc) * 0.6);
+}
+
+@media (max-width: 1100px) {
+  .tnode {
+    width: 74px;
+  }
+}
+
+/* Weapons are drawn side on: a wider box. */
+:root[data-ui-icons='synty'] .tnode-disc:is([data-ability='shoot'], [data-ability='pistol'], [data-ability='launch'], [data-ability='aimedShot'], [data-ability='evac'], [data-ability='suppression'], [data-ability='faceoff'], [data-ability='bolt'], [data-ability='spectralArrow'], [data-ability='lightRain']) {
+  --sicon-w: calc(var(--tn-disc) * 0.8);
+}
+
+/* The aptitudes' icons (INTERFACE Military Combat HUD), where a theme uses the packs' icons. */
+.apt-ico {
+  display: none;
+}
+
+:root[data-ui-icons='synty'] .apt-ico {
+  display: inline-block;
+  flex: none;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  background: var(--pen);
+  -webkit-mask: var(--apt-icon) center / contain no-repeat;
+  mask: var(--apt-icon) center / contain no-repeat;
+}
+
+.apt-ico[data-apt='pul'] {
+  --apt-icon: url('/ui/synty/icons/mh-accuracy.webp');
+}
+
+.apt-ico[data-apt='agu'] {
+  --apt-icon: url('/ui/synty/icons/mh-heart.webp');
+}
+
+.apt-ico[data-apt='ref'] {
+  --apt-icon: url('/ui/synty/icons/mh-speed.webp');
+}
+
+.apt-ico[data-apt='tem'] {
+  --apt-icon: url('/ui/synty/icons/mh-mind.webp');
+}
+
+.apt-ico[data-apt='ofi'] {
+  --apt-icon: url('/ui/synty/icons/mh-repair.webp');
+}

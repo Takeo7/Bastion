@@ -71,6 +71,8 @@ export class Room {
   private rng = new Rng(Date.now() >>> 0);
   private missionKind: MissionKind = 'elimination';
   private skirmishMap: SkirmishMap = 'city';
+  /** The interface theme both players see: whoever changes it last, for the two (not saved). */
+  private uiTheme: string | null = null;
   private skirmishVeterans = true;
 
   constructor(
@@ -222,6 +224,11 @@ export class Room {
         this.state = null;
         this.enterBase();
         break;
+      case 'uiTheme':
+        if (msg.theme === this.uiTheme) return;
+        this.uiTheme = msg.theme;
+        this.broadcastRoom();
+        break;
       case 'baseView':
         seat.view = msg.view;
         this.toPartner(seat, { t: 'baseView', slot: seat.slot, view: msg.view });
@@ -270,6 +277,8 @@ export class Room {
   private startSkirmish(kind: MissionKind = this.missionKind, map: SkirmishMap = this.skirmishMap): void {
     const slots = this.connectedSlots();
     if (!slots.length) return;
+    // A Saqueo is always in town: houses to search (the lobby only offers the city for it).
+    if (kind === 'scavenge') map = 'city';
     this.missionKind = kind;
     this.skirmishMap = map;
     this.mode = 'skirmish';
@@ -326,7 +335,7 @@ export class Room {
       vipName: info.vipName,
       leader: info.leader,
     });
-    // The Cámara de Ecos wall to wall with the listening post: songs don't give the squad away.
+    // The Taller de oficios wall to wall with the listening post: the Oficio makes less noise.
     if (hasAdjacency(c, 'echoes')) this.state.quietSongs = true;
     this.resultApplied = false;
     this.phase = 'mission';
@@ -378,7 +387,7 @@ export class Room {
 
   private broadcastRoom(): void {
     const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, doom: this.campaign.doom, level: bastionLevel(this.campaign) } : null;
-    this.broadcast({ t: 'room', players: this.players(), phase: this.phase, savedCampaign });
+    this.broadcast({ t: 'room', players: this.players(), phase: this.phase, savedCampaign, uiTheme: this.uiTheme ?? undefined });
   }
 
   private broadcast(msg: ServerMessage): void {

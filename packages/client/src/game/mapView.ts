@@ -1,89 +1,45 @@
 import * as THREE from 'three';
 import { carPartner, decorOf, DIRS4, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
+import { StaticBatch, type Dirty } from './batch';
+import { BuildingsView, piecesLoaded, preloadPieces, RAISED_FLATS, RAISED_PLATFORM, syntyPiece, type Focus } from './buildings';
 import { STOREY } from './coords';
+import { dressEdges, dressStreets } from './dressing';
+import { NIGHT, NightLights, type Glow } from './night';
+import { beforeNextFrame, shadowsChanged } from './renderer';
 import { ExploredMemory } from './explored';
 import { FogOfWar } from './fogOfWar';
-import { GroundMap, scatterDetails } from './ground';
-import { propModel, propVariants, type PropSet } from './props';
+import { GroundMap, scatterCover } from './ground';
+import { contactPatch, GroundOcclusion } from './groundAO';
 import { atlasTexture } from './synty';
-import type { AtlasId } from './syntyManifest';
+import type { AtlasId, PropId, PropSet } from './syntyManifest';
 import { preloadSyntyProps, syntyProp, syntyPropsLoaded, syntySet } from './syntyProps';
-import { voxelSurface } from './voxel';
 
+/**
+ * The colours the ground shader leaves alone: the sides of the floor slabs
+ * (open ground, street, indoor floor, rooftop) and the ground beyond the map.
+ */
 interface Palette {
   ground: number;
   street: number;
-  /** Floor inside walled buildings (seen from above: they have no roof). */
   floor: number;
   roof: number;
-  facade: number;
-  wall: number;
-  high: number[];
-  low: number[];
-  door: number;
-  frame: number;
-  glass: number;
-  ladder: number;
-  accent: number;
 }
 
-// Daylight voxel palettes (M5): paving, asphalt, sandstone and brick in the
-// city; grass, dirt and stone in the wilds; concrete and steel in facilities.
 const PALETTES: Record<Biome, Palette> = {
-  city: {
-    ground: 0x9a9384,
-    street: 0x585d63,
-    floor: 0x8a705a,
-    roof: 0x7d7a74,
-    facade: 0xa08a72,
-    wall: 0x8a5a48,
-    high: [0x3f7480, 0x7a4a3a, 0x4d6a3e],
-    low: [0x8f6c45, 0x6a2f30, 0x3a5a7a, 0x7c7f84],
-    door: 0x6a4a30,
-    frame: 0x3a3f45,
-    glass: 0x9fd8ff,
-    ladder: 0xd0a43a,
-    accent: 0x54d1ff,
-  },
-  wilds: {
-    ground: 0x6a8a45,
-    street: 0x9a8460,
-    floor: 0x86705a,
-    roof: 0x7a6a50,
-    facade: 0x8a7458,
-    wall: 0x9a8668,
-    high: [0x2f5a32, 0x3a6a36, 0x2a4f2e],
-    low: [0x7c7c74, 0x6e6a60, 0x8a7a5a],
-    door: 0x6a4a30,
-    frame: 0x3a2c22,
-    glass: 0xaedcf0,
-    ladder: 0x8a6a48,
-    accent: 0x9dffb0,
-  },
-  facility: {
-    ground: 0x6a7078,
-    street: 0x4a4f56,
-    floor: 0x7f8892,
-    roof: 0x5a6068,
-    facade: 0x7a8088,
-    wall: 0x8a9098,
-    high: [0x3a4a5a, 0x4a3a52, 0x334a4a],
-    low: [0x4a4f58, 0x52485a, 0x3e4c52],
-    door: 0x9a3a4a,
-    frame: 0x2a2f36,
-    glass: 0x7affd0,
-    ladder: 0x9aa4ad,
-    accent: 0xff4a6a,
-  },
+  city: { ground: 0x9a9384, street: 0x585d63, floor: 0x8a705a, roof: 0x7d7a74 },
+  wilds: { ground: 0x6a8a45, street: 0x9a8460, floor: 0x86705a, roof: 0x7a6a50 },
+  facility: { ground: 0x6a7078, street: 0x4a4f56, floor: 0x7f8892, roof: 0x5a6068 },
 };
 
-const unitBox = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+// Synty props and building pieces load in the background from the start, so the first map finds them ready.
+preloadSyntyProps();
+preloadPieces();
 
-// Synty props load in the background from the start, so the first map finds them ready.
-if (graphics().models === 'synty') preloadSyntyProps();
+/** How much ground cover (tufts, papers…) each level of Ajustes → Efectos scatters. */
+const COVER_DENSITY = { high: 1, medium: 0.6, low: 0.3 } as const;
 
-/** Which voxel props stand on each kind of cover, per biome. */
+/** Which props stand on each kind of cover, per biome (when the generator gave no hint). */
 const PROP_SETS: Record<Biome, { low: PropSet; high: PropSet }> = {
   city: { low: 'cityLow', high: 'cityHigh' },
   wilds: { low: 'wildsLow', high: 'wildsHigh' },
@@ -101,6 +57,7 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
   switch (kind) {
     case 'carFront':
     case 'carRear':
+      return low ? 'carFront' : null;
     case 'planter':
     case 'bin':
     case 'streetTree':
@@ -113,13 +70,17 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
     case 'pipe':
     case 'bush':
       return low ? kind : null;
+    case 'tank':
+      // In town a low one is a filling station's pump.
+      return low ? (biome === 'city' ? 'pump' : null) : kind;
+    case 'pylon':
+      // In town, a building site's portaloo.
+      return low ? null : biome === 'city' ? 'portaloo' : kind;
     case 'kiosk':
     case 'statue':
     case 'wardrobe':
     case 'cabinet':
     case 'rack':
-    case 'tank':
-    case 'pylon':
       return low ? null : kind;
     case 'fence':
       return low ? 'fencePost' : null;
@@ -174,40 +135,43 @@ const WIGGLE: Partial<Record<DecorKind, 1 | 2>> = {
 /** Quarter turns (counter-clockwise from above, as `placed` turns) that make a prop modelled facing north face DIRS4[f]. */
 const turnTo = (f: number) => (4 - f) % 4;
 
-/** Instanced meshes of one shape. */
-class Layer {
-  private matrices: THREE.Matrix4[] = [];
-  private colors: THREE.Color[] = [];
-  mesh: THREE.InstancedMesh | null = null;
+/**
+ * Tiles a side of the chunks the map's static geometry is merged in (batch.ts):
+ * a tile changing (a door, a wall blown up, furniture searched) merges its
+ * chunk again, not the map. A material still draws once, over all its chunks.
+ */
+const CHUNK = 8;
 
+/** What a map keeps from one rebuild to the next: the merged geometry, its materials, the floor slab, the ground beyond. */
+interface Kit {
+  batch: StaticBatch;
+  slab: THREE.BufferGeometry;
+  ground: THREE.MeshStandardMaterial;
+  atlas: Map<AtlasId, THREE.Material>;
+  surroundings: THREE.Mesh;
+}
+
+/** One kind of placed geometry (a prop's part, the floor slabs): its instances go to the map's batch. */
+class Layer {
   constructor(
+    private readonly batch: StaticBatch,
     private readonly geometry: THREE.BufferGeometry,
     private readonly material: THREE.Material,
     private readonly shadows = true,
+    /** Its instances have colours of their own (the slabs' sides): the material reads them per vertex. */
+    private readonly tinted = false,
+    /** It darkens the ground round it (groundAO.ts). */
+    private readonly occlude = shadows,
   ) {}
 
-  add(matrix: THREE.Matrix4, color: number | THREE.Color): void {
-    this.matrices.push(matrix);
-    this.colors.push(new THREE.Color(color));
-  }
-
-  build(group: THREE.Group): void {
-    if (!this.matrices.length) return;
-    const mesh = new THREE.InstancedMesh(this.geometry, this.material, this.matrices.length);
-    mesh.castShadow = this.shadows;
-    mesh.receiveShadow = true;
-    this.matrices.forEach((m, i) => {
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, this.colors[i]!);
-    });
-    this.mesh = mesh;
-    group.add(mesh);
-  }
-
-  dispose(): void {
-    this.mesh?.dispose();
+  add(matrix: THREE.Matrix4, color: number | THREE.Color = 0xffffff): void {
+    const c = this.tinted ? new THREE.Color(color) : null;
+    this.batch.add(this.geometry, this.material, matrix, this.shadows, c ? { color: [c.r, c.g, c.b] } : undefined, this.occlude);
   }
 }
+
+/** Props that darken no ground: slim (poles, wires, a sign) or overhead (a tree's crown would stand in for the ground under it). */
+const NO_OCCLUSION = new Set<PropId>(['streetLight', 'powerPole', 'powerLine', 'stopSign', 'tree', 'treePine', 'treeDead', 'streetTree']);
 
 /** Matrix for a box of size (sx, sy, sz) standing at (x, y, z), turned `yaw` radians. */
 function placed(x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw = 0): THREE.Matrix4 {
@@ -218,6 +182,12 @@ function placed(x: number, y: number, z: number, sx: number, sy: number, sz: num
   );
 }
 
+/** The rectangle covering both (either may be null: nothing changed there). */
+function union(a: Dirty | null, b: Dirty | null): Dirty | null {
+  if (!a || !b) return a ?? b;
+  return { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+}
+
 /** Stable pseudo-random value in [0, 1) per tile, for variety without state. */
 function hash(x: number, y: number, salt = 0): number {
   return ((((x + salt * 31) * 73856093) ^ (y * 19349663) ^ (salt * 83492791)) >>> 0) % 1000 / 1000;
@@ -226,13 +196,12 @@ function hash(x: number, y: number, salt = 0): number {
 const isWallLike = (k: TileKind) => k === 'wall' || k === 'door' || k === 'doorOpen' || k === 'window' || k === 'windowBroken';
 
 /**
- * Terrain: floors at every elevation, raised blocks, walls with their doors and
- * windows, ladders and cover objects, all tinted by the biome and the fog of war.
- * Voxel art (M5): surfaces are painted in voxel cells, cover is a voxel prop
- * (what the generator meant it to be on procedural maps: a parked car, a fence,
- * a shelf…; else crates, sandbags, kiosks, trees, server racks… at random).
- * The ground reads as continuous terrain with small details scattered over it
- * (ground.ts); no grid lines, those only come with the overlays.
+ * Terrain in Synty POLYGON: the ground as continuous terrain with small props
+ * scattered over it (ground.ts), the buildings with their walls, doors,
+ * windows, roofs, raised blocks and ladders (buildings.ts), and on each tile
+ * of cover a Synty prop: what the generator meant it to be on procedural maps
+ * (a parked car, a fence, a shelf…), else crates, barricades, trees… at
+ * random. No grid lines: those only come with the overlays.
  *
  * Fog of war (fogOfWar.ts): tiles never seen this mission lie under a dark
  * mist, tiles seen before keep a remembered look, and the squad's shared
@@ -242,8 +211,6 @@ export class MapView {
   readonly group = new THREE.Group();
   private readonly fog = new FogOfWar();
   private ground: GroundMap | null = null;
-  private layers: Layer[] = [];
-  private ladders = new THREE.Group();
   private visibility: boolean[] | null = null;
   private width = 0;
   private materials: THREE.Material[] = [];
@@ -254,8 +221,27 @@ export class MapView {
   private shown: GameState | null = null;
   /** The next sight update is the first of a mission: no fade. */
   private fresh = true;
-  /** Some Synty props were still loading at the last rebuild (voxel ones stood in): rebuild when they arrive. */
+  /** Some Synty props or pieces were still loading at the last rebuild (left out): rebuild when they arrive. */
   private waitingForProps = false;
+  /** The buildings in Synty pieces, with their cutaway; made with the map (build). */
+  private buildings: BuildingsView | null = null;
+  /** The night's lamps, headlights and lit windows (night.ts); hidden by day. */
+  private night: NightLights | null = null;
+  /** Kept from one rebuild to the next (made by build). */
+  private kit: Kit | null = null;
+  /** Where the night's lamps and headlights go, as of the last rebuild. */
+  private nightPlan: { lamps: Glow[]; headlights: Glow[] } | null = null;
+  /** The tiles and searches the last rebuild drew (what changed since is all a rebuild redoes); null: redo everything. */
+  private drawn: { tiles: TileKind[]; searched: string } | null = null;
+  /** The contact occlusion baked over the map (groundAO.ts), and which bake is the latest. */
+  private ao: GroundOcclusion | null = null;
+  /** Where the contact occlusion is to be baked again (the next frame does it). */
+  private aoDirty: Dirty | null = null;
+  /** How many tiles had been searched at the last rebuild: a search redraws the map (the furniture opens). */
+  private searchedSeen = 0;
+  /** The camera and what the player looks at, for the cutaway (game.ts). */
+  private camera: THREE.Camera | null = null;
+  private focus: (() => Focus) | null = null;
 
   build(s: GameState): void {
     this.width = s.width;
@@ -267,76 +253,177 @@ export class MapView {
     this.fog.set([], this.explored.tiles, true);
     this.ground?.dispose();
     this.ground = new GroundMap(s);
+    this.buildings?.dispose();
+    this.ao?.dispose();
+    this.ao = new GroundOcclusion(s.width, s.height);
+    this.buildings = new BuildingsView(s, this.fog, this.ao);
+    this.disposeKit();
+    this.kit = this.newKit(s, this.ground, this.ao);
+    this.aoDirty = null;
+    this.drawn = null;
+    // A wall tile's outer half is the street's: the ground shader paints it so, the building's floor covers the rest.
+    const plan = this.buildings.plan;
+    for (let i = 0; i < plan.owner.length; i++) if (plan.owner[i]! >= 0 && !plan.inside[i]) this.ground.outdoors(i);
     this.rebuild(s);
+    // A new map: all of it (its texture starts empty, which would read as hidden everywhere).
+    this.queueBake({ x0: 0, y0: 0, x1: s.width, y1: s.height });
   }
 
-  /** Recreates every mesh from the state (called on build and whenever a tile changes). */
-  rebuild(s: GameState): void {
-    for (const layer of this.layers) layer.dispose();
+  /**
+   * The camera and what the player is looking at (the selected soldier, the
+   * cursor, the target), for the buildings' cutaway. Called once by the game.
+   */
+  watch(camera: THREE.Camera, focus: () => Focus): void {
+    this.camera = camera;
+    this.focus = focus;
+  }
+
+  /** Every material of the map obeys the fog of war; the map disposes of it with the map. */
+  private own<T extends THREE.Material>(m: T): T {
+    this.materials.push(this.fog.patch(m));
+    return m;
+  }
+
+  private newKit(s: GameState, ground: GroundMap, ao: GroundOcclusion): Kit {
+    const groundMaterial = ground.material();
+    contactPatch(groundMaterial, ao);
+    const slab = new THREE.BoxGeometry(1, 0.1, 1);
+    this.geometries.push(slab);
+    return { batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground) };
+  }
+
+  private disposeKit(): void {
+    this.kit?.batch.dispose();
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
-    this.layers = [];
     this.materials = [];
     this.geometries = [];
+    this.kit = null;
+  }
+
+  /**
+   * Places everything from the state again (on build and whenever a tile
+   * changes); only what changed is merged again (batch.ts), and the contact
+   * occlusion is baked again only there.
+   */
+  rebuild(s: GameState): void {
     this.group.clear();
-    this.ladders = new THREE.Group();
     const ground = this.ground ?? (this.ground = new GroundMap(s));
+    const ao = this.ao ?? (this.ao = new GroundOcclusion(s.width, s.height));
+    const buildings = this.buildings ?? (this.buildings = new BuildingsView(s, this.fog, ao));
+    const kit = this.kit ?? (this.kit = this.newKit(s, ground, ao));
 
     const pal = PALETTES[s.biome] ?? PALETTES.city;
-    /** Every material of the map obeys the fog of war. */
-    const own = <T extends THREE.Material>(m: T): T => {
-      this.materials.push(this.fog.patch(m));
-      return m;
-    };
-    const std = (opts: THREE.MeshStandardMaterialParameters = {}, jitter?: number) =>
-      own(voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, ...opts }), { storey: STOREY, jitter }));
-    const layer = (geometry: THREE.BufferGeometry, material: THREE.Material, shadows = true) => {
-      const l = new Layer(geometry, material, shadows);
-      this.layers.push(l);
-      return l;
-    };
+    const batch = kit.batch;
+    // Only round what changed since the last rebuild (a door, a blast, a search): the chunks it touches are placed
+    // and merged again, the rest stays as it is. `area` marks the tiles to place (whatever lands in those chunks).
+    const redo = this.changed(s, batch);
+    const area = redo && this.areaOf(s, redo, batch.chunk);
+    batch.begin(redo);
+    const layer = (geometry: THREE.BufferGeometry, material: THREE.Material, shadows = true) => new Layer(batch, geometry, material, shadows);
     // Floors: the ground shader paints their tops as continuous terrain; the colour per tile is for their sides.
-    const groundMaterial = ground.material(voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }), { storey: STOREY, jitter: 0.1 }));
-    const slabs = layer(new THREE.BoxGeometry(1, 0.1, 1), own(groundMaterial), false);
-    // Raised buildings: their facades get a row of windows per storey.
-    // In the wilds a raised tile is a hill: bare earth with grass on top, no windows.
+    const slabs = new Layer(batch, kit.slab, kit.ground, false, true, true);
     const hills = s.biome === 'wilds';
-    const columnMaterial = own(voxelSurface(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: hills ? 0.95 : 0.8 }), { storey: STOREY, windows: !hills }));
-    const columns = layer(unitBox, columnMaterial);
-    const walls = layer(unitBox, std({ roughness: 0.8 }));
-    // Plinth and cornice: the bands that make a block read as a building wall.
-    const trims = layer(unitBox, std({ roughness: 0.9 }));
-    const lows = layer(unitBox, std({ roughness: 0.8 }));
-    const doors = layer(unitBox, std({ roughness: 0.6 }));
-    const frames = layer(unitBox, std({ roughness: 0.7, metalness: 0.3 }));
-    const glassMaterial = own(new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, roughness: 0.1, metalness: 0.4, emissive: new THREE.Color(pal.glass), emissiveIntensity: 0.25 }));
-    const glass = layer(unitBox, glassMaterial, false);
 
-    // One instanced layer per prop variant (lit voxels + glowing voxels), created on first use.
-    const propLayers = new Map<string, { lit: Layer | null; glow: Layer | null }>();
-    // Synty props (Ajustes → Modelos): one instanced layer per mesh of each prop, on its pack's atlas.
-    const synty = graphics().models === 'synty';
+    // Synty props: their meshes, each on its pack's atlas.
     const syntyLayers = new Map<string, Layer[]>();
-    const atlasMaterials = new Map<AtlasId, THREE.Material>();
     const atlasMaterial = (id: AtlasId) => {
-      let m = atlasMaterials.get(id);
-      if (!m) atlasMaterials.set(id, (m = own(new THREE.MeshStandardMaterial({ map: atlasTexture(id), roughness: 0.85 }))));
+      let m = kit.atlas.get(id);
+      if (!m) kit.atlas.set(id, (m = this.own(new THREE.MeshStandardMaterial({ map: atlasTexture(id), roughness: 0.85 }))));
       return m;
     };
-    /** A Synty prop for the set, or false (none in the manifest, or still loading: the voxel one stands in meanwhile). */
-    const addSynty = (set: PropSet, pick: number, matrix: THREE.Matrix4): boolean => {
-      const ids = synty ? syntySet(set) : undefined;
-      if (!ids?.length) return false;
-      const id = ids[Math.min(ids.length - 1, Math.floor(pick * ids.length))]!;
+    /** The Synty prop `id` at `matrix`; false while it loads. */
+    const addSyntyId = (id: PropId, matrix: THREE.Matrix4, shadows = true): boolean => {
       const prop = syntyProp(id);
       if (!prop) {
         this.waitingForProps = true;
         return false;
       }
-      let layers = syntyLayers.get(id);
-      if (!layers) syntyLayers.set(id, (layers = prop.map((part) => layer(part.geometry, atlasMaterial(part.atlas)))));
+      const key = shadows ? id : `${id}:flat`;
+      let layers = syntyLayers.get(key);
+      const occlude = shadows && !NO_OCCLUSION.has(id);
+      if (!layers) syntyLayers.set(key, (layers = prop.map((part) => new Layer(batch, part.geometry, atlasMaterial(part.atlas), shadows, false, occlude))));
       prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
       return true;
+    };
+    /** One of the set's Synty props (`pick` in [0, 1) chooses), at `matrix`; false while it loads. */
+    const addSynty = (set: PropSet, pick: number, matrix: THREE.Matrix4): boolean => {
+      const ids = syntySet(set);
+      return addSyntyId(ids[Math.min(ids.length - 1, Math.floor(pick * ids.length))]!, matrix);
+    };
+    const searched = new Set(s.searched ?? []);
+    /** Some wrecks still have a battery: their headlights on, by night. */
+    const headlights: Glow[] = [];
+    // The list's own length (tick compares it): a tile listed twice must not redraw the map every frame.
+    this.searchedSeen = s.searched?.length ?? 0;
+    /**
+     * A wardrobe someone has searched: its doors swung wide and its drawers
+     * pulled out (Town's wardrobe, its parts apart); false while it loads.
+     */
+    const openWardrobe = (x: number, base: number, z: number, front: { x: number; y: number }): boolean => {
+      const parts = syntyPiece('wardrobeOpen');
+      if (!parts) {
+        this.waitingForProps = true;
+        return false;
+      }
+      const at = new THREE.Matrix4().compose(new THREE.Vector3(x, base, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(front.x, front.y)), new THREE.Vector3(1, 1, 1));
+      parts.forEach((part, k) => {
+        const box = (part.geometry.boundingBox ?? (part.geometry.computeBoundingBox(), part.geometry.boundingBox!)).clone().applyMatrix4(part.matrix);
+        let local = part.matrix;
+        const swing = (hx: number, angle: number) =>
+          new THREE.Matrix4()
+            .makeTranslation(hx, 0, box.max.z)
+            .multiply(new THREE.Matrix4().makeRotationY(angle))
+            .multiply(new THREE.Matrix4().makeTranslation(-hx, 0, -box.max.z))
+            .multiply(part.matrix);
+        if (part.name.endsWith('Door_01')) local = swing(box.min.x, -1.9);
+        else if (part.name.endsWith('Door_02')) local = swing(box.max.x, 1.9);
+        else if (part.name.includes('Drawer')) local = new THREE.Matrix4().makeTranslation(0, 0, 0.1 + hash(k, Math.round(x * 7 + z), 3) * 0.18).multiply(part.matrix);
+        const key = `wardrobeOpen:${part.name}`;
+        let layers = syntyLayers.get(key);
+        if (!layers) syntyLayers.set(key, (layers = [layer(part.geometry, atlasMaterial(part.atlas))]));
+        layers[0]!.add(at.clone().multiply(local), 0xffffff);
+      });
+      return true;
+    };
+    /**
+     * What a search leaves in front of a piece of furniture (`front` the way
+     * it faces): drawers pulled out and dropped, papers, clothes, opened boxes.
+     */
+    const ransack = (kind: DecorKind, x: number, y: number, base: number, front: { x: number; y: number }) => {
+      const r = (k: number) => hash(x, y, 60 + k);
+      const spot = (along: number, out: number) => {
+        const side = { x: -front.y, y: front.x };
+        return new THREE.Vector3(x + 0.5 + front.x * out + side.x * along, base + 0.003, y + 0.5 + front.y * out + side.y * along);
+      };
+      const drop = (id: PropId, along: number, out: number, k: number, shadows = false) =>
+        addSyntyId(id, new THREE.Matrix4().compose(spot(along, out), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), r(k) * Math.PI * 2), new THREE.Vector3(1, 1, 1)), shadows);
+      switch (kind) {
+        case 'desk':
+        case 'cabinet':
+        case 'counter':
+          drop('drawer', (r(1) - 0.5) * 0.4, 0.55, 2, true);
+          drop('papers', (r(3) - 0.5) * 0.5, 0.6, 4);
+          break;
+        case 'wardrobe':
+        case 'bed':
+          drop('laundry', (r(1) - 0.5) * 0.4, 0.55, 2);
+          if (kind === 'bed') drop('papers', (r(3) - 0.5) * 0.5, 0.5, 4);
+          break;
+        case 'shelf':
+        case 'rack':
+          drop('cardboard', (r(1) - 0.5) * 0.4, 0.55, 2, true);
+          drop('papers', (r(3) - 0.5) * 0.5, 0.6, 4);
+          break;
+        case 'crates':
+          drop('crateLid', (r(1) - 0.5) * 0.3, 0.62, 2);
+          break;
+        case 'table':
+          drop('papers', (r(3) - 0.5) * 0.5, 0.5, 4);
+          break;
+        default:
+          break;
+      }
     };
     /** `wiggle` takes a prop off the grid: 1 a nudge and a few degrees, 2 any turn at all (see WIGGLE). */
     const addProp = (tile: number, set: PropSet, x: number, y: number, z: number, pick: number, turn: number, wiggle: 0 | 1 | 2 = 0) => {
@@ -344,20 +431,7 @@ export class MapView {
       const ty = Math.floor(tile / s.width);
       const shift = wiggle === 2 ? 0.07 : wiggle ? 0.035 : 0;
       const yaw = wiggle === 2 ? hash(tx, ty, 7) * Math.PI * 2 : turn * (Math.PI / 2) + (wiggle ? (hash(tx, ty, 6) - 0.5) * 0.16 : 0);
-      const matrix = placed(x + (hash(tx, ty, 4) - 0.5) * 2 * shift, y, z + (hash(tx, ty, 5) - 0.5) * 2 * shift, 1, 1, 1, yaw);
-      if (addSynty(set, pick, matrix)) return;
-      const variant = Math.floor(pick * propVariants(set));
-      const key = `${set}:${variant}`;
-      let entry = propLayers.get(key);
-      if (!entry) {
-        const model = propModel(set, variant);
-        const lit = own(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, vertexColors: true }));
-        const glow = own(new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true }));
-        entry = { lit: model.lit ? layer(model.lit, lit) : null, glow: model.glow ? layer(model.glow, glow, false) : null };
-        propLayers.set(key, entry);
-      }
-      entry.lit?.add(matrix, 0xffffff);
-      entry.glow?.add(matrix, 0xffffff);
+      addSynty(set, pick, placed(x + (hash(tx, ty, 4) - 0.5) * 2 * shift, y, z + (hash(tx, ty, 5) - 0.5) * 2 * shift, 1, 1, 1, yaw));
     };
     const props = PROP_SETS[s.biome] ?? PROP_SETS.city;
     /** The biome's random props: in the wilds, rocks, bushes and trees can turn any way. */
@@ -384,22 +458,39 @@ export class MapView {
       const turn = FACING.has(look.kind) ? turnTo(look.facing) : Math.floor(hash(x, y, 2) * 4);
       let pick = hash(x, y, 1);
       if (look.kind === 'carFront' || look.kind === 'carRear') {
-        // Half a car is drawn only while the other half stands; both halves take the colour of the front one.
+        // A car is one model over both tiles, drawn only while both stand: the front tile draws it, centred between the two.
         const j = carPartner(decor, s.width, i);
         if (j < 0 || s.tiles[j] !== 'low') return false;
-        const front = look.kind === 'carFront' ? i : j;
-        pick = hash(front % s.width, Math.floor(front / s.width), 1);
-        // A Synty car is one model over both tiles: the front tile draws it, centred between the two.
-        const whole = synty ? syntySet('carFront') : undefined;
-        if (whole?.every((id) => syntyProp(id))) {
-          if (look.kind === 'carRear') return true;
-          const d = DIRS4[look.facing]!;
-          const at = placed(cx - d.x * 0.5, base, cz - d.y * 0.5, 1, 1, 1, turn * (Math.PI / 2));
-          if (addSynty('carFront', pick, at)) return true;
-        }
+        if (look.kind === 'carRear') return true;
+        pick = hash(x, y, 1);
+        const d = DIRS4[look.facing]!;
+        const at = placed(cx - d.x * 0.5, base, cz - d.y * 0.5, 1, 1, 1, turn * (Math.PI / 2));
+        // Searched (its boot or its glovebox), it's the one with the boot lid up.
+        if (searched.has(i) || searched.has(j)) addSyntyId('carOpen', at);
+        else addSynty('carFront', pick, at);
+        if (hash(x, y, 9) < 0.25) headlights.push({ x: cx + d.x * 0.42, y: base + 0.32, z: cz + d.y * 0.42, dx: d.x, dz: d.y });
+        return true;
+      }
+      // Searched furniture: opened, its contents on the floor in front of it.
+      if (searched.has(i)) {
+        const front = FACING.has(look.kind) ? DIRS4[look.facing]! : DIRS4[Math.floor(hash(x, y, 2) * 4)]!;
+        const opened =
+          look.kind === 'wardrobe' && kind === 'high'
+            ? openWardrobe(cx, base, cz, front)
+            : look.kind === 'crates' && kind === 'low'
+              ? addSyntyId('crateOpen', placed(cx, base, cz, 1, 1, 1, turn * (Math.PI / 2)))
+              : false;
+        ransack(look.kind, x, y, base, front);
+        if (opened) return true;
       }
       // A fallen tree is a row of logs: it keeps to the grid.
       addProp(i, set, cx, base, cz, pick, turn, look.kind === 'tree' && kind === 'low' ? 1 : (WIGGLE[look.kind] ?? 0));
+      // A chair at each desk, pushed back a little (cosmetic: it stands on the floor in front).
+      if (look.kind === 'desk' && kind === 'low') {
+        const f = DIRS4[look.facing]!;
+        const yaw = Math.atan2(f.x, f.y) + Math.PI + (hash(x, y, 8) - 0.5) * 0.6;
+        addSyntyId('officeChair', placed(cx + f.x * 0.62, base, cz + f.y * 0.62, 1, 1, 1, yaw));
+      }
       if (look.kind === 'fence' || look.kind === 'gatePost') {
         DIRS4.forEach((d, k) => {
           if (fenceAt(x + d.x, y + d.y)) addProp(i, rails, cx, base, cz, 0, turnTo(k));
@@ -411,118 +502,192 @@ export class MapView {
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
         const i = y * s.width + x;
+        if (area && !area[i]) continue;
         const kind = s.tiles[i]!;
         const e = s.elev[i] ?? 0;
         const base = e * STOREY;
         const cx = x + 0.5;
         const cz = y + 0.5;
-        const jitter = (hash(x, y) - 0.5) * 0.05;
 
-        // Floor slab on top, and the solid block under a rooftop. Only the slab's sides take this colour (see ground.ts).
+        // Floor slab on top. Only its sides take this colour (see ground.ts). buildings.ts draws every
+        // wall, the floors inside, and raised ground's sides (flats, platforms, hills) and tops (but a hill's, which is ground).
         const floor = e > 0 ? (hills ? pal.ground : pal.roof) : [pal.ground, pal.street, pal.floor][ground.kinds[i]!] ?? pal.ground;
-        slabs.add(placed(cx, base - 0.05, cz, 1, 1, 1), floor);
-        if (e > 0) columns.add(placed(cx, 0, cz, 1, base - 0.1, 1), new THREE.Color(hills ? pal.street : pal.facade).offsetHSL(0, 0, hills ? jitter - 0.08 : jitter));
+        const raised = buildings.plan.raised[i] ?? 0;
+        const covered = !!buildings.plan.floor[i] || raised === RAISED_FLATS || raised === RAISED_PLATFORM;
+        if (!covered) slabs.add(placed(cx, base - 0.05, cz, 1, 1, 1), floor);
+        if (isWallLike(kind)) continue;
 
-        // Doors and windows run along the wall they belong to.
-        const alongX = isWallLike(at(x - 1, y)) || isWallLike(at(x + 1, y));
-        const yaw = alongX ? 0 : Math.PI / 2;
         const v = hash(x, y, 1);
         switch (kind) {
-          case 'wall':
-            walls.add(placed(cx, base, cz, 1, STOREY, 1), new THREE.Color(pal.wall).offsetHSL(0, 0, jitter));
-            trims.add(placed(cx, base, cz, 1.03, 0.3, 1.03), new THREE.Color(pal.facade).offsetHSL(0, 0, -0.08));
-            // The cornice stands a little proud of the wall's top (and of a rooftop beside it): flush, the two faces fought.
-            trims.add(placed(cx, base + STOREY - 0.14, cz, 1.05, 0.17, 1.05), new THREE.Color(pal.facade).offsetHSL(0, 0, 0.05));
-            break;
           case 'high':
             if (!dressed(i, x, y, kind, base)) addProp(i, props.high, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4), randomWiggle);
             break;
           case 'low':
-            // On a rooftop, low cover is the parapet along the edge (unless it is something else, crates on a platform).
+            // On a block of flats, low cover is the parapet along the roof's edge (buildings.ts), unless it is something else.
             if (dressed(i, x, y, kind, base)) break;
-            if (e > 0 && s.biome !== 'wilds') lows.add(placed(cx, base, cz, 1, 0.5, 1), new THREE.Color(pal.facade).offsetHSL(0, 0, 0.06));
-            else addProp(i, props.low, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4), randomWiggle);
+            if (raised === RAISED_FLATS) break;
+            addProp(i, props.low, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4), randomWiggle);
             break;
-          // No lintels: seen from the tactical camera, doors and windows must read as gaps in the wall.
-          case 'door':
-          case 'doorOpen': {
-            const h = STOREY * 0.88;
-            frames.add(placed(cx + (alongX ? -0.47 : 0), base, cz + (alongX ? 0 : -0.47), alongX ? 0.06 : 1, h, alongX ? 1 : 0.06), pal.frame);
-            if (kind === 'door') doors.add(placed(cx, base, cz, 0.9, h, 0.1, yaw), pal.door);
-            // An open door has swung 90° on its hinge, into the room.
-            else if (alongX) doors.add(placed(cx - 0.42, base, cz + 0.45, 0.9, h, 0.1, Math.PI / 2), pal.door);
-            else doors.add(placed(cx + 0.45, base, cz - 0.42, 0.9, h, 0.1, 0), pal.door);
-            break;
-          }
-          case 'window':
-          case 'windowBroken': {
-            frames.add(placed(cx, base, cz, 1, 0.8, 1), pal.wall);
-            trims.add(placed(cx, base, cz, 1.03, 0.3, 1.03), new THREE.Color(pal.facade).offsetHSL(0, 0, -0.08));
-            if (kind === 'window') glass.add(placed(cx, base + 0.8, cz, 0.98, STOREY - 1.1, 0.14, yaw), pal.glass);
-            break;
-          }
-          case 'console':
+          case 'console': {
+            // Its back to the wall beside it.
+            const alongX = isWallLike(at(x - 1, y)) || isWallLike(at(x + 1, y));
             addProp(i, 'console', cx, base, cz, 0, alongX ? 0 : 1);
             break;
-          case 'ladder':
-            this.addLadder(s, x, y, pal);
-            break;
-          case 'floor':
+          }
+          default:
             break;
         }
       }
     }
 
-    for (const l of this.layers) l.build(this.group);
+    // The streets' dressing (street lights, poles and wires, bags, weeds…): cosmetic, merged with the rest.
+    const lamps: Glow[] = [];
+    for (const d of dressStreets(s, ground, COVER_DENSITY[graphics().effects])) {
+      addSyntyId(d.id, d.matrix, d.cast);
+      if (d.id !== 'streetLight') continue;
+      // The lamp hangs at the end of the arm (its +x), over the road.
+      const e = d.matrix.elements;
+      lamps.push({ x: e[12]! + e[0]! * 1.45, y: 4.05, z: e[14]! + e[2]! * 1.45, dx: e[0]!, dz: e[2]! });
+    }
+
+    // Beyond the edge: wrecks on the streets that leave the map (off the baked occlusion: they darken no ground).
+    for (const d of dressEdges(s, ground)) {
+      const prop = syntyProp(d.id);
+      if (!prop) {
+        this.waitingForProps = true;
+        continue;
+      }
+      let layers = syntyLayers.get(`edge:${d.id}`);
+      if (!layers) syntyLayers.set(`edge:${d.id}`, (layers = prop.map((part) => new Layer(batch, part.geometry, atlasMaterial(part.atlas), true, false, false))));
+      prop.forEach((part, k) => layers[k]!.add(d.matrix.clone().multiply(part.matrix)));
+    }
+
+    // Ground cover (tufts, papers, leaves, drains…), scattered off the grid; no shadows.
+    const coverLayers = new Map<string, Layer[]>();
+    for (const { id, matrix } of scatterCover(s, ground, COVER_DENSITY[graphics().effects])) {
+      const prop = syntyProp(id);
+      if (!prop) {
+        this.waitingForProps = true;
+        continue;
+      }
+      let layers = coverLayers.get(id);
+      if (!layers) coverLayers.set(id, (layers = prop.map((part) => layer(part.geometry, atlasMaterial(part.atlas), false))));
+      prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
+    }
+
+    let dirty = batch.commit();
+    this.group.add(batch.group);
+    if (!buildings.buildWalls(s, redo, area)) this.waitingForProps = true;
+    dirty = union(dirty, buildings.dirty);
+    this.group.add(buildings.group, buildings.walls);
+    // What's drawn now, for the next rebuild to compare with; with props still loading, the next one redoes everything.
+    this.drawn = { tiles: s.tiles.slice(), searched: (s.searched ?? []).join(',') };
     if (this.waitingForProps) {
       this.waitingForProps = false;
-      void syntyPropsLoaded().then(() => {
+      this.drawn = null;
+      void Promise.all([syntyPropsLoaded(), piecesLoaded()]).then(() => {
         if (this.shown === s) this.rebuild(s);
       });
     }
-    const details = own(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, vertexColors: true }));
-    this.group.add(this.ladders, this.surroundings(s, pal), scatterDetails(s, ground, details));
+    this.group.add(kit.surroundings);
+    // The night's lights are made when it's night (by day a rebuild needn't pay for them); a partial rebuild keeps them.
+    if (!redo) {
+      this.night?.dispose();
+      this.night = null;
+      this.nightPlan = { lamps, headlights };
+      if (NIGHT.value > 0.5) this.lightNight();
+    } else if (this.night) this.group.add(this.night.group);
+    if (!dirty) return;
+    shadowsChanged();
+    this.queueBake(dirty);
   }
 
-  /** Ground beyond the playable area; the fog of war turns it into the mist a few tiles out. */
-  private surroundings(s: GameState, pal: Palette): THREE.Mesh {
-    const material = this.fog.patch(voxelSurface(new THREE.MeshStandardMaterial({ color: new THREE.Color(pal.street).multiplyScalar(0.7), roughness: 0.95 })));
+  /**
+   * The chunks to place again: those within two tiles of a tile that changed
+   * or was searched since the last rebuild (what stands there may reach into
+   * a neighbour: a fence's rails, a car's other half, a wall's corner post).
+   * Null: everything (a new map, props that were loading).
+   */
+  private changed(s: GameState, batch: StaticBatch): Set<string> | null {
+    const drawn = this.drawn;
+    if (!drawn || drawn.tiles.length !== s.tiles.length) return null;
+    const touched: number[] = [];
+    for (let i = 0; i < s.tiles.length; i++) if (s.tiles[i] !== drawn.tiles[i]) touched.push(i);
+    const searched = s.searched ?? [];
+    if (searched.join(',') !== drawn.searched) {
+      const before = new Set(drawn.searched ? drawn.searched.split(',').map(Number) : []);
+      for (const i of searched) if (!before.has(i)) touched.push(i);
+    }
+    const chunks = new Set<string>();
+    for (const i of touched) {
+      const x = i % s.width;
+      const y = (i - x) / s.width;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) chunks.add(batch.chunkAt(x + dx + 0.5, y + dy + 0.5));
+    }
+    return chunks;
+  }
+
+  /** The tiles whose things may land in `chunks`: theirs, and a tile round them. */
+  private areaOf(s: GameState, chunks: Set<string>, size: number): Uint8Array {
+    const area = new Uint8Array(s.width * s.height);
+    for (const key of chunks) {
+      const [cx, cz] = key.split(',').map(Number) as [number, number];
+      for (let y = Math.max(0, cz * size - 1); y < Math.min(s.height, (cz + 1) * size + 1); y++) {
+        for (let x = Math.max(0, cx * size - 1); x < Math.min(s.width, (cx + 1) * size + 1); x++) area[y * s.width + x] = 1;
+      }
+    }
+    return area;
+  }
+
+  /** The contact occlusion baked again in `region` before the next frame (one bake for all the rebuilds till then). */
+  private queueBake(region: Dirty): void {
+    const { ao, kit, buildings } = this;
+    if (!ao || !kit || !buildings) return;
+    const pending = this.aoDirty;
+    this.aoDirty = union(this.aoDirty, region);
+    if (pending) return;
+    beforeNextFrame((gl) => {
+      // Another map since: its own bake is queued.
+      if (this.ao !== ao || this.kit !== kit) return;
+      const todo = this.aoDirty;
+      this.aoDirty = null;
+      if (todo) ao.bake(gl, [...kit.batch.occluderGeometries(), ...buildings.occluders()], todo);
+    });
+  }
+
+  /**
+   * Ground beyond the playable area, painted by the ground shader as the
+   * edge tiles go on (streets carry on out of the map); the fog of war turns
+   * it into the haze a few tiles out.
+   */
+  private surroundings(s: GameState, pal: Palette, map?: GroundMap): THREE.Mesh {
+    const material = this.fog.patch(map ? map.material() : new THREE.MeshStandardMaterial({ color: new THREE.Color(pal.street).multiplyScalar(0.7), roughness: 0.95 }));
+    material.vertexColors = false;
     this.materials.push(material);
     const margin = 160;
     const geometry = new THREE.PlaneGeometry(s.width + margin, s.height + margin).rotateX(-Math.PI / 2);
     this.geometries.push(geometry);
     const ground = new THREE.Mesh(geometry, material);
-    ground.position.set(s.width / 2, -0.12, s.height / 2);
+    // Just under the floor slabs: hidden by them on the map, the ground itself beyond it.
+    ground.position.set(s.width / 2, -0.01, s.height / 2);
     ground.receiveShadow = true;
+    ground.matrixAutoUpdate = false;
+    ground.updateMatrix();
     return ground;
   }
 
-  /** Rails and rungs against the face of the neighbour one storey up. */
-  private addLadder(s: GameState, x: number, y: number, pal: Palette): void {
-    const e = s.elev[y * s.width + x] ?? 0;
-    const material = this.fog.patch(voxelSurface(new THREE.MeshStandardMaterial({ color: pal.ladder, roughness: 0.5, metalness: 0.4 })));
-    this.materials.push(material);
-    for (const d of DIRS4) {
-      const nx = x + d.x;
-      const ny = y + d.y;
-      if (nx < 0 || ny < 0 || nx >= s.width || ny >= s.height || (s.elev[ny * s.width + nx] ?? 0) !== e + 1) continue;
-      const ladder = new THREE.Group();
-      const rail = new THREE.BoxGeometry(0.06, STOREY + 0.3, 0.06);
-      for (const side of [-0.22, 0.22]) {
-        const r = new THREE.Mesh(rail, material);
-        r.position.set(side, (STOREY + 0.3) / 2, 0);
-        r.castShadow = true;
-        ladder.add(r);
-      }
-      for (let k = 1; k <= 6; k++) {
-        const rung = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.04, 0.05), material);
-        rung.position.set(0, (k * STOREY) / 6.5, 0);
-        ladder.add(rung);
-      }
-      ladder.position.set(x + 0.5 + d.x * 0.42, e * STOREY, y + 0.5 + d.y * 0.42);
-      ladder.rotation.y = d.x !== 0 ? Math.PI / 2 : 0;
-      this.ladders.add(ladder);
-    }
+  /** Day or night (the reference block's night test). */
+  setNight(on: boolean): void {
+    NIGHT.value = on ? 1 : 0;
+    this.fog.setNight(on);
+    if (on && !this.night) this.lightNight();
+    this.night?.setVisible(on);
+  }
+
+  private lightNight(): void {
+    if (!this.nightPlan) return;
+    this.night = new NightLights(this.nightPlan.lamps, this.nightPlan.headlights, this.fog);
+    this.group.add(this.night.group);
   }
 
   /** What the squad sees now: it is remembered as explored, and the fog fades to match. */
@@ -533,9 +698,13 @@ export class MapView {
     this.fresh = false;
   }
 
-  /** Advances the fog's fades and its drifting mist; called every frame. */
+  /** Advances the fog's fades and its drifting mist, and the buildings' cutaway; called every frame. */
   tick(dt: number): void {
     this.fog.update(dt);
+    // A search opened a piece of furniture: redraw (searches are few, a rebuild is cheap).
+    if (this.shown && (this.shown.searched?.length ?? 0) !== this.searchedSeen) this.rebuild(this.shown);
+    this.night?.update(this.camera);
+    if (this.buildings && this.shown) this.buildings.update(dt, this.shown, this.camera, this.focus?.() ?? null, this.visibility);
   }
 
   isVisible(x: number, y: number): boolean {

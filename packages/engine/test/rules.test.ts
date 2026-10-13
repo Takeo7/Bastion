@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { abilitiesOf, abilityBlocker, abilityTargets, allyTargets, canTargetTile, meleeTargets } from '../src/abilities';
+import { searchableTiles } from '../src/loot';
 import { autoBuild, soldierStats } from '../src/classes';
 import { ABILITIES, isAttack } from '../src/content';
 import { previewShot } from '../src/aim';
@@ -148,7 +149,7 @@ describe('classes', () => {
     run(s, ability('s1', 'aid', { target: 's2' }));
     expect(hurt.aided).toBe(20);
     const shot = previewShot(s, s.units.find((u) => u.id === 'a1')!, hurt)!;
-    expect(shot.mods.find((m) => m.label === 'Protocolo de ayuda')?.value).toBe(-20);
+    expect(shot.mods.find((m) => m.label === 'Cobertura del Grillo')?.value).toBe(-20);
   });
 });
 
@@ -424,6 +425,8 @@ describe('replication', () => {
     if (rng.int(12) === 0) return { type: 'pass' };
     const u = rng.pick(mine);
     const aliens = s.units.filter((a) => a.alive && a.team === 'alien');
+    // Searching whenever there is something at hand, half the time.
+    if (searchableTiles(s, u).length && rng.int(2) === 0) return ability(u.id, 'search', { tile: rng.pick(searchableTiles(s, u)) });
     if (rng.int(3) === 0 && aliens.length) {
       const id = rng.pick(abilitiesOf(u));
       const def = ABILITIES[id];
@@ -438,8 +441,10 @@ describe('replication', () => {
           const t = isAttack(id) ? meleeTargets(s, u, id) : [];
           return ability(u.id, id, { target: (t.length ? rng.pick(t).target : rng.pick(aliens)).id });
         }
-        case 'tile':
-          return ability(u.id, id, { tile: rng.pick(aliens).pos });
+        case 'tile': {
+          const furniture = id === 'search' ? searchableTiles(s, u) : [];
+          return ability(u.id, id, { tile: furniture.length ? rng.pick(furniture) : rng.pick(aliens).pos });
+        }
         default:
           return ability(u.id, id);
       }
@@ -462,12 +467,12 @@ describe('replication', () => {
   }
 
   it('clients replaying the event stream end with exactly the host state', () => {
-    const kinds = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue'] as const;
+    const kinds = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge'] as const;
     const biomes = ['city', 'wilds', 'facility'] as const;
-    for (let seed = 1; seed <= 15; seed++) {
+    for (let seed = 1; seed <= 18; seed++) {
       const rng = new Rng(seed);
       const map = seed <= 5 ? { kind: 'handmade' as const, id: 'plaza' } : { kind: 'generated' as const, biome: biomes[seed % 3]!, seed };
-      const pods: TemplateId[][] = [['sectoid', 'trooper'], ['lancer', 'sectoid'], ['mec', 'officer'], ['xenoid', 'zombie']];
+      const pods: TemplateId[][] = [['sectoid', 'trooper'], ['lancer', 'sectoid'], ['mec', 'officer'], ['xenoid', 'zombie', 'bloater']];
       const host = createMission({ map, slots: [0, 1], rng, kind: kinds[seed % kinds.length]!, difficulty: 1 + (seed % 4), pods: seed % 2 ? pods : undefined });
       if (seed % 3 !== 0) veterans(host, rng);
       const client = cloneState(host);

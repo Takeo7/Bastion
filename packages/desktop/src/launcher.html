@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'" />
+    <title>Bastión</title>
+    <style>
+      :root {
+        --night: #0d0f12;
+        --paper: #e8dec4;
+        --paper-edge: #d6c9a6;
+        --ink: #29231a;
+        --faded: #6d6150;
+        --stamp: #a3392b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        background: radial-gradient(ellipse at 50% 40%, #1b2027 0%, var(--night) 70%);
+        color: var(--ink);
+        font: 15px/1.45 'Courier Prime', 'Courier New', Courier, monospace;
+        user-select: none;
+      }
+      main {
+        width: min(520px, calc(100vw - 32px));
+        padding: 34px 38px 26px;
+        background: var(--paper);
+        border: 1px solid var(--paper-edge);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+        transform: rotate(-0.6deg);
+      }
+      h1 {
+        margin: 0;
+        font: 700 46px/1 Georgia, 'Times New Roman', serif;
+        letter-spacing: 0.06em;
+      }
+      .kicker {
+        margin: 6px 0 26px;
+        color: var(--faded);
+        font-size: 12px;
+        letter-spacing: 0.22em;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+      }
+      .choice {
+        display: block;
+        width: 100%;
+        padding: 12px 0 14px;
+        background: none;
+        border: 0;
+        border-top: 1px solid var(--paper-edge);
+        text-align: left;
+      }
+      .choice strong,
+      .label {
+        display: block;
+        font-size: 17px;
+        letter-spacing: 0.12em;
+      }
+      .choice small,
+      .hint {
+        display: block;
+        margin-top: 3px;
+        color: var(--faded);
+        font-size: 13px;
+      }
+      .choice:hover strong,
+      .choice:focus-visible strong {
+        color: var(--stamp);
+      }
+      form {
+        padding: 12px 0 14px;
+        border-top: 1px solid var(--paper-edge);
+        border-bottom: 1px solid var(--paper-edge);
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        padding: 7px 9px;
+        font: inherit;
+        color: var(--ink);
+        background: #f4ecd8;
+        border: 1px solid var(--paper-edge);
+        user-select: text;
+      }
+      input:focus {
+        outline: 2px solid var(--stamp);
+        outline-offset: -1px;
+      }
+      .row button {
+        padding: 7px 16px;
+        background: var(--ink);
+        color: var(--paper);
+        border: 0;
+        letter-spacing: 0.12em;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: progress;
+      }
+      #status {
+        min-height: 3em;
+        margin: 14px 0 0;
+        font-size: 13px;
+      }
+      #status.bad {
+        color: var(--stamp);
+      }
+      footer {
+        color: var(--faded);
+        font-size: 11px;
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>BASTIÓN</h1>
+      <p class="kicker">TÁCTICA POR TURNOS COOPERATIVA</p>
+      <button class="choice" id="host" type="button">
+        <strong>SER ANFITRIÓN</strong>
+        <small>La partida se abre en este ordenador. Tu compañero entra desde su app o desde Chrome.</small>
+      </button>
+      <form id="join">
+        <label class="label" for="address">UNIRSE A UN COMPAÑERO</label>
+        <span class="hint">La dirección que ve tu compañero en su pantalla de inicio.</span>
+        <div class="row">
+          <input id="address" placeholder="192.168.1.20:3000" autocomplete="off" spellcheck="false" />
+          <button id="go" type="submit">UNIRSE</button>
+        </div>
+      </form>
+      <p id="status" role="status" aria-live="polite"></p>
+      <footer id="version"></footer>
+    </main>
+    <script>
+      const api = window.bastion;
+      const status = document.getElementById('status');
+      const buttons = [document.getElementById('host'), document.getElementById('go')];
+      const address = document.getElementById('address');
+      const say = (text, bad = false) => {
+        status.textContent = text;
+        status.classList.toggle('bad', bad);
+      };
+      const note = new URLSearchParams(location.search).get('aviso');
+      if (note) say(note, true);
+      let busy = false;
+      async function attempt(run, waiting) {
+        if (busy) return;
+        busy = true;
+        buttons.forEach((b) => (b.disabled = true));
+        say(waiting);
+        const problem = await run();
+        // On success the window is already loading the game.
+        if (!problem) return;
+        say(problem, true);
+        busy = false;
+        buttons.forEach((b) => (b.disabled = false));
+      }
+      document.getElementById('host').addEventListener('click', () => attempt(() => api.host(), 'Abriendo la partida…'));
+      document.getElementById('join').addEventListener('submit', (e) => {
+        e.preventDefault();
+        attempt(() => api.join(address.value), 'Buscando a tu compañero…');
+      });
+      api.info().then((info) => {
+        if (!info) return;
+        address.value = info.last;
+        document.getElementById('version').textContent = `versión ${info.version}${info.uncapped ? ' · sin tope de imágenes (medición)' : ''}`;
+      });
+    </script>
+  </body>
+</html>

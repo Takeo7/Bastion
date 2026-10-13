@@ -92,7 +92,8 @@ export type Decor = number;
 export type CoverLevel = 0 | 1 | 2;
 
 export type ClassId = 'assault' | 'grenadier' | 'sharpshooter' | 'specialist';
-export type AlienId = 'trooper' | 'officer' | 'xenoid' | 'lancer' | 'mec' | 'sectoid' | 'zombie';
+/** The humans (trooper, officer, lancer) and the zombies (zombie, xenoid, mec, sectoid, bloater: `undead` in TEMPLATES). */
+export type AlienId = 'trooper' | 'officer' | 'xenoid' | 'lancer' | 'mec' | 'sectoid' | 'zombie' | 'bloater';
 /** Mission objectives that are units: the alien relay to destroy and the VIP to extract. */
 export type ObjectiveId = 'relay' | 'vip';
 /** 'rookie': a recruit with no class yet (classes.ts), a rifle and the basic actions. */
@@ -128,6 +129,8 @@ export interface Appearance {
   arms?: string;
   /** Thigh and shin plates. */
   legs?: string;
+  /** Which survivor model the soldier is (the client's Synty list, e.g. 'hunter'); unset = picked from the soldier's id. */
+  character?: string;
 }
 
 export type AbilityId =
@@ -145,6 +148,8 @@ export type AbilityId =
   | 'aid'
   | 'evac'
   | 'hack'
+  /** Searching a piece of furniture, a car or crates (docs/FASE2.md, «Saqueo»). */
+  | 'search'
   // Granted by perks.
   | 'runAndGun'
   | 'rapidFire'
@@ -163,6 +168,8 @@ export type AbilityId =
   | 'claw'
   | 'mindspin'
   | 'reanimate'
+  /** The Hinchado bursts. */
+  | 'burst'
   // Granted by equipment.
   | 'smoke'
   | 'flashbang'
@@ -201,7 +208,7 @@ export type AttackAbility =
   | 'lightRain';
 
 /** Area abilities thrown or fired at a tile. */
-export type BlastAbility = 'grenade' | 'launch' | 'missiles' | 'discharge' | 'smoke' | 'flashbang' | 'echoStep' | 'shadowStep' | 'silence' | 'fireball';
+export type BlastAbility = 'grenade' | 'launch' | 'missiles' | 'discharge' | 'smoke' | 'flashbang' | 'echoStep' | 'shadowStep' | 'silence' | 'fireball' | 'burst';
 
 /** Limited-use items. */
 export type ChargeId =
@@ -225,7 +232,20 @@ export type ChargeId =
 export type ItemId = 'fragGrenade' | 'smokeGrenade' | 'flashbang' | 'firstAid' | 'nanoVest' | 'mindShield' | 'apRounds' | 'tracerRounds';
 export type ItemSlot = 'utility' | 'ammo';
 
-/** What a successful Mindspin does to its victim. */
+/**
+ * One thing found searching (docs/FASE2.md): exactly one of the three is set.
+ * Each takes a slot of the backpack. Same shape as lore.ts SearchFind.
+ */
+export interface Loot {
+  /** Suministros (credits in the campaign). */
+  supplies?: number;
+  /** An accessory, as the armoury sells it. */
+  item?: ItemId;
+  /** Medicines (a counter in the campaign; phase 3 uses them). */
+  medicines?: number;
+}
+
+/** What a successful Mindspin does to its victim ('controlled' only in missions saved before the zombies: the Chillón's scream never takes control). */
 export type PsiEffect = 'disoriented' | 'panicked' | 'controlled';
 
 export type ShotResult = 'miss' | 'graze' | 'hit' | 'crit';
@@ -240,7 +260,8 @@ export type ConcealReason = 'spotted' | 'patrol' | 'attack' | 'explosive' | 'son
 
 /**
  * Why a pod came alive: a soldier came into its sight (`sighted`), it ran into
- * the squad on patrol, it was attacked, or it heard an explosion (`noise`).
+ * the squad on patrol or it was attacked. `noise` only in older saves: noise
+ * no longer wakes a pod, it sends it to look (`Unit.heard`).
  */
 export type PodCause = 'sighted' | 'patrol' | 'attacked' | 'noise';
 
@@ -253,8 +274,10 @@ export type EndReason = 'objective' | 'wiped' | 'timer' | 'abandoned' | 'objecti
  * sabotage:    destroy the alien relay before the timer runs out.
  * hack:        hack the terminal before the timer runs out (failures raise the alarm).
  * rescue:      reach the VIP and extract them alive.
+ * scavenge:    «Saqueo»: search what you can and get out by the evac; no timer, but the
+ *              horde comes in by the edges, sooner the more noise the squad makes.
  */
-export type MissionKind = 'elimination' | 'recovery' | 'sabotage' | 'hack' | 'rescue';
+export type MissionKind = 'elimination' | 'recovery' | 'sabotage' | 'hack' | 'rescue' | 'scavenge';
 
 /** Talents of the Rosa (classes.ts TALENTS); the first ten of each class are the original perks. */
 export type PerkId =
@@ -443,13 +466,11 @@ export interface UnitMods {
   suppressAim: number;
   protocolDamage: number;
   hack: number;
-  /** Against mindspin: 1 = never panics, 2 = can't be controlled either. */
+  /** Against the Chillón's scream: 1 = never panics, 2 = immune (Temple 10, «Nervios de acero»). */
   psiGuard: number;
   // Velmar's Canto (filled in by soldierStats from the Canto talents).
   /** Knows some song (1/0): for «A dos voces». */
   singer: number;
-  /** Extra chance a Cantor's song gets against this unit (10 for singers without Temple 10). */
-  songOpen: number;
   /** Hoja cantada level 2: the Slash disorients on a hit. */
   slashDisorient: number;
   /** Llama alta: extra damage of Saeta, Bola de fuego and Tormenta. */
@@ -542,6 +563,10 @@ export interface Unit {
   huntedBy?: string | null;
   /** Turn it fell on (Último verso brings back those who fell this turn). */
   fellTurn?: number;
+  /** Enemies: where the last noise it heard came from (docs/FASE2.md); it goes to look while it sees nobody. */
+  heard?: Vec2 | null;
+  /** Soldiers: what they found searching (BACKPACK_SLOTS at most). It counts if they get out or stand at a victory. */
+  backpack?: Loot[];
 }
 
 /** Silencio: inside, the Cantores can't sing. */
@@ -578,6 +603,8 @@ export interface Reinforcement {
   pos: Vec2 | null;
   units: TemplateId[];
   landed: boolean;
+  /** Saqueo: zombies coming in by the edges, drawn by the noise; they land on the prowl, not alert. */
+  horde?: boolean;
 }
 
 export interface MissionItem {
@@ -602,6 +629,12 @@ export interface MissionState {
   /** Hack bonus from the campaign (research), added to every hack attempt. */
   hackBonus: number;
   reinforcements: Reinforcement[];
+  /** 1–4, for the loot tables (missing in missions saved before searching: 2). */
+  difficulty?: number;
+  /** Noise the squad has made, in horde points (content.ts hordePoints): it brings the Saqueo's horde sooner. */
+  noise?: number;
+  /** Saqueo: who comes in each wave of the horde; absent on missions without one. */
+  horde?: TemplateId[];
 }
 
 export interface GameState {
@@ -654,6 +687,8 @@ export interface GameState {
   smoke: SmokeCloud[];
   /** Silencio zones (missing in missions saved before the Canto). */
   silences?: SilenceZone[];
-  /** The Cámara de Ecos is next to the listening post: songs don't break concealment. */
+  /** The Taller de oficios is next to the listening post: the Oficio makes less noise (OFICIO_QUIET). */
   quietSongs?: boolean;
+  /** Tiles already searched (index = y * width + x); missing before searching existed. */
+  searched?: number[];
 }

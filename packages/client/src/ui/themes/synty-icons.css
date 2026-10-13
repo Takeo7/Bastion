@@ -1,0 +1,463 @@
+/*
+ * The packs' icons on the ability buttons and the skill tree's nodes, for the
+ * proposals that use them (data-ui-icons="synty": Apocalipsis and Mixta). Each
+ * button names its ability (data-ability, from hud.ts and strategy/skillTree.ts),
+ * and each plot of the compound its building or terrain (data-plot, plotIcons.ts);
+ * the line icon of ui/icons.ts stays in the DOM and is covered by a flat white
+ * silhouette from INTERFACE Apocalypse HUD, Modern Menus or Military Combat HUD
+ * (the mh-* ones), or rendered by Arte from a Synty model (renders/ and the r-*
+ * icons: the molotov, La Mula, the cross, the rock, the ruins), used as a mask and coloured by the button's text colour. Sprites:
+ * public/ui/synty/icons (tools/ui/synty-sprites.py). An ability left out of this
+ * list keeps its line icon.
+ */
+
+/* Each mapped ability (or plot) names its silhouette, hides the line drawing and paints the mask. */
+:root[data-ui-icons='synty'] :is([data-ability], [data-plot]) svg.ico {
+  -webkit-mask: var(--sicon, none) center / contain no-repeat;
+  mask: var(--sicon, none) center / contain no-repeat;
+  background: var(--sicon-fill, none);
+}
+
+:root[data-ui-icons='synty'] :is([data-ability], [data-plot]) svg.ico > * {
+  visibility: var(--sicon-lines, visible);
+}
+
+:root[data-ui-icons='synty'] .ability {
+  --sicon-w: 26px;
+}
+
+:root[data-ui-icons='synty'] .ability[data-ability] svg.ico {
+  width: var(--sicon-w);
+}
+
+:root[data-ui-icons='synty'] [data-ability='shoot'] {
+  --sicon: url('/ui/synty/icons/rifle.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='pistol'] {
+  --sicon: url('/ui/synty/icons/pistol.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='slash'] {
+  --sicon: url('/ui/synty/icons/mh-machete.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='overwatch'] {
+  --sicon: url('/ui/synty/icons/target.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='hunker'] {
+  --sicon: url('/ui/synty/icons/helmet.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='reload'] {
+  --sicon: url('/ui/synty/icons/reload.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='grenade'] {
+  --sicon: url('/ui/synty/icons/explosives.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='launch'] {
+  --sicon: url('/ui/synty/icons/launcher.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='smoke'] {
+  --sicon: url('/ui/synty/icons/mh-smoke.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='flashbang'] {
+  --sicon: url('/ui/synty/icons/mh-flashbang.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='firstAid'] {
+  --sicon: url('/ui/synty/icons/medkit.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='evac'] {
+  --sicon: url('/ui/synty/icons/r-mula.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='hack'] {
+  --sicon: url('/ui/synty/icons/screwdriver.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='search'] {
+  --sicon: url('/ui/synty/icons/backpack.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='runAndGun'] {
+  --sicon: url('/ui/synty/icons/fastforward.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='rapidFire'] {
+  --sicon: url('/ui/synty/icons/ammo.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='aimedShot'] {
+  --sicon: url('/ui/synty/icons/sniper.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='suppression'] {
+  --sicon: url('/ui/synty/icons/mh-machinegun.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='chainShot'] {
+  --sicon: url('/ui/synty/icons/mh-bullets.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='rupture'] {
+  --sicon: url('/ui/synty/icons/mh-shield-broken.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='lightningHands'] {
+  --sicon: url('/ui/synty/icons/mh-speedup.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='faceoff'] {
+  --sicon: url('/ui/synty/icons/mh-revolver.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='killZone'] {
+  --sicon: url('/ui/synty/icons/mh-targeted.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='medkit'] {
+  --sicon: url('/ui/synty/icons/mh-drone-heal.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='aid'] {
+  --sicon: url('/ui/synty/icons/mh-drone.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='combatProtocol'] {
+  --sicon: url('/ui/synty/icons/lightning.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='revival'] {
+  --sicon: url('/ui/synty/icons/health.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='restoration'] {
+  --sicon: url('/ui/synty/icons/mh-heart.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='discharge'] {
+  --sicon: url('/ui/synty/icons/mh-drone-bomb.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='aegis'] {
+  --sicon: url('/ui/synty/icons/mh-shield.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='echoStep'] {
+  --sicon: url('/ui/synty/icons/mh-runner.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='layOnHands'] {
+  --sicon: url('/ui/synty/icons/bleeding.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='velmarOath'] {
+  --sicon: url('/ui/synty/icons/mh-shield-up.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='bolt'] {
+  --sicon: url('/ui/synty/icons/flaregun.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='silence'] {
+  --sicon: url('/ui/synty/icons/mh-dynamite.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='fireball'] {
+  --sicon: url('/ui/synty/renders/molotov-mask@128.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='velmarStorm'] {
+  --sicon: url('/ui/synty/icons/petrol.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='huntersMark'] {
+  --sicon: url('/ui/synty/icons/mh-binoculars.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='spectralArrow'] {
+  --sicon: url('/ui/synty/icons/crossbow.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='shadowStep'] {
+  --sicon: url('/ui/synty/icons/mh-up.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='lightRain'] {
+  --sicon: url('/ui/synty/icons/bow.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='counterSong'] {
+  --sicon: url('/ui/synty/icons/mh-syringe.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='hymn'] {
+  --sicon: url('/ui/synty/icons/mh-flag.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='lastVerse'] {
+  --sicon: url('/ui/synty/icons/mh-pulse.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='claw'] {
+  --sicon: url('/ui/synty/icons/skull.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='mindspin'] {
+  --sicon: url('/ui/synty/icons/mh-critical.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='reanimate'] {
+  --sicon: url('/ui/synty/icons/mh-dead.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='burst'] {
+  --sicon: url('/ui/synty/icons/mh-poisoned.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='stunLance'] {
+  --sicon: url('/ui/synty/icons/mh-shocked.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] [data-ability='missiles'] {
+  --sicon: url('/ui/synty/icons/explosives.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+/* Guns drawn side on: a wider box on the buttons. */
+:root[data-ui-icons='synty'] :is(.ability[data-ability='shoot'], .ability[data-ability='pistol'], .ability[data-ability='launch'], .ability[data-ability='aimedShot'], .ability[data-ability='evac'], .ability[data-ability='suppression'], .ability[data-ability='faceoff'], .ability[data-ability='bolt'], .ability[data-ability='spectralArrow'], .ability[data-ability='lightRain']) {
+  --sicon-w: 40px;
+}
+
+/* The compound's plots (plotIcons.ts). Camposanto, Roca, Ruinas and La Mula are Arte's renders (r-*). */
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='command'] {
+  --sicon: url('/ui/synty/icons/home.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='barracks'] {
+  --sicon: url('/ui/synty/icons/helmet.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='research'] {
+  --sicon: url('/ui/synty/icons/notes.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='engineering'] {
+  --sicon: url('/ui/synty/icons/mh-shop.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='workshop'] {
+  --sicon: url('/ui/synty/icons/crafting.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='infirmary'] {
+  --sicon: url('/ui/synty/icons/heal.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='quarters'] {
+  --sicon: url('/ui/synty/icons/mh-tent.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='training'] {
+  --sicon: url('/ui/synty/icons/mh-dumbbell.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='range'] {
+  --sicon: url('/ui/synty/icons/mh-accuracy.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='crew'] {
+  --sicon: url('/ui/synty/icons/mh-repair.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='simulation'] {
+  --sicon: url('/ui/synty/icons/mh-chip.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='garage'] {
+  --sicon: url('/ui/synty/icons/r-mula.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='listening'] {
+  --sicon: url('/ui/synty/icons/mh-headphones.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='echoes'] {
+  --sicon: url('/ui/synty/icons/mh-pliers.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='relay'] {
+  --sicon: url('/ui/synty/icons/mh-comms.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='forest'] {
+  --sicon: url('/ui/synty/icons/mh-plants.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='work'] {
+  --sicon: url('/ui/synty/icons/mh-repair.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='memorial'] {
+  --sicon: url('/ui/synty/icons/r-camposanto.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='rocks'] {
+  --sicon: url('/ui/synty/icons/r-roca.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui-icons='synty'] .plot-ico[data-plot='ruins'] {
+  --sicon: url('/ui/synty/icons/r-ruinas.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+/* La Mula is long: a wider mark on its plot. */
+:root[data-ui-icons='synty'] .plot-cell .plot-ico[data-plot='garage'] {
+  width: 92%;
+}

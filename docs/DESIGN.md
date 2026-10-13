@@ -115,46 +115,83 @@ Sustituye a la investigación y a los tres recursos (suministros, inteligencia, 
 - **Armas y armadura por soldado**, sin compra: `weaponTier(c, s)` y `armorTier(c, s)` son el mínimo entre lo que el Bastión ha desbloqueado y lo que permite el rango (`TIER_RANK`: nivel 2 desde Cabo, nivel 3 desde Teniente). `squadMember` aplica el daño (`WEAPON_TIER_DAMAGE`) y la salud y blindaje (`ARMOR_TIERS`), y los pasa a la unidad (`Unit.weaponTier`, `Unit.armorTier`) para que `buildFigure` dibuje el arma y la armadura de su nivel.
 - `migrateCampaign` convierte campañas antiguas: créditos = suministros + 2 × inteligencia + 3 × aleaciones; experiencia = la suma de la de sus soldados, y como mínimo la del nivel de lo que ya se había investigado o fabricado; los laboratorios pasan a salas de simulación.
 
-### Clases: aptitudes y la Rosa (campaña versión 10)
+### Clases: aptitudes y el árbol de habilidades (campaña versión 10)
 
-Elegida el 2026-10-12 entre tres propuestas (ramas, tablero, especialidades; maqueta en https://claude.ai/artifact/3PS1PmQ2mDWC86XN7khTpp). Primero se hicieron ramas por clase (versión 9). El mismo día, a petición del usuario, pasaron a ser un árbol común, «la Rosa», con el Canto de Velmar dentro (`LORE.md`). Todo vive en `engine/src/classes.ts`.
+Elegida el 2026-10-12 entre tres propuestas (ramas, tablero y especialidades; maqueta en https://claude.ai/artifact/3PS1PmQ2mDWC86XN7khTpp).
+- Primero se hicieron ramas por clase (versión 9). El mismo día, a petición del usuario, pasaron a ser un árbol común. Se llamó «la Rosa» y el 2026-10-13 pasó a ser el **Árbol de habilidades**.
+- La cuarta rama de cada eje nació como el Canto de Velmar. Con el paso a los zombis es el **Oficio**, que enseña el **Taller de oficios** (`docs/LORE.md`).
+- Todo vive en `engine/src/classes.ts`. Los ids internos del Canto se conservan para no romper partidas guardadas: `song`, `singer`, `SONG_GATES`, la instalación `echoes` y los ids de talentos y habilidades (`velmarOath`, `calmSong`…). El jugador no los ve.
 
-- **Aptitudes** (`ATTRS`): Pulso (+3 de puntería por punto), Aguante (+1 de salud cada 2), Reflejos (+2 de defensa por encima de 3), Temple (+6 de voluntad) y Oficio (+5 de hackeo por encima de 5). Van del 1 al 10.
+- **Aptitudes** (`ATTRS`), del 1 al 10:
+  - Pulso: +3 de puntería por punto.
+  - Aguante: +1 de salud cada 2.
+  - Reflejos: +2 de defensa por encima de 3.
+  - Temple: +6 de voluntad.
+  - Maña: +5 a arreglar por encima de 5.
   - Un recluta empieza con 5/5/5/4/3 (`RECRUIT_ATTRS`) y todo tope en 8.
-  - Al especializarse gana +1 en las dos aptitudes de su clase (`CLASS_TOP`), que además llegan a 10 (`baseAttrs`, `attrCap`).
-  - Llegar a 7 y a 10 da un extra: crítico, daño crítico, heridas más cortas (`woundDays`), blindaje, movimiento, −20 a la reacción enemiga, sin pánico, sin control mental (`UnitMods.psiGuard`), granada extra, curación y daño de granada.
-- **La Rosa:** un centro («Recluta», `CENTER`: 4 talentos para todos) y cuatro ejes (`AXES`), uno por clase.
-  - Cada eje tiene tres ramas normales y una cuarta de Canto (`BRANCHES`). 116 talentos en total (`TALENTS`), con niveles (`max`), aptitud mínima (`req`) y talento previo (`needs`).
-  - Las filas se abren con 0, 2, 4, 7 y 10 puntos en las filas de arriba de la rama (`ROW_GATES`); en el Canto, con 0, 1, 2, 3 y 4 (`SONG_GATES`).
+  - Al especializarse gana +1 en las dos aptitudes de su clase (`CLASS_TOP`: Asalto Reflejos y Aguante, Granadero Aguante y Maña, Francotirador Pulso y Temple, Especialista Maña y Reflejos), que además llegan a 10 (`baseAttrs`, `attrCap`).
+  - Extras a 7 y a 10:
+    - Pulso: +10 de crítico y +1 de daño crítico.
+    - Aguante: heridas un 30 % más cortas (`woundDays`) y +1 de blindaje.
+    - Reflejos: +1 de movimiento y −20 a los disparos de reacción contra él.
+    - Temple: sin pánico y «Nervios de acero», con el que el grito del Chillón no puede con él (`UnitMods.psiGuard`).
+    - Maña: +1 granada, y +1 de curación y de daño con granadas.
+- **El Árbol de habilidades:** un centro («Recluta», `CENTER`: 4 talentos para todos) y cuatro ejes (`AXES`), uno por clase.
+  - Cada eje tiene tres ramas normales y una cuarta de Oficio (`BRANCHES`, `song: true`):
+    - Asalto: Hoja, Escopeta, Paso y **Machete**.
+    - Granadero: Demolición, Artillería, Control y **Fuego**.
+    - Francotirador: Tirador, Pistolero, Vigía y **Ballesta**.
+    - Especialista: Médico, Grillo (el dron casero de Teo), Enlace y **Enfermería**.
+  - 116 talentos en total (`TALENTS`), con niveles (`max`), aptitud mínima (`req`) y talento previo (`needs`). 28 dan una habilidad activa, 15 de ellas del Oficio.
+  - Las filas se abren con 0, 2, 4, 7 y 10 puntos en las filas de arriba de la rama (`ROW_GATES`). El Oficio tiene un talento por fila y se abre con 0, 1, 2, 3 y 4 (`SONG_GATES`).
   - Las 40 habilidades de antes siguen con su id.
-- **La clase sale de las elecciones, en Capitán** (prueba del 2026-10-12): todo soldado empieza como recluta (`CampaignSoldier.cls` null, plantilla de combate `rookie`: fusil y granada), también los iniciales, los del relevo y los de encargos y acontecimientos (salvo quien llegue con rango de Capitán o más).
-  - Hasta Capitán aprende de dos ejes como mucho, hasta su tercera fila, y también puede cantar si la Cámara de Ecos lo permite.
-  - Al ascender a Capitán (`SPECIALIZE_RANK`, en `applyMissionResult`) toma la clase del eje en que más ha aprendido (`leaningClass`: 2 por punto de talento del eje, Canto incluido, más los puntos subidos en sus dos aptitudes; desempatan los talentos). Sale en el informe (`ReportSoldier.specializedAs`) y en el registro (`SPECIALIZE_TEXT`).
+- **La clase sale de las elecciones, en Capitán** (prueba del 2026-10-12). Todo soldado empieza como recluta (`CampaignSoldier.cls` null, plantilla de combate `rookie`: fusil y granada): los iniciales, los del relevo y los de encargos y acontecimientos, salvo quien llegue con rango de Capitán o más.
+  - Hasta Capitán aprende de dos ejes como mucho, hasta su tercera fila, también en su Oficio si el Taller lo permite.
+  - Al ascender a Capitán (`SPECIALIZE_RANK`, en `applyMissionResult`) toma la clase del eje en que más ha aprendido (`leaningClass`).
+    - Cuenta 2 por cada punto de talento del eje, Oficio incluido, más los puntos subidos en sus dos aptitudes; desempatan los talentos.
+    - Sale en el informe (`ReportSoldier.specializedAs`) y en el registro (`SPECIALIZE_TEXT`).
   - La clase queda fija hasta reentrenar. Un Capitán reentrenado se vuelve a especializar con 2 puntos en las ramas normales de un eje (`SPECIALIZE_POINTS`, `wouldSpecialize`).
 - **Ejes y equipo:**
-  - Se puede abrir un segundo eje hasta su tercera fila (`SECOND_AXIS_ROWS`), también en su Canto. Nunca un tercero (`axesOf`).
-  - Los talentos que usan el equipo propio de una clase (`kit`: espada, escopeta, cañón, fusil de precisión, pistola, Grillo) los puede aprender un recluta, pero «duermen» (`dormant`: sin efecto ni habilidad) hasta que el soldado lleve ese equipo. Un soldado ya especializado solo coge los de su clase.
-  - Cada eje tiene un talento de **llave doble** (`coop`) que solo funciona junto a soldados del compañero (`partnerNear` en `aim.ts`, `bridged` en `rules.ts`).
-- **El Canto:** su rama se abre con la Cámara de Ecos: el nivel 1 abre las filas 1–2, el 2 las 3–4 y el 3 la 5 (`songRowsOpen`, `echoesLevel`). Los conjuros mayores piden Temple 7.
-  - Quien sabe cantar tiene `mods.singer` y `mods.songOpen` (+10 para el Cantor, 0 con Temple 10).
-  - Las mecánicas de cada canto, «A dos voces» y la ocultación son de Gameplay (`rules.ts`, `test/songs.test.ts`).
-- **Ascensos:** cada uno da 2 puntos de aptitud y 2 de talento. Los puntos libres no se guardan: son lo que da el rango menos lo gastado (`pointsToSpend`). La veteranía suma sola +2 de puntería, +2 de voluntad y +3 de hackeo por ascenso.
+  - Se puede abrir un segundo eje hasta su tercera fila (`SECOND_AXIS_ROWS`), también en su Oficio. Nunca un tercero (`axesOf`).
+  - Los talentos que usan el equipo propio de una clase (`kit`: espada, escopeta, cañón, fusil de precisión, pistola, Grillo) los puede aprender un recluta. «Duermen» (`dormant`: sin efecto ni habilidad) hasta que el soldado lleve ese equipo. Un soldado ya especializado solo coge los de su clase.
+  - Cada eje tiene un talento de **llave doble** (`coop`) que solo funciona junto a soldados del compañero (`partnerNear` en `aim.ts`, `bridged` en `rules.ts`): Codo con codo, Parapeto, Fuego cruzado y Puente.
+- **El Oficio:** su rama se abre con el Taller de oficios (`echoesLevel`, `songRowsOpen`). El nivel 1 abre las filas 1–2, el 2 las 3–4 y el 3 la 5. Los cuatro oficios mayores (la última fila de cada rama de Oficio) piden Temple 7.
+  - Quien sabe algún oficio tiene `mods.singer`. Con él funciona «A dos voces»: con un soldado del compañero que también sepa uno a 2 casillas o menos, el oficio gana +1 de daño, radio o duración (`duet` en `rules.ts`).
+  - Cada oficio hace su propio ruido (`AbilityDef.noise`, que atrae zombis). Con el Taller junto a la estación de escucha, hace menos (`quietSongs`, `OFICIO_QUIET`).
+  - Las mecánicas de cada oficio son de Gameplay (`rules.ts`, `test/songs.test.ts`).
+- **Ascensos:** cada uno da 2 puntos de aptitud y 2 de talento. Los puntos libres no se guardan: son lo que da el rango menos lo gastado (`pointsToSpend`). La veteranía suma sola +2 de puntería, +2 de voluntad y +3 a arreglar por ascenso.
 - **Órdenes personales**, sin propuesta:
   - `train`: un punto de aptitud.
-  - `talent`: un nivel (y, en un Capitán reentrenado, puede especializar).
-  - La Hoja de servicio prepara el ascenso como borrador (`plan` en `screen.ts`) y manda las órdenes al pulsar «Guardar», aptitudes primero; un sello «GUARDADO» lo confirma.
-  - `retrain`: devuelve todo por `RETRAIN_COST` ₡ (la mitad con centro de entrenamiento) y deja al soldado como recluta.
+  - `talent`: un nivel; en un Capitán reentrenado, puede especializar.
+  - La Hoja de servicio prepara el ascenso como borrador (`plan` en `screen.ts`) y manda las órdenes al pulsar «Guardar», aptitudes primero. Un sello «GUARDADO» lo confirma.
+  - `retrain`: devuelve todo por `RETRAIN_COST` ₡ (30; la mitad con centro de entrenamiento) y deja al soldado como recluta.
   - `recruit`: va sin clase.
   - Los motivos de bloqueo salen de `attrBlocker` y `talentBlocker(build, id, echoes)`.
-- **Cálculo:** `soldierStats(build, gear)` da la plantilla (`soldierTemplate`), los `mods`, la salud, las cargas, la voluntad, el blindaje y la lista de talentos que el combate ve como `Unit.perks`.
-  - Puntería = 50 + 3 × Pulso + veteranía; salud = 3 + Aguante ÷ 2.
+- **Cálculo:** `soldierStats(build, gear)` da:
+  - la plantilla (`soldierTemplate`), los `mods`, la salud, las cargas, la voluntad y el blindaje;
+  - la lista de talentos despiertos, que el combate ve como `Unit.perks`.
+  - Puntería = 50 + 3 × Pulso + veteranía. Salud = 3 + Aguante ÷ 2.
   - `squadMember` añade el nivel de arma y armadura, las tecnologías, los rasgos y el campo de tiro.
   - Los soldados de escaramuza salen de la misma hoja (`autoBuild`).
-- **Interfaz:** «Hoja de servicio» en el Cuartel (`promotionPanel` en `strategy/screen.ts`).
-  - A la izquierda, las aptitudes.
-  - A la derecha, el centro, una pestaña por eje y las cuatro ramas del eje elegido, con la de Canto apagada hasta la Cámara.
-  - Es provisional: UX/UI la va a sustituir por una brújula con los cuatro ejes.
-- `migrateCampaign`: los soldados de antes de la versión 9 recuperan todos sus puntos, porque las habilidades viejas no encajan. Los de la 9 conservan sus talentos. Todos rehacen las aptitudes desde las bases nuevas, conservan su clase y lo anuncia el aviso «Nueva instrucción». `persistence.ts` rellena con ceros los `mods` de una misión guardada antes.
+- **Interfaz:** «Hoja de servicio» en el Cuartel (`promotionPanel` en `strategy/screen.ts`). La rehacen UX/UI y Gameplay en el estilo nuevo:
+  - El árbol se dibuja con caminos y nodos conectados: el centro Recluta en medio y los cuatro ejes en cruz.
+  - Los umbrales de fila y el nivel del Taller se ven como puertas y candados; los talentos dormidos, apagados; la llave doble, como un nodo especial.
+  - Forma real de las ramas:
+    - Las cuatro de Oficio son un camino recto de 5 nodos, uno por fila.
+    - Las doce normales tienen 2 nodos en paralelo en las filas 1–3 (Hoja, Médico, Grillo y Enlace solo en las filas 1–2) y un nodo en las filas 4 y 5. Son caminos que se abren en dos y se vuelven a juntar.
+    - Las reglas no dependen del dibujo: una fila se abre con los puntos de las filas de arriba de su rama, no por estar conectada a un nodo concreto.
+- `migrateCampaign`: los soldados de antes de la versión 9 recuperan todos sus puntos, porque las habilidades viejas no encajan.
+  - Los de la 9 conservan sus talentos.
+  - Todos rehacen las aptitudes desde las bases nuevas y conservan su clase.
+  - Lo anuncia el aviso «Nueva instrucción».
+  - `persistence.ts` rellena con ceros los `mods` de una misión guardada antes.
+- **Nombres:** los decide Lore y los aplica Clases.
+  - El 2026-10-13 se quitaron los nombres repetidos o que chocaban con los zombis: Machetazo, Mano en el hombro, Rematador, Zancada, Tejado, Aplomo, Tiro tranquilo y Pistola certera.
+  - Decidido por Arturo el mismo día:
+    - La aptitud que era «Oficio» se llama **Maña** (MAÑ), para no chocar con la rama. Su id sigue siendo `ofi`.
+    - Hackear pasa a ser «arreglar» (una radio, un repetidor).
+    - El Grillo se queda como el dron casero de Teo. Sus protocolos son Botiquín volante, Cobertura del Grillo, Calambrazo, Espabilar y Descarga de batería; el talento que mejora arreglar es Manitas.
+- **Pendiente:** el equilibrio de números, con la simulación de Gameplay.
 
 ### Ayudas al jugador
 
@@ -223,7 +260,7 @@ El flujo imita a XCOM 2: Bastión → geoesfera (escanear, avisos) → informe d
 | **M3a · Campaña cooperativa** | **Hecho.** Base compartida en 2D (mando, cuartel, investigación, ingeniería), recursos, propuestas entre jugadores, avance del tiempo, misiones con caducidad y dificultad creciente, escuadra mixta, experiencia, rangos y habilidades a elegir, heridas y muerte permanente, reclutamiento, reloj del Proyecto Ascensión, misión final, informe de misión, guardado de campaña |
 | **M3b · Base viva** | **Hecho.** Bastión en 3D con salas que se excavan y 5 instalaciones, globo con 8 regiones, contactos e ingresos mensuales, instalaciones alienígenas y su asalto, 8 acontecimientos con decisión conjunta, autopsias que requieren cuerpos, 11 investigaciones, 5 mejoras y 8 objetos de equipo por soldado |
 | **M4 · Variedad táctica** | **Hecho.** Mapas procedurales en 3 biomas, 5 tipos de misión (eliminación, recuperación, sabotaje, pirateo, rescate), patrullas, refuerzos con bengala |
-| **Clases** | **Hecho (2026-10-12).** Cinco aptitudes que se reparten al ascender. La Rosa: un árbol común de 116 talentos (centro, cuatro ejes con tres ramas y el Canto de Velmar), reclutas sin clase que se especializan, segundo eje, kits, llave doble, reentrenamiento y la Hoja de servicio en el Cuartel |
+| **Clases** | **Hecho (2026-10-12).** Cinco aptitudes que se reparten al ascender. El Árbol de habilidades: un árbol común de 116 talentos (centro, cuatro ejes con tres ramas y el Oficio del Taller de oficios), reclutas sin clase que se especializan en Capitán, segundo eje, kits, llave doble, reentrenamiento y la Hoja de servicio en el Cuartel |
 | **Prueba 2026-10-12** | **Hecho.** Las notas de la primera partida cooperativa de Arturo y Ana: disparar gasta una acción, la clase en Capitán, mapas de combate de 48 × 48, el ascenso como borrador, puestos fijos en el hangar y más ([PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md)) |
 | M5 · Arte y pulido | **En curso:** laboratorio de estilos para elegir la dirección de arte ([ARTE.md](ARTE.md)). Después: modelos y animaciones reales, sonido, menús; ejecutable opcional (Electron o Steam) |
 

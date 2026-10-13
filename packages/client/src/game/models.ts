@@ -1,10 +1,7 @@
 import * as THREE from 'three';
 import type { Appearance, TemplateId, Tier } from '@bastion/engine';
-import { graphics } from '../settings';
 import { buildFigure, FIGURE_TEMPLATES, type FigurePose, type FigureRig, type Gear } from './figures';
 import { preloadSynty, syntyFigure } from './syntyFigures';
-import { voxelizeUnit } from './voxel';
-import { voxFigure } from './voxFigures';
 
 // Placeholder models built from primitives, with a minimal "skeleton" so the
 // animation code can pose them:
@@ -33,6 +30,8 @@ export interface UnitRig {
   chest: number;
   /** Top of the head, where the flag floats (when the model knows it). */
   top?: number;
+  /** The rig moves its own weapon for a reload, instead of the unit view's twirl. */
+  ownsReload?: boolean;
 }
 
 const geo = {
@@ -247,7 +246,8 @@ export function buildModel(template: TemplateId, accent: string): UnitRig {
         .part(geo.sectoidEye, mat(0xd29aff, { emissive: 0x9a3aff }), 0.11, 1.28, 0.22)
         .weapon([[geo.shotgun, mat(0x4a3f5a, { metalness: 0.4 }), 0, -0.05, 0.18]], 0.44).rig;
     case 'zombie':
-      // Hunched, grey-green body with claws instead of a weapon.
+    case 'bloater':
+      // Hunched, grey-green body with claws instead of a weapon (the Hinchado borrows it until it has its own).
       return new Builder({ hip: 0.5, shoulderY: 0.88, chest: 0.95 })
         .part(geo.zombieBody, mat(0x5d6b58, { roughness: 0.9 }), 0, 0.6, 0.06, new THREE.Euler(0.35, 0, 0))
         .part(geo.head, mat(0x7c8a72, { roughness: 0.9 }), 0, 1.16, 0.28)
@@ -290,31 +290,22 @@ export function buildModel(template: TemplateId, accent: string): UnitRig {
 const FIGURES = new Set<string>(FIGURE_TEMPLATES);
 
 // Synty models load in the background from the start, so the first battle finds them ready.
-if (graphics().models === 'synty') preloadSynty();
+preloadSynty();
 
 /**
- * The model a unit is shown with: a Synty character (syntyFigures.ts), or
- * with the voxel figures chosen in Ajustes, in voxels (M5 art): hand-made
- * when the kits can dress it (voxFigures.ts), otherwise an articulated
- * figure (or the old placeholder) converted to voxels. `seed` keeps the same
- * Synty survivor for the same soldier (the soldier's name).
+ * The model a unit is shown with: its Synty character (syntyFigures.ts).
+ * `seed` keeps the same survivor for the same soldier (their campaign id). A
+ * template the manifest has no character for yet gets the old primitive
+ * figure, so nothing is ever missing from the field.
  */
 export function buildUnit(template: TemplateId, accent: string, appearance?: Appearance, gear?: Gear, seed?: string): UnitRig | FigureRig {
-  if (graphics().models === 'synty') {
-    const synty = syntyFigure(template, accent, appearance, gear, seed);
-    if (synty) {
-      synty.applyPose(IDLE_POSE, 0);
-      return synty;
-    }
+  const synty = syntyFigure(template, accent, appearance, gear, seed);
+  if (synty) {
+    synty.applyPose(IDLE_POSE, 0);
+    return synty;
   }
-  const hand = voxFigure(template, accent, appearance, gear);
-  if (hand) {
-    hand.applyPose(IDLE_POSE, 0);
-    return hand;
-  }
-  const rig = FIGURES.has(template) ? buildFigure(template, accent, appearance, gear) : buildModel(template, accent);
-  voxelizeUnit(rig);
-  return rig;
+  console.warn(`No Synty character for «${template}»: add it to syntyManifest.ts`);
+  return FIGURES.has(template) ? buildFigure(template, accent, appearance, gear) : buildModel(template, accent);
 }
 
 /** Weapon and armour tier as figures.ts wants them (1–3; anything else is tier 1). */

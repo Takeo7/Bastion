@@ -1,7 +1,7 @@
 import { audio, type Volumes } from '../audio/engine';
 import { autoQuality, autoQualityNote, graphics, setAutoQuality, setGraphics, type GraphicsSettings } from '../settings';
 import { h } from './dom';
-import { setUiTheme, UI_THEMES, uiTheme, type UiTheme } from './theme';
+import { OFFERED_THEMES, setUiTheme, UI_THEMES, uiTheme } from './theme';
 
 type Choice<K extends keyof GraphicsSettings> = [GraphicsSettings[K], string, string?];
 
@@ -74,7 +74,7 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
         ['synty', 'Synty'],
         ['voxel', 'Vóxel', 'Los modelos de antes, mientras dura el cambio'],
       ],
-      'Cómo se ven los soldados, los enemigos y los objetos del mapa. Se aplica en la próxima misión o al volver a la base.',
+      'Cómo se ven los soldados, los enemigos, los objetos y los edificios del mapa. Se aplica en la próxima misión o al volver a la base.',
       redraw,
     ),
     row(
@@ -155,7 +155,7 @@ export function soundSettings(redraw: () => void): HTMLElement {
   );
 }
 
-/** The interface's look, Expediente or Holotáctico: shared by both menus, applied at once. */
+/** The interface's look (Expediente or one of the three proposals): shared by both menus, applied at once, and shared with the partner. */
 export function themeSettings(redraw: () => void): HTMLElement {
   const current = uiTheme();
   return h(
@@ -163,12 +163,12 @@ export function themeSettings(redraw: () => void): HTMLElement {
     {},
     h(
       'div.setting',
-      { title: 'Cómo se ven los menús, los paneles y el HUD. Cada jugador elige el suyo.' },
+      { title: 'Cómo se ven los menús, los paneles y el HUD. Al cambiarlo, cambia también para tu compañero.' },
       h('span.setting-name', {}, 'Estilo'),
       h(
         'div.setting-choices',
         {},
-        ...(Object.keys(UI_THEMES) as UiTheme[]).map((id) =>
+        ...OFFERED_THEMES.map((id) =>
           h(
             `button${id === current ? '.on' : ''}`,
             {

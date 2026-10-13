@@ -37,9 +37,16 @@ export class CombatTips {
         if (u && this.mine(u)) this.show('psionic');
         return;
       }
+      // The Saqueo's horde comes in by the edges, not under a flare.
       case 'reinforcementsIncoming':
-        if (e.r.pos) this.show('flare');
+        if (e.r.horde) this.show('horde');
+        else if (e.r.pos) this.show('flare');
         return;
+      case 'searched': {
+        const u = getUnit(view, e.unit);
+        if (u && this.mine(u)) this.show('search');
+        return;
+      }
       // The Oficio: the first trade one of mine uses (noisy).
       case 'sung': {
         const u = getUnit(view, e.unit);
@@ -56,11 +63,18 @@ export class CombatTips {
    */
   state(view: GameState, visibleAliens: ReadonlySet<string>, sharing: boolean): void {
     if (sharing) this.show('command');
-    if (this.asked.has('flanked')) return;
     const watchers = view.units.filter((a) => a.alive && a.team === 'alien' && visibleAliens.has(a.id));
     if (!watchers.length) return;
+    // The first Hinchado in sight: keep it away from the squad.
+    if (watchers.some((a) => a.template === 'bloater')) this.show('bloater');
+    if (this.asked.has('flanked')) return;
     const flanked = view.units.some((u) => u.alive && this.mine(u) && !u.evacuated && Math.min(...watchers.map((a) => coverAgainst(view, u.pos, a.pos))) === 0);
     if (flanked) this.show('flanked');
+  }
+
+  /** «Os han oído» has just shown: enemies the squad can't see are coming to look. */
+  heard(): void {
+    this.show('heard');
   }
 
   /** The pointer is on a move that would break concealment (the red-framed tiles). */

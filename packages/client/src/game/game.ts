@@ -10,10 +10,12 @@ import {
   applyEvent,
   attackWeapon,
   abilityRange,
+  BACKPACK_SLOTS,
   BAD_LUCK_AIM,
   BAD_LUCK_MISSES,
   blastRadius,
   blastTiles,
+  broughtBack,
   buildPath,
   canTargetTile,
   cloneState,
@@ -22,6 +24,7 @@ import {
   coverAgainst,
   coverSides,
   destinations,
+  DIRS8,
   ENEMY_FILES,
   distance,
   endsTurn,
@@ -29,15 +32,27 @@ import {
   hackChance,
   hasAnyCover,
   hasPerk,
+  HORDE,
   isAttack,
+  ITEM_FINDS,
+  lootSummary,
+  lootTotals,
   maxMoveCost,
   MEDKIT_HEAL,
   meleeTargets,
   MISSION_NAMES,
+  NOISE,
+  noiseOf,
   PLAYER_COLORS,
   previewShot,
   rangedTargets,
+  reachesToSearch,
   sameTile,
+  SCAVENGE,
+  SEARCH_SPOTS,
+  searchableTiles,
+  searchLine,
+  searchSpot,
   sightOrigin,
   songTargets,
   STORM_TARGETS,
@@ -48,14 +63,17 @@ import {
   TEMPLATES,
   unitAt,
   visibleEnemies,
+  wasSearched,
   type AbilityId,
   type AttackAbility,
   type Command,
   type DamagePreview,
   type DamageRange,
+  type DecorKind,
   type EndReason,
   type GameEvent,
   type GameState,
+  type Loot,
   type MissionKind,
   type PingKind,
   type PlayerInfo,
@@ -69,12 +87,12 @@ import {
 } from '@bastion/engine';
 import type { Net, NetStatus } from '../net';
 import { clear } from '../ui/dom';
-import { Hud, type AbilityView, type MissionView, type TargetView, type TurnOwner } from '../ui/hud';
+import { Hud, type AbilityView, type HordeView, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
 import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
 import { MapView } from './mapView';
-import { Overlays, type MoveTile } from './overlays';
+import { Overlays, type MoveTile, type SpotKind } from './overlays';
 import { Renderer } from './renderer';
 import { Sfx } from './sfx';
 import { SONG, SongFx, SongMarks } from './songFx';
@@ -82,6 +100,8 @@ import { setTimeScale, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
 import { CombatTips } from './combatTips';
+import { playArrival } from './arrivals';
+import { graphics } from '../settings';
 
 /** `self`: a self ability pressed once, waiting for the second press (or Enter) that uses it. */
 type Mode = { kind: 'move' } | { kind: 'target'; ability: AbilityId } | { kind: 'tile'; ability: AbilityId } | { kind: 'self'; ability: AbilityId };
@@ -121,6 +141,7 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
   healed: 0.5,
   aided: 0.5,
   evacuated: 0.4,
+  searched: 0.7,
   moved: 0.12,
 };
 
@@ -208,7 +229,7 @@ const DAMAGE_EACH: Partial<Record<AbilityId, string>> = {
   missiles: ' en el área',
   discharge: ' en el área',
   fireball: ' en el área',
-  combatProtocol: ' (+2 a robots)',
+  combatProtocol: ' (+2 a Acorazados y Sirenas)',
 };
 
 /** The hover card's damage line, from the rules' own numbers: «Daño 4–6 · crítico +2». */
@@ -226,6 +247,63 @@ function damageText(s: GameState, u: Unit, id: AbilityId): string | undefined {
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+/**
+ * How far using it is heard, for the cards (docs/FASE2.md): «ruido 12», or
+ * «sin ruido» for a silent attack or trade. Vigilancia is heard when it fires.
+ */
+function noiseText(s: GameState, u: Unit, id: AbilityId): string | undefined {
+  if (id === 'overwatch' || id === 'killZone') {
+    const n = attackWeapon(u, 'shoot').noise;
+    return n ? `ruido ${n} al disparar` : undefined;
+  }
+  const n = noiseOf(s, u, id);
+  if (n > 0) return `ruido ${n}`;
+  return isAttack(id) || ABILITIES[id].song ? 'sin ruido' : undefined;
+}
+
+/** What a move sounds like (NOISE in content.ts): running, a door, a window's glass. Null when it is quiet. */
+function moveNoise(s: GameState, path: Vec2[], dash: boolean): string | null {
+  const parts: [number, string][] = [];
+  if (dash) parts.push([NOISE.dash, 'corre']);
+  if (path.some((p) => tileAt(s, p.x, p.y) === 'window')) parts.push([NOISE.breach, 'rompe un cristal']);
+  if (path.some((p) => tileAt(s, p.x, p.y) === 'door')) parts.push([NOISE.door, 'abre una puerta']);
+  if (!parts.length) return null;
+  parts.sort((a, b) => b[0] - a[0]);
+  return `Ruido ${parts[0]![0]}: ${parts.map((p) => p[1]).join(', ')}`;
+}
+
+/** What a search turned up, short, to float over the furniture: «+12 §», «Un botiquín», «Medicinas», «Nada». */
+function findText(loot: Loot | null): string {
+  const parts: string[] = [];
+  if (loot?.supplies) parts.push(`+${loot.supplies} §`);
+  if (loot?.item) parts.push(capitalize(ITEM_FINDS[loot.item]));
+  if (loot?.medicines) parts.push('Medicinas');
+  return parts.join(' · ') || 'Nada';
+}
+
+/** A backpack's things, one slot each, for the sheet. */
+function packSlots(loot: readonly Loot[]): PackSlot[] {
+  return loot.map((l): PackSlot => (l.item ? { kind: 'item', item: l.item } : l.medicines ? { kind: 'medicines', amount: l.medicines } : { kind: 'supplies', amount: l.supplies ?? 0 }));
+}
+
+/** Which edge of the map a tile is nearest to, as the radio says it (the map's top row is the north). */
+function edgeName(s: GameState, p: Vec2): string {
+  const gaps: [number, string][] = [
+    [p.y, 'el norte'],
+    [s.height - 1 - p.y, 'el sur'],
+    [p.x, 'el oeste'],
+    [s.width - 1 - p.x, 'el este'],
+  ];
+  return gaps.sort((a, b) => a[0] - b[0])[0]![1];
+}
+
+/** «3 zombis», «un enemigo»: the dead by their name, the living (or a mix) as enemies. */
+function heardCount(units: Unit[]): string {
+  const dead = units.every((u) => TEMPLATES[u.template].undead);
+  if (units.length === 1) return dead ? 'un zombi' : 'un enemigo';
+  return `${units.length} ${dead ? 'zombis' : 'enemigos'}`;
 }
 
 /** Whether what `d` takes off kills `t`: surely, maybe, or only with a critical. */
@@ -318,6 +396,8 @@ export class Game {
   private playing = false;
   /** Events from our own commands still waiting to be animated. */
   private myPending = 0;
+  /** The pause owed once our own action has played (HOLD_AFTER of its last event that isn't its noise). */
+  private holdAfter = 0.2;
   private visibleAliens = new Set<string>();
   private lastShot: { target: string; result: ShotResult } | null = null;
   /** Last ability activated, so its follow-up events can be staged (e.g. Restoration's heals). */
@@ -341,6 +421,10 @@ export class Game {
   private concealWarn: string | null = null;
   /** The frame-rate guard's notice has been shown. */
   private qualityNoticed = false;
+  /** The map has furniture to search (hand-made maps have none: Registrar is left off the bar). */
+  private hasSpots = false;
+  /** With Registrar armed, the furniture it would search (Tab or a click picks another). */
+  private searchPick: Vec2 | null = null;
 
   private readonly raycaster = new THREE.Raycaster();
   private drag: { x: number; y: number; moved: boolean } | null = null;
@@ -360,6 +444,7 @@ export class Game {
     this.rig = new CameraRig(this.renderer.camera);
     this.sfx.attach(this.renderer.camera, () => this.rig.focusPoint);
     this.renderer.scene.add(this.mapView.group, this.units.group, this.fx.group, this.songFx.group, this.songMarks.group);
+    this.mapView.watch(this.renderer.camera, () => ({ selected: this.selected, hover: this.hoverTile, target: this.targetId }));
     this.hud = new Hud(this.root, {
       onAbility: (id) => this.useAbility(id),
       onEndTurn: () => this.toggleReady(),
@@ -424,6 +509,8 @@ export class Game {
     this.renderer.fitMap(s.width, s.height);
     this.rig.setBounds(s.width, s.height);
     setTerrain(this.view);
+    this.hasSpots = false;
+    for (let i = 0; i < s.width * s.height && !this.hasSpots; i++) this.hasSpots = searchSpot(s, { x: i % s.width, y: Math.floor(i / s.width) }) !== null;
     this.mapView.build(this.view);
     this.units.build(this.view);
     if (!s.outcome) this.sfx.start(s.biome, !s.concealed);
@@ -613,9 +700,11 @@ export class Game {
       } catch (err) {
         console.error('[anim]', err);
       }
+      // The noise that follows an action doesn't set the pause after it: what was done does.
+      if (item.by === this.mySlot && e.t !== 'noise') this.holdAfter = HOLD_AFTER[e.t] ?? 0.2;
       if (item.by === this.mySlot && --this.myPending === 0) {
         // Let the player see the outcome before the selection moves on.
-        await wait(HOLD_AFTER[item.e.t] ?? 0.2);
+        await wait(this.holdAfter);
         this.rig.restoreZoom();
         this.refreshInteractive();
       }
@@ -727,6 +816,12 @@ export class Game {
         this.hud.log(u.team === 'xcom' ? `${u.name} ha caído en combate` : `${u.name} eliminado`, u.team === 'xcom' ? '#ff6b5a' : '#54d1ff');
         if (!this.shownToSquad(u)) return;
         this.sfx.death(u, this.units.chestPos(u.id));
+        // The Hinchado bursts as it falls: the blast (the next event) doesn't wait for the body.
+        if (TEMPLATES[u.template].abilities.includes('burst')) {
+          void this.units.die(u.id);
+          await wait(0.15);
+          return;
+        }
         await this.units.die(u.id);
         await wait(0.2);
         return;
@@ -756,6 +851,18 @@ export class Game {
       case 'abilityUsed': {
         this.lastUsed = { unit: e.unit, ability: e.ability };
         const u = getUnit(v, e.unit)!;
+        if (e.ability === 'mindspin' && this.shownToSquad(u)) {
+          // The Chillón's scream (docs/FASE2.md): what it does to the soldier comes with the `psi` that follows.
+          look(this.units.worldPos(u.id));
+          this.units.forceVisible(u.id);
+          void this.units.scream(u.id);
+          this.fx.scream(this.units.headPos(u.id));
+          this.fx.floatText(this.units.chestPos(u.id), '¡GRITA!', 'callout');
+          this.sfx.psi(this.units.chestPos(u.id));
+          this.hud.log(`¡${capitalize(anEnemy(u))} grita!`, '#e8d8c0');
+          await wait(cam() ? 0.7 : 0.3);
+          return;
+        }
         if (!SHOUTED.has(e.ability) || !this.shownToSquad(u)) return;
         look(this.units.worldPos(u.id));
         this.fx.floatText(this.units.chestPos(u.id), ABILITIES[e.ability].name.toUpperCase(), 'alert');
@@ -774,7 +881,7 @@ export class Game {
         await this.fx.droneFlight(home, dest);
         this.fx.sparks(this.units.chestPos(target.id), 0x8ad8ff, 18);
         this.sfx.stun(this.units.chestPos(target.id));
-        this.hud.log(`${u.name}: protocolo de combate contra ${target.name}`, '#54d1ff');
+        this.hud.log(`${u.name}: calambrazo contra ${target.name}`, '#54d1ff');
         void this.fx.droneFlight(dest, this.units.dronePos(u.id)).then(() => this.units.setDroneAway(u.id, false));
         return;
       }
@@ -858,13 +965,13 @@ export class Game {
       case 'disoriented': {
         const u = getUnit(v, e.unit)!;
         if (this.shownToSquad(u)) this.fx.floatText(this.units.chestPos(u.id), 'DESORIENTADO', 'crit');
-        this.hud.log(`${u.name} queda desorientado`, '#d29aff');
+        this.hud.log(`${u.name} queda desorientado`, '#e8d8c0');
         await wait(0.15);
         return;
       }
       case 'marked': {
         const target = getUnit(v, e.unit)!;
-        if (this.shownToSquad(target)) this.fx.floatText(this.units.chestPos(target.id).add(new THREE.Vector3(0, 0.4, 0)), 'HOLO-OBJETIVO', 'info');
+        if (this.shownToSquad(target)) this.fx.floatText(this.units.chestPos(target.id).add(new THREE.Vector3(0, 0.4, 0)), 'MARCADO', 'info');
         return;
       }
       case 'ruptured': {
@@ -878,19 +985,19 @@ export class Game {
         look(this.units.worldPos(u.id).lerp(this.units.worldPos(target.id), 0.5));
         this.units.forceVisible(u.id);
         this.units.face(u.id, this.units.worldPos(target.id));
-        this.sfx.psi(this.units.chestPos(u.id));
+        // No second shriek: the scream ('mindspin') was just heard; this is what it does to the soldier.
         await this.fx.psiBeam(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.35, 0)), this.units.chestPos(target.id));
         const texts: Record<string, string> = { disoriented: 'DESORIENTADO', panicked: 'PÁNICO', controlled: 'FUERA DE SÍ' };
         const text = e.effect ? texts[e.effect]! : 'RESISTE';
         this.fx.floatText(this.units.chestPos(target.id), text, e.success ? 'crit' : 'info');
-        this.hud.log(e.success ? `${target.name}: ${text.toLowerCase()} (${e.chance}%)` : `${target.name} resiste el grito (${e.chance}%)`, e.success ? '#d29aff' : undefined);
+        this.hud.log(e.success ? `${target.name}: ${text.toLowerCase()} (${e.chance}%)` : `${target.name} resiste el grito (${e.chance}%)`, e.success ? '#e8d8c0' : undefined);
         if (e.effect === 'controlled') this.hud.banner('¡FUERA DE SÍ!', 'alien');
         await wait(0.7);
         return;
       }
       case 'released': {
         const u = getUnit(v, e.unit)!;
-        this.fx.sparks(this.units.chestPos(u.id), 0xd29aff, 14);
+        this.fx.sparks(this.units.chestPos(u.id), 0xf0e4d4, 14);
         this.fx.floatText(this.units.chestPos(u.id), 'LIBERADO', 'heal');
         this.hud.log(`${u.name} vuelve en sí`, '#6dff9a');
         await wait(0.5);
@@ -902,11 +1009,14 @@ export class Game {
         const at = tileToWorld(corpse.pos, 0.5);
         look(at);
         this.units.forceVisible(u.id);
-        this.sfx.psi(at);
+        // The Chillón shrieks; the dead answer with a moan.
+        this.sfx.psi(this.units.chestPos(u.id));
+        this.sfx.moan(at);
         await this.fx.psiBeam(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.35, 0)), at);
         this.fx.evacBeam(tileToWorld(corpse.pos));
+        await this.units.reanimate(corpse.id, e.zombie);
         this.fx.floatText(at, 'SE LEVANTA', 'crit');
-        this.hud.log(`El grito de un Chillón levanta el cuerpo de ${corpse.name}`, '#d29aff');
+        this.hud.log(`El grito de un Chillón levanta el cuerpo de ${corpse.name}`, '#e8d8c0');
         await wait(0.6);
         return;
       }
@@ -1011,8 +1121,8 @@ export class Game {
         this.sfx.hack(screen);
         this.fx.sparks(screen, e.success ? 0x4dff9a : 0xff4a3a, 16);
         await wait(0.5);
-        this.fx.floatText(screen, e.success ? 'HACKEO COMPLETADO' : 'HACKEO FALLIDO', e.success ? 'heal' : 'warn');
-        this.hud.log(`${u.name} ${e.success ? 'hackea el terminal' : 'falla el hackeo'} (${e.chance}%)`, e.success ? '#6dff9a' : '#ffc93a');
+        this.fx.floatText(screen, e.success ? 'ARREGLADO' : 'NO ARRANCA', e.success ? 'heal' : 'warn');
+        this.hud.log(`${u.name} ${e.success ? 'arregla el equipo' : 'no consigue arreglarlo'} (${e.chance}%)`, e.success ? '#6dff9a' : '#ffc93a');
         this.sfx.hacked(e.success, screen);
         if (e.success) this.hud.banner('TERMINAL HACKEADO', 'xcom');
         else this.hud.banner('¡ALARMA!', 'alien');
@@ -1036,9 +1146,17 @@ export class Game {
       case 'reinforcementsIncoming': {
         if (!e.r.pos) return;
         const at = tileToWorld(e.r.pos);
+        if (e.r.horde) {
+          // The Saqueo's horde (docs/FASE2.md): said, and marked at the edge, but the camera stays with the player.
+          const where = edgeName(v, e.r.pos);
+          this.hud.banner('MÁS ZOMBIS EN CAMINO', 'alien', `Llegan por ${where} al final del próximo turno enemigo`);
+          this.hud.log(`${e.r.units.length === 1 ? 'Viene un zombi más' : `Vienen ${e.r.units.length} zombis más`} por ${where}: llegan al final del próximo turno enemigo. Cuanto más ruido, antes vienen.`, '#ff6b5a');
+          await wait(0.6);
+          return;
+        }
         look(at);
         this.hud.banner('REFUERZOS EN CAMINO', 'alien');
-        this.hud.log('Bengala roja: un dirigible soltará cápsulas de impresión al final del próximo turno enemigo', '#ff6b5a');
+        this.hud.log('Una bengala roja marca el sitio: llegan más al final del próximo turno enemigo', '#ff6b5a');
         this.sfx.flare(at);
         await wait(cam() ? 0.9 : 0.3);
         return;
@@ -1046,20 +1164,50 @@ export class Game {
       case 'spawned': {
         const spots = e.units.map((u) => tileToWorld(u.pos));
         const seen = e.units.filter((u) => this.mapView.isVisible(u.pos.x, u.pos.y));
-        this.hud.log(`Cápsulas de impresión: ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
+        const wave = v.mission.reinforcements.find((r) => r.id === e.reinforcement);
+        if (wave?.horde) {
+          // They walk in by the edge, on the prowl: no capsules, no beams.
+          const where = edgeName(v, wave.pos ?? e.units[0]?.pos ?? { x: 0, y: 0 });
+          this.hud.log(`La horda llega por ${where}: ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
+          this.hud.banner('¡LA HORDA!', 'alien', `${e.units.length === 1 ? 'Ha llegado un zombi' : `Han llegado ${e.units.length} zombis`} por ${where}${seen.length ? '' : ', fuera de vuestra vista'}`);
+          if (!seen.length) return;
+          look(tileToWorld(seen[0]!.pos));
+          await playArrival(this.units, this.fx, this.sfx, v, seen);
+          for (const u of seen) this.fx.floatText(tileToWorld(u.pos, 1), `¡APARECE UN ${TEMPLATES[u.template].name.toUpperCase()}!`, 'callout');
+          await wait(cam() ? 0.8 : 0.3);
+          return;
+        }
+        this.hud.log(`Refuerzos: ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
         // Nobody drops in unannounced: the stamp says how many, and where if the squad sees it.
-        this.hud.banner('¡REFUERZOS!', 'alien', `${e.units.length === 1 ? 'Ha aterrizado un enemigo' : `Han aterrizado ${e.units.length} enemigos`}${seen.length ? '' : ' fuera de vuestra vista'}`);
+        this.hud.banner('¡REFUERZOS!', 'alien', `${e.units.length === 1 ? 'Ha llegado un enemigo' : `Han llegado ${e.units.length} enemigos`}${seen.length ? '' : ' fuera de vuestra vista'}`);
         if (!seen.length) return;
         look(spots[0]!);
-        this.sfx.pods(spots[0]);
-        for (const p of spots) this.fx.evacBeam(p);
-        await wait(0.9);
+        // They come in on foot from the edge, or get up out of the dust: no capsules (arrivals.ts).
+        await playArrival(this.units, this.fx, this.sfx, v, seen);
         for (const u of seen) this.fx.floatText(tileToWorld(u.pos, 1), `¡APARECE UN ${TEMPLATES[u.template].name.toUpperCase()}!`, 'callout');
         await wait(cam() ? 0.8 : 0.2);
         return;
       }
       case 'patrol':
+      case 'forgot':
         return;
+      case 'noise':
+        this.playNoise(e);
+        return;
+      case 'searched': {
+        const u = getUnit(v, e.unit)!;
+        const at = tileToWorld(e.tile, 0.6);
+        const decor = searchSpot(v, e.tile);
+        look(this.units.worldPos(u.id).lerp(at, 0.5));
+        this.sfx.search(at);
+        await this.units.rummage(u.id, at);
+        this.overlays.find(e.tile, findText(e.loot), !e.loot);
+        if (e.loot) this.sfx.found(at);
+        // The seed comes from the event, so both players read the same line.
+        if (decor) this.hud.log(searchLine(u.name, decor, e.loot, e.tile.x * 7 + e.tile.y * 13 + v.turn), e.loot ? '#6dff9a' : undefined);
+        await wait(0.5);
+        return;
+      }
       case 'podActivated': {
         const pod = v.pods.find((p) => p.id === e.pod);
         const members = pod?.unitIds.map((id) => getUnit(v, id)!).filter((m) => m.alive) ?? [];
@@ -1129,9 +1277,9 @@ export class Game {
   }
 
   /**
-   * A song's effect (songFx.ts) and voice, landing before the events that
-   * follow it (damage, healing, the teleport…): the Canto's light tiles in the
-   * Coro's green and cyan.
+   * An Oficio ability's effect (songFx.ts) and sound, landing before the
+   * events that follow it (damage, healing, the leap…): the flare, the
+   * molotov, the bolts, the bandage.
    */
   private async playSong(u: Unit, e: Extract<GameEvent, { t: 'sung' }>): Promise<void> {
     const v = this.view;
@@ -1234,6 +1382,7 @@ export class Game {
       if (hit) {
         const stun = e.ability === 'stunLance';
         this.fx.slash(chest, stun ? 0x6ad8ff : 0xe8f6ff);
+        if (e.ability === 'claw') this.fx.bite(chest, shooterPos);
         this.sfx.melee(stun ? 'stun' : e.ability === 'claw' ? 'claw' : 'sword', chest);
         this.sfx.impact(this.sfx.body(target), chest, e.result === 'crit');
       } else {
@@ -1249,7 +1398,7 @@ export class Game {
     await wait(cam() ? 0.25 : 0.08);
 
     const heavy = weapon.apCost > 1;
-    // Flecha espectral and Lluvia de luz: arrows of light instead of rounds.
+    // Flecha perforante and Lluvia de flechas: crossbow bolts instead of rounds.
     const sung = !!ABILITIES[e.ability]?.song;
     const pellets = weapon.range === 'short' ? 6 : 0;
     const rounds = Math.max(1, weapon.burst);
@@ -1310,6 +1459,19 @@ export class Game {
     const u = getUnit(this.view, e.unit)!;
     const def = ABILITIES[e.ability];
     const to = tileToWorld(e.target, 0.15);
+    if (e.ability === 'burst') {
+      // The Hinchado bursts where it stood (docs/FASE2.md): nothing thrown, a blast of gas and worse.
+      if (!this.mapView.isVisible(e.target.x, e.target.y)) return;
+      look(to);
+      this.fx.floatText(tileToWorld(e.target, 0.4), '¡REVIENTA!', 'callout');
+      this.hud.log(`¡${capitalize(anEnemy(u))} revienta!`, '#ff6b5a');
+      this.sfx.explosion(to);
+      if (cam()) this.rig.shake(0.35, 0.5);
+      void this.fx.explosion(to, def.radius ?? 1.5);
+      this.fx.burst(to, def.radius ?? 1.5);
+      await wait(0.55);
+      return;
+    }
     this.hud.log(`${u.name}: ${def.name.toLowerCase()}`);
     if (cam()) {
       look(this.units.worldPos(u.id).lerp(to, 0.5));
@@ -1334,7 +1496,7 @@ export class Game {
       this.sfx.missile(from);
       await this.fx.missiles(from, spots);
     } else if (e.ability === 'fireball') {
-      // Bola de fuego: lobbed burning tiles and a blast of fire and song (songFx.ts).
+      // Cóctel molotov: a lobbed burning bottle and a sheet of flame (songFx.ts).
       const hands = this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.3, 0));
       this.fx.floatText(this.units.chestPos(u.id), def.name.toUpperCase(), 'info');
       this.sfx.song('fire', hands);
@@ -1359,7 +1521,7 @@ export class Game {
     }
     if (e.ability === 'smoke') {
       this.sfx.explosion(to, 'smoke');
-      this.fx.sparks(to, 0xdfe6ec, 14);
+      this.fx.puffs(to.clone().setY(0.2), 0xd8d6d0, 12, { size: 0.6, spread: 1.2, rise: 0.4, out: 0.8, life: 3, grow: 1.6 });
       await wait(0.3);
       return;
     }
@@ -1375,6 +1537,34 @@ export class Game {
     if (cam()) this.rig.shake(0.45, 0.6);
     void this.fx.explosion(to, blastRadius(u, e.ability) || 2.5);
     await wait(0.4);
+  }
+
+  /**
+   * A noise (docs/FASE2.md): a ring of its radius spreading from where it
+   * sounded, for the squad's own and for what the squad sees make one (the
+   * scream). Enemies out of sight that heard the squad and only now come to
+   * look get «Os han oído»: a stamp and a line, never the camera.
+   */
+  private playNoise(e: Extract<GameEvent, { t: 'noise' }>): void {
+    const v = this.view;
+    const by = e.by ? getUnit(v, e.by) : undefined;
+    const ours = by?.team === 'xcom';
+    const scream = !!by && this.lastUsed?.unit === by.id && this.lastUsed.ability === 'mindspin';
+    if (ours || this.mapView.isVisible(e.tile.x, e.tile.y)) this.overlays.noise(e.tile, e.radius, ours ? 0xffc93a : scream ? 0xc58cff : 0xff6b5a);
+    // Only who starts coming now: one already on its way to an earlier noise was told about then.
+    const fresh = e.heard.map((id) => getUnit(v, id)).filter((a): a is Unit => !!a?.alive && !a.heard && !this.visibleAliens.has(a.id));
+    if (!fresh.length || !by) return;
+    if (!ours) {
+      if (scream && this.visibleAliens.has(by.id)) this.hud.log(`El grito se oye a ${e.radius} casillas: ${heardCount(fresh)} ${fresh.length === 1 ? 'acude' : 'acuden'}`, '#e8d8c0');
+      return;
+    }
+    // A throw (Petardos, a grenade) draws them to where it landed, not to the squad.
+    const away = distance(by.pos, e.tile) > 1.5;
+    const one = fresh.length === 1;
+    const text = `${heardCount(fresh)} ${away ? (one ? 'va hacia donde sonó' : 'van hacia donde sonó') : one ? 'viene hacia aquí' : 'vienen hacia aquí'}`;
+    this.hud.banner('OS HAN OÍDO', 'warn', capitalize(text));
+    this.hud.log(`Os han oído: ${text}`, '#ffc93a');
+    this.tips.heard();
   }
 
   private closestSoldier(p: Vec2): THREE.Vector3 {
@@ -1393,12 +1583,16 @@ export class Game {
     const evacuated = s.units.filter((u) => u.evacuated).length;
     const killed = s.units.filter((u) => u.team === 'alien' && !u.alive).length;
     const vip = s.mission.kind === 'rescue' && s.mission.objectiveUnit ? getUnit(s, s.mission.objectiveUnit)?.name : undefined;
+    // What came home (docs/FASE2.md): only what a soldier got out with, or stood with at the end.
+    const haul = broughtBack(s);
+    const loot = lootSummary(haul.supplies, haul.items, haul.medicines);
     const success: Record<typeof s.mission.kind, string> = {
       elimination: 'Todos los hostiles abatidos',
       recovery: `${capitalize(this.recoveryItem())} a salvo`,
       sabotage: 'Sirena callada',
-      hack: 'Terminal hackeado',
+      hack: 'Equipo en marcha',
       rescue: vip ? `${vip}, a salvo` : 'VIP extraído',
+      scavenge: loot ? SCAVENGE.success : SCAVENGE.emptyHanded,
     };
     const titles: Record<EndReason, string> = {
       objective: success[s.mission.kind],
@@ -1410,7 +1604,10 @@ export class Game {
     // One short line: why it ended. A skirmish has no debrief after, so it adds the count.
     const why = reason ? titles[reason] : '';
     const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-    const line = s.campaignMission ? why : [why, count(killed, 'abatido', 'abatidos'), lost ? count(lost, 'baja', 'bajas') : 'sin bajas'].filter(Boolean).join(' · ');
+    // A skirmish also says what came home (a campaign's debrief has it, from report.loot): «Botín a salvo: +26 §».
+    const found = !s.campaignMission && outcome === 'victory' && loot ? loot.replace(/\.$/, '') : '';
+    const head = found && reason === 'objective' && s.mission.kind === 'scavenge' ? `${why}: ${found.replace(/^El botín: /, '')}` : [why, found].filter(Boolean).join(' · ');
+    const line = s.campaignMission ? why : [head, count(killed, 'abatido', 'abatidos'), lost ? count(lost, 'baja', 'bajas') : 'sin bajas'].filter(Boolean).join(' · ');
     this.hud.showOutcome(outcome, line, !!s.campaignMission);
   }
 
@@ -1440,6 +1637,11 @@ export class Game {
     if (objective?.alive && !m.objectiveDone) beacons.push({ pos: objective.pos, color: objective.team === 'alien' ? 0xff4a6a : 0x4dff9a });
     this.overlays.setBeacons(beacons);
     this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
+    // Furniture already searched, where the squad has been (Arte gives it the opened look).
+    const w = this.view.width;
+    const searched = (this.view.searched ?? []).map((i) => ({ x: i % w, y: Math.floor(i / w) }));
+    // With Synty models the furniture itself shows it was searched (drawers out, boot up); the tick is for the voxel map.
+    this.overlays.setSearched(graphics().models === 'voxel' ? searched.filter((p) => this.mapView.isExplored(p.x, p.y) && searchSpot(this.view, p) !== null) : []);
     this.overlays.setSmoke(this.view.smoke);
     this.songMarks.setSilences((this.view.silences ?? []).map((z) => ({ at: tileToWorld(z.pos), radius: z.radius })));
     this.songMarks.setOaths(this.view.units.filter((u) => u.alive && (u.oath ?? 0) > 0).map((u) => tileToWorld(u.pos)));
@@ -1462,6 +1664,9 @@ export class Game {
 
   private marks(): EdgeMark[] {
     const marks = this.missionMarks();
+    // Where the Saqueo's next wave comes in, until it does.
+    const wave = this.view.mission.reinforcements.find((r) => r.horde && r.pos && !r.landed);
+    if (wave) marks.push({ kind: 'alert', label: 'Zombis', pos: wave.pos! });
     return this.moment ? [...marks, { kind: 'alert', label: this.moment.who, pos: this.moment.pos }] : marks;
   }
 
@@ -1508,7 +1713,7 @@ export class Game {
       case 'hacked':
         if (!e.success) return;
         pos = at(e.unit);
-        text = `${who}: terminal hackeado`;
+        text = `${who}: equipo en marcha`;
         break;
       default:
         return;
@@ -1543,7 +1748,7 @@ export class Game {
       case 'song':
         return `${capitalize(who)} ha hecho ruido: se oye desde lejos.`;
       case 'alarm':
-        return `${soldier ? `${who} ha fallado el hackeo` : 'El hackeo ha fallado'}: ha saltado la alarma.`;
+        return `${soldier ? `${who} no ha podido arreglarlo` : 'El arreglo ha fallado'}: ha saltado la alarma.`;
       case 'reinforcements':
         return 'Los refuerzos llegan alertados: saben dónde estáis.';
       default:
@@ -1809,6 +2014,10 @@ export class Game {
   }
 
   private cycleTarget(dir: 1 | -1): void {
+    if (this.searching()) {
+      this.cycleSearch(dir);
+      return;
+    }
     if (this.mode.kind !== 'target') return;
     const list = this.targetOptions(this.mode.ability);
     if (!list.length) return;
@@ -1864,6 +2073,12 @@ export class Game {
         else this.enterTarget(id);
         return;
       case 'tile':
+        // Registrar is armed like a self ability (first press), on the furniture beside the soldier.
+        if (id === 'search') {
+          if (this.mode.kind === 'tile' && this.mode.ability === id) this.confirmSearch();
+          else this.armSearch();
+          return;
+        }
         this.mode = this.mode.kind === 'tile' && this.mode.ability === id ? { kind: 'move' } : { kind: 'tile', ability: id };
         this.refreshInteractive();
         return;
@@ -1878,6 +2093,81 @@ export class Game {
           this.refreshInteractive();
         }
     }
+  }
+
+  // ============================================================ Registrar
+
+  private searching(): boolean {
+    return this.mode.kind === 'tile' && this.mode.ability === 'search';
+  }
+
+  /** Furniture the selected soldier can search from where it stands. */
+  private searchTiles(): Vec2[] {
+    const u = this.selectedUnit();
+    return u ? searchableTiles(this.state, u) : [];
+  }
+
+  /** The furniture Registrar would search now: the one picked (pointer, Tab or click), else the first within reach. */
+  private searchTarget(): Vec2 | null {
+    const tiles = this.searchTiles();
+    const pick = this.searchPick;
+    return (pick && tiles.find((t) => sameTile(t, pick))) ?? tiles[0] ?? null;
+  }
+
+  /** Arms Registrar (on `tile`, if given): the furniture gets marked and the panel says which one it searches. */
+  private armSearch(tile?: Vec2): void {
+    this.mode = { kind: 'tile', ability: 'search' };
+    this.targetId = null;
+    this.concealWarn = null;
+    this.searchPick = tile ?? this.searchTarget();
+    this.refreshInteractive();
+  }
+
+  /** Tab with Registrar armed: the next piece of furniture within reach. */
+  private cycleSearch(dir: 1 | -1): void {
+    const tiles = this.searchTiles();
+    if (tiles.length < 2) return;
+    const current = this.searchTarget();
+    const i = tiles.findIndex((t) => current && sameTile(t, current));
+    this.searchPick = tiles[(i + dir + tiles.length) % tiles.length]!;
+    this.refreshInteractive();
+  }
+
+  private confirmSearch(tile = this.searchTarget()): void {
+    const u = this.selectedUnit();
+    if (!u || !this.searching() || !this.canAct()) return;
+    if (!this.hasCommand()) {
+      this.hud.toast(this.commandLock());
+      return;
+    }
+    if (!tile) {
+      this.hud.toast('No hay nada que registrar al lado.');
+      return;
+    }
+    this.send({ type: 'ability', unit: u.id, ability: 'search', tile });
+    this.cancelMode();
+  }
+
+  /** The armed Registrar's panel: «Registrar el maletero», what it costs and sounds like, the room left. */
+  private searchPanel(u: Unit): TargetView | null {
+    const tile = this.searchTarget();
+    const decor = tile ? searchSpot(this.state, tile) : null;
+    if (!tile || !decor) return null;
+    const def = ABILITIES.search;
+    const name = SEARCH_SPOTS[decor]?.name ?? 'el mueble';
+    const room = BACKPACK_SLOTS - (u.backpack?.length ?? 0);
+    const others = this.searchTiles().length - 1;
+    return {
+      kind: 'self',
+      title: `${def.name} ${name}`,
+      action: def.name,
+      locked: this.lockLabel(),
+      cost: costText(u, 'search'),
+      noise: noiseText(this.state, u, 'search'),
+      effect: def.description,
+      detail: `Mochila: ${room === 1 ? 'queda 1 hueco' : `quedan ${room} huecos`} de ${BACKPACK_SLOTS}`,
+      hint: `Otra vez, Espacio o clic en el mueble: registrar${others ? ` · Tab: ${others === 1 ? 'el otro' : 'otro'} mueble` : ''} · Esc: cancelar`,
+    };
   }
 
   /** Uses the armed self ability. */
@@ -1907,7 +2197,8 @@ export class Game {
         this.confirmTarget();
         return;
       case 'tile':
-        if (this.hoverTile) this.throwAt(this.hoverTile);
+        if (this.searching()) this.confirmSearch();
+        else if (this.hoverTile) this.throwAt(this.hoverTile);
         else this.hud.toast('Señala con el ratón dónde lanzarla.');
         return;
     }
@@ -1919,7 +2210,9 @@ export class Game {
 
   private abilityList(u: Unit): AbilityId[] {
     const m = this.state.mission;
-    return abilitiesOf(u).filter((id) => (id !== 'evac' || m.evacZone.length > 0) && (id !== 'hack' || (!!m.terminal && !m.objectiveDone)));
+    return abilitiesOf(u).filter(
+      (id) => (id !== 'evac' || m.evacZone.length > 0) && (id !== 'hack' || (!!m.terminal && !m.objectiveDone)) && (id !== 'search' || this.hasSpots),
+    );
   }
 
   private abilities(): AbilityView[] {
@@ -1946,6 +2239,7 @@ export class Game {
         cost: costText(u, id),
         limits: limitsText(u, id),
         damage: damageText(this.state, u, id),
+        noise: noiseText(this.state, u, id),
         description: def.description,
         active,
         count: charge,
@@ -2039,6 +2333,7 @@ export class Game {
     const m = s.mission;
     const after = 'eliminad a los hostiles o evacuad';
     let objective = 'Eliminad a todos los hostiles';
+    let objectiveTip: string | undefined;
     switch (m.kind) {
       case 'recovery': {
         const carrier = m.item?.carrier ? getUnit(s, m.item.carrier) : undefined;
@@ -2054,7 +2349,7 @@ export class Game {
         objective = m.objectiveDone ? `Sirena callada: ${after}` : 'Callad la sirena';
         break;
       case 'hack':
-        objective = m.objectiveDone ? `Terminal hackeado: ${after}` : 'Hackead el terminal (junto a él, o con el Grillo del especialista)';
+        objective = m.objectiveDone ? `Equipo en marcha: ${after}` : 'Arreglad el equipo (junto a él, o con el Grillo del especialista)';
         break;
       case 'rescue': {
         const vip = m.objectiveUnit ? getUnit(s, m.objectiveUnit) : undefined;
@@ -2065,9 +2360,40 @@ export class Game {
             : `Escoltad a ${vip?.name ?? 'el VIP'} hasta la zona de evacuación`;
         break;
       }
+      case 'scavenge': {
+        // What the squad carries counts once it is out (or standing at the end); a fallen soldier's is lost.
+        const n = s.units.filter((u) => u.team === 'xcom' && (u.alive || u.evacuated)).reduce((sum, u) => sum + (u.backpack?.length ?? 0), 0);
+        objective = n ? SCAVENGE.carrying.replace('{n}', String(n)) : SCAVENGE.objective;
+        if (n) objectiveTip = SCAVENGE.carryingTip.replace('{n}', String(n));
+        break;
+      }
     }
-    const incoming = m.reinforcements.some((r) => r.pos && !r.landed);
-    return { kind: m.kind, objective, turnsLeft: m.turnsLeft, alert: incoming ? 'REFUERZOS EN CAMINO' : null, area: s.mapName };
+    const incoming = m.reinforcements.filter((r) => r.pos && !r.landed);
+    const alert = !incoming.length ? null : incoming.every((r) => r.horde) ? 'ZOMBIS EN CAMINO' : 'REFUERZOS EN CAMINO';
+    return { kind: m.kind, objective, objectiveTip, turnsLeft: m.turnsLeft, alert, area: s.mapName, horde: m.horde?.length ? this.hordeView() : null };
+  }
+
+  /**
+   * The Saqueo's horde clock (HORDE in content.ts, Sim.callHorde): every squad
+   * turn and every noise winds it up, and a wave is called at the end of the
+   * alien turn once it reaches the next `wave` points. The bar is how far it
+   * is from the next one; full, the wave is called this very turn.
+   */
+  private hordeView(): HordeView {
+    const s = this.view;
+    const m = s.mission;
+    const sent = m.reinforcements.filter((r) => r.horde).length;
+    const points = s.turn * HORDE.perTurn + (m.noise ?? 0);
+    const left = (sent + 1) * HORDE.wave - points;
+    const fill = Math.max(0, Math.min(1, 1 - left / HORDE.wave));
+    const turns = Math.ceil(left / HORDE.perTurn);
+    const title =
+      left <= 0
+        ? 'Horda: la próxima oleada sale al final de este turno'
+        : turns <= 1
+          ? 'Horda: la próxima oleada sale al final del próximo turno, o de este si hacéis ruido'
+          : `Horda: la próxima oleada, en unos ${turns} turnos; antes cuanto más ruido hagáis`;
+    return { fill, title };
   }
 
   private refreshHud(): void {
@@ -2121,18 +2447,39 @@ export class Game {
       v.mission.item?.carrier ?? null,
     );
     const shown = this.selected ? getUnit(v, this.selected) : undefined;
-    this.hud.setSelected(shown?.alive ? shown : null);
+    this.hud.setSelected(shown?.alive ? shown : null, shown?.alive ? this.packView(shown) : null);
     this.tips.state(v, this.visibleAliens, sharing);
+  }
+
+  /** The soldier's backpack and the squad's haul for the sheet: where there is anything to search, or it carries something. */
+  private packView(u: Unit): PackView | null {
+    const v = this.view;
+    if (TEMPLATES[u.template].team !== 'xcom' || u.template === 'vip' || (!this.hasSpots && !u.backpack?.length)) return null;
+    const squad = lootTotals(v.units.filter((o) => o.team === 'xcom' && (o.alive || o.evacuated)).flatMap((o) => o.backpack ?? []));
+    return {
+      slots: packSlots(u.backpack ?? []),
+      size: BACKPACK_SLOTS,
+      squad: {
+        supplies: squad.supplies,
+        items: squad.items.length,
+        medicines: squad.medicines,
+        text: lootSummary(squad.supplies, squad.items, squad.medicines) ?? 'La escuadra aún no lleva nada.',
+      },
+    };
   }
 
   /** Builds the target panel and draws the aim line for the current target. */
   private targetPanel(): TargetView | null {
     const u = this.selectedUnit();
+    if (u && this.searching()) {
+      this.overlays.showAim(null, null);
+      return this.searchPanel(u);
+    }
     if (u && this.mode.kind === 'self') {
       const id = this.mode.ability;
       const def = ABILITIES[id];
       this.overlays.showAim(null, null);
-      return { kind: 'self', title: def.name, action: def.name, locked: this.lockLabel(), cost: costText(u, id), limits: limitsText(u, id), effect: def.description, detail: this.selfDetail(u, id) };
+      return { kind: 'self', title: def.name, action: def.name, locked: this.lockLabel(), cost: costText(u, id), limits: limitsText(u, id), effect: def.description, detail: this.selfDetail(u, id), noise: noiseText(this.state, u, id) };
     }
     const option = this.currentTarget();
     if (!u || !option || this.mode.kind !== 'target') {
@@ -2158,7 +2505,8 @@ export class Game {
         bolt: 'Nunca falla e ignora la cobertura',
       };
       const damage = dmg ? { hit: span(dmg.hit), notes: armorNotes(dmg, target), kill: lethality(dmg, target) } : undefined;
-      return { kind: 'support', title: def.name, action: def.name, locked: this.lockLabel(), targetName: target.name, effect: effects[ability] ?? def.description, damage, index, total: list.length };
+      const noise = noiseOf(this.state, u, ability);
+      return { kind: 'support', title: def.name, action: def.name, locked: this.lockLabel(), targetName: target.name, effect: effects[ability] ?? def.description, damage, index, total: list.length, noise: noise ? `Ruido ${noise}` : undefined };
     }
     const attack = ability as AttackAbility;
     const shot = previewShot(this.state, u, target, { ability: attack, from: option.tile });
@@ -2168,6 +2516,7 @@ export class Game {
     }
     this.overlays.showAim(shot.origin, target.pos);
     const dmg = abilityDamage(this.state, u, attack, target, shot)!;
+    const loud = noiseOf(this.state, u, attack);
     return {
       kind: 'attack',
       title: `${def.name} · ${attackWeapon(u, attack).name}`,
@@ -2189,6 +2538,7 @@ export class Game {
       total: list.length,
       note: ATTACK_NOTES[attack],
       locked: this.lockLabel(),
+      noise: loud ? `Ruido ${loud}` : 'Sin ruido',
     };
   }
 
@@ -2217,6 +2567,8 @@ export class Game {
     this.overlays.showCover(null);
     this.overlays.showBlast(null, [], false);
     this.overlays.showRange(null);
+    this.overlays.setSpots([]);
+    this.overlays.setNote(null);
     this.overlays.setHover(tile);
     const hovered = tile ? unitAt(this.view, tile) : undefined;
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
@@ -2227,6 +2579,16 @@ export class Game {
     const option = this.currentTarget();
     if (option?.path?.length) this.overlays.showPath(u.pos, option.path);
 
+    if (this.searching()) {
+      // The furniture within reach is marked; the pointer on one picks it, and the panel follows.
+      const pick = this.searchPick;
+      if (tile && this.searchTiles().some((t) => sameTile(t, tile)) && !(pick && sameTile(pick, tile))) {
+        this.searchPick = tile;
+        this.hud.setTarget(this.targetPanel());
+      }
+      this.overlays.setSpots(this.spotsAround(u, this.searchTarget()));
+      return;
+    }
     if (this.mode.kind === 'tile') {
       const ability = this.mode.ability;
       this.overlays.showRange(u.pos, abilityRange(u, ability));
@@ -2236,6 +2598,8 @@ export class Game {
       const allies = area.filter((t) => unitAt(this.state, t)?.team === 'xcom');
       this.overlays.showBlast(center, area, canTargetTile(this.state, u, ability, center), allies);
       this.overlays.setHover(null);
+      const loud = noiseOf(this.state, u, ability);
+      if (loud) this.overlays.setNote(center, `Ruido ${loud}`);
       return;
     }
     if (this.mode.kind === 'self') {
@@ -2252,6 +2616,12 @@ export class Game {
       this.overlays.setHover(tile, 0xff5a5a);
       return;
     }
+    // Only furniture the squad has seen: the fog keeps what is in an unexplored house.
+    const decor = this.hasSpots && this.mapView.isExplored(tile.x, tile.y) ? searchSpot(this.state, tile) : null;
+    if (decor) {
+      this.hoverFurniture(u, tile, decor);
+      return;
+    }
     const r = this.reach();
     const dest = r?.tiles.find((t) => sameTile(t.pos, tile));
     if (!r || !dest) return;
@@ -2259,7 +2629,31 @@ export class Game {
     this.overlays.showPath(u.pos, path, dest.dash);
     this.overlays.showCover(tile, coverSides(this.state, tile));
     this.overlays.setHover(tile, dest.detected ? 0xff4a4a : dest.dash ? 0xffc93a : 0x9fe8ff);
+    // Running, a door or a window is heard (docs/FASE2.md): said under the destination.
+    const loud = moveNoise(this.state, path ?? [], dest.dash);
+    if (loud) this.overlays.setNote(tile, loud);
     if (dest.detected) this.tips.redTile();
+  }
+
+  /** The furniture beside `u` that Registrar reaches: to search, the one it would search, or searched already. */
+  private spotsAround(u: Unit, pick: Vec2 | null): { pos: Vec2; kind: SpotKind }[] {
+    return DIRS8.map((d) => ({ x: u.pos.x + d.x, y: u.pos.y + d.y }))
+      .filter((p) => searchSpot(this.state, p) !== null && reachesToSearch(this.state, u.pos, p))
+      .map((p) => ({ pos: p, kind: wasSearched(this.state, p) ? 'done' : pick && sameTile(pick, p) ? 'pick' : 'open' }));
+  }
+
+  /** The pointer on a piece of furniture: marked, named, and whether it can be searched (a click arms Registrar). */
+  private hoverFurniture(u: Unit, tile: Vec2, decor: DecorKind): void {
+    const name = capitalize(SEARCH_SPOTS[decor]?.name ?? 'el mueble');
+    if (wasSearched(this.state, tile)) {
+      this.overlays.setSpots([{ pos: tile, kind: 'done' }]);
+      this.overlays.setNote(tile, `${name} · ya se ha registrado`);
+      return;
+    }
+    const near = this.searchTiles().some((t) => sameTile(t, tile));
+    const blocked = near ? abilityBlocker(this.state, u, 'search') : null;
+    this.overlays.setSpots([{ pos: tile, kind: near && !blocked ? 'pick' : 'open' }]);
+    this.overlays.setNote(tile, !near ? `${name} · se puede registrar` : blocked ? `${name} · ${blocked.replace(/\.$/, '').toLowerCase()}` : `${name} · clic: registrar`);
   }
 
   /**
@@ -2271,7 +2665,7 @@ export class Game {
    */
   private enemyTags(u: Unit | undefined, tile: Vec2 | null): Map<string, EnemyTag> {
     const tags = new Map<string, EnemyTag>();
-    if (u && tile && this.mode.kind === 'tile' && this.canAct() && this.isMine(u) && !this.isBusy(u.id)) return this.blastTags(u, this.mode.ability, tile);
+    if (u && tile && this.mode.kind === 'tile' && !this.searching() && this.canAct() && this.isMine(u) && !this.isBusy(u.id)) return this.blastTags(u, this.mode.ability, tile);
     if (!u || !tile || this.mode.kind !== 'move' || !this.canAct() || !this.isMine(u) || this.isBusy(u.id)) return tags;
     if (!abilitiesOf(u).includes('shoot')) return tags;
     const occupant = unitAt(this.state, tile);
@@ -2409,7 +2803,7 @@ export class Game {
       switch (e.code) {
         case 'Tab':
           e.preventDefault();
-          if (this.mode.kind === 'target') this.cycleTarget(e.shiftKey ? -1 : 1);
+          if (this.mode.kind === 'target' || this.searching()) this.cycleTarget(e.shiftKey ? -1 : 1);
           else this.cycleUnit(e.shiftKey ? -1 : 1);
           break;
         case 'Enter':
@@ -2524,6 +2918,12 @@ export class Game {
     // Without the command a click plans instead of ordering (#35): aiming and areas only preview.
     const planning = !this.hasCommand();
 
+    // Registrar armed: a click on marked furniture searches it, anywhere else backs out.
+    if (this.searching()) {
+      if (this.searchTiles().some((t) => sameTile(t, tile))) this.confirmSearch(tile);
+      else this.cancelMode();
+      return;
+    }
     if (this.mode.kind === 'tile') {
       this.throwAt(tile);
       return;
@@ -2546,6 +2946,13 @@ export class Game {
     // A click on the ground backs out of aiming, or of an armed self ability.
     if (this.mode.kind === 'target' || this.mode.kind === 'self') {
       this.cancelMode();
+      return;
+    }
+    // Furniture beside the soldier: the click arms Registrar on it (the next click, or Space, searches).
+    if (this.searchTiles().some((t) => sameTile(t, tile))) {
+      const view = this.abilities().find((a) => a.id === 'search');
+      if (view?.enabled) this.armSearch(tile);
+      else if (view?.reason) this.hud.toast(view.reason);
       return;
     }
     const dest = this.reach()?.tiles.find((t) => sameTile(t.pos, tile));

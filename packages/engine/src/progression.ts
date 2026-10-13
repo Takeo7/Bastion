@@ -20,7 +20,7 @@ export const TECHS: Record<TechId, TechDef> = {
   magWeapons: { id: 'magWeapons', name: 'Armas de taller', description: 'Teo repara y pone a punto lo que encontráis: armas de nivel 2 (+2 de daño) para los soldados desde Cabo.', level: 3 },
   plateArmor: { id: 'plateArmor', name: 'Armadura de placas', description: 'Armadura de nivel 2 (+2 de salud) para los soldados desde Cabo.', level: 4 },
   plasmaGrenades: { id: 'plasmaGrenades', name: 'Granadas de clavos', description: 'Clavos y tornillos en la carga: +2 de daño en todas las granadas.', level: 5 },
-  encryption: { id: 'encryption', name: 'Escáner de radio', description: 'Oír las frecuencias de los Cuervos sin que nos oigan: +20 a hackear y una zona contactable más.', level: 5 },
+  encryption: { id: 'encryption', name: 'Escáner de radio', description: 'Oír las frecuencias de los Cuervos sin que nos oigan: +20 a arreglar equipos y una zona contactable más.', level: 5 },
   plasmaWeapons: { id: 'plasmaWeapons', name: 'Armas militares', description: 'Lo que quedaba en los cuarteles, limpio y con munición: armas de nivel 3 (+4 de daño) para los soldados desde Teniente.', level: 6 },
   nanoMedkit: { id: 'nanoMedkit', name: 'Antibióticos', description: 'Amoxicilina y suturas de verdad: las curas sanan +2 y los botiquines tienen un uso más.', level: 6 },
   predatorArmor: { id: 'predatorArmor', name: 'Equipo antidisturbios', description: 'Armadura de nivel 3 (+4 de salud y +1 de blindaje) para los soldados desde Teniente.', level: 7 },

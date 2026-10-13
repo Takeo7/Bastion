@@ -1116,7 +1116,7 @@ dl.briefing {
 
 /* --------------------------------------------------------------- armory */
 
-/* Hoja de servicio: aptitudes typed in boxes, talents as index cards in three branches. */
+/* Árbol de habilidades: aptitudes typed in boxes on the left; the tree itself is skillTree.css. */
 .strat-modal .x-panel.wide.service {
   width: min(1180px, calc(96vw / var(--ui-scale, 1)));
 }
@@ -1156,8 +1156,8 @@ dl.briefing {
 }
 
 .apt-head small {
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  letter-spacing: 0.04em;
   color: var(--x-muted);
 }
 
@@ -1234,225 +1234,8 @@ dl.briefing {
 }
 
 .apt-effect {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--x-muted);
-}
-
-.apt-th {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-size: 11.5px;
-  line-height: 1.25;
-  color: var(--x-muted);
-}
-
-.apt-th b {
-  display: inline-block;
-  min-width: 2em;
-  font-family: var(--font-display);
-  font-weight: 400;
-}
-
-.apt-th li.got {
-  color: var(--ink);
-}
-
-.apt-th li.got b {
-  color: var(--pen);
-}
-
-.talent-grid {
-  display: grid;
-  grid-template-columns: 44px repeat(3, minmax(0, 1fr));
-  gap: 6px 10px;
-}
-
-.talent-branch {
-  display: grid;
-  padding-bottom: 4px;
-  border-bottom: 2px solid var(--ink);
-}
-
-.talent-branch b {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 400;
-}
-
-.talent-branch small {
-  font-size: 11px;
-  color: var(--x-muted);
-}
-
-.talent-branch span {
-  font-family: var(--font-hand);
-  font-size: 18px;
-  line-height: 1;
-  color: var(--pen);
-}
-
-.talent-gate {
-  display: grid;
-  align-content: start;
-  justify-items: center;
-  padding-top: 6px;
-  border-right: 1.5px dashed var(--x-line);
-}
-
-.talent-gate b {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 400;
-  line-height: 1;
-}
-
-.talent-gate small {
-  font-size: 9px;
-  color: var(--x-muted);
-}
-
-.talent-cell {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-}
-
-/* Talents are index cards: pen-tinted once taken, dashed in red while one can be added. */
-.talent {
-  position: relative;
-  display: grid;
-  gap: 2px;
-  padding: 6px 8px 7px;
-  text-align: left;
-  border: 0;
-  background: var(--paper-grain), var(--paper-light);
-  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.32);
-  color: var(--x-muted);
-  cursor: default;
-}
-
-.talent b {
-  font-family: var(--font-display);
-  font-size: 13.5px;
-  font-weight: 400;
-  color: var(--ink);
-}
-
-.talent.taken {
-  background: linear-gradient(var(--ink-blue-soft), var(--ink-blue-soft)), var(--paper-grain), var(--paper-light);
-}
-
-.talent.open {
-  cursor: pointer;
-  /* What can be chosen is circled in pen, as everywhere in the file; red stays
-     for what blocks. No pulsing: with points to spend, a dozen cards would. */
-  outline: 2px dashed var(--pen);
-  outline-offset: -4px;
-}
-
-.talent.open:hover {
-  background: var(--paper-grain), #fff;
-}
-
-.talent.shut {
-  opacity: 0.42;
-}
-
-/* Talents that need the partner's soldiers close: in pen, the colour of the
-   partner's notes (red is kept for what threatens or blocks). */
-.talent.coop b {
-  color: var(--pen);
-}
-
-.talent-levels {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 11px;
-}
-
-.talent-levels i {
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid var(--ink);
-}
-
-.talent-levels i.on {
-  background: var(--pen);
-  border-color: var(--pen);
-}
-
-.talent-levels small {
-  margin-left: 3px;
-}
-
-.talent-req {
-  margin-left: auto;
-  padding: 0 3px;
-  border: 1px solid var(--x-muted);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-}
-
-.talent-req.miss {
-  border-color: var(--stamp);
-  color: var(--stamp);
-}
-
-.talent-desc {
-  font-size: 11px;
-  line-height: 1.25;
-}
-
-.talent.taken .talent-desc {
-  color: var(--ink);
-}
-
-/* The Rosa: its centre, one tab per axis, and the axis's four branches (the fourth is the Canto). */
-.talent-grid.four {
-  grid-template-columns: 44px repeat(4, minmax(0, 1fr));
-}
-
-.talent-center {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.rosa-axes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0;
-}
-
-.rosa-axes .x-btn.on {
-  background: var(--ink);
-  color: var(--paper-light);
-}
-
-.rosa-axes small {
-  color: inherit;
-  opacity: 0.75;
-}
-
-/* The Canto's branch carries the Coro's green, as songs do in combat. */
-.talent-branch.song b,
-.talent-branch.song small {
-  color: var(--song);
-}
-
-.talent-cell.locked {
-  opacity: 0.5;
-}
-
-.talent-becomes {
-  font-family: var(--font-hand);
-  font-size: 16px;
-  line-height: 1;
-  color: var(--pen);
 }
 
 @media (max-width: 900px) {
@@ -1569,7 +1352,7 @@ dl.briefing {
   opacity: 1;
 }
 
-/* Take-off: a "DESPEGUE" stamp; it lasts LAUNCH_SECONDS (bastion.ts). */
+/* Take-off: an "EN MARCHA" stamp; it lasts LAUNCH_SECONDS (bastion.ts). */
 .launch-banner {
   position: absolute;
   left: 50%;
@@ -2910,7 +2693,7 @@ dl.x-pairs dd {
 }
 
 .apt-next {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--x-muted);
 }
 
@@ -2920,50 +2703,6 @@ dl.x-pairs dd {
 
 .apt.drafted .apt-val {
   color: var(--pen);
-}
-
-/* Only what can be learnt now: cards in a few loose columns, not a spreadsheet. */
-.talent-pick {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 8px;
-  align-items: start;
-}
-
-.talent-where {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--x-muted);
-}
-
-.talent.drafted {
-  outline: 2px solid var(--pen);
-  outline-offset: -3px;
-  background: linear-gradient(color-mix(in srgb, var(--pen) 10%, transparent), color-mix(in srgb, var(--pen) 10%, transparent)), var(--paper-grain), var(--paper-light);
-}
-
-.talent-levels i.plan {
-  background: repeating-linear-gradient(-45deg, transparent 0 2px, var(--pen) 2px 3.5px);
-}
-
-.talent-undo {
-  position: absolute;
-  top: 2px;
-  right: 4px;
-  padding: 0 4px;
-  font-size: 13px;
-  color: var(--pen);
-  cursor: pointer;
-}
-
-.talent-undo:hover {
-  color: var(--x-bad);
-}
-
-.rosa-whole {
-  display: grid;
-  gap: 6px;
 }
 
 /* «GUARDADO»: the sheet is stamped when a promotion is written down. */
@@ -3228,4 +2967,11 @@ dl.x-pairs dd {
 .x-btn.small.armed {
   color: var(--stamp);
   border-color: var(--stamp);
+}
+
+/* What a scavenge brought home, in one line under the figures. */
+.debrief-loot {
+  margin: 4px 0 0;
+  text-align: center;
+  color: var(--x-good);
 }

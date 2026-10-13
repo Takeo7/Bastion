@@ -29,17 +29,22 @@ Hace falta Blender (por defecto `/Applications/Blender.app/Contents/MacOS/Blende
    - **Armas:** el cañón mira a +Z y la empuñadura queda en el origen; la boca del cañón va en `extras.muzzle`.
    - **Sombreros** (`HEADGEAR`): centrados en la articulación de la cabeza, para colgarlos en el juego.
    - **Objetos:** las mallas se unen por material. El ajuste a la casilla (`fit`, `yaw`, `shift`) se hace en el juego, así que cambiarlo no pide reconvertir.
+   - **Piezas de edificio** (`PIECES`, de los kits modulares): como los objetos, pero recortadas antes a la caja `keep` (en metros del FBX). Los kits van en módulos de 2,5 m y una casilla son 1,5 m: el juego los dibuja 1,2 veces más grandes (`KIT_SCALE`) y cada casilla de pared es la mitad central de un módulo, con su puerta o su ventana justo en ella. Con `parts` las mallas quedan separadas (la hoja de una puerta, que se abre).
    - **Atlas:** reducidos al tamaño del manifiesto y guardados en WebP.
+   - **Animaciones** (`ANIMATIONS`, de «ANIMATION – Base Locomotion»): cada clip, sin raíz en movimiento, con el esqueleto del pack (solo los huesos que usa el juego) y todos los fotogramas. No se hornean transformaciones: el juego mide cada pose contra la pose en T del pack y la pasa a los huesos de cada personaje (`syntyAnims.ts`), así que el mismo clip sirve para los dos rigs de Synty.
 3. **gltf-transform** comprime cada GLB con meshopt sin tocar esqueletos, sombreros ni el mapa `part`.
 
 ## Añadir un modelo
 
 1. Busca el FBX en el pack, por ejemplo `POLYGON_Town_SourceFiles_v7/FBX/SM_Prop_Couch_03.fbx`.
 2. Añádelo al manifiesto en la tabla que toque:
-   - `CHARACTERS`, con sus `attach` (pelo, barba, sombrero) desde `SM_Chr_Attach_*`;
+   - `CHARACTERS`, con sus `attach` (pelo, barba, sombrero) desde `SM_Chr_Attach_*`; para que se pueda elegir en el cuartel, también en `SURVIVOR_CHOICES`;
+   - `ANIMATIONS`, con la ruta dentro del pack (los mismos nombres existen para el rig Sidekick), y en `MOTIONS` si es una de las que se mezclan;
    - `WEAPONS`;
    - `HEADGEAR`;
-   - `PROPS`.
+   - `PROPS`;
+   - `PIECES` (paredes, puertas y ventanas de edificio; las usa `buildings.ts`);
+   - `BASE_MODELS` (la base en superficie, `strategy/bastion.ts`): se convierten como piezas enteras a `base-<id>.glb` y la base les da tamaño, giro y sitio. `fbx` es una ruta dentro del pack, porque Apocalypse guarda en `FBX/Collision` gemelos de colisión con el mismo nombre que un nombre suelto puede encontrar primero.
 3. Úsalo donde toque: `SQUAD_BODIES` / `UNIT_BODIES` (quién es quién), `UNIT_WEAPONS`, `HEAD_GEAR` o `PROP_SETS` (qué objeto dibuja cada pista de decorado).
 4. Ejecuta el conversor con su id y prueba el juego.
 

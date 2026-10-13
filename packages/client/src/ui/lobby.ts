@@ -19,9 +19,13 @@ const MISSIONS: { id: MissionKind; text: string }[] = [
   { id: 'elimination', text: 'Abatid a todos los hostiles del mapa.' },
   { id: 'recovery', text: 'Recuperad los datos y evacuad antes de que se acabe el tiempo.' },
   { id: 'sabotage', text: 'Callad la sirena antes de que llegue la horda.' },
-  { id: 'hack', text: 'Hackead el terminal. Si falla, salta la alarma.' },
+  { id: 'hack', text: 'Arreglad la radio. Si falla, salta la alarma.' },
   { id: 'rescue', text: 'Llegad hasta el VIP y sacadlo con vida.' },
+  { id: 'scavenge', text: 'Registrad las casas y salid con lo que podáis: cada ruido trae más muertos.' },
 ];
+
+/** Missions that only happen on one map: the menu picks it for them. */
+const MISSION_MAP: Partial<Record<MissionKind, SkirmishMap>> = { scavenge: 'city' };
 
 const MAPS: { id: SkirmishMap; name: string; text: string }[] = [
   { id: 'city', name: 'Ciudad', text: 'Edificios, azoteas y calles' },
@@ -254,6 +258,8 @@ export class Lobby {
         h('small', {}, text),
       );
     const connected = this.players.filter((p) => p.connected).length;
+    const fixedMap = MISSION_MAP[this.mission];
+    const map = fixedMap ?? this.map;
     append(
       this.column,
       h(
@@ -262,7 +268,7 @@ export class Lobby {
         h('div.x-head', {}, 'Misión'),
         h('div.menu-options', {}, ...MISSIONS.map((m) => option(this.mission, m.id, (v) => (this.mission = v), MISSION_NAMES[m.id], m.text))),
         h('div.x-head', {}, 'Mapa'),
-        h('div.menu-options.two', {}, ...MAPS.map((m) => option(this.map, m.id, (v) => (this.map = v), m.name, m.text))),
+        h('div.menu-options.two', {}, ...MAPS.filter((m) => !fixedMap || m.id === fixedMap).map((m) => option(map, m.id, (v) => (this.map = v), m.name, m.text))),
         h('div.x-head', {}, 'Escuadra'),
         h(
           'div.menu-options.two',
@@ -277,7 +283,7 @@ export class Lobby {
         {},
         h(
           'button.menu-item.primary',
-          { disabled: !this.canPlay(), onclick: () => this.handlers.onStart(this.mission, this.map, this.veterans) },
+          { disabled: !this.canPlay(), onclick: () => this.handlers.onStart(this.mission, map, this.veterans) },
           connected < 2 ? 'Empezar en solitario' : 'Empezar escaramuza',
           h('small', {}, connected < 2 ? 'Controlarás a todos los soldados' : 'Cada uno manda a la mitad'),
         ),

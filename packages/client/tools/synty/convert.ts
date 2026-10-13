@@ -16,17 +16,30 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
+  ANIMATIONS,
   ATLASES,
   CHARACTERS,
+  FX_MODELS,
+  FX_TEXTURES,
+  fxTextureFile,
+  SURVIVOR_CHOICES,
   HEADGEAR,
   PACKS,
+  PIECES,
   PROPS,
+  TERRAIN,
   SYNTY_SCALE,
   WEAPONS,
+  BASE_MODELS,
+  BASE_TEXTURES,
   atlasFile,
+  baseTextureFile,
   modelFile,
+  terrainFile,
+  type BaseAsset,
   type AtlasId,
   type CharacterAsset,
+  type PieceAsset,
   type PackId,
 } from '../../src/game/syntyManifest.ts';
 
@@ -69,6 +82,12 @@ function extractUnityPackage(pack: PackId): void {
 const fbxIndex = new Map<PackId, Map<string, string>>();
 
 function findFbx(pack: PackId, name: string): string {
+  // A path inside the pack, for names that repeat in it (animation packs hold several rigs).
+  if (name.includes('/')) {
+    const path = join(SOURCES, PACKS[pack].dir, `${name}.fbx`);
+    if (!existsSync(path)) throw new Error(`${name}.fbx is not in ${PACKS[pack].dir}`);
+    return path;
+  }
   let index = fbxIndex.get(pack);
   if (!index) {
     index = new Map();
@@ -78,8 +97,8 @@ function findFbx(pack: PackId, name: string): string {
         if (entry.isDirectory()) walk(path);
         else if (/\.fbx$/i.test(entry.name)) {
           const key = basename(entry.name, '.fbx');
-          const worse = /unreal|unsupported/i.test(path);
-          if (!index!.has(key) || (!worse && /unreal|unsupported/i.test(index!.get(key)!))) index!.set(key, path);
+          const worse = /unreal|unsupported|[\\/]collision[\\/]/i.test(path);
+          if (!index!.has(key) || (!worse && /unreal|unsupported|[\\/]collision[\\/]/i.test(index!.get(key)!))) index!.set(key, path);
         }
       }
     };
@@ -129,7 +148,7 @@ const atlasImage = (atlas: AtlasId) => join(SOURCES, PACKS[ATLASES[atlas].pack].
 // ------------------------------------------------------------------- jobs
 
 interface Job {
-  kind: 'character' | 'headgear' | 'weapon' | 'prop' | 'texture';
+  kind: 'character' | 'headgear' | 'weapon' | 'prop' | 'texture' | 'anim' | 'piece';
   id: string;
   out: string;
   [key: string]: unknown;
@@ -166,6 +185,10 @@ for (const [id, a] of Object.entries(ATLASES) as [AtlasId, (typeof ATLASES)[Atla
   add({ kind: 'texture', id, out: join(PUBLIC, atlasFile(id)), src: atlasImage(id), size: a.size });
 }
 
+for (const [id, t] of Object.entries(TERRAIN) as [keyof typeof TERRAIN, (typeof TERRAIN)[keyof typeof TERRAIN]][]) {
+  add({ kind: 'texture', id, out: join(PUBLIC, terrainFile(id)), src: join(SOURCES, t.src), size: t.size });
+}
+
 for (const [id, c] of Object.entries(CHARACTERS) as [string, CharacterAsset][]) {
   const atlas = atlasOf(c.pack);
   add({
@@ -177,6 +200,8 @@ for (const [id, c] of Object.entries(CHARACTERS) as [string, CharacterAsset][]) 
     atlas,
     atlasImage: atlasImage(atlas),
     attach: (c.attach ?? []).map((a) => ({ ...a, fbx: findFbx(c.pack, a.fbx) })),
+    // One mesh for those whose hair never comes off; a survivor's stays apart, to hide under a hat.
+    merge: !SURVIVOR_CHOICES.some((s) => s.id === id),
   });
 }
 
@@ -189,8 +214,36 @@ for (const [id, w] of Object.entries(WEAPONS)) {
   add({ kind: 'weapon', id, name: id, out: join(PUBLIC, modelFile(w.pack, 'wep', id)), fbx: findFbx(w.pack, w.fbx), atlas: atlasOf(w.pack), slots: slotsOf(w.pack, w.fbx) });
 }
 
+for (const [id, a] of Object.entries(ANIMATIONS)) {
+  add({ kind: 'anim', id, out: join(PUBLIC, modelFile(a.pack, 'anim', id)), fbx: findFbx(a.pack, a.fbx) });
+}
+
+// The effects' shapes convert like props; their sprites like atlases (alpha kept).
+for (const [id, f] of Object.entries(FX_MODELS)) {
+  add({ kind: 'prop', id, name: id, out: join(PUBLIC, modelFile(f.pack, 'fx', id)), fbx: findFbx(f.pack, f.fbx), atlas: atlasOf(f.pack), slots: {} });
+}
+
+for (const [id, t] of Object.entries(FX_TEXTURES) as [keyof typeof FX_TEXTURES, (typeof FX_TEXTURES)[keyof typeof FX_TEXTURES]][]) {
+  add({ kind: 'texture', id, out: join(PUBLIC, fxTextureFile(id)), src: join(SOURCES, PACKS.particleFx.dir, t.src), size: t.size });
+}
+
 for (const [id, p] of Object.entries(PROPS)) {
   add({ kind: 'prop', id, name: id, out: join(PUBLIC, modelFile(p.pack, 'prop', id)), fbx: findFbx(p.pack, p.fbx), atlas: atlasOf(p.pack), slots: slotsOf(p.pack, p.fbx) });
+}
+
+for (const [id, p] of Object.entries(PIECES) as [string, PieceAsset][]) {
+  const piece = { keep: p.keep ?? null, parts: !!p.parts, drop: p.drop ?? [] };
+  add({ kind: 'piece', id, name: id, out: join(PUBLIC, modelFile(p.pack, 'piece', id)), fbx: findFbx(p.pack, p.fbx), atlas: atlasOf(p.pack), slots: slotsOf(p.pack, p.fbx), ...piece });
+}
+
+// The base's models convert as whole pieces (no cut); their fbx is a path in the pack.
+for (const [id, b] of Object.entries(BASE_MODELS) as [string, BaseAsset][]) {
+  const piece = { keep: null, parts: !!b.parts, drop: b.drop ?? [] };
+  add({ kind: 'piece', id, name: id, out: join(PUBLIC, modelFile(b.pack, 'base', id)), fbx: findFbx(b.pack, b.fbx), atlas: atlasOf(b.pack), slots: slotsOf(b.pack, basename(b.fbx)), ...piece });
+}
+
+for (const [id, t] of Object.entries(BASE_TEXTURES) as [keyof typeof BASE_TEXTURES, (typeof BASE_TEXTURES)[keyof typeof BASE_TEXTURES]][]) {
+  add({ kind: 'texture', id, out: join(PUBLIC, baseTextureFile(id)), src: join(SOURCES, t.src), size: t.size });
 }
 
 // ---------------------------------------------------------------- convert

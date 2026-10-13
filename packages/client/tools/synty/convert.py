@@ -17,6 +17,12 @@
 #    the barrel points +Z with the grip at the origin; their muzzle goes in
 #    the node's extras.
 #  - texture: an atlas scaled down and saved as WebP.
+#  - piece: a piece of a modular building kit (a wall, a door, a window): a
+#    prop cut to a box first (a tile-wide strip of a module), with its meshes
+#    kept apart when one of them swings (a door's leaf).
+#  - anim: one animation clip with its skeleton (the bones the game retargets
+#    and their ancestors), as Synty made it: no baked transforms, every frame
+#    sampled. The game measures it against the pack's T-pose clip.
 
 import bpy
 import colorsys
@@ -218,17 +224,45 @@ class Atlas:
         return self.px[i], self.px[i + 1], self.px[i + 2]
 
 
-def dyeable(rgb):
-    """Cloth the game may dye: not skin, not near black (boots, belts, hair), not near white (eyes, teeth)."""
+def dyeable(rgb, skins):
+    """
+    Cloth the game may dye: not near black (boots, belts, hair), not near
+    white (eyes, teeth), and not this character's skin (bare arms and legs).
+    """
     h, s, v = colorsys.rgb_to_hsv(*rgb)
     if v < 0.16 or (v > 0.93 and s < 0.08):
         return False
-    skin = (h < 0.11 or h > 0.97) and 0.15 < s < 0.62 and v > 0.42
-    return not skin
+    return all(sum((a - b) ** 2 for a, b in zip(rgb, k)) > 0.0045 for k in skins)
 
 
-def write_parts(mesh, arm, atlas, fixed=None):
-    """The "part" UV map: armour piece by the corner's main bone (or `fixed`), dyeable by its texel."""
+def skin_colours(mesh, atlas):
+    """
+    A character's skin, as the texels of its face: the colours that cover a
+    good share of the head and neck. Measured per character, so khaki or tan
+    cloth is not mistaken for skin, and bare arms and legs are still told apart.
+    """
+    me = mesh.data
+    uv = me.uv_layers['map1'].data
+    names = {g.index: g.name for g in mesh.vertex_groups}
+    head = set()
+    for v in me.vertices:
+        best = max(v.groups, key=lambda g: g.weight, default=None)
+        if best and names.get(best.group) in ('Head', 'Neck'):
+            head.add(v.index)
+    count = {}
+    total = 0
+    for loop in me.loops:
+        if loop.vertex_index not in head:
+            continue
+        rgb = atlas.rgb(*uv[loop.index].uv)
+        key = tuple(round(c * 24) / 24 for c in rgb)
+        count[key] = count.get(key, 0) + 1
+        total += 1
+    return [k for k, n in sorted(count.items(), key=lambda kv: -kv[1])[:3] if n >= total * 0.12]
+
+
+def write_parts(mesh, arm, atlas, fixed=None, skins=()):
+    """The "part" UV map: armour piece by the corner's main bone (or `fixed`), dyeable by its texel (not `skins`)."""
     me = mesh.data
     uv = me.uv_layers['map1'].data
     layer = me.uv_layers.new(name='part')
@@ -242,7 +276,7 @@ def write_parts(mesh, arm, atlas, fixed=None):
         vi = loop.vertex_index
         bone = main[vi]
         part = fixed if fixed is not None else PART.get(bone, 0)
-        mask = 1.0 if part and dyeable(atlas.rgb(*uv[loop.index].uv)) else 0.0
+        mask = 1.0 if part and dyeable(atlas.rgb(*uv[loop.index].uv), skins) else 0.0
         if fixed is None and bone in ('Shoulder_L', 'Shoulder_R'):
             # Measured to the elbow joint: imported bone tails point anywhere.
             a, z = bones[bone].head_local, bones[bone.replace('Shoulder', 'Elbow')].head_local
@@ -266,6 +300,7 @@ def character(job, scale):
     clean_skeleton(arm, meshes)
     bake([arm] + meshes, scale)
     atlas = Atlas(job['atlasImage']) if job.get('atlasImage') else None
+    skins = []
     for m in meshes:
         keep_uv(m)
         m.parent = arm
@@ -275,18 +310,44 @@ def character(job, scale):
         m.name = 'body'
         m.data.name = 'body'
         if atlas:
-            write_parts(m, arm, atlas)
+            skins = skin_colours(m, atlas)
+            write_parts(m, arm, atlas, skins=skins)
+    hung = []
     for a in job.get('attach', []):
         for o in attach(arm, a['fbx'], a['bone'], scale, a['name']):
             assign_atlases(o, None, a.get('atlas', job['atlas']))
             if atlas:
                 # Headgear takes the helmet colour; hair, beards and packs keep theirs.
                 o.vertex_groups.clear()
-                write_parts(o, arm, atlas, HEADGEAR if a.get('dye') else 0)
+                write_parts(o, arm, atlas, HEADGEAR if a.get('dye') else 0, skins)
+            hung.append((o, a['bone']))
+    if job.get('merge') and hung and meshes:
+        merge_attachments(arm, meshes[0], hung)
     arm.name = 'rig'
     top = max((o.matrix_world @ v.co).z for o in [o for o in bpy.data.objects if o.type == 'MESH' and o.name == 'body'] for v in o.data.vertices)
     arm['height'] = round(top, 4)
     export(job['out'], skins=True)
+
+
+def merge_attachments(arm, body, hung):
+    """
+    Joins the attachments into the skinned body, each moving with its bone,
+    so the character is one mesh (one draw call per pass). Only for those
+    whose hair never comes off (enemies, the dead): a survivor's hair hides
+    under the barracks' hats.
+    """
+    for o, bone in hung:
+        world = o.matrix_world.copy()
+        o.parent = None
+        o.matrix_world = world
+        o.vertex_groups.clear()
+        o.vertex_groups.new(name=bone).add([v.index for v in o.data.vertices], 1.0, 'REPLACE')
+    bpy.ops.object.select_all(action='DESELECT')
+    for o, _ in hung:
+        o.select_set(True)
+    body.select_set(True)
+    bpy.context.view_layer.objects.active = body
+    bpy.ops.object.join()
 
 
 def headgear(job, scale):
@@ -361,6 +422,86 @@ def static(job, scale):
     export(job['out'], skins=False)
 
 
+# -------------------------------------------------------------------- pieces
+
+def cut(obj, keep):
+    """Cuts a mesh (its data in the FBX's metres) to the box keep = [[x0, y0, z0], [x1, y1, z1]]."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    for axis in range(3):
+        for value, above in ((keep[0][axis], True), (keep[1][axis], False)):
+            normal = Vector((0, 0, 0))
+            normal[axis] = 1
+            geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
+            bmesh.ops.bisect_plane(bm, geom=geom, plane_co=normal * value, plane_no=normal, clear_inner=above, clear_outer=not above)
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def piece(job, scale):
+    reset()
+    objs = import_fbx(job['fbx'])
+    skip = ('LOD1', 'LOD2', 'LOD3', 'Collision', 'collision', 'UCX_')
+    meshes = [o for o in objs if o.type == 'MESH' and not any(t in o.name for t in skip) and not any(d in o.name for d in job.get('drop', []))]
+    for o in objs:
+        if o not in meshes:
+            for c in o.children:
+                unparent(c)
+    for o in objs:
+        if o not in meshes:
+            bpy.data.objects.remove(o)
+    slots = job.get('slots', {})
+    for m in meshes:
+        assign_atlases(m, slots.get(m.name) or slots.get(m.data.name), job['atlas'])
+        keep_uv(m)
+    # In the FBX's metres first, so the box is as the manifest gives it; then to game units.
+    bake(meshes)
+    for m in meshes:
+        if job.get('keep'):
+            cut(m, job['keep'])
+        m.data.transform(Matrix.Scale(scale, 4))
+    for m in [m for m in meshes if not len(m.data.polygons)]:
+        meshes.remove(m)
+        bpy.data.objects.remove(m)
+    if job.get('parts'):
+        for m in meshes:
+            m.data.name = m.name
+    else:
+        bpy.ops.object.select_all(action='DESELECT')
+        for m in meshes:
+            m.select_set(True)
+        bpy.context.view_layer.objects.active = meshes[0]
+        if len(meshes) > 1:
+            bpy.ops.object.join()
+        obj = bpy.context.view_layer.objects.active
+        obj.name = job['name']
+        obj.data.name = job['name']
+    export(job['out'], skins=False)
+
+
+# ---------------------------------------------------------------- animations
+
+def anim(job):
+    reset()
+    objs = import_fbx(job['fbx'])
+    arm = next(o for o in objs if o.type == 'ARMATURE')
+    for o in objs:
+        if o is not arm:
+            bpy.data.objects.remove(o)
+    # Fingers, face, props and toes are leaves the game does not pose.
+    keep = set(BONES.values()) | {'Root'}
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='EDIT')
+    for b in list(arm.data.edit_bones):
+        if b.name not in keep:
+            arm.data.edit_bones.remove(b)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    arm.animation_data.action.name = job['id']
+    arm.name = 'rig'
+    export(job['out'], skins=False, animations=True)
+
+
 # ------------------------------------------------------------------ textures
 
 def texture(job):
@@ -375,7 +516,7 @@ def texture(job):
 
 # -------------------------------------------------------------------- export
 
-def export(path, skins):
+def export(path, skins, animations=False):
     bpy.ops.export_scene.gltf(
         filepath=path,
         export_format='GLB',
@@ -385,7 +526,12 @@ def export(path, skins):
         export_normals=True,
         export_tangents=False,
         export_skins=skins,
-        export_animations=False,
+        export_animations=animations,
+        export_animation_mode='ACTIVE_ACTIONS',
+        export_force_sampling=True,
+        export_anim_slide_to_zero=True,
+        # Every bone keeps its track: a missing one would take the skeleton's rest from another clip.
+        export_optimize_animation_size=False,
         export_morph=False,
         export_yup=True,
         export_apply=False,
@@ -410,6 +556,10 @@ def main():
             static(job, scale)
         elif job['kind'] == 'texture':
             texture(job)
+        elif job['kind'] == 'anim':
+            anim(job)
+        elif job['kind'] == 'piece':
+            piece(job, scale)
 
 
 main()
