@@ -4,6 +4,8 @@ import {
   applyMissionResult,
   buildSquad,
   contactCapacity,
+  offerDays,
+  roadRoute,
   createCampaign,
   EVENTS,
   executeCampaignCommand,
@@ -221,15 +223,16 @@ describe('buildings and their levels', () => {
     c.nextDoomDay = c.day + 1;
     run(c, { type: 'advance', ready: true });
     expect(c.nextDoomDay - c.day).toBe(12 + 4);
-    // La Mula's workshop: a mission takes a day less.
-    put('5,3', 'garage');
+    // La Mula's workshop: a mission takes a day less (one at least).
     const offer = c.offers[0]!;
+    const before = offerDays(c, offer);
+    put('5,3', 'garage');
+    expect(offerDays(c, offer)).toBe(Math.max(1, before - 1));
     run(c, { type: 'chooseMission', id: offer.id });
     const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(2), kind: offer.kind, pods: offer.pods });
     mission.outcome = 'victory';
     const report = applyMissionResult(c, mission, new Rng(1));
-    expect(c.day - report.day).toBeGreaterThanOrEqual(2);
-    expect(c.day - report.day).toBeLessThanOrEqual(3);
+    expect(c.day - report.day).toBe(offerDays(c, offer));
   });
 });
 
@@ -265,16 +268,19 @@ describe('the world', () => {
   it('contacting regions costs credits, grows the monthly payment and is capped by communications', () => {
     const c = solo();
     expect(contactCapacity(c)).toBe(2);
-    run(c, { type: 'contact', region: 'na' });
+    run(c, { type: 'contact', region: 'oce' });
     expect(() => run(c, { type: 'contact', region: 'afr' })).toThrow(/comunicaciones/);
     const credits = c.credits;
     c.nextSupplyDay = c.day + 1;
     run(c, { type: 'advance', ready: true });
-    expect(c.credits).toBe(credits + 60 + 30 + 35);
+    expect(c.credits).toBe(credits + 60 + 30 + 25);
   });
 
   it('alien facilities push the project until a squad destroys them', () => {
     const c = solo();
+    // Low activity, held there: no zone under the Marea to get in the way of the contacts.
+    c.doom = 2;
+    c.nextDoomDay = 999;
     c.nextFacilityDay = c.day + 1;
     run(c, { type: 'advance', ready: true });
     const region = c.regions.find((r) => r.facility)!;
@@ -282,8 +288,9 @@ describe('the world', () => {
     if (!region.contacted) {
       expect(c.offers.some((o) => o.facility)).toBe(false);
       c.credits = 2000;
-      if (c.regions.filter((r) => r.contacted).length >= contactCapacity(c)) plotById(c, '2,2')!.building = 'relay';
-      run(c, { type: 'contact', region: region.id });
+      plotById(c, '2,2')!.building = 'relay';
+      // Contacts go by road: every zone on the way first.
+      for (const id of roadRoute('weu', region.id).slice(1)) if (!c.regions.find((r) => r.id === id)!.contacted) run(c, { type: 'contact', region: id });
     }
     const assault = c.offers.find((o) => o.facility === region.id)!;
     expect(assault.kind).toBe('sabotage');

@@ -4,7 +4,8 @@
  * which the campaign reads, it is text only.
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
-import type { Biome, DecorKind, ItemId, MissionKind, TemplateId } from './types';
+import { FOUND_WEAPONS } from './content';
+import type { Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, TemplateId } from './types';
 
 /** Bastion level at which the doom track gets its name: until the radio is fixed nobody knows the Marea is coming. */
 export const PARTITURA_LEVEL = 4;
@@ -42,7 +43,7 @@ export const GLOSSARY: Record<string, string> = {
   Corredor: 'Un zombi reciente, todavía ágil. Rápido, y ve de lejos.',
   Acorazado: 'Fue policía o soldado: el chaleco y el casco le dan blindaje.',
   Chillón: 'Un zombi que no muerde: grita. Su grito asusta a los que están cerca, llama a todos los zombis que lo oyen y levanta a los muertos. Primero el Chillón.',
-  Hinchado: 'Un zombi lento y lleno de gases. Revienta al morir o al llegar a vosotros, y hace daño a quien tenga al lado. Mejor de lejos.',
+  Hinchado: 'Un zombi lento y lleno de gases. Revienta al morir o al llegar a vosotros: hace daño a quien tenga al lado y puede contagiarlo. Mejor de lejos.',
   Cuervos: 'Bandas de saqueadores. Viven de robar a otros vivos y atraen hordas con sirenas.',
   Congregación: 'Una secta que cree que los zombis están salvados. Los guía con campanas y por radio.',
   Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega a Atalaya, la campaña está perdida.',
@@ -53,8 +54,12 @@ export const GLOSSARY: Record<string, string> = {
   Registrar: 'Una acción junto a un mueble, un coche o unas cajas: suministros, algún accesorio y, a veces, medicinas. Hace un poco de ruido.',
   Mochila: 'Cada soldado lleva tres cosas. El botín cuenta si vuelve: lo que llevaba un caído se pierde.',
   Suministros: 'Lo que se saquea y se cambia: sirve para construir, reclutar y equipar.',
-  Medicinas: 'Curan heridas y contagios. Nunca hay bastantes.',
-  Comida: 'Cada soldado come cada día. Sin comida no hay voluntad ni salud.',
+  Medicinas: 'Se cuentan en ✚. El tratamiento de un mordido cuesta 2 (1 con la Enfermería a nivel 2), y una dosis le quita 3 días de cama a un herido. Nunca hay bastantes.',
+  Mordisco: 'El de un zombi puede contagiar. El mordido vuelve con fiebre y se convierte en 3 días (5 con Enfermería) si no recibe el tratamiento. Si cae en combate contagiado, se levanta.',
+  Comida: 'Se cuenta en raciones. Cada día el Bastión gasta una por cada cuatro soldados. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan despacio.',
+  Huerto: 'Bancales, un invernadero y bidones para el agua de lluvia: da raciones cada día, más cuanto más nivel.',
+  Piezas: 'Muelles, motores, tornillería: con ellas el Taller hace armas y armaduras mejores. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.',
+  Noche: 'De noche se ve poco y os ven poco, salvo bajo una farola, una bengala o un fuego. Hay más muertos en la calle, pero el botín vale la mitad más.',
   Enclave: 'Un grupo de supervivientes con el que tenéis contacto por radio. Si sigue vivo, manda suministros.',
   Rumor: 'Algo que se oye por la radio en una zona. Si lo escucháis unos días al escanear, sabréis qué era.',
   Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
@@ -80,17 +85,17 @@ export interface EnemyFile {
 export const ENEMY_FILES: Partial<Record<TemplateId, EnemyFile>> = {
   zombie: {
     what: 'Un muerto que anda. Lo que queda de alguien, sin nada dentro.',
-    does: 'Lento, sin miedo y sin cubrirse. Va a por el vivo más cercano que vea; si no ve a nadie, adonde oyó el último ruido. Muerde cuerpo a cuerpo.',
+    does: 'Lento, sin miedo y sin cubrirse. Va a por el vivo más cercano que vea; si no ve a nadie, adonde oyó el último ruido. Muerde cuerpo a cuerpo, y un mordisco de cada cuatro contagia.',
     tip: 'Uno solo no es nada. Diez, sí. Sin ruido pasan de largo; con ruido, vienen todos.',
   },
   xenoid: {
     what: 'Un Corredor: un zombi reciente, que aún tiene piernas.',
-    does: 'Corre mucho más que los otros y ve de lejos. Ataca con las uñas, cuerpo a cuerpo.',
+    does: 'Corre mucho más que los otros y ve de lejos. Ataca con las uñas, cuerpo a cuerpo, y también contagia, aunque algo menos que un zombi.',
     tip: 'Llega antes de lo que creéis. Vigilancia en su camino, y que nadie se quede solo.',
   },
   mec: {
     what: 'Un Acorazado: fue policía o soldado, y conserva el chaleco y el casco.',
-    does: 'Blindaje 1: resta daño a cada golpe que recibe. Aguanta mucho y embiste cuerpo a cuerpo.',
+    does: 'Blindaje 1: resta daño a cada golpe que recibe. Aguanta mucho y embiste cuerpo a cuerpo. Es el que más contagia.',
     tip: 'Los explosivos le quitan el blindaje y la munición perforante lo atraviesa. Que no llegue a vuestro lado.',
   },
   sectoid: {
@@ -100,7 +105,7 @@ export const ENEMY_FILES: Partial<Record<TemplateId, EnemyFile>> = {
   },
   bloater: {
     what: 'Un Hinchado: un cuerpo lleno de gases, a punto de reventar.',
-    does: 'Lento. Al morir o al llegar a un soldado revienta: 3 de daño a quien tenga al lado.',
+    does: 'Lento. Al morir o al llegar a un soldado revienta: 3 de daño a quien tenga al lado, y a uno de cada dos lo contagia.',
     tip: 'Abatidlo de lejos, y nunca junto a los vuestros.',
   },
   trooper: {
@@ -157,15 +162,15 @@ export interface SearchSpot {
 /** Searchable furniture (docs/FASE2.md): what each decor is called and what tends to turn up in it. */
 export const SEARCH_SPOTS: Partial<Record<DecorKind, SearchSpot>> = {
   wardrobe: { name: 'el armario', supplies: ['ropa de abrigo', 'mantas y un saco de dormir', 'una caja de zapatos con pilas y velas'] },
-  table: { name: 'la mesa', supplies: ['latas en una bolsa de la compra', 'cubiertos, cerillas y un mechero', 'un mapa de carreteras y una linterna'] },
+  table: { name: 'la mesa', supplies: ['pilas en una bolsa de la compra', 'cubiertos, cerillas y un mechero', 'un mapa de carreteras y una linterna'] },
   desk: { name: 'el escritorio', supplies: ['pilas, cinta americana y un cúter', 'un cargador de manivela', 'un cajón lleno de herramientas pequeñas'] },
-  shelf: { name: 'la estantería', supplies: ['latas de conserva', 'botellas de agua', 'un tarro de clavos y tornillos'] },
-  counter: { name: 'el mostrador', supplies: ['tabaco y mecheros', 'chocolatinas y pilas', 'sal, azúcar y café'] },
+  shelf: { name: 'la estantería', supplies: ['velas y cerillas', 'botellas de agua', 'un tarro de clavos y tornillos'] },
+  counter: { name: 'el mostrador', supplies: ['tabaco y mecheros', 'pilas y bombillas', 'jabón y lejía'] },
   cabinet: { name: 'el archivador', supplies: ['una linterna y un juego de llaves', 'una petaca y dos mecheros', 'pilas detrás de los expedientes'] },
   bed: { name: 'la cama', supplies: ['mantas limpias', 'una linterna y pilas en la mesilla', 'una bolsa de deporte con ropa seca'] },
-  crates: { name: 'las cajas', supplies: ['herramientas', 'latas y bidones de agua', 'cuerda, alambre y clavos'] },
-  carRear: { name: 'el maletero', supplies: ['una garrafa de gasolina', 'herramientas y un gato', 'una compra que nadie llegó a sacar'] },
-  carFront: { name: 'la guantera', supplies: ['un mapa, un mechero y caramelos', 'pilas y una linterna', 'un paquete de tabaco a medias'] },
+  crates: { name: 'las cajas', supplies: ['herramientas', 'bidones de agua y lonas', 'cuerda, alambre y clavos'] },
+  carRear: { name: 'el maletero', supplies: ['una garrafa de gasolina', 'herramientas y un gato', 'mantas y cadenas para la nieve'] },
+  carFront: { name: 'la guantera', supplies: ['un mapa y un mechero', 'pilas y una linterna', 'un paquete de tabaco a medias'] },
   rack: { name: 'el estante', supplies: ['repuestos y cable', 'bidones de aceite', 'cajas de tornillería'] },
 };
 
@@ -192,6 +197,28 @@ export interface SearchFind {
   supplies?: number;
   item?: ItemId;
   medicines?: number;
+  /** Raciones (docs/FASE4.md). */
+  food?: number;
+  /** Piezas, for the Taller. */
+  parts?: number;
+  /** A found weapon (content.ts FOUND_WEAPONS). */
+  weapon?: FoundWeaponId;
+}
+
+/** What the rations found were. */
+export const FOOD_FINDS = ['latas de lentejas', 'un saco de arroz', 'conservas de atún', 'paquetes de galletas', 'un tarro de miel', 'pasta y tomate frito'];
+
+/** What the parts found were. */
+export const PARTS_FINDS = ['muelles y tornillería', 'un motor pequeño', 'cable de cobre', 'rodamientos', 'una batería de coche', 'piezas de una bicicleta'];
+
+/** «1 ración», «3 raciones»: the Bastion's food, counted. */
+export function rations(n: number): string {
+  return n === 1 ? '1 ración' : `${n} raciones`;
+}
+
+/** «1 pieza», «4 piezas»: what the Taller makes things with. */
+export function partsCount(n: number): string {
+  return n === 1 ? '1 pieza' : `${n} piezas`;
 }
 
 function joinAnd(parts: string[]): string {
@@ -206,17 +233,45 @@ export function searchLine(who: string, decor: DecorKind, find: SearchFind | nul
   if (find?.supplies) parts.push(`${spot ? spot.supplies[seed % spot.supplies.length] : 'suministros'} (+${find.supplies} §)`);
   if (find?.item) parts.push(ITEM_FINDS[find.item]);
   if (find?.medicines) parts.push(MEDICINE_FINDS[seed % MEDICINE_FINDS.length]!);
+  if (find?.food) parts.push(`${FOOD_FINDS[seed % FOOD_FINDS.length]!} (${rations(find.food)})`);
+  if (find?.parts) parts.push(`${PARTS_FINDS[seed % PARTS_FINDS.length]!} (${partsCount(find.parts)})`);
+  if (find?.weapon) parts.push(FOUND_WEAPONS[find.weapon].find);
   if (!parts.length) return `${who} registra ${where}. ${EMPTY_FINDS[seed % EMPTY_FINDS.length]!}`;
   return `${who} registra ${where}: ${joinAnd(parts)}.`;
 }
 
-/** The debrief's loot line: «El botín: +34 §, un botiquín y 2 medicinas.», or null with nothing brought back. */
-export function lootSummary(supplies: number, items: readonly ItemId[], medicines: number): string | null {
+/** What a search turned up, short, to float over the furniture: «+12 §», «Botiquín», «Medicinas», «+2 raciones», «+1 pieza», a weapon's name or «Nada». */
+export function findLabel(find: SearchFind | null): string {
   const parts: string[] = [];
-  if (supplies) parts.push(`+${supplies} §`);
-  for (const id of items) parts.push(ITEM_FINDS[id]);
-  if (medicines) parts.push(medicines === 1 ? '1 medicina' : `${medicines} medicinas`);
-  return parts.length ? `El botín: ${joinAnd(parts)}.` : null;
+  if (find?.supplies) parts.push(`+${find.supplies} §`);
+  if (find?.item) parts.push(ITEM_FINDS[find.item].replace(/^(una?|unos|unas) /, '').replace(/^./, (ch) => ch.toUpperCase()));
+  if (find?.medicines) parts.push('Medicinas');
+  if (find?.food) parts.push(`+${rations(find.food)}`);
+  if (find?.parts) parts.push(`+${partsCount(find.parts)}`);
+  if (find?.weapon) parts.push(FOUND_WEAPONS[find.weapon].name);
+  return parts.join(' · ') || 'Nada';
+}
+
+/**
+ * The debrief's loot line: «El botín: +34 §, un botiquín, 2 medicinas, 3 raciones
+ * y una escopeta recortada.», or null with nothing brought back.
+ */
+export function lootSummary(
+  supplies: number,
+  items: readonly ItemId[],
+  medicines: number,
+  food = 0,
+  parts = 0,
+  weapons: readonly FoundWeaponId[] = [],
+): string | null {
+  const list: string[] = [];
+  if (supplies) list.push(`+${supplies} §`);
+  for (const id of items) list.push(ITEM_FINDS[id]);
+  if (medicines) list.push(medicines === 1 ? '1 medicina' : `${medicines} medicinas`);
+  if (food) list.push(rations(food));
+  if (parts) list.push(partsCount(parts));
+  for (const w of weapons) list.push(FOUND_WEAPONS[w].find);
+  return list.length ? `El botín: ${joinAnd(list)}.` : null;
 }
 
 // --------------------------------------------------------------- scavenge
@@ -244,6 +299,70 @@ export const SCAVENGE = {
   emptyHanded: 'Volvéis con las mochilas vacías',
   /** The horde arrives at the edges. */
   horde: 'Llegan más zombis por los bordes',
+};
+
+// ------------------------------------------------------------------ valley
+
+/** A zone's name after «a»: «al Pantano Gris», «a La Vega». */
+export function toZone(name: string): string {
+  return name.startsWith('El ') ? `al ${name.slice(3)}` : `a ${name}`;
+}
+
+/** A zone's name after «de»: «del Pantano Gris», «de La Vega». */
+export function ofZone(name: string): string {
+  return name.startsWith('El ') ? `del ${name.slice(3)}` : `de ${name}`;
+}
+
+function joinWith(names: string[], last: string): string {
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} ${last} ${names[names.length - 1]}` : (names[0] ?? '');
+}
+
+/**
+ * The alert when the Marea reaches a zone or leaves it (docs/FASE5.md). Before
+ * the Bastion knows the Marea's name (PARTITURA_LEVEL) it is just «los muertos».
+ * Written without verbs that agree with the zone, which may be plural.
+ */
+export function mareaAlert(level: number, zone: string, reached: boolean): { kicker: string; title: string; text: string } {
+  const kicker = doomName(level);
+  if (level >= PARTITURA_LEVEL) {
+    return reached
+      ? { kicker, title: `La Marea llega ${toZone(zone)}`, text: `La Marea llega ${toZone(zone)}. Su enclave calla, y por sus caminos solo andan muertos: de allí ya no llegará nada.` }
+      : { kicker, title: `La Marea se retira ${ofZone(zone)}`, text: `La Marea se retira ${ofZone(zone)}. Vuelve a haber quien conteste por radio.` };
+  }
+  return reached
+    ? { kicker, title: `Los muertos toman ${zone}`, text: `Los muertos han tomado ${zone}. Su enclave calla: de allí ya no llegará nada.` }
+    : { kicker, title: `Los muertos se retiran ${ofZone(zone)}`, text: `Los muertos se retiran ${ofZone(zone)}. Vuelve a haber quien conteste por radio.` };
+}
+
+/** Why a zone under the Marea can't be contacted. */
+export function floodedContactReason(level: number, zone: string): string {
+  return level >= PARTITURA_LEVEL ? `La Marea cubre ${zone}: nadie contesta hasta que se retire.` : `Los muertos han tomado ${zone}: nadie contesta hasta que se retiren.`;
+}
+
+/** Why a zone with no road from ours can't be contacted; `via` are the zones to contact first. */
+export function noRoadReason(via: string[]): string {
+  return `No hay carretera desde vuestras zonas: contactad antes con ${via.length ? joinWith(via, 'o') : 'otra zona'}.`;
+}
+
+/** The to-do line listing the zones under the Marea. */
+export function floodedListLabel(level: number, zones: string[]): string {
+  return `${level >= PARTITURA_LEVEL ? 'Bajo la Marea' : 'En manos de los muertos'}: ${joinWith(zones, 'y')}`;
+}
+
+/** A zone's card when it is under the Marea. */
+export function floodedZoneNote(level: number): string {
+  return level >= PARTITURA_LEVEL
+    ? 'Bajo la Marea: de aquí no llega nada, y sus misiones traen un grupo más de muertos. Saldrá si la Marea retrocede: quemad Nidos.'
+    : 'En manos de los muertos: de aquí no llega nada, y sus misiones traen un grupo más. Saldrá si baja la actividad zombi: quemad Nidos.';
+}
+
+// ------------------------------------------------------------------- night
+
+/** Night missions (docs/ALTURA-Y-NOCHE.md): the tag, the briefing's last line and the debrief's. */
+export const NIGHT_TEXT = {
+  label: 'De noche',
+  briefing: 'Iréis de noche: veréis poco y os verán poco, salvo bajo una farola o una bengala. Habrá más muertos en la calle, pero lo que traigáis vale la mitad más.',
+  report: 'Volvéis con la primera luz. De noche, el botín y la recompensa valen la mitad más.',
 };
 
 // ---------------------------------------------------------------- briefings
@@ -290,6 +409,11 @@ export function briefingSignature(o: MissionOffer): string {
 
 /** Morse's report for an operation, signed by the region's ally. */
 export function missionBriefing(o: MissionOffer, level: number, simon: SimonChoice = null): string {
+  const text = briefingText(o, level, simon);
+  return o.night ? `${text} ${NIGHT_TEXT.briefing}` : text;
+}
+
+function briefingText(o: MissionOffer, level: number, simon: SimonChoice): string {
   if (o.story) return storyBriefing(o.story, simon);
   if (o.final) {
     return 'La Marea está en la sierra y la Congregación la empuja desde su campamento. La Mula se la llevará con la sirena; vosotros, al campamento. Abatid a todo lo que haya. No habrá otra oportunidad.';

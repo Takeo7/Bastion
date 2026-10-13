@@ -45,6 +45,19 @@ export class CombatTips {
       case 'searched': {
         const u = getUnit(view, e.unit);
         if (u && this.mine(u)) this.show('search');
+        // The first good weapon found (docs/FASE4.md), whoever found it.
+        if (e.loot?.weapon) this.show('foundWeapon');
+        return;
+      }
+      // docs/FASE3.md: the first of mine bitten, and the first of mine who rises (no Chillón raised it).
+      case 'infected': {
+        const u = getUnit(view, e.unit);
+        if (u && this.mine(u)) this.show('bitten');
+        return;
+      }
+      case 'reanimated': {
+        const corpse = getUnit(view, e.corpse);
+        if (!e.unit && corpse && this.mine(corpse)) this.show('risen');
         return;
       }
       // The Oficio: the first trade one of mine uses (noisy).
@@ -70,6 +83,17 @@ export class CombatTips {
     if (this.asked.has('flanked')) return;
     const flanked = view.units.some((u) => u.alive && this.mine(u) && !u.evacuated && Math.min(...watchers.map((a) => coverAgainst(view, u.pos, a.pos))) === 0);
     if (flanked) this.show('flanked');
+  }
+
+  /**
+   * A night mission begins (docs/ALTURA-Y-NOCHE.md): the first one gets Lore's
+   * warning. False when it won't play (heard before), so the caller can say
+   * its own line instead.
+   */
+  night(): boolean {
+    if (this.asked.has('night')) return false;
+    this.asked.add('night');
+    return this.radio.show('night');
   }
 
   /** «Os han oído» has just shown: enemies the squad can't see are coming to look. */

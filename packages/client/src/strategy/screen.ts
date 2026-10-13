@@ -110,6 +110,11 @@ import {
   shopPrice,
   plotName,
   soldierReady,
+  floodedZoneNote,
+  contactBlocker,
+  offerDays,
+  underMarea,
+  NIGHT_TEXT,
   craftBlocker,
   dailyRations,
   FOUND_WEAPONS,
@@ -677,7 +682,7 @@ export class StrategyScreen {
     if (s.infection) {
       const left = turnDay(c, s)! - c.day;
       const when = left <= 0 ? 'hoy' : left === 1 ? 'mañana' : `en ${left} d`;
-      return tag('.x-bad', short ? `Fiebre · ${when}` : `Mordido · se convierte ${when}`, 'Un mordisco: tiene fiebre. Si no le tratáis con medicinas, se convierte.');
+      return tag('.x-bad', short ? `Fiebre · ${when}` : `Mordido · se convierte ${when}`, 'Un mordisco: tiene fiebre. Sin el tratamiento, se convierte.');
     }
     if (s.woundedDays) return tag('.x-warn', short ? `${s.woundedDays} d` : `Herido · ${s.woundedDays} d`);
     return tag(short ? '' : '.x-good', 'Listo');
@@ -720,12 +725,12 @@ export class StrategyScreen {
         row = h(
           'button.x-btn.primary',
           { disabled: short || !!other, title: why, onclick: () => this.send({ type: 'treat', soldier: s.id, ready: true }) },
-          shared ? `Proponer tratarle (${cost} ✚)` : `Tratar (${cost} ✚)`,
+          shared ? `Proponer el tratamiento (${cost} ✚)` : `Tratar (${cost} ✚)`,
         );
       }
       out.push(
         h('div.x-group', {}, 'Mordido'),
-        h('p.x-muted', {}, shared ? `Las medicinas no llegan para todos: tratarle lo decidís los dos. Tenéis ${have} ✚.` : `Tratarle le quita la fiebre. Tenéis ${have} ✚.`),
+        h('p.x-muted', {}, shared ? `Las medicinas no llegan para todos: el tratamiento lo decidís los dos. Tenéis ${have} ✚.` : `El tratamiento le quita la fiebre. Tenéis ${have} ✚.`),
         row,
       );
     } else if (s.woundedDays > 0) {
@@ -1100,7 +1105,7 @@ export class StrategyScreen {
         const reward = [o.reward.credits ? `${o.reward.credits} §` : '', o.reward.recruit ? 'un recluta' : ''].filter(Boolean).join(' y ');
         return {
           rows: [
-            ['Tiempo', `${missionDays(c).join('–')} días fuera: el tiempo pasa`],
+            ['Tiempo', `${offerDays(c, o)} días fuera: el tiempo pasa`],
             ['Qué hace', `${MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}`],
             ['Extra', `Dificultad ${'★'.repeat(o.difficulty)}${reward ? ` · recompensa: ${reward}` : ''}`],
           ],
@@ -1365,7 +1370,7 @@ export class StrategyScreen {
     }
     for (const s of c.soldiers.filter((x) => x.alive && x.woundedDays > 0 && x.owner === this.mySlot)) dates.push({ day: c.day + s.woundedDays, icon: 'hp', text: `${s.name} vuelve al servicio` });
     // The bitten, both players': whoever has medicines can save them (docs/FASE3.md).
-    for (const s of c.soldiers.filter((x) => x.alive && x.infection)) dates.push({ day: turnDay(c, s)!, icon: 'hp', text: `${s.name} se convierte si no le tratáis`, go: () => this.openSoldier(s.id) });
+    for (const s of c.soldiers.filter((x) => x.alive && x.infection)) dates.push({ day: turnDay(c, s)!, icon: 'hp', text: `${s.name} se convierte si no recibe el tratamiento`, go: () => this.openSoldier(s.id) });
     const rumor = c.rumors.find((r) => r.id === c.listening);
     if (rumor) dates.push({ day: c.day + rumor.daysLeft, icon: 'will', text: `Se sabrá qué pasa en ${REGIONS[rumor.region].name}` });
     for (const o of c.offers.filter((x) => x.expiresDay !== null)) dates.push({ day: o.expiresDay!, icon: 'flag', text: `Caduca «${o.name}»`, go: () => this.focusOffer(o.id) });
@@ -1621,6 +1626,9 @@ export class StrategyScreen {
         h('dd', {}, MISSION_NAMES[o.kind]),
         h('dt', {}, 'Dificultad'),
         h('dd', {}, h('span.stars', {}, '★'.repeat(o.difficulty)), ` ${DIFFICULTY[o.difficulty]}`),
+        // La Mula's trip (docs/FASE5.md): the farther the zone, the more days pass.
+        h('dt', {}, 'Viaje'),
+        h('dd', { title: 'Ida, misión y vuelta: los días pasan (obras, heridas, fiebres, raciones y la actividad zombi)' }, `${offerDays(c, o)} días`),
         h('dt', {}, 'Caduca'),
         h('dd', {}, o.expiresDay === null ? 'No caduca' : `${Math.max(0, o.expiresDay - c.day)} días`),
         h('dt', {}, 'Recompensa'),
@@ -1665,15 +1673,18 @@ export class StrategyScreen {
     const contacted = c.regions.filter((x) => x.contacted).length;
     const capacity = contactCapacity(c);
     const cost = contactCost(c);
+    const flooded = underMarea(c, id);
     const blockedContact = this.why(
+      [!r.contacted && !!contactBlocker(c, id), contactBlocker(c, id) ?? ''],
       [contacted >= capacity, 'Construid un centro de comunicaciones para más contactos'],
       [!!c.proposal, 'Hay una propuesta pendiente'],
       [!canAfford(c, cost), this.shortfall(cost)],
     );
     return [
-      h('div.alert-kicker', {}, r.contacted ? 'REGIÓN CONTACTADA' : 'REGIÓN SIN CONTACTO'),
+      h(`div.alert-kicker${flooded ? '.bad' : ''}`, {}, flooded ? doomName(bastionLevel(c)).toUpperCase() : r.contacted ? 'ZONA CONTACTADA' : 'ZONA SIN CONTACTO'),
       h('h2.x-title', {}, def.name),
       h('p.x-text', {}, REGION_LORE[id].situation),
+      flooded ? h('p.x-text.x-bad', {}, floodedZoneNote(bastionLevel(c))) : null,
       h('p.x-muted', { title: 'Suministros que manda con cada convoy mensual una vez contactada' }, `${REGION_LORE[id].ally} · +${regionIncome(c, id)} § al mes`),
       this.regionQuest(c, id),
       r.facility ? h('p.x-text.x-bad', {}, `Nido: hace avanzar ${doomSubject(bastionLevel(c))} cada 14 días.${r.contacted ? '' : ' Contactad para quemarlo.'}`) : null,
@@ -1905,7 +1916,7 @@ export class StrategyScreen {
       'div',
       {},
       h('div.x-group', {}, 'Hacerla en el Taller'),
-      h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.parts} ⚙`, '', `${def.parts} piezas; tenéis ${c.parts ?? 0}`), this.chip(`${def.days} d`, '', `${def.days} días de obra`)),
+      h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.parts} piezas`, '', `Tenéis ${c.parts ?? 0}`), this.chip(`${def.days} d`, '', `${def.days} días de obra`)),
       h('button.x-btn.primary', { disabled: !!blocker, title: blocker ?? '', onclick: () => this.send({ type: 'craft', project: def.id }) }, `Hacer ${def.name.toLowerCase()}`),
       blocker ? h('p.x-muted', {}, blocker) : null,
     );
@@ -2828,7 +2839,7 @@ export class StrategyScreen {
               this.clsTag(s.cls),
               h('b', { title: [RANKS[s.rank]!.name, ...gear].join(' · ') }, displayName(s.name, s.nickname)),
               h('span.rank', { title: RANKS[s.rank]!.name }, ...Array.from({ length: s.rank }, () => h('i'))),
-              on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: hay que tratarle antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
+              on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
             );
           }),
         ),
@@ -3007,6 +3018,7 @@ export class StrategyScreen {
           h('p.x-sub', {}, report.missionName),
           tally,
           report.loot?.line ? h('p.debrief-loot', {}, report.loot.line) : null,
+          report.night ? h('p.debrief-loot', {}, NIGHT_TEXT.report) : null,
           story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
         ),
       ),

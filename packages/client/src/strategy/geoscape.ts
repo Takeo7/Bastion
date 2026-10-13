@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { DOOM_MAX, HOME_REGION, REGIONS, type CampaignState, type RegionId } from '@bastion/engine';
+import { DOOM_MAX, HOME_REGION, MAREA_SOURCE, REGIONS, ROADS, floodedZones, mareaThreshold, roadRoute, underMarea, type CampaignState, type RegionId } from '@bastion/engine';
 import { StaticBatch } from '../game/batch';
 import { extendShader } from '../game/fogOfWar';
 import type { BaseModelId } from '../game/syntyManifest';
@@ -15,9 +15,11 @@ import { skyTexture, type Shot, type StageMood, type StageSet } from './stage';
 // western hills, the farms of La Vega along the river in the middle, the two
 // dead cities (Ciudad Varela to the west, Puerto Galena by the sea), and the
 // ash plain to the south where the Marea comes up: a dark tide on the ground
-// that creeps towards Atalaya as the zombi activity grows. Each of the eight
-// zones carries its marker (contact, Nidos, operations, rumours); La Mula
+// that climbs the roads zone by zone as the zombi activity grows. Each of the
+// eight zones carries its marker (contact, Nidos, operations, rumours); La Mula
 // drives the roads between them. The same set is the main menu's backdrop.
+// Where the zones lie, the roads and the Marea's thresholds are the engine's
+// (campaign.ts, docs/FASE5.md); the roads' bends are only drawn.
 //
 // Everything that stands still is merged by material (game/batch.ts); the
 // sun's shadow map is drawn only when something moves (stage.ts).
@@ -30,34 +32,29 @@ const HD = D / 2;
 /** Game units (a Synty model's own size) to map units. */
 const MINI = 0.075;
 
-/** Where each zone lies in the valley (the engine's lat/lon stay for the rules). */
-const ZONES: Record<RegionId, { x: number; z: number }> = {
-  weu: { x: -4.6, z: -5.4 },
-  eeu: { x: 8.2, z: -5.6 },
-  eas: { x: 8.6, z: 0.7 },
-  sa: { x: -9.8, z: -0.4 },
-  oce: { x: 1.6, z: 1.4 },
-  afr: { x: -6.8, z: 5.0 },
-  me: { x: 8.4, z: 6.4 },
-  na: { x: -0.6, z: 8.9 },
-};
+/** Where each zone lies in the valley: the engine's geography. */
+const ZONES: Record<RegionId, { x: number; z: number }> = REGIONS;
 
 /** Atalaya: the station on its shelf under the peaks, above Altomonte's villages. */
 const ATALAYA = { x: -3.4, z: -7.0 };
 
-/** The roads between the zones (La Mula drives them), each with a bend to look less ruled. */
-const ROADS: [RegionId, RegionId, [number, number]][] = [
-  ['weu', 'oce', [-1.6, -1.8]],
-  ['weu', 'sa', [-8.6, -3.4]],
-  ['weu', 'eeu', [2.0, -6.4]],
-  ['eeu', 'eas', [6.8, -1.8]],
-  ['eas', 'oce', [5.4, 0.6]],
-  ['oce', 'afr', [-2.6, 3.6]],
-  ['oce', 'me', [4.6, 4.4]],
-  ['afr', 'na', [-4.0, 7.6]],
-  ['me', 'na', [4.0, 8.6]],
-  ['sa', 'afr', [-10.0, 3.0]],
-];
+/** Where each road (the engine's ROADS) bends, so it looks less ruled; one the map doesn't know runs straight. */
+const BENDS: Record<string, [number, number]> = {
+  'oce|weu': [-1.6, -1.8],
+  'sa|weu': [-8.6, -3.4],
+  'eeu|weu': [2.0, -6.4],
+  'eas|eeu': [6.8, -1.8],
+  'eas|oce': [5.4, 0.6],
+  'afr|oce': [-2.6, 3.6],
+  'me|oce': [4.6, 4.4],
+  'afr|na': [-4.0, 7.6],
+  'me|na': [4.0, 8.6],
+  'afr|sa': [-10.0, 3.0],
+};
+
+function bendOf(a: RegionId, b: RegionId): [number, number] {
+  return BENDS[a < b ? `${a}|${b}` : `${b}|${a}`] ?? [(ZONES[a].x + ZONES[b].x) / 2, (ZONES[a].z + ZONES[b].z) / 2];
+}
 
 /** The river: from under the dam, through La Vega and down to the sea in the south-east corner. */
 const RIVER: [number, number][] = [
@@ -187,11 +184,9 @@ function groundColour(x: number, z: number, h: number, up: number, out: THREE.Co
 
 /**
  * The ground as faceted low-poly (each triangle one colour), with the Marea
- * drawn on it: past its front (a z that moves north as the zombi activity
- * grows, ragged by noise) the land goes a bruised dark, a red glow along the
- * edge.
+ * drawn on it: what it covers goes a bruised dark, a red glow along its edge.
  */
-function terrain(marea: { value: number }): THREE.Mesh {
+function terrain(): THREE.Mesh {
   const cols = 132;
   const rows = 96;
   const positions: number[] = [];
@@ -232,24 +227,7 @@ function terrain(marea: { value: number }): THREE.Mesh {
   g.setAttribute('color', new THREE.Float32BufferAttribute(colours, 3));
   g.computeVertexNormals();
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
-  extendShader(material, 'valley-marea', (shader) => {
-    Object.assign(shader.uniforms, { mareaFront: marea });
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vMapPos;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvMapPos = position;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vMapPos;\nuniform float mareaFront;')
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-        float mareaEdge = mareaFront + sin(vMapPos.x * 1.7) * 0.35 + sin(vMapPos.x * 4.1 + 1.3) * 0.15;
-        float mareaIn = smoothstep(mareaEdge - 0.05, mareaEdge + 0.5, vMapPos.z);
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.36, 0.27, 0.32), mareaIn);`,
-      )
-      .replace(
-        '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>
-        totalEmissiveRadiance += vec3(0.85, 0.08, 0.05) * (1.0 - smoothstep(0.0, 0.16, abs(vMapPos.z - mareaEdge))) * 0.45;`,
-      );
-  });
+  mareaPatch(material, true);
   const mesh = new THREE.Mesh(g, material);
   mesh.receiveShadow = true;
   mesh.castShadow = true;
@@ -325,6 +303,161 @@ function roadRibbon(points: THREE.Vector3[], width: number): THREE.BufferGeometr
   return g;
 }
 
+/** A road's polyline between two zones, from `a` to `b` (the same one each way, reversed). */
+const roadLines = new Map<string, THREE.Vector3[]>();
+function roadLine(a: RegionId, b: RegionId): THREE.Vector3[] {
+  let line = roadLines.get(`${a}|${b}`);
+  if (!line) {
+    line = roadPoints(ZONES[a], ZONES[b], bendOf(a, b));
+    roadLines.set(`${a}|${b}`, line);
+    roadLines.set(`${b}|${a}`, line.slice().reverse());
+  }
+  return line;
+}
+
+// ------------------------------------------------------------- the Marea
+
+/**
+ * The Marea on the map. Each point of the valley has the zombi activity at
+ * which the tide reaches it, baked once into a texture: round each zone its
+ * threshold (the engine's mareaThreshold), a little more the further out;
+ * along each road, from one end's threshold to the other's; along the south
+ * edge, a strip just before Los Llanos falls. The ground under the activity
+ * now is stained, so a zone's marker lies inside the stain exactly while the
+ * zone is under the Marea, and between thresholds the tide creeps up the
+ * roads towards the next zone. Easing the activity drawn animates it.
+ */
+const FIELD = { w: 240, d: 176 };
+
+/** The activity at which a zone falls; Altomonte only past the end (at DOOM_MAX the campaign is lost). */
+const threshold = (id: RegionId) => mareaThreshold(id) ?? DOOM_MAX + 0.5;
+
+function mareaReach(x: number, z: number, roads: { a: RegionId; b: RegionId; points: THREE.Vector2[]; lengths: number[] }[]): number {
+  let v = Infinity;
+  let near = Infinity;
+  // Round each zone: its threshold over the zone itself (a zone that falls is engulfed at once), rising further out, steeply past a reach.
+  for (const id of Object.keys(ZONES) as RegionId[]) {
+    const d = Math.hypot(x - ZONES[id].x, z - ZONES[id].z);
+    near = Math.min(near, d);
+    v = Math.min(v, threshold(id) - 0.5 + Math.min(Math.max(0, d - 1.2), 2.2) * 0.9 + Math.max(0, d - 3.4) * 3);
+  }
+  // Along each road, from one end's threshold to the other's, a corridor either side (never too wide).
+  for (const r of roads) {
+    let best = Infinity;
+    let at = 0;
+    for (let i = 0; i + 1 < r.points.length; i++) {
+      const p = r.points[i]!;
+      const q = r.points[i + 1]!;
+      const dx = q.x - p.x;
+      const dz = q.y - p.y;
+      const t = THREE.MathUtils.clamp(((x - p.x) * dx + (z - p.y) * dz) / (dx * dx + dz * dz), 0, 1);
+      const d = Math.hypot(x - p.x - dx * t, z - p.y - dz * t);
+      if (d < best) {
+        best = d;
+        at = (r.lengths[i]! + (r.lengths[i + 1]! - r.lengths[i]!) * t) / r.lengths[r.lengths.length - 1]!;
+      }
+    }
+    v = Math.min(v, THREE.MathUtils.lerp(threshold(r.a), threshold(r.b), at) - 0.5 + Math.max(0, best - 0.25) + Math.max(0, best - 2) * 3);
+  }
+  // The strip along the south edge, where it comes up from (never more than a strip: the zones and roads carry it on).
+  const edge = HD - z;
+  v = Math.min(v, threshold(MAREA_SOURCE) - 1.8 + edge * 0.65 + Math.max(0, edge - 2) * 3);
+  // A ragged edge, but not round the markers.
+  return v + (fbm(x * 0.9 + 11, z * 0.9 + 5) - 0.5) * 0.7 * smooth(0.6, 1.4, near);
+}
+
+/** The shared uniforms of the Marea: its field, the activity drawn (each set writes its own before it draws) and where the map has been panned to. */
+const MAREA = {
+  mareaField: { value: null as THREE.Texture | null },
+  mareaLevel: { value: 0 },
+  mareaOrigin: { value: new THREE.Vector2() },
+};
+
+function mareaField(): THREE.Texture {
+  if (MAREA.mareaField.value) return MAREA.mareaField.value;
+  const roads = ROADS.map(([a, b]) => {
+    const curve = new THREE.QuadraticBezierCurve(new THREE.Vector2(ZONES[a].x, ZONES[a].z), new THREE.Vector2(...bendOf(a, b)), new THREE.Vector2(ZONES[b].x, ZONES[b].z));
+    const points = curve.getSpacedPoints(12);
+    const lengths = [0];
+    for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1]! + points[i]!.distanceTo(points[i - 1]!));
+    return { a, b, points, lengths };
+  });
+  const data = new Uint16Array(FIELD.w * FIELD.d);
+  for (let j = 0; j < FIELD.d; j++) {
+    for (let i = 0; i < FIELD.w; i++) {
+      const v = mareaReach(-HW + ((i + 0.5) / FIELD.w) * W, -HD + ((j + 0.5) / FIELD.d) * D, roads);
+      data[j * FIELD.w + i] = THREE.DataUtils.toHalfFloat(Math.min(v, 40));
+    }
+  }
+  const texture = new THREE.DataTexture(data, FIELD.w, FIELD.d, THREE.RedFormat, THREE.HalfFloatType);
+  texture.magFilter = texture.minFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return (MAREA.mareaField.value = texture);
+}
+
+const patched = new WeakSet<THREE.Material>();
+
+/**
+ * Draws the Marea on a material of the map: what it covers darker, and on
+ * the ground (`edge`) a red glow along its edge. By world position, less the
+ * map's pan, whether it is drawn plain, merged or instanced.
+ */
+function mareaPatch(material: THREE.Material, edge = false): void {
+  if (patched.has(material)) return;
+  patched.add(material);
+  mareaField();
+  extendShader(material, `valley-marea${edge ? '-edge' : ''}`, (shader) => {
+    Object.assign(shader.uniforms, MAREA);
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vMareaPos;').replace(
+      '#include <project_vertex>',
+      `#include <project_vertex>
+      {
+        vec4 w = vec4(transformed, 1.0);
+        #ifdef USE_BATCHING
+          w = batchingMatrix * w;
+        #endif
+        #ifdef USE_INSTANCING
+          w = instanceMatrix * w;
+        #endif
+        vMareaPos = (modelMatrix * w).xz;
+      }`,
+    );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vMareaPos;\nuniform sampler2D mareaField;\nuniform float mareaLevel;\nuniform vec2 mareaOrigin;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        vec2 mareaUv = (vMareaPos - mareaOrigin + vec2(${HW.toFixed(1)}, ${HD.toFixed(1)})) / vec2(${W.toFixed(1)}, ${D.toFixed(1)});
+        float mareaReach = texture2D(mareaField, mareaUv).r;
+        float mareaIn = smoothstep(mareaLevel + 0.12, mareaLevel - 0.12, mareaReach);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.36, 0.27, 0.32), mareaIn);`,
+      );
+    if (edge)
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance += vec3(0.85, 0.08, 0.05) * (1.0 - smoothstep(0.0, 0.2, abs(mareaReach - mareaLevel))) * 0.35;`,
+      );
+  });
+  material.needsUpdate = true;
+}
+
+/** A zombie on the map, as a gaming piece: body, head and arms out in front. */
+function zombieShape(): THREE.BufferGeometry {
+  const parts = [
+    new THREE.CylinderGeometry(0.035, 0.048, 0.15, 6).translate(0, 0.075, 0),
+    new THREE.SphereGeometry(0.034, 6, 4).translate(0, 0.18, 0.01),
+    new THREE.BoxGeometry(0.018, 0.018, 0.09).translate(-0.03, 0.135, 0.05),
+    new THREE.BoxGeometry(0.018, 0.018, 0.09).translate(0.03, 0.13, 0.05),
+  ];
+  const g = mergeGeometries(parts.map((p) => p.toNonIndexed()))!;
+  for (const p of parts) p.dispose();
+  return g.scale(1.3, 1.3, 1.3);
+}
+
+/** How many wander round a zone under the Marea. */
+const HORDE = 4;
+
 // ------------------------------------------------------------- markers
 
 const glows = new Map<string, THREE.Material>();
@@ -347,6 +480,9 @@ const SHAPES = {
   hit: new THREE.SphereGeometry(0.75, 8, 6),
 };
 const PAD_GREY = new THREE.MeshStandardMaterial({ color: 0x8a8c88, roughness: 0.8 });
+/** A zone under the Marea: its enclave's lights out, the pad gone dark. */
+const PAD_DROWNED = new THREE.MeshStandardMaterial({ color: 0x2e2629, roughness: 0.9 });
+const ZOMBIE = new THREE.MeshStandardMaterial({ color: 0x6d7a5a, roughness: 0.9, emissive: 0x161a10 });
 const HIT = new THREE.MeshBasicMaterial({ visible: false });
 
 interface Marker {
@@ -386,11 +522,13 @@ export class GeoscapeSet implements StageSet {
   private readonly busLabel: CSS2DObject;
   private readonly clouds = new THREE.Group();
   private readonly sun = new THREE.DirectionalLight(0xffdcb4, 3.0);
-  /** The Marea's front, in map z (south edge: none yet; Atalaya: the end); in the main menu, a little of it. */
-  private readonly marea = { value: THREE.MathUtils.lerp(HD + 1, ATALAYA.z, 0.15) };
-  private mareaGoal = this.marea.value;
-  /** The road graph's polylines, by both ends. */
-  private readonly roads = new Map<string, THREE.Vector3[]>();
+  /** The zombi activity the Marea is drawn at, easing to the campaign's; in the main menu, only its strip along the south. */
+  private level = threshold(MAREA_SOURCE) - 0.8;
+  private levelGoal = this.level;
+  private levelKnown = false;
+  /** The dead wandering round the zones under the Marea: where each circles, how far out, from where and how fast. */
+  private readonly horde = new THREE.InstancedMesh(zombieShape(), ZOMBIE, Object.keys(REGIONS).length * HORDE);
+  private wanderers: { x: number; z: number; r: number; phase: number; speed: number }[] = [];
   /** La Mula's way to its zone, how far along it is, and where it is now. */
   private path: THREE.Vector3[] = [];
   private along = 0;
@@ -422,16 +560,12 @@ export class GeoscapeSet implements StageSet {
     cloudSea.position.y = -6;
     this.scene.add(cloudSea);
 
-    this.valley.add(terrain(this.marea), skirt(), water(), this.markerGroup, this.bus, this.statics.group, this.clouds);
+    this.horde.count = 0;
+    this.horde.frustumCulled = false;
+    this.valley.add(terrain(), skirt(), water(), this.markerGroup, this.bus, this.statics.group, this.clouds, this.horde);
     this.scene.add(this.valley);
-    // The roads, one mesh; their polylines for La Mula.
-    const ribbons: THREE.BufferGeometry[] = [];
-    for (const [a, b, bend] of ROADS) {
-      const points = roadPoints(ZONES[a], ZONES[b], bend);
-      this.roads.set(`${a}|${b}`, points);
-      this.roads.set(`${b}|${a}`, points.slice().reverse());
-      ribbons.push(roadRibbon(points, 0.13));
-    }
+    // The roads, one mesh.
+    const ribbons = ROADS.map(([a, b]) => roadRibbon(roadLine(a, b), 0.13));
     const roads = new THREE.Mesh(mergeGeometries(ribbons), new THREE.MeshStandardMaterial({ color: 0x8a7a64, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }));
     for (const r of ribbons) r.dispose();
     roads.receiveShadow = true;
@@ -492,10 +626,12 @@ export class GeoscapeSet implements StageSet {
 
   update(c: CampaignState, selected: RegionId | null): void {
     this.inCampaign = true;
-    // The Marea: from beyond the south edge (none) to Atalaya (the end).
-    const k = THREE.MathUtils.clamp(c.doom / DOOM_MAX, 0, 1);
-    this.mareaGoal = THREE.MathUtils.lerp(HD + 1, ATALAYA.z, k);
-    const key = JSON.stringify([c.regions, c.offers.map((o) => [o.id, o.region, o.facility, o.final, o.story, o.quest]), c.rumors.map((x) => [x.id, x.region]), c.listening, selected]);
+    // The Marea at the campaign's activity: shown as it is the first time, then creeping to each new extent.
+    this.levelGoal = c.doom;
+    if (!this.levelKnown) this.level = c.doom;
+    this.levelKnown = true;
+    const flooded = floodedZones(c);
+    const key = JSON.stringify([c.regions, c.offers.map((o) => [o.id, o.region, o.facility, o.final, o.story, o.quest]), c.rumors.map((x) => [x.id, x.region]), c.listening, selected, flooded]);
     if (key === this.lastKey) return;
     this.lastKey = key;
     for (const m of this.markers) {
@@ -503,19 +639,26 @@ export class GeoscapeSet implements StageSet {
       m.label.element.remove();
     }
     this.markers.length = 0;
+    this.wanderers = [];
     for (const r of c.regions) {
       const def = REGIONS[r.id];
       const at = ZONES[r.id];
+      const drowned = underMarea(c, r.id);
       const group = new THREE.Group();
       group.position.set(at.x, Math.max(heightAt(at.x, at.z), 0) + 0.04, at.z);
       group.userData.hotspot = r.id;
-      const pad = new THREE.Mesh(SHAPES.pad, r.contacted ? glow(0x3fa9ff, 0.9) : PAD_GREY);
+      const pad = new THREE.Mesh(SHAPES.pad, drowned ? PAD_DROWNED : r.contacted ? glow(0x3fa9ff, 0.9) : PAD_GREY);
       pad.castShadow = true;
       group.add(pad);
-      // A beam of light over the zone: tall and blue where we have contact, short and grey where not.
-      const beam = new THREE.Mesh(SHAPES.beacon, r.contacted ? glow(0x3fa9ff, 1.6, 0.75, true) : glow(0x9aa4ad, 0.6, 0.6, true));
-      beam.scale.y = r.contacted ? 1.3 : 0.55;
-      group.add(beam);
+      if (drowned) {
+        // Under the Marea: the enclave's lights out, and the dead wander round it.
+        for (let i = 0; i < HORDE; i++) this.wanderers.push({ x: at.x, z: at.z, r: 0.5 + hash(i, r.id.length * 7 + at.x) * 0.45, phase: (i / HORDE) * Math.PI * 2 + hash(at.z, i), speed: (0.12 + hash(i, at.x) * 0.16) * (i % 2 ? 1 : -1) });
+      } else {
+        // A beam of light over the zone: tall and blue where we have contact, short and grey where not.
+        const beam = new THREE.Mesh(SHAPES.beacon, r.contacted ? glow(0x3fa9ff, 1.6, 0.75, true) : glow(0x9aa4ad, 0.6, 0.6, true));
+        beam.scale.y = r.contacted ? 1.3 : 0.55;
+        group.add(beam);
+      }
       if (r.facility) {
         // A Nido: a dark mound glowing red.
         const nest = new THREE.Mesh(SHAPES.nest, glow(0x8a1010, 1.2));
@@ -544,14 +687,20 @@ export class GeoscapeSet implements StageSet {
       }
       group.add(new THREE.Mesh(SHAPES.hit, HIT));
       const el = document.createElement('div');
-      el.className = `globe-label${r.contacted ? ' contacted' : ''}${r.facility ? ' facility' : ''}${r.id === selected ? ' selected' : ''}`;
+      el.className = `globe-label${r.contacted ? ' contacted' : ''}${r.facility ? ' facility' : ''}${drowned ? ' marea' : ''}${r.id === selected ? ' selected' : ''}`;
       el.textContent = `${def.name}${offers.length ? ` · ${offers.length}` : ''}${rumor ? ' · ?' : ''}`;
+      if (drowned) {
+        // Until the theme styles `.marea`: dimmed, a blood-red edge.
+        el.style.opacity = '0.86';
+        el.style.borderLeft = '3px solid #a3202a';
+      }
       const tag = new CSS2DObject(el);
       tag.position.set(0, 1.0, 0);
       group.add(tag);
       this.markerGroup.add(group);
       this.markers.push({ region: r.id, group, label: tag });
     }
+    this.horde.count = this.wanderers.length;
     const sel = selected ? ZONES[selected] : null;
     this.ring.visible = !!sel;
     if (sel) this.ring.position.set(sel.x, Math.max(heightAt(sel.x, sel.z), 0) + 0.12, sel.z);
@@ -573,8 +722,10 @@ export class GeoscapeSet implements StageSet {
     return true;
   }
 
-  /** Before each frame (stage.ts): the shadow map only when something in it moved (La Mula casts none). */
+  /** Before each frame (stage.ts): the Marea as this map has it (the menu's and the campaign's share their materials); the shadow map only when something in it moved (La Mula and the dead cast none). */
   beforeRender(gl: THREE.WebGLRenderer): void {
+    MAREA.mareaLevel.value = this.level;
+    MAREA.mareaOrigin.value.set(this.pan.x, this.pan.y);
     if (this.shadowsStale) {
       gl.shadowMap.needsUpdate = true;
       this.shadowsStale = false;
@@ -592,8 +743,24 @@ export class GeoscapeSet implements StageSet {
     this.valley.position.set(this.pan.x, 0, this.pan.y);
     this.sun.target.position.set(this.pan.x, 0, this.pan.y);
     this.sun.position.set(this.pan.x - 20, 15, this.pan.y + 8);
-    // The Marea creeps to where the zombi activity puts it.
-    this.marea.value += (this.mareaGoal - this.marea.value) * (1 - Math.exp(-dt * 1.5));
+    // The Marea creeps up the roads, or back down them, to where the zombi activity puts it.
+    this.level += (this.levelGoal - this.level) * (1 - Math.exp(-dt * 1.2));
+    if (Math.abs(this.levelGoal - this.level) < 1e-3) this.level = this.levelGoal;
+    // The dead shuffle round their zones.
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    const scale = new THREE.Vector3(1, 1, 1);
+    this.wanderers.forEach((w, i) => {
+      const a = w.phase + time * w.speed;
+      const x = w.x + Math.cos(a) * w.r;
+      const z = w.z + Math.sin(a) * w.r;
+      const p = new THREE.Vector3(x, Math.max(heightAt(x, z), 0) + Math.abs(Math.sin(time * 5 + w.phase)) * 0.012, z);
+      // Facing the way it shuffles, with a sway.
+      q.setFromAxisAngle(up, Math.atan2(-Math.sin(a) * Math.sign(w.speed), Math.cos(a) * Math.sign(w.speed)) + Math.sin(time * 2.3 + w.phase) * 0.25);
+      this.horde.setMatrixAt(i, m.compose(p, q, scale));
+    });
+    if (this.wanderers.length) this.horde.instanceMatrix.needsUpdate = true;
     for (const m of this.markers) {
       for (const child of m.group.children) {
         if (child.userData.spin) child.rotation.y = time * 2;
@@ -613,7 +780,7 @@ export class GeoscapeSet implements StageSet {
       if (this.along >= length) this.moving = false;
     } else if (!this.inCampaign && (this.idle += dt) > 3) {
       this.idle = 0;
-      const next = ROADS.flatMap(([a, b]) => (a === this.busRegion ? [b] : b === this.busRegion ? [a] : []));
+      const next = REGIONS[this.busRegion].roads;
       this.drive(next[Math.floor(hash(time, 7) * next.length)]!);
     }
     this.busLabel.visible = this.inCampaign;
@@ -641,27 +808,12 @@ export class GeoscapeSet implements StageSet {
     this.moving = false;
   }
 
-  /** The roads from one zone to another (fewest roads first), as one polyline; empty if none. */
+  /** The engine's road route from one zone to another (roadRoute), as one polyline; empty if there is none. */
   private route(from: RegionId, to: RegionId): THREE.Vector3[] {
-    if (from === to) return [];
-    const prev = new Map<RegionId, RegionId>([[from, from]]);
-    const queue: RegionId[] = [from];
-    while (queue.length) {
-      const at = queue.shift()!;
-      if (at === to) break;
-      for (const [a, b] of ROADS) {
-        const next = a === at ? b : b === at ? a : null;
-        if (next && !prev.has(next)) {
-          prev.set(next, at);
-          queue.push(next);
-        }
-      }
-    }
-    if (!prev.has(to)) return [];
-    const zones: RegionId[] = [to];
-    while (zones[0] !== from) zones.unshift(prev.get(zones[0]!)!);
+    const zones = roadRoute(from, to);
+    if (zones.length < 2 || zones[0] !== from) return [];
     const points: THREE.Vector3[] = [];
-    for (let i = 0; i + 1 < zones.length; i++) points.push(...(this.roads.get(`${zones[i]}|${zones[i + 1]}`) ?? []));
+    for (let i = 0; i + 1 < zones.length; i++) points.push(...roadLine(zones[i]!, zones[i + 1]!));
     // From where it stands to the road, and off the road to its parking beside the marker.
     const end = ZONES[to];
     const park = new THREE.Vector3(end.x + 0.55, Math.max(heightAt(end.x + 0.55, end.z + 0.45), 0) + 0.02, end.z + 0.45);
@@ -812,6 +964,11 @@ export class GeoscapeSet implements StageSet {
     this.statics.begin(null);
     kit.addTo(this.statics);
     this.statics.commit();
+    // What stands under the Marea goes dark with the ground: the map's own materials (glass is the base's too).
+    this.statics.group.traverse((o) => {
+      const material = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (material && (material.name.includes(':map') || material === DAM)) mareaPatch(material);
+    });
 
     // La Mula: the base's bus, merged (nothing moves on it at this size), nose along +z. It casts no
     // shadow: at this size none shows, and the shadow map need not be drawn again as it drives.

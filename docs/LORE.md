@@ -152,8 +152,13 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
 
 **Recursos:**
 - **Suministros:** la moneda de construir, con el signo «§» (el de los suministros de XCOM 2). Ocupa el lugar de los créditos, y las ruinas y el saqueo la dan.
-- **Medicinas:** curan heridas y contagios.
-- **Comida:** cada soldado come cada día; sin comida pierde voluntad y salud. Gameplay propone añadirla en una segunda vuelta, después de equilibrar las medicinas, porque cambia toda la economía.
+- **Medicinas** (✚): curan heridas y contagios. El tratamiento de un mordido se aprueba con las dos llaves.
+- **Comida**, contada en **raciones**: el Bastión come cada día; sin raciones hay hambre. El **Huerto** las produce.
+- **Piezas:** muelles, motores, tornillería. Con ellas el Taller hace armas y armaduras mejores. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.
+
+**Armas encontradas** (raras, al registrar): fusil de cerrojo, escopeta recortada, fusil con mira y ametralladora ligera. Van a la Armería, y a quien la lleve, su arma le sube un nivel.
+
+**De noche:** se ve poco y os ven poco, salvo bajo farolas, bengalas o fuego. Hay más muertos en la calle, y el botín vale la mitad más.
 
 ## Clases y el oficio de superviviente
 

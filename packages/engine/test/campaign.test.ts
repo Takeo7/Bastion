@@ -18,6 +18,7 @@ import {
   squadMember,
   type CampaignCommand,
   type CampaignState,
+  offerDays,
 } from '../src/campaign';
 import { armorTier, bastionLevel, LEVEL_XP, MAX_LEVEL, missionXp, nextTierBlocker, weaponTier } from '../src/progression';
 import { Rng } from '../src/rng';
@@ -55,13 +56,13 @@ describe('shared decisions', () => {
     const c = createCampaign(both, new Rng(1));
     const credits = c.credits;
     const cost = contactCost(c);
-    const na = c.regions.find((r) => r.id === 'na')!;
-    run(c, { type: 'contact', region: 'na' }, 0);
+    const vega = c.regions.find((r) => r.id === 'oce')!;
+    run(c, { type: 'contact', region: 'oce' }, 0);
     expect(c.proposal?.by).toBe(0);
-    expect(na.contacted).toBe(false);
+    expect(vega.contacted).toBe(false);
     expect(executeCampaignCommand(c, { type: 'vote', accept: true }, { slot: 0, connected: both, rng: new Rng(1) }).ok).toBe(false);
     run(c, { type: 'vote', accept: true }, 1);
-    expect(na.contacted).toBe(true);
+    expect(vega.contacted).toBe(true);
     expect(c.credits).toBe(credits - cost);
     expect(c.proposal).toBeNull();
   });
@@ -181,9 +182,8 @@ describe('missions', () => {
     const wounded = c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays;
     expect(wounded).toBeGreaterThan(0);
     expect(wounded).toBeLessThan(6);
-    // A mission takes days: three or four go by.
-    expect(c.day - report.day).toBeGreaterThanOrEqual(3);
-    expect(c.day - report.day).toBeLessThanOrEqual(4);
+    // A mission takes days: La Mula's trip to its zone and back (docs/FASE5.md).
+    expect(c.day - report.day).toBe(offerDays(c, offer));
     const veteran = c.soldiers.find((s) => s.id === soldiers[2]!.campaignId)!;
     expect(veteran.xp).toBe(8);
     expect(veteran.rank).toBe(2);

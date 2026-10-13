@@ -7,7 +7,7 @@
  * `{saludo}` becomes "Comandantes Ana y Luis" (or "Comandante Ana" alone);
  * `{yo}`, "Comandante Ana" for the player reading it.
  */
-import { DOOM_MAX, nextSteps, type CampaignState } from './campaign';
+import { DOOM_MAX, nextSteps, treatCost, type CampaignState } from './campaign';
 import { doomStatus, STORY } from './lore';
 import { bastionLevel } from './progression';
 import type { Slot } from './types';
@@ -47,11 +47,18 @@ export type SceneId =
   | 'ch2After'
   | 'ch3Before'
   | 'ch3After'
+  | 'firstFlood'
   | 'partitura'
   | 'simon'
   | 'ch5After'
   | 'velmar'
   | 'firstSong'
+  // Phases 3 and 4 (docs/FASE3.md, FASE4.md): the bite, medicines, food and found weapons.
+  | 'firstBite'
+  | 'shortMedicines'
+  | 'firstTurned'
+  | 'hunger'
+  | 'foundWeapon'
   | 'confession'
   | 'ch6After'
   | 'contranota'
@@ -86,6 +93,7 @@ const SONG_TALENTS = ['songBlade', 'aegis', 'echoStep', 'layOnHands', 'velmarOat
 const hasEchoes = (c: CampaignState) => c.base.plots.some((p) => (p.building as string | null) === 'echoes');
 const someoneTrained = (c: CampaignState) => c.soldiers.some((s) => SONG_TALENTS.some((id) => (s.talents as Record<string, number | undefined>)[id]));
 const chapterOpen = (c: CampaignState, n: number) => c.story.done >= n || c.offers.some((o) => o.story === n);
+const bitten = (c: CampaignState) => c.soldiers.filter((s) => s.alive && s.infection);
 
 /** In story order: when several unlock at once they play in this order. */
 export const SCENES: Scene[] = [
@@ -176,6 +184,19 @@ export const SCENES: Scene[] = [
     ],
   },
   {
+    id: 'firstFlood',
+    title: 'Los Llanos no contestan',
+    channel: 'Sala de radio',
+    when: (c) => (c.flooded ?? []).length > 0,
+    lines: [
+      { who: 'morse', text: 'Los Llanos de Ceniza no contestan. Ni ayer ni hoy.' },
+      { who: 'teo', text: '¿Una avería?' },
+      { who: 'morse', text: 'El último mensaje era un hombre contando muertos desde un tejado. Paró en el doscientos.' },
+      { who: 'teo', text: 'Entonces de allí no va a llegar nada. Ni suministros, ni nadie.' },
+      { who: 'morse', text: 'Y lo que baja de los Llanos sube por las carreteras. Si la actividad sigue creciendo, la siguiente será Ciudad Varela o Puerto Galena.' },
+    ],
+  },
+  {
     id: 'partitura',
     title: 'La Marea',
     channel: 'Sala de radio',
@@ -237,9 +258,72 @@ export const SCENES: Scene[] = [
     when: someoneTrained,
     lines: [
       { who: 'morse', text: 'Alguien se ha quedado en el Taller hasta las tantas. Teo dice que ya tiene oficio.' },
-      { who: 'teo', text: 'Aprende rápido. Pero en el campo, comandantes, con cabeza: cualquier oficio hace ruido, y el ruido os delata.' },
+      { who: 'teo', text: 'Aprende rápido. Pero en el campo, comandantes, con cabeza: el machete y la ballesta casi no se oyen; el fuego se oye desde lejos.' },
       { who: 'morse', text: 'Teo está orgulloso, aunque no lo diga.' },
       { who: 'teo', text: 'Ni lo digas tú.' },
+    ],
+  },
+  {
+    id: 'firstBite',
+    title: 'Fiebre',
+    channel: 'Línea interna · Enfermería',
+    when: (c) => bitten(c).length > 0,
+    lines: [
+      { who: 'nwosu', text: 'Treinta y nueve de fiebre, y subiendo. Es el mordisco.' },
+      { who: 'morse', text: '¿Cuánto tiempo tiene?' },
+      { who: 'nwosu', text: 'Tres días. Con la Enfermería, alguno más. Con el tratamiento, la fiebre baja y aquí no ha pasado nada.' },
+      { who: 'nwosu', text: 'Pero cada tratamiento se lleva medicinas, y no nos sobran.' },
+      { who: 'morse', text: 'Y mientras tenga fiebre no sale de misión. El tratamiento lo aprobáis los dos, comandantes.' },
+    ],
+  },
+  {
+    id: 'shortMedicines',
+    title: 'No hay para todos',
+    channel: 'Línea interna · Enfermería',
+    when: (c) => {
+      const sick = bitten(c).length;
+      return sick > 0 && (c.medicines ?? 0) < sick * treatCost(c);
+    },
+    lines: [
+      { who: 'nwosu', text: 'No hay para todos. Lo he contado tres veces.' },
+      { who: 'teo', text: '¿Y a quién se lo das?' },
+      { who: 'nwosu', text: 'Eso no lo decido yo. Para eso hay dos llaves.' },
+      { who: 'morse', text: 'Comandantes, el tratamiento lo aprobáis los dos. Y si alguien vuelve de fuera con medicinas, que sea pronto.' },
+    ],
+  },
+  {
+    id: 'firstTurned',
+    title: 'La fiebre no bajó',
+    channel: 'Sala de radio',
+    when: (c) => c.soldiers.some((s) => !s.alive && s.fellCause === 'turned'),
+    lines: [
+      { who: 'morse', text: 'Se ha ido esta mañana. La fiebre no bajó.' },
+      { who: 'nwosu', text: 'Hice lo que pude. Con una dosis más…' },
+      { who: 'teo', text: 'Ya me he encargado yo. Que nadie más tenga que verlo.' },
+      { who: 'morse', text: 'Apuntad su nombre. Y que la próxima vez no falten medicinas.' },
+    ],
+  },
+  {
+    id: 'hunger',
+    title: 'La despensa vacía',
+    channel: 'Línea interna · Taller',
+    when: (c) => !!c.hungry,
+    lines: [
+      { who: 'teo', text: 'Se ha acabado la despensa. Lo último han sido unas lentejas sin nada.' },
+      { who: 'morse', text: 'Con la tripa vacía nadie apunta igual. Ni aguanta igual.' },
+      { who: 'teo', text: 'Y las heridas tardan el doble en cerrar. Hacen falta raciones: despensas, tiendas, almacenes.' },
+      { who: 'morse', text: 'Y si queda un trozo de tierra libre, un Huerto. Que no vuelva a pasar.' },
+    ],
+  },
+  {
+    id: 'foundWeapon',
+    title: 'Algo bueno en una mochila',
+    channel: 'Línea interna · Armería',
+    when: (c) => (c.foundWeapons ?? []).length > 0,
+    lines: [
+      { who: 'teo', text: 'Mirad lo que ha llegado en una mochila. Lo he limpiado y engrasado.' },
+      { who: 'teo', text: 'Es mejor que lo que tenemos: a quien lo lleve, el arma le sube un nivel. Decidme a quién se lo doy.' },
+      { who: 'morse', text: 'A alguien que lo traiga de vuelta. Si cae quien lo lleva, se pierde.' },
     ],
   },
   {
@@ -424,7 +508,12 @@ export type TipId =
   | 'heard'
   | 'search'
   | 'horde'
-  | 'bloater';
+  | 'bloater'
+  // Night (docs/ALTURA-Y-NOCHE.md), the bite (FASE3.md) and found weapons (FASE4.md).
+  | 'night'
+  | 'bitten'
+  | 'risen'
+  | 'foundWeapon';
 
 export interface RadioTip {
   who: SpeakerId;
@@ -463,7 +552,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   wounded: {
     who: 'morse',
     line: 'Herido no es caído. Que no se nos muera.',
-    rule: 'En misión, la salud solo vuelve con botiquín; en la base, las heridas tardan días en curar. Los caídos no vuelven.',
+    rule: 'En misión, la salud solo vuelve con botiquín. En la base, las heridas tardan días en curar, y una dosis de medicinas quita tres. Los caídos no vuelven.',
   },
   command: {
     who: 'morse',
@@ -504,6 +593,26 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
     who: 'morse',
     line: 'Ese está hinchado. De lejos.',
     rule: 'El Hinchado revienta al morir o al llegar a vosotros: 3 de daño a quien tenga al lado. Abatidlo antes de que se acerque, y nunca junto a los vuestros.',
+  },
+  night: {
+    who: 'morse',
+    line: 'Noche cerrada. Ellos no necesitan ver para encontraros.',
+    rule: 'De noche veis 8 casillas menos y os detectan a la mitad de distancia. Bajo una farola, una bengala o un fuego, os ven como de día. Hay más muertos en la calle, y el botín vale la mitad más.',
+  },
+  bitten: {
+    who: 'nwosu',
+    line: 'Le han mordido. Traédmelo, y yo me encargo.',
+    rule: 'Un mordisco puede contagiar. En combate no cambia nada, pero si el contagiado cae, se levanta zombi. En la base tiene 3 días para recibir el tratamiento, y con fiebre no sale de misión.',
+  },
+  risen: {
+    who: 'morse',
+    line: 'Ese ya no es de los nuestros. Lo siento.',
+    rule: 'Quien cae contagiado se levanta zombi al empezar el turno de los zombis. A un contagiado herido, apartadlo de la primera línea o sacadlo antes de que caiga.',
+  },
+  foundWeapon: {
+    who: 'teo',
+    line: 'Eso no lo tira nadie. Traédmelo.',
+    rule: 'Un arma encontrada ocupa un hueco de la mochila. Si sale de la misión, va a la Armería: a quien la lleve, su arma le sube un nivel, hasta lo que permita su rango.',
   },
 };
 

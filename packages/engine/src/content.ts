@@ -364,10 +364,10 @@ export interface FoundWeaponDef {
  * placeholders for Lore.
  */
 export const FOUND_WEAPONS: Record<FoundWeaponId, FoundWeaponDef> = {
-  huntingRifle: { id: 'huntingRifle', name: 'Fusil de caza', find: 'un fusil de caza en buen estado', weapon: 'rifle', weight: 5 },
+  huntingRifle: { id: 'huntingRifle', name: 'Fusil de cerrojo', find: 'un fusil de cerrojo bien engrasado', weapon: 'rifle', weight: 5 },
   sawnOff: { id: 'sawnOff', name: 'Escopeta recortada', find: 'una escopeta recortada', weapon: 'shotgun', weight: 2 },
   scopedRifle: { id: 'scopedRifle', name: 'Fusil con mira', find: 'un fusil con mira telescópica', weapon: 'sniper', weight: 1 },
-  lightMachineGun: { id: 'lightMachineGun', name: 'Ametralladora ligera', find: 'una ametralladora ligera', weapon: 'cannon', weight: 1 },
+  lightMachineGun: { id: 'lightMachineGun', name: 'Ametralladora ligera', find: 'una ametralladora ligera con su cinta', weapon: 'cannon', weight: 1 },
 };
 
 export interface ItemDef {

@@ -249,7 +249,8 @@ describe('infection at the base', () => {
 
   it('La Vega and Ciudad Varela send medicines every few days while they are allies and stand; some operations pay them too', () => {
     const c = createCampaign([0], new Rng(1));
-    Object.assign(c, { nextEventDay: 999, nextMissionDay: 999, nextRumorDay: 999, nextFacilityDay: 999, nextSupplyDay: 999 });
+    // No Marea to get in the way (docs/FASE5.md): the activity stays put.
+    Object.assign(c, { nextEventDay: 999, nextMissionDay: 999, nextRumorDay: 999, nextFacilityDay: 999, nextSupplyDay: 999, nextDoomDay: 999 });
     /** Advances to day `until` at least; what the enclaves sent meanwhile, convoy by convoy. */
     const wait = (until: number) => {
       // The log is newest first (and short): what's new is what comes before the entry on top now.

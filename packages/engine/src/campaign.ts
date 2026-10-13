@@ -59,7 +59,24 @@ import {
   weaponTier,
 } from './progression';
 import { broughtBack, type LootTotals } from './loot';
-import { briefingSignature, doomChangeText, doomSubject, ITEM_FINDS, lootSummary, missionBriefing, NWOSU_CHAPTER, PARTITURA_LEVEL, SIMON_CHAPTER, STORY, storyVip, type Ending, type SimonChoice } from './lore';
+import {
+  briefingSignature,
+  doomChangeText,
+  doomSubject,
+  floodedContactReason,
+  floodedListLabel,
+  lootSummary,
+  mareaAlert,
+  missionBriefing,
+  noRoadReason,
+  NWOSU_CHAPTER,
+  PARTITURA_LEVEL,
+  SIMON_CHAPTER,
+  STORY,
+  storyVip,
+  type Ending,
+  type SimonChoice,
+} from './lore';
 import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecision, type QuestId, type QuestMission, type QuestOutcome, type TraitId } from './quests';
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
@@ -449,25 +466,141 @@ export type RegionId = 'na' | 'sa' | 'weu' | 'eeu' | 'afr' | 'me' | 'eas' | 'oce
 export interface RegionDef {
   id: RegionId;
   name: string;
-  /** Marker on the globe, in degrees. */
-  lat: number;
-  lon: number;
+  /** Where it lies on the valley's map (docs/FASE5.md): x west to east, z north (the sierra) to south (the plain), in map units. */
+  x: number;
+  z: number;
+  /** The zones a road joins it to (ROADS). */
+  roads: RegionId[];
   /** Credits it adds to every monthly payment once contacted. */
   income: number;
 }
 
+// The valley of Valdesombra (docs/FASE5.md): where each zone lies on Arte · Base's map and the
+// roads between them, the same ones La Mula drives. Altomonte (Atalaya's zone) is up in the sierra;
+// the Marea comes up from Los Llanos de Ceniza in the south.
 export const REGIONS: Record<RegionId, RegionDef> = {
-  na: { id: 'na', name: 'Los Llanos de Ceniza', lat: 44, lon: -100, income: 35 },
-  sa: { id: 'sa', name: 'Carboneda', lat: -15, lon: -60, income: 25 },
-  weu: { id: 'weu', name: 'Altomonte', lat: 45, lon: 2, income: 30 },
-  eeu: { id: 'eeu', name: 'Valdelobos', lat: 53, lon: 35, income: 25 },
-  afr: { id: 'afr', name: 'Ciudad Varela', lat: 4, lon: 21, income: 25 },
-  me: { id: 'me', name: 'Puerto Galena', lat: 28, lon: 48, income: 30 },
-  eas: { id: 'eas', name: 'El Pantano Gris', lat: 35, lon: 115, income: 35 },
-  oce: { id: 'oce', name: 'La Vega', lat: -25, lon: 135, income: 25 },
+  na: { id: 'na', name: 'Los Llanos de Ceniza', x: -0.6, z: 8.9, roads: ['afr', 'me'], income: 35 },
+  sa: { id: 'sa', name: 'Carboneda', x: -9.8, z: -0.4, roads: ['weu', 'afr'], income: 25 },
+  weu: { id: 'weu', name: 'Altomonte', x: -4.6, z: -5.4, roads: ['oce', 'sa', 'eeu'], income: 30 },
+  eeu: { id: 'eeu', name: 'Valdelobos', x: 8.2, z: -5.6, roads: ['weu', 'eas'], income: 25 },
+  afr: { id: 'afr', name: 'Ciudad Varela', x: -6.8, z: 5.0, roads: ['oce', 'na', 'sa'], income: 25 },
+  me: { id: 'me', name: 'Puerto Galena', x: 8.4, z: 6.4, roads: ['oce', 'na'], income: 30 },
+  eas: { id: 'eas', name: 'El Pantano Gris', x: 8.6, z: 0.7, roads: ['eeu', 'oce'], income: 35 },
+  oce: { id: 'oce', name: 'La Vega', x: 1.6, z: 1.4, roads: ['weu', 'eas', 'afr', 'me'], income: 25 },
 };
 
+/** Every road once, as a pair of zones (the map draws them). */
+export const ROADS: [RegionId, RegionId][] = (Object.keys(REGIONS) as RegionId[]).flatMap((a) => REGIONS[a].roads.filter((b) => a < b).map((b): [RegionId, RegionId] => [a, b]));
+
+/** The shortest way by road from `a` to `b`, both included ([a] when they are the same); La Mula drives it. Ties go by the order of each zone's roads. */
+export function roadRoute(a: RegionId, b: RegionId): RegionId[] {
+  const prev = new Map<RegionId, RegionId | null>([[a, null]]);
+  const queue: RegionId[] = [a];
+  for (let k = 0; k < queue.length && !prev.has(b); k++) {
+    for (const n of REGIONS[queue[k]!].roads) {
+      if (prev.has(n)) continue;
+      prev.set(n, queue[k]!);
+      queue.push(n);
+    }
+  }
+  const route: RegionId[] = [];
+  for (let at: RegionId | null | undefined = b; at; at = prev.get(at)) route.unshift(at);
+  return route;
+}
+
+/** Road stretches on the shortest way from `a` to `b`. */
+export function roadHops(a: RegionId, b: RegionId): number {
+  return roadRoute(a, b).length - 1;
+}
+
 export const HOME_REGION: RegionId = 'weu';
+
+// ----------------------------------------------------------------- the Marea
+
+/**
+ * Zombie activity (`c.doom`) at which each zone falls under the Marea, by the
+ * road stretches between it and Los Llanos, where it comes up from (docs/FASE5.md).
+ * Altomonte never falls: at DOOM_MAX the campaign is lost.
+ */
+export const MAREA_THRESHOLDS = [4, 6, 9, 10, 11];
+export const MAREA_SOURCE: RegionId = 'na';
+/** Nidos gather under the Marea or beside it this many times as often as elsewhere. */
+const NIDO_TIDE_WEIGHT = 3;
+
+/** The activity at which `id` falls under the Marea; null for Altomonte. */
+export function mareaThreshold(id: RegionId): number | null {
+  if (id === HOME_REGION) return null;
+  return MAREA_THRESHOLDS[Math.min(roadHops(MAREA_SOURCE, id), MAREA_THRESHOLDS.length - 1)]!;
+}
+
+/** Under the Marea: its enclave sends nothing, its missions bring one more group of the dead and it can't be newly contacted. It recedes when the activity drops. */
+export function underMarea(c: Pick<CampaignState, 'doom'>, id: RegionId): boolean {
+  const t = mareaThreshold(id);
+  return t !== null && c.doom >= t;
+}
+
+export function floodedZones(c: Pick<CampaignState, 'doom'>): RegionId[] {
+  return (Object.keys(REGIONS) as RegionId[]).filter((id) => underMarea(c, id));
+}
+
+/** The group of the dead a mission under the Marea adds. */
+function tidePod(difficulty: number): TemplateId[] {
+  return difficulty >= 3 ? ['zombie', 'zombie', 'xenoid'] : ['zombie', 'zombie'];
+}
+
+/** A mission whose zone is under the Marea: one more group of the dead (the last); out of it, back as it was. */
+function tide(c: CampaignState, o: MissionOffer): void {
+  if (o.final) return;
+  const flooded = underMarea(c, o.region);
+  if (flooded && !o.tide) {
+    o.pods = [...o.pods, tidePod(o.difficulty)];
+    o.tide = true;
+  } else if (!flooded && o.tide) {
+    o.pods = o.pods.slice(0, -1);
+    delete o.tide;
+  }
+}
+
+/**
+ * Looks where the Marea is now (it follows the activity): an alert for every
+ * zone it reaches or frees, and the missions there made harder or not.
+ * Whether any zone changed.
+ */
+function syncMarea(c: CampaignState): boolean {
+  const now = floodedZones(c);
+  const before = c.flooded ?? [];
+  // Before the Bastion's level 4 nobody knows the word «Marea»: Lore's lines say it as they can.
+  const alert = (id: RegionId, reached: boolean) => {
+    const a = mareaAlert(bastionLevel(c), REGIONS[id].name, reached);
+    log(c, a.text, reached ? 'bad' : 'good', { kicker: a.kicker, title: a.title });
+  };
+  for (const id of now.filter((x) => !before.includes(x))) alert(id, true);
+  for (const id of before.filter((x) => !now.includes(x))) alert(id, false);
+  c.flooded = now;
+  for (const o of c.offers) tide(c, o);
+  return now.length !== before.length || now.some((x) => !before.includes(x));
+}
+
+/** Zones a road joins to Altomonte or to a zone already contacted: the radio reaches as far as the people do. */
+function roadReachable(c: CampaignState, id: RegionId): boolean {
+  return REGIONS[id].roads.some((n) => n === HOME_REGION || c.regions.find((r) => r.id === n)?.contacted);
+}
+
+/** Why `id` can't be contacted now, or null (docs/FASE5.md: only by road, and never under the Marea). */
+export function contactBlocker(c: CampaignState, id: RegionId): string | null {
+  const region = c.regions.find((r) => r.id === id);
+  if (!region || region.contacted) return 'Ya tenemos contacto con esa región.';
+  if (underMarea(c, id)) return floodedContactReason(bastionLevel(c), REGIONS[id].name);
+  if (!roadReachable(c, id)) {
+    // The zones on the way that can be contacted now; failing those, the first one on the road there.
+    const next = REGIONS[id].roads.filter((n) => !c.regions.find((r) => r.id === n)?.contacted && roadReachable(c, n) && !underMarea(c, n));
+    const route = roadRoute(HOME_REGION, id).find((n) => !c.regions.find((r) => r.id === n)?.contacted);
+    return noRoadReason((next.length ? next : route ? [route] : []).map((n) => REGIONS[n].name));
+  }
+  if (c.regions.filter((r) => r.contacted).length >= contactCapacity(c)) return 'No podemos mantener más contactos: construid un centro de comunicaciones.';
+  if (!canAfford(c, contactCost(c))) return 'No hay suministros suficientes.';
+  return null;
+}
 
 export interface RegionState {
   id: RegionId;
@@ -694,11 +827,23 @@ const DOOM_INTERVAL = 12;
  * time (balance simulation, 2026-10-11: chaining them won the campaign in
  * under a month and left the base unbuilt).
  */
-const MISSION_DAYS = 3;
+/** Days of a mission in Altomonte; every road stretch further away adds one (offerDays). */
+const MISSION_DAYS = 2;
 
-/** Days a mission keeps the squad away, shortest and longest (the garage takes some off). */
-export function missionDays(c: CampaignState): [number, number] {
-  return [Math.max(1, MISSION_DAYS - garageCut(c).days), Math.max(1, MISSION_DAYS + 1 - garageCut(c).days)];
+/**
+ * Days an operation keeps the squad away (docs/FASE5.md): La Mula's trip to its
+ * zone and back, 2 and one more for each road stretch from Altomonte, less what
+ * the Taller de La Mula cuts; one at least.
+ */
+export function offerDays(c: CampaignState, offer: Pick<MissionOffer, 'region'>): number {
+  return Math.max(1, MISSION_DAYS + roadHops(HOME_REGION, offer.region) - garageCut(c).days);
+}
+
+/** Days a mission keeps the squad away: that offer's (offerDays), or without one, the nearest zone's and the farthest's. */
+export function missionDays(c: CampaignState, offer?: Pick<MissionOffer, 'region'>): [number, number] {
+  if (offer) return [offerDays(c, offer), offerDays(c, offer)];
+  const all = (Object.keys(REGIONS) as RegionId[]).map((region) => offerDays(c, { region }));
+  return [Math.min(...all), Math.max(...all)];
 }
 /** Least days between one story chapter won and the next one opening. */
 const STORY_GAP = 8;
@@ -779,6 +924,8 @@ export interface MissionOffer {
   quest: QuestId | null;
   /** Flown at night (byNight): its reward already counts the night's half as much again. Missing: by day. */
   night?: boolean;
+  /** Its zone is under the Marea (docs/FASE5.md): one more group of the dead, the last of `pods`; gone when the zone is freed. */
+  tide?: true;
 }
 
 export type ProposalAction =
@@ -890,7 +1037,7 @@ export interface Rumor {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 13;
+export const CAMPAIGN_VERSION = 14;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -923,6 +1070,8 @@ export interface CampaignState {
   crafted?: CraftId[];
   /** Good weapons found, kept in the Armería: each for one soldier at most. */
   foundWeapons?: FoundWeapon[];
+  /** Zones under the Marea when it was last looked at (syncMarea), for the alerts; missing before version 14. */
+  flooded?: RegionId[];
   /** `works`: the projects going on, one per crew (two, three with the works brigade). */
   base: { plots: BasePlot[]; works: Construction[] };
   regions: RegionState[];
@@ -1188,7 +1337,7 @@ export function turnDay(c: CampaignState, s: CampaignSoldier): number | null {
 /** An enclave that is an ally (contacted) and stands (no Nido in its region). */
 function enclaveStands(c: CampaignState, id: RegionId): boolean {
   const r = c.regions.find((x) => x.id === id);
-  return !!r?.contacted && !r.facility;
+  return !!r?.contacted && !r.facility && !underMarea(c, id);
 }
 
 /** Enclaves that send medicines (ENCLAVES). */
@@ -1273,7 +1422,7 @@ function turn(c: CampaignState, s: CampaignSoldier): void {
   for (const w of c.foundWeapons ?? []) if (w.holder === s.id) w.holder = null;
   c.squad = c.squad.filter((id) => id !== s.id);
   if (c.treatment?.soldier === s.id) c.treatment = null;
-  log(c, `${s.name} no ha superado la fiebre: se ha convertido.${facilityCount(c, 'memorial') ? ' Descansa en el Camposanto.' : ''}`, 'bad', {
+  log(c, `${s.name} no ha superado la fiebre y se ha convertido.${facilityCount(c, 'memorial') ? ' Su nombre ya está en el Camposanto.' : ''}`, 'bad', {
     kicker: 'Enfermería',
     title: `${s.name} se ha convertido`,
   });
@@ -1833,6 +1982,7 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     parts: 0,
     crafted: [],
     foundWeapons: [],
+    flooded: [],
     base: freshBase(),
     regions: freshRegions(),
     offers: [],
@@ -1868,6 +2018,7 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
   c.offers.push(makeOffer(c, rng), makeOffer(c, rng));
   log(c, 'El Bastión entra en servicio. Elegid la primera misión: el combate hará subir de nivel al Bastión.', 'good');
   refreshNarrative(c, rng);
+  syncMarea(c);
   c.uid = rng.int(2 ** 31).toString(36);
   return c;
 }
@@ -2107,6 +2258,10 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
 
   if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) steps.push({ view: 'geoscape', label: 'Tu compañero quiere escanear', tone: 'urgent' });
 
+  // The Marea (docs/FASE5.md): the zones it covers send nothing and their missions are harder.
+  const flooded = floodedZones(c);
+  if (flooded.length) steps.push({ view: 'geoscape', label: floodedListLabel(bastionLevel(c), flooded.map((id) => REGIONS[id].name)), tone: 'info' });
+
   // Food (docs/FASE4.md): hunger, or the pantry running low.
   const days = Math.floor((c.food ?? 0) / Math.max(1, dailyRations(c)));
   if (c.hungry) steps.push({ view: 'facilities', label: 'Pasáis hambre: −10 de voluntad y heridas lentas. Buscad raciones o un Huerto', tone: 'urgent' });
@@ -2228,13 +2383,8 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (!canAfford(c, upgradeCost(plot.building as FacilityId, (plot.level ?? 1) + 1).cost)) return 'No hay suministros suficientes.';
       return null;
     }
-    case 'contact': {
-      const region = c.regions.find((r) => r.id === action.region);
-      if (!region || region.contacted) return 'Ya tenemos contacto con esa región.';
-      if (c.regions.filter((r) => r.contacted).length >= contactCapacity(c)) return 'No podemos mantener más contactos: construid un centro de comunicaciones.';
-      if (!canAfford(c, contactCost(c))) return 'No hay suministros suficientes.';
-      return null;
-    }
+    case 'contact':
+      return contactBlocker(c, action.region);
     case 'event':
       if (!eventDef(c)) return 'No hay ningún acontecimiento pendiente.';
       if (!eventOptionAvailable(c, action.option)) return 'No podemos permitírnoslo.';
@@ -2350,7 +2500,11 @@ function everyoneReady(ready: [boolean, boolean], connected: readonly Slot[]): b
 
 export function executeCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: CampaignContext): CampaignResult {
   const result = runCampaignCommand(c, cmd, ctx);
-  if (result.ok) syncPads(c);
+  if (result.ok) {
+    syncPads(c);
+    // An answer to an event, a Nido burnt: the activity may have moved the Marea.
+    syncMarea(c);
+  }
   return result;
 }
 
@@ -2745,7 +2899,10 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     c.nextFacilityDay = c.day + 20 + rng.int(7);
     const free = c.regions.filter((r) => !r.facility);
     if (c.regions.filter((r) => r.facility).length < MAX_FACILITIES && free.length) {
-      const region = rng.pick(free);
+      // Nidos gather under the Marea or beside it, three times as often as elsewhere.
+      const weight = (r: RegionState) => (underMarea(c, r.id) || REGIONS[r.id].roads.some((n) => underMarea(c, n)) ? NIDO_TIDE_WEIGHT : 1);
+      let roll = rng.int(free.reduce((n, r) => n + weight(r), 0));
+      const region = free.find((r) => (roll -= weight(r)) < 0)!;
       region.facility = { nextDoomDay: c.day + FACILITY_DOOM_INTERVAL };
       log(c, `Los zombis se juntan en un Nido en ${REGIONS[region.id].name}.`, 'bad');
       if (region.contacted) c.offers.push(makeFacilityOffer(c, region.id, rng));
@@ -2798,7 +2955,8 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 
   if (c.day >= c.nextSupplyDay) {
     c.nextSupplyDay = c.day + MONTH;
-    const income = BASE_INCOME + c.regions.filter((r) => r.contacted).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
+    // A zone under the Marea sends nothing.
+    const income = BASE_INCOME + c.regions.filter((r) => r.contacted && !underMarea(c, r.id)).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
     c.credits += income;
     log(c, `Llega el convoy de Altomonte: Ruth Halvorsen manda ${income} suministros.`, 'good');
     stop = true;
@@ -2813,6 +2971,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     stop = true;
   }
 
+  if (syncMarea(c)) stop = true;
   if (c.doom >= DOOM_MAX) {
     c.outcome = 'defeat';
     log(c, 'La Marea ha llegado a Atalaya.', 'bad');
@@ -2897,21 +3056,9 @@ export function gainXp(c: CampaignState, amount: number, rng: Rng): void {
   refreshNarrative(c, rng);
 }
 
-/**
- * The debrief's loot line: lore.ts lootSummary's, and with rations, parts or
- * found weapons in it, the same sentence with them (placeholders for Lore).
- */
+/** The debrief's loot line (lore.ts lootSummary), or null when nothing came back. */
 function lootLine(h: LootTotals): string | null {
-  if (!h.food && !h.parts && !h.weapons.length) return lootSummary(h.supplies, h.items, h.medicines);
-  const parts: string[] = [];
-  if (h.supplies) parts.push(`+${h.supplies} §`);
-  for (const id of h.items) parts.push(ITEM_FINDS[id]);
-  if (h.medicines) parts.push(h.medicines === 1 ? '1 medicina' : `${h.medicines} medicinas`);
-  if (h.food) parts.push(h.food === 1 ? '1 ración' : `${h.food} raciones`);
-  if (h.parts) parts.push(h.parts === 1 ? '1 pieza' : `${h.parts} piezas`);
-  for (const w of h.weapons) parts.push(FOUND_WEAPONS[w].find);
-  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : parts[0]!;
-  return `El botín: ${list}.`;
+  return lootSummary(h.supplies, h.items, h.medicines, h.food, h.parts, h.weapons);
 }
 
 /** Folds a finished tactical mission back into the campaign. */
@@ -3024,7 +3171,9 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     // The Acorazados' plates and hinges: a part each (docs/FASE4.md).
     report.scrap = mission.units.filter((u) => u.template === 'mec' && !u.alive).length;
     c.parts = (c.parts ?? 0) + report.scrap;
-    if (report.scrap) log(c, `Desmontáis ${report.scrap === 1 ? 'un Acorazado' : `${report.scrap} Acorazados`}: +${report.scrap} ${report.scrap === 1 ? 'pieza' : 'piezas'}.`, 'good');
+    if (report.scrap) {
+      log(c, report.scrap === 1 ? 'Le quitáis el chaleco y el casco a un Acorazado: +1 pieza.' : `Les quitáis el chaleco y el casco a ${report.scrap} Acorazados: +${report.scrap} piezas.`, 'good');
+    }
   }
 
   if (victory && offer) {
@@ -3089,7 +3238,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   c.lastReport = report;
   maybeFaces(c, report, rng);
   // The flight back and the recovery. Not after the final mission: the campaign is being decided.
-  if (!offer?.final) passDays(c, Math.max(1, MISSION_DAYS + rng.int(2) - garageCut(c).days), rng);
+  if (!offer?.final) passDays(c, offer ? offerDays(c, offer) : Math.max(1, MISSION_DAYS - garageCut(c).days), rng);
   else c.day++;
   // The bitten come home with a fever: their days count from their arrival (docs/FASE3.md).
   report.infected = [];
@@ -3100,6 +3249,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     report.infected.push(s.id);
     log(c, `${s.name} vuelve con un mordisco: tiene fiebre.`, 'bad');
   }
+  syncMarea(c);
   return report;
 }
 
@@ -3239,6 +3389,12 @@ export function migrateCampaign(old: CampaignState): CampaignState {
   loose.parts ??= 0;
   loose.foundWeapons ??= [];
   loose.crafted ??= (Object.keys(CRAFTS) as CraftId[]).filter((id) => hasTech(c, CRAFTS[id].tech));
+  // Version 14: the valley (docs/FASE5.md). Contacts off the roads stay; the Marea is where the
+  // activity puts it, without alerts for what had already fallen.
+  if (!loose.flooded) {
+    c.flooded = floodedZones(c);
+    for (const o of c.offers) tide(c, o);
+  }
   c.launchReady = [false, false];
   return c;
 }

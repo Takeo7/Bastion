@@ -27,7 +27,7 @@ import {
   detectionTo,
   DIRS8,
   ENEMY_FILES,
-  FOUND_WEAPONS,
+  findLabel,
   distance,
   endsTurn,
   getUnit,
@@ -37,7 +37,6 @@ import {
   HORDE,
   isAttack,
   isLit,
-  ITEM_FINDS,
   lootSummary,
   lootTotals,
   maxMoveCost,
@@ -160,8 +159,8 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
  * what a Bengala or a fire lights up.
  */
 const NIGHT_RULES = `De noche: los vivos ven ${NIGHT.sightCut} casillas menos (${NIGHT.minSight} como mínimo) y os detectan a la mitad de distancia. A la luz de una farola, una bengala o un fuego os ven como de día.`;
-const NIGHT_RADIO = 'Noche cerrada. Se ve poco: id pegados a las farolas o llevad bengalas.';
-const LIGHT_LINES = { bolt: 'La bengala ilumina la calle', fire: 'El fuego ilumina la zona' } as const;
+const NIGHT_RADIO = 'Noche cerrada. Ellos no necesitan ver para encontraros: id con bengalas, o pegados a las farolas.';
+const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fuego ilumina la zona' } as const;
 
 /** What attack variants do besides the odds shown in the panel. */
 const ATTACK_NOTES: Partial<Record<AttackAbility, string>> = {
@@ -292,57 +291,9 @@ function moveNoise(s: GameState, path: Vec2[], dash: boolean): string | null {
   return `Ruido ${parts[0]![0]}: ${parts.map((p) => p[1]).join(', ')}`;
 }
 
-/**
- * What a search turned up, short, to float over the furniture: «+12 §», «Un
- * botiquín», «Medicinas», «+2 ◍» (rations), «+1 ⚙» (parts), a found weapon's
- * name, or «Nada».
- */
-function findText(loot: Loot | null): string {
-  const parts: string[] = [];
-  if (loot?.supplies) parts.push(`+${loot.supplies} §`);
-  if (loot?.item) parts.push(capitalize(ITEM_FINDS[loot.item]));
-  if (loot?.medicines) parts.push('Medicinas');
-  if (loot?.food) parts.push(`+${loot.food} ◍`);
-  if (loot?.parts) parts.push(`+${loot.parts} ⚙`);
-  if (loot?.weapon) parts.push(FOUND_WEAPONS[loot.weapon].name);
-  return parts.join(' · ') || 'Nada';
-}
-
-/** «4 raciones», «una pieza»: rations and parts (docs/FASE4.md) as the log and the haul say them. Placeholder words for Lore. */
-function rations(n: number): string {
-  return n === 1 ? 'una ración' : `${n} raciones`;
-}
-
-function partsOf(n: number): string {
-  return n === 1 ? 'una pieza' : `${n} piezas`;
-}
-
-function joinAnd(parts: string[]): string {
-  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : (parts[0] ?? '');
-}
-
-/**
- * The log line for a search. Lore's `searchLine` names supplies, accessories
- * and medicines; rations, parts and found weapons (docs/FASE4.md) are said
- * here until it does.
- */
-function findLine(who: string, decor: DecorKind, loot: Loot | null, seed: number): string {
-  if (!loot?.food && !loot?.parts && !loot?.weapon) return searchLine(who, decor, loot, seed);
-  const what = [loot.food ? rations(loot.food) : '', loot.parts ? partsOf(loot.parts) : '', loot.weapon ? FOUND_WEAPONS[loot.weapon].find : ''].filter(Boolean);
-  return `${who} registra ${SEARCH_SPOTS[decor]?.name ?? 'el mueble'}: ${joinAnd(what)}.`;
-}
-
-/**
- * What a squad carries or brought home, in one line: Lore's `lootSummary`
- * («El botín: +34 §, un botiquín y 2 medicinas.») with the rations, parts and
- * weapons of docs/FASE4.md added. Null with nothing.
- */
+/** What a squad carries or brought home, in Lore's words (`lootSummary`): «El botín: +34 §, un botiquín y 3 raciones.», or null. */
 function haulText(t: LootTotals): string | null {
-  const extra = [t.food ? rations(t.food) : '', t.parts ? partsOf(t.parts) : '', ...t.weapons.map((w) => FOUND_WEAPONS[w].find)].filter(Boolean);
-  const base = lootSummary(t.supplies, t.items, t.medicines);
-  if (!extra.length) return base;
-  const before = [t.supplies ? `+${t.supplies} §` : '', ...t.items.map((id) => ITEM_FINDS[id]), t.medicines ? (t.medicines === 1 ? '1 medicina' : `${t.medicines} medicinas`) : ''].filter(Boolean);
-  return `El botín: ${joinAnd([...before, ...extra])}.`;
+  return lootSummary(t.supplies, t.items, t.medicines, t.food, t.parts, t.weapons);
 }
 
 /** The weapon an attack is made with, by name: a found weapon carried as the main one keeps its own («Fusil de caza», docs/FASE4.md). */
@@ -616,9 +567,9 @@ export class Game {
     // The briefing stays 4.2 s and fades for 0.8: no warning plays over it.
     this.tips.intro(5000, s);
     this.storyRadio('start');
-    // A night mission: Morse says so once the briefing is gone, and the log keeps the rules.
+    // A night mission: Morse says so once the briefing is gone (the first time, Lore's warning), and the log keeps the rules.
     if (s.mission.night) {
-      this.tips.story(NIGHT_RADIO);
+      if (!this.tips.night()) this.tips.story(NIGHT_RADIO);
       this.hud.log(NIGHT_RULES, '#2a4a7a');
     }
     void this.openingShot();
@@ -1117,7 +1068,7 @@ export class Game {
         const u = getUnit(v, e.unit)!;
         this.hud.log(`Han mordido a ${u.name}`, '#ff6b5a');
         if (!this.shownToSquad(u)) return;
-        this.fx.floatText(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.5, 0)), 'MORDIDO', 'alert');
+        this.fx.floatText(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.5, 0)), '¡MORDISCO!', 'alert');
         await wait(0.5);
         return;
       }
@@ -1311,10 +1262,10 @@ export class Game {
         this.sfx.search(at);
         await this.units.rummage(u.id, at);
         // A found weapon is the rare one: its own, more striking slip.
-        this.overlays.find(e.tile, findText(e.loot), !e.loot ? 'empty' : e.loot.weapon ? 'rare' : 'loot');
+        this.overlays.find(e.tile, findLabel(e.loot), !e.loot ? 'empty' : e.loot.weapon ? 'rare' : 'loot');
         if (e.loot) this.sfx.found(at);
         // The seed comes from the event, so both players read the same line.
-        if (decor) this.hud.log(findLine(u.name, decor, e.loot, e.tile.x * 7 + e.tile.y * 13 + v.turn), e.loot?.weapon ? '#ffd23a' : e.loot ? '#6dff9a' : undefined);
+        if (decor) this.hud.log(searchLine(u.name, decor, e.loot, e.tile.x * 7 + e.tile.y * 13 + v.turn), e.loot?.weapon ? '#ffd23a' : e.loot ? '#6dff9a' : undefined);
         await wait(0.5);
         return;
       }

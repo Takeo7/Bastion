@@ -220,7 +220,7 @@ describe('found weapons', () => {
   it('brought home, it goes to the Armería; a soldier who carries that kind of weapon takes it, a tier above the rest', () => {
     const { c, report } = found();
     expect(report.loot?.weapons).toEqual(['huntingRifle']);
-    expect(report.loot?.line).toMatch(/fusil de caza/);
+    expect(report.loot?.line).toMatch(/fusil de cerrojo/);
     const w = c.foundWeapons![0]!;
     expect(w).toMatchObject({ kind: 'huntingRifle', holder: null });
     const rookie = c.soldiers.find((s) => s.owner === 0 && s.alive)!;
@@ -234,7 +234,7 @@ describe('found weapons', () => {
     expect(weaponTier(c, rookie)).toBe(1);
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: rookie.id }, 0).ok).toBe(true);
     expect(weaponTier(c, rookie)).toBe(2);
-    expect(squadMember(c, rookie)).toMatchObject({ weaponTier: 2, weaponName: 'Fusil de caza' });
+    expect(squadMember(c, rookie)).toMatchObject({ weaponTier: 2, weaponName: 'Fusil de cerrojo' });
     // Never past what the rank allows, nor past 3.
     expect(weaponTier(c, { ...rookie, rank: 0 })).toBe(1);
     c.crafted = ['weapons2', 'weapons3'];
@@ -257,7 +257,7 @@ describe('found weapons', () => {
     c.squad = [rookie.id];
     const mission = createMission({ map: offer.map, slots: [0, 1], rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
     const unit = mission.units.find((u) => u.campaignId === rookie.id)!;
-    expect(unit.weaponName).toBe('Fusil de caza');
+    expect(unit.weaponName).toBe('Fusil de cerrojo');
     Object.assign(unit, { alive: false, hp: 0 });
     mission.outcome = 'defeat';
     mission.outcomeReason = 'wiped';
@@ -290,13 +290,13 @@ describe('the campaign', () => {
   });
 
   it('version 13: older campaigns start with a full pantry and keep the tiers their level gave them', () => {
-    expect(CAMPAIGN_VERSION).toBe(13);
+    expect(CAMPAIGN_VERSION).toBeGreaterThanOrEqual(13);
     const old = createCampaign([0], new Rng(1)) as CampaignState & Record<string, unknown>;
     for (const k of ['food', 'hungry', 'nextFoodDay', 'parts', 'crafted', 'foundWeapons']) delete old[k];
     (old as { version: number }).version = 12;
     old.xp = LEVEL_XP[5]!;
     const c = migrateCampaign(old);
-    expect(c.version).toBe(13);
+    expect(c.version).toBe(CAMPAIGN_VERSION);
     expect(c).toMatchObject({ food: START_FOOD, hungry: false, parts: 0, foundWeapons: [] });
     expect(c.crafted).toEqual(['weapons2', 'weapons3', 'armor2']);
     expect(weaponTier(c, { id: 'x', rank: 4 })).toBe(3);
