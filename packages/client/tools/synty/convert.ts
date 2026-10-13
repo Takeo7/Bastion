@@ -22,6 +22,7 @@ import {
   FX_MODELS,
   FX_TEXTURES,
   fxTextureFile,
+  UI_MODELS,
   SURVIVOR_CHOICES,
   HEADGEAR,
   PACKS,
@@ -221,6 +222,11 @@ for (const [id, a] of Object.entries(ANIMATIONS)) {
 // The effects' shapes convert like props; their sprites like atlases (alpha kept).
 for (const [id, f] of Object.entries(FX_MODELS)) {
   add({ kind: 'prop', id, name: id, out: join(PUBLIC, modelFile(f.pack, 'fx', id)), fbx: findFbx(f.pack, f.fbx), atlas: atlasOf(f.pack), slots: {} });
+}
+
+// The interface's renders' models convert like props too.
+for (const [id, u] of Object.entries(UI_MODELS)) {
+  add({ kind: 'prop', id, name: id, out: join(PUBLIC, modelFile(u.pack, 'ui', id)), fbx: findFbx(u.pack, u.fbx), atlas: atlasOf(u.pack), slots: slotsOf(u.pack, u.fbx) });
 }
 
 for (const [id, t] of Object.entries(FX_TEXTURES) as [keyof typeof FX_TEXTURES, (typeof FX_TEXTURES)[keyof typeof FX_TEXTURES]][]) {

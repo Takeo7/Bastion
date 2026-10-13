@@ -1,7 +1,7 @@
 import { makeUnit } from '../src/setup';
 import type { GameState, Slot, TemplateId, TileKind, Unit } from '../src/types';
 
-const LEGEND: Record<string, TileKind> = { '#': 'wall', H: 'high', h: 'low', '+': 'door', '=': 'window', L: 'ladder', C: 'console' };
+const LEGEND: Record<string, TileKind> = { '#': 'wall', H: 'high', h: 'low', '+': 'door', '=': 'window', L: 'ladder', S: 'ladder', C: 'console' };
 
 /**
  * Builds a small state from ASCII rows (same legend as maps, without pods),
@@ -39,16 +39,29 @@ export function stateFrom(rows: string[], heights?: string[]): GameState {
   };
 }
 
+/**
+ * Gives a state its storeys above the ground (docs/FASE6-PLAN.md), bottom up,
+ * drawn like the ground: a space where a storey has no slab (open air, a
+ * stairwell), `R` a roof nobody stands on, `S` stairs (a ladder).
+ */
+export function withLevels(s: GameState, levels: string[][]): GameState {
+  s.levels = levels.map((rows) => ({
+    tiles: rows.flatMap((row) => [...row].map((ch): TileKind | null => (ch === ' ' ? null : ch === 'R' ? 'roof' : (LEGEND[ch] ?? 'floor')))),
+  }));
+  return s;
+}
+
 export function addUnit(
   s: GameState,
   id: string,
   template: TemplateId,
   x: number,
   y: number,
-  extra: Partial<Unit> & { owner?: Slot | null } = {},
+  extra: Partial<Unit> & { owner?: Slot | null; z?: number } = {},
 ): Unit {
-  const base = makeUnit(id, template, id, null, { x, y }, null);
-  const u: Unit = { ...base, owner: base.team === 'xcom' ? 0 : null, ap: 2, ...extra };
+  const { z = 0, ...rest } = extra;
+  const base = makeUnit(id, template, id, null, { x, y, z }, null);
+  const u: Unit = { ...base, owner: base.team === 'xcom' ? 0 : null, ap: 2, ...rest };
   s.units.push(u);
   return u;
 }

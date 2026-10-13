@@ -26,6 +26,7 @@ import {
   destinations,
   detectionTo,
   DIRS8,
+  doorTiles,
   ENEMY_FILES,
   findLabel,
   distance,
@@ -51,7 +52,10 @@ import {
   previewShot,
   rangedTargets,
   reachesToSearch,
-  sameTile,
+  nodeOf,
+  kindAt,
+  toPos,
+  canStandOn,
   SCAVENGE,
   SEARCH_SPOTS,
   searchableTiles,
@@ -64,7 +68,6 @@ import {
   STORY,
   STORY_RADIO,
   teamVisibility,
-  tileAt,
   TEMPLATES,
   unitAt,
   visibleEnemies,
@@ -79,6 +82,8 @@ import {
   type GameEvent,
   type GameState,
   type Loot,
+  type Place,
+  type Pos,
   type LootTotals,
   type MissionKind,
   type PingKind,
@@ -162,6 +167,10 @@ const NIGHT_RULES = `De noche: los vivos ven ${NIGHT.sightCut} casillas menos ($
 const NIGHT_RADIO = 'Noche cerrada. Ellos no necesitan ver para encontraros: id con bengalas, o pegados a las farolas.';
 const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fuego ilumina la zona' } as const;
 
+/** Done by hand on a tile beside the soldier: Registrar, and opening or closing a door (playtest 13/10 #2). */
+type HandAbility = 'search' | 'openDoor' | 'closeDoor';
+const HAND: ReadonlySet<AbilityId> = new Set<AbilityId>(['search', 'openDoor', 'closeDoor']);
+
 /** What attack variants do besides the odds shown in the panel. */
 const ATTACK_NOTES: Partial<Record<AttackAbility, string>> = {
   rapidFire: 'Dos disparos seguidos',
@@ -189,15 +198,28 @@ function busySlots(s: GameState): Set<Slot> {
  * the farthest tile in range on the way there (as in XCOM, the aim stops at
  * the edge of the circle instead of losing the preview).
  */
-function throwTile(u: Unit, ability: AbilityId, tile: Vec2): Vec2 {
+function throwTile(u: Unit, ability: AbilityId, tile: Place): Place {
   const range = abilityRange(u, ability);
   const far = distance(u.pos, tile);
   if (far <= range) return tile;
   for (let k = range / far; k > 0; k -= 0.01) {
-    const p = { x: Math.round(u.pos.x + (tile.x - u.pos.x) * k), y: Math.round(u.pos.y + (tile.y - u.pos.y) * k) };
+    // On the floor that was aimed at (docs/FASE6.md).
+    const p = { x: Math.round(u.pos.x + (tile.x - u.pos.x) * k), y: Math.round(u.pos.y + (tile.y - u.pos.y) * k), z: tile.z };
     if (distance(u.pos, p) <= range) return p;
   }
   return u.pos;
+}
+
+/** Same tile on the same level (docs/FASE6.md): a place without `z` is on the ground. */
+function samePlace(a: Place, b: Place): boolean {
+  return a.x === b.x && a.y === b.y && (a.z ?? 0) === (b.z ?? 0);
+}
+
+/** The highest storey of the map anyone can stand on (docs/FASE6.md): 0 without storeys. */
+function topLevel(s: GameState): number {
+  const levels = s.levels ?? [];
+  for (let k = levels.length; k >= 1; k--) if (levels[k - 1]!.tiles.some((t) => t !== null && canStandOn(t))) return k;
+  return 0;
 }
 
 /** "las cintas" → "Las cintas". */
@@ -281,11 +303,13 @@ function noiseText(s: GameState, u: Unit, id: AbilityId): string | undefined {
 }
 
 /** What a move sounds like (NOISE in content.ts): running, a door, a window's glass. Null when it is quiet. */
-function moveNoise(s: GameState, path: Vec2[], dash: boolean): string | null {
+function moveNoise(s: GameState, path: Place[], dash: boolean): string | null {
   const parts: [number, string][] = [];
+  // Each step on its own floor (docs/FASE6.md).
+  const kinds = path.map((p) => kindAt(s, toPos(p)));
   if (dash) parts.push([NOISE.dash, 'corre']);
-  if (path.some((p) => tileAt(s, p.x, p.y) === 'window')) parts.push([NOISE.breach, 'rompe un cristal']);
-  if (path.some((p) => tileAt(s, p.x, p.y) === 'door')) parts.push([NOISE.door, 'abre una puerta']);
+  if (kinds.includes('window')) parts.push([NOISE.breach, 'rompe un cristal']);
+  if (kinds.includes('door')) parts.push([NOISE.door, 'abre una puerta']);
   if (!parts.length) return null;
   parts.sort((a, b) => b[0] - a[0]);
   return `Ruido ${parts[0]![0]}: ${parts.map((p) => p[1]).join(', ')}`;
@@ -300,6 +324,21 @@ function haulText(t: LootTotals): string | null {
 function weaponLabel(u: Unit, ability: AttackAbility): string {
   const weapon = attackWeapon(u, ability);
   return u.weaponName && weapon.id === TEMPLATES[u.template].weapon ? u.weaponName : weapon.name;
+}
+
+/**
+ * A line of an operation's briefing for the arrival card: its first sentences,
+ * up to about two lines, past the sender's «Aviso de…» if it opens with one.
+ */
+function briefingLine(text: string): string {
+  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((t) => t.trim()) ?? [text];
+  if (sentences.length > 1 && /^Aviso\b/.test(sentences[0]!)) sentences.shift();
+  let out = '';
+  for (const t of sentences) {
+    if (out && out.length + t.length > 170) break;
+    out = out ? `${out} ${t}` : t;
+  }
+  return out;
 }
 
 /** A backpack's things, one slot each, for the sheet. */
@@ -432,10 +471,22 @@ export class Game {
   private selected: string | null = null;
   private mode: Mode = { kind: 'move' };
   private targetId: string | null = null;
-  private hoverTile: Vec2 | null = null;
+  private hoverTile: Pos | null = null;
+  /**
+   * The active floor (docs/FASE6.md): the cursor picks on it and below it,
+   * the range and the previews are drawn on it, and the buildings are cut
+   * away above it. It follows the selected soldier; PageUp/PageDown, the
+   * HUD's arrows or Shift and the wheel change it.
+   */
+  private level = 0;
+  private maxLevel = 0;
+  /** Soldier and level the floor last followed (`id@z`): a change sets the floor again. */
+  private levelFor: string | null = null;
+  /** When the wheel last changed the floor. */
+  private levelWheel = 0;
   private reachCache: { key: string; reach: Reach; tiles: MoveTile[] } | null = null;
   /** Moves planned without the command, by unit: mine and the partner's (UX-REVISION-2 #35). */
-  private plans = new Map<string, { slot: Slot; tile: Vec2 }>();
+  private plans = new Map<string, { slot: Slot; tile: Place }>();
   private awaitingReply = false;
   private lastPresence = '';
   private presenceTimer = 0;
@@ -449,8 +500,10 @@ export class Game {
   private qualityNoticed = false;
   /** The map has furniture to search (hand-made maps have none: Registrar is left off the bar). */
   private hasSpots = false;
-  /** With Registrar armed, the furniture it would search (Tab or a click picks another). */
-  private searchPick: Vec2 | null = null;
+  /** With Registrar or a door armed, the tile it would act on (Tab or a click picks another). */
+  private handPick: Vec2 | null = null;
+  /** A repair just failed: the horde that follows comes for the alarm, and says so. */
+  private alarmRaised = false;
   /** A bitten soldier of ours has risen in this mission already: the stamp only comes the first time. */
   private risenSeen = false;
 
@@ -472,7 +525,13 @@ export class Game {
     this.rig = new CameraRig(this.renderer.camera);
     this.sfx.attach(this.renderer.camera, () => this.rig.focusPoint);
     this.renderer.scene.add(this.mapView.group, this.units.group, this.fx.group, this.songFx.group, this.songMarks.group);
-    this.mapView.watch(this.renderer.camera, () => ({ selected: this.selected, hover: this.hoverTile, target: this.targetId }));
+    // Units on a storey the cutaway hides lose their body (their flag stays, with the floor: unitViews).
+    this.units.setCutAway((p) => this.mapView.isCutAway(p));
+    // `level`: the active floor, for the buildings' cutaway.
+    this.mapView.watch(this.renderer.camera, () => {
+      const focus = { selected: this.selected, hover: this.hoverTile, target: this.targetId, level: this.level };
+      return focus;
+    });
     this.hud = new Hud(this.root, {
       onAbility: (id) => this.useAbility(id),
       onEndTurn: () => this.toggleReady(),
@@ -486,6 +545,7 @@ export class Game {
       onAbandon: () => this.net.send({ t: 'abandon' }),
       onPassCommand: () => this.passCommand(),
       onToggleSound: () => !this.sfx.toggleMute(),
+      onFloor: (dir) => this.stepLevel(dir),
       soundOn: () => !this.sfx.muted,
     });
     // Above the 3D labels, under the HUD panels.
@@ -537,6 +597,10 @@ export class Game {
     this.renderer.fitMap(s.width, s.height);
     this.rig.setBounds(s.width, s.height);
     setTerrain(this.view);
+    this.maxLevel = topLevel(s);
+    this.level = 0;
+    this.levelFor = null;
+    this.hud.setFloor(this.maxLevel ? { level: 0, max: this.maxLevel } : null);
     this.hasSpots = false;
     for (let i = 0; i < s.width * s.height && !this.hasSpots; i++) this.hasSpots = searchSpot(s, { x: i % s.width, y: Math.floor(i / s.width) }) !== null;
     this.mapView.build(this.view);
@@ -559,13 +623,19 @@ export class Game {
     const s = this.state;
     const mission = this.missionView();
     const chapter = s.campaignMission?.story;
-    this.hud.intro(
-      s.campaignMission?.kicker ?? (chapter ? `EXPEDIENTE · HOJA ${chapter}` : s.campaignMission ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA'),
-      s.campaignMission?.name ?? MISSION_NAMES[s.mission.kind],
-      [s.mapName, s.mission.night ? NIGHT_LABEL : '', mission.objective, mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
+    // What the mission is for, said at the start and not only in the strip (playtest 13/10 #7):
+    // the objective, and a line of the operation's briefing when the mission carries one.
+    const cm = s.campaignMission;
+    const briefing = cm && 'briefing' in cm && typeof cm.briefing === 'string' ? briefingLine(cm.briefing) : undefined;
+    const shown = this.hud.intro(
+      cm?.kicker ?? (chapter ? `DIARIO · HOJA ${chapter}` : cm ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA'),
+      cm?.name ?? MISSION_NAMES[s.mission.kind],
+      [s.mapName, s.mission.night ? NIGHT_LABEL : '', mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
+      mission.objective,
+      briefing,
     );
-    // The briefing stays 4.2 s and fades for 0.8: no warning plays over it.
-    this.tips.intro(5000, s);
+    // No warning plays over the briefing while it is up and fading.
+    this.tips.intro(shown, s);
     this.storyRadio('start');
     // A night mission: Morse says so once the briefing is gone (the first time, Lore's warning), and the log keeps the rules.
     if (s.mission.night) {
@@ -629,7 +699,7 @@ export class Game {
     this.hud.toast(message);
   }
 
-  onPresence(slot: Slot, unit: string | null, tile: Vec2 | null): void {
+  onPresence(slot: Slot, unit: string | null, tile: Place | null): void {
     if (slot === this.mySlot) return;
     const color = PLAYER_COLORS[slot];
     this.units.setPartnerSelected(unit, color);
@@ -637,7 +707,7 @@ export class Game {
   }
 
   /** The partner planned a move (or withdrew one, `tile: null`). */
-  onPlan(slot: Slot, unit: string, tile: Vec2 | null): void {
+  onPlan(slot: Slot, unit: string, tile: Place | null): void {
     if (slot === this.mySlot) return;
     if (tile) this.plans.set(unit, { slot, tile });
     else this.plans.delete(unit);
@@ -646,7 +716,7 @@ export class Game {
     if (tile && u) this.hud.log(`${this.playerName(slot)} planea mover a ${u.name}`, PLAYER_COLORS[slot]);
   }
 
-  onPing(slot: Slot, tile: Vec2, kind: PingKind): void {
+  onPing(slot: Slot, tile: Place, kind: PingKind): void {
     this.fx.ping(tileToWorld(tile), PLAYER_COLORS[slot], kind === 'enemy');
     this.sfx.command();
     if (slot !== this.mySlot) {
@@ -694,7 +764,7 @@ export class Game {
     window.setTimeout(() => (this.awaitingReply = false), 1500);
   }
 
-  private ping(tile: Vec2): void {
+  private ping(tile: Place): void {
     const now = performance.now();
     if (now - this.lastPing < 400) return;
     this.lastPing = now;
@@ -1141,7 +1211,8 @@ export class Game {
         await wait(0.4);
         return;
       case 'tileChanged': {
-        const before = tileAt(v, e.pos.x, e.pos.y);
+        // On its own floor (docs/FASE6.md): a door upstairs opens upstairs.
+        const before = kindAt(v, e.pos);
         if (e.kind === 'doorOpen' && before === 'door') {
           if (this.mapView.isVisible(e.pos.x, e.pos.y)) this.sfx.door(tileToWorld(e.pos, 1));
           return;
@@ -1178,6 +1249,8 @@ export class Game {
         this.sfx.hacked(e.success, screen);
         if (e.success) this.hud.banner('TERMINAL HACKEADO', 'xcom');
         else this.hud.banner('¡ALARMA!', 'alien');
+        // A failed repair sets the alarm off: the horde it brings says so (reinforcementsIncoming).
+        if (!e.success) this.alarmRaised = true;
         if (e.remote) {
           await this.fx.droneFlight(screen.clone().add(new THREE.Vector3(0, 0.6, 0)), this.units.dronePos(u.id));
           this.units.setDroneAway(u.id, false);
@@ -1196,16 +1269,22 @@ export class Game {
         return;
       }
       case 'reinforcementsIncoming': {
-        if (!e.r.pos) return;
-        const at = tileToWorld(e.r.pos);
         if (e.r.horde) {
-          // The Saqueo's horde (docs/FASE2.md): said, and marked at the edge, but the camera stays with the player.
-          const where = edgeName(v, e.r.pos);
-          this.hud.banner('MÁS ZOMBIS EN CAMINO', 'alien', `Llegan por ${where} al final del próximo turno enemigo`);
-          this.hud.log(`${e.r.units.length === 1 ? 'Viene un zombi más' : `Vienen ${e.r.units.length} zombis más`} por ${where}: llegan al final del próximo turno enemigo. Cuanto más ruido, antes vienen.`, '#ff6b5a');
-          await wait(0.6);
+          // A horde (playtest 13/10 #1): the dead come in by an edge, and nobody knows which; the camera stays with the player.
+          // The alarm's comes this very enemy turn, the Saqueo's the next one.
+          const when = e.r.turn <= v.turn ? 'al final de este turno enemigo' : 'al final del próximo turno enemigo';
+          const alarm = this.alarmRaised;
+          this.alarmRaised = false;
+          if (alarm) this.hud.banner('LA ALARMA SE OYE LEJOS', 'alien', `Llegan muertos por un borde ${when}`);
+          else this.hud.banner('MÁS ZOMBIS EN CAMINO', 'alien', `Llegan por un borde ${when}`);
+          const many = e.r.units.length === 1 ? 'Viene un zombi' : `Vienen ${e.r.units.length} zombis`;
+          this.hud.log(alarm ? `La alarma se oye lejos. ${many} por un borde: llegan ${when}.` : `${many} más por un borde: llegan ${when}. Cuanto más ruido, antes vienen.`, '#ff6b5a');
+          await wait(alarm ? 1 : 0.6);
           return;
         }
+        // A drop under a flare: only missions saved before the playtest of 13/10.
+        if (!e.r.pos) return;
+        const at = tileToWorld(e.r.pos);
         look(at);
         this.hud.banner('REFUERZOS EN CAMINO', 'alien');
         this.hud.log('Una bengala roja marca el sitio: llegan más al final del próximo turno enemigo', '#ff6b5a');
@@ -1453,7 +1532,7 @@ export class Game {
       return;
     }
 
-    const stepOut = !sameTile(e.from, shooter.pos);
+    const stepOut = !samePlace(e.from, shooter.pos);
     if (stepOut) await this.units.slide(shooter.id, tileToWorld(e.from), 0.22, false);
     await this.units.raiseWeapon(shooter.id, targetPos);
     await wait(cam() ? 0.25 : 0.08);
@@ -1623,7 +1702,8 @@ export class Game {
     const away = distance(by.pos, e.tile) > 1.5;
     const one = fresh.length === 1;
     const text = `${heardCount(fresh)} ${away ? (one ? 'va hacia donde sonó' : 'van hacia donde sonó') : one ? 'viene hacia aquí' : 'vienen hacia aquí'}`;
-    this.hud.banner('OS HAN OÍDO', 'warn', capitalize(text));
+    // The alarm's own noise: its horde's stamp follows and says it all; here only the line.
+    if (!this.alarmRaised) this.hud.banner('OS HAN OÍDO', 'warn', capitalize(text));
     this.hud.log(`Os han oído: ${text}`, '#ffc93a');
     this.tips.heard();
   }
@@ -1718,7 +1798,8 @@ export class Game {
   private drawDetection(): void {
     const v = this.view;
     const show = v.concealed && !v.outcome && !!this.selectedUnit();
-    const watchers = show ? v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && TEMPLATES[a.template].detection > 0) : [];
+    // Not one up on a storey the cutaway hides: its ring would float over the cut (its flag says where it is).
+    const watchers = show ? v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && TEMPLATES[a.template].detection > 0 && !this.mapView.isCutAway(a.pos)) : [];
     this.overlays.setDetection(watchers.map((a) => ({ pos: a.pos, radius: this.darkDetection(a) })));
   }
 
@@ -1730,9 +1811,6 @@ export class Game {
 
   private marks(): EdgeMark[] {
     const marks = this.missionMarks();
-    // Where the Saqueo's next wave comes in, until it does.
-    const wave = this.view.mission.reinforcements.find((r) => r.horde && r.pos && !r.landed);
-    if (wave) marks.push({ kind: 'alert', label: 'Zombis', pos: wave.pos! });
     return this.moment ? [...marks, { kind: 'alert', label: this.moment.who, pos: this.moment.pos }] : marks;
   }
 
@@ -1899,9 +1977,9 @@ export class Game {
   // ================================================== planning without the command
 
   /** Plans a move for `u` (or withdraws it, clicking the same tile again); the partner sees it. */
-  private togglePlan(u: Unit, tile: Vec2): void {
+  private togglePlan(u: Unit, tile: Place): void {
     const current = this.plans.get(u.id);
-    const withdraw = !!current && sameTile(current.tile, tile);
+    const withdraw = !!current && samePlace(current.tile, tile);
     if (withdraw) this.plans.delete(u.id);
     else this.plans.set(u.id, { slot: this.mySlot, tile });
     this.net.send({ t: 'plan', unit: u.id, tile: withdraw ? null : tile });
@@ -1915,7 +1993,7 @@ export class Game {
     for (const [id, plan] of this.plans) {
       const u = getUnit(this.state, id);
       const reach = u?.alive ? computeReach(this.state, u, maxMoveCost(u)) : null;
-      if (!u || !reach?.cost.has(plan.tile.y * this.state.width + plan.tile.x)) {
+      if (!u || !reach?.cost.has(nodeOf(this.state, toPos(plan.tile)))) {
         this.plans.delete(id);
         continue;
       }
@@ -2082,8 +2160,8 @@ export class Game {
   }
 
   private cycleTarget(dir: 1 | -1): void {
-    if (this.searching()) {
-      this.cycleSearch(dir);
+    if (this.handArmed()) {
+      this.cycleHand(dir);
       return;
     }
     if (this.mode.kind !== 'target') return;
@@ -2104,6 +2182,11 @@ export class Game {
   private confirmTarget(): void {
     if (this.mode.kind === 'self') {
       this.confirmSelf();
+      return;
+    }
+    // The armed panel's button for Registrar or a door (playtest 2026-10-13 #11: it did nothing, only Space searched).
+    if (this.handArmed()) {
+      this.confirmHand();
       return;
     }
     const u = this.selectedUnit();
@@ -2141,10 +2224,14 @@ export class Game {
         else this.enterTarget(id);
         return;
       case 'tile':
-        // Registrar is armed like a self ability (first press), on the furniture beside the soldier.
-        if (id === 'search') {
-          if (this.mode.kind === 'tile' && this.mode.ability === id) this.confirmSearch();
-          else this.armSearch();
+        // By hand (Registrar, a door): armed like a self ability, on the tiles beside the soldier.
+        // A single door is opened or closed at once: free, and it can be undone.
+        if (HAND.has(id)) {
+          const hand = id as HandAbility;
+          const tiles = this.handTiles(hand);
+          if (this.handArmed() === hand) this.confirmHand();
+          else if (hand !== 'search' && tiles.length === 1) this.useDoor(hand, tiles[0]!);
+          else this.armHand(hand);
           return;
         }
         this.mode = this.mode.kind === 'tile' && this.mode.ability === id ? { kind: 'move' } : { kind: 'tile', ability: id };
@@ -2163,76 +2250,92 @@ export class Game {
     }
   }
 
-  // ============================================================ Registrar
+  // ============================================================ by hand
 
-  private searching(): boolean {
-    return this.mode.kind === 'tile' && this.mode.ability === 'search';
+  /** Registrar, or a door opened or closed (playtest 13/10 #2), armed on the tiles beside the soldier. */
+  private handArmed(): HandAbility | null {
+    return this.mode.kind === 'tile' && HAND.has(this.mode.ability) ? (this.mode.ability as HandAbility) : null;
   }
 
-  /** Furniture the selected soldier can search from where it stands. */
-  private searchTiles(): Vec2[] {
+  /** The tiles beside the selected soldier that `id` works on: furniture to search, closed or open doors. */
+  private handTiles(id: HandAbility | null = this.handArmed()): Vec2[] {
     const u = this.selectedUnit();
-    return u ? searchableTiles(this.state, u) : [];
+    if (!u || !id) return [];
+    return id === 'search' ? searchableTiles(this.state, u) : doorTiles(this.state, u, id === 'openDoor' ? 'door' : 'doorOpen');
   }
 
-  /** The furniture Registrar would search now: the one picked (pointer, Tab or click), else the first within reach. */
-  private searchTarget(): Vec2 | null {
-    const tiles = this.searchTiles();
-    const pick = this.searchPick;
-    return (pick && tiles.find((t) => sameTile(t, pick))) ?? tiles[0] ?? null;
+  /** The tile the armed ability would act on: the one picked (pointer, Tab or click), else the first within reach. */
+  private handTarget(): Vec2 | null {
+    const tiles = this.handTiles();
+    const pick = this.handPick;
+    return (pick && tiles.find((t) => samePlace(t, pick))) ?? tiles[0] ?? null;
   }
 
-  /** Arms Registrar (on `tile`, if given): the furniture gets marked and the panel says which one it searches. */
-  private armSearch(tile?: Vec2): void {
-    this.mode = { kind: 'tile', ability: 'search' };
+  /** Arms `id` (on `tile`, if given): the tiles get marked and the panel says which one it acts on. */
+  private armHand(id: HandAbility, tile?: Vec2): void {
+    this.mode = { kind: 'tile', ability: id };
     this.targetId = null;
     this.concealWarn = null;
-    this.searchPick = tile ?? this.searchTarget();
+    this.handPick = tile ?? this.handTarget();
     this.refreshInteractive();
   }
 
-  /** Tab with Registrar armed: the next piece of furniture within reach. */
-  private cycleSearch(dir: 1 | -1): void {
-    const tiles = this.searchTiles();
+  /** Tab with it armed: the next tile within reach. */
+  private cycleHand(dir: 1 | -1): void {
+    const tiles = this.handTiles();
     if (tiles.length < 2) return;
-    const current = this.searchTarget();
-    const i = tiles.findIndex((t) => current && sameTile(t, current));
-    this.searchPick = tiles[(i + dir + tiles.length) % tiles.length]!;
+    const current = this.handTarget();
+    const i = tiles.findIndex((t) => current && samePlace(t, current));
+    this.handPick = tiles[(i + dir + tiles.length) % tiles.length]!;
     this.refreshInteractive();
   }
 
-  private confirmSearch(tile = this.searchTarget()): void {
+  private confirmHand(tile = this.handTarget()): void {
     const u = this.selectedUnit();
-    if (!u || !this.searching() || !this.canAct()) return;
+    const id = this.handArmed();
+    if (!u || !id || !this.canAct()) return;
     if (!this.hasCommand()) {
       this.hud.toast(this.commandLock());
       return;
     }
     if (!tile) {
-      this.hud.toast('No hay nada que registrar al lado.');
+      this.hud.toast(id === 'search' ? 'No hay nada que registrar al lado.' : 'No hay ninguna puerta a tu lado.');
       return;
     }
-    this.send({ type: 'ability', unit: u.id, ability: 'search', tile });
+    this.send({ type: 'ability', unit: u.id, ability: id, tile });
     this.cancelMode();
   }
 
-  /** The armed Registrar's panel: «Registrar el maletero», what it costs and sounds like, the room left. */
-  private searchPanel(u: Unit): TargetView | null {
-    const tile = this.searchTarget();
-    const decor = tile ? searchSpot(this.state, tile) : null;
-    if (!tile || !decor) return null;
-    const def = ABILITIES.search;
-    const name = SEARCH_SPOTS[decor]?.name ?? 'el mueble';
+  /** A door beside the soldier, opened or closed at once: it costs nothing and can be undone. */
+  private useDoor(id: 'openDoor' | 'closeDoor', tile: Vec2): void {
+    const u = this.selectedUnit();
+    if (!u || !this.canAct()) return;
+    if (!this.hasCommand()) {
+      this.hud.toast(this.commandLock());
+      return;
+    }
+    this.send({ type: 'ability', unit: u.id, ability: id, tile });
+    this.cancelMode();
+  }
+
+  /** The armed panel: «Registrar el maletero» (with the room left in the backpack), «Abrir la puerta». */
+  private handPanel(u: Unit): TargetView | null {
+    const id = this.handArmed();
+    const tile = this.handTarget();
+    if (!id || !tile) return null;
+    const def = ABILITIES[id];
+    const others = this.handTiles().length - 1;
+    const base = { kind: 'self' as const, action: def.name, locked: this.lockLabel(), cost: costText(u, id), noise: noiseText(this.state, u, id), effect: def.description };
+    if (id !== 'search') {
+      const what = id === 'openDoor' ? 'abrir' : 'cerrar';
+      return { ...base, title: def.name, hint: `Otra vez, Espacio o clic en la puerta: ${what}${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} puerta` : ''} · Esc: cancelar` };
+    }
+    const decor = searchSpot(this.state, tile);
+    if (!decor) return null;
     const room = BACKPACK_SLOTS - (u.backpack?.length ?? 0);
-    const others = this.searchTiles().length - 1;
     return {
-      kind: 'self',
-      title: `${def.name} ${name}`,
-      action: def.name,
-      locked: this.lockLabel(),
-      cost: costText(u, 'search'),
-      noise: noiseText(this.state, u, 'search'),
-      effect: def.description,
+      ...base,
+      title: `${def.name} ${SEARCH_SPOTS[decor]?.name ?? 'el mueble'}`,
       detail: `Mochila: ${room === 1 ? 'queda 1 hueco' : `quedan ${room} huecos`} de ${BACKPACK_SLOTS}`,
       hint: `Otra vez, Espacio o clic en el mueble: registrar${others ? ` · Tab: ${others === 1 ? 'el otro' : 'otro'} mueble` : ''} · Esc: cancelar`,
     };
@@ -2265,7 +2368,7 @@ export class Game {
         this.confirmTarget();
         return;
       case 'tile':
-        if (this.searching()) this.confirmSearch();
+        if (this.handArmed()) this.confirmHand();
         else if (this.hoverTile) this.throwAt(this.hoverTile);
         else this.hud.toast('Señala con el ratón dónde lanzarla.');
         return;
@@ -2278,8 +2381,10 @@ export class Game {
 
   private abilityList(u: Unit): AbilityId[] {
     const m = this.state.mission;
+    // A door's button only while there is one to open or close beside the soldier (they come last, so no hotkey moves).
+    const door = (id: AbilityId) => (id !== 'openDoor' && id !== 'closeDoor') || doorTiles(this.state, u, id === 'openDoor' ? 'door' : 'doorOpen').length > 0;
     return abilitiesOf(u).filter(
-      (id) => (id !== 'evac' || m.evacZone.length > 0) && (id !== 'hack' || (!!m.terminal && !m.objectiveDone)) && (id !== 'search' || this.hasSpots),
+      (id) => (id !== 'evac' || m.evacZone.length > 0) && (id !== 'hack' || (!!m.terminal && !m.objectiveDone)) && (id !== 'search' || this.hasSpots) && door(id),
     );
   }
 
@@ -2368,11 +2473,44 @@ export class Game {
       if (!u || !this.canAct() || abilityBlocker(this.state, u, this.mode.ability)) this.cancelModeSilently();
     }
     this.drawDetection();
-    // Without the command the range is still shown, fainter: it is for planning (#35).
+    this.followLevel();
+    // Without the command the range is still shown, fainter: it is for planning (#35). Only the active floor's.
     const r = this.mode.kind === 'move' && !this.isBusy(this.selected) ? this.reach() : null;
-    this.overlays.showMoveRange(r?.tiles ?? [], !this.hasCommand());
+    this.overlays.showMoveRange((r?.tiles ?? []).filter((t) => ((t.pos as Pos).z ?? 0) === this.level), !this.hasCommand());
     this.updateHover();
     this.refreshHud();
+  }
+
+  /** The floor follows the selected soldier: when it is picked, and when it climbs or comes down. */
+  private followLevel(): void {
+    const u = this.selectedUnit();
+    const key = u ? `${u.id}@${u.pos.z}` : null;
+    if (key === this.levelFor) return;
+    this.levelFor = key;
+    if (u) this.setLevel(u.pos.z, false);
+  }
+
+  /** One floor up (1) or down (-1), by key, wheel or the HUD's arrows. */
+  private stepLevel(dir: 1 | -1): void {
+    if (!this.maxLevel) return;
+    this.setLevel(this.level + dir);
+  }
+
+  /**
+   * Makes `k` the active floor: the camera rises or drops to it, and the
+   * cursor, the range and the previews move to it. `refresh` false: called
+   * from inside a refresh, which goes on to draw them.
+   */
+  private setLevel(k: number, refresh = true): void {
+    const level = Math.max(0, Math.min(this.maxLevel, k));
+    this.hud.setFloor(this.maxLevel ? { level, max: this.maxLevel } : null);
+    if (level === this.level) return;
+    this.level = level;
+    const at = this.rig.focusPoint;
+    this.rig.focus(new THREE.Vector3(at.x, level * STOREY, at.z));
+    // The tile under the pointer is now looked for on the new floor.
+    this.hoverTile = null;
+    if (refresh) this.refreshInteractive();
   }
 
   private cancelModeSilently(): void {
@@ -2436,8 +2574,10 @@ export class Game {
         break;
       }
     }
-    const incoming = m.reinforcements.filter((r) => r.pos && !r.landed);
-    const alert = !incoming.length ? null : incoming.every((r) => r.horde) ? 'ZOMBIS EN CAMINO' : 'REFUERZOS EN CAMINO';
+    // A horde has no announced spot (playtest 13/10 #1); a flare drop (older saves) has one.
+    const incoming = m.reinforcements.filter((r) => !r.landed && (r.horde || r.pos));
+    const now = incoming.some((r) => r.horde && r.turn <= s.turn);
+    const alert = !incoming.length ? null : incoming.some((r) => !r.horde) ? 'REFUERZOS EN CAMINO' : now ? 'ZOMBIS: LLEGAN ESTE TURNO' : 'ZOMBIS EN CAMINO';
     return { kind: m.kind, objective, objectiveTip, turnsLeft: m.turnsLeft, alert, area: s.mapName, horde: m.horde?.length ? this.hordeView() : null };
   }
 
@@ -2451,7 +2591,8 @@ export class Game {
     const s = this.view;
     const m = s.mission;
     const sent = m.reinforcements.filter((r) => r.horde).length;
-    const points = s.turn * HORDE.perTurn + (m.noise ?? 0);
+    // At night the dead are already on their way: the clock runs a turn ahead (Sim.callHorde).
+    const points = (s.turn + (m.night ? NIGHT.hordeHead : 0)) * HORDE.perTurn + (m.noise ?? 0);
     const left = (sent + 1) * HORDE.wave - points;
     const fill = Math.max(0, Math.min(1, 1 - left / HORDE.wave));
     const turns = Math.ceil(left / HORDE.perTurn);
@@ -2542,9 +2683,9 @@ export class Game {
   /** Builds the target panel and draws the aim line for the current target. */
   private targetPanel(): TargetView | null {
     const u = this.selectedUnit();
-    if (u && this.searching()) {
+    if (u && this.handArmed()) {
       this.overlays.showAim(null, null);
-      return this.searchPanel(u);
+      return this.handPanel(u);
     }
     if (u && this.mode.kind === 'self') {
       const id = this.mode.ability;
@@ -2640,6 +2781,7 @@ export class Game {
     this.overlays.showRange(null);
     this.overlays.setSpots([]);
     this.overlays.setNote(null);
+    this.overlays.setRangeFocus(null);
     this.overlays.setHover(tile);
     const hovered = tile ? unitAt(this.view, tile) : undefined;
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
@@ -2656,14 +2798,17 @@ export class Game {
       if (lit) this.overlays.setNote(from, lit);
     }
 
-    if (this.searching()) {
-      // The furniture within reach is marked; the pointer on one picks it, and the panel follows.
-      const pick = this.searchPick;
-      if (tile && this.searchTiles().some((t) => sameTile(t, tile)) && !(pick && sameTile(pick, tile))) {
-        this.searchPick = tile;
+    const hand = this.handArmed();
+    if (hand) {
+      // The furniture or doors within reach are marked; the pointer on one picks it, and the panel follows.
+      const pick = this.handPick;
+      if (tile && this.handTiles().some((t) => samePlace(t, tile)) && !(pick && samePlace(pick, tile))) {
+        this.handPick = tile;
         this.hud.setTarget(this.targetPanel());
       }
-      this.overlays.setSpots(this.spotsAround(u, this.searchTarget()));
+      const target = this.handTarget();
+      if (hand === 'search') this.overlays.setSpots(this.spotsAround(u, target));
+      else this.overlays.setSpots(this.handTiles().map((p) => ({ pos: p, kind: target && samePlace(target, p) ? 'pick' : 'open' })), false);
       return;
     }
     if (this.mode.kind === 'tile') {
@@ -2689,10 +2834,18 @@ export class Game {
     }
     if (!tile) return;
     if (this.mode.kind !== 'move') return;
+    // The tiles' squares only round the pointer (playtest 13/10 #13: no grid over the whole board).
+    this.overlays.setRangeFocus(tile);
 
     const occupant = unitAt(this.state, tile);
     if (occupant?.team === 'alien' && this.visibleAliens.has(occupant.id)) {
       this.overlays.setHover(tile, 0xff5a5a);
+      return;
+    }
+    // A closed door beside the soldier: the click opens it, for free.
+    if (this.handTiles('openDoor').some((t) => samePlace(t, tile))) {
+      this.overlays.setSpots([{ pos: tile, kind: 'pick' }], false);
+      this.overlays.setNote(tile, 'Puerta · clic: abrir (no gasta acciones)');
       return;
     }
     // Only furniture the squad has seen: the fog keeps what is in an unexplored house.
@@ -2702,7 +2855,7 @@ export class Game {
       return;
     }
     const r = this.reach();
-    const dest = r?.tiles.find((t) => sameTile(t.pos, tile));
+    const dest = r?.tiles.find((t) => samePlace(t.pos, tile));
     if (!r || !dest) return;
     const path = buildPath(this.state, u, r.reach, tile);
     this.overlays.showPath(u.pos, path, dest.dash);
@@ -2722,9 +2875,9 @@ export class Game {
 
   /** The furniture beside `u` that Registrar reaches: to search, the one it would search, or searched already. */
   private spotsAround(u: Unit, pick: Vec2 | null): { pos: Vec2; kind: SpotKind }[] {
-    return DIRS8.map((d) => ({ x: u.pos.x + d.x, y: u.pos.y + d.y }))
+    return DIRS8.map((d) => ({ x: u.pos.x + d.x, y: u.pos.y + d.y, z: u.pos.z }))
       .filter((p) => searchSpot(this.state, p) !== null && reachesToSearch(this.state, u.pos, p))
-      .map((p) => ({ pos: p, kind: wasSearched(this.state, p) ? 'done' : pick && sameTile(pick, p) ? 'pick' : 'open' }));
+      .map((p) => ({ pos: p, kind: wasSearched(this.state, p) ? 'done' : pick && samePlace(pick, p) ? 'pick' : 'open' }));
   }
 
   /** The pointer on a piece of furniture: marked, named, and whether it can be searched (a click arms Registrar). */
@@ -2735,7 +2888,7 @@ export class Game {
       this.overlays.setNote(tile, `${name} · ya se ha registrado`);
       return;
     }
-    const near = this.searchTiles().some((t) => sameTile(t, tile));
+    const near = this.handTiles('search').some((t) => samePlace(t, tile));
     const blocked = near ? abilityBlocker(this.state, u, 'search') : null;
     this.overlays.setSpots([{ pos: tile, kind: near && !blocked ? 'pick' : 'open' }]);
     this.overlays.setNote(tile, !near ? `${name} · se puede registrar` : blocked ? `${name} · ${blocked.replace(/\.$/, '').toLowerCase()}` : `${name} · clic: registrar`);
@@ -2750,7 +2903,7 @@ export class Game {
    */
   private enemyTags(u: Unit | undefined, tile: Vec2 | null): Map<string, EnemyTag> {
     const tags = new Map<string, EnemyTag>();
-    if (u && tile && this.mode.kind === 'tile' && !this.searching() && this.canAct() && this.isMine(u) && !this.isBusy(u.id)) return this.blastTags(u, this.mode.ability, tile);
+    if (u && tile && this.mode.kind === 'tile' && !this.handArmed() && this.canAct() && this.isMine(u) && !this.isBusy(u.id)) return this.blastTags(u, this.mode.ability, tile);
     if (!u || !tile || this.mode.kind !== 'move' || !this.canAct() || !this.isMine(u) || this.isBusy(u.id)) return tags;
     if (!abilitiesOf(u).includes('shoot')) return tags;
     const occupant = unitAt(this.state, tile);
@@ -2765,7 +2918,7 @@ export class Game {
       );
       return tags;
     }
-    const dest = this.reach()?.tiles.find((t) => sameTile(t.pos, tile));
+    const dest = this.reach()?.tiles.find((t) => samePlace(t.pos, tile));
     if (!dest) return tags;
     const canShoot = !dest.dash && u.ap - 1 >= apNeeded(u, 'shoot');
     for (const a of this.state.units) {
@@ -2803,7 +2956,7 @@ export class Game {
   }
 
   private sendPresence(): void {
-    const key = `${this.selected}|${this.hoverTile?.x},${this.hoverTile?.y}`;
+    const key = `${this.selected}|${this.hoverTile?.x},${this.hoverTile?.y},${this.hoverTile?.z}`;
     if (key === this.lastPresence) return;
     this.lastPresence = key;
     window.clearTimeout(this.presenceTimer);
@@ -2819,7 +2972,7 @@ export class Game {
     const canvas = this.renderer.gl.domElement;
     const pointer = new THREE.Vector2();
 
-    const tileAtPointer = (e: PointerEvent | MouseEvent): Vec2 | null => {
+    const tileAtPointer = (e: PointerEvent | MouseEvent): Pos | null => {
       const rect = canvas.getBoundingClientRect();
       pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       this.raycaster.setFromCamera(pointer, this.renderer.camera);
@@ -2857,7 +3010,7 @@ export class Game {
         return;
       }
       const t = tileAtPointer(e);
-      if (t?.x === this.hoverTile?.x && t?.y === this.hoverTile?.y) return;
+      if (t?.x === this.hoverTile?.x && t?.y === this.hoverTile?.y && t?.z === this.hoverTile?.z) return;
       this.hoverTile = t;
       this.updateHover();
       this.sendPresence();
@@ -2873,6 +3026,15 @@ export class Game {
     });
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
+      // Shift or Alt and the wheel: the floor (Shift turns the wheel sideways on a Mac, hence deltaX).
+      if (e.shiftKey || e.altKey) {
+        const d = e.deltaY || e.deltaX;
+        // A trackpad sends a burst of these: one floor per gesture.
+        const now = performance.now();
+        if (d && now - this.levelWheel > 300) this.stepLevel(d < 0 ? 1 : -1);
+        if (d) this.levelWheel = now;
+        return;
+      }
       this.rig.zoom(e.deltaY);
     }, { passive: false });
 
@@ -2888,7 +3050,7 @@ export class Game {
       switch (e.code) {
         case 'Tab':
           e.preventDefault();
-          if (this.mode.kind === 'target' || this.searching()) this.cycleTarget(e.shiftKey ? -1 : 1);
+          if (this.mode.kind === 'target' || this.handArmed()) this.cycleTarget(e.shiftKey ? -1 : 1);
           else this.cycleUnit(e.shiftKey ? -1 : 1);
           break;
         case 'Enter':
@@ -2915,6 +3077,14 @@ export class Game {
         case 'Backspace':
           e.preventDefault();
           this.toggleReady();
+          break;
+        case 'PageUp':
+          e.preventDefault();
+          this.stepLevel(1);
+          break;
+        case 'PageDown':
+          e.preventDefault();
+          this.stepLevel(-1);
           break;
         case 'KeyG':
           if (this.hoverTile) this.ping(this.hoverTile);
@@ -2948,9 +3118,9 @@ export class Game {
    * First floor the ray meets, rooftops included. Walls and cover are ignored,
    * so the cursor always lands on a tile a unit could stand on.
    */
-  private pickTile(ray: THREE.Ray): Vec2 | null {
+  private pickTile(ray: THREE.Ray): Pos | null {
     const s = this.state;
-    const top = (Math.max(0, ...s.elev) + 1) * STOREY;
+    const top = (Math.max(0, this.level, ...s.elev) + 1) * STOREY;
     if (ray.direction.y >= 0) return null;
     let t = ray.origin.y > top ? (ray.origin.y - top) / -ray.direction.y : 0;
     const end = (ray.origin.y + 0.5) / -ray.direction.y;
@@ -2959,7 +3129,12 @@ export class Game {
       ray.at(t, p);
       const tile = worldToTile(p);
       if (tile.x < 0 || tile.y < 0 || tile.x >= s.width || tile.y >= s.height) continue;
-      if (p.y <= (s.elev[tile.y * s.width + tile.x] ?? 0) * STOREY) return tile;
+      // The floors of the active storey and those below it (above it the buildings are cut away), highest first.
+      const i = tile.y * s.width + tile.x;
+      for (let z = Math.min(this.level, s.levels?.length ?? 0); z >= 1; z--) {
+        if ((s.levels?.[z - 1]?.tiles[i] ?? null) !== null && p.y <= z * STOREY) return { ...tile, z };
+      }
+      if (p.y <= (s.elev[i] ?? 0) * STOREY) return { ...tile, z: 0 };
     }
     return null;
   }
@@ -3004,8 +3179,8 @@ export class Game {
     const planning = !this.hasCommand();
 
     // Registrar armed: a click on marked furniture searches it, anywhere else backs out.
-    if (this.searching()) {
-      if (this.searchTiles().some((t) => sameTile(t, tile))) this.confirmSearch(tile);
+    if (this.handArmed()) {
+      if (this.handTiles().some((t) => samePlace(t, tile))) this.confirmHand(tile);
       else this.cancelMode();
       return;
     }
@@ -3034,15 +3209,22 @@ export class Game {
       return;
     }
     // Furniture beside the soldier: the click arms Registrar on it (the next click, or Space, searches).
-    if (this.searchTiles().some((t) => sameTile(t, tile))) {
-      const view = this.abilities().find((a) => a.id === 'search');
-      if (view?.enabled) this.armSearch(tile);
+    // A closed door beside the soldier: the click opens it (free; playtest 13/10 #2).
+    if (this.handTiles('openDoor').some((t) => samePlace(t, tile))) {
+      const view = this.abilities().find((a) => a.id === 'openDoor');
+      if (view?.enabled) this.useDoor('openDoor', tile);
       else if (view?.reason) this.hud.toast(view.reason);
       return;
     }
-    const dest = this.reach()?.tiles.find((t) => sameTile(t.pos, tile));
+    if (this.handTiles('search').some((t) => samePlace(t, tile))) {
+      const view = this.abilities().find((a) => a.id === 'search');
+      if (view?.enabled) this.armHand('search', tile);
+      else if (view?.reason) this.hud.toast(view.reason);
+      return;
+    }
+    const dest = this.reach()?.tiles.find((t) => samePlace(t.pos, tile));
     if (dest) {
-      const cost = this.reachCache!.reach.cost.get(tile.y * this.state.width + tile.x)!;
+      const cost = this.reachCache!.reach.cost.get(nodeOf(this.state, toPos(tile)))!;
       if (apForCost(u, cost) > u.ap) return;
       if (planning) {
         this.togglePlan(u, tile);

@@ -1,0 +1,1361 @@
+/*
+ * «Mixta» on the base screens (strategy/screen.ts → strategy.css), the main
+ * menu (ui/lobby.ts) and Ajustes (ui/settingsPanel.ts). The values and the
+ * shared pieces are in mixta.css. Panels slide in when the screen changes
+ * (ui/motion.ts puts `.entering` on .strat for a moment); nothing loops except
+ * a small light where something waits for the player.
+ */
+
+/* =============================================================== top bar */
+
+/* A steel band across the top: the Bastión's plate, the stores in sunken wells, the Infestación's meter. */
+:root[data-ui='mixta'] .strat-top {
+  min-height: 46px;
+  padding: 6px 14px 7px;
+  gap: 12px;
+  border: 0;
+  border-image: none;
+  background:
+    url('/ui/mixta/grime.webp') 0 0 / 256px 256px,
+    url('/ui/mixta/steel.webp') 0 0 / 256px 256px,
+    linear-gradient(180deg, #2e3335 0%, #1a1d1f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(242, 194, 48, 0.35),
+    0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-ui='mixta'] .strat-brand {
+  align-items: center;
+  gap: 10px;
+  padding-right: 14px;
+  border-right: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+:root[data-ui='mixta'] .strat-brand b {
+  font-size: 22px;
+  letter-spacing: 0.14em;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+:root[data-ui='mixta'] .strat-brand span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .strat-brand span::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  -webkit-mask: var(--mi-day) center / contain no-repeat;
+  mask: var(--mi-day) center / contain no-repeat;
+}
+
+:root[data-ui='mixta'] .strat-res {
+  gap: 6px;
+}
+
+/* Each store in its own well: the pack's icon in the store's colour, the number in Oswald. */
+:root[data-ui='mixta'] :is(.strat-credits, .strat-level) {
+  gap: 6px;
+  padding: 4px 10px 4px 7px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .strat-res i {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  font-size: 0;
+  background: var(--rc, var(--t-muted));
+  -webkit-mask: var(--ri) center / contain no-repeat;
+  mask: var(--ri) center / contain no-repeat;
+}
+
+:root[data-ui='mixta'] .strat-res b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 19px;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .strat-credits {
+  --ri: var(--mi-supplies);
+  --rc: #ffd25a;
+}
+
+:root[data-ui='mixta'] .strat-credits.medicines {
+  --ri: var(--mi-medicines);
+  --rc: var(--t-good);
+}
+
+:root[data-ui='mixta'] .strat-credits.food {
+  --ri: var(--mi-food);
+  --rc: #eab96c;
+}
+
+:root[data-ui='mixta'] .strat-credits.parts {
+  --ri: var(--mi-parts);
+  --rc: #b2c3d0;
+}
+
+/* Hungry (no rations left): the well rimmed red, its light breathing. */
+:root[data-ui='mixta'] .strat-credits.x-bad {
+  --rc: #ff6a55;
+  box-shadow: var(--m-sink), inset 0 0 0 1px rgba(240, 80, 60, 0.8);
+}
+
+:root[data-ui='mixta'] .strat-credits.x-bad b {
+  color: #ff8a78;
+}
+
+:root[data-ui='mixta'] .strat-credits.x-bad i {
+  animation: m-breathe 1.6s ease-in-out infinite;
+}
+
+:root[data-ui='mixta'] .strat-level::before {
+  content: '';
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: var(--t-accent);
+  -webkit-mask: var(--mi-level) center / contain no-repeat;
+  mask: var(--mi-level) center / contain no-repeat;
+}
+
+:root[data-ui='mixta'] .strat-level small {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+:root[data-ui='mixta'] .strat-level .x-bar {
+  width: 64px;
+  height: 7px;
+}
+
+/* The Infestación (or la Marea): red, its count in slanted cells sunk in the band. */
+:root[data-ui='mixta'] .strat-doom small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: #ff7a64;
+}
+
+:root[data-ui='mixta'] .strat-doom small::before {
+  content: '';
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: var(--mi-doom) center / contain no-repeat;
+  mask: var(--mi-doom) center / contain no-repeat;
+}
+
+:root[data-ui='mixta'] .strat-doom .pips {
+  gap: 3px;
+  padding: 4px 6px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .strat-doom .pips i {
+  width: 12px;
+  height: 10px;
+  border: 0;
+  background: rgba(240, 80, 60, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(240, 80, 60, 0.35);
+  transform: skewX(-14deg);
+}
+
+:root[data-ui='mixta'] .strat-doom .pips i.on {
+  background: linear-gradient(180deg, #ff7f60, #cf3622);
+  box-shadow: 0 0 6px rgba(240, 80, 60, 0.55);
+}
+
+:root[data-ui='mixta'] .strat-doom b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 16px;
+  color: #ff8a78;
+}
+
+:root[data-ui='mixta'] .strat-player b {
+  font-weight: 700;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .strat-player .dot {
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* Ajustes, Menú and Novedades: steel plates with their icon. */
+:root[data-ui='mixta'] .strat-top > .x-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+:root[data-ui='mixta'] .strat-top > .x-btn::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: var(--bi) center / contain no-repeat;
+  mask: var(--bi) center / contain no-repeat;
+  opacity: 0.85;
+}
+
+:root[data-ui='mixta'] .strat-top > .x-btn:last-child {
+  --bi: var(--mi-menu);
+}
+
+:root[data-ui='mixta'] .strat-top > .x-btn:nth-last-child(2) {
+  --bi: var(--mi-settings);
+}
+
+:root[data-ui='mixta'] .strat-top > .x-btn.strat-news {
+  --bi: var(--mi-news);
+  color: var(--t-accent);
+}
+
+/* ================================================================== tabs */
+
+/* The screens: raised steel tabs with their icon; the open one is the hazard plate, lifted. */
+:root[data-ui='mixta'] .strat-nav {
+  bottom: 6px;
+  gap: 6px;
+}
+
+:root[data-ui='mixta'] .strat-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 112px;
+  height: 40px;
+  padding: 0 16px 0 12px;
+  overflow: visible;
+  clip-path: none;
+  border: 0;
+  border-radius: 2px;
+  background: url('/ui/mixta/steel.webp') 0 0 / 256px 256px, var(--m-plate);
+  box-shadow: var(--m-raise), 0 6px 14px rgba(0, 0, 0, 0.4);
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  color: #c9cdc6;
+  transition:
+    transform 0.14s var(--m-ease),
+    color 0.14s,
+    background 0.14s;
+}
+
+:root[data-ui='mixta'] .strat-nav button::before {
+  content: '';
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: var(--ni, none) center / contain no-repeat;
+  mask: var(--ni, none) center / contain no-repeat;
+  opacity: 0.85;
+}
+
+:root[data-ui='mixta'] .strat-nav button:hover {
+  transform: translateY(-2px);
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .strat-nav button.on {
+  padding-bottom: 0;
+  background: var(--t-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -3px 0 rgba(122, 82, 0, 0.45),
+    0 0 0 1px #4d3807,
+    0 10px 20px rgba(0, 0, 0, 0.45);
+  color: var(--t-primary-ink);
+  transform: translateY(-4px);
+}
+
+:root[data-ui='mixta'] .strat-nav button.on::before {
+  opacity: 1;
+}
+
+:root[data-ui='mixta'] .strat-nav button.urgent:not(.on) {
+  color: #ffb3a6;
+  box-shadow: var(--m-raise), 0 0 0 1px rgba(240, 80, 60, 0.7), 0 6px 14px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-ui='mixta'] .strat-nav button[data-view='hub'] {
+  --ni: url('/ui/synty/icons/home.webp');
+}
+
+:root[data-ui='mixta'] .strat-nav button[data-view='geoscape'] {
+  --ni: url('/ui/synty/icons/mh-pin.webp');
+}
+
+:root[data-ui='mixta'] .strat-nav button[data-view='research'] {
+  --ni: url('/ui/synty/icons/mh-notes.webp');
+}
+
+:root[data-ui='mixta'] .strat-nav button[data-view='engineering'] {
+  --ni: url('/ui/synty/icons/mh-shop.webp');
+}
+
+:root[data-ui='mixta'] .strat-nav button[data-view='barracks'] {
+  --ni: url('/ui/synty/icons/helmet.webp');
+}
+
+:root[data-ui='mixta'] .strat-nav button[data-view='facilities'] {
+  --ni: url('/ui/synty/icons/crafting.webp');
+}
+
+:root[data-ui='mixta'] .strat-nav button[data-view='squad'] {
+  --ni: url('/ui/synty/icons/r-mula.webp');
+}
+
+:root[data-ui='mixta'] .strat-nav button[data-view='squad']::before {
+  width: 28px;
+}
+
+/* News on a tab: a small lit badge after its name. */
+:root[data-ui='mixta'] .nav-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--t-accent);
+  box-shadow: 0 0 0 1px #4d3807, 0 0 8px rgba(242, 194, 48, 0.45);
+  color: var(--t-primary-ink);
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0;
+}
+
+:root[data-ui='mixta'] .nav-count.urgent {
+  background: #f0503c;
+  box-shadow: 0 0 0 1px #3d0d07, 0 0 10px rgba(240, 80, 60, 0.6);
+  color: #fff;
+}
+
+/* Where the partner is: their initial on a tag of their colour, over the tab, never over its name. */
+:root[data-ui='mixta'] .strat-nav .partner-dot {
+  top: -13px;
+  left: 50%;
+  z-index: 2;
+  min-width: 18px;
+  height: 17px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.5);
+  color: #120d1c;
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+/* ================================================================== hub */
+
+/* «Ahora»: the one thing to do next, a plate with a lit edge and a round go button. */
+:root[data-ui='mixta'] .strat-now {
+  position: relative;
+  grid-template-columns: 1fr auto;
+  gap: 1px 12px;
+  padding: 9px 10px 10px 16px;
+  border: 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.16), rgba(242, 194, 48, 0.03) 70%), var(--m-plate);
+  box-shadow: var(--m-raise), inset 4px 0 0 var(--t-accent);
+  color: var(--t-accent);
+  transition:
+    transform 0.14s var(--m-ease),
+    background 0.14s;
+}
+
+:root[data-ui='mixta'] .strat-now :is(small, b) {
+  grid-column: 1;
+}
+
+:root[data-ui='mixta'] .strat-now small {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+}
+
+:root[data-ui='mixta'] .strat-now b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 19px;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .strat-now .ico {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  padding: 7px;
+  border-radius: 50%;
+  background: var(--t-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 0 1px #4d3807;
+  color: var(--t-primary-ink);
+}
+
+:root[data-ui='mixta'] .strat-now:hover:not(:disabled) {
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.24), rgba(242, 194, 48, 0.06) 70%), var(--m-plate-hover);
+  transform: translateX(3px);
+}
+
+/* Urgent: the edge becomes hazard tape and the button breathes. */
+:root[data-ui='mixta'] .strat-now.urgent {
+  border-left: 8px solid transparent;
+  border-image: var(--m-hazard) 0 0 0 64 / 0 0 0 8px round;
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.2), rgba(242, 194, 48, 0.05) 70%), var(--m-plate);
+  color: var(--t-accent);
+  box-shadow: var(--m-raise);
+}
+
+:root[data-ui='mixta'] .strat-now.urgent .ico {
+  animation: m-breathe 1.8s ease-in-out infinite;
+}
+
+/* Lists: rows on the plate, parted by a groove; the one chosen lit yellow from its edge. */
+:root[data-ui='mixta'] .x-row {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: background 0.12s;
+}
+
+:root[data-ui='mixta'] .x-row:hover:not(:disabled) {
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.13), rgba(242, 194, 48, 0.02));
+}
+
+:root[data-ui='mixta'] .x-row.selected {
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.2), rgba(242, 194, 48, 0.05));
+  box-shadow: inset 3px 0 0 var(--t-accent), 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-ui='mixta'] .x-row b {
+  font-weight: 600;
+}
+
+:root[data-ui='mixta'] .agenda-icon {
+  width: 16px;
+  height: 16px;
+}
+
+:root[data-ui='mixta'] .calendar-day {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--t-accent);
+}
+
+/* ========================================================== soldier rows */
+
+/* The Cuartel's list: the class tag in its colour, the name, the rank's badge, a waiting promotion lit. */
+:root[data-ui='mixta'] .x-row.soldier {
+  gap: 8px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+:root[data-ui='mixta'] .x-row.soldier b {
+  font-size: 14px;
+}
+
+:root[data-ui='mixta'] .x-row.soldier .x-chip.good {
+  min-width: 20px;
+  background: var(--t-ready);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 0 1px #1d3a0a, 0 0 8px rgba(143, 208, 90, 0.5);
+  color: var(--t-ready-ink);
+  text-align: center;
+  animation: m-breathe 2.2s ease-in-out infinite;
+}
+
+/* The soldier's stats: a sunken strip of icons and big numbers. */
+:root[data-ui='mixta'] .x-statline {
+  padding: 6px 10px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .x-statline .stat b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 18px;
+}
+
+/* ================================================================ labels */
+
+/* Labels over the 3D base: small steel tags; the four fixed buildings in hazard yellow. */
+:root[data-ui='mixta'] :is(.room-label, .globe-label) {
+  border: 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(40, 44, 46, 0.95), rgba(20, 22, 24, 0.95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 3px 0 0 var(--t-accent), 0 0 0 1px rgba(0, 0, 0, 0.8), 0 3px 8px rgba(0, 0, 0, 0.45);
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+:root[data-ui='mixta'] .room-label.command {
+  background: var(--t-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(122, 82, 0, 0.45), 0 0 0 1px #4d3807, 0 4px 10px rgba(0, 0, 0, 0.5);
+  color: var(--t-primary-ink);
+  letter-spacing: 0.14em;
+}
+
+/* ================================================================ motion */
+
+/* A screen opened: its panels slide in from their side. */
+:root[data-ui='mixta'] .strat.entering :is(.strat-left, .strat-ticker) {
+  animation: m-in-left 0.3s var(--m-ease) both;
+}
+
+:root[data-ui='mixta'] .strat.entering .strat-right {
+  animation: m-in-right 0.3s var(--m-ease) 0.05s both;
+}
+
+:root[data-ui='mixta'] .strat.entering :is(.strat-center-top, .strat-center-bottom) {
+  animation: m-in-up 0.3s var(--m-ease) 0.05s both;
+}
+
+/* Pop-ups and Ajustes fade in (their content is drawn again on every update: only the curtain moves). */
+:root[data-ui='mixta'] .strat-modal.show {
+  animation: m-fade 0.18s ease-out;
+}
+
+@keyframes m-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+:root[data-ui='mixta'] :is(.toast, .strat-toast).show {
+  animation: m-in-down 0.22s var(--m-ease);
+}
+
+/* ============================================================ main menu */
+
+:root[data-ui='mixta'] .menu-column {
+  padding: 40px 34px 26px;
+}
+
+:root[data-ui='mixta'] .menu-title {
+  margin-bottom: 14px;
+  padding-bottom: 16px;
+  border-bottom: 6px solid transparent;
+  border-image: var(--m-hazard) 0 0 64 0 / 0 0 6px 0 round;
+}
+
+:root[data-ui='mixta'] .menu-title h1 {
+  font-size: clamp(56px, 6vw, 78px);
+  line-height: 0.95;
+  letter-spacing: 0.1em;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+:root[data-ui='mixta'] .menu-title p {
+  margin-bottom: 0;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: var(--t-accent);
+}
+
+/* The options: big Oswald words that step aside when pointed at, a yellow bar sliding in. */
+:root[data-ui='mixta'] .menu-item {
+  position: relative;
+  padding: 10px 0 10px 18px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 27px;
+  letter-spacing: 0.1em;
+  color: #e6e8e2;
+  transition:
+    transform 0.16s var(--m-ease),
+    background 0.16s,
+    color 0.16s;
+}
+
+:root[data-ui='mixta'] .menu-item small {
+  font-family: var(--t-font);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  background: var(--t-accent);
+  transform: scaleY(0);
+  transition: transform 0.16s var(--m-ease);
+}
+
+:root[data-ui='mixta'] .menu-item:hover:not(:disabled) {
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.14), transparent 80%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: #fff;
+  transform: translateX(6px);
+}
+
+:root[data-ui='mixta'] .menu-item:hover:not(:disabled)::before,
+:root[data-ui='mixta'] .menu-item.primary::before {
+  transform: scaleY(1);
+}
+
+:root[data-ui='mixta'] .menu-item.primary {
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .menu-item:disabled {
+  color: rgba(238, 240, 234, 0.32);
+}
+
+:root[data-ui='mixta'] .menu-option.on {
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.18), rgba(242, 194, 48, 0.03));
+  box-shadow: inset 3px 0 0 var(--t-accent);
+}
+
+/* ================================================================ Ajustes */
+
+:root[data-ui='mixta'] .setting {
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-ui='mixta'] .setting-name {
+  font-weight: 600;
+}
+
+/* Each setting a segmented switch sunk in the plate; the choice raised, with a yellow foot. */
+:root[data-ui='mixta'] .setting-choices {
+  gap: 2px;
+  padding: 2px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .setting-choices button {
+  clip-path: none;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+  color: var(--t-muted);
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+:root[data-ui='mixta'] .setting-choices button:hover:not(.on) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .setting-choices button.on {
+  background: var(--m-plate);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -2px 0 var(--t-accent), 0 0 0 1px var(--m-edge);
+  color: #fff;
+}
+
+/* ======================================================= the soldier's sheet */
+
+/* Aptitudes: ten cells sunk in a channel; the class's own steel-lit, the spent ones yellow, this promotion's striped, past the cap hatched. */
+:root[data-ui='mixta'] .apt-head b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+
+:root[data-ui='mixta'] .apt-val {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 21px;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .apt-boxes {
+  gap: 2px;
+  padding: 3px;
+  border-radius: 2px;
+  background: var(--m-well);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .apt-boxes i {
+  height: 11px;
+  border: 0;
+  border-radius: 1px;
+  background: #23272a;
+  transform: skewX(-12deg);
+}
+
+:root[data-ui='mixta'] .apt-boxes i.base {
+  background: linear-gradient(180deg, #d9ddd5, #9ea49b);
+}
+
+:root[data-ui='mixta'] .apt-boxes i.add {
+  background: linear-gradient(180deg, #ffe07a, #e2aa20);
+  box-shadow: 0 0 5px rgba(242, 194, 48, 0.45);
+}
+
+:root[data-ui='mixta'] .apt-boxes i.plan {
+  background: repeating-linear-gradient(-45deg, #7a5f12 0 2px, #f2c230 2px 4px);
+}
+
+:root[data-ui='mixta'] .apt-boxes i.cap {
+  background: repeating-linear-gradient(45deg, #15181a 0 3px, #262a2d 3px 5px);
+}
+
+:root[data-ui='mixta'] .apt-boxes i.mark::after {
+  bottom: -6px;
+  width: 2px;
+  background: var(--t-accent);
+}
+
+:root[data-ui='mixta'] :is(.apt-plus, .apt-minus) {
+  width: 24px;
+  height: 22px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-plate);
+  box-shadow: var(--m-raise);
+  color: var(--t-accent);
+  font-weight: 700;
+  transition: transform 0.12s var(--m-ease);
+}
+
+:root[data-ui='mixta'] :is(.apt-plus, .apt-minus):hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--m-raise), 0 0 0 1px var(--t-accent);
+}
+
+:root[data-ui='mixta'] .apt-plus:not(:disabled) {
+  background: var(--t-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 0 1px #4d3807;
+  color: var(--t-primary-ink);
+}
+
+:root[data-ui='mixta'] .service-help {
+  padding: 6px 10px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.14), transparent);
+  box-shadow: inset 3px 0 0 var(--t-accent);
+}
+
+/* «Guardado»: a plate that drops in, not a rubber stamp. */
+:root[data-ui='mixta'] .saved-stamp {
+  border: 0;
+  border-radius: 2px;
+  background: var(--t-ready);
+  box-shadow: 0 0 0 1px #1d3a0a, 0 6px 16px rgba(0, 0, 0, 0.5);
+  color: var(--t-ready-ink);
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  -webkit-mask: none;
+  mask: none;
+  transform: none;
+  animation: m-in-down 0.25s var(--m-ease);
+}
+
+/* ================================================================ pop-ups */
+
+/* Pop-ups and alerts: a riveted plate with a lit top edge (green for good news, red for bad), room to read. */
+:root[data-ui='mixta'] .strat-modal .x-panel,
+:root[data-ui='mixta'] .menu-modal .x-panel {
+  padding: 18px 22px 16px;
+  box-shadow: var(--t-sheet-shadow), inset 0 3px 0 var(--t-accent);
+}
+
+:root[data-ui='mixta'] .strat-modal .x-panel:has(> .alert-kicker.good) {
+  box-shadow: var(--t-sheet-shadow), inset 0 3px 0 var(--t-good);
+}
+
+:root[data-ui='mixta'] .strat-modal .x-panel:has(> .alert-kicker.bad) {
+  box-shadow: var(--t-sheet-shadow), inset 0 3px 0 var(--t-danger);
+}
+
+:root[data-ui='mixta'] .strat-modal .x-panel > .x-title {
+  margin-bottom: 10px;
+  font-size: 30px;
+}
+
+:root[data-ui='mixta'] :is(.strat-modal, .menu-modal) .x-text {
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: #dfe2dc;
+}
+
+:root[data-ui='mixta'] .alert-actions {
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ============================================================== El valle */
+
+/* Each operation's kind on a hexagon in its category's colour, the packs' icon in it instead of a glyph. */
+:root[data-ui='mixta'] .mission-icon {
+  width: 30px;
+  height: 27px;
+  border: 0;
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--icon, var(--t-warn)) 80%, #fff), var(--icon, var(--t-warn)) 55%, color-mix(in srgb, var(--icon, var(--t-warn)) 65%, #000));
+  color: #111314;
+  transform: none;
+}
+
+:root[data-ui='mixta'] .mission-icon > span {
+  width: 15px;
+  height: 15px;
+  font-size: 0;
+  background: currentColor;
+  -webkit-mask: var(--ki) center / contain no-repeat;
+  mask: var(--ki) center / contain no-repeat;
+  transform: none;
+}
+
+:root[data-ui='mixta'] .mission-icon[data-kind='elimination'] {
+  --ki: url('/ui/synty/icons/skull.webp');
+}
+
+:root[data-ui='mixta'] .mission-icon[data-kind='recovery'] {
+  --ki: url('/ui/synty/icons/mh-crate.webp');
+}
+
+:root[data-ui='mixta'] .mission-icon[data-kind='sabotage'] {
+  --ki: url('/ui/synty/icons/fire.webp');
+}
+
+:root[data-ui='mixta'] .mission-icon[data-kind='hack'] {
+  --ki: url('/ui/synty/icons/mh-comms.webp');
+}
+
+:root[data-ui='mixta'] .mission-icon[data-kind='rescue'] {
+  --ki: url('/ui/synty/icons/heal.webp');
+}
+
+:root[data-ui='mixta'] .mission-icon[data-kind='scavenge'] {
+  --ki: url('/ui/synty/icons/backpack.webp');
+}
+
+:root[data-ui='mixta'] .x-row.mission {
+  grid-template-columns: 4px 34px 1fr auto;
+}
+
+:root[data-ui='mixta'] .x-side.days {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  color: var(--t-accent);
+}
+
+/* The briefing: the facts in a sunken table, their names small, their values plain. */
+:root[data-ui='mixta'] dl.briefing {
+  padding: 8px 10px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] dl.briefing dd {
+  margin: 0;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* A note from the partner on a briefing: their words, set apart. */
+:root[data-ui='mixta'] .x-note {
+  color: var(--t-accent);
+  font-weight: 600;
+}
+
+/* Passing the days: the day on a small plate over the button. */
+:root[data-ui='mixta'] .scan-day {
+  padding: 2px 12px;
+  border-radius: 2px;
+  background: var(--m-plate);
+  box-shadow: var(--m-raise);
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .scan-btn {
+  min-width: 260px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+:root[data-ui='mixta'] .scan-btn small {
+  font-family: var(--t-font);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  text-shadow: none;
+}
+
+/* ============================================================== tabs in a sheet */
+
+/* Tabs inside a sheet (Armería): a segmented switch sunk in the plate, the open one raised with a yellow foot. */
+:root[data-ui='mixta'] .x-tabs {
+  gap: 2px;
+  padding: 2px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .x-tabs button {
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .x-tabs button:hover:not(.on) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .x-tabs button.on {
+  background: var(--m-plate);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -2px 0 var(--t-accent), 0 0 0 1px var(--m-edge);
+  color: #fff;
+}
+
+/* ========================================================== Instalaciones */
+
+/* The compound's plots: wells in the plate. The bunker's four buildings in hazard yellow, the facilities raised
+   steel, free ground rimmed green, rock and forest dim, works on hazard tape; the one picked lit yellow. */
+:root[data-ui='mixta'] .plot-cell {
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-well);
+  box-shadow: var(--m-sink);
+  color: #7d837b;
+  transition: transform 0.1s var(--m-ease);
+}
+
+:root[data-ui='mixta'] .plot-cell.terrain {
+  background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.035) 0 4px, transparent 4px 8px), var(--m-well);
+  color: #6c726b;
+}
+
+:root[data-ui='mixta'] .plot-cell.free {
+  border: 0;
+  box-shadow: var(--m-sink), inset 0 0 0 1px rgba(143, 208, 90, 0.6);
+}
+
+:root[data-ui='mixta'] .plot-cell.built {
+  background: var(--m-plate);
+  box-shadow: var(--m-raise);
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .plot-cell.fixed {
+  background: var(--t-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(122, 82, 0, 0.45), 0 0 0 1px #4d3807;
+  color: var(--t-primary-ink);
+}
+
+:root[data-ui='mixta'] .plot-cell.work {
+  background: var(--m-hazard) 0 0 / 24px 24px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  color: #1e1706;
+}
+
+:root[data-ui='mixta'] .plot-cell.work .plot-ico {
+  border-radius: 50%;
+  background: rgba(30, 23, 6, 0.85);
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] :is(.plot-cell:hover, .plot-cell.hovered) {
+  outline: 2px solid rgba(242, 194, 48, 0.65);
+  outline-offset: 1px;
+  transform: translateY(-1px);
+}
+
+:root[data-ui='mixta'] .plot-cell.selected {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 1px;
+  box-shadow: var(--m-sink), 0 0 12px rgba(242, 194, 48, 0.55);
+}
+
+:root[data-ui='mixta'] :is(.plot-level, .plot-days) {
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 10px;
+  color: var(--t-accent);
+  text-shadow: 0 1px 0 #000;
+}
+
+:root[data-ui='mixta'] .plot-cell.can-up::after {
+  color: var(--t-good);
+  text-shadow: 0 0 4px rgba(143, 208, 90, 0.8);
+}
+
+/* What can be built: small trays, those that gain from their neighbour rimmed green. */
+:root[data-ui='mixta'] .build-card {
+  border: 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.12));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+:root[data-ui='mixta'] .build-card.bonus {
+  box-shadow: inset 0 0 0 1px rgba(143, 208, 90, 0.55), inset 3px 0 0 var(--t-good);
+}
+
+:root[data-ui='mixta'] .build-card b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .build-card .plot-ico {
+  color: var(--t-accent);
+}
+
+/* ================================================================ cochera */
+
+/* The operation's head in the cochera: La Mula, from the front, at its side. */
+:root[data-ui='mixta'] .strat[data-view='squad'] .briefing-head {
+  padding-left: 120px;
+  background:
+    url('/ui/synty/renders/mula-front.webp') 16px 50% / auto 86% no-repeat,
+    var(--m-rivets),
+    var(--t-sheet);
+}
+
+:root[data-ui='mixta'] .briefing-head h1 {
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 30px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* The squad on the pads: steel cards in the owner's colour, each with its class's portrait (Arte-Personajes' renders). */
+:root[data-ui='mixta'] .lineup-card {
+  --portrait: none;
+  padding: 10px 8px 9px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--t-sheet);
+  box-shadow: inset 0 3px 0 var(--accent, var(--t-accent)), var(--t-sheet-shadow);
+}
+
+:root[data-ui='mixta'] .lineup-card[data-cls]:not(.empty) {
+  padding-left: 18px;
+  padding-right: 6px;
+}
+
+/* The portrait: head and shoulders in a sunken round frame on the card's top corner (no taller card: the pads
+   and «Lanzar misión» keep their room). */
+:root[data-ui='mixta'] .lineup-card[data-cls]::before {
+  content: '';
+  display: block;
+  position: absolute;
+  top: -14px;
+  left: -12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background:
+    var(--portrait) 50% 11% / auto 450% no-repeat,
+    radial-gradient(circle at 50% 30%, #3a4246, #15181a 75%);
+  box-shadow: 0 0 0 2px #1b1e20, 0 0 0 3px var(--accent, var(--t-accent)), 0 4px 10px rgba(0, 0, 0, 0.55);
+  transform: none;
+}
+
+:root[data-ui='mixta'] .lineup-card[data-cls='assault'] {
+  --portrait: url('/ui/synty/renders/asalto.webp');
+}
+
+:root[data-ui='mixta'] .lineup-card[data-cls='grenadier'] {
+  --portrait: url('/ui/synty/renders/granadero.webp');
+}
+
+:root[data-ui='mixta'] .lineup-card[data-cls='sharpshooter'] {
+  --portrait: url('/ui/synty/renders/francotirador.webp');
+}
+
+:root[data-ui='mixta'] .lineup-card[data-cls='specialist'] {
+  --portrait: url('/ui/synty/renders/especialista.webp');
+}
+
+:root[data-ui='mixta'] .lineup-card[data-cls='rookie'] {
+  --portrait: url('/ui/synty/renders/recluta.webp');
+}
+
+:root[data-ui='mixta'] .lineup-card b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .lineup-card.ready {
+  box-shadow: inset 0 3px 0 var(--t-good), var(--t-sheet-shadow), 0 0 14px rgba(143, 208, 90, 0.45);
+}
+
+:root[data-ui='mixta'] .lineup-card.empty {
+  background: rgba(14, 16, 17, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  outline: 1px dashed rgba(255, 255, 255, 0.25);
+  outline-offset: -5px;
+}
+
+:root[data-ui='mixta'] .lineup-card.empty b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--t-muted);
+}
+
+/* Fallen: the card darkened red, the portrait greyed, a red tag instead of a stamp. */
+:root[data-ui='mixta'] .lineup-card.dead {
+  background: linear-gradient(180deg, rgba(90, 30, 22, 0.95), rgba(40, 14, 10, 0.95));
+  box-shadow: inset 0 3px 0 var(--t-danger), var(--t-sheet-shadow);
+}
+
+:root[data-ui='mixta'] .lineup-card.dead[data-cls]::before {
+  filter: grayscale(1) brightness(0.6);
+  box-shadow: 0 0 0 3px #1b1e20, 0 0 0 4px var(--t-danger), 0 6px 14px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-ui='mixta'] .lineup-card.dead::after {
+  top: 0;
+  padding: 1px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--t-danger);
+  box-shadow: 0 0 0 1px #3d0d07;
+  color: #fff;
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  mix-blend-mode: normal;
+  transform: translate(-50%, -50%);
+}
+
+/* A promotion on the report: a lit badge. */
+:root[data-ui='mixta'] .lineup-card .promo {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 2px;
+  background: var(--t-ready);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 10px rgba(143, 208, 90, 0.45);
+  color: var(--t-ready-ink);
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+/* Launching: La Mula's silhouette on the big yellow plate. */
+:root[data-ui='mixta'] .x-btn.big {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 34px;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+}
+
+:root[data-ui='mixta'] .strat[data-view='squad'] .x-btn.big::before {
+  content: '';
+  width: 38px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: url('/ui/synty/icons/r-mula.webp') center / contain no-repeat;
+  mask: url('/ui/synty/icons/r-mula.webp') center / contain no-repeat;
+}
+
+/* ================================================================ report */
+
+/* The result: a lit plate (green done, red failed), not a rubber stamp. */
+:root[data-ui='mixta'] .briefing-head:is(.victory, .defeat) h1 {
+  margin: 6px 0 8px;
+  padding: 4px 22px 3px;
+  border: 0;
+  border-radius: 2px;
+  transform: none;
+  -webkit-mask: none;
+  mask: none;
+  font-size: 34px;
+  letter-spacing: 0.12em;
+}
+
+:root[data-ui='mixta'] .briefing-head.victory h1 {
+  background: var(--t-ready);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -3px 0 rgba(20, 60, 0, 0.4), 0 0 18px rgba(143, 208, 90, 0.4);
+  color: var(--t-ready-ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+:root[data-ui='mixta'] .briefing-head.defeat h1 {
+  background: linear-gradient(180deg, #ff7a62, #d23a25 55%, #9e2414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -3px 0 rgba(60, 0, 0, 0.4), 0 0 18px rgba(240, 80, 60, 0.4);
+  color: #fff;
+}
+
+/* ============================================================ Ajustes rows */
+
+/* In the main menu's narrow column the name goes over its switch, so no switch wraps. */
+:root[data-ui='mixta'] .menu-panel .setting {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+:root[data-ui='mixta'] .menu-panel .setting-choices {
+  flex-wrap: nowrap;
+}
+
+:root[data-ui='mixta'] .setting-choices button {
+  padding: 2px 8px;
+  font-family: var(--t-font);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+:root[data-ui='mixta'] .setting-name {
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  color: var(--t-muted);
+}
+
+/* ================================================================ Armería */
+
+/* What is on sale or in the racks, pictured in the panel's corner: Arte-Personajes' render where there is one
+   (the medkit), the packs' silhouette in yellow otherwise; a found weapon in its violet. */
+:root[data-ui='mixta'] .item-art {
+  --ia: none;
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 72px;
+  height: 72px;
+  pointer-events: none;
+  background: var(--ia-c, rgba(242, 194, 48, 0.85));
+  -webkit-mask: var(--ia) center / contain no-repeat;
+  mask: var(--ia) center / contain no-repeat;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5));
+}
+
+:root[data-ui='mixta'] .x-panel:has(> .item-art) > :is(.alert-kicker, .x-title, .x-text:first-of-type) {
+  margin-right: 84px;
+}
+
+:root[data-ui='mixta'] .item-art[data-item='firstAid'] {
+  width: 96px;
+  height: 80px;
+  top: 8px;
+  background: url('/ui/synty/renders/botiquin.webp') center / contain no-repeat;
+  -webkit-mask: none;
+  mask: none;
+}
+
+:root[data-ui='mixta'] .item-art[data-item='fragGrenade'] {
+  --ia: url('/ui/synty/icons/explosives.webp');
+}
+
+:root[data-ui='mixta'] .item-art[data-item='smokeGrenade'] {
+  --ia: url('/ui/synty/icons/mh-smoke.webp');
+}
+
+:root[data-ui='mixta'] .item-art[data-item='flashbang'] {
+  --ia: url('/ui/synty/icons/mh-flashbang.webp');
+}
+
+:root[data-ui='mixta'] .item-art:is([data-item='apRounds'], [data-item='tracerRounds']) {
+  --ia: url('/ui/synty/icons/mh-bullets.webp');
+}
+
+:root[data-ui='mixta'] .item-art:is([data-item='nanoVest'], [data-item='armor']) {
+  --ia: url('/ui/synty/icons/armor.webp');
+}
+
+:root[data-ui='mixta'] .item-art[data-item='mindShield'] {
+  --ia: url('/ui/synty/icons/mh-headphones.webp');
+}
+
+:root[data-ui='mixta'] .item-art[data-item='weapon'] {
+  --ia: url('/ui/synty/icons/rifle.webp');
+  width: 96px;
+}
+
+:root[data-ui='mixta'] .item-art[data-item='found'] {
+  --ia: url('/ui/synty/icons/rifle.webp');
+  --ia-c: #c58cff;
+  width: 96px;
+}

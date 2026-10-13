@@ -40,10 +40,22 @@ La sesión **Arte** sigue abierta sin encargo: escribió el motor vóxel y se le
   Nunca se usan ni se paran el 3000/3001 (la partida de los jugadores) ni el 5173.
 - El panel admite 5 servidores de prueba a la vez: como mucho, dos o tres agentes probando en el navegador al mismo tiempo.
 - Los packs de Synty originales viven en `assets-src/synty/`, que no se sube: la licencia no deja redistribuirlos. Al repositorio solo van los modelos convertidos que use el juego.
+- El repositorio `Takeo7/Bastion` es **siempre privado**: lleva los modelos de Synty convertidos y la licencia no deja publicarlos. Nadie cambia su visibilidad. Si algún día hace falta una descarga pública, será un repositorio o sitio aparte solo con los binarios, y siempre preguntando antes a Arturo. Las releases (`v0.1.0`) solo las ve quien tiene acceso al repositorio; para pasar el juego a alguien, Arturo le manda el zip.
 
 ## En marcha (2026-10-13)
 
-Subido b56a5b4 (noche, altura, fases 3 y 4, el valle, fuera lo vóxel). Fase 5 hecha ([FASE5.md](FASE5.md)); pendiente de subir.
+Subido b56a5b4 (noche, altura, fases 3 y 4, el valle, fuera lo vóxel). Fase 5 hecha y subida (8bc98a8). Las 5 fases del plan de zombis están terminadas.
+
+**Prueba del 13/10** ([PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md)), en marcha:
+- Gameplay · Reglas: sin refuerzos humanos, zombis solo por los bordes, abrir puertas gratis, ver por las ventanas, la campaña empieza con una misión, el sexo del soldado y el aviso de ascenso.
+- Combate: el botón Registrar, los textos que no caben, la cuadrícula del suelo como en XCOM, el objetivo en la presentación de la misión.
+- Arte · Personajes: modelo según el sexo, cómo cogen las armas, animaciones, auriculares, transparencia en el Cuartel.
+- Arte · Interfaz (agente, mientras UX/UI no esté): Mixta, elegida por Arturo, como única interfaz; más profundidad y vida; el árbol de habilidades con referencias; la marca «A»; los estilos de la fase 4.
+- Lore: tono adulto, nombres internacionales, la premisa, la apertura y los nombres nuevos ([LORE-PROPUESTA-2026-10-13.md](LORE-PROPUESTA-2026-10-13.md), pendiente de Arturo).
+- Arte · Mapas: hecho. Dos estilos de ciudad (cuadrícula y pueblo viejo, mitad y mitad), aceras más estrechas, fachadas escalonadas, plazuelas; el tejado se desvanece cuando se ve el interior por una ventana o puerta; pavimento sin aspecto de cuadrícula.
+- Gameplay · Reglas: fase 6 hecha, edificios de varias plantas ([FASE6.md](FASE6.md), [FASE6-PLAN.md](FASE6-PLAN.md)): plantas reales en el generador, escaleras, visión, niebla y cobertura por planta, ruido y explosiones, IA que sube; 345 tests. Pendiente para más adelante: saltar por ventanas altas, suelos destructibles, comprimir el estado (deflate en el WebSocket, de Red).
+- Arte · Mapas y Combate: plantas dibujadas, corte por plantas, niebla por planta, planta activa (RePág/AvPág, Mayús+rueda), marca «▲ P1».
+- Después: Arte · Base (más detalle en el valle).
 
 Decisiones de Arturo del 13/10 (las trajo General):
 - el aspecto objetivo es el de las capturas promocionales de Synty (`assets-src/referencias/aspecto-synty/`, no se suben);

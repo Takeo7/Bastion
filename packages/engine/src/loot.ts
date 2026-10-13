@@ -3,9 +3,9 @@
 // (Sim.search); the `searched` event carries what was found.
 import { FOUND_WEAPONS, ITEMS, NIGHT, TEMPLATES } from './content';
 import { decorOf } from './decor';
-import { DIRS8, elevAt, inBounds, tileAt, tileIndex } from './grid';
+import { DIRS8, heightAt, inBounds, kindAt, nodeOf, tileIndex, toPos } from './grid';
 import type { Rng } from './rng';
-import type { DecorKind, FoundWeaponId, GameState, ItemId, Loot, TileKind, Unit, Vec2 } from './types';
+import type { DecorKind, FoundWeaponId, GameState, ItemId, Loot, Place, Pos, TileKind, Unit } from './types';
 
 /** What kind of place a searchable piece of furniture belongs to: it sets what turns up in it. */
 type Spot = 'home' | 'office' | 'shop' | 'store' | 'trunk' | 'glovebox';
@@ -91,37 +91,44 @@ export function rollLoot(decor: DecorKind, difficulty: number, rng: Rng, night =
 // ------------------------------------------------------------ the furniture
 
 /** The searchable piece of furniture on `p`, searched or not; null if there is none or it was blown away. */
-export function searchSpot(s: GameState, p: Vec2): DecorKind | null {
-  if (!s.decor || !inBounds(s, p.x, p.y)) return null;
-  const kind = tileAt(s, p.x, p.y);
+export function searchSpot(s: GameState, at: Place): DecorKind | null {
+  const p = toPos(at);
+  const decor = p.z === 0 ? s.decor : s.levels?.[p.z - 1]?.decor;
+  if (!decor || !inBounds(s, p.x, p.y)) return null;
+  const kind = kindAt(s, p);
   if (kind !== 'low' && kind !== 'high') return null;
-  const look = decorOf(s.decor[tileIndex(s, p.x, p.y)]);
+  const look = decorOf(decor[tileIndex(s, p.x, p.y)]);
   return look && SPOTS[look.kind] ? look.kind : null;
 }
 
-export function wasSearched(s: GameState, p: Vec2): boolean {
-  return (s.searched ?? []).includes(tileIndex(s, p.x, p.y));
+export function wasSearched(s: GameState, p: Place): boolean {
+  return (s.searched ?? []).includes(nodeOf(s, toPos(p)));
 }
 
 /** Furniture on `p` that is still there to search (for highlighting it anywhere on the map). */
-export function searchable(s: GameState, p: Vec2): boolean {
+export function searchable(s: GameState, p: Pos): boolean {
   return searchSpot(s, p) !== null && !wasSearched(s, p);
 }
 
 const SOLID: ReadonlySet<TileKind> = new Set<TileKind>(['wall', 'door', 'window', 'windowBroken']);
 
-/** Whether a soldier on `from` reaches `p` with the hands: beside it, on its level, and not round a wall's corner. */
-export function reachesToSearch(s: GameState, from: Vec2, p: Vec2): boolean {
+/** Whether a soldier on `from` reaches `p` with the hands: beside it, at its height, and not round a wall's corner. */
+export function reachesToSearch(s: GameState, from: Pos, at: Place): boolean {
+  const p = toPos(at);
   const dx = p.x - from.x;
   const dy = p.y - from.y;
-  if (Math.max(Math.abs(dx), Math.abs(dy)) !== 1 || elevAt(s, from.x, from.y) !== elevAt(s, p.x, p.y)) return false;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) !== 1 || heightAt(s, from) !== heightAt(s, p)) return false;
   if (dx === 0 || dy === 0) return true;
-  return !SOLID.has(tileAt(s, from.x + dx, from.y)) || !SOLID.has(tileAt(s, from.x, from.y + dy));
+  const solid = (x: number, y: number) => {
+    const kind = kindAt(s, { x, y, z: from.z });
+    return kind !== null && SOLID.has(kind);
+  };
+  return !solid(from.x + dx, from.y) || !solid(from.x, from.y + dy);
 }
 
 /** Furniture `u` can search right now from where it stands (any backpack room aside). */
-export function searchableTiles(s: GameState, u: Unit): Vec2[] {
-  return DIRS8.map((d) => ({ x: u.pos.x + d.x, y: u.pos.y + d.y })).filter((p) => searchable(s, p) && reachesToSearch(s, u.pos, p));
+export function searchableTiles(s: GameState, u: Unit): Pos[] {
+  return DIRS8.map((d) => ({ x: u.pos.x + d.x, y: u.pos.y + d.y, z: u.pos.z })).filter((p) => searchable(s, p) && reachesToSearch(s, u.pos, p));
 }
 
 /** Room left in the backpack. */

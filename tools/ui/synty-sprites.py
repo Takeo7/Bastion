@@ -1,5 +1,5 @@
 """
-Copies the Synty interface sprites the game's interface themes use (ui/themes/)
+Copies the Synty interface sprites the interface uses («Mixta», ui/themes/)
 from the original packs in assets-src/synty (not in the repository: the licence
 forbids redistributing them) to packages/client/public/ui/synty/, downscaled
 and as WebP. Only what is listed here is copied; run it again after editing.
@@ -17,52 +17,37 @@ OUT = os.path.join(ROOT, 'packages/client/public/ui/synty')
 
 # out name: (source, longest side in px)
 SPRITES = {
-    # Apocalypse HUD: low-poly metal frames and bars (9-slice), the dial, textures.
-    'apoc/frame-metal': (f'{APOC}/Apocalypse/SPR_Apocalypse_Box_Metal01.png', 256),
-    'apoc/frame-rusty': (f'{APOC}/Apocalypse/SPR_Apocalypse_Box_Rusty01.png', 256),
-    'apoc/frame-bolts': (f'{APOC}/Apocalypse/SPR_Apocalypse_Box_RustyBolts01.png', 256),
-    'apoc/bar-metal': (f'{APOC}/Apocalypse/SPR_Apocalypse_Bar_Metal02.png', 256),
-    'apoc/bar-rusty': (f'{APOC}/Apocalypse/SPR_Apocalypse_Bar_MetalRusty01.png', 384),
-    'apoc/dial': (f'{APOC}/Apocalypse/SPR_Apocalypse_Dial_Rusty01.png', 192),
-    'apoc/fill': (f'{APOC}/Apocalypse/SPR_Apocalypse_Box_Background_Shadowed.png', 128),
-    'hud/hazard': (f'{APOC}/HUD/SPR_Background_HazardStripes.png', 128),
-    'hud/grunge': (f'{APOC}/HUD/SPR_Background_Square_Tile_Grunge_Med_01.png', 256),
-    'hud/grunge-frame': (f'{APOC}/HUD/SPR_HUD_Frame_Border_Grunge_Med.png', 256),
-    'hud/flag': (f'{APOC}/HUD/SPR_HUD_Flag_Grunge.png', 128),
-    'hud/ring': (f'{APOC}/HUD/SPR_HUD_DialRing_Med.png', 192),
-    # Modern Menus: bevelled frames with a cut corner, rank shields.
-    'mm/frame': (f'{MM}/ModernMenus/SPR_ModernMenus_Frame_Box_Medium_01.png', 256),
-    'mm/frame-selected': (f'{MM}/ModernMenus/SPR_ModernMenus_Frame_Box_Medium_01_Selected.png', 256),
-    'mm/frame-square': (f'{MM}/ModernMenus/SPR_ModernMenus_Frame_Box_Medium_02.png', 256),
-    'mm/shield-silver': (f'{MM}/ModernMenus/SPR_ModernMenus_Shield_03_Ortho.png', 96),
-    'mm/shield-gold': (f'{MM}/ModernMenus/SPR_ModernMenus_Shield_04_Ortho.png', 96),
-    'mm/shield-bronze': (f'{MM}/ModernMenus/SPR_ModernMenus_Shield_06_Ortho.png', 96),
+    # INTERFACE Military Combat HUD: the rank badges (ui/themes/mixta.css), bronze to gold.
+    'mh/rank-1': (f'{MH}/Badges/SPR_MilitaryCombat_Badge_Chevron_05_Bronze.png', 64),
+    'mh/rank-2': (f'{MH}/Badges/SPR_MilitaryCombat_Badge_Chevron_06_Bronze.png', 64),
+    'mh/rank-3': (f'{MH}/Badges/SPR_MilitaryCombat_Badge_Chevron_07_Bronze.png', 64),
+    'mh/rank-4': (f'{MH}/Badges/SPR_MilitaryCombat_Badge_Chevron_01_Silver.png', 64),
+    'mh/rank-5': (f'{MH}/Badges/SPR_MilitaryCombat_Badge_Chevron_02_Silver.png', 64),
+    'mh/rank-6': (f'{MH}/Badges/SPR_MilitaryCombat_Badge_Chevron_03_Gold.png', 64),
+    'mh/rank-7': (f'{MH}/Badges/SPR_MilitaryCombat_Badge_Chevron_04_Gold.png', 64),
+}
+
+# Military Combat HUD pieces turned to neutral steel (their teal glints would fight the hazard yellow).
+STEEL = {
+    'mh/dial': (f'{MH}/MilitaryCombat/SPR_MilitaryCombat_Dial_Medium_03.png', 256),
 }
 
 # Flat white silhouettes, used as masks (coloured by the theme). out name: source.
 ICONS = {
     'rifle': f'{APOC}/Icons_Weapons/ICON_SM_Wep_AssaultRifle_01_Clean.png',
     'pistol': f'{APOC}/Icons_Weapons/ICON_SM_Wep_Pistol_01_Clean.png',
-    'shotgun': f'{APOC}/Icons_Weapons/ICON_SM_Wep_Shotgun_01_Apoc_Clean.png',
     'sniper': f'{APOC}/Icons_Weapons/ICON_SM_Wep_SniperRifle_01_Clean.png',
     'launcher': f'{APOC}/Icons_Weapons/ICON_SM_Wep_Grenade_Launcher_01_Clean.png',
     'crossbow': f'{APOC}/Icons_Weapons/ICON_SM_Wep_CrossBow_01_Clean.png',
     'bow': f'{APOC}/Icons_Weapons/ICON_SM_Prop_Bow_01_Clean.png',
     'flaregun': f'{APOC}/Icons_Weapons/ICON_SM_Wep_FlareGun_01_Clean.png',
-    'axe': f'{APOC}/Icons_Weapons/ICON_SM_Wep_FireAxe_01_Clean.png',
-    'hammer': f'{APOC}/Icons_Weapons/ICON_SM_Wep_Hammer_01_Clean.png',
-    'bat': f'{APOC}/Icons_Weapons/ICON_SM_Wep_Bat_Metal_01_Clean.png',
     'target': f'{APOC}/Icons_Map/ICON_Map_Target.png',
     'ammo': f'{APOC}/Icons_Map/ICON_Map_Ammo.png',
     'fire': f'{APOC}/Icons_Map/ICON_Map_Fire.png',
-    'flag': f'{APOC}/Icons_Map/ICON_Map_Flag.png',
     'heal': f'{APOC}/Icons_Map/ICON_Map_Healing.png',
     'lightning': f'{APOC}/Icons_Map/ICON_Map_Lightning.png',
     'petrol': f'{APOC}/Icons_Map/ICON_Map_Petrol.png',
     'skull': f'{APOC}/Icons_Map/ICON_Map_Skull.png',
-    'vehicle': f'{APOC}/Icons_Map/ICON_Map_Vehicle.png',
-    'star': f'{APOC}/Icons_Map/ICON_Map_Star.png',
-    'quest': f'{APOC}/Icons_Map/ICON_Map_Quest.png',
     'biohazard': f'{APOC}/Icons_Map/ICON_Map_Biohazard.png',
     'home': f'{APOC}/Icons_Map/ICON_Map_Home.png',
     'armor': f'{APOC}/Icons_Status/ICON_Status_Armor.png',
@@ -80,12 +65,8 @@ ICONS = {
     'screwdriver': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Settings_01_Clean.png',
     'settings': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Settings_02_Clean.png',
     'sound': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Sound_01_On_Clean.png',
-    'play': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Play_01_Clean.png',
-    'medal': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Medal_01_Clean.png',
-    'timer': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Timer_01_Clean.png',
-    'death': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Death_01_Clean.png',
-    'cancel': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Cancel_01_Clean.png',
-    'confirm': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Confirm_01_Clean.png',
+    'mainmenu': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_MainMenu_01_Clean.png',
+    'notify': f'{MM}/Icons_ModernMenus_Flat/ICON_ModernMenus_Notification_01_On_Clean.png',
 }
 
 # INTERFACE Military Combat HUD: flat icons for what the other two packs lack, cut to their
@@ -131,6 +112,14 @@ MH_ICONS = {
     'mh-pliers': (f'{MH}/Icons_Inventory/ICON_MilitaryCombat_Inventory_Crafting_01_Clean.png', 0),
     'mh-syringe': (f'{MH}/Icons_Resources/ICON_SM_Prop_Needle_01_BattleRoyale.png', 0),
     'mh-dynamite': (f'{MH}/Icons_Resources/ICON_SM_Chr_Attach_Bomb_Dynamite_01_Military.png', 0),
+    # «Mixta»: the top bar's resources, the tabs and the skill tree's lock.
+    'mh-crate': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Treasure_01_Clean.png', 0),
+    'mh-medkit': (f'{MH}/Icons_Inventory/ICON_MilitaryCombat_Inventory_Healing_02_Clean.png', 0),
+    'mh-xp': (f'{MH}/Icons_Status/ICON_MilitaryCombat_Status_XP_01_Clean.png', 0),
+    'mh-hourglass': (f'{MH}/Icons_Status/ICON_MilitaryCombat_Status_Time_01_Clean.png', 0),
+    'mh-lock': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Lock_01_Clean.png', 0),
+    'mh-pin': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Pin_01_Clean.png', 0),
+    'mh-notes': (f'{MH}/Icons_Inventory/ICON_MilitaryCombat_Inventory_Notes_01_Clean.png', 0),
 }
 
 
@@ -157,6 +146,22 @@ def tape(out: str, stripe: tuple, ground: tuple) -> None:
 
 for out, (src, size) in SPRITES.items():
     save(src, out, size)
+
+
+def steel(src: str, out: str, size: int) -> None:
+    """The piece in greys with a hint of warmth: its shading kept, its colour gone."""
+    im = Image.open(src).convert('RGBA')
+    im.thumbnail((size, size), Image.LANCZOS)
+    grey = im.convert('L')
+    tinted = Image.merge('RGB', (grey.point(lambda v: min(255, int(v * 1.04))), grey, grey.point(lambda v: int(v * 0.95))))
+    tinted.putalpha(im.getchannel('A'))
+    path = os.path.join(OUT, out + '.webp')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tinted.save(path, 'WEBP', quality=90, method=6)
+
+
+for out, (src, size) in STEEL.items():
+    steel(src, out, size)
 for out, (stripe, ground) in TAPES.items():
     tape(out, stripe, ground)
 for out, src in ICONS.items():
@@ -188,7 +193,7 @@ for out, (src, turn, *bold) in MH_ICONS.items():
 # masks cut to their edges like the rest. La Mula's flat mask reads as a bar, so its windows
 # and tyres (the dark and glass-blue pixels of the colour render) are cut out of it.
 RENDERS = os.path.join(OUT, 'renders')
-for name in ('camposanto', 'roca', 'ruinas'):
+for name in ('camposanto', 'roca', 'ruinas', 'racion'):
     outline(f'{RENDERS}/{name}-mask.webp', f'icons/r-{name}', 0)
 
 
@@ -210,4 +215,4 @@ def windows_cut(src: str, out: str, size: int = 128) -> None:
 
 windows_cut(f'{RENDERS}/mula-side.webp', 'icons/r-mula')
 total = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(OUT) for f in fs)
-print(f'{len(SPRITES) + len(ICONS) + len(MH_ICONS)} sprites, {total // 1024} KB in {OUT}')
+print(f'{len(SPRITES) + len(STEEL) + len(ICONS) + len(MH_ICONS)} sprites, {total // 1024} KB in {OUT}')

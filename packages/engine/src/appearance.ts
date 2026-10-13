@@ -57,6 +57,7 @@ export function isAppearance(a: Appearance): boolean {
     HEX.test(a.visor) &&
     HEAD_IDS.includes(a.head) &&
     BUILD_IDS.includes(a.build) &&
+    (a.sex === undefined || a.sex === 'f' || a.sex === 'm') &&
     ARMOR_PART_IDS.every((part) => a[part] === undefined || HEX.test(a[part])) &&
     (a.character === undefined || CHARACTER_ID.test(a.character))
   );
@@ -78,6 +79,7 @@ export function partColor(a: Appearance, part: ArmorPart): string {
  */
 export function normalizeAppearance(a: Appearance): Appearance {
   const out: Appearance = { primary: a.primary, secondary: a.secondary, visor: a.visor, head: a.head, build: a.build };
+  if (a.sex) out.sex = a.sex;
   for (const part of ARMOR_PART_IDS) {
     const own = a[part];
     if (own !== undefined && own.toLowerCase() !== partColor(out, part).toLowerCase()) out[part] = own;
@@ -96,15 +98,17 @@ function mix(a: string, b: string, t: number): string {
   return '#' + out.map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
-/** The look soldiers had before customization: their player's colour, class head and build. */
-export function defaultAppearance(cls: ClassId | null, owner: Slot, accent = PLAYER_COLORS[owner]): Appearance {
-  return {
+/** The look soldiers had before customization: their player's colour, class head and build (and their sex, when known). */
+export function defaultAppearance(cls: ClassId | null, owner: Slot, accent = PLAYER_COLORS[owner], sex?: 'f' | 'm'): Appearance {
+  const out: Appearance = {
     primary: mix(accent, '#56605a', 0.55),
     secondary: accent,
     visor: '#9fe3ff',
     head: cls === 'sharpshooter' ? 'hood' : 'helmet',
     build: cls === 'grenadier' ? 'heavy' : 'normal',
   };
+  if (sex) out.sex = sex;
+  return out;
 }
 
 /** A random look, like XCOM's "randomize" button. */

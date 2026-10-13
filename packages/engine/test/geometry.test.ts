@@ -25,10 +25,10 @@ describe('line of sight', () => {
       '.....',
     ]);
     // Standing under the wall end at (3,2), the step-out tile (4,2) sees (4,0).
-    expect(peekOrigins(s, { x: 3, y: 2 })).toContainEqual({ x: 4, y: 2 });
-    expect(sightOrigin(s, { x: 3, y: 2 }, { x: 4, y: 0 }, 10)).not.toBeNull();
+    expect(peekOrigins(s, { x: 3, y: 2, z: 0 })).toContainEqual({ x: 4, y: 2, z: 0 });
+    expect(sightOrigin(s, { x: 3, y: 2, z: 0 }, { x: 4, y: 0, z: 0 }, 10)).not.toBeNull();
     // The middle of the wall has no corner to peek around.
-    expect(sightOrigin(s, { x: 2, y: 2 }, { x: 2, y: 0 }, 10)).toBeNull();
+    expect(sightOrigin(s, { x: 2, y: 2, z: 0 }, { x: 2, y: 0, z: 0 }, 10)).toBeNull();
   });
 });
 
@@ -65,8 +65,8 @@ describe('pathfinding', () => {
     const u = addUnit(s, 's1', 'specialist', 0, 0);
     const reach = computeReach(s, u, 100);
     expect(reach.cost.get(2 * 3 + 2)).toBe(COST_ORTHO * 4); // around the wall, no corner cutting
-    const path = buildPath(s, u, reach, { x: 2, y: 2 })!;
-    expect(path.at(-1)).toEqual({ x: 2, y: 2 });
+    const path = buildPath(s, u, reach, { x: 2, y: 2, z: 0 })!;
+    expect(path.at(-1)).toEqual({ x: 2, y: 2, z: 0 });
   });
 
   it('can pass through allies but not stop on them, and enemies block', () => {
@@ -74,8 +74,8 @@ describe('pathfinding', () => {
     const u = addUnit(s, 's1', 'specialist', 0, 0);
     addUnit(s, 's2', 'specialist', 1, 0);
     const reach = computeReach(s, u, 100);
-    expect(buildPath(s, u, reach, { x: 1, y: 0 })).toBeNull();
-    expect(buildPath(s, u, reach, { x: 2, y: 0 })).toHaveLength(2);
+    expect(buildPath(s, u, reach, { x: 1, y: 0, z: 0 })).toBeNull();
+    expect(buildPath(s, u, reach, { x: 2, y: 0, z: 0 })).toHaveLength(2);
 
     addUnit(s, 'a1', 'trooper', 3, 0);
     expect(computeReach(s, u, 100).cost.has(4)).toBe(false);

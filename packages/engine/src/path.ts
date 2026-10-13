@@ -1,6 +1,6 @@
 import { TEMPLATES } from './content';
-import { canStandOn, DIRS8, inBounds, isWalkable, isWindow } from './grid';
-import type { GameState, Unit, Vec2 } from './types';
+import { canStandOn, DIRS8, elevAt, heightAt, inBounds, isWalkable, isWindow, kindAt, nodeOf, posOf, slabAt, surfaceAt, toPos } from './grid';
+import type { GameState, Place, Pos, Unit } from './types';
 
 /** Movement costs in half-tiles so diagonals (1.5 tiles) stay integral. */
 export const COST_ORTHO = 2;
@@ -15,9 +15,10 @@ export const COST_VAULT = 2;
 const MAX_DROP = 2;
 
 /**
- * Cost of a single step between neighbouring tiles (without unit checks), or
- * null if the step is impossible: walls, climbing without a ladder, cutting
- * corners, or slipping diagonally between levels or through a window.
+ * Cost of a single step between neighbouring tiles on the ground (without unit
+ * checks), or null if the step is impossible: walls, climbing without a ladder,
+ * cutting corners, or slipping diagonally between levels or through a window.
+ * Maps without storeys move by it; stepBetween is the same on any level.
  */
 export function stepCost(s: GameState, x: number, y: number, dx: number, dy: number): number | null {
   const nx = x + dx;
@@ -51,11 +52,87 @@ export function stepCost(s: GameState, x: number, y: number, dx: number, dy: num
   return cost;
 }
 
+/**
+ * Cost of a step from `from` to `to`, on the next tile, on any level (without
+ * unit checks), or null if it can't be taken (docs/FASE6-PLAN.md): stepCost's
+ * rules by height instead of elevation. A ladder (or a building's stairs)
+ * climbs one storey onto the next tile, with nothing overhead (a stairwell);
+ * going down onto one costs the same. Any other way down is a drop off an
+ * edge, with no floor or roof in between, and never out of an upper window
+ * (not yet: decision 4 in FASE6-PLAN.md).
+ */
+export function stepBetween(s: GameState, from: Pos, to: Pos): number | null {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) !== 1 || !inBounds(s, to.x, to.y)) return null;
+  const fromKind = kindAt(s, from);
+  const toKind = kindAt(s, to);
+  if (!isWalkable(toKind)) return null;
+  const h = heightAt(s, from);
+  const landing = heightAt(s, to);
+  const dz = landing - h;
+
+  if (dx !== 0 && dy !== 0) {
+    if (dz !== 0 || isWindow(fromKind) || isWindow(toKind)) return null;
+    for (const [ox, oy] of [[to.x, from.y], [from.x, to.y]] as const) {
+      const side = surfaceAt(s, ox, oy, h);
+      if (!side || isWindow(kindAt(s, side))) return null;
+    }
+    return COST_DIAG;
+  }
+
+  let cost = COST_ORTHO + (isWindow(toKind) ? COST_VAULT : 0);
+  if (dz > 0) {
+    if (dz !== 1 || fromKind !== 'ladder' || slabAt(s, from.x, from.y, h + 1)) return null;
+    cost += COST_CLIMB;
+  } else if (dz < 0) {
+    if (-dz > MAX_DROP || (from.z > 0 && isWindow(fromKind))) return null;
+    for (let k = landing + 1; k <= h; k++) if (slabAt(s, to.x, to.y, k)) return null;
+    cost += toKind === 'ladder' && dz === -1 ? COST_CLIMB : COST_DROP * -dz;
+  }
+  return cost;
+}
+
+/**
+ * Every step from `from` onto the tile (dx, dy) away, to each of its levels a
+ * unit can get to, with its cost. On a map without storeys, stepCost's one.
+ * With storeys there are three at most, each checked by stepBetween: the floor
+ * at the same height, the one a storey up (from a ladder or stairs), and the
+ * highest one below (going down, or a drop).
+ */
+export function stepsFrom(s: GameState, from: Pos, dx: number, dy: number): { to: Pos; cost: number }[] {
+  if (!s.levels) {
+    const cost = from.z === 0 ? stepCost(s, from.x, from.y, dx, dy) : null;
+    return cost === null ? [] : [{ to: { x: from.x + dx, y: from.y + dy, z: 0 }, cost }];
+  }
+  const out: { to: Pos; cost: number }[] = [];
+  const nx = from.x + dx;
+  const ny = from.y + dy;
+  if (!inBounds(s, nx, ny)) return out;
+  const take = (to: Pos | null) => {
+    const cost = to && stepBetween(s, from, to);
+    if (to && cost !== null && cost !== undefined) out.push({ to, cost });
+  };
+  const h = heightAt(s, from);
+  take(surfaceAt(s, nx, ny, h));
+  if (dx !== 0 && dy !== 0) return out;
+  if (kindAt(s, from) === 'ladder') take(surfaceAt(s, nx, ny, h + 1));
+  for (let k = h - 1; k >= Math.max(0, h - MAX_DROP); k--) {
+    const below = surfaceAt(s, nx, ny, k);
+    if (below) {
+      take(below);
+      break;
+    }
+    if (slabAt(s, nx, ny, k) || elevAt(s, nx, ny) > k) break;
+  }
+  return out;
+}
+
 export interface Reach {
-  origin: Vec2;
-  /** tile index -> accumulated cost */
+  origin: Pos;
+  /** node (grid.ts nodeOf; on the ground, the tile index) -> accumulated cost */
   cost: Map<number, number>;
-  /** tile index -> previous tile index */
+  /** node -> previous node */
   prev: Map<number, number>;
 }
 
@@ -117,19 +194,21 @@ export function onPatrol(s: GameState, u: Unit): boolean {
 }
 
 /**
- * Dijkstra over 8 directions. Allies can be walked through (but not stopped on),
- * enemies block, and diagonals may not cut corners of blocked tiles. A pod on
- * patrol keeps to doors and open ground (playtest: undiscovered aliens went
- * into a building through a window): vaulting in is for aliens in the fight.
+ * Dijkstra over 8 directions, on every level (docs/FASE6-PLAN.md: up and down
+ * ladders and stairs, off edges). Allies can be walked through (but not
+ * stopped on), enemies block their place (not the floor above or below), and
+ * diagonals may not cut corners of blocked tiles. A pod on patrol keeps to
+ * doors and open ground (playtest: undiscovered aliens went into a building
+ * through a window): vaulting in is for aliens in the fight.
  */
-export function computeReach(s: GameState, u: Unit, maxCost: number, from: Vec2 = u.pos): Reach {
-  const w = s.width;
+export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos = u.pos): Reach {
   const windows = !onPatrol(s, u);
   const blockedByEnemy = new Set<number>();
   for (const o of s.units) {
-    if (o.alive && o.team !== u.team) blockedByEnemy.add(o.pos.y * w + o.pos.x);
+    if (o.alive && o.team !== u.team) blockedByEnemy.add(nodeOf(s, o.pos));
   }
-  const start = from.y * w + from.x;
+  const blocked = (p: Pos | null) => !!p && blockedByEnemy.has(nodeOf(s, p));
+  const start = nodeOf(s, from);
   const cost = new Map<number, number>([[start, 0]]);
   const prev = new Map<number, number>();
   const heap = new MinHeap();
@@ -138,22 +217,22 @@ export function computeReach(s: GameState, u: Unit, maxCost: number, from: Vec2 
   while (heap.size) {
     const [c, i] = heap.pop();
     if (c > (cost.get(i) ?? Infinity)) continue;
-    const x = i % w;
-    const y = (i - x) / w;
+    const p = posOf(s, i);
     for (const d of DIRS8) {
-      const nx = x + d.x;
-      const ny = y + d.y;
-      const step = stepCost(s, x, y, d.x, d.y);
-      if (step === null) continue;
-      const ni = ny * w + nx;
-      if (blockedByEnemy.has(ni) || (!windows && isWindow(s.tiles[ni]!))) continue;
-      if (d.x !== 0 && d.y !== 0 && (blockedByEnemy.has(y * w + nx) || blockedByEnemy.has(ny * w + x))) continue;
-      const nc = c + step;
-      if (nc > maxCost) continue;
-      if (nc < (cost.get(ni) ?? Infinity)) {
-        cost.set(ni, nc);
-        prev.set(ni, i);
-        heap.push(nc, ni);
+      for (const { to, cost: step } of stepsFrom(s, p, d.x, d.y)) {
+        const ni = nodeOf(s, to);
+        if (blockedByEnemy.has(ni) || (!windows && isWindow(kindAt(s, to)))) continue;
+        if (d.x !== 0 && d.y !== 0) {
+          const h = heightAt(s, p);
+          if (blocked(surfaceAt(s, to.x, p.y, h)) || blocked(surfaceAt(s, p.x, to.y, h))) continue;
+        }
+        const nc = c + step;
+        if (nc > maxCost) continue;
+        if (nc < (cost.get(ni) ?? Infinity)) {
+          cost.set(ni, nc);
+          prev.set(ni, i);
+          heap.push(nc, ni);
+        }
       }
     }
   }
@@ -161,34 +240,32 @@ export function computeReach(s: GameState, u: Unit, maxCost: number, from: Vec2 
 }
 
 function occupied(s: GameState, i: number, ignore: Unit): boolean {
-  const x = i % s.width;
-  const y = (i - x) / s.width;
-  return s.units.some((o) => o !== ignore && o.alive && o.pos.x === x && o.pos.y === y);
+  const p = posOf(s, i);
+  return s.units.some((o) => o !== ignore && o.alive && o.pos.x === p.x && o.pos.y === p.y && o.pos.z === p.z);
 }
 
 /** Tiles the unit may end its move on (excludes origin, occupied tiles and window frames). */
-export function destinations(s: GameState, u: Unit, reach: Reach): { pos: Vec2; cost: number }[] {
-  const out: { pos: Vec2; cost: number }[] = [];
-  const start = reach.origin.y * s.width + reach.origin.x;
+export function destinations(s: GameState, u: Unit, reach: Reach): { pos: Pos; cost: number }[] {
+  const out: { pos: Pos; cost: number }[] = [];
+  const start = nodeOf(s, reach.origin);
   for (const [i, c] of reach.cost) {
-    if (i === start || occupied(s, i, u) || !canStandOn(s.tiles[i]!)) continue;
-    const x = i % s.width;
-    out.push({ pos: { x, y: (i - x) / s.width }, cost: c });
+    const p = posOf(s, i);
+    if (i === start || occupied(s, i, u) || !canStandOn(kindAt(s, p))) continue;
+    out.push({ pos: p, cost: c });
   }
   return out;
 }
 
 /** Path from the reach origin to `to` (origin excluded), or null if unreachable / occupied. */
-export function buildPath(s: GameState, u: Unit, reach: Reach, to: Vec2): Vec2[] | null {
+export function buildPath(s: GameState, u: Unit, reach: Reach, to: Place): Pos[] | null {
   if (!inBounds(s, to.x, to.y)) return null;
-  const end = to.y * s.width + to.x;
-  const start = reach.origin.y * s.width + reach.origin.x;
-  if (end === start || !reach.cost.has(end) || occupied(s, end, u) || !canStandOn(s.tiles[end]!)) return null;
-  const path: Vec2[] = [];
+  const end = nodeOf(s, toPos(to));
+  const start = nodeOf(s, reach.origin);
+  if (end === start || !reach.cost.has(end) || occupied(s, end, u) || !canStandOn(kindAt(s, posOf(s, end)))) return null;
+  const path: Pos[] = [];
   let i: number | undefined = end;
   while (i !== undefined && i !== start) {
-    const x: number = i % s.width;
-    path.push({ x, y: (i - x) / s.width });
+    path.push(posOf(s, i));
     i = reach.prev.get(i);
   }
   return path.reverse();

@@ -273,7 +273,7 @@ describe('the campaign', () => {
     expect(offers.some((o) => o.reward.food)).toBe(true);
     expect(offers.some((o) => o.reward.parts)).toBe(true);
     const c = quiet();
-    const offer = createCampaign([0], new Rng(9)).offers.find((o) => !o.story && o.kind !== 'scavenge')!;
+    const offer = { ...offers.find((o) => o.kind !== 'scavenge')!, id: 'mfood' };
     offer.reward = { credits: 10, food: 4, parts: 2 };
     c.offers.push(offer);
     run(c, { type: 'chooseMission', id: offer.id });

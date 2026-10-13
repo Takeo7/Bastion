@@ -1,42 +1,17 @@
 import { sound } from './bank';
 import { audio, type PlayOptions } from './engine';
 
-// The interface sounds like the case file it looks like: every button is a
-// typewriter key, confirming is the carriage returning with its bell, the
-// tabs turn a page, a disabled button knocks dully, and typing into a field
-// types. Each interface theme (data-ui, ui/theme.ts) has its own voice for the
-// same moments. The three Synty proposals play recordings from Kenney's
-// «Interface Sounds» (CC0; public/audio/ui, made by tools/ui/kenney-sounds.sh),
-// a different set each; until a recording has loaded, the same moment plays
-// one of the game's own sounds (sounds.ts). One listener for the whole
-// document, so new screens need no wiring.
+// The interface's sounds (ui/theme.ts, «Mixta»): Kenney's «Interface Sounds»
+// (CC0; public/audio/ui, made by tools/ui/kenney-sounds.sh). Clean ticks on
+// buttons, glass between tabs, a mechanical switch to confirm, a rise when a
+// panel opens, a chime when something is done. Until a recording has loaded,
+// the same moment plays one of the game's own sounds (sounds.ts). One
+// listener for the whole document, so new screens need no wiring.
 
-/** What an interface sound means; each interface theme has its own sound for it. */
+/** What an interface sound means. The names come from the old case file: a key, the bell, a page, a stamp. */
 export type UiKind = 'key' | 'space' | 'bell' | 'confirm' | 'page' | 'paper' | 'stamp' | 'error';
 
-const PAPER: Record<UiKind, string> = {
-  key: 'ui.key',
-  space: 'ui.space',
-  bell: 'ui.bell',
-  confirm: 'ui.return',
-  page: 'ui.page',
-  paper: 'ui.paper',
-  stamp: 'ui.stamp',
-  error: 'ui.error',
-};
-
-const HOLO: Record<UiKind, string> = {
-  key: 'holo.click',
-  space: 'holo.click',
-  bell: 'holo.confirm',
-  confirm: 'holo.confirm',
-  page: 'holo.page',
-  paper: 'holo.open',
-  stamp: 'holo.alert',
-  error: 'holo.error',
-};
-
-/** While a proposal's recordings load: the game's own sounds closest to them. */
+/** While the recordings load: the game's own sounds closest to them. */
 const SYNTH: Record<UiKind, string> = {
   key: 'ui.tick',
   space: 'ui.tick',
@@ -48,34 +23,8 @@ const SYNTH: Record<UiKind, string> = {
   error: 'ui.error',
 };
 
-type Recorded = Record<UiKind, string[]>;
-
-/** Proposal A, rusty metal: low dry clicks, a heavy switch to confirm, a scrape between tabs, a metal bong when saved. */
-const APOCALIPSIS: Recorded = {
-  key: ['back_002', 'back_004'],
-  space: ['back_004'],
-  bell: ['drop_001'],
-  confirm: ['switch_003'],
-  page: ['scratch_004'],
-  paper: ['drop_004'],
-  stamp: ['bong_001'],
-  error: ['error_006'],
-};
-
-/** Proposal B, a clean console: tiny clicks, glass between tabs, a soft rise when a panel opens, a chime when saved. */
-const MODERNA: Recorded = {
-  key: ['click_002', 'click_003'],
-  space: ['click_005'],
-  bell: ['select_001'],
-  confirm: ['select_003'],
-  page: ['glass_002'],
-  paper: ['maximize_002'],
-  stamp: ['confirmation_003'],
-  error: ['error_008'],
-};
-
-/** Proposal C, Moderna's clean ticks with Apocalipsis's mechanical switch. */
-const MIXTA: Recorded = {
+/** The recordings of each moment (one is picked at random). */
+const RECORDED: Record<UiKind, string[]> = {
   key: ['tick_004', 'click_001'],
   space: ['tick_004'],
   bell: ['select_002'],
@@ -86,20 +35,17 @@ const MIXTA: Recorded = {
   error: ['error_004'],
 };
 
-const RECORDED: Record<string, Recorded> = { apocalipsis: APOCALIPSIS, moderna: MODERNA, mixta: MIXTA };
-
 /** How loud each moment sits (the recordings are all normalised to the same peak). */
 const GAIN: Record<UiKind, number> = { key: 0.32, space: 0.3, bell: 0.4, confirm: 0.5, page: 0.4, paper: 0.42, stamp: 0.55, error: 0.45 };
 
 const buffers = new Map<string, AudioBuffer>();
 const loading = new Set<string>();
 
-/** Fetches and decodes a theme's recordings once (needs the audio context, so after the first gesture). */
-function load(theme: string): void {
-  const set = RECORDED[theme];
+/** Fetches and decodes the recordings once (needs the audio context, so after the first gesture). */
+function load(): void {
   const ctx = audio.ctx;
-  if (!set || !ctx) return;
-  for (const name of new Set(Object.values(set).flat())) {
+  if (!ctx) return;
+  for (const name of new Set(Object.values(RECORDED).flat())) {
     if (buffers.has(name) || loading.has(name)) continue;
     loading.add(name);
     fetch(`/audio/ui/${name}.wav`)
@@ -113,22 +59,18 @@ function load(theme: string): void {
   }
 }
 
-/** Plays an interface sound in the voice of the active theme (the case file's typewriter, paper and stamps by default). */
+/** Plays an interface sound. */
 export function uiSound(kind: UiKind, o: PlayOptions & { spread?: number } = {}): void {
-  const theme = document.documentElement.dataset.ui ?? '';
-  const set = RECORDED[theme];
-  if (set) {
-    const names = set[kind];
-    const buf = buffers.get(names[Math.floor(Math.random() * names.length)]!);
-    if (buf) {
-      const spread = o.spread ?? 0.03;
-      audio.play(buf, { ...o, bus: 'ui', gain: (o.gain ?? 1) * GAIN[kind], rate: (o.rate ?? 1) * (1 + (Math.random() * 2 - 1) * spread) });
-      return;
-    }
-    load(theme);
+  const names = RECORDED[kind];
+  const buf = buffers.get(names[Math.floor(Math.random() * names.length)]!);
+  if (buf) {
+    const spread = o.spread ?? 0.03;
+    audio.play(buf, { ...o, bus: 'ui', gain: (o.gain ?? 1) * GAIN[kind], rate: (o.rate ?? 1) * (1 + (Math.random() * 2 - 1) * spread) });
+    return;
   }
+  load();
   // The game's own sounds (a radio click, the search slide…) still follow the interface's volume.
-  sound((set ? SYNTH : theme === 'holo' ? HOLO : PAPER)[kind], { bus: 'ui', ...o });
+  sound(SYNTH[kind], { bus: 'ui', ...o });
 }
 
 const CLICKABLE = 'button, [role="button"], .x-row, .lineup-card, .edge-mark, .setting-choices button';
@@ -145,9 +87,8 @@ let installed = false;
 export function installUiSounds(): void {
   if (installed) return;
   installed = true;
-  // The recordings of the theme on screen, ready before the first click that needs them.
-  audio.onReady(() => load(document.documentElement.dataset.ui ?? ''));
-  window.addEventListener('bastion:theme', () => load(document.documentElement.dataset.ui ?? ''));
+  // The recordings, ready before the first click that needs them.
+  audio.onReady(load);
   document.addEventListener(
     'pointerdown',
     (e) => {

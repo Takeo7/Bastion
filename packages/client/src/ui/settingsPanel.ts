@@ -1,7 +1,6 @@
 import { audio, type Volumes } from '../audio/engine';
 import { autoQuality, autoQualityNote, graphics, setAutoQuality, setGraphics, type GraphicsSettings } from '../settings';
 import { h } from './dom';
-import { OFFERED_THEMES, setUiTheme, UI_THEMES, uiTheme } from './theme';
 
 type Choice<K extends keyof GraphicsSettings> = [GraphicsSettings[K], string, string?];
 
@@ -141,37 +140,6 @@ export function soundSettings(redraw: () => void): HTMLElement {
     volumeRow('sfx', 'Efectos', 'Disparos, explosiones, pasos y acciones.', redraw),
     volumeRow('music', 'Música', 'La música de la base, del globo y del combate.', redraw),
     volumeRow('ambience', 'Ambiente', 'Viento, ciudad, bosque, máquinas.', redraw),
-    volumeRow('ui', 'Interfaz y radio', 'Teclas, sellos, papeles y las transmisiones de radio.', redraw),
-  );
-}
-
-/** The interface's look (Expediente or one of the three proposals): shared by both menus, applied at once, and shared with the partner. */
-export function themeSettings(redraw: () => void): HTMLElement {
-  const current = uiTheme();
-  return h(
-    'div.settings',
-    {},
-    h(
-      'div.setting',
-      { title: 'Cómo se ven los menús, los paneles y el HUD. Al cambiarlo, cambia también para tu compañero.' },
-      h('span.setting-name', {}, 'Estilo'),
-      h(
-        'div.setting-choices',
-        {},
-        ...OFFERED_THEMES.map((id) =>
-          h(
-            `button${id === current ? '.on' : ''}`,
-            {
-              title: UI_THEMES[id].hint,
-              onclick: () => {
-                setUiTheme(id);
-                redraw();
-              },
-            },
-            UI_THEMES[id].name,
-          ),
-        ),
-      ),
-    ),
+    volumeRow('ui', 'Interfaz y radio', 'Botones, avisos y las transmisiones de radio.', redraw),
   );
 }

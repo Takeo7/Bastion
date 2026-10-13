@@ -25,8 +25,8 @@ export interface TraitDef {
 }
 
 export const TRAITS: Record<TraitId, TraitDef> = {
-  grudge: { name: 'Rencor', description: '+10 de puntería y −15 de voluntad: no perdona a los Cuervos.', aim: 10, will: -15 },
-  scarred: { name: 'Pesadillas', description: '−20 de voluntad: desde entonces no duerme una noche entera.', aim: 0, will: -20 },
+  grudge: { name: 'Rencor', description: '+10 de puntería, −15 de voluntad. No perdona a los Cuervos.', aim: 10, will: -15 },
+  scarred: { name: 'Pesadillas', description: '−20 de voluntad. No ha vuelto a dormir una noche entera.', aim: 0, will: -20 },
 };
 
 // -------------------------------------------------------------------- steps
@@ -128,8 +128,8 @@ export const QUESTS: Record<QuestId, QuestDef> = {
   faces: {
     id: 'faces',
     title: 'Caras conocidas',
-    signature: '— I. A.',
-    hook: '{soldier} ha oído un nombre conocido en la radio de los Cuervos.',
+    signature: '— N. A.',
+    hook: '{soldier} ha reconocido un nombre en la radio de los Cuervos.',
     prize: '{relative} se une al Bastión',
     region: null,
     rumor: false,
@@ -137,9 +137,9 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'event',
         title: 'Caras conocidas',
-        text: 'Los Cuervos leen por radio la lista de sus prisioneros: los cambian por comida y munición. {soldier} ha oído un nombre, el de {relation}, {relative}. Encontrar su campamento costará días y soldados.',
+        text: 'Los Cuervos leen por radio su lista de prisioneros. Los cambian por comida y munición. {soldier} ha oído el nombre de {relation}, {relative}. Encontrar el campamento costará días y soldados.',
         options: [
-          { label: 'Buscar el campamento', effect: 'Tres operaciones para encontrar a {relative}', then: 'next' },
+          { label: 'Buscar el campamento', effect: 'Tres operaciones', then: 'next' },
           { label: 'No podemos permitírnoslo', effect: '{soldier} gana el rasgo «Rencor»', then: 'refused' },
         ],
       },
@@ -149,7 +149,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'recovery',
         biome: 'city',
         days: 8,
-        briefing: 'Los Cuervos apuntan a sus prisioneros en un registro que guardan en un control de la carretera. Dice quién tiene a {relative}. Recuperadlo y sacadlo por la zona de evacuación.',
+        briefing: 'Los Cuervos llevan un registro de prisioneros en un control de la carretera. Ahí consta quién tiene a {relative}. Recuperadlo y sacadlo por la zona de evacuación.',
         item: 'el registro de prisioneros',
         reward: { credits: 40 },
       },
@@ -159,7 +159,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'hack',
         biome: 'city',
         days: 8,
-        briefing: 'El registro no dice dónde está el campamento. Su radio se oye desde un repetidor roto de la ciudad. Arregladlo y escuchad: sabremos dónde tienen a {relative}. Si el arreglo falla, el ruido atraerá a todo lo que haya cerca.',
+        briefing: 'El registro no dice dónde está el campamento. Su radio llega a un repetidor roto de la ciudad. Reparadlo y lo localizaremos. Si falla, el ruido atraerá a lo que ande cerca.',
         reward: { credits: 40 },
       },
       {
@@ -169,23 +169,23 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         biome: 'facility',
         difficulty: 1,
         days: 8,
-        briefing: 'Los Cuervos guardan a sus prisioneros en un almacén cerrado con cadenas. {relative} está dentro. Llegad hasta allí y sacad a {relative} con vida.',
+        briefing: 'Los prisioneros están en un almacén cerrado con cadenas. {relative} está dentro. Hay que sacar a {relative} con vida.',
         vip: '{relative}',
       },
     ],
     outcomes: {
-      success: { text: '{relative} llega a Atalaya en los huesos. Al día siguiente pide un fusil, como {soldier}.', tone: 'good', recruit: { name: '{relative}' }, retry: 40 },
-      refused: { text: '{soldier} no ha dicho nada. Desde entonces dispara antes de preguntar.', tone: 'bad', trait: 'grudge', retry: 30 },
-      failure: { text: 'Cuando llegamos, el campamento estaba vacío. {soldier} no habla de ello, pero ahora dispara antes de preguntar.', tone: 'bad', trait: 'grudge', retry: 30 },
+      success: { text: '{relative} llega a Atalaya en los huesos. Al día siguiente pide un fusil.', tone: 'good', recruit: { name: '{relative}' }, retry: 40 },
+      refused: { text: '{soldier} no dice nada. Desde entonces dispara antes de preguntar.', tone: 'bad', trait: 'grudge', retry: 30 },
+      failure: { text: 'El campamento estaba vacío cuando llegamos. {soldier} no habla de ello. Ahora dispara antes de preguntar.', tone: 'bad', trait: 'grudge', retry: 30 },
     },
   },
 
   ibarra: {
     id: 'ibarra',
-    title: 'La comandante Ibarra',
-    signature: '— I. A.',
-    hook: 'Morse ha oído el nombre de Elena Ibarra en una frecuencia de los Cuervos.',
-    prize: 'decidir qué hacer con Ibarra',
+    title: 'La comandante Lindqvist',
+    signature: '— N. A.',
+    hook: 'Morse ha oído el nombre de Vera Lindqvist en una frecuencia de los Cuervos.',
+    prize: 'decidir qué hacer con Lindqvist',
     region: 'weu',
     rumor: false,
     steps: [
@@ -195,24 +195,24 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'recovery',
         biome: 'city',
         days: 10,
-        briefing: 'Elena Ibarra mandaba el Refugio del Collado. El año pasado se lo vendió a los Cuervos a cambio de su vida: por eso aquí todo se decide con dos llaves. Su diario sigue en las ruinas del Collado y dice adónde fue después. Recuperadlo y sacadlo por la zona de evacuación.',
+        briefing: 'Vera Lindqvist mandaba el Refugio del Collado. El año pasado se lo entregó a los Cuervos a cambio de su vida. Por ella, aquí todo se decide con dos llaves. Su diario sigue en las ruinas y dice adónde fue. Recuperadlo y sacadlo por la zona de evacuación.',
         item: 'el diario',
         reward: { credits: 50 },
       },
       {
         type: 'mission',
-        name: 'Elena Ibarra',
+        name: 'Vera Lindqvist',
         kind: 'elimination',
         biome: 'city',
         difficulty: 1,
         days: 8,
-        briefing: 'Ibarra manda ahora una banda de Cuervos. Abatid a todos los hostiles. A ella, si se puede, la quiero viva.',
-        leader: { template: 'officer', name: 'Elena Ibarra' },
+        briefing: 'Lindqvist manda ahora una banda de Cuervos. Abatid a todos los hostiles. A ella, si se puede, la quiero viva.',
+        leader: { template: 'officer', name: 'Vera Lindqvist' },
       },
       {
         type: 'event',
-        title: 'Elena Ibarra',
-        text: 'La escuadra encuentra a Ibarra herida entre los escombros. No pide perdón: dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo que roba.',
+        title: 'Vera Lindqvist',
+        text: 'Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.',
         options: [
           { label: 'Llevarla a Atalaya', effect: 'Se une como sargento, con el rasgo «Pesadillas»', then: 'captured' },
           { label: 'Acabar con esto', effect: '+150 suministros de su alijo', then: 'killed' },
@@ -220,9 +220,9 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      captured: { text: 'Ibarra ha vuelto. Duerme poco y con la luz encendida. Cuesta mirarla, pero sabe mandar.', tone: 'good', recruit: { name: 'Elena Ibarra', cls: 'sharpshooter', rank: 3, trait: 'scarred' } },
-      killed: { text: 'Ibarra ya no venderá a nadie más. Su alijo nos da munición para un mes.', tone: 'good', credits: 150 },
-      failure: { text: 'Ibarra se nos ha escapado. Volverá a aparecer.', tone: 'bad', retry: 25 },
+      captured: { text: 'Lindqvist duerme en Atalaya, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.', tone: 'good', recruit: { name: 'Vera Lindqvist', cls: 'sharpshooter', rank: 3, trait: 'scarred' } },
+      killed: { text: 'Lindqvist está muerta. Su alijo pasa a Atalaya (+150 suministros).', tone: 'good', credits: 150 },
+      failure: { text: 'Lindqvist ha escapado. Volverá a aparecer.', tone: 'bad', retry: 25 },
     },
   },
 
@@ -231,14 +231,14 @@ export const QUESTS: Record<QuestId, QuestDef> = {
     title: 'El ayudante de la doctora',
     signature: '— Dra. Nwosu',
     hook: 'Ha llegado una carta para la Dra. Nwosu.',
-    prize: 'decidir qué hacer con Tomás Rubio',
+    prize: 'decidir qué hacer con Tomasz Rybak',
     region: 'afr',
     rumor: false,
     steps: [
       {
         type: 'event',
         title: 'Una carta para la doctora',
-        text: 'Los del Hospital traen una carta para la Dra. Nwosu. La firma el doctor Tomás Rubio, su ayudante en el Instituto Galena. Ella lo creía muerto. Está vivo, trabaja para la Congregación en un laboratorio de Ciudad Varela y quiere hablar.',
+        text: 'Los del Hospital traen una carta para la Dra. Nwosu. La firma Tomasz Rybak, que fue su ayudante en el Instituto Galen. Ella lo daba por muerto. Trabaja para la Congregación en un laboratorio de Corran. Quiere hablar.',
         options: [
           { label: 'Contestar', effect: 'Una operación en el laboratorio', then: 'next' },
           { label: 'Quemar la carta', effect: 'Sin efecto', then: 'burned' },
@@ -246,17 +246,17 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
       {
         type: 'mission',
-        name: 'El laboratorio de Varela',
+        name: 'El laboratorio de Corran',
         kind: 'hack',
         biome: 'facility',
         difficulty: 1,
         days: 8,
-        briefing: 'Rubio nos ha dejado abierto su laboratorio. Tiene un ordenador que funciona con un generador. Arrancadlo y leed sus notas: sabremos si quiere salir o tendernos una trampa. Si algo falla, la Congregación tocará sus campanas y vendrán todos.',
+        briefing: 'Rybak ha dejado abierto el laboratorio. Su ordenador va con un generador. Arrancadlo y leed sus notas: sabremos si quiere salir o si es una trampa. Si falla, la Congregación tocará las campanas y vendrán todos.',
       },
       {
         type: 'event',
-        title: 'Tomás Rubio',
-        text: 'Quiere salir. La Congregación le hace estudiar cómo guiar a los zombis con sonido, y a escondidas ha avanzado con los antibióticos. Si lo sacamos, viene con sus cuadernos. Si quemamos el laboratorio, la Voz pierde un año de trabajo. La Dra. Nwosu no sabe si perdonarlo.',
+        title: 'Tomasz Rybak',
+        text: 'Rybak quiere salir. La Congregación lo tiene estudiando cómo guiar a los zombis con sonido. A escondidas, ha avanzado con los antibióticos. Si lo sacamos, trae sus cuadernos. Si quemamos el laboratorio, la Voz pierde un año de trabajo. La Dra. Nwosu no opina.',
         options: [
           { label: 'Sacarlo de allí', effect: 'Antibióticos sin esperar al nivel 6', then: 'rescued' },
           { label: 'Quemar el laboratorio', effect: 'Los zombis retroceden (−1)', then: 'ended' },
@@ -264,50 +264,50 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      rescued: { text: 'Rubio y la Dra. Nwosu trabajan en la misma mesa y no se dirigen la palabra. Los antibióticos llegan antes de tiempo.', tone: 'good', tech: 'nanoMedkit' },
-      ended: { text: 'El laboratorio arde con un año de trabajo de la Congregación dentro, y los zombis retroceden. La Dra. Nwosu pasa la noche junto a la radio.', tone: 'good', doom: -1 },
+      rescued: { text: 'Rybak y la Dra. Nwosu comparten mesa y no se hablan. Los antibióticos llegan antes de tiempo.', tone: 'good', tech: 'nanoMedkit' },
+      ended: { text: 'El laboratorio arde con un año de trabajo de la Congregación dentro. Los zombis retroceden. La Dra. Nwosu pasa la noche junto a la radio.', tone: 'good', doom: -1 },
       burned: { text: 'La carta arde. La Dra. Nwosu no pregunta.', tone: 'bad' },
-      failure: { text: 'La Congregación sabe que la buscamos. Con sus campanas trae a Ciudad Varela a los Acorazados del cuartel: uno más en cada operación de la zona.', tone: 'bad', enemy: 'mec' },
+      failure: { text: 'La Congregación sabe que la buscamos. Sus campanas atraen a Corran a los Acorazados del cuartel: uno más en cada operación de la zona.', tone: 'bad', enemy: 'mec' },
     },
   },
 
   bells: {
     id: 'bells',
-    title: 'Las campanas de San Telmo',
-    signature: '— Los de San Telmo',
-    hook: 'Las campanas de San Telmo tocan a rebato.',
+    title: 'Las campanas de Telm',
+    signature: '— Los de Telm',
+    hook: 'Las campanas de Telm tocan a rebato.',
     prize: 'dos granadas aturdidoras y +10 suministros al mes',
     region: 'weu',
     rumor: true,
     steps: [
       {
         type: 'event',
-        title: 'Las campanas de San Telmo',
-        text: 'San Telmo, un pueblo de la sierra, toca a rebato cada noche: viene una horda y la gente corre a encerrarse en la iglesia. Los Cuervos han puesto una sirena en el valle que llama a los zombis hacia el pueblo. Cuando no quede nadie, bajarán a por lo que haya.',
+        title: 'Las campanas de Telm',
+        text: 'Telm es un pueblo de la sierra. Cada noche llega una horda y la gente se encierra en la iglesia. Una sirena de los Cuervos, en el valle, atrae a los zombis hacia el pueblo. Cuando no quede nadie, bajarán a saquearlo.',
         options: [
           { label: 'Callar la sirena', effect: 'Una operación de sabotaje', then: 'next' },
-          { label: 'Ahora no podemos', effect: 'San Telmo se vacía: −10 suministros al mes', then: 'failure' },
+          { label: 'Ahora no podemos', effect: 'Telm se vacía: −10 suministros al mes', then: 'failure' },
         ],
       },
       {
         type: 'mission',
-        name: 'Las campanas de San Telmo',
+        name: 'Las campanas de Telm',
         kind: 'sabotage',
         biome: 'wilds',
         days: 8,
-        briefing: 'La sirena de los Cuervos está en una loma sobre el valle. Destrozadla antes de que la horda llegue al pueblo. Las campanas avisarán al resto.',
+        briefing: 'La sirena está en una loma sobre el valle. Calladla antes de que la horda llegue al pueblo.',
       },
     ],
     outcomes: {
-      success: { text: 'San Telmo ha resistido. El pueblo nos da las dos granadas aturdidoras del cuartelillo y parte de cada cosecha (+10 suministros al mes).', tone: 'good', items: { flashbang: 2 }, income: 10 },
-      failure: { text: 'Las campanas de San Telmo se han callado. El pueblo está vacío (−10 suministros al mes).', tone: 'bad', income: -10 },
+      success: { text: 'Telm resiste. El pueblo nos da las dos granadas aturdidoras del cuartelillo y parte de cada cosecha (+10 suministros al mes).', tone: 'good', items: { flashbang: 2 }, income: 10 },
+      failure: { text: 'Las campanas de Telm ya no suenan. El pueblo está vacío (−10 suministros al mes).', tone: 'bad', income: -10 },
     },
   },
 
   numbers: {
     id: 'numbers',
     title: 'La estación de números',
-    signature: '— I. A.',
+    signature: '— N. A.',
     hook: 'Morse ha oído un indicativo que no oía desde antes de la Pandemia.',
     prize: 'una zona contactable más',
     region: 'eeu',
@@ -319,21 +319,21 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'hack',
         biome: 'city',
         days: 10,
-        briefing: 'Una estación de números emite con el indicativo de mi maestro, Ramiro Ostalé. Lo creía muerto. En lo alto del ayuntamiento de Valdelobos hay un repetidor roto que recoge su señal: si lo arregláis, sabremos desde dónde emite. Si el arreglo falla, el ruido atraerá a todo lo que haya cerca.',
+        briefing: 'Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Volkren hay un repetidor roto que recoge su señal. Reparadlo y sabremos desde dónde emite. Si falla, el ruido atraerá a lo que ande cerca.',
       },
       {
         type: 'mission',
-        name: 'Ramiro Ostalé',
+        name: 'Otto Brandt',
         kind: 'rescue',
         biome: 'wilds',
         days: 8,
-        briefing: 'Ramiro está vivo, en una cabaña de Valdelobos, con una radio de válvulas. Los Cuervos también lo han oído. Llegad antes que ellos y sacadlo con vida.',
-        vip: 'Ramiro Ostalé',
+        briefing: 'Otto está vivo. Emite desde una cabaña de Volkren con una radio de válvulas. Los Cuervos también lo han oído. Llegad antes y sacadlo con vida.',
+        vip: 'Otto Brandt',
       },
     ],
     outcomes: {
-      success: { text: 'Ramiro Ostalé monta su radio en Atalaya. Con él, la red llega a una zona más.', tone: 'good', contacts: 1 },
-      failure: { text: 'No llegamos a tiempo. Morse ha escrito algo en el margen del informe y lo ha tachado todo menos una palabra: «gracias».', tone: 'bad' },
+      success: { text: 'Otto Brandt monta su radio en Atalaya. Con él, la red llega a una zona más.', tone: 'good', contacts: 1 },
+      failure: { text: 'No llegamos a tiempo. Morse firma el informe y no añade nada.', tone: 'bad' },
     },
   },
 
@@ -352,7 +352,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'rescue',
         biome: 'wilds',
         days: 8,
-        briefing: 'Una partida de caza de los Cuervos ha asaltado el convoy en la Ruta 50. La conductora, Lola Haskins, se ha encerrado en una gasolinera. Llegad hasta ella y sacadla con vida.',
+        briefing: 'Una partida de caza de los Cuervos ha asaltado el convoy en la Ruta 50. La conductora, Lola Haskins, se ha encerrado en una gasolinera. Sacadla con vida.',
         vip: 'Lola Haskins',
         reward: { credits: 40 },
       },
@@ -362,7 +362,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'elimination',
         biome: 'wilds',
         days: 6,
-        briefing: 'La partida de caza que asaltó el convoy sigue en la carretera. Mientras siga ahí, no pasará ningún camión. Abatid a todos los hostiles.',
+        briefing: 'La partida que asaltó el convoy sigue en la carretera. Mientras esté ahí no pasará ningún camión. Abatid a todos los hostiles.',
       },
     ],
     outcomes: {
@@ -386,7 +386,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'rescue',
         biome: 'city',
         days: 8,
-        briefing: 'En la Red Callada hay sordos y sus familias: han sobrevivido porque hablan con las manos, sin hacer ruido. Los Cuervos se han llevado a Mei Takahara, una de sus enlaces, y no saben lo que vale. Llegad hasta ella y sacadla con vida.',
+        briefing: 'La Red Callada son sordos y sus familias. Han sobrevivido hablando por señas, sin un ruido. Los Cuervos se han llevado a Mei Takahara, una de sus enlaces. No saben lo que vale. Sacadla con vida.',
         vip: 'Mei Takahara',
       },
       {
@@ -395,12 +395,12 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'recovery',
         biome: 'city',
         days: 8,
-        briefing: 'Mei apuntaba en papel por dónde pasan las hordas del Pantano Gris. Sus notas siguen en una casa que los Cuervos están saqueando. Recuperadlas y sacadlas por la zona de evacuación.',
+        briefing: 'Mei anotaba por dónde pasan las hordas del Pantano Gris. Sus notas siguen en una casa que los Cuervos están saqueando. Recuperadlas y sacadlas por la zona de evacuación.',
         item: 'las notas',
       },
     ],
     outcomes: {
-      success: { text: 'La Red Callada nos enseña sus señas. Ahora las escuadras hablan sin hacer ruido, y sabemos por dónde pasan las hordas del Pantano.', tone: 'good', xp: 15, credits: 50 },
+      success: { text: 'La Red Callada nos enseña sus señas. Las escuadras se comunican sin ruido y sabemos por dónde pasan las hordas del Pantano.', tone: 'good', xp: 15, credits: 50 },
       failure: { text: 'La Red Callada se esconde. No volveremos a saber de ella.', tone: 'bad' },
     },
   },
@@ -408,8 +408,8 @@ export const QUESTS: Record<QuestId, QuestDef> = {
   mole: {
     id: 'mole',
     title: 'El topo',
-    signature: '— I. A.',
-    hook: 'Dos sabotajes en el generador no son casualidad.',
+    signature: '— N. A.',
+    hook: 'Alguien ha saboteado el generador dos veces.',
     prize: 'encontrar al topo',
     region: 'weu',
     rumor: false,
@@ -417,7 +417,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'event',
         title: 'El topo',
-        text: 'Alguien del Bastión pasa información a los Cuervos. Solo dos personas bajaron al generador las noches de los sabotajes: {a} y {b}. Podemos vigilar a una de ellas una semana.',
+        text: 'Alguien de Atalaya pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.',
         options: [
           { label: 'Vigilar a {a}', effect: 'Una semana de vigilancia', then: 'next', clue: true },
           { label: 'Vigilar a {b}', effect: 'Una semana de vigilancia', then: 'next', clue: true },
@@ -426,7 +426,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'event',
         title: 'El topo',
-        text: '{clue} Hay que decidir antes de que vuelva a pasar. Si acusamos a quien no es, el topo sabrá que lo buscamos.',
+        text: '{clue} Hay que decidir antes del próximo sabotaje. Si acusamos a quien no es, el topo sabrá que lo buscamos.',
         options: [
           { label: 'Acusar a {a}', effect: 'Si es el topo, los zombis retroceden (−1)', then: 'guess' },
           { label: 'Acusar a {b}', effect: 'Si es el topo, los zombis retroceden (−1)', then: 'guess' },
@@ -434,12 +434,12 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     clues: {
-      guilty: '{name} sale de noche hacia la antena vieja y vuelve sin hacer ruido.',
-      innocent: '{name} no se mueve de su catre en toda la semana.',
+      guilty: 'Vigilamos a {name}, que sale de noche hacia la antena vieja y vuelve antes del cambio de guardia.',
+      innocent: 'Vigilamos a {name}, que no se mueve de su catre en toda la semana.',
     },
     outcomes: {
-      success: { text: '{culprit} confiesa: pasaba los turnos de guardia a los Cuervos por una radio escondida en el almacén. Sabían cuándo dormíamos y por dónde mandarnos a los zombis. Sin sus avisos, los zombis retroceden.', tone: 'good', doom: -1 },
-      failure: { text: 'Hemos acusado a quien no era. Esa noche, {culprit} desaparece con la caja de suministros (−60) y deja las obras saboteadas.', tone: 'bad', credits: -60, delay: 4 },
+      success: { text: 'Confiesa {culprit}. Pasaba los turnos de guardia a los Cuervos con una radio escondida en el almacén. Sabían cuándo dormíamos y por dónde echarnos a los zombis. Sin esos avisos, los zombis retroceden.', tone: 'good', doom: -1 },
+      failure: { text: 'Hemos acusado a quien no era. Esa noche desaparece {culprit}. Se lleva la caja (−60 suministros) y deja las obras saboteadas (4 días de retraso).', tone: 'bad', credits: -60, delay: 4 },
     },
   },
 
@@ -447,15 +447,15 @@ export const QUESTS: Record<QuestId, QuestDef> = {
     id: 'mine',
     title: 'La mina',
     signature: '— El Sindicato de la Mina',
-    hook: 'En una mina abandonada de Carboneda se oyen gritos por las noches.',
-    prize: 'una granadera y dos granadas',
+    hook: 'De una mina abandonada de Carvik salen gritos por la noche.',
+    prize: 'un refuerzo (Granadero) y dos granadas',
     region: 'sa',
     rumor: true,
     steps: [
       {
         type: 'event',
         title: 'La mina',
-        text: 'Los mineros del Sindicato oyen gritos en una mina abandonada de Carboneda. Las galerías están llenas de zombis, y dentro hay un Chillón que los llama. Cada noche salen más hacia los pueblos.',
+        text: 'Las galerías de una mina abandonada de Carvik están llenas de zombis. Dentro hay un Chillón que los llama. Cada noche salen más hacia los pueblos.',
         options: [
           { label: 'Bajar a la mina', effect: 'Una operación contra el Chillón', then: 'next' },
           { label: 'Sellarla con dinamita', effect: 'Sin efecto', then: 'sealed' },
@@ -468,14 +468,14 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         biome: 'wilds',
         difficulty: 1,
         days: 8,
-        briefing: 'El Chillón de la mina lleva semanas llamando a los zombis del valle. Bajad y abatid a todos los hostiles. Primero el Chillón: si grita, vendrán todos.',
+        briefing: 'El Chillón de la mina lleva semanas llamando a los zombis del valle. Abatid a todos los hostiles. Primero el Chillón.',
         leader: { template: 'sectoid', name: 'El Chillón de la mina' },
       },
     ],
     outcomes: {
-      success: { text: 'La mina calla. El Sindicato nos manda a su mejor barrenera y una caja de dinamita.', tone: 'good', recruit: { cls: 'grenadier' }, items: { fragGrenade: 2 } },
+      success: { text: 'La mina queda en silencio. El Sindicato nos cede a quien mejor maneja los explosivos y dos cargas de dinamita (+2 granadas).', tone: 'good', recruit: { cls: 'grenadier' }, items: { fragGrenade: 2 } },
       sealed: { text: 'El Sindicato sella la mina. Nadie sabe cuántos quedaron dentro.', tone: 'bad' },
-      failure: { text: 'Los mineros abandonan Carboneda (−10 suministros al mes).', tone: 'bad', income: -10 },
+      failure: { text: 'Los mineros abandonan Carvik (−10 suministros al mes).', tone: 'bad', income: -10 },
     },
   },
 
@@ -491,10 +491,10 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'event',
         title: 'El camión del río',
-        text: 'Con el río bajo, los de las Bodegas han visto un camión de suministros hundido junto al puente de La Vega. Las cajas están precintadas y muchas siguen secas. Los Cuervos también lo han visto.',
+        text: 'Con el río bajo ha aparecido un camión de suministros hundido junto al puente de La Vega. Las cajas están precintadas y muchas siguen secas. Los Cuervos también lo han visto.',
         options: [
           { label: 'Llegar antes que ellos', effect: 'Una operación de recuperación', then: 'next' },
-          { label: 'Dejárselo al río', effect: 'Sin efecto', then: 'left' },
+          { label: 'Dejarlo en el río', effect: 'Sin efecto', then: 'left' },
         ],
       },
       {
@@ -508,7 +508,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      success: { text: 'Las cajas del camión traen conservas, vendas y munición para un mes entero (+150 suministros).', tone: 'good', credits: 150 },
+      success: { text: 'Las cajas traen conservas, vendas y munición (+150 suministros).', tone: 'good', credits: 150 },
       left: { text: 'El camión se queda en el fondo del río.', tone: 'bad' },
       failure: { text: 'Los Cuervos se llevan las cajas del embarcadero.', tone: 'bad' },
     },
@@ -518,17 +518,17 @@ export const QUESTS: Record<QuestId, QuestDef> = {
 // ------------------------------------------------------------------- people
 
 /** Relatives a soldier can hear named on the Cuervos' prisoner list ("Caras conocidas"). */
-export const RELATIVES: { name: string; relation: string }[] = [
-  { name: 'Marta', relation: 'su hermana' },
-  { name: 'Tomás', relation: 'su hermano' },
-  { name: 'Carmen', relation: 'su madre' },
-  { name: 'Andrés', relation: 'su padre' },
-  { name: 'Lucía', relation: 'su hermana pequeña' },
-  { name: 'Joaquín', relation: 'su primo' },
-];
+export const RELATIVES: { name: string; relation: string; sex: 'f' | 'm' }[] = [
+  { name: 'Mariam', relation: 'su hermana', sex: 'f' },
+  { name: 'Tomás', relation: 'su hermano', sex: 'm' },
+  { name: 'Ewa', relation: 'su madre', sex: 'f' },
+  { name: 'Andrés', relation: 'su padre', sex: 'm' },
+  { name: 'Lucía', relation: 'su hermana pequeña', sex: 'f' },
+  { name: 'Kenji', relation: 'su primo', sex: 'm' },
+]
 
-/** People with access to the generator ("El topo"); Simón joins them if he was trusted. */
-export const SUSPECTS = ['Paco Lanuza, el electricista', 'Rosa Aldea, la cocinera', 'Bruno Sanz, el de la radio'];
+/** People with access to the generator ("El topo"); Simão joins them if he was trusted. */
+export const SUSPECTS = ['Pavel Lanz, el electricista', 'Rosa Alves, la cocinera', 'Bruno Sauer, el de la radio'];
 
 /** What rumours are about ("Se habla de …"). */
 export const RUMOR_LINES = [

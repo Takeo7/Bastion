@@ -29,6 +29,13 @@ export const UNIT_LAYER = 1;
 export class SolidGTAO extends GTAOPass {
   /** At a third of the size instead of half (lightenPost). */
   light?: boolean;
+  /**
+   * Characters in the pre-pass too. Left out, the occlusion behind a
+   * character is multiplied over it and it looks see-through; the battle
+   * leaves them out all the same, for the pass's cost with a crowd, and the
+   * base's stage (a handful, close up) puts them in.
+   */
+  withUnits = false;
 
   /**
    * Occlusion is soft by nature: at half resolution it costs a quarter and
@@ -53,7 +60,7 @@ export class SolidGTAO extends GTAOPass {
     const [auto, needs] = [shadows.autoUpdate, shadows.needsUpdate];
     const units = this.camera.layers.isEnabled(UNIT_LAYER);
     shadows.autoUpdate = shadows.needsUpdate = false;
-    this.camera.layers.disable(UNIT_LAYER);
+    if (!this.withUnits) this.camera.layers.disable(UNIT_LAYER);
     AO_PASS.value = 1;
     try {
       super.render(...args);

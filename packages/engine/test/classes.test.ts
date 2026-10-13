@@ -359,10 +359,10 @@ describe('talents in combat', () => {
     const grenadier = addUnit(s, 's1', 'grenadier', 2, 10, { perks: ['safeBlast'], mods: { ...soldierStats(build('grenadier', 3, { longArm: 2 })).mods } });
     const ally = addUnit(s, 's2', 'assault', 16, 10, { owner: 1 });
     const enemy = addUnit(s, 'a1', 'trooper', 16, 11, { hp: 20, maxHp: 20 });
-    expect(canTargetTile(s, grenadier, 'launch', { x: 16, y: 10 })).toBe(true);
-    expect(canTargetTile(s, { ...grenadier, mods: { ...grenadier.mods, grenadeRange: 0 } }, 'launch', { x: 17, y: 10 })).toBe(false);
+    expect(canTargetTile(s, grenadier, 'launch', { x: 16, y: 10, z: 0 })).toBe(true);
+    expect(canTargetTile(s, { ...grenadier, mods: { ...grenadier.mods, grenadeRange: 0 } }, 'launch', { x: 17, y: 10, z: 0 })).toBe(false);
     const sim = new Sim(s, new Rng(1), [0, 1]);
-    sim.perform(grenadier, 'launch', { tile: { x: 16, y: 10 } });
+    sim.perform(grenadier, 'launch', { tile: { x: 16, y: 10, z: 0 } });
     expect(ally.hp).toBe(ally.maxHp);
     expect(enemy.hp).toBeLessThan(20);
   });

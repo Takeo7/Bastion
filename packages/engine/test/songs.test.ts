@@ -19,12 +19,12 @@ describe('songs', () => {
     const u = addUnit(s, 's1', 'assault', 2, 2);
     addUnit(s, 's2', 'grenadier', 4, 2);
     addUnit(s, 'a1', 'zombie', 7, 15);
-    expect(canTargetTile(s, u, 'echoStep', { x: 4, y: 2 })).toBe(false);
-    expect(canTargetTile(s, u, 'echoStep', { x: 9, y: 2 })).toBe(false);
-    expect(canTargetTile(s, u, 'echoStep', { x: 6, y: 4 })).toBe(true);
+    expect(canTargetTile(s, u, 'echoStep', { x: 4, y: 2, z: 0 })).toBe(false);
+    expect(canTargetTile(s, u, 'echoStep', { x: 9, y: 2, z: 0 })).toBe(false);
+    expect(canTargetTile(s, u, 'echoStep', { x: 6, y: 4, z: 0 })).toBe(true);
     const run = sim(s);
-    run.perform(u, 'echoStep', { tile: { x: 6, y: 4 } });
-    expect(u.pos).toEqual({ x: 6, y: 4 });
+    run.perform(u, 'echoStep', { tile: { x: 6, y: 4, z: 0 } });
+    expect(u.pos).toEqual({ x: 6, y: 4, z: 0 });
     expect(s.concealed).toBe(true);
     expect(run.events.find((e) => e.t === 'noise')).toMatchObject({ tile: { x: 6, y: 4 }, radius: 1 });
     expect(noiseOf(s, u, 'silence')).toBe(12);
@@ -35,7 +35,7 @@ describe('songs', () => {
     q.quietSongs = true;
     const v = addUnit(q, 's1', 'assault', 2, 2);
     const quiet = sim(q);
-    quiet.perform(v, 'echoStep', { tile: { x: 5, y: 2 } });
+    quiet.perform(v, 'echoStep', { tile: { x: 5, y: 2, z: 0 } });
     expect(q.concealed).toBe(true);
     expect(quiet.events.some((e) => e.t === 'noise')).toBe(false);
     expect(noiseOf(q, v, 'silence')).toBe(10);
@@ -103,7 +103,7 @@ describe('songs', () => {
     const s = field();
     const u = addUnit(s, 's1', 'grenadier', 2, 2);
     const sectoid = addUnit(s, 'a1', 'sectoid', 9, 2);
-    sim(s).perform(u, 'silence', { tile: { x: 9, y: 3 } });
+    sim(s).perform(u, 'silence', { tile: { x: 9, y: 3, z: 0 } });
     expect(s.silences).toHaveLength(1);
     expect(sectoid.disoriented).toBeGreaterThan(0);
     sectoid.ap = 2;

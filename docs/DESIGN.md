@@ -77,6 +77,7 @@ Cliente A ──comando──▶ Host (Node) ──eventos──▶ Cliente A y 
 | Ventaja de altura | +20 de puntería disparando hacia abajo | `HEIGHT_ADVANTAGE_BONUS` |
 | Cobertura con alturas | Relativa a la elevación de quien se cubre: el borde de una azotea no cubre a quien está arriba, la pared de un bloque sí cubre a quien está al pie | Cobertura por altura del objeto |
 | Escaleras y caídas | Subir solo por escalera (+1 casilla); bajar desde cualquier borde (+1 casilla por piso, hasta 2) | Escalar y saltar |
+| Plantas | Edificios de 2 y 3 plantas con habitaciones, ventanas y escalera interior (sube como una escalera de mano); azoteas planas con antepecho (cobertura baja). Los suelos tapan la vista y paran las explosiones; el ruido cuenta +1 casilla por planta. Los vivos apostados arriba valoran la altura (+6 por planta) y los zombis suben (3 casillas de rodeo por planta) | Edificios de varias plantas |
 | Puertas | Tapan la vista; se abren al cruzarlas y quedan abiertas; las explosiones las destrozan | Puertas |
 | Ventanas | Transparentes, cobertura alta al lado, saltarlas cuesta +1 casilla y rompe el cristal | Ventanas |
 | Patrullas | Los grupos inactivos caminan entre puntos de ruta; si ven a la escuadra durante su turno, se activan y corren a cubrirse | Pod patrols |
@@ -262,7 +263,9 @@ El flujo imita a XCOM 2: Bastión → geoesfera (escanear, avisos) → informe d
 | **M4 · Variedad táctica** | **Hecho.** Mapas procedurales en 3 biomas, 5 tipos de misión (eliminación, recuperación, sabotaje, pirateo, rescate), patrullas, refuerzos con bengala |
 | **Clases** | **Hecho (2026-10-12).** Cinco aptitudes que se reparten al ascender. El Árbol de habilidades: un árbol común de 116 talentos (centro, cuatro ejes con tres ramas y el Oficio del Taller de oficios), reclutas sin clase que se especializan en Capitán, segundo eje, kits, llave doble, reentrenamiento y la Hoja de servicio en el Cuartel |
 | **Prueba 2026-10-12** | **Hecho.** Las notas de la primera partida cooperativa de Arturo y Ana: disparar gasta una acción, la clase en Capitán, mapas de combate de 48 × 48, el ascenso como borrador, puestos fijos en el hangar y más ([PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md)) |
-| M5 · Arte y pulido | **En curso:** laboratorio de estilos para elegir la dirección de arte ([ARTE.md](ARTE.md)). Después: modelos y animaciones reales, sonido, menús; ejecutable opcional (Electron o Steam) |
+| **Zombis (fases 1–5)** | **Hecho (2026-10-13).** El cambio a supervivencia zombi ([LORE.md](LORE.md)): textos; Saqueo, ruido y zombis ([FASE2.md](FASE2.md)); contagio y medicinas ([FASE3.md](FASE3.md)); comida, Huerto, piezas y armas ([FASE4.md](FASE4.md)); el valle de Valdesombra con carreteras y la Marea ([FASE5.md](FASE5.md)). Además, noche y altura de los edificios ([ALTURA-Y-NOCHE.md](ALTURA-Y-NOCHE.md)) |
+| **Fase 6 · Plantas** | **Hecho en las reglas (2026-10-13).** Edificios de varias plantas que se suben ([FASE6.md](FASE6.md), [FASE6-PLAN.md](FASE6-PLAN.md)): posiciones con nivel, escaleras, visión y cobertura en 3D, ruido y explosiones por planta, plantas y azoteas en el generador, IA que sube y se aposta arriba, y «La torre» para escaramuza. El cliente (dibujo por plantas, corte y elección de planta) lo hacen Arte · Mapas y Combate |
+| **M5 · Arte y pulido** | **Casi hecho.** Todo en Synty: personajes y animaciones, mapas en los que se entra, la base, el mapa del valle, efectos y sonido. Telemetría de rendimiento. Aplicación de escritorio en Electron (release `v0.1.0`). Falta: la interfaz nueva (3 propuestas a votar por Arturo), probar en el PC de referencia (RTX 3090, objetivo ≤4,2 ms por fotograma) y firmar la aplicación |
 
 ## Habilidades: una sola fuente de verdad
 
@@ -275,6 +278,12 @@ Todas las habilidades, de jugadores y de alienígenas, se ejecutan por el mismo 
 - La IA conoce la posición de los soldados una vez activada. Es aceptable para empezar, pero en XCOM es más sutil.
 - El servidor envía el estado completo a ambos clientes, posiciones alienígenas incluidas. Entre amigos no importa.
 - La cobertura ocupa casillas enteras: no hay muros finos entre casillas.
-- Las alturas son un mapa de elevaciones: no hay interiores bajo una azotea (un edificio con tejado transitable es macizo). Los edificios con interior no tienen tejado.
-- Los muros de los edificios son indestructibles; los explosivos solo rompen cobertura, puertas y ventanas.
-- El globo y el Bastión son vistas provisionales hechas con primitivas (continentes a grandes rasgos, salas con cajas).
+- Los edificios tienen plantas de verdad (fase 6, [FASE6-PLAN.md](FASE6-PLAN.md)): se entra, se sube por la escalera a cada planta y a las azoteas planas, y se pisan. Lo que falta:
+  - Saltar por una ventana de arriba a la calle (decisión 4: más adelante).
+  - Suelos destructibles: los forjados paran las explosiones y no se rompen (decisión 5).
+  - Muros destructibles: los explosivos solo rompen cobertura, puertas y ventanas.
+  - Una escalera sube como una escalera de mano: arriba se puede salir por cualquier lado libre, no solo por el que se dibuja.
+  - Solo hay plantas sobre suelo a altura 0. Los bloques macizos (pisos con terraza, plataformas, colinas) siguen siendo un mapa de elevaciones.
+  - De los mapas hechos a mano, solo «La torre» tiene plantas.
+  - Una misión guardada antes de la fase 6 se juega sin plantas.
+  - El estado completo de una misión pesa unos 107 KB, por unos 58 sin plantas. Se manda al entrar, al reconectar y al empezar una misión. Si hiciera falta, se puede comprimir (deflate en el WebSocket, o las capas en cadenas): queda para más adelante.

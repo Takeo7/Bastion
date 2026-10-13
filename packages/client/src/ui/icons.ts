@@ -57,6 +57,10 @@ const counter = svg('<path d="M3 9c2-3 4 3 6 0s4 3 6 0 4 3 6 0"/><path d="M3 15c
 const hymnIcon = svg('<path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/><path d="M9 9.5l10-2"/>');
 const lastVerseIcon = svg('<path d="M3 19h18"/><path d="M7 19a5 5 0 0 1 10 0"/><path d="M12 4v4M5.6 7.6l2.1 2.1M18.4 7.6l-2.1 2.1"/>');
 const magnifier = svg('<circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L20 20"/>');
+// Doors (playtest 2026-10-13): one swung open on its frame with light through the gap, one shut with its
+// panels and handle. The theme lays its filled silhouettes over these (public/ui/mixta/icons).
+const doorOpenIcon = svg('<path d="M3 22h18M5.5 22V2.5h13V22"/><path d="M5.5 2.5l7 2.4V22.6l-7-1.2z"/><path d="M15.5 6.5v14" stroke-dasharray="1.6 2"/><circle cx="10.4" cy="13" r="0.9" fill="currentColor"/>');
+const doorShutIcon = svg('<path d="M3 22h18"/><rect x="5.5" y="2.5" width="13" height="19.5" rx="0.5"/><path d="M8.5 5.5h5v6h-5zM8.5 14h5v5h-5z"/><circle cx="16" cy="12.8" r="0.9" fill="currentColor"/>');
 
 const ICONS: Record<AbilityId, string> = {
   shoot: crosshair,
@@ -74,6 +78,8 @@ const ICONS: Record<AbilityId, string> = {
   evac,
   hack: chip,
   search: magnifier,
+  openDoor: doorOpenIcon,
+  closeDoor: doorShutIcon,
   runAndGun: dash,
   rapidFire: burst,
   suppression: waves,

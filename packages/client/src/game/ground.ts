@@ -390,10 +390,15 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
     } else if (gBiome < 0.5) {
       if (k < 0.5) {
         // Paving (slabs that never line up with the tiles), lawns away from the streets, a kerb along them.
-        vec2 sp = p / 0.62 + vec2(0.31, 0.17);
+        // The slabs are oblong and laid in a running bond (each row half a slab along from the last), their
+        // joints thin, smoothed and worn away in patches: a square's paving never reads as a grid.
+        vec2 sp = p / vec2(0.86, 0.58) + vec2(0.31, 0.17);
+        sp.x += 0.5 * mod(floor(sp.y), 2.0);
         vec2 sf = fract(sp);
-        float joint = max(step(sf.x, 0.045), step(sf.y, 0.045));
-        vec3 pave = sPave * (0.96 + 0.06 * sHash(floor(sp))) * (1.0 - 0.14 * joint);
+        vec2 edge = min(sf, 1.0 - sf);
+        vec2 seam = 1.0 - smoothstep(vec2(0.025), vec2(0.025) + 1.5 * fwidth(sp), edge);
+        float joint = max(seam.x, seam.y) * (0.3 + 0.7 * smoothstep(0.3, 0.7, sNoise(p * 0.9 + 7.0)));
+        vec3 pave = sPave * (0.965 + 0.05 * sHash(floor(sp))) * (1.0 - 0.1 * joint);
         pave *= 1.0 - 0.14 * smoothstep(0.55, 0.8, big);
         float lawn = smoothstep(0.42, 0.6, sMask(p + warp * 0.6, -1.0, level) + (mid - 0.5) * 0.25);
         c = mix(pave, grass, lawn);

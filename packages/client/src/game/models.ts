@@ -298,8 +298,8 @@ preloadSynty();
  * template the manifest has no character for yet gets the old primitive
  * figure, so nothing is ever missing from the field.
  */
-export function buildUnit(template: TemplateId, accent: string, appearance?: Appearance, gear?: Gear, seed?: string): UnitRig | FigureRig {
-  const synty = syntyFigure(template, accent, appearance, gear, seed);
+export function buildUnit(template: TemplateId, accent: string, appearance?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm'): UnitRig | FigureRig {
+  const synty = syntyFigure(template, accent, appearance, gear, seed, sex);
   if (synty) {
     synty.applyPose(IDLE_POSE, 0);
     return synty;

@@ -36,6 +36,7 @@ import {
 } from '../src/campaign';
 import { abilitiesOf } from '../src/abilities';
 import { defaultAppearance } from '../src/appearance';
+import { sexOfName } from '../src/content';
 import { bastionLevel, LEVEL_XP, missionXp } from '../src/progression';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
@@ -408,8 +409,8 @@ describe('migration', () => {
     expect(pointsToSpend(m.soldiers[0]!)).toEqual({ attrs: 4, talents: 4 });
     expect('perks' in m.soldiers[0]!).toBe(false);
     expect(m.soldiers[0]!.loadout).toEqual({ utility: null, ammo: null });
-    // Soldiers from before customization keep their old look.
-    expect(m.soldiers[0]!.appearance).toEqual(defaultAppearance(m.soldiers[0]!.cls, 0));
+    // Soldiers from before customization keep their old look, and take the sex of their name.
+    expect(m.soldiers[0]!.appearance).toEqual(defaultAppearance(m.soldiers[0]!.cls, 0, undefined, sexOfName(m.soldiers[0]!.name)));
     expect(m.soldiers[0]!.nickname).toBe('');
     expect(m.version).toBe(CAMPAIGN_VERSION);
     // Resources become credits, and the Bastion keeps what was already researched.
@@ -426,7 +427,7 @@ describe('migration', () => {
     custom!.appearance = { ...defaultAppearance(custom!.cls, 0, '#3fa9ff'), visor: '#ffffff' };
     (c as { version: number }).version = 10;
     const m = migrateCampaign(c);
-    expect(m.soldiers.find((s) => s.id === plain!.id)!.appearance).toEqual(defaultAppearance(plain!.cls, 0));
+    expect(m.soldiers.find((s) => s.id === plain!.id)!.appearance).toEqual(defaultAppearance(plain!.cls, 0, undefined, sexOfName(plain!.name)));
     expect(m.soldiers.find((s) => s.id === custom!.id)!.appearance.secondary).toBe('#3fa9ff');
   });
 
@@ -489,7 +490,7 @@ describe('customization', () => {
     run(c, { type: 'recruit' });
     const s = c.soldiers.at(-1)!;
     expect(s.cls).toBeNull();
-    expect(s.appearance).toEqual(defaultAppearance(null, 0));
+    expect(s.appearance).toEqual(defaultAppearance(null, 0, undefined, sexOfName(s.name)));
     expect(s.appearance.head).toBe('helmet');
   });
 });

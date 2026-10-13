@@ -172,11 +172,12 @@ def bone_head(arm, name):
     return arm.matrix_world @ arm.data.bones[name].head_local
 
 
-def attach(arm, path, bone, scale, name):
+def attach(arm, path, bone, scale, name, turn=-math.pi / 2):
     """
     Hangs an attachment (hair, hat, pack) from a bone as a rigid mesh. Synty
     draws them around the bone's joint, in their own axes: forward is +X and
-    up +Y in the file, so they turn a quarter about the vertical.
+    up +Y in the file, so they turn a quarter about the vertical (`turn`;
+    Office's face as the body does and turn none).
     """
     objs = import_fbx(path)
     meshes = [o for o in objs if o.type == 'MESH']
@@ -189,7 +190,7 @@ def attach(arm, path, bone, scale, name):
     out = []
     for i, o in enumerate(meshes):
         unparent(o)
-        o.matrix_world = Matrix.Translation(head) @ Matrix.Rotation(-math.pi / 2, 4, 'Z') @ Matrix.Scale(scale, 4) @ o.matrix_world
+        o.matrix_world = Matrix.Translation(head) @ Matrix.Rotation(turn, 4, 'Z') @ Matrix.Scale(scale, 4) @ o.matrix_world
         bpy.ops.object.select_all(action='DESELECT')
         o.select_set(True)
         bpy.context.view_layer.objects.active = o
@@ -314,7 +315,7 @@ def character(job, scale):
             write_parts(m, arm, atlas, skins=skins)
     hung = []
     for a in job.get('attach', []):
-        for o in attach(arm, a['fbx'], a['bone'], scale, a['name']):
+        for o in attach(arm, a['fbx'], a['bone'], scale, a['name'], math.radians(a.get('turn', -90))):
             assign_atlases(o, None, a.get('atlas', job['atlas']))
             if atlas:
                 # Headgear takes the helmet colour; hair, beards and packs keep theirs.

@@ -23,10 +23,10 @@ import {
   type WeaponDef,
 } from './content';
 import { coverAgainst } from './cover';
-import { distance, elevAt } from './grid';
+import { distance, heightAt, sameSpace, toPos } from './grid';
 import { canSee, isViewer, sightOrigin, sightTo } from './los';
 import type { Rng } from './rng';
-import type { AttackAbility, CoverLevel, GameState, ShotResult, Unit, Vec2 } from './types';
+import type { AttackAbility, CoverLevel, GameState, Place, Pos, ShotResult, Unit, Vec2 } from './types';
 
 export interface Modifier {
   label: string;
@@ -35,7 +35,7 @@ export interface Modifier {
 
 export interface ShotPreview {
   /** Tile the attacker strikes from (own tile, step-out tile or melee position). */
-  origin: Vec2;
+  origin: Pos;
   hit: number;
   crit: number;
   graze: number;
@@ -50,8 +50,8 @@ export interface ShotPreview {
 export interface ShotOptions {
   ability?: AttackAbility;
   reaction?: boolean;
-  /** Evaluate as if the attacker stood here (AI planning, melee approach). */
-  from?: Vec2;
+  /** Evaluate as if the attacker stood here (AI planning, melee approach); without a level, on the ground. */
+  from?: Place;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -74,9 +74,9 @@ export function adjacent(a: Vec2, b: Vec2): boolean {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) === 1;
 }
 
-/** Adjacent and on the same level: a blade can't reach someone on the roof above. */
-export function inMeleeReach(s: GameState, a: Vec2, b: Vec2): boolean {
-  return adjacent(a, b) && elevAt(s, a.x, a.y) === elevAt(s, b.x, b.y);
+/** Adjacent and on the same level: a blade can't reach someone on the roof above, or on the storey above. */
+export function inMeleeReach(s: GameState, a: Pos, b: Pos): boolean {
+  return adjacent(a, b) && heightAt(s, a) === heightAt(s, b);
 }
 
 /** Whether any living member of `team` can see `target`. */
@@ -87,20 +87,20 @@ export function teamSees(s: GameState, team: Unit['team'], target: Unit): boolea
 /** "Llave doble": a living soldier of the other player within 4 tiles of `pos`. */
 export function partnerNear(s: GameState, u: Unit, pos: Vec2): boolean {
   if (u.owner === null) return false;
-  return s.units.some((o) => o.alive && o.team === u.team && o.owner !== null && o.owner !== u.owner && distance(o.pos, pos) <= 4);
+  return s.units.some((o) => o.alive && o.team === u.team && o.owner !== null && o.owner !== u.owner && distance(o.pos, pos) <= 4 && sameSpace(s, o.pos, pos));
 }
 
 /** Null when the attack is impossible (no line of sight, or not adjacent for melee). */
 export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: ShotOptions = {}): ShotPreview | null {
   const ability = opts.ability ?? 'shoot';
-  const from = opts.from ?? shooter.pos;
+  const from = opts.from ? toPos(opts.from) : shooter.pos;
   const st = TEMPLATES[shooter.template];
   const tt = TEMPLATES[target.template];
   const weapon = attackWeapon(shooter, ability);
 
   const def = ABILITIES[ability];
   const primary = (def.weapon ?? 'primary') === 'primary';
-  let origin: Vec2 | null;
+  let origin: Pos | null;
   let squadsight = false;
   if (weapon.melee) {
     origin = inMeleeReach(s, from, target.pos) ? from : null;
@@ -138,7 +138,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
     const range = rangeModifier(weapon.range, dist);
     if (range) mods.push({ label: 'Alcance', value: range });
   }
-  if (!weapon.melee && elevAt(s, origin.x, origin.y) > elevAt(s, target.pos.x, target.pos.y)) {
+  if (!weapon.melee && heightAt(s, origin) > heightAt(s, target.pos)) {
     mods.push({ label: 'Ventaja de altura', value: HEIGHT_ADVANTAGE_AIM });
     if (sm.heightAim) mods.push({ label: 'Nido', value: sm.heightAim });
   }
@@ -159,7 +159,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   if (cover === 2) mods.push({ label: 'Cobertura alta', value: -HIGH_COVER_BONUS });
   if (target.hunkered) mods.push({ label: 'Agazapado', value: -HUNKER_DEFENSE });
   if (target.aided) mods.push({ label: 'Cobertura del Grillo', value: -target.aided });
-  if (!weapon.melee && !shooter.mods.smokeSight && s.smoke.some((c) => distance(c.pos, target.pos) <= c.radius)) mods.push({ label: 'Humo', value: -SMOKE_DEFENSE });
+  if (!weapon.melee && !shooter.mods.smokeSight && s.smoke.some((c) => distance(c.pos, target.pos) <= c.radius && sameSpace(s, c.pos, target.pos))) mods.push({ label: 'Humo', value: -SMOKE_DEFENSE });
 
   let hit = mods.reduce((sum, m) => sum + m.value, 0);
   if (opts.reaction) {

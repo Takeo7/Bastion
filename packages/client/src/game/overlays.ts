@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { DIRS4, type CoverLevel, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
@@ -9,8 +11,21 @@ import { wait } from './tween';
 import eyeUrl from '../assets/expediente/eye.png';
 import hatchUrl from '../assets/expediente/hatch.png';
 
+/**
+ * How the move range is drawn (playtest 2026-10-13 #13: «nada de cuadrícula
+ * fija, solo líneas suaves y las casillas al pasar el ratón»), as XCOM does:
+ * a border round what one action reaches (solid blue) and round the dash
+ * (dashed yellow), and the tiles' squares only round the pointer. `outline`
+ * is just that; `soft` adds a faint, gapless wash inside the borders.
+ */
+export type RangeStyle = 'outline' | 'soft';
+
+/** How far round the pointer the tiles' squares show, fading out. */
+const NEAR_RADIUS = 2.5;
+
 export interface MoveTile {
-  pos: Vec2;
+  /** With its level (docs/FASE6.md), when it has one. */
+  pos: Vec2 & { z?: number };
   dash: boolean;
   /** Ending here would get the concealed squad noticed. */
   detected: boolean;
@@ -143,6 +158,20 @@ function reshape(line: Line2, points: number[]): void {
 export class Overlays {
   readonly group = new THREE.Group();
   private readonly tiles: THREE.InstancedMesh;
+  /** The range's borders: one action (solid) and the dash (dashed), at the tiles' own heights. */
+  private readonly walkEdge = new LineSegments2(
+    new LineSegmentsGeometry(),
+    new LineMaterial({ color: 0x6cc4ff, linewidth: 2.5, transparent: true, opacity: 0.95, depthTest: false }),
+  );
+  private readonly dashEdge = new LineSegments2(
+    new LineSegmentsGeometry(),
+    new LineMaterial({ color: 0xffc93a, linewidth: 2.5, dashed: true, dashSize: 0.32, gapSize: 0.2, transparent: true, opacity: 0.95, depthTest: false }),
+  );
+  /** The tiles' squares round the pointer, brighter the nearer (additive: a fade to nothing). */
+  private readonly near: THREE.InstancedMesh;
+  /** The range last shown, by tile (x * 1024 + y), for the squares round the pointer. */
+  private range = new Map<number, MoveTile>();
+  rangeStyle: RangeStyle = 'outline';
   /** Red frames on the tiles where the squad would be noticed, over the cost colour (which still shows). */
   private readonly detect: THREE.InstancedMesh;
   /** Patterns besides colour (UX-REVISION-2 #49): hatching on dash tiles, an eye where the squad would be seen. */
@@ -188,11 +217,24 @@ export class Overlays {
 
   constructor(capacity: number) {
     const tileGeometry = new THREE.PlaneGeometry(0.9, 0.9).rotateX(-Math.PI / 2);
+    // The wash fills whole tiles, edge to edge: no gaps, so no grid.
     this.tiles = new THREE.InstancedMesh(
-      tileGeometry,
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false }),
+      new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, depthWrite: false }),
       capacity,
     );
+    this.near = new THREE.InstancedMesh(
+      new THREE.RingGeometry(0.62, 0.68, 4).rotateZ(Math.PI / 4).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }),
+      64,
+    );
+    this.near.count = 0;
+    this.near.position.y = 0.03;
+    this.near.renderOrder = 9;
+    this.near.frustumCulled = false;
+    this.walkEdge.renderOrder = this.dashEdge.renderOrder = 9;
+    this.walkEdge.frustumCulled = this.dashEdge.frustumCulled = false;
+    this.walkEdge.visible = this.dashEdge.visible = false;
     this.tiles.count = 0;
     this.tiles.position.y = 0.02;
     // A four-segment ring is a square frame; turned 45° its sides follow the tile's.
@@ -275,6 +317,7 @@ export class Overlays {
     this.note.element.className = 'tile-note';
     this.note.visible = false;
     this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.walkEdge, this.dashEdge, this.near);
     this.group.add(this.spots, this.noises, this.note);
   }
 
@@ -353,9 +396,12 @@ export class Overlays {
     }
   }
 
-  /** Furniture marked for Registrar: a frame round each tile and a badge over it (the one it would search, pulsing). */
-  setSpots(list: { pos: Vec2; kind: SpotKind }[]): void {
-    const key = JSON.stringify(list);
+  /**
+   * Furniture marked for Registrar: a frame round each tile and a badge over
+   * it (the one it would search, pulsing). `badges` false: frames only (doors).
+   */
+  setSpots(list: { pos: Vec2; kind: SpotKind }[], badges = true): void {
+    const key = JSON.stringify(list) + badges;
     if (this.spots.userData.key === key) return;
     this.spots.userData.key = key;
     clearGroup(this.spots, new Set([this.spotFrame]));
@@ -371,7 +417,9 @@ export class Overlays {
       badge.scale.setScalar(s.kind === 'pick' ? 0.6 : 0.44);
       badge.renderOrder = 13;
       badge.userData.pick = s.kind === 'pick';
-      this.spots.add(frame, badge);
+      this.spots.add(frame);
+      if (badges) this.spots.add(badge);
+      else badge.material.dispose();
     }
   }
 
@@ -479,33 +527,97 @@ export class Overlays {
     if (pos) this.item.position.copy(tileToWorld(pos));
   }
 
-  /** The fill says what the move costs (blue: one action, yellow: dash); a red frame, that it gets the squad noticed. */
-  /** `planning`: without the command the range is only for planning, so it is drawn fainter. */
+  /**
+   * The move range (RangeStyle): its borders, solid blue round what one action
+   * reaches and dashed yellow round the dash (line and pattern, not colour
+   * alone: UX-REVISION-2 #49), a faint wash inside with `soft`, and a red
+   * frame with an eye on a tile that would get the squad noticed. The tiles'
+   * own squares only show round the pointer (setRangeFocus).
+   * `planning`: without the command the range is only for planning, so it is drawn fainter.
+   */
   showMoveRange(tiles: MoveTile[], planning = false): void {
     for (const [mesh, opacity] of this.rangeLayers) (mesh.material as THREE.MeshBasicMaterial).opacity = planning ? opacity * 0.5 : opacity;
+    for (const edge of [this.walkEdge, this.dashEdge]) edge.material.opacity = planning ? 0.5 : 0.95;
+    this.range = new Map(tiles.map((t) => [t.pos.x * 1024 + t.pos.y, t]));
     const m = new THREE.Matrix4();
     let frames = 0;
-    let dashes = 0;
-    tiles.slice(0, this.tiles.instanceMatrix.count).forEach((t, i) => {
+    let washed = 0;
+    for (const t of tiles.slice(0, this.tiles.instanceMatrix.count)) {
       m.setPosition(tileToWorld(t.pos));
-      this.tiles.setMatrixAt(i, m);
-      this.tiles.setColorAt(i, t.dash ? COLOR_DASH : COLOR_MOVE);
-      // Not only colour: a dash is also hatched, and a tile that gives the squad away carries an eye.
-      if (t.dash) this.hatch.setMatrixAt(dashes++, m);
+      if (this.rangeStyle === 'soft') {
+        this.tiles.setMatrixAt(washed, m);
+        this.tiles.setColorAt(washed++, t.dash ? COLOR_DASH : COLOR_MOVE);
+      }
       if (t.detected) {
         this.detect.setMatrixAt(frames, m);
         this.eyes.setMatrixAt(frames++, m);
       }
-    });
-    this.tiles.count = tiles.length;
+    }
+    this.tiles.count = washed;
     this.tiles.instanceMatrix.needsUpdate = true;
     if (this.tiles.instanceColor) this.tiles.instanceColor.needsUpdate = true;
-    this.hatch.count = dashes;
-    this.hatch.instanceMatrix.needsUpdate = true;
+    this.hatch.count = 0;
     this.detect.count = frames;
     this.detect.instanceMatrix.needsUpdate = true;
     this.eyes.count = frames;
     this.eyes.instanceMatrix.needsUpdate = true;
+    this.drawBorders(tiles);
+  }
+
+  /**
+   * The range's borders, edge by edge: a walk tile's side that faces a dash
+   * tile or nothing is on the blue line; a dash tile's side that faces
+   * nothing, on the yellow. Each sits at its own tile's height (rooftops).
+   */
+  private drawBorders(tiles: MoveTile[]): void {
+    const walk: number[] = [];
+    const dash: number[] = [];
+    const sides = [
+      [1, 0, 1, 0, 1, 1],
+      [-1, 0, 0, 0, 0, 1],
+      [0, 1, 0, 1, 1, 1],
+      [0, -1, 0, 0, 1, 0],
+    ] as const;
+    for (const t of tiles) {
+      const y = tileToWorld(t.pos, 0.06).y;
+      for (const [dx, dy, ax, az, bx, bz] of sides) {
+        const n = this.range.get((t.pos.x + dx) * 1024 + t.pos.y + dy);
+        const out = t.dash ? !n : !n || n.dash;
+        if (!out) continue;
+        (t.dash ? dash : walk).push(t.pos.x + ax, y, t.pos.y + az, t.pos.x + bx, y, t.pos.y + bz);
+      }
+    }
+    for (const [edge, points] of [[this.walkEdge, walk], [this.dashEdge, dash]] as const) {
+      edge.visible = points.length > 0;
+      edge.geometry.dispose();
+      if (!points.length) continue;
+      edge.geometry.setPositions(points);
+      edge.computeLineDistances();
+    }
+  }
+
+  /** The tiles' squares round the pointer (`tile`), fading with the distance; none off the range. */
+  setRangeFocus(tile: Vec2 | null): void {
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    let n = 0;
+    if (tile) {
+      const r = Math.ceil(NEAR_RADIUS);
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const d = Math.hypot(dx, dy);
+          const t = d <= NEAR_RADIUS ? this.range.get((tile.x + dx) * 1024 + tile.y + dy) : undefined;
+          if (!t || n >= this.near.instanceMatrix.count) continue;
+          m.setPosition(tileToWorld(t.pos));
+          this.near.setMatrixAt(n, m);
+          // Additive: a darker colour is a fainter square.
+          this.near.setColorAt(n++, c.copy(t.dash ? COLOR_DASH : COLOR_MOVE).multiplyScalar(0.85 * (1 - d / (NEAR_RADIUS + 0.5))));
+        }
+      }
+    }
+    this.near.count = n;
+    this.near.instanceMatrix.needsUpdate = true;
+    if (this.near.instanceColor) this.near.instanceColor.needsUpdate = true;
   }
 
   /** Planned moves, each a dashed line from the soldier to a ring on its destination. */
@@ -663,5 +775,6 @@ export class Overlays {
     this.showRange(null);
     this.setSpots([]);
     this.setNote(null);
+    this.setRangeFocus(null);
   }
 }

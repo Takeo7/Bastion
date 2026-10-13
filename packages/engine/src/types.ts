@@ -3,6 +3,36 @@ export interface Vec2 {
   y: number;
 }
 
+/**
+ * A place a unit can be (docs/FASE6-PLAN.md): a tile and its level, 0 the
+ * ground (`tiles` and `elev`), 1–3 a building's storeys (`GameState.levels`).
+ * On the wire and in older saves `z` may be missing: it means 0.
+ */
+export interface Pos extends Vec2 {
+  z: number;
+}
+
+/**
+ * A place as the client or the wire may give it (a hovered tile, a command):
+ * without `z`, on the ground. The state always stores a Pos.
+ */
+export type Place = Vec2 & { z?: number };
+
+/**
+ * One storey above the ground (docs/FASE6-PLAN.md): `GameState.levels[k - 1]`
+ * is storey k, k storeys up. Only buildings have them, and only on ground at
+ * elevation 0.
+ */
+export interface Level {
+  /**
+   * What stands on the storey's slab on each tile (index = y * width + x), as
+   * on the ground; null where there is no slab (open air, a stairwell).
+   */
+  tiles: (TileKind | null)[];
+  /** What the storey's objects look like (decor.ts), as GameState.decor. */
+  decor?: Decor[];
+}
+
 export type Team = 'xcom' | 'alien';
 
 /** Player seat in a co-op session. */
@@ -21,8 +51,11 @@ export type Slot = 0 | 1;
  * window:       window in a wall: crossed by vaulting (extra cost, can't stop on it),
  *               transparent, full cover for whoever stands beside it. Breaks when crossed.
  * windowBroken: same, without the glass.
- * ladder:       walkable floor that also lets units climb to an orthogonal neighbour one storey up.
+ * ladder:       walkable floor that also lets units climb to an orthogonal neighbour one storey up
+ *               (a ladder, or a building's stairs: decor 'stairs').
  * console:      objective terminal — indestructible full-cover object.
+ * roof:         a storey's slab nobody stands on (a pitched roof, a roof with no way up):
+ *               only on GameState.levels.
  */
 export type TileKind =
   | 'floor'
@@ -34,7 +67,8 @@ export type TileKind =
   | 'window'
   | 'windowBroken'
   | 'ladder'
-  | 'console';
+  | 'console'
+  | 'roof';
 
 /** Visual and generation theme of a map. */
 export type Biome = 'city' | 'wilds' | 'facility';
@@ -83,7 +117,9 @@ export type DecorKind =
   | 'bush'
   | 'rock'
   | 'log'
-  | 'rubble';
+  | 'rubble'
+  // A building's stairs (docs/FASE6-PLAN.md): a `ladder` tile, facing the way up.
+  | 'stairs';
 
 /** A tile's decor hint packed in one number (0: none); see decor.ts. */
 export type Decor = number;
@@ -121,6 +157,8 @@ export interface Appearance {
   visor: string;
   head: HeadId;
   build: BuildId;
+  /** The soldier's sex (from their name): with `character` unset, the client picks a model of that sex. */
+  sex?: 'f' | 'm';
   /** The headgear: a helmet's shell, or a beret, cap or hood (those follow `secondary` when unset). */
   helmet?: string;
   /** Chest, back, belt and packs. */
@@ -150,6 +188,9 @@ export type AbilityId =
   | 'hack'
   /** Searching a piece of furniture, a car or crates (docs/FASE2.md, «Saqueo»). */
   | 'search'
+  /** Opening or closing a door beside the soldier without moving (playtest 2026-10-13): free. */
+  | 'openDoor'
+  | 'closeDoor'
   // Granted by perks.
   | 'runAndGun'
   | 'rapidFire'
@@ -499,7 +540,7 @@ export interface Unit {
   name: string;
   /** Owning player for XCOM soldiers; null for aliens and shared (pool) units. */
   owner: Slot | null;
-  pos: Vec2;
+  pos: Pos;
   hp: number;
   maxHp: number;
   /** Damage absorbed per hit; explosives shred it. */
@@ -575,7 +616,7 @@ export interface Unit {
   /** Turn it fell on (Último verso brings back those who fell this turn). */
   fellTurn?: number;
   /** Enemies: where the last noise it heard came from (docs/FASE2.md); it goes to look while it sees nobody. */
-  heard?: Vec2 | null;
+  heard?: Pos | null;
   /** Soldiers: what they found searching (BACKPACK_SLOTS at most). It counts if they get out or stand at a victory. */
   backpack?: Loot[];
   /** Bitten and infected (docs/FASE3.md): no effect in combat, but if it falls it rises, and back at base it turns. */
@@ -584,7 +625,7 @@ export interface Unit {
 
 /** Silencio: inside, the Cantores can't sing. */
 export interface SilenceZone {
-  pos: Vec2;
+  pos: Pos;
   radius: number;
   /** XCOM turns it still lasts. */
   turns: number;
@@ -597,17 +638,17 @@ export interface SilenceZone {
  */
 export interface Light {
   id: string;
-  tile: Vec2;
+  tile: Pos;
   radius: number;
   /** Squad turns it still lasts; absent for the map's own lights. */
   turns?: number;
-  /** The tiles it lights (index = y * width + x): within `radius` and in its line of sight (los.ts lightTiles). */
+  /** The tiles it lights, by node (grid.ts nodeOf; on the ground, y * width + x): within `radius` and in its line of sight (los.ts lightTiles). */
   tiles?: number[];
 }
 
 /** A smoke cloud: units inside are harder to hit. */
 export interface SmokeCloud {
-  pos: Vec2;
+  pos: Pos;
   radius: number;
   /** XCOM turns it still lasts. */
   turns: number;
@@ -618,17 +659,22 @@ export interface Pod {
   active: boolean;
   unitIds: string[];
   /** Waypoints an inactive pod walks between during the alien turn (empty = it stays put). */
-  patrol: Vec2[];
+  patrol: Pos[];
   patrolIndex: number;
 }
 
-/** Alien reinforcements: announced by a flare one turn before they drop. */
+/**
+ * Enemies arriving mid-mission. Since the playtest of 2026-10-13, only the
+ * horde (`horde`): zombies that come in by a map edge, where they land, with
+ * no flare. Missions saved before may still hold a drop announced by a flare
+ * one turn before.
+ */
 export interface Reinforcement {
   id: string;
   /** Alien turn at the end of which they land. */
   turn: number;
-  /** Landing tile, chosen when the flare goes up; null until announced. */
-  pos: Vec2 | null;
+  /** A drop's landing tile, chosen when its flare goes up; always null for the horde (no exact spot is ever announced). */
+  pos: Pos | null;
   units: TemplateId[];
   landed: boolean;
   /** Saqueo: zombies coming in by the edges, drawn by the noise; they land on the prowl, not alert. */
@@ -637,7 +683,7 @@ export interface Reinforcement {
 
 export interface MissionItem {
   /** Where it lies, or null while someone carries it. */
-  pos: Vec2 | null;
+  pos: Pos | null;
   carrier: string | null;
   evacuated: boolean;
 }
@@ -649,7 +695,7 @@ export interface MissionState {
   item: MissionItem | null;
   evacZone: Vec2[];
   /** Hack missions: the terminal (a `console` tile). */
-  terminal: Vec2 | null;
+  terminal: Pos | null;
   /** Sabotage: the relay unit; rescue: the VIP unit. */
   objectiveUnit: string | null;
   /** Relay destroyed, terminal hacked, data or VIP extracted. */
@@ -695,6 +741,12 @@ export interface GameState {
    * two or more, walls and windows stop sight up to its roof (los.ts).
    */
   storeys?: number[];
+  /**
+   * The storeys above the ground, inside buildings (docs/FASE6-PLAN.md):
+   * `levels[k - 1]` is storey k. Missing on maps without them (older saves,
+   * hand-made maps but «la torre»), which see and move as they always did.
+   */
+  levels?: Level[];
   /** Lit tiles at night: the map's street lights, Bengalas and fires (missing in older saves). */
   lights?: Light[];
   units: Unit[];
@@ -722,12 +774,13 @@ export interface GameState {
    * chapter in lore.ts STORY; `kicker` titles the arrival briefing and `item` names what a recovery
    * carries out (story chapters and side quests).
    */
-  campaignMission: { id: string; name: string; story?: number; kicker?: string; item?: string } | null;
+  /** `briefing`: the operation's briefing, for the mission's intro card (playtest 13/10: what the mission is for). */
+  campaignMission: { id: string; name: string; story?: number; kicker?: string; item?: string; briefing?: string } | null;
   smoke: SmokeCloud[];
   /** Silencio zones (missing in missions saved before the Canto). */
   silences?: SilenceZone[];
   /** The Taller de oficios is next to the listening post: the Oficio makes less noise (OFICIO_QUIET). */
   quietSongs?: boolean;
-  /** Tiles already searched (index = y * width + x); missing before searching existed. */
+  /** Tiles already searched, by node (grid.ts nodeOf; on the ground, y * width + x); missing before searching existed. */
   searched?: number[];
 }

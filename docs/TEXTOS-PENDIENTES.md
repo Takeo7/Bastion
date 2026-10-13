@@ -27,3 +27,7 @@ Revisado por Lore el 13/10: noche, contagio y medicinas, y fase 4. Lo que estaba
 Revisado por Lore el 13/10. Hasta el nivel 4 del Bastión el jugador no conoce a la Marea, y Los Llanos pueden caer antes, así que los textos dependen del nivel: antes son «los muertos». Además, ningún verbo concuerda con el nombre de la zona, que puede ser plural («Los Llanos de Ceniza»). Las funciones están en `lore.ts` y `campaign.ts` ya las llama.
 
 Hecho: la escena de radio `firstFlood` («Los Llanos no contestan»), que sale sola cuando cae la primera zona.
+
+## Prueba 13/10 ([PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md))
+
+Revisado y aplicado. Queda para Combate: con la horda que trae la alarma de un arreglo fallido, el cartel «LA ALARMA SE OYE LEJOS», con «Llegan muertos por {borde} al final del próximo turno enemigo». Las llegadas por el borde usan las líneas de la horda del Saqueo («¡LA HORDA!»), no «REFUERZOS».

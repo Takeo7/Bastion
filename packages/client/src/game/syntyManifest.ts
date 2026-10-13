@@ -13,7 +13,7 @@ import type { BuildId, HeadId, TemplateId } from '@bastion/engine';
 /** Metres to game units: a tile is 1.5 m, so a 1.8 m survivor stands 1.2 tall. */
 export const SYNTY_SCALE = 1 / 1.5;
 
-export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military';
+export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons';
 
 /**
  * Where each pack lives under assets-src/synty/. A pack that only comes as a
@@ -38,6 +38,8 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
   office: { dir: 'SourceFiles2' },
   // «POLYGON – Particle FX»: shapes and sprites for the effects (fx.ts, songFx.ts).
   particleFx: { dir: 'Source Files' },
+  // «POLYGON – Icons»: a few of its pieces for the interface's renders (lab/renders).
+  icons: { dir: 'POLYGON_Icons_SourceFiles_v4', materialList: 'MaterialList_PolygonIcons.txt' },
   // «POLYGON – Construction» and «POLYGON – Military»: building sites and checkpoints on the map (Arte-Mapas).
   construction: { dir: 'POLYGON_Construction_SourceFiles_v5', materialList: 'MaterialList_PolygonConstruction.txt' },
   military: { dir: 'SourceFiles' },
@@ -62,12 +64,13 @@ export const ATLASES = {
   construction: { pack: 'construction', src: 'Textures/PolygonConstruction_Texture_01_A.png', albedo: 'PolygonConstruction_Texture_01_A.png', size: 1024 },
   military: { pack: 'military', src: 'Textures/PolygonMilitary_Texture_01_A.png', albedo: 'PolygonMilitary_Texture_01_A.png', size: 1024 },
   particleFx: { pack: 'particleFx', src: 'Textures/PolygonParticles_Texture_01_A.png', albedo: 'PolygonParticles_Texture_01_A', size: 256 },
+  icons: { pack: 'icons', src: 'Textures/PolygonIcons_Texture_01_A.png', albedo: 'PolygonIcons_01_A.png', size: 512 },
 } satisfies Record<string, { pack: PackId; src: string; albedo: string; size: number }>;
 
 export type AtlasId = keyof typeof ATLASES;
 
 /** Kinds of converted model; a model's file is `<kind>-<id>.glb` in its pack's folder. */
-export type ModelKind = 'chr' | 'hat' | 'wep' | 'prop' | 'anim' | 'piece' | 'base' | 'fx';
+export type ModelKind = 'chr' | 'hat' | 'wep' | 'prop' | 'anim' | 'piece' | 'base' | 'fx' | 'ui';
 
 /** Path of a converted file under public/ (the game prefixes Vite's base URL). */
 export const syntyFile = (pack: PackId, file: string) => `models/synty/${pack}/${file}`;
@@ -94,6 +97,12 @@ export interface Attachment {
   bone: SyntyBone;
   name: string;
   dye?: boolean;
+  /**
+   * Its turn about the vertical, in degrees, as the converter hangs it: −90
+   * (the default) for packs that draw attachments forward along +X
+   * (Apocalypse, the bosses); 0 for those drawn facing as the body does (Office).
+   */
+  turn?: number;
 }
 
 /**
@@ -130,7 +139,8 @@ const apoc = (fbx: string, attach: Attachment[] = [], female = false): Character
 const zombie = (mesh: string, female = false): CharacterAsset => ({ pack: 'cityZombies', fbx: 'Zombies', mesh, female });
 const office = (fbx: string, attach: Attachment[] = [], female = false): CharacterAsset => ({ pack: 'office', fbx: `SK_Chr_${fbx}`, attach, female });
 // Headset_01 is a one-ear earpiece whose boom crosses the face at our scale; 02 is a proper radio headset.
-const headset: Attachment = { fbx: 'SM_Chr_Attachment_Headset_02', bone: 'Head', name: 'headset' };
+// Office draws its attachments facing as the body does: no quarter turn, or the earpieces sit on the face.
+const headset: Attachment = { fbx: 'SM_Chr_Attachment_Headset_02', bone: 'Head', name: 'headset', turn: 0 };
 
 export const CHARACTERS = {
   // The squad: survivors of every kind.
@@ -388,6 +398,22 @@ export const FX_TEXTURES = {
 export type FxTextureId = keyof typeof FX_TEXTURES;
 
 export const fxTextureFile = (id: FxTextureId) => syntyFile('particleFx', `${id}.webp`);
+
+/**
+ * Models only the interface's renders use (lab/renders: items and the like,
+ * shot to images under public/ui/synty/renders); the game never loads them.
+ */
+export const UI_MODELS = {
+  // A ration: food tins, a tall one and two flat.
+  tinTall: { pack: 'apocalypse', fbx: 'SM_Item_Can_03' },
+  tinFlat: { pack: 'apocalypse', fbx: 'SM_Item_Can_09' },
+  tinFlat2: { pack: 'apocalypse', fbx: 'SM_Item_Can_07' },
+  // «Piezas»: scrap metal, gears, a bolt and a battery (Apocalypse's wire is too thin to read as an icon).
+  scrapSheet: { pack: 'apocalypse', fbx: 'SM_Prop_Iron_Sheet_02' },
+  battery: { pack: 'apocalypse', fbx: 'SM_Item_Battery_01' },
+  gears: { pack: 'icons', fbx: 'SM_Icon_Gears_01' },
+  boltIcon: { pack: 'icons', fbx: 'SM_Icon_Crafting_Bolt_01' },
+} satisfies Record<string, { pack: PackId; fbx: string }>;
 
 // ------------------------------------------------------------------- props
 
@@ -958,7 +984,7 @@ export const BASE_MODELS = {
   gardenSeedlings: at('farm', 'SM_Env_Vege_Rows_02'),
   gardenSeeds: at('farm', 'SM_Prop_SeedPacket_01'),
   scarecrow: at('farm', 'SM_Prop_Scarecrow_01'),
-  // The valley of Valdesombra (strategy/geoscape.ts), in miniature: farms, villages, the dead cities, the power station, clouds.
+  // The valley of Kessra (strategy/geoscape.ts), in miniature: farms, villages, the dead cities, the power station, clouds.
   mapBarn: at('farm', 'SM_Bld_Barn_01'),
   mapSilo: at('farm', 'SM_Bld_Silo_01'),
   mapCrops: at('farm', 'SM_Env_Vege_Rows_01'),
@@ -983,6 +1009,41 @@ export const BASE_MODELS = {
   mapCloud2: at('construction', 'SM_Generic_Cloud_02'),
   mapCloud3: at('construction', 'SM_Generic_Cloud_03'),
   mapMine: at('construction', 'SM_Prop_Pipe_Concrete_Huge_01'),
+  // Its dead cities, towns and farms, roads, bridges and woods (the second pass, «el mapa del valle es pobre»).
+  mapHouseA: apocalypseAt('SM_Bld_House_01'),
+  mapHouseC: apocalypseAt('SM_Bld_House_03'),
+  mapRuin: apocalypseAt('SM_Bld_HighRise_Medium_01_Stack_Destroyed_01'),
+  mapShopL: apocalypseAt('SM_Bld_Shop_Large_01'),
+  mapShopM: apocalypseAt('SM_Bld_Shop_Medium_01'),
+  mapShopS: apocalypseAt('SM_Bld_Shop_Small_02'),
+  mapBlockM: apocalypseAt('SM_Bld_Commercial_Medium_01'),
+  mapTower: apocalypseAt('SM_Bld_Commercial_Large_01'),
+  mapMarket: apocalypseAt('SM_Bld_Market_Medium_01'),
+  mapDiner: apocalypseAt('SM_Bld_Diner_01'),
+  mapGarage: apocalypseAt('SM_Bld_AutoRepair_01'),
+  mapBrickShed: apocalypseAt('SM_Bld_Warehouse_Brick_01'),
+  mapWorks: apocalypseAt('SM_Bld_Industrial_Small_01'),
+  mapTrailer: apocalypseAt('SM_Bld_Trailer_Damaged_01'),
+  mapTankTower: apocalypseAt('SM_Bld_WaterTower_01'),
+  mapCrane: apocalypseAt('SM_Bld_Crane_01'),
+  mapBridge: apocalypseAt('SM_Env_Bridge_Clean_01'),
+  mapWreckVan: apocalypseAt('SM_Prop_Car_Wrecked_Van_01'),
+  mapWreckSuv: apocalypseAt('SM_Prop_Car_Wrecked_SUV_01'),
+  mapWreckBus: apocalypseAt('SM_Prop_Car_Wrecked_Bus_01'),
+  mapSign: apocalypseAt('SM_Prop_Sign_01'),
+  mapSignStop: apocalypseAt('SM_Prop_Sign_Stop_01'),
+  mapBarrier: apocalypseAt('SM_Prop_Barrier_Plastic_01'),
+  mapHeli: apocalypseAt('SM_Prop_Helicopter_Crashed_01'),
+  mapTreeA: apocalypseAt('SM_Env_Tree_01'),
+  mapTreeBig: apocalypseAt('SM_Env_Tree_Large_01'),
+  mapGrove: apocalypseAt('SM_Env_Tree_Cluster_01'),
+  mapPines: apocalypseAt('SM_Env_Tree_Pine_Cluster_01'),
+  mapTreeDead: apocalypseAt('SM_Env_Tree_Dead_01'),
+  mapBushes: apocalypseAt('SM_Env_Bushes_01'),
+  mapFence: at('farm', 'SM_Prop_Fence_Wood_01'),
+  mapHay: at('farm', 'SM_Prop_Hay_Bale_Round_Plastic_01'),
+  mapWindmill: at('farm', 'SM_Prop_Windmill_01'),
+  mapFarmShed: at('farm', 'SM_Bld_Garage_01'),
 } satisfies Record<string, BaseAsset>;
 
 export type BaseModelId = keyof typeof BASE_MODELS;

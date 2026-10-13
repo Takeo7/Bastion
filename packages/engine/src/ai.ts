@@ -2,14 +2,28 @@ import { abilitiesOf, abilityBlocker, abilityTargets, blastTiles, canTargetTile,
 import { inMeleeReach, previewShot, weaponOf } from './aim';
 import { ABILITIES, isAttack, TEMPLATES } from './content';
 import { coverAgainst, hasAnyCover } from './cover';
-import { canStandOn, combatants, DIRS8, distance, getUnit, inBounds, sameTile, tileAt, unitAt } from './grid';
+import { canStandOn, combatants, DIRS8, distance, getUnit, heightAt, inBounds, kindAt, nodeOf, samePos, storeysApart, unitAt } from './grid';
 import { canSee, sightOrigin, sightTo } from './los';
 import { buildPath, computeReach, costPerAp, destinations, type Reach } from './path';
 import type { Sim } from './rules';
-import type { AbilityId, AttackAbility, GameState, Pod, Unit, Vec2 } from './types';
+import type { AbilityId, AttackAbility, GameState, Pod, Unit, Pos } from './types';
+
+/**
+ * How far one place is from another for a walker (docs/FASE6-PLAN.md): the
+ * tiles between them, and for each storey between them the way round to the
+ * stairs. Without storeys, the distance.
+ */
+const STOREY_WALK = 3;
+const farness = (s: GameState, a: Pos, b: Pos) => distance(a, b) + STOREY_WALK * storeysApart(s, a, b);
+
+/** Beside `b` (or on it), on its floor: a walker that got there has arrived. */
+const arrived = (s: GameState, a: Pos, b: Pos, gap: number) => distance(a, b) <= gap && storeysApart(s, a, b) === 0;
+
+/** Points a living enemy gives a place for each storey it stands over the nearest soldier: they like to be posted up high. */
+const HIGH_GROUND = 6;
 
 interface Candidate {
-  pos: Vec2;
+  pos: Pos;
   cost: number;
   score: number;
 }
@@ -18,7 +32,7 @@ interface Candidate {
  * Desirability of standing on `pos`: good cover against every soldier that can
  * see it, being flanked is very bad, and a good shot from there is a bonus.
  */
-function tileScore(s: GameState, u: Unit, pos: Vec2, enemies: Unit[], shotWeight: number): number {
+function tileScore(s: GameState, u: Unit, pos: Pos, enemies: Unit[], shotWeight: number): number {
   let score = 0;
   let bestShot = 0;
   for (const e of enemies) {
@@ -30,6 +44,11 @@ function tileScore(s: GameState, u: Unit, pos: Vec2, enemies: Unit[], shotWeight
     if (shot) bestShot = Math.max(bestShot, shot.hit + (shot.flanked ? 15 : 0));
   }
   score += bestShot * shotWeight;
+  // The high ground (storeys over the nearest soldier, on a map with them).
+  if (s.levels) {
+    const below = [...enemies].sort((a, b) => distance(pos, a.pos) - distance(pos, b.pos))[0];
+    if (below) score += HIGH_GROUND * Math.max(0, Math.round(heightAt(s, pos) - heightAt(s, below.pos)));
+  }
   const nearest = Math.min(...enemies.map((e) => distance(pos, e.pos)));
   if (nearest > 14) score -= (nearest - 14) * 3;
   // Ranged aliens keep their distance: hugging a soldier gets them flanked and shot point-blank.
@@ -38,7 +57,7 @@ function tileScore(s: GameState, u: Unit, pos: Vec2, enemies: Unit[], shotWeight
   return score;
 }
 
-function bestCandidate(s: GameState, u: Unit, reach: Reach, score: (p: Vec2) => number): Candidate | null {
+function bestCandidate(s: GameState, u: Unit, reach: Reach, score: (p: Pos) => number): Candidate | null {
   const options = [{ pos: u.pos, cost: 0 }, ...destinations(s, u, reach)];
   let best: Candidate | null = null;
   for (const o of options) {
@@ -55,26 +74,26 @@ function bestCandidate(s: GameState, u: Unit, reach: Reach, score: (p: Vec2) => 
 }
 
 /** Where a freshly activated alien runs to: cover first, shots barely matter. */
-export function chooseScamperTile(s: GameState, u: Unit): Vec2 | null {
+export function chooseScamperTile(s: GameState, u: Unit): Pos | null {
   const enemies = combatants(s, 'xcom');
   if (!enemies.length) return null;
   const reach = computeReach(s, u, costPerAp(u));
   const best = bestCandidate(s, u, reach, (p) => tileScore(s, u, p, enemies, 0.1));
-  return best && !sameTile(best.pos, u.pos) ? best.pos : null;
+  return best && !samePos(best.pos, u.pos) ? best.pos : null;
 }
 
 /**
  * Best impact point for an explosive: as many soldiers as possible, never an
  * ally. Soldiers well protected from bullets count extra.
  */
-function bestBlast(s: GameState, u: Unit, ability: 'grenade' | 'launch' | 'missiles'): { tile: Vec2; score: number } | null {
+function bestBlast(s: GameState, u: Unit, ability: 'grenade' | 'launch' | 'missiles'): { tile: Pos; score: number } | null {
   const soldiers = combatants(s, 'xcom');
-  const candidates: Vec2[] = [];
+  const candidates: Pos[] = [];
   for (const soldier of soldiers) {
     candidates.push(soldier.pos);
-    for (const d of DIRS8) candidates.push({ x: soldier.pos.x + d.x, y: soldier.pos.y + d.y });
+    for (const d of DIRS8) candidates.push({ x: soldier.pos.x + d.x, y: soldier.pos.y + d.y, z: soldier.pos.z });
   }
-  let best: { tile: Vec2; score: number } | null = null;
+  let best: { tile: Pos; score: number } | null = null;
   for (const tile of candidates) {
     if (!canTargetTile(s, u, ability, tile)) continue;
     let score = 0;
@@ -96,14 +115,15 @@ function bestBlast(s: GameState, u: Unit, ability: 'grenade' | 'launch' | 'missi
 }
 
 /** One action toward the nearest of `goals`, ending in cover if it can. */
-function moveToward(sim: Sim, u: Unit, goals: Vec2[]): boolean {
+function moveToward(sim: Sim, u: Unit, goals: Pos[]): boolean {
   const s = sim.s;
+  const nearest = (p: Pos) => Math.min(...goals.map((g) => farness(s, p, g)));
+  // A goal on another storey: the way there goes round by the stairs, further first (a walk planned ahead).
+  const target = [...goals].sort((a, b) => farness(s, u.pos, a) - farness(s, u.pos, b))[0];
+  if (target && storeysApart(s, u.pos, target) > 0) return walk(sim, u, target, 1);
   const reach = computeReach(s, u, costPerAp(u));
-  const cand = bestCandidate(s, u, reach, (p) => {
-    const nearest = Math.min(...goals.map((g) => distance(p, g)));
-    return -nearest * 4 + (hasAnyCover(s, p) ? 6 : 0);
-  });
-  if (!cand || sameTile(cand.pos, u.pos)) return false;
+  const cand = bestCandidate(s, u, reach, (p) => -nearest(p) * 4 + (hasAnyCover(s, p) ? 6 : 0));
+  if (!cand || samePos(cand.pos, u.pos)) return false;
   const path = buildPath(s, u, reach, cand.pos);
   if (!path) return false;
   sim.moveAlong(u, path, 1);
@@ -111,28 +131,31 @@ function moveToward(sim: Sim, u: Unit, goals: Vec2[]): boolean {
 }
 
 /** Reachable tile closest to `goal` (ties: cheaper, then reading order). */
-function closestTo(s: GameState, u: Unit, reach: Reach, goal: Vec2, minGap = 0): Vec2 | null {
-  let best: { pos: Vec2; d: number; cost: number } | null = null;
+function closestTo(s: GameState, u: Unit, reach: Reach, goal: Pos, minGap = 0): Pos | null {
+  let best: { pos: Pos; d: number; cost: number } | null = null;
   for (const o of destinations(s, u, reach)) {
-    const d = distance(o.pos, goal);
+    const d = farness(s, o.pos, goal);
     if (d < minGap) continue;
     if (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) < 1e-9 && (o.cost < best.cost || (o.cost === best.cost && (o.pos.y < best.pos.y || (o.pos.y === best.pos.y && o.pos.x < best.pos.x)))))) {
       best = { pos: o.pos, d, cost: o.cost };
     }
   }
-  return best && best.d < distance(u.pos, goal) ? best.pos : null;
+  return best && best.d < farness(s, u.pos, goal) ? best.pos : null;
 }
 
 /** How far ahead a walk is planned, in actions: enough to go round a building to its door. */
 const LOOKAHEAD = 4;
+/** To a goal on another storey, the way round by the stairs may first lead away: planned as far as it goes. */
+const LOOKAHEAD_STOREYS = 40;
 
 /**
  * A unit's walk this turn toward `goal`: the shortest way to the free tile
  * nearest it (a pod on patrol goes round by the doors and keeps out of
  * windows), as far along as `actions` go. Null when it gets no closer.
  */
-function walkPath(s: GameState, u: Unit, goal: Vec2, minGap = 0, actions = 1): Vec2[] | null {
-  const all = computeReach(s, u, costPerAp(u) * Math.max(LOOKAHEAD, actions));
+function walkPath(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Pos[] | null {
+  const ahead = storeysApart(s, u.pos, goal) > 0 ? LOOKAHEAD_STOREYS : LOOKAHEAD;
+  const all = computeReach(s, u, costPerAp(u) * Math.max(ahead, actions));
   const dest = closestTo(s, u, all, goal, minGap);
   const path = dest && buildPath(s, u, all, dest);
   if (!path) return null;
@@ -140,8 +163,8 @@ function walkPath(s: GameState, u: Unit, goal: Vec2, minGap = 0, actions = 1): V
   let end = -1;
   for (let i = 0; i < path.length; i++) {
     const p = path[i]!;
-    if (all.cost.get(p.y * s.width + p.x)! > budget) break;
-    if (canStandOn(tileAt(s, p.x, p.y)) && !unitAt(s, p)) end = i;
+    if (all.cost.get(nodeOf(s, p))! > budget) break;
+    if (canStandOn(kindAt(s, p)) && !unitAt(s, p)) end = i;
   }
   return end >= 0 ? path.slice(0, end + 1) : null;
 }
@@ -164,7 +187,7 @@ export function patrolPod(sim: Sim, pod: Pod): void {
 
   const heard = members.find((m) => m.heard)?.heard;
   if (heard) {
-    const path = distance(leader.pos, heard) > 1.5 ? walkPath(s, leader, heard, 0, INVESTIGATE_ACTIONS) : null;
+    const path = !arrived(s, leader.pos, heard, 1.5) ? walkPath(s, leader, heard, 0, INVESTIGATE_ACTIONS) : null;
     if (path) {
       sim.moveAlong(leader, path, 0);
       follow(sim, pod, members, INVESTIGATE_ACTIONS);
@@ -177,7 +200,7 @@ export function patrolPod(sim: Sim, pod: Pod): void {
 
   let index = pod.patrolIndex % pod.patrol.length;
   let path = walkPath(s, leader, pod.patrol[index]!);
-  if (!path || distance(leader.pos, pod.patrol[index]!) <= 2) {
+  if (!path || arrived(s, leader.pos, pod.patrol[index]!, 2)) {
     index = (index + 1) % pod.patrol.length;
     sim.emit({ t: 'patrol', pod: pod.id, index });
     path = walkPath(s, leader, pod.patrol[index]!);
@@ -192,7 +215,7 @@ function follow(sim: Sim, pod: Pod, members: Unit[], actions: number): void {
   const leader = members[0]!;
   for (const f of members.slice(1)) {
     if (sim.over || (s.pods.find((p) => p.id === pod.id)?.active ?? true) || !leader.alive) return;
-    if (!f.alive || distance(f.pos, leader.pos) <= 1.5) continue;
+    if (!f.alive || arrived(s, f.pos, leader.pos, 1.5)) continue;
     const walk = walkPath(s, f, leader.pos, 1, actions);
     if (walk) sim.moveAlong(f, walk, 0);
   }
@@ -202,10 +225,10 @@ function follow(sim: Sim, pod: Pod, members: Unit[], actions: number): void {
  * Where a living enemy heads when it has nothing to shoot: the soldiers, or
  * the last noise it heard while it sees none of them (reached, it forgets it).
  */
-function headFor(sim: Sim, u: Unit, enemies: Unit[]): Vec2[] {
+function headFor(sim: Sim, u: Unit, enemies: Unit[]): Pos[] {
   const s = sim.s;
   if (u.heard && !enemies.some((e) => canSee(s, u, e))) {
-    if (distance(u.pos, u.heard) > 1.5) return [u.heard];
+    if (!arrived(s, u.pos, u.heard, 1.5)) return [u.heard];
     sim.emit({ t: 'forgot', unit: u.id });
   }
   return enemies.map((e) => e.pos);
@@ -271,7 +294,7 @@ export function takeAlienTurn(sim: Sim, u: Unit): void {
       if (best) {
         const here = tileScore(s, u, u.pos, enemies, 0.5);
         const cand = bestCandidate(s, u, reach, (p) => tileScore(s, u, p, enemies, 0.5));
-        if (cand && !sameTile(cand.pos, u.pos) && cand.score > here + 8) {
+        if (cand && !samePos(cand.pos, u.pos) && cand.score > here + 8) {
           const path = buildPath(s, u, reach, cand.pos);
           if (path) {
             sim.moveAlong(u, path, 1);
@@ -301,14 +324,14 @@ export function takeAlienTurn(sim: Sim, u: Unit): void {
 /** The Chillón keeps this far from the soldiers it sees: it screams, it doesn't bite. */
 const SCREAMER_GAP = 5;
 
-/** Nearest first; ties by id, so the choice is the same every time. */
-const byDistance = (from: Vec2) => (a: Unit, b: Unit) => distance(from, a.pos) - distance(from, b.pos) || a.id.localeCompare(b.id);
+/** Nearest first (storeys counting as the way round to the stairs); ties by id, so the choice is the same every time. */
+const byDistance = (s: GameState, from: Pos) => (a: Unit, b: Unit) => farness(s, from, a.pos) - farness(s, from, b.pos) || a.id.localeCompare(b.id);
 
 /** Tiles `u` covers in one action: no soldier further than this (plus a step) can be reached this action. */
 const stride = (u: Unit) => TEMPLATES[u.template].mobility + u.mods.mobility + 1.5;
 
 /** One action's walk toward `goal`, round whatever is in the way; false when it gets no closer. */
-function walk(sim: Sim, u: Unit, goal: Vec2, minGap: number): boolean {
+function walk(sim: Sim, u: Unit, goal: Pos, minGap: number): boolean {
   const path = walkPath(sim.s, u, goal, minGap);
   if (!path) return false;
   sim.moveAlong(u, path, 1);
@@ -316,16 +339,16 @@ function walk(sim: Sim, u: Unit, goal: Vec2, minGap: number): boolean {
 }
 
 /** The way, within one action, to a tile beside one of `soldiers` (the cheapest): for the Hinchado. */
-function besideSoldier(s: GameState, u: Unit, soldiers: Unit[]): Vec2[] | null {
-  const near = soldiers.filter((t) => distance(u.pos, t.pos) <= stride(u));
+function besideSoldier(s: GameState, u: Unit, soldiers: Unit[]): Pos[] | null {
+  const near = soldiers.filter((t) => farness(s, u.pos, t.pos) <= stride(u));
   if (!near.length) return null;
   const reach = computeReach(s, u, costPerAp(u));
-  let best: { path: Vec2[]; cost: number } | null = null;
+  let best: { path: Pos[]; cost: number } | null = null;
   for (const t of near) {
     for (const d of DIRS8) {
-      const tile = { x: t.pos.x + d.x, y: t.pos.y + d.y };
+      const tile = { x: t.pos.x + d.x, y: t.pos.y + d.y, z: t.pos.z };
       if (!inBounds(s, tile.x, tile.y) || !inMeleeReach(s, tile, t.pos)) continue;
-      const cost = reach.cost.get(tile.y * s.width + tile.x);
+      const cost = reach.cost.get(nodeOf(s, tile));
       if (cost === undefined || (best && cost >= best.cost)) continue;
       const path = buildPath(s, u, reach, tile);
       if (path) best = { path, cost };
@@ -339,7 +362,7 @@ function backAway(sim: Sim, u: Unit, seen: Unit[]): boolean {
   const s = sim.s;
   const reach = computeReach(s, u, costPerAp(u));
   const cand = bestCandidate(s, u, reach, (p) => Math.min(SCREAMER_GAP + 2, ...seen.map((e) => distance(p, e.pos))) * 4);
-  if (!cand || sameTile(cand.pos, u.pos)) return false;
+  if (!cand || samePos(cand.pos, u.pos)) return false;
   const path = buildPath(s, u, reach, cand.pos);
   if (!path) return false;
   sim.moveAlong(u, path, 1);
@@ -372,7 +395,7 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
   for (let guard = 0; guard < 6 && u.alive && u.ap > 0 && !sim.over; guard++) {
     const soldiers = combatants(s, 'xcom');
     if (!soldiers.length) return;
-    const seen = soldiers.filter((e) => canSee(s, u, e)).sort(byDistance(u.pos));
+    const seen = soldiers.filter((e) => canSee(s, u, e)).sort(byDistance(s, u.pos));
 
     if (abilities.includes('mindspin')) {
       // The Chillón: a scream at whoever it sees (one a turn for the whole horde), or a corpse raised.
@@ -412,7 +435,7 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
       }
     } else {
       // A bite for whoever is within one action's reach (the nearest), or a step toward the nearest in sight.
-      if (bite && usable(bite) && soldiers.some((e) => distance(u.pos, e.pos) <= stride(u))) {
+      if (bite && usable(bite) && soldiers.some((e) => farness(s, u.pos, e.pos) <= stride(u))) {
         const options = meleeTargets(s, u, bite);
         if (options.length) {
           const pick = options.sort((a, b) => a.path.length - b.path.length || a.target.hp - b.target.hp || a.target.id.localeCompare(b.target.id))[0]!;
@@ -428,7 +451,7 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
 
     // Nobody in sight: to the last noise heard, and having found nobody there, wandering.
     if (u.heard) {
-      if (distance(u.pos, u.heard) > 1.5 && walk(sim, u, u.heard, 0)) continue;
+      if (!arrived(s, u.pos, u.heard, 1.5) && walk(sim, u, u.heard, 0)) continue;
       sim.emit({ t: 'forgot', unit: u.id });
     }
     wander(sim, u);

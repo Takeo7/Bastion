@@ -5,10 +5,12 @@ import {
   createCampaign,
   DOOM_MAX,
   executeCampaignCommand,
+  FACILITIES,
   floodedZones,
   HOME_REGION,
   mareaThreshold,
   migrateCampaign,
+  missionInfo,
   offerDays,
   plotById,
   REGIONS,
@@ -21,12 +23,12 @@ import {
   type MissionOffer,
   type RegionId,
 } from '../src/campaign';
-import { doomName, mareaAlert } from '../src/lore';
+import { doomName, mareaAlert, missionName } from '../src/lore';
 import { LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
 import type { Slot } from '../src/types';
 
-// Phase 5: the valley of Valdesombra (docs/FASE5.md).
+// Phase 5: the valley of Kessra (docs/FASE5.md).
 
 const ZONES = Object.keys(REGIONS) as RegionId[];
 const run = (c: CampaignState, cmd: CampaignCommand, slot: Slot = 0, connected: Slot[] = [0]) => executeCampaignCommand(c, cmd, { slot, connected, rng: new Rng(7) });
@@ -45,6 +47,28 @@ const offerIn = (c: CampaignState, region: RegionId): MissionOffer => ({ ...c.of
 const look = (c: CampaignState) => run(c, { type: 'advance', ready: false });
 
 describe('the valley', () => {
+  // Lore, 2026-10-13: invented, neutral names.
+  it('the zones have their names, and ordinary operations are named for the place they go', () => {
+    expect(REGIONS.weu.name).toBe('Aldren');
+    expect([REGIONS.afr.name, REGIONS.eeu.name, REGIONS.me.name, REGIONS.sa.name]).toEqual(['Corran', 'Volkren', 'Galen', 'Carvik']);
+    expect([REGIONS.oce.name, REGIONS.eas.name, REGIONS.na.name]).toEqual(['La Vega', 'El Pantano Gris', 'Los Llanos de Ceniza']);
+    let ordinary = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const c = createCampaign([0], new Rng(seed));
+      for (const o of c.offers.filter((x) => !x.story && !x.final && !x.quest && x.map.kind === 'generated')) {
+        ordinary++;
+        expect(o.name).toBe(missionName(o.map.kind === 'generated' ? o.map.biome : 'city', REGIONS[o.region].name, o.map.kind === 'generated' ? o.map.seed : 0));
+        expect(o.name).not.toMatch(/Operación/);
+        expect(o.name).toContain(REGIONS[o.region].name.replace(/^El /, ''));
+      }
+      // The story's pages are the Diario's now.
+      const story = c.offers.find((x) => x.story === 1)!;
+      expect(missionInfo(c, story).kicker).toBe('DIARIO · HOJA 1');
+    }
+    expect(ordinary).toBeGreaterThan(10);
+    expect(FACILITIES.simulation.name).toBe('Sala de mapas');
+  });
+
   it('roads go both ways, join every zone, and are the ones the map draws', () => {
     for (const a of ZONES) for (const b of REGIONS[a].roads) expect(REGIONS[b].roads).toContain(a);
     for (const a of ZONES) for (const b of ZONES) expect(roadHops(a, b)).toBeGreaterThanOrEqual(0);
@@ -77,9 +101,9 @@ describe('the valley', () => {
 });
 
 describe('contacting by road', () => {
-  it('only zones a road joins to Altomonte or to a contacted zone; the reason says where to go first', () => {
+  it('only zones a road joins to Aldren or to a contacted zone; the reason says where to go first', () => {
     const c = quiet();
-    expect(contactBlocker(c, 'afr')).toBe('No hay carretera desde vuestras zonas: contactad antes con La Vega o Carboneda.');
+    expect(contactBlocker(c, 'afr')).toBe('No hay carretera desde vuestras zonas: contactad antes con La Vega o Carvik.');
     expect(contactBlocker(c, 'na')).toBe('No hay carretera desde vuestras zonas: contactad antes con La Vega.');
     expect(run(c, { type: 'contact', region: 'na' }).ok).toBe(false);
     expect(run(c, { type: 'contact', region: 'oce' }).ok).toBe(true);
@@ -100,7 +124,7 @@ describe('contacting by road', () => {
 });
 
 describe('the Marea', () => {
-  it('rises zone by zone from Los Llanos as the activity reaches each threshold; Altomonte only falls with the campaign', () => {
+  it('rises zone by zone from Los Llanos as the activity reaches each threshold; Aldren only falls with the campaign', () => {
     const c = quiet();
     const at = (doom: number) => floodedZones({ doom }).sort();
     expect(at(3)).toEqual([]);

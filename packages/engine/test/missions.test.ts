@@ -3,8 +3,8 @@ import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { abilitiesOf } from '../src/abilities';
 import { buildSquad, createCampaign } from '../src/campaign';
 import { TALENTS } from '../src/classes';
-import { ABILITIES } from '../src/content';
-import { createMission, makeUnit } from '../src/setup';
+import { ABILITIES, TEMPLATES } from '../src/content';
+import { createMission, garrison, hordeWave, makeUnit } from '../src/setup';
 import { Rng } from '../src/rng';
 import { computeReach } from '../src/path';
 import { executeCommand, Sim } from '../src/rules';
@@ -60,7 +60,7 @@ describe('hack', () => {
     const rows = Array.from({ length: 20 }, () => '.'.repeat(20));
     rows[5] = '.....C' + '.'.repeat(14);
     const s = field('hack', rows);
-    s.mission.terminal = { x: 5, y: 5 };
+    s.mission.terminal = { x: 5, y: 5, z: 0 };
     s.concealed = true;
     return s;
   }
@@ -74,7 +74,7 @@ describe('hack', () => {
     expect(executeCommand(s, { type: 'ability', unit: 's2', ability: 'hack' }, ctx()).ok).toBe(true);
   });
 
-  it('success secures the objective; failure raises the alarm and brings a drop', () => {
+  it('success secures the objective; failure raises the alarm, heard far, and a horde comes in by an edge', () => {
     let failed: GameState | null = null;
     for (let seed = 1; seed < 40; seed++) {
       const s = hackField();
@@ -86,19 +86,23 @@ describe('hack', () => {
       if (hack.success) {
         expect(s.mission.objectiveDone).toBe(true);
       } else {
-        expect(events.some((e) => e.t === 'reinforcementsIncoming')).toBe(true);
+        const coming = events.find((e) => e.t === 'reinforcementsIncoming') as Extract<GameEvent, { t: 'reinforcementsIncoming' }>;
+        expect(coming.r).toMatchObject({ horde: true, pos: null });
+        expect(coming.r.units.every((t) => t !== 'trooper' && t !== 'officer' && t !== 'lancer')).toBe(true);
+        expect(events.find((e) => e.t === 'noise')).toMatchObject({ tile: s.mission.terminal!, radius: 16 });
         expect(s.concealed).toBe(false);
         failed = s;
       }
     }
     expect(failed).not.toBeNull();
-    // The drop lands at the end of the alien turn, already alert.
+    // The horde lands at the end of the enemy turn, by an edge, on the prowl.
     const s = failed!;
     const before = s.units.length;
     new Sim(s, new Rng(2), [0]).runAlienTurn();
     expect(s.units.length).toBeGreaterThan(before);
     expect(s.mission.reinforcements.every((r) => r.landed)).toBe(true);
-    expect(s.pods.find((p) => p.id.startsWith('pr'))?.active).toBe(true);
+    expect(s.pods.find((p) => p.id.startsWith('pr'))?.active).toBe(false);
+    for (const u of s.units.filter((x) => x.podId?.startsWith('pr'))) expect(u.pos.x < 2 || u.pos.y < 2 || u.pos.x >= s.width - 2 || u.pos.y >= s.height - 2).toBe(true);
   });
 });
 
@@ -118,7 +122,7 @@ describe('rescue', () => {
     const vip = s.units.find((u) => u.id === 'vip')!;
     expect(vip.captive).toBe(false);
     expect(vip.owner).toBe(0);
-    vip.pos = { x: 0, y: 19 };
+    vip.pos = { x: 0, y: 19, z: 0 };
     vip.ap = 2;
     run(s, { type: 'ability', unit: 'vip', ability: 'evac' });
     expect(s.mission.objectiveDone).toBe(true);
@@ -135,9 +139,9 @@ describe('rescue', () => {
 
   it('a captive VIP is ignored by the aliens and gives no vision', () => {
     const s = rescueField();
-    s.units.find((u) => u.id === 's1')!.pos = { x: 0, y: 0 };
+    s.units.find((u) => u.id === 's1')!.pos = { x: 0, y: 0, z: 0 };
     const sim = new Sim(s, new Rng(1), [0]);
-    expect(sim.podSpotsSquad(s.units.find((u) => u.id === 'a1')!, { x: 19, y: 19 })).toBe(false);
+    expect(sim.podSpotsSquad(s.units.find((u) => u.id === 'a1')!, { x: 19, y: 19, z: 0 })).toBe(false);
   });
 });
 
@@ -148,7 +152,7 @@ describe('patrols and reinforcements', () => {
     addUnit(s, 's1', 'specialist', 2, 28);
     const a = addUnit(s, 'a1', 'trooper', 28, 2, { podId: 'p1' });
     addUnit(s, 'a2', 'trooper', 28, 3, { podId: 'p1' });
-    s.pods.push({ id: 'p1', active: false, unitIds: ['a1', 'a2'], patrol: [{ x: 28, y: 2 }, { x: 4, y: 26 }], patrolIndex: 0 });
+    s.pods.push({ id: 'p1', active: false, unitIds: ['a1', 'a2'], patrol: [{ x: 28, y: 2, z: 0 }, { x: 4, y: 26, z: 0 }], patrolIndex: 0 });
     const client = cloneState(s);
     const sim = new Sim(s, new Rng(1), [0]);
     let moved = false;
@@ -177,7 +181,7 @@ describe('patrols and reinforcements', () => {
     s.concealed = true;
     addUnit(s, 's1', 'specialist', 23, 23);
     const a = addUnit(s, 'a1', 'trooper', 1, 4, { podId: 'p1' });
-    s.pods.push({ id: 'p1', active: false, unitIds: ['a1'], patrol: [{ x: 6, y: 4 }], patrolIndex: 0 });
+    s.pods.push({ id: 'p1', active: false, unitIds: ['a1'], patrol: [{ x: 6, y: 4, z: 0 }], patrolIndex: 0 });
     const glass = 4 * 24 + 4;
     expect(computeReach(s, a, 100).cost.has(glass)).toBe(false);
     const sim = new Sim(s, new Rng(1), [0]);
@@ -190,7 +194,59 @@ describe('patrols and reinforcements', () => {
     expect(computeReach(s, a, 100).cost.has(glass)).toBe(true);
   });
 
-  it('scheduled reinforcements are announced a turn early and land alert', () => {
+  // Playtest 2026-10-13: nobody drops in out of nowhere.
+  it('every living enemy is on the map from the start; only hordes of the dead come later, by an edge', () => {
+    const kinds: MissionKind[] = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge'];
+    for (const kind of kinds) {
+      for (const difficulty of [1, 2, 3, 4]) {
+        const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 11 + difficulty }, slots: [0], rng: new Rng(difficulty), kind, difficulty });
+        const label = `${kind} ${difficulty}`;
+        for (const r of s.mission.reinforcements) {
+          expect(r, label).toMatchObject({ horde: true, pos: null, landed: false });
+          expect(r.units.every((t) => TEMPLATES[t].undead), label).toBe(true);
+        }
+        expect(s.mission.horde?.every((t) => TEMPLATES[t].undead) ?? true, label).toBe(true);
+        // Sabotage and hack keep their pressure as two hordes; the others bring nobody.
+        expect(s.mission.reinforcements.map((r) => r.turn), label).toEqual(s.mission.kind === 'sabotage' || s.mission.kind === 'hack' ? [4, 8] : []);
+        // The strength those drops had is a garrison on the map from the start.
+        const extra = garrison(s.mission.kind, difficulty);
+        const humans = s.units.filter((u) => u.team === 'alien' && !TEMPLATES[u.template].undead).length;
+        expect(humans, label).toBeGreaterThanOrEqual(extra?.length ?? 0);
+      }
+    }
+    expect(garrison('scavenge', 4)).toBeNull();
+    expect(garrison('elimination', 2)).toBeNull();
+    expect(garrison('sabotage', 1)).toEqual(['trooper', 'trooper']);
+    expect(hordeWave(9)).toEqual(hordeWave(4));
+  });
+
+  it('a horde due lands at the end of its enemy turn, by an edge and away from the squad, on the prowl', () => {
+    const s = field('sabotage', Array.from({ length: 30 }, () => '.'.repeat(30)));
+    s.concealed = true;
+    addUnit(s, 's1', 'specialist', 15, 15);
+    addUnit(s, 'a1', 'trooper', 29, 29);
+    s.mission.turnsLeft = 20;
+    s.mission.reinforcements = [{ id: 'r1', turn: 2, pos: null, units: hordeWave(3), landed: false, horde: true }];
+    const sim = new Sim(s, new Rng(4), [0]);
+    sim.runAlienTurn(); // turn 1: nothing yet, and no flare
+    expect(sim.events.some((e) => e.t === 'reinforcementsIncoming' || e.t === 'spawned')).toBe(false);
+    expect(s.mission.reinforcements[0]!.pos).toBeNull();
+    s.turn = 2;
+    sim.runAlienTurn(); // turn 2: in by an edge
+    expect(s.mission.reinforcements[0]!.landed).toBe(true);
+    const horde = s.units.filter((u) => u.id.startsWith('r1'));
+    expect(horde.map((u) => u.template)).toEqual(hordeWave(3));
+    for (const u of horde) {
+      expect(u.pos.x < 2 || u.pos.y < 2 || u.pos.x >= 28 || u.pos.y >= 28).toBe(true);
+      expect(Math.hypot(u.pos.x - 15, u.pos.y - 15)).toBeGreaterThanOrEqual(12);
+      expect(u.heard).toEqual({ x: 15, y: 15, z: 0 });
+    }
+    // Unaware: they come looking, and the squad stays hidden.
+    expect(s.pods.find((p) => p.id === 'pr1')!.active).toBe(false);
+    expect(s.concealed).toBe(true);
+  });
+
+  it('scheduled reinforcements from older saves are still announced a turn early and land alert', () => {
     const s = field('recovery', Array.from({ length: 30 }, () => '.'.repeat(30)));
     s.concealed = false;
     addUnit(s, 's1', 'specialist', 15, 15);

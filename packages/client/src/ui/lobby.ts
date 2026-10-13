@@ -5,8 +5,7 @@ import { GeoscapeSet } from '../strategy/geoscape';
 import { Stage } from '../strategy/stage';
 import '../strategy/strategy.css';
 import { append, clear, h } from './dom';
-import { graphicsSettings, soundSettings, themeSettings } from './settingsPanel';
-import { otherUiTheme, setUiTheme, UI_THEMES, uiTheme } from './theme';
+import { graphicsSettings, soundSettings } from './settingsPanel';
 
 export interface LobbyHandlers {
   onJoin(name: string): void;
@@ -32,6 +31,8 @@ const MAPS: { id: SkirmishMap; name: string; text: string }[] = [
   { id: 'wilds', name: 'Afueras', text: 'Bosque, cabañas y colinas' },
   { id: 'facility', name: 'Fábrica', text: 'Naves, maquinaria y almacenes' },
   { id: 'plaza', name: 'Distrito Comercial', text: 'El mapa hecho a mano' },
+  // Phase 6's test map (docs/FASE6-PLAN.md): a building with real storeys and stairs.
+  { id: 'torre', name: 'La torre', text: 'Un edificio de dos plantas: pruebas' },
 ];
 
 /**
@@ -213,19 +214,6 @@ export class Lobby {
         'Ajustes',
         h('small', {}, 'Gráficos y rendimiento'),
       ),
-      // The interface's look, one click from the start (also in Ajustes and the in-game menu).
-      h(
-        'button.menu-item',
-        {
-          title: UI_THEMES[otherUiTheme()].hint,
-          onclick: () => {
-            setUiTheme(otherUiTheme());
-            this.render();
-          },
-        },
-        `Interfaz: ${UI_THEMES[uiTheme()].name}`,
-        h('small', {}, `Cambiar a ${UI_THEMES[otherUiTheme()].name}`),
-      ),
       ok ? null : h('p.menu-hint', {}, 'Conectando con el servidor…'),
     );
   }
@@ -233,7 +221,7 @@ export class Lobby {
   private renderSettings(): void {
     append(
       this.column,
-      h('div.x-panel.menu-panel', {}, h('div.x-head', {}, 'Ajustes'), themeSettings(() => this.render()), soundSettings(() => this.render()), graphicsSettings(() => this.render())),
+      h('div.x-panel.menu-panel', {}, h('div.x-head', {}, 'Ajustes'), soundSettings(() => this.render()), graphicsSettings(() => this.render())),
       h(
         'button.menu-item.back',
         {

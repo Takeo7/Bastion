@@ -1,4 +1,4 @@
-import type { GameState } from '@bastion/engine';
+import { levelCount, type GameState } from '@bastion/engine';
 
 // What the squad has seen this mission, tile by tile: the memory behind the
 // fog of war. It knows nothing about how the map is drawn (any renderer can
@@ -11,7 +11,7 @@ const STORAGE_KEY = 'bastion.explored';
 const missionKey = (s: GameState) => `${s.mapId}|${s.campaignMission?.id ?? 'skirmish'}|${s.width}x${s.height}`;
 
 export class ExploredMemory {
-  /** 1 for every tile seen this mission (index = y * width + x). */
+  /** 1 for every place seen this mission (index: the engine's node, the ground's tiles first, then each storey's). */
   tiles: Uint8Array = new Uint8Array(0);
   private mission = '';
   /** The seq of the state when the squad last looked. */
@@ -24,13 +24,13 @@ export class ExploredMemory {
    */
   begin(s: GameState): void {
     const key = missionKey(s);
-    const size = s.width * s.height;
+    const size = s.width * s.height * levelCount(s);
     if (key !== this.mission || s.seq < this.seq || this.tiles.length !== size) this.tiles = load(key, s.seq, size) ?? new Uint8Array(size);
     this.mission = key;
     this.seq = s.seq;
   }
 
-  /** Adds the tiles in sight (shared by the whole squad); true if any of them is new. */
+  /** Adds the places in sight (shared by the whole squad; a mask by place, as teamVisibility); true if any of them is new. */
   see(visible: readonly boolean[], seq: number): boolean {
     let found = false;
     for (let i = 0; i < this.tiles.length; i++) {

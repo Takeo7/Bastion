@@ -16,6 +16,7 @@
 // every command instead of streaming events like the tactical layer.
 import { defaultAppearance, displayName, isAppearance, NAME_MAX, NICKNAME_MAX, normalizeAppearance } from './appearance';
 import {
+  ATTR_IDS,
   ATTR_POINTS_PER_RANK,
   attrBlocker,
   attrPointsFree,
@@ -37,7 +38,7 @@ import {
   type AttrId,
   type Talents,
 } from './classes';
-import { addMods, FOUND_WEAPONS, ITEMS, NIGHT, RANKS, rankForXp, SOLDIER_NAMES, TEMPLATES } from './content';
+import { addMods, FOUND_WEAPONS, ITEMS, NIGHT, RANKS, rankForXp, sexOfName, SOLDIER_NAMES, TEMPLATES } from './content';
 import {
   ARMOR_TIERS,
   armorTier,
@@ -68,6 +69,8 @@ import {
   lootSummary,
   mareaAlert,
   missionBriefing,
+  missionName,
+  NAMED_SEX,
   noRoadReason,
   NWOSU_CHAPTER,
   PARTITURA_LEVEL,
@@ -182,7 +185,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   },
   simulation: {
     id: 'simulation',
-    name: 'Sala de simulación',
+    name: 'Sala de mapas',
     description: 'Las misiones dan un 25 % más de experiencia al Bastión.',
     upgrades: ['+40 % de experiencia en las misiones. Mapas de arena con los combates de verdad.', '+55 % de experiencia. Cintas de cada misión, fotograma a fotograma.'],
     cost: 100,
@@ -294,7 +297,7 @@ export const FIXED_BUILDINGS: Readonly<Record<FixedBuildingId, Vec2>> = {
 export const FIXED_NAMES: Record<FixedBuildingId, string> = {
   command: 'Búnker de mando',
   barracks: 'Cuartel',
-  research: 'Expediente',
+  research: 'Diario',
   engineering: 'Armería',
 };
 
@@ -475,16 +478,16 @@ export interface RegionDef {
   income: number;
 }
 
-// The valley of Valdesombra (docs/FASE5.md): where each zone lies on Arte · Base's map and the
-// roads between them, the same ones La Mula drives. Altomonte (Atalaya's zone) is up in the sierra;
+// The valley of Kessra (docs/FASE5.md): where each zone lies on Arte · Base's map and the
+// roads between them, the same ones La Mula drives. Aldren (Atalaya's zone) is up in the sierra;
 // the Marea comes up from Los Llanos de Ceniza in the south.
 export const REGIONS: Record<RegionId, RegionDef> = {
   na: { id: 'na', name: 'Los Llanos de Ceniza', x: -0.6, z: 8.9, roads: ['afr', 'me'], income: 35 },
-  sa: { id: 'sa', name: 'Carboneda', x: -9.8, z: -0.4, roads: ['weu', 'afr'], income: 25 },
-  weu: { id: 'weu', name: 'Altomonte', x: -4.6, z: -5.4, roads: ['oce', 'sa', 'eeu'], income: 30 },
-  eeu: { id: 'eeu', name: 'Valdelobos', x: 8.2, z: -5.6, roads: ['weu', 'eas'], income: 25 },
-  afr: { id: 'afr', name: 'Ciudad Varela', x: -6.8, z: 5.0, roads: ['oce', 'na', 'sa'], income: 25 },
-  me: { id: 'me', name: 'Puerto Galena', x: 8.4, z: 6.4, roads: ['oce', 'na'], income: 30 },
+  sa: { id: 'sa', name: 'Carvik', x: -9.8, z: -0.4, roads: ['weu', 'afr'], income: 25 },
+  weu: { id: 'weu', name: 'Aldren', x: -4.6, z: -5.4, roads: ['oce', 'sa', 'eeu'], income: 30 },
+  eeu: { id: 'eeu', name: 'Volkren', x: 8.2, z: -5.6, roads: ['weu', 'eas'], income: 25 },
+  afr: { id: 'afr', name: 'Corran', x: -6.8, z: 5.0, roads: ['oce', 'na', 'sa'], income: 25 },
+  me: { id: 'me', name: 'Galen', x: 8.4, z: 6.4, roads: ['oce', 'na'], income: 30 },
   eas: { id: 'eas', name: 'El Pantano Gris', x: 8.6, z: 0.7, roads: ['eeu', 'oce'], income: 35 },
   oce: { id: 'oce', name: 'La Vega', x: 1.6, z: 1.4, roads: ['weu', 'eas', 'afr', 'me'], income: 25 },
 };
@@ -520,14 +523,14 @@ export const HOME_REGION: RegionId = 'weu';
 /**
  * Zombie activity (`c.doom`) at which each zone falls under the Marea, by the
  * road stretches between it and Los Llanos, where it comes up from (docs/FASE5.md).
- * Altomonte never falls: at DOOM_MAX the campaign is lost.
+ * Aldren never falls: at DOOM_MAX the campaign is lost.
  */
 export const MAREA_THRESHOLDS = [4, 6, 9, 10, 11];
 export const MAREA_SOURCE: RegionId = 'na';
 /** Nidos gather under the Marea or beside it this many times as often as elsewhere. */
 const NIDO_TIDE_WEIGHT = 3;
 
-/** The activity at which `id` falls under the Marea; null for Altomonte. */
+/** The activity at which `id` falls under the Marea; null for Aldren. */
 export function mareaThreshold(id: RegionId): number | null {
   if (id === HOME_REGION) return null;
   return MAREA_THRESHOLDS[Math.min(roadHops(MAREA_SOURCE, id), MAREA_THRESHOLDS.length - 1)]!;
@@ -581,7 +584,7 @@ function syncMarea(c: CampaignState): boolean {
   return now.length !== before.length || now.some((x) => !before.includes(x));
 }
 
-/** Zones a road joins to Altomonte or to a zone already contacted: the radio reaches as far as the people do. */
+/** Zones a road joins to Aldren or to a zone already contacted: the radio reaches as far as the people do. */
 function roadReachable(c: CampaignState, id: RegionId): boolean {
   return REGIONS[id].roads.some((n) => n === HOME_REGION || c.regions.find((r) => r.id === n)?.contacted);
 }
@@ -749,13 +752,13 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
   },
   simon: {
     id: 'simon',
-    title: 'Simón Ferreira',
-    text: 'Un desertor de los Cuervos llama a la puerta del Bastión. Se llama Simón Ferreira. Dice que sabe dónde tienen los Cuervos a la niña inmune, y cómo entrar sin que se enteren.',
+    title: 'Simão Ferreira',
+    text: 'Un desertor de los Cuervos llama a la puerta del Bastión. Se llama Simão Ferreira. Dice que sabe dónde tienen los Cuervos a la niña inmune, y cómo entrar sin que se enteren.',
     story: true,
     options: [
       {
         label: 'Confiar en él',
-        effect: 'Simón os guiará por dentro: «Los inmunes» a la dificultad prevista',
+        effect: 'Simão os guiará por dentro: «Los inmunes» a la dificultad prevista',
         apply: (c) => (c.story.simon = 'trusted'),
       },
       {
@@ -827,12 +830,12 @@ const DOOM_INTERVAL = 12;
  * time (balance simulation, 2026-10-11: chaining them won the campaign in
  * under a month and left the base unbuilt).
  */
-/** Days of a mission in Altomonte; every road stretch further away adds one (offerDays). */
+/** Days of a mission in Aldren; every road stretch further away adds one (offerDays). */
 const MISSION_DAYS = 2;
 
 /**
  * Days an operation keeps the squad away (docs/FASE5.md): La Mula's trip to its
- * zone and back, 2 and one more for each road stretch from Altomonte, less what
+ * zone and back, 2 and one more for each road stretch from Aldren, less what
  * the Taller de La Mula cuts; one at least.
  */
 export function offerDays(c: CampaignState, offer: Pick<MissionOffer, 'region'>): number {
@@ -1037,7 +1040,7 @@ export interface Rumor {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 14;
+export const CAMPAIGN_VERSION = 15;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1128,7 +1131,7 @@ export interface FoundWeapon {
 export interface StoryState {
   /** Story chapters won, in order. */
   done: number;
-  /** Answer to Simón's visit, which opens chapter 5. */
+  /** Answer to Simão's visit, which opens chapter 5. */
   simon: SimonChoice;
   /** The next chapter can't open before this day: chapters don't chain back to back. */
   nextDay?: number;
@@ -1157,18 +1160,29 @@ function newId(c: CampaignState, prefix: string): string {
   return `${prefix}${++c.nextId}`;
 }
 
-function soldierName(c: CampaignState, rng: Rng): string {
+/**
+ * The sex of someone who joins by name: the story's people (lore.ts NAMED_SEX),
+ * a relative by first name (quests.ts RELATIVES), or else a soldier's name.
+ */
+export function sexOfPerson(name: string): 'f' | 'm' | undefined {
+  return NAMED_SEX[name] ?? RELATIVES.find((r) => r.name === name.split(' ')[0])?.sex ?? sexOfName(name);
+}
+
+/** A name nobody in the campaign has yet, with the sex it goes with. */
+function soldierName(c: CampaignState, rng: Rng): { name: string; sex: 'f' | 'm' } {
   const used = new Set(c.soldiers.map((s) => s.name));
-  const free = SOLDIER_NAMES.filter((n) => !used.has(n));
+  const free = SOLDIER_NAMES.filter((n) => !used.has(n.name));
   if (free.length) return rng.pick(free);
-  return `${rng.pick(SOLDIER_NAMES)} ${c.soldiers.length + 1}`;
+  const any = rng.pick(SOLDIER_NAMES);
+  return { name: `${any.name} ${c.soldiers.length + 1}`, sex: any.sex };
 }
 
 /** A new soldier: a veteran of a class, or a recruit (`cls` null) who specialises with the Rosa. */
 function addSoldier(c: CampaignState, owner: Slot, cls: ClassId | null, rng: Rng): CampaignSoldier {
+  const { name, sex } = soldierName(c, rng);
   const s: CampaignSoldier = {
     id: newId(c, 'c'),
-    name: soldierName(c, rng),
+    name,
     owner,
     cls,
     xp: 0,
@@ -1181,7 +1195,7 @@ function addSoldier(c: CampaignState, owner: Slot, cls: ClassId | null, rng: Rng
     alive: true,
     loadout: { utility: null, ammo: null },
     nickname: '',
-    appearance: defaultAppearance(cls, owner),
+    appearance: defaultAppearance(cls, owner, undefined, sex),
     traits: [],
   };
   c.soldiers.push(s);
@@ -1238,7 +1252,7 @@ export function healRate(c: CampaignState): number {
   return level ? 1 + level + (hasAdjacency(c, 'infirmary') ? 1 : 0) : 1;
 }
 
-/** Bastion experience a mission's earned XP becomes: +25/40/55 % with simulation, 15 % more next to the Expediente. */
+/** Bastion experience a mission's earned XP becomes: +25/40/55 % with simulation, 15 % more next to the Diario. */
 export function xpMultiplier(c: CampaignState): number {
   const level = facilityLevel(c, 'simulation');
   return level ? 1.25 + 0.15 * (level - 1) + (hasAdjacency(c, 'simulation') ? 0.15 : 0) : 1;
@@ -1451,9 +1465,6 @@ export function buildable(c: CampaignState, plot: BasePlot, id: FacilityId): str
 
 // ----------------------------------------------------------------- missions
 
-const OPERATION_A = ['Ceniza', 'Hierro', 'Silencio', 'Tormenta', 'Vigilia', 'Escarcha', 'Brasa', 'Sombra', 'Alba', 'Trueno'];
-const OPERATION_B = ['Rota', 'Callada', 'Lejana', 'Roja', 'Blanca', 'Final', 'Hueca', 'Firme', 'Negra', 'Dorada'];
-
 /** Mission types offered by the resistance network, with their relative frequency. */
 const OFFER_KINDS: [MissionKind, number][] = [
   ['elimination', 3],
@@ -1505,14 +1516,16 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   const reward: MissionReward = final ? {} : { credits: 50 + difficulty * 25 + bonus + rng.int(4) * 5 };
   if (!final && (kind === 'rescue' || rng.int(5) === 0)) reward.recruit = rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const);
   if (!final && (kind === 'sabotage' || (kind === 'hack' && rng.int(3) === 0))) reward.doom = 1;
+  const seed = rng.int(2 ** 31);
   return byNight(withProvisions(withMedicines({
     id: newId(c, 'm'),
-    name: final ? 'El campamento de la sierra' : `Operación ${rng.pick(OPERATION_A)} ${rng.pick(OPERATION_B)}`,
+    // An ordinary operation is named for where it goes (Lore): «El colegio de Corran».
+    name: final ? 'El campamento de la sierra' : missionName(biome, REGIONS[region].name, seed),
     kind,
     difficulty,
     expiresDay: final ? null : c.day + 6 + rng.int(4),
     reward,
-    map: { kind: 'generated', biome, seed: rng.int(2 ** 31) },
+    map: { kind: 'generated', biome, seed },
     pods: regionPods(c, region, difficulty, kind),
     final,
     region,
@@ -1580,7 +1593,7 @@ function makeFacilityOffer(c: CampaignState, region: RegionId, rng: Rng): Missio
 /** The mission of a story chapter: fixed place and type, and it never expires. */
 function makeStoryOffer(c: CampaignState, chapter: number, rng: Rng): MissionOffer {
   const def = STORY[chapter - 1]!;
-  // Without Simón inside, the Archive is harder to crack.
+  // Without Simão inside, the Archive is harder to crack.
   const difficulty = Math.min(4, def.difficulty + (chapter === SIMON_CHAPTER && c.story.simon === 'refused' ? 1 : 0));
   return {
     id: newId(c, 'm'),
@@ -1601,7 +1614,7 @@ function makeStoryOffer(c: CampaignState, chapter: number, rng: Rng): MissionOff
 
 /**
  * Opens whatever the story has ready: the next chapter's mission once the
- * Bastion reaches its level, Simón's visit before chapter 5 and, with every
+ * Bastion reaches its level, Simão's visit before chapter 5 and, with every
  * chapter won and the top level reached, the final mission.
  */
 function refreshStory(c: CampaignState, rng: Rng): void {
@@ -1616,7 +1629,7 @@ function refreshStory(c: CampaignState, rng: Rng): void {
     } else if (!c.offers.some((o) => o.story === next)) {
       const offer = makeStoryOffer(c, next, rng);
       c.offers.push(offer);
-      log(c, `Expediente: nueva misión de historia, ${offer.name}.`, 'good');
+      log(c, `Diario: nueva misión de historia, ${offer.name}.`, 'good');
     }
   }
   if (c.story.done >= STORY.length && hasTech(c, 'signal') && !c.offers.some((o) => o.final)) {
@@ -1641,7 +1654,7 @@ export interface MissionInfo {
 
 export function missionInfo(c: CampaignState, offer: MissionOffer): MissionInfo {
   if (offer.story) {
-    return { kicker: `EXPEDIENTE · HOJA ${offer.story}`, item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
+    return { kicker: `DIARIO · HOJA ${offer.story}`, item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
   }
   const q = questOf(c, offer);
   const step = q && QUESTS[q.id].steps[q.step];
@@ -1730,9 +1743,9 @@ function startQuest(c: CampaignState, id: QuestId, rng: Rng, extra: Partial<Ques
     ...extra,
   };
   if (id === 'mole') {
-    // Simón is a suspect if he was let in.
+    // Simão is a suspect if he was let in.
     const pool = [...SUSPECTS];
-    const a = c.story.simon === 'trusted' ? 'Simón Ferreira' : pool.splice(rng.int(pool.length), 1)[0]!;
+    const a = c.story.simon === 'trusted' ? 'Simão Ferreira' : pool.splice(rng.int(pool.length), 1)[0]!;
     const b = pool[rng.int(pool.length)]!;
     q.names = { a, b, culprit: q.secret === 0 ? a : b };
   }
@@ -1830,7 +1843,10 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
   if (outcome.recruit) {
     const r = outcome.recruit;
     const s = addSoldier(c, q.owner ?? neediestPlayer(c), null, rng);
-    if (r.name) s.name = fill(r.name, q.names);
+    if (r.name) {
+      s.name = fill(r.name, q.names);
+      s.appearance = defaultAppearance(s.cls, s.owner, undefined, sexOfPerson(s.name));
+    }
     if (r.rank) promoteTo(s, r.rank, r.cls);
     if (r.trait) s.traits.push(r.trait);
     log(c, `${s.name} se une al Bastión (${TEMPLATES[soldierTemplate(s.cls)].name}).`, 'good');
@@ -1848,9 +1864,10 @@ function promoteTo(s: CampaignSoldier, rank: number, cls?: ClassId): void {
 
 /** A recruit reaching Capitán takes its class (classes.ts), and the look that goes with it if it had the default one. */
 function specializeSoldier(s: CampaignSoldier, cls: ClassId): void {
-  const wasDefault = JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, s.owner));
+  const sex = s.appearance.sex;
+  const wasDefault = JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, s.owner, undefined, sex));
   specialize(s, cls);
-  if (wasDefault) s.appearance = defaultAppearance(cls, s.owner);
+  if (wasDefault) s.appearance = defaultAppearance(cls, s.owner, undefined, sex);
 }
 
 /** Level of the Taller de oficios, which opens the rows of the Oficio (0 = not built). */
@@ -1861,6 +1878,18 @@ export function echoesLevel(c: CampaignState): number {
 /** Aptitude and talent points the soldier's rank gives and haven't been spent yet. */
 export function pointsToSpend(s: CampaignSoldier): { attrs: number; talents: number } {
   return { attrs: attrPointsFree(s), talents: talentPointsFree(s) };
+}
+
+/**
+ * Whether a soldier's free points can go anywhere now (playtest 2026-10-13):
+ * an aptitude below its cap, or a talent open to it (row gates, kit and the
+ * Oficio's Taller allowing). Points left with nowhere to go don't ask for a
+ * promotion to be spent.
+ */
+export function canSpendPoints(c: CampaignState, s: CampaignSoldier): boolean {
+  const free = pointsToSpend(s);
+  if (free.attrs > 0 && ATTR_IDS.some((id) => !attrBlocker(s, id))) return true;
+  return free.talents > 0 && (Object.keys(TALENTS) as PerkId[]).some((id) => !talentBlocker(s, id, echoesLevel(c)));
 }
 
 /** Starting over costs less with a training centre. */
@@ -1964,6 +1993,27 @@ function freshRegions(): RegionState[] {
   return (Object.keys(REGIONS) as RegionId[]).map((id) => ({ id, contacted: id === HOME_REGION, facility: null }));
 }
 
+/** The base's first line, and the same once the opening operation is chosen (placeholders for Lore). */
+const WELCOME = 'El Bastión entra en servicio. Elegid la primera misión: el combate hará subir de nivel al Bastión.';
+const WELCOME_OPENING = 'Primera salida: las medicinas del consultorio de Aldren. La escuadra espera en la cochera.';
+
+/**
+ * A new campaign opens with a mission (playtest 2026-10-13): the first story
+ * operation is chosen and its squad picked, waiting in the hangar; the base
+ * and its needs come after. The server calls it on a campaign it has just
+ * created (createCampaign itself leaves the choice open).
+ */
+export function openingMission(c: CampaignState): void {
+  const first = c.offers.find((o) => o.story === 1) ?? c.offers[0];
+  if (!first || c.activeMission) return;
+  c.activeMission = first.id;
+  c.squad = defaultSquad(c, c.players);
+  c.launchReady = [false, false];
+  syncPads(c);
+  const welcome = c.log.find((l) => l.text === WELCOME);
+  if (welcome) welcome.text = WELCOME_OPENING;
+}
+
 export function createCampaign(players: Slot[], rng: Rng): CampaignState {
   const c: CampaignState = {
     version: CAMPAIGN_VERSION,
@@ -2016,7 +2066,7 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
   // Everyone starts as a recruit: classes come at Capitán.
   for (let i = 0; i < 2 * START_KIT; i++) addSoldier(c, players.length > 1 ? players[i % 2]! : players[0]!, null, rng);
   c.offers.push(makeOffer(c, rng), makeOffer(c, rng));
-  log(c, 'El Bastión entra en servicio. Elegid la primera misión: el combate hará subir de nivel al Bastión.', 'good');
+  log(c, WELCOME, 'good');
   refreshNarrative(c, rng);
   syncMarea(c);
   c.uid = rng.int(2 ** 31).toString(36);
@@ -2167,9 +2217,10 @@ export function addPlayer(c: CampaignState, slot: Slot, rng: Rng): number {
   // A squad being picked is redone for both by whoever calls this (see the server's bringPlayersIn).
   c.squad = c.squad.filter((id) => !rookies.some((s) => s.id === id));
   for (const s of rookies) {
-    const wasDefault = JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, s.owner));
+    const sex = s.appearance.sex;
+    const wasDefault = JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, s.owner, undefined, sex));
     s.owner = slot;
-    if (wasDefault) s.appearance = defaultAppearance(s.cls, slot);
+    if (wasDefault) s.appearance = defaultAppearance(s.cls, slot, undefined, sex);
     s.loadout = { utility: null, ammo: null };
   }
   const recruits: CampaignSoldier[] = [];
@@ -2248,10 +2299,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     });
   }
 
-  const promotions = mine.filter((s) => {
-    const free = pointsToSpend(s);
-    return s.alive && free.attrs + free.talents > 0;
-  });
+  const promotions = mine.filter((s) => s.alive && canSpendPoints(c, s));
   if (promotions.length) {
     steps.push({ view: 'barracks', label: promotions.length === 1 ? `Ascenso pendiente: ${promotions[0]!.name}` : 'Ascensos pendientes', count: promotions.length, tone: 'info', go: { soldier: promotions[0]!.id } });
   }
@@ -2350,7 +2398,8 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
 function validateAction(c: CampaignState, action: ProposalAction): string | null {
   switch (action.type) {
     case 'chooseMission':
-      if (c.activeMission) return 'Ya hay una misión elegida.';
+      // Another operation may take the place of the one chosen, until it takes off.
+      if (c.activeMission === action.id) return 'Esa misión ya está elegida.';
       if (!c.offers.some((o) => o.id === action.id)) return 'Esa misión ya no está disponible.';
       return null;
     case 'clear': {
@@ -2714,7 +2763,8 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       if (!isAppearance(cmd.appearance)) return { ok: false, error: 'Ese aspecto no es válido.' };
       s.name = name;
       s.nickname = nickname;
-      s.appearance = normalizeAppearance(cmd.appearance);
+      // The sex comes with the name: a look sent without it keeps the soldier's.
+      s.appearance = normalizeAppearance({ ...cmd.appearance, sex: cmd.appearance.sex ?? s.appearance.sex });
       return { ok: true };
     }
 
@@ -2958,7 +3008,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     // A zone under the Marea sends nothing.
     const income = BASE_INCOME + c.regions.filter((r) => r.contacted && !underMarea(c, r.id)).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
     c.credits += income;
-    log(c, `Llega el convoy de Altomonte: Ruth Halvorsen manda ${income} suministros.`, 'good');
+    log(c, `Llega el convoy de Aldren: Ruth Halvorsen manda ${income} suministros.`, 'good');
     stop = true;
   }
 
@@ -3282,6 +3332,9 @@ export function migrateCampaign(old: CampaignState): CampaignState {
     s.loadout ??= { utility: null, ammo: null };
     s.nickname ??= '';
     s.appearance ??= defaultAppearance(s.cls, s.owner);
+    // Version 15: the sex the client picks a model of, from the name; unset when it isn't one of ours.
+    const sex = s.appearance.sex ?? sexOfPerson(s.name);
+    if (sex) s.appearance = normalizeAppearance({ ...s.appearance, sex });
     s.traits ??= [];
   }
   loose.inventory ??= {};
@@ -3375,7 +3428,8 @@ export function migrateCampaign(old: CampaignState): CampaignState {
   }
   // Version 11: the first player's colour goes from blue to violet; soldiers still in the old default follow it.
   for (const s of c.soldiers) {
-    if (s.owner === 0 && JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, 0, '#3fa9ff'))) s.appearance = defaultAppearance(s.cls, 0);
+    const sex = s.appearance.sex;
+    if (s.owner === 0 && JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.cls, 0, '#3fa9ff', sex))) s.appearance = defaultAppearance(s.cls, 0, undefined, sex);
   }
   // Version 12: infection and medicines. Nobody comes in bitten; the medicines they had stay.
   loose.medicines ??= 0;

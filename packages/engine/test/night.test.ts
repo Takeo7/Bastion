@@ -3,14 +3,14 @@ import { byNight, createCampaign, nightFor, type MissionOffer } from '../src/cam
 import { NIGHT, TEMPLATES } from '../src/content';
 import { decorOf } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
-import { BODY_HEIGHT, elevAt, EYE_HEIGHT, sightTop } from '../src/grid';
+import { BODY_HEIGHT, elevAt, EYE_HEIGHT, posOf, sightTop } from '../src/grid';
 import { rollLoot } from '../src/loot';
 import { canSee, canSeeTile, detectionTo, isLit, lightTiles, lineClear, litMask, nightSight, sightOf, sightTo, teamVisibility } from '../src/los';
 import { generateLayout } from '../src/mapgen';
 import { Rng } from '../src/rng';
 import { Sim } from '../src/rules';
 import { createMission, nightPod } from '../src/setup';
-import type { GameState, Pod, Unit, Vec2 } from '../src/types';
+import type { GameState, Pod, Pos, Unit, Vec2 } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
 
 // Building height and night missions (docs/ALTURA-Y-NOCHE.md).
@@ -91,12 +91,12 @@ describe('tall buildings', () => {
     const rows = ['............', '..#####.....', '..#...#.....', '..=...#.....', '..#...#.....', '..#####.....', '............'];
     const ground = stateFrom(rows);
     raise(ground, 2, 1, 6, 5, 3);
-    const inside = { x: 4, y: 3 };
-    expect(canSeeTile(ground, { x: 0, y: 3 }, inside, 18)).toBe(true);
+    const inside = { x: 4, y: 3, z: 0 };
+    expect(canSeeTile(ground, { x: 0, y: 3, z: 0 }, inside, 18)).toBe(true);
     // The same wall without the window: nothing.
     const blind = stateFrom(rows.map((r) => r.replace('=', '#')));
     raise(blind, 2, 1, 6, 5, 3);
-    expect(canSeeTile(blind, { x: 0, y: 3 }, inside, 18)).toBe(false);
+    expect(canSeeTile(blind, { x: 0, y: 3, z: 0 }, inside, 18)).toBe(false);
     // From a one-storey rooftop beside it, the window shows only the wall above it.
     const roof = stateFrom(rows, ['', '', '', '1']);
     expect(lineClear(roof, { x: 0, y: 3 }, inside)).toBe(true);
@@ -106,12 +106,45 @@ describe('tall buildings', () => {
     expect(lineClear(roof, { x: 0, y: 3 }, { x: 10, y: 3 }, 1.7, 1.5)).toBe(false);
   });
 
+  it('playtest 2026-10-13: from the street, a window, whole or broken, shows the room and lifts its fog', () => {
+    const rows = ['............', '..#####.....', '..#...#.....', '..=...#.....', '..#...#.....', '..#####.....', '............'];
+    const room = (seen: boolean[]) => {
+      const out: string[] = [];
+      for (let y = 2; y <= 4; y++) for (let x = 3; x <= 5; x++) if (seen[y * 12 + x]) out.push(`${x},${y}`);
+      return out;
+    };
+    for (const glass of ['window', 'windowBroken'] as const) {
+      for (const storeys of [1, 2, 3]) {
+        const s = stateFrom(rows);
+        s.tiles[3 * 12 + 2] = glass;
+        raise(s, 2, 1, 6, 5, storeys);
+        // Two steps back: a wedge of the room behind the glass.
+        const watcher = addUnit(s, 's1', 'rookie', 0, 3);
+        const label = `${glass}, ${storeys} storeys`;
+        expect(room(teamVisibility(s, 'xcom')), label).toEqual(['4,2', '5,2', '3,3', '4,3', '5,3', '4,4', '5,4']);
+        // Whoever is in there is seen too.
+        const inside = addUnit(s, 'a1', 'zombie', 5, 4);
+        expect(canSee(s, watcher, inside), label).toBe(true);
+        // Right at the glass: the whole room.
+        watcher.pos = { x: 1, y: 3, z: 0 };
+        expect(room(teamVisibility(s, 'xcom')), label).toHaveLength(9);
+      }
+    }
+    // The same wall without the window: the room stays in the fog.
+    const blind = stateFrom(rows.map((r) => r.replace('=', '#')));
+    raise(blind, 2, 1, 6, 5, 1);
+    addUnit(blind, 's1', 'rookie', 1, 3);
+    expect(room(teamVisibility(blind, 'xcom'))).toEqual([]);
+  });
+
   it('maps without storeys see exactly as before; from the ground, so do one-storey buildings', () => {
     const layout = generateLayout({ biome: 'city', kind: 'elimination', podSizes: [2, 2, 3], seed: 7 });
     const old = createMission({ map: { kind: 'generated', biome: 'city', seed: 7 }, slots: [0], rng: new Rng(1) });
     expect(old.storeys).toEqual(layout.storeys);
     const tall = old.storeys!.some((n) => n >= 2);
     expect(tall).toBe(true);
+    // Without their storeys above the ground (docs/FASE6-PLAN.md): the model of tall buildings this tests.
+    delete old.levels;
     const flat = cloneState(old);
     delete flat.storeys;
     const low = cloneState(old);
@@ -192,7 +225,7 @@ describe('night', () => {
   const dark = () => {
     const s = stateFrom(Array.from({ length: 20 }, () => '.'.repeat(30)));
     s.mission.night = true;
-    s.lights = [{ id: 'l1', tile: { x: 2, y: 15 }, radius: NIGHT.streetLight }];
+    s.lights = [{ id: 'l1', tile: { x: 2, y: 15, z: 0 }, radius: NIGHT.streetLight }];
     return s;
   };
 
@@ -205,9 +238,9 @@ describe('night', () => {
     expect(nightSight(soldier)).toBe(10);
     expect(canSee(s, soldier, near)).toBe(true);
     // Twelve tiles off in the dark: unseen; in the street light's circle: seen.
-    far.pos = { x: 12, y: 14 };
+    far.pos = { x: 12, y: 14, z: 0 };
     expect(canSee(s, soldier, far)).toBe(false);
-    far.pos = { x: 2, y: 14 };
+    far.pos = { x: 2, y: 14, z: 0 };
     expect(isLit(s, far.pos)).toBe(true);
     expect(canSee(s, soldier, far)).toBe(true);
     // Short-sighted to begin with: never under 6.
@@ -229,18 +262,18 @@ describe('night', () => {
     raise(s, 8, 1, 12, 5, 1);
     const at = (x: number, y: number) => y * 14 + x;
     // A street lamp at (5,2): the pavement round it is lit, and from up high it shines over the garden wall.
-    const lamp = lightTiles(s, { x: 5, y: 2 }, NIGHT.streetLight, NIGHT.lampHeight);
-    s.lights = [{ id: 'l1', tile: { x: 5, y: 2 }, radius: NIGHT.streetLight, tiles: lamp }];
+    const lamp = lightTiles(s, { x: 5, y: 2, z: 0 }, NIGHT.streetLight, NIGHT.lampHeight);
+    s.lights = [{ id: 'l1', tile: { x: 5, y: 2, z: 0 }, radius: NIGHT.streetLight, tiles: lamp }];
     expect(isLit(s, { x: 4, y: 2 })).toBe(true);
     expect(isLit(s, { x: 5, y: 4 })).toBe(true);
     expect(isLit(s, { x: 7, y: 2 })).toBe(true);
     // A Bengala burning on the ground doesn't: the wall keeps its light in.
-    const low = lightTiles(s, { x: 5, y: 2 }, NIGHT.flare.radius, NIGHT.flare.height);
+    const low = lightTiles(s, { x: 5, y: 2, z: 0 }, NIGHT.flare.radius, NIGHT.flare.height);
     expect(low).toContain(at(3, 2));
     expect(low).not.toContain(at(7, 2));
     // In the alley: a lamp's light stops at the house's roof, but a Bengala on the ground lights the room through the window.
-    expect(lightTiles(s, { x: 7, y: 3 }, NIGHT.streetLight, NIGHT.lampHeight)).not.toContain(at(9, 3));
-    const flare = lightTiles(s, { x: 7, y: 3 }, NIGHT.flare.radius, NIGHT.flare.height);
+    expect(lightTiles(s, { x: 7, y: 3, z: 0 }, NIGHT.streetLight, NIGHT.lampHeight)).not.toContain(at(9, 3));
+    const flare = lightTiles(s, { x: 7, y: 3, z: 0 }, NIGHT.flare.radius, NIGHT.flare.height);
     expect(flare).toContain(at(9, 3));
     expect(flare).toContain(at(7, 5));
     expect(flare).not.toContain(at(9, 2));
@@ -249,7 +282,7 @@ describe('night', () => {
     const mask = litMask(night);
     for (const l of night.lights!) {
       expect(l.tiles!.length).toBeGreaterThan(0);
-      for (const i of l.tiles!) expect(isLit(night, { x: i % 48, y: Math.floor(i / 48) })).toBe(mask[i]);
+      for (const i of l.tiles!) expect(isLit(night, posOf(night, i))).toBe(mask[i]);
     }
   });
 
@@ -265,7 +298,7 @@ describe('night', () => {
   });
 
   it('a hidden squad is noticed from half as far, unless it stands in the light', () => {
-    const run = (night: boolean, at: Vec2) => {
+    const run = (night: boolean, at: Pos) => {
       const s = dark();
       s.mission.night = night;
       s.concealed = true;
@@ -279,10 +312,10 @@ describe('night', () => {
       return s.pods[0]!.active;
     };
     // Four tiles from a zombie (detection 6): noticed by day, not at night...
-    expect(run(false, { x: 10, y: 5 })).toBe(true);
-    expect(run(true, { x: 10, y: 5 })).toBe(false);
+    expect(run(false, { x: 10, y: 5, z: 0 })).toBe(true);
+    expect(run(true, { x: 10, y: 5, z: 0 })).toBe(false);
     // ...unless the soldier walks under a street light.
-    expect(run(true, { x: 2, y: 13 })).toBe(true);
+    expect(run(true, { x: 2, y: 13, z: 0 })).toBe(true);
   });
 
   it('a Bengala lights its target and round it for two turns, then burns out; by day it lights nothing', () => {
@@ -294,7 +327,7 @@ describe('night', () => {
     const run = sim(s);
     run.perform(u, 'bolt', { target: z });
     const on = of(run.events, 'lightOn');
-    expect(on).toEqual([{ t: 'lightOn', light: { id: expect.any(String), tile: { x: 2, y: 12 }, radius: 3, turns: 2, tiles: expect.any(Array) } }]);
+    expect(on).toEqual([{ t: 'lightOn', light: { id: expect.any(String), tile: { x: 2, y: 12, z: 0 }, radius: 3, turns: 2, tiles: expect.any(Array) } }]);
     const id = on[0]!.light.id;
     expect(isLit(s, { x: 4, y: 13 })).toBe(true);
     // Still lit through the next squad turn...
@@ -322,7 +355,7 @@ describe('night', () => {
     const u = addUnit(s, 's1', 'grenadier', 2, 2, { charges: { fireball: 1, velmarStorm: 1 } });
     const z = addUnit(s, 'a1', 'zombie', 2, 9, { hp: 30, maxHp: 30 });
     const run = sim(s);
-    run.perform(u, 'fireball', { tile: { x: 2, y: 9 } });
+    run.perform(u, 'fireball', { tile: { x: 2, y: 9, z: 0 } });
     expect(of(run.events, 'lightOn')[0]!.light).toMatchObject({ tile: { x: 2, y: 9 }, radius: NIGHT.fire.radius, turns: NIGHT.fire.turns });
     u.ap = 2;
     const storm = sim(s, 2);

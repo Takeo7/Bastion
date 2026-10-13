@@ -1,5 +1,7 @@
+import { defaultAppearance } from './appearance';
 import { autoBuild, baseAttrs, CENTER, learnTalent, soldierStats, talentBlocker, talentPointsFree, talentsOf, type Build, type TalentDef } from './classes';
 import { AP_PER_TURN, NIGHT, RECOVERY_TURNS, SOLDIER_NAMES, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS } from './content';
+import { ground, toPos } from './grid';
 import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
@@ -20,6 +22,7 @@ import type {
   TemplateId,
   Unit,
   UnitMods,
+  Pos,
   Vec2,
 } from './types';
 
@@ -105,7 +108,8 @@ function veteranBuild(cls: ClassId, rank: number, rng: Rng): Build {
   return b;
 }
 
-export function makeUnit(id: string, template: TemplateId, name: string, owner: Slot | null, pos: Vec2, podId: string | null): Unit {
+/** A unit of a kind, on `pos` (on the ground unless it says its level). */
+export function makeUnit(id: string, template: TemplateId, name: string, owner: Slot | null, pos: Vec2 & { z?: number }, podId: string | null): Unit {
   const t = TEMPLATES[template];
   return {
     id,
@@ -113,7 +117,7 @@ export function makeUnit(id: string, template: TemplateId, name: string, owner: 
     template,
     name,
     owner,
-    pos: { ...pos },
+    pos: toPos(pos),
     hp: t.hp,
     maxHp: t.hp,
     armor: t.armor,
@@ -226,7 +230,7 @@ export function scavengePlan(difficulty: number): TemplateId[][] {
   }
 }
 
-/** Saqueo: who comes in each wave of the horde, by difficulty (rules.ts callHorde). */
+/** Who comes in each wave of a horde, by difficulty: the Saqueo's (rules.ts callHorde), sabotage and hack's, and a failed hack's alarm. */
 const HORDE_WAVES: Record<number, TemplateId[]> = {
   1: ['zombie', 'zombie'],
   2: ['zombie', 'zombie', 'xenoid'],
@@ -234,29 +238,35 @@ const HORDE_WAVES: Record<number, TemplateId[]> = {
   4: ['zombie', 'zombie', 'zombie', 'xenoid', 'mec'],
 };
 
-const REINFORCEMENT_UNITS: Record<number, TemplateId[]> = {
+export function hordeWave(difficulty: number): TemplateId[] {
+  return [...HORDE_WAVES[Math.max(1, Math.min(4, difficulty))]!];
+}
+
+/**
+ * Nobody drops in out of nowhere (playtest 2026-10-13): the living enemy
+ * that used to arrive mid-mission is on the map from the start, as one more
+ * group, in the missions that had them (elimination from difficulty 3 on, and
+ * every mission with an objective but the Saqueo).
+ */
+const GARRISON: Record<number, TemplateId[]> = {
   1: ['trooper', 'trooper'],
   2: ['trooper', 'lancer'],
   3: ['officer', 'trooper', 'lancer'],
-  4: ['officer', 'mec', 'trooper'],
+  4: ['officer', 'lancer', 'trooper'],
 };
 
-/** Alien turns at the end of which a drop is scheduled. */
-function reinforcementTurns(kind: MissionKind, difficulty: number): number[] {
-  switch (kind) {
-    case 'elimination':
-      return difficulty >= 3 ? [6] : [];
-    case 'sabotage':
-    case 'hack':
-      return [4, 8];
-    case 'scavenge':
-      return [];
-    default:
-      return [5, 9];
-  }
+export function garrison(kind: MissionKind, difficulty: number): TemplateId[] | null {
+  if (kind === 'scavenge' || (kind === 'elimination' && difficulty < 3)) return null;
+  return [...GARRISON[Math.max(1, Math.min(4, difficulty))]!];
 }
 
-const VIP_NAMES = ['Dra. Irene Saldaña', 'Ing. Tomás Arrieta', 'Alcaldesa Mara Velasco', 'Dr. Bruno Lasarte', 'Agente Inés Corral'];
+/** The pressure on the clock of sabotage and hack: zombies drawn in by the edges, at the end of these enemy turns. */
+function hordeTurns(kind: MissionKind): number[] {
+  return kind === 'sabotage' || kind === 'hack' ? [4, 8] : [];
+}
+
+/** Who a rescue frees, when it isn't a story's or a quest's (their sex is in lore.ts NAMED_SEX). */
+const VIP_NAMES = ['Dra. Irina Sokolova', 'Ing. Kenji Mori', 'Alcaldesa Mara Velasco', 'Dr. Femi Adebayo', 'Agente Claire Dubois'];
 
 /**
  * The battlefield a kind asks the generator for, when it isn't its own: a
@@ -280,8 +290,9 @@ export function createMission(opts: MissionOptions): GameState {
   const handmade = opts.map.kind === 'handmade' ? MAPS[opts.map.id] : undefined;
   let kind = opts.kind ?? 'elimination';
   const base = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : kind === 'scavenge' ? scavengePlan(difficulty) : podPlan(difficulty));
-  // At night the dead are out in force: one more group (a hand-made map has no room for it).
-  const plan = opts.night ? [...base, nightPod(difficulty)] : base;
+  // The living enemy's whole strength from the start; at night, the dead out in force too (a hand-made map has no room for either).
+  const extra = garrison(kind, difficulty);
+  const plan = [...base, ...(extra ? [extra] : []), ...(opts.night ? [nightPod(difficulty)] : [])];
   const layout = missionLayout(opts.map, kind, plan.map((p) => p.length));
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
@@ -326,11 +337,23 @@ export function createMission(opts: MissionOptions): GameState {
     for (let i = 0; i < squadSize; i++) {
       const owner = opts.slots[Math.min(Math.floor(i / perPlayer), opts.slots.length - 1)]!;
       const cls = SQUAD_CLASSES[i % SQUAD_CLASSES.length]!;
-      const u = makeUnit(`s${i + 1}`, cls, names[i]!, owner, layout.spawns[i]!, null);
+      const { name, sex } = names[i]!;
+      const u = makeUnit(`s${i + 1}`, cls, name, owner, layout.spawns[i]!, null);
       const rank = opts.veterans ? 3 + opts.rng.int(3) : 0;
       const build = opts.veterans ? veteranBuild(cls, rank, opts.rng) : { cls, rank, attrs: baseAttrs(cls), talents: {} };
       const stats = soldierStats(build);
-      units.push({ ...u, rank, perks: stats.perks, mods: stats.mods, maxHp: stats.maxHp, hp: stats.maxHp, charges: stats.charges, will: stats.will, armor: stats.armor });
+      units.push({
+        ...u,
+        rank,
+        perks: stats.perks,
+        mods: stats.mods,
+        maxHp: stats.maxHp,
+        hp: stats.maxHp,
+        charges: stats.charges,
+        will: stats.will,
+        armor: stats.armor,
+        appearance: defaultAppearance(cls, owner, undefined, sex),
+      });
     }
   }
 
@@ -346,10 +369,13 @@ export function createMission(opts: MissionOptions): GameState {
 
   const pods: Pod[] = [];
   let alienIndex = 0;
+  // From difficulty 2, one group of the living posted upstairs, where the map has room for it (decision 7 in docs/FASE6-PLAN.md).
+  const perch = layout.perch ?? [];
+  const perched = difficulty >= 2 ? plan.findIndex((members) => members.length > 0 && members.length <= perch.length && members.every((t) => !TEMPLATES[t].undead)) : -1;
   plan.forEach((members, i) => {
-    const spot = layout.pods[i];
+    const spot = i === perched ? { tiles: perch, patrol: [] } : layout.pods[i];
     if (!spot) return;
-    const pod: Pod = { id: `p${i + 1}`, active: false, unitIds: [], patrol: spot.patrol.map((p) => ({ ...p })), patrolIndex: 0 };
+    const pod: Pod = { id: `p${i + 1}`, active: false, unitIds: [], patrol: spot.patrol.map(toPos), patrolIndex: 0 };
     members.slice(0, spot.tiles.length).forEach((template, k) => {
       const id = `a${++alienIndex}`;
       units.push(makeUnit(id, template, TEMPLATES[template].name, null, spot.tiles[k]!, pod.id));
@@ -360,26 +386,20 @@ export function createMission(opts: MissionOptions): GameState {
   const leader = opts.leader && units.find((u) => u.team === 'alien' && u.template === opts.leader!.template);
   if (leader) leader.name = opts.leader!.name;
 
-  const reinforcements: Reinforcement[] = reinforcementTurns(kind, difficulty).map((turn, i) => ({
-    id: `r${i + 1}`,
-    turn,
-    pos: null,
-    units: [...REINFORCEMENT_UNITS[Math.max(1, Math.min(4, difficulty))]!],
-    landed: false,
-  }));
+  const reinforcements: Reinforcement[] = hordeTurns(kind).map((turn, i) => ({ id: `r${i + 1}`, turn, pos: null, units: hordeWave(difficulty), landed: false, horde: true }));
 
   const mission: MissionState = {
     kind,
     turnsLeft: kind === 'elimination' ? null : opts.turns ?? missionTurns(kind, Math.max(layout.width, layout.height)),
-    item: kind === 'recovery' && layout.item ? { pos: { ...layout.item }, carrier: null, evacuated: false } : null,
+    item: kind === 'recovery' && layout.item ? { pos: toPos(layout.item), carrier: null, evacuated: false } : null,
     evacZone: kind === 'elimination' ? [] : layout.evacZone,
-    terminal: kind === 'hack' ? layout.terminal : null,
+    terminal: kind === 'hack' && layout.terminal ? toPos(layout.terminal) : null,
     objectiveUnit,
     objectiveDone: false,
     hackBonus: opts.hackBonus ?? 0,
     reinforcements,
     difficulty,
-    ...(kind === 'scavenge' ? { horde: [...HORDE_WAVES[Math.max(1, Math.min(4, difficulty))]!] } : {}),
+    ...(kind === 'scavenge' ? { horde: hordeWave(difficulty) } : {}),
     night: !!opts.night,
   };
 
@@ -399,6 +419,7 @@ export function createMission(opts: MissionOptions): GameState {
     ...(layout.ground ? { ground: [...layout.ground] } : {}),
     ...(layout.decor ? { decor: [...layout.decor] } : {}),
     ...(layout.storeys ? { storeys: [...layout.storeys] } : {}),
+    ...(layout.levels ? { levels: layout.levels.map((l) => ({ tiles: [...l.tiles], ...(l.decor ? { decor: [...l.decor] } : {}) })) } : {}),
     lights: [],
     units,
     pods,
@@ -416,9 +437,30 @@ export function createMission(opts: MissionOptions): GameState {
   // The map's street lights (they never go out): each lights what its lamp sees round it, worked out once.
   state.lights = (layout.lights ?? []).map((tile, i) => ({
     id: `l${i + 1}`,
-    tile: { ...tile },
+    tile: ground(tile),
     radius: NIGHT.streetLight,
-    tiles: lightTiles(state, tile, NIGHT.streetLight, NIGHT.lampHeight),
+    tiles: lightTiles(state, ground(tile), NIGHT.streetLight, NIGHT.lampHeight),
   }));
   return state;
+}
+
+/**
+ * A mission saved before buildings had storeys (docs/FASE6-PLAN.md): every
+ * place in it gets its level, the ground. Harmless on a mission that has them.
+ */
+export function normalizeMission(s: GameState): GameState {
+  const fix = <T extends Vec2>(p: T): T & Pos => Object.assign(p, { z: (p as Partial<Pos>).z ?? 0 });
+  for (const u of s.units) {
+    fix(u.pos);
+    if (u.heard) fix(u.heard);
+  }
+  for (const p of s.pods) p.patrol.forEach(fix);
+  const m = s.mission;
+  if (m.item?.pos) fix(m.item.pos);
+  if (m.terminal) fix(m.terminal);
+  for (const r of m.reinforcements) if (r.pos) fix(r.pos);
+  for (const c of s.smoke) fix(c.pos);
+  for (const z of s.silences ?? []) fix(z.pos);
+  for (const l of s.lights ?? []) fix(l.tile);
+  return s;
 }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { decorOf, DIRS4, type DecorKind, type GameState, type TileKind, type Vec2 } from '@bastion/engine';
+import { decorOf, DIRS4, isWalkable, type DecorKind, type GameState, type Place, type TileKind, type Vec2 } from '@bastion/engine';
 import { StaticBatch, type Dirty } from './batch';
-import { STOREY } from './coords';
+import { groundAt, STOREY } from './coords';
 import { extendShader, type FogOfWar } from './fogOfWar';
 import { contactPatch, type GroundOcclusion } from './groundAO';
 import { ATLAS_RECTS, atlasIndex, atlasRect, mapAtlasTexture, PACKED } from './mapAtlas';
@@ -27,7 +27,9 @@ import { unitPosNow } from './unitViews';
 // Cutaway, as in XCOM: a building's roof fades out (dithered) while a soldier
 // or a visible enemy is inside it (where they are on screen, so it opens as
 // they walk in), and the walls facing the camera drop to waist height; the
-// same for the cursor, the selected soldier and the target. A building
+// same for the cursor, the selected soldier and the target. A building whose
+// inside the squad sees from out in the street (through a window or a door)
+// loses its roof too, so what they see in there is on screen. A building
 // between the camera and a unit only loses its roof; between the camera and
 // the selected soldier, the cursor or the target, all its walls drop too.
 // Close up, the roofs round the view fade. Each building fades on its own
@@ -71,13 +73,21 @@ export interface Building {
   /** World height of the top of its roof. */
   top: number;
   /**
-   * Storeys it stands (Synty's captures: shops and offices of two to four):
-   * only the ground floor is played; the ones above are drawn, and go with
-   * the roof in the cutaway.
+   * Storeys it stands (Synty's captures: shops and offices of two to four).
+   * Without levels only the ground floor is played: the ones above are a
+   * façade, and go with the roof in the cutaway.
    */
   storeys: number;
   /** The side its doors open onto (a motel's rooms), as a DIRS4 index; -1 none in particular. */
   front: number;
+  /**
+   * Its storeys are real (GameState.levels, docs/FASE6-PLAN.md): each is drawn
+   * from its own tiles (floor, walls, furniture, stairs) instead of as a façade,
+   * and the floors above the one in view fade in the cutaway.
+   */
+  leveled: boolean;
+  /** Its top storey is a roof one can walk on (a flat roof with stairs or a ladder up): drawn as a deck, open where the stairs come up. */
+  walkableRoof: boolean;
 }
 
 /** Wall pieces stand on tile middles, half a tile each way: these are the tiles a building of bounds b spans. */
@@ -260,11 +270,33 @@ export class BuildingPlan {
         const told = s.storeys?.[floorTile];
         const tall = s.biome !== 'city' || base > 0 ? 0 : kind === 'shop' ? (look < 0.55 ? 1 : 2) : kind === 'office' ? (look < 0.6 ? 1 : 2) : kind === 'house' ? (look < 0.3 ? 1 : 0) : 0;
         const storeys = told && told > 0 ? told : 1 + tall;
-        this.buildings.push({ index: own, ...r, kind, kit, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1 });
+        const leveled = this.slabsOver(r) > 0;
+        const walkableRoof = leveled && this.walkableAt(r, storeys);
+        this.buildings.push({ index: own, ...r, kind, kit, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1, leveled, walkableRoof });
       });
       for (const i of tiles) if (this.inside[i]) this.floor[i] = 1;
     }
     if (s.biome === 'wilds') this.findRuins();
+  }
+
+  /** What stands on storey k (≥ 1) of tile (x, y): null where there's no slab (open air, a stairwell), or off the map. */
+  kindAt(x: number, y: number, k: number): TileKind | null {
+    const s = this.s;
+    if (k < 1 || x < 0 || y < 0 || x >= s.width || y >= s.height) return null;
+    return s.levels?.[k - 1]?.tiles[y * s.width + x] ?? null;
+  }
+
+  /** How many slabs (of any storey) stand over the span. */
+  private slabsOver(r: Span): number {
+    let n = 0;
+    for (let k = 1; k <= (this.s.levels?.length ?? 0); k++) for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if (this.kindAt(x, y, k) !== null) n++;
+    return n;
+  }
+
+  /** Whether storey k has somewhere to stand on within the span. */
+  private walkableAt(r: Span, k: number): boolean {
+    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if (isWalkable(this.kindAt(x, y, k))) return true;
+    return false;
   }
 
   /**
@@ -349,7 +381,7 @@ export class BuildingPlan {
           }
         }
       }
-      this.buildings.push({ index, x0, y0, x1, y1, kind: 'ruin', kit: 'house', look: hash(x0, y0, 5), base: 0, top: STOREY, storeys: 1, front: -1 });
+      this.buildings.push({ index, x0, y0, x1, y1, kind: 'ruin', kit: 'house', look: hash(x0, y0, 5), base: 0, top: STOREY, storeys: 1, front: -1, leveled: false, walkableRoof: false });
     }
   }
 
@@ -646,13 +678,22 @@ function swatchPatch(material: THREE.MeshStandardMaterial): void {
 
 // ---------------------------------------------------------------- cutaway
 
-/** What the player is looking at, from the game: the selected soldier, the cursor's tile, the target. */
+/**
+ * What the player is looking at, from the game: the selected soldier, the
+ * cursor's place (with its storey, `z`), the target, and the active storey
+ * (`level`: the selected soldier's, or the one chosen with PageUp/PageDown,
+ * the wheel or the indicator: docs/FASE6.md). Buildings show that storey and
+ * those below it.
+ */
 export interface Focus {
   selected: string | null;
-  hover: Vec2 | null;
+  hover: Place | null;
   target: string | null;
+  level?: number | null;
 }
 
+/** The cut map's alpha holds the storey in view, this much a storey. */
+const FLOOR_CODE = 64;
 /** Seconds a building keeps its cutaway after the reason for it goes, and a fade takes. */
 const HOLD = 0.6;
 const FADE = 0.3;
@@ -664,7 +705,9 @@ const ZOOM_RADIUS = 8;
 
 /**
  * The cutaway of every building: a texel each (r roof gone, g walls facing
- * the camera cut, b every wall cut), read by the materials of walls and roofs.
+ * the camera cut, b every wall cut, a the storey in view: what stands above
+ * it fades with r, its walls drop with g and b), read by the materials of
+ * walls, roofs, floors and furniture.
  */
 export class Cutaway {
   readonly uniforms = {
@@ -677,6 +720,11 @@ export class Cutaway {
   private readonly now: Float32Array;
   private readonly hold: Float32Array;
   private readonly marks: Uint8Array;
+  /** This frame, the storey each building is opened down to (-1 none said), and whether the focus said it (it wins). */
+  private readonly want: Int8Array;
+  private readonly locked: Uint8Array;
+  /** The storey each building shows now. */
+  private readonly shown: Uint8Array;
   private readonly data: Uint8Array;
   private boxes: THREE.Box3[] = [];
   private readonly ray = new THREE.Ray();
@@ -684,6 +732,9 @@ export class Cutaway {
   private readonly point = new THREE.Vector3();
   private readonly tile: Vec2 = { x: 0, y: 0 };
   private readonly look = new THREE.Vector3();
+  /** The buildings whose inside is in the squad's sight, and the sight they were worked out for. */
+  private seenInside: number[] = [];
+  private seenFor: readonly boolean[] | null = null;
 
   constructor(private readonly plan: BuildingPlan) {
     this.n = plan.buildings.length;
@@ -691,6 +742,9 @@ export class Cutaway {
     this.now = new Float32Array(n * 3);
     this.hold = new Float32Array(n * 3);
     this.marks = new Uint8Array(n * 3);
+    this.want = new Int8Array(n);
+    this.locked = new Uint8Array(n);
+    this.shown = new Uint8Array(n);
     this.data = new Uint8Array(n * 4);
     const texture = new THREE.DataTexture(this.data, n, 1);
     texture.needsUpdate = true;
@@ -704,19 +758,49 @@ export class Cutaway {
     this.boxes = this.plan.buildings.map((b) => new THREE.Box3(new THREE.Vector3(b.x0 + 0.4, b.base, b.y0 + 0.4), new THREE.Vector3(b.x1 + 0.6, b.top, b.y1 + 0.6)));
   }
 
-  /** Works out which buildings open up this frame and moves every fade towards it. */
-  update(dt: number, s: GameState, camera: THREE.Camera | null, focus: Focus | null, visible: readonly boolean[] | null): void {
+  /**
+   * Works out which buildings open up this frame and moves every fade towards
+   * it. With `inside`, a building whose inside tiles are in `visible` (seen
+   * through a window or a door) loses its roof.
+   */
+  update(dt: number, s: GameState, camera: THREE.Camera | null, focus: Focus | null, visible: readonly boolean[] | null, inside = true): void {
     if (!this.n) return;
     this.marks.fill(0);
+    this.want.fill(-1);
+    this.locked.fill(0);
     const plan = this.plan;
     const mark = (b: number, what: 0 | 1 | 2) => {
       if (b >= 0) this.marks[b * 3 + what] = 1;
     };
-    /** Opens building b for something inside it: roof off, the walls facing the camera down. */
-    const inside = (p: Vec2) => {
+    /** Building b is opened down to storey `level` (the highest anyone in it stands on; `keen`, the focus's, wins). */
+    const aim = (b: number, level: number, keen: boolean) => {
+      if (b < 0 || this.locked[b]) return;
+      if (keen) {
+        this.want[b] = level;
+        this.locked[b] = 1;
+      } else this.want[b] = Math.max(this.want[b]!, level);
+    };
+    const selectedUnit = focus?.selected ? s.units.find((u) => u.id === focus.selected) : undefined;
+    /** The storey the player looks at: the active one, else the selected soldier's. */
+    const view = focus?.level ?? selectedUnit?.pos.z ?? 0;
+    /** Chosen by hand (not the selected soldier's own): it wins over where the soldier stands. */
+    const chosen = focus?.level != null && focus.level !== (selectedUnit?.pos.z ?? 0);
+    if (visible !== this.seenFor) {
+      this.seenFor = visible;
+      const seen = new Set<number>();
+      // A mask by place: the ground's tiles, then each storey's.
+      const area = s.width * s.height;
+      if (visible) for (let n = 0; n < visible.length; n++) if (visible[n]) seen.add(plan.at({ x: (n % area) % s.width, y: Math.floor((n % area) / s.width) }));
+      seen.delete(-1);
+      this.seenInside = [...seen];
+    }
+    if (inside) for (const b of this.seenInside) mark(b, 0);
+    /** Opens building b for something inside it on storey `level`: what stands above off, the walls facing the camera down. */
+    const within = (p: Vec2, level: number, keen = false) => {
       const b = plan.at(p);
       mark(b, 0);
       mark(b, 1);
+      aim(b, level, keen);
     };
     if (camera) {
       camera.getWorldDirection(this.look);
@@ -743,23 +827,30 @@ export class Cutaway {
       }
     };
     /** Where a unit is now (mid-walk too), its tile in `this.tile` and its chest in `this.point`. */
-    const locate = (u: { id: string; pos: Vec2 }) => {
+    const locate = (u: { id: string; pos: Place }) => {
       if (unitPosNow(u.id, this.point)) {
         this.tile.x = Math.floor(this.point.x);
         this.tile.y = Math.floor(this.point.z);
       } else {
         this.tile.x = u.pos.x;
         this.tile.y = u.pos.y;
-        this.point.set(u.pos.x + 0.5, (s.elev[u.pos.y * s.width + u.pos.x] ?? 0) * STOREY, u.pos.y + 0.5);
+        this.point.set(u.pos.x + 0.5, groundAt(u.pos), u.pos.y + 0.5);
       }
       this.point.y += 0.9;
     };
+    // The cursor first: the storey under it is the one the player looks at in that building.
+    if (focus?.hover) {
+      const p = focus.hover;
+      within(p, p.z ?? view, true);
+      this.point.set(p.x + 0.5, groundAt(p) + 0.2, p.y + 0.5);
+      behind(this.point, plan.at(p), true);
+    }
     for (const u of s.units) {
       if (!u.alive) continue;
       const ours = u.team === 'xcom';
-      if (!ours && !(visible?.[u.pos.y * s.width + u.pos.x] ?? false)) continue;
+      if (!ours && !(visible?.[((u.pos.z ?? 0) * s.height + u.pos.y) * s.width + u.pos.x] ?? false)) continue;
       locate(u);
-      inside(this.tile);
+      within(this.tile, u.pos.z ?? 0, u.id === focus?.selected && !chosen);
       const keen = u.id === focus?.selected || u.id === focus?.target;
       behind(this.point, plan.at(this.tile), keen);
       if (u.id !== focus?.selected) continue;
@@ -770,14 +861,9 @@ export class Cutaway {
         if (dx + dy <= 1) {
           mark(b.index, 0);
           mark(b.index, 1);
+          aim(b.index, u.pos.z ?? 0, false);
         }
       }
-    }
-    if (focus?.hover) {
-      const p = focus.hover;
-      inside(p);
-      this.point.set(p.x + 0.5, (s.elev[p.y * s.width + p.x] ?? 0) * STOREY + 0.2, p.y + 0.5);
-      behind(this.point, plan.at(p), true);
     }
     if (camera) {
       // Zoomed in: the roofs round where the camera looks.
@@ -795,8 +881,23 @@ export class Cutaway {
         }
       }
     }
-    // Walls opened right through also lose their roof; held a moment, then faded.
+    // A storey chosen by hand: every building with storeys above it opens down to it.
+    if (chosen) for (const b of plan.buildings) if (b.leveled && b.storeys > view) mark(b.index, 0);
+    // The storey each opened building shows: the cursor's or the selected soldier's in theirs; else the one chosen by
+    // hand; else the highest anyone in it stands on; else the one in view. A building whose storeys aren't real shows
+    // its ground floor. Kept while it fades back.
     let changed = false;
+    for (const b of plan.buildings) {
+      const k = b.index;
+      if (!this.marks[k * 3] && !this.marks[k * 3 + 1] && !this.marks[k * 3 + 2]) continue;
+      const asked = this.locked[k] || (!chosen && this.want[k]! >= 0) ? this.want[k]! : view;
+      const floor = b.leveled ? Math.max(0, Math.min(b.storeys, asked)) : 0;
+      if (floor !== this.shown[k]) {
+        this.shown[k] = floor;
+        changed = true;
+      }
+    }
+    // Walls opened right through also lose their roof; held a moment, then faded.
     const step = dt / FADE;
     for (let k = 0; k < this.n * 3; k++) {
       if (this.marks[k]) this.hold[k] = HOLD;
@@ -816,8 +917,19 @@ export class Cutaway {
         const v = this.now[b * 3 + c]!;
         this.data[b * 4 + c] = Math.round(v * v * (3 - 2 * v) * 255);
       }
+      this.data[b * 4 + 3] = this.shown[b]! * FLOOR_CODE;
     }
     this.uniforms.cutMap.value.needsUpdate = true;
+  }
+
+  /**
+   * Whether place `p` is hidden by the cutaway: on a storey above the one its
+   * building shows, while that building is cut (what stands there, a unit
+   * included, isn't to be drawn).
+   */
+  hides(p: Place): boolean {
+    const b = this.plan.at(p);
+    return b >= 0 && (p.z ?? 0) > this.shown[b]! && this.now[b * 3]! > 0.5;
   }
 
   dispose(): void {
@@ -831,6 +943,16 @@ const CUT_GLSL = /* glsl */ `
   uniform vec2 cutView;
   vec4 cutState(float building) {
     return texture2D(cutMap, vec2((building - 0.5) / cutCount, 0.5));
+  }
+  // The storey in view in a building that is cut (its alpha, ${FLOOR_CODE} a storey): what stands higher fades.
+  float cutFloor(vec4 state) {
+    return floor(state.a * ${(255 / FLOOR_CODE).toFixed(4)} + 0.5);
+  }
+  // How far what stands on storey 'level' of 'building' (+1; 0 none) has faded.
+  float cutAbove(float building, float level) {
+    if (building < 0.5) return 0.0;
+    vec4 state = cutState(building);
+    return level > cutFloor(state) + 0.5 ? state.r : 0.0;
   }`;
 
 /** A pixel's threshold in a 4×4 ordered dither: fades with no sorting, steady on screen. */
@@ -860,6 +982,7 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
         `#include <common>
         ${CUT_GLSL}
         attribute vec4 aCut;
+        attribute float aLevel;
         attribute vec3 aOuter;
         attribute vec3 aInner;
         attribute float aAtlas;
@@ -885,14 +1008,18 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
           vOuter = aOuter;
           vInner = aInner;
           vAtlas = aAtlas;
-          if (aCut.x > 0.5 && aCut.y > ${ON_ROOF - 1}.0) {
-            vCutFade = cutState(aCut.x).r;
-          } else if (aCut.x > 0.5) {
+          if (aCut.x > 0.5) {
             vec4 state = cutState(aCut.x);
-            // Between rooms, or facing the camera.
-            float facing = dot(aCut.yz, aCut.yz) < 0.01 ? 1.0 : smoothstep(-0.15, 0.25, -dot(aCut.yz, cutView));
-            float k = max(state.g * facing, state.b);
-            if (k > 0.0) vCutTop = aCut.w + mix(${(STOREY + 0.05).toFixed(2)}, ${CUT_LOW.toFixed(2)}, k);
+            float shown = cutFloor(state);
+            if (aLevel > shown + 0.5) {
+              // Above the storey in view (the roof, a façade's upper storeys, a building's real storeys): it fades.
+              vCutFade = state.r;
+            } else if (aLevel > shown - 0.5 && aCut.y < ${ON_ROOF - 1}.0) {
+              // On the storey in view: between rooms, or facing the camera, the walls drop.
+              float facing = dot(aCut.yz, aCut.yz) < 0.01 ? 1.0 : smoothstep(-0.15, 0.25, -dot(aCut.yz, cutView));
+              float k = max(state.g * facing, state.b);
+              if (k > 0.0) vCutTop = aCut.w + mix(${(STOREY + 0.05).toFixed(2)}, ${CUT_LOW.toFixed(2)}, k);
+            }
           }
         }`,
       );
@@ -920,22 +1047,48 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
   });
 }
 
-/** Roofs that fade (dithered) for the cutaway; per vertex aRoof: the building (+1). */
+/**
+ * Roofs and a building's upper floors that fade (dithered) for the cutaway;
+ * per vertex aRoof, the building (+1), and aLevel, the storey it stands on:
+ * it fades while its building is cut below that storey.
+ */
 function roofFadePatch(material: THREE.Material, cut: Cutaway): void {
   extendShader(material, 'roof-fade', (shader) => {
     Object.assign(shader.uniforms, cut.uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${CUT_GLSL}\nattribute float aRoof;\nvarying float vRoofFade;`)
+      .replace('#include <common>', `#include <common>\n${CUT_GLSL}\nattribute float aRoof;\nattribute float aLevel;\nvarying float vRoofFade;`)
       .replace(
         '#include <project_vertex>',
         `#include <project_vertex>
-        vRoofFade = aRoof > 0.5 ? cutState(aRoof).r : 0.0;
+        vRoofFade = cutAbove(aRoof, aLevel);
         // Gone: out of the view altogether, so it costs nothing.
         if (vRoofFade > 0.995) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${DITHER_GLSL}\nvarying float vRoofFade;`)
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (cutDither() < vRoofFade) discard;');
+  });
+}
+
+/**
+ * Furniture and props that stand on a building's storeys (mapView.ts): per
+ * vertex aFloor, the building (+1; 0 for what stands out of doors) and the
+ * storey. They fade with the floors above the one in view.
+ */
+export function floorFadePatch(material: THREE.Material, cut: Cutaway): void {
+  extendShader(material, 'floor-fade', (shader) => {
+    Object.assign(shader.uniforms, cut.uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${CUT_GLSL}\nattribute vec2 aFloor;\nvarying float vFloorFade;`)
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+        vFloorFade = cutAbove(aFloor.x, aFloor.y);
+        if (vFloorFade > 0.995) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${DITHER_GLSL}\nvarying float vFloorFade;`)
+      .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (cutDither() < vFloorFade) discard;');
   });
 }
 
@@ -994,6 +1147,9 @@ class Surfaces {
   private patch: number[] = [];
   private color: number[] = [];
   private roof: number[] = [];
+  private levels: number[] = [];
+  /** The storey what is added now stands on: above the one in view, it fades in the cutaway (roofs: their building's top). */
+  level = 0;
   private readonly n = new THREE.Vector3();
   private readonly e1 = new THREE.Vector3();
   private readonly e2 = new THREE.Vector3();
@@ -1020,6 +1176,7 @@ class Surfaces {
       this.patch.push(...sw.rect);
       this.color.push(tint.r, tint.g, tint.b);
       this.roof.push(building + 1);
+      this.levels.push(this.level);
     }
   }
 
@@ -1048,6 +1205,7 @@ class Surfaces {
     g.setAttribute('aSwatch', new THREE.Float32BufferAttribute(this.patch, 4));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.color, 3));
     g.setAttribute('aRoof', new THREE.Float32BufferAttribute(this.roof, 1));
+    g.setAttribute('aLevel', new THREE.Float32BufferAttribute(this.levels, 1));
     // The standard material wants a uv for its map; the swatch patch reads its own.
     g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((this.position.length / 3) * 2), 2));
     g.computeBoundingSphere();
@@ -1062,6 +1220,8 @@ const BRICK = new THREE.Color(0x985c4e);
 const STONE = new THREE.Color(0x968770);
 /** The walkable top of a block of flats: pale roofing, weathered (WEATHER_GLSL). */
 const TAR = new THREE.Color(0xbdb1a6);
+/** A building's stairs: dark wood. */
+const STAIR_WOOD = new THREE.Color(0x6e4c36);
 /** Platforms' steel decks and posts, and the tops of solid walls. */
 const DECK = new THREE.Color(0x5c6064);
 const STEEL = new THREE.Color(0x3c4044);
@@ -1140,6 +1300,11 @@ function flatRoof(out: Surfaces, b: Building, tar: THREE.Color, trim: THREE.Colo
   return h;
 }
 
+/** The storey a piece of building `b` at height `base` stands on (0: the ground floor, or no building). */
+function storeyOf(b: Building | undefined, base: number): number {
+  return b ? Math.max(0, Math.round((base - b.base) / STOREY)) : 0;
+}
+
 // -------------------------------------------------------------- the view
 
 /** Instances of one part of one piece, collected and then turned into an InstancedMesh. */
@@ -1150,6 +1315,8 @@ interface Batch {
   cut: number[];
   outer: number[];
   inner: number[];
+  /** The storey each instance stands on (its building's, for the cutaway); the ground when missing. */
+  level?: number[];
 }
 
 const WHITE = new THREE.Color(1, 1, 1);
@@ -1168,13 +1335,13 @@ interface RoofProp {
  * some houses; air conditioners, vents and a dish on flat roofs, the stair
  * housing on offices, skylights in a row on warehouses.
  */
-function roofProps(b: Building): RoofProp[] {
+function roofProps(b: Building, open?: (x: number, y: number) => boolean): RoofProp[] {
   const out: RoofProp[] = [];
   const r = (salt: number) => hash(b.x0, b.y0, 40 + salt);
   const along = b.x1 - b.x0 >= b.y1 - b.y0;
   const cx = (b.x0 + b.x1) / 2 + 0.5;
   const cz = (b.y0 + b.y1) / 2 + 0.5;
-  if (b.kind === 'house') {
+  if (b.kind === 'house' && !b.walkableRoof) {
     if (r(0) < 0.65) {
       // On the ridge near one end, half sunk into the roof.
       const L = (along ? b.x1 - b.x0 : b.y1 - b.y0) / 2 - 1.1;
@@ -1186,6 +1353,8 @@ function roofProps(b: Building): RoofProp[] {
   }
   if (b.kind === 'barn' || b.kind === 'ruin') return out;
   const y = b.base + STOREY * b.storeys + 0.04;
+  // A roof one walks on keeps clear: only what's been left up there, never over the stairwell.
+  const walk = b.walkableRoof;
   // Free spots on the roof, a tile in from the parapet, taken as things are put down.
   const taken = new Set<string>();
   const place = (id: PropId, x: number, z: number, w: number, d: number, yaw: number): boolean => {
@@ -1197,7 +1366,7 @@ function roofProps(b: Building): RoofProp[] {
     return true;
   };
   const spot = (salt: number): [number, number] => [b.x0 + 1.7 + r(salt) * (b.x1 - b.x0 - 2.4), b.y0 + 1.7 + r(salt + 1) * (b.y1 - b.y0 - 2.4)];
-  if (b.kind === 'hall') {
+  if (b.kind === 'hall' && !walk) {
     // Skylights down the middle.
     const n = Math.floor((along ? b.x1 - b.x0 : b.y1 - b.y0) / 3);
     for (let k = 0; k < n; k++) {
@@ -1205,13 +1374,13 @@ function roofProps(b: Building): RoofProp[] {
       place('roofSkylight', along ? cx + u : cx, along ? cz : cz + u, along ? 1.4 : 0.9, along ? 0.9 : 1.4, along ? 0 : Math.PI / 2);
     }
   }
-  if (b.kind === 'office') {
+  if (b.kind === 'office' && !walk) {
     const [x, z] = spot(2);
     place('roofAccess', x, z, 2.4, 2.4, Math.floor(r(4) * 4) * (Math.PI / 2));
   }
   const area = (b.x1 - b.x0) * (b.y1 - b.y0);
   // A billboard on some shops and offices, at the roof's edge facing the default view (south or east).
-  if ((b.kind === 'shop' || b.kind === 'office') && area >= 30 && r(60) < 0.45) {
+  if ((b.kind === 'shop' || b.kind === 'office') && !walk && area >= 30 && r(60) < 0.45) {
     const south = r(61) < 0.5;
     const [bx, bz] = south ? [cx + (r(62) - 0.5) * 2, b.y1 - 0.4] : [b.x1 - 0.4, cz + (r(62) - 0.5) * 2];
     // The frame is long along z and faces x: turned a quarter for the south edge.
@@ -1225,8 +1394,10 @@ function roofProps(b: Building): RoofProp[] {
   const litter = Math.min(10, Math.round(area / 12));
   for (let k = 0; k < litter; k++) {
     const [x, z] = spot(80 + k * 2);
+    if (walk && !open?.(Math.floor(x), Math.floor(z))) continue;
     out.push({ id: clutter[Math.floor(r(120 + k) * clutter.length)]!, x, y: y + 0.003, z, yaw: r(140 + k) * Math.PI * 2 });
   }
+  if (walk) return out;
   const count = Math.min(6, Math.max(2, Math.round(area / 22)));
   const kinds: PropId[] = ['roofAircon', 'roofAirconLong', 'roofVent', 'roofAircon', 'roofVent', 'roofDish'];
   for (let k = 0, tries = 0; k < count && tries < 24; tries++) {
@@ -1418,25 +1589,33 @@ export class BuildingsView {
   private buildStatic(s: GameState): void {
     const floors = new Surfaces();
     const roofs = new Surfaces();
+    // Real storeys (GameState.levels): their floors and the stairs, which fade with the floors above the one in view;
+    // the decks of roofs one can walk on, weathered like any roof.
+    const storeys = new Surfaces();
+    const decks = new Surfaces();
     for (const b of this.plan.buildings) {
       if (b.kind === 'ruin') continue;
       const looks = looksOf(b);
       // The floor runs to the walls' middle lines (the outer half of a wall tile is the street's).
       const [x0, x1, z0, z1, y] = [b.x0 + 0.5, b.x1 + 0.5, b.y0 + 0.5, b.y1 + 0.5, b.base + 0.004];
       floors.poly([V(x0, y, z0), V(x0, y, z1), V(x1, y, z1), V(x1, y, z0)], [[x0, z0], [x0, z1], [x1, z1], [x1, z0]], looks.floorSwatch, looks.floor, -1);
-      if (b.kind === 'house') b.top = gableRoof(roofs, b, PITCH, looks.shingles, looks.outer);
+      if (b.leveled) this.storeyFloors(b, storeys, looks);
+      roofs.level = b.storeys;
+      if (b.walkableRoof) b.top = this.roofDeck(b, decks, looks);
+      else if (b.kind === 'house') b.top = gableRoof(roofs, b, PITCH, looks.shingles, looks.outer);
       else if (b.kind === 'barn') b.top = gableRoof(roofs, b, HALL_PITCH * 1.8, looks.shingles, looks.outer);
       else b.top = flatRoof(roofs, b, looks.tar, looks.trim);
     }
+    this.stairs(s, storeys);
     const solid = new Surfaces();
-    const decks = new Surfaces();
-    this.raisedSurfaces(s, decks, solid);
-    const make = (surfaces: Surfaces, roof: boolean, shadows = roof, weathered = roof, occludes = false) => {
+    const raised = new Surfaces();
+    this.raisedSurfaces(s, raised, solid);
+    const make = (surfaces: Surfaces, roof: boolean, shadows = roof, weathered = roof, occludes = false, fades = roof) => {
       if (surfaces.empty) return;
       const material = new THREE.MeshStandardMaterial({ map: mapAtlasTexture(), vertexColors: true, roughness: roof ? 0.8 : 0.9 });
       swatchPatch(material);
       if (weathered) weatherPatch(material);
-      if (roof) roofFadePatch(material, this.cutaway);
+      if (fades) roofFadePatch(material, this.cutaway);
       // Floors and decks sit in the occlusion of what stands round them.
       else contactPatch(material, this.ao);
       this.own(material);
@@ -1451,8 +1630,106 @@ export class BuildingsView {
     };
     make(floors, false);
     make(roofs, true);
-    make(decks, false, false, true, true);
+    make(raised, false, false, true, true);
     make(solid, false, true, false, true);
+    make(storeys, false, true, false, false, true);
+    make(decks, true);
+  }
+
+  /**
+   * The floors of a building's storeys below its top, over every tile that
+   * has a slab (not over a stairwell), to the walls' middle lines like the
+   * ground floor's.
+   */
+  private storeyFloors(b: Building, out: Surfaces, looks: ReturnType<typeof looksOf>): void {
+    const [x0, x1, z0, z1] = [b.x0 + 0.5, b.x1 + 0.5, b.y0 + 0.5, b.y1 + 0.5];
+    for (let k = 1; k < b.storeys; k++) {
+      out.level = k;
+      const y = b.base + k * STOREY + 0.004;
+      for (let ty = b.y0; ty <= b.y1; ty++) {
+        for (let tx = b.x0; tx <= b.x1; tx++) {
+          const kind = this.plan.kindAt(tx, ty, k);
+          if (kind === null || kind === 'roof') continue;
+          const [ax, bx, az, bz] = [Math.max(tx, x0), Math.min(tx + 1, x1), Math.max(ty, z0), Math.min(ty + 1, z1)];
+          if (bx <= ax || bz <= az) continue;
+          out.poly([V(ax, y, az), V(ax, y, bz), V(bx, y, bz), V(bx, y, az)], [[ax, az], [ax, bz], [bx, bz], [bx, az]], looks.floorSwatch, looks.floor, b.index);
+        }
+      }
+    }
+  }
+
+  /**
+   * A roof one can walk on (its top storey has floor): a deck of tar out to
+   * the walls' outer faces, open where stairs come up through it, with a
+   * parapet along the edge wherever the rules put low cover there. Returns
+   * the height of its top.
+   */
+  private roofDeck(b: Building, out: Surfaces, looks: ReturnType<typeof looksOf>): number {
+    const k = b.storeys;
+    out.level = k;
+    const y = b.base + k * STOREY + 0.04;
+    const [x0, x1, z0, z1] = [b.x0 + 0.5 - WALL_HALF - 0.02, b.x1 + 0.5 + WALL_HALF + 0.02, b.y0 + 0.5 - WALL_HALF - 0.02, b.y1 + 0.5 + WALL_HALF + 0.02];
+    const lip = looks.trim.clone().multiplyScalar(0.9);
+    for (let ty = b.y0; ty <= b.y1; ty++) {
+      for (let tx = b.x0; tx <= b.x1; tx++) {
+        const kind = this.plan.kindAt(tx, ty, k);
+        if (kind === null) continue;
+        const [ax, bx, az, bz] = [Math.max(tx, x0), Math.min(tx + 1, x1), Math.max(ty, z0), Math.min(ty + 1, z1)];
+        out.poly([V(ax, y, az), V(ax, y, bz), V(bx, y, bz), V(bx, y, az)], [[ax, az], [ax, bz], [bx, bz], [bx, az]], SWATCH.flat, looks.tar, b.index);
+        // The parapet: on the deck's edge, along each side of this tile that is the roof's edge.
+        if (kind !== 'low') continue;
+        const t = PARAPET_THICK;
+        const top = y + PARAPET;
+        if (ty === b.y0) out.box(V(ax, y - 0.12, z0), V(bx, top, z0 + t), SWATCH.flat, lip, b.index);
+        if (ty === b.y1) out.box(V(ax, y - 0.12, z1 - t), V(bx, top, z1), SWATCH.flat, lip, b.index);
+        if (tx === b.x0) out.box(V(x0, y - 0.12, az), V(x0 + t, top, bz), SWATCH.flat, lip, b.index);
+        if (tx === b.x1) out.box(V(x1 - t, y - 0.12, az), V(x1, top, bz), SWATCH.flat, lip, b.index);
+      }
+    }
+    // The deck's edge, seen from the street: a band over the walls' tops.
+    out.box(V(x0, y - 0.14, z0), V(x1, y + 0.02, z0 + 0.04), SWATCH.flat, lip, b.index);
+    out.box(V(x0, y - 0.14, z1 - 0.04), V(x1, y + 0.02, z1), SWATCH.flat, lip, b.index);
+    out.box(V(x0, y - 0.14, z0), V(x0 + 0.04, y + 0.02, z1), SWATCH.flat, lip, b.index);
+    out.box(V(x1 - 0.04, y - 0.14, z0), V(x1, y + 0.02, z1), SWATCH.flat, lip, b.index);
+    return y + PARAPET;
+  }
+
+  /**
+   * A building's stairs (a ladder tile whose decor is 'stairs', facing the
+   * way it climbs): a flight of solid steps across the tile, from its back
+   * edge up to the landing a storey higher on the tile it faces. No walls
+   * round it: the rules let one step off the top on any open side.
+   */
+  private stairs(s: GameState, out: Surfaces): void {
+    const { width: w, height: h } = s;
+    const STEPS = 9;
+    const half = 0.4;
+    for (let k = 0; k <= (s.levels?.length ?? 0); k++) {
+      const tiles = k ? s.levels![k - 1]!.tiles : s.tiles;
+      const decor = k ? s.levels![k - 1]!.decor : s.decor;
+      if (!decor) continue;
+      for (let i = 0; i < w * h; i++) {
+        const look = tiles[i] === 'ladder' ? decorOf(decor[i]) : null;
+        if (look?.kind !== 'stairs') continue;
+        const x = i % w;
+        const y = (i - x) / w;
+        const b = this.plan.owner[i]!;
+        const bd = b >= 0 ? this.plan.buildings[b] : undefined;
+        const base = (bd?.base ?? 0) + k * STOREY;
+        const d = DIRS4[look.facing]!;
+        const wood = bd ? STAIR_WOOD : STEEL;
+        out.level = k;
+        for (let n = 0; n < STEPS; n++) {
+          // Along the climb, from the tile's back edge (-0.5) to its front (+0.5).
+          const u0 = -0.5 + n / STEPS;
+          const u1 = -0.5 + (n + 1) / STEPS;
+          const top = base + ((n + 1) / STEPS) * STOREY;
+          const [ax, bx] = d.x !== 0 ? [x + 0.5 + Math.min(u0 * d.x, u1 * d.x), x + 0.5 + Math.max(u0 * d.x, u1 * d.x)] : [x + 0.5 - half, x + 0.5 + half];
+          const [az, bz] = d.y !== 0 ? [y + 0.5 + Math.min(u0 * d.y, u1 * d.y), y + 0.5 + Math.max(u0 * d.y, u1 * d.y)] : [y + 0.5 - half, y + 0.5 + half];
+          out.box(V(ax, base, az), V(bx, top, bz), SWATCH.flat, n % 2 ? wood : wood.clone().multiplyScalar(0.92), b);
+        }
+      }
+    }
   }
 
   /**
@@ -1508,9 +1785,12 @@ export class BuildingsView {
     const plan = this.plan;
     const batches = new Map<string, Batch>();
     let ready = true;
-    const glass = new Map<KitId, { matrices: THREE.Matrix4[]; cut: number[] }>();
+    const glass = new Map<KitId, { matrices: THREE.Matrix4[]; cut: number[]; level: number[] }>();
     const palettes = new Map<number, ReturnType<typeof looksOf>>();
-    const at = (x: number, y: number): TileKind | undefined => (x < 0 || y < 0 || x >= w || y >= h ? undefined : s.tiles[y * w + x]);
+    /** The storey whose walls are being laid (0 the ground), and its tiles. */
+    let level = 0;
+    let layer: readonly (TileKind | null)[] = s.tiles;
+    const at = (x: number, y: number): TileKind | undefined => (x < 0 || y < 0 || x >= w || y >= h ? undefined : (layer[y * w + x] ?? undefined));
     const wallish = (x: number, y: number) => isWallLike(at(x, y));
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -1567,11 +1847,12 @@ export class BuildingsView {
             .multiply(local);
         }
         batch.matrices.push(m.clone().multiply(local));
-        // An upper storey goes with the roof in the cutaway; the ground floor's walls drop as walls.
+        // A façade's upper storey goes with the roof in the cutaway; the walls of the storey in view drop as walls.
         if (o.roof) batch.cut.push(b + 1, ON_ROOF, ON_ROOF, base);
         else batch.cut.push(b + 1, between ? 0 : out.x, between ? 0 : out.y, base);
         batch.outer.push(outer.r, outer.g, outer.b);
         batch.inner.push(inner.r, inner.g, inner.b);
+        (batch.level ??= []).push(storeyOf(building, base));
       }
     };
     /** A list of pieces: the first one in the building's colours. */
@@ -1582,7 +1863,8 @@ export class BuildingsView {
     /** A window pane at (x, z), `base` its storey's floor (upper storeys' go with the roof). */
     const pane = (kitId: KitId, x: number, z: number, base: number, out: Vec2, between: boolean, b: number, roof: boolean) => {
       let p = glass.get(kitId);
-      if (!p) glass.set(kitId, (p = { matrices: [], cut: [] }));
+      if (!p) glass.set(kitId, (p = { matrices: [], cut: [], level: [] }));
+      p.level.push(storeyOf(plan.buildings[b], base));
       q.setFromAxisAngle(up, Math.atan2(out.x, out.y));
       p.matrices.push(new THREE.Matrix4().compose(new THREE.Vector3(x, base, z), q.clone(), new THREE.Vector3(1, 1, 1)));
       if (roof) p.cut.push(b + 1, ON_ROOF, ON_ROOF, base);
@@ -1597,7 +1879,8 @@ export class BuildingsView {
      */
     const storeys = (ground: TileKind, x: number, z: number, t: number, out: Vec2, between: boolean, b: number, other: number, along = 1) => {
       const bd = plan.buildings[b];
-      if (!bd) return;
+      // Real storeys are laid from their own tiles.
+      if (!bd || bd.leveled || (other >= 0 && plan.buildings[other]!.leveled)) return;
       const kit = KITS[bd.kit];
       let from = 1;
       let to = between ? 1 : bd.storeys;
@@ -1656,17 +1939,21 @@ export class BuildingsView {
       });
     };
 
+    // The ground's walls, then each storey's (GameState.levels).
+    for (level = 0; level <= (s.levels?.length ?? 0); level++) {
+    layer = level ? s.levels![level - 1]!.tiles : s.tiles;
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
         if (area && !area[i]) continue;
-        const kind = s.tiles[i]!;
+        const kind = layer[i];
+        if (kind === null || kind === undefined || kind === 'roof') continue;
         const b = plan.owner[i]!;
         const loose = b < 0;
-        if (loose && (!isWallLike(kind) || plan.massive[i])) continue;
-        if (plan.massive[i]) continue;
+        if (loose && (level > 0 || !isWallLike(kind) || plan.massive[i])) continue;
+        if (!level && plan.massive[i]) continue;
         const building = loose ? undefined : plan.buildings[b]!;
-        const base = building ? building.base : (s.elev[i] ?? 0) * STOREY;
+        const base = building ? building.base + level * STOREY : (s.elev[i] ?? 0) * STOREY;
         const outerKit = KITS[building ? building.kit : plan.looseKit];
         const cx = x + 0.5;
         const cz = y + 0.5;
@@ -1730,7 +2017,7 @@ export class BuildingsView {
           if (kind === 'door' || kind === 'doorOpen') {
             putAll(kit.door, cx, cz, base, out, between, b, kit, kind === 'doorOpen');
             // A shop's name over its front door: the first door of its outline (whatever part of the map is being redone).
-            if (!between && building && signDoor.get(b) === i && (building.kind === 'shop' || (building.kind === 'office' && building.look < 0.35))) sign(building, cx, cz, base, out);
+            if (!level && !between && building && signDoor.get(b) === i && (building.kind === 'shop' || (building.kind === 'office' && building.look < 0.35))) sign(building, cx, cz, base, out);
             if (kit.leaf) {
               put(kit.leaf, cx, cz, base, out, between, b, { thick: kit.thick, open: kind === 'doorOpen' });
               // Jambs either side of the leaf.
@@ -1741,7 +2028,8 @@ export class BuildingsView {
             if (kind === 'window') {
               const kitId = between ? 'house' : building ? building.kit : plan.looseKit;
               let pane = glass.get(kitId);
-              if (!pane) glass.set(kitId, (pane = { matrices: [], cut: [] }));
+              if (!pane) glass.set(kitId, (pane = { matrices: [], cut: [], level: [] }));
+              pane.level.push(level);
               q.setFromAxisAngle(up, Math.atan2(out.x, out.y));
               pane.matrices.push(new THREE.Matrix4().compose(new THREE.Vector3(cx, base, cz), q.clone(), new THREE.Vector3(1, 1, 1)));
               pane.cut.push(b + 1, between ? 0 : out.x, between ? 0 : out.y, base);
@@ -1756,7 +2044,7 @@ export class BuildingsView {
             if (conn[k]) continue;
             const d = DIRS4[k]!;
             post(kit, cx + d.x * 0.5, cz + d.y * 0.5, base, out, between, b);
-            if (building && !between) for (let n = 1; n < building.storeys; n++) post(kit, cx + d.x * 0.5, cz + d.y * 0.5, base + n * STOREY, out, false, b, true);
+            if (building && !building.leveled && !between) for (let n = 1; n < building.storeys; n++) post(kit, cx + d.x * 0.5, cz + d.y * 0.5, base + n * STOREY, out, false, b, true);
           }
           continue;
         }
@@ -1778,10 +2066,14 @@ export class BuildingsView {
         if (arms === 2) {
           const { out, between } = facing(0, conn[1] ? 1 : -1, 0);
           post(between ? BETWEEN : outerKit, cx, cz, base, out, between, b);
-          if (building && !between) for (let n = 1; n < building.storeys; n++) post(outerKit, cx, cz, base + n * STOREY, out, false, b, true);
+          if (building && !building.leveled && !between) for (let n = 1; n < building.storeys; n++) post(outerKit, cx, cz, base + n * STOREY, out, false, b, true);
         }
       }
     }
+
+    }
+    level = 0;
+    layer = s.tiles;
 
     this.layRaised(s, batches, () => (ready = false), area);
 
@@ -1814,7 +2106,7 @@ export class BuildingsView {
 
     // On the roofs: they fade with them.
     for (const b of plan.buildings) {
-      for (const r of roofProps(b)) {
+      for (const r of roofProps(b, (x, y) => plan.kindAt(x, y, b.storeys) === 'floor')) {
         const parts = syntyProp(r.id);
         if (!parts) {
           ready = false;
@@ -1829,6 +2121,7 @@ export class BuildingsView {
           batch.cut.push(b.index + 1, ON_ROOF, ON_ROOF, b.base);
           batch.outer.push(1, 1, 1);
           batch.inner.push(1, 1, 1);
+          (batch.level ??= []).push(b.storeys);
         });
       }
     }
@@ -1851,6 +2144,7 @@ export class BuildingsView {
           true,
           {
             aCut: batch.cut.slice(k * 4, k * 4 + 4),
+            aLevel: [batch.level?.[k] ?? 0],
             aOuter: batch.outer.slice(k * 3, k * 3 + 3),
             aInner: batch.inner.slice(k * 3, k * 3 + 3),
             aAtlas,
@@ -1865,7 +2159,7 @@ export class BuildingsView {
       pane.matrices.forEach((mm, k) => {
         const e = mm.elements;
         const glow = hash(Math.round(e[12]! * 2), Math.round(e[14]! * 2), 90) < 0.35 ? 1 : 0;
-        merged.add(geometry, this.glassMaterial, mm, false, { aCut: pane.cut.slice(k * 4, k * 4 + 4), aOuter: WHITE3, aInner: WHITE3, aGlow: [glow], aAtlas: [-1] });
+        merged.add(geometry, this.glassMaterial, mm, false, { aCut: pane.cut.slice(k * 4, k * 4 + 4), aLevel: [pane.level[k] ?? 0], aOuter: WHITE3, aInner: WHITE3, aGlow: [glow], aAtlas: [-1] });
       });
     }
     const changed = merged.commit();
@@ -1930,9 +2224,18 @@ export class BuildingsView {
         const i = y * w + x;
         const e = elev(x, y);
         placing = !area || !!area[i];
-        // Ladders: against the side of the tile one storey up, whatever it is.
-        if (s.tiles[i] === 'ladder') {
-          for (const d of DIRS4) if (elev(x + d.x, y + d.y) === e + 1) place('ladder', x + 0.5 + d.x * 0.44, e * STOREY, y + 0.5 + d.y * 0.44, { x: -d.x, y: -d.y });
+        // Ladders: against the side of the tile one storey up, whatever it is (a building's roof one walks on, too);
+        // a building's stairs are drawn as stairs (buildStatic).
+        if (s.tiles[i] === 'ladder' && decorOf(s.decor?.[i])?.kind !== 'stairs') {
+          for (const d of DIRS4) {
+            const up = elev(x + d.x, y + d.y) === e + 1 || (e === 0 && isWalkable(plan.kindAt(x + d.x, y + d.y, 1)));
+            if (up) place('ladder', x + 0.5 + d.x * 0.44, e * STOREY, y + 0.5 + d.y * 0.44, { x: -d.x, y: -d.y });
+          }
+        }
+        // On a storey: a ladder up to the next one.
+        for (let k = 1; k <= (s.levels?.length ?? 0); k++) {
+          if (plan.kindAt(x, y, k) !== 'ladder' || decorOf(s.levels![k - 1]!.decor?.[i])?.kind === 'stairs') continue;
+          for (const d of DIRS4) if (isWalkable(plan.kindAt(x + d.x, y + d.y, k + 1))) place('ladder', x + 0.5 + d.x * 0.44, k * STOREY, y + 0.5 + d.y * 0.44, { x: -d.x, y: -d.y });
         }
         // A solid mass of wall: concrete on its sides.
         if (plan.massive[i]) {
@@ -2019,8 +2322,9 @@ export class BuildingsView {
     return [...this.staticOccluders, ...this.merged.occluderGeometries(), ...this.wallOccluders];
   }
 
-  update(dt: number, s: GameState, camera: THREE.Camera | null, focus: Focus | null, visible: readonly boolean[] | null): void {
-    this.cutaway.update(dt, s, camera, focus, visible);
+  /** Moves the cutaway on (`inside`: buildings whose inside is in sight lose their roof). */
+  update(dt: number, s: GameState, camera: THREE.Camera | null, focus: Focus | null, visible: readonly boolean[] | null, inside = true): void {
+    this.cutaway.update(dt, s, camera, focus, visible, inside);
   }
 
   dispose(): void {

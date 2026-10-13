@@ -110,6 +110,8 @@ import {
   shopPrice,
   plotName,
   soldierReady,
+  canSpendPoints,
+  PREMISE,
   floodedZoneNote,
   contactBlocker,
   offerDays,
@@ -176,7 +178,7 @@ import { gearOf } from '../game/models';
 import { storageKey } from '../net';
 import { append, clear, h } from '../ui/dom';
 import { arrowIcon } from '../ui/icons';
-import { graphicsSettings, soundSettings, themeSettings } from '../ui/settingsPanel';
+import { graphicsSettings, soundSettings } from '../ui/settingsPanel';
 import { BastionSet, LAUNCH_SECONDS, type FixedRoom, type LineupEntry } from './bastion';
 import { GeoscapeSet } from './geoscape';
 import { Stage, type Shot } from './stage';
@@ -196,7 +198,7 @@ interface Alert {
   tone: 'info' | 'good' | 'bad';
   kicker: string;
   title: string;
-  /** Typed paragraphs before `text` (an Expediente page). */
+  /** Typed paragraphs before `text` (a page of the Diario). */
   body?: string[];
   text: string;
   /** Handwritten in the margin. */
@@ -213,10 +215,12 @@ const MAX_NEWS = 20;
 
 const REPORT_KEY = storageKey('seenReport');
 /** The rule of time, wherever the day is shown. */
-const TIME_HELP = 'El tiempo solo pasa al ESCANEAR (hasta que ocurre algo) y al volar una misión (3–4 días). Comprar, reclutar, entrenar o proponer no gastan días; las obras, las curas y las escuchas avanzan mientras pasan.';
+const TIME_HELP = 'El tiempo solo pasa al esperar noticias (hasta que ocurre algo) y en las misiones (de 2 a 5 días, según lo lejos que esté la zona). Comprar, reclutar, entrenar o proponer no gastan días; las obras, las curas y las escuchas avanzan mientras pasan.';
 
 /** What each browser has already seen of every campaign's news (the tabs' numbers). */
 const NEWS_KEY = storageKey('seenNews');
+/** Campaigns whose premise card was shown in this browser (playtest 13/10: «¿quién soy?»). */
+const PREMISE_KEY = storageKey('seenPremise');
 
 const KIND_ICON: Record<MissionKind, string> = { elimination: '✕', recovery: '◆', sabotage: 'ϟ', hack: '⌘', rescue: '✚', scavenge: '⌂' };
 const DIFFICULTY = ['', 'Moderada', 'Difícil', 'Muy difícil', 'Extrema'];
@@ -224,8 +228,8 @@ const CLASSES: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'
 
 const NAV: { view: BaseView; label: string }[] = [
   { view: 'hub', label: 'Bastión' },
-  { view: 'geoscape', label: 'Geoesfera' },
-  { view: 'research', label: 'Expediente' },
+  { view: 'geoscape', label: 'El valle' },
+  { view: 'research', label: 'Diario' },
   { view: 'engineering', label: 'Armería' },
   { view: 'barracks', label: 'Cuartel' },
   { view: 'facilities', label: 'Instalaciones' },
@@ -243,12 +247,12 @@ const ROOM_OF: Partial<Record<BaseView, FixedRoom | 'hangar'>> = {
 
 const VIEW_NAMES: Record<BaseView, string> = {
   hub: 'Bastión',
-  geoscape: 'Geoesfera',
-  research: 'Expediente',
+  geoscape: 'El valle',
+  research: 'Diario',
   engineering: 'Armería',
   barracks: 'Cuartel',
   facilities: 'Instalaciones',
-  squad: 'Hangar',
+  squad: 'Cochera',
   debrief: 'Informe',
 };
 
@@ -435,6 +439,7 @@ export class StrategyScreen {
     this.bastion.setBase(c);
     this.geo.flyTo(this.offerById(c.activeMission)?.region ?? HOME_REGION);
     if (prev) this.collectAlerts(prev, c);
+    this.showPremise(c);
     // A mission chosen by either player sends both to the hangar; a finished one to the debrief.
     if (!prev?.activeMission && c.activeMission) void this.go('squad');
     else if (prev?.activeMission && !c.activeMission && this.view === 'squad') void this.go('geoscape');
@@ -816,22 +821,51 @@ export class StrategyScreen {
 
   // ------------------------------------------------------------- alerts
 
+  /**
+   * Who the players are, once per campaign and browser, before the first
+   * mission (the campaign opens with it already chosen: openingMission).
+   */
+  private showPremise(c: CampaignState): void {
+    if ((c.missionsFlown ?? 0) > 0 || c.day > 1) return;
+    let seen: string[] = [];
+    try {
+      seen = JSON.parse(localStorage.getItem(PREMISE_KEY) ?? '[]') as string[];
+    } catch {
+      /* private mode: shown again next time */
+    }
+    const uid = c.uid ?? '';
+    if (seen.includes(uid)) return;
+    try {
+      localStorage.setItem(PREMISE_KEY, JSON.stringify([...seen, uid].slice(-20)));
+    } catch {
+      /* private mode */
+    }
+    this.alerts.unshift({
+      tone: 'info',
+      kicker: 'KESSRA',
+      title: PREMISE.title,
+      body: PREMISE.lines,
+      text: '',
+      action: c.activeMission ? { label: 'A la cochera', go: () => void this.go('squad') } : undefined,
+    });
+  }
+
   /** XCOM-style pop-ups for what happened while time passed. */
   private collectAlerts(prev: CampaignState, c: CampaignState): void {
     const fresh: Alert[] = [];
-    // Each level adds a page to the Expediente. After a mission it waits until the debrief is closed.
+    // Each level adds a page to the Diario. After a mission it waits until the debrief is closed.
     for (let level = bastionLevel(prev) + 1; level <= bastionLevel(c); level++) {
       const page = EXPEDIENTE[level - 1]!;
       fresh.push({
         tone: 'good',
-        kicker: `EXPEDIENTE · HOJA ${level}`,
+        kicker: `DIARIO · HOJA ${level}`,
         rank: 90,
         title: page.title,
-        // One line of the page here; the whole page waits in the Expediente (playtest: «mucho texto»).
+        // One line of the page here; the whole page waits in the Diario (playtest: «mucho texto»).
         body: [page.summary],
         text: `Bastión nivel ${level}. ${this.unlocksText(level)}`,
         note: page.note,
-        action: { label: 'Ver el expediente', go: () => void this.go('research') },
+        action: { label: 'Abrir el diario', go: () => void this.go('research') },
       });
     }
     // Story chapters and the final mission are announced whenever they open: after a level, a mission or an event.
@@ -905,8 +939,8 @@ export class StrategyScreen {
         tone: 'good',
         kicker: 'FIN DE MES',
         rank: 10,
-        title: 'Llega el convoy de Altomonte',
-        text: `Ruth Halvorsen manda desde Altomonte ${c.credits - prev.credits} suministros. Cada zona contactada aumenta el envío.`,
+        title: 'Llega el convoy de Aldren',
+        text: `Ruth Halvorsen manda desde Aldren ${c.credits - prev.credits} suministros. Cada zona contactada aumenta el envío.`,
       });
     }
     if (c.doom > prev.doom) {
@@ -1056,10 +1090,10 @@ export class StrategyScreen {
         h(
           `span.strat-credits.food${c.hungry ? '.x-bad' : ''}`,
           { title: c.hungry ? 'Raciones: no quedan. El Bastión pasa hambre: −10 de voluntad en las misiones y las heridas curan más despacio.' : `Raciones: el Bastión come ${dailyRations(c)} al día` },
-          h('i', {}, '◍'),
+          h('i', { 'aria-hidden': 'true' }),
           h('b', {}, String(c.food ?? 0)),
         ),
-        h('span.strat-credits.parts', { title: 'Piezas: el Taller hace con ellas armas y armaduras mejores' }, h('i', {}, '⚙'), h('b', {}, String(c.parts ?? 0))),
+        h('span.strat-credits.parts', { title: 'Piezas: el Taller hace con ellas armas y armaduras mejores' }, h('i', { 'aria-hidden': 'true' }), h('b', {}, String(c.parts ?? 0))),
         this.levelBadge(c),
       ),
       h(
@@ -1087,7 +1121,7 @@ export class StrategyScreen {
       this.news.length
         ? h('button.x-btn.strat-news', { onclick: () => ((this.newsOpen = !this.newsOpen), this.render()), title: 'Lo que ha pasado y no salió en una ventana' }, 'Novedades ', this.chip(String(this.news.length), 'warn'))
         : null,
-      h('button.x-btn', { onclick: () => ((this.settingsOpen = true), this.render()), title: 'Gráficos, sonido y estilo, sin salir de la campaña' }, 'Ajustes'),
+      h('button.x-btn', { onclick: () => ((this.settingsOpen = true), this.render()), title: 'Gráficos y sonido, sin salir de la campaña' }, 'Ajustes'),
       h('button.x-btn', { onclick: () => ((this.leaving = true), this.render()), title: 'Volver al menú principal (la campaña queda guardada)' }, 'Menú'),
     );
   }
@@ -1231,7 +1265,7 @@ export class StrategyScreen {
       this.nav.append(
         h(
           `button${this.view === item.view ? '.on' : ''}${item.view === 'squad' ? '.urgent' : ''}`,
-          { onclick: () => void this.go(item.view), title: todo ? todo.what.join(' · ') : '' },
+          { 'data-view': item.view, onclick: () => void this.go(item.view), title: todo ? todo.what.join(' · ') : '' },
           item.label,
           todo ? h(`span.nav-count${todo.urgent ? '.urgent' : ''}`, {}, todo.n) : null,
           here ? h('span.partner-dot', { style: { '--accent': partner!.color }, title: `${partner!.name} está aquí` }, partner!.name.slice(0, 1).toUpperCase()) : null,
@@ -1256,7 +1290,7 @@ export class StrategyScreen {
           .filter((p) => p.building && !(p.building in FIXED_NAMES_SET))
           .map((p) => ({ key: `built:${p.id}:${p.building}:${p.level ?? 1}`, label: `Obra terminada: ${buildingName(p.building!)}${(p.level ?? 1) > 1 ? ` · nivel ${p.level}` : ''}`, urgent: false })),
       ],
-      ['research', [{ key: `level:${bastionLevel(c)}`, label: `Nueva hoja del Expediente: nivel ${bastionLevel(c)}`, urgent: false }]],
+      ['research', [{ key: `level:${bastionLevel(c)}`, label: `Nueva hoja del Diario: nivel ${bastionLevel(c)}`, urgent: false }]],
     ]);
   }
 
@@ -1374,7 +1408,7 @@ export class StrategyScreen {
     const rumor = c.rumors.find((r) => r.id === c.listening);
     if (rumor) dates.push({ day: c.day + rumor.daysLeft, icon: 'will', text: `Se sabrá qué pasa en ${REGIONS[rumor.region].name}` });
     for (const o of c.offers.filter((x) => x.expiresDay !== null)) dates.push({ day: o.expiresDay!, icon: 'flag', text: `Caduca «${o.name}»`, go: () => this.focusOffer(o.id) });
-    dates.push({ day: c.nextSupplyDay, icon: 'clock', text: 'Convoy de Altomonte' });
+    dates.push({ day: c.nextSupplyDay, icon: 'clock', text: 'Convoy de Aldren' });
     dates.push({ day: c.nextDoomDay, icon: 'clock', text: `Avanza ${doomSubject(bastionLevel(c))}` });
     dates.sort((a, b) => a.day - b.day);
     const when = (day: number) => (day <= c.day ? 'hoy' : day === c.day + 1 ? 'mañana' : `en ${day - c.day} d`);
@@ -1393,7 +1427,7 @@ export class StrategyScreen {
           ),
         ),
       ),
-      h('p.calendar-note', {}, 'Los días solo pasan al ESCANEAR y en las misiones. Obras, curas y escuchas avanzan con ellos.'),
+      h('p.calendar-note', {}, 'Los días solo pasan al esperar noticias y en las misiones. Obras, curas y escuchas avanzan con ellos.'),
     ];
   }
 
@@ -1416,7 +1450,8 @@ export class StrategyScreen {
         h(
           `button.x-row.mission${this.offer === o.id ? '.selected' : ''}`,
           { onclick: () => this.focusOffer(o.id) },
-          h('span.mission-icon', { style: { '--icon': o.final ? '#ff5a8a' : o.facility ? '#ff4a5a' : o.story ? '#4a7dff' : o.quest ? '#2f9e6a' : '#ffb030' } }, h('span', {}, KIND_ICON[o.kind])),
+          // data-kind: the theme draws the kind's icon from the packs over the glyph (ui/themes/mixta-base.css).
+          h('span.mission-icon', { 'data-kind': o.kind, style: { '--icon': o.final ? '#ff5a8a' : o.facility ? '#ff4a5a' : o.story ? '#4a7dff' : o.quest ? '#2f9e6a' : '#ffb030' } }, h('span', {}, KIND_ICON[o.kind])),
           h(
             'div',
             { title: `${o.facility ? 'Nido' : o.story ? `Historia · ${MISSION_NAMES[o.kind]}` : o.quest ? `Encargo · ${MISSION_NAMES[o.kind]}` : MISSION_NAMES[o.kind]} · ${REGIONS[o.region].name}` },
@@ -1431,7 +1466,7 @@ export class StrategyScreen {
         ),
       );
     }
-    if (!offers.length) list.append(h('p.x-muted', {}, 'Ninguna a la vista: escanead.'));
+    if (!offers.length) list.append(h('p.x-muted', {}, 'Ninguna a la vista: esperad noticias.'));
     const threats = c.regions.filter((r) => r.facility);
     const network = c.regions.filter((r) => r.contacted).length;
     // Sections only appear when they have something in them.
@@ -1489,7 +1524,7 @@ export class StrategyScreen {
     const partner = this.partner();
     const waiting = partner?.connected && c.players.length > 1 && !c.advanceReady[partner.slot];
     const partnerReady = partner?.connected && !ready && c.advanceReady[partner.slot];
-    const blocked = c.activeMission ? 'Hay una misión elegida: id al hangar' : c.event ? 'Antes decidid qué hacer con el acontecimiento' : '';
+    const blocked = c.activeMission ? 'Hay una misión elegida: id a la cochera' : c.event ? 'Antes decidid qué hacer con el acontecimiento' : '';
     // The main action here is choosing an operation; scanning lets them expire. With a
     // briefing open, deploying is the only action on screen.
     if (offer && !ready) return;
@@ -1509,7 +1544,7 @@ export class StrategyScreen {
               this.send({ type: 'advance', ready: !ready });
             },
           },
-          ready ? 'ESCANEANDO…' : 'ESCANEAR',
+          ready ? 'A LA ESCUCHA…' : 'ESPERAR NOTICIAS',
           h(
             'small',
             {},
@@ -1517,7 +1552,7 @@ export class StrategyScreen {
               (ready && waiting
                 ? `Esperando a ${partner!.name}`
                 : partnerReady
-                  ? `${partner!.name} quiere escanear`
+                  ? `${partner!.name} quiere esperar noticias`
                   : expiring
                     ? `«${expiring.name}» caduca ${expiring.expiresDay! - c.day <= 0 ? 'hoy' : 'mañana'}`
                     : 'Hace pasar los días hasta que ocurra algo'),
@@ -1574,7 +1609,7 @@ export class StrategyScreen {
                 ? h('small.x-good', {}, `Escuchando · faltan ${r.daysLeft} días`)
                 : h(
                     'button.x-btn.small',
-                    { disabled: !!blocked, title: blocked || `Hacen falta ${r.daysLeft} días de escaneo`, onclick: () => this.send({ type: 'investigate', id: r.id }) },
+                    { disabled: !!blocked, title: blocked || `Hacen falta ${r.daysLeft} días a la escucha`, onclick: () => this.send({ type: 'investigate', id: r.id }) },
                     `${this.decide('escuchar')} · ${r.daysLeft} días`,
                   ),
             ),
@@ -1628,13 +1663,13 @@ export class StrategyScreen {
         h('dd', {}, h('span.stars', {}, '★'.repeat(o.difficulty)), ` ${DIFFICULTY[o.difficulty]}`),
         // La Mula's trip (docs/FASE5.md): the farther the zone, the more days pass.
         h('dt', {}, 'Viaje'),
-        h('dd', { title: 'Ida, misión y vuelta: los días pasan (obras, heridas, fiebres, raciones y la actividad zombi)' }, `${offerDays(c, o)} días`),
+        h('dd', { title: 'Ida, misión y vuelta: los días pasan (obras, heridas, fiebres, raciones y la infestación)' }, `${offerDays(c, o)} días`),
         h('dt', {}, 'Caduca'),
         h('dd', {}, o.expiresDay === null ? 'No caduca' : `${Math.max(0, o.expiresDay - c.day)} días`),
         h('dt', {}, 'Recompensa'),
         h('dd', {}, rewards.filter(Boolean).join(' · ') || 'La victoria'),
       ),
-      chosen ? h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir al hangar') : this.deployButton(c, o),
+      chosen ? h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la cochera') : this.deployButton(c, o),
     ];
   }
 
@@ -1744,7 +1779,7 @@ export class StrategyScreen {
       this.panel(
         'progress-right',
         'right',
-        h('div.alert-kicker', { className: `alert-kicker${reached ? ' good' : ''}` }, reached ? `ALCANZADO · EXPEDIENTE, HOJA ${n}` : `FALTAN ${LEVEL_XP[n - 1]! - c.xp} XP`),
+        h('div.alert-kicker', { className: `alert-kicker${reached ? ' good' : ''}` }, reached ? `ALCANZADO · DIARIO, HOJA ${n}` : `FALTAN ${LEVEL_XP[n - 1]! - c.xp} XP`),
         h('h2.x-title', {}, reached ? page.title : `Nivel ${n}`),
         ...(reached ? [...page.paragraphs.map((p) => h('p.x-text.page', {}, p)), h('p.x-note', {}, page.note)] : []),
         techs.length || items.length || facilities.length ? h('div.x-group', {}, reached ? 'Desbloqueado' : 'Desbloquea') : null,
@@ -1858,7 +1893,9 @@ export class StrategyScreen {
     if (!this.engPick) return;
     if (this.engTab === 'gear') {
       const panel = this.engPick.startsWith('f:') ? this.foundPanel(c, this.engPick.slice(2)) : this.tierPanel(c, this.engPick);
-      this.viewEl.append(this.panel('eng-right', 'right', ...panel));
+      // .item-art: the theme's picture of it, in the panel's corner (ui/themes/mixta-base.css).
+      const art = h('div.item-art', { 'data-item': this.engPick.startsWith('f:') ? 'found' : this.engPick.startsWith('a') ? 'armor' : 'weapon', 'aria-hidden': 'true' });
+      this.viewEl.append(this.panel('eng-right', 'right', art, ...panel));
       return;
     }
     const item = ITEMS[this.engPick as ItemId];
@@ -1869,6 +1906,7 @@ export class StrategyScreen {
       this.panel(
         'eng-right',
         'right',
+        h('div.item-art', { 'data-item': item.id, 'aria-hidden': 'true' }),
         h('div.alert-kicker', {}, item.slot === 'utility' ? 'ACCESORIO · UTILIDAD' : 'ACCESORIO · MUNICIÓN'),
         h('h2.x-title', {}, item.name),
         h('p.x-text', {}, item.description),
@@ -2372,9 +2410,9 @@ export class StrategyScreen {
   }
 
   /** Alive and with aptitude or talent points waiting. */
+  /** Points the soldier can still put somewhere (playtest 13/10: capped points kept «¡Ascenso!» up for good). */
   private hasPoints(s: CampaignSoldier): boolean {
-    const free = pointsToSpend(s);
-    return s.alive && free.attrs + free.talents > 0;
+    return s.alive && !!this.state && canSpendPoints(this.state, s);
   }
 
   /**
@@ -2811,8 +2849,10 @@ export class StrategyScreen {
           'div.x-panel.briefing-head',
           {},
           h('div.alert-kicker', {}, 'SELECCIÓN DE ESCUADRA'),
-          h('h1', { title: offerBriefing(c, offer) }, offer.name),
-          h('p.x-sub', { title: offerBriefing(c, offer) }, `${MISSION_NAMES[offer.kind]} · ${REGIONS[offer.region].name} · ${'★'.repeat(offer.difficulty)}`),
+          h('h1', {}, offer.name),
+          h('p.x-sub', {}, `${MISSION_NAMES[offer.kind]} · ${REGIONS[offer.region].name} · ${'★'.repeat(offer.difficulty)} · ${offerDays(c, offer)} días`),
+          // What the mission is for, in view before choosing the squad (playtest 13/10: it was only a tooltip).
+          h('p.x-text.briefing-goal', {}, offerBriefing(c, offer)),
         ),
       ),
     );
@@ -2896,7 +2936,8 @@ export class StrategyScreen {
       const card = s
         ? h(
             `div.lineup-card${together && c.launchReady[s.owner] ? '.ready' : ''}`,
-            { style: { '--accent': this.playerColor(s.owner) } },
+            // data-cls: the theme puts the class's portrait on the card (ui/themes/mixta-base.css).
+            { style: { '--accent': this.playerColor(s.owner) }, 'data-cls': soldierTemplate(s.cls) },
             h('b', {}, displayName(s.name, s.nickname)),
             h('small', {}, `${TEMPLATES[soldierTemplate(s.cls)].name} · ${RANKS[s.rank]!.name}`),
             c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
@@ -3029,7 +3070,7 @@ export class StrategyScreen {
       const status = (e.status === 'dead' ? 'CAÍDO EN COMBATE' : e.status === 'wounded' ? `HERIDO · ${e.woundedDays} días` : 'ILESO') + bitten;
       const card = h(
         `div.lineup-card.${e.status}`,
-        { style: { '--accent': this.playerColor(e.owner) } },
+        { style: { '--accent': this.playerColor(e.owner) }, 'data-cls': soldierTemplate(e.cls) },
         h('b', {}, displayName(e.name, c.soldiers.find((x) => x.id === e.id)?.nickname)),
         h(`small${e.status === 'dead' ? '.x-bad' : e.status === 'wounded' ? '.x-warn' : ''}`, {}, status),
         h('small', {}, `${e.kills} baja${e.kills === 1 ? '' : 's'}${e.status === 'dead' ? '' : ` · +${e.xpGained} XP`}`),
@@ -3124,7 +3165,6 @@ export class StrategyScreen {
         h('div.alert-kicker', {}, 'AJUSTES'),
         h('h2.x-title', {}, 'Ajustes'),
         h('p.x-muted', {}, this.partner()?.connected ? `Solo para ti: ${this.partner()!.name} sigue a lo suyo.` : 'Se guardan en este navegador.'),
-        themeSettings(redraw),
         soundSettings(redraw),
         graphicsSettings(redraw),
         h('div.alert-actions', {}, h('button.x-btn.primary', { onclick: () => ((this.settingsOpen = false), this.render()) }, 'Cerrar')),

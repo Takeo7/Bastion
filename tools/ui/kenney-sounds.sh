@@ -1,5 +1,5 @@
 #!/bin/bash
-# The interface sounds of the three Synty proposals (audio/ui.ts), taken from
+# The interface sounds («Mixta», audio/ui.ts), taken from
 # Kenney's «Interface Sounds» (CC0, assets-src/kenney/interface-sounds/Audio,
 # not in the repo): only the ones in use, trimmed of silence, peak-normalised,
 # mono WAV at 32 kHz (WAV decodes everywhere, Safari included, and has no
@@ -9,8 +9,6 @@ SRC=assets-src/kenney/interface-sounds/Audio
 OUT=packages/client/public/audio/ui
 mkdir -p "$OUT"
 NAMES=(
-  back_002 back_004 drop_001 drop_002 drop_004 switch_003 scratch_004 bong_001 error_006
-  click_002 click_003 click_005 select_001 select_003 glass_002 maximize_002 confirmation_003 error_008
   tick_004 click_001 select_002 switch_004 glass_006 maximize_007 confirmation_001 error_004
 )
 for n in "${NAMES[@]}"; do

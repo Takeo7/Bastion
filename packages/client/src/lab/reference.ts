@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { createMission, Rng, type Biome, type GameState } from '@bastion/engine';
+import { canStandOn, createMission, DIRS4, levelCount, Rng, teamVisibility, type Biome, type GameState, type Vec2 } from '@bastion/engine';
+import type { Focus } from '../game/buildings';
 import { setGraphics, type EffectsLevel } from '../settings';
 import { CameraRig } from '../game/camera';
 import { setTerrain } from '../game/coords';
@@ -19,7 +20,10 @@ import '../styles.css';
 // `__ref.bench(300)` draws 300 frames back to back, uncapped, and reports the
 // JS cost and the throughput (frames finished per second). Keys: 1/2/3 alto,
 // medio, bajo; N day/night; U units; C capture camera / play camera; P snapshot.
-// URL: ?biome=city&seed=7&night
+// URL: ?biome=city&seed=7&night&fog (fog: the squad's own sight instead of
+// everything; `__ref.peek()` then stands a soldier outside a window);
+// ?map=torre draws a hand-made map instead. `__ref.focus` is what the
+// cutaway follows (the selected soldier, the cursor, the active storey).
 
 const params = new URLSearchParams(location.search);
 const biome = (params.get('biome') ?? 'city') as Biome;
@@ -31,7 +35,10 @@ const renderer = new Renderer(container);
 const gl = renderer.gl;
 gl.info.autoReset = false;
 
-const state: GameState = createMission({ map: { kind: 'generated', biome, seed }, slots: [0], rng: new Rng(seed), kind: 'elimination', difficulty: 3 });
+const handmade = params.get('map');
+const state: GameState = handmade
+  ? createMission({ map: { kind: 'handmade', id: handmade }, slots: [0], rng: new Rng(seed), difficulty: 3 })
+  : createMission({ map: { kind: 'generated', biome, seed }, slots: [0], rng: new Rng(seed), kind: 'elimination', difficulty: 3 });
 setTerrain(state);
 const mapView = new MapView();
 const units = new UnitViews();
@@ -39,11 +46,51 @@ const rig = new CameraRig(renderer.camera);
 renderer.scene.add(mapView.group, units.group);
 renderer.fitMap(state.width, state.height);
 rig.setBounds(state.width, state.height);
-mapView.watch(renderer.camera, () => ({ selected: null, hover: null, target: null }));
+const focus: Focus = { selected: null, hover: null, target: null, level: null };
+mapView.watch(renderer.camera, () => focus);
 mapView.build(state);
 units.build(state);
-// Everything in sight: the block is seen as a whole, as in the captures.
-mapView.setVisibility(new Array<boolean>(state.width * state.height).fill(true));
+// Everything in sight: the block is seen as a whole, as in the captures (no roofs off for what is seen inside, then).
+// With ?fog, what the squad sees.
+const fog = params.has('fog');
+mapView.seeInside = fog;
+const everything = () => new Array<boolean>(state.width * state.height * levelCount(state)).fill(true);
+mapView.setVisibility(fog ? teamVisibility(state, 'xcom') : everything());
+
+/**
+ * Stands the first soldier out in the street two tiles from a ground-floor
+ * window facing the camera (the `n`th nearest the middle of the map that has room), looking
+ * in, and the camera on it; the squad's sight and the fog follow, over a map
+ * already explored (as midway through a mission). Returns the window.
+ */
+function peek(n = 0): Vec2 | null {
+  const w = state.width;
+  const free = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < state.height && canStandOn(state.tiles[y * w + x]!) && !state.elev[y * w + x] && state.ground?.[y * w + x] !== 2;
+  const windows = state.tiles
+    .map((t, i) => (t === 'window' && !state.elev[i] ? i : -1))
+    .filter((i) => i >= 0)
+    .sort((a, b) => Math.hypot((a % w) - w / 2, Math.floor(a / w) - w / 2) - Math.hypot((b % w) - w / 2, Math.floor(b / w) - w / 2));
+  let k = 0;
+  for (const i of windows) {
+    const x = i % w;
+    const y = (i - x) / w;
+    // A window on the side the camera looks at (the house isn't between them, so it keeps its roof for that).
+    for (const d of DIRS4.filter((q) => q.x > 0 || q.y > 0)) {
+      const out = { x: x + 2 * d.x, y: y + 2 * d.y };
+      if (!free(x + d.x, y + d.y) || !free(out.x, out.y) || state.ground?.[(y - d.y) * w + x - d.x] !== 2) continue;
+      if (k++ < n) continue;
+      const soldier = state.units.find((u) => u.team === 'xcom')!;
+      soldier.pos = { ...soldier.pos, x: out.x, y: out.y };
+      units.build(state);
+      mapView.seeInside = true;
+      mapView.setVisibility(everything());
+      mapView.setVisibility(teamVisibility(state, 'xcom'));
+      rig.focus(new THREE.Vector3(x + 0.5, 0, y + 0.5), true);
+      return { x, y };
+    }
+  }
+  return null;
+}
 
 /** Camera views: the capture's (wide, over the middle of the map) and the game's default. */
 const VIEWS = {
@@ -287,4 +334,4 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyP') void snap(`ref_${biome}_${night ? 'night' : 'day'}_${preset}`);
 });
 
-Object.assign(window, { __ref: { renderer, mapView, units, rig, state, bench, counts, snap, setPreset, setNight, setView, sceneCounts, show } });
+Object.assign(window, { __ref: { renderer, mapView, units, rig, state, bench, counts, snap, setPreset, setNight, setView, sceneCounts, show, peek, focus } });

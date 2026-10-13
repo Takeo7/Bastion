@@ -6,15 +6,17 @@ import { ABILITIES, ITEMS } from './content';
 import { CRAFTS } from './progression';
 import type { CampaignState } from './campaign';
 import type { GameEvent } from './events';
-import type { AbilityId, GameState, Slot, Vec2 } from './types';
+import type { AbilityId, GameState, Place, Slot } from './types';
 
 const vec2 = z.object({ x: z.number().int(), y: z.number().int() });
+/** A place (types.ts Pos): without `z`, on the ground (docs/FASE6-PLAN.md). */
+const spot = z.object({ x: z.number().int(), y: z.number().int(), z: z.number().int().min(0).max(3).optional() });
 const unitId = z.string().min(1).max(16);
 
 export const abilityIdSchema = z.enum(Object.keys(ABILITIES) as [AbilityId, ...AbilityId[]]);
 
 export const commandSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('move'), unit: unitId, to: vec2 }),
+  z.object({ type: z.literal('move'), unit: unitId, to: spot }),
   z.object({
     type: z.literal('ability'),
     unit: unitId,
@@ -22,7 +24,7 @@ export const commandSchema = z.discriminatedUnion('type', [
     /** Unit target (attacks, support abilities). */
     target: unitId.optional(),
     /** Tile target (explosives). */
-    tile: vec2.optional(),
+    tile: spot.optional(),
   }),
   z.object({ type: z.literal('endTurn'), ready: z.boolean() }),
   /** Hand the command (el mando) to the partner. */
@@ -32,8 +34,8 @@ export const commandSchema = z.discriminatedUnion('type', [
 export type Command = z.infer<typeof commandSchema>;
 
 export const missionKindSchema = z.enum(['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge']);
-/** Skirmish battlefield: the hand-made district or a procedural map of a biome. */
-export const skirmishMapSchema = z.enum(['plaza', 'city', 'wilds', 'facility']);
+/** Skirmish battlefield: a hand-made map (the district; «la torre», with storeys: docs/FASE6-PLAN.md) or a procedural map of a biome. */
+export const skirmishMapSchema = z.enum(['plaza', 'city', 'wilds', 'facility', 'torre']);
 export type SkirmishMap = z.infer<typeof skirmishMapSchema>;
 export const pingKindSchema = z.enum(['point', 'enemy']);
 export type PingKind = z.infer<typeof pingKindSchema>;
@@ -47,13 +49,11 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
   /** Ask for a full snapshot (the client detected a gap in the event stream). */
   z.object({ t: z.literal('sync') }),
   z.object({ t: z.literal('cmd'), cmd: commandSchema }),
-  z.object({ t: z.literal('presence'), unit: unitId.nullable(), tile: vec2.nullable() }),
+  z.object({ t: z.literal('presence'), unit: unitId.nullable(), tile: spot.nullable() }),
   /** Marks a tile for the partner ("go here", "this enemy"). */
-  z.object({ t: z.literal('ping'), tile: vec2, kind: pingKindSchema }),
+  z.object({ t: z.literal('ping'), tile: spot, kind: pingKindSchema }),
   /** A move planned without the command, shown to the partner; `tile: null` withdraws it. */
-  z.object({ t: z.literal('plan'), unit: unitId, tile: vec2.nullable() }),
-  /** The interface theme chosen in this browser: the room shares it, so both players see the same one. */
-  z.object({ t: z.literal('uiTheme'), theme: z.string().regex(/^[a-z][a-z0-9-]{0,23}$/) }),
+  z.object({ t: z.literal('plan'), unit: unitId, tile: spot.nullable() }),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
@@ -74,6 +74,7 @@ const appearanceSchema = z.object({
   visor: color,
   head: z.enum(keys(HEADS)),
   build: z.enum(keys(BUILDS)),
+  sex: z.enum(['f', 'm']).optional(),
   helmet: color.optional(),
   torso: color.optional(),
   arms: color.optional(),
@@ -145,14 +146,13 @@ export interface HostAddress {
 export type ServerMessage =
   /** `hosts`: this machine's network addresses, so the menu can tell the partner where to connect; `httpsPort`: where the game is also served over https. */
   | { t: 'welcome'; token: string; slot: Slot; hosts?: HostAddress[]; httpsPort?: number }
-  /** `uiTheme`: the interface theme the last player to choose one picked, for both (none until someone does). */
-  | { t: 'room'; players: PlayerInfo[]; phase: RoomPhase; savedCampaign: { day: number; doom: number; level: number } | null; uiTheme?: string }
+  | { t: 'room'; players: PlayerInfo[]; phase: RoomPhase; savedCampaign: { day: number; doom: number; level: number } | null }
   | { t: 'campaign'; state: CampaignState }
   | { t: 'baseView'; slot: Slot; view: BaseView }
   | { t: 'snapshot'; state: GameState }
   | { t: 'events'; events: GameEvent[]; seq: number; by: Slot | null }
-  | { t: 'presence'; slot: Slot; unit: string | null; tile: Vec2 | null }
-  | { t: 'ping'; slot: Slot; tile: Vec2; kind: PingKind }
-  | { t: 'plan'; slot: Slot; unit: string; tile: Vec2 | null }
+  | { t: 'presence'; slot: Slot; unit: string | null; tile: Place | null }
+  | { t: 'ping'; slot: Slot; tile: Place; kind: PingKind }
+  | { t: 'plan'; slot: Slot; unit: string; tile: Place | null }
   | { t: 'rejected'; message: string }
   | { t: 'error'; message: string };

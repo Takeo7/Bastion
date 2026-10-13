@@ -21,12 +21,12 @@ export interface Speaker {
 }
 
 export const SPEAKERS: Record<SpeakerId, Speaker> = {
-  morse: { name: 'Inés Albarrán, «Morse»', role: 'Radio' },
-  teo: { name: 'Teodoro Vidal, «el Relojero»', role: 'Taller' },
+  morse: { name: 'Nadia Albescu, «Morse»', role: 'Radio' },
+  teo: { name: 'Teodor Vidić, «Teo»', role: 'Taller' },
   nwosu: { name: 'Dra. Amara Nwosu', role: 'Enfermería' },
-  simon: { name: 'Simón Ferreira', role: 'Desertor de los Cuervos' },
-  voz: { name: 'Celia Arranz, «la Voz»', role: 'La Congregación' },
-  halvorsen: { name: 'Ruth Halvorsen', role: 'Refugio de Altomonte' },
+  simon: { name: 'Simão Ferreira', role: 'Desertor de los Cuervos' },
+  voz: { name: 'Celia Marsh, «la Voz»', role: 'La Congregación' },
+  halvorsen: { name: 'Ruth Halvorsen', role: 'Refugio de Aldren' },
   coro: { name: 'Voz sin nombre', role: 'Frecuencia de la Congregación' },
 };
 
@@ -35,7 +35,7 @@ export interface SceneLine {
   text: string;
   /** The rule behind it, in small print under the line (the radio's warnings). */
   rule?: string;
-  /** Said only when this holds (Simón speaks only if he was let in). */
+  /** Said only when this holds (Simão speaks only if he was let in). */
   if?: (c: CampaignState) => boolean;
 }
 
@@ -99,16 +99,14 @@ const bitten = (c: CampaignState) => c.soldiers.filter((s) => s.alive && s.infec
 export const SCENES: Scene[] = [
   {
     id: 'welcome',
-    title: 'Primera llave',
-    channel: 'Línea interna · Estación Atalaya',
-    when: () => true,
+    title: 'Atalaya',
+    channel: 'Línea interna',
+    when: (c) => c.story.done >= 1,
     lines: [
-      { who: 'morse', text: '{saludo}: bienvenidos a Atalaya. Soy Inés Albarrán. Aquí me llaman Morse, y no por mi carácter.' },
-      { who: 'teo', text: 'Teodoro Vidal. Taller, generadores y La Mula, el autobús de ahí fuera. Llamadme Teo, o el Relojero, como prefiráis.' },
-      { who: 'morse', text: 'Tres normas. Primera: el ruido mata. Los zombis van a lo que oyen, y un tiro se oye a dos pueblos de distancia.' },
-      { who: 'teo', text: 'Segunda: aquí no se tira nada. Ni una bala, ni una venda, ni una lata abollada.' },
-      { who: 'morse', text: 'Y tercera: lo importante lo decidís los dos. El año pasado, una líder sola vendió su refugio a los Cuervos por salvar el pellejo.' },
-      { who: 'morse', text: 'Primer trabajo: las medicinas del consultorio del pueblo, antes de que caduquen. Empezad por ahí.' },
+      { who: 'morse', text: 'Aquí Morse, en la radio. Si alguien habla en el valle, lo oigo yo primero.' },
+      { who: 'teo', text: 'Teo. Taller, generador y la Mula. Lo que se rompa, me lo traéis.' },
+      { who: 'morse', text: 'Las medicinas dan para un mes si nadie se pone enfermo. Alguien se pondrá.' },
+      { who: 'teo', text: 'Y la despensa tampoco se llena sola.' },
     ],
   },
   {
@@ -117,34 +115,30 @@ export const SCENES: Scene[] = [
     channel: 'Correo a pie · leída por Morse',
     when: (c) => c.day > 31,
     lines: [
-      { who: 'halvorsen', text: 'A la Estación Atalaya: el Refugio de Altomonte ha recibido vuestros partes. Con esta carta suben los suministros.' },
-      { who: 'halvorsen', text: 'Cada caja sale de la despensa de gente que también pasa hambre. Queremos resultados, no caprichos.' },
-      { who: 'morse', text: 'Firma Ruth Halvorsen, portavoz del Refugio. Escribe así hasta para felicitar la Navidad.' },
-      { who: 'teo', text: '¿Caprichos? Llevo dos inviernos soldando a la luz de una vela.' },
+      { who: 'halvorsen', text: 'A Atalaya, del Refugio de Aldren. Con esta carta suben los suministros del mes.' },
+      { who: 'halvorsen', text: 'Cada caja sale de una despensa que también pasa hambre. Esperamos resultados.' },
+      { who: 'morse', text: 'Firma Ruth Halvorsen. Aldren es el enclave más grande del valle. Mientras le sirvamos, seguirá mandando.' },
     ],
   },
   {
     id: 'ch1After',
     title: 'Campanas de fondo',
     channel: 'Sala de radio',
-    when: (c) => c.story.done >= 1,
+    when: (c) => c.story.done >= 1 && bastionLevel(c) >= 2,
     lines: [
-      { who: 'morse', text: 'Las medicinas han llegado enteras: antibióticos, vendas, insulina. Y dos cajas que caducaron el mes pasado.' },
-      { who: 'teo', text: 'Caducado no es estropeado. Guárdalas, que aquí no se tira nada.' },
-      { who: 'morse', text: 'Otra cosa. Anoche, en la onda media, una mujer hablaba de los «salvados». Con campanas de fondo.' },
-      { who: 'teo', text: 'Apúntalo. Lo que no se entiende hoy, mañana nos mata.' },
+      { who: 'morse', text: 'Anoche, en onda media, una mujer hablaba de los «salvados». Había campanas de fondo.' },
+      { who: 'teo', text: 'Apúntalo.' },
     ],
   },
   {
     id: 'ch2Before',
-    title: 'Una llamada de Ciudad Varela',
+    title: 'Una llamada de Corran',
     channel: 'Onda corta · 7.040 kHz',
     when: (c) => chapterOpen(c, 2),
     lines: [
-      { who: 'morse', text: 'Llamada desde el hospital de Ciudad Varela. Una doctora lleva tres semanas encerrada en la tercera planta.' },
-      { who: 'teo', text: '¿En un hospital? Si en algún sitio había muertos, era ahí.' },
-      { who: 'morse', text: 'Dice que trabajaba en el Instituto Galena. Y que se le acaba el agua.' },
-      { who: 'teo', text: 'Del Galena, nada menos. Habrá que ir.' },
+      { who: 'morse', text: 'Llamada desde el hospital de Corran. Una doctora, encerrada en la tercera planta desde hace tres semanas.' },
+      { who: 'morse', text: 'Trabajaba en el Instituto Galen. Se le acaba el agua.' },
+      { who: 'teo', text: 'Si sabe algo del Galen, hay que sacarla.' },
     ],
   },
   {
@@ -153,23 +147,21 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · Enfermería',
     when: (c) => c.story.done >= 2,
     lines: [
-      { who: 'nwosu', text: 'Amara Nwosu. Gracias por venir a buscarme. No pensé que nadie lo haría.' },
-      { who: 'morse', text: '¿Es verdad que viene del Instituto Galena?' },
-      { who: 'nwosu', text: 'Del laboratorio de vacunas. Cuando cerraron las puertas, salí corriendo con mis notas y nada más.' },
-      { who: 'nwosu', text: 'Creo que hay una vacuna. Me faltan muestras, tiempo y una nevera que no se apague.' },
-      { who: 'teo', text: 'La nevera es cosa mía. Bienvenida, doctora. Aquí todos tenemos algo que pagar.' },
+      { who: 'nwosu', text: 'Amara Nwosu. Virología, Instituto Galen.' },
+      { who: 'nwosu', text: 'Cuando cerraron las puertas salí con mis notas y nada más. Creo que hay una vacuna.' },
+      { who: 'nwosu', text: 'Me faltan muestras, tiempo y una nevera que no se apague.' },
+      { who: 'teo', text: 'La nevera es cosa mía.' },
     ],
   },
   {
     id: 'ch3Before',
-    title: 'Un favor personal',
+    title: 'La sirena',
     channel: 'Línea interna · Taller',
     when: (c) => chapterOpen(c, 3),
     lines: [
-      { who: 'teo', text: 'Comandantes, os pido un favor personal. Los Cuervos tienen una sirena en los Llanos de Ceniza.' },
-      { who: 'teo', text: 'La hacen sonar junto a quien no les paga, y los zombis acuden en manada. Así vaciaron dos aldeas el invierno pasado.' },
-      { who: 'teo', text: 'Quiero que esa sirena se calle. Para siempre.' },
-      { who: 'morse', text: 'Y si sale mal, la tendremos sonando encima de vuestras cabezas, con medio valle acudiendo a la fiesta.' },
+      { who: 'teo', text: 'Los Cuervos tienen una sirena en los Llanos de Ceniza. La hacen sonar junto a quien no les paga, y los muertos acuden.' },
+      { who: 'teo', text: 'Así vaciaron dos aldeas el invierno pasado. Quiero que se calle.' },
+      { who: 'morse', text: 'Si sale mal, sonará encima de vosotros.' },
     ],
   },
   {
@@ -178,9 +170,8 @@ export const SCENES: Scene[] = [
     channel: 'Onda corta · 4.625 kHz',
     when: (c) => c.story.done >= 3,
     lines: [
-      { who: 'teo', text: '¿Lo oís? Nada. Ni sirena ni gemidos. Tres días sin una horda en la carretera.' },
-      { who: 'morse', text: 'Teo lleva media hora riéndose solo en el taller.' },
-      { who: 'teo', text: 'Porque ahora lo sé: los zombis no piensan, van al ruido. Quien manda en el ruido, manda en la horda.' },
+      { who: 'teo', text: 'Tres días sin una horda en la carretera.' },
+      { who: 'teo', text: 'Los muertos no piensan: van al ruido. Quien controla el ruido, controla la horda.' },
     ],
   },
   {
@@ -189,11 +180,10 @@ export const SCENES: Scene[] = [
     channel: 'Sala de radio',
     when: (c) => (c.flooded ?? []).length > 0,
     lines: [
-      { who: 'morse', text: 'Los Llanos de Ceniza no contestan. Ni ayer ni hoy.' },
-      { who: 'teo', text: '¿Una avería?' },
+      { who: 'morse', text: 'Los Llanos de Ceniza no contestan desde ayer.' },
       { who: 'morse', text: 'El último mensaje era un hombre contando muertos desde un tejado. Paró en el doscientos.' },
-      { who: 'teo', text: 'Entonces de allí no va a llegar nada. Ni suministros, ni nadie.' },
-      { who: 'morse', text: 'Y lo que baja de los Llanos sube por las carreteras. Si la actividad sigue creciendo, la siguiente será Ciudad Varela o Puerto Galena.' },
+      { who: 'teo', text: 'De allí ya no va a llegar nada.' },
+      { who: 'morse', text: 'Y lo que baja de los Llanos sube por las carreteras. Si la infestación sigue creciendo, las siguientes serán Corran y Galen.' },
     ],
   },
   {
@@ -202,12 +192,10 @@ export const SCENES: Scene[] = [
     channel: 'Sala de radio',
     when: (c) => bastionLevel(c) >= 4,
     lines: [
-      { who: 'morse', text: 'Con la antena nueva ya oigo a otros enclaves. Los Camioneros, los de la Mina, unas bodegas de La Vega.' },
-      { who: 'morse', text: 'Todos dicen lo mismo: algo sube desde los Llanos de Ceniza con el deshielo.' },
-      { who: 'teo', text: '¿Algo?' },
-      { who: 'morse', text: 'Zombis. Miles. Una horda que no se dispersa y va adonde va el ruido. La llaman la Marea.' },
-      { who: 'teo', text: 'Y Atalaya está en lo alto de la sierra. Donde se acaba la cuesta.' },
-      { who: 'morse', text: 'Desde hoy, el reloj de la sala de mando cuenta kilómetros: los que le faltan a la Marea para llegar.' },
+      { who: 'morse', text: 'Con la antena nueva oigo a otros enclaves: los Camioneros, la Mina, las bodegas de La Vega.' },
+      { who: 'morse', text: 'Todos dicen lo mismo. Con el deshielo sube algo desde los Llanos de Ceniza: miles de muertos que no se dispersan. La llaman la Marea.' },
+      { who: 'teo', text: 'Y Atalaya está al final de la cuesta.' },
+      { who: 'morse', text: 'Desde hoy, el reloj de la sala de mando cuenta kilómetros.' },
     ],
   },
   {
@@ -216,11 +204,11 @@ export const SCENES: Scene[] = [
     channel: 'Puerta norte · interfono',
     when: (c) => c.event === 'simon' || c.story.simon !== null,
     lines: [
-      { who: 'simon', text: '¿Hola? ¿Funciona esto? Me llamo Simón Ferreira. Hasta hace un mes iba con los Cuervos.' },
-      { who: 'morse', text: 'Hasta hace un mes nos habrías vendido por un plato caliente.' },
-      { who: 'simon', text: 'Por menos. Pero me he ido. Y sé dónde tienen a una niña a la que muerden y no se levanta.' },
-      { who: 'nwosu', text: 'Si dice la verdad, esa niña vale más que todo el valle.' },
-      { who: 'morse', text: 'Decidid vosotros, comandantes. Yo no le abriría ni la ventana.' },
+      { who: 'simon', text: 'Me llamo Simão Ferreira. Hasta hace un mes iba con los Cuervos.' },
+      { who: 'morse', text: 'Hace un mes nos habrías vendido.' },
+      { who: 'simon', text: 'Sí. Ya no. Sé dónde tienen a una niña a la que muerden y no se levanta.' },
+      { who: 'nwosu', text: 'Si es verdad, esa niña vale más que todo el valle.' },
+      { who: 'morse', text: 'Decidid vosotros. Yo no le abriría.' },
     ],
   },
   {
@@ -229,12 +217,10 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · Enfermería',
     when: (c) => c.story.done >= 5,
     lines: [
-      { who: 'nwosu', text: 'Está a salvo. Tiene tres mordiscos viejos en el brazo y ni una décima de fiebre.' },
-      { who: 'simon', text: 'Os dije que sabía dónde estaba. Ahora, a lo mejor, me miráis de otra manera.', if: trusted },
-      { who: 'nwosu', text: 'Su sangre hace algo que no había visto nunca: el virus entra y no encuentra dónde agarrarse.' },
-      { who: 'morse', text: '¿Eso es una vacuna?' },
-      { who: 'nwosu', text: 'Es el principio de una. Con tiempo, y con una nevera que no se apague.' },
-      { who: 'teo', text: 'La cría solo pregunta cuándo puede subir a La Mula.' },
+      { who: 'nwosu', text: 'Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre.' },
+      { who: 'simon', text: 'Os dije dónde estaba.', if: trusted },
+      { who: 'nwosu', text: 'El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna.' },
+      { who: 'teo', text: 'Pregunta cuándo puede subir a la Mula.' },
     ],
   },
   {
@@ -243,12 +229,9 @@ export const SCENES: Scene[] = [
     channel: 'Taller de oficios',
     when: hasEchoes,
     lines: [
-      { who: 'teo', text: 'Bienvenidos al Taller de oficios. Aquí no se enseña nada nuevo: lo que sabían nuestros abuelos y se nos ha olvidado.' },
-      { who: 'teo', text: 'Machete, para el cuerpo a cuerpo. Ballesta, para de lejos. Fuego, para cuando ya da igual. Y enfermería de campo, para lo demás.' },
-      { who: 'morse', text: '¿Y quién enseña todo eso? ¿Tú?' },
-      { who: 'teo', text: 'Me crié en una aldea, Inés. Antes de los motores, cazaba conejos con una ballesta que hizo mi padre.' },
-      { who: 'nwosu', text: 'Las vendas, mejor yo. Que nadie se me cosa una herida con hilo de pescar.' },
-      { who: 'teo', text: 'Con lo que hay ahí fuera, no podemos permitirnos no aprender.' },
+      { who: 'teo', text: 'El taller de oficios está abierto. Lo que se sabía antes de los motores y se nos olvidó.' },
+      { who: 'teo', text: 'Machete, ballesta, fuego y vendas.' },
+      { who: 'nwosu', text: 'Las vendas las enseño yo.' },
     ],
   },
   {
@@ -257,10 +240,8 @@ export const SCENES: Scene[] = [
     channel: 'Taller de oficios',
     when: someoneTrained,
     lines: [
-      { who: 'morse', text: 'Alguien se ha quedado en el Taller hasta las tantas. Teo dice que ya tiene oficio.' },
-      { who: 'teo', text: 'Aprende rápido. Pero en el campo, comandantes, con cabeza: el machete y la ballesta casi no se oyen; el fuego se oye desde lejos.' },
-      { who: 'morse', text: 'Teo está orgulloso, aunque no lo diga.' },
-      { who: 'teo', text: 'Ni lo digas tú.' },
+      { who: 'teo', text: 'Alguien ha terminado su primer oficio. Aprende rápido.' },
+      { who: 'teo', text: 'En el campo, con cabeza: el machete y la ballesta casi no se oyen. El fuego se oye desde lejos.' },
     ],
   },
   {
@@ -269,11 +250,10 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · Enfermería',
     when: (c) => bitten(c).length > 0,
     lines: [
-      { who: 'nwosu', text: 'Treinta y nueve de fiebre, y subiendo. Es el mordisco.' },
-      { who: 'morse', text: '¿Cuánto tiempo tiene?' },
-      { who: 'nwosu', text: 'Tres días. Con la Enfermería, alguno más. Con el tratamiento, la fiebre baja y aquí no ha pasado nada.' },
-      { who: 'nwosu', text: 'Pero cada tratamiento se lleva medicinas, y no nos sobran.' },
-      { who: 'morse', text: 'Y mientras tenga fiebre no sale de misión. El tratamiento lo aprobáis los dos, comandantes.' },
+      { who: 'nwosu', text: 'Treinta y nueve y subiendo. Es el mordisco.' },
+      { who: 'nwosu', text: 'Tres días, alguno más con la Enfermería. Con el tratamiento, la fiebre baja.' },
+      { who: 'nwosu', text: 'Cada tratamiento se lleva medicinas, y no nos sobran.' },
+      { who: 'morse', text: 'Con fiebre no sale de misión. El tratamiento lo aprobáis los dos.' },
     ],
   },
   {
@@ -285,10 +265,9 @@ export const SCENES: Scene[] = [
       return sick > 0 && (c.medicines ?? 0) < sick * treatCost(c);
     },
     lines: [
-      { who: 'nwosu', text: 'No hay para todos. Lo he contado tres veces.' },
-      { who: 'teo', text: '¿Y a quién se lo das?' },
-      { who: 'nwosu', text: 'Eso no lo decido yo. Para eso hay dos llaves.' },
-      { who: 'morse', text: 'Comandantes, el tratamiento lo aprobáis los dos. Y si alguien vuelve de fuera con medicinas, que sea pronto.' },
+      { who: 'nwosu', text: 'No hay medicinas para todos. Lo he contado tres veces.' },
+      { who: 'nwosu', text: 'A quién se le dan no lo decido yo.' },
+      { who: 'morse', text: 'Para eso hay dos llaves.' },
     ],
   },
   {
@@ -298,62 +277,57 @@ export const SCENES: Scene[] = [
     when: (c) => c.soldiers.some((s) => !s.alive && s.fellCause === 'turned'),
     lines: [
       { who: 'morse', text: 'Se ha ido esta mañana. La fiebre no bajó.' },
-      { who: 'nwosu', text: 'Hice lo que pude. Con una dosis más…' },
-      { who: 'teo', text: 'Ya me he encargado yo. Que nadie más tenga que verlo.' },
-      { who: 'morse', text: 'Apuntad su nombre. Y que la próxima vez no falten medicinas.' },
+      { who: 'teo', text: 'Me he encargado yo.' },
+      { who: 'morse', text: 'Apuntad su nombre.' },
     ],
   },
   {
     id: 'hunger',
-    title: 'La despensa vacía',
+    title: 'La despensa',
     channel: 'Línea interna · Taller',
     when: (c) => !!c.hungry,
     lines: [
-      { who: 'teo', text: 'Se ha acabado la despensa. Lo último han sido unas lentejas sin nada.' },
-      { who: 'morse', text: 'Con la tripa vacía nadie apunta igual. Ni aguanta igual.' },
-      { who: 'teo', text: 'Y las heridas tardan el doble en cerrar. Hacen falta raciones: despensas, tiendas, almacenes.' },
-      { who: 'morse', text: 'Y si queda un trozo de tierra libre, un Huerto. Que no vuelva a pasar.' },
+      { who: 'teo', text: 'Se ha acabado la despensa.' },
+      { who: 'morse', text: 'Sin comida nadie apunta igual ni aguanta igual, y las heridas tardan el doble en cerrar.' },
+      { who: 'teo', text: 'Hacen falta raciones: despensas, tiendas, almacenes. Y un huerto, si queda tierra.' },
     ],
   },
   {
     id: 'foundWeapon',
-    title: 'Algo bueno en una mochila',
+    title: 'En una mochila',
     channel: 'Línea interna · Armería',
     when: (c) => (c.foundWeapons ?? []).length > 0,
     lines: [
-      { who: 'teo', text: 'Mirad lo que ha llegado en una mochila. Lo he limpiado y engrasado.' },
-      { who: 'teo', text: 'Es mejor que lo que tenemos: a quien lo lleve, el arma le sube un nivel. Decidme a quién se lo doy.' },
-      { who: 'morse', text: 'A alguien que lo traiga de vuelta. Si cae quien lo lleva, se pierde.' },
+      { who: 'teo', text: 'Ha llegado un arma buena en una mochila. Está limpia y engrasada.' },
+      { who: 'teo', text: 'A quien la lleve, su arma le sube un nivel. Decidme a quién. Si cae, se pierde.' },
     ],
   },
   {
     id: 'confession',
-    title: 'La noche de Galena',
+    title: 'La noche de Galen',
     channel: 'Sala de radio · 03:10',
     when: (c) => bastionLevel(c) >= 6,
     lines: [
-      { who: 'morse', text: 'Teo, la doctora dice que en el Instituto Galena había un vigilante de noche. Que fue el último en ver el sótano entero.' },
+      { who: 'morse', text: 'Teo. Nwosu dice que en el Galen había un vigilante de noche. El último que vio el sótano.' },
       { who: 'teo', text: 'Era yo.' },
-      { who: 'morse', text: '¿Cómo que eras tú?' },
-      { who: 'teo', text: 'Hacía las noches allí para estirar la pensión. A las tres y diez saltó una alarma en el sótano. Saltaba cada dos por tres, y la apagué.' },
-      { who: 'teo', text: 'A las tres semanas, los muertos se levantaban en Varela. Desde entonces me despierto todas las noches a esta hora.' },
+      { who: 'teo', text: 'Hacía las noches para estirar la pensión. A las tres y diez saltó una alarma en el sótano. Saltaba cada dos por tres. La apagué.' },
+      { who: 'teo', text: 'Tres semanas después, los muertos andaban por Corran.' },
       { who: 'morse', text: 'Dos inviernos callado.' },
-      { who: 'teo', text: 'Dos inviernos intentando arreglarlo, Inés.' },
+      { who: 'teo', text: 'Dos inviernos intentando arreglarlo.' },
     ],
   },
   {
     id: 'ch6After',
-    title: 'Los cuadernos de Galena',
-    channel: 'Sala de radio · cuadernos de Galena',
+    title: 'Los cuadernos de Galen',
+    channel: 'Sala de radio',
     when: (c) => c.story.done >= 6,
     lines: [
-      { who: 'nwosu', text: 'Están todos: pruebas, muestras, fallos. Estábamos más cerca de la vacuna de lo que yo creía.' },
+      { who: 'nwosu', text: 'Están todos: pruebas, muestras, fallos. Estábamos más cerca de lo que yo creía.' },
       { who: 'teo', text: 'Y el parte de aquella noche. «03:10, alarma en el sótano. Apagada por el vigilante.»' },
       { who: 'nwosu', text: 'Esa alarma saltaba tres veces por semana, Teo. También lo pone aquí.' },
-      { who: 'morse', text: 'Silencio. Alguien ha entrado en nuestra frecuencia.' },
-      { who: 'coro', text: 'Atalaya. Quemad esos cuadernos. Nadie está enfermo: solo os falta dar el último paso.' },
+      { who: 'morse', text: 'Alguien ha entrado en nuestra frecuencia.' },
+      { who: 'coro', text: 'Atalaya. Quemad esos cuadernos. Nadie está enfermo. Solo os falta dar el último paso.' },
       { who: 'morse', text: 'La Congregación. Saben lo que hemos traído.' },
-      { who: 'teo', text: 'Apágalo, Inés.' },
     ],
   },
   {
@@ -362,11 +336,11 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · Taller',
     when: (c) => bastionLevel(c) >= 7,
     lines: [
-      { who: 'nwosu', text: 'La vacuna está cerca. Semanas, no meses. Si la Marea nos deja esas semanas.' },
-      { who: 'morse', text: 'No nos las va a dejar. Cada noche la Voz habla por la radio, y la Marea gira hacia donde ella dice.' },
-      { who: 'teo', text: 'Campanas y altavoces: la lleva como a un rebaño. Mientras ella hable, no se para.' },
-      { who: 'morse', text: 'Es Celia Arranz. Hacía el programa de la tarde en Radio Varela. Mi madre no se lo perdía.' },
-      { who: 'teo', text: 'Pues habrá que ir a su emisora y sacarla de ahí. Viva: solo ella sabe cómo se deshace la Marea.' },
+      { who: 'nwosu', text: 'La vacuna está a semanas. Si la Marea nos deja esas semanas.' },
+      { who: 'morse', text: 'No nos las va a dejar. Cada noche la Voz habla por radio, y la Marea gira hacia donde ella dice.' },
+      { who: 'teo', text: 'Campanas y altavoces. La lleva como a un rebaño.' },
+      { who: 'morse', text: 'Es Celia Marsh. Hacía el programa de la tarde en Radio Corran.' },
+      { who: 'teo', text: 'Hay que sacarla de su emisora. Viva: solo ella sabe cómo se deshace la Marea.' },
     ],
   },
   {
@@ -375,11 +349,11 @@ export const SCENES: Scene[] = [
     channel: 'Atalaya · celda del sótano',
     when: (c) => c.story.done >= 7,
     lines: [
-      { who: 'voz', text: 'Buenas noches, Valdesombra. Están escuchando a la Voz. No tengan miedo de los que suben: vienen a buscarlos.' },
-      { who: 'morse', text: 'Ya no está en antena, señora Arranz. Aquí solo la oímos nosotros.' },
-      { who: 'voz', text: 'Lo sé. Qué silencio tienen aquí arriba. ¿Ustedes viven siempre así, susurrando?' },
+      { who: 'voz', text: 'Buenas noches, Kessra. Están escuchando a la Voz.' },
+      { who: 'morse', text: 'Ya no está en antena. Aquí solo la oímos nosotros.' },
+      { who: 'voz', text: 'Qué silencio tienen aquí arriba.' },
       { who: 'voz', text: 'La Marea no me obedece a mí. Obedece al ruido más fuerte. Mis campanas solo le enseñaban el camino.' },
-      { who: 'voz', text: 'Denle un ruido más fuerte que mi voz, lejos de los vivos, y no lo apaguen hasta que se gire la última cabeza. Y luego déjenme dormir.' },
+      { who: 'voz', text: 'Denle un ruido más fuerte que mi voz, lejos de los vivos, y no lo apaguen hasta que se gire la última cabeza.' },
     ],
   },
   {
@@ -388,11 +362,11 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · todas las salas',
     when: (c) => c.offers.some((o) => o.final) || c.event === 'finale' || c.ending !== null,
     lines: [
-      { who: 'morse', text: 'Comandantes, la Marea ya se ve desde la presa. Llena el valle hasta donde alcanza la vista.' },
-      { who: 'teo', text: 'La Mula tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo. Cuando suene, la oirán hasta los de atrás.' },
-      { who: 'nwosu', text: 'Y la vacuna está lista. Pocas dosis, pero ya sé hacer más. Habrá que decidir para quién.' },
-      { who: 'simon', text: 'Si me lo preguntáis a mí, los Cuervos no se la merecen. Aunque mi hermano siga con ellos.', if: trusted },
-      { who: 'morse', text: 'Lo decidiréis los dos. Para eso estáis aquí.' },
+      { who: 'morse', text: 'La Marea se ve desde la presa. Llena el valle.' },
+      { who: 'teo', text: 'La Mula tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo.' },
+      { who: 'nwosu', text: 'La vacuna está lista. Pocas dosis. Habrá que decidir para quién.' },
+      { who: 'simon', text: 'Los Cuervos no se la merecen. Aunque mi hermano siga con ellos.', if: trusted },
+      { who: 'morse', text: 'Lo decidiréis los dos.' },
     ],
   },
   {
@@ -401,11 +375,10 @@ export const SCENES: Scene[] = [
     channel: 'Onda corta · todas las frecuencias',
     when: (c) => c.ending === 'break',
     lines: [
-      { who: 'morse', text: 'Aquí Atalaya, a todo el que tenga una radio encendida. Coged papel: así se hace la vacuna.' },
-      { who: 'nwosu', text: 'Ya está. La receta entera, en abierto. Para los Pastores, la Mina, las Bodegas. Y para los Cuervos.' },
-      { who: 'teo', text: 'Alguno la venderá a precio de oro. Otro la usará para mandar sobre los demás.' },
-      { who: 'morse', text: 'Y me contestan desde sitios que ni sabía que seguían vivos. Doce frecuencias. Trece.' },
-      { who: 'nwosu', text: 'Nadie se queda fuera. Con eso me basta.' },
+      { who: 'morse', text: 'Aquí Atalaya, a cualquiera con una radio encendida. Coged papel: así se hace la vacuna.' },
+      { who: 'nwosu', text: 'La receta entera, en abierto. Para los enclaves y para los Cuervos.' },
+      { who: 'teo', text: 'Alguno la venderá. Otro la usará para mandar.' },
+      { who: 'morse', text: 'Contestan sitios que no sabía que seguían vivos. Doce frecuencias. Trece.' },
     ],
   },
   {
@@ -414,11 +387,11 @@ export const SCENES: Scene[] = [
     channel: 'Frecuencia de la Red',
     when: (c) => c.ending === 'record',
     lines: [
-      { who: 'teo', text: 'Última caja de dosis. Sale mañana en La Mula, para las Bodegas.' },
+      { who: 'teo', text: 'Última caja de dosis. Sale mañana en la Mula, para las bodegas.' },
       { who: 'morse', text: '¿Y la receta?' },
-      { who: 'nwosu', text: 'En el refugio, en una caja con dos cerraduras. Hacen falta dos llaves.' },
-      { who: 'morse', text: 'Esta noche han llamado desde el otro lado de la sierra. Preguntaban por una vacuna.' },
-      { who: 'teo', text: '¿Y qué les has dicho?' },
+      { who: 'nwosu', text: 'En el refugio, en una caja con dos cerraduras.' },
+      { who: 'morse', text: 'Anoche llamaron desde el otro lado de la sierra. Preguntaban por una vacuna.' },
+      { who: 'teo', text: '¿Qué les dijiste?' },
       { who: 'morse', text: 'Que aquí no sabemos nada. Atalaya, cambio y corto.' },
     ],
   },
@@ -428,8 +401,8 @@ export const SCENES: Scene[] = [
     channel: 'Todas las frecuencias',
     when: (c) => c.outcome === 'defeat' && c.doom >= DOOM_MAX,
     lines: [
-      { who: 'coro', text: 'Kilómetro cero. Las campanas ya suenan en la sierra.' },
-      { who: 'coro', text: 'No tengáis miedo. Abrid las puertas. Todos seréis salvados.' },
+      { who: 'coro', text: 'Kilómetro cero. Las campanas suenan en la sierra.' },
+      { who: 'coro', text: 'Abrid las puertas. Todos seréis salvados.' },
       { who: 'morse', text: 'Aquí Atalaya. Si alguien recibe esto: lo intentamos.' },
     ],
   },
@@ -440,7 +413,7 @@ export function unlockedScenes(c: CampaignState): Scene[] {
   return SCENES.filter((s) => s.when(c));
 }
 
-/** Scenes tied to what is on screen (Simón at the door, the end): they play as soon as they unlock. */
+/** Scenes tied to what is on screen (Simão at the door, the end): they play as soon as they unlock. */
 const URGENT: readonly SceneId[] = ['simon', 'endingBreak', 'endingRecord', 'granCoral'];
 
 /**
@@ -460,13 +433,13 @@ export function sceneLines(scene: Scene, c: CampaignState): SceneLine[] {
 
 /** Morse on the radio during a story chapter: when the squad lands and when the objective is done. */
 export const STORY_RADIO: { start: string; objective: string }[] = [
-  { start: 'Aquí Morse. Os oigo. El consultorio está en la plaza; las medicinas, en el armario de la enfermera.', objective: 'Medicinas en la mochila. Ahora, a casa, y sin hacer ruido.' },
-  { start: 'La doctora está en la tercera planta. Los pasillos están llenos: id despacio.', objective: 'La tenéis. Sacadla antes de que el hospital entero sepa que estáis dentro.' },
-  { start: 'Teo está pegado a la radio. Callad esa sirena.', objective: 'Silencio en los Llanos. Teo dice que os quiere.' },
-  { start: 'Arreglad el repetidor del Pico Gris. Mientras tanto, calladitos.', objective: 'Os oigo como si estuvierais aquí. Y oigo a todo el valle.' },
-  { start: 'Los Cuervos tienen a la niña bien guardada. Que nadie le toque un pelo.', objective: 'La tenéis. Fuera de ahí, y abrigadla, que hace frío.' },
-  { start: 'El Instituto Galena. Los cuadernos antes que nada. Teo no se separa de la radio.', objective: 'Los cuadernos están a salvo. Teo no respira.' },
-  { start: 'Está en antena ahora mismo. La oigo. Id a por ella.', objective: 'La tenéis. Viva, por favor.' },
+  { start: 'El consultorio está en la plaza. Las medicinas, en el armario de la enfermera.', objective: 'Las tenéis. A la Mula, sin ruido.' },
+  { start: 'Tercera planta. Los pasillos están llenos: despacio.', objective: 'La tenéis. Fuera, antes de que el hospital entero sepa que estáis dentro.' },
+  { start: 'Callad esa sirena.', objective: 'Silencio en los Llanos.' },
+  { start: 'El repetidor está en lo alto del Pico Gris. Arregladlo sin llamar la atención.', objective: 'Os oigo. Y oigo a todo el valle.' },
+  { start: 'La niña está en el campamento de los Cuervos. Que no le pase nada.', objective: 'La tenéis. Fuera de ahí.' },
+  { start: 'El Instituto Galen. Los cuadernos, antes que nada.', objective: 'Los cuadernos están a salvo.' },
+  { start: 'Está en antena ahora mismo. Id a por ella.', objective: 'La tenéis. Viva.' },
 ];
 
 // ---------------------------------------------------------------- recap
@@ -477,14 +450,14 @@ export const RECAP: Scene = { id: 'recap', title: 'Relevo', channel: 'Línea int
 /** Where the campaign stands, for `slot`: the day, the Bastion, the Marea, their soldiers and the first thing to do. */
 export function recapLines(c: CampaignState, slot: Slot): SceneLine[] {
   const level = bastionLevel(c);
-  const story = c.story.done ? `Llevamos ${c.story.done} de ${STORY.length} hojas del Expediente.` : 'El Expediente está en la primera hoja.';
+  const story = c.story.done ? `Llevamos ${c.story.done} de ${STORY.length} hojas del diario.` : 'El diario está en la primera hoja.';
   const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).map((s) => s.name);
   const names = mine.length > 1 ? `${mine.slice(0, -1).join(', ')} y ${mine[mine.length - 1]}` : (mine[0] ?? 'nadie todavía');
   const first = nextSteps(c, slot)[0];
   const lines: SceneLine[] = [
-    { who: 'morse', text: `{yo}: Atalaya le esperaba. Llega el día ${c.day}, con el Bastión en el nivel ${level}.` },
+    { who: 'morse', text: `{yo}: día ${c.day}. El Bastión está en el nivel ${level}.` },
     { who: 'morse', text: `${doomStatus(level, c.doom)}. ${story}` },
-    { who: 'teo', text: `A su mando: ${names}. Los tiene en el Cuartel.` },
+    { who: 'teo', text: `A su mando: ${names}.` },
   ];
   if (first) lines.push({ who: 'morse', text: `Lo más urgente: ${first.label[0]!.toLowerCase()}${first.label.slice(1)}.` });
   return lines;
@@ -531,7 +504,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   redTile: {
     who: 'morse',
-    line: 'Ahí os ven. Pensadlo dos veces.',
+    line: 'Ahí os ven.',
     rule: 'Acabar el movimiento en una casilla roja rompe la ocultación. El primer clic avisa y el segundo mueve.',
   },
   contact: {
@@ -541,7 +514,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   shot: {
     who: 'morse',
-    line: 'Mirad el número antes de apretar. Y pensad en quién más lo oye.',
+    line: 'Mirad el número antes de disparar. Y quién más lo va a oír.',
     rule: 'El porcentaje ya cuenta cobertura, distancia y altura; por el flanco, más acierto y más crítico. Cada disparo suena: una pistola a 8 casillas, un fusil a 12, un francotirador a 16. Lo que lo oye, viene.',
   },
   flanked: {
@@ -551,7 +524,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   wounded: {
     who: 'morse',
-    line: 'Herido no es caído. Que no se nos muera.',
+    line: 'Herido no es caído.',
     rule: 'En misión, la salud solo vuelve con botiquín. En la base, las heridas tardan días en curar, y una dosis de medicinas quita tres. Los caídos no vuelven.',
   },
   command: {
@@ -606,7 +579,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   risen: {
     who: 'morse',
-    line: 'Ese ya no es de los nuestros. Lo siento.',
+    line: 'Ya no es de los nuestros.',
     rule: 'Quien cae contagiado se levanta zombi al empezar el turno de los zombis. A un contagiado herido, apartadlo de la primera línea o sacadlo antes de que caiga.',
   },
   foundWeapon: {

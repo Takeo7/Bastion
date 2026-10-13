@@ -1,6 +1,5 @@
 /*
- * The packs' icons on the ability buttons and the skill tree's nodes, for the
- * proposals that use them (data-ui-icons="synty": Apocalipsis and Mixta). Each
+ * The packs' icons on the ability buttons and the skill tree's nodes. Each
  * button names its ability (data-ability, from hud.ts and strategy/skillTree.ts),
  * and each plot of the compound its building or terrain (data-plot, plotIcons.ts);
  * the line icon of ui/icons.ts stays in the DOM and is covered by a flat white
@@ -12,452 +11,471 @@
  */
 
 /* Each mapped ability (or plot) names its silhouette, hides the line drawing and paints the mask. */
-:root[data-ui-icons='synty'] :is([data-ability], [data-plot]) svg.ico {
+:root[data-ui='mixta'] :is([data-ability], [data-plot]) svg.ico {
   -webkit-mask: var(--sicon, none) center / contain no-repeat;
   mask: var(--sicon, none) center / contain no-repeat;
   background: var(--sicon-fill, none);
 }
 
-:root[data-ui-icons='synty'] :is([data-ability], [data-plot]) svg.ico > * {
+:root[data-ui='mixta'] :is([data-ability], [data-plot]) svg.ico > * {
   visibility: var(--sicon-lines, visible);
 }
 
-:root[data-ui-icons='synty'] .ability {
+:root[data-ui='mixta'] .ability {
   --sicon-w: 26px;
 }
 
-:root[data-ui-icons='synty'] .ability[data-ability] svg.ico {
+:root[data-ui='mixta'] .ability[data-ability] svg.ico {
   width: var(--sicon-w);
 }
 
-:root[data-ui-icons='synty'] [data-ability='shoot'] {
+:root[data-ui='mixta'] [data-ability='shoot'] {
   --sicon: url('/ui/synty/icons/rifle.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='pistol'] {
+:root[data-ui='mixta'] [data-ability='pistol'] {
   --sicon: url('/ui/synty/icons/pistol.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='slash'] {
+:root[data-ui='mixta'] [data-ability='slash'] {
   --sicon: url('/ui/synty/icons/mh-machete.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='overwatch'] {
+:root[data-ui='mixta'] [data-ability='overwatch'] {
   --sicon: url('/ui/synty/icons/target.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='hunker'] {
+:root[data-ui='mixta'] [data-ability='hunker'] {
   --sicon: url('/ui/synty/icons/helmet.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='reload'] {
+:root[data-ui='mixta'] [data-ability='reload'] {
   --sicon: url('/ui/synty/icons/reload.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='grenade'] {
+:root[data-ui='mixta'] [data-ability='grenade'] {
   --sicon: url('/ui/synty/icons/explosives.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='launch'] {
+:root[data-ui='mixta'] [data-ability='launch'] {
   --sicon: url('/ui/synty/icons/launcher.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='smoke'] {
+:root[data-ui='mixta'] [data-ability='smoke'] {
   --sicon: url('/ui/synty/icons/mh-smoke.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='flashbang'] {
+:root[data-ui='mixta'] [data-ability='flashbang'] {
   --sicon: url('/ui/synty/icons/mh-flashbang.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='firstAid'] {
+:root[data-ui='mixta'] [data-ability='firstAid'] {
   --sicon: url('/ui/synty/icons/medkit.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='evac'] {
+:root[data-ui='mixta'] [data-ability='evac'] {
   --sicon: url('/ui/synty/icons/r-mula.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='hack'] {
+:root[data-ui='mixta'] [data-ability='hack'] {
   --sicon: url('/ui/synty/icons/screwdriver.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='search'] {
+:root[data-ui='mixta'] [data-ability='search'] {
   --sicon: url('/ui/synty/icons/backpack.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='runAndGun'] {
+:root[data-ui='mixta'] [data-ability='runAndGun'] {
   --sicon: url('/ui/synty/icons/fastforward.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='rapidFire'] {
+:root[data-ui='mixta'] [data-ability='rapidFire'] {
   --sicon: url('/ui/synty/icons/ammo.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='aimedShot'] {
+:root[data-ui='mixta'] [data-ability='aimedShot'] {
   --sicon: url('/ui/synty/icons/sniper.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='suppression'] {
+:root[data-ui='mixta'] [data-ability='suppression'] {
   --sicon: url('/ui/synty/icons/mh-machinegun.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='chainShot'] {
+:root[data-ui='mixta'] [data-ability='chainShot'] {
   --sicon: url('/ui/synty/icons/mh-bullets.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='rupture'] {
+:root[data-ui='mixta'] [data-ability='rupture'] {
   --sicon: url('/ui/synty/icons/mh-shield-broken.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='lightningHands'] {
+:root[data-ui='mixta'] [data-ability='lightningHands'] {
   --sicon: url('/ui/synty/icons/mh-speedup.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='faceoff'] {
+:root[data-ui='mixta'] [data-ability='faceoff'] {
   --sicon: url('/ui/synty/icons/mh-revolver.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='killZone'] {
+:root[data-ui='mixta'] [data-ability='killZone'] {
   --sicon: url('/ui/synty/icons/mh-targeted.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='medkit'] {
+:root[data-ui='mixta'] [data-ability='medkit'] {
   --sicon: url('/ui/synty/icons/mh-drone-heal.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='aid'] {
+:root[data-ui='mixta'] [data-ability='aid'] {
   --sicon: url('/ui/synty/icons/mh-drone.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='combatProtocol'] {
+:root[data-ui='mixta'] [data-ability='combatProtocol'] {
   --sicon: url('/ui/synty/icons/lightning.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='revival'] {
+:root[data-ui='mixta'] [data-ability='revival'] {
   --sicon: url('/ui/synty/icons/health.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='restoration'] {
+:root[data-ui='mixta'] [data-ability='restoration'] {
   --sicon: url('/ui/synty/icons/mh-heart.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='discharge'] {
+:root[data-ui='mixta'] [data-ability='discharge'] {
   --sicon: url('/ui/synty/icons/mh-drone-bomb.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='aegis'] {
+:root[data-ui='mixta'] [data-ability='aegis'] {
   --sicon: url('/ui/synty/icons/mh-shield.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='echoStep'] {
+:root[data-ui='mixta'] [data-ability='echoStep'] {
   --sicon: url('/ui/synty/icons/mh-runner.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='layOnHands'] {
+:root[data-ui='mixta'] [data-ability='layOnHands'] {
   --sicon: url('/ui/synty/icons/bleeding.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='velmarOath'] {
+:root[data-ui='mixta'] [data-ability='velmarOath'] {
   --sicon: url('/ui/synty/icons/mh-shield-up.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='bolt'] {
+:root[data-ui='mixta'] [data-ability='bolt'] {
   --sicon: url('/ui/synty/icons/flaregun.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='silence'] {
+:root[data-ui='mixta'] [data-ability='silence'] {
   --sicon: url('/ui/synty/icons/mh-dynamite.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='fireball'] {
+:root[data-ui='mixta'] [data-ability='fireball'] {
   --sicon: url('/ui/synty/renders/molotov-mask@128.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='velmarStorm'] {
+:root[data-ui='mixta'] [data-ability='velmarStorm'] {
   --sicon: url('/ui/synty/icons/petrol.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='huntersMark'] {
+:root[data-ui='mixta'] [data-ability='huntersMark'] {
   --sicon: url('/ui/synty/icons/mh-binoculars.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='spectralArrow'] {
+:root[data-ui='mixta'] [data-ability='spectralArrow'] {
   --sicon: url('/ui/synty/icons/crossbow.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='shadowStep'] {
+:root[data-ui='mixta'] [data-ability='shadowStep'] {
   --sicon: url('/ui/synty/icons/mh-up.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='lightRain'] {
+:root[data-ui='mixta'] [data-ability='lightRain'] {
   --sicon: url('/ui/synty/icons/bow.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='counterSong'] {
+:root[data-ui='mixta'] [data-ability='counterSong'] {
   --sicon: url('/ui/synty/icons/mh-syringe.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='hymn'] {
+:root[data-ui='mixta'] [data-ability='hymn'] {
   --sicon: url('/ui/synty/icons/mh-flag.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='lastVerse'] {
+:root[data-ui='mixta'] [data-ability='lastVerse'] {
   --sicon: url('/ui/synty/icons/mh-pulse.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='claw'] {
+:root[data-ui='mixta'] [data-ability='claw'] {
   --sicon: url('/ui/synty/icons/skull.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='mindspin'] {
+:root[data-ui='mixta'] [data-ability='mindspin'] {
   --sicon: url('/ui/synty/icons/mh-critical.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='reanimate'] {
+:root[data-ui='mixta'] [data-ability='reanimate'] {
   --sicon: url('/ui/synty/icons/mh-dead.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='burst'] {
+:root[data-ui='mixta'] [data-ability='burst'] {
   --sicon: url('/ui/synty/icons/mh-poisoned.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='stunLance'] {
+:root[data-ui='mixta'] [data-ability='stunLance'] {
   --sicon: url('/ui/synty/icons/mh-shocked.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] [data-ability='missiles'] {
+:root[data-ui='mixta'] [data-ability='missiles'] {
   --sicon: url('/ui/synty/icons/explosives.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
+/* Doors: no pack draws one, so they are our own silhouettes in the packs' manner (public/ui/mixta/icons). */
+:root[data-ui='mixta'] [data-ability='openDoor'] {
+  --sicon: url('/ui/mixta/icons/door-open.svg');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-ability='closeDoor'] {
+  --sicon: url('/ui/mixta/icons/door-shut.svg');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
 /* Guns drawn side on: a wider box on the buttons. */
-:root[data-ui-icons='synty'] :is(.ability[data-ability='shoot'], .ability[data-ability='pistol'], .ability[data-ability='launch'], .ability[data-ability='aimedShot'], .ability[data-ability='evac'], .ability[data-ability='suppression'], .ability[data-ability='faceoff'], .ability[data-ability='bolt'], .ability[data-ability='spectralArrow'], .ability[data-ability='lightRain']) {
+:root[data-ui='mixta'] :is(.ability[data-ability='shoot'], .ability[data-ability='pistol'], .ability[data-ability='launch'], .ability[data-ability='aimedShot'], .ability[data-ability='evac'], .ability[data-ability='suppression'], .ability[data-ability='faceoff'], .ability[data-ability='bolt'], .ability[data-ability='spectralArrow'], .ability[data-ability='lightRain']) {
   --sicon-w: 40px;
 }
 
 /* The compound's plots (plotIcons.ts). Camposanto, Roca, Ruinas and La Mula are Arte's renders (r-*). */
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='command'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='command'] {
   --sicon: url('/ui/synty/icons/home.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='barracks'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='barracks'] {
   --sicon: url('/ui/synty/icons/helmet.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='research'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='research'] {
   --sicon: url('/ui/synty/icons/notes.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='engineering'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='engineering'] {
   --sicon: url('/ui/synty/icons/mh-shop.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='workshop'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='workshop'] {
   --sicon: url('/ui/synty/icons/crafting.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='infirmary'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='infirmary'] {
   --sicon: url('/ui/synty/icons/heal.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='quarters'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='quarters'] {
   --sicon: url('/ui/synty/icons/mh-tent.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='training'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='training'] {
   --sicon: url('/ui/synty/icons/mh-dumbbell.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='range'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='range'] {
   --sicon: url('/ui/synty/icons/mh-accuracy.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='crew'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='crew'] {
   --sicon: url('/ui/synty/icons/mh-repair.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='simulation'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='simulation'] {
   --sicon: url('/ui/synty/icons/mh-chip.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='garage'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='garage'] {
   --sicon: url('/ui/synty/icons/r-mula.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='listening'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='listening'] {
   --sicon: url('/ui/synty/icons/mh-headphones.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='echoes'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='echoes'] {
   --sicon: url('/ui/synty/icons/mh-pliers.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='relay'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='relay'] {
   --sicon: url('/ui/synty/icons/mh-comms.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='forest'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='forest'] {
   --sicon: url('/ui/synty/icons/mh-plants.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='work'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='work'] {
   --sicon: url('/ui/synty/icons/mh-repair.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='memorial'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='memorial'] {
   --sicon: url('/ui/synty/icons/r-camposanto.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='rocks'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='rocks'] {
   --sicon: url('/ui/synty/icons/r-roca.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
-:root[data-ui-icons='synty'] .plot-ico[data-plot='ruins'] {
+:root[data-ui='mixta'] .plot-ico[data-plot='ruins'] {
   --sicon: url('/ui/synty/icons/r-ruinas.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }
 
+:root[data-ui='mixta'] .plot-ico[data-plot='garden'] {
+  --sicon: url('/ui/synty/icons/herbs.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
 /* La Mula is long: a wider mark on its plot. */
-:root[data-ui-icons='synty'] .plot-cell .plot-ico[data-plot='garage'] {
+:root[data-ui='mixta'] .plot-cell .plot-ico[data-plot='garage'] {
   width: 92%;
 }

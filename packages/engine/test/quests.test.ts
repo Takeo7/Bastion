@@ -17,6 +17,7 @@ import {
   type MissionOffer,
   type RegionId,
 } from '../src/campaign';
+import { defaultAppearance } from '../src/appearance';
 import { hasTech, LEVEL_XP } from '../src/progression';
 import { QUESTS } from '../src/quests';
 import { Rng } from '../src/rng';
@@ -114,7 +115,7 @@ describe('side quests', () => {
     expect(regionIncome(c, 'na')).toBe(25);
   });
 
-  it('Ibarra leads her own squad, and capturing her brings her back scarred', () => {
+  it('Lindqvist (quest «ibarra») leads her own squad, and capturing her brings her back scarred', () => {
     const c = solo();
     c.story.done = 1;
     gainXp(c, LEVEL_XP[2]! - c.xp, new Rng(1));
@@ -122,11 +123,13 @@ describe('side quests', () => {
     const hunt = questOffer(c, 'ibarra');
     expect(hunt.kind).toBe('elimination');
     const mission = fly(c, hunt, 'victory');
-    expect(mission.units.find((u) => u.team === 'alien' && u.name === 'Elena Ibarra')?.template).toBe('officer');
-    expect(eventDef(c)?.title).toBe('Elena Ibarra');
+    expect(mission.units.find((u) => u.team === 'alien' && u.name === 'Vera Lindqvist')?.template).toBe('officer');
+    expect(eventDef(c)?.title).toBe('Vera Lindqvist');
     run(c, { type: 'answerEvent', option: 0 });
-    const ibarra = c.soldiers.find((s) => s.name === 'Elena Ibarra')!;
+    const ibarra = c.soldiers.find((s) => s.name === 'Vera Lindqvist')!;
     expect(ibarra).toMatchObject({ cls: null, rank: 3, traits: ['scarred'] });
+    // Her model is a woman's, whatever name the recruit drew first.
+    expect(ibarra.appearance).toEqual(defaultAppearance(null, ibarra.owner, undefined, 'f'));
     expect(pointsToSpend(ibarra)).toEqual({ attrs: 6, talents: 6 });
     expect(squadMember(c, ibarra).will).toBeLessThan(squadMember(c, { ...ibarra, traits: [] }).will);
   });

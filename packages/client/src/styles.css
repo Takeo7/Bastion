@@ -1,30 +1,24 @@
 /*
- * Interface art direction "Expediente" (M5): the campaign is a classified
- * file. Paper, typewriter, rubber stamps and notes in pen. Every colour and
- * font comes from these tokens; strategy.css maps its --x-* names onto them,
- * so combat, base and menu share one palette.
+ * The interface's layout and its shared tokens. The look itself («Mixta»,
+ * ui/theme.ts) is set by ui/themes/: they give these tokens their values and
+ * paint the components. The token names still carry the old case file's words
+ * (paper, ink, pen, stamp); strategy.css maps its --x-* names onto them, so
+ * combat, base and menu share one palette.
  */
-@import '@fontsource/courier-prime/latin-400.css';
-@import '@fontsource/courier-prime/latin-700.css';
-@import '@fontsource/special-elite/latin-400.css';
-@import '@fontsource/caveat/latin-600.css';
-@import '@fontsource/caveat/latin-700.css';
 
 :root {
-  --font: 'Courier Prime', 'Courier New', monospace;
-  --font-display: 'Special Elite', 'Courier New', monospace;
-  --font-hand: 'Caveat', 'Segoe Print', cursive;
+  --font: 'Barlow', 'Segoe UI', sans-serif;
+  --font-display: 'Barlow', 'Segoe UI', sans-serif;
+  --font-hand: 'Barlow', 'Segoe UI', sans-serif;
 
   --paper: #f1e6c6;
   --paper-dark: #e2d3aa;
   --paper-light: #fbf7ea;
-  /* Materials, generated and tileable (assets/expediente): paper grain as a
-     shade layer for any paper tone, ballpoint and ribbon ink as light speckle
-     laid over the ink colour, and the wear of a rubber stamp as a mask. */
-  --paper-grain: url('./assets/expediente/paper.webp') 0 0 / 512px 512px;
-  --ink-pen-tex: url('./assets/expediente/ink-pen.png') 0 0 / 64px 64px;
-  --ink-type-tex: url('./assets/expediente/ink-type.png') 0 0 / 96px 48px;
-  --stamp-wear: url('./assets/expediente/stamp.png') 0 0 / 128px 128px;
+  /* The case file's materials are gone: the layers stay, empty. */
+  --paper-grain: linear-gradient(transparent, transparent);
+  --ink-pen-tex: none;
+  --ink-type-tex: none;
+  --stamp-wear: linear-gradient(#000, #000);
   --paper-bg: var(--paper-grain), repeating-linear-gradient(0deg, transparent 0 23px, rgba(80, 110, 160, 0.16) 23px 24px), linear-gradient(135deg, #f1e6c6, #e2d3aa);
   --paper-shadow: 2px 4px 10px rgba(0, 0, 0, 0.45);
 
@@ -66,6 +60,9 @@
   --i-clock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3Cpath d='M12 6.5V12l3.5 2.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.6'/%3E%3C/svg%3E");
   --i-pick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 8.5C7 3.5 15 3 21 7.5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.8'/%3E%3Cpath d='M12 5.5L8.5 21' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.8'/%3E%3C/svg%3E");
   --i-xp: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z'/%3E%3C/svg%3E");
+  /* Rations: a tin. Parts: a nut (docs/FASE4.md). */
+  --i-food: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 6.5C4 5 7.6 4 12 4s8 1 8 2.5v11C20 19 16.4 20 12 20s-8-1-8-2.5z M5.5 6.5c0 .8 2.9 1.6 6.5 1.6s6.5-.8 6.5-1.6S15.6 5 12 5 5.5 5.7 5.5 6.5z' fill-rule='evenodd'/%3E%3C/svg%3E");
+  --i-parts: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M7 3h10l5 9-5 9H7l-5-9z M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6z'/%3E%3C/svg%3E");
   /* A bite (docs/FASE3.md): two rows of teeth closing. */
   --i-bite: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M2 4h20v3l-2.5 4-2.5-4-2.5 4-2.5-4-2.5 4-2.5-4-2.5 4L2 7z'/%3E%3Cpath d='M2 20h20v-3l-2.5-4-2.5 4-2.5-4-2.5 4-2.5-4-2.5 4-2.5-4L2 17z'/%3E%3C/svg%3E");
   /* Accessories found searching, counted together: a holdall. */
@@ -409,6 +406,33 @@ button:disabled {
 
 .conceal.off {
   color: var(--stamp);
+}
+
+/* The active floor on maps with storeys (docs/FASE6.md): its name between an arrow down and one up. */
+.floor-ind {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--ink-blue);
+}
+
+.hud .floor-ind button {
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  color: inherit;
+}
+
+.hud .floor-ind button:disabled {
+  opacity: 0.35;
 }
 
 /* A night mission: the same stamp, in ink blue, a little less crooked. */
@@ -1237,7 +1261,8 @@ em.bite::before {
   right: var(--edge);
   top: 50%;
   transform: translateY(-50%) rotate(1deg);
-  width: 214px;
+  /* Wide enough for the action and «Cancelar» side by side (playtest 13/10 #12: «Vigilancia» was cut). */
+  width: 236px;
   padding: 8px 10px;
   display: grid;
   /* minmax(0, …): a long line must wrap, not push the panel past the screen edge. */
@@ -1467,19 +1492,30 @@ em.bite::before {
   z-index: 3;
 }
 
+/* The action and «Cancelar» side by side, each as wide as its words: never
+   squeezed into a cut word (a slanted button's corner ate the end of
+   «Vigilancia»). A long one («Protocolo de ayuda», «Mando: Anastasia») takes
+   the row and «Cancelar» goes under it. */
 .shot-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 5px;
 }
 
+.hud .shot-actions button {
+  white-space: nowrap;
+}
+
 .hud .shot-actions button.fire {
-  padding: 6px 8px;
+  flex: 1 0 auto;
+  padding: 6px 12px;
   font-size: 14px;
+  letter-spacing: 0.06em;
 }
 
 .hud .shot-actions button.cancel {
-  padding: 6px 8px;
+  flex: 1 0 auto;
+  padding: 6px 10px;
   font-size: 12px;
 }
 
@@ -1921,6 +1957,29 @@ dl.controls dd {
 
 .mission-intro p {
   margin: 2px 0;
+}
+
+/* What the mission is for (playtest 13/10 #7): the objective stands out, the briefing reads under it. */
+.mission-intro .intro-meta {
+  color: var(--ink-soft);
+}
+
+.mission-intro .intro-objective {
+  margin-top: 8px;
+  font-size: 17px;
+}
+
+.mission-intro .intro-objective b {
+  color: var(--ink-blue);
+  letter-spacing: 0.06em;
+}
+
+.mission-intro .intro-briefing {
+  max-width: 62ch;
+  margin: 6px auto 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink-soft);
 }
 
 @keyframes intro-in {
@@ -2628,6 +2687,35 @@ body:has(.strat) .fps-counter {
   border-width: 2px;
 }
 
+/* Rations and parts: the number and a small drawn icon after it (a glyph like ⚙ is an emoji on Windows). */
+.pack-slot .ico,
+.pack-total .ico {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 1px;
+  vertical-align: -1px;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+
+.pack-slot.food,
+.pack-total.food {
+  --icon: var(--i-food);
+}
+
+.pack-slot.parts,
+.pack-total.parts {
+  --icon: var(--i-parts);
+}
+
+.pack-slot:is(.food, .parts) {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .pack-slot.weapon .stat-icon,
 .pack-total.weapon .stat-icon {
   width: 20px;
@@ -2693,4 +2781,21 @@ body:has(.strat) .fps-counter {
 
 .pack-none {
   color: var(--ink-soft);
+}
+
+/* A unit on a storey the cutaway hides (docs/FASE6.md): its body is gone, its
+   flag stays, a little faded, with the floor it is on («▲ P1») at the end of its row. */
+.uflag.cut {
+  opacity: 0.8;
+}
+
+.uflag.cut .uflag-row::after {
+  content: var(--floor);
+  margin-left: 4px;
+  padding: 0 3px;
+  font: 700 10px var(--font);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--ink);
+  border: 1px solid currentColor;
 }

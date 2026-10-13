@@ -38,6 +38,8 @@ export const NOISE = {
   breach: 6,
   /** A move that spends both actions. */
   dash: 3,
+  /** A failed hack: the alarm blares at the terminal and draws a horde in by the edges. */
+  alarm: 16,
 } as const;
 /** The Taller de oficios by the listening post: the Oficio is this much quieter (never below 0). */
 export const OFICIO_QUIET = 2;
@@ -258,7 +260,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   hack: {
     id: 'hack',
     name: 'Arreglar',
-    description: 'Arregla el equipo (una radio, un repetidor…) desde una casilla contigua; el Grillo, el dron casero del especialista, llega a 10 casillas. Si falla, salta la alarma y llegan refuerzos.',
+    description: 'Arregla el equipo (una radio, un repetidor…) desde una casilla contigua; el Grillo, el dron casero del especialista, llega a 10 casillas. Si falla, salta la alarma: se oye lejos y atrae a los muertos por los bordes.',
     target: 'self',
     ap: 1,
     endsTurn: true,
@@ -275,6 +277,9 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
     range: 1.5,
     noise: 2,
   },
+  // A door beside the soldier, without moving: free, and as quiet as walking through it (NOISE.door). Texts are placeholders for Lore.
+  openDoor: { id: 'openDoor', name: 'Abrir la puerta', description: 'Abre una puerta cerrada que tengas al lado. No gasta acciones.', target: 'tile', ap: 0, endsTurn: false, range: 1.5, noise: 1 },
+  closeDoor: { id: 'closeDoor', name: 'Cerrar la puerta', description: 'Cierra una puerta abierta que tengas al lado, si no hay nadie en ella. No gasta acciones.', target: 'tile', ap: 0, endsTurn: false, range: 1.5, noise: 1 },
   runAndGun: { id: 'runAndGun', name: 'Correr y disparar', description: 'Acción gratuita: +1 acción este turno.', target: 'self', ap: 0, endsTurn: false, cooldown: 4 },
   rapidFire: { id: 'rapidFire', name: 'Fuego rápido', description: 'Dos disparos seguidos, cada uno con −15 de puntería. Gasta 2 balas.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -15, ammo: 2 },
   suppression: { id: 'suppression', name: 'Supresión', description: 'Inmoviliza al objetivo: −50 de puntería hasta tu próximo turno, y si se mueve, le disparas. Gasta 2 balas.', target: 'enemy', ap: 1, endsTurn: true, ammo: 2 },
@@ -537,11 +542,47 @@ export function attackWeapon(u: Unit, ability: AttackAbility = 'shoot'): WeaponD
   }
 }
 
-export const SOLDIER_NAMES = [
-  'Ana Ríos', 'Luis Varela', 'Marta Soler', 'Iker Ortega', 'Nora Campos', 'Hugo Lázaro',
-  'Elena Vidal', 'Darío Pons', 'Sara Mena', 'Raúl Ibarra', 'Lucía Prat', 'Óscar Nieto',
-  'Irene Galán', 'Pablo Rey', 'Clara Bosch', 'Adrián Gil', 'Julia Font', 'Marcos Vela',
+/**
+ * Soldiers' names (Lore, 2026-10-13: people from everywhere, half women and
+ * half men), each with the sex the client picks a model of (Appearance.sex).
+ */
+export const SOLDIER_NAMES: { name: string; sex: 'f' | 'm' }[] = [
+  { name: 'Amara Okafor', sex: 'f' }, { name: 'Kofi Mensah', sex: 'm' }, { name: 'Yuki Tanaka', sex: 'f' },
+  { name: 'Jonas Becker', sex: 'm' }, { name: 'Leila Mansour', sex: 'f' }, { name: 'Arjun Mehta', sex: 'm' },
+  { name: 'Sofia Marin', sex: 'f' }, { name: 'Dmitri Volkov', sex: 'm' }, { name: 'Priya Nair', sex: 'f' },
+  { name: 'Mateo Rojas', sex: 'm' }, { name: 'Anja Kowalski', sex: 'f' }, { name: 'Hiro Sato', sex: 'm' },
+  { name: 'Elena Petrova', sex: 'f' }, { name: 'Omar Saleh', sex: 'm' }, { name: 'Nadia Benali', sex: 'f' },
+  { name: "Liam O'Brien", sex: 'm' }, { name: 'Maya Cohen', sex: 'f' }, { name: 'Pierre Dubois', sex: 'm' },
+  { name: 'Chiara Rossi', sex: 'f' }, { name: 'Ivan Horvat', sex: 'm' }, { name: 'Freya Lund', sex: 'f' },
+  { name: 'Rafael Costa', sex: 'm' }, { name: 'Ana Ríos', sex: 'f' }, { name: 'Erik Nilsson', sex: 'm' },
+  { name: 'Zainab Bello', sex: 'f' }, { name: 'Samuel Adeyemi', sex: 'm' }, { name: 'Hana Novak', sex: 'f' },
+  { name: 'Wei Zhang', sex: 'm' }, { name: 'Lucía Ortega', sex: 'f' }, { name: 'Luca Bianchi', sex: 'm' },
+  { name: 'Ingrid Berg', sex: 'f' }, { name: 'Marcus Reid', sex: 'm' }, { name: 'Mariana Costa', sex: 'f' },
+  { name: 'Tariq Aziz', sex: 'm' }, { name: 'Aisha Diallo', sex: 'f' }, { name: 'Pablo Rey', sex: 'm' },
 ];
+
+/** The names before 2026-10-13, for the soldiers of older saves (sexOfName). */
+const OLD_SOLDIER_NAMES: { name: string; sex: 'f' | 'm' }[] = [
+  { name: 'Ana Ríos', sex: 'f' }, { name: 'Luis Varela', sex: 'm' }, { name: 'Marta Soler', sex: 'f' },
+  { name: 'Iker Ortega', sex: 'm' }, { name: 'Nora Campos', sex: 'f' }, { name: 'Hugo Lázaro', sex: 'm' },
+  { name: 'Elena Vidal', sex: 'f' }, { name: 'Darío Pons', sex: 'm' }, { name: 'Sara Mena', sex: 'f' },
+  { name: 'Raúl Ibarra', sex: 'm' }, { name: 'Lucía Prat', sex: 'f' }, { name: 'Óscar Nieto', sex: 'm' },
+  { name: 'Irene Galán', sex: 'f' }, { name: 'Pablo Rey', sex: 'm' }, { name: 'Clara Bosch', sex: 'f' },
+  { name: 'Adrián Gil', sex: 'm' }, { name: 'Julia Font', sex: 'f' }, { name: 'Marcos Vela', sex: 'm' },
+];
+
+/**
+ * The sex a name goes with: the whole name in SOLDIER_NAMES or the old list,
+ * or else its first word against their first names; undefined when nothing
+ * matches (a name the players chose).
+ */
+export function sexOfName(name: string): 'f' | 'm' | undefined {
+  const all = [...SOLDIER_NAMES, ...OLD_SOLDIER_NAMES];
+  const whole = all.find((n) => n.name === name);
+  if (whole) return whole.sex;
+  const first = name.trim().split(/\s+/)[0];
+  return all.find((n) => n.name.split(' ')[0] === first)?.sex;
+}
 
 // Violet and orange: apart from the interfaces' own blues and cyans, and from the aliens' red.
 export const PLAYER_COLORS: [string, string] = ['#a678ff', '#ffa630'];

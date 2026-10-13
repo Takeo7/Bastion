@@ -1,8 +1,12 @@
+import { defaultAppearance, type ClassId, type TemplateId } from '@bastion/engine';
 import * as THREE from 'three';
+import type { FigureRig } from '../../game/figures';
 import { fxShape } from '../../game/fx';
+import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
+import { SyntyFigure } from '../../game/syntyFigures';
 import { molotov } from '../../game/songFx';
 import { loadModel } from '../../game/synty';
-import type { BaseModelId, PackId } from '../../game/syntyManifest';
+import { UI_MODELS, type BaseModelId, type CharacterId, type PackId } from '../../game/syntyManifest';
 import { KitBatch, kitMesh, kitModel, loadBaseKit } from '../../strategy/baseKit';
 
 // Icon renders for the interface (/renders.html): things of the game as
@@ -60,6 +64,8 @@ function shoot(subject: THREE.Object3D, view: THREE.Vector3, margin = 0.06): str
   const half = Math.max(x1 - x0, y1 - y0) / 2 / (1 - margin * 2);
   const distance = half / Math.tan(THREE.MathUtils.degToRad(fov / 2)) + depth;
   camera.position.copy(target).addScaledVector(back, distance);
+  // Characters draw on their own layer (post.ts).
+  camera.layers.enableAll();
   camera.up.copy(up);
   camera.lookAt(target);
   renderer.render(scene, camera);
@@ -156,6 +162,69 @@ const kit = (id: BaseModelId) => async (): Promise<THREE.Object3D> => {
   return kitMesh(id, 'plain');
 };
 
+/** A neutral player colour for the class portraits: no one's violet or orange. */
+const NEUTRAL = '#8d97a3';
+
+/**
+ * A soldier of a class, full length, at low ready with the class weapon: in
+ * the class's default look in the neutral colour, as a given survivor.
+ */
+const soldier = (template: TemplateId, cls: ClassId | null, character: CharacterId) => async (): Promise<THREE.Object3D> => {
+  const look = { ...defaultAppearance(cls, 0, NEUTRAL), character };
+  const rig = buildUnit(template, NEUTRAL, look, { weapon: 1, armor: 1 }, character);
+  if (!isFigure(rig)) throw new Error(`${template} is not a figure`);
+  for (let i = 0; i < 300 && rig instanceof SyntyFigure && !rig.ready; i++) await new Promise((r) => setTimeout(r, 30));
+  const pose = { ...IDLE_POSE, spin: 0, search: 0 };
+  for (let t = 0; t < 1.5; t += 1 / 30) (rig as FigureRig).applyPose(pose, t);
+  // The drone's bob is the unit view's: here it hovers where it was put.
+  return rig.root;
+};
+
+/**
+ * One of UI_MODELS, `size` across its longest side, standing on y = 0 at
+ * (x, z), turned `yaw` about the vertical and tipped `tilt` about x.
+ */
+async function piece(id: keyof typeof UI_MODELS, size: number, x = 0, z = 0, yaw = 0, tilt = 0): Promise<THREE.Object3D> {
+  const model = (await loadModel(UI_MODELS[id].pack, 'ui', id)).clone();
+  const holder = new THREE.Group();
+  model.rotation.set(tilt, yaw, 0);
+  holder.add(model);
+  holder.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(model);
+  const dim = box.getSize(new THREE.Vector3());
+  const k = size / Math.max(dim.x, dim.y, dim.z);
+  model.scale.setScalar(k);
+  holder.updateMatrixWorld(true);
+  box.setFromObject(model);
+  const centre = box.getCenter(new THREE.Vector3());
+  model.position.set(x - centre.x, -box.min.y, z - centre.z);
+  return holder;
+}
+
+/** A ration: a tall food tin and two flat ones stacked beside it. */
+async function rationIcon(): Promise<THREE.Object3D> {
+  const g = new THREE.Group();
+  const tall = await piece('tinTall', 0.34, 0.1, -0.02);
+  const flat = await piece('tinFlat', 0.3, -0.13, 0.08, 0.3);
+  const flat2 = await piece('tinFlat2', 0.27, -0.12, 0.07, -0.25);
+  // The second flat tin sits on the first.
+  const under = new THREE.Box3().setFromObject(flat);
+  flat2.position.y = under.max.y;
+  g.add(tall, flat, flat2);
+  return g;
+}
+
+/** «Piezas»: a scrap of sheet metal, two gears leaning on it, a bolt and a battery. */
+async function partsIcon(): Promise<THREE.Object3D> {
+  const g = new THREE.Group();
+  // A heap on the sheet: the battery standing at the back, the gears tipped back against it, the bolt in front.
+  g.add(await piece('scrapSheet', 0.55, 0, 0, 0.3));
+  g.add(await piece('battery', 0.2, -0.14, -0.12, 0.4));
+  g.add(await piece('gears', 0.34, 0.04, 0.02, -0.25, -0.9));
+  g.add(await piece('boltIcon', 0.22, 0.17, 0.16, -0.6, Math.PI / 2));
+  return g;
+}
+
 /** One of the battle maps' props (syntyManifest.ts, PROPS). */
 const prop = (pack: PackId, id: string) => async (): Promise<THREE.Object3D> => (await loadModel(pack, 'prop', id)).clone();
 
@@ -176,12 +245,26 @@ const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.V
   roca: { make: kit('crag2'), view: new THREE.Vector3(0.5, 0.12, 1), masks: true },
   // Ruinas: the collapsed brick wall, its broken edge stepping down.
   ruinas: { make: kit('brokenWall'), view: new THREE.Vector3(1, 0.15, 0.3), masks: true },
+  // La Mula nose on, for the Mixta panels.
+  'mula-front': { make: mulaIcon, view: new THREE.Vector3(0.05, 0.12, 1) },
+  // A soldier per class, full length, the class weapon at low ready, in a neutral colour (seen from the gun side).
+  asalto: { make: soldier('assault', 'assault', 'riotCop'), view: new THREE.Vector3(-0.75, 0.22, 1) },
+  granadero: { make: soldier('grenadier', 'grenadier', 'soldierM'), view: new THREE.Vector3(-0.75, 0.22, 1) },
+  francotirador: { make: soldier('sharpshooter', 'sharpshooter', 'scout'), view: new THREE.Vector3(-0.75, 0.22, 1) },
+  especialista: { make: soldier('specialist', 'specialist', 'mechanic'), view: new THREE.Vector3(-0.75, 0.22, 1) },
+  recluta: { make: soldier('rookie', null, 'coolM'), view: new THREE.Vector3(-0.75, 0.22, 1) },
+  // Items.
+  botiquin: { make: kit('medKit'), view: new THREE.Vector3(0.55, 0.85, 1) },
+  racion: { make: rationIcon, view: new THREE.Vector3(0.6, 0.5, 1) },
+  piezas: { make: partsIcon, view: new THREE.Vector3(0.6, 0.55, 1) },
 };
 
 const shots = new Map<string, string>();
 const shelf = document.getElementById('renders')!;
 
-for (const [name, icon] of Object.entries(ICONS)) {
+// `?only=asalto,racion` renders just those.
+const only = new URLSearchParams(location.search).get('only')?.split(',');
+for (const [name, icon] of Object.entries(ICONS).filter(([n]) => !only || only.includes(n))) {
   void icon.make().then(async (subject) => {
     await painted(subject);
     const url = shoot(subject, icon.view);
@@ -227,8 +310,11 @@ async function save(): Promise<string[]> {
   const sent: string[] = [];
   for (const [name, url] of shots) {
     const img = new Image();
-    img.src = url;
-    await img.decode();
+    // (onload, not decode(): a hidden page may put decoding off indefinitely.)
+    await new Promise((resolve) => {
+      img.onload = resolve;
+      img.src = url;
+    });
     for (const [size, suffix] of [[512, ''], [128, '@128']] as const) {
       for (const mask of ICONS[name]!.masks ? [true] : [false, true]) {
         const file = `icon-${name}${mask ? '-mask' : ''}${suffix}`;

@@ -36,6 +36,8 @@ export interface FigurePose {
   spin?: number;
   /** Rummaging through furniture, 0 to 1 (the unit view also crouches the figure for it). */
   search?: number;
+  /** Up a ladder, 0 to 1: hands and feet on the rungs (rigs that can; the others just walk up). */
+  climb?: number;
 }
 
 export interface FigureRig extends UnitRig {

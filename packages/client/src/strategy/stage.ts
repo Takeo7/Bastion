@@ -109,6 +109,8 @@ export class Stage {
   soundtrack = true;
   private frameId = 0;
   private moveId = 0;
+  /** A set change has faded the stage to black and not yet lifted it (blackout() is apart). */
+  private fading = false;
   private drag: { x: number; y: number; moved: boolean } | null = null;
   private disposed = false;
   /** Post-processing; it follows whichever set is active. */
@@ -137,6 +139,8 @@ export class Stage {
     // Characters live on their own layer (post.ts), like in battle.
     this.camera.layers.enable(UNIT_LAYER);
     this.post = postChain(this.gl, new THREE.Scene(), this.camera);
+    // A handful of characters, close up: in the occlusion's pre-pass, or it shows through them (post.ts).
+    this.post.ao.withUnits = true;
     this.element.append(this.gl.domElement, this.fade);
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.element);
@@ -188,8 +192,10 @@ export class Stage {
     if (id !== this.active) {
       this.moving = true;
       if (this.active && !instant) {
+        this.fading = true;
         this.fade.classList.add('on');
         await new Promise((r) => setTimeout(r, 260));
+        // Overtaken by a newer move: that one lifts the fade (or keeps it, if it changes set too).
         if (move !== this.moveId) return;
       }
       for (const [key, labels] of this.labels) labels.domElement.style.display = key === id ? '' : 'none';
@@ -200,8 +206,15 @@ export class Stage {
       }
       this.place((this.shot = this.fitted(asked)));
       this.moving = false;
+      this.fading = false;
       this.fade.classList.remove('on');
       return;
+    }
+    // A set change this move overtook (a report arriving in the cochera) left the stage faded: lift it.
+    if (this.fading) {
+      this.fading = false;
+      this.moving = false;
+      this.fade.classList.remove('on');
     }
     const shot = (this.shot = this.fitted(asked));
     if (instant) {

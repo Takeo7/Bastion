@@ -10,12 +10,14 @@ import {
   campaignMessageSchema,
   clientMessageSchema,
   createCampaign,
+  openingMission,
   createMission,
   defaultSquad,
   executeCampaignCommand,
   executeCommand,
   hasAdjacency,
   missionInfo,
+  offerBriefing,
   PLAYER_COLORS,
   Rng,
   syncPads,
@@ -71,8 +73,6 @@ export class Room {
   private rng = new Rng(Date.now() >>> 0);
   private missionKind: MissionKind = 'elimination';
   private skirmishMap: SkirmishMap = 'city';
-  /** The interface theme both players see: whoever changes it last, for the two (not saved). */
-  private uiTheme: string | null = null;
   private skirmishVeterans = true;
   private skirmishNight = false;
 
@@ -196,6 +196,8 @@ export class Room {
       case 'newCampaign':
         if (this.phase !== 'lobby') return;
         this.campaign = createCampaign(this.connectedSlots(), this.rng);
+        // It opens with the first operation chosen and its squad in the hangar (playtest 2026-10-13).
+        openingMission(this.campaign);
         console.log(`[room] Nueva campaña con ${this.campaign.players.length} jugador(es).`);
         this.enterBase();
         break;
@@ -228,11 +230,6 @@ export class Room {
         if (this.phase !== 'mission' || this.mode !== 'campaign' || !this.state?.outcome) return;
         this.state = null;
         this.enterBase();
-        break;
-      case 'uiTheme':
-        if (msg.theme === this.uiTheme) return;
-        this.uiTheme = msg.theme;
-        this.broadcastRoom();
         break;
       case 'baseView':
         seat.view = msg.view;
@@ -287,7 +284,7 @@ export class Room {
     this.missionKind = kind;
     this.skirmishMap = map;
     this.mode = 'skirmish';
-    const source: MapSource = map === 'plaza' ? { kind: 'handmade', id: 'plaza' } : { kind: 'generated', biome: map, seed: this.rng.int(2 ** 31) };
+    const source: MapSource = map === 'plaza' || map === 'torre' ? { kind: 'handmade', id: map } : { kind: 'generated', biome: map, seed: this.rng.int(2 ** 31) };
     this.state = createMission({ map: source, slots, rng: this.rng, kind, veterans: this.skirmishVeterans, night: this.skirmishNight });
     this.phase = 'mission';
     console.log(`[room] Escaramuza (${kind}${this.skirmishNight ? ', de noche' : ''}, ${this.state.mapName}) con ${slots.length} jugador(es).`);
@@ -337,7 +334,7 @@ export class Room {
       pods: offer.pods,
       difficulty: offer.difficulty,
       hackBonus: campaignHackBonus(c),
-      campaignMission: { id: offer.id, name: offer.name, ...(offer.story ? { story: offer.story } : {}), ...(info.kicker ? { kicker: info.kicker } : {}), ...(info.item ? { item: info.item } : {}) },
+      campaignMission: { id: offer.id, name: offer.name, ...(offer.story ? { story: offer.story } : {}), ...(info.kicker ? { kicker: info.kicker } : {}), ...(info.item ? { item: info.item } : {}), briefing: offerBriefing(c, offer) },
       vipName: info.vipName,
       leader: info.leader,
     });
@@ -398,7 +395,7 @@ export class Room {
 
   private broadcastRoom(): void {
     const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, doom: this.campaign.doom, level: bastionLevel(this.campaign) } : null;
-    this.broadcast({ t: 'room', players: this.players(), phase: this.phase, savedCampaign, uiTheme: this.uiTheme ?? undefined });
+    this.broadcast({ t: 'room', players: this.players(), phase: this.phase, savedCampaign });
   }
 
   private broadcast(msg: ServerMessage): void {

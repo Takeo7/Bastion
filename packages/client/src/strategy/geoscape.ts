@@ -8,13 +8,15 @@ import type { BaseModelId } from '../game/syntyManifest';
 import { KitBatch, kitMesh, kitModel, loadBaseKit, type Finish } from './baseKit';
 import { skyTexture, type Shot, type StageMood, type StageSet } from './stage';
 
-// The map of the valley of Valdesombra (docs/LORE.md, «El mundo»), where the
-// globe was: a diorama in Synty's low-poly, seen from the south. The sierra to
-// the north with Atalaya under its peaks, closed valleys to the north-east,
-// the reservoir and its dead power station to the east, the mines in the
-// western hills, the farms of La Vega along the river in the middle, the two
-// dead cities (Ciudad Varela to the west, Puerto Galena by the sea), and the
-// ash plain to the south where the Marea comes up: a dark tide on the ground
+// «El valle»: the map of the valley of Kessra (docs/LORE.md, «El mundo»), a
+// diorama in Synty's low-poly, seen from the south. The sierra to the north
+// with Atalaya under its peaks above Aldren's villages, the closed valleys of
+// Volkren to the north-east, the reservoir and its dead power station to the
+// east (El Pantano Gris), Carvik's mines in the western hills, the farms of La
+// Vega along the river in the middle, the two dead cities (Corran to the west,
+// Galen by the river's mouth), roads with their wrecks, signs, roadblocks and
+// bridges, woods, smoke, birds and mist in the low ground, and the ash plain to
+// the south where the Marea comes up: a dark tide on the ground
 // that climbs the roads zone by zone as the zombi activity grows. Each of the
 // eight zones carries its marker (contact, Nidos, operations, rumours); La Mula
 // drives the roads between them. The same set is the main menu's backdrop.
@@ -35,7 +37,7 @@ const MINI = 0.075;
 /** Where each zone lies in the valley: the engine's geography. */
 const ZONES: Record<RegionId, { x: number; z: number }> = REGIONS;
 
-/** Atalaya: the station on its shelf under the peaks, above Altomonte's villages. */
+/** Atalaya: the station on its shelf under the peaks, above Aldren's villages. */
 const ATALAYA = { x: -3.4, z: -7.0 };
 
 /** Where each road (the engine's ROADS) bends, so it looks less ruled; one the map doesn't know runs straight. */
@@ -80,6 +82,17 @@ function ashen(x: number, z: number): boolean {
 
 /** The reservoir: its basin up on a shelf, its water level, and the dam across the gap where the river leaves it. */
 const RESERVOIR = { x: 11.2, z: -2.0, r: 2.6, level: 1.2, dam: 2.5 };
+
+/** The two dead cities: a grid of blocks round the zone (a square left open at its marker), streets between them. */
+const CITIES: { id: RegionId; dx: number; dz: number; cols: number; rows: number; cell: number }[] = [
+  { id: 'afr', dx: 0, dz: 0, cols: 8, rows: 6, cell: 0.62 },
+  { id: 'me', dx: 0.35, dz: -0.15, cols: 6, rows: 5, cell: 0.62 },
+];
+
+/** Whether (x, z) lies in a city (with `margin` round it). */
+function inCity(x: number, z: number, margin = 0): boolean {
+  return CITIES.some((c) => Math.abs(x - ZONES[c.id].x - c.dx) < (c.cols * c.cell) / 2 + margin && Math.abs(z - ZONES[c.id].z - c.dz) < (c.rows * c.cell) / 2 + margin);
+}
 
 // ------------------------------------------------------------- terrain
 
@@ -134,7 +147,7 @@ function heightAt(x: number, z: number): number {
   h += smooth(3.6, 9.2, -z) * (2.4 + 2.4 * fbm(x * 0.55 + 7, z * 0.4 + 2));
   // Atalaya's shelf under the peaks, levelled.
   h = THREE.MathUtils.lerp(h, 2.8, smooth(3.0, 1.3, Math.hypot(x - ATALAYA.x, z - ATALAYA.z)));
-  // The western hills (Carboneda) and the closed valleys to the north-east (Valdelobos).
+  // The western hills (Carvik) and the closed valleys to the north-east (Volkren).
   h += 1.6 * bump(x, z, -12.2, -0.8, 4.8) * (0.55 + n);
   h += 1.9 * bump(x, z, 9.6, -6.4, 5.2) * (0.45 + 0.9 * noise(x * 0.9, z * 0.9));
   // The reservoir's shelf, its basin dug out under the water.
@@ -176,7 +189,7 @@ function groundColour(x: number, z: number, h: number, up: number, out: THREE.Co
   // The ash plain where the Marea comes up.
   if (ashen(x, z)) return out.copy(GROUND.ash).lerp(GROUND.ash2, n);
   // The dead cities' ground.
-  if (Math.hypot(x - ZONES.afr.x, z - ZONES.afr.z) < 1.9 || Math.hypot(x - ZONES.me.x - 0.6, z - ZONES.me.z + 0.2) < 1.5) return out.copy(GROUND.city);
+  if (inCity(x, z, 0.2)) return out.copy(GROUND.city).lerp(GROUND.ash2, n * 0.4);
   // La Vega's patchwork of fields.
   if (Math.hypot(x - ZONES.oce.x, z - ZONES.oce.z - 0.3) < 3.6) return out.copy(GROUND.fields[Math.floor(hash(Math.floor(x * 1.4), Math.floor(z * 1.4)) * GROUND.fields.length)]!);
   return out.copy(GROUND.grass).lerp(GROUND.grass2, n);
@@ -329,7 +342,7 @@ function roadLine(a: RegionId, b: RegionId): THREE.Vector3[] {
  */
 const FIELD = { w: 240, d: 176 };
 
-/** The activity at which a zone falls; Altomonte only past the end (at DOOM_MAX the campaign is lost). */
+/** The activity at which a zone falls; Aldren only past the end (at DOOM_MAX the campaign is lost). */
 const threshold = (id: RegionId) => mareaThreshold(id) ?? DOOM_MAX + 0.5;
 
 function mareaReach(x: number, z: number, roads: { a: RegionId; b: RegionId; points: THREE.Vector2[]; lengths: number[] }[]): number {
@@ -452,11 +465,193 @@ function zombieShape(): THREE.BufferGeometry {
   ];
   const g = mergeGeometries(parts.map((p) => p.toNonIndexed()))!;
   for (const p of parts) p.dispose();
-  return g.scale(1.3, 1.3, 1.3);
+  // About a person's height at the cities' scale, a little more to read at all.
+  return g.scale(0.62, 0.62, 0.62);
 }
 
-/** How many wander round a zone under the Marea. */
-const HORDE = 4;
+/** How many wander round a zone under the Marea: two groups of five. */
+const HORDE = 10;
+
+// ------------------------------------------------------------- life
+
+/** Where smoke rises: a burning block (dark, thick) or a chimney (pale, thin). */
+interface Smoke {
+  x: number;
+  y: number;
+  z: number;
+  dark: boolean;
+  size: number;
+}
+
+/**
+ * Columns of smoke, as puffs that rise, swell, drift east with the wind and
+ * fade, over and over: one instanced quad facing the camera, all of it in
+ * the shader (nothing to update but the time).
+ */
+function smokeColumns(sources: Smoke[]): THREE.Mesh {
+  const puffs = 10;
+  const quad = new THREE.PlaneGeometry(1, 1);
+  const g = new THREE.InstancedBufferGeometry();
+  g.index = quad.index;
+  g.setAttribute('position', quad.getAttribute('position'));
+  g.setAttribute('uv', quad.getAttribute('uv'));
+  const base: number[] = [];
+  const seed: number[] = [];
+  sources.forEach((src, i) => {
+    for (let k = 0; k < puffs; k++) {
+      base.push(src.x, src.y, src.z);
+      seed.push(k / puffs + hash(i, k) * 0.05, src.size, src.dark ? 1 : 0, hash(k, i + 3) * 6.28);
+    }
+  });
+  g.setAttribute('aBase', new THREE.InstancedBufferAttribute(new Float32Array(base), 3));
+  g.setAttribute('aSeed', new THREE.InstancedBufferAttribute(new Float32Array(seed), 4));
+  g.instanceCount = sources.length * puffs;
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    transparent: true,
+    depthWrite: false,
+    vertexShader: /* glsl */ `
+      attribute vec3 aBase;
+      attribute vec4 aSeed;
+      uniform float uTime;
+      varying vec2 vUv;
+      varying float vAlpha;
+      varying float vDark;
+      void main() {
+        float life = fract(uTime * 0.08 + aSeed.x);
+        float size = aSeed.y * (0.5 + life * 2.4);
+        vec3 c = aBase + vec3(life * life * 1.2 + sin(aSeed.w + life * 3.0) * 0.1, life * (0.25 + aSeed.y * 4.5), cos(aSeed.w) * 0.12 * life);
+        vec4 mv = modelViewMatrix * vec4(c, 1.0);
+        mv.xy += position.xy * size;
+        gl_Position = projectionMatrix * mv;
+        vUv = uv;
+        vAlpha = smoothstep(0.0, 0.1, life) * (1.0 - smoothstep(0.55, 1.0, life));
+        vDark = aSeed.z;
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv;
+      varying float vAlpha;
+      varying float vDark;
+      void main() {
+        float r = length(vUv - 0.5) * 2.0;
+        float a = (1.0 - smoothstep(0.3, 1.0, r)) * vAlpha * mix(0.45, 0.78, vDark);
+        gl_FragColor = vec4(mix(vec3(0.62, 0.62, 0.64), vec3(0.09, 0.085, 0.08), vDark), a);
+      }`,
+  });
+  const mesh = new THREE.Mesh(g, material);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 2;
+  return mesh;
+}
+
+/** Flocks of birds circling over the fields and woods: a little V each, flapping, all in the shader. */
+function flocks(flights: { x: number; z: number; r: number; n: number; y: number }[]): THREE.Mesh {
+  const wing = new THREE.BufferGeometry();
+  wing.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.025, -0.08, 0, -0.03, 0, 0, -0.012, 0, 0, 0.025, 0, 0, -0.012, 0.08, 0, -0.03], 3));
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', wing.getAttribute('position'));
+  const a: number[] = [];
+  const b: number[] = [];
+  flights.forEach((f, i) => {
+    for (let k = 0; k < f.n; k++) {
+      a.push(f.x + (hash(i, k) - 0.5) * 0.6, f.z + (hash(k, i) - 0.5) * 0.6, f.r * (0.7 + hash(k, i + 9) * 0.5), hash(i + 5, k) * 6.28);
+      b.push(f.y + hash(k, i + 2) * 0.5, (0.35 + hash(i, k + 4) * 0.2) * (i % 2 ? 1 : -1));
+    }
+  });
+  g.setAttribute('aFlight', new THREE.InstancedBufferAttribute(new Float32Array(a), 4));
+  g.setAttribute('aFlight2', new THREE.InstancedBufferAttribute(new Float32Array(b), 2));
+  g.instanceCount = a.length / 4;
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    side: THREE.DoubleSide,
+    vertexShader: /* glsl */ `
+      attribute vec4 aFlight;
+      attribute vec2 aFlight2;
+      uniform float uTime;
+      void main() {
+        float a = aFlight.w + uTime * aFlight2.y;
+        vec3 p = position;
+        p.y += abs(p.x) * sin(uTime * 10.0 + aFlight.w * 7.0) * 0.9;
+        vec3 fwd = vec3(-sin(a), 0.0, cos(a)) * sign(aFlight2.y);
+        vec3 side = vec3(fwd.z, 0.0, -fwd.x);
+        vec3 at = vec3(aFlight.x + cos(a) * aFlight.z, aFlight2.x + sin(uTime * 0.6 + aFlight.w) * 0.12, aFlight.y + sin(a) * aFlight.z);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(at + side * p.x + vec3(0.0, p.y, 0.0) + fwd * p.z, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      void main() {
+        gl_FragColor = vec4(0.05, 0.05, 0.06, 1.0);
+      }`,
+  });
+  const mesh = new THREE.Mesh(g, material);
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+/**
+ * Mist lying in the low ground (the river's valley, the plain): one sheet
+ * just over the lowlands, thick where the ground sinks under it and gone
+ * where it rises through, drifting by two scrolling noises.
+ */
+function lowMist(): THREE.Mesh {
+  const level = 0.4;
+  const [w, d] = [120, 88];
+  const mask = new Uint8Array(w * d);
+  for (let j = 0; j < d; j++) {
+    for (let i = 0; i < w; i++) {
+      // The sheet's v runs from the south edge (0) to the north (1).
+      const x = -HW + ((i + 0.5) / w) * W;
+      const z = HD - ((j + 0.5) / d) * D;
+      const h = heightAt(x, z);
+      // Thickest in the river's valley and over the ash plain, thinning out where the ground rises to it.
+      const low = smooth(0.12, 0.38, level - h) * Math.max(smooth(2.2, 0.3, distToPolyline(x, z, RIVER)), ashen(x, z) ? 0.6 : 0, 0.15);
+      mask[j * w + i] = Math.round(THREE.MathUtils.clamp(low, 0, 1) * 255);
+    }
+  }
+  const maskTexture = new THREE.DataTexture(mask, w, d, THREE.RedFormat);
+  maskTexture.magFilter = maskTexture.minFilter = THREE.LinearFilter;
+  maskTexture.needsUpdate = true;
+  // Soft noise that tiles: four copies of it blended across the seams.
+  const n = 64;
+  const grain = new Uint8Array(n * n);
+  const f = 8 / n;
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const [u, v] = [i / n, j / n];
+      const at = (x: number, y: number) => fbm(x * f + 20, y * f + 40);
+      const t = at(i, j) * (1 - u) * (1 - v) + at(i - n, j) * u * (1 - v) + at(i, j - n) * (1 - u) * v + at(i - n, j - n) * u * v;
+      grain[j * n + i] = Math.round(THREE.MathUtils.clamp((t - 0.25) * 2, 0, 1) * 255);
+    }
+  const grainTexture = new THREE.DataTexture(grain, n, n, THREE.RedFormat);
+  grainTexture.wrapS = grainTexture.wrapT = THREE.RepeatWrapping;
+  grainTexture.magFilter = grainTexture.minFilter = THREE.LinearFilter;
+  grainTexture.needsUpdate = true;
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uMask: { value: maskTexture }, uGrain: { value: grainTexture } },
+    transparent: true,
+    depthWrite: false,
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform sampler2D uMask;
+      uniform sampler2D uGrain;
+      varying vec2 vUv;
+      void main() {
+        float m = texture2D(uMask, vUv).r;
+        vec2 p = vUv * vec2(${(W / 3).toFixed(1)}, ${(D / 3).toFixed(1)});
+        float n = texture2D(uGrain, p * 0.12 + vec2(uTime * 0.004, uTime * 0.0015)).r * 0.6 + texture2D(uGrain, p * 0.27 - vec2(uTime * 0.006, 0.0)).r * 0.4;
+        gl_FragColor = vec4(vec3(0.86, 0.87, 0.9), m * smoothstep(0.25, 0.75, n) * 0.3);
+      }`,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, D).rotateX(-Math.PI / 2), material);
+  mesh.position.y = level;
+  mesh.renderOrder = 1;
+  return mesh;
+}
 
 // ------------------------------------------------------------- markers
 
@@ -521,14 +716,18 @@ export class GeoscapeSet implements StageSet {
   private readonly bus = new THREE.Group();
   private readonly busLabel: CSS2DObject;
   private readonly clouds = new THREE.Group();
+  /** Smoke (once the models are in), birds and the mist in the low ground: animated in their shaders. */
+  private smoke: THREE.Mesh | null = null;
+  private readonly birds: THREE.Mesh;
+  private readonly mist: THREE.Mesh;
   private readonly sun = new THREE.DirectionalLight(0xffdcb4, 3.0);
   /** The zombi activity the Marea is drawn at, easing to the campaign's; in the main menu, only its strip along the south. */
   private level = threshold(MAREA_SOURCE) - 0.8;
   private levelGoal = this.level;
   private levelKnown = false;
-  /** The dead wandering round the zones under the Marea: where each circles, how far out, from where and how fast. */
+  /** The dead wandering round the zones under the Marea, in groups: where each group circles, how far out, from where and how fast, and where in the group each one is. */
   private readonly horde = new THREE.InstancedMesh(zombieShape(), ZOMBIE, Object.keys(REGIONS).length * HORDE);
-  private wanderers: { x: number; z: number; r: number; phase: number; speed: number }[] = [];
+  private wanderers: { x: number; z: number; r: number; phase: number; speed: number; ox: number; oz: number }[] = [];
   /** La Mula's way to its zone, how far along it is, and where it is now. */
   private path: THREE.Vector3[] = [];
   private along = 0;
@@ -562,7 +761,16 @@ export class GeoscapeSet implements StageSet {
 
     this.horde.count = 0;
     this.horde.frustumCulled = false;
-    this.valley.add(terrain(), skirt(), water(), this.markerGroup, this.bus, this.statics.group, this.clouds, this.horde);
+    // Rooks over La Vega's fields, crows over the woods and the plain, gulls by the river's mouth.
+    this.birds = flocks([
+      { x: 1.5, z: 0.6, r: 1.6, n: 7, y: 1.6 },
+      { x: -6.5, z: 2.2, r: 1.2, n: 5, y: 1.8 },
+      { x: 10.8, z: 8.2, r: 1.1, n: 5, y: 1.3 },
+      { x: 3.5, z: -4.2, r: 1.4, n: 6, y: 2.2 },
+      { x: -1.0, z: 8.6, r: 0.9, n: 6, y: 1.4 },
+    ]);
+    this.mist = lowMist();
+    this.valley.add(terrain(), skirt(), water(), this.markerGroup, this.bus, this.statics.group, this.clouds, this.horde, this.birds, this.mist);
     this.scene.add(this.valley);
     // The roads, one mesh.
     const ribbons = ROADS.map(([a, b]) => roadRibbon(roadLine(a, b), 0.13));
@@ -652,7 +860,10 @@ export class GeoscapeSet implements StageSet {
       group.add(pad);
       if (drowned) {
         // Under the Marea: the enclave's lights out, and the dead wander round it.
-        for (let i = 0; i < HORDE; i++) this.wanderers.push({ x: at.x, z: at.z, r: 0.5 + hash(i, r.id.length * 7 + at.x) * 0.45, phase: (i / HORDE) * Math.PI * 2 + hash(at.z, i), speed: (0.12 + hash(i, at.x) * 0.16) * (i % 2 ? 1 : -1) });
+        for (let i = 0; i < HORDE; i++) {
+          const group = i % 2;
+          this.wanderers.push({ x: at.x, z: at.z, r: group ? 0.85 : 0.55, phase: group * Math.PI + hash(at.z, group), speed: (0.07 + hash(group, at.x) * 0.06) * (group ? 1 : -1), ox: (hash(i, at.x) - 0.5) * 0.36, oz: (hash(at.z, i) - 0.5) * 0.36 });
+        }
       } else {
         // A beam of light over the zone: tall and blue where we have contact, short and grey where not.
         const beam = new THREE.Mesh(SHAPES.beacon, r.contacted ? glow(0x3fa9ff, 1.6, 0.75, true) : glow(0x9aa4ad, 0.6, 0.6, true));
@@ -746,6 +957,8 @@ export class GeoscapeSet implements StageSet {
     // The Marea creeps up the roads, or back down them, to where the zombi activity puts it.
     this.level += (this.levelGoal - this.level) * (1 - Math.exp(-dt * 1.2));
     if (Math.abs(this.levelGoal - this.level) < 1e-3) this.level = this.levelGoal;
+    // Smoke, birds and mist move in their shaders.
+    for (const m of [this.smoke, this.birds, this.mist]) if (m) (m.material as THREE.ShaderMaterial).uniforms.uTime!.value = time;
     // The dead shuffle round their zones.
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -753,8 +966,8 @@ export class GeoscapeSet implements StageSet {
     const scale = new THREE.Vector3(1, 1, 1);
     this.wanderers.forEach((w, i) => {
       const a = w.phase + time * w.speed;
-      const x = w.x + Math.cos(a) * w.r;
-      const z = w.z + Math.sin(a) * w.r;
+      const x = w.x + Math.cos(a) * w.r + w.ox + Math.sin(time * 0.7 + w.ox * 30) * 0.03;
+      const z = w.z + Math.sin(a) * w.r + w.oz + Math.cos(time * 0.6 + w.oz * 30) * 0.03;
       const p = new THREE.Vector3(x, Math.max(heightAt(x, z), 0) + Math.abs(Math.sin(time * 5 + w.phase)) * 0.012, z);
       // Facing the way it shuffles, with a sway.
       q.setFromAxisAngle(up, Math.atan2(-Math.sin(a) * Math.sign(w.speed), Math.cos(a) * Math.sign(w.speed)) + Math.sin(time * 2.3 + w.phase) * 0.25);
@@ -820,14 +1033,53 @@ export class GeoscapeSet implements StageSet {
     return [this.bus.position.clone(), ...points, park];
   }
 
-  /** The models: Atalaya and the zones' towns, farms, mines and works, the forests and peaks, La Mula and the clouds. */
+  /**
+   * The models: the peaks, Atalaya, the towns and the dead cities, farms and
+   * fields, mines and works, roads with their wrecks, signs, roadblocks and
+   * bridges, woods, then La Mula, the clouds and the smoke. Everything stands
+   * still and is merged by material (a few draws for all of it).
+   */
   private build(): void {
     const kit = new KitBatch();
-    const put = (id: BaseModelId, x: number, z: number, o: { fit?: number; s?: number; sy?: number; yaw?: number; y?: number; finish?: Finish } = {}) => {
+    /** Small things (fences, bushes, crops, signs, cars): no shadow of their own, nothing for the shadow map to draw. */
+    const flat = new KitBatch();
+    /** What has been placed (centre and radius), so what comes later keeps clear of it. */
+    const taken: { x: number; z: number; r: number }[] = [];
+    const clear = (x: number, z: number, r: number) => taken.every((t) => Math.hypot(t.x - x, t.z - z) > t.r + r);
+    const roadPaths = ROADS.map(([a, b]) => roadLine(a, b).map((p): [number, number] => [p.x, p.z]));
+    const roadDist = (x: number, z: number) => Math.min(...roadPaths.map((line) => distToPolyline(x, z, line)));
+    const nearZone = (x: number, z: number, r: number) => Object.values(ZONES).some((p) => Math.hypot(p.x - x, p.z - z) < r);
+    const onLand = (x: number, z: number) =>
+      Math.abs(x) < HW - 0.3 && Math.abs(z) < HD - 0.3 && heightAt(x, z) > 0.05 && distToPolyline(x, z, RIVER) > 0.32 && Math.hypot(x - RESERVOIR.x, z - RESERVOIR.z) > RESERVOIR.dam + 0.15;
+    const put = (id: BaseModelId, x: number, z: number, o: { fit?: number; s?: number; sy?: number; yaw?: number; y?: number; finish?: Finish; r?: number; small?: boolean } = {}) => {
       const size = kitModel(id)?.size;
       if (!size) return;
       const s = o.fit ? o.fit / Math.max(size.x, size.z) : (o.s ?? 1) * MINI;
-      kit.put(id, { x, z, y: o.y ?? Math.max(heightAt(x, z), 0) - 0.01, yaw: o.yaw ?? 0, s, sy: o.sy, finish: o.finish ?? 'map' });
+      (o.small || SMALL.has(id) ? flat : kit).put(id, { x, z, y: o.y ?? Math.max(heightAt(x, z), 0) - 0.01, yaw: o.yaw ?? 0, s, sy: o.sy, finish: o.finish ?? 'map' });
+      if (o.r) taken.push({ x, z, r: o.r });
+    };
+    /** A dead car as two boxes (at this size a model's detail never shows): a body and its cab, in faded paint. */
+    const car = (x: number, z: number, yaw: number, k: number) => {
+      const paint = CAR_PAINT[Math.floor(k * CAR_PAINT.length) % CAR_PAINT.length]!;
+      const y = Math.max(heightAt(x, z), 0);
+      const turn = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+      const along = new THREE.Vector3(1, 0, 0).applyQuaternion(turn);
+      kit.prim(UNIT, paint, new THREE.Matrix4().compose(new THREE.Vector3(x, y + 0.01, z), turn, new THREE.Vector3(0.17, 0.035, 0.075)), false);
+      kit.prim(UNIT, paint, new THREE.Matrix4().compose(new THREE.Vector3(x - along.x * 0.01, y + 0.045, z - along.z * 0.01), turn, new THREE.Vector3(0.085, 0.03, 0.068)), false);
+    };
+    /** A model at the cities' scale (a house about half a block), never wider than `most`. */
+    const SCALE = 0.05;
+    const putTrue = (id: BaseModelId, x: number, z: number, yaw: number, most = 0.52, finish: Finish = 'map') => {
+      const size = kitModel(id)?.size;
+      if (!size) return;
+      put(id, x, z, { s: Math.min(SCALE, most / Math.max(size.x, size.z)) / MINI, yaw, finish });
+    };
+    /** A flat strip on the ground from (ax, az) to (bx, bz): a street, a lane, a square. */
+    const strip = (material: THREE.Material, ax: number, az: number, bx: number, bz: number, width: number) => {
+      const mx = (ax + bx) / 2;
+      const mz = (az + bz) / 2;
+      const yaw = Math.atan2(-(bz - az), bx - ax);
+      kit.prim(UNIT, material, new THREE.Matrix4().compose(new THREE.Vector3(mx, Math.max(heightAt(mx, mz), 0.01) - 0.008, mz), new THREE.Quaternion().setFromAxisAngle(UP, yaw), new THREE.Vector3(Math.hypot(bx - ax, bz - az) + width * 0.5, 0.025, width)), false);
     };
     const scatter = (cx: number, cz: number, r: number, n: number, seed: number, each: (x: number, z: number, k: number) => void) => {
       for (let k = 0; k < n; k++) {
@@ -836,6 +1088,9 @@ export class GeoscapeSet implements StageSet {
         each(cx + Math.cos(a) * d, cz + Math.sin(a) * d, k);
       }
     };
+    const quarter = (k: number) => Math.floor(k * 4) * (Math.PI / 2);
+    const smokes: Smoke[] = [];
+    const wrecks: BaseModelId[] = ['rustyCar', 'mapWreckSuv', 'mapWreckVan', 'rustyCar'];
 
     // The sierra's peaks along the north edge.
     const ranges: BaseModelId[] = ['range1', 'range2', 'range3', 'range4'];
@@ -845,10 +1100,10 @@ export class GeoscapeSet implements StageSet {
       put(ranges[i % 4]!, x, z, { s: 3.4 + hash(i, 9) * 1.6, sy: 2.2 + hash(i, 11) * 1.2, yaw: hash(i, 13) * 6.3, y: heightAt(x, z) - 0.6, finish: 'mapMountain' });
     }
 
-    // Atalaya on its shelf: the bunker, its mast, two lookouts, the water tower; the dam beside it is the reservoir's.
+    // Atalaya on its shelf: the bunker, its mast, two lookouts, the water tower, a line of barriers.
     const ax = ATALAYA.x;
     const az = ATALAYA.z;
-    put('bunker', ax, az, { s: 1.8, yaw: Math.PI, finish: 'mapSnow' });
+    put('bunker', ax, az, { s: 1.8, yaw: Math.PI, finish: 'mapSnow', r: 1.3 });
     put('mast', ax - 0.75, az - 0.4, { s: 1.6, finish: 'mapSnow' });
     put('waterTower', ax + 0.9, az - 0.25, { s: 1.2, finish: 'mapSnow' });
     for (const [dx, dz] of [
@@ -859,101 +1114,344 @@ export class GeoscapeSet implements StageSet {
     put('armyTent', ax + 0.1, az + 0.8, { s: 1.3, finish: 'mapSnow' });
     for (let t = -1.2; t <= 1.2; t += 0.2) put('jersey', ax + t, az + 1.2, { s: 1.2, finish: 'mapSnow' });
 
-    // Altomonte's villages under the station.
-    const village = (cx: number, cz: number, seed: number, snow: boolean) => {
-      const houses: BaseModelId[] = ['mapHouse', 'mapHouseSquare', 'mapHouseL', 'mapHouse'];
-      scatter(cx, cz, 0.9, 6, seed, (x, z, k) => put(houses[k % houses.length]!, x, z, { fit: 0.38, yaw: hash(k, seed) * 6.3, finish: snow ? 'mapSnow' : 'map' }));
-      put('mapChurch', cx + 0.2, cz - 0.2, { fit: 0.5, yaw: 0.4, finish: snow ? 'mapSnow' : 'map' });
-    };
-    village(ZONES.weu.x - 1.0, ZONES.weu.z + 0.5, 11, true);
-    // Valdelobos: villages in the closed valleys.
-    village(ZONES.eeu.x - 0.6, ZONES.eeu.z + 0.6, 23, false);
-    village(ZONES.eeu.x + 3.2, ZONES.eeu.z - 1.0, 29, false);
+    // The dead cities: streets in a grid, tall blocks in the middle, shops round them, houses and
+    // yards on the edge, cars dead in the streets, a burnt block or two still smoking.
+    const STREET = mapMaterial('street', 0x58595b);
+    const PLAZA = mapMaterial('plaza', 0x77746d);
+    const LANE = mapMaterial('lane', 0x83725c);
+    const SNOW_LANE = mapMaterial('snowLane', 0xb3aea6);
+    const DOWNTOWN: BaseModelId[] = ['mapTower', 'mapBlockM', 'mapFlats', 'mapShopL', 'mapTower', 'mapFlats'];
+    const MIDTOWN: BaseModelId[] = ['mapShopM', 'mapShopS', 'mapShop', 'mapOffice', 'mapDiner', 'mapShopL', 'mapMotel', 'mapMarket'];
+    const EDGE: BaseModelId[] = ['mapHouseA', 'mapHouseSquare', 'mapGarage', 'mapHouseSquare', 'mapWorks', 'mapBrickShed', 'mapHouseSquare', 'mapHouseSquare'];
+    for (const c of CITIES) {
+      const seed = c.id.charCodeAt(0) * 3;
+      const cx = ZONES[c.id].x + c.dx;
+      const cz = ZONES[c.id].z + c.dz;
+      const [w, d] = [c.cols * c.cell, c.rows * c.cell];
+      const [x0, z0] = [cx - w / 2, cz - d / 2];
+      const wet = (x: number, z: number) => !onLand(x, z);
+      for (let i = 0; i <= c.cols; i++)
+        for (let j = 0; j < c.rows; j++) {
+          const x = x0 + i * c.cell;
+          if (!wet(x, z0 + (j + 0.5) * c.cell)) strip(STREET, x, z0 + j * c.cell, x, z0 + (j + 1) * c.cell, 0.13);
+        }
+      for (let j = 0; j <= c.rows; j++)
+        for (let i = 0; i < c.cols; i++) {
+          const z = z0 + j * c.cell;
+          if (!wet(x0 + (i + 0.5) * c.cell, z)) strip(STREET, x0 + i * c.cell, z, x0 + (i + 1) * c.cell, z, 0.13);
+        }
+      const burnt = [Math.floor(hash(seed, 1) * c.cols * c.rows), Math.floor(hash(seed, 2) * c.cols * c.rows)];
+      for (let j = 0; j < c.rows; j++)
+        for (let i = 0; i < c.cols; i++) {
+          const x = x0 + (i + 0.5) * c.cell;
+          const z = z0 + (j + 0.5) * c.cell;
+          if (wet(x, z)) continue;
+          const k = hash(i + seed, j);
+          const yaw = quarter(hash(j, i + seed));
+          taken.push({ x, z, r: c.cell * 0.5 });
+          // The square at the marker.
+          if (Math.hypot(x - ZONES[c.id].x, z - ZONES[c.id].z) < c.cell * 0.75) {
+            strip(PLAZA, x - c.cell * 0.4, z, x + c.cell * 0.4, z, c.cell * 0.8);
+            continue;
+          }
+          if (burnt.includes(j * c.cols + i)) {
+            putTrue('mapRuin', x, z, yaw);
+            put('siteSpoil', x + 0.18, z + 0.15, { s: 0.5, yaw: k * 6 });
+            smokes.push({ x, y: Math.max(heightAt(x, z), 0) + 0.3, z, dark: true, size: 0.34 });
+            continue;
+          }
+          const r = Math.max(Math.abs(x - cx) / (w / 2), Math.abs(z - cz) / (d / 2));
+          if (k < 0.1) {
+            // An empty lot: dead cars, a barrier.
+            putTrue(wrecks[Math.floor(k * 40) % 4]!, x - 0.1, z, yaw + 0.3);
+            car(x + 0.12, z + 0.1, yaw - 0.5, k);
+            putTrue('mapBarrier', x, z - 0.2, yaw);
+            continue;
+          }
+          if (r > 0.72) {
+            // The edge: two houses or sheds to a block, a yard tree.
+            const kinds = EDGE;
+            putTrue(kinds[Math.floor(k * kinds.length)]!, x - 0.14, z - 0.1, yaw, 0.3);
+            putTrue(kinds[Math.floor(hash(k, 3) * kinds.length)]!, x + 0.15, z + 0.12, yaw + Math.PI, 0.3);
+            if (hash(i, j + 5) < 0.5) put('mapTreeA', x + 0.18, z - 0.18, { fit: 0.2, yaw: k * 6 });
+            continue;
+          }
+          const kinds = r < 0.4 ? DOWNTOWN : MIDTOWN;
+          putTrue(kinds[Math.floor(hash(k, i) * kinds.length)]!, x, z, yaw);
+        }
+      // Dead cars in the streets.
+      for (let n = 0; n < c.cols * c.rows * 0.45; n++) {
+        const along = hash(n, seed + 11);
+        const line = Math.floor(hash(seed + 13, n) * (c.cols + c.rows + 2));
+        const vertical = line <= c.cols;
+        const x = vertical ? x0 + line * c.cell + (hash(n, 4) - 0.5) * 0.06 : x0 + along * w;
+        const z = vertical ? z0 + along * d : z0 + (line - c.cols - 1) * c.cell + (hash(n, 4) - 0.5) * 0.06;
+        if (wet(x, z) || Math.hypot(x - ZONES[c.id].x, z - ZONES[c.id].z) < 0.35) continue;
+        const yaw = (vertical ? Math.PI / 2 : 0) + (hash(n, 6) - 0.5) * 0.8;
+        if (n % 11 === 0) putTrue('mapWreckBus', x, z, yaw);
+        else car(x, z, yaw, hash(n, 9));
+      }
+    }
+    // Corran: the first city to fall; a helicopter down at its edge.
+    put('mapHeli', ZONES.afr.x + 2.9, ZONES.afr.z - 1.6, { fit: 0.42, yaw: 0.7, r: 0.3 });
+    smokes.push({ x: ZONES.afr.x + 2.9, y: heightAt(ZONES.afr.x + 2.9, ZONES.afr.z - 1.6) + 0.1, z: ZONES.afr.z - 1.6, dark: true, size: 0.2 });
+    // Galen: the Instituto Galena on its north side, a crane and warehouses on the bank, the lighthouse.
+    put('mapFactory', ZONES.me.x + 2.6, ZONES.me.z - 1.0, { fit: 0.8, yaw: 0.2, r: 0.45 });
+    put('mapCrane', 10.95, 8.55, { fit: 0.75, yaw: 2.4, r: 0.25 });
+    put('mapWarehouse', 11.4, 7.8, { fit: 0.65, yaw: 0.45, r: 0.35 });
+    put('mapBrickShed', 10.6, 7.55, { fit: 0.55, yaw: 0.45, r: 0.3 });
+    put('mapLighthouse', 12.4, 8.6, { fit: 0.35 });
+    put('mapTankTower', ZONES.me.x - 1.9, ZONES.me.z - 1.3, { fit: 0.2 });
 
-    // El Pantano Gris: the dam across the reservoir's lip, the dead power station below it, a line of pylons.
+    // Towns: a lane through each, houses either side behind their fences, a church at one end.
+    const town = (cx: number, cz: number, n: number, axis: number, seed: number, snow: boolean) => {
+      const finish: Finish = snow ? 'mapSnow' : 'map';
+      const dir = [Math.cos(axis), Math.sin(axis)] as const;
+      const across = [-dir[1], dir[0]] as const;
+      const half = Math.ceil(n / 2) * 0.22 + 0.12;
+      strip(snow ? SNOW_LANE : LANE, cx - dir[0] * half, cz - dir[1] * half, cx + dir[0] * half, cz + dir[1] * half, 0.08);
+      const houses: BaseModelId[] = ['mapHouse', 'mapHouseSquare', 'mapHouseA', 'mapHouseSquare', 'mapHouse', 'mapHouseSquare'];
+      for (let k = 0; k < n; k++) {
+        const side = k % 2 ? 1 : -1;
+        const t = -half + 0.24 + Math.floor(k / 2) * 0.44 + (hash(k, seed) - 0.5) * 0.06;
+        const x = cx + dir[0] * t + across[0] * side * 0.25;
+        const z = cz + dir[1] * t + across[1] * side * 0.25;
+        if (!onLand(x, z) || nearZone(x, z, 0.4) || !clear(x, z, 0.12)) continue;
+        // Facing the lane.
+        const face = Math.atan2(across[0] * -side, across[1] * -side);
+        putTrue(houses[Math.floor(hash(seed, k) * houses.length)]!, x, z, face, 0.36, finish);
+        taken.push({ x, z, r: 0.14 });
+        const fx = x - across[0] * side * 0.19;
+        const fz = z - across[1] * side * 0.19;
+        put('mapFence', fx, fz, { fit: 0.26, yaw: axis + Math.PI / 2, finish });
+        if (hash(k, seed + 1) < 0.45) put('mapTree', x + across[0] * side * 0.2 + dir[0] * 0.14, z + across[1] * side * 0.2 + dir[1] * 0.14, { fit: 0.14, finish });
+        if (hash(k, seed + 2) < 0.18) car(cx + dir[0] * t + across[0] * side * 0.08, cz + dir[1] * t + across[1] * side * 0.08, Math.atan2(-dir[1], dir[0]), hash(seed, k));
+      }
+      const ex = cx + dir[0] * (half + 0.2);
+      const ez = cz + dir[1] * (half + 0.2);
+      if (n >= 9 && onLand(ex, ez) && clear(ex, ez, 0.2)) {
+        put('mapChurch', ex, ez, { fit: 0.36, yaw: axis + Math.PI / 2, finish, r: 0.22 });
+        // Someone still lives here: a chimney smoking.
+        smokes.push({ x: cx, y: Math.max(heightAt(cx, cz), 0) + 0.3, z: cz, dark: false, size: 0.08 });
+      }
+    };
+    // Aldren's villages under Atalaya, in the snow.
+    town(ZONES.weu.x - 1.3, ZONES.weu.z + 0.55, 10, 0.25, 11, true);
+    town(ZONES.weu.x + 1.4, ZONES.weu.z + 1.0, 6, -0.4, 13, true);
+    // Volkren: villages in the closed valleys.
+    town(ZONES.eeu.x - 0.9, ZONES.eeu.z + 0.6, 9, 0.5, 23, false);
+    town(ZONES.eeu.x + 3.1, ZONES.eeu.z - 0.9, 6, -0.3, 29, false);
+    // Carvik: the miners' row.
+    town(ZONES.sa.x + 0.9, ZONES.sa.z + 1.3, 6, 1.2, 31, false);
+
+    // El Pantano Gris: the dam across the reservoir's lip, the dead power station below it, its yard, a line of pylons.
     const gap = Math.atan2(RIVER[0]![1] - RESERVOIR.z, RIVER[0]![0] - RESERVOIR.x);
     for (let i = 0; i < 10; i++) {
       const a = gap + (i / 9 - 0.5) * 1.1;
       const block = new THREE.Vector3(RESERVOIR.x + Math.cos(a) * RESERVOIR.dam, -0.3, RESERVOIR.z + Math.sin(a) * RESERVOIR.dam);
-      kit.prim(UNIT, DAM, new THREE.Matrix4().compose(block, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a), new THREE.Vector3(0.24, RESERVOIR.level + 0.45, 0.32)));
+      kit.prim(UNIT, DAM, new THREE.Matrix4().compose(block, new THREE.Quaternion().setFromAxisAngle(UP, -a), new THREE.Vector3(0.24, RESERVOIR.level + 0.45, 0.32)));
     }
-    put('mapCooling', 12.6, 2.6, { fit: 1.0 });
-    put('mapChimney', 11.6, 3.2, { s: 0.9 });
-    put('mapWarehouse', 13.6, 1.4, { fit: 0.9, yaw: 0.3 });
-    for (let i = 0; i < 5; i++) {
-      const x = RESERVOIR.x - 2 - i * 2.6;
-      const z = RESERVOIR.z + 5.2 + i * 0.5;
-      put('pylon', x, z, { s: 0.45, yaw: 1.4 });
+    put('mapCooling', 12.6, 2.6, { fit: 1.0, r: 0.55 });
+    put('mapChimney', 11.6, 3.2, { s: 0.9, r: 0.15 });
+    put('mapWarehouse', 13.6, 1.4, { fit: 0.9, yaw: 0.3, r: 0.45 });
+    put('mapWorks', 11.3, 4.0, { fit: 0.3, yaw: 0.3, r: 0.18 });
+    put('mapWorks', 11.75, 4.2, { fit: 0.3, yaw: 0.3, r: 0.18 });
+    put('mapBrickShed', 13.4, 3.7, { fit: 0.6, yaw: -0.2, r: 0.32 });
+    for (let i = 0; i < 6; i++) {
+      const x = RESERVOIR.x - 2 - i * 2.4;
+      const z = RESERVOIR.z + 5.2 + i * 0.45;
+      if (onLand(x, z)) put('pylon', x, z, { s: 0.45, yaw: 1.4, r: 0.12 });
     }
 
-    // Carboneda: mine mouths in the western hills, spoil heaps and a works shed.
+    // Carvik: mine mouths in the western hills, spoil heaps, a works shed, a dozer.
     for (const [dx, dz, yaw] of [
       [-0.9, -1.2, 0.6],
       [0.8, -1.5, -0.3],
     ] as const)
-      put('mapMine', ZONES.sa.x + dx, ZONES.sa.z + dz, { fit: 0.5, yaw, y: heightAt(ZONES.sa.x + dx, ZONES.sa.z + dz) - 0.1 });
-    put('siteSpoil', ZONES.sa.x - 0.2, ZONES.sa.z - 0.2, { s: 1.6 });
-    put('siteSpoil', ZONES.sa.x + 1.2, ZONES.sa.z + 0.4, { s: 1.2, yaw: 1 });
-    put('mapWarehouse', ZONES.sa.x + 0.9, ZONES.sa.z + 1.3, { fit: 0.8, yaw: -0.5 });
-    put('siteDozer', ZONES.sa.x - 1.0, ZONES.sa.z + 0.6, { s: 0.9, yaw: 0.8 });
+      put('mapMine', ZONES.sa.x + dx, ZONES.sa.z + dz, { fit: 0.5, yaw, y: heightAt(ZONES.sa.x + dx, ZONES.sa.z + dz) - 0.1, r: 0.3 });
+    put('siteSpoil', ZONES.sa.x - 0.2, ZONES.sa.z - 0.2, { s: 1.6, r: 0.3 });
+    put('siteSpoil', ZONES.sa.x + 1.2, ZONES.sa.z + 0.4, { s: 1.2, yaw: 1, r: 0.25 });
+    put('mapWarehouse', ZONES.sa.x - 0.9, ZONES.sa.z + 0.9, { fit: 0.7, yaw: -0.5, r: 0.38 });
+    put('siteDozer', ZONES.sa.x - 1.4, ZONES.sa.z + 0.1, { s: 0.9, yaw: 0.8 });
 
-    // La Vega: farms along the river, fields and orchards.
+    // Farms: a farmhouse, a barn or a shed, silos, a windmill, hay bales and a paddock fenced in,
+    // fields of crops round them behind fences and hedges.
+    const fence = (ax0: number, az0: number, bx: number, bz: number) => {
+      const n = Math.max(1, Math.round(Math.hypot(bx - ax0, bz - az0) / 0.3));
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n;
+        const x = ax0 + (bx - ax0) * t;
+        const z = az0 + (bz - az0) * t;
+        if (onLand(x, z)) put('mapFence', x, z, { fit: 0.31, yaw: Math.atan2(bx - ax0, bz - az0) });
+      }
+    };
+    const field = (x: number, z: number, w: number, d: number, seed: number) => {
+      const tiles = Math.round(w / 0.62) * Math.round(d / 0.62);
+      for (let k = 0; k < tiles; k++) {
+        const fx = x - w / 2 + 0.31 + (k % Math.round(w / 0.62)) * 0.62;
+        const fz = z - d / 2 + 0.31 + Math.floor(k / Math.round(w / 0.62)) * 0.62;
+        if (onLand(fx, fz) && roadDist(fx, fz) > 0.2) put(hash(k, seed) < 0.7 ? 'mapCrops' : 'mapField', fx, fz, { fit: 0.62, yaw: quarter(hash(seed, k)) });
+      }
+      // Fenced on two sides, a hedge on a third.
+      fence(x - w / 2, z - d / 2, x + w / 2, z - d / 2);
+      fence(x - w / 2, z + d / 2, x - w / 2, z - d / 2);
+      for (let t = 0; t < 1; t += 0.2) if (onLand(x + w / 2, z - d / 2 + t * d)) put('mapBushes', x + w / 2, z - d / 2 + t * d, { fit: 0.14, yaw: t * 9 });
+      taken.push({ x, z, r: Math.max(w, d) * 0.5 });
+    };
+    const farm = (x: number, z: number, seed: number, big: boolean) => {
+      if (!onLand(x, z)) return;
+      putTrue(hash(seed, 1) < 0.5 ? 'mapHouseC' : 'mapHouse', x, z, quarter(hash(seed, 2)), 0.3);
+      put(big ? 'mapBarn' : 'mapFarmShed', x + 0.45, z - 0.3, { fit: big ? 0.48 : 0.4, yaw: quarter(hash(seed, 3)) });
+      put('mapSilo', x + 0.78, z - 0.08, { fit: 0.14 });
+      if (big) put('mapSilo', x + 0.78, z + 0.12, { fit: 0.14 });
+      if (hash(seed, 4) < 0.6) put('mapWindmill', x - 0.35, z - 0.3, { fit: 0.16 });
+      for (let k = 0; k < 4; k++) put('mapHay', x + 0.2 + k * 0.08, z + 0.32 + (k % 2) * 0.07, { fit: 0.06 });
+      // The paddock.
+      fence(x - 0.2, z + 0.5, x + 0.55, z + 0.5);
+      fence(x + 0.55, z + 0.5, x + 0.55, z + 0.22);
+      taken.push({ x: x + 0.2, z: z - 0.05, r: 0.6 });
+      field(x - 1.1, z + 0.1, 1.24, 1.24, seed + 5);
+      if (big) field(x + 0.2, z + 1.25, 1.86, 1.24, seed + 6);
+      smokes.push({ x, y: Math.max(heightAt(x, z), 0) + 0.25, z, dark: false, size: 0.06 });
+    };
+    // La Vega: the big farm by the river, its patchwork of fields, an orchard.
     const vx = ZONES.oce.x;
     const vz = ZONES.oce.z;
-    put('mapBarn', vx - 1.1, vz - 0.9, { fit: 0.6, yaw: 0.2 });
-    put('mapSilo', vx - 0.5, vz - 1.2, { fit: 0.22 });
-    put('mapSilo', vx - 0.25, vz - 1.15, { fit: 0.22 });
-    put('mapHouse', vx + 0.9, vz - 0.8, { fit: 0.4, yaw: -0.3 });
-    for (let i = 0; i < 10; i++) {
-      const x = vx - 3 + (i % 5) * 1.3 + hash(i, 41) * 0.3;
-      const z = vz + 0.1 + Math.floor(i / 5) * 1.25 + hash(i, 43) * 0.3;
-      if (distToPolyline(x, z, RIVER) < 0.7) continue;
-      put(i % 3 ? 'mapCrops' : 'mapField', x, z, { fit: 0.8, yaw: Math.round(hash(i, 47) * 4) * (Math.PI / 2) });
-    }
-    scatter(vx + 2.6, vz - 1.4, 0.8, 9, 53, (x, z) => put('mapTree', x, z, { fit: 0.22 }));
+    farm(vx - 1.0, vz - 0.85, 41, true);
+    field(vx + 0.9, vz - 1.4, 1.24, 1.24, 43);
+    field(vx - 2.4, vz + 1.1, 1.86, 1.24, 45);
+    field(vx + 0.1, vz + 1.2, 1.24, 0.62, 47);
+    scatter(vx + 2.4, vz - 1.5, 0.7, 10, 53, (x, z) => onLand(x, z) && put('mapTree', x, z, { fit: 0.2 }));
+    // Farmsteads along the roads.
+    farm(-2.4, -1.6, 61, false);
+    farm(-3.6, 2.6, 63, true);
+    farm(4.4, -2.8, 65, false);
+    farm(5.6, 4.6, 67, false);
+    farm(-9.6, 3.6, 69, false);
 
-    // Ciudad Varela: the first city to fall, a grid of dead blocks.
-    const city = (cx: number, cz: number, cols: number, rows: number, seed: number, kinds: BaseModelId[]) => {
-      for (let j = 0; j < rows; j++)
-        for (let i = 0; i < cols; i++) {
-          const x = cx + (i - (cols - 1) / 2) * 0.75;
-          const z = cz + (j - (rows - 1) / 2) * 0.75;
-          // A square left open round the zone's marker.
-          if (Object.values(ZONES).some((p) => Math.hypot(p.x - x, p.z - z) < 0.6)) continue;
-          put(kinds[Math.floor(hash(i + seed, j) * kinds.length)]!, x, z, { fit: 0.55, yaw: Math.round(hash(j, i + seed) * 4) * (Math.PI / 2) });
-        }
+    // Los Llanos de Ceniza: dead trees and wrecks on the ash, fires smouldering.
+    scatter(ZONES.na.x, ZONES.na.z, 3.2, 22, 81, (x, z, k) => {
+      if (!onLand(x, z) || !clear(x, z, 0.1)) return;
+      if (k % 4) put(k % 3 ? 'mapTreeDead' : 'pineDead', x, z, { fit: k % 3 ? 0.22 : undefined, s: 1.1, yaw: hash(k, 83) * 6.3 });
+      else car(x, z, hash(k, 83) * 6.3, hash(k, 85));
+    });
+    for (const [dx, dz] of [
+      [-1.6, 0.9],
+      [1.9, 0.4],
+    ] as const)
+      smokes.push({ x: ZONES.na.x + dx, y: Math.max(heightAt(ZONES.na.x + dx, ZONES.na.z + dz), 0) + 0.05, z: ZONES.na.z + dz, dark: true, size: 0.2 });
+
+    // The roads: dead cars on the verges, a sign by each zone, roadblocks on the way into the cities, bridges over the river.
+    ROADS.forEach(([a, b], r) => {
+      const line = roadLine(a, b);
+      for (let i = 6; i < line.length - 6; i++) {
+        const p = line[i]!;
+        const q = line[i + 1]!;
+        const yaw = Math.atan2(-(q.z - p.z), q.x - p.x);
+        const k = hash(i, r * 7 + 3);
+        const sx = -(q.z - p.z);
+        const sz = q.x - p.x;
+        const len = Math.hypot(sx, sz) || 1;
+        const side = k < 0.5 ? 1 : -1;
+        const x = p.x + (sx / len) * 0.1 * side;
+        const z = p.z + (sz / len) * 0.1 * side;
+        if (inCity(x, z) || !onLand(x, z)) continue;
+        if (k < 0.045) car(x, z, yaw + (hash(i, r) - 0.5) * 0.6, hash(r, i));
+        else if (k > 0.993) putTrue('mapWreckBus', x, z, yaw + 0.2);
+      }
+      // A sign by each end.
+      for (const [from, list] of [
+        [a, line],
+        [b, line.slice().reverse()],
+      ] as const) {
+        const p = list[Math.min(5, list.length - 1)]!;
+        const q = list[Math.min(6, list.length - 1)]!;
+        const sx = -(q.z - p.z);
+        const sz = q.x - p.x;
+        const len = Math.hypot(sx, sz) || 1;
+        const x = p.x + (sx / len) * 0.1;
+        const z = p.z + (sz / len) * 0.1;
+        if (onLand(x, z) && !inCity(x, z)) put(hash(r, from.length) < 0.3 ? 'mapSignStop' : 'mapSign', x, z, { fit: 0.06, sy: 1.1, yaw: Math.atan2(-(q.z - p.z), q.x - p.x) + Math.PI / 2 });
+      }
+    });
+    // Roadblocks: on the roads into the dead cities, and the last one before Aldren.
+    const roadblock = (a: RegionId, b: RegionId, at: number) => {
+      const line = roadLine(a, b);
+      const i = Math.round(at * (line.length - 1));
+      const p = line[i]!;
+      const q = line[Math.min(i + 1, line.length - 1)]!;
+      const yaw = Math.atan2(-(q.z - p.z), q.x - p.x);
+      const sx = -(q.z - p.z);
+      const sz = q.x - p.x;
+      const len = Math.hypot(sx, sz) || 1;
+      for (const t of [-0.15, 0, 0.15]) put(t ? 'mapBarrier' : 'jersey', p.x + (sx / len) * t, p.z + (sz / len) * t, { fit: 0.1, yaw: yaw + Math.PI / 2 });
+      put('sandbagWall', p.x + (sx / len) * 0.26, p.z + (sz / len) * 0.26, { fit: 0.09, yaw });
+      putTrue('rustyCar', p.x - (sx / len) * 0.3, p.z - (sz / len) * 0.3, yaw + 1.1);
     };
-    city(ZONES.afr.x, ZONES.afr.z, 4, 3, 61, ['mapFlats', 'mapOffice', 'mapShop', 'mapFactory', 'mapMotel', 'mapHouseSquare']);
-    // Puerto Galena: the dead city and the Instituto Galena by the river's mouth, warehouses on the bank, the lighthouse.
-    put('mapFactory', ZONES.me.x + 1.0, ZONES.me.z - 0.6, { fit: 0.9, yaw: 0.2 });
-    city(ZONES.me.x + 0.4, ZONES.me.z + 0.5, 3, 2, 71, ['mapFlats', 'mapOffice', 'mapShop', 'mapHouseSquare']);
-    put('mapWarehouse', ZONES.me.x - 0.8, ZONES.me.z + 1.6, { fit: 0.7, yaw: 0.5 });
-    put('mapLighthouse', 12.4, 8.6, { fit: 0.35 });
+    roadblock('afr', 'oce', 0.3);
+    roadblock('me', 'oce', 0.32);
+    roadblock('afr', 'sa', 0.35);
+    roadblock('oce', 'weu', 0.78);
+    // Bridges where the roads cross the river.
+    const crossing = (a: [number, number], b: [number, number], c: [number, number], d: [number, number]) => {
+      const den = (b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0]);
+      if (Math.abs(den) < 1e-9) return null;
+      const t = ((c[0] - a[0]) * (d[1] - c[1]) - (c[1] - a[1]) * (d[0] - c[0])) / den;
+      const u = ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / den;
+      return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null;
+    };
+    for (const path of roadPaths)
+      for (let i = 0; i + 1 < path.length; i++)
+        for (let j = 0; j + 1 < RIVER.length; j++) {
+          const t = crossing(path[i]!, path[i + 1]!, RIVER[j]!, RIVER[j + 1]!);
+          if (t === null) continue;
+          const [x, z] = [path[i]![0] + (path[i + 1]![0] - path[i]![0]) * t, path[i]![1] + (path[i + 1]![1] - path[i]![1]) * t];
+          put('mapBridge', x, z, { fit: 1.0, yaw: Math.atan2(-(path[i + 1]![1] - path[i]![1]), path[i + 1]![0] - path[i]![0]), y: -0.16 });
+        }
 
-    // Los Llanos de Ceniza: dead trees and wrecks on the ash.
-    scatter(ZONES.na.x, ZONES.na.z, 3.2, 14, 81, (x, z, k) => put(k % 4 ? 'pineDead' : 'rustyCar', x, z, { s: k % 4 ? 1.1 : 0.9, yaw: hash(k, 83) * 6.3 }));
-
-    // Forests on the slopes (snowy higher up), copses in the lowlands, crags in the hills.
+    // Woods: pine forests on the slopes, deeper with stands of them, snow higher up.
     const pines: BaseModelId[] = ['pine', 'pineSmall', 'pineTall'];
-    for (let k = 0; k < 420; k++) {
+    for (let k = 0; k < 1300; k++) {
       const x = -HW + 0.4 + hash(k, 101) * (W - 0.8);
       const z = -HD + 0.4 + hash(k, 103) * (D - 0.8);
       const h = heightAt(x, z);
-      if (h < 0.55 || h > 3.0 || fbm(x * 0.5 + 3, z * 0.5) < 0.45) continue;
-      if (Object.values(ZONES).some((p) => Math.hypot(p.x - x, p.z - z) < 1.3) || Math.hypot(ATALAYA.x - x, ATALAYA.z - z) < 1.6) continue;
-      put(pines[k % 3]!, x, z, { s: 1.0 + hash(k, 107) * 0.5, yaw: hash(k, 109) * 6.3, finish: h > 1.7 ? 'mapSnow' : 'map' });
+      const thick = fbm(x * 0.5 + 3, z * 0.5);
+      if (h < 0.5 || h > 3.0 || thick < 0.42) continue;
+      if (nearZone(x, z, 1.1) || Math.hypot(ATALAYA.x - x, ATALAYA.z - z) < 1.6 || roadDist(x, z) < 0.18 || !clear(x, z, 0.08)) continue;
+      const finish: Finish = h > 1.7 ? 'mapSnow' : 'map';
+      if (thick > 0.55 && k % 3 === 0) put('mapPines', x, z, { fit: 0.42 + hash(k, 105) * 0.2, yaw: hash(k, 109) * 6.3, finish });
+      else put(pines[k % 3]!, x, z, { s: 1.0 + hash(k, 107) * 0.6, yaw: hash(k, 109) * 6.3, finish });
     }
-    for (let k = 0; k < 160; k++) {
+    // Broadleaf woods and groves in the lowlands, trees along the river's banks, dead ones by the ash.
+    const broad: BaseModelId[] = ['mapGrove', 'mapTrees', 'mapTrees', 'mapTreesWide', 'mapTreeA', 'mapTrees'];
+    const broadFit = { mapGrove: 0.7, mapTreeBig: 0.38, mapTreeA: 0.26, mapTrees: 0.6, mapTreesWide: 0.7 } as Record<string, number>;
+    for (let k = 0; k < 600; k++) {
       const x = -HW + 1 + hash(k, 113) * (W - 2);
-      const z = -5 + hash(k, 117) * (HD + 4);
+      const z = -6 + hash(k, 117) * (HD + 5);
       const h = heightAt(x, z);
-      if (h < 0.06 || h > 1.3 || fbm(x * 0.6, z * 0.6 + 4) < 0.5 || distToPolyline(x, z, RIVER) < 0.45) continue;
-      if (Object.values(ZONES).some((p) => Math.hypot(p.x - x, p.z - z) < 1.6)) continue;
-      if (ashen(x, z)) continue;
-      put(k % 2 ? 'mapTrees' : 'mapTreesWide', x, z, { fit: 0.7, yaw: hash(k, 119) * 6.3 });
+      if (h < 0.06 || h > 1.3 || fbm(x * 0.6, z * 0.6 + 4) < 0.47 || distToPolyline(x, z, RIVER) < 0.4) continue;
+      if (nearZone(x, z, 1.2) || inCity(x, z, 0.3) || ashen(x, z) || roadDist(x, z) < 0.2 || !clear(x, z, 0.12)) continue;
+      const id = broad[Math.floor(hash(k, 119) * broad.length)]!;
+      put(id, x, z, { fit: broadFit[id]! * (0.8 + hash(k, 121) * 0.4), yaw: hash(k, 123) * 6.3, r: 0.1 });
     }
+    for (let i = 0; i + 1 < RIVER.length; i++) {
+      const [px, pz] = RIVER[i]!;
+      const [qx, qz] = RIVER[i + 1]!;
+      const len = Math.hypot(qx - px, qz - pz);
+      for (let t = 0; t < len; t += 0.32) {
+        const side = hash(i * 31 + t, 3) < 0.5 ? 1 : -1;
+        const off = 0.45 + hash(t, i) * 0.25;
+        const x = px + ((qx - px) / len) * t - ((qz - pz) / len) * off * side;
+        const z = pz + ((qz - pz) / len) * t + ((qx - px) / len) * off * side;
+        if (!onLand(x, z) || inCity(x, z, 0.1) || roadDist(x, z) < 0.15 || !clear(x, z, 0.08) || hash(t * 3, i) < 0.35) continue;
+        put(hash(t, i + 1) < 0.5 ? 'mapBushes' : 'mapTreeA', x, z, { fit: 0.18 + hash(t, i + 2) * 0.1, yaw: t * 5 });
+      }
+    }
+    scatter(-1.5, 5.6, 4.5, 30, 131, (x, z, k) => {
+      if (onLand(x, z) && !inCity(x, z, 0.2) && roadDist(x, z) > 0.15 && clear(x, z, 0.1)) put('mapTreeDead', x, z, { fit: 0.18 + hash(k, 133) * 0.08, yaw: k * 2.3 });
+    });
     const crags: BaseModelId[] = ['crag', 'crag2', 'crag3', 'crag4'];
-    for (let k = 0; k < 40; k++) {
+    for (let k = 0; k < 60; k++) {
       const x = -HW + 1 + hash(k, 121) * (W - 2);
       const z = -HD + 1 + hash(k, 123) * (D - 2);
       const h = heightAt(x, z);
@@ -963,6 +1461,7 @@ export class GeoscapeSet implements StageSet {
 
     this.statics.begin(null);
     kit.addTo(this.statics);
+    flat.addTo(this.statics, false);
     this.statics.commit();
     // What stands under the Marea goes dark with the ground: the map's own materials (glass is the base's too).
     this.statics.group.traverse((o) => {
@@ -983,6 +1482,10 @@ export class GeoscapeSet implements StageSet {
       this.bus.add(parts.group);
     }
 
+    // Smoke over the burning blocks, the plain's fires and the farms' chimneys.
+    this.smoke = smokeColumns(smokes);
+    this.valley.add(this.smoke);
+
     // Clouds drifting over the sierra (no shadows: they move all the time).
     const cloudIds: BaseModelId[] = ['mapCloud', 'mapCloud2', 'mapCloud3'];
     for (let i = 0; i < 7; i++) {
@@ -997,6 +1500,24 @@ export class GeoscapeSet implements StageSet {
   }
 }
 
-/** A unit box standing on y = 0 (the dam's blocks). */
+/** A unit box standing on y = 0 (the dam's blocks, the streets and lanes). */
 const UNIT = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** Models too small to cast a shadow worth drawing. */
+const SMALL = new Set<BaseModelId>(['mapFence', 'mapBushes', 'mapHay', 'mapSign', 'mapSignStop', 'mapBarrier', 'jersey', 'sandbagWall', 'mapCrops', 'mapField', 'siteSpoil']);
+
+/** A plain material of the map (streets, squares, lanes, cars): named so the Marea darkens it too. */
+const mapMaterials = new Map<string, THREE.Material>();
+/** Dead cars' faded paint: rust, grey, a washed-out blue, a dull cream. */
+const CAR_PAINT = [0x6e4231, 0x67696b, 0x52606a, 0x948b74].map((c, i) => mapMaterial(`car${i}`, c));
+function mapMaterial(name: string, color: number): THREE.Material {
+  let m = mapMaterials.get(name);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1 });
+    m.name = `${name}:map`;
+    mapMaterials.set(name, m);
+  }
+  return m;
+}
 const DAM = new THREE.MeshStandardMaterial({ color: 0xa3a39e, roughness: 0.9 });

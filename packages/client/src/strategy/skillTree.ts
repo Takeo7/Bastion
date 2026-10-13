@@ -216,9 +216,12 @@ function stepEl(ctx: TreeContext, axis: ClassId, branch: number, row: number, in
   // Taller de oficios still holds carries its lock on the path.
   const pill = !mini && st.taller ? h('span.tstep-lock', { title: `Hace falta el Taller de oficios a nivel ${st.taller}` }, `Taller ${st.taller}`) : null;
   const title = row ? `Esta fila pide ${st.gate} ${st.gate === 1 ? 'punto' : 'puntos'} en ${name}, en las filas de arriba (lleva ${st.above})` : '';
+  // How many points the path asks for here, on the path itself: lit once the branch has them.
+  const gate = !mini && row && st.gate ? h(`span.tstep-gate${st.above >= st.gate ? '.ok' : ''}`, { 'aria-hidden': 'true' }, String(st.gate)) : null;
   return h(
     `div.tstep.b${branch}${st.lit ? '.lit' : ''}${st.barred ? '.barred' : ''}${st.taller ? '.taller' : ''}${row === ROW_GATES.length - 1 ? '.last' : ''}${nodes.length > 1 ? '.pair' : ''}`,
     { title },
+    gate,
     pill,
     h('div.tstep-nodes', {}, ...nodes.map((d) => nodeEl(ctx, d, inspect, mini, zoom))),
   );
@@ -230,6 +233,7 @@ function inspector(ctx: TreeContext): { el: HTMLElement; show: (d: TalentDef | n
   const el = h('div.tree-inspect', { 'aria-live': 'polite' });
   const show = (d: TalentDef | null) => {
     clear(el);
+    el.className = `tree-inspect${d?.axis ? ` axis-${d.axis}` : ''}`;
     if (!d) {
       el.append(
         h('div.x-group', {}, 'Talento'),
@@ -237,7 +241,7 @@ function inspector(ctx: TreeContext): { el: HTMLElement; show: (d: TalentDef | n
           'p.ti-hint',
           {},
           ctx.promoting
-            ? 'Pasa por encima de un nodo para ver qué hace. Los que tienen el aro encendido se aprenden ya: pulsa para añadir un nivel.'
+            ? 'Pasa por encima de un nodo para ver qué hace. Los que tienen el aro encendido y un halo se aprenden ya: pulsa para añadir un nivel.'
             : 'Pasa por encima de un nodo para ver qué hace y qué le falta.',
         ),
       );
@@ -269,7 +273,7 @@ function inspector(ctx: TreeContext): { el: HTMLElement; show: (d: TalentDef | n
       h(
         'div.ti-head',
         {},
-        disc(iconOf(d), `${d.ability ? '.ab' : ''}${st.level ? '.taken' : ''}`),
+        disc(iconOf(d), `${d.ability ? '.ab' : ''}${st.level ? '.taken' : ''}${d.song ? '.song' : ''}`),
         h(
           'div',
           {},
@@ -305,7 +309,7 @@ function axisBar(ctx: TreeContext): HTMLElement {
       const role = roleOf(ctx.b, a);
       const points = pointsInAxis(ctx.b.talents, a);
       return h(
-        `button.tree-axis.role-${role}${!ctx.whole && a === ctx.axis ? '.on' : ''}`,
+        `button.tree-axis.axis-${a}.role-${role}${!ctx.whole && a === ctx.axis ? '.on' : ''}`,
         { type: 'button', role: 'tab', 'aria-selected': String(!ctx.whole && a === ctx.axis), onclick: () => ctx.onAxis(a) },
         ctx.clsTag(a),
         h('b', {}, TEMPLATES[a].name),
@@ -361,7 +365,7 @@ function axisView(ctx: TreeContext, inspect: (d: TalentDef | null) => void): HTM
     role === 'closed'
       ? h('p.tree-note', {}, `Eje cerrado: ${ctx.b.cls ? `aprende ya de ${[ctx.b.cls, ...axesOf(ctx.b).open].map((a) => TEMPLATES[a!].name).join(' y ')}` : `un recluta aprende de dos ejes como mucho, y ya tiene ${axesOf(ctx.b).open.map((a) => TEMPLATES[a].name).join(' y ')}`}.`)
       : null;
-  return h('div.tree-axis-view', {}, closedNote, grid);
+  return h(`div.tree-axis-view.axis-${axis}`, {}, closedNote, grid);
 }
 
 /** The four axes around the centre, every node small: the map to plan far ahead. Click to open an axis. */
@@ -375,7 +379,7 @@ function wholeView(ctx: TreeContext, inspect: (d: TalentDef | null) => void): HT
       body.append(col);
     });
     return h(
-      `div.tw-quarter.${top ? 'tw-up' : 'tw-down'}.role-${role}${axis === ctx.axis ? '.last-open' : ''}`,
+      `div.tw-quarter.axis-${axis}.${top ? 'tw-up' : 'tw-down'}.role-${role}${axis === ctx.axis ? '.last-open' : ''}`,
       {},
       h(
         'button.tw-head',
@@ -406,7 +410,7 @@ export function skillTree(ctx: TreeContext): { tree: HTMLElement; inspect: HTMLE
   const focused = ctx.focus ? (TALENTS[ctx.focus] ?? null) : null;
   insp.show(focused);
   const tree = h(
-    `div.skill-tree${ctx.whole ? '.whole' : ''}`,
+    `div.skill-tree${ctx.whole ? '.whole' : `.axis-${ctx.axis}`}`,
     { onmouseleave: () => insp.show(focused) },
     axisBar(ctx),
     ctx.whole ? wholeView(ctx, insp.show) : axisView(ctx, insp.show),
@@ -419,7 +423,7 @@ export function skillTree(ctx: TreeContext): { tree: HTMLElement; inspect: HTMLE
       h('span.lg.taken', {}, h('i'), 'Aprendido'),
       h('span.lg.plan', {}, h('i'), 'En este ascenso'),
       h('span.lg.shut', {}, h('i'), 'Cerrado'),
-      h('span.lg.ab', {}, h('i'), 'Habilidad (rombo)'),
+      h('span.lg.ab', {}, h('i'), 'Habilidad (hexágono)'),
       h('span.lg.sleep', {}, h('i'), 'Dormido: falta el equipo de su clase'),
     ),
   );

@@ -4,7 +4,7 @@ import { carPartner, decorOf } from '../src/decor';
 import { GEN_SIZE, generateLayout, type MissionLayout } from '../src/mapgen';
 import { computeReach, stepCost } from '../src/path';
 import { Rng } from '../src/rng';
-import { createMission, MISSION_TURNS, missionTurns, podPlan } from '../src/setup';
+import { createMission, garrison, MISSION_TURNS, missionTurns, podPlan } from '../src/setup';
 import type { Biome, GameState, MissionKind, TileKind, Vec2 } from '../src/types';
 
 const BIOMES: Biome[] = ['city', 'wilds', 'facility'];
@@ -103,7 +103,8 @@ describe('procedural maps', () => {
           if (kind !== 'elimination') expect(s.mission.evacZone.length, label).toBe(9);
           if (kind === 'hack') expect(near(s.mission.terminal!), `${label}: terminal`).toBe(true);
           const aliens = s.units.filter((u) => u.team === 'alien' && !u.objective);
-          expect(aliens.length, label).toBe(plan.flat().length);
+          // The plan, and the living enemy's whole strength from the start (playtest 2026-10-13).
+          expect(aliens.length, label).toBe(plan.flat().length + (garrison(kind, 2)?.length ?? 0));
           for (const a of aliens) {
             const d = Math.min(...soldiers.map((x) => Math.hypot(x.pos.x - a.pos.x, x.pos.y - a.pos.y)));
             expect(d, `${label}: ${a.id} too close`).toBeGreaterThanOrEqual(12);
@@ -214,7 +215,8 @@ describe('procedural maps', () => {
       const s = createMission({ map: { kind: 'generated', biome: 'city', seed }, slots: [0], rng: new Rng(seed), kind: 'elimination' });
       roofs += s.elev.filter((e) => e > 0).length;
       openings += s.tiles.filter((t) => t === 'door' || t === 'window').length;
-      for (const pod of s.pods) expect(pod.patrol.length).toBeGreaterThan(0);
+      // Every pod walks a round, but the living posted upstairs (docs/FASE6-PLAN.md), who stay put.
+      for (const pod of s.pods) if (!s.units.some((u) => u.podId === pod.id && u.pos.z > 0)) expect(pod.patrol.length).toBeGreaterThan(0);
       hills += layout('wilds', 'elimination', seed).elev.filter((e) => e > 0).length;
     }
     expect(roofs).toBeGreaterThan(0);
@@ -234,7 +236,8 @@ describe('procedural maps', () => {
           const look = decorOf(code);
           if (!look) return;
           kinds.add(look.kind);
-          expect(['low', 'high'], `${label}: ${look.kind} on ${l.tiles[i]}`).toContain(l.tiles[i]);
+          // A building's stairs are a ladder tile (docs/FASE6-PLAN.md); everything else dressed is cover.
+          expect(look.kind === 'stairs' ? ['ladder'] : ['low', 'high'], `${label}: ${look.kind} on ${l.tiles[i]}`).toContain(l.tiles[i]);
           if (look.kind === 'carFront' || look.kind === 'carRear') expect(carPartner(l.decor!, l.width, i), `${label}: half a car`).toBeGreaterThanOrEqual(0);
         });
         // Everything on the ground is dressed; only rooftop parapets are left to the client.

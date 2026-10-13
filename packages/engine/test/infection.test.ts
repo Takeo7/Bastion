@@ -247,7 +247,7 @@ describe('infection at the base', () => {
     expect(run(c, { type: 'medicate', soldier: s.id }, 0, [0])).toEqual({ ok: false, error: 'No hay medicinas.' });
   });
 
-  it('La Vega and Ciudad Varela send medicines every few days while they are allies and stand; some operations pay them too', () => {
+  it('La Vega and Corran send medicines every few days while they are allies and stand; some operations pay them too', () => {
     const c = createCampaign([0], new Rng(1));
     // No Marea to get in the way (docs/FASE5.md): the activity stays put.
     Object.assign(c, { nextEventDay: 999, nextMissionDay: 999, nextRumorDay: 999, nextFacilityDay: 999, nextSupplyDay: 999, nextDoomDay: 999 });
@@ -270,7 +270,7 @@ describe('infection at the base', () => {
     const both = wait(c.day + 2 * ENCLAVE_DAYS);
     expect(both.length).toBeGreaterThanOrEqual(1);
     expect(both.every((n) => n === 2)).toBe(true);
-    // A Nido in La Vega: only Ciudad Varela still sends.
+    // A Nido in La Vega: only Corran still sends.
     c.regions.find((r) => r.id === 'oce')!.facility = { nextDoomDay: 999 };
     const one = wait(c.day + 2 * ENCLAVE_DAYS);
     expect(one.length).toBeGreaterThanOrEqual(1);

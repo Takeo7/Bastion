@@ -128,8 +128,8 @@ describe('reactions', () => {
     const a = addUnit(s, 'a1', 'trooper', 15, 2, { hp: 99, maxHp: 99 });
     const b = addUnit(s, 'a2', 'trooper', 15, 18, { hp: 99, maxHp: 99 });
     const sim = new Sim(s, new Rng(1), [0]);
-    sim.moveAlong(a, [{ x: 14, y: 2 }, { x: 13, y: 2 }], 1);
-    sim.moveAlong(b, [{ x: 14, y: 18 }, { x: 13, y: 18 }], 1);
+    sim.moveAlong(a, [{ x: 14, y: 2, z: 0 }, { x: 13, y: 2, z: 0 }], 1);
+    sim.moveAlong(b, [{ x: 14, y: 18, z: 0 }, { x: 13, y: 18, z: 0 }], 1);
     expect(sim.events.filter((e) => e.t === 'shot')).toHaveLength(2);
     expect(sniper.overwatch).toBe(true);
   });
@@ -151,7 +151,7 @@ describe('reactions', () => {
     expect(previewShot(s, a, g)!.mods).toContainEqual({ label: 'Suprimido', value: -50 });
     s.activeTeam = 'alien';
     const sim = new Sim(s, new Rng(1), [0]);
-    sim.moveAlong(a, [{ x: 9, y: 2 }], 1);
+    sim.moveAlong(a, [{ x: 9, y: 2, z: 0 }], 1);
     expect(sim.events.some((e) => e.t === 'shot' && e.reaction && e.unit === 's1')).toBe(true);
     expect(a.suppressedBy).toBeNull();
   });
@@ -310,7 +310,7 @@ describe('psionics', () => {
     for (const e of sim.events) applyEvent(s, e);
     expect(s).toEqual(host);
     // Next alien turn, the zombie shambles over and attacks.
-    zombie.pos = { x: 3, y: 3 };
+    zombie.pos = { x: 3, y: 3, z: 0 };
     const turn = new Sim(host, new Rng(2), [0]);
     turn.runAlienTurn();
     expect(turn.events.some((e) => e.t === 'shot' && e.unit === zombie.id && e.ability === 'claw')).toBe(true);

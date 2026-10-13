@@ -48,13 +48,32 @@ import {
   WEAPONS,
 } from './content';
 import { applyEvent, type GameEvent } from './events';
-import { canStandOn, combatants, DIRS8, distance, elevAt, getUnit, inBounds, sameTile, tileAt, tileIndex, unitAt } from './grid';
+import {
+  canStandOn,
+  combatants,
+  DIRS8,
+  distance,
+  getUnit,
+  heightAt,
+  inBounds,
+  kindAt,
+  nodeOf,
+  placesOn,
+  samePos,
+  sameSpace,
+  sameTile,
+  storeysApart,
+  tileAt,
+  tileIndex,
+  toPos,
+  unitAt,
+} from './grid';
 import { rollLoot, searchSpot } from './loot';
 import { canSee, detectionTo, isViewer, lightTiles, sightOrigin, sightTo } from './los';
 import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol } from './path';
 import type { Command } from './protocol';
 import type { Rng } from './rng';
-import { makeUnit } from './setup';
+import { hordeWave, makeUnit } from './setup';
 import type {
   AbilityId,
   AttackAbility,
@@ -67,10 +86,9 @@ import type {
   Reinforcement,
   ShotResult,
   Slot,
-  TemplateId,
+  Pos,
   TileKind,
   Unit,
-  Vec2,
 } from './types';
 
 // Velmar's Canto (docs/LORE.md, «El Canto de Velmar»).
@@ -175,7 +193,7 @@ export class Sim {
    * Runs an ability that has already been validated. Player commands and the
    * alien AI both come through here, so every rule applies to both sides.
    */
-  perform(u: Unit, ability: AbilityId, args: { target?: Unit; tile?: Vec2; melee?: MeleeOption } = {}): void {
+  perform(u: Unit, ability: AbilityId, args: { target?: Unit; tile?: Pos; melee?: MeleeOption } = {}): void {
     const { target, tile, melee } = args;
     this.pay(u, ability);
     const loaded = () => attackWeapon(u, 'shoot').clip === 0 || u.ammo > 0;
@@ -264,6 +282,10 @@ export class Sim {
         break;
       case 'search':
         this.search(u, tile!);
+        break;
+      case 'openDoor':
+      case 'closeDoor':
+        this.emit({ t: 'tileChanged', pos: { ...tile! }, kind: ability === 'openDoor' ? 'doorOpen' : 'door' });
         break;
       case 'runAndGun':
         break;
@@ -354,7 +376,7 @@ export class Sim {
   // ------------------------------------------------------------- the Canto
 
   /** A Bengala or a fire lights what it sees round `tile` for `turns` of the squad's turns: at night only, by day nothing changes. */
-  private light(tile: Vec2, { radius, turns, height }: { radius: number; turns: number; height: number }): void {
+  private light(tile: Pos, { radius, turns, height }: { radius: number; turns: number; height: number }): void {
     if (!this.s.mission.night || this.over) return;
     this.emit({ t: 'lightOn', light: { id: `f${this.s.seq}`, tile: { ...tile }, radius, turns, tiles: lightTiles(this.s, tile, radius, height) } });
   }
@@ -366,7 +388,7 @@ export class Sim {
 
   /** The singer and its allies within `range` (on the battlefield, able to act). */
   private alliesWithin(u: Unit, range: number): Unit[] {
-    return this.s.units.filter((a) => a.alive && a.team === u.team && !a.captive && !a.objective && distance(a.pos, u.pos) <= range);
+    return this.s.units.filter((a) => a.alive && a.team === u.team && !a.captive && !a.objective && distance(a.pos, u.pos) <= range && sameSpace(this.s, a.pos, u.pos));
   }
 
   /** Égida and Himno: defence (and aim) until the allies' next turn. */
@@ -379,19 +401,21 @@ export class Sim {
   }
 
   /** Salto de eco and Paso de sombra: gone from here, there at once. No overwatch sees the jump. */
-  private teleport(u: Unit, to: Vec2, ability: AbilityId): void {
+  private teleport(u: Unit, to: Pos, ability: AbilityId): void {
     const from = { ...u.pos };
     this.emit({ t: 'sung', unit: u.id, ability, targets: [u.id], tile: to });
     this.emit({ t: 'teleported', unit: u.id, from, to: { ...to } });
-    if (ability === 'shadowStep' && elevAt(this.s, to.x, to.y) > elevAt(this.s, from.x, from.y)) this.emit({ t: 'blessed', unit: u.id, aim: SHADOW_AIM });
+    if (ability === 'shadowStep' && heightAt(this.s, to) > heightAt(this.s, from)) this.emit({ t: 'blessed', unit: u.id, aim: SHADOW_AIM });
     const noticing = u.team === 'xcom' ? this.podsNoticing(to) : [];
     if (noticing.length) this.activatePods(noticing, this.sighting(noticing, u, to));
   }
 
   /** Silencio: the Cantores in the zone can't sing for two turns, and every enemy there is disoriented. */
-  private silence(u: Unit, center: Vec2): void {
+  private silence(u: Unit, center: Pos): void {
     const radius = (ABILITIES.silence.radius ?? 2) + this.duet(u);
-    const hit = this.s.units.filter((v) => v.alive && v.team !== u.team && !v.objective && !TEMPLATES[v.template].robotic && distance(v.pos, center) <= radius);
+    const hit = this.s.units.filter(
+      (v) => v.alive && v.team !== u.team && !v.objective && !TEMPLATES[v.template].robotic && distance(v.pos, center) <= radius && sameSpace(this.s, v.pos, center),
+    );
     this.emit({ t: 'sung', unit: u.id, ability: 'silence', targets: hit.map((v) => v.id), tile: center });
     this.emit({ t: 'silenced', pos: { ...center }, radius, turns: SONG_TURNS });
     for (const v of hit) this.emit({ t: 'disoriented', unit: v.id });
@@ -415,7 +439,7 @@ export class Sim {
 
   /** Juramento de Velmar: some ally within 4 tiles (or the unit itself) keeps the oath. */
   private underOath(u: Unit): boolean {
-    return this.s.units.some((a) => a.alive && a.team === u.team && (a.oath ?? 0) > 0 && distance(a.pos, u.pos) <= (ABILITIES.velmarOath.range ?? 0));
+    return this.s.units.some((a) => a.alive && a.team === u.team && (a.oath ?? 0) > 0 && distance(a.pos, u.pos) <= (ABILITIES.velmarOath.range ?? 0) && sameSpace(this.s, a.pos, u.pos));
   }
 
   // ---------------------------------------------------------------- combat
@@ -462,11 +486,11 @@ export class Sim {
   }
 
   /** Implacable and Death From Above give an action back after a kill, once per turn. */
-  private afterKill(killer: Unit, victim: Unit, ability: AttackAbility, from: Vec2): void {
+  private afterKill(killer: Unit, victim: Unit, ability: AttackAbility, from: Pos): void {
     if (killer.refunded || !killer.alive) return;
     const melee = attackWeapon(killer, ability).melee;
     if (melee && hasPerk(killer, 'implacable')) this.emit({ t: 'refund', unit: killer.id, reason: 'implacable' });
-    else if (!melee && hasPerk(killer, 'deathFromAbove') && elevAt(this.s, from.x, from.y) > elevAt(this.s, victim.pos.x, victim.pos.y)) {
+    else if (!melee && hasPerk(killer, 'deathFromAbove') && heightAt(this.s, from) > heightAt(this.s, victim.pos)) {
       this.emit({ t: 'refund', unit: killer.id, reason: 'deathFromAbove' });
     }
   }
@@ -525,7 +549,7 @@ export class Sim {
     if (ability === 'slash' && u.mods.slashDisorient && result && result !== 'miss' && target.alive && !TEMPLATES[target.template].robotic) this.emit({ t: 'disoriented', unit: target.id });
   }
 
-  explode(source: Unit, center: Vec2, ability: BlastAbility): void {
+  explode(source: Unit, center: Pos, ability: BlastAbility): void {
     // The Hinchado's burst is its death: nobody gets to fire first, and it goes off without it.
     const bursting = ability === 'burst';
     if (!bursting) this.coveringFire(source);
@@ -546,7 +570,8 @@ export class Sim {
     // The drone's discharge is pure electricity and the Hinchado's burst only gas: they leave the scenery alone.
     if (ability !== 'discharge' && !bursting) {
       for (const p of tiles) {
-        const next = BLAST_RESULT[tileAt(this.s, p.x, p.y)];
+        const kind = kindAt(this.s, p);
+        const next = kind && BLAST_RESULT[kind];
         if (next) this.emit({ t: 'tileChanged', pos: p, kind: next });
       }
     }
@@ -559,7 +584,7 @@ export class Sim {
   }
 
   /** Disorients every enemy in the area; no damage, the scenery is untouched. */
-  private flashbang(u: Unit, center: Vec2): void {
+  private flashbang(u: Unit, center: Pos): void {
     this.emit({ t: 'explosive', unit: u.id, ability: 'flashbang', target: center });
     const hit = blastTiles(this.s, 'flashbang', center, u)
       .map((p) => unitAt(this.s, p))
@@ -582,7 +607,7 @@ export class Sim {
   private restoration(u: Unit): void {
     const range = ABILITIES.restoration.range ?? 0;
     for (const a of this.s.units) {
-      if (!a.alive || a.team !== u.team || a.captive || distance(a.pos, u.pos) > range) continue;
+      if (!a.alive || a.team !== u.team || a.captive || distance(a.pos, u.pos) > range || !sameSpace(this.s, a.pos, u.pos)) continue;
       const heal = Math.min(RESTORATION_HEAL, a.maxHp - a.hp);
       if (heal > 0) this.emit({ t: 'healed', unit: u.id, target: a.id, amount: heal });
       if (hasBadStatus(a)) this.emit({ t: 'cleansed', unit: u.id, target: a.id });
@@ -636,8 +661,8 @@ export class Sim {
   private riseInfected(): void {
     for (const corpse of this.s.units.filter((x) => !x.alive && !x.evacuated && x.infected && !x.reanimated)) {
       if (this.over) return;
-      const at = [corpse.pos, ...DIRS8.map((d) => ({ x: corpse.pos.x + d.x, y: corpse.pos.y + d.y }))].find(
-        (p) => inBounds(this.s, p.x, p.y) && canStandOn(tileAt(this.s, p.x, p.y)) && elevAt(this.s, p.x, p.y) === elevAt(this.s, corpse.pos.x, corpse.pos.y) && !unitAt(this.s, p),
+      const at = [corpse.pos, ...DIRS8.map((d) => ({ x: corpse.pos.x + d.x, y: corpse.pos.y + d.y, z: corpse.pos.z }))].find(
+        (p) => inBounds(this.s, p.x, p.y) && canStandOn(kindAt(this.s, p)) && heightAt(this.s, p) === heightAt(this.s, corpse.pos) && !unitAt(this.s, p),
       );
       if (!at) continue;
       const zombie = makeUnit(this.zombieId(), 'zombie', risenName(corpse), null, at, null);
@@ -647,7 +672,7 @@ export class Sim {
   }
 
   /** Searches the furniture on `tile` (docs/FASE2.md): what turns up goes into the backpack. */
-  private search(u: Unit, tile: Vec2): void {
+  private search(u: Unit, tile: Pos): void {
     const decor = searchSpot(this.s, tile);
     const loot = decor ? rollLoot(decor, this.s.mission.difficulty ?? 2, this.rng, !!this.s.mission.night) : null;
     this.emit({ t: 'searched', unit: u.id, tile: { ...tile }, loot });
@@ -657,7 +682,7 @@ export class Sim {
     const chance = hackChance(this.s, u);
     const success = this.rng.int(100) < chance;
     this.emit({ t: 'hacked', unit: u.id, success, chance, remote: !adjacent(u.pos, this.s.mission.terminal!) });
-    if (!success) this.raiseAlarm(alarmSquad(this.s), u);
+    if (!success) this.raiseAlarm(u);
     else this.checkOutcome();
   }
 
@@ -668,8 +693,8 @@ export class Sim {
    * the objective interrupt the walk, so a move may be emitted as several
    * `moved` segments.
    */
-  moveAlong(u: Unit, path: Vec2[], ap: number): void {
-    let segment: Vec2[] = [];
+  moveAlong(u: Unit, path: Pos[], ap: number): void {
+    let segment: Pos[] = [];
     let pendingAp = ap;
     const flush = () => {
       if (!segment.length) return;
@@ -686,7 +711,7 @@ export class Sim {
       segment.push(step);
 
       // Doors swing open and windows shatter as the unit goes through.
-      const kind = tileAt(this.s, step.x, step.y);
+      const kind = kindAt(this.s, step);
       if (kind === 'door' || kind === 'window') {
         flush();
         this.emit({ t: 'tileChanged', pos: step, kind: kind === 'door' ? 'doorOpen' : 'windowBroken' });
@@ -695,12 +720,13 @@ export class Sim {
       if (blocker) continue; // passing through an ally: nothing can interrupt here
 
       const item = this.s.mission.item;
-      if (u.team === 'xcom' && item && !item.carrier && item.pos && sameTile(item.pos, step)) {
+      if (u.team === 'xcom' && item && !item.carrier && item.pos && samePos(item.pos, step)) {
         flush();
         this.emit({ t: 'itemPicked', unit: u.id });
       }
       if (u.team === 'xcom' && !u.captive) {
-        const vip = this.s.units.find((o) => o.alive && o.captive && adjacent(o.pos, step));
+        // Beside the VIP, on its level (a floor between them keeps them apart).
+        const vip = this.s.units.find((o) => o.alive && o.captive && adjacent(o.pos, step) && o.pos.z === step.z);
         if (vip) {
           flush();
           this.emit({ t: 'vipRescued', unit: vip.id, by: u.id, owner: u.owner });
@@ -744,7 +770,7 @@ export class Sim {
   }
 
   /** Whether an overwatcher covers `step`: own sight, or the squad's with Long Watch. */
-  private watches(o: Unit, step: Vec2): boolean {
+  private watches(o: Unit, step: Pos): boolean {
     if (sightOrigin(this.s, o.pos, step, sightTo(this.s, o, step))) return true;
     if (!hasPerk(o, 'longWatch') || !TEMPLATES[o.template].squadsight) return false;
     const spotted = this.s.units.some((v) => isViewer(v, o.team) && sightOrigin(this.s, v.pos, step, sightTo(this.s, v, step)));
@@ -754,22 +780,22 @@ export class Sim {
   // ------------------------------------------------------- pods & stealth
 
   /** Whether a patrolling alien standing on `p` spots any soldier (detection range while the squad is concealed). */
-  podSpotsSquad(u: Unit, p: Vec2): boolean {
+  podSpotsSquad(u: Unit, p: Pos): boolean {
     return this.spottedFrom(u, p) !== undefined;
   }
 
   /** How far `u` notices a soldier on `p`: its detection while the squad is hidden, its sight after (both shorter at night, unless lit). */
-  private noticeRange(u: Unit, p: Vec2): number {
+  private noticeRange(u: Unit, p: Pos): number {
     return this.s.concealed ? detectionTo(this.s, u, p) : sightTo(this.s, u, p);
   }
 
   /** The first soldier an alien standing on `p` would spot. */
-  spottedFrom(u: Unit, p: Vec2): Unit | undefined {
+  spottedFrom(u: Unit, p: Pos): Unit | undefined {
     return combatants(this.s, 'xcom').find((soldier) => sightOrigin(this.s, p, soldier.pos, this.noticeRange(u, soldier.pos)) !== null);
   }
 
   /** The member of `pod` that would notice an XCOM soldier standing on `p`, if any. */
-  private noticer(pod: Pod, p: Vec2): Unit | undefined {
+  private noticer(pod: Pod, p: Pos): Unit | undefined {
     for (const id of pod.unitIds) {
       const m = getUnit(this.s, id);
       if (!m?.alive) continue;
@@ -779,12 +805,12 @@ export class Sim {
   }
 
   /** Inactive pods that would notice an XCOM soldier standing on `p`. */
-  podsNoticing(p: Vec2): string[] {
+  podsNoticing(p: Pos): string[] {
     return this.s.pods.filter((pod) => !pod.active && this.noticer(pod, p)).map((pod) => pod.id);
   }
 
   /** `soldier`, standing on `p`, has been seen by these pods: by whom, for the players. */
-  private sighting(podIds: string[], soldier: Unit, p: Vec2): Activation {
+  private sighting(podIds: string[], soldier: Unit, p: Pos): Activation {
     const pod = this.s.pods.find((x) => podIds.includes(x.id));
     return { cause: 'sighted', unit: soldier.id, by: pod && this.noticer(pod, p)?.id };
   }
@@ -801,7 +827,7 @@ export class Sim {
    * to look, inactive pods too, without waking up. It never breaks concealment.
    * The one who made it, and its pod, know what it was.
    */
-  makeNoise(tile: Vec2, radius: number, by?: Unit): void {
+  makeNoise(tile: Pos, radius: number, by?: Unit): void {
     if (radius <= 0 || this.over) return;
     const heard = this.s.units
       .filter(
@@ -812,7 +838,8 @@ export class Sim {
           !o.controlledBy &&
           o.id !== by?.id &&
           !(by?.podId && o.podId === by.podId) &&
-          distance(o.pos, tile) <= radius &&
+          // A storey between them is one more tile to carry (decision 3 in FASE6-PLAN.md).
+          distance(o.pos, tile) + storeysApart(this.s, o.pos, tile) <= radius &&
           !this.engaged(o),
       )
       .map((o) => o.id);
@@ -867,23 +894,23 @@ export class Sim {
    * the ground. The horde (`edge`) comes in by the map's edges instead, well
    * away from the squad and the evac zone.
    */
-  chooseDropZone(count: number, edge = false): Vec2[] | null {
+  chooseDropZone(count: number, edge = false): Pos[] | null {
     const s = this.s;
     const soldiers = combatants(s, 'xcom');
     if (!soldiers.length) return null;
     const free = (x: number, y: number) =>
-      inBounds(s, x, y) && canStandOn(tileAt(s, x, y)) && (s.elev[tileIndex(s, x, y)] ?? 0) === 0 && !unitAt(s, { x, y });
+      inBounds(s, x, y) && canStandOn(tileAt(s, x, y)) && (s.elev[tileIndex(s, x, y)] ?? 0) === 0 && !unitAt(s, { x, y, z: 0 });
     const onEdge = (x: number, y: number) =>
       (x < EDGE_BAND || y < EDGE_BAND || x >= s.width - EDGE_BAND || y >= s.height - EDGE_BAND) &&
       !s.mission.evacZone.some((z) => distance(z, { x, y }) < EDGE_EVAC_GAP);
     const bands = edge ? EDGE_GAP.map((lo) => [lo, Infinity] as const) : ([[DROP_MIN, DROP_MAX], [4, 20], [2, 60]] as const);
     for (const [lo, hi] of bands) {
-      const candidates: Vec2[] = [];
+      const candidates: Pos[] = [];
       for (let y = 0; y < s.height; y++) {
         for (let x = 0; x < s.width; x++) {
           if (!free(x, y) || (edge && !onEdge(x, y))) continue;
           const d = Math.min(...soldiers.map((o) => distance(o.pos, { x, y })));
-          if (d >= lo && d <= hi) candidates.push({ x, y });
+          if (d >= lo && d <= hi) candidates.push({ x, y, z: 0 });
         }
       }
       while (candidates.length) {
@@ -892,8 +919,9 @@ export class Sim {
         for (let r = 1; r <= 2 && zone.length < count; r++) {
           for (let dy = -r; dy <= r && zone.length < count; dy++) {
             for (let dx = -r; dx <= r && zone.length < count; dx++) {
-              const p = { x: anchor.x + dx, y: anchor.y + dy };
-              if (free(p.x, p.y) && !zone.some((z) => sameTile(z, p))) zone.push(p);
+              const p = { x: anchor.x + dx, y: anchor.y + dy, z: 0 };
+              // The horde stays by the edge, all of it.
+              if (free(p.x, p.y) && (!edge || onEdge(p.x, p.y)) && !zone.some((z) => sameTile(z, p))) zone.push(p);
             }
           }
         }
@@ -903,40 +931,54 @@ export class Sim {
     return null;
   }
 
-  /** Raises the flare for every reinforcement due at the end of alien turn `turn`. */
+  /**
+   * Raises the flare for every reinforcement due at the end of alien turn
+   * `turn`: only drops from missions saved before the playtest of 2026-10-13.
+   * The horde comes in by an edge, with no flare.
+   */
   announceReinforcements(turn: number): void {
     for (const r of this.s.mission.reinforcements) {
-      if (r.landed || r.pos || r.turn !== turn) continue;
+      if (r.landed || r.pos || r.horde || r.turn !== turn) continue;
       const zone = this.chooseDropZone(r.units.length);
       if (zone) this.emit({ t: 'reinforcementsIncoming', r: { ...r, pos: zone[0]! } });
     }
   }
 
-  /** The alarm went off (`hacker` failed the hack): a drop at the end of this alien turn. */
-  raiseAlarm(units: TemplateId[], hacker?: Unit): void {
+  /**
+   * The alarm went off (`hacker` failed the hack): it gives the squad away,
+   * the terminal blares (NOISE.alarm), and a horde drawn by it comes in by an
+   * edge at the end of this enemy turn (playtest 2026-10-13: nobody drops in
+   * from nowhere).
+   */
+  raiseAlarm(hacker?: Unit): void {
     this.breakConcealment({ reason: 'alarm', unit: hacker?.id });
-    const zone = this.chooseDropZone(units.length);
-    if (!zone) return;
+    const terminal = this.s.mission.terminal;
+    if (terminal) this.makeNoise(terminal, NOISE.alarm, hacker);
     const id = `r${this.s.mission.reinforcements.length + 1}`;
-    const r: Reinforcement = { id, turn: this.s.turn, pos: zone[0]!, units, landed: false };
+    const r: Reinforcement = { id, turn: this.s.turn, pos: null, units: hordeWave(this.s.mission.difficulty ?? 2), landed: false, horde: true };
     this.emit({ t: 'reinforcementsIncoming', r });
   }
 
   /**
-   * Drops every announced reinforcement that is due, already alert. The
-   * horde lands on the prowl instead: an inactive pod heading for the soldier
-   * nearest to it, which only wakes up (and gives the squad away) on seeing someone.
+   * Brings in every arrival that is due. The horde comes in by the map's
+   * edge, where it lands, on the prowl: an inactive pod heading for the
+   * soldier nearest to it, which only wakes up (and gives the squad away) on
+   * seeing someone. A drop with a flare (only in missions saved before the
+   * playtest of 2026-10-13) lands where it was announced, already alert.
    */
   landReinforcements(turn: number): void {
     for (const r of this.s.mission.reinforcements) {
-      if (r.landed || !r.pos || r.turn > turn || this.over) continue;
-      const zone = this.chooseDropZoneAround(r.pos, r.units.length);
+      if (r.landed || (!r.horde && !r.pos) || r.turn > turn || this.over) continue;
+      const zone = r.horde ? this.chooseDropZone(r.units.length, true) : this.chooseDropZoneAround(r.pos!, r.units.length);
+      // No edge free today: they come next turn.
+      if (!zone?.length) continue;
+      const at = zone[0]!;
       const pod: Pod = { id: `p${r.id}`, active: !r.horde, unitIds: [], patrol: [], patrolIndex: 0 };
-      const near = r.horde ? [...combatants(this.s, 'xcom')].sort((a, b) => distance(a.pos, r.pos!) - distance(b.pos, r.pos!))[0] : undefined;
+      const near = r.horde ? [...combatants(this.s, 'xcom')].sort((a, b) => distance(a.pos, at) - distance(b.pos, at))[0] : undefined;
       const units = r.units.map((template, i) => {
         const id = `${r.id}u${i + 1}`;
         pod.unitIds.push(id);
-        const u = makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? r.pos!, pod.id);
+        const u = makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? at, pod.id);
         return near ? { ...u, heard: { ...near.pos } } : u;
       });
       this.emit({ t: 'spawned', units, pod, reinforcement: r.id });
@@ -959,22 +1001,21 @@ export class Sim {
     // At night the dead are already on their way: the clock runs a turn ahead.
     const due = Math.floor(((turn + (m.night ? NIGHT.hordeHead : 0)) * HORDE.perTurn + (m.noise ?? 0)) / HORDE.wave);
     if (due <= sent || combatants(this.s, 'alien').length >= HORDE.cap) return;
-    const zone = this.chooseDropZone(m.horde.length, true);
-    if (!zone) return;
-    const r: Reinforcement = { id: `r${m.reinforcements.length + 1}`, turn: turn + 1, pos: zone[0]!, units: [...m.horde], landed: false, horde: true };
+    // Heard coming: they're in by an edge at the end of the next enemy turn, and nobody knows where.
+    const r: Reinforcement = { id: `r${m.reinforcements.length + 1}`, turn: turn + 1, pos: null, units: [...m.horde], landed: false, horde: true };
     this.emit({ t: 'reinforcementsIncoming', r });
   }
 
   /** Free tiles around a landing point (the flare tile first). */
-  private chooseDropZoneAround(center: Vec2, count: number): Vec2[] {
+  private chooseDropZoneAround(center: Pos, count: number): Pos[] {
     const s = this.s;
-    const zone: Vec2[] = [];
+    const zone: Pos[] = [];
     for (let r = 0; r <= 3 && zone.length < count; r++) {
       for (let dy = -r; dy <= r && zone.length < count; dy++) {
         for (let dx = -r; dx <= r && zone.length < count; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          const p = { x: center.x + dx, y: center.y + dy };
-          if (inBounds(s, p.x, p.y) && canStandOn(tileAt(s, p.x, p.y)) && !unitAt(s, p) && !zone.some((z) => sameTile(z, p))) zone.push(p);
+          const p = { x: center.x + dx, y: center.y + dy, z: center.z };
+          if (inBounds(s, p.x, p.y) && canStandOn(kindAt(s, p)) && !unitAt(s, p) && !zone.some((z) => samePos(z, p))) zone.push(p);
         }
       }
     }
@@ -1132,7 +1173,8 @@ export function risenName(corpse: Unit): string {
 /** «A dos voces»: a partner's singer within 2 tiles adds one more to a song. */
 export function duet(s: GameState, u: Unit): number {
   const partner = s.units.some(
-    (a) => a.alive && a.id !== u.id && a.team === u.team && a.owner !== null && u.owner !== null && a.owner !== u.owner && a.mods.singer > 0 && distance(a.pos, u.pos) <= 2,
+    (a) =>
+      a.alive && a.id !== u.id && a.team === u.team && a.owner !== null && u.owner !== null && a.owner !== u.owner && a.mods.singer > 0 && distance(a.pos, u.pos) <= 2 && sameSpace(s, a.pos, u.pos),
   );
   return partner ? 1 : 0;
 }
@@ -1180,13 +1222,15 @@ export function abilityDamage(s: GameState, u: Unit, ability: AbilityId, target?
   return null;
 }
 
-/** Tiles within `radius` of `center` (kept for UI previews of the basic grenade). */
-export function tilesInRadius(s: GameState, center: Vec2, radius: number): Vec2[] {
-  const out: Vec2[] = [];
+/** Places within `radius` of `center`, on its floor (kept for UI previews of the basic grenade; see blastTiles). */
+export function tilesInRadius(s: GameState, center: Pos, radius: number): Pos[] {
+  const out: Pos[] = [];
   const r = Math.ceil(radius);
   for (let y = center.y - r; y <= center.y + r; y++) {
     for (let x = center.x - r; x <= center.x + r; x++) {
-      if (inBounds(s, x, y) && distance(center, { x, y }) <= radius) out.push({ x, y });
+      if (!inBounds(s, x, y) || distance(center, { x, y }) > radius) continue;
+      if (!s.levels) out.push({ x, y, z: 0 });
+      else for (const p of placesOn(s, x, y)) if (sameSpace(s, center, p)) out.push(p);
     }
   }
   return out;
@@ -1261,10 +1305,12 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
   sim.passCommand(ctx.slot);
 
   if (cmd.type === 'move') {
+    // A place without its level is on the ground (docs/FASE6-PLAN.md).
+    const to = toPos(cmd.to);
     const reach = computeReach(s, u, maxMoveCost(u));
-    const path = buildPath(s, u, reach, cmd.to);
+    const path = buildPath(s, u, reach, to);
     if (!path) return { ok: false, error: 'No puede llegar ahí.' };
-    const cost = reach.cost.get(tileIndex(s, cmd.to.x, cmd.to.y))!;
+    const cost = reach.cost.get(nodeOf(s, to))!;
     const ap = apForCost(u, cost);
     if (ap > u.ap) return { ok: false, error: 'No le quedan acciones para llegar ahí.' };
     sim.moveAlong(u, path, ap);
@@ -1294,12 +1340,15 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
       sim.perform(u, cmd.ability, { melee: option });
       break;
     }
-    case 'tile':
-      if (!cmd.tile || !canTargetTile(s, u, cmd.ability, cmd.tile)) {
-        return { ok: false, error: cmd.ability === 'search' ? 'No puede registrar eso desde ahí.' : 'Fuera de alcance o fuera de la vista de la escuadra.' };
+    case 'tile': {
+      const tile = cmd.tile && toPos(cmd.tile);
+      if (!tile || !canTargetTile(s, u, cmd.ability, tile)) {
+        const why: Partial<Record<AbilityId, string>> = { search: 'No puede registrar eso desde ahí.', openDoor: 'Esa casilla no es una puerta cerrada contigua.', closeDoor: 'Esa casilla no es una puerta abierta, libre y contigua.' };
+        return { ok: false, error: why[cmd.ability] ?? 'Fuera de alcance o fuera de la vista de la escuadra.' };
       }
-      sim.perform(u, cmd.ability, { tile: cmd.tile });
+      sim.perform(u, cmd.ability, { tile });
       break;
+    }
     case 'self':
       sim.perform(u, cmd.ability);
       break;
@@ -1309,10 +1358,6 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
   return { ok: true, events: sim.events };
 }
 
-/** Who answers a failed hack: stronger pods later in the mission. */
-function alarmSquad(s: GameState): TemplateId[] {
-  return s.turn >= 6 ? ['officer', 'trooper', 'lancer'] : ['trooper', 'trooper'];
-}
 
 /** Re-evaluates the end of turn, e.g. after a player disconnects. */
 export function syncTurn(s: GameState, ctx: Omit<CommandContext, 'slot'>): GameEvent[] {

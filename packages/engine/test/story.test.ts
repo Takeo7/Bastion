@@ -67,7 +67,7 @@ describe('story', () => {
     expect(offerVip(c, chapter(c, 2)!)).toBe('Dra. Amara Nwosu');
   });
 
-  it('Simón knocks before chapter 5; turning him away makes it harder and changes who waits inside', () => {
+  it('Simão knocks before chapter 5; turning him away makes it harder and changes who waits inside', () => {
     const answer = (option: 0 | 1) => {
       const c = solo();
       c.story.done = SIMON_CHAPTER - 1;
@@ -81,12 +81,12 @@ describe('story', () => {
     const trusted = answer(0);
     expect(trusted.c.story.simon).toBe('trusted');
     expect(trusted.offer.difficulty).toBe(STORY[SIMON_CHAPTER - 1]!.difficulty);
-    expect(offerVip(trusted.c, trusted.offer)).toBe('Simón Ferreira');
+    expect(offerVip(trusted.c, trusted.offer)).toBe('Simão Ferreira');
     const refused = answer(1);
     expect(refused.c.story.simon).toBe('refused');
     expect(refused.c.xp).toBe(refused.xp + 12);
     expect(refused.offer.difficulty).toBe(STORY[SIMON_CHAPTER - 1]!.difficulty + 1);
-    expect(offerVip(refused.c, refused.offer)).toBe('Lucía Prats');
+    expect(offerVip(refused.c, refused.offer)).toBe('Noor Haddad');
   });
 
   it('the rescue VIP of a chapter reaches the battlefield with their name', () => {
@@ -95,7 +95,7 @@ describe('story', () => {
     gainXp(c, LEVEL_XP[6]! - c.xp, new Rng(1));
     const offer = chapter(c, 7)!;
     const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(2), kind: offer.kind, pods: offer.pods, vipName: offerVip(c, offer) });
-    expect(mission.units.find((u) => u.template === 'vip')?.name).toBe('Celia Arranz');
+    expect(mission.units.find((u) => u.template === 'vip')?.name).toBe('Celia Marsh');
   });
 
   it('Dr Nwosu makes the bodies worth a quarter more', () => {
@@ -154,7 +154,7 @@ describe('story', () => {
     expect(mid.story).toEqual({ done: 4, simon: null });
     expect(mid.ending).toBeNull();
     expect(mid.offers.every((o) => o.story === null)).toBe(true);
-    // The next scan brings Simón, who opens chapter 5.
+    // The next wait for news brings Simão, who opens chapter 5.
     mid.nextEventDay = 999;
     advanceTime(mid, new Rng(1));
     expect(mid.event).toBe('simon');

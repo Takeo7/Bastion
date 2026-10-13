@@ -19,11 +19,11 @@ import {
 } from './content';
 import { TALENTS } from './classes';
 import { hasAnyCover } from './cover';
-import { canStandOn, DIRS8, distance, inBounds, sameTile, tileAt, unitAt } from './grid';
+import { canStandOn, DIRS8, distance, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, toPos, unitAt } from './grid';
 import { backpackRoom, reachesToSearch, searchable, searchableTiles, searchSpot } from './loot';
 import { canSee, canSeeTile, isViewer, sightTo } from './los';
 import { buildPath, computeReach, costPerAp } from './path';
-import type { AbilityId, AttackAbility, BlastAbility, GameState, Unit, Vec2 } from './types';
+import type { AbilityId, AttackAbility, BlastAbility, GameState, Place, Pos, Unit, Vec2 } from './types';
 
 export function abilitiesOf(u: Unit): AbilityId[] {
   const list = [...TEMPLATES[u.template].abilities];
@@ -32,20 +32,21 @@ export function abilitiesOf(u: Unit): AbilityId[] {
   }
   if (u.team === 'xcom' && !u.captive && TEMPLATES[u.template].team === 'xcom') {
     list.push('evac');
-    if (u.template !== 'vip') list.push('hack', 'search');
+    if (u.template !== 'vip') list.push('hack', 'search', 'openDoor', 'closeDoor');
   }
   return list;
 }
 
-export function inEvacZone(s: GameState, p: Vec2): boolean {
-  return s.mission.evacZone.some((z) => sameTile(z, p));
+/** On the evac zone: it lies on the ground. */
+export function inEvacZone(s: GameState, p: Pos): boolean {
+  return p.z === 0 && s.mission.evacZone.some((z) => sameTile(z, p));
 }
 
 /** Hack from an adjacent tile, or from afar with the specialist's drone (needs sight of the terminal). */
-export function canHackFrom(s: GameState, u: Unit, from: Vec2 = u.pos): boolean {
+export function canHackFrom(s: GameState, u: Unit, from: Pos = u.pos): boolean {
   const t = s.mission.terminal;
   if (!t) return false;
-  if (adjacent(from, t)) return true;
+  if (adjacent(from, t) && from.z === t.z) return true;
   return u.template === 'specialist' && distance(from, t) <= (ABILITIES.hack.range ?? 0) && canSeeTile(s, from, t, sightTo(s, u, t));
 }
 
@@ -62,7 +63,9 @@ export function hackChance(s: GameState, u: Unit): number {
  */
 export function psiChance(target: Unit, s?: GameState): number {
   if (TEMPLATES[target.template].robotic || target.will >= 100 || target.controlledBy || (target.ward ?? 0) > 0 || target.mods.psiGuard >= 2) return 0;
-  const calm = s ? Math.max(0, ...s.units.filter((a) => a.alive && a.team === target.team && a.mods.calmAura > 0 && distance(a.pos, target.pos) <= CALM_RANGE).map((a) => a.mods.calmAura)) : 0;
+  const calm = s
+    ? Math.max(0, ...s.units.filter((a) => a.alive && a.team === target.team && a.mods.calmAura > 0 && distance(a.pos, target.pos) <= CALM_RANGE && sameSpace(s, a.pos, target.pos)).map((a) => a.mods.calmAura))
+    : 0;
   const will = target.will + CALM_WILL * calm;
   return Math.max(10, Math.min(90, PSI_BASE - (will - 40)));
 }
@@ -72,8 +75,8 @@ const CALM_RANGE = 4;
 const CALM_WILL = 10;
 
 /** Whether `p` lies inside a Silencio zone: no Cantor can sing there. */
-export function inSilence(s: GameState, p: Vec2): boolean {
-  return (s.silences ?? []).some((z) => distance(z.pos, p) <= z.radius);
+export function inSilence(s: GameState, p: Place): boolean {
+  return (s.silences ?? []).some((z) => distance(z.pos, p) <= z.radius && sameSpace(s, z.pos, p));
 }
 
 /** Enemies a song that strikes everyone in sight can reach (Tormenta, Lluvia de luz). */
@@ -104,6 +107,20 @@ export function ammoNeeded(u: Unit, ability: AbilityId): number {
   return isAttack(ability) && attackWeapon(u, ability).clip > 0 ? 1 : 0;
 }
 
+/** Tile abilities done with the hands beside the soldier, not thrown: a disoriented soldier can still do them. */
+const BY_HAND: ReadonlySet<AbilityId> = new Set<AbilityId>(['search', 'openDoor', 'closeDoor']);
+
+/**
+ * Doors beside `u` it can open (`door`) or close (`doorOpen`, with nobody in
+ * the doorway), reaching them with the hands as when searching (loot.ts
+ * reachesToSearch): beside it, on its level, not round a wall's corner.
+ */
+export function doorTiles(s: GameState, u: Unit, kind: 'door' | 'doorOpen'): Pos[] {
+  return DIRS8.map((d) => ({ x: u.pos.x + d.x, y: u.pos.y + d.y, z: u.pos.z })).filter(
+    (p) => kindAt(s, p) === kind && reachesToSearch(s, u.pos, p) && !(kind === 'doorOpen' && unitAt(s, p)),
+  );
+}
+
 /** Why the ability cannot be used right now (ignoring targets), or null if it can. */
 export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): string | null {
   if (!abilitiesOf(u).includes(ability)) return 'No tiene esa habilidad.';
@@ -116,7 +133,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
   if (def.charge && !((u.charges[def.charge] ?? 0) > 0)) return 'No quedan usos.';
   const ammo = ammoNeeded(u, ability);
   if (ammo > 0 && u.ammo < ammo) return ammo > 1 ? `Necesita ${ammo} balas en el cargador: recarga.` : 'Sin munición: recarga.';
-  if (u.disoriented && def.target === 'tile' && !def.teleport && ability !== 'search') return 'Desorientado: no puede usar explosivos.';
+  if (u.disoriented && def.target === 'tile' && !def.teleport && !BY_HAND.has(ability)) return 'Desorientado: no puede usar explosivos.';
   if (def.psi && inSilence(s, u.pos)) return 'Petardos: aquí no se puede gritar.';
   switch (ability) {
     case 'reload':
@@ -141,11 +158,17 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
       if (backpackRoom(u, BACKPACK_SLOTS) <= 0) return 'La mochila está llena.';
       if (!searchableTiles(s, u).length) {
         const done = DIRS8.some((d) => {
-          const p = { x: u.pos.x + d.x, y: u.pos.y + d.y };
+          const p = { x: u.pos.x + d.x, y: u.pos.y + d.y, z: u.pos.z };
           return searchSpot(s, p) !== null && reachesToSearch(s, u.pos, p);
         });
         return done ? 'Ya está registrado.' : 'No hay nada que registrar al lado.';
       }
+      break;
+    case 'openDoor':
+      if (!doorTiles(s, u, 'door').length) return 'No hay ninguna puerta cerrada a tu lado.';
+      break;
+    case 'closeDoor':
+      if (!doorTiles(s, u, 'doorOpen').length) return 'No hay ninguna puerta abierta a tu lado.';
       break;
   }
   return null;
@@ -161,8 +184,8 @@ export function rangedTargets(s: GameState, u: Unit, ability: AttackAbility): Un
 export interface MeleeOption {
   target: Unit;
   /** Tile to strike from (the attacker's own tile when already adjacent). */
-  tile: Vec2;
-  path: Vec2[];
+  tile: Pos;
+  path: Pos[];
 }
 
 /** Enemies a melee ability can reach this action: within the blue move range, seen by the team. */
@@ -178,9 +201,9 @@ export function meleeTargets(s: GameState, u: Unit, ability: AttackAbility): Mel
     let best: MeleeOption | null = null;
     let bestCost = Infinity;
     for (const d of DIRS8) {
-      const tile = { x: t.pos.x + d.x, y: t.pos.y + d.y };
+      const tile = { x: t.pos.x + d.x, y: t.pos.y + d.y, z: t.pos.z };
       if (!inBounds(s, tile.x, tile.y)) continue;
-      const cost = reach.cost.get(tile.y * s.width + tile.x);
+      const cost = reach.cost.get(nodeOf(s, tile));
       if (cost === undefined || cost >= bestCost) continue;
       const path = buildPath(s, u, reach, tile);
       if (!path) continue;
@@ -204,6 +227,8 @@ export function allyTargets(s: GameState, u: Unit, ability: 'medkit' | 'aid' | '
     // Contracanto reaches a comrade the Cantor holds, who now stands with the enemy.
     const held = ability === 'counterSong' && !!t.controlledBy && TEMPLATES[t.template].team === u.team;
     if (!t.alive || (t.team !== u.team && !held) || t.captive || distance(u.pos, t.pos) > range) return false;
+    // By hand, beside the ally: never through a floor (the Grillo flies wherever it likes).
+    if (range <= 1.5 && !sameSpace(s, u.pos, t.pos)) return false;
     if (ability === 'medkit' || ability === 'firstAid') return t.hp < t.maxHp;
     if (ability === 'revival') return hasBadStatus(t);
     if (ability === 'layOnHands') return t.hp < t.maxHp || t.panicked || t.disoriented > 0;
@@ -262,12 +287,14 @@ export function abilityTargets(s: GameState, u: Unit, ability: AbilityId): Unit[
  * Explosives: target tile within range and seen by the squad (not necessarily
  * by the thrower). A teleport needs a free floor the singer sees itself.
  */
-export function canTargetTile(s: GameState, u: Unit, ability: AbilityId, tile: Vec2): boolean {
+export function canTargetTile(s: GameState, u: Unit, ability: AbilityId, at: Place): boolean {
+  const tile = toPos(at);
   const def = ABILITIES[ability];
   if (def.target !== 'tile' || !inBounds(s, tile.x, tile.y)) return false;
   if (distance(u.pos, tile) > abilityRange(u, ability)) return false;
   if (ability === 'search') return searchable(s, tile) && reachesToSearch(s, u.pos, tile);
-  if (def.teleport) return !sameTile(u.pos, tile) && canStandOn(tileAt(s, tile.x, tile.y)) && !unitAt(s, tile) && canSeeTile(s, u.pos, tile, sightTo(s, u, tile));
+  if (ability === 'openDoor' || ability === 'closeDoor') return doorTiles(s, u, ability === 'openDoor' ? 'door' : 'doorOpen').some((p) => samePos(p, tile));
+  if (def.teleport) return !samePos(u.pos, tile) && canStandOn(kindAt(s, tile)) && !unitAt(s, tile) && canSeeTile(s, u.pos, tile, sightTo(s, u, tile));
   return s.units.some((o) => isViewer(o, u.team) && canSeeTile(s, o.pos, tile, sightTo(s, o, tile)));
 }
 
@@ -283,13 +310,20 @@ export function blastRadius(u: Unit | undefined, ability: AbilityId): number {
   return ability === 'grenade' || ability === 'launch' ? base + (u?.mods.grenadeRadius ?? 0) : base;
 }
 
-export function blastTiles(s: GameState, ability: AbilityId, center: Vec2, thrower?: Unit): Vec2[] {
+/**
+ * The places a blast on `at` reaches: within its radius, and on a map with
+ * storeys only those in its space (grid.ts sameSpace: a floor stops it).
+ */
+export function blastTiles(s: GameState, ability: AbilityId, at: Place, thrower?: Unit): Pos[] {
+  const center = toPos(at);
   const radius = blastRadius(thrower, ability);
-  const out: Vec2[] = [];
+  const out: Pos[] = [];
   const r = Math.ceil(radius);
   for (let y = center.y - r; y <= center.y + r; y++) {
     for (let x = center.x - r; x <= center.x + r; x++) {
-      if (inBounds(s, x, y) && distance(center, { x, y }) <= radius) out.push({ x, y });
+      if (!inBounds(s, x, y) || distance(center, { x, y }) > radius) continue;
+      if (!s.levels) out.push({ x, y, z: 0 });
+      else for (const p of placesOn(s, x, y)) if (sameSpace(s, center, p)) out.push(p);
     }
   }
   return out;
@@ -317,7 +351,7 @@ export function noiseOf(s: GameState, u: Unit, ability: AbilityId): number {
   return def.song && s.quietSongs ? Math.max(0, noise - OFICIO_QUIET) : noise;
 }
 
-/** Whether `p` lies inside a smoke cloud. */
-export function inSmoke(s: GameState, p: Vec2): boolean {
-  return s.smoke.some((c) => distance(c.pos, p) <= c.radius);
+/** Whether `p` lies inside a smoke cloud (on its floor). */
+export function inSmoke(s: GameState, p: Place): boolean {
+  return s.smoke.some((c) => distance(c.pos, p) <= c.radius && sameSpace(s, c.pos, p));
 }

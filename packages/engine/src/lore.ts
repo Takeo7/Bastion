@@ -12,43 +12,43 @@ export const PARTITURA_LEVEL = 4;
 
 /** The doom track as a label: "La Marea" once known. */
 export function doomName(level: number): string {
-  return level >= PARTITURA_LEVEL ? 'La Marea' : 'Actividad zombi';
+  return level >= PARTITURA_LEVEL ? 'La Marea' : 'Infestación';
 }
 
 /** The doom track inside a sentence: "la Marea". */
 export function doomSubject(level: number): string {
-  return level >= PARTITURA_LEVEL ? 'la Marea' : 'la actividad zombi';
+  return level >= PARTITURA_LEVEL ? 'la Marea' : 'la infestación';
 }
 
-/** The doom track at a glance: "La Marea, a 9 km" once known, "Actividad zombi 3/12" before. */
+/** The doom track at a glance: "La Marea, a 9 km" once known, "Infestación 3/12" before. */
 export function doomStatus(level: number, doom: number): string {
-  return level >= PARTITURA_LEVEL ? `La Marea, a ${Math.max(0, DOOM_TRACK - doom)} km` : `Actividad zombi ${doom}/${DOOM_TRACK}`;
+  return level >= PARTITURA_LEVEL ? `La Marea, a ${Math.max(0, DOOM_TRACK - doom)} km` : `Infestación ${doom}/${DOOM_TRACK}`;
 }
 
 /** Length of the doom track (campaign.ts DOOM_MAX): the Marea starts this many km away. */
 const DOOM_TRACK = 12;
 
-/** "La Marea se acerca 1 km." / "La actividad zombi baja (−2)." */
+/** "La Marea se acerca 1 km." / "La infestación baja (−2)." */
 export function doomChangeText(level: number, delta: number): string {
   if (level >= PARTITURA_LEVEL) return delta > 0 ? `La Marea se acerca ${delta} km.` : `La Marea retrocede ${-delta} km.`;
-  return delta > 0 ? `La actividad zombi crece (+${delta}).` : `La actividad zombi baja (−${-delta}).`;
+  return delta > 0 ? `La infestación crece (+${delta}).` : `La infestación baja (−${-delta}).`;
 }
 
 // ----------------------------------------------------------------- glossary
 
 /** One line for each word of the world, for tooltips. */
 export const GLOSSARY: Record<string, string> = {
-  Pandemia: 'Empezó hace dos inviernos en el Instituto Galena. Quien se contagia muere en un día y se levanta.',
+  Pandemia: 'Empezó hace dos inviernos en el Instituto Galen. Quien se contagia muere en un día y se levanta.',
   Zombi: 'Un muerto que anda. Va a por el vivo que ve y, si no ve a nadie, hacia el último ruido que oyó.',
   Corredor: 'Un zombi reciente, todavía ágil. Rápido, y ve de lejos.',
   Acorazado: 'Fue policía o soldado: el chaleco y el casco le dan blindaje.',
-  Chillón: 'Un zombi que no muerde: grita. Su grito asusta a los que están cerca, llama a todos los zombis que lo oyen y levanta a los muertos. Primero el Chillón.',
-  Hinchado: 'Un zombi lento y lleno de gases. Revienta al morir o al llegar a vosotros: hace daño a quien tenga al lado y puede contagiarlo. Mejor de lejos.',
+  Chillón: 'Un zombi que no muerde: grita. Su grito asusta a los que están cerca, llama a todos los zombis que lo oyen y levanta a los muertos.',
+  Hinchado: 'Un zombi lento y lleno de gases. Revienta al morir o al llegar a vosotros: hace daño a quien tenga al lado y puede contagiarlo.',
   Cuervos: 'Bandas de saqueadores. Viven de robar a otros vivos y atraen hordas con sirenas.',
   Congregación: 'Una secta que cree que los zombis están salvados. Los guía con campanas y por radio.',
   Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega a Atalaya, la campaña está perdida.',
   Nido: 'Un sitio donde los zombis se juntan y la Marea crece. Quemarlo la hace retroceder.',
-  Sirena: 'El altavoz con el que los Cuervos atraen hordas. Calladla y la zona respira.',
+  Sirena: 'El altavoz con el que los Cuervos atraen hordas contra quien no les paga.',
   Ruido: 'Cada acción suena: un disparo se oye a una docena de casillas, un registro a dos. Lo que lo oye va a mirar. El ruido no os delata: os delata que os vean.',
   Saqueo: 'Misión de registrar un pueblo: llenad las mochilas y evacuad. No hay reloj, pero llegan zombis por los bordes, y antes cuanto más ruido.',
   Registrar: 'Una acción junto a un mueble, un coche o unas cajas: suministros, algún accesorio y, a veces, medicinas. Hace un poco de ruido.',
@@ -61,10 +61,10 @@ export const GLOSSARY: Record<string, string> = {
   Piezas: 'Muelles, motores, tornillería: con ellas el Taller hace armas y armaduras mejores. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.',
   Noche: 'De noche se ve poco y os ven poco, salvo bajo una farola, una bengala o un fuego. Hay más muertos en la calle, pero el botín vale la mitad más.',
   Enclave: 'Un grupo de supervivientes con el que tenéis contacto por radio. Si sigue vivo, manda suministros.',
-  Rumor: 'Algo que se oye por la radio en una zona. Si lo escucháis unos días al escanear, sabréis qué era.',
+  Rumor: 'Algo que se oye por la radio en una zona. Si lo seguís unos días a la escucha, sabréis qué era.',
   Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
   Oficio: 'Lo que Teo enseña en el Taller de oficios: machete, fuego, ballesta y enfermería de campo.',
-  'Taller de oficios': 'Donde Teo enseña a sobrevivir. Abre la rama de Oficio de cada clase.',
+  'Taller de oficios': 'Donde Teo enseña los oficios. Abre la cuarta rama de cada clase.',
   Maña: 'La aptitud de las manos: arreglar equipos, lanzar granadas y curar.',
   Grillo: 'El dron del Especialista: uno de juguete con una batería de coche, montado por Teo. Cura, cubre, da calambres y arregla a distancia.',
   Recluta: 'Superviviente todavía sin clase, con fusil. Al llegar a Capitán se especializa en el eje del árbol de habilidades en que más haya aprendido.',
@@ -139,11 +139,11 @@ export interface RegionLore {
 }
 
 export const REGION_LORE: Record<RegionId, RegionLore> = {
-  weu: { ally: 'el Refugio de Altomonte', situation: 'Los pueblos de la sierra, junto a Atalaya. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
+  weu: { ally: 'el Refugio de Aldren', situation: 'Los pueblos de la sierra, junto a Atalaya. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
   afr: { ally: 'los del Hospital', situation: 'La primera ciudad caída. Calles llenas de zombis y farmacias que nadie ha terminado de vaciar.' },
   eas: { ally: 'la Red Callada', situation: 'Un embalse y una central muerta. La Red Callada sobrevivió hablando en lengua de signos: sin un ruido.' },
   eeu: { ally: 'los Pastores', situation: 'Valles cerrados y aldeas que aún resisten. Los Cuervos cobran aquí su peaje.' },
-  me: { ally: 'los del Instituto', situation: 'La ciudad muerta donde empezó todo. El Instituto Galena sigue en pie, y nadie quiere entrar.' },
+  me: { ally: 'los del Instituto', situation: 'La ciudad muerta donde empezó todo. El Instituto Galen sigue en pie, y nadie quiere entrar.' },
   na: { ally: 'los Camioneros', situation: 'La llanura por donde sube la Marea. Los camioneros la vigilan desde la carretera.' },
   sa: { ally: 'el Sindicato de la Mina', situation: 'Minas y carreteras cortadas. Los mineros resisten con túneles y dinamita.' },
   oce: { ally: 'las Bodegas', situation: 'Granjas, bodegas y un río. Es donde hay comida, y por eso donde más se pelea.' },
@@ -278,8 +278,8 @@ export function lootSummary(
 
 /** Reports for the Saqueo mission (`scavenge`), in the style of BRIEFINGS. */
 export const SCAVENGE_BRIEFINGS = [
-  'Un pueblo que se vació a toda prisa, con las casas cerradas y las despensas llenas. Registrad lo que podáis y evacuad. Sin ruido: cada tiro llama a más.',
-  'Un polígono que nadie ha tocado desde el primer invierno: naves, oficinas y coches en el aparcamiento. Llenad las mochilas y salid por la zona de evacuación. Vendrán zombis, y antes cuanto más ruido hagáis.',
+  'Un pueblo que se vació a toda prisa, con las casas cerradas y las despensas llenas. Registrad lo que podáis y evacuad. Cada tiro llama a más.',
+  'Un polígono que nadie ha tocado desde el primer invierno: naves, oficinas y coches en el aparcamiento. Llenad las mochilas y salid por la zona de evacuación. Vendrán, y antes cuanto más ruido hagáis.',
   'Una urbanización a medio construir. Cuando empezó todo, la mitad de las casas tenía gente, y lo que dejaron sigue dentro. Registrad, cargad y evacuad antes de que la horda os encuentre.',
 ];
 
@@ -300,6 +300,52 @@ export const SCAVENGE = {
   /** The horde arrives at the edges. */
   horde: 'Llegan más zombis por los bordes',
 };
+
+// ------------------------------------------------------------------ people
+
+/** The sex of every named person who can be on the battlefield or join the squad, so their model matches their name. */
+export const NAMED_SEX: Record<string, 'f' | 'm'> = {
+  'Dra. Amara Nwosu': 'f',
+  'Simão Ferreira': 'm',
+  'Noor Haddad': 'f',
+  'Celia Marsh': 'f',
+  'Vera Lindqvist': 'f',
+  'Lola Haskins': 'f',
+  'Mei Takahara': 'f',
+  'Otto Brandt': 'm',
+  'Tomasz Rybak': 'm',
+  'Dra. Irina Sokolova': 'f',
+  'Ing. Kenji Mori': 'm',
+  'Alcaldesa Mara Velasco': 'f',
+  'Dr. Femi Adebayo': 'm',
+  'Agente Claire Dubois': 'f',
+};
+
+// ----------------------------------------------------------------- premise
+
+/** The card before the first mission: who the players are and why they fight. One paragraph per line. */
+export const PREMISE = {
+  title: 'Atalaya',
+  lines: [
+    'Hace dos inviernos, la Pandemia vació el valle de Kessra. Los muertos se levantaron y siguen andando.',
+    'Atalaya, una vieja estación militar en la sierra de Aldren, aguanta con cuarenta supervivientes llegados de todas partes.',
+    'Vosotros dos la dirigís. Lo que importa se decide con las dos llaves.',
+    'Atalaya vive de lo que sus equipos traen de fuera. El primero sale hoy.',
+  ],
+};
+
+/** Where an ordinary operation goes, by kind of map: it gives the mission its name («La gasolinera de Volkren»). */
+const MISSION_PLACES: Record<Biome, string[]> = {
+  city: ['El mercado', 'La comisaría', 'El colegio', 'El hospital', 'La estación de autobuses', 'El centro comercial', 'Los juzgados', 'La biblioteca'],
+  wilds: ['La gasolinera', 'La granja', 'El camping', 'El aserradero', 'La ermita', 'El área de servicio', 'La casa de campo'],
+  facility: ['La conservera', 'La nave de transportes', 'La planta química', 'El almacén frigorífico', 'La fábrica de piensos'],
+};
+
+/** An ordinary operation's name: a place in the zone, «El colegio de Corran», «La granja del Pantano Gris». */
+export function missionName(biome: Biome, zone: string, seed: number): string {
+  const places = MISSION_PLACES[biome];
+  return `${places[Math.abs(seed) % places.length]!} ${ofZone(zone)}`;
+}
 
 // ------------------------------------------------------------------ valley
 
@@ -353,7 +399,7 @@ export function floodedListLabel(level: number, zones: string[]): string {
 export function floodedZoneNote(level: number): string {
   return level >= PARTITURA_LEVEL
     ? 'Bajo la Marea: de aquí no llega nada, y sus misiones traen un grupo más de muertos. Saldrá si la Marea retrocede: quemad Nidos.'
-    : 'En manos de los muertos: de aquí no llega nada, y sus misiones traen un grupo más. Saldrá si baja la actividad zombi: quemad Nidos.';
+    : 'En manos de los muertos: de aquí no llega nada, y sus misiones traen un grupo más. Saldrá si baja la infestación: quemad Nidos.';
 }
 
 // ------------------------------------------------------------------- night
@@ -370,28 +416,28 @@ export const NIGHT_TEXT = {
 /** Several reports per mission type; each offer always gets the same one. */
 const BRIEFINGS: Record<MissionKind, string[]> = {
   elimination: [
-    'Una banda de Cuervos lleva dos días siguiendo a una familia. Si la encuentran, se la llevarán. Abatid a todos los hostiles: que no vuelva ninguno.',
-    'Una manada de zombis ha cortado la única carretera con agua potable. Limpiad la zona: todos los hostiles abatidos.',
-    'Los Cuervos han montado un control en el cruce y cobran en comida a todo el que pasa. Eliminad a todos los hostiles.',
+    'Una banda de Cuervos lleva dos días siguiendo a una familia. Si la encuentra, se la llevará. Abatid a todos.',
+    'Una manada de zombis ha cortado la única carretera con agua potable. Limpiad la zona.',
+    'Los Cuervos han montado un control en el cruce y cobran en comida a todo el que pasa. Que no quede ninguno.',
   ],
   recovery: [
-    'La farmacia del pueblo sigue cerrada, con la persiana echada. Dentro hay medicinas. Recuperadlas y sacadlas por la zona de evacuación.',
-    'Un correo del Refugio cayó con su mochila en un pueblo infestado. La mochila sigue allí. Recuperadla antes de que se acabe el tiempo y evacuad.',
-    'Los Cuervos guardan su botín en un almacén mal vigilado. Recuperad lo que podáis y sacadlo por la zona de evacuación.',
+    'La farmacia del pueblo sigue cerrada. Dentro hay medicinas. Sacadlas por la zona de evacuación.',
+    'Un correo del Refugio cayó en un pueblo infestado. Su mochila sigue allí. Recuperadla antes de que se acabe el tiempo.',
+    'Los Cuervos guardan su botín en un almacén mal vigilado. Llevaos lo que podáis.',
   ],
   sabotage: [
-    'Los Cuervos han puesto una sirena en el valle. Mientras suene, cada zombi de la comarca vendrá hacia aquí. Calladla antes de que termine la cuenta atrás.',
-    'Una sirena nueva suena cada noche junto a nuestras rutas. Destruidla a tiempo o tendremos la horda en la puerta.',
+    'Los Cuervos han puesto una sirena en el valle. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Calladla antes de que termine la cuenta atrás.',
+    'Una sirena nueva suena cada noche junto a nuestras rutas. Calladla a tiempo.',
   ],
   hack: [
-    'Hay una radio de emergencia en la zona, muerta desde el invierno. Si la arreglamos, oiremos a quien queda. Si falla, el ruido atraerá a todo lo que ande cerca.',
+    'Hay una radio de emergencia en la zona, muerta desde el invierno. Arregladla y oiremos a quien queda. Si falla, el ruido atraerá a todo lo que ande cerca.',
     'Los Cuervos se comunican por un repetidor de la zona. Pinchadlo y sabremos qué traman. Si falla, saltará la alarma.',
-    'En el cuartelillo de la Guardia queda un equipo de radio entero. Ponedlo en marcha; si falla, el ruido traerá compañía.',
+    'En el puesto de policía queda un equipo de radio entero. Ponedlo en marcha. Si falla, el ruido traerá compañía.',
   ],
   rescue: [
-    'Los Cuervos se han llevado a una maestra del pueblo. Si llega a su campamento, no la volveremos a ver. Llegad hasta ella y sacadla con vida.',
-    'Un superviviente está atrapado en una azotea, rodeado. Lleva tres días sin agua. Llegad hasta él y sacadlo con vida.',
-    'Un desertor de los Cuervos quiere pasarse a nuestro lado y lo están cazando. Llegad hasta él antes que ellos y sacadlo con vida.',
+    'Los Cuervos se han llevado a una maestra. Si llega a su campamento, no la volveremos a ver. Sacadla con vida.',
+    'Un superviviente lleva tres días en una azotea, rodeado y sin agua. Sacadlo con vida.',
+    'Un desertor de los Cuervos quiere pasarse a nuestro lado, y lo están cazando. Llegad antes que ellos.',
   ],
   scavenge: SCAVENGE_BRIEFINGS,
 };
@@ -404,7 +450,7 @@ function hash(text: string): number {
 
 /** Who signs an operation's report, in pen under it. */
 export function briefingSignature(o: MissionOffer): string {
-  return o.story ? STORY[o.story - 1]!.signature : '— I. A.';
+  return o.story ? STORY[o.story - 1]!.signature : '— N. A.';
 }
 
 /** Morse's report for an operation, signed by the region's ally. */
@@ -419,7 +465,7 @@ function briefingText(o: MissionOffer, level: number, simon: SimonChoice): strin
     return 'La Marea está en la sierra y la Congregación la empuja desde su campamento. La Mula se la llevará con la sirena; vosotros, al campamento. Abatid a todo lo que haya. No habrá otra oportunidad.';
   }
   if (o.facility) {
-    const effect = level >= PARTITURA_LEVEL ? 'acerca la Marea un kilómetro cada catorce días' : 'hace crecer la actividad zombi cada catorce días';
+    const effect = level >= PARTITURA_LEVEL ? 'acerca la Marea un kilómetro cada catorce días' : 'hace crecer la infestación cada catorce días';
     return `Este Nido ${effect}. Lo mantiene vivo una sirena: calladla antes de que termine la cuenta atrás.`;
   }
   const options = BRIEFINGS[o.kind];
@@ -443,13 +489,13 @@ export interface ExpedientePage {
 export const EXPEDIENTE: ExpedientePage[] = [
   {
     title: 'Primera llave',
-    summary: 'La Pandemia lo vació todo. En Atalaya hay muros, agua y dos grupos que se mandan a medias.',
+    summary: 'La Pandemia lo vació todo. Atalaya aguanta: muros, agua y dos llaves.',
     paragraphs: [
       'Hace dos inviernos llegó la Pandemia. Quien se contagia muere en un día y se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.',
-      'La Estación Atalaya era un puesto de defensa civil: muros de hormigón, un refugio bajo tierra, la presa al lado y una sola carretera. Por eso sigue en pie.',
-      'Aquí mandan dos grupos a la vez, y nada importante se hace sin las dos llaves. El año pasado, una líder sola vendió su refugio a los Cuervos a cambio de su vida.',
+      'Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra, la presa al lado y una sola carretera. Por eso sigue en pie. Quienes llegaron después conservaron su orden: equipos, rangos y armería.',
+      'La dirigen dos personas, y nada importante se hace sin las dos llaves. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.',
     ],
-    note: 'Bienvenidos a casa. Limpiaos las botas. — Inés',
+    note: 'Lo que entra por la puerta se apunta aquí. — N. A.',
   },
   {
     title: 'Lo que sabemos de ellos',
@@ -457,7 +503,7 @@ export const EXPEDIENTE: ExpedientePage[] = [
     paragraphs: [
       'Notas de la Dra. Nwosu. No piensan, no se cansan y no tienen miedo. Van hacia lo que ven y, sobre todo, hacia lo que oyen.',
       'Un disparo se oye a kilómetros. Un machete, no. Cada vez que apretamos el gatillo, la comarca viene a ver qué pasa.',
-      'El mordisco contagia. Con medicinas a tiempo, a veces se para. Sin ellas, en unos días tendremos que hacer lo que nadie quiere hacer.',
+      'El mordisco contagia. Con el tratamiento a tiempo, se para. Sin él, en tres días tendremos que hacer lo que nadie quiere hacer.',
     ],
     note: 'Si veis una cara conocida entre ellos, no es quien creéis. — T. V.',
   },
@@ -469,7 +515,7 @@ export const EXPEDIENTE: ExpedientePage[] = [
       'Su arma más sucia es la sirena. La encienden cerca de quien no paga y dejan que la horda haga el resto.',
       'Cuando cayó la sirena del valle, los zombis se dispersaron en un día. Sin ruido, se pierden.',
     ],
-    note: 'Las sirenas primero. Siempre. — I. A.',
+    note: 'Las sirenas primero. Siempre. — N. A.',
   },
   {
     title: 'La Marea',
@@ -479,25 +525,25 @@ export const EXPEDIENTE: ExpedientePage[] = [
       'No es una horda: son todas a la vez. Miles de zombis caminando juntos hacia la sierra con el deshielo. La llaman la Marea.',
       'Los Nidos la alimentan. Cada Nido que quememos la frena. Desde hoy, el reloj de la sala de mando cuenta kilómetros.',
     ],
-    note: 'Doce kilómetros. Contadlos. — I. A.',
+    note: 'Doce kilómetros. Contadlos. — N. A.',
   },
   {
     title: 'Los inmunes',
     summary: 'Hay gente a la que la Pandemia no mata. Su sangre podría ser una vacuna.',
     paragraphs: [
-      'Hay gente a la que la Pandemia no mata. Se contagian, tienen fiebre y se levantan al día siguiente… vivos.',
+      'Hay gente a la que la Pandemia no mata. Se contagian, tienen fiebre y al día siguiente siguen vivos.',
       'Los Cuervos lo saben y los cazan: un inmune vale más que un camión de comida.',
       'La Dra. Nwosu dice que con la sangre de un inmune y los cuadernos del Instituto se podría hacer una vacuna.',
     ],
     note: 'No es un experimento. Es una niña. — A. N.',
   },
   {
-    title: 'Galena',
-    summary: 'La Pandemia salió del Instituto Galena. Teo estaba allí aquella noche.',
+    title: 'Galen',
+    summary: 'La Pandemia salió del Instituto Galen. Teo estaba allí aquella noche.',
     paragraphs: [
-      'Los cuadernos del Instituto Galena cuentan lo que pasó: buscaban una vacuna y crearon otra cosa. La primera muestra se perdió una noche de octubre.',
+      'Los cuadernos del Instituto Galen cuentan lo que pasó: buscaban una vacuna y crearon otra cosa. La primera muestra se perdió una noche de octubre.',
       'Aquella noche había un vigilante de guardia. Firmó el parte de entrada a las once y el de salida a las seis. Entre medias, una puerta quedó abierta.',
-      'Ese vigilante era Teodoro Vidal.',
+      'Ese vigilante era Teodor Vidić.',
     ],
     note: 'Lo sé desde el primer día. No sabía cómo decíroslo. — T. V.',
   },
@@ -506,25 +552,25 @@ export const EXPEDIENTE: ExpedientePage[] = [
     summary: 'La Congregación empuja la Marea con campanas y radio. Solo la Voz sabe cómo pararla.',
     paragraphs: [
       'La Marea no sube sola. La Congregación cree que los zombis están salvados, y los guía con campanas hacia los vivos.',
-      'Los dirige una voz por radio: Celia Arranz, la que presentaba el programa de la tarde. Cada noche les dice hacia dónde caminar.',
+      'Los dirige una voz por radio: Celia Marsh, la que presentaba el programa de la tarde. Cada noche les dice hacia dónde caminar.',
       'Si alguien sabe cómo parar la Marea, es ella. Hay que sacarla de su emisora.',
     ],
-    note: 'Esta vez la necesitamos viva. — I. A.',
+    note: 'Esta vez la necesitamos viva. — N. A.',
   },
   {
     title: 'La vacuna',
     summary: 'La vacuna está lista y la Marea, en la sierra. Allí decidiréis los dos qué hacer con ella.',
     paragraphs: [
-      'La Dra. Nwosu ha terminado la vacuna: la sangre de Lucía, los cuadernos de Galena y muchas noches sin dormir.',
+      'La Dra. Nwosu ha terminado la vacuna: la sangre de Noor, los cuadernos de Galen y muchas noches sin dormir.',
       'La Marea ya está en la sierra. Si la paramos, habrá que decidir qué hacemos con la vacuna, y eso lo decidiréis vosotros dos, con las dos llaves.',
     ],
-    note: 'Volved. — I. A. y T. V.',
+    note: 'Volved. — N. A. y T. V.',
   },
 ];
 
 // ------------------------------------------------------------------ story
 
-/** What the commanders did when Simón knocked on the door. */
+/** What the commanders did when Simão knocked on the door. */
 export type SimonChoice = 'trusted' | 'refused' | null;
 
 export interface StoryChapter {
@@ -547,7 +593,7 @@ export interface StoryChapter {
   after: string;
 }
 
-/** The chapter whose mission needs Simón's visit answered first. */
+/** The chapter whose mission needs Simão's visit answered first. */
 export const SIMON_CHAPTER = 5;
 /** From this chapter on Dr Nwosu is in the Bastion: the loot is worth more. */
 export const NWOSU_CHAPTER = 2;
@@ -563,7 +609,7 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 90 },
     briefing:
       'El consultorio del pueblo sigue cerrado, con las medicinas del último invierno dentro. Caducan este mes, y el pueblo no está vacío. Recuperadlas y sacadlas por la zona de evacuación.',
-    signature: '— I. A.',
+    signature: '— N. A.',
     item: 'las medicinas',
     after: 'Las medicinas del consultorio ya están en la enfermería. Por primera vez desde el otoño, nadie tiene que elegir quién se cura.',
   },
@@ -576,8 +622,8 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 60 },
     prize: 'la Dra. Nwosu se une al Bastión (el botín vale un 25 % más)',
     briefing:
-      'Una doctora lleva una semana encerrada en el hospital de Ciudad Varela, con el edificio lleno de zombis. Se llama Amara Nwosu y trabajaba en el Instituto Galena. Llegad hasta ella y sacadla con vida.',
-    signature: '— I. A.',
+      'Una doctora lleva una semana encerrada en el hospital de Corran, con el edificio lleno de zombis. Se llama Amara Nwosu y trabajaba en el Instituto Galen. Llegad hasta ella y sacadla con vida.',
+    signature: '— N. A.',
     vip: 'Dra. Amara Nwosu',
     after: 'La Dra. Nwosu se queda en el Bastión. Sabe qué aprovechar de cada saqueo: el botín valdrá un 25 % más.',
   },
@@ -602,7 +648,7 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 120, doom: 1 },
     briefing:
       'El repetidor del Pico Gris lleva muerto desde el invierno. Si lo arreglamos, oiremos a los demás enclaves del valle. Si falla, el ruido atraerá a todo lo que ande por el pantano.',
-    signature: '— I. A.',
+    signature: '— N. A.',
     after: 'El repetidor vuelve a funcionar. Lo primero que hemos oído es a los demás enclaves avisando de lo mismo: la Marea.',
   },
   {
@@ -614,20 +660,20 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 80, recruit: 'assault' },
     prize: 'una niña inmune a salvo en el Bastión',
     briefing:
-      'Simón entró en el campamento de los Cuervos a por la niña inmune, pero lo han descubierto. Sabe dónde la esconden. Llegad hasta él y sacadlo con vida.',
-    signature: '— I. A.',
-    vip: 'Simón Ferreira',
-    after: 'Lucía está en la enfermería. Se contagió hace un mes y sigue viva. Nwosu no ha dormido.',
+      'Simão entró en el campamento de los Cuervos a por la niña inmune, pero lo han descubierto. Sabe dónde la esconden. Llegad hasta él y sacadlo con vida.',
+    signature: '— N. A.',
+    vip: 'Simão Ferreira',
+    after: 'Noor está en la enfermería. Se contagió hace un mes y sigue viva. Nwosu no ha dormido.',
   },
   {
-    title: 'Los cuadernos de Galena',
+    title: 'Los cuadernos de Galen',
     kind: 'recovery',
     biome: 'facility',
     region: 'me',
     difficulty: 3,
     reward: { credits: 150, doom: 1 },
     briefing:
-      'Los cuadernos del Instituto Galena siguen en el laboratorio donde empezó todo. Sin ellos no habrá vacuna. Recuperad los cuadernos y sacadlos por la zona de evacuación.',
+      'Los cuadernos del Instituto Galen siguen en el laboratorio donde empezó todo. Sin ellos no habrá vacuna. Recuperad los cuadernos y sacadlos por la zona de evacuación.',
     signature: '— T. V.',
     item: 'los cuadernos',
     after: 'Los cuadernos ya están en el Bastión. Teo los ha leído enteros y lleva dos días sin hablar.',
@@ -641,18 +687,18 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 100 },
     prize: 'cómo parar la Marea (con el nivel 8, la misión final)',
     briefing:
-      'Celia Arranz, la Voz de la Congregación, emite cada noche desde una vieja emisora de los Llanos. Es la única que sabe cómo parar la Marea. Asaltad la emisora, llegad hasta ella y sacadla con vida.',
-    signature: '— I. A.',
-    vip: 'Celia Arranz',
+      'Celia Marsh, la Voz de la Congregación, emite cada noche desde una vieja emisora de los Llanos. Es la única que sabe cómo parar la Marea. Asaltad la emisora, llegad hasta ella y sacadla con vida.',
+    signature: '— N. A.',
+    vip: 'Celia Marsh',
     after: 'La Voz está en el Bastión. Ha pasado una hora callada. Luego ha dicho cómo se para la Marea.',
   },
 ];
 
-/** Without Simón inside, «Los inmunes» is a break-in, straight for the girl. */
+/** Without Simão inside, «Los inmunes» is a break-in, straight for the girl. */
 const SIMON_REFUSED = {
   briefing:
-    'Sin nadie dentro, habrá que entrar a la fuerza en el campamento de los Cuervos. La niña inmune se llama Lucía Prats. Llegad hasta ella y sacadla con vida.',
-  vip: 'Lucía Prats',
+    'Sin nadie dentro, habrá que entrar a la fuerza en el campamento de los Cuervos. La niña inmune se llama Noor Haddad. Llegad hasta ella y sacadla con vida.',
+  vip: 'Noor Haddad',
 };
 
 export function storyBriefing(chapter: number, simon: SimonChoice): string {
@@ -686,6 +732,6 @@ export function epilogue(outcome: 'victory' | 'defeat', ending: Ending | null, d
     return 'La Marea se ha deshecho en la sierra. Por primera vez en dos inviernos, el valle duerme sin oír pasos.';
   }
   return doomFull
-    ? 'Kilómetro cero. La Marea llegó a Atalaya con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del Expediente se quedó a medio escribir.'
+    ? 'Kilómetro cero. La Marea llegó a Atalaya con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.'
     : 'No queda nadie para girar las llaves. Atalaya vuelve a quedarse a oscuras.';
 }

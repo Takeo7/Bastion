@@ -883,7 +883,7 @@ export class BastionSet implements StageSet {
     hangarHit.position.copy(HANGAR).add(new THREE.Vector3(0, HANGAR_H / 2, 0));
     hangarHit.userData.hotspot = 'hangar';
     this.hotspots.push(hangarHit);
-    const hangarLabel = label('Hangar', 'room-label fixed');
+    const hangarLabel = label('Cochera', 'room-label fixed');
     hangarLabel.position.copy(HANGAR).add(new THREE.Vector3(0, HANGAR_H + 0.5, HANGAR_D / 2));
     this.scene.add(hangarHit, hangarLabel);
     this.placeShowcase();

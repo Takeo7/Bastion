@@ -42,7 +42,7 @@ describe('noise', () => {
     expect(noiseOf(s, kit('sharpshooter'), 'spectralArrow')).toBe(1);
     expect(noiseOf(s, kit('rookie'), 'overwatch')).toBe(0);
     expect(noiseOf(s, addUnit(s, 'a1', 'sectoid', 0, 0), 'mindspin')).toBe(16);
-    expect(NOISE).toEqual({ door: 1, breach: 6, dash: 3 });
+    expect(NOISE).toEqual({ door: 1, breach: 6, dash: 3, alarm: 16 });
   });
 
   it('those in earshot that see nobody go to look; the busy, the deaf and the maker’s own pod do not', () => {
@@ -56,8 +56,8 @@ describe('noise', () => {
     pod(s, 'p3', false, [deaf]);
     const run = sim(s);
     run.makeNoise(soldier.pos, 12, soldier);
-    expect(of(run.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 2, y: 2 }, radius: 12, by: 's1', heard: ['a2'] }]);
-    expect(idle.heard).toEqual({ x: 2, y: 2 });
+    expect(of(run.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 2, y: 2, z: 0 }, radius: 12, by: 's1', heard: ['a2'] }]);
+    expect(idle.heard).toEqual({ x: 2, y: 2, z: 0 });
     expect(busy.heard).toBeUndefined();
     expect(deaf.heard).toBeUndefined();
     expect(s.pods.find((p) => p.id === 'p2')!.active).toBe(false);
@@ -87,7 +87,7 @@ describe('noise', () => {
     expect(events.ok).toBe(true);
     if (!events.ok) return;
     expect(runner.ap).toBe(0);
-    expect(of(events.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 13, y: 1 }, radius: NOISE.dash, by: 's1', heard: ['a1', 'a2'] }]);
+    expect(of(events.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 13, y: 1, z: 0 }, radius: NOISE.dash, by: 's1', heard: ['a1', 'a2'] }]);
     expect(s.concealed).toBe(true);
     expect(s.pods[0]!.active).toBe(false);
     // On their turn they come round the end of the wall, see the runner and only then wake up.
@@ -106,7 +106,7 @@ describe('noise', () => {
     const z = addUnit(s, 'a1', 'zombie', 9, 2);
     pod(s, 'p1', false, [z]);
     const r = executeCommand(s, { type: 'move', unit: 's1', to: { x: 4, y: 2 } }, ctx());
-    expect(r.ok && of(r.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 4, y: 1 }, radius: NOISE.door, by: 's1', heard: [] }]);
+    expect(r.ok && of(r.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 4, y: 1, z: 0 }, radius: NOISE.door, by: 's1', heard: [] }]);
     const w = executeCommand(s, { type: 'move', unit: 's2', to: { x: 5, y: 2 } }, ctx());
     expect(w.ok && of(w.events, 'noise')[0]).toMatchObject({ tile: { x: 5, y: 1 }, radius: NOISE.breach });
   });
@@ -115,8 +115,8 @@ describe('noise', () => {
     const s = stateFrom(['....#.........', '....#.........', '....#.........']);
     s.concealed = true;
     addUnit(s, 's1', 'rookie', 0, 1);
-    const z1 = addUnit(s, 'a1', 'zombie', 13, 1, { heard: { x: 6, y: 1 } });
-    const z2 = addUnit(s, 'a2', 'zombie', 13, 2, { heard: { x: 6, y: 1 } });
+    const z1 = addUnit(s, 'a1', 'zombie', 13, 1, { heard: { x: 6, y: 1, z: 0 } });
+    const z2 = addUnit(s, 'a2', 'zombie', 13, 2, { heard: { x: 6, y: 1, z: 0 } });
     pod(s, 'p1', false, [z1, z2]);
     const events: GameEvent[] = [];
     for (let i = 0; i < 4 && z1.heard; i++) {
@@ -167,10 +167,10 @@ describe('the dead', () => {
     const s = stateFrom(['...............', '.#############.', '...............']);
     s.activeTeam = 'alien';
     addUnit(s, 's1', 'rookie', 0, 0);
-    const z = addUnit(s, 'a1', 'zombie', 14, 2, { heard: { x: 2, y: 2 } });
+    const z = addUnit(s, 'a1', 'zombie', 14, 2, { heard: { x: 2, y: 2, z: 0 } });
     pod(s, 'p1', true, [z]);
     sim(s).runAlienTurn();
-    expect(z.pos).toEqual({ x: 6, y: 2 });
+    expect(z.pos).toEqual({ x: 6, y: 2, z: 0 });
   });
 
   it('the living keep their ways, but seeing nobody they too go where they heard something', () => {
@@ -188,7 +188,7 @@ describe('the dead', () => {
     expect(hunter.pos.x).toBeLessThan(10);
     // ...with one, and nobody in sight, it goes to look.
     const t = street();
-    const raider = addUnit(t, 'a1', 'trooper', 10, 2, { heard: { x: 19, y: 0 } });
+    const raider = addUnit(t, 'a1', 'trooper', 10, 2, { heard: { x: 19, y: 0, z: 0 } });
     pod(t, 'p1', true, [raider]);
     sim(t).runAlienTurn();
     expect(raider.pos.x).toBeGreaterThan(10);
@@ -241,7 +241,7 @@ describe('the Hinchado', () => {
     const run = sim(s);
     run.damage(bloater, 5, 0, shooter);
     expect(bloater.alive).toBe(false);
-    expect(of(run.events, 'explosive')).toEqual([{ t: 'explosive', unit: 'a1', ability: 'burst', target: { x: 8, y: 10 } }]);
+    expect(of(run.events, 'explosive')).toEqual([{ t: 'explosive', unit: 'a1', ability: 'burst', target: { x: 8, y: 10, z: 0 } }]);
     expect(soldier.hp).toBe(7);
     expect(beside.hp).toBe(TEMPLATES.zombie.hp - 3);
     expect(apart.hp).toBe(TEMPLATES.zombie.hp);
@@ -327,8 +327,8 @@ describe('searching', () => {
     const u = addUnit(s, 's1', 'rookie', 2, 1);
     const z = addUnit(s, 'a1', 'zombie', 4, 2);
     pod(s, 'p1', false, [z]);
-    expect(searchableTiles(s, u)).toEqual([{ x: 3, y: 1 }]);
-    expect(canTargetTile(s, u, 'search', { x: 3, y: 1 })).toBe(true);
+    expect(searchableTiles(s, u)).toEqual([{ x: 3, y: 1, z: 0 }]);
+    expect(canTargetTile(s, u, 'search', { x: 3, y: 1, z: 0 })).toBe(true);
     const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'search', tile: { x: 3, y: 1 } }, ctx(3));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -338,7 +338,7 @@ describe('searching', () => {
     expect(of(r.events, 'noise')[0]).toMatchObject({ tile: { x: 3, y: 1 }, radius: 2, heard: ['a1'] });
     expect(u.ap).toBe(1);
     expect(s.searched).toEqual([1 * 8 + 3]);
-    expect(searchable(s, { x: 3, y: 1 })).toBe(false);
+    expect(searchable(s, { x: 3, y: 1, z: 0 })).toBe(false);
     expect(abilityBlocker(s, u, 'search')).toBe('Ya está registrado.');
   });
 
@@ -347,18 +347,18 @@ describe('searching', () => {
     const u = addUnit(s, 's1', 'rookie', 2, 1, { backpack: [{ supplies: 5 }, { medicines: 1 }, { item: 'firstAid' }] });
     expect(abilityBlocker(s, u, 'search')).toBe('La mochila está llena.');
     u.backpack = [];
-    u.pos = { x: 0, y: 0 };
+    u.pos = { x: 0, y: 0, z: 0 };
     expect(abilityBlocker(s, u, 'search')).toBe('No hay nada que registrar al lado.');
     // Diagonally round the corner of a wall: out of reach.
-    u.pos = { x: 4, y: 2 };
-    expect(searchableTiles(s, u)).toEqual([{ x: 3, y: 1 }]);
+    u.pos = { x: 4, y: 2, z: 0 };
+    expect(searchableTiles(s, u)).toEqual([{ x: 3, y: 1, z: 0 }]);
     s.tiles[2 * 8 + 4] = 'floor';
     s.tiles[1 * 8 + 4] = 'wall';
     s.tiles[2 * 8 + 3] = 'wall';
     expect(searchableTiles(s, u)).toEqual([]);
     // A car's boot; blown away, nothing is left to search.
-    u.pos = { x: 4, y: 4 };
-    expect(searchableTiles(s, u)).toEqual([{ x: 5, y: 4 }]);
+    u.pos = { x: 4, y: 4, z: 0 };
+    expect(searchableTiles(s, u)).toEqual([{ x: 5, y: 4, z: 0 }]);
     s.tiles[4 * 8 + 5] = 'floor';
     expect(searchableTiles(s, u)).toEqual([]);
     expect(SEARCHABLE).toEqual(expect.arrayContaining(['wardrobe', 'table', 'desk', 'shelf', 'counter', 'cabinet', 'bed', 'crates', 'carRear', 'carFront', 'rack']));
@@ -395,7 +395,7 @@ describe('the Saqueo', () => {
     expect(s.mission.horde).toEqual(['zombie', 'zombie', 'xenoid']);
     expect(s.units.filter((u) => u.team === 'alien').every((u) => TEMPLATES[u.template].undead)).toBe(true);
     let furniture = 0;
-    for (let i = 0; i < s.tiles.length; i++) if (searchable(s, { x: i % s.width, y: Math.floor(i / s.width) })) furniture++;
+    for (let i = 0; i < s.tiles.length; i++) if (searchable(s, { x: i % s.width, y: Math.floor(i / s.width), z: 0 })) furniture++;
     expect(furniture).toBeGreaterThan(20);
   });
 
@@ -465,11 +465,15 @@ describe('the Saqueo', () => {
     expect(announced.map((e) => e.r.turn)).toEqual([first + 1]);
     const r = announced[0]!.r;
     expect(r.horde).toBe(true);
-    expect(r.pos!.x < 2 || r.pos!.y < 2 || r.pos!.x >= 38 || r.pos!.y >= 38).toBe(true);
-    expect(Math.hypot(r.pos!.x - 20, r.pos!.y - 20)).toBeGreaterThanOrEqual(12);
-    // It lands unaware, heading for the squad: the squad stays hidden until they see it.
+    // No exact spot is ever announced (playtest 2026-10-13).
+    expect(r.pos).toBeNull();
+    // It lands unaware by an edge, far from the squad, heading for it: the squad stays hidden until they see it.
     const landing = turns(quiet, 1);
     const spawned = of(landing, 'spawned')[0]!;
+    for (const u of spawned.units) {
+      expect(u.pos.x < 2 || u.pos.y < 2 || u.pos.x >= 38 || u.pos.y >= 38).toBe(true);
+      expect(Math.hypot(u.pos.x - 20, u.pos.y - 20)).toBeGreaterThanOrEqual(12);
+    }
     expect(spawned.pod.active).toBe(false);
     expect(spawned.units.every((u) => u.heard && u.heard.x === 20 && u.heard.y === 20)).toBe(true);
     expect(of(landing, 'concealmentBroken')).toEqual([]);

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { carPartner, decorOf, DIRS4, litMask, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
+import { carPartner, decorOf, DIRS4, floorLevels, litMask, type Biome, type DecorKind, type GameState, type Place, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
 import { StaticBatch, type Dirty, type UvRect } from './batch';
 import { atlasRect, mapAtlasTexture } from './mapAtlas';
-import { BuildingsView, piecesLoaded, preloadPieces, RAISED_FLATS, RAISED_PLATFORM, syntyPiece, type Focus } from './buildings';
+import { BuildingsView, floorFadePatch, piecesLoaded, preloadPieces, RAISED_FLATS, RAISED_PLATFORM, syntyPiece, type Focus } from './buildings';
 import { STOREY } from './coords';
 import { dressEdges, dressStreets } from './dressing';
 import { NIGHT, NightLights, type Glow } from './night';
@@ -105,6 +105,9 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
       return low ? 'logs' : null;
     case 'rubble':
       return low ? 'rubble' : 'wallStub';
+    case 'stairs':
+      // A building's stairs are a ladder tile, never cover (docs/FASE6-PLAN.md).
+      return null;
   }
 }
 
@@ -154,6 +157,12 @@ interface Kit {
 }
 
 /** One kind of placed geometry (a prop's part, the floor slabs): its instances go to the map's batch. */
+/** Where the props being placed stand: a building (-1 none) and its storey. */
+interface FloorTag {
+  building: number;
+  level: number;
+}
+
 class Layer {
   constructor(
     private readonly batch: StaticBatch,
@@ -166,11 +175,14 @@ class Layer {
     private readonly occlude = shadows,
     /** Where its atlas sits in the packed texture (mapAtlas.ts), if it's packed. */
     private readonly uv: UvRect | null = null,
+    /** The building and storey what's added now stands on (aFloor, buildings.ts: floorFadePatch), read as each is added. */
+    private readonly floor: FloorTag | null = null,
   ) {}
 
   add(matrix: THREE.Matrix4, color: number | THREE.Color = 0xffffff): void {
     const c = this.tinted ? new THREE.Color(color) : null;
-    this.batch.add(this.geometry, this.material, matrix, this.shadows, c ? { color: [c.r, c.g, c.b] } : undefined, this.occlude, this.uv ?? undefined);
+    const consts: Record<string, number[]> | undefined = c ? { color: [c.r, c.g, c.b] } : this.floor ? { aFloor: [this.floor.building + 1, this.floor.level] } : undefined;
+    this.batch.add(this.geometry, this.material, matrix, this.shadows, consts, this.occlude, this.uv ?? undefined);
   }
 }
 
@@ -238,7 +250,7 @@ export class MapView {
   /** Where the night's lamps and headlights go, as of the last rebuild. */
   private nightPlan: { lamps: Glow[]; headlights: Glow[] } | null = null;
   /** The tiles and searches the last rebuild drew (what changed since is all a rebuild redoes); null: redo everything. */
-  private drawn: { tiles: TileKind[]; searched: string } | null = null;
+  private drawn: { tiles: TileKind[]; levels: (TileKind | null)[][]; searched: string } | null = null;
   /** The contact occlusion baked over the map (groundAO.ts), and which bake is the latest. */
   private ao: GroundOcclusion | null = null;
   /** Where the contact occlusion is to be baked again (the next frame does it). */
@@ -248,6 +260,8 @@ export class MapView {
   /** The camera and what the player looks at, for the cutaway (game.ts). */
   private camera: THREE.Camera | null = null;
   private focus: (() => Focus) | null = null;
+  /** The storey the fog shows (the active one when it was last drawn). */
+  private fogFloor = 0;
 
   build(s: GameState): void {
     this.width = s.width;
@@ -256,6 +270,7 @@ export class MapView {
     this.visibility = null;
     this.fresh = true;
     this.fog.resize(s.width, s.height);
+    this.fogFloor = 0;
     this.fog.set([], this.explored.tiles, true);
     this.fog.setFloors(s.elev);
     this.ground?.dispose();
@@ -336,16 +351,25 @@ export class MapView {
 
     // Synty props: their meshes, each on its pack's atlas.
     const syntyLayers = new Map<string, Layer[]>();
-    /** The props' material: one for every pack in the packed texture (mapAtlas.ts: a draw for all of them), else the pack's own. */
+    /**
+     * The props' material: one for every pack in the packed texture (mapAtlas.ts: a draw for all of them), else the
+     * pack's own. What stands on a building's storey fades with the floors above the one in view.
+     */
     const atlasMaterial = (id: AtlasId) => {
       const key = atlasRect(id) ? 'packed' : id;
       let m = kit.atlas.get(key);
-      if (!m) kit.atlas.set(key, (m = this.own(new THREE.MeshStandardMaterial({ map: key === 'packed' ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 }))));
+      if (!m) {
+        m = this.own(new THREE.MeshStandardMaterial({ map: key === 'packed' ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 }));
+        floorFadePatch(m, buildings.cutaway);
+        kit.atlas.set(key, m);
+      }
       return m;
     };
+    /** Where the props being placed stand (a building's storey: they fade with it; else out of doors). */
+    const floor: FloorTag = { building: -1, level: 0 };
     /** A layer for one part of a prop, its UVs moved into its atlas's place. */
     const partLayer = (part: { geometry: THREE.BufferGeometry; atlas: AtlasId }, shadows = true, occlude = shadows) =>
-      new Layer(batch, part.geometry, atlasMaterial(part.atlas), shadows, false, occlude, atlasRect(part.atlas));
+      new Layer(batch, part.geometry, atlasMaterial(part.atlas), shadows, false, occlude, atlasRect(part.atlas), floor);
     /** The Synty prop `id` at `matrix`; false while it loads. */
     const addSyntyId = (id: PropId, matrix: THREE.Matrix4, shadows = true): boolean => {
       const prop = syntyProp(id);
@@ -453,6 +477,10 @@ export class MapView {
 
     const at = (x: number, y: number): TileKind => (x < 0 || y < 0 || x >= s.width || y >= s.height ? 'floor' : s.tiles[y * s.width + x]!);
     const decor = s.decor ?? [];
+    /** The storey being dressed: its decor and tiles, and where its places start among the map's (searched lists places). */
+    let decorNow = decor;
+    let tilesNow: readonly (TileKind | null)[] = s.tiles;
+    let placeBase = 0;
     /** A fence or gate post still standing: the fences beside it run their rails to it. */
     const fenceAt = (x: number, y: number) => {
       const kind = at(x, y) === 'low' ? decorOf(decor[y * s.width + x])?.kind : undefined;
@@ -464,7 +492,7 @@ export class MapView {
      * the tile is now; false to fall back to the biome's random props.
      */
     const dressed = (i: number, x: number, y: number, kind: 'low' | 'high', base: number): boolean => {
-      const look = decorOf(decor[i]);
+      const look = decorOf(decorNow[i]);
       const set = look && decorSet(look.kind, kind, s.biome);
       if (!look || !set) return false;
       const cx = x + 0.5;
@@ -473,20 +501,20 @@ export class MapView {
       let pick = hash(x, y, 1);
       if (look.kind === 'carFront' || look.kind === 'carRear') {
         // A car is one model over both tiles, drawn only while both stand: the front tile draws it, centred between the two.
-        const j = carPartner(decor, s.width, i);
-        if (j < 0 || s.tiles[j] !== 'low') return false;
+        const j = carPartner(decorNow, s.width, i);
+        if (j < 0 || tilesNow[j] !== 'low') return false;
         if (look.kind === 'carRear') return true;
         pick = hash(x, y, 1);
         const d = DIRS4[look.facing]!;
         const at = placed(cx - d.x * 0.5, base, cz - d.y * 0.5, 1, 1, 1, turn * (Math.PI / 2));
         // Searched (its boot or its glovebox), it's the one with the boot lid up.
-        if (searched.has(i) || searched.has(j)) addSyntyId('carOpen', at);
+        if (searched.has(placeBase + i) || searched.has(placeBase + j)) addSyntyId('carOpen', at);
         else addSynty('carFront', pick, at);
         if (hash(x, y, 9) < 0.25) headlights.push({ x: cx + d.x * 0.42, y: base + 0.32, z: cz + d.y * 0.42, dx: d.x, dz: d.y });
         return true;
       }
       // Searched furniture: opened, its contents on the floor in front of it.
-      if (searched.has(i)) {
+      if (searched.has(placeBase + i)) {
         const front = FACING.has(look.kind) ? DIRS4[look.facing]! : DIRS4[Math.floor(hash(x, y, 2) * 4)]!;
         const opened =
           look.kind === 'wardrobe' && kind === 'high'
@@ -554,6 +582,39 @@ export class MapView {
       }
     }
 
+    // Each storey's furniture and cover (GameState.levels), as on the ground; it fades with the floors above the one in view.
+    s.levels?.forEach((storey, k) => {
+      const level = k + 1;
+      const base = level * STOREY;
+      decorNow = storey.decor ?? [];
+      tilesNow = storey.tiles;
+      placeBase = level * s.width * s.height;
+      floor.level = level;
+      for (let y = 0; y < s.height; y++) {
+        for (let x = 0; x < s.width; x++) {
+          const i = y * s.width + x;
+          if (area && !area[i]) continue;
+          const kind = storey.tiles[i];
+          if (kind !== 'low' && kind !== 'high') continue;
+          const b = buildings.plan.owner[i]!;
+          const bd = b >= 0 ? buildings.plan.buildings[b] : undefined;
+          // Low cover round the edge of a roof one walks on is its parapet (buildings.ts).
+          if (kind === 'low' && bd?.walkableRoof && level === bd.storeys && !decorOf(decorNow[i])) continue;
+          floor.building = b;
+          if (dressed(i, x, y, kind, base)) continue;
+          // Cover with nothing to say what it is, indoors: shelves and crates (out of doors, the biome's props).
+          const v = hash(x, y, 1 + level);
+          const set = (b >= 0 ? decorSet(kind === 'high' ? 'shelf' : 'crates', kind, s.biome) : null) ?? (kind === 'high' ? props.high : props.low);
+          addProp(i, set, x + 0.5, base, y + 0.5, v, Math.floor(hash(x, y, 2 + level) * 4), b >= 0 ? 1 : randomWiggle);
+        }
+      }
+    });
+    decorNow = decor;
+    tilesNow = s.tiles;
+    placeBase = 0;
+    floor.building = -1;
+    floor.level = 0;
+
     // The streets' dressing (street lights, poles and wires, bags, weeds…): cosmetic, merged with the rest.
     const lamps: Glow[] = [];
     // The map's own lights (generated maps): a street light on each.
@@ -597,7 +658,7 @@ export class MapView {
     dirty = union(dirty, buildings.dirty);
     this.group.add(buildings.group, buildings.walls);
     // What's drawn now, for the next rebuild to compare with; with props still loading, the next one redoes everything.
-    this.drawn = { tiles: s.tiles.slice(), searched: (s.searched ?? []).join(',') };
+    this.drawn = { tiles: s.tiles.slice(), levels: (s.levels ?? []).map((l) => l.tiles.slice()), searched: (s.searched ?? []).join(',') };
     if (this.waitingForProps) {
       this.waitingForProps = false;
       this.drawn = null;
@@ -628,16 +689,22 @@ export class MapView {
    */
   private changed(s: GameState, batch: StaticBatch): Set<string> | null {
     const drawn = this.drawn;
-    if (!drawn || drawn.tiles.length !== s.tiles.length) return null;
+    if (!drawn || drawn.tiles.length !== s.tiles.length || drawn.levels.length !== (s.levels?.length ?? 0)) return null;
     const touched: number[] = [];
     for (let i = 0; i < s.tiles.length; i++) if (s.tiles[i] !== drawn.tiles[i]) touched.push(i);
+    // A door opened, a window broken upstairs (tileChanged with its storey).
+    s.levels?.forEach((l, k) => {
+      for (let i = 0; i < l.tiles.length; i++) if (l.tiles[i] !== drawn.levels[k]![i]) touched.push(i);
+    });
     const searched = s.searched ?? [];
     if (searched.join(',') !== drawn.searched) {
       const before = new Set(drawn.searched ? drawn.searched.split(',').map(Number) : []);
       for (const i of searched) if (!before.has(i)) touched.push(i);
     }
     const chunks = new Set<string>();
-    for (const i of touched) {
+    for (const place of touched) {
+      // Searches list places: upstairs ones come after the ground's.
+      const i = place % (s.width * s.height);
       const x = i % s.width;
       const y = (i - x) / s.width;
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) chunks.add(batch.chunkAt(x + dx + 0.5, y + dy + 0.5));
@@ -718,20 +785,71 @@ export class MapView {
    */
   private lightsChanged(s: GameState): void {
     const night = NIGHT.value > 0.5;
-    this.fog.setLit(night ? litMask(s) : []);
+    this.fog.setLit(night ? this.onFloor(s, litMask(s)) : []);
     this.night?.setBurning(s.lights ?? [], (x, y) => (s.elev[y * s.width + x] ?? 0) * STOREY);
   }
 
-  /** What the squad sees now: it is remembered as explored, and the fog fades to match. */
+  /** Buildings whose inside the squad sees through a window or a door lose their roof (off in the lab, where all is in sight). */
+  seeInside = true;
+
+  /**
+   * What the squad sees now (a mask by place: the ground's tiles first, then
+   * each storey's: teamVisibility): it is remembered as explored, and the fog
+   * fades to match on the floor in view.
+   */
   setVisibility(mask: boolean[]): void {
     this.visibility = mask;
     this.explored.see(mask, this.shown?.seq ?? 0);
-    this.fog.set(mask, this.explored.tiles, this.fresh);
+    this.refog();
     this.fresh = false;
+  }
+
+  /** The storey in view (the active one: game.ts). */
+  private activeFloor(): number {
+    return this.focus?.()?.level ?? 0;
+  }
+
+  /**
+   * A mask by place shown on the floor in view, tile by tile (the engine's
+   * floorView): on each tile, its value on the highest level at or below the
+   * floor in view that has a slab there, else the ground's.
+   */
+  private onFloor(s: GameState, mask: ArrayLike<boolean | number>): boolean[] {
+    const area = s.width * s.height;
+    return floorLevels(s, this.fogFloor).map((z, i) => !!mask[z * area + i]);
+  }
+
+  /** The fog for the floor in view: what is in sight and explored there, and the height of each tile's floor (for the night's light). */
+  private refog(): void {
+    const s = this.shown;
+    if (!s) return;
+    this.fogFloor = this.activeFloor();
+    const area = s.width * s.height;
+    const levels = floorLevels(s, this.fogFloor);
+    this.fog.set(this.onFloor(s, this.visibility ?? []), Uint8Array.from(levels, (z, i) => this.explored.tiles[z * area + i] ?? 0), this.fresh);
+    this.fog.setFloors(levels.map((z, i) => (z ? z : (s.elev[i] ?? 0))));
+    if (NIGHT.value > 0.5) this.fog.setLit(this.onFloor(s, litMask(s)));
+  }
+
+  /**
+   * Whether place `p` is hidden by the buildings' cutaway (a storey above the
+   * one its building shows): units there aren't to be drawn.
+   */
+  isCutAway(p: Place): boolean {
+    return this.buildings?.cutaway.hides(p) ?? false;
+  }
+
+  /** Whether the squad sees place `p` (on the ground without `z`). */
+  isVisibleAt(p: Place): boolean {
+    const s = this.shown;
+    if (!s) return true;
+    return this.visibility?.[((p.z ?? 0) * s.height + p.y) * s.width + p.x] ?? true;
   }
 
   /** Advances the fog's fades and its drifting mist, and the buildings' cutaway; called every frame. */
   tick(dt: number): void {
+    // Another storey in view: the fog shows what is seen there.
+    if (this.shown && this.visibility && this.activeFloor() !== this.fogFloor) this.refog();
     this.fog.update(dt);
     // A search opened a piece of furniture: redraw (searches are few, a rebuild is cheap).
     if (this.shown && (this.shown.searched?.length ?? 0) !== this.searchedSeen) this.rebuild(this.shown);
@@ -746,7 +864,7 @@ export class MapView {
       }
     }
     this.night?.update(dt, this.camera);
-    if (this.buildings && this.shown) this.buildings.update(dt, this.shown, this.camera, this.focus?.() ?? null, this.visibility);
+    if (this.buildings && this.shown) this.buildings.update(dt, this.shown, this.camera, this.focus?.() ?? null, this.visibility, this.seeInside);
   }
 
   isVisible(x: number, y: number): boolean {

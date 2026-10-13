@@ -157,6 +157,7 @@ const v4 = new THREE.Vector3();
 const q1 = new THREE.Quaternion();
 const q2 = new THREE.Quaternion();
 const e1 = new THREE.Euler();
+const m1 = new THREE.Matrix4();
 const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -443,6 +444,8 @@ export class SyntyFigure implements FigureRig {
     // Legs and the spine underneath: the clips, or procedural legs until they load.
     if (anim) this.animate(p, dt);
     else this.legs(p, time);
+    const climb = (p.climb ?? 0) * live;
+    if (climb > 0.5) this.climbLegs(time + p.phase);
     // Knees give way as the body goes down.
     const buckle = Math.sin(fall * Math.PI) * 0.7;
     if (buckle > 0.01) {
@@ -466,7 +469,11 @@ export class SyntyFigure implements FigureRig {
     this.tilt(B.Spine_02, roll, twist * 0.6, lean * 0.7);
     const upper = this.tilt(B.Spine_03, roll, twist, lean);
     // Neck and head: they keep the eyes up as the spine leans; the dead's lolls, a screamer's goes back.
-    const neck = rot(this.neckTurn, Z, shamble * 0.32 * live).multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6) * live)).premultiply(upper);
+    // Aiming a gun the head comes down and over to the stock, the eye behind the sights.
+    const sight = this.spec.weapon && !this.melee ? p.aim * live : 0;
+    const neck = rot(this.neckTurn, Z, shamble * 0.32 * live - sight * 0.12)
+      .multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6) * live + sight * 0.16))
+      .premultiply(upper);
     if (!anim) d[B.Neck]!.copy(d[B.Hips]!);
     d[B.Neck]!.premultiply(neck);
     if (anim) d[B.Head]!.premultiply(neck);
@@ -482,9 +489,20 @@ export class SyntyFigure implements FigureRig {
     const aim = p.aim;
     const throwing = Math.abs(p.lean) > 0.04 && live > 0.5 && !dead;
     if (live < 0.5) {
-      // Fallen: arms limp along the body, the weapon lying in the hand.
+      // Fallen: arms limp along the body, the weapon lying flat along it in the hand (not pointing at the sky).
       this.hang('L', 0);
       this.hang('R', 0);
+      if (this.spec.weapon) {
+        const along = v1.set(0.12, -1, 0.15).normalize();
+        const flat = v2.copy(Z).addScaledVector(along, -along.z).normalize();
+        m1.makeBasis(v3.crossVectors(flat, along), flat, along);
+        d[B.Hand_R]!.setFromRotationMatrix(m1).multiply(r.gripTurn);
+      }
+    } else if (climb > 0.5) {
+      // Up a ladder: the free hand goes from rung to rung; the gun hand keeps the gun low, or climbs too.
+      this.reach('L', this.rung(1, time + p.phase), v4.set(0.6, -1, -0.3));
+      if (this.spec.weapon) this.holdWeapon(p, lean);
+      else this.reach('R', this.rung(-1, time + p.phase), v4.set(-0.6, -1, -0.3));
     } else if (this.spec.weapon) {
       this.holdWeapon(p, lean);
       if (throwing) this.throwArm(p.lean);
@@ -492,7 +510,7 @@ export class SyntyFigure implements FigureRig {
         // Rummaging: the gun stays low in the right hand, the left goes in among the things.
         const grip = tmpR.copy(this.fore ? this.leftHand(p) : this.p[B.Hand_L]!);
         this.reach('L', v3.lerpVectors(grip, this.rummage(1, time), search), v4.set(0.7, -1, 0.2));
-      } else if (this.fore) this.reach('L', this.leftHand(p), v4.set(0.7, -1, -0.2));
+      } else if (this.fore) this.reach('L', this.leftHand(p), v4.set(lerp(0.7, 0.25, p.aim), -1, lerp(-0.2, 0.1, p.aim)));
       else if (anim) this.followArm('L', upper);
       else this.hang('L', p.run * Math.sin(time * 11 + p.phase) * 0.4);
     } else if (dead) {
@@ -628,6 +646,26 @@ export class SyntyFigure implements FigureRig {
     pos[B.Hips]!.y += r.p[B.Ankle_L]!.y - lowest;
   }
 
+  /** Up a ladder: one knee comes up to the next rung as the other leg pushes, turn about. */
+  private climbLegs(time: number): void {
+    const r = this.rest!;
+    const s = Math.sin(time * 7);
+    for (let k = 0; k < 2; k++) {
+      const lift = Math.max(0, k ? s : -s);
+      const [thigh, shin, foot, ball] = k ? [B.UpperLeg_R, B.LowerLeg_R, B.Ankle_R, B.Ball_R] : [B.UpperLeg_L, B.LowerLeg_L, B.Ankle_L, B.Ball_L];
+      this.leg(thigh, shin, foot, ball, -0.25 - 1.05 * lift, 0.3 + 1.4 * lift, k ? -0.05 : 0.05);
+    }
+    // The lower foot stands on its rung.
+    const lowest = Math.min(this.ankle(B.UpperLeg_L, B.LowerLeg_L, B.Ankle_L), this.ankle(B.UpperLeg_R, B.LowerLeg_R, B.Ankle_R));
+    this.p[B.Hips]!.y += r.p[B.Ankle_L]!.y - lowest;
+  }
+
+  /** Where a hand grips the ladder: a rung up in front, higher on its turn (model space). */
+  private rung(side: 1 | -1, time: number): THREE.Vector3 {
+    const sh = this.p[side > 0 ? B.Shoulder_L : B.Shoulder_R]!;
+    return v3.copy(sh).add(v4.set(side * -0.04, 0.16 + 0.1 * Math.sin(time * 7 + (side > 0 ? Math.PI : 0)), 0.3));
+  }
+
   /** Leans a spine bone on top of what it has (model space); returns the turn it got. */
   private tilt(i: number, roll: number, twist: number, lean: number): THREE.Quaternion {
     const t = rot(this.upperTurn, Z, roll).multiply(rot(q1, Y, twist)).multiply(rot(q2, X, lean));
@@ -657,16 +695,23 @@ export class SyntyFigure implements FigureRig {
       v1.set(sh.x * 1.1, lerp(r.hip + 0.02, sh.y + 0.08, aim), lerp(sh.z + 0.08, sh.z + 0.18, aim));
       e1.set(lerp(1.15, -0.9, aim) - lean, 0, 0, 'YXZ');
     } else {
-      v1.set(lerp(sh.x * 0.35, sh.x * 0.5, aim), lerp(sh.y - 0.27, sh.y - 0.09, aim) + reload * 0.08, lerp(sh.z + 0.22, sh.z + 0.19, aim));
-      e1.set((1 - aim) * 0.42 - p.recoil * 0.18 - lean - reload * 0.5, (1 - aim) * 0.38 + reload * 0.2, reload * 0.9, 'YXZ');
+      // Shouldered, the grip comes up level with the shoulder: the stock in its pocket, the sights at the eye.
+      v1.set(lerp(sh.x * 0.35, sh.x * 0.5, aim), lerp(sh.y - 0.27, sh.y - 0.02, aim) + reload * 0.08, lerp(sh.z + 0.22, sh.z + 0.19, aim));
+      e1.set((1 - aim) * 0.42 - p.recoil * 0.18 - reload * 0.5, (1 - aim) * 0.38 + reload * 0.2, reload * 0.9, 'YXZ');
     }
     this.gunQ.setFromEuler(e1);
-    this.gunQ.premultiply(d[s3]!);
+    if (this.melee) this.gunQ.premultiply(d[s3]!);
+    else {
+      // A gun stays level however the clip bends the spine (a crouch, a hunch): only the chest's heading turns it.
+      const ahead = v2.copy(Z).applyQuaternion(d[s3]!);
+      this.gunQ.premultiply(q1.setFromAxisAngle(Y, Math.atan2(ahead.x, ahead.z)));
+    }
     this.gunP.copy(v1).sub(r.p[s3]!).applyQuaternion(d[s3]!).add(pos[s3]!);
     this.gunP.addScaledVector(v2.copy(Z).applyQuaternion(this.gunQ), -p.recoil * 0.05);
     // Right hand on the grip, holding the gun's turn.
     const hand = v3.copy(GRIP).applyQuaternion(this.gunQ).negate().add(this.gunP);
-    this.reach('R', hand, v4.set(-0.7, -1, -0.35));
+    // The elbow hangs at low ready and comes out to the side when the stock is shouldered.
+    this.reach('R', hand, v4.set(lerp(-0.7, -1, aim), lerp(-1, -0.45, aim), lerp(-0.35, -0.25, aim)));
     d[B.Hand_R]!.copy(this.gunQ).multiply(r.gripTurn);
   }
 
@@ -862,12 +907,16 @@ const PIECES: ArmorPart[] = ['helmet', 'torso', 'arms', 'legs'];
  * The Synty figure for a unit, or null if the manifest has none for it.
  * `seed` keeps the same survivor for the same soldier (else the look picks it).
  */
-export function syntyFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear, seed?: string): FigureRig | null {
+/**
+ * A unit as a Synty character. `sex` is for who has no look of their own (a
+ * VIP, an enemy leader: the engine's sexOfPerson); a soldier's is in the look.
+ */
+export function syntyFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm'): FigureRig | null {
   if (template === 'relay') return new SyntyProp(RELAY_PROP);
   const squad = SQUAD.has(template);
   const head: HeadId = look?.head ?? (template === 'sharpshooter' ? 'hood' : 'helmet');
   const build = look?.build ?? (template === 'grenadier' ? 'heavy' : 'normal');
-  const bodies = squad ? SQUAD_BODIES[build] : UNIT_BODIES[template];
+  const bodies = sameSex(squad ? SQUAD_BODIES[build] : UNIT_BODIES[template], look?.sex ?? sex, squad);
   if (!bodies?.length) return null;
   // The barracks' «Personaje» if chosen, else one picked by the soldier's campaign id (the same everywhere).
   const chosen = squad ? SURVIVOR_CHOICES.find((c) => c.id === look?.character)?.id : undefined;
@@ -895,6 +944,20 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
     scream: template === 'sectoid',
     drone: template === 'specialist',
   });
+}
+
+/**
+ * The bodies someone picked at random can have: those of their sex in the
+ * list. A soldier whose build has none of it (no heavy women) takes any
+ * survivor of that sex; anyone else, the whole list; so does whoever's sex is
+ * unknown.
+ */
+function sameSex(bodies: CharacterId[] | undefined, sex: 'f' | 'm' | undefined, squad: boolean): CharacterId[] | undefined {
+  if (!sex || !bodies) return bodies;
+  const of = (id: CharacterId) => !!(CHARACTERS[id] as CharacterAsset).female === (sex === 'f');
+  const kept = bodies.filter(of);
+  if (kept.length) return kept;
+  return squad ? SURVIVOR_CHOICES.map((c) => c.id).filter(of) : bodies;
 }
 
 /**

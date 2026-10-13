@@ -23,7 +23,7 @@ import { uiSound } from '../audio/ui';
 import type { NetStatus } from '../net';
 import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
-import { graphicsSettings, soundSettings, themeSettings } from './settingsPanel';
+import { graphicsSettings, soundSettings } from './settingsPanel';
 import { typed } from './typed';
 
 export interface AbilityView {
@@ -179,6 +179,8 @@ export interface HudHandlers {
   /** Toggles the sound; returns whether it is now on. */
   onToggleSound(): boolean;
   soundOn(): boolean;
+  /** One floor up (1) or down (-1) (docs/FASE6.md). */
+  onFloor(dir: 1 | -1): void;
 }
 
 const CONTROLS: [string, string][] = [
@@ -190,10 +192,11 @@ const CONTROLS: [string, string][] = [
   ['Retroceso', 'Terminar turno'],
   ['G · clic central', 'Marcar'],
   ['Q / E', 'Girar la cámara'],
+  ['RePág / AvPág · Mayús + rueda', 'Subir o bajar de planta'],
   ['WASD', 'Mover la cámara'],
   ['F', 'Centrar en el soldado'],
   ['O', 'Centrar en el objetivo'],
-  ['Clic derecho', 'Expediente del enemigo'],
+  ['Clic derecho', 'Ficha del enemigo'],
   ['M', 'Sonido'],
   ['Esc', 'Cancelar o abrir este menú'],
 ];
@@ -230,6 +233,9 @@ export class Hud {
   /** Round the screen, in the colour of whoever plays now (playtest: «que se note de quién es el turno»). */
   private readonly frame = h('div.turn-frame');
   private readonly turn = h('div.turn');
+  /** Which floor is shown, on maps with storeys (docs/FASE6.md): «Planta 1 de 3», with arrows. */
+  private readonly floor = h('div.floor-ind.hidden');
+  private floorKey = '';
   private readonly mission = h('div.mission');
   private readonly players = h('div.players');
   private readonly squad = h('div.squad.panel');
@@ -259,7 +265,7 @@ export class Hud {
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
     this.root.append(
       this.frame,
-      h('div.top', {}, this.turn, this.mission, this.players),
+      h('div.top', {}, this.turn, this.floor, this.mission, this.players),
       this.squad,
       this.unitPanel,
       this.abilities,
@@ -314,6 +320,26 @@ export class Hud {
       h(`span.conceal.${concealed ? 'on' : 'off'}`, {}, concealed ? 'OCULTOS' : 'DETECTADOS'),
       // The same stamp as the concealment, so every theme dresses it alike; `.night` gives its colour.
       night ? h('span.conceal.night', { title: night.rules }, night.label.toUpperCase()) : null,
+    );
+  }
+
+  /**
+   * The active floor (docs/FASE6.md): «Planta baja» or «Planta 2 de 3», with
+   * an arrow up and one down; hidden on maps without storeys (`null`).
+   */
+  setFloor(view: { level: number; max: number } | null): void {
+    const key = view ? `${view.level}/${view.max}` : '';
+    if (key === this.floorKey) return;
+    this.floorKey = key;
+    this.floor.classList.toggle('hidden', !view);
+    clear(this.floor);
+    if (!view) return;
+    const label = view.level === 0 ? 'Planta baja' : `Planta ${view.level} de ${view.max}`;
+    append(
+      this.floor,
+      h('button.floor-down', { disabled: view.level === 0, title: 'Bajar de planta (AvPág)', 'aria-label': 'Bajar de planta', onclick: () => this.handlers.onFloor(-1) }, '▼'),
+      h('span.floor-label', { title: 'RePág / AvPág, o Mayús y la rueda' }, label.toUpperCase()),
+      h('button.floor-up', { disabled: view.level >= view.max, title: 'Subir de planta (RePág)', 'aria-label': 'Subir de planta', onclick: () => this.handlers.onFloor(1) }, '▲'),
     );
   }
 
@@ -456,15 +482,17 @@ export class Hud {
       if (!s) return h('span.pack-slot.empty', { title: 'Hueco libre' });
       if (s.kind === 'supplies') return h('span.pack-slot.supplies', { title: `Suministros: +${s.amount} §` }, h('b', {}, `${s.amount}§`));
       if (s.kind === 'medicines') return h('span.pack-slot.medicines', { title: s.amount === 1 ? 'Medicinas' : `Medicinas ×${s.amount}` }, h('span.stat-icon'));
-      if (s.kind === 'food') return h('span.pack-slot.food', { title: `Raciones: +${s.amount}` }, h('b', {}, `${s.amount}◍`));
-      if (s.kind === 'parts') return h('span.pack-slot.parts', { title: `Piezas: +${s.amount}` }, h('b', {}, `${s.amount}⚙`));
+      // The number and a drawn icon, never a glyph: ⚙ comes out as an emoji on Windows.
+      if (s.kind === 'food') return h('span.pack-slot.food', { title: `Raciones: +${s.amount}` }, h('b', {}, String(s.amount)), h('span.ico.food'));
+      if (s.kind === 'parts') return h('span.pack-slot.parts', { title: `Piezas: +${s.amount}` }, h('b', {}, String(s.amount)), h('span.ico.parts'));
       if (s.kind === 'weapon') return h('span.pack-slot.weapon', { title: `${FOUND_WEAPONS[s.weapon].name}: a la Armería, para un soldado` }, h('span.stat-icon'));
       return h(`span.pack-slot.item.i-${ITEM_ICONS[s.item]}`, { title: `${ITEMS[s.item].name}: ${ITEMS[s.item].description}` }, h('span.stat-icon'));
     };
     const q = pack.squad;
-    // Supplies, rations and parts carry their sign in the number; the rest an icon.
-    const signed = ['supplies', 'food', 'parts'];
-    const total = (kind: string, n: number, text: string) => (n ? h(`span.pack-total.${kind}`, {}, signed.includes(kind) ? null : h('span.stat-icon'), h('b', {}, text)) : null);
+    // Supplies carry their sign («§») in the number; rations and parts an icon after it; the rest an icon before.
+    const after = ['food', 'parts'];
+    const total = (kind: string, n: number, text: string) =>
+      n ? h(`span.pack-total.${kind}`, {}, kind === 'supplies' || after.includes(kind) ? null : h('span.stat-icon'), h('b', {}, text), after.includes(kind) ? h(`span.ico.${kind}`) : null) : null;
     return h(
       'div.unit-pack',
       { title: `Mochila ${pack.slots.length}/${pack.size}. Cuenta si vuelve: lo que lleva un caído se pierde.` },
@@ -478,8 +506,8 @@ export class Hud {
               'span.pack-totals',
               {},
               total('supplies', q.supplies, `${q.supplies}§`),
-              total('food', q.food, `${q.food}◍`),
-              total('parts', q.parts, `${q.parts}⚙`),
+              total('food', q.food, String(q.food)),
+              total('parts', q.parts, String(q.parts)),
               total('weapon', q.weapons, `×${q.weapons}`),
               total('item', q.items, `×${q.items}`),
               total('medicines', q.medicines, `×${q.medicines}`),
@@ -585,7 +613,8 @@ export class Hud {
       h(
         'div.shot-numbers',
         {},
-        h('div.big', {}, `${view.hit}%`, h('small', {}, 'IMPACTO')),
+        // --p: the odds, 0–100, for the theme to draw as an arc round the dial.
+        h('div.big', { style: { '--p': String(view.hit) } }, `${view.hit}%`, h('small', {}, 'IMPACTO')),
         h('div.big.crit', {}, `${view.crit}%`, h('small', {}, 'CRÍTICO')),
       ),
       damageBlock(view.damage),
@@ -668,12 +697,27 @@ export class Hud {
     this.bannerTimer = window.setTimeout(() => this.bannerEl.classList.remove('show'), detail ? 3600 : 1500);
   }
 
-  /** Arrival briefing: operation, area and objective, then it fades away. */
-  intro(kicker: string, title: string, lines: string[]): void {
-    const el = h('div.mission-intro', {}, h('small', {}, kicker), h('h1', {}, type(title)), ...lines.map((l) => h('p', {}, l)));
+  /**
+   * Arrival briefing: the operation, the area (`lines`: map, night, turns),
+   * the objective in its own line and, when there is one, a line of the
+   * operation's briefing; then it fades away. A longer card stays longer.
+   * Returns how long it is on screen, in ms.
+   */
+  intro(kicker: string, title: string, lines: string[], objective?: string, briefing?: string): number {
+    const el = h(
+      'div.mission-intro',
+      {},
+      h('small', {}, kicker),
+      h('h1', {}, type(title)),
+      lines.length ? h('p.intro-meta', {}, lines.join(' · ')) : null,
+      objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
+      briefing ? h('p.intro-briefing', {}, briefing) : null,
+    );
     this.root.append(el);
-    window.setTimeout(() => el.classList.add('out'), 4200);
-    window.setTimeout(() => el.remove(), 5000);
+    const stay = briefing ? Math.min(7000, 4200 + briefing.length * 18) : 4200;
+    window.setTimeout(() => el.classList.add('out'), stay);
+    window.setTimeout(() => el.remove(), stay + 800);
+    return stay + 800;
   }
 
   /** Shows (or, with null, hides) the partner's key moment: its text in their colour and «Ver (F)». */
@@ -753,7 +797,7 @@ export class Hud {
         },
         `Sonido: ${this.handlers.soundOn() ? 'activado' : 'desactivado'}`,
       );
-      append(card, h('h2', {}, 'Ajustes'), sound, themeSettings(() => this.renderMenu('settings')), soundSettings(() => this.renderMenu('settings')), graphicsSettings(() => this.renderMenu('settings')), back);
+      append(card, h('h2', {}, 'Ajustes'), sound, soundSettings(() => this.renderMenu('settings')), graphicsSettings(() => this.renderMenu('settings')), back);
     }
     this.menu.append(card);
   }
@@ -852,7 +896,7 @@ export class Hud {
       h(
         'div.modal-card.panel.enemy-file',
         {},
-        h('small.enemy-file-kicker', {}, 'EXPEDIENTE DEL BASTIÓN'),
+        h('small.enemy-file-kicker', {}, 'FICHA DE ATALAYA'),
         h('h2', {}, name),
         h('p.enemy-file-stats', {}, stats),
         h('p', {}, file.what),

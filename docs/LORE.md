@@ -21,39 +21,50 @@ Lo nuevo de verdad es la supervivencia: saquear, el ruido, la infección y la es
 
 ## La idea en una frase
 
-Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se levanta zombi. Dos grupos de supervivientes se han juntado en una vieja estación de montaña, Atalaya, y bajan a los pueblos del valle a por comida, medicinas y gente viva. Cada disparo atrae a más.
+Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se levanta zombi. Atalaya, una vieja estación militar en la sierra, aguanta con cuarenta supervivientes llegados de todas partes. Los dos jugadores la dirigen y mandan sus equipos a los pueblos del valle a por comida, medicinas y gente viva. Cada disparo atrae a más.
+
+**La premisa en el juego** (`PREMISE` en `lore.ts`, la tarjeta antes de la primera misión, aprobada por Arturo el 13/10):
+
+> Hace dos inviernos, la Pandemia vació el valle de Kessra. Los muertos se levantaron y siguen andando.
+>
+> Atalaya, una vieja estación militar en la sierra de Aldren, aguanta con cuarenta supervivientes llegados de todas partes.
+>
+> Vosotros dos la dirigís. Lo que importa se decide con las dos llaves.
+>
+> Atalaya vive de lo que sus equipos traen de fuera. El primero sale hoy.
 
 ## Tono
 
-- **Supervivencia seria, con calor humano:** más *The Last of Us* y *This War of Mine* que gore de serie B.
+- **Adulto y seco** (prueba del 13/10): frases cortas, nada de explicar lo que se ve, nada de chistes ni guiños. Los personajes hablan como adultos cansados. La regla va en la línea pequeña del consejo, no en el diálogo.
+- **Supervivencia seria:** más *The Last of Us* y *This War of Mine* que gore de serie B.
 - **El miedo:** la escasez y el ruido, más que el monstruo.
 - **El enemigo más peligroso** suele ser otra persona.
-- **El humor:** vive en las notas a boli entre los dos líderes, como hasta ahora.
-- **Todo es inventado:** el país, el valle, las ciudades. Ningún sitio real.
+- **Todo es inventado:** el país, el valle, las ciudades. Ningún sitio real, y nombres de lugar sin idioma claro (Kessra, Aldren, Corran, Volkren, Galen, Carvik, Telm).
+- **Gente de todas partes:** el puerto de Galen y el Instituto traían gente de todo el mundo, y el valle fue camino de huida hacia la sierra. Los nombres de soldados y personajes son internacionales.
 
 ## Cronología
 
 | Cuándo | Qué pasó |
 |---|---|
-| Otoño, año 0 | Primeros casos en el Instituto Galena, un laboratorio de vacunas a las afueras de Puerto Galena. Los telediarios hablan de «la Pandemia». |
+| Otoño, año 0 | Primeros casos en el Instituto Galen, un laboratorio de vacunas a las afueras de Galen. Los telediarios hablan de «la Pandemia». |
 | Tres semanas después | Los muertos se levantan en las ciudades. Ya nadie dice «infectados»: dicen **zombis**. |
-| Invierno, año 0 | Caen Puerto Galena y Ciudad Varela. El ejército se repliega y desaparece. La radio se queda muda. |
+| Invierno, año 0 | Caen Galen y Corran. El ejército se repliega y desaparece. La radio se queda muda. |
 | Año 1 | Los vivos se esconden en los pueblos de la sierra. Aparecen los Cuervos, bandas que viven de saquear a otros. |
 | Primavera, año 2 · Día 1 de la campaña | Dos grupos de supervivientes llegan a la vez a la Estación Atalaya. Se quedan los dos, y se mandan a medias. |
 
-## El mundo: el valle de Valdesombra
+## El mundo: el valle de Kessra
 
 Es una comarca inventada entre una sierra alta y una llanura, con dos ciudades muertas. La geoesfera pasa a ser un **mapa del valle** en vóxel, con ocho zonas en lugar de las ocho regiones.
 
 | Zona | Id | Qué hay | Aliado (enclave) |
 |---|---|---|---|
-| Altomonte | `weu` | Los pueblos de la sierra, junto a Atalaya (la de partida) | El Refugio de Altomonte |
-| Ciudad Varela | `afr` | La primera ciudad caída, llena de zombis | Los del Hospital |
+| Aldren | `weu` | Los pueblos de la sierra, junto a Atalaya (la de partida) | El Refugio de Aldren |
+| Corran | `afr` | La primera ciudad caída, llena de zombis | Los del Hospital |
 | El Pantano Gris | `eas` | Un embalse y una central eléctrica muerta | La Red Callada |
-| Valdelobos | `eeu` | Valles cerrados, aldeas que aún resisten | Los Pastores |
-| Puerto Galena | `me` | La ciudad muerta y el Instituto Galena | Los del Instituto |
+| Volkren | `eeu` | Valles cerrados, aldeas que aún resisten | Los Pastores |
+| Galen | `me` | La ciudad muerta y el Instituto Galen | Los del Instituto |
 | Los Llanos de Ceniza | `na` | La llanura por donde sube la Marea | Los Camioneros |
-| Carboneda | `sa` | Minas y carreteras cortadas | El Sindicato de la Mina |
+| Carvik | `sa` | Minas y carreteras cortadas | El Sindicato de la Mina |
 | La Vega | `oce` | Granjas, bodegas, el río y comida | Las Bodegas |
 
 Los ids de región del código (`weu`, `afr`…) se quedan; solo cambian los nombres.
@@ -81,7 +92,7 @@ Los ids del código se mantienen; cambian el nombre, el aspecto y, donde haga fa
 
 ## El Bastión
 
-- **La Estación Atalaya:** un puesto de defensa civil en lo alto de la sierra de Altomonte, con refugio subterráneo, muros de hormigón y una presa al lado. La nieve, la altura y una sola carretera la mantienen viva.
+- **La Estación Atalaya:** una vieja estación militar en lo alto de la sierra de Aldren, con refugio subterráneo, muros de hormigón y una presa al lado. La nieve, la altura y una sola carretera la mantienen viva. Quienes llegaron conservaron su orden militar: equipos, rangos y armería.
 - **La base en superficie** encaja tal cual: el refugio en el centro y alrededor barracones, huerto, barricadas y pasarelas. Se despejan rocas, bosque y ruinas, y las ruinas dan suministros.
 - **La Mula:** un autobús de línea blindado con chapa. Lleva a la escuadra y vuelve cargado.
 - **La doble llave se queda, con otra historia.** Dos grupos que llegaron a la vez y no se fían del todo: lo importante se decide a medias. El año pasado, un líder solo vendió su refugio a los Cuervos a cambio de su vida.
@@ -92,12 +103,12 @@ Se mantienen las voces de la radio que ya existen y cambian sus vidas.
 
 | Personaje | Papel nuevo |
 |---|---|
-| **Inés Albarrán, «Morse»** | Radioaficionada de toda la vida. Mantiene la radio de Atalaya y es la primera en oír a otros vivos. Firma los informes. |
-| **Teodoro Vidal, «el Relojero»** | Mecánico jubilado. Blindó La Mula, arregla armas y enseña oficios. Construyó el Grillo. Secreto: trabajó de vigilante en el Instituto Galena la noche en que todo empezó. |
-| **Dra. Amara Nwosu** | Viróloga del Instituto Galena. Huyó con sus cuadernos y cree que hay una vacuna. |
-| **Simón Ferreira** | Desertor de los Cuervos. Sabe dónde guardan lo que roban y a quién. |
-| **Ruth Halvorsen** | Portavoz del Refugio de Altomonte, el enclave más grande. Socia exigente. |
-| **Celia Arranz, «la Voz»** | Presentadora de radio antes de la Pandemia. Ahora guía a la Congregación y a la Marea con su emisora. |
+| **Nadia Albescu, «Morse»** | Radioaficionada de toda la vida. Mantiene la radio de Atalaya y es la primera en oír a otros vivos. Firma los informes. |
+| **Teodor Vidić, «Teo»** | Mecánico jubilado. Blindó La Mula, arregla armas y enseña oficios. Construyó el Grillo. Secreto: trabajó de vigilante en el Instituto Galen la noche en que todo empezó. |
+| **Dra. Amara Nwosu** | Viróloga del Instituto Galen. Huyó con sus cuadernos y cree que hay una vacuna. |
+| **Simão Ferreira** | Desertor de los Cuervos. Sabe dónde guardan lo que roban y a quién. |
+| **Ruth Halvorsen** | Portavoz del Refugio de Aldren, el enclave más grande. Socia exigente. |
+| **Celia Marsh, «la Voz»** | Presentadora de radio antes de la Pandemia. Ahora guía a la Congregación y a la Marea con su emisora. |
 
 ## La historia
 
@@ -105,12 +116,12 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 
 | Nivel | Capítulo | Tipo · zona | Qué pasa |
 |---|---|---|---|
-| 1 | **Primer invierno** | Recuperación · Altomonte | Las medicinas del consultorio del pueblo, antes de que caduquen. |
-| 2 | **La doctora** | Rescate · Ciudad Varela | Sacar a la Dra. Nwosu de un hospital lleno de zombis. |
+| 1 | **Primer invierno** | Recuperación · Aldren | Las medicinas del consultorio del pueblo, antes de que caduquen. |
+| 2 | **La doctora** | Rescate · Corran | Sacar a la Dra. Nwosu de un hospital lleno de zombis. |
 | 3 | **La sirena** | Sabotaje · Los Llanos de Ceniza | Callar la sirena con la que los Cuervos atraen hordas. |
 | 4 | **La torre del Pico Gris** | Pirateo (arreglar la radio) · El Pantano Gris | Volver a poner en marcha el repetidor: oír a los demás enclaves. |
-| 5 | **Los inmunes** | Rescate · Valdelobos | Una niña a la que la Pandemia no mata. Simón sabe dónde la tienen los Cuervos. |
-| 6 | **Los cuadernos de Galena** | Recuperación · Puerto Galena | Lo que pasó de verdad en el laboratorio. Teo estaba allí. |
+| 5 | **Los inmunes** | Rescate · Volkren | Una niña a la que la Pandemia no mata. Simão sabe dónde la tienen los Cuervos. |
+| 6 | **Los cuadernos de Galen** | Recuperación · Galen | Lo que pasó de verdad en el laboratorio. Teo estaba allí. |
 | 7 | **La Voz** | Rescate · Los Llanos de Ceniza | Asaltar la emisora de la Congregación y sacar a la Voz con vida: solo ella sabe parar la Marea. |
 | 8 | **La Marea** | Final | La horda llega a la sierra. Atalaya resiste, y la vacuna está lista. |
 
@@ -195,7 +206,7 @@ Además:
 | Capítulos, encargos, rumores | Se quedan como sistema y se reescriben todos los textos. |
 | Radio, Expediente, avisos de Morse | Se quedan. Se reescriben las escenas, las hojas y las fichas. |
 | Doble llave, cooperativo | Se queda, con la nueva historia. |
-| Geoesfera | Pasa a ser el mapa de Valdesombra (trabajo de Arte). |
+| Geoesfera | Pasa a ser el mapa de Kessra (trabajo de Arte). |
 | Créditos, pago mensual, venta de cuerpos | Se cambian por suministros, medicinas (y luego comida), saqueo y enclaves aliados. |
 | Combate | Se añaden registro, mochila, ruido, contagio, el Hinchado y la IA de los zombis (van al ruido, en masa). |
 | Partidas guardadas | Lo más limpio es empezar campañas nuevas: es otro mundo. |
@@ -210,6 +221,6 @@ Es la propuesta de Gameplay, con el coste de cada paso.
 | 2 · Saquear y ruido | Misión de saqueo (registrar muebles, mochila, evacuar el botín), ruido e IA de los zombis, el grito del Chillón y el Hinchado | Gameplay · Arte (interiores, zombis) | Medio |
 | 3 · Contagio y medicinas | El contagio con días contados, las medicinas como recurso y la decisión de dos llaves | Gameplay · Lore (textos) | Medio |
 | 4 · Comida y armas encontradas | Consumo diario, munición contada y fabricar en el Taller para desbloquear el nivel del arma | Gameplay (con su simulación de equilibrio) | Alto |
-| 5 · El mapa del valle | Valdesombra en lugar del globo | Arte | Alto |
+| 5 · El mapa del valle | Kessra en lugar del globo | Arte | Alto |
 
 **Arte:** el usuario está comprando un pack de Synty. Si es POLYGON Apocalypse, trae zombis, supervivientes, casas y vehículos, y encaja de lleno con este tema. Pero cambiaría la dirección de arte (ahora todo es vóxel), así que lo decide el usuario.

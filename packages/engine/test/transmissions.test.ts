@@ -18,13 +18,15 @@ describe('transmissions', () => {
     expect(STORY_RADIO).toHaveLength(STORY.length);
   });
 
-  it('a new campaign unlocks only the welcome', () => {
+  it('a new campaign starts with no radio: the welcome comes back with the first mission', () => {
     const c = createCampaign([0, 1], new Rng(1));
+    expect(ids(c)).toEqual([]);
+    c.story.done = 1;
     expect(ids(c)).toEqual(['welcome']);
     expect(c.uid).toBeTruthy();
   });
 
-  it('scenes follow the story: chapters, levels and Simón', () => {
+  it('scenes follow the story: chapters, levels and Simão', () => {
     const c = createCampaign([0], new Rng(1));
     c.story.done = 1;
     gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));

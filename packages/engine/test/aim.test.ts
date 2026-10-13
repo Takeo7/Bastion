@@ -59,7 +59,7 @@ describe('rolls', () => {
     const a = new Rng(42);
     const b = new Rng(42);
     for (let i = 0; i < 200; i++) {
-      const p = { origin: { x: 0, y: 0 }, hit: 60, crit: 20, graze: 10, flanked: true, cover: 0 as const, distance: 5, squadsight: false, mods: [], critMods: [] };
+      const p = { origin: { x: 0, y: 0, z: 0 }, hit: 60, crit: 20, graze: 10, flanked: true, cover: 0 as const, distance: 5, squadsight: false, mods: [], critMods: [] };
       const r = rollShot(p, a);
       expect(r).toBe(rollShot(p, b));
       const d = rollDamage(WEAPONS.rifle, r, a);
@@ -75,7 +75,7 @@ describe('rolls', () => {
 describe('the die on screen', () => {
   it('the roll runs 1–100 and hits exactly when it is at most the chance', () => {
     const rng = new Rng(7);
-    const p = { origin: { x: 0, y: 0 }, hit: 93, crit: 10, graze: 0, flanked: false, cover: 0 as const, distance: 5, squadsight: false, mods: [], critMods: [] };
+    const p = { origin: { x: 0, y: 0, z: 0 }, hit: 93, crit: 10, graze: 0, flanked: false, cover: 0 as const, distance: 5, squadsight: false, mods: [], critMods: [] };
     for (let i = 0; i < 300; i++) {
       const { result, roll } = resolveShot(p, rng);
       expect(roll).toBeGreaterThanOrEqual(1);
@@ -86,7 +86,7 @@ describe('the die on screen', () => {
   });
 
   it('gives the same result as rollShot for the same seed', () => {
-    const p = { origin: { x: 0, y: 0 }, hit: 55, crit: 15, graze: 10, flanked: false, cover: 0 as const, distance: 5, squadsight: false, mods: [], critMods: [] };
+    const p = { origin: { x: 0, y: 0, z: 0 }, hit: 55, crit: 15, graze: 10, flanked: false, cover: 0 as const, distance: 5, squadsight: false, mods: [], critMods: [] };
     const a = new Rng(3);
     const b = new Rng(3);
     for (let i = 0; i < 100; i++) expect(resolveShot(p, a).result).toBe(rollShot(p, b));

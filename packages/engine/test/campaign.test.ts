@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { previewShot } from '../src/aim';
-import { specialize, VETERAN_AIM } from '../src/classes';
+import { defaultAppearance } from '../src/appearance';
+import { ATTR_IDS, attrCap, specialize, talentBlocker, TALENTS, VETERAN_AIM } from '../src/classes';
 import {
   addPlayer,
+  canSpendPoints,
+  defaultSquad,
+  openingMission,
   LATE_KIT,
   applyMissionResult,
   buildSquad,
@@ -23,7 +27,7 @@ import {
 import { armorTier, bastionLevel, LEVEL_XP, MAX_LEVEL, missionXp, nextTierBlocker, weaponTier } from '../src/progression';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
-import type { Slot } from '../src/types';
+import type { PerkId, Slot } from '../src/types';
 
 const both: Slot[] = [0, 1];
 
@@ -153,6 +157,49 @@ describe('missions', () => {
     expect(() => run(c, { type: 'squad', soldier: out.id, on: true }, 0, both)).toThrow(/compañero/);
   });
 
+  // Playtest 2026-10-13: a new campaign opens with a mission straight away.
+  it('a new campaign opens with the first story operation chosen and the squad in the hangar', () => {
+    const plain = createCampaign(both, new Rng(1));
+    // On its own the campaign chooses nothing (older saves, tests): the server opens it.
+    expect(plain.activeMission).toBeNull();
+    const c = createCampaign(both, new Rng(1));
+    openingMission(c);
+    const first = c.offers.find((o) => o.story === 1)!;
+    expect(first).toBeDefined();
+    expect(c.activeMission).toBe(first.id);
+    expect(c.squad).toEqual(defaultSquad(c, both));
+    expect(c.squad.length).toBeGreaterThan(0);
+    expect(c.launchReady).toEqual([false, false]);
+    expect(Object.keys(c.pads ?? {}).sort()).toEqual([...c.squad].sort());
+    expect(c.log.some((l) => /Primera salida: .* La escuadra espera en la cochera/.test(l.text))).toBe(true);
+    expect(c.log.some((l) => /Elegid la primera misión/.test(l.text))).toBe(false);
+    expect(nextSteps(c, 0)[0]?.label).not.toBe('Elige una operación');
+    // Nothing else changes: the same offers, soldiers and day as a campaign opened by hand.
+    expect(c.offers).toEqual(plain.offers);
+    expect(c.soldiers).toEqual(plain.soldiers);
+    expect(c.day).toBe(plain.day);
+    // Ready to go: both press launch.
+    expect(run(c, { type: 'launch', ready: true }, 0).launch).toBeUndefined();
+    expect(run(c, { type: 'launch', ready: true }, 1).launch).toBe(true);
+    // A campaign that already has a mission chosen is left as it is.
+    const other = c.offers.find((o) => o.id !== first.id)!;
+    const later = createCampaign(both, new Rng(1));
+    later.activeMission = other.id;
+    openingMission(later);
+    expect(later.activeMission).toBe(other.id);
+  });
+
+  it('the opening mission can be swapped for another; choosing the same one again is refused', () => {
+    const c = createCampaign(both, new Rng(1));
+    openingMission(c);
+    const first = c.activeMission!;
+    const other = c.offers.find((o) => o.id !== first)!;
+    expect(() => run(c, { type: 'chooseMission', id: first }, 0)).toThrow('Esa misión ya está elegida.');
+    run(c, { type: 'chooseMission', id: other.id }, 0);
+    run(c, { type: 'vote', accept: true }, 1);
+    expect(c.activeMission).toBe(other.id);
+  });
+
   it('launches only when both are ready', () => {
     const { c } = ready();
     expect(run(c, { type: 'launch', ready: true }, 0).launch).toBeUndefined();
@@ -205,11 +252,15 @@ describe('missions', () => {
     s.rank = 4;
     s.xp = 19;
     s.talents = { demolition: 2, bandolier: 1, runner: 1 };
+    const sex = s.appearance.sex;
     mission.outcome = 'victory';
     mission.outcomeReason = 'objective';
     const report = applyMissionResult(c, mission, new Rng(4));
     expect(report.squad.find((e) => e.id === s.id)).toMatchObject({ promotedTo: 5, specializedAs: 'grenadier' });
     expect(s.cls).toBe('grenadier');
+    // The recruit look becomes the class's, and the soldier keeps their sex.
+    expect(sex).toBeDefined();
+    expect(s.appearance).toEqual(defaultAppearance('grenadier', s.owner, undefined, sex));
     expect(c.log.some((l) => /se especializa como Granadero/.test(l.text))).toBe(true);
     expect(pointsToSpend(s)).toEqual({ attrs: 10, talents: 6 });
   });
@@ -254,7 +305,7 @@ describe('missions', () => {
     const shooter = mission.units.find((u) => u.campaignId === sniper.id)!;
     // a3 belongs to the central pod, standing in the open.
     const target = mission.units.find((u) => u.id === 'a3')!;
-    shooter.pos = { x: target.pos.x, y: target.pos.y + 5 };
+    shooter.pos = { x: target.pos.x, y: target.pos.y + 5, z: 0 };
     const shot = previewShot(mission, shooter, target);
     expect(shot?.mods[0]).toEqual({ label: 'Puntería', value: 70 + member.mods.aim });
   });
@@ -397,5 +448,52 @@ describe('helping the players', () => {
     // Without the credits (or at the cap) there is nothing to do about it here.
     c.credits = 0;
     expect(nextSteps(c, 0).some((x) => x.label.includes('recluta'))).toBe(false);
+  });
+});
+
+// Playtest 2026-10-13: «¡Ascenso! Repartir puntos» stayed up with points that had nowhere to go.
+describe('promotions to spend', () => {
+  const promotion = (c: CampaignState) => nextSteps(c, 0).filter((x) => /^Ascensos? pendientes?/.test(x.label));
+
+  it('points with nowhere to go ask for nothing; points that fit somewhere do', () => {
+    const c = createCampaign([0], new Rng(1));
+    const s = c.soldiers.find((x) => x.owner === 0)!;
+    expect(canSpendPoints(c, s)).toBe(false);
+    expect(promotion(c)).toEqual([]);
+
+    // Every aptitude at its cap and every talent point spent, with two aptitude points still free.
+    specialize(s, 'assault');
+    s.rank = 11;
+    for (const id of ATTR_IDS) s.attrs[id] = attrCap('assault', id);
+    s.talents = { runner: 22 };
+    expect(pointsToSpend(s)).toEqual({ attrs: 2, talents: 0 });
+    expect(canSpendPoints(c, s)).toBe(false);
+    expect(promotion(c)).toEqual([]);
+
+    // One aptitude below its cap: somewhere to put them.
+    s.attrs.pul--;
+    expect(canSpendPoints(c, s)).toBe(true);
+    expect(promotion(c)).toEqual([expect.objectContaining({ label: `Ascenso pendiente: ${s.name}`, count: 1, go: { soldier: s.id } })]);
+  });
+
+  it('talent points count only where a talent is open to the soldier', () => {
+    const c = createCampaign([0], new Rng(1));
+    const s = c.soldiers.find((x) => x.owner === 0)!;
+    s.rank = 1;
+    // The aptitude points spent; the two talent points have the first rows to go to.
+    s.attrs.pul += 2;
+    expect(pointsToSpend(s)).toEqual({ attrs: 0, talents: 2 });
+    expect(canSpendPoints(c, s)).toBe(true);
+    expect(promotion(c)).toHaveLength(1);
+    expect((Object.keys(TALENTS) as PerkId[]).some((id) => !talentBlocker(s, id, 0))).toBe(true);
+    // With every talent shut to it (here: all of them at their maximum) and every aptitude at its cap, nothing to ask.
+    s.talents = Object.fromEntries((Object.keys(TALENTS) as PerkId[]).map((id) => [id, TALENTS[id].max]));
+    for (const id of ATTR_IDS) s.attrs[id] = attrCap(s.cls, id);
+    const spent = Object.values(s.talents).reduce((a, b) => a + (b ?? 0), 0);
+    s.rank = Math.ceil(spent / 2) + 20;
+    expect(pointsToSpend(s).talents).toBeGreaterThan(0);
+    expect(pointsToSpend(s).attrs).toBeGreaterThan(0);
+    expect(canSpendPoints(c, s)).toBe(false);
+    expect(promotion(c)).toEqual([]);
   });
 });

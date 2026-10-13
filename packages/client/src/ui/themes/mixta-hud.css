@@ -1,0 +1,843 @@
+/*
+ * «Mixta» in combat (ui/hud.ts → styles.css; Combate's DOM, styled here only
+ * through its classes). Steel plates over the scene, the ability bar as a row
+ * of raised keys, the odds in a steel dial (Military Combat HUD), the end of
+ * the turn on hazard tape. The values and shared pieces are in mixta.css.
+ * No size here is tighter than styles.css's: what Combate widened so that
+ * nothing is cut («Vigilancia», the odds) stays at least as wide.
+ */
+
+/* ============================================================= the strip */
+
+/* Turn, mission and players: one steel band, its parts parted by grooves. */
+:root[data-ui='mixta'] .top {
+  border-radius: 2px;
+  background:
+    url('/ui/mixta/steel.webp') 0 0 / 256px 256px,
+    linear-gradient(180deg, rgba(44, 48, 50, 0.96), rgba(22, 25, 27, 0.96));
+  box-shadow: var(--t-sheet-shadow);
+}
+
+:root[data-ui='mixta'] .top > * + * {
+  border-left: 1px solid rgba(0, 0, 0, 0.6);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Whose turn: a plate in that player's colour (the enemy's red), lit from above. */
+:root[data-ui='mixta'] .turn-label {
+  padding: 6px 12px 5px;
+  font-size: 19px;
+  letter-spacing: 0.08em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+:root[data-ui='mixta'] .turn-label.enemy {
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+:root[data-ui='mixta'] .conceal {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 2px;
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+}
+
+:root[data-ui='mixta'] .conceal.on {
+  background: rgba(143, 208, 90, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(143, 208, 90, 0.6);
+  color: var(--t-good);
+}
+
+:root[data-ui='mixta'] .conceal.off {
+  background: rgba(240, 80, 60, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(240, 80, 60, 0.65);
+  color: #ff8a78;
+}
+
+:root[data-ui='mixta'] .mission-kind {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .mission-goal {
+  font-weight: 600;
+}
+
+:root[data-ui='mixta'] .timer {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .timer.urgent {
+  color: #ff8a78;
+  box-shadow: var(--m-sink), inset 0 0 0 1px rgba(240, 80, 60, 0.6);
+}
+
+/* The Saqueo's horde: a sunken channel filling red, breathing when it is near. */
+:root[data-ui='mixta'] .horde-label {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: #ff8a78;
+}
+
+:root[data-ui='mixta'] .horde-bar {
+  border: 0;
+  border-radius: 1px;
+  background: var(--m-well);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .horde-bar i {
+  background: linear-gradient(180deg, #ff7f60, #c4321f);
+  box-shadow: 0 0 6px rgba(240, 80, 60, 0.5);
+}
+
+:root[data-ui='mixta'] .horde:is(.near, .full) .horde-bar i {
+  animation: m-breathe 1.4s ease-in-out infinite;
+}
+
+:root[data-ui='mixta'] .player .name {
+  font-weight: 600;
+}
+
+/* ============================================================= the squad */
+
+:root[data-ui='mixta'] .squad {
+  border-radius: 2px;
+  background: var(--t-sheet);
+  box-shadow: var(--t-sheet-shadow);
+}
+
+:root[data-ui='mixta'] .squad-card {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.45);
+  transition: background 0.12s;
+}
+
+:root[data-ui='mixta'] .squad-card .card-name {
+  font-weight: 600;
+}
+
+:root[data-ui='mixta'] .squad-card.mine:hover {
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.12), transparent);
+}
+
+:root[data-ui='mixta'] .squad-card.selected {
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.2), rgba(242, 194, 48, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(242, 194, 48, 0.55);
+}
+
+/* =========================================================== the soldier */
+
+/* The selected soldier: a riveted plate, the name in Oswald, the stats sunk in a strip. */
+:root[data-ui='mixta'] .unit-head {
+  align-items: center;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:root[data-ui='mixta'] .unit-name {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 21px;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .unit-class {
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .unit-stats {
+  padding: 5px 8px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .unit-stats .stat b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 15px;
+}
+
+/* The backpack: each slot a small well; what it holds, in its colour. */
+:root[data-ui='mixta'] .unit-pack {
+  border-top: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:root[data-ui='mixta'] .pack-slot {
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink), inset 0 -2px 0 color-mix(in srgb, var(--c, transparent) 70%, transparent);
+}
+
+:root[data-ui='mixta'] .pack-slot.empty {
+  border: 0;
+  box-shadow: var(--m-sink);
+  opacity: 0.55;
+}
+
+:root[data-ui='mixta'] .pack-slot b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+/* docs/FASE4.md: rations, parts and a found weapon (violet, the found weapon's colour). */
+/* Rations and parts: the same pack icons as the top bar (styles.css's plain ones underneath). */
+:root[data-ui='mixta'] :is(.pack-slot.food, .pack-total.food) {
+  --c: #eab96c;
+  --icon: var(--mi-food);
+}
+
+:root[data-ui='mixta'] :is(.pack-slot.parts, .pack-total.parts) {
+  --c: #b2c3d0;
+  --icon: var(--mi-parts);
+}
+
+:root[data-ui='mixta'] .pack-slot .ico {
+  width: 11px;
+  height: 11px;
+}
+
+:root[data-ui='mixta'] :is(.pack-slot.weapon, .pack-total.weapon) {
+  --c: #c58cff;
+  --icon: var(--mi-weapon);
+}
+
+:root[data-ui='mixta'] .pack-slot.weapon {
+  border: 0;
+  background: linear-gradient(180deg, rgba(197, 140, 255, 0.2), rgba(197, 140, 255, 0.06));
+  box-shadow: var(--m-sink), inset 0 0 0 1px rgba(197, 140, 255, 0.65), 0 0 8px rgba(197, 140, 255, 0.35);
+}
+
+/* ========================================================== the abilities */
+
+/* Each ability a raised steel key: its number on a small dark plate, the icon in a round well. */
+:root[data-ui='mixta'] .ability {
+  width: 74px;
+  min-height: 66px;
+  padding: 19px 3px 6px;
+  clip-path: none;
+  border: 0;
+  border-radius: 3px;
+  background:
+    radial-gradient(circle at 50% 30px, rgba(0, 0, 0, 0.42) 0 15px, rgba(255, 255, 255, 0.06) 15.5px, transparent 17px),
+    url('/ui/mixta/steel.webp') 0 0 / 256px 256px,
+    var(--m-plate);
+  box-shadow: var(--m-raise), 0 4px 10px rgba(0, 0, 0, 0.35);
+  color: #eceee8;
+  transition:
+    transform 0.12s var(--m-ease),
+    box-shadow 0.12s var(--m-ease);
+}
+
+:root[data-ui='mixta'] .ability:hover {
+  clip-path: none;
+}
+
+:root[data-ui='mixta'] .ability:hover:not(:disabled) {
+  background:
+    radial-gradient(circle at 50% 30px, rgba(0, 0, 0, 0.42) 0 15px, rgba(242, 194, 48, 0.25) 15.5px, transparent 17px),
+    url('/ui/mixta/steel.webp') 0 0 / 256px 256px,
+    var(--m-plate-hover);
+  box-shadow: var(--m-raise), 0 0 0 1px rgba(242, 194, 48, 0.6), 0 6px 14px rgba(0, 0, 0, 0.4);
+  transform: translateY(-3px);
+}
+
+:root[data-ui='mixta'] .ability:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Chosen: lit from inside, a yellow rim, raised above the row. */
+:root[data-ui='mixta'] .ability.active {
+  background:
+    radial-gradient(circle at 50% 30px, rgba(0, 0, 0, 0.35) 0 15px, rgba(242, 194, 48, 0.55) 15.5px, transparent 17px),
+    linear-gradient(180deg, #514828, #2f2a17);
+  box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.3), 0 0 0 2px var(--t-accent), 0 0 16px rgba(242, 194, 48, 0.35), 0 8px 16px rgba(0, 0, 0, 0.45);
+  color: #fff1c4;
+  transform: translateY(-6px);
+}
+
+/* Costs no action: a green foot. */
+:root[data-ui='mixta'] .ability.free {
+  box-shadow: var(--m-raise), inset 0 -3px 0 var(--t-good), 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-ui='mixta'] .ability:disabled {
+  background:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.025) 0 4px, transparent 4px 8px),
+    linear-gradient(180deg, #23272a, #1a1d1f);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 0 1px var(--m-edge);
+  color: #737871;
+}
+
+:root[data-ui='mixta'] .ability .key {
+  top: 3px;
+  left: 4px;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .ability:disabled .key {
+  color: #6b706a;
+}
+
+:root[data-ui='mixta'] .ability .ico {
+  width: 22px;
+  height: 22px;
+}
+
+:root[data-ui='mixta'] .ability .label {
+  margin-top: 5px;
+  font-weight: 600;
+}
+
+:root[data-ui='mixta'] .ability .count {
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--t-accent);
+  font-weight: 700;
+}
+
+/* What hovering a key tells: a small steel card with a lit top edge. */
+:root[data-ui='mixta'] .ability-card {
+  border: 0;
+  border-radius: 2px;
+  background: var(--t-sheet);
+  box-shadow: inset 0 2px 0 var(--t-accent), var(--t-sheet-shadow);
+}
+
+:root[data-ui='mixta'] .ability-card .ac-head b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================= the target */
+
+:root[data-ui='mixta'] .shot-title {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .shot-target {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 19px;
+  letter-spacing: 0.03em;
+  color: #ff6f5a;
+}
+
+:root[data-ui='mixta'] .hud .shot-head .cycle {
+  border-radius: 2px;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .hud .shot-head .cycle:hover {
+  background: rgba(242, 194, 48, 0.14);
+  color: #fff;
+}
+
+/* The odds in a steel dial (Military Combat HUD) sized to its number: «100 %» and its label fit inside. */
+:root[data-ui='mixta'] .shot-numbers .big:not(.crit) {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  width: 112px;
+  height: 112px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background:
+    url('/ui/synty/mh/dial.webp') center / contain no-repeat,
+    radial-gradient(circle, rgba(10, 12, 13, 0.92) 0 58%, transparent 60%);
+  box-shadow: none;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 1;
+  white-space: nowrap;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6), 0 0 14px rgba(242, 194, 48, 0.35);
+  transform: none;
+  /* The arc's colour by the odds (hud.ts --p, 0–100): red when slim, yellow, green when sure. */
+  --arc: hsl(calc(var(--p, 0) * 0.95 + 4) 88% 55%);
+  position: relative;
+  isolation: isolate;
+}
+
+/* The odds as an arc on the dial's inner track, from the top, clockwise. */
+:root[data-ui='mixta'] .shot-numbers .big:not(.crit)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  background: conic-gradient(var(--arc) calc(var(--p, 0) * 1%), rgba(255, 255, 255, 0.07) 0);
+  -webkit-mask: radial-gradient(circle, transparent 0 52%, #000 53% 58.5%, transparent 59.5%);
+  mask: radial-gradient(circle, transparent 0 52%, #000 53% 58.5%, transparent 59.5%);
+  filter: drop-shadow(0 0 3px var(--arc));
+}
+
+:root[data-ui='mixta'] .shot-numbers .big:not(.crit) small {
+  margin-top: 3px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--t-accent);
+  text-shadow: none;
+}
+
+:root[data-ui='mixta'] .shot-numbers .big.crit {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--t-warn);
+}
+
+:root[data-ui='mixta'] .shot-numbers .big.crit small {
+  margin-top: 3px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+}
+
+/* The damage on a sunken plate: the figures in Oswald, lit red. */
+:root[data-ui='mixta'] .shot-damage {
+  padding: 5px 8px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .shot-damage .dmg {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 26px;
+  color: #ff6f5a;
+}
+
+:root[data-ui='mixta'] .dmg-kill {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ff8a78;
+}
+
+:root[data-ui='mixta'] .mods .mod {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* How far it is heard: a small chip with a speaker. */
+:root[data-ui='mixta'] .shot-noise {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+  font-weight: 700;
+}
+
+:root[data-ui='mixta'] .shot-noise::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  -webkit-mask: url('/ui/synty/icons/sound.webp') center / contain no-repeat;
+  mask: url('/ui/synty/icons/sound.webp') center / contain no-repeat;
+}
+
+/* The panel comes in from its side each time it opens. */
+:root[data-ui='mixta'] .shot-panel:not(.hidden, .anchored) {
+  animation: m-shot-in 0.2s var(--m-ease);
+}
+
+@keyframes m-shot-in {
+  from {
+    opacity: 0;
+    transform: translate(18px, -50%);
+  }
+}
+
+/* ========================================================= end of the turn */
+
+/* Ending the turn: a big steel plate standing on hazard tape. */
+:root[data-ui='mixta'] .end-turn {
+  padding: 9px 10px 8px;
+  border: 0;
+  border-bottom: 6px solid transparent;
+  border-image: var(--m-hazard) 0 0 64 0 / 0 0 6px 0 round;
+  border-radius: 2px 2px 0 0;
+  background: url('/ui/mixta/steel.webp') 0 0 / 256px 256px, var(--m-plate);
+  box-shadow: var(--m-raise), 0 6px 14px rgba(0, 0, 0, 0.4);
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: 0.06em;
+  color: var(--t-accent);
+  transition: transform 0.12s var(--m-ease);
+}
+
+:root[data-ui='mixta'] .end-turn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: url('/ui/mixta/steel.webp') 0 0 / 256px 256px, var(--m-plate-hover);
+}
+
+:root[data-ui='mixta'] .end-turn small {
+  font-family: var(--t-font);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+:root[data-ui='mixta'] .end-turn.is-ready {
+  background: var(--t-ready);
+  color: var(--t-ready-ink);
+}
+
+:root[data-ui='mixta'] .end-turn.is-confirm {
+  border-image: var(--m-hazard-red) 0 0 64 0 / 0 0 6px 0 round;
+  background: linear-gradient(180deg, #5a2219, #3a140e);
+  color: #ffc2b6;
+}
+
+:root[data-ui='mixta'] .end-turn.is-waiting {
+  border-image: none;
+  border-bottom: 0;
+  background: var(--t-panel);
+  box-shadow: inset 0 0 0 1px rgba(242, 194, 48, 0.45);
+}
+
+/* ===================================================== log, menu, radio */
+
+:root[data-ui='mixta'] .log {
+  background: var(--t-sheet);
+  box-shadow: var(--t-sheet-shadow);
+}
+
+:root[data-ui='mixta'] .menu-button {
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-plate);
+  box-shadow: var(--m-raise);
+  color: var(--t-text);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* Morse on the radio: her portrait in a sunken frame, faint scan lines over it only. */
+:root[data-ui='mixta'] .radio-portrait {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 0 2px #3a4043, 0 0 0 3px #0b0d0e;
+}
+
+:root[data-ui='mixta'] .radio-portrait::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px), radial-gradient(circle, transparent 55%, rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+}
+
+:root[data-ui='mixta'] .radio-channel {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .radio-who b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .radio-next {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+/* ======================================================= banners, results */
+
+:root[data-ui='mixta'] :is(.banner, .launch-banner) {
+  padding: 10px 40px;
+  border-width: 6px 0;
+  border-style: solid;
+  border-color: transparent;
+  border-image: var(--m-hazard) 64 0 / 6px 0 round;
+  border-radius: 0;
+  background: url('/ui/mixta/steel.webp') 0 0 / 256px 256px, rgba(16, 18, 19, 0.95);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+:root[data-ui='mixta'] .banner.alien {
+  border-image: var(--m-hazard-red) 64 0 / 6px 0 round;
+}
+
+:root[data-ui='mixta'] .mission-intro h1 {
+  font-size: 44px;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+:root[data-ui='mixta'] .mission-intro small {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .outcome-card {
+  border-top: 6px solid transparent;
+  border-image: var(--m-hazard) 64 0 0 0 / 6px 0 0 0 round;
+}
+
+:root[data-ui='mixta'] .outcome-card.defeat {
+  border-image: var(--m-hazard-red) 64 0 0 0 / 6px 0 0 0 round;
+}
+
+:root[data-ui='mixta'] .outcome-card h1 {
+  font-size: 46px;
+  letter-spacing: 0.06em;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================ over units */
+
+:root[data-ui='mixta'] .uflag {
+  border: 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(40, 44, 46, 0.94), rgba(18, 20, 22, 0.94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 3px 0 0 var(--accent, var(--t-accent)), 0 0 0 1px rgba(0, 0, 0, 0.8);
+}
+
+/* What a search turned up, over the furniture: Oswald on a small plate. A found weapon (rare) in violet, bigger. */
+:root[data-ui='mixta'] .float-text.find {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, rgba(36, 40, 42, 0.95), rgba(16, 18, 19, 0.95));
+}
+
+:root[data-ui='mixta'] .float-text.find.rare {
+  border: 2px solid #c58cff;
+  border-left-width: 6px;
+  background: linear-gradient(180deg, rgba(60, 38, 88, 0.95), rgba(28, 16, 44, 0.95));
+  box-shadow: 0 0 0 2px rgba(197, 140, 255, 0.3), 0 0 18px rgba(197, 140, 255, 0.45);
+  color: #e6d2ff;
+}
+
+/* ============================================================ night, floors */
+
+/* A night mission (docs/ALTURA-Y-NOCHE.md): the tag in night blue, next to the concealment. */
+:root[data-ui='mixta'] .conceal.night {
+  background: rgba(90, 120, 230, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(140, 165, 255, 0.6);
+  color: #c2cdff;
+}
+
+/* The floor in view (docs/FASE6.md): its name in Oswald between two small steel keys. */
+:root[data-ui='mixta'] .floor-ind {
+  gap: 6px;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .hud .floor-ind button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-plate);
+  box-shadow: var(--m-raise);
+  color: var(--t-accent);
+  font-size: 10px;
+  line-height: 22px;
+  transition: transform 0.12s var(--m-ease);
+}
+
+:root[data-ui='mixta'] .hud .floor-ind button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--m-raise), 0 0 0 1px var(--t-accent);
+}
+
+:root[data-ui='mixta'] .hud .floor-ind button:disabled {
+  background: #1a1d1f;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  color: #5d625c;
+  opacity: 1;
+}
+
+/* A soldier on an upper floor seen through the cutaway: «▲ P1» on a small yellow plate at the end of its flag. */
+:root[data-ui='mixta'] .uflag.cut .uflag-row::after {
+  padding: 0 4px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--t-accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  color: var(--t-primary-ink);
+  font: 600 10px/1.5 var(--t-font-title);
+  letter-spacing: 0.08em;
+}
+
+/* One line on a tile under the cursor (noise, furniture, standing in the light at night): a small steel tag. */
+:root[data-ui='mixta'] .tile-note {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(40, 44, 46, 0.95), rgba(18, 20, 22, 0.95));
+  box-shadow: inset 3px 0 0 var(--t-warn), 0 0 0 1px rgba(0, 0, 0, 0.8), 0 3px 8px rgba(0, 0, 0, 0.5);
+  font: 600 12px/1.5 var(--t-font);
+  color: #fff;
+}
+
+/* The arrival briefing: what the mission is for, standing out (playtest 13/10 #7). */
+:root[data-ui='mixta'] .mission-intro .intro-meta {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .mission-intro .intro-objective {
+  font-size: 18px;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .mission-intro .intro-objective b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .mission-intro .intro-briefing {
+  color: #cfd3cc;
+}
+
+/* Bitten (MORDIDO), on the squad list and the flags: the danger plate, its letters in Oswald. */
+:root[data-ui='mixta'] em.bite {
+  border: 0;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(240, 80, 60, 0.75);
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* =============================================================== Esc menu */
+
+/* The menu in combat (Esc): Oswald entries that step aside when pointed at, like the main menu's. */
+:root[data-ui='mixta'] .game-menu-card h2 {
+  margin: 0 0 8px;
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .menu-entry {
+  border: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  color: #e6e8e2;
+  transition:
+    transform 0.14s var(--m-ease),
+    background 0.14s,
+    color 0.14s;
+}
+
+:root[data-ui='mixta'] .menu-entry:hover {
+  background: linear-gradient(90deg, rgba(242, 194, 48, 0.14), transparent 80%);
+  color: #fff;
+  transform: translateX(4px);
+}
+
+/* «Abandonar misión»: red, and not a steel button (it is a .hud button.danger too). */
+:root[data-ui='mixta'] .hud .menu-entry.danger {
+  border-radius: 0;
+  background: linear-gradient(90deg, rgba(240, 80, 60, 0.16), transparent 85%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: #ff8a78;
+}
+
+:root[data-ui='mixta'] .hud .menu-entry.danger:hover {
+  background: linear-gradient(90deg, rgba(240, 80, 60, 0.3), transparent 85%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: #ffc2b6;
+  transform: translateX(4px);
+}
+
+/* «Sonido: activado»: a plain switch line, not a big entry. */
+:root[data-ui='mixta'] .menu-entry.toggle {
+  font-family: var(--t-font);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+/* Its Ajustes: the name over its switch, like the main menu's narrow column, so no switch wraps. */
+:root[data-ui='mixta'] .game-menu-card .setting {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+:root[data-ui='mixta'] .game-menu-card .setting-choices {
+  flex-wrap: nowrap;
+}

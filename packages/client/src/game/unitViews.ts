@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { PLAYER_COLORS, TEMPLATES, type GameState, type Unit, type Vec2 } from '@bastion/engine';
+import { PLAYER_COLORS, sexOfPerson, TEMPLATES, type GameState, type Place, type Unit, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
 import type { FigurePose } from './figures';
 import { buildUnit, gearOf, IDLE_POSE, isFigure, type UnitRig } from './models';
@@ -34,6 +34,8 @@ interface Pose {
   spin: number;
   /** Rummaging through furniture (rummage()). */
   search: number;
+  /** Up a ladder (moveAlong). */
+  climb: number;
   yaw: number;
   yawTarget: number;
   phase: number;
@@ -56,6 +58,10 @@ interface UnitView {
   /** Flag contents from the unit's state, and the hover line above them. */
   body: string;
   tag: string;
+  /** Where it stands, with its storey (docs/FASE6.md): set by sync and by each step of a walk. */
+  place: Place;
+  /** Hidden by the buildings' cutaway (a storey above the one in view): body and rings out, the flag stays. */
+  cut: boolean;
 }
 
 /**
@@ -110,6 +116,8 @@ export class UnitViews {
   private selectedId: string | null = null;
   private hoveredId: string | null = null;
   private partnerId: string | null = null;
+  /** Whether a place is hidden by the buildings' cutaway (MapView.isCutAway); set by the game. */
+  private cutAway: ((p: Place) => boolean) | null = null;
 
   constructor() {
     // Selection is white, never a player's colour (playtest: a selected soldier looked like Arturo's),
@@ -156,7 +164,9 @@ export class UnitViews {
   private create(u: Unit): UnitView {
     const color = unitColor(u);
     // The soldier's campaign id picks the same survivor as in the base; skirmish units go by name.
-    const rig = buildUnit(u.template, color, u.appearance, gearOf(u.weaponTier, u.armorTier), u.campaignId ?? u.name);
+    // Who has no look (a VIP, an enemy leader) still gets a body of their sex, from their name.
+    const sex = u.appearance ? undefined : sexOfPerson(u.name);
+    const rig = buildUnit(u.template, color, u.appearance, gearOf(u.weaponTier, u.armorTier), u.campaignId ?? u.name, sex);
     const ring = new THREE.Mesh(
       ringGeometry,
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -176,12 +186,12 @@ export class UnitViews {
     const facing = u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
       crouch: 0, crouchTarget: 0, aim: 0, aimTarget: 0, aimFx: 0, run: 0, recoil: 0, hit: 0, flash: 0,
-      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, yaw: facing, yawTarget: facing,
+      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, yaw: facing, yawTarget: facing,
       phase: Math.random() * Math.PI * 2,
     };
     this.group.add(rig.root);
 
-    const view: UnitView = { id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, shadow: true, body: '', tag: '' };
+    const view: UnitView = { id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, shadow: true, body: '', tag: '', place: { ...u.pos }, cut: false };
     this.views.set(u.id, view);
     flagEl.classList.toggle('named', u.id === this.selectedId);
     flagEl.classList.toggle('selected', u.id === this.selectedId);
@@ -204,6 +214,7 @@ export class UnitViews {
         continue;
       }
       if (!v.animating && u.alive) v.rig.root.position.copy(tileToWorld(u.pos));
+      if (!v.animating) v.place = { ...u.pos };
       // A corpse raised by a sectoid stands up as a new unit: hide the body.
       if (u.reanimated && v.dead) {
         v.rig.root.visible = false;
@@ -390,19 +401,51 @@ export class UnitViews {
 
   private placeRings(): void {
     const sel = this.selectedId ? this.views.get(this.selectedId) : undefined;
-    this.selection.visible = !!sel && !sel.dead;
+    this.selection.visible = !!sel && !sel.dead && !sel.cut;
     if (sel) this.selection.position.copy(sel.rig.root.position).setY(sel.rig.root.position.y + 0.035);
     const partner = this.partnerId ? this.views.get(this.partnerId) : undefined;
-    this.partnerSelection.visible = !!partner && !partner.dead && this.partnerId !== this.selectedId;
+    this.partnerSelection.visible = !!partner && !partner.dead && !partner.cut && this.partnerId !== this.selectedId;
     if (partner) this.partnerSelection.position.copy(partner.rig.root.position).setY(partner.rig.root.position.y + 0.035);
   }
 
   // ------------------------------------------------------------- frame
 
+  /** How to tell a place hidden by the buildings' cutaway (docs/FASE6.md): the game hands MapView.isCutAway. */
+  setCutAway(test: (p: Place) => boolean): void {
+    this.cutAway = test;
+  }
+
+  /**
+   * A unit on a storey the cutaway hides (above the one in view) would float
+   * over the cut: its body, ring and selection go, by render layers so its
+   * own visibility stays as the game set it. Its flag stays, with the floor
+   * on it («P1»): an enemy seen up there is still marked.
+   */
+  private setCut(v: UnitView, cut: boolean): void {
+    if (v.cut === cut) return;
+    v.cut = cut;
+    v.rig.root.traverse((o) => {
+      if (o === v.flag) return;
+      if (cut) {
+        o.userData.cutMask ??= o.layers.mask;
+        o.layers.mask = 0;
+      } else if (o.userData.cutMask !== undefined) {
+        o.layers.mask = o.userData.cutMask as number;
+        delete o.userData.cutMask;
+      }
+    });
+    v.flagEl.classList.toggle('cut', cut);
+    // The floor goes at the end of the flag's row (styles.css .uflag.cut), as a string for `content`.
+    if (cut) v.flagEl.style.setProperty('--floor', `"▲ P${v.place.z ?? 0}"`);
+    else v.flagEl.style.removeProperty('--floor');
+  }
+
   tick(dt: number, time: number): void {
     const pulse = 1 + Math.sin(time * 5) * 0.06;
     this.selection.scale.setScalar(pulse);
     this.partnerSelection.scale.setScalar(2 - pulse);
+    // Re-checked every frame: the cutaway follows the camera and the floor in view.
+    if (this.cutAway) for (const v of this.views.values()) this.setCut(v, !!v.place.z && this.cutAway(v.place));
     this.placeRings();
     for (const v of this.views.values()) {
       const p = v.pose;
@@ -438,6 +481,7 @@ export class UnitViews {
       posed.phase = p.phase;
       posed.spin = p.spin;
       posed.search = p.search;
+      posed.climb = p.climb;
       rig.applyPose(posed, time);
       if (!rig.ownsReload) rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
       return;
@@ -466,7 +510,7 @@ export class UnitViews {
     if (a !== null) v.pose.yawTarget = a;
   }
 
-  async moveAlong(id: string, path: Vec2[], onStep?: (p: THREE.Vector3) => void): Promise<void> {
+  async moveAlong(id: string, path: Place[], onStep?: (p: THREE.Vector3) => void): Promise<void> {
     const v = this.views.get(id);
     if (!v || !path.length) return;
     v.animating = true;
@@ -483,8 +527,10 @@ export class UnitViews {
           const foot = from.clone().lerp(to, 0.4).setY(from.y);
           const top = foot.clone().setY(to.y);
           await tween(STEP_SECONDS * 0.6, (t) => v.rig.root.position.lerpVectors(from, foot, t));
-          p.run = 0.3;
+          p.run = 0;
+          p.climb = 1;
           await tween(STEP_SECONDS * 4, (t) => v.rig.root.position.lerpVectors(foot, top, t));
+          p.climb = 0;
           p.run = 1;
           await tween(STEP_SECONDS * 0.6, (t) => v.rig.root.position.lerpVectors(top, to, t));
         } else if (rise < -0.5) {
@@ -500,6 +546,8 @@ export class UnitViews {
             v.rig.root.position.lerpVectors(from, to, t);
           });
         }
+        // On its storey once there (docs/FASE6.md): the cutaway checks this.
+        v.place = { ...step };
         onStep?.(v.rig.root.position);
       }
     } finally {

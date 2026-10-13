@@ -1,6 +1,6 @@
 import { BAD_LUCK_MISSES } from './aim';
 import { AP_PER_TURN, attackWeapon, CONTROL_TURNS, hordePoints, TEMPLATES, WEAPONS } from './content';
-import { getUnit, tileIndex } from './grid';
+import { getUnit, nodeOf, tileIndex } from './grid';
 import type {
   AbilityId,
   AttackAbility,
@@ -20,8 +20,8 @@ import type {
   Slot,
   Team,
   TileKind,
+  Pos,
   Unit,
-  Vec2,
 } from './types';
 
 /**
@@ -33,7 +33,7 @@ export type GameEvent =
   | { t: 'turnBegan'; team: Team; turn: number; command?: Slot }
   /** The command (el mando) changes hands. */
   | { t: 'commandPassed'; to: Slot }
-  | { t: 'moved'; unit: string; path: Vec2[]; ap: number }
+  | { t: 'moved'; unit: string; path: Pos[]; ap: number }
   /** An ability was activated: pays its actions (negative = gains), cooldown and charge. */
   | { t: 'abilityUsed'; unit: string; ability: AbilityId; ap: number; cooldown: number; charge: ChargeId | null }
   | {
@@ -41,7 +41,7 @@ export type GameEvent =
       unit: string;
       target: string;
       ability: AttackAbility;
-      from: Vec2;
+      from: Pos;
       result: ShotResult;
       chance: number;
       /** The d100, 1–100: it hits when `roll ≤ chance`. */
@@ -56,7 +56,7 @@ export type GameEvent =
   | { t: 'overwatch'; unit: string; killZone: boolean }
   | { t: 'hunker'; unit: string }
   | { t: 'reload'; unit: string }
-  | { t: 'explosive'; unit: string; ability: BlastAbility; target: Vec2 }
+  | { t: 'explosive'; unit: string; ability: BlastAbility; target: Pos }
   | { t: 'healed'; unit: string; target: string; amount: number }
   | { t: 'aided'; unit: string; target: string; amount: number }
   /** Combat Protocol: the drone shocks a target (never misses). */
@@ -80,13 +80,13 @@ export type GameEvent =
   | { t: 'reanimated'; unit?: string; corpse: string; zombie: Unit; pod?: Pod }
   /** Bitten and infected (`by`: the zombie, or the Hinchado that burst). */
   | { t: 'infected'; unit: string; by: string }
-  | { t: 'smokeDeployed'; unit: string; pos: Vec2; radius: number; turns: number }
+  | { t: 'smokeDeployed'; unit: string; pos: Pos; radius: number; turns: number }
   /** Flashbang: disoriented until the end of its own next turn. */
   | { t: 'disoriented'; unit: string }
   | { t: 'evacuated'; unit: string }
   | { t: 'itemPicked'; unit: string }
-  | { t: 'itemDropped'; pos: Vec2 }
-  | { t: 'tileChanged'; pos: Vec2; kind: TileKind }
+  | { t: 'itemDropped'; pos: Pos }
+  | { t: 'tileChanged'; pos: Pos; kind: TileKind }
   /** `unit`: the soldier they saw (or who attacked them); `by`: the alien that saw it. */
   | { t: 'podActivated'; pod: string; cause: PodCause; unit?: string; by?: string }
   /**
@@ -112,11 +112,11 @@ export type GameEvent =
    * enemies that now go to look (Unit.heard). The squad's noise also winds up
    * the Saqueo's horde.
    */
-  | { t: 'noise'; tile: Vec2; radius: number; by?: string; heard: string[] }
+  | { t: 'noise'; tile: Pos; radius: number; by?: string; heard: string[] }
   /** It reached what it heard and found nobody: it stops looking for it. */
   | { t: 'forgot'; unit: string }
   /** A soldier searched the furniture on `tile`; `loot` went into the backpack (null: nothing). */
-  | { t: 'searched'; unit: string; tile: Vec2; loot: Loot | null }
+  | { t: 'searched'; unit: string; tile: Pos; loot: Loot | null }
   // Night (docs/ALTURA-Y-NOCHE.md).
   /** A light goes on at night (a Bengala, a fire): whoever stands in it is seen from as far as by day. */
   | { t: 'lightOn'; light: Light }
@@ -124,9 +124,9 @@ export type GameEvent =
   | { t: 'lightOff'; id: string }
   // Velmar's Canto.
   /** A song is sung (for the effects): on whom, or where. */
-  | { t: 'sung'; unit: string; ability: AbilityId; targets: string[]; tile?: Vec2 }
+  | { t: 'sung'; unit: string; ability: AbilityId; targets: string[]; tile?: Pos }
   /** Salto de eco, Paso de sombra. */
-  | { t: 'teleported'; unit: string; from: Vec2; to: Vec2 }
+  | { t: 'teleported'; unit: string; from: Pos; to: Pos }
   /** Juramento de Velmar: turns it lasts. */
   | { t: 'oath'; unit: string; turns: number }
   /** Contracanto: turns of immunity to the Cantores. */
@@ -138,7 +138,7 @@ export type GameEvent =
   /** Último verso: back on its feet. */
   | { t: 'revived'; unit: string; hp: number }
   /** Silencio: a zone where the Cantores can't sing. */
-  | { t: 'silenced'; pos: Vec2; radius: number; turns: number };
+  | { t: 'silenced'; pos: Pos; radius: number; turns: number };
 
 function unit(s: GameState, id: string) {
   const u = getUnit(s, id);
@@ -443,9 +443,12 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       }
       break;
     }
-    case 'tileChanged':
-      s.tiles[tileIndex(s, e.pos.x, e.pos.y)] = e.kind;
+    case 'tileChanged': {
+      // On the ground, or on a storey's slab (docs/FASE6-PLAN.md).
+      const tiles = e.pos.z === 0 ? s.tiles : s.levels?.[e.pos.z - 1]?.tiles;
+      if (tiles) tiles[tileIndex(s, e.pos.x, e.pos.y)] = e.kind;
       break;
+    }
     case 'podActivated': {
       const pod = s.pods.find((p) => p.id === e.pod);
       if (pod) pod.active = true;
@@ -503,7 +506,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       unit(s, e.unit).heard = null;
       break;
     case 'searched': {
-      (s.searched ??= []).push(tileIndex(s, e.tile.x, e.tile.y));
+      (s.searched ??= []).push(nodeOf(s, e.tile));
       if (e.loot) (unit(s, e.unit).backpack ??= []).push({ ...e.loot });
       break;
     }

@@ -24,7 +24,7 @@ import { stepCost } from './path';
 import { Rng } from './rng';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from './grid';
 import { carPartner, decorCode, decorOf } from './decor';
-import type { Biome, Decor, DecorKind, GameState, GroundKind, MissionKind, TileKind, Vec2 } from './types';
+import type { Biome, Decor, DecorKind, GameState, GroundKind, Level, MissionKind, Pos, TileKind, Vec2 } from './types';
 
 /** Side of every procedural map, in tiles. */
 export const GEN_SIZE = 48;
@@ -52,11 +52,15 @@ export interface MissionLayout {
   decor?: Decor[];
   /** Storeys of the building each tile belongs to, 0 outside (procedural maps only; GameState.storeys). */
   storeys?: number[];
+  /** The storeys above the ground (GameState.levels; docs/FASE6-PLAN.md). */
+  levels?: Level[];
+  /** A few places together on an upper floor, by a window and far from the squad, for a group of the living posted up there (decision 7). */
+  perch?: Pos[];
   /** Where the map's street lights and floodlights stand (procedural maps only; GameState.lights). */
   lights?: Vec2[];
   spawns: Vec2[];
-  /** Spawn tiles and patrol route of each pod, in the order the pod plan lists them. */
-  pods: { tiles: Vec2[]; patrol: Vec2[] }[];
+  /** Spawn tiles and patrol route of each pod, in the order the pod plan lists them (on the ground unless they say `z`). */
+  pods: { tiles: (Vec2 & { z?: number })[]; patrol: (Vec2 & { z?: number })[] }[];
   /** Recovery data; also the default spot for other objectives on hand-made maps. */
   item: Vec2 | null;
   terminal: Vec2 | null;
@@ -319,6 +323,8 @@ interface Style {
   windowEvery: number;
   /** From one planter (bin, bollard) to the next along a sidewalk. */
   furniture: number;
+  /** A town laid out as an old town (bent streets, uneven plots, small squares) rather than a grid: city() sets it. */
+  organic?: boolean;
 }
 
 function pickStyle(rng: Rng): Style {
@@ -348,6 +354,10 @@ interface Building {
   furnish: Furnish;
   /** Storeys when they aren't the furnishing's to say (a filling station's shop, a motel). */
   storeys?: number;
+  /** Left in ruins (ruin): no roof, no storeys above. */
+  ruined?: boolean;
+  /** A flat roof though it is furnished as a home (a motel). */
+  flat?: boolean;
 }
 
 /**
@@ -743,6 +753,7 @@ function ruin(c: Canvas, b: Building, rng: Rng): void {
   for (const room of b.rooms) groupNear(c, centre(room), rng, RUBBLE, 1, 0, 4);
   // Nothing grows inside.
   for (const p of tilesIn(inset(outer, 1))) c.reserve(p.x, p.y);
+  b.ruined = true;
 }
 
 /**
@@ -826,12 +837,79 @@ interface SplitRules {
   deadEnd: number;
   /** Chance of keeping a block whole, by depth. */
   stop: number[];
+  /** Streets that bend (an old town): the chance, and the most stretches a street has, by depth. */
+  bend?: number[];
+  bends?: number[];
 }
 
 const swapRect = (r: Rect): Rect => rect(r.y, r.x, r.h, r.w);
 
+/** The shortest straight stretch of a street that bends: a building's length beside it. */
+const STRETCH = 8;
+
+/**
+ * A street across `r` (north–south) that bends: `k` straight stretches, each
+ * a step of two or three tiles sideways from the last, joined by short cross
+ * streets. Mostly the steps go the same way, so the street runs on a slant
+ * across the district; else back and forth. On each side, the land beside a
+ * stretch is a block of its own (with the cross street's corner when the
+ * street steps away from it). Null when `r` is too short or too narrow.
+ */
+function bentStreet(r: Rect, w: number, k: number, rng: Rng, rules: SplitRules): { parts: Rect[]; streets: Road[] } | null {
+  const lo = r.x + rules.minBlock;
+  const hi = r.x + r.w - rules.minBlock - w;
+  const free = r.h - k * STRETCH - (k - 1) * w;
+  if (k < 2 || hi - lo < 2 || free < 0) return null;
+  // Where each stretch ends (its cross street starts): even stretches, the slack shared out at random.
+  const ends: number[] = [];
+  let y = r.y;
+  let slack = free;
+  for (let i = 0; i < k - 1; i++) {
+    const extra = rng.int(Math.floor(slack / (k - i)) * 2 + 1);
+    const take = Math.min(extra, slack);
+    slack -= take;
+    ends.push(y + STRETCH + take);
+    y = ends[i]! + w;
+  }
+  const slant = rng.next() < 0.65;
+  const dir = rng.int(2) === 0 ? -1 : 1;
+  const xs = [clamp(Math.round((lo + hi) / 2 - (slant ? dir * (k - 1) * 1.25 : 0) + rng.range(-1, 1)), lo, hi)];
+  for (let i = 1; i < k; i++) {
+    const prev = xs[i - 1]!;
+    const step = (slant ? dir : rng.int(2) === 0 ? -1 : 1) * rng.range(2, 3);
+    let x = prev + step;
+    if (x < lo || x > hi) x = prev - step;
+    x = clamp(x, lo, hi);
+    if (x === prev) x = prev + (prev < hi ? 1 : -1);
+    xs.push(x);
+  }
+  const bottom = r.y + r.h;
+  const right = r.x + r.w;
+  const top = (i: number) => (i === 0 ? r.y : ends[i - 1]! + w);
+  const end = (i: number) => (i === k - 1 ? bottom : ends[i]!);
+  const streets: Road[] = [];
+  const parts: Rect[] = [];
+  for (let i = 0; i < k; i++) {
+    const a = xs[i]!;
+    streets.push({ r: rect(a, top(i), w, end(i) - top(i)), vertical: true });
+    if (i < k - 1) streets.push({ r: rect(Math.min(a, xs[i + 1]!), ends[i]!, Math.abs(xs[i + 1]! - a) + w, w), vertical: false });
+    // The corner of a cross street goes to the side the street steps away from.
+    const leftFrom = i === 0 ? r.y : a < xs[i - 1]! ? ends[i - 1]! : top(i);
+    const leftTo = i === k - 1 ? bottom : a < xs[i + 1]! ? ends[i]! + w : end(i);
+    const rightFrom = i === 0 ? r.y : a > xs[i - 1]! ? ends[i - 1]! : top(i);
+    const rightTo = i === k - 1 ? bottom : a > xs[i + 1]! ? ends[i]! + w : end(i);
+    parts.push(rect(r.x, leftFrom, a - r.x, leftTo - leftFrom), rect(a + w, rightFrom, right - a - w, rightTo - rightFrom));
+  }
+  return { parts, streets };
+}
+
 /** One street across `r`, running north–south (the caller transposes for the other axis). */
 function cutStreet(r: Rect, w: number, depth: number, rng: Rng, rules: SplitRules): { parts: Rect[]; streets: Road[] } {
+  const most = rules.bends?.[Math.min(depth, rules.bends.length - 1)] ?? 0;
+  if (most >= 2 && rng.next() < (rules.bend?.[Math.min(depth, rules.bend.length - 1)] ?? 0)) {
+    const bent = bentStreet(r, w, rng.range(Math.max(2, most - 1), most), rng, rules);
+    if (bent) return bent;
+  }
   const m = rules.minBlock;
   const lo = r.x + m;
   const hi = r.x + r.w - m - w;
@@ -947,6 +1025,8 @@ function parkCars(c: Canvas, roads: Road[], rng: Rng, chance: number): void {
         const clear = [at(lane, t - 1), at(lane, t + 2), at(inner, t), at(inner, t + 1)];
         if (!car.every((p) => c.free(p.x, p.y) && c.groundAt(p.x, p.y) === ROAD)) continue;
         if (kerb.some((p) => c.groundAt(p.x, p.y) === ROAD)) continue;
+        // Where houses stand on the street, never across a door or a window.
+        if (kerb.some((p) => ['door', 'window'].includes(c.get(p.x, p.y)))) continue;
         if (!clear.every((p) => c.get(p.x, p.y) === 'floor')) continue;
         for (const p of car) c.force(p.x, p.y, 'low');
         c.dress(car[ahead]!, 'carFront', facing);
@@ -1068,24 +1148,40 @@ function rowOfBuildings(c: Canvas, lot: Rect, front: number, roads: boolean[], r
   const setback = plan === 'rooms' && rows.length === 1 && D - hd >= 4 ? 2 : 0;
   const out: Building[] = [];
   const n = Math.max(1, Math.floor((L + style.gap) / (plot + style.gap)));
-  // The row fills its side: what is left over widens the houses, up to two tiles each.
-  const hw = plot + Math.min(2, Math.floor((L - (n * plot + (n - 1) * style.gap)) / n));
-  const spare = L - (n * hw + (n - 1) * style.gap);
+  // The row fills its side: what is left over widens the houses, up to two tiles each (four for a house on its own).
+  const hw = plot + Math.min(n === 1 ? 4 : 2, Math.floor((L - (n * plot + (n - 1) * style.gap)) / n));
   for (const side of rows) {
+    // In an old town every plot is its own width, with alleys of one or two between them.
+    const widths = Array.from({ length: n }, () => (style.organic ? plot + rng.range(0, 3) : hw));
+    const gaps = Array.from({ length: n - 1 }, () => (style.organic ? rng.range(1, 2) : style.gap));
+    const sum = () => widths.reduce((a, b) => a + b, 0) + gaps.reduce((a, b) => a + b, 0);
+    while (sum() > L) {
+      const k = widths.indexOf(Math.max(...widths));
+      const g = gaps.indexOf(Math.max(...gaps));
+      if (widths[k]! > 7) widths[k]!--;
+      else gaps[g]!--;
+    }
+    const spare = L - sum();
     let u = Math.floor(spare / 2) + (spare > 1 ? rng.range(-1, 1) : 0);
     u = clamp(u, 0, spare);
     // A long row keeps a garden in one of its middle plots now and then, and a house row may end in a corner shop.
     const garden = n >= 3 && rng.next() < 0.15 ? rng.range(1, n - 2) : -1;
     const shop = plan === 'rooms' && rng.next() < 0.3 ? rng.pick([0, n - 1]) : -1;
     for (let k = 0; k < n; k++) {
-      const b = local(lot, side, u, setback, hw, hd);
+      const w = widths[k]!;
+      // Not every house lines up with the next: one now and then stands back from the street (more, and further, in an
+      // old town), on the room a single row has to spare behind it, or shallower.
+      const room = rows.length === 1 ? D - hd : 0;
+      const most = Math.min(style.organic ? 2 : 1, room + hd - 7);
+      const back = !setback && most > 0 && rng.next() < (style.organic ? 0.5 : 0.15) ? rng.range(1, most) : 0;
+      const b = local(lot, side, u, setback + back, w, hd - Math.max(0, back - room));
       if (k === garden) groupNear(c, centre(b), rng, [dressed(CORNER, 'bush', 'tree'), dressed(PAIR, 'bush', 'tree')], 1, 0, 6);
-      else if (k === shop) out.push(building(c, local(lot, side, u, 0, hw, hd), rng, 'shop', side, style, 'shop'));
+      else if (k === shop) out.push(building(c, local(lot, side, u, 0, w, hd), rng, 'shop', side, style, 'shop'));
       else {
         out.push(building(c, b, rng, plan, side, style, furnish));
-        if (setback) frontGarden(c, lot, side, u, hw, rng);
+        if (setback) frontGarden(c, lot, side, u, w, rng);
       }
-      u += hw + style.gap;
+      u += w + (gaps[k] ?? 0);
     }
   }
   // Back yards: a fence down the middle between two rows (posts beside each gap), a tree or bins behind a single one.
@@ -1158,6 +1254,13 @@ function shopRow(c: Canvas, lot: Rect, front: number, L: number, d: number, rng:
     }
     if (!widths.length) break;
     if (total < 7) widths[0] = 7;
+    // What is left of the row's room widens its shops, up to 9 tiles each.
+    for (let extra = room - Math.max(7, total), k = 0; extra > 0 && widths.some((w) => w < 9); k = (k + 1) % widths.length) {
+      if (widths[k]! < 9) {
+        widths[k]!++;
+        extra--;
+      }
+    }
     const shops: Rect[] = [];
     let x = u;
     for (const w of widths) {
@@ -1258,7 +1361,7 @@ function motelWing(c: Canvas, b: Rect, front: number, rng: Rng): Building {
     c.force(localPt(b, front, 3 + 4 * k, 0).x, localPt(b, front, 3 + 4 * k, 0).y, 'window');
     furnishRoom(c, room, rng, 'home');
   }
-  const wing: Building = { outer: b, rooms, furnish: 'home', storeys: 1 };
+  const wing: Building = { outer: b, rooms, furnish: 'home', storeys: 1, flat: true };
   c.buildings.push(wing);
   return wing;
 }
@@ -1342,19 +1445,21 @@ function lotOf(c: Canvas, block: Rect): Rect {
 }
 
 /**
- * A town block's buildable part, and the sides it keeps a sidewalk on: one
- * along streets three or more tiles wide (on a lane the houses stand right on
- * it), none on the map's edge. Against the block behind, the east and south
- * sides give up a tile for the alley between them, the other block builds up
- * to it.
+ * A town block's buildable part, and the sides it keeps a sidewalk on: both
+ * sides of an avenue; one side of a street three tiles wide in a grid (the
+ * north or west one), one now and then in an old town; none on a lane (the
+ * houses stand right on it) or on the map's edge. Against the block behind,
+ * the east and south sides give up a tile for the alley between them, the
+ * other block builds up to it.
  */
-function townLot(c: Canvas, block: Rect, roads: boolean[]): { lot: Rect; walks: boolean[] } {
+function townLot(c: Canvas, block: Rect, roads: boolean[], organic: boolean): { lot: Rect; walks: boolean[] } {
   let lot = block;
   const walks = [false, false, false, false];
   for (let s = 0; s < 4; s++) {
     const q = add(localPt(block, s, 0, 0), DIRS4[s]!);
     if (!c.in(q.x, q.y)) continue;
-    const pave = roads[s] ? roadWidth(c, block, s) >= 3 : s === 1 || s === 2;
+    const street = roads[s] ? roadWidth(c, block, s) : 0;
+    const pave = !roads[s] ? s === 1 || s === 2 : street >= 4 || (street === 3 && (organic ? mix(block.x + s, block.y) % 3 === 0 : s === 1 || s === 2));
     if (!pave) continue;
     lot = cut(lot, s, 1);
     walks[s] = roads[s]!;
@@ -1403,21 +1508,38 @@ function endOf(l: Lot, to: Vec2, area: number): [Lot, Lot] | null {
 }
 
 /**
- * A square `yard` tiles across in the north-west corner of a lot (north-east
- * if `east`), and the lots left round it beyond a one-tile alley: the rest of
- * its width beside the square and the rest of its depth below it, when they
- * are 7 or more across (else the square takes that whole side).
+ * A square `yard` tiles across in a corner of a lot (0 north-west, then
+ * clockwise: north-east, south-east, south-west), and the lots left round it
+ * beyond a one-tile alley: the rest of its width beside the square and the
+ * rest of its depth beyond it, when they are 7 or more across (else the
+ * square takes that whole side).
  */
-function cornerLots(lot: Lot, east: boolean, yard: number): { square: Rect; lots: Lot[] } {
+function cornerLots(lot: Lot, corner: number, yard: number): { square: Rect; lots: Lot[] } {
   const r = lot.r;
+  const east = corner === 1 || corner === 2;
+  const south = corner >= 2;
   const wide = r.w >= yard + 8;
   const deep = r.h >= yard + 8;
   const sw = wide ? yard : r.w;
-  const square = rect(east ? r.x + r.w - sw : r.x, r.y, sw, deep ? yard : r.h);
+  const sh = deep ? yard : r.h;
+  const square = rect(east ? r.x + r.w - sw : r.x, south ? r.y + r.h - sh : r.y, sw, sh);
   const lots: Lot[] = [];
   if (wide) lots.push(piece(lot, rect(east ? r.x : r.x + yard + 1, r.y, r.w - yard - 1, r.h)));
-  if (deep) lots.push(piece(lot, rect(square.x, r.y + yard + 1, sw, r.h - yard - 1)));
+  if (deep) lots.push(piece(lot, rect(square.x, south ? r.y : r.y + yard + 1, sw, r.h - yard - 1)));
   return { square, lots };
+}
+
+/** A small square on a corner of an old town's block: a fountain, or trees and a bench, and a bin by the kerb. */
+function plazuela(c: Canvas, r: Rect, rng: Rng): void {
+  const m = centre(r);
+  if (rng.next() < 0.4) {
+    const rim = (k: number): Look => ['fountainCorner', k];
+    group(c, { x: Math.floor(m.x), y: Math.floor(m.y) }, [[0, 0, 'low', rim(0)], [1, 0, 'low', rim(1)], [0, 1, 'low', rim(3)], [1, 1, 'low', rim(2)]]);
+  } else {
+    groupNear(c, m, rng, [dressed(CORNER, 'bush', 'tree'), dressed(PAIR, 'planter', 'tree')], 1, 0, 6);
+  }
+  const side = rng.int(4);
+  groupNear(c, localPt(r, side, Math.floor(sideLen(r, side) / 2), 1), rng, [dressed(PAIR, 'bin', 'kiosk'), [[0, 0, 'low', ['bin']]]], 1, 0, 4);
 }
 
 // -------------------------------------------------------------------- city
@@ -1436,7 +1558,7 @@ function weighted<T>(rng: Rng, options: [T, number][]): T {
 }
 
 /** `used` counts the programs already placed: besides the squad's square and the objective, two open lots at most (a square, a car park, a site, a filling station, a motel), one of each. */
-function cityProgram(lot: Rect, rng: Rng, role: Role | null, used: Map<CityProgram, number>): CityProgram {
+function cityProgram(lot: Rect, rng: Rng, role: Role | null, used: Map<CityProgram, number>, organic = false): CityProgram {
   const short = Math.min(lot.w, lot.h);
   const long = Math.max(lot.w, lot.h);
   if (role === 'indoor') return short >= 10 && rng.next() < 0.6 ? 'office' : rng.next() < 0.5 ? 'shops' : 'houses';
@@ -1448,11 +1570,13 @@ function cityProgram(lot: Rect, rng: Rng, role: Role | null, used: Map<CityProgr
   const options: [CityProgram, number][] = [];
   if (few && !used.get('plaza') && area <= 130) options.push(['plaza', 0.35]);
   if (few && !used.get('parking') && area <= 160) options.push(['parking', 0.35]);
-  // Smaller buildings, more of them (Synty's captures: rows of shops, a filling station, a motel, houses with gardens).
-  if (short >= 7) options.push(['houses', 2.5], ['shops', 1], ['highStreet', 2.5]);
-  if (short >= 10) options.push(['office', 2]);
-  if (short >= 9 && long >= 10) options.push(['flats', 2]);
-  if (short >= 12) options.push(['warehouse', 1.2]);
+  // Smaller buildings, more of them (Synty's captures: rows of shops, a filling station, a motel, houses with gardens);
+  // an old town is mostly houses and small shops, a few offices, flats and warehouses.
+  const big = organic ? 0.45 : 1;
+  if (short >= 7) options.push(['houses', organic ? 4 : 2.5], ['shops', 1], ['highStreet', organic ? 1.2 : 2.5]);
+  if (short >= 10) options.push(['office', 2 * big]);
+  if (short >= 9 && long >= 10) options.push(['flats', 2 * big]);
+  if (short >= 12) options.push(['warehouse', 1.2 * big]);
   if (few && !used.get('gasStation') && short >= 10 && long >= 13 && area <= 180) options.push(['gasStation', 0.25]);
   if (few && !used.get('motel') && short >= 11 && long >= 13) options.push(['motel', 0.9]);
   if (few && !used.get('site') && short >= 8 && area <= 150) options.push(['site', 0.4]);
@@ -1590,11 +1714,25 @@ function cityLot(c: Canvas, lot: Rect, program: CityProgram, roads: boolean[], r
   }
 }
 
-/** City: blocks of houses, shops, offices, flats and warehouses between streets, a square or a car park here and there. */
-function city(c: Canvas, rng: Rng, style: Style, role: Role): Rect {
+/**
+ * City: blocks of houses, shops, offices, flats and warehouses between
+ * streets, a square or a car park here and there. Half the towns are laid out
+ * on a grid; the other half are old towns, with streets that bend and run on
+ * a slant, smaller and uneven blocks, houses that don't line up and small
+ * squares on the corners.
+ */
+function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
   const S = c.width;
+  const organic = rng.next() < 0.5;
+  const style: Style = { ...map, organic };
   // Small blocks: an avenue, streets and lanes two tiles wide (on a lane the houses stand right on it).
-  const plan = district(rect(0, 0, S, S), rng, { minBlock: 9, maxBlock: 20, widths: [[4, 4], [3, 3], [2, 2]], jog: 0.35, deadEnd: 0.3, stop: [0, 0.2, 0.6, 0.9] });
+  const plan = district(
+    rect(0, 0, S, S),
+    rng,
+    organic
+      ? { minBlock: 8, maxBlock: 18, widths: [[3, 4], [2, 3], [2, 3]], jog: 0.3, deadEnd: 0.35, stop: [0, 0.15, 0.55, 0.9], bend: [1, 0.6, 0.4], bends: [4, 3, 2] }
+      : { minBlock: 9, maxBlock: 20, widths: [[4, 4], [3, 3], [2, 2]], jog: 0.35, deadEnd: 0.3, stop: [0, 0.2, 0.6, 0.9] },
+  );
   for (const road of plan.roads) c.paint(road.r, ROAD);
   const far = { x: S * 0.76, y: S * 0.76 };
   const spawnBlock = plan.blocks.find((b) => inRect(b, { x: 0, y: 0 }))!;
@@ -1606,20 +1744,28 @@ function city(c: Canvas, rng: Rng, style: Style, role: Role): Rect {
     ) ?? best(plan.blocks, (b) => (b === spawnBlock ? Infinity : dist(centre(b), far)))!;
   let objective: Rect = objBlock;
   const used = new Map<CityProgram, number>();
+  let squares = 0;
   for (const block of plan.blocks) {
     const roads = [0, 1, 2, 3].map((s) => facesRoad(c, block, s));
-    const { lot, walks } = townLot(c, block, roads);
+    const { lot, walks } = townLot(c, block, roads, organic);
     const lots: Lot[] = [];
     if (block === spawnBlock) {
       // The squad's corner: an open square, with buildings round it if the block is big (on a small block, a narrower square).
-      const corner = cornerLots({ r: lot, roads }, false, lot.w >= 16 || lot.h >= 16 ? 8 : 6);
+      const corner = cornerLots({ r: lot, roads }, 0, lot.w >= 16 || lot.h >= 16 ? 8 : 6);
       plaza(c, corner.square, rng);
       lots.push(...corner.lots);
     } else if (block !== objBlock && inRect(block, { x: S - 1, y: 0 })) {
       // The other corner on the squad's side keeps a yard for the evac zone (generateLayout carves it there), a few crates in it.
-      const corner = [6, 5].map((yard) => cornerLots({ r: lot, roads }, true, yard)).find((k) => k.lots.length) ?? cornerLots({ r: lot, roads }, true, 6);
+      const corner = [6, 5].map((yard) => cornerLots({ r: lot, roads }, 1, yard)).find((k) => k.lots.length) ?? cornerLots({ r: lot, roads }, 1, 6);
       groupNear(c, centre(corner.square), rng, [dressed(CRATES, 'crates'), dressed(PAIR, 'crates')], 1, 0, 6);
       lots.push(...corner.lots);
+    } else if (organic && block !== objBlock && squares < 2 && lot.w >= 13 && lot.h >= 13 && rng.next() < 0.5) {
+      // An old town's small square, on the block's corner at a crossroads if it has one.
+      const corners = [0, 1, 2, 3].filter((k) => roads[k] && roads[(k + 3) % 4]);
+      const corner = cornerLots({ r: lot, roads }, corners.length ? rng.pick(corners) : rng.int(4), lot.w >= 14 && lot.h >= 14 ? 6 : 5);
+      plazuela(c, corner.square, rng);
+      for (const l of corner.lots) lots.push(...splitLot(l.r, l.roads, rng, 8, 0.5, 1));
+      squares++;
     } else {
       lots.push(...splitLot(lot, roads, rng, 8, block === objBlock && role === 'indoor' ? 0 : 0.65, 1));
     }
@@ -1630,12 +1776,12 @@ function city(c: Canvas, rng: Rng, style: Style, role: Role): Rect {
         const [open, rest] = endOf(l, far, 120) ?? [l, null];
         if (cityProgram(open.r, rng, role, used) === 'plaza') plaza(c, open.r, rng);
         else parking(c, open.r, rng, frontOf(c, open.r, open.roads, rng));
-        if (rest) cityLot(c, rest.r, cityProgram(rest.r, rng, null, used), rest.roads, rng, style);
+        if (rest) cityLot(c, rest.r, cityProgram(rest.r, rng, null, used, organic), rest.roads, rng, style);
         objective = open.r;
         continue;
       }
       const isObj = l === objLot;
-      const built = cityLot(c, l.r, cityProgram(l.r, rng, isObj ? role : null, used), l.roads, rng, style);
+      const built = cityLot(c, l.r, cityProgram(l.r, rng, isObj ? role : null, used, organic), l.roads, rng, style);
       if (isObj) objective = best(built, (b) => dist(centre(b.outer), far))?.outer ?? l.r;
     }
     sidewalk(c, block, walks, style.furniture, 'low');
@@ -2327,17 +2473,289 @@ function carveEvac(c: Canvas, r: Rect, corner: Vec2, rng: Rng): Vec2[] {
  * storeys; a wall two buildings share, the taller one's. Rolled on a seed of
  * their own, so nothing else in the layout moves.
  */
-function storeysOf(c: Canvas, biome: Biome, seed: number): number[] {
-  const rng = new Rng(seed ^ 0x5f0e75);
+function storeysOf(c: Canvas, heights: number[]): number[] {
   const out = new Array<number>(c.tiles.length).fill(0);
-  for (const b of c.buildings) {
-    const roll = rng.next();
-    const n =
-      b.storeys ??
-      (biome !== 'city' ? 1 : b.furnish === 'shop' ? (roll < 0.55 ? 2 : 3) : b.furnish === 'office' ? (roll < 0.6 ? 2 : 3) : b.furnish === 'home' && roll < 0.3 ? 2 : 1);
-    for (const p of tilesIn(b.outer)) if (c.in(p.x, p.y)) out[c.i(p.x, p.y)] = Math.max(out[c.i(p.x, p.y)]!, n);
-  }
+  c.buildings.forEach((b, j) => {
+    for (const p of tilesIn(b.outer)) if (c.in(p.x, p.y)) out[c.i(p.x, p.y)] = Math.max(out[c.i(p.x, p.y)]!, heights[j]!);
+  });
   return out;
+}
+
+/** How many storeys each building of c.buildings stands (storeysOf's rule), on its own seed. */
+function buildingStoreys(c: Canvas, biome: Biome, seed: number): number[] {
+  const rng = new Rng(seed ^ 0x5f0e75);
+  return c.buildings.map((b) => {
+    const roll = rng.next();
+    return (
+      b.storeys ??
+      (biome !== 'city' ? 1 : b.furnish === 'shop' ? (roll < 0.55 ? 2 : 3) : b.furnish === 'office' ? (roll < 0.6 ? 2 : 3) : b.furnish === 'home' && roll < 0.3 ? 2 : 1)
+    );
+  });
+}
+
+// ------------------------------------------------------ storeys above the ground
+
+// docs/FASE6-PLAN.md, step 5. Every building gets its storeys for real, on
+// canvases of their own laid over the ground: walls, rooms, windows, furniture
+// and stairs up from the floor below; on top, its roof. Houses and barns have
+// a pitched roof nobody stands on (decision 2); the rest a flat one, with a
+// parapet, reached by the stairs when the building has two or three storeys,
+// and by a ladder up its side on about half of those of one (decision 1). A
+// ruin has no roof. Drawn on a seed of its own, after everything else: the
+// ground only changes where stairs and ladders go.
+
+/** A storey above the ground while it is drawn: what stands on it, and where it has a slab at all. */
+interface Storey {
+  c: Canvas;
+  slab: boolean[];
+}
+
+/** A pitched roof nobody stands on: houses and barns (decision 2). */
+const pitched = (b: Building) => !b.flat && (b.furnish === 'home' || b.furnish === 'barn');
+
+/** What the rooms of a building's upper storeys hold: a shop's stockroom, the rest as below. */
+const UPSTAIRS: Record<Furnish, Furnish> = { home: 'home', shop: 'store', office: 'office', lab: 'lab', store: 'store', barn: 'barn', bare: 'bare' };
+
+/** From one window to the next on an upper storey: shops and offices glazed, houses less. */
+const upstairsWindows = (b: Building) => (b.furnish === 'home' ? 3 : 2);
+
+/**
+ * Windows along the outer walls of storey `lc` of building `b`, like windows()
+ * on the ground: never at a corner, beside another opening or where a wall
+ * meets it from inside, and never onto another building's storey (`occupied`).
+ */
+function upperWindows(lc: Canvas, b: Rect, every: number, occupied: boolean[]): void {
+  for (let s = 0; s < 4; s++) {
+    const n = sideLen(b, s);
+    const anchor = Math.floor((n - 1) / 2);
+    const back = DIRS4[opposite(s)]!;
+    const lateral = DIRS4[(s + 1) % 4]!;
+    for (let u = 2; u <= n - 3; u++) {
+      if (Math.abs(u - anchor) % every !== 0) continue;
+      const p = localPt(b, s, u, 0);
+      const q = add(p, DIRS4[s]!);
+      if (lc.get(p.x, p.y) !== 'wall' || lc.get(p.x + back.x, p.y + back.y) !== 'floor') continue;
+      if (![add(p, lateral), { x: p.x - lateral.x, y: p.y - lateral.y }].every((r) => lc.get(r.x, r.y) === 'wall' || lc.get(r.x, r.y) === 'window')) continue;
+      if (!lc.in(q.x, q.y) || occupied[lc.i(q.x, q.y)]) continue;
+      lc.force(p.x, p.y, 'window');
+    }
+  }
+}
+
+/**
+ * Whether every place one can stand on, on storey `st` within `r`, joins up
+ * with `from` (orthogonal steps; windows are no way through).
+ */
+function storeyJoined(st: Storey, r: Rect, from: Vec2): boolean {
+  const open = (p: Vec2) => inRect(r, p) && st.slab[st.c.i(p.x, p.y)]! && isWalkable(st.c.get(p.x, p.y)) && st.c.get(p.x, p.y) !== 'window';
+  if (!open(from)) return false;
+  const seen = new Set<number>([st.c.i(from.x, from.y)]);
+  const queue = [from];
+  while (queue.length) {
+    const p = queue.pop()!;
+    for (const d of DIRS4) {
+      const q = add(p, d);
+      if (!open(q) || seen.has(st.c.i(q.x, q.y))) continue;
+      seen.add(st.c.i(q.x, q.y));
+      queue.push(q);
+    }
+  }
+  return tilesIn(r).every((p) => !open(p) || seen.has(st.c.i(p.x, p.y)));
+}
+
+/**
+ * Clears the furniture that cuts storey `st` of building `r` in two, nearest
+ * to what `from` reaches first, until every place one can stand on there joins
+ * up again (furnishRoom keeps doorways clear, not narrow rooms).
+ */
+function unblockStorey(st: Storey, r: Rect, from: Vec2): void {
+  for (let guard = 0; guard < 20 && !storeyJoined(st, r, from); guard++) {
+    const blocked = tilesIn(inset(r, 1)).find((p) => {
+      const k = st.c.get(p.x, p.y);
+      return (k === 'low' || k === 'high') && DIRS4.some((d) => isWalkable(st.c.get(p.x + d.x, p.y + d.y)));
+    });
+    if (!blocked) return;
+    st.c.force(blocked.x, blocked.y, 'floor');
+    st.c.decor[st.c.i(blocked.x, blocked.y)] = 0;
+  }
+}
+
+/**
+ * Stairs up through building `r` from the floor below (`lower`: the ground
+ * canvas, or a storey) to storey `upper`: a ladder tile against a wall below,
+ * a free floor one storey up beside it to step off onto, and a hole in the
+ * floor above it (the stairwell). Never where the hole would cut that storey
+ * in two. Returns the landing, or null if no place fits.
+ */
+function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, r: Rect, rng: Rng, avoid: Set<number>): Vec2 | null {
+  const inner = inset(r, 1);
+  const options: { at: Vec2; up: number; key: number }[] = [];
+  for (const at of tilesIn(inner)) {
+    const i = lower.i(at.x, at.y);
+    if (!lower.free(at.x, at.y) || lower.decor[i] || avoid.has(i) || (lowerSlab && !lowerSlab[i]) || upper.c.get(at.x, at.y) !== 'floor' || upper.c.keep[i]) continue;
+    DIRS4.forEach((d, up) => {
+      const landing = add(at, d);
+      if (!inRect(inner, landing) || upper.c.get(landing.x, landing.y) !== 'floor' || upper.c.keep[upper.c.i(landing.x, landing.y)]) return;
+      // Against a wall below, the flight going up away from it.
+      const back = { x: at.x - d.x, y: at.y - d.y };
+      options.push({ at, up, key: (lower.get(back.x, back.y) === 'wall' ? 0 : 2) + rng.next() });
+    });
+  }
+  options.sort((a, b) => a.key - b.key);
+  for (const { at, up } of options) {
+    const i = lower.i(at.x, at.y);
+    const landing = add(at, DIRS4[up]!);
+    upper.slab[i] = false;
+    if (!storeyJoined(upper, r, landing)) {
+      upper.slab[i] = true;
+      continue;
+    }
+    lower.force(at.x, at.y, 'ladder');
+    lower.dress(at, 'stairs', up);
+    lower.reserve(at.x, at.y);
+    upper.c.reserve(at.x, at.y);
+    upper.c.reserve(landing.x, landing.y);
+    return landing;
+  }
+  return null;
+}
+
+/**
+ * A ladder up the side of building `r`'s one-storey flat roof: on open ground
+ * the squad can reach, against a plain stretch of wall, clear of the doors.
+ * The roof's parapet opens where it comes up. False if nowhere fits.
+ */
+function placeLadder(c: Canvas, roof: Storey, r: Rect, rng: Rng, avoid: Set<number>, reach: Set<number>): boolean {
+  const spots: { wall: Vec2; foot: Vec2 }[] = [];
+  for (let s = 0; s < 4; s++) {
+    for (let u = 2; u <= sideLen(r, s) - 3; u++) {
+      const wall = localPt(r, s, u, 0);
+      const foot = add(wall, DIRS4[s]!);
+      const lateral = DIRS4[(s + 1) % 4]!;
+      const alongWall = [wall, add(wall, lateral), { x: wall.x - lateral.x, y: wall.y - lateral.y }];
+      const i = c.i(foot.x, foot.y);
+      if (!c.in(foot.x, foot.y) || !c.free(foot.x, foot.y) || c.decor[i] || c.groundAt(foot.x, foot.y) === INDOOR || !reach.has(i) || avoid.has(i)) continue;
+      if (!alongWall.every((p) => c.get(p.x, p.y) === 'wall')) continue;
+      if (DIRS8.some((d) => c.get(foot.x + d.x, foot.y + d.y) === 'door')) continue;
+      spots.push({ wall, foot });
+    }
+  }
+  const spot = spots.length ? rng.pick(spots) : null;
+  if (!spot) return false;
+  c.force(spot.foot.x, spot.foot.y, 'ladder');
+  c.reserve(spot.foot.x, spot.foot.y);
+  roof.c.force(spot.wall.x, spot.wall.y, 'floor');
+  return true;
+}
+
+/**
+ * The storeys above the ground of every building on `c` (`heights`: how many
+ * each stands), bottom up, and where a group of the living could be posted
+ * up there (`perch`: a few places together on an upper floor, far from
+ * `squad`). `avoid`: ground tiles already taken (spawns, pods, objective, evac,
+ * lights); `reach`: what the squad reaches on the ground.
+ */
+function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<number>, reach: Set<number>, squad: Vec2): { storeys: Storey[]; perch: Pos[] } {
+  const rng = new Rng(seed ^ 0x57a125);
+  const area = c.width * c.height;
+  const all = c.buildings
+    .map((b, j) => ({ b, n: heights[j]!, walkable: false, reached: 0, landing: null as Vec2 | null, rooms: [] as Rect[] }))
+    .filter((e) => !e.b.ruined && e.n >= 1);
+  // Flat roofs: reached by the stairs over two or three storeys; over one, by a ladder half the time.
+  for (const e of all) e.walkable = !pitched(e.b) && (e.n >= 2 || rng.next() < 0.5);
+  const top = Math.max(0, ...all.map((e) => e.n));
+  const storeys: Storey[] = Array.from({ length: top }, () => ({ c: new Canvas(c.width, c.height), slab: new Array<boolean>(area).fill(false) }));
+  for (let k = 1; k <= top; k++) {
+    const st = storeys[k - 1]!;
+    const lc = st.c;
+    const occupied = new Array<boolean>(area).fill(false);
+    for (const e of all) if (e.n >= k) for (const p of tilesIn(e.b.outer)) if (c.in(p.x, p.y)) occupied[c.i(p.x, p.y)] = true;
+    // The roofs of those that end here, then the walls of those that go on (a wall two share stands over the lower one's roof).
+    for (const e of all.filter((x) => x.n === k)) {
+      for (const p of tilesIn(e.b.outer)) {
+        if (!c.in(p.x, p.y)) continue;
+        lc.force(p.x, p.y, e.walkable ? 'floor' : 'roof');
+        st.slab[c.i(p.x, p.y)] = true;
+      }
+    }
+    const going = all.filter((x) => x.n > k);
+    for (const e of going) {
+      const r = e.b.outer;
+      for (const p of tilesIn(r)) {
+        if (!c.in(p.x, p.y)) continue;
+        const edge = p.x === r.x || p.y === r.y || p.x === r.x + r.w - 1 || p.y === r.y + r.h - 1;
+        lc.force(p.x, p.y, edge ? 'wall' : 'floor');
+        lc.ground[c.i(p.x, p.y)] = INDOOR;
+        st.slab[c.i(p.x, p.y)] = true;
+      }
+    }
+    for (const e of going) {
+      e.rooms = [];
+      splitRooms(lc, inset(e.b.outer, 1), rng, e.rooms, e.b.furnish === 'home' ? 6 : 8, e.b.furnish !== 'home');
+      upperWindows(lc, e.b.outer, upstairsWindows(e.b), occupied.map((o, i) => o && !inRect(e.b.outer, { x: i % c.width, y: Math.floor(i / c.width) })));
+    }
+    // Up from the storey below: to each storey of those that go on, and to the flat roofs over two or three.
+    const lower = k === 1 ? c : storeys[k - 2]!.c;
+    const lowerSlab = k === 1 ? null : storeys[k - 2]!.slab;
+    for (const e of all) {
+      e.landing = null;
+      // No way up to the storey below: none here either.
+      if (!(e.n > k || (e.n === k && k >= 2 && e.walkable)) || e.reached !== k - 1) continue;
+      e.landing = placeStairs(lower, lowerSlab, st, e.b.outer, rng, k === 1 ? avoid : new Set());
+      if (e.landing) e.reached = k;
+    }
+    for (const e of going) {
+      if (!e.landing) continue;
+      for (const room of e.rooms) furnishRoom(lc, room, rng, UPSTAIRS[e.b.furnish]);
+      unblockStorey(st, e.b.outer, e.landing);
+    }
+    // A flat roof one walks on has a parapet round it (half cover); one nobody reaches is just a roof.
+    for (const e of all.filter((x) => x.n === k && x.walkable)) {
+      const reached = k === 1 || !!e.landing;
+      const r = e.b.outer;
+      for (const p of tilesIn(r)) {
+        if (!c.in(p.x, p.y) || lc.get(p.x, p.y) !== 'floor') continue;
+        const edge = p.x === r.x || p.y === r.y || p.x === r.x + r.w - 1 || p.y === r.y + r.h - 1;
+        if (!reached) lc.force(p.x, p.y, 'roof');
+        else if (edge) lc.force(p.x, p.y, 'low');
+      }
+      if (reached && k === 1 && !placeLadder(c, st, r, rng, avoid, reach)) {
+        for (const p of tilesIn(r)) if (c.in(p.x, p.y) && st.slab[c.i(p.x, p.y)] && (lc.get(p.x, p.y) === 'floor' || lc.get(p.x, p.y) === 'low')) lc.force(p.x, p.y, 'roof');
+      }
+    }
+    // Storeys nobody can reach (no room for stairs): only a roof over them.
+    for (const e of going) {
+      if (e.landing) continue;
+      for (const p of tilesIn(e.b.outer)) if (c.in(p.x, p.y) && st.slab[c.i(p.x, p.y)]) lc.force(p.x, p.y, 'roof');
+    }
+  }
+  // Somewhere up there for a group of the living to be posted (decision 7): far from the squad, by a window.
+  const perch: Pos[] = [];
+  const upstairs = shuffle(
+    all.filter((e) => e.n >= 2 && e.reached >= 1 && dist(centre(e.b.outer), squad) >= POD_DISTANCE),
+    rng,
+  );
+  for (const e of upstairs) {
+    const st = storeys[0]!;
+    const stand = (p: Vec2) => inRect(e.b.outer, p) && st.slab[c.i(p.x, p.y)]! && canStandOn(st.c.get(p.x, p.y)) && !st.c.keep[c.i(p.x, p.y)];
+    const byWindow = tilesIn(inset(e.b.outer, 1)).filter((p) => stand(p) && DIRS4.some((d) => st.c.get(p.x + d.x, p.y + d.y) === 'window'));
+    const anchor = byWindow.length ? rng.pick(byWindow) : null;
+    if (!anchor) continue;
+    const seen = new Set<number>([c.i(anchor.x, anchor.y)]);
+    const queue = [anchor];
+    while (queue.length && perch.length < 4) {
+      const p = queue.shift()!;
+      if (stand(p)) perch.push({ ...p, z: 1 });
+      for (const d of DIRS4) {
+        const q = add(p, d);
+        if (seen.has(c.i(q.x, q.y)) || !inRect(e.b.outer, q) || !st.slab[c.i(q.x, q.y)] || !isWalkable(st.c.get(q.x, q.y)) || st.c.get(q.x, q.y) === 'window') continue;
+        seen.add(c.i(q.x, q.y));
+        queue.push(q);
+      }
+    }
+    break;
+  }
+  return { storeys, perch };
 }
 
 /** How far apart the map's lights stand: street lights in town, floodlights in a facility, a lamp now and then along a track. */
@@ -2474,8 +2892,12 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   }
 
   tidyDecor(c);
-  const tall = storeysOf(c, biome, opts.seed);
+  const heights = buildingStoreys(c, biome, opts.seed);
+  const tall = storeysOf(c, heights);
   const lamps = streetLights(c, biome, opts.seed);
+  // The storeys above the ground (docs/FASE6-PLAN.md), last: stairs and ladders keep off what is already placed.
+  const placed = new Set<number>([...taken, ...lamps.map((p) => c.i(p.x, p.y)), ...[item, terminal].filter((p): p is Vec2 => !!p).map((p) => c.i(p.x, p.y))]);
+  const upper = upperFloors(c, heights, opts.seed, placed, reach, squadCenter);
 
   // Mirror/transpose everything into the final frame.
   const T = (p: Vec2): Vec2 => {
@@ -2514,6 +2936,19 @@ export function generateLayout(opts: GenOptions): MissionLayout {
       storeys[q.y * S + q.x] = tall[i]!;
     }
   }
+  const levels: Level[] = upper.storeys.map((st) => {
+    const out: Level = { tiles: new Array<TileKind | null>(S * S), decor: new Array<Decor>(S * S) };
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        const q = T({ x, y });
+        const i = c.i(x, y);
+        out.tiles[q.y * S + q.x] = st.slab[i] ? st.c.tiles[i]! : null;
+        out.decor![q.y * S + q.x] = st.slab[i] ? Dc(st.c.decor[i]!) : 0;
+      }
+    }
+    if (out.decor!.every((d) => !d)) delete out.decor;
+    return out;
+  });
   const t = (p: Vec2 | null) => (p ? T(p) : null);
 
   return {
@@ -2527,6 +2962,8 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     ground,
     decor,
     storeys,
+    ...(levels.length ? { levels } : {}),
+    ...(upper.perch.length ? { perch: upper.perch.map((p) => ({ ...T(p), z: p.z })) } : {}),
     lights: lamps.map(T),
     spawns: spawns.map(T),
     pods: pods.map((p) => ({ tiles: p.tiles.map(T), patrol: p.patrol.map(T) })),
@@ -2552,6 +2989,9 @@ export function handmadeLayout(def: MapDef, kind: MissionKind): MissionLayout {
     height: map.height,
     tiles,
     elev: map.elev,
+    // A map with storeys (docs/FASE6-PLAN.md): the storeys, their stairs and how tall each building stands.
+    ...(map.decor ? { decor: map.decor } : {}),
+    ...(map.levels ? { levels: map.levels, storeys: map.storeys } : {}),
     spawns: map.spawns,
     pods: Object.keys(def.pods)
       .sort()

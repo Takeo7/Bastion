@@ -5,13 +5,14 @@ import { autoBuild, soldierStats } from '../src/classes';
 import { ABILITIES, isAttack } from '../src/content';
 import { previewShot } from '../src/aim';
 import { cloneState, applyEvent, type GameEvent } from '../src/events';
+import { nodeOf, toPos } from '../src/grid';
 import { MAPS, parseMap } from '../src/maps';
 import { computeReach } from '../src/path';
 import type { Command } from '../src/protocol';
 import { Rng } from '../src/rng';
 import { abandonMission, executeCommand, Sim } from '../src/rules';
 import { createMission } from '../src/setup';
-import type { AbilityId, ClassId, GameState, Slot, TemplateId } from '../src/types';
+import type { AbilityId, ClassId, GameState, Place, Slot, TemplateId } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
 
 const ctx = (slot: Slot = 0, connected: Slot[] = [0], seed = 1) => ({ slot, connected, rng: new Rng(seed) });
@@ -66,7 +67,7 @@ describe('actions', () => {
     expect(firstMove).toBeGreaterThanOrEqual(0);
     expect(shot).toBeGreaterThan(firstMove);
     expect(events[shot]).toMatchObject({ reaction: true, unit: 'a1' });
-    if (u.alive) expect(u.pos).toEqual({ x: 6, y: 10 });
+    if (u.alive) expect(u.pos).toEqual({ x: 6, y: 10, z: 0 });
   });
 
   it('grenades damage everyone in the blast and destroy cover', () => {
@@ -87,8 +88,8 @@ describe('actions', () => {
     const g = addUnit(s, 's1', 'grenadier', 0, 0);
     const sp = addUnit(s, 's2', 'specialist', 0, 1);
     addUnit(s, 'a1', 'trooper', 19, 19);
-    expect(canTargetTile(s, sp, 'grenade', { x: 12, y: 0 })).toBe(false);
-    expect(canTargetTile(s, g, 'launch', { x: 12, y: 0 })).toBe(true);
+    expect(canTargetTile(s, sp, 'grenade', { x: 12, y: 0, z: 0 })).toBe(false);
+    expect(canTargetTile(s, g, 'launch', { x: 12, y: 0, z: 0 })).toBe(true);
   });
 });
 
@@ -244,9 +245,9 @@ describe('concealment and pods', () => {
     s.concealed = true;
     addUnit(s, 's1', 'specialist', 0, 10);
     const a = addUnit(s, 'a1', 'trooper', 20, 10, { podId: 'p1' });
-    s.pods.push({ id: 'p1', active: false, unitIds: ['a1'], patrol: [{ x: 2, y: 10 }], patrolIndex: 0 });
+    s.pods.push({ id: 'p1', active: false, unitIds: ['a1'], patrol: [{ x: 2, y: 10, z: 0 }], patrolIndex: 0 });
     const sim = new Sim(s, new Rng(1), [0]);
-    sim.moveAlong(a, Array.from({ length: 15 }, (_, i) => ({ x: 19 - i, y: 10 })), 0);
+    sim.moveAlong(a, Array.from({ length: 15 }, (_, i) => ({ x: 19 - i, y: 10, z: 0 })), 0);
     expect(s.concealed).toBe(false);
     expect(sim.events.find((e) => e.t === 'concealmentBroken')).toMatchObject({ reason: 'patrol', unit: 's1', by: 'a1', range: 8 });
     expect(sim.events.find((e) => e.t === 'podActivated')).toMatchObject({ cause: 'patrol', unit: 's1', by: 'a1' });
@@ -256,7 +257,7 @@ describe('concealment and pods', () => {
 describe('recovery missions', () => {
   function recovery() {
     const s = field();
-    s.mission = { kind: 'recovery', turnsLeft: 3, item: { pos: { x: 4, y: 0 }, carrier: null, evacuated: false }, evacZone: [{ x: 0, y: 5 }], terminal: null, objectiveUnit: null, objectiveDone: false, hackBonus: 0, reinforcements: [] };
+    s.mission = { kind: 'recovery', turnsLeft: 3, item: { pos: { x: 4, y: 0, z: 0 }, carrier: null, evacuated: false }, evacZone: [{ x: 0, y: 5 }], terminal: null, objectiveUnit: null, objectiveDone: false, hackBonus: 0, reinforcements: [] };
     const a = addUnit(s, 's1', 'specialist', 0, 0);
     const b = addUnit(s, 's2', 'specialist', 1, 0);
     addUnit(s, 'a1', 'trooper', 19, 19);
@@ -335,7 +336,7 @@ describe('turn flow', () => {
     expect(executeCommand(s, { type: 'pass' }, ctx(1, both)).ok).toBe(false);
     expect(run(s, { type: 'pass' }, ctx(0, both))).toEqual([{ t: 'commandPassed', to: 1 }]);
     run(s, { type: 'move', unit: 's2', to: { x: 1, y: 2 } }, ctx(1, both));
-    expect(s.units.find((u) => u.id === 's2')!.pos).toEqual({ x: 1, y: 2 });
+    expect(s.units.find((u) => u.id === 's2')!.pos).toEqual({ x: 1, y: 2, z: 0 });
     // Alone, there's nobody to pass it to.
     expect(executeCommand(s, { type: 'pass' }, ctx(1, [1])).ok).toBe(false);
     // Nor to a partner with nothing left to do.
@@ -394,8 +395,9 @@ describe('maps', () => {
       const scout = { ...s.units[0]!, team: 'xcom' as const };
       s.units = [scout];
       const reach = computeReach(s, scout, 10_000);
-      const targets = [...Object.values(map.podSpawns).flat(), ...(map.item ? [map.item] : []), ...map.evacZone];
-      for (const t of targets) expect(reach.cost.has(t.y * s.width + t.x), `${t.x},${t.y}`).toBe(true);
+      const targets: Place[] = [...Object.values(map.podSpawns).flat(), ...(map.item ? [map.item] : []), ...map.evacZone];
+      // Upstairs too, on maps with storeys (docs/FASE6-PLAN.md).
+      for (const t of targets) expect(reach.cost.has(nodeOf(s, toPos(t))), `${def.id} ${t.x},${t.y},${t.z ?? 0}`).toBe(true);
     }
   });
 });
@@ -405,7 +407,7 @@ describe('alien AI', () => {
     for (let seed = 1; seed <= 6; seed++) {
       const s = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(seed) });
       const sim = new Sim(s, new Rng(seed), [0]);
-      const spots = [{ x: 12, y: 15 }, { x: 13, y: 15 }, { x: 14, y: 16 }, { x: 11, y: 16 }, { x: 15, y: 15 }, { x: 10, y: 15 }];
+      const spots = [{ x: 12, y: 15, z: 0 }, { x: 13, y: 15, z: 0 }, { x: 14, y: 16, z: 0 }, { x: 11, y: 16, z: 0 }, { x: 15, y: 15, z: 0 }, { x: 10, y: 15, z: 0 }];
       s.units.filter((u) => u.team === 'xcom').forEach((u, i) => (u.pos = spots[i]!));
       s.concealed = false;
       sim.activatePods(s.pods.map((p) => p.id), { cause: 'sighted' });
@@ -484,5 +486,6 @@ describe('replication', () => {
       }
       expect(client).toEqual(host);
     }
-  });
+    // Eighteen missions of up to 700 orders, most of them on generated maps with storeys: room for a loaded machine.
+  }, 20_000);
 });
