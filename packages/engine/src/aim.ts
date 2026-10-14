@@ -122,7 +122,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   const mods: Modifier[] = [{ label: 'Puntería', value: st.aim + sm.aim }];
   if (weapon.aim) mods.push({ label: weapon.melee ? 'Arma cuerpo a cuerpo' : 'Arma', value: weapon.aim });
   if (def.aim) mods.push({ label: def.name, value: def.aim });
-  if (weapon.melee && sm.meleeAim) mods.push({ label: 'Maestro de la espada', value: sm.meleeAim });
+  if (weapon.melee && sm.meleeAim) mods.push({ label: 'Maestro del machete', value: sm.meleeAim });
   if (shooter.disoriented) mods.push({ label: 'Desorientado', value: -DISORIENTED_AIM });
   if (shooter.suppressedBy) {
     const by = s.units.find((u) => u.id === shooter.suppressedBy);

@@ -67,11 +67,12 @@ export const MAPS: Record<string, MapDef> = {
       '.xx......................hEEE.',
       '..............................',
     ],
+    // The dead's, like every ordinary mission (docs/ZOMBIS-PRIMERO.md).
     pods: {
-      '1': ['trooper', 'lancer'],
-      '2': ['trooper', 'officer'],
-      '3': ['trooper', 'mec', 'xenoid'],
-      '4': ['lancer', 'xenoid'],
+      '1': ['zombie', 'zombie'],
+      '2': ['zombie', 'zombie', 'bloater'],
+      '3': ['zombie', 'mec', 'xenoid'],
+      '4': ['sectoid', 'xenoid'],
     },
   },
   // Phase 6's first building of several storeys (docs/FASE6-PLAN.md), for the

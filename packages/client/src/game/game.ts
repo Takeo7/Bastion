@@ -15,6 +15,9 @@ import {
   BAD_LUCK_MISSES,
   blastRadius,
   blastTiles,
+  breachedWalls,
+  breachLine,
+  breaksFloor,
   broughtBack,
   buildPath,
   canTargetTile,
@@ -28,6 +31,7 @@ import {
   DIRS8,
   doorTiles,
   ENEMY_FILES,
+  fallLine,
   findLabel,
   distance,
   endsTurn,
@@ -53,12 +57,15 @@ import {
   rangedTargets,
   reachesToSearch,
   nodeOf,
+  heightAt,
   kindAt,
   toPos,
   canStandOn,
   SCAVENGE,
   SEARCH_SPOTS,
   searchableTiles,
+  RUBBLE_TEXT,
+  samePos,
   searchLine,
   searchSpot,
   sightOrigin,
@@ -112,7 +119,7 @@ import { SONG, SongFx, SongMarks } from './songFx';
 import { setTimeScale, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
-import { CombatTips } from './combatTips';
+import { CombatTips, shootsFromRange } from './combatTips';
 import { playArrival } from './arrivals';
 import { graphics } from '../settings';
 
@@ -853,7 +860,7 @@ export class Game {
       if (e.t === 'turnBegan') this.plans.clear();
       else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') this.plans.delete(e.unit);
       if (!secured && this.view.mission.objectiveDone) this.storyRadio('objective');
-      if (item.e.t === 'tileChanged') this.mapView.rebuild(this.view);
+      if (item.e.t === 'tileChanged' || item.e.t === 'floorBroken') this.mapView.rebuild(this.view);
       this.refreshView();
       this.refreshStatus();
       this.tips.event(item.e, this.view);
@@ -1281,6 +1288,11 @@ export class Game {
           this.sfx.glass(tileToWorld(e.pos, 1.3));
           return;
         }
+        // A breached wall (docs/FASE7.md §4) bursts higher and in brick and plaster, not in the cover's colours.
+        if (before === 'wall') {
+          this.fx.debris(tileToWorld(e.pos, 1.2), 0x9a8a78, 12);
+          return;
+        }
         this.fx.debris(tileToWorld(e.pos, before === 'high' ? 1.1 : 0.45), before === 'low' ? 0x8f6c45 : 0x3f7480, 7);
         return;
       }
@@ -1390,6 +1402,35 @@ export class Game {
       case 'noise':
         this.playNoise(e);
         return;
+      case 'floorBroken': {
+        // docs/FASE7.md §5: the slab gives way where the grenade went off; the hole opens with the rebuild after it.
+        if (!this.mapView.isVisible(e.pos.x, e.pos.y)) return;
+        const at = tileToWorld(e.pos, 0.1);
+        look(at);
+        this.fx.debris(at, 0x8f6c45, 14);
+        if (cam()) this.rig.shake(0.2, 0.3);
+        this.hud.log(RUBBLE_TEXT.floor, '#ffb070');
+        // What the squad came for, lying there, goes down with it (its itemDropped follows).
+        const item = v.mission.item;
+        if (item && !item.carrier && item.pos && samePos(toPos(item.pos), e.pos)) this.hud.log(RUBBLE_TEXT.item, '#ffd23a');
+        await wait(cam() ? 0.45 : 0.2);
+        return;
+      }
+      case 'fell': {
+        // Down with the floor (docs/FASE7.md §5): the camera holds until the body lands; the damage follows as `damaged`.
+        const u = getUnit(v, e.unit)!;
+        // An enemy falling out of sight is neither seen nor told.
+        if (!this.shownToSquad(u) && !this.mapView.isVisible(e.to.x, e.to.y)) return;
+        this.hud.log(fallLine(u.name, Math.max(1, e.from.z - heightAt(v, e.to))), u.team === 'alien' ? '#54d1ff' : '#ff6b5a');
+        const to = tileToWorld(e.to);
+        look(this.units.worldPos(u.id).lerp(to, 0.5));
+        this.fx.floatText(this.units.chestPos(u.id), RUBBLE_TEXT.fallFloat, 'alert');
+        // Arte's fall resolves as it touches down.
+        await this.units.fall(u.id, e.to);
+        this.sfx.land(to);
+        await wait(cam() ? 0.35 : 0.15);
+        return;
+      }
       case 'searched': {
         const u = getUnit(v, e.unit)!;
         const at = tileToWorld(e.tile, 0.6);
@@ -1733,6 +1774,9 @@ export class Game {
     this.sfx.explosion(to);
     if (cam()) this.rig.shake(0.45, 0.6);
     void this.fx.explosion(to, blastRadius(u, e.ability) || 2.5);
+    // docs/FASE7.md §4: the walls it breaks, said once for the whole blast; each comes down with its tileChanged.
+    const walls = breachedWalls(this.view, e.ability, e.target, u).length;
+    if (walls && this.mapView.isVisible(e.target.x, e.target.y)) this.hud.log(breachLine(walls), '#ffb070');
     await wait(0.4);
   }
 
@@ -1813,11 +1857,12 @@ export class Game {
   private refreshView(): void {
     this.mapView.setVisibility(teamVisibility(this.view, 'xcom'));
     this.visibleAliens = new Set(visibleEnemies(this.view, 'xcom').map((u) => u.id));
-    const watchers = this.view.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id));
+    // Only those that shoot: cover means nothing against the dead, who come to bite (docs/ZOMBIS-PRIMERO.md).
+    const watchers = this.view.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && shootsFromRange(a));
     const selected = this.selected ? getUnit(this.view, this.selected) : undefined;
     this.units.sync(this.view, this.visibleAliens, (u) => {
       if (u.team === 'xcom') {
-        // With no enemy in sight nobody flanks anyone: the shield only shows cover, never the red "flanked".
+        // With no shooter in sight nobody flanks anyone: the shield only shows cover, never the red "flanked".
         if (!watchers.length) return hasAnyCover(this.view, u.pos) ? (Math.max(...coverSides(this.view, u.pos)) as 0 | 1 | 2) : null;
         return Math.min(...watchers.map((a) => coverAgainst(this.view, u.pos, a.pos))) as 0 | 1 | 2;
       }
@@ -2822,7 +2867,8 @@ export class Game {
       case 'hack':
         return `Probabilidad: ${hackChance(s, u)} %`;
       case 'reload':
-        return `Cargador: ${u.ammo}/${attackWeapon(u, 'shoot').clip}`;
+        // The spares too (docs/FASE7.md): «3 de repuesto», «sin repuesto».
+        return `Cargador: ${u.ammo}/${attackWeapon(u, 'shoot').clip}${u.mags === undefined ? '' : u.mags ? ` · ${u.mags} de repuesto` : ' · sin repuesto'}`;
     }
     return undefined;
   }
@@ -2873,11 +2919,14 @@ export class Game {
       const center = throwTile(u, ability, tile);
       const area = blastTiles(this.state, ability, center, u);
       const allies = area.filter((t) => unitAt(this.state, t)?.team === 'xcom');
-      this.overlays.showBlast(center, area, canTargetTile(this.state, u, ability, center), allies);
+      // docs/FASE7.md §4–5: the walls a frag grenade breaches are framed, and the note says so, and whether the floor goes.
+      const walls = breachedWalls(this.state, ability, center, u);
+      this.overlays.showBlast(center, area, canTargetTile(this.state, u, ability, center), allies, walls);
       this.overlays.setHover(null);
       const loud = noiseOf(this.state, u, ability);
+      const rubble = [walls.length ? (walls.length === 1 ? 'Rompe una pared' : `Rompe ${walls.length} paredes`) : '', breaksFloor(this.state, ability, center) ? 'Hunde el suelo' : ''];
       // A jump lands the soldier there: at night, whether it is in the light.
-      const note = [loud ? `Ruido ${loud}` : '', ABILITIES[ability].teleport ? this.litNote(center) : ''].filter(Boolean).join(' · ');
+      const note = [loud ? `Ruido ${loud}` : '', ...rubble, ABILITIES[ability].teleport ? this.litNote(center) : ''].filter(Boolean).join(' · ');
       if (note) this.overlays.setNote(center, note);
       return;
     }
@@ -3224,7 +3273,9 @@ export class Game {
       }
       return;
     }
-    if (occupant?.team === 'xcom') {
+    // With an area armed, a soldier's tile is a place to throw at like any other: the preview already
+    // warns «¡Aliado!», and a grenade upstairs may be meant to sink the floor under one (docs/FASE7.md §5).
+    if (occupant?.team === 'xcom' && this.mode.kind !== 'tile') {
       if (this.isMine(occupant)) this.select(occupant.id);
       else this.hud.toast(`${occupant.name} es de tu compañero.`);
       return;

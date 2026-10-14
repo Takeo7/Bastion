@@ -900,6 +900,15 @@ em.bite::before {
   border-radius: 2px 2px 0 0;
 }
 
+/* The spare magazines (docs/FASE7.md): small after the clip; none left, red. */
+.stat .mags {
+  font-size: 12px;
+}
+
+.stat .mags.none {
+  color: var(--warn);
+}
+
 /* The weapon and its tier, coloured like the guns: steel, magnetic, plasma. */
 .unit-weapon {
   display: inline-flex;
@@ -2295,17 +2304,12 @@ dl.controls dd {
   }
 }
 
-/* Narrower screens: slimmer sheet and buttons, smaller cards, so seven
-   abilities still fit in one row at 1024 px. */
-@media (max-width: 1200px) {
-  .hud {
-    --unit-w: 206px;
-    --end-w: 150px;
-  }
-  /* The strip gets two rows: turn and players, then the mission (whose
-     objective may wrap) across the whole width. */
+/* The strip gets two rows: turn, floor and players, then the mission (whose
+   objective may wrap) across the whole width. Up to 1366 px: at 1280, with
+   two players and the floor, one row needed 880 px of 816 and cut the
+   objective and the partner (UX-REVISION-3 #2). */
+@media (max-width: 1366px) {
   .top {
-    max-width: calc(100% - 2 * 214px);
     flex-wrap: wrap;
   }
   .top > * {
@@ -2322,6 +2326,18 @@ dl.controls dd {
   .mission-goal {
     text-align: center;
     line-height: 1.15;
+  }
+}
+
+/* Narrower screens: slimmer sheet and buttons, smaller cards, so seven
+   abilities still fit in one row at 1024 px. */
+@media (max-width: 1200px) {
+  .hud {
+    --unit-w: 206px;
+    --end-w: 150px;
+  }
+  .top {
+    max-width: calc(100% - 2 * 214px);
   }
   .turn-label {
     font-size: 14px;
@@ -2610,6 +2626,12 @@ body:has(.strat) .fps-counter {
   max-width: 44ch;
   white-space: normal;
   line-height: 1.15;
+}
+
+/* Typed text never breaks at its spaces (white-space: pre): here it has to, or the two lines never
+   came and the objective was cut on one («Recuperad las medicinas y eva…» at 1280 px). */
+.mission-goal .typed {
+  white-space: pre-wrap;
 }
 
 /* ------------------------------- phase 2: searching, backpack, noise, horde */

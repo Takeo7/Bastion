@@ -38,6 +38,9 @@ import { unitPosNow } from './unitViews';
 // soldiers of both count.
 
 const WALLISH = new Set<TileKind>(['wall', 'door', 'doorOpen', 'window', 'windowBroken']);
+/** BuildingPlan.before: what a tile was when the map was built. */
+const WAS_WALL = 1;
+const WAS_SLAB = 2;
 export const isWallLike = (k: TileKind | undefined): boolean => k !== undefined && WALLISH.has(k);
 const at = (s: GameState, x: number, y: number): TileKind | undefined => (x < 0 || y < 0 || x >= s.width || y >= s.height ? undefined : s.tiles[y * s.width + x]);
 
@@ -122,6 +125,13 @@ export class BuildingPlan {
   readonly massive: Uint8Array;
   /** The kit of walls that belong to no building (a perimeter, a lone stretch). */
   readonly looseKit: KitId;
+  /**
+   * What each tile was when the map was built, per storey (0 the ground):
+   * WAS_WALL for a wall, a door or a window, WAS_SLAB for a storey's floor.
+   * The rules only ever take these away (docs/FASE7.md §4, §5): a wall
+   * that is low cover now was blown down, a slab that is gone was blown through.
+   */
+  private readonly before: Uint8Array[] = [];
 
   constructor(readonly s: GameState) {
     const { width: w, height: h } = s;
@@ -133,7 +143,7 @@ export class BuildingPlan {
     this.massive = new Uint8Array(n);
     this.looseKit = s.biome === 'facility' ? 'fence' : 'brick';
     this.findRaised();
-    const wallAt = (i: number) => isWallLike(s.tiles[i]);
+    const wallAt = (i: number) => this.wallIn(i);
     for (let y = 0; y + 1 < h; y++) {
       for (let x = 0; x + 1 < w; x++) {
         const square = [y * w + x, y * w + x + 1, (y + 1) * w + x, (y + 1) * w + x + 1];
@@ -277,6 +287,37 @@ export class BuildingPlan {
       for (const i of tiles) if (this.inside[i]) this.floor[i] = 1;
     }
     if (s.biome === 'wilds') this.findRuins();
+    for (let k = 0; k <= (s.levels?.length ?? 0); k++) {
+      const tiles = k ? s.levels![k - 1]!.tiles : s.tiles;
+      this.before.push(Uint8Array.from(tiles, (t) => (isWallLike(t ?? undefined) ? WAS_WALL : 0) | (k && t !== null ? WAS_SLAB : 0)));
+    }
+  }
+
+  /** Storey k's tiles (0 the ground) as they are now. */
+  private tilesAt(k: number): readonly (TileKind | null)[] | undefined {
+    return k ? this.s.levels?.[k - 1]?.tiles : this.s.tiles;
+  }
+
+  /**
+   * Tile i of storey k was a wall and is low cover now: blown down to rubble
+   * (docs/FASE7.md §4). The engine marks it ('breach'), so it is known after a
+   * reload too; before that, against the map as it was built.
+   */
+  breached(i: number, k: number): boolean {
+    if (this.tilesAt(k)?.[i] !== 'low') return false;
+    if ((this.before[k]?.[i] ?? 0) & WAS_WALL) return true;
+    const decor = k ? this.s.levels?.[k - 1]?.decor : this.s.decor;
+    return decorOf(decor?.[i])?.kind === 'breach';
+  }
+
+  /** The ground's tile i is part of a building's walls: a wall, a door, a window, or one blown down (breached). */
+  private wallIn(i: number): boolean {
+    return isWallLike(this.s.tiles[i]) || (this.s.tiles[i] === 'low' && decorOf(this.s.decor?.[i])?.kind === 'breach');
+  }
+
+  /** Storey k's (≥ 1) slab at tile i was there and is gone: blown through (docs/FASE7.md §5). */
+  holed(i: number, k: number): boolean {
+    return k > 0 && !!((this.before[k]?.[i] ?? 0) & WAS_SLAB) && this.tilesAt(k)?.[i] === null;
   }
 
   /** What stands on storey k (≥ 1) of tile (x, y): null where there's no slab (open air, a stairwell), or off the map. */
@@ -342,7 +383,7 @@ export class BuildingPlan {
   private findRuins(): void {
     const s = this.s;
     const { width: w, height: h } = s;
-    const loose = (i: number) => isWallLike(s.tiles[i]) && this.owner[i] === -1 && !this.massive[i];
+    const loose = (i: number) => this.wallIn(i) && this.owner[i] === -1 && !this.massive[i];
     const seen = new Uint8Array(w * h);
     for (let start = 0; start < w * h; start++) {
       if (seen[start] || !loose(start)) continue;
@@ -374,7 +415,7 @@ export class BuildingPlan {
           const i = y * w + x;
           if (this.owner[i] !== -1) continue;
           const edge = x === x0 || y === y0 || x === x1 || y === y1;
-          if (isWallLike(s.tiles[i])) this.owner[i] = index;
+          if (this.wallIn(i)) this.owner[i] = index;
           else if (!edge) {
             this.owner[i] = index;
             this.inside[i] = 1;
@@ -1226,6 +1267,8 @@ const STAIR_WOOD = new THREE.Color(0x6e4c36);
 const DECK = new THREE.Color(0x5c6064);
 const STEEL = new THREE.Color(0x3c4044);
 const CONCRETE = new THREE.Color(0x8a8a86);
+/** What's left of a wall blown down (docs/FASE7.md §4), as a share of its storey: about low cover's height. */
+const BREACH_HEIGHT = 0.36;
 /** A parapet's height (a little under the low cover's, which counts from the soldier's feet) and thickness. */
 const PARAPET = 0.82;
 const PARAPET_THICK = 0.2;
@@ -1513,7 +1556,7 @@ const WIRE_LENGTH = 3.94 * KIT;
 export class BuildingsView {
   readonly plan: BuildingPlan;
   readonly cutaway: Cutaway;
-  /** Floors and roofs: they never change during a mission. */
+  /** Floors and roofs: they don't change during a mission, but for the slabs a blast goes through (redoUpper). */
   readonly group = new THREE.Group();
   /** Walls, doors and windows as the tiles are now. */
   readonly walls = new THREE.Group();
@@ -1538,6 +1581,10 @@ export class BuildingsView {
   dirty: Dirty | null = null;
   /** What the parapets were at the last buildWalls (they're few: drawn whole each time). */
   private parapetSignature = 0;
+  /** The storeys' floors and the roof decks one walks on, made again when a slab is blown through (redoUpper). */
+  private upper: { storeys: THREE.Mesh | null; decks: THREE.Mesh | null } = { storeys: null, decks: null };
+  /** The holes in the slabs when they were last made. */
+  private holesMade = 0;
 
   constructor(
     s: GameState,
@@ -1612,8 +1659,8 @@ export class BuildingsView {
     const solid = new Surfaces();
     const raised = new Surfaces();
     this.raisedSurfaces(s, raised, solid);
-    const make = (surfaces: Surfaces, roof: boolean, shadows = roof, weathered = roof, occludes = false, fades = roof) => {
-      if (surfaces.empty) return;
+    const make = (surfaces: Surfaces, roof: boolean, shadows = roof, weathered = roof, occludes = false, fades = roof): THREE.Mesh | null => {
+      if (surfaces.empty) return null;
       const material = new THREE.MeshStandardMaterial({ map: mapAtlasTexture(), vertexColors: true, roughness: roof ? 0.8 : 0.9 });
       swatchPatch(material);
       if (weathered) weatherPatch(material);
@@ -1629,13 +1676,45 @@ export class BuildingsView {
       mesh.castShadow = shadows;
       mesh.matrixAutoUpdate = false;
       this.group.add(mesh);
+      return mesh;
     };
     make(floors, false);
     make(roofs, true);
     make(raised, false, false, true, true);
     make(solid, false, true, false, true);
-    make(storeys, false, true, false, false, true);
-    make(decks, true);
+    this.upper = { storeys: make(storeys, false, true, false, false, true), decks: make(decks, true) };
+  }
+
+  /**
+   * The storeys' floors (with their stairs) and the decks of roofs one walks
+   * on, made again as the slabs are now: a slab blown through leaves its
+   * hole (docs/FASE7.md §5). Their meshes and materials stay; only the
+   * geometry is new.
+   */
+  private redoUpper(s: GameState): void {
+    const storeys = new Surfaces();
+    const decks = new Surfaces();
+    for (const b of this.plan.buildings) {
+      if (b.kind === 'ruin') continue;
+      const looks = looksOf(b);
+      if (b.leveled) this.storeyFloors(b, storeys, looks);
+      if (b.walkableRoof) this.roofDeck(b, decks, looks);
+    }
+    this.stairs(s, storeys);
+    for (const [mesh, surfaces] of [[this.upper.storeys, storeys], [this.upper.decks, decks]] as const) {
+      if (!mesh) continue;
+      const old = mesh.geometry;
+      mesh.geometry = surfaces.geometry();
+      this.geometries[this.geometries.indexOf(old)] = mesh.geometry;
+      old.dispose();
+    }
+  }
+
+  /** How many slabs have been blown through, at the last look (BuildingPlan.holed). */
+  private holes(s: GameState): number {
+    let n = 0;
+    for (let k = 1; k <= (s.levels?.length ?? 0); k++) for (let i = 0; i < s.width * s.height; i++) if (this.plan.holed(i, k)) n++;
+    return n;
   }
 
   /**
@@ -1699,13 +1778,21 @@ export class BuildingsView {
   /**
    * A building's stairs (a ladder tile whose decor is 'stairs', facing the
    * way it climbs): a flight of solid steps across the tile, from its back
-   * edge up to the landing a storey higher on the tile it faces. No walls
-   * round it: the rules let one step off the top on any open side.
+   * edge up to the landing a storey higher on the tile it faces. The rules
+   * let one on and off them only by that landing (docs/FASE7.md), so they
+   * have a banister on each side of the flight and a railing round the
+   * stairwell above, open only to the landing; none against a wall.
    */
   private stairs(s: GameState, out: Surfaces): void {
     const { width: w, height: h } = s;
     const STEPS = 9;
     const half = 0.4;
+    const tilesOf = (k: number) => (k === 0 ? s.tiles : s.levels?.[k - 1]?.tiles);
+    /** A wall (or a door, a window) on storey k at (x, y): no railing needed against it. */
+    const walled = (x: number, y: number, k: number) => {
+      const t = x < 0 || y < 0 || x >= w || y >= h ? 'wall' : tilesOf(k)?.[y * w + x];
+      return t === 'wall' || t === 'window' || t === 'windowBroken' || t === 'door' || t === 'doorOpen';
+    };
     for (let k = 0; k <= (s.levels?.length ?? 0); k++) {
       const tiles = k ? s.levels![k - 1]!.tiles : s.tiles;
       const decor = k ? s.levels![k - 1]!.decor : s.decor;
@@ -1730,7 +1817,70 @@ export class BuildingsView {
           const [az, bz] = d.y !== 0 ? [y + 0.5 + Math.min(u0 * d.y, u1 * d.y), y + 0.5 + Math.max(u0 * d.y, u1 * d.y)] : [y + 0.5 - half, y + 0.5 + half];
           out.box(V(ax, base, az), V(bx, top, bz), SWATCH.flat, n % 2 ? wood : wood.clone().multiplyScalar(0.92), b);
         }
+        this.banisters(out, x, y, k, d, base, STEPS, wood.clone().multiplyScalar(1.25), b, walled);
       }
+    }
+  }
+
+  /**
+   * The railings of the stairs on tile (x, y) of storey k, climbing towards
+   * `d` from `base`: along each side of the flight a handrail stepping up
+   * with the treads, on balusters; round the stairwell a storey up, on each
+   * of its edges but the landing's, a rail on posts at the floor's height.
+   * Boxes in the stairs' own surfaces: no draws of their own.
+   */
+  private banisters(out: Surfaces, x: number, y: number, k: number, d: { x: number; y: number }, base: number, steps: number, tint: THREE.Color, b: number, walled: (x: number, y: number, k: number) => boolean): void {
+    const RAIL = 0.9;
+    const T = 0.035;
+    const cx = x + 0.5;
+    const cz = y + 0.5;
+    /** A box from (along, across, height) to (along, across, height), in the stairs' own axes: `along` up the climb, `across` to its left. */
+    const box = (u0: number, v0: number, h0: number, u1: number, v1: number, h1: number) => {
+      const ax = cx + d.x * u0 - d.y * v0;
+      const az = cz + d.y * u0 + d.x * v0;
+      const bx = cx + d.x * u1 - d.y * v1;
+      const bz = cz + d.y * u1 + d.x * v1;
+      out.box(V(Math.min(ax, bx), h0, Math.min(az, bz)), V(Math.max(ax, bx), h1, Math.max(az, bz)), SWATCH.flat, tint, b);
+    };
+    /** A point in the stairs' axes. */
+    const at = (u: number, v: number, h: number) => V(cx + d.x * u - d.y * v, h, cz + d.y * u + d.x * v);
+    const across = V(-d.y, 0, d.x);
+    const up = V(0, 1, 0);
+    /** The handrail's height over the flight at `u`, parallel to its slope. */
+    const rail = (u: number) => base + (u + 0.5) * STOREY + RAIL;
+    out.level = k;
+    for (const side of [1, -1]) {
+      // Against a wall on that side, none.
+      if (walled(x - d.y * side, y + d.x * side, k)) continue;
+      const v = side * 0.44;
+      // The handrail: one bar along the slope, from the foot to the landing.
+      const [a, z] = [-0.5, 0.5];
+      const [ha, hz] = [rail(a), rail(z)];
+      const faces: [THREE.Vector3[], THREE.Vector3][] = [
+        [[at(a, v - T, ha), at(a, v + T, ha), at(z, v + T, hz), at(z, v - T, hz)], up],
+        [[at(a, v - T, ha - 0.05), at(z, v - T, hz - 0.05), at(z, v + T, hz - 0.05), at(a, v + T, ha - 0.05)], up.clone().negate()],
+        [[at(a, v + T, ha - 0.05), at(z, v + T, hz - 0.05), at(z, v + T, hz), at(a, v + T, ha)], across],
+        [[at(a, v - T, ha - 0.05), at(a, v - T, ha), at(z, v - T, hz), at(z, v - T, hz - 0.05)], across.clone().negate()],
+      ];
+      for (const [corners, facing] of faces) out.poly(corners, corners.map((c) => [c.x + c.z, c.y] as [number, number]), SWATCH.flat, tint, b, facing);
+      // Balusters on every third tread, and a newel post at the foot.
+      for (let n = 1; n < steps; n += 3) {
+        const u = -0.5 + (n + 0.5) / steps;
+        box(u - T, v - T, base + ((n + 1) / steps) * STOREY, u + T, v + T, rail(u) - 0.03);
+      }
+      box(-0.5, v - T, base, -0.5 + 2 * T, v + T, ha + 0.04);
+    }
+    // The stairwell above, open to the landing (the tile the stairs face).
+    out.level = k + 1;
+    const floor = base + STOREY;
+    for (const [du, dv] of [[-1, 0], [0, 1], [0, -1]] as const) {
+      if (walled(x + d.x * du - d.y * dv, y + d.y * du + d.x * dv, k + 1)) continue;
+      // The edge's two ends, in (along, across), and a post at each.
+      const [ua, va, ub, vb] = du ? [-0.5, -0.5, -0.5 + 2 * T, 0.5] : [-0.5, dv * 0.5 - T, 0.5, dv * 0.5 + T];
+      box(ua, va, floor + RAIL - 0.05, ub, vb, floor + RAIL);
+      box(ua, va, floor + 0.42, ub, vb, floor + 0.46);
+      const posts: [number, number][] = du ? [[-0.5, -0.5], [-0.5, 0.5]] : [[-0.5, dv * 0.5], [0.5, dv * 0.5]];
+      for (const [u, vv] of posts) box(u - T, vv - T, floor, u + T, vv + T, floor + RAIL);
     }
   }
 
@@ -1777,6 +1927,12 @@ export class BuildingsView {
    * them); false if some pieces are still loading.
    */
   buildWalls(s: GameState, redo: Set<string> | null = null, area: Uint8Array | null = null): boolean {
+    // A slab blown through since: the storeys' floors again, with its hole (rebuilt with the walls, as a blast is).
+    const holes = this.holes(s);
+    if (holes !== this.holesMade) {
+      this.holesMade = holes;
+      this.redoUpper(s);
+    }
     this.merged.begin(redo);
     for (const g of this.wallParts.geometries) g.dispose();
     this.wallParts = { geometries: [] };
@@ -1793,7 +1949,8 @@ export class BuildingsView {
     let level = 0;
     let layer: readonly (TileKind | null)[] = s.tiles;
     const at = (x: number, y: number): TileKind | undefined => (x < 0 || y < 0 || x >= w || y >= h ? undefined : (layer[y * w + x] ?? undefined));
-    const wallish = (x: number, y: number) => isWallLike(at(x, y));
+    /** Wall-like, or a wall blown down (it still joins the walls beside it). */
+    const wallish = (x: number, y: number) => isWallLike(at(x, y)) || (x >= 0 && y >= 0 && x < w && y < h && plan.breached(y * w + x, level));
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -1816,7 +1973,7 @@ export class BuildingsView {
       out: Vec2,
       between: boolean,
       b: number,
-      o: { along?: number; thick?: number; square?: boolean; tint?: boolean; open?: boolean; roof?: boolean } = {},
+      o: { along?: number; thick?: number; square?: boolean; tint?: boolean; open?: boolean; roof?: boolean; tall?: number } = {},
     ) => {
       const parts = pieceNow(id);
       if (!parts) {
@@ -1831,7 +1988,7 @@ export class BuildingsView {
       const thick = o.thick ?? THICK;
       q.setFromAxisAngle(up, Math.atan2(out.x, out.y));
       pos.set(x, base, z);
-      scale.set(o.along ?? 1, 1, 1);
+      scale.set(o.along ?? 1, o.tall ?? 1, 1);
       m.compose(pos, q, scale);
       thicken.makeScale(o.square ? thick : 1, 1, thick);
       for (const part of parts) {
@@ -1952,14 +2109,16 @@ export class BuildingsView {
         if (kind === null || kind === undefined || kind === 'roof') continue;
         const b = plan.owner[i]!;
         const loose = b < 0;
-        if (loose && (level > 0 || !isWallLike(kind) || plan.massive[i])) continue;
+        /** A wall blown down to low cover (docs/FASE7.md §4): laid as a wall, but its stump and the wall above the gap. */
+        const broken = kind === 'low' && plan.breached(i, level);
+        if (loose && (level > 0 || (!isWallLike(kind) && !broken) || plan.massive[i])) continue;
         if (!level && plan.massive[i]) continue;
         const building = loose ? undefined : plan.buildings[b]!;
         const base = building ? building.base + level * STOREY : (s.elev[i] ?? 0) * STOREY;
         const outerKit = KITS[building ? building.kit : plan.looseKit];
         const cx = x + 0.5;
         const cz = y + 0.5;
-        if (!isWallLike(kind)) {
+        if (!isWallLike(kind) && !broken) {
           // A gap in the outline (a loading bay): a lintel over it. Ruins are just broken.
           const bd = building!;
           if (bd.kind === 'ruin') continue;
@@ -2015,7 +2174,7 @@ export class BuildingsView {
           const { out, between, other } = facing(run, 0, 0);
           const kit = between ? BETWEEN : outerKit;
           const along = run === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
-          if (!loose) storeys(kind, cx, cz, run === 0 ? x : y, out, between, b, other);
+          if (!loose) storeys(broken ? 'wall' : kind, cx, cz, run === 0 ? x : y, out, between, b, other);
           if (kind === 'door' || kind === 'doorOpen') {
             putAll(kit.door, cx, cz, base, out, between, b, kit, kind === 'doorOpen');
             // A shop's name over its front door: the first door of its outline (whatever part of the map is being redone).
@@ -2036,6 +2195,11 @@ export class BuildingsView {
               pane.matrices.push(new THREE.Matrix4().compose(new THREE.Vector3(cx, base, cz), q.clone(), new THREE.Vector3(1, 1, 1)));
               pane.cut.push(b + 1, between ? 0 : out.x, between ? 0 : out.y, base);
             }
+          } else if (broken) {
+            // Blown down (docs/FASE7.md §4): a stump of the wall at low cover's height and the wall over the gap
+            // left standing, its lintel (the storey above stands); the rubble on it is the map's (mapView).
+            kit.wall.forEach((id, n) => put(id, cx, cz, base, out, between, b, { thick: kit.thick, tint: n === 0, tall: BREACH_HEIGHT }));
+            putAll(kit.lintel, cx, cz, base, out, between, b, kit);
           } else {
             putAll(kit.wall, cx, cz, base, out, between, b, kit);
           }
@@ -2061,7 +2225,8 @@ export class BuildingsView {
           const bb = !loose && next >= 0 && next !== b && isWallLike(at(x + d.x, y + d.y)) ? next : b;
           const { out, between, other } = facing(run, d.x, d.y, bb);
           const kit = between ? BETWEEN : outerKit;
-          kit.wall.forEach((id, n) => put(id, cx + d.x * 0.25, cz + d.y * 0.25, base, out, between, bb, { along: 0.5, thick: kit.thick, tint: n === 0 }));
+          kit.wall.forEach((id, n) => put(id, cx + d.x * 0.25, cz + d.y * 0.25, base, out, between, bb, { along: 0.5, thick: kit.thick, tint: n === 0, tall: broken ? BREACH_HEIGHT : undefined }));
+          if (broken) kit.lintel.forEach((id, n) => put(id, cx + d.x * 0.25, cz + d.y * 0.25, base, out, between, bb, { along: 0.5, thick: kit.thick, tint: n === 0 }));
           if (!loose) storeys('wall', cx + d.x * 0.25, cz + d.y * 0.25, 0, out, between, bb, other, 0.5);
           if (kit.top) put(kit.top, cx + d.x * 0.25, cz + d.y * 0.25, base + STOREY, out, between, b, { along: 0.5 / WIRE_LENGTH, thick: 1 });
         });

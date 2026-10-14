@@ -191,6 +191,16 @@
   font-size: 15px;
 }
 
+:root[data-ui='mixta'] .unit-stats .stat b.mags {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+:root[data-ui='mixta'] .unit-stats .stat b.mags.none {
+  color: #ff8a78;
+  opacity: 1;
+}
+
 /* The backpack: each slot a small well; what it holds, in its colour. */
 :root[data-ui='mixta'] .unit-pack {
   border-top: 1px solid rgba(0, 0, 0, 0.5);

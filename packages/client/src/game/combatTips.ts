@@ -2,8 +2,17 @@
 // each of Lore's RADIO_TIPS is due, from the events as they are animated and the
 // state on screen (`view`). RadioTips plays them and remembers, per browser,
 // which have been heard; each id is only worked out until it has been asked for.
-import { coverAgainst, getUnit, type GameEvent, type GameState, type Slot, type TipId, type Unit } from '@bastion/engine';
+import { ABILITIES, abilitiesOf, attackWeapon, coverAgainst, getUnit, type AttackAbility, type GameEvent, type GameState, type Slot, type TipId, type Unit } from '@bastion/engine';
 import { RadioTips } from '../strategy/transmissions';
+
+/**
+ * Whether `a` shoots: an attack on an enemy with a weapon that isn't for close quarters. Only then
+ * does cover count against it: a bite or a blow ignores cover and never flanks (aim.ts), and most
+ * enemies now are the dead (docs/ZOMBIS-PRIMERO.md). The Chillón screams and the Hinchado bursts.
+ */
+export function shootsFromRange(a: Unit): boolean {
+  return abilitiesOf(a).some((id) => ABILITIES[id].target === 'enemy' && !!ABILITIES[id].weapon && !attackWeapon(a, id as AttackAbility).melee);
+}
 
 export class CombatTips {
   private readonly radio: RadioTips;
@@ -60,6 +69,12 @@ export class CombatTips {
         if (!e.unit && corpse && this.mine(corpse)) this.show('risen');
         return;
       }
+      // docs/FASE7.md: the first of mine left without spares after reloading (`view` has it spent).
+      case 'reload': {
+        const u = getUnit(view, e.unit);
+        if (u && this.mine(u) && u.mags === 0) this.show('noMags');
+        return;
+      }
       // The Oficio: the first trade one of mine uses (noisy).
       case 'sung': {
         const u = getUnit(view, e.unit);
@@ -83,7 +98,10 @@ export class CombatTips {
     // The first Hinchado in sight: keep it away from the squad.
     if (watchers.some((a) => a.template === 'bloater')) this.show('bloater');
     if (this.asked.has('flanked')) return;
-    const flanked = view.units.some((u) => u.alive && this.mine(u) && !u.evacuated && Math.min(...watchers.map((a) => coverAgainst(view, u.pos, a.pos))) === 0);
+    // Only against those that shoot: a bite ignores cover (docs/ZOMBIS-PRIMERO.md), and the lesson would come with the first zombie.
+    const shooters = watchers.filter(shootsFromRange);
+    if (!shooters.length) return;
+    const flanked = view.units.some((u) => u.alive && this.mine(u) && !u.evacuated && Math.min(...shooters.map((a) => coverAgainst(view, u.pos, a.pos))) === 0);
     if (flanked) this.show('flanked');
   }
 

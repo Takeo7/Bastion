@@ -168,7 +168,7 @@ export const KIT_CLASS: Record<Kit, ClassId> = {
 };
 
 export const KIT_NAMES: Record<Kit, string> = {
-  blade: 'la espada del Asalto',
+  blade: 'el machete del Asalto',
   shotgun: 'la escopeta del Asalto',
   cannon: 'el cañón del Granadero',
   rifle: 'el fusil de precisión del Francotirador',
@@ -251,7 +251,7 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   bladeCrit: t('assault', 0, 1, 'bladeCrit', 2, 'Golpe certero', '+10 de crítico con el Tajo por nivel.', { mods: { meleeCrit: 10 }, kit: 'blade' }),
   toughSkin: t('assault', 0, 2, 'toughSkin', 2, 'Piel dura', '+1 de salud por nivel.', { hp: 1 }),
   instinct: t('assault', 0, 3, 'instinct', 2, 'Instinto', '+5 de defensa por nivel.', { mods: { defense: 5 } }),
-  bladeMaster: t('assault', 0, 4, 'bladeMaster', 1, 'Maestro de la espada', 'El Tajo hace +2 de daño y gana +15 de puntería.', { mods: { meleeDamage: 2, meleeAim: 15 }, req: ['agu', 7], kit: 'blade' }),
+  bladeMaster: t('assault', 0, 4, 'bladeMaster', 1, 'Maestro del machete', 'El Tajo hace +2 de daño y gana +15 de puntería.', { mods: { meleeDamage: 2, meleeAim: 15 }, req: ['agu', 7], kit: 'blade' }),
   // Assault · Escopeta
   pointBlank: t('assault', 1, 0, 'pointBlank', 3, 'Quemarropa', '+5 de puntería y +4 de crítico a 4 casillas o menos, por nivel.', { mods: { closeRangeAim: 5, closeRangeCrit: 4 } }),
   slug: t('assault', 1, 0, 'slug', 1, 'Perdigón grueso', '+1 de daño con la escopeta.', { mods: { damage: 1 }, kit: 'shotgun' }),

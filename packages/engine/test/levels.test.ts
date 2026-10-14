@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { allyTargets, blastTiles, canHackFrom, inSilence, inSmoke } from '../src/abilities';
 import { previewShot } from '../src/aim';
 import { coverAgainst, coverSides } from '../src/cover';
-import { decorOf } from '../src/decor';
+import { decorCode, decorOf } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import {
   blocksSightAt,
@@ -217,6 +217,29 @@ describe('moving up and down', () => {
     expect(ends.some((p) => samePos(p, at(7, 3, 1)))).toBe(false);
   });
 
+  it("a building's stairs are left and taken at the top only by their landing, the tile they face; a ladder by any side", () => {
+    const s = building();
+    // The stairs at (2,2) climb east, onto (3,2) on the first floor.
+    s.decor = new Array(s.width * s.height).fill(0);
+    s.decor[tileIndex(s, 2, 2)] = decorCode('stairs', 1);
+    const climb = COST_ORTHO + COST_CLIMB;
+    expect(stepBetween(s, at(2, 2), at(3, 2, 1))).toBe(climb);
+    expect(stepBetween(s, at(3, 2, 1), at(2, 2))).toBe(climb);
+    // Not off the side of the flight, up or down, nor dropping into the stairwell.
+    expect(stepBetween(s, at(2, 2), at(2, 3, 1))).toBeNull();
+    expect(stepBetween(s, at(2, 3, 1), at(2, 2))).toBeNull();
+    expect(stepsFrom(s, at(2, 3, 1), 0, -1)).toEqual([]);
+    // On its own level the foot of the flight is a tile like any other.
+    expect(stepBetween(s, at(2, 3), at(2, 2))).toBe(COST_ORTHO);
+    // The upstairs is still all in reach, by the landing.
+    const u = addUnit(s, 's1', 'assault', 4, 3);
+    const reach = computeReach(s, u, 1000);
+    const path = buildPath(s, u, reach, at(2, 4, 1))!;
+    expect(path.some((p) => samePos(p, at(3, 2, 1)))).toBe(true);
+    // The ladder up the shed's side, with no stairs on it, still climbs as before.
+    expect(stepBetween(s, at(9, 7), at(10, 7, 1))).toBe(climb);
+  });
+
   it('floors are solid: nobody walks or drops through them, and enemies on another floor block nothing', () => {
     const s = building();
     // Inside, the floor above is no way down or up.
@@ -239,13 +262,17 @@ describe('moving up and down', () => {
     expect(destinations(s, u, reach()).some((d) => samePos(d.pos, ally.pos))).toBe(false);
   });
 
-  it('off a roof one drops to the street (two storeys at most), never through a roof below or out of an upper window', () => {
+  it('off a roof or out of an upper window one drops to the street (two storeys at most), never through a roof below', () => {
     const s = building();
     expect(stepBetween(s, at(7, 4, 2), at(8, 4))).toBe(COST_ORTHO + 2 * COST_DROP);
     expect(stepBetween(s, at(7, 1, 2), at(8, 1))).toBeNull();
-    // Into the first floor's window from the room, and no further: jumping out comes later (decision 4).
+    // Into the first floor's window from the room, and out of it to the street below (docs/FASE7.md).
     expect(stepBetween(s, at(6, 3, 1), at(7, 3, 1))).toBe(COST_ORTHO + COST_VAULT);
-    expect(stepBetween(s, at(7, 3, 1), at(8, 3))).toBeNull();
+    expect(stepBetween(s, at(7, 3, 1), at(8, 3))).toBe(COST_ORTHO + COST_DROP);
+    const jumper = addUnit(s, 's0', 'assault', 6, 3, { z: 1 });
+    const out = buildPath(s, jumper, computeReach(s, jumper, 1000), at(9, 3))!;
+    expect(out.slice(0, 2)).toEqual([at(7, 3, 1), at(8, 3)]);
+    s.units = s.units.filter((o) => o !== jumper);
     // A ladder up the side of a flat one-storey roof (decision 1), and a drop back off its edge.
     expect(stepBetween(s, at(9, 7), at(10, 7, 1))).toBe(COST_ORTHO + COST_CLIMB);
     expect(stepBetween(s, at(10, 6, 1), at(10, 5))).toBe(COST_ORTHO + COST_DROP);
@@ -769,9 +796,12 @@ describe("the generator's storeys", () => {
     expect(pitched).toBeGreaterThan(0);
   });
 
-  it('one group of the living starts posted upstairs from difficulty 2, never the dead; none at difficulty 1', () => {
+  it('in a mission of the living one of their groups starts posted upstairs from difficulty 2, never the dead; none at difficulty 1', () => {
+    // docs/ZOMBIS-PRIMERO.md: the living only hold some missions; in the dead's, everyone starts on the ground.
+    for (const s of towns) expect(s.units.some((u) => u.team === 'alien' && u.pos.z > 0), s.mapId).toBe(false);
+    const held = Array.from({ length: 16 }, (_, k) => createMission({ map: { kind: 'generated', biome: 'city', seed: 101 * (k + 1) }, slots: [0], rng: new Rng(k), kind: 'hack', living: true }));
     let posted = 0;
-    for (const s of towns) {
+    for (const s of held) {
       const up = s.units.filter((u) => u.pos.z > 0);
       for (const u of up) expect(TEMPLATES[u.template].undead, `${s.mapId}: ${u.id}`).toBe(false);
       if (up.length) {
@@ -780,9 +810,9 @@ describe("the generator's storeys", () => {
         expect(canStandOn(kindAt(s, up[0]!.pos))).toBe(true);
       }
     }
-    expect(posted).toBeGreaterThan(towns.length / 2);
+    expect(posted).toBeGreaterThan(held.length / 2);
     for (let k = 1; k <= 6; k++) {
-      const easy = createMission({ map: { kind: 'generated', biome: 'city', seed: 101 * k }, slots: [0], rng: new Rng(k), kind: 'hack', difficulty: 1 });
+      const easy = createMission({ map: { kind: 'generated', biome: 'city', seed: 101 * k }, slots: [0], rng: new Rng(k), kind: 'hack', difficulty: 1, living: true });
       expect(easy.units.some((u) => u.pos.z > 0)).toBe(false);
     }
   });

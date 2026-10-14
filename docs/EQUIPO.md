@@ -10,7 +10,7 @@ Quién hace qué en Bastión, qué archivos toca cada uno y en qué está ahora.
 | **Lore** | Sesión Lore | El mundo y todos los textos: nombres, capítulos, encargos, radio, glosario, fichas | `engine/src/lore.ts`, `quests.ts`, `transmissions.ts`, `docs/LORE.md` (el de zombis; el del Coro está en `docs/archive/LORE-coro.md`); los textos (no la lógica) de `content.ts`, `campaign.ts`, `progression.ts`, `classes.ts`, `setup.ts`, `mapgen.ts` |
 | **Arte** | Sesión Arte | Todo el arte de Synty: supervivientes, zombis y armas (escala, animaciones, personaje de cada soldado); mapas de combate (casas en las que se entra, suelo, calles, iluminación); la base y el mapa del valle | `game/syntyFigures.ts`, `models.ts`, `figures.ts`, `unitViews.ts`, `fx.ts`, `mapView.ts`, `ground.ts`, `props.ts`, `syntyProps.ts`, `fogOfWar.ts`, `explored.ts`, `post.ts`, `renderer.ts`, `strategy/bastion.ts`, `stage.ts`, `docs/ARTE.md`; `syntyManifest.ts` entero; la disposición de los edificios en `mapgen.ts`, de acuerdo con Gameplay |
 | **Gameplay · Reglas** | Agente Gameplay-Reglas | Implementa las reglas que fija Gameplay (ahora, la fase 2); Gameplay revisa y sube | `engine/src/rules.ts`, `ai.ts`, `content.ts`, `setup.ts`, `campaign.ts`, `types.ts`, `events.ts`, `abilities.ts` y sus tests, mientras dure el encargo |
-| **Combate (interfaz)** | Sesión UI, mientras no haya sesión de Combate | El HUD y el control en combate: avisos, fichas, teclas, cámara | `client/src/game/game.ts`, `client/src/ui/hud.ts`, `client/src/styles.css` |
+| **Combate (interfaz)** | Sesión UI, mientras no haya sesión de Combate | El HUD y el control en combate: avisos, fichas, teclas, cámara | `client/src/game/game.ts`, `game/overlays.ts`, `client/src/ui/hud.ts`, `client/src/styles.css` |
 | **UX/UI** (lidera la interfaz) | Sesión UI | La interfaz nueva y sus sonidos: laboratorio con las propuestas A «Apocalipsis», B «Moderna» y C (mezcla) y, tras el voto de Arturo, el tema; la Hoja de servicio de `screen.ts`, de acuerdo con Gameplay | `src/lab/ui/`, `interfaz.html`, `ui/theme.ts` y `ui/holo.css` (se borran tras el voto), `game/combatTips.ts`, `docs/UX-REVISION*`; tras el voto, los estilos del tema (`styles.css`, `strategy.css`, `transmissions.css`) de acuerdo con Combate y Gameplay, y `audio/ui.ts` de acuerdo con Red |
 | **Clases** | Sesión Clases | Reglas, números y estructura de las clases: aptitudes, talentos, la Rosa; el equilibrio, de acuerdo con la simulación de Gameplay. Avisa a Gameplay antes de tocar `classes.ts` | `engine/src/classes.ts` (los textos son de Lore), `engine/test/classes.test.ts`, la sección de clases de `docs/DESIGN.md` |
 | **Red** | Sesión Networking | Conexión, https, informes del navegador del compañero, el servidor de juego de los jugadores, la telemetría de rendimiento y la aplicación de escritorio (Electron) | `client/src/net.ts`, `report.ts`, `ui/lobby.ts`, `audio/`, `server/src/index.ts`, `tls.ts`, `lan.ts`, `packages/desktop/` |
@@ -37,7 +37,19 @@ Sesiones abiertas (2026-10-14), todas con Remote Control para seguirlas desde cl
 - Los packs de Synty originales viven en `assets-src/synty/`, que no se sube: la licencia no deja redistribuirlos. Al repositorio solo van los modelos convertidos que use el juego.
 - El repositorio `Takeo7/Bastion` es **siempre privado**: lleva los modelos de Synty convertidos y la licencia no deja publicarlos. Nadie cambia su visibilidad. Si algún día hace falta una descarga pública, será un repositorio o sitio aparte solo con los binarios, y siempre preguntando antes a Arturo. Las releases (`v0.1.0`) solo las ve quien tiene acceso al repositorio; para pasar el juego a alguien, Arturo le manda el zip.
 
-## En marcha (2026-10-13)
+## En marcha (2026-10-14)
+
+Subida la 0.2.2 (bdf4953 y 0d4db5b) y, después, la 0.2.3: la fase 7 ([FASE7.md](FASE7.md)) y los zombis primero ([ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)), con el cliente de Arte y UI y los textos de Lore. Lo que hizo cada sesión antes de eso:
+
+| Quién | Hecho el 14/10 | Ahora |
+|---|---|---|
+| Gameplay | Visibilidad el doble de rápida en mapas con plantas (`los.ts`); «Tejado» en lugar de «Nido» en la puntería; el contador de raciones en rojo si no llegan para mañana; «Caras conocidas» sin familiares con el nombre del soldado; los documentos al día | Las mecánicas pendientes ([FASE7.md](FASE7.md)) |
+| Arte | ARTE.md reescrito; el valle con relieve, campos, pueblos y carreteras; luz y suciedad del combate; plazas con árboles y escombros (`mapgen.ts`, con Gameplay); fuera las figuras de XCOM; etiquetas del seleccionado al frente; `renderer.ts` pasa a Arte | Esperando encargo |
+| Lore | Los textos del globo y de XCOM que quedaban; el consejo de radio de las plantas; nombres que chocaban (Chioma Okafor, Samira Benali, Pierre Lambert, Mariana Duarte, Tariq Rahimi, Anja Kowalska; Clara y Yusuf) | Esperando encargo |
+| UI | Revisión de UX 3: velo de carga, ventanas estrechas, pulido del combate, estilos del panel de direcciones | Sin subir: la franja de combate en dos filas hasta 1366 px (`styles.css`), para después de la prueba |
+| Networking | Deflate en el WebSocket; el panel «Comandantes» sin interfaces virtuales; la app no se queda con un puerto ocupado en 127.0.0.1; la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md) | Leer el `red.log` de la prueba en el PC |
+
+## Lo que se hizo hasta el 13/10
 
 Subido b56a5b4 (noche, altura, fases 3 y 4, el valle, fuera lo vóxel). Fase 5 hecha y subida (8bc98a8). Las 5 fases del plan de zombis están terminadas.
 

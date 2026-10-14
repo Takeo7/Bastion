@@ -48,6 +48,8 @@ export interface QuestMission {
   vip?: string;
   /** Named enemy leading the first group. */
   leader?: { template: TemplateId; name: string };
+  /** The living hold it (docs/ZOMBIS-PRIMERO.md): bands of the Cuervos among the dead. A living leader means it too. */
+  living?: boolean;
   reward?: MissionReward;
 }
 
@@ -146,6 +148,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'mission',
         name: 'La lista de prisioneros',
+        living: true,
         kind: 'recovery',
         biome: 'city',
         days: 8,
@@ -165,6 +168,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'mission',
         name: 'Sacar a {relative}',
+        living: true,
         kind: 'rescue',
         biome: 'facility',
         difficulty: 1,
@@ -324,6 +328,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'mission',
         name: 'Otto Brandt',
+        living: true,
         kind: 'rescue',
         biome: 'wilds',
         days: 8,
@@ -349,6 +354,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'mission',
         name: 'Ruta 50',
+        living: true,
         kind: 'rescue',
         biome: 'wilds',
         days: 8,
@@ -359,6 +365,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'mission',
         name: 'Cacería en la Ruta 50',
+        living: true,
         kind: 'elimination',
         biome: 'wilds',
         days: 6,
@@ -383,6 +390,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'mission',
         name: 'Manos',
+        living: true,
         kind: 'rescue',
         biome: 'city',
         days: 8,
@@ -392,6 +400,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'mission',
         name: 'Las notas de Mei',
+        living: true,
         kind: 'recovery',
         biome: 'city',
         days: 8,
@@ -503,7 +512,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'recovery',
         biome: 'wilds',
         days: 6,
-        briefing: 'Los de las Bodegas han subido las cajas del camión a un embarcadero. Recuperadlas y sacadlas por la zona de evacuación antes de que lleguen los Cuervos.',
+        briefing: 'Los de las Bodegas han subido las cajas del camión a un embarcadero. El pueblo de al lado está lleno de muertos, y los Cuervos vienen de camino. Recuperadlas y sacadlas por la zona de evacuación antes de que lleguen.',
         item: 'las cajas',
       },
     ],

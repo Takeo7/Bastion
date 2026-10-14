@@ -119,7 +119,9 @@ export type DecorKind =
   | 'log'
   | 'rubble'
   // A building's stairs (docs/FASE6-PLAN.md): a `ladder` tile, facing the way up.
-  | 'stairs';
+  | 'stairs'
+  // A wall a grenade broke (docs/FASE7.md §4): its stump and the rubble, on a `low` tile.
+  | 'breach';
 
 /** A tile's decor hint packed in one number (0: none); see decor.ts. */
 export type Decor = number;
@@ -290,6 +292,8 @@ export interface Loot {
   parts?: number;
   /** A good weapon (content.ts FOUND_WEAPONS): to the Armería, for one soldier. */
   weapon?: FoundWeaponId;
+  /** Magazines (docs/FASE7.md): straight to the searcher's spares, not into the backpack. */
+  mags?: number;
 }
 
 /** Weapons found searching (docs/FASE4.md, content.ts FOUND_WEAPONS): each counts as one class weapon. */
@@ -547,6 +551,8 @@ export interface Unit {
   armor: number;
   ap: number;
   ammo: number;
+  /** Spare magazines for the primary weapon (docs/FASE7.md): only the squad counts them; without it, reloading never runs out. */
+  mags?: number;
   charges: Partial<Record<ChargeId, number>>;
   overwatch: boolean;
   hunkered: boolean;

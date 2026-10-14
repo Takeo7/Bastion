@@ -4,12 +4,14 @@ import { abilitiesOf } from '../src/abilities';
 import { buildSquad, createCampaign } from '../src/campaign';
 import { TALENTS } from '../src/classes';
 import { ABILITIES, TEMPLATES } from '../src/content';
-import { createMission, garrison, hordeWave, makeUnit } from '../src/setup';
+import { createMission, garrison, hordeWave, makeUnit, missionPods } from '../src/setup';
+import { STORY } from '../src/lore';
+import { QUESTS, type QuestMission } from '../src/quests';
 import { Rng } from '../src/rng';
 import { computeReach } from '../src/path';
 import { executeCommand, Sim } from '../src/rules';
 import type { Command } from '../src/protocol';
-import type { GameState, MissionKind } from '../src/types';
+import type { GameState, MissionKind, TemplateId } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
 
 const ctx = (seed = 1) => ({ slot: 0 as const, connected: [0 as const], rng: new Rng(seed) });
@@ -195,12 +197,20 @@ describe('patrols and reinforcements', () => {
   });
 
   // Playtest 2026-10-13: nobody drops in out of nowhere.
-  it('every living enemy is on the map from the start; only hordes of the dead come later, by an edge', () => {
+  it('every enemy is on the map from the start; only hordes of the dead come later, by an edge; the living only where the mission is theirs', () => {
     const kinds: MissionKind[] = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge'];
+    /** The living on the map (the Sirena is a machine, not one of them). */
+    const livingOn = (s: GameState) => s.units.filter((u) => u.team === 'alien' && !TEMPLATES[u.template].undead && !TEMPLATES[u.template].robotic).length;
     for (const kind of kinds) {
       for (const difficulty of [1, 2, 3, 4]) {
         const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 11 + difficulty }, slots: [0], rng: new Rng(difficulty), kind, difficulty });
         const label = `${kind} ${difficulty}`;
+        // docs/ZOMBIS-PRIMERO.md: a mission of the dead has none of the living; one of the living, at least their garrison.
+        expect(livingOn(s), label).toBe(0);
+        if (kind !== 'scavenge') {
+          const held = createMission({ map: { kind: 'generated', biome: 'city', seed: 11 + difficulty }, slots: [0], rng: new Rng(difficulty), kind, difficulty, living: true });
+          expect(livingOn(held), label).toBeGreaterThanOrEqual(Math.max(2, garrison(held.mission.kind, difficulty, true)?.length ?? 0));
+        }
         for (const r of s.mission.reinforcements) {
           expect(r, label).toMatchObject({ horde: true, pos: null, landed: false });
           expect(r.units.every((t) => TEMPLATES[t].undead), label).toBe(true);
@@ -208,15 +218,16 @@ describe('patrols and reinforcements', () => {
         expect(s.mission.horde?.every((t) => TEMPLATES[t].undead) ?? true, label).toBe(true);
         // Sabotage and hack keep their pressure as two hordes; the others bring nobody.
         expect(s.mission.reinforcements.map((r) => r.turn), label).toEqual(s.mission.kind === 'sabotage' || s.mission.kind === 'hack' ? [4, 8] : []);
-        // The strength those drops had is a garrison on the map from the start.
+        // The strength those drops had is a garrison on the map from the start, of the dead here.
         const extra = garrison(s.mission.kind, difficulty);
-        const humans = s.units.filter((u) => u.team === 'alien' && !TEMPLATES[u.template].undead).length;
-        expect(humans, label).toBeGreaterThanOrEqual(extra?.length ?? 0);
+        const dead = s.units.filter((u) => u.team === 'alien' && TEMPLATES[u.template].undead).length;
+        expect(dead, label).toBeGreaterThanOrEqual(extra?.length ?? 0);
       }
     }
     expect(garrison('scavenge', 4)).toBeNull();
     expect(garrison('elimination', 2)).toBeNull();
-    expect(garrison('sabotage', 1)).toEqual(['trooper', 'trooper']);
+    expect(garrison('sabotage', 1)).toEqual(['zombie', 'zombie', 'zombie']);
+    expect(garrison('sabotage', 1, true)).toEqual(['trooper', 'trooper']);
     expect(hordeWave(9)).toEqual(hordeWave(4));
   }, 60_000);
 
@@ -305,5 +316,30 @@ describe('skirmish veterans', () => {
       const mission = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(seed), squad, veterans: true });
       expect(mission.units.filter((u) => u.team === 'xcom').map((u) => u.perks)).toEqual(squad.map((m) => m.perks));
     }
+  });
+});
+
+describe('the dead first (docs/ZOMBIS-PRIMERO.md)', () => {
+  const living = (pods: TemplateId[][]) => pods.flat().filter((t) => !TEMPLATES[t].undead).length;
+
+  it('the groups of an ordinary mission are all the dead; a mission of the living has two of their bands among them', () => {
+    for (const difficulty of [1, 2, 3, 4]) {
+      for (const kind of ['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge'] as const) {
+        expect(living(missionPods(difficulty, kind)), `${kind} ${difficulty}`).toBe(0);
+      }
+      const held = missionPods(difficulty, 'rescue', true);
+      expect(held.filter((p) => p.every((t) => !TEMPLATES[t].undead))).toHaveLength(2);
+      expect(held.filter((p) => p.every((t) => TEMPLATES[t].undead))).toHaveLength(2);
+    }
+  });
+
+  it('the living hold the story chapters and quest steps that are theirs, and nothing else', () => {
+    expect(STORY.filter((c) => c.living).map((c) => c.title)).toEqual(['La sirena', 'Los inmunes', 'La Voz']);
+    const steps = Object.values(QUESTS).flatMap((q) => q.steps.filter((s): s is QuestMission => s.type === 'mission'));
+    const held = steps.filter((s) => s.living || (s.leader && !TEMPLATES[s.leader.template].undead)).map((s) => s.name);
+    expect(held).toEqual(
+      expect.arrayContaining(['La lista de prisioneros', 'Sacar a {relative}', 'Vera Lindqvist', 'Otto Brandt', 'Ruta 50', 'Cacería en la Ruta 50', 'Manos', 'Las notas de Mei']),
+    );
+    expect(held).toHaveLength(8);
   });
 });

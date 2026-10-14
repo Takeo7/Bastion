@@ -105,6 +105,9 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
       return low ? 'logs' : null;
     case 'rubble':
       return low ? 'rubble' : 'wallStub';
+    case 'breach':
+      // A wall blown down (docs/FASE7.md §4): drawn by the walls and rubbleOf (rebuild), its rubble here only as a fallback.
+      return low ? 'rubble' : null;
     case 'stairs':
       // A building's stairs are a ladder tile, never cover (docs/FASE6-PLAN.md).
       return null;
@@ -541,6 +544,25 @@ export class MapView {
       return true;
     };
 
+    /**
+     * What a blast left of the wall on tile (x, y) of storey `level`: a heap
+     * of rubble either side of its stump, blown out of the line of the wall,
+     * and gravel about it (the heaps are the low cover; the gravel is flat).
+     */
+    const rubbleOf = (x: number, y: number, level: number, base: number, tiles: readonly (TileKind | null)[]) => {
+      const wallish = (tx: number, ty: number) =>
+        tx >= 0 && ty >= 0 && tx < s.width && ty < s.height && (isWallLike(tiles[ty * s.width + tx] ?? 'floor') || buildings.plan.breached(ty * s.width + tx, level));
+      // The wall runs along x when the walls beside it do; the heaps fall across it.
+      const across = wallish(x - 1, y) || wallish(x + 1, y) ? { x: 0, y: 1 } : { x: 1, y: 0 };
+      for (const side of [-1, 1]) {
+        const r = (salt: number) => hash(x, y, 60 + level * 7 + (side + 1) * 3 + salt);
+        const px = x + 0.5 + across.x * side * 0.34 + across.y * (r(0) - 0.5) * 0.4;
+        const pz = y + 0.5 + across.y * side * 0.34 + across.x * (r(0) - 0.5) * 0.4;
+        addSyntyId(r(1) < 0.5 ? 'rubble1' : 'rubble2', placed(px, base, pz, 0.62, 0.55, 0.62, r(2) * Math.PI * 2));
+        addSyntyId('pebbles', placed(px + across.x * side * 0.25, base + 0.01, pz + across.y * side * 0.25, 1, 1, 1, r(3) * Math.PI * 2), false);
+      }
+    };
+
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
         const i = y * s.width + x;
@@ -565,6 +587,11 @@ export class MapView {
             if (!dressed(i, x, y, kind, base)) addProp(i, props.high, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4), randomWiggle);
             break;
           case 'low':
+            // A wall blown down (docs/FASE7.md §4): its rubble, over the stump the walls draw (buildings.ts).
+            if (buildings.plan.breached(i, 0)) {
+              rubbleOf(x, y, 0, base, s.tiles);
+              break;
+            }
             // On a block of flats, low cover is the parapet along the roof's edge (buildings.ts), unless it is something else.
             if (dressed(i, x, y, kind, base)) break;
             if (raised === RAISED_FLATS) break;
@@ -601,6 +628,10 @@ export class MapView {
           // Low cover round the edge of a roof one walks on is its parapet (buildings.ts).
           if (kind === 'low' && bd?.walkableRoof && level === bd.storeys && !decorOf(decorNow[i])) continue;
           floor.building = b;
+          if (kind === 'low' && buildings.plan.breached(i, level)) {
+            rubbleOf(x, y, level, base, storey.tiles);
+            continue;
+          }
           if (dressed(i, x, y, kind, base)) continue;
           // Cover with nothing to say what it is, indoors: shelves and crates (out of doors, the biome's props).
           const v = hash(x, y, 1 + level);
@@ -612,6 +643,23 @@ export class MapView {
     decorNow = decor;
     tilesNow = s.tiles;
     placeBase = 0;
+
+    // Under a slab blown through (docs/FASE7.md §5): what came down with it, on the floor below. Flat: no cover.
+    for (let k = 1; k <= (s.levels?.length ?? 0); k++) {
+      for (let i = 0; i < s.width * s.height; i++) {
+        if ((area && !area[i]) || !buildings.plan.holed(i, k)) continue;
+        const x = i % s.width;
+        const y = (i - x) / s.width;
+        const base = (k - 1) * STOREY + (k === 1 ? (s.elev[i] ?? 0) * STOREY : 0);
+        floor.building = buildings.plan.owner[i]!;
+        floor.level = k - 1;
+        for (let n = 0; n < 3; n++) {
+          const r = (salt: number) => hash(x, y, 40 + n * 3 + salt);
+          addSyntyId('pebbles', placed(x + 0.2 + r(0) * 0.6, base + 0.01, y + 0.2 + r(1) * 0.6, 1, 1, 1, r(2) * Math.PI * 2), false);
+        }
+        addSyntyId('rubble1', placed(x + 0.5, base, y + 0.5, 0.45, 0.35, 0.45, hash(x, y, 49) * Math.PI * 2), false);
+      }
+    }
     floor.building = -1;
     floor.level = 0;
 

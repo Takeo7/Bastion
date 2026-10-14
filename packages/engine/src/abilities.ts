@@ -19,7 +19,7 @@ import {
 } from './content';
 import { TALENTS } from './classes';
 import { hasAnyCover } from './cover';
-import { canStandOn, DIRS8, distance, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, toPos, unitAt } from './grid';
+import { canStandOn, DIRS4, DIRS8, distance, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, slabAt, toPos, unitAt } from './grid';
 import { backpackRoom, reachesToSearch, searchable, searchableTiles, searchSpot } from './loot';
 import { canSee, canSeeTile, isViewer, sightTo } from './los';
 import { buildPath, computeReach, costPerAp } from './path';
@@ -132,12 +132,16 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
   if (cooldown > 0) return `Disponible en ${cooldown} ${cooldown === 1 ? 'turno' : 'turnos'}.`;
   if (def.charge && !((u.charges[def.charge] ?? 0) > 0)) return 'No quedan usos.';
   const ammo = ammoNeeded(u, ability);
-  if (ammo > 0 && u.ammo < ammo) return ammo > 1 ? `Necesita ${ammo} balas en el cargador: recarga.` : 'Sin munición: recarga.';
+  if (ammo > 0 && u.ammo < ammo) {
+    if (u.mags === 0) return 'Sin munición y sin cargadores.';
+    return ammo > 1 ? `Necesita ${ammo} balas en el cargador: recarga.` : 'Sin munición: recarga.';
+  }
   if (u.disoriented && def.target === 'tile' && !def.teleport && !BY_HAND.has(ability)) return 'Desorientado: no puede usar explosivos.';
   if (def.psi && inSilence(s, u.pos)) return 'Petardos: aquí no se puede gritar.';
   switch (ability) {
     case 'reload':
       if (u.ammo >= attackWeapon(u, 'shoot').clip) return 'El cargador está lleno.';
+      if (u.mags === 0) return 'No quedan cargadores.';
       break;
     case 'hunker':
       if (!hasAnyCover(s, u.pos)) return 'Necesita estar a cubierto.';
@@ -327,6 +331,37 @@ export function blastTiles(s: GameState, ability: AbilityId, at: Place, thrower?
     }
   }
   return out;
+}
+
+/** Explosives that breach walls (docs/FASE7.md §4): the frag grenades, thrown, launched or going off on a vest. */
+const BREACHING: ReadonlySet<AbilityId> = new Set<AbilityId>(['grenade', 'launch', 'missiles']);
+
+/**
+ * Walls a blast breaks (docs/FASE7.md §4), left as rubble: within its radius,
+ * on the floor it went off on, and beside one of the tiles it reaches. None
+ * for anything but the frag grenades.
+ */
+export function breachedWalls(s: GameState, ability: AbilityId, at: Place, thrower?: Unit): Pos[] {
+  if (!BREACHING.has(ability)) return [];
+  const center = toPos(at);
+  const radius = blastRadius(thrower, ability);
+  const reached = new Set(blastTiles(s, ability, at, thrower).filter((p) => kindAt(s, p) !== 'wall').map((p) => nodeOf(s, p)));
+  const out: Pos[] = [];
+  const r = Math.ceil(radius);
+  for (let y = center.y - r; y <= center.y + r; y++) {
+    for (let x = center.x - r; x <= center.x + r; x++) {
+      const p = { x, y, z: center.z };
+      if (!inBounds(s, x, y) || distance(center, p) > radius || kindAt(s, p) !== 'wall') continue;
+      if (DIRS4.some((d) => inBounds(s, x + d.x, y + d.y) && reached.has(nodeOf(s, { x: x + d.x, y: y + d.y, z: center.z })))) out.push(p);
+    }
+  }
+  return out;
+}
+
+/** Whether a blast on `at` breaks the slab it went off on (docs/FASE7.md §5): a frag grenade on a storey's floor or a roof. */
+export function breaksFloor(s: GameState, ability: AbilityId, at: Place): boolean {
+  const p = toPos(at);
+  return BREACHING.has(ability) && p.z >= 1 && slabAt(s, p.x, p.y, p.z);
 }
 
 export function isBlast(ability: AbilityId): ability is BlastAbility {

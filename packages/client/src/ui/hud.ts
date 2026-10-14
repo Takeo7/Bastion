@@ -3,6 +3,7 @@ import {
   weaponName,
   FOUND_WEAPONS,
   ITEMS,
+  magsCount,
   MISSION_NAMES,
   RANKS,
   TEMPLATES,
@@ -459,7 +460,15 @@ export class Hud {
         {},
         stat('hp', `Salud ${u.hp}/${u.maxHp}`, h('span.pips', {}, ...pips(u.hp, u.maxHp))),
         stat('ap', `Acciones ${u.ap}/2`, h('span.pips', {}, ...pips(u.ap, Math.max(2, u.ap)))),
-        w.clip > 0 ? stat('ammo', `Munición ${u.ammo}/${w.clip}`, h('span.pips', {}, ...pips(u.ammo, w.clip))) : null,
+        // The spare magazines after the clip (docs/FASE7.md): «+3», red at none; the enemies don't count theirs.
+        w.clip > 0
+          ? stat(
+              'ammo',
+              `Munición ${u.ammo}/${w.clip}${u.mags === undefined ? '' : u.mags ? ` · ${magsCount(u.mags)} de repuesto` : ' · sin cargadores de repuesto'}`,
+              h('span.pips', {}, ...pips(u.ammo, w.clip)),
+              ...(u.mags === undefined ? [] : [h(`b.mags${u.mags ? '' : '.none'}`, {}, `+${u.mags}`)]),
+            )
+          : null,
         stat('aim', `Puntería ${t.aim + u.mods.aim}`, h('b', {}, String(t.aim + u.mods.aim))),
         u.charges.grenade !== undefined ? stat('grenade', `Granadas: ${u.charges.grenade}`, h('b', {}, `×${u.charges.grenade}`)) : null,
         u.charges.medkit !== undefined ? stat('medkit', `Botiquín: ${u.charges.medkit}`, h('b', {}, `×${u.charges.medkit}`)) : null,

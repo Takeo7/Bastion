@@ -84,7 +84,7 @@ import {
 import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecision, type QuestId, type QuestMission, type QuestOutcome, type TraitId } from './quests';
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
-import { podPlan, scavengePlan, type MapSource, type SquadMember } from './setup';
+import { missionPods, podPlan, type MapSource, type SquadMember } from './setup';
 import type { Appearance, Biome, ClassId, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Slot, TemplateId, Vec2 } from './types';
 
 // --------------------------------------------------------------- facilities
@@ -207,8 +207,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   listening: {
     id: 'listening',
     name: 'Estación de escucha',
-    description: 'El reloj enemigo avanza 2 días más tarde (+2 junto al centro de comunicaciones) y hay una misión más a la vista. Morse oye antes lo que viene.',
-    upgrades: ['El reloj enemigo, 4 días más tarde (+2 junto a comunicaciones).', 'El reloj enemigo, 6 días más tarde (+2 junto a comunicaciones).'],
+    description: 'Los muertos avanzan 2 días más tarde (+2 junto al centro de comunicaciones) y hay una misión más a la vista. Morse oye antes lo que viene.',
+    upgrades: ['Los muertos, 4 días más tarde (+2 junto a comunicaciones).', 'Los muertos, 6 días más tarde (+2 junto a comunicaciones).'],
     cost: 120,
     days: 5,
     level: 4,
@@ -343,7 +343,7 @@ export const ADJACENCY: AdjacencyDef[] = [
   { facility: 'training', next: 'barracks', text: 'Reclutar cuesta 20 § en vez de 30. Los novatos se forman en casa.' },
   { facility: 'quarters', next: 'barracks', text: 'Una cama más. El Cuartel presta la estufa.' },
   { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
-  { facility: 'listening', next: 'relay', text: 'El enemigo avanza 2 días más tarde aún. Dos antenas oyen más que una.' },
+  { facility: 'listening', next: 'relay', text: 'Los muertos avanzan 2 días más tarde aún. Dos antenas oyen más que una.' },
   { facility: 'echoes', next: 'listening', text: 'Los oficios hacen menos ruido (−2). Junto a la escucha se aprende a no hacer ruido.' },
 ];
 
@@ -699,7 +699,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
           log(c, `${s.name} vuelve herido del rescate del convoy.`, 'bad');
         },
       },
-      { label: 'No arriesgar a nadie', effect: 'El enemigo avanza (+1)', apply: (c) => (c.doom += 1) },
+      { label: 'No arriesgar a nadie', effect: 'Los muertos avanzan (+1)', apply: (c) => (c.doom += 1) },
     ],
   },
   defector: {
@@ -708,7 +708,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
     text: 'Un Saqueador de los Cuervos quiere desertar y ofrece lo que sabe.',
     options: [
       { label: 'Interrogarlo', effect: '+12 de experiencia del Bastión', apply: (c, rng) => gainXp(c, 12, rng) },
-      { label: 'Mandarlo a llevarse una horda lejos', effect: 'El enemigo retrocede (−1)', apply: (c) => (c.doom = Math.max(0, c.doom - 1)) },
+      { label: 'Mandarlo a llevarse una horda lejos', effect: 'Los muertos retroceden (−1)', apply: (c) => (c.doom = Math.max(0, c.doom - 1)) },
     ],
   },
   blackMarket: {
@@ -930,6 +930,8 @@ export interface MissionOffer {
   night?: boolean;
   /** Its zone is under the Marea (docs/FASE5.md): one more group of the dead, the last of `pods`; gone when the zone is freed. */
   tide?: true;
+  /** The living hold it (docs/ZOMBIS-PRIMERO.md): their bands among the dead, and their garrison. Missing: the dead's alone. */
+  living?: true;
 }
 
 export type ProposalAction =
@@ -1496,12 +1498,18 @@ export function veteranEnemies(c: Pick<CampaignState, 'missionsFlown'>): number 
   return Math.min(2, Math.floor((c.missionsFlown ?? 0) / 4));
 }
 
-/** The enemy groups of an operation, with what side quests left in its region. A Saqueo has the dead scattered about. */
-function regionPods(c: CampaignState, region: RegionId, difficulty: number, kind: MissionKind): TemplateId[][] {
-  const pods = kind === 'scavenge' ? scavengePlan(difficulty) : podPlan(difficulty);
+/**
+ * The enemy groups of an operation, with what side quests left in its region
+ * (missionPods: a Saqueo has the dead scattered about; a mission of the
+ * living, their bands among the dead). The veterans' extra bodies are of
+ * whoever holds it.
+ */
+function regionPods(c: CampaignState, region: RegionId, difficulty: number, kind: MissionKind, living = false): TemplateId[][] {
+  const pods = missionPods(difficulty, kind, living);
   const extra = regionEnemy(c, region);
   if (extra) pods[0]!.push(extra);
-  for (let i = 0; i < veteranEnemies(c); i++) pods[(i + 1) % pods.length]!.push(kind === 'scavenge' ? 'zombie' : difficulty >= 3 ? 'lancer' : 'trooper');
+  const veteran: TemplateId = kind === 'scavenge' ? 'zombie' : living ? (difficulty >= 3 ? 'lancer' : 'trooper') : difficulty >= 3 ? 'xenoid' : 'zombie';
+  for (let i = 0; i < veteranEnemies(c); i++) pods[(i + 1) % pods.length]!.push(veteran);
   return pods;
 }
 
@@ -1518,6 +1526,8 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   if (!final && (kind === 'rescue' || rng.int(5) === 0)) reward.recruit = rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const);
   if (!final && (kind === 'sabotage' || (kind === 'hack' && rng.int(3) === 0))) reward.doom = 1;
   const seed = rng.int(2 ** 31);
+  // An ordinary rescue is someone the Cuervos hold, and the last mission is the Congregación's camp (docs/ZOMBIS-PRIMERO.md); every other operation is the dead's.
+  const living = final || kind === 'rescue';
   return byNight(withProvisions(withMedicines({
     id: newId(c, 'm'),
     // An ordinary operation is named for where it goes (Lore): «El colegio de Corran».
@@ -1527,12 +1537,13 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
     expiresDay: final ? null : c.day + 6 + rng.int(4),
     reward,
     map: { kind: 'generated', biome, seed },
-    pods: regionPods(c, region, difficulty, kind),
+    pods: regionPods(c, region, difficulty, kind, living),
     final,
     region,
     facility: null,
     story: null,
     quest: null,
+    ...(living ? { living: true as const } : {}),
   })));
 }
 
@@ -1604,12 +1615,13 @@ function makeStoryOffer(c: CampaignState, chapter: number, rng: Rng): MissionOff
     expiresDay: null,
     reward: { ...def.reward },
     map: { kind: 'generated', biome: def.biome, seed: rng.int(2 ** 31) },
-    pods: podPlan(difficulty),
+    pods: missionPods(difficulty, def.kind, def.living),
     final: false,
     region: def.region,
     facility: null,
     story: chapter,
     quest: null,
+    ...(def.living ? { living: true as const } : {}),
   };
 }
 
@@ -1772,7 +1784,9 @@ function enterStep(c: CampaignState, q: QuestState, rng: Rng): void {
 
 function makeQuestOffer(c: CampaignState, q: QuestState, step: QuestMission, rng: Rng): MissionOffer {
   const difficulty = Math.max(1, Math.min(4, difficultyNow(c, rng) + (step.difficulty ?? 0)));
-  const pods = regionPods(c, q.region, difficulty, step.kind);
+  // The living's, if the step says so or its named enemy is one of them (docs/ZOMBIS-PRIMERO.md).
+  const living = !!step.living || (!!step.leader && !TEMPLATES[step.leader.template].undead);
+  const pods = regionPods(c, q.region, difficulty, step.kind, living);
   // The named enemy needs a body of its kind on the field.
   if (step.leader && !pods.some((p) => p.includes(step.leader!.template))) pods[0] = [step.leader.template, ...pods[0]!];
   return byNight({
@@ -1789,6 +1803,7 @@ function makeQuestOffer(c: CampaignState, q: QuestState, step: QuestMission, rng
     facility: null,
     story: null,
     quest: q.id,
+    ...(living ? { living: true as const } : {}),
   });
 }
 
@@ -2901,7 +2916,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
       finishQuest(c, q, 'failure', rng);
     } else {
       c.doom++;
-      log(c, `La misión ${o.name} ha expirado. El enemigo avanza.`, 'bad');
+      log(c, `La misión ${o.name} ha expirado. ${doomChangeText(bastionLevel(c), 1)}`, 'bad');
     }
     stop = true;
   }

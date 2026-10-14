@@ -3,6 +3,8 @@ import {
   abilityTargets,
   apNeeded,
   blastTiles,
+  breachedWalls,
+  breaksFloor,
   canTargetTile,
   endsTurn,
   hackChance,
@@ -33,6 +35,7 @@ import {
   ABILITIES,
   AID_DEFENSE,
   attackWeapon,
+  FALL_DAMAGE,
   hasPerk,
   HOLO_AIM,
   HORDE,
@@ -61,6 +64,7 @@ import {
   placesOn,
   samePos,
   sameSpace,
+  slabAt,
   sameTile,
   storeysApart,
   tileAt,
@@ -128,6 +132,27 @@ const BLAST_RESULT: Partial<Record<TileKind, TileKind>> = {
   door: 'doorOpen',
   window: 'windowBroken',
 };
+
+/**
+ * Where someone (or something) on storey place `p` lands when its slab gives
+ * way (docs/FASE7.md §5): on the next slab down in that column, or the ground,
+ * on `p`'s own tile if one can stand there, else the nearest free place to
+ * stand at that height (two tiles away at most). Null if there is none.
+ */
+function landingBelow(s: GameState, p: Pos, taken: ReadonlySet<number>): Pos | null {
+  let z = p.z - 1;
+  while (z > 0 && !slabAt(s, p.x, p.y, z)) z--;
+  for (let r = 0; r <= 2; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !inBounds(s, p.x + dx, p.y + dy)) continue;
+        const q = { x: p.x + dx, y: p.y + dy, z };
+        if (canStandOn(kindAt(s, q)) && !unitAt(s, q) && !taken.has(nodeOf(s, q))) return q;
+      }
+    }
+  }
+  return null;
+}
 
 /** Why pods come alive (podActivated), and who was involved. */
 export interface Activation {
@@ -574,6 +599,10 @@ export class Sim {
         const next = kind && BLAST_RESULT[kind];
         if (next) this.emit({ t: 'tileChanged', pos: p, kind: next });
       }
+      // The frag grenades breach the walls they reach (docs/FASE7.md §4): rubble, low cover, on that floor only.
+      for (const p of breachedWalls(this.s, ability, center, source)) this.emit({ t: 'tileChanged', pos: p, kind: 'low', decor: 'breach' });
+      // Upstairs, the slab it went off on gives way (docs/FASE7.md §5).
+      if (breaksFloor(this.s, ability, center)) this.breakFloor(center);
     }
     if (source.team === 'xcom') this.breakConcealment({ reason: 'explosive', unit: source.id });
     // Pods caught in the blast were attacked; the rest only hear it (the noise, after the action).
@@ -581,6 +610,32 @@ export class Sim {
     for (const v of victims) if (v.podId) hit.add(v.podId);
     this.activatePods([...hit], { cause: 'attacked', unit: source.team === 'xcom' ? source.id : undefined });
     this.checkOutcome();
+  }
+
+  /**
+   * A grenade breaks the slab of storey place `p` (docs/FASE7.md §5): whoever
+   * stands on it falls to the floor below (the nearest free place to stand
+   * there), with FALL_DAMAGE a storey through the armour, and the objective
+   * lying on it drops too. If someone would have nowhere to land, the floor
+   * holds.
+   */
+  private breakFloor(p: Pos): void {
+    const taken = new Set<number>();
+    const land = () => {
+      const to = landingBelow(this.s, p, taken);
+      if (to) taken.add(nodeOf(this.s, to));
+      return to;
+    };
+    const falling = this.s.units.filter((u) => u.alive && samePos(u.pos, p)).map((u) => ({ u, to: land() }));
+    const item = this.s.mission.item;
+    const lying = item && !item.carrier && item.pos && samePos(toPos(item.pos), p) ? land() : null;
+    if (falling.some((f) => !f.to) || (item && !item.carrier && item.pos && samePos(toPos(item.pos), p) && !lying)) return;
+    this.emit({ t: 'floorBroken', pos: { ...p } });
+    if (lying) this.emit({ t: 'itemDropped', pos: lying });
+    for (const { u, to } of falling) {
+      this.emit({ t: 'fell', unit: u.id, from: { ...p }, to: to! });
+      this.damage(u, FALL_DAMAGE * Math.max(1, p.z - heightAt(this.s, to!)), 0, undefined, u.armor);
+    }
   }
 
   /** Disorients every enemy in the area; no damage, the scenery is untouched. */
@@ -674,7 +729,7 @@ export class Sim {
   /** Searches the furniture on `tile` (docs/FASE2.md): what turns up goes into the backpack. */
   private search(u: Unit, tile: Pos): void {
     const decor = searchSpot(this.s, tile);
-    const loot = decor ? rollLoot(decor, this.s.mission.difficulty ?? 2, this.rng, !!this.s.mission.night) : null;
+    const loot = decor ? rollLoot(decor, this.s.mission.difficulty ?? 2, this.rng, !!this.s.mission.night, u.mags !== undefined) : null;
     this.emit({ t: 'searched', unit: u.id, tile: { ...tile }, loot });
   }
 

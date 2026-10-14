@@ -1,6 +1,6 @@
 import { defaultAppearance } from './appearance';
 import { autoBuild, baseAttrs, CENTER, learnTalent, soldierStats, talentBlocker, talentPointsFree, talentsOf, type Build, type TalentDef } from './classes';
-import { AP_PER_TURN, NIGHT, RECOVERY_TURNS, SOLDIER_NAMES, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS } from './content';
+import { AP_PER_TURN, NIGHT, RECOVERY_TURNS, SOLDIER_NAMES, SPARE_MAGS, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
 import { ground, toPos } from './grid';
 import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
@@ -19,6 +19,7 @@ import type {
   Pod,
   Reinforcement,
   Slot,
+  Team,
   TemplateId,
   Unit,
   UnitMods,
@@ -79,6 +80,8 @@ export interface MissionOptions {
   leader?: { template: TemplateId; name: string };
   /** A night mission (docs/ALTURA-Y-NOCHE.md): one more group of the dead, and the living see less. */
   night?: boolean;
+  /** The living hold it (docs/ZOMBIS-PRIMERO.md): their bands and their garrison; without it, the dead's. */
+  living?: boolean;
 }
 
 /** The Taller de oficios skirmish veterans trained in, as if built at its top level: a skirmish has no base. */
@@ -108,6 +111,11 @@ function veteranBuild(cls: ClassId, rank: number, rng: Rng): Build {
   return b;
 }
 
+/** Whether a unit counts its spare magazines (docs/FASE7.md): the squad's, with a weapon that takes them. */
+function countsMags(team: Team, weapon: WeaponId): boolean {
+  return team === 'xcom' && WEAPONS[weapon].clip > 0;
+}
+
 /** A unit of a kind, on `pos` (on the ground unless it says its level). */
 export function makeUnit(id: string, template: TemplateId, name: string, owner: Slot | null, pos: Vec2 & { z?: number }, podId: string | null): Unit {
   const t = TEMPLATES[template];
@@ -123,6 +131,7 @@ export function makeUnit(id: string, template: TemplateId, name: string, owner: 
     armor: t.armor,
     ap: t.team === 'xcom' ? AP_PER_TURN : 0,
     ammo: WEAPONS[t.weapon].clip,
+    ...(countsMags(t.team, t.weapon) ? { mags: SPARE_MAGS } : {}),
     charges: { ...t.charges },
     overwatch: false,
     hunkered: false,
@@ -199,18 +208,51 @@ export function missionTurns(kind: MissionKind, size: number): number | null {
   return base + Math.round(kind === 'recovery' || kind === 'rescue' ? extra * 1.5 : extra);
 }
 
-/** Pods by difficulty for procedural maps. */
+/**
+ * The dead by difficulty for procedural maps (docs/ZOMBIS-PRIMERO.md): every
+ * mission is the dead's, but those where the living hold something
+ * (livingPlan). Groups of two to four, as many bodies as the living's bands
+ * were, more from difficulty 3: they only bite.
+ */
 export function podPlan(difficulty: number): TemplateId[][] {
+  switch (Math.max(1, Math.min(4, difficulty))) {
+    case 1:
+      return [['zombie', 'zombie'], ['zombie', 'zombie'], ['zombie', 'zombie', 'bloater']];
+    case 2:
+      return [['zombie', 'zombie', 'xenoid'], ['sectoid', 'zombie'], ['zombie', 'zombie', 'bloater'], ['zombie', 'xenoid']];
+    case 3:
+      return [['zombie', 'zombie', 'xenoid'], ['mec', 'zombie', 'zombie'], ['sectoid', 'zombie', 'xenoid'], ['zombie', 'zombie', 'bloater']];
+    default:
+      return [['mec', 'zombie', 'zombie'], ['sectoid', 'xenoid', 'zombie'], ['xenoid', 'xenoid', 'zombie'], ['bloater', 'zombie', 'zombie'], ['mec', 'xenoid']];
+  }
+}
+
+/**
+ * Bands of the living (the Cuervos, the Congregación) by difficulty: only in
+ * the missions that are theirs (docs/ZOMBIS-PRIMERO.md), two of them with two
+ * groups of the dead about (missionPods).
+ */
+export function livingPlan(difficulty: number): TemplateId[][] {
   switch (Math.max(1, Math.min(4, difficulty))) {
     case 1:
       return [['trooper', 'trooper'], ['trooper', 'officer'], ['trooper', 'trooper', 'lancer']];
     case 2:
-      return [['trooper', 'lancer'], ['sectoid', 'trooper'], ['trooper', 'mec', 'xenoid'], ['lancer', 'xenoid']];
+      return [['trooper', 'lancer'], ['trooper', 'officer'], ['trooper', 'trooper', 'lancer']];
     case 3:
-      return [['officer', 'lancer'], ['mec', 'officer'], ['sectoid', 'trooper', 'xenoid'], ['lancer', 'sectoid', 'trooper']];
+      return [['officer', 'lancer'], ['officer', 'trooper', 'trooper'], ['lancer', 'trooper', 'trooper']];
     default:
-      return [['mec', 'lancer'], ['mec', 'officer', 'trooper'], ['officer', 'sectoid', 'xenoid'], ['xenoid', 'sectoid'], ['lancer', 'officer']];
+      return [['officer', 'lancer', 'trooper'], ['officer', 'trooper', 'trooper'], ['lancer', 'officer']];
   }
+}
+
+/**
+ * The enemy groups of a procedural mission (docs/ZOMBIS-PRIMERO.md): a
+ * Saqueo's dead scattered about; a mission of the living, two of their bands
+ * and two groups of the dead; any other, the dead.
+ */
+export function missionPods(difficulty: number, kind: MissionKind, living = false): TemplateId[][] {
+  if (kind === 'scavenge') return scavengePlan(difficulty);
+  return living ? [...livingPlan(difficulty).slice(0, 2), ...podPlan(difficulty).slice(0, 2)] : podPlan(difficulty);
 }
 
 /**
@@ -243,10 +285,11 @@ export function hordeWave(difficulty: number): TemplateId[] {
 }
 
 /**
- * Nobody drops in out of nowhere (playtest 2026-10-13): the living enemy
- * that used to arrive mid-mission is on the map from the start, as one more
- * group, in the missions that had them (elimination from difficulty 3 on, and
- * every mission with an objective but the Saqueo).
+ * Nobody drops in out of nowhere (playtest 2026-10-13): one more group on the
+ * map from the start, in the missions that had one (elimination from
+ * difficulty 3 on, and every mission with an objective but the Saqueo). The
+ * living's when the mission is theirs, the dead's round the objective
+ * otherwise (docs/ZOMBIS-PRIMERO.md).
  */
 const GARRISON: Record<number, TemplateId[]> = {
   1: ['trooper', 'trooper'],
@@ -254,10 +297,16 @@ const GARRISON: Record<number, TemplateId[]> = {
   3: ['officer', 'trooper', 'lancer'],
   4: ['officer', 'lancer', 'trooper'],
 };
+const DEAD_GARRISON: Record<number, TemplateId[]> = {
+  1: ['zombie', 'zombie', 'zombie'],
+  2: ['zombie', 'zombie', 'xenoid'],
+  3: ['zombie', 'zombie', 'xenoid', 'bloater'],
+  4: ['zombie', 'zombie', 'mec', 'xenoid'],
+};
 
-export function garrison(kind: MissionKind, difficulty: number): TemplateId[] | null {
+export function garrison(kind: MissionKind, difficulty: number, living = false): TemplateId[] | null {
   if (kind === 'scavenge' || (kind === 'elimination' && difficulty < 3)) return null;
-  return [...GARRISON[Math.max(1, Math.min(4, difficulty))]!];
+  return [...(living ? GARRISON : DEAD_GARRISON)[Math.max(1, Math.min(4, difficulty))]!];
 }
 
 /** The pressure on the clock of sabotage and hack: zombies drawn in by the edges, at the end of these enemy turns. */
@@ -289,9 +338,9 @@ export function createMission(opts: MissionOptions): GameState {
   const difficulty = opts.difficulty ?? 2;
   const handmade = opts.map.kind === 'handmade' ? MAPS[opts.map.id] : undefined;
   let kind = opts.kind ?? 'elimination';
-  const base = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : kind === 'scavenge' ? scavengePlan(difficulty) : podPlan(difficulty));
-  // The living enemy's whole strength from the start; at night, the dead out in force too (a hand-made map has no room for either).
-  const extra = garrison(kind, difficulty);
+  const base = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : missionPods(difficulty, kind, opts.living));
+  // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
+  const extra = garrison(kind, difficulty, opts.living);
   const plan = [...base, ...(extra ? [extra] : []), ...(opts.night ? [nightPod(difficulty)] : [])];
   const layout = missionLayout(opts.map, kind, plan.map((p) => p.length));
   // A map that can't host the objective falls back to elimination.
@@ -453,6 +502,8 @@ export function normalizeMission(s: GameState): GameState {
   for (const u of s.units) {
     fix(u.pos);
     if (u.heard) fix(u.heard);
+    // A mission saved before magazines were counted (docs/FASE7.md): the squad starts with its spares.
+    if (u.mags === undefined && countsMags(u.team, TEMPLATES[u.template].weapon)) u.mags = SPARE_MAGS;
   }
   for (const p of s.pods) p.patrol.forEach(fix);
   const m = s.mission;

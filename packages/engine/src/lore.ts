@@ -1,5 +1,5 @@
 /**
- * The story (docs/LORE.md): mission briefings, the Expediente pages, the story
+ * The story (docs/LORE.md): mission briefings, the Diario pages, the story
  * chapters and the epilogues. Apart from the chapters' mission setup (`STORY`),
  * which the campaign reads, it is text only.
  */
@@ -203,6 +203,8 @@ export interface SearchFind {
   parts?: number;
   /** A found weapon (content.ts FOUND_WEAPONS). */
   weapon?: FoundWeaponId;
+  /** Magazines (docs/FASE7.md), straight to the searcher's spares. */
+  mags?: number;
 }
 
 /** What the rations found were. */
@@ -221,6 +223,14 @@ export function partsCount(n: number): string {
   return n === 1 ? '1 pieza' : `${n} piezas`;
 }
 
+/** What a magazine found was (docs/FASE7.md): it fits the searcher's weapon. */
+export const MAG_FINDS = ['un cargador lleno', 'un cargador que le vale', 'una caja de balas de su calibre'];
+
+/** «1 cargador», «3 cargadores»: a soldier's spares. */
+export function magsCount(n: number): string {
+  return n === 1 ? '1 cargador' : `${n} cargadores`;
+}
+
 function joinAnd(parts: string[]): string {
   return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : (parts[0] ?? '');
 }
@@ -236,11 +246,12 @@ export function searchLine(who: string, decor: DecorKind, find: SearchFind | nul
   if (find?.food) parts.push(`${FOOD_FINDS[seed % FOOD_FINDS.length]!} (${rations(find.food)})`);
   if (find?.parts) parts.push(`${PARTS_FINDS[seed % PARTS_FINDS.length]!} (${partsCount(find.parts)})`);
   if (find?.weapon) parts.push(FOUND_WEAPONS[find.weapon].find);
+  if (find?.mags) parts.push(find.mags === 1 ? MAG_FINDS[seed % MAG_FINDS.length]! : magsCount(find.mags));
   if (!parts.length) return `${who} registra ${where}. ${EMPTY_FINDS[seed % EMPTY_FINDS.length]!}`;
   return `${who} registra ${where}: ${joinAnd(parts)}.`;
 }
 
-/** What a search turned up, short, to float over the furniture: «+12 §», «Botiquín», «Medicinas», «+2 raciones», «+1 pieza», a weapon's name or «Nada». */
+/** What a search turned up, short, to float over the furniture: «+12 §», «Botiquín», «Medicinas», «+2 raciones», «+1 pieza», a weapon's name, «+1 cargador» or «Nada». */
 export function findLabel(find: SearchFind | null): string {
   const parts: string[] = [];
   if (find?.supplies) parts.push(`+${find.supplies} §`);
@@ -249,7 +260,35 @@ export function findLabel(find: SearchFind | null): string {
   if (find?.food) parts.push(`+${rations(find.food)}`);
   if (find?.parts) parts.push(`+${partsCount(find.parts)}`);
   if (find?.weapon) parts.push(FOUND_WEAPONS[find.weapon].name);
+  if (find?.mags) parts.push(`+${magsCount(find.mags)}`);
   return parts.join(' · ') || 'Nada';
+}
+
+// ------------------------------------------------------------------ rubble
+
+/** Walls and floors a grenade breaks (docs/FASE7.md §4–5): the log lines and the floating word. */
+export const RUBBLE_TEXT = {
+  /** Log, when the floor gives way under the blast. */
+  floor: 'El suelo cede.',
+  /** Floating over whoever falls through it. */
+  fallFloat: '¡CAE!',
+  /** Log, when the objective lying there goes down with the floor. */
+  item: 'Lo que veníais a buscar cae con el suelo.',
+};
+
+/** The log line for a blast that breaks walls: one or several. */
+export function breachLine(walls: number): string {
+  return walls === 1 ? 'La explosión abre un boquete en la pared.' : 'La explosión abre boquetes en las paredes.';
+}
+
+/**
+ * The log line for a fall through a broken floor: «Ana cae con el suelo a la
+ * planta de abajo.», «… dos plantas.». The damage (FALL_DAMAGE a storey) has
+ * its own line after, from `damaged`.
+ */
+export function fallLine(who: string, storeys: number): string {
+  const n = Math.max(1, storeys);
+  return `${who} cae con el suelo ${n === 1 ? 'a la planta de abajo' : `${['dos', 'tres'][n - 2] ?? n} plantas`}.`;
 }
 
 /**
@@ -416,28 +455,28 @@ export const NIGHT_TEXT = {
 /** Several reports per mission type; each offer always gets the same one. */
 const BRIEFINGS: Record<MissionKind, string[]> = {
   elimination: [
-    'Una banda de Cuervos lleva dos días siguiendo a una familia. Si la encuentra, se la llevará. Abatid a todos.',
+    'Los muertos han llenado el mercado donde los enclaves cambian comida. Hasta que no esté vacío, no hay trueque. Que no quede ninguno.',
     'Una manada de zombis ha cortado la única carretera con agua potable. Limpiad la zona.',
-    'Los Cuervos han montado un control en el cruce y cobran en comida a todo el que pasa. Que no quede ninguno.',
+    'Los muertos de todo un barrio siguen en sus calles, y por ese barrio pasa la ruta de la sierra. Abatidlos a todos.',
   ],
   recovery: [
     'La farmacia del pueblo sigue cerrada. Dentro hay medicinas. Sacadlas por la zona de evacuación.',
     'Un correo del Refugio cayó en un pueblo infestado. Su mochila sigue allí. Recuperadla antes de que se acabe el tiempo.',
-    'Los Cuervos guardan su botín en un almacén mal vigilado. Llevaos lo que podáis.',
+    'Los Cuervos escondieron su botín en un almacén y no volvieron a por él: los muertos llegaron antes. Llevaos lo que podáis.',
   ],
   sabotage: [
-    'Los Cuervos han puesto una sirena en el valle. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Calladla antes de que termine la cuenta atrás.',
+    'Los Cuervos dejaron una sirena en el valle y se fueron. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Calladla antes de que termine la cuenta atrás.',
     'Una sirena nueva suena cada noche junto a nuestras rutas. Calladla a tiempo.',
   ],
   hack: [
     'Hay una radio de emergencia en la zona, muerta desde el invierno. Arregladla y oiremos a quien queda. Si falla, el ruido atraerá a todo lo que ande cerca.',
-    'Los Cuervos se comunican por un repetidor de la zona. Pinchadlo y sabremos qué traman. Si falla, saltará la alarma.',
+    'Los Cuervos montaron un repetidor en un pueblo muerto y hablan por él. Ponedlo a nuestro favor y sabremos qué traman. Si falla, saltará la alarma.',
     'En el puesto de policía queda un equipo de radio entero. Ponedlo en marcha. Si falla, el ruido traerá compañía.',
   ],
   rescue: [
-    'Los Cuervos se han llevado a una maestra. Si llega a su campamento, no la volveremos a ver. Sacadla con vida.',
-    'Un superviviente lleva tres días en una azotea, rodeado y sin agua. Sacadlo con vida.',
-    'Un desertor de los Cuervos quiere pasarse a nuestro lado, y lo están cazando. Llegad antes que ellos.',
+    'Los Cuervos se han llevado a una persona que nos hace falta. Si llega a su campamento, no la volveremos a ver. Sacadla con vida.',
+    'Los Cuervos retienen a alguien del enclave y piden gasolina a cambio. No vamos a pagar. Que vuelva con vida.',
+    'Los Cuervos han parado en un pueblo con sus prisioneros. Entre ellos hay alguien que sabe cosas que nos hacen falta. Que salga con vida.',
   ],
   scavenge: SCAVENGE_BRIEFINGS,
 };
@@ -585,6 +624,8 @@ export interface StoryChapter {
   prize?: string;
   briefing: string;
   signature: string;
+  /** The living hold it (docs/ZOMBIS-PRIMERO.md): bands of the Cuervos or the Congregación among the dead. */
+  living?: boolean;
   /** Recovery: what the squad carries out. */
   item?: string;
   /** Rescue: who waits at the objective. */
@@ -629,6 +670,7 @@ export const STORY: StoryChapter[] = [
   },
   {
     title: 'La sirena',
+    living: true,
     kind: 'sabotage',
     biome: 'wilds',
     region: 'na',
@@ -653,6 +695,7 @@ export const STORY: StoryChapter[] = [
   },
   {
     title: 'Los inmunes',
+    living: true,
     kind: 'rescue',
     biome: 'wilds',
     region: 'eeu',
@@ -680,6 +723,7 @@ export const STORY: StoryChapter[] = [
   },
   {
     title: 'La Voz',
+    living: true,
     kind: 'rescue',
     biome: 'city',
     region: 'na',

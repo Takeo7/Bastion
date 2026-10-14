@@ -1,5 +1,6 @@
 import { BAD_LUCK_MISSES } from './aim';
 import { AP_PER_TURN, attackWeapon, CONTROL_TURNS, hordePoints, TEMPLATES, WEAPONS } from './content';
+import { decorCode } from './decor';
 import { getUnit, nodeOf, tileIndex } from './grid';
 import type {
   AbilityId,
@@ -7,6 +8,8 @@ import type {
   BlastAbility,
   ChargeId,
   ConcealReason,
+  Decor,
+  DecorKind,
   EndReason,
   GameState,
   Light,
@@ -86,7 +89,12 @@ export type GameEvent =
   | { t: 'evacuated'; unit: string }
   | { t: 'itemPicked'; unit: string }
   | { t: 'itemDropped'; pos: Pos }
-  | { t: 'tileChanged'; pos: Pos; kind: TileKind }
+  /** `decor`: what it is to look like from now on (a breached wall); without it, the decor stays. */
+  | { t: 'tileChanged'; pos: Pos; kind: TileKind; decor?: DecorKind }
+  /** A storey's slab gives way under a grenade (docs/FASE7.md §5): the place is open air. */
+  | { t: 'floorBroken'; pos: Pos }
+  /** Down through a broken floor onto `to` (docs/FASE7.md §5); the damage comes after, as `damaged`. */
+  | { t: 'fell'; unit: string; from: Pos; to: Pos }
   /** `unit`: the soldier they saw (or who attacked them); `by`: the alien that saw it. */
   | { t: 'podActivated'; pod: string; cause: PodCause; unit?: string; by?: string }
   /**
@@ -287,6 +295,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     case 'reload': {
       const u = unit(s, e.unit);
       u.ammo = WEAPONS[TEMPLATES[u.template].weapon].clip;
+      if (u.mags !== undefined) u.mags = Math.max(0, u.mags - 1);
       break;
     }
     case 'explosive':
@@ -443,10 +452,27 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       }
       break;
     }
+    case 'floorBroken': {
+      const level = e.pos.z > 0 ? s.levels?.[e.pos.z - 1] : undefined;
+      if (level) level.tiles[tileIndex(s, e.pos.x, e.pos.y)] = null;
+      break;
+    }
+    case 'fell': {
+      const u = unit(s, e.unit);
+      u.pos = { ...e.to };
+      u.overwatch = false;
+      u.hunkered = false;
+      break;
+    }
     case 'tileChanged': {
       // On the ground, or on a storey's slab (docs/FASE6-PLAN.md).
       const tiles = e.pos.z === 0 ? s.tiles : s.levels?.[e.pos.z - 1]?.tiles;
       if (tiles) tiles[tileIndex(s, e.pos.x, e.pos.y)] = e.kind;
+      if (e.decor) {
+        // A breached wall keeps its look through a reload (docs/FASE7.md §4).
+        const level = e.pos.z === 0 ? s : s.levels?.[e.pos.z - 1];
+        if (level) (level.decor ??= new Array<Decor>(s.width * s.height).fill(0))[tileIndex(s, e.pos.x, e.pos.y)] = decorCode(e.decor);
+      }
       break;
     }
     case 'podActivated': {
@@ -507,7 +533,9 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     case 'searched': {
       (s.searched ??= []).push(nodeOf(s, e.tile));
-      if (e.loot) (unit(s, e.unit).backpack ??= []).push({ ...e.loot });
+      // Magazines go straight to the searcher's spares (docs/FASE7.md); everything else into the backpack.
+      if (e.loot?.mags) unit(s, e.unit).mags = (unit(s, e.unit).mags ?? 0) + e.loot.mags;
+      else if (e.loot) (unit(s, e.unit).backpack ??= []).push({ ...e.loot });
       break;
     }
     case 'lightOn':

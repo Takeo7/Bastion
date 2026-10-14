@@ -1,5 +1,6 @@
 import { TEMPLATES } from './content';
-import { canStandOn, DIRS8, elevAt, heightAt, inBounds, isWalkable, isWindow, kindAt, nodeOf, posOf, slabAt, surfaceAt, toPos } from './grid';
+import { decorOf } from './decor';
+import { canStandOn, DIRS4, DIRS8, elevAt, heightAt, inBounds, isWalkable, isWindow, kindAt, nodeOf, posOf, slabAt, surfaceAt, toPos } from './grid';
 import type { GameState, Place, Pos, Unit } from './types';
 
 /** Movement costs in half-tiles so diagonals (1.5 tiles) stay integral. */
@@ -52,14 +53,22 @@ export function stepCost(s: GameState, x: number, y: number, dx: number, dy: num
   return cost;
 }
 
+/** The way a building's stairs on `p` climb (a DIRS4 index), or null for a ladder or anything else. */
+function stairsFacing(s: GameState, p: Pos): number | null {
+  const decor = p.z ? s.levels?.[p.z - 1]?.decor : s.decor;
+  const look = decorOf(decor?.[p.y * s.width + p.x]);
+  return look?.kind === 'stairs' ? look.facing : null;
+}
+
 /**
  * Cost of a step from `from` to `to`, on the next tile, on any level (without
  * unit checks), or null if it can't be taken (docs/FASE6-PLAN.md): stepCost's
  * rules by height instead of elevation. A ladder (or a building's stairs)
  * climbs one storey onto the next tile, with nothing overhead (a stairwell);
- * going down onto one costs the same. Any other way down is a drop off an
- * edge, with no floor or roof in between, and never out of an upper window
- * (not yet: decision 4 in FASE6-PLAN.md).
+ * going down onto one costs the same. A building's stairs are left and taken
+ * at the top only by their landing, the tile they face (docs/FASE7.md); a
+ * ladder by any side. Any other way down is a drop off an edge, with no floor
+ * or roof in between, out of an upper window too (docs/FASE7.md).
  */
 export function stepBetween(s: GameState, from: Pos, to: Pos): number | null {
   const dx = to.x - from.x;
@@ -84,10 +93,14 @@ export function stepBetween(s: GameState, from: Pos, to: Pos): number | null {
   let cost = COST_ORTHO + (isWindow(toKind) ? COST_VAULT : 0);
   if (dz > 0) {
     if (dz !== 1 || fromKind !== 'ladder' || slabAt(s, from.x, from.y, h + 1)) return null;
+    const up = stairsFacing(s, from);
+    if (up !== null && (DIRS4[up]!.x !== dx || DIRS4[up]!.y !== dy)) return null;
     cost += COST_CLIMB;
   } else if (dz < 0) {
-    if (-dz > MAX_DROP || (from.z > 0 && isWindow(fromKind))) return null;
+    if (-dz > MAX_DROP) return null;
     for (let k = landing + 1; k <= h; k++) if (slabAt(s, to.x, to.y, k)) return null;
+    const up = toKind === 'ladder' && dz === -1 ? stairsFacing(s, to) : null;
+    if (up !== null && (DIRS4[up]!.x !== -dx || DIRS4[up]!.y !== -dy)) return null;
     cost += toKind === 'ladder' && dz === -1 ? COST_CLIMB : COST_DROP * -dz;
   }
   return cost;

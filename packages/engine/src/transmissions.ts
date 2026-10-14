@@ -8,6 +8,7 @@
  * `{yo}`, "Comandante Ana" for the player reading it.
  */
 import { DOOM_MAX, nextSteps, treatCost, type CampaignState } from './campaign';
+import { SPARE_MAGS } from './content';
 import { doomStatus, STORY } from './lore';
 import { bastionLevel } from './progression';
 import type { Slot } from './types';
@@ -487,8 +488,9 @@ export type TipId =
   | 'bitten'
   | 'risen'
   | 'foundWeapon'
-  // Buildings with storeys (docs/FASE6.md).
-  | 'storeys';
+  // Buildings with storeys (docs/FASE6.md) and counted ammunition (FASE7.md).
+  | 'storeys'
+  | 'noMags';
 
 export interface RadioTip {
   who: SpeakerId;
@@ -512,7 +514,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   contact: {
     who: 'morse',
     line: 'Contacto. Ahora se mueven ellos también.',
-    rule: 'Los vivos corren a cubrirse; los zombis vienen derechos a por vosotros. Buscad cobertura (el escudo) antes de terminar el turno.',
+    rule: 'Los zombis vienen derechos a por vosotros, y contra un mordisco la cobertura no sirve: guardad distancia, dejad a alguien en vigilancia, esperadlos en un paso estrecho y que no os rodeen. Los vivos, donde los haya, corren a cubrirse: contra ellos, sí, buscad el escudo antes de terminar el turno.',
   },
   shot: {
     who: 'morse',
@@ -591,8 +593,13 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   storeys: {
     who: 'morse',
-    line: 'Desde arriba se dispara mejor. Ellos también lo saben.',
-    rule: 'Subir o bajar una planta por la escalera cuesta como 2 casillas. Disparar desde más alto da +20 de puntería, también a los vivos apostados arriba. Los zombis también suben: si os oyen arriba, os siguen por la escalera.',
+    line: 'Desde arriba se dispara mejor. Y por una escalera se sube de uno en uno.',
+    rule: 'Subir o bajar una planta por la escalera cuesta como 2 casillas; arriba, solo se entra y se sale por el rellano. Disparar desde más alto da +20 de puntería. Los zombis también suben: si os oyen arriba, os siguen por la escalera. En las misiones de los vivos, ellos se apostan arriba.',
+  },
+  noMags: {
+    who: 'teo',
+    line: 'Sin cargadores, esa arma ya solo pesa.',
+    rule: `Cada soldado sale con ${SPARE_MAGS} cargadores de repuesto, y recargar gasta uno. Sin ellos no se recarga: quedan las balas que tenga dentro y lo que lleve aparte, pistola, hoja o granadas. Registrando aparecen más, y en la base se reponen.`,
   },
 };
 

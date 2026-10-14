@@ -5,6 +5,12 @@ import type { AbilityId, AttackAbility, ChargeId, ClassId, FoundWeaponId, ItemId
 
 export const AP_PER_TURN = 2;
 
+/** Spare magazines a soldier takes into a mission for the primary weapon (docs/FASE7.md): reloading spends one. */
+export const SPARE_MAGS = 3;
+
+/** Damage per storey to whoever falls through a floor a grenade broke (docs/FASE7.md §5); armour doesn't stop it. */
+export const FALL_DAMAGE = 1;
+
 export const LOW_COVER_BONUS = 20;
 export const HIGH_COVER_BONUS = 40;
 export const HUNKER_DEFENSE = 30;
@@ -179,7 +185,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   cannon: weapon({ id: 'cannon', name: 'Cañón', damage: 5, spread: 1, critDamage: 2, clip: 3, burst: 5, noise: 14 }),
   sniper: weapon({ id: 'sniper', name: 'Fusil de precisión', damage: 5, spread: 1, critDamage: 2, clip: 3, crit: 10, range: 'long', apCost: 2, burst: 1, noise: 16 }),
   pistol: weapon({ id: 'pistol', name: 'Pistola', damage: 2, plusOne: 50, critDamage: 1, burst: 1, noise: 8 }),
-  sword: weapon({ id: 'sword', name: 'Espada', damage: 4, spread: 1, critDamage: 2, aim: 20, crit: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
+  sword: weapon({ id: 'sword', name: 'Machete', damage: 4, spread: 1, critDamage: 2, aim: 20, crit: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
   trooperRifle: weapon({ id: 'trooperRifle', name: 'Fusil de caza', damage: 3, critDamage: 1, clip: 3, noise: 12 }),
   officerRifle: weapon({ id: 'officerRifle', name: 'Fusil automático', damage: 3, plusOne: 50, critDamage: 2, clip: 3, noise: 14 }),
   lancerRifle: weapon({ id: 'lancerRifle', name: 'Carabina', damage: 3, plusOne: 50, critDamage: 2, clip: 3, noise: 12 }),
@@ -245,15 +251,15 @@ export interface AbilityDef {
 export const ABILITIES: Record<AbilityId, AbilityDef> = {
   shoot: { id: 'shoot', name: 'Disparar', description: 'Dispara el arma principal. Gasta una acción; el fusil de precisión, las dos.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'primary' },
   pistol: { id: 'pistol', name: 'Pistola', description: 'Dispara la pistola: munición infinita. Gasta una acción.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'secondary' },
-  slash: { id: 'slash', name: 'Tajo', description: 'Corre hasta un enemigo a tu alcance y atácalo con la espada. Ignora la cobertura.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
+  slash: { id: 'slash', name: 'Tajo', description: 'Corre hasta un enemigo a tu alcance y atácalo con el machete. Ignora la cobertura.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   stunLance: { id: 'stunLance', name: 'Red y porra', description: 'Atrapa con la red y golpea con la porra: aturde.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   claw: { id: 'claw', name: 'Mordisco', description: 'Muerde cuerpo a cuerpo.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   overwatch: { id: 'overwatch', name: 'Vigilancia', description: 'Dispara al primer enemigo que se mueva a la vista.', target: 'self', ap: 1, endsTurn: true },
   hunker: { id: 'hunker', name: 'Agazaparse', description: '+30 de defensa y +50 de esquiva hasta tu próximo turno.', target: 'self', ap: 1, endsTurn: true },
-  reload: { id: 'reload', name: 'Recargar', description: 'Llena el cargador.', target: 'self', ap: 1, endsTurn: false },
-  grenade: { id: 'grenade', name: 'Granada', description: 'Lanza una granada: daña a todos en el área y destruye cobertura.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 10, radius: 2.5, explosive: 'fragGrenade' },
-  launch: { id: 'launch', name: 'Lanzagranadas', description: 'Dispara una granada más lejos y con más radio.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 14, radius: 3.5, explosive: 'fragGrenade' },
-  missiles: { id: 'missiles', name: 'Granada del chaleco', description: 'Le estalla una granada que aún cuelga del chaleco.', target: 'tile', ap: 1, endsTurn: true, charge: 'missiles', range: 15, radius: 2.5, explosive: 'microMissiles' },
+  reload: { id: 'reload', name: 'Recargar', description: `Mete un cargador lleno y gasta uno de repuesto. Cada soldado sale con ${SPARE_MAGS}; registrando aparecen más.`, target: 'self', ap: 1, endsTurn: false },
+  grenade: { id: 'grenade', name: 'Granada', description: 'Lanza una granada: daña a todos en el área, destruye cobertura y abre boquetes en las paredes. Arriba hunde el suelo donde cae, y quien esté encima cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 10, radius: 2.5, explosive: 'fragGrenade' },
+  launch: { id: 'launch', name: 'Lanzagranadas', description: 'Dispara una granada más lejos y con más radio. También abre boquetes en las paredes y, arriba, hunde el suelo donde cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 14, radius: 3.5, explosive: 'fragGrenade' },
+  missiles: { id: 'missiles', name: 'Granada del chaleco', description: 'Le estalla una granada que aún cuelga del chaleco. También abre boquetes en las paredes y, arriba, hunde el suelo.', target: 'tile', ap: 1, endsTurn: true, charge: 'missiles', range: 15, radius: 2.5, explosive: 'microMissiles' },
   medkit: { id: 'medkit', name: 'Botiquín volante', description: 'El Grillo, el dron casero del especialista, cura 4 de salud a un aliado.', target: 'ally', ap: 1, endsTurn: false, charge: 'medkit', range: 15 },
   aid: { id: 'aid', name: 'Cobertura del Grillo', description: 'El Grillo protege a un aliado: +20 de defensa hasta vuestro próximo turno.', target: 'ally', ap: 1, endsTurn: false, range: 15 },
   evac: { id: 'evac', name: 'Evacuar', description: 'Sale de la misión desde la zona de evacuación.', target: 'self', ap: 1, endsTurn: true },

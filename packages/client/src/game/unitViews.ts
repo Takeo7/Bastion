@@ -12,6 +12,8 @@ const POOL_COLOR = '#e8edf2';
 const CROWD_SHADOWS = 24;
 /** Seconds per orthogonal tile while moving. */
 const STEP_SECONDS = 0.16;
+/** How high a window's sill is over its floor (the kits' windows), where a unit climbs to jump out. */
+const SILL = 0.75;
 
 /**
  * Pose values combined every frame into the rig transform.
@@ -118,6 +120,8 @@ export class UnitViews {
   private partnerId: string | null = null;
   /** Whether a place is hidden by the buildings' cutaway (MapView.isCutAway); set by the game. */
   private cutAway: ((p: Place) => boolean) | null = null;
+  /** The state last shown, for what a step lands on (a window's sill). */
+  private shown: GameState | null = null;
 
   constructor() {
     // Selection is white, never a player's colour (playtest: a selected soldier looked like Arturo's),
@@ -207,6 +211,7 @@ export class UnitViews {
 
   /** Brings flags, visibility, persistent poses and idle positions in line with the shown state. */
   sync(s: GameState, visibleAliens: Set<string>, coverOf: (u: Unit) => 0 | 1 | 2 | null): void {
+    this.shown = s;
     const carrier = s.mission.item?.carrier ?? null;
     for (const u of s.units) {
       const v = this.views.get(u.id) ?? this.create(u);
@@ -517,7 +522,18 @@ export class UnitViews {
         const to = tileToWorld(step);
         this.face(id, to);
         const rise = to.y - from.y;
-        if (rise > 0.5) {
+        if (Math.abs(rise) < 0.5 && this.windowAt(step)) {
+          // Onto a window's sill (docs/FASE7.md): a crouched climb up to it. Out of it is the next step: down
+          // to the ground beyond, or from a storey up, the fall.
+          const sill = to.clone().setY(to.y + SILL);
+          p.run = 0;
+          await tween(STEP_SECONDS * 1.8, (t) => {
+            v.rig.root.position.lerpVectors(from, sill, t);
+            v.rig.root.position.y = from.y + (sill.y - from.y) * Math.min(1, t / 0.65) ** 0.6;
+            p.crouch = Math.sin(t * Math.PI) * 0.7;
+          });
+          p.run = 1;
+        } else if (rise > 0.5) {
           // Up a ladder: to the wall, climb, then onto the roof.
           const foot = from.clone().lerp(to, 0.4).setY(from.y);
           const top = foot.clone().setY(to.y);
@@ -529,8 +545,9 @@ export class UnitViews {
           p.run = 1;
           await tween(STEP_SECONDS * 0.6, (t) => v.rig.root.position.lerpVectors(top, to, t));
         } else if (rise < -0.5) {
-          // Drop off an edge: a short hop out, then the fall.
-          await tween(STEP_SECONDS * 2.2, (t) => {
+          // Drop off an edge or out of a window: a short hop out, then the fall, longer the higher it is
+          // (off a roof one storey up, as it always was).
+          await tween(STEP_SECONDS * (1.2 + 0.45 * -rise), (t) => {
             v.rig.root.position.lerpVectors(from, to, Math.min(1, t * 1.3));
             v.rig.root.position.y = from.y + rise * t * t + Math.sin(Math.min(1, t * 2) * Math.PI) * 0.35;
           });
@@ -549,6 +566,41 @@ export class UnitViews {
       v.animating = false;
       void tween(0.18, (t) => (p.run = 1 - t));
     }
+  }
+
+  /**
+   * Falls through a broken floor to place `to` (docs/FASE7.md §5: the event
+   * `fell`): no hop, the floor gives way under the unit, a short stagger
+   * while it drops, and a crouch on landing. Resolves as it touches down.
+   */
+  async fall(id: string, to: Place): Promise<void> {
+    const v = this.views.get(id);
+    if (!v) return;
+    v.animating = true;
+    const p = v.pose;
+    const from = v.rig.root.position.clone();
+    const end = tileToWorld(to);
+    const drop = Math.max(0.1, from.y - end.y);
+    try {
+      await tween(STEP_SECONDS * (1 + 0.5 * drop), (t) => {
+        v.rig.root.position.lerpVectors(from, end, t);
+        v.rig.root.position.y = from.y - drop * t * t;
+        p.hit = Math.sin(t * Math.PI) * 0.6;
+      });
+      v.place = { ...to };
+      void tween(0.25, (t) => (p.crouch = Math.sin(t * Math.PI) * 0.9));
+    } finally {
+      v.animating = false;
+    }
+  }
+
+  /** Whether place `p` is a window (whole or broken) on its storey, in the state last shown. */
+  private windowAt(p: Place): boolean {
+    const s = this.shown;
+    if (!s || p.x < 0 || p.y < 0 || p.x >= s.width || p.y >= s.height) return false;
+    const tiles = p.z ? s.levels?.[p.z - 1]?.tiles : s.tiles;
+    const t = tiles?.[p.y * s.width + p.x];
+    return t === 'window' || t === 'windowBroken';
   }
 
   /**

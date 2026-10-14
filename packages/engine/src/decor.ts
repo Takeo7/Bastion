@@ -46,6 +46,7 @@ const IDS: Record<DecorKind, number> = {
   log: 30,
   rubble: 31,
   stairs: 32,
+  breach: 33,
 };
 
 const KINDS: DecorKind[] = [];

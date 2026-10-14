@@ -38,17 +38,19 @@ interface LootTable {
   parts: number;
   /** A good weapon (FOUND_WEAPONS): rare, in boots, stores and wardrobes. */
   weapon: number;
+  /** A magazine (docs/FASE7.md), for a searcher who counts them: stores and car boots most. */
+  mags: number;
   /** Accessories that turn up there (only those the difficulty opens: `level` ≤ difficulty + 2). */
   items: ItemId[];
 }
 
 const TABLES: Record<Spot, LootTable> = {
-  home: { supplies: 30, item: 8, medicines: 12, food: 20, parts: 0, weapon: 2, items: ['firstAid', 'smokeGrenade', 'nanoVest', 'mindShield'] },
-  office: { supplies: 30, item: 8, medicines: 8, food: 4, parts: 15, weapon: 0, items: ['firstAid', 'flashbang', 'tracerRounds', 'mindShield'] },
-  shop: { supplies: 35, item: 8, medicines: 12, food: 25, parts: 2, weapon: 0, items: ['firstAid', 'smokeGrenade', 'fragGrenade', 'tracerRounds'] },
-  store: { supplies: 30, item: 14, medicines: 4, food: 15, parts: 15, weapon: 3, items: ['fragGrenade', 'smokeGrenade', 'tracerRounds', 'apRounds', 'flashbang'] },
-  trunk: { supplies: 30, item: 14, medicines: 8, food: 5, parts: 15, weapon: 4, items: ['fragGrenade', 'firstAid', 'apRounds', 'nanoVest'] },
-  glovebox: { supplies: 25, item: 5, medicines: 12, food: 3, parts: 5, weapon: 1, items: ['firstAid', 'tracerRounds'] },
+  home: { supplies: 30, item: 8, medicines: 12, food: 20, parts: 0, weapon: 2, mags: 4, items: ['firstAid', 'smokeGrenade', 'nanoVest', 'mindShield'] },
+  office: { supplies: 30, item: 8, medicines: 8, food: 4, parts: 15, weapon: 0, mags: 3, items: ['firstAid', 'flashbang', 'tracerRounds', 'mindShield'] },
+  shop: { supplies: 35, item: 8, medicines: 12, food: 25, parts: 2, weapon: 0, mags: 6, items: ['firstAid', 'smokeGrenade', 'fragGrenade', 'tracerRounds'] },
+  store: { supplies: 30, item: 14, medicines: 4, food: 15, parts: 15, weapon: 3, mags: 10, items: ['fragGrenade', 'smokeGrenade', 'tracerRounds', 'apRounds', 'flashbang'] },
+  trunk: { supplies: 30, item: 14, medicines: 8, food: 5, parts: 15, weapon: 4, mags: 10, items: ['fragGrenade', 'firstAid', 'apRounds', 'nanoVest'] },
+  glovebox: { supplies: 25, item: 5, medicines: 12, food: 3, parts: 5, weapon: 1, mags: 8, items: ['firstAid', 'tracerRounds'] },
 };
 
 /** Rations and parts found at once. */
@@ -68,8 +70,13 @@ function supplies(difficulty: number, rng: Rng, night: boolean): number {
   return night ? Math.round(found * NIGHT.supplies) : found;
 }
 
-/** What a search of `decor` turns up at that difficulty (1–4), or null for nothing; more suministros at night. */
-export function rollLoot(decor: DecorKind, difficulty: number, rng: Rng, night = false): Loot | null {
+/**
+ * What a search of `decor` turns up at that difficulty (1–4), or null for
+ * nothing; more suministros at night. A magazine only for a searcher who
+ * counts them (`mags`); for anyone else that share turns up nothing, so the
+ * other rolls come out as before.
+ */
+export function rollLoot(decor: DecorKind, difficulty: number, rng: Rng, night = false, mags = false): Loot | null {
   const spot = SPOTS[decor];
   if (!spot) return null;
   const d = Math.max(1, Math.min(4, difficulty));
@@ -85,6 +92,7 @@ export function rollLoot(decor: DecorKind, difficulty: number, rng: Rng, night =
   if (roll < (edge += t.food)) return { food: rng.range(...FOOD_FIND) };
   if (roll < (edge += t.parts)) return { parts: rng.range(...PARTS_FIND) };
   if (roll < (edge += t.weapon)) return { weapon: foundWeapon(rng) };
+  if (roll < (edge += t.mags)) return mags ? { mags: 1 } : null;
   return null;
 }
 

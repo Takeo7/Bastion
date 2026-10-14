@@ -185,7 +185,7 @@ describe('the skill tree', () => {
     expect(soldierStats(recruit).perks).toEqual([]);
     expect(soldierStats(recruit).mods.damage).toBe(soldierStats(build(null, 2)).mods.damage);
     expect(soldierStats(build('assault', 2, { slug: 1 })).perks).toEqual(['slug']);
-    expect(talentBlocker(build('sharpshooter', 7), 'keenBlade')).toMatch(/Necesita la espada del Asalto/);
+    expect(talentBlocker(build('sharpshooter', 7), 'keenBlade')).toMatch(/Necesita el machete del Asalto/);
   });
 
   it('a second axis up to its third row; never a third one', () => {

@@ -178,6 +178,8 @@ export class Overlays {
   private readonly hatch: THREE.InstancedMesh;
   private readonly eyes: THREE.InstancedMesh;
   private readonly blast: THREE.InstancedMesh;
+  /** Walls a frag grenade will breach (docs/FASE7.md §4). */
+  private readonly breach: THREE.InstancedMesh;
   private readonly path = fatLine(0xeafaff, 4);
   private readonly pathCasing = new Line2(
     this.path.geometry,
@@ -269,6 +271,14 @@ export class Overlays {
     );
     this.blast.count = 0;
     this.blast.position.y = 0.03;
+    // A bright square frame halfway up the wall, drawn over it (no depth test), so the wall that goes reads through itself.
+    this.breach = new THREE.InstancedMesh(
+      new THREE.RingGeometry(0.3, 0.4, 4).rotateZ(Math.PI / 4).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffd08a, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }),
+      64,
+    );
+    this.breach.count = 0;
+    this.breach.renderOrder = 9;
 
     this.evac = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(0.96, 0.96).rotateX(-Math.PI / 2),
@@ -307,7 +317,7 @@ export class Overlays {
     // instances were then (nowhere, for an empty one), and culls it by them
     // from then on: a grenade area or a move range elsewhere on the map would
     // vanish whenever that first spot left the screen. They are cheap to draw.
-    for (const mesh of [this.tiles, this.detect, this.hatch, this.eyes, this.blast, this.evac]) mesh.frustumCulled = false;
+    for (const mesh of [this.tiles, this.detect, this.hatch, this.eyes, this.blast, this.breach, this.evac]) mesh.frustumCulled = false;
     this.rangeLayers = [this.tiles, this.hatch, this.detect, this.eyes].map((mesh) => [mesh, (mesh.material as THREE.MeshBasicMaterial).opacity]);
 
     // The path gets a dark casing, so it reads over the blue and the yellow tiles alike.
@@ -316,7 +326,7 @@ export class Overlays {
     this.rangeRing.renderOrder = 9;
     this.note.element.className = 'tile-note';
     this.note.visible = false;
-    this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
     this.group.add(this.walkEdge, this.dashEdge, this.near);
     this.group.add(this.spots, this.noises, this.note);
   }
@@ -738,13 +748,23 @@ export class Overlays {
   /**
    * Grenade preview; `danger` tiles (own soldiers inside the blast) are drawn
    * red. A throw that can't be made still shows its area, greyed out.
+   * `walls`: those it would breach (docs/FASE7.md §4), framed.
    */
-  showBlast(center: Vec2 | null, tiles: Vec2[], valid: boolean, danger: Vec2[] = []): void {
+  showBlast(center: Vec2 | null, tiles: Vec2[], valid: boolean, danger: Vec2[] = [], walls: Vec2[] = []): void {
     this.blastCenter.visible = !!center;
     if (!center) {
       this.blast.count = 0;
+      this.breach.count = 0;
       return;
     }
+    const w = new THREE.Matrix4();
+    walls.slice(0, 64).forEach((t, i) => {
+      w.setPosition(tileToWorld(t, 1));
+      this.breach.setMatrixAt(i, w);
+    });
+    this.breach.count = Math.min(64, walls.length);
+    this.breach.instanceMatrix.needsUpdate = true;
+    (this.breach.material as THREE.MeshBasicMaterial).opacity = valid ? 0.95 : 0.4;
     this.blastCenter.position.copy(tileToWorld(center, 0.05));
     (this.blastCenter.material as THREE.MeshBasicMaterial).color.set(valid ? COLOR_BLAST : COLOR_DETECT);
     const m = new THREE.Matrix4();

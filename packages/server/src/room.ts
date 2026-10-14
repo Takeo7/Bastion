@@ -330,6 +330,7 @@ export class Room {
       rng: this.rng,
       kind: offer.kind,
       night: offer.night,
+      living: offer.living,
       squad: buildSquad(c),
       pods: offer.pods,
       difficulty: offer.difficulty,

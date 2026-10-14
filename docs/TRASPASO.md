@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14, con la versión 0.2.1 (commit `c1101f5`). Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el mismo día con la 0.2.3. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 345 tests.
+   Deben pasar 360 tests.
 5. **Jugar en el navegador:**
 
    ```bash
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. En Windows también se construye el instalador.
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.2.1)
+## 3. Estado (versión 0.2.3)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, clases con árbol de habilidades, heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,15 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0 y v0.2.1 en GitHub (privadas).
+  - releases v0.1.0, v0.2.0 y v0.2.1 en GitHub (privadas); la 0.2.2 y la 0.2.3 no están publicadas: el instalador se construye en el PC.
+- **Lo nuevo de la 0.2.2** (2026-10-14):
+  - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
+  - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
+  - el valle con relieve, campos, pueblos y carreteras; en combate, luz más cálida, suciedad y plazas con árboles y escombros;
+  - los textos que quedaban del globo y de XCOM, fuera; nombres que chocaban, cambiados.
+- **Lo nuevo de la 0.2.3** (2026-10-14):
+  - los zombis primero ([ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos; los humanos, solo en las suyas;
+  - la fase 7 ([FASE7.md](FASE7.md)): saltar por ventanas altas, escaleras que solo se dejan por el rellano, munición contada (3 cargadores), paredes y suelos que rompen las granadas.
 - **Rendimiento:** la telemetría de cada navegador va a `data/red.log` (o `%APPDATA%\Bastion\red.log` en la aplicación).
 
 ## 4. Decisiones importantes (y por qué)
@@ -91,6 +99,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Nombres:**
   - pestañas «Bastión», «El valle», «Diario», «Armería», «Cuartel», «Instalaciones», «Cochera»;
   - el tiempo pasa con «Esperar noticias»; la amenaza se llama «Infestación» (y «la Marea» desde el nivel 4).
+- **Los zombis primero** (14/10, [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos; los humanos solo en Rescate y en los capítulos y encargos que son suyos.
 - **Reglas** (de las pruebas de juego del 12 y del 13/10):
   - disparar gasta una acción;
   - la clase llega en Capitán;
@@ -104,18 +113,16 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - disparar desde más alto da +20 de puntería; la IA de los vivos valora la altura con +6 por planta al elegir sitio;
   - subir o bajar una planta por la escalera cuesta como 2 casillas; la IA cuenta 3 casillas de rodeo por planta.
 - **Interfaz:** Mixta, votada por Arturo. La cuadrícula del suelo, opción A (solo contornos).
+- **Cómo se juega:** Arturo y Ana juegan con la aplicación de escritorio; la web queda para probar (por eso Safari no se prueba).
+- **Sesiones de Claude:** Gameplay (coordina), Arte, Lore, UI y Networking, todas con Remote Control para seguirlas desde claude.ai/code ([EQUIPO.md](EQUIPO.md)).
 
 ## 5. Pendiente
 
 - **De Arturo y Ana:**
-  - probar la 0.2.1 en el PC con la RTX 3090: el instalador, una misión con telemetría y que Ana se una;
+  - probar la 0.2.3 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
+- **Probar en partida** lo nuevo de la 0.2.3: si las misiones de zombis se quedan cortas o se pasan, y si los 3 cargadores aprietan lo justo.
 - **Para más adelante:**
-  - saltar desde ventanas altas;
-  - suelos y paredes destructibles;
-  - escaleras que solo se dejan por un lado;
-  - comprimir el estado en red (deflate en el WebSocket);
-  - la munición contada;
   - firmar la aplicación (cuenta de desarrollador de Apple) y Steam;
   - horneado de animaciones para hordas grandes, si la telemetría lo pide.
 - **Textos pendientes de revisar por Lore:** [TEXTOS-PENDIENTES.md](TEXTOS-PENDIENTES.md).
@@ -129,6 +136,6 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [DESIGN.md](DESIGN.md) | Arquitectura, mecánicas, hoja de ruta y limitaciones conocidas |
 | [LORE.md](LORE.md) | El mundo, los zombis, las zonas y los recursos |
 | [ARTE.md](ARTE.md) | Dirección de arte y la tubería de Synty |
-| `FASE2.md`…`FASE6.md`, [ALTURA-Y-NOCHE.md](ALTURA-Y-NOCHE.md) | Especificación de cada fase |
+| `FASE2.md`…[FASE7.md](FASE7.md), [ALTURA-Y-NOCHE.md](ALTURA-Y-NOCHE.md), [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md) | Especificación de cada fase y del reparto de enemigos |
 | [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
