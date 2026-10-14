@@ -45,6 +45,8 @@ interface Pose {
   climb: number;
   /** A melee stroke: −1 wound up, +1 followed through (lunge). */
   swing: number;
+  /** How far into its hit reaction (hitReact), 0 to 1. */
+  react: number;
   yaw: number;
   yawTarget: number;
   phase: number;
@@ -206,7 +208,7 @@ export class UnitViews {
     const facing = u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
       crouch: 0, crouchTarget: 0, aim: 0, aimTarget: 0, aimFx: 0, run: 0, recoil: 0, hit: 0, flash: 0,
-      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, yaw: facing, yawTarget: facing,
+      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, yaw: facing, yawTarget: facing,
       phase: Math.random() * Math.PI * 2,
     };
     this.group.add(rig.root);
@@ -524,6 +526,7 @@ export class UnitViews {
     posed.search = p.search;
     posed.climb = p.climb;
     posed.swing = p.swing;
+    posed.react = p.react;
     rig.applyPose(posed, time);
     if (!rig.ownsReload) rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
   }
@@ -738,12 +741,19 @@ export class UnitViews {
     v.fell = { blow, seconds: (isFigure(v.rig) && v.rig.die?.(blow)) || 0 };
   }
 
-  /** Knock-back and red flash; `strength` 1 for a normal hit, more for crits. */
+  /**
+   * Knock-back and red flash; `strength` 1 for a normal hit, more for crits,
+   * less for a graze. Figures with clips also play a hit reaction for the way
+   * the blow came (syntyManifest.ts HITS), whose tail goes on after this resolves.
+   */
   hitReact(id: string, strength = 1): Promise<void> {
     const v = this.views.get(id);
     if (!v) return Promise.resolve();
     // A critical is a shot to the head: if it kills, the unit falls as one.
     if (v.blow) v.blow.head = strength > 1;
+    const last = v.blow && performance.now() - v.blow.at < BLOW_SECONDS * 1000 ? v.blow : null;
+    const seconds = (isFigure(v.rig) && v.rig.react?.(this.blowAt(v, last?.from ?? null, strength > 1, !!last?.melee), strength)) || 0;
+    if (seconds) void tween(seconds, (t) => (v.pose.react = t)).then(() => (v.pose.react = 0));
     return tween(0.4, (t) => {
       const k = Math.sin(Math.min(1, t * 1.6) * Math.PI);
       v.pose.hit = k * 0.6 * strength;

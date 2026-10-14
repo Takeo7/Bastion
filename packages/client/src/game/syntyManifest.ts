@@ -326,6 +326,25 @@ export const ANIMATIONS = {
   deathSpineFemn: bow('Feminine/Death/A_POLY_BOW_Death_Spine_B_Femn'),
   deathStomachFemn: bow('Feminine/Death/A_POLY_BOW_Death_Stomach_F_Femn'),
   deathForward: sword('Death/A_Death_F_01_Sword'),
+  // How a unit takes a hit (HITS): Bow Combat's for a hit, Sword Combat's (one for both builds) for a hard one.
+  hitHeadFMasc: bow('Masculine/Hit/A_POLY_BOW_Hit_Head_F_React_Masc'),
+  hitHeadLMasc: bow('Masculine/Hit/A_POLY_BOW_Hit_Head_L_React_Masc'),
+  hitHeadRMasc: bow('Masculine/Hit/A_POLY_BOW_Hit_Head_R_React_Masc'),
+  hitHeadBMasc: bow('Masculine/Hit/A_POLY_BOW_Hit_Head_B_React_Masc'),
+  hitBackMasc: bow('Masculine/Hit/A_POLY_BOW_Hit_Back_B_React_Masc'),
+  hitShoulderLMasc: bow('Masculine/Hit/A_POLY_BOW_Hit_Shoulder_L_React_Masc'),
+  hitShoulderRMasc: bow('Masculine/Hit/A_POLY_BOW_Hit_Shoulder_R_React_Masc'),
+  hitHeadFFemn: bow('Feminine/Hit/A_POLY_BOW_Hit_Head_F_React_Femn'),
+  hitHeadLFemn: bow('Feminine/Hit/A_POLY_BOW_Hit_Head_L_React_Femn'),
+  hitHeadRFemn: bow('Feminine/Hit/A_POLY_BOW_Hit_Head_R_React_Femn'),
+  hitHeadBFemn: bow('Feminine/Hit/A_POLY_BOW_Hit_Head_B_React_Femn'),
+  hitBackFemn: bow('Feminine/Hit/A_POLY_BOW_Hit_Back_B_React_Femn'),
+  hitShoulderLFemn: bow('Feminine/Hit/A_POLY_BOW_Hit_Shoulder_L_React_Femn'),
+  hitShoulderRFemn: bow('Feminine/Hit/A_POLY_BOW_Hit_Shoulder_R_React_Femn'),
+  hardBack: sword('Hit/HitReact/A_Hit_B_React_Sword'),
+  hardDouble: sword('Hit/HitReact/A_Hit_F_React_Sword'),
+  hardLeft: sword('Hit/HitReact/A_Hit_L_React_Sword'),
+  hardRight: sword('Hit/HitReact/A_Hit_R_React_Sword'),
 } satisfies Record<string, { pack: PackId; fbx: string }>;
 
 export type AnimationId = keyof typeof ANIMATIONS;
@@ -398,6 +417,39 @@ const deaths = (b: 'Masc' | 'Femn'): Death[] => [
 ];
 
 export const DEATHS: Record<'masc' | 'femn', Death[]> = { masc: deaths('Masc'), femn: deaths('Femn') };
+
+/**
+ * How a unit takes a hit (Gameplay, 2026-10-14): Synty's hit reactions, over
+ * the upper body only (the legs keep what they do: crouched in cover, it stays
+ * crouched). `from` is the way the blow comes from in the unit's frame (0
+ * ahead, π/2 from its left), measured in Blender by where the head is thrown;
+ * `hard` ones (Sword Combat, a stagger) are for a critical, `head` ones go with
+ * one too, `close` doubles up round a blow at arm's length.
+ */
+export interface Hit {
+  id: AnimationId;
+  from: number;
+  hard?: boolean;
+  head?: boolean;
+  close?: boolean;
+}
+
+const hits = (b: 'Masc' | 'Femn'): Hit[] => [
+  { id: `hitHeadF${b}`, from: 0, head: true },
+  { id: `hitHeadL${b}`, from: 0.86, head: true },
+  { id: `hitHeadR${b}`, from: -1.17, head: true },
+  { id: `hitHeadB${b}`, from: Math.PI, head: true },
+  { id: `hitBack${b}`, from: Math.PI },
+  { id: `hitShoulderL${b}`, from: 1.25 },
+  { id: `hitShoulderR${b}`, from: -1.57 },
+  // Sword Combat's are named for the way the body goes: B thrown back, F doubled forward, L and R to that side.
+  { id: 'hardBack', from: -0.22, hard: true },
+  { id: 'hardDouble', from: Math.PI, hard: true, close: true },
+  { id: 'hardLeft', from: -1.2, hard: true },
+  { id: 'hardRight', from: 0.82, hard: true },
+];
+
+export const HITS: Record<'masc' | 'femn', Hit[]> = { masc: hits('Masc'), femn: hits('Femn') };
 
 // ---------------------------------------------------------------- headgear
 

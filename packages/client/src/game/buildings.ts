@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { decorOf, DIRS4, isWalkable, type DecorKind, type GameState, type Place, type TileKind, type Vec2 } from '@bastion/engine';
 import { StaticBatch, type Dirty } from './batch';
 import { groundAt, STOREY } from './coords';
+import { DoorLeaves } from './doors';
 import { extendShader, type FogOfWar } from './fogOfWar';
 import { contactPatch, type GroundOcclusion } from './groundAO';
 import { ATLAS_RECTS, atlasIndex, atlasRect, mapAtlasTexture, PACKED } from './mapAtlas';
@@ -1577,6 +1578,8 @@ export class BuildingsView {
   private wallOccluders: THREE.BufferGeometry[] = [];
   /** The walls' pieces, merged per chunk and kept between rebuilds: a change merges its chunk again (batch.ts). */
   private readonly merged = new StaticBatch(8);
+  /** The doors' leaves, out of the merge so they swing (doors.ts). */
+  private readonly doors = new DoorLeaves();
   /** Where the walls changed at the last buildWalls (null: nowhere), for the contact occlusion. */
   dirty: Dirty | null = null;
   /** What the parapets were at the last buildWalls (they're few: drawn whole each time). */
@@ -1934,6 +1937,7 @@ export class BuildingsView {
       this.redoUpper(s);
     }
     this.merged.begin(redo);
+    this.doors.begin(area);
     for (const g of this.wallParts.geometries) g.dispose();
     this.wallParts = { geometries: [] };
     this.wallOccluders = [];
@@ -1947,6 +1951,9 @@ export class BuildingsView {
     const palettes = new Map<number, ReturnType<typeof looksOf>>();
     /** The storey whose walls are being laid (0 the ground), and its tiles. */
     let level = 0;
+    /** The tile being laid, and how many door leaves it has put so far (doors.ts keys them so). */
+    let tile = -1;
+    let leaves = 0;
     let layer: readonly (TileKind | null)[] = s.tiles;
     const at = (x: number, y: number): TileKind | undefined => (x < 0 || y < 0 || x >= w || y >= h ? undefined : (layer[y * w + x] ?? undefined));
     /** Wall-like, or a wall blown down (it still joins the walls beside it). */
@@ -1993,18 +2000,30 @@ export class BuildingsView {
       thicken.makeScale(o.square ? thick : 1, 1, thick);
       for (const part of parts) {
         const key = `${id}:${part.name}`;
+        const local = thicken.clone().multiply(part.matrix);
+        if (part.leaf) {
+          // A door's leaf swings (doors.ts): an instance of its own, shut, or open a quarter turn into the building.
+          this.doors.put(`${level}:${tile}:${leaves++}`, tile, {
+            kind: key,
+            geometry: part.geometry,
+            material: this.materialFor(part.atlas),
+            uv: atlasRect(part.atlas) ?? undefined,
+            piece: m.clone(),
+            local,
+            hinge: new THREE.Vector3(part.hinge.x, 0, part.hinge.z * thick),
+            consts: {
+              aCut: o.roof ? [b + 1, ON_ROOF, ON_ROOF, base] : [b + 1, between ? 0 : out.x, between ? 0 : out.y, base],
+              aLevel: [storeyOf(building, base)],
+              aOuter: [outer.r, outer.g, outer.b],
+              aInner: [inner.r, inner.g, inner.b],
+              aAtlas: [atlasIndex(part.atlas)],
+            },
+            open: !!o.open,
+          });
+          continue;
+        }
         let batch = batches.get(key);
         if (!batch) batches.set(key, (batch = { geometry: part.geometry, atlas: part.atlas, matrices: [], cut: [], outer: [], inner: [] }));
-        let local = thicken.clone().multiply(part.matrix);
-        if (part.leaf && o.open) {
-          // Swung a quarter turn on its hinge, into the building.
-          const hz = part.hinge.z * thick;
-          local = new THREE.Matrix4()
-            .makeTranslation(part.hinge.x, 0, hz)
-            .multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2))
-            .multiply(new THREE.Matrix4().makeTranslation(-part.hinge.x, 0, -hz))
-            .multiply(local);
-        }
         batch.matrices.push(m.clone().multiply(local));
         // A façade's upper storey goes with the roof in the cutaway; the walls of the storey in view drop as walls.
         if (o.roof) batch.cut.push(b + 1, ON_ROOF, ON_ROOF, base);
@@ -2107,6 +2126,8 @@ export class BuildingsView {
         if (area && !area[i]) continue;
         const kind = layer[i];
         if (kind === null || kind === undefined || kind === 'roof') continue;
+        tile = i;
+        leaves = 0;
         const b = plan.owner[i]!;
         const loose = b < 0;
         /** A wall blown down to low cover (docs/FASE7.md §4): laid as a wall, but its stump and the wall above the gap. */
@@ -2336,6 +2357,8 @@ export class BuildingsView {
       this.dirty = d ? { x0: Math.min(d.x0, changed.x0), y0: Math.min(d.y0, changed.y0), x1: Math.max(d.x1, changed.x1), y1: Math.max(d.y1, changed.y1) } : changed;
     }
     this.walls.add(merged.group);
+    this.doors.commit();
+    this.walls.add(this.doors.group);
     return ready;
   }
 
@@ -2492,10 +2515,12 @@ export class BuildingsView {
   /** Moves the cutaway on (`inside`: buildings whose inside is in sight lose their roof). */
   update(dt: number, s: GameState, camera: THREE.Camera | null, focus: Focus | null, visible: readonly boolean[] | null, inside = true): void {
     this.cutaway.update(dt, s, camera, focus, visible, inside);
+    this.doors.update(dt);
   }
 
   dispose(): void {
     this.merged.dispose();
+    this.doors.dispose();
     for (const g of this.wallParts.geometries) g.dispose();
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();

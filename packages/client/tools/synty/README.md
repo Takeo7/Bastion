@@ -28,8 +28,8 @@ Cada carpeta lleva el nombre del pack de Synty que contiene (renombradas el 2026
 | `POLYGON_SinIdentificar_CarreteraYAserradero_SourceFiles` | Sin identificar: un pack pequeño de carretera de montaña (estatua de leñador, carteles de cebo y gasolinera, camión destrozado, pinos, contenedor) | Sin usar |
 | `ANIMATION_BaseLocomotion_SourceFiles` | ANIMATION – Base Locomotion | Andar, correr, sprint, agacharse (`baseLocomotion`) |
 | `ANIMATION_Idles_SourceFiles` | ANIMATION – Idles | Reposos y posturas (`idles`) |
-| `ANIMATION_BowCombat_SourceFiles` | ANIMATION – Bow Combat | Muertes (`bowCombat`); las reacciones a golpes, por convertir |
-| `ANIMATION_SwordCombat_SourceFiles` | ANIMATION – Sword Combat | Una muerte de bruces (`swordCombat`); derribos y ataques cuerpo a cuerpo, por convertir |
+| `ANIMATION_BowCombat_SourceFiles` | ANIMATION – Bow Combat | Muertes y reacciones a golpes (`bowCombat`) |
+| `ANIMATION_SwordCombat_SourceFiles` | ANIMATION – Sword Combat | Una muerte de bruces y los golpes fuertes (`swordCombat`); derribos y ataques cuerpo a cuerpo, por convertir |
 | `ANIMATION_GoblinLocomotion_SourceFiles` | ANIMATION – Goblin Locomotion | Andar, trote y sprint de los muertos (`goblinLocomotion`) |
 | `ANIMATION_Emotes_SourceFiles` | ANIMATION – Emotes | Sin usar |
 | `INTERFACE_ApocalypseHUD_SourceFiles` | INTERFACE – Apocalypse HUD | Iconos y piezas de la interfaz |

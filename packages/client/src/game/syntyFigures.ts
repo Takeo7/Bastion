@@ -11,6 +11,7 @@ import {
   CHARACTERS,
   DEAD_TEMPLATES,
   DEATHS,
+  HITS,
   HEAD_GEAR,
   HEADGEAR,
   PROPS,
@@ -28,6 +29,7 @@ import {
   type CharacterId,
   type Death,
   type HeadgearId,
+  type Hit,
   type Stance,
   type SyntyBone,
   type WeaponId,
@@ -124,6 +126,24 @@ function deathFor(deaths: readonly Death[], blow: Blow, scale: number): number {
   if (roomy.length) return pick(roomy, blow.seed);
   const anywhere = all.filter(room);
   return least(anywhere.length ? anywhere : all);
+}
+
+/**
+ * Which of `hits` a unit plays for `blow`: at arm's length (a blade, a bite)
+ * it doubles up; else for a critical a hard one or one to the head, for the
+ * rest one of the others: the one whose blow comes from nearest the way this
+ * one does, any of them for an unknown blow.
+ */
+function hitFor(hits: readonly Hit[], blow: Blow, strength: number): number {
+  const all = hits.map((_, k) => k);
+  const close = all.find((k) => hits[k]!.close);
+  if (blow.melee && close !== undefined) return close;
+  const hard = strength > 1;
+  const pool = all.filter((k) => (hard ? hits[k]!.hard || hits[k]!.head : !hits[k]!.hard));
+  if (blow.from === null) return pick(pool, blow.seed);
+  const from = blow.from;
+  const off = (k: number) => Math.abs(wrap(hits[k]!.from - from));
+  return pool.reduce((a, b) => (off(b) < off(a) ? b : a));
 }
 
 /**
@@ -356,6 +376,8 @@ export class SyntyFigure implements FigureRig {
   private death: { k: number; seconds: number } | null = null;
   /** A death asked for before the clips loaded: taken once they have, the body lying. */
   private pending: Blow | null = null;
+  /** The hit reaction it plays (HITS[build]), the seconds it takes and how much of the upper body it takes; null none. */
+  private hit: { k: number; seconds: number; share: number; on: boolean } | null = null;
   /** The weapon let go: where it left the hand (in the yaw's frame), how it lies on the ground, and when. */
   private drop: { p: THREE.Vector3; q: THREE.Quaternion; flat: THREE.Quaternion; at: number } | null = null;
 
@@ -580,7 +602,9 @@ export class SyntyFigure implements FigureRig {
     const search = dead ? 0 : (p.search ?? 0) * live;
     const breathe = anim || dead ? 0 : Math.sin(time * 2.1 + p.phase) * 0.015;
     const style = STYLES[this.spec.style ?? 'none'];
-    const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + p.lean - p.hit * 0.38 - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
+    // A hit's knock-back is the clip's when there is one; a little of it stays, for the jolt.
+    const knock = p.hit * (this.hit ? 0.12 : 0.38);
+    const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + p.lean - knock - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
     // A two-handed gun blades the upper body: the support shoulder comes forward so that arm bends under
     // the gun instead of reaching across the chest; the gun and the head keep facing ahead (holdWeapon, the neck).
     this.blade = this.fore && !dead ? -(0.22 + 0.24 * p.aim) * live : 0;
@@ -678,6 +702,14 @@ export class SyntyFigure implements FigureRig {
     this.write();
     this.poses++;
     if (clip) this.dropWeapon(Math.min(1, p.fall) * clip.seconds);
+  }
+
+  react(blow: Blow, strength: number): number | null {
+    const a = this.anim;
+    if (!a || !this.rest || this.death) return null;
+    const k = hitFor(HITS[this.build], blow, strength);
+    this.hit = { k, seconds: a.set.hits[k]!.duration, share: strength > 1 ? 1 : strength >= 1 ? 0.85 : 0.5, on: false };
+    return this.hit.seconds;
   }
 
   die(blow: Blow): number | null {
@@ -813,6 +845,17 @@ export class SyntyFigure implements FigureRig {
     a.speeds[WALK] = dead ? 0.9 : 1.2;
     a.speeds[CROUCH_WALK] = 1.6;
     a.speeds[g.motion] = g.speed;
+    // A hit reaction over the upper body, eased in and out at its ends; over once `react` is back to 0.
+    const h = this.hit;
+    const react = p.react ?? 0;
+    if (h && react > 0 && react < 1) {
+      h.on = true;
+      const t = react * h.seconds;
+      a.react(h.k, t, h.share * Math.min(1, t / 0.06, (h.seconds - t) / 0.2));
+    } else if (h && (h.on || react >= 1)) {
+      a.react(null);
+      this.hit = null;
+    }
     // A corpse stays as it fell. Only a unit at ease looks round now and then.
     if (p.fall < 1) a.update(dt, p.aim < 0.05 && p.hit < 0.01 && !(p.search ?? 0) && !dead);
     a.read(this.d, this.hipsShift);

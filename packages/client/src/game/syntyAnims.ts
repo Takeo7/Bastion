@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadAnimation } from './synty';
-import { ANIMATIONS, DEAD_MOTIONS, DEATHS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type Motion } from './syntyManifest';
+import { ANIMATIONS, DEAD_MOTIONS, DEATHS, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type Motion } from './syntyManifest';
 
 // Locomotion from «ANIMATION – Base Locomotion» on any Synty character. Each
 // unit plays the clips on its own proxy of the pack's skeleton (one mixer,
@@ -12,12 +12,17 @@ import { ANIMATIONS, DEAD_MOTIONS, DEATHS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDE
 // idle now and then plays a variation from «ANIMATION – Idles» instead: it
 // looks round or shifts its weight; some stand in a stance of their own
 // instead (STANCES: the dead sway, a wounded soldier slumps). The dead walk
-// and run with Goblin Locomotion's clips (DEAD_MOTIONS). A unit that dies plays one of «Bow
-// Combat»'s and «Sword Combat»'s deaths (DEATHS) alone, posed at the moment
+// and run with Goblin Locomotion's clips (DEAD_MOTIONS). A hit plays one of
+// «Bow Combat»'s and «Sword Combat»'s reactions (HITS) over the upper body;
+// a unit that dies, one of their deaths (DEATHS) alone, posed at the moment
 // of the fall the unit view says.
 
 const N = SYNTY_BONES.length;
 const HIPS = SYNTY_BONES.indexOf('Hips');
+/** The bones a hit reaction moves: from the spine up (the legs and hips keep what they do). */
+const UPPER = new Set(['Spine_01', 'Spine_02', 'Spine_03', 'Neck', 'Head', 'Clavicle_L', 'Clavicle_R', 'Shoulder_L', 'Shoulder_R', 'Elbow_L', 'Elbow_R', 'Hand_L', 'Hand_R']);
+/** Seconds a death takes to blend in from the pose the unit had. */
+const DEATH_BLEND = 0.2;
 
 /** The clips a figure blends, in the order of its weights. */
 export const MOTION_ORDER: readonly Motion[] = ['idle', 'crouchIdle', 'walk', 'run', 'crouchWalk', 'sprint'];
@@ -36,6 +41,8 @@ export interface AnimSet {
   /** DEATHS, in order, and the seconds each takes until the body lies still. */
   deaths: THREE.AnimationClip[];
   settles: number[];
+  /** HITS, in order, their upper body only. */
+  hits: THREE.AnimationClip[];
   /** Inverse model-space rotation of each bone in the T-pose. */
   restInv: THREE.Quaternion[];
   /** Each bone's parent among SYNTY_BONES (−1: the hips, under the fixed root). */
@@ -59,6 +66,7 @@ function prepare(
   variations: THREE.AnimationClip[],
   stances: THREE.AnimationClip[],
   deaths: THREE.AnimationClip[],
+  hits: THREE.AnimationClip[],
 ): AnimSet {
   const proxy = tpose.clone();
   const mixer = new THREE.AnimationMixer(proxy);
@@ -81,6 +89,7 @@ function prepare(
     stances,
     deaths,
     settles: deaths.map(settleOf),
+    hits: hits.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
     restInv: bones.map((b) => (b ? b.getWorldQuaternion(new THREE.Quaternion()).invert() : new THREE.Quaternion())),
     parent,
     rootQ: root.getWorldQuaternion(new THREE.Quaternion()),
@@ -119,11 +128,12 @@ export function whenAnimSet(build: Build, dead = false): Promise<AnimSet> {
   if (!p) {
     const variations = IDLE_VARIATIONS[build];
     const motions = MOTION_ORDER.map((m) => (dead && DEAD_MOTIONS[m]) || MOTIONS[build][m]);
-    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id)];
+    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id), ...HITS[build].map((h) => h.id)];
     p = Promise.all([loadAnimation(ANIMATIONS.tpose.pack, 'tpose'), ...ids.map((id) => loadAnimation(ANIMATIONS[id].pack, id))]).then(([pose, ...loaded]) => {
       const clips = loaded.map((c) => c.clip);
       const at = [MOTION_ORDER.length, MOTION_ORDER.length + variations.length, MOTION_ORDER.length + variations.length + STANCE_ORDER.length];
-      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2]));
+      at.push(at[2]! + DEATHS[build].length);
+      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2], at[3]), clips.slice(at[3]));
       ready.set(kit, set);
       return set;
     });
@@ -152,6 +162,10 @@ export class AnimDriver {
   private stance = -1;
   private readonly deaths: THREE.AnimationAction[];
   private dying: THREE.AnimationAction | null = null;
+  /** The death has blended in: the rest no longer count. */
+  private down = false;
+  private readonly hits: THREE.AnimationAction[];
+  private hit: THREE.AnimationAction | null = null;
   private wait = nextWait();
   private readonly bones: THREE.Object3D[];
   private readonly world = Array.from({ length: N }, () => new THREE.Quaternion());
@@ -192,7 +206,29 @@ export class AnimDriver {
       a.clampWhenFinished = true;
       return a;
     });
+    this.hits = set.hits.map((clip) => this.mixer.clipAction(clip));
     this.bones = SYNTY_BONES.map((n) => proxy.getObjectByName(n) ?? new THREE.Object3D());
+  }
+
+  /**
+   * Hit reaction `k` (set.hits) `time` seconds in, taking `share` (0 to 1)
+   * of the upper body from what it does; null lets go of it.
+   */
+  react(k: number | null, time = 0, share = 0): void {
+    const next = k === null ? null : this.hits[k]!;
+    if (this.hit !== next) {
+      this.hit?.stop();
+      this.hit = next;
+      if (next) {
+        next.reset().play();
+        next.paused = true;
+      }
+    }
+    if (!next) return;
+    next.time = time;
+    // The mixer averages what plays by weight: against the rest's 1, this weight gives the reaction its share.
+    const s = Math.min(0.95, share);
+    next.setEffectiveWeight(s / (1 - s));
   }
 
   /** Stands in stance `k` (STANCE_ORDER) instead of the plain idle, or −1; `now` without easing into it. */
@@ -213,17 +249,24 @@ export class AnimDriver {
     if (this.dying !== next) {
       this.dying?.stop();
       this.dying = next;
+      this.down = false;
       if (next) {
-        this.variation?.stop();
-        this.variation = null;
-        for (const a of this.actions) a.setEffectiveWeight(0);
-        for (const a of this.stances) a.setEffectiveWeight(0);
         next.reset().play();
         next.paused = true;
-        next.setEffectiveWeight(1);
       }
     }
     if (!next) return;
+    // It blends in from the pose the unit had (what else played, held as it was); once in, it plays alone.
+    const s = Math.min(1, time / DEATH_BLEND);
+    if (s >= 1 && !this.down) {
+      this.down = true;
+      this.variation?.stop();
+      this.variation = null;
+      this.react(null);
+      for (const a of this.actions) a.setEffectiveWeight(0);
+      for (const a of this.stances) a.setEffectiveWeight(0);
+    }
+    next.setEffectiveWeight(this.down ? 1 : s / (1 - s));
     next.time = time;
     this.mixer.update(0);
   }

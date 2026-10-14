@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el mismo día con la 0.2.4. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el mismo día con la 0.2.5. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. En Windows también se construye el instalador.
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.2.4)
+## 3. Estado (versión 0.2.5)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, clases con árbol de habilidades, heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0 y v0.2.1 en GitHub (privadas); la 0.2.2, la 0.2.3 y la 0.2.4 no están publicadas: el instalador se construye en el PC.
+  - releases v0.1.0, v0.2.0 y v0.2.1 en GitHub (privadas); de la 0.2.2 a la 0.2.5 no están publicadas: el instalador se construye en el PC.
 - **Lo nuevo de la 0.2.2** (2026-10-14):
   - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
   - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
@@ -88,6 +88,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - muertes de verdad (Bow Combat y Sword Combat), según de dónde viene el golpe y con sitio para caer; posturas de reposo (Idles); Tajo con arco y mordisco que agarra; escaleras que se suben andando;
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
+- **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
 - **Rendimiento:** la telemetría de cada navegador va a `data/red.log` (o `%APPDATA%\Bastion\red.log` en la aplicación).
 
 ## 4. Decisiones importantes (y por qué)
@@ -124,10 +125,9 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 ## 5. Pendiente
 
 - **De Arturo y Ana:**
-  - probar la 0.2.4 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
+  - probar la 0.2.5 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
 - **Probar en partida** lo nuevo de la 0.2.3 y la 0.2.4: si las misiones de zombis se quedan cortas o se pasan, si los 3 cargadores aprietan lo justo, y si el ritmo y los pasos (zombi a 1,02 s/casilla; turnos de ~30 s con 6–7 a la vista) están bien. Lo más fácil de ajustar: `GAITS` en `game/gaits.ts`.
-- **Siguiente de Arte:** reacciones a los golpes de Bow Combat y la puerta que se abre con animación.
 - **Para más adelante:**
   - firmar la aplicación (cuenta de desarrollador de Apple) y Steam;
   - horneado de animaciones para hordas grandes, si la telemetría lo pide.

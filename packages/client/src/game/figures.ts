@@ -30,6 +30,8 @@ export interface FigurePose {
   climb?: number;
   /** A melee stroke, −1 wound up to +1 followed through: the living cut across, the dead grab and bite. */
   swing?: number;
+  /** How far into its hit reaction (react), 0 to 1; 0 none. */
+  react?: number;
 }
 
 /** The blow that kills a unit, for how it falls (syntyManifest.ts DEATHS). */
@@ -58,6 +60,12 @@ export interface FigureRig extends UnitRig {
   die?(blow: Blow): number | null;
   /** On its feet again after die (Último verso, a body risen as a zombie), once `fall` is back to 0. */
   rise?(): void;
+  /**
+   * How it takes a hit of `strength` (1 a hit, more a critical, less a graze),
+   * on figures that play clips: from then on its pose's `react` is how far into
+   * it. Returns the seconds it takes; null without clips (the procedural hit only).
+   */
+  react?(blow: Blow, strength: number): number | null;
   /** How it stands waiting (syntyManifest.ts STANCES), null the plain idle; on figures that play clips. */
   setStance?(stance: Stance | null): void;
 }
