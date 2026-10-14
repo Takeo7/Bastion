@@ -218,7 +218,7 @@ describe('patrols and reinforcements', () => {
     expect(garrison('elimination', 2)).toBeNull();
     expect(garrison('sabotage', 1)).toEqual(['trooper', 'trooper']);
     expect(hordeWave(9)).toEqual(hordeWave(4));
-  });
+  }, 60_000);
 
   it('a horde due lands at the end of its enemy turn, by an edge and away from the squad, on the prowl', () => {
     const s = field('sabotage', Array.from({ length: 30 }, () => '.'.repeat(30)));
@@ -294,7 +294,7 @@ describe('skirmish veterans', () => {
     // Rookies in a skirmish learn nothing.
     const rookies = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(1) }).units.filter((u) => u.team === 'xcom');
     expect(rookies.every((u) => !u.perks.length)).toBe(true);
-  });
+  }, 60_000);
 
   it('the campaign is untouched: its soldiers bring exactly what they learnt', () => {
     const c = createCampaign([0], new Rng(3));

@@ -12,6 +12,7 @@ import {
   kindAt,
   levelCount,
   nodeOf,
+  obstacleHeight,
   opaqueAtIndex,
   placesOn,
   roofSide,
@@ -113,8 +114,9 @@ function lineThroughStoreys(s: GameState, a: Vec2, b: Vec2, ha: number, hb: numb
   const sy = Math.sign(dy);
   const len2 = dx * dx + dy * dy;
   const rise = hb - ha;
-  /** Height of the line where it crosses the tile `(ox, oy)` away from `a`. */
-  const at = (ox: number, oy: number) => ha + rise * Math.min(1, Math.max(0, (ox * dx + oy * dy) / len2));
+  // The height of the line where it crosses the tile (ox, oy) away from `a` is
+  // ha + rise * Math.min(1, Math.max(0, (ox * dx + oy * dy) / len2)), written
+  // out where it is needed: a closure here costs more than the walk itself.
   let pi = a.y * w + a.x;
   let ph = ha;
   let x = a.x;
@@ -124,7 +126,13 @@ function lineThroughStoreys(s: GameState, a: Vec2, b: Vec2, ha: number, hb: numb
   while (ix < nx || iy < ny) {
     const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
     if (decision === 0) {
-      if (opaqueAtIndex(s, y * w + x + sx, at(x + sx - a.x, y - a.y)) && opaqueAtIndex(s, (y + sy) * w + x, at(x - a.x, y + sy - a.y))) return false;
+      const ox = x - a.x;
+      const oy = y - a.y;
+      if (
+        opaqueAtIndex(s, y * w + x + sx, ha + rise * Math.min(1, Math.max(0, ((ox + sx) * dx + oy * dy) / len2))) &&
+        opaqueAtIndex(s, (y + sy) * w + x, ha + rise * Math.min(1, Math.max(0, (ox * dx + (oy + sy) * dy) / len2)))
+      )
+        return false;
       x += sx;
       y += sy;
       ix++;
@@ -138,7 +146,7 @@ function lineThroughStoreys(s: GameState, a: Vec2, b: Vec2, ha: number, hb: numb
     }
     const i = y * w + x;
     const end = x === b.x && y === b.y;
-    const h = end ? hb : at(x - a.x, y - a.y);
+    const h = end ? hb : ha + rise * Math.min(1, Math.max(0, ((x - a.x) * dx + (y - a.y) * dy) / len2));
     // Through a floor or ceiling between the last tile and this one: the slab of the tile where it crosses that height.
     if (h !== ph) {
       const lo = Math.min(ph, h);
@@ -281,40 +289,197 @@ export function isViewer(u: Unit, team: Unit['team']): boolean {
  * Places visible to any living unit of `team`, as a boolean mask by node
  * (grid.ts nodeOf: the ground first, y * width + x, then each storey, where
  * only its slabs are worked out). At night, the dark ones only from close by.
+ * On a map with storeys, the same lines as lineClear, walked on a SightGrid.
  */
 export function teamVisibility(s: GameState, team: Unit['team']): boolean[] {
   const area = s.width * s.height;
   const levels = levelCount(s);
   const mask = new Array<boolean>(area * levels).fill(false);
-  const viewers = s.units.filter((u) => isViewer(u, team));
   const lit = s.mission?.night ? litMask(s) : null;
-  for (const u of viewers) {
+  // Worked out on every call: it is cheap next to the walks, and the state changes under it.
+  const v: Viewing | null = s.levels ? { g: sightGrid(s), w: s.width, area, n: levels - 1, elev: s.elev, mask, lit, ox: [], oy: [], eyes: [], blocked: [], dark: 0 } : null;
+  /** By origin and eye height, the nodes a line from it has already been found not to reach. */
+  const tried = new Map<string, Uint8Array>();
+  for (const u of s.units) {
+    if (!isViewer(u, team)) continue;
     const range = sightOf(u);
     const dark = lit ? nightSight(u) : range;
     const origins = peekOrigins(s, u.pos);
     const eyes = origins.map((o) => heightAt(s, o) + EYE_HEIGHT);
+    if (v) {
+      v.dark = dark;
+      v.ox = origins.map((o) => o.x);
+      v.oy = origins.map((o) => o.y);
+      v.eyes = eyes;
+      v.blocked = origins.map((o, k) => {
+        const key = `${o.x},${o.y},${o.z},${eyes[k]}`;
+        let m = tried.get(key);
+        if (!m) tried.set(key, (m = new Uint8Array(area * levels)));
+        return m;
+      });
+    }
     const minX = Math.max(0, Math.floor(u.pos.x - range));
     const maxX = Math.min(s.width - 1, Math.ceil(u.pos.x + range));
     const minY = Math.max(0, Math.floor(u.pos.y - range));
     const maxY = Math.min(s.height - 1, Math.ceil(u.pos.y + range));
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
-        const d = distance(u.pos, { x, y });
+        // distance(u.pos, { x, y }), without the object.
+        const d = Math.hypot(u.pos.x - x, u.pos.y - y);
         if (d > range) continue;
-        const i = y * s.width + x;
-        // The ground, then each storey with a slab here (only those are worked out).
-        for (let z = 0; z < levels; z++) {
-          if (z > 0 && (s.levels![z - 1]!.tiles[i] ?? null) === null) continue;
-          const node = z * area + i;
-          if (mask[node] || (d > dark && !lit?.[node])) continue;
-          const t = { x, y, z };
-          const body = (z === 0 ? (s.elev[i] ?? 0) : z) + BODY_HEIGHT;
-          if (origins.some((o, k) => lineClear(s, o, t, eyes[k], body))) mask[node] = true;
+        if (v) {
+          seeTile(v, x, y, d);
+          continue;
         }
+        // Without storeys, the ground only.
+        const i = y * s.width + x;
+        if (mask[i] || (d > dark && !lit?.[i])) continue;
+        const t = { x, y, z: 0 };
+        const body = (s.elev[i] ?? 0) + BODY_HEIGHT;
+        if (origins.some((o, k) => lineClear(s, o, t, eyes[k], body))) mask[i] = true;
       }
     }
   }
   return mask;
+}
+
+/**
+ * What lineThroughStoreys reads, laid out flat for the fog: by tile, the top
+ * of the ground's opaque column (elevation plus what stands there); by storey
+ * and tile, the top of what stands on its slab (-Infinity without a slab), and
+ * whether there is a slab.
+ */
+interface SightGrid {
+  ground: Float64Array;
+  top: Float64Array;
+  slab: Uint8Array;
+}
+
+function sightGrid(s: GameState): SightGrid {
+  const area = s.width * s.height;
+  const n = s.levels?.length ?? 0;
+  const ground = new Float64Array(area);
+  for (let i = 0; i < area; i++) ground[i] = (s.elev[i] ?? 0) + obstacleHeight(s.tiles[i]!);
+  const top = new Float64Array(area * n).fill(-Infinity);
+  const slab = new Uint8Array(area * n);
+  for (let k = 1; k <= n; k++) {
+    const tiles = s.levels![k - 1]!.tiles;
+    for (let i = 0; i < area; i++) {
+      const kind = tiles[i] ?? null;
+      if (kind === null) continue;
+      top[(k - 1) * area + i] = k + obstacleHeight(kind);
+      slab[(k - 1) * area + i] = 1;
+    }
+  }
+  return { ground, top, slab };
+}
+
+/** opaqueAtIndex on a SightGrid (`n` storeys of `area` tiles). */
+function gridOpaque(ground: Float64Array, top: Float64Array, area: number, n: number, i: number, h: number): boolean {
+  if (ground[i]! > h + 1e-6) return true;
+  const k = Math.floor(h + 1e-6);
+  if (k < 1 || k > n) return false;
+  return top[(k - 1) * area + i]! > h + 1e-6;
+}
+
+/** lineThroughStoreys from tile (ax, ay) to (bx, by) on a SightGrid, step for step. */
+function gridLine(g: SightGrid, w: number, area: number, n: number, ax: number, ay: number, bx: number, by: number, ha: number, hb: number): boolean {
+  const { ground, top, slab } = g;
+  if (ax === bx && ay === by) {
+    const lo = Math.min(ha, hb);
+    const hi = Math.max(ha, hb);
+    for (let k = Math.floor(lo + 1e-6) + 1; k < hi - 1e-6; k++) if (k >= 1 && k <= n && slab[(k - 1) * area + ay * w + ax]) return false;
+    return true;
+  }
+  const dx = bx - ax;
+  const dy = by - ay;
+  const nx = Math.abs(dx);
+  const ny = Math.abs(dy);
+  const sx = Math.sign(dx);
+  const sy = Math.sign(dy);
+  const len2 = dx * dx + dy * dy;
+  const rise = hb - ha;
+  let pi = ay * w + ax;
+  let ph = ha;
+  let x = ax;
+  let y = ay;
+  let ix = 0;
+  let iy = 0;
+  while (ix < nx || iy < ny) {
+    const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
+    if (decision === 0) {
+      const ox = x - ax;
+      const oy = y - ay;
+      if (
+        gridOpaque(ground, top, area, n, y * w + x + sx, ha + rise * Math.min(1, Math.max(0, ((ox + sx) * dx + oy * dy) / len2))) &&
+        gridOpaque(ground, top, area, n, (y + sy) * w + x, ha + rise * Math.min(1, Math.max(0, (ox * dx + (oy + sy) * dy) / len2)))
+      )
+        return false;
+      x += sx;
+      y += sy;
+      ix++;
+      iy++;
+    } else if (decision < 0) {
+      x += sx;
+      ix++;
+    } else {
+      y += sy;
+      iy++;
+    }
+    const i = y * w + x;
+    const end = x === bx && y === by;
+    const h = end ? hb : ha + rise * Math.min(1, Math.max(0, ((x - ax) * dx + (y - ay) * dy) / len2));
+    if (h !== ph) {
+      const lo = Math.min(ph, h);
+      const hi = Math.max(ph, h);
+      for (let k = Math.floor(lo + 1e-6) + 1; k < hi - 1e-6; k++) {
+        const j = (k - ph) / (h - ph) < 0.5 ? pi : i;
+        if (k <= n && slab[(k - 1) * area + j]) return false;
+      }
+    }
+    if (end) return true;
+    if (gridOpaque(ground, top, area, n, i, h)) return false;
+    pi = i;
+    ph = h;
+  }
+  return true;
+}
+
+/** One viewer of teamVisibility on a map with storeys: its origins, their eyes, and the lines already found blocked from each. */
+interface Viewing {
+  g: SightGrid;
+  w: number;
+  area: number;
+  n: number;
+  elev: readonly number[];
+  mask: boolean[];
+  lit: readonly boolean[] | null;
+  ox: number[];
+  oy: number[];
+  eyes: number[];
+  blocked: Uint8Array[];
+  dark: number;
+}
+
+/** teamVisibility's look at tile (x, y), `d` away: the ground, then each storey with a slab here. */
+function seeTile(v: Viewing, x: number, y: number, d: number): void {
+  const area = v.area;
+  const i = y * v.w + x;
+  for (let z = 0; z <= v.n; z++) {
+    if (z > 0 && !v.g.slab[(z - 1) * area + i]) continue;
+    const node = z * area + i;
+    if (v.mask[node] || (d > v.dark && !(v.lit !== null && v.lit[node]))) continue;
+    const body = (z === 0 ? (v.elev[i] ?? 0) : z) + BODY_HEIGHT;
+    for (let k = 0; k < v.eyes.length; k++) {
+      const blocked = v.blocked[k]!;
+      if (blocked[node]) continue;
+      if (gridLine(v.g, v.w, area, v.n, v.ox[k]!, v.oy[k]!, x, y, v.eyes[k]!, body)) {
+        v.mask[node] = true;
+        break;
+      }
+      blocked[node] = 1;
+    }
+  }
 }
 
 /**

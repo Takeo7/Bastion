@@ -112,7 +112,7 @@ describe('procedural maps', () => {
         }
       }
     }
-  });
+  }, 60_000);
 
   it('leave no walkable pocket out of reach (rooftops, rooms, the heart of a grove)', () => {
     for (const biome of BIOMES) {

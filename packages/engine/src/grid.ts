@@ -250,6 +250,11 @@ export function opaqueAtIndex(s: GameState, i: number, h: number): boolean {
   return kind !== null && k + OBSTACLE_HEIGHT[kind] > h + 1e-6;
 }
 
+/** Height of what stands on a tile of `kind` above its floor (what opaqueAtIndex compares). */
+export function obstacleHeight(kind: TileKind): number {
+  return OBSTACLE_HEIGHT[kind];
+}
+
 /** Legacy flat check: whether the object on a tile blocks sight at ground level. */
 export function blocksSight(kind: TileKind): boolean {
   return OBSTACLE_HEIGHT[kind] >= 0.75;

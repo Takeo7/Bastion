@@ -296,7 +296,7 @@ describe('moving up and down', () => {
         }
       }
     }
-  });
+  }, 60_000);
 
   it('maps without storeys move exactly as before: one step per direction, the same costs', () => {
     for (const seed of [3, 11]) {

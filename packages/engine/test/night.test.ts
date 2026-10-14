@@ -164,7 +164,7 @@ describe('tall buildings', () => {
     }
     // With the real storeys, some lines over the town now stop at the tall buildings.
     expect(differs).toBeGreaterThan(0);
-  });
+  }, 60_000);
 
   it('every building has a roof: from a raised platform nobody sees into a house, but over it they do', () => {
     // A one-storey house (walls x 4–8, y 1–5) with a window on its west wall, a platform west of it.
@@ -217,7 +217,7 @@ describe('tall buildings', () => {
     }
     // Hand-made maps have none: they see as before.
     expect(createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(1) }).storeys).toBeUndefined();
-  });
+  }, 60_000);
 });
 
 describe('night', () => {

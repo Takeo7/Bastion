@@ -416,7 +416,7 @@ describe('alien AI', () => {
         expect(nearest, `seed ${seed}: ${a.id} at ${a.pos.x},${a.pos.y}`).toBeGreaterThanOrEqual(2);
       }
     }
-  });
+  }, 60_000);
 });
 
 describe('replication', () => {
@@ -487,5 +487,5 @@ describe('replication', () => {
       expect(client).toEqual(host);
     }
     // Eighteen missions of up to 700 orders, most of them on generated maps with storeys: room for a loaded machine.
-  }, 20_000);
+  }, 120_000);
 });

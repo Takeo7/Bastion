@@ -1,4 +1,4 @@
-# Fase 5 · El valle de Valdesombra (la lógica)
+# Fase 5 · El valle de Kessra (la lógica)
 
 Quinta fase del cambio a zombis ([LORE.md](LORE.md) «El mundo», [EQUIPO.md](EQUIPO.md)). El arte ya está: el mapa del valle en Synty sustituye al globo (`strategy/geoscape.ts`). Falta que las reglas sean de un valle y no de un globo: carreteras, distancias y una Marea que sube zona a zona. Las reglas las fija Gameplay y las hace Gameplay · Reglas.
 
