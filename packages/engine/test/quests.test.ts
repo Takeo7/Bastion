@@ -207,6 +207,31 @@ describe('side quests', () => {
     throw new Error('No soldier recognised anyone in 60 campaigns');
   });
 
+  it('the relative a soldier recognises never has the soldier’s own first name', () => {
+    let found = 0;
+    for (let seed = 0; seed < 300 && found < 12; seed++) {
+      const c = solo(seed);
+      gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
+      c.quests = [];
+      c.offers = c.offers.filter((o) => !o.quest);
+      // Every soldier shares a first name with one of the relatives.
+      for (const s of c.soldiers) {
+        s.nickname = 'Mula';
+        s.name = `Mariam ${s.name.split(' ').slice(1).join(' ')}`;
+      }
+      run(c, { type: 'chooseMission', id: c.offers[0]!.id });
+      for (const s of c.soldiers.slice(0, 4)) run(c, { type: 'squad', soldier: s.id, on: true });
+      const mission = createMission({ map: c.offers[0]!.map, slots: [0], rng: new Rng(2), kind: c.offers[0]!.kind, squad: c.squad.map((id) => squadMember(c, c.soldiers.find((s) => s.id === id)!)) });
+      mission.outcome = 'victory';
+      applyMissionResult(c, mission, new Rng(seed));
+      const faces = c.quests.find((q) => q.id === 'faces');
+      if (!faces) continue;
+      found++;
+      expect(faces.names.relative!.split(' ')[0]).not.toBe('Mariam');
+    }
+    expect(found).toBeGreaterThanOrEqual(12);
+  });
+
   it('an older campaign gets empty quests and rumours', () => {
     const c = createCampaign([0], new Rng(1)) as unknown as Record<string, unknown> & CampaignState;
     for (const key of ['quests', 'questLog', 'questEvent', 'rumors', 'listening', 'nextRumorDay', 'techs', 'seen']) delete c[key];

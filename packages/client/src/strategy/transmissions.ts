@@ -246,7 +246,7 @@ export class RadioTips {
   private readonly panel = new RadioPanel('combat');
   private readonly key = storageKey('tips');
   private readonly heard: Set<TipId>;
-  private readonly queue: { tip?: TipId; line: SceneLine }[] = [];
+  private readonly queue: { tip?: TipId; line: SceneLine; read?: () => void }[] = [];
   private heldUntil = 0;
   private holdTimer = 0;
   private gone = false;
@@ -271,10 +271,10 @@ export class RadioTips {
     return true;
   }
 
-  /** A one-off line from Morse (the story chapters), queued like the warnings and never remembered. */
-  say(text: string): void {
+  /** A one-off line from Morse (the story chapters), queued like the warnings and never remembered; `read` once it is closed. */
+  say(text: string, read?: () => void): void {
     if (this.gone) return;
-    this.queue.push({ line: { who: 'morse', text } });
+    this.queue.push({ line: { who: 'morse', text }, read });
     this.pump();
   }
 
@@ -303,7 +303,10 @@ export class RadioTips {
         /* private mode: the warnings may play again after a reload */
       }
     }
-    this.panel.play(TIP_SCENE, [next.line], {}, () => this.pump());
+    this.panel.play(TIP_SCENE, [next.line], {}, () => {
+      next.read?.();
+      this.pump();
+    });
   }
 }
 

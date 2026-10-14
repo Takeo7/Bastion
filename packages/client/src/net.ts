@@ -27,6 +27,8 @@ export function setHosts(list: HostAddress[], https?: number): void {
 export interface InviteLink {
   label: string;
   url: string;
+  /** Folded away in the menu: another address on the local network, less likely the one. */
+  other?: boolean;
 }
 
 /**
@@ -34,13 +36,17 @@ export interface InviteLink {
  * (Safari is fifty times slower over plain http), otherwise this page's port
  * (dev or built), on the host's network addresses. `localhost` only works on
  * this machine, so it is never offered; if the page was opened through a
- * network address, that one.
+ * network address, that one. The server lists its default route's address
+ * first: of the local network ones, only that one goes up front.
  */
 export function inviteLinks(): InviteLink[] {
   const secure = httpsPort !== undefined && !import.meta.env.DEV;
   const port = secure ? `:${httpsPort}` : location.port ? `:${location.port}` : '';
   const url = (address: string) => `${secure ? 'https:' : location.protocol}//${address}${port}/`;
-  const links = hosts.map((h) => ({ label: h.kind === 'tailscale' ? 'Por internet (Tailscale)' : 'En tu misma red', url: url(h.address) }));
+  let lan = 0;
+  const links: InviteLink[] = hosts.map((h) =>
+    h.kind === 'tailscale' ? { label: 'Por internet (Tailscale)', url: url(h.address) } : { label: 'En tu misma red', url: url(h.address), other: lan++ > 0 },
+  );
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   if (!local && !hosts.some((h) => h.address === location.hostname)) links.unshift({ label: 'Esta dirección', url: url(location.hostname) });
   return links;

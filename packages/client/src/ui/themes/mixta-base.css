@@ -74,7 +74,8 @@
   box-shadow: var(--m-sink);
 }
 
-:root[data-ui='mixta'] .strat-res i {
+/* The stores' icons only: the level's bar has an <i> too, and it was painted as an 18 px grey block. */
+:root[data-ui='mixta'] .strat-res > * > i {
   flex: none;
   width: 18px;
   height: 18px;
@@ -239,6 +240,49 @@
 :root[data-ui='mixta'] .strat-top > .x-btn.strat-news {
   --bi: var(--mi-news);
   color: var(--t-accent);
+}
+
+/* Narrow windows (UX-REVISION-3 #2): the app goes down to 1024 px, and at 1024 the band held
+   1097 px, so «Menú» was off the screen and «DÍA 7» broke in two. The buttons keep their icon
+   and their tooltip; the day stays on one line; the rest packs closer. */
+:root[data-ui='mixta'] .strat-brand {
+  flex: none;
+}
+
+:root[data-ui='mixta'] .strat-brand span {
+  white-space: nowrap;
+}
+
+@media (max-width: 1280px) {
+  :root[data-ui='mixta'] .strat-top {
+    gap: 8px;
+    padding-inline: 10px;
+  }
+  :root[data-ui='mixta'] .strat-brand {
+    padding-right: 10px;
+  }
+  :root[data-ui='mixta'] .strat-top > .x-btn {
+    gap: 4px;
+    padding: 6px 9px;
+    font-size: 0;
+  }
+  :root[data-ui='mixta'] .strat-top > .x-btn .x-chip {
+    font-size: 11px;
+  }
+  :root[data-ui='mixta'] .strat-level .x-bar {
+    width: 44px;
+  }
+  /* The meter keeps its icon, cells and count (its name is in the tooltip): at 1024 the count was cut to «9/». */
+  :root[data-ui='mixta'] .strat-doom small {
+    flex: none;
+    font-size: 0;
+  }
+  :root[data-ui='mixta'] .strat-doom .pips {
+    gap: 2px;
+  }
+  :root[data-ui='mixta'] .strat-doom .pips i {
+    width: 8px;
+  }
 }
 
 /* ================================================================== tabs */
@@ -574,6 +618,28 @@
 
 :root[data-ui='mixta'] .menu-column {
   padding: 40px 34px 26px;
+}
+
+/* The partner's invitation (lobby.ts): a small plate to copy beside the address, the fold a lit label. */
+:root[data-ui='mixta'] .menu-copy {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+:root[data-ui='mixta'] .menu-more > summary {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--t-muted);
+  transition: color 0.12s;
+}
+
+:root[data-ui='mixta'] .menu-more > summary::before {
+  border-left-color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .menu-more > summary:hover {
+  color: var(--t-text);
 }
 
 :root[data-ui='mixta'] .menu-title {
@@ -1156,6 +1222,13 @@
   font-size: 16px;
   letter-spacing: 0.02em;
   color: #fff;
+}
+
+/* The portrait reaches 14 px past the padding: the name, the only line beside it, starts after it
+   («rjun Mehta» had lost its initial, UX-REVISION-3 #2); two lines break evenly. */
+:root[data-ui='mixta'] .lineup-card[data-cls]:not(.empty) b {
+  margin-left: 14px;
+  text-wrap: balance;
 }
 
 :root[data-ui='mixta'] .lineup-card.ready {

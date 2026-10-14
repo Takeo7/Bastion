@@ -2283,6 +2283,61 @@ dl.x-pairs dd {
   border: 1px dashed rgba(42, 35, 24, 0.45);
 }
 
+/* The address and its copy button on one line (lobby.ts): the address takes the room left. */
+.menu-address-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.menu-address-row .menu-address {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-copy {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+/* The other addresses, folded under a label that opens like the rest of the menu. */
+.menu-more {
+  margin-top: 6px;
+}
+
+.menu-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.menu-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-more > summary::before {
+  content: '';
+  flex: none;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+}
+
+.menu-more[open] > summary::before {
+  transform: rotate(90deg);
+}
+
 /* ---------------------------------------------------------- UX review 2 (2026-10-11) */
 
 /* Classes: a symbol before the short code (the full name on hover). */

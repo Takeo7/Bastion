@@ -56,21 +56,24 @@ type RGB = readonly [number, number, number];
 const MOODS: Record<'day' | 'night', Mood> = {
   day: {
     sky: ['#8f97b4', '#c8c0cc', '#ecd0b8'],
-    haze: 0xc9bec2,
-    hazeDensity: 0.0065,
-    sun: 0xffd3a6,
-    sunIntensity: 3.3,
+    // Second look against the capture (2026-10-14, measured by tone bands): the far streets read through a
+    // grey-violet veil, and the frame came out darker than the capture (its middle tones a third brighter)
+    // with duller, more violet shade. A thinner, warmer haze; brighter, with the shade lifted towards mauve.
+    haze: 0xd4c8bc,
+    hazeDensity: 0.0032,
+    sun: 0xffd6b0,
+    sunIntensity: 3.5,
     // About 40° up; in the default view (yaw 45°) it stands to the upper right.
     sunFrom: [5, 26, -31],
-    skyLight: 0xbab4da,
-    groundLight: 0x7d6454,
-    skyIntensity: 1.5,
+    skyLight: 0xbdb6d8,
+    groundLight: 0x82674f,
+    skyIntensity: 1.75,
     fill: 0xfff0e0,
     fillIntensity: 0.3,
     // Neutral against ACES and AgX on the reference block: closest to the capture's median and saturation (ACES and AgX washed it out).
-    exposure: 1.17,
+    exposure: 1.34,
     bloom: { strength: 0.35, threshold: 0.92 },
-    grade: { saturation: 0.92, contrast: 1.07, vignette: 0.22, shadowTint: [0.95, 0.92, 1.06], highlightTint: [1.04, 1.0, 0.94], lift: [0.075, 0.06, 0.085] },
+    grade: { saturation: 0.9, contrast: 1.04, vignette: 0.2, shadowTint: [1.0, 0.92, 1.02], highlightTint: [1.04, 1.0, 0.95], lift: [0.075, 0.055, 0.07] },
   },
   night: {
     sky: ['#081419', '#0f2328', '#173233'],

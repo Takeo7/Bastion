@@ -4,6 +4,16 @@ Respuesta a los puntos 23–27 de [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md).
 
 **Aprobado por Arturo el 13/10:** la premisa de la estación militar, los nombres internacionales de soldados y personajes, todos los cambios de nombre de la interfaz y también los lugares, con nombres inventados y neutros (§2, «Lugares»).
 
+**Cambiado el 14/10 (Arturo), porque chocaban con otros:**
+- Soldados:
+  - Amara Okafor → **Chioma Okafor** (la Dra. Amara Nwosu);
+  - Nadia Benali → **Samira Benali** (Morse);
+  - Pierre Dubois → **Pierre Lambert** (la agente Claire Dubois);
+  - Mariana Costa → **Mariana Duarte** (Rafael Costa);
+  - Tariq Aziz → **Tariq Rahimi** (un político real);
+  - Anja Kowalski → **Anja Kowalska** (la forma femenina en polaco).
+- Familiares: Lucía → **Clara** (la soldado Lucía Ortega) y Kenji → **Yusuf** (el Ing. Kenji Mori). El familiar lleva el apellido del soldado, así que podía salir una hermana con su mismo nombre.
+
 ## 1. La premisa: quiénes somos
 
 Una tarjeta al abrir la campaña, antes de la primera misión. Cinco líneas y ninguna más:

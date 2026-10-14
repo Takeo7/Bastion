@@ -883,7 +883,8 @@ export class BastionSet implements StageSet {
     hangarHit.position.copy(HANGAR).add(new THREE.Vector3(0, HANGAR_H / 2, 0));
     hangarHit.userData.hotspot = 'hangar';
     this.hotspots.push(hangarHit);
-    const hangarLabel = label('Cochera', 'room-label fixed');
+    // The yellow plate of the fixed buildings (Diario, Cuartel, Búnker, Armería): the Cochera is one of them.
+    const hangarLabel = label('Cochera', 'room-label command fixed');
     hangarLabel.position.copy(HANGAR).add(new THREE.Vector3(0, HANGAR_H + 0.5, HANGAR_D / 2));
     this.scene.add(hangarHit, hangarLabel);
     this.placeShowcase();
@@ -1519,10 +1520,6 @@ export class BastionSet implements StageSet {
       rig.root.position.copy(at);
       // Pose state, applied every frame in tick().
       Object.assign(rig.root.userData, { yaw: 0.15 - i * 0.04, phase: i * 0.7, wounded: entry.status === 'wounded', running: 0 });
-      if (entry.status === 'wounded' && !isFigure(rig)) {
-        rig.pivot.rotation.x = 0.35;
-        rig.pivot.position.y = rig.hip - 0.12;
-      }
       this.rigs.push(rig);
       this.lineup.add(rig.root);
     });
@@ -1626,15 +1623,10 @@ export class BastionSet implements StageSet {
         rig.root.visible = k < 1;
       });
     }
-    // Soldiers breathe in line; figures also limp when wounded and run to board.
+    // Soldiers breathe in line, limp when wounded and run to board.
     for (const rig of this.rigs) {
       const d = rig.root.userData;
-      if (isFigure(rig)) {
-        rig.applyPose({ ...IDLE_POSE, yaw: d.yaw, phase: d.phase, run: d.running, crouch: d.wounded && !d.running ? 0.4 : 0 }, time);
-      } else {
-        rig.yaw.rotation.y = d.yaw;
-        rig.pivot.scale.y = 1 + Math.sin(time * 2.1 + d.phase) * 0.012;
-      }
+      if (isFigure(rig)) rig.applyPose({ ...IDLE_POSE, yaw: d.yaw, phase: d.phase, run: d.running, crouch: d.wounded && !d.running ? 0.4 : 0 }, time);
     }
     if (this.showcaseRig && isFigure(this.showcaseRig)) this.showcaseRig.applyPose(IDLE_POSE, time);
     this.tickDeparture(since, boarded);

@@ -103,7 +103,7 @@ describe("the soldier's sex (playtest 2026-10-13)", () => {
     expect(SOLDIER_NAMES.every((n) => n.sex === 'f' || n.sex === 'm')).toBe(true);
     expect(SOLDIER_NAMES.filter((n) => n.sex === 'f')).toHaveLength(SOLDIER_NAMES.length / 2);
     expect(new Set(SOLDIER_NAMES.map((n) => n.name)).size).toBe(SOLDIER_NAMES.length);
-    expect(sexOf('Amara Okafor')).toBe('f');
+    expect(sexOf('Chioma Okafor')).toBe('f');
     expect(sexOf('Kofi Mensah')).toBe('m');
     const c = createCampaign([0, 1], new Rng(4));
     for (const s of c.soldiers) expect(s.appearance.sex).toBe(sexOf(s.name));

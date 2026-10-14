@@ -113,9 +113,9 @@ export class CombatTips {
     this.show('shot');
   }
 
-  /** A story chapter's radio line (STORY_RADIO), played every time. */
-  story(line: string): void {
-    this.radio.say(line);
+  /** A story chapter's radio line (STORY_RADIO), played every time; `read` once the player has closed it. */
+  story(line: string, read?: () => void): void {
+    this.radio.say(line, read);
   }
 
   destroy(): void {

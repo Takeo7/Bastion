@@ -1921,7 +1921,9 @@ function maybeFaces(c: CampaignState, report: MissionReport, rng: Rng): void {
   const seen = report.squad.map((e) => c.soldiers.find((s) => s.id === e.id)).filter((s): s is CampaignSoldier => !!s && s.alive && !!s.nickname);
   if (!seen.length) return;
   const s = rng.pick(seen);
-  const relative = rng.pick(RELATIVES);
+  // Never someone with the soldier's own first name (an old save's, or one the players chose).
+  const first = s.name.split(' ')[0];
+  const relative = rng.pick(RELATIVES.filter((r) => r.name !== first));
   const surname = s.name.split(' ').slice(1).join(' ') || s.name;
   startQuest(c, 'faces', rng, {
     owner: s.owner,

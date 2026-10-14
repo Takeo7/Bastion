@@ -158,6 +158,18 @@
   color: #fff;
 }
 
+/* No clip on the plate (synty-base.css), so no room kept for it: the name gets it (UX-REVISION-3 #2). */
+:root[data-ui='mixta'] .unit-head {
+  padding-right: 0;
+}
+
+/* Under 1200 px the sheet is 206 px wide: «Elena Petrova» fits at 18 px, not at 21. */
+@media (max-width: 1200px) {
+  :root[data-ui='mixta'] .unit-name {
+    font-size: 18px;
+  }
+}
+
 :root[data-ui='mixta'] .unit-class {
   padding: 2px 6px;
   border-radius: 2px;
@@ -735,6 +747,39 @@
   box-shadow: inset 3px 0 0 var(--t-warn), 0 0 0 1px rgba(0, 0, 0, 0.8), 0 3px 8px rgba(0, 0, 0, 0.5);
   font: 600 12px/1.5 var(--t-font);
   color: #fff;
+}
+
+/* The loading veil (UX-REVISION-3 #1): the briefing's head on black, the bar in hazard yellow. */
+:root[data-ui='mixta'] .load-veil small {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .load-veil h1 {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 44px;
+  letter-spacing: 0.05em;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+:root[data-ui='mixta'] .load-veil p {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .load-bar {
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-ui='mixta'] .load-bar i {
+  background: var(--t-accent);
+  box-shadow: 0 0 8px rgba(242, 194, 48, 0.5);
 }
 
 /* The arrival briefing: what the mission is for, standing out (playtest 13/10 #7). */

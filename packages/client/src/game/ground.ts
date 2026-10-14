@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { decorOf, DIRS4, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
+import { decorOf, DIRS4, DIRS8, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
 import { extendShader } from './fogOfWar';
 import { STOREY } from './coords';
 import { terrainFile, type PropId, type TerrainId } from './syntyManifest';
@@ -258,13 +258,15 @@ const ASPHALT_GAIN = 2.6;
 
 /** Colours of the Synty ground (sRGB): flat colours, and tints over the tiling textures. */
 const SYNTY_LOOK = {
-  // Warm, a little pink, as the paving in Synty's Apocalypse captures.
-  sPave: 0xb8aa9f,
-  sKerb: 0xcfc1b4,
+  // Pale and only a little warm, as the paving in Synty's Apocalypse captures (the warmer sun adds the rest).
+  sPave: 0xbdb5ac,
+  sKerb: 0xd3cbc1,
   sAsphalt: 0xc9b8b0,
   /** Moss in clumps on the paving and in the gutters, and grime. */
   sMoss: 0x6c6e3e,
   sGrime: 0x564840,
+  /** Dust and dirt blown over the paving and into the road. */
+  sDust: 0x9c8a72,
   sPaint: 0xe6e2d4,
   sYellow: 0xd8aa3a,
   sGrass: 0xd2dab8,
@@ -405,7 +407,11 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
         float ds = sNear(p, t, 1.0, level);
         // Grime in broad patches, and moss in clumps, more of it by the kerb.
         c = mix(c, c * sGrime * 2.2, smoothstep(0.55, 0.82, sFbm(p * 0.4 + 17.0)) * 0.35 * (1.0 - lawn));
-        float mossy = smoothstep(0.7, 0.73, sFbm(p * 0.6 + 29.0) + (1.0 - smoothstep(0.0, 0.7, ds)) * 0.08);
+        // Dust blown over it in drifts, and the slabs cracked where the paving is oldest.
+        c = mix(c, sDust * (0.9 + 0.2 * sNoise(p * 3.0)), smoothstep(0.6, 0.78, sFbm(p * 0.3 + 71.0)) * 0.45 * (1.0 - lawn));
+        float split = 1.0 - smoothstep(0.02, 0.04, sCrack(p * 1.3 + 9.0));
+        c *= 1.0 - 0.22 * split * smoothstep(0.58, 0.72, sFbm(p * 0.25 + 13.0)) * (1.0 - lawn);
+        float mossy = smoothstep(0.66, 0.69, sFbm(p * 0.6 + 29.0) + (1.0 - smoothstep(0.0, 0.7, ds)) * 0.08);
         c = mix(c, sMoss * (0.8 + 0.4 * sNoise(p * 6.0)), mossy * 0.85 * (1.0 - lawn));
         float kerb = 1.0 - smoothstep(0.105, 0.125, ds);
         c = mix(c, sKerb * (0.82 + 0.18 * smoothstep(0.0, 0.03, ds)) * (0.96 + 0.06 * mid), kerb);
@@ -428,9 +434,10 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
           float bar = step(0.5, fract(across * 2.2)) * step(0.12, inTile) * step(inTile, 0.88);
           c = mix(c, sPaint, bar * 0.88 * smoothstep(0.18, 0.4, sNoise(p * 2.6 + 9.0)));
         }
-        // Cracks, in a few worn stretches only.
+        // Cracks in the worn stretches (a good part of a town nobody mends), and dust blown into the road.
         float crack = 1.0 - smoothstep(0.025, 0.045, sCrack(p * 0.9 + 3.0));
-        c *= 1.0 - 0.28 * crack * smoothstep(0.66, 0.76, sFbm(p * 0.22 + 61.0));
+        c *= 1.0 - 0.34 * crack * smoothstep(0.56, 0.7, sFbm(p * 0.22 + 61.0));
+        c = mix(c, sDust * 0.8 * (0.9 + 0.2 * sNoise(p * 3.0)), smoothstep(0.62, 0.8, sFbm(p * 0.35 + 83.0)) * 0.35);
       } else {
         c = sPave;
       }
@@ -481,11 +488,12 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
 
 /** Ground cover per tile, by what the floor is (before the clumping): Synty props, cosmetic. */
 const COVER: Record<Biome, Partial<Record<number, [PropId, number][]>>> = {
+  // Town (second look against the capture: «muy vestidas»): litter, rubble and trash spread over paving and road.
   city: {
-    [OPEN]: [['papers', 0.035], ['pebbles', 0.04]],
+    [OPEN]: [['papers', 0.06], ['pebbles', 0.09], ['trash', 0.025]],
     [LAWN + 10]: [['tuftLow', 0.6], ['tuft', 0.25], ['flowers', 0.06]],
-    [STREET]: [['papers', 0.025], ['pebbles', 0.03]],
-    [ROOF]: [['pebbles', 0.06]],
+    [STREET]: [['papers', 0.045], ['pebbles', 0.07], ['trash', 0.02]],
+    [ROOF]: [['pebbles', 0.08], ['papers', 0.02]],
   },
   wilds: {
     [OPEN]: [['tuft', 0.55], ['tuftLow', 0.75], ['tuftWide', 0.3], ['flowers', 0.12], ['pebbles', 0.06]],
@@ -536,7 +544,11 @@ export function scatterCover(s: GameState, ground: GroundMap, density = 1): { id
       // Leaves round trees, weeds where the paving meets the street.
       const tree = (k: TileKind | null, nx: number, ny: number) => k === 'high' && ['tree', 'streetTree'].includes(decorOf(decor[ny * w + nx])?.kind ?? '');
       if (near(tree)) list.push(['leaves', 0.5]);
-      if (s.biome === 'city' && kind === OPEN && near((_k, nx, ny) => ground.kinds[ny * w + nx] === STREET)) list.push(['grassBlob', 0.08]);
+      if (s.biome === 'city' && kind === OPEN && near((_k, nx, ny) => ground.kinds[ny * w + nx] === STREET)) list.push(['grassBlob', 0.16]);
+      // The middle of a square or a car park (open paving all round: the squad's own square among them), so it
+      // never reads as an empty slab: weeds through the cracks, leaves blown in, more litter. All of it flat.
+      const paved = (nx: number, ny: number) => nx >= 0 && ny >= 0 && nx < w && ny < h && s.tiles[ny * w + nx] === 'floor' && ground.kinds[ny * w + nx] === OPEN && data[(ny * w + nx) * 4 + 2] !== LAWN && elev(nx, ny) === e;
+      if (s.biome === 'city' && kind === OPEN && !lawn && DIRS8.every((d) => paved(x + d.x, y + d.y))) list.push(['grassBlob', 0.12], ['leaves', 0.06], ['papers', 0.05], ['pebbles', 0.06]);
       // Margins on the sides that walls, cover or a higher floor close.
       const margin = DIRS4.map((d) => {
         const k = at(x + d.x, y + d.y);

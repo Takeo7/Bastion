@@ -168,6 +168,11 @@
   color: var(--ink-soft);
 }
 
+/* In battle, Enter and Space belong to the battle (they fire): the card is closed with a click. */
+.radio.combat.ready .radio-next::after {
+  content: ' · clic';
+}
+
 @keyframes radio-wait {
   50% {
     transform: translateX(3px);

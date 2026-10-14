@@ -102,10 +102,12 @@ import { Hud, type AbilityView, type HordeView, type MissionView, type PackSlot,
 import { CameraRig, isTyping } from './camera';
 import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
+import { piecesLoaded } from './buildings';
 import { MapView } from './mapView';
 import { Overlays, type MoveTile, type SpotKind } from './overlays';
 import { Renderer } from './renderer';
 import { Sfx } from './sfx';
+import { syntyPropsLoaded } from './syntyProps';
 import { SONG, SongFx, SongMarks } from './songFx';
 import { setTimeScale, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
@@ -166,6 +168,14 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
 const NIGHT_RULES = `De noche: los vivos ven ${NIGHT.sightCut} casillas menos (${NIGHT.minSight} como mínimo) y os detectan a la mitad de distancia. A la luz de una farola, una bengala o un fuego os ven como de día.`;
 const NIGHT_RADIO = 'Noche cerrada. Ellos no necesitan ver para encontraros: id con bengalas, o pegados a las farolas.';
 const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fuego ilumina la zona' } as const;
+
+/**
+ * The loading veil (UX-REVISION-3 #1) waits at most this long for the map's
+ * models: a partner downloading them slowly gets the battle as it is, and
+ * the map fills in as they arrive. Then at most this long for the shaders.
+ */
+const VEIL_MODELS_MS = 15000;
+const VEIL_SHADERS_MS = 4000;
 
 /** Done by hand on a tile beside the soldier: Registrar, and opening or closing a door (playtest 13/10 #2). */
 type HandAbility = 'search' | 'openDoor' | 'closeDoor';
@@ -506,6 +516,9 @@ export class Game {
   private alarmRaised = false;
   /** A bitten soldier of ours has risen in this mission already: the stamp only comes the first time. */
   private risenSeen = false;
+  /** Resolves when the loading veil lifts (UX-REVISION-3 #1); null when it is down. */
+  private veiled: Promise<void> | null = null;
+  private gone = false;
 
   private readonly raycaster = new THREE.Raycaster();
   private drag: { x: number; y: number; moved: boolean } | null = null;
@@ -581,6 +594,8 @@ export class Game {
   // ================================================================ network
 
   loadSnapshot(s: GameState): void {
+    // A battle built from nothing, or a new mission on the same screen, goes under the loading veil.
+    const fresh = !this.view || s.seq === 0;
     this.plans.clear();
     this.exposure = null;
     this.state = cloneState(s);
@@ -616,19 +631,60 @@ export class Game {
     const focus = this.selected ? getUnit(this.state, this.selected) : this.state.units.find((u) => u.team === 'xcom');
     if (focus) this.rig.focus(tileToWorld(focus.pos), true);
     this.refreshInteractive();
+    if (fresh) this.raiseVeil();
+  }
+
+  /** The briefing's kicker: the operation's, the story chapter's, or what kind of fight it is. */
+  private kicker(): string {
+    const cm = this.state.campaignMission;
+    const chapter = cm?.story;
+    return cm?.kicker ?? (chapter ? `DIARIO · HOJA ${chapter}` : cm ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA');
+  }
+
+  /**
+   * UX-REVISION-3 #1: the battle has just been built, and its first frame
+   * still has to compile every shader (850 ms on the Mac); a partner may be
+   * downloading the models too. The veil stays up until the models are in,
+   * the shaders compiled and two frames drawn; the briefing waits for it.
+   */
+  private raiseVeil(): void {
+    const s = this.state;
+    const lift = this.hud.veil(this.kicker(), s.campaignMission?.name ?? MISSION_NAMES[s.mission.kind], s.mapName);
+    const timer = (ms: number) => new Promise<void>((done) => window.setTimeout(done, ms));
+    const frames = (n: number) =>
+      new Promise<void>((done) => {
+        const off = this.renderer.onFrame(() => {
+          if (--n > 0) return;
+          off();
+          done();
+        });
+      });
+    const veiled = Promise.race([Promise.all([syntyPropsLoaded(), piecesLoaded()]), timer(VEIL_MODELS_MS)])
+      // The map has rebuilt with its models by now (mapView waits on the same loads).
+      .then(() => (this.gone ? undefined : Promise.race([this.renderer.gl.compileAsync(this.renderer.scene, this.renderer.camera).catch(() => undefined), timer(VEIL_SHADERS_MS)])))
+      .then(() => (this.gone ? undefined : Promise.race([frames(2), timer(1000)])))
+      .then(() => {
+        if (this.veiled === veiled) this.veiled = null;
+        lift();
+      });
+    this.veiled = veiled;
   }
 
   /** The arrival briefing, XCOM-style: operation, area and objective. */
   intro(): void {
+    // Nothing plays over the loading veil: the briefing's time would run out on a black screen.
+    if (this.veiled) {
+      void this.veiled.then(() => !this.gone && this.intro());
+      return;
+    }
     const s = this.state;
     const mission = this.missionView();
-    const chapter = s.campaignMission?.story;
     // What the mission is for, said at the start and not only in the strip (playtest 13/10 #7):
     // the objective, and a line of the operation's briefing when the mission carries one.
     const cm = s.campaignMission;
     const briefing = cm && 'briefing' in cm && typeof cm.briefing === 'string' ? briefingLine(cm.briefing) : undefined;
     const shown = this.hud.intro(
-      cm?.kicker ?? (chapter ? `DIARIO · HOJA ${chapter}` : cm ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA'),
+      this.kicker(),
       cm?.name ?? MISSION_NAMES[s.mission.kind],
       [s.mapName, s.mission.night ? NIGHT_LABEL : '', mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
       mission.objective,
@@ -747,6 +803,7 @@ export class Game {
   }
 
   destroy(): void {
+    this.gone = true;
     window.clearTimeout(this.endArmTimer);
     window.clearTimeout(this.momentTimer);
     this.tips.destroy();
@@ -2522,10 +2579,8 @@ export class Game {
   private storyRadio(moment: 'start' | 'objective'): void {
     const chapter = this.state.campaignMission?.story;
     const line = chapter ? STORY_RADIO[chapter - 1]?.[moment] : undefined;
-    if (line) {
-      this.hud.log(`Morse · ${line}`, '#1d4fb0');
-      this.tips.story(line);
-    }
+    // The log keeps it once it has been read: while the card is up, the same words in the corner were twice.
+    if (line) this.tips.story(line, () => this.hud.log(`Morse · ${line}`, '#1d4fb0'));
   }
 
   /** What a recovery carries out: story chapters and side quests name it ("las cintas"). */

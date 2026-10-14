@@ -547,21 +547,25 @@ export function attackWeapon(u: Unit, ability: AttackAbility = 'shoot'): WeaponD
  * half men), each with the sex the client picks a model of (Appearance.sex).
  */
 export const SOLDIER_NAMES: { name: string; sex: 'f' | 'm' }[] = [
-  { name: 'Amara Okafor', sex: 'f' }, { name: 'Kofi Mensah', sex: 'm' }, { name: 'Yuki Tanaka', sex: 'f' },
+  { name: 'Chioma Okafor', sex: 'f' }, { name: 'Kofi Mensah', sex: 'm' }, { name: 'Yuki Tanaka', sex: 'f' },
   { name: 'Jonas Becker', sex: 'm' }, { name: 'Leila Mansour', sex: 'f' }, { name: 'Arjun Mehta', sex: 'm' },
   { name: 'Sofia Marin', sex: 'f' }, { name: 'Dmitri Volkov', sex: 'm' }, { name: 'Priya Nair', sex: 'f' },
-  { name: 'Mateo Rojas', sex: 'm' }, { name: 'Anja Kowalski', sex: 'f' }, { name: 'Hiro Sato', sex: 'm' },
-  { name: 'Elena Petrova', sex: 'f' }, { name: 'Omar Saleh', sex: 'm' }, { name: 'Nadia Benali', sex: 'f' },
-  { name: "Liam O'Brien", sex: 'm' }, { name: 'Maya Cohen', sex: 'f' }, { name: 'Pierre Dubois', sex: 'm' },
+  { name: 'Mateo Rojas', sex: 'm' }, { name: 'Anja Kowalska', sex: 'f' }, { name: 'Hiro Sato', sex: 'm' },
+  { name: 'Elena Petrova', sex: 'f' }, { name: 'Omar Saleh', sex: 'm' }, { name: 'Samira Benali', sex: 'f' },
+  { name: "Liam O'Brien", sex: 'm' }, { name: 'Maya Cohen', sex: 'f' }, { name: 'Pierre Lambert', sex: 'm' },
   { name: 'Chiara Rossi', sex: 'f' }, { name: 'Ivan Horvat', sex: 'm' }, { name: 'Freya Lund', sex: 'f' },
   { name: 'Rafael Costa', sex: 'm' }, { name: 'Ana Ríos', sex: 'f' }, { name: 'Erik Nilsson', sex: 'm' },
   { name: 'Zainab Bello', sex: 'f' }, { name: 'Samuel Adeyemi', sex: 'm' }, { name: 'Hana Novak', sex: 'f' },
   { name: 'Wei Zhang', sex: 'm' }, { name: 'Lucía Ortega', sex: 'f' }, { name: 'Luca Bianchi', sex: 'm' },
-  { name: 'Ingrid Berg', sex: 'f' }, { name: 'Marcus Reid', sex: 'm' }, { name: 'Mariana Costa', sex: 'f' },
-  { name: 'Tariq Aziz', sex: 'm' }, { name: 'Aisha Diallo', sex: 'f' }, { name: 'Pablo Rey', sex: 'm' },
+  { name: 'Ingrid Berg', sex: 'f' }, { name: 'Marcus Reid', sex: 'm' }, { name: 'Mariana Duarte', sex: 'f' },
+  { name: 'Tariq Rahimi', sex: 'm' }, { name: 'Aisha Diallo', sex: 'f' }, { name: 'Pablo Rey', sex: 'm' },
 ];
 
-/** The names before 2026-10-13, for the soldiers of older saves (sexOfName). */
+/**
+ * Names older saves may hold, for sexOfName: the soldiers before 2026-10-13,
+ * those renamed on 2026-10-14 (they clashed with someone else's), and the
+ * relative of «Caras conocidas» retired that day, matched by first name.
+ */
 const OLD_SOLDIER_NAMES: { name: string; sex: 'f' | 'm' }[] = [
   { name: 'Ana Ríos', sex: 'f' }, { name: 'Luis Varela', sex: 'm' }, { name: 'Marta Soler', sex: 'f' },
   { name: 'Iker Ortega', sex: 'm' }, { name: 'Nora Campos', sex: 'f' }, { name: 'Hugo Lázaro', sex: 'm' },
@@ -569,6 +573,9 @@ const OLD_SOLDIER_NAMES: { name: string; sex: 'f' | 'm' }[] = [
   { name: 'Raúl Ibarra', sex: 'm' }, { name: 'Lucía Prat', sex: 'f' }, { name: 'Óscar Nieto', sex: 'm' },
   { name: 'Irene Galán', sex: 'f' }, { name: 'Pablo Rey', sex: 'm' }, { name: 'Clara Bosch', sex: 'f' },
   { name: 'Adrián Gil', sex: 'm' }, { name: 'Julia Font', sex: 'f' }, { name: 'Marcos Vela', sex: 'm' },
+  { name: 'Amara Okafor', sex: 'f' }, { name: 'Anja Kowalski', sex: 'f' }, { name: 'Nadia Benali', sex: 'f' },
+  { name: 'Pierre Dubois', sex: 'm' }, { name: 'Mariana Costa', sex: 'f' }, { name: 'Tariq Aziz', sex: 'm' },
+  { name: 'Kenji', sex: 'm' },
 ];
 
 /**

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { doomName, MISSION_NAMES, type MissionKind, type PlayerInfo, type SkirmishMap, type Slot } from '@bastion/engine';
-import { inviteLinks, type NetStatus } from '../net';
+import { inviteLinks, type InviteLink, type NetStatus } from '../net';
 import { GeoscapeSet } from '../strategy/geoscape';
 import { Stage } from '../strategy/stage';
 import '../strategy/strategy.css';
@@ -58,6 +58,8 @@ export class Lobby {
   private night = false;
   /** Asking before a new campaign replaces the saved one, or starts without the partner. */
   private confirming = false;
+  /** «Otras direcciones» unfolded: the menu is redrawn often, and it stays as the player left it. */
+  private othersOpen = false;
 
   constructor(container: HTMLElement, private readonly handlers: LobbyHandlers, private defaultName: string) {
     const globe = new GeoscapeSet(() => {});
@@ -325,12 +327,50 @@ export class Lobby {
     if (this.players.filter((p) => p.connected).length >= 2) return [];
     const links = inviteLinks();
     if (!links.length) return [h('p.menu-hint', {}, 'Tu compañero necesita la dirección de red de este ordenador: está en la ventana del servidor.')];
+    // In the desktop app the partner joins from theirs, which asks for the address and port, not a web address.
+    const app = /\bElectron\//.test(navigator.userAgent);
+    const row = (l: InviteLink) => {
+      const text = app ? new URL(l.url).host : l.url;
+      const address = h('code.menu-address', {}, text);
+      return h('div.menu-invite', {}, h('small', {}, l.label), h('div.menu-address-row', {}, address, copyButton(text, address)));
+    };
+    const others = links.filter((l) => l.other);
     return [
-      h('p.menu-hint', {}, 'Tu compañero entra abriendo en su navegador:'),
-      ...links.map((l) => h('div.menu-invite', {}, h('small', {}, l.label), h('code.menu-address', {}, l.url))),
+      h('p.menu-hint', {}, app ? 'Tu compañero te verá en «Partidas en tu red» de su app. Si no te ve, que use «Unirse por dirección» con:' : 'Tu compañero entra abriendo en su navegador:'),
+      ...links.filter((l) => !l.other).map(row),
+      others.length
+        ? h(
+            'details.menu-more',
+            { open: this.othersOpen, ontoggle: (e: Event) => (this.othersOpen = (e.currentTarget as HTMLDetailsElement).open) },
+            h('summary', {}, `Otras direcciones (${others.length})`),
+            ...others.map(row),
+          )
+        : null,
       links.some((l) => l.url.startsWith('https:'))
         ? h('p.menu-hint', {}, 'La primera vez su navegador avisará de que la conexión no es privada: el certificado es el de este ordenador, que lo acepte.')
         : null,
     ];
   }
+}
+
+/**
+ * Copies `text`. The clipboard needs a secure page (localhost, https or the
+ * app); anywhere else the address is left selected, to copy by hand.
+ */
+function copyButton(text: string, address: HTMLElement): HTMLButtonElement {
+  const button = h('button.x-btn.menu-copy', { type: 'button' }, 'Copiar');
+  const say = (label: string) => {
+    button.textContent = label;
+    setTimeout(() => (button.textContent = 'Copiar'), 1500);
+  };
+  button.addEventListener('click', () => {
+    (navigator.clipboard?.writeText(text) ?? Promise.reject()).then(
+      () => say('Copiada'),
+      () => {
+        getSelection()?.selectAllChildren(address);
+        say('Seleccionada');
+      },
+    );
+  });
+  return button;
 }

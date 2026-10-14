@@ -1,4 +1,5 @@
 import { X509Certificate } from 'node:crypto';
+import { createSocket } from 'node:dgram';
 import { appendFileSync, createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
@@ -149,11 +150,39 @@ function handle(req: IncomingMessage, res: ServerResponse): void {
   createReadStream(file).pipe(res);
 }
 
-/** Windows' virtual adapters (Hyper-V, WSL, virtual machines): no partner is on the other side. */
-const VIRTUAL = /vEthernet|Hyper-V|WSL|VirtualBox|VMware/i;
+/**
+ * Virtual adapters (virtual machines, containers, WSL): no partner is on the
+ * other side. Windows names them in words; macOS and Linux by prefix. On macOS,
+ * bridge100 and up are made for virtual machines and containers (OrbStack,
+ * Docker); bridge0 is the Thunderbolt bridge, a real cable, and stays. So does
+ * utun, which is Tailscale.
+ */
+const VIRTUAL = /vEthernet|Hyper-V|WSL|VirtualBox|VMware|^bridge1\d\d|^vmnet|^vboxnet|^docker|^veth|^br-|^virbr/i;
 
-/** IPv4 addresses a partner can reach: same network, or Tailscale (100.64.0.0/10). */
-function hostAddresses(): HostAddress[] {
+/**
+ * The address this machine goes out from (its default route), the one a
+ * partner on the same network most likely reaches. A UDP socket that only
+ * connects sends nothing: the system just picks the route. Null without one.
+ */
+function outbound(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const socket = createSocket('udp4');
+    let over = false;
+    const done = (address: string | null) => {
+      if (over) return;
+      over = true;
+      socket.close();
+      resolve(address);
+    };
+    socket.once('error', () => done(null));
+    socket.once('connect', () => done(socket.address().address));
+    // TEST-NET-1 (RFC 5737): nobody there, but routed like any outside address.
+    socket.connect(9, '192.0.2.1');
+  });
+}
+
+/** IPv4 addresses a partner can reach: same network, or Tailscale (100.64.0.0/10). The default route's goes first. */
+function hostAddresses(main: string | null): HostAddress[] {
   const out: HostAddress[] = [];
   for (const [name, addrs] of Object.entries(networkInterfaces())) {
     if (VIRTUAL.test(name)) continue;
@@ -163,10 +192,10 @@ function hostAddresses(): HostAddress[] {
       out.push({ address: a.address, kind: first === 100 && second! >= 64 && second! < 128 ? 'tailscale' : 'lan' });
     }
   }
-  return out;
+  return out.sort((a, b) => Number(b.address === main) - Number(a.address === main));
 }
 
-const hosts = hostAddresses();
+const hosts = hostAddresses(await outbound());
 const tls: Tls | null = HTTPS_PORT ? certificate(join(dirname(SAVE_PATH), 'tls'), hosts.map((h) => h.address)) : null;
 const http = createServer((req, res) => toHttps(req, res) || handle(req, res));
 const https = tls ? createHttpsServer(tls, handle) : null;

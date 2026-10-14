@@ -1389,9 +1389,11 @@ function roofProps(b: Building, open?: (x: number, y: number) => boolean): RoofP
     const off = 0.32;
     out.push({ id: r(63) < 0.5 ? 'billboardSign' : 'billboardSign2', x: bx + (south ? 0 : off), y: y + 0.7, z: bz + (south ? off : 0), yaw });
   }
-  // What's been left up there: weeds, bags, a pallet, a tyre (they take no room).
-  const clutter: PropId[] = ['tuftLow', 'tuft', 'tuftLow', 'trashBag', 'pallet', 'tuftLow', 'tire', 'trashBag2', 'cardboard', 'papers'];
-  const litter = Math.min(10, Math.round(area / 12));
+  // What's been left up there: weeds and moss, rubble, bags, a pallet, a tyre (they take no room); on a
+  // roof nobody walks, a crate too (second look against the capture: its roofs are cluttered).
+  const clutter: PropId[] = ['tuftLow', 'tuft', 'grassBlob', 'trashBag', 'pallet', 'pebbles', 'tire', 'trashBag2', 'cardboard', 'papers', 'grassBlob', 'pebbles'];
+  if (!walk) clutter.push('crate', 'crateOpen');
+  const litter = Math.min(16, Math.round(area / 8));
   for (let k = 0; k < litter; k++) {
     const [x, z] = spot(80 + k * 2);
     if (walk && !open?.(Math.floor(x), Math.floor(z))) continue;

@@ -34,7 +34,7 @@ const REMEMBERED_TINT = new THREE.Color(0x26303c);
 /** Never seen. */
 const UNKNOWN = new THREE.Color(0x161e28);
 /** Beyond the map's edge: the haze of the day (renderer.ts), so the map fades into distance, not into a void. */
-const BEYOND_DAY = new THREE.Color(0x7a7380);
+const BEYOND_DAY = new THREE.Color(0x837a73);
 const BEYOND_NIGHT = new THREE.Color(0x0c1a1e);
 
 /** 1 while the ambient occlusion draws its normals and depth (post.ts), else 0; shared by every map material. */

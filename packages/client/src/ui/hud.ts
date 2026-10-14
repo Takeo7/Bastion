@@ -238,6 +238,8 @@ export class Hud {
   private floorKey = '';
   private readonly mission = h('div.mission');
   private readonly players = h('div.players');
+  /** There is a partner in the room, connected or not: abandoning ends the mission for both. */
+  private paired = false;
   private readonly squad = h('div.squad.panel');
   private readonly unitPanel = h('div.unit-panel.panel');
   private readonly abilities = h('div.abilities');
@@ -371,6 +373,7 @@ export class Hud {
 
   setPlayers(players: PlayerInfo[], ready: [boolean, boolean], mySlot: Slot, busy: Set<Slot>, commander: Slot | null = null): void {
     clear(this.players);
+    this.paired = players.some((p) => p.slot !== mySlot);
     // Alone, the turn state is the end-turn button's business: a status here read as "you are waiting".
     const alone = !players.some((p) => p.slot !== mySlot && p.connected);
     for (const p of players) {
@@ -720,6 +723,28 @@ export class Hud {
     return stay + 800;
   }
 
+  /**
+   * The loading veil (UX-REVISION-3 #1): while the battle's models come in
+   * and its first frames are drawn, the operation's name over a running bar
+   * instead of a frozen black screen. The bar moves on the compositor, so it
+   * keeps going while the page is busy. Returns what lifts it.
+   */
+  veil(kicker: string, title: string, place: string): () => void {
+    const el = h(
+      'div.load-veil',
+      { role: 'status' },
+      h('small', {}, kicker),
+      h('h1', {}, title),
+      h('span.load-bar', { 'aria-hidden': 'true' }, h('i')),
+      place ? h('p', {}, place) : null,
+    );
+    this.root.append(el);
+    return () => {
+      el.classList.add('out');
+      window.setTimeout(() => el.remove(), 450);
+    };
+  }
+
   /** Shows (or, with null, hides) the partner's key moment: its text in their colour and «Ver (F)». */
   notice(text: string | null, color = '', onSee?: () => void): void {
     clear(this.noticeEl);
@@ -782,7 +807,7 @@ export class Hud {
         h('button.menu-entry', { onclick: () => this.toggleMenu(false) }, 'Continuar'),
         h('button.menu-entry', { onclick: () => this.renderMenu('controls') }, 'Controles'),
         h('button.menu-entry', { onclick: () => this.renderMenu('settings') }, 'Ajustes'),
-        h('button.menu-entry.danger', { onclick: () => (this.toggleMenu(false), this.confirmAbandon()), title: 'Termina la misión para los dos' }, 'Abandonar misión'),
+        h('button.menu-entry.danger', { onclick: () => (this.toggleMenu(false), this.confirmAbandon()), title: this.paired ? 'Termina la misión para los dos' : 'Termina la misión' }, 'Abandonar misión'),
       );
     } else if (page === 'controls') {
       append(card, h('h2', {}, 'Controles'), h('dl.controls', {}, ...CONTROLS.flatMap(([key, what]) => [h('dt', {}, key), h('dd', {}, what)])), back);
@@ -876,7 +901,7 @@ export class Hud {
         'div.modal-card.panel',
         {},
         h('h2', {}, '¿Abandonar la misión?'),
-        h('p', {}, 'La misión termina para los dos jugadores y cuenta como fracasada.'),
+        h('p', {}, this.paired ? 'La misión termina para los dos jugadores y cuenta como fracasada.' : 'La misión termina y cuenta como fracasada.'),
         h(
           'div.modal-actions',
           {},

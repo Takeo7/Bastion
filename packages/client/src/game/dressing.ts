@@ -144,17 +144,18 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
             continue;
           }
         }
-        // Against a façade: a few bags, a tyre or a pallet, now and then.
+        // Against a façade: a few bags, rubble fallen from it, a tyre or a pallet, now and then.
         const toWall = DIRS4.filter((d) => wallish(x + d.x, y + d.y));
-        if (toWall.length && r(5) < 0.16 * density) {
+        if (toWall.length && r(5) < 0.22 * density) {
           const d = toWall[0]!;
           const along = { x: -d.y, y: d.x };
           const n = 1 + Math.floor(r(6) * 3);
           for (let k = 0; k < n; k++) {
             const u = (r(10 + k) - 0.5) * 0.7;
-            const id: PropId = r(20 + k) < 0.7 ? (['trashBag', 'trashBag2', 'trashBag3'] as const)[Math.floor(r(30 + k) * 3)]! : r(40 + k) < 0.5 ? 'tire' : 'pallet';
+            const pick = r(20 + k);
+            const id: PropId = pick < 0.55 ? (['trashBag', 'trashBag2', 'trashBag3'] as const)[Math.floor(r(30 + k) * 3)]! : pick < 0.78 ? 'pebbles' : r(40 + k) < 0.5 ? 'tire' : 'pallet';
             const yaw = r(50 + k) * Math.PI * 2;
-            out.push(placed(id, cx + d.x * 0.3 + along.x * u, 0, cz + d.y * 0.3 + along.y * u, Math.cos(yaw), Math.sin(yaw), id !== 'pallet' && id !== 'tire', 1, 0.8 + r(60 + k) * 0.3));
+            out.push(placed(id, cx + d.x * 0.3 + along.x * u, 0, cz + d.y * 0.3 + along.y * u, Math.cos(yaw), Math.sin(yaw), id !== 'pallet' && id !== 'tire' && id !== 'pebbles', 1, 0.8 + r(60 + k) * 0.3));
           }
           continue;
         }

@@ -523,8 +523,8 @@ export const RELATIVES: { name: string; relation: string; sex: 'f' | 'm' }[] = [
   { name: 'Tomás', relation: 'su hermano', sex: 'm' },
   { name: 'Ewa', relation: 'su madre', sex: 'f' },
   { name: 'Andrés', relation: 'su padre', sex: 'm' },
-  { name: 'Lucía', relation: 'su hermana pequeña', sex: 'f' },
-  { name: 'Kenji', relation: 'su primo', sex: 'm' },
+  { name: 'Clara', relation: 'su hermana pequeña', sex: 'f' },
+  { name: 'Yusuf', relation: 'su primo', sex: 'm' },
 ]
 
 /** People with access to the generator ("El topo"); Simão joins them if he was trusted. */

@@ -2,6 +2,8 @@
 
 Estado al 2026-10-14, con la versión 0.2.1. Lo lleva la sesión **Arte**, con los archivos de [EQUIPO.md](EQUIPO.md). La etapa anterior (laboratorio de estilos, vóxel, Expediente, Holotáctico, el Canto de Velmar) está en [archive/ARTE-historial.md](archive/ARTE-historial.md).
 
+![El juego hoy: la ciudad de día y de noche, el campo, una instalación, la base al empezar y el valle](arte/juego-hoja.jpg)
+
 ## Normas
 
 - **De dónde sale el arte:** solo Synty POLYGON (con la suscripción de Arturo), Kenney (CC0) o lo hecho por nosotros. Tipografías OFL, como mucho dos familias. Nada de otros packs, aunque sean gratuitos.
@@ -65,6 +67,7 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - la muerte: se doblan las rodillas y el cuerpo cae de espaldas o de lado.
 - **Coste:** la pose se actualiza a 30 Hz en reposo o lejos, a 8 Hz fuera de pantalla y nada en la niebla o muertos. Solo los 24 enemigos más cercanos dan sombra. Las unidades van en su propia capa (`UNIT_LAYER`), fuera de la oclusión ambiental.
 - **Retratos de la radio:** personajes de Synty en su panel (`strategy/portraits.ts`).
+- **Sin reserva de primitivas:** `models.ts` y `figures.ts` solo guardan el contrato que mueven las vistas (`UnitRig`, `FigureRig`, `FigurePose`, `Gear`). Una plantilla sin personaje en el manifiesto sale como recluta y avisa en la consola.
 
 ### Mapas de combate (`game/mapView.ts`, `buildings.ts`, `ground.ts`, `dressing.ts`, `batch.ts`)
 
@@ -72,7 +75,13 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - el tejado se desvanece cuando se ve el interior por una ventana o una puerta;
   - varias plantas, con corte por planta y la planta activa (RePág/AvPág, Mayús+rueda).
 - **Dos estilos de ciudad,** mitad y mitad: cuadrícula y pueblo viejo. Hileras de tiendas, gasolinera, motel, casas con jardín, obras y control militar. Los bordes siguen la calle con vehículos abandonados.
-- **Suelo:** terreno continuo, sin aspecto de cuadrícula, y oclusión de contacto horneada (`groundAO.ts`).
+- **Luz de día** (`renderer.ts`), medida contra la captura de la ciudad de Apocalypse por bandas de tono: una neblina fina y cálida, el sol bajo a la derecha, la sombra levantada hacia el malva y una saturación media como la suya (0,29).
+- **Suelo:** terreno continuo, sin aspecto de cuadrícula, y oclusión de contacto horneada (`groundAO.ts`). En la ciudad:
+  - pavimento claro y poco cálido;
+  - polvo a manchas, losas y asfalto agrietados en las zonas viejas, musgo en el bordillo;
+  - papeles, escombros y basura sueltos, todo plano y cosmético (`ground.ts`, `dressing.ts`);
+  - los tejados con trastos (`buildings.ts`); cajas solo en los que no se pisan.
+  Lo que pueda leerse como cobertura lo pone el motor, nunca el decorado.
 - **Noche** (`night.ts`), contra la captura del motel de Woodland de Synty: neblina verdosa y luna fría, y la luz cálida de lo que aún funciona (farolas, algún faro, bengalas y fuegos). Qué casillas están a la luz lo dice el motor.
 - **Niebla de guerra** (`fogOfWar.ts`, `explored.ts`) sobre los materiales, por planta.
 - **Coste:**
@@ -85,9 +94,15 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 - **El Bastión:** Atalaya en la sierra, con la luz de la manzana de referencia (de 524 a 132 llamadas). Tiene el Cuartel, el Taller de oficios, obras con Construction y el Huerto por niveles: bancales con plástico, invernadero con estufa, riego por goteo y espantapájaros.
 - **El valle de Kessra** en Synty, en lugar del globo:
   - las 8 zonas con sus pueblos, el embalse, las minas y la Vega;
-  - lee la geografía del motor, y La Mula sigue las carreteras;
-  - la Marea cubre exactamente las zonas caídas: zombis, luces apagadas y el frente animado;
-  - 49 llamadas, y también sirve de fondo del menú.
+  - lee la geografía del motor (REGIONS, ROADS), y La Mula sigue las carreteras;
+  - la Marea cubre exactamente las zonas caídas: zombis, luces apagadas y el frente animado. También oscurece campos y carreteras;
+  - lomas suaves en el fondo del valle; prados de varios verdes, el suelo oscuro bajo los bosques y nieve a parches en Aldren;
+  - campos de cultivo en una malla de hileras (granjas, el mosaico de La Vega, huertos tras las casas);
+  - pueblos con tejados de Town y un hito cada uno: iglesia o depósito de agua;
+  - ciudades con el borde irregular, un parque y patios;
+  - carreteras con arcén, asfalto y línea discontinua, postes con cable, coches abandonados y dos choques en cadena;
+  - bosques en manchas;
+  - 57 llamadas en el menú y 77 en la campaña con las 8 zonas contactadas (los marcadores suman 20). También sirve de fondo del menú.
 
 ### Efectos y renders (`game/fx.ts`, `songFx.ts`, `lab/renders/`)
 
@@ -106,10 +121,11 @@ Se abren con el cliente de pruebas (el mío, en el 5197). Todos usan el código 
 | `/armas.html` | Cada arma en las manos de cada cuerpo, pose a pose. `__weapons.sheet(...)` guarda una hoja |
 | `/efectos.html` | Cada efecto del combate y del Oficio sobre un superviviente y tres zombis (`#molotov`, `__fx.play('bengala')`) |
 | `/cuartel.html` | La escena del Cuartel con la cámara sobre el soldado |
+| `/valle.html` | El mapa del valle solo, con las llamadas y los triángulos de cada fotograma. Teclas 0–8 para las zonas, con el zoom más cercano del jugador; `?menu` para el fondo del menú, `?doom=6` para la Marea, `?contact` para contactarlo todo. `__valle.look(x, z, distancia)` y `__valle.snap(nombre)` |
 | `/renders.html` | Los renders de la interfaz. `__renders.save()` los manda a `.dev-snapshots/` |
 | `/sonido.html` | Todos los sonidos (son de Red y de UX/UI) |
 
-Las capturas de los laboratorios van a `.dev-snapshots/`, que no se sube.
+Las capturas de los laboratorios van a `.dev-snapshots/`, que no se sube. Con el panel del navegador oculto, `?timer` hace que los fotogramas avancen igual.
 
 ## Pendiente
 
@@ -117,4 +133,5 @@ Las capturas de los laboratorios van a `.dev-snapshots/`, que no se sube.
 - **Hornear las hordas** (InstancedMesh con la animación en una textura), solo si las unidades pasan de ~1 ms por fotograma.
 - **Lo que pedirán las reglas más adelante:** saltar desde ventanas altas, suelos y paredes destructibles, escaleras que solo se dejan por un lado.
 - **Para UX/UI, si lo pide:** la venda en render ([UX-CARENCIAS.md](UX-CARENCIAS.md)).
-- **Capturas de este documento:** las de `docs/arte/` son de la etapa vóxel. Faltan unas nuevas del combate, la base y el valle.
+- **Lo que falta para parecerse a la captura de Apocalypse** es contenido del generador (mapgen.ts, de Gameplay): árboles en las plazas grandes, más coches abandonados en la calle y montones de basura en los lotes abiertos. Está propuesto a Gameplay.
+- **Las etiquetas de los soldados se pisan** cuando la escuadra va junta (aviso de UI): la del seleccionado y la del señalado, por encima; si no basta, apartarlas en vertical.

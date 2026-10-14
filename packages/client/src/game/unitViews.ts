@@ -465,40 +465,25 @@ export class UnitViews {
 
   private apply(v: UnitView, time: number): void {
     const { rig, pose: p } = v;
-    if (isFigure(rig)) {
-      // Articulated figures pose their own skeleton; the reload twirl is layered on top.
-      // Rummaging crouches every figure; the ones that can also lean in and reach (Synty) do.
-      posed.crouch = Math.max(p.crouch, p.search * 0.6);
-      posed.aim = Math.max(p.aim, p.aimFx);
-      posed.run = p.run;
-      posed.recoil = p.recoil;
-      posed.hit = p.hit;
-      posed.flash = p.flash;
-      posed.fall = p.fall;
-      posed.lean = p.lean;
-      posed.hop = p.hop;
-      posed.yaw = p.yaw;
-      posed.phase = p.phase;
-      posed.spin = p.spin;
-      posed.search = p.search;
-      posed.climb = p.climb;
-      rig.applyPose(posed, time);
-      if (!rig.ownsReload) rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
-      return;
-    }
-    const alive = !v.dead;
-    const breathe = alive ? Math.sin(time * 2.1 + p.phase) * 0.012 : 0;
-    const bob = p.run * Math.abs(Math.sin(time * 15 + p.phase)) * 0.07;
-    rig.yaw.rotation.y = p.yaw;
-    rig.pivot.rotation.x = p.run * 0.22 + p.lean - p.hit * 0.38 - p.recoil * 0.05 - p.fall * (Math.PI / 2);
-    rig.pivot.position.y = rig.hip - p.crouch * 0.2 + bob + p.hop - p.fall * (rig.hip - 0.27);
-    rig.pivot.scale.y = (1 + breathe) * (1 - p.crouch * 0.12);
-    const aim = Math.max(p.aim, p.aimFx);
-    rig.gunPivot.rotation.x = (1 - aim) * 0.6 - p.recoil * 0.18;
-    rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
-    rig.gunPivot.position.z = 0.06 - p.recoil * 0.09;
-    rig.flash.visible = p.flash > 0.01;
-    (rig.flash.material as THREE.MeshBasicMaterial).opacity = p.flash * 0.6;
+    if (!isFigure(rig)) return;
+    // Figures pose their own skeleton; the reload twirl is layered on top.
+    // Rummaging crouches every figure, and they lean in and reach.
+    posed.crouch = Math.max(p.crouch, p.search * 0.6);
+    posed.aim = Math.max(p.aim, p.aimFx);
+    posed.run = p.run;
+    posed.recoil = p.recoil;
+    posed.hit = p.hit;
+    posed.flash = p.flash;
+    posed.fall = p.fall;
+    posed.lean = p.lean;
+    posed.hop = p.hop;
+    posed.yaw = p.yaw;
+    posed.phase = p.phase;
+    posed.spin = p.spin;
+    posed.search = p.search;
+    posed.climb = p.climb;
+    rig.applyPose(posed, time);
+    if (!rig.ownsReload) rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
   }
 
   // -------------------------------------------------------- animations
