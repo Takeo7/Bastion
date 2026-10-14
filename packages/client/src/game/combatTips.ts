@@ -76,6 +76,8 @@ export class CombatTips {
    */
   state(view: GameState, visibleAliens: ReadonlySet<string>, sharing: boolean): void {
     if (sharing) this.show('command');
+    // docs/FASE6.md: the first time one of mine stands on a storey (climbing the stairs leads there).
+    if (!this.asked.has('storeys') && view.units.some((u) => u.alive && this.mine(u) && u.pos.z >= 1)) this.show('storeys');
     const watchers = view.units.filter((a) => a.alive && a.team === 'alien' && visibleAliens.has(a.id));
     if (!watchers.length) return;
     // The first Hinchado in sight: keep it away from the squad.

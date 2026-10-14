@@ -486,7 +486,9 @@ export type TipId =
   | 'night'
   | 'bitten'
   | 'risen'
-  | 'foundWeapon';
+  | 'foundWeapon'
+  // Buildings with storeys (docs/FASE6.md).
+  | 'storeys';
 
 export interface RadioTip {
   who: SpeakerId;
@@ -535,7 +537,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   flare: {
     who: 'morse',
     line: 'Movimiento en esa calle. Llegan más.',
-    rule: 'Refuerzos: llegan ahí al final del próximo turno enemigo. Apartaos o dejad a alguien en vigilancia.',
+    rule: 'Llegan más muertos ahí al final del próximo turno enemigo. Apartaos o dejad a alguien en vigilancia.',
   },
   song: {
     who: 'morse',
@@ -586,6 +588,11 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
     who: 'teo',
     line: 'Eso no lo tira nadie. Traédmelo.',
     rule: 'Un arma encontrada ocupa un hueco de la mochila. Si sale de la misión, va a la Armería: a quien la lleve, su arma le sube un nivel, hasta lo que permita su rango.',
+  },
+  storeys: {
+    who: 'morse',
+    line: 'Desde arriba se dispara mejor. Ellos también lo saben.',
+    rule: 'Subir o bajar una planta por la escalera cuesta como 2 casillas. Disparar desde más alto da +20 de puntería, también a los vivos apostados arriba. Los zombis también suben: si os oyen arriba, os siguen por la escalera.',
   },
 };
 

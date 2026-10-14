@@ -138,7 +138,7 @@ export function soundSettings(redraw: () => void): HTMLElement {
     {},
     volumeRow('master', 'Volumen', 'Todo el sonido del juego. La tecla M lo silencia en combate.', redraw),
     volumeRow('sfx', 'Efectos', 'Disparos, explosiones, pasos y acciones.', redraw),
-    volumeRow('music', 'Música', 'La música de la base, del globo y del combate.', redraw),
+    volumeRow('music', 'Música', 'La música de la base, del valle y del combate.', redraw),
     volumeRow('ambience', 'Ambiente', 'Viento, ciudad, bosque, máquinas.', redraw),
     volumeRow('ui', 'Interfaz y radio', 'Botones, avisos y las transmisiones de radio.', redraw),
   );

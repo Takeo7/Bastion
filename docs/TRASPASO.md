@@ -101,8 +101,8 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Equilibrio:**
   - la Marea cae por zonas a 4/6/9/10/11 de infestación;
   - empieza con 16 raciones;
-  - los humanos apostados arriba tienen +6 de ventaja de altura;
-  - subir una planta cuesta como 3 casillas.
+  - disparar desde más alto da +20 de puntería; la IA de los vivos valora la altura con +6 por planta al elegir sitio;
+  - subir o bajar una planta por la escalera cuesta como 2 casillas; la IA cuenta 3 casillas de rodeo por planta.
 - **Interfaz:** Mixta, votada por Arturo. La cuadrícula del suelo, opción A (solo contornos).
 
 ## 5. Pendiente

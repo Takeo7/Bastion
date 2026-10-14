@@ -9,12 +9,12 @@ Quinta fase del cambio a zombis ([LORE.md](LORE.md) «El mundo», [EQUIPO.md](EQ
 
   | Desde | Hasta |
   |---|---|
-  | Altomonte (`weu`) | La Vega (`oce`), Carboneda (`sa`), Valdelobos (`eeu`) |
-  | Valdelobos (`eeu`) | El Pantano Gris (`eas`) |
+  | Aldren (`weu`) | La Vega (`oce`), Carvik (`sa`), Volkren (`eeu`) |
+  | Volkren (`eeu`) | El Pantano Gris (`eas`) |
   | El Pantano Gris (`eas`) | La Vega (`oce`) |
-  | La Vega (`oce`) | Ciudad Varela (`afr`), Puerto Galena (`me`) |
-  | Ciudad Varela (`afr`) | Los Llanos de Ceniza (`na`), Carboneda (`sa`) |
-  | Puerto Galena (`me`) | Los Llanos de Ceniza (`na`) |
+  | La Vega (`oce`) | Corran (`afr`), Galen (`me`) |
+  | Corran (`afr`) | Los Llanos de Ceniza (`na`), Carvik (`sa`) |
+  | Galen (`me`) | Los Llanos de Ceniza (`na`) |
 
 - **Funciones:**
   - `roadHops(a, b)`: el número de tramos por el camino más corto;
@@ -22,15 +22,15 @@ Quinta fase del cambio a zombis ([LORE.md](LORE.md) «El mundo», [EQUIPO.md](EQ
 
 ## Contactar por carretera
 
-- Solo se puede contactar una zona unida por carretera a Altomonte o a una zona ya contactada. La radio llega hasta donde llega la gente.
-- La razón sale en el botón: «Sin carretera desde vuestras zonas: contactad antes con La Vega o Carboneda».
+- Solo se puede contactar una zona unida por carretera a Aldren o a una zona ya contactada. La radio llega hasta donde llega la gente.
+- La razón sale en el botón: «Sin carretera desde vuestras zonas: contactad antes con La Vega o Carvik».
 
 ## El viaje de La Mula
 
 - Los días de una misión dependen de lo lejos que esté su zona de Atalaya: `2 + tramos`, menos lo que quite el Taller de La Mula, con un mínimo de 1.
-  - Altomonte, 2.
-  - La Vega, Carboneda y Valdelobos, 3.
-  - Ciudad Varela, Puerto Galena y El Pantano Gris, 4.
+  - Aldren, 2.
+  - La Vega, Carvik y Volkren, 3.
+  - Corran, Galen y El Pantano Gris, 4.
   - Los Llanos, 5.
 - Esos días pasan como hoy: obras, heridas, fiebres, comida y el reloj zombi.
 - Cada operación lo dice en su ficha («4 días de viaje»).
@@ -43,12 +43,12 @@ Quinta fase del cambio a zombis ([LORE.md](LORE.md) «El mundo», [EQUIPO.md](EQ
   | Tramos desde Los Llanos | Zonas | Umbral |
   |---|---|---|
   | 0 | Los Llanos | 4 |
-  | 1 | Ciudad Varela, Puerto Galena | 6 |
-  | 2 | La Vega, Carboneda | 9 |
+  | 1 | Corran, Galen | 6 |
+  | 2 | La Vega, Carvik | 9 |
   | 3 | El Pantano Gris | 10 |
-  | 4 | Valdelobos | 11 |
+  | 4 | Volkren | 11 |
 
-  Altomonte no cae por umbral: si la actividad llega a 12, la campaña se pierde, como hoy.
+  Aldren no cae por umbral: si la actividad llega a 12, la campaña se pierde, como hoy.
 - **Una zona bajo la Marea:**
   - su enclave deja de mandar suministros, medicinas y comida;
   - sus misiones tienen un grupo más de muertos (la dificultad no cambia);

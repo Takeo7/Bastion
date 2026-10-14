@@ -73,6 +73,7 @@ import {
   NAMED_SEX,
   noRoadReason,
   NWOSU_CHAPTER,
+  ofZone,
   PARTITURA_LEVEL,
   SIMON_CHAPTER,
   STORY,
@@ -251,8 +252,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   relay: {
     id: 'relay',
     name: 'Centro de comunicaciones',
-    description: '+2 regiones contactables.',
-    upgrades: ['+3 regiones contactables por centro. Una antena más alta, en el pino más alto.', '+4 regiones por centro. La antena llega hasta el mar.'],
+    description: '+2 zonas contactables.',
+    upgrades: ['+3 zonas contactables por centro. Una antena más alta, en el pino más alto.', '+4 zonas por centro. La antena llega hasta el mar.'],
     cost: 110,
     days: 5,
     level: 5,
@@ -338,7 +339,7 @@ export const ADJACENCY: AdjacencyDef[] = [
   { facility: 'infirmary', next: 'barracks', text: 'Las heridas curan un grado más rápido (×3 a nivel 1). Nadie cruza la nieve con una herida abierta.' },
   { facility: 'workshop', next: 'engineering', text: 'Accesorios un 15 % más baratos aún (−40 % a nivel 1). Las piezas pasan por un ventanuco.' },
   { facility: 'simulation', next: 'research', text: '+15 % de experiencia más (+40 % a nivel 1). Teo corrige los ejercicios en caliente.' },
-  { facility: 'relay', next: 'command', text: '+1 región contactable. La antena, pegada a la sala de Morse, llega más lejos.' },
+  { facility: 'relay', next: 'command', text: '+1 zona contactable. La antena, pegada a la sala de Morse, llega más lejos.' },
   { facility: 'training', next: 'barracks', text: 'Reclutar cuesta 20 § en vez de 30. Los novatos se forman en casa.' },
   { facility: 'quarters', next: 'barracks', text: 'Una cama más. El Cuartel presta la estufa.' },
   { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
@@ -592,7 +593,7 @@ function roadReachable(c: CampaignState, id: RegionId): boolean {
 /** Why `id` can't be contacted now, or null (docs/FASE5.md: only by road, and never under the Marea). */
 export function contactBlocker(c: CampaignState, id: RegionId): string | null {
   const region = c.regions.find((r) => r.id === id);
-  if (!region || region.contacted) return 'Ya tenemos contacto con esa región.';
+  if (!region || region.contacted) return 'Ya tenemos contacto con esa zona.';
   if (underMarea(c, id)) return floodedContactReason(bastionLevel(c), REGIONS[id].name);
   if (!roadReachable(c, id)) {
     // The zones on the way that can be contacted now; failing those, the first one on the road there.
@@ -1575,7 +1576,7 @@ function makeFacilityOffer(c: CampaignState, region: RegionId, rng: Rng): Missio
   const difficulty = Math.min(4, difficultyNow(c, rng) + 1);
   return byNight({
     id: newId(c, 'm'),
-    name: `Nido de ${REGIONS[region].name}`,
+    name: `Nido ${ofZone(REGIONS[region].name)}`,
     kind: 'sabotage',
     difficulty,
     expiresDay: null,
@@ -1953,7 +1954,7 @@ function resolveRumor(c: CampaignState, rumor: Rumor, rng: Rng): void {
   const quest = rumorQuest(c, rumor.region);
   if (quest && c.quests.length < MAX_QUESTS) {
     // The quest's own decision or operation tells the rest.
-    log(c, `El rumor de ${name} era cierto: ${QUESTS[quest].title}.`, 'good');
+    log(c, `El rumor ${ofZone(name)} era cierto: ${QUESTS[quest].title}.`, 'good');
     startQuest(c, quest, rng);
     return;
   }
@@ -1962,16 +1963,16 @@ function resolveRumor(c: CampaignState, rumor: Rumor, rng: Rng): void {
     const offer = makeOffer(c, rng, false, rumor.region);
     offer.reward.credits = (offer.reward.credits ?? 0) + 25;
     c.offers.push(offer);
-    log(c, `El rumor de ${name} era cierto: ${offer.name}, con mejor paga.`, 'good', alert);
+    log(c, `El rumor ${ofZone(name)} era cierto: ${offer.name}, con mejor paga.`, 'good', alert);
   } else if (roll < 60) {
     const credits = 30 + rng.int(4) * 10;
     c.credits += credits;
-    log(c, `El rumor de ${name} era un alijo de otros supervivientes: +${credits} suministros.`, 'good', alert);
+    log(c, `El rumor ${ofZone(name)} era un alijo de otros supervivientes: +${credits} suministros.`, 'good', alert);
   } else if (roll < 80) {
-    log(c, `El rumor de ${name} era un Saqueador que hablaba demasiado. Lo que sabía vale experiencia.`, 'good', alert);
+    log(c, `El rumor ${ofZone(name)} era un Saqueador que hablaba demasiado. Lo que sabía vale experiencia.`, 'good', alert);
     gainXp(c, 6 + rng.int(5), rng);
   } else {
-    log(c, `El rumor de ${name} era un bulo.`, 'info', alert);
+    log(c, `El rumor ${ofZone(name)} era un bulo.`, 'info', alert);
   }
 }
 
@@ -2304,7 +2305,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     steps.push({ view: 'barracks', label: promotions.length === 1 ? `Ascenso pendiente: ${promotions[0]!.name}` : 'Ascensos pendientes', count: promotions.length, tone: 'info', go: { soldier: promotions[0]!.id } });
   }
 
-  if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) steps.push({ view: 'geoscape', label: 'Tu compañero quiere escanear', tone: 'urgent' });
+  if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) steps.push({ view: 'geoscape', label: 'Tu compañero quiere esperar noticias', tone: 'urgent' });
 
   // The Marea (docs/FASE5.md): the zones it covers send nothing and their missions are harder.
   const flooded = floodedZones(c);
@@ -2359,9 +2360,9 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     }
   }
 
-  if (c.regions.filter((r) => r.contacted).length < contactCapacity(c) && canAfford(c, contactCost(c))) steps.push({ view: 'geoscape', label: 'Contacta una región', tone: 'info' });
+  if (c.regions.filter((r) => r.contacted).length < contactCapacity(c) && canAfford(c, contactCost(c))) steps.push({ view: 'geoscape', label: 'Contacta una zona', tone: 'info' });
 
-  if (!mission && !c.offers.length) steps.push({ view: 'geoscape', label: 'Escanea hasta que pase algo', tone: 'info' });
+  if (!mission && !c.offers.length) steps.push({ view: 'geoscape', label: 'Espera noticias hasta que pase algo', tone: 'info' });
 
   // Urgent first, keeping the order above within each tone.
   return [...steps.filter((x) => x.tone === 'urgent'), ...steps.filter((x) => x.tone === 'info')];
@@ -2388,7 +2389,7 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
       return `responder «${eventDef(c)?.options[action.option].label ?? ''}»`;
     case 'investigate': {
       const rumor = c.rumors.find((r) => r.id === action.id);
-      return `escuchar el rumor de ${rumor ? REGIONS[rumor.region].name : '…'}`;
+      return `escuchar el rumor ${rumor ? ofZone(REGIONS[rumor.region].name) : 'de …'}`;
     }
     case 'craft':
       return `hacer en el Taller: ${CRAFTS[action.project].name.toLowerCase()}`;
@@ -2493,7 +2494,7 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       log(c, `Contacto establecido con ${REGIONS[region.id].name}.`, 'good');
       if (region.facility && !c.offers.some((o) => o.facility === region.id)) {
         c.offers.push(makeFacilityOffer(c, region.id, rng));
-        log(c, `Ya podemos quemar el Nido de ${REGIONS[region.id].name}.`, 'good');
+        log(c, `Ya podemos quemar el Nido ${ofZone(REGIONS[region.id].name)}.`, 'good');
       }
       break;
     }
@@ -2512,7 +2513,7 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
     case 'investigate': {
       const rumor = c.rumors.find((r) => r.id === action.id)!;
       c.listening = rumor.id;
-      log(c, `Escuchamos el rumor de ${REGIONS[rumor.region].name}: faltan ${rumor.daysLeft} días de escucha.`);
+      log(c, `Escuchamos el rumor ${ofZone(REGIONS[rumor.region].name)}: faltan ${rumor.daysLeft} días de escucha.`);
       break;
     }
     case 'craft': {
@@ -2910,7 +2911,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   }
   for (const r of c.rumors.filter((x) => x.id !== c.listening && x.expiresDay < c.day)) {
     c.rumors = c.rumors.filter((x) => x.id !== r.id);
-    log(c, `El rumor de ${REGIONS[r.region].name} se ha enfriado.`);
+    log(c, `El rumor ${ofZone(REGIONS[r.region].name)} se ha enfriado.`);
   }
   if (c.day >= c.nextRumorDay) {
     c.nextRumorDay = c.day + 7 + rng.int(5);
@@ -2941,7 +2942,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     if (!r.facility || c.day < r.facility.nextDoomDay) continue;
     r.facility.nextDoomDay = c.day + FACILITY_DOOM_INTERVAL;
     c.doom++;
-    log(c, bastionLevel(c) >= PARTITURA_LEVEL ? `El Nido de ${REGIONS[r.id].name} acerca la Marea.` : `El Nido de ${REGIONS[r.id].name} hace crecer ${doomSubject(bastionLevel(c))}.`, 'bad');
+    log(c, bastionLevel(c) >= PARTITURA_LEVEL ? `El Nido ${ofZone(REGIONS[r.id].name)} acerca la Marea.` : `El Nido ${ofZone(REGIONS[r.id].name)} hace crecer ${doomSubject(bastionLevel(c))}.`, 'bad');
     stop = true;
   }
 
@@ -3243,7 +3244,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     if (offer.facility) {
       const region = c.regions.find((x) => x.id === offer.facility);
       if (region) region.facility = null;
-      log(c, `Nido de ${REGIONS[offer.facility].name} quemado.`, 'good');
+      log(c, `Nido ${ofZone(REGIONS[offer.facility].name)} quemado.`, 'good');
     }
     log(c, `Misión cumplida: ${offer.name}.`, 'good');
     const quest = questOf(c, offer);

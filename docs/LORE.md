@@ -1,6 +1,6 @@
 # Bastión — lore
 
-**Estado:** diseño del 2026-10-12. El usuario ha elegido zombis clásicos y un mundo nuevo, sin el Coro.
+**Estado (2026-10-14):** las cinco fases del cambio a zombis están en el juego (ver «Orden de trabajo»), con los nombres y el tono aprobados por Arturo el 13/10 ([LORE-PROPUESTA-2026-10-13.md](LORE-PROPUESTA-2026-10-13.md)). Este documento manda sobre los nombres: si un texto del juego no coincide, se corrige el texto.
 
 Decisiones tomadas:
 - un lugar inventado;
@@ -8,11 +8,11 @@ Decisiones tomadas:
 - la magia pasa a ser el Oficio;
 - «zombis» y «la Pandemia».
 
-Gameplay ha revisado el coste en reglas (ver «Orden de trabajo»). La fase 1 (nueva piel) empezó el 2026-10-12. El lore anterior, el del Coro, está en [archive/LORE-coro.md](archive/LORE-coro.md).
+El lore anterior, el del Coro, está en [archive/LORE-coro.md](archive/LORE-coro.md).
 
 **Cómo está planteado:** cambiar de piel, no de motor. Casi todos los sistemas que ya funcionan se quedan y cambian de nombre y de historia:
 - capítulos, encargos y rumores;
-- radio y Expediente;
+- radio y Diario (antes, Expediente);
 - la base en superficie;
 - el árbol de habilidades y sus ramas;
 - la doble llave.
@@ -54,7 +54,7 @@ Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se l
 
 ## El mundo: el valle de Kessra
 
-Es una comarca inventada entre una sierra alta y una llanura, con dos ciudades muertas. La geoesfera pasa a ser un **mapa del valle** en vóxel, con ocho zonas en lugar de las ocho regiones.
+Es una comarca inventada entre una sierra alta y una llanura, con dos ciudades muertas. El globo de XCOM pasa a ser un **mapa del valle** en Synty (la pestaña «El valle»), con ocho zonas unidas por carreteras en lugar de las ocho regiones ([FASE5.md](FASE5.md)). Para el jugador son siempre **zonas**, nunca «regiones».
 
 | Zona | Id | Qué hay | Aliado (enclave) |
 |---|---|---|---|
@@ -128,6 +128,8 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 **El reloj: la Marea.**
 - Es una horda inmensa que sube desde la llanura con el deshielo, y sustituye a la Partitura.
 - En vez de compases cuenta kilómetros: «La Marea, a 9 km». Cuando llega a 0, Atalaya cae.
+- Hasta el nivel 4 del Bastión (cuando se arregla la radio del Pico Gris) nadie sabe que existe: el reloj se llama **Infestación** («Infestación 3/12») y las zonas caídas están «en manos de los muertos». Desde el nivel 4 es la Marea.
+- Entra por Los Llanos de Ceniza y sube por las carreteras: cubre las zonas a 4, 6, 9, 10 y 11, según lo lejos que estén de Los Llanos ([FASE5.md](FASE5.md)). Aldren no cae: a 12, la campaña se pierde. Los textos no conjugan verbos con el nombre de la zona, que puede ser plural.
 - Los **Nidos**, sitios donde los zombis se juntan (antes, los Órganos), la alimentan. Quemarlos la hace retroceder.
 
 **El final** (dos llaves). Con la Marea parada y la vacuna en la mano:
@@ -204,16 +206,40 @@ Además:
 | Árbol de habilidades, ramas, aptitudes, rangos | Se quedan. Se renombran el Oficio y lo psiónico. |
 | Base en superficie, edificios, cercanías | Se quedan, con otra piel: huerto, barricadas, depósito de agua, Camposanto… |
 | Capítulos, encargos, rumores | Se quedan como sistema y se reescriben todos los textos. |
-| Radio, Expediente, avisos de Morse | Se quedan. Se reescriben las escenas, las hojas y las fichas. |
+| Radio, Expediente, avisos de Morse | Se quedan. El Expediente pasa a ser el **Diario** de Atalaya, que escribe Morse. Se reescriben las escenas, las hojas y las fichas. |
 | Doble llave, cooperativo | Se queda, con la nueva historia. |
-| Geoesfera | Pasa a ser el mapa de Kessra (trabajo de Arte). |
+| Geoesfera | Pasa a ser el mapa del valle de Kessra, en Synty (hecho). |
 | Créditos, pago mensual, venta de cuerpos | Se cambian por suministros, medicinas (y luego comida), saqueo y enclaves aliados. |
 | Combate | Se añaden registro, mochila, ruido, contagio, el Hinchado y la IA de los zombis (van al ruido, en masa). |
 | Partidas guardadas | Lo más limpio es empezar campañas nuevas: es otro mundo. |
 
+## Nombres en el juego
+
+Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Arturo el 13/10). La columna de la izquierda es lo que **no** debe aparecer.
+
+| No | Sí |
+|---|---|
+| Geoesfera, globo | **El valle** (pestaña y mapa) |
+| Región | **Zona** |
+| Expediente | **Diario** («DIARIO · HOJA N») |
+| Hangar | **Cochera** |
+| Escanear, escaneando, días de escaneo | **Esperar noticias**, «A LA ESCUCHA…», días a la escucha |
+| Actividad zombi | **Infestación** (hasta el nivel 4); **la Marea, a N km** (desde el 4) |
+| Órgano | **Nido** |
+| Sala de simulación | **Sala de mapas** |
+| Terminal, hackear, pirateo | **Arreglar** (el equipo, la radio) |
+| Protocolos del dron | Botiquín volante, Cobertura del Grillo, Calambrazo, Espabilar |
+| La Rosa | **Árbol de habilidades** |
+| Oficio (la aptitud) | **Maña** (MAÑ); el Oficio es la rama |
+| Créditos | **Suministros** (§) |
+| Refuerzos (en combate) | **La horda**: los muertos que llegan por los bordes |
+| «Operación Ceniza Rota» | Nombre de lugar: «La gasolinera de Volkren» |
+
+Con los nombres de zona: «del Pantano Gris», «al Pantano Gris», «de La Vega», «en Los Llanos de Ceniza» (`ofZone` y `toZone` en `lore.ts`). Nunca «de El…».
+
 ## Orden de trabajo
 
-Es la propuesta de Gameplay, con el coste de cada paso.
+Es la propuesta de Gameplay, con el coste de cada paso. **Las cinco fases están hechas** (2026-10-13); después vinieron la noche y la altura, y la fase 6, los edificios de varias plantas.
 
 | Fase | Contenido | Quién | Coste |
 |---|---|---|---|
@@ -223,4 +249,4 @@ Es la propuesta de Gameplay, con el coste de cada paso.
 | 4 · Comida y armas encontradas | Consumo diario, munición contada y fabricar en el Taller para desbloquear el nivel del arma | Gameplay (con su simulación de equilibrio) | Alto |
 | 5 · El mapa del valle | Kessra en lugar del globo | Arte | Alto |
 
-**Arte:** el usuario está comprando un pack de Synty. Si es POLYGON Apocalypse, trae zombis, supervivientes, casas y vehículos, y encaja de lleno con este tema. Pero cambiaría la dirección de arte (ahora todo es vóxel), así que lo decide el usuario.
+**Arte:** todo es Synty POLYGON (lo vóxel está borrado); ver [ARTE.md](ARTE.md).

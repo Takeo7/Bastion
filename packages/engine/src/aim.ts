@@ -140,7 +140,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   }
   if (!weapon.melee && heightAt(s, origin) > heightAt(s, target.pos)) {
     mods.push({ label: 'Ventaja de altura', value: HEIGHT_ADVANTAGE_AIM });
-    if (sm.heightAim) mods.push({ label: 'Nido', value: sm.heightAim });
+    if (sm.heightAim) mods.push({ label: 'Tejado', value: sm.heightAim });
   }
   if (sm.pairAim && partnerNear(s, shooter, from)) mods.push({ label: 'Codo con codo', value: sm.pairAim });
   if (sm.spotterAim && partnerNear(s, shooter, target.pos)) mods.push({ label: 'Fuego cruzado', value: sm.spotterAim });

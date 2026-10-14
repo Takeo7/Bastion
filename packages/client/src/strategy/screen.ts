@@ -113,12 +113,14 @@ import {
   canSpendPoints,
   PREMISE,
   floodedZoneNote,
+  ofZone,
   contactBlocker,
   offerDays,
   underMarea,
   NIGHT_TEXT,
   craftBlocker,
   dailyRations,
+  gardenYield,
   FOUND_WEAPONS,
   fitsWeapon,
   weaponLabel,
@@ -877,7 +879,7 @@ export class StrategyScreen {
         title: o.name,
         text: `${o.final ? 'Misión final' : MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}. ${offerBriefing(c, o)}`,
         note: offerSignature(c, o),
-        action: { label: 'Ver en la geoesfera', go: () => this.focusOffer(o.id) },
+        action: { label: 'Ver en el valle', go: () => this.focusOffer(o.id) },
       });
     }
     // What the campaign logged as a pop-up: rumours, side quests and how they end. New entries sit at the front.
@@ -898,11 +900,11 @@ export class StrategyScreen {
     for (const o of c.offers.filter((x) => !x.story && !x.final && !x.quest && !prev.offers.some((p) => p.id === x.id))) {
       fresh.push({
         tone: o.facility ? 'bad' : 'info',
-        kicker: o.facility ? 'OBJETIVO: ÓRGANO' : 'NUEVA OPERACIÓN',
+        kicker: o.facility ? 'OBJETIVO: NIDO' : 'NUEVA OPERACIÓN',
         rank: o.facility ? 65 : 40,
         title: o.name,
         text: `${MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}. ${offerBriefing(c, o)}`,
-        action: { label: 'Ver en la geoesfera', go: () => this.focusOffer(o.id) },
+        action: { label: 'Ver en el valle', go: () => this.focusOffer(o.id) },
       });
     }
     // Works that were going on and are no longer: finished.
@@ -931,7 +933,7 @@ export class StrategyScreen {
         text: r.contacted
           ? `Los zombis se han juntado en un Nido. Hará avanzar ${doomSubject(bastionLevel(c))} hasta que lo queméis.`
           : 'Los zombis se han juntado en un Nido. Contactad con la zona para poder quemarlo.',
-        action: { label: 'Ver en la geoesfera', go: () => this.focusRegion(r.id) },
+        action: { label: 'Ver en el valle', go: () => this.focusRegion(r.id) },
       });
     }
     if (c.nextSupplyDay !== prev.nextSupplyDay) {
@@ -1087,9 +1089,16 @@ export class StrategyScreen {
         h('span.strat-credits', { title: 'Suministros: construir, comprar accesorios, reclutar y contactar zonas' }, h('i', {}, '§'), h('b', {}, String(c.credits))),
         h('span.strat-credits.medicines', { title: 'Medicinas: se traen de los saqueos. Curan heridas y tratan a los mordidos.' }, h('i', {}, '✚'), h('b', {}, String(c.medicines ?? 0))),
         // Food and parts (docs/FASE4.md): the base eats every day; the Taller makes weapons and armour with parts.
+        // Red too when what is left, with the Huerto's, does not cover the next meal.
         h(
-          `span.strat-credits.food${c.hungry ? '.x-bad' : ''}`,
-          { title: c.hungry ? 'Raciones: no quedan. El Bastión pasa hambre: −10 de voluntad en las misiones y las heridas curan más despacio.' : `Raciones: el Bastión come ${dailyRations(c)} al día` },
+          `span.strat-credits.food${c.hungry || (c.food ?? 0) + gardenYield(c) < dailyRations(c) ? '.x-bad' : ''}`,
+          {
+            title: c.hungry
+              ? 'Raciones: no quedan. El Bastión pasa hambre: −10 de voluntad en las misiones y las heridas curan más despacio.'
+              : (c.food ?? 0) + gardenYield(c) < dailyRations(c)
+                ? `Raciones: el Bastión come ${dailyRations(c)} al día y no llegan para mañana. Sin ellas, pasa hambre.`
+                : `Raciones: el Bastión come ${dailyRations(c)} al día`,
+          },
           h('i', { 'aria-hidden': 'true' }),
           h('b', {}, String(c.food ?? 0)),
         ),
@@ -1202,7 +1211,7 @@ export class StrategyScreen {
       case 'investigate': {
         const rumor = c.rumors.find((r) => r.id === action.id);
         return rumor
-          ? { rows: [['Tiempo', `${rumor.daysLeft} días escuchando; no hace pasar el tiempo`], ['Qué hace', `Investigar el rumor de ${REGIONS[rumor.region].name}`]], see: () => this.focusRegion(rumor.region) }
+          ? { rows: [['Tiempo', `${rumor.daysLeft} días escuchando; no hace pasar el tiempo`], ['Qué hace', `Investigar el rumor ${ofZone(REGIONS[rumor.region].name)}`]], see: () => this.focusRegion(rumor.region) }
           : { rows: [], see: null };
       }
       case 'event': {
@@ -1486,7 +1495,7 @@ export class StrategyScreen {
                   `button.x-row${this.region === r.id && !this.offer ? '.selected' : ''}`,
                   { style: { '--row-accent': '#ff4a5a' }, onclick: () => this.focusRegion(r.id) },
                   h('div', {}, h('b', {}, REGIONS[r.id].name)),
-                  r.contacted ? this.chip('Asaltable', 'bad') : this.chip('Sin contacto', '', 'Contactad con la región para poder asaltarlo'),
+                  r.contacted ? this.chip('Asaltable', 'bad') : this.chip('Sin contacto', '', 'Contactad con la zona para poder asaltarlo'),
                 ),
               ),
             ),
@@ -1494,8 +1503,8 @@ export class StrategyScreen {
         : []),
       ...this.questRows(c),
       ...this.rumorRows(c),
-      h('div.x-head', { title: 'Pulsa una región del globo para ver sus datos' }, 'Red de enclaves'),
-      this.meter(network, contactCapacity(c), 'Regiones contactadas / máximo (los centros de comunicaciones dan más)'),
+      h('div.x-head', { title: 'Pulsa una zona del valle para ver sus datos' }, 'Red de enclaves'),
+      this.meter(network, contactCapacity(c), 'Zonas contactadas / máximo (los centros de comunicaciones dan más)'),
     );
     this.viewEl.append(left);
 
@@ -1643,7 +1652,7 @@ export class StrategyScreen {
         o.final
           ? 'MISIÓN FINAL'
           : o.facility
-            ? 'ÓRGANO'
+            ? 'NIDO'
             : o.story
               ? `MISIÓN DE HISTORIA · HOJA ${o.story}`
               : o.quest
@@ -1697,9 +1706,9 @@ export class StrategyScreen {
           ? 'cumplido'
           : 'cerrado'
         : contacted
-          ? 'escuchad los rumores de la región para encontrarlo'
-          : 'contactad con la región para que os lo cuenten';
-    return h('p.x-muted', {}, `Encargo de la región: ${done || c.quests.some((q) => q.id === quest) ? `«${def.title}», ` : ''}${state}.`);
+          ? 'escuchad los rumores de la zona para encontrarlo'
+          : 'contactad con la zona para que os lo cuenten';
+    return h('p.x-muted', {}, `Encargo de la zona: ${done || c.quests.some((q) => q.id === quest) ? `«${def.title}», ` : ''}${state}.`);
   }
 
   private regionInfo(c: CampaignState, id: RegionId): (HTMLElement | null)[] {
@@ -1731,7 +1740,7 @@ export class StrategyScreen {
             `${this.decide('contactar')} · ${costText(cost)}`,
           ),
       r.contacted ? null : this.whyEl(blockedContact),
-      r.contacted ? null : this.meter(contacted, capacity, 'Regiones contactadas / máximo'),
+      r.contacted ? null : this.meter(contacted, capacity, 'Zonas contactadas / máximo'),
     ];
   }
 
@@ -1755,7 +1764,7 @@ export class StrategyScreen {
         h('span.x-side', {}, reached ? '✓' : `${xp} XP`),
       );
     });
-    const xpHelp = 'Cada misión da experiencia: +2 por ir, +3 y su dificultad si se gana, y +1 por cada baja. La sala de simulación da un 25 % más.';
+    const xpHelp = 'Cada misión da experiencia: +2 por ir, +3 y su dificultad si se gana, y +1 por cada baja. La Sala de mapas da un 25 % más.';
     this.viewEl.append(
       this.panel(
         'progress-left',
@@ -2640,7 +2649,7 @@ export class StrategyScreen {
     if (garageCut(c).days) lines.push(['flag', `Misiones −${garageCut(c).days} d${garageCut(c).wounds ? ` · heridas −${garageCut(c).wounds} d` : ''}`]);
     if (listeningDelay(c)) lines.push(['will', `Reloj enemigo +${listeningDelay(c)} d`]);
     if (facilityLevel(c, 'crew')) lines.push(['flag', `Obras −${[25, 40, 50][facilityLevel(c, 'crew') - 1]} %`]);
-    lines.push(['will', `Contactos: ${contactCapacity(c)} regiones`]);
+    lines.push(['will', `Contactos: ${contactCapacity(c)} zonas`]);
     const bonuses = adjacencyBonuses(c);
     const works = c.base.works;
     const workOn = (id: string) => works.find((w) => w.plot === id);
@@ -2830,7 +2839,7 @@ export class StrategyScreen {
   private renderSquad(c: CampaignState): void {
     const offer = this.offerById(c.activeMission);
     if (!offer) {
-      this.viewEl.append(h('div.strat-center-top', {}, h('div.x-panel', {}, h('p.x-text', {}, 'No hay ninguna misión elegida.'), h('button.x-btn', { onclick: () => void this.go('geoscape') }, 'Ir a la geoesfera'))));
+      this.viewEl.append(h('div.strat-center-top', {}, h('div.x-panel', {}, h('p.x-text', {}, 'No hay ninguna misión elegida.'), h('button.x-btn', { onclick: () => void this.go('geoscape') }, 'Ir al valle'))));
       this.bastion.setLineup([]);
       return;
     }

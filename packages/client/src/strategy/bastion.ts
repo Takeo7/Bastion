@@ -745,7 +745,7 @@ function progressStrip(k: Site, progress: number): void {
 const SHORT_NAMES: Partial<Record<FacilityId, string>> = {
   training: 'Entrenamiento',
   relay: 'Comunicaciones',
-  simulation: 'Simulación',
+  simulation: 'Mapas',
   garage: 'La Mula',
   listening: 'Escucha',
   crew: 'Brigada',

@@ -1247,7 +1247,7 @@ export class Game {
         this.fx.floatText(screen, e.success ? 'ARREGLADO' : 'NO ARRANCA', e.success ? 'heal' : 'warn');
         this.hud.log(`${u.name} ${e.success ? 'arregla el equipo' : 'no consigue arreglarlo'} (${e.chance}%)`, e.success ? '#6dff9a' : '#ffc93a');
         this.sfx.hacked(e.success, screen);
-        if (e.success) this.hud.banner('TERMINAL HACKEADO', 'xcom');
+        if (e.success) this.hud.banner('EQUIPO ARREGLADO', 'xcom');
         else this.hud.banner('¡ALARMA!', 'alien');
         // A failed repair sets the alarm off: the horde it brings says so (reinforcementsIncoming).
         if (!e.success) this.alarmRaised = true;
@@ -1286,7 +1286,7 @@ export class Game {
         if (!e.r.pos) return;
         const at = tileToWorld(e.r.pos);
         look(at);
-        this.hud.banner('REFUERZOS EN CAMINO', 'alien');
+        this.hud.banner('VIENEN MÁS', 'alien');
         this.hud.log('Una bengala roja marca el sitio: llegan más al final del próximo turno enemigo', '#ff6b5a');
         this.sfx.flare(at);
         await wait(cam() ? 0.9 : 0.3);
@@ -1308,9 +1308,9 @@ export class Game {
           await wait(cam() ? 0.8 : 0.3);
           return;
         }
-        this.hud.log(`Refuerzos: ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
+        this.hud.log(`Llegan más: ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
         // Nobody drops in unannounced: the stamp says how many, and where if the squad sees it.
-        this.hud.banner('¡REFUERZOS!', 'alien', `${e.units.length === 1 ? 'Ha llegado un enemigo' : `Han llegado ${e.units.length} enemigos`}${seen.length ? '' : ' fuera de vuestra vista'}`);
+        this.hud.banner('¡LLEGAN MÁS!', 'alien', `${e.units.length === 1 ? 'Ha llegado un enemigo' : `Han llegado ${e.units.length} enemigos`}${seen.length ? '' : ' fuera de vuestra vista'}`);
         if (!seen.length) return;
         look(spots[0]!);
         // They come in on foot from the edge, or get up out of the dust: no capsules (arrivals.ts).
@@ -1894,7 +1894,7 @@ export class Game {
       case 'alarm':
         return `${soldier ? `${who} no ha podido arreglarlo` : 'El arreglo ha fallado'}: ha saltado la alarma.`;
       case 'reinforcements':
-        return 'Los refuerzos llegan alertados: saben dónde estáis.';
+        return 'Los que llegan vienen alertados: saben dónde estáis.';
       default:
         return 'El enemigo sabe dónde estáis.';
     }
@@ -2577,7 +2577,7 @@ export class Game {
     // A horde has no announced spot (playtest 13/10 #1); a flare drop (older saves) has one.
     const incoming = m.reinforcements.filter((r) => !r.landed && (r.horde || r.pos));
     const now = incoming.some((r) => r.horde && r.turn <= s.turn);
-    const alert = !incoming.length ? null : incoming.some((r) => !r.horde) ? 'REFUERZOS EN CAMINO' : now ? 'ZOMBIS: LLEGAN ESTE TURNO' : 'ZOMBIS EN CAMINO';
+    const alert = !incoming.length ? null : incoming.some((r) => !r.horde) ? 'VIENEN MÁS' : now ? 'ZOMBIS: LLEGAN ESTE TURNO' : 'ZOMBIS EN CAMINO';
     return { kind: m.kind, objective, objectiveTip, turnsLeft: m.turnsLeft, alert, area: s.mapName, horde: m.horde?.length ? this.hordeView() : null };
   }
 

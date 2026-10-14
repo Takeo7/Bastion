@@ -27,15 +27,15 @@ interface Voice {
 }
 
 const VOICES: Record<SpeakerId, Voice> = {
-  // Inés Albarrán, «Morse»: sixty, grey hair, her radio headphones, a wine cardigan.
+  // Nadia Albescu, «Morse»: sixty, grey hair, her radio headphones, a wine cardigan.
   morse: { character: 'voiceMorse', dyes: [null, '#7a2e3a', '#7a2e3a', null] },
-  // Teodoro Vidal, «el Relojero»: bald, white moustache, his good jacket.
+  // Teodor Vidić, «Teo»: bald, white moustache, his good jacket.
   teo: { character: 'voiceTeo' },
   // Dra. Amara Nwosu: dark curls, glasses, a white coat.
   nwosu: { character: 'voiceNwosu', dyes: [null, '#e8e6df', '#e8e6df', null], skin: '#6b4330' },
-  // Simón Ferreira: a Cuervos deserter in a field jacket; he shows his scarred side.
+  // Simão Ferreira: a Cuervos deserter in a field jacket; he shows his scarred side.
   simon: { character: 'voiceSimon', turn: -0.48 },
-  // Celia Arranz, «la Voz»: a radio host's headset, ivory and composed.
+  // Celia Marsh, «la Voz»: a radio host's headset, ivory and composed.
   voz: { character: 'voiceVoz', dyes: [null, '#e9e4d8', '#e9e4d8', null] },
   // Ruth Halvorsen: platinum hair, a charcoal suit.
   halvorsen: { character: 'voiceHalvorsen', dyes: [null, '#2b2f35', '#2b2f35', null] },

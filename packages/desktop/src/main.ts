@@ -42,17 +42,23 @@ let stopListening: (() => void) | null = null;
 
 // ------------------------------------------------------------------ server
 
-/** A port nothing is listening on, from `first` up. */
-function freePort(first: number): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const probe = (port: number) => {
-      if (port > first + 40) return reject(new Error('No hay ningún puerto libre.'));
-      const s = createServer();
-      s.once('error', () => probe(port + 1));
-      s.listen(port, () => s.close(() => resolve(port)));
-    };
-    probe(first);
+/** Whether `port` can be listened on, on every address or only on `host`. */
+function bindable(port: number, host?: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = createServer();
+    s.once('error', () => resolve(false));
+    s.listen({ port, host }, () => s.close(() => resolve(true)));
   });
+}
+
+/**
+ * A port nothing is listening on, from `first` up. 127.0.0.1 is tried too: a
+ * program holding only that address (a container's forwarded port) leaves the
+ * wildcard free, and the window's localhost would then reach it, not the game.
+ */
+async function freePort(first: number): Promise<number> {
+  for (let port = first; port <= first + 40; port++) if ((await bindable(port)) && (await bindable(port, '127.0.0.1'))) return port;
+  throw new Error('No hay ningún puerto libre.');
 }
 
 /** Waits until `url` answers, for up to `ms`. */

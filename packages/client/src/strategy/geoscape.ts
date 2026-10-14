@@ -1195,7 +1195,7 @@ export class GeoscapeSet implements StageSet {
     // Corran: the first city to fall; a helicopter down at its edge.
     put('mapHeli', ZONES.afr.x + 2.9, ZONES.afr.z - 1.6, { fit: 0.42, yaw: 0.7, r: 0.3 });
     smokes.push({ x: ZONES.afr.x + 2.9, y: heightAt(ZONES.afr.x + 2.9, ZONES.afr.z - 1.6) + 0.1, z: ZONES.afr.z - 1.6, dark: true, size: 0.2 });
-    // Galen: the Instituto Galena on its north side, a crane and warehouses on the bank, the lighthouse.
+    // Galen: the Instituto Galen on its north side, a crane and warehouses on the bank, the lighthouse.
     put('mapFactory', ZONES.me.x + 2.6, ZONES.me.z - 1.0, { fit: 0.8, yaw: 0.2, r: 0.45 });
     put('mapCrane', 10.95, 8.55, { fit: 0.75, yaw: 2.4, r: 0.25 });
     put('mapWarehouse', 11.4, 7.8, { fit: 0.65, yaw: 0.45, r: 0.35 });

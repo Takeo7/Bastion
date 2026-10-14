@@ -2,32 +2,20 @@
 
 Textos provisionales que han puesto Gameplay, Reglas y Combate mientras la sesión Lore no estaba abierta. Lore los revisa y los cambia en su sitio; el archivo de cada uno va entre paréntesis. Cuando estén revisados, se borra la línea.
 
-Revisado por Lore el 13/10: noche, contagio y medicinas, y fase 4. Lo que estaba bien se queda como estaba. Lo que Lore ha cambiado en sus archivos, en `game.ts`, en `screen.ts` y en `content.ts` ya está hecho. Abajo solo queda lo que tiene que aplicar otro.
+Los nombres que valen para el jugador están en la tabla «Nombres en el juego» de [LORE.md](LORE.md).
 
-## Para Combate (`game.ts`)
+## Hecho
 
-- Los hallazgos los dicen ya `lore.ts`:
-  - `findText` → `findLabel(loot)`;
-  - `findLine` → `searchLine(who, decor, loot, seed)`;
-  - `haulText` → `lootSummary(…, t.food, t.parts, t.weapons)`.
-  - Las funciones `rations` y `partsOf` de `game.ts` sobran: `lore.ts` exporta `rations` y `partsCount`.
-- Consejos de radio nuevos en `RADIO_TIPS` (`transmissions.ts`), con su momento:
-  - `night`: la primera misión de noche. Puede sustituir a `NIGHT_RADIO`, que suena en cada misión de noche.
-  - `bitten`: el primer `infected` de un soldado propio.
-  - `risen`: el primer soldado propio que se levanta.
-  - `foundWeapon`: la primera arma encontrada al registrar.
-- Las escenas de la base (`firstBite`, `shortMedicines`, `firstTurned`, `hunger`, `foundWeapon`) salen solas por su condición: no hay que hacer nada.
+- **13/10:** noche, contagio y medicinas, fase 4, fase 5 (los textos de la Marea según el nivel, y `firstFlood`) y la prueba del 13/10. Combate ya usa las funciones de `lore.ts` para los hallazgos, los consejos de radio `night`, `bitten`, `risen` y `foundWeapon`, el cartel «LA ALARMA SE OYE LEJOS» y «¡LA HORDA!» para las llegadas por el borde. Los iconos de raciones y piezas de la barra de arriba ya no son «◍» y «⚙».
+- **14/10:** fuera los nombres viejos que quedaban, con permiso de Gameplay:
+  - `campaign.ts`: la agenda («Tu compañero quiere esperar noticias», «Espera noticias hasta que pase algo», «Contacta una zona»), «zona» en lugar de «región» y «del Pantano Gris» en Nidos y rumores;
+  - `screen.ts`: «Ver en el valle», «Ir al valle», «OBJETIVO: NIDO», «La Sala de mapas», «zona» en lugar de «región» y «del globo»;
+  - `game.ts`: «EQUIPO ARREGLADO» en lugar de «TERMINAL HACKEADO»;
+  - `bastion.ts`: «Mapas» en lugar de «Simulación»;
+  - `settingsPanel.ts`: «la música… del valle»;
+  - `transmissions.ts`: el consejo de la bengala ya no dice «Refuerzos»;
+  - comentarios de `portraits.ts` y `geoscape.ts` con los nombres nuevos.
 
-## Para UX/UI
+## Pendiente
 
-- Los iconos de raciones y piezas en la barra de arriba (`screen.ts`, hoy «◍» y «⚙»). En el texto, Lore usa palabras: «3 raciones», «1 pieza», «+2 raciones». Las medicinas siguen con «✚» y los suministros con «§».
-
-## Fase 5 ([FASE5.md](FASE5.md))
-
-Revisado por Lore el 13/10. Hasta el nivel 4 del Bastión el jugador no conoce a la Marea, y Los Llanos pueden caer antes, así que los textos dependen del nivel: antes son «los muertos». Además, ningún verbo concuerda con el nombre de la zona, que puede ser plural («Los Llanos de Ceniza»). Las funciones están en `lore.ts` y `campaign.ts` ya las llama.
-
-Hecho: la escena de radio `firstFlood` («Los Llanos no contestan»), que sale sola cuando cae la primera zona.
-
-## Prueba 13/10 ([PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md))
-
-Revisado y aplicado. Queda para Combate: con la horda que trae la alarma de un arreglo fallido, el cartel «LA ALARMA SE OYE LEJOS», con «Llegan muertos por {borde} al final del próximo turno enemigo». Las llegadas por el borde usan las líneas de la horda del Saqueo («¡LA HORDA!»), no «REFUERZOS».
+- **Gameplay ([FASE5.md](FASE5.md)):** la tabla de umbrales y las carreteras aún dicen Ciudad Varela, Puerto Galena, Carboneda, Valdelobos y Altomonte (son Corran, Galen, Carvik, Volkren y Aldren).

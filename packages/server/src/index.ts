@@ -181,7 +181,10 @@ https?.on('tlsClientError', (e: Error & { code?: string }, socket) => {
 
 const room = new Room(new SaveStore(SAVE_PATH), hosts, https ? HTTPS_PORT : null);
 // One WebSocket server for both: the game is the same over http and https.
-const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+// Compressed (permessage-deflate, which browsers undo on their own): a mission's
+// snapshot goes from ~105 KB to ~7 KB. Level 1 is nearly as small as the default
+// and cheaper; the small messages of each order go as they are.
+const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024, perMessageDeflate: { zlibDeflateOptions: { level: 1 }, threshold: 1024 } });
 const alive = new WeakSet<WebSocket>();
 
 for (const server of [http, https].filter((s): s is Server => !!s)) {
@@ -193,7 +196,8 @@ for (const server of [http, https].filter((s): s is Server => !!s)) {
 
 wss.on('connection', (socket, req) => {
   const who = `${peer(req.socket)} ${(req.socket as TLSSocket).encrypted ? 'wss' : 'ws'}`;
-  netLog(`conecta ${who}`);
+  // A browser that declines compression still plays: the log says so, in case it is slow to load a mission.
+  netLog(`conecta ${who}${socket.extensions.includes('permessage-deflate') ? '' : ' (sin comprimir)'}`);
   socket.on('close', (code) => netLog(`desconecta ${who} (${code})`));
   alive.add(socket);
   socket.on('pong', () => alive.add(socket));
