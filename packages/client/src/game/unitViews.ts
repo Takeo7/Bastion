@@ -195,6 +195,7 @@ export class UnitViews {
     this.views.set(u.id, view);
     flagEl.classList.toggle('named', u.id === this.selectedId);
     flagEl.classList.toggle('selected', u.id === this.selectedId);
+    flag.renderOrder = u.id === this.selectedId ? 0 : -1;
     if (!u.alive) {
       ring.visible = false;
       flag.visible = false;
@@ -391,11 +392,20 @@ export class UnitViews {
     this.placeRings();
   }
 
-  /** Names are only shown for the selected and hovered units to keep flags compact. */
+  /**
+   * Names are only shown for the selected and hovered units to keep flags
+   * compact, and their flags come to the front: with the squad close
+   * together the other flags go under them (UX review 3: a name covered its
+   * neighbour's flag). The labels sort by renderOrder before distance
+   * (CSS2DRenderer), so the rest go to −1 and these two stay at 0, where the
+   * other labels (notes, finds, rising text) are.
+   */
   private updateNames(): void {
     for (const v of this.views.values()) {
-      v.flagEl.classList.toggle('named', v.id === this.selectedId || v.id === this.hoveredId);
+      const front = v.id === this.selectedId || v.id === this.hoveredId;
+      v.flagEl.classList.toggle('named', front);
       v.flagEl.classList.toggle('selected', v.id === this.selectedId);
+      v.flag.renderOrder = front ? 0 : -1;
     }
   }
 

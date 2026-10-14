@@ -81,7 +81,7 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - polvo a manchas, losas y asfalto agrietados en las zonas viejas, musgo en el bordillo;
   - papeles, escombros y basura sueltos, todo plano y cosmético (`ground.ts`, `dressing.ts`);
   - los tejados con trastos (`buildings.ts`); cajas solo en los que no se pisan.
-  Lo que pueda leerse como cobertura lo pone el motor, nunca el decorado.
+  Lo que pueda leerse como cobertura lo pone el motor, nunca el decorado. El generador (mapgen.ts, acordado con Gameplay) pone árboles en las esquinas de las plazas, escombros en plazas y aparcamientos y más coches abandonados, siempre fuera del despliegue, del objetivo, de la evacuación y de los bordes, y a 2 casillas o más de paredes, puertas y escaleras. La cobertura cercana pasa del 25,7 % al 26,9 % del suelo abierto.
 - **Noche** (`night.ts`), contra la captura del motel de Woodland de Synty: neblina verdosa y luna fría, y la luz cálida de lo que aún funciona (farolas, algún faro, bengalas y fuegos). Qué casillas están a la luz lo dice el motor.
 - **Niebla de guerra** (`fogOfWar.ts`, `explored.ts`) sobre los materiales, por planta.
 - **Coste:**
@@ -133,5 +133,4 @@ Las capturas de los laboratorios van a `.dev-snapshots/`, que no se sube. Con el
 - **Hornear las hordas** (InstancedMesh con la animación en una textura), solo si las unidades pasan de ~1 ms por fotograma.
 - **Lo que pedirán las reglas más adelante:** saltar desde ventanas altas, suelos y paredes destructibles, escaleras que solo se dejan por un lado.
 - **Para UX/UI, si lo pide:** la venda en render ([UX-CARENCIAS.md](UX-CARENCIAS.md)).
-- **Lo que falta para parecerse a la captura de Apocalypse** es contenido del generador (mapgen.ts, de Gameplay): árboles en las plazas grandes, más coches abandonados en la calle y montones de basura en los lotes abiertos. Está propuesto a Gameplay.
-- **Las etiquetas de los soldados se pisan** cuando la escuadra va junta (aviso de UI): la del seleccionado y la del señalado, por encima; si no basta, apartarlas en vertical.
+- **Si las etiquetas de los soldados aún molestan** con la escuadra junta: apartar en vertical las que se solapen. Por ahora, la del seleccionado y la del señalado van por encima de las demás (`renderOrder` en `unitViews.ts`).

@@ -1003,9 +1003,11 @@ function frontOf(c: Canvas, lot: Rect, roads: boolean[], rng: Rng): number {
 
 /**
  * Cars parked along the curb of streets three or more tiles wide: two tiles
- * each, in line with the street, never at a crossing.
+ * each, in line with the street, never at a crossing. `more`: a further chance
+ * of a wreck where new cover may stand (the second look: the captures' streets
+ * are full of them).
  */
-function parkCars(c: Canvas, roads: Road[], rng: Rng, chance: number): void {
+function parkCars(c: Canvas, roads: Road[], rng: Rng, chance: number, more = 0): void {
   for (const road of roads) {
     const width = road.vertical ? road.r.w : road.r.h;
     const length = road.vertical ? road.r.h : road.r.w;
@@ -1019,8 +1021,11 @@ function parkCars(c: Canvas, roads: Road[], rng: Rng, chance: number): void {
       const facing = road.vertical ? (lane === 0 ? 2 : 0) : lane === 0 ? 3 : 1;
       const ahead = facing === 1 || facing === 2 ? 1 : 0;
       for (let t = 1 + rng.int(3); t + 2 < length; t++) {
-        if (rng.next() > chance) continue;
+        const roll = rng.next();
+        if (roll > chance + more) continue;
         const car = [at(lane, t), at(lane, t + 1)];
+        // Past `chance`, the second look's extra wrecks: only where new cover may stand (roomForCover).
+        if (roll > chance && !car.every((p) => roomForCover(c, p, 2))) continue;
         const kerb = [-1, 0, 1, 2].map((k) => at(curb, t + k));
         const clear = [at(lane, t - 1), at(lane, t + 2), at(inner, t), at(inner, t + 1)];
         if (!car.every((p) => c.free(p.x, p.y) && c.groundAt(p.x, p.y) === ROAD)) continue;
@@ -1060,11 +1065,87 @@ function spaced(a: number, b: number, step: number): number[] {
   return Array.from({ length: n + 1 }, (_, k) => a + Math.round((k * (b - a)) / n));
 }
 
+/** The squad's corner (its spawns are the free tiles nearest it), and the corner the evacuation is carved in. */
+const DEPLOY_AREA = 12;
+const EVAC_AREA = 14;
+/** Tiles along the map's edge kept clear, where the dead come in. */
+const EDGE_CLEAR = 2;
+
+/**
+ * Whether new cover (a square's trees, a lot's rubble, the extra wrecks in
+ * the streets: the second look against Synty's captures) may stand on `p`:
+ * not in the squad's corner nor where the evacuation is carved, not by the
+ * map's edge, and nothing but floor and cover within `clear` tiles (walls,
+ * doors, windows, ladders). With 2, a tile always lies between it and a door
+ * or the foot of the ladder a building may get later against its wall.
+ */
+function roomForCover(c: Canvas, p: Vec2, clear: number): boolean {
+  if (p.x < DEPLOY_AREA && p.y < DEPLOY_AREA) return false;
+  if (p.x >= c.width - EVAC_AREA && p.y < EVAC_AREA) return false;
+  if (p.x < EDGE_CLEAR || p.y < EDGE_CLEAR || p.x >= c.width - EDGE_CLEAR || p.y >= c.height - EDGE_CLEAR) return false;
+  for (let dy = -clear; dy <= clear; dy++) {
+    for (let dx = -clear; dx <= clear; dx++) {
+      const k = c.get(p.x + dx, p.y + dy);
+      if (c.in(p.x + dx, p.y + dy) && k !== 'floor' && k !== 'low' && k !== 'high') return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * What the second look added to a square or a car park that is neither the
+ * squad's nor the objective's (the captures' squares are planted and
+ * littered): on a square, two to four trees by its corners, a tile in from
+ * its edges and a tile clear of the fountain; on either, a heap or two of
+ * rubble, two tiles in from the edges (never on the row it opens onto the
+ * street by). Placed by position (mix): it draws nothing from the generator's
+ * rng, so the rest of a seed's layout only changes where it takes a tile.
+ */
+function plantAndLitter(c: Canvas, r: Rect, trees: boolean): void {
+  const m = centre(r);
+  const cx = Math.floor(m.x);
+  const cy = Math.floor(m.y);
+  if (trees && r.w >= 9 && r.h >= 9) {
+    const want = 2 + (mix(r.x, r.y) % 3);
+    const corners: Vec2[] = [
+      { x: r.x + 1, y: r.y + 1 },
+      { x: r.x + r.w - 2, y: r.y + 1 },
+      { x: r.x + 1, y: r.y + r.h - 2 },
+      { x: r.x + r.w - 2, y: r.y + r.h - 2 },
+    ].sort((a, b) => mix(a.x, a.y) - mix(b.x, b.y));
+    let planted = 0;
+    for (const corner of corners) {
+      if (planted >= want) break;
+      // The corner's tile, or one a step or two further in (planters stand on some).
+      const inward = { x: Math.sign(cx - corner.x), y: Math.sign(cy - corner.y) };
+      for (const [u, v] of [[0, 0], [1, 0], [0, 1], [1, 1], [2, 0], [0, 2]] as const) {
+        const p = { x: corner.x + inward.x * u, y: corner.y + inward.y * v };
+        // The fountain spans the middle 3 × 3: a tile clear of it.
+        if (Math.max(Math.abs(p.x - cx), Math.abs(p.y - cy)) < 3 || !roomForCover(c, p, 2)) continue;
+        if (group(c, p, [[0, 0, 'high', ['tree']]])) {
+          planted++;
+          break;
+        }
+      }
+    }
+  }
+  const heaps = 1 + (mix(r.y, r.x) % 2);
+  const spots = tilesIn(rect(r.x + 2, r.y + 2, r.w - 4, r.h - 4)).sort((a, b) => mix(a.x, a.y) - mix(b.x, b.y));
+  let n = 0;
+  for (const p of spots) {
+    if (n >= heaps) break;
+    const pair = mix(p.y, p.x) % 2 === 0 && p.x + 1 < r.x + r.w - 2;
+    if (!roomForCover(c, p, 2) || (pair && !roomForCover(c, add(p, { x: 1, y: 0 }), 2))) continue;
+    if (group(c, p, pair ? [[0, 0, 'low', ['rubble']], [1, 0, 'low', ['rubble']]] : [[0, 0, 'low', ['rubble']]])) n++;
+  }
+}
+
 /**
  * A square: a fountain with a statue in the middle, planters mirrored around
- * it on a regular grid and a kiosk or two by the edges.
+ * it on a regular grid and a kiosk or two by the edges; `extras`, its trees
+ * and rubble (plantAndLitter), all but on the squad's and the objective's.
  */
-function plaza(c: Canvas, r: Rect, rng: Rng): void {
+function plaza(c: Canvas, r: Rect, rng: Rng, extras = true): void {
   const m = centre(r);
   const cx = Math.floor(m.x);
   const cy = Math.floor(m.y);
@@ -1105,10 +1186,11 @@ function plaza(c: Canvas, r: Rect, rng: Rng): void {
     const p = localPt(r, side, Math.floor(sideLen(r, side) / 2) + rng.range(-1, 1), 1);
     group(c, p, turn(dressed(PAIR, 'bin', 'kiosk'), rng.int(4)));
   }
+  if (extras) plantAndLitter(c, r, true);
 }
 
-/** Car park: bays across the lot facing an aisle, two rows when deep enough, and a booth. */
-function parking(c: Canvas, r: Rect, rng: Rng, front: number): void {
+/** Car park: bays across the lot facing an aisle, two rows when deep enough, and a booth; `extras`, its rubble (plantAndLitter), but on the objective's. */
+function parking(c: Canvas, r: Rect, rng: Rng, front: number, extras = true): void {
   const across = sideLen(r, front);
   const depth = depthOf(r, front);
   if (across < 5 || depth < 4) return;
@@ -1130,6 +1212,7 @@ function parking(c: Canvas, r: Rect, rng: Rng, front: number): void {
     }
   }
   group(c, localPt(r, front, rng.int(2) === 0 ? 0 : across - 1, 0), [[0, 0, 'high', ['kiosk']]]);
+  if (extras) plantAndLitter(c, r, false);
 }
 
 /** A row of houses or shops on the front of a lot, and another one on the back when the lot is deep. */
@@ -1752,7 +1835,7 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
     if (block === spawnBlock) {
       // The squad's corner: an open square, with buildings round it if the block is big (on a small block, a narrower square).
       const corner = cornerLots({ r: lot, roads }, 0, lot.w >= 16 || lot.h >= 16 ? 8 : 6);
-      plaza(c, corner.square, rng);
+      plaza(c, corner.square, rng, false);
       lots.push(...corner.lots);
     } else if (block !== objBlock && inRect(block, { x: S - 1, y: 0 })) {
       // The other corner on the squad's side keeps a yard for the evac zone (generateLayout carves it there), a few crates in it.
@@ -1774,8 +1857,8 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
       if (l === objLot && role === 'open') {
         // The objective's square or car park: the far end of its lot, the rest built up.
         const [open, rest] = endOf(l, far, 120) ?? [l, null];
-        if (cityProgram(open.r, rng, role, used) === 'plaza') plaza(c, open.r, rng);
-        else parking(c, open.r, rng, frontOf(c, open.r, open.roads, rng));
+        if (cityProgram(open.r, rng, role, used) === 'plaza') plaza(c, open.r, rng, false);
+        else parking(c, open.r, rng, frontOf(c, open.r, open.roads, rng), false);
         if (rest) cityLot(c, rest.r, cityProgram(rest.r, rng, null, used, organic), rest.roads, rng, style);
         objective = open.r;
         continue;
@@ -1786,7 +1869,7 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
     }
     sidewalk(c, block, walks, style.furniture, 'low');
   }
-  parkCars(c, plan.roads, rng, 0.4);
+  parkCars(c, plan.roads, rng, 0.4, 0.15);
   checkpoint(c, plan.roads, rng);
   return objective;
 }
