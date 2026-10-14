@@ -673,8 +673,8 @@ export class Hud {
    * `waiting`: the partner has the command (`waitingFor` names them).
    * `confirm`: pressed once with soldiers still able to act (`waitingFor` says how many).
    */
-  setEndTurn(mode: 'act' | 'ready' | 'waiting' | 'disabled' | 'confirm', waitingFor: string | null): void {
-    this.endTurn.disabled = mode === 'disabled' || mode === 'waiting';
+  setEndTurn(mode: 'act' | 'ready' | 'waiting' | 'disabled' | 'confirm' | 'enemy', waitingFor: string | null): void {
+    this.endTurn.disabled = mode === 'disabled' || mode === 'waiting' || mode === 'enemy';
     this.endTurn.classList.toggle('is-ready', mode === 'ready');
     this.endTurn.classList.toggle('is-waiting', mode === 'waiting');
     this.endTurn.classList.toggle('is-confirm', mode === 'confirm');
@@ -685,6 +685,9 @@ export class Hud {
       this.endTurn.append(h('span', {}, 'LISTO ✓'), h('small', {}, waitingFor ? `Esperando a ${waitingFor}` : 'Pulsa para cancelar'));
     } else if (mode === 'waiting') {
       this.endTurn.append(h('span', {}, `MANDO: ${(waitingFor ?? '').toUpperCase()}`), h('small', {}, 'Puedes planear: clic en una casilla'));
+    } else if (mode === 'enemy') {
+      // The enemy turn plays (docs/UX-RITMO.md): the space bar held shows it in «Rápida».
+      this.endTurn.append(h('span', {}, 'TURNO ENEMIGO'), h('small', {}, 'Espacio: más rápido'));
     } else {
       this.endTurn.append(h('span', {}, 'TERMINAR TURNO'), h('small', {}, 'Retroceso'));
     }

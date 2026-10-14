@@ -50,7 +50,16 @@ export class CameraRig {
   /** The player explicitly took the camera: cancels any cinematic in progress. */
   takeControl(): void {
     this.epoch++;
+    this.takenAt = performance.now();
     this.savedDistance = null;
+  }
+
+  /** When the player last took the camera (performance.now): the enemy turn leaves it alone a while after (docs/UX-RITMO.md). */
+  takenAt = -Infinity;
+
+  /** It has reached where it was last sent, look and zoom, give or take a few centimetres. */
+  get settled(): boolean {
+    return this.target.distanceTo(this.desiredTarget) < 0.15 && Math.abs(this.distance - this.desiredDistance) < 0.3;
   }
 
   /** Looks at `p`; the target follows the floor height so rooftops stay centred. */

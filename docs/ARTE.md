@@ -31,6 +31,8 @@ Todos en `assets-src/synty/`. Las rutas de cada uno están en `PACKS` de `syntyM
 | POLYGON Office, y dos de City | Las voces de la radio (`strategy/portraits.ts`) |
 | Nature Biomes – Alpine Mountain y POLYGON Snow | La base en la sierra |
 | ANIMATION – Base Locomotion e Idles | Las animaciones de todos los personajes |
+| ANIMATION – Bow Combat y Sword Combat | Las muertes (`DEATHS`) |
+| ANIMATION – Goblin Locomotion | Cómo andan y corren los muertos (`DEAD_MOTIONS`) |
 | POLYGON Particle FX | Los efectos del combate y del Oficio |
 | POLYGON Icons | Piezas para los renders de la interfaz |
 | INTERFACE Apocalypse HUD, Modern Menus y Military Combat HUD | La interfaz (los lleva UX/UI) |
@@ -63,8 +65,23 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 - **Los muertos:** comunes (10 modelos), corredores (4), acorazados (4, un poco más grandes), el Chillón y el Hinchado (`UNIT_BODIES`).
 - **Animación,** por capas:
   - los clips de Base Locomotion e Idles se miden contra la pose en T del pack y se pasan a los huesos de cada personaje, así que el mismo clip sirve para los dos rigs de Synty;
-  - encima, el torso (encogerse, impactos, retroceso, lanzar, gritar) y los brazos: el arma en la mano derecha y la izquierda en el guardamanos, las dos con cinemática inversa;
-  - la muerte: se doblan las rodillas y el cuerpo cae de espaldas o de lado.
+  - encima, el torso (encogerse, impactos, retroceso, lanzar, tajo, mordisco, gritar) y los brazos: el arma en la mano derecha y la izquierda en el guardamanos, las dos con cinemática inversa;
+  - la espera: la normal, con un vistazo o un cambio de peso de vez en cuando, o una postura propia (`STANCES`): los muertos se tambalean como borrachos, los Cuervos están en guardia y el soldado con la mitad de la vida o menos se encorva.
+- **Velocidades** (`GAITS` en `gaits.ts`, la tabla que se afina; los segundos los decide Gameplay): cada plantilla tiene su paso, y el clip va a la velocidad que deja los pies quietos en el suelo (`clipSpeed`, medido: el pie apoyado no se desliza más de un ±8 %). Los muertos andan y corren con Goblin Locomotion, encorvados y arrastrando los pies.
+
+  | Quién | Un movimiento (azul) | Dos (amarilla) |
+  |---|---|---|
+  | Los vivos (escuadra, Cuervos, VIP) | correr ×1,11 · 0,50 s | sprint ×0,81 · 0,24 s |
+  | Agachado | andar agachado ×1,27 · 0,71 s | |
+  | Muerto común | andar ×0,73 · 1,02 s, arrastrando un pie | andar ×0,97 · 0,77 s |
+  | Corredor | correr ×0,87 · 0,52 s, encorvado | sprint ×1,19 · 0,20 s |
+  | Acorazado | andar ×0,77 · 0,97 s, pesado | andar ×1,06 · 0,71 s |
+  | El Chillón | andar ×0,81 · 0,92 s | andar ×1,13 · 0,66 s |
+  | El Hinchado | andar ×0,69 · 1,08 s, bamboleándose | andar ×0,94 · 0,80 s |
+
+  Son segundos por casilla; una diagonal tarda 1,4 veces más, una escalera de mano 1,2 s por planta y un tramo de escalera 1,6 veces la casilla. Todo va a la «Velocidad del combate» (`timeRate()` de `tween.ts`), los clips también.
+- **Muertes** (`DEATHS` en `syntyManifest.ts`): seis clips por complexión, de Bow Combat y Sword Combat. El cuerpo cae lejos del golpe que lo mata: de un disparo de frente, de espaldas; por la espalda, de bruces; desde un lado, hacia el otro. Un crítico es un tiro a la cabeza, y un golpe cuerpo a cuerpo puede doblarlo sobre sí mismo. Entre las caídas que encajan, cada unidad elige siempre la misma. Entre las que encajan se queda con una que tenga sitio: ni pared ni cobertura alta en el camino, del ancho de los hombros, hasta donde llega la cabeza (`reach`). Si ninguna lo tiene, cae la que menos sitio ocupa. El clip se ve entero (de 0,9 a 1,5 s) y deja la pose final; el arma se suelta y queda en el suelo. Levantarse (Último verso, el zombi que sale del cadáver) es la muerte al revés.
+- **Saltos y caídas** (`unitViews.ts`): saltar una ventana es subir agachado al alféizar y bajar o caer al otro lado; la caída dura más cuanto más alta es. Por un forjado roto, `fall()`: sin saltito, con tambaleo, agachado al tocar suelo.
 - **Coste:** la pose se actualiza a 30 Hz en reposo o lejos, a 8 Hz fuera de pantalla y nada en la niebla o muertos. Solo los 24 enemigos más cercanos dan sombra. Las unidades van en su propia capa (`UNIT_LAYER`), fuera de la oclusión ambiental.
 - **Retratos de la radio:** personajes de Synty en su panel (`strategy/portraits.ts`).
 - **Sin reserva de primitivas:** `models.ts` y `figures.ts` solo guardan el contrato que mueven las vistas (`UnitRig`, `FigureRig`, `FigurePose`, `Gear`). Una plantilla sin personaje en el manifiesto sale como recluta y avisa en la consola.
@@ -73,7 +90,10 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 
 - **Edificios en los que se entra,** de los kits modulares:
   - el tejado se desvanece cuando se ve el interior por una ventana o una puerta;
-  - varias plantas, con corte por planta y la planta activa (RePág/AvPág, Mayús+rueda).
+  - varias plantas, con corte por planta y la planta activa (RePág/AvPág, Mayús+rueda);
+  - escaleras con pasamanos a los lados del tramo y barandilla alrededor del hueco, abierta solo al rellano, que es por donde se dejan ([FASE7.md](FASE7.md));
+  - paredes que rompe una granada: un muñón a la altura de cobertura baja, el dintel encima (la planta de arriba sigue en pie) y escombros a cada lado. Se reconocen por el decorado `breach`, también tras recargar;
+  - forjados rotos: el agujero, por el que se ve la planta de abajo, y cascotes planos debajo. Rehacer las plantas con un agujero nuevo cuesta 7–10 ms, una vez por explosión.
 - **Dos estilos de ciudad,** mitad y mitad: cuadrícula y pueblo viejo. Hileras de tiendas, gasolinera, motel, casas con jardín, obras y control militar. Los bordes siguen la calle con vehículos abandonados.
 - **Luz de día** (`renderer.ts`), medida contra la captura de la ciudad de Apocalypse por bandas de tono: una neblina fina y cálida, el sol bajo a la derecha, la sombra levantada hacia el malva y una saturación media como la suya (0,29).
 - **Suelo:** terreno continuo, sin aspecto de cuadrícula, y oclusión de contacto horneada (`groundAO.ts`). En la ciudad:
@@ -132,5 +152,8 @@ Las capturas de los laboratorios van a `.dev-snapshots/`, que no se sube. Con el
 - **Medir en el PC con la RTX 3090:** la telemetría de una misión (`data/red.log`) dice si hace falta lo siguiente.
 - **Hornear las hordas** (InstancedMesh con la animación en una textura), solo si las unidades pasan de ~1 ms por fotograma.
 - **Lo que pedirán las reglas más adelante:** saltar desde ventanas altas, suelos y paredes destructibles, escaleras que solo se dejan por un lado.
+- **La puerta animada,** en una tanda aparte.
+- **Impactos con clips:** Bow Combat y Sword Combat traen reacciones según dónde da el golpe (`Hit_*`); hoy el impacto es procedural.
+- **Los cuerpos y el decorado pequeño:** la caída esquiva paredes y cobertura alta, pero no un banco ni un buzón (no son casillas que tapen).
 - **Para UX/UI, si lo pide:** la venda en render ([UX-CARENCIAS.md](UX-CARENCIAS.md)).
 - **Si las etiquetas de los soldados aún molestan** con la escuadra junta: apartar en vertical las que se solapen. Por ahora, la del seleccionado y la del señalado van por encima de las demás (`renderOrder` en `unitViews.ts`).

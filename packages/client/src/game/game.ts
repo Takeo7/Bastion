@@ -116,12 +116,12 @@ import { Renderer } from './renderer';
 import { Sfx } from './sfx';
 import { syntyPropsLoaded } from './syntyProps';
 import { SONG, SongFx, SongMarks } from './songFx';
-import { setTimeScale, wait } from './tween';
+import { setCombatRate, setHurry, timeRate, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
 import { CombatTips, shootsFromRange } from './combatTips';
 import { playArrival } from './arrivals';
-import { graphics } from '../settings';
+import { COMBAT_RATES, graphics, onGraphics } from '../settings';
 
 /** `self`: a self ability pressed once, waiting for the second press (or Enter) that uses it. */
 type Mode = { kind: 'move' } | { kind: 'target'; ability: AbilityId } | { kind: 'tile'; ability: AbilityId } | { kind: 'self'; ability: AbilityId };
@@ -145,9 +145,10 @@ type ShotEvent = Extract<GameEvent, { t: 'shot' }>;
 
 /** Pause after the last event of one of our own actions before handing control back. */
 const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
-  damaged: 0.75,
+  // docs/UX-RITMO.md: the number stays a second, a miss most of one.
+  damaged: 1,
   died: 0.6,
-  shot: 0.6,
+  shot: 0.8,
   stunned: 0.6,
   tileChanged: 0.6,
   explosive: 0.6,
@@ -163,7 +164,7 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
   evacuated: 0.4,
   searched: 0.7,
   infected: 0.75,
-  moved: 0.12,
+  moved: 0.25,
 };
 
 /**
@@ -183,6 +184,25 @@ const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fu
  */
 const VEIL_MODELS_MS = 15000;
 const VEIL_SHADERS_MS = 4000;
+
+/**
+ * The enemy turn's pace (docs/UX-RITMO.md; Arturo, 14/10: «el turno de la IA va
+ * muy rápido»), in seconds at «Normal» (Ajustes' «Velocidad del combate» and the
+ * space bar scale them, with everything else, through tween.ts). Before an
+ * enemy (or a group of the dead) acts in sight, the camera gets there and stays
+ * still SETTLE; the result of an attack stays READ_HIT (READ_MISS for a miss)
+ * before anything else; between one enemy and the next, at least BETWEEN.
+ */
+const SETTLE = 0.35;
+const READ_HIT = 0.9;
+const READ_MISS = 0.7;
+const BETWEEN = 0.5;
+/** Within this of where the camera looks, the next enemy needs no camera move: it never goes back and forth. */
+const NEAR_ENOUGH = 5;
+/** After the player takes the camera, the enemy turn leaves it to them this long (ms): it never fights them. */
+const PLAYER_CAMERA_MS = 2500;
+/** What follows an enemy's action and belongs to it: it doesn't end the action, nor start the next. */
+const FOLLOW_UP: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['damaged', 'died', 'infected', 'stunned', 'disoriented', 'noise', 'tileChanged', 'floorBroken', 'fell', 'itemDropped']);
 
 /** Done by hand on a tile beside the soldier: Registrar, and opening or closing a door (playtest 13/10 #2). */
 type HandAbility = 'search' | 'openDoor' | 'closeDoor';
@@ -523,6 +543,14 @@ export class Game {
   private alarmRaised = false;
   /** A bitten soldier of ours has risen in this mission already: the stamp only comes the first time. */
   private risenSeen = false;
+  /** The enemy last shown acting in this enemy turn (a unit id, or a group of the dead as `group:` and its pod): the next one is shown anew. */
+  private lastActor: string | null = null;
+  /** The result of the enemy attack just played, still to be read (seconds), before anything new starts. */
+  private resultHold = 0;
+  /** A group of the dead is walking together: no single walker takes the camera. */
+  private grouped = false;
+  /** The framing of the last group of the dead shown walking: who was in it and what it took in. */
+  private groupFrame: { ids: Set<string>; centre: THREE.Vector3; radius: number } | null = null;
   /** Resolves when the loading veil lifts (UX-REVISION-3 #1); null when it is down. */
   private veiled: Promise<void> | null = null;
   private gone = false;
@@ -573,6 +601,8 @@ export class Game {
     this.tips = new CombatTips(this.hud.root, this.mySlot);
 
     this.disposers.push(this.renderer.onFrame((dt, time) => this.frame(dt, time)));
+    // «Velocidad del combate» (docs/UX-RITMO.md), live; the base and the menus always play at normal speed.
+    this.disposers.push(onGraphics((g) => setCombatRate(COMBAT_RATES[g.combatSpeed] ?? 1)), () => (setCombatRate(1), setHurry(false)));
     this.renderer.onQualityLowered = () => this.qualityLowered();
     this.bindInput();
     this.loadSnapshot(snapshot);
@@ -588,10 +618,13 @@ export class Game {
 
   /** Advances camera, poses and particles; called by the render loop. */
   frame(dt: number, time: number): void {
-    this.rig.update(dt);
+    // The battle's speed (tween.ts timeRate): the bodies follow it in unitViews; the effects here, and the camera while
+    // events play, so it arrives in step with them (the player's own panning keeps its speed).
+    const rate = timeRate();
+    this.rig.update(this.playing ? dt * rate : dt);
     this.units.tick(dt, time);
-    this.fx.tick(dt);
-    this.songFx.tick(dt);
+    this.fx.tick(dt * rate);
+    this.songFx.tick(dt * rate);
     this.overlays?.tick(time);
     this.mapView.tick(dt);
     const from = this.selected ? getUnit(this.view, this.selected) : undefined;
@@ -842,9 +875,16 @@ export class Game {
   private async pump(): Promise<void> {
     if (this.playing) return;
     this.playing = true;
+    // No speed-up for a backlog (docs/UX-RITMO.md): the enemy turn arrives whole, and it played at ×2.5.
     while (this.queue.length) {
-      setTimeScale(this.queue.length > 24 ? 2.5 : this.queue.length > 12 ? 1.6 : 1);
       const item = this.queue.shift()!;
+      // The dead of one group that walk in the same stretch walk together, under one framing.
+      const group = this.walkingWith(item);
+      if (group.length) {
+        await this.playGroup([item, ...group]);
+        continue;
+      }
+      await this.beforeActing(item);
       this.current = item;
       const epoch = this.rig.epoch;
       try {
@@ -853,34 +893,191 @@ export class Game {
         console.error('[anim]', err);
       }
       this.current = null;
-      const secured = this.view.mission.objectiveDone;
-      const seen = this.visibleAliens;
-      applyEvent(this.view, item.e);
-      const e = item.e;
-      if (e.t === 'turnBegan') this.plans.clear();
-      else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') this.plans.delete(e.unit);
-      if (!secured && this.view.mission.objectiveDone) this.storyRadio('objective');
-      if (item.e.t === 'tileChanged' || item.e.t === 'floorBroken') this.mapView.rebuild(this.view);
-      this.refreshView();
-      this.refreshStatus();
-      this.tips.event(item.e, this.view);
-      try {
-        await this.announceSighted(item, seen, epoch);
-      } catch (err) {
-        console.error('[anim]', err);
-      }
-      // The noise that follows an action doesn't set the pause after it: what was done does.
-      if (item.by === this.mySlot && e.t !== 'noise') this.holdAfter = HOLD_AFTER[e.t] ?? 0.2;
-      if (item.by === this.mySlot && --this.myPending === 0) {
-        // Let the player see the outcome before the selection moves on.
-        await wait(this.holdAfter);
-        this.rig.restoreZoom();
-        this.refreshInteractive();
-      }
+      this.noteResult(item);
+      await this.settle(item, epoch);
     }
-    setTimeScale(1);
+    // The last enemy attack of the turn is read too, before the turn changes hands.
+    if (this.resultHold) {
+      const hold = this.resultHold;
+      this.resultHold = 0;
+      await wait(hold);
+    }
     this.playing = false;
     this.refreshInteractive();
+  }
+
+  /** What an animated event leaves behind: the view, the fog, the HUD, the warnings, the sightings, and the pause after one's own action. */
+  private async settle(item: QueuedEvent, epoch: number): Promise<void> {
+    const secured = this.view.mission.objectiveDone;
+    const seen = this.visibleAliens;
+    applyEvent(this.view, item.e);
+    const e = item.e;
+    if (e.t === 'turnBegan') this.plans.clear();
+    else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') this.plans.delete(e.unit);
+    if (!secured && this.view.mission.objectiveDone) this.storyRadio('objective');
+    if (item.e.t === 'tileChanged' || item.e.t === 'floorBroken') this.mapView.rebuild(this.view);
+    this.refreshView();
+    this.refreshStatus();
+    this.tips.event(item.e, this.view);
+    try {
+      await this.announceSighted(item, seen, epoch);
+    } catch (err) {
+      console.error('[anim]', err);
+    }
+    // The noise that follows an action doesn't set the pause after it: what was done does.
+    if (item.by === this.mySlot && e.t !== 'noise') this.holdAfter = HOLD_AFTER[e.t] ?? 0.2;
+    if (item.by === this.mySlot && --this.myPending === 0) {
+      // Let the player see the outcome before the selection moves on.
+      await wait(this.holdAfter);
+      this.rig.restoreZoom();
+      this.refreshInteractive();
+    }
+    if (e.t === 'turnBegan') {
+      this.lastActor = null;
+      this.groupFrame = null;
+      // The space bar hurries the enemy turn only.
+      if (e.team === 'xcom') setHurry(false);
+      // The end-turn button says whose turn it is (and, in the enemy's, that the space bar hurries it).
+      this.refreshHud();
+    }
+  }
+
+  /** The enemy turn is on screen: the space bar hurries it, and the end-turn button says so. */
+  private enemyTurnPlaying(): boolean {
+    return this.view.activeTeam === 'alien' && !this.view.outcome;
+  }
+
+  /** Whether anything of the enemy turn now queued will be seen: something done in sight, or to one of ours. */
+  private enemyTurnShows(): boolean {
+    for (const { e } of this.queue) {
+      if (e.t === 'turnBegan') return false;
+      if (e.t === 'reinforcementsIncoming' || e.t === 'missionEnded' || e.t === 'concealmentBroken') return true;
+      if (e.t === 'shot' && getUnit(this.view, e.target)?.team === 'xcom') return true;
+      const id = unitOf(e);
+      const u = id ? getUnit(this.view, id) : undefined;
+      if (u && (u.team === 'xcom' || this.shownToSquad(u) || (e.t === 'moved' && e.path.some((p) => this.mapView.isVisible(p.x, p.y))))) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The enemy that `e` makes act in sight, in the enemy turn: the unit that
+   * moves, attacks, shouts or throws, if the squad sees it (or a step of its
+   * path). Null for anything else.
+   */
+  private enemyActor(e: GameEvent): Unit | null {
+    const v = this.view;
+    if (v.activeTeam !== 'alien' || FOLLOW_UP.has(e.t)) return null;
+    const id = unitOf(e);
+    const u = id ? getUnit(v, id) : undefined;
+    if (!u || u.team !== 'alien' || !u.alive) return null;
+    const seen = this.shownToSquad(u) || (e.t === 'moved' && e.path.some((p) => this.mapView.isVisible(p.x, p.y)));
+    return seen ? u : null;
+  }
+
+  /**
+   * docs/UX-RITMO.md, before an event plays: the result of the last enemy
+   * attack is read first; and an enemy that starts acting in sight is shown
+   * before it does (a pause after the previous one, the camera to it unless
+   * it is near or the player has the camera, and a still moment).
+   */
+  private async beforeActing(item: QueuedEvent): Promise<void> {
+    if (FOLLOW_UP.has(item.e.t)) return;
+    const hold = this.resultHold;
+    this.resultHold = 0;
+    const actor = this.enemyActor(item.e);
+    if (!actor || actor.id === this.lastActor) {
+      if (hold) await wait(hold);
+      return;
+    }
+    const first = this.lastActor === null;
+    this.lastActor = actor.id;
+    // One that was in the last group's framing (often one of the group, now going to bite) is in view
+    // already: no new presentation, only what is left of reading the last result (Gameplay, 14/10).
+    if (this.inGroupFrame(actor)) {
+      if (hold) await wait(hold);
+      return;
+    }
+    this.groupFrame = null;
+    await wait(Math.max(first ? 0 : BETWEEN, hold));
+    await this.showEnemy([this.units.worldPos(actor.id)]);
+  }
+
+  /** Whether `u` was in the last group's framing and the camera is still there. */
+  private inGroupFrame(u: Unit): boolean {
+    const f = this.groupFrame;
+    if (!f) return false;
+    const at = this.units.worldPos(u.id);
+    const reach = Math.max(NEAR_ENOUGH, f.radius + 1);
+    return (f.ids.has(u.id) || at.distanceTo(f.centre) <= reach) && at.distanceTo(this.rig.focusPoint) <= reach;
+  }
+
+  /** The camera to where `points` are (unless near, or the player has it), there, and a still moment. */
+  private async showEnemy(points: THREE.Vector3[]): Promise<void> {
+    const centre = new THREE.Box3().setFromPoints(points).getCenter(new THREE.Vector3());
+    const theirs = performance.now() - this.rig.takenAt < PLAYER_CAMERA_MS;
+    if (!theirs && centre.distanceTo(this.rig.focusPoint) > NEAR_ENOUGH) {
+      this.rig.focus(centre);
+      for (let i = 0; i < 24 && !this.rig.settled; i++) await wait(0.05);
+    }
+    await wait(SETTLE);
+  }
+
+  /** An enemy attack just played: its result is to be read before the next thing starts. */
+  private noteResult(item: QueuedEvent): void {
+    const e = item.e;
+    if (this.view.activeTeam !== 'alien') return;
+    if (e.t === 'shot') {
+      const shooter = getUnit(this.view, e.unit);
+      if (shooter?.team === 'alien' && (this.shownToSquad(shooter) || getUnit(this.view, e.target)?.team === 'xcom')) this.resultHold = e.result === 'miss' ? READ_MISS : READ_HIT;
+    } else if ((e.t === 'explosive' || e.t === 'psi') && this.enemyActor(e)) this.resultHold = READ_HIT;
+  }
+
+  /** The pod `e` moves if it is a walk of one of the dead in the enemy turn (they only bite: docs/ZOMBIS-PRIMERO.md). */
+  private deadWalker(e: GameEvent): string | null {
+    if (e.t !== 'moved' || this.view.activeTeam !== 'alien') return null;
+    const u = getUnit(this.view, e.unit);
+    return u && u.team === 'alien' && u.alive && u.podId && !shootsFromRange(u) ? u.podId : null;
+  }
+
+  /** The walks of the same group of the dead right after `item`'s, taken off the queue (none if it walks alone). */
+  private walkingWith(item: QueuedEvent): QueuedEvent[] {
+    const pod = this.deadWalker(item.e);
+    if (!pod) return [];
+    let n = 0;
+    while (n < this.queue.length && this.deadWalker(this.queue[n]!.e) === pod) n++;
+    return this.queue.splice(0, n);
+  }
+
+  /**
+   * A group of the dead walking in the same stretch (docs/UX-RITMO.md): one
+   * framing over where they are and where they go, a still moment, and they
+   * all walk at once; their attacks come after, one by one.
+   */
+  private async playGroup(items: QueuedEvent[]): Promise<void> {
+    const v = this.view;
+    const shown = items.filter((q) => this.enemyActor(q.e));
+    const hold = this.resultHold;
+    this.resultHold = 0;
+    if (shown.length) {
+      const first = this.lastActor === null;
+      this.lastActor = `group:${this.deadWalker(items[0]!.e)}`;
+      await wait(Math.max(first ? 0 : BETWEEN, hold));
+      const points = shown.flatMap((q) => {
+        const e = q.e as Extract<GameEvent, { t: 'moved' }>;
+        return [this.units.worldPos(e.unit), tileToWorld(e.path[e.path.length - 1] ?? getUnit(v, e.unit)!.pos)];
+      });
+      const box = new THREE.Box3().setFromPoints(points);
+      this.groupFrame = { ids: new Set(items.map((q) => unitOf(q.e)!)), centre: box.getCenter(new THREE.Vector3()), radius: box.getSize(new THREE.Vector3()).length() / 2 };
+      await this.showEnemy(points);
+    } else if (hold) await wait(hold);
+    const epoch = this.rig.epoch;
+    this.current = items[0]!;
+    this.grouped = true;
+    await Promise.all(items.map((q) => this.play(q).catch((err) => console.error('[anim]', err))));
+    this.grouped = false;
+    this.current = null;
+    for (const q of items) await this.settle(q, epoch);
   }
 
   /** Whether `id` still has events waiting to be animated. */
@@ -948,12 +1145,19 @@ export class Game {
         const seen = this.shownToSquad(u) || e.path.some((p) => this.mapView.isVisible(p.x, p.y));
         if (!seen) return;
         this.units.forceVisible(u.id);
-        look(this.units.worldPos(u.id));
+        // In a group of the dead (playGroup), the framing is the group's: no walker takes the camera.
+        if (!this.grouped) look(this.units.worldPos(u.id));
         let steps = 0;
-        await this.units.moveAlong(u.id, e.path, (p) => {
-          look(p);
-          if (steps++ % 2 === 0) this.sfx.step(u, p);
-        });
+        // The move's cost picks the gait (Arte's gaits.ts): a dash runs, a blue move walks.
+        await this.units.moveAlong(
+          u.id,
+          e.path,
+          (p) => {
+            if (!this.grouped) look(p);
+            if (steps++ % 2 === 0) this.sfx.step(u, p);
+          },
+          e.ap,
+        );
         return;
       }
       case 'shot':
@@ -1176,6 +1380,8 @@ export class Game {
         // No `unit`: an infected soldier rising by itself (docs/FASE3.md), with no Chillón to shriek.
         const u = e.unit ? getUnit(v, e.unit) : undefined;
         const corpse = getUnit(v, e.corpse)!;
+        // Out of sight it costs no time (docs/UX-RITMO.md): the body is just up when it comes into view.
+        if (!this.mapView.isVisible(corpse.pos.x, corpse.pos.y) && !(u && this.shownToSquad(u))) return;
         const at = tileToWorld(corpse.pos, 0.5);
         look(at);
         if (u) this.units.forceVisible(u.id);
@@ -1488,6 +1694,8 @@ export class Game {
       }
       case 'turnBegan': {
         if (e.team === 'xcom') this.rig.restoreZoom();
+        // An enemy turn nobody will see opens without its banner (docs/UX-RITMO.md): «TU TURNO» says enough.
+        if (e.team === 'alien' && !this.enemyTurnShows()) return;
         this.sfx.turn(e.team === 'alien', !v.concealed);
         // Whose turn opens: mine, the partner's (they hold the command) or the enemy's.
         const partner = e.team === 'xcom' && !!this.partnerHere() && e.command !== undefined && e.command !== this.mySlot;
@@ -1697,6 +1905,10 @@ export class Game {
     const u = getUnit(this.view, e.unit)!;
     const def = ABILITIES[e.ability];
     const to = tileToWorld(e.target, 0.15);
+    // An enemy's blast nobody sees, thrown from out of sight, costs no time (docs/UX-RITMO.md).
+    if (u.team === 'alien' && !this.shownToSquad(u) && !this.mapView.isVisible(e.target.x, e.target.y)) return;
+    // Whoever dies in it falls away from the blast (Arte's deaths, unitViews).
+    this.units.blastAt(to);
     if (e.ability === 'burst') {
       // The Hinchado bursts where it stood (docs/FASE2.md): nothing thrown, a blast of gas and worse.
       if (!this.mapView.isVisible(e.target.x, e.target.y)) return;
@@ -2721,7 +2933,7 @@ export class Game {
     const ready = s.ready[this.mySlot];
     const waiting = partner && busy.has(partner.slot) && !s.ready[partner.slot] ? partner.name : null;
     const idle = this.idleSoldiers();
-    const mode = !this.canAct() ? 'disabled' : ready ? 'ready' : !mine ? 'waiting' : this.endArmed && idle ? 'confirm' : 'act';
+    const mode = this.enemyTurnPlaying() ? 'enemy' : !this.canAct() ? 'disabled' : ready ? 'ready' : !mine ? 'waiting' : this.endArmed && idle ? 'confirm' : 'act';
     const detail = mode === 'confirm' ? `${idle} ${idle === 1 ? 'soldado' : 'soldados'} con acciones` : !mine && !ready ? this.playerName(s.command) : waiting;
     this.hud.setEndTurn(mode, detail);
     this.hud.setCommand(sharing && this.canAct() ? { mine, holder: this.playerName(s.command), color: PLAYER_COLORS[s.command ?? this.mySlot], canPass: mine && !s.ready[partner!.slot] && busySlots(s).has(partner!.slot) } : null);
@@ -3144,6 +3356,12 @@ export class Game {
 
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e)) return;
+      // In the enemy turn the space bar, held, plays it in «Rápida» (docs/UX-RITMO.md); it gives no orders then.
+      if (e.code === 'Space' && this.enemyTurnPlaying() && !this.hud.covered) {
+        e.preventDefault();
+        setHurry(true);
+        return;
+      }
       if (/^Digit[0-9]$/.test(e.code)) {
         const u = this.selectedUnit();
         const n = Number(e.code.slice(5));
@@ -3216,6 +3434,14 @@ export class Game {
     };
     window.addEventListener('keydown', onKey);
     this.disposers.push(() => window.removeEventListener('keydown', onKey));
+    // Let go (or the window loses the keyboard), and the chosen speed is back.
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setHurry(false);
+    };
+    const onBlur = () => setHurry(false);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    this.disposers.push(() => window.removeEventListener('keyup', onKeyUp), () => window.removeEventListener('blur', onBlur));
   }
 
   /**

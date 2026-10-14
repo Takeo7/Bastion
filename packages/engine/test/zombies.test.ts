@@ -163,6 +163,25 @@ describe('the dead', () => {
     expect(Math.hypot(walker.pos.x - near.pos.x, walker.pos.y - near.pos.y)).toBeLessThanOrEqual(13 - 8 + 0.5);
   });
 
+  it('the dead with nobody in reach walk first, each group together; the bites come after', () => {
+    const s = field(40, 30);
+    s.activeTeam = 'alien';
+    addUnit(s, 's1', 'rookie', 5, 5, { hp: 50, maxHp: 50 });
+    const biter = addUnit(s, 'a1', 'zombie', 8, 5);
+    const far1 = addUnit(s, 'a2', 'zombie', 30, 5);
+    const far2 = addUnit(s, 'a3', 'zombie', 31, 6);
+    pod(s, 'p1', true, [biter, far1, far2]);
+    const turn = sim(s);
+    turn.runAlienTurn();
+    const acts = turn.events.filter((e): e is Extract<GameEvent, { t: 'moved' | 'shot' }> => e.t === 'moved' || e.t === 'shot').map((e) => e.unit);
+    // Both far ones' walks come before anything of the one that bites, though it comes first in its group.
+    const firstBiter = acts.indexOf('a1');
+    expect(firstBiter).toBeGreaterThan(0);
+    expect(new Set(acts.slice(0, firstBiter))).toEqual(new Set(['a2', 'a3']));
+    expect(acts.slice(firstBiter).every((id) => id === 'a1')).toBe(true);
+    expect(of(turn.events, 'shot').filter((e) => e.unit === 'a1')).toEqual([expect.objectContaining({ ability: 'claw', target: 's1' })]);
+  });
+
   it('seeing nobody, a zombie goes to the last noise it heard; with nothing heard, it wanders', () => {
     const s = stateFrom(['...............', '.#############.', '...............']);
     s.activeTeam = 'alien';

@@ -23,7 +23,7 @@ Vienen de npm, `@fontsource/*` 5.3.0, en latín y woff2. Las importa `packages/c
 |---|---|---|
 | Barlow | SIL OFL 1.1 | The Barlow Project Authors (github.com/jpt/barlow) |
 | Oswald | SIL OFL 1.1 | The Oswald Project Authors (github.com/googlefonts/OswaldFont) |
-| Oxanium (Synty, `MilitaryHUD/Fonts`; sin usar) | SIL OFL 1.1 | Severin Meyer |
+| Oxanium (Synty, `INTERFACE_MilitaryCombatHUD_SourceFiles/Fonts`; sin usar) | SIL OFL 1.1 | Severin Meyer |
 
 Comprobado: las dos tienen en su subconjunto latino todos los caracteres del español (ñ, á é í ó ú, ü, ¿ ¡ « » §, la raya, los puntos suspensivos y ×).
 

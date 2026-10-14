@@ -1,28 +1,34 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { HEADS, partColor, type Appearance, type ArmorPart, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
-import type { FigurePose, FigureRig, Gear } from './figures';
+import type { Blow, FigurePose, FigureRig, Gear } from './figures';
+import { gaitsOf, type GaitMotion, type GaitStyle } from './gaits';
 import { UNIT_LAYER } from './post';
 import { atlasMaterial, atlasOf, dyedMaterial, loadModel, modelNow, type DyedMaterial } from './synty';
-import { AnimDriver, animSet, whenAnimSet, type Build } from './syntyAnims';
+import { AnimDriver, animSet, MOTION_ORDER, whenAnimSet, type AnimSet, type Build } from './syntyAnims';
 import {
   CHARACTER_SCALE,
   CHARACTERS,
   DEAD_TEMPLATES,
+  DEATHS,
   HEAD_GEAR,
   HEADGEAR,
   PROPS,
   RELAY_PROP,
   SQUAD_BODIES,
+  STANCE_ORDER,
   SURVIVOR_CHOICES,
   SYNTY_BONES,
+  SYNTY_SCALE,
   UNIT_BODIES,
   UNIT_WEAPONS,
   WEAPONS,
   type AtlasId,
   type CharacterAsset,
   type CharacterId,
+  type Death,
   type HeadgearId,
+  type Stance,
   type SyntyBone,
   type WeaponId,
 } from './syntyManifest';
@@ -44,7 +50,9 @@ import {
 //    foregrip, both by two-bone IK; a reload takes the left hand to the
 //    magazine and a pouch; the free arm throws; the dead reach out; the
 //    unarmed keep the clip's arms;
-//  - death: knees give way and the body goes down backwards or sideways.
+//  - death: one of Synty's death clips, the body falling away from the blow
+//    (DEATHS), the weapon let go; until the clips load, the knees give way
+//    and the body goes over backwards or sideways.
 // Model space: +Z forward, +Y up, the figure's left is +X.
 
 const B = Object.fromEntries(SYNTY_BONES.map((n, i) => [n, i])) as Record<SyntyBone, number>;
@@ -62,8 +70,61 @@ const SHINS = [B.LowerLeg_L, B.LowerLeg_R];
 const ARM_L = [B.Shoulder_L, B.Elbow_L, B.Hand_L];
 const ARM_R = [B.Shoulder_R, B.Elbow_R, B.Hand_R];
 const ARMS = [...ARM_L, ...ARM_R];
-/** Which way the dead fall: backwards, or to either side. */
+/** The moving clips' places in MOTION_ORDER. */
+const WALK = MOTION_ORDER.indexOf('walk');
+const RUN = MOTION_ORDER.indexOf('run');
+const CROUCH_WALK = MOTION_ORDER.indexOf('crouchWalk');
+/** Steps a second each clip takes at its own speed (Synty's clips, measured), so the hips roll once a stride. */
+const CADENCE = MOTION_ORDER.map((m) => ({ idle: 0, crouchIdle: 0, walk: 1.9, run: 2.9, crouchWalk: 1.9, sprint: 3.3 })[m]);
+/**
+ * What a body adds to its gait over the clip (gaits.ts): how far the dead
+ * lean forward, and how much their hips roll and their shoulders twist. The
+ * common dead drag themselves hunched; the armoured stand straighter and
+ * sway heavily from side to side; the bloated one wobbles; the runner goes bent.
+ */
+const STYLES: Record<NonNullable<GaitStyle> | 'none', { lean: number; roll: number; twist: number }> = {
+  none: { lean: 0.38, roll: 1, twist: 1 },
+  drag: { lean: 0.5, roll: 1.5, twist: 1.3 },
+  heavy: { lean: 0.2, roll: 1.7, twist: 0.4 },
+  wobble: { lean: 0.12, roll: 2.6, twist: 0.8 },
+  hunched: { lean: 0.55, roll: 0.6, twist: 0.6 },
+};
+
+/** Which way the dead fall without a death clip: backwards, or to either side. */
 const FALLS = [0, 0, 0.9, -0.9];
+
+/** How far off the way away from the blow a death's fall can be and still fit it (radians). */
+const FITS = 0.9;
+/** Seconds the weapon takes to drop from the hand to the ground, let go this far into the fall. */
+const DROP_SECONDS = 0.4;
+const LET_GO = 0.3;
+
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/**
+ * Which of `deaths` a unit plays for `blow`: one that falls away from it
+ * (for a critical, one to the head if any fits; at arm's length, doubling up
+ * fits too), the nearest if none does, any for an unknown blow; and of those,
+ * one with room to fall (Gameplay: no body through a wall), else the one that
+ * takes least room. The same unit picks the same among those that fit.
+ */
+function deathFor(deaths: readonly Death[], blow: Blow, scale: number): number {
+  const all = deaths.map((_, k) => k);
+  const room = (k: number) => !blow.room || blow.room(deaths[k]!.falls, deaths[k]!.reach * SYNTY_SCALE * scale);
+  const least = (ks: number[]) => ks.reduce((a, b) => (deaths[b]!.reach < deaths[a]!.reach ? b : a));
+  let fits = all;
+  if (blow.from !== null) {
+    const away = blow.from + Math.PI;
+    const off = (k: number) => Math.abs(wrap(deaths[k]!.falls - away));
+    fits = all.filter((k) => off(k) < FITS || (blow.melee && deaths[k]!.close));
+    if (blow.head && fits.some((k) => deaths[k]!.head)) fits = fits.filter((k) => deaths[k]!.head);
+    if (!fits.length) fits = [all.reduce((a, b) => (off(b) < off(a) ? b : a))];
+  }
+  const roomy = fits.filter(room);
+  if (roomy.length) return pick(roomy, blow.seed);
+  const anywhere = all.filter(room);
+  return least(anywhere.length ? anywhere : all);
+}
 
 /**
  * How often a figure's bones are posed (level of detail; its facing, fall
@@ -195,6 +256,10 @@ interface Spec {
   /** The Chillón: aiming is its scream. */
   scream: boolean;
   drone: boolean;
+  /** What the body adds to its gait (gaits.ts). */
+  style?: GaitStyle;
+  /** How it stands waiting (STANCES); unset, the plain idle. */
+  stance?: Stance;
   /** A skin tone instead of Synty's one; unset keeps it. */
   skin?: string;
 }
@@ -282,8 +347,20 @@ export class SyntyFigure implements FigureRig {
   private readonly stagger = 0.85 + Math.random() * 0.3;
   /** Full poses so far: a skeleton sends its bones to the GPU again only after a new one (or a move). */
   private poses = 0;
+  /** What its moves play (MOTION_ORDER) and how fast (setGait, from the unit view's gaits.ts). */
+  private gait = { motion: RUN, speed: 1.5 };
+  private readonly build: Build;
+  /** The stance it stands in (STANCE_ORDER), −1 the plain idle. */
+  private stance = -1;
+  /** The death it plays (DEATHS[build]) and the seconds it takes; null standing. */
+  private death: { k: number; seconds: number } | null = null;
+  /** A death asked for before the clips loaded: taken once they have, the body lying. */
+  private pending: Blow | null = null;
+  /** The weapon let go: where it left the hand (in the yaw's frame), how it lies on the ground, and when. */
+  private drop: { p: THREE.Vector3; q: THREE.Quaternion; flat: THREE.Quaternion; at: number } | null = null;
 
   constructor(private readonly spec: Spec) {
+    if (spec.dead) this.gait.motion = WALK;
     this.root.add(this.yaw);
     this.yaw.add(this.pivot);
     this.pivot.add(this.body);
@@ -297,9 +374,11 @@ export class SyntyFigure implements FigureRig {
     this.scale = CHARACTER_SCALE * (c.scale ?? 1);
     // Each unit plays the clips from its own point, so a squad does not breathe in step.
     const build: Build = c.female ? 'femn' : 'masc';
-    const set = animSet(build);
-    if (set) this.anim = new AnimDriver(set, Math.random());
-    else void whenAnimSet(build).then((s) => (this.anim = new AnimDriver(s, Math.random())), () => undefined);
+    this.build = build;
+    this.stance = spec.stance ? STANCE_ORDER.indexOf(spec.stance) : -1;
+    const set = animSet(build, spec.dead);
+    if (set) this.anim = this.driver(set);
+    else void whenAnimSet(build, spec.dead).then((s) => (this.anim = this.driver(s)), () => undefined);
     const w = spec.weapon && WEAPONS[spec.weapon];
     const h = spec.hat && HEADGEAR[spec.hat];
     const now = [modelNow(c.pack, 'chr', spec.character), w ? modelNow(w.pack, 'wep', spec.weapon!) : null, h ? modelNow(h.pack, 'hat', spec.hat!) : null] as const;
@@ -309,6 +388,18 @@ export class SyntyFigure implements FigureRig {
         .then(([m, g, hat]) => this.fill(m, g, hat))
         .catch((e: unknown) => console.warn(`Synty: ${spec.character} could not be dressed`, e));
     }
+  }
+
+  /** Its clips' driver, standing as it should. */
+  private driver(set: AnimSet): AnimDriver {
+    const a = new AnimDriver(set, Math.random());
+    a.setStance(this.stance, true);
+    return a;
+  }
+
+  setStance(stance: Stance | null): void {
+    this.stance = stance ? STANCE_ORDER.indexOf(stance) : -1;
+    this.anim?.setStance(this.stance);
   }
 
   /** Dressed and moving with its clips (both load in the background). */
@@ -441,12 +532,21 @@ export class SyntyFigure implements FigureRig {
   // ---------------------------------------------------------------- pose
 
   applyPose(p: FigurePose, time: number): void {
-    const fall = Math.min(1, p.fall);
+    // One that died before the clips loaded takes its death now, lying.
+    if (this.pending && this.anim && this.rest && p.fall >= 1) this.die(this.pending);
+    // A death clip takes the body down itself, the pivot upright; without one the body goes over stiffly.
+    const clip = this.death;
+    const fall = clip ? 1 : Math.min(1, p.fall);
     const live = 1 - fall;
     this.yaw.rotation.y = p.yaw;
-    // The body goes down backwards or to one side; a fall past 1 is the bounce as it settles.
-    this.pivot.position.y = lerp(this.hip, 0.14 * this.scale, p.fall) + p.hop;
-    this.pivot.rotation.set(((-p.fall * Math.PI) / 2) * Math.cos(this.fallSide), 0, ((p.fall * Math.PI) / 2) * Math.sin(this.fallSide));
+    if (clip) {
+      this.pivot.position.y = this.hip + p.hop;
+      this.pivot.rotation.set(0, 0, 0);
+    } else {
+      // The body goes down backwards or to one side; a fall past 1 is the bounce as it settles.
+      this.pivot.position.y = lerp(this.hip, 0.14 * this.scale, p.fall) + p.hop;
+      this.pivot.rotation.set(((-p.fall * Math.PI) / 2) * Math.cos(this.fallSide), 0, ((p.fall * Math.PI) / 2) * Math.sin(this.fallSide));
+    }
     this.flashTo(p.flash * 0.8);
     const r = this.rest;
     if (!r) {
@@ -479,13 +579,18 @@ export class SyntyFigure implements FigureRig {
     const scream = this.spec.scream ? p.aim * live : 0;
     const search = dead ? 0 : (p.search ?? 0) * live;
     const breathe = anim || dead ? 0 : Math.sin(time * 2.1 + p.phase) * 0.015;
-    const lean = ((dead ? 0.38 : 0) + (anim ? 0 : 0.28 * p.crouch) + p.lean - p.hit * 0.38 - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
+    const style = STYLES[this.spec.style ?? 'none'];
+    const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + p.lean - p.hit * 0.38 - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
     // A two-handed gun blades the upper body: the support shoulder comes forward so that arm bends under
     // the gun instead of reaching across the chest; the gun and the head keep facing ahead (holdWeapon, the neck).
     this.blade = this.fore && !dead ? -(0.22 + 0.24 * p.aim) * live : 0;
-    const twist = shamble * Math.sin(time * 1.7 + p.phase) * 0.12 * live + this.blade;
-    // Without clips the hips already roll (legs()); with them the roll goes on here.
-    const roll = anim ? shamble * Math.sin(time * (p.run ? 3 : 1.3) + p.phase) * (0.05 + p.run * 0.08) * live : 0;
+    // A melee stroke turns the living's upper body back and then across (the weapon goes with it); the dead grab instead.
+    const swing = (p.swing ?? 0) * live;
+    const grab = dead ? Math.abs(swing) : 0;
+    const twist = shamble * Math.sin(time * 1.7 + p.phase) * 0.12 * style.twist * live + this.blade + (dead ? 0 : -swing * 0.75);
+    // Without clips the hips already roll (legs()); with them the roll goes on here, once a stride as they move.
+    const sway = p.run > 0.05 ? Math.PI * CADENCE[this.gait.motion] * this.gait.speed : 1.3;
+    const roll = anim ? shamble * Math.sin(time * sway + p.phase) * (0.05 + p.run * 0.08) * style.roll * live : 0;
     if (anim) d[B.Hips]!.premultiply(rot(q1, Z, roll));
     else for (let k = 0; k < SPINE.length; k++) d[SPINE[k]!]!.copy(d[B.Hips]!);
     this.tilt(B.Spine_01, roll, twist * 0.3, lean * 0.35);
@@ -495,7 +600,7 @@ export class SyntyFigure implements FigureRig {
     // Aiming a gun the head comes down and over to the stock, the eye behind the sights.
     const sight = this.spec.weapon && !this.melee ? p.aim * live : 0;
     const neck = rot(this.neckTurn, Z, shamble * 0.32 * live - sight * 0.12)
-      .multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6) * live + sight * 0.16))
+      .multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6 + grab * 0.4) * live + sight * 0.16))
       .premultiply(upper)
       .premultiply(rot(q2, Y, -this.blade * 0.85));
     if (!anim) d[B.Neck]!.copy(d[B.Hips]!);
@@ -512,7 +617,9 @@ export class SyntyFigure implements FigureRig {
     // Arms.
     const aim = p.aim;
     const throwing = Math.abs(p.lean) > 0.04 && live > 0.5 && !dead;
-    if (live < 0.5) {
+    if (clip) {
+      // Dying: the clip's own arms, the hand letting go of the weapon (dropWeapon).
+    } else if (live < 0.5) {
       // Fallen: arms limp along the body, the weapon lying flat along it in the hand (not pointing at the sky).
       this.hang('L', 0);
       this.hang('R', 0);
@@ -542,7 +649,7 @@ export class SyntyFigure implements FigureRig {
       for (let k = 0; k < SIDES.length; k++) {
         const [side, s] = SIDES[k]!;
         const sway = Math.sin(time * 1.6 + p.phase + s) * 0.05 * live;
-        v3.set(s * 0.12, r.chest - 0.08 + aim * 0.12 + sway, r.p[B.Spine_03]!.z + 0.4 + aim * 0.08)
+        v3.set(s * 0.12 * (1 - 0.7 * grab), r.chest - 0.08 + aim * 0.12 + sway + grab * 0.05, r.p[B.Spine_03]!.z + 0.4 + aim * 0.08 + grab * 0.12)
           .sub(r.p[B.Spine_03]!)
           .applyQuaternion(d[B.Spine_03]!)
           .add(pos[B.Spine_03]!);
@@ -570,6 +677,64 @@ export class SyntyFigure implements FigureRig {
     }
     this.write();
     this.poses++;
+    if (clip) this.dropWeapon(Math.min(1, p.fall) * clip.seconds);
+  }
+
+  die(blow: Blow): number | null {
+    const a = this.anim;
+    if (!a || !this.rest) {
+      this.pending = blow;
+      return null;
+    }
+    this.pending = null;
+    const k = deathFor(DEATHS[this.build], blow, this.scale);
+    this.death = { k, seconds: a.set.settles[k]! };
+    return this.death.seconds;
+  }
+
+  /** On its feet again: the moving clips, and the weapon back in the hand. */
+  rise(): void {
+    this.death = null;
+    this.pending = null;
+    this.anim?.fallen(null);
+    this.pickUp();
+  }
+
+  /** A weapon let go back in the hand. */
+  private pickUp(): void {
+    if (!this.drop) return;
+    const g = this.gunPivot;
+    this.socket.add(g);
+    g.position.set(0, 0, 0);
+    g.quaternion.identity();
+    g.scale.setScalar(1);
+    this.drop = null;
+  }
+
+  /**
+   * The weapon, `t` seconds into the death: in the hand, then let go (LET_GO
+   * of the fall) to drop and lie on its side, pointing the way it fell. Played
+   * backwards (getting up), it comes back up into the hand.
+   */
+  private dropWeapon(t: number): void {
+    const g = this.gunPivot;
+    if (t < this.death!.seconds * LET_GO) {
+      this.pickUp();
+      return;
+    }
+    if (!this.drop) {
+      // The unarmed have nothing in the hand.
+      if (g.parent !== this.socket) return;
+      g.updateWorldMatrix(true, false);
+      this.yaw.attach(g);
+      const ahead = v1.set(0, 0, 1).applyQuaternion(g.quaternion);
+      const flat = new THREE.Quaternion().setFromEuler(e1.set(0, Math.atan2(ahead.x, ahead.z), Math.PI / 2, 'YXZ'));
+      this.drop = { p: g.position.clone(), q: g.quaternion.clone(), flat, at: t };
+    }
+    const d = this.drop;
+    const u = THREE.MathUtils.clamp((t - d.at) / DROP_SECONDS, 0, 1);
+    g.position.set(d.p.x, lerp(d.p.y, 0.03, u * u), d.p.z);
+    g.quaternion.slerpQuaternions(d.q, d.flat, u);
   }
 
   /** A hit's red flash; a figure on the plain material takes its own while it lasts. */
@@ -611,10 +776,22 @@ export class SyntyFigure implements FigureRig {
     return time - this.clock < every * this.stagger;
   }
 
+  setGait(motion: GaitMotion, speed: number): void {
+    this.gait = { motion: MOTION_ORDER.indexOf(motion), speed };
+  }
+
   /** Blends the clips by what the unit does and reads their pose. */
   private animate(p: FigurePose, dt: number): void {
     const a = this.anim!;
     const r = this.rest!;
+    if (this.death) {
+      // Dying: the death alone, as far in as the fall; the hips go where it takes them, down to the ground.
+      a.fallen(this.death.k, Math.min(1, p.fall) * this.death.seconds);
+      a.read(this.d, this.hipsShift);
+      this.p[B.Hips]!.copy(this.hipsShift).multiplyScalar(r.hip).add(r.p[B.Hips]!);
+      this.lastYaw = p.yaw;
+      return;
+    }
     const dead = this.spec.dead;
     const move = THREE.MathUtils.clamp(p.run, 0, 1);
     const crouch = THREE.MathUtils.clamp(p.crouch, 0, 1);
@@ -623,17 +800,19 @@ export class SyntyFigure implements FigureRig {
     this.lastYaw = p.yaw;
     const turn = dt > 0 ? THREE.MathUtils.clamp((turned / dt) * 0.3, 0, 0.7) * (1 - move) * (1 - crouch) : 0;
     const w = a.weights;
+    const g = this.gait;
+    w.fill(0);
     w[0] = (1 - move) * (1 - crouch) - turn;
     w[1] = (1 - move) * crouch;
-    // The dead shamble: the walk, slowed when idle and lurching when they move (the roll and hunch on top).
-    w[2] = (dead ? move * (1 - crouch) : 0) + turn;
-    w[3] = dead ? 0 : move * (1 - crouch);
-    w[4] = move * crouch;
+    // A few steps of the walk while turning on the spot; moving, the gait's clip (gaits.ts) at the speed that
+    // keeps its feet on the ground (the dead's lurch and hunch go on top).
+    w[WALK] += turn;
+    w[g.motion] += move * (1 - crouch);
+    w[CROUCH_WALK] += move * crouch;
     a.speeds[0] = dead ? 0.6 : 1;
-    // Units cross a tile in a sixth of a second: the clips run fast to keep up.
-    a.speeds[2] = dead ? 1.5 : 1.2;
-    a.speeds[3] = 1.5;
-    a.speeds[4] = 1.6;
+    a.speeds[WALK] = dead ? 0.9 : 1.2;
+    a.speeds[CROUCH_WALK] = 1.6;
+    a.speeds[g.motion] = g.speed;
     // A corpse stays as it fell. Only a unit at ease looks round now and then.
     if (p.fall < 1) a.update(dt, p.aim < 0.05 && p.hit < 0.01 && !(p.search ?? 0) && !dead);
     a.read(this.d, this.hipsShift);
@@ -938,6 +1117,8 @@ function pick<T>(list: readonly T[], seed: string): T {
 }
 
 const SQUAD = new Set<TemplateId>(['rookie', 'assault', 'grenadier', 'sharpshooter', 'specialist']);
+/** The enemies still alive (the Cuervos): they stand squared up for a fight. */
+const LIVING_ENEMIES = new Set<TemplateId>(['trooper', 'officer', 'lancer']);
 const PIECES: ArmorPart[] = ['helmet', 'torso', 'arms', 'legs'];
 
 /**
@@ -979,6 +1160,8 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
     band: squad || template === 'vip' ? accent : null,
     dead: DEAD_TEMPLATES.has(template),
     scream: template === 'sectoid',
+    style: gaitsOf(template).style,
+    stance: DEAD_TEMPLATES.has(template) ? 'drunk' : LIVING_ENEMIES.has(template) ? 'aggressive' : undefined,
     drone: template === 'specialist',
   });
 }
@@ -1013,6 +1196,9 @@ export function preloadSynty(): void {
   for (const [id, w] of Object.entries(WEAPONS)) void loadModel(w.pack, 'wep', id).catch(() => undefined);
   for (const [id, h] of Object.entries(HEADGEAR)) void loadModel(h.pack, 'hat', id).catch(() => undefined);
   void loadModel(PROPS[RELAY_PROP].pack, 'prop', RELAY_PROP).catch(() => undefined);
-  for (const build of ['masc', 'femn'] as const) animSet(build);
+  for (const build of ['masc', 'femn'] as const) {
+    animSet(build);
+    animSet(build, true);
+  }
   atlasMaterial('apocalypse');
 }

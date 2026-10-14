@@ -1,19 +1,24 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { PLAYER_COLORS, sexOfPerson, TEMPLATES, type GameState, type Place, type Unit, type Vec2 } from '@bastion/engine';
-import { tileToWorld } from './coords';
-import type { FigurePose } from './figures';
+import { coverAt, decorOf, PLAYER_COLORS, sexOfPerson, TEMPLATES, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
+import { STOREY, tileToWorld } from './coords';
+import type { Blow, FigurePose } from './figures';
+import { clipSpeed, CROUCHED, gaitsOf } from './gaits';
 import { buildUnit, gearOf, IDLE_POSE, isFigure, type UnitRig } from './models';
-import { easeInOut, tween, wait } from './tween';
+import { easeInOut, timeRate, tween, wait } from './tween';
 
 const ALIEN_COLOR = '#ff4d4d';
 const POOL_COLOR = '#e8edf2';
 /** Enemies that cast shadows at most (the nearest to the squad). */
 const CROWD_SHADOWS = 24;
-/** Seconds per orthogonal tile while moving. */
-const STEP_SECONDS = 0.16;
+/** The time scale of hops, vaults and falls (walking keeps its own pace: gaits.ts). */
+const HOP_SECONDS = 0.16;
+/** Seconds a storey of ladder takes to climb. */
+const LADDER_SECONDS = 1.2;
 /** How high a window's sill is over its floor (the kits' windows), where a unit climbs to jump out. */
 const SILL = 0.75;
+/** Seconds a blow (a shot, a strike, a blast) still says which way the unit it came at falls if it dies. */
+const BLOW_SECONDS = 8;
 
 /**
  * Pose values combined every frame into the rig transform.
@@ -38,6 +43,8 @@ interface Pose {
   search: number;
   /** Up a ladder (moveAlong). */
   climb: number;
+  /** A melee stroke: −1 wound up, +1 followed through (lunge). */
+  swing: number;
   yaw: number;
   yawTarget: number;
   phase: number;
@@ -64,6 +71,12 @@ interface UnitView {
   place: Place;
   /** Hidden by the buildings' cutaway (a storey above the one in view): body and rings out, the flag stays. */
   cut: boolean;
+  /** What it is, for how it moves (gaits.ts). */
+  template: TemplateId;
+  /** The last blow at it (raiseWeapon, lunge, blastAt): where from, and when (performance.now). */
+  blow: { from: THREE.Vector3; melee: boolean; head: boolean; at: number } | null;
+  /** How it fell, and the seconds its death clip took (0 for the topple): for getting up again. */
+  fell: { blow: Blow; seconds: number } | null;
 }
 
 /**
@@ -122,6 +135,8 @@ export class UnitViews {
   private cutAway: ((p: Place) => boolean) | null = null;
   /** The state last shown, for what a step lands on (a window's sill). */
   private shown: GameState | null = null;
+  /** The bodies' clock: it runs at the battle's speed (tween.ts timeRate), so clips and sways keep pace with the tweens. */
+  private bodyTime = 0;
 
   constructor() {
     // Selection is white, never a player's colour (playtest: a selected soldier looked like Arturo's),
@@ -157,6 +172,7 @@ export class UnitViews {
   }
 
   build(s: GameState): void {
+    this.shown = s;
     for (const v of this.views.values()) {
       this.group.remove(v.rig.root);
       v.flag.element.remove();
@@ -186,17 +202,21 @@ export class UnitViews {
     flag.center.set(0.5, 1);
 
     rig.root.add(ring, flag);
-    rig.root.position.copy(tileToWorld(u.pos));
+    rig.root.position.copy(this.standAt(u.pos));
     const facing = u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
       crouch: 0, crouchTarget: 0, aim: 0, aimTarget: 0, aimFx: 0, run: 0, recoil: 0, hit: 0, flash: 0,
-      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, yaw: facing, yawTarget: facing,
+      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, yaw: facing, yawTarget: facing,
       phase: Math.random() * Math.PI * 2,
     };
     this.group.add(rig.root);
 
-    const view: UnitView = { id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, shadow: true, body: '', tag: '', place: { ...u.pos }, cut: false };
+    const view: UnitView = {
+      id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, shadow: true, body: '', tag: '',
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null,
+    };
     this.views.set(u.id, view);
+    if (!u.alive) this.lieDown(view);
     flagEl.classList.toggle('named', u.id === this.selectedId);
     flagEl.classList.toggle('selected', u.id === this.selectedId);
     flag.renderOrder = u.id === this.selectedId ? 0 : -1;
@@ -219,7 +239,7 @@ export class UnitViews {
         if (!v.animating) v.rig.root.visible = false;
         continue;
       }
-      if (!v.animating && u.alive) v.rig.root.position.copy(tileToWorld(u.pos));
+      if (!v.animating && u.alive) v.rig.root.position.copy(this.standAt(u.pos));
       if (!v.animating) v.place = { ...u.pos };
       // A corpse raised by a sectoid stands up as a new unit: hide the body.
       if (u.reanimated && v.dead) {
@@ -237,11 +257,14 @@ export class UnitViews {
       v.flag.visible = shown && u.alive;
       v.pose.crouchTarget = u.hunkered || u.captive ? 1 : 0;
       v.pose.aimTarget = u.overwatch ? 1 : 0;
+      // Down to half its health or less, a soldier stands slumped.
+      if (u.team === 'xcom' && isFigure(v.rig)) v.rig.setStance?.(u.alive && u.hp * 2 <= u.maxHp ? 'slumped' : null);
       if (u.alive) this.renderFlag(v, u, coverOf(u), carrier === u.id);
       if (!u.alive && !v.dead && !v.animating) {
         v.dead = true;
         v.pose.fall = 1;
         v.ring.visible = false;
+        this.lieDown(v);
       }
       // Último verso brought it back (when the rise wasn't played, e.g. on a reload).
       if (u.alive && v.dead && !v.animating) this.standUp(v);
@@ -462,6 +485,9 @@ export class UnitViews {
     // Re-checked every frame: the cutaway follows the camera and the floor in view.
     if (this.cutAway) for (const v of this.views.values()) this.setCut(v, !!v.place.z && this.cutAway(v.place));
     this.placeRings();
+    // Clips, sways and settling go at the battle's speed, like the tweens that move the bodies (their feet stay put).
+    dt *= timeRate();
+    time = this.bodyTime += dt;
     for (const v of this.views.values()) {
       const p = v.pose;
       const k = 1 - Math.exp(-dt * 9);
@@ -497,6 +523,7 @@ export class UnitViews {
     posed.spin = p.spin;
     posed.search = p.search;
     posed.climb = p.climb;
+    posed.swing = p.swing;
     rig.applyPose(posed, time);
     if (!rig.ownsReload) rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
   }
@@ -510,24 +537,34 @@ export class UnitViews {
     if (a !== null) v.pose.yawTarget = a;
   }
 
-  async moveAlong(id: string, path: Place[], onStep?: (p: THREE.Vector3) => void): Promise<void> {
+  /**
+   * Walks unit `id` along `path`, a move of `ap` actions: at its template's
+   * pace for one or for two (gaits.ts), crouched if it is. Resolves on arrival.
+   */
+  async moveAlong(id: string, path: Place[], onStep?: (p: THREE.Vector3) => void, ap = 1): Promise<void> {
     const v = this.views.get(id);
     if (!v || !path.length) return;
     v.animating = true;
     const p = v.pose;
+    const gaits = gaitsOf(v.template);
+    const gait = p.crouchTarget > 0.5 ? CROUCHED : ap >= 2 ? gaits.two : gaits.one;
+    if (isFigure(v.rig)) v.rig.setGait?.(gait.motion, clipSpeed(v.template, gait));
     try {
       void tween(0.12, (t) => (p.run = Math.max(p.run, t)));
       for (const step of path) {
         const from = v.rig.root.position.clone();
-        const to = tileToWorld(step);
+        const to = this.standAt(step);
         this.face(id, to);
         const rise = to.y - from.y;
-        if (Math.abs(rise) < 0.5 && this.windowAt(step)) {
+        if (this.stairsAt(step) || this.stairsAt(v.place)) {
+          // On or off a building's stairs (a tile of flight between two floors): walked up or down its slope.
+          await tween(gait.seconds * (Math.abs(rise) > 0.5 ? 1.6 : 1), (t) => v.rig.root.position.lerpVectors(from, to, t));
+        } else if (Math.abs(rise) < 0.5 && this.windowAt(step)) {
           // Onto a window's sill (docs/FASE7.md): a crouched climb up to it. Out of it is the next step: down
           // to the ground beyond, or from a storey up, the fall.
           const sill = to.clone().setY(to.y + SILL);
           p.run = 0;
-          await tween(STEP_SECONDS * 1.8, (t) => {
+          await tween(HOP_SECONDS * 1.8, (t) => {
             v.rig.root.position.lerpVectors(from, sill, t);
             v.rig.root.position.y = from.y + (sill.y - from.y) * Math.min(1, t / 0.65) ** 0.6;
             p.crouch = Math.sin(t * Math.PI) * 0.7;
@@ -537,23 +574,23 @@ export class UnitViews {
           // Up a ladder: to the wall, climb, then onto the roof.
           const foot = from.clone().lerp(to, 0.4).setY(from.y);
           const top = foot.clone().setY(to.y);
-          await tween(STEP_SECONDS * 0.6, (t) => v.rig.root.position.lerpVectors(from, foot, t));
+          await tween(gait.seconds * 0.4, (t) => v.rig.root.position.lerpVectors(from, foot, t));
           p.run = 0;
           p.climb = 1;
-          await tween(STEP_SECONDS * 4, (t) => v.rig.root.position.lerpVectors(foot, top, t));
+          await tween(LADDER_SECONDS * (rise / STOREY), (t) => v.rig.root.position.lerpVectors(foot, top, t));
           p.climb = 0;
           p.run = 1;
-          await tween(STEP_SECONDS * 0.6, (t) => v.rig.root.position.lerpVectors(top, to, t));
+          await tween(gait.seconds * 0.6, (t) => v.rig.root.position.lerpVectors(top, to, t));
         } else if (rise < -0.5) {
           // Drop off an edge or out of a window: a short hop out, then the fall, longer the higher it is
           // (off a roof one storey up, as it always was).
-          await tween(STEP_SECONDS * (1.2 + 0.45 * -rise), (t) => {
+          await tween(HOP_SECONDS * (1.2 + 0.45 * -rise), (t) => {
             v.rig.root.position.lerpVectors(from, to, Math.min(1, t * 1.3));
             v.rig.root.position.y = from.y + rise * t * t + Math.sin(Math.min(1, t * 2) * Math.PI) * 0.35;
           });
           void tween(0.2, (t) => (p.crouch = Math.sin(t * Math.PI) * 0.8));
         } else {
-          const seconds = STEP_SECONDS * (from.distanceTo(to) > 1.2 ? 1.4 : 1);
+          const seconds = gait.seconds * (from.distanceTo(to) > 1.2 ? 1.4 : 1);
           await tween(seconds, (t) => {
             v.rig.root.position.lerpVectors(from, to, t);
           });
@@ -582,7 +619,7 @@ export class UnitViews {
     const end = tileToWorld(to);
     const drop = Math.max(0.1, from.y - end.y);
     try {
-      await tween(STEP_SECONDS * (1 + 0.5 * drop), (t) => {
+      await tween(HOP_SECONDS * (1 + 0.5 * drop), (t) => {
         v.rig.root.position.lerpVectors(from, end, t);
         v.rig.root.position.y = from.y - drop * t * t;
         p.hit = Math.sin(t * Math.PI) * 0.6;
@@ -592,6 +629,22 @@ export class UnitViews {
     } finally {
       v.animating = false;
     }
+  }
+
+  /** A building's stairs on place `p` (a ladder tile dressed as stairs), in the state last shown. */
+  private stairsAt(p: Place): boolean {
+    const s = this.shown;
+    if (!s || p.x < 0 || p.y < 0 || p.x >= s.width || p.y >= s.height) return false;
+    const level = p.z ? s.levels?.[p.z - 1] : undefined;
+    const i = p.y * s.width + p.x;
+    return (p.z ? level?.tiles[i] : s.tiles[i]) === 'ladder' && decorOf((p.z ? level?.decor : s.decor)?.[i])?.kind === 'stairs';
+  }
+
+  /** Where a unit on place `p` stands: its tile's floor, or halfway up a building's stairs on them. */
+  private standAt(p: Place): THREE.Vector3 {
+    const at = tileToWorld(p);
+    if (this.stairsAt(p)) at.y += STOREY / 2;
+    return at;
   }
 
   /** Whether place `p` is a window (whole or broken) on its storey, in the state last shown. */
@@ -620,6 +673,7 @@ export class UnitViews {
     const v = this.views.get(id);
     if (!v) return;
     this.face(id, target);
+    this.struck(target, v.rig.root.position, false);
     await tween(0.28, (t) => (v.pose.aimFx = easeInOut(t)));
   }
 
@@ -633,10 +687,63 @@ export class UnitViews {
     if (v) void tween(0.08, (t) => (v.pose.recoil = Math.sin(t * Math.PI)));
   }
 
+  /** A blow at whoever stands at `target`, from `from`: the way it falls if it dies of it (die). */
+  private struck(target: THREE.Vector3, from: THREE.Vector3, melee: boolean): void {
+    let hit: UnitView | null = null;
+    let best = 0.6 * 0.6;
+    for (const v of this.views.values()) {
+      if (v.dead) continue;
+      const d = v.rig.root.position.distanceToSquared(target);
+      if (d < best) {
+        best = d;
+        hit = v;
+      }
+    }
+    if (hit) hit.blow = { from: from.clone(), melee, head: false, at: performance.now() };
+  }
+
+  /** A blast at `at` (a grenade, a burst, a fireball): whoever it kills falls away from it. */
+  blastAt(at: THREE.Vector3): void {
+    const now = performance.now();
+    for (const v of this.views.values()) {
+      if (!v.dead && v.rig.root.position.distanceToSquared(at) < 6 * 6) v.blow = { from: at.clone(), melee: false, head: false, at: now };
+    }
+  }
+
+  /** The blow `v` falls from, in its own frame (Blow), and where it has room to fall: not into a wall or high cover. */
+  private blowAt(v: UnitView, from: THREE.Vector3 | null, head: boolean, melee: boolean): Blow {
+    const way = from ? angleTo(v.rig.root.position, from) : null;
+    const s = this.shown;
+    const at = { x: v.place.x, y: v.place.y, z: v.place.z ?? 0 };
+    const yaw = v.pose.yaw;
+    // Every tile on the way, a quarter of a tile at a time out to where the head comes down, the shoulders' width across.
+    const room = s && ((falls: number, reach: number) => {
+      const dx = Math.sin(yaw + falls);
+      const dy = Math.cos(yaw + falls);
+      for (let d = 0.25; d < reach + 0.25; d += 0.25) {
+        for (const side of [-0.2, 0, 0.2]) {
+          const along = Math.min(d, reach);
+          const tile = { x: Math.floor(at.x + 0.5 + dx * along + dy * side), y: Math.floor(at.y + 0.5 + dy * along - dx * side) };
+          if ((tile.x !== at.x || tile.y !== at.y) && coverAt(s, at, tile) >= 2) return false;
+        }
+      }
+      return true;
+    });
+    return { from: way === null ? null : wrapAngle(way - yaw), head, melee, seed: v.id, room: room || undefined };
+  }
+
+  /** A body already down when it comes into view (a reload, a death not played): its death's last pose. */
+  private lieDown(v: UnitView): void {
+    const blow = this.blowAt(v, null, false, false);
+    v.fell = { blow, seconds: (isFigure(v.rig) && v.rig.die?.(blow)) || 0 };
+  }
+
   /** Knock-back and red flash; `strength` 1 for a normal hit, more for crits. */
   hitReact(id: string, strength = 1): Promise<void> {
     const v = this.views.get(id);
     if (!v) return Promise.resolve();
+    // A critical is a shot to the head: if it kills, the unit falls as one.
+    if (v.blow) v.blow.head = strength > 1;
     return tween(0.4, (t) => {
       const k = Math.sin(Math.min(1, t * 1.6) * Math.PI);
       v.pose.hit = k * 0.6 * strength;
@@ -647,18 +754,35 @@ export class UnitViews {
     });
   }
 
-  async die(id: string): Promise<void> {
+  /**
+   * Death: the figure's death clip played whole (syntyManifest.ts DEATHS),
+   * the body falling away from `from`, else from the last blow at it (a shot,
+   * a strike, a blast: raiseWeapon, lunge, blastAt), a shot to the head if
+   * that was a critical; the stiff topple for a figure without clips.
+   */
+  async die(id: string, from?: THREE.Vector3): Promise<void> {
     const v = this.views.get(id);
     if (!v || v.dead) return;
     v.animating = true;
     v.flag.visible = false;
     v.pose.aimFx = 0;
-    await tween(0.75, (t) => {
-      v.pose.fall = t * t;
-      v.pose.flash = Math.max(0, 0.6 - t);
-    });
-    // The body hits the ground, bounces a little and settles.
-    await tween(0.3, (t) => (v.pose.fall = 1 - Math.sin(t * Math.PI) * 0.07 * (1 - t * 0.5)));
+    const last = v.blow && performance.now() - v.blow.at < BLOW_SECONDS * 1000 ? v.blow : null;
+    const blow = this.blowAt(v, from ?? last?.from ?? null, !!last?.head, !from && !!last?.melee);
+    const seconds = (isFigure(v.rig) && v.rig.die?.(blow)) || 0;
+    v.fell = { blow, seconds };
+    if (seconds) {
+      await tween(seconds, (t) => {
+        v.pose.fall = t;
+        v.pose.flash = Math.max(0, 0.6 - (t * seconds) / 0.75);
+      });
+    } else {
+      await tween(0.75, (t) => {
+        v.pose.fall = t * t;
+        v.pose.flash = Math.max(0, 0.6 - t);
+      });
+      // The body hits the ground, bounces a little and settles.
+      await tween(0.3, (t) => (v.pose.fall = 1 - Math.sin(t * Math.PI) * 0.07 * (1 - t * 0.5)));
+    }
     v.pose.fall = 1;
     v.pose.flash = 0;
     v.dead = true;
@@ -675,8 +799,10 @@ export class UnitViews {
     const v = this.views.get(id);
     if (!v || !v.dead) return;
     v.animating = true;
-    await tween(0.6, (t) => {
-      v.pose.fall = 1 - t * (2 - t);
+    // Its death played backwards, a little quicker; or the topple undone.
+    const clip = v.fell?.seconds ?? 0;
+    await tween(Math.max(0.6, clip * 0.7), (t) => {
+      v.pose.fall = clip ? 1 - t : 1 - t * (2 - t);
       v.pose.flash = 0.5 * (1 - t);
     });
     this.standUp(v);
@@ -686,6 +812,8 @@ export class UnitViews {
   private standUp(v: UnitView): void {
     v.dead = false;
     v.pose.fall = 0;
+    if (isFigure(v.rig)) v.rig.rise?.();
+    v.fell = null;
     v.pose.flash = 0;
     v.ring.visible = true;
     v.flag.visible = true;
@@ -710,7 +838,8 @@ export class UnitViews {
   async throwMotion(id: string): Promise<void> {
     const v = this.views.get(id);
     if (!v) return;
-    await tween(0.22, (t) => (v.pose.lean = -0.35 * easeInOut(t)));
+    // The arm well back before the throw (a wind-up one can see: Arturo, 2026-10-14).
+    await tween(0.35, (t) => (v.pose.lean = -0.35 * easeInOut(t)));
     await tween(0.14, (t) => (v.pose.lean = -0.35 + 0.65 * t));
     void tween(0.25, (t) => (v.pose.lean = 0.3 * (1 - t)));
   }
@@ -721,19 +850,25 @@ export class UnitViews {
     if (!v) return;
     this.face(id, target);
     const home = v.rig.root.position.clone();
+    this.struck(target, home, true);
     const toward = target.clone().setY(home.y).sub(home).setLength(0.45);
     v.animating = true;
-    await tween(0.16, (t) => {
+    // Wound up (the body turned back, the dead's arms open), the stroke across or the grab, and back (Arturo, 2026-10-14:
+    // the Tajo cuts, the bite grabs).
+    await tween(0.2, (t) => {
       v.pose.lean = -0.25 * t;
       v.pose.aimFx = t;
+      v.pose.swing = -easeInOut(t);
     });
-    await tween(0.1, (t) => {
+    await tween(0.14, (t) => {
       v.pose.lean = -0.25 + 0.75 * t;
+      v.pose.swing = -1 + 2 * easeInOut(t);
       v.rig.root.position.copy(home).addScaledVector(toward, t);
     });
-    void tween(0.3, (t) => {
+    void tween(0.35, (t) => {
       v.pose.lean = 0.5 * (1 - t);
       v.pose.aimFx = 1 - t;
+      v.pose.swing = 1 - easeInOut(t);
       v.rig.root.position.copy(home).addScaledVector(toward, 1 - t);
     }).then(() => (v.animating = false));
   }
@@ -834,8 +969,11 @@ export class UnitViews {
     v.flag.visible = false;
     if (body) v.pose.yaw = v.pose.yawTarget = body.pose.yaw;
     v.pose.fall = 1;
-    await tween(0.9, (t) => (v.pose.fall = 1 - easeInOut(t)));
+    // It gets up out of the body's death, played backwards (the same clip, as the body's seed picks it).
+    const clip = (body?.fell && isFigure(v.rig) && v.rig.die?.(body.fell.blow)) || 0;
+    await tween(Math.max(0.9, clip * 0.8), (t) => (v.pose.fall = clip ? 1 - t : 1 - easeInOut(t)));
     v.pose.fall = 0;
+    if (isFigure(v.rig)) v.rig.rise?.();
     v.animating = false;
   }
 

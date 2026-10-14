@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadAnimation } from './synty';
-import { ANIMATIONS, IDLE_VARIATIONS, MOTIONS, SYNTY_BONES, type Motion } from './syntyManifest';
+import { ANIMATIONS, DEAD_MOTIONS, DEATHS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type Motion } from './syntyManifest';
 
 // Locomotion from «ANIMATION – Base Locomotion» on any Synty character. Each
 // unit plays the clips on its own proxy of the pack's skeleton (one mixer,
@@ -10,13 +10,17 @@ import { ANIMATIONS, IDLE_VARIATIONS, MOTIONS, SYNTY_BONES, type Motion } from '
 // Zombies) whatever their bone axes, and the procedural layers (weapon,
 // lean, hits, the dead's reach) go on top in the same terms. A unit standing
 // idle now and then plays a variation from «ANIMATION – Idles» instead: it
-// looks round or shifts its weight.
+// looks round or shifts its weight; some stand in a stance of their own
+// instead (STANCES: the dead sway, a wounded soldier slumps). The dead walk
+// and run with Goblin Locomotion's clips (DEAD_MOTIONS). A unit that dies plays one of «Bow
+// Combat»'s and «Sword Combat»'s deaths (DEATHS) alone, posed at the moment
+// of the fall the unit view says.
 
 const N = SYNTY_BONES.length;
 const HIPS = SYNTY_BONES.indexOf('Hips');
 
 /** The clips a figure blends, in the order of its weights. */
-export const MOTION_ORDER: readonly Motion[] = ['idle', 'crouchIdle', 'walk', 'run', 'crouchWalk'];
+export const MOTION_ORDER: readonly Motion[] = ['idle', 'crouchIdle', 'walk', 'run', 'crouchWalk', 'sprint'];
 
 export type Build = 'masc' | 'femn';
 
@@ -27,6 +31,11 @@ export interface AnimSet {
   clips: THREE.AnimationClip[];
   /** Played once now and then in place of the idle. */
   variations: THREE.AnimationClip[];
+  /** Stood in instead of the idle (STANCE_ORDER). */
+  stances: THREE.AnimationClip[];
+  /** DEATHS, in order, and the seconds each takes until the body lies still. */
+  deaths: THREE.AnimationClip[];
+  settles: number[];
   /** Inverse model-space rotation of each bone in the T-pose. */
   restInv: THREE.Quaternion[];
   /** Each bone's parent among SYNTY_BONES (−1: the hips, under the fixed root). */
@@ -37,10 +46,20 @@ export interface AnimSet {
   hips: THREE.Vector3;
 }
 
-const ready = new Map<Build, AnimSet>();
-const loading = new Map<Build, Promise<AnimSet>>();
+/** A build's clips, the living's or the dead's. */
+type Kit = Build | `${Build}Dead`;
 
-function prepare(tpose: THREE.Group, poseClip: THREE.AnimationClip, motionClips: THREE.AnimationClip[], variations: THREE.AnimationClip[]): AnimSet {
+const ready = new Map<Kit, AnimSet>();
+const loading = new Map<Kit, Promise<AnimSet>>();
+
+function prepare(
+  tpose: THREE.Group,
+  poseClip: THREE.AnimationClip,
+  motionClips: THREE.AnimationClip[],
+  variations: THREE.AnimationClip[],
+  stances: THREE.AnimationClip[],
+  deaths: THREE.AnimationClip[],
+): AnimSet {
   const proxy = tpose.clone();
   const mixer = new THREE.AnimationMixer(proxy);
   mixer.clipAction(poseClip).play();
@@ -59,6 +78,9 @@ function prepare(tpose: THREE.Group, poseClip: THREE.AnimationClip, motionClips:
     template: tpose,
     clips: motionClips,
     variations,
+    stances,
+    deaths,
+    settles: deaths.map(settleOf),
     restInv: bones.map((b) => (b ? b.getWorldQuaternion(new THREE.Quaternion()).invert() : new THREE.Quaternion())),
     parent,
     rootQ: root.getWorldQuaternion(new THREE.Quaternion()),
@@ -67,24 +89,45 @@ function prepare(tpose: THREE.Group, poseClip: THREE.AnimationClip, motionClips:
   };
 }
 
-/** A build's clips once loaded; null meanwhile (asking starts the load). */
-export function animSet(build: Build): AnimSet | null {
-  const set = ready.get(build);
-  if (!set) void whenAnimSet(build).catch(() => undefined);
+/** When a death's hips stop moving (under 0.3 % of their height a frame), and a beat to lie still. */
+function settleOf(clip: THREE.AnimationClip): number {
+  const track = clip.tracks.find((t) => t.name === 'Hips.position');
+  if (!track) return clip.duration;
+  const { times, values } = track;
+  // In the root bone's frame, whatever its axes: the hips' distance from it is their height.
+  const still = Math.hypot(values[0]!, values[1]!, values[2]!) * 0.003;
+  let last = 0;
+  for (let i = 1; i < times.length; i++) {
+    const dx = values[i * 3]! - values[i * 3 - 3]!;
+    const dy = values[i * 3 + 1]! - values[i * 3 - 2]!;
+    const dz = values[i * 3 + 2]! - values[i * 3 - 1]!;
+    if (Math.hypot(dx, dy, dz) > still) last = times[i]!;
+  }
+  return Math.min(clip.duration, last + 0.12);
+}
+
+/** A build's clips (`dead`: the dead's) once loaded; null meanwhile (asking starts the load). */
+export function animSet(build: Build, dead = false): AnimSet | null {
+  const set = ready.get(dead ? `${build}Dead` : build);
+  if (!set) void whenAnimSet(build, dead).catch(() => undefined);
   return set ?? null;
 }
 
-export function whenAnimSet(build: Build): Promise<AnimSet> {
-  let p = loading.get(build);
+export function whenAnimSet(build: Build, dead = false): Promise<AnimSet> {
+  const kit: Kit = dead ? `${build}Dead` : build;
+  let p = loading.get(kit);
   if (!p) {
-    const ids = [...MOTION_ORDER.map((m) => MOTIONS[build][m]), ...IDLE_VARIATIONS[build]];
-    p = Promise.all([loadAnimation(ANIMATIONS.tpose.pack, 'tpose'), ...ids.map((id) => loadAnimation(ANIMATIONS[id].pack, id))]).then(([pose, ...clips]) => {
-      const motions = clips.slice(0, MOTION_ORDER.length).map((c) => c.clip);
-      const set = prepare(pose!.scene, pose!.clip, motions, clips.slice(MOTION_ORDER.length).map((c) => c.clip));
-      ready.set(build, set);
+    const variations = IDLE_VARIATIONS[build];
+    const motions = MOTION_ORDER.map((m) => (dead && DEAD_MOTIONS[m]) || MOTIONS[build][m]);
+    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id)];
+    p = Promise.all([loadAnimation(ANIMATIONS.tpose.pack, 'tpose'), ...ids.map((id) => loadAnimation(ANIMATIONS[id].pack, id))]).then(([pose, ...loaded]) => {
+      const clips = loaded.map((c) => c.clip);
+      const at = [MOTION_ORDER.length, MOTION_ORDER.length + variations.length, MOTION_ORDER.length + variations.length + STANCE_ORDER.length];
+      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2]));
+      ready.set(kit, set);
       return set;
     });
-    loading.set(build, p);
+    loading.set(kit, p);
   }
   return p;
 }
@@ -92,6 +135,8 @@ export function whenAnimSet(build: Build): Promise<AnimSet> {
 const v = new THREE.Vector3();
 /** Seconds a variation takes to blend in and out, and to wait between two. */
 const BLEND = 0.35;
+/** Seconds the idle takes to ease from one stance to another. */
+const STANCE_BLEND = 0.6;
 const nextWait = () => 5 + Math.random() * 9;
 
 /** One unit's locomotion: a proxy skeleton and its mixer. */
@@ -100,6 +145,13 @@ export class AnimDriver {
   private readonly actions: THREE.AnimationAction[];
   private readonly variations: THREE.AnimationAction[];
   private variation: THREE.AnimationAction | null = null;
+  private readonly stances: THREE.AnimationAction[];
+  /** How far each stance has taken the idle's place, easing to the one stood in. */
+  private readonly held: Float32Array;
+  /** The stance stood in (STANCE_ORDER); −1 the plain idle. */
+  private stance = -1;
+  private readonly deaths: THREE.AnimationAction[];
+  private dying: THREE.AnimationAction | null = null;
   private wait = nextWait();
   private readonly bones: THREE.Object3D[];
   private readonly world = Array.from({ length: N }, () => new THREE.Quaternion());
@@ -126,7 +178,54 @@ export class AnimDriver {
       a.setEffectiveWeight(0);
       return a;
     });
+    // Each starts playing when first stood in, so a crowd plays only the clips it uses.
+    this.stances = set.stances.map((clip) => {
+      const a = this.mixer.clipAction(clip);
+      a.time = phase * clip.duration;
+      a.setEffectiveWeight(0);
+      return a;
+    });
+    this.held = new Float32Array(set.stances.length);
+    this.deaths = set.deaths.map((clip) => {
+      const a = this.mixer.clipAction(clip);
+      a.setLoop(THREE.LoopOnce, 1);
+      a.clampWhenFinished = true;
+      return a;
+    });
     this.bones = SYNTY_BONES.map((n) => proxy.getObjectByName(n) ?? new THREE.Object3D());
+  }
+
+  /** Stands in stance `k` (STANCE_ORDER) instead of the plain idle, or −1; `now` without easing into it. */
+  setStance(k: number, now = false): void {
+    if (k === this.stance) return;
+    this.stance = k;
+    const a = this.stances[k];
+    if (a && !this.held[k]) a.play();
+    if (now) this.held.forEach((_, i) => (this.held[i] = i === k ? 1 : 0));
+  }
+
+  /**
+   * Death `k` (set.deaths) alone, posed `time` seconds in; null lets the
+   * moving clips back (update sets their weights again).
+   */
+  fallen(k: number | null, time = 0): void {
+    const next = k === null ? null : this.deaths[k]!;
+    if (this.dying !== next) {
+      this.dying?.stop();
+      this.dying = next;
+      if (next) {
+        this.variation?.stop();
+        this.variation = null;
+        for (const a of this.actions) a.setEffectiveWeight(0);
+        for (const a of this.stances) a.setEffectiveWeight(0);
+        next.reset().play();
+        next.paused = true;
+        next.setEffectiveWeight(1);
+      }
+    }
+    if (!next) return;
+    next.time = time;
+    this.mixer.update(0);
   }
 
   /**
@@ -136,6 +235,16 @@ export class AnimDriver {
    */
   update(dt: number, calm: boolean): void {
     const idle = this.weights[0]!;
+    // The stance stood in takes the idle's place, the others give it back; those out of use stop.
+    const ease = dt / STANCE_BLEND;
+    let stood = 0;
+    for (let k = 0; k < this.stances.length; k++) {
+      const h = (this.held[k] = THREE.MathUtils.clamp(this.held[k]! + (k === this.stance ? ease : -ease), 0, 1));
+      const a = this.stances[k]!;
+      if (h > 0) a.setEffectiveWeight(idle * h);
+      else if (a.isRunning()) a.stop();
+      stood += h;
+    }
     let v = 0;
     const current = this.variation;
     if (current) {
@@ -144,9 +253,9 @@ export class AnimDriver {
         current.stop();
         this.variation = null;
         this.wait = nextWait();
-      } else v = Math.min(1, current.time / BLEND, (length - current.time) / BLEND) * idle;
+      } else v = Math.min(1, current.time / BLEND, (length - current.time) / BLEND) * idle * (1 - stood);
       current.setEffectiveWeight(v);
-    } else if (calm && idle > 0.95 && this.variations.length) {
+    } else if (calm && idle > 0.95 && !stood && this.variations.length) {
       this.wait -= dt;
       if (this.wait <= 0) {
         const next = this.variations[Math.floor(Math.random() * this.variations.length)]!;
@@ -156,7 +265,7 @@ export class AnimDriver {
     } else this.wait = Math.max(this.wait, 2);
     for (let k = 0; k < this.actions.length; k++) {
       const a = this.actions[k]!;
-      a.setEffectiveWeight(k === 0 ? idle - v : this.weights[k]!);
+      a.setEffectiveWeight(k === 0 ? idle * (1 - stood) - v : this.weights[k]!);
       a.timeScale = this.speeds[k]!;
     }
     this.mixer.update(dt);

@@ -67,6 +67,17 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
     ),
     row('showFps', 'Mostrar FPS', [[true, 'Sí'], [false, 'No']], 'Un contador de imágenes por segundo en una esquina.', redraw),
     row(
+      'combatSpeed',
+      'Velocidad del combate',
+      [
+        ['slow', 'Lenta', 'Cada acción tarda más en verse'],
+        ['normal', 'Normal'],
+        ['fast', 'Rápida', 'Cada acción tarda menos en verse'],
+      ],
+      'Lo que tarda en verse cada acción, la vuestra y la del enemigo. En el turno enemigo, mantén la barra espaciadora para verlo en Rápida.',
+      redraw,
+    ),
+    row(
       'uiScale',
       'Interfaz',
       [

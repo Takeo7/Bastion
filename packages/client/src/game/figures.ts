@@ -1,5 +1,7 @@
 import type { Tier } from '@bastion/engine';
+import type { GaitMotion } from './gaits';
 import type { UnitRig } from './models';
+import type { Stance } from './syntyManifest';
 
 // What a unit's figure answers to (syntyFigures.ts makes them, the unit views
 // pose them every frame): the pose values and the equipment it shows. The
@@ -26,10 +28,38 @@ export interface FigurePose {
   search?: number;
   /** Up a ladder, 0 to 1: hands and feet on the rungs (rigs that can; the others just walk up). */
   climb?: number;
+  /** A melee stroke, −1 wound up to +1 followed through: the living cut across, the dead grab and bite. */
+  swing?: number;
+}
+
+/** The blow that kills a unit, for how it falls (syntyManifest.ts DEATHS). */
+export interface Blow {
+  /** The way it comes from in the unit's frame (0 ahead, π/2 from its left), or null if unknown. */
+  from: number | null;
+  /** A critical: a shot to the head. */
+  head: boolean;
+  /** At arm's length (a blade, a bite). */
+  melee: boolean;
+  /** Picks among the falls that fit it, the same for the same unit. */
+  seed: string;
+  /** Whether the body has room to fall `reach` tiles that way (an angle in its frame): no wall or high cover on the way. */
+  room?: (way: number, reach: number) => boolean;
 }
 
 export interface FigureRig extends UnitRig {
   applyPose(p: FigurePose, time: number): void;
+  /** What its moves play, and how fast (gaits.ts), on figures that play clips. */
+  setGait?(motion: GaitMotion, speed: number): void;
+  /**
+   * How it dies, on figures that play clips: from then on its pose's `fall`
+   * (0 to 1) is how far into the death it is. Returns the seconds the fall
+   * takes; null if it has no clips (yet), and the fall is the stiff topple.
+   */
+  die?(blow: Blow): number | null;
+  /** On its feet again after die (Último verso, a body risen as a zombie), once `fall` is back to 0. */
+  rise?(): void;
+  /** How it stands waiting (syntyManifest.ts STANCES), null the plain idle; on figures that play clips. */
+  setStance?(stance: Stance | null): void;
 }
 
 /** Equipment tiers a soldier carries (1 when absent): the weapon's and the armour's. */

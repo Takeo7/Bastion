@@ -5,6 +5,39 @@ Convierte los modelos de Synty POLYGON que usa el juego en GLB ligeros, en `pack
 - Los packs originales viven en `assets-src/synty/`, que no se sube: la licencia no deja redistribuirlos. Solo se suben los convertidos.
 - La lista de lo que se usa, y para qué, es una sola: `src/game/syntyManifest.ts`. El conversor convierte exactamente eso y el juego lo lee para saber qué modelo lleva cada unidad, arma, sombrero y objeto del mapa.
 
+## Los packs en `assets-src/synty/`
+
+Cada carpeta lleva el nombre del pack de Synty que contiene (renombradas el 2026-10-14: antes muchas se llamaban `SourceFiles`, `SourceFiles-2`…). `PACKS`, en `syntyManifest.ts`, dice qué carpeta lee el conversor para cada pack.
+
+| Carpeta | Pack de Synty | En el juego |
+|---|---|---|
+| `POLYGON_Apocalypse_SourceFiles_v4` | POLYGON – Apocalypse | Personajes, armas y objetos (`apocalypse`) |
+| `POLYGON_City_Zombies_Extracted` (y su `.unitypackage`) | POLYGON – City Zombies | Zombis (`cityZombies`) |
+| `POLYGON_BossZombies_SourceFiles_v4` | POLYGON – Boss Zombies | Muertos especiales (`bossZombies`) |
+| `POLYGON_City_SourceFiles_v6` | POLYGON – City | Ciudad en cuadrícula (`city`) |
+| `POLYGON_Town_SourceFiles_v7` | POLYGON – Town | Pueblo viejo y suelo (`town`) |
+| `POLYGON_Farm_SourceFiles_v6` | POLYGON – Farm | Campo y el Huerto (`farm`) |
+| `POLYGON_Nature_SourceFiles_v3` | POLYGON – Nature | Árboles y rocas (`nature`) |
+| `POLYGON_NatureBiomes_AlpineMountain_SourceFiles_v3` | POLYGON – Nature Biomes: Alpine Mountain | La base y el suelo (`alpine`) |
+| `POLYGON_Snow_SourceFiles` | POLYGON – Snow | La base (`snow`) |
+| `POLYGON_Construction_SourceFiles_v5` | POLYGON – Construction | Obras (`construction`) |
+| `POLYGON_Military_SourceFiles` | POLYGON – Military | Controles militares (`military`) |
+| `POLYGON_Office_SourceFiles` | POLYGON – Office | Retratos de la radio (`office`) |
+| `POLYGON_ParticleFX_SourceFiles` | POLYGON – Particle FX | Efectos (`particleFx`) |
+| `POLYGON_Icons_SourceFiles_v4` | POLYGON – Icons | Renders de iconos (`icons`) |
+| `POLYGON_SinIdentificar_CarreteraYAserradero_SourceFiles` | Sin identificar: un pack pequeño de carretera de montaña (estatua de leñador, carteles de cebo y gasolinera, camión destrozado, pinos, contenedor) | Sin usar |
+| `ANIMATION_BaseLocomotion_SourceFiles` | ANIMATION – Base Locomotion | Andar, correr, sprint, agacharse (`baseLocomotion`) |
+| `ANIMATION_Idles_SourceFiles` | ANIMATION – Idles | Reposos y posturas (`idles`) |
+| `ANIMATION_BowCombat_SourceFiles` | ANIMATION – Bow Combat | Muertes (`bowCombat`); las reacciones a golpes, por convertir |
+| `ANIMATION_SwordCombat_SourceFiles` | ANIMATION – Sword Combat | Una muerte de bruces (`swordCombat`); derribos y ataques cuerpo a cuerpo, por convertir |
+| `ANIMATION_GoblinLocomotion_SourceFiles` | ANIMATION – Goblin Locomotion | Andar, trote y sprint de los muertos (`goblinLocomotion`) |
+| `ANIMATION_Emotes_SourceFiles` | ANIMATION – Emotes | Sin usar |
+| `INTERFACE_ApocalypseHUD_SourceFiles` | INTERFACE – Apocalypse HUD | Iconos y piezas de la interfaz |
+| `INTERFACE_MilitaryCombatHUD_SourceFiles` | INTERFACE – Military Combat HUD | Iconos de la interfaz |
+| `INTERFACE_Modern_Menus_SourceFiles_v1` | INTERFACE – Modern Menus | Piezas de la interfaz |
+
+Un pack nuevo va en su propia carpeta con este mismo esquema (`POLYGON_…`, `ANIMATION_…`, `INTERFACE_…`), nunca con el nombre genérico con el que viene el zip.
+
 ## Uso
 
 ```sh

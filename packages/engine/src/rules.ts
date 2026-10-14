@@ -16,7 +16,7 @@ import {
   songTargets,
   type MeleeOption,
 } from './abilities';
-import { chooseScamperTile, patrolPod, takeAlienTurn } from './ai';
+import { chooseScamperTile, onlyWalks, patrolPod, takeAlienTurn } from './ai';
 import {
   adjacent,
   damageRange,
@@ -1139,9 +1139,10 @@ export class Sim {
     this.emit({ t: 'turnBegan', team: 'alien', turn });
     // They rise now, but only act from the next turn on (they had no turn to begin).
     this.riseInfected();
-    const actors = this.s.units
-      .filter((u) => u.alive && u.team === 'alien' && !u.objective && this.s.pods.find((p) => p.id === u.podId)?.active)
-      .map((u) => u.id);
+    const active = this.s.units.filter((u) => u.alive && u.team === 'alien' && !u.objective && this.s.pods.find((p) => p.id === u.podId)?.active);
+    // The dead with nobody to reach this turn walk first, each group in one go; then everyone else, in order (docs/UX-RITMO.md).
+    const walkers = active.filter((u) => onlyWalks(this.s, u));
+    const actors = [...walkers, ...active.filter((u) => !walkers.includes(u))].map((u) => u.id);
     for (const id of actors) {
       const u = getUnit(this.s, id)!;
       if (this.over) return;

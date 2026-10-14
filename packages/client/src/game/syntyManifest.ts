@@ -13,7 +13,7 @@ import type { BuildId, HeadId, TemplateId } from '@bastion/engine';
 /** Metres to game units: a tile is 1.5 m, so a 1.8 m survivor stands 1.2 tall. */
 export const SYNTY_SCALE = 1 / 1.5;
 
-export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons';
+export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion';
 
 /**
  * Where each pack lives under assets-src/synty/. A pack that only comes as a
@@ -29,20 +29,25 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
   nature: { dir: 'POLYGON_Nature_SourceFiles_v3', materialList: 'MaterialList_PolygonNature.txt' },
   city: { dir: 'POLYGON_City_SourceFiles_v6', materialList: 'MaterialList_PolygonCity.txt' },
   // «ANIMATION – Base Locomotion» and «ANIMATION – Idles»: clips only, no atlas.
-  baseLocomotion: { dir: 'SourceFiles-5' },
-  idles: { dir: 'SourceFiles-4' },
+  baseLocomotion: { dir: 'ANIMATION_BaseLocomotion_SourceFiles' },
+  idles: { dir: 'ANIMATION_Idles_SourceFiles' },
+  // «ANIMATION – Bow Combat» and «ANIMATION – Sword Combat»: their deaths and hits (DEATHS), clips only.
+  bowCombat: { dir: 'ANIMATION_BowCombat_SourceFiles' },
+  swordCombat: { dir: 'ANIMATION_SwordCombat_SourceFiles' },
+  // «ANIMATION – Goblin Locomotion»: how the dead walk and run (DEAD_MOTIONS).
+  goblinLocomotion: { dir: 'ANIMATION_GoblinLocomotion_SourceFiles' },
   // The base (BASE_MODELS): «Nature Biomes – Alpine Mountain» and the snow kit.
   alpine: { dir: 'POLYGON_NatureBiomes_AlpineMountain_SourceFiles_v3', materialList: 'MaterialList_PNB_Alpine_Mountain.txt' },
-  snow: { dir: 'SourceFiles-2', materialList: 'MaterialList_PolygonSnow.txt' },
+  snow: { dir: 'POLYGON_Snow_SourceFiles', materialList: 'MaterialList_PolygonSnow.txt' },
   // «POLYGON – Office»: the radio's voices (strategy/portraits.ts).
-  office: { dir: 'SourceFiles2' },
+  office: { dir: 'POLYGON_Office_SourceFiles' },
   // «POLYGON – Particle FX»: shapes and sprites for the effects (fx.ts, songFx.ts).
-  particleFx: { dir: 'Source Files' },
+  particleFx: { dir: 'POLYGON_ParticleFX_SourceFiles' },
   // «POLYGON – Icons»: a few of its pieces for the interface's renders (lab/renders).
   icons: { dir: 'POLYGON_Icons_SourceFiles_v4', materialList: 'MaterialList_PolygonIcons.txt' },
   // «POLYGON – Construction» and «POLYGON – Military»: building sites and checkpoints on the map (Arte-Mapas).
   construction: { dir: 'POLYGON_Construction_SourceFiles_v5', materialList: 'MaterialList_PolygonConstruction.txt' },
-  military: { dir: 'SourceFiles' },
+  military: { dir: 'POLYGON_Military_SourceFiles' },
 };
 
 /**
@@ -268,6 +273,9 @@ export const DEAD_TEMPLATES: ReadonlySet<TemplateId> = new Set<TemplateId>(['zom
  */
 const loco = (path: string) => ({ pack: 'baseLocomotion' as PackId, fbx: `Animations/Polygon/${path}` });
 const idle = (path: string) => ({ pack: 'idles' as PackId, fbx: `Animations/Polygon/${path}` });
+const bow = (path: string) => ({ pack: 'bowCombat' as PackId, fbx: `Animations/Polygon/${path}` });
+const sword = (path: string) => ({ pack: 'swordCombat' as PackId, fbx: `Animations/Polygon/${path}` });
+const goblin = (path: string) => ({ pack: 'goblinLocomotion' as PackId, fbx: `Animations/Polygon/Neutral/Locomotion/${path}` });
 
 export const ANIMATIONS = {
   tpose: loco('Neutral/Additive/TPose/A_TPose_Neut'),
@@ -279,8 +287,15 @@ export const ANIMATIONS = {
   walkFemn: loco('Feminine/Locomotion/Walk/A_Walk_F_Femn'),
   runMasc: loco('Masculine/Locomotion/Run/A_Run_F_Masc'),
   runFemn: loco('Feminine/Locomotion/Run/A_Run_F_Femn'),
+  // The dash (a move of two actions) and the Corredor (docs/ARTE.md, «Velocidades»).
+  sprintMasc: loco('Masculine/Locomotion/Sprint/A_Sprint_F_Masc'),
+  sprintFemn: loco('Feminine/Locomotion/Sprint/A_Sprint_F_Femn'),
   crouchWalkMasc: loco('Masculine/Locomotion/Crouch/A_Crouch_FwdStrafeF_Masc'),
   crouchWalkFemn: loco('Feminine/Locomotion/Crouch/A_Crouch_FwdStrafeF_Femn'),
+  // «ANIMATION – Goblin Locomotion» (one for both builds): the dead's (DEAD_MOTIONS).
+  goblinWalk: goblin('Walk/A_POLY_GBL_Walk_F_Neut'),
+  goblinRun: goblin('Run/A_POLY_GBL_Run_F_Neut'),
+  goblinSprint: goblin('Sprint/A_POLY_GBL_Sprint_F_Neut'),
   // «ANIMATION – Idles»: what a unit waiting does now and then.
   lookLMasc: idle('Masculine/Look/Actions/A_POLY_IDL_Look_L_Masc'),
   lookRMasc: idle('Masculine/Look/Actions/A_POLY_IDL_Look_R_Masc'),
@@ -292,23 +307,97 @@ export const ANIMATIONS = {
   lookBehindFemn: idle('Feminine/Look/Actions/A_POLY_IDL_Look_R_Behind_Femn'),
   shiftLFemn: idle('Feminine/WeightShift/Actions/A_POLY_IDL_WeightShift_L_Femn'),
   shiftRFemn: idle('Feminine/WeightShift/Actions/A_POLY_IDL_WeightShift_R_Femn'),
+  // How some stand waiting (STANCES).
+  drunkMasc: idle('Masculine/Sway/Stances/A_POLY_IDL_Sway_Drunk_Loop_Masc'),
+  drunkFemn: idle('Feminine/Sway/Stances/A_POLY_IDL_Sway_Drunk_Loop_Femn'),
+  aggressiveMasc: idle('Masculine/Posture/Stances/A_POLY_IDL_Posture_Aggressive_Loop_Masc'),
+  aggressiveFemn: idle('Feminine/Posture/Stances/A_POLY_IDL_Posture_Aggressive_Loop_Femn'),
+  slumpedMasc: idle('Masculine/Posture/Stances/A_POLY_IDL_Posture_Slumped_Loop_Masc'),
+  slumpedFemn: idle('Feminine/Posture/Stances/A_POLY_IDL_Posture_Slumped_Loop_Femn'),
+  // «ANIMATION – Bow Combat» and «– Sword Combat»: how a unit dies (DEATHS).
+  deathHeadFMasc: bow('Masculine/Death/A_POLY_BOW_Death_Head_F_Masc'),
+  deathHeadLMasc: bow('Masculine/Death/A_POLY_BOW_Death_Head_L_Masc'),
+  deathHeadRMasc: bow('Masculine/Death/A_POLY_BOW_Death_Head_R_Masc'),
+  deathSpineMasc: bow('Masculine/Death/A_POLY_BOW_Death_Spine_B_Masc'),
+  deathStomachMasc: bow('Masculine/Death/A_POLY_BOW_Death_Stomach_F_Masc'),
+  deathHeadFFemn: bow('Feminine/Death/A_POLY_BOW_Death_Head_F_Femn'),
+  deathHeadLFemn: bow('Feminine/Death/A_POLY_BOW_Death_Head_L_Femn'),
+  deathHeadRFemn: bow('Feminine/Death/A_POLY_BOW_Death_Head_R_Femn'),
+  deathSpineFemn: bow('Feminine/Death/A_POLY_BOW_Death_Spine_B_Femn'),
+  deathStomachFemn: bow('Feminine/Death/A_POLY_BOW_Death_Stomach_F_Femn'),
+  deathForward: sword('Death/A_Death_F_01_Sword'),
 } satisfies Record<string, { pack: PackId; fbx: string }>;
 
 export type AnimationId = keyof typeof ANIMATIONS;
 
 /** The clips a unit blends between; each character uses its build's set. */
-export type Motion = 'idle' | 'crouchIdle' | 'walk' | 'run' | 'crouchWalk';
+export type Motion = 'idle' | 'crouchIdle' | 'walk' | 'run' | 'crouchWalk' | 'sprint';
 
 export const MOTIONS: Record<'masc' | 'femn', Record<Motion, AnimationId>> = {
-  masc: { idle: 'idleMasc', crouchIdle: 'crouchIdleMasc', walk: 'walkMasc', run: 'runMasc', crouchWalk: 'crouchWalkMasc' },
-  femn: { idle: 'idleFemn', crouchIdle: 'crouchIdleFemn', walk: 'walkFemn', run: 'runFemn', crouchWalk: 'crouchWalkFemn' },
+  masc: { idle: 'idleMasc', crouchIdle: 'crouchIdleMasc', walk: 'walkMasc', run: 'runMasc', crouchWalk: 'crouchWalkMasc', sprint: 'sprintMasc' },
+  femn: { idle: 'idleFemn', crouchIdle: 'crouchIdleFemn', walk: 'walkFemn', run: 'runFemn', crouchWalk: 'crouchWalkFemn', sprint: 'sprintFemn' },
 };
+
+/**
+ * The dead walk and run hunched, dragging their feet (Goblin Locomotion; Arturo,
+ * 2026-10-14: «no se ve bien la animación de andar»); the rest as the living.
+ */
+export const DEAD_MOTIONS: Partial<Record<Motion, AnimationId>> = { walk: 'goblinWalk', run: 'goblinRun', sprint: 'goblinSprint' };
 
 /** Played once now and then instead of the idle while a unit stands waiting: a look round, a shift of weight. */
 export const IDLE_VARIATIONS: Record<'masc' | 'femn', AnimationId[]> = {
   masc: ['lookLMasc', 'lookRMasc', 'lookBehindMasc', 'shiftLMasc', 'shiftRMasc'],
   femn: ['lookLFemn', 'lookRFemn', 'lookBehindFemn', 'shiftLFemn', 'shiftRFemn'],
 };
+
+/**
+ * How some units stand waiting instead of the plain idle (Arturo, 2026-10-14):
+ * the dead sway as if drunk, the living enemies stand squared up for a fight,
+ * a badly wounded soldier slumps.
+ */
+export type Stance = 'drunk' | 'aggressive' | 'slumped';
+
+export const STANCE_ORDER: readonly Stance[] = ['drunk', 'aggressive', 'slumped'];
+
+export const STANCES: Record<'masc' | 'femn', Record<Stance, AnimationId>> = {
+  masc: { drunk: 'drunkMasc', aggressive: 'aggressiveMasc', slumped: 'slumpedMasc' },
+  femn: { drunk: 'drunkFemn', aggressive: 'aggressiveFemn', slumped: 'slumpedFemn' },
+};
+
+/**
+ * How a unit dies (Arturo, 2026-10-14: «al morir solo se desploman como si
+ * fuese un tronco»): Synty's death clips and which way each body goes down,
+ * `falls`, as an angle in the unit's frame (0 ahead, π/2 to its left; where
+ * its hips end up, measured in Blender). A body falls away from the blow that
+ * kills it (syntyFigures.ts die): shot from ahead it goes over backwards,
+ * from behind onto its face, from one side towards the other. `head` is a
+ * shot to the head (a critical picks among those); `close` doubles up round a
+ * blow at arm's length (a blade, a bite), whichever way it comes.
+ */
+export interface Death {
+  id: AnimationId;
+  falls: number;
+  /** How far from where it stood its head ends up, in metres: how much room the fall takes. */
+  reach: number;
+  head?: boolean;
+  close?: boolean;
+}
+
+const deaths = (b: 'Masc' | 'Femn'): Death[] => [
+  // Head_F: thrown back onto its back.
+  { id: `deathHeadF${b}`, falls: -2.65, reach: 0.85, head: true },
+  // Head_L and Head_R: spun round and down backwards, to the side away from the hit.
+  { id: `deathHeadL${b}`, falls: -2.46, reach: 1.25, head: true },
+  { id: `deathHeadR${b}`, falls: 2.34, reach: 1.41, head: true },
+  // Spine_B: arches, the knees go and it sits back and down, about where it stood.
+  { id: `deathSpine${b}`, falls: 3.0, reach: 0.73 },
+  // Stomach_F: doubles over and goes down forwards.
+  { id: `deathStomach${b}`, falls: 0.21, reach: 0.95, close: true },
+  // Sword Combat's Death_F (one for both builds): pitches forward onto its face.
+  { id: 'deathForward', falls: -0.14, reach: 1.58 },
+];
+
+export const DEATHS: Record<'masc' | 'femn', Death[]> = { masc: deaths('Masc'), femn: deaths('Femn') };
 
 // ---------------------------------------------------------------- headgear
 

@@ -5,7 +5,7 @@ Lista de UX/UI. Recoge lo que las tres propuestas (Apocalipsis, Moderna y Mixta)
 - Packs que ya se usan:
   - INTERFACE Apocalypse HUD;
   - INTERFACE Modern Menus;
-  - INTERFACE Military Combat HUD, desde hoy (`assets-src/synty/MilitaryHUD`).
+  - INTERFACE Military Combat HUD, desde hoy (`assets-src/synty/INTERFACE_MilitaryCombatHUD_SourceFiles`).
 - Regla de Arturo: todo sale de Synty o de Kenney (CC0), o lo hacemos nosotros. Nada de otros packs gratuitos: game-icons.net está descartado.
 
 **Conclusión: Arturo no tiene que descargar nada más.** Lo que sigue faltando lo dibuja UX/UI en el estilo que gane, o lo saca Arte en render desde los modelos 3D de Synty (apartado 3).

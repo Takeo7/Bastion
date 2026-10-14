@@ -7,6 +7,9 @@ import { storageKey } from './net';
 export type FpsCap = 0 | 30 | 60;
 /** high: ambient occlusion and bloom · medium: bloom only · low: no post-processing. */
 export type EffectsLevel = 'high' | 'medium' | 'low';
+/** «Velocidad del combate» (docs/UX-RITMO.md): every action as long ×1.4, ×1 or ×0.6. */
+export type CombatSpeed = 'slow' | 'normal' | 'fast';
+export const COMBAT_RATES: Record<CombatSpeed, number> = { slow: 1 / 1.4, normal: 1, fast: 1 / 0.6 };
 
 export interface GraphicsSettings {
   /** Frames per second at most; 0 for no cap. */
@@ -18,9 +21,10 @@ export interface GraphicsSettings {
   showFps: boolean;
   /** Interface size (0.9 to 1.3): scales the HUD and the base's sheets, not the 3D view. */
   uiScale: number;
+  combatSpeed: CombatSpeed;
 }
 
-const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1 };
+const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1, combatSpeed: 'normal' };
 const KEY = storageKey('graphics');
 /** Version of the stored settings: 2 made the resolution automatic by default. */
 const VERSION = 2;
