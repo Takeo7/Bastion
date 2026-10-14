@@ -2,7 +2,7 @@
 
 Táctica por turnos **cooperativa para dos jugadores**, inspirada en XCOM 2. Cada jugador usa su propio PC y controla sus propios soldados. En el turno de la escuadra juega uno cada vez: quien tiene **el mando** da las órdenes y se lo **cede** al compañero cuando quiere, aunque le queden acciones.
 
-Estado: **prototipo jugable (hitos M1 a M4)**. Combate con alturas, puertas y ventanas en mapas generados al azar; 4 clases con árbol de habilidades; 7 tipos de enemigo, psiónicos incluidos; 5 tipos de misión con patrullas y refuerzos. La campaña cooperativa tiene base en 3D, mapa global, acontecimientos y equipo por soldado. Los modelos están generados por código: soldados, enemigos, el VIP y el repetidor son figuras articuladas, con brazos, piernas y animaciones. Ver [docs/DESIGN.md](docs/DESIGN.md).
+Estado: **versión 0.2.1**. Supervivencia zombi con arte de Synty: combate por turnos con plantas, noche, ruido y saqueo, y una campaña cooperativa con base, el valle de Kessra, contagio, comida y la Marea. Estado completo y decisiones en [docs/TRASPASO.md](docs/TRASPASO.md); diseño en [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Requisitos
 
