@@ -102,6 +102,8 @@ export type DecorKind =
   | 'table'
   | 'sofa'
   | 'bed'
+  | 'hospitalBed'
+  | 'medicalShelf'
   | 'desk'
   | 'wardrobe'
   | 'cabinet'

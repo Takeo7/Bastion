@@ -353,7 +353,7 @@ function pickStyle(rng: Rng): Style {
 /** How the interior is divided. */
 type Plan = 'rooms' | 'open' | 'corridor' | 'shop' | 'hall';
 /** What stands inside. */
-type Furnish = 'home' | 'shop' | 'office' | 'lab' | 'store' | 'barn' | 'bare';
+type Furnish = 'home' | 'shop' | 'office' | 'lab' | 'store' | 'barn' | 'bare' | 'clinic';
 
 interface Building {
   outer: Rect;
@@ -660,6 +660,11 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish): void {
     case 'barn':
       corner('low', 'hay');
       corner('low', 'hay');
+      break;
+    case 'clinic':
+      corner('low', 'hospitalBed');
+      corner('high', 'medicalShelf');
+      if (short >= 5) put(c, P(mid, short - 1), 'low', ['desk', toward(0, -1)]);
       break;
     case 'bare':
       break;
@@ -1874,7 +1879,7 @@ function cityLot(c: Canvas, lot: Rect, program: CityProgram, roads: boolean[], r
  * a slant, smaller and uneven blocks, houses that don't line up and small
  * squares on the corners.
  */
-function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
+function city(c: Canvas, rng: Rng, map: Style, role: Role, clinic = false): Rect {
   const S = c.width;
   const organic = rng.next() < 0.5 && !map.industrial;
   const style: Style = { ...map, organic };
@@ -1940,6 +1945,12 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
         continue;
       }
       const isObj = l === objLot;
+      if (isObj && clinic) {
+        const b = building(c, l.r, rng, 'shop', frontOf(c, l.r, l.roads, rng), style, 'clinic');
+        b.storeys = 1;
+        objective = b.outer;
+        continue;
+      }
       const built = cityLot(c, l.r, cityProgram(l.r, rng, isObj ? role : null, used, organic, style.industrial), l.roads, rng, style);
       if (isObj) objective = best(built, (b) => dist(centre(b.outer), far))?.outer ?? l.r;
     }
@@ -2941,7 +2952,7 @@ interface Storey {
 const pitched = (b: Building) => !b.flat && (b.furnish === 'home' || b.furnish === 'barn');
 
 /** What the rooms of a building's upper storeys hold: a shop's stockroom, the rest as below. */
-const UPSTAIRS: Record<Furnish, Furnish> = { home: 'home', shop: 'store', office: 'office', lab: 'lab', store: 'store', barn: 'barn', bare: 'bare' };
+const UPSTAIRS: Record<Furnish, Furnish> = { home: 'home', shop: 'store', office: 'office', lab: 'lab', store: 'store', barn: 'barn', bare: 'bare', clinic: 'clinic' };
 
 /** From one window to the next on an upper storey: shops and offices glazed, houses less. */
 const upstairsWindows = (b: Building) => (b.furnish === 'home' ? 3 : 2);
@@ -3227,6 +3238,8 @@ export interface GenOptions {
   seed: number;
   /** A recovery whose story puts the item out in the open (playtest 2026-10-14, #27): on a square or a car park, not in a room. */
   itemOutdoors?: boolean;
+  /** The opening's medicines belong inside Aldren's furnished clinic. */
+  clinic?: boolean;
   /** A scenario other than the biome's usual one (playtest 2026-10-14, #25): 'roadside' in the wilds, 'industrial' in a city. */
   site?: Site;
 }
@@ -3242,7 +3255,8 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   const flipY = rng.int(2) === 1;
   const swap = rng.int(2) === 1;
   const needsEvac = kind !== 'elimination';
-  const outdoorItem = kind === 'recovery' && !!opts.itemOutdoors;
+  const clinic = biome === 'city' && kind === 'recovery' && !!opts.clinic;
+  const outdoorItem = kind === 'recovery' && !!opts.itemOutdoors && !clinic;
   const role: Role = !outdoorItem && (kind === 'recovery' || kind === 'rescue' || (kind === 'hack' && biome !== 'wilds')) ? 'indoor' : 'open';
 
   // Keep the squad's corner clear.
@@ -3253,7 +3267,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   const compound = biome === 'facility' ? facility(c, rng, style, role) : null;
   const objRect =
     compound?.objective ??
-    (biome === 'city' ? city(c, rng, { ...style, industrial: site === 'industrial' }, role) : site === 'roadside' ? roadside(c, rng, style, role) : wilds(c, rng, style, role));
+    (biome === 'city' ? city(c, rng, { ...style, industrial: site === 'industrial' }, role, clinic) : site === 'roadside' ? roadside(c, rng, style, role) : wilds(c, rng, style, role));
   thinClutter(c, opts.seed);
   // Something to take cover behind on the squad's first move: barricades and crates, rocks in the wilds.
   const posts = [BARRICADE, CORNER, PAIR].map((parts) => (biome === 'wilds' ? dressed(parts, 'rock') : dressed(parts, 'barricade', 'crates')));
@@ -3293,7 +3307,10 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   if (kind === 'recovery' || kind === 'rescue') {
     // Tucked away indoors, or for an item out in the open (#27) the most open tile outdoors.
     const outside = outdoorItem ? objTiles.filter((p) => c.groundAt(p.x, p.y) !== INDOOR) : [];
-    const spot = (outdoorItem && outside.length ? best(outside, (p) => enclosed(p)) : best(objTiles, (p) => -enclosed(p) - (c.groundAt(p.x, p.y) === INDOOR ? 2 : 0))) ?? null;
+    // Door and window tiles also carry INDOOR. The clinic's objective must be
+    // on actual room floor, with a tile between it and the exterior walls.
+    const inside = clinic ? objTiles.filter((p) => inRect(inset(objRect, 2), p) && c.get(p.x, p.y) === 'floor' && c.groundAt(p.x, p.y) === INDOOR) : objTiles;
+    const spot = (outdoorItem && outside.length ? best(outside, (p) => enclosed(p)) : best(inside, (p) => -enclosed(p) - (c.groundAt(p.x, p.y) === INDOOR ? 2 : 0))) ?? null;
     if (kind === 'recovery') item = spot;
     else objectiveSpot = spot;
   } else if (kind === 'sabotage') {

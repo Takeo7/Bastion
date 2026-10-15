@@ -401,13 +401,13 @@ const VIP_NAMES = ['Dra. Irina Sokolova', 'Ing. Kenji Mori', 'Alcaldesa Mara Vel
  */
 const LAYOUT_KIND: Partial<Record<MissionKind, MissionKind>> = { scavenge: 'recovery' };
 
-export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[], itemOutdoors = false): MissionLayout {
+export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[], itemOutdoors = false, clinic = false): MissionLayout {
   if (map.kind === 'handmade') {
     const def = MAPS[map.id];
     if (!def) throw new Error(`Unknown map ${map.id}`);
     return handmadeLayout(def, kind);
   }
-  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed, ...(map.site ? { site: map.site } : {}), ...(itemOutdoors ? { itemOutdoors } : {}) });
+  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed, ...(map.site ? { site: map.site } : {}), ...(itemOutdoors ? { itemOutdoors } : {}), ...(clinic ? { clinic } : {}) });
 }
 
 export function createMission(opts: MissionOptions): GameState {
@@ -419,7 +419,7 @@ export function createMission(opts: MissionOptions): GameState {
   // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
   const extra = garrison(kind, difficulty, opts.living);
   const plan = [...base, ...(extra ? [extra] : []), ...(opts.night ? [nightPod(difficulty)] : [])];
-  const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors);
+  const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors, opts.campaignMission?.story === 1);
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
     (kind === 'recovery' && !layout.item) ||

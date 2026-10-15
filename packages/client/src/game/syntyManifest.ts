@@ -598,6 +598,8 @@ export const UI_MODELS = {
 export interface PropAsset {
   pack: PackId;
   fbx: string;
+  /** Reuses a converted base model as tile furniture, without another GLB. */
+  base?: BaseModelId;
   fit?: number;
   stretch?: boolean;
   thick?: number;
@@ -656,6 +658,8 @@ export const PROPS = {
   sofa: prop('town', 'SM_Prop_Couch_01', { fit: 1, stretch: true, yaw: 2 }),
   sofaDirty: prop('apocalypse', 'SM_Prop_Couch_01', { fit: 1, stretch: true, yaw: 1 }),
   bed: prop('town', 'SM_Prop_Bed_Single_01', { fit: 1, stretch: true, yaw: 2 }),
+  hospitalBed: prop('apocalypse', 'Rigged/SK_Prop_Bed_Hospital_01', { base: 'hospitalBed', fit: 0.95, yaw: 1 }),
+  medicalShelf: prop('apocalypse', 'SM_Prop_Medical_Shelf_01', { base: 'medShelf', fit: 0.9, yaw: 1 }),
   wardrobe: prop('town', 'SM_Prop_Wardrobe_01_Combined', { fit: 0.95, yaw: 2 }),
   desk: prop('town', 'SM_Prop_Desk_01', { fit: 1, stretch: true }),
   cabinet: prop('town', 'SM_Prop_Cabinet_01', { yaw: 2 }),
@@ -845,6 +849,8 @@ export const PROP_SETS = {
   table: ['table'],
   sofa: ['sofa', 'sofaDirty'],
   bed: ['bed'],
+  hospitalBed: ['hospitalBed'],
+  medicalShelf: ['medicalShelf'],
   desk: ['desk', 'officeDesk', 'officeDesk2'],
   labBench: ['officeDesk2'],
   wardrobe: ['wardrobe'],

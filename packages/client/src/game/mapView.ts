@@ -74,6 +74,7 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'table':
     case 'sofa':
     case 'bed':
+    case 'hospitalBed':
     case 'pipe':
     case 'bush':
       return low ? kind : null;
@@ -87,6 +88,7 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'statue':
     case 'wardrobe':
     case 'cabinet':
+    case 'medicalShelf':
     case 'rack':
       return low ? null : kind;
     case 'fence':
@@ -143,7 +145,7 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
 }
 
 /** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
-const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire']);
+const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'hospitalBed', 'medicalShelf', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire']);
 
 /**
  * The scenarios' things that stand over several tiles (#25), and what each of
