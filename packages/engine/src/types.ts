@@ -113,6 +113,16 @@ export type DecorKind =
   | 'examTable'
   | 'medicalMonitor'
   | 'xray'
+  | 'bedsideTable'
+  | 'visitorChair'
+  | 'clinicalSink'
+  | 'sterilizer'
+  | 'ultrasound'
+  | 'waitingTable'
+  | 'waterDispenser'
+  | 'toilet'
+  | 'clinicalBin'
+  | 'consultDesk'
   | 'desk'
   | 'wardrobe'
   | 'cabinet'
@@ -794,7 +804,7 @@ export interface MissionState {
   night?: boolean;
 }
 
-export type MedicalUse = 'reception' | 'consultation' | 'treatment' | 'ward' | 'equipment' | 'nurses';
+export type MedicalUse = 'reception' | 'consultation' | 'treatment' | 'ward' | 'equipment' | 'nurses' | 'waiting' | 'supplies' | 'hygiene' | 'stairs';
 export interface MedicalRoom {
   x: number;
   y: number;

@@ -658,7 +658,7 @@ export const PROPS = {
   sofa: prop('town', 'SM_Prop_Couch_01', { fit: 1, stretch: true, yaw: 2 }),
   sofaDirty: prop('apocalypse', 'SM_Prop_Couch_01', { fit: 1, stretch: true, yaw: 1 }),
   bed: prop('town', 'SM_Prop_Bed_Single_01', { fit: 1, stretch: true, yaw: 2 }),
-  hospitalBed: prop('apocalypse', 'Rigged/SK_Prop_Bed_Hospital_01', { base: 'hospitalBed', fit: 0.95, yaw: 1 }),
+  hospitalBed: prop('apocalypse', 'Rigged/SK_Prop_Bed_Hospital_01', { base: 'hospitalBed', fit: 1.15, yaw: 1 }),
   medicalShelf: prop('apocalypse', 'SM_Prop_Medical_Shelf_01', { base: 'medShelf', fit: 0.9, yaw: 1 }),
   gurney: prop('apocalypse', 'Rigged/SK_Prop_Bed_Gurney_01', { base: 'gurney', fit: 0.95, yaw: 1 }),
   ivStand: prop('apocalypse', 'SM_Prop_Medical_IVStand_01', { base: 'ivStand' }),

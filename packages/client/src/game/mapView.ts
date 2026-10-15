@@ -138,6 +138,16 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'examTable':
     case 'medicalMonitor':
     case 'xray':
+    case 'bedsideTable':
+    case 'visitorChair':
+    case 'clinicalSink':
+    case 'sterilizer':
+    case 'ultrasound':
+    case 'waitingTable':
+    case 'waterDispenser':
+    case 'toilet':
+    case 'clinicalBin':
+    case 'consultDesk':
     case 'wheelchair':
       // Own clinical furniture is drawn directly, outside Synty's prop sets.
       return null;
@@ -157,7 +167,7 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
 }
 
 /** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
-const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'hospitalBed', 'medicalShelf', 'gurney', 'medicalCart', 'medicalCabinet', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire']);
+const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'hospitalBed', 'medicalShelf', 'gurney', 'medicalCart', 'medicalCabinet', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'bedsideTable', 'visitorChair', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'clinicalBin', 'consultDesk', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire']);
 
 /**
  * The scenarios' things that stand over several tiles (#25), and what each of
@@ -724,7 +734,7 @@ export class MapView {
         return true;
       }
       const clinical = look && medicalFurniture(look.kind);
-      if (clinical && (look.kind === 'medicalCabinet' || look.kind === 'xray' ? kind === 'high' : kind === 'low')) {
+      if (clinical && (look.kind === 'medicalCabinet' || look.kind === 'xray' || look.kind === 'waterDispenser' ? kind === 'high' : kind === 'low')) {
         if (!kit.clinical) {
           kit.clinical = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
           floorFadePatch(kit.clinical, buildings.cutaway);

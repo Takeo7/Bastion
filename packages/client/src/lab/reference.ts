@@ -119,13 +119,16 @@ setView(viewName);
 if (medical && state.medical?.[0]) {
   const b = state.medical[0];
   const level = Math.max(0, Math.min(medical === 'hospital' ? 2 : 0, Number(params.get('level') ?? 0)));
+  const rooms = b.rooms?.filter((r) => r.use === params.get('room') && r.z === level);
+  const detail = rooms?.[Math.min((rooms?.length ?? 1) - 1, Math.max(0, Number(params.get('room-index') ?? 0)))];
   if (!params.has('exterior')) {
     focus.hover = { x: Math.floor(b.x + b.w / 2), y: Math.floor(b.y + b.h / 2), z: level };
     focus.level = level;
   }
-  rig.focus(new THREE.Vector3(b.x + b.w / 2, level * 2.3, b.y + b.h / 2), true);
+  if (detail) focus.hover = { x: Math.floor(detail.x + detail.w / 2), y: Math.floor(detail.y + detail.h / 2), z: level };
+  rig.focus(new THREE.Vector3(detail ? detail.x + detail.w / 2 : b.x + b.w / 2, level * 2.3, detail ? detail.y + detail.h / 2 : b.y + b.h / 2), true);
   const camera = rig as unknown as { distance: number; desiredDistance: number };
-  camera.distance = camera.desiredDistance = Math.max(9, Math.max(b.w, b.h) * (params.has('exterior') ? 2.1 : 1.55));
+  camera.distance = camera.desiredDistance = detail ? Math.max(8, Math.max(detail.w, detail.h) * 2.2) : Math.max(9, Math.max(b.w, b.h) * (params.has('exterior') ? 2.1 : 1.55));
 }
 container.addEventListener('wheel', (e) => rig.zoom(e.deltaY), { passive: true });
 let dragging = false;

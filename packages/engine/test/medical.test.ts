@@ -8,7 +8,7 @@ import { createMission } from '../src/setup';
 import type { MedicalSite } from '../src/types';
 
 const inside = (b: MedicalSite, x: number, y: number) => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h;
-const kinds = new Set(['hospitalBed', 'medicalShelf', 'gurney', 'medicalCabinet', 'medicalCart', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray']);
+const kinds = new Set(['hospitalBed', 'medicalShelf', 'gurney', 'medicalCabinet', 'medicalCart', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'bedsideTable', 'visitorChair', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'clinicalBin', 'consultDesk']);
 
 describe('medical locations', () => {
   it('scopes clinical furniture and wear to explicit locations, with varied plans', () => {
@@ -104,11 +104,77 @@ describe('medical locations', () => {
       const s = createMission({ map: { kind: 'generated', biome, seed: seed * 7919, medical: 'hospital' }, slots: [0], rng: new Rng(seed), kind: 'rescue' });
       if (biome !== 'city') { expect(s.medical).toBeUndefined(); continue; }
       const b = s.medical![0]!;
-      expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(13);
+      expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(12);
       for (let z = 0; z < 3; z++) {
         const uses = b.rooms!.filter((r) => r.z === z).map((r) => r.use);
         expect(uses).toContain(z === 0 ? 'reception' : 'ward');
         expect(uses).toContain(z === 1 ? 'nurses' : 'equipment');
+      }
+    }
+  }, 30_000);
+
+  it('uses small inpatient rooms with one or two beds and equipped consultations', () => {
+    for (let seed = 0; seed < 48; seed++) {
+      const s = createMission({ map: { kind: 'generated', biome: 'city', seed: seed * 7919, medical: 'hospital' }, slots: [0], rng: new Rng(seed), kind: 'rescue' });
+      const rooms = s.medical![0]!.rooms!;
+      const contents = (r: typeof rooms[number]) => {
+        const ds = r.z ? s.levels![r.z - 1]!.decor : s.decor;
+        const out: string[] = [];
+        for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+          const d = decorOf(ds?.[y * s.width + x]); if (d && d.kind !== 'stairs') out.push(d.kind);
+        }
+        return out;
+      };
+      for (let z = 0; z < 3; z++) expect(rooms.filter((r) => r.z === z).length).toBeGreaterThanOrEqual(8);
+      for (const r of rooms) {
+        const label = `hospital/${seed}/p${r.z}/${r.use}`;
+        if (r.use === 'stairs') continue;
+        const furniture = contents(r);
+        if (r.use === 'ward') {
+          expect(r.w * r.h, label).toBeLessThanOrEqual(12);
+          const beds = furniture.filter((k) => k === 'hospitalBed').length;
+          expect(beds, label).toBeGreaterThanOrEqual(1); expect(beds, label).toBeLessThanOrEqual(2);
+          expect(furniture.filter((k) => k === 'bedsideTable').length, label).toBeGreaterThanOrEqual(beds);
+          expect(furniture, label).toContain('medicalMonitor');
+          expect(furniture.length, label).toBeGreaterThanOrEqual(4);
+        }
+        if (r.use === 'consultation') {
+          expect(r.w * r.h, label).toBeLessThanOrEqual(12);
+          for (const k of ['consultDesk', 'examTable', 'clinicalSink', 'medicalCabinet']) expect(furniture, label).toContain(k);
+        }
+        if (r.use === 'equipment') {
+          expect(furniture.some((k) => k === 'xray' || k === 'ultrasound'), label).toBe(true);
+          expect(furniture, label).toContain('examTable');
+          expect(furniture.length, label).toBeGreaterThanOrEqual(4);
+        }
+      }
+      const waiting = rooms.filter((r) => r.z === 0 && r.use === 'waiting');
+      expect(waiting.length).toBeGreaterThan(0);
+      for (const r of waiting) expect(contents(r)).toContain('waitingSeats');
+    }
+  }, 30_000);
+
+  it('gives infirmaries waiting/triage, treatment, observation and stocked medical stores', () => {
+    for (let seed = 0; seed < 64; seed++) {
+      const s = createMission({ map: { kind: 'generated', biome: 'city', seed: seed * 7919, medical: 'ward' }, slots: [0], rng: new Rng(seed), kind: 'recovery' });
+      const rooms = s.medical![0]!.rooms!;
+      for (const use of ['waiting', 'treatment', 'ward', 'supplies']) expect(rooms.map((r) => r.use), `infirmary/${seed}`).toContain(use);
+      const scout = s.units.find((u) => u.team === 'xcom')!;
+      const reach = computeReach({ ...s, units: [scout] }, scout, 100_000);
+      for (const r of rooms) {
+        const furniture: string[] = [];
+        for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+          const i = y * s.width + x, d = decorOf(s.decor?.[i]); if (d) furniture.push(d.kind);
+          if (canStandOn(s.tiles[i]!)) expect(reach.cost.has(i), `infirmary/${seed}/${r.use}`).toBe(true);
+        }
+        expect(furniture.length).toBeGreaterThanOrEqual(4);
+        if (r.use === 'waiting') for (const k of ['receptionDesk', 'waitingSeats']) expect(furniture).toContain(k);
+        if (r.use === 'ward') for (const k of ['hospitalBed', 'bedsideTable', 'medicalMonitor']) expect(furniture).toContain(k);
+        if (r.use === 'treatment') {
+          expect(furniture.some((k) => k === 'examTable' || k === 'gurney')).toBe(true);
+          expect(furniture).toContain('sterilizer'); expect(furniture).toContain('clinicalSink');
+        }
+        if (r.use === 'supplies') for (const k of ['medicalShelf', 'medicalCabinet', 'medicalCart']) expect(furniture).toContain(k);
       }
     }
   }, 30_000);
