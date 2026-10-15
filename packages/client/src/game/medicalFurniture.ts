@@ -9,12 +9,13 @@ interface Part {
   matrix: THREE.Matrix4;
   color: THREE.Color;
 }
-const cache = new Map<DecorKind, Part[]>();
+const cache = new Map<string, Part[]>();
 const METAL = 0x8b9c9c, WHITE = 0xdedfd5, RUBBER = 0x353d40, BLUE = 0x416b78;
 
-export function medicalFurniture(kind: DecorKind): Part[] | null {
+export function medicalFurniture(kind: DecorKind, black = false): Part[] | null {
   if (!['medicalCabinet', 'medicalCart', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'bedsideTable', 'visitorChair', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'clinicalBin', 'consultDesk'].includes(kind)) return null;
-  const ready = cache.get(kind);
+  const key = `${kind}:${black}`;
+  const ready = cache.get(key);
   if (ready) return ready;
   const parts: Part[] = [];
   const add = (g: THREE.BufferGeometry, color: number, x: number, y: number, z: number, rz = 0) => {
@@ -122,10 +123,13 @@ export function medicalFurniture(kind: DecorKind): Part[] | null {
     add(new THREE.CylinderGeometry(0.035, 0.03, 0.09, 8), 0xc1d5d8, -0.10, 0.60, 0.05);
     box(BLUE, 0.10, 0.58, -0.06, 0.11, 0.035, 0.14);
   } else if (kind === 'visitorChair') {
-    for (const x of [-0.18, 0.18]) for (const z of [-0.16, 0.16]) box(METAL, x, 0.17, z, 0.03, 0.32, 0.03);
-    box(BLUE, 0, 0.34, 0, 0.42, 0.065, 0.39);
-    box(BLUE, 0, 0.55, 0.18, 0.42, 0.37, 0.05);
-    for (const x of [-0.22, 0.22]) box(RUBBER, x, 0.49, 0, 0.045, 0.04, 0.37);
+    // A padded visitor armchair, as in patient rooms and waiting areas.
+    const fabric = black ? 0x776349 : 0x6b8178;
+    for (const x of [-0.20, 0.20]) for (const z of [-0.19, 0.19]) box(METAL, x, 0.10, z, 0.04, 0.18, 0.04);
+    box(fabric, 0, 0.25, 0, 0.57, 0.20, 0.53);
+    box(fabric, 0, 0.38, -0.03, 0.43, 0.12, 0.43);
+    box(fabric, 0, 0.58, 0.21, 0.57, 0.55, 0.14);
+    for (const x of [-0.255, 0.255]) box(fabric, x, 0.45, 0, 0.11, 0.30, 0.53);
   } else if (kind === 'clinicalSink') {
     box(WHITE, 0, 0.35, 0.08, 0.64, 0.62, 0.43);
     box(WHITE, 0, 0.69, 0.02, 0.70, 0.08, 0.53);
@@ -191,10 +195,10 @@ export function medicalFurniture(kind: DecorKind): Part[] | null {
       box(RUBBER, x, 0.57, -0.03, 0.05, 0.035, 0.32);
       box(METAL, x * 0.7, 0.19, -0.35, 0.15, 0.03, 0.15);
     }
-    box(BLUE, 0, 0.36, 0, 0.45, 0.055, 0.42);
-    box(BLUE, 0, 0.56, 0.20, 0.45, 0.40, 0.055);
+    box(black ? 0x242b2d : BLUE, 0, 0.36, 0, 0.45, 0.055, 0.42);
+    box(black ? 0x242b2d : BLUE, 0, 0.56, 0.20, 0.45, 0.40, 0.055);
     box(METAL, 0, 0.27, 0.15, 0.56, 0.025, 0.025);
   }
-  cache.set(kind, parts);
+  cache.set(key, parts);
   return parts;
 }

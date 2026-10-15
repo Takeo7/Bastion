@@ -19,6 +19,7 @@
 // All the houses (offices, halls…) of one map share a scale. A final pass makes
 // sure every walkable area can be reached (adding ladders or doors if needed),
 // and only reachable tiles are used to place the squad, the pods and objectives.
+import { dressMedical } from './medicalDressing';
 import { MAPS, parseMap, type MapDef } from './maps';
 import { stepCost } from './path';
 import { Rng } from './rng';
@@ -3753,6 +3754,8 @@ export function generateLayout(opts: GenOptions): MissionLayout {
       return { x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, z: r.z, use: r.use };
     }) }];
   });
+
+  for (const b of medical) b.dressing = dressMedical(b, S, tiles, decor, levels, opts.seed, [...spawns, item, terminal, objectiveSpot].filter((p): p is Vec2 => !!p).map(T));
 
   return {
     id: `gen-${site ?? biome}-${opts.seed}`,

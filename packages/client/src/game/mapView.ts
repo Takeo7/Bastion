@@ -17,6 +17,7 @@ import { SnowCover, snowyMission, snowTexture } from './snow';
 import { DroppedView } from './dropped';
 import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
 import { EvacBus } from './evacBus';
+import { medicalDetails, medicalWallPatch } from './medicalDetails';
 import { medicalFurniture } from './medicalFurniture';
 import { contactPatch, GroundOcclusion } from './groundAO';
 import { atlasTexture } from './synty';
@@ -230,6 +231,7 @@ interface Kit {
   surroundings: THREE.Mesh;
   snowbank: THREE.MeshStandardMaterial | null;
   clinical: THREE.MeshStandardMaterial | null;
+  clinicalWall: THREE.MeshStandardMaterial | null;
 }
 
 /** One kind of placed geometry (a prop's part, the floor slabs): its instances go to the map's batch. */
@@ -409,7 +411,7 @@ export class MapView {
     const slab = new THREE.BoxGeometry(1, 0.1, 1);
     this.geometries.push(slab);
     return {
-      batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), clinical: null,
+      batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), clinical: null, clinicalWall: null,
       surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground),
       snowbank: this.snow ? this.own(new THREE.MeshStandardMaterial({ map: snowTexture(), color: 0xe3f0ff, roughness: 0.98 })) : null,
     };
@@ -491,6 +493,8 @@ export class MapView {
       const ids = syntySet(set);
       return addSyntyId(ids[Math.min(ids.length - 1, Math.floor(pick * ids.length))]!, matrix);
     };
+    const bedVariants = new Set((s.medical ?? []).flatMap((b) => (b.dressing ?? [])
+      .filter((d) => d.kind === 'bareBed' || d.kind === 'coveredBed').map((d) => d.z * s.width * s.height + d.y * s.width + d.x)));
     const searched = new Set(s.searched ?? []);
     /** Some wrecks still have a battery: their headlights on, by night. */
     const headlights: Glow[] = [];
@@ -733,7 +737,8 @@ export class MapView {
         addSyntyId('lumberjack', placed(x + 0.5, base + topOf('lumberjackBase'), y + 0.5, 1, 1, 1, yaw));
         return true;
       }
-      const clinical = look && medicalFurniture(look.kind);
+      if (look?.kind === 'hospitalBed' && kind === 'low' && bedVariants.has(placeBase + i)) return true;
+      const clinical = look && medicalFurniture(look.kind, hash(x, y, 73 + floor.level) < 0.6);
       if (clinical && (look.kind === 'medicalCabinet' || look.kind === 'xray' || look.kind === 'waterDispenser' ? kind === 'high' : kind === 'low')) {
         if (!kit.clinical) {
           kit.clinical = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
@@ -902,6 +907,41 @@ export class MapView {
         }
       }
     });
+    // Seeded clinical scenery: stored with the mission, nonblocking, and
+    // removed visually if its floor, bed, furniture or supporting wall is destroyed.
+    for (const b of s.medical ?? []) for (const d of b.dressing ?? []) {
+      const i = d.y * s.width + d.x;
+      if (area && !area[i]) continue;
+      const st = d.z ? s.levels?.[d.z - 1] : { tiles: s.tiles, decor: s.decor };
+      const tile = st?.tiles[i], look = decorOf(st?.decor?.[i]);
+      if (!tile) continue;
+      const isBed = d.kind === 'bareBed' || d.kind === 'coveredBed';
+      const isBody = d.kind === 'corpseCivilian' || d.kind === 'corpseStaff' || d.kind === 'coveredCorpse';
+      const isWall = d.kind === 'wallCross' || d.kind === 'cautionSign' || d.kind === 'safeSign';
+      if (isBed && (tile !== 'low' || look?.kind !== 'hospitalBed')) continue;
+      if (isBody && tile !== 'floor') continue;
+      if (!isBed && !isBody && !isWall && tile !== 'low' && tile !== 'high') continue;
+      const normal = DIRS4[d.facing]!;
+      const wallX = d.x - normal.x, wallY = d.y - normal.y;
+      if (isWall && st?.tiles[wallY * s.width + wallX] !== 'wall') continue;
+      floor.building = buildings.plan.owner[i]!; floor.level = d.z;
+      const at = placed(d.x + 0.5, d.z * STOREY + d.height, d.y + 0.5, 1, 1, 1, turnTo(d.facing) * Math.PI / 2);
+      if (d.kind === 'corpseCivilian' || d.kind === 'corpseStaff') { addSyntyId(d.kind, at); continue; }
+      if (!kit.clinical) {
+        kit.clinical = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
+        floorFadePatch(kit.clinical, buildings.cutaway);
+      }
+      if (isWall && !kit.clinicalWall) {
+        kit.clinicalWall = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
+        floorFadePatch(kit.clinicalWall, buildings.cutaway); medicalWallPatch(kit.clinicalWall, buildings.cutaway);
+      }
+      const outside = wallX <= b.x || wallY <= b.y || wallX >= b.x + b.w - 1 || wallY >= b.y + b.h - 1;
+      for (const part of medicalDetails(d.kind)) batch.add(part.geometry, isWall ? kit.clinicalWall! : kit.clinical, at.clone().multiply(part.matrix), true, {
+        color: [part.color.r, part.color.g, part.color.b], aFloor: [floor.building + 1, floor.level],
+        ...(isWall ? { aMedicalWall: outside ? [-normal.x, -normal.y] : [0, 0] } : {}),
+      }, !isWall);
+      if (d.kind === 'coveredBed') addSyntyId('ivStand', at.clone().multiply(new THREE.Matrix4().makeTranslation(-0.31, 0, 0.22)));
+    }
     decorNow = decor;
     tilesNow = s.tiles;
     placeBase = 0;

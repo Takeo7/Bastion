@@ -814,6 +814,15 @@ export interface MedicalRoom {
   use: MedicalUse;
 }
 
+export interface MedicalDetail {
+  kind: 'corpseCivilian' | 'corpseStaff' | 'coveredCorpse' | 'coveredBed' | 'bareBed' | 'privacyScreen' | 'medicalSupplies' | 'luggage' | 'crutches' | 'books' | 'wallCross' | 'cautionSign' | 'safeSign';
+  x: number;
+  y: number;
+  z: number;
+  facing: number;
+  height: number;
+}
+
 /** A medical building's bounds, including walls; wear is cosmetic, from 0 to 1. */
 export interface MedicalSite {
   x: number;
@@ -823,6 +832,8 @@ export interface MedicalSite {
   wear: number;
   kind?: 'clinic' | 'ward' | 'hospital';
   rooms?: MedicalRoom[];
+  /** Seeded scenery, stored with the mission. Never affects movement, cover or AI. */
+  dressing?: MedicalDetail[];
 }
 
 export interface GameState {

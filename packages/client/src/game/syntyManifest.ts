@@ -658,6 +658,9 @@ export const PROPS = {
   sofa: prop('town', 'SM_Prop_Couch_01', { fit: 1, stretch: true, yaw: 2 }),
   sofaDirty: prop('apocalypse', 'SM_Prop_Couch_01', { fit: 1, stretch: true, yaw: 1 }),
   bed: prop('town', 'SM_Prop_Bed_Single_01', { fit: 1, stretch: true, yaw: 2 }),
+  // Static poses baked from existing licensed characters; see tools/synty/bake-medical-corpses.mjs.
+  corpseCivilian: prop('apocalypse', 'SK_Chr_Business_Male_01', { fit: 0.92 }),
+  corpseStaff: prop('apocalypse', 'SK_Chr_Waitress_Female_01', { fit: 0.92 }),
   hospitalBed: prop('apocalypse', 'Rigged/SK_Prop_Bed_Hospital_01', { base: 'hospitalBed', fit: 1.15, yaw: 1 }),
   medicalShelf: prop('apocalypse', 'SM_Prop_Medical_Shelf_01', { base: 'medShelf', fit: 0.9, yaw: 1 }),
   gurney: prop('apocalypse', 'Rigged/SK_Prop_Bed_Gurney_01', { base: 'gurney', fit: 0.95, yaw: 1 }),

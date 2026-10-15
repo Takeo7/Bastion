@@ -49,15 +49,15 @@ const WALL = /* glsl */ `
   if (h < 0.095) paint = vec3(0.16, 0.17, 0.16);
   float dirt = medNoise(along * vec2(1.9, 3.2) + 8.0);
   paint *= 0.93 + dirt * 0.07 - wear * medNoise(along * 7.0) * 0.17;
-  // Ragged islands of exposed masonry, with staggered brick joints.
+  // Sparse chips of exposed masonry; abandonment does not strip whole walls, with staggered brick joints.
   float wornPatch = medNoise(along * 1.4 + 31.0) + medNoise(along * 9.0) * 0.18;
-  float missing = step(0.99 - wear * 0.35, wornPatch) * step(0.2, wear);
+  float missing = step(1.14 - wear * 0.055, wornPatch) * step(0.2, wear);
   vec2 brickUv = along / vec2(0.29, 0.14);
   brickUv.x += mod(floor(brickUv.y), 2.0) * 0.5;
   vec2 joint = min(fract(brickUv), 1.0 - fract(brickUv));
   vec3 brick = mix(vec3(0.28, 0.13, 0.08), vec3(0.43, 0.23, 0.13), medHash(floor(brickUv)));
   brick = mix(brick, vec3(0.39, 0.36, 0.30), 1.0 - smoothstep(0.025, 0.055, min(joint.x, joint.y)));
-  float rim = step(0.965 - wear * 0.35, wornPatch) * step(0.2, wear);
+  float rim = step(1.115 - wear * 0.055, wornPatch) * step(0.2, wear);
   paint = mix(paint, vec3(0.48, 0.44, 0.35), rim);
   diffuseColor.rgb = mix(paint, brick, missing);
 `;
