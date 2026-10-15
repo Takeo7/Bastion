@@ -24,7 +24,7 @@ import { stepCost } from './path';
 import { Rng } from './rng';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from './grid';
 import { carPartner, decorCode, decorOf } from './decor';
-import type { Biome, Decor, DecorKind, GameState, GroundKind, Level, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
+import type { Biome, Decor, DecorKind, GameState, GroundKind, Level, MedicalSite, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
 
 /** Side of every procedural map, in tiles. */
 export const GEN_SIZE = 48;
@@ -50,6 +50,7 @@ export interface MissionLayout {
   elev: number[];
   /** What the floor of each tile is (procedural maps only). */
   ground?: GroundKind[];
+  medical?: MedicalSite[];
   /** What each piece of cover is meant to be (procedural maps only; cosmetic). */
   decor?: Decor[];
   /** Storeys of the building each tile belongs to, 0 outside (procedural maps only; GameState.storeys). */
@@ -366,6 +367,8 @@ interface Building {
   ruined?: boolean;
   /** A flat roof though it is furnished as a home (a motel). */
   flat?: boolean;
+  /** Clinical finish and damage, independent of furniture surviving a blast. */
+  medicalWear?: number;
 }
 
 /**
@@ -664,7 +667,19 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish): void {
     case 'clinic':
       corner('low', 'hospitalBed');
       corner('high', 'medicalShelf');
-      if (short >= 5) put(c, P(mid, short - 1), 'low', ['desk', toward(0, -1)]);
+      // Along the room's edge, with a central aisle. Different room shapes
+      // and shuffled corners give consultation rooms and wards their own plan.
+      if (short >= 3) {
+        [P(mid, short - 1), P(mid, 0), P(mid - 1, short - 1), P(mid - 1, 0)]
+          .some((p) => put(c, p, 'low', ['medicalCart', inward(room, p)]));
+      }
+      if (short >= 5) {
+        corner('high', 'medicalCabinet');
+        corner('low', rng.int(2) ? 'gurney' : 'wheelchair');
+      }
+      if (long >= 8 && short >= 5) {
+        for (const a of [2, long - 3]) put(c, P(a, 0), 'low', ['hospitalBed', toward(0, 1)]);
+      }
       break;
     case 'bare':
       break;
@@ -1879,7 +1894,7 @@ function cityLot(c: Canvas, lot: Rect, program: CityProgram, roads: boolean[], r
  * a slant, smaller and uneven blocks, houses that don't line up and small
  * squares on the corners.
  */
-function city(c: Canvas, rng: Rng, map: Style, role: Role, clinic = false): Rect {
+function city(c: Canvas, rng: Rng, map: Style, role: Role, clinic = false, hospital = false, ward = false): Rect {
   const S = c.width;
   const organic = rng.next() < 0.5 && !map.industrial;
   const style: Style = { ...map, organic };
@@ -1945,9 +1960,10 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role, clinic = false): Rect
         continue;
       }
       const isObj = l === objLot;
-      if (isObj && clinic) {
-        const b = building(c, l.r, rng, 'shop', frontOf(c, l.r, l.roads, rng), style, 'clinic');
-        b.storeys = 1;
+      if (isObj && (clinic || hospital)) {
+        const b = building(c, l.r, rng, hospital || ward ? 'corridor' : 'open', frontOf(c, l.r, l.roads, rng), style, 'clinic');
+        b.storeys = hospital ? 3 : 1;
+        b.medicalWear = hospital ? 0.85 : ward ? 0.45 : 0.08;
         objective = b.outer;
         continue;
       }
@@ -3248,6 +3264,10 @@ export interface GenOptions {
   itemOutdoors?: boolean;
   /** The opening's medicines belong inside Aldren's furnished clinic. */
   clinic?: boolean;
+  /** A hospital objective, including the rescue of Dr Nwosu. */
+  hospital?: boolean;
+  /** Explicit medical locations; ordinary houses keep their existing identity. */
+  medical?: 'clinic' | 'ward' | 'hospital';
   /** A scenario other than the biome's usual one (playtest 2026-10-14, #25): 'roadside' in the wilds, 'industrial' in a city. */
   site?: Site;
 }
@@ -3263,9 +3283,11 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   const flipY = rng.int(2) === 1;
   const swap = rng.int(2) === 1;
   const needsEvac = kind !== 'elimination';
-  const clinic = biome === 'city' && kind === 'recovery' && !!opts.clinic;
+  const clinic = biome === 'city' && ((kind === 'recovery' && !!opts.clinic) || opts.medical === 'clinic' || opts.medical === 'ward');
+  const hospital = biome === 'city' && ((kind === 'rescue' && !!opts.hospital) || opts.medical === 'hospital');
+  const ward = opts.medical === 'ward';
   const outdoorItem = kind === 'recovery' && !!opts.itemOutdoors && !clinic;
-  const role: Role = !outdoorItem && (kind === 'recovery' || kind === 'rescue' || (kind === 'hack' && biome !== 'wilds')) ? 'indoor' : 'open';
+  const role: Role = clinic || hospital || (!outdoorItem && (kind === 'recovery' || kind === 'rescue' || (kind === 'hack' && biome !== 'wilds'))) ? 'indoor' : 'open';
 
   // Keep the squad's corner clear.
   for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) c.reserve(x, y);
@@ -3275,7 +3297,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   const compound = biome === 'facility' ? facility(c, rng, style, role) : null;
   const objRect =
     compound?.objective ??
-    (biome === 'city' ? city(c, rng, { ...style, industrial: site === 'industrial' }, role, clinic) : site === 'roadside' ? roadside(c, rng, style, role) : wilds(c, rng, style, role));
+    (biome === 'city' ? city(c, rng, { ...style, industrial: site === 'industrial' }, role, clinic, hospital, ward) : site === 'roadside' ? roadside(c, rng, style, role) : wilds(c, rng, style, role));
   thinClutter(c, opts.seed);
   // Something to take cover behind on the squad's first move: barricades and crates, rocks in the wilds.
   const posts = [BARRICADE, CORNER, PAIR].map((parts) => (biome === 'wilds' ? dressed(parts, 'rock') : dressed(parts, 'barricade', 'crates')));
@@ -3426,6 +3448,12 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     return out;
   });
   const t = (p: Vec2 | null) => (p ? T(p) : null);
+  const medical: MedicalSite[] = c.buildings.flatMap((b) => {
+    if (b.medicalWear === undefined) return [];
+    const a = T(b.outer);
+    const z = T({ x: b.outer.x + b.outer.w - 1, y: b.outer.y + b.outer.h - 1 });
+    return [{ x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, wear: b.medicalWear }];
+  });
 
   return {
     id: `gen-${site ?? biome}-${opts.seed}`,
@@ -3437,6 +3465,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     tiles,
     elev,
     ground,
+    ...(medical.length ? { medical } : {}),
     decor,
     storeys,
     ...(levels.length ? { levels } : {}),

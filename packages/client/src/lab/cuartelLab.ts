@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { gearOf } from '../game/models';
 import { BastionSet } from '../strategy/bastion';
 import { Stage } from '../strategy/stage';
+import { loadBaseKit } from '../strategy/baseKit';
 import '../styles.css';
 import '../strategy/strategy.css';
 
@@ -24,10 +25,17 @@ document.body.append(stage.element);
 const bastion = new BastionSet(() => undefined);
 stage.add('bastion', bastion);
 const campaign = createCampaign([0], new Rng(3));
+const infirmary = new URLSearchParams(location.search).get('infirmary');
+const medicalPlot = infirmary ? campaign.base.plots.find((p) => !p.building) : undefined;
+if (medicalPlot) {
+  medicalPlot.building = 'infirmary';
+  medicalPlot.terrain = 'clear';
+  medicalPlot.level = Math.max(1, Math.min(3, Number(infirmary)));
+}
 bastion.setBase(campaign);
 const soldier = campaign.soldiers[0]!;
 bastion.setShowcase('rookie', PLAYER_COLORS[0], soldier.appearance, gearOf(1, 1), soldier.id);
-void stage.show('bastion', bastion.armory(), true);
+void stage.show('bastion', medicalPlot ? bastion.room(medicalPlot.id) : bastion.armory(), true);
 
 function canvas(): HTMLCanvasElement {
   return stage.element.querySelector('canvas')!;
@@ -56,3 +64,11 @@ function aoWithUnit(on: boolean): void {
 }
 
 (window as unknown as { __cuartel: unknown }).__cuartel = { stage, bastion, snap, aoWithUnit };
+window.addEventListener('keydown', (e) => { if (e.code === 'KeyP') void snap(infirmary ? `infirmary_base_${infirmary}` : 'cuartel'); });
+if (new URLSearchParams(location.search).has('snapshot')) {
+  void loadBaseKit().then(async () => {
+    for (let n = 0; n < 30; n++) await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    stage.frameNow();
+    await snap(`infirmary_base_${infirmary}`);
+  });
+}

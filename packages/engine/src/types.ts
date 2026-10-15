@@ -104,6 +104,10 @@ export type DecorKind =
   | 'bed'
   | 'hospitalBed'
   | 'medicalShelf'
+  | 'gurney'
+  | 'medicalCabinet'
+  | 'medicalCart'
+  | 'wheelchair'
   | 'desk'
   | 'wardrobe'
   | 'cabinet'
@@ -785,6 +789,15 @@ export interface MissionState {
   night?: boolean;
 }
 
+/** A medical building's bounds, including walls; wear is cosmetic, from 0 to 1. */
+export interface MedicalSite {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  wear: number;
+}
+
 export interface GameState {
   /** Number of events applied so far. Clients use it to detect gaps. */
   seq: number;
@@ -802,6 +815,8 @@ export interface GameState {
   elev: number[];
   /** Floor of each tile (procedural maps; missing on hand-made maps and older saves). */
   ground?: GroundKind[];
+  /** Clinical finishes stay attached to the building after furniture is destroyed. */
+  medical?: MedicalSite[];
   /**
    * What the cover of each tile is meant to look like (procedural maps; see
    * decor.ts). Cosmetic and never updated: a tile whose kind has changed since
