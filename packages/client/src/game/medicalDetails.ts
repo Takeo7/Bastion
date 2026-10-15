@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { medicalDebris } from './medicalDebris';
 import type { MedicalDetail } from '@bastion/engine';
 import type { Cutaway } from './buildings';
 import { extendShader } from './fogOfWar';
@@ -28,7 +29,9 @@ type Part = { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4; color: THRE
 const cache = new Map<string, Part[]>();
 const METAL = 0x83918e, RUST = 0x746554, WHITE = 0xd6d4c6, DARK = 0x343a37;
 
-export function medicalDetails(kind: MedicalDetail['kind']): Part[] {
+export function medicalDetails(kind: MedicalDetail['kind'], variant = 0): Part[] {
+  const debris = medicalDebris(kind, variant);
+  if (debris) return debris;
   const ready = cache.get(kind);
   if (ready) return ready;
   const parts: Part[] = [];
@@ -46,8 +49,22 @@ export function medicalDetails(kind: MedicalDetail['kind']): Part[] {
     }
     const g = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     g.setIndex(index); g.computeVertexNormals(); add(g.toNonIndexed(), WHITE, 0, 0, 0);
-    // Faint old stains, kept small enough for the body silhouette to lead.
-    box(0x775550, 0.02, base + 0.157, -0.20, 0.075, 0.006, 0.055);
+    // Blood follows the faceted fabric, so it neither floats above the
+    // drape nor disappears under its raised shoulders.
+    const clothHeight = (x: number, z: number) => {
+      const i = sections.findIndex((s) => s[0]! >= z), b = sections[Math.max(1, i)]!, a = sections[Math.max(0, i - 1)]!;
+      const t = (z - a[0]!) / (b[0]! - a[0]!);
+      const h = THREE.MathUtils.lerp(a[1]!, b[1]!, t), w = THREE.MathUtils.lerp(a[2]!, b[2]!, t);
+      return base + h * (1 - Math.abs(x) / w * 0.55) + 0.004;
+    };
+    const blood = [0.01, clothHeight(0.01, -0.27), -0.27], triangles: number[] = [];
+    for (let n = 0; n < 10; n++) {
+      const a = n / 10 * Math.PI * 2, x = 0.01 + Math.cos(a) * (n % 2 ? 0.055 : 0.08), z = -0.27 + Math.sin(a) * 0.065;
+      blood.push(x, clothHeight(x, z), z);
+    }
+    for (let n = 0; n < 10; n++) triangles.push(0, (n + 1) % 10 + 1, n + 1);
+    const stain = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(blood, 3));
+    stain.setIndex(triangles); stain.computeVertexNormals(); add(stain, 0x7c3433, 0, 0, 0);
   };
   if (kind === 'bareBed' || kind === 'coveredBed') {
     for (const x of [-0.25, 0.25]) for (const z of [-0.46, 0.46]) {

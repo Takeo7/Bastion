@@ -33,6 +33,11 @@ const FLOOR = /* glsl */ `
   vec3 tile = mix(vec3(0.64, 0.65, 0.60), vec3(0.79, 0.78, 0.70), r);
   float dust = medNoise(vMedicalWorld.xz * 0.75 + 21.0) * medNoise(uv * 1.8);
   tile *= 1.0 - dust * (0.10 + wear * 0.65);
+  // Tracked-in dirt and old moisture: broader than the tile cracks, with
+  // different stains on each storey. Keep the pale tile pattern readable.
+  float grime = smoothstep(0.43, 0.82, medNoise(vMedicalWorld.xz * 1.15 + vMedicalWorld.y * 3.1 + 63.0));
+  grime *= 0.60 + medNoise(vMedicalWorld.xz * 9.0) * 0.40;
+  tile = mix(tile, vec3(0.31, 0.30, 0.22), grime * (0.28 + wear * 0.30));
   float damaged = step(r, wear * wear * 0.38);
   float crack = abs(f.y - (0.18 + f.x * 0.48 + medNoise(vec2(f.x * 12.0, r * 71.0)) * 0.13));
   tile = mix(tile, vec3(0.17, 0.15, 0.13), damaged * (1.0 - smoothstep(0.005, 0.013 + aa * 0.5, crack)));
@@ -49,6 +54,10 @@ const WALL = /* glsl */ `
   if (h < 0.095) paint = vec3(0.16, 0.17, 0.16);
   float dirt = medNoise(along * vec2(1.9, 3.2) + 8.0);
   paint *= 0.93 + dirt * 0.07 - wear * medNoise(along * 7.0) * 0.17;
+  float damp = (1.0 - smoothstep(0.05, 0.48, h)) * medNoise(along * vec2(5.0, 1.7) + 47.0);
+  paint = mix(paint, vec3(0.25, 0.26, 0.19), damp * (0.35 + wear * 0.25));
+  float streaks = smoothstep(0.70, 0.92, medNoise(vec2(along.x * 21.0, 17.0))) * (1.0 - smoothstep(0.1, 1.15, h));
+  paint *= 1.0 - streaks * (0.10 + wear * 0.12);
   // Sparse chips of exposed masonry; abandonment does not strip whole walls, with staggered brick joints.
   float wornPatch = medNoise(along * 1.4 + 31.0) + medNoise(along * 9.0) * 0.18;
   float missing = step(1.14 - wear * 0.055, wornPatch) * step(0.2, wear);

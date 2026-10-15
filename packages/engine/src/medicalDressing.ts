@@ -1,3 +1,4 @@
+import { medicalAbandonment } from './medicalAbandonment';
 import { decorOf } from './decor';
 import { DIRS4 } from './grid';
 import { Rng } from './rng';
@@ -70,5 +71,5 @@ export function dressMedical(site: MedicalSite, width: number, tiles: TileKind[]
     const wall = shuffled(walls)[0];
     if (wall) add(r.use === 'ward' ? 'wallCross' : r.use === 'waiting' || r.use === 'reception' || r.use === 'nurses' ? 'safeSign' : 'cautionSign', wall.x, wall.y, r.z, wall.facing);
   }
-  return details;
+  return [...details, ...medicalAbandonment(site, width, tiles, decor, levels, seed, reserved, details)];
 }

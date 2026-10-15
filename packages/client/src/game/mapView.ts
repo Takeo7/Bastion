@@ -168,6 +168,8 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
 }
 
 /** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
+const MEDICAL_FLAT = new Set(['bloodPool', 'bloodDrops', 'floorGrime', 'scatteredPapers']);
+const MEDICAL_SCATTER = new Set([...MEDICAL_FLAT, 'medicalWaste', 'overturnedChair', 'fallenIV', 'spilledSupplies', 'rumpledLinen']);
 const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'hospitalBed', 'medicalShelf', 'gurney', 'medicalCart', 'medicalCabinet', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'bedsideTable', 'visitorChair', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'clinicalBin', 'consultDesk', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire']);
 
 /**
@@ -232,6 +234,7 @@ interface Kit {
   snowbank: THREE.MeshStandardMaterial | null;
   clinical: THREE.MeshStandardMaterial | null;
   clinicalWall: THREE.MeshStandardMaterial | null;
+  clinicalDirt: THREE.MeshStandardMaterial | null;
 }
 
 /** One kind of placed geometry (a prop's part, the floor slabs): its instances go to the map's batch. */
@@ -411,7 +414,7 @@ export class MapView {
     const slab = new THREE.BoxGeometry(1, 0.1, 1);
     this.geometries.push(slab);
     return {
-      batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), clinical: null, clinicalWall: null,
+      batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), clinical: null, clinicalWall: null, clinicalDirt: null,
       surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground),
       snowbank: this.snow ? this.own(new THREE.MeshStandardMaterial({ map: snowTexture(), color: 0xe3f0ff, roughness: 0.98 })) : null,
     };
@@ -917,10 +920,12 @@ export class MapView {
       if (!tile) continue;
       const isBed = d.kind === 'bareBed' || d.kind === 'coveredBed';
       const isBody = d.kind === 'corpseCivilian' || d.kind === 'corpseStaff' || d.kind === 'coveredCorpse';
-      const isWall = d.kind === 'wallCross' || d.kind === 'cautionSign' || d.kind === 'safeSign';
+      const isWall = d.kind === 'wallCross' || d.kind === 'cautionSign' || d.kind === 'safeSign' || d.kind === 'wallBlood';
+      const scatter = MEDICAL_SCATTER.has(d.kind), flat = MEDICAL_FLAT.has(d.kind);
       if (isBed && (tile !== 'low' || look?.kind !== 'hospitalBed')) continue;
       if (isBody && tile !== 'floor') continue;
-      if (!isBed && !isBody && !isWall && tile !== 'low' && tile !== 'high') continue;
+      if (scatter && tile !== 'floor' && tile !== 'low' && tile !== 'high') continue;
+      if (!scatter && !isBed && !isBody && !isWall && tile !== 'low' && tile !== 'high') continue;
       const normal = DIRS4[d.facing]!;
       const wallX = d.x - normal.x, wallY = d.y - normal.y;
       if (isWall && st?.tiles[wallY * s.width + wallX] !== 'wall') continue;
@@ -931,15 +936,19 @@ export class MapView {
         kit.clinical = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
         floorFadePatch(kit.clinical, buildings.cutaway);
       }
+      if (d.kind === 'floorGrime' && !kit.clinicalDirt) {
+        kit.clinicalDirt = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, transparent: true, opacity: 0.24, depthWrite: false }));
+        floorFadePatch(kit.clinicalDirt, buildings.cutaway);
+      }
       if (isWall && !kit.clinicalWall) {
         kit.clinicalWall = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
         floorFadePatch(kit.clinicalWall, buildings.cutaway); medicalWallPatch(kit.clinicalWall, buildings.cutaway);
       }
       const outside = wallX <= b.x || wallY <= b.y || wallX >= b.x + b.w - 1 || wallY >= b.y + b.h - 1;
-      for (const part of medicalDetails(d.kind)) batch.add(part.geometry, isWall ? kit.clinicalWall! : kit.clinical, at.clone().multiply(part.matrix), true, {
+      for (const part of medicalDetails(d.kind, d.variant)) batch.add(part.geometry, isWall ? kit.clinicalWall! : d.kind === 'floorGrime' ? kit.clinicalDirt! : kit.clinical, at.clone().multiply(part.matrix), !flat && !isWall, {
         color: [part.color.r, part.color.g, part.color.b], aFloor: [floor.building + 1, floor.level],
         ...(isWall ? { aMedicalWall: outside ? [-normal.x, -normal.y] : [0, 0] } : {}),
-      }, !isWall);
+      }, !flat && !isWall);
       if (d.kind === 'coveredBed') addSyntyId('ivStand', at.clone().multiply(new THREE.Matrix4().makeTranslation(-0.31, 0, 0.22)));
     }
     decorNow = decor;

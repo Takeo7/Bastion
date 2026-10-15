@@ -815,12 +815,13 @@ export interface MedicalRoom {
 }
 
 export interface MedicalDetail {
-  kind: 'corpseCivilian' | 'corpseStaff' | 'coveredCorpse' | 'coveredBed' | 'bareBed' | 'privacyScreen' | 'medicalSupplies' | 'luggage' | 'crutches' | 'books' | 'wallCross' | 'cautionSign' | 'safeSign';
+  kind: 'corpseCivilian' | 'corpseStaff' | 'coveredCorpse' | 'coveredBed' | 'bareBed' | 'privacyScreen' | 'medicalSupplies' | 'luggage' | 'crutches' | 'books' | 'wallCross' | 'cautionSign' | 'safeSign' | 'bloodPool' | 'bloodDrops' | 'wallBlood' | 'floorGrime' | 'scatteredPapers' | 'medicalWaste' | 'overturnedChair' | 'fallenIV' | 'spilledSupplies' | 'rumpledLinen';
   x: number;
   y: number;
   z: number;
   facing: number;
   height: number;
+  variant?: number;
 }
 
 /** A medical building's bounds, including walls; wear is cosmetic, from 0 to 1. */
