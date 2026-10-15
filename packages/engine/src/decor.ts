@@ -64,6 +64,11 @@ const IDS: Record<DecorKind, number> = {
   medicalCabinet: 48,
   medicalCart: 49,
   wheelchair: 50,
+  receptionDesk: 51,
+  waitingSeats: 52,
+  examTable: 53,
+  medicalMonitor: 54,
+  xray: 55,
 };
 
 const KINDS: DecorKind[] = [];

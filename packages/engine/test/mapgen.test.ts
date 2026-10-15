@@ -84,7 +84,7 @@ describe('procedural maps', () => {
       const room = roomAt(s, p);
       expect(room, label).not.toBeNull();
       const furniture = new Set(room!.tiles.flatMap((q) => DIRS4.map((d) => decorOf(s.decor![(q.y + d.y) * s.width + q.x + d.x])?.kind)));
-      expect(furniture.has('hospitalBed'), label).toBe(true);
+      expect(furniture.has('examTable'), label).toBe(true);
       expect(furniture.has('medicalShelf'), label).toBe(true);
       const scout = s.units.find((u) => u.team === 'xcom')!;
       const reach = computeReach({ ...s, units: [scout] }, scout, 100_000);

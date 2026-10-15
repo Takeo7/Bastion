@@ -108,6 +108,11 @@ export type DecorKind =
   | 'medicalCabinet'
   | 'medicalCart'
   | 'wheelchair'
+  | 'receptionDesk'
+  | 'waitingSeats'
+  | 'examTable'
+  | 'medicalMonitor'
+  | 'xray'
   | 'desk'
   | 'wardrobe'
   | 'cabinet'
@@ -789,6 +794,16 @@ export interface MissionState {
   night?: boolean;
 }
 
+export type MedicalUse = 'reception' | 'consultation' | 'treatment' | 'ward' | 'equipment' | 'nurses';
+export interface MedicalRoom {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z: number;
+  use: MedicalUse;
+}
+
 /** A medical building's bounds, including walls; wear is cosmetic, from 0 to 1. */
 export interface MedicalSite {
   x: number;
@@ -796,6 +811,8 @@ export interface MedicalSite {
   w: number;
   h: number;
   wear: number;
+  kind?: 'clinic' | 'ward' | 'hospital';
+  rooms?: MedicalRoom[];
 }
 
 export interface GameState {

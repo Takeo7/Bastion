@@ -550,7 +550,7 @@ export function createMission(opts: MissionOptions): GameState {
     tiles,
     elev: [...layout.elev],
     ...(layout.ground ? { ground: [...layout.ground] } : {}),
-    ...(layout.medical ? { medical: layout.medical.map((b) => ({ ...b })) } : {}),
+    ...(layout.medical ? { medical: layout.medical.map((b) => ({ ...b, ...(b.rooms ? { rooms: b.rooms.map((r) => ({ ...r })) } : {}) })) } : {}),
     ...(layout.decor ? { decor: [...layout.decor] } : {}),
     ...(layout.storeys ? { storeys: [...layout.storeys] } : {}),
     ...(layout.levels ? { levels: layout.levels.map((l) => ({ tiles: [...l.tiles], ...(l.decor ? { decor: [...l.decor] } : {}) })) } : {}),

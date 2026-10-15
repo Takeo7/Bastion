@@ -47,6 +47,7 @@ const state: GameState = handmade
   : createMission({ map: { kind: 'generated', biome, seed, site, ...(medical ? { medical } : {}) } as MapSource, slots: [0], rng: new Rng(seed), kind: (params.get('kind') as MissionKind) ?? (medical === 'hospital' ? 'rescue' : medical ? 'recovery' : 'elimination'), difficulty: 3,
     ...(story ? { campaignMission: { id: 'medical-reference', name: medical === 'clinic' ? 'El consultorio de Aldren' : 'La doctora', story } } : {}),
   });
+if (params.has('exterior')) state.units = []; // Synthetic façade inspection, without unit-driven cutaway.
 setTerrain(state);
 const mapView = new MapView();
 const units = new UnitViews();
@@ -118,11 +119,13 @@ setView(viewName);
 if (medical && state.medical?.[0]) {
   const b = state.medical[0];
   const level = Math.max(0, Math.min(medical === 'hospital' ? 2 : 0, Number(params.get('level') ?? 0)));
-  focus.hover = { x: Math.floor(b.x + b.w / 2), y: Math.floor(b.y + b.h / 2), z: level };
-  focus.level = level;
+  if (!params.has('exterior')) {
+    focus.hover = { x: Math.floor(b.x + b.w / 2), y: Math.floor(b.y + b.h / 2), z: level };
+    focus.level = level;
+  }
   rig.focus(new THREE.Vector3(b.x + b.w / 2, level * 2.3, b.y + b.h / 2), true);
   const camera = rig as unknown as { distance: number; desiredDistance: number };
-  camera.distance = camera.desiredDistance = Math.max(9, Math.max(b.w, b.h) * 1.55);
+  camera.distance = camera.desiredDistance = Math.max(9, Math.max(b.w, b.h) * (params.has('exterior') ? 2.1 : 1.55));
 }
 container.addEventListener('wheel', (e) => rig.zoom(e.deltaY), { passive: true });
 let dragging = false;

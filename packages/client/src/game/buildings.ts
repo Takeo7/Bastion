@@ -291,7 +291,7 @@ export class BuildingPlan {
         const look = hash(r.x0, r.y0, 5);
         // Sheet metal (#25): the sawmill by the forest road, three warehouses in four on an industrial estate.
         const shed = (kind === 'barn' && s.site === 'roadside') || (kind === 'hall' && s.site === 'industrial' && look < 0.75);
-        const kit: KitId = kind === 'medical' ? 'medical' : shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
+        const kit: KitId = kind === 'medical' ? 'house' : shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
         // As tall as the engine says (it stops sight up to its roof: GameState.storeys), read on a tile of its floor
         // (a wall two share takes the taller one's); older saves and hand-made maps: town's shops and offices two or three, some houses two.
         const floorTile = (() => {
@@ -1863,7 +1863,7 @@ export class BuildingsView {
         const bd = b >= 0 ? this.plan.buildings[b] : undefined;
         const base = (bd?.base ?? 0) + k * STOREY;
         const d = DIRS4[look.facing]!;
-        const wood = bd ? STAIR_WOOD : STEEL;
+        const wood = bd?.kind === 'medical' ? new THREE.Color(0x79888b) : bd ? STAIR_WOOD : STEEL;
         out.level = k;
         for (let n = 0; n < STEPS; n++) {
           // Along the climb, from the tile's back edge (-0.5) to its front (+0.5).

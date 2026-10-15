@@ -439,9 +439,13 @@ const FACILITY_ART: Record<string, Art> = {
     }
     for (const [x, z, w, d, h] of [[0, -2.15, 4.5, 0.15, 1.75], [-2.15, 0, 0.15, 4.3, 1.25], [2.15, 0, 0.15, 4.3, 1.25]] as const) {
       k.box(plaster, w, h, d, x, 0.06, z);
-      k.box(lower, w + 0.005, 0.65, d + 0.005, x, 0.06, z);
-      k.box(band, w + 0.015, 0.15, d + 0.015, x, 0.71, z);
-      k.box(grout, w + 0.01, 0.07, d + 0.01, x, 0.06, z);
+      // Clinical lining on the inward face; the exterior remains plain plaster.
+      const ix = w < d ? -Math.sign(x) * (w / 2 + 0.009) : 0;
+      const iz = d < w ? -Math.sign(z) * (d / 2 + 0.009) : 0;
+      const fw = w < d ? 0.012 : w, fd = d < w ? 0.012 : d;
+      k.box(lower, fw, 0.65, fd, x + ix, 0.06, z + iz);
+      k.box(band, fw, 0.15, fd, x + ix, 0.71, z + iz);
+      k.box(grout, fw, 0.07, fd, x + ix, 0.06, z + iz);
     }
     // A short canopy at the back leaves the beds visible in the base view.
     k.box(mat(0xb5b8b3), 4.5, 0.10, 0.75, 0, 1.82, -1.85);

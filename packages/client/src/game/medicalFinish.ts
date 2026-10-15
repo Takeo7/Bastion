@@ -86,8 +86,9 @@ export class MedicalFinish {
       shader.uniforms.uMedical = { value: this.texture };
       shader.uniforms.uMedicalSize = { value: this.size };
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vMedicalWorld;\nvarying vec3 vMedicalNormal;')
+        .replace('#include <common>', `#include <common>\nvarying vec3 vMedicalWorld;\nvarying vec3 vMedicalNormal;${surface === 'wall' ? '\nvarying vec2 vMedicalOut;' : ''}`)
         .replace('#include <project_vertex>', `#include <project_vertex>
+          ${surface === 'wall' ? 'vMedicalOut = aCut.yz;' : ''}
           vec4 medWorld = vec4(transformed, 1.0);
           vec3 medNormal = objectNormal;
           #ifdef USE_BATCHING
@@ -102,13 +103,13 @@ export class MedicalFinish {
           vMedicalNormal = normalize(mat3(modelMatrix) * medNormal);
         `);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\n${COMMON}`)
+        .replace('#include <common>', `#include <common>\n${COMMON}${surface === 'wall' ? '\nvarying vec2 vMedicalOut;' : ''}`)
         .replace('#include <roughnessmap_fragment>', `
           vec2 medUv = vMedicalWorld.xz / uMedicalSize;
           vec4 medical = texture2D(uMedical, medUv);
           if (medical.r > 0.01 && all(greaterThanEqual(medUv, vec2(0))) && all(lessThan(medUv, vec2(1)))
               && vMedicalWorld.y < medical.g * 255.0 * ${STOREY.toFixed(2)} - 0.08
-              && ${surface === 'floor' ? `vMedicalNormal.y > 0.8 && mod(vMedicalWorld.y + 0.01, ${STOREY.toFixed(2)}) < 0.06` : 'abs(vMedicalNormal.y) < 0.5'}) {
+              && ${surface === 'floor' ? `vMedicalNormal.y > 0.8 && mod(vMedicalWorld.y + 0.01, ${STOREY.toFixed(2)}) < 0.06` : 'abs(vMedicalNormal.y) < 0.5 && (dot(vMedicalOut, vMedicalOut) < 0.01 || dot(vMedicalNormal.xz, vMedicalOut) < -0.15)'}) {
             float wear = clamp((medical.r * 255.0 - 30.0) / 210.0, 0.0, 1.0);
             ${surface === 'floor' ? FLOOR : WALL}
           }

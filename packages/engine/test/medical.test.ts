@@ -8,7 +8,7 @@ import { createMission } from '../src/setup';
 import type { MedicalSite } from '../src/types';
 
 const inside = (b: MedicalSite, x: number, y: number) => x >= b.x && y >= b.y && x < b.x + b.w && y < b.y + b.h;
-const kinds = new Set(['hospitalBed', 'medicalShelf', 'gurney', 'medicalCabinet', 'medicalCart', 'wheelchair']);
+const kinds = new Set(['hospitalBed', 'medicalShelf', 'gurney', 'medicalCabinet', 'medicalCart', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray']);
 
 describe('medical locations', () => {
   it('scopes clinical furniture and wear to explicit locations, with varied plans', () => {
@@ -70,6 +70,46 @@ describe('medical locations', () => {
       }
       const vip = Object.values(s.units).find((u) => u.captive)!;
       expect(reached(vip.pos.x, vip.pos.y, vip.pos.z), label).toBe(true);
+    }
+  }, 30_000);
+
+  it('gives compact clinics separate reception, consultation and equipment rooms', () => {
+    for (let seed = 0; seed < 80; seed++) {
+      const s = createMission({ map: { kind: 'generated', biome: 'city', seed: seed * 104729, medical: 'clinic' }, slots: [0], rng: new Rng(seed), kind: 'recovery' });
+      const b = s.medical![0]!;
+      expect(Math.min(b.w, b.h)).toBeLessThanOrEqual(11);
+      expect(Math.max(b.w, b.h)).toBeLessThanOrEqual(11);
+      expect(b.rooms?.map((r) => r.use)).toEqual(['reception', 'consultation', 'equipment']);
+      const scout = s.units.find((u) => u.team === 'xcom')!;
+      const reach = computeReach({ ...s, units: [scout] }, scout, 100_000);
+      for (const r of b.rooms!) {
+        const furniture: string[] = [];
+        let reached = 0, doors = 0;
+        for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+          const i = y * s.width + x, d = decorOf(s.decor?.[i]);
+          if (d) furniture.push(d.kind);
+          if (kindAt(s, { x, y, z: 0 }) === 'floor') { expect(reach.cost.has(i), `clinic/${seed}/${r.use}`).toBe(true); reached++; }
+          for (const v of DIRS4) if (kindAt(s, { x: x + v.x, y: y + v.y, z: 0 }) === 'door') doors++;
+        }
+        expect(reached).toBeGreaterThan(0);
+        expect(doors).toBeGreaterThan(0);
+        expect(furniture).toContain(r.use === 'reception' ? 'receptionDesk' : 'examTable');
+        if (r.use === 'equipment') expect(furniture).toContain('xray');
+      }
+    }
+  }, 30_000);
+
+  it('restricts large hospitals to cities and gives their floors distinct functions', () => {
+    for (const biome of ['city', 'wilds', 'facility'] as const) for (let seed = 0; seed < 16; seed++) {
+      const s = createMission({ map: { kind: 'generated', biome, seed: seed * 7919, medical: 'hospital' }, slots: [0], rng: new Rng(seed), kind: 'rescue' });
+      if (biome !== 'city') { expect(s.medical).toBeUndefined(); continue; }
+      const b = s.medical![0]!;
+      expect(Math.min(b.w, b.h)).toBeGreaterThanOrEqual(13);
+      for (let z = 0; z < 3; z++) {
+        const uses = b.rooms!.filter((r) => r.z === z).map((r) => r.use);
+        expect(uses).toContain(z === 0 ? 'reception' : 'ward');
+        expect(uses).toContain(z === 1 ? 'nurses' : 'equipment');
+      }
     }
   }, 30_000);
 
