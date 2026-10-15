@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { HEADS, partColor, TEMPLATES, type Appearance, type ArmorPart, type Arms, type FoundWeaponId, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { HEADS, partColor, TEMPLATES, type Alarm, type Appearance, type ArmorPart, type Arms, type FoundWeaponId, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
 import { CROWD, type Baker, type Member } from './crowd';
 import type { Armament, Blow, FigurePose, FigureRig, Gear } from './figures';
 import { gaitsOf, type GaitMotion, type GaitStyle } from './gaits';
@@ -16,7 +17,6 @@ import {
   HEAD_GEAR,
   HEADGEAR,
   PROPS,
-  RELAY_PROP,
   SQUAD_BODIES,
   STANCE_ORDER,
   SURVIVOR_CHOICES,
@@ -30,6 +30,7 @@ import {
   type CharacterId,
   type Death,
   type HeadgearId,
+  type PropId,
   type Hit,
   type Stance,
   type SyntyBone,
@@ -422,11 +423,9 @@ export class SyntyFigure implements FigureRig {
   /** The character's model, dressed (null while it loads), and the atlas it is painted from. */
   private model: THREE.Object3D | null = null;
   private atlas: AtlasId | null = null;
-  /** Its place in the crowd while it is there (crowd.ts), and where in its loops it plays. */
+  /** Its place in the crowd while it is there (crowd.ts), the loop it plays there, at what rate and from what phase. */
   private member: Member | null = null;
-  private readonly crowdPhase = Math.random();
-  /** While baking: the loop's length, which the sways keep in step with so it loops cleanly (hz). */
-  private lockTo = 0;
+  private crowd = { loop: -1, rate: 0, phase: 0 };
   /** A figure that bakes for the crowd: it poses itself, always. */
   private baking = false;
   cutAway = false;
@@ -748,7 +747,8 @@ export class SyntyFigure implements FigureRig {
       return;
     }
     if (this.rests(p, time)) return;
-    const dt = THREE.MathUtils.clamp(time - this.clock, 0, 0.25);
+    // (Just out of the crowd, its clip is where the crowd's loop had got to: no time to catch up on.)
+    const dt = this.clock === -Infinity ? 0 : THREE.MathUtils.clamp(time - this.clock, 0, 0.25);
     this.clock = time;
     const { d, p: pos } = this;
     const dead = this.spec.dead;
@@ -783,10 +783,9 @@ export class SyntyFigure implements FigureRig {
     // A melee stroke turns the living's upper body back and then across (the weapon goes with it); the dead grab instead.
     const swing = (p.swing ?? 0) * live;
     const grab = dead ? Math.abs(swing) : 0;
-    const twist = shamble * Math.sin(time * this.hz(1.7) + p.phase) * 0.12 * style.twist * live + this.blade + (dead ? 0 : -swing * 0.75);
+    const twist = shamble * this.sway(1.7, 1.7, 0, p, time) * 0.12 * style.twist * live + this.blade + (dead ? 0 : -swing * 0.75);
     // Without clips the hips already roll (legs()); with them the roll goes on here, once a stride as they move.
-    const sway = p.run > 0.05 ? Math.PI * CADENCE[this.gait.motion] * this.gait.speed : 1.3;
-    const roll = anim ? shamble * Math.sin(time * this.hz(sway) + p.phase) * (0.05 + p.run * 0.08) * style.roll * live : 0;
+    const roll = anim ? shamble * this.sway(1.3, Math.PI * CADENCE[this.gait.motion], 0, p, time) * (0.05 + p.run * 0.08) * style.roll * live : 0;
     if (anim) d[B.Hips]!.premultiply(rot(q1, Z, roll));
     else for (let k = 0; k < SPINE.length; k++) d[SPINE[k]!]!.copy(d[B.Hips]!);
     this.tilt(B.Spine_01, roll, twist * 0.3, lean * 0.35);
@@ -845,7 +844,7 @@ export class SyntyFigure implements FigureRig {
       // Arms out in front, swaying; raised further on a lunge.
       for (let k = 0; k < SIDES.length; k++) {
         const [side, s] = SIDES[k]!;
-        const sway = Math.sin(time * this.hz(1.6) + p.phase + s) * 0.05 * live;
+        const sway = this.sway(1.6, 1.6, s, p, time) * 0.05 * live;
         v3.set(s * 0.12 * (1 - 0.7 * grab), r.chest - 0.08 + aim * 0.12 + sway + grab * 0.05, r.p[B.Spine_03]!.z + 0.4 + aim * 0.08 + grab * 0.12)
           .sub(r.p[B.Spine_03]!)
           .applyQuaternion(d[B.Spine_03]!)
@@ -913,17 +912,36 @@ export class SyntyFigure implements FigureRig {
     if (this.body.parent) this.pivot.remove(this.body);
     this.root.updateWorldMatrix(true, false);
     m1.copy(this.root.matrixWorld).multiply(m2.makeRotationY(p.yaw));
-    CROWD.set(this.member, m1, loop, this.crowdPhase, loop === 0 ? this.gait.speed : 1, this.root.visible && !this.cutAway);
+    // The loop plays on from where it is: from its own clip's point as it joins (or changes loop), from the
+    // crowd's if only the rate changes.
+    const rate = loop === 0 ? this.gait.speed : 1;
+    const c = this.crowd;
+    if (c.loop !== loop || c.rate !== rate) {
+      const k = loop === 0 ? WALK : -1;
+      const at = c.loop === loop ? this.crowdCycle() : this.anim!.cycle(k);
+      const phase = at - (CROWD.clock * rate) / this.anim!.seconds(k);
+      this.crowd = { loop, rate, phase: phase - Math.floor(phase) };
+    }
+    CROWD.set(this.member, m1, loop, this.crowd.phase, rate, this.root.visible && !this.cutAway);
     this.clock = time;
     this.lastYaw = p.yaw;
     return true;
   }
 
-  /** Out of the crowd: its own figure again, posed at once. */
+  /** How far through the loop it plays in the crowd it is now (any number: its fraction). */
+  private crowdCycle(): number {
+    const c = this.crowd;
+    return (CROWD.clock * c.rate) / this.anim!.seconds(c.loop === 0 ? WALK : -1) + c.phase;
+  }
+
+  /** Out of the crowd: its own figure again, posed at once, its clip at the point the crowd's loop had got to. */
   private leaveCrowd(): void {
     if (!this.member) return;
     CROWD.leave(this.member);
     this.member = null;
+    const c = this.crowd;
+    if (c.loop >= 0) this.anim?.setCycle(c.loop === 0 ? WALK : -1, this.crowdCycle());
+    c.loop = -1;
     if (!this.body.parent) this.pivot.add(this.body);
     this.clock = -Infinity;
   }
@@ -940,10 +958,19 @@ export class SyntyFigure implements FigureRig {
     CROWD.bake(key, () => fig.baker());
   }
 
-  /** A frequency kept in step with the loop being baked (whole turns over it); as it is otherwise. */
-  private hz(w: number): number {
-    if (!this.lockTo) return w;
-    return (2 * Math.PI * Math.max(1, Math.round((w * this.lockTo) / (2 * Math.PI)))) / this.lockTo;
+  /**
+   * One of the dead's sways (the twist, the hips' roll, the arms), `w` radians
+   * a second standing and `moving` on the move, `offset` along. With clips it
+   * keeps to their loops, the stance's and the gait's (whole turns over each,
+   * blended as the unit sets off and stops), as the crowd has them baked: a
+   * body goes in and out of the crowd without a jolt.
+   */
+  private sway(w: number, moving: number, offset: number, p: FigurePose, time: number): number {
+    const a = this.anim;
+    if (!a) return Math.sin(time * (p.run > 0.05 ? moving : w) + p.phase + offset);
+    const at = (k: number, w: number) => Math.sin(2 * Math.PI * Math.max(1, Math.round((w * a.seconds(k)) / (2 * Math.PI))) * a.cycle(k) + offset);
+    const run = THREE.MathUtils.clamp(p.run, 0, 1);
+    return lerp(run < 1 ? at(-1, w) : 0, run > 0 ? at(this.gait.motion, moving) : 0, run);
   }
 
   /**
@@ -981,8 +1008,7 @@ export class SyntyFigure implements FigureRig {
     const pose: FigurePose = { crouch: 0, aim: 0, run: 0, recoil: 0, hit: 0, flash: 0, fall: 0, lean: 0, hop: 0, yaw: 0, phase: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0 };
     const v = new THREE.Vector3();
     const toYaw = new THREE.Matrix4();
-    let current = -1;
-    let start = 0;
+    this.setGait('walk', 1);
     return {
       vertices,
       geometry,
@@ -994,17 +1020,14 @@ export class SyntyFigure implements FigureRig {
       },
       frame: (k, f, positions, normals) => {
         const l = loops[k]!;
-        if (k !== current) {
-          current = k;
-          this.setGait('walk', 1);
-          start = this.clock + 1;
-        }
         pose.run = l.run;
-        this.lockTo = l.seconds;
         this.seen = true;
         this.far = false;
-        this.applyPose(pose, start + (f / l.frames) * l.seconds);
-        this.lockTo = 0;
+        // Frame f is f / frames through the loop: its clip put there and posed as it is, no time going by
+        // (the sways keep to the clip: sway).
+        a.setCycle(k === 0 ? WALK : -1, f / l.frames);
+        this.clock = 0;
+        this.applyPose(pose, 0);
         this.root.updateMatrixWorld(true);
         skinned.skeleton.update();
         toYaw.copy(this.yaw.matrixWorld).invert().multiply(skinned.matrixWorld);
@@ -1111,7 +1134,8 @@ export class SyntyFigure implements FigureRig {
   private rests(p: FigurePose, time: number): boolean {
     const seen = this.seen;
     this.seen = false;
-    if (!SYNTY_LOD.on) return false;
+    // A figure baking for the crowd poses every frame it is asked to.
+    if (!SYNTY_LOD.on || this.baking) return false;
     if (!this.root.visible) return true;
     // A body lying still keeps its pose until something moves it (a hit, getting up).
     if (p.fall >= 1 && p.hit < 0.01 && p.recoil < 0.01) {
@@ -1428,10 +1452,74 @@ const tmpU = new THREE.Vector3();
 const tmpR = new THREE.Vector3();
 const tmpF = new THREE.Vector3();
 
-// ------------------------------------------------------------------ props
+// ------------------------------------------------------------------ the alarm
 
-/** An objective that is a thing, not a person (the loudspeaker): it only turns, flashes and topples. */
-class SyntyProp implements FigureRig {
+/**
+ * How each alarm looks: its model (none for the factory's, made here: motor),
+ * its longest side (tiles) and the quarter turns that point its nose along
+ * +z; the pole the factory's stands on (tiles high); its lights, from the
+ * middle of the model's top (x across, z along, y up), and their colours; how
+ * many turns a second they go round, and the seconds they take to run down
+ * once silenced (0: out at once, with a spark).
+ */
+interface SirenLook {
+  prop: PropId | null;
+  fit: number;
+  turn: number;
+  pole: number;
+  lights: { x: number; y: number; z: number; color: number }[];
+  spin: number;
+  stop: number;
+}
+
+const SIRENS: Record<Alarm, SirenLook> = {
+  police: { prop: 'sirenPolice', fit: 1.95, turn: 0, pole: 0, lights: [{ x: -0.11, y: -0.02, z: -0.12, color: 0x2f6bff }, { x: 0.11, y: -0.02, z: -0.12, color: 0xff2a2a }], spin: 1.6, stop: 0 },
+  ambulance: { prop: 'sirenAmbulance', fit: 1.95, turn: 3, pole: 0, lights: [{ x: -0.33, y: -0.01, z: 0.27, color: 0x2f6bff }, { x: 0.33, y: -0.01, z: 0.27, color: 0xff2a2a }], spin: 1.4, stop: 0 },
+  factory: { prop: null, fit: 0, turn: 0, pole: 2.1, lights: [{ x: 0, y: 0.04, z: 0, color: 0xff8a1a }], spin: 1.1, stop: 2.5 },
+};
+
+/** A sabotage's objective as the battle has it: its alarm, and where a car's nose points (radians about y; 0 along +z). */
+export interface Siren {
+  alarm: Alarm;
+  heading: number;
+}
+
+/** A light's beam: white in the middle, gone at the edge (a texture made here). */
+let beamTexture: THREE.Texture | null = null;
+function beam(): THREE.Texture {
+  if (beamTexture) return beamTexture;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, 'rgba(255,255,255,1)');
+  r.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r;
+  g.fillRect(0, 0, 128, 128);
+  beamTexture = new THREE.CanvasTexture(c);
+  return beamTexture;
+}
+
+/** Two fans of light either side of a lamp, flat, `radius` long: what goes round. */
+function beams(color: number, radius: number, opacity: number): THREE.Mesh {
+  const fan = (start: number) => new THREE.CircleGeometry(radius, 12, start, 0.7);
+  const geometry = mergeGeometries([fan(-0.35), fan(Math.PI - 0.35)])!.rotateX(-Math.PI / 2);
+  const material = new THREE.MeshBasicMaterial({ color, map: beam(), transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
+  return new THREE.Mesh(geometry, material);
+}
+
+/**
+ * The sabotage's objective (playtest 15/10 #14), as the mission's alarm says:
+ * a patrol car or an ambulance with its lights going round, two tiles long
+ * (the unit on the back tile, the nose over the one the map blocks for it,
+ * `sirenCar`), or a factory's motor siren on a pole with its beacon. Each
+ * light throws two fans that sweep the air and, wider and fainter, the
+ * ground. Silenced (its fall), the cars' lights go out at once with a spark;
+ * the motor runs down and its beacon fades with it (as Red's sound does:
+ * sfx.ts SIREN_STOP). It never turns to face anyone, nor topples.
+ */
+class SirenRig implements FigureRig {
   readonly root = new THREE.Group();
   readonly yaw = new THREE.Group();
   readonly pivot = new THREE.Group();
@@ -1440,37 +1528,178 @@ class SyntyProp implements FigureRig {
   readonly flash: THREE.Mesh;
   readonly drone = null;
   readonly hip = 0;
-  readonly chest = 1.0;
-  readonly top = 1.6;
+  readonly chest: number;
+  readonly top: number;
+  private readonly look: SirenLook;
+  /** The model and its lights, the nose along +z (half a tile ahead for a car, over the tile it is given). */
+  private readonly body = new THREE.Group();
+  private readonly lamps: { group: THREE.Group; lens: THREE.Mesh; air: THREE.Mesh; ground: THREE.Mesh }[] = [];
+  private readonly sparks: THREE.Points;
+  private readonly flying: { v: THREE.Vector3; at: number }[] = [];
+  private angle = Math.random() * Math.PI * 2;
+  private clock = 0;
+  /** When it was silenced (its clock); −1 sounding. */
+  private silenced = -1;
 
-  constructor(id: keyof typeof PROPS) {
-    const a = PROPS[id];
+  constructor(alarm: Alarm, heading: number) {
+    const look = (this.look = SIRENS[alarm]);
+    const car = !look.pole;
     this.root.add(this.yaw);
     this.yaw.add(this.pivot);
-    this.gunPivot.position.set(0, 1.2, 0);
+    this.yaw.rotation.y = heading;
+    this.pivot.add(this.gunPivot, this.body);
     this.gunPivot.add(this.muzzle);
-    this.pivot.add(this.gunPivot);
+    if (car) this.body.position.z = 0.5;
+    // The factory's pole and the box at its foot, ours.
+    if (!car) {
+      const steel = new THREE.MeshStandardMaterial({ color: 0x6d7378, metalness: 0.55, roughness: 0.5 });
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, look.pole, 8).translate(0, look.pole / 2, 0), steel);
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.14).translate(0, 1.0, 0.09), new THREE.MeshStandardMaterial({ color: 0x9a8a3a, metalness: 0.2, roughness: 0.6 }));
+      pole.castShadow = box.castShadow = true;
+      this.body.add(pole, box);
+    }
+    this.chest = car ? 0.45 : look.pole;
+    this.top = car ? 0.95 : look.pole + 0.5;
+    this.gunPivot.position.set(0, this.chest, 0);
+    // A hit's flash over the whole of it; sized once the model is in.
     this.flash = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.35, 1.6, 10).translate(0, 0.8, 0),
+      new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
       new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
     );
     this.flash.visible = false;
-    this.pivot.add(this.flash);
-    const show = (m: THREE.Group) => {
-      const prop = m.clone();
-      onUnitLayer(prop);
-      this.pivot.add(prop);
-    };
-    const now = modelNow(a.pack, 'prop', id);
-    if (now) show(now);
-    else void loadModel(a.pack, 'prop', id).then(show).catch(() => undefined);
+    this.body.add(this.flash);
+    this.sparks = new THREE.Points(
+      new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(14 * 3), 3)),
+      new THREE.PointsMaterial({ color: 0xffe2a8, size: 0.07, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
+    );
+    this.sparks.visible = false;
+    this.sparks.frustumCulled = false;
+    this.body.add(this.sparks);
+    const id = look.prop;
+    if (!id) this.motor();
+    else {
+      const now = modelNow(PROPS[id].pack, 'prop', id);
+      if (now) this.fill(now);
+      else void loadModel(PROPS[id].pack, 'prop', id).then((m) => this.fill(m)).catch(() => undefined);
+    }
+    onUnitLayer(this.root);
   }
 
-  applyPose(p: FigurePose): void {
-    this.yaw.rotation.y = p.yaw;
-    this.pivot.rotation.x = (-p.fall * Math.PI) / 2.2;
+  /** The factory's motor siren, ours: a yellow drum across the pole's top, its rotor and grilles dark, the beacon on a stalk above it. */
+  private motor(): void {
+    const top = this.look.pole;
+    const yellow = new THREE.MeshStandardMaterial({ color: 0xd8b238, metalness: 0.3, roughness: 0.55 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x2b2e30, metalness: 0.5, roughness: 0.6 });
+    const across = (r: number, l: number) => new THREE.CylinderGeometry(r, r, l, 16).rotateZ(Math.PI / 2).translate(0, top + 0.2, 0);
+    const parts = [
+      new THREE.Mesh(across(0.18, 0.46), yellow),
+      new THREE.Mesh(across(0.195, 0.12), dark),
+      ...[-1, 1].map((side) => new THREE.Mesh(new THREE.CircleGeometry(0.15, 16).rotateY((side * Math.PI) / 2).translate(side * 0.231, top + 0.2, 0), dark)),
+      new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.1).translate(0, top + 0.01, 0), dark),
+      new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.12, 6).translate(0, top + 0.44, 0), dark),
+    ];
+    for (const m of parts) m.castShadow = true;
+    this.body.add(...parts);
+    this.flash.scale.set(0.6, top + 0.6, 0.45);
+    this.addLamps(top + 0.5);
+  }
+
+  /** The model in, fitted (its longest side `fit` tiles, its nose along +z, on the floor or the pole), and its lights on top. */
+  private fill(source: THREE.Group): void {
+    const look = this.look;
+    const model = source.clone();
+    const fitted = new THREE.Group();
+    fitted.rotation.y = (look.turn * Math.PI) / 2;
+    fitted.add(model);
+    fitted.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(fitted);
+    const size = box.getSize(new THREE.Vector3());
+    const k = look.fit / Math.max(size.x, size.z);
+    const centre = box.getCenter(new THREE.Vector3());
+    fitted.scale.setScalar(k);
+    fitted.position.set(-centre.x * k, look.pole - box.min.y * k, -centre.z * k);
+    model.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = true;
+    });
+    this.body.add(fitted);
+    this.flash.scale.set(size.x * k * 1.08, size.y * k * 1.08, size.z * k * 1.08);
+    this.addLamps(look.pole + size.y * k);
+    onUnitLayer(this.root);
+    this.root.updateMatrixWorld(true);
+  }
+
+  /** Its lights, on its top at `height`. */
+  private addLamps(height: number): void {
+    for (const l of this.look.lights) {
+      const group = new THREE.Group();
+      group.position.set(l.x, height + l.y, l.z);
+      const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(l.color).multiplyScalar(2.4), toneMapped: false }));
+      const air = beams(l.color, 1.6, 0.55);
+      const ground = beams(l.color, 2.6, 0.32);
+      ground.position.y = 0.03 - group.position.y;
+      group.add(lens, air, ground);
+      this.body.add(group);
+      this.lamps.push({ group, lens, air, ground });
+    }
+  }
+
+  applyPose(p: FigurePose, time: number): void {
+    const look = this.look;
+    const dt = THREE.MathUtils.clamp(time - this.clock, 0, 0.1);
+    this.clock = time;
+    // Silenced from the first moment of its fall: the cars' lights out with a spark, the motor running down.
+    if (p.fall > 0 && this.silenced < 0) {
+      this.silenced = time;
+      if (!look.stop) this.burst();
+    } else if (p.fall <= 0) this.silenced = -1;
+    const power = this.silenced < 0 ? 1 : look.stop ? Math.max(0, 1 - (time - this.silenced) / look.stop) : 0;
+    this.angle += dt * look.spin * Math.PI * 2 * power;
+    for (let i = 0; i < this.lamps.length; i++) {
+      const l = this.lamps[i]!;
+      l.group.visible = power > 0.01;
+      // A bar's two lamps a quarter turn apart; each brightest as it faces the camera's way (towards +z, roughly).
+      const turn = this.angle + i * Math.PI * 0.5;
+      l.air.rotation.y = l.ground.rotation.y = turn;
+      const glint = 0.55 + 0.45 * Math.abs(Math.cos(turn));
+      (l.lens.material as THREE.MeshBasicMaterial).color.set(look.lights[i]!.color).multiplyScalar((0.6 + 1.8 * glint) * power);
+      (l.air.material as THREE.MeshBasicMaterial).opacity = 0.55 * power;
+      (l.ground.material as THREE.MeshBasicMaterial).opacity = 0.32 * power;
+    }
+    this.fly(dt);
     this.flash.visible = p.flash > 0.01;
     (this.flash.material as THREE.MeshBasicMaterial).opacity = p.flash * 0.4;
+  }
+
+  /** The spark as the lights cut out: a few bright bits off the bar, falling. */
+  private burst(): void {
+    const at = this.lamps[0]?.group.position ?? new THREE.Vector3(0, this.top, 0);
+    const pos = this.sparks.geometry.getAttribute('position') as THREE.BufferAttribute;
+    this.flying.length = 0;
+    for (let i = 0; i < pos.count; i++) {
+      pos.setXYZ(i, at.x * 0.5, at.y, at.z);
+      const a = Math.random() * Math.PI * 2;
+      this.flying.push({ v: new THREE.Vector3(Math.cos(a) * (0.6 + Math.random()), 1 + Math.random() * 1.4, Math.sin(a) * (0.6 + Math.random())), at: 0 });
+    }
+    pos.needsUpdate = true;
+    this.sparks.visible = true;
+    (this.sparks.material as THREE.PointsMaterial).opacity = 1;
+  }
+
+  private fly(dt: number): void {
+    if (!this.sparks.visible) return;
+    const pos = this.sparks.geometry.getAttribute('position') as THREE.BufferAttribute;
+    let life = 0;
+    for (let i = 0; i < this.flying.length; i++) {
+      const f = this.flying[i]!;
+      f.at += dt;
+      f.v.y -= 6 * dt;
+      pos.setXYZ(i, pos.getX(i) + f.v.x * dt, Math.max(0.02, pos.getY(i) + f.v.y * dt), pos.getZ(i) + f.v.z * dt);
+      life = Math.max(life, f.at);
+    }
+    pos.needsUpdate = true;
+    const m = this.sparks.material as THREE.PointsMaterial;
+    m.opacity = Math.max(0, 1 - life / 0.5);
+    if (m.opacity <= 0) this.sparks.visible = false;
   }
 }
 
@@ -1495,9 +1724,10 @@ const PIECES: ArmorPart[] = ['helmet', 'torso', 'arms', 'legs'];
 /**
  * A unit as a Synty character. `sex` is for who has no look of their own (a
  * VIP, an enemy leader: the engine's sexOfPerson); a soldier's is in the look.
+ * `siren` is what a sabotage's objective is (SirenRig).
  */
-export function syntyFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm'): FigureRig | null {
-  if (template === 'relay') return new SyntyProp(RELAY_PROP);
+export function syntyFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm', siren?: Siren): FigureRig | null {
+  if (template === 'relay') return new SirenRig(siren?.alarm ?? 'factory', siren?.heading ?? 0);
   const squad = SQUAD.has(template);
   const head: HeadId = look?.head ?? (template === 'sharpshooter' ? 'hood' : 'helmet');
   const build = look?.build ?? (template === 'grenadier' ? 'heavy' : 'normal');
@@ -1600,7 +1830,7 @@ export function preloadSynty(): void {
   for (const id of used) void loadModel(CHARACTERS[id].pack, 'chr', id).catch(() => undefined);
   for (const [id, w] of Object.entries(WEAPONS)) void loadModel(w.pack, 'wep', id).catch(() => undefined);
   for (const [id, h] of Object.entries(HEADGEAR)) void loadModel(h.pack, 'hat', id).catch(() => undefined);
-  void loadModel(PROPS[RELAY_PROP].pack, 'prop', RELAY_PROP).catch(() => undefined);
+  for (const { prop } of Object.values(SIRENS)) if (prop) void loadModel(PROPS[prop].pack, 'prop', prop).catch(() => undefined);
   for (const build of ['masc', 'femn'] as const) {
     animSet(build);
     animSet(build, true);

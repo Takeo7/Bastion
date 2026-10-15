@@ -1,6 +1,6 @@
 import { trace } from '../report';
 import { audio, type PlayOptions } from './engine';
-import { SOUNDS } from './sounds';
+import { LOOP_SEAM, SOUNDS } from './sounds';
 import { Synth } from './synth';
 
 // Renders the recipes of sounds.ts into buffers, a few variants each, once
@@ -76,6 +76,36 @@ export function render(name: string): Promise<AudioBuffer[]> {
       return bufs;
     });
     pending.set(name, p);
+  }
+  return p;
+}
+
+const loops = new Map<string, Promise<AudioBuffer>>();
+
+/**
+ * A looping sound (sounds.ts `loop`): its first variant cut to the period,
+ * with what the recipe played past it faded into the head (equal power), so
+ * the end runs on into the start without a click.
+ */
+export function loopBuffer(name: string): Promise<AudioBuffer> {
+  let p = loops.get(name);
+  if (!p) {
+    const period = SOUNDS[name]?.loop;
+    if (!period) return Promise.reject(new Error(`No loop "${name}"`));
+    p = render(name).then(([buf]) => {
+      const a = buf!.getChannelData(0);
+      const n = Math.floor(period * RATE);
+      const seam = Math.min(a.length - n, Math.floor(LOOP_SEAM * RATE));
+      const out = new AudioBuffer({ length: n, sampleRate: RATE, numberOfChannels: 1 });
+      const d = out.getChannelData(0);
+      d.set(a.subarray(0, n));
+      for (let i = 0; i < seam; i++) {
+        const w = (i / seam) * (Math.PI / 2);
+        d[i] = a[i]! * Math.sin(w) + a[n + i]! * Math.cos(w);
+      }
+      return out;
+    });
+    loops.set(name, p);
   }
   return p;
 }

@@ -400,7 +400,7 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   surgeon: t('specialist', 0, 3, 'surgeon', 2, 'Pulso de cirujano', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
   restoration: t('specialist', 0, 4, 'restoration', 1, 'Restauración', 'Cura 2 a todos los aliados cercanos y les quita los estados alterados (enfriamiento 5).', { ability: 'restoration', req: ['tem', 6], kit: 'grillo' }),
   // Specialist · Grillo
-  combatProtocol: t('specialist', 1, 0, 'combatProtocol', 1, 'Calambrazo', 'El Grillo electrocuta a un enemigo: 2 de daño (4 a Acorazados y Sirenas), nunca falla. 2 usos.', { ability: 'combatProtocol', charges: { combatProtocol: 2 }, kit: 'grillo' }),
+  combatProtocol: t('specialist', 1, 0, 'combatProtocol', 1, 'Calambrazo', 'El Grillo electrocuta a un enemigo: 2 de daño (4 a Acorazados y alarmas), nunca falla. 2 usos.', { ability: 'combatProtocol', charges: { combatProtocol: 2 }, kit: 'grillo' }),
   marksman: t('specialist', 1, 0, 'marksman', 2, 'Tiro tranquilo', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
   overcharge: t('specialist', 1, 1, 'overcharge', 2, 'Sobrecarga', 'El Calambrazo hace +1 de daño por nivel.', { mods: { protocolDamage: 1 }, needs: 'combatProtocol', kit: 'grillo' }),
   battery: t('specialist', 1, 1, 'battery', 2, 'Batería extra', '+1 uso del Calambrazo por nivel.', { charges: { combatProtocol: 1 }, needs: 'combatProtocol', kit: 'grillo' }),

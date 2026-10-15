@@ -9,27 +9,26 @@ import './valley.css';
 // painting Arturo chose (15/10, «este va a ser el mapa»): the valley seen from
 // above, its towns, roads, river and lakes, Atalaya's works in the north-west,
 // Galen's city in the east, Los Llanos' great works in the south. Where the
-// zones, the roads and the places lie on it is valleyGeography.ts. Round the
-// painting, the painting itself mirrored and out of focus, so no screen ever
-// shows its edge. Live over it, only the Marea (the violet storm, its bright
-// edge climbing the roads zone by zone as the zombi activity grows: the
-// engine's thresholds), the zones' markers (contact, Nidos, operations,
-// rumours), La Lata on the roads and the names (HTML, valley.css). The wheel
-// zooms towards the pointer, a drag pans, and the valley always fits the part
-// of the screen the panels leave. The same set is the main menu's backdrop,
-// with the Marea a strip to the south.
+// zones, the roads and the places lie on it is valleyGeography.ts. Live over
+// it, only the Marea (the violet storm, its bright edge climbing the roads
+// zone by zone as the zombi activity grows: the engine's thresholds), the
+// zones' markers (contact, Nidos, operations, rumours), La Lata on the roads
+// and the names (HTML, valley.css). The painting is always seen whole, fitted
+// to the part of the screen the panels leave, the table round it (playtest
+// 15/10: no blur, nothing mirrored round it, no zoom). A zone picked while a
+// sheet is open over the map is kept clear of it: the map slides aside as far
+// as it takes, its size as it was, and back when the sheet closes. The same
+// set is the main menu's backdrop, with the Marea a strip to the south.
 
 /** The painting (tools/valle/mapa.ts). */
 const MAP_URL = 'maps/valle/mapa.jpg';
-/** How far round the painting its blurred mirror reaches (map units), and its last stretch fading into the table: past any screen. */
-const AROUND = { x: 16, z: 12, fade: 2 };
-/** The valley: what fits the free part of the screen when zoomed out, and what covers it when zoomed in (a hair inside the painting's edge). */
-const VALLEY = new THREE.Box3(new THREE.Vector3(-HW + 0.15, 0, -HD + 0.15), new THREE.Vector3(HW - 0.15, 0, HD - 0.15));
-/** The closest zoom, in times the whole valley: the painting is 1536 pixels wide, a little over a screen; past twice that it goes soft. */
-const ZOOM_MAX = 2;
-/** The free part of the screen keeps this much round the valley when zoomed out (pixels). */
+/** The valley: the painting's whole, what fits the free part of the screen. */
+const VALLEY = new THREE.Box3(new THREE.Vector3(-HW, 0, -HD), new THREE.Vector3(HW, 0, HD));
+/** The free part of the screen keeps this much round the valley (pixels). */
 const MARGIN = 12;
-/** What lies round the map, far out: the panels' steel. */
+/** How far a picked zone keeps from a sheet's edge (pixels): room for its name and its badges. */
+const CLEAR = 150;
+/** What lies round the map: the panels' steel. */
 const TABLE = new THREE.Color(0x1b1e20);
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 /** Where La Lata parks at a zone, from its pin: below it, clear of the name and the badges. */
@@ -62,7 +61,6 @@ function mareaField(): THREE.Texture {
 }
 
 const f1 = (n: number) => n.toFixed(2);
-const linear = (c: THREE.Color) => `vec3(${f1(c.r)}, ${f1(c.g)}, ${f1(c.b)})`;
 
 const GROUND_VERTEX = /* glsl */ `
   varying vec2 vMap;
@@ -74,10 +72,7 @@ const GROUND_VERTEX = /* glsl */ `
 /**
  * The painting, and the Marea over it: where the activity has reached, the
  * ground bled of colour and stained violet, a veil drifting over it; at its
- * edge a glow and a bright line (a few pixels whatever the zoom). Out of the
- * painting, the painting mirrored (the texture repeats mirrored) and ever more
- * out of focus (a coarser level of its mipmaps), a little dimmer, until it
- * fades into the table far out.
+ * edge a glow and a bright line (a few pixels whatever the size).
  */
 const GROUND_FRAGMENT = /* glsl */ `
   uniform sampler2D map;
@@ -98,13 +93,7 @@ const GROUND_FRAGMENT = /* glsl */ `
   }
 
   void main() {
-    vec2 uv = (vMap + vec2(${f1(HW)}, ${f1(HD)})) / vec2(${f1(W)}, ${f1(D)});
-    // How far out of the painting (map units): there, out of focus and dimmer.
-    vec2 beyond = max(max(-uv, uv - 1.0), 0.0) * vec2(${f1(W)}, ${f1(D)});
-    float out_ = length(beyond);
-    vec3 c = texture2D(map, uv, clamp(out_ * 1.6, 0.0, 6.5)).rgb;
-    float far = smoothstep(0.0, 6.0, out_);
-    c = mix(c, vec3(dot(c, vec3(0.3, 0.55, 0.15))), 0.25 * far) * (1.0 - 0.22 * far);
+    vec3 c = texture2D(map, (vMap + vec2(${f1(HW)}, ${f1(HD)})) / vec2(${f1(W)}, ${f1(D)})).rgb;
     // Where it reaches, the field read a little askew: its edge wavers the same everywhere, steep or not.
     vec2 warp = (vec2(noise(vMap * 0.8 + 3.1), noise(vMap * 0.8 + 9.7)) - 0.5) * 0.7 + (vec2(noise(vMap * 2.7 + 1.3), noise(vMap * 2.7 + 5.9)) - 0.5) * 0.22;
     vec2 fuv = (vMap + warp + vec2(${f1(HW)}, ${f1(HD)})) / vec2(${f1(W)}, ${f1(D)});
@@ -120,8 +109,6 @@ const GROUND_FRAGMENT = /* glsl */ `
     float flicker = 0.85 + 0.15 * sin(time * 1.7 + vMap.x * 1.1 + vMap.y * 0.7);
     c += vec3(0.79, 0.155, 1.0) * (exp(-abs(px) / 7.0) * 0.36 + exp(-abs(px) / 22.0) * 0.12) * flicker;
     c = mix(c, vec3(0.97, 0.72, 1.0), 1.0 - smoothstep(0.7, 1.7, abs(px)));
-    vec2 e = vec2(${f1(HW + AROUND.x)}, ${f1(HD + AROUND.z)}) - abs(vMap);
-    c = mix(${linear(TABLE)}, c, smoothstep(0.0, ${f1(AROUND.fade)}, min(e.x, e.y)));
     gl_FragColor = vec4(c, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -170,7 +157,7 @@ interface Rect {
 
 /**
  * The valley map: the eight zones with their markers, the Marea, La Lata on
- * the roads. The wheel zooms, a drag pans, a click on a zone selects it.
+ * the roads. A click on a zone selects it.
  */
 export class GeoscapeSet implements StageSet {
   readonly scene = new THREE.Scene();
@@ -178,9 +165,9 @@ export class GeoscapeSet implements StageSet {
   /** No post-processing: the map is shown as painted, its glow in its own shader. */
   readonly plain = true;
   readonly mood = MAP_MOOD;
-  /** The map, scaled (zoom) and moved (pan) under the still camera; its children are in map units. */
+  /** The map, scaled and moved under the still camera; its children are in map units. */
   private readonly map = new THREE.Group();
-  /** The painting and what lies round it, one plane; drawn once its image is in. */
+  /** The painting, one plane; drawn once its image is in. */
   private readonly ground: THREE.Mesh;
   /** The painting decoded and waiting to go to the GPU (beforeRender). */
   private upload: THREE.Texture | null = null;
@@ -198,7 +185,7 @@ export class GeoscapeSet implements StageSet {
   /**
    * The map's scale, and where it is heading: the scale at which the valley
    * fits the free part of the screen (measured all along, so it follows the
-   * panels), times the zoom asked for (1 to ZOOM_MAX).
+   * panels), times how much closer a lab frames it (look: 1 in the game).
    */
   private scale = 1;
   private scaleGoal = 1;
@@ -219,8 +206,10 @@ export class GeoscapeSet implements StageSet {
    */
   private readonly fitArea: Rect = { x0: 0, x1: 0, z0: 0, z1: 0 };
   private fitLeft: number | null = null;
-  /** How far the map has moved aside for a zone picked while a sheet is open (back to nothing when it closes). */
-  private readonly aside = new THREE.Vector2();
+  /** How far the map has moved aside (to the left) for a zone picked while a sheet is open; back to nothing when it closes. */
+  private aside = 0;
+  /** The zone picked (update): kept clear of a sheet open over the map. */
+  private selected: RegionId | null = null;
   private insets = { top: 0, right: 0, bottom: 0, left: 0 };
   private frame = 0;
   private pixel = 1;
@@ -249,7 +238,7 @@ export class GeoscapeSet implements StageSet {
     this.scene.background = TABLE;
     mareaField();
     this.scene.add(this.map);
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(W + 2 * AROUND.x, D + 2 * AROUND.z).rotateX(-Math.PI / 2), HIT);
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(W, D).rotateX(-Math.PI / 2), HIT);
     this.ground.visible = false;
     this.ground.frustumCulled = false;
     this.map.add(this.ground);
@@ -301,7 +290,7 @@ export class GeoscapeSet implements StageSet {
     return { pos: target.clone().add(new THREE.Vector3(0, 40, 0.02)), target, fov: 36 };
   }
 
-  /** Keeps a zone in the free part of the screen (moving the map as little as it takes), while the panels open for it. */
+  /** Keeps a zone clear of a sheet over the map (moving the map as little as it takes), while the panels open for it. */
   focus(region: RegionId): void {
     // Timed from the map's next frame (it may be asked from another view), the panels measured afresh.
     this.focusing = { region, until: -1 };
@@ -327,6 +316,7 @@ export class GeoscapeSet implements StageSet {
 
   update(c: CampaignState, selected: RegionId | null): void {
     this.inCampaign = true;
+    this.selected = selected;
     // The Marea at the campaign's activity: shown as it is the first time, then creeping to each new extent.
     this.levelGoal = c.doom;
     if (!this.levelKnown) this.level = c.doom;
@@ -355,7 +345,7 @@ export class GeoscapeSet implements StageSet {
         badges.append(icon);
       }
       const rumor = c.rumors.find((x) => x.region === r.id);
-      if (rumor) badges.append(el('i', `valley-rumor${rumor.id === c.listening ? ' listening' : ''}`, '?'));
+      if (rumor) badges.append(el('i', `valley-rumor${rumor.id === c.listening ? ' listening' : ''}`));
       root.append(el('i', 'valley-pin'), name, badges);
       const label = new CSS2DObject(root);
       label.position.set(at.x, 0, at.z);
@@ -380,28 +370,6 @@ export class GeoscapeSet implements StageSet {
     for (const m of this.markers) m.label.element.classList.toggle('hovered', m.region === hot);
   }
 
-  /** A drag pans the map with the pointer (the ground under it stays under it). */
-  drag(dx: number, dy: number): boolean {
-    const perPixel = this.worldPerPixel();
-    this.panGoal.x += dx * perPixel;
-    this.panGoal.y += dy * perPixel;
-    this.clampPan();
-    this.pan.copy(this.panGoal);
-    this.focusing = null;
-    return true;
-  }
-
-  /** The wheel zooms about the point under the pointer. */
-  zoom(factor: number, at: THREE.Vector3 | null): void {
-    const g = at ? new THREE.Vector2(at.x, at.z) : new THREE.Vector2((this.free.x0 + this.free.x1) / 2, (this.free.z0 + this.free.z1) / 2);
-    const local = g.clone().sub(this.panGoal).divideScalar(this.scaleGoal);
-    this.zoomGoal = THREE.MathUtils.clamp(this.zoomGoal / factor, 1, ZOOM_MAX);
-    this.scaleGoal = this.fit * this.zoomGoal;
-    this.panGoal.copy(g).addScaledVector(local, -this.scaleGoal);
-    this.clampPan();
-    this.focusing = null;
-  }
-
   /** Before each frame: the Marea as this map has it, and the painting sent to the GPU once decoded. */
   beforeRender(gl: THREE.WebGLRenderer): void {
     MAREA.level.value = this.level;
@@ -420,17 +388,17 @@ export class GeoscapeSet implements StageSet {
     this.fitView();
     if (this.looking && this.free.x1 > this.free.x0) {
       const l = this.looking;
-      this.zoomGoal = THREE.MathUtils.clamp(l.scale, 1, ZOOM_MAX);
+      this.zoomGoal = Math.max(1, l.scale);
       this.scaleGoal = this.fit * this.zoomGoal;
       this.panGoal.set((this.free.x0 + this.free.x1) / 2 - l.x * this.scaleGoal, (this.free.z0 + this.free.z1) / 2 - l.z * this.scaleGoal);
       this.looking = null;
     }
-    // The map eases to its zoom and pan; the first frame takes them as they are.
-    if (this.focusing) {
-      if (this.focusing.until < 0) this.focusing.until = time + 0.8;
-      this.keepInView(this.focusing.region);
-      if (time > this.focusing.until) this.focusing = null;
-    }
+    // The zone picked (or asked for, while the panels open for it) clear of a sheet over the map.
+    if (this.focusing && this.focusing.until < 0) this.focusing.until = time + 0.8;
+    if (this.focusing && time > this.focusing.until) this.focusing = null;
+    const keep = this.focusing?.region ?? this.selected;
+    if (keep && this.insets.right > 0) this.keepInView(keep);
+    // The map eases to its size and place; the first frame takes them as they are.
     this.clampPan();
     const k = this.placed ? 1 - Math.exp(-dt * 12) : 1;
     if (this.free.x1 > this.free.x0) this.placed = true;
@@ -482,7 +450,7 @@ export class GeoscapeSet implements StageSet {
     corners((i.left * kx * 2) / w - 1, 1 - (i.right * kx * 2) / w, (i.bottom * ky * 2) / h - 1, 1 - (i.top * ky * 2) / h, this.free);
     if (i.right <= 0) {
       this.fitLeft = i.left;
-      this.aside.set(0, 0);
+      this.aside = 0;
     }
     const left = this.fitLeft ?? i.left;
     const kf = squeeze(left, 0, w);
@@ -496,10 +464,10 @@ export class GeoscapeSet implements StageSet {
   }
 
   /**
-   * The scale at which the valley fits the part of the screen the panels
-   * leave (fitArea, measured all along: they slide in as a screen opens): the
-   * zoom keeps its factor over it, and what is in the middle of the free part
-   * stays there.
+   * The scale at which the valley fits whole in the part of the screen the
+   * panels leave (fitArea, measured all along: they slide in as a screen
+   * opens); framed closer by a lab (look), what is in the middle of the free
+   * part stays there.
    */
   private fitView(): void {
     const f = this.free;
@@ -517,9 +485,10 @@ export class GeoscapeSet implements StageSet {
   }
 
   /**
-   * The pan the map may have at its zoom: where the valley is bigger than the
-   * free part of the screen, covering it; where smaller (zoomed out), in the
-   * middle of the part it is fitted to, moved aside for a zone picked.
+   * Where the map lies: in the middle of the part it is fitted to, moved
+   * aside for a zone picked. Where it is bigger than the free part of the
+   * screen (a sheet open over it, or framed closer by a lab), it covers that
+   * part: no table shows there.
    */
   private clampPan(): void {
     const f = this.free;
@@ -527,30 +496,31 @@ export class GeoscapeSet implements StageSet {
     if (!(f.x1 > f.x0) || !(a.x1 > a.x0)) return;
     const s = this.scaleGoal;
     const c = VALLEY.getCenter(new THREE.Vector3());
-    const axis = (v: number, lo: number, hi: number, middle: number) => (lo <= hi ? THREE.MathUtils.clamp(v, lo, hi) : middle);
-    this.panGoal.x = axis(this.panGoal.x, f.x1 - s * VALLEY.max.x, f.x0 - s * VALLEY.min.x, (a.x0 + a.x1) / 2 - s * c.x + this.aside.x);
-    this.panGoal.y = axis(this.panGoal.y, f.z1 - s * VALLEY.max.z, f.z0 - s * VALLEY.min.z, (a.z0 + a.z1) / 2 - s * c.z + this.aside.y);
+    // A lab's closer framing keeps where it was put (look).
+    const close = this.zoomGoal > 1;
+    const axis = (v: number, lo: number, hi: number, middle: number) => (lo <= hi ? THREE.MathUtils.clamp(close ? v : middle, lo, hi) : middle);
+    // Moved aside, its left edge stays on the screen.
+    const middle = (a.x0 + a.x1) / 2 - s * c.x;
+    const edge = this.screen.x0 + MARGIN * this.worldPerPixel() - s * VALLEY.min.x;
+    this.panGoal.x = axis(this.panGoal.x, f.x1 - s * VALLEY.max.x, f.x0 - s * VALLEY.min.x, Math.max(middle + this.aside, Math.min(edge, middle)));
+    this.panGoal.y = axis(this.panGoal.y, f.z1 - s * VALLEY.max.z, f.z0 - s * VALLEY.min.z, (a.z0 + a.z1) / 2 - s * c.z);
   }
 
-  /** Moves the map just enough for a zone to lie well inside the free part of the screen. */
+  /**
+   * Moves the map aside, as little as it takes, for a zone (its name and its
+   * badges) to clear the sheet open on the right; kept while the sheet stays
+   * open, whatever is picked next, so the map does not slide back and forth.
+   */
   private keepInView(region: RegionId): void {
     const f = this.free;
-    if (!(f.x1 > f.x0)) return;
-    const z = ZONES[region];
-    const mx = (f.x1 - f.x0) * 0.2;
-    const mz = (f.z1 - f.z0) * 0.2;
-    const x = this.panGoal.x + z.x * this.scaleGoal;
-    const y = this.panGoal.y + z.z * this.scaleGoal;
-    const dx = Math.max(0, f.x0 + mx - x) - Math.max(0, x - (f.x1 - mx));
-    const dy = Math.max(0, f.z0 + mz - y) - Math.max(0, y - (f.z1 - mz));
-    this.panGoal.x += dx;
-    this.panGoal.y += dy;
-    // Kept while the sheet stays open (clampPan), so the zone does not slide back under it.
-    if (this.insets.right > 0) this.aside.x += dx;
-    if (this.insets.right > 0) this.aside.y += dy;
+    const a = this.fitArea;
+    if (!(f.x1 > f.x0) || !(a.x1 > a.x0)) return;
+    // Where the zone lies with the map in the middle.
+    const x = (a.x0 + a.x1) / 2 + (ZONES[region].x - VALLEY.getCenter(new THREE.Vector3()).x) * this.scaleGoal;
+    this.aside = Math.min(this.aside, f.x1 - CLEAR * this.worldPerPixel() - x);
   }
 
-  /** The painting, fetched and decoded off the main thread, its mipmaps (the blur round it) made on the GPU. */
+  /** The painting, fetched and decoded off the main thread, its mipmaps made on the GPU. */
   private load(): void {
     fetch(`${import.meta.env.BASE_URL}${MAP_URL}`)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
@@ -559,7 +529,6 @@ export class GeoscapeSet implements StageSet {
         const texture = new THREE.Texture(bitmap);
         texture.flipY = false;
         texture.colorSpace = THREE.SRGBColorSpace;
-        texture.wrapS = texture.wrapT = THREE.MirroredRepeatWrapping;
         texture.anisotropy = 4;
         texture.needsUpdate = true;
         this.ground.material = new THREE.ShaderMaterial({

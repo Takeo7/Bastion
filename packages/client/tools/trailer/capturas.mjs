@@ -9,6 +9,9 @@
 // --hacia 0.4: the frame's middle that far from the soldier towards the nearest of the dead; --giro 1: the camera turned a quarter.
 // The defaults frame Gameplay's showcase mission: the squad on the road, two of the dead in sight.
 // --escala 2: the same layout at 3840×2160, into capturas/2x/ (the trailer's panels).
+// --marcos a|b: the plates in a frame of the packs (a trial, ui/themes/mixta.css data-frames).
+// --operacion números: the operation open on the valley, by a piece of its name (Velsa's, on the right:
+// the map moves just enough to show its zone).
 //
 // The page must reach a server whose save gives that token a seat: Gameplay's
 // showcase saves (tools/trailer/escaparate.ts), base.json for the Bastión's
@@ -20,8 +23,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SNAPSHOTS = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../.dev-snapshots/trailer/capturas');
-const W = 1920;
-const H = 1080;
+// --tam 1440x900: another window size (the store's and the trailer's are 1920×1080).
+const [W, H] = (process.argv.includes('--tam') ? process.argv[process.argv.indexOf('--tam') + 1] : '1920x1080').split('x').map(Number);
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -47,11 +50,17 @@ const SHOTS = {
     phase: 'base',
     run: `
       await b.go('geoscape');
-      const o = c.offers.find((x) => x.expiresDay && !x.story) ?? c.offers[0];
+      const o = c.offers.find((x) => x.name.toLowerCase().includes(${JSON.stringify(arg('operacion', 'números').toLowerCase())})) ?? c.offers.find((x) => x.expiresDay && !x.story) ?? c.offers[0];
       if (o) b.focusOffer(o.id);`,
   },
-  // The valley alone.
-  'valle-solo': { phase: 'base', run: `await b.go('geoscape');` },
+  // The valley alone, nothing picked.
+  'valle-solo': {
+    phase: 'base',
+    run: `
+      b.offer = null;
+      b.region = null;
+      await b.go('geoscape');`,
+  },
   // The Armería on its arms: the list of every weapon, one of them open with whoever carries it.
   armeria: {
     phase: 'base',
@@ -85,6 +94,28 @@ const SHOTS = {
       await new Promise((done) => setTimeout(done, 500));
       [...document.querySelectorAll('button')].find((x) => /árbol entero/i.test(x.textContent))?.click();`,
   },
+  // A promotion being prepared: the first soldier of one's own with points, two talents drafted (not saved), the whole tree.
+  'arbol-ascenso': {
+    phase: 'base',
+    run: `
+      const s = c.soldiers.find((x) => x.owner === b.mySlot && b.hasPoints(x));
+      if (s) {
+        b.soldier = s.id;
+        await b.go('barracks');
+        b.promoting = true;
+        b.render();
+        await new Promise((done) => setTimeout(done, 600));
+        for (let i = 0; i < 2; i++) {
+          document.querySelector('.tn.open')?.click();
+          await new Promise((done) => setTimeout(done, 300));
+        }
+        [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Ver todo')?.click();
+      }`,
+  },
+  // The Bastión's own screen, with the tabs below (and the partner's figure on the one they look at).
+  bastion: { phase: 'base', run: `await b.go('hub');` },
+  // The squad for the mission chosen (Desplegar), where each says «listo».
+  desplegar: { phase: 'base', run: `await b.go('squad');` },
   // The Cuartel: a soldier's sheet.
   cuartel: {
     phase: 'base',
@@ -154,10 +185,17 @@ async function main() {
   // A session in memory: no zoom nor storage kept from a run before.
   const win = new BrowserWindow({ width: W * SCALE, height: H * SCALE, useContentSize: true, show: false, enableLargerThanScreen: true, webPreferences: { partition: 'capturas', backgroundThrottling: false, zoomFactor: SCALE } });
   win.webContents.setAudioMuted(true);
+  // CAPTURAS_LOG=1: the page's console and failed loads, to see why it doesn't get in.
+  if (process.env.CAPTURAS_LOG) {
+    win.webContents.on('console-message', (e) => console.log('[página]', e.message));
+    win.webContents.on('did-fail-load', (_e, code, text, url) => console.log('[carga]', code, text, url));
+  }
   await seat(win, TOKEN, 'Ana');
   await win.loadURL(URL_.href);
   // The radio's tips stay out of the store's pictures.
   await win.webContents.insertCSS('.radio { display: none !important; }');
+  // --marcos a|b: the trial of the packs' frames on the plates (ui/themes/mixta.css, data-frames).
+  if (arg('marcos')) await win.webContents.executeJavaScript(`document.documentElement.dataset.frames = ${JSON.stringify(arg('marcos'))}`);
   // With a name remembered the client goes straight in (main.ts), and the token takes its seat.
   await until(win, `window.__bastion?.base || window.__bastion?.game`);
   // The partner, connected after (whoever comes first keeps the command), in a window and a storage of its own.

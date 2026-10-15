@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 15/10 con la 0.2.8. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 15/10 con la 0.2.9. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.2.8)
+## 3. Estado (versión 0.2.9)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, clases con árbol de habilidades, heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7 y v0.2.8 en GitHub (privadas); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8 y v0.2.9 en GitHub (privadas); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
 - **Lo nuevo de la 0.2.2** (2026-10-14):
   - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
   - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
@@ -89,8 +89,18 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+- **Lo nuevo de la 0.2.9** (2026-10-15), las notas de la prueba de ese día ([PRUEBA-2026-10-15.md](PRUEBA-2026-10-15.md)):
+  - turnos de uno en uno: cada soldado gasta sus acciones (o termina) y pasa el mando al compañero, que mueve uno de los suyos; se puede ceder (`GameState.activeUnit`, evento `unitActive`). Evacuar se pide y se acepta desde la barra, sin ventana;
+  - la horda llega por los bordes cada turno, el doble mientras suena la alarma de un sabotaje; los muertos, con 2 de vida más;
+  - el mordido pierde 1 de vida por turno y no sube a La Lata sin la Cuarentena, la instalación nueva (`quarantine`);
+  - el sabotaje calla un coche patrulla, una ambulancia o la alarma de una nave (`alarm`), con su modelo, sus luces y su sonido; el coche ocupa dos casillas (`sirenCar`);
+  - la fábrica, rehecha (el bioma `facility`, `factory` en mapgen.ts): la entrada con las oficinas, la nave principal con muelles y patio de maniobra, el patio de contenedores, silos y aparcamiento, palés y bidones, y ninguna explanada sin cobertura;
+  - el rescate nombra a quien está retenido y el mapa se llama como la operación; las medicinas, solo en tiendas y laboratorios;
+  - Aldren pasa a llamarse Brena y Volkren, Velsa (Lore);
+  - interfaz: repaso con los packs de Synty (marcos de acero «a», placas de listos, iconos del valle de una sola familia), el busto del soldado de verdad en el árbol, el Diario solo con «Entendido» y sin radio en misión;
+  - el valle entero en la ventana, sin desenfoque ni zoom; los zombis ya no van y vuelven al andar; la granada mata a la vez.
 - **Lo nuevo de la 0.2.8** (2026-10-15):
-  - el valle es el mapa de Arturo (una imagen suya, `assets-src/valle/mapa-valle.png`, convertida a `public/maps/valle/mapa.jpg`): las zonas, Atalaya y los sitios de Lore están sobre ella, y la Marea y La Lata van por sus carreteras (`strategy/valleyRoads.ts`, generado con `packages/client/tools/valle/mapa.ts`). Las posiciones de REGIONS son las mismas que en el mapa. Zoom hasta 2×: con la imagen al doble se vería nítida a más;
+  - el valle es el mapa de Arturo (una imagen suya, `assets-src/valle/mapa-valle.png`, convertida a `public/maps/valle/mapa.jpg`): las zonas, Atalaya y los sitios de Lore están sobre ella, y la Marea y La Lata van por sus carreteras (`strategy/valleyRoads.ts`, generado con `packages/client/tools/valle/mapa.ts`). Las posiciones de REGIONS son las mismas que en el mapa;
   - en Linux, también un .deb (Ubuntu y Debian), que prepara el aislamiento de Chromium y AppArmor ([FIRMA.md](FIRMA.md)).
 - **Lo nuevo de la 0.2.7** (2026-10-15):
   - el valle, rehecho de cero: un mapa ilustrado visto desde arriba (Arte), horneado en teselas (`public/maps/valle`) con la Marea, los marcadores y los rótulos encima; elegido por Arturo entre tres direcciones;
@@ -122,7 +132,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Plataforma:** Three.js y web, más la aplicación de escritorio en Electron (Tauri no: en Mac usa WebKit). WebGPU, más adelante.
 - **Tema y tono** ([LORE-PROPUESTA-2026-10-13.md](LORE-PROPUESTA-2026-10-13.md)):
   - supervivencia zombi clásica;
-  - premisa: Atalaya, una vieja estación militar en la sierra de Aldren, con supervivientes de todas partes;
+  - premisa: Atalaya, una vieja estación militar en la sierra de Brena, con supervivientes de todas partes;
   - tono adulto y seco, sin explicar de más, con nombres internacionales.
 - **Nombres:**
   - pestañas «Bastión», «El valle», «Diario», «Armería», «Cuartel», «Instalaciones», «Cochera»;
@@ -148,13 +158,14 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 ## 5. Pendiente
 
 - **De Arturo y Ana:**
-  - probar la 0.2.8 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
+  - probar la 0.2.9 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
 - **Probar en partida** lo nuevo de la 0.2.6: si el triple de zombis y empezar con cuchillo y pistola (6 balas, sin cargadores) aprietan lo justo o se pasan. Lo más fácil de ajustar: `podPlan` en `setup.ts`, `PISTOL_CLIP` y `LEVEL_ARMS` en el motor, y los precios del Taller (`CRAFTS`).
-- **El tráiler:** el borrador montado espera el visto bueno de Arturo ([TRAILER.md](TRAILER.md); se rehace con las herramientas de `packages/client/tools/trailer/`).
+- **El tráiler:** aparcado por Arturo (15/10). El último borrador, la portada y las 10 capturas de la ficha están en `.dev-snapshots/trailer/` (no se suben); las herramientas siguen en `packages/client/tools/trailer/` ([TRAILER.md](TRAILER.md)) por si se retoma.
 - **Escenarios:** la cárcel y el centro comercial esperan los packs «POLYGON – Police Station» y «POLYGON – Shops», que tienen los atlas de sus piezas. Para después: la cafetería con aspecto propio y el portón grande de las naves (un hueco de 5 casillas).
 - **Para más adelante:**
   - firmar la aplicación (cuenta de desarrollador de Apple; los pasos, en [FIRMA.md](FIRMA.md)) y Steam;
+- **La 0.3.0:** la progresión nueva, «Se aprende haciendo» ([FASE9.md](FASE9.md), propuesta A de [PROGRESION-PROPUESTAS.md](PROGRESION-PROPUESTAS.md)), con campaña nueva.
 - **Textos pendientes de revisar por Lore:** [TEXTOS-PENDIENTES.md](TEXTOS-PENDIENTES.md).
 
 ## 6. Mapa de los documentos

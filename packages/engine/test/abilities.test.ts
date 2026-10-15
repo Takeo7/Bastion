@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { abilityBlocker, abilityTargets, psiChance } from '../src/abilities';
 import { previewShot } from '../src/aim';
+import { TEMPLATES } from '../src/content';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import type { Command } from '../src/protocol';
 import { Rng } from '../src/rng';
@@ -57,6 +58,9 @@ describe('cooldowns and free actions', () => {
     expect(rifle.ap).toBe(1);
     run(s, use('s1', 'shoot', { target: 'a1' }));
     expect(rifle.ap).toBe(0);
+    // Done with s1, the partner plays one of theirs (playtest 2026-10-15, #9), and hands the turn back.
+    expect(s.command).toBe(1);
+    expect(executeCommand(s, { type: 'pass' }, ctx(1, 1)).ok).toBe(true);
     run(s, use('s2', 'shoot', { target: 'a1' }));
     expect(sniper.ap).toBe(0);
   });
@@ -175,7 +179,7 @@ describe('support', () => {
     const mec = addUnit(s, 'a1', 'mec', 8, 2);
     const specialist = s.units.find((u) => u.id === 's1')!;
     run(s, use('s1', 'combatProtocol', { target: 'a1' }));
-    expect(mec.hp).toBe(7 - 4);
+    expect(mec.hp).toBe(TEMPLATES.mec.hp - 4);
     // An attack, so it ends the turn (as in XCOM 2).
     expect(specialist.ap).toBe(0);
   });
@@ -356,6 +360,6 @@ describe('equipment in the field', () => {
     const mec = addUnit(t, 'a1', 'mec', 4, 2);
     const sim = new Sim(t, new Rng(1), [0]);
     sim.damage(mec, 3, 0, gunner, gunner.mods.pierce);
-    expect(mec.hp).toBe(7 - 3);
+    expect(mec.hp).toBe(TEMPLATES.mec.hp - 3);
   });
 });

@@ -408,24 +408,25 @@
   color: #fff;
 }
 
-/* Where the partner is: their initial on a tag of their colour, over the tab, never over its name. */
 :root[data-ui='mixta'] .strat-nav .partner-dot {
-  top: -13px;
+  /* Where the partner is (playtest 15/10 #5: a letter on a tag read as cheap): the packs' figure of a player
+     (Military Combat HUD, map-player) in their colour, over the tab; the initial stays in the markup, unseen. */
+  top: -15px;
   left: 50%;
   z-index: 2;
-  min-width: 18px;
-  height: 17px;
-  padding: 0 4px;
+  width: 17px;
+  min-width: 0;
+  height: 19px;
+  padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 0;
   transform: translateX(-50%);
   background: var(--accent);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.5);
-  color: #120d1c;
-  font-family: var(--t-font-title);
-  font-weight: 600;
-  font-size: 11px;
-  line-height: 17px;
+  -webkit-mask: url('/ui/synty/icons/map-player.webp') center / contain no-repeat;
+  mask: url('/ui/synty/icons/map-player.webp') center / contain no-repeat;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  font-size: 0;
+  color: transparent;
 }
 
 /* ================================================================== hub */
@@ -947,8 +948,8 @@
 }
 
 /* The partner's proposal (playtest 14/10, #22): an alert's riveted plate pinned under the band, the
-   proposer's colour on its edge, the data in a sunken table and the answer at its foot. The light by
-   «Propuesta» breathes while the vote is this player's. */
+   data in a sunken table and the answer at its foot; who proposed, by name in their colour (no stripe
+   on the edge: playtest 15/10, #4). The light by «Propuesta» breathes while the vote is this player's. */
 :root[data-ui='mixta'] .strat-proposal {
   top: 58px;
   left: 0;
@@ -959,7 +960,7 @@
   align-items: stretch;
   gap: 12px;
   width: min(500px, 92vw);
-  padding: 14px 18px 14px 21px;
+  padding: 14px 18px;
   font-family: var(--t-font);
   font-size: 16px;
   line-height: 1.3;
@@ -967,7 +968,7 @@
   background: var(--m-rivets), var(--t-sheet);
   border: 0;
   border-radius: 2px;
-  box-shadow: var(--t-sheet-shadow), inset 3px 0 0 var(--who, var(--t-accent));
+  box-shadow: var(--t-sheet-shadow);
 }
 
 :root[data-ui='mixta'] .strat-proposal.show {
@@ -1050,25 +1051,57 @@
 
 /* ============================================================== El valle */
 
-/* Each operation's kind on a hexagon in its category's colour, the packs' icon in it instead of a glyph. */
+/* Each operation as a map pin of the packs (Military Combat HUD, map-pin; playtest 15/10 #3), the same in the
+   list and on the valley: the pin in its category's colour, its head's window dark with the operation's icon
+   in it. The pin's window sits at 50 % across and 34 % down, 47 % of its width (tools/ui/synty-sprites.py). */
 :root[data-ui='mixta'] .mission-icon {
-  width: 30px;
-  height: 27px;
+  position: relative;
+  isolation: isolate;
+  width: 26px;
+  height: 36px;
   border: 0;
-  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--icon, var(--t-warn)) 80%, #fff), var(--icon, var(--t-warn)) 55%, color-mix(in srgb, var(--icon, var(--t-warn)) 65%, #000));
-  color: #111314;
+  clip-path: none;
+  background: none;
+  color: color-mix(in srgb, var(--icon, var(--t-warn)) 55%, #fff);
   transform: none;
 }
 
+:root[data-ui='mixta'] .mission-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--icon, var(--t-warn)) 75%, #fff), var(--icon, var(--t-warn)) 50%, color-mix(in srgb, var(--icon, var(--t-warn)) 60%, #000));
+  -webkit-mask: url('/ui/synty/icons/map-pin.webp') center / contain no-repeat;
+  mask: url('/ui/synty/icons/map-pin.webp') center / contain no-repeat;
+}
+
+/* The window: a dark disc behind the icon, filling the pin's hexagonal hole. */
+:root[data-ui='mixta'] .mission-icon::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 34%;
+  width: 52%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #15181a;
+  transform: translate(-50%, -50%);
+}
+
 :root[data-ui='mixta'] .mission-icon > span {
-  width: 15px;
-  height: 15px;
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 34%;
+  width: 11px;
+  height: 11px;
   font-size: 0;
   background: currentColor;
   -webkit-mask: var(--ki) center / contain no-repeat;
   mask: var(--ki) center / contain no-repeat;
-  transform: none;
+  transform: translate(-50%, -50%);
 }
 
 :root[data-ui='mixta'] .mission-icon[data-kind='elimination'] {
@@ -1125,7 +1158,15 @@
   font-weight: 600;
 }
 
-/* Passing the days: the day on a small plate over the button. */
+/* On the valley, the day beside the button, not over it: half as tall over the bottom of the painting
+   (Arte: it covered 35 px of it at 1440, 70 at 1920). */
+:root[data-ui='mixta'] .strat-center-bottom:has(> .scan-day) {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Passing the days: the day on a small plate by the button. */
 :root[data-ui='mixta'] .scan-day {
   padding: 2px 12px;
   border-radius: 2px;
@@ -1666,4 +1707,80 @@
   --ia: url('/ui/synty/icons/rifle.webp');
   --ia-c: #c58cff;
   width: 96px;
+}
+
+/* ======================================================== Ready to go */
+
+/* Who has said «listo» (playtest 15/10 #5): a steel plate each, the player's figure and name in their
+   colour, and a lamp in the packs' steel bezel (mh/dial): amber breathing while they choose, green when ready. */
+:root[data-ui='mixta'] .ready-board {
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+:root[data-ui='mixta'] .ready-mark {
+  display: inline-grid;
+  grid-template-columns: 26px auto;
+  grid-template-rows: auto auto;
+  column-gap: 9px;
+  align-items: center;
+  min-width: 150px;
+  padding: 6px 14px 6px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-rivets), var(--t-sheet);
+  box-shadow: var(--t-sheet-shadow), inset 0 -2px 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--t-text);
+  text-align: left;
+}
+
+:root[data-ui='mixta'] .ready-mark b {
+  grid-column: 2;
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+:root[data-ui='mixta'] .ready-mark small {
+  grid-column: 2;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: #e7b44a;
+}
+
+:root[data-ui='mixta'] .ready-mark.on small {
+  color: #7dffb4;
+}
+
+:root[data-ui='mixta'] .ready-mark.on {
+  box-shadow: var(--t-sheet-shadow), inset 0 -2px 0 var(--accent), 0 0 0 1px color-mix(in srgb, #4dff9a 45%, transparent);
+}
+
+/* The lamp: a bulb in the bezel, amber and breathing while they choose, green and still when ready. */
+:root[data-ui='mixta'] .ready-lamp {
+  grid-row: 1 / 3;
+  position: relative;
+  width: 26px;
+  height: 26px;
+  background: url('/ui/synty/mh/dial.webp') center / contain no-repeat;
+}
+
+:root[data-ui='mixta'] .ready-lamp::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffe2a0, #e7a43a 55%, #6b4310);
+  box-shadow: 0 0 8px rgba(231, 164, 58, 0.7);
+  animation: m-breathe 1.6s ease-in-out infinite;
+}
+
+:root[data-ui='mixta'] .ready-mark.on .ready-lamp::after {
+  background: radial-gradient(circle at 40% 35%, #d7ffe8, #4dff9a 55%, #11613a);
+  box-shadow: 0 0 10px rgba(77, 255, 154, 0.8);
+  animation: none;
 }

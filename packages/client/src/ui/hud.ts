@@ -1,8 +1,8 @@
 import {
+  BITE_TAG,
+  biteNote,
   clipOf,
   displayName,
-  EVAC_TEXT,
-  evacClock,
   weaponName,
   FOUND_WEAPONS,
   ITEMS,
@@ -26,14 +26,19 @@ import {
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
 import type { NetStatus } from '../net';
-import { deadlineEl } from './deadline';
 import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
 import { graphicsSettings, soundSettings } from './settingsPanel';
 import { typed } from './typed';
 
+/**
+ * What the action bar holds: the soldier's abilities, and the evacuation's own
+ * (playtest 15/10 #10): «Evacuar» from La Lata, and the partner's answer to it.
+ */
+export type BarActionId = AbilityId | 'evac' | 'evacAccept' | 'evacRefuse';
+
 export interface AbilityView {
-  id: AbilityId;
+  id: BarActionId;
   label: string;
   hotkey: string;
   enabled: boolean;
@@ -72,31 +77,6 @@ export interface CommandView {
   color: string;
   /** The holder can hand it over (partner connected and still playing). */
   canPass: boolean;
-}
-
-/**
- * The evacuation button (docs/PRUEBA-2026-10-14.md P1), while one of the
- * player's soldiers is in La Mula or the partner has asked to leave.
- */
-export interface EvacButtonView {
-  /** «EVACUAR», or «RETIRARSE» in a Limpieza. */
-  label: string;
-  /** The line under it: how many are in, «Esperando a Ana…», «Ana lo pide». */
-  detail: string;
-  /** This player asked and waits for the partner: the button rests. */
-  waiting: boolean;
-  /** The call has its clock running (PRUEBA-2026-10-14 #28): unanswered, the bus leaves on its own. */
-  clock?: boolean;
-}
-
-/** Leave in La Mula or wait: the stakes (lore.ts evacPrompt, evacAsk) and the two answers. */
-export interface EvacDialogView {
-  title: string;
-  text: string;
-  go: string;
-  wait: string;
-  /** Leaving now loses the mission or someone: the button to leave is red. */
-  costly: boolean;
 }
 
 /** What the aimed ability takes off that target: ranges after its armour, and what armour does. */
@@ -215,7 +195,7 @@ const randomKind = () => KINDS[Math.floor(Math.random() * KINDS.length)]!;
 const randomMap = () => MAPS[Math.floor(Math.random() * MAPS.length)]!;
 
 export interface HudHandlers {
-  onAbility(id: AbilityId): void;
+  onAbility(id: BarActionId): void;
   onEndTurn(): void;
   onSelectUnit(id: string): void;
   onConfirmTarget(): void;
@@ -228,8 +208,6 @@ export interface HudHandlers {
   onBackToMenu(): void;
   onAbandon(): void;
   onPassCommand(): void;
-  /** The evacuation button: leave or wait, or the partner's call to answer. */
-  onEvac(): void;
   /** Toggles the sound; returns whether it is now on. */
   onToggleSound(): boolean;
   soundOn(): boolean;
@@ -306,10 +284,6 @@ export class Hud {
   private readonly target = h('div.shot-panel.panel');
   private readonly endTurn = h('button.end-turn');
   private readonly passBtn = h('button.pass-command', { title: 'Tu compañero da las órdenes hasta que te lo devuelva (C)' });
-  private readonly evacBtn = h('button.evac-call.hidden', { title: EVAC_TEXT.buttonTip });
-  private evacKey = '';
-  /** The open evacuation dialog's «Esperar» (Esc), or null. */
-  private evacWait: (() => void) | null = null;
   private readonly logEl = h('div.log');
   private readonly logLines: HTMLElement[] = [];
   private logOpen = false;
@@ -327,13 +301,14 @@ export class Hud {
   private readonly outcome = h('div.outcome');
   private readonly modal = h('div.modal');
   private readonly connection = h('div.connection');
+  /** What a bite does in this mission, on the MORDISCO tags (game.ts setBiteNote). */
+  private biteNote = biteNote(true);
   private bannerTimer = 0;
   private toastTimer = 0;
 
   constructor(container: HTMLElement, private readonly handlers: HudHandlers) {
     this.endTurn.addEventListener('click', () => handlers.onEndTurn());
     this.passBtn.addEventListener('click', () => handlers.onPassCommand());
-    this.evacBtn.addEventListener('click', () => handlers.onEvac());
     this.passBtn.append(h('span', {}, 'CEDER EL MANDO'), h('small', {}, 'C'));
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
     this.root.append(
@@ -343,7 +318,7 @@ export class Hud {
       this.unitPanel,
       this.abilities,
       this.target,
-      h('div.turn-actions', {}, this.evacBtn, this.passBtn, this.endTurn),
+      h('div.turn-actions', {}, this.passBtn, this.endTurn),
       h('div.side', {}, menuButton, this.logEl),
       this.bannerEl,
       this.toastEl,
@@ -372,8 +347,12 @@ export class Hud {
    * `night`: a night mission (docs/ALTURA-Y-NOCHE.md): a tag («De noche»)
    * beside the concealment, whose tooltip says what the dark changes.
    */
-  setTurn(turn: number, owner: TurnOwner | null, concealed: boolean, night: { label: string; rules: string } | null = null): void {
-    const key = `${turn}|${JSON.stringify(owner)}|${concealed}|${night?.label}`;
+  /**
+   * `inPlay`: the soldier in play while turns go one soldier at a time
+   * (playtest 15/10 #9), by the label: whoever holds the turn finishes it first.
+   */
+  setTurn(turn: number, owner: TurnOwner | null, concealed: boolean, night: { label: string; rules: string } | null = null, inPlay: string | null = null): void {
+    const key = `${turn}|${JSON.stringify(owner)}|${concealed}|${night?.label}|${inPlay}`;
     if (key === this.turnKey) return;
     this.turnKey = key;
     const kind = owner?.kind ?? 'over';
@@ -391,6 +370,7 @@ export class Hud {
       this.turn,
       // The number goes in the tooltip: the strip has no room for it next to a partner's name.
       h(`span.turn-label.${kind}`, { title: `Turno ${turn}` }, type(label)),
+      inPlay ? h('span.in-play', { title: 'Un soldado cada vez: este termina sus acciones antes que otro, o se cede el turno' }, `EN JUEGO · ${inPlay.toUpperCase()}`) : null,
       h(`span.conceal.${concealed ? 'on' : 'off'}`, {}, concealed ? 'OCULTOS' : 'DETECTADOS'),
       // The same stamp as the concealment, so every theme dresses it alike; `.night` gives its colour.
       night ? h('span.conceal.night', { title: night.rules }, night.label.toUpperCase()) : null,
@@ -464,14 +444,20 @@ export class Hud {
     }
   }
 
-  setSquad(units: Unit[], mySlot: Slot, selected: string | null, colors: Record<number, string>, carrier: string | null): void {
+  /** What a bite does in this mission (playtest 15/10 #13), for the MORDISCO tags' tooltip. */
+  setBiteNote(text: string): void {
+    this.biteNote = text;
+  }
+
+  /** `inPlay`: the soldier in play (playtest 15/10 #9), marked on its card. */
+  setSquad(units: Unit[], mySlot: Slot, selected: string | null, colors: Record<number, string>, carrier: string | null, inPlay: string | null = null): void {
     clear(this.squad);
     const sorted = [...units].sort((a, b) => Number(b.owner === mySlot) - Number(a.owner === mySlot));
     for (const u of sorted) {
       const mine = (u.owner === mySlot || u.owner === null) && u.team === 'xcom';
       const state = u.evacuated ? '.evacuated' : u.alive ? '' : '.dead';
       const card = h(
-        `div.squad-card${u.id === selected ? '.selected' : ''}${state}${mine ? '.mine' : ''}`,
+        `div.squad-card${u.id === selected ? '.selected' : ''}${state}${mine ? '.mine' : ''}${u.id === inPlay ? '.in-play' : ''}`,
         {
           style: { '--accent': u.owner === null ? '#e8edf2' : colors[u.owner] },
           onclick: () => mine && u.alive && this.handlers.onSelectUnit(u.id),
@@ -483,12 +469,13 @@ export class Hud {
           {},
           h('span.hp', {}, ...Array.from({ length: u.maxHp }, (_, i) => h(`i${i < u.hp ? '.on' : ''}`))),
           h('span.ap', {}, ...Array.from({ length: Math.max(2, u.ap) }, (_, i) => h(`i${i < u.ap ? '.on' : ''}`))),
+          u.id === inPlay ? h('em.in-play', { title: 'En juego: termina sus acciones antes que otro' }, 'EN JUEGO') : null,
           u.controlledBy ? h('em.psi', {}, 'CONTROLADO') : null,
           u.captive ? h('em.data', {}, 'CAUTIVO') : null,
           u.disoriented ? h('em.psi', {}, 'DESORIENTADO') : null,
           u.panicked ? h('em.psi', {}, 'PÁNICO') : null,
           // Bitten (docs/FASE3.md): if it falls it rises, and back at the base it turns unless treated.
-          u.infected && u.alive ? h('em.bite', { title: 'Mordido: si cae, se levanta. En la base hay que tratarlo' }, 'MORDIDO') : null,
+          u.infected && u.alive ? h('em.bite', { title: this.biteNote }, BITE_TAG) : null,
           u.evacuated ? h('em.evac', {}, 'EVACUADO') : null,
           carrier === u.id ? h('em.data', {}, this.itemTag) : null,
           u.overwatch ? h('em.ow', {}, u.killZone ? 'ZONA LETAL' : 'VIGILANCIA') : null,
@@ -529,6 +516,8 @@ export class Hud {
         u.team === 'xcom' ? h('span.rank', { title: rank }, ...Array.from({ length: u.rank }, () => h('i'))) : null,
         h('span.unit-name', {}, type(displayName(u.name, u.nickname))),
         h('span.unit-class', {}, t.short),
+        // Bitten (playtest 15/10 #13): what it does to them, on the sheet as on the list.
+        u.infected && u.alive ? h('em.bite', { title: this.biteNote }, BITE_TAG) : null,
       ),
       h(
         'div.unit-stats',
@@ -927,85 +916,6 @@ export class Hud {
     this.root.classList.toggle('waiting-command', !!view && !view.mine);
   }
 
-  /** The evacuation button (P1); null hides it. */
-  setEvac(view: EvacButtonView | null): void {
-    const key = JSON.stringify(view);
-    if (key === this.evacKey) return;
-    this.evacKey = key;
-    this.evacBtn.classList.toggle('hidden', !view);
-    clear(this.evacBtn);
-    if (!view) return;
-    this.evacBtn.disabled = view.waiting;
-    this.evacBtn.classList.toggle('is-waiting', view.waiting);
-    append(
-      this.evacBtn,
-      h('span', {}, view.label),
-      h('small', {}, view.detail),
-      view.clock ? deadlineEl('evac', (left) => evacClock(left, view.waiting)) : null,
-    );
-  }
-
-  /** The partner's call, open in the dialog: its clock (PRUEBA-2026-10-14 #28), drawn again whenever the server says. */
-  evacClock(): void {
-    const slot = this.modal.querySelector<HTMLElement>('.evac-clock');
-    if (!slot) return;
-    clear(slot);
-    append(slot, deadlineEl('evac', (left) => evacClock(left, false)));
-  }
-
-  get evacOpen(): boolean {
-    return this.evacWait !== null;
-  }
-
-  /**
-   * Leave in La Mula or wait (docs/PRUEBA-2026-10-14.md P1): what leaving
-   * now costs, then the two answers. Leaving can't be undone, so no key
-   * leaves; Esc waits (game.ts).
-   */
-  evacDialog(view: EvacDialogView, go: () => void, wait: () => void): void {
-    uiSound('paper');
-    clear(this.modal);
-    this.modal.classList.add('show');
-    let answered = false;
-    const answer = (then: () => void) => () => {
-      if (answered) return;
-      answered = true;
-      this.evacWait = null;
-      this.modal.classList.remove('show');
-      then();
-    };
-    this.evacWait = answer(wait);
-    this.modal.append(
-      h(
-        'div.modal-card.panel.evac-card',
-        {},
-        h('small.evac-kicker', {}, EVAC_TEXT.kicker),
-        h('h2', {}, view.title),
-        h('p', {}, view.text),
-        h('div.evac-clock'),
-        h(
-          'div.modal-actions',
-          {},
-          h(`button.${view.costly ? 'danger' : 'fire'}`, { onclick: answer(go) }, view.go.toUpperCase()),
-          h('button.secondary', { onclick: this.evacWait }, view.wait.toUpperCase()),
-        ),
-      ),
-    );
-    this.evacClock();
-  }
-
-  /** Esc on the evacuation dialog: its «Esperar». */
-  waitEvac(): void {
-    this.evacWait?.();
-  }
-
-  /** Takes the evacuation dialog down unanswered: the call was answered, refused or lapsed meanwhile. */
-  dropEvac(): void {
-    if (!this.evacWait) return;
-    this.evacWait = null;
-    this.modal.classList.remove('show');
-  }
-
   /** `detail`: a line under the stamp saying why (who saw the squad…); it stays longer, to be read. */
   banner(text: string, kind: 'xcom' | 'alien' | 'warn' = 'xcom', detail?: string): void {
     // The banner is a rubber stamp coming down.
@@ -1223,7 +1133,6 @@ export class Hud {
 
   private confirmAbandon(): void {
     uiSound('paper');
-    this.evacWait = null;
     clear(this.modal);
     this.modal.classList.add('show');
     const close = () => this.modal.classList.remove('show');
@@ -1245,7 +1154,6 @@ export class Hud {
 
   /** The Bastion's file on an enemy (right click): what it is, what it does, how to beat it. */
   enemyFile(name: string, stats: string, file: { what: string; does: string; tip: string }): void {
-    this.evacWait = null;
     clear(this.modal);
     this.modal.classList.add('show');
     const close = () => this.modal.classList.remove('show');

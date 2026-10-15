@@ -38,13 +38,13 @@ export const ZONE_PIXELS: Record<RegionId, [number, number]> = {
 export const ZONES = Object.fromEntries((Object.keys(ZONE_PIXELS) as RegionId[]).map((id) => [id, onMap(...ZONE_PIXELS[id])])) as Record<RegionId, { x: number; z: number }>;
 const ZONE_LIST = Object.values(ZONES);
 
-/** Atalaya: the walled works with its water, up in the north-west above Aldren. */
+/** Atalaya: the walled works with its water, up in the north-west above Brena. */
 export const ATALAYA = onMap(222, 118);
 
 /** The places one knows the valley by (Lore's names, engine lore.ts LANDMARKS), each on something of the painting. */
 export const VALLEY_LANDMARKS: { key: keyof typeof LANDMARKS; at: [number, number] }[] = (
   [
-    // Aldren: the hamlet on the road east.
+    // Brena: the hamlet on the road east.
     ['telm', 620, 150],
     // Carvik's mine: the works on the hill with its conveyor, east of the town.
     ['mine', 445, 540],
@@ -54,7 +54,7 @@ export const VALLEY_LANDMARKS: { key: keyof typeof LANDMARKS; at: [number, numbe
     ['peak', 1040, 238],
     // La Vega: the fields south of the crossing.
     ['wineries', 756, 612],
-    // Volkren: the Cuervos' toll on the road down to Aldren.
+    // Velsa: the Cuervos' toll on the road down to Brena.
     ['toll', 840, 92],
     // Corran: the big block east of the roundabout.
     ['hospital', 612, 735],
@@ -117,7 +117,7 @@ const smooth = (a: number, b: number, t: number) => {
 /** The Marea's field over the valley, in cells (the painting's aspect). */
 export const FIELD = { w: 240, d: 160 };
 
-/** The activity at which a zone falls; Aldren only past the end (at DOOM_MAX the campaign is lost). */
+/** The activity at which a zone falls; Brena only past the end (at DOOM_MAX the campaign is lost). */
 export const threshold = (id: RegionId) => mareaThreshold(id) ?? DOOM_MAX + 0.5;
 
 /** The roads as mareaReach follows them: their points and how far along each one lies. */

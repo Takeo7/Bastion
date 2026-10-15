@@ -27,6 +27,8 @@ const ICONS: Record<FacilityId | FixedBuildingId | Exclude<Terrain, 'clear'> | '
   // Placeholder until UX/UI draws it (docs/FASE4.md): a sprout over a bed.
   garden: svg('<path d="M3 20h18M5 20v-3h14v3"/><path d="M12 17V9"/><path d="M12 12c-3 0-5-2-5-5 3 0 5 2 5 5zM12 10c0-3 2-5 5-5 0 3-2 5-5 5z"/>'),
   relay: svg('<path d="M12 9l-5 12M12 9l5 12M9 16h6"/><circle cx="12" cy="7" r="2"/><path d="M7 4a7 7 0 0 0 0 6M17 4a7 7 0 0 1 0 6"/>'),
+  // Placeholder until UX/UI draws it (playtest 2026-10-15, #13): a door barred from outside.
+  quarantine: svg('<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M3 12h18"/><circle cx="15" cy="8" r="0.8" fill="currentColor"/>'),
   // Terrain still to clear.
   rocks: svg('<path d="M3 19l5-9 3 4 3-6 7 11z"/>'),
   forest: svg('<path d="M12 3l-5 8h3l-4 6h12l-4-6h3z"/><path d="M12 17v4"/>'),

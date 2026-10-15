@@ -16,6 +16,8 @@ import {
   executeCampaignCommand,
   executeCommand,
   hasAdjacency,
+  ALARM_NAMES,
+  hasQuarantine,
   medicineCures,
   missionInfo,
   offerBriefing,
@@ -358,9 +360,11 @@ export class Room {
       hackBonus: campaignHackBonus(c),
       campaignMission: { id: offer.id, name: offer.name, ...(offer.story ? { story: offer.story } : {}), ...(info.kicker ? { kicker: info.kicker } : {}), ...(info.item ? { item: info.item } : {}), briefing: offerBriefing(c, offer) },
       vipName: info.vipName,
+      ...(info.alarm ? { alarm: info.alarm, objectiveName: ALARM_NAMES[info.alarm] } : {}),
       leader: info.leader,
       itemOutdoors: info.itemOutdoors,
       medicineCures: medicineCures(c),
+      quarantine: hasQuarantine(c),
     });
     // The Taller de oficios wall to wall with the listening post: the Oficio makes less noise.
     if (hasAdjacency(c, 'echoes')) this.state.quietSongs = true;

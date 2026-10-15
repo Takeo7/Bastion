@@ -18,4 +18,4 @@ Los nombres que valen para el jugador están en la tabla «Nombres en el juego»
 
 ## Pendiente
 
-- **Gameplay ([FASE5.md](FASE5.md)):** la tabla de umbrales y las carreteras aún dicen Ciudad Varela, Puerto Galena, Carboneda, Valdelobos y Altomonte (son Corran, Galen, Carvik, Volkren y Aldren).
+Nada.

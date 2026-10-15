@@ -4,15 +4,25 @@ from the original packs in assets-src/synty (not in the repository: the licence
 forbids redistributing them) to packages/client/public/ui/synty/, downscaled
 and as WebP. Only what is listed here is copied; run it again after editing.
 
-  python3 tools/ui/synty-sprites.py
+  python3 tools/ui/synty-sprites.py [name …]   (needs Pillow)
+
+With names (the keys below: «mh/rank-1», «biohazard», «mh-pin»…), only those are
+written: the rest stay byte for byte as they are, whatever Pillow's version.
 """
 import os
+import sys
 from PIL import Image, ImageFilter
 
+ONLY = set(sys.argv[1:])
+
+
+def want(name: str) -> bool:
+    return not ONLY or name in ONLY
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-APOC = os.path.join(ROOT, 'assets-src/synty/Source_Sprites/Sprites')
+APOC = os.path.join(ROOT, 'assets-src/synty/INTERFACE_ApocalypseHUD_SourceFiles/Sprites')
 MM = os.path.join(ROOT, 'assets-src/synty/INTERFACE_Modern_Menus_SourceFiles_v1/Sprites')
-MH = os.path.join(ROOT, 'assets-src/synty/MilitaryHUD/Sprites')
+MH = os.path.join(ROOT, 'assets-src/synty/INTERFACE_MilitaryCombatHUD_SourceFiles/Sprites')
 OUT = os.path.join(ROOT, 'packages/client/public/ui/synty')
 
 # out name: (source, longest side in px)
@@ -30,6 +40,9 @@ SPRITES = {
 # Military Combat HUD pieces turned to neutral steel (their teal glints would fight the hazard yellow).
 STEEL = {
     'mh/dial': (f'{MH}/MilitaryCombat/SPR_MilitaryCombat_Dial_Medium_03.png', 256),
+    # The panels' frames (playtest 15/10 #5), cut in nine (border-image): a plain bevel, and one with bolts and a handle.
+    'mh/frame-a': (f'{MH}/MilitaryCombat/SPR_MilitaryCombat_Frame_Medium_01.png', 256),
+    'mh/frame-b': (f'{MH}/MilitaryCombat/SPR_MilitaryCombat_Frame_Medium_05.png', 256),
 }
 
 # Flat white silhouettes, used as masks (coloured by the theme). out name: source.
@@ -120,6 +133,22 @@ MH_ICONS = {
     'mh-lock': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Lock_01_Clean.png', 0),
     'mh-pin': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Pin_01_Clean.png', 0),
     'mh-notes': (f'{MH}/Icons_Inventory/ICON_MilitaryCombat_Inventory_Notes_01_Clean.png', 0),
+    # The map's markers and the partner's presence (playtest 15/10 #3, #5): one family for the valley and the bases.
+    'map-pin': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Pin_01_Clean.png', 0),
+    'map-player': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Player_01_Clean.png', 0),
+    'map-home': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Home_01_Clean.png', 0),
+    'map-vehicle': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Vehicle_01_Clean.png', 0),
+    'map-skull': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Skull_01_Clean.png', 0),
+    'map-unknown': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Unknown_01_Clean.png', 0),
+    'map-quest': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Quest_01_Clean.png', 0),
+    'map-objective': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Objective_01_Clean.png', 0),
+    'map-danger': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Danger_01_Clean.png', 0),
+    'map-target': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Target_01_Clean.png', 0),
+    'map-treasure': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Treasure_01_Clean.png', 0),
+    'map-message': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Message_01_Clean.png', 0),
+    'map-lightning': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Lightning_01_Clean.png', 0),
+    'map-healing': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Healing_01_Clean.png', 0),
+    'map-star': (f'{MH}/Icons_Map/ICON_MilitaryCombat_Map_Star_01_Clean.png', 0),
 }
 
 
@@ -145,7 +174,8 @@ def tape(out: str, stripe: tuple, ground: tuple) -> None:
 
 
 for out, (src, size) in SPRITES.items():
-    save(src, out, size)
+    if want(out):
+        save(src, out, size)
 
 
 def steel(src: str, out: str, size: int) -> None:
@@ -161,11 +191,14 @@ def steel(src: str, out: str, size: int) -> None:
 
 
 for out, (src, size) in STEEL.items():
-    steel(src, out, size)
+    if want(out):
+        steel(src, out, size)
 for out, (stripe, ground) in TAPES.items():
-    tape(out, stripe, ground)
+    if want(out):
+        tape(out, stripe, ground)
 for out, src in ICONS.items():
-    save(src, 'icons/' + out, 128)
+    if want(out):
+        save(src, 'icons/' + out, 128)
 
 
 def outline(src: str, out: str, turn: int, bold: int = 0, size: int = 128) -> None:
@@ -186,7 +219,8 @@ def outline(src: str, out: str, turn: int, bold: int = 0, size: int = 128) -> No
 
 
 for out, (src, turn, *bold) in MH_ICONS.items():
-    outline(src, 'icons/' + out, turn, *bold)
+    if want(out):
+        outline(src, 'icons/' + out, turn, *bold)
 
 
 # Arte's renders of Synty models (public/ui/synty/renders, made by Arte-Personajes): their
@@ -194,7 +228,8 @@ for out, (src, turn, *bold) in MH_ICONS.items():
 # and tyres (the dark and glass-blue pixels of the colour render) are cut out of it.
 RENDERS = os.path.join(OUT, 'renders')
 for name in ('camposanto', 'roca', 'ruinas', 'racion'):
-    outline(f'{RENDERS}/{name}-mask.webp', f'icons/r-{name}', 0)
+    if want(f'r-{name}'):
+        outline(f'{RENDERS}/{name}-mask.webp', f'icons/r-{name}', 0)
 
 
 def windows_cut(src: str, out: str, size: int = 128) -> None:
@@ -213,6 +248,7 @@ def windows_cut(src: str, out: str, size: int = 128) -> None:
     white.save(os.path.join(OUT, out + '.webp'), 'WEBP', quality=90, method=6)
 
 
-windows_cut(f'{RENDERS}/mula-side.webp', 'icons/r-mula')
+if want('r-mula'):
+    windows_cut(f'{RENDERS}/mula-side.webp', 'icons/r-mula')
 total = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(OUT) for f in fs)
 print(f'{len(SPRITES) + len(STEEL) + len(ICONS) + len(MH_ICONS)} sprites, {total // 1024} KB in {OUT}')

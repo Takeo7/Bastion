@@ -66,7 +66,8 @@ export const OFICIO_QUIET = 2;
  * squad sees one every 5 turns; a firefight (four rifle shots a turn) one
  * every 3. Tuned with a headless Saqueo against a scripted squad.
  */
-export const HORDE = { perTurn: 10, perNoise: 5, wave: 50, cap: 60 } as const;
+/** `trickle`: the dead that come in every turn whatever happens (playtest 2026-10-15, #11), by difficulty (1–4); twice that while a sabotage's alarm sounds. */
+export const HORDE = { perTurn: 10, perNoise: 5, wave: 50, cap: 60, trickle: [0, 1, 2, 2, 3] } as const;
 
 /**
  * Night missions (docs/ALTURA-Y-NOCHE.md). The living see `sightCut` tiles
@@ -316,7 +317,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   lightningHands: { id: 'lightningHands', name: 'Manos rápidas', description: 'Acción gratuita: un disparo de pistola.', target: 'enemy', ap: 0, endsTurn: false, cooldown: 4, weapon: 'secondary' },
   faceoff: { id: 'faceoff', name: 'Cara a cara', description: 'Un disparo de pistola a cada enemigo que veas.', target: 'self', ap: 1, endsTurn: true, cooldown: 4, weapon: 'secondary' },
   killZone: { id: 'killZone', name: 'Zona letal', description: 'Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno.', target: 'self', ap: 1, endsTurn: true, cooldown: 4 },
-  combatProtocol: { id: 'combatProtocol', name: 'Calambrazo', description: 'El Grillo electrocuta a un enemigo a la vista de la escuadra: 2 de daño (4 a Acorazados y Sirenas). Nunca falla e ignora el blindaje. Termina el turno.', target: 'enemy', ap: 1, endsTurn: true, charge: 'combatProtocol', range: 15, noise: 2 },
+  combatProtocol: { id: 'combatProtocol', name: 'Calambrazo', description: 'El Grillo electrocuta a un enemigo a la vista de la escuadra: 2 de daño (4 a Acorazados y alarmas). Nunca falla e ignora el blindaje. Termina el turno.', target: 'enemy', ap: 1, endsTurn: true, charge: 'combatProtocol', range: 15, noise: 2 },
   revival: { id: 'revival', name: 'Espabilar', description: 'El Grillo libera a un aliado del aturdimiento, la desorientación y el pánico.', target: 'ally', ap: 1, endsTurn: false, charge: 'medkit', range: 15 },
   restoration: { id: 'restoration', name: 'Restauración', description: 'Cura 2 a todos los aliados a 6 casillas o menos y les quita los estados alterados.', target: 'self', ap: 1, endsTurn: true, cooldown: 5, range: 6 },
   discharge: { id: 'discharge', name: 'Descarga de batería', description: 'El Grillo descarga en una zona: 3 de daño a todos los que estén dentro, aliados incluidos.', target: 'tile', ap: 1, endsTurn: true, cooldown: 4, range: 10, radius: 1.5, explosive: 'discharge' },
@@ -556,15 +557,16 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
   officer: alien({ id: 'officer', name: 'Cabecilla', short: 'CAB', weapon: 'officerRifle', hp: 6, abilities: ['shoot', 'overwatch', 'reload'] }),
   lancer: alien({ id: 'lancer', name: 'Cazador', short: 'CAZ', weapon: 'lancerRifle', meleeWeapon: 'stunLance', hp: 4, abilities: ['stunLance', 'shoot', 'reload'] }),
   // The dead (docs/FASE2.md): claws and teeth, no cover, the horde's AI (ai.ts takeZombieTurn).
-  zombie: alien({ id: 'zombie', name: 'Zombi', short: 'ZOM', weapon: 'claws', meleeWeapon: 'claws', hp: 6, aim: 60, defense: -10, mobility: 4, sight: 14, detection: 6, will: 100, undead: true, abilities: ['claw'] }),
-  xenoid: alien({ id: 'xenoid', name: 'Corredor', short: 'COR', weapon: 'xenoPistol', meleeWeapon: 'xenoPistol', hp: 5, aim: 60, mobility: 8, detection: 10, will: 100, undead: true, abilities: ['claw'] }),
-  mec: alien({ id: 'mec', name: 'Acorazado', short: 'ACO', weapon: 'mecCannon', meleeWeapon: 'mecCannon', hp: 7, armor: 1, aim: 60, mobility: 4, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: ['claw'] }),
+  // Harder to put down (playtest 2026-10-15, #12): two more points of health each.
+  zombie: alien({ id: 'zombie', name: 'Zombi', short: 'ZOM', weapon: 'claws', meleeWeapon: 'claws', hp: 8, aim: 60, defense: -10, mobility: 4, sight: 14, detection: 6, will: 100, undead: true, abilities: ['claw'] }),
+  xenoid: alien({ id: 'xenoid', name: 'Corredor', short: 'COR', weapon: 'xenoPistol', meleeWeapon: 'xenoPistol', hp: 7, aim: 60, mobility: 8, detection: 10, will: 100, undead: true, abilities: ['claw'] }),
+  mec: alien({ id: 'mec', name: 'Acorazado', short: 'ACO', weapon: 'mecCannon', meleeWeapon: 'mecCannon', hp: 9, armor: 1, aim: 60, mobility: 4, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: ['claw'] }),
   /** The Chillón doesn't bite: it screams (mindspin, noise 16) and raises the dead. */
-  sectoid: alien({ id: 'sectoid', name: 'Chillón', short: 'CHI', weapon: 'sectoidPistol', hp: 5, mobility: 5, will: 100, undead: true, abilities: ['mindspin', 'reanimate'] }),
+  sectoid: alien({ id: 'sectoid', name: 'Chillón', short: 'CHI', weapon: 'sectoidPistol', hp: 7, mobility: 5, will: 100, undead: true, abilities: ['mindspin', 'reanimate'] }),
   /** The Hinchado: slow; it bursts when it dies or reaches a soldier (rules.ts burst). */
-  bloater: alien({ id: 'bloater', name: 'Hinchado', short: 'HIN', weapon: 'bloaterBurst', hp: 6, aim: 0, defense: -15, mobility: 3, sight: 12, detection: 5, will: 100, undead: true, abilities: ['burst'] }),
+  bloater: alien({ id: 'bloater', name: 'Hinchado', short: 'HIN', weapon: 'bloaterBurst', hp: 8, aim: 0, defense: -15, mobility: 3, sight: 12, detection: 5, will: 100, undead: true, abilities: ['burst'] }),
   // Objectives. The relay is an alien "unit" so every weapon can hit it; it never acts.
-  relay: alien({ id: 'relay', name: 'Sirena', short: 'SIR', weapon: 'trooperRifle', hp: 8, armor: 1, aim: 0, mobility: 0, sight: 0, detection: 0, robotic: true, abilities: [] }),
+  relay: alien({ id: 'relay', name: 'Alarma', short: 'ALA', weapon: 'trooperRifle', hp: 8, armor: 1, aim: 0, mobility: 0, sight: 0, detection: 0, robotic: true, abilities: [] }),
   vip: soldier({ id: 'vip', name: 'VIP', short: 'VIP', weapon: 'pistol', hp: 4, aim: 50, will: 30, abilities: ['hunker'], charges: {} }),
 };
 

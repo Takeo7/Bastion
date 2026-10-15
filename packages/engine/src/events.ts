@@ -38,6 +38,8 @@ export type GameEvent =
   | { t: 'turnBegan'; team: Team; turn: number; command?: Slot }
   /** The command (el mando) changes hands. */
   | { t: 'commandPassed'; to: Slot }
+  /** The soldier in play changes (playtest 2026-10-15, #9); null, none. */
+  | { t: 'unitActive'; unit: string | null }
   | { t: 'moved'; unit: string; path: Pos[]; ap: number }
   /** An ability was activated: pays its actions (negative = gains), cooldown and charge. */
   | { t: 'abilityUsed'; unit: string; ability: AbilityId; ap: number; cooldown: number; charge: ChargeId | null }
@@ -202,6 +204,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       delete s.evacCall;
       if (e.team === 'xcom') {
         s.ready = [false, false];
+        delete s.activeUnit;
         if (e.command !== undefined) s.command = e.command;
         if (s.mission.turnsLeft !== null && e.turn > 1) s.mission.turnsLeft--;
         // Holo marks last for the rest of the squad's turn and the alien turn after it.
@@ -533,6 +536,11 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     case 'commandPassed':
       s.command = e.to;
+      delete s.activeUnit;
+      break;
+    case 'unitActive':
+      if (e.unit) s.activeUnit = e.unit;
+      else delete s.activeUnit;
       break;
     case 'ready':
       s.ready[e.slot] = e.ready;

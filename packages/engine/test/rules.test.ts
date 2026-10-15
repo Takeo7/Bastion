@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { abilitiesOf, abilityBlocker, abilityTargets, allyTargets, canTargetTile, meleeTargets } from '../src/abilities';
 import { searchableTiles } from '../src/loot';
 import { autoBuild, soldierStats } from '../src/classes';
-import { ABILITIES, isAttack } from '../src/content';
+import { ABILITIES, isAttack, TEMPLATES } from '../src/content';
 import { previewShot } from '../src/aim';
 import { cloneState, applyEvent, type GameEvent } from '../src/events';
 import { nodeOf, toPos } from '../src/grid';
@@ -160,11 +160,11 @@ describe('enemies', () => {
     const mec = addUnit(s, 'a1', 'mec', 5, 5);
     const sim = new Sim(s, new Rng(1), [0]);
     sim.damage(mec, 4, 0);
-    expect(mec.hp).toBe(7 - 3);
+    expect(mec.hp).toBe(TEMPLATES.mec.hp - 3);
     sim.damage(mec, 3, 1);
     expect(mec.armor).toBe(0);
     sim.damage(mec, 1, 0);
-    expect(mec.hp).toBe(7 - 3 - 2 - 1);
+    expect(mec.hp).toBe(TEMPLATES.mec.hp - 3 - 2 - 1);
   });
 
   it('a stun lance hit leaves the soldier with a single action next turn', () => {

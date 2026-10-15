@@ -10,7 +10,9 @@ import { UNIT_LAYER } from './post';
 // (its walk and its stance, with everything the figure adds on top: the
 // hunch, the arms out, the roll), a few frames a tick. The moment a unit does
 // anything else (it is hit, it lunges, it falls, it climbs) it goes back to
-// its own figure (syntyFigures.ts), and back to the crowd when it is calm.
+// its own figure (syntyFigures.ts), and back to the crowd when it is calm,
+// each time at the point of its loop it was at (playtest 15/10 #19: a body
+// changing over at another point of its step jumped).
 
 /** A loop the crowd plays: where its frames start in the body's texture, how many, and how long it lasts at its own speed. */
 export interface CrowdLoop {
@@ -25,7 +27,7 @@ export interface Baker {
   readonly vertices: number;
   readonly geometry: THREE.BufferGeometry;
   material(): THREE.Material;
-  /** The loops it bakes and their frames; `frame` poses loop `k` at frame `f` and writes positions and normals (xyz each). */
+  /** The loops it bakes and their frames; `frame` poses loop `k` at frame `f` (f / frames through it) and writes positions and normals (xyz each). */
   readonly loops: { frames: number; seconds: number }[];
   frame(k: number, f: number, positions: Float32Array, normals: Float32Array): void;
   dispose(): void;
@@ -132,6 +134,11 @@ export class Crowd {
       row += l.frames;
     }
     this.bodies.set(key, body);
+  }
+
+  /** The crowd's clock now: a loop played at `rate` from `phase` is fract(clock · rate / its seconds + phase) through. */
+  get clock(): number {
+    return this.time.value;
   }
 
   /** Whether body `key` has been baked and can be drawn. */

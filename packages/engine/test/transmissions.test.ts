@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { addPlayer, createCampaign, gainXp } from '../src/campaign';
-import { ENEMY_FILES, EXPEDIENTE, STORY } from '../src/lore';
+import { ENEMY_FILES, EXPEDIENTE } from '../src/lore';
 import { LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
-import { nextScene, RADIO_TIPS, recapLines, sceneLines, SCENES, SPEAKERS, STORY_RADIO, unlockedScenes, type SceneId } from '../src/transmissions';
+import { nextScene, recapLines, sceneLines, SCENES, SPEAKERS, unlockedScenes, type SceneId } from '../src/transmissions';
 
 const ids = (c: Parameters<typeof unlockedScenes>[0]) => unlockedScenes(c).map((s) => s.id);
 
@@ -15,7 +15,6 @@ describe('transmissions', () => {
       expect(s.lines.length).toBeLessThanOrEqual(7);
       for (const l of s.lines) expect(SPEAKERS[l.who]).toBeDefined();
     }
-    expect(STORY_RADIO).toHaveLength(STORY.length);
   });
 
   it('a new campaign starts with no radio, and the first mission brings none: Morse speaks when there is news', () => {
@@ -53,13 +52,6 @@ describe('transmissions', () => {
     expect(nextScene(c, seen, false)?.id).toBe('simon');
   });
 
-  it("Morse's warnings say something and the rule behind it", () => {
-    for (const tip of Object.values(RADIO_TIPS)) {
-      expect(SPEAKERS[tip.who]).toBeDefined();
-      expect(tip.line.length).toBeGreaterThan(5);
-      expect(tip.rule.length).toBeGreaterThan(tip.line.length);
-    }
-  });
 
   it('the recap tells a late commander where things stand and who is theirs', () => {
     const c = createCampaign([0], new Rng(1));
@@ -85,7 +77,6 @@ describe('the song of Velmar', () => {
     expect(ids(c)).not.toContain('firstSong');
     (c.soldiers[0]!.talents as Record<string, number>).bolt = 1;
     expect(ids(c)).toContain('firstSong');
-    expect(RADIO_TIPS.song.rule).toMatch(/ruido/);
   });
 });
 

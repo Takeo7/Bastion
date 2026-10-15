@@ -128,6 +128,21 @@
   border-radius: 2px;
 }
 
+/* Trial (playtest 15/10 #5): the big plates in a steel frame of the packs (Military Combat HUD, mh/frame-a or
+   -b), cut in nine and drawn outside the plate, so nothing moves. On with data-frames on <html>, to compare. */
+:root[data-ui='mixta'][data-frames] :is(.strat-left, .strat-right, .strat-ticker, .strat-center-top, .strat-center-bottom) > .x-panel,
+:root[data-ui='mixta'][data-frames] :is(.menu-column, .menu-squad, .modal-card, .game-menu-card, .outcome-card, .unit-panel, .shot-panel, .mission-intro, .strat-modal .x-panel, .menu-modal .x-panel) {
+  border-image: var(--m-frame) 34 / 15px / 8px stretch;
+}
+
+:root[data-frames='a'] {
+  --m-frame: url('/ui/synty/mh/frame-a.webp');
+}
+
+:root[data-frames='b'] {
+  --m-frame: url('/ui/synty/mh/frame-b.webp');
+}
+
 /* Smaller plates: the same steel, no rivets. */
 :root[data-ui='mixta'] :is(.panel, .x-panel, .log, .ability-card, .squad, .lineup-card) {
   border-image: none;

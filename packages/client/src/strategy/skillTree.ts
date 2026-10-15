@@ -9,6 +9,7 @@ import {
   dormant,
   KIT_NAMES,
   learnTalent,
+  PLAYER_COLORS,
   pointsAbove,
   pointsInBranch,
   RANKS,
@@ -31,6 +32,7 @@ import {
   type TalentDef,
 } from '@bastion/engine';
 import { append, clear, h } from '../ui/dom';
+import { soldierPortrait } from './portraits';
 import { abilityIcon } from '../ui/icons';
 
 // The «Árbol de habilidades» of a soldier's sheet, drawn after the «Prepping
@@ -678,6 +680,8 @@ function nodeEl(ctx: TreeContext, n: NodeGeo, inspect: Inspect): HTMLElement[] {
       onblur: () => inspect(null),
       onclick: (e: Event) => {
         if (st.open) ctx.onAdd(d.id);
+        // A level of this promotion that can take no more: the click takes it back (a single-level talent toggles).
+        else if (st.fresh) ctx.onRemove(d.id);
         else {
           ctx.onFocus(d.id);
           inspect(d, e.currentTarget as HTMLElement);
@@ -693,12 +697,29 @@ function nodeEl(ctx: TreeContext, n: NodeGeo, inspect: Inspect): HTMLElement[] {
     pips,
     ...marks,
   );
+  // Every level of this promotion can be taken back in plain sight, not only with a right click (playtest 15/10 #6).
+  const undo = st.fresh
+    ? h(
+        'button.tn-undo',
+        {
+          type: 'button',
+          title: `Quitar ${d.name} de este ascenso`,
+          'aria-label': `Quitar ${d.name} de este ascenso`,
+          style: { left: `${f(n.p.x + n.r * 0.72)}px`, top: `${f(n.p.y - n.r * 0.72)}px` },
+          onclick: (e: Event) => {
+            e.stopPropagation();
+            ctx.onRemove(d.id);
+          },
+        },
+        '−',
+      )
+    : null;
   // The name where the layout found room for it (placeNames).
   const at = n.label;
   const x = at === 'e' ? n.p.x + n.r + 6 : at === 'w' ? n.p.x - n.r - 6 : n.p.x;
   const y = at === 's' ? n.p.y + n.r + 10 : at === 'n' ? n.p.y - n.r - 4 : n.p.y;
   const label = h(`span.tn-name.near.${trunkClass(n.trunk)}${d.axis === null ? '.centre' : ''}.${at}${st.level ? '.taken' : ''}${st.open ? '.open' : ''}${st.shut ? '.shut' : ''}`, { style: { left: `${f(x)}px`, top: `${f(y)}px` } }, d.name);
-  return [button, label];
+  return undo ? [button, label, undo] : [button, label];
 }
 
 /** A branch's big node: its emblem, its name and its points. */
@@ -718,16 +739,20 @@ function branchEl(ctx: TreeContext, g: BranchGeo): HTMLElement {
   );
 }
 
-/** The soldier in the middle: their class's portrait, the class and the rank on a band. */
+/**
+ * The soldier in the middle: their own bust, as they go into battle (the same
+ * survivor, colours and helmet: portraits.ts), and the class and rank on a
+ * band. Until it is drawn the disc stays empty, never a stand-in (playtest
+ * 15/10 #6: «o es el soldado de verdad o fuera»).
+ */
 function medalEl(ctx: TreeContext): HTMLElement {
   const cls = ctx.b.cls;
-  const file = cls ? { assault: 'asalto', grenadier: 'granadero', sharpshooter: 'francotirador', specialist: 'especialista' }[cls] : 'recluta';
-  return h(
-    `div.tm${cls ? `.axis-${cls}` : ''}`,
-    { style: { '--portrait': `url('/ui/synty/renders/${file}.webp')` } },
-    h('span.tm-face'),
-    h('span.tm-band', {}, `${cls ? TEMPLATES[cls].name : CENTER_NAME} · ${RANKS[ctx.b.rank]!.name}`),
-  );
+  const s = ctx.s;
+  const face = h('span.tm-face');
+  void soldierPortrait(s.cls ?? 'rookie', PLAYER_COLORS[s.owner], s.appearance, s.id)
+    .then((url) => face.style.setProperty('--portrait', `url('${url}')`))
+    .catch(() => undefined);
+  return h(`div.tm${cls ? `.axis-${cls}` : ''}`, {}, face, h('span.tm-band', {}, `${cls ? TEMPLATES[cls].name : CENTER_NAME} · ${RANKS[ctx.b.rank]!.name}`));
 }
 
 // ------------------------------------------------------- card and figures
@@ -786,7 +811,7 @@ function tooltip(ctx: TreeContext): { el: HTMLElement; show: (d: TalentDef | nul
       h('p.ti-desc', {}, d.description),
       notes.length ? h('ul.ti-notes', {}, ...notes) : null,
       status,
-      st.fresh ? h('p.ti-undo', {}, 'Clic derecho: quitar el nivel de este ascenso.') : null,
+      st.fresh ? h('p.ti-undo', {}, st.open ? 'El «−» de su esquina lo quita de este ascenso.' : 'Clic: quitarlo de este ascenso.') : null,
     );
     // By the node, inside the sheet: to its right if there is room, else to its left; never past the sheet's edges.
     const host = at.closest<HTMLElement>('.x-panel') ?? at.parentElement!;
@@ -1035,7 +1060,7 @@ export function skillTree(ctx: TreeContext): { tree: HTMLElement; inspect: HTMLE
       h('span.lg.kit', {}, h('i'), 'Equipo de una clase'),
       h('span.lg.needs', {}, h('i'), 'Antes, otro talento'),
       h('span.lg.coop', {}, h('i'), 'Con el compañero'),
-      h('span.tree-hint', {}, 'Rueda: acercar · arrastrar: mover · clic: aprender · clic derecho: quitar'),
+      h('span.tree-hint', {}, 'Rueda: acercar · arrastrar: mover · clic: aprender · «−»: quitar · nada cuenta hasta «Guardar»'),
     ),
   );
   void AXES;

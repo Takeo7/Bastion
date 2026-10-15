@@ -14,6 +14,8 @@ Respuesta a los puntos 23–27 de [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md).
   - Anja Kowalski → **Anja Kowalska** (la forma femenina en polaco).
 - Familiares: Lucía → **Clara** (la soldado Lucía Ortega) y Kenji → **Yusuf** (el Ing. Kenji Mori). El familiar lleva el apellido del soldado, así que podía salir una hermana con su mismo nombre.
 
+**Cambiado el 15/10 (Arturo), porque sonaban a fantasía (Ana):** la sierra de Aldren → **Brena**; Volkren → **Velsa**.
+
 ## 1. La premisa: quiénes somos
 
 Una tarjeta al abrir la campaña, antes de la primera misión. Cinco líneas y ninguna más:

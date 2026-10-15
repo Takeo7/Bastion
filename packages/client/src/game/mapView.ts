@@ -137,19 +137,35 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'wire':
       // A fallen chain-link fence by the road; razor wire at an industrial gate.
       return low ? (biome === 'city' ? 'razorWire' : 'chainFence') : null;
+    // The factory (playtest 15/10, #14 and #17). Pallets are stacked by `dressed`, higher for high cover.
+    case 'pallets':
+      return 'pallets';
+    case 'drums':
+      return low ? 'drums' : null;
+    case 'forklift':
+      // No forklift in the packs: the generator puts pallets and drums where one would stand.
+      return null;
+    case 'machine':
+      return low ? null : 'machine';
+    case 'sirenCar':
+      // Under the siren's car (syntyFigures.ts SirenRig draws it): nothing of its own, rubble if blown down.
+      return low ? 'rubble' : null;
+    case 'silo':
+      // Drawn whole over its 2×2 block (block); what a blast leaves of one is rubble.
+      return low ? 'rubble' : null;
   }
 }
 
 /** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
-const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire']);
+const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire', 'pallets', 'drums', 'machine']);
 
 /**
  * The scenarios' things that stand over several tiles (#25), and what each of
  * their tiles is: a lorry (2×4), a container (2×5), a water tower (2×2, its
- * legs), a log pile (1×2 or 2×2). The generator never lets two touch, so a
- * block is the tiles of its kind joined to each other.
+ * legs), a factory's silo (2×2), a log pile (1×2 or 2×2). The generator never
+ * lets two touch, so a block is the tiles of its kind joined to each other.
  */
-const BLOCKS: Partial<Record<DecorKind, TileKind>> = { truck: 'high', container: 'high', waterTower: 'high', logPile: 'low' };
+const BLOCKS: Partial<Record<DecorKind, TileKind>> = { truck: 'high', container: 'high', waterTower: 'high', silo: 'high', logPile: 'low' };
 
 /** A block: its tiles' bounds, the way it faces, whether all of it still stands, and the tile that draws it (under its middle). */
 interface Block {
@@ -664,6 +680,10 @@ export class MapView {
         case 'waterTower':
           addSyntyId('waterTower', placed(cx, base, cz, 1, 1, 1, Math.floor(r * 4) * (Math.PI / 2)));
           break;
+        case 'silo':
+          // Its ladder any way round.
+          addSynty('silo', r, placed(cx, base, cz, 1, 1, 1, Math.floor(hash(b.x0, b.y0, 32) * 4) * (Math.PI / 2)));
+          break;
         case 'logPile':
           // Its logs (the model's z) along a long pile, narrowed to its tile; a square one whole. Half a survivor high or so.
           if (b.w !== b.h) addSyntyId('logPile', placed(cx, base, cz, 0.62, 0.75, 1, b.w > b.h ? Math.PI / 2 : 0));
@@ -679,6 +699,8 @@ export class MapView {
       const look = decorOf(decorNow[i]);
       // The bus's bay: La Mula stands on it whole (placeBus), nothing else.
       if (look?.kind === 'bus') return true;
+      // The siren's car's nose: the car is the siren's own (SirenRig), nothing else here.
+      if (look?.kind === 'sirenCar' && kind === 'high') return true;
       // A lorry, a container, a water tower, a log pile: one model over its block while all of it stands.
       if (look && BLOCKS[look.kind]) {
         const b = blockOf(i, look.kind);
@@ -729,6 +751,19 @@ export class MapView {
               : false;
         ransack(look.kind, x, y, base, front);
         if (opened) return true;
+      }
+      // Pallets stacked, three for low cover and six for high, each a little askew; a machine in the hall, the genset stood taller.
+      if (look.kind === 'pallets') {
+        const n = kind === 'high' ? 6 : 3;
+        for (let k = 0; k < n; k++) {
+          const r = (salt: number) => hash(x, y, 40 + k * 3 + salt) - 0.5;
+          addSyntyId('pallet', placed(cx + r(0) * 0.06, base + k * 0.19, cz + r(1) * 0.06, 1, 1, 1, turn * (Math.PI / 2) + r(2) * 0.12));
+        }
+        return true;
+      }
+      if (look.kind === 'machine' && kind === 'high') {
+        addSyntyId('machine', placed(cx, base, cz, 1, 1.9, 1, turn * (Math.PI / 2)));
+        return true;
       }
       // A fallen tree is a row of logs: it keeps to the grid.
       addProp(i, set, cx, base, cz, pick, turn, look.kind === 'tree' && kind === 'low' ? 1 : (WIGGLE[look.kind] ?? 0));

@@ -533,7 +533,9 @@ describe('the Saqueo', () => {
     // Quiet: the first wave is announced once the turns alone fill the clock (the fifth), to land a turn later.
     const quiet = setup();
     const first = HORDE.wave / HORDE.perTurn;
-    const announced = of(turns(quiet, first), 'reinforcementsIncoming');
+    // (The few that come every turn, playtest 2026-10-15 #11, apart.)
+    const waves = (events: GameEvent[]) => of(events, 'reinforcementsIncoming').filter((e) => !e.r.trickle);
+    const announced = waves(turns(quiet, first));
     expect(announced.map((e) => e.r.turn)).toEqual([first + 1]);
     const r = announced[0]!.r;
     expect(r.horde).toBe(true);
@@ -541,18 +543,39 @@ describe('the Saqueo', () => {
     expect(r.pos).toBeNull();
     // It lands unaware by an edge, far from the squad, heading for it: the squad stays hidden until they see it.
     const landing = turns(quiet, 1);
-    const spawned = of(landing, 'spawned')[0]!;
+    const spawned = of(landing, 'spawned').find((e) => e.units.length === r.units.length)!;
     for (const u of spawned.units) {
       expect(u.pos.x < 2 || u.pos.y < 2 || u.pos.x >= 38 || u.pos.y >= 38).toBe(true);
       expect(Math.hypot(u.pos.x - 20, u.pos.y - 20)).toBeGreaterThanOrEqual(12);
     }
     expect(spawned.pod.active).toBe(false);
     expect(spawned.units.every((u) => u.heard && u.heard.x === 20 && u.heard.y === 20)).toBe(true);
-    expect(of(landing, 'concealmentBroken')).toEqual([]);
+    // (The few that came before it, every turn, may have found the squad by now: the wave itself doesn't.)
+    expect(of(landing, 'concealmentBroken').filter((e) => spawned.units.some((u) => u.id === e.by))).toEqual([]);
     // Noisy: a firefight's worth of noise brings it on the first turn.
     const loud = setup();
     loud.mission.noise = HORDE.wave - HORDE.perTurn;
-    expect(of(turns(loud, 1), 'reinforcementsIncoming').map((e) => e.r.turn)).toEqual([2]);
+    expect(waves(turns(loud, 1)).map((e) => e.r.turn)).toEqual([2]);
+  });
+
+  it('a few of the dead come in every turn on any mission left by bus, twice as many while a sabotage alarm sounds (playtest 2026-10-15, #11, #14)', () => {
+    const trickles = (kind: 'scavenge' | 'sabotage' | 'elimination', difficulty: number) => {
+      const s = field(40, 40);
+      s.mission.evacZone = [{ x: 39, y: 39 }];
+      s.mission.horde = ['zombie', 'zombie'];
+      addUnit(s, 's1', 'rookie', 20, 20);
+      s.mission.kind = kind;
+      s.mission.difficulty = difficulty;
+      if (kind === 'elimination') delete s.mission.horde;
+      const t = sim(s, 1);
+      t.runAlienTurn();
+      return of(t.events, 'reinforcementsIncoming').filter((e) => e.r.trickle).map((e) => e.r.units.length);
+    };
+    expect(trickles('scavenge', 1)).toEqual([HORDE.trickle[1]]);
+    expect(trickles('scavenge', 4)).toEqual([HORDE.trickle[4]]);
+    expect(trickles('sabotage', 2)).toEqual([2 * HORDE.trickle[2]]);
+    // A Limpieza ends when they're all down: nobody keeps coming.
+    expect(trickles('elimination', 3)).toEqual([]);
   });
 });
 

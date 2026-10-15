@@ -52,7 +52,7 @@ for (const o of c.offers) if (o.expiresDay !== null) o.expiresDay += shift;
 gainXp(c, LEVEL_XP[2]! + 8 - c.xp, rng);
 Object.assign(c, { credits: 340, parts: 9, medicines: 5, food: 22 });
 
-// The Marea halfway, three zones down; Volkren in contact by road besides Aldren (the two the network holds).
+// The Marea halfway, three zones down; Velsa in contact by road besides Brena (the two the network holds).
 c.doom = 6;
 c.flooded = floodedZones(c);
 for (const r of c.regions) if (r.id === 'eeu') r.contacted = true;

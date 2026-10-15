@@ -576,6 +576,40 @@ const FACILITY_ART: Record<string, Art> = {
       k.put('anvil', { x: 0.95, z: 0.2 });
     }
   },
+  // Cuarentena (playtest 15/10 #13): «una nave aparte, con cerrojo por fuera». A container made a cell, its doors
+  // barred and padlocked from outside, a red lamp over them, concrete barriers round it and a warning post. Then a
+  // guard's chair at the door with a lamp and water; then the stove's pipe smoking on the roof and a radio by the chair.
+  quarantine: (k, level) => {
+    const steel = mat(0x2d3134, { metal: 0.6, rough: 0.45 });
+    // The container lengthwise, its doors to the front (at z 1.15, 1.47 high, 1.4 across).
+    k.put('shipContainer', { z: -0.6, yaw: Math.PI / 2, s: 0.85 });
+    // The bar across the doors, its brackets and the padlock.
+    k.box(steel, 1.5, 0.09, 0.08, 0, 0.78, 1.2);
+    for (const x of [-0.66, 0.66]) k.box(steel, 0.1, 0.24, 0.1, x, 0.7, 1.17);
+    k.box(mat(0xc9a227, { metal: 0.5, rough: 0.4 }), 0.1, 0.12, 0.05, 0.14, 0.62, 1.26);
+    k.beacon('red', 0, 1.58, 1.08, 0.14);
+    for (const [x, z, yaw] of [
+      [-1.85, -0.6, Math.PI / 2],
+      [1.85, -0.6, Math.PI / 2],
+      [-1.35, 2.0, 0],
+    ] as const)
+      k.put('jersey', { x, z, yaw, s: 0.8 });
+    // The warning: a post with a yellow board.
+    k.box(mat(0x3a3f45), 0.07, 1.1, 0.07, -2.05, 0, 1.45);
+    k.box(mat(0xd9b53a, { rough: 0.6 }), 0.5, 0.36, 0.04, -2.05, 0.85, 1.47);
+    k.box(mat(0x1c1c1c), 0.36, 0.06, 0.05, -2.05, 0.95, 1.48);
+    if (level >= 2) {
+      k.put('foldingChair', { x: 1.2, z: 1.75, yaw: Math.PI + 0.5, s: 0.85 });
+      k.put('wallLamp', { x: 0.7, z: 1.16, y: 1.2, s: 0.8 });
+      for (const x of [-0.95, -0.72]) k.put('jerrycan', { x, z: 1.5, yaw: x * 2 });
+    }
+    if (level >= 3) {
+      k.shape(PIPE, steel, 0.12, 0.55, 0.12, -0.4, 1.47, -1.6);
+      k.fire(-0.4, 2.02, -1.6, 0.12);
+      k.put('supplyCrate', { x: 1.75, z: 1.25, s: 0.6 });
+      k.put('radioSet', { x: 1.75, z: 1.25, y: 0.38 });
+    }
+  },
   // Huerto: raised beds under plastic and rain barrels; a greenhouse with a stove; drip lines, seed trays and a scarecrow.
   garden: (k, level) => {
     for (const z of [0.62, 1.86]) tunnelBed(k, -0.55, z, level >= 3);

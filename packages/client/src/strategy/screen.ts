@@ -14,17 +14,24 @@ import {
   baseWeaponTier,
   bastionLevel,
   BIOME_NAMES,
+  BITE_TAG,
   BUILD_IDS,
   buildable,
   BUILDS,
   canAfford,
   CLASS_TOP,
+  clearAim,
+  contactAim,
+  craftAim,
   CRAFTS,
   AXES,
   axesOf,
   baseAttrs,
   echoesLevel,
+  missionInfo,
+  operationAim,
   RECRUIT_DESCRIPTION,
+  rumorAim,
   soldierTemplate,
   attrPointsFree,
   leaningClass,
@@ -114,7 +121,6 @@ import {
   PREMISE,
   proposalClock,
   floodedZoneNote,
-  ofZone,
   contactBlocker,
   underMarea,
   NIGHT_TEXT,
@@ -908,7 +914,6 @@ export class StrategyScreen {
         text: `Bastión nivel ${level}.`,
         unlocks: this.unlocksOf(level),
         note: page.note,
-        action: { label: 'Abrir el diario', go: () => void this.go('research') },
       });
     }
     // Story chapters and the final mission are announced whenever they open: after a level, a mission or an event.
@@ -982,8 +987,8 @@ export class StrategyScreen {
         tone: 'good',
         kicker: 'FIN DE MES',
         rank: 10,
-        title: 'Llega el convoy de Aldren',
-        text: `Ruth Halvorsen manda desde Aldren ${c.credits - prev.credits} suministros. Cada zona contactada aumenta el envío.`,
+        title: 'Llega el convoy de Brena',
+        text: `Ruth Halvorsen manda desde Brena ${c.credits - prev.credits} suministros. Cada zona contactada aumenta el envío.`,
       });
     }
     if (c.doom > prev.doom) {
@@ -1179,7 +1184,7 @@ export class StrategyScreen {
   /** What a proposal costs, takes and does, and where to see it: whoever decides should know as much as whoever proposed. */
   /**
    * What a proposal costs and brings, one kind per line in the same order
-   * (Tiempo, Suministros, Qué hace, Extra), and how to see what it is about.
+   * (Tiempo, Suministros, Qué hace or Objetivo, Extra), and how to see what it is about.
    */
   private proposalDetail(c: CampaignState, action: NonNullable<CampaignState['proposal']>['action']): { rows: [string, string][]; see: (() => void) | null } {
     switch (action.type) {
@@ -1187,10 +1192,12 @@ export class StrategyScreen {
         const o = this.offerById(action.id);
         if (!o) return { rows: [], see: null };
         const reward = [o.reward.credits ? `${o.reward.credits} §` : '', o.reward.recruit ? 'un recluta' : ''].filter(Boolean).join(' y ');
+        const info = missionInfo(c, o);
         return {
           rows: [
-            ['Qué hace', `${MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}`],
-            ['Extra', `Dificultad ${'★'.repeat(o.difficulty)}${reward ? ` · recompensa: ${reward}` : ''}`],
+            // What there is to do there, in Lore's words (playtest 15/10 #4: «Qué hace» did not say what it was).
+            ['Objetivo', operationAim(o.kind, { item: info.item, vip: info.vipName, alarm: info.alarm, facility: !!o.facility, final: o.final })],
+            ['Extra', `${MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name} · dificultad ${'★'.repeat(o.difficulty)}${reward ? ` · recompensa: ${reward}` : ''}`],
           ],
           see: () => this.focusOffer(o.id),
         };
@@ -1203,7 +1210,7 @@ export class StrategyScreen {
           rows: [
             ['Tiempo', `${workDays(c, days)} días de obra; no hace pasar el tiempo`],
             ['Suministros', costText(cost)],
-            ['Qué hace', `Despeja ${TERRAINS[plot.terrain as keyof typeof TERRAINS]?.name.toLowerCase() ?? 'el terreno'} en ${plotCode(plot)}`],
+            ['Qué hace', clearAim(plot.terrain as 'rocks' | 'forest' | 'ruins', plotCode(plot))],
             ...(salvage ? [['Extra', `+${salvage} § de chatarra`] as [string, string]] : []),
           ],
           see: () => this.pickPlot(plot.id, false),
@@ -1243,15 +1250,14 @@ export class StrategyScreen {
           rows: [
             ['Tiempo', 'Al momento'],
             ['Suministros', costText(contactCost(c))],
-            ['Qué hace', `Contacto con ${REGIONS[action.region].name}`],
-            ['Extra', `+${regionIncome(c, action.region)} § al mes`],
+            ['Qué hace', contactAim(action.region, regionIncome(c, action.region))],
           ],
           see: () => this.focusRegion(action.region),
         };
       case 'investigate': {
         const rumor = c.rumors.find((r) => r.id === action.id);
         return rumor
-          ? { rows: [['Tiempo', `${rumor.daysLeft} días escuchando; no hace pasar el tiempo`], ['Qué hace', `Investigar el rumor ${ofZone(REGIONS[rumor.region].name)}`]], see: () => this.focusRegion(rumor.region) }
+          ? { rows: [['Tiempo', `${rumor.daysLeft} días escuchando; no hace pasar el tiempo`], ['Qué hace', rumorAim(REGIONS[rumor.region].name)]], see: () => this.focusRegion(rumor.region) }
           : { rows: [], see: null };
       }
       case 'event': {
@@ -1261,7 +1267,7 @@ export class StrategyScreen {
       case 'craft': {
         // The Taller's work (docs/FASE4.md): placeholder rows until the Taller's screen shows it.
         const def = CRAFTS[action.project];
-        return { rows: [['Tiempo', `${def.days} días de obra`], ['Suministros', `${costText(def.cost)} y ${def.parts} piezas`], ['Qué hace', def.name]], see: null };
+        return { rows: [['Tiempo', `${def.days} días de obra`], ['Suministros', `${costText(def.cost)} y ${def.parts} piezas`], ['Qué hace', craftAim(def.kind, def.the)]], see: null };
       }
     }
   }
@@ -1277,7 +1283,6 @@ export class StrategyScreen {
     // A plate like the alerts' (playtest 14/10, #22): who proposed on its edge, the sentence, the data, the answer at its foot.
     const mine = p.by === this.mySlot;
     this.proposalEl.classList.toggle('mine', mine);
-    this.proposalEl.style.setProperty('--who', this.playerColor(p.by));
     const kicker = h('div.proposal-kicker', {}, mine ? 'Tu propuesta' : 'Propuesta');
     if (mine) {
       append(
@@ -1466,7 +1471,7 @@ export class StrategyScreen {
     const rumor = c.rumors.find((r) => r.id === c.listening);
     if (rumor) dates.push({ day: c.day + rumor.daysLeft, icon: 'will', text: `Se sabrá qué pasa en ${REGIONS[rumor.region].name}` });
     for (const o of c.offers.filter((x) => x.expiresDay !== null)) dates.push({ day: o.expiresDay!, icon: 'flag', text: `Caduca «${o.name}»`, go: () => this.focusOffer(o.id) });
-    dates.push({ day: c.nextSupplyDay, icon: 'clock', text: 'Convoy de Aldren' });
+    dates.push({ day: c.nextSupplyDay, icon: 'clock', text: 'Convoy de Brena' });
     dates.push({ day: c.nextDoomDay, icon: 'clock', text: `Avanza ${doomSubject(bastionLevel(c))}` });
     dates.sort((a, b) => a.day - b.day);
     const when = (day: number) => (day <= c.day ? 'hoy' : day === c.day + 1 ? 'mañana' : `en ${day - c.day} d`);
@@ -3016,11 +3021,13 @@ export class StrategyScreen {
           'div.ready-board',
           {},
           ...[this.mySlot, partner!.slot].map((slot) =>
+            // A plate each (playtest 15/10 #5): who, and a light that says whether they are ready.
             h(
               `span.ready-mark${c.launchReady[slot] ? '.on' : ''}`,
-              { style: { '--accent': this.playerColor(slot) } },
-              h('b', {}, slot === this.mySlot ? 'Tú' : this.playerName(slot)),
-              c.launchReady[slot] ? ' · LISTO ✓' : ' · eligiendo…',
+              { style: { '--accent': this.playerColor(slot) }, title: c.launchReady[slot] ? 'Listo para despegar' : 'Aún elige la escuadra' },
+              h('i.ready-lamp'),
+              h('b', {}, slot === this.mySlot ? `${this.playerName(slot)} (tú)` : this.playerName(slot)),
+              h('small', {}, c.launchReady[slot] ? 'LISTO' : 'ELIGIENDO'),
             ),
           ),
         )
@@ -3186,7 +3193,7 @@ export class StrategyScreen {
     );
     const cards = h('div.lineup-cards');
     report.squad.forEach((e, i) => {
-      const bitten = report.infected?.includes(e.id) ? ' · MORDIDO' : '';
+      const bitten = report.infected?.includes(e.id) ? ` · ${BITE_TAG}` : '';
       const status = (e.status === 'dead' ? 'CAÍDO EN COMBATE' : e.status === 'wounded' ? `HERIDO · ${e.woundedDays} días` : 'ILESO') + bitten;
       const card = h(
         `div.lineup-card.${e.status}`,

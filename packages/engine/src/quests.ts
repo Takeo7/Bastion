@@ -290,7 +290,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'event',
         title: 'Las campanas de Telm',
-        text: 'Telm es un pueblo de la sierra. Cada noche llega una horda y la gente se encierra en la iglesia. Una sirena de los Cuervos, en el valle, atrae a los zombis hacia el pueblo. Cuando no quede nadie, bajarán a saquearlo.',
+        text: 'Telm es un pueblo de la sierra. Cada noche llega una horda y la gente se encierra en la iglesia. Un coche patrulla de los Cuervos, con la sirena puesta en el valle, atrae a los zombis hacia el pueblo. Cuando no quede nadie, bajarán a saquearlo.',
         options: [
           { label: 'Callar la sirena', effect: 'Una operación de sabotaje', then: 'next' },
           { label: 'Ahora no podemos', effect: 'Telm se vacía: −10 suministros al mes', then: 'failure' },
@@ -302,7 +302,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'sabotage',
         biome: 'wilds',
         days: 8,
-        briefing: 'La sirena está en una loma sobre el valle. Calladla antes de que la horda llegue al pueblo.',
+        briefing: 'El coche patrulla está en una loma sobre el valle, con la sirena puesta. Apagadla antes de que la horda llegue al pueblo.',
       },
     ],
     outcomes: {
@@ -326,7 +326,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'hack',
         biome: 'city',
         days: 10,
-        briefing: 'Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Volkren hay un repetidor roto que recoge su señal. Reparadlo y sabremos desde dónde emite. Si falla, el ruido atraerá a lo que ande cerca.',
+        briefing: 'Una estación de números emite con el indicativo de Otto Brandt. Fue mi maestro. Lo creía muerto. En el tejado del ayuntamiento de Velsa hay un repetidor roto que recoge su señal. Reparadlo y sabremos desde dónde emite. Si falla, el ruido atraerá a lo que ande cerca.',
       },
       {
         type: 'mission',
@@ -335,7 +335,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'rescue',
         biome: 'wilds',
         days: 8,
-        briefing: 'Otto está vivo. Emite desde una cabaña de Volkren con una radio de válvulas. Los Cuervos también lo han oído. Llegad antes y sacadlo con vida.',
+        briefing: 'Otto está vivo. Emite desde una cabaña de Velsa con una radio de válvulas. Los Cuervos también lo han oído. Llegad antes y sacadlo con vida.',
         vip: 'Otto Brandt',
       },
     ],

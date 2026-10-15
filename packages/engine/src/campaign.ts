@@ -91,8 +91,8 @@ import {
 import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecision, type QuestId, type QuestMission, type QuestOutcome, type TraitId } from './quests';
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
-import { missionPods, podPlan, type MapSource, type SquadMember } from './setup';
-import type { Appearance, Arms, Biome, ClassId, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Site, Slot, TemplateId, Vec2 } from './types';
+import { missionPods, podPlan, VIP_NAMES, type MapSource, type SquadMember } from './setup';
+import type { Alarm, Appearance, Arms, Biome, ClassId, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Site, Slot, TemplateId, Vec2 } from './types';
 
 // --------------------------------------------------------------- facilities
 
@@ -109,7 +109,8 @@ export type FacilityId =
   | 'crew'
   | 'echoes'
   | 'memorial'
-  | 'garden';
+  | 'garden'
+  | 'quarantine';
 
 export interface FacilityDef {
   id: FacilityId;
@@ -246,6 +247,17 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
     unique: true,
   },
   // Food (docs/FASE4.md): costs and days like a barracón. Texts are placeholders for Lore.
+  // The bitten's own building (playtest 2026-10-15, #13): without it none of them boards La Lata.
+  quarantine: {
+    id: 'quarantine',
+    name: 'Cuarentena',
+    description: 'Una nave aparte, con cerrojo por fuera. Sin ella, un mordido no sube a La Lata.',
+    upgrades: ['Los mordidos tardan un día más en convertirse. Mantas, agua y alguien de guardia en la puerta.', 'Los mordidos tardan dos días más en convertirse. Una estufa y una radio para las noches largas.'],
+    cost: 50,
+    days: 3,
+    level: 1,
+    unique: true,
+  },
   garden: {
     id: 'garden',
     name: 'Huerto',
@@ -488,13 +500,13 @@ export interface RegionDef {
 
 // The valley of Kessra (docs/FASE5.md): where each zone lies on the valley's map (Arturo's, 15/10:
 // x −15…15 and z −10…10, 51,2 of its pixels a unit) and the roads between them, the same ones La Lata
-// drives. Aldren (Atalaya's zone) is up in the north-west; the Marea comes up from Los Llanos de
+// drives. Brena (Atalaya's zone) is up in the north-west; the Marea comes up from Los Llanos de
 // Ceniza in the south.
 export const REGIONS: Record<RegionId, RegionDef> = {
   na: { id: 'na', name: 'Los Llanos de Ceniza', x: 2.87, z: 6.95, roads: ['afr', 'me'], income: 35 },
   sa: { id: 'sa', name: 'Carvik', x: -11.48, z: -0.98, roads: ['weu', 'afr'], income: 25 },
-  weu: { id: 'weu', name: 'Aldren', x: -6.11, z: -5.86, roads: ['oce', 'sa', 'eeu'], income: 30 },
-  eeu: { id: 'eeu', name: 'Volkren', x: 12.64, z: -8.28, roads: ['weu', 'eas'], income: 25 },
+  weu: { id: 'weu', name: 'Brena', x: -6.11, z: -5.86, roads: ['oce', 'sa', 'eeu'], income: 30 },
+  eeu: { id: 'eeu', name: 'Velsa', x: 12.64, z: -8.28, roads: ['weu', 'eas'], income: 25 },
   afr: { id: 'afr', name: 'Corran', x: -6.56, z: 4.02, roads: ['oce', 'na', 'sa'], income: 25 },
   me: { id: 'me', name: 'Galen', x: 10.82, z: -2.23, roads: ['oce', 'na'], income: 30 },
   eas: { id: 'eas', name: 'El Pantano Gris', x: 3.79, z: -6.25, roads: ['eeu', 'oce'], income: 35 },
@@ -532,14 +544,14 @@ export const HOME_REGION: RegionId = 'weu';
 /**
  * Zombie activity (`c.doom`) at which each zone falls under the Marea, by the
  * road stretches between it and Los Llanos, where it comes up from (docs/FASE5.md).
- * Aldren never falls: at DOOM_MAX the campaign is lost.
+ * Brena never falls: at DOOM_MAX the campaign is lost.
  */
 export const MAREA_THRESHOLDS = [4, 6, 9, 10, 11];
 export const MAREA_SOURCE: RegionId = 'na';
 /** Nidos gather under the Marea or beside it this many times as often as elsewhere. */
 const NIDO_TIDE_WEIGHT = 3;
 
-/** The activity at which `id` falls under the Marea; null for Aldren. */
+/** The activity at which `id` falls under the Marea; null for Brena. */
 export function mareaThreshold(id: RegionId): number | null {
   if (id === HOME_REGION) return null;
   return MAREA_THRESHOLDS[Math.min(roadHops(MAREA_SOURCE, id), MAREA_THRESHOLDS.length - 1)]!;
@@ -593,7 +605,7 @@ function syncMarea(c: CampaignState): boolean {
   return now.length !== before.length || now.some((x) => !before.includes(x));
 }
 
-/** Zones a road joins to Aldren or to a zone already contacted: the radio reaches as far as the people do. */
+/** Zones a road joins to Brena or to a zone already contacted: the radio reaches as far as the people do. */
 function roadReachable(c: CampaignState, id: RegionId): boolean {
   return REGIONS[id].roads.some((n) => n === HOME_REGION || c.regions.find((r) => r.id === n)?.contacted);
 }
@@ -921,6 +933,10 @@ export interface MissionOffer {
   tide?: true;
   /** The living hold it (docs/ZOMBIS-PRIMERO.md): their bands among the dead, and their garrison. Missing: the dead's alone. */
   living?: true;
+  /** An ordinary rescue: who is held (playtest 2026-10-15, #20), so the report and the card can name them. */
+  vip?: string;
+  /** A sabotage: what makes the noise (#14). */
+  alarm?: Alarm;
 }
 
 export type ProposalAction =
@@ -1341,10 +1357,15 @@ export function treatCost(c: CampaignState): number {
   return facilityLevel(c, 'infirmary') >= 2 ? 1 : 2;
 }
 
-/** The day a bitten soldier turns, unless treated: 3 days after coming back, 5 with an Enfermería. */
+/** The day a bitten soldier turns, unless treated: 3 days after coming back, 5 with an Enfermería, and one more for each level of the Cuarentena past the first. */
 export function turnDay(c: CampaignState, s: CampaignSoldier): number | null {
   if (!s.infection) return null;
-  return s.infection.since + TURN_DAYS + (facilityCount(c, 'infirmary') ? INFIRMARY_TURN_DAYS : 0);
+  return s.infection.since + TURN_DAYS + (facilityCount(c, 'infirmary') ? INFIRMARY_TURN_DAYS : 0) + Math.max(0, facilityLevel(c, 'quarantine') - 1);
+}
+
+/** Whether the bitten may board La Lata (playtest 2026-10-15, #13): only with a Cuarentena to take them to. */
+export function hasQuarantine(c: CampaignState): boolean {
+  return facilityCount(c, 'quarantine') > 0;
 }
 
 /** An enclave that is an ally (contacted) and stands (no Nido in its region). */
@@ -1534,6 +1555,9 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   if (!final && (kind === 'rescue' || rng.int(5) === 0)) reward.recruit = rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const);
   if (!final && (kind === 'sabotage' || (kind === 'hack' && rng.int(3) === 0))) reward.doom = 1;
   const seed = rng.int(2 ** 31);
+  // Who a rescue is for and what a sabotage silences, chosen now so the report can say it (playtest 2026-10-15, #14, #20).
+  const vip = kind === 'rescue' && !final ? VIP_NAMES[seed % VIP_NAMES.length] : undefined;
+  const alarm: Alarm | undefined = kind === 'sabotage' ? (['factory', 'factory', 'police', 'ambulance'] as const)[seed % 4] : undefined;
   // The scenarios (playtest 2026-10-14, #25), by the map's seed: half the countryside is a service area on the
   // forest road, a third of the towns an industrial estate.
   const site: Site | undefined = final ? undefined : biome === 'wilds' && seed % 2 === 0 ? 'roadside' : biome === 'city' && seed % 3 === 0 ? 'industrial' : undefined;
@@ -1555,6 +1579,8 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
     story: null,
     quest: null,
     ...(living ? { living: true as const } : {}),
+    ...(vip ? { vip } : {}),
+    ...(alarm ? { alarm } : {}),
   })));
 }
 
@@ -1610,6 +1636,8 @@ function makeFacilityOffer(c: CampaignState, region: RegionId, rng: Rng): Missio
     facility: region,
     story: null,
     quest: null,
+    // A Nido's noise is a factory's alarm (Lore, #14).
+    alarm: 'factory',
   });
 }
 
@@ -1633,6 +1661,8 @@ function makeStoryOffer(c: CampaignState, chapter: number, rng: Rng): MissionOff
     story: chapter,
     quest: null,
     ...(def.living ? { living: true as const } : {}),
+    // The Cuervos take their sirens from patrol cars (Lore, #14).
+    ...(def.kind === 'sabotage' ? { alarm: 'police' as const } : {}),
   };
 }
 
@@ -1671,6 +1701,8 @@ function refreshNarrative(c: CampaignState, rng: Rng): void {
 /** What the battlefield of an operation names: its kicker, the object to recover, the VIP and an enemy leader. */
 export interface MissionInfo {
   kicker?: string;
+  /** A sabotage's alarm (#14). */
+  alarm?: Alarm;
   item?: string;
   /** Its story puts the item out in the open (playtest 2026-10-14, #27). */
   itemOutdoors?: boolean;
@@ -1679,6 +1711,13 @@ export interface MissionInfo {
 }
 
 export function missionInfo(c: CampaignState, offer: MissionOffer): MissionInfo {
+  const info = ownInfo(c, offer);
+  // An ordinary rescue's hostage and a sabotage's alarm, chosen with the offer (playtest 2026-10-15, #14, #20).
+  return { ...info, ...(info.vipName || !offer.vip ? {} : { vipName: offer.vip }), ...(offer.alarm ? { alarm: offer.alarm } : {}) };
+}
+
+/** What the story, a side quest or an ordinary Botín say of an operation. */
+function ownInfo(c: CampaignState, offer: MissionOffer): MissionInfo {
   if (offer.story) {
     return { kicker: `DIARIO · HOJA ${offer.story}`, item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
   }
@@ -1822,6 +1861,7 @@ function makeQuestOffer(c: CampaignState, q: QuestState, step: QuestMission, rng
     story: null,
     quest: q.id,
     ...(living ? { living: true as const } : {}),
+    ...(step.kind === 'sabotage' ? { alarm: 'police' as const } : {}),
   });
 }
 
@@ -2031,7 +2071,7 @@ function freshRegions(): RegionState[] {
 
 /** The base's first line, and the same once the opening operation is chosen (placeholders for Lore). */
 const WELCOME = 'El Bastión entra en servicio. Elegid la primera misión: el combate hará subir de nivel al Bastión.';
-const WELCOME_OPENING = 'Primera salida: las medicinas del consultorio de Aldren. La escuadra espera en la cochera.';
+const WELCOME_OPENING = 'Primera salida: las medicinas del consultorio de Brena. La escuadra espera en la cochera.';
 
 /**
  * A new campaign opens with a mission (playtest 2026-10-13): the first story
@@ -3052,7 +3092,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     // A zone under the Marea sends nothing.
     const income = BASE_INCOME + c.regions.filter((r) => r.contacted && !underMarea(c, r.id)).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
     c.credits += income;
-    log(c, `Llega el convoy de Aldren: Ruth Halvorsen manda ${income} suministros.`, 'good');
+    log(c, `Llega el convoy de Brena: Ruth Halvorsen manda ${income} suministros.`, 'good');
     stop = true;
   }
 
@@ -3228,7 +3268,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       s.alive = false;
       s.fellDay = report.day;
       entry.status = u.lost ? 'lost' : 'dead';
-      if (u.lost) log(c, `${s.name} se quedó fuera cuando salió La Lata.`, 'bad');
+      if (u.lost) log(c, u.infected && !hasQuarantine(c) ? `${s.name} se quedó fuera: llevaba un mordisco, y sin Cuarentena no se sube a La Lata.` : `${s.name} se quedó fuera cuando salió La Lata.`, 'bad');
       else if (facilityCount(c, 'memorial')) log(c, `${s.name} descansa en el Camposanto.`);
       // Equipment is lost with its bearer, the Armería's weapons too.
       for (const item of [s.loadout.utility, s.loadout.ammo]) if (item) c.inventory[item] = Math.max(0, (c.inventory[item] ?? 0) - 1);

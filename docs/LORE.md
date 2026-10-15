@@ -27,7 +27,7 @@ Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se l
 
 > Hace dos inviernos, la Pandemia vació el valle de Kessra. Los muertos se levantaron y siguen andando.
 >
-> Atalaya, una vieja estación militar en la sierra de Aldren, aguanta con cuarenta supervivientes llegados de todas partes.
+> Atalaya, una vieja estación militar en la sierra de Brena, aguanta con cuarenta supervivientes llegados de todas partes.
 >
 > Vosotros dos la dirigís. Lo importante lo decidís juntos.
 >
@@ -41,7 +41,7 @@ Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se l
 - **Supervivencia seria:** más *The Last of Us* y *This War of Mine* que gore de serie B.
 - **El miedo:** la escasez y el ruido, más que el monstruo.
 - **Los vivos, en sus misiones** ([ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos. Cuervos y Congregación aparecen en las suyas, y ahí son lo más peligroso.
-- **Todo es inventado:** el país, el valle, las ciudades. Ningún sitio real, y nombres de lugar sin idioma claro (Kessra, Aldren, Corran, Volkren, Galen, Carvik, Telm).
+- **Todo es inventado:** el país, el valle, las ciudades. Ningún sitio real, y nombres de lugar sin idioma claro (Kessra, Brena, Corran, Velsa, Galen, Carvik, Telm). Que suenen a un pueblo de hoy, no a fantasía: cortos, sin «-ren», «-dren» ni «-vik» (prueba del 15/10, Ana: «Aldren» y «Volkren» pasaron a Brena y Velsa).
 - **Gente de todas partes:** el puerto de Galen y el Instituto traían gente de todo el mundo, y el valle fue camino de huida hacia la sierra. Los nombres de soldados y personajes son internacionales.
 
 ## Cronología
@@ -60,10 +60,10 @@ Es una comarca inventada entre una sierra alta y una llanura, con dos ciudades m
 
 | Zona | Id | Qué hay | Aliado (enclave) |
 |---|---|---|---|
-| Aldren | `weu` | Los pueblos de la sierra, junto a Atalaya (la de partida) | El Refugio de Aldren |
+| Brena | `weu` | Los pueblos de la sierra, junto a Atalaya (la de partida) | El Refugio de Brena |
 | Corran | `afr` | La primera ciudad caída, llena de zombis | Los del Hospital |
 | El Pantano Gris | `eas` | Un embalse y una central eléctrica muerta | La Red Callada |
-| Volkren | `eeu` | Valles cerrados, aldeas que aún resisten | Los Pastores |
+| Velsa | `eeu` | Valles cerrados, aldeas que aún resisten | Los Pastores |
 | Galen | `me` | La ciudad muerta y el Instituto Galen | Los del Instituto |
 | Los Llanos de Ceniza | `na` | La llanura por donde sube la Marea | Los Camioneros |
 | Carvik | `sa` | Minas y carreteras cortadas | El Sindicato de la Mina |
@@ -94,7 +94,7 @@ Los ids del código se mantienen; cambian el nombre, el aspecto y, donde haga fa
 
 ## El Bastión
 
-- **La Estación Atalaya:** una vieja estación militar en lo alto de la sierra de Aldren, con refugio subterráneo, muros de hormigón y una presa al lado. La nieve, la altura y una sola carretera la mantienen viva. Quienes llegaron conservaron su orden militar: equipos, rangos y armería.
+- **La Estación Atalaya:** una vieja estación militar en lo alto de la sierra de Brena, con refugio subterráneo, muros de hormigón y una presa al lado. La nieve, la altura y una sola carretera la mantienen viva. Quienes llegaron conservaron su orden militar: equipos, rangos y armería.
 - **La base en superficie** encaja tal cual: el refugio en el centro y alrededor barracones, huerto, barricadas y pasarelas. Se despejan rocas, bosque y ruinas, y las ruinas dan suministros.
 - **La Lata:** un autobús de línea con la chapa que Teo le soldó por encima; de ahí el nombre que le puso la gente de Atalaya (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
 - **Las decisiones a medias se quedan, con otra historia.** Dos grupos que llegaron a la vez y no se fían del todo: lo importante lo deciden los dos. El año pasado, un líder solo vendió su refugio a los Cuervos a cambio de su vida.
@@ -109,7 +109,7 @@ Se mantienen las voces de la radio que ya existen y cambian sus vidas.
 | **Teodor Vidić, «Teo»** | Mecánico jubilado. Blindó La Lata, arregla armas y enseña oficios. Construyó el Grillo. Secreto: trabajó de vigilante en el Instituto Galen la noche en que todo empezó. |
 | **Dra. Amara Nwosu** | Viróloga del Instituto Galen. Huyó con sus cuadernos y cree que hay una vacuna. |
 | **Simão Ferreira** | Desertor de los Cuervos. Sabe dónde guardan lo que roban y a quién. |
-| **Ruth Halvorsen** | Portavoz del Refugio de Aldren, el enclave más grande. Socia exigente. |
+| **Ruth Halvorsen** | Portavoz del Refugio de Brena, el enclave más grande. Socia exigente. |
 | **Celia Marsh, «la Voz»** | Presentadora de radio antes de la Pandemia. Ahora guía a la Congregación y a la Marea con su emisora. |
 
 ## La historia
@@ -118,11 +118,11 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 
 | Nivel | Capítulo | Tipo · zona | Qué pasa |
 |---|---|---|---|
-| 1 | **Primer invierno** | Recuperación · Aldren | Las medicinas del consultorio del pueblo, antes de que caduquen. |
+| 1 | **Primer invierno** | Recuperación · Brena | Las medicinas del consultorio del pueblo, antes de que caduquen. |
 | 2 | **La doctora** | Rescate · Corran | Sacar a la Dra. Nwosu de un hospital lleno de zombis. |
 | 3 | **La sirena** | Sabotaje · Los Llanos de Ceniza | Callar la sirena con la que los Cuervos atraen hordas. |
 | 4 | **La torre del Pico Gris** | Pirateo (arreglar la radio) · El Pantano Gris | Volver a poner en marcha el repetidor: oír a los demás enclaves. |
-| 5 | **Los inmunes** | Rescate · Volkren | Una niña a la que la Pandemia no mata. Simão sabe dónde la tienen los Cuervos. |
+| 5 | **Los inmunes** | Rescate · Velsa | Una niña a la que la Pandemia no mata. Simão sabe dónde la tienen los Cuervos. |
 | 6 | **Los cuadernos de Galen** | Recuperación · Galen | Lo que pasó de verdad en el laboratorio. Teo estaba allí. |
 | 7 | **La Voz** | Rescate · Los Llanos de Ceniza | Asaltar la emisora de la Congregación y sacar a la Voz con vida: solo ella sabe parar la Marea. |
 | 8 | **La Marea** | Final | La horda llega a la sierra. Atalaya resiste, y la vacuna está lista. |
@@ -131,7 +131,7 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 - Es una horda inmensa que sube desde la llanura con el deshielo, y sustituye a la Partitura.
 - En vez de compases cuenta kilómetros: «La Marea, a 9 km». Cuando llega a 0, Atalaya cae.
 - Hasta el nivel 4 del Bastión (cuando se arregla la radio del Pico Gris) nadie sabe que existe: el reloj se llama **Infestación** («Infestación 3/12») y las zonas caídas están «en manos de los muertos». Desde el nivel 4 es la Marea.
-- Entra por Los Llanos de Ceniza y sube por las carreteras: cubre las zonas a 4, 6, 9, 10 y 11, según lo lejos que estén de Los Llanos ([FASE5.md](FASE5.md)). Aldren no cae: a 12, la campaña se pierde. Los textos no conjugan verbos con el nombre de la zona, que puede ser plural.
+- Entra por Los Llanos de Ceniza y sube por las carreteras: cubre las zonas a 4, 6, 9, 10 y 11, según lo lejos que estén de Los Llanos ([FASE5.md](FASE5.md)). Brena no cae: a 12, la campaña se pierde. Los textos no conjugan verbos con el nombre de la zona, que puede ser plural.
 - Los **Nidos**, sitios donde los zombis se juntan (antes, los Órganos), la alimentan. Quemarlos la hace retroceder.
 
 **El final** (lo deciden los dos). Con la Marea parada y la vacuna en la mano:
@@ -153,7 +153,8 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
   - El Chillón llama a todos los de alrededor.
 - **Contagio:**
   - El mordisco de un zombi contagia.
-  - Un contagiado vuelve a la base con días contados: o medicinas, o se convierte y se pierde.
+  - En la misión, el mordido pierde 1 de salud cada turno. Sin una **Cuarentena** en el Bastión (una nave aparte, con cerrojo por fuera) no sube a La Lata y se queda fuera (prueba del 15/10).
+  - Si vuelve, vuelve con días contados: o medicinas, o se convierte y se pierde. Cada mejora de la Cuarentena le da un día más.
   - Es el drama del juego: una decisión de los dos cuando las medicinas no llegan para todos.
 - **Escasez:**
   - Munición contada por misión.
@@ -233,12 +234,13 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 | Terminal, hackear, pirateo | **Arreglar** (el equipo, la radio) |
 | Protocolos del dron | Botiquín volante, Cobertura del Grillo, Calambrazo, Espabilar |
 | La Rosa | **Árbol de habilidades** |
+| Aldren, Volkren | **Brena**, **Velsa** |
 | Dos llaves, llave doble | Uno propone y el otro acepta; «lo decidís juntos» |
 | Los datos (el objetivo) | El nombre del objeto: «las medicinas»; sin nombre, «la carga» |
 | Oficio (la aptitud) | **Maña** (MAÑ); el Oficio es la rama |
 | Créditos | **Suministros** (§) |
 | Refuerzos (en combate) | **La horda**: los muertos que llegan por los bordes |
-| «Operación Ceniza Rota» | Nombre de lugar: «La gasolinera de Volkren» |
+| «Operación Ceniza Rota» | Nombre de lugar: «La gasolinera de Velsa» |
 
 Con los nombres de zona: «del Pantano Gris», «al Pantano Gris», «de La Vega», «en Los Llanos de Ceniza» (`ofZone` y `toZone` en `lore.ts`). Nunca «de El…».
 

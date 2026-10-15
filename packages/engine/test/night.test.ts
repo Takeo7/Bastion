@@ -210,10 +210,10 @@ describe('tall buildings', () => {
     expect(counts[2]).toBeGreaterThan(0);
     expect(counts[3]).toBeGreaterThan(0);
     expect([...desks].some((n) => n >= 2)).toBe(true);
-    // Out of town, everything is one storey.
+    // Out of town, everything is one storey; at a factory, but its offices, which may have two (playtest 15/10, #17).
     for (const biome of ['wilds', 'facility'] as const) {
       const s = createMission({ map: { kind: 'generated', biome, seed: 4 }, slots: [0], rng: new Rng(1) });
-      expect(Math.max(...s.storeys!)).toBeLessThanOrEqual(1);
+      expect(Math.max(...s.storeys!)).toBeLessThanOrEqual(biome === 'wilds' ? 1 : 2);
     }
     // Hand-made maps have none: they see as before.
     expect(createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(1) }).storeys).toBeUndefined();
@@ -430,7 +430,7 @@ describe('night', () => {
       for (let turn = 1; turn < 10; turn++) {
         const r = sim(s, turn);
         r.runAlienTurn();
-        const wave = of(r.events, 'reinforcementsIncoming')[0];
+        const wave = of(r.events, 'reinforcementsIncoming').find((e) => !e.r.trickle);
         if (wave) return turn;
       }
       return null;

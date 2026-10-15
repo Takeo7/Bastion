@@ -7,6 +7,7 @@ import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import type { Rng } from './rng';
 import type {
+  Alarm,
   Appearance,
   Arms,
   Biome,
@@ -85,6 +86,9 @@ export interface MissionOptions {
   campaignMission?: GameState['campaignMission'];
   /** Rescue: who waits at the objective (story chapters, side quests); a random name otherwise. */
   vipName?: string;
+  /** A sabotage's alarm (playtest 2026-10-15, #14), and what the objective is called. */
+  alarm?: Alarm;
+  objectiveName?: string;
   /** Names the first enemy of this kind (a side quest's leader). */
   leader?: { template: TemplateId; name: string };
   /** A night mission (docs/ALTURA-Y-NOCHE.md): one more group of the dead, and the living see less. */
@@ -95,6 +99,8 @@ export interface MissionOptions {
   itemOutdoors?: boolean;
   /** Medicines also stop a bite's contagion, for everyone (docs/FASE8.md §C). */
   medicineCures?: boolean;
+  /** The campaign's Bastion has a Cuarentena (#13): false, the bitten can't board La Lata. */
+  quarantine?: boolean;
 }
 
 /** The Taller de oficios skirmish veterans trained in, as if built at its top level: a skirmish has no base. */
@@ -391,7 +397,8 @@ function hordeTurns(kind: MissionKind): number[] {
 }
 
 /** Who a rescue frees, when it isn't a story's or a quest's (their sex is in lore.ts NAMED_SEX). */
-const VIP_NAMES = ['Dra. Irina Sokolova', 'Ing. Kenji Mori', 'Alcaldesa Mara Velasco', 'Dr. Femi Adebayo', 'Agente Claire Dubois'];
+/** Who an ordinary rescue is for; the campaign picks one when it offers the operation (MissionOffer.vip). */
+export const VIP_NAMES = ['Dra. Irina Sokolova', 'Ing. Kenji Mori', 'Alcaldesa Mara Velasco', 'Dr. Femi Adebayo', 'Agente Claire Dubois'];
 
 /**
  * The battlefield a kind asks the generator for, when it isn't its own: a
@@ -400,13 +407,13 @@ const VIP_NAMES = ['Dra. Irina Sokolova', 'Ing. Kenji Mori', 'Alcaldesa Mara Vel
  */
 const LAYOUT_KIND: Partial<Record<MissionKind, MissionKind>> = { scavenge: 'recovery' };
 
-export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[], itemOutdoors = false): MissionLayout {
+export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[], itemOutdoors = false, alarm?: Alarm): MissionLayout {
   if (map.kind === 'handmade') {
     const def = MAPS[map.id];
     if (!def) throw new Error(`Unknown map ${map.id}`);
     return handmadeLayout(def, kind);
   }
-  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed, ...(map.site ? { site: map.site } : {}), ...(itemOutdoors ? { itemOutdoors } : {}) });
+  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed, ...(map.site ? { site: map.site } : {}), ...(itemOutdoors ? { itemOutdoors } : {}), ...(alarm ? { alarm } : {}) });
 }
 
 export function createMission(opts: MissionOptions): GameState {
@@ -418,7 +425,7 @@ export function createMission(opts: MissionOptions): GameState {
   // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
   const extra = garrison(kind, difficulty, opts.living);
   const plan = [...base, ...(extra ? [extra] : []), ...(opts.night ? [nightPod(difficulty)] : [])];
-  const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors);
+  const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors, opts.alarm);
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
     (kind === 'recovery' && !layout.item) ||
@@ -487,7 +494,7 @@ export function createMission(opts: MissionOptions): GameState {
 
   let objectiveUnit: string | null = null;
   if (kind === 'sabotage' && layout.objectiveSpot) {
-    units.push({ ...makeUnit('relay', 'relay', TEMPLATES.relay.name, null, layout.objectiveSpot, null), objective: true });
+    units.push({ ...makeUnit('relay', 'relay', opts.objectiveName ?? TEMPLATES.relay.name, null, layout.objectiveSpot, null), objective: true });
     objectiveUnit = 'relay';
   }
   if (kind === 'rescue' && layout.objectiveSpot) {
@@ -527,9 +534,12 @@ export function createMission(opts: MissionOptions): GameState {
     objectiveDone: false,
     hackBonus: opts.hackBonus ?? 0,
     ...(opts.medicineCures ? { medicineCures: true } : {}),
+    ...(opts.alarm ? { alarm: opts.alarm } : {}),
+    ...(opts.quarantine !== undefined ? { quarantine: opts.quarantine } : {}),
     reinforcements,
     difficulty,
-    ...(kind === 'scavenge' ? { horde: hordeWave(difficulty) } : {}),
+    // The dead keep coming by the edges on every mission you leave by bus (playtest 2026-10-15, #11).
+    ...(kind !== 'elimination' ? { horde: hordeWave(difficulty) } : {}),
     night: !!opts.night,
   };
 
@@ -540,7 +550,8 @@ export function createMission(opts: MissionOptions): GameState {
   const state: GameState = {
     seq: 0,
     mapId: layout.id,
-    mapName: layout.name,
+    // In the campaign the map is called as the operation (playtest 2026-10-15, #20): one name for the place everywhere.
+    mapName: opts.campaignMission?.name ?? layout.name,
     biome: layout.biome,
     ...(layout.site ? { site: layout.site } : {}),
     width: layout.width,

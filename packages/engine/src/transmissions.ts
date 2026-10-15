@@ -27,7 +27,7 @@ export const SPEAKERS: Record<SpeakerId, Speaker> = {
   nwosu: { name: 'Dra. Amara Nwosu', role: 'Enfermería' },
   simon: { name: 'Simão Ferreira', role: 'Desertor de los Cuervos' },
   voz: { name: 'Celia Marsh, «la Voz»', role: 'La Congregación' },
-  halvorsen: { name: 'Ruth Halvorsen', role: 'Refugio de Aldren' },
+  halvorsen: { name: 'Ruth Halvorsen', role: 'Refugio de Brena' },
   coro: { name: 'Voz sin nombre', role: 'Frecuencia de la Congregación' },
 };
 
@@ -67,9 +67,8 @@ export type SceneId =
   | 'endingBreak'
   | 'endingRecord'
   | 'granCoral'
-  /** Built on the spot: the recap for whoever opens a campaign already under way, and the warnings in combat. */
-  | 'recap'
-  | 'tip';
+  /** Built on the spot: the recap for whoever opens a campaign already under way. */
+  | 'recap';
 
 export interface Scene {
   id: SceneId;
@@ -103,7 +102,7 @@ export const SCENES: Scene[] = [
     channel: 'Correo a pie · leída por Morse',
     when: (c) => c.day > 31,
     lines: [
-      { who: 'halvorsen', text: 'A Atalaya, del Refugio de Aldren. Con esta carta suben los suministros del mes.' },
+      { who: 'halvorsen', text: 'A Atalaya, del Refugio de Brena. Con esta carta suben los suministros del mes.' },
       { who: 'halvorsen', text: 'Cada caja sale de una despensa que también pasa hambre. Esperamos resultados.' },
     ],
   },
@@ -146,7 +145,7 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · Taller',
     when: (c) => chapterOpen(c, 3),
     lines: [
-      { who: 'teo', text: 'Los Cuervos tienen una sirena en los Llanos de Ceniza. La hacen sonar junto a quien no les paga, y los muertos acuden.' },
+      { who: 'teo', text: 'Los Cuervos tienen un coche patrulla en los Llanos de Ceniza. Lo llevan junto a quien no les paga, encienden la sirena, y los muertos acuden.' },
       { who: 'teo', text: 'Así vaciaron dos aldeas el invierno pasado. Quiero que se calle.' },
     ],
   },
@@ -235,8 +234,8 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · Enfermería',
     when: (c) => bitten(c).length > 0,
     lines: [
-      { who: 'nwosu', text: 'Treinta y nueve y subiendo. Es el mordisco.' },
-      { who: 'nwosu', text: 'Tres días, alguno más con la Enfermería. Con el tratamiento, la fiebre baja.' },
+      { who: 'nwosu', text: 'Treinta y nueve y subiendo. Es el mordisco. Está en la Cuarentena, con el cerrojo echado.' },
+      { who: 'nwosu', text: 'Tres días, alguno más con la Enfermería o con la Cuarentena mejor montada. Con el tratamiento, la fiebre baja.' },
       { who: 'nwosu', text: 'Cada tratamiento se lleva medicinas, y no nos sobran.' },
       { who: 'morse', text: 'Con fiebre no sale de misión. El tratamiento lo aprobáis los dos.' },
     ],
@@ -415,21 +414,6 @@ export function sceneLines(scene: Scene, c: CampaignState): SceneLine[] {
   return scene.lines.filter((l) => !l.if || l.if(c));
 }
 
-/**
- * Morse on the radio during a story chapter, by chapter: when the squad lands
- * and when the objective is done. Only what the mission doesn't already say
- * (prueba del 14/10): the briefing and the objective strip tell the rest.
- */
-export const STORY_RADIO: { start?: string; objective?: string }[] = [
-  {},
-  {},
-  {},
-  { objective: 'Os oigo. Y oigo a todo el valle.' },
-  {},
-  {},
-  {},
-];
-
 // ---------------------------------------------------------------- recap
 
 /** Played to whoever opens a campaign already under way (a partner arriving late, another browser). */
@@ -450,133 +434,3 @@ export function recapLines(c: CampaignState, slot: Slot): SceneLine[] {
   if (first) lines.push({ who: 'morse', text: `Lo más urgente: ${first.label[0]!.toLowerCase()}${first.label.slice(1)}.` });
   return lines;
 }
-
-// ------------------------------------------------------------------ tips
-
-/** Morse's first-time warnings in combat: each plays once per browser, the first time it matters. */
-export type TipId =
-  | 'contact'
-  | 'shot'
-  | 'flanked'
-  | 'wounded'
-  | 'command'
-  | 'flare'
-  | 'psionic'
-  | 'song'
-  // Phase 2 (docs/FASE2.md): noise, searching and the Hinchado.
-  | 'heard'
-  | 'search'
-  | 'horde'
-  | 'bloater'
-  // Night (docs/ALTURA-Y-NOCHE.md), the bite (FASE3.md) and found weapons (FASE4.md).
-  | 'night'
-  | 'bitten'
-  | 'risen'
-  | 'foundWeapon'
-  // Buildings with storeys (docs/FASE6.md) and counted ammunition (FASE7.md).
-  | 'storeys'
-  | 'noMags';
-
-export interface RadioTip {
-  who: SpeakerId;
-  /** What Morse says. */
-  line: string;
-  /** The rule, in small print. */
-  rule: string;
-}
-
-export const RADIO_TIPS: Record<TipId, RadioTip> = {
-  contact: {
-    who: 'morse',
-    line: 'Contacto. Que no os rodeen.',
-    rule: 'Los zombis vienen derechos a por vosotros, y contra un mordisco la cobertura no sirve: guardad distancia, dejad a alguien en vigilancia, esperadlos en un paso estrecho y que no os rodeen. Los vivos, donde los haya, corren a cubrirse: contra ellos, sí, buscad el escudo antes de terminar el turno.',
-  },
-  shot: {
-    who: 'morse',
-    line: 'Mirad el porcentaje y el ruido antes de disparar.',
-    rule: 'El porcentaje ya cuenta cobertura, distancia y altura; por el flanco, más acierto y más crítico. Cada disparo suena: una pistola a 8 casillas, un fusil a 12, un francotirador a 16. Lo que lo oye, viene.',
-  },
-  flanked: {
-    who: 'morse',
-    line: 'Ese está al descubierto. Movedlo.',
-    rule: 'Escudo rojo: sin cobertura frente a un enemigo, cualquier ataque puede ser crítico.',
-  },
-  wounded: {
-    who: 'morse',
-    line: 'Herido. En el campo no se cura solo.',
-    rule: 'En misión, la salud solo vuelve con botiquín. En la base, las heridas tardan días en curar, y una dosis de medicinas quita tres. Los caídos no vuelven.',
-  },
-  command: {
-    who: 'morse',
-    line: 'Un solo mando a la vez.',
-    rule: 'Quien tiene el mando da las órdenes. La tecla C se lo cede al compañero.',
-  },
-  flare: {
-    who: 'morse',
-    line: 'Movimiento en esa calle. Llegan más.',
-    rule: 'Llegan más muertos ahí al final del próximo turno enemigo. Apartaos o dejad a alguien en vigilancia.',
-  },
-  song: {
-    who: 'morse',
-    line: 'El machete apenas se oye. El molotov, sí.',
-    rule: 'El machete y la ballesta apenas se oyen; un molotov, a 10 casillas. Los petardos suenan donde caen: sirven de cebo. La previsión de cada acción dice cuánto ruido hace.',
-  },
-  psionic: {
-    who: 'morse',
-    line: 'Un Chillón. Primero el Chillón.',
-    rule: 'Su grito desorienta o asusta a los que estén cerca, y se oye a 16 casillas: todo zombi que lo oiga viene. También levanta a los muertos. La voluntad resiste, y sube con el rango.',
-  },
-  heard: {
-    who: 'morse',
-    line: 'Os han oído. Vienen a mirar.',
-    rule: 'Lo que oye un ruido va hacia él aunque no os vea, y un grupo dormido se pone en marcha. Apartaos de donde sonó, o esperadlos en vigilancia.',
-  },
-  search: {
-    who: 'teo',
-    line: 'Medicinas y comida, antes que nada.',
-    rule: 'Registrar: 1 acción dentro de una habitación, y cada una se registra una vez, para toda la escuadra. Las cajas marcadas dan siempre lo suyo: un arma, medicinas, cargadores o comida. La mochila lleva 3 cosas, 4 con la Chapistería; lo que lleva un caído se pierde.',
-  },
-  horde: {
-    who: 'morse',
-    line: 'Vienen más. Por los bordes.',
-    rule: 'En el Saqueo no hay reloj, pero cada pocos turnos llegan zombis por los bordes del mapa, y antes cuanto más ruido hagáis. Evacuad cuando la mochila pese.',
-  },
-  bloater: {
-    who: 'morse',
-    line: 'Ese está hinchado. De lejos.',
-    rule: 'El Hinchado revienta al morir o al llegar a vosotros: 3 de daño a quien tenga al lado. Abatidlo antes de que se acerque, y nunca junto a los vuestros.',
-  },
-  night: {
-    who: 'morse',
-    line: 'Noche cerrada. Ellos no necesitan ver para encontraros.',
-    rule: 'De noche veis 8 casillas menos y os detectan a la mitad de distancia. Bajo una farola, una bengala o un fuego, os ven como de día. Hay más muertos en la calle, y el botín vale la mitad más.',
-  },
-  bitten: {
-    who: 'nwosu',
-    line: 'Le han mordido. Traédmelo, y yo me encargo.',
-    rule: 'Un mordisco puede contagiar. En combate no cambia nada, pero si el contagiado cae, se levanta zombi. En la base tiene 3 días para recibir el tratamiento, y con fiebre no sale de misión.',
-  },
-  risen: {
-    who: 'morse',
-    line: 'Ya no es de los nuestros.',
-    rule: 'Quien cae contagiado se levanta zombi al empezar el turno de los zombis. A un contagiado herido, apartadlo de la primera línea o sacadlo antes de que caiga.',
-  },
-  foundWeapon: {
-    who: 'teo',
-    line: 'Eso no lo tira nadie. Traédmelo.',
-    rule: 'Un arma encontrada ocupa un hueco de la mochila. Con una acción se equipa ahí mismo, y la que llevaba pasa a la mochila. Si vuelve en La Lata, va a la Armería; las buenas suben un nivel a quien las lleve',
-  },
-  storeys: {
-    who: 'morse',
-    line: 'Desde arriba se dispara mejor. Y por una escalera se sube de uno en uno.',
-    rule: 'Subir o bajar una planta por la escalera cuesta como 2 casillas; arriba, solo se entra y se sale por el rellano. Disparar desde más alto da +20 de puntería. Los zombis también suben: si os oyen arriba, os siguen por la escalera. En las misiones de los vivos, ellos se apostan arriba.',
-  },
-  noMags: {
-    who: 'teo',
-    line: 'Sin cargadores, esa arma ya solo pesa.',
-    rule: 'Se sale con los cargadores de repuesto que haya hecho el Taller, y recargar gasta uno: primero el arma principal y, si está llena, la pistola, de 6 balas. Sin ellos no se recarga: quedan las balas que haya dentro, el cuchillo o el machete y las granadas. Registrando aparecen más.',
-  },
-};
-
-/** The scene a warning plays as. */
-export const TIP_SCENE: Scene = { id: 'tip', title: 'Aviso', channel: 'Radio de campaña', when: () => false, lines: [] };

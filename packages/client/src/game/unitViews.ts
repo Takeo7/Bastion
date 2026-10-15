@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { coverAt, decorOf, PLAYER_COLORS, sexOfPerson, TEMPLATES, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
+import { BITE_TAG, canStandOn, coverAt, decorOf, kindAt, PLAYER_COLORS, sexOfPerson, TEMPLATES, type Alarm, type Biome, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
 import { STOREY, tileToWorld } from './coords';
 import type { Blow, FigurePose, Gear } from './figures';
 import { clipSpeed, CROUCHED, gaitsOf } from './gaits';
 import { CROWD } from './crowd';
 import { buildUnit, gearOf, IDLE_POSE, isFigure, type UnitRig } from './models';
-import { armamentOf } from './syntyFigures';
+import { armamentOf, type Siren } from './syntyFigures';
 import { easeInOut, timeRate, tween, wait } from './tween';
 
 const ALIEN_COLOR = '#ff4d4d';
@@ -83,7 +83,15 @@ interface UnitView {
   fell: { blow: Blow; seconds: number } | null;
   /** A campaign soldier's own weapons as last shown (Unit.arms: armsKey), to see one taken in hand. */
   arms: string;
+  /** Its last walk (moveAlong), which the next waits for, and how many it has set off on. */
+  walk: Promise<void> | null;
+  walks: number;
 }
+
+/** A sabotage's alarm by the map, where the mission does not say (skirmishes, older saves): as sfx.ts picks its sound. */
+const ALARM_BY_MAP: Record<Biome, Alarm> = { city: 'police', wilds: 'ambulance', facility: 'factory' };
+/** The four ways round a tile. */
+const SIDES: [number, number][] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
 /** What a campaign soldier carries, as a key: its weapon in the hand and at the belt. */
 const armsKey = (u: Unit) => (u.arms ? `${u.arms.primary}|${u.arms.melee}` : '');
@@ -204,7 +212,7 @@ export class UnitViews {
     const sex = u.appearance ? undefined : sexOfPerson(u.name);
     // A campaign soldier's own weapons (docs/FASE8.md §A); anyone else's are its template's.
     const gear: Gear = { ...gearOf(u.weaponTier, u.armorTier), arms: u.arms ?? null };
-    const rig = buildUnit(u.template, color, u.appearance, gear, u.campaignId ?? (u.team === 'xcom' ? u.name : u.id), sex);
+    const rig = buildUnit(u.template, color, u.appearance, gear, u.campaignId ?? (u.team === 'xcom' ? u.name : u.id), sex, u.template === 'relay' ? this.sirenOf(u) : undefined);
     const ring = new THREE.Mesh(
       ringGeometry,
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -231,7 +239,7 @@ export class UnitViews {
 
     const view: UnitView = {
       id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, droneAway: false, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u),
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0,
     };
     this.views.set(u.id, view);
     // Left outside when La Mula went (sync): standing, not dead.
@@ -347,7 +355,7 @@ export class UnitViews {
       u.stunned ? '<em class="stun">ATURDIDO</em>' : '',
       u.disoriented ? '<em class="psi">DESORIENTADO</em>' : '',
       u.panicked ? '<em class="psi">PÁNICO</em>' : '',
-      u.infected ? '<em class="bite">MORDIDO</em>' : '',
+      u.infected ? `<em class="bite">${BITE_TAG}</em>` : '',
       u.suppressedBy ? '<em class="stun">SUPRIMIDO</em>' : '',
       u.marked ? '<em class="aid">MARCADO</em>' : '',
       u.ruptured ? '<em class="stun">VULNERABLE</em>' : '',
@@ -573,11 +581,30 @@ export class UnitViews {
   /**
    * Walks unit `id` along `path`, a move of `ap` actions: at its template's
    * pace for one or for two (gaits.ts), crouched if it is. Resolves on arrival.
+   * A unit's walks go one after the other, even when they are played at once
+   * (a group of the dead walking together, where one may move twice: game.ts
+   * playGroup; playtest 15/10 #19, two walks pulling a body back and forth):
+   * the next sets off from where the last ends, without stopping.
    */
   async moveAlong(id: string, path: Place[], onStep?: (p: THREE.Vector3) => void, ap = 1): Promise<void> {
     const v = this.views.get(id);
     if (!v || !path.length) return;
+    const before = v.walk;
+    const walk = (async () => {
+      await before?.catch(() => undefined);
+      await this.walk(v, id, path, onStep, ap);
+    })();
+    v.walk = walk;
+    try {
+      await walk;
+    } finally {
+      if (v.walk === walk) v.walk = null;
+    }
+  }
+
+  private async walk(v: UnitView, id: string, path: Place[], onStep: ((p: THREE.Vector3) => void) | undefined, ap: number): Promise<void> {
     v.animating = true;
+    const walks = ++v.walks;
     const p = v.pose;
     const gaits = gaitsOf(v.template);
     const gait = p.crouchTarget > 0.5 ? CROUCHED : ap >= 2 ? gaits.two : gaits.one;
@@ -634,7 +661,10 @@ export class UnitViews {
       }
     } finally {
       v.animating = false;
-      void tween(0.18, (t) => (p.run = 1 - t));
+      // Down to a stand, unless it has set off again meanwhile.
+      void tween(0.18, (t) => {
+        if (v.walks === walks) p.run = 1 - t;
+      });
     }
   }
 
@@ -662,6 +692,24 @@ export class UnitViews {
     } finally {
       v.animating = false;
     }
+  }
+
+  /**
+   * What a sabotage's objective is in this battle (its alarm; sfx.ts picks its
+   * sound the same way) and where a car's nose points: at the tile the map
+   * blocks for it (sirenCar), else along the first tile beside it one could
+   * stand on.
+   */
+  private sirenOf(u: Unit): Siren {
+    const s = this.shown!;
+    const alarm = s.mission.alarm ?? ALARM_BY_MAP[s.biome];
+    const at = ([dx, dy]: [number, number]) => ({ x: u.pos.x + dx, y: u.pos.y + dy, z: 0 });
+    const inside = (p: Place) => p.x >= 0 && p.y >= 0 && p.x < s.width && p.y < s.height;
+    const way =
+      SIDES.find((d) => inside(at(d)) && decorOf(s.decor?.[at(d).y * s.width + at(d).x])?.kind === 'sirenCar') ??
+      SIDES.find((d) => inside(at(d)) && canStandOn(kindAt(s, at(d)))) ??
+      SIDES[0]!;
+    return { alarm, heading: Math.atan2(way[0], way[1]) };
   }
 
   /** A building's stairs on place `p` (a ladder tile dressed as stairs), in the state last shown. */

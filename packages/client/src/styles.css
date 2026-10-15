@@ -435,6 +435,25 @@ button:disabled {
   opacity: 0.35;
 }
 
+/* The soldier in play, one at a time (playtest 15/10 #9): a stamp in the turn's colour, by the label. */
+.in-play {
+  padding: 1px 5px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--turn, var(--ink));
+  border: 1.5px solid;
+}
+
+/* On its card in the squad list, the same words. */
+em.in-play {
+  font-style: normal;
+  padding: 0 3px;
+  font-size: 10px;
+  border-width: 1px;
+}
+
 /* A night mission: the same stamp, in ink blue, a little less crooked. */
 .conceal.night {
   color: var(--ink-blue);
@@ -1279,43 +1298,6 @@ em.bite::before {
 
 .deadline.hurry .deadline-bar i {
   background: var(--stamp);
-}
-
-/* Leaving in La Mula (docs/PRUEBA-2026-10-14.md P1): over the turn's buttons while one of ours is in it,
-   green like the zone on the ground. */
-.evac-call {
-  display: grid;
-  gap: 1px;
-  padding: 6px 8px 5px;
-  font-family: var(--font-display);
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  color: #0d2a18;
-  background: #4dff9a;
-  border: 0;
-  border-radius: 2px;
-  box-shadow: 2px 3px 6px rgba(0, 0, 0, 0.5);
-}
-
-.evac-call small {
-  font-family: var(--font);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-}
-
-.evac-call:disabled {
-  opacity: 0.6;
-}
-
-/* The evacuation dialog's head: whose decision it is about. */
-.evac-kicker {
-  display: block;
-  margin-bottom: 4px;
-  font-family: var(--font-display);
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--good);
 }
 
 /* Key cap. */

@@ -48,6 +48,8 @@ import {
   itemDroppedFloat,
   itemDroppedLine,
   itemObjective,
+  alarmDoneLine,
+  alarmObjective,
   itemPartnerLine,
   itemTag,
   itemTakenFloat,
@@ -55,7 +57,14 @@ import {
   distance,
   endsTurn,
   EVAC_TEXT,
+  BITE_FLOAT,
+  BITE_NO_BOARD,
+  biteLossLine,
+  biteNote,
+  EVAC_BAR,
   evacAsk,
+  evacBarNotice,
+  evacClock,
   evacDepartLine,
   evacPrompt,
   evacRefusedLine,
@@ -105,7 +114,6 @@ import {
   songTargets,
   STORM_TARGETS,
   STORY,
-  STORY_RADIO,
   teamVisibility,
   TEMPLATES,
   unitAt,
@@ -138,9 +146,9 @@ import {
   type Vec2,
 } from '@bastion/engine';
 import type { Net, NetStatus } from '../net';
-import { deadlineOf } from '../ui/deadline';
+import { deadlineLeft } from '../ui/deadline';
 import { clear } from '../ui/dom';
-import { Hud, type AbilityView, type EvacButtonView, type HordeView, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
+import { Hud, type AbilityView, type BarActionId, type HordeView, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
 import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
@@ -154,7 +162,6 @@ import { SONG, SongFx, SongMarks } from './songFx';
 import { setCombatRate, setHurry, timeRate, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
-import { CombatTips, shootsFromRange } from './combatTips';
 import { playArrival } from './arrivals';
 import { COMBAT_RATES, graphics, onGraphics } from '../settings';
 
@@ -341,7 +348,7 @@ const DAMAGE_EACH: Partial<Record<AbilityId, string>> = {
   missiles: ' en el área',
   discharge: ' en el área',
   fireball: ' en el área',
-  combatProtocol: ' (+2 a Acorazados y Sirenas)',
+  combatProtocol: ' (+2 a Acorazados y alarmas)',
 };
 
 /** The hover card's damage line, from the rules' own numbers: «Daño 4–6 · crítico +2». */
@@ -426,6 +433,18 @@ function packSlots(loot: readonly Loot[]): PackSlot[] {
   });
 }
 
+/** What a blast does to each one caught in it, played together (Game.playBlast). */
+const BLAST_RESULTS = new Set<GameEvent['t']>(['damaged', 'died', 'infected', 'stunned']);
+
+/**
+ * Whether `a` shoots: an attack on an enemy with a weapon that isn't for close quarters. Only then
+ * does cover count against it: a bite or a blow ignores cover and never flanks (aim.ts), and most
+ * enemies now are the dead (docs/ZOMBIS-PRIMERO.md). The Chillón screams and the Hinchado bursts.
+ */
+function shootsFromRange(a: Unit): boolean {
+  return abilitiesOf(a).some((id) => ABILITIES[id].target === 'enemy' && !!ABILITIES[id].weapon && !attackWeapon(a, id as AttackAbility).melee);
+}
+
 /** Which edge of the map a tile is nearest to, as the radio says it (the map's top row is the north). */
 function edgeName(s: GameState, p: Vec2): string {
   const gaps: [number, string][] = [
@@ -463,16 +482,16 @@ function armorNotes(d: DamagePreview, t: Unit): string[] {
   return notes;
 }
 
-/** Enemies whose name is feminine: «una Sirena». */
+/** Enemies whose name is feminine: «una Alarma». */
 const FEMININE: Partial<Record<TemplateId, true>> = { relay: true };
 
-/** "Saqueador" → "un Saqueador", "Sirena" → "una Sirena". */
+/** "Saqueador" → "un Saqueador", "Alarma" → "una Alarma". */
 function anEnemy(u: Unit | undefined): string {
   return u ? `${FEMININE[u.template] ? 'una' : 'un'} ${TEMPLATES[u.template].name}` : 'un enemigo';
 }
 
 function unitOf(e: GameEvent): string | undefined {
-  return 'unit' in e ? e.unit : undefined;
+  return 'unit' in e ? (e.unit ?? undefined) : undefined;
 }
 
 /** Where a missed round ends up: past the target, off to one side. */
@@ -517,7 +536,11 @@ export class Game {
   /** The partner's soldier that acted last: where a broken concealment happened. */
   private partnerLast: string | null = null;
   /** One of ours that has just walked into La Mula: once the queue has played, leave or wait (P1). */
-  private evacArrived: string | null = null;
+  /** The squad's turn has just begun: a `damaged` on a bitten soldier now is the bite's toll (#13). */
+  private biteTick = false;
+  /** «Evacuar» pressed once, for this soldier: the second press asks (playtest 15/10 #10). */
+  private evacArmed: string | null = null;
+  private evacArmTimer = 0;
   /** A swap under way (docs/FASE8.md §C): once the slot is dropped, this is picked up from the floor. */
   private swapTake: { unit: string; id: string } | null = null;
   /** The next `healed` is a medicine's, not the Grillo's: no drone flies. */
@@ -534,8 +557,6 @@ export class Game {
   private readonly songMarks = new SongMarks();
   private overlays!: Overlays;
   private readonly hud: Hud;
-  /** Morse's first-time warnings (UX-REVISION-2 #30, UX/UI and Lore). */
-  private readonly tips: CombatTips;
 
   private state!: GameState;
   private view!: GameState;
@@ -552,6 +573,9 @@ export class Game {
   private lastUsed: { unit: string; ability: AbilityId } | null = null;
 
   private selected: string | null = null;
+  /** The command and the soldier in play as autoSelect last saw them: a change picks the one in play (#9). */
+  private lastCommand: Slot | undefined;
+  private lastInPlay: string | undefined;
   private mode: Mode = { kind: 'move' };
   private targetId: string | null = null;
   private hoverTile: Pos | null = null;
@@ -640,7 +664,6 @@ export class Game {
       onBackToMenu: () => this.net.send({ t: 'backToMenu' }),
       onAbandon: () => this.net.send({ t: 'abandon' }),
       onPassCommand: () => this.passCommand(),
-      onEvac: () => this.evacButton(),
       onItem: (o) => this.itemOrder(o),
       onSwap: (take, drop) => this.swapItem(take, drop),
       onToggleSound: () => !this.sfx.toggleMute(),
@@ -649,7 +672,6 @@ export class Game {
     });
     // Above the 3D labels, under the HUD panels.
     this.root.insertBefore(this.edge.root, this.hud.root);
-    this.tips = new CombatTips(this.hud.root, this.mySlot);
 
     this.disposers.push(this.renderer.onFrame((dt, time) => this.frame(dt, time)));
     // «Velocidad del combate» (docs/UX-RITMO.md), live; the base and the menus always play at normal speed.
@@ -716,6 +738,9 @@ export class Game {
     this.renderer.setNight(!!this.view.mission.night);
     this.units.build(this.view);
     if (!s.outcome) this.sfx.start(s.biome, !s.concealed);
+    this.sfx.siren(this.view);
+    // What a bite does here (playtest 15/10 #13): it weakens every turn, and without a Cuarentena it can't board.
+    this.hud.setBiteNote(biteNote(s.mission.quarantine !== false));
     this.selected = null;
     this.mode = { kind: 'move' };
     this.showOutcome();
@@ -783,14 +808,8 @@ export class Game {
       mission.objective,
       briefing,
     );
-    // No warning plays over the briefing while it is up (until it is closed).
-    this.tips.intro(closed);
-    this.storyRadio('start');
-    // A night mission: Morse says so once the briefing is gone, the first night only (playtest 14/10: less radio), and the log keeps the rules.
-    if (s.mission.night) {
-      this.tips.night();
-      this.hud.log(NIGHT_RULES, '#2a4a7a');
-    }
+    // A night mission: the log keeps the rules. No radio in the middle of a mission (playtest 15/10 #8).
+    if (s.mission.night) this.hud.log(NIGHT_RULES, '#2a4a7a');
     void this.openingShot();
   }
 
@@ -874,10 +893,9 @@ export class Game {
     }
   }
 
-  /** The server's clock on the call to leave changed (PRUEBA-2026-10-14 #28): the button and the open dialog show it. */
+  /** The server's clock on the call to leave changed (PRUEBA-2026-10-14 #28): the bar's answer says it. */
   refreshDeadline(): void {
     this.refreshHud();
-    this.hud.evacClock();
   }
 
   setPlayers(players: PlayerInfo[]): void {
@@ -910,8 +928,8 @@ export class Game {
     this.gone = true;
     window.clearTimeout(this.endArmTimer);
     window.clearTimeout(this.momentTimer);
-    this.tips.destroy();
     for (const d of this.disposers) d();
+    this.sfx.siren(null);
     this.renderer.dispose();
     clear(this.root);
     this.root.remove();
@@ -959,6 +977,11 @@ export class Game {
       this.current = null;
       this.noteResult(item);
       await this.settle(item, epoch);
+      // What a blast does to everyone in it plays at once (playtest 15/10 #16).
+      if (item.e.t === 'explosive') {
+        const blast = this.blastResults();
+        if (blast.length) await this.playBlast(blast);
+      }
     }
     // The last enemy attack of the turn is read too, before the turn changes hands.
     if (this.resultHold) {
@@ -968,15 +991,12 @@ export class Game {
     }
     this.playing = false;
     this.refreshInteractive();
-    this.offerEvac();
   }
 
-  /** What an animated event leaves behind: the view, the fog, the HUD, the warnings, the sightings, and the pause after one's own action. */
+  /** What an animated event leaves behind: the view, the fog, the HUD, the sightings, and the pause after one's own action. */
   private async settle(item: QueuedEvent, epoch: number): Promise<void> {
-    const secured = this.view.mission.objectiveDone;
     const seen = this.visibleAliens;
     const call = this.view.evacCall;
-    const from = item.e.t === 'moved' ? getUnit(this.view, item.e.unit)?.pos : undefined;
     const floorBefore = new Set((this.view.dropped ?? []).map((d) => d.id));
     applyEvent(this.view, item.e);
     const e = item.e;
@@ -992,25 +1012,15 @@ export class Game {
       this.swapTake = null;
       if (this.view.dropped?.some((d) => d.id === id)) this.send({ type: 'item', unit, action: 'take', id });
     }
-    // One of ours walked into La Mula from outside: leave or wait, once the queue has played (P1).
-    if (e.t === 'moved' && item.by === this.mySlot && from && !inEvacZone(this.view, from)) {
-      const u = getUnit(this.view, e.unit);
-      if (u?.alive && this.isMine(u) && inEvacZone(this.view, u.pos)) this.evacArrived = u.id;
-    }
     // A call nobody answered lapses with the squad's turn.
-    if (e.t === 'turnBegan' && call && !this.view.evacCall) {
-      this.hud.log(EVAC_TEXT.lapsed, '#ffc93a');
-      this.hud.dropEvac();
-    }
+    if (e.t === 'turnBegan' && call && !this.view.evacCall) this.hud.log(EVAC_TEXT.lapsed, '#ffc93a');
     if (e.t === 'turnBegan') this.plans.clear();
     else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') this.plans.delete(e.unit);
-    if (!secured && this.view.mission.objectiveDone) this.storyRadio('objective');
     if (item.e.t === 'tileChanged' || item.e.t === 'floorBroken') this.mapView.rebuild(this.view);
     this.refreshView();
     // A weapon taken in hand changes on the figure as the view syncs (unitViews, 0.7 s): seen whole before what follows.
     if (e.t === 'weaponEquipped') await wait(0.7);
     this.refreshStatus();
-    this.tips.event(item.e, this.view);
     try {
       await this.announceSighted(item, seen, epoch);
     } catch (err) {
@@ -1172,6 +1182,35 @@ export class Game {
     for (const q of items) await this.settle(q, epoch);
   }
 
+  /**
+   * What a blast leaves on everyone it caught, right after its `explosive`
+   * (rules.ts explode: each victim's hit, fall and bite in turn), taken off
+   * the queue; none unless there are at least two.
+   */
+  private blastResults(): QueuedEvent[] {
+    let n = 0;
+    while (n < this.queue.length && BLAST_RESULTS.has(this.queue[n]!.e.t)) n++;
+    return n > 1 ? this.queue.splice(0, n) : [];
+  }
+
+  /** A blast's results at once: everyone it caught is hit together, then all who die fall together. */
+  private async playBlast(items: QueuedEvent[]): Promise<void> {
+    const epoch = this.rig.epoch;
+    this.grouped = true;
+    for (const phase of [(t: string) => t !== 'died', (t: string) => t === 'died']) {
+      const these = items.filter((q) => phase(q.e.t));
+      if (!these.length) continue;
+      this.current = these[0]!;
+      await Promise.all(these.map((q) => this.play(q).catch((err) => console.error('[anim]', err))));
+    }
+    this.grouped = false;
+    this.current = null;
+    for (const q of items) {
+      this.noteResult(q);
+      await this.settle(q, epoch);
+    }
+  }
+
   /** Whether `id` still has events waiting to be animated. */
   private isBusy(id: string | null): boolean {
     if (!id) return false;
@@ -1221,6 +1260,8 @@ export class Game {
    */
   private async play(item: QueuedEvent): Promise<void> {
     const { e, by } = item;
+    // Right after the squad's turn begins come the bites' tolls (rules.ts: a `damaged` for each bitten, and a fall).
+    this.biteTick = e.t === 'turnBegan' ? e.team === 'xcom' : this.biteTick && (e.t === 'damaged' || e.t === 'died');
     if (by !== null && by !== this.mySlot) this.notePartner(e, by);
     const v = this.view;
     const alienPhase = v.activeTeam === 'alien';
@@ -1256,15 +1297,17 @@ export class Game {
         return this.playAttack(e, cam, look);
       case 'damaged': {
         const target = getUnit(v, e.unit)!;
-        const shot = this.lastShot?.target === e.unit ? this.lastShot.result : null;
+        // The bite's toll as the squad's turn begins (playtest 15/10 #13): said as such, not as a hit.
+        const bite = this.biteTick && target.infected;
+        const shot = bite ? null : this.lastShot?.target === e.unit ? this.lastShot.result : null;
         const crit = shot === 'crit';
         if (e.amount) {
-          this.hud.log(`${target.name} recibe ${e.amount} de daño${crit ? ' (crítico)' : ''}`, target.team === 'alien' ? '#54d1ff' : '#ff6b5a');
+          this.hud.log(bite ? biteLossLine(target.name) : `${target.name} recibe ${e.amount} de daño${crit ? ' (crítico)' : ''}`, target.team === 'alien' ? '#54d1ff' : '#ff6b5a');
         }
         if (!this.shownToSquad(target)) return;
         const chest = this.units.chestPos(target.id);
         if (e.amount) {
-          const label = crit ? `CRÍTICO −${e.amount}` : shot === 'graze' ? `ROZADURA −${e.amount}` : `−${e.amount}`;
+          const label = bite ? BITE_FLOAT : crit ? `CRÍTICO −${e.amount}` : shot === 'graze' ? `ROZADURA −${e.amount}` : `−${e.amount}`;
           this.fx.floatText(chest, label, crit ? 'crit' : 'damage');
         }
         if (e.mitigated) {
@@ -1638,21 +1681,21 @@ export class Game {
       }
       // Leaving in La Mula (docs/PRUEBA-2026-10-14.md P1): one asks, the other answers, and the bus goes.
       case 'evacCalled': {
-        this.hud.log(evacAsk(this.playerName(e.slot), this.evacSituation(v)).title, PLAYER_COLORS[e.slot]);
-        if (e.slot !== this.mySlot) this.askEvac(e.slot);
+        const ask = evacAsk(this.playerName(e.slot), this.evacSituation(v));
+        this.hud.log(ask.title, PLAYER_COLORS[e.slot]);
+        // No window over the field (playtest 15/10 #10): the answer waits on the bar.
+        if (e.slot !== this.mySlot) this.hud.toast(evacBarNotice(this.playerName(e.slot)));
         return;
       }
       case 'evacRefused': {
         const line = evacRefusedLine(this.playerName(e.slot));
         this.hud.log(line, PLAYER_COLORS[e.slot]);
         if (e.slot !== this.mySlot) this.hud.toast(line);
-        this.hud.dropEvac();
         return;
       }
       case 'evacDeparted': {
         // Both players see it go (whoever said yes): the camera to the bus, everyone in it boards (the
         // `evacuated` that follow), and then it pulls away (Arte's mapView.busDeparts).
-        this.hud.dropEvac();
         const aboard = v.units.filter((u) => u.alive && u.team === 'xcom' && inEvacZone(v, u.pos));
         this.hud.log(evacDepartLine(aboard.map((u) => u.name)), '#6dff9a');
         const bus = this.busTile(v);
@@ -1934,7 +1977,6 @@ export class Game {
         return;
       }
       case 'missionEnded':
-        this.hud.dropEvac();
         this.sfx.outcome(e.outcome === 'victory');
         await wait(0.8);
         this.showOutcome(e.outcome, e.reason);
@@ -2240,7 +2282,6 @@ export class Game {
     // The alarm's own noise: its horde's stamp follows and says it all; here only the line.
     if (!this.alarmRaised) this.hud.banner('OS HAN OÍDO', 'warn', capitalize(text));
     this.hud.log(`Os han oído: ${text}`, '#ffc93a');
-    this.tips.heard();
   }
 
   private closestSoldier(p: Vec2): THREE.Vector3 {
@@ -2266,7 +2307,7 @@ export class Game {
     const success: Record<typeof s.mission.kind, string> = {
       elimination: 'Todos los hostiles abatidos',
       recovery: `${capitalize(this.recoveryItem())} a salvo`,
-      sabotage: 'Sirena callada',
+      sabotage: 'Ya no suena',
       hack: 'Equipo en marcha',
       rescue: vip ? `${vip}, a salvo` : 'VIP extraído',
       scavenge: loot ? SCAVENGE.success : SCAVENGE.emptyHanded,
@@ -2385,7 +2426,8 @@ export class Game {
       case 'died': {
         const u = getUnit(v, e.unit);
         if (u?.team === 'xcom') text = `${u.name} ha caído`;
-        else if (u?.objective) text = `${who} ha callado la sirena`;
+        // Lore's line without its full stop, like the partner's other notices.
+        else if (u?.objective) text = alarmDoneLine(who, v.mission.alarm).replace(/\.$/, '');
         else return;
         pos = u.pos;
         break;
@@ -2569,6 +2611,19 @@ export class Game {
     return this.players.find((p) => p.slot === slot)?.name ?? 'tu compañero';
   }
 
+  /**
+   * Turns go one soldier at a time (playtest 15/10 #9; rules.ts, `inPlay`): while one of mine is in play with
+   * actions and the partner can still play, another of mine waits. The host's own answer, or null.
+   */
+  private waitingFor(id: string): string | null {
+    const s = this.state;
+    const busy = s.activeUnit && s.activeUnit !== id ? getUnit(s, s.activeUnit) : undefined;
+    if (!busy?.alive || busy.ap <= 0 || busy.owner !== this.mySlot || !this.hasCommand()) return null;
+    const partner = this.partnerHere();
+    if (!partner || s.ready[partner.slot] || !busySlots(s).has(partner.slot)) return null;
+    return `Primero termina con ${busy.name}, o cede el turno.`;
+  }
+
   /** The partner, when connected: only then is there a command to share. */
   private partnerHere(): PlayerInfo | undefined {
     return this.players.find((p) => p.slot !== this.mySlot && p.connected);
@@ -2604,6 +2659,9 @@ export class Game {
     this.units.setSelected(id);
     const u = this.selectedUnit();
     if (u && focus) this.rig.focus(tileToWorld(u.pos));
+    // Picking another of one's own while one is in play is allowed, to look: it says why it can't act yet.
+    const waiting = u && this.isMine(u) && u.ap > 0 ? this.waitingFor(u.id) : null;
+    if (waiting) this.hud.toast(waiting);
     this.refreshInteractive();
     this.sendPresence();
   }
@@ -2613,8 +2671,22 @@ export class Game {
     const current = this.selectedUnit();
     // Keep the acting soldier selected until its action has finished playing.
     if (current && this.myPending > 0) return;
+    // The one in play, if it is mine (playtest 15/10 #9): picked once, as it comes into play or the
+    // command comes back to it; one picked afterwards to look at stays picked.
+    const playing = this.state.activeUnit ? getUnit(this.state, this.state.activeUnit) : undefined;
+    const mineInPlay = playing?.alive && playing.ap > 0 && this.isMine(playing) ? playing : undefined;
+    const turned = this.state.command !== this.lastCommand || this.state.activeUnit !== this.lastInPlay;
+    this.lastCommand = this.state.command;
+    this.lastInPlay = this.state.activeUnit;
+    if (mineInPlay && turned && this.canAct() && this.hasCommand()) {
+      if (current?.id === mineInPlay.id) return;
+      this.selected = mineInPlay.id;
+      this.units.setSelected(this.selected);
+      this.rig.focus(tileToWorld(mineInPlay.pos));
+      return;
+    }
     if (current && this.isMine(current) && (current.ap > 0 || !this.canAct())) return;
-    const next = this.myUnits().find((u) => u.ap > 0) ?? (current && this.isMine(current) ? current : this.myUnits()[0]);
+    const next = mineInPlay ?? this.myUnits().find((u) => u.ap > 0) ?? (current && this.isMine(current) ? current : this.myUnits()[0]);
     this.selected = next?.id ?? null;
     this.units.setSelected(this.selected);
     if (next && current && next.id !== current.id && this.canAct()) this.rig.focus(tileToWorld(next.pos));
@@ -2634,7 +2706,7 @@ export class Game {
 
   private reach(): { reach: Reach; tiles: MoveTile[] } | null {
     const u = this.selectedUnit();
-    if (!u || !this.canAct() || !this.isMine(u) || u.ap <= 0) return null;
+    if (!u || !this.canAct() || !this.isMine(u) || u.ap <= 0 || this.waitingFor(u.id)) return null;
     const key = `${u.id}:${this.state.seq}`;
     if (this.reachCache?.key === key) return this.reachCache;
     const reach = computeReach(this.state, u, maxMoveCost(u));
@@ -2744,7 +2816,8 @@ export class Game {
     this.refreshInteractive();
   }
 
-  private useAbility(id: AbilityId): void {
+  private useAbility(id: BarActionId): void {
+    if (id === 'evac' || id === 'evacAccept' || id === 'evacRefuse') return this.useEvac(id);
     const u = this.selectedUnit();
     if (!u || !this.canAct()) return;
     const view = this.abilities().find((a) => a.id === id);
@@ -2921,20 +2994,24 @@ export class Game {
     const m = this.state.mission;
     // A door's button only while there is one to open or close beside the soldier (they come last, so no hotkey moves).
     const door = (id: AbilityId) => (id !== 'openDoor' && id !== 'closeDoor') || doorTiles(this.state, u, id === 'openDoor' ? 'door' : 'doorOpen').length > 0;
-    return abilitiesOf(u).filter(
-      (id) => (id !== 'evac' || m.evacZone.length > 0) && (id !== 'hack' || (!!m.terminal && !m.objectiveDone)) && (id !== 'search' || this.hasSpots) && door(id),
-    );
+    // Leaving is the bar's own action (evacActions), for any of ours in La Lata: never the soldier's.
+    return abilitiesOf(u).filter((id) => id !== 'evac' && (id !== 'hack' || (!!m.terminal && !m.objectiveDone)) && (id !== 'search' || this.hasSpots) && door(id));
   }
 
   private abilities(): AbilityView[] {
     const u = this.selectedUnit();
-    if (!u || !this.isMine(u)) return [];
+    const evac = this.evacActions(u);
+    if (!u || !this.isMine(u)) return evac;
+    return [...this.soldierAbilities(u), ...evac];
+  }
+
+  private soldierAbilities(u: Unit): AbilityView[] {
     return this.abilityList(u).map((id, i) => {
       const def = ABILITIES[id];
       const charge = def.charge ? u.charges[def.charge] ?? 0 : undefined;
       let reason: string | null = !this.canAct()
         ? 'No es vuestro turno.'
-        : abilityBlocker(this.state, u, id);
+        : (this.waitingFor(u.id) ?? abilityBlocker(this.state, u, id));
       if (!reason && (def.target === 'enemy' || def.target === 'melee' || def.target === 'ally') && !this.targetOptions(id).length) {
         reason = def.target === 'ally' ? 'No hay aliados válidos.' : def.target === 'melee' ? 'Ningún enemigo a su alcance.' : 'Sin enemigos a la vista.';
       }
@@ -3085,7 +3162,8 @@ export class Game {
     return {
       clearing: s.mission.kind === 'elimination',
       ready: evacWins(s),
-      left: s.units.filter((u) => u.alive && u.team === 'xcom' && !inEvacZone(s, u.pos)).map((u) => u.name),
+      // Outside, and the bitten with no Cuarentena to go to (playtest 15/10 #13): they stay too.
+      left: s.units.filter((u) => u.alive && u.team === 'xcom' && (!inEvacZone(s, u.pos) || (u.infected && s.mission.quarantine === false))).map((u) => u.name),
     };
   }
 
@@ -3112,70 +3190,77 @@ export class Game {
   }
 
   /**
-   * The evacuation button (P1): while one of ours is in La Mula, or the
-   * partner's call waits for an answer; resting while ours waits for theirs.
+   * The evacuation on the action bar (playtest 15/10 #10), with no window over the field: «Evacuar» for a
+   * soldier of ours in La Lata (pressed twice: the first says what leaving costs), the wait while ours
+   * waits, and the partner's «Aceptar evacuación» and «Esperar» while theirs does.
    */
-  private evacButtonView(): EvacButtonView | null {
+  private evacActions(u: Unit | undefined): AbilityView[] {
     const s = this.state;
-    if (!this.canAct() || !s.mission.evacZone.length) return null;
+    if (!this.canAct() || !s.mission.evacZone.length) return [];
     const call = s.evacCall;
-    const theirs = !!call && call.by !== this.mySlot;
-    const aboard = this.mineAboard().length;
-    if (!aboard && !theirs) return null;
-    const label = s.mission.kind === 'elimination' ? 'RETIRARSE' : 'EVACUAR';
-    const clock = !!deadlineOf('evac');
-    if (call?.by === this.mySlot) return { label, detail: evacWaiting(this.playerName(this.mySlot === 0 ? 1 : 0)), waiting: true, clock };
-    if (call && theirs) return { label, detail: `${this.playerName(call.by)} lo pide`, waiting: false, clock };
-    const squad = s.units.filter((u) => u.alive && u.team === 'xcom');
-    const inside = squad.filter((u) => inEvacZone(s, u.pos)).length;
-    return { label, detail: `${inside} de ${squad.length} dentro`, waiting: false };
-  }
-
-  private evacButton(): void {
-    const call = this.state.evacCall;
-    if (call && call.by !== this.mySlot) this.askEvac(call.by);
-    else this.promptEvac();
-  }
-
-  /** Leave or wait, from one of ours in La Mula (`from`, or any): what leaving costs first, then the answer. */
-  private promptEvac(from?: string): void {
-    const s = this.state;
-    if (!this.canAct() || s.evacCall) return;
-    const aboard = this.mineAboard();
-    const u = aboard.find((o) => o.id === from) ?? aboard[0];
-    if (!u) return;
-    const asks = this.evacPartner()?.name ?? null;
     const o = this.evacSituation(s);
-    const p = evacPrompt(o, asks);
-    this.hud.evacDialog({ title: p.title, text: p.text, go: p.go, wait: p.wait, costly: this.evacCostly(o) }, () => this.send({ type: 'evac', unit: u.id }), () => {});
+    const left = deadlineLeft('evac');
+    const view = (id: BarActionId, name: string, description: string, extra: Partial<AbilityView> = {}): AbilityView => ({
+      id,
+      label: name,
+      hotkey: '',
+      enabled: true,
+      name,
+      cost: 'Sin acción',
+      description,
+      free: true,
+      ...extra,
+    });
+    if (call && call.by !== this.mySlot) {
+      const ask = evacAsk(this.playerName(call.by), o);
+      const limits = left ? evacClock(left, false) : undefined;
+      return [view('evacAccept', EVAC_BAR.accept, ask.text, { limits }), view('evacRefuse', EVAC_BAR.wait, EVAC_BAR.stay, { limits })];
+    }
+    // Asking costs no action: whichever of ours is in La Lata asks, the one picked if it is, any other if not
+    // (a soldier with no actions left is not kept picked); one who can board before a bitten one who can't.
+    const inside = this.mineAboard().sort((a, b) => Number(a.id !== u?.id) - Number(b.id !== u?.id));
+    const boards = (o: Unit) => !(o.infected && s.mission.quarantine === false);
+    const aboard = inside.find(boards) ?? inside[0];
+    if (call?.by === this.mySlot) {
+      const partner = this.evacPartner();
+      const name = s.mission.kind === 'elimination' ? 'Retirarse' : 'Evacuar';
+      return [view('evac', name, evacWaiting(partner?.name ?? 'tu compañero'), { enabled: false, reason: left ? evacClock(left, true) : evacWaiting(partner?.name ?? 'tu compañero') })];
+    }
+    if (!aboard) return [];
+    if (aboard.infected && s.mission.quarantine === false) return [view('evac', s.mission.kind === 'elimination' ? 'Retirarse' : 'Evacuar', BITE_NO_BOARD, { enabled: false, reason: BITE_NO_BOARD })];
+    const p = evacPrompt(o, this.evacPartner()?.name ?? null);
+    const armed = this.evacArmed === aboard.id;
+    return [view('evac', armed ? `Confirmar: ${p.go}` : p.go, `${p.title}. ${p.text}`, { active: armed, cost: this.evacPartner() ? 'Lo acepta tu compañero' : 'Termina la misión' })];
   }
 
-  /** The partner asks to leave: the same stakes, and «Salir» or «Esperar» (Esc). */
-  private askEvac(by: Slot): void {
-    const o = this.evacSituation(this.state);
-    const a = evacAsk(this.playerName(by), o);
-    this.hud.evacDialog(
-      { title: a.title, text: a.text, go: a.accept, wait: a.refuse, costly: this.evacCostly(o) },
-      () => this.send({ type: 'evacAnswer', accept: true }),
-      () => this.send({ type: 'evacAnswer', accept: false }),
-    );
-  }
-
-  /** Once the queue has played: one of ours walked into La Mula, so leave or wait (P1). */
-  private offerEvac(): void {
-    const id = this.evacArrived;
-    this.evacArrived = null;
-    if (!id || this.hud.covered || this.state.evacCall) return;
-    const u = getUnit(this.state, id);
-    if (u?.alive && inEvacZone(this.state, u.pos)) this.promptEvac(id);
-  }
-
-  /** Morse on the radio in story chapters: when the squad lands and when the objective is done. */
-  private storyRadio(moment: 'start' | 'objective'): void {
-    const chapter = this.state.campaignMission?.story;
-    const line = chapter ? STORY_RADIO[chapter - 1]?.[moment] : undefined;
-    // The log keeps it once it has been read: while the card is up, the same words in the corner were twice.
-    if (line) this.tips.story(line, () => this.hud.log(`Morse · ${line}`, '#1d4fb0'));
+  /** The bar's evacuation, pressed: arm then ask (ours), or answer (the partner's). */
+  private useEvac(id: 'evac' | 'evacAccept' | 'evacRefuse'): void {
+    if (id !== 'evac') {
+      if (this.state.evacCall && this.state.evacCall.by !== this.mySlot) this.send({ type: 'evacAnswer', accept: id === 'evacAccept' });
+      return;
+    }
+    // The same soldier the bar offered (evacActions).
+    const s = this.state;
+    const sel = this.selectedUnit();
+    const inside = this.mineAboard().sort((a, b) => Number(a.id !== sel?.id) - Number(b.id !== sel?.id));
+    const u = inside.find((o) => !(o.infected && s.mission.quarantine === false));
+    if (!u || s.evacCall) return;
+    if (this.evacArmed !== u.id) {
+      // The first press only says what leaving costs: it can't be undone.
+      this.evacArmed = u.id;
+      window.clearTimeout(this.evacArmTimer);
+      this.evacArmTimer = window.setTimeout(() => {
+        this.evacArmed = null;
+        this.refreshHud();
+      }, 5000);
+      const p = evacPrompt(this.evacSituation(this.state), this.evacPartner()?.name ?? null);
+      this.hud.toast(`${p.text} Pulsa otra vez «${p.go}».`);
+      this.refreshHud();
+      return;
+    }
+    this.evacArmed = null;
+    window.clearTimeout(this.evacArmTimer);
+    this.send({ type: 'evac', unit: u.id });
   }
 
   /** What a recovery carries out: story chapters and side quests name it ("las cintas"). */
@@ -3204,7 +3289,7 @@ export class Game {
         break;
       }
       case 'sabotage':
-        objective = m.objectiveDone ? OBJECTIVE_DONE.sabotage! : 'Callad la sirena';
+        objective = m.objectiveDone ? OBJECTIVE_DONE.sabotage! : alarmObjective(m.alarm);
         break;
       case 'hack':
         objective = m.objectiveDone ? OBJECTIVE_DONE.hack! : 'Arreglad el equipo (junto a él, o con el Grillo del especialista)';
@@ -3271,7 +3356,6 @@ export class Game {
 
     const panel = this.targetPanel();
     this.hud.setTarget(panel);
-    if (panel?.kind === 'attack') this.tips.shotPanel();
 
     const ready = s.ready[this.mySlot];
     const waiting = partner && busy.has(partner.slot) && !s.ready[partner.slot] ? partner.name : null;
@@ -3279,7 +3363,6 @@ export class Game {
     const mode = this.enemyTurnPlaying() ? 'enemy' : !this.canAct() ? 'disabled' : ready ? 'ready' : !mine ? 'waiting' : this.endArmed && idle ? 'confirm' : 'act';
     const detail = mode === 'confirm' ? `${idle} ${idle === 1 ? 'soldado' : 'soldados'} con acciones` : !mine && !ready ? this.playerName(s.command) : waiting;
     this.hud.setEndTurn(mode, detail);
-    this.hud.setEvac(this.evacButtonView());
     this.hud.setCommand(sharing && this.canAct() ? { mine, holder: this.playerName(s.command), color: PLAYER_COLORS[s.command ?? this.mySlot], canPass: mine && !s.ready[partner!.slot] && busySlots(s).has(partner!.slot) } : null);
   }
 
@@ -3301,7 +3384,10 @@ export class Game {
         : sharing && holder !== this.mySlot
           ? { kind: 'partner', name: this.playerName(holder), color: PLAYER_COLORS[holder] }
           : { kind: 'mine', color: PLAYER_COLORS[this.mySlot] };
-    this.hud.setTurn(v.turn, owner, v.concealed, v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null);
+    // One soldier at a time with a partner (playtest 15/10 #9): the one in play, by the label and on its card.
+    const playing = sharing && v.activeUnit ? getUnit(v, v.activeUnit) : undefined;
+    const inPlay = playing?.alive && playing.ap > 0 ? playing : undefined;
+    this.hud.setTurn(v.turn, owner, v.concealed, v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null, inPlay?.name ?? null);
     this.hud.setMission(this.missionView());
     this.hud.setPlayers(this.players, v.ready, this.mySlot, busySlots(v), sharing ? holder : null);
     this.hud.setSquad(
@@ -3310,10 +3396,10 @@ export class Game {
       this.selected,
       { 0: PLAYER_COLORS[0], 1: PLAYER_COLORS[1] },
       v.mission.item?.carrier ?? null,
+      inPlay?.id ?? null,
     );
     const shown = this.selected ? getUnit(v, this.selected) : undefined;
     this.hud.setSelected(shown?.alive ? shown : null, shown?.alive ? this.packView(shown) : null);
-    this.tips.state(v, this.visibleAliens, sharing);
   }
 
   /** The soldier's backpack and the squad's haul for the sheet: where there is anything to search, or it carries something. */
@@ -3736,12 +3822,6 @@ export class Game {
         this.hud.closeIntro();
         return;
       }
-      // Esc on the evacuation dialog is its «Esperar» (P1); no key leaves.
-      if (this.hud.evacOpen && e.code === 'Escape') {
-        e.preventDefault();
-        this.hud.waitEvac();
-        return;
-      }
       // In the enemy turn the space bar, held, plays it in «Rápida» (docs/UX-RITMO.md); it gives no orders then.
       if (e.code === 'Space' && this.enemyTurnPlaying() && !this.hud.covered) {
         e.preventDefault();
@@ -3893,6 +3973,11 @@ export class Game {
       return;
     }
     if (!this.canAct() || !u) return;
+    const waiting = this.waitingFor(u.id);
+    if (waiting) {
+      this.hud.toast(waiting);
+      return;
+    }
     // Without the command a click plans instead of ordering (#35): aiming and areas only preview.
     const planning = !this.hasCommand();
 

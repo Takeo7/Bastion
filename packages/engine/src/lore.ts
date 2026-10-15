@@ -6,7 +6,7 @@
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
 import { FOUND_WEAPONS } from './content';
-import type { Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
+import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
 /** Bastion level at which the doom track gets its name: until the radio is fixed nobody knows the Marea is coming. */
 export const PARTITURA_LEVEL = 4;
@@ -56,7 +56,7 @@ export const GLOSSARY: Record<string, string> = {
   Congregación: 'Una secta que cree que los zombis están salvados. Los guía con campanas y por radio.',
   Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega a Atalaya, la campaña está perdida.',
   Nido: 'Un sitio donde los zombis se juntan y la Marea crece. Quemarlo la hace retroceder.',
-  Sirena: 'El altavoz con el que los Cuervos atraen hordas contra quien no les paga.',
+  Sirena: 'La de un coche patrulla: los Cuervos la encienden cerca de quien no les paga, y los muertos acuden. En el valle también suenan ambulancias atascadas y alarmas de naves.',
   Ruido: 'Cada acción suena: un disparo se oye a una docena de casillas, un registro a dos. Lo que lo oye va a mirar. El ruido no os delata: os delata que os vean.',
   Saqueo: 'Misión de registrar un pueblo: llenad las mochilas y evacuad. No hay reloj, pero llegan zombis por los bordes, y antes cuanto más ruido.',
   Registrar: 'Una acción dentro de una habitación. Sale lo que haya según el sitio: comida y medicinas en las casas, piezas en las oficinas, comida en las tiendas, de todo en los almacenes. Cada habitación se registra una vez, para toda la escuadra. Hace un poco de ruido.',
@@ -66,7 +66,8 @@ export const GLOSSARY: Record<string, string> = {
   Cargadores: 'Los de repuesto los hace el Taller: cada soldado sale con uno por tanda hecha, hasta tres. Valen para todas las armas; recargar llena primero la principal y luego la pistola. Registrando aparecen más.',
   Suministros: 'Lo que se saquea y se cambia: sirve para construir, reclutar y equipar.',
   Medicinas: 'Se cuentan en ✚. El tratamiento de un mordido cuesta 2 (1 con la Enfermería a nivel 2), y una dosis le quita 3 días de cama a un herido. En la misión, las de la mochila curan 3 con una acción. Nunca hay bastantes.',
-  Mordisco: 'El de un zombi puede contagiar. El mordido vuelve con fiebre y se convierte en 3 días (5 con Enfermería) si no recibe el tratamiento. Si cae en combate contagiado, se levanta.',
+  Mordisco: 'El de un zombi puede contagiar. En la misión, el mordido pierde 1 de salud cada turno, y sin una Cuarentena en el Bastión no sube a La Lata. Si vuelve, tiene fiebre y se convierte en 3 días (5 con la Enfermería, uno más por cada mejora de la Cuarentena) si no recibe el tratamiento. Si cae contagiado, se levanta.',
+  Cuarentena: 'La nave donde se aísla a los mordidos, con cerrojo por fuera. Sin ella, un mordido no sube a La Lata y se queda en la misión.',
   Comida: 'Se cuenta en raciones. Cada día el Bastión gasta una por cada cuatro soldados. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan despacio.',
   Huerto: 'Bancales, un invernadero y bidones para el agua de lluvia: da raciones cada día, más cuanto más nivel.',
   Piezas: 'Muelles, motores, tornillería: con ellas el Taller hace armas y armaduras mejores. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.',
@@ -137,9 +138,9 @@ export const ENEMY_FILES: Partial<Record<TemplateId, EnemyFile>> = {
     tip: 'Corre mucho y no necesita línea de tiro. Vigilancia en su camino, y nadie solo.',
   },
   relay: {
-    what: 'Una Sirena: el altavoz con el que los Cuervos atraen hordas.',
+    what: 'Lo que suena: un coche patrulla, una ambulancia o la alarma de una nave.',
     does: 'No dispara. Tiene salud y blindaje 1, y mientras suene, la zona se llena de zombis.',
-    tip: 'Es el objetivo: calladla antes de que termine la cuenta atrás. Los explosivos ayudan.',
+    tip: 'Es el objetivo: que deje de sonar antes de que termine la cuenta atrás. Los explosivos ayudan.',
   },
 };
 
@@ -152,7 +153,7 @@ export interface RegionLore {
 }
 
 export const REGION_LORE: Record<RegionId, RegionLore> = {
-  weu: { ally: 'el Refugio de Aldren', situation: 'Los pueblos de la sierra, junto a Atalaya. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
+  weu: { ally: 'el Refugio de Brena', situation: 'Los pueblos de la sierra, junto a Atalaya. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
   afr: { ally: 'los del Hospital', situation: 'La primera ciudad caída. Calles llenas de zombis y farmacias que nadie ha terminado de vaciar.' },
   eas: { ally: 'la Red Callada', situation: 'Un embalse y una central muerta. La Red Callada sobrevivió hablando en lengua de signos: sin un ruido.' },
   eeu: { ally: 'los Pastores', situation: 'Valles cerrados y aldeas que aún resisten. Los Cuervos cobran aquí su peaje.' },
@@ -436,11 +437,84 @@ export function vipObjective(vip: string, phase: 'captive' | 'loose' | 'aboard' 
   return phase === 'aboard' ? `${Who}, ${BUS.in}: que suba el resto` : `${Who}, a salvo`;
 }
 
+/** A sabotage's objective strip, by what sounds: «Apagad la sirena del coche patrulla». */
+export function alarmObjective(alarm?: Alarm): string {
+  return `Apagad ${alarm ? ALARMS[alarm].name : 'la alarma'}`;
+}
+
+/** The log line when it stops: «Ana apaga la sirena de la ambulancia.» */
+export function alarmDoneLine(who: string, alarm?: Alarm): string {
+  return `${who} apaga ${alarm ? ALARMS[alarm].name : 'la alarma'}.`;
+}
+
 /** The strip once the objective of a sabotage or a repair is done: back to the bus. */
 export const OBJECTIVE_DONE: Partial<Record<MissionKind, string>> = {
-  sabotage: `Sirena callada: volved ${BUS.to}`,
+  sabotage: `Ya no suena: volved ${BUS.to}`,
   hack: `Equipo en marcha: volved ${BUS.to}`,
 };
+
+/**
+ * What sounds in a sabotage (docs/PRUEBA-2026-10-15.md #14): a police car the
+ * Cuervos took the siren from, an ambulance whose siren stuck, or a factory's
+ * alarm running on its battery. `name` for a sentence, `find` to introduce it.
+ */
+export const ALARMS: Record<Alarm, { name: string; find: string }> = {
+  police: { name: 'la sirena del coche patrulla', find: 'un coche patrulla con la sirena puesta' },
+  ambulance: { name: 'la sirena de la ambulancia', find: 'una ambulancia con la sirena atascada' },
+  factory: { name: 'la alarma de la nave', find: 'la alarma de una nave, que salta sola con la batería' },
+};
+
+/**
+ * What an operation is, in one line, for «Qué hace» (docs/PRUEBA-2026-10-15.md
+ * #4): «Recuperar las medicinas y volver a La Lata», «Sacar a la alcaldesa Mara
+ * Velasco con vida…». The item, the hostage and the alarm when known (campaign
+ * missionInfo); without them, words that still hold. The same line for story
+ * chapters and quest steps: none of them says more than the briefing.
+ */
+export function operationAim(kind: MissionKind, o: { item?: string; vip?: string; alarm?: Alarm; facility?: boolean; final?: boolean } = {}): string {
+  if (o.final) return 'Asaltar el campamento de la Congregación y abatir a todo lo que haya.';
+  const alarm = o.alarm ? ALARMS[o.alarm].name : 'la alarma';
+  if (o.facility) return `Apagar ${alarm} que alimenta el Nido antes de que termine la cuenta atrás, y volver ${BUS.to}.`;
+  switch (kind) {
+    case 'elimination':
+      return `Abatir a todo lo que haya. Se gana sin volver ${BUS.to}.`;
+    case 'recovery':
+      return `Recuperar ${o.item ?? DEFAULT_ITEM} y volver ${BUS.to}.`;
+    case 'sabotage':
+      return `Apagar ${alarm} antes de que termine la cuenta atrás, y volver ${BUS.to}.`;
+    case 'hack':
+      return `Poner en marcha el equipo y volver ${BUS.to}. Si falla, salta la alarma.`;
+    case 'rescue': {
+      const who = o.vip ? titled(o.vip) : 'alguien';
+      return `Sacar ${who.startsWith('el ') ? `al ${who.slice(3)}` : `a ${who}`} con vida y volver ${BUS.to}.`;
+    }
+    case 'scavenge':
+      return `Registrar lo que se pueda y volver ${BUS.to}. Llegan muertos por los bordes.`;
+  }
+}
+
+/** «Qué hace» for clearing a plot (campaign.ts TERRAINS): «Despejar el bosque de C4 y dejar la parcela libre para construir.» */
+export function clearAim(terrain: 'rocks' | 'forest' | 'ruins', plot: string): string {
+  const what = { rocks: 'la roca', forest: 'el bosque', ruins: 'las ruinas' }[terrain];
+  return `Despejar ${what} de ${plot} y dejar la parcela libre para construir.`;
+}
+
+/** «Qué hace» for a contact: who answers, what they send and what it opens. */
+export function contactAim(id: RegionId, income: number): string {
+  return `Hablar por radio con ${REGION_LORE[id].ally}: ${income} § al mes mientras su zona no caiga, y se pueden asaltar sus Nidos.`;
+}
+
+/** «Qué hace» for listening to a rumour: what it may turn out to be. */
+export function rumorAim(zone: string): string {
+  return `Escuchar el rumor ${ofZone(zone)} unos días: puede ser un encargo, una misión mejor pagada, un alijo o nada.`;
+}
+
+/** «Qué hace» for an order to the Taller (progression.ts CRAFTS): its `kind` and `the`. */
+export function craftAim(kind: string, the: string): string {
+  if (kind === 'arms') return `Hacer ${the}: va a la Armería y se reparte desde allí.`;
+  if (kind === 'ammo') return `Hacer ${the}: un cargador de repuesto más para cada soldado que salga.`;
+  return `Hacer ${the}: para todos, hasta lo que permita su rango.`;
+}
 
 /** The partner's notice: «Ana lleva las medicinas». */
 export function itemPartnerLine(who: string, item: string): string {
@@ -535,6 +609,43 @@ export function proposalClock(left: string, mine: boolean): string {
 /** The same for a call to leave: when it runs out, the bus goes. */
 export function evacClock(left: string, mine: boolean): string {
   return mine ? `Si no contesta, ${BUS.name} sale en ${left}` : `Sin respuesta, ${BUS.name} sale en ${left}`;
+}
+
+/**
+ * Leaving from the action bar, without a window (docs/PRUEBA-2026-10-15.md
+ * #10): the partner's button, the card of «Esperar», and the notice.
+ */
+export const EVAC_BAR = {
+  accept: 'Aceptar evacuación',
+  wait: 'Esperar',
+  /** The card when the partner chooses to wait. */
+  stay: `${BUS.name} no sale todavía: seguís en la misión.`,
+};
+
+/** The notice to the partner: «Ana pide salir: «Aceptar evacuación» o «Esperar», en tu barra.» */
+export function evacBarNotice(who: string): string {
+  return `${who} pide salir: «${EVAC_BAR.accept}» o «${EVAC_BAR.wait}», en tu barra.`;
+}
+
+/**
+ * The bite in the field (docs/PRUEBA-2026-10-15.md #13): the tag, its note,
+ * the floating word and the log line. A noun, not «mordido», so it agrees with
+ * everyone.
+ */
+export const BITE_TAG = 'MORDISCO';
+export const BITE_FLOAT = 'MORDISCO −1';
+
+/** Why someone bitten can't board without a Cuarentena: the button's reason. The same words are written in rules.ts (the evac refusal) and test/prueba15.test.ts: change the three together. */
+export const BITE_NO_BOARD = `Con un mordisco no se sube a ${BUS.name} sin una Cuarentena en el Bastión.`;
+
+/** The tag's note, on the sheet and the list: what it does now and what it will need. */
+export function biteNote(quarantine: boolean): string {
+  return `Mordisco: pierde 1 de salud al empezar cada turno y, si cae, se levanta. ${quarantine ? 'En la base necesitará el tratamiento.' : `Sin Cuarentena en el Bastión no sube a ${BUS.name}.`}`;
+}
+
+/** The log line each turn: «Ana pierde 1 de salud por el mordisco.» */
+export function biteLossLine(who: string): string {
+  return `${who} pierde 1 de salud por el mordisco.`;
 }
 
 /** The log line for someone outside when the bus leaves: «Ana se queda fuera.» */
@@ -645,18 +756,21 @@ export const PREMISE = {
   title: 'Atalaya',
   lines: [
     'Hace dos inviernos, la Pandemia vació el valle de Kessra. Los muertos se levantaron y siguen andando.',
-    'Atalaya, una vieja estación militar en la sierra de Aldren, aguanta con cuarenta supervivientes llegados de todas partes.',
+    'Atalaya, una vieja estación militar en la sierra de Brena, aguanta con cuarenta supervivientes llegados de todas partes.',
     'Vosotros dos la dirigís. Lo importante lo decidís juntos.',
     'Atalaya vive de lo que sus equipos traen de fuera. El primero sale hoy.',
   ],
 };
 
-/** Where an ordinary operation goes, by kind of map: it gives the mission its name («La gasolinera de Volkren»). */
+/** Where an ordinary operation goes, by kind of map: it gives the mission its name («La gasolinera de Velsa»). */
 const MISSION_PLACES: Record<Biome, string[]> = {
   city: ['El mercado', 'La comisaría', 'El colegio', 'El hospital', 'La estación de autobuses', 'El centro comercial', 'Los juzgados', 'La biblioteca'],
   wilds: ['La granja', 'El camping', 'El pinar', 'La ermita', 'La casa de campo'],
   facility: ['La conservera', 'La nave de transportes', 'La planta química', 'El almacén frigorífico', 'La fábrica de piensos'],
 };
+
+/** What a sabotage's objective is called on the field, by its alarm (playtest 2026-10-15, #14; Lore's to change). */
+export const ALARM_NAMES: Record<Alarm, string> = { police: 'Coche patrulla', ambulance: 'Ambulancia', factory: 'Alarma de la nave' };
 
 /** The scenarios' places (playtest 2026-10-14, #25): a forest's service area, a town's industrial estate. */
 const SITE_PLACES: Record<Site, string[]> = {
@@ -675,12 +789,12 @@ export function missionName(biome: Biome, zone: string, seed: number, site?: Sit
 /**
  * The places one knows the valley by, named small on its map under the zones'
  * names (Arte places them; docs/LORE.md «El mundo»). Each says something of its
- * zone: the Peaje is where the Cuervos charge Volkren its toll, the Emisora is
+ * zone: the Peaje is where the Cuervos charge Velsa its toll, the Emisora is
  * the Voz's, the Pico Gris holds the repeater of chapter 4.
  */
 export const LANDMARKS = {
   atalaya: 'Atalaya',
-  /** Aldren: the village of the bells (quest «Las campanas de Telm»). */
+  /** Brena: the village of the bells (quest «Las campanas de Telm»). */
   telm: 'Telm',
   /** Carvik: the Sindicato's mine. */
   mine: 'Mina',
@@ -690,7 +804,7 @@ export const LANDMARKS = {
   peak: 'Pico Gris',
   /** La Vega: the Bodegas' cellars. */
   wineries: 'Bodegas',
-  /** Volkren: the Cuervos' toll on the road. */
+  /** Velsa: the Cuervos' toll on the road. */
   toll: 'Peaje',
   /** Corran: chapter 2. */
   hospital: 'Hospital',
@@ -766,6 +880,13 @@ export const NIGHT_TEXT = {
 
 // ---------------------------------------------------------------- briefings
 
+/** An ordinary sabotage's report, by what sounds (MissionOffer.alarm). */
+const SABOTAGE_BRIEFINGS: Record<Alarm, string> = {
+  police: 'Los Cuervos dejaron allí un coche patrulla con la sirena puesta y se fueron. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Apagadla antes de que termine la cuenta atrás.',
+  ambulance: 'Allí hay una ambulancia con la sirena atascada, y la batería aguanta. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Apagadla antes de que termine la cuenta atrás.',
+  factory: 'La alarma de una nave salta allí cada noche, sola, con la batería. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Apagadla antes de que termine la cuenta atrás.',
+};
+
 /** Several reports per mission type; each offer always gets the same one. */
 const BRIEFINGS: Record<MissionKind, string[]> = {
   elimination: [
@@ -779,8 +900,8 @@ const BRIEFINGS: Record<MissionKind, string[]> = {
     'Los Cuervos escondieron allí su botín y no volvieron a por él: los muertos llegaron antes. Llevaos lo que podáis.',
   ],
   sabotage: [
-    'Los Cuervos dejaron una sirena en el valle y se fueron. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Calladla antes de que termine la cuenta atrás.',
-    'Una sirena nueva suena cada noche junto a nuestras rutas. Calladla a tiempo.',
+    'Algo suena allí cada noche, y los muertos de toda la comarca acuden. Que deje de sonar antes de que termine la cuenta atrás.',
+    'Cada noche suena una alarma junto a nuestras rutas. Apagadla a tiempo.',
   ],
   hack: [
     'Hay una radio de emergencia en la zona, muerta desde el invierno. Arregladla y oiremos a quien queda. Si falla, el ruido atraerá a todo lo que ande cerca.',
@@ -788,9 +909,9 @@ const BRIEFINGS: Record<MissionKind, string[]> = {
     'Allí queda un equipo de radio entero. Ponedlo en marcha. Si falla, el ruido traerá compañía.',
   ],
   rescue: [
-    'Los Cuervos se han llevado a una persona que nos hace falta. Si llega a su campamento, no la volveremos a ver. Sacadla con vida.',
-    'Los Cuervos retienen a alguien del enclave y piden gasolina a cambio. No vamos a pagar. Que vuelva con vida.',
-    'Los Cuervos han parado allí con sus prisioneros. Entre ellos hay alguien que sabe cosas que nos hacen falta. Que salga con vida.',
+    'Los Cuervos se han llevado {a}. Si llegan a su campamento, no habrá otra ocasión. Que salga con vida.',
+    'Los Cuervos retienen {a} y piden gasolina a cambio. No vamos a pagar. Que vuelva con vida.',
+    'Los Cuervos han parado allí con sus prisioneros. Entre ellos va {who}, que sabe cosas que nos hacen falta. Que salga con vida.',
   ],
   scavenge: SCAVENGE_BRIEFINGS,
 };
@@ -848,12 +969,17 @@ function briefingText(o: MissionOffer, level: number, simon: SimonChoice): strin
   }
   if (o.facility) {
     const effect = level >= PARTITURA_LEVEL ? 'acerca la Marea un kilómetro cada catorce días' : 'hace crecer la infestación cada catorce días';
-    return `Este Nido ${effect}. Lo mantiene vivo una sirena: calladla antes de que termine la cuenta atrás.`;
+    return `Este Nido ${effect}. Lo mantiene vivo la alarma de una nave, que no deja de sonar: apagadla antes de que termine la cuenta atrás.`;
   }
   const options = BRIEFINGS[o.kind];
   const seed = briefingSeed(o);
   const ally = REGION_LORE[o.region].ally;
-  return `Aviso ${ally.startsWith('el ') ? `del ${ally.slice(3)}` : `de ${ally}`}. ${options[seed % options.length]!}`;
+  // What sounds, and who is held, once the offer says (docs/PRUEBA-2026-10-15.md #14, #20).
+  const who = o.vip ? titled(o.vip) : 'alguien';
+  const text = (o.kind === 'sabotage' && o.alarm ? SABOTAGE_BRIEFINGS[o.alarm] : options[seed % options.length]!)
+    .replace('{a}', who.startsWith('el ') ? `al ${who.slice(3)}` : `a ${who}`)
+    .replace('{who}', who);
+  return `Aviso ${ally.startsWith('el ') ? `del ${ally.slice(3)}` : `de ${ally}`}. ${text}`;
 }
 
 // ------------------------------------------------------------ Expediente
@@ -894,8 +1020,8 @@ export const EXPEDIENTE: ExpedientePage[] = [
     summary: 'Los Cuervos atraen hordas con sirenas contra quien no les paga. Sin sirena, la zona respira.',
     paragraphs: [
       'Los Cuervos no son una banda: son muchas, con un mismo negocio. Cobran peaje en comida y en gente.',
-      'Su arma más sucia es la sirena. La encienden cerca de quien no paga y dejan que la horda haga el resto.',
-      'Cuando cayó la sirena del valle, los zombis se dispersaron en un día. Sin ruido, se pierden.',
+      'Su arma más sucia es la sirena de un coche patrulla. Lo llevan cerca de quien no paga, la encienden y dejan que la horda haga el resto.',
+      'Cuando se calló la sirena de los Llanos, los zombis se dispersaron en un día. Sin ruido, se pierden.',
     ],
     note: 'Las sirenas primero. Siempre. — N. A.',
   },
@@ -1020,7 +1146,7 @@ export const STORY: StoryChapter[] = [
     difficulty: 2,
     reward: { credits: 80, doom: 1 },
     briefing:
-      'Los Cuervos han montado una sirena en los Llanos que suena cada noche y nos trae a media comarca. Quiero verla callada. Destruidla antes de que termine la cuenta atrás.',
+      'Los Cuervos tienen en los Llanos un coche patrulla con la sirena puesta, y la encienden cada noche: nos trae a media comarca. Quiero que se calle. Destruidlo antes de que termine la cuenta atrás.',
     signature: '— T. V.',
     after: 'La sirena se calló y los zombis del valle se dispersaron en un día. Teo lo apuntó todo.',
   },

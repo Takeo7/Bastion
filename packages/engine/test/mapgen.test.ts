@@ -244,7 +244,7 @@ describe('procedural maps', () => {
         const plain = l.tiles.filter((t, i) => (t === 'low' || t === 'high') && !l.decor![i] && l.elev[i] === 0).length;
         expect(plain, label).toBe(0);
       }
-      const expected = { city: ['carFront', 'streetTree', 'shelf', 'desk', 'fountain'], wilds: ['fence', 'gatePost', 'hay', 'tree', 'bush', 'rock'], facility: ['pipe', 'rack', 'crates', 'carRear'] }[biome];
+      const expected = { city: ['carFront', 'streetTree', 'shelf', 'desk', 'fountain'], wilds: ['fence', 'gatePost', 'hay', 'tree', 'bush', 'rock'], facility: ['shelf', 'machine', 'container', 'pallets', 'drums', 'truck', 'silo', 'carRear'] }[biome];
       for (const k of expected) expect(kinds, `${biome}: ${k}`).toContain(k);
     }
     // The mission keeps the hints; hand-made maps have none.

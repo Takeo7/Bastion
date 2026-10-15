@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Appearance, TemplateId, Tier } from '@bastion/engine';
 import type { FigurePose, FigureRig, Gear } from './figures';
-import { preloadSynty, syntyFigure } from './syntyFigures';
+import { preloadSynty, syntyFigure, type Siren } from './syntyFigures';
 
 // The rig every unit's model answers to, for the unit views to move it:
 //
@@ -39,10 +39,11 @@ preloadSynty();
  * The model a unit is shown with: its Synty character (syntyFigures.ts).
  * `seed` keeps the same survivor for the same soldier (their campaign id). A
  * template the manifest has no character for yet shows as a recruit, so
- * nothing is ever missing from the field.
+ * nothing is ever missing from the field. `siren` is what a sabotage's
+ * objective is (its alarm, where a car's nose points).
  */
-export function buildUnit(template: TemplateId, accent: string, appearance?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm'): FigureRig {
-  let synty = syntyFigure(template, accent, appearance, gear, seed, sex);
+export function buildUnit(template: TemplateId, accent: string, appearance?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm', siren?: Siren): FigureRig {
+  let synty = syntyFigure(template, accent, appearance, gear, seed, sex, siren);
   if (!synty) {
     console.warn(`No Synty character for «${template}»: add it to syntyManifest.ts`);
     synty = syntyFigure('rookie', accent, appearance, gear, seed, sex)!;

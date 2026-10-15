@@ -141,7 +141,23 @@ export type DecorKind =
   /** A big roadside sign on its post, one `high` tile; facing: towards the road. */
   | 'sign'
   /** Wire (a fallen fence or barbed wire), a line of `low` tiles like 'fence'. */
-  | 'wire';
+  | 'wire'
+  // The factory (playtest 2026-10-15, #14 and #17).
+  /** The nose of the patrol car or ambulance whose siren a sabotage silences, a `high` tile beside the objective; facing: away from it. */
+  | 'sirenCar'
+  /** Stacked pallets, a `low` tile; in rows between a factory's zones and by its loading docks. */
+  | 'pallets'
+  /** Oil drums, a `low` tile. */
+  | 'drums'
+  /** A forklift, a `low` tile; facing: its forks. Not placed for now: no pack has one (playtest 15/10, #17). */
+  | 'forklift'
+  /** Factory machinery, a `high` tile inside a hall. */
+  | 'machine'
+  /** A silo, a 2 × 2 block of `high` tiles. */
+  | 'silo';
+
+/** What makes the noise a sabotage has to silence (playtest 2026-10-15, #14): a patrol car, an ambulance, a factory's alarm. */
+export type Alarm = 'police' | 'ambulance' | 'factory';
 
 /** A scenario a generated map can be (playtest 2026-10-14, #25): a forest's service area, a city's industrial estate. */
 export type Site = 'roadside' | 'industrial';
@@ -743,6 +759,8 @@ export interface Reinforcement {
   landed: boolean;
   /** Saqueo: zombies coming in by the edges, drawn by the noise; they land on the prowl, not alert. */
   horde?: boolean;
+  /** The few that come in every turn (playtest 2026-10-15, #11), apart from the waves. */
+  trickle?: boolean;
 }
 
 export interface MissionItem {
@@ -770,8 +788,12 @@ export interface MissionState {
   evacDone?: boolean;
   /** Hack bonus from the campaign (research), added to every hack attempt. */
   hackBonus: number;
+  /** A sabotage's alarm (playtest 2026-10-15, #14); missing in older saves and outside the campaign: a siren. */
+  alarm?: Alarm;
   /** Medicines also stop a bite's contagion, for everyone (docs/FASE8.md §C: the Enfermería from level 2). */
   medicineCures?: boolean;
+  /** The campaign's Bastion has a Cuarentena (playtest 2026-10-15, #13); false, the bitten can't board La Lata. Missing (a skirmish, older saves): no rule. */
+  quarantine?: boolean;
   reinforcements: Reinforcement[];
   /** 1–4, for the loot tables (missing in missions saved before searching: 2). */
   difficulty?: number;
@@ -839,6 +861,8 @@ export interface GameState {
    * saved before it existed: the first player to act takes it.
    */
   command?: Slot;
+  /** The soldier in play (playtest 2026-10-15, #9): the holder finishes it before another; once it's done, the partner plays one of theirs. */
+  activeUnit?: string;
   /** A player asked to evacuate from the bus and waits for the partner's yes (docs/PRUEBA-2026-10-14.md P1). */
   evacCall?: { by: Slot; unit: string };
   outcome: Outcome | null;

@@ -24,6 +24,12 @@ export function deadlineOf(kind: string): { at: number; total: number } | null {
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
+/** What is left of `kind` right now, «1:25», or null when nothing waits (for words drawn once, not ticking). */
+export function deadlineLeft(kind: string): string | null {
+  const d = due.get(kind);
+  return d ? clock(Math.max(0, Math.ceil((d.at - performance.now()) / 1000))) : null;
+}
+
 /**
  * The countdown of `kind` as a line (`text` words it round the time left,
  * «Se acepta sola en 1:25») over a bar that drains; null when nothing waits.

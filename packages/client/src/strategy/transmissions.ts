@@ -4,17 +4,15 @@
 //
 // Each browser remembers which scenes it has played, per campaign, and plays at
 // most one per "moment" (back at the base, or after a scan); the rest wait for
-// the next moment, and every unlocked scene stays in the archive. RadioTips puts
-// the same panel in combat for Morse's first-time warnings.
+// the next moment, and every unlocked scene stays in the archive. No radio plays
+// in the middle of a mission (playtest 15/10 #8).
 import {
   nextScene,
-  RADIO_TIPS,
   RECAP,
   recapLines,
   sceneLines,
   SCENES,
   SPEAKERS,
-  TIP_SCENE,
   unlockedScenes,
   type CampaignState,
   type Scene,
@@ -22,7 +20,6 @@ import {
   type SceneLine,
   type Slot,
   type SpeakerId,
-  type TipId,
 } from '@bastion/engine';
 import { sound } from '../audio/bank';
 import { audio } from '../audio/engine';
@@ -232,91 +229,6 @@ export class RadioPanel {
     this.stop();
     if (++this.index >= this.lines.length) this.close();
     else this.showLine();
-  }
-}
-
-// --------------------------------------------------------------- warnings
-
-/**
- * Morse's first-time warnings in combat (RADIO_TIPS), one at a time on a card
- * of its own. Each plays once per browser, whatever the campaign: the rules
- * don't change. The game decides when each one matters and calls `show`.
- */
-export class RadioTips {
-  private readonly panel = new RadioPanel('combat');
-  private readonly key = storageKey('tips');
-  private readonly heard: Set<TipId>;
-  private readonly queue: { tip?: TipId; line: SceneLine; read?: () => void }[] = [];
-  private heldUntil = 0;
-  private holdTimer = 0;
-  private gone = false;
-
-  constructor(container: HTMLElement) {
-    container.append(this.panel.el);
-    let stored: TipId[] = [];
-    try {
-      stored = JSON.parse(localStorage.getItem(this.key) ?? '[]') as TipId[];
-    } catch {
-      /* storage unavailable: every warning plays */
-    }
-    this.heard = new Set(stored);
-  }
-
-  /** Queues the warning unless this browser has heard it; false if it won't play. */
-  show(id: TipId): boolean {
-    if (this.gone || this.heard.has(id) || this.queue.some((q) => q.tip === id)) return false;
-    const tip = RADIO_TIPS[id];
-    this.queue.push({ tip: id, line: { who: tip.who, text: tip.line, rule: tip.rule } });
-    this.pump();
-    return true;
-  }
-
-  /** A one-off line from Morse (the story chapters), queued like the warnings and never remembered; `read` once it is closed. */
-  say(text: string, read?: () => void): void {
-    if (this.gone) return;
-    this.queue.push({ line: { who: 'morse', text }, read });
-    this.pump();
-  }
-
-  /** Nothing plays until `released` settles (the mission's briefing, until it is closed); the queue waits. */
-  holdUntil(released: Promise<void>): void {
-    this.heldUntil = Infinity;
-    window.clearTimeout(this.holdTimer);
-    void released.then(() => {
-      this.heldUntil = 0;
-      this.pump();
-    });
-  }
-
-  /** Nothing plays until `ms` from now; the queue waits. */
-  holdFor(ms: number): void {
-    this.heldUntil = Math.max(this.heldUntil, Date.now() + ms);
-    window.clearTimeout(this.holdTimer);
-    this.holdTimer = window.setTimeout(() => this.pump(), this.heldUntil - Date.now());
-  }
-
-  destroy(): void {
-    this.gone = true;
-    this.queue.length = 0;
-    window.clearTimeout(this.holdTimer);
-    this.panel.dispose();
-  }
-
-  private pump(): void {
-    if (this.gone || this.panel.active || !this.queue.length || Date.now() < this.heldUntil) return;
-    const next = this.queue.shift()!;
-    if (next.tip) {
-      this.heard.add(next.tip);
-      try {
-        localStorage.setItem(this.key, JSON.stringify([...this.heard]));
-      } catch {
-        /* private mode: the warnings may play again after a reload */
-      }
-    }
-    this.panel.play(TIP_SCENE, [next.line], {}, () => {
-      next.read?.();
-      this.pump();
-    });
   }
 }
 

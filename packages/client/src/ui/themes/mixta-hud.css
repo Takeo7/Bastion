@@ -642,61 +642,8 @@
   box-shadow: inset 0 0 0 1px rgba(242, 194, 48, 0.45);
 }
 
-/* Leaving in La Mula (P1): a steel plate over the turn's, its edge and words green like the zone on the
-   ground; while this player's call waits for the partner, a green light breathes on it. */
-:root[data-ui='mixta'] .evac-call {
-  position: relative;
-  padding: 7px 10px 6px 16px;
-  border-radius: 2px;
-  background: url('/ui/mixta/steel.webp') 0 0 / 256px 256px, var(--m-plate);
-  box-shadow: var(--m-raise), inset 3px 0 0 #4dff9a, 0 6px 14px rgba(0, 0, 0, 0.4);
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  text-align: left;
-  color: #7dffb4;
-  transition: transform 0.12s var(--m-ease);
-}
-
-:root[data-ui='mixta'] .evac-call:hover:not(:disabled) {
-  transform: translateY(-2px);
-  background: url('/ui/mixta/steel.webp') 0 0 / 256px 256px, var(--m-plate-hover);
-  box-shadow: var(--m-raise), inset 3px 0 0 #4dff9a, 0 0 0 1px rgba(77, 255, 154, 0.55), 0 6px 14px rgba(0, 0, 0, 0.4);
-}
-
-:root[data-ui='mixta'] .evac-call small {
-  font-family: var(--t-font);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--t-muted);
-}
-
-:root[data-ui='mixta'] .evac-call.is-waiting {
-  opacity: 1;
-  color: var(--t-muted);
-}
-
-:root[data-ui='mixta'] .evac-call.is-waiting::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  right: 11px;
-  width: 7px;
-  height: 7px;
-  margin-top: -3.5px;
-  border-radius: 50%;
-  background: #4dff9a;
-  box-shadow: 0 0 6px rgba(77, 255, 154, 0.7);
-  animation: m-breathe 1.6s ease-in-out infinite;
-}
-
-:root[data-ui='mixta'] .evac-kicker {
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  font-size: 13px;
-  letter-spacing: 0.22em;
+/* Leaving in La Lata from the bar (playtest 15/10 #10): its words green like the zone on the ground. */
+:root[data-ui='mixta'] .ability:is([data-ability='evac'], [data-ability='evacAccept']):not(:disabled) {
   color: #7dffb4;
 }
 
@@ -955,7 +902,31 @@
   color: var(--t-muted);
 }
 
-/* Bitten (MORDIDO), on the squad list and the flags: the danger plate, its letters in Oswald. */
+/* The soldier in play (#9): a plate lit in the turn's colour, its letters in Oswald; its card glows the same. */
+:root[data-ui='mixta'] .in-play {
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 2px;
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  color: #fff;
+  background: color-mix(in srgb, var(--turn, var(--t-accent)) 28%, transparent);
+  box-shadow: inset 0 0 0 1px var(--turn, var(--t-accent));
+}
+
+:root[data-ui='mixta'] em.in-play {
+  padding: 0 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+:root[data-ui='mixta'] .squad-card.in-play {
+  box-shadow: inset 3px 0 0 var(--accent), 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent), 0 0 12px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Bitten (MORDISCO), on the squad list and the flags: the danger plate, its letters in Oswald. */
 :root[data-ui='mixta'] em.bite {
   border: 0;
   border-radius: 2px;

@@ -1,5 +1,5 @@
 import type { Bus } from './engine';
-import { hit, type Synth } from './synth';
+import { hit, type Env, type Synth } from './synth';
 
 // Every sound effect of the game, made in code (no recordings): a recipe per
 // sound, rendered once into a few variants (bank.ts) so repeats never sound
@@ -20,9 +20,25 @@ export interface SoundDef {
   level?: number;
   /** How much goes to the shared reverb. */
   reverb?: number;
+  /**
+   * A looping sound (the sabotage's siren): its period in seconds. The recipe
+   * runs LOOP_SEAM longer, and bank.ts loopBuffer fades that tail into the
+   * head, so the loop never clicks where it joins.
+   */
+  loop?: number;
 }
 
+/** Seconds a looping recipe runs past its period, to fade across the seam. */
+export const LOOP_SEAM = 0.4;
+
 const def = (bus: Bus, dur: number, build: (s: Synth) => void, o: Omit<SoundDef, 'bus' | 'dur' | 'build'> = {}): SoundDef => ({ bus, dur, build, ...o });
+
+/** A looping recipe's envelope: `points` (within one `period`) over and over, to `length` (the recipe's, seam included) and a step past it. */
+function repeat(period: number, points: Env, length: number): Env {
+  const out: Env = [];
+  for (let k = 0; k * period <= length; k++) for (const [t, v] of points) out.push([k * period + t, v]);
+  return out;
+}
 
 // ---------------------------------------------------------------- weapons
 
@@ -718,6 +734,37 @@ export const SOUNDS: Record<string, SoundDef> = {
       s.to(s.amp(s.filter(o, 'lowpass', 1800), [[at, 0], [at + 0.02, 0.4], [at + 0.48, 0.4], [at + 0.5, 0]]));
     }
   }, { reverb: 0.3 }),
+  // The sabotage's siren (playtest 15/10 #14), one per kind of map (sfx.ts siren), each a seamless loop
+  // that game.ts places where it stands. The sweeps repeat past the period so the seam can be faded.
+  // A police car in town: the wail, up fast and down slow, through a horn speaker.
+  'siren.police': def('sfx', 4.4 + LOOP_SEAM, (s) => {
+    const sweep = repeat(4.4, [[0, 640], [1.5, 1480]], s.dur);
+    const voice = s.ctx.createGain();
+    s.osc('sawtooth', sweep).connect(voice);
+    s.amp(s.osc('square', sweep, 0, undefined, 4), 0.35).connect(voice);
+    const horn = s.filter(s.filter(voice, 'highpass', 420, 0.7), 'peaking', 1900, 1.1, 6);
+    s.to(s.amp(s.filter(s.shape(horn, 1.8), 'lowpass', 4300, 0.8), 0.5));
+  }, { variants: 1, loop: 4.4, reverb: 0.35 }),
+  // An ambulance out of town: two tones, a fourth apart, half a second each.
+  'siren.ambulance': def('sfx', 4.4 + LOOP_SEAM, (s) => {
+    const tones = repeat(1.1, [[0, 466], [0.548, 466], [0.55, 622], [1.098, 622]], s.dur);
+    const voice = s.ctx.createGain();
+    s.osc('square', tones).connect(voice);
+    s.amp(s.osc('sawtooth', tones, 0, undefined, -5), 0.4).connect(voice);
+    const horn = s.filter(s.filter(voice, 'highpass', 320, 0.7), 'peaking', 1500, 1.2, 5);
+    s.to(s.amp(s.filter(s.shape(horn, 1.4), 'lowpass', 2800, 0.8), 0.5));
+  }, { variants: 1, loop: 4.4, reverb: 0.35 }),
+  // A factory's motor siren: two rotors a third apart winding up, holding, winding down, with the wind of the blades.
+  'siren.alarm': def('sfx', 7 + LOOP_SEAM, (s) => {
+    const rotor = repeat(7, [[0, 180], [2.6, 720], [4, 700]], s.dur);
+    const voice = s.ctx.createGain();
+    s.osc('sawtooth', rotor).connect(voice);
+    s.amp(s.osc('sawtooth', rotor.map(([t, f]) => [t, f * 1.26] as [number, number])), 0.7).connect(voice);
+    const blades = s.filter(s.noise('pink'), 'bandpass', rotor.map(([t, f]) => [t, f * 3] as [number, number]), 2);
+    s.amp(blades, 0.5).connect(voice);
+    const body = s.filter(s.filter(s.shape(voice, 1.6), 'bandpass', 950, 0.6), 'lowpass', 3200, 0.7);
+    s.to(s.amp(body, repeat(7, [[0, 0.5], [2.6, 1], [4, 1]], s.dur)));
+  }, { variants: 1, loop: 7, reverb: 0.5 }),
   // The Chillón's shriek (its Grito, and the dead it raises; the id is the old psionics'): one
   // human throat torn ragged, rising to a scream that cracks and falls, rasping and distorted.
   psi: def('sfx', 1.8, (s) => {

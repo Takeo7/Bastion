@@ -479,10 +479,10 @@
   clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
 }
 
-/* The tab's cut corner is a clip-path: the partner's initial sits inside it, not over the edge. */
+/* The tab's cut corner is a clip-path: the partner's figure sits inside it, not over the edge. */
 :root[data-ui='mixta'] .strat-nav .partner-dot {
-  top: 3px;
-  left: 10px;
+  top: 4px;
+  left: 14px;
 }
 
 :root[data-ui='mixta'] .strat-nav button.on {

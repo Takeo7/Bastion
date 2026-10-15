@@ -11,6 +11,19 @@
  */
 
 /* Each mapped ability (or plot) names its silhouette, hides the line drawing and paints the mask. */
+/* The evacuation on the bar (playtest 15/10 #10): La Lata to leave or to say yes, the hourglass to wait. */
+:root[data-ui='mixta'] :is([data-ability='evac'], [data-ability='evacAccept']) {
+  --sicon: url('/ui/synty/icons/r-mula.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-ability='evacRefuse'] {
+  --sicon: url('/ui/synty/icons/mh-hourglass.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
 :root[data-ui='mixta'] :is([data-ability], [data-plot]) svg.ico {
   -webkit-mask: var(--sicon, none) center / contain no-repeat;
   mask: var(--sicon, none) center / contain no-repeat;
@@ -381,6 +394,12 @@
 
 :root[data-ui='mixta'] .plot-ico[data-plot='infirmary'] {
   --sicon: url('/ui/synty/icons/heal.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] .plot-ico[data-plot='quarantine'] {
+  --sicon: url('/ui/synty/icons/biohazard.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }

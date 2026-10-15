@@ -17,7 +17,7 @@ export interface LobbyHandlers {
 const MISSIONS: { id: MissionKind; text: string }[] = [
   { id: 'elimination', text: 'Abatid a todos los hostiles del mapa.' },
   { id: 'recovery', text: 'Recuperad la carga y salid en La Lata antes de que se acabe el tiempo.' },
-  { id: 'sabotage', text: 'Callad la sirena antes de que llegue la horda.' },
+  { id: 'sabotage', text: 'Apagad la alarma antes de que llegue la horda.' },
   { id: 'hack', text: 'Arreglad la radio. Si falla, salta la alarma.' },
   { id: 'rescue', text: 'Llegad hasta el VIP y sacadlo con vida.' },
   { id: 'scavenge', text: 'Registrad las casas y salid con lo que podáis: cada ruido trae más muertos.' },

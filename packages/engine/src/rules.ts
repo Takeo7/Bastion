@@ -1064,13 +1064,21 @@ export class Sim {
    */
   callHorde(turn: number): void {
     const m = this.s.mission;
-    if (!m.horde?.length) return;
-    const sent = m.reinforcements.filter((r) => r.horde).length;
+    if (!m.horde?.length || combatants(this.s, 'alien').length >= HORDE.cap) return;
+    // A few every turn, always (playtest 2026-10-15, #11); twice as many while a sabotage's alarm still sounds (#14).
+    const alarm = m.kind === 'sabotage' && !m.objectiveDone ? 2 : 1;
+    const few = HORDE.trickle[Math.max(1, Math.min(4, m.difficulty ?? 2))]! * alarm;
+    if (few) {
+      const r: Reinforcement = { id: `r${m.reinforcements.length + 1}`, turn: turn + 1, pos: null, units: Array.from({ length: few }, () => 'zombie' as const), landed: false, horde: true, trickle: true };
+      this.emit({ t: 'reinforcementsIncoming', r });
+    }
+    // And a whole wave now and then, sooner the more noise the squad makes.
+    const sent = this.s.mission.reinforcements.filter((r) => r.horde && !r.trickle).length;
     // At night the dead are already on their way: the clock runs a turn ahead.
     const due = Math.floor(((turn + (m.night ? NIGHT.hordeHead : 0)) * HORDE.perTurn + (m.noise ?? 0)) / HORDE.wave);
-    if (due <= sent || combatants(this.s, 'alien').length >= HORDE.cap) return;
+    if (due <= sent) return;
     // Heard coming: they're in by an edge at the end of the next enemy turn, and nobody knows where.
-    const r: Reinforcement = { id: `r${m.reinforcements.length + 1}`, turn: turn + 1, pos: null, units: [...m.horde], landed: false, horde: true };
+    const r: Reinforcement = { id: `r${this.s.mission.reinforcements.length + 1}`, turn: turn + 1, pos: null, units: [...m.horde], landed: false, horde: true };
     this.emit({ t: 'reinforcementsIncoming', r });
   }
 
@@ -1145,8 +1153,10 @@ export class Sim {
   departEvac(): void {
     this.emit({ t: 'evacDeparted' });
     const squad = this.s.units.filter((o) => o.alive && o.team === 'xcom');
-    for (const u of squad.filter((o) => inEvacZone(this.s, o.pos))) this.emit({ t: 'evacuated', unit: u.id });
-    for (const u of squad.filter((o) => !inEvacZone(this.s, o.pos))) this.emit({ t: 'leftBehind', unit: u.id });
+    // The bitten board only with a Cuarentena at home (playtest 2026-10-15, #13).
+    const boards = (o: Unit) => inEvacZone(this.s, o.pos) && !(o.infected && this.s.mission.quarantine === false);
+    for (const u of squad.filter(boards)) this.emit({ t: 'evacuated', unit: u.id });
+    for (const u of squad.filter((o) => !boards(o))) this.emit({ t: 'leftBehind', unit: u.id });
     this.checkOutcome();
   }
 
@@ -1205,6 +1215,9 @@ export class Sim {
     // Bengalas and fires on their last turn burn out; the rest burn down as the squad's turn begins.
     for (const l of [...(this.s.lights ?? [])]) if (l.turns !== undefined && l.turns <= 1) this.emit({ t: 'lightOff', id: l.id });
     this.emit({ t: 'turnBegan', team: 'xcom', turn: turn + 1, command: this.openingCommander(turn + 1) });
+    // The bitten weaken: one point of health at every turn of the squad (playtest 2026-10-15, #13), armour or not.
+    for (const u of this.s.units.filter((x) => x.alive && x.team === 'xcom' && x.infected)) this.damage(u, 1, 0, undefined, 99);
+    this.checkOutcome();
   }
 
   /** Players take turns opening the squad's turn, skipping one who isn't here or has nobody left. */
@@ -1218,6 +1231,27 @@ export class Sim {
   /** Whether `slot` has a soldier (or a shared unit) that can still act. */
   hasActions(slot: Slot): boolean {
     return combatants(this.s, 'xcom').some((u) => u.ap > 0 && (u.owner === slot || u.owner === null));
+  }
+
+  /** Whether turns go one soldier at a time (playtest 2026-10-15, #9): the partner is here, not done, and has someone to move. */
+  alternates(partner: Slot): boolean {
+    return this.canReceiveCommand(partner) && this.hasActions(partner);
+  }
+
+  /**
+   * After a soldier's order (#9): while it has actions it is the one in play;
+   * once it has none (or is down, or gone), the partner plays one of theirs.
+   */
+  afterSoldier(u: Unit, apBefore: number): void {
+    if (this.over || this.s.activeTeam !== 'xcom' || u.owner === null) return;
+    const live = getUnit(this.s, u.id);
+    if (live && live.alive && !live.evacuated && live.ap > 0) {
+      if (live.ap < apBefore && this.s.activeUnit !== live.id) this.emit({ t: 'unitActive', unit: live.id });
+      return;
+    }
+    if (this.s.activeUnit) this.emit({ t: 'unitActive', unit: null });
+    const partner: Slot = u.owner === 0 ? 1 : 0;
+    if (this.s.command === u.owner && this.alternates(partner)) this.passCommand(partner);
   }
 
   /** The partner can take the command: connected and not done with the turn. */
@@ -1472,6 +1506,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     if (u.owner !== null && u.owner !== ctx.slot) return { ok: false, error: 'Ese soldado pertenece a tu compañero.' };
     if (!inEvacZone(s, u.pos)) return { ok: false, error: 'Solo desde el autobús, en la zona de evacuación.' };
     if (s.evacCall?.by === ctx.slot) return { ok: false, error: 'Ya has pedido evacuar: falta que conteste tu compañero.' };
+    if (u.infected && s.mission.quarantine === false) return { ok: false, error: 'Con un mordisco no se sube a La Lata sin una Cuarentena en el Bastión.' };
     sim.callEvac(ctx.slot, u);
     return { ok: true, events: sim.events };
   }
@@ -1486,16 +1521,30 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
   }
 
   if (!holds) return { ok: false, error: 'Tiene el mando tu compañero: espera a que te lo ceda.' };
+  // Turns go one soldier at a time (playtest 2026-10-15, #9): the one in play is finished before another of yours.
+  const inPlay = (id: string): string | null => {
+    const busy = s.activeUnit && s.activeUnit !== id ? getUnit(s, s.activeUnit) : undefined;
+    return busy && busy.alive && busy.ap > 0 && busy.owner === ctx.slot && sim.alternates(partner) ? `Primero termina con ${busy.name}, o cede el turno.` : null;
+  };
   if (cmd.type === 'item') {
     const refusal = backpackRefusal(s, cmd, ctx.slot);
     if (refusal) return { ok: false, error: refusal };
+    const free = cmd.action === 'drop' || cmd.action === 'take';
+    const busy = free ? null : inPlay(cmd.unit);
+    if (busy) return { ok: false, error: busy };
+    const holder = getUnit(s, cmd.unit)!;
+    const apBefore = holder.ap;
     sim.passCommand(ctx.slot);
     sim.useBackpack(cmd);
+    if (!free) sim.afterSoldier(holder, apBefore);
     sim.afterXcomAction();
     return { ok: true, events: sim.events };
   }
   const u = commandUnit(s, cmd.unit, ctx.slot);
   if (typeof u === 'string') return { ok: false, error: u };
+  const busy = inPlay(u.id);
+  if (busy) return { ok: false, error: busy };
+  const apBefore = u.ap;
   // The command changes hands only once the order is sure to go through: a refused one changes nothing
   // (it used to pass first, and the host kept a holder the partner never heard of).
 
@@ -1512,6 +1561,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     sim.moveAlong(u, path, ap);
     // Running is heard (docs/FASE2.md).
     if (ap >= 2 && u.alive) sim.makeNoise(u.pos, NOISE.dash, u);
+    sim.afterSoldier(u, apBefore);
     sim.afterXcomAction();
     return { ok: true, events: sim.events };
   }
@@ -1554,6 +1604,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
       break;
   }
 
+  sim.afterSoldier(u, apBefore);
   sim.afterXcomAction();
   return { ok: true, events: sim.events };
 }

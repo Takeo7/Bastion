@@ -1,5 +1,7 @@
 # El tráiler y lo que acompaña al juego
 
+> **Aparcado** por Arturo el 15/10. Hay un borrador montado, la portada en los tamaños de Steam y las 10 capturas de la ficha, en `.dev-snapshots/trailer/`. Si se retoma, se empieza por aquí.
+
 Lo pidió Arturo el 15/10: un tráiler de motion graphics de 60–90 s, en español y con música nuestra. Además, la portada del juego en los tamaños de Steam, 8–10 capturas buenas y el logo animado por separado.
 
 ## Qué se entrega

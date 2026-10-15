@@ -334,7 +334,7 @@
   top: 0;
 }
 
-/* The soldier: their class's portrait in a round frame of its colour, the class and rank on a band. */
+/* The soldier: their own bust (portraits.ts) in a round frame of their class's colour, the class and rank on a band. */
 .tm {
   position: absolute;
   left: -84px;
@@ -354,7 +354,7 @@
   inset: 4px;
   border-radius: 50%;
   background:
-    var(--portrait) 50% 14% / 140% auto no-repeat,
+    var(--portrait, none) 50% 22% / 128% auto no-repeat,
     radial-gradient(circle at 50% 35%, #3a4043, #1a1d1f 75%);
 }
 
@@ -455,8 +455,30 @@
   cursor: default;
 }
 
-.tn.open {
+.tn.open,
+.tn.drafted {
   cursor: pointer;
+}
+
+/* A level of this promotion, taken back with a click on its corner (playtest 15/10 #6). */
+.tn-undo {
+  position: absolute;
+  z-index: 3;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  padding: 0;
+  border: 1.5px solid #e9ebe6;
+  border-radius: 50%;
+  background: #b8473a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  font: 700 15px/15px var(--t-font, sans-serif);
+  color: #fff;
+  cursor: pointer;
+}
+
+.tn-undo:hover {
+  background: #d65646;
 }
 
 .tn-disc {

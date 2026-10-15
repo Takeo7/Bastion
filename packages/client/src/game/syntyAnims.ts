@@ -231,6 +231,29 @@ export class AnimDriver {
     next.setEffectiveWeight(s / (1 - s));
   }
 
+  /** The looping clip `k` names: a moving one (MOTION_ORDER), or with −1 what is stood in (the stance, else the idle). */
+  private looped(k: number): THREE.AnimationAction {
+    return k >= 0 ? this.actions[k]! : (this.stances[this.stance] ?? this.actions[0]!);
+  }
+
+  /** How long looping clip `k` (see looped) lasts at its own speed. */
+  seconds(k: number): number {
+    return this.looped(k).getClip().duration;
+  }
+
+  /** How far through its loop clip `k` (see looped) is, 0 to 1. */
+  cycle(k: number): number {
+    const a = this.looped(k);
+    const at = a.time / a.getClip().duration;
+    return at - Math.floor(at);
+  }
+
+  /** Puts looping clip `k` (see looped) `at` (any number: its fraction) through its loop. */
+  setCycle(k: number, at: number): void {
+    const a = this.looped(k);
+    a.time = (at - Math.floor(at)) * a.getClip().duration;
+  }
+
   /** Stands in stance `k` (STANCE_ORDER) instead of the plain idle, or −1; `now` without easing into it. */
   setStance(k: number, now = false): void {
     if (k === this.stance) return;

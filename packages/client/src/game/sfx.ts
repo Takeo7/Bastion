@@ -1,10 +1,28 @@
 import * as THREE from 'three';
-import { TEMPLATES, type Biome, type Unit, type WeaponDef } from '@bastion/engine';
+import { TEMPLATES, type Alarm, type Biome, type GameState, type Unit, type WeaponDef } from '@bastion/engine';
 import { ambience } from '../audio/ambience';
-import { sound } from '../audio/bank';
+import { loopBuffer, sound } from '../audio/bank';
 import { SOUNDS } from '../audio/sounds';
-import { audio } from '../audio/engine';
+import { audio, type Loop } from '../audio/engine';
 import { music, type Piece } from '../audio/music';
+import { tileToWorld } from './coords';
+
+/** The sabotage's alarm, as the engine says which it is (s.mission.alarm, chosen by the campaign) and Arte's model shows. */
+const SIRENS: Record<Alarm, string> = { police: 'siren.police', ambulance: 'siren.ambulance', factory: 'siren.alarm' };
+/** Without that (a skirmish, an older save): by the map, a police car in town, an ambulance out of it, a factory's motor siren. */
+const SIRENS_BY_MAP: Record<Biome, string> = { city: 'siren.police', wilds: 'siren.ambulance', facility: 'siren.alarm' };
+/** Seconds a siren takes to fall silent: a motor runs down (and its light with it); the electric ones cut out. */
+const SIREN_STOP: Record<string, number> = { 'siren.alarm': 2.5 };
+/** The siren's level right beside it: steady under the fight, not over it. */
+const SIREN_LEVEL = 0.45;
+
+/** The siren sounding now: which, where, its loop once sound can play, and the timer that places it. */
+interface Wail {
+  name: string;
+  at: THREE.Vector3;
+  loop: Loop | null;
+  timer: number;
+}
 
 /**
  * Combat sound: what game.ts calls when it animates an event. Each sound is
@@ -201,6 +219,8 @@ export class Sfx {
   }
 
   death(u: Unit, at?: THREE.Vector3): void {
+    // The siren falls silent the moment it is destroyed, as its lights go out (Arte's models).
+    if (u.objective && this.wail) this.silence(SIREN_STOP[this.wail.name] ?? 0);
     const t = u.template;
     const name = TEMPLATES[t].robotic ? 'death.robot' : t === 'sectoid' ? 'death.sectoid' : t === 'xenoid' ? 'death.runner' : t === 'zombie' ? 'death.zombie' : u.team === 'alien' ? 'death.advent' : 'death.human';
     this.at(name, at);
@@ -243,6 +263,7 @@ export class Sfx {
 
   /** The mission is over: the music stops for the stinger. */
   outcome(victory: boolean): void {
+    this.silence(0.5);
     music.play(null, 0.6);
     sound(victory ? 'victory' : 'defeat', { delay: 0.3 });
   }
@@ -257,6 +278,62 @@ export class Sfx {
 
   mood(piece: Piece): void {
     if (music.current !== piece) music.play(piece, piece === 'alien' ? 1.5 : 3);
+  }
+
+  // ------------------------------------------------------------ the siren
+
+  private wail: Wail | null = null;
+
+  /**
+   * The sabotage's siren (playtest 15/10 #14): looping from where it stands,
+   * heard across the map, louder near and panned by its place on screen,
+   * until it is silenced (its death(), outcome(), or `null` when the mission
+   * is left). `s`: game.ts's view of the mission, the live object (it is
+   * watched for the siren's death); without a live siren, it stops.
+   */
+  siren(s: GameState | null): void {
+    const relay = s && s.mission.kind === 'sabotage' && !s.outcome ? s.units.find((u) => u.id === s.mission.objectiveUnit && u.alive) : undefined;
+    if (!s || !relay) return this.silence(0);
+    const name = s.mission.alarm ? SIRENS[s.mission.alarm] : SIRENS_BY_MAP[s.biome];
+    const at = tileToWorld(relay.pos, 1);
+    if (this.wail?.name === name && this.wail.at.equals(at)) return;
+    this.silence(0);
+    const wail: Wail = { name, at, loop: null, timer: 0 };
+    this.wail = wail;
+    let buffer: AudioBuffer | null = null;
+    void loopBuffer(name).then((b) => (buffer = b));
+    // Placed ten times a second as the camera moves; it starts once sound can play (after the first click) and is rendered.
+    // `s` is game.ts's view, which takes each event as it is played: the siren also falls silent when it dies out of
+    // sight (death() is only called for what the squad sees), as Arte's lights do then.
+    const tick = () => {
+      if (this.wail !== wail) return;
+      if (!relay.alive || s.outcome) return this.silence(SIREN_STOP[name] ?? 0);
+      const { level, pan, muffle } = this.far(at);
+      if (!wail.loop && buffer) wail.loop = audio.loop(buffer, { bus: 'sfx', gain: level * SIREN_LEVEL, reverb: 0.3 });
+      wail.loop?.set(level * SIREN_LEVEL, pan, muffle);
+      wail.timer = window.setTimeout(tick, 100);
+    };
+    tick();
+  }
+
+  /** The siren stops: running down over `windDown` seconds, or at once. */
+  private silence(windDown: number): void {
+    const wail = this.wail;
+    if (!wail) return;
+    this.wail = null;
+    window.clearTimeout(wail.timer);
+    wail.loop?.stop(windDown);
+  }
+
+  /** Like place(), for a sound meant to carry across the whole map: gentler with distance, losing its highs far away. */
+  private far(at: THREE.Vector3): { level: number; pan: number; muffle: number } {
+    if (!this.camera) return { level: 0.5, pan: 0, muffle: 0.5 };
+    this.ndc.copy(at).project(this.camera);
+    const pan = THREE.MathUtils.clamp(this.ndc.x * 0.7, -0.75, 0.75);
+    const dist = at.distanceTo(this.focus());
+    const offScreen = Math.abs(this.ndc.x) > 1 || Math.abs(this.ndc.y) > 1 || this.ndc.z > 1;
+    const level = THREE.MathUtils.clamp(1.1 - dist / 40, 0.18, 1) * (offScreen ? 0.8 : 1);
+    return { level, pan, muffle: THREE.MathUtils.clamp(dist / 50, 0, 1) };
   }
 }
 

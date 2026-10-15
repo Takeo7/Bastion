@@ -21,7 +21,7 @@ const OUT_IMAGE = resolve(ROOT, 'packages/client/public/maps/valle/mapa.jpg');
 const OUT_ROADS = resolve(ROOT, 'packages/client/src/strategy/valleyRoads.ts');
 const FFMPEG = existsSync('/opt/homebrew/bin/ffmpeg') ? '/opt/homebrew/bin/ffmpeg' : 'ffmpeg';
 
-/** Where a road must pass (painting pixels), when the shortest way would take another: Volkren's along the north by the lake, Galen's from Llanos by the east. */
+/** Where a road must pass (painting pixels), when the shortest way would take another: Velsa's along the north by the lake, Galen's from Llanos by the east. */
 const VIA: Partial<Record<string, [number, number][]>> = {
   'eeu|weu': [
     [1270, 155],

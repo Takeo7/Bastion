@@ -636,6 +636,15 @@ export const PROPS = {
   gasTank: prop('farm', 'SM_Prop_Gastank_01', { fit: 0.95 }),
   pipes: prop('apocalypse', 'SM_Prop_Pipe_Large_01', { fit: 1, stretch: true, thick: 0.5 }),
   loudSpeaker: prop('apocalypse', 'SM_Prop_Loud_Speaker_01', { fit: 0.7 }),
+  // The factory (playtest 15/10 #17): drums, the hall's machines, silos over a 2×2 block (the pallets are `pallet`, stacked).
+  drums: prop('apocalypse', 'SM_Prop_BarrelStack_01', { fit: 0.95 }),
+  drumsTarp: prop('apocalypse', 'SM_Prop_BarrelStack_01_Tarp', { fit: 0.95 }),
+  machine: prop('construction', 'SM_Prop_Generator_Large_01', { fit: 0.95 }),
+  silo2: prop('construction', 'SM_Bld_WaterTank_02', { fit: 1.9 }),
+  silo3: prop('construction', 'SM_Bld_WaterTank_03', { fit: 1.9 }),
+  // The sabotage's alarm (playtest 15/10 #14; syntyFigures.ts SirenRig): a patrol car or an ambulance, two tiles long.
+  sirenPolice: prop('city', 'SM_Veh_Car_Police_01', { fit: 1.95 }),
+  sirenAmbulance: prop('apocalypse', 'SK_Veh_Ambulance_01', { fit: 1.95 }),
   rubble1: prop('apocalypse', 'SM_Prop_Rubble_Concrete_01', { fit: 0.95 }),
   rubble2: prop('apocalypse', 'SM_Prop_Rubble_Concrete_02', { fit: 0.95 }),
   rubbleWall: prop('apocalypse', 'SM_Prop_Rubble_Concrete_Frame_01', { fit: 0.95 }),
@@ -856,6 +865,11 @@ export const PROP_SETS = {
   lootAmmo: ['lootAmmo'],
   lootFood: ['lootFood'],
   techCrate: ['crate'],
+  // The factory (playtest 15/10 #17; mapView.ts stacks the pallets and stands the machine taller).
+  pallets: ['pallet'],
+  drums: ['drums', 'barrels', 'drumsTarp'],
+  machine: ['machine'],
+  silo: ['silo3', 'silo2'],
   containers: ['barricadeTall', 'vending', 'milBarrierTall'],
   barricade: ['barricade1', 'barricade2', 'barricadePallet', 'sandbags', 'milBarrier', 'siteBarrier'],
   sandbags: ['sandbags'],
@@ -877,9 +891,6 @@ export const PROP_SETS = {
 
 /** A set of props the map picks from for a tile of cover (mapView.ts). */
 export type PropSet = keyof typeof PROP_SETS;
-
-/** The objective the Cuervos call hordes with (relay): a loudspeaker. */
-export const RELAY_PROP: PropId = 'loudSpeaker';
 
 // --------------------------------------------------------------- buildings
 

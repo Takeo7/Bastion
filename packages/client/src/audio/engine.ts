@@ -43,6 +43,14 @@ export interface PlayOptions {
   reverb?: number;
 }
 
+/** A sound playing in a loop (AudioEngine.loop). */
+export interface Loop {
+  /** Level (linear), stereo place (−1 to 1) and how muffled by distance (0 near, 1 far), eased in about a tenth of a second. */
+  set(level: number, place: number, muffle?: number): void;
+  /** Stops it at once, or winding down over `windDown` seconds (pitch sinking as it fades). */
+  stop(windDown?: number): void;
+}
+
 class AudioEngine {
   ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -207,6 +215,62 @@ class AudioEngine {
       trace(`audio: primer sonido (${ctx.state})`);
     }
     return src;
+  }
+
+  /**
+   * Plays a buffer over and over (the sabotage's siren) and returns its
+   * controls, or null if nothing can play yet. It fades in from silence.
+   */
+  loop(buffer: AudioBuffer, o: PlayOptions = {}): Loop | null {
+    const ctx = this.live();
+    const bus = this.bus(o.bus ?? 'sfx');
+    if (!ctx || !bus) return null;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    // Far away a sound loses its highs before it loses its level.
+    const air = ctx.createBiquadFilter();
+    air.type = 'lowpass';
+    air.frequency.value = 12000;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    const pan = ctx.createStereoPanner();
+    src.connect(air).connect(gain).connect(pan).connect(bus);
+    if (o.reverb && this.reverbIn) {
+      const send = ctx.createGain();
+      send.gain.value = o.reverb;
+      pan.connect(send).connect(this.reverbIn);
+    }
+    // Anywhere in the cycle: two missions never start it on the same note.
+    src.start(ctx.currentTime, Math.random() * buffer.duration);
+    gain.gain.setTargetAtTime(o.gain ?? 1, ctx.currentTime, 0.4);
+    let stopped = false;
+    return {
+      set(level, place, muffle = 0) {
+        if (stopped) return;
+        const t = ctx.currentTime;
+        gain.gain.setTargetAtTime(level, t, 0.12);
+        pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, place)), t, 0.12);
+        air.frequency.setTargetAtTime(12000 - Math.max(0, Math.min(1, muffle)) * 9500, t, 0.12);
+      },
+      stop(windDown = 0) {
+        if (stopped) return;
+        stopped = true;
+        const t = ctx.currentTime;
+        gain.gain.cancelScheduledValues(t);
+        gain.gain.setValueAtTime(gain.gain.value, t);
+        if (windDown > 0) {
+          // A motor running down: the pitch sinks as it fades.
+          src.playbackRate.setValueAtTime(1, t);
+          src.playbackRate.exponentialRampToValueAtTime(0.3, t + windDown);
+          gain.gain.linearRampToValueAtTime(0, t + windDown);
+          src.stop(t + windDown + 0.05);
+        } else {
+          gain.gain.setTargetAtTime(0, t, 0.03);
+          src.stop(t + 0.2);
+        }
+      },
+    };
   }
 
   /** Lowers the music for a moment: `depth` 0–1, held for `hold` seconds, back over `release`. */
