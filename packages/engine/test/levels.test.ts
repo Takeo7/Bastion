@@ -781,6 +781,25 @@ describe("the generator's storeys", () => {
     }
   });
 
+  it('keeps stairs away from walls on both floors, with an open foot and a usable landing in both directions', () => {
+    let count = 0;
+    for (const s of towns) for (const { at: p, up } of stairsOf(s)) {
+      const label = `${s.mapId}: ${p.x},${p.y},${p.z}`;
+      const d = DIRS4[up]!;
+      const foot = { x: p.x - d.x, y: p.y - d.y, z: p.z };
+      const landing = { x: p.x + d.x, y: p.y + d.y, z: p.z + 1 };
+      for (const side of DIRS4) for (const z of [p.z, p.z + 1]) {
+        expect(['floor', 'low', 'high'], label).toContain(kindAt(s, { x: p.x + side.x, y: p.y + side.y, z }));
+      }
+      expect(kindAt(s, foot), label).toBe('floor');
+      expect(stepBetween(s, foot, p), label).not.toBeNull();
+      expect(stepBetween(s, p, landing), label).toBe(COST_ORTHO + COST_CLIMB);
+      expect(stepBetween(s, landing, p), label).toBe(COST_ORTHO + COST_CLIMB);
+      count++;
+    }
+    expect(count).toBeGreaterThan(20);
+  });
+
   it('flat roofs: over two or three storeys reached by the stairs, with a parapet; over one, a ladder up the side about half the time; houses pitched', () => {
     let decks = 0;
     let parapets = 0;

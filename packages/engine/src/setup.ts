@@ -6,6 +6,7 @@ import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import { STORY } from './lore';
+import { repairStairAccess } from './stairAccess';
 import type { Rng } from './rng';
 import type {
   Appearance,
@@ -602,5 +603,6 @@ export function normalizeMission(s: GameState): GameState {
   for (const c of s.smoke) fix(c.pos);
   for (const z of s.silences ?? []) fix(z.pos);
   for (const l of s.lights ?? []) fix(l.tile);
+  repairStairAccess(s);
   return s;
 }

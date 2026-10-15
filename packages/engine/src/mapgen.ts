@@ -3020,10 +3020,10 @@ function unblockStorey(st: Storey, r: Rect, from: Vec2): void {
 
 /**
  * Stairs up through building `r` from the floor below (`lower`: the ground
- * canvas, or a storey) to storey `upper`: a ladder tile against a wall below,
- * a free floor one storey up beside it to step off onto, and a hole in the
- * floor above it (the stairwell). Never where the hole would cut that storey
- * in two. Returns the landing, or null if no place fits.
+ * canvas, or a storey) to storey `upper`: away from walls on both floors,
+ * with free floor behind its foot and at its landing, and a hole above the
+ * flight (the stairwell). Never where the hole would cut that storey in two.
+ * Returns the landing, or null if no place fits.
  */
 function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, r: Rect, rng: Rng, avoid: Set<number>): Vec2 | null {
   const inner = inset(r, 1);
@@ -3031,12 +3031,18 @@ function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, 
   for (const at of tilesIn(inner)) {
     const i = lower.i(at.x, at.y);
     if (!lower.free(at.x, at.y) || lower.decor[i] || avoid.has(i) || (lowerSlab && !lowerSlab[i]) || upper.c.get(at.x, at.y) !== 'floor' || upper.c.keep[i]) continue;
+    // A full tile between the flight and any wall, on both storeys.
+    if (!DIRS4.every((d) => {
+      const p = add(at, d);
+      const j = lower.i(p.x, p.y);
+      return inRect(inner, p) && ['floor', 'low', 'high'].includes(lower.get(p.x, p.y)) && (!lowerSlab || lowerSlab[j]) && upper.slab[j] && upper.c.get(p.x, p.y) === 'floor';
+    })) continue;
     DIRS4.forEach((d, up) => {
       const landing = add(at, d);
       if (!inRect(inner, landing) || upper.c.get(landing.x, landing.y) !== 'floor' || upper.c.keep[upper.c.i(landing.x, landing.y)]) return;
-      // Against a wall below, the flight going up away from it.
       const back = { x: at.x - d.x, y: at.y - d.y };
-      options.push({ at, up, key: (lower.get(back.x, back.y) === 'wall' ? 0 : 2) + rng.next() });
+      if (lower.get(back.x, back.y) !== 'floor' || lower.decor[lower.i(back.x, back.y)]) return;
+      options.push({ at, up, key: rng.next() });
     });
   }
   options.sort((a, b) => a.key - b.key);
@@ -3051,8 +3057,10 @@ function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, 
     lower.force(at.x, at.y, 'ladder');
     lower.dress(at, 'stairs', up);
     lower.reserve(at.x, at.y);
+    const back = { x: at.x - DIRS4[up]!.x, y: at.y - DIRS4[up]!.y };
+    lower.reserve(back.x, back.y);
     upper.c.reserve(at.x, at.y);
-    upper.c.reserve(landing.x, landing.y);
+    for (const d of DIRS4) upper.c.reserve(at.x + d.x, at.y + d.y);
     return landing;
   }
   return null;
