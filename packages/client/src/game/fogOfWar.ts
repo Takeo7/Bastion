@@ -86,8 +86,8 @@ export class FogOfWar {
    * Day or night: beyond the map's edge, the tints of what has been seen
    * (darker, still legible) and the unknown, and whether lit tiles glow.
    */
-  setNight(on: boolean): void {
-    this.uniforms.fowBeyond.value.copy(on ? BEYOND_NIGHT : BEYOND_DAY);
+  setNight(on: boolean, snow = false): void {
+    this.uniforms.fowBeyond.value.copy(on ? BEYOND_NIGHT : snow ? new THREE.Color(0x9aafc2) : BEYOND_DAY);
     this.uniforms.fowRemembered.value.copy(on ? REMEMBERED_NIGHT : REMEMBERED_TINT);
     this.uniforms.fowUnknown.value.copy(on ? UNKNOWN_NIGHT : UNKNOWN);
     this.uniforms.fowNight.value = on ? 1 : 0;

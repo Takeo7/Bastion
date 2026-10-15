@@ -923,8 +923,9 @@ export class BastionSet implements StageSet {
   hangar(): Shot {
     const aspect = Math.max(1, window.innerWidth / Math.max(1, window.innerHeight));
     const back = Math.max(9.2, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * aspect));
-    const target = HANGAR.clone().add(new THREE.Vector3(0, 1.5, 0.3));
-    return { pos: HANGAR.clone().add(new THREE.Vector3(0, 2.75, PAD_Z + back)), target, fov: 42 };
+    // Reserve the lower part of the window for equal-height cards and the launch controls.
+    const target = HANGAR.clone().add(new THREE.Vector3(0, 0.5, 0.3));
+    return { pos: HANGAR.clone().add(new THREE.Vector3(0, 1.75, PAD_Z + back)), target, fov: 42 };
   }
 
   /**

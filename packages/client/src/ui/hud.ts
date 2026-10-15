@@ -1033,7 +1033,7 @@ export class Hud {
     const el = h(
       'div.mission-intro.open',
       { onclick: close },
-      h('small', {}, kicker),
+      kicker ? h('small', {}, kicker) : null,
       h('h1', {}, type(title)),
       lines.length ? h('p.intro-meta', {}, lines.join(' · ')) : null,
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
@@ -1063,7 +1063,7 @@ export class Hud {
     const el = h(
       'div.load-veil',
       { role: 'status' },
-      h('small', {}, kicker),
+      kicker ? h('small', {}, kicker) : null,
       h('h1', {}, title),
       h('span.load-bar', { 'aria-hidden': 'true' }, h('i')),
       place ? h('p', {}, place) : null,

@@ -1032,8 +1032,8 @@ export interface Rumor {
   daysLeft: number;
 }
 
-/** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 16;
+/** Bumped when saved campaign data needs updating; older campaigns go through `migrateCampaign`. */
+export const CAMPAIGN_VERSION = 17;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1680,7 +1680,7 @@ export interface MissionInfo {
 
 export function missionInfo(c: CampaignState, offer: MissionOffer): MissionInfo {
   if (offer.story) {
-    return { kicker: `DIARIO · HOJA ${offer.story}`, item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
+    return { ...(offer.story === 1 ? {} : { kicker: `DIARIO · HOJA ${offer.story}` }), item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
   }
   const q = questOf(c, offer);
   const step = q && QUESTS[q.id].steps[q.step];
@@ -3404,6 +3404,8 @@ export function migrateCampaign(old: CampaignState): CampaignState {
     const prev = o as Partial<MissionOffer> & { pods: unknown; reward: MissionReward & LegacyCost };
     return {
       ...o,
+      // Version 17: the opening chapter's approved title, also on an existing offer.
+      name: o.story === 1 ? STORY[0]!.title : o.name,
       map: prev.map ?? { kind: 'generated', biome: o.final ? 'facility' : 'city', seed: seed++ },
       pods: Array.isArray(prev.pods) ? (prev.pods as TemplateId[][]) : podPlan(o.difficulty),
       region: prev.region ?? HOME_REGION,

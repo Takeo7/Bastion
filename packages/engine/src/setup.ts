@@ -5,6 +5,7 @@ import { ground, toPos } from './grid';
 import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
+import { STORY } from './lore';
 import type { Rng } from './rng';
 import type {
   Appearance,
@@ -580,6 +581,12 @@ export function createMission(opts: MissionOptions): GameState {
  * place in it gets its level, the ground. Harmless on a mission that has them.
  */
 export function normalizeMission(s: GameState): GameState {
+  // An opening mission already in progress keeps its state, with the approved presentation.
+  if (s.campaignMission?.story === 1) {
+    s.campaignMission.name = STORY[0]!.title;
+    s.campaignMission.briefing = STORY[0]!.briefing;
+    delete s.campaignMission.kicker;
+  }
   const fix = <T extends Vec2>(p: T): T & Pos => Object.assign(p, { z: (p as Partial<Pos>).z ?? 0 });
   for (const u of s.units) {
     fix(u.pos);

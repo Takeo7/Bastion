@@ -7,6 +7,7 @@ import {
   executeCampaignCommand,
   gainXp,
   migrateCampaign,
+  missionInfo,
   offerVip,
   type CampaignCommand,
   type CampaignState,
@@ -15,7 +16,7 @@ import {
 import { SIMON_CHAPTER, STORY } from '../src/lore';
 import { LEVEL_XP, MAX_LEVEL } from '../src/progression';
 import { Rng } from '../src/rng';
-import { createMission } from '../src/setup';
+import { createMission, normalizeMission } from '../src/setup';
 import type { Slot } from '../src/types';
 
 function run(c: CampaignState, cmd: CampaignCommand, slot: Slot = 0, connected: Slot[] = [0]) {
@@ -42,6 +43,27 @@ function fly(c: CampaignState, offer: MissionOffer, outcome: 'victory' | 'defeat
 }
 
 describe('story', () => {
+  it('updates the saved opening title without changing its map, squad or progress', () => {
+    const old = solo();
+    const first = chapter(old, 1)!;
+    first.name = 'Primer invierno';
+    old.activeMission = first.id;
+    old.version = 16 as CampaignState['version'];
+    const expected = JSON.parse(JSON.stringify(old)) as CampaignState;
+    const updated = migrateCampaign(old);
+    expected.version = updated.version;
+    chapter(expected, 1)!.name = STORY[0]!.title;
+    expect(updated).toEqual(expected);
+    expect(first.name).toBe('Primer invierno');
+  });
+
+  it('updates the presentation of a saved opening battle without resetting the battle', () => {
+    const state = createMission({ map: { kind: 'generated', biome: 'city', seed: 2 }, slots: [0], rng: new Rng(2), campaignMission: { id: 'opening', story: 1, name: 'Primer invierno', kicker: 'DIARIO · HOJA 1', briefing: 'Old report.' } });
+    const expected = JSON.parse(JSON.stringify(state)) as typeof state;
+    expected.campaignMission = { id: 'opening', story: 1, name: STORY[0]!.title, briefing: STORY[0]!.briefing };
+    expect(normalizeMission(state)).toEqual(expected);
+  });
+
   it('chapter 1 is there from the start, never expires and survives a defeat', () => {
     const c = solo();
     const first = chapter(c, 1)!;
@@ -64,6 +86,7 @@ describe('story', () => {
     for (let i = 0; i < 10 && !chapter(c, 2); i++) run(c, { type: 'advance', ready: true });
     expect(c.day).toBeGreaterThanOrEqual(c.story.nextDay!);
     expect(chapter(c, 2)).toMatchObject({ kind: 'rescue', region: 'afr', expiresDay: null });
+    expect(missionInfo(c, chapter(c, 2)!).kicker).toBe('DIARIO · HOJA 2');
     expect(offerVip(c, chapter(c, 2)!)).toBe('Dra. Amara Nwosu');
   });
 

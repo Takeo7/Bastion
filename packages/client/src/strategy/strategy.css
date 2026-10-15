@@ -811,12 +811,9 @@
   width: min(560px, calc(100vw - 2 * clamp(250px, 25vw, 340px) - 48px));
 }
 
-/* The mission's paragraph in the hangar: three lines at most (it is in the geoscape in full). */
+/* The hangar is the opening mission's only presentation: keep its full report. */
 .strat-center-top .briefing-head .x-text {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
+  white-space: pre-line;
 }
 
 /* Squad select: the roster stays short so the lineup is visible. */
@@ -1034,6 +1031,27 @@ dl.briefing {
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 400;
+}
+
+/* Equal slots for short and two-line names; the button stays on the same row. */
+.strat[data-view='squad'] .lineup-card {
+  height: 128px;
+  display: flex;
+  flex-direction: column;
+}
+
+.strat[data-view='squad'] .lineup-card b {
+  min-height: 44px;
+  line-height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-wrap: anywhere;
+}
+
+.strat[data-view='squad'] .lineup-card > .x-btn {
+  margin-top: auto;
+  align-self: center;
 }
 
 .lineup-card small {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { SnowCover } from './snow';
 import { decorOf, DIRS4, isWalkable, type DecorKind, type GameState, type Place, type TileKind, type Vec2 } from '@bastion/engine';
 import { StaticBatch, type Dirty } from './batch';
 import { groundAt, STOREY } from './coords';
@@ -1626,6 +1627,7 @@ export class BuildingsView {
     s: GameState,
     private readonly fog: FogOfWar,
     private readonly ao: GroundOcclusion,
+    private readonly snow: SnowCover | null = null,
   ) {
     this.plan = new BuildingPlan(s);
     this.cutaway = new Cutaway(this.plan);
@@ -1661,10 +1663,12 @@ export class BuildingsView {
       this.geometries.push(g);
     }
     this.buildStatic(s);
+    this.snow?.shelterBuildings(this.plan);
     this.cutaway.measure();
   }
 
   private own<T extends THREE.Material>(m: T): T {
+    if (!(m instanceof THREE.MeshStandardMaterial) || !m.transparent) this.snow?.patch(m);
     this.fog.patch(m);
     this.materials.push(m);
     return m;

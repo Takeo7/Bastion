@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { kitModel } from '../strategy/baseKit';
 import { carPartner, decorOf, DIRS4, floorLevels, litMask, type Biome, type DecorKind, type GameState, type Place, type Site, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
 import { StaticBatch, type Dirty, type UvRect } from './batch';
@@ -12,6 +13,7 @@ import { beforeNextFrame, shadowsChanged } from './renderer';
 import { ExploredMemory } from './explored';
 import { FogOfWar } from './fogOfWar';
 import { GroundMap, scatterCover } from './ground';
+import { SnowCover, snowyMission, snowTexture } from './snow';
 import { DroppedView } from './dropped';
 import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
 import { EvacBus } from './evacBus';
@@ -202,6 +204,7 @@ interface Kit {
   /** Props' materials: 'packed' for the packed texture's packs, else by pack. */
   atlas: Map<AtlasId | 'packed', THREE.Material>;
   surroundings: THREE.Mesh;
+  snowbank: THREE.MeshStandardMaterial | null;
 }
 
 /** One kind of placed geometry (a prop's part, the floor slabs): its instances go to the map's batch. */
@@ -275,6 +278,8 @@ export class MapView {
   readonly group = new THREE.Group();
   private readonly fog = new FogOfWar();
   private ground: GroundMap | null = null;
+  private snow: SnowCover | null = null;
+  private snowReady = false;
   private visibility: boolean[] | null = null;
   private width = 0;
   private materials: THREE.Material[] = [];
@@ -340,7 +345,10 @@ export class MapView {
     this.buildings?.dispose();
     this.ao?.dispose();
     this.ao = new GroundOcclusion(s.width, s.height);
-    this.buildings = new BuildingsView(s, this.fog, this.ao);
+    this.snow?.dispose();
+    this.snow = snowyMission(s) ? new SnowCover(s) : null;
+    this.snowReady = false;
+    this.buildings = new BuildingsView(s, this.fog, this.ao, this.snow);
     this.disposeKit();
     this.kit = this.newKit(s, this.ground, this.ao);
     this.aoDirty = null;
@@ -375,7 +383,11 @@ export class MapView {
     contactPatch(groundMaterial, ao);
     const slab = new THREE.BoxGeometry(1, 0.1, 1);
     this.geometries.push(slab);
-    return { batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground) };
+    return {
+      batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(),
+      surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground),
+      snowbank: this.snow ? this.own(new THREE.MeshStandardMaterial({ map: snowTexture(), color: 0xe3f0ff, roughness: 0.98 })) : null,
+    };
   }
 
   private disposeKit(): void {
@@ -396,7 +408,7 @@ export class MapView {
     this.group.clear();
     const ground = this.ground ?? (this.ground = new GroundMap(s));
     const ao = this.ao ?? (this.ao = new GroundOcclusion(s.width, s.height));
-    const buildings = this.buildings ?? (this.buildings = new BuildingsView(s, this.fog, ao));
+    const buildings = this.buildings ?? (this.buildings = new BuildingsView(s, this.fog, ao, this.snow));
     const kit = this.kit ?? (this.kit = this.newKit(s, ground, ao));
 
     const pal = PALETTES[s.biome] ?? PALETTES.city;
@@ -422,7 +434,9 @@ export class MapView {
       const key = atlasRect(id) ? 'packed' : id;
       let m = kit.atlas.get(key);
       if (!m) {
-        m = this.own(new THREE.MeshStandardMaterial({ map: key === 'packed' ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 }));
+        m = new THREE.MeshStandardMaterial({ map: key === 'packed' ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 });
+        this.snow?.patch(m);
+        this.own(m);
         floorFadePatch(m, buildings.cutaway);
         kit.atlas.set(key, m);
       }
@@ -902,6 +916,26 @@ export class MapView {
       prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
     }
 
+    if (this.snow) {
+      const drift = kitModel('drift');
+      if (!drift) {
+        // The shared kit caches failures too: only wait once, then keep the textured snow.
+        if (!this.snowReady) {
+          this.snowReady = true;
+          void this.snow.ready.then(() => {
+            if (this.shown === s) { this.drawn = null; this.rebuild(s); }
+          });
+        }
+      } else {
+        const m = kit.snowbank!;
+        for (const matrix of this.snow.drifts(buildings.plan)) {
+          const e = matrix.elements;
+          if (area && !area[Math.floor(e[14]!) * s.width + Math.floor(e[12]!)]) continue;
+          for (const part of drift.parts) layer(part.geometry, m, false).add(matrix);
+        }
+      }
+    }
+
     // A filling station's pumps (decor 'tank', low): an island under each pair, a canopy over each station's.
     const pumps: number[] = [];
     for (let i = 0; i < s.tiles.length; i++) if (s.tiles[i] === 'low' && decorOf(decor[i])?.kind === 'tank' && (s.elev[i] ?? 0) === 0) pumps.push(i);
@@ -1032,7 +1066,7 @@ export class MapView {
   /** Day or night: the fog's tints, the street lights' heads, the real lights, the lit tiles. */
   setNight(on: boolean): void {
     NIGHT.value = on ? 1 : 0;
-    this.fog.setNight(on);
+    this.fog.setNight(on, !!this.snow);
     if (on && !this.night) this.lightNight();
     this.night?.setVisible(on);
     this.lightsSeen = '';
