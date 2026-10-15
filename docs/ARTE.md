@@ -127,20 +127,23 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - la reconstrucción por trozos baja de 160–270 ms a 4–13 ms;
   - los ocho atlas del mapa en una textura: de 83 a 63 llamadas en la manzana de referencia.
 
-### Base y valle (`strategy/bastion.ts`, `baseKit.ts`, `stage.ts`, `geoscape.ts`, `valleyArt.ts`, `valleyGeography.ts`, `valley.css`)
+### Base y valle (`strategy/bastion.ts`, `baseKit.ts`, `stage.ts`, `geoscape.ts`, `valleyGeography.ts`, `valleyRoads.ts`, `valley.css`, `tools/valle/mapa.ts`)
 
 - **El Bastión:** Atalaya en la sierra, con la luz de la manzana de referencia (de 524 a 132 llamadas). Tiene el Cuartel, el Taller de oficios, obras con Construction y el Huerto por niveles: bancales con plástico, invernadero con estufa, riego por goteo y espantapájaros.
-- **El valle de Kessra,** «el Ilustrado» (lo eligió Arturo el 15/10 entre tres direcciones; sustituye al diorama 3D desde la 0.2.7):
-  - **un mapa pintado,** visto desde arriba: la sierra nevada con Atalaya, los pueblos de Aldren y Telm, Volkren y su Peaje (caseta con barrera) junto a la presa, la mina de Carvik, los campos de La Vega, Corran y Galen, el río, el puerto y los Llanos de Ceniza;
-  - **horneado una vez** (`valleyArt.ts`, en el laboratorio `/valle-mapas.html`) en 41 teselas de 2048×1446 y cuatro niveles (30, 60, 120 y 241 píxeles por unidad; el más fino solo sobre el valle), 7,8 MB en `public/maps/valle/`. El juego carga las finas según amplías, una por fotograma, y guarda como mucho 6 de cada nivel fino;
-  - **alrededor del valle, mundo** (68×48 unidades): la sierra nevada al norte, bosque a los lados, la costa y el mar abiertos al sureste y la llanura bajo la Marea al sur. Así el mapa llena siempre la ventana entera por detrás de los paneles, con cualquier zoom y encuadre;
+- **El valle de Kessra, el mapa de Arturo** (15/10: «este va a ser el mapa»; desde la 0.2.8, en lugar del Ilustrado):
+  - **una pintura vista desde arriba,** al aire de Fortnite: `assets-src/valle/mapa-valle.png` (1536×1024, no se sube); en el juego, `public/maps/valle/mapa.jpg` (1 MB). Ocupa x de −15 a 15 y z de −10 a 10, a 51,2 píxeles por unidad;
+  - **dónde está cada cosa** (`valleyGeography.ts`), sobre lo que se ve en la pintura:
+    - las 8 zonas: Atalaya, el recinto con agua del noroeste; Aldren, el pueblo de al lado; Carvik, a la izquierda; La Vega, en el cruce del río; El Pantano Gris, a la orilla del lago de arriba; Volkren, arriba a la derecha; Galen, en la rotonda de la ciudad grande; Corran, en la de la ciudad de abajo; Los Llanos de Ceniza, en las grandes obras del sur. El motor tiene las mismas x/z (`REGIONS`);
+    - los lugares de Lore (`LANDMARKS`), cada uno junto a algo que se ve: la mina sobre la colina con su cinta, la presa en la boca del lago, la central junto al río, el peaje en la carretera del norte…;
+  - **las carreteras de la Marea y de La Lata van por las de la pintura:** `tools/valle/mapa.ts` (`npx tsx packages/client/tools/valle/mapa.ts`) busca el camino más corto sobre sus píxeles de calzada (claros y sin color) entre cada par de zonas del grafo del motor, con algún punto de paso donde el más corto iría por otro lado, y lo guarda en `valleyRoads.ts`. Además convierte la imagen. No se pintan carreteras encima: se ven las de la pintura;
+  - **alrededor, la propia pintura reflejada** (el borde de la textura en espejo) y cada vez más desenfocada (sus mipmaps), algo más apagada, hasta fundirse con el fondo lejos. Así ninguna ventana enseña el borde;
   - **en vivo encima,** solo:
-    - la Marea, en el sombreador de las teselas: el suelo apagado y teñido de violeta, un velo que se mueve, y el borde con su brillo y una línea clara de pocos píxeles con cualquier zoom. Sube por las carreteras con la infestación, con los umbrales del motor (`valleyGeography.ts`); en el menú, solo la franja del sur;
-    - los marcadores y los nombres, en HTML (`valley.css`): chincheta por zona (azul con contacto, violeta bajo la Marea, amarilla la elegida, con su anillo), Nido, operaciones en los hexágonos de la lista, rumor (verde si se escucha), Atalaya, La Lata (`BUS.name`) por las carreteras y los lugares de Lore (`LANDMARKS`), que solo salen si el mapa es lo bastante grande;
+    - la Marea, en el sombreador del suelo: el suelo apagado y teñido de violeta, un velo que se mueve, y el borde con su brillo y una línea clara de pocos píxeles con cualquier zoom. Sube por las carreteras con la infestación, con los umbrales del motor; en el menú, solo la franja del sur;
+    - los marcadores y los nombres, en HTML (`valley.css`): chincheta por zona (azul con contacto, violeta bajo la Marea, amarilla la elegida, con su anillo), Nido, operaciones en los hexágonos de la lista, rumor (verde si se escucha), Atalaya, La Lata (`BUS.name`) por las carreteras y los lugares de Lore, que solo salen si el mapa es lo bastante grande;
   - **la geografía es la del motor** (REGIONS, ROADS); La Lata sigue `roadRoute`;
   - **el valle cabe siempre entre los paneles:** el encuadre lo mide el propio valle cada pocos fotogramas, con los paneles como estén (entran con animación). Se mide sin la ficha de la derecha y con el panel izquierdo desplegado, así que abrir una ficha no cambia el tamaño: el mapa solo se aparta lo justo para que la zona elegida quede a la vista, y vuelve al cerrarla;
-  - **la rueda amplía** hacia el puntero (hasta 4,5× sobre ese encuadre) y arrastrar mueve el mapa. Ampliado, el valle cubre la parte libre de la pantalla;
-  - **sin postproceso** (`plain`): en el Mac, a 2560×1600, 0,7 ms el fotograma con el mapa entero y 1 ms ampliado (con el bloom y la gradación eran 4,5 y 5,6 ms). Telemetría como siempre (`globo` en `red.log`).
+  - **la rueda amplía** hacia el puntero, hasta 2× sobre ese encuadre (la pintura tiene 1536 píxeles: a 1440 de ancho ya va casi a 1:1, y más allá de 2× se ve blanda). Arrastrar mueve el mapa; ampliado, el valle cubre la parte libre de la pantalla;
+  - **coste:** un plano y una textura, dos llamadas de dibujo, sin postproceso (`plain`). Telemetría como siempre (`globo` en `red.log`).
 - **`stage.ts`:** los sets pueden hacer su propio zoom (`zoom`) y conocer el escenario (`attach`), y `frameNow()` dibuja un fotograma al momento para capturarlo. Una barra mucho más ancha que alta y a pocos píxeles del borde de arriba o de abajo cuenta como ese borde. La de navegación flota 6 px y se tomaba por un panel lateral, lo que encogía los encuadres de la base y del valle.
 
 ### El tráiler, la portada y las capturas ([TRAILER.md](TRAILER.md); `lab/trailer/cine.ts`, `sala.ts`, `shots/`)
@@ -175,7 +178,6 @@ Se abren con el cliente de pruebas (el mío, en el 5197). Todos usan el código 
 | `/efectos.html` | Cada efecto del combate y del Oficio sobre un superviviente y tres zombis (`#molotov`, `__fx.play('bengala')`) |
 | `/cuartel.html` | La escena del Cuartel con la cámara sobre el soldado |
 | `/valle.html` | El valle solo, como en la campaña, con las llamadas, los triángulos y los milisegundos de cada fotograma. Teclas 0 (entero), 1–8 (cada zona de cerca) y M (fondo del menú); `?doom=6` para la Marea, `?contact` para contactarlo todo. `__valle.look(x, z, zoom)` y `__valle.snap(nombre)` (el mapa, sin los nombres) |
-| `/valle-mapas.html` | El pintor del mapa base. `__mapas.view(cx, cz, k)` pinta un trozo (k píxeles por unidad; 48 es el valle entero en 1440) y `__mapas.bake()` pinta las 21 teselas y las manda a `.dev-snapshots/valle-<nivel>-<i>-<j>.jpg` (WebP dentro). Se copian a `public/maps/valle/<nivel>-<i>-<j>.webp` |
 | `/renders.html` | Los renders de la interfaz. `__renders.save()` los manda a `.dev-snapshots/` |
 | `/sonido.html` | Todos los sonidos (son de Red y de UX/UI) |
 

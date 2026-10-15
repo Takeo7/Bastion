@@ -75,9 +75,11 @@ describe('the valley', () => {
     const pairs = ROADS.map(([a, b]) => [a, b].sort().join('-')).sort();
     const drawn = [['weu', 'oce'], ['weu', 'sa'], ['weu', 'eeu'], ['eeu', 'eas'], ['eas', 'oce'], ['oce', 'afr'], ['oce', 'me'], ['afr', 'na'], ['me', 'na'], ['sa', 'afr']].map((p) => p.sort().join('-')).sort();
     expect(pairs).toEqual(drawn);
-    // Arte · Base's positions.
-    expect(REGIONS.weu).toMatchObject({ x: -4.6, z: -5.4 });
-    expect(REGIONS.na).toMatchObject({ x: -0.6, z: 8.9 });
+    // Where they lie on Arturo's map (15/10): 51,2 of its pixels a unit, the middle at (768, 512).
+    expect(REGIONS.weu).toMatchObject({ x: -6.11, z: -5.86 });
+    expect(REGIONS.na).toMatchObject({ x: 2.87, z: 6.95 });
+    // The Marea comes from the south: Los Llanos de Ceniza lie south of every other zone.
+    expect(Object.values(REGIONS).every((r) => r.id === 'na' || r.z < REGIONS.na.z)).toBe(true);
   });
 
   it('stretches and routes by road', () => {

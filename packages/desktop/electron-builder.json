@@ -34,8 +34,12 @@
   "linux": {
     "target": [
       { "target": "AppImage", "arch": ["x64"] },
+      { "target": "deb", "arch": ["x64"] },
       { "target": "tar.gz", "arch": ["x64"] }
     ],
+    "maintainer": "Arturo Wagener",
+    "description": "Táctica por turnos cooperativa, para dos.",
+    "desktop": { "entry": { "Name": "Bastión" } },
     "category": "Game",
     "executableName": "bastion",
     "icon": "build/icon.png",

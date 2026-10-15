@@ -5,12 +5,12 @@ import { frames } from '../cine';
 import type { Shot } from '../types';
 
 // Shot 6 (docs/TRAILER.md, 0:44–0:48): the campaign's valley, the Marea coming
-// up it. The game's own map (strategy/geoscape.ts: the painted valley, the
+// up it. The game's own map (strategy/geoscape.ts: Arturo's painting, the
 // Marea in its shader), slowly closing in from the whole valley on La Vega
-// while the zombi activity it is drawn at climbs from the plain to the middle
-// of the valley: the violet edge running up the roads, Corran and Galen going
-// under. Its names and markers are HTML, which the take does not see: the map
-// alone. Then UI's screens (pantallas).
+// and the south while the zombi activity it is drawn at climbs from the plain
+// to the middle of the valley: the violet edge running up the roads, Los
+// Llanos, Corran and Galen going under. Its names and markers are HTML, which
+// the take does not see: the map alone. Then UI's screens (pantallas).
 
 /** The activity the Marea is drawn at, from the shot's start to its end (MAREA_THRESHOLDS: the plain falls at 4, the cities at 6, the middle at 9). */
 const LEVEL: [number, number] = [4.2, 8.6];
@@ -35,18 +35,14 @@ export default {
     valley = new GeoscapeSet(() => undefined);
     stage3d.add('geo', valley);
     await stage3d.show('geo', valley.shot(), true);
-    // The tiles in (the sharper ones load as it closes in: a pass through the zoom first, then back).
-    valley.look(0, 1, 1);
-    await frames(60);
-    valley.look(1.5, 1.5, 1.7);
+    // The painting in, and its mipmaps made.
+    valley.look(0, 0, 1);
     await frames(90);
-    valley.look(0, 1, 1);
-    await frames(60);
   },
   frame(t) {
     if (!valley) return;
     const k = THREE.MathUtils.smoothstep(t, 0, 4);
-    valley.look(THREE.MathUtils.lerp(0, 1.5, k), THREE.MathUtils.lerp(1, 1.6, k), THREE.MathUtils.lerp(1, 1.6, k));
+    valley.look(THREE.MathUtils.lerp(0, -0.5, k), THREE.MathUtils.lerp(0, 1.4, k), THREE.MathUtils.lerp(1, 1.5, k));
     const inside = valley as unknown as Inside;
     inside.level = inside.levelGoal = THREE.MathUtils.lerp(LEVEL[0], LEVEL[1], THREE.MathUtils.smoothstep(t, 0.3, 3.8));
   },

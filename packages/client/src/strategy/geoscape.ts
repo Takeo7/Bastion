@@ -2,40 +2,34 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { BUS, HOME_REGION, LANDMARKS, MAREA_SOURCE, REGIONS, roadRoute, underMarea, type CampaignState, type MissionOffer, type RegionId } from '@bastion/engine';
 import type { Shot, Stage, StageMood, StageSet } from './stage';
-import { tileBounds, tileExists, VALLEY_LANDMARKS, VALLEY_TILES } from './valleyArt';
-import { ATALAYA, D, FIELD, HD, HW, mareaReach, mareaRoads, roadLine, threshold, W, ZONES } from './valleyGeography';
+import { ATALAYA, D, FIELD, HD, HW, mareaReach, mareaRoads, roadLine, threshold, VALLEY_LANDMARKS, W, ZONES } from './valleyGeography';
 import './valley.css';
 
-export { GEOGRAPHY } from './valleyGeography';
-
 // «El valle»: the map of the valley of Kessra (docs/LORE.md, «El mundo»), the
-// one Arturo chose of three (15/10, «el Ilustrado»): a painted map seen from
-// above, Atalaya under the sierra, Aldren's villages, Volkren by the dam lake,
-// Carvik's mine, the fields of La Vega, the dead cities, the ash plain to the
-// south. The ground is painted once (valleyArt.ts, baked in the lab
-// valle-mapas.html) into tiles at three levels of detail (public/maps/valle),
-// the sharper ones loaded as the map is zoomed in. Live over it, only the
-// Marea (the violet storm, its bright edge climbing the roads zone by zone as
-// the zombi activity grows: the engine's thresholds, valleyGeography.ts), the
-// zones' markers (contact, Nidos, operations, rumours), La Lata on the roads
-// and the names (HTML, valley.css). The wheel zooms towards the pointer, a drag
-// pans, and the map always covers the part of the screen the panels leave. The
-// same set is the main menu's backdrop, with the Marea a strip to the south.
+// painting Arturo chose (15/10, «este va a ser el mapa»): the valley seen from
+// above, its towns, roads, river and lakes, Atalaya's works in the north-west,
+// Galen's city in the east, Los Llanos' great works in the south. Where the
+// zones, the roads and the places lie on it is valleyGeography.ts. Round the
+// painting, the painting itself mirrored and out of focus, so no screen ever
+// shows its edge. Live over it, only the Marea (the violet storm, its bright
+// edge climbing the roads zone by zone as the zombi activity grows: the
+// engine's thresholds), the zones' markers (contact, Nidos, operations,
+// rumours), La Lata on the roads and the names (HTML, valley.css). The wheel
+// zooms towards the pointer, a drag pans, and the valley always fits the part
+// of the screen the panels leave. The same set is the main menu's backdrop,
+// with the Marea a strip to the south.
 
-const T = VALLEY_TILES;
-/** The world's outer edge fades into the table this wide (map units): out of sight, past any screen. */
-const EDGE = 0.8;
-/** The valley: what fits the free part of the screen when zoomed out, and what covers it when zoomed in (round it, the sierra, the woods and the plain fill the rest). */
-const VALLEY = new THREE.Box3(new THREE.Vector3(T.sharp.x0 + 0.8, 0, T.sharp.z0 + 0.8), new THREE.Vector3(T.sharp.x1 - 0.8, 0, T.sharp.z1 - 0.8));
-/** The closest zoom, in times the whole valley. */
-const ZOOM_MAX = 4.5;
-/** Pixels of each level's tiles a map unit. */
-const DENSITY = T.levels.map((n) => (T.tile[0] * n) / (T.x1 - T.x0));
-/** Tiles of each of the sharper levels kept at once (some 16 MB each on the GPU). */
-const KEEP = 6;
+/** The painting (tools/valle/mapa.ts). */
+const MAP_URL = 'maps/valle/mapa.jpg';
+/** How far round the painting its blurred mirror reaches (map units), and its last stretch fading into the table: past any screen. */
+const AROUND = { x: 16, z: 12, fade: 2 };
+/** The valley: what fits the free part of the screen when zoomed out, and what covers it when zoomed in (a hair inside the painting's edge). */
+const VALLEY = new THREE.Box3(new THREE.Vector3(-HW + 0.15, 0, -HD + 0.15), new THREE.Vector3(HW - 0.15, 0, HD - 0.15));
+/** The closest zoom, in times the whole valley: the painting is 1536 pixels wide, a little over a screen; past twice that it goes soft. */
+const ZOOM_MAX = 2;
 /** The free part of the screen keeps this much round the valley when zoomed out (pixels). */
 const MARGIN = 12;
-/** What lies round the map: the panels' steel. */
+/** What lies round the map, far out: the panels' steel. */
 const TABLE = new THREE.Color(0x1b1e20);
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 /** Where La Lata parks at a zone, from its pin: below it, clear of the name and the badges. */
@@ -43,7 +37,7 @@ const PARK = { x: 0.3, z: 0.72 };
 
 // ------------------------------------------------------------- the Marea
 
-/** The Marea's uniforms, shared by every tile: where it reaches, the activity drawn, the clock and the screen's pixel. */
+/** The Marea's uniforms: where it reaches, the activity drawn, the clock and the screen's pixel. */
 const MAREA = {
   field: { value: null as THREE.Texture | null },
   level: { value: 0 },
@@ -70,29 +64,27 @@ function mareaField(): THREE.Texture {
 const f1 = (n: number) => n.toFixed(2);
 const linear = (c: THREE.Color) => `vec3(${f1(c.r)}, ${f1(c.g)}, ${f1(c.b)})`;
 
-const TILE_VERTEX = /* glsl */ `
-  varying vec2 vUv;
+const GROUND_VERTEX = /* glsl */ `
   varying vec2 vMap;
   void main() {
-    // The tiles go up as decoded bitmaps, top row first (no flip on upload).
-    vUv = vec2(uv.x, 1.0 - uv.y);
     vMap = position.xz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }`;
 
 /**
- * A tile as painted, and the Marea over it: where the activity has reached,
- * the ground bled of colour and stained violet, a veil drifting over it; at
- * its edge a glow and a bright line (a few pixels whatever the zoom), and the
- * map's own edge fading into the table.
+ * The painting, and the Marea over it: where the activity has reached, the
+ * ground bled of colour and stained violet, a veil drifting over it; at its
+ * edge a glow and a bright line (a few pixels whatever the zoom). Out of the
+ * painting, the painting mirrored (the texture repeats mirrored) and ever more
+ * out of focus (a coarser level of its mipmaps), a little dimmer, until it
+ * fades into the table far out.
  */
-const TILE_FRAGMENT = /* glsl */ `
+const GROUND_FRAGMENT = /* glsl */ `
   uniform sampler2D map;
   uniform sampler2D field;
   uniform float level;
   uniform float time;
   uniform float pixel;
-  varying vec2 vUv;
   varying vec2 vMap;
 
   float hash(vec2 p) {
@@ -106,7 +98,13 @@ const TILE_FRAGMENT = /* glsl */ `
   }
 
   void main() {
-    vec3 c = texture2D(map, vUv).rgb;
+    vec2 uv = (vMap + vec2(${f1(HW)}, ${f1(HD)})) / vec2(${f1(W)}, ${f1(D)});
+    // How far out of the painting (map units): there, out of focus and dimmer.
+    vec2 beyond = max(max(-uv, uv - 1.0), 0.0) * vec2(${f1(W)}, ${f1(D)});
+    float out_ = length(beyond);
+    vec3 c = texture2D(map, uv, clamp(out_ * 1.6, 0.0, 6.5)).rgb;
+    float far = smoothstep(0.0, 6.0, out_);
+    c = mix(c, vec3(dot(c, vec3(0.3, 0.55, 0.15))), 0.25 * far) * (1.0 - 0.22 * far);
     // Where it reaches, the field read a little askew: its edge wavers the same everywhere, steep or not.
     vec2 warp = (vec2(noise(vMap * 0.8 + 3.1), noise(vMap * 0.8 + 9.7)) - 0.5) * 0.7 + (vec2(noise(vMap * 2.7 + 1.3), noise(vMap * 2.7 + 5.9)) - 0.5) * 0.22;
     vec2 fuv = (vMap + warp + vec2(${f1(HW)}, ${f1(HD)})) / vec2(${f1(W)}, ${f1(D)});
@@ -122,49 +120,12 @@ const TILE_FRAGMENT = /* glsl */ `
     float flicker = 0.85 + 0.15 * sin(time * 1.7 + vMap.x * 1.1 + vMap.y * 0.7);
     c += vec3(0.79, 0.155, 1.0) * (exp(-abs(px) / 7.0) * 0.36 + exp(-abs(px) / 22.0) * 0.12) * flicker;
     c = mix(c, vec3(0.97, 0.72, 1.0), 1.0 - smoothstep(0.7, 1.7, abs(px)));
-    vec2 e = min(vMap - vec2(${f1(T.x0)}, ${f1(T.z0)}), vec2(${f1(T.x1)}, ${f1(T.z1)}) - vMap);
-    c = mix(${linear(TABLE)}, c, smoothstep(0.0, ${f1(EDGE)}, min(e.x, e.y)));
+    vec2 e = vec2(${f1(HW + AROUND.x)}, ${f1(HD + AROUND.z)}) - abs(vMap);
+    c = mix(${linear(TABLE)}, c, smoothstep(0.0, ${f1(AROUND.fade)}, min(e.x, e.y)));
     gl_FragColor = vec4(c, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }`;
-
-function tileMaterial(map: THREE.Texture): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
-    uniforms: { map: { value: map }, ...MAREA },
-    vertexShader: TILE_VERTEX,
-    fragmentShader: TILE_FRAGMENT,
-    // Flat on the ground, one over the other: drawn in order (renderOrder), no depth.
-    depthTest: false,
-    depthWrite: false,
-    toneMapped: false,
-  });
-}
-
-// ------------------------------------------------------------- tiles
-
-interface Tile {
-  level: number;
-  i: number;
-  j: number;
-  /** The ground it covers, map units. */
-  x0: number;
-  x1: number;
-  z0: number;
-  z1: number;
-  mesh: THREE.Mesh | null;
-  state: 'none' | 'loading' | 'decoded' | 'ready' | 'failed';
-  /** When it was last in view (the set's clock). */
-  used: number;
-}
-
-function tiles(): Tile[] {
-  const out: Tile[] = [];
-  T.levels.forEach((n, level) => {
-    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (tileExists(level, i, j)) out.push({ level, i, j, ...tileBounds(level, i, j), mesh: null, state: 'none', used: -Infinity });
-  });
-  return out;
-}
 
 // ------------------------------------------------------------- markers
 
@@ -219,9 +180,10 @@ export class GeoscapeSet implements StageSet {
   readonly mood = MAP_MOOD;
   /** The map, scaled (zoom) and moved (pan) under the still camera; its children are in map units. */
   private readonly map = new THREE.Group();
-  private readonly tiles = tiles();
-  /** Decoded tiles waiting to go to the GPU, one a frame. */
-  private readonly uploads: Tile[] = [];
+  /** The painting and what lies round it, one plane; drawn once its image is in. */
+  private readonly ground: THREE.Mesh;
+  /** The painting decoded and waiting to go to the GPU (beforeRender). */
+  private upload: THREE.Texture | null = null;
   private readonly markers: Marker[] = [];
   private readonly landmarks: CSS2DObject[] = [];
   private readonly atalaya: CSS2DObject;
@@ -287,15 +249,11 @@ export class GeoscapeSet implements StageSet {
     this.scene.background = TABLE;
     mareaField();
     this.scene.add(this.map);
-    for (const t of this.tiles) {
-      const geometry = new THREE.PlaneGeometry(t.x1 - t.x0, t.z1 - t.z0).rotateX(-Math.PI / 2).translate((t.x0 + t.x1) / 2, 0, (t.z0 + t.z1) / 2);
-      t.mesh = new THREE.Mesh(geometry, HIT);
-      t.mesh.renderOrder = t.level;
-      t.mesh.visible = false;
-      t.mesh.frustumCulled = false;
-      this.map.add(t.mesh);
-    }
-    this.load(this.tiles[0]!);
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(W + 2 * AROUND.x, D + 2 * AROUND.z).rotateX(-Math.PI / 2), HIT);
+    this.ground.visible = false;
+    this.ground.frustumCulled = false;
+    this.map.add(this.ground);
+    this.load();
 
     // The scan's ring spreads from La Lata.
     this.scanRing = new THREE.Mesh(
@@ -444,18 +402,15 @@ export class GeoscapeSet implements StageSet {
     this.focusing = null;
   }
 
-  /** Before each frame: the Marea as this map has it, and one decoded tile sent to the GPU. */
+  /** Before each frame: the Marea as this map has it, and the painting sent to the GPU once decoded. */
   beforeRender(gl: THREE.WebGLRenderer): void {
     MAREA.level.value = this.level;
     MAREA.time.value = this.clock;
     MAREA.pixel.value = this.pixel = gl.getPixelRatio();
-    const t = this.uploads.shift();
-    if (t?.mesh && t.state === 'decoded') {
-      const texture = (t.mesh.material as THREE.ShaderMaterial).uniforms.map!.value as THREE.Texture;
-      gl.initTexture(texture);
-      // Once on the GPU the decoded copy goes (some 12 MB a tile); a tile sent away is fetched again.
-      (texture.image as ImageBitmap).close();
-      t.state = 'ready';
+    if (this.upload) {
+      gl.initTexture(this.upload);
+      this.upload = null;
+      this.ground.visible = true;
     }
   }
 
@@ -485,7 +440,6 @@ export class GeoscapeSet implements StageSet {
     if (this.pan.distanceToSquared(this.panGoal) < 1e-8) this.pan.copy(this.panGoal);
     this.map.scale.set(this.scale, 1, this.scale);
     this.map.position.set(this.pan.x, 0, this.pan.y);
-    this.showTiles(time);
     // The Marea creeps up the roads, or back down them, to where the zombi activity puts it.
     this.level += (this.levelGoal - this.level) * (1 - Math.exp(-dt * 1.2));
     if (Math.abs(this.levelGoal - this.level) < 1e-3) this.level = this.levelGoal;
@@ -596,73 +550,29 @@ export class GeoscapeSet implements StageSet {
     if (this.insets.right > 0) this.aside.y += dy;
   }
 
-  /** The tiles the view needs: the whole map always, the sharper levels where it is zoomed in, loaded as they come into view. */
-  private showTiles(time: number): void {
-    const h = this.stage?.element.clientHeight ?? 0;
-    const shown = this.screen;
-    if (!h || !(shown.z1 > shown.z0)) return;
-    // Pixels of the screen a map unit, and the level sharp enough for them.
-    const need = ((h * this.pixel) / (shown.z1 - shown.z0)) * this.scale;
-    let want = 0;
-    while (want < DENSITY.length - 1 && DENSITY[want]! < need * 0.85) want++;
-    const s = this.scale;
-    const view = { x0: (shown.x0 - this.pan.x) / s - 0.3, x1: (shown.x1 - this.pan.x) / s + 0.3, z0: (shown.z0 - this.pan.y) / s - 0.3, z1: (shown.z1 - this.pan.y) / s + 0.3 };
-    const inView = (t: Tile) => t.x1 > view.x0 && t.x0 < view.x1 && t.z1 > view.z0 && t.z0 < view.z1;
-    // The sharpest level whose tiles in view are all on the GPU: what is under it is not drawn.
-    let floor = 0;
-    for (let level = want; level > 0; level--)
-      if (this.tiles.every((t) => t.level !== level || !inView(t) || t.state === 'ready')) {
-        floor = level;
-        break;
-      }
-    for (const t of this.tiles) {
-      const seen = (t.level === 0 || t.level <= want) && inView(t);
-      if (seen) {
-        t.used = time;
-        if (t.state === 'none') this.load(t);
-      }
-      t.mesh!.visible = (seen || t.level === 0) && t.level >= floor && t.state === 'ready';
-    }
-    // Only so many of each sharper level at once: the longest out of view go.
-    for (let level = 2; level < DENSITY.length; level++) {
-      const held = this.tiles.filter((t) => t.level === level && (t.state === 'ready' || t.state === 'decoded'));
-      const away = held.filter((t) => t.used < time).sort((a, b) => a.used - b.used);
-      for (let n = held.length; n > KEEP && away.length; n--) this.unload(away.shift()!);
-    }
-  }
-
-  private load(t: Tile): void {
-    t.state = 'loading';
-    // Fetched and decoded off the main thread, then sent to the GPU one a frame (beforeRender).
-    fetch(`${import.meta.env.BASE_URL}maps/valle/${t.level}-${t.i}-${t.j}.webp`)
+  /** The painting, fetched and decoded off the main thread, its mipmaps (the blur round it) made on the GPU. */
+  private load(): void {
+    fetch(`${import.meta.env.BASE_URL}${MAP_URL}`)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
       .then((blob) => createImageBitmap(blob))
       .then((bitmap) => {
-        if (t.state !== 'loading') return bitmap.close();
         const texture = new THREE.Texture(bitmap);
         texture.flipY = false;
         texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = texture.wrapT = THREE.MirroredRepeatWrapping;
+        texture.anisotropy = 4;
         texture.needsUpdate = true;
-        t.mesh!.material = tileMaterial(texture);
-        t.state = 'decoded';
-        this.uploads.push(t);
+        this.ground.material = new THREE.ShaderMaterial({
+          uniforms: { map: { value: texture }, ...MAREA },
+          vertexShader: GROUND_VERTEX,
+          fragmentShader: GROUND_FRAGMENT,
+          depthTest: false,
+          depthWrite: false,
+          toneMapped: false,
+        });
+        this.upload = texture;
       })
-      .catch(() => {
-        if (t.state === 'loading') t.state = 'failed';
-      });
-  }
-
-  private unload(t: Tile): void {
-    const material = t.mesh!.material as THREE.Material;
-    if (material instanceof THREE.ShaderMaterial) {
-      const texture = material.uniforms.map!.value as THREE.Texture;
-      if (t.state === 'decoded') (texture.image as ImageBitmap).close();
-      texture.dispose();
-      material.dispose();
-    }
-    t.mesh!.material = HIT;
-    t.mesh!.visible = false;
-    t.state = 'none';
+      .catch((e: Error) => console.warn(`[valle] No se ha podido cargar el mapa (${e.message}).`));
   }
 
   /** The names: what the pointer hits sized to them; the small places only once the map is big enough for them. */

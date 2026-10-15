@@ -486,18 +486,19 @@ export interface RegionDef {
   income: number;
 }
 
-// The valley of Kessra (docs/FASE5.md): where each zone lies on Arte · Base's map and the
-// roads between them, the same ones La Lata drives. Aldren (Atalaya's zone) is up in the sierra;
-// the Marea comes up from Los Llanos de Ceniza in the south.
+// The valley of Kessra (docs/FASE5.md): where each zone lies on the valley's map (Arturo's, 15/10:
+// x −15…15 and z −10…10, 51,2 of its pixels a unit) and the roads between them, the same ones La Lata
+// drives. Aldren (Atalaya's zone) is up in the north-west; the Marea comes up from Los Llanos de
+// Ceniza in the south.
 export const REGIONS: Record<RegionId, RegionDef> = {
-  na: { id: 'na', name: 'Los Llanos de Ceniza', x: -0.6, z: 8.9, roads: ['afr', 'me'], income: 35 },
-  sa: { id: 'sa', name: 'Carvik', x: -9.8, z: -0.4, roads: ['weu', 'afr'], income: 25 },
-  weu: { id: 'weu', name: 'Aldren', x: -4.6, z: -5.4, roads: ['oce', 'sa', 'eeu'], income: 30 },
-  eeu: { id: 'eeu', name: 'Volkren', x: 8.2, z: -5.6, roads: ['weu', 'eas'], income: 25 },
-  afr: { id: 'afr', name: 'Corran', x: -6.8, z: 5.0, roads: ['oce', 'na', 'sa'], income: 25 },
-  me: { id: 'me', name: 'Galen', x: 8.4, z: 6.4, roads: ['oce', 'na'], income: 30 },
-  eas: { id: 'eas', name: 'El Pantano Gris', x: 8.6, z: 0.7, roads: ['eeu', 'oce'], income: 35 },
-  oce: { id: 'oce', name: 'La Vega', x: 1.6, z: 1.4, roads: ['weu', 'eas', 'afr', 'me'], income: 25 },
+  na: { id: 'na', name: 'Los Llanos de Ceniza', x: 2.87, z: 6.95, roads: ['afr', 'me'], income: 35 },
+  sa: { id: 'sa', name: 'Carvik', x: -11.48, z: -0.98, roads: ['weu', 'afr'], income: 25 },
+  weu: { id: 'weu', name: 'Aldren', x: -6.11, z: -5.86, roads: ['oce', 'sa', 'eeu'], income: 30 },
+  eeu: { id: 'eeu', name: 'Volkren', x: 12.64, z: -8.28, roads: ['weu', 'eas'], income: 25 },
+  afr: { id: 'afr', name: 'Corran', x: -6.56, z: 4.02, roads: ['oce', 'na', 'sa'], income: 25 },
+  me: { id: 'me', name: 'Galen', x: 10.82, z: -2.23, roads: ['oce', 'na'], income: 30 },
+  eas: { id: 'eas', name: 'El Pantano Gris', x: 3.79, z: -6.25, roads: ['eeu', 'oce'], income: 35 },
+  oce: { id: 'oce', name: 'La Vega', x: -0.39, z: -0.63, roads: ['weu', 'eas', 'afr', 'me'], income: 25 },
 };
 
 /** Every road once, as a pair of zones (the map draws them). */
