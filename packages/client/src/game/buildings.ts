@@ -1817,7 +1817,7 @@ export class BuildingsView {
 
   /**
    * A building's stairs (a ladder tile whose decor is 'stairs', facing the
-   * way it climbs): a flight of solid steps across the tile, from its back
+   * way it climbs): a flight of steps across the tile, from its back
    * edge up to the landing a storey higher on the tile it faces. The rules
    * let one on and off them only by that landing (docs/FASE7.md), so they
    * have a banister on each side of the flight and a railing round the
@@ -1855,10 +1855,39 @@ export class BuildingsView {
           const top = base + ((n + 1) / STEPS) * STOREY;
           const [ax, bx] = d.x !== 0 ? [x + 0.5 + Math.min(u0 * d.x, u1 * d.x), x + 0.5 + Math.max(u0 * d.x, u1 * d.x)] : [x + 0.5 - half, x + 0.5 + half];
           const [az, bz] = d.y !== 0 ? [y + 0.5 + Math.min(u0 * d.y, u1 * d.y), y + 0.5 + Math.max(u0 * d.y, u1 * d.y)] : [y + 0.5 - half, y + 0.5 + half];
-          out.box(V(ax, base, az), V(bx, top, bz), SWATCH.flat, n % 2 ? wood : wood.clone().multiplyScalar(0.92), b);
+          // Wooden treads are horizontal boards. Filling every step down
+          // to the ground made the back of the flight look like a vertical floor.
+          out.box(V(ax, bd ? top - 0.055 : base, az), V(bx, top, bz), SWATCH.flat, n % 2 ? wood : wood.clone().multiplyScalar(0.92), b, !!bd);
         }
+        if (bd) this.stairStringers(out, x, y, d, base, wood.clone().multiplyScalar(0.72), b);
         this.banisters(out, x, y, k, d, base, STEPS, wood.clone().multiplyScalar(1.25), b, walled);
       }
+    }
+  }
+
+  /** Two sloping wooden beams carry the horizontal treads, leaving the risers open. */
+  private stairStringers(out: Surfaces, x: number, y: number, d: Vec2, base: number, tint: THREE.Color, b: number): void {
+    const at = (u: number, v: number, h: number) => V(x + 0.5 + d.x * u - d.y * v, h, y + 0.5 + d.y * u + d.x * v);
+    const up = V(0, 1, 0);
+    const across = V(-d.y, 0, d.x);
+    const along = V(d.x, 0, d.y);
+    const h0 = base - 0.055;
+    const h1 = base + STOREY - 0.055;
+    for (const v of [-0.32, 0.32]) {
+      const a = at(-0.5, v - 0.04, h0);
+      const b0 = at(-0.5, v + 0.04, h0);
+      const c = at(0.5, v + 0.04, h1);
+      const d0 = at(0.5, v - 0.04, h1);
+      const lower = (p: THREE.Vector3) => p.clone().addScaledVector(up, -0.16);
+      const faces: [THREE.Vector3[], THREE.Vector3][] = [
+        [[a, b0, c, d0], up],
+        [[lower(a), lower(d0), lower(c), lower(b0)], up.clone().negate()],
+        [[b0, lower(b0), lower(c), c], across],
+        [[a, d0, lower(d0), lower(a)], across.clone().negate()],
+        [[a, lower(a), lower(b0), b0], along.clone().negate()],
+        [[d0, c, lower(c), lower(d0)], along],
+      ];
+      for (const [corners, facing] of faces) out.poly(corners, corners.map((p) => [p.x + p.z, p.y] as [number, number]), SWATCH.flat, tint, b, facing);
     }
   }
 
