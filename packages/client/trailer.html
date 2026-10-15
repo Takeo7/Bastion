@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bastión · Tráiler</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+        font: 13px/1.4 monospace;
+        color: #eee;
+      }
+      /* The frame is always 1920×1080 and is shown scaled to the window (main.ts fit). */
+      #marco {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 1920px;
+        height: 1080px;
+        transform-origin: 0 0;
+        overflow: hidden;
+      }
+      #escena,
+      #imagen {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+      }
+      #estado {
+        position: fixed;
+        left: 8px;
+        bottom: 8px;
+        margin: 0;
+        padding: 6px 8px;
+        background: rgba(0, 0, 0, 0.7);
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="marco"><div id="escena"></div></div>
+    <pre id="estado"></pre>
+    <script type="module" src="/src/lab/trailer/main.ts"></script>
+  </body>
+</html>

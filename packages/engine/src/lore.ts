@@ -595,9 +595,9 @@ export function lootSummary(
 
 /** Reports for the Saqueo mission (`scavenge`), in the style of BRIEFINGS. */
 export const SCAVENGE_BRIEFINGS = [
-  'Un pueblo que se vació a toda prisa, con las casas cerradas y las despensas llenas. Registrad lo que podáis y evacuad. Cada tiro llama a más.',
-  'Un polígono que nadie ha tocado desde el primer invierno: naves, oficinas y coches en el aparcamiento. Llenad las mochilas y salid por la zona de evacuación. Vendrán, y antes cuanto más ruido hagáis.',
-  'Una urbanización a medio construir. Cuando empezó todo, la mitad de las casas tenía gente, y lo que dejaron sigue dentro. Registrad, cargad y evacuad antes de que la horda os encuentre.',
+  `Se vació a toda prisa, con las puertas cerradas y las despensas llenas. Registrad lo que podáis y volved ${BUS.to}. Cada tiro llama a más.`,
+  `Nadie lo ha tocado desde el primer invierno. Llenad las mochilas y volved ${BUS.to}. Vendrán, y antes cuanto más ruido hagáis.`,
+  `Cuando empezó todo, había gente dentro, y lo que dejaron sigue allí. Registrad, cargad y volved ${BUS.to} antes de que la horda os encuentre.`,
 ];
 
 /** The Saqueo mission's lines for the combat screen and the debrief. */
@@ -672,6 +672,36 @@ export function missionName(biome: Biome, zone: string, seed: number, site?: Sit
 
 // ------------------------------------------------------------------ valley
 
+/**
+ * The places one knows the valley by, named small on its map under the zones'
+ * names (Arte places them; docs/LORE.md «El mundo»). Each says something of its
+ * zone: the Peaje is where the Cuervos charge Volkren its toll, the Emisora is
+ * the Voz's, the Pico Gris holds the repeater of chapter 4.
+ */
+export const LANDMARKS = {
+  atalaya: 'Atalaya',
+  /** Aldren: the village of the bells (quest «Las campanas de Telm»). */
+  telm: 'Telm',
+  /** Carvik: the Sindicato's mine. */
+  mine: 'Mina',
+  /** El Pantano Gris: the reservoir's dam, its dead power plant and the peak with the repeater. */
+  dam: 'Presa',
+  plant: 'Central',
+  peak: 'Pico Gris',
+  /** La Vega: the Bodegas' cellars. */
+  wineries: 'Bodegas',
+  /** Volkren: the Cuervos' toll on the road. */
+  toll: 'Peaje',
+  /** Corran: chapter 2. */
+  hospital: 'Hospital',
+  /** Galen: where it began, and its port. */
+  institute: 'Instituto Galen',
+  port: 'Puerto',
+  /** Los Llanos de Ceniza: the Voz's station, and the Camioneros' stop. */
+  station: 'Emisora',
+  truckStop: 'Parada de camiones',
+} as const;
+
 /** A zone's name after «a»: «al Pantano Gris», «a La Vega». */
 export function toZone(name: string): string {
   return name.startsWith('El ') ? `al ${name.slice(3)}` : `a ${name}`;
@@ -739,14 +769,14 @@ export const NIGHT_TEXT = {
 /** Several reports per mission type; each offer always gets the same one. */
 const BRIEFINGS: Record<MissionKind, string[]> = {
   elimination: [
-    'Los muertos han llenado el mercado donde los enclaves cambian comida. Hasta que no esté vacío, no hay trueque. Que no quede ninguno.',
+    'Hace semanas que nadie puede acercarse: está lleno de muertos, y es paso obligado hacia la sierra. Que no quede ninguno.',
     'Una manada de zombis ha cortado la única carretera con agua potable. Limpiad la zona.',
-    'Los muertos de todo un barrio siguen en sus calles, y por ese barrio pasa la ruta de la sierra. Abatidlos a todos.',
+    'Los muertos se han quedado allí, y por ahí pasa la ruta de la sierra. Abatidlos a todos.',
   ],
   recovery: [
-    'La farmacia del pueblo sigue cerrada. Dentro hay medicinas. Sacadlas por la zona de evacuación.',
-    'Uno de sus mensajeros murió en mitad de la calle, en un pueblo infestado. Su mochila sigue junto al cuerpo. Recuperadla antes de que se acabe el tiempo.',
-    'Los Cuervos escondieron su botín en un almacén y no volvieron a por él: los muertos llegaron antes. Llevaos lo que podáis.',
+    `Dentro hay medicinas, intactas desde el primer invierno. Recuperadlas y volved ${BUS.to}.`,
+    'Uno de sus mensajeros murió allí, a la intemperie. Su mochila sigue junto al cuerpo. Recuperadla antes de que se acabe el tiempo.',
+    'Los Cuervos escondieron allí su botín y no volvieron a por él: los muertos llegaron antes. Llevaos lo que podáis.',
   ],
   sabotage: [
     'Los Cuervos dejaron una sirena en el valle y se fueron. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Calladla antes de que termine la cuenta atrás.',
@@ -754,13 +784,13 @@ const BRIEFINGS: Record<MissionKind, string[]> = {
   ],
   hack: [
     'Hay una radio de emergencia en la zona, muerta desde el invierno. Arregladla y oiremos a quien queda. Si falla, el ruido atraerá a todo lo que ande cerca.',
-    'Los Cuervos montaron un repetidor en un pueblo muerto y hablan por él. Ponedlo a nuestro favor y sabremos qué traman. Si falla, saltará la alarma.',
-    'En el puesto de policía queda un equipo de radio entero. Ponedlo en marcha. Si falla, el ruido traerá compañía.',
+    'Los Cuervos montaron allí un repetidor y hablan por él. Ponedlo a nuestro favor y sabremos qué traman. Si falla, saltará la alarma.',
+    'Allí queda un equipo de radio entero. Ponedlo en marcha. Si falla, el ruido traerá compañía.',
   ],
   rescue: [
     'Los Cuervos se han llevado a una persona que nos hace falta. Si llega a su campamento, no la volveremos a ver. Sacadla con vida.',
     'Los Cuervos retienen a alguien del enclave y piden gasolina a cambio. No vamos a pagar. Que vuelva con vida.',
-    'Los Cuervos han parado en un pueblo con sus prisioneros. Entre ellos hay alguien que sabe cosas que nos hacen falta. Que salga con vida.',
+    'Los Cuervos han parado allí con sus prisioneros. Entre ellos hay alguien que sabe cosas que nos hacen falta. Que salga con vida.',
   ],
   scavenge: SCAVENGE_BRIEFINGS,
 };

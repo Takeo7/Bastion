@@ -30,7 +30,7 @@ Sesiones abiertas (2026-10-14), todas con Remote Control para seguirlas desde cl
   | Gameplay | `bastion-test` (3310) | `bastion-gp-client` (5193) |
   | Arte | `bastion-ux-server` (3330) | `bastion-ux-client` (5197) |
   | UX/UI | `bastion-uiux-server` (3360) | `bastion-uilab` (5203; también sirve `interfaz.html`) |
-  | Red | 3390 (https en 3391), arrancado a mano | — |
+  | Red | 3390 (https en 3391), arrancado a mano; 3392, el receptor de la captura del tráiler | 5205 (`trailer.html`, config local en `.claude/`) |
 
   Nunca se usan ni se paran el 3000/3001 (la partida de los jugadores) ni el 5173.
 - El panel admite 5 servidores de prueba a la vez: como mucho, dos o tres agentes probando en el navegador al mismo tiempo.

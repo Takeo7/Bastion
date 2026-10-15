@@ -485,6 +485,15 @@ function layout(): Layout {
     grow(trunkBox[b.trunk], b.node, 50);
   }
   for (const n of nodes) if (n.d.axis !== null) grow(trunkBox[n.trunk], n.p, n.r + 34);
+  // The branches' names stand past the vines' ends, the whole view keeps them in.
+  for (const b of branches) {
+    const { at, anchor } = rimOf(b);
+    const w = rimWidth(BRANCHES[b.axis][b.branch].name.toUpperCase());
+    const x0 = anchor === 'start' ? at.x : anchor === 'end' ? at.x - w : at.x - w / 2;
+    const y = at.y + (b.out.y > 0.6 ? 24 : b.out.y < -0.6 ? -22 : 0);
+    grow(box, { x: x0, y }, 30);
+    grow(box, { x: x0 + w, y }, 30);
+  }
   cached = { trunks, branches, nodes, box, trunkBox };
   return cached;
 }
@@ -508,6 +517,17 @@ interface View {
 
 /** Each soldier's window, kept while the sheet redraws (every click redraws it). */
 const views = new Map<string, View>();
+
+/** Where a branch's name sits, far away past its vine's end; the Oficio's four, close together, every other one further out. */
+function rimOf(g: BranchGeo): { at: Pt; anchor: 'start' | 'end' | 'middle' } {
+  const at = add(g.tip, g.out, g.branch === 3 && ['grenadier', 'specialist'].includes(g.axis) ? 74 : 34);
+  return { at, anchor: g.out.x > 0.35 ? 'start' : g.out.x < -0.35 ? 'end' : 'middle' };
+}
+
+/** How wide a branch's name is at the rim (.tt-rim: Oswald 600, 27px, a pixel apart). */
+function rimWidth(text: string): number {
+  return measure ? ((measure.font = '600 27px Oswald, sans-serif'), measure.measureText(text).width + text.length) : text.length * 15;
+}
 
 function frame(box: Layout['box'], w: number, h: number, cap: number): { s: number; cx: number; cy: number } {
   const s = Math.min(cap, (w - 24) / (box.x1 - box.x0), (h - 24) / (box.y1 - box.y0));
@@ -543,9 +563,9 @@ function structure(ctx: TreeContext, L: Layout): SVGSVGElement {
       parts.push(`<path id="${id}" d="${cubicD(piece(g.limb, 0.32, 0.98))}" fill="none"/>`);
       const focus = BRANCHES[g.axis][g.branch].focus.replace(/^Oficio: /, '');
       parts.push(`<text class="tt-note near" dy="-11"><textPath href="#${id}" startOffset="50%" text-anchor="middle">${esc(focus)}</textPath></text>`);
-      // Far away, the branch's name past the end of its vine; the Oficio's four, close together, every other one further out.
-      const rim = add(g.tip, g.out, g.branch === 3 && ['grenadier', 'specialist'].includes(g.axis) ? 74 : 34);
-      parts.push(`<text class="tt-rim far${has ? ' lit' : ''}" x="${f(rim.x)}" y="${f(rim.y)}" text-anchor="${g.out.x > 0.35 ? 'start' : g.out.x < -0.35 ? 'end' : 'middle'}" dy="${g.out.y > 0.6 ? '0.9em' : g.out.y < -0.6 ? '-0.1em' : '0.35em'}">${esc(BRANCHES[g.axis][g.branch].name.toUpperCase())}</text>`);
+      // Far away, the branch's name past the end of its vine.
+      const rim = rimOf(g);
+      parts.push(`<text class="tt-rim far${has ? ' lit' : ''}" x="${f(rim.at.x)}" y="${f(rim.at.y)}" text-anchor="${rim.anchor}" dy="${g.out.y > 0.6 ? '0.9em' : g.out.y < -0.6 ? '-0.1em' : '0.35em'}">${esc(BRANCHES[g.axis][g.branch].name.toUpperCase())}</text>`);
       // The points a row asks for: small triangles on the vine (close).
       for (let row = 1; row < 5; row++) {
         const st = step(g.axis, g.branch, row);

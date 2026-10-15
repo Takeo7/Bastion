@@ -62,7 +62,7 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 ### Personajes (`game/syntyFigures.ts`, `syntyAnims.ts`, `unitViews.ts`)
 
 - **Supervivientes:** 16 personajes para elegir en el Cuartel (`SURVIVOR_CHOICES`). Sin elección, el soldado sale de su complexión y de su sexo (`SQUAD_BODIES`), y es el mismo en todas partes.
-- **Los muertos:** comunes (10 modelos), corredores (4), acorazados (4, un poco más grandes), el Chillón y el Hinchado (`UNIT_BODIES`).
+- **Los muertos:** comunes (10 modelos), corredores (4), acorazados (4, un poco más grandes), el Chillón y el Hinchado (`UNIT_BODIES`). Cada uno sale de su id, así que una horda es de todo tipo. Hasta el 15/10 salían del nombre, que comparten («Zombi»), y todos los de una misión eran el mismo cuerpo.
 - **Animación,** por capas:
   - los clips de Base Locomotion e Idles se miden contra la pose en T del pack y se pasan a los huesos de cada personaje, así que el mismo clip sirve para los dos rigs de Synty;
   - encima, el torso (encogerse, impactos, retroceso, lanzar, tajo, mordisco, gritar) y los brazos: el arma en la mano derecha y la izquierda en el guardamanos, las dos con cinemática inversa;
@@ -127,20 +127,35 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - la reconstrucción por trozos baja de 160–270 ms a 4–13 ms;
   - los ocho atlas del mapa en una textura: de 83 a 63 llamadas en la manzana de referencia.
 
-### Base y valle (`strategy/bastion.ts`, `baseKit.ts`, `stage.ts`, `geoscape.ts`)
+### Base y valle (`strategy/bastion.ts`, `baseKit.ts`, `stage.ts`, `geoscape.ts`, `valleyArt.ts`, `valleyGeography.ts`, `valley.css`)
 
 - **El Bastión:** Atalaya en la sierra, con la luz de la manzana de referencia (de 524 a 132 llamadas). Tiene el Cuartel, el Taller de oficios, obras con Construction y el Huerto por niveles: bancales con plástico, invernadero con estufa, riego por goteo y espantapájaros.
-- **El valle de Kessra** en Synty, en lugar del globo:
-  - las 8 zonas con sus pueblos, el embalse, las minas y la Vega;
-  - lee la geografía del motor (REGIONS, ROADS), y La Mula sigue las carreteras;
-  - la Marea cubre exactamente las zonas caídas: zombis, luces apagadas y el frente animado. También oscurece campos y carreteras;
-  - lomas suaves en el fondo del valle; prados de varios verdes, el suelo oscuro bajo los bosques y nieve a parches en Aldren;
-  - campos de cultivo en una malla de hileras (granjas, el mosaico de La Vega, huertos tras las casas);
-  - pueblos con tejados de Town y un hito cada uno: iglesia o depósito de agua;
-  - ciudades con el borde irregular, un parque y patios;
-  - carreteras con arcén, asfalto y línea discontinua, postes con cable, coches abandonados y dos choques en cadena;
-  - bosques en manchas;
-  - 57 llamadas en el menú y 77 en la campaña con las 8 zonas contactadas (los marcadores suman 20). También sirve de fondo del menú.
+- **El valle de Kessra,** «el Ilustrado» (lo eligió Arturo el 15/10 entre tres direcciones; sustituye al diorama 3D desde la 0.2.7):
+  - **un mapa pintado,** visto desde arriba: la sierra nevada con Atalaya, los pueblos de Aldren y Telm, Volkren y su Peaje (caseta con barrera) junto a la presa, la mina de Carvik, los campos de La Vega, Corran y Galen, el río, el puerto y los Llanos de Ceniza;
+  - **horneado una vez** (`valleyArt.ts`, en el laboratorio `/valle-mapas.html`) en 41 teselas de 2048×1446 y cuatro niveles (30, 60, 120 y 241 píxeles por unidad; el más fino solo sobre el valle), 7,8 MB en `public/maps/valle/`. El juego carga las finas según amplías, una por fotograma, y guarda como mucho 6 de cada nivel fino;
+  - **alrededor del valle, mundo** (68×48 unidades): la sierra nevada al norte, bosque a los lados, la costa y el mar abiertos al sureste y la llanura bajo la Marea al sur. Así el mapa llena siempre la ventana entera por detrás de los paneles, con cualquier zoom y encuadre;
+  - **en vivo encima,** solo:
+    - la Marea, en el sombreador de las teselas: el suelo apagado y teñido de violeta, un velo que se mueve, y el borde con su brillo y una línea clara de pocos píxeles con cualquier zoom. Sube por las carreteras con la infestación, con los umbrales del motor (`valleyGeography.ts`); en el menú, solo la franja del sur;
+    - los marcadores y los nombres, en HTML (`valley.css`): chincheta por zona (azul con contacto, violeta bajo la Marea, amarilla la elegida, con su anillo), Nido, operaciones en los hexágonos de la lista, rumor (verde si se escucha), Atalaya, La Lata (`BUS.name`) por las carreteras y los lugares de Lore (`LANDMARKS`), que solo salen si el mapa es lo bastante grande;
+  - **la geografía es la del motor** (REGIONS, ROADS); La Lata sigue `roadRoute`;
+  - **el valle cabe siempre entre los paneles:** el encuadre lo mide el propio valle cada pocos fotogramas, con los paneles como estén (entran con animación). Se mide sin la ficha de la derecha y con el panel izquierdo desplegado, así que abrir una ficha no cambia el tamaño: el mapa solo se aparta lo justo para que la zona elegida quede a la vista, y vuelve al cerrarla;
+  - **la rueda amplía** hacia el puntero (hasta 4,5× sobre ese encuadre) y arrastrar mueve el mapa. Ampliado, el valle cubre la parte libre de la pantalla;
+  - **sin postproceso** (`plain`): en el Mac, a 2560×1600, 0,7 ms el fotograma con el mapa entero y 1 ms ampliado (con el bloom y la gradación eran 4,5 y 5,6 ms). Telemetría como siempre (`globo` en `red.log`).
+- **`stage.ts`:** los sets pueden hacer su propio zoom (`zoom`) y conocer el escenario (`attach`), y `frameNow()` dibuja un fotograma al momento para capturarlo. Una barra mucho más ancha que alta y a pocos píxeles del borde de arriba o de abajo cuenta como ese borde. La de navegación flota 6 px y se tomaba por un panel lateral, lo que encogía los encuadres de la base y del valle.
+
+### El tráiler, la portada y las capturas ([TRAILER.md](TRAILER.md); `lab/trailer/cine.ts`, `sala.ts`, `shots/`)
+
+- **Las tomas de Arte** (`src/lab/trailer/shots/<id>.ts`, con la interfaz de Red: `setup`, `frame(t)` y duración). Las graba la página de Red, `trailer.html`, con su reloj virtual.
+  - calle, horda y atalaya: el juego sin reglas (`cine.ts`, `mapScene`) o la base (`BastionSet`, con su despegue). La horda son 45 figuras a la velocidad del juego, con gemidos y pasos.
+  - Los diez planos del montaje y la evacuación son batallas de verdad (`sala.ts`, `LocalBattle`): un `Game` con una red falsa. Las órdenes de los planos de Gameplay (`.dev-snapshots/trailer/partidas/tomas/<id>.json`) pasan por `executeCommand` con una sola `Rng(seed)` y van a `game.onEvents`.
+    - Sin HUD, aros ni superposiciones, y la cámara es de cine (`cameraPath`, por puntos clave).
+    - `lead` adelanta el plano a la acción, `times` cambia los tiempos (nunca el orden) para que quepa en 2 s y `rate` cambia la «Velocidad del combate» a mitad de plano. `missionEnded` no se juega.
+    - De cerca, el golpe no tiñe el cuerpo (`UnitViews.flashScale = 0`) y el halo del impacto es pequeño (`Fx.impactGlow = 0.3`): con el bloom, el zombi alcanzado se veía entero de rosa. En el juego los dos siguen a 1.
+  - valle: el mapa del juego acercándose mientras sube la Marea.
+  - **El horizonte** (`backdrop`): más allá del mapa el juego solo tiene suelo, y la neblina lo dejaba en una franja gris. Calle, horda y portada llevan siluetas de ciudad (bloques bajos cerca y más altos lejos, oscuros, que la neblina aclara con la distancia) y el humo de un incendio.
+- **Luces nuevas del `Renderer`** (`setTime`): `dawn` (el amanecer de la calle: sol bajo y naranja, neblina cálida) y `dusk` (la portada: sol bajo del oeste, cielo de azul a naranja). `closeUp` quita la oclusión ambiental: de cerca, lo de detrás de los personajes se veía a través de ellos.
+- **La portada** (`shots/portada.ts`, `?toma=portada&ver&ss=2`): la partida de Gameplay recolocada para la foto (no se juega nada). La escuadra en el borde de un tejado, la horda en la calle, La Lata al fondo, al atardecer; el cielo de arriba queda libre para el logo. `__portada.save()` la guarda a 3840×2160 en `.dev-snapshots/trailer/portada/keyart.png`.
+- **Las capturas de combate** (`.dev-snapshots/trailer/capturas/combate/`): combate, horda, noche, área de servicio, polígono y evacuación, a 1920×1080, en partidas de Gameplay en mi servidor. Las dos plazas están conectadas, con el HUD y la cámara del juego (su inclinación y giros de 45°) y el modo de disparo abierto.
 
 ### Efectos y renders (`game/fx.ts`, `songFx.ts`, `lab/renders/`)
 
@@ -159,7 +174,8 @@ Se abren con el cliente de pruebas (el mío, en el 5197). Todos usan el código 
 | `/armas.html` | Cada arma en las manos de cada cuerpo, pose a pose. `__weapons.sheet(...)` guarda una hoja |
 | `/efectos.html` | Cada efecto del combate y del Oficio sobre un superviviente y tres zombis (`#molotov`, `__fx.play('bengala')`) |
 | `/cuartel.html` | La escena del Cuartel con la cámara sobre el soldado |
-| `/valle.html` | El mapa del valle solo, con las llamadas y los triángulos de cada fotograma. Teclas 0–8 para las zonas, con el zoom más cercano del jugador; `?menu` para el fondo del menú, `?doom=6` para la Marea, `?contact` para contactarlo todo. `__valle.look(x, z, distancia)` y `__valle.snap(nombre)` |
+| `/valle.html` | El valle solo, como en la campaña, con las llamadas, los triángulos y los milisegundos de cada fotograma. Teclas 0 (entero), 1–8 (cada zona de cerca) y M (fondo del menú); `?doom=6` para la Marea, `?contact` para contactarlo todo. `__valle.look(x, z, zoom)` y `__valle.snap(nombre)` (el mapa, sin los nombres) |
+| `/valle-mapas.html` | El pintor del mapa base. `__mapas.view(cx, cz, k)` pinta un trozo (k píxeles por unidad; 48 es el valle entero en 1440) y `__mapas.bake()` pinta las 21 teselas y las manda a `.dev-snapshots/valle-<nivel>-<i>-<j>.jpg` (WebP dentro). Se copian a `public/maps/valle/<nivel>-<i>-<j>.webp` |
 | `/renders.html` | Los renders de la interfaz. `__renders.save()` los manda a `.dev-snapshots/` |
 | `/sonido.html` | Todos los sonidos (son de Red y de UX/UI) |
 
@@ -171,6 +187,7 @@ Las capturas de los laboratorios van a `.dev-snapshots/`, que no se sube. Con el
 - **Lo que pedirán las reglas más adelante:** saltar desde ventanas altas, suelos y paredes destructibles, escaleras que solo se dejan por un lado.
 - **Escenarios, después de la 0.2.6** (acordado con Gameplay): la cafetería propia (hoy es una tienda de ciudad con tablas) y el portón grande de la nave industrial (7,5 m: un hueco de 5 casillas en el plano); hasta entonces, las puertas de las naves son de metal de búnker.
 - **Cárcel y centro comercial:** esperan a los atlas de «Police Station» y «Shops».
+- **Restos del diorama del valle:** los modelos `map*` del kit de la base (`syntyManifest.ts`) ya solo los usaba el valle 3D. Quitarlos del manifiesto y sus GLB de `public/` cuando se confirme el valle pintado.
 - **Sacar el arma:** la pistola y el cuchillo o el machete aparecen en la mano de golpe, al empezar el gesto. Si en la prueba se nota, la mano va antes a la funda o a la cadera (unos 0,15 s).
 - **Los cuerpos y el decorado pequeño:** la caída esquiva paredes y cobertura alta, pero no un banco ni un buzón (no son casillas que tapen).
 - **Para UX/UI, si lo pide:** la venda en render ([UX-CARENCIAS.md](UX-CARENCIAS.md)).

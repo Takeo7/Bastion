@@ -53,7 +53,7 @@ type RGB = readonly [number, number, number];
  * a dense teal haze, and the warm pools of the lamps (mapView). A neutral
  * tone mapping keeps the atlases' colours (ACES turned their reds orange).
  */
-const MOODS: Record<'day' | 'night', Mood> = {
+const MOODS: Record<'day' | 'night' | 'dawn' | 'dusk', Mood> = {
   day: {
     sky: ['#8f97b4', '#c8c0cc', '#ecd0b8'],
     // Second look against the capture (2026-10-14, measured by tone bands): the far streets read through a
@@ -90,6 +90,42 @@ const MOODS: Record<'day' | 'night', Mood> = {
     exposure: 1.2,
     bloom: { strength: 0.85, threshold: 0.7 },
     grade: { saturation: 1.0, contrast: 1.06, vignette: 0.34, shadowTint: [0.9, 1.0, 1.04], highlightTint: [1.06, 1.0, 0.9], lift: [0.015, 0.03, 0.035] },
+  },
+  // Dawn (the trailer's opening, docs/TRAILER.md): the sun just up in the east, low and orange, its shadows
+  // the length of the street; the sky blue overhead and peach at the horizon, a warm haze in the far streets.
+  dawn: {
+    sky: ['#56679a', '#b893a6', '#f3b487'],
+    haze: 0xd8b4a2,
+    hazeDensity: 0.024,
+    sun: 0xffad73,
+    sunIntensity: 3.0,
+    sunFrom: [31, 8, -9],
+    skyLight: 0x9aa4d2,
+    groundLight: 0x6a5244,
+    skyIntensity: 1.35,
+    fill: 0xffe2cc,
+    fillIntensity: 0.22,
+    exposure: 1.32,
+    bloom: { strength: 0.5, threshold: 0.86 },
+    grade: { saturation: 0.95, contrast: 1.07, vignette: 0.3, shadowTint: [0.9, 0.93, 1.1], highlightTint: [1.08, 1.0, 0.9], lift: [0.04, 0.035, 0.065] },
+  },
+  // Dusk (the cover, docs/TRAILER.md): the sun low in the west, gold on what faces it and long shadows east; the
+  // sky deep blue overhead and burning at the horizon; the shade a cool violet.
+  dusk: {
+    sky: ['#24326a', '#7d4f86', '#f08f5a', '#f6b26a', '#f6b26a'],
+    haze: 0xc8927e,
+    hazeDensity: 0.0085,
+    sun: 0xffa45c,
+    sunIntensity: 3.6,
+    sunFrom: [-30, 10, 9],
+    skyLight: 0x8a8fc8,
+    groundLight: 0x5e4436,
+    skyIntensity: 1.5,
+    fill: 0xffd8bc,
+    fillIntensity: 0.25,
+    exposure: 1.42,
+    bloom: { strength: 0.55, threshold: 0.85 },
+    grade: { saturation: 1.0, contrast: 1.08, vignette: 0.32, shadowTint: [0.88, 0.9, 1.12], highlightTint: [1.1, 1.0, 0.88], lift: [0.04, 0.03, 0.07] },
   },
 };
 
@@ -137,6 +173,8 @@ export class Renderer {
   private readonly clock = new THREE.Timer();
   /** Post-processing: ambient occlusion in corners and contacts, bloom on lights. */
   private readonly post: PostChain;
+  /** The camera close in (closeUp). */
+  private near = false;
   private readonly limiter = new FrameLimiter();
   /** Lowers the quality if the mission doesn't run fluidly (playtest: «me va a 25 fps»). */
   private readonly guard = new QualityGuard(() => this.onQualityLowered?.());
@@ -195,7 +233,7 @@ export class Renderer {
     this.sun.shadow.radius = shadow.radius;
     shadowsStale = true;
     const q = postQuality();
-    this.post.ao.enabled = q.ao !== 'off';
+    this.post.ao.enabled = q.ao !== 'off' && !this.near;
     lightenPost(this.post, q.ao === 'light', q.bloom === 'light');
     if (this.gl.shadowMap.enabled !== g.shadows) {
       this.gl.shadowMap.enabled = g.shadows;
@@ -219,6 +257,22 @@ export class Renderer {
   /** Day or night (the reference block's night test; missions are by day). */
   setNight(on: boolean): void {
     this.setMood(on ? MOODS.night : MOODS.day);
+  }
+
+  /**
+   * Close in on the characters (the trailer's cinema camera): no ambient
+   * occlusion. The characters stay out of its pre-pass (skinned, they would
+   * stand in it in their bind pose), and from close what is behind them shows
+   * through them in it.
+   */
+  set closeUp(on: boolean) {
+    this.near = on;
+    this.post.ao.enabled = postQuality().ao !== 'off' && !on;
+  }
+
+  /** The time of day by name: also dawn, for the trailer. */
+  setTime(time: keyof typeof MOODS): void {
+    this.setMood(MOODS[time]);
   }
 
   private setMood(m: Mood): void {

@@ -140,6 +140,8 @@ export class UnitViews {
   private readonly selection: THREE.Mesh;
   private readonly partnerSelection: THREE.Mesh;
   private selectedId: string | null = null;
+  /** How strong a hit's red flash shows (1 in battle; the trailer's close shots soften it: lab/trailer/sala.ts). */
+  flashScale = 1;
   private hoveredId: string | null = null;
   private partnerId: string | null = null;
   /** Whether a place is hidden by the buildings' cutaway (MapView.isCutAway); set by the game. */
@@ -196,12 +198,13 @@ export class UnitViews {
 
   private create(u: Unit): UnitView {
     const color = unitColor(u);
-    // The soldier's campaign id picks the same survivor as in the base; skirmish units go by name.
+    // The soldier's campaign id picks the same survivor as in the base; skirmish soldiers go by name. The
+    // enemy go by their id: they share their template's name («Zombi»), and by it every one was the same body.
     // Who has no look (a VIP, an enemy leader) still gets a body of their sex, from their name.
     const sex = u.appearance ? undefined : sexOfPerson(u.name);
     // A campaign soldier's own weapons (docs/FASE8.md §A); anyone else's are its template's.
     const gear: Gear = { ...gearOf(u.weaponTier, u.armorTier), arms: u.arms ?? null };
-    const rig = buildUnit(u.template, color, u.appearance, gear, u.campaignId ?? u.name, sex);
+    const rig = buildUnit(u.template, color, u.appearance, gear, u.campaignId ?? (u.team === 'xcom' ? u.name : u.id), sex);
     const ring = new THREE.Mesh(
       ringGeometry,
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -543,7 +546,7 @@ export class UnitViews {
     posed.run = p.run;
     posed.recoil = p.recoil;
     posed.hit = p.hit;
-    posed.flash = p.flash;
+    posed.flash = p.flash * this.flashScale;
     posed.fall = p.fall;
     posed.lean = p.lean;
     posed.hop = p.hop;

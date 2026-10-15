@@ -150,6 +150,8 @@ export class Fx {
   readonly group = new THREE.Group();
   private readonly glow = glowTexture();
   private particles: Particle[] = [];
+  /** How big and bright the glow of a shot's impact is (1 in battle; the trailer's close shots, lab/trailer/sala.ts, take less: bloomed up close it swallowed the body). */
+  impactGlow = 1;
 
   constructor() {
     loadShapes();
@@ -448,7 +450,8 @@ export class Fx {
       const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).normalize();
       this.spawn(s, s.material, { velocity: dir.multiplyScalar(2.5 + Math.random() * 3), gravity: 9, life: 0.3 + Math.random() * 0.25 });
     }
-    const puff = this.glowSprite(color, 0.5, 0.8);
+    if (this.impactGlow <= 0) return;
+    const puff = this.glowSprite(color, 0.5 * this.impactGlow, 0.8 * this.impactGlow);
     puff.position.copy(at);
     this.spawn(puff, puff.material, { life: 0.15, grow: 1 });
   }

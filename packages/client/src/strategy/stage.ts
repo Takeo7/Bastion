@@ -35,6 +35,8 @@ type RGB = readonly [number, number, number];
  */
 export interface StageMood {
   exposure: number;
+  /** The tone mapping (Neutral if none): the valley's painted map is shown as painted, with none. */
+  toneMapping?: THREE.ToneMapping;
   bloom: { strength: number; threshold: number };
   grade: { saturation: number; contrast: number; vignette: number; shadowTint: RGB; highlightTint: RGB; lift: RGB };
 }
@@ -74,8 +76,18 @@ export interface StageSet {
   hover?(hotspot: string | null): void;
   /** Drag with the pointer; return true when the set used it (e.g. spinning the globe). */
   drag?(dx: number, dy: number): boolean;
+  /**
+   * The wheel or a pinch, for a set that zooms by itself (the shot's `zoom`
+   * then stays out of it): `factor` above 1 out, below 1 in, about the
+   * ground point under the pointer.
+   */
+  zoom?(factor: number, at: THREE.Vector3 | null): void;
+  /** Called once it is added, with the stage that shows it (its camera, the panels over it). */
+  attach?(stage: Stage): void;
   /** Screen-space ambient occlusion: on for solid sets like the Bastion (only on «alto»). */
   readonly ambientOcclusion?: boolean;
+  /** Drawn straight to the screen, without the post-processing (the valley's painted map needs none): its mood's tone mapping only. */
+  readonly plain?: boolean;
   /** Its light after the scene (exposure, bloom, grade), applied while it is shown. */
   readonly mood?: StageMood;
   /**
@@ -177,6 +189,7 @@ export class Stage {
     labels.domElement.style.display = 'none';
     this.element.insertBefore(labels.domElement, this.fade);
     this.labels.set(id, labels);
+    set.attach?.(this);
     this.resize();
   }
 
@@ -239,17 +252,19 @@ export class Stage {
 
   /**
    * How far the screen's panels reach in from each edge of the stage: a bar
-   * touching the top or the bottom edge takes that side, a sheet the side its
-   * middle is on.
+   * (much wider than tall) at the top or the bottom edge, or a few pixels
+   * off it (the nav floats over the bottom), takes that side; a sheet the
+   * side its middle is on.
    */
-  private insets(): { top: number; right: number; bottom: number; left: number } {
+  insets(): { top: number; right: number; bottom: number; left: number } {
     const out = { top: 0, right: 0, bottom: 0, left: 0 };
     const box = this.element.getBoundingClientRect();
     for (const el of this.element.parentElement?.querySelectorAll<HTMLElement>(PANELS) ?? []) {
       const r = el.getBoundingClientRect();
       if (r.width < 4 || r.height < 4) continue;
-      if (r.top <= box.top + 2) out.top = Math.max(out.top, r.bottom - box.top);
-      else if (r.bottom >= box.bottom - 2) out.bottom = Math.max(out.bottom, box.bottom - r.top);
+      const bar = r.width > r.height * 3;
+      if (r.top <= box.top + 2 || (bar && r.top <= box.top + 24)) out.top = Math.max(out.top, r.bottom - box.top);
+      else if (r.bottom >= box.bottom - 2 || (bar && r.bottom >= box.bottom - 24)) out.bottom = Math.max(out.bottom, box.bottom - r.top);
       else if (r.left + r.width / 2 < box.left + box.width / 2) out.left = Math.max(out.left, r.right - box.left);
       else out.right = Math.max(out.right, box.right - r.left);
     }
@@ -318,6 +333,12 @@ export class Stage {
 
   /** The wheel, or a trackpad pinch (a wheel with ctrl held): zooms towards the pointer. */
   private onWheel(e: WheelEvent): void {
+    const set = this.sets.get(this.active);
+    if (set?.zoom) {
+      e.preventDefault();
+      if (!this.moving) set.zoom(Math.exp(e.deltaY * (e.deltaMode === 1 ? 16 : 1) * (e.ctrlKey ? 0.01 : 0.0015)), this.groundAt(e));
+      return;
+    }
     const range = this.shot?.zoom;
     if (!range || this.moving) return;
     e.preventDefault();
@@ -382,6 +403,7 @@ export class Stage {
   private applyMood(set: StageSet): void {
     this.moodOf = set;
     const m = set.mood ?? PLAIN_MOOD;
+    this.gl.toneMapping = m.toneMapping ?? THREE.NeutralToneMapping;
     this.gl.toneMappingExposure = m.exposure;
     this.post.bloom.strength = m.bloom.strength;
     this.post.bloom.threshold = m.bloom.threshold;
@@ -472,10 +494,20 @@ export class Stage {
   private loop = (): void => {
     if (this.disposed) return;
     this.frameId = requestAnimationFrame(this.loop);
+    if (!this.limiter.ready()) return;
+    this.draw();
+  };
+
+  /** Draws a frame now and returns the canvas: what it shows can be copied until this task ends (labs, captures). */
+  frameNow(): HTMLCanvasElement {
+    this.draw();
+    return this.gl.domElement;
+  }
+
+  private draw(): void {
     const set = this.sets.get(this.active);
     // Hidden (display: none) or detached: nothing to draw.
     if (!set || !this.element.isConnected || !this.element.clientWidth) return;
-    if (!this.limiter.ready()) return;
     perfBegin(this.gl);
     this.clock.update();
     const dt = Math.min(this.clock.getDelta(), 0.1);
@@ -486,12 +518,12 @@ export class Stage {
     else this.gl.shadowMap.needsUpdate = true;
     this.post.scene.scene = set.scene;
     this.post.ao.scene = set.scene;
-    this.post.ao.enabled = !!set.ambientOcclusion && this.effects === 'high';
-    if (this.effects === 'low') this.gl.render(set.scene, this.camera);
+    this.post.ao.enabled = !!set.ambientOcclusion && this.effects === 'high' && !set.plain;
+    if (this.effects === 'low' || set.plain) this.gl.render(set.scene, this.camera);
     else this.post.composer.render(dt);
     this.labels.get(this.active)?.render(set.scene, this.camera);
     perfFrame(this.gl, this.soundtrack ? this.active : 'menú');
-  };
+  }
 
   dispose(): void {
     this.disposed = true;

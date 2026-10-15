@@ -31,6 +31,16 @@
       { "target": "zip", "arch": ["x64"] }
     ]
   },
+  "linux": {
+    "target": [
+      { "target": "AppImage", "arch": ["x64"] },
+      { "target": "tar.gz", "arch": ["x64"] }
+    ],
+    "category": "Game",
+    "executableName": "bastion",
+    "icon": "build/icon.png",
+    "synopsis": "Táctica por turnos cooperativa"
+  },
   "nsis": {
     "oneClick": false,
     "perMachine": false,
