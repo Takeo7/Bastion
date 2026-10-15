@@ -9,6 +9,7 @@ import { atlasFile, type AtlasId } from './syntyManifest';
 // is inside its own atlas, so a model only needs its UVs moved into its
 // atlas's place (batch.ts, when merging); the walls' dye reads the UV back in
 // its own atlas (buildings.ts). Characters keep their packs' own textures.
+// Woodland's containers (512 each) share a 1024 corner of the bottom row; Generic (a roller shutter) has the last.
 
 const SIZE = 4096;
 
@@ -22,6 +23,11 @@ const RECTS: Partial<Record<AtlasId, readonly [number, number, number, number]>>
   construction: [0.75, 0.5, 0.25, 0.25],
   military: [0, 0.75, 0.25, 0.25],
   nature: [0.25, 0.75, 0.25, 0.25],
+  containerRed: [0.5, 0.75, 0.125, 0.125],
+  containerBlue: [0.625, 0.75, 0.125, 0.125],
+  containerOrange: [0.5, 0.875, 0.125, 0.125],
+  containerGrey: [0.625, 0.875, 0.125, 0.125],
+  generic: [0.75, 0.75, 0.25, 0.25],
 };
 
 /** The packed atlases, in index order (aAtlas). */

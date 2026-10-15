@@ -19,7 +19,7 @@ const LABELS: Record<string, string> = {
   'shot.rifle': 'Fusil (especialista)',
   'shot.shotgun': 'Escopeta (asalto)',
   'shot.sniper': 'Fusil de precisión (francotirador)',
-  'shot.cannon': 'Cañón (granadero)',
+  'shot.cannon': 'Ametralladora (granadero)',
   'shot.pistol': 'Pistola',
   'shot.advent': 'Fusil de ADVENT',
   'shot.mec': 'Cañón del Acorazado',

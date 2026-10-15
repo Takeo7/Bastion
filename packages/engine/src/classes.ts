@@ -13,9 +13,9 @@
 // TALENT_POINTS_PER_RANK talent points. Free points are never stored: they're
 // what the rank allows minus what has been spent, so a retrain only has to
 // reset the choices.
-import { addMods, ITEMS, RANKS, TEMPLATES, ZERO_MODS } from './content';
+import { addMods, FOUND_WEAPONS, ITEMS, RANKS, TEMPLATES, ZERO_MODS } from './content';
 import type { Rng } from './rng';
-import type { AbilityId, ChargeId, ClassId, ItemId, PerkId, TemplateId, UnitMods } from './types';
+import type { AbilityId, Arms, ChargeId, ClassId, ItemId, PerkId, TemplateId, UnitMods } from './types';
 
 // ---------------------------------------------------------------- aptitudes
 
@@ -80,6 +80,32 @@ export function baseAttrs(cls: ClassId | null): Attributes {
   return out;
 }
 
+/**
+ * A recruit's own aptitudes (docs/PRUEBA-2026-10-14.md #10): the recruit's
+ * base with a couple of points moved from one aptitude to another, so no two
+ * are quite alike and none starts ahead (the total, and so the points to
+ * spend, stay the same). None drops below 3 or goes past a recruit's cap.
+ */
+export function recruitAttrs(rng: Rng, moves = 2): Attributes {
+  const out = { ...RECRUIT_ATTRS };
+  for (let k = 0; k < moves; k++) {
+    const from = ATTR_IDS.filter((id) => out[id] > 3);
+    const to = ATTR_IDS.filter((id) => out[id] < ATTR_CAP);
+    const a = rng.pick(from);
+    const b = rng.pick(to.filter((id) => id !== a));
+    out[a]--;
+    out[b]++;
+  }
+  return out;
+}
+
+/** A recruit's aptitudes (recruitAttrs) as a soldier of `cls`: its class's two aptitudes one point up. */
+export function withClass(attrs: Attributes, cls: ClassId | null): Attributes {
+  const out = { ...attrs };
+  if (cls) for (const id of CLASS_TOP[cls]) out[id]++;
+  return out;
+}
+
 export function attrCap(cls: ClassId | null, id: AttrId): number {
   return cls && CLASS_TOP[cls].includes(id) ? ATTR_MAX : ATTR_CAP;
 }
@@ -134,7 +160,7 @@ export const BRANCHES: Record<ClassId, [BranchDef, BranchDef, BranchDef, BranchD
   ],
   grenadier: [
     { name: 'Demolición', focus: 'Granadas y explosivos' },
-    { name: 'Artillería', focus: 'El cañón y el blindaje' },
+    { name: 'Artillería', focus: 'La ametralladora y el blindaje' },
     { name: 'Control', focus: 'Supresión y marcas' },
     { name: 'Fuego', focus: 'Oficio: bengalas, petardos y molotov', song: true },
   ],
@@ -167,24 +193,47 @@ export const KIT_CLASS: Record<Kit, ClassId> = {
   grillo: 'specialist',
 };
 
+/** What a kit's talents need, as «Necesita …» reads it (docs/FASE8.md §A: the weapon carried, not the class). */
 export const KIT_NAMES: Record<Kit, string> = {
-  blade: 'el machete del Asalto',
-  shotgun: 'la escopeta del Asalto',
-  cannon: 'el cañón del Granadero',
-  rifle: 'el fusil de precisión del Francotirador',
-  pistol: 'la pistola del Francotirador',
+  blade: 'un machete',
+  shotgun: 'una escopeta',
+  cannon: 'una ametralladora',
+  rifle: 'un fusil de precisión',
+  pistol: 'una pistola',
   grillo: 'el Grillo del Especialista',
 };
 
+/**
+ * Whether a soldier carries what a kit's talents need (docs/FASE8.md §A). With arms of its own (the campaign),
+ * the weapon in the hand or at the belt, and everyone has a pistol; without (a skirmish), its class's. The
+ * Grillo is always the Especialista's.
+ */
+export function carriesKit(b: Pick<Build, 'cls'>, kit: Kit, arms?: Arms): boolean {
+  if (kit === 'grillo' || !arms) return KIT_CLASS[kit] === b.cls;
+  const primary = arms.primary && FOUND_WEAPONS[arms.primary].weapon;
+  switch (kit) {
+    case 'blade':
+      return !!arms.melee && FOUND_WEAPONS[arms.melee].weapon === 'sword';
+    case 'shotgun':
+      return primary === 'shotgun';
+    case 'cannon':
+      return primary === 'cannon';
+    case 'rifle':
+      return primary === 'sniper';
+    case 'pistol':
+      return true;
+  }
+}
+
 /** Specialising, as the register tells it. `{name}` is the soldier's. */
 export const SPECIALIZE_TEXT: Record<ClassId, string> = {
-  assault: '{name} se especializa como Asalto. Teo le entrega una escopeta y una hoja.',
-  grenadier: '{name} se especializa como Granadero. Le toca el cañón, y las granadas.',
-  sharpshooter: '{name} se especializa como Francotirador. Teo le ajusta la mira de un fusil de precisión.',
+  assault: '{name} se especializa como Asalto. Sus talentos piden una escopeta o un machete: buscadlos en la Armería.',
+  grenadier: '{name} se especializa como Granadero. El lanzagranadas es suyo; el resto de sus talentos piden una ametralladora.',
+  sharpshooter: '{name} se especializa como Francotirador. Sus talentos piden un fusil de precisión o la pistola; sin el fusil no hay disparo lejano.',
   specialist: '{name} se especializa como Especialista. El Grillo ya tiene dueño.',
 };
 
-export const RECRUIT_DESCRIPTION = 'Todavía sin clase. Lleva fusil y aprende lo que le enseñen. Al llegar a Capitán se especializa en el eje del árbol de habilidades en que más haya aprendido.';
+export const RECRUIT_DESCRIPTION = 'Todavía sin clase. Sale con cuchillo y pistola, y con el arma que le deis en la Armería. Aprende lo que le enseñen. Al llegar a Capitán se especializa en el eje del árbol de habilidades en que más haya aprendido.';
 
 /** Combat template a soldier fights with. */
 export function soldierTemplate(cls: ClassId | null): TemplateId {
@@ -286,16 +335,16 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   blastWave: t('grenadier', 0, 3, 'blastWave', 1, 'Onda expansiva', 'Las granadas tienen +1 de radio más.', { mods: { grenadeRadius: 1 } }),
   salvo: t('grenadier', 0, 4, 'salvo', 1, 'Salva', 'Lanzar granadas ya no termina el turno.', { req: ['ofi', 6] }),
   // Grenadier · Artillería
-  heavyFire: t('grenadier', 1, 0, 'heavyFire', 1, 'Fuego pesado', 'El cañón hace +1 de daño.', { mods: { damage: 1 }, kit: 'cannon' }),
+  heavyFire: t('grenadier', 1, 0, 'heavyFire', 1, 'Fuego pesado', 'La ametralladora hace +1 de daño.', { mods: { damage: 1 }, kit: 'cannon' }),
   steadyCannon: t('grenadier', 1, 0, 'steadyCannon', 2, 'Apoyo firme', '+5 de puntería por nivel.', { mods: { aim: 5 } }),
-  shredder: t('grenadier', 1, 1, 'shredder', 1, 'Destrozador', 'Los disparos del cañón destrozan 1 de blindaje.', { mods: { shred: 1 }, kit: 'cannon' }),
-  apCannon: t('grenadier', 1, 1, 'apCannon', 2, 'Perforante', 'Los disparos del cañón ignoran 1 de blindaje por nivel.', { mods: { pierce: 1 }, kit: 'cannon' }),
+  shredder: t('grenadier', 1, 1, 'shredder', 1, 'Destrozador', 'Los disparos de la ametralladora destrozan 1 de blindaje.', { mods: { shred: 1 }, kit: 'cannon' }),
+  apCannon: t('grenadier', 1, 1, 'apCannon', 2, 'Perforante', 'Los disparos de la ametralladora ignoran 1 de blindaje por nivel.', { mods: { pierce: 1 }, kit: 'cannon' }),
   heavyCrit: t('grenadier', 1, 2, 'heavyCrit', 2, 'Calibre grueso', '+5 de crítico por nivel.', { mods: { crit: 5 } }),
   tripod: t('grenadier', 1, 2, 'tripod', 1, 'Trípode', 'Los disparos de vigilancia pierden un 15 % menos de puntería.', { mods: { reactionKeep: 15 } }),
   armoured: t('grenadier', 1, 3, 'armoured', 2, 'Blindado', '+1 de salud por nivel.', { hp: 1 }),
   chainShot: t('grenadier', 1, 4, 'chainShot', 1, 'Disparo en cadena', 'Disparo con −15; si acierta, disparas otra vez (enfriamiento 3).', { ability: 'chainShot', req: ['pul', 7] }),
   // Grenadier · Control
-  holoTargeting: t('grenadier', 2, 0, 'holoTargeting', 1, 'Marcar el blanco', 'Cada disparo del cañón marca al objetivo: +15 de puntería para tus aliados.', { kit: 'cannon' }),
+  holoTargeting: t('grenadier', 2, 0, 'holoTargeting', 1, 'Marcar el blanco', 'Cada disparo de la ametralladora marca al objetivo: +15 de puntería para tus aliados.', { kit: 'cannon' }),
   marker: t('grenadier', 2, 0, 'marker', 2, 'Marcador', 'Marcar el blanco da +5 de puntería más por nivel.', { mods: { holoAim: 5 }, needs: 'holoTargeting', kit: 'cannon' }),
   suppression: t('grenadier', 2, 1, 'suppression', 1, 'Supresión', 'Inmoviliza a un enemigo: −50 de puntería, y si se mueve le disparas.', { ability: 'suppression' }),
   bulwark: t('grenadier', 2, 1, 'bulwark', 1, 'Parapeto', '+15 de defensa si un soldado de tu compañero está a 4 casillas o menos.', { mods: { pairDefense: 15 }, coop: true }),
@@ -370,7 +419,7 @@ export const TALENTS: Record<PerkId, TalentDef> = {
   calmSong: t('specialist', 3, 0, 'calmSong', 2, 'Mano en el hombro', '+10 de voluntad por nivel a los aliados a 4 casillas o menos.', { mods: { calmAura: 1 } }),
   counterSong: t('specialist', 3, 1, 'counterSong', 1, 'Sedante', 'Libera a un aliado a 10 casillas o menos del grito del Chillón, el pánico y la desorientación, y lo hace inmune al grito durante 2 turnos (enfriamiento 3).', { ability: 'counterSong' }),
   hymn: t('specialist', 3, 2, 'hymn', 1, 'Arenga', 'Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno (enfriamiento 4).', { ability: 'hymn' }),
-  lightHands: t('specialist', 3, 3, 'lightHands', 2, 'Manos de enfermero', 'Tus curas sanan +1 por nivel.', { mods: { heal: 1 } }),
+  lightHands: t('specialist', 3, 3, 'lightHands', 2, 'Manos de enfermero', 'Tus curas sanan +1 por nivel, y tus medicinas también paran el contagio de un mordido.', { mods: { heal: 1 } }),
   lastVerse: t('specialist', 3, 4, 'lastVerse', 1, 'Desfibrilador', 'Una vez por misión: un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas.', { ability: 'lastVerse', charges: { lastVerse: 1 }, req: ['tem', 7] }),
 };
 
@@ -432,10 +481,10 @@ export function wouldSpecialize(b: Pick<Build, 'cls' | 'rank' | 'talents'>, id: 
   return pointsInAxis(b.talents, d.axis, true) + 1 >= SPECIALIZE_POINTS ? d.axis : null;
 }
 
-/** Whether a learnt talent waits for equipment the soldier doesn't carry (it does nothing yet). */
-export function dormant(b: Pick<Build, 'cls'>, id: PerkId): boolean {
+/** Whether a learnt talent waits for equipment the soldier doesn't carry (it does nothing yet). `arms`: its own weapons (the campaign's). */
+export function dormant(b: Pick<Build, 'cls'>, id: PerkId, arms?: Arms): boolean {
   const kit = TALENTS[id]?.kit;
-  return !!kit && KIT_CLASS[kit] !== b.cls;
+  return !!kit && !carriesKit(b, kit, arms);
 }
 
 /**
@@ -463,8 +512,8 @@ export function talentBlocker(b: Build, id: PerkId, echoes = 0): string | null {
   if (!d.axis) return null;
   const axis = d.axis;
   const becomes = wouldSpecialize(b, id);
-  // A recruit may learn it ahead: it sleeps until the soldier carries the kit.
-  if (d.kit && b.cls && b.cls !== KIT_CLASS[d.kit]) return `Necesita ${KIT_NAMES[d.kit]}.`;
+  // A weapon's talents are learnt by anyone and sleep until the soldier carries it (docs/FASE8.md §A); the Grillo stays the Especialista's.
+  if (d.kit === 'grillo' && b.cls && b.cls !== KIT_CLASS.grillo) return `Necesita ${KIT_NAMES.grillo}.`;
   if (axis !== b.cls) {
     const { open } = axesOf(b);
     const others = b.cls ? open : open.filter((a) => a !== axis);
@@ -526,7 +575,7 @@ export interface SoldierStats {
 }
 
 /** Aim, health, defence and the rest from aptitudes, veterancy, talents and equipment. */
-export function soldierStats(b: Build, gear: ItemId[] = []): SoldierStats {
+export function soldierStats(b: Build, gear: ItemId[] = [], arms?: Arms): SoldierStats {
   const template = soldierTemplate(b.cls);
   const tpl = TEMPLATES[template];
   const { pul, agu, ref, tem, ofi } = b.attrs;
@@ -555,8 +604,8 @@ export function soldierStats(b: Build, gear: ItemId[] = []): SoldierStats {
   if (ofi >= 7) addCharges({ grenade: 1 });
   if (ofi >= 10) mods = addMods(mods, { heal: 1, grenadeDamage: 1 });
 
-  // Talents asleep for want of their class's equipment do nothing yet.
-  const perks = talentIds(b.talents).filter((id) => !dormant(b, id));
+  // Talents asleep for want of their weapon (or the Grillo) do nothing yet.
+  const perks = talentIds(b.talents).filter((id) => !dormant(b, id, arms));
   for (const id of perks) {
     const d = TALENTS[id];
     const level = b.talents[id]!;

@@ -27,6 +27,21 @@ export const commandSchema = z.discriminatedUnion('type', [
     tile: spot.optional(),
   }),
   z.object({ type: z.literal('endTurn'), ready: z.boolean() }),
+  /** From a soldier in the bus, ask to evacuate; the partner answers (docs/PRUEBA-2026-10-14.md P1). */
+  z.object({ type: z.literal('evac'), unit: unitId }),
+  z.object({ type: z.literal('evacAnswer'), accept: z.boolean() }),
+  /**
+   * The backpack (docs/FASE8.md §C): drop a thing (`index`) or take one from the floor (`id`), free; give one
+   * to a partner next to you (`to`), use a medicine on yourself or on them, or equip a found weapon, one action.
+   */
+  z.object({
+    type: z.literal('item'),
+    unit: unitId,
+    action: z.enum(['drop', 'take', 'give', 'use', 'equip']),
+    index: z.number().int().min(0).max(7).optional(),
+    id: z.string().min(1).max(16).optional(),
+    to: unitId.optional(),
+  }),
   /** Hand the command (el mando) to the partner. */
   z.object({ type: z.literal('pass') }),
 ]);
@@ -35,7 +50,8 @@ export type Command = z.infer<typeof commandSchema>;
 
 export const missionKindSchema = z.enum(['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge']);
 /** Skirmish battlefield: a hand-made map (the district; «la torre», with storeys: docs/FASE6-PLAN.md) or a procedural map of a biome. */
-export const skirmishMapSchema = z.enum(['plaza', 'city', 'wilds', 'facility', 'torre']);
+/** 'roadside' and 'industrial': the scenarios (playtest 2026-10-14, #25), in the wilds and in a city. */
+export const skirmishMapSchema = z.enum(['plaza', 'city', 'wilds', 'facility', 'torre', 'roadside', 'industrial']);
 export type SkirmishMap = z.infer<typeof skirmishMapSchema>;
 export const pingKindSchema = z.enum(['point', 'enemy']);
 export type PingKind = z.infer<typeof pingKindSchema>;
@@ -155,4 +171,12 @@ export type ServerMessage =
   | { t: 'ping'; slot: Slot; tile: Place; kind: PingKind }
   | { t: 'plan'; slot: Slot; unit: string; tile: Place | null }
   | { t: 'rejected'; message: string }
+  /**
+   * A joint decision waits for the partner (playtest 2026-10-14, #28): a base
+   * proposal or a call to evacuate goes ahead on its own after `ms` more
+   * milliseconds, counted on the client's own clock; `ms: null`, it was answered.
+   */
+  | { t: 'deadline'; kind: DeadlineKind; ms: number | null }
   | { t: 'error'; message: string };
+
+export type DeadlineKind = 'proposal' | 'evac';

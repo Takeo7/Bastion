@@ -8,6 +8,7 @@ import {
   DISORIENTED_AIM,
   GRAZE_DAMAGE_MULT,
   hasPerk,
+  hasSquadsight,
   HEIGHT_ADVANTAGE_AIM,
   HIGH_COVER_BONUS,
   HUNKER_DEFENSE,
@@ -106,7 +107,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
     origin = inMeleeReach(s, from, target.pos) ? from : null;
   } else {
     origin = sightOrigin(s, from, target.pos, sightTo(s, shooter, target.pos));
-    if (!origin && primary && st.squadsight && teamSees(s, shooter.team, target)) {
+    if (!origin && primary && hasSquadsight(shooter) && teamSees(s, shooter.team, target)) {
       origin = sightOrigin(s, from, target.pos, Infinity);
       squadsight = origin !== null;
     }

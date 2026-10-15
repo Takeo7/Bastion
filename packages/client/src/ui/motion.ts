@@ -10,8 +10,13 @@
 const ENTER_MS = 450;
 const TICK_MS = 700;
 
-/** The last value shown for each resource of the top bar, by its classes. */
-const shown = new Map<string, number>();
+/**
+ * The last value shown for each resource, by its classes, kept per top bar
+ * (playtest 14/10, P9). A module-wide memory outlived the screen: back from
+ * a mission, the new base's counter started from what the old one had shown
+ * and counted up again later, as if the money came back.
+ */
+const shownBy = new WeakMap<Element, Map<string, number>>();
 
 function enter(el: HTMLElement): void {
   el.classList.remove('entering');
@@ -39,13 +44,17 @@ function tick(b: HTMLElement, from: number, to: number): void {
 }
 
 function resources(top: Element): void {
+  let shown = shownBy.get(top);
+  if (!shown) shownBy.set(top, (shown = new Map()));
+  // A bar out of sight (a screen taking off, a hidden view) only remembers: nothing counts where nobody sees.
+  const visible = (top as HTMLElement).offsetParent !== null;
   for (const b of top.querySelectorAll<HTMLElement>('.strat-res .strat-credits > b')) {
     const value = Number(b.textContent);
     if (!Number.isFinite(value)) continue;
     const key = b.parentElement!.className.replace(/\s*(tick-up|tick-down|x-bad)\b/g, '');
     const before = shown.get(key);
     shown.set(key, value);
-    if (before !== undefined && before !== value) tick(b, before, value);
+    if (visible && before !== undefined && before !== value) tick(b, before, value);
   }
 }
 

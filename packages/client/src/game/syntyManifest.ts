@@ -13,14 +13,15 @@ import type { BuildId, HeadId, TemplateId } from '@bastion/engine';
 /** Metres to game units: a tile is 1.5 m, so a 1.8 m survivor stands 1.2 tall. */
 export const SYNTY_SCALE = 1 / 1.5;
 
-export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion';
+export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza';
 
 /**
  * Where each pack lives under assets-src/synty/. A pack that only comes as a
  * Unity package is extracted next to it first (`extracted`): its paths are
- * then the package's own (Assets/Synty/…).
+ * then the package's own (Assets/Synty/…). `atlas`: a map pack painted from
+ * another pack's atlas (its models share that one, nothing more to load).
  */
-export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypackage?: string }> = {
+export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypackage?: string; atlas?: AtlasId }> = {
   apocalypse: { dir: 'POLYGON_Apocalypse_SourceFiles_v4', materialList: 'MaterialList_PolygonApocalypse.txt' },
   cityZombies: { dir: 'POLYGON_City_Zombies_Extracted', unitypackage: 'POLYGON_City_Zombies_Unity_2022_3_v1_7_2.unitypackage' },
   bossZombies: { dir: 'POLYGON_BossZombies_SourceFiles_v4', materialList: 'MaterialList_PolygonBossZombies.txt' },
@@ -48,6 +49,12 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
   // «POLYGON – Construction» and «POLYGON – Military»: building sites and checkpoints on the map (Arte-Mapas).
   construction: { dir: 'POLYGON_Construction_SourceFiles_v5', materialList: 'MaterialList_PolygonConstruction.txt' },
   military: { dir: 'POLYGON_Military_SourceFiles' },
+  // «POLYGON Maps – Woodland Apocalypse»: the forest stop's own pieces, painted from Apocalypse's atlas (scenarios, #25).
+  woodland: { dir: 'POLYGON_WoodlandApocalypseMap_SourceFiles', atlas: 'apocalypse' },
+  // The unidentified sheds-and-military pack: skylights and the like, painted from Military's atlas (#25).
+  industrial: { dir: 'POLYGON_SinIdentificar_NaveIndustrialYMilitar_SourceFiles', atlas: 'military' },
+  // «POLYGON Maps – Shopping Plaza»: for now only its Generic atlas (a roller shutter of the sheds pack is painted from it).
+  plaza: { dir: 'POLYGON_ShoppingPlazaMap_SourceFiles', atlas: 'generic' },
 };
 
 /**
@@ -70,6 +77,13 @@ export const ATLASES = {
   military: { pack: 'military', src: 'Textures/PolygonMilitary_Texture_01_A.png', albedo: 'PolygonMilitary_Texture_01_A.png', size: 1024 },
   particleFx: { pack: 'particleFx', src: 'Textures/PolygonParticles_Texture_01_A.png', albedo: 'PolygonParticles_Texture_01_A', size: 256 },
   icons: { pack: 'icons', src: 'Textures/PolygonIcons_Texture_01_A.png', albedo: 'PolygonIcons_01_A.png', size: 512 },
+  // Woodland's shipping containers are painted from textures of their own, one per colour: three of the five.
+  containerRed: { pack: 'woodland', src: 'Textures/Containers_01.png', albedo: 'Containers_01.png', size: 512 },
+  containerBlue: { pack: 'woodland', src: 'Textures/Containers_03.png', albedo: 'Containers_03.png', size: 512 },
+  containerOrange: { pack: 'woodland', src: 'Textures/Containers_05.png', albedo: 'Containers_05.png', size: 512 },
+  // The light grey one (galvanised), for the sheds' sheet metal (PIECES sheetGrey).
+  containerGrey: { pack: 'woodland', src: 'Textures/Containers_04.png', albedo: 'Containers_04.png', size: 512 },
+  generic: { pack: 'plaza', src: 'Generic/Textures/Generic_01_A.png', albedo: 'Generic_01_A.png', size: 1024 },
 } satisfies Record<string, { pack: PackId; src: string; albedo: string; size: number }>;
 
 export type AtlasId = keyof typeof ATLASES;
@@ -494,7 +508,15 @@ export const WEAPONS = {
   huntingRifle: { pack: 'apocalypse', fbx: 'SM_Wep_HuntingRifle_01', fore: [-0.04, 0.22] },
   smg: { pack: 'apocalypse', fbx: 'SM_Wep_SubMGun_01', fore: [-0.008, 0.12] },
   baton: { pack: 'apocalypse', fbx: 'SM_Wep_Baton_01', melee: true },
-} satisfies Record<string, { pack: PackId; fbx: string; melee?: boolean; fore?: [number, number] }>;
+  // A campaign soldier's own (docs/FASE8.md §A): the pistol, alone in the hand or in its holster;
+  // the knife or the machete at the belt, in the hand for the Tajo; and the Armería's good ones.
+  pistol: { pack: 'apocalypse', fbx: 'SM_Wep_Pistol_01', pistol: true },
+  // (Synty's blades are long beside its guns: `size` brings them down.)
+  knife: { pack: 'apocalypse', fbx: 'SM_Wep_Melee_HuntingKnife_01', melee: true, size: 0.8 },
+  machete: { pack: 'apocalypse', fbx: 'SM_Wep_Melee_Machete_01', melee: true, size: 0.72 },
+  boltRifle: { pack: 'apocalypse', fbx: 'SM_Wep_HuntingRifle_Clean_01', fore: [-0.04, 0.22] },
+  machineGun2: { pack: 'apocalypse', fbx: 'SM_Wep_MachineGun_02', fore: [0.018, 0.3] },
+} satisfies Record<string, { pack: PackId; fbx: string; melee?: boolean; pistol?: boolean; fore?: [number, number]; size?: number }>;
 
 export type WeaponId = keyof typeof WEAPONS;
 
@@ -583,6 +605,8 @@ export interface PropAsset {
   shift?: [number, number];
   /** Stands on its own origin, not its middle: a pole with an arm, a power line from its pole. */
   origin?: boolean;
+  /** Painted from another atlas than its pack's (a texture of its own). */
+  atlas?: AtlasId;
 }
 
 const prop = (pack: PackId, fbx: string, o: Omit<PropAsset, 'pack' | 'fbx'> = {}): PropAsset => ({ pack, fbx, ...o });
@@ -638,7 +662,8 @@ export const PROPS = {
   workShelf: prop('apocalypse', 'SM_Prop_WorkShelf_01', { fit: 1, stretch: true, yaw: 1 }),
   // The wilds.
   tree: prop('nature', 'SM_Tree_01', { fit: 1.5 }),
-  treePine: prop('nature', 'SM_Tree_Pine_01', { fit: 1.4 }),
+  // (Nature's needle pines take their leaves from a texture of their own, with holes: the solid ones instead.)
+  treePine: prop('nature', 'SM_Tree_PolyPine_01', { fit: 1.4 }),
   treeDead: prop('apocalypse', 'SM_Env_Tree_Dead_01', { fit: 1.4 }),
   streetTree: prop('apocalypse', 'SM_Env_Tree_01', { fit: 1.5 }),
   bush: prop('nature', 'SM_Plant_Bush_01', { fit: 0.9, thick: 0.6 }),
@@ -671,6 +696,47 @@ export const PROPS = {
   drawer: prop('apocalypse', 'SM_Prop_Dresser_03_Drawer_01', { fit: 0.45 }),
   laundry: prop('town', 'SM_Prop_Laundry_Pile_01', { fit: 0.4 }),
   cardboard: prop('apocalypse', 'SM_Prop_CardboardBox_01', { fit: 0.45 }),
+  // The special loot boxes (docs/FASE8.md §B; mapView.ts lootBox): each its own shape and colour from afar, shut and opened.
+  lootWeapons: prop('military', 'SM_Prop_Crate_Wood_01', { fit: 0.92 }),
+  lootWeaponsLid: prop('military', 'SM_Prop_Crate_Wood_Lid_01', { fit: 0.92 }),
+  lootMedical: prop('apocalypse', 'SM_Prop_Medical_Container_01', { fit: 0.66 }),
+  lootMedicalKit: prop('apocalypse', 'SM_Prop_MedicalBox_02', { fit: 0.36 }),
+  lootPills: prop('apocalypse', 'SM_Item_Pills_01', { fit: 0.1 }),
+  lootAmmo: prop('military', 'SM_Prop_Crate_Ammo_01', { fit: 0.72 }),
+  lootAmmoLid: prop('military', 'SM_Prop_Crate_Ammo_Lid_01', { fit: 0.72 }),
+  lootAmmoCan: prop('apocalypse', 'SM_Prop_Ammo_Box_01', { fit: 0.3 }),
+  lootAmmoCanOpen: prop('apocalypse', 'SM_Prop_Ammo_Box_Open_01', { fit: 0.3 }),
+  lootFood: prop('apocalypse', 'SM_Prop_CardboardBox_03', { fit: 0.62 }),
+  lootFoodTop: prop('apocalypse', 'SM_Prop_CardboardBox_02', { fit: 0.42 }),
+  lootCan: prop('apocalypse', 'SM_Item_Can_01', { fit: 0.08 }),
+  lootCan2: prop('apocalypse', 'SM_Item_Can_04', { fit: 0.08 }),
+  lootRice: prop('apocalypse', 'SM_Item_Rice_01', { fit: 0.14 }),
+  // What is left on the floor (docs/FASE8.md §C, dropped.ts): a bag, unless it is a weapon or a medicine.
+  dropBag: prop('apocalypse', 'SM_Item_Duffle_Bag_01', { fit: 0.44 }),
+  // The scenarios (#25). The forest stop, from «Woodland Apocalypse»: the sawmill's log piles, wrecked lorries (nose
+  // north, a block of 2×4), the lumberjack on his plinth, the roadside signs and broken fences; Nature's solid pines
+  // (Woodland's own are painted from an atlas we don't have).
+  pineLarge: prop('nature', 'SM_Tree_PolyPine_02', { fit: 1.7 }),
+  pineLarge2: prop('nature', 'SM_Tree_PolyPine_03', { fit: 1.6 }),
+  logPile: prop('woodland', 'SM_Prop_Log_Pile_02', { fit: 1.9 }),
+  truckWreck: prop('woodland', 'SM_Prop_Truck_Wrecked_01', { fit: 3.9, yaw: 2 }),
+  truckWreck2: prop('woodland', 'SM_Prop_Truck_Wrecked_02', { fit: 3.9, yaw: 2 }),
+  lumberjack: prop('woodland', 'SM_Prop_Statue_Lumberjack_01', { fit: 0.9 }),
+  lumberjackBase: prop('woodland', 'SM_Prop_Statue_Base_01', { fit: 0.95 }),
+  baitSign: prop('woodland', 'SM_Prop_Bait_Sign_01', { fit: 0.9 }),
+  baitSign2: prop('woodland', 'SM_Prop_Bait_Sign_Alt_01', { fit: 0.9 }),
+  gasSign: prop('woodland', 'SM_Prop_Gas_Sign_01', { fit: 1.1, yaw: 2 }),
+  natureSign: prop('woodland', 'SM_Prop_Nature_Sign_01', { fit: 0.9 }),
+  brochures: prop('woodland', 'SM_Prop_Brochure_Stand_01', { fit: 0.5 }),
+  woodFence: prop('woodland', 'SM_Prop_Fence_Wood_Damaged_01', { fit: 1 }),
+  woodFence2: prop('woodland', 'SM_Prop_Fence_Wood_Damaged_02', { fit: 1 }),
+  chainFence: prop('woodland', 'SM_Prop_Chain_Fence_Broken_01', { fit: 1 }),
+  // A shipping container (a block of 2×5, its doors north), in three of Woodland's colours.
+  container: prop('woodland', 'SM_Prop_Shipping_Container_01', { fit: 4.85, yaw: 2, atlas: 'containerRed' }),
+  containerBlue: prop('woodland', 'SM_Prop_Shipping_Container_01', { fit: 4.85, yaw: 2, atlas: 'containerBlue' }),
+  containerOrange: prop('woodland', 'SM_Prop_Shipping_Container_01', { fit: 4.85, yaw: 2, atlas: 'containerOrange' }),
+  waterTower: prop('apocalypse', 'SM_Bld_WaterTower_01', { fit: 2.3 }),
+  razorWire: prop('military', 'SM_Prop_RazorWire_01', { fit: 1, stretch: true }),
   /** Round the sides of hills (buildings.ts stretches it to a storey). */
   cliff: prop('nature', 'SM_Rock_Wall_01', { fit: 1.4 }),
   cliff2: prop('nature', 'SM_Rock_Wall_02', { fit: 1.4 }),
@@ -719,6 +785,13 @@ export const PROPS = {
   // A filling station's pumps (town `tank` hints), a motel's sign by the road, billboards on roofs.
   pump: prop('apocalypse', 'SM_Prop_Gaspump_01'),
   pump2: prop('apocalypse', 'SM_Prop_Gaspump_02'),
+  // The canopy over a filling station's pumps, and their island (mapView: one over each pair of pumps).
+  pumpCanopy: prop('apocalypse', 'SM_Prop_Gaspump_Cover_01', { origin: true }),
+  pumpCanopyBurnt: prop('apocalypse', 'SM_Prop_Gaspump_Cover_Burnt_01', { origin: true }),
+  pumpIsland: prop('apocalypse', 'SM_Prop_Gaspump_Base_01'),
+  // A shed's roof (#25): flat skylights in a row; a roller shutter on its walls (Generic's atlas).
+  skylight: prop('industrial', 'SM_Bld_Skylight_Flat_01', { origin: true }),
+  rollerShutter: prop('industrial', 'SM_Bld_Door_Roller_Large_01', { origin: true, atlas: 'generic' }),
   motelSign: prop('apocalypse', 'SM_Bld_Motel_Sign_01', { origin: true }),
   billboard: prop('apocalypse', 'SM_Prop_Billboard_Roof_01'),
   billboardSign: prop('apocalypse', 'SM_Prop_Billboard_Sign_01'),
@@ -751,6 +824,15 @@ export const PROP_SETS = {
   fountain: ['concreteBarrier'],
   fountainCorner: ['concreteBarrier'],
   statue: ['statue'],
+  // The scenarios' own (#25; mapView draws the blocks whole): log piles, roadside signs, a fallen chain-link fence, razor wire.
+  logPile: ['logPile'],
+  truck: ['truckWreck', 'truckWreck2'],
+  container: ['container', 'containerBlue', 'containerOrange'],
+  roadSign: ['gasSign'],
+  chainFence: ['chainFence'],
+  razorWire: ['razorWire'],
+  pines: ['pineLarge', 'pineLarge2', 'treePine', 'pineLarge'],
+  woodFence: ['woodFence'],
   fencePost: ['fencePost'],
   fenceRails: ['fenceWire'],
   fenceBoards: ['fencePanel'],
@@ -769,6 +851,10 @@ export const PROP_SETS = {
   cabinet: ['cabinet', 'bookshelf', 'officeCabinet'],
   rack: ['workShelf'],
   crates: ['crates', 'crate', 'palletStack', 'cementBags'],
+  lootWeapons: ['lootWeapons'],
+  lootMedical: ['lootMedical'],
+  lootAmmo: ['lootAmmo'],
+  lootFood: ['lootFood'],
   techCrate: ['crate'],
   containers: ['barricadeTall', 'vending', 'milBarrierTall'],
   barricade: ['barricade1', 'barricade2', 'barricadePallet', 'sandbags', 'milBarrier', 'siteBarrier'],
@@ -834,6 +920,8 @@ export interface PieceAsset {
   parts?: boolean;
   leaf?: string;
   drop?: string[];
+  /** Painted from another atlas than its pack's (a texture of its own). */
+  atlas?: AtlasId;
 }
 
 interface PieceOptions {
@@ -851,6 +939,7 @@ interface PieceOptions {
   parts?: boolean;
   leaf?: string;
   drop?: string[];
+  atlas?: AtlasId;
 }
 
 /** A piece cut to one tile of its module: KIT_TILE along the run about `centre`, from `floor` up. */
@@ -882,6 +971,14 @@ function whole(pack: PackId, fbx: string, centre: [number, number], o: PieceOpti
  */
 const apartment = (fbx: string, run: 'x' | 'y') =>
   strip('city', fbx, [0.025, 0], { run, unit: 100, storey: 3, depth: 0.004, top: 0.0302, floor: -0.0002 });
+
+/**
+ * A sheet-metal skin: a tile-wide strip of the +x side of Woodland's container (x = 0.327; 2.59 m tall, lid
+ * and floor cut off), near its door end, clear of the logo both sides carry; set so the side lies on a
+ * bunker wall's outer face; from `floor` up over a door.
+ */
+const sheet = (atlas: AtlasId, floor = 0.03) =>
+  strip('woodland', 'SM_Prop_Shipping_Container_01', [2.3, 0.212], { run: 'y', out: 1, storey: 2.59, depth: 0.2, top: 2.56, floor, atlas });
 
 /** Apocalypse's bunker kit: modules from y = 0 to 2.5, walls from x = −0.125 to 0.125. */
 const bunker = (fbx: string, o: PieceOptions = {}) => strip('apocalypse', fbx, [1.25, 0], { run: 'y', out: 1, storey: 3, ...o });
@@ -928,6 +1025,14 @@ export const PIECES = {
   barbedWire: whole('apocalypse', 'SM_Prop_Wall_Quarantine_BarbedWire_01', [0, 0], { storey: 3 }),
   /** Loading platforms: shipping-container sides. */
   containerWall: bunker('SM_Bld_Bunker_Wall_Container_x1_01'),
+  // Sheds (#25): sheet metal, a skin outside a bunker wall as the warehouses' brick is: a tile of the side of
+  // Woodland's container (its ribs are painted), in three of its colours; over a door, its top.
+  sheetGrey: sheet('containerGrey'),
+  sheetRed: sheet('containerRed'),
+  sheetBlue: sheet('containerBlue'),
+  sheetGreyLintel: sheet('containerGrey', 1.81),
+  sheetRedLintel: sheet('containerRed', 1.81),
+  sheetBlueLintel: sheet('containerBlue', 1.81),
   /** A wardrobe someone has searched: its doors and drawers apart, to open them (mapView.ts). */
   wardrobeOpen: whole('town', 'SM_Prop_Wardrobe_01', [0, 0.03], { parts: true, storey: 2.9 }),
 } satisfies Record<string, PieceAsset>;

@@ -1,7 +1,8 @@
 import { BAD_LUCK_MISSES } from './aim';
-import { AP_PER_TURN, attackWeapon, CONTROL_TURNS, hordePoints, TEMPLATES, WEAPONS } from './content';
+import { apPerTurn, attackWeapon, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, reloadWeapon, TEMPLATES, WEAPONS } from './content';
 import { decorCode } from './decor';
 import { getUnit, nodeOf, tileIndex } from './grid';
+import { packSlots } from './loot';
 import type {
   AbilityId,
   AttackAbility,
@@ -11,6 +12,7 @@ import type {
   Decor,
   DecorKind,
   EndReason,
+  FoundWeaponId,
   GameState,
   Light,
   Loot,
@@ -89,6 +91,14 @@ export type GameEvent =
   | { t: 'evacuated'; unit: string }
   | { t: 'itemPicked'; unit: string }
   | { t: 'itemDropped'; pos: Pos }
+  /** A player asks to evacuate, from `unit` in the bus; the partner answers (docs/PRUEBA-2026-10-14.md P1). */
+  | { t: 'evacCalled'; slot: Slot; unit: string }
+  /** The partner said no: everyone stays. */
+  | { t: 'evacRefused'; slot: Slot }
+  /** The bus leaves: `evacuated` for whoever is in it and `leftBehind` for the rest follow. */
+  | { t: 'evacDeparted' }
+  /** Not in the bus when it left: lost (docs/PRUEBA-2026-10-14.md P1). */
+  | { t: 'leftBehind'; unit: string }
   /** `decor`: what it is to look like from now on (a breached wall); without it, the decor stays. */
   | { t: 'tileChanged'; pos: Pos; kind: TileKind; decor?: DecorKind }
   /** A storey's slab gives way under a grenade (docs/FASE7.md §5): the place is open air. */
@@ -125,6 +135,20 @@ export type GameEvent =
   | { t: 'forgot'; unit: string }
   /** A soldier searched the furniture on `tile`; `loot` went into the backpack (null: nothing). */
   | { t: 'searched'; unit: string; tile: Pos; loot: Loot | null }
+  /** A room searched, by its id (loot.ts roomAt; docs/FASE8.md §B); what it turned up, as `searched`. */
+  | { t: 'roomSearched'; unit: string; room: number; loot: Loot | null }
+  /** The backpack (docs/FASE8.md §C): a thing left on the soldier's tile, free; it becomes `dropped` l<n>. */
+  | { t: 'lootDropped'; unit: string; index: number }
+  /** A thing picked up from the soldier's tile (GameState.dropped), free. */
+  | { t: 'lootTaken'; unit: string; id: string }
+  /** A thing handed to a partner next to the soldier, for an action. */
+  | { t: 'lootGiven'; unit: string; to: string; index: number }
+  /** A medicine used from the backpack, for an action; the cure itself comes as `healed` and `cured`. */
+  | { t: 'medicineUsed'; unit: string; target: string; index: number }
+  /** A weapon from the backpack taken in hand (or at the belt), for an action: the one it replaces goes into the backpack, or to the floor. */
+  | { t: 'weaponEquipped'; unit: string; index: number }
+  /** A bite's contagion stopped (docs/FASE8.md §C). */
+  | { t: 'cured'; unit: string; by: string }
   // Night (docs/ALTURA-Y-NOCHE.md).
   /** A light goes on at night (a Bengala, a fire): whoever stands in it is seen from as far as by day. */
   | { t: 'lightOn'; light: Light }
@@ -174,6 +198,8 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     case 'turnBegan': {
       s.activeTeam = e.team;
       s.turn = e.turn;
+      // A call to evacuate nobody answered lapses with the squad's turn.
+      delete s.evacCall;
       if (e.team === 'xcom') {
         s.ready = [false, false];
         if (e.command !== undefined) s.command = e.command;
@@ -194,7 +220,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
           if (u.disoriented > 0) u.disoriented--;
           continue;
         }
-        u.ap = u.captive || u.objective ? 0 : u.stunned ? 1 : AP_PER_TURN;
+        u.ap = u.captive || u.objective ? 0 : u.stunned ? 1 : apPerTurn(u);
         u.stunned = false;
         u.overwatch = false;
         u.killZone = false;
@@ -239,7 +265,8 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     }
     case 'shot': {
       const u = unit(s, e.unit);
-      if (attackWeapon(u, e.ability).clip > 0) u.ammo = Math.max(0, u.ammo - 1);
+      if (firesSidearm(u, e.ability)) u.pistolAmmo = Math.max(0, (u.pistolAmmo ?? 0) - 1);
+      else if (clipOf(u, e.ability) > 0) u.ammo = Math.max(0, u.ammo - 1);
       if (e.reaction && u.overwatch) {
         if (u.killZone) u.reactedTo.push(e.target);
         else u.overwatch = false;
@@ -294,7 +321,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     case 'reload': {
       const u = unit(s, e.unit);
-      u.ammo = WEAPONS[TEMPLATES[u.template].weapon].clip;
+      reloadWeapon(u);
       if (u.mags !== undefined) u.mags = Math.max(0, u.mags - 1);
       break;
     }
@@ -436,6 +463,27 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       if (s.mission.kind === 'rescue' && s.mission.objectiveUnit === u.id) completeObjective(s);
       break;
     }
+    case 'evacCalled':
+      s.evacCall = { by: e.slot, unit: e.unit };
+      break;
+    case 'evacRefused':
+      delete s.evacCall;
+      break;
+    case 'evacDeparted':
+      delete s.evacCall;
+      s.mission.evacDone = true;
+      break;
+    case 'leftBehind': {
+      const u = unit(s, e.unit);
+      u.alive = false;
+      u.lost = true;
+      u.ap = 0;
+      u.overwatch = false;
+      endSuppression(s, u);
+      // What it carried stays with it.
+      if (s.mission.item?.carrier === u.id) s.mission.item.carrier = null;
+      break;
+    }
     case 'itemPicked': {
       const item = s.mission.item;
       if (item) {
@@ -533,9 +581,52 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     case 'searched': {
       (s.searched ??= []).push(nodeOf(s, e.tile));
-      // Magazines go straight to the searcher's spares (docs/FASE7.md); everything else into the backpack.
-      if (e.loot?.mags) unit(s, e.unit).mags = (unit(s, e.unit).mags ?? 0) + e.loot.mags;
-      else if (e.loot) (unit(s, e.unit).backpack ??= []).push({ ...e.loot });
+      if (e.loot) stow(s, unit(s, e.unit), e.loot);
+      break;
+    }
+    case 'lootDropped': {
+      const u = unit(s, e.unit);
+      const [loot] = u.backpack!.splice(e.index, 1);
+      leaveOnFloor(s, u.pos, loot);
+      break;
+    }
+    case 'lootTaken': {
+      const at = s.dropped!.findIndex((d) => d.id === e.id);
+      const [left] = s.dropped!.splice(at, 1);
+      stow(s, unit(s, e.unit), left.loot);
+      break;
+    }
+    case 'lootGiven': {
+      const u = unit(s, e.unit);
+      u.ap = Math.max(0, u.ap - 1);
+      const [loot] = u.backpack!.splice(e.index, 1);
+      stow(s, unit(s, e.to), loot);
+      break;
+    }
+    case 'medicineUsed': {
+      const u = unit(s, e.unit);
+      u.ap = Math.max(0, u.ap - 1);
+      const loot = u.backpack![e.index];
+      loot.medicines = (loot.medicines ?? 1) - 1;
+      if (loot.medicines <= 0) {
+        delete loot.medicines;
+        if (!Object.keys(loot).length) u.backpack!.splice(e.index, 1);
+      }
+      break;
+    }
+    case 'cured':
+      unit(s, e.unit).infected = false;
+      break;
+    case 'weaponEquipped': {
+      const u = unit(s, e.unit);
+      u.ap = Math.max(0, u.ap - 1);
+      const [loot] = u.backpack!.splice(e.index, 1);
+      equipWeapon(s, u, loot.weapon!, loot.weaponId);
+      break;
+    }
+    case 'roomSearched': {
+      (s.roomsSearched ??= []).push(e.room);
+      if (e.loot) stow(s, unit(s, e.unit), e.loot);
       break;
     }
     case 'lightOn':
@@ -545,6 +636,50 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       if (s.lights) s.lights = s.lights.filter((l) => l.id !== e.id);
       break;
   }
+}
+
+/**
+ * Where a find goes (docs/FASE7.md, FASE8.md §C): magazines straight to the
+ * spares; anything else into the backpack, or onto the floor at the finder's
+ * feet when it is full, to be swapped for something there.
+ */
+/**
+ * A weapon in hand (docs/FASE8.md §C), loaded: the one it replaces goes into the backpack (or to the floor), with
+ * its Armería id if it was the soldier's own. A new main gun leaves the pistol beside it with the rounds it had.
+ */
+function equipWeapon(s: GameState, u: Unit, kind: FoundWeaponId, id: string | undefined): void {
+  const arms = u.arms!;
+  const melee = FOUND_WEAPONS[kind].slot === 'melee';
+  const old = melee ? arms.melee : arms.primary;
+  const oldId = melee ? arms.meleeId : arms.primaryId;
+  if (melee) {
+    arms.melee = kind;
+    if (id) arms.meleeId = id;
+    else delete arms.meleeId;
+  } else {
+    if (!arms.primary) u.pistolAmmo = u.ammo;
+    arms.primary = kind;
+    if (id) arms.primaryId = id;
+    else delete arms.primaryId;
+    u.ammo = clipOf(u, 'shoot');
+    u.weaponName = FOUND_WEAPONS[kind].name;
+  }
+  if (old) stow(s, u, { weapon: old, ...(oldId ? { weaponId: oldId } : {}) });
+}
+
+function stow(s: GameState, u: Unit, loot: Loot): void {
+  if (loot.mags) {
+    u.mags = (u.mags ?? 0) + loot.mags;
+    return;
+  }
+  if ((u.backpack?.length ?? 0) < packSlots(u)) (u.backpack ??= []).push({ ...loot });
+  else leaveOnFloor(s, u.pos, loot);
+}
+
+/** Something left on the floor of `pos`, with the next id. */
+function leaveOnFloor(s: GameState, pos: Pos, loot: Loot): void {
+  s.droppedCount = (s.droppedCount ?? 0) + 1;
+  (s.dropped ??= []).push({ id: `l${s.droppedCount}`, pos: { ...pos }, loot: { ...loot } });
 }
 
 /** The mission's objective is secured: the timer stops. */

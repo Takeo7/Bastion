@@ -8,7 +8,7 @@
  * `{yo}`, "Comandante Ana" for the player reading it.
  */
 import { DOOM_MAX, nextSteps, treatCost, type CampaignState } from './campaign';
-import { SPARE_MAGS } from './content';
+import { FOUND_WEAPONS } from './content';
 import { doomStatus, STORY } from './lore';
 import { bastionLevel } from './progression';
 import type { Slot } from './types';
@@ -41,7 +41,6 @@ export interface SceneLine {
 }
 
 export type SceneId =
-  | 'welcome'
   | 'council'
   | 'ch1After'
   | 'ch2Before'
@@ -99,18 +98,6 @@ const bitten = (c: CampaignState) => c.soldiers.filter((s) => s.alive && s.infec
 /** In story order: when several unlock at once they play in this order. */
 export const SCENES: Scene[] = [
   {
-    id: 'welcome',
-    title: 'Atalaya',
-    channel: 'Línea interna',
-    when: (c) => c.story.done >= 1,
-    lines: [
-      { who: 'morse', text: 'Aquí Morse, en la radio. Si alguien habla en el valle, lo oigo yo primero.' },
-      { who: 'teo', text: 'Teo. Taller, generador y la Mula. Lo que se rompa, me lo traéis.' },
-      { who: 'morse', text: 'Las medicinas dan para un mes si nadie se pone enfermo. Alguien se pondrá.' },
-      { who: 'teo', text: 'Y la despensa tampoco se llena sola.' },
-    ],
-  },
-  {
     id: 'council',
     title: 'Carta del Refugio',
     channel: 'Correo a pie · leída por Morse',
@@ -118,7 +105,6 @@ export const SCENES: Scene[] = [
     lines: [
       { who: 'halvorsen', text: 'A Atalaya, del Refugio de Aldren. Con esta carta suben los suministros del mes.' },
       { who: 'halvorsen', text: 'Cada caja sale de una despensa que también pasa hambre. Esperamos resultados.' },
-      { who: 'morse', text: 'Firma Ruth Halvorsen. Aldren es el enclave más grande del valle. Mientras le sirvamos, seguirá mandando.' },
     ],
   },
   {
@@ -162,7 +148,6 @@ export const SCENES: Scene[] = [
     lines: [
       { who: 'teo', text: 'Los Cuervos tienen una sirena en los Llanos de Ceniza. La hacen sonar junto a quien no les paga, y los muertos acuden.' },
       { who: 'teo', text: 'Así vaciaron dos aldeas el invierno pasado. Quiero que se calle.' },
-      { who: 'morse', text: 'Si sale mal, sonará encima de vosotros.' },
     ],
   },
   {
@@ -193,8 +178,7 @@ export const SCENES: Scene[] = [
     channel: 'Sala de radio',
     when: (c) => bastionLevel(c) >= 4,
     lines: [
-      { who: 'morse', text: 'Con la antena nueva oigo a otros enclaves: los Camioneros, la Mina, las bodegas de La Vega.' },
-      { who: 'morse', text: 'Todos dicen lo mismo. Con el deshielo sube algo desde los Llanos de Ceniza: miles de muertos que no se dispersan. La llaman la Marea.' },
+      { who: 'morse', text: 'Con la antena nueva oigo a los otros enclaves. Todos dicen lo mismo: con el deshielo sube algo desde los Llanos de Ceniza, miles de muertos que no se dispersan. La llaman la Marea.' },
       { who: 'teo', text: 'Y Atalaya está al final de la cuesta.' },
       { who: 'morse', text: 'Desde hoy, el reloj de la sala de mando cuenta kilómetros.' },
     ],
@@ -221,7 +205,7 @@ export const SCENES: Scene[] = [
       { who: 'nwosu', text: 'Está a salvo. Tres mordiscos viejos en el brazo y ni una décima de fiebre.' },
       { who: 'simon', text: 'Os dije dónde estaba.', if: trusted },
       { who: 'nwosu', text: 'El virus entra en su sangre y no encuentra dónde agarrarse. Es el principio de una vacuna.' },
-      { who: 'teo', text: 'Pregunta cuándo puede subir a la Mula.' },
+      { who: 'teo', text: 'Pregunta cuándo puede subir a La Lata.' },
     ],
   },
   {
@@ -268,7 +252,6 @@ export const SCENES: Scene[] = [
     lines: [
       { who: 'nwosu', text: 'No hay medicinas para todos. Lo he contado tres veces.' },
       { who: 'nwosu', text: 'A quién se le dan no lo decido yo.' },
-      { who: 'morse', text: 'Para eso hay dos llaves.' },
     ],
   },
   {
@@ -289,7 +272,7 @@ export const SCENES: Scene[] = [
     when: (c) => !!c.hungry,
     lines: [
       { who: 'teo', text: 'Se ha acabado la despensa.' },
-      { who: 'morse', text: 'Sin comida nadie apunta igual ni aguanta igual, y las heridas tardan el doble en cerrar.' },
+      { who: 'morse', text: 'Con hambre, en las misiones se aguanta peor el miedo, y las heridas tardan el doble en cerrar.' },
       { who: 'teo', text: 'Hacen falta raciones: despensas, tiendas, almacenes. Y un huerto, si queda tierra.' },
     ],
   },
@@ -297,7 +280,7 @@ export const SCENES: Scene[] = [
     id: 'foundWeapon',
     title: 'En una mochila',
     channel: 'Línea interna · Armería',
-    when: (c) => (c.foundWeapons ?? []).length > 0,
+    when: (c) => (c.foundWeapons ?? []).some((w) => FOUND_WEAPONS[w.kind].better),
     lines: [
       { who: 'teo', text: 'Ha llegado un arma buena en una mochila. Está limpia y engrasada.' },
       { who: 'teo', text: 'A quien la lleve, su arma le sube un nivel. Decidme a quién. Si cae, se pierde.' },
@@ -364,7 +347,7 @@ export const SCENES: Scene[] = [
     when: (c) => c.offers.some((o) => o.final) || c.event === 'finale' || c.ending !== null,
     lines: [
       { who: 'morse', text: 'La Marea se ve desde la presa. Llena el valle.' },
-      { who: 'teo', text: 'La Mula tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo.' },
+      { who: 'teo', text: 'La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo.' },
       { who: 'nwosu', text: 'La vacuna está lista. Pocas dosis. Habrá que decidir para quién.' },
       { who: 'simon', text: 'Los Cuervos no se la merecen. Aunque mi hermano siga con ellos.', if: trusted },
       { who: 'morse', text: 'Lo decidiréis los dos.' },
@@ -388,9 +371,9 @@ export const SCENES: Scene[] = [
     channel: 'Frecuencia de la Red',
     when: (c) => c.ending === 'record',
     lines: [
-      { who: 'teo', text: 'Última caja de dosis. Sale mañana en la Mula, para las bodegas.' },
+      { who: 'teo', text: 'Última caja de dosis. Sale mañana en La Lata, para las bodegas.' },
       { who: 'morse', text: '¿Y la receta?' },
-      { who: 'nwosu', text: 'En el refugio, en una caja con dos cerraduras.' },
+      { who: 'nwosu', text: 'En el refugio, bajo llave.' },
       { who: 'morse', text: 'Anoche llamaron desde el otro lado de la sierra. Preguntaban por una vacuna.' },
       { who: 'teo', text: '¿Qué les dijiste?' },
       { who: 'morse', text: 'Que aquí no sabemos nada. Atalaya, cambio y corto.' },
@@ -432,15 +415,19 @@ export function sceneLines(scene: Scene, c: CampaignState): SceneLine[] {
   return scene.lines.filter((l) => !l.if || l.if(c));
 }
 
-/** Morse on the radio during a story chapter: when the squad lands and when the objective is done. */
-export const STORY_RADIO: { start: string; objective: string }[] = [
-  { start: 'El consultorio está en la plaza. Las medicinas, en el armario de la enfermera.', objective: 'Las tenéis. A la Mula, sin ruido.' },
-  { start: 'Tercera planta. Los pasillos están llenos: despacio.', objective: 'La tenéis. Fuera, antes de que el hospital entero sepa que estáis dentro.' },
-  { start: 'Callad esa sirena.', objective: 'Silencio en los Llanos.' },
-  { start: 'El repetidor está en lo alto del Pico Gris. Arregladlo sin llamar la atención.', objective: 'Os oigo. Y oigo a todo el valle.' },
-  { start: 'La niña está en el campamento de los Cuervos. Que no le pase nada.', objective: 'La tenéis. Fuera de ahí.' },
-  { start: 'El Instituto Galen. Los cuadernos, antes que nada.', objective: 'Los cuadernos están a salvo.' },
-  { start: 'Está en antena ahora mismo. Id a por ella.', objective: 'La tenéis. Viva.' },
+/**
+ * Morse on the radio during a story chapter, by chapter: when the squad lands
+ * and when the objective is done. Only what the mission doesn't already say
+ * (prueba del 14/10): the briefing and the objective strip tell the rest.
+ */
+export const STORY_RADIO: { start?: string; objective?: string }[] = [
+  {},
+  {},
+  {},
+  { objective: 'Os oigo. Y oigo a todo el valle.' },
+  {},
+  {},
+  {},
 ];
 
 // ---------------------------------------------------------------- recap
@@ -468,8 +455,6 @@ export function recapLines(c: CampaignState, slot: Slot): SceneLine[] {
 
 /** Morse's first-time warnings in combat: each plays once per browser, the first time it matters. */
 export type TipId =
-  | 'concealed'
-  | 'redTile'
   | 'contact'
   | 'shot'
   | 'flanked'
@@ -501,24 +486,14 @@ export interface RadioTip {
 }
 
 export const RADIO_TIPS: Record<TipId, RadioTip> = {
-  concealed: {
-    who: 'morse',
-    line: 'Aún no os han visto. Que siga así.',
-    rule: 'Ocultos: el ruido no os delata, pero hace que vengan a mirar. Os delata que os vean: cuidado con las casillas de borde rojo.',
-  },
-  redTile: {
-    who: 'morse',
-    line: 'Ahí os ven.',
-    rule: 'Acabar el movimiento en una casilla roja rompe la ocultación. El primer clic avisa y el segundo mueve.',
-  },
   contact: {
     who: 'morse',
-    line: 'Contacto. Ahora se mueven ellos también.',
+    line: 'Contacto. Que no os rodeen.',
     rule: 'Los zombis vienen derechos a por vosotros, y contra un mordisco la cobertura no sirve: guardad distancia, dejad a alguien en vigilancia, esperadlos en un paso estrecho y que no os rodeen. Los vivos, donde los haya, corren a cubrirse: contra ellos, sí, buscad el escudo antes de terminar el turno.',
   },
   shot: {
     who: 'morse',
-    line: 'Mirad el número antes de disparar. Y quién más lo va a oír.',
+    line: 'Mirad el porcentaje y el ruido antes de disparar.',
     rule: 'El porcentaje ya cuenta cobertura, distancia y altura; por el flanco, más acierto y más crítico. Cada disparo suena: una pistola a 8 casillas, un fusil a 12, un francotirador a 16. Lo que lo oye, viene.',
   },
   flanked: {
@@ -528,12 +503,12 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   wounded: {
     who: 'morse',
-    line: 'Herido no es caído.',
+    line: 'Herido. En el campo no se cura solo.',
     rule: 'En misión, la salud solo vuelve con botiquín. En la base, las heridas tardan días en curar, y una dosis de medicinas quita tres. Los caídos no vuelven.',
   },
   command: {
     who: 'morse',
-    line: 'Dos llaves, pero un solo mando a la vez.',
+    line: 'Un solo mando a la vez.',
     rule: 'Quien tiene el mando da las órdenes. La tecla C se lo cede al compañero.',
   },
   flare: {
@@ -543,7 +518,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   song: {
     who: 'morse',
-    line: 'Cada oficio suena distinto. Aprended cuál.',
+    line: 'El machete apenas se oye. El molotov, sí.',
     rule: 'El machete y la ballesta apenas se oyen; un molotov, a 10 casillas. Los petardos suenan donde caen: sirven de cebo. La previsión de cada acción dice cuánto ruido hace.',
   },
   psionic: {
@@ -558,8 +533,8 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   },
   search: {
     who: 'teo',
-    line: 'Todo lo que traigáis, aquí se aprovecha.',
-    rule: 'Registrar: 1 acción junto a un mueble, un coche o unas cajas, con un poco de ruido. La mochila lleva 3 cosas. El botín cuenta si vuelve: lo que lleva un caído se pierde.',
+    line: 'Medicinas y comida, antes que nada.',
+    rule: 'Registrar: 1 acción dentro de una habitación, y cada una se registra una vez, para toda la escuadra. Las cajas marcadas dan siempre lo suyo: un arma, medicinas, cargadores o comida. La mochila lleva 3 cosas, 4 con la Chapistería; lo que lleva un caído se pierde.',
   },
   horde: {
     who: 'morse',
@@ -589,7 +564,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   foundWeapon: {
     who: 'teo',
     line: 'Eso no lo tira nadie. Traédmelo.',
-    rule: 'Un arma encontrada ocupa un hueco de la mochila. Si sale de la misión, va a la Armería: a quien la lleve, su arma le sube un nivel, hasta lo que permita su rango.',
+    rule: 'Un arma encontrada ocupa un hueco de la mochila. Con una acción se equipa ahí mismo, y la que llevaba pasa a la mochila. Si vuelve en La Lata, va a la Armería; las buenas suben un nivel a quien las lleve',
   },
   storeys: {
     who: 'morse',
@@ -599,7 +574,7 @@ export const RADIO_TIPS: Record<TipId, RadioTip> = {
   noMags: {
     who: 'teo',
     line: 'Sin cargadores, esa arma ya solo pesa.',
-    rule: `Cada soldado sale con ${SPARE_MAGS} cargadores de repuesto, y recargar gasta uno. Sin ellos no se recarga: quedan las balas que tenga dentro y lo que lleve aparte, pistola, hoja o granadas. Registrando aparecen más, y en la base se reponen.`,
+    rule: 'Se sale con los cargadores de repuesto que haya hecho el Taller, y recargar gasta uno: primero el arma principal y, si está llena, la pistola, de 6 balas. Sin ellos no se recarga: quedan las balas que haya dentro, el cuchillo o el machete y las granadas. Registrando aparecen más.',
   },
 };
 

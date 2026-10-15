@@ -20,8 +20,21 @@ Guía para Arturo y Ana. La preparó Red el 2026-10-14. El objetivo es comprobar
    npm run desktop:dist
    ```
 
+   También se puede construir desde el Mac, sin el PC, y llevar el `.exe` en un pendrive o por la red. Primero la aplicación:
+
+   ```bash
+   node packages/desktop/scripts/build.mjs
+   ```
+
+   Y luego el instalador de Windows:
+
+   ```bash
+   cd packages/desktop && npx electron-builder --config electron-builder.json --win
+   ```
+
 ## 1. Instalar (Arturo)
 
+- El instalador no está firmado, así que Windows avisa con «Windows protegió tu PC». Hay que pulsar «Más información» y luego «Ejecutar de todas formas».
 - Elegir «Para todos los usuarios». Pide permiso de administrador, pero así el instalador añade la regla del cortafuegos y Windows no pregunta nada. Con «Solo para mí», Windows pregunta la primera vez: hay que pulsar «Permitir» en redes privadas.
 - La red de casa tiene que estar como «Privada» en Configuración → Red e Internet → la red → Tipo de perfil. Si está como «Pública», la regla no vale y Ana no podrá entrar.
 
@@ -33,7 +46,19 @@ Guía para Arturo y Ana. La preparó Red el 2026-10-14. El objetivo es comprobar
 ## 3. Unirse (Ana, con la aplicación)
 
 - En la pantalla de inicio, la partida de Arturo debería salir en «Partidas en tu red» en unos segundos. Si no sale, «Unirse por dirección» con la dirección del paso 2.
-- En un Mac, la aplicación no está firmada: la primera vez se abre con clic derecho → Abrir. Si macOS pregunta por la red local, «Permitir».
+- En un Mac, la aplicación no está firmada con una cuenta de Apple. Desde macOS 15, «clic derecho → Abrir» ya no basta. La primera vez:
+  1. intentar abrirla; macOS dice que no puede comprobarla;
+  2. ir a Ajustes del Sistema → Privacidad y seguridad, bajar hasta el aviso de Bastion y pulsar «Abrir igualmente»;
+  3. confirmar.
+
+  Otra forma, en Terminal, una sola vez:
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/Bastion.app
+  ```
+
+- Si macOS pregunta por la red local, «Permitir». Con cada versión nueva puede volver a preguntarlo: es por la firma provisional, y se responde igual.
+- En un PC con Windows, el aviso «Windows protegió tu PC» del instalador se pasa igual que en el paso 1: «Más información» → «Ejecutar de todas formas».
 - Si no conecta, apuntar el mensaje exacto que sale.
 
 ## 4. Ajustes para medir (los dos, en Ajustes → gráficos)

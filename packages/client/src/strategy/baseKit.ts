@@ -96,6 +96,26 @@ export function loadBaseKit(): Promise<void> {
   return loading;
 }
 
+const loadingOne = new Map<BaseModelId, Promise<void>>();
+
+/** Loads just `ids` of the base's models (a scene that needs a few: La Mula at an evacuation), once each. */
+export function loadKitModels(ids: readonly BaseModelId[]): Promise<void> {
+  return Promise.all(
+    ids.map((id) => {
+      let p = loadingOne.get(id);
+      if (!p) {
+        p = models.has(id)
+          ? Promise.resolve()
+          : loadModel(BASE_MODELS[id].pack, 'base', id)
+              .then((scene) => void models.set(id, prepare(scene)))
+              .catch(() => undefined);
+        loadingOne.set(id, p);
+      }
+      return p;
+    }),
+  ).then(() => undefined);
+}
+
 export function kitModel(id: BaseModelId): KitModel | undefined {
   return models.get(id);
 }

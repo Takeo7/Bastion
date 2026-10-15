@@ -16,7 +16,7 @@ export interface LobbyHandlers {
 
 const MISSIONS: { id: MissionKind; text: string }[] = [
   { id: 'elimination', text: 'Abatid a todos los hostiles del mapa.' },
-  { id: 'recovery', text: 'Recuperad los datos y evacuad antes de que se acabe el tiempo.' },
+  { id: 'recovery', text: 'Recuperad la carga y salid en La Lata antes de que se acabe el tiempo.' },
   { id: 'sabotage', text: 'Callad la sirena antes de que llegue la horda.' },
   { id: 'hack', text: 'Arreglad la radio. Si falla, salta la alarma.' },
   { id: 'rescue', text: 'Llegad hasta el VIP y sacadlo con vida.' },
@@ -30,6 +30,8 @@ const MAPS: { id: SkirmishMap; name: string; text: string }[] = [
   { id: 'city', name: 'Ciudad', text: 'Edificios, azoteas y calles' },
   { id: 'wilds', name: 'Afueras', text: 'Bosque, cabañas y colinas' },
   { id: 'facility', name: 'Fábrica', text: 'Naves, maquinaria y almacenes' },
+  { id: 'roadside', name: 'Área de servicio', text: 'Gasolinera, motel y aserradero en el bosque' },
+  { id: 'industrial', name: 'Polígono', text: 'Naves y patios de contenedores' },
   { id: 'plaza', name: 'Distrito Comercial', text: 'El mapa hecho a mano' },
   // Phase 6's test map (docs/FASE6-PLAN.md): a building with real storeys and stairs.
   { id: 'torre', name: 'La torre', text: 'Un edificio de dos plantas: pruebas' },

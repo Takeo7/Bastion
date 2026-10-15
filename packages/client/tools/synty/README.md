@@ -25,7 +25,10 @@ Cada carpeta lleva el nombre del pack de Synty que contiene (renombradas el 2026
 | `POLYGON_Office_SourceFiles` | POLYGON – Office | Retratos de la radio (`office`) |
 | `POLYGON_ParticleFX_SourceFiles` | POLYGON – Particle FX | Efectos (`particleFx`) |
 | `POLYGON_Icons_SourceFiles_v4` | POLYGON – Icons | Renders de iconos (`icons`) |
-| `POLYGON_SinIdentificar_CarreteraYAserradero_SourceFiles` | Sin identificar: un pack pequeño de carretera de montaña (estatua de leñador, carteles de cebo y gasolinera, camión destrozado, pinos, contenedor) | Sin usar |
+| `POLYGON_WoodlandApocalypseMap_SourceFiles` | POLYGON Maps – Woodland Apocalypse (antes «sin identificar»: estatua de leñador, carteles de cebo y gasolinera, camión destrozado, el cartel «Survivors inside») | Escenarios de bosque (por hacer) |
+| `POLYGON_PrisonMap_SourceFiles` | POLYGON Maps – Prison | La cárcel apocalíptica (por hacer) |
+| `POLYGON_ShoppingPlazaMap_SourceFiles` | POLYGON Maps – Shopping Plaza (con su carpeta `Generic`) | El centro comercial (por hacer) |
+| `POLYGON_SinIdentificar_NaveIndustrialYMilitar_SourceFiles` | Sin identificar: naves de chapa ondulada, puertas y muros militares, alambre de espino, paredes y suelos destruidos, una pizarra de misiones | Escenarios industriales (por hacer) |
 | `ANIMATION_BaseLocomotion_SourceFiles` | ANIMATION – Base Locomotion | Andar, correr, sprint, agacharse (`baseLocomotion`) |
 | `ANIMATION_Idles_SourceFiles` | ANIMATION – Idles | Reposos y posturas (`idles`) |
 | `ANIMATION_BowCombat_SourceFiles` | ANIMATION – Bow Combat | Muertes y reacciones a golpes (`bowCombat`) |
@@ -35,6 +38,8 @@ Cada carpeta lleva el nombre del pack de Synty que contiene (renombradas el 2026
 | `INTERFACE_ApocalypseHUD_SourceFiles` | INTERFACE – Apocalypse HUD | Iconos y piezas de la interfaz |
 | `INTERFACE_MilitaryCombatHUD_SourceFiles` | INTERFACE – Military Combat HUD | Iconos de la interfaz |
 | `INTERFACE_Modern_Menus_SourceFiles_v1` | INTERFACE – Modern Menus | Piezas de la interfaz |
+
+`_duplicados/` guarda una copia repetida de un pack (el Woodland Apocalypse descargado dos veces): se puede borrar.
 
 Un pack nuevo va en su propia carpeta con este mismo esquema (`POLYGON_…`, `ANIMATION_…`, `INTERFACE_…`), nunca con el nombre genérico con el que viene el zip.
 

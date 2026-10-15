@@ -185,7 +185,14 @@ describe('the skill tree', () => {
     expect(soldierStats(recruit).perks).toEqual([]);
     expect(soldierStats(recruit).mods.damage).toBe(soldierStats(build(null, 2)).mods.damage);
     expect(soldierStats(build('assault', 2, { slug: 1 })).perks).toEqual(['slug']);
-    expect(talentBlocker(build('sharpshooter', 7), 'keenBlade')).toMatch(/Necesita el machete del Asalto/);
+    // A weapon's talents are anyone's (docs/FASE8.md §A): they sleep until it's carried; the Grillo stays the Especialista's.
+    expect(talentBlocker(build('sharpshooter', 7), 'keenBlade') ?? '').not.toMatch(/Necesita/);
+    expect(talentBlocker(build('sharpshooter', 7), 'fieldMedic')).toBe('Necesita el Grillo del Especialista.');
+    const sharp = build('sharpshooter', 7, { keenBlade: 1, slug: 1 });
+    expect(dormant(sharp, 'keenBlade', { primary: null, melee: null })).toBe(true);
+    expect(dormant(sharp, 'keenBlade', { primary: null, melee: 'machete' })).toBe(false);
+    expect(soldierStats(sharp, [], { primary: 'sawnOff', melee: 'machete' }).perks).toEqual(expect.arrayContaining(['keenBlade', 'slug']));
+    expect(soldierStats(sharp, [], { primary: 'precisionRifle', melee: null }).perks).not.toContain('slug');
   });
 
   it('a second axis up to its third row; never a third one', () => {
@@ -264,6 +271,9 @@ describe('training in the barracks', () => {
   function campaign() {
     const c = createCampaign([0, 1], new Rng(3));
     const s = c.soldiers.find((x) => x.owner === 0)!;
+    // A recruit of the plain base, for the sums below (each one varies a little: docs/PRUEBA-2026-10-14.md #10).
+    s.attrs = baseAttrs(null);
+    s.born = baseAttrs(null);
     specialize(s, 'sharpshooter');
     s.rank = 1;
     return { c, s };
@@ -281,6 +291,24 @@ describe('training in the barracks', () => {
     expect(c.log.some((l) => l.text.includes('aprende Precisión letal'))).toBe(true);
     // The partner can look but not train someone else's soldier.
     expect(run(c, { type: 'talent', soldier: s.id, talent: 'deadeye' }, 1).ok).toBe(false);
+  });
+
+  it('every recruit is a little different, none ahead: the same points, and retraining goes back to how it came', () => {
+    const c = createCampaign([0, 1], new Rng(7));
+    const sums = new Set(c.soldiers.map((s) => Object.values(s.born!).reduce((a, b) => a + b, 0)));
+    expect(sums).toEqual(new Set([Object.values(baseAttrs(null)).reduce((a, b) => a + b, 0)]));
+    expect(new Set(c.soldiers.map((s) => JSON.stringify(s.born))).size).toBeGreaterThan(1);
+    for (const s of c.soldiers) {
+      expect(pointsToSpend(s).attrs).toBe(0);
+      for (const v of Object.values(s.born!)) expect(v).toBeGreaterThanOrEqual(3);
+    }
+    const s = c.soldiers.find((x) => x.owner === 0)!;
+    const born = { ...s.born! };
+    specialize(s, 'assault');
+    s.rank = 1;
+    run(c, { type: 'train', soldier: s.id, attr: 'tem' });
+    expect(run(c, { type: 'retrain', soldier: s.id }).ok).toBe(true);
+    expect(s.attrs).toEqual(born);
   });
 
   it('a recruit arrives without a class and keeps it until Capitán', () => {

@@ -11,7 +11,6 @@ import {
   mareaThreshold,
   migrateCampaign,
   missionInfo,
-  offerDays,
   plotById,
   REGIONS,
   roadHops,
@@ -57,7 +56,7 @@ describe('the valley', () => {
       const c = createCampaign([0], new Rng(seed));
       for (const o of c.offers.filter((x) => !x.story && !x.final && !x.quest && x.map.kind === 'generated')) {
         ordinary++;
-        expect(o.name).toBe(missionName(o.map.kind === 'generated' ? o.map.biome : 'city', REGIONS[o.region].name, o.map.kind === 'generated' ? o.map.seed : 0));
+        expect(o.name).toBe(missionName(o.map.kind === 'generated' ? o.map.biome : 'city', REGIONS[o.region].name, o.map.kind === 'generated' ? o.map.seed : 0, o.map.kind === 'generated' ? o.map.site : undefined));
         expect(o.name).not.toMatch(/Operación/);
         expect(o.name).toContain(REGIONS[o.region].name.replace(/^El /, ''));
       }
@@ -90,14 +89,6 @@ describe('the valley', () => {
     expect(roadHops('eeu', 'na')).toBe(4);
   });
 
-  it('La Mula’s trip: 2 days and one more a stretch, a day less with its Taller', () => {
-    const c = quiet();
-    const days = Object.fromEntries(ZONES.map((id) => [id, offerDays(c, { region: id })]));
-    expect(days).toEqual({ weu: 2, oce: 3, sa: 3, eeu: 3, afr: 4, me: 4, eas: 4, na: 5 });
-    plotById(c, '5,3')!.building = 'garage';
-    expect(offerDays(c, { region: 'weu' })).toBe(1);
-    expect(offerDays(c, { region: 'na' })).toBe(4);
-  });
 });
 
 describe('contacting by road', () => {

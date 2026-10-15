@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { TemplateId } from '@bastion/engine';
+import { CROWD } from '../game/crowd';
 import type { FigurePose, FigureRig } from '../game/figures';
 import { IDLE_POSE } from '../game/models';
 import { UNIT_LAYER } from '../game/post';
@@ -18,7 +19,8 @@ import { SYNTY_LOD, SyntyFigure, syntyFigure } from '../game/syntyFigures';
 //  - render: the renderer's CPU time, and the frame with the GPU (synced).
 // `__horde.run([10, 20, 40, 60, 80])` measures each N; `#40` shows 40;
 // `__horde.compare(80)` measures with the figures' level of detail on and off;
-// `__horde.floor(40)` what baking the crowd into instanced meshes could save.
+// `__horde.floor(40)` what baking the crowd into instanced meshes could save;
+// `__horde.crowd(45)` measures with the game's crowd (crowd.ts) on and off.
 
 const container = document.getElementById('horde')!;
 const report = document.getElementById('horde-report')!;
@@ -28,7 +30,7 @@ const scene = renderer.scene;
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x77705f, roughness: 0.95 }));
 ground.position.set(20, 0, 20);
 ground.receiveShadow = true;
-scene.add(ground);
+scene.add(ground, CROWD.group);
 renderer.fitMap(40, 40);
 
 const TEMPLATES: TemplateId[] = ['zombie', 'zombie', 'zombie', 'xenoid', 'mec', 'bloater'];
@@ -62,6 +64,7 @@ let horde: Member[] = [];
 function clear(): void {
   for (const m of horde) scene.remove(m.rig.root);
   horde = [];
+  CROWD.clear();
 }
 
 /** N zombies in a loose crowd, every other one shambling forward. */
@@ -91,6 +94,7 @@ let clock = 0;
 function frame(dt: number, sync: boolean): { pose: number; scene: number; render: number; total: number } {
   clock += dt;
   const t0 = performance.now();
+  CROWD.tick(dt);
   for (const m of horde) {
     m.pose.run = m.walking ? 1 : 0;
     m.rig.applyPose(m.pose, clock);
@@ -120,8 +124,8 @@ interface Result {
   calls: number;
 }
 
-async function measure(n: number, frames = 120): Promise<Result> {
-  build(n);
+async function measure(n: number, frames = 120, keep = false): Promise<Result> {
+  if (!keep) build(n);
   await ready();
   renderer.camera.position.set(20, 18, 38);
   renderer.camera.lookAt(20, 0, 22);
@@ -262,5 +266,18 @@ async function compare(n = 80, rounds = 3): Promise<{ lod: Result[]; full: Resul
   return out;
 }
 
-(window as unknown as { __horde: unknown }).__horde = { run, show, measure, compare, floor, renderer };
+/** N zombies with the crowd on and off: its bodies baked first (frames run until every one of them is in it). */
+async function crowd(n = 45): Promise<{ on: Result; off: Result }> {
+  CROWD.enabled = true;
+  build(n);
+  await ready();
+  for (let k = 0; k < 2000 && !horde.every((m) => (m.rig as unknown as { member: unknown }).member); k++) frame(1 / 60, false);
+  const on = await measure(n, 120, true);
+  CROWD.enabled = false;
+  const off = await measure(n, 120, true);
+  CROWD.enabled = true;
+  return { on, off };
+}
+
+(window as unknown as { __horde: unknown }).__horde = { run, show, measure, compare, floor, crowd, renderer };
 void show(Number(location.hash.slice(1)) || 40);

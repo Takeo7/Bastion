@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { previewShot } from '../src/aim';
 import { defaultAppearance } from '../src/appearance';
-import { ATTR_IDS, attrCap, specialize, talentBlocker, TALENTS, VETERAN_AIM } from '../src/classes';
+import { ATTR_IDS, attrCap, baseAttrs, specialize, talentBlocker, TALENTS, VETERAN_AIM } from '../src/classes';
 import {
   addPlayer,
   canSpendPoints,
@@ -22,7 +22,6 @@ import {
   squadMember,
   type CampaignCommand,
   type CampaignState,
-  offerDays,
 } from '../src/campaign';
 import { armorTier, bastionLevel, LEVEL_XP, MAX_LEVEL, missionXp, nextTierBlocker, weaponTier } from '../src/progression';
 import { Rng } from '../src/rng';
@@ -225,12 +224,9 @@ describe('missions', () => {
     expect(report.squad.find((e) => e.id === soldiers[1]!.campaignId)).toMatchObject({ status: 'wounded', woundedDays: 6, xpGained: 2 });
     expect(report.squad.find((e) => e.id === soldiers[2]!.campaignId)).toMatchObject({ kills: 6, xpGained: 8, promotedTo: 2 });
     expect(c.soldiers.find((s) => s.id === soldiers[0]!.campaignId)!.alive).toBe(false);
-    // The report says how bad it was; the flight back and the recovery already healed some of it.
-    const wounded = c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays;
-    expect(wounded).toBeGreaterThan(0);
-    expect(wounded).toBeLessThan(6);
-    // A mission takes days: La Mula's trip to its zone and back (docs/FASE5.md).
-    expect(c.day - report.day).toBe(offerDays(c, offer));
+    // The report says how bad it was, and a mission takes no days (docs/PRUEBA-2026-10-14.md P7): it is all still to heal.
+    expect(c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays).toBe(6);
+    expect(c.day).toBe(report.day);
     const veteran = c.soldiers.find((s) => s.id === soldiers[2]!.campaignId)!;
     expect(veteran.xp).toBe(8);
     expect(veteran.rank).toBe(2);
@@ -281,6 +277,8 @@ describe('missions', () => {
   it('aptitudes, talents, ranks and weapon and armour tiers reach the battlefield', () => {
     const c = createCampaign([0], new Rng(5));
     const sniper = c.soldiers[0]!;
+    // A recruit of the plain base, for the sums below (each one varies a little: docs/PRUEBA-2026-10-14.md #10).
+    sniper.attrs = baseAttrs(null);
     specialize(sniper, 'sharpshooter');
     sniper.rank = 4;
     run(c, { type: 'train', soldier: sniper.id, attr: 'pul' }, 0, [0]);

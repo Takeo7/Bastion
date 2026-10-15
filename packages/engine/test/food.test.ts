@@ -217,7 +217,7 @@ describe('found weapons', () => {
     expect(share('desk', 'weapon')).toBe(0);
   });
 
-  it('brought home, it goes to the Armería; a soldier who carries that kind of weapon takes it, a tier above the rest', () => {
+  it('brought home, it goes to the Armería; any of your soldiers takes it, a tier above the rest', () => {
     const { c, report } = found();
     expect(report.loot?.weapons).toEqual(['huntingRifle']);
     expect(report.loot?.line).toMatch(/fusil de cerrojo/);
@@ -225,12 +225,13 @@ describe('found weapons', () => {
     expect(w).toMatchObject({ kind: 'huntingRifle', holder: null });
     const rookie = c.soldiers.find((s) => s.owner === 0 && s.alive)!;
     rookie.rank = 2;
-    // Not for a partner's soldier, nor for one with another kind of weapon.
+    // Not for a partner's soldier; any of yours, whatever its class (docs/FASE8.md §A).
     const theirs = c.soldiers.find((s) => s.owner === 1)!;
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: theirs.id }, 0).ok).toBe(false);
     const assault = c.soldiers.find((s) => s.owner === 0 && s.alive && s !== rookie)!;
     specialize(assault, 'assault');
-    expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: assault.id }, 0)).toEqual({ ok: false, error: 'Es para quien lleva fusil de asalto.' });
+    expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: assault.id }, 0).ok).toBe(true);
+    expect(w.holder).toBe(assault.id);
     expect(weaponTier(c, rookie)).toBe(1);
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: rookie.id }, 0).ok).toBe(true);
     expect(weaponTier(c, rookie)).toBe(2);
@@ -297,8 +298,10 @@ describe('the campaign', () => {
     old.xp = LEVEL_XP[5]!;
     const c = migrateCampaign(old);
     expect(c.version).toBe(CAMPAIGN_VERSION);
-    expect(c).toMatchObject({ food: START_FOOD, hungry: false, parts: 0, foundWeapons: [] });
-    expect(c.crafted).toEqual(['weapons2', 'weapons3', 'armor2']);
+    expect(c).toMatchObject({ food: START_FOOD, hungry: false, parts: 0 });
+    // Version 16 on top: the munition they had, and each soldier its class's weapon.
+    expect(c.crafted).toEqual(['weapons2', 'weapons3', 'armor2', 'ammo1', 'ammo2', 'ammo3']);
+    expect(c.foundWeapons!.map((w) => w.kind)).toEqual(c.soldiers.map(() => 'assaultRifle'));
     expect(weaponTier(c, { id: 'x', rank: 4 })).toBe(3);
   });
 });

@@ -1,6 +1,6 @@
 import { defaultAppearance } from './appearance';
 import { autoBuild, baseAttrs, CENTER, learnTalent, soldierStats, talentBlocker, talentPointsFree, talentsOf, type Build, type TalentDef } from './classes';
-import { AP_PER_TURN, NIGHT, RECOVERY_TURNS, SOLDIER_NAMES, SPARE_MAGS, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
+import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, RECOVERY_TURNS, SOLDIER_NAMES, SPARE_MAGS, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
 import { ground, toPos } from './grid';
 import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
@@ -8,6 +8,7 @@ import { MAPS } from './maps';
 import type { Rng } from './rng';
 import type {
   Appearance,
+  Arms,
   Biome,
   ChargeId,
   ClassId,
@@ -18,6 +19,7 @@ import type {
   PerkId,
   Pod,
   Reinforcement,
+  Site,
   Slot,
   Team,
   TemplateId,
@@ -49,10 +51,17 @@ export interface SquadMember {
   will: number;
   armor: number;
   gear: ItemId[];
+  /** Backpack slots, when not BACKPACK_SLOTS (the Chapistería's one more, docs/FASE8.md §C). */
+  packSlots?: number;
+  /** Its own weapons (docs/FASE8.md §A); absent, its class's. */
+  arms?: Arms;
+  /** Spare magazines it sets out with (the Taller's munition); absent, SPARE_MAGS. */
+  mags?: number;
 }
 
 /** Hand-made map by id, or a procedural one from a biome and a seed. */
-export type MapSource = { kind: 'handmade'; id: string } | { kind: 'generated'; biome: Biome; seed: number };
+/** `site`: a scenario other than the biome's usual one (playtest 2026-10-14, #25). */
+export type MapSource = { kind: 'handmade'; id: string } | { kind: 'generated'; biome: Biome; seed: number; site?: Site };
 
 export interface MissionOptions {
   map: MapSource;
@@ -82,6 +91,10 @@ export interface MissionOptions {
   night?: boolean;
   /** The living hold it (docs/ZOMBIS-PRIMERO.md): their bands and their garrison; without it, the dead's. */
   living?: boolean;
+  /** A recovery whose story puts the item outdoors (playtest 2026-10-14, #27). */
+  itemOutdoors?: boolean;
+  /** Medicines also stop a bite's contagion, for everyone (docs/FASE8.md §C). */
+  medicineCures?: boolean;
 }
 
 /** The Taller de oficios skirmish veterans trained in, as if built at its top level: a skirmish has no base. */
@@ -114,6 +127,19 @@ function veteranBuild(cls: ClassId, rank: number, rng: Rng): Build {
 /** Whether a unit counts its spare magazines (docs/FASE7.md): the squad's, with a weapon that takes them. */
 function countsMags(team: Team, weapon: WeaponId): boolean {
   return team === 'xcom' && WEAPONS[weapon].clip > 0;
+}
+
+/** A campaign soldier's own weapons, loaded, and its spare magazines (docs/FASE8.md §A). */
+function armed(u: Unit, m: SquadMember): Partial<Unit> {
+  if (!m.arms) return m.mags !== undefined && u.mags !== undefined ? { mags: m.mags } : {};
+  const arms: Arms = { ...m.arms };
+  const unit = { ...u, arms };
+  return {
+    arms,
+    ammo: clipOf(unit, 'shoot'),
+    ...(arms.primary ? { pistolAmmo: PISTOL_CLIP } : {}),
+    mags: m.mags ?? 0,
+  };
 }
 
 /** A unit of a kind, on `pos` (on the ground unless it says its level). */
@@ -179,7 +205,8 @@ export const NIGHT_LABEL = 'De noche';
 
 /** The extra group of the dead a night mission starts with (NIGHT in content.ts). */
 export function nightPod(difficulty: number): TemplateId[] {
-  return difficulty >= 3 ? ['zombie', 'zombie', 'xenoid'] : ['zombie', 'zombie'];
+  // Twice as many as before the playtest of 2026-10-14 (#26): the night is theirs.
+  return difficulty >= 3 ? ['zombie', 'zombie', 'zombie', 'zombie', 'xenoid', 'xenoid'] : ['zombie', 'zombie', 'zombie', 'zombie'];
 }
 
 export const BIOME_NAMES: Record<Biome, string> = {
@@ -211,19 +238,42 @@ export function missionTurns(kind: MissionKind, size: number): number | null {
 /**
  * The dead by difficulty for procedural maps (docs/ZOMBIS-PRIMERO.md): every
  * mission is the dead's, but those where the living hold something
- * (livingPlan). Groups of two to four, as many bodies as the living's bands
- * were, more from difficulty 3: they only bite.
+ * (livingPlan). Three times as many as at first (playtest 2026-10-14, #26:
+ * going into town has to be a risk): about 20 at difficulty 1 and 45 at 4, in
+ * groups of three to five spread over the map, so the streets are full of them.
  */
 export function podPlan(difficulty: number): TemplateId[][] {
+  const z = 'zombie' as const;
   switch (Math.max(1, Math.min(4, difficulty))) {
     case 1:
-      return [['zombie', 'zombie'], ['zombie', 'zombie'], ['zombie', 'zombie', 'bloater']];
+      return [[z, z, z], [z, z, z], [z, z, z, 'bloater'], [z, z, z], [z, z, z, z], [z, z, z]];
     case 2:
-      return [['zombie', 'zombie', 'xenoid'], ['sectoid', 'zombie'], ['zombie', 'zombie', 'bloater'], ['zombie', 'xenoid']];
+      return [[z, z, 'xenoid'], ['sectoid', z, z], [z, z, z, 'bloater'], [z, 'xenoid', z, z], [z, z, z], [z, z, z, z], [z, 'xenoid', z], [z, z, z, 'bloater']];
     case 3:
-      return [['zombie', 'zombie', 'xenoid'], ['mec', 'zombie', 'zombie'], ['sectoid', 'zombie', 'xenoid'], ['zombie', 'zombie', 'bloater']];
+      return [
+        [z, z, z, 'xenoid'],
+        ['mec', z, z, z],
+        ['sectoid', z, 'xenoid', z],
+        [z, z, z, 'bloater'],
+        [z, z, 'xenoid', z],
+        [z, z, z, z],
+        ['mec', z, z],
+        [z, z, z, 'bloater'],
+        [z, 'xenoid', z, z],
+      ];
     default:
-      return [['mec', 'zombie', 'zombie'], ['sectoid', 'xenoid', 'zombie'], ['xenoid', 'xenoid', 'zombie'], ['bloater', 'zombie', 'zombie'], ['mec', 'xenoid']];
+      return [
+        ['mec', z, z, z, z],
+        ['sectoid', 'xenoid', z, z],
+        ['xenoid', 'xenoid', z, z],
+        ['bloater', z, z, z, z],
+        ['mec', 'xenoid', z, z],
+        [z, z, z, z, z],
+        ['sectoid', z, z, z],
+        ['bloater', z, z, z, 'xenoid'],
+        ['mec', z, z, z],
+        [z, z, 'xenoid', z, z],
+      ];
   }
 }
 
@@ -260,24 +310,50 @@ export function missionPods(difficulty: number, kind: MissionKind, living = fals
  * horde comes later, by the edges (HORDE_WAVES).
  */
 export function scavengePlan(difficulty: number): TemplateId[][] {
+  // Three times as many as at first (playtest 2026-10-14, #26), in small groups all over the town.
+  const z = 'zombie' as const;
   switch (Math.max(1, Math.min(4, difficulty))) {
     case 1:
-      return [['zombie', 'zombie'], ['zombie'], ['zombie', 'zombie'], ['xenoid'], ['zombie', 'bloater']];
+      return [[z, z], [z, z], [z, z, z], ['xenoid', z], [z, 'bloater', z], [z, z], [z, z, z], [z, z], [z, z, z], [z, 'xenoid']];
     case 2:
-      return [['zombie', 'zombie'], ['zombie', 'xenoid'], ['zombie', 'zombie', 'bloater'], ['sectoid', 'zombie'], ['zombie', 'zombie']];
+      return [[z, z, z], [z, 'xenoid', z], [z, z, 'bloater'], ['sectoid', z, z], [z, z, z], [z, z], [z, 'xenoid', z], [z, z, z, 'bloater'], [z, z, z], [z, z, z]];
     case 3:
-      return [['zombie', 'zombie', 'xenoid'], ['mec', 'zombie'], ['zombie', 'zombie', 'bloater'], ['sectoid', 'zombie', 'zombie'], ['xenoid', 'zombie']];
+      return [
+        [z, z, 'xenoid'],
+        ['mec', z, z],
+        [z, z, 'bloater'],
+        ['sectoid', z, z, z],
+        ['xenoid', z, z],
+        [z, z, z, z],
+        [z, 'xenoid', z],
+        [z, z, z, 'bloater'],
+        ['mec', z, z],
+        [z, z, z, z],
+      ];
     default:
-      return [['zombie', 'zombie', 'xenoid'], ['mec', 'zombie', 'zombie'], ['bloater', 'zombie', 'zombie'], ['sectoid', 'zombie', 'xenoid'], ['mec', 'xenoid'], ['zombie', 'zombie', 'bloater']];
+      return [
+        [z, z, z, 'xenoid'],
+        ['mec', z, z, z],
+        ['bloater', z, z, z],
+        ['sectoid', z, 'xenoid', z],
+        ['mec', 'xenoid', z],
+        [z, z, z, 'bloater'],
+        ['xenoid', z, z, z],
+        [z, z, z, z, z],
+        ['sectoid', z, z],
+        ['mec', z, z, z],
+        [z, 'xenoid', z, z],
+      ];
   }
 }
 
 /** Who comes in each wave of a horde, by difficulty: the Saqueo's (rules.ts callHorde), sabotage and hack's, and a failed hack's alarm. */
+/** Twice what they were (playtest 2026-10-14, #26): with three times the dead on the map, a horde is a horde. */
 const HORDE_WAVES: Record<number, TemplateId[]> = {
-  1: ['zombie', 'zombie'],
-  2: ['zombie', 'zombie', 'xenoid'],
-  3: ['zombie', 'zombie', 'xenoid', 'bloater'],
-  4: ['zombie', 'zombie', 'zombie', 'xenoid', 'mec'],
+  1: ['zombie', 'zombie', 'zombie', 'zombie'],
+  2: ['zombie', 'zombie', 'zombie', 'zombie', 'xenoid', 'xenoid'],
+  3: ['zombie', 'zombie', 'zombie', 'zombie', 'xenoid', 'xenoid', 'bloater', 'zombie'],
+  4: ['zombie', 'zombie', 'zombie', 'zombie', 'zombie', 'zombie', 'xenoid', 'xenoid', 'mec', 'bloater'],
 };
 
 export function hordeWave(difficulty: number): TemplateId[] {
@@ -324,13 +400,13 @@ const VIP_NAMES = ['Dra. Irina Sokolova', 'Ing. Kenji Mori', 'Alcaldesa Mara Vel
  */
 const LAYOUT_KIND: Partial<Record<MissionKind, MissionKind>> = { scavenge: 'recovery' };
 
-export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[]): MissionLayout {
+export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[], itemOutdoors = false): MissionLayout {
   if (map.kind === 'handmade') {
     const def = MAPS[map.id];
     if (!def) throw new Error(`Unknown map ${map.id}`);
     return handmadeLayout(def, kind);
   }
-  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed });
+  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed, ...(map.site ? { site: map.site } : {}), ...(itemOutdoors ? { itemOutdoors } : {}) });
 }
 
 export function createMission(opts: MissionOptions): GameState {
@@ -342,7 +418,7 @@ export function createMission(opts: MissionOptions): GameState {
   // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
   const extra = garrison(kind, difficulty, opts.living);
   const plan = [...base, ...(extra ? [extra] : []), ...(opts.night ? [nightPod(difficulty)] : [])];
-  const layout = missionLayout(opts.map, kind, plan.map((p) => p.length));
+  const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors);
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
     (kind === 'recovery' && !layout.item) ||
@@ -364,6 +440,7 @@ export function createMission(opts: MissionOptions): GameState {
       const u = makeUnit(`s${i + 1}`, m.template, m.name, m.owner, layout.spawns[i]!, null);
       units.push({
         ...u,
+        ap: apPerTurn({ team: u.team, rank: m.rank }),
         rank: m.rank,
         perks: [...m.perks],
         mods: { ...m.mods },
@@ -378,6 +455,8 @@ export function createMission(opts: MissionOptions): GameState {
         ...(m.weaponName ? { weaponName: m.weaponName } : {}),
         will: m.will,
         armor: m.armor,
+        ...(m.packSlots ? { packSlots: m.packSlots } : {}),
+        ...armed(u, m),
         gear: [...m.gear],
       });
     });
@@ -442,10 +521,12 @@ export function createMission(opts: MissionOptions): GameState {
     turnsLeft: kind === 'elimination' ? null : opts.turns ?? missionTurns(kind, Math.max(layout.width, layout.height)),
     item: kind === 'recovery' && layout.item ? { pos: toPos(layout.item), carrier: null, evacuated: false } : null,
     evacZone: kind === 'elimination' ? [] : layout.evacZone,
+    ...(kind !== 'elimination' && layout.evacBus ? { evacBus: layout.evacBus } : {}),
     terminal: kind === 'hack' && layout.terminal ? toPos(layout.terminal) : null,
     objectiveUnit,
     objectiveDone: false,
     hackBonus: opts.hackBonus ?? 0,
+    ...(opts.medicineCures ? { medicineCures: true } : {}),
     reinforcements,
     difficulty,
     ...(kind === 'scavenge' ? { horde: hordeWave(difficulty) } : {}),
@@ -461,6 +542,7 @@ export function createMission(opts: MissionOptions): GameState {
     mapId: layout.id,
     mapName: layout.name,
     biome: layout.biome,
+    ...(layout.site ? { site: layout.site } : {}),
     width: layout.width,
     height: layout.height,
     tiles,

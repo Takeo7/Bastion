@@ -13,6 +13,7 @@ import {
   BACKPACK_SLOTS,
   BAD_LUCK_AIM,
   BAD_LUCK_MISSES,
+  boxTitle,
   blastRadius,
   blastTiles,
   breachedWalls,
@@ -31,17 +32,45 @@ import {
   DIRS8,
   doorTiles,
   ENEMY_FILES,
+  DEFAULT_ITEM,
   fallLine,
+  CURED_FLOAT,
   findLabel,
+  firesSidearm,
+  FOUND_WEAPONS,
+  lootDroppedLine,
+  lootGivenLine,
+  lootName,
+  lootTakenLine,
+  medicineLine,
+  packFullLine,
+  weaponEquippedLine,
+  itemDroppedFloat,
+  itemDroppedLine,
+  itemObjective,
+  itemPartnerLine,
+  itemTag,
+  itemTakenFloat,
+  itemTakenLine,
   distance,
   endsTurn,
+  EVAC_TEXT,
+  evacAsk,
+  evacDepartLine,
+  evacPrompt,
+  evacRefusedLine,
+  evacWaiting,
+  evacWins,
   getUnit,
   hackChance,
   hasAnyCover,
   hasPerk,
   HORDE,
+  inEvacZone,
+  inMeleeReach,
   isAttack,
   isLit,
+  leftBehindLine,
   lootSummary,
   lootTotals,
   maxMoveCost,
@@ -52,10 +81,13 @@ import {
   NIGHT_LABEL,
   NOISE,
   noiseOf,
+  OBJECTIVE_DONE,
   PLAYER_COLORS,
   previewShot,
   rangedTargets,
   reachesToSearch,
+  roomAt,
+  roomSearchLine,
   nodeOf,
   heightAt,
   kindAt,
@@ -77,6 +109,7 @@ import {
   teamVisibility,
   TEMPLATES,
   unitAt,
+  vipObjective,
   visibleEnemies,
   wasSearched,
   type AbilityId,
@@ -86,6 +119,7 @@ import {
   type DamageRange,
   type DecorKind,
   type EndReason,
+  type EvacSituation,
   type GameEvent,
   type GameState,
   type Loot,
@@ -104,8 +138,9 @@ import {
   type Vec2,
 } from '@bastion/engine';
 import type { Net, NetStatus } from '../net';
+import { deadlineOf } from '../ui/deadline';
 import { clear } from '../ui/dom';
-import { Hud, type AbilityView, type HordeView, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
+import { Hud, type AbilityView, type EvacButtonView, type HordeView, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
 import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
@@ -170,11 +205,9 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
 /**
  * Night missions (docs/ALTURA-Y-NOCHE.md §2), as the HUD explains them; the
  * lines are placeholders for Lore. `NIGHT_RULES` goes in the «De noche» tag's
- * tooltip and the log, `NIGHT_RADIO` is Morse on the first turn, `LIGHT_LINES`
- * what a Bengala or a fire lights up.
+ * tooltip and the log, `LIGHT_LINES` what a Bengala or a fire lights up.
  */
 const NIGHT_RULES = `De noche: los vivos ven ${NIGHT.sightCut} casillas menos (${NIGHT.minSight} como mínimo) y os detectan a la mitad de distancia. A la luz de una farola, una bengala o un fuego os ven como de día.`;
-const NIGHT_RADIO = 'Noche cerrada. Ellos no necesitan ver para encontraros: id con bengalas, o pegados a las farolas.';
 const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fuego ilumina la zona' } as const;
 
 /**
@@ -184,6 +217,9 @@ const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fu
  */
 const VEIL_MODELS_MS = 15000;
 const VEIL_SHADERS_MS = 4000;
+
+/** The server's reconnection grace (room.ts RECONNECT_GRACE_MS): a partner who dropped this recently still answers a call to leave. */
+const RECONNECT_GRACE_MS = 30_000;
 
 /**
  * The enemy turn's pace (docs/UX-RITMO.md; Arturo, 14/10: «el turno de la IA va
@@ -480,6 +516,16 @@ export class Game {
   private momentTimer = 0;
   /** The partner's soldier that acted last: where a broken concealment happened. */
   private partnerLast: string | null = null;
+  /** One of ours that has just walked into La Mula: once the queue has played, leave or wait (P1). */
+  private evacArrived: string | null = null;
+  /** A swap under way (docs/FASE8.md §C): once the slot is dropped, this is picked up from the floor. */
+  private swapTake: { unit: string; id: string } | null = null;
+  /** The next `healed` is a medicine's, not the Grillo's: no drone flies. */
+  private medicineHeal = false;
+  /** The next `cured` is a medicine's: its line already says so. */
+  private medicineCure = false;
+  /** When each player's connection dropped (setPlayers): within the server's grace they still answer a call to leave. */
+  private readonly droppedAt = new Map<Slot, number>();
   /** How the squad lost its concealment, once it has: the contact that follows says who saw whom. */
   private exposure: Extract<GameEvent, { t: 'concealmentBroken' }> | null = null;
   private readonly sfx = new Sfx();
@@ -549,6 +595,8 @@ export class Game {
   private resultHold = 0;
   /** A group of the dead is walking together: no single walker takes the camera. */
   private grouped = false;
+  /** The mission's item just went down with a broken floor: its own drop line would say it twice. */
+  private itemFell = false;
   /** The framing of the last group of the dead shown walking: who was in it and what it took in. */
   private groupFrame: { ids: Set<string>; centre: THREE.Vector3; radius: number } | null = null;
   /** Resolves when the loading veil lifts (UX-REVISION-3 #1); null when it is down. */
@@ -592,6 +640,9 @@ export class Game {
       onBackToMenu: () => this.net.send({ t: 'backToMenu' }),
       onAbandon: () => this.net.send({ t: 'abandon' }),
       onPassCommand: () => this.passCommand(),
+      onEvac: () => this.evacButton(),
+      onItem: (o) => this.itemOrder(o),
+      onSwap: (take, drop) => this.swapItem(take, drop),
       onToggleSound: () => !this.sfx.toggleMute(),
       onFloor: (dir) => this.stepLevel(dir),
       soundOn: () => !this.sfx.muted,
@@ -659,6 +710,8 @@ export class Game {
     this.hasSpots = false;
     for (let i = 0; i < s.width * s.height && !this.hasSpots; i++) this.hasSpots = searchSpot(s, { x: i % s.width, y: Math.floor(i / s.width) }) !== null;
     this.mapView.build(this.view);
+    // What the carrier carries is named (playtest 14/10 #2: it said «DATOS»).
+    this.hud.itemTag = this.units.itemTag = itemTag(this.recoveryItem());
     // Night missions (docs/ALTURA-Y-NOCHE.md): the sky and the sun; a day mission after a night one turns them back.
     this.renderer.setNight(!!this.view.mission.night);
     this.units.build(this.view);
@@ -723,19 +776,19 @@ export class Game {
     // the objective, and a line of the operation's briefing when the mission carries one.
     const cm = s.campaignMission;
     const briefing = cm && 'briefing' in cm && typeof cm.briefing === 'string' ? briefingLine(cm.briefing) : undefined;
-    const shown = this.hud.intro(
+    const closed = this.hud.intro(
       this.kicker(),
       cm?.name ?? MISSION_NAMES[s.mission.kind],
       [s.mapName, s.mission.night ? NIGHT_LABEL : '', mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
       mission.objective,
       briefing,
     );
-    // No warning plays over the briefing while it is up and fading.
-    this.tips.intro(shown, s);
+    // No warning plays over the briefing while it is up (until it is closed).
+    this.tips.intro(closed);
     this.storyRadio('start');
-    // A night mission: Morse says so once the briefing is gone (the first time, Lore's warning), and the log keeps the rules.
+    // A night mission: Morse says so once the briefing is gone, the first night only (playtest 14/10: less radio), and the log keeps the rules.
     if (s.mission.night) {
-      if (!this.tips.night()) this.tips.story(NIGHT_RADIO);
+      this.tips.night();
       this.hud.log(NIGHT_RULES, '#2a4a7a');
     }
     void this.openingShot();
@@ -821,7 +874,18 @@ export class Game {
     }
   }
 
+  /** The server's clock on the call to leave changed (PRUEBA-2026-10-14 #28): the button and the open dialog show it. */
+  refreshDeadline(): void {
+    this.refreshHud();
+    this.hud.evacClock();
+  }
+
   setPlayers(players: PlayerInfo[]): void {
+    const now = performance.now();
+    for (const p of players) {
+      if (p.connected) this.droppedAt.delete(p.slot);
+      else if (this.players.find((q) => q.slot === p.slot)?.connected) this.droppedAt.set(p.slot, now);
+    }
     this.players = players;
     this.refreshHud();
   }
@@ -904,19 +968,47 @@ export class Game {
     }
     this.playing = false;
     this.refreshInteractive();
+    this.offerEvac();
   }
 
   /** What an animated event leaves behind: the view, the fog, the HUD, the warnings, the sightings, and the pause after one's own action. */
   private async settle(item: QueuedEvent, epoch: number): Promise<void> {
     const secured = this.view.mission.objectiveDone;
     const seen = this.visibleAliens;
+    const call = this.view.evacCall;
+    const from = item.e.t === 'moved' ? getUnit(this.view, item.e.unit)?.pos : undefined;
+    const floorBefore = new Set((this.view.dropped ?? []).map((d) => d.id));
     applyEvent(this.view, item.e);
     const e = item.e;
+    // A find with the backpack full stays on the floor (docs/FASE8.md §C): say so, with «Cambiar».
+    if ((e.t === 'searched' || e.t === 'roomSearched') && item.by === this.mySlot && e.loot) {
+      const u = getUnit(this.view, e.unit);
+      const left = (this.view.dropped ?? []).find((d) => !floorBefore.has(d.id) && u && samePos(d.pos, u.pos));
+      if (u && left) this.hud.packOffer(packFullLine(left.loot), () => this.openSwap(u.id, left.id));
+    }
+    // The second half of a swap: the slot is on the floor, now the find comes up.
+    if (e.t === 'lootDropped' && item.by === this.mySlot && this.swapTake?.unit === e.unit) {
+      const { unit, id } = this.swapTake;
+      this.swapTake = null;
+      if (this.view.dropped?.some((d) => d.id === id)) this.send({ type: 'item', unit, action: 'take', id });
+    }
+    // One of ours walked into La Mula from outside: leave or wait, once the queue has played (P1).
+    if (e.t === 'moved' && item.by === this.mySlot && from && !inEvacZone(this.view, from)) {
+      const u = getUnit(this.view, e.unit);
+      if (u?.alive && this.isMine(u) && inEvacZone(this.view, u.pos)) this.evacArrived = u.id;
+    }
+    // A call nobody answered lapses with the squad's turn.
+    if (e.t === 'turnBegan' && call && !this.view.evacCall) {
+      this.hud.log(EVAC_TEXT.lapsed, '#ffc93a');
+      this.hud.dropEvac();
+    }
     if (e.t === 'turnBegan') this.plans.clear();
     else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') this.plans.delete(e.unit);
     if (!secured && this.view.mission.objectiveDone) this.storyRadio('objective');
     if (item.e.t === 'tileChanged' || item.e.t === 'floorBroken') this.mapView.rebuild(this.view);
     this.refreshView();
+    // A weapon taken in hand changes on the figure as the view syncs (unitViews, 0.7 s): seen whole before what follows.
+    if (e.t === 'weaponEquipped') await wait(0.7);
     this.refreshStatus();
     this.tips.event(item.e, this.view);
     try {
@@ -1427,12 +1519,15 @@ export class Game {
       case 'aided': {
         const u = getUnit(v, e.unit)!;
         const target = getUnit(v, e.target)!;
-        if (e.t === 'healed' && this.lastUsed?.unit === u.id && this.lastUsed.ability === 'restoration') {
-          // Restoration heals everyone at once: no drone trips.
+        // A medicine from the backpack (docs/FASE8.md §C), like Restoration, needs no drone.
+        const medicine = e.t === 'healed' && this.medicineHeal;
+        if (medicine) this.medicineHeal = false;
+        if (e.t === 'healed' && (medicine || (this.lastUsed?.unit === u.id && this.lastUsed.ability === 'restoration'))) {
+          // Restoration heals everyone at once: no drone trips. A medicine's line already says how much.
           this.fx.heal(this.units.chestPos(target.id));
           this.sfx.heal(this.units.chestPos(target.id));
           this.fx.floatText(this.units.chestPos(target.id), `+${e.amount}`, 'heal');
-          this.hud.log(`${target.name} recupera ${e.amount}`, '#6dff9a');
+          if (!medicine) this.hud.log(`${target.name} recupera ${e.amount}`, '#6dff9a');
           await wait(0.2);
           return;
         }
@@ -1458,28 +1553,151 @@ export class Game {
         this.units.setDroneAway(u.id, false);
         return;
       }
-      case 'evacuated': {
+      // The backpack (docs/FASE8.md §C). Lore's words to come; these say what happened, plainly.
+      case 'roomSearched': {
         const u = getUnit(v, e.unit)!;
-        look(this.units.worldPos(u.id));
-        this.hud.log(`${u.name} evacuado`, '#6dff9a');
-        this.fx.evacBeam(this.units.worldPos(u.id));
-        this.sfx.beam(this.units.worldPos(u.id));
-        await this.units.evacuate(u.id);
+        const at = this.units.worldPos(u.id);
+        look(at);
+        this.sfx.search(at);
+        await this.units.rummage(u.id, at.clone().add(new THREE.Vector3(0.6, 0.4, 0)));
+        this.overlays.find(u.pos, findLabel(e.loot), !e.loot ? 'empty' : e.loot.weapon ? 'rare' : 'loot');
+        if (e.loot) this.sfx.found(at);
+        // The seed comes from the event, so both players read the same line.
+        const spot = roomAt(v, u.pos)?.spot ?? 'home';
+        this.hud.log(roomSearchLine(u.name, spot, e.loot, e.room * 7 + v.turn), e.loot?.weapon ? '#ffd23a' : e.loot ? '#6dff9a' : undefined);
+        await wait(0.5);
         return;
       }
-      case 'itemPicked': {
+      case 'lootDropped': {
         const u = getUnit(v, e.unit)!;
-        this.hud.log(`${u.name} recupera los datos`, '#6dff9a');
-        this.fx.floatText(this.units.chestPos(u.id), 'DATOS RECUPERADOS', 'heal');
-        this.sfx.data();
+        const loot = u.backpack?.[e.index];
+        if (loot) this.hud.log(lootDroppedLine(u.name, loot));
+        await wait(0.15);
+        return;
+      }
+      case 'lootTaken': {
+        const u = getUnit(v, e.unit)!;
+        const left = v.dropped?.find((d) => d.id === e.id);
+        if (left) {
+          this.fx.floatText(this.units.chestPos(u.id), findLabel(left.loot), 'info');
+          this.hud.log(lootTakenLine(u.name, left.loot), '#6dff9a');
+        }
+        await wait(0.3);
+        return;
+      }
+      case 'lootGiven': {
+        const u = getUnit(v, e.unit)!;
+        const to = getUnit(v, e.to)!;
+        const loot = u.backpack?.[e.index];
+        this.units.face(u.id, this.units.worldPos(to.id));
+        this.units.face(to.id, this.units.worldPos(u.id));
+        look(this.units.worldPos(u.id).lerp(this.units.worldPos(to.id), 0.5));
+        if (loot) {
+          this.fx.floatText(this.units.chestPos(to.id), findLabel(loot), 'info');
+          this.hud.log(lootGivenLine(u.name, to.name, loot), '#6dff9a');
+        }
         await wait(0.6);
         return;
       }
-      case 'itemDropped':
-        this.hud.log('¡Los datos han caído al suelo!', '#ffc93a');
-        this.fx.floatText(tileToWorld(e.pos, 1), 'DATOS PERDIDOS', 'warn');
+      case 'medicineUsed': {
+        const u = getUnit(v, e.unit)!;
+        const target = getUnit(v, e.target)!;
+        if (target.id !== u.id) this.units.face(u.id, this.units.worldPos(target.id));
+        look(this.units.worldPos(target.id));
+        // One line for the whole cure (Lore): what the `healed` and `cured` that follow it do.
+        const after = this.queue.slice(0, 3).map((q) => q.e);
+        const healed = after.find((x): x is Extract<GameEvent, { t: 'healed' }> => x.t === 'healed' && x.target === target.id)?.amount ?? 0;
+        const cured = after.some((x) => x.t === 'cured' && x.unit === target.id);
+        this.hud.log(medicineLine(u.name, target.id === u.id ? null : target.name, healed, cured), '#6dff9a');
+        this.medicineHeal = true;
+        this.medicineCure = cured;
+        await wait(0.3);
+        return;
+      }
+      case 'cured': {
+        const u = getUnit(v, e.unit)!;
+        this.fx.floatText(this.units.chestPos(u.id), CURED_FLOAT, 'heal');
+        // A medicine's cure is already in its line.
+        if (!this.medicineCure) this.hud.log(`${u.name}: ${CURED_FLOAT.toLowerCase()}`, '#6dff9a');
+        this.medicineCure = false;
+        await wait(0.5);
+        return;
+      }
+      case 'weaponEquipped': {
+        const u = getUnit(v, e.unit)!;
+        const loot = u.backpack?.[e.index];
+        look(this.units.worldPos(u.id));
+        if (loot?.weapon) {
+          this.fx.floatText(this.units.chestPos(u.id), FOUND_WEAPONS[loot.weapon].name.toUpperCase(), 'callout');
+          this.hud.log(weaponEquippedLine(u.name, loot.weapon), '#6dff9a');
+        }
+        this.sfx.reload(this.units.worldPos(u.id));
+        // The swap itself is seen after (settle waits for unitViews' 0.7 s).
+        await wait(0.3);
+        return;
+      }
+      // Leaving in La Mula (docs/PRUEBA-2026-10-14.md P1): one asks, the other answers, and the bus goes.
+      case 'evacCalled': {
+        this.hud.log(evacAsk(this.playerName(e.slot), this.evacSituation(v)).title, PLAYER_COLORS[e.slot]);
+        if (e.slot !== this.mySlot) this.askEvac(e.slot);
+        return;
+      }
+      case 'evacRefused': {
+        const line = evacRefusedLine(this.playerName(e.slot));
+        this.hud.log(line, PLAYER_COLORS[e.slot]);
+        if (e.slot !== this.mySlot) this.hud.toast(line);
+        this.hud.dropEvac();
+        return;
+      }
+      case 'evacDeparted': {
+        // Both players see it go (whoever said yes): the camera to the bus, everyone in it boards (the
+        // `evacuated` that follow), and then it pulls away (Arte's mapView.busDeparts).
+        this.hud.dropEvac();
+        const aboard = v.units.filter((u) => u.alive && u.team === 'xcom' && inEvacZone(v, u.pos));
+        this.hud.log(evacDepartLine(aboard.map((u) => u.name)), '#6dff9a');
+        const bus = this.busTile(v);
+        if (!bus) return;
+        this.rig.focus(tileToWorld(bus));
+        this.rig.cinematicZoom(16);
+        await wait(0.5);
+        if (this.queue[0]?.e.t !== 'evacuated') await this.busLeaves(bus);
+        return;
+      }
+      case 'evacuated': {
+        // Into the bus: a puff of dust where they stood; the view hides them once the event is applied. After the last, it goes.
+        this.fx.dust(this.units.worldPos(e.unit), 4);
+        await wait(0.18);
+        const bus = this.busTile(v);
+        if (bus && this.queue[0]?.e.t !== 'evacuated') await this.busLeaves(bus);
+        return;
+      }
+      case 'leftBehind': {
+        const u = getUnit(v, e.unit)!;
+        this.fx.floatText(this.units.chestPos(u.id), 'SE QUEDA FUERA', 'callout');
+        this.hud.log(leftBehindLine(u.name), '#ff8a78');
+        await wait(0.6);
+        return;
+      }
+      case 'itemPicked': {
+        // Picking it up shows (playtest 14/10 #2): the camera on the soldier, a callout, the log; the objective then names who has it.
+        const u = getUnit(v, e.unit)!;
+        const item = this.recoveryItem();
+        look(this.units.worldPos(u.id));
+        this.hud.log(itemTakenLine(u.name, item), '#6dff9a');
+        this.fx.floatText(this.units.chestPos(u.id), itemTakenFloat(item), 'callout');
+        this.sfx.data();
+        await wait(0.9);
+        return;
+      }
+      case 'itemDropped': {
+        const item = this.recoveryItem();
+        this.fx.floatText(tileToWorld(e.pos, 1), itemDroppedFloat(item), 'warn');
+        // Down with a broken floor, RUBBLE_TEXT.item has said it already.
+        if (!this.itemFell) this.hud.log(itemDroppedLine(item), '#ffc93a');
+        this.itemFell = false;
         await wait(0.4);
         return;
+      }
       case 'tileChanged': {
         // On its own floor (docs/FASE6.md): a door upstairs opens upstairs.
         const before = kindAt(v, e.pos);
@@ -1618,7 +1836,10 @@ export class Game {
         this.hud.log(RUBBLE_TEXT.floor, '#ffb070');
         // What the squad came for, lying there, goes down with it (its itemDropped follows).
         const item = v.mission.item;
-        if (item && !item.carrier && item.pos && samePos(toPos(item.pos), e.pos)) this.hud.log(RUBBLE_TEXT.item, '#ffd23a');
+        if (item && !item.carrier && item.pos && samePos(toPos(item.pos), e.pos)) {
+          this.hud.log(RUBBLE_TEXT.item, '#ffd23a');
+          this.itemFell = true;
+        }
         await wait(cam() ? 0.45 : 0.2);
         return;
       }
@@ -1713,6 +1934,7 @@ export class Game {
         return;
       }
       case 'missionEnded':
+        this.hud.dropEvac();
         this.sfx.outcome(e.outcome === 'victory');
         await wait(0.8);
         this.showOutcome(e.outcome, e.reason);
@@ -1840,7 +2062,7 @@ export class Game {
 
     const stepOut = !samePlace(e.from, shooter.pos);
     if (stepOut) await this.units.slide(shooter.id, tileToWorld(e.from), 0.22, false);
-    await this.units.raiseWeapon(shooter.id, targetPos);
+    await this.units.raiseWeapon(shooter.id, targetPos, firesSidearm(shooter, e.ability));
     await wait(cam() ? 0.25 : 0.08);
 
     const heavy = weapon.apCost > 1;
@@ -2033,7 +2255,8 @@ export class Game {
       return;
     }
     const s = this.state;
-    const lost = s.units.filter((u) => u.team === 'xcom' && !u.alive && !u.evacuated).length;
+    const lost = s.units.filter((u) => u.team === 'xcom' && !u.alive && !u.evacuated && !u.lost).length;
+    const left = s.units.filter((u) => u.lost).length;
     const evacuated = s.units.filter((u) => u.evacuated).length;
     const killed = s.units.filter((u) => u.team === 'alien' && !u.alive).length;
     const vip = s.mission.kind === 'rescue' && s.mission.objectiveUnit ? getUnit(s, s.mission.objectiveUnit)?.name : undefined;
@@ -2052,7 +2275,8 @@ export class Game {
       objective: success[s.mission.kind],
       wiped: evacuated ? 'La escuadra se retiró sin cumplir el objetivo' : 'Escuadra eliminada',
       timer: 'Se agotó el tiempo',
-      abandoned: 'Misión abandonada',
+      // Gone in La Mula too early (P1): a Limpieza is a retreat; the rest, out without the objective.
+      abandoned: s.mission.evacDone ? (s.mission.kind === 'elimination' ? EVAC_TEXT.retreat : EVAC_TEXT.withoutObjective) : 'Misión abandonada',
       objectiveLost: vip ? `${vip} ha muerto` : 'El VIP ha muerto',
     };
     // One short line: why it ended. A skirmish has no debrief after, so it adds the count.
@@ -2061,7 +2285,9 @@ export class Game {
     // A skirmish also says what came home (a campaign's debrief has it, from report.loot): «Botín a salvo: +26 §».
     const found = !s.campaignMission && outcome === 'victory' && loot ? loot.replace(/\.$/, '') : '';
     const head = found && reason === 'objective' && s.mission.kind === 'scavenge' ? `${why}: ${found.replace(/^El botín: /, '')}` : [why, found].filter(Boolean).join(' · ');
-    const line = s.campaignMission ? why : [head, count(killed, 'abatido', 'abatidos'), lost ? count(lost, 'baja', 'bajas') : 'sin bajas'].filter(Boolean).join(' · ');
+    const line = s.campaignMission
+      ? why
+      : [head, count(killed, 'abatido', 'abatidos'), lost ? count(lost, 'baja', 'bajas') : 'sin bajas', left ? (left === 1 ? '1 se quedó fuera' : `${left} se quedaron fuera`) : ''].filter(Boolean).join(' · ');
     this.hud.showOutcome(outcome, line, !!s.campaignMission);
   }
 
@@ -2166,7 +2392,7 @@ export class Game {
       }
       case 'itemPicked':
         pos = at(e.unit);
-        text = `${who} ha recuperado los datos`;
+        text = itemPartnerLine(who, this.recoveryItem());
         break;
       case 'hacked':
         if (!e.success) return;
@@ -2264,11 +2490,8 @@ export class Game {
       }
     }
     if (goal) return [{ kind: 'objective', label: 'Objetivo', pos: goal }];
-    if (!m.evacZone.length) return [];
-    const cx = m.evacZone.reduce((sum, t) => sum + t.x, 0) / m.evacZone.length;
-    const cy = m.evacZone.reduce((sum, t) => sum + t.y, 0) / m.evacZone.length;
-    const centre = m.evacZone.reduce((best, t) => (distance(t, { x: cx, y: cy }) < distance(best, { x: cx, y: cy }) ? t : best));
-    return [{ kind: 'evac', label: 'Evacuación', pos: centre }];
+    const bus = this.evacCentre(s);
+    return bus ? [{ kind: 'evac', label: 'Evacuación', pos: bus }] : [];
   }
 
   private showEnemyFile(u: Unit): void {
@@ -2646,12 +2869,13 @@ export class Game {
     }
     const decor = searchSpot(this.state, tile);
     if (!decor) return null;
-    const room = BACKPACK_SLOTS - (u.backpack?.length ?? 0);
+    const slots = u.packSlots ?? BACKPACK_SLOTS;
+    const room = slots - (u.backpack?.length ?? 0);
     return {
       ...base,
-      title: `${def.name} ${SEARCH_SPOTS[decor]?.name ?? 'el mueble'}`,
-      detail: `Mochila: ${room === 1 ? 'queda 1 hueco' : `quedan ${room} huecos`} de ${BACKPACK_SLOTS}`,
-      hint: `Otra vez, Espacio o clic en el mueble: registrar${others ? ` · Tab: ${others === 1 ? 'el otro' : 'otro'} mueble` : ''} · Esc: cancelar`,
+      title: boxTitle(decor),
+      detail: `Mochila: ${room === 1 ? 'queda 1 hueco' : `quedan ${room} huecos`} de ${slots}`,
+      hint: `Otra vez, Espacio o clic en la caja: abrir${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} caja` : ''} · Esc: cancelar`,
     };
   }
 
@@ -2832,6 +3056,120 @@ export class Game {
     this.targetId = null;
   }
 
+  // ============================================================ evacuation
+
+  /** The evacuation zone's middle tile (where La Mula waits), or null on a map without one. */
+  private evacCentre(s: GameState): Vec2 | null {
+    const zone = s.mission.evacZone;
+    if (!zone.length) return null;
+    const mid = { x: zone.reduce((sum, t) => sum + t.x, 0) / zone.length, y: zone.reduce((sum, t) => sum + t.y, 0) / zone.length };
+    return zone.reduce((best, t) => (distance(t, mid) < distance(best, mid) ? t : best));
+  }
+
+  /** Where the bus stands: the middle of its bay (mission.evacBus), else the evacuation zone's (it waits just off the edge by it). */
+  private busTile(s: GameState): Vec2 | null {
+    const bay = s.mission.evacBus?.tiles;
+    if (!bay?.length) return this.evacCentre(s);
+    const mid = { x: bay.reduce((sum, t) => sum + t.x, 0) / bay.length, y: bay.reduce((sum, t) => sum + t.y, 0) / bay.length };
+    return bay.reduce((best, t) => (distance(t, mid) < distance(best, mid) ? t : best));
+  }
+
+  /** The bus pulls away with its engine (doors, lights, off the map: mapView.busDeparts), seen whole before the report. */
+  private async busLeaves(at: Vec2): Promise<void> {
+    this.sfx.vehicle(tileToWorld(at));
+    await this.mapView.busDeparts();
+  }
+
+  /** What leaving now costs, for Lore's words: a Limpieza, the objective, and who would stay outside. */
+  private evacSituation(s: GameState): EvacSituation {
+    return {
+      clearing: s.mission.kind === 'elimination',
+      ready: evacWins(s),
+      left: s.units.filter((u) => u.alive && u.team === 'xcom' && !inEvacZone(s, u.pos)).map((u) => u.name),
+    };
+  }
+
+  /** Leaving loses the mission or somebody: the button to leave is red. */
+  private evacCostly(o: EvacSituation): boolean {
+    return o.clearing || !o.ready || o.left.length > 0;
+  }
+
+  /**
+   * The partner whose yes leaving needs (Sim.callEvac): still on the field,
+   * and connected or dropped within the server's reconnection grace (its
+   * activeSlots, room.ts RECONNECT_GRACE_MS). Past it, the bus leaves alone.
+   */
+  private evacPartner(): PlayerInfo | undefined {
+    const now = performance.now();
+    const p = this.players.find((q) => q.slot !== this.mySlot && (q.connected || now - (this.droppedAt.get(q.slot) ?? -Infinity) < RECONNECT_GRACE_MS));
+    return p && this.state.units.some((u) => u.alive && u.team === 'xcom' && u.owner === p.slot) ? p : undefined;
+  }
+
+  /** Our soldiers in La Mula, on the state orders go by. */
+  private mineAboard(): Unit[] {
+    const s = this.state;
+    return s.units.filter((u) => u.alive && this.isMine(u) && inEvacZone(s, u.pos));
+  }
+
+  /**
+   * The evacuation button (P1): while one of ours is in La Mula, or the
+   * partner's call waits for an answer; resting while ours waits for theirs.
+   */
+  private evacButtonView(): EvacButtonView | null {
+    const s = this.state;
+    if (!this.canAct() || !s.mission.evacZone.length) return null;
+    const call = s.evacCall;
+    const theirs = !!call && call.by !== this.mySlot;
+    const aboard = this.mineAboard().length;
+    if (!aboard && !theirs) return null;
+    const label = s.mission.kind === 'elimination' ? 'RETIRARSE' : 'EVACUAR';
+    const clock = !!deadlineOf('evac');
+    if (call?.by === this.mySlot) return { label, detail: evacWaiting(this.playerName(this.mySlot === 0 ? 1 : 0)), waiting: true, clock };
+    if (call && theirs) return { label, detail: `${this.playerName(call.by)} lo pide`, waiting: false, clock };
+    const squad = s.units.filter((u) => u.alive && u.team === 'xcom');
+    const inside = squad.filter((u) => inEvacZone(s, u.pos)).length;
+    return { label, detail: `${inside} de ${squad.length} dentro`, waiting: false };
+  }
+
+  private evacButton(): void {
+    const call = this.state.evacCall;
+    if (call && call.by !== this.mySlot) this.askEvac(call.by);
+    else this.promptEvac();
+  }
+
+  /** Leave or wait, from one of ours in La Mula (`from`, or any): what leaving costs first, then the answer. */
+  private promptEvac(from?: string): void {
+    const s = this.state;
+    if (!this.canAct() || s.evacCall) return;
+    const aboard = this.mineAboard();
+    const u = aboard.find((o) => o.id === from) ?? aboard[0];
+    if (!u) return;
+    const asks = this.evacPartner()?.name ?? null;
+    const o = this.evacSituation(s);
+    const p = evacPrompt(o, asks);
+    this.hud.evacDialog({ title: p.title, text: p.text, go: p.go, wait: p.wait, costly: this.evacCostly(o) }, () => this.send({ type: 'evac', unit: u.id }), () => {});
+  }
+
+  /** The partner asks to leave: the same stakes, and «Salir» or «Esperar» (Esc). */
+  private askEvac(by: Slot): void {
+    const o = this.evacSituation(this.state);
+    const a = evacAsk(this.playerName(by), o);
+    this.hud.evacDialog(
+      { title: a.title, text: a.text, go: a.accept, wait: a.refuse, costly: this.evacCostly(o) },
+      () => this.send({ type: 'evacAnswer', accept: true }),
+      () => this.send({ type: 'evacAnswer', accept: false }),
+    );
+  }
+
+  /** Once the queue has played: one of ours walked into La Mula, so leave or wait (P1). */
+  private offerEvac(): void {
+    const id = this.evacArrived;
+    this.evacArrived = null;
+    if (!id || this.hud.covered || this.state.evacCall) return;
+    const u = getUnit(this.state, id);
+    if (u?.alive && inEvacZone(this.state, u.pos)) this.promptEvac(id);
+  }
+
   /** Morse on the radio in story chapters: when the squad lands and when the objective is done. */
   private storyRadio(moment: 'start' | 'objective'): void {
     const chapter = this.state.campaignMission?.story;
@@ -2843,39 +3181,44 @@ export class Game {
   /** What a recovery carries out: story chapters and side quests name it ("las cintas"). */
   private recoveryItem(): string {
     const cm = this.state.campaignMission;
-    return cm?.item || (cm?.story && STORY[cm.story - 1]?.item) || 'los datos';
+    return cm?.item || (cm?.story && STORY[cm.story - 1]?.item) || DEFAULT_ITEM;
   }
 
   private missionView(): MissionView {
     const s = this.view;
     const m = s.mission;
-    const after = 'eliminad a los hostiles o evacuad';
     let objective = 'Eliminad a todos los hostiles';
     let objectiveTip: string | undefined;
     switch (m.kind) {
       case 'recovery': {
         const carrier = m.item?.carrier ? getUnit(s, m.item.carrier) : undefined;
         const item = this.recoveryItem();
+        // Lore's words for each moment of the item (playtest 14/10 #23).
         objective = m.item?.evacuated
-          ? `${capitalize(item)} a salvo: evacuad al resto`
-          : carrier
-            ? `Llevad ${item} (${carrier.name}) a la zona de evacuación`
-            : `Recuperad ${item} y evacuad`;
+          ? itemObjective(item, 'out')
+          : carrier?.alive && inEvacZone(s, carrier.pos)
+            ? itemObjective(item, 'aboard')
+            : carrier
+              ? itemObjective(item, 'carried', carrier.name)
+              : itemObjective(item, 'loose');
         break;
       }
       case 'sabotage':
-        objective = m.objectiveDone ? `Sirena callada: ${after}` : 'Callad la sirena';
+        objective = m.objectiveDone ? OBJECTIVE_DONE.sabotage! : 'Callad la sirena';
         break;
       case 'hack':
-        objective = m.objectiveDone ? `Equipo en marcha: ${after}` : 'Arreglad el equipo (junto a él, o con el Grillo del especialista)';
+        objective = m.objectiveDone ? OBJECTIVE_DONE.hack! : 'Arreglad el equipo (junto a él, o con el Grillo del especialista)';
         break;
       case 'rescue': {
         const vip = m.objectiveUnit ? getUnit(s, m.objectiveUnit) : undefined;
+        const who = vip?.name ?? 'el VIP';
         objective = m.objectiveDone
-          ? `${vip?.name ?? 'El VIP'} a salvo: evacuad al resto`
-          : vip?.captive
-            ? `Llegad hasta ${vip.name}`
-            : `Escoltad a ${vip?.name ?? 'el VIP'} hasta la zona de evacuación`;
+          ? vipObjective(who, 'out')
+          : vip?.alive && !vip.captive && inEvacZone(s, vip.pos)
+            ? vipObjective(who, 'aboard')
+            : vip?.captive
+              ? vipObjective(who, 'captive')
+              : vipObjective(who, 'loose');
         break;
       }
       case 'scavenge': {
@@ -2936,6 +3279,7 @@ export class Game {
     const mode = this.enemyTurnPlaying() ? 'enemy' : !this.canAct() ? 'disabled' : ready ? 'ready' : !mine ? 'waiting' : this.endArmed && idle ? 'confirm' : 'act';
     const detail = mode === 'confirm' ? `${idle} ${idle === 1 ? 'soldado' : 'soldados'} con acciones` : !mine && !ready ? this.playerName(s.command) : waiting;
     this.hud.setEndTurn(mode, detail);
+    this.hud.setEvac(this.evacButtonView());
     this.hud.setCommand(sharing && this.canAct() ? { mine, holder: this.playerName(s.command), color: PLAYER_COLORS[s.command ?? this.mySlot], canPass: mine && !s.ready[partner!.slot] && busySlots(s).has(partner!.slot) } : null);
   }
 
@@ -2977,9 +3321,15 @@ export class Game {
     const v = this.view;
     if (TEMPLATES[u.template].team !== 'xcom' || u.template === 'vip' || (!this.hasSpots && !u.backpack?.length)) return null;
     const squad = lootTotals(v.units.filter((o) => o.team === 'xcom' && (o.alive || o.evacuated)).flatMap((o) => o.backpack ?? []));
+    const mine = this.isMine(u) && u.alive && this.canAct();
     return {
       slots: packSlots(u.backpack ?? []),
-      size: BACKPACK_SLOTS,
+      size: u.packSlots ?? BACKPACK_SLOTS,
+      live: mine,
+      labels: (u.backpack ?? []).map((l) => findLabel(l)),
+      names: (u.backpack ?? []).map((l) => lootName(l)),
+      near: v.units.filter((o) => o.id !== u.id && o.alive && o.team === 'xcom' && !o.captive && o.template !== 'vip' && inMeleeReach(v, u.pos, o.pos)).map((o) => ({ id: o.id, name: o.name })),
+      floor: (v.dropped ?? []).filter((d) => samePos(d.pos, u.pos)).map((d) => ({ id: d.id, label: findLabel(d.loot), name: lootName(d.loot), kind: packSlots([d.loot])[0]!.kind })),
       squad: {
         supplies: squad.supplies,
         items: squad.items.length,
@@ -2990,6 +3340,31 @@ export class Game {
         text: haulText(squad) ?? 'La escuadra aún no lleva nada.',
       },
     };
+  }
+
+  // ============================================================ backpack
+
+  /** An order on the selected soldier's backpack or tile (docs/FASE8.md §C); the engine says why not, if not. */
+  private itemOrder(o: ItemOrder): void {
+    const u = this.selectedUnit();
+    if (!u || !this.canAct()) return;
+    this.send({ type: 'item', unit: u.id, ...o });
+    this.refreshStatus();
+  }
+
+  /** The backpack full: leave slot `drop` on the floor, then pick up `take` (settle sends the second half). */
+  private swapItem(take: string, drop: number): void {
+    const u = this.selectedUnit();
+    if (!u || !this.canAct()) return;
+    this.swapTake = { unit: u.id, id: take };
+    this.send({ type: 'item', unit: u.id, action: 'drop', index: drop });
+  }
+
+  /** The notice's «Cambiar»: the soldier on the sheet, its backpack asking what to leave for the find. */
+  private openSwap(unit: string, id: string): void {
+    if (this.selected !== unit) this.select(unit, true);
+    this.hud.openSwap(unit, id);
+    this.refreshStatus();
   }
 
   /** Builds the target panel and draws the aim line for the current target. */
@@ -3181,7 +3556,6 @@ export class Game {
     // And at night, whether it ends in the light.
     const note = [moveNoise(this.state, path ?? [], dest.dash), this.litNote(tile)].filter(Boolean).join(' · ');
     if (note) this.overlays.setNote(tile, note);
-    if (dest.detected) this.tips.redTile();
   }
 
   /** At night a tile in the light is seen from as far as by day (los.ts sightTo, detectionTo): the previews say so. */
@@ -3196,18 +3570,18 @@ export class Game {
       .map((p) => ({ pos: p, kind: wasSearched(this.state, p) ? 'done' : pick && samePlace(pick, p) ? 'pick' : 'open' }));
   }
 
-  /** The pointer on a piece of furniture: marked, named, and whether it can be searched (a click arms Registrar). */
+  /** The pointer on a special box (docs/FASE8.md §B): marked, named, and whether it can be opened (a click arms Abrir). */
   private hoverFurniture(u: Unit, tile: Vec2, decor: DecorKind): void {
-    const name = capitalize(SEARCH_SPOTS[decor]?.name ?? 'el mueble');
+    const name = capitalize(SEARCH_SPOTS[decor]?.name ?? 'la caja');
     if (wasSearched(this.state, tile)) {
       this.overlays.setSpots([{ pos: tile, kind: 'done' }]);
-      this.overlays.setNote(tile, `${name} · ya se ha registrado`);
+      this.overlays.setNote(tile, `${name} · ya está abierta`);
       return;
     }
     const near = this.handTiles('search').some((t) => samePlace(t, tile));
     const blocked = near ? abilityBlocker(this.state, u, 'search') : null;
     this.overlays.setSpots([{ pos: tile, kind: near && !blocked ? 'pick' : 'open' }]);
-    this.overlays.setNote(tile, !near ? `${name} · se puede registrar` : blocked ? `${name} · ${blocked.replace(/\.$/, '').toLowerCase()}` : `${name} · clic: registrar`);
+    this.overlays.setNote(tile, !near ? `${name} · se puede abrir` : blocked ? `${name} · ${blocked.replace(/\.$/, '').toLowerCase()}` : `${name} · clic: abrir`);
   }
 
   /**
@@ -3356,6 +3730,18 @@ export class Game {
 
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e)) return;
+      // The mission's briefing stays until it is closed (playtest 14/10 #3): Enter, Space or Esc close it.
+      if (this.hud.introOpen && (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space' || e.code === 'Escape')) {
+        e.preventDefault();
+        this.hud.closeIntro();
+        return;
+      }
+      // Esc on the evacuation dialog is its «Esperar» (P1); no key leaves.
+      if (this.hud.evacOpen && e.code === 'Escape') {
+        e.preventDefault();
+        this.hud.waitEvac();
+        return;
+      }
       // In the enemy turn the space bar, held, plays it in «Rápida» (docs/UX-RITMO.md); it gives no orders then.
       if (e.code === 'Space' && this.enemyTurnPlaying() && !this.hud.covered) {
         e.preventDefault();

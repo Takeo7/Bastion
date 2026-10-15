@@ -1,7 +1,7 @@
-import type { Tier } from '@bastion/engine';
+import type { Arms, Tier } from '@bastion/engine';
 import type { GaitMotion } from './gaits';
 import type { UnitRig } from './models';
-import type { Stance } from './syntyManifest';
+import type { Stance, WeaponId } from './syntyManifest';
 
 // What a unit's figure answers to (syntyFigures.ts makes them, the unit views
 // pose them every frame): the pose values and the equipment it shows. The
@@ -68,10 +68,29 @@ export interface FigureRig extends UnitRig {
   react?(blow: Blow, strength: number): number | null;
   /** How it stands waiting (syntyManifest.ts STANCES), null the plain idle; on figures that play clips. */
   setStance?(stance: Stance | null): void;
+  /** Hidden by the buildings' cutaway (the unit views set it): what it draws away from its own meshes (the crowd) hides too. */
+  cutAway?: boolean;
+  /** Which of its weapons is in the hand (Armament): the main one, the pistol from its holster, the blade from the belt. */
+  draw?(which: keyof Armament): void;
+  /** Other weapons on it (the engine's weaponEquipped), the main one in the hand. */
+  arm?(a: Armament): void;
 }
 
-/** Equipment tiers a soldier carries (1 when absent): the weapon's and the armour's. */
+/**
+ * The weapons a unit carries, as models (syntyFigures.ts armamentOf): the
+ * main one in the hand; beside it, the pistol in its holster on the right
+ * thigh, drawn for a pistol shot; and at the left hip the knife or the
+ * machete, drawn for a stroke.
+ */
+export interface Armament {
+  weapon: WeaponId | null;
+  sidearm?: WeaponId | null;
+  belt?: WeaponId | null;
+}
+
+/** Equipment tiers a soldier carries (1 when absent): the weapon's and the armour's; and a campaign soldier's own weapons (docs/FASE8.md §A). */
 export interface Gear {
   weapon?: Tier;
   armor?: Tier;
+  arms?: Arms | null;
 }

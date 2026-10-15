@@ -21,9 +21,11 @@ const ROOF = 3;
 const HILL = 4;
 /** A furrow of a ploughed field: one tile wide, along the field. */
 const FURROW = 5;
+/** Tarmac that is not a street (the engine's ground 3: a yard, a forecourt, a car park): no paint on it. */
+const YARD = 6;
 
 /** The floor kinds (GroundMap.kinds), for what dresses the ground (dressing.ts). */
-export const FLOOR = { OPEN, STREET, INDOOR, ROOF, HILL, FURROW } as const;
+export const FLOOR = { OPEN, STREET, INDOOR, ROOF, HILL, FURROW, YARD } as const;
 
 /** Open ground marked as grass in a town (blue channel). */
 const LAWN = 3;
@@ -45,20 +47,23 @@ export class GroundMap {
     const isStreet = (x: number, y: number) =>
       x >= 0 && y >= 0 && x < w && y < h && (s.elev[y * w + x] ?? 0) === 0 && (s.ground ? s.ground[y * w + x] === 1 : generated && w === 36 && (x % 13 >= 10 || y % 13 >= 10));
     const wilds = s.biome === 'wilds';
+    // The forest road and the stop's yards (site roadside, #25): tarmac, the road with a town street's centre line.
+    const tarmac = wilds && s.site === 'roadside';
     const data = new Uint8Array(w * h * 4);
     this.kinds = new Uint8Array(w * h);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
         const e = s.elev[i] ?? 0;
-        let kind = e > 0 ? (wilds ? HILL : ROOF) : s.ground?.[i] === 2 ? INDOOR : isStreet(x, y) ? STREET : OPEN;
+        let kind = e > 0 ? (wilds ? HILL : ROOF) : s.ground?.[i] === 2 ? INDOOR : s.ground?.[i] === 3 ? YARD : isStreet(x, y) ? STREET : OPEN;
         let axis = 0;
         let offset = 0;
-        if (kind === STREET && wilds) {
-          // A one-tile strip in the wilds is a furrow of a field, not the track.
-          if (!isStreet(x, y - 1) && !isStreet(x, y + 1) && (isStreet(x - 1, y) || isStreet(x + 1, y))) [kind, axis] = [FURROW, 1];
-          else if (!isStreet(x - 1, y) && !isStreet(x + 1, y) && (isStreet(x, y - 1) || isStreet(x, y + 1))) [kind, axis] = [FURROW, 2];
-        } else if (kind === STREET) {
+        // A one-tile strip in the wilds is a furrow of a field, not the track.
+        const furrowX = wilds && !isStreet(x, y - 1) && !isStreet(x, y + 1) && (isStreet(x - 1, y) || isStreet(x + 1, y));
+        const furrowZ = wilds && !isStreet(x - 1, y) && !isStreet(x + 1, y) && (isStreet(x, y - 1) || isStreet(x, y + 1));
+        if (kind === STREET && (furrowX || furrowZ)) {
+          [kind, axis] = [FURROW, furrowX ? 1 : 2];
+        } else if (kind === STREET && (!wilds || tarmac)) {
           // Centre line of a street two to four tiles wide, away from crossings.
           const run = (dx: number, dy: number) => {
             let n = 0;
@@ -96,7 +101,7 @@ export class GroundMap {
     const far = new Array<number>(w * h).fill(99);
     const queue: number[] = [];
     for (let i = 0; i < w * h; i++) {
-      if (this.kinds[i] === STREET) {
+      if (this.kinds[i] === STREET || this.kinds[i] === YARD) {
         far[i] = 0;
         queue.push(i);
       }
@@ -171,6 +176,7 @@ export class GroundMap {
       groundMap: { value: this.texture },
       groundSize: { value: new THREE.Vector2(this.s.width, this.s.height) },
       gBiome: { value: biome },
+      gTarmac: { value: this.s.biome === 'wilds' && this.s.site === 'roadside' ? 1 : 0 },
       tAsphalt: { value: terrainTexture('asphalt') },
       tGrass: { value: terrainTexture('grass') },
       tDirt: { value: terrainTexture('dirt') },
@@ -280,6 +286,7 @@ const SYNTY_GROUND_GLSL = /* glsl */ `
   uniform sampler2D groundMap;
   uniform vec2 groundSize;
   uniform float gBiome;
+  uniform float gTarmac;
   uniform sampler2D tAsphalt;
   uniform sampler2D tGrass;
   uniform sampler2D tDirt;
@@ -415,7 +422,8 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
         c = mix(c, sMoss * (0.8 + 0.4 * sNoise(p * 6.0)), mossy * 0.85 * (1.0 - lawn));
         float kerb = 1.0 - smoothstep(0.105, 0.125, ds);
         c = mix(c, sKerb * (0.82 + 0.18 * smoothstep(0.0, 0.03, ds)) * (0.96 + 0.06 * mid), kerb);
-      } else if (k < 1.5) {
+      } else if (k < 1.5 || k > 5.5) {
+        // A street, or a yard's tarmac (no paint on it).
         c = asphalt;
         // Repairs, a gutter by the kerb, the centre line, cracks.
         c *= 1.0 - 0.09 * smoothstep(0.6, 0.62, sNoise(floor(p * 1.3) * 0.41 + 9.0) * 0.7 + sNoise(p * 0.5) * 0.3);
@@ -427,7 +435,7 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
         c = mix(c, sPaint, sLine(p, t, own) * 0.9);
         // Zebra crossing: bars along the street, across its width, worn in places.
         float zebra = floor(own.b * 255.0 + 0.5);
-        if (zebra > ${CROSSWALK - 0.5}) {
+        if (k < 1.5 && zebra > ${CROSSWALK - 0.5}) {
           vec2 zl = p - vec2(t);
           float across = zebra < ${CROSSWALK + 0.5} ? p.y : p.x;
           float inTile = zebra < ${CROSSWALK + 0.5} ? zl.x : zl.y;
@@ -444,10 +452,25 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
     } else if (gBiome < 1.5) {
       // Grass, a dirt track with wandering edges, ploughed fields.
       c = grass;
-      float track = smoothstep(0.36, 0.64, sMask(p + warp, 1.0, level) + (mid - 0.5) * 0.35);
-      c = mix(c, dirt, track);
+      // Tarmac (#25): the yards (a forecourt, a car park, a sawmill's yard), and at the forest stop its road.
+      float m = sMask(p + warp * 0.2, 6.0, level) + gTarmac * sMask(p + warp * 0.2, 1.0, level);
+      float road = smoothstep(0.42, 0.52, m);
+      if (gTarmac < 0.5) {
+        float track = smoothstep(0.36, 0.64, sMask(p + warp, 1.0, level) + (mid - 0.5) * 0.35);
+        c = mix(c, dirt, track);
+      }
+      if (m > 0.001) {
+        // On a gravel verge, worn, cracked and dusty; a centre line down the road where it runs straight.
+        c = mix(c, dirt * 0.88, smoothstep(0.2, 0.38, m));
+        vec3 tar = asphalt * (1.0 - 0.16 * smoothstep(0.62, 0.8, sFbm(p * 0.7 + 41.0)));
+        tar = mix(tar, sPaint, sLine(p, t, own) * 0.85);
+        float crack = 1.0 - smoothstep(0.025, 0.045, sCrack(p * 0.9 + 3.0));
+        tar *= 1.0 - 0.32 * crack * smoothstep(0.54, 0.7, sFbm(p * 0.22 + 61.0));
+        tar = mix(tar, sDust * 0.8 * (0.9 + 0.2 * sNoise(p * 3.0)), smoothstep(0.6, 0.8, sFbm(p * 0.35 + 83.0)) * 0.4);
+        c = mix(c, tar, road);
+      }
       // Worn ground: bare patches here and there.
-      c = mix(c, dirt * 0.95, smoothstep(0.7, 0.78, sFbm(p * 0.45 + 41.0)) * 0.8);
+      c = mix(c, dirt * 0.95, smoothstep(0.7, 0.78, sFbm(p * 0.45 + 41.0)) * 0.8 * (1.0 - road));
       float rows = 0.0;
       float axis = 0.0;
       for (int y = -1; y <= 1; y++) {
@@ -458,7 +481,7 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
           axis = floor(sTile(n).b * 255.0 + 0.5);
         }
       }
-      if (k > 4.5 || rows > 1.5) {
+      if (abs(k - 5.0) < 0.5 || rows > 1.5) {
         float across = axis < 1.5 ? p.y : p.x;
         float ridge = smoothstep(0.2, 0.5, abs(fract(across * 2.5) - 0.5) * 2.0);
         c = dirt * (0.72 + 0.3 * ridge) * (0.95 + 0.1 * mid);
@@ -471,7 +494,7 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
         float joint = max(step(sf.x, 0.035), step(sf.y, 0.035));
         c = sConcrete * (0.95 + 0.08 * sHash(floor(sp))) * (0.93 + 0.1 * big) * (1.0 - 0.2 * joint);
         c *= 1.0 - 0.3 * smoothstep(0.72, 0.8, sFbm(p * 0.6 + 23.0));
-      } else if (k < 1.5) {
+      } else if (k < 1.5 || k > 5.5) {
         c = asphalt * 1.08;
         float dk = sNear(p, t, 0.0, level);
         // A yellow line along the yard's edge, and down its middle.
@@ -493,17 +516,20 @@ const COVER: Record<Biome, Partial<Record<number, [PropId, number][]>>> = {
     [OPEN]: [['papers', 0.06], ['pebbles', 0.09], ['trash', 0.025]],
     [LAWN + 10]: [['tuftLow', 0.6], ['tuft', 0.25], ['flowers', 0.06]],
     [STREET]: [['papers', 0.045], ['pebbles', 0.07], ['trash', 0.02]],
+    [YARD]: [['papers', 0.04], ['pebbles', 0.08], ['trash', 0.02]],
     [ROOF]: [['pebbles', 0.08], ['papers', 0.02]],
   },
   wilds: {
     [OPEN]: [['tuft', 0.55], ['tuftLow', 0.75], ['tuftWide', 0.3], ['flowers', 0.12], ['pebbles', 0.06]],
     [STREET]: [['pebbles', 0.18], ['tuftLow', 0.12]],
+    [YARD]: [['pebbles', 0.08], ['papers', 0.02], ['tuftLow', 0.04]],
     [HILL]: [['tuft', 0.5], ['tuftLow', 0.5], ['pebbles', 0.08]],
     [FURROW]: [['pebbles', 0.05]],
   },
   facility: {
     [OPEN]: [['papers', 0.03], ['pebbles', 0.07], ['grassBlob', 0.03]],
     [STREET]: [['papers', 0.02], ['pebbles', 0.05]],
+    [YARD]: [['papers', 0.02], ['pebbles', 0.05]],
     [ROOF]: [['pebbles', 0.05]],
   },
 };
@@ -519,7 +545,8 @@ const COVER: Record<Biome, Partial<Record<number, [PropId, number][]>>> = {
 export function scatterCover(s: GameState, ground: GroundMap, density = 1): { id: PropId; matrix: THREE.Matrix4 }[] {
   const out: { id: PropId; matrix: THREE.Matrix4 }[] = [];
   const { width: w, height: h } = s;
-  const plan = COVER[s.biome] ?? COVER.city;
+  // On the forest road's tarmac (#25), what a town's street has.
+  const plan = s.biome === 'wilds' && s.site === 'roadside' ? { ...COVER.wilds, [STREET]: COVER.city[STREET]! } : (COVER[s.biome] ?? COVER.city);
   const decor = s.decor ?? [];
   const data = ground.texture.image.data as Uint8Array;
   const at = (x: number, y: number): TileKind | null => (x < 0 || y < 0 || x >= w || y >= h ? null : s.tiles[y * w + x]!);

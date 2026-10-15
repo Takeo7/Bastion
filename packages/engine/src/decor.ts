@@ -47,6 +47,17 @@ const IDS: Record<DecorKind, number> = {
   rubble: 31,
   stairs: 32,
   breach: 33,
+  lootWeapons: 34,
+  lootMedical: 35,
+  lootAmmo: 36,
+  lootFood: 37,
+  bus: 38,
+  truck: 39,
+  logPile: 40,
+  waterTower: 41,
+  container: 42,
+  sign: 43,
+  wire: 44,
 };
 
 const KINDS: DecorKind[] = [];

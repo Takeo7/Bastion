@@ -78,6 +78,7 @@ const ICONS: Record<AbilityId, string> = {
   evac,
   hack: chip,
   search: magnifier,
+  searchRoom: magnifier,
   openDoor: doorOpenIcon,
   closeDoor: doorShutIcon,
   runAndGun: dash,

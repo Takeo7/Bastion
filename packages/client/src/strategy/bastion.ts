@@ -25,6 +25,7 @@ import { graphics } from '../settings';
 import { terrainFile, type BaseModelId } from '../game/syntyManifest';
 import { BASE_OCCLUSION, baseMaterial, baseTexture, KitBatch, kitMesh, kitModel, loadBaseKit, type Put } from './baseKit';
 import { skyTexture, type Shot, type StageMood, type StageSet } from './stage';
+import { buildMula } from './mula';
 
 // The Bastion on the surface, seen from above at an angle: Atalaya, an old
 // civil-defence station high in the snow, in Synty's low-poly models. A 7×7
@@ -746,7 +747,7 @@ const SHORT_NAMES: Partial<Record<FacilityId, string>> = {
   training: 'Entrenamiento',
   relay: 'Comunicaciones',
   simulation: 'Mapas',
-  garage: 'La Mula',
+  garage: 'Chapistería',
   listening: 'Escucha',
   crew: 'Brigada',
 };
@@ -1213,98 +1214,25 @@ export class BastionSet implements StageSet {
     this.buildBus(shell);
   }
 
-  /**
-   * La Mula (LORE: an armoured city bus): POLYGON Town's bus with steel plates
-   * bolted over its windows, slits to see through, plates on the roof. Its
-   * doors and wheels are parts of their own, so they move.
-   */
+  /** La Mula (mula.ts) in the hangar, nose east and doors south, and where the squad boards it. */
   private buildBus(shell: THREE.Group): void {
-    const model = kitModel('mulaBus');
-    if (!model) return;
+    const mula = buildMula();
+    if (!mula) return;
+    const { body, doors, wheels, wheelRadius, lights, doorCentres, size } = mula;
     const root = new THREE.Group();
-    const body = new THREE.Group();
     // Its nose is +z and its doors on its −x side as it comes: turned, nose east and doors south.
     body.rotation.y = Math.PI / 2;
     body.scale.setScalar(BUS_SCALE);
     root.add(body);
-    const doors: BusRig['doors'] = [];
-    const wheels: THREE.Object3D[] = [];
-    let wheelRadius = 0.35;
-    const doorCentres: THREE.Vector3[] = [];
-    // The body, its glass and its plates stand still on it: merged, they move with it.
-    const statics = new StaticBatch(50);
-    statics.begin(null);
-    const still = new THREE.Matrix4();
-    for (const part of kitMesh('mulaBus', 'plain').children.slice()) {
-      const mesh = part as THREE.Mesh;
-      mesh.geometry.computeBoundingBox();
-      const bb = mesh.geometry.boundingBox!;
-      const centre = bb.getCenter(new THREE.Vector3());
-      if (/wheel/i.test(mesh.name)) {
-        // Turned about its own axle.
-        const hub = new THREE.Group();
-        hub.position.copy(centre);
-        const spun = mesh.clone();
-        spun.geometry = mesh.geometry.clone().translate(-centre.x, -centre.y, -centre.z);
-        hub.add(spun);
-        body.add(hub);
-        wheels.push(hub);
-        wheelRadius = (bb.max.y - bb.min.y) / 2;
-      } else if (/door/i.test(mesh.name)) {
-        const leaf = new THREE.Group();
-        leaf.add(mesh);
-        body.add(leaf);
-        const width = bb.max.z - bb.min.z;
-        // A leaf folds inside, along the bus away from its doorway's middle.
-        const along = Number(/Door_0(\d)/.exec(mesh.name)?.[1] ?? 1) % 2 ? 1 : -1;
-        doors.push({ leaf, shut: new THREE.Vector3(), open: new THREE.Vector3(0.14, 0, along * width * 0.85) });
-        if (!/glass/i.test(mesh.name)) doorCentres.push(centre);
-      } else statics.add(mesh.geometry, mesh.material as THREE.Material, still, true, undefined, false);
-    }
-    // (A leaf's glass is a mesh of its own: its name gives it the same offset, so both move alike.)
-    // Steel plates over the windows, both sides, leaving the doorways open.
-    const glass = model.parts.find((p) => /^SM_Veh_Bus_Glass/i.test(p.name));
-    const band = new THREE.Box3();
-    glass?.geometry.computeBoundingBox();
-    if (glass?.geometry.boundingBox) band.copy(glass.geometry.boundingBox);
-    else band.set(new THREE.Vector3(-1.1, 1.0, -3.6), new THREE.Vector3(1.1, 1.8, 3.4));
-    const plates = new KitBatch();
-    const windowY = (band.min.y + band.max.y) / 2 + 0.05;
-    const plateH = (kitModel('plateSlit')?.size.y ?? 0.45) * 1.15;
-    const sy = Math.max(1, (band.max.y - band.min.y) / plateH);
-    const halfW = model.size.x / 2 + 0.02;
-    const inDoorway = (z: number) => doorCentres.some((c) => Math.abs(c.z - z) < 0.75);
-    for (let z = band.min.z + 0.35; z < band.max.z - 0.2; z += 0.68) {
-      for (const side of [-1, 1]) {
-        if (side < 0 && inDoorway(z)) continue;
-        plates.put(Math.round(z * 3) % 3 ? 'plate' : 'plateSlit', { x: side * halfW, y: windowY - 0.25 * sy, z, s: 1.15, sy, finish: 'plain' });
-      }
-    }
-    // The windscreen half covered, a slit to drive by; plates on the roof.
-    const nose = model.size.z / 2 + 0.03;
-    for (const x of [-0.55, 0.55]) plates.put('plateSlit', { x, y: windowY - 0.35, z: nose - 0.15, yaw: Math.PI / 2, s: 1.3, finish: 'plain' });
-    for (let z = -2.6; z <= 2.6; z += 1.3) plates.put('plateRoof', { x: (Math.round(z) % 2) * 0.2, y: model.size.y + 0.01, z, yaw: 0.05 * z, s: 1.1 });
-    plates.addTo(statics);
-    statics.commit();
-    body.add(statics.group);
-    // Headlights, off while parked.
-    const lights = new THREE.MeshStandardMaterial({ color: 0x2a2a20, emissive: 0xfff2c0, emissiveIntensity: 0.2 });
-    for (const x of [-0.75, 0.75]) {
-      const lamp = new THREE.Mesh(UNIT, lights);
-      lamp.scale.set(0.28, 0.14, 0.05);
-      lamp.position.set(x, 0.55, nose + 0.01);
-      body.add(lamp);
-    }
     root.position.set(HANGAR.x + BUS_X, FLOOR, HANGAR.z + BUS_Z);
     shell.add(root);
     root.updateMatrixWorld(true);
     // Boarding points, in the hangar's space: in front of each doorway on the floor, and just inside it.
     const boarding = doorCentres.map((c) => {
-      const outside = body.localToWorld(new THREE.Vector3(-model.size.x / 2 - 0.55, 0, c.z)).sub(HANGAR);
-      const inside = body.localToWorld(new THREE.Vector3(-model.size.x / 2 + 0.5, 0.45, c.z)).sub(HANGAR);
+      const outside = body.localToWorld(new THREE.Vector3(-size.x / 2 - 0.55, 0, c.z)).sub(HANGAR);
+      const inside = body.localToWorld(new THREE.Vector3(-size.x / 2 + 0.5, 0.45, c.z)).sub(HANGAR);
       return { foot: outside.setY(FLOOR), inside };
     });
-    for (const d of doors) d.shut.copy(d.leaf.position);
     this.bus = { root, doors, wheels, wheelRadius: wheelRadius * BUS_SCALE, lights, boarding };
   }
 

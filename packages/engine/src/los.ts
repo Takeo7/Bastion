@@ -9,6 +9,7 @@ import {
   EYE_HEIGHT,
   heightAt,
   inBounds,
+  isWindow,
   kindAt,
   levelCount,
   nodeOf,
@@ -24,10 +25,18 @@ import {
 import type { GameState, Place, Pos, Unit, Vec2 } from './types';
 
 /**
+ * The most windows a line of sight goes through (playtest 2026-10-14): out of
+ * a building or into it, and at most across one from window to window, never
+ * on through the next.
+ */
+export const MAX_WINDOWS_SEEN_THROUGH = 2;
+
+/**
  * Whether a line from `a`, `ha` storeys up, to `b`, `hb` up (by default a
  * unit's eyes and the body of whoever stands there, on their levels), sees
  * through: on a map with storeys, through floors and ceilings only where they
  * have a hole (lineThroughStoreys); without them, as it always did (lineFlat).
+ * Either way, through MAX_WINDOWS_SEEN_THROUGH windows at most.
  */
 export function lineClear(s: GameState, a: Place, b: Place, ha = heightAt(s, toPos(a)) + EYE_HEIGHT, hb = heightAt(s, toPos(b)) + BODY_HEIGHT): boolean {
   return s.levels ? lineThroughStoreys(s, a, b, ha, hb) : lineFlat(s, a, b, ha, hb);
@@ -69,6 +78,7 @@ function lineFlat(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number): boole
   let y = a.y;
   let ix = 0;
   let iy = 0;
+  let windows = 0;
 
   while (ix < nx || iy < ny) {
     const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
@@ -87,6 +97,9 @@ function lineFlat(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number): boole
     }
     if (x === b.x && y === b.y) return !throughRoof(x, y, hb);
     if (blocks(x, y) || throughRoof(x, y, lineAt(x, y))) return false;
+    // A window counts where the line goes through it, on the ground floor (not over its roof).
+    const i = y * s.width + x;
+    if (isWindow(s.tiles[i]!) && lineAt(x, y) < (s.elev[i] ?? 0) + 1 && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
   }
   return true;
 }
@@ -123,6 +136,7 @@ function lineThroughStoreys(s: GameState, a: Vec2, b: Vec2, ha: number, hb: numb
   let y = a.y;
   let ix = 0;
   let iy = 0;
+  let windows = 0;
   while (ix < nx || iy < ny) {
     const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
     if (decision === 0) {
@@ -158,6 +172,9 @@ function lineThroughStoreys(s: GameState, a: Vec2, b: Vec2, ha: number, hb: numb
     }
     if (end) return true;
     if (opaqueAtIndex(s, i, h)) return false;
+    // A window on the floor the line crosses at: the ground's within its first storey, else that storey's.
+    const k = Math.floor(h + 1e-6);
+    if (isWindow(h < (s.elev[i] ?? 0) + 1 ? s.tiles[i]! : k >= 1 ? (levels[k - 1]?.tiles[i] ?? null) : null) && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
     pi = i;
     ph = h;
   }
@@ -353,13 +370,23 @@ interface SightGrid {
   ground: Float64Array;
   top: Float64Array;
   slab: Uint8Array;
+  /** By level (the ground first) and tile, a window there (MAX_WINDOWS_SEEN_THROUGH). */
+  window: Uint8Array;
+  /** By tile, the ground's elevation: its windows count below one storey over it. */
+  elev: Float64Array;
 }
 
 function sightGrid(s: GameState): SightGrid {
   const area = s.width * s.height;
   const n = s.levels?.length ?? 0;
   const ground = new Float64Array(area);
-  for (let i = 0; i < area; i++) ground[i] = (s.elev[i] ?? 0) + obstacleHeight(s.tiles[i]!);
+  const window = new Uint8Array(area * (n + 1));
+  const elev = new Float64Array(area);
+  for (let i = 0; i < area; i++) {
+    elev[i] = s.elev[i] ?? 0;
+    ground[i] = elev[i]! + obstacleHeight(s.tiles[i]!);
+    if (isWindow(s.tiles[i]!)) window[i] = 1;
+  }
   const top = new Float64Array(area * n).fill(-Infinity);
   const slab = new Uint8Array(area * n);
   for (let k = 1; k <= n; k++) {
@@ -369,9 +396,10 @@ function sightGrid(s: GameState): SightGrid {
       if (kind === null) continue;
       top[(k - 1) * area + i] = k + obstacleHeight(kind);
       slab[(k - 1) * area + i] = 1;
+      if (isWindow(kind)) window[k * area + i] = 1;
     }
   }
-  return { ground, top, slab };
+  return { ground, top, slab, window, elev };
 }
 
 /** opaqueAtIndex on a SightGrid (`n` storeys of `area` tiles). */
@@ -384,7 +412,7 @@ function gridOpaque(ground: Float64Array, top: Float64Array, area: number, n: nu
 
 /** lineThroughStoreys from tile (ax, ay) to (bx, by) on a SightGrid, step for step. */
 function gridLine(g: SightGrid, w: number, area: number, n: number, ax: number, ay: number, bx: number, by: number, ha: number, hb: number): boolean {
-  const { ground, top, slab } = g;
+  const { ground, top, slab, window, elev } = g;
   if (ax === bx && ay === by) {
     const lo = Math.min(ha, hb);
     const hi = Math.max(ha, hb);
@@ -405,6 +433,7 @@ function gridLine(g: SightGrid, w: number, area: number, n: number, ax: number, 
   let y = ay;
   let ix = 0;
   let iy = 0;
+  let windows = 0;
   while (ix < nx || iy < ny) {
     const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
     if (decision === 0) {
@@ -439,6 +468,8 @@ function gridLine(g: SightGrid, w: number, area: number, n: number, ax: number, 
     }
     if (end) return true;
     if (gridOpaque(ground, top, area, n, i, h)) return false;
+    const k = h < elev[i]! + 1 ? 0 : Math.floor(h + 1e-6);
+    if (k <= n && window[k * area + i] && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
     pi = i;
     ph = h;
   }

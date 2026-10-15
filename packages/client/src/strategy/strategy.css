@@ -1116,6 +1116,96 @@ dl.briefing {
 
 /* --------------------------------------------------------------- armory */
 
+/* A weapon's silhouette (strategy/arms.ts), by the kind of weapon it fires; the packs' icons as masks, in the
+   text's colour. The shotgun and the knife are Arte's renders of the game's own models (r-escopeta, r-cuchillo). */
+.wpn {
+  --wpn: url('/ui/synty/icons/rifle.webp');
+  display: inline-block;
+  width: 30px;
+  height: 15px;
+  margin-right: 7px;
+  vertical-align: -3px;
+  background: currentColor;
+  -webkit-mask: var(--wpn) center / contain no-repeat;
+  mask: var(--wpn) center / contain no-repeat;
+}
+
+.wpn[data-weapon='shotgun'] {
+  --wpn: url('/ui/synty/icons/r-escopeta.webp');
+}
+
+.wpn[data-weapon='sniper'] {
+  --wpn: url('/ui/synty/icons/sniper.webp');
+  width: 34px;
+}
+
+.wpn[data-weapon='cannon'] {
+  --wpn: url('/ui/synty/icons/mh-machinegun.webp');
+  width: 32px;
+}
+
+.wpn[data-weapon='pistol'] {
+  --wpn: url('/ui/synty/icons/pistol.webp');
+}
+
+.wpn:is([data-weapon='sword'], [data-weapon='knife']) {
+  --wpn: url('/ui/synty/icons/mh-machete.webp');
+}
+
+.wpn[data-weapon='knife'] {
+  --wpn: url('/ui/synty/icons/r-cuchillo.webp');
+  width: 18px;
+}
+
+.wpn[data-weapon='ammo'] {
+  --wpn: url('/ui/synty/icons/mh-bullets.webp');
+  width: 20px;
+}
+
+/* Where a weapon goes, beside it in the lists: «Mano» or «Cinto». */
+.x-place {
+  margin-right: 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+/* A soldier's arms (strategy/arms.ts): the hand and the belt side by side, each with its weapon. */
+.x-loadout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
+
+.ld-cell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 2px;
+  padding: 5px 8px;
+  border: 1px dashed var(--x-line);
+}
+
+.ld-where {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.ld-cell b {
+  font-size: 13.5px;
+}
+
+.ld-note {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--x-muted);
+}
+
 /* Árbol de habilidades: aptitudes typed in boxes on the left; the tree itself is skillTree.css. */
 .strat-modal .x-panel.wide.service {
   width: min(1180px, calc(96vw / var(--ui-scale, 1)));
@@ -1329,6 +1419,26 @@ dl.briefing {
 
 .event-option small {
   color: var(--x-muted);
+}
+
+/* The option on the table (playtest 2026-10-14): lit, while the others wait dimmed. */
+.event-option.proposed:disabled {
+  opacity: 1;
+  outline: 3px solid var(--x-warn);
+  outline-offset: 2px;
+}
+
+/* Answering the partner's choice, or withdrawing one's own, right in the event window. */
+.event-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-answer p {
+  flex: 1 1 100%;
+  margin: 0;
 }
 
 .strat-toast {
@@ -1900,6 +2010,15 @@ dl.briefing {
 }
 
 /* Unlocks: symbol, name, one-line effect, and the price tag under it. */
+/* A level's unlocks in its alert (playtest 14/10 #20): one per line with its icon, as in the Diario. */
+.alert-unlocks {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0 4px;
+  max-height: min(320px, 40vh);
+  overflow-y: auto;
+}
+
 .x-row.unlock {
   grid-template-columns: 4px 16px 1fr;
 }
@@ -2416,6 +2535,20 @@ dl.x-pairs dd {
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+.proposal-kicker {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--stamp);
+}
+
+.proposal-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .proposal-detail {

@@ -254,6 +254,83 @@
   box-shadow: var(--m-sink), inset 0 0 0 1px rgba(197, 140, 255, 0.65), 0 0 8px rgba(197, 140, 255, 0.35);
 }
 
+/* The backpack's menu (docs/FASE8.md §C): a steel plate over the backpack, an order per row, its cost small
+   at the end; the main order (equip, use) lit. What lies on the floor: dashed slips in the accent. */
+:root[data-ui='mixta'] :is(.pack-slot-btn:hover, .pack-slot-btn.open) .pack-slot {
+  outline: 0;
+  box-shadow: var(--m-sink), inset 0 -2px 0 color-mix(in srgb, var(--c, transparent) 70%, transparent), 0 0 0 1px var(--t-accent);
+}
+
+:root[data-ui='mixta'] .pack-menu {
+  min-width: 230px;
+  padding: 8px;
+  border-radius: 2px;
+  background: var(--m-rivets), var(--t-sheet);
+  box-shadow: var(--t-sheet-shadow), 0 10px 24px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-ui='mixta'] .pack-menu-head b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .pack-menu-x {
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .pack-act {
+  background: var(--m-plate);
+  box-shadow: var(--m-raise);
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+:root[data-ui='mixta'] .pack-act:hover {
+  background: var(--m-plate-hover);
+  box-shadow: var(--m-raise), 0 0 0 1px rgba(242, 194, 48, 0.55);
+}
+
+:root[data-ui='mixta'] .pack-act.main {
+  background: linear-gradient(180deg, #4a4325, #352f19);
+  box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(242, 194, 48, 0.7);
+  color: #ffe9a6;
+}
+
+:root[data-ui='mixta'] .pack-act small {
+  color: var(--t-muted);
+  font-weight: 600;
+}
+
+:root[data-ui='mixta'] .pack-floor > small {
+  font-family: var(--t-font);
+  font-weight: 700;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .pack-floor-item {
+  border: 1px dashed rgba(242, 194, 48, 0.7);
+  background: rgba(242, 194, 48, 0.08);
+  color: var(--t-text);
+}
+
+:root[data-ui='mixta'] .pack-floor-item:hover {
+  background: rgba(242, 194, 48, 0.18);
+}
+
+:root[data-ui='mixta'] .pack-floor-item small {
+  color: var(--t-accent);
+  font-weight: 700;
+}
+
+:root[data-ui='mixta'] .unit-weapon-name {
+  font-family: var(--t-font);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
 /* ========================================================== the abilities */
 
 /* Each ability a raised steel key: its number on a small dark plate, the icon in a round well. */
@@ -565,6 +642,64 @@
   box-shadow: inset 0 0 0 1px rgba(242, 194, 48, 0.45);
 }
 
+/* Leaving in La Mula (P1): a steel plate over the turn's, its edge and words green like the zone on the
+   ground; while this player's call waits for the partner, a green light breathes on it. */
+:root[data-ui='mixta'] .evac-call {
+  position: relative;
+  padding: 7px 10px 6px 16px;
+  border-radius: 2px;
+  background: url('/ui/mixta/steel.webp') 0 0 / 256px 256px, var(--m-plate);
+  box-shadow: var(--m-raise), inset 3px 0 0 #4dff9a, 0 6px 14px rgba(0, 0, 0, 0.4);
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  text-align: left;
+  color: #7dffb4;
+  transition: transform 0.12s var(--m-ease);
+}
+
+:root[data-ui='mixta'] .evac-call:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: url('/ui/mixta/steel.webp') 0 0 / 256px 256px, var(--m-plate-hover);
+  box-shadow: var(--m-raise), inset 3px 0 0 #4dff9a, 0 0 0 1px rgba(77, 255, 154, 0.55), 0 6px 14px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-ui='mixta'] .evac-call small {
+  font-family: var(--t-font);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .evac-call.is-waiting {
+  opacity: 1;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .evac-call.is-waiting::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: #4dff9a;
+  box-shadow: 0 0 6px rgba(77, 255, 154, 0.7);
+  animation: m-breathe 1.6s ease-in-out infinite;
+}
+
+:root[data-ui='mixta'] .evac-kicker {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.22em;
+  color: #7dffb4;
+}
+
 /* ===================================================== log, menu, radio */
 
 :root[data-ui='mixta'] .log {
@@ -813,6 +948,11 @@
 
 :root[data-ui='mixta'] .mission-intro .intro-briefing {
   color: #cfd3cc;
+}
+
+:root[data-ui='mixta'] .intro-foot small {
+  letter-spacing: 0.04em;
+  color: var(--t-muted);
 }
 
 /* Bitten (MORDIDO), on the squad list and the flags: the danger plate, its letters in Oswald. */

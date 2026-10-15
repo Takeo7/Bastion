@@ -276,13 +276,16 @@
   color: var(--t-ready-ink);
 }
 
-:root[data-ui='mixta'] .x-btn.danger {
+/* Danger (Rechazar, Cancelar misión, Abandonar): red plates. The selector weighs more than the steel plates'
+   :is() above (its .hud button.danger is 0,2,1), or the plain steel won and every one came out grey. A disabled
+   one is steel like the rest; the menu's «Abandonar misión» has its own red line (mixta-hud.css). */
+:root[data-ui='mixta'] :is(.x-btn.danger, .hud button.danger:not(.menu-entry)):not(:disabled) {
   background: linear-gradient(180deg, #5a2219, #3e1610);
   box-shadow: inset 0 1px 0 rgba(255, 160, 140, 0.18), inset 0 -2px 0 rgba(0, 0, 0, 0.35), 0 0 0 1px #1a0705;
   color: #ffc2b6;
 }
 
-:root[data-ui='mixta'] .x-btn.danger:hover:not(:disabled) {
+:root[data-ui='mixta'] :is(.x-btn.danger, .hud button.danger:not(.menu-entry)):hover:not(:disabled) {
   background: linear-gradient(180deg, #74291d, #4f1b13);
   box-shadow: inset 0 1px 0 rgba(255, 160, 140, 0.22), inset 0 -2px 0 rgba(0, 0, 0, 0.35), 0 0 0 1px #f0503c;
 }
@@ -295,6 +298,37 @@
 }
 
 /* ============================================================ chips, bars */
+
+/* The clock on a question left open (ui/deadline.ts): its words small and plain, a lit bar draining in a sunken
+   groove; the last seconds in red. */
+:root[data-ui='mixta'] .deadline {
+  font-family: var(--t-font);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .deadline-bar {
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .deadline-bar i {
+  border-radius: 2px;
+  background: var(--t-accent);
+  box-shadow: 0 0 6px rgba(242, 194, 48, 0.5);
+}
+
+:root[data-ui='mixta'] .deadline.hurry {
+  color: #ff8a78;
+}
+
+:root[data-ui='mixta'] .deadline.hurry .deadline-bar i {
+  background: var(--t-danger);
+  box-shadow: 0 0 6px rgba(240, 80, 60, 0.5);
+}
 
 /* A chip is stamped into the plate: a small sunken well. */
 :root[data-ui='mixta'] :is(.x-chip, .menu-address) {

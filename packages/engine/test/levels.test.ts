@@ -26,16 +26,17 @@ import {
   storeysAt,
   surfaceAt,
   tileAt,
+  isWindow,
   tileIndex,
   unitAt,
 } from '../src/grid';
-import { canSee, floorLevels, floorView, isLit, lightTiles, lineClear, peekOrigins, sightOf, teamVisibility } from '../src/los';
+import { canSee, floorLevels, floorView, isLit, lightTiles, lineClear, MAX_WINDOWS_SEEN_THROUGH, peekOrigins, sightOf, teamVisibility } from '../src/los';
 import { MAPS, parseMap } from '../src/maps';
 import { buildPath, COST_CLIMB, COST_DIAG, COST_DROP, COST_ORTHO, COST_VAULT, computeReach, destinations, stepBetween, stepCost, stepsFrom } from '../src/path';
 import { campaignCommandSchema, commandSchema } from '../src/protocol';
 import { Rng } from '../src/rng';
 import { duet, executeCommand, Sim } from '../src/rules';
-import { searchSpot } from '../src/loot';
+import { roomAt, searchSpot } from '../src/loot';
 import { TEMPLATES } from '../src/content';
 import { createMission, makeUnit, normalizeMission } from '../src/setup';
 import type { GameState, Pos, Slot, Unit, Vec2 } from '../src/types';
@@ -372,7 +373,12 @@ describe('la torre', () => {
 
 // ---------------------------------------------------------------- step 3
 
-/** lineClear as it was before storeys had floors (phase 5, with `storeys`), to hold maps without them against. */
+/**
+ * lineClear as it was before storeys had floors (phase 5, with `storeys`), to
+ * hold maps without them against; with the one rule added since, on purpose:
+ * through two windows at most, counted where the line goes through them
+ * (MAX_WINDOWS_SEEN_THROUGH, playtest 2026-10-14).
+ */
 function lineClearPhase5(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y) + EYE_HEIGHT, hb = elevAt(s, b.x, b.y) + BODY_HEIGHT): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -394,6 +400,7 @@ function lineClearPhase5(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y
   let y = a.y;
   let ix = 0;
   let iy = 0;
+  let windows = 0;
   while (ix < nx || iy < ny) {
     const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
     if (decision === 0) {
@@ -411,6 +418,7 @@ function lineClearPhase5(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y
     }
     if (x === b.x && y === b.y) return !throughRoof(x, y, hb);
     if (blocks(x, y) || throughRoof(x, y, lineAt(x, y))) return false;
+    if (isWindow(tileAt(s, x, y)) && lineAt(x, y) < elevAt(s, x, y) + 1 && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
   }
   return true;
 }
@@ -735,10 +743,10 @@ function stairsOf(s: GameState): { at: Pos; up: number }[] {
 describe("the generator's storeys", () => {
   const towns = Array.from({ length: 16 }, (_, k) => createMission({ map: { kind: 'generated', biome: 'city', seed: 101 * (k + 1) }, slots: [0], rng: new Rng(k), kind: 'hack' }));
 
-  it('towns of both styles stand their buildings for real: storeys, stairs up each one, windows, furniture to search', () => {
+  it('towns of both styles stand their buildings for real: storeys, stairs up each one, windows, rooms to search', () => {
     let three = 0;
     let windows = 0;
-    let furniture = 0;
+    const rooms = new Set<string>();
     for (const s of towns) {
       expect(s.levels?.length).toBeGreaterThanOrEqual(2);
       if (s.levels!.length >= 3) three++;
@@ -753,12 +761,14 @@ describe("the generator's storeys", () => {
           // A window upstairs looks out onto open air, never into the next building's storey.
           expect(DIRS4.some((d) => kindAt(s, { x: p.x + d.x, y: p.y + d.y, z: p.z }) === null), `${p.x},${p.y},${p.z}`).toBe(true);
         }
-        if (searchSpot(s, p)) furniture++;
+        // Upstairs rooms to search too (docs/FASE8.md §B), under the storey above.
+        const room = roomAt(s, p);
+        if (room) rooms.add(`${s.mapId}:${room.id}`);
       }
     }
     expect(three).toBeGreaterThan(0);
     expect(windows).toBeGreaterThan(100);
-    expect(furniture).toBeGreaterThan(50);
+    expect(rooms.size).toBeGreaterThan(50);
   });
 
   it("every place one can stand on, on every level, is in the squad's reach", () => {

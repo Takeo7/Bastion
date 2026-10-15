@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el mismo día con la 0.2.5. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el mismo día con la 0.2.6. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 361 tests.
+   Deben pasar 384 tests.
 5. **Jugar en el navegador:**
 
    ```bash
@@ -53,10 +53,10 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npm run desktop:dist
    ```
 
-   Sale en `packages/desktop/dist/release/`. En Windows también se construye el instalador.
+   Sale en `packages/desktop/dist/release/`. El instalador de Windows se construye en el PC o desde el Mac ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.2.5)
+## 3. Estado (versión 0.2.6)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, clases con árbol de habilidades, heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0 y v0.2.1 en GitHub (privadas); de la 0.2.2 a la 0.2.5 no están publicadas: el instalador se construye en el PC.
+  - releases v0.1.0, v0.2.0, v0.2.1 y v0.2.6 en GitHub (privadas); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac y de Windows se construyen las dos desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)).
 - **Lo nuevo de la 0.2.2** (2026-10-14):
   - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
   - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
@@ -89,6 +89,19 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+- **Lo nuevo de la 0.2.6** (2026-10-14), las notas de la prueba de ese día ([PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md)):
+  - evacuar es conjunto: desde La Lata (el autobús, aparcado junto a la zona) uno lo pide y el otro acepta; quien se queda fuera se pierde. Una misión se gana al irse, no al matar a todos (salvo Limpieza);
+  - la fase 8 ([FASE8.md](FASE8.md)):
+    - armas desde cero: todos salen con cuchillo y pistola, y las armas se encuentran, se fabrican o llegan con el nivel del Bastión; cualquiera lleva cualquiera;
+    - registrar por habitaciones, una vez para toda la escuadra, y cajas especiales marcadas (armas, medicinas, munición, comida);
+    - la mochila: soltar, coger, dar, usar medicinas y equipar armas en la misión;
+  - el triple de zombis, y la mitad de las cajas, barricadas, papeleras y jardineras sueltas;
+  - dos escenarios nuevos con los packs de Woodland y de la nave industrial (`GameState.site`): el área de servicio en la carretera del bosque y el polígono industrial. Salen solos en la campaña y se eligen en la escaramuza;
+  - por las ventanas se ve a través de dos como mucho;
+  - una propuesta o una petición de evacuar sin respuesta se acepta sola a los 90 s;
+  - el árbol de habilidades nuevo, más orgánico;
+  - sin días de viaje a las misiones; más acciones al subir mucho de rango; reclutas algo distintos;
+  - hordas horneadas: 45 o 90 zombis cuestan lo mismo que 15.
 - **Rendimiento:** la telemetría de cada navegador va a `data/red.log` (o `%APPDATA%\Bastion\red.log` en la aplicación).
 
 ## 4. Decisiones importantes (y por qué)
@@ -111,7 +124,8 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - la clase llega en Capitán;
   - no hay refuerzos humanos: los zombis solo entran por los bordes;
   - abrir puertas es gratis;
-  - la campaña empieza con una misión.
+  - la campaña empieza con una misión;
+  - (14/10) evacuar es de los dos y se gana al irse; la clase no trae arma; registrar es por habitaciones.
 - **Clases:** el «Árbol de habilidades» es común a todos. Tiene 5 aptitudes (la quinta es «Maña») y la rama del Oficio, que se abre con el Taller de oficios.
 - **Equilibrio:**
   - la Marea cae por zonas a 4/6/9/10/11 de infestación;
@@ -125,12 +139,13 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 ## 5. Pendiente
 
 - **De Arturo y Ana:**
-  - probar la 0.2.5 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
+  - probar la 0.2.6 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
-- **Probar en partida** lo nuevo de la 0.2.3 y la 0.2.4: si las misiones de zombis se quedan cortas o se pasan, si los 3 cargadores aprietan lo justo, y si el ritmo y los pasos (zombi a 1,02 s/casilla; turnos de ~30 s con 6–7 a la vista) están bien. Lo más fácil de ajustar: `GAITS` en `game/gaits.ts`.
+- **Probar en partida** lo nuevo de la 0.2.6: si el triple de zombis y empezar con cuchillo y pistola (6 balas, sin cargadores) aprietan lo justo o se pasan. Lo más fácil de ajustar: `podPlan` en `setup.ts`, `PISTOL_CLIP` y `LEVEL_ARMS` en el motor, y los precios del Taller (`CRAFTS`).
+- **El valle visto desde arriba:** a Arturo no le convenció la primera maqueta de Arte (15/10). Falta saber qué cambiar antes de hacer otra.
+- **Escenarios:** la cárcel y el centro comercial esperan los packs «POLYGON – Police Station» y «POLYGON – Shops», que tienen los atlas de sus piezas. Para después: la cafetería con aspecto propio y el portón grande de las naves (un hueco de 5 casillas).
 - **Para más adelante:**
-  - firmar la aplicación (cuenta de desarrollador de Apple) y Steam;
-  - horneado de animaciones para hordas grandes, si la telemetría lo pide.
+  - firmar la aplicación (cuenta de desarrollador de Apple; los pasos, en [FIRMA.md](FIRMA.md)) y Steam;
 - **Textos pendientes de revisar por Lore:** [TEXTOS-PENDIENTES.md](TEXTOS-PENDIENTES.md).
 
 ## 6. Mapa de los documentos
@@ -142,6 +157,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [DESIGN.md](DESIGN.md) | Arquitectura, mecánicas, hoja de ruta y limitaciones conocidas |
 | [LORE.md](LORE.md) | El mundo, los zombis, las zonas y los recursos |
 | [ARTE.md](ARTE.md) | Dirección de arte y la tubería de Synty |
-| `FASE2.md`…[FASE7.md](FASE7.md), [ALTURA-Y-NOCHE.md](ALTURA-Y-NOCHE.md), [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md) | Especificación de cada fase y del reparto de enemigos |
-| [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md) | Notas de las pruebas de juego y qué se hizo con cada una |
+| `FASE2.md`…[FASE8.md](FASE8.md), [ALTURA-Y-NOCHE.md](ALTURA-Y-NOCHE.md), [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md) | Especificación de cada fase y del reparto de enemigos |
+| [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
+| [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), [FIRMA.md](FIRMA.md) | La guía de la prueba en el PC de referencia; cómo se firma la aplicación y qué cambiar con la cuenta de Apple |

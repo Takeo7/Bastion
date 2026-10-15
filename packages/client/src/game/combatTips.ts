@@ -23,10 +23,9 @@ export class CombatTips {
     this.radio = new RadioTips(container);
   }
 
-  /** The mission briefing is on screen for `ms`: nothing plays over it. A concealed start is the first lesson. */
-  intro(ms: number, s: GameState): void {
-    this.radio.holdFor(ms);
-    if (s.concealed) this.show('concealed');
+  /** The mission briefing is on screen until `closed`: nothing plays over it. */
+  intro(closed: Promise<void>): void {
+    this.radio.holdUntil(closed);
   }
 
   /** `e` has just been animated; `view` is the state after it. */
@@ -51,6 +50,8 @@ export class CombatTips {
         if (e.r.horde) this.show('horde');
         else if (e.r.pos) this.show('flare');
         return;
+      // The first room or box of mine (docs/FASE8.md §B: the tip speaks of both).
+      case 'roomSearched':
       case 'searched': {
         const u = getUnit(view, e.unit);
         if (u && this.mine(u)) this.show('search');
@@ -119,11 +120,6 @@ export class CombatTips {
   /** «Os han oído» has just shown: enemies the squad can't see are coming to look. */
   heard(): void {
     this.show('heard');
-  }
-
-  /** The pointer is on a move that would break concealment (the red-framed tiles). */
-  redTile(): void {
-    this.show('redTile');
   }
 
   /** The odds panel of an attack is open. */

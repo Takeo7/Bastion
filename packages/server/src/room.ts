@@ -16,6 +16,7 @@ import {
   executeCampaignCommand,
   executeCommand,
   hasAdjacency,
+  medicineCures,
   missionInfo,
   offerBriefing,
   PLAYER_COLORS,
@@ -26,6 +27,7 @@ import {
   type CampaignMessage,
   type CampaignState,
   type ClientMessage,
+  type DeadlineKind,
   type GameState,
   type HostAddress,
   type MapSource,
@@ -54,6 +56,8 @@ export type RoomMode = 'skirmish' | 'campaign';
 
 /** A dropped player keeps blocking the end of turn this long, so a reload or Wi-Fi blip never costs them their turn. */
 const RECONNECT_GRACE_MS = 30_000;
+/** How long a joint decision waits for the partner's answer before it goes ahead (playtest 2026-10-14, #28: in case they left). */
+const ANSWER_WAIT_MS = 90_000;
 
 type AnyMessage = ClientMessage | CampaignMessage;
 
@@ -64,6 +68,8 @@ type AnyMessage = ClientMessage | CampaignMessage;
  */
 export class Room {
   private seats: [Seat | null, Seat | null] = [null, null];
+  /** The waits on joint decisions now running (ANSWER_WAIT_MS): what each waits on, and when it ends. */
+  private waits: Record<DeadlineKind, { key: string; at: number; timer: ReturnType<typeof setTimeout> } | null> = { proposal: null, evac: null };
   private phase: RoomPhase = 'lobby';
   private mode: RoomMode = 'skirmish';
   private state: GameState | null = null;
@@ -171,6 +177,11 @@ export class Room {
     if (this.phase === 'mission' && this.state) this.send(socket, { t: 'snapshot', state: this.state });
     this.persist();
     this.resyncTurn();
+    // Back in: how long the open decisions have left.
+    for (const kind of ['proposal', 'evac'] as const) {
+      const wait = this.waits[kind];
+      if (wait) this.send(socket, { t: 'deadline', kind, ms: Math.max(0, wait.at - Date.now()) });
+    }
     return seat;
   }
 
@@ -224,6 +235,7 @@ export class Room {
         if (result.launch) this.launchCampaignMission();
         else this.broadcast({ t: 'campaign', state: this.campaign });
         this.persist();
+        this.checkWaits();
         break;
       }
       case 'returnToBase':
@@ -261,6 +273,7 @@ export class Room {
         }
         this.broadcast({ t: 'events', events: result.events, seq: this.state.seq, by: seat.slot });
         this.afterTactical();
+        this.checkWaits();
         break;
       }
       case 'presence':
@@ -280,11 +293,19 @@ export class Room {
     const slots = this.connectedSlots();
     if (!slots.length) return;
     // A Saqueo is always in town: houses to search (the lobby only offers the city for it).
-    if (kind === 'scavenge') map = 'city';
+    if (kind === 'scavenge' && map !== 'industrial') map = 'city';
     this.missionKind = kind;
     this.skirmishMap = map;
     this.mode = 'skirmish';
-    const source: MapSource = map === 'plaza' || map === 'torre' ? { kind: 'handmade', id: map } : { kind: 'generated', biome: map, seed: this.rng.int(2 ** 31) };
+    const seed = this.rng.int(2 ** 31);
+    const source: MapSource =
+      map === 'plaza' || map === 'torre'
+        ? { kind: 'handmade', id: map }
+        : map === 'roadside'
+          ? { kind: 'generated', biome: 'wilds', seed, site: 'roadside' }
+          : map === 'industrial'
+            ? { kind: 'generated', biome: 'city', seed, site: 'industrial' }
+            : { kind: 'generated', biome: map, seed };
     this.state = createMission({ map: source, slots, rng: this.rng, kind, veterans: this.skirmishVeterans, night: this.skirmishNight });
     this.phase = 'mission';
     console.log(`[room] Escaramuza (${kind}${this.skirmishNight ? ', de noche' : ''}, ${this.state.mapName}) con ${slots.length} jugador(es).`);
@@ -338,6 +359,8 @@ export class Room {
       campaignMission: { id: offer.id, name: offer.name, ...(offer.story ? { story: offer.story } : {}), ...(info.kicker ? { kicker: info.kicker } : {}), ...(info.item ? { item: info.item } : {}), briefing: offerBriefing(c, offer) },
       vipName: info.vipName,
       leader: info.leader,
+      itemOutdoors: info.itemOutdoors,
+      medicineCures: medicineCures(c),
     });
     // The Taller de oficios wall to wall with the listening post: the Oficio makes less noise.
     if (hasAdjacency(c, 'echoes')) this.state.quietSongs = true;
@@ -367,6 +390,59 @@ export class Room {
       this.broadcast({ t: 'events', events, seq: this.state.seq, by: null });
       this.afterTactical();
     }
+    this.checkWaits();
+  }
+
+  /**
+   * Starts, keeps or drops the waits on joint decisions (playtest 2026-10-14,
+   * #28): a base proposal, a call to evacuate. A new one starts its
+   * ANSWER_WAIT_MS and both clients hear how long it has; when it is answered
+   * or gone, they hear it is over.
+   */
+  private checkWaits(): void {
+    const proposal = this.phase === 'base' ? this.campaign?.proposal : null;
+    this.watch('proposal', proposal ? JSON.stringify(proposal) : null);
+    const call = this.phase === 'mission' && this.state && !this.state.outcome ? this.state.evacCall : undefined;
+    this.watch('evac', call && this.state ? `${this.state.turn}:${call.by}:${call.unit}` : null);
+  }
+
+  private watch(kind: DeadlineKind, key: string | null): void {
+    const wait = this.waits[kind];
+    if (wait?.key === key) return;
+    if (wait) {
+      clearTimeout(wait.timer);
+      this.waits[kind] = null;
+      if (!key) this.broadcast({ t: 'deadline', kind, ms: null });
+    }
+    if (!key) return;
+    const timer = setTimeout(() => this.answerForPartner(kind, key), ANSWER_WAIT_MS);
+    this.waits[kind] = { key, at: Date.now() + ANSWER_WAIT_MS, timer };
+    this.broadcast({ t: 'deadline', kind, ms: ANSWER_WAIT_MS });
+  }
+
+  /** The wait ran out: the decision goes ahead, as if the partner had said yes. */
+  private answerForPartner(kind: DeadlineKind, key: string): void {
+    if (this.waits[kind]?.key !== key) return;
+    this.waits[kind] = null;
+    if (kind === 'proposal' && this.campaign?.proposal && this.phase === 'base') {
+      const partner: Slot = this.campaign.proposal.by === 0 ? 1 : 0;
+      const result = executeCampaignCommand(this.campaign, { type: 'vote', accept: true }, { slot: partner, connected: [0, 1], rng: this.rng });
+      console.log(`[room] Propuesta sin respuesta: sigue adelante${result.ok ? '' : ` (${result.error})`}.`);
+      if (result.ok && result.launch) this.launchCampaignMission();
+      else this.broadcast({ t: 'campaign', state: this.campaign });
+      this.persist();
+    }
+    if (kind === 'evac' && this.state?.evacCall && this.phase === 'mission') {
+      const partner: Slot = this.state.evacCall.by === 0 ? 1 : 0;
+      const result = executeCommand(this.state, { type: 'evacAnswer', accept: true }, { slot: partner, connected: this.activeSlots(), rng: this.rng });
+      console.log(`[room] Evacuación sin respuesta: sale el autobús${result.ok ? '' : ` (${result.error})`}.`);
+      if (result.ok) {
+        this.broadcast({ t: 'events', events: result.events, seq: this.state.seq, by: null });
+        this.afterTactical();
+      }
+    }
+    this.broadcast({ t: 'deadline', kind, ms: null });
+    this.checkWaits();
   }
 
   // -------------------------------------------------------------- helpers

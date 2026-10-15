@@ -907,6 +907,147 @@
   margin-top: 14px;
 }
 
+/* An event's option on the table (Gameplay, 14/10): lit from inside like a toggle that is on, not a drawn
+   outline; under the options, the answer in a sunken tray, its light breathing while the vote is this player's. */
+:root[data-ui='mixta'] .event-option.proposed:disabled {
+  outline: 0;
+  background: linear-gradient(180deg, #4a4325, #352f19);
+  box-shadow: inset 0 1px 0 rgba(255, 230, 140, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(242, 194, 48, 0.7);
+}
+
+:root[data-ui='mixta'] .event-option.proposed b {
+  color: #ffe9a6;
+}
+
+:root[data-ui='mixta'] .event-answer {
+  margin-top: 4px;
+  padding: 9px 10px 9px 12px;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .event-answer p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+  font-weight: 600;
+}
+
+:root[data-ui='mixta'] .event-answer:has(.x-btn.primary) p::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--t-accent);
+  box-shadow: 0 0 6px rgba(242, 194, 48, 0.7);
+  animation: m-breathe 1.6s ease-in-out infinite;
+}
+
+/* The partner's proposal (playtest 14/10, #22): an alert's riveted plate pinned under the band, the
+   proposer's colour on its edge, the data in a sunken table and the answer at its foot. The light by
+   «Propuesta» breathes while the vote is this player's. */
+:root[data-ui='mixta'] .strat-proposal {
+  top: 58px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  transform: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: min(500px, 92vw);
+  padding: 14px 18px 14px 21px;
+  font-family: var(--t-font);
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--t-text);
+  background: var(--m-rivets), var(--t-sheet);
+  border: 0;
+  border-radius: 2px;
+  box-shadow: var(--t-sheet-shadow), inset 3px 0 0 var(--who, var(--t-accent));
+}
+
+:root[data-ui='mixta'] .strat-proposal.show {
+  animation: m-in-down 0.22s var(--m-ease);
+}
+
+:root[data-ui='mixta'] .proposal-text {
+  gap: 4px;
+}
+
+:root[data-ui='mixta'] .proposal-text > span {
+  font-weight: 600;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .proposal-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.22em;
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .proposal-kicker::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--t-accent);
+  box-shadow: 0 0 6px rgba(242, 194, 48, 0.7);
+  animation: m-breathe 1.6s ease-in-out infinite;
+}
+
+:root[data-ui='mixta'] .strat-proposal.mine .proposal-kicker {
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .strat-proposal.mine .proposal-kicker::before {
+  background: var(--t-muted);
+  box-shadow: none;
+  animation: none;
+}
+
+:root[data-ui='mixta'] .proposal-detail {
+  gap: 3px 12px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 2px;
+  font-family: var(--t-font);
+  font-size: 13.5px;
+  color: #dfe2dc;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .proposal-detail dt {
+  padding-top: 1px;
+  font-family: var(--t-font);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .proposal-detail dd {
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .proposal-actions {
+  justify-content: flex-end;
+}
+
+:root[data-ui='mixta'] .strat-proposal .x-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
 /* ============================================================== El valle */
 
 /* Each operation's kind on a hexagon in its category's colour, the packs' icon in it instead of a glyph. */
@@ -1425,6 +1566,100 @@
 :root[data-ui='mixta'] .item-art[data-item='weapon'] {
   --ia: url('/ui/synty/icons/rifle.webp');
   width: 96px;
+}
+
+/* The Armería's weapons, each its own drawing (strategy/arms.ts kinds); the good ones in the found weapon's violet. */
+:root[data-ui='mixta'] .item-art:is([data-item='w-rifle'], [data-item='w-shotgun']) {
+  --ia: url('/ui/synty/icons/rifle.webp');
+  width: 104px;
+}
+
+:root[data-ui='mixta'] .item-art[data-item='w-shotgun'] {
+  --ia: url('/ui/synty/icons/r-escopeta.webp');
+}
+
+:root[data-ui='mixta'] .item-art[data-item='w-sniper'] {
+  --ia: url('/ui/synty/icons/sniper.webp');
+  width: 116px;
+}
+
+:root[data-ui='mixta'] .item-art[data-item='w-cannon'] {
+  --ia: url('/ui/synty/icons/mh-machinegun.webp');
+  width: 108px;
+}
+
+:root[data-ui='mixta'] .item-art[data-item='w-sword'] {
+  --ia: url('/ui/synty/icons/mh-machete.webp');
+}
+
+:root[data-ui='mixta'] .item-art[data-item='ammo'] {
+  --ia: url('/ui/synty/icons/mh-bullets.webp');
+}
+
+:root[data-ui='mixta'] .item-art.better {
+  --ia-c: #c58cff;
+}
+
+/* Weapons are long and low: the drawing sits by the kicker, and the name runs the panel's whole width under it. */
+:root[data-ui='mixta'] .item-art[data-item^='w-'] {
+  top: 10px;
+  height: 40px;
+}
+
+:root[data-ui='mixta'] .x-panel:has(> .item-art[data-item^='w-']) > :is(.x-title, .x-text:first-of-type) {
+  margin-right: 0;
+}
+
+:root[data-ui='mixta'] .x-panel:has(> .item-art[data-item^='w-']) > .alert-kicker {
+  min-height: 34px;
+  margin-right: 112px;
+}
+
+/* In the lists, the weapon's silhouette before its name, lit in the accent; where it goes small and muted. */
+:root[data-ui='mixta'] .x-row .wpn {
+  color: var(--t-accent);
+  opacity: 0.85;
+}
+
+:root[data-ui='mixta'] .x-row.selected .wpn {
+  opacity: 1;
+}
+
+:root[data-ui='mixta'] .x-place {
+  font-family: var(--t-font);
+  font-weight: 700;
+  color: var(--t-muted);
+}
+
+/* A soldier's arms: the hand and the belt, two wells sunk in the sheet, the weapon's drawing in the accent. */
+:root[data-ui='mixta'] .ld-cell {
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--m-well-bg);
+  box-shadow: var(--m-sink);
+}
+
+:root[data-ui='mixta'] .ld-where {
+  font-family: var(--t-font);
+  font-weight: 700;
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .ld-cell .wpn {
+  color: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .ld-cell b {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] .ld-note {
+  color: var(--t-muted);
 }
 
 :root[data-ui='mixta'] .item-art[data-item='found'] {

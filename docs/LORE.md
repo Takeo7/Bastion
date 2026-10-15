@@ -15,7 +15,7 @@ El lore anterior, el del Coro, está en [archive/LORE-coro.md](archive/LORE-coro
 - radio y Diario (antes, Expediente);
 - la base en superficie;
 - el árbol de habilidades y sus ramas;
-- la doble llave.
+- las decisiones a medias: uno propone y el otro acepta.
 
 Lo nuevo de verdad es la supervivencia: saquear, el ruido, la infección y la escasez.
 
@@ -29,16 +29,18 @@ Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se l
 >
 > Atalaya, una vieja estación militar en la sierra de Aldren, aguanta con cuarenta supervivientes llegados de todas partes.
 >
-> Vosotros dos la dirigís. Lo que importa se decide con las dos llaves.
+> Vosotros dos la dirigís. Lo importante lo decidís juntos.
 >
 > Atalaya vive de lo que sus equipos traen de fuera. El primero sale hoy.
 
 ## Tono
 
 - **Adulto y seco** (prueba del 13/10): frases cortas, nada de explicar lo que se ve, nada de chistes ni guiños. Los personajes hablan como adultos cansados. La regla va en la línea pequeña del consejo, no en el diálogo.
+- **Morse habla poco** (prueba del 14/10, Arturo y Ana): solo un aviso táctico o algo que el jugador no ve. Nada de presentaciones, nada de repetir el objetivo ni el informe, nada que el juego ya enseñe en pantalla.
+- **Sin metáforas sobre el mando compartido** (prueba del 14/10): ni «dos llaves» ni «llave doble». Se dice lo que pasa: uno propone, el otro acepta; lo deciden los dos.
 - **Supervivencia seria:** más *The Last of Us* y *This War of Mine* que gore de serie B.
 - **El miedo:** la escasez y el ruido, más que el monstruo.
-- **El enemigo más peligroso** suele ser otra persona.
+- **Los vivos, en sus misiones** ([ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos. Cuervos y Congregación aparecen en las suyas, y ahí son lo más peligroso.
 - **Todo es inventado:** el país, el valle, las ciudades. Ningún sitio real, y nombres de lugar sin idioma claro (Kessra, Aldren, Corran, Volkren, Galen, Carvik, Telm).
 - **Gente de todas partes:** el puerto de Galen y el Instituto traían gente de todo el mundo, y el valle fue camino de huida hacia la sierra. Los nombres de soldados y personajes son internacionales.
 
@@ -94,8 +96,8 @@ Los ids del código se mantienen; cambian el nombre, el aspecto y, donde haga fa
 
 - **La Estación Atalaya:** una vieja estación militar en lo alto de la sierra de Aldren, con refugio subterráneo, muros de hormigón y una presa al lado. La nieve, la altura y una sola carretera la mantienen viva. Quienes llegaron conservaron su orden militar: equipos, rangos y armería.
 - **La base en superficie** encaja tal cual: el refugio en el centro y alrededor barracones, huerto, barricadas y pasarelas. Se despejan rocas, bosque y ruinas, y las ruinas dan suministros.
-- **La Mula:** un autobús de línea blindado con chapa. Lleva a la escuadra y vuelve cargado.
-- **La doble llave se queda, con otra historia.** Dos grupos que llegaron a la vez y no se fían del todo: lo importante se decide a medias. El año pasado, un líder solo vendió su refugio a los Cuervos a cambio de su vida.
+- **La Lata:** un autobús de línea con la chapa que Teo le soldó por encima; de ahí el nombre que le puso la gente de Atalaya (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
+- **Las decisiones a medias se quedan, con otra historia.** Dos grupos que llegaron a la vez y no se fían del todo: lo importante lo deciden los dos. El año pasado, un líder solo vendió su refugio a los Cuervos a cambio de su vida.
 
 ## Personajes
 
@@ -104,7 +106,7 @@ Se mantienen las voces de la radio que ya existen y cambian sus vidas.
 | Personaje | Papel nuevo |
 |---|---|
 | **Nadia Albescu, «Morse»** | Radioaficionada de toda la vida. Mantiene la radio de Atalaya y es la primera en oír a otros vivos. Firma los informes. |
-| **Teodor Vidić, «Teo»** | Mecánico jubilado. Blindó La Mula, arregla armas y enseña oficios. Construyó el Grillo. Secreto: trabajó de vigilante en el Instituto Galen la noche en que todo empezó. |
+| **Teodor Vidić, «Teo»** | Mecánico jubilado. Blindó La Lata, arregla armas y enseña oficios. Construyó el Grillo. Secreto: trabajó de vigilante en el Instituto Galen la noche en que todo empezó. |
 | **Dra. Amara Nwosu** | Viróloga del Instituto Galen. Huyó con sus cuadernos y cree que hay una vacuna. |
 | **Simão Ferreira** | Desertor de los Cuervos. Sabe dónde guardan lo que roban y a quién. |
 | **Ruth Halvorsen** | Portavoz del Refugio de Aldren, el enclave más grande. Socia exigente. |
@@ -112,7 +114,7 @@ Se mantienen las voces de la radio que ya existen y cambian sus vidas.
 
 ## La historia
 
-Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que no caducan, y una misión final con un dilema de dos llaves.
+Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que no caducan, y una misión final con un dilema que deciden los dos.
 
 | Nivel | Capítulo | Tipo · zona | Qué pasa |
 |---|---|---|---|
@@ -132,7 +134,7 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 - Entra por Los Llanos de Ceniza y sube por las carreteras: cubre las zonas a 4, 6, 9, 10 y 11, según lo lejos que estén de Los Llanos ([FASE5.md](FASE5.md)). Aldren no cae: a 12, la campaña se pierde. Los textos no conjugan verbos con el nombre de la zona, que puede ser plural.
 - Los **Nidos**, sitios donde los zombis se juntan (antes, los Órganos), la alimentan. Quemarlos la hace retroceder.
 
-**El final** (dos llaves). Con la Marea parada y la vacuna en la mano:
+**El final** (lo deciden los dos). Con la Marea parada y la vacuna en la mano:
 - **Darla a todos:** emitirla por radio para todos los enclaves, también los Cuervos. Nadie se queda fuera, aunque algunos la usarán contra otros.
 - **Guardarla para la Red:** solo para quienes os ayudaron. El valle sobrevive, y fuera de él…
 
@@ -152,7 +154,7 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
 - **Contagio:**
   - El mordisco de un zombi contagia.
   - Un contagiado vuelve a la base con días contados: o medicinas, o se convierte y se pierde.
-  - Es el drama del juego: una decisión de dos llaves cuando las medicinas no llegan para todos.
+  - Es el drama del juego: una decisión de los dos cuando las medicinas no llegan para todos.
 - **Escasez:**
   - Munición contada por misión.
   - Las armas mejores se encuentran o se fabrican. Gameplay propone un camino mixto: fabricar en el Taller desbloquea el nivel del arma.
@@ -165,7 +167,7 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
 
 **Recursos:**
 - **Suministros:** la moneda de construir, con el signo «§» (el de los suministros de XCOM 2). Ocupa el lugar de los créditos, y las ruinas y el saqueo la dan.
-- **Medicinas** (✚): curan heridas y contagios. El tratamiento de un mordido se aprueba con las dos llaves.
+- **Medicinas** (✚): curan heridas y contagios. El tratamiento de un mordido lo aprueban los dos.
 - **Comida**, contada en **raciones**: el Bastión come cada día; sin raciones hay hambre. El **Huerto** las produce.
 - **Piezas:** muelles, motores, tornillería. Con ellas el Taller hace armas y armaduras mejores. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.
 
@@ -207,7 +209,7 @@ Además:
 | Base en superficie, edificios, cercanías | Se quedan, con otra piel: huerto, barricadas, depósito de agua, Camposanto… |
 | Capítulos, encargos, rumores | Se quedan como sistema y se reescriben todos los textos. |
 | Radio, Expediente, avisos de Morse | Se quedan. El Expediente pasa a ser el **Diario** de Atalaya, que escribe Morse. Se reescriben las escenas, las hojas y las fichas. |
-| Doble llave, cooperativo | Se queda, con la nueva historia. |
+| Decisiones a medias, cooperativo | Se quedan, con la nueva historia. |
 | Geoesfera | Pasa a ser el mapa del valle de Kessra, en Synty (hecho). |
 | Créditos, pago mensual, venta de cuerpos | Se cambian por suministros, medicinas (y luego comida), saqueo y enclaves aliados. |
 | Combate | Se añaden registro, mochila, ruido, contagio, el Hinchado y la IA de los zombis (van al ruido, en masa). |
@@ -223,6 +225,7 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 | Región | **Zona** |
 | Expediente | **Diario** («DIARIO · HOJA N») |
 | Hangar | **Cochera** |
+| La Mula (el autobús), Taller de La Mula | **La Lata**, **Chapistería** |
 | Escanear, escaneando, días de escaneo | **Esperar noticias**, «A LA ESCUCHA…», días a la escucha |
 | Actividad zombi | **Infestación** (hasta el nivel 4); **la Marea, a N km** (desde el 4) |
 | Órgano | **Nido** |
@@ -230,6 +233,8 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 | Terminal, hackear, pirateo | **Arreglar** (el equipo, la radio) |
 | Protocolos del dron | Botiquín volante, Cobertura del Grillo, Calambrazo, Espabilar |
 | La Rosa | **Árbol de habilidades** |
+| Dos llaves, llave doble | Uno propone y el otro acepta; «lo decidís juntos» |
+| Los datos (el objetivo) | El nombre del objeto: «las medicinas»; sin nombre, «la carga» |
 | Oficio (la aptitud) | **Maña** (MAÑ); el Oficio es la rama |
 | Créditos | **Suministros** (§) |
 | Refuerzos (en combate) | **La horda**: los muertos que llegan por los bordes |
@@ -245,7 +250,7 @@ Es la propuesta de Gameplay, con el coste de cada paso. **Las cinco fases están
 |---|---|---|---|
 | 1 · Nueva piel | Este documento como nuevo LORE.md. Todos los textos: nombres de enemigos, zonas, capítulos, encargos, acontecimientos, escenas de radio, Expediente, fichas, glosario y edificios. La Marea en kilómetros, los Nidos, La Mula como autobús. Los tipos de misión con nombre nuevo, la rama de Oficio y «Nervios de acero» | Lore (textos) · Gameplay y Clases (renombres) | Bajo |
 | 2 · Saquear y ruido | Misión de saqueo (registrar muebles, mochila, evacuar el botín), ruido e IA de los zombis, el grito del Chillón y el Hinchado | Gameplay · Arte (interiores, zombis) | Medio |
-| 3 · Contagio y medicinas | El contagio con días contados, las medicinas como recurso y la decisión de dos llaves | Gameplay · Lore (textos) | Medio |
+| 3 · Contagio y medicinas | El contagio con días contados, las medicinas como recurso y la decisión de los dos | Gameplay · Lore (textos) | Medio |
 | 4 · Comida y armas encontradas | Consumo diario, munición contada y fabricar en el Taller para desbloquear el nivel del arma | Gameplay (con su simulación de equilibrio) | Alto |
 | 5 · El mapa del valle | Kessra en lugar del globo | Arte | Alto |
 

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { abilityBlocker, canTargetTile, noiseOf } from '../src/abilities';
-import { applyMissionResult, buildSquad, CAMPAIGN_VERSION, createCampaign, executeCampaignCommand, migrateCampaign, type CampaignState } from '../src/campaign';
+import { applyMissionResult, buildSquad, CAMPAIGN_VERSION, createCampaign, executeCampaignCommand, medicineCures, migrateCampaign, type CampaignState } from '../src/campaign';
 import { HORDE, hordePoints, NOISE, TEMPLATES } from '../src/content';
-import { decorCode } from '../src/decor';
+import { decorCode, decorOf } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
-import { broughtBack, rollLoot, searchable, searchableTiles, SEARCHABLE } from '../src/loot';
+import { broughtBack, rollLoot, roomAt, searchable, searchableTiles, SEARCHABLE } from '../src/loot';
 import { lootSummary } from '../src/lore';
 import { Rng } from '../src/rng';
 import { executeCommand, Sim } from '../src/rules';
-import { createMission, MISSION_NAMES } from '../src/setup';
+import { createMission, hordeWave, MISSION_NAMES } from '../src/setup';
 import type { GameState, Loot, Pod, Slot, Unit } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
 
@@ -332,16 +332,16 @@ describe('the Chillón', () => {
 });
 
 describe('searching', () => {
-  /** A room: a wardrobe at (3,1) against a wall line, a car outside. */
+  /** A medicine box at (3,1) against a wall line, a car outside (docs/FASE8.md §B). */
   function house() {
     const s = stateFrom(['........', '...H....', '..##....', '........', '.....h..']);
     s.decor = new Array(s.width * s.height).fill(0);
-    s.decor[1 * 8 + 3] = decorCode('wardrobe');
+    s.decor[1 * 8 + 3] = decorCode('lootMedical');
     s.decor[4 * 8 + 5] = decorCode('carRear');
     return s;
   }
 
-  it('one action beside a piece of furniture: what turns up goes into the backpack, and it makes a little noise', () => {
+  it('one action beside a loot box: always what it is marked for, and it makes a little noise', () => {
     const s = house();
     const u = addUnit(s, 's1', 'rookie', 2, 1);
     const z = addUnit(s, 'a1', 'zombie', 4, 2);
@@ -353,21 +353,26 @@ describe('searching', () => {
     if (!r.ok) return;
     const found = of(r.events, 'searched')[0]!;
     expect(found).toMatchObject({ unit: 's1', tile: { x: 3, y: 1 } });
-    expect(u.backpack ?? []).toEqual(found.loot ? [found.loot] : []);
+    expect(found.loot?.medicines).toBeGreaterThanOrEqual(1);
+    expect(u.backpack).toEqual([found.loot]);
     expect(of(r.events, 'noise')[0]).toMatchObject({ tile: { x: 3, y: 1 }, radius: 2, heard: ['a1'] });
     expect(u.ap).toBe(1);
     expect(s.searched).toEqual([1 * 8 + 3]);
     expect(searchable(s, { x: 3, y: 1, z: 0 })).toBe(false);
-    expect(abilityBlocker(s, u, 'search')).toBe('Ya está registrado.');
+    expect(abilityBlocker(s, u, 'search')).toBe('Ya está abierta.');
   });
 
-  it('needs room in the backpack, the furniture at hand, and no wall in between', () => {
+  it('a full backpack leaves the find on the floor; the box at hand, no wall in between; furniture and cars are no longer searched', () => {
     const s = house();
     const u = addUnit(s, 's1', 'rookie', 2, 1, { backpack: [{ supplies: 5 }, { medicines: 1 }, { item: 'firstAid' }] });
-    expect(abilityBlocker(s, u, 'search')).toBe('La mochila está llena.');
-    u.backpack = [];
+    expect(abilityBlocker(s, u, 'search')).toBeNull();
+    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'search', tile: { x: 3, y: 1 } }, ctx(3));
+    expect(r.ok).toBe(true);
+    expect(u.backpack).toHaveLength(3);
+    expect(s.dropped).toEqual([{ id: 'l1', pos: { x: 2, y: 1, z: 0 }, loot: expect.objectContaining({ medicines: expect.any(Number) }) }]);
+    s.searched = [];
     u.pos = { x: 0, y: 0, z: 0 };
-    expect(abilityBlocker(s, u, 'search')).toBe('No hay nada que registrar al lado.');
+    expect(abilityBlocker(s, u, 'search')).toBe('No hay ninguna caja al lado.');
     // Diagonally round the corner of a wall: out of reach.
     u.pos = { x: 4, y: 2, z: 0 };
     expect(searchableTiles(s, u)).toEqual([{ x: 3, y: 1, z: 0 }]);
@@ -375,12 +380,58 @@ describe('searching', () => {
     s.tiles[1 * 8 + 4] = 'wall';
     s.tiles[2 * 8 + 3] = 'wall';
     expect(searchableTiles(s, u)).toEqual([]);
-    // A car's boot; blown away, nothing is left to search.
+    // A car's boot is not searched any more.
     u.pos = { x: 4, y: 4, z: 0 };
-    expect(searchableTiles(s, u)).toEqual([{ x: 5, y: 4, z: 0 }]);
-    s.tiles[4 * 8 + 5] = 'floor';
     expect(searchableTiles(s, u)).toEqual([]);
-    expect(SEARCHABLE).toEqual(expect.arrayContaining(['wardrobe', 'table', 'desk', 'shelf', 'counter', 'cabinet', 'bed', 'crates', 'carRear', 'carFront', 'rack']));
+    expect(SEARCHABLE).toEqual(expect.arrayContaining(['wardrobe', 'table', 'desk', 'shelf', 'counter', 'cabinet', 'bed', 'crates', 'rack']));
+  });
+
+  it('every map has its special boxes: up to 3, each of a different kind, away from the start (docs/FASE8.md §B)', () => {
+    const kinds = ['lootWeapons', 'lootMedical', 'lootAmmo', 'lootFood'] as const;
+    for (const biome of ['city', 'wilds', 'facility'] as const) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const s = createMission({ map: { kind: 'generated', biome, seed }, slots: [0], rng: new Rng(1), kind: 'scavenge' });
+        const boxes = s.decor!.flatMap((d, i) => {
+          const k = decorOf(d)?.kind;
+          return k && (kinds as readonly string[]).includes(k) ? [{ k, x: i % s.width, y: Math.floor(i / s.width) }] : [];
+        });
+        expect(boxes.length, `${biome} ${seed}`).toBeGreaterThanOrEqual(1);
+        expect(boxes.length).toBeLessThanOrEqual(3);
+        expect(new Set(boxes.map((b) => b.k)).size).toBe(boxes.length);
+        const squad = s.units.filter((u) => u.team === 'xcom');
+        for (const b of boxes) expect(Math.min(...squad.map((u) => Math.hypot(b.x - u.pos.x, b.y - u.pos.y)))).toBeGreaterThanOrEqual(10);
+      }
+    }
+  });
+
+  it('a room is searched once for the whole squad, from inside it; its furniture says what kind of place it is', () => {
+    // Two rooms (an office with a desk, and a home with a bed) parted by a door, the street outside.
+    const s = stateFrom(['..........', '.########.', '.#.H#..h#.', '.#..+...#.', '.########.', '..........']);
+    s.decor = new Array(s.width * s.height).fill(0);
+    s.decor[2 * 10 + 3] = decorCode('desk');
+    s.decor[2 * 10 + 7] = decorCode('bed');
+    s.ground = new Array(s.width * s.height).fill(0);
+    for (const [x, y] of [[2, 2], [2, 3], [3, 3], [5, 2], [6, 2], [5, 3], [6, 3], [7, 3]]) s.ground[y! * 10 + x!] = 2;
+    const office = roomAt(s, { x: 2, y: 2, z: 0 })!;
+    const home = roomAt(s, { x: 6, y: 3, z: 0 })!;
+    expect(office.spot).toBe('office');
+    expect(home.spot).toBe('home');
+    expect(office.id).not.toBe(home.id);
+    expect(roomAt(s, { x: 4, y: 3, z: 0 })).toBeNull();
+    expect(roomAt(s, { x: 0, y: 0, z: 0 })).toBeNull();
+    const a = addUnit(s, 's1', 'rookie', 3, 3);
+    const b = addUnit(s, 's2', 'rookie', 2, 2);
+    expect(abilityBlocker(s, a, 'searchRoom')).toBeNull();
+    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'searchRoom' }, ctx(5));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(of(r.events, 'roomSearched')[0]).toMatchObject({ unit: 's1', room: office.id });
+    expect(s.roomsSearched).toEqual([office.id]);
+    expect(abilityBlocker(s, b, 'searchRoom')).toBe('Esta habitación ya está registrada.');
+    b.pos = { x: 6, y: 3, z: 0 };
+    expect(abilityBlocker(s, b, 'searchRoom')).toBeNull();
+    b.pos = { x: 0, y: 0, z: 0 };
+    expect(abilityBlocker(s, b, 'searchRoom')).toBe('Solo dentro de una habitación.');
   });
 
   it('the loot comes from a seeded table: suministros (5–20), an accessory, medicines or nothing', () => {
@@ -411,11 +462,15 @@ describe('the Saqueo', () => {
     expect(MISSION_NAMES.scavenge).toBe('Saqueo');
     expect(s.mission).toMatchObject({ kind: 'scavenge', turnsLeft: null, item: null, difficulty: 2, reinforcements: [] });
     expect(s.mission.evacZone.length).toBeGreaterThan(0);
-    expect(s.mission.horde).toEqual(['zombie', 'zombie', 'xenoid']);
+    expect(s.mission.horde).toEqual(hordeWave(2));
     expect(s.units.filter((u) => u.team === 'alien').every((u) => TEMPLATES[u.template].undead)).toBe(true);
-    let furniture = 0;
-    for (let i = 0; i < s.tiles.length; i++) if (searchable(s, { x: i % s.width, y: Math.floor(i / s.width), z: 0 })) furniture++;
-    expect(furniture).toBeGreaterThan(20);
+    // Rooms to search (docs/FASE8.md §B), and a box or so.
+    const rooms = new Set<number>();
+    for (let i = 0; i < s.tiles.length; i++) {
+      const room = roomAt(s, { x: i % s.width, y: Math.floor(i / s.width), z: 0 });
+      if (room) rooms.add(room.id);
+    }
+    expect(rooms.size).toBeGreaterThan(20);
   });
 
   it('is won by getting somebody out; what they carry counts, a fallen soldier’s is lost', () => {
@@ -426,12 +481,10 @@ describe('the Saqueo', () => {
     const fallen = addUnit(s, 's2', 'rookie', 5, 5, { backpack: [{ supplies: 20 }, { medicines: 1 }] });
     addUnit(s, 'a1', 'zombie', 15, 15);
     const run = sim(s);
-    run.emit({ t: 'evacuated', unit: out.id });
-    run.checkOutcome();
-    expect(s.outcome).toBeNull();
-    run.damage(fallen, 99, 0);
-    run.checkOutcome();
+    // The bus leaves with s1 in it; s2, out in the street, is lost with what it carries (docs/PRUEBA-2026-10-14.md P1).
+    run.callEvac(0, out);
     expect(s.outcome).toBe('victory');
+    expect(fallen.lost).toBe(true);
     expect(broughtBack(s)).toMatchObject({ supplies: 12, items: ['firstAid'], medicines: 0 });
 
     // Everyone down: lost, and nothing comes home.
@@ -570,11 +623,123 @@ describe('loot in the campaign', () => {
   });
 });
 
+describe('the backpack (docs/FASE8.md §C)', () => {
+  const item = (s: GameState, cmd: Omit<Extract<Parameters<typeof executeCommand>[1], { type: 'item' }>, 'type'>) => executeCommand(s, { type: 'item', ...cmd }, ctx());
+  // A zombie asleep far away, so the mission goes on.
+  const field = () => {
+    const s = stateFrom(Array.from({ length: 20 }, () => '.'.repeat(20)));
+    pod(s, 'p1', false, [addUnit(s, 'a1', 'zombie', 19, 19)]);
+    return s;
+  };
+
+  it('dropping and taking are free, even with no actions left; what is dropped stays on the tile for anyone', () => {
+    const s = field();
+    const a = addUnit(s, 's1', 'rookie', 5, 5, { ap: 0, backpack: [{ food: 3 }, { medicines: 1 }] });
+    const b = addUnit(s, 's2', 'rookie', 9, 9, { backpack: [{ supplies: 4 }, { parts: 2 }, { food: 1 }] });
+    expect(item(s, { unit: 's1', action: 'drop', index: 0 }).ok).toBe(true);
+    expect(a.backpack).toEqual([{ medicines: 1 }]);
+    expect(s.dropped).toEqual([{ id: 'l1', pos: { x: 5, y: 5, z: 0 }, loot: { food: 3 } }]);
+    expect(item(s, { unit: 's2', action: 'take', id: 'l1' })).toEqual({ ok: false, error: 'Aquí no hay nada que coger.' });
+    b.pos = { x: 5, y: 5, z: 0 };
+    expect(item(s, { unit: 's2', action: 'take', id: 'l1' })).toEqual({ ok: false, error: 'La mochila está llena: suelta algo antes.' });
+    expect(item(s, { unit: 's1', action: 'take', id: 'l1' }).ok).toBe(true);
+    expect(a.backpack).toEqual([{ medicines: 1 }, { food: 3 }]);
+    expect(s.dropped).toEqual([]);
+    expect(a.ap).toBe(0);
+    // The Chapistería's one more slot.
+    b.packSlots = 4;
+    a.backpack!.pop();
+    s.dropped = [{ id: 'l9', pos: { x: 5, y: 5, z: 0 }, loot: { supplies: 9 } }];
+    expect(item(s, { unit: 's2', action: 'take', id: 'l9' }).ok).toBe(true);
+    expect(b.backpack).toHaveLength(4);
+  });
+
+  it('giving takes an action and a partner next to you with room', () => {
+    const s = field();
+    const a = addUnit(s, 's1', 'rookie', 5, 5, { backpack: [{ parts: 2 }] });
+    const b = addUnit(s, 's2', 'rookie', 7, 5, { backpack: [{ supplies: 4 }, { parts: 2 }, { food: 1 }] });
+    expect(item(s, { unit: 's1', action: 'give', index: 0, to: 's2' })).toEqual({ ok: false, error: 'Tiene que estar a tu lado.' });
+    b.pos = { x: 6, y: 6, z: 0 };
+    expect(item(s, { unit: 's1', action: 'give', index: 0, to: 's2' })).toEqual({ ok: false, error: 'No le cabe: lleva la mochila llena.' });
+    b.backpack!.pop();
+    const ap = a.ap;
+    expect(item(s, { unit: 's1', action: 'give', index: 0, to: 's2' }).ok).toBe(true);
+    expect(a.backpack).toEqual([]);
+    expect(b.backpack).toEqual([{ supplies: 4 }, { parts: 2 }, { parts: 2 }]);
+    expect(a.ap).toBe(ap - 1);
+    expect(item(s, { unit: 's1', action: 'give', index: 0, to: 's2' })).toEqual({ ok: false, error: 'No lleva eso en la mochila.' });
+  });
+
+  it('a medicine heals 3 on you or a partner next to you, for an action; the contagion only stops once unlocked', () => {
+    const s = field();
+    const a = addUnit(s, 's1', 'rookie', 5, 5, { backpack: [{ medicines: 2 }, { food: 1 }] });
+    const b = addUnit(s, 's2', 'rookie', 6, 5, { hp: 1, infected: true });
+    expect(item(s, { unit: 's1', action: 'use', index: 1 })).toEqual({ ok: false, error: 'Solo se usan las medicinas.' });
+    expect(item(s, { unit: 's1', action: 'use', index: 0 })).toEqual({ ok: false, error: 'No estás herido.' });
+    const r = item(s, { unit: 's1', action: 'use', index: 0, to: 's2' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(b.hp).toBe(4);
+    expect(b.infected).toBe(true);
+    expect(of(r.events, 'cured')).toEqual([]);
+    expect(a.backpack).toEqual([{ medicines: 1 }, { food: 1 }]);
+    // Healthy but bitten: with the Enfermería at level 2, the medicine is worth it again, and it stops the bite.
+    b.hp = b.maxHp;
+    expect(item(s, { unit: 's1', action: 'use', index: 0, to: 's2' })).toEqual({ ok: false, error: 'No está herido.' });
+    s.mission = { ...s.mission!, medicineCures: true };
+    expect(item(s, { unit: 's1', action: 'use', index: 0, to: 's2' }).ok).toBe(true);
+    expect(b.infected).toBe(false);
+    expect(a.backpack).toEqual([{ food: 1 }]);
+  });
+
+  it('the support talent stops the bite for its own soldier only', () => {
+    const s = field();
+    addUnit(s, 's1', 'rookie', 5, 5, { perks: ['lightHands'], backpack: [{ medicines: 1 }] });
+    const b = addUnit(s, 's2', 'rookie', 6, 5, { hp: 2, infected: true });
+    expect(item(s, { unit: 's1', action: 'use', index: 0, to: 's2' }).ok).toBe(true);
+    expect(b.infected).toBe(false);
+  });
+
+  it('the Chapistería gives one more slot, and the Enfermería at level 2 makes medicines stop the bite', () => {
+    const c = createCampaign([0], new Rng(1));
+    expect(buildSquad(c).every((m) => m.packSlots === undefined)).toBe(true);
+    expect(medicineCures(c)).toBe(false);
+    const free = c.base.plots.filter((p) => p.terrain === 'clear' && !p.building);
+    Object.assign(free[0]!, { building: 'garage', level: 1 });
+    Object.assign(free[1]!, { building: 'infirmary', level: 2 });
+    expect(buildSquad(c).every((m) => m.packSlots === 4)).toBe(true);
+    expect(medicineCures(c)).toBe(true);
+    const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 3 }, slots: [0], rng: new Rng(1), squad: buildSquad(c), medicineCures: medicineCures(c) });
+    expect(s.mission!.medicineCures).toBe(true);
+    expect(s.units.filter((u) => u.team === 'xcom').every((u) => u.packSlots === 4)).toBe(true);
+  });
+
+  it('a client replaying the backpack ends with the host state', () => {
+    const s = field();
+    addUnit(s, 's1', 'rookie', 5, 5, { backpack: [{ medicines: 2 }, { food: 3 }] });
+    addUnit(s, 's2', 'rookie', 6, 5, { hp: 2, infected: true, perks: ['lightHands'] });
+    const client = cloneState(s);
+    const orders = [
+      { unit: 's1', action: 'drop', index: 1 },
+      { unit: 's1', action: 'take', id: 'l1' },
+      { unit: 's1', action: 'give', index: 1, to: 's2' },
+      { unit: 's2', action: 'drop', index: 0 },
+      { unit: 's1', action: 'use', index: 0, to: 's2' },
+    ] as const;
+    for (const o of orders) {
+      const r = item(s, o);
+      expect(r.ok).toBe(true);
+      if (r.ok) for (const e of r.events) applyEvent(client, e);
+    }
+    expect(client).toEqual(s);
+  });
+});
+
 describe('replication of the new events', () => {
   it('clients replaying noise, searches and bursts end with the host state', () => {
     const s = field();
     s.decor = new Array(400).fill(0);
-    s.decor[5 * 20 + 6] = decorCode('crates');
+    s.decor[5 * 20 + 6] = decorCode('lootFood');
     s.tiles[5 * 20 + 6] = 'low';
     addUnit(s, 's1', 'rookie', 5, 5);
     const z = addUnit(s, 'a1', 'zombie', 15, 5);

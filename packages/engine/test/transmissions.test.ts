@@ -18,11 +18,11 @@ describe('transmissions', () => {
     expect(STORY_RADIO).toHaveLength(STORY.length);
   });
 
-  it('a new campaign starts with no radio: the welcome comes back with the first mission', () => {
+  it('a new campaign starts with no radio, and the first mission brings none: Morse speaks when there is news', () => {
     const c = createCampaign([0, 1], new Rng(1));
     expect(ids(c)).toEqual([]);
     c.story.done = 1;
-    expect(ids(c)).toEqual(['welcome']);
+    expect(ids(c)).toEqual([]);
     expect(c.uid).toBeTruthy();
   });
 
@@ -30,7 +30,7 @@ describe('transmissions', () => {
     const c = createCampaign([0], new Rng(1));
     c.story.done = 1;
     gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
-    expect(ids(c)).toEqual(['welcome', 'ch1After', 'ch2Before']);
+    expect(ids(c)).toEqual(['ch1After', 'ch2Before']);
     c.event = 'simon';
     expect(ids(c)).toContain('simon');
     const ch5 = SCENES.find((s) => s.id === 'ch5After')!;
@@ -44,7 +44,7 @@ describe('transmissions', () => {
     const c = createCampaign([0], new Rng(1));
     c.story.done = 1;
     gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
-    const seen = new Set<SceneId>(['welcome']);
+    const seen = new Set<SceneId>();
     expect(nextScene(c, seen, false)).toBeNull();
     expect(nextScene(c, seen, true)?.id).toBe('ch1After');
     seen.add('ch1After');

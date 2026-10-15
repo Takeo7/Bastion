@@ -10,7 +10,7 @@ import { MAPS, parseMap } from '../src/maps';
 import { computeReach } from '../src/path';
 import type { Command } from '../src/protocol';
 import { Rng } from '../src/rng';
-import { abandonMission, executeCommand, Sim } from '../src/rules';
+import { abandonMission, evacWins, executeCommand, Sim, syncTurn } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { AbilityId, ClassId, GameState, Place, Slot, TemplateId } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
@@ -273,18 +273,42 @@ describe('recovery missions', () => {
     expect(s.mission.item).toMatchObject({ carrier: null, pos: { x: 6, y: 0 } });
   });
 
-  it('evacuating with the objective wins once nobody is left on the field', () => {
-    const { s } = recovery();
-    run(s, { type: 'move', unit: 's1', to: { x: 4, y: 0 } });
-    run(s, { type: 'move', unit: 's1', to: { x: 0, y: 5 } });
+  it('evacuating is a joint call from the bus: on the partner’s yes whoever is in it gets out with the objective, and the rest are lost', () => {
+    const { s, b } = recovery();
+    b.owner = 1;
+    const both = (slot: Slot) => ctx(slot, [0, 1]);
+    run(s, { type: 'move', unit: 's1', to: { x: 4, y: 0 } }, both(0));
+    run(s, { type: 'move', unit: 's1', to: { x: 0, y: 5 } }, both(0));
     expect(s.mission.item?.carrier).toBe('s1');
-    s.units[0]!.ap = 1;
-    run(s, ability('s1', 'evac'));
-    expect(s.mission.item?.evacuated).toBe(true);
+    // Holding the item with no enemy left is not a win any more (docs/PRUEBA-2026-10-14.md P1).
+    // s1 calls from the bus; the partner's s2 is still out in the street.
+    run(s, { type: 'evac', unit: 's1' }, both(0));
+    expect(s.evacCall).toEqual({ by: 0, unit: 's1' });
     expect(s.outcome).toBeNull();
-    run(s, { type: 'move', unit: 's2', to: { x: 0, y: 5 } });
-    run(s, ability('s2', 'evac'));
+    // Only the partner answers, and a no keeps everyone on the field.
+    expect(executeCommand(s, { type: 'evacAnswer', accept: true }, both(0)).ok).toBe(false);
+    run(s, { type: 'evacAnswer', accept: false }, both(1));
+    expect(s.evacCall).toBeUndefined();
+    // Not from outside the bus.
+    expect(executeCommand(s, { type: 'evac', unit: 's2' }, both(1)).ok).toBe(false);
+    // Called again and a yes: s1 gets out with the item, s2 is lost, and the mission is won.
+    expect(evacWins(s)).toBe(true);
+    run(s, { type: 'evac', unit: 's1' }, both(0));
+    run(s, { type: 'evacAnswer', accept: true }, both(1));
+    expect(s.mission.item?.evacuated).toBe(true);
+    expect(b.lost).toBe(true);
     expect(s.outcome).toBe('victory');
+  });
+
+  it('a call to evacuate whose answerer has gone leaves at once', () => {
+    const { s, b } = recovery();
+    b.owner = 1;
+    run(s, { type: 'move', unit: 's1', to: { x: 0, y: 5 } }, ctx(0, [0, 1]));
+    run(s, { type: 'evac', unit: 's1' }, ctx(0, [0, 1]));
+    expect(s.evacCall).toBeDefined();
+    syncTurn(s, { connected: [0], rng: new Rng(1) });
+    expect(s.mission.evacDone).toBe(true);
+    expect(b.lost).toBe(true);
   });
 
   it('the mission fails when the timer runs out', () => {

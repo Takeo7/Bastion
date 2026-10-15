@@ -1,10 +1,14 @@
 import {
+  clipOf,
   displayName,
+  EVAC_TEXT,
+  evacClock,
   weaponName,
   FOUND_WEAPONS,
   ITEMS,
   magsCount,
   MISSION_NAMES,
+  PISTOL_CLIP,
   RANKS,
   TEMPLATES,
   WEAPONS,
@@ -22,6 +26,7 @@ import {
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
 import type { NetStatus } from '../net';
+import { deadlineEl } from './deadline';
 import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
 import { graphicsSettings, soundSettings } from './settingsPanel';
@@ -67,6 +72,31 @@ export interface CommandView {
   color: string;
   /** The holder can hand it over (partner connected and still playing). */
   canPass: boolean;
+}
+
+/**
+ * The evacuation button (docs/PRUEBA-2026-10-14.md P1), while one of the
+ * player's soldiers is in La Mula or the partner has asked to leave.
+ */
+export interface EvacButtonView {
+  /** «EVACUAR», or «RETIRARSE» in a Limpieza. */
+  label: string;
+  /** The line under it: how many are in, «Esperando a Ana…», «Ana lo pide». */
+  detail: string;
+  /** This player asked and waits for the partner: the button rests. */
+  waiting: boolean;
+  /** The call has its clock running (PRUEBA-2026-10-14 #28): unanswered, the bus leaves on its own. */
+  clock?: boolean;
+}
+
+/** Leave in La Mula or wait: the stakes (lore.ts evacPrompt, evacAsk) and the two answers. */
+export interface EvacDialogView {
+  title: string;
+  text: string;
+  go: string;
+  wait: string;
+  /** Leaving now loses the mission or someone: the button to leave is red. */
+  costly: boolean;
 }
 
 /** What the aimed ability takes off that target: ranges after its armour, and what armour does. */
@@ -144,7 +174,28 @@ export interface PackView {
   slots: PackSlot[];
   size: number;
   squad: { supplies: number; items: number; medicines: number; food: number; parts: number; weapons: number; text: string };
+  /** One of the player's own, with orders to give (docs/FASE8.md §C): the slots take a click. */
+  live?: boolean;
+  /** What each slot holds, in words (lore.ts findLabel), for its menu. */
+  labels?: string[];
+  /** The same as a phrase (lore.ts lootName: «una medicina»), for «Dejar …» and «Coger …». */
+  names?: string[];
+  /** Partners right next to it: who it can hand a thing to, or treat. */
+  near?: { id: string; name: string }[];
+  /** Things on its tile (GameState.dropped), to pick up. */
+  floor?: { id: string; label: string; name: string; kind: PackSlot['kind'] }[];
 }
+
+/** An order on a thing carried or lying on the floor: the engine's `item` command (docs/FASE8.md §C). */
+export interface ItemOrder {
+  action: 'drop' | 'take' | 'give' | 'use' | 'equip';
+  index?: number;
+  id?: string;
+  to?: string;
+}
+
+/** The backpack's menu open: a slot's orders, or what to leave to take a thing from the floor. */
+type PackMenu = { unit: string; slot: number } | { unit: string; swap: string } | null;
 
 /** The symbol of an accessory found while searching, from the sheet's own set (styles.css). */
 const ITEM_ICONS: Record<ItemId, string> = {
@@ -177,11 +228,17 @@ export interface HudHandlers {
   onBackToMenu(): void;
   onAbandon(): void;
   onPassCommand(): void;
+  /** The evacuation button: leave or wait, or the partner's call to answer. */
+  onEvac(): void;
   /** Toggles the sound; returns whether it is now on. */
   onToggleSound(): boolean;
   soundOn(): boolean;
   /** One floor up (1) or down (-1) (docs/FASE6.md). */
   onFloor(dir: 1 | -1): void;
+  /** An order on the backpack or the floor (docs/FASE8.md §C). */
+  onItem(order: ItemOrder): void;
+  /** Leave slot `drop` on the floor and pick up `take` from it: the swap when the backpack is full. */
+  onSwap(take: string, drop: number): void;
 }
 
 const CONTROLS: [string, string][] = [
@@ -231,6 +288,8 @@ const LOG_FOLDED = 2;
 /** DOM overlay for everything that is not in the 3D scene. */
 export class Hud {
   readonly root = h('div.hud');
+  /** What the mission's carrier carries, as its tag (lore.ts itemTag: «MEDICINAS»); set by the game per mission. */
+  itemTag = 'CARGA';
   /** Round the screen, in the colour of whoever plays now (playtest: «que se note de quién es el turno»). */
   private readonly frame = h('div.turn-frame');
   private readonly turn = h('div.turn');
@@ -247,6 +306,10 @@ export class Hud {
   private readonly target = h('div.shot-panel.panel');
   private readonly endTurn = h('button.end-turn');
   private readonly passBtn = h('button.pass-command', { title: 'Tu compañero da las órdenes hasta que te lo devuelva (C)' });
+  private readonly evacBtn = h('button.evac-call.hidden', { title: EVAC_TEXT.buttonTip });
+  private evacKey = '';
+  /** The open evacuation dialog's «Esperar» (Esc), or null. */
+  private evacWait: (() => void) | null = null;
   private readonly logEl = h('div.log');
   private readonly logLines: HTMLElement[] = [];
   private logOpen = false;
@@ -255,6 +318,12 @@ export class Hud {
   private readonly toastEl = h('div.toast');
   /** A key moment the partner caused, with «Ver (F)» (UX-REVISION-2 #36). */
   private readonly noticeEl = h('div.toast.partner-notice');
+  /** Something found with the backpack full, left on the floor: «Cambiar» to choose what stays (docs/FASE8.md §C). */
+  private readonly packOfferEl = h('div.toast.pack-offer');
+  private packOfferTimer = 0;
+  private packMenu: PackMenu = null;
+  /** The soldier on the sheet, and the backpack last drawn, so an open menu survives the panel's redraws. */
+  private shownUnit: string | null = null;
   private readonly outcome = h('div.outcome');
   private readonly modal = h('div.modal');
   private readonly connection = h('div.connection');
@@ -264,6 +333,7 @@ export class Hud {
   constructor(container: HTMLElement, private readonly handlers: HudHandlers) {
     this.endTurn.addEventListener('click', () => handlers.onEndTurn());
     this.passBtn.addEventListener('click', () => handlers.onPassCommand());
+    this.evacBtn.addEventListener('click', () => handlers.onEvac());
     this.passBtn.append(h('span', {}, 'CEDER EL MANDO'), h('small', {}, 'C'));
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
     this.root.append(
@@ -273,11 +343,12 @@ export class Hud {
       this.unitPanel,
       this.abilities,
       this.target,
-      h('div.turn-actions', {}, this.passBtn, this.endTurn),
+      h('div.turn-actions', {}, this.evacBtn, this.passBtn, this.endTurn),
       h('div.side', {}, menuButton, this.logEl),
       this.bannerEl,
       this.toastEl,
       this.noticeEl,
+      this.packOfferEl,
       this.outcome,
       this.menu,
       this.modal,
@@ -419,7 +490,7 @@ export class Hud {
           // Bitten (docs/FASE3.md): if it falls it rises, and back at the base it turns unless treated.
           u.infected && u.alive ? h('em.bite', { title: 'Mordido: si cae, se levanta. En la base hay que tratarlo' }, 'MORDIDO') : null,
           u.evacuated ? h('em.evac', {}, 'EVACUADO') : null,
-          carrier === u.id ? h('em.data', {}, 'DATOS') : null,
+          carrier === u.id ? h('em.data', {}, this.itemTag) : null,
           u.overwatch ? h('em.ow', {}, u.killZone ? 'ZONA LETAL' : 'VIGILANCIA') : null,
           u.hunkered ? h('em.hk', {}, 'AGAZAPADO') : null,
           u.stunned ? h('em.stun', {}, 'ATURDIDO') : null,
@@ -439,10 +510,14 @@ export class Hud {
     this.unitPanel.classList.toggle('hidden', !u);
     if (!u) return;
     const t = TEMPLATES[u.template];
-    const w = WEAPONS[t.weapon];
-    // A found weapon goes by its own name (docs/FASE4.md): «Fusil de caza».
-    const weapon = u.weaponName ?? weaponName(t.weapon, u.weaponTier ?? 1);
-    const extras = [t.secondary && WEAPONS[t.secondary].name, t.meleeWeapon && WEAPONS[t.meleeWeapon].name].filter(Boolean).join(' · ');
+    // A soldier's own arms (docs/FASE8.md §A): what is in the hand (the pistol if nothing), the pistol beside it, the knife or machete.
+    const arms = u.arms;
+    const weapon = u.weaponName ?? (arms ? (arms.primary ? FOUND_WEAPONS[arms.primary].name : WEAPONS.pistol.name) : weaponName(t.weapon, u.weaponTier ?? 1));
+    const extras = (arms ? [arms.primary ? WEAPONS.pistol.name : '', arms.melee ? FOUND_WEAPONS[arms.melee].name : WEAPONS.knife.name] : [t.secondary && WEAPONS[t.secondary].name, t.meleeWeapon && WEAPONS[t.meleeWeapon].name])
+      .filter(Boolean)
+      .join(' · ');
+    const clip = clipOf(u, 'shoot');
+    const sidearm = !!arms?.primary;
     const rank = u.team === 'xcom' ? RANKS[u.rank]?.name ?? '' : '';
     const pips = (filled: number, total: number) => Array.from({ length: total }, (_, i) => h(`i${i < filled ? '.on' : ''}`));
     const stat = (kind: string, title: string, ...content: (Node | string)[]) => h(`span.stat.${kind}`, { title }, h('span.stat-icon'), ...content);
@@ -461,14 +536,16 @@ export class Hud {
         stat('hp', `Salud ${u.hp}/${u.maxHp}`, h('span.pips', {}, ...pips(u.hp, u.maxHp))),
         stat('ap', `Acciones ${u.ap}/2`, h('span.pips', {}, ...pips(u.ap, Math.max(2, u.ap)))),
         // The spare magazines after the clip (docs/FASE7.md): «+3», red at none; the enemies don't count theirs.
-        w.clip > 0
+        clip > 0
           ? stat(
               'ammo',
-              `Munición ${u.ammo}/${w.clip}${u.mags === undefined ? '' : u.mags ? ` · ${magsCount(u.mags)} de repuesto` : ' · sin cargadores de repuesto'}`,
-              h('span.pips', {}, ...pips(u.ammo, w.clip)),
+              `${weapon}: ${u.ammo}/${clip}${u.mags === undefined ? '' : u.mags ? ` · ${magsCount(u.mags)} de repuesto` : ' · sin cargadores de repuesto'}`,
+              h('span.pips', {}, ...pips(u.ammo, clip)),
               ...(u.mags === undefined ? [] : [h(`b.mags${u.mags ? '' : '.none'}`, {}, `+${u.mags}`)]),
             )
           : null,
+        // The pistol carried beside a main gun counts its own rounds (PISTOL_CLIP); the spares serve both.
+        sidearm ? stat('ammo.sidearm', `${WEAPONS.pistol.name}: ${u.pistolAmmo ?? 0}/${PISTOL_CLIP}`, h('span.pips', {}, ...pips(u.pistolAmmo ?? 0, PISTOL_CLIP))) : null,
         stat('aim', `Puntería ${t.aim + u.mods.aim}`, h('b', {}, String(t.aim + u.mods.aim))),
         u.charges.grenade !== undefined ? stat('grenade', `Granadas: ${u.charges.grenade}`, h('b', {}, `×${u.charges.grenade}`)) : null,
         u.charges.medkit !== undefined ? stat('medkit', `Botiquín: ${u.charges.medkit}`, h('b', {}, `×${u.charges.medkit}`)) : null,
@@ -478,10 +555,42 @@ export class Hud {
         'div.unit-weapon',
         { title: [weapon, extras].filter(Boolean).join(' · ') },
         h('span.stat-icon'),
+        h('span.unit-weapon-name', {}, weapon),
         h(`span.tier.t${u.weaponTier ?? 1}`, {}, ...Array.from({ length: u.weaponTier ?? 1 }, () => h('i'))),
       ),
-      pack ? this.backpack(pack) : null,
+      pack ? this.backpack(u.id, pack) : null,
     );
+  }
+
+  /** Opens the backpack's swap for `id` on the floor (the notice's «Cambiar»): what to leave to take it. */
+  openSwap(unit: string, id: string): void {
+    this.packMenu = { unit, swap: id };
+    this.shownUnit = unit;
+  }
+
+  /**
+   * Something found with the backpack full stays on the floor (docs/FASE8.md
+   * §C): a notice says so, with «Cambiar» to choose what stays.
+   */
+  packOffer(text: string, swap: () => void): void {
+    clear(this.packOfferEl);
+    this.packOfferEl.classList.add('show');
+    append(
+      this.packOfferEl,
+      h('span', {}, text),
+      h(
+        'button.x-btn.small',
+        {
+          onclick: () => {
+            this.packOfferEl.classList.remove('show');
+            swap();
+          },
+        },
+        'Cambiar',
+      ),
+    );
+    window.clearTimeout(this.packOfferTimer);
+    this.packOfferTimer = window.setTimeout(() => this.packOfferEl.classList.remove('show'), 7000);
   }
 
   /**
@@ -489,8 +598,30 @@ export class Hud {
    * suministros, the accessory's symbol, a pill for medicines; then what the
    * whole squad carries. It only counts if it gets home.
    */
-  private backpack(pack: PackView): HTMLElement {
-    const slot = (s: PackSlot | undefined) => {
+  private backpack(unit: string, pack: PackView): HTMLElement {
+    // A menu open on another soldier closes when this one is shown.
+    if (this.shownUnit !== unit) this.packMenu = null;
+    this.shownUnit = unit;
+    const menu = this.packMenu;
+    const slot = (s: PackSlot | undefined, i: number) => {
+      const el = slotEl(s);
+      if (!s || !pack.live) return el;
+      // Its own soldier's: a click opens what can be done with it.
+      const open = !!menu && 'slot' in menu && menu.slot === i;
+      return h(
+        `button.pack-slot-btn${open ? '.open' : ''}`,
+        {
+          type: 'button',
+          title: `${pack.labels?.[i] ?? ''}: soltar${s.kind === 'weapon' ? ', equipar' : ''}${s.kind === 'medicines' ? ', usar' : ''}${pack.near?.length ? ', dar' : ''}`,
+          onclick: () => {
+            this.packMenu = open ? null : { unit, slot: i };
+            this.redrawPack(unit, pack);
+          },
+        },
+        el,
+      );
+    };
+    const slotEl = (s: PackSlot | undefined) => {
       if (!s) return h('span.pack-slot.empty', { title: 'Hueco libre' });
       if (s.kind === 'supplies') return h('span.pack-slot.supplies', { title: `Suministros: +${s.amount} §` }, h('b', {}, `${s.amount}§`));
       if (s.kind === 'medicines') return h('span.pack-slot.medicines', { title: s.amount === 1 ? 'Medicinas' : `Medicinas ×${s.amount}` }, h('span.stat-icon'));
@@ -505,10 +636,41 @@ export class Hud {
     const after = ['food', 'parts'];
     const total = (kind: string, n: number, text: string) =>
       n ? h(`span.pack-total.${kind}`, {}, kind === 'supplies' || after.includes(kind) ? null : h('span.stat-icon'), h('b', {}, text), after.includes(kind) ? h(`span.ico.${kind}`) : null) : null;
+    const full = pack.slots.length >= pack.size;
+    // What lies on its tile: a click picks it up, or, with the backpack full, asks what to leave for it.
+    const floor = pack.live && pack.floor?.length
+      ? h(
+          'div.pack-floor',
+          {},
+          h('small', {}, 'EN EL SUELO'),
+          ...pack.floor.map((f) =>
+            h(
+              `button.pack-floor-item.${f.kind}`,
+              {
+                type: 'button',
+                title: full ? `${f.label}: la mochila está llena; elige qué dejar` : `${f.label}: recogerlo (gratis)`,
+                onclick: () => {
+                  if (!full) {
+                    this.packMenu = null;
+                    this.handlers.onItem({ action: 'take', id: f.id });
+                    return;
+                  }
+                  this.packMenu = { unit, swap: f.id };
+                  this.redrawPack(unit, pack);
+                },
+              },
+              h('b', {}, f.label),
+              h('small', {}, full ? 'Cambiar' : 'Coger'),
+            ),
+          ),
+        )
+      : null;
     return h(
       'div.unit-pack',
       { title: `Mochila ${pack.slots.length}/${pack.size}. Cuenta si vuelve: lo que lleva un caído se pierde.` },
-      h('span.pack-slots', {}, ...Array.from({ length: pack.size }, (_, i) => slot(pack.slots[i]))),
+      this.packMenuEl(unit, pack),
+      floor,
+      h('span.pack-slots', {}, ...Array.from({ length: pack.size }, (_, i) => slot(pack.slots[i], i))),
       h(
         'span.pack-squad',
         { title: q.text },
@@ -527,6 +689,59 @@ export class Hud {
           : h('span.pack-none', {}, '—'),
       ),
     );
+  }
+
+  /** The backpack drawn again in place, for its menu (the rest of the sheet stays). */
+  private redrawPack(unit: string, pack: PackView): void {
+    const old = this.unitPanel.querySelector('.unit-pack');
+    if (old) old.replaceWith(this.backpack(unit, pack));
+  }
+
+  /**
+   * The open menu, over the backpack: for a slot, what can be done with it
+   * (soltar, free; equipar, usar, dar, an action each); for a thing on the
+   * floor with the backpack full, which slot to leave for it.
+   */
+  private packMenuEl(unit: string, pack: PackView): HTMLElement | null {
+    const menu = this.packMenu;
+    if (!menu || menu.unit !== unit || !pack.live) return null;
+    const close = () => {
+      this.packMenu = null;
+      this.redrawPack(unit, pack);
+    };
+    const order = (o: ItemOrder) => {
+      this.packMenu = null;
+      this.handlers.onItem(o);
+    };
+    const act = (label: string, cost: string, fn: () => void, kind = '') => h(`button.pack-act${kind}`, { type: 'button', onclick: fn }, h('span', {}, label), h('small', {}, cost));
+    const items: HTMLElement[] = [];
+    let title = '';
+    if ('slot' in menu) {
+      const s = pack.slots[menu.slot];
+      if (!s) return null;
+      const i = menu.slot;
+      title = pack.labels?.[i] ?? '';
+      if (s.kind === 'weapon') items.push(act('Equipar', '1 acción', () => order({ action: 'equip', index: i }), '.main'));
+      if (s.kind === 'medicines') {
+        items.push(act('Usar', '1 acción', () => order({ action: 'use', index: i }), '.main'));
+        for (const n of pack.near ?? []) items.push(act(`Curar a ${n.name}`, '1 acción', () => order({ action: 'use', index: i, to: n.id })));
+      }
+      for (const n of pack.near ?? []) items.push(act(`Dar a ${n.name}`, '1 acción', () => order({ action: 'give', index: i, to: n.id })));
+      items.push(act('Soltar', 'gratis', () => order({ action: 'drop', index: i })));
+    } else {
+      const f = pack.floor?.find((x) => x.id === menu.swap);
+      if (!f) return null;
+      title = `Coger ${f.name}: ¿qué dejas?`;
+      pack.slots.forEach((_, i) =>
+        items.push(
+          act(`Dejar ${pack.names?.[i] ?? pack.labels?.[i] ?? ''}`, 'gratis', () => {
+            this.packMenu = null;
+            this.handlers.onSwap(menu.swap, i);
+          }),
+        ),
+      );
+    }
+    return h('div.pack-menu', { role: 'menu' }, h('div.pack-menu-head', {}, h('b', {}, title), h('button.pack-menu-x', { type: 'button', title: 'Cerrar', onclick: close }, '✕')), ...items);
   }
 
   setAbilities(list: AbilityView[]): void {
@@ -664,9 +879,20 @@ export class Hud {
     this.target.style.left = `${Math.round(Math.max(min, Math.min(max, left)))}px`;
   }
 
-  /** The menu or a modal is up: the keys are theirs. */
+  /** The menu, a modal or the mission's briefing is up: the keys are theirs. */
   get covered(): boolean {
-    return this.menuOpen || this.modal.classList.contains('show');
+    return this.menuOpen || this.modal.classList.contains('show') || this.introOpen;
+  }
+
+  /** Closes the mission's briefing, when it is up. */
+  private introClose: (() => void) | null = null;
+
+  get introOpen(): boolean {
+    return this.introClose !== null;
+  }
+
+  closeIntro(): void {
+    this.introClose?.();
   }
 
   /**
@@ -701,6 +927,85 @@ export class Hud {
     this.root.classList.toggle('waiting-command', !!view && !view.mine);
   }
 
+  /** The evacuation button (P1); null hides it. */
+  setEvac(view: EvacButtonView | null): void {
+    const key = JSON.stringify(view);
+    if (key === this.evacKey) return;
+    this.evacKey = key;
+    this.evacBtn.classList.toggle('hidden', !view);
+    clear(this.evacBtn);
+    if (!view) return;
+    this.evacBtn.disabled = view.waiting;
+    this.evacBtn.classList.toggle('is-waiting', view.waiting);
+    append(
+      this.evacBtn,
+      h('span', {}, view.label),
+      h('small', {}, view.detail),
+      view.clock ? deadlineEl('evac', (left) => evacClock(left, view.waiting)) : null,
+    );
+  }
+
+  /** The partner's call, open in the dialog: its clock (PRUEBA-2026-10-14 #28), drawn again whenever the server says. */
+  evacClock(): void {
+    const slot = this.modal.querySelector<HTMLElement>('.evac-clock');
+    if (!slot) return;
+    clear(slot);
+    append(slot, deadlineEl('evac', (left) => evacClock(left, false)));
+  }
+
+  get evacOpen(): boolean {
+    return this.evacWait !== null;
+  }
+
+  /**
+   * Leave in La Mula or wait (docs/PRUEBA-2026-10-14.md P1): what leaving
+   * now costs, then the two answers. Leaving can't be undone, so no key
+   * leaves; Esc waits (game.ts).
+   */
+  evacDialog(view: EvacDialogView, go: () => void, wait: () => void): void {
+    uiSound('paper');
+    clear(this.modal);
+    this.modal.classList.add('show');
+    let answered = false;
+    const answer = (then: () => void) => () => {
+      if (answered) return;
+      answered = true;
+      this.evacWait = null;
+      this.modal.classList.remove('show');
+      then();
+    };
+    this.evacWait = answer(wait);
+    this.modal.append(
+      h(
+        'div.modal-card.panel.evac-card',
+        {},
+        h('small.evac-kicker', {}, EVAC_TEXT.kicker),
+        h('h2', {}, view.title),
+        h('p', {}, view.text),
+        h('div.evac-clock'),
+        h(
+          'div.modal-actions',
+          {},
+          h(`button.${view.costly ? 'danger' : 'fire'}`, { onclick: answer(go) }, view.go.toUpperCase()),
+          h('button.secondary', { onclick: this.evacWait }, view.wait.toUpperCase()),
+        ),
+      ),
+    );
+    this.evacClock();
+  }
+
+  /** Esc on the evacuation dialog: its «Esperar». */
+  waitEvac(): void {
+    this.evacWait?.();
+  }
+
+  /** Takes the evacuation dialog down unanswered: the call was answered, refused or lapsed meanwhile. */
+  dropEvac(): void {
+    if (!this.evacWait) return;
+    this.evacWait = null;
+    this.modal.classList.remove('show');
+  }
+
   /** `detail`: a line under the stamp saying why (who saw the squad…); it stays longer, to be read. */
   banner(text: string, kind: 'xcom' | 'alien' | 'warn' = 'xcom', detail?: string): void {
     // The banner is a rubber stamp coming down.
@@ -716,23 +1021,36 @@ export class Hud {
    * Arrival briefing: the operation, the area (`lines`: map, night, turns),
    * the objective in its own line and, when there is one, a line of the
    * operation's briefing; then it fades away. A longer card stays longer.
-   * Returns how long it is on screen, in ms.
+   * It stays until the player closes it (playtest 14/10 #3: it went before
+   * it could be read): «Empezar», a click anywhere, Enter, Space or Esc
+   * (game.ts). Resolves when it is closed.
    */
-  intro(kicker: string, title: string, lines: string[], objective?: string, briefing?: string): number {
+  intro(kicker: string, title: string, lines: string[], objective?: string, briefing?: string): Promise<void> {
+    this.introClose?.();
+    const close = () => this.introClose?.();
+    // A click anywhere closes it; nothing under it is played meanwhile.
+    const catcher = h('div.intro-catcher', { onpointerdown: close });
     const el = h(
-      'div.mission-intro',
-      {},
+      'div.mission-intro.open',
+      { onclick: close },
       h('small', {}, kicker),
       h('h1', {}, type(title)),
       lines.length ? h('p.intro-meta', {}, lines.join(' · ')) : null,
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
       briefing ? h('p.intro-briefing', {}, briefing) : null,
+      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR'), h('small', {}, 'clic o Intro')),
     );
-    this.root.append(el);
-    const stay = briefing ? Math.min(7000, 4200 + briefing.length * 18) : 4200;
-    window.setTimeout(() => el.classList.add('out'), stay);
-    window.setTimeout(() => el.remove(), stay + 800);
-    return stay + 800;
+    this.root.append(catcher, el);
+    return new Promise((resolve) => {
+      this.introClose = () => {
+        this.introClose = null;
+        uiSound('confirm');
+        catcher.remove();
+        el.classList.add('out');
+        window.setTimeout(() => el.remove(), 800);
+        resolve();
+      };
+    });
   }
 
   /**
@@ -905,6 +1223,7 @@ export class Hud {
 
   private confirmAbandon(): void {
     uiSound('paper');
+    this.evacWait = null;
     clear(this.modal);
     this.modal.classList.add('show');
     const close = () => this.modal.classList.remove('show');
@@ -926,6 +1245,7 @@ export class Hud {
 
   /** The Bastion's file on an enemy (right click): what it is, what it does, how to beat it. */
   enemyFile(name: string, stats: string, file: { what: string; does: string; tip: string }): void {
+    this.evacWait = null;
     clear(this.modal);
     this.modal.classList.add('show');
     const close = () => this.modal.classList.remove('show');

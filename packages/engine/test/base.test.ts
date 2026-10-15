@@ -4,7 +4,6 @@ import {
   applyMissionResult,
   buildSquad,
   contactCapacity,
-  offerDays,
   roadRoute,
   createCampaign,
   EVENTS,
@@ -27,6 +26,7 @@ import {
   upgradeCost,
   FACILITIES,
   listeningDelay,
+  garageCut,
   shopPrice,
   squadLimit,
   squadMember,
@@ -224,16 +224,15 @@ describe('buildings and their levels', () => {
     c.nextDoomDay = c.day + 1;
     run(c, { type: 'advance', ready: true });
     expect(c.nextDoomDay - c.day).toBe(12 + 4);
-    // La Mula's workshop: a mission takes a day less (one at least).
+    // La Mula's workshop: wounds heal a day sooner a level; a mission takes no days (docs/PRUEBA-2026-10-14.md P7).
+    put('5,3', 'garage', 2);
+    expect(garageCut(c).wounds).toBe(2);
     const offer = c.offers[0]!;
-    const before = offerDays(c, offer);
-    put('5,3', 'garage');
-    expect(offerDays(c, offer)).toBe(Math.max(1, before - 1));
     run(c, { type: 'chooseMission', id: offer.id });
     const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(2), kind: offer.kind, pods: offer.pods });
     mission.outcome = 'victory';
     const report = applyMissionResult(c, mission, new Rng(1));
-    expect(c.day - report.day).toBe(offerDays(c, offer));
+    expect(c.day).toBe(report.day);
   });
 });
 

@@ -9,6 +9,7 @@ import {
   endsTurn,
   hackChance,
   hasBadStatus,
+  inEvacZone,
   meleeTargets,
   noiseOf,
   psiChance,
@@ -37,10 +38,13 @@ import {
   attackWeapon,
   FALL_DAMAGE,
   hasPerk,
+  hasSquadsight,
   HOLO_AIM,
   HORDE,
   INFECTION,
   isAttack,
+  loadedFor,
+  MEDICINE_HEAL,
   MEDKIT_HEAL,
   NIGHT,
   NOISE,
@@ -72,7 +76,7 @@ import {
   toPos,
   unitAt,
 } from './grid';
-import { rollLoot, searchSpot } from './loot';
+import { packSlots, rollBox, rollRoom, roomAt, searchSpot } from './loot';
 import { canSee, detectionTo, isViewer, lightTiles, sightOrigin, sightTo } from './los';
 import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol } from './path';
 import type { Command } from './protocol';
@@ -221,7 +225,7 @@ export class Sim {
   perform(u: Unit, ability: AbilityId, args: { target?: Unit; tile?: Pos; melee?: MeleeOption } = {}): void {
     const { target, tile, melee } = args;
     this.pay(u, ability);
-    const loaded = () => attackWeapon(u, 'shoot').clip === 0 || u.ammo > 0;
+    const loaded = () => loadedFor(u, 'shoot');
     switch (ability) {
       case 'shoot':
       case 'pistol':
@@ -260,7 +264,7 @@ export class Sim {
         break;
       case 'aid':
         this.emit({ t: 'aided', unit: u.id, target: target!.id, amount: AID_DEFENSE + u.mods.aid + (bridged(u, target!) ? 10 : 0) });
-        if (hasPerk(u, 'threatAssessment') && !target!.overwatch && (attackWeapon(target!, 'shoot').clip === 0 || target!.ammo > 0)) {
+        if (hasPerk(u, 'threatAssessment') && !target!.overwatch && loadedFor(target!, 'shoot')) {
           this.emit({ t: 'overwatch', unit: target!.id, killZone: false });
         }
         break;
@@ -299,14 +303,14 @@ export class Sim {
       case 'reload':
         this.emit({ t: 'reload', unit: u.id });
         break;
-      case 'evac':
-        this.emit({ t: 'evacuated', unit: u.id });
-        break;
       case 'hack':
         this.hack(u);
         break;
       case 'search':
         this.search(u, tile!);
+        break;
+      case 'searchRoom':
+        this.searchRoom(u);
         break;
       case 'openDoor':
       case 'closeDoor':
@@ -529,7 +533,7 @@ export class Sim {
         o.overwatch &&
         hasPerk(o, 'coveringFire') &&
         !(o.killZone && o.reactedTo.includes(attacker.id)) &&
-        (attackWeapon(o, 'shoot').clip === 0 || o.ammo > 0) &&
+        loadedFor(o, 'shoot') &&
         canSee(this.s, o, attacker),
     );
     for (const o of watchers) {
@@ -727,10 +731,19 @@ export class Sim {
   }
 
   /** Searches the furniture on `tile` (docs/FASE2.md): what turns up goes into the backpack. */
+  /** Opens the loot box on `tile` (docs/FASE8.md §B): always what it is marked for. */
   private search(u: Unit, tile: Pos): void {
-    const decor = searchSpot(this.s, tile);
-    const loot = decor ? rollLoot(decor, this.s.mission.difficulty ?? 2, this.rng, !!this.s.mission.night, u.mags !== undefined) : null;
+    const box = searchSpot(this.s, tile);
+    const loot = box ? rollBox(box, this.rng, u.mags !== undefined) : null;
     this.emit({ t: 'searched', unit: u.id, tile: { ...tile }, loot });
+  }
+
+  /** Searches the room `u` stands in, once for the squad (docs/FASE8.md §B). */
+  private searchRoom(u: Unit): void {
+    const room = roomAt(this.s, u.pos);
+    if (!room) return;
+    const loot = rollRoom(room, this.s.mission.difficulty ?? 2, this.rng, !!this.s.mission.night, u.mags !== undefined);
+    this.emit({ t: 'roomSearched', unit: u.id, room: room.id, loot });
   }
 
   private hack(u: Unit): void {
@@ -797,7 +810,7 @@ export class Sim {
 
       // Shadowstep: nobody gets a reaction shot at this unit.
       const shadow = hasPerk(u, 'shadowstep');
-      const loaded = (o: Unit) => attackWeapon(o, 'shoot').clip === 0 || o.ammo > 0;
+      const loaded = (o: Unit) => loadedFor(o, 'shoot');
       const reactors = shadow
         ? []
         : this.s.units.filter(
@@ -827,7 +840,7 @@ export class Sim {
   /** Whether an overwatcher covers `step`: own sight, or the squad's with Long Watch. */
   private watches(o: Unit, step: Pos): boolean {
     if (sightOrigin(this.s, o.pos, step, sightTo(this.s, o, step))) return true;
-    if (!hasPerk(o, 'longWatch') || !TEMPLATES[o.template].squadsight) return false;
+    if (!hasPerk(o, 'longWatch') || !hasSquadsight(o)) return false;
     const spotted = this.s.units.some((v) => isViewer(v, o.team) && sightOrigin(this.s, v.pos, step, sightTo(this.s, v, step)));
     return spotted && sightOrigin(this.s, o.pos, step, Infinity) !== null;
   }
@@ -1090,18 +1103,14 @@ export class Sim {
     const m = s.mission;
     const squad = combatants(s, 'xcom');
     const hostiles = combatants(s, 'alien');
-    const end = (outcome: 'victory' | 'defeat', reason: 'objective' | 'wiped' | 'objectiveLost') =>
+    const end = (outcome: 'victory' | 'defeat', reason: 'objective' | 'wiped' | 'objectiveLost' | 'abandoned') =>
       this.emit({ t: 'missionEnded', outcome, reason });
 
+    // The Limpieza is won clearing the map; leaving it by the bus is a retreat.
     if (m.kind === 'elimination') {
       if (!hostiles.length) end('victory', 'objective');
+      else if (m.evacDone) end('defeat', 'abandoned');
       else if (!squad.length) end('defeat', 'wiped');
-      return;
-    }
-    const someoneOut = s.units.some((u) => u.team === 'xcom' && u.evacuated);
-    // Saqueo: won by getting somebody out; the horde never runs dry.
-    if (m.kind === 'scavenge') {
-      if (!squad.length) end(someoneOut ? 'victory' : 'defeat', someoneOut ? 'objective' : 'wiped');
       return;
     }
     const target = m.objectiveUnit ? getUnit(s, m.objectiveUnit) : undefined;
@@ -1109,12 +1118,36 @@ export class Sim {
       end('defeat', 'objectiveLost');
       return;
     }
-    const secured =
-      m.objectiveDone ||
-      (!hostiles.length && m.kind === 'recovery' && !!m.item?.carrier) ||
-      (!hostiles.length && m.kind === 'rescue' && !!target?.alive && !target.captive);
-    if (secured && (!hostiles.length || (!squad.length && someoneOut))) end('victory', 'objective');
-    else if (!squad.length) end('defeat', 'wiped');
+    // Every other mission is won only back on the bus (docs/PRUEBA-2026-10-14.md P1), with the
+    // objective done (the item or the VIP on it); a Saqueo, by just getting somebody out.
+    if (m.evacDone) {
+      const someoneOut = s.units.some((u) => u.team === 'xcom' && u.evacuated);
+      const won = someoneOut && (m.kind === 'scavenge' || m.objectiveDone);
+      end(won ? 'victory' : 'defeat', won ? 'objective' : 'abandoned');
+      return;
+    }
+    if (!squad.length) end('defeat', 'wiped');
+  }
+
+  /**
+   * A player asks to evacuate from `u`, in the bus (docs/PRUEBA-2026-10-14.md
+   * P1). With the partner on the field and connected it waits for their yes;
+   * alone, or answering the partner's own call, the bus leaves now.
+   */
+  callEvac(slot: Slot, u: Unit): void {
+    const partner: Slot = slot === 0 ? 1 : 0;
+    const partnerOnField = this.connected.includes(partner) && this.s.units.some((o) => o.alive && o.team === 'xcom' && o.owner === partner);
+    if (!partnerOnField || this.s.evacCall?.by === partner) this.departEvac();
+    else this.emit({ t: 'evacCalled', slot, unit: u.id });
+  }
+
+  /** The bus leaves: whoever is in it gets out (first), everyone else is lost; then the mission is decided. */
+  departEvac(): void {
+    this.emit({ t: 'evacDeparted' });
+    const squad = this.s.units.filter((o) => o.alive && o.team === 'xcom');
+    for (const u of squad.filter((o) => inEvacZone(this.s, o.pos))) this.emit({ t: 'evacuated', unit: u.id });
+    for (const u of squad.filter((o) => !inEvacZone(this.s, o.pos))) this.emit({ t: 'leftBehind', unit: u.id });
+    this.checkOutcome();
   }
 
   /** Ends the XCOM turn once every player with soldiers able to act is ready. */
@@ -1206,6 +1239,33 @@ export class Sim {
     if (holder === undefined) return;
     const partner: Slot = holder === 0 ? 1 : 0;
     if (!this.hasActions(holder) && this.canReceiveCommand(partner) && this.hasActions(partner)) this.passCommand(partner);
+  }
+
+  /** A backpack order already checked (backpackRefusal). */
+  useBackpack(cmd: ItemCommand): void {
+    const u = getUnit(this.s, cmd.unit)!;
+    switch (cmd.action) {
+      case 'drop':
+        this.emit({ t: 'lootDropped', unit: u.id, index: cmd.index! });
+        break;
+      case 'take':
+        this.emit({ t: 'lootTaken', unit: u.id, id: cmd.id! });
+        break;
+      case 'give':
+        this.emit({ t: 'lootGiven', unit: u.id, to: cmd.to!, index: cmd.index! });
+        break;
+      case 'use': {
+        const target = cmd.to ? getUnit(this.s, cmd.to)! : u;
+        this.emit({ t: 'medicineUsed', unit: u.id, target: target.id, index: cmd.index! });
+        const amount = Math.min(MEDICINE_HEAL, target.maxHp - target.hp);
+        if (amount > 0) this.emit({ t: 'healed', unit: u.id, target: target.id, amount });
+        if (target.infected && medicineStopsBite(this.s, u)) this.emit({ t: 'cured', unit: target.id, by: u.id });
+        break;
+      }
+      case 'equip':
+        this.emit({ t: 'weaponEquipped', unit: u.id, index: cmd.index! });
+        break;
+    }
   }
 
   afterXcomAction(): void {
@@ -1308,6 +1368,58 @@ function commandUnit(s: GameState, id: string, slot: Slot): Unit | string {
   return u;
 }
 
+type ItemCommand = Extract<Command, { type: 'item' }>;
+
+/**
+ * Why a backpack order can't go through (docs/FASE8.md §C), or null. Dropping and taking are free, even with no
+ * actions left; giving, using a medicine and equipping a weapon take one.
+ */
+function backpackRefusal(s: GameState, cmd: ItemCommand, slot: Slot): string | null {
+  const u = getUnit(s, cmd.unit);
+  if (!u || !u.alive) return 'Esa unidad no existe o está fuera de combate.';
+  if (u.team !== 'xcom' || u.captive || u.objective) return 'No puedes dar órdenes a esa unidad.';
+  if (u.owner !== null && u.owner !== slot) return 'Ese soldado pertenece a tu compañero.';
+  if (u.controlledBy || u.panicked) return 'Ese soldado no responde.';
+  const free = cmd.action === 'drop' || cmd.action === 'take';
+  if (!free && u.ap <= 0) return 'Ese soldado no tiene acciones.';
+  if (cmd.action === 'take') {
+    const left = s.dropped?.find((d) => d.id === cmd.id);
+    if (!left || !samePos(left.pos, u.pos)) return 'Aquí no hay nada que coger.';
+    if (!left.loot.mags && (u.backpack?.length ?? 0) >= packSlots(u)) return 'La mochila está llena: suelta algo antes.';
+    return null;
+  }
+  const loot = cmd.index === undefined ? undefined : u.backpack?.[cmd.index];
+  if (!loot) return 'No lleva eso en la mochila.';
+  switch (cmd.action) {
+    case 'drop':
+      return null;
+    case 'give': {
+      const to = cmd.to ? getUnit(s, cmd.to) : undefined;
+      if (!to || !to.alive || to.team !== 'xcom' || to.captive || to.objective || to.id === u.id) return 'Solo a un compañero.';
+      if (!inMeleeReach(s, u.pos, to.pos)) return 'Tiene que estar a tu lado.';
+      if ((to.backpack?.length ?? 0) >= packSlots(to)) return 'No le cabe: lleva la mochila llena.';
+      return null;
+    }
+    case 'use': {
+      if (!loot.medicines) return 'Solo se usan las medicinas.';
+      const to = cmd.to ? getUnit(s, cmd.to) : u;
+      if (!to || !to.alive || to.team !== 'xcom' || to.objective) return 'Solo en ti o en un compañero.';
+      if (to !== u && !inMeleeReach(s, u.pos, to.pos)) return 'Tiene que estar a tu lado.';
+      if (to.hp >= to.maxHp && !(to.infected && medicineStopsBite(s, u))) return to === u ? 'No estás herido.' : 'No está herido.';
+      return null;
+    }
+    case 'equip':
+      if (!loot.weapon) return 'Solo se equipan las armas.';
+      if (!u.arms) return 'Las armas encontradas son para el Bastión.';
+      return null;
+  }
+}
+
+/** Whether `u`'s medicines also stop a bite's contagion (docs/FASE8.md §C): the Enfermería for everyone, or the support talent. */
+export function medicineStopsBite(s: GameState, u: Unit): boolean {
+  return !!s.mission?.medicineCures || hasPerk(u, 'lightHands');
+}
+
 /** Why a support ability can't go to that ally: the reason, not just "no". */
 function allyRefusal(u: Unit, ability: AbilityId, target: Unit | undefined): string {
   if (!target || !target.alive) return 'Aliado no válido.';
@@ -1346,6 +1458,24 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     return { ok: true, events: sim.events };
   }
 
+  // Evacuating (docs/PRUEBA-2026-10-14.md P1): either player calls it from a soldier in the bus, the
+  // other answers; neither needs the command, nor actions left.
+  if (cmd.type === 'evacAnswer') {
+    if (!s.evacCall || s.evacCall.by === ctx.slot) return { ok: false, error: 'No hay ninguna petición de evacuar que contestar.' };
+    if (cmd.accept) sim.departEvac();
+    else sim.emit({ t: 'evacRefused', slot: ctx.slot });
+    return { ok: true, events: sim.events };
+  }
+  if (cmd.type === 'evac') {
+    const u = getUnit(s, cmd.unit);
+    if (!u || !u.alive || u.team !== 'xcom' || u.captive) return { ok: false, error: 'Esa unidad no puede evacuar.' };
+    if (u.owner !== null && u.owner !== ctx.slot) return { ok: false, error: 'Ese soldado pertenece a tu compañero.' };
+    if (!inEvacZone(s, u.pos)) return { ok: false, error: 'Solo desde el autobús, en la zona de evacuación.' };
+    if (s.evacCall?.by === ctx.slot) return { ok: false, error: 'Ya has pedido evacuar: falta que conteste tu compañero.' };
+    sim.callEvac(ctx.slot, u);
+    return { ok: true, events: sim.events };
+  }
+
   if (cmd.type === 'pass') {
     if (!holds) return { ok: false, error: 'No tienes el mando.' };
     if (!ctx.connected.includes(partner)) return { ok: false, error: 'Tu compañero no está conectado.' };
@@ -1356,9 +1486,18 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
   }
 
   if (!holds) return { ok: false, error: 'Tiene el mando tu compañero: espera a que te lo ceda.' };
+  if (cmd.type === 'item') {
+    const refusal = backpackRefusal(s, cmd, ctx.slot);
+    if (refusal) return { ok: false, error: refusal };
+    sim.passCommand(ctx.slot);
+    sim.useBackpack(cmd);
+    sim.afterXcomAction();
+    return { ok: true, events: sim.events };
+  }
   const u = commandUnit(s, cmd.unit, ctx.slot);
   if (typeof u === 'string') return { ok: false, error: u };
-  sim.passCommand(ctx.slot);
+  // The command changes hands only once the order is sure to go through: a refused one changes nothing
+  // (it used to pass first, and the host kept a holder the partner never heard of).
 
   if (cmd.type === 'move') {
     // A place without its level is on the ground (docs/FASE6-PLAN.md).
@@ -1369,6 +1508,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     const cost = reach.cost.get(nodeOf(s, to))!;
     const ap = apForCost(u, cost);
     if (ap > u.ap) return { ok: false, error: 'No le quedan acciones para llegar ahí.' };
+    sim.passCommand(ctx.slot);
     sim.moveAlong(u, path, ap);
     // Running is heard (docs/FASE2.md).
     if (ap >= 2 && u.alive) sim.makeNoise(u.pos, NOISE.dash, u);
@@ -1388,24 +1528,28 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
       if (!target || !abilityTargets(s, u, cmd.ability).includes(target)) {
         return { ok: false, error: def.target === 'ally' ? allyRefusal(u, cmd.ability, target) : 'Objetivo fuera de alcance o sin línea de visión.' };
       }
+      sim.passCommand(ctx.slot);
       sim.perform(u, cmd.ability, { target });
       break;
     case 'melee': {
       const option = isAttack(cmd.ability) ? meleeTargets(s, u, cmd.ability).find((o) => o.target.id === cmd.target) : undefined;
       if (!option) return { ok: false, error: 'No puede alcanzar a ese enemigo este turno.' };
+      sim.passCommand(ctx.slot);
       sim.perform(u, cmd.ability, { melee: option });
       break;
     }
     case 'tile': {
       const tile = cmd.tile && toPos(cmd.tile);
       if (!tile || !canTargetTile(s, u, cmd.ability, tile)) {
-        const why: Partial<Record<AbilityId, string>> = { search: 'No puede registrar eso desde ahí.', openDoor: 'Esa casilla no es una puerta cerrada contigua.', closeDoor: 'Esa casilla no es una puerta abierta, libre y contigua.' };
+        const why: Partial<Record<AbilityId, string>> = { search: 'No hay ninguna caja que abrir ahí.', openDoor: 'Esa casilla no es una puerta cerrada contigua.', closeDoor: 'Esa casilla no es una puerta abierta, libre y contigua.' };
         return { ok: false, error: why[cmd.ability] ?? 'Fuera de alcance o fuera de la vista de la escuadra.' };
       }
+      sim.passCommand(ctx.slot);
       sim.perform(u, cmd.ability, { tile });
       break;
     }
     case 'self':
+      sim.passCommand(ctx.slot);
       sim.perform(u, cmd.ability);
       break;
   }
@@ -1418,12 +1562,30 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
 /** Re-evaluates the end of turn, e.g. after a player disconnects. */
 export function syncTurn(s: GameState, ctx: Omit<CommandContext, 'slot'>): GameEvent[] {
   const sim = new Sim(s, ctx.rng, ctx.connected);
+  // A call to evacuate whose answerer has gone: the bus leaves (docs/PRUEBA-2026-10-14.md P1).
+  if (s.evacCall && s.activeTeam === 'xcom' && !s.outcome && !ctx.connected.includes(s.evacCall.by === 0 ? 1 : 0)) sim.departEvac();
   sim.maybeEndXcomTurn();
   // A holder who left hands the command to whoever is still here.
   const holder = s.command;
   const here = ctx.connected[0];
   if (s.activeTeam === 'xcom' && !s.outcome && here !== undefined && (holder === undefined || !ctx.connected.includes(holder))) sim.passCommand(here);
   return sim.events;
+}
+
+/**
+ * Whether the bus leaving now wins the mission (docs/PRUEBA-2026-10-14.md P1),
+ * for the prompt: a Limpieza is never won by leaving; a Saqueo, by anyone on
+ * board; the rest, with the objective done, or its item or VIP on board.
+ */
+export function evacWins(s: GameState): boolean {
+  const m = s.mission;
+  if (m.kind === 'elimination') return false;
+  const aboard = s.units.filter((u) => u.alive && u.team === 'xcom' && inEvacZone(s, u.pos));
+  if (!aboard.length) return false;
+  if (m.kind === 'scavenge' || m.objectiveDone) return true;
+  if (m.kind === 'recovery') return !!m.item?.carrier && aboard.some((u) => u.id === m.item!.carrier);
+  if (m.kind === 'rescue') return !!m.objectiveUnit && aboard.some((u) => u.id === m.objectiveUnit);
+  return false;
 }
 
 /** Ends the mission early (either player can abandon). */

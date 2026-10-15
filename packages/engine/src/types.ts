@@ -74,7 +74,7 @@ export type TileKind =
 export type Biome = 'city' | 'wilds' | 'facility';
 
 /** What a tile's floor is, on procedural maps: 0 open ground, 1 street or dirt track, 2 inside a building. */
-export type GroundKind = 0 | 1 | 2;
+export type GroundKind = 0 | 1 | 2 | 3;
 
 /**
  * What a piece of cover on a procedural map is meant to be, so the client can
@@ -121,7 +121,30 @@ export type DecorKind =
   // A building's stairs (docs/FASE6-PLAN.md): a `ladder` tile, facing the way up.
   | 'stairs'
   // A wall a grenade broke (docs/FASE7.md §4): its stump and the rubble, on a `low` tile.
-  | 'breach';
+  | 'breach'
+  // The bus parked by the evacuation zone (docs/PRUEBA-2026-10-14.md P1): `high` tiles the client draws it over.
+  | 'bus'
+  // The special loot boxes (docs/FASE8.md §B), on a `low` tile: weapons, medicines, ammunition, food.
+  | 'lootWeapons'
+  | 'lootMedical'
+  | 'lootAmmo'
+  | 'lootFood'
+  // The new scenarios (playtest 2026-10-14, #25). Blocks of one kind, apart from each other: one object per block.
+  /** A wrecked lorry, a 2 × 4 block of `high` tiles; facing: its nose. */
+  | 'truck'
+  /** A stack of logs, a 1 × 2 or 2 × 2 block of `low` tiles. */
+  | 'logPile'
+  /** A water tower on its legs, a 2 × 2 block of `high` tiles. */
+  | 'waterTower'
+  /** A shipping container, a 2 × 5 block of `high` tiles; facing: its doors. */
+  | 'container'
+  /** A big roadside sign on its post, one `high` tile; facing: towards the road. */
+  | 'sign'
+  /** Wire (a fallen fence or barbed wire), a line of `low` tiles like 'fence'. */
+  | 'wire';
+
+/** A scenario a generated map can be (playtest 2026-10-14, #25): a forest's service area, a city's industrial estate. */
+export type Site = 'roadside' | 'industrial';
 
 /** A tile's decor hint packed in one number (0: none); see decor.ts. */
 export type Decor = number;
@@ -188,8 +211,10 @@ export type AbilityId =
   | 'aid'
   | 'evac'
   | 'hack'
-  /** Searching a piece of furniture, a car or crates (docs/FASE2.md, «Saqueo»). */
+  /** Opening a special loot box beside the soldier (docs/FASE8.md §B; before, any furniture or car). */
   | 'search'
+  /** Searching the room the soldier is in, once for the squad (docs/FASE8.md §B). */
+  | 'searchRoom'
   /** Opening or closing a door beside the soldier without moving (playtest 2026-10-13): free. */
   | 'openDoor'
   | 'closeDoor'
@@ -290,14 +315,39 @@ export interface Loot {
   food?: number;
   /** Parts, for the Taller to make weapons and armour. */
   parts?: number;
-  /** A good weapon (content.ts FOUND_WEAPONS): to the Armería, for one soldier. */
+  /** A weapon of the Armería (content.ts FOUND_WEAPONS): to the Armería, for one soldier; equipped in the mission (docs/FASE8.md §C). */
   weapon?: FoundWeaponId;
+  /** That weapon is already the Armería's (FoundWeapon.id): a soldier's own, swapped for a find. It goes back, not in as new. */
+  weaponId?: string;
   /** Magazines (docs/FASE7.md): straight to the searcher's spares, not into the backpack. */
   mags?: number;
 }
 
-/** Weapons found searching (docs/FASE4.md, content.ts FOUND_WEAPONS): each counts as one class weapon. */
-export type FoundWeaponId = 'huntingRifle' | 'sawnOff' | 'scopedRifle' | 'lightMachineGun';
+/** The Armería's weapons (docs/FASE8.md §A, content.ts FOUND_WEAPONS): the plain ones, and the good ones found searching (docs/FASE4.md). */
+export type FoundWeaponId =
+  | 'assaultRifle'
+  | 'pumpShotgun'
+  | 'precisionRifle'
+  | 'machineGun'
+  | 'machete'
+  | 'huntingRifle'
+  | 'sawnOff'
+  | 'scopedRifle'
+  | 'lightMachineGun';
+
+/**
+ * What a campaign soldier carries (docs/FASE8.md §A), besides the pistol everyone has: the class no longer
+ * brings a weapon. Absent, the template's (skirmish, the enemies, missions saved before).
+ */
+export interface Arms {
+  /** In the hand; null, none: the pistol is the main gun. */
+  primary: FoundWeaponId | null;
+  /** The Armería's weapon it is (FoundWeapon.id); absent, picked up in this mission. */
+  primaryId?: string;
+  /** At the belt; null, the knife. */
+  melee: FoundWeaponId | null;
+  meleeId?: string;
+}
 
 /** What a successful Mindspin does to its victim ('controlled' only in missions saved before the zombies: the Chillón's scream never takes control). */
 export type PsiEffect = 'disoriented' | 'panicked' | 'controlled';
@@ -553,6 +603,10 @@ export interface Unit {
   ammo: number;
   /** Spare magazines for the primary weapon (docs/FASE7.md): only the squad counts them; without it, reloading never runs out. */
   mags?: number;
+  /** A campaign soldier's own weapons (docs/FASE8.md §A); absent, the template's. */
+  arms?: Arms;
+  /** Rounds in the pistol carried beside a primary weapon (content.ts PISTOL_CLIP); `ammo` is the main gun's. */
+  pistolAmmo?: number;
   charges: Partial<Record<ChargeId, number>>;
   overwatch: boolean;
   hunkered: boolean;
@@ -564,6 +618,8 @@ export interface Unit {
   alive: boolean;
   evacuated: boolean;
   podId: string | null;
+  /** Left behind when the bus went (docs/PRUEBA-2026-10-14.md P1): off the field, and lost to the campaign. */
+  lost?: boolean;
   rank: number;
   perks: PerkId[];
   mods: UnitMods;
@@ -625,6 +681,8 @@ export interface Unit {
   heard?: Pos | null;
   /** Soldiers: what they found searching (BACKPACK_SLOTS at most). It counts if they get out or stand at a victory. */
   backpack?: Loot[];
+  /** Backpack slots when not BACKPACK_SLOTS (the Chapistería's one more, docs/FASE8.md §C). */
+  packSlots?: number;
   /** Bitten and infected (docs/FASE3.md): no effect in combat, but if it falls it rises, and back at base it turns. */
   infected?: boolean;
 }
@@ -700,14 +758,20 @@ export interface MissionState {
   turnsLeft: number | null;
   item: MissionItem | null;
   evacZone: Vec2[];
+  /** The bus parked beside the evac zone (docs/PRUEBA-2026-10-14.md P1): its tiles, and the way it drives off (DIRS4 index). */
+  evacBus?: { tiles: Vec2[]; heading: number };
   /** Hack missions: the terminal (a `console` tile). */
   terminal: Pos | null;
   /** Sabotage: the relay unit; rescue: the VIP unit. */
   objectiveUnit: string | null;
   /** Relay destroyed, terminal hacked, data or VIP extracted. */
   objectiveDone: boolean;
+  /** The bus has left (docs/PRUEBA-2026-10-14.md P1): whoever was in it got out, the rest were lost. */
+  evacDone?: boolean;
   /** Hack bonus from the campaign (research), added to every hack attempt. */
   hackBonus: number;
+  /** Medicines also stop a bite's contagion, for everyone (docs/FASE8.md §C: the Enfermería from level 2). */
+  medicineCures?: boolean;
   reinforcements: Reinforcement[];
   /** 1–4, for the loot tables (missing in missions saved before searching: 2). */
   difficulty?: number;
@@ -726,6 +790,8 @@ export interface GameState {
   /** Display name of the area (generated maps get a name per biome). */
   mapName: string;
   biome: Biome;
+  /** The scenario a generated map is, if not the biome's usual one (playtest 2026-10-14, #25). */
+  site?: Site;
   width: number;
   height: number;
   /** Row-major: index = y * width + x. */
@@ -773,6 +839,8 @@ export interface GameState {
    * saved before it existed: the first player to act takes it.
    */
   command?: Slot;
+  /** A player asked to evacuate from the bus and waits for the partner's yes (docs/PRUEBA-2026-10-14.md P1). */
+  evacCall?: { by: Slot; unit: string };
   outcome: Outcome | null;
   outcomeReason: EndReason | null;
   /**
@@ -789,4 +857,10 @@ export interface GameState {
   quietSongs?: boolean;
   /** Tiles already searched, by node (grid.ts nodeOf; on the ground, y * width + x); missing before searching existed. */
   searched?: number[];
+  /** Rooms the squad has searched, by id (loot.ts roomAt; docs/FASE8.md §B). */
+  roomsSearched?: number[];
+  /** Things left on the floor (docs/FASE8.md §C): dropped, or found with a full backpack. */
+  dropped?: { id: string; pos: Pos; loot: Loot }[];
+  /** How many things have been left on the floor so far: the next one's id. */
+  droppedCount?: number;
 }

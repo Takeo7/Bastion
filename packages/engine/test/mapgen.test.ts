@@ -280,6 +280,58 @@ describe('procedural maps', () => {
   });
 });
 
+describe('the scenarios (playtest 2026-10-14, #25)', () => {
+  const kindAt = (l: MissionLayout, i: number) => decorOf(l.decor![i])?.kind;
+
+  it('the service area and the industrial estate: everything reachable, every objective placed', () => {
+    for (const [biome, site] of [['wilds', 'roadside'], ['city', 'industrial']] as const) {
+      for (const kind of KINDS) {
+        for (let seed = 1; seed <= 5; seed++) {
+          const label = `${site}/${kind}/${seed}`;
+          const s = createMission({ map: { kind: 'generated', biome, seed: seed * 7919, site }, slots: [0, 1], rng: new Rng(seed), kind, pods: podPlan(2) });
+          expect(s.site, label).toBe(site);
+          const scout = s.units.find((u) => u.team === 'xcom')!;
+          const reach = computeReach({ ...s, units: [scout] }, scout, 100_000);
+          const near = (p: Vec2) => [p, ...DIRS8.map((d) => ({ x: p.x + d.x, y: p.y + d.y }))].some((q) => reach.cost.has(q.y * s.width + q.x) || (q.x === scout.pos.x && q.y === scout.pos.y));
+          for (const u of s.units) expect(near(u.pos), `${label}: ${u.id}`).toBe(true);
+          for (const z of s.mission.evacZone) expect(near(z), `${label}: evac`).toBe(true);
+          if (kind === 'recovery') expect(s.mission.item, label).not.toBeNull();
+        }
+      }
+    }
+  });
+
+  it('they are made of what such places have, each object a whole block of its own', () => {
+    const counts = (l: MissionLayout) => {
+      const n: Record<string, number> = {};
+      for (let i = 0; i < l.tiles.length; i++) {
+        const k = kindAt(l, i);
+        if (k) n[k] = (n[k] ?? 0) + 1;
+      }
+      return n;
+    };
+    for (let seed = 1; seed <= 6; seed++) {
+      const road = generateLayout({ biome: 'wilds', kind: 'recovery', podSizes: [3, 3], seed, site: 'roadside' });
+      const n = counts(road);
+      expect(road.site).toBe('roadside');
+      for (const k of ['truck', 'waterTower', 'sign', 'tank', 'counter']) expect(n[k] ?? 0, `roadside ${seed}: ${k}`).toBeGreaterThan(0);
+      // A lorry is 2 × 4, a water tower 2 × 2: blocks that never touch another of their kind.
+      for (const [k, size] of [['truck', 8], ['waterTower', 4]] as const) {
+        for (const a of areas(road, (i) => kindAt(road, i) === k)) expect(a.n, `roadside ${seed}: ${k}`).toBe(size);
+      }
+      const estate = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [3, 3], seed, site: 'industrial' });
+      const m = counts(estate);
+      expect(m.container ?? 0, `industrial ${seed}`).toBeGreaterThanOrEqual(10);
+      for (const a of areas(estate, (i) => kindAt(estate, i) === 'container')) expect([a.w, a.h].sort(), `industrial ${seed}`).toEqual([2, 5]);
+      // No homes on an industrial estate.
+      expect(m.bed ?? 0).toBe(0);
+    }
+    // A site only where it belongs, and a map without one is the biome's usual.
+    expect(generateLayout({ biome: 'facility', kind: 'recovery', podSizes: [3], seed: 1, site: 'roadside' }).site).toBeUndefined();
+    expect(generateLayout({ biome: 'city', kind: 'recovery', podSizes: [3], seed: 1 })).toEqual(generateLayout({ biome: 'city', kind: 'recovery', podSizes: [3], seed: 1, site: 'roadside' }));
+  });
+});
+
 describe('mission timers', () => {
   it('keep the values tuned on 36-tile maps and add turns on bigger ones, more when the objective comes back', () => {
     expect(missionTurns('hack', 36)).toBe(MISSION_TURNS.hack);

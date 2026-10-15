@@ -44,6 +44,8 @@ export interface QuestMission {
   briefing: string;
   /** Recovery: what the squad carries out. */
   item?: string;
+  /** Recovery: the item lies out in the open, not in a building (docs/PRUEBA-2026-10-14.md #27). */
+  outdoors?: true;
   /** Rescue: who waits at the objective. */
   vip?: string;
   /** Named enemy leading the first group. */
@@ -154,6 +156,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         days: 8,
         briefing: 'Los Cuervos llevan un registro de prisioneros en un control de la carretera. Ahí consta quién tiene a {relative}. Recuperadlo y sacadlo por la zona de evacuación.',
         item: 'el registro de prisioneros',
+        outdoors: true,
         reward: { credits: 40 },
       },
       {
@@ -199,7 +202,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'recovery',
         biome: 'city',
         days: 10,
-        briefing: 'Vera Lindqvist mandaba el Refugio del Collado. El año pasado se lo entregó a los Cuervos a cambio de su vida. Por ella, aquí todo se decide con dos llaves. Su diario sigue en las ruinas y dice adónde fue. Recuperadlo y sacadlo por la zona de evacuación.',
+        briefing: 'Vera Lindqvist mandaba el Refugio del Collado. El año pasado se lo entregó a los Cuervos a cambio de su vida. Por ella, aquí nadie decide solo. Su diario sigue en las ruinas y dice adónde fue. Recuperadlo y sacadlo por la zona de evacuación.',
         item: 'el diario',
         reward: { credits: 50 },
       },
@@ -512,8 +515,9 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'recovery',
         biome: 'wilds',
         days: 6,
-        briefing: 'Los de las Bodegas han subido las cajas del camión a un embarcadero. El pueblo de al lado está lleno de muertos, y los Cuervos vienen de camino. Recuperadlas y sacadlas por la zona de evacuación antes de que lleguen.',
+        briefing: 'Los de las Bodegas han sacado las cajas del camión y las han dejado junto a la carretera, bajo una lona. El pueblo de al lado está lleno de muertos, y los Cuervos vienen de camino. Recuperadlas y sacadlas en La Lata antes de que lleguen.',
         item: 'las cajas',
+        outdoors: true,
       },
     ],
     outcomes: {

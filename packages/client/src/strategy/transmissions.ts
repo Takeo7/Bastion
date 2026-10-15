@@ -278,7 +278,17 @@ export class RadioTips {
     this.pump();
   }
 
-  /** Nothing plays until `ms` from now (the mission's arrival briefing); the queue waits. */
+  /** Nothing plays until `released` settles (the mission's briefing, until it is closed); the queue waits. */
+  holdUntil(released: Promise<void>): void {
+    this.heldUntil = Infinity;
+    window.clearTimeout(this.holdTimer);
+    void released.then(() => {
+      this.heldUntil = 0;
+      this.pump();
+    });
+  }
+
+  /** Nothing plays until `ms` from now; the queue waits. */
   holdFor(ms: number): void {
     this.heldUntil = Math.max(this.heldUntil, Date.now() + ms);
     window.clearTimeout(this.holdTimer);
@@ -388,7 +398,7 @@ export class Transmissions {
       /* storage unavailable: start afresh */
     }
     const underWay = c.day > 5;
-    this.seen = new Set(stored ?? unlockedScenes(c).map((s) => s.id).filter((id) => id !== 'welcome' || underWay));
+    this.seen = new Set(stored ?? unlockedScenes(c).map((s) => s.id));
     this.recap = !stored && underWay;
     if (!stored) this.save();
   }

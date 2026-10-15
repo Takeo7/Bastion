@@ -4,11 +4,19 @@
  * which the campaign reads, it is text only.
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
+import type { Room } from './loot';
 import { FOUND_WEAPONS } from './content';
-import type { Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, TemplateId } from './types';
+import type { Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
 /** Bastion level at which the doom track gets its name: until the radio is fixed nobody knows the Marea is coming. */
 export const PARTITURA_LEVEL = 4;
+
+/**
+ * The squad's bus (docs/LORE.md «El Bastión»), named once for every text that
+ * names it: `to` and `of` contract like a zone's, should it ever start with «El».
+ */
+const BUS_NAME = 'La Lata';
+export const BUS = { name: BUS_NAME, to: toZone(BUS_NAME), of: ofZone(BUS_NAME), in: `en ${BUS_NAME}` };
 
 /** The doom track as a label: "La Marea" once known. */
 export function doomName(level: number): string {
@@ -51,10 +59,13 @@ export const GLOSSARY: Record<string, string> = {
   Sirena: 'El altavoz con el que los Cuervos atraen hordas contra quien no les paga.',
   Ruido: 'Cada acción suena: un disparo se oye a una docena de casillas, un registro a dos. Lo que lo oye va a mirar. El ruido no os delata: os delata que os vean.',
   Saqueo: 'Misión de registrar un pueblo: llenad las mochilas y evacuad. No hay reloj, pero llegan zombis por los bordes, y antes cuanto más ruido.',
-  Registrar: 'Una acción junto a un mueble, un coche o unas cajas: suministros, algún accesorio y, a veces, medicinas. Hace un poco de ruido.',
-  Mochila: 'Cada soldado lleva tres cosas. El botín cuenta si vuelve: lo que llevaba un caído se pierde.',
+  Registrar: 'Una acción dentro de una habitación. Sale lo que haya según el sitio: comida y medicinas en las casas, piezas en las oficinas, comida en las tiendas, de todo en los almacenes. Cada habitación se registra una vez, para toda la escuadra. Hace un poco de ruido.',
+  Cajas: 'Marcadas, como mucho tres por mapa, cada una de un tipo: armas, medicinas, munición o comida. Su marca se ve cuando están a la vista, y se queda en el mapa. Se abren con una acción, al lado, y dan siempre lo suyo.',
+  Mochila: 'Tres cosas por soldado, cuatro con la Chapistería. Se suelta gratis, se pasa a un compañero de al lado con una acción, y las armas y las medicinas se usan ahí mismo. El botín cuenta si vuelve: lo que llevaba un caído se pierde.',
+  Armería: 'Las armas de Atalaya: las que se encuentran, las que hace el Taller y las que trae el nivel del Bastión. Cada una es de quien la lleve, sea de la clase que sea.',
+  Cargadores: 'Los de repuesto los hace el Taller: cada soldado sale con uno por tanda hecha, hasta tres. Valen para todas las armas; recargar llena primero la principal y luego la pistola. Registrando aparecen más.',
   Suministros: 'Lo que se saquea y se cambia: sirve para construir, reclutar y equipar.',
-  Medicinas: 'Se cuentan en ✚. El tratamiento de un mordido cuesta 2 (1 con la Enfermería a nivel 2), y una dosis le quita 3 días de cama a un herido. Nunca hay bastantes.',
+  Medicinas: 'Se cuentan en ✚. El tratamiento de un mordido cuesta 2 (1 con la Enfermería a nivel 2), y una dosis le quita 3 días de cama a un herido. En la misión, las de la mochila curan 3 con una acción. Nunca hay bastantes.',
   Mordisco: 'El de un zombi puede contagiar. El mordido vuelve con fiebre y se convierte en 3 días (5 con Enfermería) si no recibe el tratamiento. Si cae en combate contagiado, se levanta.',
   Comida: 'Se cuenta en raciones. Cada día el Bastión gasta una por cada cuatro soldados. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan despacio.',
   Huerto: 'Bancales, un invernadero y bidones para el agua de lluvia: da raciones cada día, más cuanto más nivel.',
@@ -67,7 +78,9 @@ export const GLOSSARY: Record<string, string> = {
   'Taller de oficios': 'Donde Teo enseña los oficios. Abre la cuarta rama de cada clase.',
   Maña: 'La aptitud de las manos: arreglar equipos, lanzar granadas y curar.',
   Grillo: 'El dron del Especialista: uno de juguete con una batería de coche, montado por Teo. Cura, cubre, da calambres y arregla a distancia.',
-  Recluta: 'Superviviente todavía sin clase, con fusil. Al llegar a Capitán se especializa en el eje del árbol de habilidades en que más haya aprendido.',
+  'La Lata': 'El autobús de Atalaya: uno de línea, con la chapa que Teo le soldó por encima. Lleva a los equipos y los espera en la zona de evacuación.',
+  Evacuar: `Se sale ${BUS.in}, desde la zona de evacuación: lo pide uno y lo acepta el otro. Quien esté fuera cuando sale, se pierde. En la Limpieza, salir es retirarse y la misión se pierde.`,
+  Recluta: 'Superviviente todavía sin clase, con cuchillo y pistola. Al llegar a Capitán se especializa en el eje del árbol de habilidades en que más haya aprendido.',
 };
 
 // ---------------------------------------------------------- enemy files
@@ -153,25 +166,29 @@ export const REGION_LORE: Record<RegionId, RegionLore> = {
 
 /** A piece of furniture that can be searched, as the log and the button read it. */
 export interface SearchSpot {
-  /** With its article, as it reads after «Registrar»: «el armario». */
+  /** With its article, as it reads after «Abrir»: «la caja de armas». */
   name: string;
   /** What the supplies found in it were; one is picked by seed. */
   supplies: string[];
 }
 
-/** Searchable furniture (docs/FASE2.md): what each decor is called and what tends to turn up in it. */
+/**
+ * What can be opened (docs/FASE8.md §B): the marked boxes, one kind each. They
+ * always give what they say, so they need no supplies of their own.
+ */
 export const SEARCH_SPOTS: Partial<Record<DecorKind, SearchSpot>> = {
-  wardrobe: { name: 'el armario', supplies: ['ropa de abrigo', 'mantas y un saco de dormir', 'una caja de zapatos con pilas y velas'] },
-  table: { name: 'la mesa', supplies: ['pilas en una bolsa de la compra', 'cubiertos, cerillas y un mechero', 'un mapa de carreteras y una linterna'] },
-  desk: { name: 'el escritorio', supplies: ['pilas, cinta americana y un cúter', 'un cargador de manivela', 'un cajón lleno de herramientas pequeñas'] },
-  shelf: { name: 'la estantería', supplies: ['velas y cerillas', 'botellas de agua', 'un tarro de clavos y tornillos'] },
-  counter: { name: 'el mostrador', supplies: ['tabaco y mecheros', 'pilas y bombillas', 'jabón y lejía'] },
-  cabinet: { name: 'el archivador', supplies: ['una linterna y un juego de llaves', 'una petaca y dos mecheros', 'pilas detrás de los expedientes'] },
-  bed: { name: 'la cama', supplies: ['mantas limpias', 'una linterna y pilas en la mesilla', 'una bolsa de deporte con ropa seca'] },
-  crates: { name: 'las cajas', supplies: ['herramientas', 'bidones de agua y lonas', 'cuerda, alambre y clavos'] },
-  carRear: { name: 'el maletero', supplies: ['una garrafa de gasolina', 'herramientas y un gato', 'mantas y cadenas para la nieve'] },
-  carFront: { name: 'la guantera', supplies: ['un mapa y un mechero', 'pilas y una linterna', 'un paquete de tabaco a medias'] },
-  rack: { name: 'el estante', supplies: ['repuestos y cable', 'bidones de aceite', 'cajas de tornillería'] },
+  lootWeapons: { name: 'la caja de armas', supplies: [] },
+  lootMedical: { name: 'la caja de medicinas', supplies: [] },
+  lootAmmo: { name: 'la caja de munición', supplies: [] },
+  lootFood: { name: 'la caja de comida', supplies: [] },
+};
+
+/** A room as its furniture makes it (loot.ts Room.spot): what it is called, and what the supplies found in it were. */
+const ROOMS: Partial<Record<Room['spot'], SearchSpot>> = {
+  home: { name: 'la habitación', supplies: ['ropa de abrigo', 'mantas y un saco de dormir', 'una caja de zapatos con pilas y velas', 'cubiertos, cerillas y un mechero', 'una linterna y pilas en la mesilla'] },
+  office: { name: 'el despacho', supplies: ['pilas, cinta americana y un cúter', 'una radio de manivela', 'una linterna y un juego de llaves', 'pilas detrás de los expedientes'] },
+  shop: { name: 'la tienda', supplies: ['tabaco y mecheros', 'pilas y bombillas', 'jabón y lejía', 'velas y botellas de agua'] },
+  store: { name: 'el almacén', supplies: ['herramientas', 'bidones de agua y lonas', 'cuerda, alambre y clavos', 'repuestos y cable'] },
 };
 
 /** When a search turns up nothing. */
@@ -235,20 +252,36 @@ function joinAnd(parts: string[]): string {
   return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : (parts[0] ?? '');
 }
 
-/** The log line for a search: «Ana registra el maletero: una garrafa de gasolina (+12 §) y un botiquín.» */
-export function searchLine(who: string, decor: DecorKind, find: SearchFind | null, seed: number): string {
-  const spot = SEARCH_SPOTS[decor];
-  const where = spot?.name ?? 'el mueble';
+/** What a search turned up, as a list for the log: the supplies' flavour comes from where they were found. */
+function findParts(find: SearchFind | null, supplies: string[], seed: number): string[] {
   const parts: string[] = [];
-  if (find?.supplies) parts.push(`${spot ? spot.supplies[seed % spot.supplies.length] : 'suministros'} (+${find.supplies} §)`);
+  if (find?.supplies) parts.push(`${supplies.length ? supplies[seed % supplies.length] : 'suministros'} (+${find.supplies} §)`);
   if (find?.item) parts.push(ITEM_FINDS[find.item]);
-  if (find?.medicines) parts.push(MEDICINE_FINDS[seed % MEDICINE_FINDS.length]!);
+  if (find?.medicines) parts.push(find.medicines === 1 ? MEDICINE_FINDS[seed % MEDICINE_FINDS.length]! : `${MEDICINE_FINDS[seed % MEDICINE_FINDS.length]!} (${find.medicines} ✚)`);
   if (find?.food) parts.push(`${FOOD_FINDS[seed % FOOD_FINDS.length]!} (${rations(find.food)})`);
   if (find?.parts) parts.push(`${PARTS_FINDS[seed % PARTS_FINDS.length]!} (${partsCount(find.parts)})`);
   if (find?.weapon) parts.push(FOUND_WEAPONS[find.weapon].find);
   if (find?.mags) parts.push(find.mags === 1 ? MAG_FINDS[seed % MAG_FINDS.length]! : magsCount(find.mags));
-  if (!parts.length) return `${who} registra ${where}. ${EMPTY_FINDS[seed % EMPTY_FINDS.length]!}`;
-  return `${who} registra ${where}: ${joinAnd(parts)}.`;
+  return parts;
+}
+
+/** The log line for opening a marked box: «Ana abre la caja de armas: un fusil de asalto.» */
+export function searchLine(who: string, decor: DecorKind, find: SearchFind | null, seed: number): string {
+  const where = SEARCH_SPOTS[decor]?.name ?? 'la caja';
+  const parts = findParts(find, [], seed);
+  return parts.length ? `${who} abre ${where}: ${joinAnd(parts)}.` : `${who} abre ${where}. Está vacía.`;
+}
+
+/** The log line for searching a room (docs/FASE8.md §B): «Ana registra el despacho: una radio de manivela (+12 §) y 1 pieza.» */
+export function roomSearchLine(who: string, spot: Room['spot'], find: SearchFind | null, seed: number): string {
+  const room = ROOMS[spot] ?? ROOMS.home!;
+  const parts = findParts(find, room.supplies, seed);
+  return parts.length ? `${who} registra ${room.name}: ${joinAnd(parts)}.` : `${who} registra ${room.name}. ${EMPTY_FINDS[seed % EMPTY_FINDS.length]!}`;
+}
+
+/** Opening a marked box, for the action's title: «Abrir la caja de armas». */
+export function boxTitle(decor: DecorKind): string {
+  return `Abrir ${SEARCH_SPOTS[decor]?.name ?? 'la caja'}`;
 }
 
 /** What a search turned up, short, to float over the furniture: «+12 §», «Botiquín», «Medicinas», «+2 raciones», «+1 pieza», a weapon's name, «+1 cargador» or «Nada». */
@@ -262,6 +295,251 @@ export function findLabel(find: SearchFind | null): string {
   if (find?.weapon) parts.push(FOUND_WEAPONS[find.weapon].name);
   if (find?.mags) parts.push(`+${magsCount(find.mags)}`);
   return parts.join(' · ') || 'Nada';
+}
+
+// -------------------------------------------------------------- backpack
+
+/**
+ * What a backpack's thing is, in a sentence (docs/FASE8.md §C): «un
+ * botiquín», «2 raciones», «12 suministros», «un fusil de asalto», «un
+ * cargador».
+ */
+export function lootName(loot: SearchFind): string {
+  const parts: string[] = [];
+  if (loot.supplies) parts.push(loot.supplies === 1 ? '1 suministro' : `${loot.supplies} suministros`);
+  if (loot.item) parts.push(ITEM_FINDS[loot.item]);
+  if (loot.medicines) parts.push(loot.medicines === 1 ? 'una medicina' : `${loot.medicines} medicinas`);
+  if (loot.food) parts.push(rations(loot.food));
+  if (loot.parts) parts.push(partsCount(loot.parts));
+  if (loot.weapon) parts.push(FOUND_WEAPONS[loot.weapon].find);
+  if (loot.mags) parts.push(loot.mags === 1 ? 'un cargador' : magsCount(loot.mags));
+  return joinAnd(parts) || 'nada';
+}
+
+/** The log lines of the backpack: «Ana deja en el suelo un botiquín.», «Ana recoge 2 raciones.», «Ana le da a Kofi un cargador.» */
+export function lootDroppedLine(who: string, loot: SearchFind): string {
+  return `${who} deja en el suelo ${lootName(loot)}.`;
+}
+
+export function lootTakenLine(who: string, loot: SearchFind): string {
+  return `${who} recoge ${lootName(loot)}.`;
+}
+
+export function lootGivenLine(who: string, to: string, loot: SearchFind): string {
+  return `${who} le da a ${to} ${lootName(loot)}.`;
+}
+
+/** Finding something with the backpack full, without a verb to agree: «Mochila llena: 2 medicinas, al suelo.» */
+export function packFullLine(loot: SearchFind): string {
+  return `Mochila llena: ${lootName(loot)}, al suelo.`;
+}
+
+/**
+ * A medicine used in the field: «Ana se cura con una medicina: +3 de salud.»,
+ * «Ana cura a Kofi con una medicina: +3 de salud, y el contagio se corta.».
+ * `to` is null on oneself.
+ */
+export function medicineLine(who: string, to: string | null, healed: number, cured: boolean): string {
+  const what = to ? `${who} cura a ${to} con una medicina` : `${who} se cura con una medicina`;
+  const effects = [healed ? `+${healed} de salud` : '', cured ? 'el contagio se corta' : ''].filter(Boolean);
+  return effects.length ? `${what}: ${effects.join(', y ')}.` : `${what}.`;
+}
+
+/** Floating over whoever is cured of the bite. */
+export const CURED_FLOAT = 'SIN CONTAGIO';
+
+/** Taking up a found weapon in the field: «Ana empuña un fusil de asalto.» */
+export function weaponEquippedLine(who: string, kind: FoundWeaponId): string {
+  return `${who} empuña ${FOUND_WEAPONS[kind].find}.`;
+}
+
+// --------------------------------------------------------------- objective
+
+/** What a mission's objective is called when nothing names it (a skirmish). */
+export const DEFAULT_ITEM = 'la carga';
+
+/** The item down to its article and noun: «el registro de prisioneros» → «el registro». */
+function shortItem(item: string): string {
+  const words = item.split(' ');
+  return /^(el|la|los|las)$/.test(words[0]!) ? words.slice(0, 2).join(' ') : words[0]!;
+}
+
+/** The carrier's tag, short and in capitals, over their head and on their sheet: «MEDICINAS», «REGISTRO». */
+export function itemTag(item: string): string {
+  return item.replace(/^(el|la|los|las) /, '').split(' ')[0]!.toUpperCase();
+}
+
+/** Floating over whoever picks it up: «RECOGE LAS MEDICINAS». */
+export function itemTakenFloat(item: string): string {
+  return `RECOGE ${shortItem(item).toUpperCase()}`;
+}
+
+/** The log line when it is picked up: «Ana recoge las medicinas.» */
+export function itemTakenLine(who: string, item: string): string {
+  return `${who} recoge ${item}.`;
+}
+
+/** Floating where it falls when its carrier goes down: «MEDICINAS AL SUELO». */
+export function itemDroppedFloat(item: string): string {
+  return `${itemTag(item)} AL SUELO`;
+}
+
+/** The log line when it falls: «Las medicinas han caído al suelo.», «El diario ha caído al suelo.» */
+export function itemDroppedLine(item: string): string {
+  return `${item.charAt(0).toUpperCase()}${item.slice(1)} ${/^(los|las) /.test(item) ? 'han' : 'ha'} caído al suelo.`;
+}
+
+/** Where the objective is, for the strip over the battlefield (docs/PRUEBA-2026-10-14.md #23). */
+export type ItemPhase = 'loose' | 'carried' | 'aboard' | 'out';
+
+/**
+ * The objective strip for an item: «Recuperad las medicinas y volved a La
+ * Mula», «Ana lleva las medicinas: a La Lata», «Las medicinas, en La Lata: que
+ * suba el resto», «Las medicinas, a salvo». `carrier` names who has it.
+ */
+export function itemObjective(item: string, phase: ItemPhase, carrier?: string): string {
+  const Item = `${item.charAt(0).toUpperCase()}${item.slice(1)}`;
+  switch (phase) {
+    case 'loose':
+      return `Recuperad ${item} y volved ${BUS.to}`;
+    case 'carried':
+      return carrier ? `${carrier} lleva ${item}: ${BUS.to}` : `Llevad ${item} ${BUS.to}`;
+    case 'aboard':
+      return `${Item}, ${BUS.in}: que suba el resto`;
+    case 'out':
+      return `${Item}, a salvo`;
+  }
+}
+
+/**
+ * A name with a title takes its article: «la Dra. Irina Sokolova», «el Ing.
+ * Kenji Mori», «la alcaldesa Mara Velasco»; a bare name doesn't.
+ */
+function titled(name: string): string {
+  const m = /^(Dra\.|Dr\.|Ing\.|Alcaldesa|Agente) /.exec(name);
+  if (!m) return name;
+  const title = m[1]!;
+  const female = title === 'Dra.' || title === 'Alcaldesa' || NAMED_SEX[name] === 'f';
+  return `${female ? 'la' : 'el'} ${title.endsWith('.') ? title : title.toLowerCase()} ${name.slice(m[0].length)}`;
+}
+
+/**
+ * The same for a rescue: «Llegad hasta la Dra. Irina Sokolova» while still
+ * held, «Llevad a la Dra. Irina Sokolova a La Lata», «La Dra. Irina Sokolova,
+ * en La Lata: que suba el resto», «…, a salvo».
+ */
+export function vipObjective(vip: string, phase: 'captive' | 'loose' | 'aboard' | 'out'): string {
+  const who = titled(vip);
+  if (phase === 'captive') return `Llegad hasta ${who}`;
+  if (phase === 'loose') return `Llevad ${who.startsWith('el ') ? `al ${who.slice(3)}` : `a ${who}`} ${BUS.to}`;
+  const Who = `${who.charAt(0).toUpperCase()}${who.slice(1)}`;
+  return phase === 'aboard' ? `${Who}, ${BUS.in}: que suba el resto` : `${Who}, a salvo`;
+}
+
+/** The strip once the objective of a sabotage or a repair is done: back to the bus. */
+export const OBJECTIVE_DONE: Partial<Record<MissionKind, string>> = {
+  sabotage: `Sirena callada: volved ${BUS.to}`,
+  hack: `Equipo en marcha: volved ${BUS.to}`,
+};
+
+/** The partner's notice: «Ana lleva las medicinas». */
+export function itemPartnerLine(who: string, item: string): string {
+  return `${who} lleva ${item}`;
+}
+
+// ---------------------------------------------------------------- evacuate
+
+/**
+ * Leaving in La Lata (docs/PRUEBA-2026-10-14.md P1): one player calls it from
+ * the bus, the other answers, and whoever is outside when it leaves is lost.
+ * `clearing`: a Limpieza, where leaving is a retreat that loses the mission;
+ * `ready`: the objective is done (always so in a Saqueo); `left`: who would
+ * stay outside.
+ */
+export interface EvacSituation {
+  clearing: boolean;
+  ready: boolean;
+  left: string[];
+}
+
+/** What leaving now costs, in a sentence or two: the mission, and who stays outside. */
+function evacStakes(o: EvacSituation): string {
+  const lose = o.clearing
+    ? 'Si os vais ahora, la Limpieza queda a medias y la misión se pierde.'
+    : !o.ready
+      ? 'El objetivo no está cumplido: si salís ahora, la misión se pierde.'
+      : '';
+  const out = !o.left.length
+    ? 'Estáis todos dentro.'
+    : o.left.length === 1
+      ? `${o.left[0]} se quedaría fuera, y se perdería.`
+      : `${joinAnd(o.left)} se quedarían fuera, y se perderían.`;
+  return lose ? `${lose} ${out}` : out;
+}
+
+/** The prompt on reaching the bus: leave or wait. `partner`: who has to accept, or null when playing alone. */
+export function evacPrompt(o: EvacSituation, partner: string | null): { title: string; text: string; go: string; wait: string } {
+  const title = o.clearing ? 'Retirada' : o.ready ? `Salir ${BUS.in}` : 'Salir sin el objetivo';
+  const text = partner ? `${evacStakes(o)} ${partner} tiene que aceptar.` : evacStakes(o);
+  return { title, text, go: o.clearing ? 'Retirarse' : partner ? 'Pedir salir' : 'Salir', wait: 'Esperar' };
+}
+
+/** The partner's notice: `who` asks to leave; accept or wait. */
+export function evacAsk(who: string, o: EvacSituation): { title: string; text: string; accept: string; refuse: string } {
+  return {
+    title: o.clearing ? `${who} pide retirarse` : `${who} pide salir`,
+    text: evacStakes(o),
+    accept: o.clearing ? 'Retirarse' : 'Salir',
+    refuse: 'Esperar',
+  };
+}
+
+/** While the call waits for the partner's answer: «Esperando a Ana…». */
+export function evacWaiting(partner: string): string {
+  return `Esperando a ${partner}…`;
+}
+
+/** The log line when the partner says no: «Ana quiere esperar.» */
+export function evacRefusedLine(who: string): string {
+  return `${who} quiere esperar.`;
+}
+
+/** The bus leaves: the log line, with who is in it. */
+export function evacDepartLine(out: string[]): string {
+  return out.length ? `${BUS.name} sale con ${joinAnd(out)}.` : `${BUS.name} sale sin nadie.`;
+}
+
+/** The words for evacuating that don't depend on who. */
+export const EVAC_TEXT = {
+  /** Log, when a call nobody answered lapses with the squad's turn. */
+  lapsed: 'Nadie ha contestado: la petición de salir caduca con el turno.',
+  /** The evacuation notice's kicker, and the EVACUAR button's tooltip. */
+  kicker: BUS.name,
+  buttonTip: `Salir ${BUS.in}: quien esté fuera cuando salga se pierde`,
+  /** The debrief's status of someone left outside (`lost`). */
+  lost: 'Se quedó fuera',
+  /** The mission's end when the bus left early: a Limpieza abandoned, or any other without its objective. */
+  retreat: 'Retirada',
+  withoutObjective: 'Salisteis sin el objetivo',
+};
+
+/**
+ * The countdown on a proposal nobody answers (docs/PRUEBA-2026-10-14.md #28):
+ * when it runs out, it is accepted. `left` comes formatted («1:25»); `mine`:
+ * shown to whoever proposed it.
+ */
+export function proposalClock(left: string, mine: boolean): string {
+  return mine ? `Si no contesta, se acepta sola en ${left}` : `Sin respuesta, se acepta sola en ${left}`;
+}
+
+/** The same for a call to leave: when it runs out, the bus goes. */
+export function evacClock(left: string, mine: boolean): string {
+  return mine ? `Si no contesta, ${BUS.name} sale en ${left}` : `Sin respuesta, ${BUS.name} sale en ${left}`;
+}
+
+/** The log line for someone outside when the bus leaves: «Ana se queda fuera.» */
+export function leftBehindLine(who: string): string {
+  return `${who} se queda fuera.`;
 }
 
 // ------------------------------------------------------------------ rubble
@@ -331,7 +609,7 @@ export const SCAVENGE = {
   /** Objective while the squad carries loot, short for the objective strip; `{n}` is how many things. */
   carrying: 'Botín: {n} · registrad o evacuad',
   /** The same, in full, for its tooltip. */
-  carryingTip: 'Lo que llevan las mochilas ({n}) cuenta si sale por la zona de evacuación o si seguís en pie al ganar. Lo que llevaba un caído se pierde.',
+  carryingTip: `Lo que llevan las mochilas ({n}) cuenta si sale ${BUS.in}. Lo que llevaba un caído, o alguien que se queda fuera, se pierde.`,
   /** Debrief headline when loot came home. */
   success: 'Botín a salvo',
   /** Debrief headline when the squad came home with nothing. */
@@ -368,7 +646,7 @@ export const PREMISE = {
   lines: [
     'Hace dos inviernos, la Pandemia vació el valle de Kessra. Los muertos se levantaron y siguen andando.',
     'Atalaya, una vieja estación militar en la sierra de Aldren, aguanta con cuarenta supervivientes llegados de todas partes.',
-    'Vosotros dos la dirigís. Lo que importa se decide con las dos llaves.',
+    'Vosotros dos la dirigís. Lo importante lo decidís juntos.',
     'Atalaya vive de lo que sus equipos traen de fuera. El primero sale hoy.',
   ],
 };
@@ -376,13 +654,19 @@ export const PREMISE = {
 /** Where an ordinary operation goes, by kind of map: it gives the mission its name («La gasolinera de Volkren»). */
 const MISSION_PLACES: Record<Biome, string[]> = {
   city: ['El mercado', 'La comisaría', 'El colegio', 'El hospital', 'La estación de autobuses', 'El centro comercial', 'Los juzgados', 'La biblioteca'],
-  wilds: ['La gasolinera', 'La granja', 'El camping', 'El aserradero', 'La ermita', 'El área de servicio', 'La casa de campo'],
+  wilds: ['La granja', 'El camping', 'El pinar', 'La ermita', 'La casa de campo'],
   facility: ['La conservera', 'La nave de transportes', 'La planta química', 'El almacén frigorífico', 'La fábrica de piensos'],
 };
 
+/** The scenarios' places (playtest 2026-10-14, #25): a forest's service area, a town's industrial estate. */
+const SITE_PLACES: Record<Site, string[]> = {
+  roadside: ['El área de servicio', 'El motel', 'El aserradero', 'La gasolinera'],
+  industrial: ['El polígono', 'Los muelles de carga', 'Las naves', 'El depósito de contenedores'],
+};
+
 /** An ordinary operation's name: a place in the zone, «El colegio de Corran», «La granja del Pantano Gris». */
-export function missionName(biome: Biome, zone: string, seed: number): string {
-  const places = MISSION_PLACES[biome];
+export function missionName(biome: Biome, zone: string, seed: number, site?: Site): string {
+  const places = site ? SITE_PLACES[site] : MISSION_PLACES[biome];
   return `${places[Math.abs(seed) % places.length]!} ${ofZone(zone)}`;
 }
 
@@ -461,7 +745,7 @@ const BRIEFINGS: Record<MissionKind, string[]> = {
   ],
   recovery: [
     'La farmacia del pueblo sigue cerrada. Dentro hay medicinas. Sacadlas por la zona de evacuación.',
-    'Un correo del Refugio cayó en un pueblo infestado. Su mochila sigue allí. Recuperadla antes de que se acabe el tiempo.',
+    'Uno de sus mensajeros murió en mitad de la calle, en un pueblo infestado. Su mochila sigue junto al cuerpo. Recuperadla antes de que se acabe el tiempo.',
     'Los Cuervos escondieron su botín en un almacén y no volvieron a por él: los muertos llegaron antes. Llevaos lo que podáis.',
   ],
   sabotage: [
@@ -487,6 +771,35 @@ function hash(text: string): number {
   return h;
 }
 
+/** What picks an ordinary operation's report: the same offer always gets the same one. */
+function briefingSeed(o: MissionOffer): number {
+  return hash(o.id) + (o.map.kind === 'generated' ? o.map.seed : 0);
+}
+
+/**
+ * What each ordinary recovery carries out, in the order of its reports
+ * (BRIEFINGS.recovery), and whether its report puts it out in the open
+ * rather than in a building (docs/PRUEBA-2026-10-14.md #27): the pharmacy's
+ * medicines and the Cuervos' warehouse are indoors, the courier's backpack
+ * lies in the street.
+ */
+const RECOVERY_ITEMS: { item: string; outdoors?: true }[] = [{ item: 'las medicinas' }, { item: 'la mochila', outdoors: true }, { item: 'el botín' }];
+
+function ordinaryRecovery(o: MissionOffer): { item: string; outdoors?: true } | undefined {
+  if (o.kind !== 'recovery' || o.story || o.quest || o.final || o.facility) return undefined;
+  return RECOVERY_ITEMS[briefingSeed(o) % RECOVERY_ITEMS.length];
+}
+
+/** The objective an ordinary recovery names, as its report does; undefined for any other operation. */
+export function recoveryItem(o: MissionOffer): string | undefined {
+  return ordinaryRecovery(o)?.item;
+}
+
+/** Whether an ordinary recovery's objective lies out in the open (its report says so); false indoors or for any other operation. */
+export function recoveryOutdoors(o: MissionOffer): boolean {
+  return !!ordinaryRecovery(o)?.outdoors;
+}
+
 /** Who signs an operation's report, in pen under it. */
 export function briefingSignature(o: MissionOffer): string {
   return o.story ? STORY[o.story - 1]!.signature : '— N. A.';
@@ -501,14 +814,14 @@ export function missionBriefing(o: MissionOffer, level: number, simon: SimonChoi
 function briefingText(o: MissionOffer, level: number, simon: SimonChoice): string {
   if (o.story) return storyBriefing(o.story, simon);
   if (o.final) {
-    return 'La Marea está en la sierra y la Congregación la empuja desde su campamento. La Mula se la llevará con la sirena; vosotros, al campamento. Abatid a todo lo que haya. No habrá otra oportunidad.';
+    return 'La Marea está en la sierra y la Congregación la empuja desde su campamento. La Lata se la llevará con la sirena; vosotros, al campamento. Abatid a todo lo que haya. No habrá otra oportunidad.';
   }
   if (o.facility) {
     const effect = level >= PARTITURA_LEVEL ? 'acerca la Marea un kilómetro cada catorce días' : 'hace crecer la infestación cada catorce días';
     return `Este Nido ${effect}. Lo mantiene vivo una sirena: calladla antes de que termine la cuenta atrás.`;
   }
   const options = BRIEFINGS[o.kind];
-  const seed = hash(o.id) + (o.map.kind === 'generated' ? o.map.seed : 0);
+  const seed = briefingSeed(o);
   const ally = REGION_LORE[o.region].ally;
   return `Aviso ${ally.startsWith('el ') ? `del ${ally.slice(3)}` : `de ${ally}`}. ${options[seed % options.length]!}`;
 }
@@ -527,22 +840,22 @@ export interface ExpedientePage {
 /** One page per Bastion level: what the Bastion has found out by then. */
 export const EXPEDIENTE: ExpedientePage[] = [
   {
-    title: 'Primera llave',
-    summary: 'La Pandemia lo vació todo. Atalaya aguanta: muros, agua y dos llaves.',
+    title: 'Atalaya',
+    summary: 'La Pandemia lo vació todo. Atalaya aguanta: muros, agua y una sola carretera.',
     paragraphs: [
       'Hace dos inviernos llegó la Pandemia. Quien se contagia muere en un día y se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.',
-      'Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra, la presa al lado y una sola carretera. Por eso sigue en pie. Quienes llegaron después conservaron su orden: equipos, rangos y armería.',
-      'La dirigen dos personas, y nada importante se hace sin las dos llaves. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.',
+      'Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra, la presa al lado y una sola carretera. Por eso sigue en pie. Quienes llegaron después conservaron su orden: equipos, rangos y armería. Los equipos salen en La Lata, un autobús de línea al que Teo le soldó chapa por encima.',
+      'La dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.',
     ],
     note: 'Lo que entra por la puerta se apunta aquí. — N. A.',
   },
   {
-    title: 'Lo que sabemos de ellos',
-    summary: 'Los zombis van hacia lo que ven y lo que oyen. El mordisco contagia. El ruido mata.',
+    title: 'Notas de la doctora',
+    summary: 'De noche ven igual que de día. Una puerta no los para. No todos los mordiscos contagian.',
     paragraphs: [
-      'Notas de la Dra. Nwosu. No piensan, no se cansan y no tienen miedo. Van hacia lo que ven y, sobre todo, hacia lo que oyen.',
-      'Un disparo se oye a kilómetros. Un machete, no. Cada vez que apretamos el gatillo, la comarca viene a ver qué pasa.',
-      'El mordisco contagia. Con el tratamiento a tiempo, se para. Sin él, en tres días tendremos que hacer lo que nadie quiere hacer.',
+      'Notas de la Dra. Nwosu. La oscuridad no les quita nada: de noche ven igual que de día. Los que perdemos vista somos nosotros.',
+      'Una puerta cerrada no los para: la empujan y pasan. Solo les tapa la vista. Para frenarlos sirve un paso estrecho, no una puerta.',
+      'No todos los mordiscos contagian. El de un muerto corriente, uno de cada cuatro; el de un Acorazado, uno de cada tres. Los gases de un Hinchado, uno de cada dos.',
     ],
     note: 'Si veis una cara conocida entre ellos, no es quien creéis. — T. V.',
   },
@@ -601,7 +914,7 @@ export const EXPEDIENTE: ExpedientePage[] = [
     summary: 'La vacuna está lista y la Marea, en la sierra. Allí decidiréis los dos qué hacer con ella.',
     paragraphs: [
       'La Dra. Nwosu ha terminado la vacuna: la sangre de Noor, los cuadernos de Galen y muchas noches sin dormir.',
-      'La Marea ya está en la sierra. Si la paramos, habrá que decidir qué hacemos con la vacuna, y eso lo decidiréis vosotros dos, con las dos llaves.',
+      'La Marea ya está en la sierra. Si la paramos, habrá que decidir qué hacemos con la vacuna, y eso lo decidiréis vosotros dos.',
     ],
     note: 'Volved. — N. A. y T. V.',
   },
@@ -771,11 +1084,11 @@ export function epilogue(outcome: 'victory' | 'defeat', ending: Ending | null, d
       return 'La Marea se deshizo en la sierra. Esa noche, Morse leyó la fórmula de la vacuna por todas las frecuencias, despacio, dos veces. La oyeron los enclaves, la oyeron los Cuervos y la oyó quien quisiera oírla. Nadie sabe qué harán con ella. Por primera vez en dos inviernos, nadie se queda fuera.';
     }
     if (ending === 'record') {
-      return 'La Marea se deshizo en la sierra. La vacuna salió de Atalaya en La Mula, enclave por enclave, solo para quienes estuvieron. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. En el refugio hay una caja con la fórmula, y para abrirla hacen falta dos llaves.';
+      return 'La Marea se deshizo en la sierra. La vacuna salió de Atalaya en La Lata, enclave por enclave, solo para quienes estuvieron. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en una caja del refugio.';
     }
     return 'La Marea se ha deshecho en la sierra. Por primera vez en dos inviernos, el valle duerme sin oír pasos.';
   }
   return doomFull
     ? 'Kilómetro cero. La Marea llegó a Atalaya con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.'
-    : 'No queda nadie para girar las llaves. Atalaya vuelve a quedarse a oscuras.';
+    : 'No queda nadie que conteste por radio. Atalaya vuelve a quedarse a oscuras.';
 }

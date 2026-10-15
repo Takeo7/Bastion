@@ -1,6 +1,6 @@
-import { PLAYER_COLORS, type Appearance, type TemplateId, type Tier } from '@bastion/engine';
+import { PLAYER_COLORS, type Appearance, type Arms, type TemplateId, type Tier } from '@bastion/engine';
 import * as THREE from 'three';
-import type { FigurePose, FigureRig } from '../../game/figures';
+import type { Armament, FigurePose, FigureRig } from '../../game/figures';
 import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
 import { Renderer } from '../../game/renderer';
 import { SYNTY_LOD, SyntyFigure } from '../../game/syntyFigures';
@@ -9,8 +9,9 @@ import type { CharacterId } from '../../game/syntyManifest';
 // Weapons lab (/armas.html): how every weapon sits in the hands of every kind
 // of body, pose by pose, in close-up. `__weapons.sheet(name, pose, bodies)`
 // saves a contact sheet (rows: weapons; columns: bodies) to the dev server's
-// /__snap; poses: idle, aim, run, crouch, crouchAim, reload, throw, hit, climb, dead;
-// views: right, left, front.
+// /__snap; poses: idle, aim, run, crouch, crouchAim, reload, throw, hit, climb,
+// dead, windup, strike; views: right, left, front, back. `__weapons.ARMS_CASES`
+// are a campaign soldier's own (docs/FASE8.md §A), with what each has drawn.
 
 const container = document.getElementById('weapons')!;
 const renderer = new Renderer(container);
@@ -21,8 +22,16 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(20, 20).rotateX(-Math.PI /
 ground.receiveShadow = true;
 scene.add(ground);
 
-/** A weapon as a unit carries it: its template and tier. */
-export const WEAPON_CASES: { label: string; template: TemplateId; tier: Tier }[] = [
+/** A weapon as a unit carries it: its template and tier; a campaign soldier's own arms, and which it has in the hand. */
+interface WeaponCase {
+  label: string;
+  template: TemplateId;
+  tier: Tier;
+  arms?: Arms;
+  draw?: keyof Armament;
+}
+
+export const WEAPON_CASES: WeaponCase[] = [
   { label: 'rifle', template: 'rookie', tier: 1 },
   { label: 'rifle2', template: 'rookie', tier: 2 },
   { label: 'rifle3', template: 'rookie', tier: 3 },
@@ -33,6 +42,18 @@ export const WEAPON_CASES: { label: string; template: TemplateId; tier: Tier }[]
   { label: 'huntingRifle', template: 'trooper', tier: 1 },
   { label: 'smg', template: 'officer', tier: 1 },
   { label: 'baton', template: 'lancer', tier: 1 },
+];
+
+const own = (primary: Arms['primary'], melee: Arms['melee'] = null): Arms => ({ primary, melee });
+
+export const ARMS_CASES: WeaponCase[] = [
+  { label: 'pistola sola', template: 'rookie', tier: 1, arms: own(null) },
+  { label: 'fusil + pistola', template: 'rookie', tier: 1, arms: own('assaultRifle'), draw: 'sidearm' },
+  { label: 'cuchillo', template: 'rookie', tier: 1, arms: own('assaultRifle'), draw: 'belt' },
+  { label: 'machete', template: 'rookie', tier: 1, arms: own('pumpShotgun', 'machete'), draw: 'belt' },
+  { label: 'colgadas', template: 'rookie', tier: 1, arms: own('precisionRifle', 'machete'), draw: 'sidearm' },
+  { label: 'cerrojo', template: 'rookie', tier: 1, arms: own('huntingRifle') },
+  { label: 'ametralladora ligera', template: 'rookie', tier: 1, arms: own('lightMachineGun') },
 ];
 
 const POSES: Record<string, Partial<FigurePose>> = {
@@ -46,16 +67,19 @@ const POSES: Record<string, Partial<FigurePose>> = {
   hit: { hit: 0.6 },
   climb: { climb: 1 },
   dead: { fall: 1 },
+  windup: { aim: 1, swing: -1, lean: -0.25 },
+  strike: { aim: 1, swing: 1, lean: 0.5 },
 };
 
 const look = (character: CharacterId): Appearance => ({ primary: '#56605a', secondary: PLAYER_COLORS[0], visor: '#9fe3ff', head: 'bare', build: 'normal', character });
 
 /** A body with a weapon, posed for `seconds` at 30 fps so the clips have blended in. */
-async function posed(template: TemplateId, tier: Tier, body: CharacterId | null, pose: Partial<FigurePose>): Promise<FigureRig> {
+async function posed(template: TemplateId, tier: Tier, body: CharacterId | null, pose: Partial<FigurePose>, arms?: Arms, draw?: keyof Armament): Promise<FigureRig> {
   const squad = !['trooper', 'officer', 'lancer'].includes(template);
-  const rig = buildUnit(template, PLAYER_COLORS[0], squad && body ? look(body) : undefined, { weapon: tier }, `${template}${body}`);
+  const rig = buildUnit(template, PLAYER_COLORS[0], squad && body ? look(body) : undefined, { weapon: tier, arms }, `${template}${body}`);
   if (!isFigure(rig)) throw new Error(`${template} is not a figure`);
   for (let i = 0; i < 200 && rig instanceof SyntyFigure && !rig.ready; i++) await new Promise((r) => setTimeout(r, 30));
+  if (draw) rig.draw?.(draw);
   const p: FigurePose = { ...IDLE_POSE, spin: 0, search: 0, ...pose };
   for (let t = 0; t < 1.5; t += 1 / 30) rig.applyPose(p, t);
   return rig;
@@ -66,6 +90,7 @@ const VIEWS: Record<string, THREE.Vector3> = {
   right: new THREE.Vector3(-1, 0.25, 0.6),
   left: new THREE.Vector3(1, 0.25, 0.6),
   front: new THREE.Vector3(0.25, 0.2, 1),
+  back: new THREE.Vector3(-0.35, 0.3, -1),
 };
 
 /**
@@ -92,7 +117,7 @@ async function sheet(
   const view = (VIEWS[viewName] ?? VIEWS.right!).clone().normalize();
   for (const [row, c] of cases.entries()) {
     for (const [col, body] of bodies.entries()) {
-      const rig = await posed(c.template, c.tier, body, pose);
+      const rig = await posed(c.template, c.tier, body, pose, c.arms, c.draw);
       scene.add(rig.root);
       // On the hands: between the two, a little up towards the shoulders.
       rig.root.updateMatrixWorld(true);
@@ -121,4 +146,4 @@ async function sheet(
   return name;
 }
 
-(window as unknown as { __weapons: unknown }).__weapons = { sheet, posed, renderer, POSES, WEAPON_CASES };
+(window as unknown as { __weapons: unknown }).__weapons = { sheet, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES };

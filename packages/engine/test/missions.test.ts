@@ -3,7 +3,7 @@ import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { abilitiesOf } from '../src/abilities';
 import { buildSquad, createCampaign } from '../src/campaign';
 import { TALENTS } from '../src/classes';
-import { ABILITIES, TEMPLATES } from '../src/content';
+import { ABILITIES, apPerTurn, TEMPLATES, THIRD_ACTION_RANK } from '../src/content';
 import { createMission, garrison, hordeWave, makeUnit, missionPods } from '../src/setup';
 import { STORY } from '../src/lore';
 import { QUESTS, type QuestMission } from '../src/quests';
@@ -29,7 +29,7 @@ function field(kind: MissionKind, rows = Array.from({ length: 20 }, () => '.'.re
 }
 
 describe('sabotage', () => {
-  it('destroying the relay secures the objective and stops the timer; then the hostiles must fall', () => {
+  it('destroying the relay secures the objective and stops the timer; the mission is won back on the bus', () => {
     const s = field('sabotage');
     addUnit(s, 's1', 'sharpshooter', 0, 0);
     const relay = { ...makeUnit('relay', 'relay', 'Retransmisor', null, { x: 6, y: 0 }, null), objective: true };
@@ -44,6 +44,10 @@ describe('sabotage', () => {
     expect(s.outcome).toBeNull();
     sim.damage(alien, 99, 0);
     sim.checkOutcome();
+    // Clearing the map is not enough (docs/PRUEBA-2026-10-14.md P1): it is won getting out.
+    expect(s.outcome).toBeNull();
+    s.mission.evacZone = [{ x: 0, y: 0 }];
+    run(s, { type: 'evac', unit: 's1' });
     expect(s.outcome).toBe('victory');
   });
 
@@ -124,10 +128,13 @@ describe('rescue', () => {
     const vip = s.units.find((u) => u.id === 'vip')!;
     expect(vip.captive).toBe(false);
     expect(vip.owner).toBe(0);
+    // Both on the bus; it leaves, and the VIP is out (docs/PRUEBA-2026-10-14.md P1).
+    s.mission.evacZone = [{ x: 0, y: 19 }, { x: 1, y: 19 }];
     vip.pos = { x: 0, y: 19, z: 0 };
-    vip.ap = 2;
-    run(s, { type: 'ability', unit: 'vip', ability: 'evac' });
+    s.units.find((u) => u.id === 's1')!.pos = { x: 1, y: 19, z: 0 };
+    run(s, { type: 'evac', unit: 'vip' });
     expect(s.mission.objectiveDone).toBe(true);
+    expect(s.outcome).toBe('victory');
   });
 
   it('losing the VIP fails the mission', () => {
@@ -341,5 +348,17 @@ describe('the dead first (docs/ZOMBIS-PRIMERO.md)', () => {
       expect.arrayContaining(['La lista de prisioneros', 'Sacar a {relative}', 'Vera Lindqvist', 'Otto Brandt', 'Ruta 50', 'Cacería en la Ruta 50', 'Manos', 'Las notas de Mei']),
     );
     expect(held).toHaveLength(8);
+  });
+});
+
+describe('ranks (docs/PRUEBA-2026-10-14.md P5)', () => {
+  it('a soldier from Comandante on starts each turn with three actions; anyone else, two', () => {
+    const s = field('elimination');
+    const veteran = addUnit(s, 's1', 'assault', 2, 2, { rank: THIRD_ACTION_RANK });
+    const captain = addUnit(s, 's2', 'assault', 4, 2, { rank: THIRD_ACTION_RANK - 1 });
+    applyEvent(s, { t: 'turnBegan', team: 'xcom', turn: 2 });
+    expect(veteran.ap).toBe(3);
+    expect(captain.ap).toBe(2);
+    expect(apPerTurn({ team: 'alien', rank: 7 })).toBe(2);
   });
 });

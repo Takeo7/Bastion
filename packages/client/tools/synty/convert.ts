@@ -41,6 +41,7 @@ import {
   type AtlasId,
   type CharacterAsset,
   type PieceAsset,
+  type PropAsset,
   type PackId,
 } from '../../src/game/syntyManifest.ts';
 
@@ -139,7 +140,7 @@ function slotsOf(pack: PackId, prefab: string): Record<string, (AtlasId | null)[
 
 /** The pack's own atlas. */
 function atlasOf(pack: PackId): AtlasId {
-  const id = (Object.keys(ATLASES) as AtlasId[]).find((a) => ATLASES[a].pack === pack);
+  const id = PACKS[pack].atlas ?? (Object.keys(ATLASES) as AtlasId[]).find((a) => ATLASES[a].pack === pack);
   if (!id) throw new Error(`No atlas for pack ${pack}`);
   return id;
 }
@@ -233,13 +234,13 @@ for (const [id, t] of Object.entries(FX_TEXTURES) as [keyof typeof FX_TEXTURES, 
   add({ kind: 'texture', id, out: join(PUBLIC, fxTextureFile(id)), src: join(SOURCES, PACKS.particleFx.dir, t.src), size: t.size });
 }
 
-for (const [id, p] of Object.entries(PROPS)) {
-  add({ kind: 'prop', id, name: id, out: join(PUBLIC, modelFile(p.pack, 'prop', id)), fbx: findFbx(p.pack, p.fbx), atlas: atlasOf(p.pack), slots: slotsOf(p.pack, p.fbx) });
+for (const [id, p] of Object.entries(PROPS) as [string, PropAsset][]) {
+  add({ kind: 'prop', id, name: id, out: join(PUBLIC, modelFile(p.pack, 'prop', id)), fbx: findFbx(p.pack, p.fbx), atlas: p.atlas ?? atlasOf(p.pack), slots: slotsOf(p.pack, p.fbx) });
 }
 
 for (const [id, p] of Object.entries(PIECES) as [string, PieceAsset][]) {
   const piece = { keep: p.keep ?? null, parts: !!p.parts, drop: p.drop ?? [] };
-  add({ kind: 'piece', id, name: id, out: join(PUBLIC, modelFile(p.pack, 'piece', id)), fbx: findFbx(p.pack, p.fbx), atlas: atlasOf(p.pack), slots: slotsOf(p.pack, p.fbx), ...piece });
+  add({ kind: 'piece', id, name: id, out: join(PUBLIC, modelFile(p.pack, 'piece', id)), fbx: findFbx(p.pack, p.fbx), atlas: p.atlas ?? atlasOf(p.pack), slots: slotsOf(p.pack, p.fbx), ...piece });
 }
 
 // The base's models convert as whole pieces (no cut); their fbx is a path in the pack.

@@ -155,7 +155,7 @@
   transform: none;
 }
 
-:root[data-ui='mixta'] :is(.toast, .toast.partner-notice, .strat-toast, .strat-proposal) {
+:root[data-ui='mixta'] :is(.toast, .toast.partner-notice, .strat-toast) {
   transform: translateX(-50%);
 }
 
@@ -519,8 +519,8 @@
   background: var(--t-urgent-hover);
 }
 
-/* The partner's proposal and name tag: amber glass, not a sticky note. */
-:root[data-ui='mixta'] :is(.strat-proposal, .partner-tag) {
+/* The partner's name tag: amber glass, not a sticky note (the proposal is a plate: mixta-base.css). */
+:root[data-ui='mixta'] .partner-tag {
   background: var(--t-note);
   border: 1px solid var(--t-note-edge);
   color: var(--t-note-ink);

@@ -6,7 +6,7 @@ import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
 import { SyntyFigure } from '../../game/syntyFigures';
 import { molotov } from '../../game/songFx';
 import { loadModel } from '../../game/synty';
-import { UI_MODELS, type BaseModelId, type CharacterId, type PackId } from '../../game/syntyManifest';
+import { UI_MODELS, type BaseModelId, type CharacterId, type PackId, type WeaponId } from '../../game/syntyManifest';
 import { KitBatch, kitMesh, kitModel, loadBaseKit } from '../../strategy/baseKit';
 
 // Icon renders for the interface (/renders.html): things of the game as
@@ -225,14 +225,25 @@ async function partsIcon(): Promise<THREE.Object3D> {
   return g;
 }
 
+/** One of the units' weapons (syntyManifest.ts, WEAPONS), its barrel along +z, turned `tilt` about its side (up from the barrel). */
+const weapon = (id: WeaponId, tilt = 0) => async (): Promise<THREE.Object3D> => {
+  const g = new THREE.Group();
+  const m = (await loadModel('apocalypse', 'wep', id)).clone();
+  m.rotation.x = -tilt;
+  g.add(m);
+  return g;
+};
+
 /** One of the battle maps' props (syntyManifest.ts, PROPS). */
 const prop = (pack: PackId, id: string) => async (): Promise<THREE.Object3D> => (await loadModel(pack, 'prop', id)).clone();
 
 /**
  * What to render: the subject and the direction it is seen from (its nose or
- * face towards +z); `masks`: only its white silhouettes are wanted.
+ * face towards +z); `masks`: only its white silhouettes are wanted; `trim`: as
+ * the packs' weapon icons (public/ui/synty/icons), cut to the silhouette and
+ * 128 wide, as tall as it comes.
  */
-const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.Vector3; masks?: boolean }> = {
+const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.Vector3; masks?: boolean; trim?: boolean }> = {
   molotov: { make: molotovIcon, view: new THREE.Vector3(0.9, 0.35, 1.3) },
   // More nose than side: chunkier, so it still reads at 128 px.
   mula: { make: mulaIcon, view: new THREE.Vector3(0.95, 0.6, 1.45) },
@@ -257,6 +268,10 @@ const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.V
   botiquin: { make: kit('medKit'), view: new THREE.Vector3(0.55, 0.85, 1) },
   racion: { make: rationIcon, view: new THREE.Vector3(0.6, 0.5, 1) },
   piezas: { make: partsIcon, view: new THREE.Vector3(0.6, 0.55, 1) },
+  // Weapons for the Armería, beside the packs' own (rifle, pistol, mh-machete): a pure profile, the muzzle to the
+  // right; a blade slanting up to the right, as the machete.
+  escopeta: { make: weapon('shotgun'), view: new THREE.Vector3(-1, 0, 0), masks: true, trim: true },
+  cuchillo: { make: weapon('knife', Math.PI / 4), view: new THREE.Vector3(-1, 0, 0), masks: true, trim: true },
 };
 
 const shots = new Map<string, string>();
@@ -305,6 +320,32 @@ function scaled(img: HTMLImageElement, size: number, mask: boolean): HTMLCanvasE
   return canvas;
 }
 
+/** A mask cut to its silhouette's box (and a pixel round it), `width` wide. */
+function trimmed(mask: HTMLCanvasElement, width: number): HTMLCanvasElement {
+  const { width: w, height: h } = mask;
+  const data = mask.getContext('2d')!.getImageData(0, 0, w, h).data;
+  let [x0, y0, x1, y1] = [w, h, -1, -1];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (data[(y * w + x) * 4 + 3]! < 8) continue;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+  }
+  const pad = 2;
+  const sw = x1 - x0 + 1 + pad * 2;
+  const sh = y1 - y0 + 1 + pad * 2;
+  const out = document.createElement('canvas');
+  out.width = width;
+  out.height = Math.max(1, Math.round((sh * width) / sw));
+  const g = out.getContext('2d')!;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(mask, x0 - pad, y0 - pad, sw, sh, 0, 0, out.width, out.height);
+  return out;
+}
+
 /** Sends every render, at 512 and 128 and as masks, to the dev server's /__snap as WebP. */
 async function save(): Promise<string[]> {
   const sent: string[] = [];
@@ -315,6 +356,12 @@ async function save(): Promise<string[]> {
       img.onload = resolve;
       img.src = url;
     });
+    if (ICONS[name]!.trim) {
+      const file = `icon-${name}-mask-trim`;
+      await fetch(`/__snap?name=${encodeURIComponent(file)}`, { method: 'POST', body: trimmed(scaled(img, 512, true), 128).toDataURL('image/webp', 0.92) });
+      sent.push(file);
+      continue;
+    }
     for (const [size, suffix] of [[512, ''], [128, '@128']] as const) {
       for (const mask of ICONS[name]!.masks ? [true] : [false, true]) {
         const file = `icon-${name}${mask ? '-mask' : ''}${suffix}`;

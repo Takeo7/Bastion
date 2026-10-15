@@ -1,9 +1,9 @@
 // Searching (docs/FASE2.md, «Saqueo»): which furniture can be searched, what
 // turns up in it and what the squad brings home. The rolls happen on the host
 // (Sim.search); the `searched` event carries what was found.
-import { FOUND_WEAPONS, ITEMS, NIGHT, TEMPLATES } from './content';
+import { BACKPACK_SLOTS, FOUND_WEAPONS, ITEMS, NIGHT, TEMPLATES } from './content';
 import { decorOf } from './decor';
-import { DIRS8, heightAt, inBounds, kindAt, nodeOf, tileIndex, toPos } from './grid';
+import { DIRS4, DIRS8, heightAt, inBounds, isWalkable, kindAt, nodeOf, slabAt, tileIndex, toPos } from './grid';
 import type { Rng } from './rng';
 import type { DecorKind, FoundWeaponId, GameState, ItemId, Loot, Place, Pos, TileKind, Unit } from './types';
 
@@ -78,7 +78,11 @@ function supplies(difficulty: number, rng: Rng, night: boolean): number {
  */
 export function rollLoot(decor: DecorKind, difficulty: number, rng: Rng, night = false, mags = false): Loot | null {
   const spot = SPOTS[decor];
-  if (!spot) return null;
+  return spot ? rollSpot(spot, difficulty, rng, night, mags) : null;
+}
+
+/** What searching a place of kind `spot` turns up: rollLoot by the kind of place, not the piece of furniture. */
+function rollSpot(spot: Spot, difficulty: number, rng: Rng, night: boolean, mags: boolean): Loot | null {
   const d = Math.max(1, Math.min(4, difficulty));
   const t = TABLES[spot];
   const roll = rng.int(100);
@@ -98,7 +102,36 @@ export function rollLoot(decor: DecorKind, difficulty: number, rng: Rng, night =
 
 // ------------------------------------------------------------ the furniture
 
-/** The searchable piece of furniture on `p`, searched or not; null if there is none or it was blown away. */
+// ------------------------------------------------------- the loot boxes
+
+/** The special boxes (docs/FASE8.md §B): each always holds what it is marked for. */
+export const LOOT_BOXES: readonly DecorKind[] = ['lootWeapons', 'lootMedical', 'lootAmmo', 'lootFood'];
+
+/**
+ * What opening a box of `kind` turns up: a good weapon, one or two
+ * medicines, two magazines (for a searcher who counts them; nothing for
+ * anyone else), or three to five rations.
+ */
+export function rollBox(kind: DecorKind, rng: Rng, mags: boolean): Loot | null {
+  switch (kind) {
+    case 'lootWeapons':
+      return { weapon: foundWeapon(rng) };
+    case 'lootMedical':
+      return { medicines: rng.range(1, 2) };
+    case 'lootAmmo':
+      return mags ? { mags: 2 } : null;
+    case 'lootFood':
+      return { food: rng.range(3, 5) };
+    default:
+      return null;
+  }
+}
+
+/**
+ * The loot box on `p`, opened or not; null if there is none or it was blown
+ * away. Furniture and cars are no longer searched one by one (docs/FASE8.md
+ * §B): a room is, as a whole (roomAt).
+ */
 export function searchSpot(s: GameState, at: Place): DecorKind | null {
   const p = toPos(at);
   const decor = p.z === 0 ? s.decor : s.levels?.[p.z - 1]?.decor;
@@ -106,7 +139,87 @@ export function searchSpot(s: GameState, at: Place): DecorKind | null {
   const kind = kindAt(s, p);
   if (kind !== 'low' && kind !== 'high') return null;
   const look = decorOf(decor[tileIndex(s, p.x, p.y)]);
-  return look && SPOTS[look.kind] ? look.kind : null;
+  return look && LOOT_BOXES.includes(look.kind) ? look.kind : null;
+}
+
+// ------------------------------------------------------------- the rooms
+
+/** The ground's mark for the inside of a building (mapgen.ts INDOOR). */
+const INDOOR_GROUND = 2;
+
+/** A room (docs/FASE8.md §B): its floor tiles on one level, the kind of place its furniture makes it, and its id (its first node). */
+export interface Room {
+  id: number;
+  tiles: Pos[];
+  spot: Spot;
+}
+
+/** Whether place (x, y) on level `z` is inside a building: an indoor tile on the ground, or a storey with a floor over it. */
+function interior(s: GameState, x: number, y: number, z: number): boolean {
+  return z === 0 ? (s.ground?.[tileIndex(s, x, y)] ?? 0) === INDOOR_GROUND : slabAt(s, x, y, z + 1);
+}
+
+/** Floor a room is made of: walkable, but not a doorway nor a window (they part one room from the next). */
+function roomFloor(kind: TileKind | null): boolean {
+  return isWalkable(kind) && kind !== 'door' && kind !== 'doorOpen' && kind !== 'window' && kind !== 'windowBroken';
+}
+
+/**
+ * The room place `at` stands in (docs/FASE8.md §B): the floor joined to it on
+ * its level, inside the building, without crossing a doorway or a window.
+ * Its kind of place is the one most of its furniture makes it (a home, an
+ * office, a shop, a store), a home when it has none. Null outdoors, on a
+ * roof, in a doorway, or on a hand-made map (they mark no inside).
+ */
+export function roomAt(s: GameState, at: Place): Room | null {
+  const start = toPos(at);
+  if (!inBounds(s, start.x, start.y) || !roomFloor(kindAt(s, start)) || !interior(s, start.x, start.y, start.z)) return null;
+  const z = start.z;
+  const decor = z === 0 ? s.decor : s.levels?.[z - 1]?.decor;
+  const seen = new Set<number>([tileIndex(s, start.x, start.y)]);
+  const tiles: Pos[] = [];
+  const furniture = new Map<number, Spot>();
+  const queue: Pos[] = [start];
+  while (queue.length) {
+    const p = queue.shift()!;
+    tiles.push(p);
+    for (const d of DIRS4) {
+      const x = p.x + d.x;
+      const y = p.y + d.y;
+      if (!inBounds(s, x, y)) continue;
+      const i = tileIndex(s, x, y);
+      const q = { x, y, z };
+      const kind = kindAt(s, q);
+      if ((kind === 'low' || kind === 'high') && decor) {
+        const look = decorOf(decor[i]);
+        const spot = look && SPOTS[look.kind];
+        if (spot) furniture.set(i, spot);
+      }
+      if (seen.has(i) || !roomFloor(kind) || !interior(s, x, y, z)) continue;
+      seen.add(i);
+      queue.push(q);
+    }
+  }
+  const counts = new Map<Spot, number>();
+  for (const spot of furniture.values()) counts.set(spot, (counts.get(spot) ?? 0) + 1);
+  const spot = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? 'home';
+  const id = Math.min(...tiles.map((p) => nodeOf(s, p)));
+  return { id, tiles, spot };
+}
+
+/** Whether the squad has already searched `room` (docs/FASE8.md §B: once for everyone). */
+export function roomSearched(s: GameState, room: Pick<Room, 'id'>): boolean {
+  return (s.roomsSearched ?? []).includes(room.id);
+}
+
+/** What searching `room` turns up at that difficulty: the furniture's tables, rolled once for the room. */
+export function rollRoom(room: Room, difficulty: number, rng: Rng, night = false, mags = false): Loot | null {
+  return rollSpot(room.spot, difficulty, rng, night, mags);
+}
+
+/** Room in a soldier's backpack: BACKPACK_SLOTS, one more with the Chapistería (docs/FASE8.md §C). */
+export function packSlots(u: Pick<Unit, 'packSlots'>): number {
+  return u.packSlots ?? BACKPACK_SLOTS;
 }
 
 export function wasSearched(s: GameState, p: Place): boolean {
@@ -152,7 +265,10 @@ export interface LootTotals {
   medicines: number;
   food: number;
   parts: number;
+  /** Weapons found: new to the Armería. */
   weapons: FoundWeaponId[];
+  /** The Armería's own weapons coming back in a backpack (Loot.weaponId), swapped for a find (docs/FASE8.md §C). */
+  returned?: { id: string; kind: FoundWeaponId }[];
 }
 
 export function lootTotals(loot: readonly Loot[]): LootTotals {
@@ -163,7 +279,8 @@ export function lootTotals(loot: readonly Loot[]): LootTotals {
     out.medicines += l.medicines ?? 0;
     out.food += l.food ?? 0;
     out.parts += l.parts ?? 0;
-    if (l.weapon) out.weapons.push(l.weapon);
+    if (l.weapon && l.weaponId) (out.returned ??= []).push({ id: l.weaponId, kind: l.weapon });
+    else if (l.weapon) out.weapons.push(l.weapon);
   }
   return out;
 }

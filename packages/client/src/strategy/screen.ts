@@ -88,7 +88,6 @@ import {
   MAX_LEVEL,
   soldierCap,
   MISSION_NAMES,
-  missionDays,
   NAME_MAX,
   nextSteps,
   nextTierBlocker,
@@ -108,21 +107,24 @@ import {
   REGIONS,
   Rng,
   shopPrice,
+  soldierArms,
   plotName,
   soldierReady,
   canSpendPoints,
   PREMISE,
+  proposalClock,
   floodedZoneNote,
   ofZone,
   contactBlocker,
-  offerDays,
   underMarea,
   NIGHT_TEXT,
   craftBlocker,
   dailyRations,
   gardenYield,
   FOUND_WEAPONS,
-  fitsWeapon,
+  meleeWeaponOf,
+  spareMags,
+  type CraftId,
   weaponLabel,
   MEDICATE_COST,
   MEDICATE_DAYS,
@@ -187,7 +189,9 @@ import { Stage, type Shot } from './stage';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
 import { plotIcon } from './plotIcons';
+import { kindOf, loadoutEl, placeOf, weaponIcon } from './arms';
 import { skillTree } from './skillTree';
+import { deadlineEl } from '../ui/deadline';
 import { SURVIVOR_CHOICES } from '../game/syntyManifest';
 
 export interface StrategyHandlers {
@@ -210,6 +214,15 @@ interface Alert {
   rank?: number;
   /** Where it happens: the globe turns there when it pops up (rumours). */
   region?: RegionId;
+  /** What a level unlocks, one per line with its icon (UI, playtest 14/10 #20: it came all in one line). */
+  unlocks?: Unlock[];
+}
+
+/** One thing a Bastion level unlocks: its icon (agenda-icon kind), its name and a line on it. */
+interface Unlock {
+  kind: string;
+  name: string;
+  detail?: string;
 }
 
 /** The Novedades tray keeps this many alerts at most. */
@@ -217,7 +230,7 @@ const MAX_NEWS = 20;
 
 const REPORT_KEY = storageKey('seenReport');
 /** The rule of time, wherever the day is shown. */
-const TIME_HELP = 'El tiempo solo pasa al esperar noticias (hasta que ocurre algo) y en las misiones (de 2 a 5 días, según lo lejos que esté la zona). Comprar, reclutar, entrenar o proponer no gastan días; las obras, las curas y las escuchas avanzan mientras pasan.';
+const TIME_HELP = 'El tiempo solo pasa al esperar noticias, hasta que ocurre algo. Las misiones, comprar, reclutar, entrenar o proponer no gastan días; las obras, las curas y las escuchas avanzan mientras pasan.';
 
 /** What each browser has already seen of every campaign's news (the tabs' numbers). */
 const NEWS_KEY = storageKey('seenNews');
@@ -303,6 +316,15 @@ function loadSeenReport(): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * The clock on the open proposal (PRUEBA-2026-10-14 #28): unanswered, the
+ * server takes it as the partner's yes, so whoever stays can play on. `mine`:
+ * this player proposed it.
+ */
+function proposalTimer(mine: boolean): HTMLElement | null {
+  return deadlineEl('proposal', (left) => proposalClock(left, mine));
 }
 
 /**
@@ -452,6 +474,11 @@ export class StrategyScreen {
 
   setPlayers(players: PlayerInfo[]): void {
     this.players = players;
+    this.render();
+  }
+
+  /** Drawn again as it is: the clock on an open question changed (ui/deadline.ts, PRUEBA-2026-10-14 #28). */
+  refresh(): void {
     this.render();
   }
 
@@ -640,7 +667,7 @@ export class StrategyScreen {
 
   /** The weapon and armour tier a soldier has earned, for their model. */
   private gearFor(c: CampaignState, s: CampaignSoldier): Gear {
-    return gearOf(weaponTier(c, s), armorTier(c, s));
+    return { ...gearOf(weaponTier(c, s), armorTier(c, s)), arms: soldierArms(c, s) };
   }
 
   /** "Faltan 20 suministros", or '' when the cost is affordable. */
@@ -804,6 +831,19 @@ export class StrategyScreen {
     );
   }
 
+  /** What a Bastion level unlocks, one by one: techs, accessories, facilities and their upgrades (levelUnlocks' order). */
+  private unlocksOf(level: number): Unlock[] {
+    const known = new Set<string>();
+    const out: Unlock[] = [];
+    const add = (kind: string, name: string, detail?: string) => (known.add(name), out.push({ kind, name, detail }));
+    for (const t of Object.values(TECHS).filter((x) => x.level === level)) add('xp', t.name, t.description);
+    for (const i of Object.values(ITEMS).filter((x) => x.level === level)) add('flag', i.name, i.description);
+    for (const f of Object.values(FACILITIES).filter((x) => x.level === level)) add('pick', f.name, f.description);
+    // The rest are facilities going up a level («Barracón, nivel 2»).
+    for (const name of levelUnlocks(level, FACILITIES).filter((n) => !known.has(n))) add('pick', name);
+    return out;
+  }
+
   /** "Armas magnéticas · Sala de simulación": what a Bastion level unlocks. */
   private unlocksText(level: number): string {
     const list = levelUnlocks(level, FACILITIES);
@@ -865,7 +905,8 @@ export class StrategyScreen {
         title: page.title,
         // One line of the page here; the whole page waits in the Diario (playtest: «mucho texto»).
         body: [page.summary],
-        text: `Bastión nivel ${level}. ${this.unlocksText(level)}`,
+        text: `Bastión nivel ${level}.`,
+        unlocks: this.unlocksOf(level),
         note: page.note,
         action: { label: 'Abrir el diario', go: () => void this.go('research') },
       });
@@ -1148,7 +1189,6 @@ export class StrategyScreen {
         const reward = [o.reward.credits ? `${o.reward.credits} §` : '', o.reward.recruit ? 'un recluta' : ''].filter(Boolean).join(' y ');
         return {
           rows: [
-            ['Tiempo', `${offerDays(c, o)} días fuera: el tiempo pasa`],
             ['Qué hace', `${MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}`],
             ['Extra', `Dificultad ${'★'.repeat(o.difficulty)}${reward ? ` · recompensa: ${reward}` : ''}`],
           ],
@@ -1234,19 +1274,28 @@ export class StrategyScreen {
     const { rows, see } = this.proposalDetail(c, p.action);
     const detail = rows.length ? h('dl.proposal-detail', {}, ...rows.flatMap(([label, text]) => [h('dt', {}, label), h('dd', {}, text)])) : null;
     const seeBtn = see ? h('button.x-btn.small', { onclick: see }, 'Ver') : null;
-    if (p.by === this.mySlot) {
+    // A plate like the alerts' (playtest 14/10, #22): who proposed on its edge, the sentence, the data, the answer at its foot.
+    const mine = p.by === this.mySlot;
+    this.proposalEl.classList.toggle('mine', mine);
+    this.proposalEl.style.setProperty('--who', this.playerColor(p.by));
+    const kicker = h('div.proposal-kicker', {}, mine ? 'Tu propuesta' : 'Propuesta');
+    if (mine) {
       append(
         this.proposalEl,
-        h('div.proposal-text', {}, h('span', {}, `Has propuesto ${p.text}. Esperando a ${this.partner()?.name ?? 'tu compañero'}…`), detail),
-        h('button.x-btn', { onclick: () => this.send({ type: 'withdraw' }) }, 'Retirar'),
+        h('div.proposal-text', {}, kicker, h('span', {}, `Has propuesto ${p.text}. Esperando a ${this.partner()?.name ?? 'tu compañero'}…`), detail, proposalTimer(true)),
+        h('div.proposal-actions', {}, h('button.x-btn', { onclick: () => this.send({ type: 'withdraw' }) }, 'Retirar')),
       );
     } else {
       append(
         this.proposalEl,
-        h('div.proposal-text', {}, h('span', {}, h('b', { style: { color: this.playerColor(p.by) } }, this.playerName(p.by)), ` propone ${p.text}.`), detail),
-        seeBtn,
-        h('button.x-btn.primary', { onclick: () => this.send({ type: 'vote', accept: true }) }, 'Aceptar'),
-        h('button.x-btn.danger', { onclick: () => this.send({ type: 'vote', accept: false }) }, 'Rechazar'),
+        h('div.proposal-text', {}, kicker, h('span', {}, h('b', { style: { color: this.playerColor(p.by) } }, this.playerName(p.by)), ` propone ${p.text}.`), detail, proposalTimer(false)),
+        h(
+          'div.proposal-actions',
+          {},
+          seeBtn,
+          h('button.x-btn.primary', { onclick: () => this.send({ type: 'vote', accept: true }) }, 'Aceptar'),
+          h('button.x-btn.danger', { onclick: () => this.send({ type: 'vote', accept: false }) }, 'Rechazar'),
+        ),
       );
     }
   }
@@ -1436,7 +1485,7 @@ export class StrategyScreen {
           ),
         ),
       ),
-      h('p.calendar-note', {}, 'Los días solo pasan al esperar noticias y en las misiones. Obras, curas y escuchas avanzan con ellos.'),
+      h('p.calendar-note', {}, 'Los días solo pasan al esperar noticias. Obras, curas y escuchas avanzan con ellos.'),
     ];
   }
 
@@ -1670,9 +1719,6 @@ export class StrategyScreen {
         h('dd', {}, MISSION_NAMES[o.kind]),
         h('dt', {}, 'Dificultad'),
         h('dd', {}, h('span.stars', {}, '★'.repeat(o.difficulty)), ` ${DIFFICULTY[o.difficulty]}`),
-        // La Mula's trip (docs/FASE5.md): the farther the zone, the more days pass.
-        h('dt', {}, 'Viaje'),
-        h('dd', { title: 'Ida, misión y vuelta: los días pasan (obras, heridas, fiebres, raciones y la infestación)' }, `${offerDays(c, o)} días`),
         h('dt', {}, 'Caduca'),
         h('dd', {}, o.expiresDay === null ? 'No caduca' : `${Math.max(0, o.expiresDay - c.day)} días`),
         h('dt', {}, 'Recompensa'),
@@ -1859,17 +1905,31 @@ export class StrategyScreen {
           ),
         );
       }
-      // Weapons found while searching (docs/FASE4.md): one soldier each, a tier above the rest.
+      // The Taller's weapons and munition (docs/FASE8.md §A): weapons again and again, munition three times.
+      rows.push(h('div.x-group', {}, 'Hacer en el Taller'));
+      for (const def of Object.values(CRAFTS).filter((d) => d.kind === 'arms' || d.kind === 'ammo')) {
+        const work = c.base.works.find((w) => w.project === def.id);
+        const done = def.kind === 'ammo' && c.crafted?.includes(def.id);
+        rows.push(
+          h(
+            `button.x-row${this.engPick === `m:${def.id}` ? '.selected' : ''}${done || !craftBlocker(c, def.id) || work ? '' : '.dim'}`,
+            { onclick: () => ((this.engPick = `m:${def.id}`), this.render()) },
+            h('b', {}, weaponIcon(def.kind === 'ammo' || !def.makes ? 'ammo' : kindOf(def.makes)), def.name),
+            h('span.x-side', {}, done ? '✓' : work ? this.chip(`Taller · ${work.daysLeft} d`, 'good') : def.makes ? h('small.x-place', {}, placeOf(def.makes)) : ''),
+          ),
+        );
+      }
+      // The Armería's weapons (docs/FASE8.md §A): each for one soldier, of any class; the good ones a tier above.
       const found = c.foundWeapons ?? [];
-      if (found.length) rows.push(h('div.x-group', {}, 'Encontradas'));
+      if (found.length) rows.push(h('div.x-group', {}, 'En la Armería'));
       for (const w of found) {
         const holder = w.holder ? c.soldiers.find((x) => x.id === w.holder) : undefined;
         rows.push(
           h(
             `button.x-row${this.engPick === `f:${w.id}` ? '.selected' : ''}`,
             { onclick: () => ((this.engPick = `f:${w.id}`), this.render()) },
-            h('b', {}, FOUND_WEAPONS[w.kind].name),
-            h('span.x-side', {}, holder ? displayName(holder.name, holder.nickname) : 'En la Armería'),
+            h('b', {}, weaponIcon(kindOf(w.kind)), FOUND_WEAPONS[w.kind].name),
+            h('span.x-side', {}, h('small.x-place', {}, placeOf(w.kind)), holder ? displayName(holder.name, holder.nickname) : 'En la Armería'),
           ),
         );
       }
@@ -1901,9 +1961,18 @@ export class StrategyScreen {
     this.viewEl.append(this.panel('eng-left', 'left', h('div.x-head', {}, 'Armería'), tabs, h('div.x-list', {}, ...rows), note ? h('p.x-muted', {}, note) : null));
     if (!this.engPick) return;
     if (this.engTab === 'gear') {
-      const panel = this.engPick.startsWith('f:') ? this.foundPanel(c, this.engPick.slice(2)) : this.tierPanel(c, this.engPick);
+      const panel = this.engPick.startsWith('f:')
+        ? this.foundPanel(c, this.engPick.slice(2))
+        : this.engPick.startsWith('m:')
+          ? this.makePanel(c, this.engPick.slice(2) as CraftId)
+          : this.tierPanel(c, this.engPick);
       // .item-art: the theme's picture of it, in the panel's corner (ui/themes/mixta-base.css).
-      const art = h('div.item-art', { 'data-item': this.engPick.startsWith('f:') ? 'found' : this.engPick.startsWith('a') ? 'armor' : 'weapon', 'aria-hidden': 'true' });
+      const pick = this.engPick;
+      const found = pick.startsWith('f:') ? (c.foundWeapons ?? []).find((x) => x.id === pick.slice(2)) : undefined;
+      const made = pick.startsWith('m:') ? CRAFTS[pick.slice(2) as CraftId] : undefined;
+      // The weapon's own drawing (strategy/arms.ts): found or made by its kind, munition its bullets.
+      const artKind = found ? `w-${kindOf(found.kind)}` : made ? (made.makes ? `w-${kindOf(made.makes)}` : 'ammo') : pick.startsWith('a') ? 'armor' : 'weapon';
+      const art = h(`div.item-art${found && FOUND_WEAPONS[found.kind].better ? '.better' : ''}`, { 'data-item': artKind, 'aria-hidden': 'true' });
       this.viewEl.append(this.panel('eng-right', 'right', art, ...panel));
       return;
     }
@@ -1969,17 +2038,56 @@ export class StrategyScreen {
     );
   }
 
-  /** A weapon found while searching: who can carry it and who does. */
+  /** A weapon or the munition the Taller can make (docs/FASE8.md §A). */
+  private makePanel(c: CampaignState, id: CraftId): (HTMLElement | null)[] {
+    const def = CRAFTS[id];
+    if (!def) return [];
+    const work = c.base.works.find((w) => w.project === def.id);
+    const done = def.kind === 'ammo' && c.crafted?.includes(def.id);
+    const blocker = craftBlocker(c, def.id);
+    const text =
+      def.kind === 'ammo'
+        ? `Un cargador de repuesto más para cada soldado que salga de misión. Ahora cada uno sale con ${spareMags(c)} de repuesto.`
+        : `Una para la Armería, para el soldado que la lleve, sea de la clase que sea. Se puede hacer tantas veces como haga falta.`;
+    return [
+      h('div.alert-kicker', {}, def.kind === 'ammo' ? 'TALLER · MUNICIÓN' : 'TALLER · ARMA'),
+      h('h2.x-title', {}, def.name),
+      h('p.x-text', {}, text),
+      done
+        ? h('p.x-muted', {}, 'Ya está hecha.')
+        : work
+          ? h('p.x-text', {}, `El Taller la está haciendo: ${work.daysLeft} ${work.daysLeft === 1 ? 'día' : 'días'}.`)
+          : h(
+              'div',
+              {},
+              h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.parts} piezas`, '', `Tenéis ${c.parts ?? 0}`), this.chip(`${def.days} d`, '', `${def.days} días de obra`)),
+              h('button.x-btn.primary', { disabled: !!blocker, title: blocker ?? '', onclick: () => this.send({ type: 'craft', project: def.id }) }, `Hacer ${def.the}`),
+              blocker ? h('p.x-muted', {}, blocker) : null,
+            ),
+    ];
+  }
+
+  /** A weapon of the Armería: who can carry it (any of your soldiers) and who does. */
   private foundPanel(c: CampaignState, id: string): (HTMLElement | null)[] {
     const w = (c.foundWeapons ?? []).find((x) => x.id === id);
     if (!w) return [h('p.x-muted', {}, 'Esa arma ya no está.')];
     const def = FOUND_WEAPONS[w.kind];
     const holder = w.holder ? c.soldiers.find((x) => x.id === w.holder) : undefined;
-    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && s.alive && fitsWeapon(s, w.kind));
+    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && s.alive);
+    const melee = def.slot === 'melee';
+    const carries = (s: CampaignState['soldiers'][number]) => (melee ? (meleeWeaponOf(c, s) ? 'Machete' : 'Cuchillo') : weaponLabel(c, s));
     return [
-      h('div.alert-kicker', {}, 'ARMA ENCONTRADA'),
+      h('div.alert-kicker', {}, `${def.better ? 'ARMA BUENA' : melee ? 'CUERPO A CUERPO' : 'ARMA'} · ${placeOf(w.kind).toUpperCase()}`),
       h('h2.x-title', {}, def.name),
-      h('p.x-text', {}, 'Para un soldado: un nivel de arma por encima del resto, hasta el 3 y lo que permita su rango. Si cae, se pierde.'),
+      h(
+        'p.x-text',
+        {},
+        def.better
+          ? 'Para un soldado: un nivel de arma por encima del resto, hasta el 3 y lo que permita su rango. Si cae, se pierde.'
+          : melee
+            ? 'Para un soldado, en lugar del cuchillo. Si cae, se pierde.'
+            : 'Para un soldado, de cualquier clase: la lleva en la mano y la pistola al cinto. Si cae, se pierde.',
+      ),
       h('div.x-group', {}, 'La lleva'),
       holder
         ? h(
@@ -1989,7 +2097,7 @@ export class StrategyScreen {
             holder.owner === this.mySlot ? h('button.x-btn.small', { onclick: () => this.send({ type: 'assignWeapon', weapon: w.id, soldier: null }) }, 'Quitársela') : null,
           )
         : h('p.x-muted', {}, 'Nadie: está en la Armería.'),
-      h('div.x-group', {}, 'Tus soldados que pueden llevarla'),
+      h('div.x-group', {}, 'Tus soldados'),
       mine.length
         ? h(
             'div.x-list',
@@ -1998,12 +2106,12 @@ export class StrategyScreen {
               h(
                 'div.x-gear',
                 {},
-                h('span', {}, displayName(s.name, s.nickname), h('small', {}, ` · ${weaponLabel(c, s)}`)),
+                h('span', {}, displayName(s.name, s.nickname), h('small', {}, ` · ${melee ? 'al cinto' : 'en la mano'}: ${carries(s)}`)),
                 s.id === w.holder ? this.chip('La lleva', 'good') : h('button.x-btn.small', { onclick: () => this.send({ type: 'assignWeapon', weapon: w.id, soldier: s.id }) }, 'Dársela'),
               ),
             ),
           )
-        : h('p.x-muted', {}, 'Ninguno lleva esa clase de arma.'),
+        : h('p.x-muted', {}, 'No tienes soldados que puedan llevarla.'),
     ];
   }
 
@@ -2076,7 +2184,7 @@ export class StrategyScreen {
       'div.recruit-card',
       { title: `Como mucho ${cap} soldados por jugador${price < RECRUIT_COST ? '. Más barato: el centro de entrenamiento está junto al cuartel' : ''}` },
       h('div.x-group', {}, 'Reclutar un soldado'),
-      h('p.x-text', {}, `Un recluta nuevo, sin clase: lleva fusil y aprende lo que le enseñéis. Llega al momento, sin gastar días.`),
+      h('p.x-text', {}, `Un recluta nuevo, sin clase: sale con cuchillo y pistola, y aprende lo que le enseñéis. Llega al momento, sin gastar días.`),
       h(
         'p.x-chips',
         {},
@@ -2183,7 +2291,8 @@ export class StrategyScreen {
         s.traits?.length ? h('div.x-group', {}, 'Rasgos') : null,
         s.traits?.length ? h('p.x-chips', {}, ...s.traits.map((t) => this.chip(TRAITS[t].name, '', TRAITS[t].description))) : null,
         // What they carry, and what is chosen here and what isn't (playtest: «no se ve qué armas llevan ni dónde se elige»).
-        h('div.x-group', { title: 'No se eligen: van con la clase y mejoran solas con el nivel del Bastión y el rango' }, 'Arma y armadura'),
+        h('div.x-group', { title: 'Las armas salen de la Armería; mejoran con el nivel del Bastión y el rango' }, 'Arma y armadura'),
+        loadoutEl(c, s),
         ...(['weapon', 'armor'] as const).map((kind) => {
           const tier = kind === 'weapon' ? weaponTier(c, s) : armorTier(c, s);
           const name = kind === 'weapon' ? weaponLabel(c, s) : ARMOR_TIERS[tier - 1]!.name;
@@ -2193,7 +2302,7 @@ export class StrategyScreen {
           const stat = kind === 'weapon' ? this.weaponDamage(soldierTemplate(s.cls), stats.mods.damage) : `${stats.maxHp} de salud${stats.armor ? ` · ${stats.armor} de blindaje` : ''}`;
           return h('div.x-gear', {}, this.tierMarks(tier), h('span', {}, name, h('small', {}, ` · ${stat}`)), blocker && short ? this.chip(short, '', blocker) : null);
         }),
-        h('p.x-muted.gear-note', {}, s.cls ? `Van con la clase de ${TEMPLATES[s.cls].name}; mejoran con el nivel del Bastión y el rango.` : `Un recluta lleva fusil; el arma de su clase llega en ${SPECIALIZE_RANK_NAME}.`),
+        h('p.x-muted.gear-note', {}, s.cls ? `Salen de la Armería, sea de ${TEMPLATES[s.cls].name} o no; mejoran con el nivel del Bastión y el rango.` : `Salen de la Armería, para cualquier clase; la especialización llega en ${SPECIALIZE_RANK_NAME}.`),
         h('div.x-group', { title: 'Se compran en la Armería; si el soldado cae, se pierden' }, 'Accesorios · se eligen aquí'),
         loadout('utility', 'Utilidad'),
         loadout('ammo', 'Munición'),
@@ -2536,6 +2645,7 @@ export class StrategyScreen {
     const { tree, inspect } = skillTree({
       s,
       b,
+      arms: soldierArms(c, s),
       echoes,
       promoting,
       axis,
@@ -2646,7 +2756,7 @@ export class StrategyScreen {
     if (facilityCount(c, 'infirmary')) lines.push(['hp', `Heridas ×${healRate(c)} de rápido`]);
     if (facilityCount(c, 'training')) lines.push(['flag', `Escuadra de ${squadMax(c)}`]);
     if (rangeAim(c)) lines.push(['xp', `Puntería +${rangeAim(c)}`]);
-    if (garageCut(c).days) lines.push(['flag', `Misiones −${garageCut(c).days} d${garageCut(c).wounds ? ` · heridas −${garageCut(c).wounds} d` : ''}`]);
+    if (garageCut(c).wounds) lines.push(['hp', `Heridas −${garageCut(c).wounds} d`]);
     if (listeningDelay(c)) lines.push(['will', `Reloj enemigo +${listeningDelay(c)} d`]);
     if (facilityLevel(c, 'crew')) lines.push(['flag', `Obras −${[25, 40, 50][facilityLevel(c, 'crew') - 1]} %`]);
     lines.push(['will', `Contactos: ${contactCapacity(c)} zonas`]);
@@ -2859,7 +2969,7 @@ export class StrategyScreen {
           {},
           h('div.alert-kicker', {}, 'SELECCIÓN DE ESCUADRA'),
           h('h1', {}, offer.name),
-          h('p.x-sub', {}, `${MISSION_NAMES[offer.kind]} · ${REGIONS[offer.region].name} · ${'★'.repeat(offer.difficulty)} · ${offerDays(c, offer)} días`),
+          h('p.x-sub', {}, `${MISSION_NAMES[offer.kind]} · ${REGIONS[offer.region].name} · ${'★'.repeat(offer.difficulty)}`),
           // What the mission is for, in view before choosing the squad (playtest 13/10: it was only a tooltip).
           h('p.x-text.briefing-goal', {}, offerBriefing(c, offer)),
         ),
@@ -3031,7 +3141,8 @@ export class StrategyScreen {
     }
     const entries: LineupEntry[] = report.squad.map((e) => {
       const s = c.soldiers.find((x) => x.id === e.id);
-      return { template: soldierTemplate(e.cls), color: this.playerColor(e.owner), status: e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined, seed: e.id };
+      // Someone left behind (docs/PRUEBA-2026-10-14.md P1) didn't come back either: a memorial, as the fallen.
+      return { template: soldierTemplate(e.cls), color: this.playerColor(e.owner), status: e.status === 'lost' ? 'dead' : e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined, seed: e.id };
     });
     this.bastion.setLineup(entries);
     // The outcome in a line of figures; the details are in each chip's title, the story's page one click away.
@@ -3110,11 +3221,6 @@ export class StrategyScreen {
           },
           'CONTINUAR',
         ),
-        // What comes next, the same for both commanders, so nobody wonders what the other was told.
-        (() => {
-          const now = nextSteps(c, this.mySlot)[0];
-          return now ? h('small.debrief-next', {}, h('b', {}, now.tone === 'urgent' ? 'Lo más urgente: ' : 'Después: '), now.label) : null;
-        })(),
       ),
     );
   }
@@ -3212,7 +3318,7 @@ export class StrategyScreen {
         h(
           'div.alert-kicker',
           {},
-          c.event === 'finale' ? 'DOBLE LLAVE · DECISIÓN FINAL' : c.event === 'quest' && c.questEvent ? `ENCARGO · ${QUESTS[c.questEvent].title.toUpperCase()}` : 'ACONTECIMIENTO',
+          c.event === 'finale' ? 'DECISIÓN FINAL' : c.event === 'quest' && c.questEvent ? `ENCARGO · ${QUESTS[c.questEvent].title.toUpperCase()}` : 'ACONTECIMIENTO',
         ),
         h('h2.x-title', {}, def.title),
         h('p.x-text', {}, def.text),
@@ -3221,7 +3327,8 @@ export class StrategyScreen {
           {},
           ...([0, 1] as const).map((i) =>
             h(
-              'button.event-option',
+              // The option on the table stands out (playtest 2026-10-14: the partner's choice was hidden).
+              `button.event-option${proposal?.action.type === 'event' && proposal.action.option === i ? '.proposed' : ''}`,
               { disabled: !!c.proposal || !eventOptionAvailable(c, i), onclick: () => this.send({ type: 'answerEvent', option: i }) },
               h('b', {}, def.options[i].label),
               h('small', {}, def.options[i].effect),
@@ -3229,7 +3336,25 @@ export class StrategyScreen {
             ),
           ),
         ),
-        proposal ? h('p.x-warn', {}, proposal.by === this.mySlot ? `Esperando a ${this.partner()?.name ?? 'tu compañero'}…` : `${this.playerName(proposal.by)} propone ${proposal.text}: acepta o rechaza arriba.`) : h('p.x-muted', {}, 'El tiempo no avanza hasta que decidáis.'),
+        // The answer goes right here: the proposal bar above sits behind this window (playtest 2026-10-14).
+        proposal
+          ? proposal.by === this.mySlot
+            ? h(
+                'div.event-answer',
+                {},
+                h('p.x-warn', {}, `Esperando a ${this.partner()?.name ?? 'tu compañero'}…`),
+                h('button.x-btn', { onclick: () => this.send({ type: 'withdraw' }) }, 'Retirar'),
+                proposalTimer(true),
+              )
+            : h(
+                'div.event-answer',
+                {},
+                h('p.x-warn', {}, `${this.playerName(proposal.by)} propone ${proposal.text}.`),
+                h('button.x-btn.primary', { onclick: () => this.send({ type: 'vote', accept: true }) }, 'Aceptar'),
+                h('button.x-btn.danger', { onclick: () => this.send({ type: 'vote', accept: false }) }, 'Rechazar'),
+                proposalTimer(false),
+              )
+          : h('p.x-muted', {}, 'El tiempo no avanza hasta que decidáis.'),
       );
     } else if (this.alerts.length && this.view !== 'debrief') {
       const alert = this.alerts[0]!;
@@ -3250,6 +3375,14 @@ export class StrategyScreen {
         h('h2.x-title', {}, alert.title),
         ...(alert.body ?? []).map((p) => h('p.x-text', {}, p)),
         h(`p.${alert.body ? 'x-muted' : 'x-text'}`, {}, alert.text),
+        alert.unlocks?.length
+          ? h(
+              'div.alert-unlocks',
+              {},
+              h('div.x-group', {}, 'Desbloquea'),
+              ...alert.unlocks.map((u) => h('div.x-row.unlock', { title: u.detail ?? '' }, h(`span.agenda-icon.${u.kind}`), h('div', {}, h('b', {}, u.name), u.detail ? h('small', {}, u.detail) : null))),
+            )
+          : null,
         alert.note ? h('p.x-note', {}, alert.note) : null,
         h(
           'div.alert-actions',

@@ -51,9 +51,13 @@ export type BuildingKind = 'house' | 'shop' | 'office' | 'hall' | 'barn' | 'ruin
  * The wall kit a building is built from: Town's houses (siding outside,
  * plaster inside), Apocalypse's concrete bunker walls (labs), the brick of
  * its warehouses (warehouses, hangars), the quarantine wall (a facility's
- * perimeter).
+ * perimeter); sheet metal in three colours (sheds: #25).
  */
-export type KitId = 'house' | 'bunker' | 'brick' | 'fence';
+export type KitId = 'house' | 'bunker' | 'brick' | 'fence' | 'shedGrey' | 'shedRed' | 'shedBlue';
+
+/** The sheds' kits, picked per building (twice as often grey). */
+const SHEDS: KitId[] = ['shedGrey', 'shedGrey', 'shedRed', 'shedBlue'];
+const isShed = (kit: KitId) => kit.startsWith('shed');
 
 /** How a raised tile is drawn: a block of flats, a loading platform, a hill. */
 export const RAISED_FLATS = 1;
@@ -246,13 +250,13 @@ export class BuildingPlan {
           // The shared wall stays with the part before; the rest of this part is its own.
           for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if ((k === 0 || x > parts[k - 1]!.x1 || y > parts[k - 1]!.y1) && this.owner[y * w + x] === index) this.owner[y * w + x] = own;
         }
-        const decor = new Set<DecorKind>();
+        const decor = new Map<DecorKind, number>();
         let doorsBySide = [0, 0, 0, 0];
         for (let y = r.y0; y <= r.y1; y++) {
           for (let x = r.x0; x <= r.x1; x++) {
             const i = y * w + x;
             const look = decorOf(s.decor?.[i]);
-            if (look) decor.add(look.kind);
+            if (look) decor.set(look.kind, (decor.get(look.kind) ?? 0) + 1);
             const t = s.tiles[i];
             if (t === 'door' || t === 'doorOpen') {
               if (y === r.y0) doorsBySide[0]!++;
@@ -264,14 +268,22 @@ export class BuildingPlan {
         }
         const span = Math.min(r.x1 - r.x0 + 1, r.y1 - r.y0 + 1);
         const most = doorsBySide.indexOf(Math.max(...doorsBySide));
+        const n = (k: DecorKind) => decor.get(k) ?? 0;
         let kind: BuildingKind = 'house';
-        if (decor.has('bed') && doorsBySide[most]! >= 3) kind = 'motel';
-        else if (decor.has('counter')) kind = 'shop';
-        else if (decor.has('desk') || decor.has('rack')) kind = 'office';
-        else if (span >= 11 && (decor.has('shelf') || decor.has('hay') || gaps >= 2)) kind = s.biome === 'wilds' ? 'barn' : 'hall';
+        if (n('bed') && doorsBySide[most]! >= 3) kind = 'motel';
+        else if (n('counter')) kind = 'shop';
+        // A warehouse is rows of shelves, whatever desk its office corner has; a small one full of them too (a sawmill).
+        else if (
+          (span >= 11 && ((n('shelf') && n('shelf') >= 2 * (n('desk') + n('rack'))) || n('hay') || gaps >= 2)) ||
+          (span >= 9 && n('shelf') >= 6 && n('shelf') >= 2 * (n('desk') + n('rack')))
+        )
+          kind = s.biome === 'wilds' ? 'barn' : 'hall';
+        else if (n('desk') || n('rack')) kind = 'office';
         else if (span >= 10) kind = 'office';
-        const kit: KitId = kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
         const look = hash(r.x0, r.y0, 5);
+        // Sheet metal (#25): the sawmill by the forest road, three warehouses in four on an industrial estate.
+        const shed = (kind === 'barn' && s.site === 'roadside') || (kind === 'hall' && s.site === 'industrial' && look < 0.75);
+        const kit: KitId = shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
         // As tall as the engine says (it stops sight up to its roof: GameState.storeys), read on a tile of its floor
         // (a wall two share takes the taller one's); older saves and hand-made maps: town's shops and offices two or three, some houses two.
         const floorTile = (() => {
@@ -673,10 +685,13 @@ const STYLES: Record<BuildingKind, Style> = {
 
 const pick = (list: number[], k: number) => list[Math.floor(k * list.length) % list.length]!;
 
+/** A shed's gables and trim in its sheet metal's colour. */
+const SHED_TINT: Partial<Record<KitId, number>> = { shedGrey: 0xa4a8aa, shedRed: 0x9a4436, shedBlue: 0x4a6a8a };
+
 /** The colours of building b, as tints of the patches they go on. */
 function looksOf(b: Building) {
   const st = STYLES[b.kind];
-  const outer = pick(st.outer, b.look);
+  const outer = SHED_TINT[b.kit] ?? pick(st.outer, b.look);
   const [floor, floors] = st.floor;
   return {
     /** On the siding of walls and gables, and the plaster inside. */
@@ -1410,7 +1425,19 @@ function roofProps(b: Building, open?: (x: number, y: number) => boolean): RoofP
     return true;
   };
   const spot = (salt: number): [number, number] => [b.x0 + 1.7 + r(salt) * (b.x1 - b.x0 - 2.4), b.y0 + 1.7 + r(salt + 1) * (b.y1 - b.y0 - 2.4)];
-  if (b.kind === 'hall' && !walk) {
+  if (b.kind === 'hall' && !walk && isShed(b.kit)) {
+    // A shed's roof light: flat skylights end to end down the middle (the model's corner is its origin).
+    const size = 2.5 * SYNTY_SCALE;
+    const L = along ? b.x1 - b.x0 : b.y1 - b.y0;
+    const n = Math.max(1, Math.floor((L - 3) / size));
+    for (let k = 0; k < n; k++) {
+      const u = (k - n / 2) * size;
+      const x = along ? cx + u : cx - size / 2;
+      const z = along ? cz - size / 2 : cz + u;
+      out.push({ id: 'skylight', x, y, z, yaw: 0 });
+      for (let i = Math.floor(x); i <= Math.floor(x + size); i++) for (let j = Math.floor(z); j <= Math.floor(z + size); j++) taken.add(`${i},${j}`);
+    }
+  } else if (b.kind === 'hall' && !walk) {
     // Skylights down the middle.
     const n = Math.floor((along ? b.x1 - b.x0 : b.y1 - b.y0) / 3);
     for (let k = 0; k < n; k++) {
@@ -1479,7 +1506,7 @@ interface Kit {
   top?: PieceId;
 }
 
-const KITS: Record<KitId, Kit> = {
+const KITS = {
   house: {
     wall: ['houseWall'],
     window: ['houseWindowWall', 'houseWindow'],
@@ -1532,7 +1559,13 @@ const KITS: Record<KitId, Kit> = {
     glass: [0.93, 1.85, 1.355, 0],
     top: 'barbedWire',
   },
-};
+} as Record<KitId, Kit>;
+
+/** A shed: sheet metal outside a bunker wall (as the warehouses' brick), steel-framed windows, a metal door. */
+const shedKit = (sheet: PieceId, lintel: PieceId): Kit => ({ ...KITS.brick, wall: ['bunkerWall', sheet], door: ['bunkerLintel', lintel], lintel: ['bunkerLintel', lintel] });
+KITS.shedGrey = shedKit('sheetGrey', 'sheetGreyLintel');
+KITS.shedRed = shedKit('sheetRed', 'sheetRedLintel');
+KITS.shedBlue = shedKit('sheetBlue', 'sheetBlueLintel');
 
 /** Walls between rooms: Town's interior walls, whatever the building. */
 const BETWEEN: Kit = { ...KITS.house, wall: ['roomWall'], door: ['roomDoorWall'], lintel: ['roomLintel'] };
@@ -2095,6 +2128,74 @@ export class BuildingsView {
       const y = (i - x) / w;
       if (x === bd.x0 || x === bd.x1 || y === bd.y0 || y === bd.y1) signDoor.set(b, i);
     }
+    /**
+     * Where a shed's roller shutters go (#25): the middle of the longest
+     * stretch of plain wall, four tiles or more, on each of two of its sides;
+     * how wide each is.
+     */
+    const shutters = new Map<number, number>();
+    for (const bd of plan.buildings) {
+      if (!isShed(bd.kit) || bd.base > 0) continue;
+      const runs: { tile: number; length: number; side: number }[] = [];
+      const sides: [number, number, number, number, number][] = [
+        [bd.x0 + 1, bd.y0, 1, 0, bd.x1 - bd.x0 - 1],
+        [bd.x0 + 1, bd.y1, 1, 0, bd.x1 - bd.x0 - 1],
+        [bd.x0, bd.y0 + 1, 0, 1, bd.y1 - bd.y0 - 1],
+        [bd.x1, bd.y0 + 1, 0, 1, bd.y1 - bd.y0 - 1],
+      ];
+      sides.forEach(([x0, y0, dx, dy, n], side) => {
+        let start = -1;
+        for (let k = 0; k <= n; k++) {
+          const i = (y0 + dy * k) * w + x0 + dx * k;
+          const plain = k < n && s.tiles[i] === 'wall' && plan.owner[i] === bd.index;
+          if (plain && start < 0) start = k;
+          if (!plain && start >= 0) {
+            const mid = Math.floor((start + k - 1) / 2);
+            runs.push({ tile: (y0 + dy * mid) * w + x0 + dx * mid, length: k - start, side });
+            start = -1;
+          }
+        }
+      });
+      runs.sort((a, b) => b.length - a.length);
+      const sided = new Set<number>();
+      for (const r of runs) {
+        if (r.length < 4 || sided.has(r.side) || sided.size >= 2) continue;
+        sided.add(r.side);
+        shutters.set(r.tile, Math.min(3, r.length - 1.4));
+      }
+    }
+    /**
+     * A roller shutter `width` tiles wide on a shed's wall, shut, three
+     * quarters of a storey tall, on its outer face; it drops with the wall in
+     * the cutaway. (The model is 6.84 m wide from x = 0.35, 4.19 m tall, its
+     * face to +z; syntyProps stands it on the floor.)
+     */
+    const shutter = (bd: Building, x: number, z: number, base: number, out: Vec2, width: number) => {
+      const parts = syntyProp('rollerShutter');
+      if (!parts) {
+        ready = false;
+        return;
+      }
+      const sx = width / (6.84 * SYNTY_SCALE);
+      const sy = (0.75 * STOREY) / (4.19 * SYNTY_SCALE);
+      const off = WALL_HALF + 0.02;
+      // Its width along the wall, its face out: the model's x along, its +z the way out.
+      const yaw = Math.atan2(out.x, out.y);
+      q.setFromAxisAngle(up, yaw);
+      const alongX = Math.cos(yaw);
+      const alongZ = -Math.sin(yaw);
+      const left = (3.77 * SYNTY_SCALE) * sx;
+      m.compose(pos.set(x + out.x * off - alongX * left, base, z + out.y * off - alongZ * left), q, scale.set(sx, sy, 0.6));
+      parts.forEach((part, k) => {
+        const key = `shutter:${k}`;
+        let batch = batches.get(key);
+        if (!batch) batches.set(key, (batch = { geometry: part.geometry, atlas: part.atlas, matrices: [], cut: [], outer: [], inner: [] }));
+        batch.matrices.push(m.clone().multiply(part.matrix));
+        batch.cut.push(bd.index + 1, out.x, out.y, base);
+        batch.outer.push(1, 1, 1);
+        batch.inner.push(1, 1, 1);
+      });
+    };
     /** A sign over a door, on the wall's outer face, its face out; it drops with the wall in the cutaway. */
     const sign = (bd: Building, x: number, z: number, base: number, out: Vec2) => {
       const [id, length] = SIGNS[Math.floor(hash(bd.x0, bd.y0, 70) * SIGNS.length)]!;
@@ -2223,6 +2324,7 @@ export class BuildingsView {
             putAll(kit.lintel, cx, cz, base, out, between, b, kit);
           } else {
             putAll(kit.wall, cx, cz, base, out, between, b, kit);
+            if (!level && !between && building && shutters.has(i)) shutter(building, cx, cz, base, out, shutters.get(i)!);
           }
           if (kit.top && kind === 'wall') put(kit.top, cx, cz, base + STOREY, out, between, b, { along: 1 / WIRE_LENGTH, thick: 1 });
           // The open end of a wall gets a post, so its hollow doesn't show (on a perimeter, a gate's column).

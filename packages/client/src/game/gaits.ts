@@ -51,8 +51,8 @@ interface Gaits {
 
 const g = (motion: GaitMotion, seconds: number): Gait => ({ motion, seconds });
 
-/** The living (the squad, the Cuervos, the VIP): a run for a move (8 tiles: 4 s), a sprint for a dash (16: 3.8 s). */
-const LIVING: Gaits = { one: g('run', 0.5), two: g('sprint', 0.24), style: null };
+/** The living (the squad, the Cuervos, the VIP): a run for a move (8 tiles: 3 s), a sprint for a dash (16: 3.8 s). */
+const LIVING: Gaits = { one: g('run', 0.375), two: g('sprint', 0.24), style: null };
 
 /** The dead (Gameplay, 2026-10-14: slower than the living, a dash quicker than a move). */
 const GAITS: Partial<Record<TemplateId, Gaits>> = {

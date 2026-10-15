@@ -7,6 +7,7 @@ import { Game } from './game/game';
 import { Net, serverUrl, setHosts, storageKey } from './net';
 import { installReport, trace } from './report';
 import { StrategyScreen } from './strategy/screen';
+import { setDeadline } from './ui/deadline';
 import { applyUiTheme } from './ui/theme';
 import { Lobby } from './ui/lobby';
 
@@ -179,6 +180,12 @@ function handle(m: ServerMessage): void {
       break;
     case 'presence':
       game?.onPresence(m.slot, m.unit, m.tile);
+      break;
+    // How long an open question has before it is taken as a yes (PRUEBA-2026-10-14 #28).
+    case 'deadline':
+      setDeadline(m.kind, m.ms);
+      base?.refresh();
+      game?.refreshDeadline();
       break;
     case 'ping':
       game?.onPing(m.slot, m.tile, m.kind);

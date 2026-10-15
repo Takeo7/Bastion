@@ -1,22 +1,23 @@
 /*
- * The «Árbol de habilidades» (skillTree.ts), in the interface's steel («Mixta»,
- * ui/themes/mixta.css). Taken from well-known trees (contact sheet in
- * .dev-snapshots/uilab/arbol-referencias.jpg): Path of Exile's sockets and lit
- * paths, XCOM 2's rows and class colours, Diablo IV's path that lights by
- * stretches with what each stretch asks for written on it.
+ * The «Árbol de habilidades» (skillTree.ts) after the «Prepping Matrix» poster,
+ * in the interface's steel («Mixta», ui/themes/mixta.css): a planning board of
+ * dark steel with a faint grid, the soldier's medal at its centre, five thick
+ * trunks of a colour family each, their branches as big nodes and the talents
+ * growing from them as flowers and leaves along curling vines.
  *
- * - The board is a dark recessed plate; the centre (Recluta) feeds a rail that
- *   drops into the four branches; one row per step, the bar before the last two.
- * - Every node is a socket: a steel ring with a well inside. Passives are round,
- *   abilities (a new button in combat) a bigger hexagon.
- * - Its state is its fill, ring and badge, never only its colour:
- *   learnt = filled with the class's colour; can be learnt now = dark well, ring
- *   and icon in the class's colour, a halo breathing; in this promotion = the
- *   fill striped, «+» badge; closed = dark, a lock badge; asleep = half filled,
- *   «z»; needs the partner = «⚷» badge.
- * - Paths are grooves: lit in the class's colour where the branch has the
- *   points, dark where it hasn't; the points a row asks for sit on its path.
- * Each axis has its colour (--cc, from --cls-*); the Oficio's branch is brass.
+ * - Colours: each trunk's family is --cc (the class colours --cls-*, the
+ *   Oficio's brass --t-song). Everything of a trunk wears a tint of it; what is
+ *   learnt or lit wears it whole.
+ * - A node's state is its fill, ring and halo, never only its colour:
+ *   learnt = filled and lit; in this promotion = striped, a dashed yellow ring;
+ *   can be learnt now = dark, ring and icon in the colour, a halo breathing;
+ *   closed = darker still, its ring faint; asleep (its kit missing) = half
+ *   filled. Abilities are hexagons; requirements a triangle (an aptitude) or
+ *   a rhombus (a class's kit) on the node's shoulder.
+ * - The window has a fixed size (playtest 14/10 #14) and zooms: `.near` on the
+ *   board when it is close enough to read brings in the names and notes
+ *   (`.near` elements), and takes away what only reads from afar (`.far`).
+ * Sizes inside the world are in tree units: the board scales them.
  */
 
 .service-tree {
@@ -24,11 +25,8 @@
 }
 
 .skill-tree {
-  --tn-disc: 33px;
-  --tn-gap: 14px;
+  --board: #15191b;
   --hex: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
-  --groove: #090b0c;
-  --steel-ring: #4a5154;
   --cc: var(--t-accent, #f2c230);
   display: grid;
   gap: 6px;
@@ -51,32 +49,29 @@
   --cc: var(--cls-specialist, #4fcaa3);
 }
 
-/* The Oficio is a trade, the same brass in every axis. */
-:is(.tree-branch.song, .tw-branch.song, .tnode.song, .tnode-disc.song) {
-  --cc: var(--song, #d9a464);
+/* The Oficio is a trade, the same brass for every axis. */
+.tk-song {
+  --cc: var(--t-song, #d9a464);
 }
 
-/* ------------------------------------------------------------------ axes */
+/* ------------------------------------------------------------------ trunks */
 
-/* The four axes: class banners, each with its colour on its edge; the open one lit. */
+/* The five trunks over the window: each with its colour on its edge, what it is to the soldier and its points. */
 .tree-axes {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
 .tree-axis {
   display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
-  column-gap: 8px;
-  align-items: center;
-  padding: 6px 10px 6px 12px;
+  gap: 1px;
+  padding: 5px 9px 5px 12px;
   text-align: left;
   border: 0;
   border-radius: 2px;
   background: var(--m-plate, #2b2f31);
-  box-shadow: var(--m-raise), inset 4px 0 0 color-mix(in srgb, var(--cc) 55%, transparent);
+  box-shadow: var(--m-raise), inset 4px 0 0 color-mix(in srgb, var(--cc) 40%, transparent);
   color: var(--ink);
   font: inherit;
   cursor: pointer;
@@ -85,915 +80,708 @@
     box-shadow 0.12s;
 }
 
-.tree-axis .cls {
-  grid-row: 1 / 3;
-  color: var(--cc);
-}
-
 .tree-axis b {
   font-family: var(--t-font-title, var(--font-display));
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 500;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   line-height: 1.1;
   text-transform: uppercase;
+  color: color-mix(in srgb, var(--cc) 55%, #c9cdc8);
 }
 
 .tree-axis small {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--x-muted);
+}
+
+.tree-axis.live {
+  box-shadow: var(--m-raise), inset 4px 0 0 var(--cc);
+}
+
+.tree-axis.live b {
+  color: var(--cc);
 }
 
 .tree-axis:hover {
   transform: translateY(-1px);
-}
-
-.tree-axis.on {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--cc) 28%, #2b2f31), color-mix(in srgb, var(--cc) 12%, #1c1f21));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 2px var(--cc), 0 0 14px color-mix(in srgb, var(--cc) 35%, transparent);
-}
-
-.tree-axis.role-main small,
-.tree-axis.role-lean small {
-  color: var(--cc);
-}
-
-.tree-axis.role-closed {
-  opacity: 0.55;
+  box-shadow: var(--m-raise), inset 4px 0 0 var(--cc), 0 0 0 1px color-mix(in srgb, var(--cc) 60%, transparent);
 }
 
 /* ------------------------------------------------------------------ board */
 
-.tree-grid {
-  display: grid;
-  grid-template-columns: 44px repeat(4, minmax(0, 1fr));
-  column-gap: 8px;
-  row-gap: 0;
-  padding: 8px 12px 8px 6px;
-  border-radius: 3px;
-  background:
-    radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--cc) 12%, transparent), transparent 55%),
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 9px),
-    #0f1113;
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-.tree-note {
-  margin: 0 0 4px;
-  font-size: 13px;
-  color: var(--x-warn);
-}
-
-/* The centre: the root everyone starts from, a lit trunk down to the four paths. */
-.tree-root {
+/* The planning board: dark steel sunk in the sheet, a faint grid, a warm pool of light at the centre. */
+.tree-board {
   position: relative;
-  grid-column: 2 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  padding: 0 0 12px;
+  height: clamp(420px, 60vh, 640px);
+  overflow: hidden;
+  border-radius: 2px;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(242, 194, 48, 0.05), transparent 60%),
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px) 0 0 / 160px 160px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px) 0 0 / 160px 160px,
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--board);
+  box-shadow: var(--m-sink, inset 0 1px 3px rgba(0, 0, 0, 0.75)), inset 0 0 60px rgba(0, 0, 0, 0.55);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.tree-board.moving {
+  cursor: grabbing;
+}
+
+.tree-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  transition: transform 0.35s var(--m-ease, ease-out);
+}
+
+.tree-board.moving .tree-world {
+  transition: none;
+}
+
+/* What reads only close, and what only from afar. */
+.tree-board:not(.near) .near,
+.tree-board.near .far {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- structure */
+
+.tt-svg {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tt-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.04);
+  stroke-width: 2;
+}
+
+/* Trunks: thick, thinning, a tint of their colour until the soldier has something in them. */
+.tt-trunk {
+  fill: color-mix(in srgb, var(--cc) 40%, var(--board));
+}
+
+.live .tt-trunk {
+  fill: var(--cc);
+}
+
+.tt-name {
+  font-family: var(--t-font-title, 'Oswald', sans-serif);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 3.5px;
+  fill: rgba(10, 12, 13, 0.62);
+}
+
+.live .tt-name {
+  fill: #0d0f10;
+}
+
+.tt-limb {
+  fill: color-mix(in srgb, var(--cc) 32%, var(--board));
+}
+
+.tt-limb.lit {
+  fill: var(--cc);
+}
+
+/* Vines: lit while their rows open, dim where they don't yet, dashed past the class's bar or the Taller. */
+.tt-vine {
+  fill: none;
+  stroke: color-mix(in srgb, var(--cc) 40%, var(--board));
+  stroke-width: 4.5;
+  stroke-linecap: round;
+}
+
+.tt-vine.lit {
+  stroke: var(--cc);
+  stroke-width: 6.5;
+}
+
+.tt-vine.barred {
+  stroke: color-mix(in srgb, var(--cc) 26%, var(--board));
+  stroke-dasharray: 7 7;
+}
+
+.tt-twig {
+  fill: none;
+  stroke: color-mix(in srgb, var(--cc) 38%, var(--board));
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.tt-twig.lit {
+  stroke: color-mix(in srgb, var(--cc) 85%, var(--board));
+  stroke-width: 3;
+}
+
+.tt-twig.centre {
   --cc: var(--t-accent, #f2c230);
 }
 
-.tree-root::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 4px;
-  height: 12px;
-  margin-left: -2px;
-  background: var(--t-accent, #f2c230);
-  box-shadow: 0 0 6px rgba(242, 194, 48, 0.5);
+.tt-needs {
+  fill: none;
+  stroke: color-mix(in srgb, var(--cc) 70%, #fff);
+  stroke-width: 1.6;
+  stroke-dasharray: 4 4;
+  opacity: 0.8;
 }
 
-.tree-root-name {
-  display: grid;
-  text-align: right;
+/* The points a row asks for: small triangles on the vine, the number beside. */
+.tt-gate {
+  fill: #20262a;
+  stroke: #5d645f;
+  stroke-width: 1.3;
 }
 
-.tree-root-name b {
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--t-accent, #f2c230);
+.tt-gate.ok {
+  fill: var(--cc);
+  stroke: color-mix(in srgb, var(--cc) 60%, #000);
 }
 
-.tree-root-name small {
-  font-size: 12px;
-  color: var(--x-muted);
+.tt-gate.taller {
+  stroke: var(--t-accent, #f2c230);
 }
 
-.tree-root-nodes {
-  --tn-disc: 30px;
-  display: flex;
-  gap: 6px;
-  padding: 6px 10px 2px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.025);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-}
-
-/* Branch heads hang from a lit rail under the root. */
-.tree-branch {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  gap: 1px;
-  min-width: 0;
-  padding: 12px 2px 2px;
-  text-align: center;
-}
-
-.tree-branch::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -4px;
-  right: -4px;
-  height: 4px;
-  background: var(--t-accent, #f2c230);
-  box-shadow: 0 0 6px rgba(242, 194, 48, 0.4);
-}
-
-.tree-branch.b0::before {
-  left: 50%;
-}
-
-.tree-branch.b3::before {
-  right: 50%;
-}
-
-.tree-branch::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 4px;
-  height: 12px;
-  margin-left: -2px;
-  background: var(--t-accent, #f2c230);
-}
-
-.tree-branch-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tree-branch b {
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  line-height: 1.1;
-  text-transform: uppercase;
-  color: #fff;
-}
-
-.tree-branch small {
-  font-size: 12px;
-  line-height: 1.2;
-  color: var(--x-muted);
-}
-
-.tree-branch-focus {
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.tree-branch .tree-branch-points {
-  padding: 0 5px;
-  border-radius: 2px;
-  background: rgba(0, 0, 0, 0.45);
+.tt-gate-n {
+  font-family: var(--t-font, 'Barlow', sans-serif);
   font-weight: 700;
-  color: var(--cc);
-}
-
-.tree-branch.song b,
-.tree-branch.song .tree-branch-focus {
-  color: var(--cc);
-}
-
-/* The row ruler: the step's number on a small plate, what it asks for under it. */
-.tree-gutter {
-  display: grid;
-  align-content: start;
-  justify-items: center;
-  gap: 2px;
-  padding-top: calc(var(--tn-disc) / 2);
-  color: var(--x-muted);
-  white-space: nowrap;
-}
-
-.tree-gutter b {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 22px;
-  clip-path: var(--hex);
-  background: #2b3033;
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1;
-  color: #fff;
-}
-
-.tree-gutter small {
   font-size: 11px;
-  line-height: 1;
+  fill: #8a918c;
+  paint-order: stroke;
+  stroke: var(--board);
+  stroke-width: 3px;
 }
 
-/* The bar before the last two rows: hazard tape on the soldier's own axis, grey tape and a lock on the others. */
-.tree-bar {
-  grid-column: 1 / -1;
-  position: relative;
-  margin: 8px 0 2px;
-  padding: 3px 8px;
-  text-align: center;
-  border: 0;
-  background: repeating-linear-gradient(-45deg, #2a2e31 0 8px, #17191b 8px 16px);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.05);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--x-muted);
+.tt-gate-n.ok {
+  fill: color-mix(in srgb, var(--cc) 70%, #fff);
 }
 
-.tree-bar span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 1px 10px;
-  border-radius: 2px;
-  background: #121416;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+.tt-gate-n.taller {
+  fill: var(--t-accent, #f2c230);
 }
 
-.tree-bar:not(.own) span::before {
-  content: '';
-  width: 11px;
-  height: 11px;
-  background: currentColor;
-  -webkit-mask: var(--mi-lock) center / contain no-repeat;
-  mask: var(--mi-lock) center / contain no-repeat;
+/* The bar before the class's two rows, across each axis; its note follows it. */
+.tt-bar {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.24);
+  stroke-width: 2;
+  stroke-dasharray: 3 6;
+  stroke-linecap: round;
 }
 
-.tree-bar.own {
-  background: var(--m-hazard, repeating-linear-gradient(-45deg, #f2c230 0 8px, #1c1608 8px 16px)) 0 0 / 32px 32px;
-  color: var(--t-accent, #f2c230);
+.tt-bar.own {
+  stroke: color-mix(in srgb, var(--cc) 75%, #fff);
+  stroke-width: 2.4;
+  stroke-dasharray: none;
 }
 
-/* ----------------------------------------------------------------- steps */
-
-/* One row of a branch: the path runs through its middle, the nodes sit on it. */
-.tstep {
-  --trunk: var(--groove);
-  --trunk-glow: inset 1px 0 0 rgba(255, 255, 255, 0.05);
-  --pad: 12px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  padding: var(--pad) 0 0;
+.tt-bar-note {
+  font-family: var(--t-font, 'Barlow', sans-serif);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  fill: #8d948f;
+  paint-order: stroke;
+  stroke: var(--board);
+  stroke-width: 3px;
 }
 
-.tstep.lit {
-  --trunk: var(--cc);
-  --trunk-glow: 0 0 6px color-mix(in srgb, var(--cc) 55%, transparent);
+.tt-bar-note.own {
+  fill: color-mix(in srgb, var(--cc) 65%, #fff);
 }
 
-.tstep::before {
-  content: '';
+/* What a branch is about, along its limb. */
+.tt-note {
+  font-family: var(--t-font, 'Barlow', sans-serif);
+  font-weight: 500;
+  font-style: italic;
+  font-size: 11px;
+  fill: color-mix(in srgb, var(--cc) 55%, #fff);
+  opacity: 0.85;
+  paint-order: stroke;
+  stroke: var(--board);
+  stroke-width: 3px;
+}
+
+/* From afar, each branch's name past the end of its vine. */
+.tt-rim {
+  font-family: var(--t-font-title, 'Oswald', sans-serif);
+  font-weight: 600;
+  font-size: 27px;
+  letter-spacing: 1px;
+  fill: color-mix(in srgb, var(--cc) 55%, var(--board));
+}
+
+.tt-rim.lit {
+  fill: var(--cc);
+}
+
+/* ------------------------------------------------------------------ medal */
+
+.tm-at {
   position: absolute;
-  left: 50%;
+  left: 0;
   top: 0;
-  bottom: 0;
-  width: 4px;
-  margin-left: -2px;
-  background: var(--trunk);
-  box-shadow: var(--trunk-glow);
 }
 
-/* A lone node sits on the path: the line stops at its socket and goes on under its name (.tnode-tail). */
-.tstep:not(.pair)::before,
-.tstep.last::before {
-  bottom: auto;
-  height: calc(var(--pad) + var(--tn-disc) / 2);
-}
-
-/* What the row asks for, on its path, level with the sockets: on the junction between two nodes,
-   beside a lone one. Dark until the branch has it, then lit. */
-.tstep-gate {
+/* The soldier: their class's portrait in a round frame of its colour, the class and rank on a band. */
+.tm {
   position: absolute;
-  top: calc(var(--pad) + var(--tn-disc) / 2);
+  left: -84px;
+  top: -84px;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background: #0c0e0f;
+  box-shadow:
+    0 0 0 6px var(--cc),
+    0 0 0 12px #0c0e0f,
+    0 0 34px color-mix(in srgb, var(--cc) 35%, transparent);
+}
+
+.tm-face {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background:
+    var(--portrait) 50% 14% / 140% auto no-repeat,
+    radial-gradient(circle at 50% 35%, #3a4043, #1a1d1f 75%);
+}
+
+.tm-band {
+  position: absolute;
   left: 50%;
-  z-index: 3;
-  min-width: 18px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  transform: translate(-50%, -50%);
-  background: #0b0d0e;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 16px;
-  text-align: center;
-  color: var(--x-muted);
-}
-
-.tstep:not(.pair) .tstep-gate {
-  left: calc(50% - var(--tn-disc) / 2 - 8px);
-  transform: translate(-100%, -50%);
-}
-
-.tstep:not(.pair):has(.tnode.ab) .tstep-gate {
-  left: calc(50% - var(--tn-disc) * 0.61 - 8px);
-}
-
-.tstep-gate.ok {
+  bottom: 16px;
+  transform: translateX(-50%);
+  padding: 2px 10px;
+  border-radius: 2px;
   background: var(--cc);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 8px color-mix(in srgb, var(--cc) 50%, transparent);
-  color: #101213;
-}
-
-.tstep-nodes {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  gap: var(--tn-gap);
-}
-
-.tnode-tail {
-  display: none;
-  flex: 1;
-  width: 4px;
-  min-height: 0;
-  margin-bottom: -2px;
-  background: var(--trunk);
-  box-shadow: var(--trunk-glow);
-}
-
-.tstep:not(.pair, .last) .tnode-tail {
-  display: block;
-}
-
-/* A row the Taller de oficios still holds: its lock sits on the path, beside the node. */
-.tstep-lock {
-  position: absolute;
-  top: calc(var(--pad) + var(--tn-disc) / 2 - 9px);
-  left: calc(50% + var(--tn-disc) / 2 + 8px);
-  z-index: 2;
-  padding: 0 6px;
-  border-radius: 2px;
-  background: #121416;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--song, #d9a464) 70%, transparent);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 18px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   white-space: nowrap;
-  color: var(--song, #d9a464);
+  text-transform: uppercase;
+  color: #0d0f10;
 }
 
-/* ----------------------------------------------------------------- nodes */
+/* ---------------------------------------------------------------- branches */
 
-.tnode {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  width: 88px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  text-align: center;
-  cursor: default;
-}
-
-.tnode.open {
-  cursor: pointer;
-}
-
-/* Two nodes on one row: a short groove from each to the path between them. */
-.tstep.pair .tnode::before {
-  content: '';
+/* A branch: a big round node of its colour (dark until it has points), its emblem, name and points. */
+.tb {
   position: absolute;
-  top: calc(var(--tn-disc) / 2 - 2px);
-  height: 4px;
-  background: var(--trunk);
-  box-shadow: var(--trunk-glow);
-}
-
-.tstep.pair .tnode:first-child::before {
-  left: 50%;
-  right: calc(var(--tn-gap) / -2);
-}
-
-.tstep.pair .tnode:last-child::before {
-  left: calc(var(--tn-gap) / -2);
-  right: 50%;
-}
-
-/* The socket's mark: the socket, its level notches on its foot, a halo and a badge (pseudo-elements). */
-.tnode-mark {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  margin-bottom: 4px;
-}
-
-/* The socket: a steel ring (the disc) with a well inside (::before), the icon above both. */
-.tnode-disc {
-  --ring: var(--steel-ring);
-  --well: radial-gradient(circle at 50% 30%, #2f3437, #15181a 75%);
-  --icon-c: #9aa09a;
-  position: relative;
-  z-index: 1;
   display: grid;
   place-items: center;
-  width: var(--tn-disc);
-  height: var(--tn-disc);
-  border: 0;
+  align-content: center;
+  gap: 1px;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
   border-radius: 50%;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ring) 100%, #fff 18%), var(--ring) 45%, color-mix(in srgb, var(--ring) 70%, #000));
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
-  color: var(--icon-c);
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--cc) 30%, #2a2f31), color-mix(in srgb, var(--cc) 14%, #15191b) 75%);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--cc) 65%, var(--board)),
+    0 0 0 8px var(--board),
+    0 4px 12px rgba(0, 0, 0, 0.5);
+  color: color-mix(in srgb, var(--cc) 75%, #fff);
+  text-align: center;
 }
 
-.tnode-disc::before {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: inherit;
-  clip-path: inherit;
-  background: var(--well);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+.tb.lit {
+  background: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--cc) 65%, #fff), var(--cc) 55%, color-mix(in srgb, var(--cc) 70%, #000));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--cc) 70%, #fff),
+    0 0 0 8px var(--board),
+    0 0 22px color-mix(in srgb, var(--cc) 45%, transparent);
+  color: #0d0f10;
 }
 
-.tnode-disc svg.ico {
-  position: relative;
-  z-index: 1;
-  width: calc(var(--tn-disc) * 0.52);
-  height: calc(var(--tn-disc) * 0.52);
-}
-
-/* Abilities (a new button in combat): a bigger hexagon. */
-.tnode.ab .tnode-disc,
-.tnode-disc.ab {
-  width: calc(var(--tn-disc) * 1.22);
-  height: calc(var(--tn-disc) * 1.1);
-  border-radius: 0;
-  clip-path: var(--hex);
-}
-
-/* Branch emblems: small hexagons in the class's colour. */
-.tnode-disc.emblem {
-  --tn-disc: 24px;
-  --ring: var(--cc);
-  --icon-c: var(--cc);
-  border-radius: 0;
-  clip-path: var(--hex);
-}
-
-/* Learnt: the well filled with the class's colour, lit from above; the icon dark. */
-.tnode.taken .tnode-disc,
-.tnode-disc.taken {
-  --ring: color-mix(in srgb, var(--cc) 75%, #fff);
-  --well: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--cc) 60%, #fff), var(--cc) 55%, color-mix(in srgb, var(--cc) 60%, #000));
-  --icon-c: #0d0f10;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6), 0 0 12px color-mix(in srgb, var(--cc) 45%, transparent);
-}
-
-/* In this promotion, not saved yet: the fill striped. */
-.tnode.drafted .tnode-disc {
-  --ring: color-mix(in srgb, var(--cc) 75%, #fff);
-  --well: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--cc) 70%, #000) 0 4px, var(--cc) 4px 8px);
-  --icon-c: #0d0f10;
-}
-
-/* Can take a level now: the ring and icon in the class's colour, a halo breathing behind. */
-.tnode.open:not(.taken, .drafted) .tnode-disc {
-  --ring: var(--cc);
-  --icon-c: var(--cc);
-}
-
-.tnode.open .tnode-mark::before {
-  content: '';
-  position: absolute;
-  top: -6px;
-  left: 50%;
-  width: calc(var(--tn-disc) + 12px);
-  height: calc(var(--tn-disc) + 12px);
-  margin-left: calc(var(--tn-disc) / -2 - 6px);
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--cc) 55%, transparent) 55%, transparent 70%);
-  animation: m-breathe 2.4s ease-in-out infinite;
-}
-
-.tnode.open.ab .tnode-mark::before {
-  width: calc(var(--tn-disc) * 1.22 + 14px);
-  height: calc(var(--tn-disc) * 1.1 + 14px);
-  margin-left: calc(var(--tn-disc) * -0.61 - 7px);
-  top: -7px;
-  border-radius: 0;
-  clip-path: var(--hex);
-}
-
-.tnode.open:hover .tnode-disc,
-.tnode.open:focus-visible .tnode-disc {
-  transform: scale(1.06);
-}
-
-.tnode-disc {
-  transition: transform 0.12s var(--m-ease, ease-out);
-}
-
-/* Closed (shut, past the bar, an axis it can't learn): dark and still, a lock on it. Never see-through. */
-:is(.tnode.shut, .tstep.barred .tnode:not(.taken), .tree-grid.closed .tnode:not(.taken)) .tnode-disc {
-  --ring: #2b2f32;
-  --well: #121416;
-  --icon-c: #4f5451;
+.tb .tn-disc.emblem {
+  width: 22px;
+  height: 22px;
+  background: none;
   box-shadow: none;
 }
 
-:is(.tnode.shut, .tstep.barred .tnode:not(.taken), .tree-grid.closed .tnode:not(.taken)) .tnode-name {
-  color: #7d827b;
+.tree-board:not(.near) .tb .tn-disc.emblem {
+  width: 40px;
+  height: 40px;
 }
 
-/* The badge on the socket's shoulder: lock, «z», «+» or the double key. */
-.tnode-mark::after {
-  position: absolute;
-  top: -5px;
-  right: 50%;
-  z-index: 2;
-  margin-right: calc(var(--tn-disc) / -2 - 9px);
-  display: grid;
-  place-items: center;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: #0b0d0e;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--cc);
-}
-
-:is(.tnode.shut, .tstep.barred .tnode:not(.taken), .tree-grid.closed .tnode:not(.taken)) .tnode-mark::after {
-  content: '';
-  background:
-    var(--mi-lock) center / 9px 9px no-repeat,
-    #0b0d0e;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
-}
-
-.tnode.coop .tnode-mark::after {
-  content: '⚷';
-}
-
-/* Learnt but asleep until the soldier carries its class's kit: half filled, «z». */
-.tnode.sleeping .tnode-disc {
-  --ring: color-mix(in srgb, var(--cc) 55%, #000);
-  --well: linear-gradient(0deg, color-mix(in srgb, var(--cc) 45%, #000) 50%, #15181a 50%);
-  --icon-c: #c9cdc6;
-}
-
-.tnode.sleeping .tnode-mark::after {
-  content: 'z';
-}
-
-.tnode.drafted .tnode-mark::after {
-  content: '+';
-  background: var(--cc);
-  color: #0d0f10;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
-}
-
-.tnode-name {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 1.12;
-  color: #d9dcd5;
-}
-
-.tnode.taken .tnode-name,
-.tnode.drafted .tnode-name {
-  color: #fff;
-}
-
-.tnode.focus .tnode-name,
-.tnode:hover .tnode-name {
-  text-decoration: underline;
-  text-decoration-color: var(--cc);
-  text-underline-offset: 3px;
-}
-
-/* The level notches on the socket's foot, on a small dark plate so they read over the path. */
-.tnode-pips {
-  display: flex;
-  justify-content: center;
-  gap: 2px;
-}
-
-.tnode-mark .tnode-pips {
-  position: absolute;
-  left: 50%;
-  bottom: -7px;
-  z-index: 2;
-  transform: translateX(-50%);
-  padding: 2px 3px;
-  border-radius: 2px;
-  background: #0b0d0e;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
-}
-
-.tnode-pips i {
-  width: 7px;
-  height: 4px;
-  background: #2f3437;
-}
-
-.tnode-pips i.on {
-  background: var(--cc);
-  box-shadow: 0 0 4px color-mix(in srgb, var(--cc) 60%, transparent);
-}
-
-.tnode-pips i.plan {
-  background: repeating-linear-gradient(-45deg, #2f3437 0 1.5px, var(--cc) 1.5px 3px);
-}
-
-.tnode-undo {
-  position: absolute;
-  top: -6px;
-  left: 6px;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: #0b0d0e;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
-  font-size: 10px;
-  line-height: 1;
-  color: #ff8a78;
-  cursor: pointer;
-}
-
-.tnode-undo:hover {
-  background: #f0503c;
-  color: #fff;
-}
-
-/* ----------------------------------------------------------------- whole */
-
-/* The four axes around the centre: the two above grow up from it, the two below grow down. */
-.tree-whole {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 22px;
-  padding: 10px;
-  border-radius: 3px;
-  background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 9px), #0f1113;
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(0, 0, 0, 0.6);
-}
-
-.tw-quarter {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.tw-quarter.tw-down {
-  flex-direction: column-reverse;
-}
-
-.tw-head {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: 2px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cc) 22%, #2b2f31), #1f2224);
-  box-shadow: var(--m-raise), inset 3px 0 0 var(--cc);
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.tw-head:hover {
-  box-shadow: var(--m-raise), inset 3px 0 0 var(--cc), 0 0 0 1px var(--cc);
-}
-
-.tw-head .cls {
-  color: var(--cc);
-}
-
-.tw-head b {
+.tb-name {
+  max-width: 64px;
   font-family: var(--t-font-title, var(--font-display));
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.tw-head small {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--x-muted);
-}
-
-.tw-quarter.role-closed {
-  opacity: 0.5;
-}
-
-.tw-body {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0 4px;
-}
-
-.tw-branch {
-  display: flex;
-  flex-direction: column;
-}
-
-.tw-quarter.tw-up .tw-branch {
-  flex-direction: column-reverse;
-}
-
-.tw-branch-name {
-  padding: 0 0 2px;
   font-size: 11.5px;
   font-weight: 600;
-  text-align: center;
-  color: var(--x-muted);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
-.tw-branch.song .tw-branch-name {
-  color: var(--cc);
+.tb-points {
+  font-size: 9.5px;
+  font-weight: 700;
+  opacity: 0.75;
 }
 
-.tw-quarter.tw-down .tw-branch-name {
-  padding: 2px 0 0;
+/* ------------------------------------------------------------------ nodes */
+
+/* A talent: a socket --r across, a ring of its colour (the disc) with its fill inside (::before), the icon above. */
+.tn {
+  --ring: color-mix(in srgb, var(--cc) 62%, var(--board));
+  --fill: color-mix(in srgb, var(--cc) 30%, var(--board));
+  --icon-c: color-mix(in srgb, var(--cc) 85%, #fff);
+  position: absolute;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  margin: calc(var(--r) * -1) 0 0 calc(var(--r) * -1);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font: inherit;
+  cursor: default;
 }
 
-.tree-whole .tstep {
-  --tn-disc: 22px;
-  --tn-gap: 6px;
-  --pad: 5px;
-  padding-bottom: 4px;
+.tn.open {
+  cursor: pointer;
 }
 
-.tree-whole .tstep::before,
-.tree-whole .tnode-tail {
-  width: 3px;
-  margin-left: -1.5px;
+.tn-disc {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--ring);
+  box-shadow: 0 0 0 4px var(--board);
+  color: var(--icon-c);
+  transition: transform 0.12s var(--m-ease, ease-out);
 }
 
-.tree-whole .tnode-tail {
-  margin-left: 0;
-  margin-bottom: -4px;
+.tn-disc::before {
+  content: '';
+  position: absolute;
+  inset: 2.5px;
+  border-radius: inherit;
+  clip-path: inherit;
+  background: var(--fill);
 }
 
-.tree-whole .tstep.pair .tnode::before {
-  height: 3px;
+.tn-disc svg.ico {
+  position: relative;
+  z-index: 1;
+  width: 56%;
+  height: 56%;
 }
 
-/* Above the centre the paths grow upwards: the outermost row ends at its socket, on the other side. */
-.tw-quarter.tw-up .tstep.last:not(.pair)::before {
-  display: none;
+/* Abilities (a new button in combat): hexagons. */
+.tn.ab .tn-disc,
+.tn-disc.ab {
+  border-radius: 0;
+  clip-path: var(--hex);
+  box-shadow: none;
 }
 
-.tw-quarter.tw-up .tstep.last.pair::before {
-  top: calc(var(--pad) + var(--tn-disc) / 2);
-  bottom: 0;
-  height: auto;
+/* Learnt: filled with the colour, lit from above; the icon dark. */
+.tn.taken {
+  --ring: color-mix(in srgb, var(--cc) 70%, #fff);
+  --fill: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--cc) 60%, #fff), var(--cc) 55%, color-mix(in srgb, var(--cc) 65%, #000));
+  --icon-c: #0d0f10;
 }
 
-.tw-quarter.tw-up .tstep.last:not(.pair) .tnode-tail {
-  display: block;
+.tn.taken .tn-disc {
+  box-shadow:
+    0 0 0 4px var(--board),
+    0 0 14px color-mix(in srgb, var(--cc) 50%, transparent);
 }
 
-.tnode.mini {
-  width: auto;
-  gap: 2px;
+/* In this promotion, not saved yet: the fill striped, a dashed yellow ring round it. */
+.tn.drafted {
+  --fill: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--cc) 65%, #000) 0 4px, var(--cc) 4px 8px);
+  outline: 2px dashed var(--t-accent, #f2c230);
+  outline-offset: 5px;
 }
 
-.tnode.mini .tnode-mark {
-  margin-bottom: 3px;
+/* Can take a level now: the ring and icon in the colour, a halo breathing behind. */
+.tn.open:not(.taken) {
+  --ring: var(--cc);
+  --fill: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--cc) 22%, #2a2f31), color-mix(in srgb, var(--cc) 10%, var(--board)) 75%);
+  --icon-c: var(--cc);
 }
 
-.tnode.mini .tnode-disc::before {
-  inset: 2px;
+.tn.open::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--cc) 55%, transparent) 50%, transparent 70%);
+  animation: m-breathe 2.4s ease-in-out infinite;
 }
 
-.tnode.mini .tnode-mark .tnode-pips {
-  bottom: -4px;
-  padding: 1px;
+.tn.open.ab::after {
+  border-radius: 0;
+  clip-path: var(--hex);
 }
 
-.tnode.mini .tnode-pips i {
-  width: 4px;
-  height: 2px;
+.tn.open:hover .tn-disc,
+.tn.open:focus-visible .tn-disc {
+  transform: scale(1.1);
 }
 
-.tnode.mini .tnode-mark::after {
-  top: -4px;
-  width: 11px;
-  height: 11px;
-  margin-right: calc(var(--tn-disc) / -2 - 5px);
-  font-size: 8px;
+/* Closed: darker still, its ring faint; never see-through. */
+.tn.shut {
+  --ring: color-mix(in srgb, var(--cc) 34%, var(--board));
+  --fill: color-mix(in srgb, var(--cc) 15%, #111416);
+  --icon-c: color-mix(in srgb, var(--cc) 42%, #111416);
 }
 
-/* Small, the badges would crowd the map: the socket's own look says it (only a new point keeps its «+»). */
-.tree-whole .tnode.mini:not(.drafted) .tnode-mark::after {
-  content: none;
+/* Learnt but asleep until the soldier carries its class's kit: half filled. */
+.tn.sleeping {
+  --fill: linear-gradient(0deg, color-mix(in srgb, var(--cc) 55%, #000) 50%, var(--board) 50%);
+  --icon-c: color-mix(in srgb, var(--cc) 80%, #fff);
 }
 
-.tnode.mini.open .tnode-mark::before {
-  width: calc(var(--tn-disc) + 8px);
-  height: calc(var(--tn-disc) + 8px);
-  margin-left: calc(var(--tn-disc) / -2 - 4px);
-  top: -4px;
+/* Works next to the partner's soldiers: a second, thin ring. */
+.tn.coop .tn-disc {
+  box-shadow:
+    0 0 0 3px var(--board),
+    0 0 0 4.5px color-mix(in srgb, var(--cc) 60%, #fff),
+    0 0 0 6px var(--board);
 }
 
-.tnode.mini:hover .tnode-disc {
-  transform: scale(1.15);
+/* The node last picked. */
+.tn.focus .tn-disc {
+  box-shadow:
+    0 0 0 3px var(--board),
+    0 0 0 5px #f4f5f1;
 }
 
-.tw-centre {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 6px 0;
-  border-block: 1px solid rgba(242, 194, 48, 0.25);
-  --tn-disc: 26px;
+/* The centre's crown: the brass of the whole tree. */
+.tn.centre {
   --cc: var(--t-accent, #f2c230);
 }
 
-.tw-centre > b {
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--t-accent, #f2c230);
-}
-
-.tw-centre-nodes {
+/* Levels: notches under the socket. */
+.tn-pips {
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  z-index: 2;
   display: flex;
-  gap: 8px;
+  gap: 2px;
+  padding: 1.5px 2.5px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: #0b0d0e;
 }
 
-.tw-centre small {
-  font-size: 12px;
+.tn-pips i {
+  width: 6px;
+  height: 3.5px;
+  background: #343a3d;
+}
+
+.tn-pips i.on {
+  background: var(--cc);
+}
+
+.tn-pips i.plan {
+  background: var(--t-accent, #f2c230);
+}
+
+/* What it asks for, on its shoulders: an aptitude (a triangle and its figure), a class's kit (a rhombus). */
+.tn-req,
+.tn-kit {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.tn-req {
+  right: -13px;
+  top: -10px;
+}
+
+.tn-req i {
+  width: 12px;
+  height: 11px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: var(--t-accent, #f2c230);
+}
+
+.tn-req.ok i {
+  background: var(--t-good, #8fd05a);
+}
+
+.tn-req b {
+  display: none;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t-accent, #f2c230);
+  text-shadow:
+    0 0 3px var(--board),
+    0 0 3px var(--board);
+}
+
+.tree-board.near .tn-req b {
+  display: block;
+}
+
+.tn-req.ok b {
+  color: var(--t-good, #8fd05a);
+}
+
+.tn-kit {
+  left: -10px;
+  top: -9px;
+}
+
+.tn-kit i {
+  width: 10px;
+  height: 12px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: #8a918c;
+}
+
+.tn-kit.ok i {
+  background: color-mix(in srgb, var(--cc) 70%, #fff);
+}
+
+/* A talent's name, on the side away from its vine. */
+.tn-name {
+  position: absolute;
+  z-index: 2;
+  max-width: 96px;
+  width: max-content;
+  font-family: var(--t-font, var(--font));
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: #b3b9b4;
+  text-shadow:
+    0 0 3px var(--board),
+    0 0 3px var(--board),
+    0 0 2px var(--board);
+  pointer-events: none;
+}
+
+.tn-name.e {
+  transform: translate(0, -50%);
+  text-align: left;
+}
+
+.tn-name.w {
+  transform: translate(-100%, -50%);
+  text-align: right;
+}
+
+.tn-name.s {
+  transform: translate(-50%, 0);
+  text-align: center;
+}
+
+.tn-name.n {
+  transform: translate(-50%, -100%);
+  text-align: center;
+}
+
+.tn-name.taken {
+  color: #f4f5f1;
+}
+
+.tn-name.open {
+  color: color-mix(in srgb, var(--cc) 50%, #fff);
+}
+
+.tn-name.shut {
+  color: #6c7370;
+}
+
+.tn-name.centre {
+  --cc: var(--t-accent, #f2c230);
+}
+
+/* The packs' silhouettes on the sockets (synty-icons.css): weapons are drawn side on, a wider box. */
+.tn-disc[data-ability] {
+  --sicon-w: 58%;
+}
+
+.tn-disc:is([data-ability='shoot'], [data-ability='pistol'], [data-ability='launch'], [data-ability='aimedShot'], [data-ability='evac'], [data-ability='suppression'], [data-ability='faceoff'], [data-ability='bolt'], [data-ability='spectralArrow'], [data-ability='lightRain']) {
+  --sicon-w: 76%;
+}
+
+.tn-disc[data-ability] svg.ico {
+  width: var(--sicon-w);
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.tree-ctl {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 2px;
+  background: var(--m-plate, #2b2f31);
+  box-shadow: var(--m-raise);
+  cursor: default;
+}
+
+.tree-ctl .x-btn.small {
+  min-width: 28px;
+  padding: 3px 8px;
+}
+
+.tree-zoom-n {
+  min-width: 50px;
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 13px;
+  text-align: center;
+  color: #e6e8e3;
+}
+
+.tree-hint {
+  margin-left: auto;
+  font-size: 11px;
   color: var(--x-muted);
 }
 
-/* -------------------------------------------------------------- inspector */
+/* -------------------------------------------------------------- the card */
 
-/* Next to the aptitudes: what the node under the pointer does, and what it lacks. */
 .tree-inspect {
   --tn-disc: 52px;
   --hex: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
-  --steel-ring: #4a5154;
+  --board: #15191b;
   --cc: var(--t-accent, #f2c230);
   display: grid;
   align-content: start;
   gap: 7px;
-  min-height: 150px;
-  margin-top: 6px;
   padding: 10px 12px 12px;
   border-radius: 3px;
   background: var(--m-well-bg, rgba(0, 0, 0, 0.35));
   box-shadow: var(--m-sink), inset 0 2px 0 color-mix(in srgb, var(--cc) 70%, transparent);
-}
-
-.ti-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--x-muted);
 }
 
 .ti-head {
@@ -1005,6 +793,22 @@
 .ti-head > div {
   display: grid;
   gap: 2px;
+}
+
+/* The card's socket: like a node, bigger. */
+.ti-head .tn-disc {
+  --ring: color-mix(in srgb, var(--cc) 48%, var(--board));
+  --fill: color-mix(in srgb, var(--cc) 20%, var(--board));
+  --icon-c: var(--cc);
+  flex: none;
+  width: var(--tn-disc);
+  height: var(--tn-disc);
+}
+
+.ti-head .tn-disc.taken {
+  --ring: color-mix(in srgb, var(--cc) 70%, #fff);
+  --fill: radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--cc) 60%, #fff), var(--cc) 55%, color-mix(in srgb, var(--cc) 65%, #000));
+  --icon-c: #0d0f10;
 }
 
 .ti-name {
@@ -1021,12 +825,21 @@
   color: var(--cc);
 }
 
-.ti-head .tnode-pips {
-  justify-content: start;
+.ti-head .tn-pips {
+  position: static;
+  justify-self: start;
   align-items: center;
+  transform: none;
+  background: none;
+  padding: 0;
 }
 
-.ti-head .tnode-pips small {
+.ti-head .tn-pips i {
+  width: 7px;
+  height: 4px;
+}
+
+.ti-head .tn-pips small {
   margin-left: 4px;
   font-size: 12px;
   color: var(--x-muted);
@@ -1077,12 +890,85 @@
   color: var(--x-muted);
 }
 
-.ti-actions {
-  display: flex;
-  gap: 6px;
+.ti-undo {
+  margin: 0;
+  font-size: 12px;
+  color: var(--x-muted);
 }
 
-/* ----------------------------------------------------------------- legend */
+/* By the node (playtest 14/10 #15): over the sheet, out of its flow, so the window keeps its size (#14). */
+.tree-tip {
+  position: absolute;
+  z-index: 30;
+  width: 300px;
+  margin: 0;
+  pointer-events: none;
+  box-shadow: var(--m-sink), inset 0 2px 0 color-mix(in srgb, var(--cc) 70%, transparent), 0 10px 26px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(180deg, rgba(36, 40, 42, 0.98), rgba(20, 23, 25, 0.98));
+  animation: tip-in 0.12s ease-out;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+/* --------------------------------------------------------------- figures */
+
+/* The soldier's figures, top right of the sheet (#16); what the node under the pointer adds, in green. */
+.service .tree-figures {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  display: grid;
+  grid-template-columns: repeat(7, auto);
+  gap: 4px 6px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: var(--m-well-bg, rgba(0, 0, 0, 0.35));
+  box-shadow: var(--m-sink);
+}
+
+.tree-figures .tf {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 4px;
+  min-width: 54px;
+}
+
+.tree-figures .tf-name {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.tree-figures b {
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 17px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.tree-figures .tf-delta {
+  min-width: 2.2em;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.tree-figures .tf-delta.up {
+  color: var(--x-good);
+}
+
+.tree-figures .tf-delta.down {
+  color: var(--x-warn);
+}
+
+/* ---------------------------------------------------------------- legend */
 
 .tree-legend {
   display: flex;
@@ -1094,6 +980,7 @@
 }
 
 .tree-legend .lg {
+  --cc: var(--cls-assault, #ec644e);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1103,12 +990,8 @@
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 30%, #2f3437, #15181a 75%);
-  box-shadow: 0 0 0 2px #4a5154;
-}
-
-.tree-legend .open i {
-  box-shadow: 0 0 0 2px var(--cc), 0 0 6px color-mix(in srgb, var(--cc) 60%, transparent);
+  background: color-mix(in srgb, var(--cc) 20%, #15191b);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cc) 48%, #15191b);
 }
 
 .tree-legend .taken i {
@@ -1117,50 +1000,65 @@
 }
 
 .tree-legend .plan i {
-  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--cc) 70%, #000) 0 2px, var(--cc) 2px 4px);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cc) 75%, #fff);
+  background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--cc) 65%, #000) 0 2px, var(--cc) 2px 4px);
+  outline: 1.5px dashed var(--t-accent, #f2c230);
+  outline-offset: 3px;
+}
+
+.tree-legend .open i {
+  box-shadow: 0 0 0 2px var(--cc), 0 0 6px color-mix(in srgb, var(--cc) 60%, transparent);
 }
 
 .tree-legend .shut i {
-  background: #121416;
-  box-shadow: 0 0 0 2px #2b2f32;
-}
-
-.tree-legend .sleep i {
-  background: linear-gradient(0deg, color-mix(in srgb, var(--cc) 45%, #000) 50%, #15181a 50%);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cc) 55%, #000);
+  background: #111416;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cc) 20%, #15191b);
 }
 
 .tree-legend .ab i {
   width: 15px;
   border-radius: 0;
   clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
-  background: #4a5154;
+  background: color-mix(in srgb, var(--cc) 48%, #15191b);
   box-shadow: none;
 }
 
-/* The packs' silhouettes on the sockets (synty-icons.css). */
-.tnode-disc[data-ability] {
-  --sicon-w: calc(var(--tn-disc) * 0.56);
+.tree-legend .req i {
+  width: 12px;
+  height: 11px;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: var(--t-accent, #f2c230);
+  box-shadow: none;
 }
 
-.tnode-disc[data-ability] svg.ico {
-  width: var(--sicon-w);
-  height: calc(var(--tn-disc) * 0.56);
+.tree-legend .kit i {
+  width: 10px;
+  height: 12px;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: #8a918c;
+  box-shadow: none;
 }
 
-/* Weapons are drawn side on: a wider box. */
-.tnode-disc:is([data-ability='shoot'], [data-ability='pistol'], [data-ability='launch'], [data-ability='aimedShot'], [data-ability='evac'], [data-ability='suppression'], [data-ability='faceoff'], [data-ability='bolt'], [data-ability='spectralArrow'], [data-ability='lightRain']) {
-  --sicon-w: calc(var(--tn-disc) * 0.72);
+.tree-legend .needs i {
+  width: 18px;
+  height: 0;
+  border-radius: 0;
+  border-top: 1.6px dashed color-mix(in srgb, var(--cc) 70%, #fff);
+  background: none;
+  box-shadow: none;
 }
 
-@media (max-width: 1100px) {
-  .tnode {
-    width: 74px;
-  }
+.tree-legend .coop i {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--cc) 48%, #15191b),
+    0 0 0 3.5px #15191b,
+    0 0 0 4.5px color-mix(in srgb, var(--cc) 60%, #fff);
 }
 
-/* The aptitudes' icons (INTERFACE Military Combat HUD). */
+/* ------------------------------------------------------------- aptitudes */
+
+/* The aptitudes' icons (INTERFACE Military Combat HUD), in the sheet beside the tree. */
 .apt-ico {
   display: inline-block;
   flex: none;

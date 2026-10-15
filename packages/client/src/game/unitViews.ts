@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { coverAt, decorOf, PLAYER_COLORS, sexOfPerson, TEMPLATES, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
 import { STOREY, tileToWorld } from './coords';
-import type { Blow, FigurePose } from './figures';
+import type { Blow, FigurePose, Gear } from './figures';
 import { clipSpeed, CROUCHED, gaitsOf } from './gaits';
+import { CROWD } from './crowd';
 import { buildUnit, gearOf, IDLE_POSE, isFigure, type UnitRig } from './models';
+import { armamentOf } from './syntyFigures';
 import { easeInOut, timeRate, tween, wait } from './tween';
 
 const ALIEN_COLOR = '#ff4d4d';
@@ -79,7 +81,12 @@ interface UnitView {
   blow: { from: THREE.Vector3; melee: boolean; head: boolean; at: number } | null;
   /** How it fell, and the seconds its death clip took (0 for the topple): for getting up again. */
   fell: { blow: Blow; seconds: number } | null;
+  /** A campaign soldier's own weapons as last shown (Unit.arms: armsKey), to see one taken in hand. */
+  arms: string;
 }
+
+/** What a campaign soldier carries, as a key: its weapon in the hand and at the belt. */
+const armsKey = (u: Unit) => (u.arms ? `${u.arms.primary}|${u.arms.melee}` : '');
 
 /**
  * A line over an enemy's flag while the player aims a move or hovers it:
@@ -127,6 +134,8 @@ export function unitPosNow(id: string, out: THREE.Vector3): boolean {
 /** 3D bodies, base rings, floating flags and procedural animation for every unit. */
 export class UnitViews {
   readonly group = new THREE.Group();
+  /** The mission item's tag over its carrier (lore.ts itemTag: «MEDICINAS»); set by the game (UI, playtest 14/10 #2). */
+  itemTag = 'CARGA';
   private views = new Map<string, UnitView>();
   private readonly selection: THREE.Mesh;
   private readonly partnerSelection: THREE.Mesh;
@@ -161,7 +170,7 @@ export class UnitViews {
     );
     this.selection.visible = false;
     this.partnerSelection.visible = false;
-    this.group.add(this.selection, this.partnerSelection);
+    this.group.add(this.selection, this.partnerSelection, CROWD.group);
     onScreen = this;
   }
 
@@ -180,6 +189,8 @@ export class UnitViews {
       v.flag.element.remove();
     }
     this.views.clear();
+    // A new battle: a crowd of its own (its bodies are baked again as they come).
+    CROWD.clear();
     for (const u of s.units) this.create(u);
   }
 
@@ -188,7 +199,9 @@ export class UnitViews {
     // The soldier's campaign id picks the same survivor as in the base; skirmish units go by name.
     // Who has no look (a VIP, an enemy leader) still gets a body of their sex, from their name.
     const sex = u.appearance ? undefined : sexOfPerson(u.name);
-    const rig = buildUnit(u.template, color, u.appearance, gearOf(u.weaponTier, u.armorTier), u.campaignId ?? u.name, sex);
+    // A campaign soldier's own weapons (docs/FASE8.md §A); anyone else's are its template's.
+    const gear: Gear = { ...gearOf(u.weaponTier, u.armorTier), arms: u.arms ?? null };
+    const rig = buildUnit(u.template, color, u.appearance, gear, u.campaignId ?? u.name, sex);
     const ring = new THREE.Mesh(
       ringGeometry,
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -208,17 +221,18 @@ export class UnitViews {
     const facing = u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
       crouch: 0, crouchTarget: 0, aim: 0, aimTarget: 0, aimFx: 0, run: 0, recoil: 0, hit: 0, flash: 0,
-      fall: u.alive ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, yaw: facing, yawTarget: facing,
+      fall: u.alive || u.lost ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, yaw: facing, yawTarget: facing,
       phase: Math.random() * Math.PI * 2,
     };
     this.group.add(rig.root);
 
     const view: UnitView = {
-      id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated, droneAway: false, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null,
+      id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, droneAway: false, shadow: true, body: '', tag: '',
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u),
     };
     this.views.set(u.id, view);
-    if (!u.alive) this.lieDown(view);
+    // Left outside when La Mula went (sync): standing, not dead.
+    if (!u.alive && !u.lost) this.lieDown(view);
     flagEl.classList.toggle('named', u.id === this.selectedId);
     flagEl.classList.toggle('selected', u.id === this.selectedId);
     flag.renderOrder = u.id === this.selectedId ? 0 : -1;
@@ -241,6 +255,12 @@ export class UnitViews {
         if (!v.animating) v.rig.root.visible = false;
         continue;
       }
+      // Left outside when La Mula went (docs/PRUEBA-2026-10-14.md P1): no longer one of the squad, but standing, not dead.
+      if (u.lost) {
+        v.flag.visible = false;
+        v.ring.visible = false;
+        continue;
+      }
       if (!v.animating && u.alive) v.rig.root.position.copy(this.standAt(u.pos));
       if (!v.animating) v.place = { ...u.pos };
       // A corpse raised by a sectoid stands up as a new unit: hide the body.
@@ -261,6 +281,11 @@ export class UnitViews {
       v.pose.aimTarget = u.overwatch ? 1 : 0;
       // Down to half its health or less, a soldier stands slumped.
       if (u.team === 'xcom' && isFigure(v.rig)) v.rig.setStance?.(u.alive && u.hp * 2 <= u.maxHp ? 'slumped' : null);
+      // A weapon from the backpack taken in hand (the engine's weaponEquipped).
+      if (u.alive && armsKey(u) !== v.arms) {
+        v.arms = armsKey(u);
+        void this.equip(v, u);
+      }
       if (u.alive) this.renderFlag(v, u, coverOf(u), carrier === u.id);
       if (!u.alive && !v.dead && !v.animating) {
         v.dead = true;
@@ -327,7 +352,7 @@ export class UnitViews {
       u.ward ? '<em class="song">GUARDA</em>' : '',
       u.blessed ? '<em class="song">HIMNO</em>' : '',
       u.huntedBy ? '<em class="hunt">PRESA</em>' : '',
-      carrier ? '<em class="data">DATOS</em>' : '',
+      carrier ? `<em class="data">${this.itemTag}</em>` : '',
       u.captive ? '<em class="data">CAUTIVO</em>' : '',
       u.objective ? '<em class="stun">OBJETIVO</em>' : '',
     ].join('');
@@ -464,6 +489,7 @@ export class UnitViews {
   private setCut(v: UnitView, cut: boolean): void {
     if (v.cut === cut) return;
     v.cut = cut;
+    if (isFigure(v.rig)) v.rig.cutAway = cut;
     v.rig.root.traverse((o) => {
       if (o === v.flag) return;
       if (cut) {
@@ -490,6 +516,7 @@ export class UnitViews {
     // Clips, sways and settling go at the battle's speed, like the tweens that move the bodies (their feet stay put).
     dt *= timeRate();
     time = this.bodyTime += dt;
+    CROWD.tick(dt);
     for (const v of this.views.values()) {
       const p = v.pose;
       const k = 1 - Math.exp(-dt * 9);
@@ -672,17 +699,20 @@ export class UnitViews {
     if (release) v.animating = false;
   }
 
-  async raiseWeapon(id: string, target: THREE.Vector3): Promise<void> {
+  /** Up to aim at `target`; `sidearm`, the pistol carried beside a main gun (firesSidearm), drawn from its holster first. */
+  async raiseWeapon(id: string, target: THREE.Vector3, sidearm = false): Promise<void> {
     const v = this.views.get(id);
     if (!v) return;
     this.face(id, target);
+    if (isFigure(v.rig)) v.rig.draw?.(sidearm ? 'sidearm' : 'weapon');
     this.struck(target, v.rig.root.position, false);
     await tween(0.28, (t) => (v.pose.aimFx = easeInOut(t)));
   }
 
+  /** Down from aiming; a pistol drawn from its holster goes back once lowered. */
   lowerWeapon(id: string): void {
     const v = this.views.get(id);
-    if (v) void tween(0.35, (t) => (v.pose.aimFx = 1 - easeInOut(t)));
+    if (v) void tween(0.35, (t) => (v.pose.aimFx = 1 - easeInOut(t))).then(() => isFigure(v.rig) && v.rig.draw?.('weapon'));
   }
 
   recoil(id: string): void {
@@ -833,6 +863,26 @@ export class UnitViews {
     v.shadow = true;
   }
 
+  /**
+   * A weapon taken in hand from the backpack: the one it held turned over
+   * and down as a reload's, the left hand back to the pack, and the new one
+   * comes up in its place (0.7 s).
+   */
+  private async equip(v: UnitView, u: Unit): Promise<void> {
+    const rig = v.rig;
+    if (!isFigure(rig) || !rig.arm) return;
+    const arms = armamentOf(u.template, gearOf(u.weaponTier).weapon!, u.arms);
+    let swapped = false;
+    await tween(0.7, (t) => {
+      v.pose.spin = easeInOut(t);
+      if (t >= 0.5 && !swapped) {
+        swapped = true;
+        rig.arm!(arms);
+      }
+    });
+    v.pose.spin = 0;
+  }
+
   async reload(id: string): Promise<void> {
     const v = this.views.get(id);
     if (!v) return;
@@ -863,6 +913,9 @@ export class UnitViews {
     this.struck(target, home, true);
     const toward = target.clone().setY(home.y).sub(home).setLength(0.45);
     v.animating = true;
+    // The knife or the machete from the belt (a soldier's Tajo); whoever has none strikes with what it holds.
+    const rig = isFigure(v.rig) ? v.rig : null;
+    rig?.draw?.('belt');
     // Wound up (the body turned back, the dead's arms open), the stroke across or the grab, and back (Arturo, 2026-10-14:
     // the Tajo cuts, the bite grabs).
     await tween(0.2, (t) => {
@@ -880,7 +933,10 @@ export class UnitViews {
       v.pose.aimFx = 1 - t;
       v.pose.swing = 1 - easeInOut(t);
       v.rig.root.position.copy(home).addScaledVector(toward, 1 - t);
-    }).then(() => (v.animating = false));
+    }).then(() => {
+      v.animating = false;
+      rig?.draw?.('weapon');
+    });
   }
 
   /** Lifted out by the dropship: rises into the sky and disappears. */

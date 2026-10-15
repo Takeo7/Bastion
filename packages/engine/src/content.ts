@@ -5,6 +5,14 @@ import type { AbilityId, AttackAbility, ChargeId, ClassId, FoundWeaponId, ItemId
 
 export const AP_PER_TURN = 2;
 
+/** From this rank on (Comandante), a soldier gets a third action each turn (docs/PRUEBA-2026-10-14.md P5). */
+export const THIRD_ACTION_RANK = 6;
+
+/** Actions a unit starts its turn with: two, three for a soldier from Comandante on. */
+export function apPerTurn(u: Pick<Unit, 'team' | 'rank'>): number {
+  return u.team === 'xcom' && u.rank >= THIRD_ACTION_RANK ? AP_PER_TURN + 1 : AP_PER_TURN;
+}
+
 /** Spare magazines a soldier takes into a mission for the primary weapon (docs/FASE7.md): reloading spends one. */
 export const SPARE_MAGS = 3;
 
@@ -58,7 +66,7 @@ export const OFICIO_QUIET = 2;
  * squad sees one every 5 turns; a firefight (four rifle shots a turn) one
  * every 3. Tuned with a headless Saqueo against a scripted squad.
  */
-export const HORDE = { perTurn: 10, perNoise: 5, wave: 50, cap: 20 } as const;
+export const HORDE = { perTurn: 10, perNoise: 5, wave: 50, cap: 60 } as const;
 
 /**
  * Night missions (docs/ALTURA-Y-NOCHE.md). The living see `sightCut` tiles
@@ -124,6 +132,7 @@ export type WeaponId =
   | 'sniper'
   | 'pistol'
   | 'sword'
+  | 'knife'
   | 'trooperRifle'
   | 'officerRifle'
   | 'xenoPistol'
@@ -182,10 +191,12 @@ const weapon = (w: Partial<WeaponDef> & Pick<WeaponDef, 'id' | 'name' | 'damage'
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   rifle: weapon({ id: 'rifle', name: 'Fusil de asalto', damage: 4, spread: 1, critDamage: 2, clip: 4, noise: 12 }),
   shotgun: weapon({ id: 'shotgun', name: 'Escopeta', damage: 5, spread: 1, critDamage: 3, clip: 4, crit: 10, range: 'short', burst: 1, noise: 10 }),
-  cannon: weapon({ id: 'cannon', name: 'Cañón', damage: 5, spread: 1, critDamage: 2, clip: 3, burst: 5, noise: 14 }),
+  cannon: weapon({ id: 'cannon', name: 'Ametralladora', damage: 5, spread: 1, critDamage: 2, clip: 3, burst: 5, noise: 14 }),
   sniper: weapon({ id: 'sniper', name: 'Fusil de precisión', damage: 5, spread: 1, critDamage: 2, clip: 3, crit: 10, range: 'long', apCost: 2, burst: 1, noise: 16 }),
   pistol: weapon({ id: 'pistol', name: 'Pistola', damage: 2, plusOne: 50, critDamage: 1, burst: 1, noise: 8 }),
   sword: weapon({ id: 'sword', name: 'Machete', damage: 4, spread: 1, critDamage: 2, aim: 20, crit: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
+  /** Everyone's blade in the campaign (docs/FASE8.md §A), until a machete. */
+  knife: weapon({ id: 'knife', name: 'Cuchillo', damage: 3, spread: 1, critDamage: 1, aim: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
   trooperRifle: weapon({ id: 'trooperRifle', name: 'Fusil de caza', damage: 3, critDamage: 1, clip: 3, noise: 12 }),
   officerRifle: weapon({ id: 'officerRifle', name: 'Fusil automático', damage: 3, plusOne: 50, critDamage: 2, clip: 3, noise: 14 }),
   lancerRifle: weapon({ id: 'lancerRifle', name: 'Carabina', damage: 3, plusOne: 50, critDamage: 2, clip: 3, noise: 12 }),
@@ -256,13 +267,13 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   claw: { id: 'claw', name: 'Mordisco', description: 'Muerde cuerpo a cuerpo.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   overwatch: { id: 'overwatch', name: 'Vigilancia', description: 'Dispara al primer enemigo que se mueva a la vista.', target: 'self', ap: 1, endsTurn: true },
   hunker: { id: 'hunker', name: 'Agazaparse', description: '+30 de defensa y +50 de esquiva hasta tu próximo turno.', target: 'self', ap: 1, endsTurn: true },
-  reload: { id: 'reload', name: 'Recargar', description: `Mete un cargador lleno y gasta uno de repuesto. Cada soldado sale con ${SPARE_MAGS}; registrando aparecen más.`, target: 'self', ap: 1, endsTurn: false },
+  reload: { id: 'reload', name: 'Recargar', description: 'Mete un cargador lleno y gasta uno de repuesto: primero en el arma principal y, si está llena, en la pistola. Los de repuesto los hace el Taller; registrando aparecen más.', target: 'self', ap: 1, endsTurn: false },
   grenade: { id: 'grenade', name: 'Granada', description: 'Lanza una granada: daña a todos en el área, destruye cobertura y abre boquetes en las paredes. Arriba hunde el suelo donde cae, y quien esté encima cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 10, radius: 2.5, explosive: 'fragGrenade' },
   launch: { id: 'launch', name: 'Lanzagranadas', description: 'Dispara una granada más lejos y con más radio. También abre boquetes en las paredes y, arriba, hunde el suelo donde cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 14, radius: 3.5, explosive: 'fragGrenade' },
   missiles: { id: 'missiles', name: 'Granada del chaleco', description: 'Le estalla una granada que aún cuelga del chaleco. También abre boquetes en las paredes y, arriba, hunde el suelo.', target: 'tile', ap: 1, endsTurn: true, charge: 'missiles', range: 15, radius: 2.5, explosive: 'microMissiles' },
   medkit: { id: 'medkit', name: 'Botiquín volante', description: 'El Grillo, el dron casero del especialista, cura 4 de salud a un aliado.', target: 'ally', ap: 1, endsTurn: false, charge: 'medkit', range: 15 },
   aid: { id: 'aid', name: 'Cobertura del Grillo', description: 'El Grillo protege a un aliado: +20 de defensa hasta vuestro próximo turno.', target: 'ally', ap: 1, endsTurn: false, range: 15 },
-  evac: { id: 'evac', name: 'Evacuar', description: 'Sale de la misión desde la zona de evacuación.', target: 'self', ap: 1, endsTurn: true },
+  evac: { id: 'evac', name: 'Evacuar', description: 'Desde La Lata, pide salir. Si tu compañero acepta, salen los que estén dentro y los de fuera se pierden. En la Limpieza es una retirada: la misión se pierde.', target: 'self', ap: 0, endsTurn: false },
   hack: {
     id: 'hack',
     name: 'Arreglar',
@@ -273,14 +284,24 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
     range: 10,
     noise: 2,
   },
+  // Lore's texts (docs/FASE8.md §B).
   search: {
     id: 'search',
-    name: 'Registrar',
-    description: 'Registra un mueble, un coche o unas cajas a tu lado: suministros, algún accesorio y, a veces, medicinas. Hace un poco de ruido. La mochila lleva 3 cosas.',
+    name: 'Abrir la caja',
+    description: 'Abre una caja marcada que tengas al lado. Da siempre lo suyo: un arma, una o dos medicinas, dos cargadores o de 3 a 5 raciones. Hace un poco de ruido.',
     target: 'tile',
     ap: 1,
     endsTurn: false,
     range: 1.5,
+    noise: 2,
+  },
+  searchRoom: {
+    id: 'searchRoom',
+    name: 'Registrar la habitación',
+    description: 'Registra la habitación en la que estás. Sale lo que haya según el sitio: suministros, comida, piezas, medicinas, algún cargador y, a veces, un arma. Cada habitación se registra una vez, para toda la escuadra. Hace un poco de ruido.',
+    target: 'self',
+    ap: 1,
+    endsTurn: false,
     noise: 2,
   },
   // A door beside the soldier, without moving: free, and as quiet as walking through it (NOISE.door). Texts are placeholders for Lore.
@@ -356,6 +377,11 @@ export const SMOKE_TURNS = 2;
 
 /** Things a soldier can carry back from searching (docs/FASE2.md): a full backpack can't search. */
 export const BACKPACK_SLOTS = 3;
+/** What a medicine heals (docs/FASE8.md §C): only health; stopping a bite's contagion is unlocked. */
+export const MEDICINE_HEAL = 3;
+
+/** Rounds in a pistol's clip when it counts them (docs/FASE8.md §A: the campaign's soldiers; in a skirmish it never runs out). */
+export const PISTOL_CLIP = 6;
 
 export interface FoundWeaponDef {
   id: FoundWeaponId;
@@ -363,22 +389,41 @@ export interface FoundWeaponDef {
   name: string;
   /** As it reads when found, with its article. */
   find: string;
-  /** The class weapon it is: only a soldier who carries that one can take it. */
+  /** The weapon it fires as. */
   weapon: WeaponId;
-  /** How often it turns up, against the others. */
+  /** In the hand (fusil, escopeta, fusil de precisión, ametralladora) or at the belt (the machete). */
+  slot: 'primary' | 'melee';
+  /** A good one: whoever carries it fights a tier above everyone (to 3, and never past what the rank allows). */
+  better: boolean;
+  /** How often it turns up in a weapons box or a search, against the others (0: never). */
   weight: number;
 }
 
 /**
- * Good weapons found searching (docs/FASE4.md): a soldier who carries one fights
- * a tier above everyone (to 3, and never past what the rank allows). Names are
- * placeholders for Lore.
+ * The Armería's weapons (docs/FASE8.md §A): the campaign's soldiers start with a
+ * knife and a pistol, and these are found, made in the Taller or brought by the
+ * Bastion's level. Anyone may carry any of them. The good ones (docs/FASE4.md)
+ * fight a tier above. Names are placeholders for Lore.
  */
 export const FOUND_WEAPONS: Record<FoundWeaponId, FoundWeaponDef> = {
-  huntingRifle: { id: 'huntingRifle', name: 'Fusil de cerrojo', find: 'un fusil de cerrojo bien engrasado', weapon: 'rifle', weight: 5 },
-  sawnOff: { id: 'sawnOff', name: 'Escopeta recortada', find: 'una escopeta recortada', weapon: 'shotgun', weight: 2 },
-  scopedRifle: { id: 'scopedRifle', name: 'Fusil con mira', find: 'un fusil con mira telescópica', weapon: 'sniper', weight: 1 },
-  lightMachineGun: { id: 'lightMachineGun', name: 'Ametralladora ligera', find: 'una ametralladora ligera con su cinta', weapon: 'cannon', weight: 1 },
+  assaultRifle: { id: 'assaultRifle', name: 'Fusil de asalto', find: 'un fusil de asalto', weapon: 'rifle', slot: 'primary', better: false, weight: 8 },
+  pumpShotgun: { id: 'pumpShotgun', name: 'Escopeta', find: 'una escopeta', weapon: 'shotgun', slot: 'primary', better: false, weight: 6 },
+  precisionRifle: { id: 'precisionRifle', name: 'Fusil de precisión', find: 'un fusil de precisión', weapon: 'sniper', slot: 'primary', better: false, weight: 3 },
+  machineGun: { id: 'machineGun', name: 'Ametralladora', find: 'una ametralladora', weapon: 'cannon', slot: 'primary', better: false, weight: 3 },
+  machete: { id: 'machete', name: 'Machete', find: 'un machete', weapon: 'sword', slot: 'melee', better: false, weight: 0 },
+  huntingRifle: { id: 'huntingRifle', name: 'Fusil de cerrojo', find: 'un fusil de cerrojo bien engrasado', weapon: 'rifle', slot: 'primary', better: true, weight: 3 },
+  sawnOff: { id: 'sawnOff', name: 'Escopeta recortada', find: 'una escopeta recortada', weapon: 'shotgun', slot: 'primary', better: true, weight: 2 },
+  scopedRifle: { id: 'scopedRifle', name: 'Fusil con mira', find: 'un fusil con mira telescópica', weapon: 'sniper', slot: 'primary', better: true, weight: 1 },
+  lightMachineGun: { id: 'lightMachineGun', name: 'Ametralladora ligera', find: 'una ametralladora ligera con su cinta', weapon: 'cannon', slot: 'primary', better: true, weight: 1 },
+};
+
+/** The Armería's plain weapon of each class weapon: what an older campaign's soldiers keep (docs/FASE8.md §A). */
+export const PLAIN_WEAPON: Partial<Record<WeaponId, FoundWeaponId>> = {
+  rifle: 'assaultRifle',
+  shotgun: 'pumpShotgun',
+  sniper: 'precisionRifle',
+  cannon: 'machineGun',
+  sword: 'machete',
 };
 
 export interface ItemDef {
@@ -535,8 +580,18 @@ export function isAttack(ability: AbilityId): ability is AttackAbility {
   return ATTACKS.has(ability);
 }
 
-/** Weapon used by an attack ability. */
+/** Weapon used by an attack ability. A campaign soldier's are its own (Unit.arms): the primary, or the pistol without one; the knife without a machete. */
 export function attackWeapon(u: Unit, ability: AttackAbility = 'shoot'): WeaponDef {
+  if (u.arms) {
+    switch (ABILITIES[ability].weapon) {
+      case 'secondary':
+        return WEAPONS.pistol;
+      case 'melee':
+        return WEAPONS[u.arms.melee ? FOUND_WEAPONS[u.arms.melee].weapon : 'knife'];
+      default:
+        return WEAPONS[u.arms.primary ? FOUND_WEAPONS[u.arms.primary].weapon : 'pistol'];
+    }
+  }
   const t = TEMPLATES[u.template];
   switch (ABILITIES[ability].weapon) {
     case 'secondary':
@@ -546,6 +601,44 @@ export function attackWeapon(u: Unit, ability: AttackAbility = 'shoot'): WeaponD
     default:
       return WEAPONS[t.weapon];
   }
+}
+
+/** Rounds in a full clip of the weapon `ability` fires; 0, it never runs out. A campaign soldier's pistol counts them (docs/FASE8.md §A). */
+export function clipOf(u: Unit, ability: AttackAbility = 'shoot'): number {
+  const w = attackWeapon(u, ability);
+  return u.arms && w.id === 'pistol' ? PISTOL_CLIP : w.clip;
+}
+
+/** Whether `ability` fires the pistol carried beside a primary weapon: it has its own rounds (Unit.pistolAmmo). */
+export function firesSidearm(u: Unit, ability: AttackAbility): boolean {
+  return !!u.arms?.primary && attackWeapon(u, ability).id === 'pistol';
+}
+
+/** Rounds left for `ability`'s weapon. */
+export function roundsOf(u: Unit, ability: AttackAbility = 'shoot'): number {
+  return firesSidearm(u, ability) ? (u.pistolAmmo ?? 0) : u.ammo;
+}
+
+/** Whether `ability` can fire now: its weapon never runs out, or it has a round left. */
+export function loadedFor(u: Unit, ability: AttackAbility = 'shoot'): boolean {
+  return clipOf(u, ability) === 0 || roundsOf(u, ability) > 0;
+}
+
+/** Reloading: the main gun if it's short of a full clip, otherwise the pistol carried beside it (docs/FASE8.md §A). */
+export function reloadWeapon(u: Unit): void {
+  const main = clipOf(u, 'shoot');
+  if (u.ammo < main || !u.arms?.primary) u.ammo = main;
+  else u.pistolAmmo = PISTOL_CLIP;
+}
+
+/** Whether every gun the soldier carries is full. */
+export function fullyLoaded(u: Unit): boolean {
+  return u.ammo >= clipOf(u, 'shoot') && (!u.arms?.primary || (u.pistolAmmo ?? 0) >= PISTOL_CLIP);
+}
+
+/** Squadsight: the class's, and with arms of its own only with a fusil de precisión in hand (docs/FASE8.md §A). */
+export function hasSquadsight(u: Unit): boolean {
+  return TEMPLATES[u.template].squadsight && (!u.arms || attackWeapon(u, 'shoot').id === 'sniper');
 }
 
 /**

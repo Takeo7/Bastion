@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { HEADS, partColor, type Appearance, type ArmorPart, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
-import type { Blow, FigurePose, FigureRig, Gear } from './figures';
+import { HEADS, partColor, TEMPLATES, type Appearance, type ArmorPart, type Arms, type FoundWeaponId, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
+import { CROWD, type Baker, type Member } from './crowd';
+import type { Armament, Blow, FigurePose, FigureRig, Gear } from './figures';
 import { gaitsOf, type GaitMotion, type GaitStyle } from './gaits';
 import { UNIT_LAYER } from './post';
 import { atlasMaterial, atlasOf, dyedMaterial, loadModel, modelNow, type DyedMaterial } from './synty';
@@ -94,6 +95,12 @@ const STYLES: Record<NonNullable<GaitStyle> | 'none', { lean: number; roll: numb
 
 /** Which way the dead fall without a death clip: backwards, or to either side. */
 const FALLS = [0, 0, 0.9, -0.9];
+
+/** Figures that bake a body's loops for the crowd (crowd.ts), by its key, while they load: no one sees them. */
+const bakers = new Map<string, SyntyFigure>();
+/** Frames baked of a walk's loop and of a stance's. */
+const WALK_FRAMES = 20;
+const STANCE_FRAMES = 24;
 
 /** How far off the way away from the blow a death's fall can be and still fit it (radians). */
 const FITS = 0.9;
@@ -253,6 +260,7 @@ const q1 = new THREE.Quaternion();
 const q2 = new THREE.Quaternion();
 const e1 = new THREE.Euler();
 const m1 = new THREE.Matrix4();
+const m2 = new THREE.Matrix4();
 const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -263,10 +271,44 @@ const lerp = THREE.MathUtils.lerp;
 
 // ----------------------------------------------------------------- figures
 
+type Carry = keyof Armament;
+const CARRIES: Carry[] = ['weapon', 'sidearm', 'belt'];
+
+/** The models of an armament, by where they are carried. */
+type Guns = Partial<Record<Carry, { id: WeaponId; model: THREE.Group }>>;
+
+/** An armament's models if all have loaded (asking starts the loads), else null. */
+function gunsNow(a: Armament): Guns | null {
+  const out: Guns = {};
+  let all = true;
+  for (const k of CARRIES) {
+    const id = a[k];
+    if (!id) continue;
+    const model = modelNow(WEAPONS[id].pack, 'wep', id);
+    if (model) out[k] = { id, model };
+    else all = false;
+  }
+  return all ? out : null;
+}
+
+async function loadGuns(a: Armament): Promise<Guns> {
+  const out: Guns = {};
+  await Promise.all(CARRIES.map(async (k) => {
+    const id = a[k];
+    if (id) out[k] = { id, model: await loadModel(WEAPONS[id].pack, 'wep', id) };
+  }));
+  return out;
+}
+
+const sameArms = (a: Armament, b: Armament) => CARRIES.every((k) => (a[k] ?? null) === (b[k] ?? null));
+const armsOf = (guns: Guns): Armament => ({ weapon: guns.weapon?.id ?? null, sidearm: guns.sidearm?.id ?? null, belt: guns.belt?.id ?? null });
+
+/** The pistol's grip for the support hand (as WEAPONS fore: height, distance along the barrel): the left hand cups the right. */
+const PISTOL_FORE: [number, number] = [-0.07, 0.01];
+
 /** What a Synty unit is made of. */
-interface Spec {
+interface Spec extends Armament {
   character: CharacterId;
-  weapon: WeaponId | null;
   hat: HeadgearId | null;
   /** Barracks colours: helmet, torso, arms, legs; null for a piece left as Synty painted it. */
   dyes: (string | null)[] | null;
@@ -337,7 +379,14 @@ export class SyntyFigure implements FigureRig {
   private readonly painted: THREE.Mesh[] = [];
   /** Hand to weapon (fixed), so the gun lands where the pose puts it. */
   private readonly socket = new THREE.Group();
+  /** Its weapons' models (cloned), which of them is in the hand, and where the others ride (hung from bones: stows). */
+  private readonly carried: Partial<Record<Carry, THREE.Object3D>> = {};
+  private drawn: Carry = 'weapon';
+  private readonly stows: Partial<Record<Carry, THREE.Group>> = {};
+  /** Something in the right hand. */
+  private armed = false;
   private melee = false;
+  private pistol = false;
   /** Foregrip distance along the barrel; 0 for one-handed weapons. */
   private fore = 0;
   /** Height of the support palm in the gun's frame (WEAPONS fore). */
@@ -370,6 +419,17 @@ export class SyntyFigure implements FigureRig {
   /** What its moves play (MOTION_ORDER) and how fast (setGait, from the unit view's gaits.ts). */
   private gait = { motion: RUN, speed: 1.5 };
   private readonly build: Build;
+  /** The character's model, dressed (null while it loads), and the atlas it is painted from. */
+  private model: THREE.Object3D | null = null;
+  private atlas: AtlasId | null = null;
+  /** Its place in the crowd while it is there (crowd.ts), and where in its loops it plays. */
+  private member: Member | null = null;
+  private readonly crowdPhase = Math.random();
+  /** While baking: the loop's length, which the sways keep in step with so it loops cleanly (hz). */
+  private lockTo = 0;
+  /** A figure that bakes for the crowd: it poses itself, always. */
+  private baking = false;
+  cutAway = false;
   /** The stance it stands in (STANCE_ORDER), −1 the plain idle. */
   private stance = -1;
   /** The death it plays (DEATHS[build]) and the seconds it takes; null standing. */
@@ -401,12 +461,12 @@ export class SyntyFigure implements FigureRig {
     const set = animSet(build, spec.dead);
     if (set) this.anim = this.driver(set);
     else void whenAnimSet(build, spec.dead).then((s) => (this.anim = this.driver(s)), () => undefined);
-    const w = spec.weapon && WEAPONS[spec.weapon];
     const h = spec.hat && HEADGEAR[spec.hat];
-    const now = [modelNow(c.pack, 'chr', spec.character), w ? modelNow(w.pack, 'wep', spec.weapon!) : null, h ? modelNow(h.pack, 'hat', spec.hat!) : null] as const;
-    if (now[0] && (!w || now[1]) && (!h || now[2])) this.fill(now[0], now[1] ?? null, now[2] ?? null);
+    const now = [modelNow(c.pack, 'chr', spec.character), h ? modelNow(h.pack, 'hat', spec.hat!) : null] as const;
+    const guns = gunsNow(spec);
+    if (now[0] && (!h || now[1]) && guns) this.fill(now[0], guns, now[1] ?? null);
     else {
-      void Promise.all([loadModel(c.pack, 'chr', spec.character), w ? loadModel(w.pack, 'wep', spec.weapon!) : null, h ? loadModel(h.pack, 'hat', spec.hat!) : null])
+      void Promise.all([loadModel(c.pack, 'chr', spec.character), loadGuns(spec), h ? loadModel(h.pack, 'hat', spec.hat!) : null])
         .then(([m, g, hat]) => this.fill(m, g, hat))
         .catch((e: unknown) => console.warn(`Synty: ${spec.character} could not be dressed`, e));
     }
@@ -430,7 +490,7 @@ export class SyntyFigure implements FigureRig {
   }
 
   /** Dresses the rig once its models are loaded. */
-  private fill(source: THREE.Group, gun: THREE.Group | null, hat: THREE.Group | null): void {
+  private fill(source: THREE.Group, guns: Guns, hat: THREE.Group | null): void {
     const rest = restOf(source);
     this.rest = rest;
     const k = this.scale;
@@ -443,6 +503,7 @@ export class SyntyFigure implements FigureRig {
     const plain = !spec.dyes && !spec.band && !spec.skin;
     model.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
+      this.atlas ??= atlasOf(o);
       material ??= plain ? plainMaterial(atlasOf(o)) : dyedMaterial(atlasOf(o));
       o.material = material;
       this.painted.push(o);
@@ -474,6 +535,7 @@ export class SyntyFigure implements FigureRig {
     this.bones = SYNTY_BONES.map((n) => model.getObjectByName(n) ?? null);
     onUnitLayer(model);
     this.body.add(model);
+    this.model = model;
     this.body.scale.setScalar(k);
     this.body.position.y = -this.hip;
     this.pivot.position.y = this.hip;
@@ -492,27 +554,135 @@ export class SyntyFigure implements FigureRig {
     }
 
     const hand = this.bones[B.Hand_R];
-    if (gun && hand && spec.weapon) {
-      const g = gun.clone();
-      const muzzle = (g.children[0]?.userData.muzzle as [number, number, number] | undefined) ?? [0, 0, 0.5];
-      this.melee = !!(WEAPONS[spec.weapon] as { melee?: boolean }).melee;
-      const fore = (WEAPONS[spec.weapon] as { fore?: [number, number] }).fore;
-      this.fore = this.melee || !fore ? 0 : fore[1];
-      this.foreY = fore?.[0] ?? 0;
-      this.yaw.remove(this.gunPivot);
-      this.gunPivot.position.set(0, 0, 0);
-      onUnitLayer(g);
-      this.gunPivot.add(g);
-      this.muzzle.position.set(...muzzle);
+    if (hand) {
       // The hand holds the grip; its rotation in the aim pose is gripTurn · rest, so the gun is the inverse.
       this.socket.quaternion.copy(rest.gripTurn).multiply(rest.q[B.Hand_R]!).invert();
       this.socket.position.copy(GRIP).applyQuaternion(this.socket.quaternion);
-      this.socket.add(this.gunPivot);
       hand.add(this.socket);
-    } else {
-      this.gunPivot.position.set(0, this.chest, 0.3);
     }
+    if (spec.weapon || spec.sidearm || spec.belt) this.hangStows(model, rest);
+    this.equip(guns);
+    // Armed again while its first weapons loaded (arm): those instead.
+    if (!sameArms(armsOf(guns), spec)) this.arm({ ...spec }, true);
     if (this.drone) this.drone.position.set(-0.38, this.top + 0.25, -0.1);
+  }
+
+  /**
+   * Where the weapons not in the hand ride, hung from their bones (placed in
+   * model space at rest): the main gun slung across the back, the barrel up
+   * over the right shoulder; the pistol in its holster on the right thigh,
+   * the muzzle down; the blade in its sheath at the left hip, pointing down
+   * and back.
+   */
+  private hangStows(model: THREE.Object3D, rest: Rest): void {
+    model.updateMatrixWorld(true);
+    const toModel = new THREE.Matrix4().copy(model.matrixWorld).invert();
+    const hang = (k: Carry, bone: number, at: THREE.Vector3, along: THREE.Vector3, top: THREE.Vector3) => {
+      const b = this.bones[bone];
+      if (!b) return;
+      const z = along.normalize();
+      const x = new THREE.Vector3().crossVectors(top, z).normalize();
+      const y = new THREE.Vector3().crossVectors(z, x);
+      const place = new THREE.Matrix4().makeBasis(x, y, z).setPosition(at);
+      const g = new THREE.Group();
+      new THREE.Matrix4().multiplyMatrices(toModel, b.matrixWorld).invert().multiply(place).decompose(g.position, g.quaternion, g.scale);
+      b.add(g);
+      this.stows[k] = g;
+    };
+    const s3 = rest.p[B.Spine_03]!;
+    const hipL = rest.p[B.UpperLeg_L]!;
+    const hipR = rest.p[B.UpperLeg_R]!;
+    hang('weapon', B.Spine_03, new THREE.Vector3(0, s3.y + 0.02, s3.z - 0.11), new THREE.Vector3(-0.45, 0.9, 0), new THREE.Vector3(0, 0, -1));
+    hang('sidearm', B.UpperLeg_R, new THREE.Vector3(hipR.x - 0.075, hipR.y - 0.08, hipR.z + 0.01), new THREE.Vector3(0, -1, 0.1), new THREE.Vector3(0, 0, 1));
+    hang('belt', B.Hips, new THREE.Vector3(hipL.x + 0.075, hipL.y + 0.03, hipL.z - 0.02), new THREE.Vector3(0.12, -1, -0.4), new THREE.Vector3(0, 0, 1));
+  }
+
+  /** Its weapons on it (fill, arm): the drawn one in the hand, the rest where they ride; what it carried before goes. */
+  private equip(guns: Guns): void {
+    for (const k of CARRIES) {
+      this.carried[k]?.removeFromParent();
+      delete this.carried[k];
+      const g = guns[k];
+      if (!g) continue;
+      const m = g.model.clone();
+      m.scale.setScalar((WEAPONS[g.id] as { size?: number }).size ?? 1);
+      onUnitLayer(m);
+      // Slung, the main gun hangs by its middle.
+      m.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(m);
+      m.userData.middle = (box.min.z + box.max.z) / 2;
+      m.userData.muzzle = new THREE.Vector3(...((m.children[0]?.userData.muzzle as [number, number, number] | undefined) ?? [0, 0, 0.5])).multiply(m.scale);
+      this.carried[k] = m;
+    }
+    if (!this.carried[this.drawn]) this.drawn = 'weapon';
+    this.hold();
+  }
+
+  /** The drawn weapon into the hand and the others where they ride; how the hand holds it, and where its muzzle is. */
+  private hold(): void {
+    const held = this.carried[this.drawn];
+    for (const k of CARRIES) {
+      const m = this.carried[k];
+      if (!m || m === held) continue;
+      const stow = this.stows[k];
+      if (!stow) {
+        m.removeFromParent();
+        continue;
+      }
+      stow.add(m);
+      m.position.set(0, 0, k === 'weapon' ? -(m.userData.middle as number) : 0);
+    }
+    const id = held && this.spec[this.drawn];
+    if (held && id && this.socket.parent) {
+      const w = WEAPONS[id] as { melee?: boolean; pistol?: boolean; fore?: [number, number] };
+      this.melee = !!w.melee;
+      this.pistol = !!w.pistol;
+      const fore = this.pistol ? PISTOL_FORE : this.melee ? undefined : w.fore;
+      this.fore = fore?.[1] ?? 0;
+      this.foreY = fore?.[0] ?? 0;
+      held.position.set(0, 0, 0);
+      this.gunPivot.add(held);
+      this.muzzle.position.copy(held.userData.muzzle as THREE.Vector3);
+      // (Let go while the body lies, it stays on the ground until it gets up: pickUp.)
+      if (!this.drop) {
+        this.socket.add(this.gunPivot);
+        this.gunPivot.position.set(0, 0, 0);
+        this.gunPivot.quaternion.identity();
+      }
+      this.armed = true;
+    } else {
+      // Unarmed: shots and effects start in front of the chest.
+      this.melee = this.pistol = false;
+      this.fore = this.foreY = 0;
+      this.muzzle.position.set(0, 0, 0);
+      this.yaw.add(this.gunPivot);
+      this.gunPivot.position.set(0, this.chest, 0.3);
+      this.gunPivot.quaternion.identity();
+      this.armed = false;
+    }
+  }
+
+  /** Which of its weapons is in the hand: the main one, the pistol from its holster or the blade from the belt (one it doesn't carry: the main one). */
+  draw(which: Carry): void {
+    const k = which !== 'weapon' && !this.spec[which] ? 'weapon' : which;
+    if (k === this.drawn) return;
+    this.drawn = k;
+    if (this.rest) this.hold();
+  }
+
+  /** Other weapons (the engine's weaponEquipped): on it as soon as they load, the main one in the hand. */
+  arm(a: Armament, again = false): void {
+    if (!again && sameArms(a, this.spec)) return;
+    this.spec.weapon = a.weapon;
+    this.spec.sidearm = a.sidearm ?? null;
+    this.spec.belt = a.belt ?? null;
+    this.drawn = 'weapon';
+    const put = (g: Guns) => {
+      if (this.rest && sameArms(armsOf(g), this.spec)) this.equip(g);
+    };
+    const now = gunsNow(this.spec);
+    if (now) put(now);
+    else void loadGuns({ ...this.spec }).then(put, () => undefined);
   }
 
   /** Barracks colours on the cloth, the owner's band on the arms. */
@@ -554,6 +724,8 @@ export class SyntyFigure implements FigureRig {
   // ---------------------------------------------------------------- pose
 
   applyPose(p: FigurePose, time: number): void {
+    // A dead one at ease is drawn with the crowd (crowd.ts): nothing of its own to pose.
+    if (this.crowdPose(p, time)) return;
     // One that died before the clips loaded takes its death now, lying.
     if (this.pending && this.anim && this.rest && p.fall >= 1) this.die(this.pending);
     // A death clip takes the body down itself, the pivot upright; without one the body goes over stiffly.
@@ -607,14 +779,14 @@ export class SyntyFigure implements FigureRig {
     const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + p.lean - knock - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
     // A two-handed gun blades the upper body: the support shoulder comes forward so that arm bends under
     // the gun instead of reaching across the chest; the gun and the head keep facing ahead (holdWeapon, the neck).
-    this.blade = this.fore && !dead ? -(0.22 + 0.24 * p.aim) * live : 0;
+    this.blade = this.fore && !dead ? -(0.22 + 0.24 * p.aim) * (this.pistol ? 0.45 : 1) * live : 0;
     // A melee stroke turns the living's upper body back and then across (the weapon goes with it); the dead grab instead.
     const swing = (p.swing ?? 0) * live;
     const grab = dead ? Math.abs(swing) : 0;
-    const twist = shamble * Math.sin(time * 1.7 + p.phase) * 0.12 * style.twist * live + this.blade + (dead ? 0 : -swing * 0.75);
+    const twist = shamble * Math.sin(time * this.hz(1.7) + p.phase) * 0.12 * style.twist * live + this.blade + (dead ? 0 : -swing * 0.75);
     // Without clips the hips already roll (legs()); with them the roll goes on here, once a stride as they move.
     const sway = p.run > 0.05 ? Math.PI * CADENCE[this.gait.motion] * this.gait.speed : 1.3;
-    const roll = anim ? shamble * Math.sin(time * sway + p.phase) * (0.05 + p.run * 0.08) * style.roll * live : 0;
+    const roll = anim ? shamble * Math.sin(time * this.hz(sway) + p.phase) * (0.05 + p.run * 0.08) * style.roll * live : 0;
     if (anim) d[B.Hips]!.premultiply(rot(q1, Z, roll));
     else for (let k = 0; k < SPINE.length; k++) d[SPINE[k]!]!.copy(d[B.Hips]!);
     this.tilt(B.Spine_01, roll, twist * 0.3, lean * 0.35);
@@ -622,7 +794,7 @@ export class SyntyFigure implements FigureRig {
     const upper = this.tilt(B.Spine_03, roll, twist, lean);
     // Neck and head: they keep the eyes up as the spine leans; the dead's lolls, a screamer's goes back.
     // Aiming a gun the head comes down and over to the stock, the eye behind the sights.
-    const sight = this.spec.weapon && !this.melee ? p.aim * live : 0;
+    const sight = this.armed && !this.melee ? p.aim * live : 0;
     const neck = rot(this.neckTurn, Z, shamble * 0.32 * live - sight * 0.12)
       .multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6 + grab * 0.4) * live + sight * 0.16))
       .premultiply(upper)
@@ -640,14 +812,15 @@ export class SyntyFigure implements FigureRig {
 
     // Arms.
     const aim = p.aim;
-    const throwing = Math.abs(p.lean) > 0.04 && live > 0.5 && !dead;
+    // (A blade's stroke leans too: the free arm stays out of it.)
+    const throwing = Math.abs(p.lean) > 0.04 && live > 0.5 && !dead && !this.melee;
     if (clip) {
       // Dying: the clip's own arms, the hand letting go of the weapon (dropWeapon).
     } else if (live < 0.5) {
       // Fallen: arms limp along the body, the weapon lying flat along it in the hand (not pointing at the sky).
       this.hang('L', 0);
       this.hang('R', 0);
-      if (this.spec.weapon) {
+      if (this.armed) {
         const along = v1.set(0.12, -1, 0.15).normalize();
         const flat = v2.copy(Z).addScaledVector(along, -along.z).normalize();
         m1.makeBasis(v3.crossVectors(flat, along), flat, along);
@@ -656,9 +829,9 @@ export class SyntyFigure implements FigureRig {
     } else if (climb > 0.5) {
       // Up a ladder: the free hand goes from rung to rung; the gun hand keeps the gun low, or climbs too.
       this.reach('L', this.rung(1, time + p.phase), v4.set(0.6, -1, -0.3));
-      if (this.spec.weapon) this.holdWeapon(p, lean);
+      if (this.armed) this.holdWeapon(p, lean);
       else this.reach('R', this.rung(-1, time + p.phase), v4.set(-0.6, -1, -0.3));
-    } else if (this.spec.weapon) {
+    } else if (this.armed) {
       this.holdWeapon(p, lean);
       if (throwing) this.throwArm(p.lean);
       else if (search > 0.01) {
@@ -672,7 +845,7 @@ export class SyntyFigure implements FigureRig {
       // Arms out in front, swaying; raised further on a lunge.
       for (let k = 0; k < SIDES.length; k++) {
         const [side, s] = SIDES[k]!;
-        const sway = Math.sin(time * 1.6 + p.phase + s) * 0.05 * live;
+        const sway = Math.sin(time * this.hz(1.6) + p.phase + s) * 0.05 * live;
         v3.set(s * 0.12 * (1 - 0.7 * grab), r.chest - 0.08 + aim * 0.12 + sway + grab * 0.05, r.p[B.Spine_03]!.z + 0.4 + aim * 0.08 + grab * 0.12)
           .sub(r.p[B.Spine_03]!)
           .applyQuaternion(d[B.Spine_03]!)
@@ -702,6 +875,153 @@ export class SyntyFigure implements FigureRig {
     this.write();
     this.poses++;
     if (clip) this.dropWeapon(Math.min(1, p.fall) * clip.seconds);
+  }
+
+  // ------------------------------------------------------------- the crowd
+
+  /** What the crowd knows this figure's body by: the same model, gait style and stance bake alike. */
+  private get crowdKey(): string {
+    return `${this.spec.character}|${this.spec.style ?? ''}|${this.stance}`;
+  }
+
+  /** Which of the crowd's loops the pose is, if it is one (0 shambling along, 1 standing); −1 if the figure has to pose it. */
+  private calmLoop(p: FigurePose): number {
+    const quiet =
+      !this.death && !this.pending && !this.hit && p.fall <= 0 && p.hit < 0.01 && p.flash < 0.01 && p.aim < 0.02 && p.recoil < 0.01 && p.crouch < 0.02 && !p.lean && !p.hop && !(p.swing ?? 0) && !(p.react ?? 0) && !(p.climb ?? 0) && !(p.search ?? 0);
+    if (!quiet) return -1;
+    if (p.run > 0.98 && this.gait.motion === WALK) return 0;
+    // Standing still, and not turning on the spot (that plays a few steps).
+    if (p.run < 0.02 && Math.abs(wrap(p.yaw - this.lastYaw)) < 1e-3) return 1;
+    return -1;
+  }
+
+  /** Into the crowd if calm and its body is baked (starting the bake if not); false to pose the figure as ever. */
+  private crowdPose(p: FigurePose, time: number): boolean {
+    const loop = this.spec.dead && !this.baking && this.anim && this.model && CROWD.enabled ? this.calmLoop(p) : -1;
+    if (loop < 0) {
+      this.leaveCrowd();
+      return false;
+    }
+    const key = this.crowdKey;
+    if (!CROWD.ready(key)) {
+      this.prepareBake(key);
+      return false;
+    }
+    this.member ??= CROWD.join(key);
+    if (!this.member) return false;
+    // Out of the scene, bones and all: nothing of it to draw or update.
+    if (this.body.parent) this.pivot.remove(this.body);
+    this.root.updateWorldMatrix(true, false);
+    m1.copy(this.root.matrixWorld).multiply(m2.makeRotationY(p.yaw));
+    CROWD.set(this.member, m1, loop, this.crowdPhase, loop === 0 ? this.gait.speed : 1, this.root.visible && !this.cutAway);
+    this.clock = time;
+    this.lastYaw = p.yaw;
+    return true;
+  }
+
+  /** Out of the crowd: its own figure again, posed at once. */
+  private leaveCrowd(): void {
+    if (!this.member) return;
+    CROWD.leave(this.member);
+    this.member = null;
+    if (!this.body.parent) this.pivot.add(this.body);
+    this.clock = -Infinity;
+  }
+
+  /** A figure of this body of its own, unseen, to bake the crowd's loops from once it has loaded. */
+  private prepareBake(key: string): void {
+    const fig = bakers.get(key);
+    if (!fig) {
+      bakers.set(key, new SyntyFigure({ ...this.spec, drone: false }));
+      return;
+    }
+    if (!fig.ready || !fig.model) return;
+    bakers.delete(key);
+    CROWD.bake(key, () => fig.baker());
+  }
+
+  /** A frequency kept in step with the loop being baked (whole turns over it); as it is otherwise. */
+  private hz(w: number): number {
+    if (!this.lockTo) return w;
+    return (2 * Math.PI * Math.max(1, Math.round((w * this.lockTo) / (2 * Math.PI)))) / this.lockTo;
+  }
+
+  /**
+   * The crowd's loops of this figure (crowd.ts Baker): its walk at speed 1 and
+   * its stance, each posed frame by frame offline, its mesh skinned on the
+   * CPU and read in its yaw's frame. Null until it has loaded.
+   */
+  private baker(): Baker | null {
+    const a = this.anim;
+    const model = this.model;
+    let mesh: THREE.SkinnedMesh | null = null;
+    model?.traverse((o) => {
+      if (!mesh && o instanceof THREE.SkinnedMesh) mesh = o;
+    });
+    if (!a || !this.rest || !model || !mesh) return null;
+    this.baking = true;
+    const skinned: THREE.SkinnedMesh = mesh;
+    const walk = a.set.clips[WALK]!;
+    const stand = this.stance >= 0 ? a.set.stances[this.stance]! : a.set.clips[0]!;
+    const loops = [
+      { frames: WALK_FRAMES, seconds: walk.duration, run: 1 },
+      { frames: STANCE_FRAMES, seconds: stand.duration, run: 0 },
+    ];
+    const source = skinned.geometry;
+    const position = source.getAttribute('position') as THREE.BufferAttribute;
+    const vertices = position.count;
+    // What is drawn: the mesh's own geometry, its positions and normals read from the crowd's textures.
+    const geometry = new THREE.BufferGeometry();
+    for (const [name, attr] of Object.entries(source.attributes)) if (name !== 'normal' && !name.startsWith('skin')) geometry.setAttribute(name, attr);
+    geometry.setIndex(source.index);
+    // The frame's skinned positions, for its normals.
+    const shape = new THREE.BufferGeometry();
+    shape.setIndex(source.index);
+    const atlas = this.atlas ?? atlasOf(skinned);
+    const pose: FigurePose = { crouch: 0, aim: 0, run: 0, recoil: 0, hit: 0, flash: 0, fall: 0, lean: 0, hop: 0, yaw: 0, phase: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0 };
+    const v = new THREE.Vector3();
+    const toYaw = new THREE.Matrix4();
+    let current = -1;
+    let start = 0;
+    return {
+      vertices,
+      geometry,
+      loops: loops.map(({ frames, seconds }) => ({ frames, seconds })),
+      material: () => {
+        const m = dyedMaterial(atlas);
+        m.userData.dyes.dyeRim.value = ENEMY_RIM;
+        return m;
+      },
+      frame: (k, f, positions, normals) => {
+        const l = loops[k]!;
+        if (k !== current) {
+          current = k;
+          this.setGait('walk', 1);
+          start = this.clock + 1;
+        }
+        pose.run = l.run;
+        this.lockTo = l.seconds;
+        this.seen = true;
+        this.far = false;
+        this.applyPose(pose, start + (f / l.frames) * l.seconds);
+        this.lockTo = 0;
+        this.root.updateMatrixWorld(true);
+        skinned.skeleton.update();
+        toYaw.copy(this.yaw.matrixWorld).invert().multiply(skinned.matrixWorld);
+        for (let i = 0; i < vertices; i++) {
+          v.fromBufferAttribute(position, i);
+          skinned.applyBoneTransform(i, v);
+          v.applyMatrix4(toYaw);
+          positions[i * 3] = v.x;
+          positions[i * 3 + 1] = v.y;
+          positions[i * 3 + 2] = v.z;
+        }
+        shape.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        shape.computeVertexNormals();
+        normals.set((shape.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array);
+      },
+      dispose: () => shape.dispose(),
+    };
   }
 
   react(blow: Blow, strength: number): number | null {
@@ -940,6 +1260,10 @@ export class SyntyFigure implements FigureRig {
     if (this.melee) {
       v1.set(sh.x * 1.1, lerp(r.hip + 0.02, sh.y + 0.08, aim), lerp(sh.z + 0.08, sh.z + 0.18, aim));
       e1.set(lerp(1.15, -0.9, aim) - lean, 0, 0, 'YXZ');
+    } else if (this.pistol) {
+      // Low ready, the muzzle down ahead of the belly; aimed, both arms out and the sights at the eye.
+      v1.set(lerp(sh.x * 0.45, sh.x * 0.15, aim), lerp(sh.y - 0.36, sh.y + 0.02, aim) + reload * 0.1, lerp(sh.z + 0.2, sh.z + 0.32, aim));
+      e1.set((1 - aim) * 0.7 - p.recoil * 0.45 - reload * 0.6, (1 - aim) * 0.2 + reload * 0.2, reload * 0.9, 'YXZ');
     } else {
       // Shouldered, the grip comes up level with the shoulder: the stock in its pocket, the sights at the eye.
       v1.set(lerp(sh.x * 0.35, sh.x * 0.5, aim), lerp(sh.y - 0.27, sh.y - 0.02, aim) + reload * 0.08, lerp(sh.z + 0.22, sh.z + 0.19, aim));
@@ -1182,8 +1506,7 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
   // The barracks' «Personaje» if chosen, else one picked by the soldier's campaign id (the same everywhere).
   const chosen = squad ? SURVIVOR_CHOICES.find((c) => c.id === look?.character)?.id : undefined;
   const character = chosen ?? pick(bodies, seed ?? `${template}|${accent}|${JSON.stringify(look ?? null)}`);
-  const tier = (gear?.weapon ?? 1) as Tier;
-  const weapon = UNIT_WEAPONS[template]?.[tier - 1] ?? null;
+  const arms = armamentOf(template, (gear?.weapon ?? 1) as Tier, gear?.arms);
   let dyes: Spec['dyes'] = null;
   if (squad) {
     // The helmet and the jacket take the armour colours; sleeves and trousers only a colour of their
@@ -1197,7 +1520,7 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
   }
   return new SyntyFigure({
     character,
-    weapon,
+    ...arms,
     hat: squad ? HEAD_GEAR[head] : null,
     dyes,
     band: squad || template === 'vip' ? accent : null,
@@ -1207,6 +1530,45 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
     stance: DEAD_TEMPLATES.has(template) ? 'drunk' : LIVING_ENEMIES.has(template) ? 'aggressive' : undefined,
     drone: template === 'specialist',
   });
+}
+
+/** The model of each of the Armería's weapons (docs/FASE8.md §A), by the soldier's weapon tier (1–3). */
+const FOUND_MODELS: Record<FoundWeaponId, WeaponId | [WeaponId, WeaponId, WeaponId]> = {
+  assaultRifle: ['rifle', 'rifle2', 'rifle3'],
+  pumpShotgun: 'shotgun',
+  precisionRifle: ['sniper', 'sniper2', 'sniper2'],
+  machineGun: 'machineGun',
+  machete: 'machete',
+  huntingRifle: 'boltRifle',
+  sawnOff: 'shotgun',
+  scopedRifle: 'sniper2',
+  lightMachineGun: 'machineGun2',
+};
+
+/** The model of one of the Armería's weapons at a weapon tier (one on the floor: dropped.ts). */
+export function foundModel(kind: FoundWeaponId, tier: Tier = 1): WeaponId {
+  const m = FOUND_MODELS[kind];
+  return typeof m === 'string' ? m : m[tier - 1]!;
+}
+
+/**
+ * What a unit carries as models. A campaign soldier's own (Unit.arms): the
+ * Armería's weapon in the hand, or the pistol without one; the pistol in its
+ * holster beside a main gun; the machete or the knife at the belt. Anyone
+ * else, its template's: its weapon by tier, the Francotirador's pistol beside
+ * it, the Asalto's machete.
+ */
+export function armamentOf(template: TemplateId, tier: Tier, arms?: Arms | null): Armament {
+  const of = (kind: FoundWeaponId) => foundModel(kind, tier);
+  if (arms && SQUAD.has(template)) {
+    return { weapon: arms.primary ? of(arms.primary) : 'pistol', sidearm: arms.primary ? 'pistol' : null, belt: arms.melee ? of(arms.melee) : 'knife' };
+  }
+  const t = TEMPLATES[template];
+  return {
+    weapon: UNIT_WEAPONS[template]?.[tier - 1] ?? null,
+    sidearm: t.secondary === 'pistol' && t.weapon !== 'pistol' ? 'pistol' : null,
+    belt: SQUAD.has(template) && t.meleeWeapon === 'sword' ? 'machete' : null,
+  };
 }
 
 /**

@@ -21,6 +21,8 @@ import {
   attrBlocker,
   attrPointsFree,
   baseAttrs,
+  recruitAttrs,
+  withClass,
   cleanTalents,
   leaningClass,
   learnTalent,
@@ -38,7 +40,7 @@ import {
   type AttrId,
   type Talents,
 } from './classes';
-import { addMods, FOUND_WEAPONS, ITEMS, NIGHT, RANKS, rankForXp, sexOfName, SOLDIER_NAMES, TEMPLATES } from './content';
+import { addMods, BACKPACK_SLOTS, FOUND_WEAPONS, PLAIN_WEAPON, WEAPONS, ITEMS, NIGHT, RANKS, rankForXp, sexOfName, SOLDIER_NAMES, TEMPLATES } from './content';
 import {
   ARMOR_TIERS,
   armorTier,
@@ -47,11 +49,14 @@ import {
   type CraftId,
   foundWeaponOf,
   hasCrafted,
+  LEVEL_ARMS,
+  meleeWeaponOf,
   hasTech,
   itemUnlocked,
   LEVEL_XP,
   levelForXp,
   missionXp,
+  spareMags,
   TECHS,
   type TechId,
   upgradeLevel,
@@ -75,6 +80,8 @@ import {
   NWOSU_CHAPTER,
   ofZone,
   PARTITURA_LEVEL,
+  recoveryItem,
+  recoveryOutdoors,
   SIMON_CHAPTER,
   STORY,
   storyVip,
@@ -85,7 +92,7 @@ import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecis
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
 import { missionPods, podPlan, type MapSource, type SquadMember } from './setup';
-import type { Appearance, Biome, ClassId, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Slot, TemplateId, Vec2 } from './types';
+import type { Appearance, Arms, Biome, ClassId, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Site, Slot, TemplateId, Vec2 } from './types';
 
 // --------------------------------------------------------------- facilities
 
@@ -196,9 +203,9 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   },
   garage: {
     id: 'garage',
-    name: 'Taller de La Mula',
-    description: 'Las misiones duran 1 día menos. La Mula vuelve antes, con el depósito lleno.',
-    upgrades: ['1 día menos por misión, y las heridas curan 1 día antes: la Mula lleva camilla.', '2 días menos por misión y 2 días menos de heridas. La Mula ya no para a repostar.'],
+    name: 'Chapistería',
+    description: 'Las heridas curan 1 día antes, nunca en menos de 1. La Lata lleva camilla.',
+    upgrades: ['Las heridas curan 2 días antes. Mantas y un botiquín fijo atrás.', 'Las heridas curan 3 días antes. La Lata ya no para a repostar con heridos dentro.'],
     cost: 110,
     days: 5,
     level: 3,
@@ -276,7 +283,7 @@ export const BUNKER_BEDS = 8;
 // 1989 bunker in the middle of a square grid of plots. New buildings go next
 // to what is already built and are joined by walkways; some pairs side by
 // side work better (adjacency). Growing means clearing the rock, the forest
-// or the ruins around. La Mula's hangar and airstrip lie outside the grid.
+// or the ruins around. La Lata's garage lies outside the grid.
 
 /** Side of the square grid of plots. */
 export const BASE_SIZE = 7;
@@ -480,7 +487,7 @@ export interface RegionDef {
 }
 
 // The valley of Kessra (docs/FASE5.md): where each zone lies on Arte · Base's map and the
-// roads between them, the same ones La Mula drives. Aldren (Atalaya's zone) is up in the sierra;
+// roads between them, the same ones La Lata drives. Aldren (Atalaya's zone) is up in the sierra;
 // the Marea comes up from Los Llanos de Ceniza in the south.
 export const REGIONS: Record<RegionId, RegionDef> = {
   na: { id: 'na', name: 'Los Llanos de Ceniza', x: -0.6, z: 8.9, roads: ['afr', 'me'], income: 35 },
@@ -496,7 +503,7 @@ export const REGIONS: Record<RegionId, RegionDef> = {
 /** Every road once, as a pair of zones (the map draws them). */
 export const ROADS: [RegionId, RegionId][] = (Object.keys(REGIONS) as RegionId[]).flatMap((a) => REGIONS[a].roads.filter((b) => a < b).map((b): [RegionId, RegionId] => [a, b]));
 
-/** The shortest way by road from `a` to `b`, both included ([a] when they are the same); La Mula drives it. Ties go by the order of each zone's roads. */
+/** The shortest way by road from `a` to `b`, both included ([a] when they are the same); La Lata drives it. Ties go by the order of each zone's roads. */
 export function roadRoute(a: RegionId, b: RegionId): RegionId[] {
   const prev = new Map<RegionId, RegionId | null>([[a, null]]);
   const queue: RegionId[] = [a];
@@ -775,7 +782,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
   finale: {
     id: 'finale',
     title: 'La vacuna',
-    text: 'La Marea se aleja detrás de la sirena de La Mula y el campamento de la Congregación ha caído. Nwosu tiene en la mano las primeras dosis de la vacuna, y no hay para todos. Hay que decidir ahora, con las dos llaves.',
+    text: 'La Marea se aleja detrás de la sirena de La Lata y el campamento de la Congregación ha caído. Nwosu tiene en la mano las primeras dosis de la vacuna, y no hay para todos. Hay que decidir ahora.',
     story: true,
     options: [
       {
@@ -785,7 +792,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
       },
       {
         label: 'Para la Red',
-        effect: 'La Mula reparte las dosis enclave por enclave, solo a quienes estuvieron. La fórmula se queda en Atalaya, bajo dos llaves.',
+        effect: 'La Lata reparte las dosis enclave por enclave, solo a quienes estuvieron. La fórmula se queda en Atalaya, bajo llave.',
         apply: (c) => ((c.ending = 'record'), (c.outcome = 'victory')),
       },
     ],
@@ -825,30 +832,9 @@ export function soldierCap(c: Pick<CampaignState, 'players'>): number {
 }
 export const DOOM_MAX = 12;
 const DOOM_INTERVAL = 12;
-/**
- * Days a mission takes: the flight there and back, and recovering. They pass
- * like any other (wounds, works, the enemy clock), so missions are not free in
- * time (balance simulation, 2026-10-11: chaining them won the campaign in
- * under a month and left the base unbuilt).
- */
-/** Days of a mission in Aldren; every road stretch further away adds one (offerDays). */
-const MISSION_DAYS = 2;
-
-/**
- * Days an operation keeps the squad away (docs/FASE5.md): La Mula's trip to its
- * zone and back, 2 and one more for each road stretch from Aldren, less what
- * the Taller de La Mula cuts; one at least.
- */
-export function offerDays(c: CampaignState, offer: Pick<MissionOffer, 'region'>): number {
-  return Math.max(1, MISSION_DAYS + roadHops(HOME_REGION, offer.region) - garageCut(c).days);
-}
-
-/** Days a mission keeps the squad away: that offer's (offerDays), or without one, the nearest zone's and the farthest's. */
-export function missionDays(c: CampaignState, offer?: Pick<MissionOffer, 'region'>): [number, number] {
-  if (offer) return [offerDays(c, offer), offerDays(c, offer)];
-  const all = (Object.keys(REGIONS) as RegionId[]).map((region) => offerDays(c, { region }));
-  return [Math.min(...all), Math.max(...all)];
-}
+// A mission takes no days (playtest 2026-10-14, docs/PRUEBA-2026-10-14.md P7):
+// time passes waiting for news, not flying out. Before, La Lata's trip took
+// 2 days and one more a road stretch (docs/FASE5.md).
 /** Least days between one story chapter won and the next one opening. */
 const STORY_GAP = 8;
 const FACILITY_DOOM_INTERVAL = 14;
@@ -877,6 +863,8 @@ export interface CampaignSoldier {
   missions: number;
   /** Aptitudes (classes.ts): the class's base plus the points spent. */
   attrs: Attributes;
+  /** The aptitudes it came with, before any class or point spent (classes.ts recruitAttrs): what retraining goes back to. Older saves: the plain recruit's. */
+  born?: Attributes;
   /** Talent levels. Free points are never stored: they're what the rank gives minus what's spent. */
   talents: Talents;
   woundedDays: number;
@@ -956,7 +944,8 @@ export interface ReportSoldier {
   name: string;
   owner: Slot;
   cls: ClassId | null;
-  status: 'ok' | 'wounded' | 'dead';
+  /** `lost`: left behind when the bus went (docs/PRUEBA-2026-10-14.md P1). */
+  status: 'ok' | 'wounded' | 'dead' | 'lost';
   woundedDays: number;
   kills: number;
   xpGained: number;
@@ -1043,7 +1032,7 @@ export interface Rumor {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 15;
+export const CAMPAIGN_VERSION = 16;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1183,6 +1172,8 @@ function soldierName(c: CampaignState, rng: Rng): { name: string; sex: 'f' | 'm'
 /** A new soldier: a veteran of a class, or a recruit (`cls` null) who specialises with the Rosa. */
 function addSoldier(c: CampaignState, owner: Slot, cls: ClassId | null, rng: Rng): CampaignSoldier {
   const { name, sex } = soldierName(c, rng);
+  // Each recruit a little different (docs/PRUEBA-2026-10-14.md #10).
+  const born = recruitAttrs(rng);
   const s: CampaignSoldier = {
     id: newId(c, 'c'),
     name,
@@ -1192,7 +1183,8 @@ function addSoldier(c: CampaignState, owner: Slot, cls: ClassId | null, rng: Rng
     rank: 0,
     kills: 0,
     missions: 0,
-    attrs: baseAttrs(cls),
+    attrs: withClass(born, cls),
+    born,
     talents: {},
     woundedDays: 0,
     alive: true,
@@ -1272,10 +1264,13 @@ export function rangeAim(c: CampaignState): number {
   return level ? [3, 6, 10][level - 1]! + (hasAdjacency(c, 'range') ? 2 : 0) : 0;
 }
 
-/** Days a mission takes off the flight (La Mula's workshop) and off each wound. */
-export function garageCut(c: CampaignState): { days: number; wounds: number } {
-  const level = facilityLevel(c, 'garage');
-  return { days: level >= 3 ? 2 : level ? 1 : 0, wounds: level >= 3 ? 2 : level === 2 ? 1 : 0 };
+/**
+ * Days La Lata's workshop (the Chapistería) takes off each wound (its stretcher): one a level.
+ * Missions take no days any more (docs/PRUEBA-2026-10-14.md P7), so that is
+ * what it does from level 1; it also gives a backpack slot (docs/FASE8.md).
+ */
+export function garageCut(c: CampaignState): { wounds: number } {
+  return { wounds: facilityLevel(c, 'garage') };
 }
 
 /** Extra days between the enemy clock's steps: 2 per level of the listening post, 2 more next to the relay. */
@@ -1404,13 +1399,15 @@ function workshopPlot(c: CampaignState): BasePlot | undefined {
 /** Why the Taller can't start making `id` now, or null (docs/FASE4.md). */
 export function craftBlocker(c: CampaignState, id: CraftId): string | null {
   const def = CRAFTS[id];
-  if (hasCrafted(c, id)) return 'Ya está hecho.';
+  // A weapon for the Armería is made again and again (docs/FASE8.md §A).
+  if (def.kind !== 'arms' && hasCrafted(c, id)) return 'Ya está hecho.';
   if (c.base.works.some((w) => w.project === id)) return 'Ya se está haciendo.';
   const plot = workshopPlot(c);
   if (!plot) return 'Hace falta el Taller.';
   if ((plot.level ?? 1) < def.workshop) return `Hace falta el Taller a nivel ${def.workshop}.`;
-  if (!hasTech(c, def.tech)) return `Hace falta el nivel ${TECHS[def.tech].level} del Bastión.`;
-  if (def.after && !hasCrafted(c, def.after)) return `Antes hay que hacer las ${CRAFTS[def.after].name.toLowerCase()}.`;
+  if (def.tech && !hasTech(c, def.tech)) return `Hace falta el nivel ${TECHS[def.tech].level} del Bastión.`;
+  if (def.level && bastionLevel(c) < def.level) return `Hace falta el nivel ${def.level} del Bastión.`;
+  if (def.after && !hasCrafted(c, def.after)) return `Antes hay que hacer ${CRAFTS[def.after].the}.`;
   const busy = worksBlocker(c, plot);
   if (busy) return busy;
   if (!canAfford(c, def.cost)) return 'No hay suministros suficientes.';
@@ -1418,15 +1415,25 @@ export function craftBlocker(c: CampaignState, id: CraftId): string | null {
   return null;
 }
 
-/** What a soldier's card reads for the weapon: a found one by its name, otherwise the class weapon of its tier. */
+/** What a soldier's card reads for the weapon in hand: a good one by its name, a plain one by its tier's; without, the pistol. */
 export function weaponLabel(c: CampaignState, s: CampaignSoldier): string {
   const found = foundWeaponOf(c, s);
-  return found ? FOUND_WEAPONS[found.kind].name : weaponName(TEMPLATES[soldierTemplate(s.cls)].weapon, weaponTier(c, s));
+  if (!found) return WEAPONS.pistol.name;
+  const def = FOUND_WEAPONS[found.kind];
+  const tier = weaponTier(c, s);
+  return def.better || tier === 1 ? def.name : weaponName(def.weapon, tier);
 }
 
-/** Whether a soldier can take a found weapon: only one who carries that kind of weapon. */
-export function fitsWeapon(s: CampaignSoldier, kind: FoundWeaponId): boolean {
-  return TEMPLATES[soldierTemplate(s.cls)].weapon === FOUND_WEAPONS[kind].weapon;
+/** What a soldier carries from the Armería (docs/FASE8.md §A): the weapon in hand, if any, and the machete or the knife. */
+export function soldierArms(c: CampaignState, s: Pick<CampaignSoldier, 'id'>): Arms {
+  const primary = foundWeaponOf(c, s);
+  const melee = meleeWeaponOf(c, s);
+  return {
+    primary: primary?.kind ?? null,
+    ...(primary ? { primaryId: primary.id } : {}),
+    melee: melee?.kind ?? null,
+    ...(melee ? { meleeId: melee.id } : {}),
+  };
 }
 
 /** A bitten soldier whose days ran out turns: one more of the Caídos (docs/FASE3.md). Gear stays in the base. */
@@ -1526,17 +1533,20 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   if (!final && (kind === 'rescue' || rng.int(5) === 0)) reward.recruit = rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const);
   if (!final && (kind === 'sabotage' || (kind === 'hack' && rng.int(3) === 0))) reward.doom = 1;
   const seed = rng.int(2 ** 31);
+  // The scenarios (playtest 2026-10-14, #25), by the map's seed: half the countryside is a service area on the
+  // forest road, a third of the towns an industrial estate.
+  const site: Site | undefined = final ? undefined : biome === 'wilds' && seed % 2 === 0 ? 'roadside' : biome === 'city' && seed % 3 === 0 ? 'industrial' : undefined;
   // An ordinary rescue is someone the Cuervos hold, and the last mission is the Congregación's camp (docs/ZOMBIS-PRIMERO.md); every other operation is the dead's.
   const living = final || kind === 'rescue';
   return byNight(withProvisions(withMedicines({
     id: newId(c, 'm'),
     // An ordinary operation is named for where it goes (Lore): «El colegio de Corran».
-    name: final ? 'El campamento de la sierra' : missionName(biome, REGIONS[region].name, seed),
+    name: final ? 'El campamento de la sierra' : missionName(biome, REGIONS[region].name, seed, site),
     kind,
     difficulty,
     expiresDay: final ? null : c.day + 6 + rng.int(4),
     reward,
-    map: { kind: 'generated', biome, seed },
+    map: { kind: 'generated', biome, seed, ...(site ? { site } : {}) },
     pods: regionPods(c, region, difficulty, kind, living),
     final,
     region,
@@ -1647,7 +1657,7 @@ function refreshStory(c: CampaignState, rng: Rng): void {
   }
   if (c.story.done >= STORY.length && hasTech(c, 'signal') && !c.offers.some((o) => o.final)) {
     c.offers.push(makeOffer(c, rng, true));
-    log(c, '¡La Mula está lista! La misión final está disponible.', 'good');
+    log(c, '¡La Lata está lista! La misión final está disponible.', 'good');
   }
 }
 
@@ -1661,6 +1671,8 @@ function refreshNarrative(c: CampaignState, rng: Rng): void {
 export interface MissionInfo {
   kicker?: string;
   item?: string;
+  /** Its story puts the item out in the open (playtest 2026-10-14, #27). */
+  itemOutdoors?: boolean;
   vipName?: string;
   leader?: { template: TemplateId; name: string };
 }
@@ -1671,10 +1683,15 @@ export function missionInfo(c: CampaignState, offer: MissionOffer): MissionInfo 
   }
   const q = questOf(c, offer);
   const step = q && QUESTS[q.id].steps[q.step];
-  if (!q || step?.type !== 'mission') return {};
+  // An ordinary Botín carries out what its report speaks of (docs/PRUEBA-2026-10-14.md #2).
+  if (!q || step?.type !== 'mission') {
+    const item = recoveryItem(offer);
+    return item ? { item, ...(recoveryOutdoors(offer) ? { itemOutdoors: true } : {}) } : {};
+  }
   return {
     kicker: `ENCARGO · ${QUESTS[q.id].title.toUpperCase()}`,
     item: step.item && fill(step.item, q.names),
+    ...(step.outdoors ? { itemOutdoors: true } : {}),
     vipName: step.vip && fill(step.vip, q.names),
     leader: step.leader,
   };
@@ -2334,7 +2351,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   else if (days < 3) steps.push({ view: 'facilities', label: `Quedan raciones para ${days} ${days === 1 ? 'día' : 'días'}`, tone: 'info' });
   // The Taller has something within reach to make.
   const craft = (Object.keys(CRAFTS) as CraftId[]).find((id) => !craftBlocker(c, id));
-  if (craft) steps.push({ view: 'engineering', label: `El Taller puede hacer ${CRAFTS[craft].name.toLowerCase()}`, tone: 'info' });
+  if (craft) steps.push({ view: 'engineering', label: `El Taller puede hacer ${CRAFTS[craft].the}`, tone: 'info' });
 
   // The bitten (docs/FASE3.md): the partner's treatment to confirm, and every fever with its deadline.
   const treating = c.treatment && c.soldiers.find((s) => s.id === c.treatment!.soldier);
@@ -2541,7 +2558,7 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       pay(c, def.cost);
       c.parts = (c.parts ?? 0) - def.parts;
       c.base.works.push({ plot: plot.id, kind: 'craft', facility: 'workshop', daysLeft: days, total: days, project: def.id });
-      log(c, `El Taller se pone con las ${def.name.toLowerCase()}: ${days} días.`);
+      log(c, `El Taller se pone con ${def.the}: ${days} días.`);
       break;
     }
   }
@@ -2635,7 +2652,8 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       return propose(c, { type: 'craft', project: cmd.project }, ctx);
 
     case 'assignWeapon': {
-      // Personal, like equipping: each commander arms their own soldiers from the Armería.
+      // Personal, like equipping: each commander arms their own soldiers from the Armería. Anyone takes any
+      // weapon (docs/FASE8.md §A): one in the hand, one at the belt.
       const w = (c.foundWeapons ?? []).find((x) => x.id === cmd.weapon);
       if (!w) return { ok: false, error: 'Esa arma no está en la Armería.' };
       const holder = w.holder ? c.soldiers.find((s) => s.id === w.holder) : undefined;
@@ -2646,8 +2664,8 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       }
       const s = c.soldiers.find((x) => x.id === cmd.soldier && x.alive);
       if (!s || s.owner !== slot) return { ok: false, error: 'Solo puedes armar a tus soldados.' };
-      if (!fitsWeapon(s, w.kind)) return { ok: false, error: `Es para quien lleva ${weaponName(FOUND_WEAPONS[w.kind].weapon).toLowerCase()}.` };
-      for (const other of c.foundWeapons ?? []) if (other.holder === s.id) other.holder = null;
+      const hand = FOUND_WEAPONS[w.kind].slot;
+      for (const other of c.foundWeapons ?? []) if (other.holder === s.id && FOUND_WEAPONS[other.kind].slot === hand) other.holder = null;
       w.holder = s.id;
       return { ok: true };
     }
@@ -2816,7 +2834,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       pay(c, cost);
       // Back to the centre of the rosa: a recruit with every point of the rank to spend.
       s.cls = null;
-      s.attrs = baseAttrs(null);
+      s.attrs = { ...(s.born ?? baseAttrs(null)) };
       s.talents = {};
       log(c, `${s.name} vuelve a la instrucción: sin clase, con aptitudes y talentos por repartir.`);
       return { ok: true };
@@ -2885,8 +2903,15 @@ function passDay(c: CampaignState, rng: Rng): boolean {
       c.credits += salvage;
       log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} § en materiales.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
     } else if (work.kind === 'craft') {
-      (c.crafted ??= []).push(work.project!);
-      log(c, `El Taller ha terminado: ${CRAFTS[work.project!].name.toLowerCase()} para todos (cada uno, hasta lo que permita su rango).`, 'good');
+      const def = CRAFTS[work.project!];
+      if (def.makes) {
+        (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind: def.makes, holder: null });
+        log(c, `El Taller ha terminado ${def.the}. Ya está en la Armería.`, 'good');
+      } else {
+        (c.crafted ??= []).push(def.id);
+        if (def.kind === 'ammo') log(c, `El Taller ha terminado ${def.the}: un cargador de repuesto más para cada soldado que salga.`, 'good');
+        else log(c, `El Taller ha terminado: ${def.name.toLowerCase()} para todos (cada uno, hasta lo que permita su rango).`, 'good');
+      }
     } else if (work.kind === 'upgrade') {
       plot.level = (plot.level ?? 1) + 1;
       log(c, `${FACILITIES[work.facility!].name}, nivel ${plot.level}: ${FACILITIES[work.facility!].upgrades[plot.level - 2]!.split('.')[0]}.`, 'good');
@@ -3056,7 +3081,8 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 /** Everything a soldier brings to a mission: rank, perks, accessories, and the weapon and armour tier they've earned. */
 export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
   const gear = [s.loadout.utility, s.loadout.ammo].filter((g): g is ItemId => !!g);
-  const base = soldierStats(s, gear);
+  const arms = soldierArms(c, s);
+  const base = soldierStats(s, gear, arms);
   let mods = base.mods;
   let maxHp = base.maxHp;
   let armor = base.armor;
@@ -3092,8 +3118,17 @@ export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
     will: base.will + traits.reduce((sum, t) => sum + t.will, 0) + memorialWill(c) - (c.hungry ? HUNGRY_WILL : 0),
     armor,
     gear,
-    ...(foundWeaponOf(c, s) ? { weaponName: weaponLabel(c, s) } : {}),
+    weaponName: weaponLabel(c, s),
+    arms,
+    mags: spareMags(c),
+    // The Chapistería: one more backpack slot (docs/FASE8.md §C).
+    ...(facilityLevel(c, 'garage') ? { packSlots: BACKPACK_SLOTS + 1 } : {}),
   };
+}
+
+/** Medicines also stop a bite's contagion in the missions (docs/FASE8.md §C): the Enfermería from level 2. */
+export function medicineCures(c: CampaignState): boolean {
+  return facilityLevel(c, 'infirmary') >= 2;
 }
 
 export function activeOffer(c: CampaignState): MissionOffer | undefined {
@@ -3112,6 +3147,11 @@ export function campaignHackBonus(c: CampaignState): number {
   return hasTech(c, 'encryption') ? 20 : 0;
 }
 
+/** «a, b y c». */
+function listOf(parts: string[]): string {
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : (parts[0] ?? '');
+}
+
 /**
  * Adds Bastion experience and announces every level reached. New levels can
  * open the next story chapter and, at the top, the final mission.
@@ -3120,7 +3160,13 @@ export function gainXp(c: CampaignState, amount: number, rng: Rng): void {
   const before = bastionLevel(c);
   c.xp += amount;
   const after = bastionLevel(c);
-  for (let level = before + 1; level <= after; level++) log(c, `El Bastión sube al nivel ${level}.`, 'good');
+  for (let level = before + 1; level <= after; level++) {
+    log(c, `El Bastión sube al nivel ${level}.`, 'good');
+    // Weapons the level brings to the Armería (docs/FASE8.md §A).
+    const arms = LEVEL_ARMS[level] ?? [];
+    for (const kind of arms) (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind, holder: null });
+    if (arms.length) log(c, `A la Armería ${arms.length === 1 ? 'llega' : 'llegan'} ${listOf(arms.map((k) => FOUND_WEAPONS[k].find))}.`, 'good');
+  }
   refreshNarrative(c, rng);
 }
 
@@ -3152,9 +3198,13 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   };
 
   // Abandoning counts as a retreat: whoever is still standing comes home.
-  const fell = (u: GameState['units'][number]) => !u.alive && !u.evacuated && u.hp <= 0;
+  // Down, or left behind when the bus went (docs/PRUEBA-2026-10-14.md P1): either way, gone.
+  const fell = (u: GameState['units'][number]) => (!u.alive && !u.evacuated && u.hp <= 0) || !!u.lost;
   // The Camposanto at level 3: whoever comes back from a mission with losses learns from it.
   const mourning = facilityLevel(c, 'memorial') >= 3 && mission.units.some((u) => u.campaignId && fell(u)) ? 1 : 0;
+  // Weapons that changed hands in the mission (docs/FASE8.md §C): what a soldier comes home holding is theirs;
+  // their own, swapped for a find, comes back only in a backpack. Armería id → whose it was.
+  const swapped = new Map<string, string>();
   for (const u of mission.units) {
     const s = u.campaignId ? c.soldiers.find((x) => x.id === u.campaignId) : undefined;
     if (!s) continue;
@@ -3176,17 +3226,29 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     if (died) {
       s.alive = false;
       s.fellDay = report.day;
-      entry.status = 'dead';
-      if (facilityCount(c, 'memorial')) log(c, `${s.name} descansa en el Camposanto.`);
-      // Equipment is lost with its bearer, a found weapon too.
+      entry.status = u.lost ? 'lost' : 'dead';
+      if (u.lost) log(c, `${s.name} se quedó fuera cuando salió La Lata.`, 'bad');
+      else if (facilityCount(c, 'memorial')) log(c, `${s.name} descansa en el Camposanto.`);
+      // Equipment is lost with its bearer, the Armería's weapons too.
       for (const item of [s.loadout.utility, s.loadout.ammo]) if (item) c.inventory[item] = Math.max(0, (c.inventory[item] ?? 0) - 1);
       s.loadout = { utility: null, ammo: null };
-      const carried = foundWeaponOf(c, s);
-      if (carried) {
+      for (const carried of (c.foundWeapons ?? []).filter((w) => w.holder === s.id)) {
         c.foundWeapons = c.foundWeapons!.filter((w) => w !== carried);
         log(c, `Con ${s.name} se pierde su ${FOUND_WEAPONS[carried.kind].name.toLowerCase()}.`, 'bad');
       }
       continue;
+    }
+    if (u.arms) {
+      for (const hand of ['primary', 'melee'] as const) {
+        const kind = hand === 'primary' ? u.arms.primary : u.arms.melee;
+        const id = hand === 'primary' ? u.arms.primaryId : u.arms.meleeId;
+        const before = hand === 'primary' ? foundWeaponOf(c, s) : meleeWeaponOf(c, s);
+        if (before && before.id !== id) {
+          before.holder = null;
+          swapped.set(before.id, s.name);
+        }
+        if (kind && !id) (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind, holder: s.id });
+      }
     }
     const lost = u.maxHp - u.hp;
     if (lost > 0) {
@@ -3205,9 +3267,6 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
         specializeSoldier(s, leaningClass(s));
         entry.specializedAs = s.cls!;
         log(c, SPECIALIZE_TEXT[s.cls!].replace('{name}', s.name), 'good');
-        // A found weapon of another kind than the class's goes back to the rack.
-        const carried = foundWeaponOf(c, s);
-        if (carried && !fitsWeapon(s, carried.kind)) carried.holder = null;
       }
     }
   }
@@ -3220,9 +3279,18 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   c.medicines = (c.medicines ?? 0) + haul.medicines;
   addFood(c, haul.food);
   c.parts = (c.parts ?? 0) + haul.parts;
-  // Found weapons go to the Armería, for a soldier to take.
+  // Found weapons go to the Armería, for a soldier to take; a soldier's own, swapped for a find, goes back to the rack.
   for (const kind of haul.weapons) (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind, holder: null });
+  for (const back of haul.returned ?? []) {
+    swapped.delete(back.id);
+    if (!c.foundWeapons?.some((w) => w.id === back.id)) (c.foundWeapons ??= []).push({ id: back.id, kind: back.kind, holder: null });
+  }
   if (report.loot.line) log(c, report.loot.line, 'good');
+  for (const [id, name] of swapped) {
+    const left = c.foundWeapons!.find((w) => w.id === id)!;
+    c.foundWeapons = c.foundWeapons!.filter((w) => w !== left);
+    log(c, `${name} vuelve sin su ${FOUND_WEAPONS[left.kind].name.toLowerCase()}: se quedó en la misión.`, 'bad');
+  }
 
   // Holding the field means the bodies come home, and the black market pays for them (not from a Saqueo: you leave by the evac).
   if (victory && mission.mission.kind !== 'scavenge') {
@@ -3274,7 +3342,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     // The campaign ends when both keys decide who gets the vaccine.
     if (offer.final) {
       c.event = 'finale';
-      log(c, 'La sirena de La Mula se lleva a la Marea.', 'good');
+      log(c, 'La sirena de La Lata se lleva a la Marea.', 'good');
     }
   } else {
     c.doom++;
@@ -3305,9 +3373,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   c.launchReady = [false, false];
   c.lastReport = report;
   maybeFaces(c, report, rng);
-  // The flight back and the recovery. Not after the final mission: the campaign is being decided.
-  if (!offer?.final) passDays(c, offer ? offerDays(c, offer) : Math.max(1, MISSION_DAYS - garageCut(c).days), rng);
-  else c.day++;
+  // No days pass on a mission (docs/PRUEBA-2026-10-14.md P7): the clock moves while waiting for news.
   // The bitten come home with a fever: their days count from their arrival (docs/FASE3.md).
   report.infected = [];
   for (const u of mission.units) {
@@ -3460,12 +3526,25 @@ export function migrateCampaign(old: CampaignState): CampaignState {
   loose.nextFoodDay ??= c.day + LA_VEGA_FOOD_DAYS;
   loose.parts ??= 0;
   loose.foundWeapons ??= [];
-  loose.crafted ??= (Object.keys(CRAFTS) as CraftId[]).filter((id) => hasTech(c, CRAFTS[id].tech));
+  loose.crafted ??= (Object.keys(CRAFTS) as CraftId[]).filter((id) => CRAFTS[id].tier && hasTech(c, CRAFTS[id].tech!));
   // Version 14: the valley (docs/FASE5.md). Contacts off the roads stay; the Marea is where the
   // activity puts it, without alerts for what had already fallen.
   if (!loose.flooded) {
     c.flooded = floodedZones(c);
     for (const o of c.offers) tide(c, o);
+  }
+  // Version 16: the weapons from zero (docs/FASE8.md §A). Every soldier keeps its class's weapon, now its own
+  // from the Armería, and the Asalto its machete; the three spare magazines they had are the Taller's munition.
+  if ((old.version ?? 0) < 16) {
+    for (const s of c.soldiers) {
+      if (!s.alive) continue;
+      const t = TEMPLATES[soldierTemplate(s.cls)];
+      const primary = PLAIN_WEAPON[t.weapon];
+      if (primary && !foundWeaponOf(c, s)) c.foundWeapons!.push({ id: newId(c, 'w'), kind: primary, holder: s.id });
+      const melee = t.meleeWeapon && PLAIN_WEAPON[t.meleeWeapon];
+      if (melee) c.foundWeapons!.push({ id: newId(c, 'w'), kind: melee, holder: s.id });
+    }
+    for (const id of ['ammo1', 'ammo2', 'ammo3'] as const) if (!hasCrafted(c, id)) c.crafted!.push(id);
   }
   c.launchReady = [false, false];
   return c;

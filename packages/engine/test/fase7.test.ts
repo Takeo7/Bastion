@@ -9,6 +9,7 @@ import { executeCommand } from '../src/rules';
 import { normalizeMission } from '../src/setup';
 import type { GameState, Slot } from '../src/types';
 import { decorOf } from '../src/decor';
+import { lineClear, MAX_WINDOWS_SEEN_THROUGH, teamVisibility } from '../src/los';
 import { kindAt, slabAt } from '../src/grid';
 import { COST_DROP, COST_ORTHO, stepBetween } from '../src/path';
 import { addUnit, stateFrom, withLevels } from './helpers';
@@ -207,5 +208,34 @@ describe('floors that break', () => {
     expect(breaksFloor(s, 'grenade', at(3, 3))).toBe(false);
     expect(breaksFloor(s, 'smoke', at(3, 3, 1))).toBe(false);
     expect(breaksFloor(s, 'flashbang', at(3, 3, 1))).toBe(false);
+  });
+});
+
+describe('sight through windows (docs/PRUEBA-2026-10-14.md)', () => {
+  const at = (x: number, y: number, z = 0) => ({ x, y, z });
+
+  it('a line of sight goes through two windows at most, both ways, and the fog agrees', () => {
+    // Three walls with a window each, one after another along the row.
+    const s = stateFrom(['.........', '.#.#.#...', '.=.=.=...', '.#.#.#...', '.........']);
+    expect(lineClear(s, at(0, 2), at(2, 2))).toBe(true);
+    expect(lineClear(s, at(0, 2), at(4, 2))).toBe(true);
+    expect(lineClear(s, at(0, 2), at(6, 2))).toBe(false);
+    expect(lineClear(s, at(6, 2), at(0, 2))).toBe(false);
+    expect(MAX_WINDOWS_SEEN_THROUGH).toBe(2);
+  });
+
+  it('upstairs too, counting the windows of the floor the line crosses', () => {
+    const ground = ['.........', '.........', '.........', '.........', '.........'];
+    const s = withLevels(stateFrom(ground), [['         ', ' # # #   ', ' = = =   ', ' # # #   ', '         '].map((r) => r.replace(/ /g, '.'))]);
+    expect(lineClear(s, at(0, 2, 1), at(4, 2, 1))).toBe(true);
+    expect(lineClear(s, at(0, 2, 1), at(6, 2, 1))).toBe(false);
+    // The same line on the ground floor, under them, crosses no window.
+    expect(lineClear(s, at(0, 2), at(6, 2))).toBe(true);
+    const eye = addUnit(s, 's1', 'assault', 0, 2, { z: 1 });
+    const fog = teamVisibility(s, 'xcom');
+    const node = (p: { x: number; y: number; z: number }) => p.z * s.width * s.height + p.y * s.width + p.x;
+    expect(fog[node(at(4, 2, 1))]).toBe(true);
+    expect(fog[node(at(6, 2, 1))]).toBe(false);
+    expect(eye.pos.z).toBe(1);
   });
 });

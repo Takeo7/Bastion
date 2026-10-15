@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { canStandOn, createMission, DIRS4, levelCount, Rng, teamVisibility, type Biome, type GameState, type Vec2 } from '@bastion/engine';
+import { canStandOn, createMission, DIRS4, levelCount, Rng, teamVisibility, type Biome, type GameState, type MissionKind, type Site, type Vec2 } from '@bastion/engine';
 import type { Focus } from '../game/buildings';
 import { setGraphics, type EffectsLevel } from '../settings';
 import { CameraRig } from '../game/camera';
+import { CROWD } from '../game/crowd';
 import { setTerrain } from '../game/coords';
 import { MapView } from '../game/mapView';
 import { Renderer } from '../game/renderer';
@@ -20,7 +21,8 @@ import '../styles.css';
 // `__ref.bench(300)` draws 300 frames back to back, uncapped, and reports the
 // JS cost and the throughput (frames finished per second). Keys: 1/2/3 alto,
 // medio, bajo; N day/night; U units; C capture camera / play camera; P snapshot.
-// URL: ?biome=city&seed=7&night&fog (fog: the squad's own sight instead of
+// URL: ?biome=city&seed=7&kind=recovery&night&fog&site=roadside (kind: the mission, a Limpieza by default; site: a
+// scenario of the biome, roadside in the wilds, industrial in town; fog: the squad's own sight instead of
 // everything; `__ref.peek()` then stands a soldier outside a window);
 // ?map=torre draws a hand-made map instead. `__ref.focus` is what the
 // cutaway follows (the selected soldier, the cursor, the active storey).
@@ -28,6 +30,7 @@ import '../styles.css';
 const params = new URLSearchParams(location.search);
 const biome = (params.get('biome') ?? 'city') as Biome;
 const seed = Number(params.get('seed') ?? 7);
+const site = (params.get('site') ?? undefined) as Site | undefined;
 
 const container = document.getElementById('ref')!;
 const report = document.getElementById('ref-report')!;
@@ -38,7 +41,7 @@ gl.info.autoReset = false;
 const handmade = params.get('map');
 const state: GameState = handmade
   ? createMission({ map: { kind: 'handmade', id: handmade }, slots: [0], rng: new Rng(seed), difficulty: 3 })
-  : createMission({ map: { kind: 'generated', biome, seed }, slots: [0], rng: new Rng(seed), kind: 'elimination', difficulty: 3 });
+  : createMission({ map: { kind: 'generated', biome, seed, site }, slots: [0], rng: new Rng(seed), kind: (params.get('kind') as MissionKind) ?? 'elimination', difficulty: 3 });
 setTerrain(state);
 const mapView = new MapView();
 const units = new UnitViews();
@@ -334,4 +337,4 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyP') void snap(`ref_${biome}_${night ? 'night' : 'day'}_${preset}`);
 });
 
-Object.assign(window, { __ref: { renderer, mapView, units, rig, state, bench, counts, snap, setPreset, setNight, setView, sceneCounts, show, peek, focus } });
+Object.assign(window, { __ref: { renderer, mapView, units, rig, state, bench, counts, snap, setPreset, setNight, setView, sceneCounts, show, peek, focus, crowd: CROWD } });

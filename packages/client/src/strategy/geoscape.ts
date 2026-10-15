@@ -100,6 +100,18 @@ const CITIES: { id: RegionId; dx: number; dz: number; cols: number; rows: number
   { id: 'me', dx: 0.35, dz: -0.15, cols: 6, rows: 5, cell: 0.62 },
 ];
 
+/** The towns: where each stands, its houses, which way its lane runs, its seed, whether it lies under the snow and what you know it by. */
+const TOWNS: { x: number; z: number; n: number; axis: number; seed: number; snow: boolean; landmark: 'church' | 'tower' }[] = [
+  // Aldren's villages under Atalaya, in the snow.
+  { x: ZONES.weu.x - 1.3, z: ZONES.weu.z + 0.55, n: 10, axis: 0.25, seed: 11, snow: true, landmark: 'church' },
+  { x: ZONES.weu.x + 1.4, z: ZONES.weu.z + 1.0, n: 6, axis: -0.4, seed: 13, snow: true, landmark: 'tower' },
+  // Volkren: villages in the closed valleys.
+  { x: ZONES.eeu.x - 0.9, z: ZONES.eeu.z + 0.6, n: 9, axis: 0.5, seed: 23, snow: false, landmark: 'church' },
+  { x: ZONES.eeu.x + 3.1, z: ZONES.eeu.z - 0.9, n: 6, axis: -0.3, seed: 29, snow: false, landmark: 'tower' },
+  // Carvik: the miners' row.
+  { x: ZONES.sa.x + 0.9, z: ZONES.sa.z + 1.3, n: 6, axis: 1.2, seed: 31, snow: false, landmark: 'tower' },
+];
+
 /** Whether (x, z) lies in a city (with `margin` round it). */
 function inCity(x: number, z: number, margin = 0): boolean {
   return CITIES.some((c) => Math.abs(x - ZONES[c.id].x - c.dx) < (c.cols * c.cell) / 2 + margin && Math.abs(z - ZONES[c.id].z - c.dz) < (c.rows * c.cell) / 2 + margin);
@@ -566,15 +578,20 @@ const MAREA = {
   mareaOrigin: { value: new THREE.Vector2() },
 };
 
-function mareaField(): THREE.Texture {
-  if (MAREA.mareaField.value) return MAREA.mareaField.value;
-  const roads = ROADS.map(([a, b]) => {
+/** The roads as mareaReach follows them: their points and how far along each one lies. */
+function mareaRoads(): Parameters<typeof mareaReach>[2] {
+  return ROADS.map(([a, b]) => {
     const curve = new THREE.QuadraticBezierCurve(new THREE.Vector2(ZONES[a].x, ZONES[a].z), new THREE.Vector2(...bendOf(a, b)), new THREE.Vector2(ZONES[b].x, ZONES[b].z));
     const points = curve.getSpacedPoints(12);
     const lengths = [0];
     for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1]! + points[i]!.distanceTo(points[i - 1]!));
     return { a, b, points, lengths };
   });
+}
+
+function mareaField(): THREE.Texture {
+  if (MAREA.mareaField.value) return MAREA.mareaField.value;
+  const roads = mareaRoads();
   const data = new Uint16Array(FIELD.w * FIELD.d);
   for (let j = 0; j < FIELD.d; j++) {
     for (let i = 0; i < FIELD.w; i++) {
@@ -981,7 +998,7 @@ export class GeoscapeSet implements StageSet {
 
     const name = document.createElement('div');
     name.className = 'globe-label ship';
-    name.textContent = 'La Mula';
+    name.textContent = 'La Lata';
     name.style.fontWeight = '700';
     name.style.borderLeft = '3px solid #ffb020';
     this.busLabel = new CSS2DObject(name);
@@ -1462,14 +1479,7 @@ export class GeoscapeSet implements StageSet {
       // Someone still lives here: a chimney smoking.
       smokes.push({ x: cx, y: Math.max(heightAt(cx, cz), 0) + 0.3, z: cz, dark: false, size: 0.08 });
     };
-    // Aldren's villages under Atalaya, in the snow.
-    town(ZONES.weu.x - 1.3, ZONES.weu.z + 0.55, 10, 0.25, 11, true, 'church');
-    town(ZONES.weu.x + 1.4, ZONES.weu.z + 1.0, 6, -0.4, 13, true, 'tower');
-    // Volkren: villages in the closed valleys.
-    town(ZONES.eeu.x - 0.9, ZONES.eeu.z + 0.6, 9, 0.5, 23, false, 'church');
-    town(ZONES.eeu.x + 3.1, ZONES.eeu.z - 0.9, 6, -0.3, 29, false, 'tower');
-    // Carvik: the miners' row.
-    town(ZONES.sa.x + 0.9, ZONES.sa.z + 1.3, 6, 1.2, 31, false, 'tower');
+    for (const t of TOWNS) town(t.x, t.z, t.n, t.axis, t.seed, t.snow, t.landmark);
 
     // El Pantano Gris: the dam across the reservoir's lip, the dead power station below it, its yard, a line of pylons.
     const gap = Math.atan2(RIVER[0]![1] - RESERVOIR.z, RIVER[0]![0] - RESERVOIR.x);
@@ -1816,3 +1826,30 @@ function mapMaterial(name: string, color: number): THREE.Material {
   return m;
 }
 const DAM = new THREE.MeshStandardMaterial({ color: 0xa3a39e, roughness: 0.9 });
+
+// ------------------------------------------------------------ the 2D map
+
+let roadsForMarea: Parameters<typeof mareaReach>[2] | null = null;
+
+/**
+ * The valley's geography as this map draws it, for the 2D map's sketches
+ * (lab/mapLab.ts; Arturo, 2026-10-14: «que el valle sea un mapa y no un
+ * 3D»): its size, the ground's height, the woods, the ash plain, the river,
+ * the reservoir, Atalaya, the cities, the towns, each road's line and the
+ * zombi activity at which the Marea reaches a point.
+ */
+export const GEOGRAPHY = {
+  width: W,
+  depth: D,
+  heightAt,
+  woods,
+  woodsAbove: WOODS,
+  ashDepth,
+  river: RIVER,
+  reservoir: RESERVOIR,
+  atalaya: ATALAYA,
+  cities: CITIES,
+  towns: TOWNS,
+  road: (a: RegionId, b: RegionId): [number, number][] => roadLine(a, b).map((p) => [p.x, p.z]),
+  mareaAt: (x: number, z: number): number => mareaReach(x, z, (roadsForMarea ??= mareaRoads())),
+};

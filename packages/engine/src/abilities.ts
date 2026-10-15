@@ -5,7 +5,8 @@ import { adjacent, inMeleeReach, previewShot, teamSees } from './aim';
 import {
   ABILITIES,
   attackWeapon,
-  BACKPACK_SLOTS,
+  clipOf,
+  fullyLoaded,
   HACK_BASE,
   HACK_PER_RANK,
   HACK_SPECIALIST,
@@ -14,25 +15,33 @@ import {
   ITEMS,
   OFICIO_QUIET,
   PSI_BASE,
+  roundsOf,
   TEMPLATES,
   WEAPONS,
 } from './content';
 import { TALENTS } from './classes';
 import { hasAnyCover } from './cover';
 import { canStandOn, DIRS4, DIRS8, distance, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, slabAt, toPos, unitAt } from './grid';
-import { backpackRoom, reachesToSearch, searchable, searchableTiles, searchSpot } from './loot';
+import { reachesToSearch, roomAt, roomSearched, searchable, searchableTiles, searchSpot } from './loot';
 import { canSee, canSeeTile, isViewer, sightTo } from './los';
 import { buildPath, computeReach, costPerAp } from './path';
 import type { AbilityId, AttackAbility, BlastAbility, GameState, Place, Pos, Unit, Vec2 } from './types';
 
 export function abilitiesOf(u: Unit): AbilityId[] {
   const list = [...TEMPLATES[u.template].abilities];
+  // Arms of its own (docs/FASE8.md §A): everyone has a blade, and the pistol is a second gun only beside a primary.
+  if (u.arms) {
+    if (!list.includes('slash')) list.splice(list.indexOf('shoot') + 1, 0, 'slash');
+    const pistol = list.indexOf('pistol');
+    if (u.arms.primary && pistol < 0) list.splice(list.indexOf('slash') + 1, 0, 'pistol');
+    if (!u.arms.primary && pistol >= 0) list.splice(pistol, 1);
+  }
   for (const granted of [...u.perks.map((id) => TALENTS[id]?.ability), ...u.gear.map((id) => ITEMS[id]?.ability)]) {
     if (granted && !list.includes(granted)) list.push(granted);
   }
   if (u.team === 'xcom' && !u.captive && TEMPLATES[u.template].team === 'xcom') {
-    list.push('evac');
-    if (u.template !== 'vip') list.push('hack', 'search', 'openDoor', 'closeDoor');
+    // Evacuating is the squad's, by the bus (the `evac` command, docs/PRUEBA-2026-10-14.md P1), not one soldier's ability.
+    if (u.template !== 'vip') list.push('hack', 'search', 'searchRoom', 'openDoor', 'closeDoor');
   }
   return list;
 }
@@ -103,12 +112,12 @@ export function endsTurn(u: Unit, ability: AbilityId): boolean {
 export function ammoNeeded(u: Unit, ability: AbilityId): number {
   const def = ABILITIES[ability];
   if (def.ammo) return def.ammo;
-  if (ability === 'overwatch' || ability === 'killZone') return attackWeapon(u, 'shoot').clip > 0 ? 1 : 0;
-  return isAttack(ability) && attackWeapon(u, ability).clip > 0 ? 1 : 0;
+  if (ability === 'overwatch' || ability === 'killZone') return clipOf(u, 'shoot') > 0 ? 1 : 0;
+  return isAttack(ability) && clipOf(u, ability) > 0 ? 1 : 0;
 }
 
 /** Tile abilities done with the hands beside the soldier, not thrown: a disoriented soldier can still do them. */
-const BY_HAND: ReadonlySet<AbilityId> = new Set<AbilityId>(['search', 'openDoor', 'closeDoor']);
+const BY_HAND: ReadonlySet<AbilityId> = new Set<AbilityId>(['search', 'searchRoom', 'openDoor', 'closeDoor']);
 
 /**
  * Doors beside `u` it can open (`door`) or close (`doorOpen`, with nobody in
@@ -132,7 +141,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
   if (cooldown > 0) return `Disponible en ${cooldown} ${cooldown === 1 ? 'turno' : 'turnos'}.`;
   if (def.charge && !((u.charges[def.charge] ?? 0) > 0)) return 'No quedan usos.';
   const ammo = ammoNeeded(u, ability);
-  if (ammo > 0 && u.ammo < ammo) {
+  if (ammo > 0 && (isAttack(ability) ? roundsOf(u, ability) : u.ammo) < ammo) {
     if (u.mags === 0) return 'Sin munición y sin cargadores.';
     return ammo > 1 ? `Necesita ${ammo} balas en el cargador: recarga.` : 'Sin munición: recarga.';
   }
@@ -140,7 +149,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
   if (def.psi && inSilence(s, u.pos)) return 'Petardos: aquí no se puede gritar.';
   switch (ability) {
     case 'reload':
-      if (u.ammo >= attackWeapon(u, 'shoot').clip) return 'El cargador está lleno.';
+      if (fullyLoaded(u)) return u.arms?.primary ? 'Los cargadores están llenos.' : 'El cargador está lleno.';
       if (u.mags === 0) return 'No quedan cargadores.';
       break;
     case 'hunker':
@@ -159,15 +168,21 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
       if (!canHackFrom(s, u)) return u.template === 'specialist' ? 'Acércate al equipo o ponlo a la vista del Grillo (10 casillas).' : 'Ponte junto al equipo.';
       break;
     case 'search':
-      if (backpackRoom(u, BACKPACK_SLOTS) <= 0) return 'La mochila está llena.';
+      // A loot box beside the soldier (docs/FASE8.md §B). A full backpack doesn't stop it: what doesn't fit goes on the floor.
       if (!searchableTiles(s, u).length) {
         const done = DIRS8.some((d) => {
           const p = { x: u.pos.x + d.x, y: u.pos.y + d.y, z: u.pos.z };
           return searchSpot(s, p) !== null && reachesToSearch(s, u.pos, p);
         });
-        return done ? 'Ya está registrado.' : 'No hay nada que registrar al lado.';
+        return done ? 'Ya está abierta.' : 'No hay ninguna caja al lado.';
       }
       break;
+    case 'searchRoom': {
+      const room = roomAt(s, u.pos);
+      if (!room) return 'Solo dentro de una habitación.';
+      if (roomSearched(s, room)) return 'Esta habitación ya está registrada.';
+      break;
+    }
     case 'openDoor':
       if (!doorTiles(s, u, 'door').length) return 'No hay ninguna puerta cerrada a tu lado.';
       break;

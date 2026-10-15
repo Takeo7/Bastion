@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { carPartner, decorOf, DIRS4, floorLevels, litMask, type Biome, type DecorKind, type GameState, type Place, type TileKind } from '@bastion/engine';
+import { carPartner, decorOf, DIRS4, floorLevels, litMask, type Biome, type DecorKind, type GameState, type Place, type Site, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
 import { StaticBatch, type Dirty, type UvRect } from './batch';
 import { atlasRect, mapAtlasTexture } from './mapAtlas';
@@ -7,10 +7,14 @@ import { BuildingsView, floorFadePatch, piecesLoaded, preloadPieces, RAISED_FLAT
 import { STOREY } from './coords';
 import { dressEdges, dressStreets } from './dressing';
 import { NIGHT, NightLights, type Glow } from './night';
+import { unitPosNow } from './unitViews';
 import { beforeNextFrame, shadowsChanged } from './renderer';
 import { ExploredMemory } from './explored';
 import { FogOfWar } from './fogOfWar';
 import { GroundMap, scatterCover } from './ground';
+import { DroppedView } from './dropped';
+import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
+import { EvacBus } from './evacBus';
 import { contactPatch, GroundOcclusion } from './groundAO';
 import { atlasTexture } from './synty';
 import type { AtlasId, PropId, PropSet } from './syntyManifest';
@@ -53,7 +57,7 @@ const PROP_SETS: Record<Biome, { low: PropSet; high: PropSet }> = {
  * cover falls back to the biome's random props, unless it has a low version
  * (a fallen tree, a shelf knocked down to its lower levels).
  */
-function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet | null {
+function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Site): PropSet | null {
   const low = tile === 'low';
   switch (kind) {
     case 'carFront':
@@ -72,8 +76,8 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
     case 'bush':
       return low ? kind : null;
     case 'tank':
-      // In town a low one is a filling station's pump.
-      return low ? (biome === 'city' ? 'pump' : null) : kind;
+      // In town and at the forest stop a low one is a filling station's pump.
+      return low ? (biome === 'city' || site === 'roadside' ? 'pump' : null) : kind;
     case 'pylon':
       // In town, a building site's portaloo.
       return low ? null : biome === 'city' ? 'portaloo' : kind;
@@ -84,7 +88,8 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
     case 'rack':
       return low ? null : kind;
     case 'fence':
-      return low ? 'fencePost' : null;
+      // By the forest road, broken boards (no rails).
+      return low ? (site === 'roadside' ? 'woodFence' : 'fencePost') : null;
     case 'gatePost':
       return low ? 'gatePost' : null;
     case 'hay':
@@ -98,7 +103,7 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
     case 'barricade':
       return low ? (biome === 'facility' ? 'techBarrier' : biome === 'wilds' ? 'sandbags' : 'barricade') : null;
     case 'tree':
-      return low ? 'logs' : biome === 'wilds' ? 'forest' : 'tree';
+      return low ? 'logs' : site === 'roadside' ? 'pines' : biome === 'wilds' ? 'forest' : 'tree';
     case 'rock':
       return low ? 'rock' : 'spire';
     case 'log':
@@ -108,14 +113,54 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome): PropSet 
     case 'breach':
       // A wall blown down (docs/FASE7.md §4): drawn by the walls and rubbleOf (rebuild), its rubble here only as a fallback.
       return low ? 'rubble' : null;
+    case 'bus':
+      // The bus by the evac zone (docs/PRUEBA-2026-10-14.md P1): drawn whole by Arte, never as props.
+      return null;
+    case 'lootWeapons':
+    case 'lootMedical':
+    case 'lootAmmo':
+    case 'lootFood':
+      // The special loot boxes (docs/FASE8.md §B): each its own (mapView lootBox), with its mark (lootMarks.ts).
+      return kind;
     case 'stairs':
       // A building's stairs are a ladder tile, never cover (docs/FASE6-PLAN.md).
       return null;
+    case 'truck':
+    case 'waterTower':
+    case 'container':
+      // Drawn whole over their block while it stands (block); what a blast leaves of one is rubble.
+      return low ? 'rubble' : null;
+    case 'logPile':
+      return low ? 'logPile' : null;
+    case 'sign':
+      return low ? null : 'roadSign';
+    case 'wire':
+      // A fallen chain-link fence by the road; razor wire at an industrial gate.
+      return low ? (biome === 'city' ? 'razorWire' : 'chainFence') : null;
   }
 }
 
 /** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
-const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log']);
+const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire']);
+
+/**
+ * The scenarios' things that stand over several tiles (#25), and what each of
+ * their tiles is: a lorry (2×4), a container (2×5), a water tower (2×2, its
+ * legs), a log pile (1×2 or 2×2). The generator never lets two touch, so a
+ * block is the tiles of its kind joined to each other.
+ */
+const BLOCKS: Partial<Record<DecorKind, TileKind>> = { truck: 'high', container: 'high', waterTower: 'high', logPile: 'low' };
+
+/** A block: its tiles' bounds, the way it faces, whether all of it still stands, and the tile that draws it (under its middle). */
+interface Block {
+  x0: number;
+  y0: number;
+  w: number;
+  h: number;
+  facing: number;
+  whole: boolean;
+  anchor: number;
+}
 
 /**
  * How far off the grid a prop may sit (second playtest: «demasiado
@@ -260,6 +305,19 @@ export class MapView {
   private aoDirty: Dirty | null = null;
   /** How many tiles had been searched at the last rebuild: a search redraws the map (the furniture opens). */
   private searchedSeen = 0;
+  /** The special loot boxes as last drawn, by place (a partial rebuild finds again only those in its area), and their marks. */
+  private readonly loot = new Map<number, LootSpot>();
+  readonly lootMarks = new LootMarks();
+  /** What the squad left on the floor (GameState.dropped). */
+  private readonly dropped = new DroppedView();
+  /** The canopies over the filling stations' pumps, the ground they roof over, and how much of each shows (canopies). */
+  private readonly canopyGroup = new THREE.Group();
+  private canopies: { group: THREE.Group; material: THREE.MeshStandardMaterial; x0: number; z0: number; x1: number; z1: number; shown: number }[] = [];
+  private canopyMaterials: THREE.MeshStandardMaterial[] = [];
+  /** La Mula by the evacuation (evacBus.ts), on maps whose mission has its bay (mission.evacBus). */
+  private bus: EvacBus | null = null;
+  /** How far La Mula drives to be gone (placeBus); null without one. */
+  private busWay: number | null = null;
   /** The camera and what the player looks at, for the cutaway (game.ts). */
   private camera: THREE.Camera | null = null;
   private focus: (() => Focus) | null = null;
@@ -268,6 +326,7 @@ export class MapView {
 
   build(s: GameState): void {
     this.width = s.width;
+    this.canopyMaterials = [];
     this.explored.begin(s);
     this.shown = s;
     this.visibility = null;
@@ -347,6 +406,7 @@ export class MapView {
     const redo = this.changed(s, batch);
     const area = redo && this.areaOf(s, redo, batch.chunk);
     batch.begin(redo);
+    for (const place of this.loot.keys()) if (!area || area[place % (s.width * s.height)]) this.loot.delete(place);
     const layer = (geometry: THREE.BufferGeometry, material: THREE.Material, shadows = true) => new Layer(batch, geometry, material, shadows);
     // Floors: the ground shader paints their tops as continuous terrain; the colour per tile is for their sides.
     const slabs = new Layer(batch, kit.slab, kit.ground, false, true, true);
@@ -466,6 +526,64 @@ export class MapView {
           break;
       }
     };
+    /** How high prop `id` stands as placed (its parts' highest point), for what is set on it. */
+    const topOf = (id: PropId): number => {
+      let top = 0;
+      for (const part of syntyProp(id) ?? []) {
+        const box = (part.geometry.boundingBox ?? (part.geometry.computeBoundingBox(), part.geometry.boundingBox!)).clone().applyMatrix4(part.matrix);
+        top = Math.max(top, box.max.y);
+      }
+      return top || 0.3;
+    };
+    /**
+     * A special loot box (docs/FASE8.md §B) on tile i, turned `yaw`: each kind
+     * its own shape and colour from afar, its lid or what is in it on top;
+     * opened (searched), the lid on the floor beside it and some of what was in
+     * it about. Its mark (lootMarks.ts) hangs over it.
+     */
+    const lootBox = (kind: LootKind, i: number, x: number, base: number, z: number, yaw: number, open: boolean) => {
+      const c = Math.cos(yaw);
+      const sn = Math.sin(yaw);
+      const r = (k: number) => hash(x, z, 70 + k);
+      /** A prop at (dx, dz) from the tile's middle in the box's own frame, `dy` up, turned `turn` more. */
+      const put = (id: PropId, dx: number, dz: number, dy = 0, turn = 0, shadows = true) =>
+        addSyntyId(id, placed(x + dx * c + dz * sn, base + dy, z - dx * sn + dz * c, 1, 1, 1, yaw + turn), shadows);
+      const main: Record<LootKind, PropId> = { lootWeapons: 'lootWeapons', lootMedical: 'lootMedical', lootAmmo: 'lootAmmo', lootFood: 'lootFood' };
+      const box = main[kind];
+      put(box, 0, 0);
+      const top = topOf(box);
+      switch (kind) {
+        case 'lootWeapons':
+          if (open) put('lootWeaponsLid', 0.05, 0.5, 0, 0.25 + r(1) * 0.3, false);
+          else put('lootWeaponsLid', 0, 0, top * 0.98);
+          break;
+        case 'lootMedical':
+          if (open) {
+            put('lootMedicalKit', -0.25, 0.5, 0, r(1) * 2);
+            put('lootPills', 0.2, 0.45, 0, r(2) * 6, false);
+            put('lootPills', 0.32, 0.58, 0, r(3) * 6, false);
+          } else put('lootMedicalKit', 0, 0, top, 0.2);
+          break;
+        case 'lootAmmo':
+          if (open) {
+            put('lootAmmoLid', 0.1, 0.5, 0, 0.3 + r(1) * 0.3, false);
+            put('lootAmmoCanOpen', -0.3, 0.52, 0, r(2) * 3);
+          } else {
+            put('lootAmmoLid', 0, 0, top * 0.98);
+            put('lootAmmoCan', 0, 0, top + 0.02, 0.4);
+          }
+          break;
+        case 'lootFood':
+          if (open) {
+            put('lootFoodTop', -0.2, 0.52, 0, r(1) * 2);
+            put('lootCan', 0.18, 0.45, 0, r(2) * 6, false);
+            put('lootCan2', 0.3, 0.58, 0, r(3) * 6, false);
+            put('lootRice', 0.05, 0.62, 0, r(4) * 6, false);
+          } else put('lootFoodTop', 0.04, -0.03, top, 0.35);
+          break;
+      }
+      this.loot.set(placeBase + i, { place: placeBase + i, kind, at: new THREE.Vector3(x, base + top + 0.95, z), open });
+    };
     /** `wiggle` takes a prop off the grid: 1 a nudge and a few degrees, 2 any turn at all (see WIGGLE). */
     const addProp = (tile: number, set: PropSet, x: number, y: number, z: number, pick: number, turn: number, wiggle: 0 | 1 | 2 = 0) => {
       const tx = tile % s.width;
@@ -490,13 +608,93 @@ export class MapView {
       return kind === 'fence' || kind === 'gatePost';
     };
     const rails: PropSet = s.biome === 'city' ? 'fenceBoards' : 'fenceRails';
+    /** The blocks found so far, by place (every tile of one points at it). */
+    const blocks = new Map<number, Block>();
+    /** The block tile i (of the storey being dressed) belongs to: the tiles of its kind joined to it. */
+    const blockOf = (i: number, kind: DecorKind): Block => {
+      const known = blocks.get(placeBase + i);
+      if (known) return known;
+      const tiles = [i];
+      const seen = new Set(tiles);
+      for (let k = 0; k < tiles.length; k++) {
+        const tx = tiles[k]! % s.width;
+        const ty = Math.floor(tiles[k]! / s.width);
+        for (const d of DIRS4) {
+          const nx = tx + d.x;
+          const ny = ty + d.y;
+          if (nx < 0 || ny < 0 || nx >= s.width || ny >= s.height) continue;
+          const j = ny * s.width + nx;
+          if (!seen.has(j) && decorOf(decorNow[j])?.kind === kind) {
+            seen.add(j);
+            tiles.push(j);
+          }
+        }
+      }
+      const xs = tiles.map((t) => t % s.width);
+      const ys = tiles.map((t) => Math.floor(t / s.width));
+      const x0 = Math.min(...xs);
+      const y0 = Math.min(...ys);
+      const w = Math.max(...xs) - x0 + 1;
+      const h = Math.max(...ys) - y0 + 1;
+      const b: Block = {
+        x0,
+        y0,
+        w,
+        h,
+        facing: decorOf(decorNow[i])!.facing,
+        whole: tiles.every((t) => tilesNow[t] === BLOCKS[kind]),
+        anchor: Math.floor(y0 + h / 2) * s.width + Math.floor(x0 + w / 2),
+      };
+      for (const t of tiles) blocks.set(placeBase + t, b);
+      return b;
+    };
+    /** A block's model over its middle: a lorry with its nose and a container with its doors the way it faces, a pile's logs along it. */
+    const drawBlock = (b: Block, kind: DecorKind, base: number) => {
+      const cx = b.x0 + b.w / 2;
+      const cz = b.y0 + b.h / 2;
+      const r = hash(b.x0, b.y0, 31);
+      const yaw = turnTo(b.facing) * (Math.PI / 2);
+      switch (kind) {
+        case 'truck':
+          addSynty('truck', r, placed(cx, base, cz, 1, 1, 1, yaw));
+          break;
+        case 'container':
+          addSynty('container', r, placed(cx, base, cz, 1, 1, 1, yaw));
+          break;
+        case 'waterTower':
+          addSyntyId('waterTower', placed(cx, base, cz, 1, 1, 1, Math.floor(r * 4) * (Math.PI / 2)));
+          break;
+        case 'logPile':
+          // Its logs (the model's z) along a long pile, narrowed to its tile; a square one whole. Half a survivor high or so.
+          if (b.w !== b.h) addSyntyId('logPile', placed(cx, base, cz, 0.62, 0.75, 1, b.w > b.h ? Math.PI / 2 : 0));
+          else addSyntyId('logPile', placed(cx, base, cz, 1, 0.75, 1, Math.floor(r * 4) * (Math.PI / 2)));
+          break;
+      }
+    };
     /**
      * Draws the cover on tile i as its decor hint says, if it has one for what
      * the tile is now; false to fall back to the biome's random props.
      */
     const dressed = (i: number, x: number, y: number, kind: 'low' | 'high', base: number): boolean => {
       const look = decorOf(decorNow[i]);
-      const set = look && decorSet(look.kind, kind, s.biome);
+      // The bus's bay: La Mula stands on it whole (placeBus), nothing else.
+      if (look?.kind === 'bus') return true;
+      // A lorry, a container, a water tower, a log pile: one model over its block while all of it stands.
+      if (look && BLOCKS[look.kind]) {
+        const b = blockOf(i, look.kind);
+        if (b.whole) {
+          if (i === b.anchor) drawBlock(b, look.kind, base);
+          return true;
+        }
+      }
+      // By the forest road, the statue is the lumberjack on his plinth.
+      if (look?.kind === 'statue' && kind === 'high' && s.site === 'roadside') {
+        const yaw = Math.floor(hash(x, y, 2) * 4) * (Math.PI / 2);
+        addSyntyId('lumberjackBase', placed(x + 0.5, base, y + 0.5, 1, 1, 1, yaw));
+        addSyntyId('lumberjack', placed(x + 0.5, base + topOf('lumberjackBase'), y + 0.5, 1, 1, 1, yaw));
+        return true;
+      }
+      const set = look && decorSet(look.kind, kind, s.biome, s.site);
       if (!look || !set) return false;
       const cx = x + 0.5;
       const cz = y + 0.5;
@@ -514,6 +712,10 @@ export class MapView {
         if (searched.has(placeBase + i) || searched.has(placeBase + j)) addSyntyId('carOpen', at);
         else addSynty('carFront', pick, at);
         if (hash(x, y, 9) < 0.25) headlights.push({ x: cx + d.x * 0.42, y: base + 0.32, z: cz + d.y * 0.42, dx: d.x, dz: d.y });
+        return true;
+      }
+      if (LOOT_KINDS.has(look.kind)) {
+        lootBox(look.kind as LootKind, i, cx, base, cz, turn * (Math.PI / 2), searched.has(placeBase + i));
         return true;
       }
       // Searched furniture: opened, its contents on the floor in front of it.
@@ -700,8 +902,26 @@ export class MapView {
       prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
     }
 
+    // A filling station's pumps (decor 'tank', low): an island under each pair, a canopy over each station's.
+    const pumps: number[] = [];
+    for (let i = 0; i < s.tiles.length; i++) if (s.tiles[i] === 'low' && decorOf(decor[i])?.kind === 'tank' && (s.elev[i] ?? 0) === 0) pumps.push(i);
+    for (const i of pumps) {
+      const x = i % s.width;
+      const y = Math.floor(i / s.width);
+      // The pair's first tile (west or north) draws the island between the two.
+      const east = pumps.includes(i + 1) && x + 1 < s.width;
+      const south = pumps.includes(i + s.width);
+      if ((!east && !south) || (area && !area[i])) continue;
+      addSyntyId('pumpIsland', placed(x + (east ? 1 : 0.5), 0, y + (south ? 1 : 0.5), 0.55, 0.3, 0.55, east ? Math.PI / 2 : 0), false);
+    }
+    this.placeCanopies(s, pumps);
+
     let dirty = batch.commit();
     this.group.add(batch.group);
+    this.lootMarks.set([...this.loot.values()]);
+    this.group.add(this.lootMarks.group, this.dropped.group, this.canopyGroup);
+    this.markLoot();
+    this.placeBus(s);
     if (!buildings.buildWalls(s, redo, area)) this.waitingForProps = true;
     dirty = union(dirty, buildings.dirty);
     this.group.add(buildings.group, buildings.walls);
@@ -850,6 +1070,154 @@ export class MapView {
     this.explored.see(mask, this.shown?.seq ?? 0);
     this.refog();
     this.fresh = false;
+    this.markLoot();
+  }
+
+  /**
+   * La Mula by the evacuation zone, its doors to it, unless it has gone
+   * (mission.evacDone): on its bay (mission.evacBus), its nose to the edge it
+   * leaves by; on a map without one, just off the edge nearest the zone and
+   * along it, its nose to the nearer corner.
+   */
+  private placeBus(s: GameState): void {
+    const zoneTiles = s.mission.evacZone;
+    if (!zoneTiles.length) {
+      if (this.bus) this.bus.root.visible = false;
+      this.busWay = null;
+      return;
+    }
+    const bus = (this.bus ??= new EvacBus());
+    const mid = (tiles: readonly { x: number; y: number }[]) =>
+      new THREE.Vector3(tiles.reduce((a, t) => a + t.x + 0.5, 0) / tiles.length, 0, tiles.reduce((a, t) => a + t.y + 0.5, 0) / tiles.length);
+    const zone = mid(zoneTiles);
+    const bay = s.mission.evacBus;
+    let at: THREE.Vector3;
+    let d: { x: number; y: number };
+    if (bay?.tiles.length) {
+      at = mid(bay.tiles);
+      d = DIRS4[bay.heading] ?? DIRS4[0]!;
+    } else {
+      // Off the nearest edge, a little more than half its width out, along it.
+      const edges = [
+        { gap: zone.z, at: new THREE.Vector3(zone.x, 0, -1.4), along: zone.x < s.width / 2 ? -1 : 1, x: true },
+        { gap: s.height - zone.z, at: new THREE.Vector3(zone.x, 0, s.height + 1.4), along: zone.x < s.width / 2 ? -1 : 1, x: true },
+        { gap: zone.x, at: new THREE.Vector3(-1.4, 0, zone.z), along: zone.z < s.height / 2 ? -1 : 1, x: false },
+        { gap: s.width - zone.x, at: new THREE.Vector3(s.width + 1.4, 0, zone.z), along: zone.z < s.height / 2 ? -1 : 1, x: false },
+      ];
+      const e = edges.reduce((a, b) => (b.gap < a.gap ? b : a));
+      at = e.at;
+      d = e.x ? { x: e.along, y: 0 } : { x: 0, y: e.along };
+    }
+    bus.park(at, Math.atan2(d.x, d.y), zone, !s.mission.evacDone);
+    // How far it drives to be gone: past the map's edge (or its corner) the way it heads, its whole length.
+    const ahead = d.x > 0 ? s.width - at.x : d.x < 0 ? at.x : d.y > 0 ? s.height - at.z : at.z;
+    this.busWay = Math.max(0, ahead) + bus.length / 2 + 1;
+    this.group.add(bus.root);
+  }
+
+  /**
+   * A canopy over each filling station's pumps (those within 3 tiles of each
+   * other are one station's), its long side along their row, sized to them
+   * and the lanes beside them; now and then a burnt one. Drawn on its own, so
+   * it can fade (canopies' tick).
+   */
+  private placeCanopies(s: GameState, pumps: number[]): void {
+    this.canopyGroup.clear();
+    this.canopies = [];
+    const left = new Set(pumps);
+    let k = 0;
+    while (left.size) {
+      const first = left.values().next().value as number;
+      const station = [first];
+      left.delete(first);
+      for (let n = 0; n < station.length; n++) {
+        const ax = station[n]! % s.width;
+        const ay = Math.floor(station[n]! / s.width);
+        for (const j of [...left]) {
+          if (Math.max(Math.abs((j % s.width) - ax), Math.abs(Math.floor(j / s.width) - ay)) > 3) continue;
+          left.delete(j);
+          station.push(j);
+        }
+      }
+      const xs = station.map((i) => i % s.width);
+      const ys = station.map((i) => Math.floor(i / s.width));
+      const x0 = Math.min(...xs);
+      const x1 = Math.max(...xs) + 1;
+      const z0 = Math.min(...ys);
+      const z1 = Math.max(...ys) + 1;
+      const alongX = x1 - x0 > z1 - z0;
+      // The model is 8.9 long and 4.7 wide: the row and a lane at each end, never more than three quarters of it.
+      const scale = THREE.MathUtils.clamp((Math.max(x1 - x0, z1 - z0) + 2) / 8.9, 0.55, 0.75);
+      const parts = syntyProp(hash(x0, z0, 77) < 0.3 ? 'pumpCanopyBurnt' : 'pumpCanopy');
+      if (!parts) {
+        this.waitingForProps = true;
+        continue;
+      }
+      const material = (this.canopyMaterials[k] ??= this.own(new THREE.MeshStandardMaterial({ map: atlasTexture('apocalypse'), roughness: 0.85 })));
+      k++;
+      const group = new THREE.Group();
+      for (const part of parts) {
+        const mesh = new THREE.Mesh(part.geometry, material);
+        mesh.matrixAutoUpdate = false;
+        mesh.matrix.copy(part.matrix);
+        mesh.castShadow = true;
+        group.add(mesh);
+      }
+      group.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
+      group.rotation.y = alongX ? Math.PI / 2 : 0;
+      group.scale.setScalar(scale);
+      this.canopyGroup.add(group);
+      const halfW = (4.7 * scale) / 2;
+      const halfL = (8.9 * scale) / 2;
+      const [hx, hz] = alongX ? [halfL, halfW] : [halfW, halfL];
+      const cx = (x0 + x1) / 2;
+      const cz = (z0 + z1) / 2;
+      this.canopies.push({ group, material, x0: cx - hx, z0: cz - hz, x1: cx + hx, z1: cz + hz, shown: 1 });
+    }
+  }
+
+  /**
+   * A canopy fades away while what the player looks at (the selected soldier,
+   * the target, the tile under the cursor) is under it, as a building's roof
+   * does: the camera never hides the fight.
+   */
+  private fadeCanopies(dt: number): void {
+    if (!this.canopies.length) return;
+    const focus = this.focus?.() ?? null;
+    const points: THREE.Vector3[] = [];
+    const p = new THREE.Vector3();
+    if (focus?.selected && unitPosNow(focus.selected, p)) points.push(p.clone());
+    if (focus?.target && unitPosNow(focus.target, p)) points.push(p.clone());
+    if (focus?.hover) points.push(new THREE.Vector3(focus.hover.x + 0.5, 0, focus.hover.y + 0.5));
+    for (const c of this.canopies) {
+      const under = points.some((q) => q.x > c.x0 - 0.5 && q.x < c.x1 + 0.5 && q.z > c.z0 - 0.5 && q.z < c.z1 + 0.5);
+      const to = under ? 0.15 : 1;
+      if (c.shown === to) continue;
+      c.shown = to > c.shown ? Math.min(to, c.shown + dt / 0.3) : Math.max(to, c.shown - dt / 0.3);
+      c.material.opacity = c.shown;
+      const faded = c.shown < 1;
+      if (c.material.transparent !== faded) {
+        c.material.transparent = faded;
+        c.material.depthWrite = !faded;
+        c.material.needsUpdate = true;
+      }
+    }
+  }
+
+  /** La Mula goes (the engine's evacDeparted): doors, lights, and away along its heading off the map; resolves once it is gone. */
+  busDeparts(): Promise<void> {
+    return this.bus && this.busWay !== null ? this.bus.depart(this.busWay) : Promise.resolve();
+  }
+
+  /** The loot boxes' marks: those seen and still shut, but not on a storey the cutaway hides. */
+  private markLoot(): void {
+    const s = this.shown;
+    if (!s) return;
+    const area = s.width * s.height;
+    this.lootMarks.update(this.explored.tiles, (place) => {
+      const i = place % area;
+      return this.isCutAway({ x: i % s.width, y: Math.floor(i / s.width), z: Math.floor(place / area) });
+    });
   }
 
   /** The storey in view (the active one: game.ts). */
@@ -913,6 +1281,10 @@ export class MapView {
     }
     this.night?.update(dt, this.camera);
     if (this.buildings && this.shown) this.buildings.update(dt, this.shown, this.camera, this.focus?.() ?? null, this.visibility, this.seeInside);
+    // The cutaway moves with the camera: a mark upstairs goes with its storey, and so does what lies on its floor.
+    this.markLoot();
+    if (this.shown) this.dropped.update(this.shown, (p) => this.isCutAway(p));
+    this.fadeCanopies(dt);
   }
 
   isVisible(x: number, y: number): boolean {
