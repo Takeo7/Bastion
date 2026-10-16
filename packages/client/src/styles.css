@@ -867,6 +867,12 @@ em.bite::before {
   --icon: var(--i-aim);
 }
 
+/* Aim with a blade (playtest 17/10), beside the firearms' own. */
+.stat.melee {
+  --c: var(--c-aim);
+  --icon: var(--i-assault);
+}
+
 .stat.grenade {
   --c: var(--c-aim);
   --icon: var(--i-grenade);

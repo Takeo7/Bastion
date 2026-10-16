@@ -577,6 +577,8 @@ export class Hud {
         sidearm ? stat('ammo.sidearm', `${WEAPONS.pistol.name}: ${u.pistolAmmo ?? 0}/${PISTOL_CLIP}`, h('span.pips', {}, ...pips(u.pistolAmmo ?? 0, PISTOL_CLIP))) : null,
         // With firearms (Tiro, Fase 9): the shots' aim; the blade's has its own line in the breakdown.
         stat('aim', `Puntería con armas de fuego ${t.aim + u.mods.aim + u.mods.gunAim}`, h('b', {}, String(t.aim + u.mods.aim + u.mods.gunAim))),
+        // And with the blade, for a soldier (playtest 17/10).
+        soldier ? stat('melee', `Puntería cuerpo a cuerpo ${t.aim + u.mods.aim + u.mods.meleeAim}`, h('b', {}, String(t.aim + u.mods.aim + u.mods.meleeAim))) : null,
         u.charges.grenade !== undefined ? stat('grenade', `Granadas: ${u.charges.grenade}`, h('b', {}, `×${u.charges.grenade}`)) : null,
         u.charges.medkit !== undefined ? stat('medkit', `Botiquín: ${u.charges.medkit}`, h('b', {}, `×${u.charges.medkit}`)) : null,
         u.armor ? stat('armor', `Blindaje ${u.armor}`, h('b', {}, String(u.armor))) : null,

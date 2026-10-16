@@ -2271,7 +2271,9 @@ export class StrategyScreen {
           'div.x-statline',
           {},
           this.stat('hp', String(stats.maxHp), 'Salud'),
-          this.stat('aim', String(TEMPLATES[SOLDIER].aim + stats.mods.aim + stats.mods.gunAim), `Puntería con armas de fuego: ${BASE_AIM}, y +5 por nivel de Tiro`),
+          // Both aims, the soldier's own without the weapon (its card says its part): the base and what the bars and the board add (playtest 17/10).
+          this.stat('aim', String(TEMPLATES[SOLDIER].aim + stats.mods.aim + stats.mods.gunAim), `Puntería con armas de fuego: ${BASE_AIM} de base, más lo que suman las barras de Disparo y el tablero`),
+          this.stat('melee', String(TEMPLATES[SOLDIER].aim + stats.mods.aim + stats.mods.meleeAim), `Puntería cuerpo a cuerpo: ${BASE_AIM} de base, más lo que suman las barras de Cuerpo a cuerpo y el tablero`),
           this.stat('will', String(stats.will), 'Voluntad'),
           this.healthTag(c, s, false),
         ),
