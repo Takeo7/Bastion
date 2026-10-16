@@ -216,7 +216,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
     description: 'Los caídos descansan aquí y salen de la lista del Cuartel; sus nombres se guardan. Cruces de pino bajo la nieve, una por cada uno.',
     upgrades: [
       '+5 de voluntad para todos los soldados. Saben que, si caen, alguien los recordará.',
-      '+10 de voluntad para todos. Y quien vuelve de una misión con bajas aprende un 20 % más: por ellos. Teo graba cada nombre en latón.',
+      '+10 de voluntad para todos. Y quien vuelve de una misión en la que cayó alguien de la escuadra aprende un 20 % más: por ellos. Teo graba cada nombre en latón.',
     ],
     cost: 40,
     days: 3,

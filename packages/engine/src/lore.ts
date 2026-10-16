@@ -325,14 +325,16 @@ function deedCount(deed: DeedId, n: number): string {
 
 /**
  * The debrief's line for a skill a mission taught: «+3 de Tiro: dos aciertos y
- * una baja». When the deeds were worth more than the mission's cap, it says so.
+ * una baja». What the base adds on top (the Taller de oficios, the Camposanto)
+ * goes at the end: «… (+1 en la base)».
  */
 export function learnedLine(skill: SkillId, gained: number, deeds: Deeds): string {
   const own = (Object.keys(DEED_XP) as DeedId[]).filter((d) => DEED_XP[d][0] === skill && (deeds[d] ?? 0) > 0);
   const raw = own.reduce((sum, d) => sum + DEED_XP[d][1] * deeds[d]!, 0);
   const why = own.map((d) => deedCount(d, deeds[d]!));
-  const head = `+${gained} de ${SKILLS[skill].name}${raw > gained ? ' (lo más que da una misión)' : ''}`;
-  return why.length ? `${head}: ${joinAnd(why)}` : head;
+  const head = `+${gained} de ${SKILLS[skill].name}`;
+  const base = gained > raw && raw > 0 ? ` (+${gained - raw} en la base)` : '';
+  return why.length ? `${head}: ${joinAnd(why)}${base}` : head;
 }
 
 /** A skill going up: «Ana sube a Tiro 3.»; at a talent's level, it says one waits in the Cuartel. */
