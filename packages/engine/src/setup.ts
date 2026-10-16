@@ -1,11 +1,11 @@
 import { defaultAppearance } from './appearance';
-import { autoBuild, baseAttrs, CENTER, learnTalent, soldierStats, talentBlocker, talentPointsFree, talentsOf, type Build, type TalentDef } from './classes';
-import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, RECOVERY_TURNS, SOLDIER_NAMES, SPARE_MAGS, SQUAD_CLASSES, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
+import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, RECOVERY_TURNS, SOLDIER_NAMES, SPARE_MAGS, SQUAD_SIZE, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
 import { ground, toPos } from './grid';
 import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import type { Rng } from './rng';
+import { fighterStats, recruitSkills, veteranSkills, type FighterStats } from './skills';
 import type {
   Alarm,
   Appearance,
@@ -13,6 +13,7 @@ import type {
   Biome,
   ChargeId,
   ClassId,
+  FoundWeaponId,
   GameState,
   ItemId,
   MissionKind,
@@ -103,31 +104,17 @@ export interface MissionOptions {
   quarantine?: boolean;
 }
 
-/** The Taller de oficios skirmish veterans trained in, as if built at its top level: a skirmish has no base. */
-const SKIRMISH_ECHOES = 3;
+/** What a skirmish soldier carries in the hand (docs/FASE9.md §6): one of these, at random. */
+const SKIRMISH_ARMS: FoundWeaponId[] = ['assaultRifle', 'pumpShotgun', 'precisionRifle', 'machineGun'];
+/** And on the belt: grenades, and one of these. */
+const SKIRMISH_BELT: ItemId[] = ['firstAid', 'smokeGrenade', 'flashbang'];
 
-/**
- * A skirmish veteran (classes.ts autoBuild). One in three also practises the
- * Oficio of its class: its talents are spent again, about half of them on
- * that branch (the Taller de oficios as if built), the rest as autoBuild
- * spreads them, leaning on one main branch.
- */
-function veteranBuild(cls: ClassId, rank: number, rng: Rng): Build {
-  const b = autoBuild(cls, rank, rng);
-  if (rng.int(3) !== 0) return b;
-  b.talents = {};
-  const learn = (pool: TalentDef[], keep: number, weight: (d: TalentDef) => number) => {
-    while (talentPointsFree(b) > keep) {
-      const open = pool.filter((d) => !talentBlocker(b, d.id, SKIRMISH_ECHOES));
-      if (!open.length) return;
-      let roll = rng.int(open.reduce((n, d) => n + weight(d), 0));
-      learnTalent(b, open.find((d) => (roll -= weight(d)) < 0)!.id);
-    }
-  };
-  learn(talentsOf(cls).filter((d) => d.song), Math.floor(talentPointsFree(b) / 2), () => 1);
-  const main = rng.int(3);
-  learn([...talentsOf(cls), ...CENTER], 0, (d) => (d.axis === null ? 1 : d.song ? 2 : d.branch === main ? 6 : 2));
-  return b;
+/** A skirmish soldier (docs/FASE9.md §6): a weapon and gear at random; a veteran, skills of 2 to 4 and their talents. */
+function skirmishSoldier(rng: Rng, veteran: boolean): { stats: FighterStats; arms: Arms; gear: ItemId[] } {
+  const arms: Arms = { primary: rng.pick(SKIRMISH_ARMS), melee: rng.next() < 0.5 ? 'machete' : null };
+  const gear: ItemId[] = ['fragGrenade', rng.pick(SKIRMISH_BELT)];
+  const { skills, picks } = veteran ? veteranSkills(rng) : { skills: recruitSkills(rng), picks: [] };
+  return { stats: fighterStats(skills, picks, gear, arms), arms, gear };
 }
 
 /** Whether a unit counts its spare magazines (docs/FASE7.md): the squad's, with a weapon that takes them. */
@@ -135,8 +122,8 @@ function countsMags(team: Team, weapon: WeaponId): boolean {
   return team === 'xcom' && WEAPONS[weapon].clip > 0;
 }
 
-/** A campaign soldier's own weapons, loaded, and its spare magazines (docs/FASE8.md §A). */
-function armed(u: Unit, m: SquadMember): Partial<Unit> {
+/** A soldier's own weapons, loaded, and its spare magazines (docs/FASE8.md §A). */
+function armed(u: Unit, m: Pick<SquadMember, 'arms' | 'mags'>): Partial<Unit> {
   if (!m.arms) return m.mags !== undefined && u.mags !== undefined ? { mags: m.mags } : {};
   const arms: Arms = { ...m.arms };
   const unit = { ...u, arms };
@@ -433,7 +420,7 @@ export function createMission(opts: MissionOptions): GameState {
     ((kind === 'sabotage' || kind === 'rescue') && !layout.objectiveSpot) ||
     (kind !== 'elimination' && !layout.evacZone.length);
   if (objectiveMissing) kind = 'elimination';
-  const squadSize = Math.min(opts.squadSize ?? SQUAD_CLASSES.length, layout.spawns.length);
+  const squadSize = Math.min(opts.squadSize ?? SQUAD_SIZE, layout.spawns.length);
 
   const names = [...SOLDIER_NAMES];
   for (let i = names.length - 1; i > 0; i--) {
@@ -471,15 +458,13 @@ export function createMission(opts: MissionOptions): GameState {
     const perPlayer = Math.ceil(squadSize / opts.slots.length);
     for (let i = 0; i < squadSize; i++) {
       const owner = opts.slots[Math.min(Math.floor(i / perPlayer), opts.slots.length - 1)]!;
-      const cls = SQUAD_CLASSES[i % SQUAD_CLASSES.length]!;
       const { name, sex } = names[i]!;
-      const u = makeUnit(`s${i + 1}`, cls, name, owner, layout.spawns[i]!, null);
-      const rank = opts.veterans ? 3 + opts.rng.int(3) : 0;
-      const build = opts.veterans ? veteranBuild(cls, rank, opts.rng) : { cls, rank, attrs: baseAttrs(cls), talents: {} };
-      const stats = soldierStats(build);
-      units.push({
+      const u = makeUnit(`s${i + 1}`, 'rookie', name, owner, layout.spawns[i]!, null);
+      const { stats, arms, gear } = skirmishSoldier(opts.rng, !!opts.veterans);
+      const unit: Unit = {
         ...u,
-        rank,
+        ap: apPerTurn({ team: u.team, rank: stats.rank }),
+        rank: stats.rank,
         perks: stats.perks,
         mods: stats.mods,
         maxHp: stats.maxHp,
@@ -487,8 +472,10 @@ export function createMission(opts: MissionOptions): GameState {
         charges: stats.charges,
         will: stats.will,
         armor: stats.armor,
-        appearance: defaultAppearance(cls, owner, undefined, sex),
-      });
+        gear,
+        appearance: defaultAppearance(owner, undefined, sex),
+      };
+      units.push({ ...unit, ...armed(unit, { arms, mags: SPARE_MAGS }) });
     }
   }
 

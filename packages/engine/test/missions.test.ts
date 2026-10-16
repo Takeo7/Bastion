@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { abilitiesOf } from '../src/abilities';
 import { buildSquad, createCampaign } from '../src/campaign';
-import { TALENTS } from '../src/classes';
 import { ABILITIES, apPerTurn, TEMPLATES, THIRD_ACTION_RANK } from '../src/content';
 import { createMission, garrison, hordeWave, makeUnit, missionPods } from '../src/setup';
 import { STORY } from '../src/lore';
@@ -286,32 +285,27 @@ describe('patrols and reinforcements', () => {
   });
 });
 
-describe('skirmish veterans', () => {
-  const oficio = (u: { perks: (keyof typeof TALENTS)[] }) => u.perks.some((p) => TALENTS[p].song);
-
-  it('about one in three has learnt the Oficio, as if the Taller de oficios stood; the same seed, the same squad', () => {
-    let soldiers = 0;
-    let trades = 0;
-    let songs = 0;
-    for (let seed = 1; seed <= 40; seed++) {
+describe('skirmish soldiers (docs/FASE9.md §6)', () => {
+  it('each one a weapon and gear at random; veterans, every pair of talents they opened picked; the same seed, the same squad', () => {
+    const kinds = new Set<string>();
+    for (let seed = 1; seed <= 20; seed++) {
       const veterans = (rng: Rng) => createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0, 1], rng, veterans: true }).units.filter((u) => u.team === 'xcom');
       const squad = veterans(new Rng(seed));
-      expect(veterans(new Rng(seed)).map((u) => u.perks)).toEqual(squad.map((u) => u.perks));
+      expect(veterans(new Rng(seed)).map((u) => [u.perks, u.arms])).toEqual(squad.map((u) => [u.perks, u.arms]));
       for (const u of squad) {
-        soldiers++;
-        if (!oficio(u)) continue;
-        trades++;
-        expect(u.mods.singer).toBe(1);
-        if (abilitiesOf(u).some((a) => ABILITIES[a].song)) songs++;
+        kinds.add(u.arms!.primary!);
+        expect(u.template).toBe('rookie');
+        expect(u.gear).toContain('fragGrenade');
+        expect(abilitiesOf(u)).toContain('grenade');
+        // Skills of 2 to 4: a talent of each level 2, at least, from Fogueado on.
+        expect(u.perks.length).toBeGreaterThanOrEqual(4);
+        expect(u.rank).toBeGreaterThanOrEqual(2);
       }
     }
-    expect(trades / soldiers).toBeGreaterThan(0.2);
-    expect(trades / soldiers).toBeLessThan(0.45);
-    // Many of them have an Oficio to use in the fight (Bengala, molotov…).
-    expect(songs).toBeGreaterThan(trades / 3);
-    // Rookies in a skirmish learn nothing.
+    expect(kinds).toEqual(new Set(['assaultRifle', 'pumpShotgun', 'precisionRifle', 'machineGun']));
+    // Rookies in a skirmish have no talents yet.
     const rookies = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(1) }).units.filter((u) => u.team === 'xcom');
-    expect(rookies.every((u) => !u.perks.length)).toBe(true);
+    expect(rookies.every((u) => !u.perks.length && u.rank === 0)).toBe(true);
   }, 60_000);
 
   it('the campaign is untouched: its soldiers bring exactly what they learnt', () => {

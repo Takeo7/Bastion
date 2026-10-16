@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { abilitiesOf, abilityBlocker, abilityTargets, allyTargets, canTargetTile, meleeTargets } from '../src/abilities';
 import { searchableTiles } from '../src/loot';
-import { autoBuild, soldierStats } from '../src/classes';
+import { fighterStats, veteranSkills } from '../src/skills';
 import { ABILITIES, isAttack, TEMPLATES } from '../src/content';
 import { previewShot } from '../src/aim';
 import { cloneState, applyEvent, type GameEvent } from '../src/events';
@@ -486,9 +486,9 @@ describe('replication', () => {
   function veterans(s: GameState, rng: Rng): void {
     for (const u of s.units) {
       if (u.team !== 'xcom' || u.template === 'vip') continue;
-      const cls = u.template as ClassId;
-      const stats = soldierStats(autoBuild(cls, 7, rng));
-      Object.assign(u, { rank: 7, perks: stats.perks, mods: stats.mods, charges: stats.charges, maxHp: stats.maxHp, hp: stats.maxHp, will: stats.will, armor: stats.armor });
+      const { skills, picks } = veteranSkills(rng);
+      const stats = fighterStats(skills, picks, u.gear, u.arms);
+      Object.assign(u, { rank: stats.rank, perks: stats.perks, mods: stats.mods, charges: stats.charges, maxHp: stats.maxHp, hp: stats.maxHp, will: stats.will, armor: stats.armor });
     }
   }
 

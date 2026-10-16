@@ -52,6 +52,8 @@ export class Lobby {
   private players: PlayerInfo[] = [];
   private mySlot: Slot | null = null;
   private savedCampaign: { day: number; doom: number; level: number } | null = null;
+  /** The file a campaign from before 0.3 was kept in when the host started (server persistence.ts, docs/FASE9.md §7). */
+  private setAside: string | null = null;
   private page: 'main' | 'skirmish' | 'settings' = 'main';
   private mission: MissionKind = 'elimination';
   private map: SkirmishMap = 'city';
@@ -80,10 +82,11 @@ export class Lobby {
     this.render();
   }
 
-  update(players: PlayerInfo[], mySlot: Slot | null, savedCampaign: { day: number; doom: number; level: number } | null = null): void {
+  update(players: PlayerInfo[], mySlot: Slot | null, savedCampaign: { day: number; doom: number; level: number } | null = null, setAside: string | null = null): void {
     this.players = players;
     this.mySlot = mySlot;
     this.savedCampaign = savedCampaign;
+    this.setAside = setAside;
     this.render();
   }
 
@@ -219,6 +222,8 @@ export class Lobby {
         h('small', {}, 'Gráficos y rendimiento'),
       ),
       ok ? null : h('p.menu-hint', {}, 'Conectando con el servidor…'),
+      // Said while the host's server runs; the file stays beside the save, as it was.
+      this.setAside ? h('p.menu-hint', {}, `Vuestra campaña anterior está guardada aparte, en ${this.setAside}: con la 0.3 empieza una nueva.`) : null,
     );
   }
 

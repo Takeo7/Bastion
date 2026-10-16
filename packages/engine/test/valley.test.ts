@@ -105,15 +105,6 @@ describe('contacting by road', () => {
     expect(run(c, { type: 'contact', region: 'na' }).ok).toBe(true);
   });
 
-  it('an older campaign keeps its contacts off the roads', () => {
-    const old = createCampaign([0], new Rng(1)) as CampaignState & Record<string, unknown>;
-    old.regions.find((r) => r.id === 'na')!.contacted = true;
-    delete old.flooded;
-    (old as { version: number }).version = 13;
-    const c = migrateCampaign(old);
-    expect(c.version).toBe(CAMPAIGN_VERSION);
-    expect(c.regions.find((r) => r.id === 'na')!.contacted).toBe(true);
-  });
 });
 
 describe('the Marea', () => {

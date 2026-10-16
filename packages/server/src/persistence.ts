@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { CAMPAIGN_VERSION, migrateCampaign, normalizeMission, ZERO_MODS, type CampaignState, type GameState, type MissionKind, type RoomPhase, type SkirmishMap, type Slot } from '@bastion/engine';
+import { constants, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { CAMPAIGN_VERSION, campaignOutdated, migrateCampaign, normalizeMission, ZERO_MODS, type CampaignState, type GameState, type MissionKind, type RoomPhase, type SkirmishMap, type Slot } from '@bastion/engine';
 
 /** Bump when the saved state shape changes; older saves are migrated when possible. */
 const SAVE_VERSION = 6;
@@ -62,18 +62,57 @@ function migrate(data: { version: number } & Record<string, unknown>): SaveFile 
 }
 
 export class SaveStore {
-  constructor(private readonly path: string) {}
+  /** Where a campaign from before 0.3 was put aside on loading, if one was (docs/FASE9.md §7). */
+  setAside: string | null = null;
+
+  /** `log`: a line for the host's red.log (index.ts). */
+  constructor(
+    private readonly path: string,
+    private readonly log: (line: string) => void = () => {},
+  ) {}
 
   load(): SaveFile | null {
     if (!existsSync(this.path)) return null;
+    let data: { version: number } & Record<string, unknown>;
     try {
-      const data = JSON.parse(readFileSync(this.path, 'utf8')) as { version: number } & Record<string, unknown>;
+      data = JSON.parse(readFileSync(this.path, 'utf8')) as { version: number } & Record<string, unknown>;
+    } catch (err) {
+      console.warn(`[save] No se pudo leer ${this.path}:`, err);
+      return null;
+    }
+    // A campaign from before 0.3 can't take the new progression (docs/FASE9.md §7): the file is kept aside
+    // as it is and the room starts in the lobby. Checked before migrating, so every old shape of save goes
+    // the same way. Outside the try: if it can't be kept aside the server stops, rather than write over it.
+    const campaign = data.campaign as { version?: unknown } | null | undefined;
+    if (campaign && typeof campaign.version === 'number' && campaignOutdated({ version: campaign.version })) {
+      this.setAside = this.keepAside();
+      const line = `[save] Partida de antes de la 0.3: guardada aparte en ${this.setAside}; se empieza en el vestíbulo.`;
+      console.warn(line);
+      this.log(line);
+      return null;
+    }
+    try {
       const save = migrate(data);
       if (!save) console.warn(`[save] Partida guardada de una versión anterior (${data.version}); se empieza de cero.`);
       return save;
     } catch (err) {
       console.warn(`[save] No se pudo leer ${this.path}:`, err);
       return null;
+    }
+  }
+
+  /** Copies the save, as it is, next to it as <name>.antes-0.3.json (-2, -3… never over one already there); returns where. */
+  private keepAside(): string {
+    const stem = join(dirname(this.path), basename(this.path, '.json'));
+    for (let n = 1; ; n++) {
+      const target = `${stem}.antes-0.3${n > 1 ? `-${n}` : ''}.json`;
+      try {
+        copyFileSync(this.path, target, constants.COPYFILE_EXCL);
+        return target;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
+        throw new Error(`No se pudo guardar aparte la partida de antes de la 0.3 (${(err as Error).message}); no se toca ${this.path}.`);
+      }
     }
   }
 

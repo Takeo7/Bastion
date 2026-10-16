@@ -1,8 +1,9 @@
 import { BAD_LUCK_MISSES } from './aim';
-import { apPerTurn, attackWeapon, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, reloadWeapon, TEMPLATES, WEAPONS } from './content';
+import { ABILITIES, apPerTurn, attackWeapon, conditionOf, firesPrimary, wearOf, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, reloadWeapon, TEMPLATES, WEAPONS } from './content';
 import { decorCode } from './decor';
 import { getUnit, nodeOf, tileIndex } from './grid';
 import { packSlots } from './loot';
+import type { DeedId } from './skills';
 import type {
   AbilityId,
   AttackAbility,
@@ -151,6 +152,8 @@ export type GameEvent =
   | { t: 'weaponEquipped'; unit: string; index: number }
   /** A bite's contagion stopped (docs/FASE8.md §C). */
   | { t: 'cured'; unit: string; by: string }
+  /** Apaños (docs/FASE9.md): `amount` of condition back to the weapon in `target`'s hand. */
+  | { t: 'patched'; unit: string; target: string; amount: number }
   // Night (docs/ALTURA-Y-NOCHE.md).
   /** A light goes on at night (a Bengala, a fire): whoever stands in it is seen from as far as by day. */
   | { t: 'lightOn'; light: Light }
@@ -186,6 +189,14 @@ function endSuppression(s: GameState, u: Unit): void {
   const target = getUnit(s, u.suppressing);
   if (target?.suppressedBy === u.id) target.suppressedBy = null;
   u.suppressing = null;
+}
+
+/** Counts something a soldier of the squad did that teaches (Fase 9, skills.ts). */
+function deed(s: GameState, id: string, what: DeedId): void {
+  const u = getUnit(s, id);
+  if (!u || u.team !== 'xcom' || u.owner === null || u.captive) return;
+  const deeds = (u.deeds ??= {});
+  deeds[what] = (deeds[what] ?? 0) + 1;
 }
 
 function clearStatuses(u: Unit): void {
@@ -279,12 +290,23 @@ export function applyEvent(s: GameState, e: GameEvent): void {
         const streak = (s.missStreak ??= [0, 0]);
         streak[u.owner] = e.result === 'miss' ? Math.min(BAD_LUCK_MISSES, streak[u.owner] + 1) : 0;
       }
+      // Every shot wears the weapon in the hand (docs/FASE9.md §5).
+      if (firesPrimary(u, e.ability)) u.arms!.condition = Math.max(0, conditionOf(u) - wearOf(attackWeapon(u, e.ability).id));
+      const blade = ABILITIES[e.ability].weapon === 'melee' || attackWeapon(u, e.ability).melee === true;
+      s.blow = { unit: u.id, kind: blade ? 'blade' : 'gun' };
+      if (e.result !== 'miss' && getUnit(s, e.target)?.team !== u.team) deed(s, u.id, blade ? 'blow' : 'hit');
       break;
     }
     case 'damaged': {
       const u = unit(s, e.unit);
       u.hp = Math.max(0, u.hp - e.amount);
       u.armor = Math.max(0, u.armor - e.shred);
+      // An explosive teaches once, if it reaches an enemy.
+      const blow = s.blow;
+      if (blow?.kind === 'blast' && !blow.landed && getUnit(s, blow.unit)?.team !== u.team) {
+        blow.landed = true;
+        deed(s, blow.unit, 'blast');
+      }
       break;
     }
     case 'died': {
@@ -304,7 +326,12 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       }
       if (e.by) {
         const killer = getUnit(s, e.by);
-        if (killer && killer.team !== u.team) killer.kills++;
+        if (killer && killer.team !== u.team) {
+          killer.kills++;
+          // Silencing the alarm teaches Maña, however it went; the rest, the weapon that killed.
+          if (u.objective) deed(s, killer.id, 'fix');
+          else if (s.blow?.unit === killer.id && s.blow.kind !== 'blast') deed(s, killer.id, s.blow.kind === 'blade' ? 'bladeKill' : 'gunKill');
+        }
       }
       if (s.mission.kind === 'sabotage' && s.mission.objectiveUnit === u.id) completeObjective(s);
       break;
@@ -329,10 +356,12 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     }
     case 'explosive':
+      s.blow = { unit: e.unit, kind: 'blast' };
       break;
     case 'healed': {
       const target = unit(s, e.target);
       target.hp = Math.min(target.maxHp, target.hp + e.amount);
+      if (e.amount > 0) deed(s, e.unit, e.unit === e.target ? 'healSelf' : 'healOther');
       break;
     }
     case 'aided':
@@ -550,7 +579,10 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       s.outcomeReason = e.reason;
       break;
     case 'hacked':
-      if (e.success) completeObjective(s);
+      if (e.success) {
+        completeObjective(s);
+        deed(s, e.unit, 'fix');
+      }
       break;
     case 'vipRescued': {
       const vip = unit(s, e.unit);
@@ -590,6 +622,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     case 'searched': {
       (s.searched ??= []).push(nodeOf(s, e.tile));
       if (e.loot) stow(s, unit(s, e.unit), e.loot);
+      deed(s, e.unit, 'search');
       break;
     }
     case 'lootDropped': {
@@ -622,19 +655,26 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       }
       break;
     }
+    case 'patched': {
+      const target = unit(s, e.target);
+      if (target.arms?.primary) target.arms.condition = Math.min(100, conditionOf(target) + e.amount);
+      break;
+    }
     case 'cured':
       unit(s, e.unit).infected = false;
+      deed(s, e.by, e.by === e.unit ? 'healSelf' : 'healOther');
       break;
     case 'weaponEquipped': {
       const u = unit(s, e.unit);
       u.ap = Math.max(0, u.ap - 1);
       const [loot] = u.backpack!.splice(e.index, 1);
-      equipWeapon(s, u, loot.weapon!, loot.weaponId);
+      equipWeapon(s, u, loot);
       break;
     }
     case 'roomSearched': {
       (s.roomsSearched ??= []).push(e.room);
       if (e.loot) stow(s, unit(s, e.unit), e.loot);
+      deed(s, e.unit, 'search');
       break;
     }
     case 'lightOn':
@@ -655,11 +695,15 @@ export function applyEvent(s: GameState, e: GameEvent): void {
  * A weapon in hand (docs/FASE8.md §C), loaded: the one it replaces goes into the backpack (or to the floor), with
  * its Armería id if it was the soldier's own. A new main gun leaves the pistol beside it with the rounds it had.
  */
-function equipWeapon(s: GameState, u: Unit, kind: FoundWeaponId, id: string | undefined): void {
+/** A weapon from the backpack in hand (or at the belt); the one it replaces goes into the backpack with its condition and mods. */
+function equipWeapon(s: GameState, u: Unit, loot: Loot): void {
+  const kind = loot.weapon!;
+  const id = loot.weaponId;
   const arms = u.arms!;
   const melee = FOUND_WEAPONS[kind].slot === 'melee';
   const old = melee ? arms.melee : arms.primary;
   const oldId = melee ? arms.meleeId : arms.primaryId;
+  const kept: Loot = melee ? {} : { ...(arms.condition !== undefined ? { condition: arms.condition } : {}), ...(arms.mods?.length ? { mods: [...arms.mods] } : {}) };
   if (melee) {
     arms.melee = kind;
     if (id) arms.meleeId = id;
@@ -669,10 +713,14 @@ function equipWeapon(s: GameState, u: Unit, kind: FoundWeaponId, id: string | un
     arms.primary = kind;
     if (id) arms.primaryId = id;
     else delete arms.primaryId;
+    if (loot.condition !== undefined) arms.condition = loot.condition;
+    else delete arms.condition;
+    if (loot.mods?.length) arms.mods = [...loot.mods];
+    else delete arms.mods;
     u.ammo = clipOf(u, 'shoot');
     u.weaponName = FOUND_WEAPONS[kind].name;
   }
-  if (old) stow(s, u, { weapon: old, ...(oldId ? { weaponId: oldId } : {}) });
+  if (old) stow(s, u, { weapon: old, ...(oldId ? { weaponId: oldId } : {}), ...kept });
 }
 
 function stow(s: GameState, u: Unit, loot: Loot): void {

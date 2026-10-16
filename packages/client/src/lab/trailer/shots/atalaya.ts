@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BASE_SIZE, PLAYER_COLORS, soldierTemplate, type CampaignState } from '@bastion/engine';
+import { BASE_SIZE, PLAYER_COLORS, type CampaignState } from '@bastion/engine';
 import { sound } from '../../../audio/bank';
 import { BastionSet, type LineupEntry } from '../../../strategy/bastion';
 import { loadBaseKit } from '../../../strategy/baseKit';
@@ -48,7 +48,7 @@ export default {
     set.setLabels(false);
     // The squad of the showcase game on the pads, in the players' colours.
     const squad = c.squad.map((id) => c.soldiers.find((s) => s.id === id)).filter((s) => !!s);
-    set.setLineup(squad.slice(0, 4).map((s): LineupEntry => ({ template: soldierTemplate(s.cls), color: PLAYER_COLORS[s.owner], appearance: s.appearance, seed: s.id })));
+    set.setLineup(squad.slice(0, 4).map((s): LineupEntry => ({ template: 'rookie', color: PLAYER_COLORS[s.owner], appearance: s.appearance, seed: s.id })));
     await stage3d.show('bastion', set.overview(), true);
     await frames(90);
     move = cameraPath(

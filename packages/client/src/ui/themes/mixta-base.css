@@ -775,83 +775,6 @@
 
 /* ======================================================= the soldier's sheet */
 
-/* Aptitudes: ten cells sunk in a channel; the class's own steel-lit, the spent ones yellow, this promotion's striped, past the cap hatched. */
-:root[data-ui='mixta'] .apt-head b {
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  font-size: 16px;
-  letter-spacing: 0.04em;
-}
-
-:root[data-ui='mixta'] .apt-val {
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  font-size: 21px;
-  color: var(--t-accent);
-}
-
-:root[data-ui='mixta'] .apt-boxes {
-  gap: 2px;
-  padding: 3px;
-  border-radius: 2px;
-  background: var(--m-well);
-  box-shadow: var(--m-sink);
-}
-
-:root[data-ui='mixta'] .apt-boxes i {
-  height: 11px;
-  border: 0;
-  border-radius: 1px;
-  background: #23272a;
-  transform: skewX(-12deg);
-}
-
-:root[data-ui='mixta'] .apt-boxes i.base {
-  background: linear-gradient(180deg, #d9ddd5, #9ea49b);
-}
-
-:root[data-ui='mixta'] .apt-boxes i.add {
-  background: linear-gradient(180deg, #ffe07a, #e2aa20);
-  box-shadow: 0 0 5px rgba(242, 194, 48, 0.45);
-}
-
-:root[data-ui='mixta'] .apt-boxes i.plan {
-  background: repeating-linear-gradient(-45deg, #7a5f12 0 2px, #f2c230 2px 4px);
-}
-
-:root[data-ui='mixta'] .apt-boxes i.cap {
-  background: repeating-linear-gradient(45deg, #15181a 0 3px, #262a2d 3px 5px);
-}
-
-:root[data-ui='mixta'] .apt-boxes i.mark::after {
-  bottom: -6px;
-  width: 2px;
-  background: var(--t-accent);
-}
-
-:root[data-ui='mixta'] :is(.apt-plus, .apt-minus) {
-  width: 24px;
-  height: 22px;
-  border: 0;
-  border-radius: 2px;
-  background: var(--m-plate);
-  box-shadow: var(--m-raise);
-  color: var(--t-accent);
-  font-weight: 700;
-  transition: transform 0.12s var(--m-ease);
-}
-
-:root[data-ui='mixta'] :is(.apt-plus, .apt-minus):hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--m-raise), 0 0 0 1px var(--t-accent);
-}
-
-:root[data-ui='mixta'] .apt-plus:not(:disabled) {
-  background: var(--t-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 0 1px #4d3807;
-  color: var(--t-primary-ink);
-}
-
 :root[data-ui='mixta'] .service-help {
   padding: 6px 10px;
   border-radius: 2px;
@@ -1355,14 +1278,14 @@
   box-shadow: inset 0 3px 0 var(--accent, var(--t-accent)), var(--t-sheet-shadow);
 }
 
-:root[data-ui='mixta'] .lineup-card[data-cls]:not(.empty) {
+:root[data-ui='mixta'] .lineup-card[data-bust]:not(.empty) {
   padding-left: 18px;
   padding-right: 6px;
 }
 
 /* The portrait: head and shoulders in a sunken round frame on the card's top corner (no taller card: the pads
-   and «Lanzar misión» keep their room). */
-:root[data-ui='mixta'] .lineup-card[data-cls]::before {
+   and «Lanzar misión» keep their room). The soldier's own bust (portraits.ts), set on the card once drawn. */
+:root[data-ui='mixta'] .lineup-card[data-bust]::before {
   content: '';
   display: block;
   position: absolute;
@@ -1372,30 +1295,10 @@
   height: 44px;
   border-radius: 50%;
   background:
-    var(--portrait) 50% 11% / auto 450% no-repeat,
+    var(--portrait) 50% 22% / 128% auto no-repeat,
     radial-gradient(circle at 50% 30%, #3a4246, #15181a 75%);
   box-shadow: 0 0 0 2px #1b1e20, 0 0 0 3px var(--accent, var(--t-accent)), 0 4px 10px rgba(0, 0, 0, 0.55);
   transform: none;
-}
-
-:root[data-ui='mixta'] .lineup-card[data-cls='assault'] {
-  --portrait: url('/ui/synty/renders/asalto.webp');
-}
-
-:root[data-ui='mixta'] .lineup-card[data-cls='grenadier'] {
-  --portrait: url('/ui/synty/renders/granadero.webp');
-}
-
-:root[data-ui='mixta'] .lineup-card[data-cls='sharpshooter'] {
-  --portrait: url('/ui/synty/renders/francotirador.webp');
-}
-
-:root[data-ui='mixta'] .lineup-card[data-cls='specialist'] {
-  --portrait: url('/ui/synty/renders/especialista.webp');
-}
-
-:root[data-ui='mixta'] .lineup-card[data-cls='rookie'] {
-  --portrait: url('/ui/synty/renders/recluta.webp');
 }
 
 :root[data-ui='mixta'] .lineup-card b {
@@ -1408,7 +1311,7 @@
 
 /* The portrait reaches 14 px past the padding: the name, the only line beside it, starts after it
    («rjun Mehta» had lost its initial, UX-REVISION-3 #2); two lines break evenly. */
-:root[data-ui='mixta'] .lineup-card[data-cls]:not(.empty) b {
+:root[data-ui='mixta'] .lineup-card[data-bust]:not(.empty) b {
   margin-left: 14px;
   text-wrap: balance;
 }
@@ -1438,7 +1341,7 @@
   box-shadow: inset 0 3px 0 var(--t-danger), var(--t-sheet-shadow);
 }
 
-:root[data-ui='mixta'] .lineup-card.dead[data-cls]::before {
+:root[data-ui='mixta'] .lineup-card.dead[data-bust]::before {
   filter: grayscale(1) brightness(0.6);
   box-shadow: 0 0 0 3px #1b1e20, 0 0 0 4px var(--t-danger), 0 6px 14px rgba(0, 0, 0, 0.55);
 }

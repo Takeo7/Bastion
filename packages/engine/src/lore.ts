@@ -6,6 +6,7 @@
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
 import { FOUND_WEAPONS } from './content';
+import { DEED_XP, SKILL_TALENTS, SKILLS, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
 /** Bastion level at which the doom track gets its name: until the radio is fixed nobody knows the Marea is coming. */
@@ -296,6 +297,59 @@ export function findLabel(find: SearchFind | null): string {
   if (find?.weapon) parts.push(FOUND_WEAPONS[find.weapon].name);
   if (find?.mags) parts.push(`+${magsCount(find.mags)}`);
   return parts.join(' · ') || 'Nada';
+}
+
+// -------------------------------------------------------------- learning
+
+/** How each deed reads in the debrief (docs/FASE9.md §1), one and many, and whether the noun is feminine. */
+const DEED_WORDS: Record<DeedId, [string, string, boolean]> = {
+  hit: ['acierto', 'aciertos', false],
+  gunKill: ['baja', 'bajas', true],
+  blow: ['golpe', 'golpes', false],
+  bladeKill: ['baja', 'bajas', true],
+  healOther: ['cura a un compañero', 'curas a compañeros', true],
+  healSelf: ['cura propia', 'curas propias', true],
+  search: ['registro', 'registros', false],
+  fix: ['arreglo', 'arreglos', false],
+  blast: ['explosivo con blanco', 'explosivos con blanco', false],
+};
+
+const NUMBERS = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez'];
+
+/** «un acierto», «una baja», «tres golpes», «12 registros». */
+function deedCount(deed: DeedId, n: number): string {
+  const [one, many, feminine] = DEED_WORDS[deed];
+  if (n === 1) return `${feminine ? 'una' : 'un'} ${one}`;
+  return `${NUMBERS[n] ?? n} ${many}`;
+}
+
+/**
+ * The debrief's line for a skill a mission taught: «+3 de Tiro: dos aciertos y
+ * una baja». When the deeds were worth more than the mission's cap, it says so.
+ */
+export function learnedLine(skill: SkillId, gained: number, deeds: Deeds): string {
+  const own = (Object.keys(DEED_XP) as DeedId[]).filter((d) => DEED_XP[d][0] === skill && (deeds[d] ?? 0) > 0);
+  const raw = own.reduce((sum, d) => sum + DEED_XP[d][1] * deeds[d]!, 0);
+  const why = own.map((d) => deedCount(d, deeds[d]!));
+  const head = `+${gained} de ${SKILLS[skill].name}${raw > gained ? ' (lo más que da una misión)' : ''}`;
+  return why.length ? `${head}: ${joinAnd(why)}` : head;
+}
+
+/** A skill going up: «Ana sube a Tiro 3.»; at a talent's level, it says one waits in the Cuartel. */
+export function levelUpLine(who: string, skill: SkillId, level: number): string {
+  const talent = Object.values(SKILL_TALENTS).some((t) => t?.skill === skill && t.level === level);
+  return `${who} sube a ${SKILLS[skill].name} ${level}.${talent ? ' Tiene un talento por elegir en el Cuartel.' : ''}`;
+}
+
+/**
+ * A weapon that comes back worn or broken (docs/FASE9.md §5): «La escopeta de Ana
+ * vuelve gastada.», «El fusil de asalto de Kofi vuelve roto.». Its gender from
+ * the article of FOUND_WEAPONS' find.
+ */
+export function wornLine(who: string, kind: FoundWeaponId, broken = false): string {
+  const w = FOUND_WEAPONS[kind];
+  const female = w.find.startsWith('una ');
+  return `${female ? 'La' : 'El'} ${w.name.toLowerCase()} de ${who} vuelve ${broken ? (female ? 'rota' : 'roto') : female ? 'gastada' : 'gastado'}.`;
 }
 
 // -------------------------------------------------------------- backpack

@@ -137,14 +137,6 @@ describe('songs', () => {
     expect(previewShot(s, other, t, { ability: 'shoot' })!.mods.some((m) => m.label === 'Rastreo')).toBe(false);
   });
 
-  it('a support song refused says why: an ally at full health and calm is not hurt nor affected', () => {
-    const s = field();
-    const paladin = addUnit(s, 's1', 'assault', 2, 2, { perks: ['layOnHands'], charges: { layOnHands: 2 } });
-    addUnit(s, 's2', 'grenadier', 3, 2);
-    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'layOnHands', target: 's2' }, { slot: 0, connected: [0], rng: new Rng(1) });
-    expect(r.ok ? '' : r.error).toBe('No está herido ni afectado.');
-    void paladin;
-  });
 
   it('Último verso brings back whoever fell this turn; otherwise it heals those around', () => {
     const s = field();

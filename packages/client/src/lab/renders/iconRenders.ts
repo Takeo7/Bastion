@@ -1,12 +1,8 @@
-import { defaultAppearance, type ClassId, type TemplateId } from '@bastion/engine';
 import * as THREE from 'three';
-import type { FigureRig } from '../../game/figures';
 import { fxShape } from '../../game/fx';
-import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
-import { SyntyFigure } from '../../game/syntyFigures';
 import { molotov } from '../../game/songFx';
 import { loadModel } from '../../game/synty';
-import { UI_MODELS, type BaseModelId, type CharacterId, type PackId, type WeaponId } from '../../game/syntyManifest';
+import { UI_MODELS, type BaseModelId, type PackId, type WeaponId } from '../../game/syntyManifest';
 import { KitBatch, kitMesh, kitModel, loadBaseKit } from '../../strategy/baseKit';
 
 // Icon renders for the interface (/renders.html): things of the game as
@@ -162,24 +158,6 @@ const kit = (id: BaseModelId) => async (): Promise<THREE.Object3D> => {
   return kitMesh(id, 'plain');
 };
 
-/** A neutral player colour for the class portraits: no one's violet or orange. */
-const NEUTRAL = '#8d97a3';
-
-/**
- * A soldier of a class, full length, at low ready with the class weapon: in
- * the class's default look in the neutral colour, as a given survivor.
- */
-const soldier = (template: TemplateId, cls: ClassId | null, character: CharacterId) => async (): Promise<THREE.Object3D> => {
-  const look = { ...defaultAppearance(cls, 0, NEUTRAL), character };
-  const rig = buildUnit(template, NEUTRAL, look, { weapon: 1, armor: 1 }, character);
-  if (!isFigure(rig)) throw new Error(`${template} is not a figure`);
-  for (let i = 0; i < 300 && rig instanceof SyntyFigure && !rig.ready; i++) await new Promise((r) => setTimeout(r, 30));
-  const pose = { ...IDLE_POSE, spin: 0, search: 0 };
-  for (let t = 0; t < 1.5; t += 1 / 30) (rig as FigureRig).applyPose(pose, t);
-  // The drone's bob is the unit view's: here it hovers where it was put.
-  return rig.root;
-};
-
 /**
  * One of UI_MODELS, `size` across its longest side, standing on y = 0 at
  * (x, z), turned `yaw` about the vertical and tipped `tilt` about x.
@@ -258,12 +236,6 @@ const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.V
   ruinas: { make: kit('brokenWall'), view: new THREE.Vector3(1, 0.15, 0.3), masks: true },
   // La Mula nose on, for the Mixta panels.
   'mula-front': { make: mulaIcon, view: new THREE.Vector3(0.05, 0.12, 1) },
-  // A soldier per class, full length, the class weapon at low ready, in a neutral colour (seen from the gun side).
-  asalto: { make: soldier('assault', 'assault', 'riotCop'), view: new THREE.Vector3(-0.75, 0.22, 1) },
-  granadero: { make: soldier('grenadier', 'grenadier', 'soldierM'), view: new THREE.Vector3(-0.75, 0.22, 1) },
-  francotirador: { make: soldier('sharpshooter', 'sharpshooter', 'scout'), view: new THREE.Vector3(-0.75, 0.22, 1) },
-  especialista: { make: soldier('specialist', 'specialist', 'mechanic'), view: new THREE.Vector3(-0.75, 0.22, 1) },
-  recluta: { make: soldier('rookie', null, 'coolM'), view: new THREE.Vector3(-0.75, 0.22, 1) },
   // Items.
   botiquin: { make: kit('medKit'), view: new THREE.Vector3(0.55, 0.85, 1) },
   racion: { make: rationIcon, view: new THREE.Vector3(0.6, 0.5, 1) },
@@ -277,7 +249,7 @@ const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.V
 const shots = new Map<string, string>();
 const shelf = document.getElementById('renders')!;
 
-// `?only=asalto,racion` renders just those.
+// `?only=botiquin,racion` renders just those.
 const only = new URLSearchParams(location.search).get('only')?.split(',');
 for (const [name, icon] of Object.entries(ICONS).filter(([n]) => !only || only.includes(n))) {
   void icon.make().then(async (subject) => {

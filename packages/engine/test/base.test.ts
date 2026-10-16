@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { baseAttrs } from '../src/classes';
 import {
   applyMissionResult,
   buildSquad,
@@ -18,7 +17,6 @@ import {
   neighbours,
   plotAt,
   plotById,
-  pointsToSpend,
   recruitCost,
   walkways,
   beds,
@@ -39,6 +37,7 @@ import { defaultAppearance } from '../src/appearance';
 import { sexOfName } from '../src/content';
 import { bastionLevel, LEVEL_XP, missionXp } from '../src/progression';
 import { Rng } from '../src/rng';
+import { skillLevel, veterancy } from '../src/skills';
 import { createMission } from '../src/setup';
 import type { Appearance, Slot } from '../src/types';
 
@@ -207,12 +206,12 @@ describe('buildings and their levels', () => {
     expect(squadMember(c, s0).mods.aim).toBe(aim + 10);
     put('3,4', 'training', 3);
     expect(squadMember(c, s0).mods.aim).toBe(aim + 12);
-    // Training at level 3: recruits arrive as Cabo, with the points of two promotions to spend.
+    // Training at level 3: recruits arrive with two levels more than a plain recruit (docs/FASE9.md).
     put('1,3', 'quarters');
     run(c, { type: 'recruit' });
     const recruit = c.soldiers[c.soldiers.length - 1]!;
-    expect(recruit.rank).toBe(2);
-    expect(pointsToSpend(recruit)).toEqual({ attrs: 4, talents: 4 });
+    expect(veterancy(recruit.skills)).toBeGreaterThanOrEqual(3);
+    expect(veterancy(recruit.skills)).toBeLessThanOrEqual(4);
     // Works brigade: a quarter off the days of every work.
     put('4,2', 'crew');
     run(c, { type: 'build', plot: '4,4', facility: 'infirmary' });
@@ -254,13 +253,14 @@ describe('the Camposanto', () => {
     const [fallen, survivor] = mission.units.filter((u) => u.team === 'xcom');
     fallen!.alive = false;
     fallen!.hp = 0;
+    survivor!.deeds = { hit: 2 };
     mission.outcome = 'victory';
     const report = applyMissionResult(c, mission, new Rng(1));
     const dead = c.soldiers.find((s) => s.id === fallen!.campaignId)!;
     expect(dead).toMatchObject({ alive: false, fellDay: report.day });
     expect(c.log.some((l) => l.text === `${dead.name} descansa en el Camposanto.`)).toBe(true);
-    // Showing up, winning and one more for the fallen.
-    expect(report.squad.find((e) => e.id === survivor!.campaignId)!.xpGained).toBe(1 + 1 + survivor!.kills + 1);
+    // What it did, and one more of it for the fallen.
+    expect(report.squad.find((e) => e.id === survivor!.campaignId)!.learned).toMatchObject({ shooting: 3 });
   });
 });
 
@@ -359,19 +359,25 @@ describe('equipment', () => {
     expect(() => run(c, { type: 'equip', soldier: theirs.id, slot: 'utility', item: 'smokeGrenade' }, 1, both)).toThrow(/libres/);
     expect(() => run(c, { type: 'equip', soldier: theirs.id, slot: 'utility', item: 'firstAid' }, 0, both)).toThrow(/tus soldados/);
     expect(() => run(c, { type: 'buy', item: 'mindShield' }, 0, both)).toThrow(/nivel 6/);
-    expect(() => run(c, { type: 'equip', soldier: mine.id, slot: 'ammo', item: 'smokeGrenade' }, 0, both)).toThrow(/ranura/);
+    // The belt has two places for any accessory (docs/FASE9.md §4); special rounds go no more.
+    run(c, { type: 'buy', item: 'smokeGrenade' }, 0, both);
+    run(c, { type: 'equip', soldier: mine.id, slot: 'ammo', item: 'smokeGrenade' }, 0, both);
+    expect(itemsFree(c, 'smokeGrenade')).toBe(0);
+    c.inventory.apRounds = 1;
+    expect(() => run(c, { type: 'equip', soldier: mine.id, slot: 'ammo', item: 'apRounds' }, 0, both)).toThrow(/cinturón/);
   });
 
   it('equipment reaches the battlefield and is lost with its bearer', () => {
     const c = solo();
     const s = c.soldiers[0]!;
     c.xp = LEVEL_XP[3]!;
-    run(c, { type: 'buy', item: 'apRounds' });
+    run(c, { type: 'buy', item: 'fragGrenade' });
     run(c, { type: 'buy', item: 'smokeGrenade' });
-    run(c, { type: 'equip', soldier: s.id, slot: 'ammo', item: 'apRounds' });
+    run(c, { type: 'equip', soldier: s.id, slot: 'ammo', item: 'fragGrenade' });
     run(c, { type: 'equip', soldier: s.id, slot: 'utility', item: 'smokeGrenade' });
+    const grenades = c.inventory.fragGrenade!;
     const member = squadMember(c, s);
-    expect(member.mods.pierce).toBe(1);
+    expect(member.charges.grenade).toBe(2 + (skillLevel(s.skills.craft) >= 2 ? 1 : 0));
     expect(member.charges.smoke).toBe(1);
     run(c, { type: 'chooseMission', id: c.offers[0]!.id });
     run(c, { type: 'squad', soldier: s.id, on: true });
@@ -382,78 +388,11 @@ describe('equipment', () => {
     unit.hp = 0;
     mission.outcome = 'defeat';
     applyMissionResult(c, mission, new Rng(1));
-    expect(c.inventory.apRounds ?? 0).toBe(0);
+    expect(c.inventory.fragGrenade).toBe(grenades - 1);
     expect(c.inventory.smokeGrenade ?? 0).toBe(0);
   });
 });
 
-describe('migration', () => {
-  it('an old campaign gets a base, regions, loadouts and its promotion points back', () => {
-    const c = createCampaign([0], new Rng(1)) as unknown as Record<string, unknown>;
-    for (const key of ['base', 'regions', 'inventory', 'credits', 'xp', 'nextFacilityDay', 'nextSupplyDay', 'nextEventDay', 'event']) delete c[key];
-    // Version 3 and older: three resources, research and engineering upgrades.
-    Object.assign(c, { version: 3, resources: { supplies: 100, intel: 20, alloys: 10 }, research: { done: ['alienEncryption'] }, upgrades: ['magWeapons'], corpses: ['sectoid'] });
-    const soldiers = c.soldiers as { rank: number; perks: string[]; loadout?: unknown }[];
-    soldiers[0]!.rank = 2;
-    soldiers[0]!.perks = ['pointBlank', 'elusive'];
-    delete soldiers[0]!.loadout;
-    delete (soldiers[0] as Record<string, unknown>).appearance;
-    delete (soldiers[0] as Record<string, unknown>).nickname;
-    const m = migrateCampaign(c as unknown as CampaignState);
-    expect(m.base.plots).toHaveLength(BASE_SIZE * BASE_SIZE);
-    expect(m.regions.find((r) => r.id === 'weu')!.contacted).toBe(true);
-    // The old perks don't fit the talent trees: every point of the rank comes back.
-    expect(m.soldiers[0]!.attrs).toEqual(baseAttrs(m.soldiers[0]!.cls));
-    expect(m.soldiers[0]!.talents).toEqual({});
-    expect(pointsToSpend(m.soldiers[0]!)).toEqual({ attrs: 4, talents: 4 });
-    expect('perks' in m.soldiers[0]!).toBe(false);
-    expect(m.soldiers[0]!.loadout).toEqual({ utility: null, ammo: null });
-    // Soldiers from before customization keep their old look, and take the sex of their name.
-    expect(m.soldiers[0]!.appearance).toEqual(defaultAppearance(m.soldiers[0]!.cls, 0, undefined, sexOfName(m.soldiers[0]!.name)));
-    expect(m.soldiers[0]!.nickname).toBe('');
-    expect(m.version).toBe(CAMPAIGN_VERSION);
-    // Resources become credits, and the Bastion keeps what was already researched.
-    expect(m.credits).toBe(100 + 2 * 20 + 3 * 10);
-    expect(bastionLevel(m)).toBe(5);
-    expect(m).not.toHaveProperty('research');
-    expect(m).not.toHaveProperty('resources');
-  });
-
-  it('the first player turns violet: soldiers in the old blue default follow, customised ones keep theirs', () => {
-    const c = createCampaign([0, 1], new Rng(1));
-    const [plain, custom] = c.soldiers.filter((s) => s.owner === 0);
-    plain!.appearance = defaultAppearance(plain!.cls, 0, '#3fa9ff');
-    custom!.appearance = { ...defaultAppearance(custom!.cls, 0, '#3fa9ff'), visor: '#ffffff' };
-    (c as { version: number }).version = 10;
-    const m = migrateCampaign(c);
-    expect(m.soldiers.find((s) => s.id === plain!.id)!.appearance).toEqual(defaultAppearance(plain!.cls, 0, undefined, sexOfName(plain!.name)));
-    expect(m.soldiers.find((s) => s.id === custom!.id)!.appearance.secondary).toBe('#3fa9ff');
-  });
-
-  it('an underground base moves to the surface: facilities keep working and the work carries on', () => {
-    const c = createCampaign([0], new Rng(1));
-    const slots = [0, 1, 2].flatMap((row) => [0, 1, 2].map((col) => ({ id: `r${row}c${col}`, row, col, excavated: row < 2, facility: null as string | null })));
-    slots[0]!.facility = 'workshop';
-    slots[1]!.facility = 'relay';
-    slots[3]!.facility = 'relay';
-    (c as unknown as { base: unknown }).base = { slots, construction: { slot: 'r1c1', kind: 'build', facility: 'infirmary', daysLeft: 4, total: 6 } };
-    (c as { version: number }).version = 6;
-    const m = migrateCampaign(c);
-    expect(m.base.plots).toHaveLength(BASE_SIZE * BASE_SIZE);
-    expect(m.base.plots.filter((p) => p.building === 'workshop')).toHaveLength(1);
-    expect(m.base.plots.filter((p) => p.building === 'relay')).toHaveLength(2);
-    // Every facility stands next to another building, on cleared ground.
-    for (const p of m.base.plots.filter((x) => x.building)) {
-      expect(p.terrain).toBe('clear');
-      if (p.building !== 'command') expect(neighbours(m, p).some((q) => q.building)).toBe(true);
-    }
-    const work = m.base.works[0]!;
-    expect(work).toMatchObject({ kind: 'build', facility: 'infirmary', daysLeft: 4, total: 6 });
-    const site = plotById(m, work.plot)!;
-    expect(site).toMatchObject({ terrain: 'clear', building: null });
-    expect(neighbours(m, site).some((q) => q.building)).toBe(true);
-  });
-});
 
 describe('customization', () => {
   const look: Appearance = { primary: '#8f2f2f', secondary: '#c9a13a', visor: '#7dffb0', head: 'beret', build: 'slim' };
@@ -479,8 +418,8 @@ describe('customization', () => {
 
   it('the default look is the armour soldiers had before customization', () => {
     // The client used to mix the player colour into grey with THREE.Color.lerp (linear space).
-    expect(defaultAppearance('assault', 0).primary).toBe('#826cbd');
-    expect(defaultAppearance('assault', 1).primary).toBe('#bc854b');
+    expect(defaultAppearance(0).primary).toBe('#826cbd');
+    expect(defaultAppearance(1).primary).toBe('#bc854b');
   });
 
   it('new recruits come without a class, with a recruit look in their player colours', () => {
@@ -488,8 +427,8 @@ describe('customization', () => {
     for (const s of c.soldiers.slice(2)) s.alive = false;
     run(c, { type: 'recruit' });
     const s = c.soldiers.at(-1)!;
-    expect(s.cls).toBeNull();
-    expect(s.appearance).toEqual(defaultAppearance(null, 0, undefined, sexOfName(s.name)));
+    expect(s.picks).toEqual([]);
+    expect(s.appearance).toEqual(defaultAppearance(0, undefined, sexOfName(s.name)));
     expect(s.appearance.head).toBe('helmet');
   });
 });

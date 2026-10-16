@@ -40,9 +40,8 @@ SPRITES = {
 # Military Combat HUD pieces turned to neutral steel (their teal glints would fight the hazard yellow).
 STEEL = {
     'mh/dial': (f'{MH}/MilitaryCombat/SPR_MilitaryCombat_Dial_Medium_03.png', 256),
-    # The panels' frames (playtest 15/10 #5), cut in nine (border-image): a plain bevel, and one with bolts and a handle.
+    # The big plates' frame (playtest 15/10 #5), cut in nine (border-image, ui/themes/mixta.css): a plain bevel.
     'mh/frame-a': (f'{MH}/MilitaryCombat/SPR_MilitaryCombat_Frame_Medium_01.png', 256),
-    'mh/frame-b': (f'{MH}/MilitaryCombat/SPR_MilitaryCombat_Frame_Medium_05.png', 256),
 }
 
 # Flat white silhouettes, used as masks (coloured by the theme). out name: source.

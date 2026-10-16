@@ -1,11 +1,11 @@
 // Searching (docs/FASE2.md, «Saqueo»): which furniture can be searched, what
 // turns up in it and what the squad brings home. The rolls happen on the host
 // (Sim.search); the `searched` event carries what was found.
-import { BACKPACK_SLOTS, FOUND_WEAPONS, ITEMS, NIGHT, TEMPLATES } from './content';
+import { BACKPACK_SLOTS, FOUND_WEAPONS, ITEMS, NIGHT, TEMPLATES, WEAPON_MODS } from './content';
 import { decorOf } from './decor';
 import { DIRS4, DIRS8, heightAt, inBounds, isWalkable, kindAt, nodeOf, slabAt, tileIndex, toPos } from './grid';
 import type { Rng } from './rng';
-import type { DecorKind, FoundWeaponId, GameState, ItemId, Loot, Place, Pos, TileKind, Unit } from './types';
+import type { DecorKind, FoundWeaponId, GameState, ItemId, Loot, Place, Pos, TileKind, Unit, WeaponModId } from './types';
 
 /** What kind of place a searchable piece of furniture belongs to: it sets what turns up in it. */
 type Spot = 'home' | 'office' | 'shop' | 'store' | 'trunk' | 'glovebox';
@@ -38,6 +38,8 @@ interface LootTable {
   parts: number;
   /** A good weapon (FOUND_WEAPONS): rare, in boots, stores and wardrobes. */
   weapon: number;
+  /** An improvement for a weapon (docs/FASE9.md §5): stores and car boots most. */
+  mod: number;
   /** A magazine (docs/FASE7.md), for a searcher who counts them: stores and car boots most. */
   mags: number;
   /** Accessories that turn up there (only those the difficulty opens: `level` ≤ difficulty + 2). */
@@ -45,23 +47,36 @@ interface LootTable {
 }
 
 const TABLES: Record<Spot, LootTable> = {
-  home: { supplies: 30, item: 8, medicines: 3, food: 20, parts: 0, weapon: 2, mags: 4, items: ['firstAid', 'smokeGrenade', 'nanoVest', 'mindShield'] },
-  office: { supplies: 30, item: 8, medicines: 2, food: 4, parts: 15, weapon: 0, mags: 3, items: ['firstAid', 'flashbang', 'tracerRounds', 'mindShield'] },
-  shop: { supplies: 35, item: 8, medicines: 12, food: 25, parts: 2, weapon: 0, mags: 6, items: ['firstAid', 'smokeGrenade', 'fragGrenade', 'tracerRounds'] },
-  store: { supplies: 30, item: 14, medicines: 2, food: 15, parts: 15, weapon: 3, mags: 10, items: ['fragGrenade', 'smokeGrenade', 'tracerRounds', 'apRounds', 'flashbang'] },
-  trunk: { supplies: 30, item: 14, medicines: 8, food: 5, parts: 15, weapon: 4, mags: 10, items: ['fragGrenade', 'firstAid', 'apRounds', 'nanoVest'] },
-  glovebox: { supplies: 25, item: 5, medicines: 12, food: 3, parts: 5, weapon: 1, mags: 8, items: ['firstAid', 'tracerRounds'] },
+  // Special rounds aren't found any more: the weapons' mods took their place (docs/FASE9.md §5).
+  home: { supplies: 30, item: 8, medicines: 3, food: 20, parts: 0, weapon: 2, mod: 0, mags: 4, items: ['firstAid', 'smokeGrenade', 'nanoVest', 'mindShield'] },
+  office: { supplies: 30, item: 8, medicines: 2, food: 4, parts: 15, weapon: 0, mod: 1, mags: 3, items: ['firstAid', 'flashbang', 'mindShield'] },
+  shop: { supplies: 35, item: 8, medicines: 12, food: 25, parts: 2, weapon: 0, mod: 1, mags: 6, items: ['firstAid', 'smokeGrenade', 'fragGrenade'] },
+  store: { supplies: 30, item: 14, medicines: 2, food: 15, parts: 15, weapon: 3, mod: 4, mags: 10, items: ['fragGrenade', 'smokeGrenade', 'flashbang'] },
+  trunk: { supplies: 30, item: 14, medicines: 8, food: 5, parts: 15, weapon: 4, mod: 3, mags: 10, items: ['fragGrenade', 'firstAid', 'nanoVest'] },
+  glovebox: { supplies: 25, item: 5, medicines: 12, food: 3, parts: 5, weapon: 1, mod: 1, mags: 8, items: ['firstAid'] },
 };
 
 /** Rations and parts found at once. */
 const FOOD_FIND = [2, 4] as const;
 const PARTS_FIND = [1, 2] as const;
 
-/** Which good weapon turns up, by FOUND_WEAPONS weight. */
-function foundWeapon(rng: Rng): FoundWeaponId {
+/**
+ * Which weapon turns up, by FOUND_WEAPONS weight, as it is found (docs/FASE9.md
+ * §5): somewhat worn, and a good one with its improvement mounted.
+ */
+function foundWeapon(rng: Rng): Loot {
   const all = Object.values(FOUND_WEAPONS);
   let roll = rng.int(all.reduce((n, w) => n + w.weight, 0));
-  return all.find((w) => (roll -= w.weight) < 0)!.id;
+  const def = all.find((w) => (roll -= w.weight) < 0)!;
+  return { weapon: def.id, condition: rng.range(FOUND_CONDITION[0], FOUND_CONDITION[1]), ...(def.mod ? { mods: [def.mod] } : {}) };
+}
+
+/** The condition a weapon is found in. */
+const FOUND_CONDITION = [40, 90] as const;
+
+/** Which improvement turns up. */
+function foundMod(rng: Rng): Loot {
+  return { mod: rng.pick(Object.keys(WEAPON_MODS) as WeaponModId[]) };
 }
 
 /** Suministros found at once: 5–14, and 2 more per difficulty step (up to 20); half as much again at night. */
@@ -95,7 +110,8 @@ function rollSpot(spot: Spot, difficulty: number, rng: Rng, night: boolean, mags
   if (roll < edge) return { medicines: 1 };
   if (roll < (edge += t.food)) return { food: rng.range(...FOOD_FIND) };
   if (roll < (edge += t.parts)) return { parts: rng.range(...PARTS_FIND) };
-  if (roll < (edge += t.weapon)) return { weapon: foundWeapon(rng) };
+  if (roll < (edge += t.weapon)) return foundWeapon(rng);
+  if (roll < (edge += t.mod)) return foundMod(rng);
   if (roll < (edge += t.mags)) return mags ? { mags: 1 } : null;
   return null;
 }
@@ -115,7 +131,8 @@ export const LOOT_BOXES: readonly DecorKind[] = ['lootWeapons', 'lootMedical', '
 export function rollBox(kind: DecorKind, rng: Rng, mags: boolean): Loot | null {
   switch (kind) {
     case 'lootWeapons':
-      return { weapon: foundWeapon(rng) };
+      // A weapon, or now and then an improvement for one (docs/FASE9.md §5).
+      return rng.int(10) < 3 ? foundMod(rng) : foundWeapon(rng);
     case 'lootMedical':
       return { medicines: rng.range(1, 2) };
     case 'lootAmmo':
@@ -267,8 +284,19 @@ export interface LootTotals {
   parts: number;
   /** Weapons found: new to the Armería. */
   weapons: FoundWeaponId[];
+  /** The same, as found: their condition and mods (docs/FASE9.md §5). */
+  arms?: CarriedWeapon[];
   /** The Armería's own weapons coming back in a backpack (Loot.weaponId), swapped for a find (docs/FASE8.md §C). */
-  returned?: { id: string; kind: FoundWeaponId }[];
+  returned?: (CarriedWeapon & { id: string })[];
+  /** Loose improvements found, for the Armería (docs/FASE9.md §5). */
+  mods?: WeaponModId[];
+}
+
+/** A weapon with its condition and mods, as it travels in a backpack. */
+export interface CarriedWeapon {
+  kind: FoundWeaponId;
+  condition?: number;
+  mods?: WeaponModId[];
 }
 
 export function lootTotals(loot: readonly Loot[]): LootTotals {
@@ -279,8 +307,13 @@ export function lootTotals(loot: readonly Loot[]): LootTotals {
     out.medicines += l.medicines ?? 0;
     out.food += l.food ?? 0;
     out.parts += l.parts ?? 0;
-    if (l.weapon && l.weaponId) (out.returned ??= []).push({ id: l.weaponId, kind: l.weapon });
-    else if (l.weapon) out.weapons.push(l.weapon);
+    const carried: CarriedWeapon | null = l.weapon ? { kind: l.weapon, ...(l.condition !== undefined ? { condition: l.condition } : {}), ...(l.mods?.length ? { mods: [...l.mods] } : {}) } : null;
+    if (carried && l.weaponId) (out.returned ??= []).push({ id: l.weaponId, ...carried });
+    else if (carried) {
+      out.weapons.push(carried.kind);
+      (out.arms ??= []).push(carried);
+    }
+    if (l.mod) (out.mods ??= []).push(l.mod);
   }
   return out;
 }

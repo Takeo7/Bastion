@@ -9,7 +9,6 @@ import {
   gainXp,
   migrateCampaign,
   missionInfo,
-  pointsToSpend,
   regionIncome,
   squadMember,
   type CampaignCommand,
@@ -21,6 +20,7 @@ import { defaultAppearance } from '../src/appearance';
 import { hasTech, LEVEL_XP } from '../src/progression';
 import { QUESTS } from '../src/quests';
 import { Rng } from '../src/rng';
+import { veterancy } from '../src/skills';
 import { createMission } from '../src/setup';
 import type { Slot } from '../src/types';
 
@@ -127,10 +127,11 @@ describe('side quests', () => {
     expect(eventDef(c)?.title).toBe('Vera Lindqvist');
     run(c, { type: 'answerEvent', option: 0 });
     const ibarra = c.soldiers.find((s) => s.name === 'Vera Lindqvist')!;
-    expect(ibarra).toMatchObject({ cls: null, rank: 3, traits: ['scarred'] });
+    // She has been out there: three levels more than a recruit (docs/FASE9.md).
+    expect(ibarra).toMatchObject({ traits: ['scarred'] });
+    expect(veterancy(ibarra.skills)).toBeGreaterThanOrEqual(4);
     // Her model is a woman's, whatever name the recruit drew first.
-    expect(ibarra.appearance).toEqual(defaultAppearance(null, ibarra.owner, undefined, 'f'));
-    expect(pointsToSpend(ibarra)).toEqual({ attrs: 6, talents: 6 });
+    expect(ibarra.appearance).toEqual(defaultAppearance(ibarra.owner, undefined, 'f'));
     expect(squadMember(c, ibarra).will).toBeLessThan(squadMember(c, { ...ibarra, traits: [] }).will);
   });
 
@@ -189,7 +190,6 @@ describe('side quests', () => {
       c.offers = c.offers.filter((o) => !o.quest);
       for (const s of c.soldiers) s.nickname = 'Mula';
       run(c, { type: 'chooseMission', id: c.offers[0]!.id });
-      for (const s of c.soldiers.slice(0, 4)) run(c, { type: 'squad', soldier: s.id, on: true });
       const mission = createMission({ map: c.offers[0]!.map, slots: [0], rng: new Rng(2), kind: c.offers[0]!.kind, squad: c.squad.map((id) => squadMember(c, c.soldiers.find((s) => s.id === id)!)) });
       mission.outcome = 'victory';
       applyMissionResult(c, mission, new Rng(seed));
@@ -220,7 +220,6 @@ describe('side quests', () => {
         s.name = `Mariam ${s.name.split(' ').slice(1).join(' ')}`;
       }
       run(c, { type: 'chooseMission', id: c.offers[0]!.id });
-      for (const s of c.soldiers.slice(0, 4)) run(c, { type: 'squad', soldier: s.id, on: true });
       const mission = createMission({ map: c.offers[0]!.map, slots: [0], rng: new Rng(2), kind: c.offers[0]!.kind, squad: c.squad.map((id) => squadMember(c, c.soldiers.find((s) => s.id === id)!)) });
       mission.outcome = 'victory';
       applyMissionResult(c, mission, new Rng(seed));
@@ -232,14 +231,4 @@ describe('side quests', () => {
     expect(found).toBeGreaterThanOrEqual(12);
   });
 
-  it('an older campaign gets empty quests and rumours', () => {
-    const c = createCampaign([0], new Rng(1)) as unknown as Record<string, unknown> & CampaignState;
-    for (const key of ['quests', 'questLog', 'questEvent', 'rumors', 'listening', 'nextRumorDay', 'techs', 'seen']) delete c[key];
-    for (const s of c.soldiers) delete (s as Partial<typeof s>).traits;
-    c.version = 5 as CampaignState['version'];
-    const m = migrateCampaign(c);
-    expect(m).toMatchObject({ quests: [], questLog: {}, questEvent: null, rumors: [], listening: null, techs: [], seen: {} });
-    expect(m.nextRumorDay).toBeGreaterThan(m.day);
-    expect(m.soldiers.every((s) => Array.isArray(s.traits))).toBe(true);
-  });
 });

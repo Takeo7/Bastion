@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { BUILDS, HEADS, NAME_MAX, NICKNAME_MAX } from './appearance';
 import { FACILITIES, REGIONS } from './campaign';
-import { ATTRS, TALENTS } from './classes';
-import { ABILITIES, ITEMS } from './content';
+import { ABILITIES, ITEMS, WEAPON_MODS } from './content';
 import { CRAFTS } from './progression';
+import { SKILL_TALENTS } from './skills';
 import type { CampaignState } from './campaign';
 import type { GameEvent } from './events';
-import type { AbilityId, GameState, Place, Slot } from './types';
+import type { AbilityId, GameState, PerkId, Place, Slot } from './types';
 
 const vec2 = z.object({ x: z.number().int(), y: z.number().int() });
 /** A place (types.ts Pos): without `z`, on the ground (docs/FASE6-PLAN.md). */
@@ -79,8 +79,8 @@ const keys = <K extends string>(record: Record<K, unknown>) => Object.keys(recor
 const facilityId = z.enum(keys(FACILITIES));
 const regionId = z.enum(keys(REGIONS));
 const itemId = z.enum(keys(ITEMS));
-const talentId = z.enum(keys(TALENTS));
-const attrId = z.enum(keys(ATTRS));
+/** Fase 9's talents (skills.ts SKILL_TALENTS). */
+const pickId = z.enum(keys(SKILL_TALENTS as Record<PerkId, unknown>));
 const id = z.string().min(1).max(16);
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 // The pieces are optional (appearance.ts): older clients and saves send none.
@@ -109,9 +109,11 @@ export const campaignCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cancelMission') }),
   z.object({ type: z.literal('squad'), soldier: id, on: z.boolean() }),
   z.object({ type: z.literal('recruit'), squad: z.boolean().optional() }),
-  z.object({ type: z.literal('train'), soldier: id, attr: attrId }),
-  z.object({ type: z.literal('talent'), soldier: id, talent: talentId }),
-  z.object({ type: z.literal('retrain'), soldier: id }),
+  /** «Guardar» in the tree (docs/FASE9.md §2): the whole list of talents picked. */
+  z.object({ type: z.literal('picks'), soldier: id, picks: z.array(pickId).max(8) }),
+  /** The Armería (docs/FASE9.md §5): mend a weapon; mount or take off an improvement. */
+  z.object({ type: z.literal('repair'), weapon: id }),
+  z.object({ type: z.literal('mod'), weapon: id, mod: z.enum(keys(WEAPON_MODS)), on: z.boolean() }),
   z.object({ type: z.literal('buy'), item: itemId }),
   z.object({ type: z.literal('equip'), soldier: id, slot: z.enum(['utility', 'ammo']), item: itemId.nullable() }),
   z.object({ type: z.literal('customize'), soldier: id, name: z.string().max(NAME_MAX * 2), nickname: z.string().max(NICKNAME_MAX * 2), appearance: appearanceSchema }),
@@ -162,7 +164,14 @@ export interface HostAddress {
 export type ServerMessage =
   /** `hosts`: this machine's network addresses, so the menu can tell the partner where to connect; `httpsPort`: where the game is also served over https. */
   | { t: 'welcome'; token: string; slot: Slot; hosts?: HostAddress[]; httpsPort?: number }
-  | { t: 'room'; players: PlayerInfo[]; phase: RoomPhase; savedCampaign: { day: number; doom: number; level: number } | null }
+  | {
+      t: 'room';
+      players: PlayerInfo[];
+      phase: RoomPhase;
+      savedCampaign: { day: number; doom: number; level: number } | null;
+      /** A campaign from before Fase 9 the host put aside on starting (docs/FASE9.md §7): the file's name. */
+      setAside?: string;
+    }
   | { t: 'campaign'; state: CampaignState }
   | { t: 'baseView'; slot: Slot; view: BaseView }
   | { t: 'snapshot'; state: GameState }

@@ -8,7 +8,7 @@
 // Every rule of the theme hangs from :root[data-ui='mixta'] (set here, and in
 // index.html so the first paint has it): the attribute gives the theme's rules
 // the weight to win over the layout rules of styles.css, strategy.css and
-// skillTree.css, whatever order the bundler loads them in.
+// skillMatrix.css, whatever order the bundler loads them in.
 //   - themes/synty-base.css: undoes the old case file's paper habits and paints
 //     every component from the --t-* values;
 //   - themes/mixta.css: the --t-* values, the materials, type and motion;

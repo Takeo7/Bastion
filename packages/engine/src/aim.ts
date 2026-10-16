@@ -5,8 +5,11 @@
 import {
   ABILITIES,
   attackWeapon,
+  conditionOf,
   DISORIENTED_AIM,
+  firesPrimary,
   GRAZE_DAMAGE_MULT,
+  hasMod,
   hasPerk,
   hasSquadsight,
   HEIGHT_ADVANTAGE_AIM,
@@ -14,6 +17,7 @@ import {
   HUNKER_DEFENSE,
   HUNKER_DODGE,
   LOW_COVER_BONUS,
+  MOD_AIM,
   REACTION_PENALTY,
   rangeModifier,
   SQUADSIGHT_CRIT_MOD,
@@ -21,6 +25,8 @@ import {
   SQUADSIGHT_DISTANCE_MOD,
   SUPPRESSED_AIM,
   TEMPLATES,
+  WORN_AIM,
+  WORN_BELOW,
   type WeaponDef,
 } from './content';
 import { coverAgainst } from './cover';
@@ -123,7 +129,14 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   const mods: Modifier[] = [{ label: 'Puntería', value: st.aim + sm.aim }];
   if (weapon.aim) mods.push({ label: weapon.melee ? 'Arma cuerpo a cuerpo' : 'Arma', value: weapon.aim });
   if (def.aim) mods.push({ label: def.name, value: def.aim });
-  if (weapon.melee && sm.meleeAim) mods.push({ label: 'Maestro del machete', value: sm.meleeAim });
+  if (weapon.melee && sm.meleeAim) mods.push({ label: 'Cuerpo a cuerpo', value: sm.meleeAim });
+  if (!weapon.melee && sm.gunAim) mods.push({ label: 'Tiro', value: sm.gunAim });
+  // The weapon in the hand (docs/FASE9.md §5): worn, a scope, a stock that steadies it on watch.
+  if (firesPrimary(shooter, ability)) {
+    if (conditionOf(shooter) < WORN_BELOW) mods.push({ label: 'Gastada', value: -WORN_AIM });
+    if (hasMod(shooter, 'scope')) mods.push({ label: 'Mira', value: MOD_AIM });
+    if (opts.reaction && hasMod(shooter, 'stock')) mods.push({ label: 'Culata', value: MOD_AIM });
+  }
   if (shooter.disoriented) mods.push({ label: 'Desorientado', value: -DISORIENTED_AIM });
   if (shooter.suppressedBy) {
     const by = s.units.find((u) => u.id === shooter.suppressedBy);
@@ -179,6 +192,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
     if (st.crit) critMods.push({ label: 'Base', value: st.crit });
     if (sm.crit) critMods.push({ label: 'Habilidad', value: sm.crit });
     if (weapon.melee && sm.meleeCrit) critMods.push({ label: 'Golpe certero', value: sm.meleeCrit });
+    if (!weapon.melee && sm.gunCrit) critMods.push({ label: 'Tiro', value: sm.gunCrit });
     if (def.weapon === 'secondary' && sm.pistolCrit) critMods.push({ label: 'Gatillo fino', value: sm.pistolCrit });
     if (weapon.crit) critMods.push({ label: 'Arma', value: weapon.crit });
     if (close && sm.closeRangeCrit) critMods.push({ label: 'Quemarropa', value: sm.closeRangeCrit });

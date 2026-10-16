@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { BITE_TAG, canStandOn, coverAt, decorOf, kindAt, PLAYER_COLORS, sexOfPerson, TEMPLATES, type Alarm, type Biome, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
+import { BITE_TAG, canStandOn, coverAt, decorOf, kindAt, PLAYER_COLORS, sexOfPerson, type Alarm, type Biome, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
 import { STOREY, tileToWorld } from './coords';
 import type { Blow, FigurePose, Gear } from './figures';
 import { clipSpeed, CROUCHED, gaitsOf } from './gaits';
@@ -369,7 +369,8 @@ export class UnitViews {
     ].join('');
     // Like XCOM 2, a soldier with a nickname goes by it in the field.
     const called = u.nickname ? `«${u.nickname}»` : u.name;
-    const name = u.team === 'xcom' && u.template !== 'vip' ? `${TEMPLATES[u.template].short} · ${called}` : u.name;
+    // Fase 9: no classes, so no class code before the name (UI).
+    const name = u.team === 'xcom' && u.template !== 'vip' ? called : u.name;
     v.body = `<div class="uflag-name">${name}</div><div class="uflag-row">${coverIcon}<span class="hp">${pips}</span>${armor}${status}</div>`;
     this.paintFlag(v);
   }

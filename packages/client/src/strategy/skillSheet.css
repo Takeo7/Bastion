@@ -1,0 +1,182 @@
+/*
+ * The skills on a soldier's sheet in the Cuartel (skillSheet.ts): a row per
+ * skill (its level in its colour, its name, a gauge to the next level and the
+ * experience), then the veterancy. The colours are the tree's (.sk-*,
+ * skillMatrix.css).
+ */
+
+.sk-rows {
+  display: grid;
+  gap: 4px;
+}
+
+.sk-row {
+  display: grid;
+  grid-template-columns: 24px auto minmax(40px, 1fr) minmax(44px, auto);
+  align-items: center;
+  gap: 8px;
+}
+
+.sk-row-level {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--cc);
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  color: #0d0f10;
+}
+
+.sk-row-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sk-row-gauge {
+  height: 6px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--cc) 18%, rgba(0, 0, 0, 0.45));
+  box-shadow: var(--m-sink, inset 0 1px 2px rgba(0, 0, 0, 0.6));
+  overflow: hidden;
+}
+
+.sk-row-gauge i {
+  display: block;
+  width: calc(var(--p) * 100%);
+  height: 100%;
+  background: var(--cc);
+}
+
+.sk-row-xp {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--x-muted);
+}
+
+/* The four levels in a list of soldiers: four figures, each in its skill's colour; a 0 barely there. */
+.sk-digits {
+  display: inline-flex;
+  gap: 1px;
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.sk-digits b {
+  display: grid;
+  place-items: center;
+  width: 10px;
+  height: 16px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--cc) 24%, rgba(0, 0, 0, 0.35));
+  color: var(--cc);
+}
+
+.sk-digits b.none {
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.22);
+}
+
+/* The veterancy: a plate of its own under the skills. */
+.sk-vet {
+  display: grid;
+  gap: 1px;
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-radius: 3px;
+  background: var(--m-well-bg, rgba(0, 0, 0, 0.35));
+  box-shadow: var(--m-sink), inset 3px 0 0 var(--t-accent, #f2c230);
+}
+
+.sk-vet-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sk-vet-head b {
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t-accent, #f2c230);
+}
+
+.sk-vet-points {
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.sk-vet-line {
+  font-size: 12.5px;
+  font-style: italic;
+  color: #d9dcd6;
+}
+
+.sk-vet-gives,
+.sk-vet-next {
+  font-size: 12px;
+  color: var(--x-muted);
+}
+
+.sk-vet-next {
+  color: var(--x-good);
+}
+
+/* A talent kept, on the sheet: its skill's colour on its edge. */
+.x-chip.sk-chip {
+  box-shadow: inset 3px 0 0 var(--cc);
+}
+
+/* The tree's panel: the board under the title, nothing beside it. */
+.strat-modal .x-panel.wide.service.sm-host {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+/* The debrief's card: what the mission taught, a tag per skill; a level gone up, a badge in its colour. */
+.sk-learned {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.sk-tag {
+  padding: 0 5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--cc) 22%, rgba(0, 0, 0, 0.4));
+  box-shadow: inset 2px 0 0 var(--cc);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--cc) 60%, #fff);
+  cursor: help;
+}
+
+:root[data-ui='mixta'] .lineup-card .promo.sk-up {
+  background: var(--cc);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 10px color-mix(in srgb, var(--cc) 45%, transparent);
+  color: #0d0f10;
+  font-size: 12px;
+}
+
+.lineup-card .sk-talent-note {
+  margin-top: 2px;
+  font-weight: 700;
+  color: var(--t-accent, #f2c230);
+}

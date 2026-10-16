@@ -498,15 +498,18 @@ export const HEAD_GEAR: Record<HeadId, HeadgearId | null> = {
  * forend). One-handed and melee weapons have none.
  */
 export const WEAPONS = {
-  rifle: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_01', fore: [0.002, 0.2] },
-  rifle2: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_02', fore: [0.012, 0.21] },
-  rifle3: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_03', fore: [0.03, 0.27] },
-  shotgun: { pack: 'apocalypse', fbx: 'SM_Wep_Shotgun_01', fore: [-0.014, 0.2] },
-  sniper: { pack: 'apocalypse', fbx: 'SM_Wep_SniperRifle_01', fore: [-0.02, 0.14] },
-  sniper2: { pack: 'apocalypse', fbx: 'SM_Wep_SniperRifle_02', fore: [-0.022, 0.18] },
-  machineGun: { pack: 'apocalypse', fbx: 'SM_Wep_MachineGun_01', fore: [0.018, 0.3] },
-  huntingRifle: { pack: 'apocalypse', fbx: 'SM_Wep_HuntingRifle_01', fore: [-0.04, 0.22] },
-  smg: { pack: 'apocalypse', fbx: 'SM_Wep_SubMGun_01', fore: [-0.008, 0.12] },
+  // `sight`: the top of the receiver, where a sight goes (WEAPON_PARTS; a red dot on the `reflex` ones);
+  // `muzzle` where the converter's (the far end) is not the barrel's.
+  rifle: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_01', fore: [0.002, 0.2], sight: 0.098 },
+  rifle2: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_02', fore: [0.012, 0.21], sight: 0.096 },
+  rifle3: { pack: 'apocalypse', fbx: 'SM_Wep_AssaultRifle_03', fore: [0.03, 0.27], sight: 0.1 },
+  shotgun: { pack: 'apocalypse', fbx: 'SM_Wep_Shotgun_01', fore: [-0.014, 0.2], sight: 0.057, reflex: true },
+  sniper: { pack: 'apocalypse', fbx: 'SM_Wep_SniperRifle_01', fore: [-0.02, 0.14], sight: 0.053 },
+  // (Its bayonet reaches past the barrel.)
+  sniper2: { pack: 'apocalypse', fbx: 'SM_Wep_SniperRifle_02', fore: [-0.022, 0.18], sight: 0.04, muzzle: [0, 0.026, 0.49] },
+  machineGun: { pack: 'apocalypse', fbx: 'SM_Wep_MachineGun_01', fore: [0.018, 0.3], sight: 0.11, reflex: true },
+  huntingRifle: { pack: 'apocalypse', fbx: 'SM_Wep_HuntingRifle_01', fore: [-0.04, 0.22], sight: 0.043 },
+  smg: { pack: 'apocalypse', fbx: 'SM_Wep_SubMGun_01', fore: [-0.008, 0.12], sight: 0.071, reflex: true },
   baton: { pack: 'apocalypse', fbx: 'SM_Wep_Baton_01', melee: true },
   // A campaign soldier's own (docs/FASE8.md §A): the pistol, alone in the hand or in its holster;
   // the knife or the machete at the belt, in the hand for the Tajo; and the Armería's good ones.
@@ -514,11 +517,38 @@ export const WEAPONS = {
   // (Synty's blades are long beside its guns: `size` brings them down.)
   knife: { pack: 'apocalypse', fbx: 'SM_Wep_Melee_HuntingKnife_01', melee: true, size: 0.8 },
   machete: { pack: 'apocalypse', fbx: 'SM_Wep_Melee_Machete_01', melee: true, size: 0.72 },
-  boltRifle: { pack: 'apocalypse', fbx: 'SM_Wep_HuntingRifle_Clean_01', fore: [-0.04, 0.22] },
-  machineGun2: { pack: 'apocalypse', fbx: 'SM_Wep_MachineGun_02', fore: [0.018, 0.3] },
-} satisfies Record<string, { pack: PackId; fbx: string; melee?: boolean; pistol?: boolean; fore?: [number, number]; size?: number }>;
+  boltRifle: { pack: 'apocalypse', fbx: 'SM_Wep_HuntingRifle_Clean_01', fore: [-0.04, 0.22], sight: 0.043 },
+  machineGun2: { pack: 'apocalypse', fbx: 'SM_Wep_MachineGun_02', fore: [0.018, 0.3], sight: 0.122, reflex: true },
+} satisfies Record<string, WeaponAsset>;
+
+/** A weapon's model and how it is held and dressed (WEAPONS). */
+export interface WeaponAsset {
+  pack: PackId;
+  fbx: string;
+  melee?: boolean;
+  pistol?: boolean;
+  fore?: [number, number];
+  size?: number;
+  sight?: number;
+  reflex?: boolean;
+  muzzle?: [number, number, number];
+}
 
 export type WeaponId = keyof typeof WEAPONS;
+
+/**
+ * What is mounted on a gun (docs/FASE9.md §5; SyntyFigure puts them on): the
+ * modular parts of Apocalypse's guns, converted as weapons are (the barrel
+ * along +z), each on its own origin, where it fits on the gun. A red dot, a
+ * telescopic sight and the home-made silencer, a tube wrapped in tape.
+ */
+export const WEAPON_PARTS = {
+  scope2: { pack: 'apocalypse', fbx: 'SM_Wep_Mod_Attach_Scope_02' },
+  scope7: { pack: 'apocalypse', fbx: 'SM_Wep_Mod_Attach_Scope_07' },
+  silencer2: { pack: 'apocalypse', fbx: 'SM_Wep_Mod_Attach_Silencer_02' },
+} satisfies Record<string, { pack: PackId; fbx: string }>;
+
+export type WeaponPartId = keyof typeof WEAPON_PARTS;
 
 /** The weapon each template carries, by weapon tier (1–3); none for the unarmed. */
 export const UNIT_WEAPONS: Partial<Record<TemplateId, [WeaponId, WeaponId, WeaponId]>> = {

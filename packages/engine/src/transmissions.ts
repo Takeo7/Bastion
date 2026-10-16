@@ -52,7 +52,6 @@ export type SceneId =
   | 'simon'
   | 'ch5After'
   | 'velmar'
-  | 'firstSong'
   // Phases 3 and 4 (docs/FASE3.md, FASE4.md): the bite, medicines, food and found weapons.
   | 'firstBite'
   | 'shortMedicines'
@@ -82,15 +81,7 @@ export interface Scene {
 
 const trusted = (c: CampaignState) => c.story.simon === 'trusted';
 
-/**
- * The Oficio branch's talents (classes.ts, «el oficio de superviviente» in
- * docs/LORE.md) and the building that teaches them, the Taller de oficios
- * (`echoes` in the code). Written as plain strings so these scenes don't
- * depend on the ids existing yet.
- */
-const SONG_TALENTS = ['songBlade', 'aegis', 'echoStep', 'layOnHands', 'velmarOath', 'bolt', 'silence', 'fireball', 'highFlame', 'velmarStorm', 'huntersMark', 'spectralArrow', 'shadowStep', 'windEyes', 'lightRain', 'calmSong', 'counterSong', 'hymn', 'lightHands', 'lastVerse'];
 const hasEchoes = (c: CampaignState) => c.base.plots.some((p) => (p.building as string | null) === 'echoes');
-const someoneTrained = (c: CampaignState) => c.soldiers.some((s) => SONG_TALENTS.some((id) => (s.talents as Record<string, number | undefined>)[id]));
 const chapterOpen = (c: CampaignState, n: number) => c.story.done >= n || c.offers.some((o) => o.story === n);
 const bitten = (c: CampaignState) => c.soldiers.filter((s) => s.alive && s.infection);
 
@@ -213,19 +204,8 @@ export const SCENES: Scene[] = [
     channel: 'Taller de oficios',
     when: hasEchoes,
     lines: [
-      { who: 'teo', text: 'El taller de oficios está abierto. Lo que se sabía antes de los motores y se nos olvidó.' },
-      { who: 'teo', text: 'Machete, ballesta, fuego y vendas.' },
-      { who: 'nwosu', text: 'Las vendas las enseño yo.' },
-    ],
-  },
-  {
-    id: 'firstSong',
-    title: 'El primer oficio',
-    channel: 'Taller de oficios',
-    when: someoneTrained,
-    lines: [
-      { who: 'teo', text: 'Alguien ha terminado su primer oficio. Aprende rápido.' },
-      { who: 'teo', text: 'En el campo, con cabeza: el machete y la ballesta casi no se oyen. El fuego se oye desde lejos.' },
+      { who: 'teo', text: 'El taller de oficios está abierto. Lo que se aprende fuera, aquí se repasa con calma.' },
+      { who: 'nwosu', text: 'Las curas las repaso yo.' },
     ],
   },
   {

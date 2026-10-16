@@ -38,6 +38,9 @@ const skull = svg(
 );
 const cloud = svg('<path d="M7 18a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.5a3.5 3.5 0 0 1 1 6.9V18z"/><path d="M9 21h8"/>');
 const star = svg('<path d="M12 2v5M12 17v5M2 12h5M17 12h5M5 5l3.5 3.5M15.5 15.5L19 19M19 5l-3.5 3.5M8.5 15.5L5 19"/>');
+// Fase 9's talents: a blade swung all round (Hacerse sitio), a wrench on a barrel (Apaños).
+const sweepIcon = svg('<path d="M12 12L20 4"/><path d="M17 4h3v3"/><path d="M4.5 9a8 8 0 0 0 10.5 10.5" stroke-dasharray="2.2 2"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>');
+const wrench = svg('<path d="M14.5 5.5a4 4 0 0 0 4.9 4.9L21 12l-9 9-3-3 9-9z"/><path d="M3 9h7M3 13h4"/>');
 const fallback = svg('<path d="M12 3l9 9-9 9-9-9z"/>');
 
 // Velmar's songs: the same pen, with the Lengua's marks (sound arcs, light, dashed bodies).
@@ -86,6 +89,8 @@ const ICONS: Record<AbilityId, string> = {
   suppression: waves,
   chainShot: chain,
   rupture: cracked,
+  elbowRoom: sweepIcon,
+  patchUp: wrench,
   aimedShot: aimedEye,
   lightningHands: bolt,
   faceoff: targets,

@@ -2,6 +2,7 @@ import {
   abilityBlocker,
   abilityTargets,
   apNeeded,
+  besideEnemies,
   blastTiles,
   breachedWalls,
   breaksFloor,
@@ -46,6 +47,8 @@ import {
   loadedFor,
   MEDICINE_HEAL,
   MEDKIT_HEAL,
+  PATCH_UP,
+  conditionOf,
   NIGHT,
   NOISE,
   RESTORATION_HEAL,
@@ -254,6 +257,13 @@ export class Sim {
       case 'claw':
         this.meleeAttack(u, melee!, ability);
         break;
+      case 'elbowRoom':
+        // Hacerse sitio (docs/FASE9.md): a Slash at every enemy alongside, without a step.
+        for (const t of besideEnemies(this.s, u)) {
+          if (!u.alive || this.over) break;
+          if (t.alive) this.meleeAttack(u, { target: t, tile: u.pos, path: [] }, 'slash');
+        }
+        break;
       case 'suppression':
         this.emit({ t: 'suppressed', unit: u.id, target: target!.id });
         if (u.team === 'xcom') this.breakConcealment({ reason: 'attack', unit: u.id, by: target!.id });
@@ -270,6 +280,9 @@ export class Sim {
         break;
       case 'revival':
         this.emit({ t: 'cleansed', unit: u.id, target: target!.id });
+        break;
+      case 'patchUp':
+        this.emit({ t: 'patched', unit: u.id, target: target!.id, amount: Math.min(PATCH_UP, 100 - conditionOf(target!)) });
         break;
       case 'restoration':
         this.restoration(u);
@@ -291,7 +304,8 @@ export class Sim {
         this.flashbang(u, tile!);
         break;
       case 'firstAid':
-        this.emit({ t: 'healed', unit: u.id, target: target!.id, amount: Math.min(MEDKIT_HEAL, target!.maxHp - target!.hp) });
+        // Medicina 2 and 4, and Buen pulso, heal more (docs/FASE9.md).
+        this.emit({ t: 'healed', unit: u.id, target: target!.id, amount: Math.min(MEDKIT_HEAL + u.mods.heal, target!.maxHp - target!.hp) });
         break;
       case 'overwatch':
       case 'killZone':
@@ -1291,7 +1305,7 @@ export class Sim {
       case 'use': {
         const target = cmd.to ? getUnit(this.s, cmd.to)! : u;
         this.emit({ t: 'medicineUsed', unit: u.id, target: target.id, index: cmd.index! });
-        const amount = Math.min(MEDICINE_HEAL, target.maxHp - target.hp);
+        const amount = Math.min(MEDICINE_HEAL + u.mods.heal, target.maxHp - target.hp);
         if (amount > 0) this.emit({ t: 'healed', unit: u.id, target: target.id, amount });
         if (target.infected && medicineStopsBite(this.s, u)) this.emit({ t: 'cured', unit: target.id, by: u.id });
         break;
@@ -1464,6 +1478,8 @@ function allyRefusal(u: Unit, ability: AbilityId, target: Unit | undefined): str
       return 'No está herido.';
     case 'revival':
       return 'No está aturdido, desorientado ni en pánico.';
+    case 'patchUp':
+      return target.arms?.primary ? 'Su arma está como nueva.' : 'No lleva arma que arreglar.';
     case 'layOnHands':
       return 'No está herido ni afectado.';
     case 'aid':

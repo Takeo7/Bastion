@@ -27,27 +27,7 @@ function squad(s: GameState, id: string, template: Parameters<typeof addUnit>[2]
 }
 
 describe('cooldowns and free actions', () => {
-  it('Run and Gun is free, gives an action and then cools down', () => {
-    const s = field();
-    const u = squad(s, 's1', 'assault', 2, 2, ['runAndGun']);
-    addUnit(s, 'a1', 'trooper', 19, 2);
-    run(s, use('s1', 'runAndGun'));
-    expect(u.ap).toBe(3);
-    expect(u.cooldowns.runAndGun).toBe(4);
-    expect(abilityBlocker(s, u, 'runAndGun')).toMatch(/Disponible en 4/);
-    applyEvent(s, { t: 'turnBegan', team: 'xcom', turn: 2 });
-    expect(u.cooldowns.runAndGun).toBe(3);
-  });
 
-  it('Lightning Hands fires the pistol without spending an action', () => {
-    const s = field();
-    const u = squad(s, 's1', 'sharpshooter', 2, 2, ['lightningHands']);
-    addUnit(s, 'a1', 'trooper', 6, 2, { hp: 99, maxHp: 99 });
-    run(s, use('s1', 'lightningHands', { target: 'a1' }));
-    expect(u.ap).toBe(2);
-    run(s, use('s1', 'pistol', { target: 'a1' }));
-    expect(u.ap).toBe(1);
-  });
 
   it('a shot spends one action, and the sniper rifle both', () => {
     const s = field();
@@ -75,45 +55,18 @@ describe('cooldowns and free actions', () => {
 });
 
 describe('attack variants', () => {
-  it('Rapid Fire shoots twice with −15 aim; Chain Shot only repeats on a hit', () => {
+  it('Ráfaga shoots twice with −15 aim', () => {
     const s = field();
     squad(s, 's1', 'assault', 2, 2, ['rapidFire']);
     addUnit(s, 'a1', 'trooper', 6, 2, { hp: 99, maxHp: 99 });
     const shooter = s.units.find((u) => u.id === 's1')!;
     const target = s.units.find((u) => u.id === 'a1')!;
-    expect(previewShot(s, shooter, target, { ability: 'rapidFire' })!.mods).toContainEqual({ label: 'Fuego rápido', value: -15 });
+    expect(previewShot(s, shooter, target, { ability: 'rapidFire' })!.mods).toContainEqual({ label: 'Ráfaga', value: -15 });
     const events = run(s, use('s1', 'rapidFire', { target: 'a1' }));
     expect(events.filter((e) => e.t === 'shot')).toHaveLength(2);
     expect(shooter.ammo).toBe(2);
-
-    for (let seed = 1; seed < 20; seed++) {
-      const t = field();
-      squad(t, 's1', 'grenadier', 2, 2, ['chainShot']);
-      addUnit(t, 'a1', 'trooper', 6, 2, { hp: 99, maxHp: 99 });
-      const shots = run(t, use('s1', 'chainShot', { target: 'a1' }), seed).filter((e) => e.t === 'shot') as Extract<GameEvent, { t: 'shot' }>[];
-      expect(shots.length).toBe(shots[0]!.result === 'miss' ? 1 : 2);
-    }
   });
 
-  it('Rupture leaves the target taking +3 from every hit; Holo-targeting marks it for allies', () => {
-    const s = field();
-    const g = squad(s, 's1', 'grenadier', 2, 2, ['rupture', 'holoTargeting']);
-    const a = addUnit(s, 'a1', 'trooper', 3, 2, { hp: 99, maxHp: 99 });
-    for (let seed = 1; seed < 30 && !a.ruptured; seed++) {
-      g.ap = 2;
-      delete g.cooldowns.rupture;
-      g.ammo = 3;
-      run(s, use('s1', 'rupture', { target: 'a1' }), seed);
-    }
-    expect(a.ruptured).toBe(3);
-    expect(a.marked).toBe(15);
-    const ally = addUnit(s, 's2', 'specialist', 2, 4);
-    expect(previewShot(s, ally, a)!.mods).toContainEqual({ label: 'Marcado', value: 15 });
-    const sim = new Sim(s, new Rng(1), [0]);
-    const before = a.hp;
-    sim.damage(a, 1, 0);
-    expect(before - a.hp).toBe(4);
-  });
 
   it('Face Off fires the pistol at every enemy in sight', () => {
     const s = field();
@@ -146,19 +99,6 @@ describe('reactions', () => {
     expect(events.some((e) => e.t === 'shot')).toBe(false);
   });
 
-  it('a suppressed enemy that moves gets shot, and the suppression ends', () => {
-    const s = field();
-    const g = squad(s, 's1', 'grenadier', 2, 2, ['suppression']);
-    const a = addUnit(s, 'a1', 'trooper', 8, 2, { hp: 99, maxHp: 99 });
-    run(s, use('s1', 'suppression', { target: 'a1' }));
-    expect(a.suppressedBy).toBe('s1');
-    expect(previewShot(s, a, g)!.mods).toContainEqual({ label: 'Suprimido', value: -50 });
-    s.activeTeam = 'alien';
-    const sim = new Sim(s, new Rng(1), [0]);
-    sim.moveAlong(a, [{ x: 9, y: 2, z: 0 }], 1);
-    expect(sim.events.some((e) => e.t === 'shot' && e.reaction && e.unit === 's1')).toBe(true);
-    expect(a.suppressedBy).toBeNull();
-  });
 
   it('Covering Fire shoots at an enemy who attacks', () => {
     const s = field();
@@ -173,16 +113,6 @@ describe('reactions', () => {
 });
 
 describe('support', () => {
-  it('Combat Protocol never misses, ignores armour and hits machines harder', () => {
-    const s = field();
-    squad(s, 's1', 'specialist', 2, 2, ['combatProtocol'], { charges: { combatProtocol: 2, medkit: 2, grenade: 1 } });
-    const mec = addUnit(s, 'a1', 'mec', 8, 2);
-    const specialist = s.units.find((u) => u.id === 's1')!;
-    run(s, use('s1', 'combatProtocol', { target: 'a1' }));
-    expect(mec.hp).toBe(TEMPLATES.mec.hp - 4);
-    // An attack, so it ends the turn (as in XCOM 2).
-    expect(specialist.ap).toBe(0);
-  });
 
   it('Threat Assessment: Aid Protocol also puts the ally on overwatch', () => {
     const s = field();
@@ -194,26 +124,21 @@ describe('support', () => {
     expect(ally.overwatch).toBe(true);
   });
 
-  it('Restoration heals and cleanses everyone nearby', () => {
+  it('Pasar visita heals and cleanses everyone within 4, once a mission (Fase 9)', () => {
     const s = field();
-    squad(s, 's1', 'specialist', 2, 2, ['restoration']);
-    const ally = addUnit(s, 's2', 'assault', 4, 2, { hp: 2, disoriented: 1, panicked: true });
+    const medic = squad(s, 's1', 'specialist', 2, 2, ['restoration'], { charges: { restoration: 1 } });
+    const ally = addUnit(s, 's2', 'assault', 6, 2, { hp: 2, disoriented: 1, panicked: true });
+    const far = addUnit(s, 's3', 'assault', 7, 2, { hp: 2 });
     addUnit(s, 'a1', 'trooper', 19, 19);
     run(s, use('s1', 'restoration'));
     expect(ally.hp).toBe(4);
     expect(ally.disoriented).toBe(0);
     expect(ally.panicked).toBe(false);
+    expect(far.hp).toBe(2);
+    medic.ap = 2;
+    expect(executeCommand(s, use('s1', 'restoration'), { slot: 0, connected: [0], rng: new Rng(1) }).ok).toBe(false);
   });
 
-  it('Capacitor Discharge hurts everyone in the area and leaves cover standing', () => {
-    const s = field();
-    squad(s, 's1', 'specialist', 2, 2, ['capacitorDischarge']);
-    const a = addUnit(s, 'a1', 'trooper', 8, 2);
-    s.tiles[2 * 20 + 9] = 'low';
-    run(s, use('s1', 'discharge', { tile: { x: 8, y: 2 } }));
-    expect(a.alive).toBe(false);
-    expect(s.tiles[2 * 20 + 9]).toBe('low');
-  });
 });
 
 describe('kills that pay back', () => {

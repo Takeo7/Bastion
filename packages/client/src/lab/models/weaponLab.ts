@@ -1,6 +1,6 @@
 import { PLAYER_COLORS, type Appearance, type Arms, type TemplateId, type Tier } from '@bastion/engine';
 import * as THREE from 'three';
-import type { Armament, FigurePose, FigureRig } from '../../game/figures';
+import type { Carried, FigurePose, FigureRig } from '../../game/figures';
 import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
 import { Renderer } from '../../game/renderer';
 import { SYNTY_LOD, SyntyFigure } from '../../game/syntyFigures';
@@ -11,7 +11,8 @@ import type { CharacterId } from '../../game/syntyManifest';
 // saves a contact sheet (rows: weapons; columns: bodies) to the dev server's
 // /__snap; poses: idle, aim, run, crouch, crouchAim, reload, throw, hit, climb,
 // dead, windup, strike; views: right, left, front, back. `__weapons.ARMS_CASES`
-// are a campaign soldier's own (docs/FASE8.md §A), with what each has drawn.
+// are a campaign soldier's own (docs/FASE8.md §A), with what each has drawn;
+// `__weapons.MOD_CASES`, what is mounted on the gun and its wear (FASE9.md §5).
 
 const container = document.getElementById('weapons')!;
 const renderer = new Renderer(container);
@@ -28,7 +29,7 @@ interface WeaponCase {
   template: TemplateId;
   tier: Tier;
   arms?: Arms;
-  draw?: keyof Armament;
+  draw?: Carried;
 }
 
 export const WEAPON_CASES: WeaponCase[] = [
@@ -56,6 +57,17 @@ export const ARMS_CASES: WeaponCase[] = [
   { label: 'ametralladora ligera', template: 'rookie', tier: 1, arms: own('lightMachineGun') },
 ];
 
+/** The improvements and the wear on a soldier's gun (docs/FASE9.md §5): `__weapons.sheet(name, pose, bodies, __weapons.MOD_CASES)`. */
+export const MOD_CASES: WeaponCase[] = [
+  { label: 'fusil · mira y silenciador', template: 'rookie', tier: 1, arms: { ...own('assaultRifle'), mods: ['scope', 'silencer'] } },
+  { label: 'precisión · mira', template: 'rookie', tier: 1, arms: { ...own('precisionRifle'), mods: ['scope'] } },
+  { label: 'con mira (encontrado)', template: 'rookie', tier: 1, arms: { ...own('scopedRifle'), mods: ['scope', 'silencer'] } },
+  { label: 'escopeta · punto rojo', template: 'rookie', tier: 1, arms: { ...own('pumpShotgun'), mods: ['scope'] } },
+  { label: 'ametralladora · silenciador', template: 'rookie', tier: 1, arms: { ...own('lightMachineGun'), mods: ['silencer', 'extMag'] } },
+  { label: 'fusil gastado', template: 'rookie', tier: 1, arms: { ...own('assaultRifle'), condition: 20 } },
+  { label: 'fusil roto', template: 'rookie', tier: 1, arms: { ...own('assaultRifle'), condition: 0 } },
+];
+
 const POSES: Record<string, Partial<FigurePose>> = {
   idle: {},
   aim: { aim: 1 },
@@ -74,7 +86,7 @@ const POSES: Record<string, Partial<FigurePose>> = {
 const look = (character: CharacterId): Appearance => ({ primary: '#56605a', secondary: PLAYER_COLORS[0], visor: '#9fe3ff', head: 'bare', build: 'normal', character });
 
 /** A body with a weapon, posed for `seconds` at 30 fps so the clips have blended in. */
-async function posed(template: TemplateId, tier: Tier, body: CharacterId | null, pose: Partial<FigurePose>, arms?: Arms, draw?: keyof Armament): Promise<FigureRig> {
+async function posed(template: TemplateId, tier: Tier, body: CharacterId | null, pose: Partial<FigurePose>, arms?: Arms, draw?: Carried): Promise<FigureRig> {
   const squad = !['trooper', 'officer', 'lancer'].includes(template);
   const rig = buildUnit(template, PLAYER_COLORS[0], squad && body ? look(body) : undefined, { weapon: tier, arms }, `${template}${body}`);
   if (!isFigure(rig)) throw new Error(`${template} is not a figure`);
@@ -146,4 +158,4 @@ async function sheet(
   return name;
 }
 
-(window as unknown as { __weapons: unknown }).__weapons = { sheet, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES };
+(window as unknown as { __weapons: unknown }).__weapons = { sheet, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES, MOD_CASES };

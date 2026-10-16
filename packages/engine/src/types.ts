@@ -1,3 +1,4 @@
+import type { Deeds } from './skills';
 export interface Vec2 {
   x: number;
   y: number;
@@ -248,6 +249,11 @@ export type AbilityId =
   | 'revival'
   | 'restoration'
   | 'discharge'
+  // Fase 9's talents (skills.ts).
+  /** Hacerse sitio: a Slash at every enemy alongside. */
+  | 'elbowRoom'
+  /** Apaños: 40 of condition back to one's own weapon or an adjacent ally's. */
+  | 'patchUp'
   // Alien powers.
   | 'claw'
   | 'mindspin'
@@ -310,7 +316,10 @@ export type ChargeId =
   | 'fireball'
   | 'velmarStorm'
   | 'lightRain'
-  | 'lastVerse';
+  | 'lastVerse'
+  // Fase 9's talents with uses per mission (skills.ts).
+  | 'restoration'
+  | 'patchUp';
 
 /** Equipment fabricated in the base: one utility item and one ammo type per soldier. */
 export type ItemId = 'fragGrenade' | 'smokeGrenade' | 'flashbang' | 'firstAid' | 'nanoVest' | 'mindShield' | 'apRounds' | 'tracerRounds';
@@ -335,6 +344,11 @@ export interface Loot {
   weapon?: FoundWeaponId;
   /** That weapon is already the Armería's (FoundWeapon.id): a soldier's own, swapped for a find. It goes back, not in as new. */
   weaponId?: string;
+  /** That weapon's condition and what is mounted on it (docs/FASE9.md §5); absent, 100 and nothing. */
+  condition?: number;
+  mods?: WeaponModId[];
+  /** A loose improvement for a weapon, to mount in the Armería (docs/FASE9.md §5). */
+  mod?: WeaponModId;
   /** Magazines (docs/FASE7.md): straight to the searcher's spares, not into the backpack. */
   mags?: number;
 }
@@ -355,11 +369,18 @@ export type FoundWeaponId =
  * What a campaign soldier carries (docs/FASE8.md §A), besides the pistol everyone has: the class no longer
  * brings a weapon. Absent, the template's (skirmish, the enemies, missions saved before).
  */
+/** What can be mounted on a weapon (docs/FASE9.md §5), two at most: Mira, Culata, Cargador ampliado, Silenciador. */
+export type WeaponModId = 'scope' | 'stock' | 'extMag' | 'silencer';
+
 export interface Arms {
   /** In the hand; null, none: the pistol is the main gun. */
   primary: FoundWeaponId | null;
   /** The Armería's weapon it is (FoundWeapon.id); absent, picked up in this mission. */
   primaryId?: string;
+  /** That weapon's condition, 0 to 100 (docs/FASE9.md §5); absent, 100. Every shot wears it. */
+  condition?: number;
+  /** What is mounted on it. */
+  mods?: WeaponModId[];
   /** At the belt; null, the knife. */
   melee: FoundWeaponId | null;
   meleeId?: string;
@@ -401,6 +422,11 @@ export type MissionKind = 'elimination' | 'recovery' | 'sabotage' | 'hack' | 're
 
 /** Talents of the Rosa (classes.ts TALENTS); the first ten of each class are the original perks. */
 export type PerkId =
+  // Fase 9's own talents (skills.ts SKILL_TALENTS; the rest it takes over from the old tree).
+  | 'elbowRoom'
+  | 'goodArm'
+  | 'quiet'
+  | 'patchUp'
   // Centre: open to every soldier
   | 'drill'
   | 'fitness'
@@ -601,6 +627,13 @@ export interface UnitMods {
   smokeSight: number;
   /** Canto de calma level: +10 will per level to allies within 4 tiles. */
   calmAura: number;
+  // Fase 9 (skills.ts).
+  /** Tiro: aim with firearms (the pistol too), not with the blade. */
+  gunAim: number;
+  /** Tiro 3: crit with firearms. */
+  gunCrit: number;
+  /** Sin hacer ruido (1/0): searching, opening boxes and forcing make no noise. */
+  quiet: number;
 }
 
 export interface Unit {
@@ -699,6 +732,8 @@ export interface Unit {
   backpack?: Loot[];
   /** Backpack slots when not BACKPACK_SLOTS (the Chapistería's one more, docs/FASE8.md §C). */
   packSlots?: number;
+  /** Soldiers: what they did this mission that teaches (Fase 9, skills.ts), counted by the events. */
+  deeds?: Deeds;
   /** Bitten and infected (docs/FASE3.md): no effect in combat, but if it falls it rises, and back at base it turns. */
   infected?: boolean;
 }
@@ -854,6 +889,12 @@ export interface GameState {
    * the next shot gets +10 per miss, up to +20. Missing in older saves.
    */
   missStreak?: [number, number];
+  /**
+   * The last attack or explosive and whose it was (Fase 9, skills.ts): who
+   * gets the kill or the blast that `died` and `damaged` count for. `landed`:
+   * the explosive already hit someone.
+   */
+  blow?: { unit: string; kind: 'gun' | 'blade' | 'blast'; landed?: boolean };
   ready: [boolean, boolean];
   /**
    * Who has the command (el mando) in the squad's turn: only that player gives

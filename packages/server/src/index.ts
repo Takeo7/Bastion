@@ -208,7 +208,16 @@ https?.on('tlsClientError', (e: Error & { code?: string }, socket) => {
   netLog(`certificado rechazado por ${(raw && tcpPeers.get(raw)) ?? '?'} (${e.code ?? e.message.trim()})`);
 });
 
-const room = new Room(new SaveStore(SAVE_PATH), hosts, https ? HTTPS_PORT : null);
+const room = ((): Room => {
+  try {
+    return new Room(new SaveStore(SAVE_PATH, netLog), hosts, https ? HTTPS_PORT : null);
+  } catch (e) {
+    // A campaign from before 0.3 that could not be kept aside (persistence.ts): stop, rather than start and write over it.
+    console.log(`\n  ${(e as Error).message}\n`);
+    netLog(`no arranca: ${(e as Error).message}`);
+    process.exit(1);
+  }
+})();
 // One WebSocket server for both: the game is the same over http and https.
 // Compressed (permessage-deflate, which browsers undo on their own): a mission's
 // snapshot goes from ~105 KB to ~7 KB. Level 1 is nearly as small as the default

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { previewShot } from '../src/aim';
 import { defaultAppearance } from '../src/appearance';
-import { ATTR_IDS, attrCap, baseAttrs, specialize, talentBlocker, TALENTS, VETERAN_AIM } from '../src/classes';
 import {
   addPlayer,
   canSpendPoints,
+  craftBlocker,
   defaultSquad,
+  missionXpCap,
   openingMission,
   LATE_KIT,
   applyMissionResult,
@@ -13,7 +14,6 @@ import {
   contactCost,
   createCampaign,
   nextSteps,
-  pointsToSpend,
   soldierCap,
   squadPads,
   veteranEnemies,
@@ -23,7 +23,9 @@ import {
   type CampaignCommand,
   type CampaignState,
 } from '../src/campaign';
+import { abilitiesOf } from '../src/abilities';
 import { armorTier, bastionLevel, LEVEL_XP, MAX_LEVEL, missionXp, nextTierBlocker, weaponTier } from '../src/progression';
+import { BASE_AIM, NO_SKILLS, SKILL_XP, veteranHp, veterancy, veteranWill } from '../src/skills';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
 import type { PerkId, Slot } from '../src/types';
@@ -205,32 +207,34 @@ describe('missions', () => {
     expect(run(c, { type: 'launch', ready: true }, 1).launch).toBe(true);
   });
 
-  it('results come back: deaths, wounds, experience, promotions and rewards', () => {
+  it('results come back: deaths, wounds, what each one learnt and rewards', () => {
     const { c, offer } = ready();
     const squad = buildSquad(c);
     const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad, pods: offer.pods, difficulty: offer.difficulty });
     const soldiers = mission.units.filter((u) => u.team === 'xcom');
     soldiers[0]!.alive = false;
     soldiers[0]!.hp = 0;
+    soldiers[0]!.deeds = { hit: 4 };
     soldiers[1]!.hp = soldiers[1]!.maxHp - 2;
     soldiers[2]!.kills = 6;
+    soldiers[2]!.deeds = { hit: 5, gunKill: 6, healOther: 1 };
     mission.outcome = 'victory';
     mission.outcomeReason = 'objective';
     const credits = c.credits;
+    const veteran = c.soldiers.find((s) => s.id === soldiers[2]!.campaignId)!;
+    const before = { ...veteran.skills };
     const report = applyMissionResult(c, mission, new Rng(4));
     expect(report.victory).toBe(true);
     expect(report.squad).toHaveLength(6);
     expect(report.squad.find((e) => e.id === soldiers[0]!.campaignId)?.status).toBe('dead');
-    expect(report.squad.find((e) => e.id === soldiers[1]!.campaignId)).toMatchObject({ status: 'wounded', woundedDays: 6, xpGained: 2 });
-    expect(report.squad.find((e) => e.id === soldiers[2]!.campaignId)).toMatchObject({ kills: 6, xpGained: 8, promotedTo: 2 });
+    expect(report.squad.find((e) => e.id === soldiers[1]!.campaignId)).toMatchObject({ status: 'wounded', woundedDays: 6 });
+    // Eleven deeds of Tiro, but a mission teaches six at most (docs/FASE9.md §1).
+    expect(report.squad.find((e) => e.id === soldiers[2]!.campaignId)).toMatchObject({ kills: 6, learned: { shooting: 6, melee: 0, medicine: 2, craft: 0 }, deeds: { hit: 5, gunKill: 6, healOther: 1 } });
     expect(c.soldiers.find((s) => s.id === soldiers[0]!.campaignId)!.alive).toBe(false);
     // The report says how bad it was, and a mission takes no days (docs/PRUEBA-2026-10-14.md P7): it is all still to heal.
     expect(c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays).toBe(6);
     expect(c.day).toBe(report.day);
-    const veteran = c.soldiers.find((s) => s.id === soldiers[2]!.campaignId)!;
-    expect(veteran.xp).toBe(8);
-    expect(veteran.rank).toBe(2);
-    expect(pointsToSpend(veteran)).toEqual({ attrs: 4, talents: 4 });
+    expect(veteran.skills).toEqual({ ...before, shooting: before.shooting + 6, medicine: before.medicine + 2 });
     expect(c.credits).toBe(credits + (offer.reward.credits ?? 0) + report.salvage);
     // The Bastion learns from every mission: showing up, winning and the kills.
     expect(report.xp).toBe(missionXp(true, offer.difficulty, 6));
@@ -239,26 +243,39 @@ describe('missions', () => {
     expect(c.activeMission).toBeNull();
   });
 
-  it('everyone starts as a recruit; reaching Capitán makes them the class they were taught most', () => {
+  it('nobody has a class: every recruit comes with a skill or two, and a level gone up is told (docs/FASE9.md)', () => {
     const { c, offer } = ready();
-    expect(c.soldiers.every((s) => s.cls === null)).toBe(true);
+    expect(c.soldiers.every((s) => s.picks.length === 0 && !('cls' in s))).toBe(true);
+    expect(c.soldiers.every((s) => veterancy(s.skills) >= 1 && veterancy(s.skills) <= 2)).toBe(true);
     const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
     const unit = mission.units.find((u) => u.team === 'xcom')!;
     const s = c.soldiers.find((x) => x.id === unit.campaignId)!;
-    s.rank = 4;
-    s.xp = 19;
-    s.talents = { demolition: 2, bandolier: 1, runner: 1 };
-    const sex = s.appearance.sex;
+    s.skills = { ...NO_SKILLS, shooting: 5 };
+    unit.deeds = { hit: 2, gunKill: 1 };
     mission.outcome = 'victory';
     mission.outcomeReason = 'objective';
     const report = applyMissionResult(c, mission, new Rng(4));
-    expect(report.squad.find((e) => e.id === s.id)).toMatchObject({ promotedTo: 5, specializedAs: 'grenadier' });
-    expect(s.cls).toBe('grenadier');
-    // The recruit look becomes the class's, and the soldier keeps their sex.
-    expect(sex).toBeDefined();
-    expect(s.appearance).toEqual(defaultAppearance('grenadier', s.owner, undefined, sex));
-    expect(c.log.some((l) => /se especializa como Granadero/.test(l.text))).toBe(true);
-    expect(pointsToSpend(s)).toEqual({ attrs: 10, talents: 6 });
+    expect(report.squad.find((e) => e.id === s.id)!.levels).toEqual([{ skill: 'shooting', from: 1, to: 2 }]);
+    expect(c.log.some((l) => l.text.startsWith(`${s.name} sube a Tiro 2.`))).toBe(true);
+    // Level 2: a talent waits to be picked, and «Guardar» keeps it.
+    expect(canSpendPoints(c, s)).toBe(true);
+    run(c, { type: 'picks', soldier: s.id, picks: ['rapidFire'] }, s.owner);
+    expect(s.picks).toEqual(['rapidFire']);
+    expect(canSpendPoints(c, s)).toBe(false);
+    expect(() => run(c, { type: 'picks', soldier: s.id, picks: ['killZone'] }, s.owner)).toThrow('Nadie pasa pide Tiro 4.');
+  });
+
+  it('the Taller de oficios raises what a mission teaches, one more per level', () => {
+    const { c, offer } = ready();
+    expect(missionXpCap(c)).toBe(6);
+    Object.assign(c.base.plots.find((p) => p.terrain === 'clear' && !p.building)!, { building: 'echoes', level: 2 });
+    expect(missionXpCap(c)).toBe(8);
+    const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
+    const unit = mission.units.find((u) => u.team === 'xcom')!;
+    unit.deeds = { hit: 12 };
+    mission.outcome = 'victory';
+    const report = applyMissionResult(c, mission, new Rng(4));
+    expect(report.squad.find((e) => e.id === unit.campaignId)!.learned!.shooting).toBe(8);
   });
 
   it('the Coro sends a little more with every few missions flown', () => {
@@ -274,58 +291,45 @@ describe('missions', () => {
     expect(veteranEnemies(c)).toBe(2);
   });
 
-  it('aptitudes, talents, ranks and weapon and armour tiers reach the battlefield', () => {
+  it('skills, talents, veterancy and the armour the Taller made reach the battlefield', () => {
     const c = createCampaign([0], new Rng(5));
-    const sniper = c.soldiers[0]!;
-    // A recruit of the plain base, for the sums below (each one varies a little: docs/PRUEBA-2026-10-14.md #10).
-    sniper.attrs = baseAttrs(null);
-    specialize(sniper, 'sharpshooter');
-    sniper.rank = 4;
-    run(c, { type: 'train', soldier: sniper.id, attr: 'pul' }, 0, [0]);
-    run(c, { type: 'talent', soldier: sniper.id, talent: 'hawkEye' }, 0, [0]);
-    run(c, { type: 'talent', soldier: sniper.id, talent: 'hawkEye' }, 0, [0]);
-    expect(sniper.attrs.pul).toBe(7);
-    expect(pointsToSpend(sniper)).toEqual({ attrs: 7, talents: 6 });
-    // Level 4, and the Taller has made tier-2 weapons and plate armour (docs/FASE4.md): a lieutenant may carry both.
+    const s = c.soldiers[0]!;
+    // Tiro 3 and Cuerpo a cuerpo 2: veterancy 5, Fogueado.
+    s.skills = { ...NO_SKILLS, shooting: SKILL_XP[2]!, melee: SKILL_XP[1]! };
+    run(c, { type: 'picks', soldier: s.id, picks: ['aimedShot', 'bladeCrit'] }, 0, [0]);
+    // Plate armour made by the Taller (docs/FASE4.md): everyone wears it, whatever their veterancy.
     c.xp = LEVEL_XP[3]!;
-    c.crafted = ['weapons2', 'armor2'];
-    const member = squadMember(c, sniper);
-    expect(member).toMatchObject({ weaponTier: 2, armorTier: 2 });
-    // Pulso 7 (and its +10 critical), four promotions of veterancy and Ojo de halcón 2/2.
-    expect(member.mods.aim).toBe(50 + 3 * 7 - 70 + 4 * VETERAN_AIM + 10);
-    expect(member.mods.crit).toBe(10);
-    expect(member.mods.damage).toBe(2);
-    // Aguante 5 and plate armour.
-    expect(member.maxHp).toBe(5 + 2);
-    expect(member.perks).toEqual(['hawkEye']);
+    c.crafted = ['armor2'];
+    const member = squadMember(c, s);
+    expect(member).toMatchObject({ weaponTier: 1, armorTier: 2, rank: 1, perks: ['aimedShot', 'bladeCrit'] });
+    expect(member.mods).toMatchObject({ gunAim: 15, gunCrit: 10, meleeAim: 16, meleeCrit: 20, damage: 0 });
+    expect(member.maxHp).toBe(veteranHp(5) + 2);
+    expect(member.will).toBe(veteranWill(5) + member.will - veteranWill(5));
 
     const mission = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(1), squad: [member] });
-    const shooter = mission.units.find((u) => u.campaignId === sniper.id)!;
+    const shooter = mission.units.find((u) => u.campaignId === s.id)!;
     // a3 belongs to the central pod, standing in the open.
     const target = mission.units.find((u) => u.id === 'a3')!;
     shooter.pos = { x: target.pos.x, y: target.pos.y + 5, z: 0 };
-    const shot = previewShot(mission, shooter, target);
-    expect(shot?.mods[0]).toEqual({ label: 'Puntería', value: 70 + member.mods.aim });
+    const shot = previewShot(mission, shooter, target)!;
+    expect(shot.mods[0]).toEqual({ label: 'Puntería', value: BASE_AIM });
+    expect(shot.mods).toContainEqual({ label: 'Tiro', value: 15 });
+    expect(abilitiesOf(shooter)).toContain('aimedShot');
+    // Nobody carries grenades without them on the belt.
+    expect(abilitiesOf(shooter)).not.toContain('grenade');
   });
 });
 
 describe('progression', () => {
-  it('soldiers carry the best tier both their rank and the Taller allow; the Bastion’s level only lets the Taller make it', () => {
+  it('weapons have no tiers; the armour the Taller makes is for everyone (docs/FASE9.md §5)', () => {
     const c = createCampaign([0], new Rng(1));
-    const s = (rank: number) => ({ id: 'x', rank });
-    expect(weaponTier(c, s(7))).toBe(1);
-    // Level 6 allows tier-3 weapons, but nothing is carried until the Taller makes it.
+    const s = { id: 'x' };
     c.xp = LEVEL_XP[5]!;
-    expect(weaponTier(c, s(4))).toBe(1);
-    expect(nextTierBlocker(c, s(4), 'weapon')).toMatch(/fabricarlas en el Taller/);
-    c.crafted = ['weapons2', 'weapons3', 'armor2'];
-    expect(weaponTier(c, s(0))).toBe(1);
-    expect(weaponTier(c, s(2))).toBe(2);
-    expect(weaponTier(c, s(4))).toBe(3);
-    expect(armorTier(c, s(4))).toBe(2);
-    expect(nextTierBlocker(c, s(4), 'armor')).toMatch(/nivel 7 del Bastión/);
-    expect(nextTierBlocker(c, s(2), 'weapon')).toMatch(/rango Teniente/);
-    expect(nextTierBlocker(c, s(4), 'weapon')).toBeNull();
+    c.crafted = ['armor2'];
+    expect(weaponTier(c, s)).toBe(1);
+    expect(nextTierBlocker(c, s, 'weapon')).toBeNull();
+    expect(armorTier(c, s)).toBe(2);
+    expect(nextTierBlocker(c, s, 'armor')).toMatch(/nivel 7 del Bastión/);
   });
 
   it('reaching the top level with every story chapter won reveals the final mission', () => {
@@ -344,12 +348,11 @@ describe('progression', () => {
 });
 
 describe('helping the players', () => {
-  it('a chosen mission comes with its squad: best ready soldiers, one of each class first', () => {
+  it('a chosen mission comes with its squad: the most seasoned ready soldiers first', () => {
     const c = createCampaign(both, new Rng(2));
     const mine = c.soldiers.filter((s) => s.owner === 0);
-    (['assault', 'grenadier', 'sharpshooter'] as const).forEach((cls, i) => specialize(mine[i]!, cls));
-    const veteran = mine[0]!;
-    veteran.rank = 3;
+    const veteran = mine[mine.length - 1]!;
+    veteran.skills = { ...NO_SKILLS, shooting: SKILL_XP[3]!, melee: SKILL_XP[3]! };
     c.soldiers.find((s) => s.owner === 1)!.woundedDays = 3;
     run(c, { type: 'chooseMission', id: c.offers[0]!.id }, 0, [0, 1]);
     run(c, { type: 'vote', accept: true }, 1, [0, 1]);
@@ -358,7 +361,7 @@ describe('helping the players', () => {
     expect(picked.filter((s) => s.owner === 1)).toHaveLength(3);
     expect(picked).toContain(veteran);
     expect(picked.every((s) => s.woundedDays === 0)).toBe(true);
-    expect(new Set(picked.filter((s) => s.owner === 0).map((s) => s.cls)).size).toBe(3);
+    expect(picked[0]).toBe(veteran);
     // Adding someone already in it is fine; swapping is out then in.
     run(c, { type: 'squad', soldier: veteran.id, on: true }, 0, [0, 1]);
     expect(c.squad).toHaveLength(6);
@@ -420,9 +423,9 @@ describe('helping the players', () => {
     expiring.expiresDay = c.day + 1;
     expect(nextSteps(c, 0)[0]).toMatchObject({ tone: 'urgent', label: `${expiring.name} caduca en 1 día`, go: { offer: expiring.id } });
     const promoted = c.soldiers.find((s) => s.owner === 1)!;
-    promoted.rank = 1;
+    promoted.skills = { ...NO_SKILLS, craft: SKILL_XP[1]! };
     expect(nextSteps(c, 1).some((x) => x.view === 'barracks' && x.go?.soldier === promoted.id)).toBe(true);
-    expect(nextSteps(c, 0).some((x) => x.view === 'barracks' && x.label.startsWith('Ascenso'))).toBe(false);
+    expect(nextSteps(c, 0).some((x) => x.view === 'barracks' && x.label.startsWith('Talento'))).toBe(false);
     // Equipment only nags before a mission, and only for what can actually be fitted.
     expect(nextSteps(c, 0).some((x) => x.label.startsWith('Equipa'))).toBe(false);
     run(c, { type: 'chooseMission', id: c.offers[0]!.id }, 0, [0]);
@@ -449,49 +452,20 @@ describe('helping the players', () => {
   });
 });
 
-// Playtest 2026-10-13: «¡Ascenso! Repartir puntos» stayed up with points that had nowhere to go.
-describe('promotions to spend', () => {
-  const promotion = (c: CampaignState) => nextSteps(c, 0).filter((x) => /^Ascensos? pendientes?/.test(x.label));
+// Fase 9: a level 2 or 4 opens a pair of talents; the Cuartel asks until one is saved.
+describe('talents to pick', () => {
+  const asks = (c: CampaignState) => nextSteps(c, 0).filter((x) => /^Talentos? por elegir/.test(x.label));
 
-  it('points with nowhere to go ask for nothing; points that fit somewhere do', () => {
+  it('a pair opened asks for a pick, and stops once it is saved', () => {
     const c = createCampaign([0], new Rng(1));
     const s = c.soldiers.find((x) => x.owner === 0)!;
+    s.skills = { ...NO_SKILLS, medicine: SKILL_XP[0]! };
     expect(canSpendPoints(c, s)).toBe(false);
-    expect(promotion(c)).toEqual([]);
-
-    // Every aptitude at its cap and every talent point spent, with two aptitude points still free.
-    specialize(s, 'assault');
-    s.rank = 11;
-    for (const id of ATTR_IDS) s.attrs[id] = attrCap('assault', id);
-    s.talents = { runner: 22 };
-    expect(pointsToSpend(s)).toEqual({ attrs: 2, talents: 0 });
-    expect(canSpendPoints(c, s)).toBe(false);
-    expect(promotion(c)).toEqual([]);
-
-    // One aptitude below its cap: somewhere to put them.
-    s.attrs.pul--;
-    expect(canSpendPoints(c, s)).toBe(true);
-    expect(promotion(c)).toEqual([expect.objectContaining({ label: `Ascenso pendiente: ${s.name}`, count: 1, go: { soldier: s.id } })]);
-  });
-
-  it('talent points count only where a talent is open to the soldier', () => {
-    const c = createCampaign([0], new Rng(1));
-    const s = c.soldiers.find((x) => x.owner === 0)!;
-    s.rank = 1;
-    // The aptitude points spent; the two talent points have the first rows to go to.
-    s.attrs.pul += 2;
-    expect(pointsToSpend(s)).toEqual({ attrs: 0, talents: 2 });
-    expect(canSpendPoints(c, s)).toBe(true);
-    expect(promotion(c)).toHaveLength(1);
-    expect((Object.keys(TALENTS) as PerkId[]).some((id) => !talentBlocker(s, id, 0))).toBe(true);
-    // With every talent shut to it (here: all of them at their maximum) and every aptitude at its cap, nothing to ask.
-    s.talents = Object.fromEntries((Object.keys(TALENTS) as PerkId[]).map((id) => [id, TALENTS[id].max]));
-    for (const id of ATTR_IDS) s.attrs[id] = attrCap(s.cls, id);
-    const spent = Object.values(s.talents).reduce((a, b) => a + (b ?? 0), 0);
-    s.rank = Math.ceil(spent / 2) + 20;
-    expect(pointsToSpend(s).talents).toBeGreaterThan(0);
-    expect(pointsToSpend(s).attrs).toBeGreaterThan(0);
-    expect(canSpendPoints(c, s)).toBe(false);
-    expect(promotion(c)).toEqual([]);
+    expect(asks(c)).toEqual([]);
+    s.skills.medicine = SKILL_XP[1]!;
+    expect(asks(c)).toEqual([expect.objectContaining({ label: `Talento por elegir: ${s.name}`, count: 1, go: { soldier: s.id } })]);
+    run(c, { type: 'picks', soldier: s.id, picks: ['revivalProtocol'] }, 0, [0]);
+    expect(asks(c)).toEqual([]);
+    expect(() => run(c, { type: 'picks', soldier: s.id, picks: ['revivalProtocol', 'fieldMedic'] }, 0, [0])).toThrow(/Solo uno de cada pareja/);
   });
 });

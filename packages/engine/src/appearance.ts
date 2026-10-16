@@ -1,6 +1,6 @@
 import { PLAYER_COLORS } from './content';
 import type { Rng } from './rng';
-import type { Appearance, ArmorPart, BuildId, ClassId, HeadId, Slot } from './types';
+import type { Appearance, ArmorPart, BuildId, HeadId, Slot } from './types';
 
 /**
  * Head pieces. `paint` is what the headgear is painted with until it gets a
@@ -98,14 +98,14 @@ function mix(a: string, b: string, t: number): string {
   return '#' + out.map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
-/** The look soldiers had before customization: their player's colour, class head and build (and their sex, when known). */
-export function defaultAppearance(cls: ClassId | null, owner: Slot, accent = PLAYER_COLORS[owner], sex?: 'f' | 'm'): Appearance {
+/** The look soldiers had before customization: their player's colour (and their sex, when known). No classes any more (docs/FASE9.md). */
+export function defaultAppearance(owner: Slot, accent = PLAYER_COLORS[owner], sex?: 'f' | 'm'): Appearance {
   const out: Appearance = {
     primary: mix(accent, '#56605a', 0.55),
     secondary: accent,
     visor: '#9fe3ff',
-    head: cls === 'sharpshooter' ? 'hood' : 'helmet',
-    build: cls === 'grenadier' ? 'heavy' : 'normal',
+    head: 'helmet',
+    build: 'normal',
   };
   if (sex) out.sex = sex;
   return out;

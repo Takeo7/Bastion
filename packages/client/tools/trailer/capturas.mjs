@@ -9,7 +9,6 @@
 // --hacia 0.4: the frame's middle that far from the soldier towards the nearest of the dead; --giro 1: the camera turned a quarter.
 // The defaults frame Gameplay's showcase mission: the squad on the road, two of the dead in sight.
 // --escala 2: the same layout at 3840×2160, into capturas/2x/ (the trailer's panels).
-// --marcos a|b: the plates in a frame of the packs (a trial, ui/themes/mixta.css data-frames).
 // --operacion números: the operation open on the valley, by a piece of its name (Velsa's, on the right:
 // the map moves just enough to show its zone).
 //
@@ -194,8 +193,6 @@ async function main() {
   await win.loadURL(URL_.href);
   // The radio's tips stay out of the store's pictures.
   await win.webContents.insertCSS('.radio { display: none !important; }');
-  // --marcos a|b: the trial of the packs' frames on the plates (ui/themes/mixta.css, data-frames).
-  if (arg('marcos')) await win.webContents.executeJavaScript(`document.documentElement.dataset.frames = ${JSON.stringify(arg('marcos'))}`);
   // With a name remembered the client goes straight in (main.ts), and the token takes its seat.
   await until(win, `window.__bastion?.base || window.__bastion?.game`);
   // The partner, connected after (whoever comes first keeps the command), in a window and a storage of its own.

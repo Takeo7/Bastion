@@ -281,19 +281,4 @@ describe('infection at the base', () => {
     expect(offers.some((o) => o.kind !== 'recovery' && o.reward.medicines)).toBe(true);
   });
 
-  it('an older campaign comes in with its medicines and nobody bitten', () => {
-    const old = createCampaign([0, 1], new Rng(1)) as CampaignState & Record<string, unknown>;
-    old.medicines = 3;
-    delete old.nextMedicineDay;
-    delete old.treatment;
-    (old as { version: number }).version = 11;
-    const c = migrateCampaign(old);
-    expect(c.version).toBe(CAMPAIGN_VERSION);
-    expect(CAMPAIGN_VERSION).toBeGreaterThanOrEqual(12);
-    expect(c.medicines).toBe(3);
-    expect(c.nextMedicineDay).toBe(c.day + ENCLAVE_DAYS);
-    expect(c.treatment).toBeNull();
-    expect(c.soldiers.some((s) => s.infection)).toBe(false);
-    expect(TEMPLATES.zombie.undead).toBe(true);
-  });
 });

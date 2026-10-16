@@ -139,25 +139,4 @@ describe('story', () => {
     }
   });
 
-  it('an older campaign picks the story up at the chapter of its level', () => {
-    const old = (xp: number, final: boolean) => {
-      const c = createCampaign([0], new Rng(1)) as unknown as Record<string, unknown> & CampaignState;
-      delete (c as Partial<CampaignState>).story;
-      delete (c as Partial<CampaignState>).ending;
-      c.offers = c.offers.filter((o) => !o.story).map((o) => ({ ...o, final }));
-      for (const o of c.offers) delete (o as Partial<MissionOffer>).story;
-      c.version = 4 as CampaignState['version'];
-      c.xp = xp;
-      return migrateCampaign(c);
-    };
-    const mid = old(LEVEL_XP[4]!, false);
-    expect(mid.story).toEqual({ done: 4, simon: null });
-    expect(mid.ending).toBeNull();
-    expect(mid.offers.every((o) => o.story === null)).toBe(true);
-    // The next wait for news brings Simão, who opens chapter 5.
-    mid.nextEventDay = 999;
-    advanceTime(mid, new Rng(1));
-    expect(mid.event).toBe('simon');
-    expect(old(LEVEL_XP[MAX_LEVEL - 1]!, true).story).toEqual({ done: STORY.length, simon: 'trusted' });
-  });
 });

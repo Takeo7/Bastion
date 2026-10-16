@@ -1,14 +1,14 @@
 // Gameplay data. Combat numbers mirror XCOM 2's defaults (XComGameCore.ini /
 // XComGameData_*.ini) converted to tiles (1 tile = 1.5 m), so the game "feels"
 // like the original before we start tuning our own values.
-import type { AbilityId, AttackAbility, ChargeId, ClassId, FoundWeaponId, ItemId, ItemSlot, PerkId, Team, TemplateId, Unit, UnitMods } from './types';
+import type { AbilityId, AttackAbility, ChargeId, ClassId, FoundWeaponId, ItemId, ItemSlot, PerkId, Team, TemplateId, Unit, UnitMods, WeaponModId } from './types';
 
 export const AP_PER_TURN = 2;
 
-/** From this rank on (Comandante), a soldier gets a third action each turn (docs/PRUEBA-2026-10-14.md P5). */
-export const THIRD_ACTION_RANK = 6;
+/** Unit.rank from which a soldier has a third action: Veterano (skills.ts VETERANCY, docs/FASE9.md §3). */
+export const THIRD_ACTION_RANK = 3;
 
-/** Actions a unit starts its turn with: two, three for a soldier from Comandante on. */
+/** Actions a unit starts its turn with: two, three for a soldier from Veterano on. */
 export function apPerTurn(u: Pick<Unit, 'team' | 'rank'>): number {
   return u.team === 'xcom' && u.rank >= THIRD_ACTION_RANK ? AP_PER_TURN + 1 : AP_PER_TURN;
 }
@@ -309,24 +309,27 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   openDoor: { id: 'openDoor', name: 'Abrir la puerta', description: 'Abre una puerta cerrada que tengas al lado. No gasta acciones.', target: 'tile', ap: 0, endsTurn: false, range: 1.5, noise: 1 },
   closeDoor: { id: 'closeDoor', name: 'Cerrar la puerta', description: 'Cierra una puerta abierta que tengas al lado, si no hay nadie en ella. No gasta acciones.', target: 'tile', ap: 0, endsTurn: false, range: 1.5, noise: 1 },
   runAndGun: { id: 'runAndGun', name: 'Correr y disparar', description: 'Acción gratuita: +1 acción este turno.', target: 'self', ap: 0, endsTurn: false, cooldown: 4 },
-  rapidFire: { id: 'rapidFire', name: 'Fuego rápido', description: 'Dos disparos seguidos, cada uno con −15 de puntería. Gasta 2 balas.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -15, ammo: 2 },
+  rapidFire: { id: 'rapidFire', name: 'Ráfaga', description: 'Dos disparos seguidos, cada uno con −15 de puntería. Gasta dos balas.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -15, ammo: 2 },
   suppression: { id: 'suppression', name: 'Supresión', description: 'Inmoviliza al objetivo: −50 de puntería hasta tu próximo turno, y si se mueve, le disparas. Gasta 2 balas.', target: 'enemy', ap: 1, endsTurn: true, ammo: 2 },
   chainShot: { id: 'chainShot', name: 'Disparo en cadena', description: 'Disparo con −15 de puntería; si acierta, vuelves a disparar.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -15 },
   rupture: { id: 'rupture', name: 'Ruptura', description: 'Disparo con +3 de daño; el objetivo recibe +3 de daño de todos los ataques.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 4, weapon: 'primary', damageBonus: 3 },
-  aimedShot: { id: 'aimedShot', name: 'Ojo letal', description: 'Disparo con −25 de puntería y +50 % de daño.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -25, damageMult: 1.5 },
+  aimedShot: { id: 'aimedShot', name: 'A la cabeza', description: 'Un disparo con −25 de puntería que hace la mitad más de daño.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -25, damageMult: 1.5 },
   lightningHands: { id: 'lightningHands', name: 'Manos rápidas', description: 'Acción gratuita: un disparo de pistola.', target: 'enemy', ap: 0, endsTurn: false, cooldown: 4, weapon: 'secondary' },
   faceoff: { id: 'faceoff', name: 'Cara a cara', description: 'Un disparo de pistola a cada enemigo que veas.', target: 'self', ap: 1, endsTurn: true, cooldown: 4, weapon: 'secondary' },
-  killZone: { id: 'killZone', name: 'Zona letal', description: 'Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno.', target: 'self', ap: 1, endsTurn: true, cooldown: 4 },
+  killZone: { id: 'killZone', name: 'Nadie pasa', description: 'Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno.', target: 'self', ap: 1, endsTurn: true, cooldown: 4 },
   combatProtocol: { id: 'combatProtocol', name: 'Calambrazo', description: 'El Grillo electrocuta a un enemigo a la vista de la escuadra: 2 de daño (4 a Acorazados y alarmas). Nunca falla e ignora el blindaje. Termina el turno.', target: 'enemy', ap: 1, endsTurn: true, charge: 'combatProtocol', range: 15, noise: 2 },
-  revival: { id: 'revival', name: 'Espabilar', description: 'El Grillo libera a un aliado del aturdimiento, la desorientación y el pánico.', target: 'ally', ap: 1, endsTurn: false, charge: 'medkit', range: 15 },
-  restoration: { id: 'restoration', name: 'Restauración', description: 'Cura 2 a todos los aliados a 6 casillas o menos y les quita los estados alterados.', target: 'self', ap: 1, endsTurn: true, cooldown: 5, range: 6 },
+  // Fase 9 (skills.ts): Espabilar without the Grillo's medkit, Pasar visita once a mission.
+  revival: { id: 'revival', name: 'Espabilar', description: 'Quita a un compañero de al lado el aturdimiento, la desorientación o el pánico. Sin botiquín.', target: 'ally', ap: 1, endsTurn: false, range: 1.5 },
+  restoration: { id: 'restoration', name: 'Pasar visita', description: 'Cura 2 a cada compañero a 4 casillas o menos y les quita los estados alterados. Una vez por misión.', target: 'self', ap: 1, endsTurn: true, charge: 'restoration', range: 4 },
+  elbowRoom: { id: 'elbowRoom', name: 'Hacerse sitio', description: 'Un Tajo a cada enemigo que tengas al lado.', target: 'self', ap: 1, endsTurn: true, cooldown: 3, weapon: 'melee' },
+  patchUp: { id: 'patchUp', name: 'Apaños', description: 'Arregla 40 de estado del arma propia o de un compañero de al lado. Una vez por misión.', target: 'ally', ap: 1, endsTurn: false, charge: 'patchUp', range: 1.5 },
   discharge: { id: 'discharge', name: 'Descarga de batería', description: 'El Grillo descarga en una zona: 3 de daño a todos los que estén dentro, aliados incluidos.', target: 'tile', ap: 1, endsTurn: true, cooldown: 4, range: 10, radius: 1.5, explosive: 'discharge' },
   mindspin: { id: 'mindspin', name: 'Grito', description: 'El Chillón grita: desorienta o asusta a los soldados cercanos, y todo zombi a 16 casillas lo oye y viene.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, range: 14, psi: true, noise: 16 },
   reanimate: { id: 'reanimate', name: 'Despertar a un muerto', description: 'El grito del Chillón despierta un cadáver, que se levanta como Zombi.', target: 'corpse', ap: 1, endsTurn: true, cooldown: 4, range: 12, psi: true, noise: 8 },
   burst: { id: 'burst', name: 'Reventón', description: 'Al morir o al llegar a un soldado revienta: 3 de daño a quien tenga al lado.', target: 'self', ap: 1, endsTurn: true, radius: 1.5, explosive: 'bloaterBurst' },
   smoke: { id: 'smoke', name: 'Granada de humo', description: 'Cubre una zona de humo durante 2 turnos: −20 a la puntería contra quien esté dentro.', target: 'tile', ap: 1, endsTurn: true, charge: 'smoke', range: 10, radius: 2, noise: 4 },
   flashbang: { id: 'flashbang', name: 'Granada aturdidora', description: 'Desorienta a los enemigos de la zona (−20 de puntería, sin explosivos). No hace daño.', target: 'tile', ap: 1, endsTurn: true, charge: 'flashbang', range: 10, radius: 2.5, noise: 18 },
-  firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Cura 4 de salud a un aliado contiguo (o a uno mismo).', target: 'ally', ap: 1, endsTurn: false, charge: 'firstAid', range: 1.5 },
+  firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Cura 4 de salud a uno mismo o a un compañero de al lado.', target: 'ally', ap: 1, endsTurn: false, charge: 'firstAid', range: 1.5 },
   // The Oficio: learnt in the Taller de oficios. Each makes its own noise; none gives the squad away by itself.
   aegis: { id: 'aegis', name: 'Escudo antidisturbios', description: 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 3, song: true, noise: 0 },
   echoStep: { id: 'echoStep', name: 'Saltar por la ventana', description: 'Saltas a una casilla libre a la vista, a 6 o menos, por encima de lo que haya en medio. No termina el turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 6, radius: 0, teleport: true, song: true, noise: 1 },
@@ -394,8 +397,9 @@ export interface FoundWeaponDef {
   weapon: WeaponId;
   /** In the hand (fusil, escopeta, fusil de precisión, ametralladora) or at the belt (the machete). */
   slot: 'primary' | 'melee';
-  /** A good one: whoever carries it fights a tier above everyone (to 3, and never past what the rank allows). */
+  /** A good one: it comes with an improvement mounted (`mod`, docs/FASE9.md §5). */
   better: boolean;
+  mod?: WeaponModId;
   /** How often it turns up in a weapons box or a search, against the others (0: never). */
   weight: number;
 }
@@ -412,11 +416,50 @@ export const FOUND_WEAPONS: Record<FoundWeaponId, FoundWeaponDef> = {
   precisionRifle: { id: 'precisionRifle', name: 'Fusil de precisión', find: 'un fusil de precisión', weapon: 'sniper', slot: 'primary', better: false, weight: 3 },
   machineGun: { id: 'machineGun', name: 'Ametralladora', find: 'una ametralladora', weapon: 'cannon', slot: 'primary', better: false, weight: 3 },
   machete: { id: 'machete', name: 'Machete', find: 'un machete', weapon: 'sword', slot: 'melee', better: false, weight: 0 },
-  huntingRifle: { id: 'huntingRifle', name: 'Fusil de cerrojo', find: 'un fusil de cerrojo bien engrasado', weapon: 'rifle', slot: 'primary', better: true, weight: 3 },
-  sawnOff: { id: 'sawnOff', name: 'Escopeta recortada', find: 'una escopeta recortada', weapon: 'shotgun', slot: 'primary', better: true, weight: 2 },
-  scopedRifle: { id: 'scopedRifle', name: 'Fusil con mira', find: 'un fusil con mira telescópica', weapon: 'sniper', slot: 'primary', better: true, weight: 1 },
-  lightMachineGun: { id: 'lightMachineGun', name: 'Ametralladora ligera', find: 'una ametralladora ligera con su cinta', weapon: 'cannon', slot: 'primary', better: true, weight: 1 },
+  huntingRifle: { id: 'huntingRifle', name: 'Fusil de cerrojo', find: 'un fusil de cerrojo bien engrasado', weapon: 'rifle', slot: 'primary', better: true, mod: 'stock', weight: 3 },
+  sawnOff: { id: 'sawnOff', name: 'Escopeta recortada', find: 'una escopeta recortada', weapon: 'shotgun', slot: 'primary', better: true, mod: 'extMag', weight: 2 },
+  scopedRifle: { id: 'scopedRifle', name: 'Fusil con mira', find: 'un fusil con mira telescópica', weapon: 'sniper', slot: 'primary', better: true, mod: 'scope', weight: 1 },
+  lightMachineGun: { id: 'lightMachineGun', name: 'Ametralladora ligera', find: 'una ametralladora ligera con su cinta', weapon: 'cannon', slot: 'primary', better: true, mod: 'extMag', weight: 1 },
 };
+
+// ------------------------------------------------------- condition and mods
+
+/** A weapon's improvements (docs/FASE9.md §5; names and lines, Lore's). */
+export const WEAPON_MODS: Record<WeaponModId, { id: WeaponModId; name: string; line: string; none: string }> = {
+  scope: { id: 'scope', name: 'Mira', line: '+10 de puntería.', none: 'ninguna mira' },
+  stock: { id: 'stock', name: 'Culata', line: '+10 de puntería en vigilancia: el arma apoyada no tiembla.', none: 'ninguna culata' },
+  extMag: { id: 'extMag', name: 'Cargador ampliado', line: 'Dos balas más en cada cargador.', none: 'ningún cargador ampliado' },
+  silencer: { id: 'silencer', name: 'Silenciador', line: 'El disparo hace la mitad de ruido. Casero: un tubo, arandelas y cinta.', none: 'ningún silenciador' },
+};
+export const MOD_SLOTS = 2;
+export const MOD_AIM = 10;
+export const EXT_MAG = 2;
+/** Below this a weapon is «Gastada»: −WORN_AIM aim. At 0, «Rota»: it doesn't fire. */
+export const WORN_BELOW = 30;
+export const WORN_AIM = 10;
+/** The Armería mends this much condition for every part. */
+export const REPAIR_PER_PART = 25;
+/** What Apaños mends in the field (docs/FASE9.md). */
+export const PATCH_UP = 40;
+
+/** What a shot takes off a weapon's condition: the precision rifle two, the rest one (the machine gun, one per burst). */
+export function wearOf(weapon: WeaponId): number {
+  return weapon === 'sniper' ? 2 : 1;
+}
+
+/** Whether `ability` fires the primary weapon a soldier carries (not the pistol beside it, not a blade). */
+export function firesPrimary(u: Pick<Unit, 'arms'>, ability: AbilityId): boolean {
+  return !!u.arms?.primary && (ABILITIES[ability].weapon ?? 'primary') === 'primary' && (isAttack(ability) || ability === 'overwatch' || ability === 'killZone' || ability === 'suppression');
+}
+
+/** The condition of the primary weapon a soldier carries (100 for none, or none told). */
+export function conditionOf(u: Pick<Unit, 'arms'>): number {
+  return u.arms?.primary ? (u.arms.condition ?? 100) : 100;
+}
+
+export function hasMod(u: Pick<Unit, 'arms'>, mod: WeaponModId): boolean {
+  return !!u.arms?.primary && !!u.arms.mods?.includes(mod);
+}
 
 /** The Armería's plain weapon of each class weapon: what an older campaign's soldiers keep (docs/FASE8.md §A). */
 export const PLAIN_WEAPON: Partial<Record<WeaponId, FoundWeaponId>> = {
@@ -445,9 +488,10 @@ export interface ItemDef {
 }
 
 export const ITEMS: Record<ItemId, ItemDef> = {
-  fragGrenade: { id: 'fragGrenade', name: 'Granada extra', description: '+1 granada de fragmentación.', slot: 'utility', cost: 20, level: 1, charges: { grenade: 1 } },
+  // The belt (docs/FASE9.md §4): two of these; ammunition goes into the weapons' mods instead.
+  fragGrenade: { id: 'fragGrenade', name: 'Granadas', description: 'Dos granadas de fragmentación, en el cinturón. Quien no las lleva, no puede lanzar.', slot: 'utility', cost: 20, level: 1, charges: { grenade: 2 } },
   smokeGrenade: { id: 'smokeGrenade', name: 'Granada de humo', description: 'Humo durante 2 turnos: −20 a la puntería contra quien esté dentro.', slot: 'utility', cost: 25, level: 1, charges: { smoke: 1 }, ability: 'smoke' },
-  firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Un uso: cura 4 a un aliado contiguo.', slot: 'utility', cost: 25, level: 1, charges: { firstAid: 1 }, ability: 'firstAid' },
+  firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Dos usos: cura 4 a uno mismo o a un compañero de al lado.', slot: 'utility', cost: 25, level: 1, charges: { firstAid: 2 }, ability: 'firstAid' },
   flashbang: { id: 'flashbang', name: 'Granada aturdidora', description: 'Desorienta a los enemigos de la zona.', slot: 'utility', cost: 30, level: 2, charges: { flashbang: 1 }, ability: 'flashbang' },
   tracerRounds: { id: 'tracerRounds', name: 'Munición trazadora', description: '+10 de puntería.', slot: 'ammo', cost: 35, level: 2, mods: { aim: 10 } },
   nanoVest: { id: 'nanoVest', name: 'Chaleco antibalas', description: '+2 de salud.', slot: 'utility', cost: 50, level: 4, hp: 2 },
@@ -571,7 +615,8 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
 };
 
 /** Default kits: each player gets a mix, a solo player gets all six. */
-export const SQUAD_CLASSES: ClassId[] = ['assault', 'sharpshooter', 'specialist', 'grenadier', 'assault', 'specialist'];
+/** Soldiers in a skirmish squad. */
+export const SQUAD_SIZE = 6;
 
 const ATTACKS: ReadonlySet<AbilityId> = new Set<AttackAbility>([
   'shoot', 'pistol', 'slash', 'stunLance', 'claw', 'rapidFire', 'chainShot', 'aimedShot', 'rupture', 'lightningHands', 'faceoff', 'spectralArrow', 'lightRain',
@@ -608,7 +653,8 @@ export function attackWeapon(u: Unit, ability: AttackAbility = 'shoot'): WeaponD
 /** Rounds in a full clip of the weapon `ability` fires; 0, it never runs out. A campaign soldier's pistol counts them (docs/FASE8.md §A). */
 export function clipOf(u: Unit, ability: AttackAbility = 'shoot'): number {
   const w = attackWeapon(u, ability);
-  return u.arms && w.id === 'pistol' ? PISTOL_CLIP : w.clip;
+  if (u.arms && w.id === 'pistol') return PISTOL_CLIP;
+  return w.clip + (firesPrimary(u, ability) && hasMod(u, 'extMag') ? EXT_MAG : 0);
 }
 
 /** Whether `ability` fires the pistol carried beside a primary weapon: it has its own rounds (Unit.pistolAmmo). */
@@ -623,6 +669,8 @@ export function roundsOf(u: Unit, ability: AttackAbility = 'shoot'): number {
 
 /** Whether `ability` can fire now: its weapon never runs out, or it has a round left. */
 export function loadedFor(u: Unit, ability: AttackAbility = 'shoot'): boolean {
+  // A broken weapon doesn't fire (docs/FASE9.md §5), loaded or not.
+  if (firesPrimary(u, ability) && conditionOf(u) <= 0) return false;
   return clipOf(u, ability) === 0 || roundsOf(u, ability) > 0;
 }
 
@@ -743,39 +791,13 @@ export const ZERO_MODS: UnitMods = {
   sight: 0,
   smokeSight: 0,
   calmAura: 0,
+  gunAim: 0,
+  gunCrit: 0,
+  quiet: 0,
 };
-
-export interface RankDef {
-  name: string;
-  /** Experience needed to reach this rank. */
-  xp: number;
-}
-
-/**
- * XP: 1 per mission, +1 for a victory, +1 per kill. Every promotion brings
- * aptitude and talent points (classes.ts).
- */
-export const RANKS: RankDef[] = [
-  { name: 'Novato', xp: 0 },
-  { name: 'Soldado', xp: 2 },
-  { name: 'Cabo', xp: 5 },
-  { name: 'Sargento', xp: 9 },
-  { name: 'Teniente', xp: 14 },
-  { name: 'Capitán', xp: 20 },
-  { name: 'Comandante', xp: 27 },
-  { name: 'Coronel', xp: 35 },
-];
 
 export function hasPerk(u: Pick<Unit, 'perks'>, id: PerkId): boolean {
   return u.perks.includes(id);
-}
-
-export function rankForXp(xp: number): number {
-  let rank = 0;
-  RANKS.forEach((r, i) => {
-    if (xp >= r.xp) rank = i;
-  });
-  return rank;
 }
 
 export function addMods(a: UnitMods, b: Partial<UnitMods>): UnitMods {

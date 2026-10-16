@@ -450,8 +450,8 @@ describe('searching', () => {
         if (difficulty === 1) expect(loot?.item).not.toBe('apRounds');
       }
     }
-    // Since phase 4, rations, parts and now and then a good weapon too (docs/FASE4.md).
-    expect([...kinds].sort()).toEqual(['food', 'item', 'medicines', 'nothing', 'parts', 'supplies', 'weapon']);
+    // Since phase 4, rations, parts and now and then a good weapon too (docs/FASE4.md); since Fase 9, an improvement for one.
+    expect([...kinds].sort()).toEqual(['food', 'item', 'medicines', 'mod', 'nothing', 'parts', 'supplies', 'weapon']);
     expect(rollLoot('tree', 2, new Rng(1))).toBeNull();
   });
 });

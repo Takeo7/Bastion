@@ -9,8 +9,10 @@ import {
   magsCount,
   MISSION_NAMES,
   PISTOL_CLIP,
-  RANKS,
   TEMPLATES,
+  VETERANCY,
+  apPerTurn,
+  conditionOf,
   WEAPONS,
   type AbilityId,
   type FoundWeaponId,
@@ -28,6 +30,7 @@ import { uiSound } from '../audio/ui';
 import type { NetStatus } from '../net';
 import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
+import { wearMarks } from '../strategy/arms';
 import { graphicsSettings, soundSettings } from './settingsPanel';
 import { typed } from './typed';
 
@@ -463,12 +466,13 @@ export class Hud {
           onclick: () => mine && u.alive && this.handlers.onSelectUnit(u.id),
           title: mine ? 'Seleccionar' : 'Soldado de tu compañero',
         },
-        h('div.card-name', {}, h('b.cls', {}, TEMPLATES[u.template].short), ' ', u.nickname ? `«${u.nickname}»` : u.name),
+        // Fase 9: soldiers have no class any more; only who isn't one (the VIP) says what it is.
+        h('div.card-name', {}, u.template === 'rookie' ? null : h('b.cls', {}, TEMPLATES[u.template].short), u.template === 'rookie' ? null : ' ', u.nickname ? `«${u.nickname}»` : u.name),
         h(
           'div.card-row',
           {},
           h('span.hp', {}, ...Array.from({ length: u.maxHp }, (_, i) => h(`i${i < u.hp ? '.on' : ''}`))),
-          h('span.ap', {}, ...Array.from({ length: Math.max(2, u.ap) }, (_, i) => h(`i${i < u.ap ? '.on' : ''}`))),
+          h('span.ap', {}, ...Array.from({ length: Math.max(apPerTurn(u), u.ap) }, (_, i) => h(`i${i < u.ap ? '.on' : ''}`))),
           u.id === inPlay ? h('em.in-play', { title: 'En juego: termina sus acciones antes que otro' }, 'EN JUEGO') : null,
           u.controlledBy ? h('em.psi', {}, 'CONTROLADO') : null,
           u.captive ? h('em.data', {}, 'CAUTIVO') : null,
@@ -505,17 +509,20 @@ export class Hud {
       .join(' · ');
     const clip = clipOf(u, 'shoot');
     const sidearm = !!arms?.primary;
-    const rank = u.team === 'xcom' ? RANKS[u.rank]?.name ?? '' : '';
+    // A soldier's veterancy (Unit.rank, skills.ts), in the feminine for a woman.
+    const soldier = u.team === 'xcom' && u.template === 'rookie';
+    const step = VETERANCY[u.rank];
+    const rank = soldier && step ? (u.appearance?.sex === 'f' ? step.female : step.name) : '';
     const pips = (filled: number, total: number) => Array.from({ length: total }, (_, i) => h(`i${i < filled ? '.on' : ''}`));
     const stat = (kind: string, title: string, ...content: (Node | string)[]) => h(`span.stat.${kind}`, { title }, h('span.stat-icon'), ...content);
     append(
       this.unitPanel,
       h(
         'div.unit-head',
-        { title: [rank, t.name].filter(Boolean).join(' · ') },
-        u.team === 'xcom' ? h('span.rank', { title: rank }, ...Array.from({ length: u.rank }, () => h('i'))) : null,
+        { title: soldier ? rank : t.name },
+        soldier ? h('span.rank', { title: rank }, ...Array.from({ length: u.rank }, () => h('i'))) : null,
         h('span.unit-name', {}, type(displayName(u.name, u.nickname))),
-        h('span.unit-class', {}, t.short),
+        h('span.unit-class', {}, soldier ? rank : t.short),
         // Bitten (playtest 15/10 #13): what it does to them, on the sheet as on the list.
         u.infected && u.alive ? h('em.bite', { title: this.biteNote }, BITE_TAG) : null,
       ),
@@ -523,7 +530,7 @@ export class Hud {
         'div.unit-stats',
         {},
         stat('hp', `Salud ${u.hp}/${u.maxHp}`, h('span.pips', {}, ...pips(u.hp, u.maxHp))),
-        stat('ap', `Acciones ${u.ap}/2`, h('span.pips', {}, ...pips(u.ap, Math.max(2, u.ap)))),
+        stat('ap', `Acciones ${u.ap}/${apPerTurn(u)}`, h('span.pips', {}, ...pips(u.ap, Math.max(apPerTurn(u), u.ap)))),
         // The spare magazines after the clip (docs/FASE7.md): «+3», red at none; the enemies don't count theirs.
         clip > 0
           ? stat(
@@ -535,7 +542,8 @@ export class Hud {
           : null,
         // The pistol carried beside a main gun counts its own rounds (PISTOL_CLIP); the spares serve both.
         sidearm ? stat('ammo.sidearm', `${WEAPONS.pistol.name}: ${u.pistolAmmo ?? 0}/${PISTOL_CLIP}`, h('span.pips', {}, ...pips(u.pistolAmmo ?? 0, PISTOL_CLIP))) : null,
-        stat('aim', `Puntería ${t.aim + u.mods.aim}`, h('b', {}, String(t.aim + u.mods.aim))),
+        // With firearms (Tiro, Fase 9): the shots' aim; the blade's has its own line in the breakdown.
+        stat('aim', `Puntería con armas de fuego ${t.aim + u.mods.aim + u.mods.gunAim}`, h('b', {}, String(t.aim + u.mods.aim + u.mods.gunAim))),
         u.charges.grenade !== undefined ? stat('grenade', `Granadas: ${u.charges.grenade}`, h('b', {}, `×${u.charges.grenade}`)) : null,
         u.charges.medkit !== undefined ? stat('medkit', `Botiquín: ${u.charges.medkit}`, h('b', {}, `×${u.charges.medkit}`)) : null,
         u.armor ? stat('armor', `Blindaje ${u.armor}`, h('b', {}, String(u.armor))) : null,
@@ -545,7 +553,8 @@ export class Hud {
         { title: [weapon, extras].filter(Boolean).join(' · ') },
         h('span.stat-icon'),
         h('span.unit-weapon-name', {}, weapon),
-        h(`span.tier.t${u.weaponTier ?? 1}`, {}, ...Array.from({ length: u.weaponTier ?? 1 }, () => h('i'))),
+        // Its state and improvements (docs/FASE9.md §5), where it carries a weapon of the Armería; no weapon tiers any more.
+        arms?.primary ? wearMarks(conditionOf(u), arms.mods) : null,
       ),
       pack ? this.backpack(u.id, pack) : null,
     );

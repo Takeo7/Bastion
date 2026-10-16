@@ -1,6 +1,5 @@
 export * from './types';
 export * from './content';
-export * from './classes';
 export * from './maps';
 export * from './rng';
 export * from './grid';
@@ -18,6 +17,7 @@ export * from './setup';
 export * from './campaign';
 export * from './appearance';
 export * from './progression';
+export * from './skills';
 export * from './lore';
 export * from './quests';
 export * from './transmissions';

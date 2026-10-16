@@ -69,14 +69,11 @@ describe('transmissions', () => {
 });
 
 describe('the song of Velmar', () => {
-  it('the Taller de oficios and the first soldier who learns a trade unlock their scenes', () => {
+  it('the Taller de oficios unlocks its scene', () => {
     const c = createCampaign([0], new Rng(1));
     expect(ids(c)).not.toContain('velmar');
     (c.base.plots[0] as { building: string | null }).building = 'echoes';
     expect(ids(c)).toContain('velmar');
-    expect(ids(c)).not.toContain('firstSong');
-    (c.soldiers[0]!.talents as Record<string, number>).bolt = 1;
-    expect(ids(c)).toContain('firstSong');
   });
 });
 

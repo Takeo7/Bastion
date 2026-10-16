@@ -6,10 +6,13 @@ import {
   ABILITIES,
   attackWeapon,
   clipOf,
+  conditionOf,
+  firesPrimary,
   fullyLoaded,
   HACK_BASE,
   HACK_PER_RANK,
   HACK_SPECIALIST,
+  hasMod,
   hasPerk,
   isAttack,
   ITEMS,
@@ -19,7 +22,7 @@ import {
   TEMPLATES,
   WEAPONS,
 } from './content';
-import { TALENTS } from './classes';
+import { SKILL_TALENTS } from './skills';
 import { hasAnyCover } from './cover';
 import { canStandOn, DIRS4, DIRS8, distance, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, slabAt, toPos, unitAt } from './grid';
 import { reachesToSearch, roomAt, roomSearched, searchable, searchableTiles, searchSpot } from './loot';
@@ -36,7 +39,9 @@ export function abilitiesOf(u: Unit): AbilityId[] {
     if (u.arms.primary && pistol < 0) list.splice(list.indexOf('slash') + 1, 0, 'pistol');
     if (!u.arms.primary && pistol >= 0) list.splice(pistol, 1);
   }
-  for (const granted of [...u.perks.map((id) => TALENTS[id]?.ability), ...u.gear.map((id) => ITEMS[id]?.ability)]) {
+  // Nobody throws grenades without having carried some (docs/FASE9.md §4): the squad's come only from the belt.
+  if (u.team === 'xcom' && u.charges.grenade === undefined && list.includes('grenade')) list.splice(list.indexOf('grenade'), 1);
+  for (const granted of [...u.perks.map((id) => SKILL_TALENTS[id]?.ability), ...u.gear.map((id) => ITEMS[id]?.ability)]) {
     if (granted && !list.includes(granted)) list.push(granted);
   }
   if (u.team === 'xcom' && !u.captive && TEMPLATES[u.template].team === 'xcom') {
@@ -146,6 +151,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
     return ammo > 1 ? `Necesita ${ammo} balas en el cargador: recarga.` : 'Sin munición: recarga.';
   }
   if (u.disoriented && def.target === 'tile' && !def.teleport && !BY_HAND.has(ability)) return 'Desorientado: no puede usar explosivos.';
+  if (firesPrimary(u, ability) && conditionOf(u) <= 0) return 'Rota: no dispara. Se arregla en la Armería.';
   if (def.psi && inSilence(s, u.pos)) return 'Petardos: aquí no se puede gritar.';
   switch (ability) {
     case 'reload':
@@ -161,6 +167,9 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
     case 'velmarStorm':
     case 'lightRain':
       if (!songTargets(s, u, ability).length) return 'Ningún enemigo a la vista.';
+      break;
+    case 'elbowRoom':
+      if (!besideEnemies(s, u).length) return 'No tienes ningún enemigo al lado.';
       break;
     case 'hack':
       if (!s.mission.terminal) return 'No hay ningún equipo que arreglar en esta misión.';
@@ -194,6 +203,11 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
 }
 
 const hostile = (u: Unit, t: Unit) => t.alive && t.team !== u.team && !t.captive;
+
+/** Enemies within reach of a blade without a step (Hacerse sitio, docs/FASE9.md). */
+export function besideEnemies(s: GameState, u: Unit): Unit[] {
+  return s.units.filter((t) => hostile(u, t) && inMeleeReach(s, u.pos, t.pos));
+}
 
 /** Enemies a ranged attack can hit right now. */
 export function rangedTargets(s: GameState, u: Unit, ability: AttackAbility): Unit[] {
@@ -240,7 +254,7 @@ export function hasBadStatus(u: Unit): boolean {
 }
 
 /** Allies a support ability can target. */
-export function allyTargets(s: GameState, u: Unit, ability: 'medkit' | 'aid' | 'revival' | 'firstAid' | 'layOnHands' | 'counterSong'): Unit[] {
+export function allyTargets(s: GameState, u: Unit, ability: 'medkit' | 'aid' | 'revival' | 'firstAid' | 'layOnHands' | 'counterSong' | 'patchUp'): Unit[] {
   const range = ABILITIES[ability].range ?? Infinity;
   return s.units.filter((t) => {
     // Contracanto reaches a comrade the Cantor holds, who now stands with the enemy.
@@ -252,6 +266,8 @@ export function allyTargets(s: GameState, u: Unit, ability: 'medkit' | 'aid' | '
     if (ability === 'revival') return hasBadStatus(t);
     if (ability === 'layOnHands') return t.hp < t.maxHp || t.panicked || t.disoriented > 0;
     if (ability === 'counterSong') return true;
+    // Apaños (docs/FASE9.md): a weapon in the hand that isn't as good as new, its own or a partner's alongside.
+    if (ability === 'patchUp') return !!t.arms?.primary && conditionOf(t) < 100;
     return t.id !== u.id && !t.aided;
   });
 }
@@ -295,6 +311,7 @@ export function abilityTargets(s: GameState, u: Unit, ability: AbilityId): Unit[
     case 'aid':
     case 'revival':
     case 'firstAid':
+    case 'patchUp':
       return allyTargets(s, u, ability);
   }
   if (def.target === 'melee' && isAttack(ability)) return meleeTargets(s, u, ability).map((o) => o.target);
@@ -398,6 +415,9 @@ export function noiseOf(s: GameState, u: Unit, ability: AbilityId): number {
     else if (ability === 'suppression') noise = attackWeapon(u, 'shoot').noise;
     else noise = def.explosive ? WEAPONS[def.explosive].noise : 0;
   }
+  // Sin hacer ruido (docs/FASE9.md): searching and opening boxes in silence. A silencer halves a shot's noise.
+  if (u.mods.quiet && (ability === 'search' || ability === 'searchRoom')) return 0;
+  if (firesPrimary(u, ability) && hasMod(u, 'silencer')) noise = Math.ceil(noise / 2);
   return def.song && s.quietSongs ? Math.max(0, noise - OFICIO_QUIET) : noise;
 }
 

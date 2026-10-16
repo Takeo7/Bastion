@@ -12,7 +12,8 @@ import { preloadSynty, syntyFigure, type Siren } from './syntyFigures';
 //     │ ├ flash      red overlay shown when hit
 //     │ └ gunPivot   shoulder: aim (rotation.x) and recoil (position.z)
 //     │   └ muzzle   where tracers and flashes start
-//     └ drone   specialist's support drone, hovering over the shoulder
+//     └ drone   the Grillo's drone over the shoulder: none since 0.3.0 (no classes); kept null until
+//               game.ts drops its flights (units.dronePos falls back to above the chest)
 
 export interface UnitRig {
   root: THREE.Group;

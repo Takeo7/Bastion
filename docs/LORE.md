@@ -106,7 +106,7 @@ Se mantienen las voces de la radio que ya existen y cambian sus vidas.
 | Personaje | Papel nuevo |
 |---|---|
 | **Nadia Albescu, «Morse»** | Radioaficionada de toda la vida. Mantiene la radio de Atalaya y es la primera en oír a otros vivos. Firma los informes. |
-| **Teodor Vidić, «Teo»** | Mecánico jubilado. Blindó La Lata, arregla armas y enseña oficios. Construyó el Grillo. Secreto: trabajó de vigilante en el Instituto Galen la noche en que todo empezó. |
+| **Teodor Vidić, «Teo»** | Mecánico jubilado. Blindó La Lata, arregla armas y enseña oficios. Secreto: trabajó de vigilante en el Instituto Galen la noche en que todo empezó. |
 | **Dra. Amara Nwosu** | Viróloga del Instituto Galen. Huyó con sus cuadernos y cree que hay una vacuna. |
 | **Simão Ferreira** | Desertor de los Cuervos. Sabe dónde guardan lo que roban y a quién. |
 | **Ruth Halvorsen** | Portavoz del Refugio de Brena, el enclave más grande. Socia exigente. |
@@ -176,37 +176,23 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
 
 **De noche:** se ve poco y os ven poco, salvo bajo farolas, bengalas o fuego. Hay más muertos en la calle, y el botín vale la mitad más.
 
-## Clases y el oficio de superviviente
+## Lo que aprenden los soldados
 
-El árbol de habilidades (antes «la Rosa»; Arturo lo renombró el 2026-10-13) y sus ramas se quedan. La magia de Velmar desaparece, pero su rama no se tira: pasa a ser el **Oficio**, una cuarta rama de cada eje que abre un edificio, el **Taller de oficios**, donde Teo enseña. Las mecánicas que ya están hechas se reaprovechan con otro nombre:
+Desde la 0.3.0 no hay clases ni árbol de ejes ([FASE9.md](FASE9.md), «Se aprende haciendo»). Cada soldado aprende de lo que hace en las misiones: los nombres y las líneas están en FASE9.md, «Textos», y en el código, en `skills.ts`.
 
-| Antes (Canto) | Ahora (Oficio) | Lo que hace |
-|---|---|---|
-| Asalto · Juramento | **Machete** | Hoja afilada, escudo antidisturbios, saltar por una ventana (el antiguo teletransporte, más corto), vendaje rápido y «Aguantad» (nadie entra en pánico) |
-| Granadero · Evocación | **Fuego** | Bengala, petardos (atraen a los zombis lejos de vosotros: era Silencio), cóctel molotov (daño en área, sin que el fuego se extienda), gasolina extra y el bidón |
-| Francotirador · Ojo de Velmar | **Ballesta** | Rastreo, flecha perforante (atraviesa la cobertura), encaramarse, prismáticos y lluvia de flechas |
-| Especialista · Voz | **Enfermería de campo** | Calma, sedante (quita el pánico), arenga, manos de enfermero y desfibrilador (levantar a alguien caído en el turno) |
+- **Cuatro habilidades:** Tiro, Cuerpo a cuerpo, Medicina y Maña. Suben con el uso: aciertos, bajas, curas, registros, arreglos.
+- **Talentos por parejas** en los niveles 2 y 4: uno de cada dos, para siempre. Nombres secos, de lo que pasa en el tablero («A la cabeza», «Nadie pasa», «Hacerse sitio», «Pasar visita», «Apaños»), nunca de videojuego ni de fantasía.
+- **La veteranía** es la suma de las cuatro: Novato, Fogueado, Curtido, Veterano, Superviviente (en femenino, Novata, Fogueada, Curtida, Veterana). Arriba del todo no hay leyendas: hay quien sobrevive.
+- **Las armas** son de la Armería y no de la clase: se encuentran, se fabrican o llegan con el nivel del Bastión. Se gastan («Gastada», «Rota») y llevan mejoras: mira, culata, cargador ampliado y silenciador.
+- **El Taller de oficios** se queda: lo que se aprende fuera, allí se repasa (cada misión enseña un poco más).
 
-Además:
-- el Temple 10 «Sordo al Coro» pasa a ser «Nervios de acero»: el grito del Chillón no le afecta;
-- la aptitud que se llamaba Oficio pasa a ser **Maña** (MAÑ), para no confundirla con la rama: arreglar equipos, granadas y curas (Arturo, 2026-10-13).
-
-**El Grillo** se queda: es el dron del Especialista, uno de juguete con una batería de coche, que Teo montó en el taller y que hace cri-cri al volar. Cura, cubre, da calambres y arregla equipos a distancia. Sus acciones dejan de llamarse «protocolos» (Arturo, 2026-10-13):
-
-| Antes | Ahora |
-|---|---|
-| Protocolo médico | Botiquín volante |
-| Protocolo de ayuda | Cobertura del Grillo |
-| Protocolo de combate | Calambrazo |
-| Protocolo de reanimación | Espabilar |
-| Descarga de condensador | Descarga de batería |
-| Hackear | Arreglar |
+Lo de antes, por si se busca: el Oficio (la rama de Machete, Fuego, Ballesta y Enfermería que sustituyó al Canto de Velmar), el Grillo del Especialista y las clases desaparecen con la 0.3.0. «Espabilar» y «Manos de enfermero» siguen, como talentos de Medicina.
 
 ## Lo que se queda y lo que cambia
 
 | Parte | Qué pasa |
 |---|---|
-| Árbol de habilidades, ramas, aptitudes, rangos | Se quedan. Se renombran el Oficio y lo psiónico. |
+| Árbol de habilidades, ramas, aptitudes, rangos | Se quedaron con la nueva piel; en la 0.3.0 los sustituye «Se aprende haciendo» (ver «Lo que aprenden los soldados»). |
 | Base en superficie, edificios, cercanías | Se quedan, con otra piel: huerto, barricadas, depósito de agua, Camposanto… |
 | Capítulos, encargos, rumores | Se quedan como sistema y se reescriben todos los textos. |
 | Radio, Expediente, avisos de Morse | Se quedan. El Expediente pasa a ser el **Diario** de Atalaya, que escribe Morse. Se reescriben las escenas, las hojas y las fichas. |
@@ -232,12 +218,11 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 | Órgano | **Nido** |
 | Sala de simulación | **Sala de mapas** |
 | Terminal, hackear, pirateo | **Arreglar** (el equipo, la radio) |
-| Protocolos del dron | Botiquín volante, Cobertura del Grillo, Calambrazo, Espabilar |
 | La Rosa | **Árbol de habilidades** |
 | Aldren, Volkren | **Brena**, **Velsa** |
 | Dos llaves, llave doble | Uno propone y el otro acepta; «lo decidís juntos» |
 | Los datos (el objetivo) | El nombre del objeto: «las medicinas»; sin nombre, «la carga» |
-| Oficio (la aptitud) | **Maña** (MAÑ); el Oficio es la rama |
+| Oficio (la aptitud) | **Maña** (MAÑ), una de las cuatro habilidades |
 | Créditos | **Suministros** (§) |
 | Refuerzos (en combate) | **La horda**: los muertos que llegan por los bordes |
 | «Operación Ceniza Rota» | Nombre de lugar: «La gasolinera de Velsa» |

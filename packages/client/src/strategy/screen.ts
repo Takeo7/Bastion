@@ -2,16 +2,8 @@ import './strategy.css';
 import {
   ARMOR_COLORS,
   ARMOR_TIERS,
-  ATTR_IDS,
-  ATTR_POINTS_PER_RANK,
-  ATTR_THRESHOLDS,
-  ATTR_MAX,
-  attrBlocker,
-  attrCap,
-  ATTRS,
   armorTier,
   baseArmorTier,
-  baseWeaponTier,
   bastionLevel,
   BIOME_NAMES,
   BITE_TAG,
@@ -19,27 +11,15 @@ import {
   buildable,
   BUILDS,
   canAfford,
-  CLASS_TOP,
   clearAim,
   contactAim,
   craftAim,
   CRAFTS,
-  AXES,
-  axesOf,
-  baseAttrs,
-  echoesLevel,
   missionInfo,
   operationAim,
-  RECRUIT_DESCRIPTION,
   rumorAim,
-  soldierTemplate,
-  attrPointsFree,
-  leaningClass,
-  learnTalent,
-  SPECIALIZE_POINTS,
-  SPECIALIZE_RANK,
-  SPECIALIZE_RANK_NAME,
-  talentPointsFree,
+  veterancy,
+  veterancyName,
   contactCapacity,
   contactCost,
   costText,
@@ -102,12 +82,13 @@ import {
   offerBriefing,
   offerSignature,
   PARTITURA_LEVEL,
+  PLAYER_COLORS,
+  BASE_AIM,
+  MOD_SLOTS,
+  WEAPON_MODS,
+  type WeaponModId,
   QUESTS,
-  pointsInAxis,
-  pointsToSpend,
   randomAppearance,
-  RANKS,
-  retrainCost,
   RECRUIT_COST,
   REGION_LORE,
   regionIncome,
@@ -137,7 +118,6 @@ import {
   treatCost,
   TURNED_CAUSE,
   turnDay,
-  soldierWeaponName,
   squadLimit,
   squadPads,
   squadPlace,
@@ -145,19 +125,10 @@ import {
   squadMax,
   squadMember,
   STORY,
-  TALENT_POINTS_PER_RANK,
-  talentBlocker,
-  talentIds,
-  talentsOf,
-  TALENTS,
   TECHS,
   TEMPLATES,
-  TIER_RANK,
   TRAITS,
-  VETERAN_AIM,
   VISOR_COLORS,
-  WEAPON_TIER_DAMAGE,
-  WEAPONS,
   weaponTier,
   type Appearance,
   type ArmorPart,
@@ -168,15 +139,11 @@ import {
   type CampaignSoldier,
   type CraftDef,
   type CampaignState,
-  type ClassId,
   type ItemId,
   type ItemSlot,
   type MissionKind,
   type MissionOffer,
   type NextStep,
-  type AttrId,
-  type Build,
-  type PerkId,
   type TemplateId,
   type PlayerInfo,
   type RegionId,
@@ -195,8 +162,9 @@ import { Stage, type Shot } from './stage';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
 import { plotIcon } from './plotIcons';
-import { kindOf, loadoutEl, placeOf, weaponIcon } from './arms';
-import { skillTree } from './skillTree';
+import { kindOf, loadoutEl, modPanel, placeOf, weaponCare, weaponIcon, weaponMarks } from './arms';
+import { soldierPortrait } from './portraits';
+import { learnedTags, levelUpLines, skillDigits, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
 import { deadlineEl } from '../ui/deadline';
 import { SURVIVOR_CHOICES } from '../game/syntyManifest';
 
@@ -245,7 +213,8 @@ const PREMISE_KEY = storageKey('seenPremise');
 
 const KIND_ICON: Record<MissionKind, string> = { elimination: '✕', recovery: '◆', sabotage: 'ϟ', hack: '⌘', rescue: '✚', scavenge: '⌂' };
 const DIFFICULTY = ['', 'Moderada', 'Difícil', 'Muy difícil', 'Extrema'];
-const CLASSES: ClassId[] = ['assault', 'grenadier', 'sharpshooter', 'specialist'];
+/** Fase 9: every soldier fights as the same template (skills.ts fighterStats); what tells them apart is their look. */
+const SOLDIER: TemplateId = 'rookie';
 
 const NAV: { view: BaseView; label: string }[] = [
   { view: 'hub', label: 'Bastión' },
@@ -378,19 +347,8 @@ export class StrategyScreen {
   private plot: string | null = null;
   /** The plot under the pointer, in 3D or in the grid. */
   private plotHovered: string | null = null;
+  /** The Árbol de habilidades is open on the soldier's sheet (skillSheet.ts keeps its draft). */
   private promoting = false;
-  /** Soldier whose Reentrenar button waits for a second click. */
-  private retrainArmed: string | null = null;
-  /** Axis open in the Árbol de habilidades (null = the soldier's main one). */
-  private sheetAxis: ClassId | null = null;
-  /** The Árbol de habilidades shows its four axes around the centre instead of one. */
-  private wholeTree = false;
-  /** The talent the tree's inspector shows when the pointer is elsewhere. */
-  private treeFocus: PerkId | null = null;
-  /** A promotion being laid out on the sheet; nothing is sent until «Guardar». */
-  private plan: { soldier: string; attrs: AttrId[]; talents: PerkId[] } | null = null;
-  /** The sheet just saved: it shows its stamp for a moment. */
-  private savedStamp: { soldier: string; until: number } | null = null;
   /** Open equipment picker ("soldierId:slot"). */
   private picking: string | null = null;
   /** The alert on screen last time, so turning the globe to it happens once. */
@@ -435,9 +393,6 @@ export class StrategyScreen {
       this.picking = null;
       this.custom = null;
       this.promoting = false;
-      this.plan = null;
-      this.wholeTree = false;
-      this.treeFocus = null;
       this.leaving = false;
       this.newsOpen = false;
       this.settingsOpen = false;
@@ -656,6 +611,13 @@ export class StrategyScreen {
     return this.players.find((p) => p.slot === slot)?.color ?? '#888';
   }
 
+  /** The soldier's own bust on a lineup card ([data-bust]), once drawn (portraits.ts); until then, the empty frame. */
+  private bustOn(card: HTMLElement, s: Pick<CampaignSoldier, 'id' | 'owner'> & { appearance?: Appearance }): void {
+    void soldierPortrait(SOLDIER, PLAYER_COLORS[s.owner], s.appearance, s.id)
+      .then((url) => card.style.setProperty('--portrait', `url('${url}')`))
+      .catch(() => undefined);
+  }
+
   /** Shared decisions are proposals only when the partner is around. */
   private decide(verb: string): string {
     const partnerHere = this.c().players.length > 1 && !!this.partner()?.connected;
@@ -805,12 +767,6 @@ export class StrategyScreen {
     const free = itemsFree(c, item);
     if (!have) return '';
     return free === have ? `Tienes ${have}` : `Tienes ${have} (${free} ${free === 1 ? 'libre' : 'libres'})`;
-  }
-
-  /** A soldier's class: its symbol and short code, the full name on hover. */
-  private clsTag(cls: ClassId | null): HTMLElement {
-    const t = soldierTemplate(cls);
-    return h(`span.cls.cls-${t}`, { title: cls ? TEMPLATES[t].name : RECRUIT_DESCRIPTION }, h('i'), TEMPLATES[t].short);
   }
 
   /** Tier diamonds, coloured like the guns: steel, magnetic, plasma. */
@@ -1321,7 +1277,7 @@ export class StrategyScreen {
       if (fresh.length) pending.set(view, { n: String(fresh.length), urgent: fresh.some((i) => i.urgent), what: fresh.map((i) => i.label) });
     }
     const promotions = c.soldiers.filter((s) => s.owner === this.mySlot && this.hasPoints(s));
-    if (promotions.length) pending.set('barracks', { n: `▲${promotions.length}`, urgent: false, what: promotions.map((s) => `${s.name}: ascenso por repartir`) });
+    if (promotions.length) pending.set('barracks', { n: `▲${promotions.length}`, urgent: false, what: promotions.map((s) => `${s.name}: talento por elegir`) });
     for (const item of items) {
       const here = partner?.connected && this.partnerView === item.view;
       const todo = pending.get(item.view);
@@ -1688,7 +1644,7 @@ export class StrategyScreen {
     const r = o.reward;
     const rewards = [
       r.credits ? `${r.credits} suministros` : '',
-      r.recruit ? `un recluta (${TEMPLATES[r.recruit].name})` : '',
+      r.recruit ? 'un recluta' : '',
       r.doom ? `${doomSubject(bastionLevel(c))} retrocede ${r.doom}` : '',
       o.story ? (STORY[o.story - 1]!.prize ?? '') : '',
     ];
@@ -1885,46 +1841,14 @@ export class StrategyScreen {
     );
     const rows: HTMLElement[] = [];
     if (this.engTab === 'gear') {
+      // No weapon tiers any more (docs/FASE9.md §5): the armour's, made in the Taller, for everyone.
       const tiers: [string, string, number, boolean][] = [
-        ['w1', 'Armas convencionales', 1, true],
-        ['w2', TECHS.magWeapons.name, TECHS.magWeapons.level, baseWeaponTier(c) >= 2],
-        ['w3', TECHS.plasmaWeapons.name, TECHS.plasmaWeapons.level, baseWeaponTier(c) >= 3],
         ['a1', ARMOR_TIERS[0]!.name, 1, true],
         ['a2', ARMOR_TIERS[1]!.name, TECHS.plateArmor.level, baseArmorTier(c) >= 2],
         ['a3', ARMOR_TIERS[2]!.name, TECHS.predatorArmor.level, baseArmorTier(c) >= 3],
       ];
-      this.engPick ??= 'w2';
-      for (const [key, name, lvl, unlocked] of tiers) {
-        const tier = Number(key[1]);
-        if (key === 'a1') rows.push(h('div.x-group', {}, 'Armadura'));
-        if (key === 'w1') rows.push(h('div.x-group', {}, 'Armas'));
-        rows.push(
-          h(
-            `button.x-row.tier-row${this.engPick === key ? '.selected' : ''}${unlocked ? '' : '.dim'}`,
-            { onclick: () => ((this.engPick = key), this.render()) },
-            this.tierMarks(tier),
-            h('b', {}, name),
-            unlocked
-              ? h('span.x-side', {}, '✓')
-              : this.craftChip(c, key) ?? this.chip(`Nv ${lvl}${tier > 1 ? ` · ${RANKS[TIER_RANK[tier - 1]]!.name}` : ''}`, '', `Nivel ${lvl} del Bastión; cada soldado desde ${RANKS[TIER_RANK[tier - 1]]!.name}`),
-          ),
-        );
-      }
-      // The Taller's weapons and munition (docs/FASE8.md §A): weapons again and again, munition three times.
-      rows.push(h('div.x-group', {}, 'Hacer en el Taller'));
-      for (const def of Object.values(CRAFTS).filter((d) => d.kind === 'arms' || d.kind === 'ammo')) {
-        const work = c.base.works.find((w) => w.project === def.id);
-        const done = def.kind === 'ammo' && c.crafted?.includes(def.id);
-        rows.push(
-          h(
-            `button.x-row${this.engPick === `m:${def.id}` ? '.selected' : ''}${done || !craftBlocker(c, def.id) || work ? '' : '.dim'}`,
-            { onclick: () => ((this.engPick = `m:${def.id}`), this.render()) },
-            h('b', {}, weaponIcon(def.kind === 'ammo' || !def.makes ? 'ammo' : kindOf(def.makes)), def.name),
-            h('span.x-side', {}, done ? '✓' : work ? this.chip(`Taller · ${work.daysLeft} d`, 'good') : def.makes ? h('small.x-place', {}, placeOf(def.makes)) : ''),
-          ),
-        );
-      }
-      // The Armería's weapons (docs/FASE8.md §A): each for one soldier, of any class; the good ones a tier above.
+      this.engPick ??= (c.foundWeapons ?? [])[0] ? `f:${c.foundWeapons![0]!.id}` : 'a2';
+      // The Armería's weapons first (docs/FASE8.md §A, FASE9.md §5): each for one soldier; its state and improvements beside its name.
       const found = c.foundWeapons ?? [];
       if (found.length) rows.push(h('div.x-group', {}, 'En la Armería'));
       for (const w of found) {
@@ -1933,13 +1857,53 @@ export class StrategyScreen {
           h(
             `button.x-row${this.engPick === `f:${w.id}` ? '.selected' : ''}`,
             { onclick: () => ((this.engPick = `f:${w.id}`), this.render()) },
-            h('b', {}, weaponIcon(kindOf(w.kind)), FOUND_WEAPONS[w.kind].name),
+            h('b', {}, weaponIcon(kindOf(w.kind)), FOUND_WEAPONS[w.kind].name, weaponMarks(w)),
             h('span.x-side', {}, h('small.x-place', {}, placeOf(w.kind)), holder ? displayName(holder.name, holder.nickname) : 'En la Armería'),
           ),
         );
       }
+      // The improvements loose on the rack, to put on a firearm.
+      const loose = (Object.keys(WEAPON_MODS) as WeaponModId[]).filter((m) => (c.weaponMods?.[m] ?? 0) > 0);
+      if (loose.length) rows.push(h('div.x-group', {}, 'Mejoras sueltas'));
+      for (const m of loose)
+        rows.push(
+          h(
+            `button.x-row${this.engPick === `x:${m}` ? '.selected' : ''}`,
+            { onclick: () => ((this.engPick = `x:${m}`), this.render()) },
+            h('b', {}, weaponIcon('mod'), WEAPON_MODS[m].name),
+            h('span.x-side', {}, `× ${c.weaponMods![m]}`),
+          ),
+        );
+      rows.push(h('div.x-group', {}, 'Armadura'));
+      for (const [key, name, lvl, unlocked] of tiers) {
+        const tier = Number(key[1]);
+        rows.push(
+          h(
+            `button.x-row.tier-row${this.engPick === key ? '.selected' : ''}${unlocked ? '' : '.dim'}`,
+            { onclick: () => ((this.engPick = key), this.render()) },
+            this.tierMarks(tier),
+            h('b', {}, name),
+            unlocked ? h('span.x-side', {}, '✓') : this.craftChip(c, key) ?? this.chip(`Nv ${lvl}`, '', `Nivel ${lvl} del Bastión, y hacerla en el Taller`),
+          ),
+        );
+      }
+      // The Taller's weapons, munition and improvements (docs/FASE8.md §A, FASE9.md §5): munition three times, the rest again and again.
+      rows.push(h('div.x-group', {}, 'Hacer en el Taller'));
+      for (const def of Object.values(CRAFTS).filter((d) => d.kind === 'arms' || d.kind === 'ammo' || d.kind === 'mod')) {
+        const work = c.base.works.find((w) => w.project === def.id);
+        const done = def.kind === 'ammo' && c.crafted?.includes(def.id);
+        rows.push(
+          h(
+            `button.x-row${this.engPick === `m:${def.id}` ? '.selected' : ''}${done || !craftBlocker(c, def.id) || work ? '' : '.dim'}`,
+            { onclick: () => ((this.engPick = `m:${def.id}`), this.render()) },
+            h('b', {}, weaponIcon(def.kind === 'mod' ? 'mod' : def.kind === 'ammo' || !def.makes ? 'ammo' : kindOf(def.makes)), def.name),
+            h('span.x-side', {}, done ? '✓' : work ? this.chip(`Taller · ${work.daysLeft} d`, 'good') : def.makes ? h('small.x-place', {}, placeOf(def.makes)) : ''),
+          ),
+        );
+      }
     } else {
-      for (const item of Object.values(ITEMS)) {
+      // Only what goes on the belt (docs/FASE9.md §4): the special rounds are the weapons' improvements now.
+      for (const item of Object.values(ITEMS).filter((i) => i.slot === 'utility')) {
         const unlocked = itemUnlocked(c, item.id);
         this.engPick ??= item.id;
         rows.push(
@@ -1950,12 +1914,7 @@ export class StrategyScreen {
               'div',
               {},
               h('b', {}, item.name),
-              h(
-                'small',
-                {},
-                item.slot === 'utility' ? 'Utilidad ' : 'Munición ',
-                unlocked ? this.chip(costText(shopPrice(c, item.id))) : this.chip(`Nv ${item.level}`, '', `Se desbloquea con el nivel ${item.level} del Bastión`),
-              ),
+              h('small', {}, unlocked ? this.chip(costText(shopPrice(c, item.id))) : this.chip(`Nv ${item.level}`, '', `Se desbloquea con el nivel ${item.level} del Bastión`)),
             ),
             h('span.x-side', { title: 'Se equipan en el Cuartel' }, this.stockText(c, item.id)),
           ),
@@ -1968,15 +1927,17 @@ export class StrategyScreen {
     if (this.engTab === 'gear') {
       const panel = this.engPick.startsWith('f:')
         ? this.foundPanel(c, this.engPick.slice(2))
-        : this.engPick.startsWith('m:')
-          ? this.makePanel(c, this.engPick.slice(2) as CraftId)
-          : this.tierPanel(c, this.engPick);
+        : this.engPick.startsWith('x:')
+          ? modPanel(c, this.mySlot, this.engPick.slice(2) as WeaponModId, (cmd) => this.send(cmd), (s) => displayName(s.name, s.nickname))
+          : this.engPick.startsWith('m:')
+            ? this.makePanel(c, this.engPick.slice(2) as CraftId)
+            : this.tierPanel(c, this.engPick);
       // .item-art: the theme's picture of it, in the panel's corner (ui/themes/mixta-base.css).
       const pick = this.engPick;
       const found = pick.startsWith('f:') ? (c.foundWeapons ?? []).find((x) => x.id === pick.slice(2)) : undefined;
       const made = pick.startsWith('m:') ? CRAFTS[pick.slice(2) as CraftId] : undefined;
       // The weapon's own drawing (strategy/arms.ts): found or made by its kind, munition its bullets.
-      const artKind = found ? `w-${kindOf(found.kind)}` : made ? (made.makes ? `w-${kindOf(made.makes)}` : 'ammo') : pick.startsWith('a') ? 'armor' : 'weapon';
+      const artKind = found ? `w-${kindOf(found.kind)}` : made ? (made.makes ? `w-${kindOf(made.makes)}` : made.kind === 'mod' ? 'weapon' : 'ammo') : pick.startsWith('a') ? 'armor' : 'weapon';
       const art = h(`div.item-art${found && FOUND_WEAPONS[found.kind].better ? '.better' : ''}`, { 'data-item': artKind, 'aria-hidden': 'true' });
       this.viewEl.append(this.panel('eng-right', 'right', art, ...panel));
       return;
@@ -1990,7 +1951,7 @@ export class StrategyScreen {
         'eng-right',
         'right',
         h('div.item-art', { 'data-item': item.id, 'aria-hidden': 'true' }),
-        h('div.alert-kicker', {}, item.slot === 'utility' ? 'ACCESORIO · UTILIDAD' : 'ACCESORIO · MUNICIÓN'),
+        h('div.alert-kicker', {}, 'ACCESORIO · CINTURÓN'),
         h('h2.x-title', {}, item.name),
         h('p.x-text', {}, item.description),
         h(
@@ -2003,15 +1964,6 @@ export class StrategyScreen {
         unlocked ? this.whyEl(this.shortfall(cost)) : null,
       ),
     );
-  }
-
-  /** A weapon or armour tier: what it gives, who may carry it, and each class's version. */
-  /** «daño 3–5» for the template's weapon, with the soldier's damage bonuses (tier, talents). */
-  private weaponDamage(template: TemplateId, bonus: number): string {
-    const w = WEAPONS[TEMPLATES[template].weapon];
-    const lo = w.damage + bonus - w.spread;
-    const hi = w.damage + bonus + w.spread + (w.plusOne ? 1 : 0);
-    return lo === hi ? `daño ${lo}` : `daño ${lo}–${hi}`;
   }
 
   /** The Taller's project that makes a tier (docs/FASE4.md). */
@@ -2053,9 +2005,11 @@ export class StrategyScreen {
     const text =
       def.kind === 'ammo'
         ? `Un cargador de repuesto más para cada soldado que salga de misión. Ahora cada uno sale con ${spareMags(c)} de repuesto.`
-        : `Una para la Armería, para el soldado que la lleve, sea de la clase que sea. Se puede hacer tantas veces como haga falta.`;
+        : def.kind === 'mod' && def.makesMod
+          ? `${WEAPON_MODS[def.makesMod].line} Una para la Armería: va en cualquier arma de fuego, ${MOD_SLOTS} mejoras como mucho en cada una. Se puede hacer tantas veces como haga falta.`
+          : `Una para la Armería, para el soldado que la lleve. Se puede hacer tantas veces como haga falta.`;
     return [
-      h('div.alert-kicker', {}, def.kind === 'ammo' ? 'TALLER · MUNICIÓN' : 'TALLER · ARMA'),
+      h('div.alert-kicker', {}, def.kind === 'ammo' ? 'TALLER · MUNICIÓN' : def.kind === 'mod' ? 'TALLER · MEJORA' : 'TALLER · ARMA'),
       h('h2.x-title', {}, def.name),
       h('p.x-text', {}, text),
       done
@@ -2087,12 +2041,12 @@ export class StrategyScreen {
       h(
         'p.x-text',
         {},
-        def.better
-          ? 'Para un soldado: un nivel de arma por encima del resto, hasta el 3 y lo que permita su rango. Si cae, se pierde.'
-          : melee
-            ? 'Para un soldado, en lugar del cuchillo. Si cae, se pierde.'
-            : 'Para un soldado, de cualquier clase: la lleva en la mano y la pistola al cinto. Si cae, se pierde.',
+        melee
+          ? 'Para un soldado, en lugar del cuchillo. Si cae, se pierde.'
+          : `Para un soldado: la lleva en la mano y la pistola al cinto.${def.better && def.mod ? ` Vino con ${WEAPON_MODS[def.mod].name.toLowerCase()}.` : ''} Si cae, se pierde.`,
       ),
+      // Fase 9: its state, «Arreglar» and its improvements (strategy/arms.ts).
+      ...weaponCare(c, this.mySlot, w, (cmd) => this.send(cmd)),
       h('div.x-group', {}, 'La lleva'),
       holder
         ? h(
@@ -2120,35 +2074,18 @@ export class StrategyScreen {
     ];
   }
 
+  /** An armour tier (docs/FASE9.md §5): what it gives; once the Taller has made it, everyone wears it. */
   private tierPanel(c: CampaignState, key: string): (HTMLElement | null)[] {
-    const weapon = key[0] === 'w';
     const tier = Number(key[1]) as 1 | 2 | 3;
-    const tech = weapon ? [null, TECHS.magWeapons, TECHS.plasmaWeapons][tier - 1] : [null, TECHS.plateArmor, TECHS.predatorArmor][tier - 1];
-    const unlocked = (weapon ? baseWeaponTier(c) : baseArmorTier(c)) >= tier;
-    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && s.alive);
-    const carrying = mine.filter((s) => (weapon ? weaponTier(c, s) : armorTier(c, s)) === tier);
+    const unlocked = baseArmorTier(c) >= tier;
     const armour = ARMOR_TIERS[tier - 1]!;
-    const effect = weapon
-      ? tier === 1
-        ? 'El arma de cada clase.'
-        : `+${WEAPON_TIER_DAMAGE[tier - 1]} de daño con el arma principal.`
-      : tier === 1
-        ? 'La protección de serie.'
-        : `+${armour.hp} de salud${armour.armor ? ` y +${armour.armor} de blindaje` : ''}.`;
+    const effect = tier === 1 ? 'La protección de serie.' : `+${armour.hp} de salud${armour.armor ? ` y +${armour.armor} de blindaje` : ''}.`;
     return [
-      h('div.alert-kicker', { className: `alert-kicker${unlocked ? ' good' : ''}` }, `${weapon ? 'ARMAS' : 'ARMADURA'} · NIVEL ${tier}`),
-      h('h2.x-title', {}, this.tierMarks(tier), ' ', weapon ? tech?.name ?? 'Armas convencionales' : armour.name),
+      h('div.alert-kicker', { className: `alert-kicker${unlocked ? ' good' : ''}` }, `ARMADURA · NIVEL ${tier}`),
+      h('h2.x-title', {}, this.tierMarks(tier), ' ', armour.name),
       h('p.x-text', {}, effect),
-      h(
-        'p.x-chips',
-        { title: 'No se compra: cada soldado la lleva en cuanto cumple los requisitos' },
-        tier === 1 ? this.chip('Todos', 'good') : this.chip(`Desde ${RANKS[TIER_RANK[tier - 1]]!.name}`),
-      ),
-      tier === 1 || unlocked ? null : this.craftRow(c, weapon ? 'weapon' : 'armor', tier),
-      weapon ? h('div.x-group', {}, 'Por clase') : null,
-      weapon ? h('dl.x-pairs', {}, ...CLASSES.flatMap((cls) => [h('dt', {}, TEMPLATES[cls].short), h('dd', {}, soldierWeaponName(cls, tier))])) : null,
-      h('div.x-group', {}, 'Tus soldados con este nivel'),
-      carrying.length ? h('p.x-text', {}, carrying.map((s) => displayName(s.name, s.nickname)).join(' · ')) : h('p.x-muted', {}, '—'),
+      h('p.x-chips', { title: 'No se compra: en cuanto el Taller la hace, la llevan todos' }, unlocked ? this.chip('La llevan todos', 'good') : this.chip('Para todos, cuando el Taller la haga')),
+      tier === 1 || unlocked ? null : this.craftRow(c, 'armor', tier),
     ];
   }
 
@@ -2157,8 +2094,8 @@ export class StrategyScreen {
   private renderBarracks(c: CampaignState): void {
     // With a Camposanto the fallen rest there, out of this list.
     const listed = (s: CampaignSoldier) => s.alive || !facilityCount(c, 'memorial');
-    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || b.rank - a.rank);
-    const theirs = c.soldiers.filter((s) => s.owner !== this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || b.rank - a.rank);
+    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || veterancy(b.skills) - veterancy(a.skills));
+    const theirs = c.soldiers.filter((s) => s.owner !== this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || veterancy(b.skills) - veterancy(a.skills));
     if (!this.soldier || !c.soldiers.some((s) => s.id === this.soldier)) this.soldier = mine.find((s) => s.alive)?.id ?? c.soldiers[0]?.id ?? null;
     const row = (s: CampaignSoldier) =>
       h(
@@ -2173,11 +2110,11 @@ export class StrategyScreen {
             this.render();
           },
         },
-        this.clsTag(s.cls),
-        h('b', { title: RANKS[s.rank]!.name }, displayName(s.name, s.nickname)),
-        h('span.rank', { title: RANKS[s.rank]!.name }, ...Array.from({ length: s.rank }, () => h('i'))),
+        skillDigits(s.skills),
+        h('b', {}, displayName(s.name, s.nickname)),
+        veterancyBadge(s.skills, s.appearance?.sex === 'f'),
         this.hasPoints(s)
-          ? this.chip('▲', 'good', 'Ascenso: puntos de aptitud y de talento por repartir')
+          ? this.chip('▲', 'good', 'Talento por elegir')
           : this.healthTag(c, s, true),
       );
     const count = mine.filter((s) => s.alive).length;
@@ -2189,7 +2126,7 @@ export class StrategyScreen {
       'div.recruit-card',
       { title: `Como mucho ${cap} soldados por jugador${price < RECRUIT_COST ? '. Más barato: el centro de entrenamiento está junto al cuartel' : ''}` },
       h('div.x-group', {}, 'Reclutar un soldado'),
-      h('p.x-text', {}, `Un recluta nuevo, sin clase: sale con cuchillo y pistola, y aprende lo que le enseñéis. Llega al momento, sin gastar días.`),
+      h('p.x-text', {}, `Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento, sin gastar días.`),
       h(
         'p.x-chips',
         {},
@@ -2197,7 +2134,7 @@ export class StrategyScreen {
         this.chip(`Tus soldados ${count}/${cap}`),
         this.chip(`Camas libres ${Math.max(0, bedsFree(c))}`, bedsFree(c) <= 0 ? 'warn' : '', 'Cada soldado necesita cama: el búnker tiene 8 y cada barracón suma más'),
       ),
-      h('button.x-btn.primary.recruit-btn', { disabled: !!blockedRecruit, title: RECRUIT_DESCRIPTION, onclick: () => this.send({ type: 'recruit' }) }, `Reclutar · ${costText(price)}`),
+      h('button.x-btn.primary.recruit-btn', { disabled: !!blockedRecruit, onclick: () => this.send({ type: 'recruit' }) }, `Reclutar · ${costText(price)}`),
       this.whyEl(blockedRecruit),
     );
     this.viewEl.append(
@@ -2213,7 +2150,7 @@ export class StrategyScreen {
     );
     const s = c.soldiers.find((x) => x.id === this.soldier);
     const draft = this.custom && this.custom.soldier === s?.id ? this.custom : null;
-    this.bastion.setShowcase(s?.alive ? soldierTemplate(s.cls) : null, s ? this.playerColor(s.owner) : '#fff', draft?.appearance ?? s?.appearance, s ? this.gearFor(c, s) : undefined, s?.id);
+    this.bastion.setShowcase(s?.alive ? SOLDIER : null, s ? this.playerColor(s.owner) : '#fff', draft?.appearance ?? s?.appearance, s ? this.gearFor(c, s) : undefined, s?.id);
     if (!s) return;
     if (draft) {
       this.viewEl.append(this.panel('barracks-right', 'right', ...this.customizer(s, draft)));
@@ -2221,7 +2158,6 @@ export class StrategyScreen {
     }
     const isMine = s.owner === this.mySlot;
     const stats = squadMember(c, s);
-    const next = RANKS[s.rank + 1];
     // Equipment is a form field that opens its list of choices.
     const loadout = (slot: ItemSlot, title: string) => {
       const current = s.loadout[slot];
@@ -2233,8 +2169,9 @@ export class StrategyScreen {
         if (item !== current) this.send({ type: 'equip', soldier: s.id, slot, item });
         this.render();
       };
+      // The belt (docs/FASE9.md §4): either place takes any accessory; the special rounds don't go on it any more.
       const choices = Object.values(ITEMS)
-        .filter((i) => i.slot === slot)
+        .filter((i) => i.slot === 'utility')
         .map((item) => ({ item, free: itemsFree(c, item.id) + (current === item.id ? 1 : 0) }))
         .filter(({ item, free }) => free > 0 || current === item.id);
       return h(
@@ -2267,28 +2204,21 @@ export class StrategyScreen {
       this.panel(
         'barracks-right',
         'right',
-        h('div.alert-kicker', {}, `${TEMPLATES[soldierTemplate(s.cls)].name.toUpperCase()} · ${isMine ? 'TUYO' : `DE ${this.playerName(s.owner).toUpperCase()}`}`),
+        h('div.alert-kicker', {}, `${veterancyName(s).toUpperCase()} · ${isMine ? 'TUYO' : `DE ${this.playerName(s.owner).toUpperCase()}`}`),
         h('h2.x-title', { title: `Misiones: ${s.missions} · Bajas: ${s.kills}` }, displayName(s.name, s.nickname)),
-        h(
-          'p.x-sub',
-          { title: s.cls ? '' : RECRUIT_DESCRIPTION },
-          `${RANKS[s.rank]!.name} · ${soldierWeaponName(soldierTemplate(s.cls), weaponTier(c, s))}`,
-          !s.cls && AXES.some((a) => pointsInAxis(s.talents, a) > 0) ? ` · en ${SPECIALIZE_RANK_NAME}, ${TEMPLATES[leaningClass(s)].name}` : '',
-        ),
+        h('p.x-sub', {}, weaponLabel(c, s)),
         isMine && s.alive
           ? h(
               'button.x-btn.small',
-              { onclick: () => ((this.custom = { soldier: s.id, name: s.name, nickname: s.nickname ?? '', appearance: { ...(s.appearance ?? defaultAppearance(s.cls, s.owner)) } }), this.render()) },
+              { onclick: () => ((this.custom = { soldier: s.id, name: s.name, nickname: s.nickname ?? '', appearance: { ...(s.appearance ?? defaultAppearance(s.owner)) } }), this.render()) },
               'Personalizar',
             )
           : null,
-        next ? this.bar(s.xp, next.xp) : null,
-        h('p.x-muted', {}, next ? `${s.xp}/${next.xp} XP → ${next.name}` : 'Rango máximo'),
         h(
           'div.x-statline',
           {},
           this.stat('hp', String(stats.maxHp), 'Salud'),
-          this.stat('aim', String(TEMPLATES[soldierTemplate(s.cls)].aim + stats.mods.aim), `Puntería: 50 + 3 por punto de Pulso + ${VETERAN_AIM} por ascenso`),
+          this.stat('aim', String(TEMPLATES[SOLDIER].aim + stats.mods.aim + stats.mods.gunAim), `Puntería con armas de fuego: ${BASE_AIM}, y +5 por nivel de Tiro`),
           this.stat('will', String(stats.will), 'Voluntad'),
           this.healthTag(c, s, false),
         ),
@@ -2296,39 +2226,21 @@ export class StrategyScreen {
         s.traits?.length ? h('div.x-group', {}, 'Rasgos') : null,
         s.traits?.length ? h('p.x-chips', {}, ...s.traits.map((t) => this.chip(TRAITS[t].name, '', TRAITS[t].description))) : null,
         // What they carry, and what is chosen here and what isn't (playtest: «no se ve qué armas llevan ni dónde se elige»).
-        h('div.x-group', { title: 'Las armas salen de la Armería; mejoran con el nivel del Bastión y el rango' }, 'Arma y armadura'),
+        h('div.x-group', { title: 'Las armas salen de la Armería: allí se arreglan y se les ponen mejoras' }, 'Arma y armadura'),
         loadoutEl(c, s),
-        ...(['weapon', 'armor'] as const).map((kind) => {
-          const tier = kind === 'weapon' ? weaponTier(c, s) : armorTier(c, s);
-          const name = kind === 'weapon' ? weaponLabel(c, s) : ARMOR_TIERS[tier - 1]!.name;
-          const blocker = s.alive ? nextTierBlocker(c, s, kind) : null;
-          const tech = tier < 3 ? (kind === 'weapon' ? [TECHS.magWeapons, TECHS.plasmaWeapons] : [TECHS.plateArmor, TECHS.predatorArmor])[tier - 1]! : null;
-          const short = tech ? `→ Nv ${tech.level} · ${RANKS[TIER_RANK[tier as 1 | 2]]!.name}` : '';
-          const stat = kind === 'weapon' ? this.weaponDamage(soldierTemplate(s.cls), stats.mods.damage) : `${stats.maxHp} de salud${stats.armor ? ` · ${stats.armor} de blindaje` : ''}`;
-          return h('div.x-gear', {}, this.tierMarks(tier), h('span', {}, name, h('small', {}, ` · ${stat}`)), blocker && short ? this.chip(short, '', blocker) : null);
-        }),
-        h('p.x-muted.gear-note', {}, s.cls ? `Salen de la Armería, sea de ${TEMPLATES[s.cls].name} o no; mejoran con el nivel del Bastión y el rango.` : `Salen de la Armería, para cualquier clase; la especialización llega en ${SPECIALIZE_RANK_NAME}.`),
-        h('div.x-group', { title: 'Se compran en la Armería; si el soldado cae, se pierden' }, 'Accesorios · se eligen aquí'),
-        loadout('utility', 'Utilidad'),
-        loadout('ammo', 'Munición'),
-        h('div.x-group', {}, 'Aptitudes'),
-        h('p.x-chips', {}, ...ATTR_IDS.map((id) => this.chip(`${ATTRS[id].short} ${s.attrs[id]}`, '', `${ATTRS[id].name}: ${ATTRS[id].effect}`))),
-        h('div.x-group', {}, 'Talentos'),
-        talentIds(s.talents).length
-          ? h(
-              'p.x-chips',
-              {},
-              ...talentIds(s.talents).map((id) => {
-                const d = TALENTS[id];
-                return this.chip(d.max > 1 ? `${d.name} ${s.talents[id]}/${d.max}` : d.name, '', d.description);
-              }),
-            )
-          : h('p.x-muted', {}, `Cada ascenso da ${TALENT_POINTS_PER_RANK} puntos de talento, desde ${RANKS[1]!.name}.`),
-        h(
-          `button.x-btn${this.hasPoints(s) && isMine ? '.primary.waiting' : ''}`,
-          { onclick: () => ((this.promoting = true), (this.retrainArmed = null), this.render()) },
-          this.hasPoints(s) && isMine ? '¡Ascenso! Repartir puntos' : 'Árbol de habilidades',
-        ),
+        (() => {
+          // The armour the Taller has made is for everyone (docs/FASE9.md §5); what the next one waits for, on its chip.
+          const tier = armorTier(c, s);
+          const blocker = s.alive ? nextTierBlocker(c, s, 'armor') : null;
+          const next = ARMOR_TIERS[tier];
+          const stat = `${stats.maxHp} de salud${stats.armor ? ` · ${stats.armor} de blindaje` : ''}`;
+          return h('div.x-gear', {}, this.tierMarks(tier), h('span', {}, ARMOR_TIERS[tier - 1]!.name, h('small', {}, ` · ${stat}`)), blocker && next ? this.chip(`→ ${next.name}`, '', blocker) : null);
+        })(),
+        h('div.x-group', { title: 'Dos huecos para cualquier accesorio. Se compran en la Armería; si el soldado cae, se pierden' }, 'Cinturón · se elige aquí'),
+        loadout('utility', 'Hueco 1'),
+        loadout('ammo', 'Hueco 2'),
+        // Fase 9: the skills, the veterancy and the talents (skillSheet.ts).
+        ...skillsBlock(skillsOf(s), isMine && s.alive, () => ((this.promoting = true), this.render())),
       ),
     );
   }
@@ -2358,7 +2270,7 @@ export class StrategyScreen {
       d.appearance = patched(patch);
       previewing ||= window.setTimeout(() => {
         previewing = 0;
-        if (this.custom === d) this.bastion.setShowcase(soldierTemplate(s.cls), this.playerColor(s.owner), d.appearance, this.gearFor(this.c(), s), s.id);
+        if (this.custom === d) this.bastion.setShowcase(SOLDIER, this.playerColor(s.owner), d.appearance, this.gearFor(this.c(), s), s.id);
       }, 90);
     };
     const text = (key: 'name' | 'nickname', label: string, max: number, placeholder: string) =>
@@ -2469,7 +2381,7 @@ export class StrategyScreen {
       'Copiar a todos mis soldados',
     );
     return [
-      h('div.alert-kicker', {}, `PERSONALIZAR · ${TEMPLATES[soldierTemplate(s.cls)].name.toUpperCase()}`),
+      h('div.alert-kicker', {}, `PERSONALIZAR · ${veterancyName(s).toUpperCase()}`),
       h('h2.x-title', {}, displayName(d.name.trim() || s.name, d.nickname.trim())),
       text('name', 'Nombre', NAME_MAX, s.name),
       text('nickname', 'Apodo', NICKNAME_MAX, 'Sin apodo'),
@@ -2506,7 +2418,7 @@ export class StrategyScreen {
         h('button.x-btn.small', { onclick: () => ((d.appearance = randomAppearance(new Rng(Date.now() >>> 0))), this.render()) }, 'Aleatorio'),
         h(
           'button.x-btn.small',
-          { title: 'Vuelve a los colores de tu jugador y al aspecto de su clase', onclick: () => ((d.appearance = defaultAppearance(s.cls, s.owner)), this.render()) },
+          { title: 'Vuelve a los colores de tu jugador y al aspecto de serie', onclick: () => ((d.appearance = defaultAppearance(s.owner)), this.render()) },
           'Restablecer',
         ),
         copy,
@@ -2539,214 +2451,18 @@ export class StrategyScreen {
   }
 
   /**
-   * The promotion being prepared: points laid on the sheet, sent only with
-   * «Guardar», step by step as the server checks them, so nothing is lost and
-   * nothing is spent by a stray click.
+   * The Árbol de habilidades (skillSheet.ts): the tree, and its «Guardar» for
+   * the viewer's own soldier, which sends the whole list of talents (`picks`).
    */
-  private planned(s: CampaignSoldier, echoes: number): { b: Build; attrs: AttrId[]; talents: PerkId[] } {
-    const plan = this.plan?.soldier === s.id ? this.plan : null;
-    const b: Build = { cls: s.cls, rank: s.rank, attrs: { ...s.attrs }, talents: { ...s.talents } };
-    const attrs: AttrId[] = [];
-    const talents: PerkId[] = [];
-    // Checked again in order: taking one back can leave a later one without what it asked for.
-    for (const id of plan?.attrs ?? []) {
-      if (attrBlocker(b, id)) continue;
-      b.attrs[id]++;
-      attrs.push(id);
-    }
-    for (const id of plan?.talents ?? []) {
-      if (talentBlocker(b, id, echoes)) continue;
-      learnTalent(b, id);
-      talents.push(id);
-    }
-    return { b, attrs, talents };
-  }
-
-  private savePlan(s: CampaignSoldier, attrs: AttrId[], talents: PerkId[]): void {
-    for (const attr of attrs) this.send({ type: 'train', soldier: s.id, attr });
-    for (const talent of talents) this.send({ type: 'talent', soldier: s.id, talent });
-    this.plan = null;
-    this.savedStamp = { soldier: s.id, until: performance.now() + 2600 };
-    uiSound('stamp');
-    const what = [...new Set(attrs)].map((id) => `${ATTRS[id].name} +${attrs.filter((x) => x === id).length}`).concat([...new Set(talents)].map((id) => TALENTS[id].name));
-    this.toast(`Guardado para ${s.name}: ${what.join(', ')}.`);
-    window.setTimeout(() => this.render(), 2700);
-  }
-
-  /**
-   * Árbol de habilidades (once the Hoja de servicio). With points to spend it is
-   * the promotion: aptitudes with + and −, and the tree's open nodes taking a
-   * level on click, laid out as a draft and saved at once. Otherwise it reads as
-   * the soldier's file. The tree itself is skillTree.ts.
-   */
-  private promotionPanel(c: CampaignState, s: CampaignSoldier): HTMLElement {
-    const mine = s.owner === this.mySlot && s.alive;
-    const echoes = echoesLevel(c);
-    const { b, attrs: planAttrs, talents: planTalents } = this.planned(s, echoes);
-    const free = { attrs: attrPointsFree(b), talents: talentPointsFree(b) };
-    const drafted = planAttrs.length + planTalents.length;
-    const promoting = mine && (free.attrs + free.talents > 0 || drafted > 0);
-    const setPlan = (attrs: AttrId[], talents: PerkId[]) => {
-      this.plan = { soldier: s.id, attrs, talents };
-      this.render();
-    };
-    const without = <T,>(list: T[], item: T) => {
-      const i = list.lastIndexOf(item);
-      return list.filter((_, j) => j !== i);
-    };
-
-    // Aptitudes: the value, ten boxes (inked = base, pen = spent, pencil = in this draft) and what the next mark brings.
-    const base = baseAttrs(b.cls);
-    const apts = ATTR_IDS.map((id: AttrId) => {
-      const def = ATTRS[id];
-      const saved = s.attrs[id];
-      const value = b.attrs[id];
-      const cap = attrCap(b.cls, id);
-      const added = value - saved;
-      const blocked = attrBlocker(b, id);
-      const next = ATTR_THRESHOLDS.findIndex((n) => value < n);
-      const boxes = Array.from({ length: 10 }, (_, i) =>
-        h(`i${i < base[id] ? '.base' : i < saved ? '.add' : i < value ? '.plan' : i < cap ? '' : '.cap'}${i === 6 || i === 9 ? '.mark' : ''}`),
-      );
-      return h(
-        `div.apt${added ? '.drafted' : ''}`,
-        { title: ATTR_THRESHOLDS.map((n, i) => `${n}: ${def.thresholds[i]}`).join('\n') },
-        h('div.apt-head', {}, h('span.apt-ico', { 'data-apt': id }), h('b', {}, def.name), h('small.apt-effect', {}, def.effect), h('span.apt-val', {}, String(value)), added ? h('small.apt-added', {}, `+${added}`) : null),
-        h(
-          'div.apt-row',
-          {},
-          h('span.apt-boxes', { title: b.cls ? `Tope ${cap}` : `Tope ${cap}: al especializarse, las dos de su clase llegan a 10` }, ...boxes),
-          promoting ? h('button.apt-minus', { disabled: !added, title: 'Quitar un punto', onclick: () => setPlan(without(planAttrs, id), planTalents) }, '−') : null,
-          promoting ? h('button.apt-plus', { disabled: !!blocked, title: blocked ?? `Subir ${def.name}`, onclick: () => setPlan([...planAttrs, id], planTalents) }, '+') : null,
-        ),
-        // The cap in words, where it stops short of the next mark (playtest: «no puedo subirle la puntería… ¿es un bug?»).
-        value >= cap && cap < ATTR_MAX
-          ? h(
-              'small.apt-next.capped',
-              {},
-              b.cls
-                ? `Tope ${cap}: no es aptitud de ${TEMPLATES[b.cls].name}. Las suyas, ${CLASS_TOP[b.cls].map((x) => ATTRS[x].name).join(' y ')}, llegan a ${ATTR_MAX}.`
-                : `Tope ${cap} de un recluta: al especializarse, las dos aptitudes de su clase llegan a ${ATTR_MAX}.`,
-            )
-          : next >= 0
-            ? h('small.apt-next', {}, `A ${ATTR_THRESHOLDS[next]}: ${def.thresholds[next]}`)
-            : h('small.apt-next.got', {}, 'Todo lo de esta aptitud'),
-      );
+  private promotionPanel(s: CampaignSoldier): HTMLElement {
+    return treePanel({
+      s: skillsOf(s),
+      editable: s.owner === this.mySlot && s.alive,
+      portrait: soldierPortrait(SOLDIER, PLAYER_COLORS[s.owner], s.appearance, s.id),
+      onSave: (picks) => this.send({ type: 'picks', soldier: s.id, picks }),
+      onClose: () => ((this.promoting = false), this.render()),
+      toast: (text) => this.toast(text),
     });
-
-    // Where the soldier is heading: the class, or the axis a recruit leans to.
-    const leaning = b.cls ? null : leaningClass(b);
-    const { second } = axesOf(b);
-    const started = AXES.some((a) => pointsInAxis(b.talents, a) > 0);
-    const path = b.cls
-      ? `${TEMPLATES[b.cls].name}${second ? ` · segundo eje: ${TEMPLATES[second].name}` : ''}`
-      : b.rank >= SPECIALIZE_RANK
-        ? `Recluta reentrenado · se especializa en cuanto tenga ${SPECIALIZE_POINTS} puntos en un eje (el Oficio no cuenta)`
-        : `Recluta · en ${SPECIALIZE_RANK_NAME} se especializa en el eje en que más haya aprendido${started ? `: ahora, ${TEMPLATES[leaning!].name}` : ''}`;
-
-    // The axis open: the one picked, else the class, else where a recruit leans, else the first with something to learn.
-    const learnable = (a: ClassId) => promoting && talentsOf(a).some((d) => !talentBlocker(b, d.id, echoes));
-    const axis = this.sheetAxis ?? b.cls ?? (started ? leaning : null) ?? AXES.find(learnable) ?? AXES[0]!;
-    const { tree, inspect } = skillTree({
-      s,
-      b,
-      arms: soldierArms(c, s),
-      echoes,
-      promoting,
-      axis,
-      whole: this.wholeTree,
-      focus: this.treeFocus,
-      clsTag: (a) => this.clsTag(a),
-      onAxis: (a) => ((this.sheetAxis = a), (this.wholeTree = false), this.render()),
-      onAdd: (id) => ((this.treeFocus = id), setPlan(planAttrs, [...planTalents, id])),
-      onRemove: (id) => ((this.treeFocus = id), setPlan(planAttrs, without(planTalents, id))),
-      onFocus: (id) => (this.treeFocus = id),
-      onZoom: (a, id) => ((this.sheetAxis = a), (this.wholeTree = false), (this.treeFocus = id ?? this.treeFocus), this.render()),
-    });
-    const talentsPart = h(
-      'div.service-tree',
-      {},
-      h(
-        'div.x-group',
-        {},
-        promoting ? '2 · Talentos' : 'Talentos',
-        promoting ? this.chip(free.talents ? `Quedan ${free.talents}` : 'Repartidos', free.talents ? 'good' : '') : null,
-        !promoting && !talentIds(b.talents).length ? h('small', {}, ` · cada ascenso da ${TALENT_POINTS_PER_RANK} puntos, desde ${RANKS[1]!.name}`) : null,
-      ),
-      tree,
-    );
-
-    const cost = retrainCost(c);
-    const spent = attrPointsFree(s) < ATTR_POINTS_PER_RANK * s.rank || talentPointsFree(s) < TALENT_POINTS_PER_RANK * s.rank;
-    const armed = this.retrainArmed === s.id;
-    const retrain =
-      mine && spent && !drafted
-        ? h(
-            `button.x-btn.small${armed ? '.danger' : ''}`,
-            {
-              disabled: !canAfford(c, cost),
-              title: canAfford(c, cost) ? 'Devuelve todos los puntos de aptitud y de talento, y deja al soldado sin clase' : this.shortfall(cost),
-              onclick: () => {
-                if (!armed) {
-                  this.retrainArmed = s.id;
-                  this.render();
-                  return;
-                }
-                this.retrainArmed = null;
-                this.send({ type: 'retrain', soldier: s.id });
-              },
-            },
-            armed ? `Confirmar: devolver todo por ${costText(cost)}` : `Reentrenar · ${costText(cost)}`,
-          )
-        : null;
-    const close = () => {
-      this.promoting = false;
-      this.retrainArmed = null;
-      this.sheetAxis = null;
-      this.wholeTree = false;
-      this.treeFocus = null;
-      this.plan = null;
-      this.render();
-    };
-    const stamped = this.savedStamp?.soldier === s.id && this.savedStamp.until > performance.now();
-    return h(
-      `div.x-panel.wide.service${promoting ? '.promoting' : ''}`,
-      {},
-      stamped ? h('div.saved-stamp', {}, 'GUARDADO') : null,
-      h('div.alert-kicker', {}, promoting ? `ASCENSO · ${RANKS[s.rank]!.name.toUpperCase()}` : `ÁRBOL DE HABILIDADES · ${RANKS[s.rank]!.name.toUpperCase()}`),
-      h('h2.x-title', {}, displayName(s.name, s.nickname)),
-      h('p.x-sub', {}, path),
-      promoting
-        ? h(
-            'p.service-help',
-            {},
-            free.attrs + free.talents
-              ? `Reparte ${free.attrs ? `${free.attrs} de aptitud` : ''}${free.attrs && free.talents ? ' y ' : ''}${free.talents ? `${free.talents} de talento` : ''}. Nada cuenta hasta que pulses «Guardar»; lo que no gastes queda para luego.`
-              : 'Todo repartido. Pulsa «Guardar» para apuntarlo en la hoja.',
-          )
-        : null,
-      h(
-        'div.service-sheet',
-        {},
-        h(
-          'div.service-apts',
-          {},
-          h('div.x-group', {}, promoting ? '1 · Aptitudes' : 'Aptitudes', promoting ? this.chip(free.attrs ? `Quedan ${free.attrs}` : 'Repartidas', free.attrs ? 'good' : '') : null),
-          ...apts,
-          retrain,
-          inspect,
-        ),
-        talentsPart,
-      ),
-      h(
-        'div.alert-actions',
-        {},
-        promoting ? h('button.x-btn.primary', { disabled: !drafted, onclick: () => this.savePlan(s, planAttrs, planTalents) }, drafted ? `Guardar (${drafted})` : 'Guardar') : null,
-        promoting && drafted ? h('button.x-btn', { onclick: () => setPlan([], []) }, 'Deshacer todo') : null,
-        h('button.x-btn', { onclick: () => ((this.wholeTree = !this.wholeTree), this.render()) }, this.wholeTree ? 'Ver un eje de cerca' : 'Ver el árbol entero'),
-        h('button.x-btn', { onclick: close }, drafted ? 'Cerrar sin guardar' : 'Cerrar'),
-      ),
-    );
   }
 
   // -------------------------------------------------------- facilities
@@ -2857,7 +2573,7 @@ export class StrategyScreen {
         adj ? h(active ? 'p.x-good' : 'p.x-muted', {}, `${active ? `Pared con pared con ${withArticle(adj.next)}` : `Mejor ${nextTo(adj.next)}`}: ${adj.text}`) : null,
       );
       if (def.id === 'memorial') {
-        // The names, as Lore asked: rank, missions and the day they fell.
+        // The names, as Lore asked: veterancy, missions and the day they fell.
         const fallen = c.soldiers.filter((s) => !s.alive).sort((a, b) => (b.fellDay ?? 0) - (a.fellDay ?? 0));
         content.push(
           h('div.x-head', {}, `Caídos · ${fallen.length}`),
@@ -2870,7 +2586,7 @@ export class StrategyScreen {
                     'div.x-row.fallen-row',
                     { style: { '--row-accent': this.playerColor(s.owner) } },
                     h('b', {}, displayName(s.name, s.nickname)),
-                    h('small', {}, `${RANKS[s.rank]!.name} · ${s.missions} ${s.missions === 1 ? 'misión' : 'misiones'}${s.fellCause === 'turned' ? ` · ${TURNED_CAUSE.toLowerCase()}` : ''}${s.fellDay !== undefined ? ` · ${s.fellCause === 'turned' ? 'el' : 'cayó el'} día ${s.fellDay}` : ''}`),
+                    h('small', {}, `${veterancyName(s)} · ${s.missions} ${s.missions === 1 ? 'misión' : 'misiones'}${s.fellCause === 'turned' ? ` · ${TURNED_CAUSE.toLowerCase()}` : ''}${s.fellDay !== undefined ? ` · ${s.fellCause === 'turned' ? 'el' : 'cayó el'} día ${s.fellDay}` : ''}`),
                   ),
                 ),
               )
@@ -2962,7 +2678,7 @@ export class StrategyScreen {
     const limit = squadLimit(c, this.connected());
     const squad = c.squad.map((id) => c.soldiers.find((s) => s.id === id)).filter((s): s is CampaignSoldier => !!s);
     const pads = squadPads(c).map((id) => squad.find((s) => s.id === id) ?? null);
-    this.bastion.setLineup(pads.map((s) => (s ? { template: soldierTemplate(s.cls), color: this.playerColor(s.owner), appearance: s.appearance, gear: this.gearFor(c, s), seed: s.id } : null)));
+    this.bastion.setLineup(pads.map((s) => (s ? { template: SOLDIER, color: this.playerColor(s.owner), appearance: s.appearance, gear: this.gearFor(c, s), seed: s.id } : null)));
     const myCount = squad.filter((s) => s.owner === this.mySlot).length;
 
     this.viewEl.append(
@@ -3000,9 +2716,9 @@ export class StrategyScreen {
             return h(
               `button.x-row.soldier${on ? '.selected' : ''}${ready ? '' : '.dim'}`,
               { disabled: !ready && !on, onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
-              this.clsTag(s.cls),
-              h('b', { title: [RANKS[s.rank]!.name, ...gear].join(' · ') }, displayName(s.name, s.nickname)),
-              h('span.rank', { title: RANKS[s.rank]!.name }, ...Array.from({ length: s.rank }, () => h('i'))),
+              skillDigits(s.skills),
+              h('b', { title: gear.join(' · ') }, displayName(s.name, s.nickname)),
+              veterancyBadge(s.skills, s.appearance?.sex === 'f'),
               on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
             );
           }),
@@ -3062,10 +2778,10 @@ export class StrategyScreen {
       const card = s
         ? h(
             `div.lineup-card${together && c.launchReady[s.owner] ? '.ready' : ''}`,
-            // data-cls: the theme puts the class's portrait on the card (ui/themes/mixta-base.css).
-            { style: { '--accent': this.playerColor(s.owner) }, 'data-cls': soldierTemplate(s.cls) },
+            // data-bust: the theme puts the soldier's own bust on the card (ui/themes/mixta-base.css), once drawn.
+            { style: { '--accent': this.playerColor(s.owner) }, 'data-bust': '' },
             h('b', {}, displayName(s.name, s.nickname)),
-            h('small', {}, `${TEMPLATES[soldierTemplate(s.cls)].name} · ${RANKS[s.rank]!.name}`),
+            h('small', {}, veterancyName(s), ' ', skillDigits(s.skills)),
             c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
             s.owner === this.mySlot ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
           )
@@ -3077,6 +2793,7 @@ export class StrategyScreen {
               h('b', {}, 'Libre'),
               room && this.padSide(c, i) === this.mySlot ? h('small', {}, 'Para reclutar más soldados, construid un barracón') : null,
             );
+      if (s) this.bustOn(card, s);
       card.dataset.pad = String(i);
       cards.append(card);
     });
@@ -3095,7 +2812,7 @@ export class StrategyScreen {
         'button.x-btn',
         {
           disabled: !afford,
-          title: afford ? `Un recluta nuevo, directo a la escuadra. ${RECRUIT_DESCRIPTION}` : this.shortfall(cost),
+          title: afford ? 'Un recluta nuevo, directo a la escuadra.' : this.shortfall(cost),
           onclick: () => this.send({ type: 'recruit', squad: true }),
         },
         // The price never splits from its sign on a narrow photo.
@@ -3149,7 +2866,7 @@ export class StrategyScreen {
     const entries: LineupEntry[] = report.squad.map((e) => {
       const s = c.soldiers.find((x) => x.id === e.id);
       // Someone left behind (docs/PRUEBA-2026-10-14.md P1) didn't come back either: a memorial, as the fallen.
-      return { template: soldierTemplate(e.cls), color: this.playerColor(e.owner), status: e.status === 'lost' ? 'dead' : e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined, seed: e.id };
+      return { template: SOLDIER, color: this.playerColor(e.owner), status: e.status === 'lost' ? 'dead' : e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined, seed: e.id };
     });
     this.bastion.setLineup(entries);
     // The outcome in a line of figures; the details are in each chip's title, the story's page one click away.
@@ -3186,6 +2903,7 @@ export class StrategyScreen {
           h('p.x-sub', {}, report.missionName),
           tally,
           report.loot?.line ? h('p.debrief-loot', {}, report.loot.line) : null,
+          ...levelUpLines(report.squad).map((line) => h('p.debrief-loot', {}, line)),
           report.night ? h('p.debrief-loot', {}, NIGHT_TEXT.report) : null,
           story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
         ),
@@ -3197,12 +2915,14 @@ export class StrategyScreen {
       const status = (e.status === 'dead' ? 'CAÍDO EN COMBATE' : e.status === 'wounded' ? `HERIDO · ${e.woundedDays} días` : 'ILESO') + bitten;
       const card = h(
         `div.lineup-card.${e.status}`,
-        { style: { '--accent': this.playerColor(e.owner) }, 'data-cls': soldierTemplate(e.cls) },
+        { style: { '--accent': this.playerColor(e.owner) }, 'data-bust': '' },
         h('b', {}, displayName(e.name, c.soldiers.find((x) => x.id === e.id)?.nickname)),
         h(`small${e.status === 'dead' ? '.x-bad' : e.status === 'wounded' ? '.x-warn' : ''}`, {}, status),
-        h('small', {}, `${e.kills} baja${e.kills === 1 ? '' : 's'}${e.status === 'dead' ? '' : ` · +${e.xpGained} XP`}`),
-        e.promotedTo !== null ? h('small.promo', {}, `▲ ${RANKS[e.promotedTo]!.name.toUpperCase()}${e.specializedAs ? ` · ${TEMPLATES[e.specializedAs].name.toUpperCase()}` : ''}`) : null,
+        h('small', {}, `${e.kills} baja${e.kills === 1 ? '' : 's'}`),
+        // Fase 9: what it learnt and the levels it went up (skillSheet.ts); only the living bring it home.
+        ...(e.status === 'dead' || e.status === 'lost' ? [] : learnedTags(e)),
       );
+      this.bustOn(card, c.soldiers.find((x) => x.id === e.id) ?? e);
       card.dataset.pad = String(i);
       cards.append(card);
     });
@@ -3413,7 +3133,7 @@ export class StrategyScreen {
       content = this.newsPanel();
     } else if (this.promoting && this.view === 'barracks') {
       const s = c.soldiers.find((x) => x.id === this.soldier);
-      if (s) content = this.promotionPanel(c, s);
+      if (s) content = this.promotionPanel(s);
     }
     // A sheet of paper when a notice or a panel opens.
     if (content && !this.modal.classList.contains('show')) uiSound('paper');

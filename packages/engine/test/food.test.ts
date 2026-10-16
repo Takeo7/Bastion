@@ -17,10 +17,9 @@ import {
   type CampaignCommand,
   type CampaignState,
 } from '../src/campaign';
-import { specialize } from '../src/classes';
 import { FOUND_WEAPONS } from '../src/content';
 import { rollLoot } from '../src/loot';
-import { CRAFTS, LEVEL_XP, weaponTier } from '../src/progression';
+import { armorTier, CRAFTS, LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
 import type { DecorKind, Slot } from '../src/types';
@@ -152,45 +151,54 @@ describe('the Taller', () => {
     return { c, plot };
   }
 
-  it('making tier-2 weapons: Taller, Bastion level 3, 60 §, 4 parts and 3 days of a crew; then everyone fit carries them', () => {
+  it('making plate armour: Taller, Bastion level 4, 60 §, 4 parts and 3 days of a crew; then everyone wears it', () => {
     const none = quiet();
-    expect(craftBlocker(none, 'weapons2')).toBe('Hace falta el Taller.');
+    expect(craftBlocker(none, 'armor2')).toBe('Hace falta el Taller.');
     const { c, plot } = workshop(1, LEVEL_XP[1]!);
-    expect(craftBlocker(c, 'weapons2')).toMatch(/nivel 3 del Bastión/);
-    c.xp = LEVEL_XP[2]!;
+    expect(craftBlocker(c, 'armor2')).toMatch(/nivel 4 del Bastión/);
+    c.xp = LEVEL_XP[3]!;
     c.parts = 3;
-    expect(craftBlocker(c, 'weapons2')).toBe('No hay piezas suficientes.');
+    expect(craftBlocker(c, 'armor2')).toBe('No hay piezas suficientes.');
     c.parts = 10;
-    expect(run(c, { type: 'craft', project: 'weapons2' }).ok).toBe(true);
-    expect(c.credits).toBe(1000 - CRAFTS.weapons2.cost);
-    expect(c.parts).toBe(10 - CRAFTS.weapons2.parts);
-    expect(c.base.works).toEqual([{ plot: plot.id, kind: 'craft', facility: 'workshop', daysLeft: 3, total: 3, project: 'weapons2' }]);
-    expect(craftBlocker(c, 'weapons2')).toBe('Ya se está haciendo.');
-    const cabo = c.soldiers[0]!;
-    cabo.rank = 2;
-    expect(weaponTier(c, cabo)).toBe(1);
+    expect(run(c, { type: 'craft', project: 'armor2' }).ok).toBe(true);
+    expect(c.credits).toBe(1000 - CRAFTS.armor2.cost);
+    expect(c.parts).toBe(10 - CRAFTS.armor2.parts);
+    expect(c.base.works).toEqual([{ plot: plot.id, kind: 'craft', facility: 'workshop', daysLeft: 3, total: 3, project: 'armor2' }]);
+    expect(craftBlocker(c, 'armor2')).toBe('Ya se está haciendo.');
+    const anyone = c.soldiers[0]!;
+    expect(armorTier(c, anyone)).toBe(1);
     days(c, 3);
-    expect(c.crafted).toEqual(['weapons2']);
-    expect(weaponTier(c, cabo)).toBe(2);
-    expect(weaponTier(c, { ...cabo, rank: 0 })).toBe(1);
+    expect(c.crafted).toEqual(['armor2']);
+    expect(armorTier(c, anyone)).toBe(2);
   });
 
-  it('tier 3 needs the Taller at level 2, its level of the Bastion and tier 2 made first; two players decide together', () => {
-    const { c, plot } = workshop(1);
-    expect(craftBlocker(c, 'weapons3')).toBe('Hace falta el Taller a nivel 2.');
+  it('improvements for the weapons: culatas and silenciadores from «Culatas y silenciadores», miras and cargadores from «Miras y cargadores ampliados», again and again', () => {
+    const { c } = workshop(1, LEVEL_XP[1]!);
+    expect(craftBlocker(c, 'makeStock')).toMatch(/nivel 3 del Bastión/);
+    c.xp = LEVEL_XP[2]!;
+    expect(craftBlocker(c, 'makeStock')).toBeNull();
+    expect(craftBlocker(c, 'makeScope')).toMatch(/nivel 6 del Bastión/);
+    expect(run(c, { type: 'craft', project: 'makeStock' }).ok).toBe(true);
+    days(c, CRAFTS.makeStock.days);
+    expect(c.weaponMods).toEqual({ stock: 1 });
+    expect(craftBlocker(c, 'makeStock')).toBeNull();
+  });
+
+  it('armour 3 needs the Taller at level 2, its level of the Bastion and armour 2 made first; two players decide together', () => {
+    const { c, plot } = workshop(1, LEVEL_XP[6]!);
+    expect(craftBlocker(c, 'armor3')).toBe('Hace falta el Taller a nivel 2.');
     plot.level = 2;
-    expect(craftBlocker(c, 'weapons3')).toMatch(/Antes hay que hacer/);
-    expect(craftBlocker(c, 'armor3')).toMatch(/nivel 7 del Bastión/);
-    c.crafted = ['weapons2'];
-    expect(craftBlocker(c, 'weapons3')).toBeNull();
-    const two = workshop(2);
+    expect(craftBlocker(c, 'armor3')).toMatch(/Antes hay que hacer/);
+    c.crafted = ['armor2'];
+    expect(craftBlocker(c, 'armor3')).toBeNull();
+    const two = workshop(2, LEVEL_XP[6]!);
     two.c.players = [0, 1];
-    two.c.crafted = ['weapons2'];
-    expect(run(two.c, { type: 'craft', project: 'weapons3' }, 0, [0, 1]).ok).toBe(true);
-    expect(two.c.proposal?.action).toEqual({ type: 'craft', project: 'weapons3' });
+    two.c.crafted = ['armor2'];
+    expect(run(two.c, { type: 'craft', project: 'armor3' }, 0, [0, 1]).ok).toBe(true);
+    expect(two.c.proposal?.action).toEqual({ type: 'craft', project: 'armor3' });
     expect(two.c.base.works).toEqual([]);
     expect(run(two.c, { type: 'vote', accept: true }, 1, [0, 1]).ok).toBe(true);
-    expect(two.c.base.works[0]).toMatchObject({ kind: 'craft', project: 'weapons3', total: 5 });
+    expect(two.c.base.works[0]).toMatchObject({ kind: 'craft', project: 'armor3', total: 5 });
   });
 });
 
@@ -217,30 +225,21 @@ describe('found weapons', () => {
     expect(share('desk', 'weapon')).toBe(0);
   });
 
-  it('brought home, it goes to the Armería; any of your soldiers takes it, a tier above the rest', () => {
+  it('brought home, it goes to the Armería; any of your soldiers takes it', () => {
     const { c, report } = found();
     expect(report.loot?.weapons).toEqual(['huntingRifle']);
     expect(report.loot?.line).toMatch(/fusil de cerrojo/);
     const w = c.foundWeapons![0]!;
     expect(w).toMatchObject({ kind: 'huntingRifle', holder: null });
     const rookie = c.soldiers.find((s) => s.owner === 0 && s.alive)!;
-    rookie.rank = 2;
     // Not for a partner's soldier; any of yours, whatever its class (docs/FASE8.md §A).
     const theirs = c.soldiers.find((s) => s.owner === 1)!;
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: theirs.id }, 0).ok).toBe(false);
     const assault = c.soldiers.find((s) => s.owner === 0 && s.alive && s !== rookie)!;
-    specialize(assault, 'assault');
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: assault.id }, 0).ok).toBe(true);
     expect(w.holder).toBe(assault.id);
-    expect(weaponTier(c, rookie)).toBe(1);
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: rookie.id }, 0).ok).toBe(true);
-    expect(weaponTier(c, rookie)).toBe(2);
-    expect(squadMember(c, rookie)).toMatchObject({ weaponTier: 2, weaponName: 'Fusil de cerrojo' });
-    // Never past what the rank allows, nor past 3.
-    expect(weaponTier(c, { ...rookie, rank: 0 })).toBe(1);
-    c.crafted = ['weapons2', 'weapons3'];
-    rookie.rank = 4;
-    expect(weaponTier(c, rookie)).toBe(3);
+    expect(squadMember(c, rookie)).toMatchObject({ weaponTier: 1, weaponName: 'Fusil de cerrojo' });
     // The partner can't take it from them.
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: null }, 1).ok).toBe(false);
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: null }, 0).ok).toBe(true);
@@ -290,18 +289,4 @@ describe('the campaign', () => {
     expect(c.food! + (c.day - report.day) * dailyRations(c)).toBe(food + 4);
   });
 
-  it('version 13: older campaigns start with a full pantry and keep the tiers their level gave them', () => {
-    expect(CAMPAIGN_VERSION).toBeGreaterThanOrEqual(13);
-    const old = createCampaign([0], new Rng(1)) as CampaignState & Record<string, unknown>;
-    for (const k of ['food', 'hungry', 'nextFoodDay', 'parts', 'crafted', 'foundWeapons']) delete old[k];
-    (old as { version: number }).version = 12;
-    old.xp = LEVEL_XP[5]!;
-    const c = migrateCampaign(old);
-    expect(c.version).toBe(CAMPAIGN_VERSION);
-    expect(c).toMatchObject({ food: START_FOOD, hungry: false, parts: 0 });
-    // Version 16 on top: the munition they had, and each soldier its class's weapon.
-    expect(c.crafted).toEqual(['weapons2', 'weapons3', 'armor2', 'ammo1', 'ammo2', 'ammo3']);
-    expect(c.foundWeapons!.map((w) => w.kind)).toEqual(c.soldiers.map(() => 'assaultRifle'));
-    expect(weaponTier(c, { id: 'x', rank: 4 })).toBe(3);
-  });
 });

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
 import {
   abandonMission,
   activeOffer,
@@ -476,7 +477,9 @@ export class Room {
 
   private broadcastRoom(): void {
     const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, doom: this.campaign.doom, level: bastionLevel(this.campaign) } : null;
-    this.broadcast({ t: 'room', players: this.players(), phase: this.phase, savedCampaign });
+    // A campaign from before the 0.3 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
+    const setAside = this.store.setAside ? basename(this.store.setAside) : null;
+    this.broadcast({ t: 'room', players: this.players(), phase: this.phase, savedCampaign, ...(setAside ? { setAside } : {}) });
   }
 
   private broadcast(msg: ServerMessage): void {

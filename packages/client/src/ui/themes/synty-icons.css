@@ -1,7 +1,8 @@
 /*
- * The packs' icons on the ability buttons and the skill tree's nodes. Each
- * button names its ability (data-ability, from hud.ts and strategy/skillTree.ts),
- * and each plot of the compound its building or terrain (data-plot, plotIcons.ts);
+ * The packs' icons on the ability buttons and the skill tree's cells. Each
+ * button names its ability (data-ability, from hud.ts and strategy/skillMatrix.ts),
+ * each passive talent of the tree itself (data-talent), and each plot of the
+ * compound its building or terrain (data-plot, plotIcons.ts);
  * the line icon of ui/icons.ts stays in the DOM and is covered by a flat white
  * silhouette from INTERFACE Apocalypse HUD, Modern Menus or Military Combat HUD
  * (the mh-* ones), or rendered by Arte from a Synty model (renders/ and the r-*
@@ -24,14 +25,63 @@
   --sicon-lines: hidden;
 }
 
-:root[data-ui='mixta'] :is([data-ability], [data-plot]) svg.ico {
+:root[data-ui='mixta'] :is([data-ability], [data-talent], [data-plot]) svg.ico {
   -webkit-mask: var(--sicon, none) center / contain no-repeat;
   mask: var(--sicon, none) center / contain no-repeat;
   background: var(--sicon-fill, none);
 }
 
-:root[data-ui='mixta'] :is([data-ability], [data-plot]) svg.ico > * {
+:root[data-ui='mixta'] :is([data-ability], [data-talent], [data-plot]) svg.ico > * {
   visibility: var(--sicon-lines, visible);
+}
+
+/* Fase 9's passive talents on the tree (strategy/skillMatrix.ts, data-talent): what each touches. */
+:root[data-ui='mixta'] [data-talent='implacable'] {
+  --sicon: url('/ui/synty/icons/mh-speedup.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-talent='bladeCrit'] {
+  --sicon: url('/ui/synty/icons/mh-critical.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-talent='bladeMaster'] {
+  --sicon: url('/ui/synty/icons/mh-machete.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-talent='fieldMedic'] {
+  --sicon: url('/ui/synty/icons/mh-syringe.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-talent='lightHands'] {
+  --sicon: url('/ui/synty/icons/biohazard.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-talent='goodArm'] {
+  --sicon: url('/ui/synty/icons/explosives.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-talent='quiet'] {
+  --sicon: url('/ui/synty/icons/sound.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-talent='demolition'] {
+  --sicon: url('/ui/synty/icons/mh-dynamite.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
 }
 
 :root[data-ui='mixta'] .ability {
@@ -158,6 +208,18 @@
 
 :root[data-ui='mixta'] [data-ability='rupture'] {
   --sicon: url('/ui/synty/icons/mh-shield-broken.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-ability='elbowRoom'] {
+  --sicon: url('/ui/synty/icons/r-cuchillo.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+:root[data-ui='mixta'] [data-ability='patchUp'] {
+  --sicon: url('/ui/synty/icons/mh-repair.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }

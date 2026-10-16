@@ -31,6 +31,7 @@ import {
   TERRAIN,
   SYNTY_SCALE,
   WEAPONS,
+  WEAPON_PARTS,
   BASE_MODELS,
   BASE_TEXTURES,
   atlasFile,
@@ -213,6 +214,10 @@ for (const [id, h] of Object.entries(HEADGEAR)) {
 }
 
 for (const [id, w] of Object.entries(WEAPONS)) {
+  add({ kind: 'weapon', id, name: id, out: join(PUBLIC, modelFile(w.pack, 'wep', id)), fbx: findFbx(w.pack, w.fbx), atlas: atlasOf(w.pack), slots: slotsOf(w.pack, w.fbx) });
+}
+
+for (const [id, w] of Object.entries(WEAPON_PARTS)) {
   add({ kind: 'weapon', id, name: id, out: join(PUBLIC, modelFile(w.pack, 'wep', id)), fbx: findFbx(w.pack, w.fbx), atlas: atlasOf(w.pack), slots: slotsOf(w.pack, w.fbx) });
 }
 

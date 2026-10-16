@@ -1,4 +1,4 @@
-import type { Arms, Tier } from '@bastion/engine';
+import type { Arms, Tier, WeaponModId } from '@bastion/engine';
 import type { GaitMotion } from './gaits';
 import type { UnitRig } from './models';
 import type { Stance, WeaponId } from './syntyManifest';
@@ -71,21 +71,26 @@ export interface FigureRig extends UnitRig {
   /** Hidden by the buildings' cutaway (the unit views set it): what it draws away from its own meshes (the crowd) hides too. */
   cutAway?: boolean;
   /** Which of its weapons is in the hand (Armament): the main one, the pistol from its holster, the blade from the belt. */
-  draw?(which: keyof Armament): void;
+  draw?(which: Carried): void;
   /** Other weapons on it (the engine's weaponEquipped), the main one in the hand. */
   arm?(a: Armament): void;
 }
+
+/** Where a unit carries each of its weapons: the main one, the pistol in its holster, the blade at the belt. */
+export type Carried = 'weapon' | 'sidearm' | 'belt';
 
 /**
  * The weapons a unit carries, as models (syntyFigures.ts armamentOf): the
  * main one in the hand; beside it, the pistol in its holster on the right
  * thigh, drawn for a pistol shot; and at the left hip the knife or the
- * machete, drawn for a stroke.
+ * machete, drawn for a stroke. A campaign soldier's main gun also shows what
+ * is mounted on it and how worn it is (docs/FASE9.md §5: Arms.mods, condition).
  */
-export interface Armament {
+export interface Armament extends Partial<Record<Carried, WeaponId | null>> {
   weapon: WeaponId | null;
-  sidearm?: WeaponId | null;
-  belt?: WeaponId | null;
+  mods?: readonly WeaponModId[];
+  /** 0 to 100; absent, 100. */
+  condition?: number;
 }
 
 /** Equipment tiers a soldier carries (1 when absent): the weapon's and the armour's; and a campaign soldier's own weapons (docs/FASE8.md §A). */

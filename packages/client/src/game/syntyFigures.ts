@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { HEADS, partColor, TEMPLATES, type Alarm, type Appearance, type ArmorPart, type Arms, type FoundWeaponId, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
+import { HEADS, partColor, TEMPLATES, WORN_BELOW, type Alarm, type Appearance, type ArmorPart, type Arms, type FoundWeaponId, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
 import { CROWD, type Baker, type Member } from './crowd';
-import type { Armament, Blow, FigurePose, FigureRig, Gear } from './figures';
+import type { Armament, Blow, Carried, FigurePose, FigureRig, Gear } from './figures';
 import { gaitsOf, type GaitMotion, type GaitStyle } from './gaits';
 import { UNIT_LAYER } from './post';
 import { atlasMaterial, atlasOf, dyedMaterial, loadModel, modelNow, type DyedMaterial } from './synty';
@@ -24,6 +24,7 @@ import {
   SYNTY_SCALE,
   UNIT_BODIES,
   UNIT_WEAPONS,
+  WEAPON_PARTS,
   WEAPONS,
   type AtlasId,
   type CharacterAsset,
@@ -34,7 +35,9 @@ import {
   type Hit,
   type Stance,
   type SyntyBone,
+  type WeaponAsset,
   type WeaponId,
+  type WeaponPartId,
 } from './syntyManifest';
 
 // Units as Synty characters (syntyManifest.ts says who is who). They keep the
@@ -272,13 +275,34 @@ const lerp = THREE.MathUtils.lerp;
 
 // ----------------------------------------------------------------- figures
 
-type Carry = keyof Armament;
+type Carry = Carried;
 const CARRIES: Carry[] = ['weapon', 'sidearm', 'belt'];
 
 /** The models of an armament, by where they are carried. */
 type Guns = Partial<Record<Carry, { id: WeaponId; model: THREE.Group }>>;
 
-/** An armament's models if all have loaded (asking starts the loads), else null. */
+/**
+ * What shows each improvement on a gun (docs/FASE9.md §5): a sight on the
+ * receiver (a red dot on the short guns and the machine guns, a telescopic
+ * one on the rest) and the home-made silencer at the muzzle. The stock and
+ * the larger magazine have nothing of their own to show.
+ */
+const SCOPE: WeaponPartId = 'scope7';
+const REFLEX: WeaponPartId = 'scope2';
+const SILENCER: WeaponPartId = 'silencer2';
+/** How far along the receiver a sight sits (the gun's frame: the grip at 0, the barrel along +z). */
+const SIGHT_Z = 0.07;
+
+/** The parts the main gun's improvements need. */
+function partsOf(a: Armament): WeaponPartId[] {
+  const mods = a.weapon ? (a.mods ?? []) : [];
+  const out: WeaponPartId[] = [];
+  if (mods.includes('scope')) out.push((WEAPONS[a.weapon!] as WeaponAsset).reflex ? REFLEX : SCOPE);
+  if (mods.includes('silencer')) out.push(SILENCER);
+  return out;
+}
+
+/** An armament's models if all have loaded, the parts on its main gun too (asking starts the loads), else null. */
 function gunsNow(a: Armament): Guns | null {
   const out: Guns = {};
   let all = true;
@@ -289,19 +313,66 @@ function gunsNow(a: Armament): Guns | null {
     if (model) out[k] = { id, model };
     else all = false;
   }
+  for (const id of partsOf(a)) if (!modelNow(WEAPON_PARTS[id].pack, 'wep', id)) all = false;
   return all ? out : null;
 }
 
 async function loadGuns(a: Armament): Promise<Guns> {
   const out: Guns = {};
-  await Promise.all(CARRIES.map(async (k) => {
-    const id = a[k];
-    if (id) out[k] = { id, model: await loadModel(WEAPONS[id].pack, 'wep', id) };
-  }));
+  await Promise.all([
+    ...CARRIES.map(async (k) => {
+      const id = a[k];
+      if (id) out[k] = { id, model: await loadModel(WEAPONS[id].pack, 'wep', id) };
+    }),
+    ...partsOf(a).map((id) => loadModel(WEAPON_PARTS[id].pack, 'wep', id)),
+  ]);
   return out;
 }
 
+/** The same models; and the same improvements and wear on the main gun. */
 const sameArms = (a: Armament, b: Armament) => CARRIES.every((k) => (a[k] ?? null) === (b[k] ?? null));
+const wearOf = (c: number | undefined) => ((c ?? 100) <= 0 ? 2 : (c ?? 100) < WORN_BELOW ? 1 : 0);
+const sameFit = (a: Armament, b: Armament) => (a.mods ?? []).join() === (b.mods ?? []).join() && wearOf(a.condition) === wearOf(b.condition);
+
+/** A gun worn (below WORN_BELOW) or broken (at 0): its atlas darker and duller, a material of its own per atlas and state. */
+const wornLooks = new Map<string, THREE.MeshStandardMaterial>();
+function wornMaterial(atlas: AtlasId, broken: boolean): THREE.MeshStandardMaterial {
+  const key = `${atlas}|${broken}`;
+  let m = wornLooks.get(key);
+  if (!m) {
+    m = atlasMaterial(atlas).clone();
+    m.color.setHex(broken ? 0x5f5850 : 0x80776c);
+    m.roughness = 0.95;
+    wornLooks.set(key, m);
+  }
+  return m;
+}
+
+/** Duct tape round a broken gun. */
+const TAPE = new THREE.MeshStandardMaterial({ color: 0x9a9890, roughness: 0.7, metalness: 0.1 });
+
+/** A gun's cross-section about z, in its own frame (for the tape round it): by weapon and place, once. */
+const sections = new Map<string, THREE.Box3>();
+function sectionOf(id: WeaponId, gun: THREE.Object3D, z: number): THREE.Box3 {
+  const key = `${id}|${z.toFixed(3)}`;
+  let box = sections.get(key);
+  if (box) return box;
+  box = new THREE.Box3();
+  gun.updateMatrixWorld(true);
+  const toGun = new THREE.Matrix4().copy(gun.matrixWorld).invert();
+  const v = new THREE.Vector3();
+  gun.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    const at = new THREE.Matrix4().multiplyMatrices(toGun, o.matrixWorld);
+    const p = o.geometry.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(at);
+      if (Math.abs(v.z - z) < 0.012) box!.expandByPoint(v);
+    }
+  });
+  sections.set(key, box);
+  return box;
+}
 const armsOf = (guns: Guns): Armament => ({ weapon: guns.weapon?.id ?? null, sidearm: guns.sidearm?.id ?? null, belt: guns.belt?.id ?? null });
 
 /** The pistol's grip for the support hand (as WEAPONS fore: height, distance along the barrel): the left hand cups the right. */
@@ -318,7 +389,6 @@ interface Spec extends Armament {
   dead: boolean;
   /** The Chillón: aiming is its scream. */
   scream: boolean;
-  drone: boolean;
   /** What the body adds to its gait (gaits.ts). */
   style?: GaitStyle;
   /** How it stands waiting (STANCES); unset, the plain idle. */
@@ -450,7 +520,6 @@ export class SyntyFigure implements FigureRig {
     // Unarmed: shots and effects start in front of the chest.
     this.gunPivot.position.set(0, this.chest, 0.3);
     this.yaw.add(this.gunPivot);
-    if (spec.drone) this.addDrone();
     const c = CHARACTERS[spec.character] as CharacterAsset;
     this.scale = CHARACTER_SCALE * (c.scale ?? 1);
     // Each unit plays the clips from its own point, so a squad does not breathe in step.
@@ -563,7 +632,6 @@ export class SyntyFigure implements FigureRig {
     this.equip(guns);
     // Armed again while its first weapons loaded (arm): those instead.
     if (!sameArms(armsOf(guns), spec)) this.arm({ ...spec }, true);
-    if (this.drone) this.drone.position.set(-0.38, this.top + 0.25, -0.1);
   }
 
   /**
@@ -604,17 +672,57 @@ export class SyntyFigure implements FigureRig {
       const g = guns[k];
       if (!g) continue;
       const m = g.model.clone();
-      m.scale.setScalar((WEAPONS[g.id] as { size?: number }).size ?? 1);
-      onUnitLayer(m);
+      const w = WEAPONS[g.id] as WeaponAsset;
+      m.scale.setScalar(w.size ?? 1);
       // Slung, the main gun hangs by its middle.
       m.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(m);
       m.userData.middle = (box.min.z + box.max.z) / 2;
-      m.userData.muzzle = new THREE.Vector3(...((m.children[0]?.userData.muzzle as [number, number, number] | undefined) ?? [0, 0, 0.5])).multiply(m.scale);
+      const muzzle = new THREE.Vector3(...(w.muzzle ?? (m.children[0]?.userData.muzzle as [number, number, number] | undefined) ?? [0, 0, 0.5]));
+      if (k === 'weapon') this.mount(m, g.id, muzzle);
+      m.userData.muzzle = muzzle.multiply(m.scale);
+      onUnitLayer(m);
       this.carried[k] = m;
     }
     if (!this.carried[this.drawn]) this.drawn = 'weapon';
     this.hold();
+  }
+
+  /**
+   * On the main gun, what is mounted on it and how worn it is (spec.mods,
+   * condition): the sight on the receiver, the silencer at the muzzle (moved
+   * to its end: the shots come out there); a worn gun darker, a broken one
+   * darker still with tape round it either side of the support hand.
+   */
+  private mount(gun: THREE.Group, id: WeaponId, muzzle: THREE.Vector3): void {
+    const w = WEAPONS[id] as WeaponAsset;
+    for (const part of partsOf(this.spec)) {
+      const model = modelNow(WEAPON_PARTS[part].pack, 'wep', part);
+      if (!model) continue;
+      const p = model.clone();
+      if (part === SILENCER) {
+        p.position.copy(muzzle);
+        muzzle.z += new THREE.Box3().setFromObject(model).max.z;
+      } else p.position.set(0, w.sight ?? 0.06, SIGHT_Z);
+      gun.add(p);
+    }
+    const condition = this.spec.condition ?? 100;
+    if (condition >= WORN_BELOW) return;
+    const broken = condition <= 0;
+    gun.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.material = wornMaterial(atlasOf(o), broken);
+    });
+    if (!broken) return;
+    const along = w.fore?.[1] ?? muzzle.z * 0.5;
+    for (const z of [along - 0.075, along + 0.075]) {
+      const s = sectionOf(id, gun, z);
+      if (s.isEmpty()) continue;
+      const size = s.getSize(new THREE.Vector3());
+      const band = new THREE.Mesh(new THREE.BoxGeometry(size.x * 1.15 + 0.006, size.y * 1.15 + 0.006, 0.024), TAPE);
+      band.position.set((s.min.x + s.max.x) / 2, (s.min.y + s.max.y) / 2, z);
+      band.castShadow = true;
+      gun.add(band);
+    }
   }
 
   /** The drawn weapon into the hand and the others where they ride; how the hand holds it, and where its muzzle is. */
@@ -671,10 +779,12 @@ export class SyntyFigure implements FigureRig {
 
   /** Other weapons (the engine's weaponEquipped): on it as soon as they load, the main one in the hand. */
   arm(a: Armament, again = false): void {
-    if (!again && sameArms(a, this.spec)) return;
+    if (!again && sameArms(a, this.spec) && sameFit(a, this.spec)) return;
     this.spec.weapon = a.weapon;
     this.spec.sidearm = a.sidearm ?? null;
     this.spec.belt = a.belt ?? null;
+    this.spec.mods = a.mods;
+    this.spec.condition = a.condition;
     this.drawn = 'weapon';
     const put = (g: Guns) => {
       if (this.rest && sameArms(armsOf(g), this.spec)) this.equip(g);
@@ -703,21 +813,6 @@ export class SyntyFigure implements FigureRig {
       dyes.dyeSkin.value.set(this.spec.skin);
       dyes.dyeSkinOn.value = 1;
     }
-  }
-
-  private addDrone(): void {
-    const drone = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), new THREE.MeshStandardMaterial({ color: 0xb8c4cc, metalness: 0.6, roughness: 0.3 }));
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.13, 0.015, 6, 20).rotateX(Math.PI / 2),
-      new THREE.MeshStandardMaterial({ color: 0x7dffb0, emissive: 0x2fd97a, emissiveIntensity: 1.8 }),
-    );
-    body.castShadow = true;
-    drone.add(body, ring);
-    onUnitLayer(drone);
-    drone.position.set(-0.38, 1.45, -0.1);
-    this.yaw.add(drone);
-    this.drone = drone;
   }
 
   // ---------------------------------------------------------------- pose
@@ -950,7 +1045,7 @@ export class SyntyFigure implements FigureRig {
   private prepareBake(key: string): void {
     const fig = bakers.get(key);
     if (!fig) {
-      bakers.set(key, new SyntyFigure({ ...this.spec, drone: false }));
+      bakers.set(key, new SyntyFigure({ ...this.spec }));
       return;
     }
     if (!fig.ready || !fig.model) return;
@@ -1729,8 +1824,9 @@ const PIECES: ArmorPart[] = ['helmet', 'torso', 'arms', 'legs'];
 export function syntyFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm', siren?: Siren): FigureRig | null {
   if (template === 'relay') return new SirenRig(siren?.alarm ?? 'factory', siren?.heading ?? 0);
   const squad = SQUAD.has(template);
-  const head: HeadId = look?.head ?? (template === 'sharpshooter' ? 'hood' : 'helmet');
-  const build = look?.build ?? (template === 'grenadier' ? 'heavy' : 'normal');
+  // Without a look of its own (older saves), the plain one: the class no longer picks it (docs/FASE9.md).
+  const head: HeadId = look?.head ?? 'helmet';
+  const build = look?.build ?? 'normal';
   const bodies = sameSex(squad ? SQUAD_BODIES[build] : UNIT_BODIES[template], look?.sex ?? sex, squad);
   if (!bodies?.length) return null;
   // The barracks' «Personaje» if chosen, else one picked by the soldier's campaign id (the same everywhere).
@@ -1758,7 +1854,6 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
     scream: template === 'sectoid',
     style: gaitsOf(template).style,
     stance: DEAD_TEMPLATES.has(template) ? 'drunk' : LIVING_ENEMIES.has(template) ? 'aggressive' : undefined,
-    drone: template === 'specialist',
   });
 }
 
@@ -1783,15 +1878,17 @@ export function foundModel(kind: FoundWeaponId, tier: Tier = 1): WeaponId {
 
 /**
  * What a unit carries as models. A campaign soldier's own (Unit.arms): the
- * Armería's weapon in the hand, or the pistol without one; the pistol in its
- * holster beside a main gun; the machete or the knife at the belt. Anyone
+ * Armería's weapon in the hand, or the pistol without one, with what is
+ * mounted on it and its wear; the pistol in its holster beside a main gun;
+ * the machete or the knife at the belt. Anyone
  * else, its template's: its weapon by tier, the Francotirador's pistol beside
  * it, the Asalto's machete.
  */
 export function armamentOf(template: TemplateId, tier: Tier, arms?: Arms | null): Armament {
   const of = (kind: FoundWeaponId) => foundModel(kind, tier);
   if (arms && SQUAD.has(template)) {
-    return { weapon: arms.primary ? of(arms.primary) : 'pistol', sidearm: arms.primary ? 'pistol' : null, belt: arms.melee ? of(arms.melee) : 'knife' };
+    const fit = arms.primary ? { mods: arms.mods ?? [], condition: arms.condition } : {};
+    return { weapon: arms.primary ? of(arms.primary) : 'pistol', sidearm: arms.primary ? 'pistol' : null, belt: arms.melee ? of(arms.melee) : 'knife', ...fit };
   }
   const t = TEMPLATES[template];
   return {
@@ -1821,7 +1918,7 @@ function sameSex(bodies: CharacterId[] | undefined, sex: 'f' | 'm' | undefined, 
  * a piece as Synty painted it) and a skin tone of their own if given.
  */
 export function voiceFigure(character: CharacterId, dyes: (string | null)[] | null = null, skin?: string): SyntyFigure {
-  return new SyntyFigure({ character, weapon: null, hat: null, dyes, band: null, dead: false, scream: false, drone: false, skin });
+  return new SyntyFigure({ character, weapon: null, hat: null, dyes, band: null, dead: false, scream: false, skin });
 }
 
 /** Starts loading every model and atlas the units use, so the first battle does not wait. */

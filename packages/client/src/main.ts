@@ -153,7 +153,7 @@ function handle(m: ServerMessage): void {
       break;
     case 'room':
       players = m.players;
-      lobby.update(players, slot, m.savedCampaign);
+      lobby.update(players, slot, m.savedCampaign, m.setAside ?? null);
       game?.setPlayers(players);
       showPhase(m.phase);
       break;

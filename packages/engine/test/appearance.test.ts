@@ -19,7 +19,7 @@ const old: Appearance = { primary: '#8f2f2f', secondary: '#c9a13a', visor: '#7df
 describe('armour pieces', () => {
   it('an old look is still valid and every piece wears what it wore before', () => {
     expect(isAppearance(old)).toBe(true);
-    expect(isAppearance(defaultAppearance('sharpshooter', 1))).toBe(true);
+    expect(isAppearance(defaultAppearance(1))).toBe(true);
     for (const part of ['helmet', 'torso', 'arms', 'legs'] as const) expect(partColor(old, part)).toBe(old.primary);
     // Berets, caps and hoods were painted in the trim; masks and bare heads have nothing to paint.
     for (const head of ['hood', 'beret', 'cap'] as const) expect(partColor({ ...old, head }, 'helmet')).toBe(old.secondary);
@@ -59,10 +59,10 @@ describe('armour pieces', () => {
     // Reset to the default with the pieces sent along unchanged (and no sex, like the barracks' button): what is
     // stored compares equal to the default look, so a promotion or a change of owner still restyles the soldier
     // (the JSON checks in campaign.ts).
-    const plain = defaultAppearance(s.cls, 0);
+    const plain = defaultAppearance(0);
     const parts = Object.fromEntries(ARMOR_PART_IDS.map((part) => [part, partColor(plain, part)]));
     run(c, { type: 'customize', soldier: s.id, name: s.name, nickname: '', appearance: { ...plain, ...parts } });
-    expect(JSON.stringify(s.appearance)).toBe(JSON.stringify(defaultAppearance(s.cls, 0, undefined, sex)));
+    expect(JSON.stringify(s.appearance)).toBe(JSON.stringify(defaultAppearance(0, undefined, sex)));
 
     expect(() => run(c, { type: 'customize', soldier: s.id, name: s.name, nickname: '', appearance: { ...plain, arms: 'blue' } })).toThrow(/aspecto/);
   });
@@ -75,24 +75,15 @@ describe('armour pieces', () => {
     expect(campaignCommandSchema.safeParse({ ...cmd, appearance: { ...old, torso: null } }).success).toBe(false);
   });
 
-  it('saves keep their looks as they were, pieces or not (and take the sex of the name)', () => {
-    const c = createCampaign([0], new Rng(4));
-    const [a, b] = c.soldiers;
-    a!.appearance = { ...old };
-    b!.appearance = { ...old, arms: '#ffffff' };
-    const m = migrateCampaign(JSON.parse(JSON.stringify(c)) as CampaignState);
-    expect(m.soldiers[0]!.appearance).toEqual({ ...old, sex: sexOfName(a!.name) });
-    expect(m.soldiers[1]!.appearance).toEqual({ ...old, arms: '#ffffff', sex: sexOfName(b!.name) });
-  });
 });
 
 describe('the survivor model', () => {
   it('is an optional id the client resolves; the engine only checks its shape and keeps it', () => {
-    const look: Appearance = { ...defaultAppearance(null, 0), character: 'hunter' };
+    const look: Appearance = { ...defaultAppearance(0), character: 'hunter' };
     expect(isAppearance(look)).toBe(true);
     expect(isAppearance({ ...look, character: 'No vale!' })).toBe(false);
     expect(normalizeAppearance(look).character).toBe('hunter');
-    expect(normalizeAppearance(defaultAppearance(null, 0))).not.toHaveProperty('character');
+    expect(normalizeAppearance(defaultAppearance(0))).not.toHaveProperty('character');
   });
 });
 
@@ -111,7 +102,7 @@ describe("the soldier's sex (playtest 2026-10-13)", () => {
     for (const s of solo.soldiers.slice(2)) s.alive = false;
     run(solo, { type: 'recruit' });
     const recruit = solo.soldiers.at(-1)!;
-    expect(recruit.appearance).toEqual(defaultAppearance(null, 0, undefined, sexOf(recruit.name)));
+    expect(recruit.appearance).toEqual(defaultAppearance(0, undefined, sexOf(recruit.name)));
     // Written right after the build, like normalizeAppearance stores it, so default looks still compare equal.
     expect(Object.keys(recruit.appearance)).toEqual(['primary', 'secondary', 'visor', 'head', 'build', 'sex']);
     expect(Object.keys(normalizeAppearance({ ...recruit.appearance, character: 'hunter', legs: '#ffffff' }))).toEqual([
@@ -133,7 +124,7 @@ describe("the soldier's sex (playtest 2026-10-13)", () => {
     expect(isAppearance({ ...old, sex: 'f' })).toBe(true);
     expect(isAppearance({ ...old, sex: 'm' })).toBe(true);
     expect(isAppearance({ ...old, sex: 'x' as 'f' })).toBe(false);
-    expect(defaultAppearance(null, 0)).not.toHaveProperty('sex');
+    expect(defaultAppearance(0)).not.toHaveProperty('sex');
     const cmd = { type: 'customize', soldier: 's1', name: 'Ada', nickname: '' };
     expect(campaignCommandSchema.safeParse({ ...cmd, appearance: { ...old, sex: 'm' } }).success).toBe(true);
     expect(campaignCommandSchema.safeParse({ ...cmd, appearance: { ...old, sex: 'x' } }).success).toBe(false);
@@ -154,34 +145,9 @@ describe("the soldier's sex (playtest 2026-10-13)", () => {
     addPlayer(d, 1, new Rng(1));
     const moved = d.soldiers.filter((x) => x.owner === 1);
     expect(moved.length).toBeGreaterThan(0);
-    for (const m of moved) expect(m.appearance).toEqual(defaultAppearance(m.cls, 1, undefined, sexOfName(m.name)));
+    for (const m of moved) expect(m.appearance).toEqual(defaultAppearance(1, undefined, sexOfName(m.name)));
   });
 
-  it('old saves take it from the name: the whole name or its first word; a name of their own stays without', () => {
-    const c = createCampaign([0], new Rng(4));
-    const [whole, numbered, first, unknown, chosen, named, relative] = c.soldiers;
-    // Names from the old list (before the international one), and from the new.
-    whole!.name = 'Sara Mena';
-    numbered!.name = 'Pablo Rey 19';
-    first!.name = 'Lucía Fernández';
-    unknown!.name = 'Zoe Quintana';
-    // People of the story who joined, and a relative from «Caras conocidas».
-    named!.name = 'Vera Lindqvist';
-    relative!.name = 'Kenji Okafor';
-    for (const s of c.soldiers) delete s.appearance.sex;
-    chosen!.appearance = { ...chosen!.appearance, sex: sexOfName(chosen!.name) === 'f' ? 'm' : 'f' };
-    (c as { version: number }).version = 14;
-    const m = migrateCampaign(c);
-    expect(m.version).toBe(CAMPAIGN_VERSION);
-    const sexes = m.soldiers.map((s) => s.appearance.sex);
-    expect(sexes.slice(0, 4)).toEqual(['f', 'm', 'f', undefined]);
-    expect(sexes.slice(5, 7)).toEqual(['f', 'm']);
-    expect(m.soldiers[3]!.appearance).not.toHaveProperty('sex');
-    // One that already has it keeps it, whatever the name says.
-    expect(sexes[4]).toBe(chosen!.appearance.sex);
-    // Untouched default looks still compare equal to the default one, sex included.
-    expect(JSON.stringify(m.soldiers[0]!.appearance)).toBe(JSON.stringify(defaultAppearance(m.soldiers[0]!.cls, 0, undefined, 'f')));
-  });
 
   it('skirmish squads carry it too', () => {
     const mission = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0, 1], rng: new Rng(1) });
@@ -189,7 +155,7 @@ describe("the soldier's sex (playtest 2026-10-13)", () => {
     expect(squad.length).toBeGreaterThan(0);
     for (const u of squad) {
       expect(u.appearance?.sex).toBe(sexOf(u.name));
-      expect(u.appearance).toEqual(defaultAppearance(u.template as ClassId, u.owner!, undefined, sexOf(u.name)));
+      expect(u.appearance).toEqual(defaultAppearance(u.owner!, undefined, sexOf(u.name)));
     }
   });
 });

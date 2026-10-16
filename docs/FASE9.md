@@ -30,12 +30,12 @@ En los niveles 2 y 4 de cada habilidad se elige uno de dos. Son 8 elecciones por
 
 | Habilidad | Nivel 2 | Nivel 4 |
 |---|---|---|
-| Tiro | Disparo apuntado / Ráfaga | Zona de muerte / Cara a cara |
-| Cuerpo a cuerpo | Implacable / Golpe certero | Maestro del machete / Torbellino |
-| Medicina | Médico de campo / Espabilar | Manos de enfermero (las medicinas paran el contagio) / Restauración |
-| Maña | Granadero / Cerrajero | Demolición / Técnico |
+| Tiro | A la cabeza / Ráfaga | Nadie pasa / Cara a cara |
+| Cuerpo a cuerpo | Uno tras otro / Golpe certero | Mano de machete / Hacerse sitio |
+| Medicina | Buen pulso / Espabilar | Manos de enfermero (las medicinas paran el contagio) / Pasar visita |
+| Maña | Buen brazo / Sin hacer ruido | Demolición / Apaños |
 
-- Los nombres son de Lore.
+- Los nombres y las líneas son de Lore (más abajo, «Textos»).
 - La elección es provisional hasta «Guardar».
 - Si el soldado sube en la misión, la elección le espera en el Cuartel.
 
@@ -45,10 +45,10 @@ En los niveles 2 y 4 de cada habilidad se elige uno de dos. Son 8 elecciones por
 
 - Es la suma de las cuatro habilidades (de 0 a 20), con nombre:
   - Novato, de 0 a 2;
-  - Superviviente, de 3 a 5;
+  - Fogueado, de 3 a 5;
   - Curtido, de 6 a 9;
   - Veterano, de 10 a 13;
-  - Leyenda, 14 o más.
+  - Superviviente, 14 o más.
 - **Vida:** 5, y +1 cada 4 puntos de veteranía.
 - **Voluntad:** 40, y +3 por punto.
 - **La tercera acción**, desde Veterano.
@@ -76,7 +76,7 @@ En los niveles 2 y 4 de cada habilidad se elige uno de dos. Son 8 elecciones por
 - **Mejoras:** dos huecos por arma. Se encuentran en cajas y habitaciones y se montan en la Armería:
   - mira: +10 de puntería;
   - culata: +10 en la vigilancia;
-  - cargador grande: +2 balas;
+  - cargador ampliado: +2 balas;
   - silenciador: el disparo hace la mitad de ruido.
 - **Ya no hay niveles de arma** (el Taller deja de hacer armas de nivel 2 y 3).
   - El Taller sigue fabricando armas, munición y armadura (para todos).
@@ -188,3 +188,33 @@ En la Armería, el botón: «Arreglar: 1 pieza cada 25». Al volver de una misi�
   - que la ropa y el aspecto no dependan de la clase.
 
 Va en la **0.3.0**. Antes sale la 0.2.9 con las notas de la prueba del 15/10.
+
+## 9. Estado (16/10)
+
+**El motor está hecho** (Gameplay, con 417 pruebas):
+- `skills.ts` lleva las habilidades, la experiencia, los talentos, la veteranía, los números del soldado (`fighterStats`), los reclutas y los veteranos de escaramuza.
+- Lo que hace cada soldado en la misión lo cuentan los eventos (`Unit.deeds`).
+- El soldado de campaña lleva `skills` y `picks`; al volver aprende, y el parte dice qué (`learned`, `deeds`, `levels`).
+- El cinturón, el estado de las armas, las mejoras y la Armería (arreglar y montar) también están.
+- La campaña de antes se aparta al arrancar (Red) y el vestíbulo lo dice.
+
+**Decisiones tomadas por el camino:**
+- **Talentos:** lo guardado queda fijo y no hay «Reentrenar».
+- **Cinturón:** son los dos huecos de antes (`loadout.utility` y `loadout.ammo`); cualquier accesorio va en cualquiera, y se puede repetir. La munición especial deja de existir: la sustituyen las mejoras.
+- **El Taller:**
+  - «Armas de taller» (nivel 3) deja hacer culatas y silenciadores, y «Armas militares» (nivel 6), miras y cargadores ampliados. Se hacen una y otra vez.
+  - Las armas de nivel 2 y 3 ya no se hacen. La armadura sigue, y es para todos.
+- **Armas encontradas:** llegan con un estado de 40 a 90. Las buenas traen su mejora: el fusil de cerrojo, culata; la recortada y la ametralladora ligera, cargador ampliado; el fusil con mira, mira.
+- **Base de puntería:** 60. Tiro suma con armas de fuego y Cuerpo a cuerpo con el cuchillo y el machete.
+- **Heridas:** 2 días más 2 por punto de vida perdido.
+- **El Camposanto a nivel 3:** un punto más de lo que más se usó en la misión.
+- **El centro de instrucción:** los reclutas llegan con uno o dos niveles más.
+
+**Hecho también:**
+- UI: la ficha del Cuartel, el árbol con «Guardar», el cinturón, la Armería (estado, arreglar, mejoras) y el parte;
+- Lore: los textos, en femenino donde toca («Novata»…), y la frase del arma gastada;
+- Arte: la mira y el silenciador sobre el arma, el arma gastada o rota, y la ropa sin clase;
+- fuera del motor: las clases, las aptitudes, el árbol viejo, los rangos (`classes.ts`, `RANKS`), los niveles de arma y la migración de las campañas de antes;
+- el Taller de oficios sube en uno, por nivel, el tope de lo que se aprende por misión (de 6 a 9).
+
+**Queda para después:** el código muerto del árbol viejo. Las habilidades del Grillo y del Oficio, sus perks y los vuelos del dron siguen en el motor y en el cliente, aunque ninguna unidad puede tenerlos. Se quitan en una pasada aparte (Gameplay, UI y Arte).

@@ -16,6 +16,7 @@ import { attackWeapon, clipOf, hasSquadsight, PISTOL_CLIP } from '../src/content
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { CRAFTS, LEVEL_XP, spareMags } from '../src/progression';
 import { Rng } from '../src/rng';
+import { NO_SKILLS, SKILL_XP } from '../src/skills';
 import { executeCommand } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { Arms, GameState, Pod, Slot, Unit } from '../src/types';
@@ -90,19 +91,21 @@ describe('the weapons from zero', () => {
     expect(hasSquadsight(addUnit(s, 's4', 'sharpshooter', 4, 4))).toBe(true);
   });
 
-  it('anyone takes any weapon: one in the hand and one at the belt, and its talents wake', () => {
+  it('anyone takes any weapon: one in the hand and one at the belt; Mano de machete wants the machete', () => {
     const c = createCampaign([0], new Rng(1));
     const s = c.soldiers[0]!;
-    s.talents = { slug: 1 };
+    s.skills = { ...NO_SKILLS, melee: SKILL_XP[3]! };
+    s.picks = ['bladeMaster'];
     c.foundWeapons = [
       { id: 'w1', kind: 'pumpShotgun', holder: null },
       { id: 'w2', kind: 'machete', holder: null },
       { id: 'w3', kind: 'assaultRifle', holder: null },
     ];
-    expect(squadMember(c, s).perks).not.toContain('slug');
+    const knife = squadMember(c, s).mods;
     for (const w of ['w1', 'w2']) expect(run(c, { type: 'assignWeapon', weapon: w, soldier: s.id }).ok).toBe(true);
     expect(squadMember(c, s)).toMatchObject({ arms: { primary: 'pumpShotgun', primaryId: 'w1', melee: 'machete', meleeId: 'w2' }, weaponName: 'Escopeta' });
-    expect(squadMember(c, s).perks).toContain('slug');
+    expect(squadMember(c, s).mods.meleeDamage - knife.meleeDamage).toBe(2);
+    expect(squadMember(c, s).mods.meleeAim - knife.meleeAim).toBe(15);
     // A second primary takes the first one's place; the machete stays.
     expect(run(c, { type: 'assignWeapon', weapon: 'w3', soldier: s.id }).ok).toBe(true);
     expect(c.foundWeapons.map((w) => w.holder)).toEqual([null, s.id, s.id]);
@@ -127,19 +130,6 @@ describe('the weapons from zero', () => {
     expect((c.foundWeapons ?? []).map((w) => w.kind).sort()).toEqual(['assaultRifle', 'machete', 'precisionRifle', 'pumpShotgun']);
   });
 
-  it('older campaigns keep their class weapons and their three magazines', () => {
-    const old = createCampaign([0], new Rng(1));
-    (old as { version: number }).version = 15;
-    const [a, b] = old.soldiers;
-    a!.cls = 'assault';
-    b!.cls = 'sharpshooter';
-    old.foundWeapons = [{ id: 'w9', kind: 'scopedRifle', holder: b!.id }];
-    const c = migrateCampaign(old);
-    const kinds = (id: string) => c.foundWeapons!.filter((w) => w.holder === id).map((w) => w.kind);
-    expect(kinds(a!.id)).toEqual(['pumpShotgun', 'machete']);
-    expect(kinds(b!.id)).toEqual(['scopedRifle']);
-    expect(spareMags(c)).toBe(3);
-  });
 });
 
 describe('a weapon found in the mission (docs/FASE8.md §C)', () => {

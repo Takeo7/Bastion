@@ -4,9 +4,9 @@
 // (CRAFTS, docs/FASE4.md), and a soldier carries the best tier made *and*
 // their rank allows, so promotions show up as better guns. A found weapon
 // lifts one soldier a tier above the rest.
-import { FOUND_WEAPONS, ITEMS, RANKS, TEMPLATES, WEAPONS, type WeaponId } from './content';
+import { FOUND_WEAPONS, ITEMS, WEAPONS, type WeaponId } from './content';
 import type { CampaignSoldier, CampaignState, FacilityId, FoundWeapon } from './campaign';
-import type { FoundWeaponId, ItemId, TemplateId } from './types';
+import type { FoundWeaponId, ItemId, TemplateId, WeaponModId } from './types';
 
 export type TechId = 'magWeapons' | 'plateArmor' | 'plasmaGrenades' | 'encryption' | 'plasmaWeapons' | 'nanoMedkit' | 'predatorArmor' | 'signal';
 
@@ -19,13 +19,13 @@ export interface TechDef {
 }
 
 export const TECHS: Record<TechId, TechDef> = {
-  magWeapons: { id: 'magWeapons', name: 'Armas de taller', description: 'Teo puede poner a punto armas de nivel 2 (+2 de daño) en el Taller, con piezas: para los soldados desde Cabo.', level: 3 },
-  plateArmor: { id: 'plateArmor', name: 'Armadura de placas', description: 'El Taller puede hacer armadura de nivel 2 (+2 de salud), con piezas: para los soldados desde Cabo.', level: 4 },
+  magWeapons: { id: 'magWeapons', name: 'Culatas y silenciadores', description: 'Teo puede hacer culatas y silenciadores en el Taller, con piezas, para montarlos en la Armería.', level: 3 },
+  plateArmor: { id: 'plateArmor', name: 'Armadura de placas', description: 'El Taller puede hacer armadura de nivel 2 (+2 de salud), con piezas: para todos.', level: 4 },
   plasmaGrenades: { id: 'plasmaGrenades', name: 'Granadas de clavos', description: 'Clavos y tornillos en la carga: +2 de daño en todas las granadas.', level: 5 },
   encryption: { id: 'encryption', name: 'Escáner de radio', description: 'Oír las frecuencias de los Cuervos sin que nos oigan: +20 a arreglar equipos y una zona contactable más.', level: 5 },
-  plasmaWeapons: { id: 'plasmaWeapons', name: 'Armas militares', description: 'Lo que quedaba en los cuarteles: el Taller, a nivel 2, puede dejarlas limpias y con munición. Armas de nivel 3 (+4 de daño) para los soldados desde Teniente.', level: 6 },
+  plasmaWeapons: { id: 'plasmaWeapons', name: 'Miras y cargadores ampliados', description: 'Lo que quedaba en los cuarteles sirve de modelo: el Taller puede hacer miras y cargadores ampliados, con piezas, para montarlos en la Armería.', level: 6 },
   nanoMedkit: { id: 'nanoMedkit', name: 'Antibióticos', description: 'Amoxicilina y suturas de verdad: las curas sanan +2 y los botiquines tienen un uso más.', level: 6 },
-  predatorArmor: { id: 'predatorArmor', name: 'Equipo antidisturbios', description: 'El Taller, a nivel 2, puede hacer armadura de nivel 3 (+4 de salud y +1 de blindaje) para los soldados desde Teniente.', level: 7 },
+  predatorArmor: { id: 'predatorArmor', name: 'Equipo antidisturbios', description: 'El Taller, a nivel 2, puede hacer armadura de nivel 3 (+4 de salud y +1 de blindaje) para todos.', level: 7 },
   signal: { id: 'signal', name: 'La sirena en La Lata', description: 'La sirena de los Cuervos, atornillada al techo de La Lata para llevarse a la Marea: desbloquea la misión final.', level: 8 },
 };
 
@@ -62,20 +62,12 @@ export function missionXp(victory: boolean, difficulty: number, kills: number): 
 
 // ------------------------------------------------------------------ tiers
 
+/** The armour's tiers (ARMOR_TIERS); weapons have none since Fase 9 (docs/FASE9.md §5). */
 export type Tier = 1 | 2 | 3;
-
-/** Lowest rank that may carry each tier (Novato, Cabo, Teniente). */
-export const TIER_RANK = [0, 2, 4] as const;
-
-export function rankTier(rank: number): Tier {
-  return rank >= TIER_RANK[2] ? 3 : rank >= TIER_RANK[1] ? 2 : 1;
-}
 
 // ----------------------------------------------------------------- crafts
 
 export type CraftId =
-  | 'weapons2'
-  | 'weapons3'
   | 'armor2'
   | 'armor3'
   | 'makeRifle'
@@ -85,16 +77,20 @@ export type CraftId =
   | 'makeMachete'
   | 'ammo1'
   | 'ammo2'
-  | 'ammo3';
+  | 'ammo3'
+  | 'makeStock'
+  | 'makeSilencer'
+  | 'makeScope'
+  | 'makeExtMag';
 
 export interface CraftDef {
   id: CraftId;
   name: string;
   /** As the register tells it, with its article. */
   the: string;
-  /** A tier for everyone, a weapon for the Armería (made again and again), or one more spare magazine for everyone (docs/FASE8.md §A). */
-  kind: 'weapon' | 'armor' | 'arms' | 'ammo';
-  /** The tier it makes ('weapon' and 'armor'). */
+  /** An armour tier for everyone, a weapon for the Armería (made again and again), one more spare magazine for everyone (docs/FASE8.md §A), or an improvement for a weapon (docs/FASE9.md §5). */
+  kind: 'armor' | 'arms' | 'ammo' | 'mod';
+  /** The tier it makes ('armor'). */
   tier?: 2 | 3;
   /** The technology (the Bastion's level) that allows it. */
   tech: TechId | null;
@@ -102,6 +98,8 @@ export interface CraftDef {
   level?: number;
   /** The weapon it makes ('arms'). */
   makes?: FoundWeaponId;
+  /** The improvement it makes ('mod'), for the Armería. */
+  makesMod?: WeaponModId;
   /** Level of the Taller it needs. */
   workshop: number;
   /** What has to be made before it. */
@@ -114,8 +112,6 @@ export interface CraftDef {
 
 /** What the Taller makes (docs/FASE4.md): tiers 2 and 3 of weapons and armour, for everyone. Names are placeholders for Lore. */
 export const CRAFTS: Record<CraftId, CraftDef> = {
-  weapons2: { id: 'weapons2', name: 'Armas de nivel 2', the: 'las armas de nivel 2', kind: 'weapon', tier: 2, tech: 'magWeapons', workshop: 1, after: null, cost: 60, parts: 4, days: 3 },
-  weapons3: { id: 'weapons3', name: 'Armas de nivel 3', the: 'las armas de nivel 3', kind: 'weapon', tier: 3, tech: 'plasmaWeapons', workshop: 2, after: 'weapons2', cost: 120, parts: 8, days: 5 },
   armor2: { id: 'armor2', name: 'Armadura de nivel 2', the: 'la armadura de nivel 2', kind: 'armor', tier: 2, tech: 'plateArmor', workshop: 1, after: null, cost: 60, parts: 4, days: 3 },
   armor3: { id: 'armor3', name: 'Armadura de nivel 3', the: 'la armadura de nivel 3', kind: 'armor', tier: 3, tech: 'predatorArmor', workshop: 2, after: 'armor2', cost: 120, parts: 8, days: 5 },
   // The weapons from zero (docs/FASE8.md §A): one at a time, for the Armería.
@@ -128,6 +124,11 @@ export const CRAFTS: Record<CraftId, CraftDef> = {
   ammo1: { id: 'ammo1', name: 'Primeros cargadores', the: 'la primera tanda de cargadores', kind: 'ammo', tech: null, workshop: 1, after: null, cost: 25, parts: 2, days: 2 },
   ammo2: { id: 'ammo2', name: 'Más cargadores', the: 'la segunda tanda de cargadores', kind: 'ammo', tech: null, level: 3, workshop: 1, after: 'ammo1', cost: 40, parts: 4, days: 3 },
   ammo3: { id: 'ammo3', name: 'Cargadores de sobra', the: 'la tercera tanda de cargadores', kind: 'ammo', tech: null, level: 5, workshop: 2, after: 'ammo2', cost: 60, parts: 6, days: 4 },
+  // Improvements for the weapons (docs/FASE9.md §5), one at a time: «Armas de taller» and «Armas militares» open them.
+  makeStock: { id: 'makeStock', name: 'Culata', the: 'una culata', kind: 'mod', makesMod: 'stock', tech: 'magWeapons', workshop: 1, after: null, cost: 20, parts: 2, days: 1 },
+  makeSilencer: { id: 'makeSilencer', name: 'Silenciador', the: 'un silenciador', kind: 'mod', makesMod: 'silencer', tech: 'magWeapons', workshop: 1, after: null, cost: 20, parts: 2, days: 1 },
+  makeScope: { id: 'makeScope', name: 'Mira', the: 'una mira', kind: 'mod', makesMod: 'scope', tech: 'plasmaWeapons', workshop: 1, after: null, cost: 30, parts: 3, days: 2 },
+  makeExtMag: { id: 'makeExtMag', name: 'Cargador ampliado', the: 'un cargador ampliado', kind: 'mod', makesMod: 'extMag', tech: 'plasmaWeapons', workshop: 1, after: null, cost: 30, parts: 3, days: 2 },
 };
 
 /** What the Bastion's level brings to the Armería (docs/FASE8.md §A), by the level reached. */
@@ -149,14 +150,9 @@ export function hasCrafted(c: Armoury, id: CraftId): boolean {
   return !!c.crafted?.includes(id);
 }
 
-/** The project of `kind` that makes `tier`. */
-export function craftFor(kind: 'weapon' | 'armor', tier: 2 | 3): CraftId {
-  return kind === 'weapon' ? (tier === 2 ? 'weapons2' : 'weapons3') : tier === 2 ? 'armor2' : 'armor3';
-}
-
-/** The tier the Taller has made for everyone. */
-export function baseWeaponTier(c: Armoury): Tier {
-  return hasCrafted(c, 'weapons3') ? 3 : hasCrafted(c, 'weapons2') ? 2 : 1;
+/** The project that makes armour of `tier`. */
+export function craftFor(tier: 2 | 3): CraftId {
+  return tier === 2 ? 'armor2' : 'armor3';
 }
 
 export function baseArmorTier(c: Armoury): Tier {
@@ -173,18 +169,15 @@ export function meleeWeaponOf(c: Armoury, s: Pick<CampaignSoldier, 'id'>): Found
   return c.foundWeapons?.find((w) => w.holder === s.id && FOUND_WEAPONS[w.kind].slot === 'melee');
 }
 
-/** A soldier's weapon tier: what the Taller made, one more with a good weapon, never past 3 nor what the rank allows. */
-export function weaponTier(c: Armoury, s: Pick<CampaignSoldier, 'rank' | 'id'>): Tier {
-  const found = foundWeaponOf(c, s);
-  return Math.min(3, baseWeaponTier(c) + (found && FOUND_WEAPONS[found.kind].better ? 1 : 0), rankTier(s.rank)) as Tier;
+/** Weapons have no tiers (docs/FASE9.md §5): every weapon is what it is. The client still draws by it. */
+export function weaponTier(_c?: Armoury, _s?: Pick<CampaignSoldier, 'id'>): Tier {
+  return 1;
 }
 
-export function armorTier(c: Armoury, s: Pick<CampaignSoldier, 'rank'>): Tier {
-  return Math.min(baseArmorTier(c), rankTier(s.rank)) as Tier;
+/** The armour the Taller has made is for everyone (docs/FASE9.md §5). */
+export function armorTier(c: Armoury, _s?: Pick<CampaignSoldier, 'id'>): Tier {
+  return baseArmorTier(c);
 }
-
-/** Extra primary-weapon damage per tier. */
-export const WEAPON_TIER_DAMAGE = [0, 2, 4];
 
 export const ARMOR_TIERS = [
   { name: 'Ropa reforzada', hp: 0, armor: 0 },
@@ -192,40 +185,28 @@ export const ARMOR_TIERS = [
   { name: 'Equipo antidisturbios', hp: 4, armor: 1 },
 ];
 
-const TIER_NAMES: Partial<Record<WeaponId, [string, string]>> = {
-  rifle: ['Fusil reforzado', 'Fusil militar'],
-  shotgun: ['Escopeta reforzada', 'Escopeta militar'],
-  cannon: ['Ametralladora reforzada', 'Ametralladora militar'],
-  sniper: ['Fusil de precisión reforzado', 'Fusil de precisión militar'],
-};
-
-export function weaponName(id: WeaponId, tier: number = 1): string {
-  const names = TIER_NAMES[id];
-  return tier > 1 && names ? names[tier - 2]! : WEAPONS[id].name;
-}
-
-/** The class weapon a soldier carries at `tier`. */
-export function soldierWeaponName(template: TemplateId, tier: number = 1): string {
-  return weaponName(TEMPLATES[template].weapon, tier);
+/** A weapon by its name (the tier is from before Fase 9 and changes nothing). */
+export function weaponName(id: WeaponId, _tier = 1): string {
+  return WEAPONS[id].name;
 }
 
 /**
  * What stands between a soldier and the next tier, or null at the top: the
- * Taller's work (and the Bastion's level that allows it) or the soldier's
- * rank. A found weapon already counts one tier.
+ * Taller's work (and the Bastion's level that allows it). Only armour has
+ * tiers now (docs/FASE9.md §5).
  */
-export function nextTierBlocker(c: Pick<CampaignState, 'xp'> & Armoury & { techs?: readonly TechId[] }, s: Pick<CampaignSoldier, 'rank' | 'id'>, kind: 'weapon' | 'armor'): string | null {
-  const tier = kind === 'weapon' ? weaponTier(c, s) : armorTier(c, s);
+export function nextTierBlocker(c: Pick<CampaignState, 'xp'> & Armoury & { techs?: readonly TechId[] }, _s: Pick<CampaignSoldier, 'id'>, kind: 'weapon' | 'armor'): string | null {
+  // No weapon tiers (docs/FASE9.md §5); the armour, for everyone.
+  if (kind === 'weapon') return null;
+  const tier = armorTier(c);
   if (tier >= 3) return null;
   const next = (tier + 1) as 2 | 3;
-  const made = next - (kind === 'weapon' && foundWeaponOf(c, s) ? 1 : 0);
   const needs: string[] = [];
-  const craft = made >= 2 ? CRAFTS[craftFor(kind, made as 2 | 3)] : null;
+  const craft = CRAFTS[craftFor(next)];
   if (craft && !hasCrafted(c, craft.id)) {
     if (craft.tech && !hasTech(c, craft.tech)) needs.push(`nivel ${TECHS[craft.tech].level} del Bastión`);
     needs.push('fabricarlas en el Taller');
   }
-  if (rankTier(s.rank) < next) needs.push(`rango ${RANKS[TIER_RANK[next - 1]]!.name}`);
   return `${craft?.name ?? `Nivel ${next}`}: requiere ${needs.join(' y ')}`;
 }
 

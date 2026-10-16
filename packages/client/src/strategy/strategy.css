@@ -1206,132 +1206,158 @@ dl.briefing {
   color: var(--x-muted);
 }
 
-/* Árbol de habilidades: aptitudes typed in boxes on the left; the tree itself is skillTree.css. */
-.strat-modal .x-panel.wide.service {
-  width: min(1180px, calc(96vw / var(--ui-scale, 1)));
+/* A firearm's state (docs/FASE9.md §5): a thin gauge and its number; worn amber, broken red. */
+.wcond {
+  --wc: var(--x-good);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
 }
 
-.service-sheet {
+.wcond.worn {
+  --wc: var(--x-warn);
+}
+
+.wcond.broken {
+  --wc: var(--x-bad);
+}
+
+.wcond i {
+  width: 54px;
+  height: 5px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--wc) calc(var(--p) * 100%), rgba(0, 0, 0, 0.4) calc(var(--p) * 100%));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.wcond small {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--wc);
+}
+
+.wcond.ok small {
+  color: var(--x-muted);
+}
+
+/* The improvements on a weapon: small tags. */
+.wmods {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  grid-column: 1 / -1;
+  margin-left: 4px;
+}
+
+.wmod {
+  padding: 0 5px;
+  border-radius: 2px;
+  background: rgba(242, 194, 48, 0.14);
+  box-shadow: inset 2px 0 0 var(--t-accent, #f2c230);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--x-text);
+}
+
+/* In the Armería's list: worn or broken, and how many improvements, after the name. */
+.wmarks {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.wwear,
+.wmod-n {
+  padding: 0 4px;
+  border-radius: 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wwear.worn {
+  background: color-mix(in srgb, var(--x-warn) 22%, transparent);
+  color: var(--x-warn);
+}
+
+.wwear.broken {
+  background: color-mix(in srgb, var(--x-bad) 26%, transparent);
+  color: var(--x-bad);
+}
+
+.wmod-n {
+  background: rgba(242, 194, 48, 0.14);
+  color: var(--t-accent, #f2c230);
+}
+
+/* A weapon's panel: its state over «Arreglar», then a line per improvement and the free places. */
+.wcare-state {
   display: grid;
-  grid-template-columns: minmax(230px, 0.9fr) minmax(0, 2.6fr);
-  gap: 18px;
-  align-items: start;
+  gap: 4px;
 }
 
-.service-apts {
+.wcare-state .wcond i {
+  width: 120px;
+  height: 7px;
+}
+
+.wcare-state .wcond small {
+  font-size: 13px;
+}
+
+.wcare-line {
+  margin: 0;
+}
+
+.wcare-line.worn {
+  color: var(--x-warn);
+}
+
+.wcare-line.broken {
+  color: var(--x-bad);
+}
+
+.wcare-repair {
   display: grid;
-  gap: 8px;
-}
-
-.service-apts > .x-btn {
-  justify-self: start;
+  justify-items: start;
+  gap: 4px;
   margin-top: 4px;
 }
 
-.apt {
+.wmod-free {
   display: grid;
-  gap: 2px;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px dashed var(--x-line);
+  border-radius: 2px;
 }
 
-.apt-head {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.apt-head b {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 400;
-}
-
-.apt-head small {
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--x-muted);
-}
-
-.apt-val {
-  margin-left: auto;
-  font-family: var(--font-display);
-  font-size: 19px;
-  color: var(--pen);
-}
-
-.apt-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Ten typed boxes: inked = the class's, pen = points spent, dotted = past the cap. */
-.apt-boxes {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 2px;
-}
-
-.apt-boxes i {
-  position: relative;
-  height: 13px;
-  border: 1.5px solid var(--ink);
-  background: var(--paper-light);
-}
-
-.apt-boxes i.base {
-  background: var(--ink);
-}
-
-.apt-boxes i.add {
-  background: var(--pen);
-  border-color: var(--pen);
-}
-
-.apt-boxes i.cap {
-  border-style: dotted;
-  border-color: var(--x-muted);
-  background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(110, 98, 80, 0.35) 3px 4px);
-}
-
-.apt-boxes i.mark::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: -5px;
-  width: 1.5px;
-  height: 3px;
-  background: var(--x-muted);
-}
-
-.apt-plus {
-  width: 24px;
-  height: 22px;
-  padding: 0;
-  border: 1.5px solid var(--pen);
-  background: var(--paper-light);
-  color: var(--pen);
+.wmod-slot {
+  font-size: 10.5px;
   font-weight: 700;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.apt-plus:disabled {
-  opacity: 0.3;
-  cursor: default;
-  animation: none;
-}
-
-.apt-effect {
-  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--x-muted);
 }
 
-@media (max-width: 900px) {
-  .service-sheet {
-    grid-template-columns: 1fr;
-  }
+.wmod-offer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.wpn[data-weapon='mod'] {
+  --wpn: url('/ui/synty/icons/mh-repair.webp');
+  width: 18px;
+}
+
+/* Árbol de habilidades: the tree's panel (skillSheet.ts; the tree itself is skillMatrix.css). */
+.strat-modal .x-panel.wide.service {
+  width: min(1180px, calc(96vw / var(--ui-scale, 1)));
 }
 
 /* --------------------------------------------------------------- modal */
@@ -2069,7 +2095,7 @@ dl.briefing {
 
 /* Soldiers: class, name, chevrons, state, all on one line. */
 .x-row.soldier {
-  grid-template-columns: 4px 30px 1fr auto auto;
+  grid-template-columns: 4px 44px 1fr auto auto;
 }
 
 .x-row.soldier .cls {
@@ -2497,7 +2523,7 @@ dl.x-pairs dd {
 }
 
 .x-row.soldier {
-  grid-template-columns: 4px 40px 1fr auto auto;
+  grid-template-columns: 4px 44px 1fr auto auto;
 }
 
 /* Recruiting: the whole class name, two per row. */
@@ -2839,58 +2865,11 @@ dl.x-pairs dd {
 
 /* ------------------------------------------------------- the promotion */
 
-/* A promotion is a draft in pencil until «Guardar»: what is drafted reads apart from what is saved. */
+/* What waits in the tree, over it: the picks are a draft until «Guardar». */
 .service-help {
   margin: 2px 0 8px;
   font-size: 13px;
   color: var(--x-text);
-}
-
-.apt-head .apt-effect {
-  flex: 1;
-  min-width: 0;
-}
-
-.apt-added {
-  font-family: var(--font-hand);
-  font-size: 16px;
-  color: var(--pen);
-}
-
-.apt-boxes i.plan {
-  background: repeating-linear-gradient(-45deg, var(--paper-light) 0 2px, var(--pen) 2px 3.5px);
-  border-color: var(--pen);
-}
-
-.apt-minus {
-  width: 24px;
-  height: 22px;
-  padding: 0;
-  border: 1.5px solid var(--x-muted);
-  background: var(--paper-light);
-  color: var(--x-muted);
-  font-weight: 700;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.apt-minus:disabled {
-  opacity: 0.25;
-  cursor: default;
-}
-
-.apt-next {
-  font-size: 12px;
-  color: var(--x-muted);
-}
-
-.apt-next.got {
-  color: var(--x-good);
-}
-
-.apt.drafted .apt-val {
-  color: var(--pen);
 }
 
 /* «GUARDADO»: the sheet is stamped when a promotion is written down. */
@@ -3050,10 +3029,6 @@ dl.x-pairs dd {
 .gear-note {
   margin: 2px 0 0;
   font-size: 11.5px;
-}
-
-.apt-next.capped {
-  color: var(--x-warn);
 }
 
 /* ------------------------------------- customizer: a colour per armour piece (2026-10-12) */
