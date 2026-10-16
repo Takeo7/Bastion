@@ -196,6 +196,7 @@ class AudioEngine {
     src.buffer = buffer;
     src.playbackRate.value = o.rate ?? 1;
     const gain = ctx.createGain();
+    this.gains.set(src, gain);
     gain.gain.value = o.gain ?? 1;
     let node: AudioNode = src.connect(gain);
     if (o.pan) {
@@ -215,6 +216,27 @@ class AudioEngine {
       trace(`audio: primer sonido (${ctx.state})`);
     }
     return src;
+  }
+
+  /** The level of each sound play() started, so stop() can fade it out. */
+  private readonly gains = new WeakMap<AudioBufferSourceNode, GainNode>();
+
+  /** Stops a sound play() started, fading it out over `fade` seconds so it never clicks (a hold let go early). */
+  stop(src: AudioBufferSourceNode, fade = 0.05): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const gain = this.gains.get(src);
+    if (gain) {
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(gain.gain.value, t);
+      gain.gain.linearRampToValueAtTime(0, t + fade);
+    }
+    try {
+      src.stop(t + fade + 0.01);
+    } catch {
+      /* already over */
+    }
   }
 
   /**

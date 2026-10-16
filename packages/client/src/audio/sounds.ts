@@ -1004,6 +1004,31 @@ export const SOUNDS: Record<string, SoundDef> = {
   // The clock while days pass.
   'ui.tick': def('ui', 0.1, (s) => s.to(s.amp(s.filter(s.noise('white'), 'bandpass', s.vary(4000, 0.2), 6), hit(0, 0.0005, 0.012, 0.8))), { variants: 4, level: -8 }),
 
+  // The skill board (strategy/hexBoard.ts; playtest 16/10, «sutil pero satisfactorio»), through audio/ui.ts.
+  // A cell bought, as it bounces: a metal latch clicking home, a little weight under it and a short glint.
+  // Neither bell nor fanfare: several may be bought one after another.
+  'cell.buy': def('ui', 0.45, (s) => {
+    s.to(s.metal(0, [2900, 4100, 5600].map((f) => s.vary(f, 0.04)), 0.035, 0.6));
+    s.to(s.metal(0.028, [2300, 3500].map((f) => s.vary(f, 0.04)), 0.03, 0.4));
+    s.to(s.amp(s.osc('sine', [[0, s.vary(520, 0.03)], [0.05, 380]], 0, 0.1), hit(0, 0.001, 0.05, 0.45)));
+    s.to(s.filter(s.metal(0.03, [6200, 7400, 8800].map((f) => s.vary(f, 0.03)), 0.22, 1), 'highpass', 4000, 0.7), 0.2);
+  }, { variants: 4, reverb: 0.15 }),
+  // Over a cell (unlocked or chosen): a tick at the edge of hearing; the board is swept fast, so it barely varies.
+  'cell.hover': def('ui', 0.05, (s) => {
+    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 3000, 0.7), hit(0, 0.0005, 0.008, 0.6)));
+    s.to(s.amp(s.osc('sine', s.vary(1800, 0.02), 0, 0.03), hit(0, 0.001, 0.012, 0.4)));
+  }, { variants: 3, level: -18 }),
+  // While a cell is held down to buy it (one second, hexBoard HOLD_MS): a soft tone rising an octave as the
+  // stroke goes round, gone just as the purchase clicks. Cut off (audio/ui.ts) if let go sooner.
+  'cell.hold': def('ui', 1.05, (s) => {
+    const rise: Env = [[0, 420], [1, 840]];
+    const tone = s.ctx.createGain();
+    s.osc('sine', rise).connect(tone);
+    s.amp(s.osc('triangle', rise.map(([t, f]) => [t, f * 2] as [number, number])), 0.12).connect(tone);
+    s.to(s.amp(tone, [[0, 0], [0.15, 0.25], [0.95, 0.5], [1, 0]]));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', [[0, 2000], [1, 6000]], 2), [[0, 0], [0.9, 0.12], [1, 0]]));
+  }, { variants: 1, level: -10 }),
+
   // ------------------------------------------------------------ the holo interface
   // The other interface (Holotáctico, ui/theme.ts): glass and light instead of
   // paper, so electronic blips instead of typewriter keys.

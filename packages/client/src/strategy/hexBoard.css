@@ -1,13 +1,14 @@
 /*
  * The hex board of Fase 10 (hexBoard.ts), in the interface's steel («Mixta»):
- * a dark planning board with a faint grid, the round frame of lines, the 169
- * cells and, beside it, the card of the last cell consulted.
+ * a dark planning board, one ring round it, the 169 cells and, beside it,
+ * the card of the last cell consulted.
  *
  * - Each line's family has its colour, --cc (.sk-*; the core, the accent).
  * - A cell's state is its fill, edge and icon, never only its colour:
- *   unlocked = filled with the colour, the icon dark and sharp; open = dull,
- *   barely tinted, the icon grey; locked = dimmer still, the cell seen, the
- *   icon not. Consulting a cell doesn't change how it looks.
+ *   selected (.unlocked) = filled with the colour, the icon dark and sharp;
+ *   unlocked (.open) = dull, barely tinted, the icon grey; locked = dimmer
+ *   still, the cell seen, the icon not. Consulting a cell doesn't change how
+ *   it looks.
  * - Holding: an indicator runs round the outline in a second; bought: a small
  *   bounce and a pulse round it. Reduced motion: neither moves.
  * Sizes inside the SVG are in board units (a cell is 30 across its corners).
@@ -58,8 +59,6 @@
   border-radius: 2px;
   background:
     radial-gradient(circle at 50% 50%, rgba(242, 194, 48, 0.05), transparent 55%),
-    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 40px 40px,
-    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 40px 40px,
     var(--board);
   box-shadow: var(--m-sink, inset 0 1px 3px rgba(0, 0, 0, 0.75)), inset 0 0 70px rgba(0, 0, 0, 0.6);
   cursor: grab;
@@ -90,11 +89,6 @@
 
 .hb-ring {
   fill: none;
-  stroke: rgba(201, 205, 200, 0.16);
-  stroke-width: 1.2;
-}
-
-.hb-ring.outer {
   stroke: rgba(201, 205, 200, 0.3);
   stroke-width: 2;
 }
@@ -114,18 +108,11 @@
   stroke-width: 1.6;
 }
 
-/* Each sector's middle: a notch in its family's colour, pointing in. */
-.hb-notch {
-  fill: var(--cc);
-  opacity: 0.8;
-}
-
 /* ------------------------------------------------------------------ cells */
 
 .hx {
   --face: color-mix(in srgb, var(--cc) 10%, #1d2123);
   --edge: color-mix(in srgb, var(--cc) 34%, #2b3033);
-  --icon: #8e948f;
   --icon-o: 1;
   cursor: pointer;
   outline: none;
@@ -146,49 +133,39 @@
   stroke-width: 1.6;
 }
 
+/* Synty's silhouettes (boardIcons.ts): the grey one, or the dark one on a selected cell. */
 .hx-icon {
-  fill: none;
-  stroke: var(--icon);
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
   opacity: var(--icon-o);
   pointer-events: none;
 }
 
-.hx-icon .fill {
-  fill: var(--icon);
-  stroke: none;
+.hx-ico.dark,
+.hx.unlocked .hx-ico.grey {
+  display: none;
 }
 
-.hx-icon .dash,
-.hb-card-icon svg .dash {
-  stroke-dasharray: 2 2.4;
+.hx.unlocked .hx-ico.dark {
+  display: inline;
 }
 
-/* Unlocked: the family's colour, the icon dark and sharp. */
+/* Selected: the family's colour, the icon dark and sharp. */
 .hx.unlocked {
   --face: var(--cc);
   --edge: color-mix(in srgb, var(--cc) 62%, #fff);
-  --icon: #0d0f10;
 }
 
-.hx.unlocked .hx-icon {
-  stroke-width: 2.1;
-}
-
-/* Locked: much dimmer; the cell is there, its icon isn't. */
+/* Locked: much dimmer; the cell is there, its icon isn't, and it has nothing to read. */
 .hx.locked {
   --face: color-mix(in srgb, var(--cc) 4%, #121517);
   --edge: color-mix(in srgb, var(--cc) 12%, #1e2225);
   --icon-o: 0;
+  cursor: inherit;
 }
 
 /* The core: steel in a double brass rim, its mark in the accent. */
 .hx.kind-core {
   --face: #2a2f31;
   --edge: var(--t-accent, #f2c230);
-  --icon: var(--t-accent, #f2c230);
 }
 
 .hx.kind-core .hx-edge {
@@ -338,27 +315,21 @@
   height: 56px;
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   background: color-mix(in srgb, var(--cc) 14%, #1d2123);
-  color: #8e948f;
 }
 
 .hb-card.unlocked .hb-card-icon {
   background: var(--cc);
-  color: #0d0f10;
 }
 
-.hb-card-icon svg {
-  width: 30px;
-  height: 30px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* The core's: steel, its mark in the accent, as on the board. */
+.hb-card.sk-core .hb-card-icon {
+  background: #2a2f31;
 }
 
-.hb-card-icon svg .fill {
-  fill: currentColor;
-  stroke: none;
+/* Its silhouette, from the board's atlas (boardIcons.ts boardIconStyle). */
+.hb-card-icon i {
+  width: 34px;
+  height: 34px;
 }
 
 .hb-card-name {
@@ -394,56 +365,9 @@
   color: #eef0ea;
 }
 
-.hb-card-needs {
-  display: grid;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 13px;
-}
-
-.hb-card-needs li {
-  display: flex;
-  gap: 7px;
-}
-
-.hb-card-needs li::before {
-  content: '';
-  flex: none;
-  width: 9px;
-  height: 9px;
-  margin-top: 4px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 2px currentColor;
-}
-
-.hb-card-needs .ok {
-  color: var(--x-good, #8fd05a);
-}
-
-.hb-card-needs .ok::before {
-  background: currentColor;
-}
-
-.hb-card-needs .miss {
-  color: var(--x-muted, #a1a79d);
-}
-
-.hb-card-status {
+/* With no points, on an unlocked cell of one's own: a quiet word, not a rule. */
+.hb-card-note {
   margin: 2px 0 0;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.hb-card-status.go {
-  color: var(--t-accent, #f2c230);
-}
-
-.hb-card-status.done {
-  color: var(--x-good, #8fd05a);
-}
-
-.hb-card-status.no {
+  font-size: 12.5px;
   color: var(--x-muted, #a1a79d);
 }

@@ -39,7 +39,7 @@ import {
   weaponTier,
 } from './progression';
 import { broughtBack, type CarriedWeapon, type LootTotals } from './loot';
-import { fighterStats, learn, NO_GROWTH, NO_SKILLS, oneMoreBar, recruitSkills, totalBars, unlockBlocker, veterancyRank, VETERANCY, type BarFilled, type Deeds, type Growth, type Skills } from './skills';
+import { fighterStats, learn, missionLines, NO_GROWTH, NO_SKILLS, oneMoreBar, recruitSkills, totalBars, unlockBlocker, veterancyRank, VETERANCY, type BarFilled, type Deeds, type Growth, type Skills } from './skills';
 import { BOARD_CELLS, type CellId } from './board';
 import {
   barLine,
@@ -295,7 +295,7 @@ export const FIXED_BUILDINGS: Readonly<Record<FixedBuildingId, Vec2>> = {
 export const FIXED_NAMES: Record<FixedBuildingId, string> = {
   command: 'Búnker de mando',
   barracks: 'Cuartel',
-  research: 'Diario',
+  research: 'Sala de radio',
   engineering: 'Armería',
 };
 
@@ -1712,7 +1712,7 @@ function refreshStory(c: CampaignState, rng: Rng): void {
     } else if (!c.offers.some((o) => o.story === next)) {
       const offer = makeStoryOffer(c, next, rng);
       c.offers.push(offer);
-      log(c, `Diario: nueva misión de historia, ${offer.name}.`, 'good');
+      log(c, `Nueva misión de historia: ${offer.name}.`, 'good');
     }
   }
   if (c.story.done >= STORY.length && hasTech(c, 'signal') && !c.offers.some((o) => o.final)) {
@@ -1737,12 +1737,26 @@ export interface MissionInfo {
   itemOutdoors?: boolean;
   vipName?: string;
   leader?: { template: TemplateId; name: string };
+  /** Still winter (playtest 16/10): the mission under snow. */
+  snow?: boolean;
+}
+
+/**
+ * Story chapters won after which the winter is over and the missions lose
+ * their snow (playtest 16/10): three, so it ends with the sirena of chapter 3;
+ * the Marea comes with the thaw, and chapter 4 finds it out.
+ */
+export const THAW_AFTER_STORY = 3;
+
+/** Whether it is still winter in the campaign: until the story says it is over. */
+export function wintry(c: Pick<CampaignState, 'story'>): boolean {
+  return c.story.done < THAW_AFTER_STORY;
 }
 
 export function missionInfo(c: CampaignState, offer: MissionOffer): MissionInfo {
   const info = ownInfo(c, offer);
   // An ordinary rescue's hostage and a sabotage's alarm, chosen with the offer (playtest 2026-10-15, #14, #20).
-  return { ...info, ...(info.vipName || !offer.vip ? {} : { vipName: offer.vip }), ...(offer.alarm ? { alarm: offer.alarm } : {}) };
+  return { ...info, ...(info.vipName || !offer.vip ? {} : { vipName: offer.vip }), ...(offer.alarm ? { alarm: offer.alarm } : {}), ...(wintry(c) ? { snow: true } : {}) };
 }
 
 /** What the story, a side quest or an ordinary Botín say of an operation. */
@@ -3216,6 +3230,8 @@ export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
     mags: spareMags(c),
     // The Chapistería: one more backpack slot (docs/FASE8.md §C).
     ...(facilityLevel(c, 'garage') ? { packSlots: BACKPACK_SLOTS + 1 } : {}),
+    // Its bars fill out there, with what the Taller de oficios adds (docs/FASE10.md §2).
+    lines: missionLines(s.skills, s.growth, learningBonus(c)),
   };
 }
 
@@ -3351,7 +3367,8 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       entry.woundedDays = s.woundedDays;
     }
     // What it did teaches it (docs/FASE10.md §3): more with the Taller de oficios, and the Camposanto at 3 after losses.
-    const taught = learn(s.skills, s.growth, u.deeds, rng, learningBonus(c) + (mourning ? LEARNING_BONUS : 0));
+    // The bars filled out there keep what they rolled; the Camposanto's share, known only now, may fill more.
+    const taught = learn(s.skills, s.growth, u.deeds, rng, learningBonus(c) + (mourning ? LEARNING_BONUS : 0), u.lines);
     for (const bar of taught.bars) log(c, barLine(s.name, bar.skill, bar.growth), 'good');
     entry.learned = taught.gained;
     entry.deeds = { ...(u.deeds ?? {}) };

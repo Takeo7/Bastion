@@ -8,115 +8,109 @@
 
 .sk-rows {
   display: grid;
-  gap: 4px;
+  gap: 7px;
 }
 
+/* A line: its name (what its bars added, small), then its bar in segments and what filling it gives. */
 .sk-row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto 42px;
-  grid-template-rows: auto 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 8px;
   row-gap: 3px;
 }
 
-.sk-row .sk-row-level {
-  grid-row: 1 / 3;
-}
-
-.sk-row .sk-row-gauge {
-  grid-column: 2 / 4;
-  grid-row: 2;
-}
-
-.sk-row .sk-row-grown {
-  grid-column: 4;
-  grid-row: 1 / 3;
-}
-
-.sk-row-level {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--cc);
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1;
-  color: #0d0f10;
-}
-
 .sk-row-name {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.sk-row-gauge {
-  height: 6px;
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--cc) 18%, rgba(0, 0, 0, 0.45));
-  box-shadow: var(--m-sink, inset 0 1px 2px rgba(0, 0, 0, 0.6));
-  overflow: hidden;
+.sk-row-name small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cc);
 }
 
-.sk-row-gauge i {
-  display: block;
-  width: calc(var(--p) * 100%);
-  height: 100%;
+.sk-row-dot {
+  width: 9px;
+  height: 9px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   background: var(--cc);
 }
 
-.sk-row-xp {
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--x-muted);
-}
-
-/* The four levels in a list of soldiers: four figures, each in its skill's colour; a 0 barely there. */
-.sk-digits {
-  display: inline-flex;
+/* A bar in segments: one per point of experience it asks, the full ones lit (playtest 16/10 #15). */
+.segs {
+  display: flex;
   gap: 1px;
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+  height: 8px;
+  min-width: 0;
 }
 
-.sk-digits b {
-  display: grid;
-  place-items: center;
-  width: 8px;
-  height: 16px;
+.segs i {
+  flex: 1 1 0;
+  min-width: 1px;
   border-radius: 1px;
-  background: color-mix(in srgb, var(--cc) 24%, rgba(0, 0, 0, 0.35));
-  color: var(--cc);
+  background: color-mix(in srgb, var(--cc, #c9cdc8) 24%, #15191b);
 }
 
-.sk-digits b.none {
-  background: rgba(0, 0, 0, 0.25);
-  color: rgba(255, 255, 255, 0.22);
+.segs i.on {
+  background: var(--cc, #c9cdc8);
 }
 
-/* What the line's bars added to its stat. */
-.sk-row-grown {
-  font-size: 12px;
+/* What filling it gives, at its end (#16). */
+.sk-row-gives {
+  font-size: 11.5px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--cc);
+  white-space: nowrap;
+  color: var(--x-muted);
+  cursor: help;
 }
 
-.sk-row-grown.none {
-  color: var(--x-muted);
-  opacity: 0.6;
+/* The veterancy's bar: its name, the points of this rank in segments, what the next gives. */
+.sk-vet-bar {
+  --cc: var(--t-accent, #f2c230);
+  display: grid;
+  grid-template-columns: auto minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.sk-vet-bar b {
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t-accent, #f2c230);
+}
+
+.sk-vet-bar .segs {
+  height: 10px;
+  gap: 3px;
+}
+
+/* A soldier's role in the lists: a hexagon of its colour; hollow before it has any. */
+.role-dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: var(--cc);
+  vertical-align: -1px;
+}
+
+.role-dot.none {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px rgba(201, 205, 200, 0.4);
+  clip-path: none;
+  border-radius: 50%;
 }
 
 /* The veterancy: a plate of its own under the bars. */
@@ -130,22 +124,7 @@
   box-shadow: var(--m-sink), inset 3px 0 0 var(--t-accent, #f2c230);
 }
 
-.sk-vet-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.sk-vet-head b {
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--t-accent, #f2c230);
-}
-
-.sk-vet-points {
+.sk-vet-gives {
   font-size: 12px;
   color: var(--x-muted);
 }
@@ -154,16 +133,6 @@
   font-size: 12.5px;
   font-style: italic;
   color: #d9dcd6;
-}
-
-.sk-vet-gives,
-.sk-vet-next {
-  font-size: 12px;
-  color: var(--x-muted);
-}
-
-.sk-vet-next {
-  color: var(--x-good);
 }
 
 /* A talent kept, on the sheet: its skill's colour on its edge. */
@@ -259,25 +228,9 @@
   color: var(--t-accent, #f2c230);
 }
 
-.hb-lines {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
 
-.hb-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: color-mix(in srgb, var(--cc) 70%, #fff);
-}
-
-.hb-line i {
-  width: 9px;
-  height: 9px;
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-  background: var(--cc);
+/* In the board's head, the veterancy's bar takes the room between the name and the points. */
+.hb-head .sk-vet-bar {
+  flex: 1 1 260px;
+  max-width: 440px;
 }

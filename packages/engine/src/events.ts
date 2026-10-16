@@ -1,9 +1,9 @@
 import { BAD_LUCK_MISSES } from './aim';
-import { ABILITIES, apPerTurn, attackWeapon, conditionOf, firesPrimary, wearOf, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, reloadWeapon, TEMPLATES, THROWN, WEAPONS } from './content';
+import { ABILITIES, addMods, apPerTurn, attackWeapon, conditionOf, firesPrimary, wearOf, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, ITEMS, reloadWeapon, TEMPLATES, THROWN, WEAPONS } from './content';
 import { decorCode } from './decor';
 import { getUnit, nodeOf, tileIndex } from './grid';
 import { packSlots } from './loot';
-import type { DeedId } from './skills';
+import { growthDelta, type DeedId, type SkillId } from './skills';
 import type {
   AbilityId,
   AttackAbility,
@@ -66,6 +66,8 @@ export type GameEvent =
   | { t: 'hunker'; unit: string }
   /** A stone thrown at `target` (docs/FASE10.md §4); `hit`, who was standing there. */
   | { t: 'stoneThrown'; unit: string; target: Pos; hit: string | null }
+  /** A bar filled out there (docs/FASE10.md §2): its line's stat goes up `growth` percent at once. `filled`, the bars of that line now. */
+  | { t: 'barFilled'; unit: string; skill: SkillId; filled: number; growth: number }
   | { t: 'reload'; unit: string }
   | { t: 'explosive'; unit: string; ability: BlastAbility; target: Pos }
   | { t: 'healed'; unit: string; target: string; amount: number }
@@ -101,6 +103,9 @@ export type GameEvent =
   | { t: 'evacCalled'; slot: Slot; unit: string }
   /** The partner said no: everyone stays. */
   | { t: 'evacRefused'; slot: Slot }
+  /** A player asks to abandon the mission; the partner answers (playtest 16/10), as with the bus. */
+  | { t: 'abandonCalled'; slot: Slot }
+  | { t: 'abandonRefused'; slot: Slot }
   /** The bus leaves: `evacuated` for whoever is in it and `leftBehind` for the rest follow. */
   | { t: 'evacDeparted' }
   /** Not in the bus when it left: lost (docs/PRUEBA-2026-10-14.md P1). */
@@ -153,6 +158,8 @@ export type GameEvent =
   | { t: 'medicineUsed'; unit: string; target: string; index: number }
   /** A weapon from the backpack taken in hand (or at the belt), for an action: the one it replaces goes into the backpack, or to the floor. */
   | { t: 'weaponEquipped'; unit: string; index: number }
+  /** A vest from the backpack put on (playtest 16/10 #18): its health at once, the new points full. */
+  | { t: 'vestWorn'; unit: string; index: number }
   /** A bite's contagion stopped (docs/FASE8.md §C). */
   | { t: 'cured'; unit: string; by: string }
   /** Apaños (docs/FASE9.md): `amount` of condition back to the weapon in `target`'s hand. */
@@ -367,6 +374,19 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       s.blow = { unit: e.unit, kind: 'blast' };
       deed(s, e.unit, 'throw');
       break;
+    case 'barFilled': {
+      const u = unit(s, e.unit);
+      if (!u.lines) break;
+      const before = u.lines.growth[e.skill];
+      u.lines.growth[e.skill] = before + e.growth;
+      (u.lines.rolls[e.skill] ??= []).push(e.growth);
+      // Its stat, at once: health too, the new points full.
+      const delta = growthDelta(e.skill, before, before + e.growth);
+      u.mods = addMods(u.mods, delta.mods);
+      u.maxHp += delta.hp;
+      u.hp += delta.hp;
+      break;
+    }
     case 'reload': {
       const u = unit(s, e.unit);
       reloadWeapon(u);
@@ -520,6 +540,12 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     case 'evacRefused':
       delete s.evacCall;
+      break;
+    case 'abandonCalled':
+      s.abandonCall = { by: e.slot };
+      break;
+    case 'abandonRefused':
+      delete s.abandonCall;
       break;
     case 'evacDeparted':
       delete s.evacCall;
@@ -689,6 +715,16 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       u.ap = Math.max(0, u.ap - 1);
       const [loot] = u.backpack!.splice(e.index, 1);
       equipWeapon(s, u, loot);
+      break;
+    }
+    case 'vestWorn': {
+      const u = unit(s, e.unit);
+      u.ap = Math.max(0, u.ap - 1);
+      const [loot] = u.backpack!.splice(e.index, 1);
+      const hp = ITEMS[loot!.item!].hp ?? 0;
+      u.maxHp += hp;
+      u.hp += hp;
+      (u.worn ??= []).push(loot!.item!);
       break;
     }
     case 'roomSearched': {

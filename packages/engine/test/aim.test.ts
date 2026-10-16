@@ -49,7 +49,7 @@ describe('hit chance (XCOM 2 formula)', () => {
     const shooter = addUnit(s, 'a1', 'trooper', 1, 0);
     const target = addUnit(s, 's1', 'specialist', 1, 10, { hunkered: true });
     const p = previewShot(s, shooter, target)!;
-    expect(p.mods.find((m) => m.label === 'Agazapado')?.value).toBe(-30);
+    expect(p.mods.find((m) => m.label === 'Cubriéndose')?.value).toBe(-30);
     expect(p.graze).toBeGreaterThan(0);
   });
 });

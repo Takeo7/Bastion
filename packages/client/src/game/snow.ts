@@ -6,8 +6,9 @@ import { STOREY } from './coords';
 import { extendShader } from './fogOfWar';
 
 /** The winter described by the opening chapter, independent of map seed or biome. */
-export function snowyMission(s: Pick<GameState, 'campaignMission'>): boolean {
-  return s.campaignMission?.story === 1;
+export function snowyMission(s: Pick<GameState, 'campaignMission' | 'snow'>): boolean {
+  // Still winter in the campaign (the engine says so, playtest 16/10); before it did, only the opening chapter.
+  return s.snow ?? s.campaignMission?.story === 1;
 }
 
 let texture: THREE.Texture | null = null;

@@ -2113,7 +2113,7 @@ dl.briefing {
 
 /* Soldiers: class, name, chevrons, state, all on one line. */
 .x-row.soldier {
-  grid-template-columns: 4px 56px 1fr auto auto;
+  grid-template-columns: 4px 14px 1fr auto auto;
 }
 
 .x-row.soldier .cls {
@@ -2541,7 +2541,7 @@ dl.x-pairs dd {
 }
 
 .x-row.soldier {
-  grid-template-columns: 4px 56px 1fr auto auto;
+  grid-template-columns: 4px 14px 1fr auto auto;
 }
 
 /* Recruiting: the whole class name, two per row. */

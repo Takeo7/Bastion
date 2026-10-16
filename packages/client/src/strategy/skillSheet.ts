@@ -1,8 +1,13 @@
 import './skillSheet.css';
 import {
   barLine,
+  barReward,
   barsOf,
   BOARD_ABOUT,
+  boardRole,
+  rankReward,
+  RANK_STEP,
+  THIRD_ACTION_RANK,
   displayName,
   learnedLine,
   pointsLeft,
@@ -50,16 +55,14 @@ export const vetName = (rank: number, female = false) => (female ? VETERANCY[ran
 
 // ------------------------------------------------------------------ the lists
 
-/** A soldier's bars filled in each line, at a glance, each in its colour, for the lists of soldiers. */
-export function skillDigits(skills: Skills): HTMLElement {
-  return h(
-    'span.sk-digits',
-    { title: SKILL_IDS.map((id) => `${SKILLS[id].name}: ${barsOf(skills[id]).filled}`).join(' · ') },
-    ...SKILL_IDS.map((id) => {
-      const n = barsOf(skills[id]).filled;
-      return h(`b.sk-${id}${n ? '' : '.none'}`, {}, String(n));
-    }),
-  );
+/**
+ * A soldier's role (playtest 16/10 #14): a dot in the colour of the line it
+ * has bought most cells of on its board (board.ts boardRole); a hollow one
+ * before it has bought any. No figures by the names.
+ */
+export function roleDot(board: readonly CellId[]): HTMLElement {
+  const role = boardRole(board);
+  return h(`span.role-dot${role ? `.sk-${role}` : '.none'}`, { title: role ? `Rol: ${SKILLS[role].name}` : 'Sin rol todavía: no ha seleccionado nada en el tablero' });
 }
 
 /** The veterancy as the packs' rank badge (one per step past Novato, none for a Novato), its name on hover. */
@@ -71,40 +74,58 @@ export function veterancyBadge(board: readonly CellId[], female = false): HTMLEl
 
 // ------------------------------------------------------------------ the sheet
 
-/** A line's row: the bars filled, its name, a gauge of the bar being filled with its experience, and what the bars added. */
+/** A bar in segments (playtest 16/10 #15): as many as `need`, the first `into` of them full; no figures. */
+function segments(need: number, into: number): HTMLElement {
+  return h('span.segs', { 'aria-label': `${into} de ${need}` }, ...Array.from({ length: need }, (_, i) => h(`i${i < into ? '.on' : ''}`)));
+}
+
+/**
+ * A line's row: its name (and what its bars have added to its stat, small),
+ * the bar being filled in segments, and at its end what filling it gives
+ * (Lore's barReward, #16).
+ */
 function barRow(s: SkillsOf, id: SkillId): HTMLElement {
   const def = SKILLS[id];
-  const { filled, into, need } = barsOf(s.skills[id]);
+  const { into, need } = barsOf(s.skills[id]);
   const grown = s.growth[id] ?? 0;
+  const reward = barReward(id);
   return h(
     `div.sk-row.sk-${id}`,
-    { title: `${def.line}\n${def.stat}: +${grown} % con ${filled === 1 ? 'la barra llena' : `las ${filled} barras llenas`}.` },
-    h('b.sk-row-level', { title: 'Barras llenas' }, String(filled)),
-    h('span.sk-row-name', {}, def.name),
-    h('span.sk-row-gauge', {}, h('i', { style: { '--p': (into / need).toFixed(3) } })),
-    h('small.sk-row-xp', {}, `${into}/${need}`),
-    h(`small.sk-row-grown${grown ? '' : '.none'}`, { title: def.stat }, grown ? `+${grown} %` : '—'),
+    { title: def.line },
+    h('span.sk-row-name', {}, h('i.sk-row-dot'), def.name, grown ? h('small', { title: def.stat }, ` +${grown} %`) : null),
+    segments(need, into),
+    h('small.sk-row-gives', { title: reward.long }, reward.short),
   );
 }
 
 /**
- * The veterancy (Arturo, 16/10): it rises with the points spent on the board,
- * a rank every RANK_STEP; its name and those points, the will it gives, and
- * how many more points on the board the next rank asks for.
+ * The veterancy as a bar (Arturo, 16/10: a rank every RANK_STEP points spent
+ * on the board): its name, the points of this rank in segments, and at its
+ * end what the next rank gives (Lore's rankReward); full at the top.
  */
-function veterancyEl(s: SkillsOf): HTMLElement {
-  const spent = s.board.length;
+export function veterancyBar(board: readonly CellId[], female = false): HTMLElement {
+  const spent = board.length;
   const rank = veterancyRank(spent);
-  const def = VETERANCY[rank]!;
-  const next = VETERANCY[rank + 1];
-  const left = next ? next.from - spent : 0;
+  const reward = rankReward(rank, female ? 'f' : 'm');
+  const into = reward ? spent - VETERANCY[rank]!.from : RANK_STEP;
+  return h(
+    'div.sk-vet-bar',
+    { title: 'La veteranía sube con los puntos gastados en el tablero: un rango cada 5.' },
+    h('b', {}, vetName(rank, female)),
+    segments(RANK_STEP, into),
+    h('small.sk-row-gives', { title: reward?.long ?? 'No hay rango más alto.' }, reward?.short ?? 'Rango máximo'),
+  );
+}
+
+/** The veterancy on the sheet: its bar, its line, and what it gives now. */
+function veterancyEl(s: SkillsOf): HTMLElement {
+  const rank = veterancyRank(s.board.length);
   return h(
     'div.sk-vet',
-    { title: 'La veteranía sube con los puntos gastados en el tablero: un rango cada 5. Cada rango, +10 de voluntad. Desde Veterano, la tercera acción.' },
-    h('div.sk-vet-head', {}, h('b', {}, vetName(rank, s.female)), h('span.sk-vet-points', {}, `${spent} ${spent === 1 ? 'punto' : 'puntos'} en el tablero`)),
-    h('small.sk-vet-line', {}, def.line),
-    h('small.sk-vet-gives', {}, `Voluntad ${veteranWill(rank)} · ${rank >= 3 ? 3 : 2} acciones por turno · ${totalBars(s.skills)} ${totalBars(s.skills) === 1 ? 'barra llena' : 'barras llenas'}`),
-    next ? h('small.sk-vet-next', {}, `${left} ${left === 1 ? 'punto más' : 'puntos más'} en el tablero para ${vetName(rank + 1, s.female)}${rank + 1 === 3 ? ': la tercera acción' : ''}.`) : null,
+    {},
+    veterancyBar(s.board, s.female),
+    h('small.sk-vet-line', {}, VETERANCY[rank]!.line),
+    h('small.sk-vet-gives', {}, `Voluntad ${veteranWill(rank)} · ${rank >= THIRD_ACTION_RANK ? 3 : 2} acciones por turno`),
   );
 }
 
@@ -122,7 +143,7 @@ export function skillsBlock(s: SkillsOf, mine: boolean, onOpen: () => void): HTM
     h(
       `button.x-btn${points && mine ? '.primary.waiting' : ''}`,
       { onclick: onOpen },
-      points ? `Tablero de habilidades · ${points === 1 ? 'un punto' : `${points} puntos`}` : 'Tablero de habilidades',
+      points ? `Tablero de habilidades · ${points === 1 ? 'un punto' : `${points} puntos`} por gastar` : 'Tablero de habilidades',
     ),
   ];
 }
@@ -169,7 +190,7 @@ export interface TreePanelContext {
   s: SkillsOf;
   /** The viewer's own soldier, alive: it can unlock. */
   editable: boolean;
-  /** Whose soldier, for «Solo Ana puede desbloquearla». */
+  /** Whose soldier, for «Solo Ana puede seleccionarla». */
   owner: string;
   /** Its bust (portraits.ts), by its name; the frame stays empty until it is drawn. */
   portrait: Promise<string> | null;
@@ -201,14 +222,9 @@ export function treePanel(ctx: TreePanelContext): HTMLElement {
       {},
       bust,
       h('h2.x-title', {}, s.name),
-      h(`span.hb-points${points ? '.some' : ''}`, { title: 'Se gana un punto cada vez que se llena una barra' }, h('b', {}, String(points)), points === 1 ? ' punto' : ' puntos'),
-      h(
-        'span.hb-lines',
-        {},
-        ...SKILL_IDS.map((id) => h(`span.hb-line.sk-${id}`, { title: `${SKILLS[id].name}: ${barsOf(s.skills[id]).filled} barras llenas` }, h('i'), `${SKILLS[id].short} ${barsOf(s.skills[id]).filled}`)),
-      ),
+      veterancyBar(s.board, s.female),
+      h(`span.hb-points${points ? '.some' : ''}`, { title: 'Un punto de habilidad cada vez que se llena una barra' }, h('b', {}, String(points)), points === 1 ? ' punto por gastar' : ' puntos por gastar'),
     ),
-    h('p.service-help', {}, ctx.editable ? 'Pasa el cursor por una casilla para leerla. Mantenla pulsada un segundo para desbloquearla. Arrastra para moverte y usa la rueda para acercarte.' : `Es de ${ctx.owner}: puedes leerlo, pero solo lo desbloquea quien lo lleva.`),
     board.el,
     h('div.alert-actions', {}, h('button.x-btn', { onclick: ctx.onClose }, 'Cerrar')),
   );

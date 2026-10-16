@@ -171,7 +171,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   if (target.mods.pairDefense && partnerNear(s, target, target.pos)) mods.push({ label: 'Parapeto', value: -target.mods.pairDefense });
   if (cover === 1) mods.push({ label: 'Cobertura baja', value: -LOW_COVER_BONUS });
   if (cover === 2) mods.push({ label: 'Cobertura alta', value: -HIGH_COVER_BONUS });
-  if (target.hunkered) mods.push({ label: 'Agazapado', value: -HUNKER_DEFENSE });
+  if (target.hunkered) mods.push({ label: 'Cubriéndose', value: -HUNKER_DEFENSE });
   if (target.aided) mods.push({ label: 'Atendido', value: -target.aided });
   if (!weapon.melee && !shooter.mods.smokeSight && s.smoke.some((c) => distance(c.pos, target.pos) <= c.radius && sameSpace(s, c.pos, target.pos))) mods.push({ label: 'Humo', value: -SMOKE_DEFENSE });
 

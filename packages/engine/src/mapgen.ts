@@ -2904,6 +2904,111 @@ function woods(c: Canvas, rng: Rng, objCentre: Vec2, most = { hills: 3, outcrops
 
 // ------------------------------------------------------------ connectivity
 
+/** What may be cleared to open a dead end outdoors: one-tile things that grow or lie about, never a car, the bus or a wall. */
+const SOFT: ReadonlySet<DecorKind> = new Set<DecorKind>(['tree', 'bush', 'rock', 'streetTree', 'planter', 'bin', 'fence', 'wire', 'crates', 'barricade', 'pallets', 'drums', 'rubble']);
+
+/**
+ * Opens the dead ends out of doors (playtest 16/10 #20: «muchos caminos
+ * acaban en callejones, incluso entre árboles»): a tile of open ground with
+ * a single way in loses the tree, bush or crate that closes it, straight
+ * ahead first, if past it the way goes on. Where nothing lies past it (a
+ * notch in a wood), the notch grows over instead, tile by tile, with what
+ * closes it; and so do the little holes in a wood nobody could reach, before
+ * connect() carves a lane to them that would lead nowhere. Walls and what
+ * stands over several tiles stay: an alley between two buildings is still
+ * one. The ways in and out are the movement rules' (a drop, a ladder).
+ */
+function openDeadEnds(c: Canvas, start: Vec2): void {
+  const s = c.asState();
+  const walk = (x: number, y: number, e: number) => c.in(x, y) && isWalkable(c.get(x, y)) && c.elevAt(x, y) === e;
+  // A step either way (a drop goes one way only); stepCost looks at the tile it goes to, so the other must be walkable too.
+  const linked = (x: number, y: number, d: Vec2) =>
+    c.in(x + d.x, y + d.y) && isWalkable(c.get(x + d.x, y + d.y)) && (stepCost(s, x, y, d.x, d.y) !== null || stepCost(s, x + d.x, y + d.y, -d.x, -d.y) !== null);
+  const soft = (x: number, y: number) => {
+    if (!c.in(x, y) || c.keep[c.i(x, y)] || c.groundAt(x, y) === INDOOR) return false;
+    const kind = c.get(x, y);
+    if (kind !== 'low' && kind !== 'high') return false;
+    // Unnamed low clutter is soft too; an unnamed tall block may be part of a lorry or a tower.
+    const look = decorOf(c.decor[c.i(x, y)]!);
+    return look ? SOFT.has(look.kind) : kind === 'low';
+  };
+  const LOOT: ReadonlySet<DecorKind> = new Set<DecorKind>(['lootWeapons', 'lootMedical', 'lootAmmo', 'lootFood']);
+  const keepsOpen = (x: number, y: number) =>
+    c.keep[c.i(x, y)] ||
+    c.groundAt(x, y) !== OPEN ||
+    DIRS8.some((d) => {
+      const nx = x + d.x;
+      const ny = y + d.y;
+      if (!c.in(nx, ny)) return false;
+      const kind = c.get(nx, ny);
+      const look = decorOf(c.decor[c.i(nx, ny)]!);
+      return kind === 'door' || kind === 'doorOpen' || kind === 'window' || kind === 'windowBroken' || kind === 'ladder' || kind === 'console' || (!!look && LOOT.has(look.kind));
+    });
+  /** Grows `p` over with what closes it, if only wood, bush and the like, the map's edge or a drop do. */
+  const growOver = (x: number, y: number, ways: Vec2[]): boolean => {
+    const sides = DIRS4.filter((d) => !ways.includes(d)).map((d) => ({ x: x + d.x, y: y + d.y }));
+    const growth = sides.filter((p) => soft(p.x, p.y));
+    const drop = (p: Vec2) => !c.in(p.x, p.y) || isWalkable(c.get(p.x, p.y));
+    if (!growth.length || growth.length + sides.filter(drop).length < sides.length) return false;
+    const like = growth[0]!;
+    c.force(x, y, c.get(like.x, like.y));
+    c.decor[c.i(x, y)] = c.decor[c.i(like.x, like.y)]!;
+    return true;
+  };
+  // Holes in a wood out of everyone's reach, a few tiles at most: grown over, not joined.
+  const reach = flood(c, start);
+  const done = new Set<number>();
+  for (let i = 0; i < c.tiles.length; i++) {
+    if (reach.has(i) || done.has(i) || !isWalkable(c.tiles[i]!)) continue;
+    const x = i % c.width;
+    const hole = [...flood(c, { x, y: (i - x) / c.width }, (j) => !reach.has(j))];
+    for (const j of hole) done.add(j);
+    const tiles = hole.map((j) => ({ x: j % c.width, y: Math.floor(j / c.width) }));
+    if (hole.length > HOLE_MAX || tiles.some((p) => c.get(p.x, p.y) !== 'floor' || keepsOpen(p.x, p.y))) continue;
+    for (let pass = 0; pass < HOLE_MAX; pass++) {
+      for (const p of tiles) if (c.get(p.x, p.y) === 'floor') growOver(p.x, p.y, DIRS4.filter((d) => linked(p.x, p.y, d)));
+    }
+  }
+  for (let pass = 0; pass < 4; pass++) {
+    let opened = 0;
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        if (c.get(x, y) !== 'floor' || c.groundAt(x, y) === INDOOR) continue;
+        const e = c.elevAt(x, y);
+        const ways = DIRS4.filter((d) => linked(x, y, d));
+        if (ways.length !== 1) continue;
+        const back = ways[0]!;
+        const ahead = DIRS4.find((d) => d.x === -back.x && d.y === -back.y)!;
+        for (const d of [ahead, ...DIRS4.filter((o) => o !== back && o !== ahead)]) {
+          const q = { x: x + d.x, y: y + d.y };
+          if (!soft(q.x, q.y) || c.elevAt(q.x, q.y) !== e) continue;
+          if (!DIRS4.some((o) => !(q.x + o.x === x && q.y + o.y === y) && walk(q.x + o.x, q.y + o.y, e))) continue;
+          c.force(q.x, q.y, 'floor');
+          c.decor[c.i(q.x, q.y)] = 0;
+          opened++;
+          break;
+        }
+      }
+    }
+    if (!opened) break;
+  }
+  // What couldn't be opened, being only wood or bush all round, grows over (nothing to reach there).
+  for (let pass = 0; pass < 12; pass++) {
+    let grown = 0;
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        if (c.get(x, y) !== 'floor' || keepsOpen(x, y)) continue;
+        const ways = DIRS4.filter((d) => linked(x, y, d));
+        if (ways.length === 1 && growOver(x, y, ways)) grown++;
+      }
+    }
+    if (!grown) return;
+  }
+}
+
+/** The biggest hole in a wood grown over rather than joined to the rest. */
+const HOLE_MAX = 6;
+
 /** Walkable tiles reachable from `start`, following the movement rules. */
 function flood(c: Canvas, start: Vec2, within?: (i: number) => boolean): Set<number> {
   const s = c.asState();
@@ -2939,15 +3044,19 @@ function linkTile(c: Canvas, i: number, reach: Set<number>): boolean {
       return true;
     }
     if (c.elevAt(n.x, n.y) !== level || isWalkable(kind)) continue;
-    // A blocking object (or a wall: a new door), one or two tiles thick.
+    // A blocking object (or a wall: a new door), one or two tiles thick: wood, bush or clutter, never part of a lorry or a tower.
+    const clearable = (p: Vec2) => {
+      const k = c.get(p.x, p.y);
+      const look = decorOf(c.decor[c.i(p.x, p.y)]!);
+      return (k === 'low' || k === 'high') && (look ? SOFT.has(look.kind) : k === 'low');
+    };
     const beyond = add(n, d);
-    if (reached(beyond) && c.elevAt(beyond.x, beyond.y) === level) {
+    if (reached(beyond) && c.elevAt(beyond.x, beyond.y) === level && (kind === 'wall' || clearable(n))) {
       c.force(n.x, n.y, kind === 'wall' ? 'door' : 'floor');
       return true;
     }
     const further = add(beyond, d);
-    const clearable = (k: TileKind) => k === 'low' || k === 'high';
-    if (clearable(kind) && clearable(c.get(beyond.x, beyond.y)) && reached(further) && c.elevAt(beyond.x, beyond.y) === level && c.elevAt(further.x, further.y) === level) {
+    if (clearable(n) && clearable(beyond) && reached(further) && c.elevAt(beyond.x, beyond.y) === level && c.elevAt(further.x, further.y) === level) {
       c.force(n.x, n.y, 'floor');
       c.force(beyond.x, beyond.y, 'floor');
       return true;
@@ -2981,7 +3090,10 @@ function carve(c: Canvas, pocket: Set<number>, reach: Set<number>): boolean {
           for (let t: number | undefined = i; t !== undefined && !pocket.has(t); t = prev.get(t)) if (!isWalkable(c.tiles[t]!)) c.tiles[t] = 'floor';
           return true;
         }
-        const step = isWalkable(kind) ? 0 : kind === 'low' || kind === 'high' ? 1 : -1;
+        // Through wood, bush and clutter first; through a lorry or a tower only if there is no other way.
+        const look = decorOf(c.decor[j]!);
+        const soft = look ? SOFT.has(look.kind) : kind === 'low';
+        const step = isWalkable(kind) ? 0 : kind === 'low' || kind === 'high' ? (soft ? 1 : 3) : -1;
         if (step < 0 || (cost.get(j) ?? Infinity) <= k + step) continue;
         cost.set(j, k + step);
         prev.set(j, i);
@@ -3152,9 +3264,13 @@ function placeLootBoxes(c: Canvas, seed: number): void {
   }
 }
 
-/** The bus: two tiles wide, eight long (a Town bus at the map's scale). */
+/**
+ * The bus: two tiles wide, five long, what La Mula covers drawn (Arte, 16/10:
+ * 1.52 × 5.12 tiles). It was eight long, and past its ends stood a wall
+ * nobody could see (playtest 16/10 #22).
+ */
 const BUS_W = 2;
-const BUS_L = 8;
+const BUS_L = 5;
 
 /**
  * Parks the bus beside the 3 × 3 evac `zone` (docs/PRUEBA-2026-10-14.md P1):
@@ -3647,8 +3763,9 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   // The bus waits beside it, drawn on its own seed so nothing else in the layout moves.
   const bus = evacZone.length ? parkBus(c, evacZone, new Rng(opts.seed ^ 0x6275)) : null;
   placeLootBoxes(c, opts.seed);
-
   const startTile = { x: 0, y: 0 };
+  openDeadEnds(c, startTile);
+
   const reach = connect(c, startTile);
   const taken = new Set<number>();
   const standable = (p: Vec2) => c.in(p.x, p.y) && reach.has(c.i(p.x, p.y)) && canStandOn(c.get(p.x, p.y)) && !taken.has(c.i(p.x, p.y));

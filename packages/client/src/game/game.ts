@@ -62,6 +62,12 @@ import {
   BITE_NO_BOARD,
   biteLossLine,
   biteNote,
+  ABANDON_TEXT,
+  ITEM_FINDS,
+  ITEMS,
+  abandonAsk,
+  abandonBarNotice,
+  abandonRefusedLine,
   EVAC_BAR,
   evacAsk,
   evacBarNotice,
@@ -71,6 +77,7 @@ import {
   evacRefusedLine,
   evacWaiting,
   evacWins,
+  proposalClock,
   getUnit,
   hackChance,
   hasAnyCover,
@@ -98,6 +105,8 @@ import {
   reachesToSearch,
   roomAt,
   roomSearchLine,
+  barLine,
+  barFillFloat,
   nodeOf,
   heightAt,
   kindAt,
@@ -179,9 +188,8 @@ interface QueuedEvent {
 /** A selectable target for the current ability. */
 interface TargetOption {
   unit: Unit;
-  /** Melee: tile the attacker will strike from, and the path to it. */
+  /** Melee: the tile it strikes from, where it stands (a blade never runs to its target, Arturo 16/10 #38). */
   tile?: Vec2;
-  path?: Vec2[];
 }
 
 type ShotEvent = Extract<GameEvent, { t: 'shot' }>;
@@ -254,13 +262,14 @@ const WALKERS_PACE = 1.25;
 const PLAYER_CAMERA_MS = 2500;
 /**
  * The bar's menus (docs/FASE10.md §4): their members in order, and which of
- * them to offer. Investigar offers the room, and the box only when there is
- * one beside (Registrar can be done).
+ * them to offer. Investigar offers the room, and the box whenever there is one
+ * beside (`crate`), off with its reason when it can't be opened now (playtest
+ * 16/10 #13: it only showed when it could).
  */
-const MENUS: { id: MenuId; name: string; icon: AbilityId; members: AbilityId[]; shows: (v: AbilityView) => boolean }[] = [
+const MENUS: { id: MenuId; name: string; icon: AbilityId; members: AbilityId[]; shows: (v: AbilityView, crate: boolean) => boolean }[] = [
   { id: 'menu:watch', name: 'Vigilancia', icon: 'overwatch', members: ['overwatch', 'overwatchMelee'], shows: () => true },
   { id: 'menu:throw', name: 'Lanzar', icon: 'stone', members: ['stone', 'grenade', 'smoke', 'flashbang'], shows: () => true },
-  { id: 'menu:investigate', name: 'Investigar', icon: 'searchRoom', members: ['searchRoom', 'search'], shows: (v) => v.id === 'searchRoom' || v.enabled },
+  { id: 'menu:investigate', name: 'Investigar', icon: 'searchRoom', members: ['searchRoom', 'search'], shows: (v, crate) => v.id === 'searchRoom' || crate },
 ];
 
 /** How a menu's choices read inside it (docs/FASE10.md §4): what the menu already says is left out. */
@@ -694,6 +703,7 @@ export class Game {
       onReturnToBase: () => this.net.send({ t: 'returnToBase' }),
       onBackToMenu: () => this.net.send({ t: 'backToMenu' }),
       onAbandon: () => this.net.send({ t: 'abandon' }),
+      abandonState: () => ({ partner: this.onlinePartner()?.name ?? null, waiting: this.state.abandonCall?.by === this.mySlot }),
       onPassCommand: () => this.passCommand(),
       onWatchPartner: () => this.watchPartner(),
       onMenu: () => this.hud.setAbilities(this.abilities()),
@@ -1395,6 +1405,17 @@ export class Game {
         await wait(0.5);
         return;
       }
+      case 'barFilled': {
+        // A bar filled out there (playtest 16/10 #10): its stat is already up (Unit.lines); seen over the soldier,
+        // the line's name and what it added on a bar that fills, and Lore's line in the log.
+        const u = getUnit(v, e.unit)!;
+        this.hud.log(barLine(u.name, e.skill, [e.growth]), '#6dff9a');
+        if (!this.shownToSquad(u)) return;
+        look(this.units.worldPos(u.id));
+        this.fx.floatBar(this.units.chestPos(u.id), barFillFloat(e.skill, e.growth), `sk-${e.skill}`);
+        await wait(1.1);
+        return;
+      }
       case 'stoneThrown': {
         // A stone (docs/FASE10.md §4): thrown underhand (Arte's tossStone), its low arc and its knock where it lands or
         // on whom it hits (fx.stone), and its sound out and in (Red's sfx). The `damaged` that follows a hit is its own.
@@ -1415,7 +1436,7 @@ export class Game {
         if (!this.shownToSquad(u)) return;
         look(this.units.worldPos(u.id));
         // The blade's watch (docs/FASE10.md §4) is said as such: on guard, not watching with a gun.
-        const text = e.t === 'hunker' ? 'AGAZAPADO' : e.killZone ? 'ZONA LETAL' : e.melee ? 'HOJA EN ALTO' : 'VIGILANCIA';
+        const text = e.t === 'hunker' ? 'CUBRIÉNDOSE' : e.killZone ? 'ZONA LETAL' : e.melee ? 'HOJA EN ALTO' : 'VIGILANCIA';
         this.fx.floatText(this.units.chestPos(u.id), text, 'info');
         if (e.t === 'hunker') this.sfx.hunker(this.units.worldPos(u.id));
         else this.sfx.overwatch(this.units.chestPos(u.id));
@@ -1745,6 +1766,19 @@ export class Game {
         await wait(0.3);
         return;
       }
+      // A vest found, put on out there (playtest 16/10): its health at once, seen on the soldier.
+      case 'vestWorn': {
+        const u = getUnit(v, e.unit)!;
+        const item = u.backpack?.[e.index]?.item;
+        look(this.units.worldPos(u.id));
+        if (item) {
+          const hp = ITEMS[item].hp ?? 0;
+          this.fx.floatText(this.units.chestPos(u.id), `+${hp} SALUD`, 'heal');
+          this.hud.log(`${u.name} se pone ${ITEM_FINDS[item]}: +${hp} de salud.`, '#6dff9a');
+        }
+        await wait(0.6);
+        return;
+      }
       // Leaving in La Mula (docs/PRUEBA-2026-10-14.md P1): one asks, the other answers, and the bus goes.
       case 'evacCalled': {
         const ask = evacAsk(this.playerName(e.slot), this.evacSituation(v));
@@ -1755,6 +1789,19 @@ export class Game {
       }
       case 'evacRefused': {
         const line = evacRefusedLine(this.playerName(e.slot));
+        this.hud.log(line, PLAYER_COLORS[e.slot]);
+        if (e.slot !== this.mySlot) this.hud.toast(line);
+        return;
+      }
+      // Abandoning with the partner there (playtest 16/10): as with the bus, one asks and the other answers on the bar.
+      case 'abandonCalled': {
+        const ask = abandonAsk(this.playerName(e.slot));
+        this.hud.log(ask, PLAYER_COLORS[e.slot]);
+        if (e.slot !== this.mySlot) this.hud.toast(abandonBarNotice(this.playerName(e.slot)));
+        return;
+      }
+      case 'abandonRefused': {
+        const line = abandonRefusedLine(this.playerName(e.slot));
         this.hud.log(line, PLAYER_COLORS[e.slot]);
         if (e.slot !== this.mySlot) this.hud.toast(line);
         return;
@@ -2821,7 +2868,7 @@ export class Game {
     const def = ABILITIES[ability];
     if (def.target === 'melee' && isAttack(ability)) {
       return meleeTargets(s, u, ability)
-        .map((o) => ({ unit: o.target, tile: o.tile, path: o.path, hit: previewShot(s, u, o.target, { ability, from: o.tile })?.hit ?? 0 }))
+        .map((o) => ({ unit: o.target, tile: o.tile, hit: previewShot(s, u, o.target, { ability, from: o.tile })?.hit ?? 0 }))
         .sort((a, b) => b.hit - a.hit);
     }
     if (def.target === 'enemy' && isAttack(ability)) {
@@ -2907,6 +2954,11 @@ export class Game {
 
   private useAbility(id: BarActionId): void {
     if (id === 'evac' || id === 'evacAccept' || id === 'evacRefuse') return this.useEvac(id);
+    if (id === 'abandon' || id === 'abandonAccept' || id === 'abandonRefuse') {
+      const call = this.state.abandonCall;
+      if (id !== 'abandon' && call && call.by !== this.mySlot && !this.state.outcome) this.net.send({ t: 'abandonAnswer', accept: id === 'abandonAccept' });
+      return;
+    }
     const u = this.selectedUnit();
     if (!u || !this.canAct()) return;
     if (isMenu(id)) return;
@@ -3090,9 +3142,9 @@ export class Game {
 
   private abilities(): AbilityView[] {
     const u = this.selectedUnit();
-    const evac = this.evacActions(u);
+    const evac = [...this.abandonActions(), ...this.evacActions(u)];
     if (!u || !this.isMine(u)) return evac;
-    return [...this.withMenus(this.soldierAbilities(u)), ...evac];
+    return [...this.withMenus(this.soldierAbilities(u), u), ...evac];
   }
 
   /**
@@ -3102,9 +3154,10 @@ export class Game {
    * Investigar (the room; the box too when there is one beside). The keys are
    * numbered again along the folded bar.
    */
-  private withMenus(views: AbilityView[]): AbilityView[] {
+  private withMenus(views: AbilityView[], u: Unit): AbilityView[] {
     const out: AbilityView[] = [];
     const done = new Set<MenuId>();
+    const crate = this.crateBeside(u);
     for (const v of views) {
       const menu = MENUS.find((m) => m.members.includes(v.id as AbilityId));
       if (!menu) {
@@ -3115,7 +3168,7 @@ export class Game {
       done.add(menu.id);
       const options = menu.members
         .map((id) => views.find((x) => x.id === id))
-        .filter((x): x is AbilityView => !!x && menu.shows(x))
+        .filter((x): x is AbilityView => !!x && menu.shows(x, crate))
         .map((o) => ({ ...o, label: MENU_LABELS[o.id as AbilityId] ?? o.label }));
       if (!options.length) continue;
       const usable = options.filter((o) => o.enabled);
@@ -3140,6 +3193,19 @@ export class Game {
     const watchAt = out.findIndex((v) => v.id === 'menu:watch');
     if (throwAt >= 0 && watchAt >= 0 && throwAt !== watchAt + 1) out.splice(watchAt + 1, 0, ...out.splice(throwAt, 1));
     return out.map((v, i) => ({ ...v, hotkey: i < 9 ? (v.id === 'shoot' ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '' }));
+  }
+
+  /** A box beside the soldier, opened or not, that its hands reach (loot.ts searchSpot, reachesToSearch). */
+  private crateBeside(u: Unit): boolean {
+    const s = this.state;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (!dx && !dy) continue;
+        const p = { x: u.pos.x + dx, y: u.pos.y + dy, z: u.pos.z };
+        if (searchSpot(s, p) && reachesToSearch(s, u.pos, p)) return true;
+      }
+    }
+    return false;
   }
 
   /** A view of the bar by its id, inside a menu too. */
@@ -3328,6 +3394,40 @@ export class Game {
     const now = performance.now();
     const p = this.players.find((q) => q.slot !== this.mySlot && (q.connected || now - (this.droppedAt.get(q.slot) ?? -Infinity) < RECONNECT_GRACE_MS));
     return p && this.state.units.some((u) => u.alive && u.team === 'xcom' && u.owner === p.slot) ? p : undefined;
+  }
+
+  /** The partner connected now: the one who has to say yes to abandoning (rules.ts callAbandon). */
+  private onlinePartner(): PlayerInfo | undefined {
+    return this.players.find((p) => p.slot !== this.mySlot && p.connected);
+  }
+
+  /**
+   * A call to abandon on the bar (playtest 16/10), like the bus's: the
+   * partner's «Abandonar» and «Seguir», on whatever turn it is; this player's
+   * own call, off and waiting, with the time left before it goes through.
+   */
+  private abandonActions(): AbilityView[] {
+    const call = this.state.abandonCall;
+    if (!call || this.state.outcome) return [];
+    const left = deadlineLeft('abandon');
+    const view = (id: BarActionId, name: string, description: string, extra: Partial<AbilityView> = {}): AbilityView => ({
+      id,
+      label: name,
+      hotkey: '',
+      enabled: true,
+      name,
+      cost: 'Sin acción',
+      description,
+      free: true,
+      ...extra,
+    });
+    if (call.by !== this.mySlot) {
+      const ask = abandonAsk(this.playerName(call.by));
+      const limits = left ? proposalClock(left, false) : undefined;
+      return [view('abandonAccept', ABANDON_TEXT.accept, `${ask}. ${ABANDON_TEXT.stakes}`, { limits }), view('abandonRefuse', ABANDON_TEXT.refuse, `${ask}. Seguís en la misión.`, { limits })];
+    }
+    const waiting = evacWaiting(this.onlinePartner()?.name ?? 'tu compañero');
+    return [view('abandon', ABANDON_TEXT.accept, waiting, { enabled: false, reason: left ? proposalClock(left, true) : waiting })];
   }
 
   /** Our soldiers in La Mula, on the state orders go by. */
@@ -3563,6 +3663,7 @@ export class Game {
       names: (u.backpack ?? []).map((l) => lootName(l)),
       near: v.units.filter((o) => o.id !== u.id && o.alive && o.team === 'xcom' && !o.captive && o.template !== 'vip' && inMeleeReach(v, u.pos, o.pos)).map((o) => ({ id: o.id, name: o.name })),
       floor: (v.dropped ?? []).filter((d) => samePos(d.pos, u.pos)).map((d) => ({ id: d.id, label: findLabel(d.loot), name: lootName(d.loot), kind: packSlots([d.loot])[0]!.kind })),
+      worn: u.worn ?? [],
       squad: {
         supplies: squad.supplies,
         items: squad.items.length,
@@ -3709,9 +3810,7 @@ export class Game {
     this.units.setTags(this.enemyTags(u, tile));
     if (!u || !this.canAct() || this.isBusy(u.id)) return;
 
-    // Melee: show the run to the strike position.
     const option = this.currentTarget();
-    if (option?.path?.length) this.overlays.showPath(u.pos, option.path);
     // Aiming at night from a lit tile (where it strikes from, or where it stands): seen from far.
     if (option) {
       const from = option.tile ?? u.pos;

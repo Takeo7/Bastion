@@ -873,9 +873,15 @@ describe('the enemy upstairs', () => {
     const z = addUnit(s, 'a1', 'zombie', 12, 3, { heard: at(5, 3, 1) });
     s.tiles[tileIndex(s, 7, 3)] = 'doorOpen';
     active(s, 'p1', [z]);
-    for (let turn = 0; turn < 6 && z.heard; turn++) new Sim(s, new Rng(turn), [0]).runAlienTurn();
+    const walked: Pos[] = [];
+    for (let turn = 0; turn < 6 && z.heard; turn++) {
+      const sim = new Sim(s, new Rng(turn), [0]);
+      sim.runAlienTurn();
+      for (const e of sim.events) if (e.t === 'moved' && e.unit === z.id) walked.push(...e.path);
+    }
     expect(z.pos.z).toBe(1);
-    expect(Math.hypot(z.pos.x - 5, z.pos.y - 3)).toBeLessThanOrEqual(1.5);
+    // It got there, upstairs (and having found nobody, may wander off).
+    expect(walked.some((p) => p.z === 1 && Math.hypot(p.x - 5, p.y - 3) <= 1.5)).toBe(true);
   });
 
   it('a zombie that heard a soldier go upstairs climbs after him and bites, never through the floor', () => {
@@ -886,13 +892,14 @@ describe('the enemy upstairs', () => {
     const z = addUnit(s, 'a1', 'zombie', 3, 4);
     active(s, 'p1', [z]);
     z.heard = { ...soldier.pos };
-    const first = new Sim(s, new Rng(1), [0]);
-    first.runAlienTurn();
-    expect(first.events.some((e) => e.t === 'shot')).toBe(false);
+    // Up the stairs, then the bite: this turn or the next (two actions, playtest 16/10 #21), always from upstairs.
+    let bite: Extract<GameEvent, { t: 'shot' }> | undefined;
+    for (let turn = 0; turn < 2 && !bite; turn++) {
+      const sim = new Sim(s, new Rng(1), [0]);
+      sim.runAlienTurn();
+      bite = sim.events.find((e): e is Extract<GameEvent, { t: 'shot' }> => e.t === 'shot');
+    }
     expect(z.pos.z).toBe(1);
-    const second = new Sim(s, new Rng(1), [0]);
-    second.runAlienTurn();
-    const bite = second.events.find((e): e is Extract<GameEvent, { t: 'shot' }> => e.t === 'shot');
     expect(bite).toMatchObject({ unit: z.id, target: soldier.id, ability: 'claw' });
     expect(bite!.from.z).toBe(1);
   });

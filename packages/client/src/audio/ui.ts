@@ -9,7 +9,7 @@ import { audio, type PlayOptions } from './engine';
 // listener for the whole document, so new screens need no wiring.
 
 /** What an interface sound means. The names come from the old case file: a key, the bell, a page, a stamp. */
-export type UiKind = 'key' | 'space' | 'bell' | 'confirm' | 'page' | 'paper' | 'stamp' | 'error';
+export type UiKind = 'key' | 'space' | 'bell' | 'confirm' | 'page' | 'paper' | 'stamp' | 'error' | 'cellBuy' | 'cellHover' | 'cellHold';
 
 /** While the recordings load: the game's own sounds closest to them. */
 const SYNTH: Record<UiKind, string> = {
@@ -21,10 +21,14 @@ const SYNTH: Record<UiKind, string> = {
   paper: 'radio.close',
   stamp: 'geo.ping',
   error: 'ui.error',
+  // The skill board's (strategy/hexBoard.ts): made in code only, no recording.
+  cellBuy: 'cell.buy',
+  cellHover: 'cell.hover',
+  cellHold: 'cell.hold',
 };
 
-/** The recordings of each moment (one is picked at random). */
-const RECORDED: Record<UiKind, string[]> = {
+/** The recordings of each moment (one is picked at random); a moment without any plays its own sound (SYNTH). */
+const RECORDED: Partial<Record<UiKind, string[]>> = {
   key: ['tick_004', 'click_001'],
   space: ['tick_004'],
   bell: ['select_002'],
@@ -36,7 +40,7 @@ const RECORDED: Record<UiKind, string[]> = {
 };
 
 /** How loud each moment sits (the recordings are all normalised to the same peak). */
-const GAIN: Record<UiKind, number> = { key: 0.32, space: 0.3, bell: 0.4, confirm: 0.5, page: 0.4, paper: 0.42, stamp: 0.55, error: 0.45 };
+const GAIN: Partial<Record<UiKind, number>> = { key: 0.32, space: 0.3, bell: 0.4, confirm: 0.5, page: 0.4, paper: 0.42, stamp: 0.55, error: 0.45 };
 
 const buffers = new Map<string, AudioBuffer>();
 const loading = new Set<string>();
@@ -45,7 +49,7 @@ const loading = new Set<string>();
 function load(): void {
   const ctx = audio.ctx;
   if (!ctx) return;
-  for (const name of new Set(Object.values(RECORDED).flat())) {
+  for (const name of new Set(Object.values(RECORDED).flatMap((names) => names ?? []))) {
     if (buffers.has(name) || loading.has(name)) continue;
     loading.add(name);
     fetch(`/audio/ui/${name}.wav`)
@@ -59,18 +63,29 @@ function load(): void {
   }
 }
 
-/** Plays an interface sound. */
-export function uiSound(kind: UiKind, o: PlayOptions & { spread?: number } = {}): void {
+/** The skill board is swept fast across its cells: at most one hover tick this often. */
+const HOVER_GAP_MS = 45;
+let lastHover = -Infinity;
+
+/** Plays an interface sound; returns what stops it, fading out (the board's hold, let go before it buys). */
+export function uiSound(kind: UiKind, o: PlayOptions & { spread?: number } = {}): () => void {
+  if (kind === 'cellHover') {
+    const now = performance.now();
+    if (now - lastHover < HOVER_GAP_MS) return () => {};
+    lastHover = now;
+  }
   const names = RECORDED[kind];
-  const buf = buffers.get(names[Math.floor(Math.random() * names.length)]!);
+  const buf = names && buffers.get(names[Math.floor(Math.random() * names.length)]!);
   if (buf) {
     const spread = o.spread ?? 0.03;
-    audio.play(buf, { ...o, bus: 'ui', gain: (o.gain ?? 1) * GAIN[kind], rate: (o.rate ?? 1) * (1 + (Math.random() * 2 - 1) * spread) });
-    return;
+    const src = audio.play(buf, { ...o, bus: 'ui', gain: (o.gain ?? 1) * (GAIN[kind] ?? 1), rate: (o.rate ?? 1) * (1 + (Math.random() * 2 - 1) * spread) });
+    return () => {
+      if (src) audio.stop(src);
+    };
   }
-  load();
+  if (names) load();
   // The game's own sounds (a radio click, the search slide…) still follow the interface's volume.
-  sound(SYNTH[kind], { bus: 'ui', ...o });
+  return sound(SYNTH[kind], { bus: 'ui', ...o });
 }
 
 const CLICKABLE = 'button, [role="button"], .x-row, .lineup-card, .edge-mark, .setting-choices button';

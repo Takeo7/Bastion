@@ -66,6 +66,7 @@ Guía para Arturo y Ana. La preparó Red el 2026-10-14. El objetivo es comprobar
 - Efectos «Altos», Sombras «Sí», Resolución «100 %», Límite de FPS «Sin límite», Mostrar FPS «Sí».
 - **Ajuste auto «No».** Si está en «Sí», baja la calidad solo y ya no se mide «alto».
 - Pantalla completa: menú Partida → Pantalla completa.
+- **Los portátiles, enchufados y sin modo de bajo consumo.** Con la batería baja o en ese modo, el sistema frena el ordenador y la medida no vale (lo que le pasó a Ana el 16/10, PRUEBA-2026-10-16 #17). La telemetría no lo puede ver en el ordenador del compañero.
 
 ## 5. Jugar una misión
 

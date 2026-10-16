@@ -268,14 +268,16 @@ export interface AbilityDef {
 export const ABILITIES: Record<AbilityId, AbilityDef> = {
   shoot: { id: 'shoot', name: 'Disparar', description: 'Dispara el arma principal. Gasta una acción; el fusil de precisión, las dos.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'primary' },
   pistol: { id: 'pistol', name: 'Pistola', description: 'Dispara la pistola: munición infinita. Gasta una acción.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'secondary' },
-  slash: { id: 'slash', name: 'Tajo', description: 'Corre hasta un enemigo a tu alcance y atácalo con el machete. Ignora la cobertura.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
+  // An action, like a shot (playtest 16/10): the turn goes on.
+  slash: { id: 'slash', name: 'Tajo', description: 'Golpea con la hoja a un enemigo que tengas al lado. Ignora la cobertura.', target: 'melee', ap: 1, endsTurn: false, weapon: 'melee' },
   stunLance: { id: 'stunLance', name: 'Red y porra', description: 'Atrapa con la red y golpea con la porra: aturde.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
-  claw: { id: 'claw', name: 'Mordisco', description: 'Muerde cuerpo a cuerpo.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
+  // An action, and the turn goes on: with two, a bite and a step, or two bites (playtest 16/10 #21).
+  claw: { id: 'claw', name: 'Mordisco', description: 'Muerde a quien tiene al lado.', target: 'melee', ap: 1, endsTurn: false, weapon: 'melee' },
   overwatch: { id: 'overwatch', name: 'Vigilancia', description: 'Dispara al primer enemigo que se mueva a la vista.', target: 'self', ap: 1, endsTurn: true },
   // Fase 10 (docs/FASE10.md §4): the reach is the throw's (abilityRange), the noise grows with Señuelo and Reclamo.
   stone: { id: 'stone', name: 'Piedra', description: 'Lanza una piedra: suena donde cae y los zombis van a mirar. Si le da a alguien, 1 de daño. No acaba el turno.', target: 'tile', ap: 1, endsTurn: false, range: 10, noise: 8 },
   overwatchMelee: { id: 'overwatchMelee', name: 'Vigilancia cuerpo a cuerpo', description: 'Golpea con la hoja al primer enemigo que se le ponga al lado.', target: 'self', ap: 1, endsTurn: true },
-  hunker: { id: 'hunker', name: 'Agazaparse', description: '+30 de defensa y +50 de esquiva hasta tu próximo turno.', target: 'self', ap: 1, endsTurn: true },
+  hunker: { id: 'hunker', name: 'Cubrirse', description: '+30 de defensa y +50 de esquiva hasta tu próximo turno.', target: 'self', ap: 1, endsTurn: true },
   reload: { id: 'reload', name: 'Recargar', description: 'Mete un cargador lleno y gasta uno de repuesto: primero en el arma principal y, si está llena, en la pistola. Los de repuesto los hace el Taller; registrando aparecen más.', target: 'self', ap: 1, endsTurn: false },
   grenade: { id: 'grenade', name: 'Granada', description: 'Lanza una granada: daña a todos en el área, destruye cobertura y abre boquetes en las paredes. Arriba hunde el suelo donde cae, y quien esté encima cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 10, radius: 2.5, explosive: 'fragGrenade' },
   launch: { id: 'launch', name: 'Lanzagranadas', description: 'Dispara una granada más lejos y con más radio. También abre boquetes en las paredes y, arriba, hunde el suelo donde cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 14, radius: 3.5, explosive: 'fragGrenade' },
@@ -542,6 +544,10 @@ export interface UnitTemplate {
   undead: boolean;
 }
 
+/** Tiles a soldier covers in an action, and how much of that the dead do (playtest 16/10 #21). */
+export const SOLDIER_MOBILITY = 8;
+export const ZOMBIE_PACE = 0.6;
+
 const soldier = (t: Pick<UnitTemplate, 'id' | 'name' | 'short' | 'weapon' | 'abilities' | 'charges'> & Partial<UnitTemplate>): UnitTemplate => ({
   team: 'xcom',
   hp: 5,
@@ -549,7 +555,7 @@ const soldier = (t: Pick<UnitTemplate, 'id' | 'name' | 'short' | 'weapon' | 'abi
   aim: 65,
   defense: 0,
   dodge: 0,
-  mobility: 8,
+  mobility: SOLDIER_MOBILITY,
   sight: 18,
   detection: 0,
   crit: 0,
@@ -609,9 +615,10 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
   lancer: alien({ id: 'lancer', name: 'Cazador', short: 'CAZ', weapon: 'lancerRifle', meleeWeapon: 'stunLance', hp: 4, abilities: ['stunLance', 'shoot', 'reload'] }),
   // The dead (docs/FASE2.md): claws and teeth, no cover, the horde's AI (ai.ts takeZombieTurn).
   // Harder to put down (playtest 2026-10-15, #12): two more points of health each.
-  zombie: alien({ id: 'zombie', name: 'Zombi', short: 'ZOM', weapon: 'claws', meleeWeapon: 'claws', hp: 8, aim: 60, defense: -10, mobility: 4, sight: 14, detection: 6, will: 100, undead: true, abilities: ['claw'] }),
+  // Playtest 16/10 #19 and #21: 3 of health, and they move 60 % of what a soldier does (ZOMBIE_PACE).
+  zombie: alien({ id: 'zombie', name: 'Zombi', short: 'ZOM', weapon: 'claws', meleeWeapon: 'claws', hp: 3, aim: 60, defense: -10, mobility: SOLDIER_MOBILITY * ZOMBIE_PACE, sight: 14, detection: 6, will: 100, undead: true, abilities: ['claw'] }),
   xenoid: alien({ id: 'xenoid', name: 'Corredor', short: 'COR', weapon: 'xenoPistol', meleeWeapon: 'xenoPistol', hp: 7, aim: 60, mobility: 8, detection: 10, will: 100, undead: true, abilities: ['claw'] }),
-  mec: alien({ id: 'mec', name: 'Acorazado', short: 'ACO', weapon: 'mecCannon', meleeWeapon: 'mecCannon', hp: 9, armor: 1, aim: 60, mobility: 4, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: ['claw'] }),
+  mec: alien({ id: 'mec', name: 'Acorazado', short: 'ACO', weapon: 'mecCannon', meleeWeapon: 'mecCannon', hp: 9, armor: 1, aim: 60, mobility: SOLDIER_MOBILITY * ZOMBIE_PACE, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: ['claw'] }),
   /** The Chillón doesn't bite: it screams (mindspin, noise 16) and raises the dead. */
   sectoid: alien({ id: 'sectoid', name: 'Chillón', short: 'CHI', weapon: 'sectoidPistol', hp: 7, mobility: 5, will: 100, undead: true, abilities: ['mindspin', 'reanimate'] }),
   /** The Hinchado: slow; it bursts when it dies or reaches a soldier (rules.ts burst). */

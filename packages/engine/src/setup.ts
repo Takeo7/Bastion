@@ -7,7 +7,7 @@ import { MAPS } from './maps';
 import { STORY } from './lore';
 import { repairStairAccess } from './stairAccess';
 import type { Rng } from './rng';
-import { fighterStats, recruitSkills, veteranSkills, type FighterStats } from './skills';
+import { fighterStats, missionLines, recruitSkills, veteranSkills, type FighterStats, type MissionLines } from './skills';
 import type {
   Alarm,
   Appearance,
@@ -61,6 +61,8 @@ export interface SquadMember {
   arms?: Arms;
   /** Spare magazines it sets out with (the Taller's munition); absent, SPARE_MAGS. */
   mags?: number;
+  /** Its experience lines, to fill out there (docs/FASE10.md §2). */
+  lines?: MissionLines;
 }
 
 /** Hand-made map by id, or a procedural one from a biome and a seed. */
@@ -104,6 +106,8 @@ export interface MissionOptions {
   medicineCures?: boolean;
   /** The campaign's Bastion has a Cuarentena (#13): false, the bitten can't board La Lata. */
   quarantine?: boolean;
+  /** Still winter in the campaign (campaign.ts wintry): the map under snow. */
+  snow?: boolean;
 }
 
 /** What a skirmish soldier carries in the hand (docs/FASE9.md §6): one of these, at random. */
@@ -112,11 +116,11 @@ const SKIRMISH_ARMS: FoundWeaponId[] = ['assaultRifle', 'pumpShotgun', 'precisio
 const SKIRMISH_BELT: ItemId[] = ['firstAid', 'smokeGrenade', 'flashbang'];
 
 /** A skirmish soldier (docs/FASE10.md §7): a weapon and gear at random; a veteran, bars filled in every line and its board. */
-function skirmishSoldier(rng: Rng, veteran: boolean): { stats: FighterStats; arms: Arms; gear: ItemId[] } {
+function skirmishSoldier(rng: Rng, veteran: boolean): { stats: FighterStats; arms: Arms; gear: ItemId[]; lines: MissionLines } {
   const arms: Arms = { primary: rng.pick(SKIRMISH_ARMS), melee: rng.next() < 0.5 ? 'machete' : null };
   const gear: ItemId[] = ['fragGrenade', rng.pick(SKIRMISH_BELT)];
   const { skills, growth, board } = veteran ? veteranSkills(rng) : { ...recruitSkills(rng), board: [] };
-  return { stats: fighterStats(skills, growth, board, gear, arms), arms, gear };
+  return { stats: fighterStats(skills, growth, board, gear, arms), arms, gear, lines: missionLines(skills, growth) };
 }
 
 /** Whether a unit counts its spare magazines (docs/FASE7.md): the squad's, with a weapon that takes them. */
@@ -452,6 +456,7 @@ export function createMission(opts: MissionOptions): GameState {
         will: m.will,
         armor: m.armor,
         ...(m.packSlots ? { packSlots: m.packSlots } : {}),
+        ...(m.lines ? { lines: missionLines(m.lines.start, m.lines.growth, m.lines.bonus) } : {}),
         ...armed(u, m),
         gear: [...m.gear],
       });
@@ -462,7 +467,7 @@ export function createMission(opts: MissionOptions): GameState {
       const owner = opts.slots[Math.min(Math.floor(i / perPlayer), opts.slots.length - 1)]!;
       const { name, sex } = names[i]!;
       const u = makeUnit(`s${i + 1}`, 'rookie', name, owner, layout.spawns[i]!, null);
-      const { stats, arms, gear } = skirmishSoldier(opts.rng, !!opts.veterans);
+      const { stats, arms, gear, lines } = skirmishSoldier(opts.rng, !!opts.veterans);
       const unit: Unit = {
         ...u,
         ap: apPerTurn({ team: u.team, rank: stats.rank }),
@@ -476,6 +481,7 @@ export function createMission(opts: MissionOptions): GameState {
         armor: stats.armor,
         gear,
         appearance: defaultAppearance(owner, undefined, sex),
+        lines,
       };
       units.push({ ...unit, ...armed(unit, { arms, mags: SPARE_MAGS }) });
     }
@@ -564,6 +570,7 @@ export function createMission(opts: MissionOptions): GameState {
     outcome: null,
     outcomeReason: null,
     campaignMission: opts.campaignMission ?? null,
+    ...(opts.snow ? { snow: true } : {}),
     smoke: [],
   };
   // The map's street lights (they never go out): each lights what its lamp sees round it, worked out once.

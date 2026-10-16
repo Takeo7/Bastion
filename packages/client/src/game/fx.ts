@@ -779,4 +779,24 @@ export class Fx {
       el.remove();
     });
   }
+
+  /**
+   * A bar filled in the field (playtest 16/10 #10, UI): over the soldier, its
+   * line's name and what it added, and a small bar filling up, in the line's
+   * colour (`cls`: hexBoard.css's .sk-*).
+   */
+  floatBar(at: THREE.Vector3, text: string, cls: string): void {
+    const el = document.createElement('div');
+    el.className = `float-bar ${cls}`;
+    const label = document.createElement('b');
+    label.textContent = text;
+    el.append(label, document.createElement('i'));
+    const obj = new CSS2DObject(el);
+    obj.position.copy(at).setY(at.y + 1.7);
+    this.group.add(obj);
+    void wait(2.9).then(() => {
+      this.group.remove(obj);
+      el.remove();
+    });
+  }
 }

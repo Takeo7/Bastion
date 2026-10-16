@@ -130,9 +130,9 @@ const ICONS: Record<AbilityId, string> = {
 
 /** An ability's icon, ready to append. */
 /** An ability's line icon; the bar's own actions (hud.ts BarActionId) borrow one that fits. */
-export function abilityIcon(id: AbilityId | 'evac' | 'evacAccept' | 'evacRefuse'): SVGElement {
+export function abilityIcon(id: AbilityId | 'evac' | 'evacAccept' | 'evacRefuse' | 'abandon' | 'abandonAccept' | 'abandonRefuse'): SVGElement {
   const t = document.createElement('template');
-  t.innerHTML = (id === 'evac' || id === 'evacAccept' ? ICONS.hunker : id === 'evacRefuse' ? ICONS.overwatch : ICONS[id]) ?? fallback;
+  t.innerHTML = (id === 'evac' || id === 'evacAccept' ? ICONS.hunker : id === 'evacRefuse' || id === 'abandonRefuse' ? ICONS.overwatch : id === 'abandon' || id === 'abandonAccept' ? fallback : ICONS[id]) ?? fallback;
   return t.content.firstElementChild as SVGElement;
 }
 

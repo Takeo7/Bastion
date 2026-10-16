@@ -44,6 +44,7 @@ import {
   HORDE,
   INFECTION,
   isAttack,
+  ITEMS,
   loadedFor,
   MEDICINE_HEAL,
   MEDKIT_HEAL,
@@ -86,12 +87,14 @@ import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol } 
 import type { Command } from './protocol';
 import type { Rng } from './rng';
 import { hordeWave, makeUnit } from './setup';
+import { pendingBars, rollGrowth } from './skills';
 import type {
   AbilityId,
   AttackAbility,
   BlastAbility,
   ConcealReason,
   GameState,
+  ItemId,
   Pod,
   PodCause,
   PsiEffect,
@@ -1240,6 +1243,8 @@ export class Sim {
       if (this.over) return;
       if (u.alive) takeAlienTurn(this, u);
     }
+    // What the squad did on the enemy's move (overwatch, the blade on guard) fills bars too.
+    this.settleBars();
     // Pods still unaware walk their round, or go to look where they heard something.
     for (const pod of this.s.pods.filter((p) => !p.active && (p.patrol.length || p.unitIds.some((id) => getUnit(this.s, id)?.heard)))) {
       if (this.over) return;
@@ -1346,12 +1351,27 @@ export class Sim {
         break;
       }
       case 'equip':
-        this.emit({ t: 'weaponEquipped', unit: u.id, index: cmd.index! });
+        if (u.backpack?.[cmd.index!]?.weapon) this.emit({ t: 'weaponEquipped', unit: u.id, index: cmd.index! });
+        else this.emit({ t: 'vestWorn', unit: u.id, index: cmd.index! });
         break;
     }
   }
 
+  /**
+   * Bars filled by what was just done (docs/FASE10.md §2): each one rolls its
+   * 5–10 % and its stat goes up there and then. After the whole action, so it
+   * is seen entire first; a bar the mission's last blow fills rolls at home.
+   */
+  settleBars(): void {
+    if (this.over) return;
+    for (const u of this.s.units) {
+      if (!u.lines || !u.alive || u.team !== 'xcom') continue;
+      for (const bar of pendingBars(u.lines, u.deeds)) this.emit({ t: 'barFilled', unit: u.id, skill: bar.skill, filled: bar.filled, growth: rollGrowth(this.rng) });
+    }
+  }
+
   afterXcomAction(): void {
+    this.settleBars();
     if (this.over) return;
     for (const u of combatants(this.s, 'xcom')) {
       const noticing = this.podsNoticing(u.pos);
@@ -1502,10 +1522,18 @@ function backpackRefusal(s: GameState, cmd: ItemCommand, slot: Slot): string | n
       return null;
     }
     case 'equip':
-      if (!loot.weapon) return 'Solo se equipan las armas.';
+      // A vest found is put on there and then (playtest 16/10 #18); one at a time.
+      if (loot.item && wearable(loot.item)) return u.worn?.length ? 'Ya lleva un chaleco puesto.' : null;
+      if (!loot.weapon) return 'Solo se equipan las armas y los chalecos.';
       if (!u.arms) return 'Las armas encontradas son para el Bastión.';
       return null;
   }
+}
+
+/** A found accessory worn over the clothes, out there: what only gives health (the Chaleco antibalas). */
+export function wearable(item: ItemId): boolean {
+  const def = ITEMS[item];
+  return !!def.hp && !def.charges && !def.ability;
 }
 
 /** Whether `u`'s medicines also stop a bite's contagion (docs/FASE8.md §C): the Enfermería for everyone, or the support talent. */
@@ -1704,6 +1732,30 @@ export function evacWins(s: GameState): boolean {
 export function abandonMission(s: GameState): GameEvent[] {
   if (s.outcome) return [];
   const e: GameEvent = { t: 'missionEnded', outcome: 'defeat', reason: 'abandoned' };
+  applyEvent(s, e);
+  return [e];
+}
+
+/**
+ * `slot` wants to abandon the mission (playtest 16/10): with the partner
+ * here it is asked first, as the bus is; alone, or the partner having asked
+ * already, it ends now.
+ */
+export function callAbandon(s: GameState, slot: Slot, connected: readonly Slot[]): GameEvent[] {
+  if (s.outcome) return [];
+  const partner: Slot = slot === 0 ? 1 : 0;
+  if (!connected.includes(partner) || s.abandonCall?.by === partner) return abandonMission(s);
+  if (s.abandonCall?.by === slot) return [];
+  const e: GameEvent = { t: 'abandonCalled', slot };
+  applyEvent(s, e);
+  return [e];
+}
+
+/** The partner answers a call to abandon: yes ends the mission, no keeps it going. */
+export function answerAbandon(s: GameState, slot: Slot, accept: boolean): GameEvent[] {
+  if (s.outcome || !s.abandonCall || s.abandonCall.by === slot) return [];
+  if (accept) return abandonMission(s);
+  const e: GameEvent = { t: 'abandonRefused', slot };
   applyEvent(s, e);
   return [e];
 }

@@ -5,8 +5,8 @@
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
-import { FOUND_WEAPONS } from './content';
-import { DEED_XP, SKILLS, type DeedId, type Deeds, type SkillId } from './skills';
+import { FOUND_WEAPONS, THIRD_ACTION_RANK } from './content';
+import { BAR_GROWTH, DEED_XP, RANK_STEP, SKILLS, VETERANCY, WILL_PER_RANK, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
 /** Bastion level at which the doom track gets its name: until the radio is fixed nobody knows the Marea is coming. */
@@ -80,8 +80,8 @@ export const GLOSSARY: Record<string, string> = {
   'La Lata': 'El autobús de Atalaya: uno de línea, con la chapa que Teo le soldó por encima. Lleva a los equipos y los espera en la zona de evacuación.',
   Evacuar: `Se sale ${BUS.in}, desde la zona de evacuación: lo pide uno y lo acepta el otro. Quien esté fuera cuando sale, se pierde. En la Limpieza, salir es retirarse y la misión se pierde.`,
   Recluta: 'Superviviente recién llegado, con cuchillo y pistola. Aprende de lo que hace fuera, como todos.',
-  Barras: 'Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo en las misiones. Cada barra llena sube un poco lo suyo y da un punto para el tablero.',
-  Tablero: 'Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos, siempre al lado de una que ya tenga, y lo comprado es para siempre.',
+  Barras: 'Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo en las misiones. Cada barra llena sube un poco lo suyo y da un punto de habilidad para el tablero.',
+  Tablero: 'Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, siempre al lado de una que ya tenga, y lo comprado es para siempre.',
   Veteranía: 'Los puntos gastados en el tablero, contados: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.',
 };
 
@@ -352,7 +352,7 @@ export function barLine(who: string, skill: SkillId, growth: number[]): string {
   const bars = n === 1 ? 'una barra' : `${NUMBERS[n] ?? n} barras`;
   const percent = growth.reduce((a, b) => a + b, 0);
   const stat = SKILLS[skill].stat.charAt(0).toLowerCase() + SKILLS[skill].stat.slice(1);
-  return `${who} llena ${bars} de ${SKILLS[skill].name}: +${percent} % de ${stat}. ${n === 1 ? 'Tiene un punto' : `Tiene ${NUMBERS[n] ?? n} puntos`} para el tablero.`;
+  return `${who} llena ${bars} de ${SKILLS[skill].name}: +${percent} % de ${stat}. ${n === 1 ? 'Tiene un punto de habilidad' : `Tiene ${NUMBERS[n] ?? n} puntos de habilidad`} para el tablero.`;
 }
 
 /**
@@ -542,6 +542,37 @@ export const BOARD_ABOUT: Record<string, string> = {
   lastStand: 'No piensa caer antes que nadie.',
   tireless: 'Nunca se sienta antes que los demás.',
 };
+
+/** Floating over a soldier whose bar fills in the field (docs/PRUEBA-2026-10-16.md #10): «DISPARO +7 %». */
+export function barFillFloat(skill: SkillId, percent: number): string {
+  return `${SKILLS[skill].name.toUpperCase()} +${percent} %`;
+}
+
+/**
+ * At the end of a bar (#16): what filling it gives. `short` beside the bar,
+ * «+5–10 % · +1 punto»; `long` for its tooltip. «Punto de habilidad» in full:
+ * no «PH», which reads as the pH and is the only acronym the game would have.
+ */
+export function barReward(skill: SkillId): { short: string; long: string } {
+  const [low, high] = BAR_GROWTH;
+  const stat = SKILLS[skill].stat.charAt(0).toLowerCase() + SKILLS[skill].stat.slice(1);
+  return {
+    short: `+${low}–${high} % · +1 punto`,
+    long: `Al llenarse: entre un ${low} y un ${high} % más de ${stat}, y un punto de habilidad para el tablero.`,
+  };
+}
+
+/** At the end of the veterancy bar: what the next rank gives (its name by the soldier's sex), or null at the top. */
+export function rankReward(rank: number, sex?: 'f' | 'm'): { short: string; long: string } | null {
+  const next = VETERANCY[rank + 1];
+  if (!next) return null;
+  const name = sex === 'f' ? next.female : next.name;
+  const third = rank + 1 === THIRD_ACTION_RANK;
+  return {
+    short: third ? `+${WILL_PER_RANK} de voluntad · +1 acción` : `+${WILL_PER_RANK} de voluntad`,
+    long: `${name}, con ${RANK_STEP} puntos de habilidad más gastados en el tablero: +${WILL_PER_RANK} de voluntad${third ? ', y una tercera acción por turno' : ''}.`,
+  };
+}
 
 // -------------------------------------------------------------- backpack
 
@@ -893,6 +924,33 @@ export function biteLossLine(who: string): string {
   return `${who} pierde 1 de salud por el mordisco.`;
 }
 
+/**
+ * Leaving a mission early, asked of the partner like the bus (playtest 16/10):
+ * whoever is still standing comes home, and the mission is lost.
+ */
+export const ABANDON_TEXT = {
+  /** The button, and what it costs, for whoever asks. */
+  button: 'Abandonar la misión',
+  stakes: 'Los que sigan en pie vuelven a la base, pero la misión se da por perdida.',
+  accept: 'Abandonar',
+  refuse: 'Seguir',
+};
+
+/** The partner's notice: «Arturo quiere abandonar la misión». */
+export function abandonAsk(who: string): string {
+  return `${who} quiere abandonar la misión`;
+}
+
+/** The notice to the partner, as the bus's: «Arturo quiere abandonar la misión: «Abandonar» o «Seguir», en tu barra.» */
+export function abandonBarNotice(who: string): string {
+  return `${abandonAsk(who)}: «${ABANDON_TEXT.accept}» o «${ABANDON_TEXT.refuse}», en tu barra.`;
+}
+
+/** The log line when the partner says no: «Arturo quiere seguir.» */
+export function abandonRefusedLine(who: string): string {
+  return `${who} quiere seguir.`;
+}
+
 /** The log line for someone outside when the bus leaves: «Ana se queda fuera.» */
 export function leftBehindLine(who: string): string {
   return `${who} se queda fuera.`;
@@ -1001,7 +1059,7 @@ export const PREMISE = {
   title: 'Atalaya',
   lines: [
     'La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
-    'En la vieja estación militar se ha ido reuniendo gente de todas partes. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.',
+    'En la vieja estación militar, sobre el pueblo de Brena, se ha ido reuniendo gente de todas partes. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.',
     'Toca volver a sacar La Lata, ese trasto forrado con chapas que tenemos por autocar, y salir a buscar lo que nos hace falta.',
   ],
 };
@@ -1363,7 +1421,7 @@ export const STORY: StoryChapter[] = [
     difficulty: 1,
     reward: { credits: 90 },
     briefing:
-      'El consultorio de Brena sigue cerrado. Puede que todavía queden medicinas dentro. En la estación apenas nos quedan paracetamoles.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Tendréis que buscar una entrada y cargar lo que encontréis.',
+      'El consultorio de Brena, el pueblo de abajo, sigue cerrado. Puede que todavía queden medicinas dentro. En la estación apenas nos quedan paracetamoles.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Tendréis que buscar una entrada y cargar lo que encontréis.',
     signature: '',
     item: 'las medicinas',
     after: 'Las medicinas del consultorio ya están en la enfermería. Por primera vez desde el otoño, nadie tiene que elegir quién se cura.',
@@ -1393,7 +1451,7 @@ export const STORY: StoryChapter[] = [
     briefing:
       'Los Cuervos tienen en los Llanos un coche patrulla con la sirena puesta, y la encienden cada noche: nos trae a media comarca. Quiero que se calle. Destruidlo antes de que termine la cuenta atrás.',
     signature: '— T. V.',
-    after: 'La sirena se calló y los zombis del valle se dispersaron en un día. Teo lo apuntó todo.',
+    after: 'La sirena se calló y los zombis del valle se dispersaron en un día. Teo lo apuntó todo. Esa misma semana empezó el deshielo.',
   },
   {
     title: 'La torre del Pico Gris',

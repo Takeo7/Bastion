@@ -54,7 +54,8 @@ La de antes («Hace dos inviernos, la Pandemia vació el valle de Kessra…») q
 | Invierno, año 0 | Caen Galen y Corran. El ejército se repliega y desaparece. La radio se queda muda. |
 | Año 1 | Los vivos se esconden en los pueblos de la sierra. Aparecen los Cuervos, bandas que viven de saquear a otros. |
 | Años 1 y 2 | Gente de todas partes se va reuniendo en la Estación Atalaya. La dirigen dos personas, a medias. |
-| Invierno, año 2 · Día 1 de la campaña | Las nevadas sepultan a muchos muertos y se vuelve a salir en La Lata. |
+| Invierno, año 2 · Día 1 de la campaña | Las nevadas sepultan a muchos muertos y se vuelve a salir en La Lata. Las misiones están nevadas hasta el capítulo 3. |
+| Deshielo · tras el capítulo 3 | Se calla la sirena de los Llanos y se va la nieve: lo que tapó vuelve a andar. Con el deshielo sube la Marea, que se descubre en el capítulo 4. |
 
 ## El mundo: el valle de Kessra
 
@@ -212,7 +213,7 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 |---|---|
 | Geoesfera, globo | **El valle** (pestaña y mapa) |
 | Región | **Zona** |
-| Expediente | **Diario** («DIARIO · HOJA N») |
+| Expediente | **Diario** («DIARIO · HOJA N»): el diario de Atalaya, que escribe Morse. Desde la 0.4.1, la pestaña se llama **Campaña** y el edificio, **Sala de radio**; las hojas siguen siendo del Diario |
 | Hangar | **Cochera** |
 | La Mula (el autobús), Taller de La Mula | **La Lata**, **Chapistería** |
 | Escanear, escaneando, días de escaneo | **Esperar noticias**, «A LA ESCUCHA…», días a la escucha |
@@ -222,6 +223,7 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 | Terminal, hackear, pirateo | **Arreglar** (el equipo, la radio) |
 | La Rosa | **Árbol de habilidades** |
 | Aldren, Volkren | **Brena**, **Velsa** |
+| Agazaparse | **Cubrirse**; el estado, «Cubriéndose» (no «a cubierto», que se confunde con estar detrás de un muro) |
 | Dos llaves, llave doble | Uno propone y el otro acepta; «lo decidís juntos» |
 | Los datos (el objetivo) | El nombre del objeto: «las medicinas»; sin nombre, «la carga» |
 | Oficio (la aptitud) | **Maña** (MAÑ), una de las cuatro habilidades |

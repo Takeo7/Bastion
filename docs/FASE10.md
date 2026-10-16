@@ -41,10 +41,10 @@ El porcentaje se acumula sobre la estadística de base y se redondea al usarla. 
 | Curar con el botiquín o con medicinas | Curar | 2 a otro, 1 a uno mismo |
 | Investigar (una caja o una habitación) | Investigar | 2 |
 | Arreglar un equipo o callar una alarma | Investigar | 3 |
-| Agazaparse | Forma física | 1 |
+| Cubrirse | Forma física | 1 |
 | Correr (moverse con las dos acciones) | Forma física | 1 |
 
-Se cuenta en la misión y se suma al volver vivo. No hay tope por misión.
+Se cuenta en la misión, y una barra que se llena lo hace allí mismo, al acabar la acción: su estadística sube al momento, con un aviso (Arturo, 16/10). El extra del Taller de oficios cuenta ya en la misión; el del Camposanto se sabe al volver, y si llena otra barra, se tira entonces. No hay tope por misión.
 
 ## 4. Las acciones nuevas
 

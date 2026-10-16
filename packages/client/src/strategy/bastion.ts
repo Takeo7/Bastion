@@ -289,9 +289,13 @@ class Site {
     this.box(GLOW[kind](), size, size, size, x, y, z, 0, false);
   }
 
-  /** The plot's ground: a concrete pad for buildings, levelled dirt for a cleared plot, snow on the rest. */
+  /**
+   * The plot's ground: a concrete pad for buildings, levelled dirt for a cleared plot, snow on the rest.
+   * Its top stands 2 cm over the yard, which stands 2 cm over the snow: enough for the depth buffer from
+   * the overview's distance, so no layer pokes through another as the wheel zooms.
+   */
   pad(kind: keyof typeof PAD_MAT): void {
-    this.box(PAD_MAT[kind](), PLOT, 0.06, PLOT, 0, -0.02, 0, 0, false);
+    this.box(PAD_MAT[kind](), PLOT, 0.06, PLOT, 0, -0.01, 0, 0, false);
   }
 
   /** A lamp that blinks (beacons, aviation lights). */
@@ -652,7 +656,7 @@ const FACILITY_ART: Record<string, Art> = {
     }
     if (level >= 3) {
       // The drip lines' feed from the barrels, the seed trays on a table, and a scarecrow over the beds.
-      k.put('gardenHose', { x: 1.0, z: 1.24, y: 0.02, yaw: Math.PI / 2, s: 0.6 });
+      k.put('gardenHose', { x: 1.0, z: 1.24, y: 0.03, yaw: Math.PI / 2, s: 0.6 });
       k.put('gardenTable', { x: 1.4, z: 1.3, s: 1.1 });
       for (const z of [0.75, 1.3, 1.85]) {
         k.box(mat(0x4a3a2c), 0.5, 0.05, 0.42, 1.4, 0.65, z, 0, false);
@@ -1040,7 +1044,7 @@ export class BastionSet implements StageSet {
     // darker: one mesh, each patch tinted by its vertices, the texture laid in world space (a tile every 2.6).
     const patches: THREE.BufferGeometry[] = [];
     const trodden = (w: number, d: number, x: number, z: number, tint: number) => {
-      const g = new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(x, 0.005, z);
+      const g = new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2).translate(x, 0, z);
       const pos = g.getAttribute('position');
       const uv = g.getAttribute('uv');
       const colour = new THREE.Color(tint);
@@ -1058,7 +1062,7 @@ export class BastionSet implements StageSet {
     trodden(110, 4.6, HANGAR.x + HANGAR_W / 2 + 55, HANGAR.z + BUS_Z, 0x85837d);
     const yard = new THREE.Mesh(
       mergeGeometries(patches),
-      baseMaterial(new THREE.MeshStandardMaterial({ map: baseTexture('snowGround', 1), vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1 })),
+      baseMaterial(new THREE.MeshStandardMaterial({ map: baseTexture('snowGround', 1), vertexColors: true, roughness: 1 })),
     );
     for (const g of patches) g.dispose();
     yard.receiveShadow = true;

@@ -366,7 +366,7 @@ export class UnitViews {
     const status = [
       u.controlledBy ? '<em class="psi">CONTROLADO</em>' : '',
       u.overwatch ? `<em class="ow">${u.killZone ? 'ZONA LETAL' : u.watchMelee ? 'HOJA EN ALTO' : 'VIGILANCIA'}</em>` : '',
-      u.hunkered ? '<em class="hk">AGAZAPADO</em>' : '',
+      u.hunkered ? '<em class="hk">CUBRIÉNDOSE</em>' : '',
       u.aided ? '<em class="aid">PROTEGIDO</em>' : '',
       u.stunned ? '<em class="stun">ATURDIDO</em>' : '',
       u.disoriented ? '<em class="psi">DESORIENTADO</em>' : '',

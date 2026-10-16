@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import {
-  abandonMission,
+  answerAbandon,
+  callAbandon,
   activeOffer,
   addPlayer,
   applyMissionResult,
@@ -59,8 +60,8 @@ export type RoomMode = 'skirmish' | 'campaign';
 
 /** A dropped player keeps blocking the end of turn this long, so a reload or Wi-Fi blip never costs them their turn. */
 const RECONNECT_GRACE_MS = 30_000;
-/** How long a joint decision waits for the partner's answer before it goes ahead (playtest 2026-10-14, #28: in case they left). */
-const ANSWER_WAIT_MS = 90_000;
+/** How long a joint decision waits for the partner's answer before it goes ahead (playtest 2026-10-14, #28: in case they left; 16/10: 90 s was too long). */
+const ANSWER_WAIT_MS = 30_000;
 
 type AnyMessage = ClientMessage | CampaignMessage;
 
@@ -72,7 +73,7 @@ type AnyMessage = ClientMessage | CampaignMessage;
 export class Room {
   private seats: [Seat | null, Seat | null] = [null, null];
   /** The waits on joint decisions now running (ANSWER_WAIT_MS): what each waits on, and when it ends. */
-  private waits: Record<DeadlineKind, { key: string; at: number; timer: ReturnType<typeof setTimeout> } | null> = { proposal: null, evac: null };
+  private waits: Record<DeadlineKind, { key: string; at: number; timer: ReturnType<typeof setTimeout> } | null> = { proposal: null, evac: null, abandon: null };
   private phase: RoomPhase = 'lobby';
   private mode: RoomMode = 'skirmish';
   private state: GameState | null = null;
@@ -253,12 +254,24 @@ export class Room {
 
       // ---- tactical
       case 'abandon': {
+        // Asked of the partner first, if here (playtest 16/10); alone, it ends now.
         if (this.phase !== 'mission' || !this.state) return;
-        const events = abandonMission(this.state);
+        const events = callAbandon(this.state, seat.slot, this.activeSlots());
         if (!events.length) return;
-        console.log(`[room] ${seat.name} abandona la misión.`);
+        console.log(`[room] ${seat.name} ${this.state.outcome ? 'abandona la misión' : 'pide abandonar la misión'}.`);
         this.broadcast({ t: 'events', events, seq: this.state.seq, by: seat.slot });
         this.afterTactical();
+        this.checkWaits();
+        break;
+      }
+      case 'abandonAnswer': {
+        if (this.phase !== 'mission' || !this.state) return;
+        const events = answerAbandon(this.state, seat.slot, msg.accept);
+        if (!events.length) return;
+        console.log(`[room] ${seat.name} ${msg.accept ? 'acepta abandonar la misión' : 'no quiere abandonar la misión'}.`);
+        this.broadcast({ t: 'events', events, seq: this.state.seq, by: seat.slot });
+        this.afterTactical();
+        this.checkWaits();
         break;
       }
       case 'ping':
@@ -366,6 +379,7 @@ export class Room {
       itemOutdoors: info.itemOutdoors,
       medicineCures: medicineCures(c),
       quarantine: hasQuarantine(c),
+      snow: info.snow,
     });
     // The Taller de oficios wall to wall with the listening post: the Oficio makes less noise.
     if (hasAdjacency(c, 'echoes')) this.state.quietSongs = true;
@@ -409,6 +423,8 @@ export class Room {
     this.watch('proposal', proposal ? JSON.stringify(proposal) : null);
     const call = this.phase === 'mission' && this.state && !this.state.outcome ? this.state.evacCall : undefined;
     this.watch('evac', call && this.state ? `${this.state.turn}:${call.by}:${call.unit}` : null);
+    const leave = this.phase === 'mission' && this.state && !this.state.outcome ? this.state.abandonCall : undefined;
+    this.watch('abandon', leave ? `by:${leave.by}` : null);
   }
 
   private watch(kind: DeadlineKind, key: string | null): void {
@@ -443,6 +459,15 @@ export class Room {
       console.log(`[room] Evacuación sin respuesta: sale el autobús${result.ok ? '' : ` (${result.error})`}.`);
       if (result.ok) {
         this.broadcast({ t: 'events', events: result.events, seq: this.state.seq, by: null });
+        this.afterTactical();
+      }
+    }
+    if (kind === 'abandon' && this.state?.abandonCall && this.phase === 'mission') {
+      const partner: Slot = this.state.abandonCall.by === 0 ? 1 : 0;
+      const events = answerAbandon(this.state, partner, true);
+      console.log('[room] Abandono sin respuesta: se abandona la misión.');
+      if (events.length) {
+        this.broadcast({ t: 'events', events, seq: this.state.seq, by: null });
         this.afterTactical();
       }
     }

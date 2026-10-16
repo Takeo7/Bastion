@@ -10,7 +10,7 @@ import { applyUiTheme } from '../../ui/theme';
 import '../../strategy/strategy.css';
 import '../../strategy/hexBoard.css';
 import { h } from '../../ui/dom';
-import { boardIconSvg } from '../../strategy/boardIcons';
+import { boardIconStyle } from '../../strategy/boardIcons';
 import { soldierPortrait } from '../../strategy/portraits';
 import { skillsBlock, treePanel, type SkillsOf } from '../../strategy/skillSheet';
 
@@ -47,17 +47,14 @@ document.body.style.background = '#0b0d0e';
 /** The 169 icons, sector by sector and ring by ring, with their names: none may be missing or look alike. */
 function iconSheet(): void {
   const cell = (id: CellId, name: string, line: string) => {
-    const icon = h('span.lab-icon');
-    icon.innerHTML = `<svg viewBox="0 0 24 24">${boardIconSvg(id)}</svg>`;
+    const icon = h('span.lab-icon', {}, h('i', { style: boardIconStyle(id, 'dark') }));
     return h(`div.lab-cell.sk-${line}`, { title: id }, icon, h('small', {}, name));
   };
   const style = h('style', {}, `
     .lab-sheet { display: grid; grid-template-columns: repeat(14, 1fr); gap: 6px; padding: 14px; color: #ddd; font: 11px Barlow, sans-serif; }
     .lab-cell { display: grid; justify-items: center; gap: 3px; text-align: center; }
     .lab-icon { display: grid; place-items: center; width: 52px; height: 52px; clip-path: polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); background: var(--cc); color: #0d0f10; }
-    .lab-icon svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-    .lab-icon svg .fill { fill: currentColor; stroke: none; }
-    .lab-icon svg .dash { stroke-dasharray: 2 2.4; }
+    .lab-icon i { width: 34px; height: 34px; }
   `);
   const sorted = [...BOARD].sort((a, b) => a.sector - b.sector || a.ring - b.ring);
   document.body.replaceChildren(style, h('div.lab-sheet', {}, ...sorted.map((c) => cell(c.id, c.name, c.line ?? 'core'))));

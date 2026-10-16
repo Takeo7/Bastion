@@ -226,31 +226,13 @@ export interface MeleeOption {
   path: Pos[];
 }
 
-/** Enemies a melee ability can reach this action: within the blue move range, seen by the team. */
-export function meleeTargets(s: GameState, u: Unit, ability: AttackAbility): MeleeOption[] {
-  const reach = computeReach(s, u, costPerAp(u));
-  const options: MeleeOption[] = [];
-  for (const t of s.units) {
-    if (!hostile(u, t) || !teamSees(s, u.team, t)) continue;
-    if (inMeleeReach(s, u.pos, t.pos)) {
-      options.push({ target: t, tile: u.pos, path: [] });
-      continue;
-    }
-    let best: MeleeOption | null = null;
-    let bestCost = Infinity;
-    for (const d of DIRS8) {
-      const tile = { x: t.pos.x + d.x, y: t.pos.y + d.y, z: t.pos.z };
-      if (!inBounds(s, tile.x, tile.y)) continue;
-      const cost = reach.cost.get(nodeOf(s, tile));
-      if (cost === undefined || cost >= bestCost) continue;
-      const path = buildPath(s, u, reach, tile);
-      if (!path) continue;
-      best = { target: t, tile, path };
-      bestCost = cost;
-    }
-    if (best && previewShot(s, u, t, { ability, from: best.tile })) options.push(best);
-  }
-  return options;
+/**
+ * Enemies a melee ability can reach: only whoever is alongside, seen by the
+ * team. Striking is striking and running is running (Arturo, 16/10): getting
+ * there is a move of its own. `ability` stays for the callers.
+ */
+export function meleeTargets(s: GameState, u: Unit, _ability: AttackAbility): MeleeOption[] {
+  return s.units.filter((t) => hostile(u, t) && teamSees(s, u.team, t) && inMeleeReach(s, u.pos, t.pos)).map((t) => ({ target: t, tile: u.pos, path: [] }));
 }
 
 /** Statuses Revival and Restoration remove. */

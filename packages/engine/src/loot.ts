@@ -325,5 +325,6 @@ export function bringsLootHome(s: GameState, u: Unit): boolean {
 
 /** What the squad brings back from the mission (docs/FASE2.md): only what comes home counts. */
 export function broughtBack(s: GameState): LootTotals {
-  return lootTotals(s.units.filter((u) => bringsLootHome(s, u)).flatMap((u) => u.backpack ?? []));
+  // A vest put on out there comes home on the soldier, as if in the backpack.
+  return lootTotals(s.units.filter((u) => bringsLootHome(s, u)).flatMap((u) => [...(u.backpack ?? []), ...(u.worn ?? []).map((item) => ({ item }))]));
 }

@@ -148,11 +148,13 @@ describe('kills that pay back', () => {
     addUnit(s, 'a1', 'trooper', 3, 2, { hp: 1, maxHp: 1 });
     addUnit(s, 'a2', 'trooper', 19, 19);
     for (let seed = 1; seed < 20 && !u.refunded; seed++) {
+      u.ap = 2;
       const r = executeCommand(s, use('s1', 'slash', { target: 'a1' }), ctx(seed));
       if (!r.ok) break;
     }
     expect(u.refunded).toBe(true);
-    expect(u.ap).toBe(1);
+    // The Tajo costs one action (playtest 16/10), and the kill gives it back.
+    expect(u.ap).toBe(2);
   });
 
   it('Death From Above: a kill from higher ground gives an action back', () => {

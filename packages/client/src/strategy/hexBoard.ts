@@ -7,29 +7,31 @@ import {
   cellState,
   CORE,
   pointsLeft,
-  SECTOR_LINES,
   SKILLS,
   unlockBlocker,
-  withinReach,
   type BoardCell,
   type CellId,
   type Skills,
 } from '@bastion/engine';
+import { uiSound } from '../audio/ui';
 import { append, clear, h } from '../ui/dom';
-import { boardIconSvg } from './boardIcons';
+import { boardIconStyle, boardIconSvg } from './boardIcons';
 
 // The hex board of Fase 10 (docs/FASE10.md §6, Arturo's prototype of 16/10):
 // 169 hexagonal cells, the core in the middle and 168 skills in seven rings,
-// six sectors of 28 in the lines' colours, inside a round frame of lines. A
-// cell is unlocked (its family's colour, its icon sharp), open (beside one
-// unlocked: dull, its icon grey) or locked (dimmer still, no icon).
+// six sectors of 28 in the lines' colours, inside one ring. In Arturo's words
+// (16/10) a cell is «seleccionada» (bought, `unlocked` in the engine: its
+// family's colour, its icon sharp), «desbloqueada» (`open`, beside a bought
+// one: dull, its icon grey) or «bloqueada» (`locked`: dimmer still, no icon).
 //
-// - Consulting: the pointer (or the keyboard's focus, or a tap) shows the
-//   cell's card beside the board; it stays when the pointer leaves, and never
-//   buys or changes how a cell looks.
-// - Unlocking: holding a cell down for a second, an indicator running round
-//   its outline; letting go early, leaving the cell, starting to drag, Escape
-//   or losing the focus cancel it. A short click only consults. Done, it
+// - Consulting: the pointer (or the keyboard's focus, or a tap) on a selected
+//   or unlocked cell shows its card beside the board; it stays when the
+//   pointer leaves, and never buys or changes how a cell looks. A locked cell
+//   shows nothing.
+// - Selecting: holding a cell down for a second, an indicator running round
+//   its outline; letting go early, straying well off the cell, Escape or
+//   losing the focus cancel it (the pointer may creep a little, and the wave
+//   holds still meanwhile). A short click only consults. Done, it
 //   bounces and its outline pulses once; the neighbours open.
 // - The wave: the cells near the pointer rise with the distance, face and icon
 //   together, and settle slowly when it leaves.
@@ -66,15 +68,20 @@ const hexPoints = (radius: number) =>
     const a = (Math.PI / 180) * (60 * i - 90);
     return `${(radius * Math.cos(a)).toFixed(2)},${(radius * Math.sin(a)).toFixed(2)}`;
   }).join(' ');
-/** The frame's rings, past the outermost cells (the farthest centres lie 364 out), and its outer edge. */
-const FRAME = [404, 416];
-const OUTER = 446;
+/** The frame's ring, past the outermost cells (the farthest centres lie 364 out). */
+const OUTER = 424;
 /** The view's half-size in board units, to frame it whole. */
-const HALF = 470;
+const HALF = 440;
 
 const HOLD_MS = 1000;
 /** Pointer travel (px) that turns a press into a drag. */
-const DRAG_PX = 6;
+const DRAG_PX = 10;
+/**
+ * How far from its cell's centre (board units) the pointer may stray while it
+ * holds it: the cell and a margin round it. A finger pressing a trackpad
+ * creeps a few px, and 6 px turned the hold into a drag (Arturo, 16/10 #36).
+ */
+const HOLD_REACH = SIZE * 1.15;
 /** The wave: how high a cell rises (board units), how far it reaches (in cells' radii). */
 const LIFT = 7;
 const REACH = 3.4;
@@ -115,6 +122,8 @@ export class HexBoard {
   private shown: CellId = CORE;
   private focused: CellId = CORE;
   private hold: Hold = null;
+  /** Red's rising tone while a cell is held (audio/ui.ts cellHold): stopped if it is let go. */
+  private holdSound: (() => void) | null = null;
   /** The camera: pan (px from the middle) and zoom (px per board unit). */
   private px = 0;
   private py = 0;
@@ -126,6 +135,8 @@ export class HexBoard {
   /** The pointer over the board, in board units (null outside). */
   private pointer: { x: number; y: number } | null = null;
   private frame = 0;
+  /** The cell under the mouse, for its tick once on entering. */
+  private hovered: CellId | null = null;
 
   constructor(private readonly onUnlock: (id: CellId) => void) {
     this.svg = svgEl('svg', { class: 'hb-svg', role: 'group', 'aria-label': 'Tablero de habilidades' });
@@ -149,30 +160,22 @@ export class HexBoard {
 
   // ---------------------------------------------------------------- drawing
 
-  /** The round frame: concentric rings, the six spokes between the sectors, and marks all round. */
+  /** The round frame (Arturo, 16/10: one ring, nothing outside it): the ring, the six spokes between the sectors, and marks all round inside it. */
   private frameEl(): SVGGElement {
     const g = svgEl('g', { class: 'hb-frame', 'aria-hidden': 'true' });
-    for (const r of FRAME) g.append(svgEl('circle', { class: 'hb-ring', cx: 0, cy: 0, r }));
-    g.append(svgEl('circle', { class: 'hb-ring outer', cx: 0, cy: 0, r: OUTER }));
-    // The spokes where each sector starts (the rings' corners, 30° either side of the vertical), out to the edge.
+    g.append(svgEl('circle', { class: 'hb-ring', cx: 0, cy: 0, r: OUTER }));
+    // The spokes where each sector starts (the rings' corners, 30° either side of the vertical), out to the ring.
     for (let i = 0; i < 6; i++) {
       const a = (Math.PI / 180) * (60 * i - 120);
-      g.append(svgEl('line', { class: 'hb-spoke', x1: (392 * Math.cos(a)).toFixed(1), y1: (392 * Math.sin(a)).toFixed(1), x2: ((OUTER + 22) * Math.cos(a)).toFixed(1), y2: ((OUTER + 22) * Math.sin(a)).toFixed(1) }));
+      g.append(svgEl('line', { class: 'hb-spoke', x1: (392 * Math.cos(a)).toFixed(1), y1: (392 * Math.sin(a)).toFixed(1), x2: (OUTER * Math.cos(a)).toFixed(1), y2: (OUTER * Math.sin(a)).toFixed(1) }));
     }
-    // Marks every 5°, longer every 15° and at each sector's middle a notch in its colour.
+    // Marks every 5°, longer every 15°.
     for (let deg = 0; deg < 360; deg += 5) {
       const a = (Math.PI / 180) * (deg - 90);
       const long = deg % 15 === 0;
       const r0 = OUTER - (long ? 12 : 6);
       g.append(svgEl('line', { class: `hb-tick${long ? ' long' : ''}`, x1: (r0 * Math.cos(a)).toFixed(1), y1: (r0 * Math.sin(a)).toFixed(1), x2: (OUTER * Math.cos(a)).toFixed(1), y2: (OUTER * Math.sin(a)).toFixed(1) }));
     }
-    SECTOR_LINES.forEach((line, i) => {
-      // At the sector's own middle: the mean of its cells' directions.
-      const own = BOARD.filter((c) => c.sector === i).map(centre);
-      const a = Math.atan2(own.reduce((sum, p) => sum + p.y, 0), own.reduce((sum, p) => sum + p.x, 0));
-      const p = { x: (OUTER + 14) * Math.cos(a), y: (OUTER + 14) * Math.sin(a) };
-      g.append(svgEl('path', { class: `hb-notch sk-${line}`, d: `M${(p.x - 9 * Math.cos(a + Math.PI / 2)).toFixed(1)} ${(p.y - 9 * Math.sin(a + Math.PI / 2)).toFixed(1)}L${(p.x + 9 * Math.cos(a + Math.PI / 2)).toFixed(1)} ${(p.y + 9 * Math.sin(a + Math.PI / 2)).toFixed(1)}L${((OUTER + 2) * Math.cos(a)).toFixed(1)} ${((OUTER + 2) * Math.sin(a)).toFixed(1)}Z` }));
-    });
     return g;
   }
 
@@ -182,8 +185,8 @@ export class HexBoard {
     // Outer cells first: the inner ones, drawn later, lie over a rising neighbour's shadow.
     for (const cell of [...BOARD].sort((a, b) => b.ring - a.ring)) {
       const { x, y } = centre(cell);
-      const icon = svgEl('g', { class: 'hx-icon', transform: cell.kind === 'core' ? 'translate(-15 -15) scale(1.25)' : 'translate(-12 -12)' });
-      icon.innerHTML = boardIconSvg(cell.id);
+      const icon = svgEl('g', { class: 'hx-icon' });
+      icon.innerHTML = boardIconSvg(cell.id, cell.kind === 'core' ? 34 : 27);
       const pop = svgEl(
         'g',
         { class: 'hx-pop' },
@@ -206,69 +209,46 @@ export class HexBoard {
     return g;
   }
 
-  /** A cell's look from the soldier's board: unlocked, open or locked, and its label for a screen reader. */
+  /** A cell's look from the soldier's board: selected, unlocked or locked, and its label for a screen reader (a locked one, no name: it shows none). */
   private paint(v: CellView): void {
     const d = this.data!;
     const state = cellState(d.board, v.cell.id);
     v.g.classList.remove('unlocked', 'open', 'locked');
     v.g.classList.add(state);
-    v.g.setAttribute('aria-label', `${v.cell.name}: ${state === 'unlocked' ? 'desbloqueada' : state === 'open' ? 'disponible' : 'bloqueada'}`);
+    v.g.setAttribute('aria-label', state === 'locked' ? 'Casilla bloqueada' : `${v.cell.name}: ${state === 'unlocked' ? 'seleccionada' : 'desbloqueada'}`);
+  }
+
+  /** Whether `id` has a card to show: a selected or unlocked cell; a locked one, nothing (Arturo, 16/10). */
+  private readable(id: CellId): boolean {
+    return !!this.data && cellState(this.data.board, id) !== 'locked';
   }
 
   // ---------------------------------------------------------------- the card
 
-  /** The card of `id`: icon, name, kind and family, Lore's line, the effect, what it asks and where it stands. */
+  /** The card of `id`: icon, name, kind and family, Lore's line, the effect, what it asks and where it stands; a locked cell keeps the last card. */
   private showCard(id: CellId): void {
     const d = this.data;
     const cell = BOARD_CELLS[id];
     if (!d || !cell) return;
+    if (!this.readable(id)) id = this.readable(this.shown) ? this.shown : CORE;
+    const shownCell = BOARD_CELLS[id]!;
     this.shown = id;
     for (const v of this.cells.values()) v.g.classList.toggle('shown', v.cell.id === id);
     const state = cellState(d.board, id);
-    const line = cell.line;
+    const line = shownCell.line;
     clear(this.card);
     this.card.className = `hb-card sk-${line ?? 'core'} ${state}`;
-    const icon = h('span.hb-card-icon');
-    icon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${boardIconSvg(id)}</svg>`;
+    const icon = h('span.hb-card-icon', {}, h('i', { style: boardIconStyle(id, id === CORE ? 'core' : state === 'unlocked' ? 'dark' : 'grey') }));
     const lore = d.describe?.(id);
-    const kind = cell.kind === 'core' ? CELL_KINDS.core : `${CELL_KINDS[cell.kind]} · ${SKILLS[line!].name}`;
+    const kind = shownCell.kind === 'core' ? CELL_KINDS.core : `${CELL_KINDS[shownCell.kind]} · ${SKILLS[line!].name}`;
     append(
       this.card,
-      h('div.hb-card-head', {}, icon, h('div', {}, h('b.hb-card-name', {}, cell.name), h('small.hb-card-kind', {}, kind))),
+      h('div.hb-card-head', {}, icon, h('div', {}, h('b.hb-card-name', {}, shownCell.name), h('small.hb-card-kind', {}, kind))),
       lore ? h('p.hb-card-lore', {}, lore) : null,
-      h('p.hb-card-effect', {}, cell.effect),
-      id === CORE ? null : this.needs(cell),
-      h(`p.hb-card-status.${this.statusTone(id)}`, {}, this.status(id)),
+      h('p.hb-card-effect', {}, shownCell.effect),
+      // No rules on the card (Arturo, 16/10 #37): at most, on an unlocked cell of one's own, that there are no points.
+      state === 'open' && d.editable && pointsLeft(d.skills, d.board) < 1 ? h('p.hb-card-note', {}, 'Sin puntos por gastar') : null,
     );
-  }
-
-  /** What a cell asks for (beside one it has, and a point), each with whether the soldier has it. */
-  private needs(cell: BoardCell): HTMLElement {
-    const d = this.data!;
-    const points = pointsLeft(d.skills, d.board);
-    const owned = d.board.includes(cell.id);
-    const row = (ok: boolean, text: string) => h(`li.${ok ? 'ok' : 'miss'}`, {}, text);
-    return h(
-      'ul.hb-card-needs',
-      {},
-      row(owned || withinReach(d.board, cell.id), 'Al lado de una que ya tenga'),
-      owned ? null : row(points > 0, `Un punto (le ${points === 1 ? 'queda 1' : `quedan ${points}`})`),
-    );
-  }
-
-  private status(id: CellId): string {
-    const d = this.data!;
-    if (id === CORE) return 'Todo se abre desde aquí.';
-    if (d.board.includes(id)) return 'Desbloqueada.';
-    const why = unlockBlocker(d.skills, d.board, id);
-    if (why) return why;
-    return d.editable ? 'Mantén pulsada la casilla un segundo para desbloquearla.' : `Disponible. Solo ${d.owner} puede desbloquearla.`;
-  }
-
-  private statusTone(id: CellId): 'done' | 'go' | 'no' {
-    const d = this.data!;
-    if (id === CORE || d.board.includes(id)) return 'done';
-    return !unlockBlocker(d.skills, d.board, id) && d.editable ? 'go' : 'no';
   }
 
   // ---------------------------------------------------------------- holding
@@ -286,6 +266,7 @@ export class HexBoard {
     if (!this.buyable(id)) return;
     const v = this.cells.get(id)!;
     v.g.classList.add('holding');
+    this.holdSound = uiSound('cellHold');
     const timer = window.setTimeout(() => this.completeHold(), HOLD_MS);
     this.hold = { id, timer, pointer, x, y };
   }
@@ -293,6 +274,8 @@ export class HexBoard {
   /** Let go, left the cell, a drag, Escape, the focus gone: nothing is bought. */
   private cancelHold(): void {
     if (!this.hold) return;
+    this.holdSound?.();
+    this.holdSound = null;
     window.clearTimeout(this.hold.timer);
     this.cells.get(this.hold.id)?.g.classList.remove('holding');
     this.hold = null;
@@ -302,6 +285,8 @@ export class HexBoard {
     const hold = this.hold;
     if (!hold) return;
     this.hold = null;
+    // Its tone lasts the hold exactly and ends on its own as the cell clicks in.
+    this.holdSound = null;
     this.cells.get(hold.id)?.g.classList.remove('holding');
     // Checked again: the soldier may have changed while it was held.
     if (this.buyable(hold.id)) this.onUnlock(hold.id);
@@ -314,6 +299,7 @@ export class HexBoard {
     v.g.classList.remove('bought');
     void v.g.getBoundingClientRect();
     v.g.classList.add('bought');
+    uiSound('cellBuy');
     window.setTimeout(() => v.g.classList.remove('bought'), 900);
   }
 
@@ -442,7 +428,9 @@ export class HexBoard {
     });
     v.addEventListener('pointermove', (e) => {
       const at = this.local(e);
-      if (e.pointerType === 'mouse' || this.touches.has(e.pointerId)) this.pointer = this.toBoard(at.x, at.y);
+      const holding = this.hold && this.hold.pointer === e.pointerId ? this.hold : null;
+      // While a cell is held the wave stays as it is: nothing moves under the pointer.
+      if (!holding && (e.pointerType === 'mouse' || this.touches.has(e.pointerId))) this.pointer = this.toBoard(at.x, at.y);
       if (this.touches.has(e.pointerId)) this.touches.set(e.pointerId, at);
       if (this.pinch && this.touches.size === 2) {
         const [a, b] = [...this.touches.values()];
@@ -450,9 +438,16 @@ export class HexBoard {
         this.zoomAt((this.pinch.z * (d / this.pinch.d)) / this.z, (a!.x + b!.x) / 2, (a!.y + b!.y) / 2);
         return;
       }
+      // A hold lets go once the pointer is well off its cell, measured on the board (not by what the
+      // wave has moved under it); until then the press never becomes a drag.
+      if (holding) {
+        const p = this.toBoard(at.x, at.y);
+        const c = this.cells.get(holding.id)!;
+        if (Math.hypot(p.x - c.x, p.y - c.y) > HOLD_REACH) this.cancelHold();
+      }
       const drag = this.drag;
       if (drag && drag.id === e.pointerId) {
-        if (!drag.moved && Math.hypot(at.x - drag.x, at.y - drag.y) > DRAG_PX) {
+        if (!drag.moved && !this.hold && Math.hypot(at.x - drag.x, at.y - drag.y) > DRAG_PX) {
           drag.moved = true;
           // Dragging is moving the board, never buying.
           this.cancelHold();
@@ -464,15 +459,14 @@ export class HexBoard {
           this.apply();
         }
       }
-      // A hold whose pointer has left its cell is let go.
-      if (this.hold && this.hold.pointer === e.pointerId) {
-        const over = document.elementFromPoint(e.clientX, e.clientY);
-        if (this.cellAt(over) !== this.hold.id) this.cancelHold();
-      }
-      // Hovering consults (a mouse only: a finger consults by tapping).
-      if (e.pointerType === 'mouse' && !this.drag?.moved) {
+      // Hovering consults (a mouse only: a finger consults by tapping; not while holding).
+      if (e.pointerType === 'mouse' && !this.drag?.moved && !this.hold) {
         const id = this.cellAt(e.target);
-        if (id && id !== this.shown) this.showCard(id);
+        if (id && id !== this.hovered && this.readable(id)) {
+          uiSound('cellHover');
+          this.showCard(id);
+        }
+        this.hovered = id;
       }
       this.wave();
     });
@@ -508,6 +502,9 @@ export class HexBoard {
       },
       { passive: false },
     );
+    // No menu or native drag to cut a press short (a long touch opens the menu).
+    v.addEventListener('contextmenu', (e) => e.preventDefault());
+    v.addEventListener('dragstart', (e) => e.preventDefault());
     v.addEventListener('keydown', (e) => this.key(e));
     // A cell given the focus any way (a click, the tab key): the arrows go on from it, and it is consulted.
     v.addEventListener('focusin', (e) => {

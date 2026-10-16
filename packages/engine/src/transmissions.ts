@@ -148,6 +148,7 @@ export const SCENES: Scene[] = [
     lines: [
       { who: 'teo', text: 'Tres días sin una horda en la carretera.' },
       { who: 'teo', text: 'Los muertos no piensan: van al ruido. Quien controla el ruido, controla la horda.' },
+      { who: 'morse', text: 'Y se va la nieve. Lo que tapó vuelve a andar.' },
     ],
   },
   {

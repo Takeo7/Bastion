@@ -411,7 +411,10 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
     if (abilities.includes('mindspin')) {
       // The Chillón: a scream at whoever it sees (one a turn for the whole horde), or a corpse raised.
       if (usable('mindspin') && sim.alienBudget.psi > 0) {
-        const victims = abilityTargets(s, u, 'mindspin').sort((a, b) => b.rank - a.rank || psiChance(b, s) - psiChance(a, s) || a.id.localeCompare(b.id));
+        // Only at whoever it sees itself: the dead don't tell each other (Arturo, 16/10).
+        const victims = abilityTargets(s, u, 'mindspin')
+          .filter((v) => seen.includes(v))
+          .sort((a, b) => b.rank - a.rank || psiChance(b, s) - psiChance(a, s) || a.id.localeCompare(b.id));
         if (victims.length) {
           sim.alienBudget.psi--;
           sim.perform(u, 'mindspin', { target: victims[0]! });
@@ -445,13 +448,14 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
         return;
       }
     } else {
-      // A bite for whoever is within one action's reach (the nearest), or a step toward the nearest in sight.
-      if (bite && usable(bite) && soldiers.some((e) => farness(s, u.pos, e.pos) <= stride(u))) {
-        const options = meleeTargets(s, u, bite);
-        if (options.length) {
-          const pick = options.sort((a, b) => a.path.length - b.path.length || a.target.hp - b.target.hp || a.target.id.localeCompare(b.target.id))[0]!;
+      // A bite costs an action and leaves the other (playtest 16/10 #21): only whoever it has beside it, the weakest first.
+      // A step is another action: to the nearest it sees itself, not whoever another of the dead sees (#12).
+      if (bite && usable(bite) && soldiers.some((e) => inMeleeReach(s, u.pos, e.pos))) {
+        const beside = meleeTargets(s, u, bite).filter((o) => !o.path.length);
+        if (beside.length) {
+          const pick = beside.sort((a, b) => a.target.hp - b.target.hp || a.target.id.localeCompare(b.target.id))[0]!;
           sim.perform(u, bite, { melee: pick });
-          return;
+          continue;
         }
       }
       if (seen.length) {

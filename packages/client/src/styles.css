@@ -882,6 +882,12 @@ em.bite::before {
   --icon: var(--i-armor);
 }
 
+/* A vest put on out there: health, with the armour's shape. */
+.stat.worn {
+  --c: var(--c-hp);
+  --icon: var(--i-armor);
+}
+
 .pips {
   display: inline-flex;
   gap: 2px;
@@ -2395,6 +2401,65 @@ dl.controls dd {
 .float-text.warn {
   color: #ffc35a;
   font-size: 17px;
+}
+
+/* A bar filled in the field (fx.floatBar): the line's name and its percent over a bar that fills, in its colour. */
+.float-bar {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  /* Clear of the soldier's flag (its name and pips), which sits on the same spot. */
+  margin-top: -44px;
+  pointer-events: none;
+  animation: callout-up 2.8s ease-out forwards;
+}
+
+.float-bar b {
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--cc, #fff) 70%, #fff);
+  text-shadow: var(--scene-shadow);
+}
+
+.float-bar i {
+  position: relative;
+  width: 96px;
+  height: 8px;
+  border-radius: 1px;
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+.float-bar i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--cc, #fff);
+  transform-origin: left;
+  animation: float-bar-fill 0.8s cubic-bezier(0.3, 0.8, 0.4, 1) 0.15s backwards, float-bar-glow 0.5s ease-out 0.95s;
+  box-shadow: 0 0 10px var(--cc, #fff);
+}
+
+@keyframes float-bar-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes float-bar-glow {
+  50% {
+    filter: brightness(1.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float-bar i::after {
+    animation: none;
+  }
 }
 
 /* «¡APARECE UN IMPRESO!», «OS HA VISTO»: a red-edged slip that stays to be read. */

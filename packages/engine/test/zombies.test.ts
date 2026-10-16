@@ -6,6 +6,7 @@ import { decorCode, decorOf } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { broughtBack, rollLoot, roomAt, searchable, searchableTiles, SEARCHABLE } from '../src/loot';
 import { lootSummary } from '../src/lore';
+import { canSee } from '../src/los';
 import { Rng } from '../src/rng';
 import { executeCommand, Sim } from '../src/rules';
 import { createMission, hordeWave, MISSION_NAMES } from '../src/setup';
@@ -182,6 +183,22 @@ describe('the dead', () => {
     expect(of(turn.events, 'shot').filter((e) => e.unit === 'a1')).toEqual([expect.objectContaining({ ability: 'claw', target: 's1' })]);
   });
 
+  it('a zombie bites only whoever it sees itself, not whoever another of the dead sees (Arturo, 16/10)', () => {
+    // Another house: a wall between the soldier and the zombie, with a way round it within one action.
+    const s = stateFrom(['....................', '....................', '....................', '....................', '###.................', '....................', '....................']);
+    s.activeTeam = 'alien';
+    addUnit(s, 's1', 'rookie', 1, 2, { hp: 50, maxHp: 50 });
+    const watcher = addUnit(s, 'a1', 'zombie', 9, 2);
+    // It could reach the soldier round the wall in one action (four steps), but doesn't see it.
+    const behind = addUnit(s, 'a2', 'zombie', 2, 5, { heard: { x: 12, y: 6, z: 0 } });
+    pod(s, 'p1', true, [watcher, behind]);
+    expect(canSee(s, watcher, s.units[0]!)).toBe(true);
+    expect(canSee(s, behind, s.units[0]!)).toBe(false);
+    const turn = sim(s);
+    turn.runAlienTurn();
+    expect(of(turn.events, 'shot').some((e) => e.unit === 'a2')).toBe(false);
+  });
+
   it('seeing nobody, a zombie goes to the last noise it heard; with nothing heard, it wanders', () => {
     const s = stateFrom(['...............', '.#############.', '...............']);
     s.activeTeam = 'alien';
@@ -213,15 +230,33 @@ describe('the dead', () => {
     expect(raider.pos.x).toBeGreaterThan(10);
   });
 
-  it('a Corredor covers twice the ground of a zombie', () => {
-    const s = stateFrom(['................................']);
+  it('a Corredor covers twice the ground of a zombie: nine tiles off, a step and a bite; the zombie only gets there', () => {
+    const turn = (template: 'xenoid' | 'zombie') => {
+      const s = stateFrom(['................................']);
+      s.activeTeam = 'alien';
+      addUnit(s, 's1', 'rookie', 0, 0, { hp: 50, maxHp: 50 });
+      pod(s, 'p1', true, [addUnit(s, 'a1', template, 9, 0)]);
+      const t = sim(s);
+      t.runAlienTurn();
+      return of(t.events, 'shot');
+    };
+    expect(turn('xenoid')).toEqual([expect.objectContaining({ unit: 'a1', ability: 'claw', target: 's1' })]);
+    expect(turn('zombie')).toEqual([]);
+  });
+
+  it('the dead have two actions (playtest 16/10 #21): two bites, or a step and a bite; a bite needs the soldier beside it', () => {
+    const s = field(12, 7);
     s.activeTeam = 'alien';
-    addUnit(s, 's1', 'rookie', 0, 0, { hp: 50, maxHp: 50 });
-    const runner = addUnit(s, 'a1', 'xenoid', 17, 0);
-    pod(s, 'p1', true, [runner]);
-    const turn = sim(s);
-    turn.runAlienTurn();
-    expect(of(turn.events, 'shot')).toEqual([expect.objectContaining({ unit: 'a1', ability: 'claw', target: 's1' })]);
+    addUnit(s, 's1', 'rookie', 2, 3, { hp: 50, maxHp: 50 });
+    const beside = addUnit(s, 'a1', 'zombie', 3, 3);
+    const near = addUnit(s, 'a2', 'zombie', 6, 5);
+    pod(s, 'p1', true, [beside, near]);
+    const t = sim(s);
+    t.runAlienTurn();
+    const bites = of(t.events, 'shot');
+    expect(bites.filter((e) => e.unit === 'a1')).toHaveLength(2);
+    expect(bites.filter((e) => e.unit === 'a2')).toHaveLength(1);
+    expect(TEMPLATES.zombie).toMatchObject({ hp: 3, mobility: TEMPLATES.rookie.mobility * 0.6 });
   });
 
   it('a horde of twenty plays its turn quickly', () => {

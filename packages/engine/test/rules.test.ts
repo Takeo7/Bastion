@@ -10,7 +10,7 @@ import { MAPS, parseMap } from '../src/maps';
 import { computeReach } from '../src/path';
 import type { Command } from '../src/protocol';
 import { Rng } from '../src/rng';
-import { abandonMission, evacWins, executeCommand, Sim, syncTurn } from '../src/rules';
+import { abandonMission, answerAbandon, callAbandon, evacWins, executeCommand, Sim, syncTurn } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { AbilityId, ClassId, GameState, Place, Slot, TemplateId } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
@@ -121,20 +121,23 @@ describe('classes', () => {
     expect(previewShot(s, sniper, far, { ability: 'pistol' })).toBeNull();
   });
 
-  it('slash runs to the enemy and ignores cover', () => {
+  it('slash strikes only whoever is alongside (striking is striking, running is running: 16/10), and ignores cover', () => {
     const s = field();
     const ranger = addUnit(s, 's1', 'assault', 0, 5);
     const a = addUnit(s, 'a1', 'trooper', 5, 5, { hp: 20, maxHp: 20 });
     s.tiles[5 * 20 + 6] = 'high';
+    expect(meleeTargets(s, ranger, 'slash')).toEqual([]);
+    ranger.pos = { x: 4, y: 5, z: 0 };
     const options = meleeTargets(s, ranger, 'slash');
-    expect(options.map((o) => o.target.id)).toContain('a1');
+    expect(options.map((o) => o.target.id)).toEqual(['a1']);
+    expect(options[0]!.path).toEqual([]);
     const p = previewShot(s, ranger, a, { ability: 'slash', from: options[0]!.tile })!;
     expect(p.cover).toBe(0);
     expect(p.mods.find((m) => m.label === 'Arma cuerpo a cuerpo')?.value).toBe(20);
     const events = run(s, ability('s1', 'slash', { target: 'a1' }));
-    expect(events.some((e) => e.t === 'moved')).toBe(true);
+    expect(events.some((e) => e.t === 'moved')).toBe(false);
     expect(events.some((e) => e.t === 'shot' && e.ability === 'slash')).toBe(true);
-    expect(Math.max(Math.abs(ranger.pos.x - a.pos.x), Math.abs(ranger.pos.y - a.pos.y))).toBe(1);
+    expect(ranger.pos).toEqual({ x: 4, y: 5, z: 0 });
   });
 
   it('the medkit heals and spends a charge; aid protocol raises defense', () => {
@@ -170,7 +173,7 @@ describe('enemies', () => {
   it('a stun lance hit leaves the soldier with a single action next turn', () => {
     const s = field();
     const soldier = addUnit(s, 's1', 'specialist', 5, 5, { hp: 50, maxHp: 50 });
-    const lancer = addUnit(s, 'a1', 'lancer', 7, 5);
+    const lancer = addUnit(s, 'a1', 'lancer', 6, 5);
     let stunned = false;
     for (let seed = 1; seed < 20 && !stunned; seed++) {
       const sim = new Sim(s, new Rng(seed), [0]);
@@ -323,6 +326,24 @@ describe('recovery missions', () => {
     const events = abandonMission(s);
     expect(events).toHaveLength(1);
     expect(s.outcomeReason).toBe('abandoned');
+  });
+
+  it('with the partner here, abandoning is asked first: a no keeps it going, a yes ends it (playtest 16/10)', () => {
+    const { s } = recovery();
+    expect(callAbandon(s, 0, [0, 1])).toEqual([{ t: 'abandonCalled', slot: 0 }]);
+    expect(s.abandonCall).toEqual({ by: 0 });
+    // Whoever asked can't answer for the partner.
+    expect(answerAbandon(s, 0, true)).toEqual([]);
+    expect(answerAbandon(s, 1, false)).toEqual([{ t: 'abandonRefused', slot: 1 }]);
+    expect(s.abandonCall).toBeUndefined();
+    expect(s.outcome).toBeNull();
+    callAbandon(s, 0, [0, 1]);
+    answerAbandon(s, 1, true);
+    expect(s.outcomeReason).toBe('abandoned');
+    // Alone, it ends at once.
+    const alone = recovery().s;
+    callAbandon(alone, 0, [0]);
+    expect(alone.outcomeReason).toBe('abandoned');
   });
 });
 

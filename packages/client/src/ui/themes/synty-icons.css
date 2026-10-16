@@ -19,8 +19,15 @@
   --sicon-lines: hidden;
 }
 
-:root[data-ui='mixta'] [data-ability='evacRefuse'] {
+:root[data-ui='mixta'] :is([data-ability='evacRefuse'], [data-ability='abandonRefuse']) {
   --sicon: url('/ui/synty/icons/mh-hourglass.webp');
+  --sicon-fill: currentColor;
+  --sicon-lines: hidden;
+}
+
+/* Abandoning the mission (playtest 16/10), asked and answered on the bar the same way: the flag to go (staying, the hourglass above). */
+:root[data-ui='mixta'] :is([data-ability='abandon'], [data-ability='abandonAccept']) {
+  --sicon: url('/ui/synty/icons/mh-flag.webp');
   --sicon-fill: currentColor;
   --sicon-lines: hidden;
 }

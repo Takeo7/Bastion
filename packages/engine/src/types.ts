@@ -1,4 +1,4 @@
-import type { Deeds } from './skills';
+import type { Deeds, MissionLines } from './skills';
 export interface Vec2 {
   x: number;
   y: number;
@@ -733,6 +733,10 @@ export interface Unit {
   reactedTo: string[];
   /** Overwatch with the blade (docs/FASE10.md §4): strikes whoever comes alongside instead of shooting. */
   watchMelee?: boolean;
+  /** A soldier's experience lines in the mission (skills.ts MissionLines): its bars fill out there. */
+  lines?: MissionLines;
+  /** A vest found and put on out there (playtest 16/10 #18): its health counts at once, and it comes home. */
+  worn?: ItemId[];
   /** Unit this one keeps pinned down with Suppression. */
   suppressing: string | null;
   /** −aim while pinned down; moving draws fire. */
@@ -982,6 +986,8 @@ export interface GameState {
   activeUnit?: string;
   /** A player asked to evacuate from the bus and waits for the partner's yes (docs/PRUEBA-2026-10-14.md P1). */
   evacCall?: { by: Slot; unit: string };
+  /** A player asked to abandon the mission and waits for the partner's yes (playtest 16/10). */
+  abandonCall?: { by: Slot };
   outcome: Outcome | null;
   outcomeReason: EndReason | null;
   /**
@@ -996,6 +1002,8 @@ export interface GameState {
   silences?: SilenceZone[];
   /** The Taller de oficios is next to the listening post: the Oficio makes less noise (OFICIO_QUIET). */
   quietSongs?: boolean;
+  /** Under snow (playtest 16/10): still winter in the campaign. Missing, only the opening chapter is. */
+  snow?: boolean;
   /** Tiles already searched, by node (grid.ts nodeOf; on the ground, y * width + x); missing before searching existed. */
   searched?: number[];
   /** Rooms the squad has searched, by id (loot.ts roomAt; docs/FASE8.md §B). */

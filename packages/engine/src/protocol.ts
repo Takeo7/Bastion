@@ -60,8 +60,9 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('hello'), name: z.string().trim().min(1).max(20), token: z.string().max(64).optional() }),
   z.object({ t: z.literal('start'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional(), veterans: z.boolean().optional(), night: z.boolean().optional() }),
   z.object({ t: z.literal('newMission'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional(), night: z.boolean().optional() }),
-  /** Ends the current mission for both players. */
+  /** Ends the current mission for both players: asked of the partner first, if here (playtest 16/10). */
   z.object({ t: z.literal('abandon') }),
+  z.object({ t: z.literal('abandonAnswer'), accept: z.boolean() }),
   /** Ask for a full snapshot (the client detected a gap in the event stream). */
   z.object({ t: z.literal('sync') }),
   z.object({ t: z.literal('cmd'), cmd: commandSchema }),
@@ -188,4 +189,4 @@ export type ServerMessage =
   | { t: 'deadline'; kind: DeadlineKind; ms: number | null }
   | { t: 'error'; message: string };
 
-export type DeadlineKind = 'proposal' | 'evac';
+export type DeadlineKind = 'proposal' | 'evac' | 'abandon';

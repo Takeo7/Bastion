@@ -22,10 +22,12 @@ import {
   squadMember,
   type CampaignCommand,
   type CampaignState,
+  missionInfo,
+  THAW_AFTER_STORY,
 } from '../src/campaign';
 import { abilitiesOf } from '../src/abilities';
 import { armorTier, bastionLevel, LEVEL_XP, MAX_LEVEL, missionXp, nextTierBlocker, weaponTier } from '../src/progression';
-import { BASE_AIM, barsCost, NO_GROWTH, NO_SKILLS, randomBoard, totalBars, veteranWill } from '../src/skills';
+import { BASE_AIM, barsCost, missionLines, NO_GROWTH, NO_SKILLS, randomBoard, totalBars, veteranWill } from '../src/skills';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
 import type { PerkId, Slot } from '../src/types';
@@ -252,13 +254,14 @@ describe('missions', () => {
     const s = c.soldiers.find((x) => x.id === unit.campaignId)!;
     s.skills = { ...NO_SKILLS, shooting: 22 };
     s.growth = { ...NO_GROWTH, shooting: 7 };
+    unit.lines = missionLines(s.skills, s.growth);
     unit.deeds = { shot: 2, hit: 1 };
     mission.outcome = 'victory';
     mission.outcomeReason = 'objective';
     const report = applyMissionResult(c, mission, new Rng(4));
     const bar = report.squad.find((e) => e.id === s.id)!.bars!;
     expect(bar).toEqual([{ skill: 'shooting', filled: 2, growth: [s.growth.shooting - 7] }]);
-    expect(c.log.some((l) => l.text === `${s.name} llena una barra de Disparo: +${s.growth.shooting - 7} % de puntería con armas de fuego. Tiene un punto para el tablero.`)).toBe(true);
+    expect(c.log.some((l) => l.text === `${s.name} llena una barra de Disparo: +${s.growth.shooting - 7} % de puntería con armas de fuego. Tiene un punto de habilidad para el tablero.`)).toBe(true);
     // Two points: a cell of the first ring, then one of the second beside it (Disparo has the bar it asks for).
     expect(canSpendPoints(c, s)).toBe(true);
     run(c, { type: 'unlock', soldier: s.id, cell: 'steadyHand' }, s.owner);
@@ -268,6 +271,14 @@ describe('missions', () => {
     expect(canSpendPoints(c, s)).toBe(false);
     expect(() => run(c, { type: 'unlock', soldier: s.id, cell: 'sidearm' }, s.owner)).toThrow(/No le quedan puntos/);
     expect(() => run(c, { type: 'unlock', soldier: s.id, cell: 'killZone' }, s.owner)).toThrow(/al lado/);
+  });
+
+  it('it is winter until the story says so: the missions go under snow (playtest 16/10)', () => {
+    const { c, offer } = ready();
+    expect(missionInfo(c, offer).snow).toBe(true);
+    c.story.done = THAW_AFTER_STORY;
+    expect(missionInfo(c, offer).snow).toBeUndefined();
+    expect(createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, snow: true }).snow).toBe(true);
   });
 
   it('the Taller de oficios makes a mission teach 20 % more for every level', () => {

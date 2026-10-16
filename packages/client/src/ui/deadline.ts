@@ -7,7 +7,7 @@ import { h } from './dom';
 // counts it down on its own clock (the two machines' clocks may differ).
 
 /** Under this many seconds the countdown turns red. */
-const HURRY_S = 15;
+const HURRY_S = 10;
 
 /** Ends known by what they count down to: `kind` → when it falls due, on this machine's clock (performance.now). */
 const due = new Map<string, { at: number; total: number }>();

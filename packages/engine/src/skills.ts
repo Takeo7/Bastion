@@ -37,8 +37,8 @@ export const SKILLS: Record<SkillId, SkillDef> = {
   melee: { id: 'melee', name: 'Cuerpo a cuerpo', short: 'CaC', line: 'Se llena golpeando con la hoja, más si se acierta y más si se abate.', stat: 'Puntería cuerpo a cuerpo' },
   throwing: { id: 'throwing', name: 'Lanzar', short: 'LAN', line: 'Se llena lanzando piedras y granadas, más si alcanzan a alguien.', stat: 'Alcance al lanzar' },
   medicine: { id: 'medicine', name: 'Curar', short: 'CUR', line: 'Se llena curando con el botiquín o con medicinas; más si es a otro.', stat: 'Curación' },
-  searching: { id: 'searching', name: 'Investigar', short: 'INV', line: 'Se llena registrando habitaciones, abriendo cajas, arreglando equipos y apagando alarmas.', stat: 'Arreglar' },
-  fitness: { id: 'fitness', name: 'Forma física', short: 'FOR', line: 'Se llena agazapándose y corriendo (moverse con las dos acciones).', stat: 'Salud' },
+  searching: { id: 'searching', name: 'Investigar', short: 'INV', line: 'Se llena registrando habitaciones, abriendo cajas, arreglando equipos y apagando alarmas.', stat: 'Destreza al arreglar' },
+  fitness: { id: 'fitness', name: 'Forma física', short: 'FOR', line: 'Se llena cubriéndose y corriendo (moverse con las dos acciones).', stat: 'Salud' },
 };
 
 /** The first bar takes BAR_FIRST, and every next one BAR_STEP more. */
@@ -122,6 +122,23 @@ export const veteranWill = (rank: number) => BASE_WILL + WILL_PER_RANK * rank;
 /** `base` with `percent` more, rounded: a stat after what its line has added. */
 export const grown = (base: number, percent: number) => Math.round(base * (1 + percent / 100));
 
+/** The stat each line grows: the mod it lands in (none for Forma física: health) and its base. */
+const LINE_STAT: Record<SkillId, { mod: keyof UnitMods | null; base: number }> = {
+  shooting: { mod: 'gunAim', base: BASE_AIM },
+  melee: { mod: 'meleeAim', base: BASE_AIM },
+  throwing: { mod: 'grenadeRange', base: THROW_RANGE },
+  medicine: { mod: 'heal', base: MEDKIT_HEAL },
+  searching: { mod: 'hack', base: HACK_BASE },
+  fitness: { mod: null, base: BASE_HP },
+};
+
+/** What a line's growth going from `from` to `to` percent adds: to its mod, or to health. */
+export function growthDelta(skill: SkillId, from: number, to: number): { mods: Partial<UnitMods>; hp: number } {
+  const { mod, base } = LINE_STAT[skill];
+  const more = grown(base, to) - grown(base, from);
+  return mod ? { mods: { [mod]: more }, hp: 0 } : { mods: {}, hp: more };
+}
+
 /** Everything a soldier fights with, from its lines, its talents and what it carries. */
 export interface FighterStats {
   template: TemplateId;
@@ -143,18 +160,13 @@ export interface FighterStats {
  */
 export function fighterStats(skills: Skills, growth: Growth, board: readonly CellId[], gear: ItemId[] = [], arms?: Arms): FighterStats {
   const tpl = TEMPLATES.rookie;
-  let mods = addMods(
-    { ...ZERO_MODS },
-    {
-      aim: BASE_AIM - tpl.aim,
-      gunAim: grown(BASE_AIM, growth.shooting) - BASE_AIM,
-      meleeAim: grown(BASE_AIM, growth.melee) - BASE_AIM,
-      grenadeRange: grown(THROW_RANGE, growth.throwing) - THROW_RANGE,
-      heal: grown(MEDKIT_HEAL, growth.medicine) - MEDKIT_HEAL,
-      hack: grown(HACK_BASE, growth.searching) - HACK_BASE,
-    },
-  );
-  let maxHp = grown(BASE_HP, growth.fitness);
+  let mods = addMods({ ...ZERO_MODS }, { aim: BASE_AIM - tpl.aim });
+  let maxHp = BASE_HP;
+  for (const id of SKILL_IDS) {
+    const delta = growthDelta(id, 0, growth[id]);
+    mods = addMods(mods, delta.mods);
+    maxHp += delta.hp;
+  }
   let armor = 0;
   const perks: PerkId[] = [];
   const charges: Partial<Record<ChargeId, number>> = {};
@@ -198,7 +210,7 @@ export function unlockBlocker(skills: Skills, board: readonly CellId[], id: Cell
   if (!BOARD_CELLS[id]) return 'Esa casilla no existe.';
   if (id === CORE || board.includes(id)) return 'Ya la tiene.';
   if (!withinReach(board, id)) return 'Tiene que estar al lado de una que ya tenga.';
-  if (pointsLeft(skills, board) < 1) return 'No le quedan puntos: se gana uno cada vez que se llena una barra.';
+  if (pointsLeft(skills, board) < 1) return 'No le quedan puntos de habilidad: se gana uno cada vez que se llena una barra.';
   return null;
 }
 
@@ -251,25 +263,64 @@ export interface BarFilled {
 }
 
 /**
+ * A soldier's lines during a mission (Unit.lines, docs/FASE10.md): a bar
+ * fills there and then, when the action that fills it is over (Arturo,
+ * 16/10), and its stat goes up at once (Sim.settleBars, the `barFilled`
+ * event). `start`, the experience it set out with; `bonus`, what the Taller de
+ * oficios adds to what it learns; `rolls`, what each bar filled out there
+ * added; `growth`, with them.
+ */
+export interface MissionLines {
+  start: Skills;
+  bonus: number;
+  growth: Growth;
+  rolls: Partial<Record<SkillId, number[]>>;
+}
+
+export const missionLines = (skills: Skills, growth: Growth, bonus = 0): MissionLines => ({ start: { ...skills }, bonus, growth: { ...growth }, rolls: {} });
+
+/** The experience of each line right now: what it set out with and what its deeds have taught. */
+export function liveSkills(lines: MissionLines, deeds: Deeds | undefined): Skills {
+  const gained = learnedFrom(deeds, lines.bonus);
+  const out = { ...lines.start };
+  for (const id of SKILL_IDS) out[id] += gained[id];
+  return out;
+}
+
+/** Bars that have filled out there and not been rolled yet: each one's line and its number. */
+export function pendingBars(lines: MissionLines, deeds: Deeds | undefined): { skill: SkillId; filled: number }[] {
+  const now = liveSkills(lines, deeds);
+  const out: { skill: SkillId; filled: number }[] = [];
+  for (const id of SKILL_IDS) {
+    const done = barsOf(lines.start[id]).filled + (lines.rolls[id]?.length ?? 0);
+    for (let k = done + 1; k <= barsOf(now[id]).filled; k++) out.push({ skill: id, filled: k });
+  }
+  return out;
+}
+
+/**
  * A mission's deeds (and its `bonus`) added to a soldier's lines: the bars
  * that filled, each with its stat rolled up 5–10 % (`rng`), and a skill point
- * for each.
+ * for each. With `lines`, the bars already filled out there keep what they
+ * rolled; only the rest (with more bonus at home, or the last blow) roll now.
  */
-export function learn(skills: Skills, growth: Growth, deeds: Deeds | undefined, rng: Rng, bonus = 0): { skills: Skills; growth: Growth; gained: Skills; bars: BarFilled[]; points: number } {
+export function learn(skills: Skills, growth: Growth, deeds: Deeds | undefined, rng: Rng, bonus = 0, lines?: MissionLines): { skills: Skills; growth: Growth; gained: Skills; bars: BarFilled[]; points: number } {
   const gained = learnedFrom(deeds, bonus);
   const next = { ...skills };
-  const grew = { ...growth };
+  const grew = { ...(lines?.growth ?? growth) };
   const bars: BarFilled[] = [];
   let points = 0;
   for (const id of SKILL_IDS) {
     const from = barsOf(skills[id]).filled;
     next[id] = skills[id] + gained[id];
     const to = barsOf(next[id]).filled;
-    if (to <= from) continue;
-    const rolls = Array.from({ length: to - from }, () => rollGrowth(rng));
-    grew[id] += rolls.reduce((a, b) => a + b, 0);
+    const out = lines?.rolls[id] ?? [];
+    const now = Array.from({ length: Math.max(0, to - from - out.length) }, () => rollGrowth(rng));
+    grew[id] += now.reduce((a, b) => a + b, 0);
+    const rolls = [...out, ...now];
+    if (!rolls.length) continue;
     points += rolls.length;
-    bars.push({ skill: id, filled: to, growth: rolls });
+    bars.push({ skill: id, filled: from + rolls.length, growth: rolls });
   }
   return { skills: next, growth: grew, gained, bars, points };
 }

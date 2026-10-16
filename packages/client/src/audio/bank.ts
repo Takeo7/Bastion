@@ -120,15 +120,19 @@ const dB = (db: number) => Math.pow(10, db / 20);
 /**
  * Plays a sound: a random variant, pitch nudged by up to ±`spread` (a
  * fraction). If it is still rendering it plays when ready, unless that takes
- * more than a fifth of a second (a late gunshot is worse than none).
+ * more than a fifth of a second (a late gunshot is worse than none). Returns
+ * what stops it, fading out (a hold let go early); most callers ignore it.
  */
-export function sound(name: string, o: PlayOptions & { spread?: number } = {}): void {
+export function sound(name: string, o: PlayOptions & { spread?: number } = {}): () => void {
   const def = SOUNDS[name];
-  if (!def || !audio.live()) return;
+  if (!def || !audio.live()) return () => {};
+  let src: AudioBufferSourceNode | null = null;
+  let stopped = false;
   const go = (bufs: AudioBuffer[]) => {
+    if (stopped) return;
     const buf = bufs[Math.floor(Math.random() * bufs.length)]!;
     const spread = o.spread ?? 0.04;
-    audio.play(buf, {
+    src = audio.play(buf, {
       bus: o.bus ?? def.bus,
       gain: (o.gain ?? 1) * dB(def.level ?? 0),
       rate: (o.rate ?? 1) * (1 + (Math.random() * 2 - 1) * spread),
@@ -137,12 +141,20 @@ export function sound(name: string, o: PlayOptions & { spread?: number } = {}): 
       reverb: (o.reverb ?? 0) + (def.reverb ?? 0),
     });
   };
+  const stop = () => {
+    stopped = true;
+    if (src) audio.stop(src);
+  };
   const ready = rendered.get(name);
-  if (ready) return go(ready);
+  if (ready) {
+    go(ready);
+    return stop;
+  }
   const asked = performance.now();
   void render(name).then((bufs) => {
     if (performance.now() - asked < 200) go(bufs);
   });
+  return stop;
 }
 
 /** Renders every sound in idle moments, the most common first. */

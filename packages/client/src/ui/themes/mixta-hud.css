@@ -647,6 +647,11 @@
   color: #7dffb4;
 }
 
+/* Saying yes to abandoning (playtest 16/10): red like the menu's «Abandonar la misión». */
+:root[data-ui='mixta'] .ability[data-ability='abandonAccept']:not(:disabled) {
+  color: #ff8a78;
+}
+
 /* ===================================================== log, menu, radio */
 
 :root[data-ui='mixta'] .log {

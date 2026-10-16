@@ -292,3 +292,20 @@ export function withinReach(board: readonly CellId[], id: CellId): boolean {
 
 /** The ability each perk of the board gives (abilities.ts abilitiesOf). */
 export const PERK_ABILITY: Partial<Record<PerkId, AbilityId>> = Object.fromEntries(BOARD.filter((c) => c.perk && c.ability).map((c) => [c.perk!, c.ability!]));
+
+/**
+ * A soldier's role (Arturo, 16/10): the line with most cells bought on its
+ * board, shown as a dot of its colour; a tie goes to the line bought last.
+ * Null with nothing bought.
+ */
+export function boardRole(board: readonly CellId[]): SkillId | null {
+  const count = new Map<SkillId, number>();
+  let best: SkillId | null = null;
+  for (const id of board) {
+    const line = BOARD_CELLS[id]?.line;
+    if (!line) continue;
+    count.set(line, (count.get(line) ?? 0) + 1);
+    if (!best || count.get(line)! >= count.get(best)!) best = line;
+  }
+  return best;
+}

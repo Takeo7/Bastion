@@ -1,4 +1,5 @@
 import {
+  ABANDON_TEXT,
   BITE_TAG,
   biteNote,
   clipOf,
@@ -13,6 +14,8 @@ import {
   VETERANCY,
   apPerTurn,
   conditionOf,
+  evacWaiting,
+  wearable,
   WEAPONS,
   type AbilityId,
   type FoundWeaponId,
@@ -36,9 +39,10 @@ import { typed } from './typed';
 
 /**
  * What the action bar holds: the soldier's abilities, and the evacuation's own
- * (playtest 15/10 #10): «Evacuar» from La Lata, and the partner's answer to it.
+ * (playtest 15/10 #10): «Evacuar» from La Lata, and the partner's answer to it;
+ * and the same for abandoning the mission (16/10): the wait, and the answer.
  */
-export type BarActionId = AbilityId | 'evac' | 'evacAccept' | 'evacRefuse' | MenuId;
+export type BarActionId = AbilityId | 'evac' | 'evacAccept' | 'evacRefuse' | 'abandon' | 'abandonAccept' | 'abandonRefuse' | MenuId;
 
 /** The bar's actions with a menu (docs/FASE10.md §4): Lanzar, Vigilancia, Investigar. */
 export type MenuId = 'menu:throw' | 'menu:watch' | 'menu:investigate';
@@ -175,6 +179,8 @@ export interface PackView {
   near?: { id: string; name: string }[];
   /** Things on its tile (GameState.dropped), to pick up. */
   floor?: { id: string; label: string; name: string; kind: PackSlot['kind'] }[];
+  /** What it has on (Unit.worn): one vest at a time (rules.ts wearable). */
+  worn?: ItemId[];
 }
 
 /** An order on a thing carried or lying on the floor: the engine's `item` command (docs/FASE8.md §C). */
@@ -218,6 +224,12 @@ export interface HudHandlers {
   /** Skirmish over: both players back to the main menu. */
   onBackToMenu(): void;
   onAbandon(): void;
+  /**
+   * Abandoning as it stands (16/10): the partner who has to say yes (null
+   * alone, or with the partner gone: it ends at once), and whether this
+   * player's own call is waiting for it.
+   */
+  abandonState(): { partner: string | null; waiting: boolean };
   onPassCommand(): void;
   /** A menu of the bar opened or closed: draw the bar again. */
   onMenu(): void;
@@ -504,7 +516,7 @@ export class Hud {
           u.evacuated ? h('em.evac', {}, 'EVACUADO') : null,
           carrier === u.id ? h('em.data', {}, this.itemTag) : null,
           u.overwatch ? h('em.ow', {}, u.killZone ? 'ZONA LETAL' : u.watchMelee ? 'HOJA EN ALTO' : 'VIGILANCIA') : null,
-          u.hunkered ? h('em.hk', {}, 'AGAZAPADO') : null,
+          u.hunkered ? h('em.hk', {}, 'CUBRIÉNDOSE') : null,
           u.stunned ? h('em.stun', {}, 'ATURDIDO') : null,
         ),
       );
@@ -568,6 +580,8 @@ export class Hud {
         u.charges.grenade !== undefined ? stat('grenade', `Granadas: ${u.charges.grenade}`, h('b', {}, `×${u.charges.grenade}`)) : null,
         u.charges.medkit !== undefined ? stat('medkit', `Botiquín: ${u.charges.medkit}`, h('b', {}, `×${u.charges.medkit}`)) : null,
         u.armor ? stat('armor', `Blindaje ${u.armor}`, h('b', {}, String(u.armor))) : null,
+        // A vest found and put on out there (playtest 16/10): its health is already in the pips.
+        ...(u.worn ?? []).map((item) => stat('worn', `Lleva puesto: ${ITEMS[item].name} (${ITEMS[item].description.replace(/\.$/, '')})`, h('b', {}, `+${ITEMS[item].hp ?? 0}`))),
       ),
       h(
         'div.unit-weapon',
@@ -631,7 +645,7 @@ export class Hud {
         `button.pack-slot-btn${open ? '.open' : ''}`,
         {
           type: 'button',
-          title: `${pack.labels?.[i] ?? ''}: soltar${s.kind === 'weapon' ? ', equipar' : ''}${s.kind === 'medicines' ? ', usar' : ''}${pack.near?.length ? ', dar' : ''}`,
+          title: `${pack.labels?.[i] ?? ''}: soltar${s.kind === 'weapon' ? ', equipar' : ''}${s.kind === 'item' && wearable(s.item) ? ', ponerse' : ''}${s.kind === 'medicines' ? ', usar' : ''}${pack.near?.length ? ', dar' : ''}`,
           onclick: () => {
             this.packMenu = open ? null : { unit, slot: i };
             this.redrawPack(unit, pack);
@@ -732,7 +746,9 @@ export class Hud {
       this.packMenu = null;
       this.handlers.onItem(o);
     };
-    const act = (label: string, cost: string, fn: () => void, kind = '') => h(`button.pack-act${kind}`, { type: 'button', onclick: fn }, h('span', {}, label), h('small', {}, cost));
+    // An order that can't be given now says why in place of its cost.
+    const act = (label: string, cost: string, fn: () => void, kind = '', off: string | null = null) =>
+      h(`button.pack-act${kind}`, { type: 'button', onclick: fn, disabled: !!off, title: off ?? undefined }, h('span', {}, label), h('small', {}, off ?? cost));
     const items: HTMLElement[] = [];
     let title = '';
     if ('slot' in menu) {
@@ -741,6 +757,8 @@ export class Hud {
       const i = menu.slot;
       title = pack.labels?.[i] ?? '';
       if (s.kind === 'weapon') items.push(act('Equipar', '1 acción', () => order({ action: 'equip', index: i }), '.main'));
+      // A vest is put on there and then (playtest 16/10), one at a time (rules.ts).
+      if (s.kind === 'item' && wearable(s.item)) items.push(act('Ponerse', '1 acción', () => order({ action: 'equip', index: i }), '.main', pack.worn?.length ? 'Ya lleva un chaleco puesto.' : null));
       if (s.kind === 'medicines') {
         items.push(act('Usar', '1 acción', () => order({ action: 'use', index: i }), '.main'));
         for (const n of pack.near ?? []) items.push(act(`Curar a ${n.name}`, '1 acción', () => order({ action: 'use', index: i, to: n.id })));
@@ -807,7 +825,7 @@ export class Hud {
       {
         disabled: !a.enabled,
         'data-ability': a.icon ?? a.id,
-        'aria-label': `${a.name}. ${a.cost}. ${a.description}`,
+        'aria-label': `${a.name}. ${a.cost}. ${a.description}${a.reason && !a.enabled ? ` ${a.reason}` : ''}`,
         'aria-haspopup': a.options && a.options.length > 1 ? 'menu' : null,
         onclick,
       },
@@ -1138,7 +1156,7 @@ export class Hud {
         h('button.menu-entry', { onclick: () => this.toggleMenu(false) }, 'Continuar'),
         h('button.menu-entry', { onclick: () => this.renderMenu('controls') }, 'Controles'),
         h('button.menu-entry', { onclick: () => this.renderMenu('settings') }, 'Ajustes'),
-        h('button.menu-entry.danger', { onclick: () => (this.toggleMenu(false), this.confirmAbandon()), title: this.paired ? 'Termina la misión para los dos' : 'Termina la misión' }, 'Abandonar misión'),
+        this.abandonEntry(),
       );
     } else if (page === 'controls') {
       append(card, h('h2', {}, 'Controles'), h('dl.controls', {}, ...CONTROLS.flatMap(([key, what]) => [h('dt', {}, key), h('dd', {}, what)])), back);
@@ -1222,22 +1240,36 @@ export class Hud {
     button.textContent = 'VOLVIENDO AL BASTIÓN…';
   }
 
+  /** The menu's «Abandonar la misión»: off while this player's call waits for the partner. */
+  private abandonEntry(): HTMLElement {
+    const { partner, waiting } = this.handlers.abandonState();
+    if (waiting) return h('button.menu-entry.danger', { disabled: true, title: 'Contesta en su barra' }, evacWaiting(partner ?? 'tu compañero'));
+    return h(
+      'button.menu-entry.danger',
+      { onclick: () => (this.toggleMenu(false), this.confirmAbandon()), title: partner ? `Se lo pregunta a ${partner}` : this.paired ? 'Termina la misión para los dos' : 'Termina la misión' },
+      ABANDON_TEXT.button,
+    );
+  }
+
+  /** What abandoning costs, before it is asked (with the partner there, it waits for a yes on their bar). */
   private confirmAbandon(): void {
     uiSound('paper');
     clear(this.modal);
     this.modal.classList.add('show');
     const close = () => this.modal.classList.remove('show');
+    const { partner } = this.handlers.abandonState();
     this.modal.append(
       h(
         'div.modal-card.panel',
         {},
-        h('h2', {}, '¿Abandonar la misión?'),
-        h('p', {}, this.paired ? 'La misión termina para los dos jugadores y cuenta como fracasada.' : 'La misión termina y cuenta como fracasada.'),
+        h('h2', {}, `¿${ABANDON_TEXT.button}?`),
+        h('p', {}, ABANDON_TEXT.stakes),
+        partner ? h('p', {}, `${partner} tiene que aceptarlo.`) : null,
         h(
           'div.modal-actions',
           {},
-          h('button.danger', { onclick: () => (close(), this.handlers.onAbandon()) }, 'ABANDONAR'),
-          h('button.fire', { onclick: close }, 'SEGUIR JUGANDO'),
+          h('button.danger', { onclick: () => (close(), this.handlers.onAbandon()) }, ABANDON_TEXT.accept.toUpperCase()),
+          h('button.fire', { onclick: close }, ABANDON_TEXT.refuse.toUpperCase()),
         ),
       ),
     );

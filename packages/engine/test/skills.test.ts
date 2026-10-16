@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD, BOARD_CELLS, boardNeighbors, CORE, PERK_ABILITY, SECTOR_LINES } from '../src/board';
+import { BOARD, BOARD_CELLS, boardNeighbors, boardRole, CORE, PERK_ABILITY, SECTOR_LINES } from '../src/board';
 import { abilitiesOf } from '../src/abilities';
 import { apPerTurn } from '../src/content';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
@@ -13,6 +13,7 @@ import {
   fighterStats,
   learn,
   learnedFrom,
+  missionLines,
   NO_GROWTH,
   NO_SKILLS,
   pointsLeft,
@@ -204,6 +205,12 @@ describe('the hex board (docs/FASE10.md §6)', () => {
     expect(fighterStats(NO_SKILLS, NO_GROWTH, ['bladeMaster'], [], { primary: null, melee: 'machete' }).mods).toMatchObject({ meleeDamage: 2, meleeAim: 15 });
   });
 
+  it('the role: the line with most cells bought, a tie to the one bought last', () => {
+    expect(boardRole([])).toBeNull();
+    expect(boardRole(['steadyHand', 'grip', 'lightTrigger'])).toBe('shooting');
+    expect(boardRole(['steadyHand', 'grip'])).toBe('melee');
+  });
+
   it('a random board spends every point, each cell beside the ones before', () => {
     const skills = bars({ shooting: 3, fitness: 2 });
     const board = randomBoard(skills, new Rng(7));
@@ -283,6 +290,46 @@ describe('what a soldier does in a mission is counted by the events', () => {
     expect(client).toEqual(s);
     expect(s.units.find((u) => u.id === 's1')!.deeds).toEqual({ throw: 1, throwHit: 1 });
     expect(z.deeds).toBeUndefined();
+  });
+});
+
+describe('a bar fills out there (Arturo, 16/10)', () => {
+  const ctx = (seed = 1) => ({ slot: 0 as const, connected: [0 as const], rng: new Rng(seed) });
+
+  it('after the action that fills it, its stat goes up at once, the same on every client', () => {
+    const s = stateFrom(Array.from({ length: 12 }, () => '.'.repeat(12)));
+    const u = addUnit(s, 's1', 'rookie', 1, 1, { owner: 0, arms: { primary: 'assaultRifle', melee: null }, lines: missionLines({ ...NO_SKILLS, shooting: 8 }, NO_GROWTH) });
+    addUnit(s, 's2', 'rookie', 1, 3, { owner: 0 });
+    addUnit(s, 'z1', 'zombie', 6, 1, { hp: 99, maxHp: 99 });
+    u.mods.aim = 300;
+    const aim = u.mods.gunAim;
+    const client = cloneState(s);
+    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'shoot', target: 'z1' }, ctx());
+    if (!r.ok) throw new Error(r.error);
+    // A shot and a hit: 8 + 2 = 10, the first bar. It comes after the whole shot.
+    const filled = r.events.findIndex((e) => e.t === 'barFilled');
+    expect(filled).toBeGreaterThan(r.events.findIndex((e) => e.t === 'damaged'));
+    const bar = r.events[filled] as Extract<GameEvent, { t: 'barFilled' }>;
+    expect(bar).toMatchObject({ unit: 's1', skill: 'shooting', filled: 1 });
+    expect(bar.growth).toBeGreaterThanOrEqual(5);
+    expect(u.mods.gunAim - aim).toBe(Math.round(60 * (1 + bar.growth / 100)) - 60);
+    expect(u.lines!.rolls).toEqual({ shooting: [bar.growth] });
+    for (const e of r.events) applyEvent(client, e);
+    expect(client).toEqual(s);
+    // Home again: the bar keeps what it rolled out there, and isn't rolled twice.
+    const home = learn({ ...NO_SKILLS, shooting: 8 }, NO_GROWTH, u.deeds, new Rng(99), 0, u.lines);
+    expect(home.bars).toEqual([{ skill: 'shooting', filled: 1, growth: [bar.growth] }]);
+    expect(home.growth.shooting).toBe(bar.growth);
+  });
+
+  it('Forma física: health grows at once, the new points full', () => {
+    const s = stateFrom(['....']);
+    const u = addUnit(s, 's1', 'rookie', 0, 0, { owner: 0, hp: 3, maxHp: 5, lines: missionLines(NO_SKILLS, { ...NO_GROWTH, fitness: 15 }) });
+    // 5 grown 15 % is 6 (5.75); 25 % more is 6 (6.25); 35 %, 7 (6.75).
+    applyEvent(s, { t: 'barFilled', unit: 's1', skill: 'fitness', filled: 1, growth: 10 });
+    expect([u.maxHp, u.hp]).toEqual([5, 3]);
+    applyEvent(s, { t: 'barFilled', unit: 's1', skill: 'fitness', filled: 2, growth: 10 });
+    expect([u.maxHp, u.hp]).toEqual([6, 4]);
   });
 });
 

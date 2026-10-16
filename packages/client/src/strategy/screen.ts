@@ -165,7 +165,7 @@ import { uiSound } from '../audio/ui';
 import { plotIcon } from './plotIcons';
 import { kindOf, loadoutEl, modPanel, placeOf, weaponCare, weaponIcon, weaponMarks } from './arms';
 import { soldierPortrait } from './portraits';
-import { barLines, learnedTags, skillDigits, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
+import { barLines, learnedTags, roleDot, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
 import { deadlineEl } from '../ui/deadline';
 import { SURVIVOR_CHOICES } from '../game/syntyManifest';
 
@@ -218,9 +218,9 @@ const DIFFICULTY = ['', 'Moderada', 'Difícil', 'Muy difícil', 'Extrema'];
 const SOLDIER: TemplateId = 'rookie';
 
 const NAV: { view: BaseView; label: string }[] = [
-  { view: 'hub', label: 'Bastión' },
+  // «Bastión» and «Diario» are one tab, «Campaña» (Arturo, 16/10 #33): what to do now, the calendar, the levels.
+  { view: 'research', label: 'Campaña' },
   { view: 'geoscape', label: 'El valle' },
-  { view: 'research', label: 'Diario' },
   { view: 'engineering', label: 'Armería' },
   { view: 'barracks', label: 'Cuartel' },
   { view: 'facilities', label: 'Instalaciones' },
@@ -237,9 +237,9 @@ const ROOM_OF: Partial<Record<BaseView, FixedRoom | 'hangar'>> = {
 };
 
 const VIEW_NAMES: Record<BaseView, string> = {
-  hub: 'Bastión',
+  hub: 'Campaña',
   geoscape: 'El valle',
-  research: 'Diario',
+  research: 'Campaña',
   engineering: 'Armería',
   barracks: 'Cuartel',
   facilities: 'Instalaciones',
@@ -322,7 +322,7 @@ export class StrategyScreen {
   private readonly toastEl = h('div.strat-toast');
   private state: CampaignState | null = null;
   private players: PlayerInfo[] = [];
-  private view: BaseView = 'hub';
+  private view: BaseView = 'research';
   private partnerView: BaseView | null = null;
   private seenReport = loadSeenReport();
   /** The pop-up waiting to be read: one per moment (back at the base, or after a scan). */
@@ -403,7 +403,7 @@ export class StrategyScreen {
     // Alerts and events are answered with their own buttons.
     if (this.modal.classList.contains('show')) return;
     if (this.view === 'facilities' && this.plot) this.pickPlot(null);
-    else if (this.view !== 'hub' && this.view !== 'debrief') void this.go('hub');
+    else if (this.view !== 'research' && this.view !== 'debrief') void this.go('research');
   }
 
   // ------------------------------------------------------------ public
@@ -482,7 +482,9 @@ export class StrategyScreen {
 
   // -------------------------------------------------------- navigation
 
-  private async go(view: BaseView): Promise<void> {
+  private async go(asked: BaseView): Promise<void> {
+    // The old «Bastión» is Campaña now (#33): whatever still asks for it lands there.
+    const view = asked === 'hub' ? 'research' : asked;
     this.view = view;
     this.seeNews(view);
     this.promoting = false;
@@ -497,7 +499,7 @@ export class StrategyScreen {
     switch (view) {
       case 'geoscape':
         return this.geo.shot();
-      case 'research':
+      // Campaña looks at the whole Bastión, as the old «Bastión» did.
       case 'engineering':
         return this.bastion.room(view);
       case 'barracks':
@@ -1048,14 +1050,12 @@ export class StrategyScreen {
     const partner = this.partner();
     this.bastion.setPartner(partner?.connected && room ? room : null, partner?.color ?? '#fff', partner?.name ?? '');
     this.bastion.select(this.view === 'facilities' ? this.plot : null);
-    this.bastion.setLabels(this.view === 'hub' || (this.view === 'facilities' && !this.plot));
+    this.bastion.setLabels(this.view === 'research' || (this.view === 'facilities' && !this.plot));
     switch (this.view) {
-      case 'hub':
-        this.renderHub(c);
-        break;
       case 'geoscape':
         this.renderGeoscape(c);
         break;
+      case 'hub':
       case 'research':
         this.renderResearch(c);
         break;
@@ -1396,10 +1396,11 @@ export class StrategyScreen {
   }
 
   /**
-   * The Bastion at a glance: "Ahora", the one next thing to do, then what else
-   * is pending (each line a shortcut), works under way and the Council's payment.
+   * The campaign at a glance, at the head of Campaña (the old «Bastión»,
+   * Arturo 16/10 #33): "Ahora", the one next thing to do, then what else is
+   * pending (each line a shortcut) and the calendar.
    */
-  private renderHub(c: CampaignState): void {
+  private overview(c: CampaignState): (HTMLElement | null)[] {
     const steps = nextSteps(c, this.mySlot);
     const icon: Record<BaseView, string> = {
       hub: 'clock',
@@ -1412,8 +1413,8 @@ export class StrategyScreen {
       debrief: 'flag',
     };
     const [now, ...rest] = steps;
-    // Steps on the hub itself (a proposal, an event) are already on screen: they only inform.
-    const here = (step: NextStep) => step.view === 'hub';
+    // Steps on Campaña itself (a proposal, an event) are already on screen: they only inform.
+    const here = (step: NextStep) => step.view === 'hub' || step.view === 'research';
     const nowEl = now
       ? h(
           `button.strat-now${now.tone === 'urgent' ? '.urgent' : ''}`,
@@ -1432,9 +1433,7 @@ export class StrategyScreen {
         step.count && step.count > 1 ? this.chip(String(step.count)) : h('span'),
       ),
     );
-    const ticker = h('div.strat-ticker');
-    ticker.append(h('div.x-panel', {}, nowEl, rows.length ? h('div.x-head', { title: 'Pulsa una sala del Bastión para entrar' }, 'Agenda') : null, h('div.x-list', {}, ...rows), ...this.calendar(c)));
-    this.viewEl.append(ticker);
+    return [nowEl, rows.length ? h('div.x-head', { title: 'Pulsa una sala del Bastión para entrar' }, 'Agenda') : null, rows.length ? h('div.x-list', {}, ...rows) : null, ...this.calendar(c)];
   }
 
   /**
@@ -1802,6 +1801,7 @@ export class StrategyScreen {
       this.panel(
         'progress-left',
         'left',
+        ...this.overview(c),
         h('div.x-head', { title: xpHelp }, `Bastión · nivel ${level}`),
         next === undefined ? h('p.x-muted', {}, 'Nivel máximo.') : this.bar(c.xp - LEVEL_XP[level - 1]!, next - LEVEL_XP[level - 1]!),
         next === undefined ? null : h('p.x-muted', { title: xpHelp }, `${c.xp} XP · faltan ${next - c.xp} para el nivel ${level + 1}`),
@@ -2136,7 +2136,7 @@ export class StrategyScreen {
             this.render();
           },
         },
-        skillDigits(s.skills),
+        roleDot(s.board),
         h('b', {}, displayName(s.name, s.nickname)),
         veterancyBadge(s.board, s.appearance?.sex === 'f'),
         this.hasPoints(s)
@@ -2742,7 +2742,7 @@ export class StrategyScreen {
             return h(
               `button.x-row.soldier${on ? '.selected' : ''}${ready ? '' : '.dim'}`,
               { disabled: !ready && !on, onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
-              skillDigits(s.skills),
+              roleDot(s.board),
               h('b', { title: gear.join(' · ') }, displayName(s.name, s.nickname)),
               veterancyBadge(s.board, s.appearance?.sex === 'f'),
               on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
@@ -2788,7 +2788,7 @@ export class StrategyScreen {
         h(
           'div.alert-actions',
           {},
-          h('button.x-btn', { onclick: () => void this.go('hub') }, 'Volver al Bastión'),
+          h('button.x-btn', { onclick: () => void this.go('research') }, 'Volver al Bastión'),
           h('button.x-btn.danger', { onclick: () => this.send({ type: 'cancelMission' }) }, 'Cancelar misión'),
         ),
       ),
@@ -2807,7 +2807,7 @@ export class StrategyScreen {
             // data-bust: the theme puts the soldier's own bust on the card (ui/themes/mixta-base.css), once drawn.
             { style: { '--accent': this.playerColor(s.owner) }, 'data-bust': '' },
             h('b', {}, displayName(s.name, s.nickname)),
-            h('small', {}, veterancyName(s), ' ', skillDigits(s.skills)),
+            h('small', {}, roleDot(s.board), veterancyName(s)),
             c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
             s.owner === this.mySlot ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
           )
@@ -2892,7 +2892,7 @@ export class StrategyScreen {
   private renderDebrief(c: CampaignState): void {
     const report = c.lastReport;
     if (!report) {
-      void this.go('hub');
+      void this.go('research');
       return;
     }
     const entries: LineupEntry[] = report.squad.map((e) => {
@@ -2975,7 +2975,7 @@ export class StrategyScreen {
                 /* storage unavailable: the debrief may show again after a reload */
               }
               this.bastion.setLineup([]);
-              void this.go('hub');
+              void this.go('research');
             },
           },
           'CONTINUAR',

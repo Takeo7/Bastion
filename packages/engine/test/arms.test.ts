@@ -147,7 +147,7 @@ describe('a weapon found in the mission (docs/FASE8.md §C)', () => {
     expect(client).toEqual(s);
     // Only weapons, and only a campaign soldier.
     u.backpack!.push({ food: 2 });
-    expect(executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 1 }, ctx())).toEqual({ ok: false, error: 'Solo se equipan las armas.' });
+    expect(executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 1 }, ctx())).toEqual({ ok: false, error: 'Solo se equipan las armas y los chalecos.' });
   });
 
   it('without a primary, the pistol keeps its rounds beside the new gun', () => {
