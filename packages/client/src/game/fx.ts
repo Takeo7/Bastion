@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { NIGHT } from './night';
 import { fxTexture, loadModel } from './synty';
 import { FX_MODELS, type FxModelId, type FxTextureId } from './syntyManifest';
 import { tween, wait } from './tween';
@@ -723,7 +724,9 @@ export class Fx {
     light.position.copy(at).setY(at.y + 0.6);
     light.target.position.copy(at).addScaledVector(dir, 6);
     this.group.add(light, light.target);
-    void tween(1.8, (t) => (light.intensity = 30 * Math.sin(Math.min(1, t * 1.4) * Math.PI))).then(() => this.group.remove(light, light.target));
+    // By night less: in the dark it lit the edge white (Arturo 17/10: «la luz deslumbra mucho de noche»).
+    const peak = NIGHT.value > 0.5 ? 16 : 30;
+    void tween(1.8, (t) => (light.intensity = peak * Math.sin(Math.min(1, t * 1.4) * Math.PI))).then(() => this.group.remove(light, light.target));
     this.dust(at, 8);
   }
 

@@ -155,6 +155,15 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - los tejados con trastos (`buildings.ts`); cajas solo en los que no se pisan.
   Lo que pueda leerse como cobertura lo pone el motor, nunca el decorado. El generador (mapgen.ts, acordado con Gameplay) pone árboles en las esquinas de las plazas, escombros en plazas y aparcamientos y más coches abandonados, siempre fuera del despliegue, del objetivo, de la evacuación y de los bordes, y a 2 casillas o más de paredes, puertas y escaleras. La cobertura cercana pasa del 25,7 % al 26,9 % del suelo abierto.
 - **Noche** (`night.ts`), contra la captura del motel de Woodland de Synty: neblina verdosa y luna fría, y la luz cálida de lo que aún funciona (farolas, algún faro, bengalas y fuegos). Qué casillas están a la luz lo dice el motor.
+  - **Sin deslumbrar** (Arturo 17/10: «la luz deslumbra mucho de noche»):
+    - bloom de noche a 0,45 con umbral 0,88, para que solo florezca lo que emite y no el suelo iluminado;
+    - farolas a 13 y bengalas y fuegos a 16 (antes 22 y 30); la luz del fuego, 0,55 por encima de las llamas;
+    - cabezas de farola y faros más bajos; el tinte cálido de las casillas a la luz, a 0,8 (antes 1,4);
+    - los faros de los refuerzos y las luces de La Mula, a la mitad de noche.
+  - **Medido a 1920×1080** (bengala y fuego junto a la tropa, a distancia de juego):
+    - en la ciudad, del 5,3 % al 1,4 % de píxeles quemados;
+    - en las afueras, del 2,0 % al 0,4 %; lo que queda son sobre todo los anillos y las líneas de la interfaz.
+    - Las zonas a la luz se siguen leyendo cálidas desde lejos.
 - **Niebla de guerra** (`fogOfWar.ts`, `explored.ts`) sobre los materiales, por planta.
 - **Coste:**
   - lo estático, fundido en pocas mallas (`batch.ts`), con sombras en caché;

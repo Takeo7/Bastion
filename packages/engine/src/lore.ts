@@ -5,7 +5,7 @@
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
-import { FOUND_WEAPONS, THIRD_ACTION_RANK } from './content';
+import { FOUND_WEAPONS, THIRD_ACTION_RANK, type RangeTable } from './content';
 import { BAR_GROWTH, DEED_XP, RANK_STEP, SKILLS, VETERANCY, WILL_PER_RANK, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
@@ -572,6 +572,44 @@ export function rankReward(rank: number, sex?: 'f' | 'm'): { short: string; long
     short: third ? `+${WILL_PER_RANK} de voluntad · +1 acción` : `+${WILL_PER_RANK} de voluntad`,
     long: `${name}, con ${RANK_STEP} puntos de habilidad más gastados en el tablero: +${WILL_PER_RANK} de voluntad${third ? ', y una tercera acción por turno' : ''}.`,
   };
+}
+
+/**
+ * A weapon's card in the Armería (aim.ts weaponProfile; Arturo, 17/10: «para
+ * saber qué elegir»): the label of each figure, short.
+ */
+export const WEAPON_LABELS = {
+  damage: 'Daño',
+  critDamage: 'Daño crítico',
+  crit: 'Crítico',
+  aim: 'Puntería',
+  clip: 'Cargador',
+  actions: 'Acciones por disparo',
+  actionsMelee: 'Acciones por golpe',
+  noise: 'Ruido',
+  shred: 'Quita blindaje',
+  reach: 'Alcance',
+  range: 'Puntería según la distancia',
+};
+
+/**
+ * Each reach, its name and what the weapon is good at, as its range table
+ * says (content.ts RANGE_TABLES): the shotgun adds most close and takes away
+ * from twelve tiles on, the rifles add close and never take away, the
+ * precision rifle takes away close and nothing from eleven on.
+ */
+export const REACH: Record<RangeTable, { name: string; line: string }> = {
+  short: { name: 'Corto', line: 'De cerca. Cuanto más cerca, más acierta; desde doce casillas, resta puntería.' },
+  medium: { name: 'Medio', line: 'Vale para todo: suma de cerca y no resta de lejos.' },
+  long: { name: 'Largo', line: 'De lejos. De cerca resta mucha puntería; desde once casillas, ya no.' },
+  none: { name: 'Cuerpo a cuerpo', line: 'Contra quien está al lado. Casi no se oye.' },
+};
+
+/** A figure of the card, in words: «4 balas», «2 acciones», «12 casillas»; the blade «No gasta». */
+export function weaponFigure(what: 'clip' | 'actions' | 'noise', n: number, melee = false): string {
+  if (what === 'clip') return melee || !n ? 'No gasta' : `${n} ${n === 1 ? 'bala' : 'balas'}`;
+  if (what === 'actions') return `${n} ${n === 1 ? 'acción' : 'acciones'}`;
+  return `${n} ${n === 1 ? 'casilla' : 'casillas'}`;
 }
 
 // -------------------------------------------------------------- backpack

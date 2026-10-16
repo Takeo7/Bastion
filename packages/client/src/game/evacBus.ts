@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadKitModels } from '../strategy/baseKit';
 import { buildMula, MULA_MODELS, type Mula } from '../strategy/mula';
+import { NIGHT } from './night';
 import { SYNTY_SCALE } from './syntyManifest';
 import { tween } from './tween';
 
@@ -69,7 +70,8 @@ export class EvacBus {
     if (!m || !this.root.visible) return;
     await tween(SHUT_SECONDS, (t) => {
       for (const d of m.doors) d.leaf.position.lerpVectors(d.open, d.shut, t);
-      m.lights.emissiveIntensity = 0.2 + t * 2.6;
+      // By night they would dazzle (Arturo 17/10): half as bright.
+      m.lights.emissiveIntensity = 0.2 + t * (NIGHT.value > 0.5 ? 1.3 : 2.6);
     });
     const from = this.root.position.clone();
     const ahead = new THREE.Vector3(Math.sin(this.root.rotation.y), 0, Math.cos(this.root.rotation.y));

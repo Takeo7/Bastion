@@ -87,6 +87,7 @@ import {
   BASE_AIM,
   MOD_SLOTS,
   WEAPON_MODS,
+  weaponProfile,
   type WeaponModId,
   QUESTS,
   randomAppearance,
@@ -163,7 +164,7 @@ import { Stage, type Shot } from './stage';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
 import { plotIcon } from './plotIcons';
-import { kindOf, loadoutEl, modPanel, placeOf, weaponCare, weaponIcon, weaponMarks } from './arms';
+import { carriedProfile, kindOf, loadoutEl, modPanel, placeOf, profileOf, weaponCare, weaponDiff, weaponIcon, weaponMarks, weaponPick, weaponStats, type WeaponPickContext } from './arms';
 import { soldierPortrait } from './portraits';
 import { barLines, learnedTags, roleDot, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
 import { deadlineEl } from '../ui/deadline';
@@ -2038,6 +2039,8 @@ export class StrategyScreen {
       h('div.alert-kicker', {}, def.kind === 'ammo' ? 'TALLER · MUNICIÓN' : def.kind === 'mod' ? 'TALLER · MEJORA' : 'TALLER · ARMA'),
       h('h2.x-title', {}, def.name),
       h('p.x-text', {}, text),
+      // What the weapon it makes does, as it comes out (Arturo, 17/10: «para saber qué elegir»).
+      def.kind === 'arms' && def.makes ? weaponStats(weaponProfile(def.makes)) : null,
       done
         ? h('p.x-muted', {}, 'Ya está hecha.')
         : work
@@ -2071,6 +2074,8 @@ export class StrategyScreen {
           ? 'Para un soldado, en lugar del cuchillo. Si cae, se pierde.'
           : `Para un soldado: la lleva en la mano y la pistola al cinto.${def.better && def.mod ? ` Vino con ${WEAPON_MODS[def.mod].name.toLowerCase()}.` : ''} Si cae, se pierde.`,
       ),
+      // What it does, as it is (Arturo, 17/10: «para saber qué elegir»); against each soldier's own, below.
+      weaponStats(profileOf(w)),
       // Fase 9: its state, «Arreglar» and its improvements (strategy/arms.ts).
       ...weaponCare(c, this.mySlot, w, (cmd) => this.send(cmd)),
       h('div.x-group', {}, 'La lleva'),
@@ -2091,7 +2096,14 @@ export class StrategyScreen {
               h(
                 'div.x-gear',
                 {},
-                h('span', {}, displayName(s.name, s.nickname), h('small', {}, ` · ${melee ? 'al cinto' : 'en la mano'}: ${carries(s)}`)),
+                h(
+                  'span',
+                  {},
+                  displayName(s.name, s.nickname),
+                  h('small', {}, ` · ${melee ? 'al cinto' : 'en la mano'}: ${carries(s)}`),
+                  // Against what it carries now: what would be better in green, what worse in red.
+                  s.id === w.holder ? null : weaponDiff(profileOf(w), carriedProfile(c, s, melee)),
+                ),
                 s.id === w.holder ? this.chip('La lleva', 'good') : h('button.x-btn.small', { onclick: () => this.send({ type: 'assignWeapon', weapon: w.id, soldier: s.id }) }, 'Dársela'),
               ),
             ),
@@ -2185,6 +2197,21 @@ export class StrategyScreen {
     const isMine = s.owner === this.mySlot;
     const stats = squadMember(c, s);
     // Equipment is a form field that opens its list of choices.
+    const weaponPicking = (place: 'hand' | 'belt'): WeaponPickContext => {
+      const key = `${s.id}:${place}`;
+      return {
+        c,
+        s,
+        mySlot: this.mySlot,
+        open: this.picking === key,
+        toggle: () => {
+          this.picking = this.picking === key ? null : key;
+          this.render();
+        },
+        send: (cmd) => this.send(cmd),
+        ownerName: (slot) => this.playerName(slot),
+      };
+    };
     const loadout = (slot: ItemSlot, title: string) => {
       const current = s.loadout[slot];
       if (!isMine || !s.alive) return h('p.x-text', {}, `${title}: ${current ? ITEMS[current].name : '—'}`);
@@ -2252,8 +2279,9 @@ export class StrategyScreen {
         s.traits?.length ? h('div.x-group', {}, 'Rasgos') : null,
         s.traits?.length ? h('p.x-chips', {}, ...s.traits.map((t) => this.chip(TRAITS[t].name, '', TRAITS[t].description))) : null,
         // What they carry, and what is chosen here and what isn't (playtest: «no se ve qué armas llevan ni dónde se elige»).
-        h('div.x-group', { title: 'Las armas salen de la Armería: allí se arreglan y se les ponen mejoras' }, 'Arma y armadura'),
-        loadoutEl(c, s),
+        h('div.x-group', { title: 'Las armas salen de la Armería: allí se arreglan y se les ponen mejoras' }, isMine && s.alive ? 'Arma y armadura · se eligen aquí' : 'Arma y armadura'),
+        // One's own, as pickers like the belt's (Arturo, 17/10); the partner's, as they are.
+        ...(isMine && s.alive ? (['hand', 'belt'] as const).map((place) => weaponPick(place, weaponPicking(place))) : [loadoutEl(c, s)]),
         (() => {
           // The armour the Taller has made is for everyone (docs/FASE9.md §5); what the next one waits for, on its chip.
           const tier = armorTier(c, s);

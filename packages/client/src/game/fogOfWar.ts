@@ -25,7 +25,7 @@ const LIT_FADE = 0.6;
 /** The fog texture's alpha holds each tile's floor, this much per storey. */
 const FLOOR_STEP = 32;
 /** Night: what lit tiles get (a lamp's warm light over their own colours), and the darker tints of the remembered and the unknown. */
-const LAMP = new THREE.Color(1.0, 0.62, 0.3).multiplyScalar(1.4);
+const LAMP = new THREE.Color(1.0, 0.62, 0.3).multiplyScalar(0.8);
 const REMEMBERED_NIGHT = new THREE.Color(0x0e1a20);
 const UNKNOWN_NIGHT = new THREE.Color(0x070d11);
 

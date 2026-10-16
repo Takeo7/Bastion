@@ -7,7 +7,9 @@ import {
   attackWeapon,
   conditionOf,
   DISORIENTED_AIM,
+  EXT_MAG,
   firesPrimary,
+  FOUND_WEAPONS,
   GRAZE_DAMAGE_MULT,
   hasMod,
   hasPerk,
@@ -25,15 +27,18 @@ import {
   SQUADSIGHT_DISTANCE_MOD,
   SUPPRESSED_AIM,
   TEMPLATES,
+  WEAPONS,
   WORN_AIM,
   WORN_BELOW,
+  type RangeTable,
   type WeaponDef,
+  type WeaponId,
 } from './content';
 import { coverAgainst } from './cover';
 import { distance, heightAt, sameSpace, toPos } from './grid';
 import { canSee, isViewer, sightOrigin, sightTo } from './los';
 import type { Rng } from './rng';
-import type { AttackAbility, CoverLevel, GameState, Place, Pos, ShotResult, Unit, Vec2 } from './types';
+import type { AttackAbility, CoverLevel, FoundWeaponId, GameState, Place, Pos, ShotResult, Unit, Vec2, WeaponModId } from './types';
 
 export interface Modifier {
   label: string;
@@ -331,4 +336,70 @@ export function shotDamageMods(
 
 export function weaponOf(u: Unit): WeaponDef {
   return attackWeapon(u, 'shoot');
+}
+
+// ------------------------------------------------------------- the Armería
+
+/** What a weapon of the Armería does, to choose one (Arturo, 17/10: «para saber qué elegir»). */
+export interface WeaponProfile {
+  /** The Armería's kind; absent for what every soldier carries (the pistol, the knife: baseWeaponProfile). */
+  kind?: FoundWeaponId;
+  name: string;
+  melee: boolean;
+  /** Damage of a hit and of a critical one. */
+  damage: DamageRange;
+  critDamage: DamageRange;
+  /** Chance of a critical, of the weapon alone. */
+  crit: number;
+  /** Aim the weapon itself adds (a scope, being worn). */
+  aim: number;
+  /** Rounds in the magazine; 0, none needed. */
+  clip: number;
+  /** Actions a shot takes. */
+  actions: number;
+  /** How far, in tiles, a shot is heard. */
+  noise: number;
+  /** Armour each hit takes off. */
+  shred: number;
+  /** Where it shoots well: short, medium or long ('none' for a blade). */
+  reach: RangeTable;
+  /** Aim the distance adds or takes, at a few distances (tiles). */
+  range: { tiles: number; aim: number }[];
+}
+
+/** The distances a weapon's card shows its aim at. */
+const PROFILE_TILES = [2, 5, 8, 12, 16];
+
+/**
+ * A weapon's card for the Armería: `condition` and `mods` as the weapon is
+ * (a worn one aims worse, a scope better, a silencer halves the noise, an
+ * extended magazine holds more); without them, as found, with the mod a good
+ * find comes with.
+ */
+export function weaponProfile(kind: FoundWeaponId, condition = 100, mods: readonly WeaponModId[] = FOUND_WEAPONS[kind].mod ? [FOUND_WEAPONS[kind].mod!] : []): WeaponProfile {
+  const def = FOUND_WEAPONS[kind];
+  return { ...profileOf(WEAPONS[def.weapon], def.name, condition, mods), kind };
+}
+
+/** The card of what every soldier carries without one of the Armería's: the pistol (`pistol`) or the knife (`knife`). */
+export function baseWeaponProfile(weapon: WeaponId, name = WEAPONS[weapon].name): WeaponProfile {
+  return profileOf(WEAPONS[weapon], name, 100, []);
+}
+
+function profileOf(w: WeaponDef, name: string, condition: number, mods: readonly WeaponModId[]): WeaponProfile {
+  const gun = !w.melee;
+  return {
+    name,
+    melee: w.melee,
+    damage: damageRange(w, 'hit'),
+    critDamage: damageRange(w, 'crit'),
+    crit: w.crit,
+    aim: w.aim + (gun && mods.includes('scope') ? MOD_AIM : 0) - (gun && condition < WORN_BELOW ? WORN_AIM : 0),
+    clip: w.clip + (gun && w.clip > 0 && mods.includes('extMag') ? EXT_MAG : 0),
+    actions: w.apCost,
+    noise: gun && mods.includes('silencer') ? Math.ceil(w.noise / 2) : w.noise,
+    shred: w.shred,
+    reach: w.range,
+    range: w.melee ? [] : PROFILE_TILES.map((tiles) => ({ tiles, aim: rangeModifier(w.range, tiles) })),
+  };
 }

@@ -18,6 +18,15 @@ export const NIGHT = { value: 0 };
 /** Real lights, wherever they're most needed. */
 const REAL_LIGHTS = 6;
 const LAMP = new THREE.Color(1.0, 0.62, 0.3);
+/**
+ * How strong each light is (Arturo 17/10: «la luz deslumbra mucho de noche»): the pools still read from afar,
+ * where the squad is seen, without burning the ground and what stands on it white, or the bloom veiling the rest.
+ */
+const LAMP_LIGHT = 13;
+const BURNING_LIGHT = 16;
+/** The lamps' heads and the headlights left on (HDR, for the bloom). */
+const LAMP_HEAD = new THREE.Color(2.2, 1.5, 0.9);
+const HEADLIGHT = new THREE.Color(2.0, 1.9, 1.6);
 /** A Bengala burns red; a fire, orange. */
 const FLARE = new THREE.Color(1.0, 0.1, 0.08);
 const FIRE = new THREE.Color(1.0, 0.5, 0.15);
@@ -95,11 +104,11 @@ export class NightLights {
     this.group.visible = NIGHT.value > 0.5;
     this.lamps = lamps;
     const glows = new Glows();
-    for (const l of lamps) glows.box(l.x, l.y, l.z, 0.32, 0.08, 0.2, new THREE.Color(3.2, 2.2, 1.3));
+    for (const l of lamps) glows.box(l.x, l.y, l.z, 0.32, 0.08, 0.2, LAMP_HEAD);
     for (const h of headlights) {
       const sx = -h.dz * 0.24;
       const sz = h.dx * 0.24;
-      for (const s of [-1, 1]) glows.box(h.x + sx * s, h.y, h.z + sz * s, 0.1, 0.07, 0.1, new THREE.Color(3, 2.9, 2.4));
+      for (const s of [-1, 1]) glows.box(h.x + sx * s, h.y, h.z + sz * s, 0.1, 0.07, 0.1, HEADLIGHT);
     }
     const glowMaterial = fog.patch(new THREE.MeshBasicMaterial({ vertexColors: true }));
     this.materials.push(glowMaterial);
@@ -135,7 +144,7 @@ export class NightLights {
       if (this.burning.has(l.id)) continue;
       const flare = l.radius >= 3;
       const color = (flare ? FLARE : FIRE).clone();
-      const material = this.fog.patch(new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(flare ? 3 : 4), transparent: true, opacity: 0 }));
+      const material = this.fog.patch(new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(flare ? 2.2 : 2.5), transparent: true, opacity: 0 }));
       this.materials.push(material);
       const glow = new THREE.Mesh(flareGeometry, material);
       const at = new THREE.Vector3(l.tile.x + 0.5, height(l.tile.x, l.tile.y) + (flare ? 1.4 : 0.35), l.tile.y + 0.5);
@@ -167,9 +176,11 @@ export class NightLights {
       const light = this.lights[n++]!;
       const flicker = b.radius >= 3 ? 0.9 + 0.1 * Math.sin(this.time * 23) : 0.75 + 0.25 * Math.sin(this.time * 11) * Math.sin(this.time * 7.3);
       light.color.copy(b.color);
-      light.intensity = 30 * b.level * flicker;
+      light.intensity = BURNING_LIGHT * b.level * flicker;
       light.distance = b.radius * 2.6;
+      // A fire's light over its flames, not in them: from that close it burnt the ground and whatever stood by white.
       light.position.copy(b.at);
+      if (b.radius < 3) light.position.y += 0.55;
     }
     // Then the street lights nearest the point the camera looks at.
     if (camera) {
@@ -195,7 +206,7 @@ export class NightLights {
       this.chosen[k] = best;
       const l = this.lamps[best]!;
       light.color.copy(LAMP);
-      light.intensity = 22;
+      light.intensity = LAMP_LIGHT;
       light.distance = 7;
       // Well under the lamp's own head: a point light right at a surface overflows the half-float target (and bloom spreads it).
       light.position.set(l.x, l.y - 0.6, l.z);

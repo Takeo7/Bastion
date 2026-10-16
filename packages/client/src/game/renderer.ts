@@ -88,7 +88,8 @@ const MOODS: Record<'day' | 'night' | 'dawn' | 'dusk', Mood> = {
     fill: 0x9fb8d0,
     fillIntensity: 0.15,
     exposure: 1.2,
-    bloom: { strength: 0.85, threshold: 0.7 },
+    // Only what shines blooms (a lamp's head, a Bengala, a fire), not the ground it lights: «la luz deslumbra mucho de noche» (Arturo 17/10).
+    bloom: { strength: 0.45, threshold: 0.88 },
     grade: { saturation: 1.0, contrast: 1.06, vignette: 0.34, shadowTint: [0.9, 1.0, 1.04], highlightTint: [1.06, 1.0, 0.9], lift: [0.015, 0.03, 0.035] },
   },
   // Dawn (the trailer's opening, docs/TRAILER.md): the sun just up in the east, low and orange, its shadows

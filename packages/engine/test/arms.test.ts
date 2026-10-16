@@ -13,6 +13,7 @@ import {
   type CampaignState,
 } from '../src/campaign';
 import { attackWeapon, clipOf, hasSquadsight, PISTOL_CLIP } from '../src/content';
+import { weaponProfile } from '../src/aim';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { CRAFTS, LEVEL_XP, spareMags } from '../src/progression';
 import { Rng } from '../src/rng';
@@ -128,6 +129,28 @@ describe('the weapons from zero', () => {
     expect((c.foundWeapons ?? []).map((w) => w.kind).sort()).toEqual(['assaultRifle', 'machete', 'precisionRifle', 'pumpShotgun']);
   });
 
+});
+
+describe('the Armería shows what each weapon does (Arturo, 17/10)', () => {
+  it('damage, crit, aim, magazine, actions, noise and how it shoots by distance', () => {
+    const shotgun = weaponProfile('pumpShotgun');
+    expect(shotgun).toMatchObject({ name: 'Escopeta', melee: false, reach: 'short', actions: 1 });
+    expect(shotgun.damage.max).toBeGreaterThanOrEqual(shotgun.damage.min);
+    expect(shotgun.critDamage.min).toBeGreaterThan(shotgun.damage.min);
+    expect(shotgun.range.map((r) => r.tiles)).toEqual([2, 5, 8, 12, 16]);
+    // A shotgun is good close and bad far; a precision rifle, the other way round.
+    expect(shotgun.range[0]!.aim).toBeGreaterThan(shotgun.range[4]!.aim);
+    const rifle = weaponProfile('precisionRifle');
+    expect(rifle.range[0]!.aim).toBeLessThan(rifle.range[4]!.aim);
+    expect(rifle.actions).toBe(2);
+    // What is mounted and how worn it is count.
+    const plain = weaponProfile('assaultRifle', 100, []);
+    expect(weaponProfile('assaultRifle', 100, ['scope', 'extMag', 'silencer'])).toMatchObject({ aim: plain.aim + 10, clip: plain.clip + 2, noise: Math.ceil(plain.noise / 2) });
+    expect(weaponProfile('assaultRifle', 10, []).aim).toBe(plain.aim - 10);
+    // A good find comes with its mod: the scoped rifle aims better than the plain one.
+    expect(weaponProfile('scopedRifle').aim).toBe(weaponProfile('precisionRifle').aim + 10);
+    expect(weaponProfile('machete')).toMatchObject({ melee: true, reach: 'none', range: [], clip: 0 });
+  });
 });
 
 describe('a weapon found in the mission (docs/FASE8.md §C)', () => {

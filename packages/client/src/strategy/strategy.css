@@ -419,6 +419,58 @@
   color: var(--x-muted);
 }
 
+/* A weapon picker on the Cuartel's sheet (arms.ts weaponPick): each choice its name, whose it is, and what changes. */
+.wpick-host .x-pick-list {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.x-pick-list button.wpick {
+  display: grid;
+  justify-content: stretch;
+  gap: 1px;
+}
+
+.x-pick-list button.wpick:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.x-pick-list button.wpick:disabled:hover {
+  background: transparent;
+}
+
+.wpick-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+}
+
+.wpick-note {
+  font-size: 11.5px;
+}
+
+.wpick-empty {
+  padding: 5px 8px;
+}
+
+/* Under the field: what it carries, as on the read-only sheet. */
+.wpick-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  margin: 2px 2px 0;
+}
+
+.wpick-now .wcond,
+.wpick-now .wmods,
+.wpick-now .ld-note {
+  grid-column: auto;
+  margin-left: 0;
+}
+
 /* Tabs inside a sheet: folder tabs. */
 .x-tabs {
   display: flex;
@@ -1221,6 +1273,167 @@ dl.briefing {
 .ld-note {
   grid-column: 1 / -1;
   font-size: 11px;
+  color: var(--x-muted);
+}
+
+/* A weapon in a line on the sheet (arms.ts weaponLine): its damage and reach. */
+.wline {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--x-muted);
+}
+
+/*
+ * A weapon's card in the Armería (arms.ts weaponStats; Arturo, 17/10: «para
+ * saber qué elegir»): its figures in two columns, then its aim by distance.
+ * Against what a soldier carries: better in green, worse in red, each with an
+ * arrow too (never only the colour).
+ */
+.wstats {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 6px;
+  padding: 8px 10px;
+  border: 1px dashed var(--x-line);
+}
+
+.wfigs {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.wfigs dt {
+  color: var(--x-muted);
+}
+
+.wfigs dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wfigs dd.up,
+.wdiff .up,
+.wrange-col.up .wrange-n {
+  color: var(--x-good);
+}
+
+.wfigs dd.down,
+.wdiff .down,
+.wrange-col.down .wrange-n {
+  color: var(--x-bad);
+}
+
+.wfigs dd.up::after,
+.wdiff .up::before {
+  content: '▲ ';
+  font-size: 0.8em;
+}
+
+.wfigs dd.down::after,
+.wdiff .down::before {
+  content: '▼ ';
+  font-size: 0.8em;
+}
+
+/* The reach: a bar per distance, up for aim it adds, down for aim it takes. */
+.wrange {
+  display: grid;
+  gap: 3px;
+}
+
+.wrange-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wrange-head small,
+.wrange-unit {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--x-muted);
+}
+
+.wrange-unit {
+  justify-self: end;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+/* What the reach is good at (Lore's REACH line). */
+.wrange-line {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--x-muted);
+}
+
+.wrange-head b {
+  font-size: 14px;
+}
+
+.wrange-bars {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.wrange-col {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.wrange-n,
+.wrange-d {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wrange-d {
+  font-weight: 400;
+  color: var(--x-muted);
+}
+
+/* Two halves round the line: the bar grows up from it, or down. */
+.wrange-track {
+  position: relative;
+  width: 100%;
+  height: 34px;
+  background: linear-gradient(var(--x-line), var(--x-line)) center / 100% 1px no-repeat;
+}
+
+.wrange-track i {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: 50%;
+  height: calc(var(--k) * 50%);
+  background: var(--x-good);
+  opacity: 0.85;
+}
+
+.wrange-track i.neg {
+  top: 50%;
+  bottom: auto;
+  background: var(--x-bad);
+}
+
+/* Against a soldier's weapon, in its row: what changes. */
+.wdiff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--x-muted);
 }
 
