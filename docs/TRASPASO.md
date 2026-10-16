@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 16/10 con la 0.3.1. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 16/10 con la 0.4.0. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.3.1)
+## 3. Estado (versión 0.4.0)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0 y v0.3.1 en GitHub (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1 y v0.4.0 en GitHub (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
 - **Lo nuevo de la 0.2.2** (2026-10-14):
   - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
   - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
@@ -89,7 +89,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
-- **En `main`, sin publicar** (para la 0.4.0):
+- **Lo nuevo de la 0.4.0** (2026-10-16):
   - las notas de la prueba del 16/10 ([PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md)): por una ventana se ve como mucho a través de una; el turno enemigo, primero los que atacan y luego todos los demás a la vez y más deprisa; el zombi levantado lleva el aspecto del soldado; «Ver» lo que hace el compañero; el dinero dibujado como la caja del contador y el contador que no se quedaba en el número viejo;
   - la Fase 10 ([FASE10.md](FASE10.md)), con campaña nueva (la de la 0.3 se guarda aparte en `save.antes-0.4.json`): seis barras de experiencia (Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar, Forma física) sin niveles; cada barra llena da un punto y un 5–10 % de su estadística; el tablero hexagonal de 169 celdas donde se gastan los puntos; la piedra y la vigilancia cuerpo a cuerpo; Lanzar, Vigilancia e Investigar con menú.
 - **Lo nuevo de la 0.3.1** (2026-10-16), la PR de Ana ([Takeo7/Bastion#1](https://github.com/Takeo7/Bastion/pull/1)), integrada sobre la 0.3.0:
@@ -171,7 +171,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 ## 5. Pendiente
 
 - **De Arturo y Ana:**
-  - probar la 0.3.0 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
+  - probar la 0.4.0 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
 - **Probar en partida** la Fase 10: si las barras se llenan a buen ritmo, si el tablero da elecciones de verdad y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `BAR_FIRST`, `BAR_STEP`, `BAR_GROWTH`, `DEED_XP`, `BASE_AIM`; en `board.ts`, las cifras de cada celda; en `content.ts`: `STONE_DAMAGE`, `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
 - **El tráiler:** aparcado por Arturo (15/10). El último borrador, la portada y las 10 capturas de la ficha están en `.dev-snapshots/trailer/` (no se suben); las herramientas siguen en `packages/client/tools/trailer/` ([TRAILER.md](TRAILER.md)) por si se retoma.
