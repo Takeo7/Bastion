@@ -119,6 +119,8 @@ import {
   samePos,
   searchLine,
   searchSpot,
+  inViewCone,
+  sightOf,
   sightOrigin,
   sightTo,
   songTargets,
@@ -186,6 +188,15 @@ interface QueuedEvent {
 }
 
 /** A selectable target for the current ability. */
+/** What an enemy sees (Overlays.setVision): its tiles in its cone and line of sight, and those it would notice a hidden soldier on. */
+interface Vision {
+  pos: Place;
+  facing?: number;
+  range: number;
+  seen: Place[];
+  noticed: Place[];
+}
+
 interface TargetOption {
   unit: Unit;
   /** Melee: the tile it strikes from, where it stands (a blade never runs to its target, Arturo 16/10 #38). */
@@ -632,6 +643,11 @@ export class Game {
   /** When the wheel last changed the floor. */
   private levelWheel = 0;
   private reachCache: { key: string; reach: Reach; tiles: MoveTile[] } | null = null;
+  /** The last enemy's field of view worked out (visionOf), until it or the state moves. */
+  private visionCache: { key: string; v: Vision } | null = null;
+  /** The enemy whose field of view is shown (under the pointer, or aimed at), and whether a dead one was turning last frame. */
+  private watched: string | null = null;
+  private wasTurning = false;
   /** Moves planned without the command, by unit: mine and the partner's (UX-REVISION-2 #35). */
   private plans = new Map<string, { slot: Slot; tile: Place }>();
   private awaitingReply = false;
@@ -742,6 +758,7 @@ export class Game {
     this.fx.tick(dt * rate);
     this.songFx.tick(dt * rate);
     this.overlays?.tick(time);
+    if (this.overlays && this.view) this.followTurns();
     this.mapView.tick(dt);
     const from = this.selected ? getUnit(this.view, this.selected) : undefined;
     this.edge.update(this.renderer.camera, from?.alive ? from.pos : null);
@@ -2498,7 +2515,62 @@ export class Game {
     const show = v.concealed && !v.outcome && !!this.selectedUnit();
     // Not one up on a storey the cutaway hides: its ring would float over the cut (its flag says where it is).
     const watchers = show ? v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && TEMPLATES[a.template].detection > 0 && !this.mapView.isCutAway(a.pos)) : [];
-    this.overlays.setDetection(watchers.map((a) => ({ pos: a.pos, radius: this.darkDetection(a) })));
+    // The dead notice in their cone (and at arm's length all round): the ring is a keyhole (Arturo, 17/10).
+    this.overlays.setDetection(watchers.map((a) => ({ pos: a.pos, radius: this.darkDetection(a), facing: this.lookOf(a) })));
+  }
+
+  /**
+   * What enemy `a` sees from where it stands: the tiles on its floor in its
+   * cone (los.ts inViewCone: the dead see VIEW_CONE ahead and AWARE_RANGE all
+   * round) and in its line of sight, as far as it sees there (sightTo, shorter
+   * in the dark); and, while the squad is hidden, those it would notice a
+   * soldier on (detectionTo). Worked out once per enemy and state.
+   */
+  private visionOf(a: Unit): Vision {
+    const s = this.view;
+    const key = `${a.id}:${s.seq}:${s.concealed}:${a.pos.x},${a.pos.y},${a.pos.z ?? 0}:${a.facing}`;
+    if (this.visionCache?.key === key) return this.visionCache.v;
+    const range = sightOf(a);
+    const r = Math.ceil(range);
+    const seen: Place[] = [];
+    const noticed: Place[] = [];
+    for (let y = Math.max(0, a.pos.y - r); y <= Math.min(s.height - 1, a.pos.y + r); y++) {
+      for (let x = Math.max(0, a.pos.x - r); x <= Math.min(s.width - 1, a.pos.x + r); x++) {
+        if (x === a.pos.x && y === a.pos.y) continue;
+        const p = { x, y, z: a.pos.z };
+        if (!canStandOn(kindAt(s, p)) || !inViewCone(a, p) || sightOrigin(s, a.pos, p, sightTo(s, a, p)) === null) continue;
+        seen.push(p);
+        if (s.concealed && distance(a.pos, p) <= detectionTo(s, a, p)) noticed.push(p);
+      }
+    }
+    const v: Vision = { pos: a.pos, facing: TEMPLATES[a.template].undead ? a.facing : undefined, range, seen, noticed };
+    this.visionCache = { key, v };
+    return v;
+  }
+
+  /**
+   * Where a dead one looks right now, for its cone's edge: its model's turn
+   * (Arte's unitViews.facingNow, 0.6 s on a noise), so the cone turns with it
+   * and never ahead of it; the engine's facing at rest. The living: none.
+   */
+  private lookOf(a: Unit): number | undefined {
+    if (!TEMPLATES[a.template].undead || a.facing === undefined) return undefined;
+    const now = this.units.facingNow(a.id);
+    return Math.round((now ?? a.facing) * 100) / 100;
+  }
+
+  /** Every frame: while a dead one in sight is turning, its cones are drawn again as it goes; once more when it stops. */
+  private followTurns(): void {
+    const turning = this.view.units.some((a) => {
+      if (!a.alive || a.team !== 'alien' || a.facing === undefined || !this.visibleAliens.has(a.id)) return false;
+      const now = this.units.facingNow(a.id);
+      return now !== null && Math.abs(Math.atan2(Math.sin(now - a.facing), Math.cos(now - a.facing))) > 0.01;
+    });
+    if (!turning && !this.wasTurning) return;
+    this.wasTurning = turning;
+    this.drawDetection();
+    const watched = this.watched ? getUnit(this.view, this.watched) : undefined;
+    if (watched?.alive) this.overlays.setVision({ ...this.visionOf(watched), facing: this.lookOf(watched) });
   }
 
   /** How close a soldier out of the light can get to `a` unseen: detectionTo's range on an unlit tile. */
@@ -2854,7 +2926,7 @@ export class Game {
       pos: d.pos,
       dash: d.cost > perAp,
       // The rules' own range (rules.ts noticeRange): halved at night, unless the tile is lit.
-      detected: watchers.some((a) => sightOrigin(this.state, a.pos, d.pos, detectionTo(this.state, a, d.pos)) !== null),
+      detected: watchers.some((a) => inViewCone(a, d.pos) && sightOrigin(this.state, a.pos, d.pos, detectionTo(this.state, a, d.pos)) !== null),
     }));
     this.reachCache = { key, reach, tiles };
     return this.reachCache;
@@ -3808,6 +3880,11 @@ export class Game {
     const hovered = tile ? unitAt(this.view, tile) : undefined;
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
     this.units.setTags(this.enemyTags(u, tile));
+    // An enemy under the pointer, or the one aimed at: what it sees (Arturo, 17/10: the dead see in a cone).
+    const watched = hovered && hovered.team === 'alien' && this.visibleAliens.has(hovered.id) ? hovered : this.currentTarget()?.unit;
+    const shown = watched?.alive && watched.team === 'alien' && !this.view.outcome && !this.mapView.isCutAway(watched.pos) ? watched : null;
+    this.watched = shown?.id ?? null;
+    this.overlays.setVision(shown ? { ...this.visionOf(shown), facing: this.lookOf(shown) } : null);
     if (!u || !this.canAct() || this.isBusy(u.id)) return;
 
     const option = this.currentTarget();

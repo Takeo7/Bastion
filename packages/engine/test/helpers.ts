@@ -60,7 +60,8 @@ export function addUnit(
   extra: Partial<Unit> & { owner?: Slot | null; z?: number } = {},
 ): Unit {
   const { z = 0, ...rest } = extra;
-  const base = makeUnit(id, template, id, null, { x, y, z }, null);
+  // Without a facing given, the dead look all round, as before the cone (los.ts inViewCone): tests about it set one.
+  const { facing: _, ...base } = makeUnit(id, template, id, null, { x, y, z }, null);
   const u: Unit = { ...base, owner: base.team === 'xcom' ? 0 : null, ap: 2, ...rest };
   s.units.push(u);
   return u;

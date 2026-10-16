@@ -145,6 +145,8 @@ function armed(u: Unit, m: Pick<SquadMember, 'arms' | 'mags'>): Partial<Unit> {
 export function makeUnit(id: string, template: TemplateId, name: string, owner: Slot | null, pos: Vec2 & { z?: number }, podId: string | null): Unit {
   const t = TEMPLATES[template];
   return {
+    // The dead look one way from the start (los.ts inViewCone): one of eight, from where they stand, no dice spent.
+    ...(t.undead ? { facing: (((pos.x * 7 + pos.y * 13 + id.length) % 8) * Math.PI) / 4 } : {}),
     id,
     team: t.team,
     template,

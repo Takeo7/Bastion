@@ -68,6 +68,7 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - encima, el torso (encogerse, impactos, retroceso, lanzar, tajo, mordisco, gritar) y los brazos: el arma en la mano derecha y la izquierda en el guardamanos, las dos con cinemática inversa;
   - la espera: la normal, con un vistazo o un cambio de peso de vez en cuando, o una postura propia (`STANCES`): los muertos se tambalean como borrachos, los Cuervos están en guardia y el soldado con la mitad de la vida o menos se encorva.
 - **Velocidades** (`GAITS` en `gaits.ts`, la tabla que se afina; los segundos los decide Gameplay): cada plantilla tiene su paso, y el clip va a la velocidad que deja los pies quietos en el suelo (`clipSpeed`, medido: el pie apoyado no se desliza más de un ±8 %). Los muertos andan y corren con Goblin Locomotion, encorvados y arrastrando los pies.
+- **Hacia dónde miran los muertos** (Arturo 17/10: ven en un cono de 120°): el modelo mira hacia `Unit.facing` del motor, que es `atan2(dy, dx)` en casillas; en el modelo, el giro es `π/2 − facing`. Lo hace desde el principio de la misión y cada vez que está quieto. Si la orientación cambia sin andar (un ruido), gira en el sitio en algo más de medio segundo (`TURN_ON_SPOT`). Al andar o al morder, termina en el mismo ángulo que el motor. `UnitViews.facingNow(id)` da el ángulo del modelo en cada momento, para que el cono de UI gire con él.
 
   | Quién | Un movimiento (azul) | Dos (amarilla) |
   |---|---|---|

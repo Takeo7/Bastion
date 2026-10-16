@@ -287,7 +287,32 @@ export function detectionTo(s: GameState, viewer: Unit, p: Place): number {
 }
 
 export function canSee(s: GameState, viewer: Unit, target: Unit, viewerPos: Pos = viewer.pos): boolean {
-  return sightOrigin(s, viewerPos, target.pos, sightTo(s, viewer, target.pos)) !== null;
+  return inViewCone(viewer, target.pos, viewerPos) && sightOrigin(s, viewerPos, target.pos, sightTo(s, viewer, target.pos)) !== null;
+}
+
+/** How wide the dead see, in degrees round where they face (Arturo, 17/10: «en cono y no en área»). */
+export const VIEW_CONE = 120;
+/** Whoever is this close, a dead one notices whatever way it faces. */
+export const AWARE_RANGE = 1.5;
+
+/**
+ * Whether `p` lies in `viewer`'s field of view from `from`: the living look
+ * all round; the dead only ahead of them, in VIEW_CONE, or right beside them.
+ * `facing` overrides the unit's own (a patrol on its way, before its move is
+ * written down).
+ */
+export function inViewCone(viewer: Unit, p: Place, from: Pos = viewer.pos, facing = viewer.facing): boolean {
+  if (!TEMPLATES[viewer.template].undead || facing === undefined) return true;
+  const dx = p.x - from.x;
+  const dy = p.y - from.y;
+  if (Math.hypot(dx, dy) <= AWARE_RANGE) return true;
+  const off = Math.abs(((Math.atan2(dy, dx) - facing + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+  return off <= (VIEW_CONE / 2) * (Math.PI / 180);
+}
+
+/** The way from `a` to `b`, as a facing (radians); null when they are the same tile. */
+export function facingTo(a: Place, b: Place): number | null {
+  return a.x === b.x && a.y === b.y ? null : Math.atan2(b.y - a.y, b.x - a.x);
 }
 
 /** Whether a viewer standing at `from` can see the tile `to` (no peeks on the target side). */

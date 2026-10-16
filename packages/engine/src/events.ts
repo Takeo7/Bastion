@@ -2,6 +2,7 @@ import { BAD_LUCK_MISSES } from './aim';
 import { ABILITIES, addMods, apPerTurn, attackWeapon, conditionOf, firesPrimary, wearOf, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, ITEMS, reloadWeapon, TEMPLATES, THROWN, WEAPONS } from './content';
 import { decorCode } from './decor';
 import { getUnit, nodeOf, tileIndex } from './grid';
+import { facingTo } from './los';
 import { packSlots } from './loot';
 import { growthDelta, type DeedId, type SkillId } from './skills';
 import type {
@@ -282,6 +283,9 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     case 'moved': {
       const u = unit(s, e.unit);
       const last = e.path[e.path.length - 1];
+      // It looks the way it walked (los.ts inViewCone: the dead see ahead of them).
+      const before = e.path.length > 1 ? e.path[e.path.length - 2]! : u.pos;
+      if (last) u.facing = facingTo(before, last) ?? u.facing;
       if (last) u.pos = { ...last };
       u.ap = Math.max(0, u.ap - e.ap);
       endSuppression(s, u);
@@ -299,6 +303,8 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     }
     case 'shot': {
       const u = unit(s, e.unit);
+      const aim = getUnit(s, e.target);
+      if (aim) u.facing = facingTo(u.pos, aim.pos) ?? u.facing;
       if (firesSidearm(u, e.ability)) u.pistolAmmo = Math.max(0, (u.pistolAmmo ?? 0) - 1);
       else if (clipOf(u, e.ability) > 0) u.ammo = Math.max(0, u.ammo - 1);
       if (e.reaction && u.overwatch) {
@@ -657,7 +663,12 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     }
     case 'noise': {
-      for (const id of e.heard) unit(s, id).heard = { ...e.tile };
+      // Whoever hears it turns to look.
+      for (const id of e.heard) {
+        const u = unit(s, id);
+        u.heard = { ...e.tile };
+        u.facing = facingTo(u.pos, e.tile) ?? u.facing;
+      }
       const by = e.by ? getUnit(s, e.by) : undefined;
       if (by?.team === 'xcom') s.mission.noise = (s.mission.noise ?? 0) + hordePoints(e.radius);
       break;

@@ -199,6 +199,51 @@ describe('the dead', () => {
     expect(of(turn.events, 'shot').some((e) => e.unit === 'a2')).toBe(false);
   });
 
+  it('the dead see in a cone ahead of them, and whoever is right beside them (Arturo, 17/10)', () => {
+    const s = field(20, 20);
+    const soldier = addUnit(s, 's1', 'rookie', 10, 10);
+    const ahead = addUnit(s, 'a1', 'zombie', 4, 10, { facing: 0 });
+    const behind = addUnit(s, 'a2', 'zombie', 16, 10, { facing: 0 });
+    const side = addUnit(s, 'a3', 'zombie', 10, 4, { facing: 0 });
+    const beside = addUnit(s, 'a4', 'zombie', 11, 10, { facing: 0 });
+    expect(canSee(s, ahead, soldier)).toBe(true);
+    expect(canSee(s, behind, soldier)).toBe(false);
+    // Straight down from it is 90° off where it faces: outside the 120° cone.
+    expect(canSee(s, side, soldier)).toBe(false);
+    expect(canSee(s, beside, soldier)).toBe(true);
+    // The living look all round.
+    expect(canSee(s, addUnit(s, 'h1', 'trooper', 16, 11, { facing: 0 }), soldier)).toBe(true);
+  });
+
+  it('the dead turn to what they hear, and look the way they walk or strike', () => {
+    const s = field(20, 20);
+    const z = addUnit(s, 'a1', 'zombie', 10, 10, { facing: 0 });
+    applyEvent(s, { t: 'noise', tile: { x: 10, y: 2, z: 0 }, radius: 12, heard: ['a1'] });
+    expect(z.facing).toBeCloseTo(-Math.PI / 2);
+    applyEvent(s, { t: 'moved', unit: 'a1', path: [{ x: 9, y: 10, z: 0 }, { x: 8, y: 11, z: 0 }], ap: 1 });
+    expect(z.facing).toBeCloseTo((3 * Math.PI) / 4);
+    addUnit(s, 's1', 'rookie', 9, 11);
+    applyEvent(s, { t: 'shot', unit: 'a1', target: 's1', ability: 'claw', from: z.pos, result: 'miss', chance: 50, roll: 90, reaction: false });
+    expect(z.facing).toBeCloseTo(0);
+    // Out of a mission's making, every one of the dead looks some way.
+    const m = createMission({ map: { kind: 'generated', biome: 'city', seed: 3 }, slots: [0], rng: new Rng(3) });
+    expect(m.units.filter((u) => TEMPLATES[u.template].undead).every((u) => u.facing !== undefined)).toBe(true);
+  });
+
+  it('a pod that faces away from a soldier walking past does not notice him', () => {
+    const run = (facing: number) => {
+      const s = field(20, 20);
+      const z = addUnit(s, 'a1', 'zombie', 10, 10, { facing });
+      pod(s, 'p1', false, [z]);
+      const soldier = addUnit(s, 's1', 'rookie', 2, 12, { owner: 0 });
+      const sim = new Sim(s, new Rng(1), [0]);
+      sim.moveAlong(soldier, [{ x: 3, y: 12, z: 0 }, { x: 4, y: 12, z: 0 }, { x: 5, y: 12, z: 0 }], 1);
+      return s.pods[0]!.active;
+    };
+    expect(run(Math.PI)).toBe(true);
+    expect(run(0)).toBe(false);
+  });
+
   it('seeing nobody, a zombie goes to the last noise it heard; with nothing heard, it wanders', () => {
     const s = stateFrom(['...............', '.#############.', '...............']);
     s.activeTeam = 'alien';

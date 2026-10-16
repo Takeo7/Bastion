@@ -5,7 +5,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { DIRS4, type CoverLevel, type Vec2 } from '@bastion/engine';
+import { AWARE_RANGE, DIRS4, VIEW_CONE, type CoverLevel, type Place, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
 import { wait } from './tween';
 import eyeUrl from '../assets/expediente/eye.png';
@@ -155,6 +155,28 @@ function reshape(line: Line2, points: number[]): void {
   geometry.setPositions(points);
 }
 
+/**
+ * The edge of what an enemy sees (Arturo, 17/10: the dead see in a cone, not
+ * all round): its VIEW_CONE ahead out to `range`, and the AWARE_RANGE circle
+ * all round, behind it too, as one closed line, a keyhole. Without a facing
+ * (the living, an old save) the whole circle. World points round `c`.
+ */
+function keyhole(c: THREE.Vector3, range: number, facing: number | undefined): number[] {
+  const out: number[] = [];
+  const at = (a: number, r: number) => out.push(c.x + Math.cos(a) * r, c.y, c.z + Math.sin(a) * r);
+  if (facing === undefined || range <= AWARE_RANGE) {
+    for (let i = 0; i <= 96; i++) at((i / 96) * Math.PI * 2, Math.max(range, AWARE_RANGE));
+    return out;
+  }
+  const half = (VIEW_CONE / 2) * (Math.PI / 180);
+  // The cone's far arc, then round behind it at arm's length, and back to where it began.
+  for (let i = 0; i <= 48; i++) at(facing - half + (i / 48) * 2 * half, range);
+  at(facing + half, AWARE_RANGE);
+  for (let i = 1; i <= 48; i++) at(facing + half + (i / 48) * (2 * Math.PI - 2 * half), AWARE_RANGE);
+  at(facing - half, range);
+  return out;
+}
+
 export class Overlays {
   readonly group = new THREE.Group();
   private readonly tiles: THREE.InstancedMesh;
@@ -201,8 +223,16 @@ export class Overlays {
   private readonly smoke = new THREE.Group();
   /** Moves planned without the command (UX-REVISION-2 #35): a dashed line in the planner's colour. */
   private readonly plans = new THREE.Group();
-  /** While concealed: how close each enemy in sight lets a soldier get unseen (a dashed red circle). */
+  /** While concealed: how close each enemy in sight lets a soldier get unseen (a dashed red keyhole: its cone and arm's length). */
   private readonly detection = new THREE.Group();
+  /**
+   * One enemy's field of view (Arturo, 17/10), under the pointer or aimed at:
+   * the tiles it sees, in its cone and its line of sight, washed faintly; the
+   * ones it would notice a hidden soldier on, more; and the keyhole's edge.
+   */
+  private readonly seen: THREE.InstancedMesh;
+  private readonly noticed: THREE.InstancedMesh;
+  private readonly sightEdge = fatLine(0xff7a5a, 2);
   private readonly shieldTextures = { 1: shieldTexture(1), 2: shieldTexture(2) };
   /** The move range's layers and their full opacity: planning shows them fainter. */
   private rangeLayers: [THREE.InstancedMesh, number][] = [];
@@ -264,6 +294,20 @@ export class Overlays {
     );
     this.eyes.count = 0;
     this.eyes.position.y = 0.03;
+    this.seen = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xff5a3a, transparent: true, opacity: 0.14, depthWrite: false }),
+      capacity,
+    );
+    this.noticed = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0.2, depthWrite: false }),
+      capacity,
+    );
+    this.seen.count = this.noticed.count = 0;
+    this.seen.position.y = 0.015;
+    this.noticed.position.y = 0.016;
+    (this.sightEdge.material as LineMaterial).opacity = 0.75;
     this.blast = new THREE.InstancedMesh(
       tileGeometry,
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false }),
@@ -317,7 +361,7 @@ export class Overlays {
     // instances were then (nowhere, for an empty one), and culls it by them
     // from then on: a grenade area or a move range elsewhere on the map would
     // vanish whenever that first spot left the screen. They are cheap to draw.
-    for (const mesh of [this.tiles, this.detect, this.hatch, this.eyes, this.blast, this.breach, this.evac]) mesh.frustumCulled = false;
+    for (const mesh of [this.tiles, this.detect, this.hatch, this.eyes, this.blast, this.breach, this.evac, this.seen, this.noticed]) mesh.frustumCulled = false;
     this.rangeLayers = [this.tiles, this.hatch, this.detect, this.eyes].map((mesh) => [mesh, (mesh.material as THREE.MeshBasicMaterial).opacity]);
 
     // The path gets a dark casing, so it reads over the blue and the yellow tiles alike.
@@ -327,7 +371,7 @@ export class Overlays {
     this.note.element.className = 'tile-note';
     this.note.visible = false;
     this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
-    this.group.add(this.walkEdge, this.dashEdge, this.near);
+    this.group.add(this.walkEdge, this.dashEdge, this.near, this.seen, this.noticed, this.sightEdge);
     this.group.add(this.spots, this.noises, this.note);
   }
 
@@ -663,7 +707,7 @@ export class Overlays {
    * concealed soldier ending a move inside one, in the enemy's line of sight,
    * is noticed. The red frames on the move range say which tiles exactly.
    */
-  setDetection(list: { pos: Vec2; radius: number }[]): void {
+  setDetection(list: { pos: Place; radius: number; facing?: number }[]): void {
     const key = JSON.stringify(list);
     if (this.detection.userData.key === key) return;
     this.detection.userData.key = key;
@@ -673,12 +717,7 @@ export class Overlays {
       child.material.dispose();
     }
     for (const d of list) {
-      const c = tileToWorld(d.pos, 0.07);
-      const points: number[] = [];
-      for (let i = 0; i <= 96; i++) {
-        const a = (i / 96) * Math.PI * 2;
-        points.push(c.x + Math.cos(a) * d.radius, c.y, c.z + Math.sin(a) * d.radius);
-      }
+      const points = keyhole(tileToWorld(d.pos, 0.07), d.radius, d.facing);
       const ring = new Line2(
         new LineGeometry(),
         new LineMaterial({ color: 0xff4a4a, linewidth: 2, dashed: true, dashSize: 0.4, gapSize: 0.3, transparent: true, opacity: 0.6, depthTest: false }),
@@ -688,6 +727,29 @@ export class Overlays {
       ring.renderOrder = 8;
       this.detection.add(ring);
     }
+  }
+
+  /**
+   * One enemy's field of view, or null: `seen`, the tiles it sees (its cone
+   * and line of sight, los.ts); `noticed`, those of them it would notice a
+   * hidden soldier on; the keyhole's edge out to `range`.
+   */
+  setVision(v: { pos: Place; facing?: number; range: number; seen: Place[]; noticed: Place[] } | null): void {
+    const key = v ? `${v.pos.x},${v.pos.y},${v.pos.z ?? 0},${v.facing ?? '-'},${v.range},${v.seen.length},${v.noticed.length}` : '';
+    if (this.seen.userData.key === key) return;
+    this.seen.userData.key = key;
+    const m = new THREE.Matrix4();
+    for (const [mesh, tiles] of [[this.seen, v?.seen ?? []], [this.noticed, v?.noticed ?? []]] as const) {
+      const n = Math.min(tiles.length, mesh.instanceMatrix.count);
+      for (let i = 0; i < n; i++) {
+        m.setPosition(tileToWorld(tiles[i]!));
+        mesh.setMatrixAt(i, m);
+      }
+      mesh.count = n;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    this.sightEdge.visible = !!v;
+    if (v) reshape(this.sightEdge, keyhole(tileToWorld(v.pos, 0.06), v.range, v.facing));
   }
 
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {

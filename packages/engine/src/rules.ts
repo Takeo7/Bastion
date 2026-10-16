@@ -82,7 +82,7 @@ import {
   unitAt,
 } from './grid';
 import { packSlots, rollBox, rollRoom, roomAt, searchSpot } from './loot';
-import { canSee, detectionTo, isViewer, lightTiles, sightOrigin, sightTo } from './los';
+import { canSee, detectionTo, facingTo, inViewCone, isViewer, lightTiles, sightOrigin, sightTo } from './los';
 import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol } from './path';
 import type { Command } from './protocol';
 import type { Rng } from './rng';
@@ -847,7 +847,7 @@ export class Sim {
         }
       }
       // A patrolling pod that walks into sight of the squad stops and takes cover.
-      const spotted = patrolling ? this.spottedFrom(u, step) : undefined;
+      const spotted = patrolling ? this.spottedFrom(u, step, facingTo(i ? path[i - 1]! : u.pos, step) ?? u.facing) : undefined;
       if (spotted) {
         flush();
         this.activatePods([u.podId!], { cause: 'patrol', unit: spotted.id, by: u.id });
@@ -909,9 +909,9 @@ export class Sim {
     return this.s.concealed ? detectionTo(this.s, u, p) : sightTo(this.s, u, p);
   }
 
-  /** The first soldier an alien standing on `p` would spot. */
-  spottedFrom(u: Unit, p: Pos): Unit | undefined {
-    return combatants(this.s, 'xcom').find((soldier) => sightOrigin(this.s, p, soldier.pos, this.noticeRange(u, soldier.pos)) !== null);
+  /** The first soldier an alien standing on `p` would spot (`facing`: the dead see ahead of them, the way they walk). */
+  spottedFrom(u: Unit, p: Pos, facing = u.facing): Unit | undefined {
+    return combatants(this.s, 'xcom').find((soldier) => inViewCone(u, soldier.pos, p, facing) && sightOrigin(this.s, p, soldier.pos, this.noticeRange(u, soldier.pos)) !== null);
   }
 
   /** The member of `pod` that would notice an XCOM soldier standing on `p`, if any. */
@@ -919,7 +919,7 @@ export class Sim {
     for (const id of pod.unitIds) {
       const m = getUnit(this.s, id);
       if (!m?.alive) continue;
-      if (sightOrigin(this.s, m.pos, p, this.noticeRange(m, p)) !== null) return m;
+      if (inViewCone(m, p) && sightOrigin(this.s, m.pos, p, this.noticeRange(m, p)) !== null) return m;
     }
     return undefined;
   }
@@ -1099,7 +1099,10 @@ export class Sim {
         const id = `${r.id}u${i + 1}`;
         pod.unitIds.push(id);
         const u = makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? at, pod.id);
-        return near ? { ...u, heard: { ...near.pos } } : u;
+        // They come in looking the way they come: to what they heard, or to the middle of the map (Arte, 17/10).
+        const toward = near?.pos ?? { x: (this.s.width - 1) / 2, y: (this.s.height - 1) / 2, z: 0 };
+        const facing = TEMPLATES[template].undead ? (facingTo(u.pos, toward) ?? u.facing) : u.facing;
+        return { ...u, ...(facing !== undefined ? { facing } : {}), ...(near ? { heard: { ...near.pos } } : {}) };
       });
       this.emit({ t: 'spawned', units, pod, reinforcement: r.id });
       if (r.horde) continue;
@@ -1394,7 +1397,8 @@ export function risenName(corpse: Unit): string {
  * 2026-10-16): `risenFrom` says whose, and the client draws that soldier dead.
  */
 function risenUnit(id: string, corpse: Unit, at: Pos, podId: string | null): Unit {
-  const zombie = makeUnit(id, 'zombie', risenName(corpse), null, at, podId);
+  // It gets up looking where it fell (Arte, 17/10).
+  const zombie = { ...makeUnit(id, 'zombie', risenName(corpse), null, at, podId), ...(corpse.facing !== undefined ? { facing: corpse.facing } : {}) };
   if (TEMPLATES[corpse.template].team !== 'xcom' || !corpse.appearance) return zombie;
   return { ...zombie, risenFrom: corpse.id, appearance: { ...corpse.appearance } };
 }

@@ -737,6 +737,12 @@ export interface Unit {
   lines?: MissionLines;
   /** A vest found and put on out there (playtest 16/10 #18): its health counts at once, and it comes home. */
   worn?: ItemId[];
+  /**
+   * Where the unit looks, in radians round the map (0 along +x, π/2 along +y):
+   * the way it last walked, struck or heard something. The dead see only in
+   * a cone that way (los.ts inViewCone, Arturo 17/10).
+   */
+  facing?: number;
   /** Unit this one keeps pinned down with Suppression. */
   suppressing: string | null;
   /** −aim while pinned down; moving draws fire. */

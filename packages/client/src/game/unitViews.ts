@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { BITE_TAG, canStandOn, coverAt, decorOf, kindAt, PLAYER_COLORS, sexOfPerson, type Alarm, type Biome, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
+import { BITE_TAG, canStandOn, coverAt, decorOf, kindAt, PLAYER_COLORS, sexOfPerson, TEMPLATES, type Alarm, type Biome, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
 import { STOREY, tileToWorld } from './coords';
 import type { Blow, FigurePose, Gear } from './figures';
 import { clipSpeed, CROUCHED, gaitsOf } from './gaits';
@@ -53,6 +53,8 @@ interface Pose {
   toss: number;
   yaw: number;
   yawTarget: number;
+  /** How fast the yaw eases to its target: brisk for a step or a strike, slower for a turn on the spot. */
+  turn: number;
   phase: number;
 }
 
@@ -94,6 +96,10 @@ interface UnitView {
 
 /** How high the blade is held on guard (the pose's aim): up in front, its point a little up. */
 const GUARD_AIM = 0.72;
+/** The yaw's ease for steps, strikes and aims (face()). */
+const TURN = 14;
+/** A dead one turning where it stands to where the engine says it looks (a noise, the start): about half a second. */
+const TURN_ON_SPOT = 5;
 
 /** A sabotage's alarm by the map, where the mission does not say (skirmishes, older saves): as sfx.ts picks its sound. */
 const ALARM_BY_MAP: Record<Biome, Alarm> = { city: 'police', wilds: 'ambulance', facility: 'factory' };
@@ -132,6 +138,11 @@ function angleTo(from: THREE.Vector3, to: THREE.Vector3): number | null {
 
 function wrapAngle(a: number): number {
   return Math.atan2(Math.sin(a), Math.cos(a));
+}
+
+/** A model's yaw (atan2(dx, dz), a model looks along +z) for the engine's Unit.facing (atan2(dy, dx) in tiles; y is +z). */
+function yawOf(facing: number): number {
+  return wrapAngle(Math.PI / 2 - facing);
 }
 
 /** The battle's unit views on screen (one battle at a time): see unitPosNow. */
@@ -239,10 +250,11 @@ export class UnitViews {
 
     rig.root.add(ring, flag);
     rig.root.position.copy(this.standAt(u.pos));
-    const facing = u.team === 'alien' ? 0 : Math.PI;
+    // Where the engine says it looks (the dead from the start: their view cone); without that, the squad faces north.
+    const facing = u.facing !== undefined ? yawOf(u.facing) : u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
       crouch: 0, crouchTarget: 0, aim: 0, aimTarget: 0, aimFx: 0, run: 0, recoil: 0, hit: 0, flash: 0,
-      fall: u.alive || u.lost ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, toss: 0, yaw: facing, yawTarget: facing,
+      fall: u.alive || u.lost ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, toss: 0, yaw: facing, yawTarget: facing, turn: TURN,
       phase: Math.random() * Math.PI * 2,
     };
     this.group.add(rig.root);
@@ -299,6 +311,15 @@ export class UnitViews {
       v.rig.root.visible = shown;
       v.flag.visible = shown && u.alive;
       v.pose.crouchTarget = u.hunkered || u.captive ? 1 : 0;
+      // The dead see in a cone (los.ts inViewCone): standing still, the model looks where the engine says,
+      // turning on the spot when that changes (a noise heard); a walk or a bite ends on the same angle.
+      if (u.alive && !v.animating && u.facing !== undefined && TEMPLATES[u.template].undead) {
+        const yaw = yawOf(u.facing);
+        if (Math.abs(wrapAngle(yaw - v.pose.yawTarget)) > 0.01) {
+          v.pose.yawTarget = yaw;
+          v.pose.turn = TURN_ON_SPOT;
+        }
+      }
       // On watch: the gun up; with the blade (docs/FASE10.md §4: Unit.watchMelee), drawn from the belt and held on guard.
       const guard = !!u.overwatch && !!u.watchMelee && u.alive;
       v.pose.aimTarget = u.overwatch ? (guard ? GUARD_AIM : 1) : 0;
@@ -561,7 +582,7 @@ export class UnitViews {
       const k = 1 - Math.exp(-dt * 9);
       p.crouch += (p.crouchTarget - p.crouch) * k;
       p.aim += (p.aimTarget - p.aim) * k;
-      p.yaw += wrapAngle(p.yawTarget - p.yaw) * (1 - Math.exp(-dt * 14));
+      p.yaw += wrapAngle(p.yawTarget - p.yaw) * (1 - Math.exp(-dt * p.turn));
       this.apply(v, time);
       if (v.rig.drone && !v.droneAway) {
         const d = v.rig.drone;
@@ -605,6 +626,16 @@ export class UnitViews {
     if (!v) return;
     const a = angleTo(v.rig.root.position, toward);
     if (a !== null) v.pose.yawTarget = a;
+    v.pose.turn = TURN;
+  }
+
+  /**
+   * Where unit `id`'s model looks right now, in the engine's terms (Unit.facing: atan2(dy, dx) in tiles):
+   * the same as the engine at rest, in between while it turns. For drawing the view cone with the model.
+   */
+  facingNow(id: string): number | null {
+    const v = this.views.get(id);
+    return v ? wrapAngle(Math.PI / 2 - v.pose.yaw) : null;
   }
 
   /**
