@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { kitModel } from '../strategy/baseKit';
 import { carPartner, decorOf, DIRS4, floorLevels, litMask, type Biome, type DecorKind, type GameState, type Place, type Site, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
 import { StaticBatch, type Dirty, type UvRect } from './batch';
@@ -12,9 +13,12 @@ import { beforeNextFrame, shadowsChanged } from './renderer';
 import { ExploredMemory } from './explored';
 import { FogOfWar } from './fogOfWar';
 import { GroundMap, scatterCover } from './ground';
+import { SnowCover, snowyMission, snowTexture } from './snow';
 import { DroppedView } from './dropped';
 import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
 import { EvacBus } from './evacBus';
+import { medicalDetails, medicalWallPatch } from './medicalDetails';
+import { medicalFurniture } from './medicalFurniture';
 import { contactPatch, GroundOcclusion } from './groundAO';
 import { atlasTexture } from './synty';
 import type { AtlasId, PropId, PropSet } from './syntyManifest';
@@ -72,6 +76,8 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'table':
     case 'sofa':
     case 'bed':
+    case 'hospitalBed':
+    case 'gurney':
     case 'pipe':
     case 'bush':
       return low ? kind : null;
@@ -85,6 +91,7 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'statue':
     case 'wardrobe':
     case 'cabinet':
+    case 'medicalShelf':
     case 'rack':
       return low ? null : kind;
     case 'fence':
@@ -125,6 +132,26 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'stairs':
       // A building's stairs are a ladder tile, never cover (docs/FASE6-PLAN.md).
       return null;
+    case 'medicalCabinet':
+    case 'medicalCart':
+    case 'receptionDesk':
+    case 'waitingSeats':
+    case 'examTable':
+    case 'medicalMonitor':
+    case 'xray':
+    case 'bedsideTable':
+    case 'visitorChair':
+    case 'clinicalSink':
+    case 'sterilizer':
+    case 'ultrasound':
+    case 'waitingTable':
+    case 'waterDispenser':
+    case 'toilet':
+    case 'clinicalBin':
+    case 'consultDesk':
+    case 'wheelchair':
+      // Own clinical furniture is drawn directly, outside Synty's prop sets.
+      return null;
     case 'truck':
     case 'waterTower':
     case 'container':
@@ -157,7 +184,9 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
 }
 
 /** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
-const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire', 'pallets', 'drums', 'machine']);
+const MEDICAL_FLAT = new Set(['bloodPool', 'bloodDrops', 'floorGrime', 'scatteredPapers']);
+const MEDICAL_SCATTER = new Set([...MEDICAL_FLAT, 'medicalWaste', 'overturnedChair', 'fallenIV', 'spilledSupplies', 'rumpledLinen']);
+const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'hospitalBed', 'medicalShelf', 'gurney', 'medicalCart', 'medicalCabinet', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'bedsideTable', 'visitorChair', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'clinicalBin', 'consultDesk', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire', 'pallets', 'drums', 'machine']);
 
 /**
  * The scenarios' things that stand over several tiles (#25), and what each of
@@ -218,6 +247,10 @@ interface Kit {
   /** Props' materials: 'packed' for the packed texture's packs, else by pack. */
   atlas: Map<AtlasId | 'packed', THREE.Material>;
   surroundings: THREE.Mesh;
+  snowbank: THREE.MeshStandardMaterial | null;
+  clinical: THREE.MeshStandardMaterial | null;
+  clinicalWall: THREE.MeshStandardMaterial | null;
+  clinicalDirt: THREE.MeshStandardMaterial | null;
 }
 
 /** One kind of placed geometry (a prop's part, the floor slabs): its instances go to the map's batch. */
@@ -291,6 +324,8 @@ export class MapView {
   readonly group = new THREE.Group();
   private readonly fog = new FogOfWar();
   private ground: GroundMap | null = null;
+  private snow: SnowCover | null = null;
+  private snowReady = false;
   private visibility: boolean[] | null = null;
   private width = 0;
   private materials: THREE.Material[] = [];
@@ -356,7 +391,10 @@ export class MapView {
     this.buildings?.dispose();
     this.ao?.dispose();
     this.ao = new GroundOcclusion(s.width, s.height);
-    this.buildings = new BuildingsView(s, this.fog, this.ao);
+    this.snow?.dispose();
+    this.snow = snowyMission(s) ? new SnowCover(s) : null;
+    this.snowReady = false;
+    this.buildings = new BuildingsView(s, this.fog, this.ao, this.snow);
     this.disposeKit();
     this.kit = this.newKit(s, this.ground, this.ao);
     this.aoDirty = null;
@@ -391,7 +429,11 @@ export class MapView {
     contactPatch(groundMaterial, ao);
     const slab = new THREE.BoxGeometry(1, 0.1, 1);
     this.geometries.push(slab);
-    return { batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground) };
+    return {
+      batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), clinical: null, clinicalWall: null, clinicalDirt: null,
+      surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground),
+      snowbank: this.snow ? this.own(new THREE.MeshStandardMaterial({ map: snowTexture(), color: 0xe3f0ff, roughness: 0.98 })) : null,
+    };
   }
 
   private disposeKit(): void {
@@ -412,7 +454,7 @@ export class MapView {
     this.group.clear();
     const ground = this.ground ?? (this.ground = new GroundMap(s));
     const ao = this.ao ?? (this.ao = new GroundOcclusion(s.width, s.height));
-    const buildings = this.buildings ?? (this.buildings = new BuildingsView(s, this.fog, ao));
+    const buildings = this.buildings ?? (this.buildings = new BuildingsView(s, this.fog, ao, this.snow));
     const kit = this.kit ?? (this.kit = this.newKit(s, ground, ao));
 
     const pal = PALETTES[s.biome] ?? PALETTES.city;
@@ -438,7 +480,9 @@ export class MapView {
       const key = atlasRect(id) ? 'packed' : id;
       let m = kit.atlas.get(key);
       if (!m) {
-        m = this.own(new THREE.MeshStandardMaterial({ map: key === 'packed' ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 }));
+        m = new THREE.MeshStandardMaterial({ map: key === 'packed' ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 });
+        this.snow?.patch(m);
+        this.own(m);
         floorFadePatch(m, buildings.cutaway);
         kit.atlas.set(key, m);
       }
@@ -468,6 +512,8 @@ export class MapView {
       const ids = syntySet(set);
       return addSyntyId(ids[Math.min(ids.length - 1, Math.floor(pick * ids.length))]!, matrix);
     };
+    const bedVariants = new Set((s.medical ?? []).flatMap((b) => (b.dressing ?? [])
+      .filter((d) => d.kind === 'bareBed' || d.kind === 'coveredBed').map((d) => d.z * s.width * s.height + d.y * s.width + d.x)));
     const searched = new Set(s.searched ?? []);
     /** Some wrecks still have a battery: their headlights on, by night. */
     const headlights: Glow[] = [];
@@ -716,6 +762,22 @@ export class MapView {
         addSyntyId('lumberjack', placed(x + 0.5, base + topOf('lumberjackBase'), y + 0.5, 1, 1, 1, yaw));
         return true;
       }
+      if (look?.kind === 'hospitalBed' && kind === 'low' && bedVariants.has(placeBase + i)) return true;
+      const clinical = look && medicalFurniture(look.kind, hash(x, y, 73 + floor.level) < 0.6);
+      if (clinical && (look.kind === 'medicalCabinet' || look.kind === 'xray' || look.kind === 'waterDispenser' ? kind === 'high' : kind === 'low')) {
+        if (!kit.clinical) {
+          kit.clinical = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
+          floorFadePatch(kit.clinical, buildings.cutaway);
+        }
+        const wear = buildings.plan.buildings[floor.building]?.medicalWear ?? 0;
+        const yaw = turnTo(look.facing) * Math.PI / 2 + (hash(x, y, 19) - 0.5) * wear * 0.7;
+        const place = placed(x + 0.5, base, y + 0.5, 1, 1, 1, yaw);
+        for (const part of clinical) batch.add(part.geometry, kit.clinical, place.clone().multiply(part.matrix), true, {
+          color: [part.color.r, part.color.g, part.color.b], aFloor: [floor.building + 1, floor.level],
+        }, true);
+        if (look.kind === 'medicalCart') addSyntyId('clinicalKit', place.clone().multiply(new THREE.Matrix4().makeTranslation(-0.08, 0.59, -0.03)));
+        return true;
+      }
       const set = look && decorSet(look.kind, kind, s.biome, s.site);
       if (!look || !set) return false;
       const cx = x + 0.5;
@@ -767,6 +829,12 @@ export class MapView {
       }
       // A fallen tree is a row of logs: it keeps to the grid.
       addProp(i, set, cx, base, cz, pick, turn, look.kind === 'tree' && kind === 'low' ? 1 : (WIGGLE[look.kind] ?? 0));
+      if (look.kind === 'hospitalBed' && kind === 'low') {
+        const yaw = turn * Math.PI / 2;
+        const at = placed(cx, base, cz, 1, 1, 1, yaw);
+        // The slim drip stays within this bed's cover tile.
+        addSyntyId('ivStand', at.multiply(new THREE.Matrix4().makeTranslation(0.31, 0, 0.22)), true);
+      }
       // A chair at each desk, pushed back a little (cosmetic: it stands on the floor in front).
       if (look.kind === 'desk' && kind === 'low') {
         const f = DIRS4[look.facing]!;
@@ -877,6 +945,47 @@ export class MapView {
         }
       }
     });
+    // Seeded clinical scenery: stored with the mission, nonblocking, and
+    // removed visually if its floor, bed, furniture or supporting wall is destroyed.
+    for (const b of s.medical ?? []) for (const d of b.dressing ?? []) {
+      const i = d.y * s.width + d.x;
+      if (area && !area[i]) continue;
+      const st = d.z ? s.levels?.[d.z - 1] : { tiles: s.tiles, decor: s.decor };
+      const tile = st?.tiles[i], look = decorOf(st?.decor?.[i]);
+      if (!tile) continue;
+      const isBed = d.kind === 'bareBed' || d.kind === 'coveredBed';
+      const isBody = d.kind === 'corpseCivilian' || d.kind === 'corpseStaff' || d.kind === 'coveredCorpse';
+      const isWall = d.kind === 'wallCross' || d.kind === 'cautionSign' || d.kind === 'safeSign' || d.kind === 'wallBlood';
+      const scatter = MEDICAL_SCATTER.has(d.kind), flat = MEDICAL_FLAT.has(d.kind);
+      if (isBed && (tile !== 'low' || look?.kind !== 'hospitalBed')) continue;
+      if (isBody && tile !== 'floor') continue;
+      if (scatter && tile !== 'floor' && tile !== 'low' && tile !== 'high') continue;
+      if (!scatter && !isBed && !isBody && !isWall && tile !== 'low' && tile !== 'high') continue;
+      const normal = DIRS4[d.facing]!;
+      const wallX = d.x - normal.x, wallY = d.y - normal.y;
+      if (isWall && st?.tiles[wallY * s.width + wallX] !== 'wall') continue;
+      floor.building = buildings.plan.owner[i]!; floor.level = d.z;
+      const at = placed(d.x + 0.5, d.z * STOREY + d.height, d.y + 0.5, 1, 1, 1, turnTo(d.facing) * Math.PI / 2);
+      if (d.kind === 'corpseCivilian' || d.kind === 'corpseStaff') { addSyntyId(d.kind, at); continue; }
+      if (!kit.clinical) {
+        kit.clinical = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
+        floorFadePatch(kit.clinical, buildings.cutaway);
+      }
+      if (d.kind === 'floorGrime' && !kit.clinicalDirt) {
+        kit.clinicalDirt = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, transparent: true, opacity: 0.24, depthWrite: false }));
+        floorFadePatch(kit.clinicalDirt, buildings.cutaway);
+      }
+      if (isWall && !kit.clinicalWall) {
+        kit.clinicalWall = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }));
+        floorFadePatch(kit.clinicalWall, buildings.cutaway); medicalWallPatch(kit.clinicalWall, buildings.cutaway);
+      }
+      const outside = wallX <= b.x || wallY <= b.y || wallX >= b.x + b.w - 1 || wallY >= b.y + b.h - 1;
+      for (const part of medicalDetails(d.kind, d.variant)) batch.add(part.geometry, isWall ? kit.clinicalWall! : d.kind === 'floorGrime' ? kit.clinicalDirt! : kit.clinical, at.clone().multiply(part.matrix), !flat && !isWall, {
+        color: [part.color.r, part.color.g, part.color.b], aFloor: [floor.building + 1, floor.level],
+        ...(isWall ? { aMedicalWall: outside ? [-normal.x, -normal.y] : [0, 0] } : {}),
+      }, !flat && !isWall);
+      if (d.kind === 'coveredBed') addSyntyId('ivStand', at.clone().multiply(new THREE.Matrix4().makeTranslation(-0.31, 0, 0.22)));
+    }
     decorNow = decor;
     tilesNow = s.tiles;
     placeBase = 0;
@@ -935,6 +1044,26 @@ export class MapView {
       let layers = coverLayers.get(id);
       if (!layers) coverLayers.set(id, (layers = prop.map((part) => partLayer(part, false))));
       prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
+    }
+
+    if (this.snow) {
+      const drift = kitModel('drift');
+      if (!drift) {
+        // The shared kit caches failures too: only wait once, then keep the textured snow.
+        if (!this.snowReady) {
+          this.snowReady = true;
+          void this.snow.ready.then(() => {
+            if (this.shown === s) { this.drawn = null; this.rebuild(s); }
+          });
+        }
+      } else {
+        const m = kit.snowbank!;
+        for (const matrix of this.snow.drifts(buildings.plan)) {
+          const e = matrix.elements;
+          if (area && !area[Math.floor(e[14]!) * s.width + Math.floor(e[12]!)]) continue;
+          for (const part of drift.parts) layer(part.geometry, m, false).add(matrix);
+        }
+      }
     }
 
     // A filling station's pumps (decor 'tank', low): an island under each pair, a canopy over each station's.
@@ -1067,7 +1196,7 @@ export class MapView {
   /** Day or night: the fog's tints, the street lights' heads, the real lights, the lit tiles. */
   setNight(on: boolean): void {
     NIGHT.value = on ? 1 : 0;
-    this.fog.setNight(on);
+    this.fog.setNight(on, !!this.snow);
     if (on && !this.night) this.lightNight();
     this.night?.setVisible(on);
     this.lightsSeen = '';

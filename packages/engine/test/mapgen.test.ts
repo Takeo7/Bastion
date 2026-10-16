@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from '../src/grid';
 import { carPartner, decorOf } from '../src/decor';
 import { GEN_SIZE, generateLayout, type MissionLayout } from '../src/mapgen';
+import { roomAt } from '../src/loot';
 import { computeReach, stepCost } from '../src/path';
 import { Rng } from '../src/rng';
 import { createMission, garrison, MISSION_TURNS, missionTurns, podPlan } from '../src/setup';
@@ -64,6 +65,38 @@ const centroid = (ps: Vec2[]): Vec2 => ({ x: ps.reduce((s, p) => s + p.x, 0) / p
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
 
 describe('procedural maps', () => {
+  it('puts the opening medicines on reachable clinic room floor, beyond its doorways', () => {
+    for (let seed = 0; seed < 80; seed++) {
+      const s = createMission({
+        map: { kind: 'generated', biome: 'city', seed: seed * 104729 },
+        slots: seed % 2 ? [0] : [0, 1], rng: new Rng(seed), kind: 'recovery', difficulty: 1,
+        campaignMission: { id: 'opening', name: 'El consultorio de Brena', story: 1 },
+      });
+      const label = `opening/${seed}`;
+      expect(s.mission.kind, label).toBe('recovery');
+      const p = s.mission.item!.pos!;
+      const i = p.y * s.width + p.x;
+      expect(s.tiles[i], label).toBe('floor');
+      expect(s.ground![i], label).toBe(INDOOR);
+      // A doorstep is tagged INDOOR too: all eight surrounding tiles must
+      // still belong to the building, and none may be an outside entrance.
+      for (const d of DIRS8) expect(s.ground![(p.y + d.y) * s.width + p.x + d.x], label).toBe(INDOOR);
+      const room = roomAt(s, p);
+      expect(room, label).not.toBeNull();
+      const furniture = new Set(room!.tiles.flatMap((q) => DIRS4.map((d) => decorOf(s.decor![(q.y + d.y) * s.width + q.x + d.x])?.kind)));
+      expect(furniture.has('examTable'), label).toBe(true);
+      expect(furniture.has('medicalShelf'), label).toBe(true);
+      const scout = s.units.find((u) => u.team === 'xcom')!;
+      const reach = computeReach({ ...s, units: [scout] }, scout, 100_000);
+      expect(reach.cost.has(i), label).toBe(true);
+    }
+  }, 30_000);
+
+  it('keeps clinic furniture out of other missions', () => {
+    const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 3 }, slots: [0], rng: new Rng(3), kind: 'recovery' });
+    expect(s.decor!.some((d) => ['hospitalBed', 'medicalShelf'].includes(decorOf(d)?.kind ?? ''))).toBe(false);
+  });
+
   it('are deterministic for a seed', () => {
     const a = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [2, 2, 3], seed: 42 });
     const b = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [2, 2, 3], seed: 42 });

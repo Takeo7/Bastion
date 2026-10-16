@@ -47,7 +47,7 @@ export function syntyProp(id: PropId): PropPart[] | null {
     const a = PROPS[id];
     pending.set(
       id,
-      loadModel(a.pack, 'prop', id)
+      loadModel(a.pack, a.base ? 'base' : 'prop', a.base ?? id)
         .then((m) => prepare(id, m))
         .catch(() => undefined),
     );

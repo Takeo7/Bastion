@@ -811,10 +811,9 @@ export const NAMED_SEX: Record<string, 'f' | 'm'> = {
 export const PREMISE = {
   title: 'Atalaya',
   lines: [
-    'Hace dos inviernos, la Pandemia vació el valle de Kessra. Los muertos se levantaron y siguen andando.',
-    'Atalaya, una vieja estación militar en la sierra de Brena, aguanta con cuarenta supervivientes llegados de todas partes.',
-    'Vosotros dos la dirigís. Lo importante lo decidís juntos.',
-    'Atalaya vive de lo que sus equipos traen de fuera. El primero sale hoy.',
+    'La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
+    'En la vieja estación militar se ha ido reuniendo gente de todas partes. Necesitamos comida, medicinas y combustible si queremos llegar todos vivos al final de la temporada.',
+    'Toca volver a sacar La Lata, ese trasto forrado con chapas que tenemos por autocar, y salir a buscar lo que nos hace falta.',
   ],
 };
 
@@ -1009,6 +1008,7 @@ export function recoveryOutdoors(o: MissionOffer): boolean {
 
 /** Who signs an operation's report, in pen under it. */
 export function briefingSignature(o: MissionOffer): string {
+  if (o.story === 1) return '';
   return o.story ? STORY[o.story - 1]!.signature : '— N. A.';
 }
 
@@ -1167,15 +1167,15 @@ export const NWOSU_CHAPTER = 2;
 /** One story mission per Bastion level, in order; the final mission needs all of them. */
 export const STORY: StoryChapter[] = [
   {
-    title: 'Primer invierno',
+    title: 'El consultorio de Brena',
     kind: 'recovery',
     biome: 'city',
     region: 'weu',
     difficulty: 1,
     reward: { credits: 90 },
     briefing:
-      'El consultorio del pueblo sigue cerrado, con las medicinas del último invierno dentro. Caducan este mes, y el pueblo no está vacío. Recuperadlas y sacadlas por la zona de evacuación.',
-    signature: '— N. A.',
+      'El consultorio de Brena sigue cerrado. Puede que todavía queden medicinas dentro. En la estación apenas nos quedan paracetamoles.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Tendréis que buscar una entrada y cargar lo que encontréis.',
+    signature: '',
     item: 'las medicinas',
     after: 'Las medicinas del consultorio ya están en la enfermería. Por primera vez desde el otoño, nadie tiene que elegir quién se cura.',
   },

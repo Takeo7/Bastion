@@ -873,7 +873,8 @@ export class StrategyScreen {
       });
     }
     // Story chapters and the final mission are announced whenever they open: after a level, a mission or an event.
-    for (const o of c.offers.filter((x) => (x.story || x.final) && !prev.offers.some((p) => p.id === x.id))) {
+    // Chapter 1 is already presented in squad select, immediately after Atalaya.
+    for (const o of c.offers.filter((x) => (x.story || x.final) && x.story !== 1 && !prev.offers.some((p) => p.id === x.id))) {
       fresh.push({
         tone: o.final ? 'bad' : 'good',
         kicker: o.final ? 'DIAPASÓN LOCALIZADO' : `MISIÓN DE HISTORIA · HOJA ${o.story}`,
@@ -1653,7 +1654,7 @@ export class StrategyScreen {
     const chosen = c.activeMission === o.id;
     const biome = o.map.kind === 'generated' ? BIOME_NAMES[o.map.biome] : 'Distrito Comercial';
     return [
-      h(
+      o.story === 1 ? null : h(
         'div.alert-kicker',
         {
           className: `alert-kicker${o.facility || o.final ? ' bad' : o.story || o.quest ? ' good' : ''}`,
@@ -1672,7 +1673,7 @@ export class StrategyScreen {
       h('h2.x-title', {}, o.name),
       h('p.x-sub', {}, `${REGIONS[o.region].name} · ${biome}${quest ? ` · paso ${quest.step + 1} de ${QUESTS[quest.id].steps.length}` : ''}`),
       h('p.x-text', {}, offerBriefing(c, o)),
-      h('p.x-note', {}, offerSignature(c, o)),
+      offerSignature(c, o) ? h('p.x-note', {}, offerSignature(c, o)) : null,
       h(
         'dl.briefing',
         {},
@@ -2830,13 +2831,19 @@ export class StrategyScreen {
   private anchorCards(cards: HTMLElement, count: number): void {
     const step = () => {
       const pads = Array.from({ length: count }, (_, i) => this.stage.project(this.bastion.padPosition(i, count)));
-      const spacing = count > 1 ? Math.abs(pads[1]!.x - pads[0]!.x) : 140;
+      const spacing = count > 1 ? Math.min(...pads.slice(1).map((p, i) => Math.abs(p.x - pads[i]!.x))) : 140;
       cards.style.setProperty('--card-w', `${Math.max(84, Math.min(150, spacing - 8))}px`);
-      for (const el of Array.from(cards.children) as HTMLElement[]) {
+      // One row with a shared height, above the launch controls even after a resize or UI zoom.
+      const children = Array.from(cards.children) as HTMLElement[];
+      const height = Math.max(0, ...children.map((el) => el.offsetHeight));
+      const controls = this.viewEl.querySelector<HTMLElement>('.strat-center-bottom');
+      const ceiling = controls ? controls.getBoundingClientRect().top - cards.getBoundingClientRect().top - height - 18 : Infinity;
+      const top = Math.min(Math.min(...pads.map((p) => p.y)) + 12, ceiling);
+      for (const el of children) {
         const p = pads[Number(el.dataset.pad)];
         if (!p) continue;
         el.style.left = `${p.x}px`;
-        el.style.top = `${p.y + 12}px`;
+        el.style.top = `${top}px`;
       }
       this.anchorFrame = requestAnimationFrame(step);
     };

@@ -240,6 +240,7 @@ for (const [id, t] of Object.entries(FX_TEXTURES) as [keyof typeof FX_TEXTURES, 
 }
 
 for (const [id, p] of Object.entries(PROPS) as [string, PropAsset][]) {
+  if (p.base) continue;
   add({ kind: 'prop', id, name: id, out: join(PUBLIC, modelFile(p.pack, 'prop', id)), fbx: findFbx(p.pack, p.fbx), atlas: p.atlas ?? atlasOf(p.pack), slots: slotsOf(p.pack, p.fbx) });
 }
 

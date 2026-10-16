@@ -429,21 +429,39 @@ const FACILITY_ART: Record<string, Art> = {
         k.put('campChair', { x, z, yaw: yaw + Math.PI });
     }
   },
-  // Enfermería: a quarantine tent, drips and stretchers; a decontamination shower and the red cross later.
+  // A maintained clinical room: the same tiles, pale plaster and red band
+  // as the mission hospitals, kept open towards the base's camera.
   infirmary: (k, level) => {
-    k.put('quarantineTent', { fit: 4.6, z: -0.7 });
-    k.put('ivStand', { x: -1.9, z: 1.5 });
-    k.put('medKit', { x: -1.3, z: 1.6, yaw: 0.4 });
+    const plaster = mat(0xe0ddd0), lower = mat(0xa09b90), band = mat(0x803b34), grout = mat(0x787970);
+    k.box(grout, 4.5, 0.05, 4.5, 0, 0, 0);
+    for (let x = 0; x < 10; x++) for (let z = 0; z < 10; z++) {
+      k.box(mat((x * 7 + z * 3) % 5 ? 0xd7d6c9 : 0xcaccc3), 0.437, 0.012, 0.437, -2.025 + x * 0.45, 0.05, -2.025 + z * 0.45, 0, false);
+    }
+    for (const [x, z, w, d, h] of [[0, -2.15, 4.5, 0.15, 1.75], [-2.15, 0, 0.15, 4.3, 1.25], [2.15, 0, 0.15, 4.3, 1.25]] as const) {
+      k.box(plaster, w, h, d, x, 0.06, z);
+      // Clinical lining on the inward face; the exterior remains plain plaster.
+      const ix = w < d ? -Math.sign(x) * (w / 2 + 0.009) : 0;
+      const iz = d < w ? -Math.sign(z) * (d / 2 + 0.009) : 0;
+      const fw = w < d ? 0.012 : w, fd = d < w ? 0.012 : d;
+      k.box(lower, fw, 0.65, fd, x + ix, 0.06, z + iz);
+      k.box(band, fw, 0.15, fd, x + ix, 0.71, z + iz);
+      k.box(grout, fw, 0.07, fd, x + ix, 0.06, z + iz);
+    }
+    // A short canopy at the back leaves the beds visible in the base view.
+    k.box(mat(0xb5b8b3), 4.5, 0.10, 0.75, 0, 1.82, -1.85);
+    k.box(mat(0xf1eee0), 0.65, 0.65, 0.03, 0, 1.02, -2.05);
+    k.box(band, 0.12, 0.44, 0.04, 0, 1.12, -2.02, 0, false);
+    k.box(band, 0.44, 0.12, 0.04, 0, 1.28, -2.02, 0, false);
+    k.put('hospitalBed', { x: -1.15, y: 0.065, z: -0.4, s: 0.9 });
+    k.put('ivStand', { x: -1.75, y: 0.065, z: -0.7, s: 0.85 });
+    k.put('medShelf', { x: 1.15, y: 0.065, z: -1.62, s: 0.75 });
+    k.put('medKit', { x: 1.1, y: 0.065, z: 1.55, s: 0.8 });
     if (level >= 2) {
-      k.put('gurney', { x: 0.3, z: 1.75 });
-      k.put('medShelf', { x: -2.05, z: -2.2, s: 0.9 });
+      k.put('gurney', { x: 1.05, y: 0.065, z: 0.05, s: 0.8 });
+      k.put('ivStand', { x: 1.75, y: 0.065, z: -0.35, s: 0.8 });
     }
     if (level >= 3) {
-      k.put('deconShower', { x: 1.85, z: 1.7, s: 0.85 });
-      k.put('ivStand', { x: -0.7, z: 1.4 });
-      // The red cross over the door.
-      k.box(GLOW.red(), 0.12, 0.5, 0.05, 0, 1.25, 0.95, 0, false);
-      k.box(GLOW.red(), 0.5, 0.12, 0.05, 0, 1.44, 0.95, 0, false);
+      k.put('deconShower', { x: -1.4, y: 0.065, z: 1.35, s: 0.65 });
     }
   },
   // Taller: a shipping container for stores, a workbench and tyres; a second container stacked on top at level 3.
@@ -957,8 +975,9 @@ export class BastionSet implements StageSet {
   hangar(): Shot {
     const aspect = Math.max(1, window.innerWidth / Math.max(1, window.innerHeight));
     const back = Math.max(9.2, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * aspect));
-    const target = HANGAR.clone().add(new THREE.Vector3(0, 1.5, 0.3));
-    return { pos: HANGAR.clone().add(new THREE.Vector3(0, 2.75, PAD_Z + back)), target, fov: 42 };
+    // Reserve the lower part of the window for equal-height cards and the launch controls.
+    const target = HANGAR.clone().add(new THREE.Vector3(0, 0.5, 0.3));
+    return { pos: HANGAR.clone().add(new THREE.Vector3(0, 1.75, PAD_Z + back)), target, fov: 42 };
   }
 
   /**

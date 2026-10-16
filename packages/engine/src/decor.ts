@@ -64,6 +64,28 @@ const IDS: Record<DecorKind, number> = {
   forklift: 48,
   machine: 49,
   silo: 50,
+  // The medical centres (PR #1, Ana): numbered after the factory's of the 0.3.0, which saved missions keep.
+  hospitalBed: 51,
+  medicalShelf: 52,
+  gurney: 53,
+  medicalCabinet: 54,
+  medicalCart: 55,
+  wheelchair: 56,
+  receptionDesk: 57,
+  waitingSeats: 58,
+  examTable: 59,
+  medicalMonitor: 60,
+  xray: 61,
+  bedsideTable: 62,
+  visitorChair: 63,
+  clinicalSink: 64,
+  sterilizer: 65,
+  ultrasound: 66,
+  waitingTable: 67,
+  waterDispenser: 68,
+  toilet: 69,
+  clinicalBin: 70,
+  consultDesk: 71,
 };
 
 const KINDS: DecorKind[] = [];

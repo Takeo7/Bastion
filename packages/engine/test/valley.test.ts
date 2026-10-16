@@ -60,9 +60,10 @@ describe('the valley', () => {
         expect(o.name).not.toMatch(/Operación/);
         expect(o.name).toContain(REGIONS[o.region].name.replace(/^El /, ''));
       }
-      // The story's pages are the Diario's now.
+      // The opening mission is presented without the Diario label.
       const story = c.offers.find((x) => x.story === 1)!;
-      expect(missionInfo(c, story).kicker).toBe('DIARIO · HOJA 1');
+      expect(missionInfo(c, story).kicker).toBeUndefined();
+      expect(missionInfo(c, story).item).toBe('las medicinas');
     }
     expect(ordinary).toBeGreaterThan(10);
     expect(FACILITIES.simulation.name).toBe('Sala de mapas');

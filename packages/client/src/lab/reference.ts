@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { canStandOn, createMission, DIRS4, levelCount, Rng, teamVisibility, type Biome, type GameState, type MissionKind, type Site, type Vec2 } from '@bastion/engine';
+import { canStandOn, createMission, DIRS4, levelCount, Rng, teamVisibility, type Biome, type GameState, type MapSource, type MissionKind, type Site, type Vec2 } from '@bastion/engine';
 import type { Focus } from '../game/buildings';
 import { setGraphics, type EffectsLevel } from '../settings';
 import { CameraRig } from '../game/camera';
@@ -31,6 +31,9 @@ const params = new URLSearchParams(location.search);
 const biome = (params.get('biome') ?? 'city') as Biome;
 const seed = Number(params.get('seed') ?? 7);
 const site = (params.get('site') ?? undefined) as Site | undefined;
+// Clinical variants use real generated missions and the normal map renderer.
+const medical = params.get('medical') as 'clinic' | 'ward' | 'hospital' | null;
+const story = medical === 'clinic' ? 1 : medical === 'hospital' ? 2 : undefined;
 
 const container = document.getElementById('ref')!;
 const report = document.getElementById('ref-report')!;
@@ -41,7 +44,10 @@ gl.info.autoReset = false;
 const handmade = params.get('map');
 const state: GameState = handmade
   ? createMission({ map: { kind: 'handmade', id: handmade }, slots: [0], rng: new Rng(seed), difficulty: 3 })
-  : createMission({ map: { kind: 'generated', biome, seed, site }, slots: [0], rng: new Rng(seed), kind: (params.get('kind') as MissionKind) ?? 'elimination', difficulty: 3 });
+  : createMission({ map: { kind: 'generated', biome, seed, site, ...(medical ? { medical } : {}) } as MapSource, slots: [0], rng: new Rng(seed), kind: (params.get('kind') as MissionKind) ?? (medical === 'hospital' ? 'rescue' : medical ? 'recovery' : 'elimination'), difficulty: 3,
+    ...(story ? { campaignMission: { id: 'medical-reference', name: medical === 'clinic' ? 'El consultorio de Brena' : 'La doctora', story } } : {}),
+  });
+if (params.has('exterior')) state.units = []; // Synthetic façade inspection, without unit-driven cutaway.
 setTerrain(state);
 const mapView = new MapView();
 const units = new UnitViews();
@@ -53,6 +59,7 @@ const focus: Focus = { selected: null, hover: null, target: null, level: null };
 mapView.watch(renderer.camera, () => focus);
 mapView.build(state);
 units.build(state);
+if (params.has('objects')) units.group.visible = false;
 // Everything in sight: the block is seen as a whole, as in the captures (no roofs off for what is seen inside, then).
 // With ?fog, what the squad sees.
 const fog = params.has('fog');
@@ -109,6 +116,20 @@ function setView(name: keyof typeof VIEWS): void {
   r.distance = r.desiredDistance = v.distance;
 }
 setView(viewName);
+if (medical && state.medical?.[0]) {
+  const b = state.medical[0];
+  const level = Math.max(0, Math.min(medical === 'hospital' ? 2 : 0, Number(params.get('level') ?? 0)));
+  const rooms = b.rooms?.filter((r) => r.use === params.get('room') && r.z === level);
+  const detail = rooms?.[Math.min((rooms?.length ?? 1) - 1, Math.max(0, Number(params.get('room-index') ?? 0)))];
+  if (!params.has('exterior')) {
+    focus.hover = { x: Math.floor(b.x + b.w / 2), y: Math.floor(b.y + b.h / 2), z: level };
+    focus.level = level;
+  }
+  if (detail) focus.hover = { x: Math.floor(detail.x + detail.w / 2), y: Math.floor(detail.y + detail.h / 2), z: level };
+  rig.focus(new THREE.Vector3(detail ? detail.x + detail.w / 2 : b.x + b.w / 2, level * 2.3, detail ? detail.y + detail.h / 2 : b.y + b.h / 2), true);
+  const camera = rig as unknown as { distance: number; desiredDistance: number };
+  camera.distance = camera.desiredDistance = detail ? Math.max(8, Math.max(detail.w, detail.h) * 2.2) : Math.max(9, Math.max(b.w, b.h) * (params.has('exterior') ? 2.1 : 1.55));
+}
 container.addEventListener('wheel', (e) => rig.zoom(e.deltaY), { passive: true });
 let dragging = false;
 container.addEventListener('pointerdown', () => (dragging = true));
@@ -334,7 +355,19 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyU') units.group.visible = !units.group.visible;
   if (e.code === 'KeyC') setView(viewName === 'capture' ? 'play' : 'capture');
   if (e.code === 'KeyB') bench();
-  if (e.code === 'KeyP') void snap(`ref_${biome}_${night ? 'night' : 'day'}_${preset}`);
+  if (e.code === 'KeyP') void snap(medical ? `medical_${medical}_${seed}_p${focus.level ?? 0}` : `ref_${biome}_${night ? 'night' : 'day'}_${preset}`);
 });
 
 Object.assign(window, { __ref: { renderer, mapView, units, rig, state, bench, counts, snap, setPreset, setNight, setView, sceneCounts, show, peek, focus, crowd: CROWD } });
+
+// Optional unattended captures of the real renderer, after loading and
+// cutaway transitions have settled. P remains available for manual shots.
+if (params.has('snapshot')) {
+  let frames = 0;
+  let saved = false;
+  renderer.onFrame(() => {
+    if (saved || ++frames < 90) return;
+    saved = true;
+    void snap(params.get('snapshot') || `medical_${medical}_${seed}`).then(() => { report.dataset.captured = 'true'; });
+  });
+}

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { SnowCover } from './snow';
 import { decorOf, DIRS4, isWalkable, type DecorKind, type GameState, type Place, type TileKind, type Vec2 } from '@bastion/engine';
 import { StaticBatch, type Dirty } from './batch';
 import { groundAt, STOREY } from './coords';
@@ -7,6 +8,7 @@ import { extendShader, type FogOfWar } from './fogOfWar';
 import { contactPatch, type GroundOcclusion } from './groundAO';
 import { ATLAS_RECTS, atlasIndex, atlasRect, mapAtlasTexture, PACKED } from './mapAtlas';
 import { NIGHT } from './night';
+import { MedicalFinish } from './medicalFinish';
 import { atlasOf, atlasTexture, loadModel } from './synty';
 import { KIT_SCALE, PIECES, SYNTY_SCALE, type AtlasId, type PieceAsset, type PieceId, type PropId } from './syntyManifest';
 import { syntyProp } from './syntyProps';
@@ -45,7 +47,7 @@ const WAS_SLAB = 2;
 export const isWallLike = (k: TileKind | undefined): boolean => k !== undefined && WALLISH.has(k);
 const at = (s: GameState, x: number, y: number): TileKind | undefined => (x < 0 || y < 0 || x >= s.width || y >= s.height ? undefined : s.tiles[y * s.width + x]);
 
-export type BuildingKind = 'house' | 'shop' | 'office' | 'hall' | 'barn' | 'ruin' | 'motel';
+export type BuildingKind = 'house' | 'shop' | 'office' | 'hall' | 'barn' | 'ruin' | 'motel' | 'medical';
 
 /**
  * The wall kit a building is built from: Town's houses (siding outside,
@@ -53,7 +55,7 @@ export type BuildingKind = 'house' | 'shop' | 'office' | 'hall' | 'barn' | 'ruin
  * its warehouses (warehouses, hangars), the quarantine wall (a facility's
  * perimeter); sheet metal in three colours (sheds: #25).
  */
-export type KitId = 'house' | 'bunker' | 'brick' | 'fence' | 'shedGrey' | 'shedRed' | 'shedBlue';
+export type KitId = 'house' | 'bunker' | 'brick' | 'fence' | 'shedGrey' | 'shedRed' | 'shedBlue' | 'medical';
 
 /** The sheds' kits, picked per building (twice as often grey). */
 const SHEDS: KitId[] = ['shedGrey', 'shedGrey', 'shedRed', 'shedBlue'];
@@ -74,6 +76,7 @@ export interface Building {
   y1: number;
   kind: BuildingKind;
   kit: KitId;
+  medicalWear?: number;
   /** Stable number in [0, 1) for its looks. */
   look: number;
   /** World height of its floor. */
@@ -270,7 +273,12 @@ export class BuildingPlan {
         const most = doorsBySide.indexOf(Math.max(...doorsBySide));
         const n = (k: DecorKind) => decor.get(k) ?? 0;
         let kind: BuildingKind = 'house';
-        if (n('bed') && doorsBySide[most]! >= 3) kind = 'motel';
+        const medical = s.medical?.find((b) => r.x0 >= b.x && r.y0 >= b.y && r.x1 < b.x + b.w && r.y1 < b.y + b.h);
+        // Older saved clinics have no bounds yet. Their existing clinical
+        // furniture identifies them without repainting ordinary houses.
+        const medicalWear = medical?.wear ?? (n('hospitalBed') || n('medicalShelf') ? (s.campaignMission?.story === 1 ? 0.08 : 0.65) : undefined);
+        if (medicalWear !== undefined) kind = 'medical';
+        else if (n('bed') && doorsBySide[most]! >= 3) kind = 'motel';
         else if (n('counter')) kind = 'shop';
         // A warehouse is rows of shelves, whatever desk its office corner has; a small one full of them too (a sawmill).
         else if (
@@ -283,7 +291,7 @@ export class BuildingPlan {
         const look = hash(r.x0, r.y0, 5);
         // Sheet metal (#25): the sawmill by the forest road, three warehouses in four on an industrial estate.
         const shed = (kind === 'barn' && s.site === 'roadside') || (kind === 'hall' && s.site === 'industrial' && look < 0.75);
-        const kit: KitId = shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
+        const kit: KitId = kind === 'medical' ? 'house' : shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
         // As tall as the engine says (it stops sight up to its roof: GameState.storeys), read on a tile of its floor
         // (a wall two share takes the taller one's); older saves and hand-made maps: town's shops and offices two or three, some houses two.
         const floorTile = (() => {
@@ -295,7 +303,7 @@ export class BuildingPlan {
         const storeys = told && told > 0 ? told : 1 + tall;
         const leveled = this.slabsOver(r) > 0;
         const walkableRoof = leveled && this.walkableAt(r, storeys);
-        this.buildings.push({ index: own, ...r, kind, kit, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1, leveled, walkableRoof });
+        this.buildings.push({ index: own, ...r, kind, kit, medicalWear, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1, leveled, walkableRoof });
       });
       for (const i of tiles) if (this.inside[i]) this.floor[i] = 1;
     }
@@ -634,6 +642,11 @@ interface Style {
 const FLAT_ROOFS = [0xcdbfb3, 0xc2b8ae, 0xd5c8b8, 0xbab2aa, 0xc9bba4];
 
 const STYLES: Record<BuildingKind, Style> = {
+  medical: {
+    outer: [0xe0ddd0], inner: [0xe0ddd0],
+    floor: ['flat', [0xe0ddd0]], roof: [0x65645e],
+    flat: [0xb7b5ac],
+  },
   house: {
     outer: [0xeee4cc, 0xe8d49c, 0xc0d4b6, 0xb8cce0, 0xe8c2ae, 0xf2f2ec, 0xccccc6, 0xc0ded0],
     inner: [0xd6ccb8, 0xc0ccb8, 0xdac0ac, 0xbac4ce, 0xccccc8],
@@ -1566,6 +1579,7 @@ const shedKit = (sheet: PieceId, lintel: PieceId): Kit => ({ ...KITS.brick, wall
 KITS.shedGrey = shedKit('sheetGrey', 'sheetGreyLintel');
 KITS.shedRed = shedKit('sheetRed', 'sheetRedLintel');
 KITS.shedBlue = shedKit('sheetBlue', 'sheetBlueLintel');
+KITS.medical = { ...KITS.bunker };
 
 /** Walls between rooms: Town's interior walls, whatever the building. */
 const BETWEEN: Kit = { ...KITS.house, wall: ['roomWall'], door: ['roomDoorWall'], lintel: ['roomLintel'] };
@@ -1588,6 +1602,7 @@ const WIRE_LENGTH = 3.94 * KIT;
  * and their cutaway.
  */
 export class BuildingsView {
+  private readonly medical: MedicalFinish;
   readonly plan: BuildingPlan;
   readonly cutaway: Cutaway;
   /** Floors and roofs: they don't change during a mission, but for the slabs a blast goes through (redoUpper). */
@@ -1626,12 +1641,15 @@ export class BuildingsView {
     s: GameState,
     private readonly fog: FogOfWar,
     private readonly ao: GroundOcclusion,
+    private readonly snow: SnowCover | null = null,
   ) {
     this.plan = new BuildingPlan(s);
     this.cutaway = new Cutaway(this.plan);
+    this.medical = new MedicalFinish(s, this.plan);
     // Every packed pack's pieces in one material (mapAtlas.ts): a draw for all of them.
     this.pieceMaterial = this.own(new THREE.MeshStandardMaterial({ map: mapAtlasTexture(), roughness: 0.85, side: THREE.DoubleSide }));
     wallCutPatch(this.pieceMaterial, this.cutaway);
+    this.medical.patch(this.pieceMaterial, 'wall');
     this.blockMaterial = new THREE.MeshStandardMaterial({ map: mapAtlasTexture(), vertexColors: true, roughness: 0.9 });
     swatchPatch(this.blockMaterial);
     this.own(this.blockMaterial);
@@ -1661,10 +1679,12 @@ export class BuildingsView {
       this.geometries.push(g);
     }
     this.buildStatic(s);
+    this.snow?.shelterBuildings(this.plan);
     this.cutaway.measure();
   }
 
   private own<T extends THREE.Material>(m: T): T {
+    if (!(m instanceof THREE.MeshStandardMaterial) || !m.transparent) this.snow?.patch(m);
     this.fog.patch(m);
     this.materials.push(m);
     return m;
@@ -1699,6 +1719,7 @@ export class BuildingsView {
       if (surfaces.empty) return null;
       const material = new THREE.MeshStandardMaterial({ map: mapAtlasTexture(), vertexColors: true, roughness: roof ? 0.8 : 0.9 });
       swatchPatch(material);
+      this.medical.patch(material, 'floor');
       if (weathered) weatherPatch(material);
       if (fades) roofFadePatch(material, this.cutaway);
       // Floors and decks sit in the occlusion of what stands round them.
@@ -1813,7 +1834,7 @@ export class BuildingsView {
 
   /**
    * A building's stairs (a ladder tile whose decor is 'stairs', facing the
-   * way it climbs): a flight of solid steps across the tile, from its back
+   * way it climbs): a flight of steps across the tile, from its back
    * edge up to the landing a storey higher on the tile it faces. The rules
    * let one on and off them only by that landing (docs/FASE7.md), so they
    * have a banister on each side of the flight and a railing round the
@@ -1842,7 +1863,7 @@ export class BuildingsView {
         const bd = b >= 0 ? this.plan.buildings[b] : undefined;
         const base = (bd?.base ?? 0) + k * STOREY;
         const d = DIRS4[look.facing]!;
-        const wood = bd ? STAIR_WOOD : STEEL;
+        const wood = bd?.kind === 'medical' ? new THREE.Color(0x79888b) : bd ? STAIR_WOOD : STEEL;
         out.level = k;
         for (let n = 0; n < STEPS; n++) {
           // Along the climb, from the tile's back edge (-0.5) to its front (+0.5).
@@ -1851,10 +1872,39 @@ export class BuildingsView {
           const top = base + ((n + 1) / STEPS) * STOREY;
           const [ax, bx] = d.x !== 0 ? [x + 0.5 + Math.min(u0 * d.x, u1 * d.x), x + 0.5 + Math.max(u0 * d.x, u1 * d.x)] : [x + 0.5 - half, x + 0.5 + half];
           const [az, bz] = d.y !== 0 ? [y + 0.5 + Math.min(u0 * d.y, u1 * d.y), y + 0.5 + Math.max(u0 * d.y, u1 * d.y)] : [y + 0.5 - half, y + 0.5 + half];
-          out.box(V(ax, base, az), V(bx, top, bz), SWATCH.flat, n % 2 ? wood : wood.clone().multiplyScalar(0.92), b);
+          // Wooden treads are horizontal boards. Filling every step down
+          // to the ground made the back of the flight look like a vertical floor.
+          out.box(V(ax, bd ? top - 0.055 : base, az), V(bx, top, bz), SWATCH.flat, n % 2 ? wood : wood.clone().multiplyScalar(0.92), b, !!bd);
         }
+        if (bd) this.stairStringers(out, x, y, d, base, wood.clone().multiplyScalar(0.72), b);
         this.banisters(out, x, y, k, d, base, STEPS, wood.clone().multiplyScalar(1.25), b, walled);
       }
+    }
+  }
+
+  /** Two sloping wooden beams carry the horizontal treads, leaving the risers open. */
+  private stairStringers(out: Surfaces, x: number, y: number, d: Vec2, base: number, tint: THREE.Color, b: number): void {
+    const at = (u: number, v: number, h: number) => V(x + 0.5 + d.x * u - d.y * v, h, y + 0.5 + d.y * u + d.x * v);
+    const up = V(0, 1, 0);
+    const across = V(-d.y, 0, d.x);
+    const along = V(d.x, 0, d.y);
+    const h0 = base - 0.055;
+    const h1 = base + STOREY - 0.055;
+    for (const v of [-0.32, 0.32]) {
+      const a = at(-0.5, v - 0.04, h0);
+      const b0 = at(-0.5, v + 0.04, h0);
+      const c = at(0.5, v + 0.04, h1);
+      const d0 = at(0.5, v - 0.04, h1);
+      const lower = (p: THREE.Vector3) => p.clone().addScaledVector(up, -0.16);
+      const faces: [THREE.Vector3[], THREE.Vector3][] = [
+        [[a, b0, c, d0], up],
+        [[lower(a), lower(d0), lower(c), lower(b0)], up.clone().negate()],
+        [[b0, lower(b0), lower(c), c], across],
+        [[a, d0, lower(d0), lower(a)], across.clone().negate()],
+        [[a, lower(a), lower(b0), b0], along.clone().negate()],
+        [[d0, c, lower(c), lower(d0)], along],
+      ];
+      for (const [corners, facing] of faces) out.poly(corners, corners.map((p) => [p.x + p.z, p.y] as [number, number]), SWATCH.flat, tint, b, facing);
     }
   }
 
@@ -2294,7 +2344,7 @@ export class BuildingsView {
           // Along x unless the wall runs north–south (a lone tile follows the floor beside it).
           const run: 0 | 1 = nsConn || (!ewConn && plan.interior(b, x - 1, y) && plan.interior(b, x + 1, y)) ? 1 : 0;
           const { out, between, other } = facing(run, 0, 0);
-          const kit = between ? BETWEEN : outerKit;
+          const kit = between && building?.kind !== 'medical' ? BETWEEN : outerKit;
           const along = run === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
           if (!loose) storeys(broken ? 'wall' : kind, cx, cz, run === 0 ? x : y, out, between, b, other);
           if (kind === 'door' || kind === 'doorOpen') {
@@ -2347,7 +2397,7 @@ export class BuildingsView {
           const next = plan.owner[(y + d.y) * w + x + d.x] ?? -1;
           const bb = !loose && next >= 0 && next !== b && isWallLike(at(x + d.x, y + d.y)) ? next : b;
           const { out, between, other } = facing(run, d.x, d.y, bb);
-          const kit = between ? BETWEEN : outerKit;
+          const kit = between && building?.kind !== 'medical' ? BETWEEN : outerKit;
           kit.wall.forEach((id, n) => put(id, cx + d.x * 0.25, cz + d.y * 0.25, base, out, between, bb, { along: 0.5, thick: kit.thick, tint: n === 0, tall: broken ? BREACH_HEIGHT : undefined }));
           if (broken) kit.lintel.forEach((id, n) => put(id, cx + d.x * 0.25, cz + d.y * 0.25, base, out, between, bb, { along: 0.5, thick: kit.thick, tint: n === 0 }));
           if (!loose) storeys('wall', cx + d.x * 0.25, cz + d.y * 0.25, 0, out, between, bb, other, 0.5);
@@ -2355,7 +2405,7 @@ export class BuildingsView {
         });
         if (arms === 2) {
           const { out, between } = facing(0, conn[1] ? 1 : -1, 0);
-          post(between ? BETWEEN : outerKit, cx, cz, base, out, between, b);
+          post(between && building?.kind !== 'medical' ? BETWEEN : outerKit, cx, cz, base, out, between, b);
           if (building && !building.leveled && !between) for (let n = 1; n < building.storeys; n++) post(outerKit, cx, cz, base + n * STOREY, out, false, b, true);
         }
       }
@@ -2604,6 +2654,7 @@ export class BuildingsView {
     if (!m) {
       m = this.own(new THREE.MeshStandardMaterial({ map: atlasTexture(atlas), roughness: 0.85, side: THREE.DoubleSide }));
       wallCutPatch(m, this.cutaway);
+      this.medical.patch(m, 'wall');
       this.atlasMaterials.set(atlas, m);
     }
     return m;
@@ -2627,5 +2678,6 @@ export class BuildingsView {
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
     this.cutaway.dispose();
+    this.medical.dispose();
   }
 }

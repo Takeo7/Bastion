@@ -19,12 +19,13 @@
 // All the houses (offices, halls…) of one map share a scale. A final pass makes
 // sure every walkable area can be reached (adding ladders or doors if needed),
 // and only reachable tiles are used to place the squad, the pods and objectives.
+import { dressMedical } from './medicalDressing';
 import { MAPS, parseMap, type MapDef } from './maps';
 import { stepCost } from './path';
 import { Rng } from './rng';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from './grid';
 import { carPartner, decorCode, decorOf } from './decor';
-import type { Alarm, Biome, Decor, DecorKind, GameState, GroundKind, Level, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
+import type { Alarm, Biome, Decor, DecorKind, GameState, GroundKind, Level, MedicalRoom, MedicalUse, MedicalSite, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
 
 /** Side of every procedural map, in tiles. */
 export const GEN_SIZE = 48;
@@ -50,6 +51,7 @@ export interface MissionLayout {
   elev: number[];
   /** What the floor of each tile is (procedural maps only). */
   ground?: GroundKind[];
+  medical?: MedicalSite[];
   /** What each piece of cover is meant to be (procedural maps only; cosmetic). */
   decor?: Decor[];
   /** Storeys of the building each tile belongs to, 0 outside (procedural maps only; GameState.storeys). */
@@ -353,7 +355,7 @@ function pickStyle(rng: Rng): Style {
 /** How the interior is divided. */
 type Plan = 'rooms' | 'open' | 'corridor' | 'shop' | 'hall';
 /** What stands inside. */
-type Furnish = 'home' | 'shop' | 'office' | 'lab' | 'store' | 'barn' | 'bare';
+type Furnish = 'home' | 'shop' | 'office' | 'lab' | 'store' | 'barn' | 'bare' | 'clinic';
 
 interface Building {
   outer: Rect;
@@ -368,6 +370,11 @@ interface Building {
   flat?: boolean;
   /** A factory's main hall (#17): its roof has a strip of skylights and nobody stands on it. */
   skylit?: boolean;
+  /** Clinical finish and damage, independent of furniture surviving a blast. */
+  medicalWear?: number;
+  medicalKind?: 'clinic' | 'ward' | 'hospital';
+  medicalRooms?: MedicalRoom[];
+  front?: number;
 }
 
 /**
@@ -509,6 +516,236 @@ function corridorPlan(c: Canvas, b: Rect, front: number, rng: Rng, rooms: Rect[]
     doors[back] = cu + 1;
   }
   return true;
+}
+
+/** Clinical rooms have a purpose, doors and a shared circulation space. */
+function medicalPlan(c: Canvas, b: Rect, front: number, rng: Rng, z: number, hospital: boolean, ward: boolean, doors: (number | null)[]): MedicalRoom[] {
+  const inner = inset(b, 1), across = sideLen(inner, front), length = depthOf(inner, front);
+  const rooms: MedicalRoom[] = [];
+  const at = (u: number, v: number) => localPt(inner, front, u, v);
+  const room = (u: number, v: number, w: number, h: number, use: MedicalUse) => rooms.push({ ...local(inner, front, u, v, w, h), z, use });
+  const wall = (u: number, v: number) => { const p = at(u, v); c.force(p.x, p.y, 'wall'); };
+  const door = (u: number, v: number, du: number, dv: number, wide = false) => {
+    const p = at(u, v); c.force(p.x, p.y, wide ? 'floor' : 'door');
+    for (const q of [p, at(u + du, v + dv), at(u - du, v - dv)]) c.reserve(q.x, q.y);
+  };
+  if (!hospital && !ward) {
+    // A compact waiting/reception area, with two closed clinical rooms behind.
+    const lobby = length >= 7 ? 3 : 2;
+    room(0, 0, across, lobby, 'reception');
+    for (let u = 0; u < across; u++) wall(u, lobby);
+    const left = Math.floor((across - 1) / 2);
+    for (let v = lobby + 1; v < length; v++) wall(left, v);
+    room(0, lobby + 1, left, length - lobby - 1, ward ? 'ward' : 'consultation');
+    room(left + 1, lobby + 1, across - left - 1, length - lobby - 1, ward ? 'treatment' : 'equipment');
+    door(Math.floor(left / 2), lobby, 0, 1);
+    door(left + 1 + Math.floor((across - left - 1) / 2), lobby, 0, 1);
+  } else {
+    // Hospital rooms are three tiles deep from the corridor, with a door for each.
+    // Small infirmaries have a narrower corridor and combine reception with waiting.
+    const cw = hospital ? 2 : 1;
+    const twoWings = across >= 7;
+    const left = twoWings ? Math.floor((across - cw - 2) / 2) : across - cw - 1;
+    const cu = left + 1;
+    const strips: [number, number, number][] = [[0, left, left]];
+    if (twoWings) strips.push([cu + cw + 1, across - cu - cw - 1, cu + cw]);
+    for (let v = 0; v < length; v++) {
+      wall(left, v);
+      if (twoWings) wall(cu + cw, v);
+      for (let u = cu; u < cu + cw; u++) { const p = at(u, v); c.reserve(p.x, p.y); }
+    }
+    // Aligned partitions on every floor make real stairwells and short rooms.
+    const count = Math.max(2, Math.floor((length + 1) / (hospital ? 4 : 3)));
+    const total = length - count + 1;
+    const sizes = Array.from({ length: count }, (_, k) => Math.floor(total / count) + (k < total % count ? 1 : 0));
+    // In an infirmary, two rooms per wing are enough for waiting/triage,
+    // treatment, observation and medical stores; avoid cramped one-tile rooms.
+    if (!hospital && sizes.some((n) => n < 3) && length >= 7) {
+      sizes.splice(0, sizes.length, Math.ceil((length - 1) / 2), Math.floor((length - 1) / 2));
+    }
+    const uses: MedicalUse[][] = !hospital
+      ? [['waiting', 'ward', 'hygiene'], ['treatment', 'supplies', 'ward']]
+      : z === 0
+        ? [['reception', 'consultation', 'equipment', 'treatment'], ['waiting', 'consultation', 'hygiene', 'supplies']]
+        : z === 1
+          ? [['ward', 'nurses', 'ward', 'ward'], ['ward', 'treatment', 'hygiene', 'supplies']]
+          : [['ward', 'nurses', 'ward', 'supplies'], ['ward', 'equipment', 'treatment', 'ward']];
+    for (let side = 0; side < strips.length; side++) {
+      const [u, width, wu] = strips[side]!;
+      let v = 0;
+      for (let k = 0; k < sizes.length; k++) {
+        const depth = sizes[k]!;
+        if (k) for (let x = u; x < u + width; x++) wall(x, v - 1);
+        const use = hospital && k === sizes.length - 1 ? 'stairs' : uses[side]![k % uses[side]!.length]!;
+        room(u, v, width, depth, use);
+        const dv = v + Math.floor((depth - 1) / 2);
+        door(wu, dv, 1, 0);
+        // Reception and waiting open onto the corridor, rather than a private bedroom entrance.
+        if ((use === 'waiting' || use === 'reception') && depth >= 3) door(wu, dv + 1, 1, 0, true);
+        v += depth + 1;
+      }
+    }
+    if (!z) {
+      for (let u = cu; u < cu + cw; u++) {
+        const p = localPt(b, front, u + 1, 0);
+        if (opensOnto(c, p, front)) { opening(c, p, front, 'door'); doors[front] = u + 1; }
+      }
+    }
+  }
+  if (!z && !hospital && !ward) {
+    // Put the entrance directly into reception; never into a consultation room.
+    const u = Math.floor(across / 2) + 1;
+    const p = localPt(b, front, u, 0);
+    if (opensOnto(c, p, front)) { opening(c, p, front, 'door'); doors[front] = u; }
+  }
+  return rooms;
+}
+
+/** Furniture expresses each room's use and leaves its doorway and central aisle clear. */
+function furnishMedical(c: Canvas, room: MedicalRoom, rng: Rng, care?: 'ward' | 'hospital'): void {
+  if (care) { furnishCareRoom(c, room, rng, care); return; }
+  const long = Math.max(room.w, room.h), short = Math.min(room.w, room.h), alongX = room.w >= room.h;
+  const P = (a: number, b: number): Vec2 => alongX ? { x: room.x + a, y: room.y + b } : { x: room.x + b, y: room.y + a };
+  const joined = () => {
+    const floor = tilesIn(room).filter((p) => c.get(p.x, p.y) === 'floor');
+    const seen = new Set<number>(), queue = floor.length ? [floor[0]!] : [];
+    while (queue.length) {
+      const p = queue.pop()!, i = c.i(p.x, p.y);
+      if (seen.has(i) || !inRect(room, p) || c.get(p.x, p.y) !== 'floor') continue;
+      seen.add(i);
+      for (const d of DIRS4) queue.push(add(p, d));
+    }
+    return floor.length > 0 && floor.every((p) => seen.has(c.i(p.x, p.y)))
+      && tilesIn(room).filter((p) => c.decor[c.i(p.x, p.y)]).every((p) => DIRS4.some((d) => seen.has(c.i(p.x + d.x, p.y + d.y))));
+  };
+  const place = (kind: DecorKind, points: Vec2[], high = false) => points.some((p) => {
+    if (!put(c, p, high ? 'high' : 'low', [kind, inward(room, p)])) return false;
+    if (joined()) return true;
+    c.force(p.x, p.y, 'floor'); c.decor[c.i(p.x, p.y)] = 0;
+    return false;
+  });
+  const edge = shuffle([P(0, 0), P(long - 1, 0), P(0, short - 1), P(long - 1, short - 1)], rng);
+  const near = [P(Math.floor(long / 2), 0), P(Math.floor(long / 2), short - 1), ...edge];
+  switch (room.use) {
+    case 'reception':
+      place('receptionDesk', edge);
+      for (let a = 1; a < long - 1; a += 2) place('waitingSeats', [P(a, short - 1), P(a, 0)]);
+      place('wheelchair', [...edge].reverse());
+      break;
+    case 'consultation':
+      place('desk', edge);
+      place('examTable', [...edge].reverse());
+      place('medicalCabinet', near, true);
+      place('medicalCart', edge);
+      break;
+    case 'treatment':
+      place('examTable', edge);
+      place('medicalCart', near);
+      place('medicalCabinet', [...edge].reverse(), true);
+      place('medicalMonitor', edge);
+      break;
+    case 'equipment':
+      place('examTable', edge);
+      place('medicalShelf', [...edge].reverse(), true);
+      place('xray', near, true);
+      place('medicalMonitor', edge);
+      break;
+    case 'ward':
+      for (let a = 0; a < long; a += 2) {
+        place('hospitalBed', [P(a, 0)]);
+        if (short >= 5) place('hospitalBed', [P(a, short - 1)]);
+      }
+      place('medicalCart', near);
+      place('medicalMonitor', [...edge].reverse());
+      place('medicalShelf', edge, true);
+      break;
+    case 'nurses':
+      place('receptionDesk', edge);
+      place('medicalShelf', [...edge].reverse(), true);
+      place('gurney', near);
+      place('medicalCabinet', edge, true);
+      break;
+  }
+}
+
+/** Compact rooms: equipment is placed by function, with connected floor and a free approach to every object. */
+function furnishCareRoom(c: Canvas, room: MedicalRoom, rng: Rng, care: 'ward' | 'hospital'): void {
+  if (room.use === 'stairs') return;
+  const long = Math.max(room.w, room.h), short = Math.min(room.w, room.h), alongX = room.w >= room.h;
+  const P = (a: number, b: number): Vec2 => alongX ? { x: room.x + a, y: room.y + b } : { x: room.x + b, y: room.y + a };
+  const cells = tilesIn(room);
+  const corners = shuffle([P(0, 0), P(long - 1, 0), P(0, short - 1), P(long - 1, short - 1)], rng);
+  const boundary = shuffle(cells.filter((p) => p.x === room.x || p.y === room.y || p.x === room.x + room.w - 1 || p.y === room.y + room.h - 1), rng);
+  const positions = [...corners, ...boundary];
+  const joined = () => {
+    const floor = cells.filter((p) => c.get(p.x, p.y) === 'floor');
+    const seen = new Set<number>(), queue = floor.length ? [floor[0]!] : [];
+    while (queue.length) {
+      const p = queue.pop()!, i = c.i(p.x, p.y);
+      if (seen.has(i) || !inRect(room, p) || c.get(p.x, p.y) !== 'floor') continue;
+      seen.add(i);
+      for (const d of DIRS4) queue.push(add(p, d));
+    }
+    return floor.length > 0 && floor.every((p) => seen.has(c.i(p.x, p.y)))
+      && cells.filter((p) => c.decor[c.i(p.x, p.y)]).every((p) => DIRS4.some((d) => seen.has(c.i(p.x + d.x, p.y + d.y))));
+  };
+  const high = new Set<DecorKind>(['medicalCabinet', 'medicalShelf', 'waterDispenser', 'xray']);
+  const place = (kind: DecorKind, points = positions): Vec2 | null => {
+    for (const p of points) {
+      if (!put(c, p, high.has(kind) ? 'high' : 'low', [kind, inward(room, p)])) continue;
+      if (joined()) return p;
+      c.force(p.x, p.y, 'floor'); c.decor[c.i(p.x, p.y)] = 0;
+    }
+    return null;
+  };
+  switch (room.use) {
+    case 'ward': {
+      // One bed in 3×3; at most two in 3×4. Keep beds and bedside tables together.
+      const beds = long >= 4 && short >= 3 ? 2 : 1;
+      for (let k = 0; k < beds; k++) {
+        const p = place('hospitalBed', k ? [P(long - 1, 0), P(long - 1, short - 1), ...corners] : [P(0, 0), ...corners]);
+        if (p) place('bedsideTable', DIRS4.map((d) => add(p, d)).filter((q) => inRect(room, q)));
+      }
+      place('medicalMonitor');
+      place('medicalCabinet');
+      place('visitorChair');
+      place('clinicalSink');
+      place('clinicalBin');
+      break;
+    }
+    case 'consultation':
+      place('consultDesk'); place('examTable', [...corners].reverse()); place('clinicalSink');
+      place('medicalCabinet'); place('visitorChair'); place('medicalCart'); place('clinicalBin');
+      break;
+    case 'treatment':
+      place(rng.int(2) ? 'examTable' : 'gurney'); place('sterilizer'); place('clinicalSink'); place('medicalCart');
+      place('medicalCabinet'); place('medicalMonitor'); place('clinicalBin');
+      break;
+    case 'equipment':
+      place(rng.int(2) ? 'xray' : 'ultrasound'); place('examTable'); place('medicalMonitor');
+      place('sterilizer'); place('medicalCabinet'); place('clinicalSink'); place('clinicalBin');
+      break;
+    case 'reception':
+      place('receptionDesk'); place('waitingSeats'); place('medicalCabinet');
+      place('waitingTable'); place('waterDispenser'); place('clinicalBin');
+      break;
+    case 'waiting':
+      if (care === 'ward') place('receptionDesk');
+      place('waitingSeats'); place('waitingSeats', [...corners].reverse()); place('waitingTable');
+      place('waterDispenser'); place('wheelchair'); place('clinicalBin');
+      break;
+    case 'nurses':
+      place('receptionDesk'); place('medicalCabinet'); place('medicalCart');
+      place('medicalMonitor'); place('sterilizer'); place('clinicalBin');
+      break;
+    case 'supplies':
+      place('medicalShelf'); place('medicalCabinet'); place('medicalCabinet');
+      place('medicalCart'); place('sterilizer'); place('clinicalBin');
+      break;
+    case 'hygiene':
+      place('toilet'); place('clinicalSink'); place('clinicalBin'); place('medicalCabinet');
+      break;
+  }
 }
 
 /** Shops: the shop floor on the street, with a stockroom behind it when deep enough. */
@@ -663,6 +900,23 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish): void {
       corner('low', 'hay');
       corner('low', 'hay');
       break;
+    case 'clinic':
+      corner('low', 'hospitalBed');
+      corner('high', 'medicalShelf');
+      // Along the room's edge, with a central aisle. Different room shapes
+      // and shuffled corners give consultation rooms and wards their own plan.
+      if (short >= 3) {
+        [P(mid, short - 1), P(mid, 0), P(mid - 1, short - 1), P(mid - 1, 0)]
+          .some((p) => put(c, p, 'low', ['medicalCart', inward(room, p)]));
+      }
+      if (short >= 5) {
+        corner('high', 'medicalCabinet');
+        corner('low', rng.int(2) ? 'gurney' : 'wheelchair');
+      }
+      if (long >= 8 && short >= 5) {
+        for (const a of [2, long - 3]) put(c, P(a, 0), 'low', ['hospitalBed', toward(0, 1)]);
+      }
+      break;
     case 'bare':
       break;
   }
@@ -698,7 +952,7 @@ function furnishHall(c: Canvas, inner: Rect, front: number, rng: Rng, kind: Furn
  * the street side (another side if that one is blocked) and windows follow a
  * regular spacing.
  */
-function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style: Style, furnish: Furnish): Building {
+function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style: Style, furnish: Furnish, medicalKind: 'clinic' | 'ward' | 'hospital' = 'clinic'): Building {
   for (let y = b.y; y < b.y + b.h; y++) {
     for (let x = b.x; x < b.x + b.w; x++) {
       const edge = x === b.x || y === b.y || x === b.x + b.w - 1 || y === b.y + b.h - 1;
@@ -709,7 +963,10 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
   const rooms: Rect[] = [];
   const doors: (number | null)[] = [null, null, null, null];
   let office: Rect | null = null;
-  if (plan === 'corridor' && corridorPlan(c, b, front, rng, rooms, doors)) {
+  const medicalRooms = furnish === 'clinic' ? medicalPlan(c, b, front, rng, 0, medicalKind === 'hospital', medicalKind === 'ward', doors) : undefined;
+  if (medicalRooms) {
+    rooms.push(...medicalRooms);
+  } else if (plan === 'corridor' && corridorPlan(c, b, front, rng, rooms, doors)) {
     // Rooms and doors are in place.
   } else if (plan === 'shop') {
     shopPlan(c, b, front, rng, rooms);
@@ -729,13 +986,15 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
   if (plan !== 'corridor' && plan !== 'hall' && rooms.length > 1 && doors[back] === null && rng.next() < 0.45) doors[back] = entrance(c, b, back, rng);
   // Shops show their goods: a window every other tile.
   windows(c, b, plan === 'shop' ? 2 : style.windowEvery, doors);
-  if (plan === 'hall') {
+  if (medicalRooms) {
+    medicalRooms.forEach((room) => furnishMedical(c, room, rng, medicalKind === 'clinic' ? undefined : medicalKind));
+  } else if (plan === 'hall') {
     furnishHall(c, rooms[0]!, front, rng, furnish, office);
     if (office) furnishRoom(c, office, rng, 'office');
   } else {
     rooms.forEach((room, k) => furnishRoom(c, room, rng, furnish === 'shop' && k > 0 ? 'store' : furnish));
   }
-  const raised: Building = { outer: b, rooms, furnish };
+  const raised: Building = { outer: b, rooms, furnish, ...(medicalRooms ? { medicalKind, medicalRooms, front } : {}) };
   c.buildings.push(raised);
   return raised;
 }
@@ -1876,15 +2135,17 @@ function cityLot(c: Canvas, lot: Rect, program: CityProgram, roads: boolean[], r
  * a slant, smaller and uneven blocks, houses that don't line up and small
  * squares on the corners.
  */
-function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
+function city(c: Canvas, rng: Rng, map: Style, role: Role, clinic = false, hospital = false, ward = false): Rect {
   const S = c.width;
-  const organic = rng.next() < 0.5 && !map.industrial;
+  const organic = rng.next() < 0.5 && !map.industrial && !hospital;
   const style: Style = { ...map, organic };
   // Small blocks: an avenue, streets and lanes two tiles wide (on a lane the houses stand right on it).
   const plan = district(
     rect(0, 0, S, S),
     rng,
-    organic
+    hospital
+      ? { minBlock: 19, maxBlock: 26, widths: [[3, 4], [3, 3], [2, 3]], jog: 0.1, deadEnd: 0.1, stop: [0, 0.2, 0.7, 1] }
+      : organic
       ? { minBlock: 8, maxBlock: 18, widths: [[3, 4], [2, 3], [2, 3]], jog: 0.3, deadEnd: 0.35, stop: [0, 0.15, 0.55, 0.9], bend: [1, 0.6, 0.4], bends: [4, 3, 2] }
       : map.industrial
         ? // An industrial estate: big blocks and wide streets for the lorries.
@@ -1897,7 +2158,7 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
   // The objective's block: the one nearest the far corner, a big one (an office fits) if it is nearly as far.
   const objBlock =
     best(
-      plan.blocks.filter((b) => b !== spawnBlock && Math.min(b.w, b.h) >= 9),
+      plan.blocks.filter((b) => b !== spawnBlock && Math.min(b.w, b.h) >= (hospital ? 19 : ward ? 11 : 9)),
       (b) => dist(centre(b), far) - (Math.min(b.w, b.h) >= (role === 'indoor' ? 12 : 11) ? 3 : 0),
     ) ?? best(plan.blocks, (b) => (b === spawnBlock ? Infinity : dist(centre(b), far)))!;
   let objective: Rect = objBlock;
@@ -1925,6 +2186,8 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
       plazuela(c, corner.square, rng);
       for (const l of corner.lots) lots.push(...splitLot(l.r, l.roads, rng, 8, 0.5, 1));
       squares++;
+    } else if (hospital && block === objBlock) {
+      lots.push({ r: lot, roads });
     } else {
       lots.push(...splitLot(lot, roads, rng, 8, block === objBlock && role === 'indoor' ? 0 : 0.65, 1));
     }
@@ -1942,6 +2205,17 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role): Rect {
         continue;
       }
       const isObj = l === objLot;
+      if (isObj && (clinic || hospital)) {
+        const front = frontOf(c, l.r, l.roads, rng);
+        const across = Math.min(sideLen(l.r, front), hospital ? 12 : 11);
+        const depth = Math.min(depthOf(l.r, front), hospital ? 22 : ward ? 13 : 11);
+        const footprint = local(l.r, front, Math.floor((sideLen(l.r, front) - across) / 2), 0, across, depth);
+        const b = building(c, footprint, rng, 'rooms', front, style, 'clinic', hospital ? 'hospital' : ward ? 'ward' : 'clinic');
+        b.storeys = hospital ? 3 : 1;
+        b.medicalWear = hospital ? 0.85 : ward ? 0.45 : 0.08;
+        objective = b.outer;
+        continue;
+      }
       const built = cityLot(c, l.r, cityProgram(l.r, rng, isObj ? role : null, used, organic, style.industrial), l.roads, rng, style);
       if (isObj) objective = best(built, (b) => dist(centre(b.outer), far))?.outer ?? l.r;
     }
@@ -2977,7 +3251,7 @@ interface Storey {
 const pitched = (b: Building) => !b.flat && (b.furnish === 'home' || b.furnish === 'barn');
 
 /** What the rooms of a building's upper storeys hold: a shop's stockroom, the rest as below. */
-const UPSTAIRS: Record<Furnish, Furnish> = { home: 'home', shop: 'store', office: 'office', lab: 'lab', store: 'store', barn: 'barn', bare: 'bare' };
+const UPSTAIRS: Record<Furnish, Furnish> = { home: 'home', shop: 'store', office: 'office', lab: 'lab', store: 'store', barn: 'barn', bare: 'bare', clinic: 'clinic' };
 
 /** From one window to the next on an upper storey: shops and offices glazed, houses less. */
 const upstairsWindows = (b: Building) => (b.furnish === 'home' ? 3 : 2);
@@ -3043,25 +3317,53 @@ function unblockStorey(st: Storey, r: Rect, from: Vec2): void {
   }
 }
 
+/** Clear only clinical cover at the edge of an isolated pocket, including after a stairwell is opened above it. */
+function clearMedicalAisles(st: Storey, r: Rect, from: Vec2): void {
+  const c = st.c, cells = tilesIn(inset(r, 1));
+  const open = (p: Vec2) => inRect(r, p) && st.slab[c.i(p.x, p.y)] && isWalkable(c.get(p.x, p.y)) && c.get(p.x, p.y) !== 'window';
+  for (let guard = 0; guard < r.w * r.h; guard++) {
+    const seen = new Set<number>(), queue = [from];
+    while (queue.length) {
+      const p = queue.pop()!, i = c.i(p.x, p.y);
+      if (seen.has(i) || !open(p)) continue;
+      seen.add(i);
+      for (const d of DIRS4) queue.push(add(p, d));
+    }
+    const isolated = cells.filter((p) => open(p) && !seen.has(c.i(p.x, p.y)));
+    if (!isolated.length) return;
+    const cover = cells.filter((p) => st.slab[c.i(p.x, p.y)] && ['low', 'high'].includes(c.get(p.x, p.y)) && DIRS4.some((d) => seen.has(c.i(p.x + d.x, p.y + d.y))));
+    const p = best(cover, (p) => Math.min(...isolated.map((q) => Math.abs(p.x - q.x) + Math.abs(p.y - q.y))));
+    if (!p) return;
+    c.force(p.x, p.y, 'floor'); c.decor[c.i(p.x, p.y)] = 0;
+  }
+}
+
 /**
  * Stairs up through building `r` from the floor below (`lower`: the ground
- * canvas, or a storey) to storey `upper`: a ladder tile against a wall below,
- * a free floor one storey up beside it to step off onto, and a hole in the
- * floor above it (the stairwell). Never where the hole would cut that storey
- * in two. Returns the landing, or null if no place fits.
+ * canvas, or a storey) to storey `upper`: away from walls on both floors,
+ * with free floor behind its foot and at its landing, and a hole above the
+ * flight (the stairwell). Never where the hole would cut that storey in two.
+ * Returns the landing, or null if no place fits.
  */
-function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, r: Rect, rng: Rng, avoid: Set<number>): Vec2 | null {
+function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, r: Rect, rng: Rng, avoid: Set<number>, zones?: Rect[]): Vec2 | null {
   const inner = inset(r, 1);
   const options: { at: Vec2; up: number; key: number }[] = [];
   for (const at of tilesIn(inner)) {
+    if (zones?.length && !zones.some((r) => inRect(r, at))) continue;
     const i = lower.i(at.x, at.y);
     if (!lower.free(at.x, at.y) || lower.decor[i] || avoid.has(i) || (lowerSlab && !lowerSlab[i]) || upper.c.get(at.x, at.y) !== 'floor' || upper.c.keep[i]) continue;
+    // A full tile between the flight and any wall, on both storeys.
+    if (!DIRS4.every((d) => {
+      const p = add(at, d);
+      const j = lower.i(p.x, p.y);
+      return inRect(inner, p) && ['floor', 'low', 'high'].includes(lower.get(p.x, p.y)) && (!lowerSlab || lowerSlab[j]) && upper.slab[j] && upper.c.get(p.x, p.y) === 'floor';
+    })) continue;
     DIRS4.forEach((d, up) => {
       const landing = add(at, d);
       if (!inRect(inner, landing) || upper.c.get(landing.x, landing.y) !== 'floor' || upper.c.keep[upper.c.i(landing.x, landing.y)]) return;
-      // Against a wall below, the flight going up away from it.
       const back = { x: at.x - d.x, y: at.y - d.y };
-      options.push({ at, up, key: (lower.get(back.x, back.y) === 'wall' ? 0 : 2) + rng.next() });
+      if (lower.get(back.x, back.y) !== 'floor' || lower.decor[lower.i(back.x, back.y)]) return;
+      options.push({ at, up, key: rng.next() });
     });
   }
   options.sort((a, b) => a.key - b.key);
@@ -3076,8 +3378,10 @@ function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, 
     lower.force(at.x, at.y, 'ladder');
     lower.dress(at, 'stairs', up);
     lower.reserve(at.x, at.y);
+    const back = { x: at.x - DIRS4[up]!.x, y: at.y - DIRS4[up]!.y };
+    lower.reserve(back.x, back.y);
     upper.c.reserve(at.x, at.y);
-    upper.c.reserve(landing.x, landing.y);
+    for (const d of DIRS4) upper.c.reserve(at.x + d.x, at.y + d.y);
     return landing;
   }
   return null;
@@ -3154,7 +3458,9 @@ function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<numb
     }
     for (const e of going) {
       e.rooms = [];
-      splitRooms(lc, inset(e.b.outer, 1), rng, e.rooms, e.b.furnish === 'home' ? 6 : 8, e.b.furnish !== 'home');
+      if (e.b.medicalKind) {
+        e.rooms = medicalPlan(lc, e.b.outer, e.b.front!, rng, k, e.b.medicalKind === 'hospital', e.b.medicalKind === 'ward', [null, null, null, null]);
+      } else splitRooms(lc, inset(e.b.outer, 1), rng, e.rooms, e.b.furnish === 'home' ? 6 : 8, e.b.furnish !== 'home');
       upperWindows(lc, e.b.outer, upstairsWindows(e.b), occupied.map((o, i) => o && !inRect(e.b.outer, { x: i % c.width, y: Math.floor(i / c.width) })));
     }
     // Up from the storey below: to each storey of those that go on, and to the flat roofs over two or three.
@@ -3164,13 +3470,17 @@ function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<numb
       e.landing = null;
       // No way up to the storey below: none here either.
       if (!(e.n > k || (e.n === k && k >= 2 && e.walkable)) || e.reached !== k - 1) continue;
-      e.landing = placeStairs(lower, lowerSlab, st, e.b.outer, rng, k === 1 ? avoid : new Set());
+      e.landing = placeStairs(lower, lowerSlab, st, e.b.outer, rng, k === 1 ? avoid : new Set(), e.b.medicalKind === 'hospital' ? e.b.medicalRooms?.filter((r) => r.use === 'stairs') : undefined);
       if (e.landing) e.reached = k;
     }
     for (const e of going) {
       if (!e.landing) continue;
-      for (const room of e.rooms) furnishRoom(lc, room, rng, UPSTAIRS[e.b.furnish]);
-      unblockStorey(st, e.b.outer, e.landing);
+      if (e.b.medicalKind) {
+        for (const room of e.rooms as MedicalRoom[]) furnishMedical(lc, room, rng, e.b.medicalKind === 'clinic' ? undefined : e.b.medicalKind);
+        e.b.medicalRooms!.push(...e.rooms as MedicalRoom[]);
+      } else for (const room of e.rooms) furnishRoom(lc, room, rng, UPSTAIRS[e.b.furnish]);
+      if (e.b.medicalKind) clearMedicalAisles(st, e.b.outer, e.landing);
+      else unblockStorey(st, e.b.outer, e.landing);
     }
     // A flat roof one walks on has a parapet round it (half cover); one nobody reaches is just a roof.
     for (const e of all.filter((x) => x.n === k && x.walkable)) {
@@ -3191,6 +3501,25 @@ function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<numb
       if (e.landing) continue;
       for (const p of tilesIn(e.b.outer)) if (c.in(p.x, p.y) && st.slab[c.i(p.x, p.y)]) lc.force(p.x, p.y, 'roof');
     }
+  }
+  // The spare circulation bay becomes a furnished waiting area if no flight or landing uses it.
+  for (const e of all.filter((e) => e.b.medicalKind === 'hospital')) for (const r of e.b.medicalRooms ?? []) {
+    if (r.use !== 'stairs') continue;
+    const st = r.z ? storeys[r.z - 1] : null;
+    const floor = st?.c ?? c;
+    const active = tilesIn(r).some((p) => decorOf(floor.decor[c.i(p.x, p.y)])?.kind === 'stairs' || (st && !st.slab[c.i(p.x, p.y)]));
+    if (!active) {
+      if (!r.z) for (const p of tilesIn(r)) if (avoid.has(c.i(p.x, p.y))) floor.reserve(p.x, p.y);
+      r.use = 'waiting'; furnishCareRoom(floor, r, rng, 'hospital');
+    }
+  }
+  // Later stairwells can isolate a tile behind a bed on the floor below.
+  for (const e of all.filter((e) => e.b.medicalKind)) for (let k = 1; k < e.n; k++) {
+    const lower = k === 1 ? c : storeys[k - 2]!.c;
+    const i = lower.decor.findIndex((d, i) => decorOf(d)?.kind === 'stairs' && inRect(e.b.outer, { x: i % c.width, y: Math.floor(i / c.width) }));
+    if (i < 0) continue;
+    const d = DIRS4[decorOf(lower.decor[i])!.facing]!;
+    clearMedicalAisles(storeys[k - 1]!, e.b.outer, { x: i % c.width + d.x, y: Math.floor(i / c.width) + d.y });
   }
   // Somewhere up there for a group of the living to be posted (decision 7): far from the squad, by a window.
   const perch: Pos[] = [];
@@ -3264,6 +3593,12 @@ export interface GenOptions {
   seed: number;
   /** A recovery whose story puts the item out in the open (playtest 2026-10-14, #27): on a square or a car park, not in a room. */
   itemOutdoors?: boolean;
+  /** The opening's medicines belong inside Brena's furnished clinic. */
+  clinic?: boolean;
+  /** A hospital objective, including the rescue of Dr Nwosu. */
+  hospital?: boolean;
+  /** Explicit medical locations; ordinary houses keep their existing identity. */
+  medical?: 'clinic' | 'ward' | 'hospital';
   /** A scenario other than the biome's usual one (playtest 2026-10-14, #25): 'roadside' in the wilds, 'industrial' in a city. */
   site?: Site;
   /** A sabotage's alarm (playtest 2026-10-15, #14): a patrol car or an ambulance takes a second tile, its nose. */
@@ -3281,8 +3616,11 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   const flipY = rng.int(2) === 1;
   const swap = rng.int(2) === 1;
   const needsEvac = kind !== 'elimination';
-  const outdoorItem = kind === 'recovery' && !!opts.itemOutdoors;
-  const role: Role = !outdoorItem && (kind === 'recovery' || kind === 'rescue' || (kind === 'hack' && biome !== 'wilds')) ? 'indoor' : 'open';
+  const clinic = biome === 'city' && ((kind === 'recovery' && !!opts.clinic) || opts.medical === 'clinic' || opts.medical === 'ward');
+  const hospital = biome === 'city' && ((kind === 'rescue' && !!opts.hospital) || opts.medical === 'hospital');
+  const ward = opts.medical === 'ward';
+  const outdoorItem = kind === 'recovery' && !!opts.itemOutdoors && !clinic;
+  const role: Role = clinic || hospital || (!outdoorItem && (kind === 'recovery' || kind === 'rescue' || (kind === 'hack' && biome !== 'wilds'))) ? 'indoor' : 'open';
 
   // Keep the squad's corner clear.
   for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) c.reserve(x, y);
@@ -3292,7 +3630,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   const compound = biome === 'facility' ? facility(c, rng, style, role) : null;
   const objRect =
     compound?.objective ??
-    (biome === 'city' ? city(c, rng, { ...style, industrial: site === 'industrial' }, role) : site === 'roadside' ? roadside(c, rng, style, role) : wilds(c, rng, style, role));
+    (biome === 'city' ? city(c, rng, { ...style, industrial: site === 'industrial' }, role, clinic, hospital, ward) : site === 'roadside' ? roadside(c, rng, style, role) : wilds(c, rng, style, role));
   thinClutter(c, opts.seed);
   // Something to take cover behind on the squad's first move: barricades and crates, rocks in the wilds.
   const posts = [BARRICADE, CORNER, PAIR].map((parts) => (biome === 'wilds' ? dressed(parts, 'rock') : dressed(parts, 'barricade', 'crates')));
@@ -3332,7 +3670,13 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   if (kind === 'recovery' || kind === 'rescue') {
     // Tucked away indoors, or for an item out in the open (#27) the most open tile outdoors.
     const outside = outdoorItem ? objTiles.filter((p) => c.groundAt(p.x, p.y) !== INDOOR) : [];
-    const spot = (outdoorItem && outside.length ? best(outside, (p) => enclosed(p)) : best(objTiles, (p) => -enclosed(p) - (c.groundAt(p.x, p.y) === INDOOR ? 2 : 0))) ?? null;
+    // Door and window tiles also carry INDOOR. The clinic's objective must be
+    // on actual room floor, with a tile between it and the exterior walls.
+    const medicineRoom = clinic ? c.buildings.find((b) => b.outer === objRect)?.medicalRooms?.find((r) => r.use === 'equipment' || r.use === 'treatment') : undefined;
+    const clinicFloor = clinic ? objTiles.filter((p) => inRect(inset(objRect, 2), p) && c.get(p.x, p.y) === 'floor' && c.groundAt(p.x, p.y) === INDOOR) : objTiles;
+    const inMedicineRoom = medicineRoom ? clinicFloor.filter((p) => inRect(medicineRoom, p)) : [];
+    const inside = inMedicineRoom.length ? inMedicineRoom : clinicFloor;
+    const spot = (outdoorItem && outside.length ? best(outside, (p) => enclosed(p)) : best(inside, (p) => -enclosed(p) - (c.groundAt(p.x, p.y) === INDOOR ? 2 : 0))) ?? null;
     if (kind === 'recovery') item = spot;
     else objectiveSpot = spot;
   } else if (kind === 'sabotage') {
@@ -3459,6 +3803,17 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     return out;
   });
   const t = (p: Vec2 | null) => (p ? T(p) : null);
+  const medical: MedicalSite[] = c.buildings.flatMap((b) => {
+    if (b.medicalWear === undefined) return [];
+    const a = T(b.outer);
+    const z = T({ x: b.outer.x + b.outer.w - 1, y: b.outer.y + b.outer.h - 1 });
+    return [{ x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, wear: b.medicalWear, kind: b.medicalKind, rooms: b.medicalRooms?.map((r) => {
+      const a = T(r), z = T({ x: r.x + r.w - 1, y: r.y + r.h - 1 });
+      return { x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, z: r.z, use: r.use };
+    }) }];
+  });
+
+  for (const b of medical) b.dressing = dressMedical(b, S, tiles, decor, levels, opts.seed, [...spawns, item, terminal, objectiveSpot].filter((p): p is Vec2 => !!p).map(T));
 
   return {
     id: `gen-${site ?? biome}-${opts.seed}`,
@@ -3470,6 +3825,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     tiles,
     elev,
     ground,
+    ...(medical.length ? { medical } : {}),
     decor,
     storeys,
     ...(levels.length ? { levels } : {}),

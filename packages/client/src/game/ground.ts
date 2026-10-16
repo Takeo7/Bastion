@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { decorOf, DIRS4, DIRS8, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
 import { extendShader } from './fogOfWar';
 import { STOREY } from './coords';
+import { snowTexture, snowyMission } from './snow';
 import { terrainFile, type PropId, type TerrainId } from './syntyManifest';
 
 // The ground as continuous terrain (second playtest: «los mapas siguen siendo
@@ -177,6 +178,8 @@ export class GroundMap {
       groundSize: { value: new THREE.Vector2(this.s.width, this.s.height) },
       gBiome: { value: biome },
       gTarmac: { value: this.s.biome === 'wilds' && this.s.site === 'roadside' ? 1 : 0 },
+      gSnow: { value: snowyMission(this.s) ? 1 : 0 },
+      tSnow: { value: snowyMission(this.s) ? snowTexture() : null },
       tAsphalt: { value: terrainTexture('asphalt') },
       tGrass: { value: terrainTexture('grass') },
       tDirt: { value: terrainTexture('dirt') },
@@ -287,6 +290,8 @@ const SYNTY_GROUND_GLSL = /* glsl */ `
   uniform vec2 groundSize;
   uniform float gBiome;
   uniform float gTarmac;
+  uniform float gSnow;
+  uniform sampler2D tSnow;
   uniform sampler2D tAsphalt;
   uniform sampler2D tGrass;
   uniform sampler2D tDirt;
@@ -506,6 +511,13 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
         c = sConcrete;
       }
     }
+    // Deep cover on open ground and roofs; slushy streets retain their darker routes and markings.
+    if (gSnow > 0.5 && abs(k - 2.0) > 0.5) {
+      vec3 snow = texture2D(tSnow, p / 3.0).rgb * vec3(0.89, 0.95, 1.0);
+      float road = sMask(p, 1.0, level) + sMask(p, 6.0, level);
+      float cover = mix(0.97, 0.5 + 0.26 * smoothstep(0.28, 0.72, mid), clamp(road, 0.0, 1.0));
+      c = mix(c, snow * (0.94 + 0.08 * big), cover);
+    }
     diffuseColor.rgb = c;
   }`;
 
@@ -583,7 +595,9 @@ export function scatterCover(s: GameState, ground: GroundMap, density = 1): { id
       });
       const clump = 0.25 + 1.5 * noise2(x / 4.5, y / 4.5, 3);
       for (const [id, amount] of list) {
-        let n = Math.floor(amount * density * (id === 'leaves' ? 1 : clump) + r());
+        // The winter has buried flowers, leaves and short grass; a few tall tufts still show.
+        if (snowyMission(s) && ['flowers', 'leaves', 'tuftLow', 'grassBlob'].includes(id)) continue;
+        let n = Math.floor(amount * density * (snowyMission(s) && (id === 'tuft' || id === 'tuftWide') ? 0.15 : 1) * (id === 'leaves' ? 1 : clump) + r());
         while (n-- > 0) {
           const px = THREE.MathUtils.clamp(x + r(), x + margin[3]!, x + 1 - margin[1]!);
           const pz = THREE.MathUtils.clamp(y + r(), y + margin[0]!, y + 1 - margin[2]!);

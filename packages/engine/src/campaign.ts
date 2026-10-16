@@ -1015,7 +1015,6 @@ export interface Rumor {
   daysLeft: number;
 }
 
-/** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
 /**
  * Campaigns from before Fase 9 (docs/FASE9.md §7) aren't carried over: the
  * progression is another. The host puts such a save aside and starts anew.
@@ -1027,7 +1026,8 @@ export function campaignOutdated(c: { version: number }): boolean {
   return c.version < FRESH_CAMPAIGN_VERSION;
 }
 
-export const CAMPAIGN_VERSION = 17;
+/** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
+export const CAMPAIGN_VERSION = 18;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1746,7 +1746,7 @@ export function missionInfo(c: CampaignState, offer: MissionOffer): MissionInfo 
 /** What the story, a side quest or an ordinary Botín say of an operation. */
 function ownInfo(c: CampaignState, offer: MissionOffer): MissionInfo {
   if (offer.story) {
-    return { kicker: `DIARIO · HOJA ${offer.story}`, item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
+    return { ...(offer.story === 1 ? {} : { kicker: `DIARIO · HOJA ${offer.story}` }), item: STORY[offer.story - 1]!.item, vipName: storyVip(offer.story, c.story.simon) };
   }
   const q = questOf(c, offer);
   const step = q && QUESTS[q.id].steps[q.step];
@@ -3475,6 +3475,8 @@ export function migrateCampaign(old: CampaignState): CampaignState {
   if (campaignOutdated(old)) throw new Error(`Campaña de la versión ${old.version}: de antes de la 0.3, no se convierte.`);
   const c = JSON.parse(JSON.stringify(old)) as CampaignState;
   c.version = CAMPAIGN_VERSION;
+  // Version 18: the opening chapter's approved title (PR #1), also on an offer already made.
+  for (const o of c.offers) if (o.story === 1) o.name = STORY[0]!.title;
   for (const s of c.soldiers) {
     s.skills ??= { ...NO_SKILLS };
     s.picks ??= [];

@@ -103,6 +103,27 @@ export type DecorKind =
   | 'table'
   | 'sofa'
   | 'bed'
+  | 'hospitalBed'
+  | 'medicalShelf'
+  | 'gurney'
+  | 'medicalCabinet'
+  | 'medicalCart'
+  | 'wheelchair'
+  | 'receptionDesk'
+  | 'waitingSeats'
+  | 'examTable'
+  | 'medicalMonitor'
+  | 'xray'
+  | 'bedsideTable'
+  | 'visitorChair'
+  | 'clinicalSink'
+  | 'sterilizer'
+  | 'ultrasound'
+  | 'waitingTable'
+  | 'waterDispenser'
+  | 'toilet'
+  | 'clinicalBin'
+  | 'consultDesk'
   | 'desk'
   | 'wardrobe'
   | 'cabinet'
@@ -840,6 +861,39 @@ export interface MissionState {
   night?: boolean;
 }
 
+export type MedicalUse = 'reception' | 'consultation' | 'treatment' | 'ward' | 'equipment' | 'nurses' | 'waiting' | 'supplies' | 'hygiene' | 'stairs';
+export interface MedicalRoom {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z: number;
+  use: MedicalUse;
+}
+
+export interface MedicalDetail {
+  kind: 'corpseCivilian' | 'corpseStaff' | 'coveredCorpse' | 'coveredBed' | 'bareBed' | 'privacyScreen' | 'medicalSupplies' | 'luggage' | 'crutches' | 'books' | 'wallCross' | 'cautionSign' | 'safeSign' | 'bloodPool' | 'bloodDrops' | 'wallBlood' | 'floorGrime' | 'scatteredPapers' | 'medicalWaste' | 'overturnedChair' | 'fallenIV' | 'spilledSupplies' | 'rumpledLinen';
+  x: number;
+  y: number;
+  z: number;
+  facing: number;
+  height: number;
+  variant?: number;
+}
+
+/** A medical building's bounds, including walls; wear is cosmetic, from 0 to 1. */
+export interface MedicalSite {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  wear: number;
+  kind?: 'clinic' | 'ward' | 'hospital';
+  rooms?: MedicalRoom[];
+  /** Seeded scenery, stored with the mission. Never affects movement, cover or AI. */
+  dressing?: MedicalDetail[];
+}
+
 export interface GameState {
   /** Number of events applied so far. Clients use it to detect gaps. */
   seq: number;
@@ -857,6 +911,8 @@ export interface GameState {
   elev: number[];
   /** Floor of each tile (procedural maps; missing on hand-made maps and older saves). */
   ground?: GroundKind[];
+  /** Clinical finishes stay attached to the building after furniture is destroyed. */
+  medical?: MedicalSite[];
   /**
    * What the cover of each tile is meant to look like (procedural maps; see
    * decor.ts). Cosmetic and never updated: a tile whose kind has changed since

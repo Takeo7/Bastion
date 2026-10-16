@@ -4,6 +4,8 @@ import { ground, toPos } from './grid';
 import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
+import { STORY } from './lore';
+import { repairStairAccess } from './stairAccess';
 import type { Rng } from './rng';
 import { fighterStats, recruitSkills, veteranSkills, type FighterStats } from './skills';
 import type {
@@ -63,7 +65,7 @@ export interface SquadMember {
 
 /** Hand-made map by id, or a procedural one from a biome and a seed. */
 /** `site`: a scenario other than the biome's usual one (playtest 2026-10-14, #25). */
-export type MapSource = { kind: 'handmade'; id: string } | { kind: 'generated'; biome: Biome; seed: number; site?: Site };
+export type MapSource = { kind: 'handmade'; id: string } | { kind: 'generated'; biome: Biome; seed: number; site?: Site; medical?: 'clinic' | 'ward' | 'hospital' };
 
 export interface MissionOptions {
   map: MapSource;
@@ -394,13 +396,13 @@ export const VIP_NAMES = ['Dra. Irina Sokolova', 'Ing. Kenji Mori', 'Alcaldesa M
  */
 const LAYOUT_KIND: Partial<Record<MissionKind, MissionKind>> = { scavenge: 'recovery' };
 
-export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[], itemOutdoors = false, alarm?: Alarm): MissionLayout {
+export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[], itemOutdoors = false, clinic = false, hospital = false, alarm?: Alarm): MissionLayout {
   if (map.kind === 'handmade') {
     const def = MAPS[map.id];
     if (!def) throw new Error(`Unknown map ${map.id}`);
     return handmadeLayout(def, kind);
   }
-  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed, ...(map.site ? { site: map.site } : {}), ...(itemOutdoors ? { itemOutdoors } : {}), ...(alarm ? { alarm } : {}) });
+  return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed, ...(map.site ? { site: map.site } : {}), ...(map.medical ? { medical: map.medical } : {}), ...(itemOutdoors ? { itemOutdoors } : {}), ...(clinic ? { clinic } : {}), ...(hospital ? { hospital } : {}), ...(alarm ? { alarm } : {}) });
 }
 
 export function createMission(opts: MissionOptions): GameState {
@@ -412,7 +414,7 @@ export function createMission(opts: MissionOptions): GameState {
   // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
   const extra = garrison(kind, difficulty, opts.living);
   const plan = [...base, ...(extra ? [extra] : []), ...(opts.night ? [nightPod(difficulty)] : [])];
-  const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors, opts.alarm);
+  const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors, opts.campaignMission?.story === 1, opts.campaignMission?.story === 2, opts.alarm);
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
     (kind === 'recovery' && !layout.item) ||
@@ -546,6 +548,7 @@ export function createMission(opts: MissionOptions): GameState {
     tiles,
     elev: [...layout.elev],
     ...(layout.ground ? { ground: [...layout.ground] } : {}),
+    ...(layout.medical ? { medical: layout.medical.map((b) => ({ ...b, ...(b.rooms ? { rooms: b.rooms.map((r) => ({ ...r })) } : {}), ...(b.dressing ? { dressing: b.dressing.map((d) => ({ ...d })) } : {}) })) } : {}),
     ...(layout.decor ? { decor: [...layout.decor] } : {}),
     ...(layout.storeys ? { storeys: [...layout.storeys] } : {}),
     ...(layout.levels ? { levels: layout.levels.map((l) => ({ tiles: [...l.tiles], ...(l.decor ? { decor: [...l.decor] } : {}) })) } : {}),
@@ -578,6 +581,12 @@ export function createMission(opts: MissionOptions): GameState {
  * place in it gets its level, the ground. Harmless on a mission that has them.
  */
 export function normalizeMission(s: GameState): GameState {
+  // An opening mission already in progress keeps its state, with the approved presentation.
+  if (s.campaignMission?.story === 1) {
+    s.campaignMission.name = STORY[0]!.title;
+    s.campaignMission.briefing = STORY[0]!.briefing;
+    delete s.campaignMission.kicker;
+  }
   const fix = <T extends Vec2>(p: T): T & Pos => Object.assign(p, { z: (p as Partial<Pos>).z ?? 0 });
   for (const u of s.units) {
     fix(u.pos);
@@ -593,5 +602,6 @@ export function normalizeMission(s: GameState): GameState {
   for (const c of s.smoke) fix(c.pos);
   for (const z of s.silences ?? []) fix(z.pos);
   for (const l of s.lights ?? []) fix(l.tile);
+  repairStairAccess(s);
   return s;
 }

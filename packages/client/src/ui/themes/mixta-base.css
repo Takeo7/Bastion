@@ -1253,7 +1253,7 @@
 :root[data-ui='mixta'] .strat[data-view='squad'] .briefing-head {
   padding-left: 120px;
   background:
-    url('/ui/synty/renders/mula-front.webp') 16px 50% / auto 86% no-repeat,
+    url('/ui/synty/renders/mula-front.webp') 16px 50% / 88px auto no-repeat,
     var(--m-rivets),
     var(--t-sheet);
 }
@@ -1266,6 +1266,17 @@
   text-transform: uppercase;
   color: #fff;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 1100px) {
+  :root[data-ui='mixta'] .strat[data-view='squad'] .briefing-head {
+    padding-left: 100px;
+    background-size: 72px auto, auto, auto;
+  }
+
+  :root[data-ui='mixta'] .strat[data-view='squad'] .briefing-head h1 {
+    font-size: 26px;
+  }
 }
 
 /* The squad on the pads: steel cards in the owner's colour, each with its class's portrait (Arte-Personajes' renders). */

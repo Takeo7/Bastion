@@ -129,6 +129,20 @@ const MOODS: Record<'day' | 'night' | 'dawn' | 'dusk', Mood> = {
   },
 };
 
+/** Winter daylight in Brena; ordinary missions keep their approved lighting. */
+const SNOW_DAY: Mood = {
+  ...MOODS.day,
+  sky: ['#9eafc8', '#c7d6e3', '#dfebf2'],
+  haze: 0xc3d4e2,
+  sun: 0xeaf3ff,
+  sunIntensity: 2.9,
+  skyLight: 0xc1d5ed,
+  groundLight: 0x899bad,
+  fill: 0xeaf3ff,
+  exposure: 1.18,
+  grade: { ...MOODS.day.grade, shadowTint: [0.92, 0.98, 1.06], highlightTint: [1, 1, 1.02], lift: [0.04, 0.05, 0.065] },
+};
+
 /** The map changed (rebuilt): the sun's shadow map is drawn again on the next frame. */
 let shadowsStale = true;
 export function shadowsChanged(): void {
@@ -255,8 +269,8 @@ export class Renderer {
   }
 
   /** Day or night (the reference block's night test; missions are by day). */
-  setNight(on: boolean): void {
-    this.setMood(on ? MOODS.night : MOODS.day);
+  setNight(on: boolean, snow = false): void {
+    this.setMood(on ? MOODS.night : snow ? SNOW_DAY : MOODS.day);
   }
 
   /**

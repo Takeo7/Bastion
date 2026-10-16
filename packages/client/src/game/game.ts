@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { snowyMission } from './snow';
 import {
   ABILITIES,
   abilitiesOf,
@@ -735,7 +736,7 @@ export class Game {
     // What the carrier carries is named (playtest 14/10 #2: it said «DATOS»).
     this.hud.itemTag = this.units.itemTag = itemTag(this.recoveryItem());
     // Night missions (docs/ALTURA-Y-NOCHE.md): the sky and the sun; a day mission after a night one turns them back.
-    this.renderer.setNight(!!this.view.mission.night);
+    this.renderer.setNight(!!this.view.mission.night, snowyMission(this.view));
     this.units.build(this.view);
     if (!s.outcome) this.sfx.start(s.biome, !s.concealed);
     this.sfx.siren(this.view);
@@ -756,6 +757,7 @@ export class Game {
   private kicker(): string {
     const cm = this.state.campaignMission;
     const chapter = cm?.story;
+    if (chapter === 1) return '';
     return cm?.kicker ?? (chapter ? `DIARIO · HOJA ${chapter}` : cm ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA');
   }
 
@@ -833,6 +835,8 @@ export class Game {
     const k = gap > 0 ? Math.min(6, gap / 2) / gap : 0;
     const home = tileToWorld({ x: Math.round(here.x + (toward.x - here.x) * k), y: Math.round(here.y + (toward.y - here.y) * k) });
     this.rig.focus(home, true);
+    // Keep Brena's snow in view throughout its presentation, rather than panning into unexplored fog.
+    if (snowyMission(v)) return;
     const epoch = this.rig.epoch;
     const goal = this.missionMarks()[0];
     if (!goal || distance(here, goal.pos) < 8) return;
