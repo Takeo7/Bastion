@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 16/10 con la 0.3.0. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 16/10 con la 0.3.1. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.3.0)
+## 3. Estado (versión 0.3.1)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, soldados que aprenden de lo que hacen ([FASE9.md](FASE9.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8 y v0.2.9 en GitHub (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0 y v0.3.1 en GitHub (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
 - **Lo nuevo de la 0.2.2** (2026-10-14):
   - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
   - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
@@ -89,6 +89,11 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+- **Lo nuevo de la 0.3.1** (2026-10-16), la PR de Ana ([Takeo7/Bastion#1](https://github.com/Takeo7/Bastion/pull/1)), integrada sobre la 0.3.0:
+  - centros médicos rehechos (consultorio, enfermerías y hospitales de ciudad de tres plantas), con mobiliario por sala y abandono: cadáveres, sangre, suciedad, material tirado; todo decorado, sin cambiar cobertura ni paso;
+  - escaleras interiores con peldaños de madera, separadas de las paredes y con el acceso asegurado;
+  - el capítulo 1, «El consultorio de Brena», con nieve y la presentación aprobada (versión 05 del PDF); la escuadra alineada en la Cochera;
+  - sus objetos van del 51 al 71 (del 45 al 50 son los de la fábrica de la 0.3.0).
 - **Lo nuevo de la 0.3.0** (2026-10-16), «Se aprende haciendo» ([FASE9.md](FASE9.md)), con campaña nueva:
   - sin clases, aptitudes ni rangos: cuatro habilidades (Tiro, Cuerpo a cuerpo, Medicina, Maña) que suben con lo que cada soldado hace en las misiones, sin tope y con niveles largos; talentos de dos en dos en los niveles 2 y 4; la veteranía, de Novato a Superviviente, da vida, voluntad y la tercera acción;
   - el cinturón de dos huecos (sin granadas en él, no hay granadas); las armas sin niveles, con estado (gastada, rota) que se arregla con piezas, y mejoras (mira, culata, cargador ampliado, silenciador) que se encuentran o se hacen en el Taller;
