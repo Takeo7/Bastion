@@ -6,7 +6,6 @@ import {
   fighterStats,
   learn,
   learnedFrom,
-  MISSION_XP,
   NO_SKILLS,
   nextLevelXp,
   pendingPicks,
@@ -39,20 +38,21 @@ const at = (levels: Partial<Record<keyof Skills, number>>): Skills => {
 
 describe('skills rise with use', () => {
   it('a level asks for 3, 8, 15, 24 and 35 of experience', () => {
-    expect([0, 2, 3, 7, 8, 14, 15, 23, 24, 34, 35, 99].map(skillLevel)).toEqual([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
-    expect(nextLevelXp(9)).toBe(15);
-    expect(nextLevelXp(40)).toBeNull();
+    expect([0, 9, 10, 24, 25, 49, 50, 84, 85, 129, 130, 999].map(skillLevel)).toEqual([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
+    expect(nextLevelXp(30)).toBe(50);
+    expect(nextLevelXp(140)).toBeNull();
   });
 
-  it('deeds turn into experience, MISSION_XP at most per skill and mission', () => {
+  it('deeds turn into experience, all of it (no cap: Arturo, 16/10), and a bonus adds its share rounded up', () => {
     expect(learnedFrom({ hit: 2, gunKill: 1, healOther: 1, healSelf: 1, search: 2, fix: 1, blast: 1 })).toEqual({ shooting: 3, melee: 0, medicine: 3, craft: 5 });
-    expect(learnedFrom({ hit: 9, gunKill: 4 }).shooting).toBe(MISSION_XP);
+    expect(learnedFrom({ hit: 9, gunKill: 4 }).shooting).toBe(13);
+    expect(learnedFrom({ hit: 9, gunKill: 4, search: 1 }, 0.2)).toMatchObject({ shooting: 16, craft: 2, melee: 0 });
     expect(learnedFrom(undefined)).toEqual(NO_SKILLS);
   });
 
   it('learning says which levels went up', () => {
-    const r = learn({ ...NO_SKILLS, shooting: 6 }, { hit: 2, blow: 1 });
-    expect(r.skills).toEqual({ ...NO_SKILLS, shooting: 8, melee: 1 });
+    const r = learn({ ...NO_SKILLS, shooting: 22 }, { hit: 2, gunKill: 1, blow: 1 });
+    expect(r.skills).toEqual({ ...NO_SKILLS, shooting: 25, melee: 1 });
     expect(r.levels).toEqual([{ skill: 'shooting', from: 1, to: 2 }]);
   });
 

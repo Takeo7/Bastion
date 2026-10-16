@@ -1,7 +1,7 @@
 // Fase 9, «Se aprende haciendo» (docs/FASE9.md). Four skills that rise with
 // use, never with points: what each soldier does in a mission is counted
 // (Unit.deeds, filled in by the events) and, if it comes back alive, turned
-// into experience, MISSION_XP at most per skill. At levels 2 and 4 of every
+// into experience, all of it: no cap (Arturo, 16/10), long levels instead. At levels 2 and 4 of every
 // skill the soldier picks one talent of a pair. The sum of the four levels is
 // its veterancy: health, will and, from Veterano, a third action.
 //
@@ -20,10 +20,13 @@ export type Skills = Record<SkillId, number>;
 export const NO_SKILLS: Skills = { shooting: 0, melee: 0, medicine: 0, craft: 0 };
 
 export const SKILL_MAX = 5;
-/** Experience it takes to reach levels 1 to 5. */
-export const SKILL_XP = [3, 8, 15, 24, 35] as const;
-/** The most one mission teaches of each skill, so nothing can be farmed. */
-export const MISSION_XP = 6;
+/**
+ * Experience it takes to reach levels 1 to 5 (Arturo, 16/10: long levels, no
+ * cap). A soldier who fights earns some 5 of Tiro a mission (a bot's 24
+ * missions: median 5, one in four 8 or more): level 2 after about five, the
+ * top after twenty-odd; a star, twice as fast.
+ */
+export const SKILL_XP = [10, 25, 50, 85, 130] as const;
 
 export interface SkillDef {
   id: SkillId;
@@ -274,20 +277,20 @@ export const DEED_XP: Record<DeedId, [SkillId, number]> = {
   blast: ['craft', 1],
 };
 
-/** The experience a mission's deeds give, skill by skill, `cap` (MISSION_XP) at most each. */
-export function learnedFrom(deeds: Deeds | undefined, cap = MISSION_XP): Skills {
+/** The experience a mission's deeds give, skill by skill; `bonus` (0.2 = 20 %) more of each, rounded up. */
+export function learnedFrom(deeds: Deeds | undefined, bonus = 0): Skills {
   const out = { ...NO_SKILLS };
   for (const [deed, times] of Object.entries(deeds ?? {}) as [DeedId, number][]) {
     const [skill, xp] = DEED_XP[deed];
     out[skill] += xp * times;
   }
-  for (const id of SKILL_IDS) out[id] = Math.min(cap, out[id]);
+  if (bonus) for (const id of SKILL_IDS) out[id] += Math.ceil(out[id] * bonus);
   return out;
 }
 
-/** Skills plus a mission's deeds, and the levels that went up. */
-export function learn(skills: Skills, deeds: Deeds | undefined, cap = MISSION_XP): { skills: Skills; gained: Skills; levels: { skill: SkillId; from: number; to: number }[] } {
-  const gained = learnedFrom(deeds, cap);
+/** Skills plus a mission's deeds (and its `bonus`), and the levels that went up. */
+export function learn(skills: Skills, deeds: Deeds | undefined, bonus = 0): { skills: Skills; gained: Skills; levels: { skill: SkillId; from: number; to: number }[] } {
+  const gained = learnedFrom(deeds, bonus);
   const next = { ...skills };
   const levels: { skill: SkillId; from: number; to: number }[] = [];
   for (const id of SKILL_IDS) {

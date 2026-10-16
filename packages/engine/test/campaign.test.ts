@@ -6,7 +6,7 @@ import {
   canSpendPoints,
   craftBlocker,
   defaultSquad,
-  missionXpCap,
+  learningBonus,
   openingMission,
   LATE_KIT,
   applyMissionResult,
@@ -228,13 +228,13 @@ describe('missions', () => {
     expect(report.squad).toHaveLength(6);
     expect(report.squad.find((e) => e.id === soldiers[0]!.campaignId)?.status).toBe('dead');
     expect(report.squad.find((e) => e.id === soldiers[1]!.campaignId)).toMatchObject({ status: 'wounded', woundedDays: 6 });
-    // Eleven deeds of Tiro, but a mission teaches six at most (docs/FASE9.md §1).
-    expect(report.squad.find((e) => e.id === soldiers[2]!.campaignId)).toMatchObject({ kills: 6, learned: { shooting: 6, melee: 0, medicine: 2, craft: 0 }, deeds: { hit: 5, gunKill: 6, healOther: 1 } });
+    // Eleven deeds of Tiro, all of them (no cap: Arturo, 16/10).
+    expect(report.squad.find((e) => e.id === soldiers[2]!.campaignId)).toMatchObject({ kills: 6, learned: { shooting: 11, melee: 0, medicine: 2, craft: 0 }, deeds: { hit: 5, gunKill: 6, healOther: 1 } });
     expect(c.soldiers.find((s) => s.id === soldiers[0]!.campaignId)!.alive).toBe(false);
     // The report says how bad it was, and a mission takes no days (docs/PRUEBA-2026-10-14.md P7): it is all still to heal.
     expect(c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays).toBe(6);
     expect(c.day).toBe(report.day);
-    expect(veteran.skills).toEqual({ ...before, shooting: before.shooting + 6, medicine: before.medicine + 2 });
+    expect(veteran.skills).toEqual({ ...before, shooting: before.shooting + 11, medicine: before.medicine + 2 });
     expect(c.credits).toBe(credits + (offer.reward.credits ?? 0) + report.salvage);
     // The Bastion learns from every mission: showing up, winning and the kills.
     expect(report.xp).toBe(missionXp(true, offer.difficulty, 6));
@@ -250,7 +250,7 @@ describe('missions', () => {
     const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
     const unit = mission.units.find((u) => u.team === 'xcom')!;
     const s = c.soldiers.find((x) => x.id === unit.campaignId)!;
-    s.skills = { ...NO_SKILLS, shooting: 5 };
+    s.skills = { ...NO_SKILLS, shooting: 22 };
     unit.deeds = { hit: 2, gunKill: 1 };
     mission.outcome = 'victory';
     mission.outcomeReason = 'objective';
@@ -265,17 +265,17 @@ describe('missions', () => {
     expect(() => run(c, { type: 'picks', soldier: s.id, picks: ['killZone'] }, s.owner)).toThrow('Nadie pasa pide Tiro 4.');
   });
 
-  it('the Taller de oficios raises what a mission teaches, one more per level', () => {
+  it('the Taller de oficios makes a mission teach 20 % more for every level', () => {
     const { c, offer } = ready();
-    expect(missionXpCap(c)).toBe(6);
+    expect(learningBonus(c)).toBe(0);
     Object.assign(c.base.plots.find((p) => p.terrain === 'clear' && !p.building)!, { building: 'echoes', level: 2 });
-    expect(missionXpCap(c)).toBe(8);
+    expect(learningBonus(c)).toBeCloseTo(0.4);
     const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
     const unit = mission.units.find((u) => u.team === 'xcom')!;
     unit.deeds = { hit: 12 };
     mission.outcome = 'victory';
     const report = applyMissionResult(c, mission, new Rng(4));
-    expect(report.squad.find((e) => e.id === unit.campaignId)!.learned!.shooting).toBe(8);
+    expect(report.squad.find((e) => e.id === unit.campaignId)!.learned!.shooting).toBe(12 + 5);
   });
 
   it('the Coro sends a little more with every few missions flown', () => {

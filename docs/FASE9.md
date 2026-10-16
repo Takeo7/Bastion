@@ -20,9 +20,9 @@ Cuatro, de 0 a 5:
 - **Cuerpo a cuerpo:** +1 por golpe que acierta y +1 por baja cuerpo a cuerpo.
 - **Medicina:** +2 por cada cura o contagio parado en otro y +1 en uno mismo.
 - **Maña:** +1 por caja abierta o habitación registrada, +2 por equipo arreglado o alarma callada, y +1 por explosivo que alcanza a alguien.
-- **Tope:** 6 por habilidad y misión, para que no se pueda «farmear».
+- **Sin tope** (Arturo, 16/10): todo lo hecho cuenta. A cambio, los niveles son largos.
 
-**Para subir de nivel** hace falta experiencia acumulada: 3, 8, 15, 24 y 35 (niveles 1 a 5).
+**Para subir de nivel** hace falta experiencia acumulada: 10, 25, 50, 85 y 130 (niveles 1 a 5). Medido con un bot en 24 misiones, quien combate gana unos 5 de Tiro por misión (uno de cada cuatro, 8 o más): el nivel 2 llega hacia la quinta misión y el 5, pasadas las veinte; una estrella, el doble de rápido.
 
 ## 2. Los talentos
 
@@ -215,6 +215,6 @@ Va en la **0.3.0**. Antes sale la 0.2.9 con las notas de la prueba del 15/10.
 - Lore: los textos, en femenino donde toca («Novata»…), y la frase del arma gastada;
 - Arte: la mira y el silenciador sobre el arma, el arma gastada o rota, y la ropa sin clase;
 - fuera del motor: las clases, las aptitudes, el árbol viejo, los rangos (`classes.ts`, `RANKS`), los niveles de arma y la migración de las campañas de antes;
-- el Taller de oficios sube en uno, por nivel, el tope de lo que se aprende por misión (de 6 a 9).
+- el Taller de oficios hace que cada misión enseñe un 20 % más por nivel, y el Camposanto a nivel 3, otro 20 % tras una misión con bajas.
 
 **Queda para después:** el código muerto del árbol viejo. Las habilidades del Grillo y del Oficio, sus perks y los vuelos del dron siguen en el motor y en el cliente, aunque ninguna unidad puede tenerlos. Se quitan en una pasada aparte (Gameplay, UI y Arte).

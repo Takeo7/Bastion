@@ -39,7 +39,7 @@ import {
   weaponTier,
 } from './progression';
 import { broughtBack, type CarriedWeapon, type LootTotals } from './loot';
-import { fighterStats, learn, MISSION_XP, NO_SKILLS, pendingPicks, picksBlocker, recruitSkills, SKILL_IDS, SKILL_MAX, SKILL_TALENTS, SKILL_XP, skillLevel, veterancy, veterancyRank, VETERANCY, type Deeds, type SkillId, type Skills } from './skills';
+import { fighterStats, learn, NO_SKILLS, pendingPicks, picksBlocker, recruitSkills, SKILL_IDS, SKILL_MAX, SKILL_TALENTS, SKILL_XP, skillLevel, veterancy, veterancyRank, VETERANCY, type Deeds, type SkillId, type Skills } from './skills';
 import {
   levelUpLine,
   wornLine,
@@ -202,8 +202,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   echoes: {
     id: 'echoes',
     name: 'Taller de oficios',
-    description: 'Lo que se aprende fuera, aquí se repasa: cada misión enseña hasta 7 de experiencia en cada habilidad, en lugar de 6.',
-    upgrades: ['Hasta 8 por misión. Más herramientas, y Nwosu repasa las curas.', 'Hasta 9 por misión. Gente de otros enclaves enseña lo suyo.'],
+    description: 'Lo que se aprende fuera, aquí se repasa: cada misión enseña un 20 % más en cada habilidad.',
+    upgrades: ['Un 40 % más. Más herramientas, y Nwosu repasa las curas.', 'Un 60 % más. Gente de otros enclaves enseña lo suyo.'],
     cost: 130,
     days: 6,
     level: 5,
@@ -216,7 +216,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
     description: 'Los caídos descansan aquí y salen de la lista del Cuartel; sus nombres se guardan. Cruces de pino bajo la nieve, una por cada uno.',
     upgrades: [
       '+5 de voluntad para todos los soldados. Saben que, si caen, alguien los recordará.',
-      '+10 de voluntad para todos. Y quien vuelve de una misión con bajas gana +1 de experiencia: por ellos. Teo graba cada nombre en latón.',
+      '+10 de voluntad para todos. Y quien vuelve de una misión con bajas aprende un 20 % más: por ellos. Teo graba cada nombre en latón.',
     ],
     cost: 40,
     days: 3,
@@ -1973,12 +1973,15 @@ export function veterancyName(s: Pick<CampaignSoldier, 'skills'> & { appearance?
 }
 
 /**
- * The most a mission teaches of each skill (skills.ts MISSION_XP): the Taller
- * de oficios one more per level (docs/FASE9.md), Teo teaching what hands know.
+ * How much more a mission teaches (skills.ts learn): 20 % for every level of
+ * the Taller de oficios (docs/FASE9.md), Teo going over what was done out there.
  */
-export function missionXpCap(c: CampaignState): number {
-  return MISSION_XP + facilityLevel(c, 'echoes');
+export function learningBonus(c: CampaignState): number {
+  return LEARNING_BONUS * facilityLevel(c, 'echoes');
 }
+
+/** Of what a mission teaches, this much more for each level of the Taller de oficios, and with the Camposanto at 3 after losses. */
+const LEARNING_BONUS = 0.2;
 
 /**
  * Whether a soldier's free points can go anywhere now (playtest 2026-10-13):
@@ -3329,15 +3332,8 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       entry.status = 'wounded';
       entry.woundedDays = s.woundedDays;
     }
-    // What it did teaches it (docs/FASE9.md §1); the Camposanto at level 3, one more of what it used most.
-    const taught = learn(s.skills, u.deeds, missionXpCap(c));
-    if (mourning) {
-      const most = [...SKILL_IDS].sort((a, b) => taught.gained[b] - taught.gained[a])[0]!;
-      if (taught.gained[most] > 0) {
-        taught.gained[most]++;
-        taught.skills[most]++;
-      }
-    }
+    // What it did teaches it (docs/FASE9.md §1): more with the Taller de oficios, and the Camposanto at 3 after losses.
+    const taught = learn(s.skills, u.deeds, learningBonus(c) + (mourning ? LEARNING_BONUS : 0));
     for (const id of SKILL_IDS) {
       const from = skillLevel(s.skills[id]);
       const to = skillLevel(taught.skills[id]);

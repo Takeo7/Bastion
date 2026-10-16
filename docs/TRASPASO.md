@@ -90,7 +90,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
 - **Lo nuevo de la 0.3.0** (2026-10-16), «Se aprende haciendo» ([FASE9.md](FASE9.md)), con campaña nueva:
-  - sin clases, aptitudes ni rangos: cuatro habilidades (Tiro, Cuerpo a cuerpo, Medicina, Maña) que suben con lo que cada soldado hace en las misiones, con un tope por misión; talentos de dos en dos en los niveles 2 y 4; la veteranía, de Novato a Superviviente, da vida, voluntad y la tercera acción;
+  - sin clases, aptitudes ni rangos: cuatro habilidades (Tiro, Cuerpo a cuerpo, Medicina, Maña) que suben con lo que cada soldado hace en las misiones, sin tope y con niveles largos; talentos de dos en dos en los niveles 2 y 4; la veteranía, de Novato a Superviviente, da vida, voluntad y la tercera acción;
   - el cinturón de dos huecos (sin granadas en él, no hay granadas); las armas sin niveles, con estado (gastada, rota) que se arregla con piezas, y mejoras (mira, culata, cargador ampliado, silenciador) que se encuentran o se hacen en el Taller;
   - una campaña de antes se guarda aparte (`save.antes-0.3.json`) y el vestíbulo lo dice;
   - la escaramuza: armas al azar, y con «Veteranos», habilidades de 2 a 4.
@@ -150,7 +150,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - abrir puertas es gratis;
   - la campaña empieza con una misión;
   - (14/10) evacuar es de los dos y se gana al irse; la clase no trae arma; registrar es por habitaciones.
-- **Progresión** (0.3.0, [FASE9.md](FASE9.md)): sin clases; se aprende haciendo. Lo guardado en el árbol queda fijo (no hay reentrenar). El Taller de oficios sube el tope de lo que se aprende por misión.
+- **Progresión** (0.3.0, [FASE9.md](FASE9.md)): sin clases; se aprende haciendo. Lo guardado en el árbol queda fijo (no hay reentrenar). El Taller de oficios hace que cada misión enseñe un 20 % más por nivel.
 - **Equilibrio:**
   - la Marea cae por zonas a 4/6/9/10/11 de infestación;
   - empieza con 16 raciones;
@@ -165,7 +165,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **De Arturo y Ana:**
   - probar la 0.3.0 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
-- **Probar en partida** la 0.3.0: si se aprende a buen ritmo y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `SKILL_XP`, `MISSION_XP`, `DEED_XP` y `BASE_AIM`; en `content.ts`: `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
+- **Probar en partida** la 0.3.0: si se aprende a buen ritmo y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `SKILL_XP`, `DEED_XP` y `BASE_AIM`; en `content.ts`: `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
 - **El tráiler:** aparcado por Arturo (15/10). El último borrador, la portada y las 10 capturas de la ficha están en `.dev-snapshots/trailer/` (no se suben); las herramientas siguen en `packages/client/tools/trailer/` ([TRAILER.md](TRAILER.md)) por si se retoma.
 - **Escenarios:** la cárcel y el centro comercial esperan los packs «POLYGON – Police Station» y «POLYGON – Shops», que tienen los atlas de sus piezas. Para después: la cafetería con aspecto propio y el portón grande de las naves (un hueco de 5 casillas).
 - **Para más adelante:**
