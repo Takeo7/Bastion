@@ -5,6 +5,13 @@ import { CAMPAIGN_VERSION, campaignOutdated, migrateCampaign, normalizeMission, 
 /** Bump when the saved state shape changes; older saves are migrated when possible. */
 const SAVE_VERSION = 6;
 
+/**
+ * The release whose progression a campaign must be from (engine campaignOutdated, FRESH_CAMPAIGN_VERSION):
+ * older ones are kept aside under its name, save.antes-<release>.json, and the messages say it. Change it
+ * with FRESH_CAMPAIGN_VERSION; copies kept aside for an earlier release stay as they are.
+ */
+export const FRESH_RELEASE = '0.4';
+
 export interface SavedSeat {
   slot: Slot;
   name: string;
@@ -62,7 +69,7 @@ function migrate(data: { version: number } & Record<string, unknown>): SaveFile 
 }
 
 export class SaveStore {
-  /** Where a campaign from before 0.3 was put aside on loading, if one was (docs/FASE9.md §7). */
+  /** Where a campaign from before FRESH_RELEASE was put aside on loading, if one was (docs/FASE9.md §7, FASE10.md). */
   setAside: string | null = null;
 
   /** `log`: a line for the host's red.log (index.ts). */
@@ -80,13 +87,13 @@ export class SaveStore {
       console.warn(`[save] No se pudo leer ${this.path}:`, err);
       return null;
     }
-    // A campaign from before 0.3 can't take the new progression (docs/FASE9.md §7): the file is kept aside
+    // A campaign from before FRESH_RELEASE can't take the new progression (docs/FASE9.md §7, FASE10.md): the file is kept aside
     // as it is and the room starts in the lobby. Checked before migrating, so every old shape of save goes
     // the same way. Outside the try: if it can't be kept aside the server stops, rather than write over it.
     const campaign = data.campaign as { version?: unknown } | null | undefined;
     if (campaign && typeof campaign.version === 'number' && campaignOutdated({ version: campaign.version })) {
       this.setAside = this.keepAside();
-      const line = `[save] Partida de antes de la 0.3: guardada aparte en ${this.setAside}; se empieza en el vestíbulo.`;
+      const line = `[save] Partida de antes de la ${FRESH_RELEASE}: guardada aparte en ${this.setAside}; se empieza en el vestíbulo.`;
       console.warn(line);
       this.log(line);
       return null;
@@ -101,17 +108,17 @@ export class SaveStore {
     }
   }
 
-  /** Copies the save, as it is, next to it as <name>.antes-0.3.json (-2, -3… never over one already there); returns where. */
+  /** Copies the save, as it is, next to it as <name>.antes-<FRESH_RELEASE>.json (-2, -3… never over one already there); returns where. */
   private keepAside(): string {
     const stem = join(dirname(this.path), basename(this.path, '.json'));
     for (let n = 1; ; n++) {
-      const target = `${stem}.antes-0.3${n > 1 ? `-${n}` : ''}.json`;
+      const target = `${stem}.antes-${FRESH_RELEASE}${n > 1 ? `-${n}` : ''}.json`;
       try {
         copyFileSync(this.path, target, constants.COPYFILE_EXCL);
         return target;
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
-        throw new Error(`No se pudo guardar aparte la partida de antes de la 0.3 (${(err as Error).message}); no se toca ${this.path}.`);
+        throw new Error(`No se pudo guardar aparte la partida de antes de la ${FRESH_RELEASE} (${(err as Error).message}); no se toca ${this.path}.`);
       }
     }
   }

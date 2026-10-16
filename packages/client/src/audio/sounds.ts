@@ -551,6 +551,35 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 500], [0.6, 2800]], 1.5), [[0, 0], [0.08, 0.8], [0.9, 0.001]]));
     s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 1500), [[0, 0], [0.05, 0.9], [0.8, 0.001]]));
   }),
+  // The stone (docs/FASE10.md §4): thrown to make the dead look somewhere else, so where it lands must carry.
+  // As it leaves the hand: a short swish, lighter than a grenade's.
+  'stone.throw': def('sfx', 0.3, (s) => {
+    const air = s.filter(s.noise('white'), 'bandpass', [[0, s.vary(900)], [0.12, s.vary(2600)], [0.26, 1500]], 1.4);
+    s.to(s.amp(air, [[0, 0], [0.06, 0.55], [0.26, 0.001]]));
+  }, { level: -7 }),
+  // On hard ground (street, factory floor): a dry knock, two bounces and a little grit.
+  'stone.land': def('sfx', 0.55, (s) => {
+    for (const [at, l] of [[0, 1], [s.vary(0.12), 0.45], [s.vary(0.21), 0.2]] as const) {
+      const knock = s.osc('sine', [[at, s.vary(260)], [at + 0.05, s.vary(160)]], at, 0.12);
+      s.to(s.amp(knock, hit(at, 0.001, 0.06, l * 0.8)));
+      const click = s.filter(s.noise('white', at, 0.06), 'highpass', 1800, 0.7);
+      s.to(s.amp(click, hit(at, 0.0005, 0.025, l)));
+    }
+    s.to(s.filter(s.grains(0.02, 0.32, 9, 0.006), 'highpass', 2500, 0.7), 0.25);
+  }, { variants: 4, reverb: 0.25 }),
+  // On earth (out of town): a thud and a spray of soil.
+  'stone.thud': def('sfx', 0.4, (s) => {
+    const body = s.osc('sine', [[0, s.vary(130)], [0.08, s.vary(70)]], 0, 0.25);
+    s.to(s.amp(body, hit(0, 0.002, 0.14, 0.9)));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 700), hit(0, 0.002, 0.1, 0.8)));
+    s.to(s.filter(s.grains(0.01, 0.2, 7, 0.01), 'bandpass', 1400, 0.8), 0.2);
+  }, { variants: 4, reverb: 0.2 }),
+  // On whoever it strikes: blunt, with no ring to it.
+  'stone.hit': def('sfx', 0.3, (s) => {
+    const body = s.osc('sine', [[0, s.vary(160)], [0.06, s.vary(95)]], 0, 0.2);
+    s.to(s.amp(body, hit(0, 0.001, 0.16, 1)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 1100), hit(0, 0.001, 0.1, 0.7)));
+  }, { variants: 3, reverb: 0.1 }),
   'grenade.throw': def('sfx', 0.45, (s) => {
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 700], [0.25, 1300]], 1.2), [[0, 0], [0.12, 0.6], [0.35, 0.001]]));
     s.to(s.metal(0, [3800, 5100], 0.06, 0.15));

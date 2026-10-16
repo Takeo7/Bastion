@@ -275,6 +275,11 @@ export type AbilityId =
   | 'elbowRoom'
   /** Apaños: 40 of condition back to one's own weapon or an adjacent ally's. */
   | 'patchUp'
+  // Fase 10 (docs/FASE10.md §4).
+  /** A stone, always at hand: heard where it lands, 1 of damage to whoever it hits. Doesn't end the turn. */
+  | 'stone'
+  /** Overwatch with the blade: strikes the first enemy that comes alongside. */
+  | 'overwatchMelee'
   // Alien powers.
   | 'claw'
   | 'mindspin'
@@ -448,6 +453,11 @@ export type PerkId =
   | 'goodArm'
   | 'quiet'
   | 'patchUp'
+  // Fase 10's (board.ts).
+  /** Muro de acero: melee overwatch strikes every enemy that comes alongside, once each. */
+  | 'bladeWall'
+  /** Segundo aliento: a melee kill heals 1. */
+  | 'secondWind'
   // Centre: open to every soldier
   | 'drill'
   | 'fitness'
@@ -655,6 +665,12 @@ export interface UnitMods {
   gunCrit: number;
   /** Sin hacer ruido (1/0): searching, opening boxes and forcing make no noise. */
   quiet: number;
+  // Fase 10 (board.ts).
+  /** The stone's extra damage, and how many tiles farther it is heard. */
+  stoneDamage: number;
+  stoneNoise: number;
+  /** Mantenimiento (1/0): its weapons wear half. */
+  care: number;
 }
 
 export interface Unit {
@@ -715,6 +731,8 @@ export interface Unit {
   /** Kill Zone: overwatch that keeps firing, once per enemy (ids already shot). */
   killZone: boolean;
   reactedTo: string[];
+  /** Overwatch with the blade (docs/FASE10.md §4): strikes whoever comes alongside instead of shooting. */
+  watchMelee?: boolean;
   /** Unit this one keeps pinned down with Suppression. */
   suppressing: string | null;
   /** −aim while pinned down; moving draws fire. */
@@ -755,6 +773,8 @@ export interface Unit {
   packSlots?: number;
   /** Soldiers: what they did this mission that teaches (Fase 9, skills.ts), counted by the events. */
   deeds?: Deeds;
+  /** A zombie risen from a soldier of the squad (its id): it keeps that soldier's `appearance` (playtest 2026-10-16). */
+  risenFrom?: string;
   /** Bitten and infected (docs/FASE3.md): no effect in combat, but if it falls it rises, and back at base it turns. */
   infected?: boolean;
 }

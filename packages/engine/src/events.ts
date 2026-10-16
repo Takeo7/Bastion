@@ -1,5 +1,5 @@
 import { BAD_LUCK_MISSES } from './aim';
-import { ABILITIES, apPerTurn, attackWeapon, conditionOf, firesPrimary, wearOf, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, reloadWeapon, TEMPLATES, WEAPONS } from './content';
+import { ABILITIES, apPerTurn, attackWeapon, conditionOf, firesPrimary, wearOf, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, reloadWeapon, TEMPLATES, THROWN, WEAPONS } from './content';
 import { decorCode } from './decor';
 import { getUnit, nodeOf, tileIndex } from './grid';
 import { packSlots } from './loot';
@@ -61,8 +61,11 @@ export type GameEvent =
   /** `by`: the unit whose attack or explosive dealt the killing blow. */
   | { t: 'died'; unit: string; by?: string }
   | { t: 'stunned'; unit: string }
-  | { t: 'overwatch'; unit: string; killZone: boolean }
+  /** `melee`: with the blade (docs/FASE10.md §4), it strikes whoever comes alongside. */
+  | { t: 'overwatch'; unit: string; killZone: boolean; melee?: boolean }
   | { t: 'hunker'; unit: string }
+  /** A stone thrown at `target` (docs/FASE10.md §4); `hit`, who was standing there. */
+  | { t: 'stoneThrown'; unit: string; target: Pos; hit: string | null }
   | { t: 'reload'; unit: string }
   | { t: 'explosive'; unit: string; ability: BlastAbility; target: Pos }
   | { t: 'healed'; unit: string; target: string; amount: number }
@@ -199,6 +202,14 @@ function deed(s: GameState, id: string, what: DeedId): void {
   deeds[what] = (deeds[what] ?? 0) + 1;
 }
 
+/** What was thrown last reached an enemy `u`: it teaches once (docs/FASE10.md §3). */
+function throwLanded(s: GameState, u: Unit): void {
+  const blow = s.blow;
+  if (blow?.kind !== 'blast' || blow.landed || getUnit(s, blow.unit)?.team === u.team) return;
+  blow.landed = true;
+  deed(s, blow.unit, 'throwHit');
+}
+
 function clearStatuses(u: Unit): void {
   u.stunned = false;
   u.disoriented = 0;
@@ -267,6 +278,8 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       if (last) u.pos = { ...last };
       u.ap = Math.max(0, u.ap - e.ap);
       endSuppression(s, u);
+      // Running, with both actions, teaches Forma física (docs/FASE10.md §3).
+      if (e.ap >= 2) deed(s, u.id, 'run');
       break;
     }
     case 'abilityUsed': {
@@ -290,23 +303,22 @@ export function applyEvent(s: GameState, e: GameEvent): void {
         const streak = (s.missStreak ??= [0, 0]);
         streak[u.owner] = e.result === 'miss' ? Math.min(BAD_LUCK_MISSES, streak[u.owner] + 1) : 0;
       }
-      // Every shot wears the weapon in the hand (docs/FASE9.md §5).
-      if (firesPrimary(u, e.ability)) u.arms!.condition = Math.max(0, conditionOf(u) - wearOf(attackWeapon(u, e.ability).id));
+      // Every shot wears the weapon in the hand (docs/FASE9.md §5); half with Mantenimiento.
+      if (firesPrimary(u, e.ability)) u.arms!.condition = Math.max(0, conditionOf(u) - wearOf(attackWeapon(u, e.ability).id) / (u.mods.care ? 2 : 1));
       const blade = ABILITIES[e.ability].weapon === 'melee' || attackWeapon(u, e.ability).melee === true;
       s.blow = { unit: u.id, kind: blade ? 'blade' : 'gun' };
-      if (e.result !== 'miss' && getUnit(s, e.target)?.team !== u.team) deed(s, u.id, blade ? 'blow' : 'hit');
+      // Each one at an enemy teaches, and more if it lands (docs/FASE10.md §3).
+      if (getUnit(s, e.target)?.team !== u.team) {
+        deed(s, u.id, blade ? 'swing' : 'shot');
+        if (e.result !== 'miss') deed(s, u.id, blade ? 'blow' : 'hit');
+      }
       break;
     }
     case 'damaged': {
       const u = unit(s, e.unit);
       u.hp = Math.max(0, u.hp - e.amount);
       u.armor = Math.max(0, u.armor - e.shred);
-      // An explosive teaches once, if it reaches an enemy.
-      const blow = s.blow;
-      if (blow?.kind === 'blast' && !blow.landed && getUnit(s, blow.unit)?.team !== u.team) {
-        blow.landed = true;
-        deed(s, blow.unit, 'blast');
-      }
+      throwLanded(s, u);
       break;
     }
     case 'died': {
@@ -343,11 +355,17 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       const u = unit(s, e.unit);
       u.overwatch = true;
       u.killZone = e.killZone;
+      u.watchMelee = !!e.melee;
       u.reactedTo = [];
       break;
     }
     case 'hunker':
       unit(s, e.unit).hunkered = true;
+      deed(s, e.unit, 'hunker');
+      break;
+    case 'stoneThrown':
+      s.blow = { unit: e.unit, kind: 'blast' };
+      deed(s, e.unit, 'throw');
       break;
     case 'reload': {
       const u = unit(s, e.unit);
@@ -357,6 +375,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     }
     case 'explosive':
       s.blow = { unit: e.unit, kind: 'blast' };
+      if (THROWN.has(e.ability)) deed(s, e.unit, 'throw');
       break;
     case 'healed': {
       const target = unit(s, e.target);
@@ -478,6 +497,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     case 'disoriented':
       unit(s, e.unit).disoriented = 1;
+      throwLanded(s, unit(s, e.unit));
       break;
     case 'evacuated': {
       const u = unit(s, e.unit);

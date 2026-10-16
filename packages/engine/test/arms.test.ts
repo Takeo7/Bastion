@@ -16,7 +16,6 @@ import { attackWeapon, clipOf, hasSquadsight, PISTOL_CLIP } from '../src/content
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { CRAFTS, LEVEL_XP, spareMags } from '../src/progression';
 import { Rng } from '../src/rng';
-import { NO_SKILLS, SKILL_XP } from '../src/skills';
 import { executeCommand } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { Arms, GameState, Pod, Slot, Unit } from '../src/types';
@@ -94,8 +93,7 @@ describe('the weapons from zero', () => {
   it('anyone takes any weapon: one in the hand and one at the belt; Mano de machete wants the machete', () => {
     const c = createCampaign([0], new Rng(1));
     const s = c.soldiers[0]!;
-    s.skills = { ...NO_SKILLS, melee: SKILL_XP[3]! };
-    s.picks = ['bladeMaster'];
+    s.board = ['bladeMaster'];
     c.foundWeapons = [
       { id: 'w1', kind: 'pumpShotgun', holder: null },
       { id: 'w2', kind: 'machete', holder: null },

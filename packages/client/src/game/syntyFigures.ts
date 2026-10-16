@@ -395,6 +395,8 @@ interface Spec extends Armament {
   stance?: Stance;
   /** A skin tone instead of Synty's one; unset keeps it. */
   skin?: string;
+  /** Always drawn by its own figure, never by the crowd (whose bodies have no clothes' colours nor hats): a risen soldier. */
+  own?: boolean;
 }
 
 const BOUNDS = new THREE.Sphere(new THREE.Vector3(0, 0.6, 0), 1.2);
@@ -874,7 +876,8 @@ export class SyntyFigure implements FigureRig {
     const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + p.lean - knock - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
     // A two-handed gun blades the upper body: the support shoulder comes forward so that arm bends under
     // the gun instead of reaching across the chest; the gun and the head keep facing ahead (holdWeapon, the neck).
-    this.blade = this.fore && !dead ? -(0.22 + 0.24 * p.aim) * (this.pistol ? 0.45 : 1) * live : 0;
+    // A pistol, hardly: it is held square to the target, both arms out.
+    this.blade = this.fore && !dead ? -(0.22 + 0.24 * p.aim) * (this.pistol ? 0.15 : 1) * live : 0;
     // A melee stroke turns the living's upper body back and then across (the weapon goes with it); the dead grab instead.
     const swing = (p.swing ?? 0) * live;
     const grab = dead ? Math.abs(swing) : 0;
@@ -966,6 +969,9 @@ export class SyntyFigure implements FigureRig {
       this.hang('L', swing * 0.5);
       this.hang('R', -swing * 0.5);
     }
+    // A stone tossed with the free hand, over whatever that arm was doing.
+    const toss = (p.toss ?? 0) * live;
+    if (toss > 0 && !dead) this.tossArm(toss);
     this.write();
     this.poses++;
     if (clip) this.dropWeapon(Math.min(1, p.fall) * clip.seconds);
@@ -991,7 +997,7 @@ export class SyntyFigure implements FigureRig {
 
   /** Into the crowd if calm and its body is baked (starting the bake if not); false to pose the figure as ever. */
   private crowdPose(p: FigurePose, time: number): boolean {
-    const loop = this.spec.dead && !this.baking && this.anim && this.model && CROWD.enabled ? this.calmLoop(p) : -1;
+    const loop = this.spec.dead && !this.spec.own && !this.baking && this.anim && this.model && CROWD.enabled ? this.calmLoop(p) : -1;
     if (loop < 0) {
       this.leaveCrowd();
       return false;
@@ -1100,7 +1106,7 @@ export class SyntyFigure implements FigureRig {
     const shape = new THREE.BufferGeometry();
     shape.setIndex(source.index);
     const atlas = this.atlas ?? atlasOf(skinned);
-    const pose: FigurePose = { crouch: 0, aim: 0, run: 0, recoil: 0, hit: 0, flash: 0, fall: 0, lean: 0, hop: 0, yaw: 0, phase: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0 };
+    const pose: FigurePose = { crouch: 0, aim: 0, run: 0, recoil: 0, hit: 0, flash: 0, fall: 0, lean: 0, hop: 0, yaw: 0, phase: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, toss: 0 };
     const v = new THREE.Vector3();
     const toYaw = new THREE.Matrix4();
     this.setGait('walk', 1);
@@ -1242,7 +1248,7 @@ export class SyntyFigure implements FigureRig {
     const spin = p.spin ?? 0;
     const calm =
       this.far ||
-      (p.run < 0.02 && p.aim < 0.02 && p.hit < 0.01 && p.recoil < 0.01 && !p.lean && !p.hop && !p.fall && !(p.search ?? 0) && (spin <= 0 || spin >= 1) && Math.abs(p.yaw - this.lastYaw) < 1e-3);
+      (p.run < 0.02 && p.aim < 0.02 && p.hit < 0.01 && p.recoil < 0.01 && !p.lean && !p.hop && !p.fall && !(p.search ?? 0) && !(p.toss ?? 0) && (spin <= 0 || spin >= 1) && Math.abs(p.yaw - this.lastYaw) < 1e-3);
     const every = !seen ? UNSEEN_EVERY : calm ? CALM_EVERY : 0;
     return time - this.clock < every * this.stagger;
   }
@@ -1380,9 +1386,10 @@ export class SyntyFigure implements FigureRig {
       v1.set(sh.x * 1.1, lerp(r.hip + 0.02, sh.y + 0.08, aim), lerp(sh.z + 0.08, sh.z + 0.18, aim));
       e1.set(lerp(1.15, -0.9, aim) - lean, 0, 0, 'YXZ');
     } else if (this.pistol) {
-      // Low ready, the muzzle down ahead of the belly; aimed, both arms out and the sights at the eye.
-      v1.set(lerp(sh.x * 0.45, sh.x * 0.15, aim), lerp(sh.y - 0.36, sh.y + 0.02, aim) + reload * 0.1, lerp(sh.z + 0.2, sh.z + 0.32, aim));
-      e1.set((1 - aim) * 0.7 - p.recoil * 0.45 - reload * 0.6, (1 - aim) * 0.2 + reload * 0.2, reload * 0.9, 'YXZ');
+      // Low ready, both hands on it ahead of the belly, the muzzle at the ground in front; aimed (playtest 16/10
+      // #3), square to the target with both arms almost straight, the gun in the middle and its sights at the eye.
+      v1.set(lerp(sh.x * 0.06, 0, aim), lerp(sh.y - 0.22, sh.y + 0.16, aim) + reload * 0.1, lerp(sh.z + 0.3, sh.z + 0.5, aim));
+      e1.set((1 - aim) * 0.75 - p.recoil * 0.45 - reload * 0.6, reload * 0.2, reload * 0.9, 'YXZ');
     } else {
       // Shouldered, the grip comes up level with the shoulder: the stock in its pocket, the sights at the eye.
       v1.set(lerp(sh.x * 0.35, sh.x * 0.5, aim), lerp(sh.y - 0.27, sh.y - 0.02, aim) + reload * 0.08, lerp(sh.z + 0.22, sh.z + 0.19, aim));
@@ -1390,17 +1397,21 @@ export class SyntyFigure implements FigureRig {
     }
     this.gunQ.setFromEuler(e1);
     if (this.melee) this.gunQ.premultiply(d[s3]!);
-    else {
+    else if (!this.pistol) {
       // A gun stays level however the clip bends the spine (a crouch, a hunch): only the chest's heading turns it.
       const ahead = v2.copy(Z).applyQuaternion(d[s3]!);
       this.gunQ.premultiply(q1.setFromAxisAngle(Y, Math.atan2(ahead.x, ahead.z) - this.blade));
     }
-    this.gunP.copy(v1).sub(r.p[s3]!).applyQuaternion(d[s3]!).add(pos[s3]!);
+    // A pistol keeps to the body's own front, not the chest's: the clips turn the chest as for a rifle, and
+    // took the pistol over to the right shoulder, out of the left hand's reach. It follows the chest up and down.
+    if (this.pistol) this.gunP.copy(v1).sub(r.p[s3]!).add(pos[s3]!);
+    else this.gunP.copy(v1).sub(r.p[s3]!).applyQuaternion(d[s3]!).add(pos[s3]!);
     this.gunP.addScaledVector(v2.copy(Z).applyQuaternion(this.gunQ), -p.recoil * 0.05);
     // Right hand on the grip, holding the gun's turn.
     const hand = v3.copy(GRIP).applyQuaternion(this.gunQ).negate().add(this.gunP);
-    // The elbow hangs at low ready and comes out to the side when the stock is shouldered.
-    this.reach('R', hand, v4.set(lerp(-0.7, -1, aim), lerp(-1, -0.45, aim), lerp(-0.35, -0.25, aim)));
+    // The elbow hangs at low ready and comes out to the side when the stock is shouldered; a pistol's stays down.
+    if (this.pistol) this.reach('R', hand, v4.set(-0.55, -1, lerp(-0.3, -0.1, aim)));
+    else this.reach('R', hand, v4.set(lerp(-0.7, -1, aim), lerp(-1, -0.45, aim), lerp(-0.35, -0.25, aim)));
     d[B.Hand_R]!.copy(this.gunQ).multiply(r.gripTurn);
   }
 
@@ -1518,6 +1529,24 @@ export class SyntyFigure implements FigureRig {
   }
 
   /** Overhead throw with the free (left) arm: back and up in the wind-up, forward at the release. */
+  /**
+   * A stone tossed underhand with the left hand, the gun kept in the right
+   * (docs/FASE10.md §4: short and one-handed, unlike the grenade's overhand):
+   * the arm back and low, then swung through to ahead at shoulder height
+   * (the release about 0.6 in); blended in and out of what the arm was doing.
+   */
+  private tossArm(s: number): void {
+    const d = this.d;
+    for (let i = 0; i < ARM_L.length; i++) this.held[i]!.copy(d[ARM_L[i]!]!);
+    const back = Math.min(1, s / 0.35);
+    const through = THREE.MathUtils.clamp((s - 0.35) / 0.35, 0, 1);
+    const upper = tmpU.set(0.12, -1, 0.05).lerp(v3.set(0.18, -0.85, -0.5), back).lerp(v4.set(0.1, -0.15, 0.98), through).normalize();
+    const fore = tmpF.set(0.1, -1, 0.1).lerp(v3.set(0.15, -0.8, -0.55), back).lerp(v4.set(0.05, 0.05, 1), through).normalize();
+    this.setArm('L', upper, fore);
+    const w = Math.min(1, s / 0.12, (1 - s) / 0.2);
+    for (let i = 0; i < ARM_L.length; i++) d[ARM_L[i]!]!.slerp(this.held[i]!, 1 - w);
+  }
+
   private throwArm(lean: number): void {
     const t = THREE.MathUtils.clamp((lean + 0.35) / 0.65, 0, 1);
     this.setArm(
@@ -1823,7 +1852,10 @@ const PIECES: ArmorPart[] = ['helmet', 'torso', 'arms', 'legs'];
  */
 export function syntyFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm', siren?: Siren): FigureRig | null {
   if (template === 'relay') return new SirenRig(siren?.alarm ?? 'factory', siren?.heading ?? 0);
-  const squad = SQUAD.has(template);
+  // One of the dead with a look of its own is a soldier risen (playtest 16/10 #7: Unit.risenFrom): their body,
+  // clothes and helmet as they fell, the skin gone grey, the dead's walk; no band, no weapons.
+  const risen = DEAD_TEMPLATES.has(template) && !!look;
+  const squad = SQUAD.has(template) || risen;
   // Without a look of its own (older saves), the plain one: the class no longer picks it (docs/FASE9.md).
   const head: HeadId = look?.head ?? 'helmet';
   const build = look?.build ?? 'normal';
@@ -1849,13 +1881,17 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
     ...arms,
     hat: squad ? HEAD_GEAR[head] : null,
     dyes,
-    band: squad || template === 'vip' ? accent : null,
+    band: (squad && !risen) || template === 'vip' ? accent : null,
     dead: DEAD_TEMPLATES.has(template),
+    ...(risen ? { skin: RISEN_SKIN, own: true } : {}),
     scream: template === 'sectoid',
     style: gaitsOf(template).style,
     stance: DEAD_TEMPLATES.has(template) ? 'drunk' : LIVING_ENEMIES.has(template) ? 'aggressive' : undefined,
   });
 }
+
+/** A risen soldier's skin: grey with a little green, like the dead's. */
+const RISEN_SKIN = '#98a08a';
 
 /** The model of each of the Armería's weapons (docs/FASE8.md §A), by the soldier's weapon tier (1–3). */
 const FOUND_MODELS: Record<FoundWeaponId, WeaponId | [WeaponId, WeaponId, WeaponId]> = {

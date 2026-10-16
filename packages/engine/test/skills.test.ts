@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest';
+import { BOARD, BOARD_CELLS, boardNeighbors, CORE, PERK_ABILITY, SECTOR_LINES } from '../src/board';
+import { abilitiesOf } from '../src/abilities';
+import { apPerTurn } from '../src/content';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { Rng } from '../src/rng';
-import { executeCommand } from '../src/rules';
+import { executeCommand, Sim } from '../src/rules';
 import {
+  barCost,
+  barsCost,
+  barsOf,
+  cellState,
   fighterStats,
   learn,
   learnedFrom,
+  NO_GROWTH,
   NO_SKILLS,
-  nextLevelXp,
-  pendingPicks,
-  picksBlocker,
+  pointsLeft,
+  randomBoard,
   recruitSkills,
   SKILL_IDS,
-  SKILL_TALENTS,
-  SKILL_XP,
-  skillLevel,
-  skillMods,
-  TALENT_PAIRS,
-  veteranAp,
-  veteranHp,
-  veterancy,
+  unlockBlocker,
+  totalBars,
   veterancyRank,
   VETERANCY,
   veteranSkills,
@@ -28,99 +29,186 @@ import {
 } from '../src/skills';
 import { addUnit, stateFrom } from './helpers';
 
-// Fase 9, «Se aprende haciendo» (docs/FASE9.md).
+// Fase 10, barras de experiencia y tablero hexagonal (docs/FASE10.md).
 
-const at = (levels: Partial<Record<keyof Skills, number>>): Skills => {
+/** Lines with these bars filled, and nothing into the next. */
+const bars = (filled: Partial<Record<keyof Skills, number>>): Skills => {
   const out = { ...NO_SKILLS };
-  for (const [id, level] of Object.entries(levels) as [keyof Skills, number][]) out[id] = level ? SKILL_XP[level - 1]! : 0;
+  for (const [id, n] of Object.entries(filled) as [keyof Skills, number][]) out[id] = barsCost(n);
   return out;
 };
 
-describe('skills rise with use', () => {
-  it('a level asks for 3, 8, 15, 24 and 35 of experience', () => {
-    expect([0, 9, 10, 24, 25, 49, 50, 84, 85, 129, 130, 999].map(skillLevel)).toEqual([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
-    expect(nextLevelXp(30)).toBe(50);
-    expect(nextLevelXp(140)).toBeNull();
+describe('the bars', () => {
+  it('take 10, 15, 20… and start again when full', () => {
+    expect([0, 1, 2, 3].map(barCost)).toEqual([10, 15, 20, 25]);
+    expect([0, 1, 2, 3].map(barsCost)).toEqual([0, 10, 25, 45]);
+    expect(barsOf(0)).toEqual({ filled: 0, into: 0, need: 10 });
+    expect(barsOf(9)).toEqual({ filled: 0, into: 9, need: 10 });
+    expect(barsOf(10)).toEqual({ filled: 1, into: 0, need: 15 });
+    expect(barsOf(32)).toEqual({ filled: 2, into: 7, need: 20 });
   });
 
-  it('deeds turn into experience, all of it (no cap: Arturo, 16/10), and a bonus adds its share rounded up', () => {
-    expect(learnedFrom({ hit: 2, gunKill: 1, healOther: 1, healSelf: 1, search: 2, fix: 1, blast: 1 })).toEqual({ shooting: 3, melee: 0, medicine: 3, craft: 5 });
-    expect(learnedFrom({ hit: 9, gunKill: 4 }).shooting).toBe(13);
-    expect(learnedFrom({ hit: 9, gunKill: 4, search: 1 }, 0.2)).toMatchObject({ shooting: 16, craft: 2, melee: 0 });
+  it('deeds turn into experience, line by line, and a bonus adds its share rounded up', () => {
+    expect(learnedFrom({ shot: 3, hit: 2, gunKill: 1, swing: 1, blow: 1, throw: 2, throwHit: 1, healOther: 1, healSelf: 1, search: 2, fix: 1, hunker: 2, run: 3 })).toEqual({
+      shooting: 6,
+      melee: 2,
+      throwing: 3,
+      medicine: 3,
+      searching: 7,
+      fitness: 5,
+    });
+    expect(learnedFrom({ shot: 9, hit: 4 }, 0.2)).toMatchObject({ shooting: 16, melee: 0 });
     expect(learnedFrom(undefined)).toEqual(NO_SKILLS);
   });
 
-  it('learning says which levels went up', () => {
-    const r = learn({ ...NO_SKILLS, shooting: 22 }, { hit: 2, gunKill: 1, blow: 1 });
-    expect(r.skills).toEqual({ ...NO_SKILLS, shooting: 25, melee: 1 });
-    expect(r.levels).toEqual([{ skill: 'shooting', from: 1, to: 2 }]);
+  it('a bar that fills adds 5 to 10 % to its line and a point; two at once, two of each', () => {
+    const r = learn({ ...NO_SKILLS, shooting: 8 }, NO_GROWTH, { shot: 10, hit: 9, gunKill: 3, hunker: 2 }, new Rng(4));
+    // 8 + 22 = 30: the first bar (10) and the second (25).
+    expect(r.skills).toEqual({ ...NO_SKILLS, shooting: 30, fitness: 2 });
+    expect(r.gained).toEqual({ ...NO_SKILLS, shooting: 22, fitness: 2 });
+    expect(r.bars).toHaveLength(1);
+    expect(r.bars[0]).toMatchObject({ skill: 'shooting', filled: 2 });
+    expect(r.bars[0]!.growth).toHaveLength(2);
+    for (const g of r.bars[0]!.growth) expect(g).toBeGreaterThanOrEqual(5), expect(g).toBeLessThanOrEqual(10);
+    expect(r.growth.shooting).toBe(r.bars[0]!.growth[0]! + r.bars[0]!.growth[1]!);
+    expect(r.growth.fitness).toBe(0);
+    expect(r.points).toBe(2);
   });
 
-  it('what the levels give, grenades and the medkit only to whoever carries them', () => {
-    const top = at({ shooting: 5, melee: 5, medicine: 5, craft: 5 });
-    expect(skillMods(top).mods).toMatchObject({ gunAim: 25, gunCrit: 10, meleeAim: 40, meleeDamage: 2, heal: 2, hack: 50, grenadeDamage: 1 });
-    expect(skillMods(top).charges).toEqual({});
-    expect(skillMods(top, { grenades: true, medkit: true }).charges).toEqual({ grenade: 1, firstAid: 1 });
-    expect(skillMods(at({ shooting: 2, melee: 2 })).mods).toMatchObject({ gunCrit: 0, meleeDamage: 0 });
-  });
-});
-
-describe('talents: one of a pair at levels 2 and 4', () => {
-  it('every skill has two pairs of talents of its own, sixteen in all', () => {
-    const ids = SKILL_IDS.flatMap((id) => TALENT_PAIRS[id].flat());
-    expect(new Set(ids).size).toBe(16);
-    for (const id of ids) expect(SKILL_TALENTS[id], id).toBeDefined();
-  });
-
-  it('a level opens its pair until one is picked', () => {
-    const skills = at({ shooting: 4, medicine: 2 });
-    expect(pendingPicks(skills, []).map((p) => `${p.skill}${p.level}`)).toEqual(['shooting2', 'shooting4', 'medicine2']);
-    expect(pendingPicks(skills, ['rapidFire', 'faceoff', 'fieldMedic'])).toEqual([]);
-  });
-
-  it('what «Guardar» sends: talents of the levels reached, one of each pair', () => {
-    const skills = at({ shooting: 2 });
-    expect(picksBlocker(skills, ['aimedShot'])).toBeNull();
-    expect(picksBlocker(skills, ['aimedShot', 'rapidFire'])).toMatch(/Solo uno de cada pareja/);
-    expect(picksBlocker(skills, ['killZone'])).toBe('Nadie pasa pide Tiro 4.');
-    expect(picksBlocker(skills, ['drill'])).toBe('Ese talento no existe.');
+  it('what the lines add: a share of the base, rounded when it is used', () => {
+    const st = fighterStats(NO_SKILLS, { shooting: 10, melee: 20, throwing: 10, medicine: 13, searching: 10, fitness: 23 }, []);
+    // 60 → 66 and 72; a throw of 10 → 11; the medkit's 4 → 5 (4.52); 55 → 61 (60.5); health 5 → 6 (6.15).
+    expect(st.mods).toMatchObject({ gunAim: 6, meleeAim: 12, grenadeRange: 1, heal: 1, hack: 6 });
+    expect(st.maxHp).toBe(6);
+    expect(fighterStats(NO_SKILLS, NO_GROWTH, []).maxHp).toBe(5);
   });
 });
 
-describe('veterancy', () => {
-  it('is the sum of the four levels, with its names', () => {
-    expect(veterancy(at({ shooting: 3, melee: 2, craft: 1 }))).toBe(6);
-    expect([0, 2, 3, 5, 6, 9, 10, 13, 14, 20].map((v) => VETERANCY[veterancyRank(v)]!.name)).toEqual(['Novato', 'Novato', 'Fogueado', 'Fogueado', 'Curtido', 'Curtido', 'Veterano', 'Veterano', 'Superviviente', 'Superviviente']);
+describe('veterancy (Arturo, 16/10)', () => {
+  it('a rank for every 5 points spent on the board, with its names', () => {
+    expect(totalBars(bars({ shooting: 3, melee: 2, fitness: 1 }))).toBe(6);
+    expect([0, 4, 5, 9, 10, 14, 15, 19, 20, 40].map((v) => VETERANCY[veterancyRank(v)]!.name)).toEqual([
+      'Novato',
+      'Novato',
+      'Fogueado',
+      'Fogueado',
+      'Curtido',
+      'Curtido',
+      'Veterano',
+      'Veterano',
+      'Superviviente',
+      'Superviviente',
+    ]);
   });
 
-  it('gives health every 4 points, will every point and a third action from Veterano', () => {
-    expect([0, 3, 4, 20].map(veteranHp)).toEqual([5, 5, 6, 10]);
-    expect([0, 10].map(veteranWill)).toEqual([40, 70]);
-    expect([9, 10].map(veteranAp)).toEqual([2, 3]);
+  it('each rank gives 10 of will, and a Veterano the third action; bars not spent count for nothing', () => {
+    expect([0, 1, 4].map(veteranWill)).toEqual([40, 50, 80]);
+    const skills = bars({ shooting: 5, melee: 5, fitness: 5, medicine: 5 });
+    expect(fighterStats(skills, NO_GROWTH, []).rank).toBe(0);
+    expect(fighterStats(skills, NO_GROWTH, []).will).toBe(40);
+    const board = randomBoard(skills, new Rng(2));
+    expect(board).toHaveLength(20);
+    expect(fighterStats(skills, NO_GROWTH, board.slice(0, 14))).toMatchObject({ rank: 2, will: 60 });
+    expect(fighterStats(skills, NO_GROWTH, board.slice(0, 15))).toMatchObject({ rank: 3, will: 70 });
+    expect(apPerTurn({ team: 'xcom', rank: 3 })).toBe(3);
   });
 });
 
 describe('newcomers', () => {
-  it('a recruit has level 1 in one or two skills, not always the same', () => {
+  it('a recruit has a bar in one or two lines, not always the same, with its growth', () => {
     const seen = new Set<string>();
     for (let seed = 1; seed <= 30; seed++) {
-      const s = recruitSkills(new Rng(seed));
-      const ones = SKILL_IDS.filter((id) => s[id] === SKILL_XP[0]);
-      expect(ones.length).toBeGreaterThanOrEqual(1);
-      expect(ones.length).toBeLessThanOrEqual(2);
-      expect(veterancy(s)).toBe(ones.length);
-      seen.add(ones.join());
+      const { skills, growth } = recruitSkills(new Rng(seed));
+      const full = SKILL_IDS.filter((id) => barsOf(skills[id]).filled === 1);
+      expect(full.length).toBeGreaterThanOrEqual(1);
+      expect(full.length).toBeLessThanOrEqual(2);
+      expect(totalBars(skills)).toBe(full.length);
+      for (const id of SKILL_IDS) expect(growth[id] > 0).toBe(full.includes(id));
+      seen.add(full.join());
     }
     expect(seen.size).toBeGreaterThan(4);
   });
 
-  it('a skirmish veteran has every skill at 2 to 4 and a talent of every pair it opened', () => {
+  it('a skirmish veteran has two to five bars in every line and every point spent', () => {
     for (let seed = 1; seed <= 10; seed++) {
-      const { skills, picks } = veteranSkills(new Rng(seed));
-      for (const id of SKILL_IDS) expect(skillLevel(skills[id])).toBeGreaterThanOrEqual(2);
-      expect(pendingPicks(skills, picks)).toEqual([]);
-      expect(picksBlocker(skills, picks)).toBeNull();
+      const { skills, board } = veteranSkills(new Rng(seed));
+      for (const id of SKILL_IDS) expect(barsOf(skills[id]).filled).toBeGreaterThanOrEqual(2);
+      expect(board).toHaveLength(totalBars(skills));
+      expect(pointsLeft(skills, board)).toBe(0);
+      // Bought one by one, each beside the ones before.
+      board.forEach((id, i) => expect(unlockBlocker(skills, board.slice(0, i), id), id).toBeNull());
     }
+  });
+});
+
+describe('the hex board (docs/FASE10.md §6)', () => {
+  const hexDistance = (q: number, r: number) => (Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2;
+
+  it('169 cells: the core and seven rings, six sectors of 28', () => {
+    expect(BOARD).toHaveLength(169);
+    expect(new Set(BOARD.map((c) => c.id)).size).toBe(169);
+    expect(new Set(BOARD.map((c) => `${c.q},${c.r}`)).size).toBe(169);
+    expect(new Set(BOARD.map((c) => c.name)).size).toBe(169);
+    for (let k = 1; k <= 7; k++) expect(BOARD.filter((c) => c.ring === k)).toHaveLength(6 * k);
+    for (let i = 0; i < 6; i++) {
+      const sector = BOARD.filter((c) => c.sector === i);
+      expect(sector).toHaveLength(28);
+      for (const c of sector) expect(c.line).toBe(SECTOR_LINES[i]);
+    }
+    for (const c of BOARD) expect(hexDistance(c.q, c.r), c.id).toBe(c.ring);
+  });
+
+  it('the core touches one cell of every sector; every cell has its neighbours on the board', () => {
+    expect(boardNeighbors(CORE).map((id) => BOARD_CELLS[id]!.sector).sort()).toEqual([0, 1, 2, 3, 4, 5]);
+    for (const c of BOARD) expect(boardNeighbors(c.id).length, c.id).toBe(c.ring === 7 ? (boardNeighbors(c.id).length === 3 ? 3 : 4) : 6);
+  });
+
+  it('every active gives its ability, and every skill says what it does', () => {
+    for (const c of BOARD) {
+      expect(c.effect.length, c.id).toBeGreaterThan(5);
+      if (c.kind === 'active') expect(PERK_ABILITY[c.perk!], c.id).toBe(c.ability);
+    }
+  });
+
+  it('a skill is bought beside one already had, with a point, and nothing else', () => {
+    const first = BOARD.find((c) => c.ring === 1 && c.line === 'shooting')!;
+    const second = BOARD.find((c) => c.ring === 2 && c.line === 'shooting' && boardNeighbors(c.id).includes(first.id))!;
+    const far = BOARD.find((c) => c.ring === 3 && c.line === 'shooting')!;
+    const one = bars({ melee: 1 });
+    expect(cellState([], first.id)).toBe('open');
+    expect(cellState([], far.id)).toBe('locked');
+    expect(cellState([], CORE)).toBe('unlocked');
+    expect(unlockBlocker(one, [], first.id)).toBeNull();
+    expect(unlockBlocker(one, [], far.id)).toMatch(/al lado/);
+    // A point from any line opens any cell beside: no bars of its own line asked (Arturo, 16/10).
+    expect(unlockBlocker(bars({ melee: 2 }), [first.id], second.id)).toBeNull();
+    expect(unlockBlocker(one, [first.id], second.id)).toMatch(/No le quedan puntos/);
+    expect(unlockBlocker(one, [first.id], first.id)).toBe('Ya la tiene.');
+    expect(unlockBlocker(one, [], CORE)).toBe('Ya la tiene.');
+    expect(unlockBlocker(one, [], 'nothing')).toBe('Esa casilla no existe.');
+    expect(pointsLeft(bars({ shooting: 2, fitness: 1 }), [first.id])).toBe(2);
+  });
+
+  it('what the cells give: numbers, health, armour, rules, abilities, and spare uses only of what is carried', () => {
+    const st = fighterStats(NO_SKILLS, NO_GROWTH, ['steadyHand', 'stamina', 'vest', 'implacable', 'aimedShot', 'bandolier', 'bigKit', 'restoration']);
+    expect(st.mods.gunAim).toBe(3);
+    expect(st.maxHp).toBe(6);
+    expect(st.armor).toBe(1);
+    expect(st.perks).toEqual(['implacable', 'aimedShot', 'restoration']);
+    expect(st.charges).toEqual({ restoration: 1 });
+    const carrying = fighterStats(NO_SKILLS, NO_GROWTH, ['bandolier', 'goodArm', 'demolition'], ['fragGrenade', 'fragGrenade']);
+    // Two accessories of two grenades, one more each with Buen brazo, and one more with Bandolera.
+    expect(carrying.charges.grenade).toBe(4 + 2 + 1);
+    expect(carrying.mods).toMatchObject({ grenadeRange: 3, grenadeRadius: 1, grenadeDamage: 1 });
+    expect(fighterStats(NO_SKILLS, NO_GROWTH, ['bladeMaster'], [], { primary: null, melee: null }).mods.meleeDamage).toBe(0);
+    expect(fighterStats(NO_SKILLS, NO_GROWTH, ['bladeMaster'], [], { primary: null, melee: 'machete' }).mods).toMatchObject({ meleeDamage: 2, meleeAim: 15 });
+  });
+
+  it('a random board spends every point, each cell beside the ones before', () => {
+    const skills = bars({ shooting: 3, fitness: 2 });
+    const board = randomBoard(skills, new Rng(7));
+    expect(board).toHaveLength(5);
+    board.forEach((id, i) => expect(unlockBlocker(skills, board.slice(0, i), id), id).toBeNull());
   });
 });
 
@@ -135,7 +223,7 @@ describe('what a soldier does in a mission is counted by the events', () => {
   }
   const shot = (unit: string, target: string, ability: 'shoot' | 'slash', result: 'miss' | 'hit' | 'graze' | 'crit'): GameEvent => ({ t: 'shot', unit, target, ability, from: { x: 1, y: 1, z: 0 }, result, chance: 50, roll: 10, reaction: false });
 
-  it('hits and kills, by the weapon that dealt them', () => {
+  it('every shot and swing, more if it lands, more if it kills', () => {
     const { s, a } = field();
     for (const e of [
       shot('s1', 'z1', 'shoot', 'hit'),
@@ -143,24 +231,29 @@ describe('what a soldier does in a mission is counted by the events', () => {
       shot('s1', 'z1', 'shoot', 'graze'),
       { t: 'damaged', unit: 'z1', amount: 9, mitigated: 0, shred: 0 },
       { t: 'died', unit: 'z1', by: 's1' },
+      shot('s1', 'z2', 'slash', 'miss'),
       shot('s1', 'z2', 'slash', 'crit'),
       { t: 'died', unit: 'z2', by: 's1' },
+      shot('s1', 's2', 'shoot', 'hit'),
     ] as GameEvent[]) applyEvent(s, e);
-    expect(a.deeds).toEqual({ hit: 2, gunKill: 1, blow: 1, bladeKill: 1 });
+    expect(a.deeds).toEqual({ shot: 3, hit: 2, gunKill: 1, swing: 2, blow: 1, bladeKill: 1 });
   });
 
-  it('an explosive teaches once, if it reaches an enemy; a kill with it is no gun kill', () => {
+  it('a throw teaches, and once more if it reaches an enemy; a kill with it is no gun kill', () => {
     const { s, a } = field();
     for (const e of [
       { t: 'explosive', unit: 's1', ability: 'grenade', target: { x: 6, y: 1, z: 0 } },
       { t: 'damaged', unit: 'z1', amount: 3, mitigated: 0, shred: 0 },
       { t: 'damaged', unit: 'z2', amount: 3, mitigated: 0, shred: 0 },
       { t: 'died', unit: 'z2', by: 's1' },
+      { t: 'explosive', unit: 's1', ability: 'flashbang', target: { x: 6, y: 1, z: 0 } },
+      { t: 'disoriented', unit: 'z1' },
+      { t: 'explosive', unit: 's1', ability: 'smoke', target: { x: 1, y: 1, z: 0 } },
     ] as GameEvent[]) applyEvent(s, e);
-    expect(a.deeds).toEqual({ blast: 1 });
+    expect(a.deeds).toEqual({ throw: 3, throwHit: 2 });
   });
 
-  it('cures, searches, a fixed radio and a silenced alarm', () => {
+  it('cures, searches, a fixed radio, a silenced alarm, hunkering and running', () => {
     const { s, a, b } = field();
     const relay = addUnit(s, 'r1', 'relay', 9, 9, { objective: true });
     s.mission = { ...s.mission, kind: 'sabotage', objectiveUnit: relay.id };
@@ -173,9 +266,12 @@ describe('what a soldier does in a mission is counted by the events', () => {
       { t: 'hacked', unit: 's2', success: true, chance: 60, remote: false },
       shot('s1', 'r1', 'shoot', 'hit'),
       { t: 'died', unit: 'r1', by: 's1' },
+      { t: 'hunker', unit: 's2' },
+      { t: 'moved', unit: 's2', path: [{ x: 3, y: 1, z: 0 }], ap: 1 },
+      { t: 'moved', unit: 's2', path: [{ x: 9, y: 1, z: 0 }], ap: 2 },
     ] as GameEvent[]) applyEvent(s, e);
-    expect(a.deeds).toEqual({ healOther: 2, healSelf: 1, hit: 1, fix: 1 });
-    expect(b.deeds).toEqual({ search: 2, fix: 1 });
+    expect(a.deeds).toEqual({ healOther: 2, healSelf: 1, shot: 1, hit: 1, fix: 1 });
+    expect(b.deeds).toEqual({ search: 2, fix: 1, hunker: 1, run: 1 });
   });
 
   it('only the squad learns, and a client counts the same as the host', () => {
@@ -185,17 +281,109 @@ describe('what a soldier does in a mission is counted by the events', () => {
     if (!r.ok) throw new Error(r.error);
     for (const e of r.events) applyEvent(client, e);
     expect(client).toEqual(s);
-    expect(s.units.find((u) => u.id === 's1')!.deeds).toEqual({ blast: 1 });
+    expect(s.units.find((u) => u.id === 's1')!.deeds).toEqual({ throw: 1, throwHit: 1 });
     expect(z.deeds).toBeUndefined();
   });
 });
 
-describe('the talents in the fight (docs/FASE9.md §2)', () => {
+describe('the new actions (docs/FASE10.md §4)', () => {
   const ctx = (seed = 1) => ({ slot: 0 as const, connected: [0 as const], rng: new Rng(seed) });
-  function field() {
-    const s = stateFrom(Array.from({ length: 12 }, () => '.'.repeat(12)));
-    return s;
-  }
+  const field = () => stateFrom(Array.from({ length: 16 }, () => '.'.repeat(16)));
+  const armed = { arms: { primary: 'assaultRifle' as const, melee: null } };
+
+  it('a stone is always at hand, and the blade can keep watch', () => {
+    const s = field();
+    const u = addUnit(s, 's1', 'rookie', 5, 5, { owner: 0, ...armed });
+    expect(abilitiesOf(u)).toEqual(expect.arrayContaining(['stone', 'overwatchMelee']));
+    const list = abilitiesOf(u);
+    expect(list.indexOf('overwatchMelee')).toBe(list.indexOf('overwatch') + 1);
+    expect(abilitiesOf(addUnit(s, 'z1', 'zombie', 1, 1))).not.toContain('stone');
+  });
+
+  it('the stone: heard where it lands, 1 of damage to whoever is there, and the turn goes on', () => {
+    const s = field();
+    const u = addUnit(s, 's1', 'rookie', 2, 2, { owner: 0, ...armed });
+    const z = addUnit(s, 'z1', 'zombie', 8, 2, { hp: 5, maxHp: 5 });
+    const far = addUnit(s, 'z2', 'zombie', 14, 14);
+    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'stone', tile: { x: 8, y: 2 } }, ctx());
+    if (!r.ok) throw new Error(r.error);
+    expect(r.events.find((e) => e.t === 'stoneThrown')).toMatchObject({ unit: 's1', hit: 'z1' });
+    expect(z.hp).toBe(4);
+    expect(u.ap).toBe(1);
+    const noise = r.events.find((e) => e.t === 'noise') as { tile: { x: number; y: number }; radius: number } | undefined;
+    expect(noise).toMatchObject({ tile: { x: 8, y: 2 }, radius: 8 });
+    expect(far.alive).toBe(true);
+    expect(u.deeds).toEqual({ throw: 1, throwHit: 1 });
+  });
+
+  it('a stone on the floor only sounds; Señuelo makes it heard further, Canto afilado hurts more', () => {
+    const s = field();
+    const st = fighterStats(NO_SKILLS, NO_GROWTH, ['decoy', 'sharpStone']);
+    const u = addUnit(s, 's1', 'rookie', 2, 2, { owner: 0, ...armed, mods: st.mods });
+    addUnit(s, 'z1', 'zombie', 14, 14);
+    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'stone', tile: { x: 6, y: 6 } }, ctx());
+    if (!r.ok) throw new Error(r.error);
+    expect(r.events.find((e) => e.t === 'stoneThrown')).toMatchObject({ hit: null });
+    expect(r.events.find((e) => e.t === 'noise')).toMatchObject({ radius: 12 });
+    expect(u.deeds).toEqual({ throw: 1 });
+    const t = field();
+    addUnit(t, 's1', 'rookie', 2, 2, { owner: 0, ...armed, mods: st.mods });
+    const z = addUnit(t, 'z1', 'zombie', 4, 2, { hp: 5, maxHp: 5 });
+    expect(executeCommand(t, { type: 'ability', unit: 's1', ability: 'stone', tile: { x: 4, y: 2 } }, ctx()).ok).toBe(true);
+    expect(z.hp).toBe(3);
+  });
+
+  const walk = (x: number, from: number, to: number) => Array.from({ length: from - to }, (_, i) => ({ x, y: from - 1 - i, z: 0 }));
+
+  it('melee overwatch strikes the first enemy that comes alongside, not the one walking past in sight, and stops', () => {
+    const s = field();
+    const u = addUnit(s, 's1', 'rookie', 5, 5, { owner: 0, ...armed, ap: 2 });
+    // Someone with actions left, so the turn doesn't pass.
+    addUnit(s, 's2', 'rookie', 1, 1, { owner: 0, ...armed });
+    addUnit(s, 'z9', 'zombie', 15, 15);
+    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'overwatchMelee' }, ctx());
+    if (!r.ok) throw new Error(r.error);
+    expect(u).toMatchObject({ overwatch: true, watchMelee: true, ap: 0 });
+    const passer = addUnit(s, 'z0', 'zombie', 9, 12, { hp: 50, maxHp: 50 });
+    const z = addUnit(s, 'z1', 'zombie', 5, 9, { hp: 50, maxHp: 50 });
+    const z2 = addUnit(s, 'z2', 'zombie', 4, 9, { hp: 50, maxHp: 50 });
+    const sim = new Sim(s, new Rng(1), [0]);
+    sim.moveAlong(passer, walk(9, 12, 8), 1);
+    expect(sim.events.some((e) => e.t === 'shot')).toBe(false);
+    sim.moveAlong(z, walk(5, 9, 6), 1);
+    const strikes = sim.events.filter((e) => e.t === 'shot');
+    expect(strikes).toHaveLength(1);
+    expect(strikes[0]).toMatchObject({ unit: 's1', target: 'z1', ability: 'slash', reaction: true });
+    expect(u.overwatch).toBe(false);
+    sim.moveAlong(z2, walk(4, 9, 6), 1);
+    expect(sim.events.filter((e) => e.t === 'shot')).toHaveLength(1);
+    expect(u.deeds?.swing).toBe(1);
+  });
+
+  it('Muro de acero: every enemy that comes alongside, once each', () => {
+    const s = field();
+    const u = addUnit(s, 's1', 'rookie', 5, 5, { owner: 0, ...armed, ap: 2, perks: ['bladeWall'] });
+    addUnit(s, 's2', 'rookie', 1, 1, { owner: 0, ...armed });
+    addUnit(s, 'z9', 'zombie', 15, 15);
+    expect(executeCommand(s, { type: 'ability', unit: 's1', ability: 'overwatchMelee' }, ctx()).ok).toBe(true);
+    const z = addUnit(s, 'z1', 'zombie', 5, 9, { hp: 50, maxHp: 50 });
+    const z2 = addUnit(s, 'z2', 'zombie', 4, 9, { hp: 50, maxHp: 50 });
+    const sim = new Sim(s, new Rng(1), [0]);
+    sim.moveAlong(z, walk(5, 9, 6), 1);
+    sim.moveAlong(z2, walk(4, 9, 6), 1);
+    expect(sim.events.filter((e) => e.t === 'shot').map((e) => (e as { target: string }).target)).toEqual(['z1', 'z2']);
+    expect(u.overwatch).toBe(true);
+  });
+
+  it('Segundo aliento: a blade kill heals 1', () => {
+    const s = field();
+    const u = addUnit(s, 's1', 'rookie', 5, 5, { owner: 0, ...armed, perks: ['secondWind'], hp: 2, maxHp: 6, mods: { ...fighterStats(NO_SKILLS, NO_GROWTH, []).mods, meleeAim: 200 } });
+    addUnit(s, 'z1', 'zombie', 6, 5, { hp: 1, maxHp: 1 });
+    addUnit(s, 'z9', 'zombie', 15, 15);
+    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'slash', target: 'z1' }, ctx());
+    if (!r.ok) throw new Error(r.error);
+    expect(u.hp).toBe(3);
+  });
 
   it('Hacerse sitio: a Slash at every enemy alongside, none at the one further off', () => {
     const s = field();
@@ -207,10 +395,6 @@ describe('the talents in the fight (docs/FASE9.md §2)', () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.events.filter((e) => e.t === 'shot').map((e) => (e as { target: string }).target).sort()).toEqual(['z1', 'z2']);
     expect(u.cooldowns.elbowRoom).toBeGreaterThan(0);
-    const alone = field();
-    addUnit(alone, 's1', 'rookie', 5, 5, { owner: 0, perks: ['elbowRoom'] });
-    addUnit(alone, 'z3', 'zombie', 9, 9);
-    expect(executeCommand(alone, { type: 'ability', unit: 's1', ability: 'elbowRoom' }, ctx())).toEqual({ ok: false, error: 'No tienes ningún enemigo al lado.' });
   });
 
   it('Espabilar needs no medkit, only a partner alongside', () => {
@@ -220,31 +404,31 @@ describe('the talents in the fight (docs/FASE9.md §2)', () => {
     const far = addUnit(s, 's3', 'rookie', 9, 5, { owner: 0, panicked: true });
     addUnit(s, 'z1', 'zombie', 11, 11);
     expect(executeCommand(s, { type: 'ability', unit: 's1', ability: 'revival', target: 's3' }, ctx()).ok).toBe(false);
-    const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'revival', target: 's2' }, ctx());
-    expect(r.ok).toBe(true);
+    expect(executeCommand(s, { type: 'ability', unit: 's1', ability: 'revival', target: 's2' }, ctx()).ok).toBe(true);
     expect(dazed).toMatchObject({ stunned: false, disoriented: 0 });
     expect(far.panicked).toBe(true);
   });
 
-  it('Sin hacer ruido: searching makes no noise; Buen brazo and Demolición reach further', () => {
-    const quiet = { ...stateFrom(['....']).units[0], mods: { ...fighterStats(NO_SKILLS, ['quiet']).mods } };
-    expect(quiet.mods.quiet).toBe(1);
-    const thrower = fighterStats(at({ craft: 4 }), ['goodArm', 'demolition'], ['fragGrenade', 'fragGrenade']);
-    // Two accessories of two grenades, one more each with Buen brazo, and one more with Maña 2.
-    expect(thrower.charges.grenade).toBe(4 + 2 + 1);
-    expect(thrower.mods).toMatchObject({ grenadeRange: 3, grenadeRadius: 1, grenadeDamage: 2 });
-  });
-
-  it('Mano de machete counts only with the machete, and the medkit heals more with Medicina', () => {
-    expect(fighterStats(NO_SKILLS, ['bladeMaster'], [], { primary: null, melee: null }).mods.meleeDamage).toBe(0);
-    expect(fighterStats(NO_SKILLS, ['bladeMaster'], [], { primary: null, melee: 'machete' }).mods).toMatchObject({ meleeDamage: 2, meleeAim: 15 });
+  it('first aid heals more with what Curar has grown and with Vendaje', () => {
     const s = field();
-    addUnit(s, 's1', 'rookie', 5, 5, { owner: 0, gear: ['firstAid'], charges: { firstAid: 2 }, mods: { ...fighterStats(at({ medicine: 4 }), ['fieldMedic']).mods } });
+    const st = fighterStats(NO_SKILLS, { ...NO_GROWTH, medicine: 26 }, ['bandage', 'firstAid', 'bigKit'], ['firstAid']);
+    // Two uses of the Botiquín, and one more with Botiquín grande.
+    expect(st.charges.firstAid).toBe(3);
+    addUnit(s, 's1', 'rookie', 5, 5, { owner: 0, gear: ['firstAid'], charges: st.charges, mods: st.mods });
     const hurt = addUnit(s, 's2', 'rookie', 6, 5, { owner: 0, hp: 1, maxHp: 12 });
-    addUnit(s, 'z1', 'zombie', 11, 11);
+    addUnit(s, 'z1', 'zombie', 15, 15);
     const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'firstAid', target: 's2' }, ctx());
     if (!r.ok) throw new Error(r.error);
-    // 4, +2 for Medicina 4 and +1 for Buen pulso.
-    expect(hurt.hp).toBe(1 + 4 + 2 + 1);
+    // 4 grown 26 % is 5 (5.04), and +1 for Vendaje; and Primeros auxilios shelters whoever it heals.
+    expect(hurt.hp).toBe(1 + 5 + 1);
+    expect(hurt.aided).toBe(10);
+  });
+
+  it('Mantenimiento: the weapon wears half', () => {
+    const s = field();
+    const plain = addUnit(s, 's1', 'rookie', 2, 2, { owner: 0, arms: { primary: 'assaultRifle', melee: null, condition: 100 } });
+    const careful = addUnit(s, 's2', 'rookie', 2, 4, { owner: 0, arms: { primary: 'assaultRifle', melee: null, condition: 100 }, mods: { ...plain.mods, care: 1 } });
+    for (const u of [plain, careful]) applyEvent(s, { t: 'shot', unit: u.id, target: 'zz', ability: 'shoot', from: u.pos, result: 'miss', chance: 50, roll: 90, reaction: false });
+    expect(100 - careful.arms!.condition!).toBe((100 - plain.arms!.condition!) / 2);
   });
 });

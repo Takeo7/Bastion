@@ -39,9 +39,10 @@ import {
   weaponTier,
 } from './progression';
 import { broughtBack, type CarriedWeapon, type LootTotals } from './loot';
-import { fighterStats, learn, NO_SKILLS, pendingPicks, picksBlocker, recruitSkills, SKILL_IDS, SKILL_MAX, SKILL_TALENTS, SKILL_XP, skillLevel, veterancy, veterancyRank, VETERANCY, type Deeds, type SkillId, type Skills } from './skills';
+import { fighterStats, learn, NO_GROWTH, NO_SKILLS, oneMoreBar, recruitSkills, totalBars, unlockBlocker, veterancyRank, VETERANCY, type BarFilled, type Deeds, type Growth, type Skills } from './skills';
+import { BOARD_CELLS, type CellId } from './board';
 import {
-  levelUpLine,
+  barLine,
   wornLine,
   briefingSignature,
   doomChangeText,
@@ -202,7 +203,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   echoes: {
     id: 'echoes',
     name: 'Taller de oficios',
-    description: 'Lo que se aprende fuera, aquí se repasa: cada misión enseña un 20 % más en cada habilidad.',
+    description: 'Lo que se aprende fuera, aquí se repasa: cada misión llena las barras un 20 % más.',
     upgrades: ['Un 40 % más. Más herramientas, y Nwosu repasa las curas.', 'Un 60 % más. Gente de otros enclaves enseña lo suyo.'],
     cost: 130,
     days: 6,
@@ -845,10 +846,12 @@ export interface CampaignSoldier {
   owner: Slot;
   kills: number;
   missions: number;
-  /** Fase 9 (skills.ts): experience in each skill, which rises with what it does in the missions. */
+  /** Fase 10 (skills.ts): experience in each line, from what it does in the missions; the bars follow from it. */
   skills: Skills;
-  /** The talents picked, one of each pair its levels have opened (skills.ts TALENT_PAIRS). */
-  picks: PerkId[];
+  /** What each line's filled bars added to its stat, in percent. */
+  growth: Growth;
+  /** The cells unlocked on the hex board (board.ts), in the order they were bought; the core isn't listed. */
+  board: CellId[];
   woundedDays: number;
   alive: boolean;
   /** Campaign day of the mission the soldier fell in (the Camposanto lists it). */
@@ -933,10 +936,10 @@ export interface ReportSoldier {
   status: 'ok' | 'wounded' | 'dead' | 'lost';
   woundedDays: number;
   kills: number;
-  /** Fase 9 (skills.ts): what the mission taught, skill by skill, what it did, and the levels that went up. */
+  /** Fase 10 (skills.ts): what the mission taught, line by line, what it did, and the bars that filled (a point each). */
   learned?: Skills;
   deeds?: Deeds;
-  levels?: { skill: SkillId; from: number; to: number }[];
+  bars?: BarFilled[];
 }
 
 export interface MissionReport {
@@ -1016,10 +1019,10 @@ export interface Rumor {
 }
 
 /**
- * Campaigns from before Fase 9 (docs/FASE9.md §7) aren't carried over: the
+ * Campaigns from before Fase 10 (docs/FASE10.md) aren't carried over: the
  * progression is another. The host puts such a save aside and starts anew.
  */
-export const FRESH_CAMPAIGN_VERSION = 17;
+export const FRESH_CAMPAIGN_VERSION = 19;
 
 /** A saved campaign the current progression can't take (campaignOutdated): the host keeps it aside. */
 export function campaignOutdated(c: { version: number }): boolean {
@@ -1027,7 +1030,7 @@ export function campaignOutdated(c: { version: number }): boolean {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 18;
+export const CAMPAIGN_VERSION = 19;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1171,9 +1174,8 @@ function soldierName(c: CampaignState, rng: Rng): { name: string; sex: 'f' | 'm'
 }
 
 /**
- * A new soldier (docs/FASE9.md §3): no class, level 1 in one or two skills at
- * random, so no two are alike. The old tree's fields stay neutral until the
- * client leaves them.
+ * A new soldier (docs/FASE10.md): no class, a bar filled in one or two lines
+ * at random, so no two are alike, and its points still to spend.
  */
 function addSoldier(c: CampaignState, owner: Slot, rng: Rng): CampaignSoldier {
   const { name, sex } = soldierName(c, rng);
@@ -1183,8 +1185,8 @@ function addSoldier(c: CampaignState, owner: Slot, rng: Rng): CampaignSoldier {
     owner,
     kills: 0,
     missions: 0,
-    skills: recruitSkills(rng),
-    picks: [],
+    ...recruitSkills(rng),
+    board: [],
     woundedDays: 0,
     alive: true,
     loadout: { utility: null, ammo: null },
@@ -1956,19 +1958,14 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
   if (c.doom >= DOOM_MAX) c.outcome = 'defeat';
 }
 
-/** A newcomer who has been out there before (docs/FASE9.md): `steps` levels more, a skill at random each. */
+/** A newcomer who has been out there before: `steps` bars more, in a line at random each. */
 function seasoned(s: CampaignSoldier, steps: number, rng: Rng): void {
-  for (let k = 0; k < steps; k++) {
-    const open = SKILL_IDS.filter((id) => skillLevel(s.skills[id]) < SKILL_MAX);
-    if (!open.length) return;
-    const id = rng.pick(open);
-    s.skills[id] = SKILL_XP[skillLevel(s.skills[id])]!;
-  }
+  for (let k = 0; k < steps; k++) Object.assign(s, oneMoreBar(s.skills, s.growth, rng));
 }
 
 /** A soldier's veterancy, by name (Novato, Fogueado…). */
-export function veterancyName(s: Pick<CampaignSoldier, 'skills'> & { appearance?: Pick<Appearance, 'sex'> }): string {
-  const def = VETERANCY[veterancyRank(veterancy(s.skills))]!;
+export function veterancyName(s: Pick<CampaignSoldier, 'board'> & { appearance?: Pick<Appearance, 'sex'> }): string {
+  const def = VETERANCY[veterancyRank(s.board.length)]!;
   return s.appearance?.sex === 'f' ? def.female : def.name;
 }
 
@@ -1984,14 +1981,11 @@ export function learningBonus(c: CampaignState): number {
 const LEARNING_BONUS = 0.2;
 
 /**
- * Whether a soldier's free points can go anywhere now (playtest 2026-10-13):
- * an aptitude below its cap, or a talent open to it (row gates, kit and the
- * Oficio's Taller allowing). Points left with nowhere to go don't ask for a
- * promotion to be spent.
+ * Whether a soldier has a point it can spend now on the board (docs/FASE10.md
+ * §6): a cell beside its own whose line's bars allow it.
  */
 export function canSpendPoints(_c: CampaignState, s: CampaignSoldier): boolean {
-  // Fase 9: no points any more; what waits is a talent to pick (skills.ts pendingPicks).
-  return pendingPicks(s.skills, s.picks).length > 0;
+  return Object.keys(BOARD_CELLS).some((id) => unlockBlocker(s.skills, s.board, id) === null);
 }
 
 /** Side quests with their own trigger; at most one starts at a time. */
@@ -2187,8 +2181,8 @@ export type CampaignCommand =
   /** `squad`: straight into the squad of the chosen mission (a free place in the hangar). */
   /** Recruits come without a class: they specialise with their first talent points. */
   | { type: 'recruit'; squad?: boolean }
-  /** Fase 9: «Guardar» in the tree, the whole list of talents picked (skills.ts picksBlocker). */
-  | { type: 'picks'; soldier: string; picks: PerkId[] }
+  /** Fase 10: a skill of the hex board bought with a point (skills.ts unlockBlocker). */
+  | { type: 'unlock'; soldier: string; cell: CellId }
   /** Fase 9 (docs/FASE9.md §5): mend a weapon with parts, as far as they go; mount or take off an improvement. */
   | { type: 'repair'; weapon: string }
   | { type: 'mod'; weapon: string; mod: WeaponModId; on: boolean }
@@ -2257,7 +2251,7 @@ export function squadPlace(c: CampaignState, slot: Slot, connected: readonly Slo
 }
 
 /** The more veterancy (and then missions) first. */
-const seasonedFirst = (a: CampaignSoldier, b: CampaignSoldier) => veterancy(b.skills) - veterancy(a.skills) || b.missions - a.missions;
+const seasonedFirst = (a: CampaignSoldier, b: CampaignSoldier) => b.board.length - a.board.length || totalBars(b.skills) - totalBars(a.skills) || b.missions - a.missions;
 
 function joinSquad(c: CampaignState, soldier: CampaignSoldier, place: { evict?: string }): void {
   if (place.evict) {
@@ -2399,7 +2393,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
 
   const promotions = mine.filter((s) => s.alive && canSpendPoints(c, s));
   if (promotions.length) {
-    steps.push({ view: 'barracks', label: promotions.length === 1 ? `Talento por elegir: ${promotions[0]!.name}` : 'Talentos por elegir', count: promotions.length, tone: 'info', go: { soldier: promotions[0]!.id } });
+    steps.push({ view: 'barracks', label: promotions.length === 1 ? `Puntos por gastar: ${promotions[0]!.name}` : 'Puntos por gastar', count: promotions.length, tone: 'info', go: { soldier: promotions[0]!.id } });
   }
 
   if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) steps.push({ view: 'geoscape', label: 'Tu compañero quiere esperar noticias', tone: 'urgent' });
@@ -2624,6 +2618,31 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       log(c, `El Taller se pone con ${def.the}: ${days} días.`);
       break;
     }
+  }
+}
+
+/**
+ * The suministros a shared decision costs, paid only when the partner accepts
+ * (applyAction): what the counter shows as committed meanwhile (playtest 2026-10-16).
+ */
+export function proposalCost(c: CampaignState, action: ProposalAction): number {
+  switch (action.type) {
+    case 'clear': {
+      const plot = plotById(c, action.plot);
+      return plot ? clearCost(plot).cost : 0;
+    }
+    case 'build':
+      return FACILITIES[action.facility].cost;
+    case 'upgrade': {
+      const plot = plotById(c, action.plot);
+      return plot?.building ? upgradeCost(plot.building as FacilityId, (plot.level ?? 1) + 1).cost : 0;
+    }
+    case 'contact':
+      return contactCost(c);
+    case 'craft':
+      return CRAFTS[action.project].cost;
+    default:
+      return 0;
   }
 }
 
@@ -2894,15 +2913,13 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       return { ok: true };
     }
 
-    case 'picks': {
+    case 'unlock': {
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
-      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes elegir los talentos de tus soldados.' };
-      const blocked = picksBlocker(s.skills, cmd.picks);
+      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes elegir las habilidades de tus soldados.' };
+      const blocked = unlockBlocker(s.skills, s.board, cmd.cell);
       if (blocked) return { ok: false, error: blocked };
-      // What was saved is for good (docs/FASE9.md §2: only provisional until «Guardar»).
-      if (s.picks.some((id) => !cmd.picks.includes(id))) return { ok: false, error: 'Un talento guardado ya no se cambia.' };
-      for (const id of cmd.picks.filter((p) => !s.picks.includes(p))) log(c, `${s.name} aprende ${SKILL_TALENTS[id]!.name}.`, 'good');
-      s.picks = [...cmd.picks];
+      s.board.push(cmd.cell);
+      log(c, `${s.name} aprende ${BOARD_CELLS[cmd.cell]!.name}.`, 'good');
       return { ok: true };
     }
 
@@ -3158,7 +3175,7 @@ const WOUND_DAYS = 2;
 export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
   const gear = [s.loadout.utility, s.loadout.ammo].filter((g): g is ItemId => !!g);
   const arms = soldierArms(c, s);
-  const base = fighterStats(s.skills, s.picks, gear, arms);
+  const base = fighterStats(s.skills, s.growth, s.board, gear, arms);
   let mods = base.mods;
   let maxHp = base.maxHp;
   let armor = base.armor;
@@ -3170,7 +3187,8 @@ export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
   if (hasTech(c, 'plasmaGrenades')) mods = addMods(mods, { grenadeDamage: 2 });
   if (hasTech(c, 'nanoMedkit')) {
     mods = addMods(mods, { heal: 2 });
-    if (charges.medkit !== undefined) charges.medkit += 1;
+    // The belt's Botiquín (the Grillo's flying medkit is gone with the classes).
+    if (charges.firstAid !== undefined) charges.firstAid += 1;
   }
   const traits = s.traits.map((t) => TRAITS[t]);
   mods = addMods(mods, { aim: traits.reduce((sum, t) => sum + t.aim, 0) + rangeAim(c) });
@@ -3332,17 +3350,14 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       entry.status = 'wounded';
       entry.woundedDays = s.woundedDays;
     }
-    // What it did teaches it (docs/FASE9.md §1): more with the Taller de oficios, and the Camposanto at 3 after losses.
-    const taught = learn(s.skills, u.deeds, learningBonus(c) + (mourning ? LEARNING_BONUS : 0));
-    for (const id of SKILL_IDS) {
-      const from = skillLevel(s.skills[id]);
-      const to = skillLevel(taught.skills[id]);
-      if (to > from) log(c, levelUpLine(s.name, id, to), 'good');
-    }
+    // What it did teaches it (docs/FASE10.md §3): more with the Taller de oficios, and the Camposanto at 3 after losses.
+    const taught = learn(s.skills, s.growth, u.deeds, rng, learningBonus(c) + (mourning ? LEARNING_BONUS : 0));
+    for (const bar of taught.bars) log(c, barLine(s.name, bar.skill, bar.growth), 'good');
     entry.learned = taught.gained;
     entry.deeds = { ...(u.deeds ?? {}) };
-    entry.levels = SKILL_IDS.map((id) => ({ skill: id, from: skillLevel(s.skills[id]), to: skillLevel(taught.skills[id]) })).filter((l) => l.to > l.from);
+    entry.bars = taught.bars;
     s.skills = taught.skills;
+    s.growth = taught.growth;
   }
 
   // What the squad searched and brought back (docs/FASE2.md): a fallen soldier's is lost.
@@ -3468,18 +3483,17 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
 
 /**
  * Brings a campaign saved by an earlier version of the current progression
- * up to the current shape. Campaigns from before Fase 9 aren't carried over
- * (campaignOutdated, docs/FASE9.md §7): the host keeps them aside instead.
+ * up to the current shape. Campaigns from before Fase 10 aren't carried over
+ * (campaignOutdated, docs/FASE10.md): the host keeps them aside instead.
  */
 export function migrateCampaign(old: CampaignState): CampaignState {
-  if (campaignOutdated(old)) throw new Error(`Campaña de la versión ${old.version}: de antes de la 0.3, no se convierte.`);
+  if (campaignOutdated(old)) throw new Error(`Campaña de la versión ${old.version}: de antes de la 0.4, no se convierte.`);
   const c = JSON.parse(JSON.stringify(old)) as CampaignState;
   c.version = CAMPAIGN_VERSION;
-  // Version 18: the opening chapter's approved title (PR #1), also on an offer already made.
-  for (const o of c.offers) if (o.story === 1) o.name = STORY[0]!.title;
   for (const s of c.soldiers) {
     s.skills ??= { ...NO_SKILLS };
-    s.picks ??= [];
+    s.growth ??= { ...NO_GROWTH };
+    s.board ??= [];
   }
   c.launchReady = [false, false];
   return c;

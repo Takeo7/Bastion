@@ -5,7 +5,7 @@ import type { AbilityId, AttackAbility, ChargeId, ClassId, FoundWeaponId, ItemId
 
 export const AP_PER_TURN = 2;
 
-/** Unit.rank from which a soldier has a third action: Veterano (skills.ts VETERANCY, docs/FASE9.md §3). */
+/** Unit.rank from which a soldier has a third action: Veterano (skills.ts VETERANCY, docs/FASE10.md §5). */
 export const THIRD_ACTION_RANK = 3;
 
 /** Actions a unit starts its turn with: two, three for a soldier from Veterano on. */
@@ -31,6 +31,11 @@ export const GRAZE_DAMAGE_MULT = 0.5;
 export const SQUADSIGHT_DISTANCE_MOD = -2;
 export const SQUADSIGHT_CRIT_MOD = -10;
 export const MEDKIT_HEAL = 4;
+/** The stone's damage, before Canto afilado and the rest (docs/FASE10.md §4). */
+export const STONE_DAMAGE = 1;
+
+/** What is thrown by hand: Lanzar fills with it and its reach reaches it all (docs/FASE10.md §2). */
+export const THROWN: ReadonlySet<AbilityId> = new Set<AbilityId>(['grenade', 'launch', 'smoke', 'flashbang', 'stone']);
 /** Shooting down from a higher level (XCOM 2 height advantage). */
 export const HEIGHT_ADVANTAGE_AIM = 20;
 /**
@@ -267,6 +272,9 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   stunLance: { id: 'stunLance', name: 'Red y porra', description: 'Atrapa con la red y golpea con la porra: aturde.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   claw: { id: 'claw', name: 'Mordisco', description: 'Muerde cuerpo a cuerpo.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
   overwatch: { id: 'overwatch', name: 'Vigilancia', description: 'Dispara al primer enemigo que se mueva a la vista.', target: 'self', ap: 1, endsTurn: true },
+  // Fase 10 (docs/FASE10.md §4): the reach is the throw's (abilityRange), the noise grows with Señuelo and Reclamo.
+  stone: { id: 'stone', name: 'Piedra', description: 'Lanza una piedra: suena donde cae y los zombis van a mirar. Si le da a alguien, 1 de daño. No acaba el turno.', target: 'tile', ap: 1, endsTurn: false, range: 10, noise: 8 },
+  overwatchMelee: { id: 'overwatchMelee', name: 'Vigilancia cuerpo a cuerpo', description: 'Golpea con la hoja al primer enemigo que se le ponga al lado.', target: 'self', ap: 1, endsTurn: true },
   hunker: { id: 'hunker', name: 'Agazaparse', description: '+30 de defensa y +50 de esquiva hasta tu próximo turno.', target: 'self', ap: 1, endsTurn: true },
   reload: { id: 'reload', name: 'Recargar', description: 'Mete un cargador lleno y gasta uno de repuesto: primero en el arma principal y, si está llena, en la pistola. Los de repuesto los hace el Taller; registrando aparecen más.', target: 'self', ap: 1, endsTurn: false },
   grenade: { id: 'grenade', name: 'Granada', description: 'Lanza una granada: daña a todos en el área, destruye cobertura y abre boquetes en las paredes. Arriba hunde el suelo donde cae, y quien esté encima cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 10, radius: 2.5, explosive: 'fragGrenade' },
@@ -278,7 +286,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   hack: {
     id: 'hack',
     name: 'Arreglar',
-    description: 'Arregla el equipo (una radio, un repetidor…) desde una casilla contigua; el Grillo, el dron casero del especialista, llega a 10 casillas. Si falla, salta la alarma: se oye lejos y atrae a los muertos por los bordes.',
+    description: 'Arregla el equipo (una radio, un repetidor…) desde una casilla de al lado. Si falla, salta la alarma: se oye lejos y atrae a los muertos por los bordes.',
     target: 'self',
     ap: 1,
     endsTurn: true,
@@ -360,10 +368,9 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   lastVerse: { id: 'lastVerse', name: 'Desfibrilador', description: 'Un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas.', target: 'self', ap: 1, endsTurn: true, charge: 'lastVerse', range: 6, song: true, noise: 0 },
 };
 
-/** Base chance of hacking the objective terminal; specialists and rank add to it. */
+/** Base chance of fixing the objective terminal (Arreglar); Investigar's bars add to it. */
 export const HACK_BASE = 55;
 export const HACK_SPECIALIST = 25;
-export const HACK_PER_RANK = 3;
 
 /** Mindspin: success chance is PSI_BASE − (will − 40), then the effect is rolled. */
 export const PSI_BASE = 70;
@@ -794,6 +801,9 @@ export const ZERO_MODS: UnitMods = {
   gunAim: 0,
   gunCrit: 0,
   quiet: 0,
+  stoneDamage: 0,
+  stoneNoise: 0,
+  care: 0,
 };
 
 export function hasPerk(u: Pick<Unit, 'perks'>, id: PerkId): boolean {

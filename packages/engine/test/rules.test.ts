@@ -150,7 +150,7 @@ describe('classes', () => {
     run(s, ability('s1', 'aid', { target: 's2' }));
     expect(hurt.aided).toBe(20);
     const shot = previewShot(s, s.units.find((u) => u.id === 'a1')!, hurt)!;
-    expect(shot.mods.find((m) => m.label === 'Cobertura del Grillo')?.value).toBe(-20);
+    expect(shot.mods.find((m) => m.label === 'Atendido')?.value).toBe(-20);
   });
 });
 
@@ -486,8 +486,8 @@ describe('replication', () => {
   function veterans(s: GameState, rng: Rng): void {
     for (const u of s.units) {
       if (u.team !== 'xcom' || u.template === 'vip') continue;
-      const { skills, picks } = veteranSkills(rng);
-      const stats = fighterStats(skills, picks, u.gear, u.arms);
+      const { skills, growth, board } = veteranSkills(rng);
+      const stats = fighterStats(skills, growth, board, u.gear, u.arms);
       Object.assign(u, { rank: stats.rank, perks: stats.perks, mods: stats.mods, charges: stats.charges, maxHp: stats.maxHp, hp: stats.maxHp, will: stats.will, armor: stats.armor });
     }
   }

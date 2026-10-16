@@ -1,168 +1,75 @@
-// Fase 9, «Se aprende haciendo» (docs/FASE9.md). Four skills that rise with
-// use, never with points: what each soldier does in a mission is counted
-// (Unit.deeds, filled in by the events) and, if it comes back alive, turned
-// into experience, all of it: no cap (Arturo, 16/10), long levels instead. At levels 2 and 4 of every
-// skill the soldier picks one talent of a pair. The sum of the four levels is
-// its veterancy: health, will and, from Veterano, a third action.
-//
-// The names and lines are Lore's (docs/FASE9.md, «Textos»).
-import { addMods, ITEMS, TEMPLATES, ZERO_MODS } from './content';
+// Fase 10, experience bars (docs/FASE10.md, Arturo 16/10). Six lines that
+// fill with what each soldier does in a mission (Unit.deeds, counted by the
+// events) and is added if it comes back alive. A bar has no levels: when it
+// fills it starts again, every time longer, and gives a skill point (spent on
+// the hex board, board.ts) and 5–10 % more, at random, of its line's stat.
+// Veterancy goes up with the points spent on the board (Arturo, 16/10).
+import { BOARD, BOARD_CELLS, type CellId, CORE, withinReach } from './board';
+import { addMods, HACK_BASE, ITEMS, MEDKIT_HEAL, TEMPLATES, ZERO_MODS } from './content';
 import type { Rng } from './rng';
-import type { AbilityId, Arms, ChargeId, ItemId, PerkId, TemplateId, UnitMods } from './types';
+import type { Arms, ChargeId, ItemId, PerkId, TemplateId, UnitMods } from './types';
 
-// ------------------------------------------------------------------ skills
+// ------------------------------------------------------------------- lines
 
-export type SkillId = 'shooting' | 'melee' | 'medicine' | 'craft';
-export const SKILL_IDS: SkillId[] = ['shooting', 'melee', 'medicine', 'craft'];
+export type SkillId = 'shooting' | 'melee' | 'throwing' | 'medicine' | 'searching' | 'fitness';
+export const SKILL_IDS: SkillId[] = ['shooting', 'melee', 'throwing', 'medicine', 'searching', 'fitness'];
 
-/** Experience in each skill (the level follows from it: skillLevel). */
+/** Experience earned in each line, all of it (the bars follow from it: barsOf). */
 export type Skills = Record<SkillId, number>;
-export const NO_SKILLS: Skills = { shooting: 0, melee: 0, medicine: 0, craft: 0 };
+export const NO_SKILLS: Skills = { shooting: 0, melee: 0, throwing: 0, medicine: 0, searching: 0, fitness: 0 };
 
-export const SKILL_MAX = 5;
-/**
- * Experience it takes to reach levels 1 to 5 (Arturo, 16/10: long levels, no
- * cap). A soldier who fights earns some 5 of Tiro a mission (a bot's 24
- * missions: median 5, one in four 8 or more): level 2 after about five, the
- * top after twenty-odd; a star, twice as fast.
- */
-export const SKILL_XP = [10, 25, 50, 85, 130] as const;
+/** What each line's filled bars have added to its stat, in percent (rolled as they fill). */
+export type Growth = Record<SkillId, number>;
+export const NO_GROWTH: Growth = { ...NO_SKILLS };
 
 export interface SkillDef {
   id: SkillId;
   name: string;
   short: string;
-  /** What it is and how it rises. */
+  /** What fills it. */
   line: string;
-  /** What every level gives, and the extras. */
-  gives: string;
+  /** The stat it raises. */
+  stat: string;
 }
 
 export const SKILLS: Record<SkillId, SkillDef> = {
-  shooting: { id: 'shooting', name: 'Tiro', short: 'TIR', line: 'Puntería con armas de fuego. Sube acertando y abatiendo con ellas.', gives: '+5 de puntería con armas de fuego por nivel. En el nivel 3, +10 de crítico con ellas.' },
-  melee: { id: 'melee', name: 'Cuerpo a cuerpo', short: 'CaC', line: 'El cuchillo y el machete. Sube acertando y abatiendo de cerca.', gives: '+8 de puntería cuerpo a cuerpo por nivel. En los niveles 3 y 5, +1 de daño.' },
-  medicine: { id: 'medicine', name: 'Medicina', short: 'MED', line: 'Curar a otros y a uno mismo. Sube curando y parando contagios; más si es a otro.', gives: 'En los niveles 2 y 4, las curas sanan +1. En el 5, el botiquín tiene un uso más.' },
-  craft: { id: 'craft', name: 'Maña', short: 'MAÑ', line: 'Arreglar, forzar y los explosivos. Sube registrando, abriendo cajas, arreglando, apagando alarmas y con las granadas que alcanzan a alguien.', gives: '+10 a arreglar y forzar por nivel. En el nivel 2, una granada más; en el 4, +1 de daño de los explosivos.' },
+  shooting: { id: 'shooting', name: 'Disparo', short: 'DIS', line: 'Se llena disparando, más si se acierta y más si se abate.', stat: 'Puntería con armas de fuego' },
+  melee: { id: 'melee', name: 'Cuerpo a cuerpo', short: 'CaC', line: 'Se llena golpeando con la hoja, más si se acierta y más si se abate.', stat: 'Puntería cuerpo a cuerpo' },
+  throwing: { id: 'throwing', name: 'Lanzar', short: 'LAN', line: 'Se llena lanzando piedras y granadas, más si alcanzan a alguien.', stat: 'Alcance al lanzar' },
+  medicine: { id: 'medicine', name: 'Curar', short: 'CUR', line: 'Se llena curando con el botiquín o con medicinas; más si es a otro.', stat: 'Curación' },
+  searching: { id: 'searching', name: 'Investigar', short: 'INV', line: 'Se llena registrando habitaciones, abriendo cajas, arreglando equipos y apagando alarmas.', stat: 'Arreglar' },
+  fitness: { id: 'fitness', name: 'Forma física', short: 'FOR', line: 'Se llena agazapándose y corriendo (moverse con las dos acciones).', stat: 'Salud' },
 };
 
-export function skillLevel(xp: number): number {
-  let level = 0;
-  while (level < SKILL_MAX && xp >= SKILL_XP[level]!) level++;
-  return level;
+/** The first bar takes BAR_FIRST, and every next one BAR_STEP more. */
+export const BAR_FIRST = 10;
+export const BAR_STEP = 5;
+/** What a bar adds to its line's stat when it fills, in percent, at random between these. */
+export const BAR_GROWTH = [5, 10] as const;
+
+/** Experience the `n`-th bar of a line takes (0 is the first). */
+export const barCost = (n: number) => BAR_FIRST + BAR_STEP * n;
+
+/** Experience it takes to fill the first `n` bars of a line. */
+export const barsCost = (n: number) => BAR_FIRST * n + (BAR_STEP * n * (n - 1)) / 2;
+
+/** A line's bars filled, and how far into the next one it is. */
+export function barsOf(xp: number): { filled: number; into: number; need: number } {
+  let filled = 0;
+  while (xp >= barsCost(filled + 1)) filled++;
+  return { filled, into: xp - barsCost(filled), need: barCost(filled) };
 }
 
-/** Experience the next level asks for; null at the top. */
-export function nextLevelXp(xp: number): number | null {
-  const level = skillLevel(xp);
-  return level >= SKILL_MAX ? null : SKILL_XP[level]!;
-}
-
-export function skillLevels(skills: Skills): Record<SkillId, number> {
-  return { shooting: skillLevel(skills.shooting), melee: skillLevel(skills.melee), medicine: skillLevel(skills.medicine), craft: skillLevel(skills.craft) };
-}
-
-/**
- * What the levels give in a fight. Grenades and the medkit's extra use only
- * count for whoever carries them (`grenades`, `medkit`).
- */
-export function skillMods(skills: Skills, carries: { grenades?: boolean; medkit?: boolean } = {}): { mods: Partial<UnitMods>; charges: Partial<Record<ChargeId, number>> } {
-  const l = skillLevels(skills);
-  const steps = (level: number, at: number[]) => at.filter((n) => level >= n).length;
-  const mods: Partial<UnitMods> = {
-    gunAim: 5 * l.shooting,
-    gunCrit: l.shooting >= 3 ? 10 : 0,
-    meleeAim: 8 * l.melee,
-    meleeDamage: steps(l.melee, [3, 5]),
-    heal: steps(l.medicine, [2, 4]),
-    hack: 10 * l.craft,
-    grenadeDamage: l.craft >= 4 ? 1 : 0,
-  };
-  const charges: Partial<Record<ChargeId, number>> = {};
-  if (carries.grenades && l.craft >= 2) charges.grenade = 1;
-  if (carries.medkit && l.medicine >= 5) charges.firstAid = 1;
-  return { mods, charges };
-}
-
-// ----------------------------------------------------------------- talents
-
-export interface SkillTalent {
-  id: PerkId;
-  skill: SkillId;
-  /** The level of the skill it opens at: one of each pair. */
-  level: 2 | 4;
-  name: string;
-  line: string;
-  mods?: Partial<UnitMods>;
-  ability?: AbilityId;
-  /** Uses per mission, for the ones that have them. */
-  charges?: Partial<Record<ChargeId, number>>;
-}
-
-const talent = (id: PerkId, skill: SkillId, level: 2 | 4, name: string, line: string, extra: Partial<SkillTalent> = {}): SkillTalent => ({ id, skill, level, name, line, ...extra });
-
-export const SKILL_TALENTS: Partial<Record<PerkId, SkillTalent>> = {
-  aimedShot: talent('aimedShot', 'shooting', 2, 'A la cabeza', 'Un disparo con −25 de puntería que hace la mitad más de daño. Enfriamiento 3.', { ability: 'aimedShot' }),
-  rapidFire: talent('rapidFire', 'shooting', 2, 'Ráfaga', 'Dos disparos seguidos, cada uno con −15 de puntería. Gasta dos balas. Enfriamiento 3.', { ability: 'rapidFire' }),
-  killZone: talent('killZone', 'shooting', 4, 'Nadie pasa', 'Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno. Enfriamiento 4.', { ability: 'killZone' }),
-  faceoff: talent('faceoff', 'shooting', 4, 'Cara a cara', 'Un disparo de pistola a cada enemigo a la vista. Enfriamiento 4.', { ability: 'faceoff' }),
-  implacable: talent('implacable', 'melee', 2, 'Uno tras otro', 'Abatir con el Tajo devuelve una acción, una vez por turno.'),
-  bladeCrit: talent('bladeCrit', 'melee', 2, 'Golpe certero', '+20 de crítico con el Tajo.', { mods: { meleeCrit: 20 } }),
-  bladeMaster: talent('bladeMaster', 'melee', 4, 'Mano de machete', 'Con el machete, el Tajo hace +2 de daño y gana +15 de puntería.'),
-  elbowRoom: talent('elbowRoom', 'melee', 4, 'Hacerse sitio', 'Un Tajo a cada enemigo que tenga al lado. Enfriamiento 3.', { ability: 'elbowRoom' }),
-  fieldMedic: talent('fieldMedic', 'medicine', 2, 'Buen pulso', 'El botiquín y las medicinas curan +1.', { mods: { heal: 1 } }),
-  revivalProtocol: talent('revivalProtocol', 'medicine', 2, 'Espabilar', 'Con una acción, quita a un compañero de al lado el aturdimiento, la desorientación o el pánico. Sin botiquín.', { ability: 'revival' }),
-  lightHands: talent('lightHands', 'medicine', 4, 'Manos de enfermero', 'Las medicinas también paran el contagio de un mordido.'),
-  restoration: talent('restoration', 'medicine', 4, 'Pasar visita', 'Cura 2 a cada compañero a 4 casillas o menos y les quita los estados alterados. Una vez por misión.', { ability: 'restoration', charges: { restoration: 1 } }),
-  goodArm: talent('goodArm', 'craft', 2, 'Buen brazo', 'Las granadas llegan 3 casillas más lejos, y lleva una más en cada accesorio de granadas.', { mods: { grenadeRange: 3 } }),
-  quiet: talent('quiet', 'craft', 2, 'Sin hacer ruido', 'Registrar, abrir cajas y forzar no hacen ruido.', { mods: { quiet: 1 } }),
-  demolition: talent('demolition', 'craft', 4, 'Demolición', 'Los explosivos hacen +1 de daño y su radio crece una casilla.', { mods: { grenadeDamage: 1, grenadeRadius: 1 } }),
-  patchUp: talent('patchUp', 'craft', 4, 'Apaños', 'Una vez por misión, con una acción, arregla 40 de estado del arma propia o de un compañero de al lado.', { ability: 'patchUp', charges: { patchUp: 1 } }),
-};
-
-/** The pairs of every skill, at levels 2 and 4 (one of each is picked). */
-export const TALENT_PAIRS: Record<SkillId, [[PerkId, PerkId], [PerkId, PerkId]]> = {
-  shooting: [['aimedShot', 'rapidFire'], ['killZone', 'faceoff']],
-  melee: [['implacable', 'bladeCrit'], ['bladeMaster', 'elbowRoom']],
-  medicine: [['fieldMedic', 'revivalProtocol'], ['lightHands', 'restoration']],
-  craft: [['goodArm', 'quiet'], ['demolition', 'patchUp']],
-};
-
-/** The pair a talent belongs to, with the other one. */
-export function pairOf(id: PerkId): { skill: SkillId; level: 2 | 4; pair: [PerkId, PerkId] } | null {
-  const def = SKILL_TALENTS[id];
-  if (!def) return null;
-  return { skill: def.skill, level: def.level, pair: TALENT_PAIRS[def.skill][def.level === 2 ? 0 : 1] };
-}
-
-/** The pairs open to a soldier's levels and still without a pick: the choices waiting for it. */
-export function pendingPicks(skills: Skills, picks: PerkId[]): { skill: SkillId; level: 2 | 4; pair: [PerkId, PerkId] }[] {
-  const out: { skill: SkillId; level: 2 | 4; pair: [PerkId, PerkId] }[] = [];
-  for (const skill of SKILL_IDS) {
-    const level = skillLevel(skills[skill]);
-    TALENT_PAIRS[skill].forEach((pair, k) => {
-      const at = k === 0 ? 2 : 4;
-      if (level >= at && !pair.some((id) => picks.includes(id))) out.push({ skill, level: at, pair });
-    });
-  }
+/** Bars filled in every line. */
+export function filledBars(skills: Skills): Record<SkillId, number> {
+  const out = { ...NO_SKILLS };
+  for (const id of SKILL_IDS) out[id] = barsOf(skills[id]).filled;
   return out;
 }
 
-/**
- * Why a soldier with these skills can't hold this list of talents (what
- * «Guardar» sends), or null if it can: each one a talent of the skills, its
- * level reached, and one of each pair at most.
- */
-export function picksBlocker(skills: Skills, picks: PerkId[]): string | null {
-  const seen = new Set<string>();
-  for (const id of picks) {
-    const where = pairOf(id);
-    if (!where) return 'Ese talento no existe.';
-    const key = `${where.skill}${where.level}`;
-    if (seen.has(key)) return `Solo uno de cada pareja: ${SKILL_TALENTS[where.pair[0]]!.name} o ${SKILL_TALENTS[where.pair[1]]!.name}.`;
-    seen.add(key);
-    if (skillLevel(skills[where.skill]) < where.level) return `${SKILL_TALENTS[id]!.name} pide ${SKILLS[where.skill].name} ${where.level}.`;
-  }
-  return null;
+/** What a bar adds when it fills: 5 to 10 % (BAR_GROWTH), at random. */
+export function rollGrowth(rng: Rng): number {
+  return rng.range(BAR_GROWTH[0], BAR_GROWTH[1]);
 }
 
 // --------------------------------------------------------------- veterancy
@@ -171,48 +78,51 @@ export interface VeterancyDef {
   name: string;
   /** For a woman: Novata, Fogueada… (Lore). */
   female: string;
-  /** Sum of the four levels it starts at. */
+  /** Skill points spent on the board it starts at (a step every RANK_STEP). */
   from: number;
   line: string;
 }
 
 export const VETERANCY: VeterancyDef[] = [
   { name: 'Novato', female: 'Novata', from: 0, line: 'Todavía no ha visto lo peor.' },
-  { name: 'Fogueado', female: 'Fogueada', from: 3, line: 'Ya ha salido y ha vuelto.' },
-  { name: 'Curtido', female: 'Curtida', from: 6, line: 'Sabe cuándo no disparar.' },
-  { name: 'Veterano', female: 'Veterana', from: 10, line: 'Tercera acción por turno. Los demás le siguen sin que lo pida.' },
-  { name: 'Superviviente', female: 'Superviviente', from: 14, line: 'Ha vuelto de todo.' },
+  { name: 'Fogueado', female: 'Fogueada', from: 5, line: 'Ya ha salido y ha vuelto.' },
+  { name: 'Curtido', female: 'Curtida', from: 10, line: 'Sabe cuándo no disparar.' },
+  { name: 'Veterano', female: 'Veterana', from: 15, line: 'Tercera acción por turno. Los demás le siguen sin que lo pida.' },
+  { name: 'Superviviente', female: 'Superviviente', from: 20, line: 'Ha vuelto de todo.' },
 ];
 
-/** From Veterano on, a third action per turn. */
-export const THIRD_ACTION_AT = 10;
-export const BASE_HP = 5;
-/** +1 health every this many points of veterancy. */
-export const HP_EVERY = 4;
-export const BASE_WILL = 40;
-export const WILL_PER_POINT = 3;
-/** Aim of a soldier with no Tiro and no Cuerpo a cuerpo, before its weapon. */
-export const BASE_AIM = 60;
+/** A rank more for every so many points spent on the board, and this much will with each (Arturo, 16/10). */
+export const RANK_STEP = 5;
+export const WILL_PER_RANK = 10;
 
-/** The sum of the four levels, 0 to 20. */
-export function veterancy(skills: Skills): number {
-  return SKILL_IDS.reduce((sum, id) => sum + skillLevel(skills[id]), 0);
+export const BASE_HP = 5;
+export const BASE_WILL = 40;
+/** Aim with a firearm or a blade before what the lines add, and before the weapon. */
+export const BASE_AIM = 60;
+/** How far a throw reaches before what Lanzar adds (the grenade's range). */
+export const THROW_RANGE = 10;
+
+/** Bars filled among the six lines: the skill points earned. */
+export function totalBars(skills: Skills): number {
+  return SKILL_IDS.reduce((sum, id) => sum + barsOf(skills[id]).filled, 0);
 }
 
-/** VETERANCY's index for a veterancy. */
-export function veterancyRank(points: number): number {
+/** VETERANCY's index for the points spent on the board; from Veterano on, a third action (content.ts THIRD_ACTION_RANK). */
+export function veterancyRank(spent: number): number {
   let rank = 0;
-  while (rank + 1 < VETERANCY.length && points >= VETERANCY[rank + 1]!.from) rank++;
+  while (rank + 1 < VETERANCY.length && spent >= VETERANCY[rank + 1]!.from) rank++;
   return rank;
 }
 
-export const veteranHp = (points: number) => BASE_HP + Math.floor(points / HP_EVERY);
-export const veteranWill = (points: number) => BASE_WILL + WILL_PER_POINT * points;
-export const veteranAp = (points: number) => (points >= THIRD_ACTION_AT ? 3 : 2);
+/** Will for a rank: 40, and 10 more with each. */
+export const veteranWill = (rank: number) => BASE_WILL + WILL_PER_RANK * rank;
 
 // ------------------------------------------------------------------- stats
 
-/** Everything a soldier fights with, from its skills, its talents and what it carries. */
+/** `base` with `percent` more, rounded: a stat after what its line has added. */
+export const grown = (base: number, percent: number) => Math.round(base * (1 + percent / 100));
+
+/** Everything a soldier fights with, from its lines, its talents and what it carries. */
 export interface FighterStats {
   template: TemplateId;
   mods: UnitMods;
@@ -226,58 +136,103 @@ export interface FighterStats {
 }
 
 /**
- * A soldier's numbers (docs/FASE9.md §1–§4). Everyone fights as the same
- * template; grenades, the medkit and the rest come only from the belt (`gear`).
+ * A soldier's numbers (docs/FASE10.md): each line's stat with what its bars
+ * added (`growth`), the skills unlocked on the board, and what it carries.
+ * Everyone fights as the same template; grenades, the medkit and the rest
+ * come only from the belt.
  */
-export function fighterStats(skills: Skills, picks: PerkId[], gear: ItemId[] = [], arms?: Arms): FighterStats {
+export function fighterStats(skills: Skills, growth: Growth, board: readonly CellId[], gear: ItemId[] = [], arms?: Arms): FighterStats {
   const tpl = TEMPLATES.rookie;
-  const points = veterancy(skills);
-  const grenades = gear.filter((id) => ITEMS[id].charges?.grenade).length;
-  const skill = skillMods(skills, { grenades: grenades > 0, medkit: gear.includes('firstAid') });
-  let mods = addMods(addMods({ ...ZERO_MODS }, { aim: BASE_AIM - tpl.aim }), skill.mods);
-  let maxHp = veteranHp(points);
+  let mods = addMods(
+    { ...ZERO_MODS },
+    {
+      aim: BASE_AIM - tpl.aim,
+      gunAim: grown(BASE_AIM, growth.shooting) - BASE_AIM,
+      meleeAim: grown(BASE_AIM, growth.melee) - BASE_AIM,
+      grenadeRange: grown(THROW_RANGE, growth.throwing) - THROW_RANGE,
+      heal: grown(MEDKIT_HEAL, growth.medicine) - MEDKIT_HEAL,
+      hack: grown(HACK_BASE, growth.searching) - HACK_BASE,
+    },
+  );
+  let maxHp = grown(BASE_HP, growth.fitness);
+  let armor = 0;
+  const perks: PerkId[] = [];
   const charges: Partial<Record<ChargeId, number>> = {};
   const add = (extra: Partial<Record<ChargeId, number>> | undefined) => {
     for (const [c, n] of Object.entries(extra ?? {}) as [ChargeId, number][]) if (n) charges[c] = (charges[c] ?? 0) + n;
   };
-  add(skill.charges);
-  for (const id of picks) {
-    const d = SKILL_TALENTS[id];
-    if (!d) continue;
-    if (d.mods) mods = addMods(mods, d.mods);
-    add(d.charges);
+  const cells = board.map((id) => BOARD_CELLS[id]).filter((c) => !!c);
+  for (const c of cells) {
+    if (c.mods) mods = addMods(mods, c.mods);
+    maxHp += c.hp ?? 0;
+    armor += c.armor ?? 0;
+    if (c.perk && !perks.includes(c.perk)) perks.push(c.perk);
+    add(c.charges);
   }
-  // Mano de machete wants the machete; Buen brazo, one more grenade in every accessory of them.
-  if (picks.includes('bladeMaster') && arms?.melee === 'machete') mods = addMods(mods, { meleeDamage: 2, meleeAim: 15 });
-  if (picks.includes('goodArm')) add({ grenade: grenades });
   for (const item of gear.map((id) => ITEMS[id])) {
     if (item.mods) mods = addMods(mods, item.mods);
     maxHp += item.hp ?? 0;
     add(item.charges);
   }
-  return { template: 'rookie', mods, maxHp, charges, will: veteranWill(points) + mods.will, armor: 0, perks: [...picks], rank: veterancyRank(points) };
+  // Mano de machete wants the machete; Buen brazo, one more grenade in every accessory of them.
+  if (perks.includes('bladeMaster') && arms?.melee === 'machete') mods = addMods(mods, { meleeDamage: 2, meleeAim: 15 });
+  if (perks.includes('goodArm')) add({ grenade: gear.filter((id) => ITEMS[id].charges?.grenade).length });
+  // One more use of what it carries: nothing if it carries none.
+  for (const c of cells) for (const [id, n] of Object.entries(c.spare ?? {}) as [ChargeId, number][]) if (charges[id] !== undefined) charges[id] += n;
+  const rank = veterancyRank(cells.length);
+  return { template: 'rookie', mods, maxHp, charges, will: veteranWill(rank) + mods.will, armor, perks, rank };
+}
+
+// -------------------------------------------------------------- the board
+
+/** Skill points: one for every bar filled, less the cells unlocked on the board. */
+export function pointsLeft(skills: Skills, board: readonly CellId[]): number {
+  return Math.max(0, totalBars(skills) - board.length);
+}
+
+/**
+ * Why a soldier can't unlock `id` now (docs/FASE10.md §6), or null: beside the
+ * core or a cell it has, and a point to spend. Nothing else (Arturo, 16/10).
+ */
+export function unlockBlocker(skills: Skills, board: readonly CellId[], id: CellId): string | null {
+  if (!BOARD_CELLS[id]) return 'Esa casilla no existe.';
+  if (id === CORE || board.includes(id)) return 'Ya la tiene.';
+  if (!withinReach(board, id)) return 'Tiene que estar al lado de una que ya tenga.';
+  if (pointsLeft(skills, board) < 1) return 'No le quedan puntos: se gana uno cada vez que se llena una barra.';
+  return null;
+}
+
+/** A cell's state for a soldier: unlocked, beside one it has (to be bought, if it can), or out of reach. */
+export function cellState(board: readonly CellId[], id: CellId): 'unlocked' | 'open' | 'locked' {
+  if (id === CORE || board.includes(id)) return 'unlocked';
+  return withinReach(board, id) ? 'open' : 'locked';
 }
 
 // ---------------------------------------------------------------- learning
 
 /** What a soldier did in a mission that teaches (Unit.deeds). */
-export type DeedId = 'hit' | 'gunKill' | 'blow' | 'bladeKill' | 'healOther' | 'healSelf' | 'search' | 'fix' | 'blast';
+export type DeedId = 'shot' | 'hit' | 'gunKill' | 'swing' | 'blow' | 'bladeKill' | 'throw' | 'throwHit' | 'healOther' | 'healSelf' | 'search' | 'fix' | 'hunker' | 'run';
 export type Deeds = Partial<Record<DeedId, number>>;
 
-/** The skill each deed teaches, and how much. */
+/** The line each deed fills, and how much (docs/FASE10.md §3). */
 export const DEED_XP: Record<DeedId, [SkillId, number]> = {
+  shot: ['shooting', 1],
   hit: ['shooting', 1],
   gunKill: ['shooting', 1],
+  swing: ['melee', 1],
   blow: ['melee', 1],
   bladeKill: ['melee', 1],
+  throw: ['throwing', 1],
+  throwHit: ['throwing', 1],
   healOther: ['medicine', 2],
   healSelf: ['medicine', 1],
-  search: ['craft', 1],
-  fix: ['craft', 2],
-  blast: ['craft', 1],
+  search: ['searching', 2],
+  fix: ['searching', 3],
+  hunker: ['fitness', 1],
+  run: ['fitness', 1],
 };
 
-/** The experience a mission's deeds give, skill by skill; `bonus` (0.2 = 20 %) more of each, rounded up. */
+/** The experience a mission's deeds give, line by line; `bonus` (0.2 = 20 %) more of each, rounded up. */
 export function learnedFrom(deeds: Deeds | undefined, bonus = 0): Skills {
   const out = { ...NO_SKILLS };
   for (const [deed, times] of Object.entries(deeds ?? {}) as [DeedId, number][]) {
@@ -288,35 +243,80 @@ export function learnedFrom(deeds: Deeds | undefined, bonus = 0): Skills {
   return out;
 }
 
-/** Skills plus a mission's deeds (and its `bonus`), and the levels that went up. */
-export function learn(skills: Skills, deeds: Deeds | undefined, bonus = 0): { skills: Skills; gained: Skills; levels: { skill: SkillId; from: number; to: number }[] } {
+/** A bar that filled on coming back: its line, how many it has now, and what each one added (percent). */
+export interface BarFilled {
+  skill: SkillId;
+  filled: number;
+  growth: number[];
+}
+
+/**
+ * A mission's deeds (and its `bonus`) added to a soldier's lines: the bars
+ * that filled, each with its stat rolled up 5–10 % (`rng`), and a skill point
+ * for each.
+ */
+export function learn(skills: Skills, growth: Growth, deeds: Deeds | undefined, rng: Rng, bonus = 0): { skills: Skills; growth: Growth; gained: Skills; bars: BarFilled[]; points: number } {
   const gained = learnedFrom(deeds, bonus);
   const next = { ...skills };
-  const levels: { skill: SkillId; from: number; to: number }[] = [];
+  const grew = { ...growth };
+  const bars: BarFilled[] = [];
+  let points = 0;
   for (const id of SKILL_IDS) {
-    const from = skillLevel(skills[id]);
+    const from = barsOf(skills[id]).filled;
     next[id] = skills[id] + gained[id];
-    const to = skillLevel(next[id]);
-    if (to > from) levels.push({ skill: id, from, to });
+    const to = barsOf(next[id]).filled;
+    if (to <= from) continue;
+    const rolls = Array.from({ length: to - from }, () => rollGrowth(rng));
+    grew[id] += rolls.reduce((a, b) => a + b, 0);
+    points += rolls.length;
+    bars.push({ skill: id, filled: to, growth: rolls });
   }
-  return { skills: next, gained, levels };
+  return { skills: next, growth: grew, gained, bars, points };
 }
 
 // ----------------------------------------------------------------- newcomers
 
-/** A recruit (docs/FASE9.md §3): level 1 in one or two skills, at random, so no two are alike. */
-export function recruitSkills(rng: Rng): Skills {
-  const out = { ...NO_SKILLS };
-  const first = rng.pick(SKILL_IDS);
-  out[first] = SKILL_XP[0];
-  if (rng.next() < 0.5) out[rng.pick(SKILL_IDS.filter((id) => id !== first))] = SKILL_XP[0];
-  return out;
+/** Lines with `bars` filled, each with its growth rolled. */
+function seasoned(rng: Rng, bars: Record<SkillId, number>): { skills: Skills; growth: Growth } {
+  const skills = { ...NO_SKILLS };
+  const growth = { ...NO_GROWTH };
+  for (const id of SKILL_IDS) {
+    skills[id] = barsCost(bars[id]);
+    for (let k = 0; k < bars[id]; k++) growth[id] += rollGrowth(rng);
+  }
+  return { skills, growth };
 }
 
-/** A skirmish veteran (docs/FASE9.md §6): every skill at 2 to 4, and a talent of every pair it has opened. */
-export function veteranSkills(rng: Rng): { skills: Skills; picks: PerkId[] } {
-  const skills = { ...NO_SKILLS };
-  for (const id of SKILL_IDS) skills[id] = SKILL_XP[rng.range(2, 4) - 1]!;
-  const picks = pendingPicks(skills, []).map((p) => rng.pick(p.pair));
-  return { skills, picks };
+/** A recruit (docs/FASE10.md §5): a bar filled in one or two lines, at random, so no two are alike. */
+export function recruitSkills(rng: Rng): { skills: Skills; growth: Growth } {
+  const bars = { ...NO_SKILLS };
+  const first = rng.pick(SKILL_IDS);
+  bars[first] = 1;
+  if (rng.next() < 0.5) bars[rng.pick(SKILL_IDS.filter((id) => id !== first))] = 1;
+  return seasoned(rng, bars);
+}
+
+/** One more bar in a line at random, with its growth (a recruit trained in the base, a newcomer who has been out). */
+export function oneMoreBar(skills: Skills, growth: Growth, rng: Rng): { skills: Skills; growth: Growth } {
+  const id = rng.pick(SKILL_IDS);
+  const filled = barsOf(skills[id]).filled + 1;
+  return { skills: { ...skills, [id]: Math.max(skills[id], barsCost(filled)) }, growth: { ...growth, [id]: growth[id] + rollGrowth(rng) } };
+}
+
+/** A skirmish veteran (docs/FASE10.md §7): two to five bars in every line, and its points spent on the board at random. */
+export function veteranSkills(rng: Rng): { skills: Skills; growth: Growth; board: CellId[] } {
+  const bars = { ...NO_SKILLS };
+  for (const id of SKILL_IDS) bars[id] = rng.range(2, 5);
+  const lines = seasoned(rng, bars);
+  return { ...lines, board: randomBoard(lines.skills, rng) };
+}
+
+/** Every point spent, a cell at a time, on whatever the board allows (a skirmish veteran's). */
+export function randomBoard(skills: Skills, rng: Rng): CellId[] {
+  const board: CellId[] = [];
+  for (;;) {
+    const open = BOARD.filter((c) => unlockBlocker(skills, board, c.id) === null);
+    if (!open.length) return board;
+    board.push(rng.pick(open).id);
+  }
 }

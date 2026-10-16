@@ -58,7 +58,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 
 ## 3. Estado (versión 0.3.1)
 
-- **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, soldados que aprenden de lo que hacen ([FASE9.md](FASE9.md)), heridas y muerte permanente.
+- **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
   - Saqueo, ruido e IA de zombis ([FASE2.md](FASE2.md));
   - contagio y medicinas ([FASE3.md](FASE3.md));
@@ -89,6 +89,9 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+- **En `main`, sin publicar** (para la 0.4.0):
+  - las notas de la prueba del 16/10 ([PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md)): por una ventana se ve como mucho a través de una; el turno enemigo, primero los que atacan y luego todos los demás a la vez y más deprisa; el zombi levantado lleva el aspecto del soldado; «Ver» lo que hace el compañero; el dinero dibujado como la caja del contador y el contador que no se quedaba en el número viejo;
+  - la Fase 10 ([FASE10.md](FASE10.md)), con campaña nueva (la de la 0.3 se guarda aparte en `save.antes-0.4.json`): seis barras de experiencia (Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar, Forma física) sin niveles; cada barra llena da un punto y un 5–10 % de su estadística; el tablero hexagonal de 169 celdas donde se gastan los puntos; la piedra y la vigilancia cuerpo a cuerpo; Lanzar, Vigilancia e Investigar con menú.
 - **Lo nuevo de la 0.3.1** (2026-10-16), la PR de Ana ([Takeo7/Bastion#1](https://github.com/Takeo7/Bastion/pull/1)), integrada sobre la 0.3.0:
   - centros médicos rehechos (consultorio, enfermerías y hospitales de ciudad de tres plantas), con mobiliario por sala y abandono: cadáveres, sangre, suciedad, material tirado; todo decorado, sin cambiar cobertura ni paso;
   - escaleras interiores con peldaños de madera, separadas de las paredes y con el acceso asegurado;
@@ -155,7 +158,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - abrir puertas es gratis;
   - la campaña empieza con una misión;
   - (14/10) evacuar es de los dos y se gana al irse; la clase no trae arma; registrar es por habitaciones.
-- **Progresión** (0.3.0, [FASE9.md](FASE9.md)): sin clases; se aprende haciendo. Lo guardado en el árbol queda fijo (no hay reentrenar). El Taller de oficios hace que cada misión enseñe un 20 % más por nivel.
+- **Progresión** (Fase 10, [FASE10.md](FASE10.md)): sin clases; se aprende haciendo, en seis barras sin niveles. Los puntos se gastan en el tablero hexagonal; lo comprado queda fijo (no hay reentrenar). El Taller de oficios hace que cada misión llene las barras un 20 % más por nivel.
 - **Equilibrio:**
   - la Marea cae por zonas a 4/6/9/10/11 de infestación;
   - empieza con 16 raciones;
@@ -170,7 +173,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **De Arturo y Ana:**
   - probar la 0.3.0 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
-- **Probar en partida** la 0.3.0: si se aprende a buen ritmo y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `SKILL_XP`, `DEED_XP` y `BASE_AIM`; en `content.ts`: `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
+- **Probar en partida** la Fase 10: si las barras se llenan a buen ritmo, si el tablero da elecciones de verdad y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `BAR_FIRST`, `BAR_STEP`, `BAR_GROWTH`, `DEED_XP`, `BASE_AIM`; en `board.ts`, las cifras de cada celda; en `content.ts`: `STONE_DAMAGE`, `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
 - **El tráiler:** aparcado por Arturo (15/10). El último borrador, la portada y las 10 capturas de la ficha están en `.dev-snapshots/trailer/` (no se suben); las herramientas siguen en `packages/client/tools/trailer/` ([TRAILER.md](TRAILER.md)) por si se retoma.
 - **Escenarios:** la cárcel y el centro comercial esperan los packs «POLYGON – Police Station» y «POLYGON – Shops», que tienen los atlas de sus piezas. Para después: la cafetería con aspecto propio y el portón grande de las naves (un hueco de 5 casillas).
 - **Para más adelante:**
@@ -187,8 +190,8 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [DESIGN.md](DESIGN.md) | Arquitectura, mecánicas, hoja de ruta y limitaciones conocidas |
 | [LORE.md](LORE.md) | El mundo, los zombis, las zonas y los recursos |
 | [ARTE.md](ARTE.md) | Dirección de arte y la tubería de Synty |
-| `FASE2.md`…[FASE8.md](FASE8.md), [ALTURA-Y-NOCHE.md](ALTURA-Y-NOCHE.md), [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md) | Especificación de cada fase y del reparto de enemigos |
+| `FASE2.md`…[FASE10.md](FASE10.md), [ALTURA-Y-NOCHE.md](ALTURA-Y-NOCHE.md), [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md) | Especificación de cada fase y del reparto de enemigos |
 | [TRAILER.md](TRAILER.md) | El tráiler, la portada y las capturas de la ficha: guion, quién hace qué y cómo se rehace |
-| [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md) | Notas de las pruebas de juego y qué se hizo con cada una |
+| [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md), [PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
 | [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), [FIRMA.md](FIRMA.md) | La guía de la prueba en el PC de referencia; cómo se firma la aplicación y qué cambiar con la cuenta de Apple |

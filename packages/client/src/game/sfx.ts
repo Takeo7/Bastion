@@ -33,6 +33,8 @@ interface Wail {
  */
 export class Sfx {
   private camera: THREE.Camera | null = null;
+  /** Out of town the ground is earth, not asphalt or concrete (where a stone lands, stoneLand). */
+  private softGround = false;
   private focus: () => THREE.Vector3 = () => new THREE.Vector3();
   private readonly ndc = new THREE.Vector3();
 
@@ -97,6 +99,19 @@ export class Sfx {
 
   throw(at?: THREE.Vector3): void {
     this.at('grenade.throw', at);
+  }
+
+  /** A stone (docs/FASE10.md §4) leaving the hand: a short swish. game.ts calls it as units.tossStone resolves. */
+  stoneThrow(at?: THREE.Vector3): void {
+    this.at('stone.throw', at, 1, { spread: 0.08 });
+  }
+
+  /**
+   * Where the stone comes down, as fx.stone resolves: a dry knock with its bounces on hard ground, a thud
+   * on earth (out of town), or a blunt blow on whoever it `struck`. It is what draws the dead: it carries.
+   */
+  stoneLand(at?: THREE.Vector3, struck = false): void {
+    this.at(struck ? 'stone.hit' : this.softGround ? 'stone.thud' : 'stone.land', at);
   }
 
   launch(at?: THREE.Vector3): void {
@@ -272,6 +287,7 @@ export class Sfx {
 
   /** The ambience of the map and the music for how things stand. */
   start(biome: Biome, contact: boolean): void {
+    this.softGround = biome === 'wilds';
     ambience.play(biome);
     this.mood(contact ? 'tense' : 'calm');
   }

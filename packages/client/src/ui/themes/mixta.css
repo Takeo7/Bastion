@@ -15,11 +15,22 @@
  * interface (≤ 4.2 ms a frame on the RTX 3090).
  */
 
+/* The supplies' sign (playtest 16/10 #4): «§» drawn as the counter's crate, a font of that one character
+   (tools/ui/suministros-font.py) put first in every stack; the rest of each text falls through to Barlow
+   or Oswald. One weight drawn for all, so none is faked bolder. */
+@font-face {
+  font-family: 'Bastion Suministros';
+  src: url('./suministros.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: block;
+  unicode-range: U+00A7;
+}
+
 /* ================================================================ values */
 
 :root[data-ui='mixta'] {
-  --t-font: 'Barlow', 'Segoe UI', sans-serif;
-  --t-font-title: 'Oswald', 'Barlow', sans-serif;
+  --t-font: 'Bastion Suministros', 'Barlow', 'Segoe UI', sans-serif;
+  --t-font-title: 'Bastion Suministros', 'Oswald', 'Barlow', sans-serif;
   --t-title-weight: 600;
 
   --t-text: #eef0ea;

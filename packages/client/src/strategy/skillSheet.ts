@@ -1,136 +1,128 @@
+import './skillSheet.css';
 import {
+  barLine,
+  barsOf,
+  BOARD_ABOUT,
   displayName,
   learnedLine,
-  levelUpLine,
-  pendingPicks,
-  picksBlocker,
+  pointsLeft,
   SKILL_IDS,
-  SKILL_MAX,
-  SKILL_TALENTS,
   SKILLS,
-  skillLevel,
-  veteranAp,
-  veteranHp,
-  veterancy,
+  totalBars,
   veterancyRank,
   VETERANCY,
   veteranWill,
   type CampaignSoldier,
-  type PerkId,
+  type CellId,
+  type Growth,
   type ReportSoldier,
+  type SkillId,
   type Skills,
 } from '@bastion/engine';
-import './skillSheet.css';
-import { uiSound } from '../audio/ui';
 import { h } from '../ui/dom';
-import { cellState, levelProgress, levelXp, mateOf, skillMatrix, vetName } from './skillMatrix';
+import { HexBoard } from './hexBoard';
 
-// What the Cuartel shows of a soldier's skills (docs/FASE9.md §8, «la ficha»):
-// the four skills with their level and the experience to the next, the
-// veterancy and what its next step brings, the talents kept and those waiting
-// for a pick; and the «Árbol de habilidades» panel, where the pairs are picked
-// as a draft and sent whole with «Guardar» (the engine's `picks` command,
-// checked first with picksBlocker). The tree itself is skillMatrix.ts.
+// What the Cuartel shows of a soldier's experience (docs/FASE10.md, «Lo tuyo»
+// of UI): the six bars, each with how far into the next one it is, how many it
+// has filled and what they have added to its stat; the veterancy; the points
+// for the board; and the hex board itself in its panel (hexBoard.ts), where
+// cells are bought with the campaign's `unlock`. And what a mission taught,
+// for the debrief's cards.
 
-/** What the sheet and the tree take of a campaign soldier. */
-export function skillsOf(s: Pick<CampaignSoldier, 'id' | 'name' | 'nickname' | 'skills' | 'picks' | 'appearance'>): SkillsOf {
-  return { id: s.id, name: displayName(s.name, s.nickname), skills: s.skills, picks: s.picks, female: s.appearance?.sex === 'f' };
-}
-
-/** What both take of a soldier. */
+/** What the sheet, the board and the lists take of a soldier. */
 export interface SkillsOf {
   id: string;
   name: string;
   skills: Skills;
-  picks: PerkId[];
+  growth: Growth;
+  board: CellId[];
   /** A woman: the veterancy's names go in the feminine. */
   female?: boolean;
 }
 
+/** What the sheet and the board take of a campaign soldier. */
+export function skillsOf(s: Pick<CampaignSoldier, 'id' | 'name' | 'nickname' | 'skills' | 'growth' | 'board' | 'appearance'>): SkillsOf {
+  return { id: s.id, name: displayName(s.name, s.nickname), skills: s.skills, growth: s.growth, board: s.board, female: s.appearance?.sex === 'f' };
+}
+
+/** A step of the veterancy by its index, in the feminine for a woman (Lore). */
+export const vetName = (rank: number, female = false) => (female ? VETERANCY[rank]!.female : VETERANCY[rank]!.name);
+
 // ------------------------------------------------------------------ the lists
 
-/** A soldier's four levels at a glance, each in its skill's colour, for the lists of soldiers. */
+/** A soldier's bars filled in each line, at a glance, each in its colour, for the lists of soldiers. */
 export function skillDigits(skills: Skills): HTMLElement {
   return h(
     'span.sk-digits',
-    { title: SKILL_IDS.map((id) => `${SKILLS[id].name} ${skillLevel(skills[id])}`).join(' · ') },
-    ...SKILL_IDS.map((id) => h(`b.sk-${id}${skillLevel(skills[id]) ? '' : '.none'}`, {}, String(skillLevel(skills[id])))),
+    { title: SKILL_IDS.map((id) => `${SKILLS[id].name}: ${barsOf(skills[id]).filled}`).join(' · ') },
+    ...SKILL_IDS.map((id) => {
+      const n = barsOf(skills[id]).filled;
+      return h(`b.sk-${id}${n ? '' : '.none'}`, {}, String(n));
+    }),
   );
 }
 
 /** The veterancy as the packs' rank badge (one per step past Novato, none for a Novato), its name on hover. */
-export function veterancyBadge(skills: Skills, female = false): HTMLElement {
-  const points = veterancy(skills);
-  const rank = veterancyRank(points);
-  const title = `${vetName(rank, female)} · ${points} de veteranía`;
-  return h('span.rank', { title }, ...Array.from({ length: rank }, () => h('i')));
+export function veterancyBadge(board: readonly CellId[], female = false): HTMLElement {
+  const spent = board.length;
+  const rank = veterancyRank(spent);
+  return h('span.rank', { title: `${vetName(rank, female)} · ${spent} ${spent === 1 ? 'punto gastado' : 'puntos gastados'} en el tablero` }, ...Array.from({ length: rank }, () => h('i')));
 }
 
 // ------------------------------------------------------------------ the sheet
 
-/** «Tiro 2 · 11/15» with its gauge, for the soldier's sheet. */
-function skillRow(skills: Skills, skill: (typeof SKILL_IDS)[number]): HTMLElement {
-  const xp = skills[skill];
-  const level = skillLevel(xp);
-  const def = SKILLS[skill];
+/** A line's row: the bars filled, its name, a gauge of the bar being filled with its experience, and what the bars added. */
+function barRow(s: SkillsOf, id: SkillId): HTMLElement {
+  const def = SKILLS[id];
+  const { filled, into, need } = barsOf(s.skills[id]);
+  const grown = s.growth[id] ?? 0;
   return h(
-    `div.sk-row.sk-${skill}`,
-    { title: `${def.line}\n${def.gives}` },
-    h('b.sk-row-level', {}, String(level)),
+    `div.sk-row.sk-${id}`,
+    { title: `${def.line}\n${def.stat}: +${grown} % con ${filled === 1 ? 'la barra llena' : `las ${filled} barras llenas`}.` },
+    h('b.sk-row-level', { title: 'Barras llenas' }, String(filled)),
     h('span.sk-row-name', {}, def.name),
-    h('span.sk-row-gauge', {}, h('i', { style: { '--p': levelProgress(xp).toFixed(3) } })),
-    h('small.sk-row-xp', {}, level >= SKILL_MAX ? 'Al máximo' : `${xp}/${levelXp(level + 1)}`),
-  );
-}
-
-/** The veterancy: its name and sum, what it gives now, and what the next step brings. */
-function veterancyEl(skills: Skills, female = false): HTMLElement {
-  const points = veterancy(skills);
-  const rank = veterancyRank(points);
-  const def = VETERANCY[rank]!;
-  const next = VETERANCY[rank + 1];
-  const gives = `Salud ${veteranHp(points)} · Voluntad ${veteranWill(points)} · ${veteranAp(points)} acciones por turno`;
-  return h(
-    'div.sk-vet',
-    { title: 'La veteranía es la suma de los niveles de las cuatro habilidades. Salud: 5, y +1 cada 4 puntos. Voluntad: 40, y +3 por punto. Desde Veterano, la tercera acción.' },
-    h('div.sk-vet-head', {}, h('b', {}, vetName(rank, female)), h('span.sk-vet-points', {}, `${points} de veteranía`)),
-    h('small.sk-vet-line', {}, def.line),
-    h('small.sk-vet-gives', {}, gives),
-    next ? h('small.sk-vet-next', {}, `${next.from - points} más para ${vetName(rank + 1, female)}${next.from === 10 ? ': la tercera acción' : ''}.`) : null,
+    h('span.sk-row-gauge', {}, h('i', { style: { '--p': (into / need).toFixed(3) } })),
+    h('small.sk-row-xp', {}, `${into}/${need}`),
+    h(`small.sk-row-grown${grown ? '' : '.none'}`, { title: def.stat }, grown ? `+${grown} %` : '—'),
   );
 }
 
 /**
- * The skills block of a soldier's sheet in the Cuartel: skills, veterancy,
- * talents and the button to the tree (`onOpen`; it calls for attention while a
- * pair waits, if the soldier is the viewer's).
+ * The veterancy (Arturo, 16/10): it rises with the points spent on the board,
+ * a rank every RANK_STEP; its name and those points, the will it gives, and
+ * how many more points on the board the next rank asks for.
+ */
+function veterancyEl(s: SkillsOf): HTMLElement {
+  const spent = s.board.length;
+  const rank = veterancyRank(spent);
+  const def = VETERANCY[rank]!;
+  const next = VETERANCY[rank + 1];
+  const left = next ? next.from - spent : 0;
+  return h(
+    'div.sk-vet',
+    { title: 'La veteranía sube con los puntos gastados en el tablero: un rango cada 5. Cada rango, +10 de voluntad. Desde Veterano, la tercera acción.' },
+    h('div.sk-vet-head', {}, h('b', {}, vetName(rank, s.female)), h('span.sk-vet-points', {}, `${spent} ${spent === 1 ? 'punto' : 'puntos'} en el tablero`)),
+    h('small.sk-vet-line', {}, def.line),
+    h('small.sk-vet-gives', {}, `Voluntad ${veteranWill(rank)} · ${rank >= 3 ? 3 : 2} acciones por turno · ${totalBars(s.skills)} ${totalBars(s.skills) === 1 ? 'barra llena' : 'barras llenas'}`),
+    next ? h('small.sk-vet-next', {}, `${left} ${left === 1 ? 'punto más' : 'puntos más'} en el tablero para ${vetName(rank + 1, s.female)}${rank + 1 === 3 ? ': la tercera acción' : ''}.`) : null,
+  );
+}
+
+/**
+ * The experience block of a soldier's sheet in the Cuartel: the six bars, the
+ * veterancy and the button to the board (`onOpen`; it calls for attention
+ * while there are points to spend, if the soldier is the viewer's).
  */
 export function skillsBlock(s: SkillsOf, mine: boolean, onOpen: () => void): HTMLElement[] {
-  const pending = pendingPicks(s.skills, s.picks);
-  const picked = s.picks.map((id) => SKILL_TALENTS[id]).filter((d) => !!d);
+  const points = pointsLeft(s.skills, s.board);
   return [
-    h('div.x-group', {}, 'Habilidades'),
-    h('div.sk-rows', {}, ...SKILL_IDS.map((id) => skillRow(s.skills, id))),
-    veterancyEl(s.skills, s.female),
-    h('div.x-group', {}, 'Talentos'),
-    picked.length || pending.length
-      ? h(
-          'p.x-chips',
-          {},
-          ...picked.map((d) => h(`span.x-chip.sk-chip.sk-${d.skill}`, { title: d.line }, d.name)),
-          ...pending.map((p) =>
-            h(
-              'span.x-chip.warn',
-              { title: `${SKILL_TALENTS[p.pair[0]]!.name} o ${SKILL_TALENTS[p.pair[1]]!.name}` },
-              `Por elegir: ${SKILLS[p.skill].name} ${p.level}`,
-            ),
-          ),
-        )
-      : h('p.x-muted', {}, 'Se elige un talento en los niveles 2 y 4 de cada habilidad.'),
+    h('div.x-group', {}, 'Experiencia'),
+    h('div.sk-rows', {}, ...SKILL_IDS.map((id) => barRow(s, id))),
+    veterancyEl(s),
     h(
-      `button.x-btn${pending.length && mine ? '.primary.waiting' : ''}`,
+      `button.x-btn${points && mine ? '.primary.waiting' : ''}`,
       { onclick: onOpen },
-      pending.length && mine ? `Árbol de habilidades · ${pending.length === 1 ? 'un talento' : `${pending.length} talentos`} por elegir` : 'Árbol de habilidades',
+      points ? `Tablero de habilidades · ${points === 1 ? 'un punto' : `${points} puntos`}` : 'Tablero de habilidades',
     ),
   ];
 }
@@ -139,10 +131,11 @@ export function skillsBlock(s: SkillsOf, mine: boolean, onOpen: () => void): HTM
 
 /**
  * What a mission taught a soldier, for its card in the debrief: a tag per
- * skill it learnt in («+3 TIR», Lore's whole line in its title) and a badge
- * per level gone up («▲ TIRO 3»), saying when it opens a talent to pick.
+ * line it learnt in («+5 DIS», Lore's whole line in its title), a badge per
+ * line whose bars filled with what they added («▲ DISPARO +7 %»), and the
+ * points they give.
  */
-export function learnedTags(e: Pick<ReportSoldier, 'learned' | 'deeds' | 'levels'>): HTMLElement[] {
+export function learnedTags(e: Pick<ReportSoldier, 'name' | 'learned' | 'deeds' | 'bars'>): HTMLElement[] {
   const gained = SKILL_IDS.filter((id) => (e.learned?.[id] ?? 0) > 0);
   const out: HTMLElement[] = [];
   if (gained.length)
@@ -153,114 +146,70 @@ export function learnedTags(e: Pick<ReportSoldier, 'learned' | 'deeds' | 'levels
         ...gained.map((id) => h(`span.sk-tag.sk-${id}`, { title: learnedLine(id, e.learned![id], e.deeds ?? {}) }, `+${e.learned![id]} ${SKILLS[id].short}`)),
       ),
     );
-  for (const up of e.levels ?? []) out.push(h(`small.promo.sk-up.sk-${up.skill}`, {}, `▲ ${SKILLS[up.skill].name.toUpperCase()} ${up.to}`));
-  // A level 2 or 4 reached: a talent waits in the Cuartel.
-  if ((e.levels ?? []).some((up) => [2, 4].some((at) => up.from < at && up.to >= at))) out.push(h('small.sk-talent-note', {}, 'Talento por elegir'));
+  for (const bar of e.bars ?? []) {
+    const percent = bar.growth.reduce((a, b) => a + b, 0);
+    out.push(h(`small.promo.sk-up.sk-${bar.skill}`, { title: barLine(e.name, bar.skill, bar.growth) }, `▲ ${SKILLS[bar.skill].name.toUpperCase()} +${percent} %`));
+  }
+  const points = (e.bars ?? []).reduce((n, b) => n + b.growth.length, 0);
+  if (points) out.push(h('small.sk-talent-note', {}, points === 1 ? 'Un punto para el tablero' : `${points} puntos para el tablero`));
   return out;
 }
 
-/** The levels a mission brought, in Lore's words, for the debrief's head: «Ana Ríos sube a Tiro 3.». */
-export function levelUpLines(squad: Pick<ReportSoldier, 'name' | 'status' | 'levels'>[]): string[] {
-  return squad.filter((e) => e.status !== 'dead' && e.status !== 'lost').flatMap((e) => (e.levels ?? []).map((up) => levelUpLine(e.name, up.skill, up.to)));
+/** The bars a mission filled, in Lore's words, for the debrief's head: «Ana llena una barra de Disparo: +7 %…». */
+export function barLines(squad: Pick<ReportSoldier, 'name' | 'status' | 'bars'>[]): string[] {
+  return squad.filter((e) => e.status !== 'dead' && e.status !== 'lost').flatMap((e) => (e.bars ?? []).map((b) => barLine(e.name, b.skill, b.growth)));
 }
 
-// ------------------------------------------------------------------ the tree
+// ------------------------------------------------------------------ the board
 
-/** Each soldier's draft: the picks laid on the tree, kept while the screen redraws, sent only with «Guardar». */
-const drafts = new Map<string, PerkId[]>();
-/** «GUARDADO» stamped on a soldier's panel until then (performance.now()). */
-const stamps = new Map<string, number>();
-
-/** The draft as it still stands: each pick on a pair its levels open and nobody has saved a pick on. */
-function draftOf(s: SkillsOf): PerkId[] {
-  return (drafts.get(s.id) ?? []).filter((id) => {
-    const st = cellState(s.skills, s.picks, [], id);
-    return st === 'open';
-  });
-}
+/** Each soldier's board, kept while the screen redraws (its camera, its wave, the cell on its card). */
+const boards = new Map<string, HexBoard>();
 
 export interface TreePanelContext {
   s: SkillsOf;
-  /** The viewer's own soldier, alive: it can pick. */
+  /** The viewer's own soldier, alive: it can unlock. */
   editable: boolean;
-  /** Its bust, for the centre. */
+  /** Whose soldier, for «Solo Ana puede desbloquearla». */
+  owner: string;
+  /** Its bust (portraits.ts), by its name; the frame stays empty until it is drawn. */
   portrait: Promise<string> | null;
-  /** «Guardar»: the whole list, the saved ones and this draft's (the `picks` command). */
-  onSave: (picks: PerkId[]) => void;
+  /** The campaign's `unlock`. */
+  onUnlock: (cell: CellId) => void;
   onClose: () => void;
-  /** A line on the screen's toasts. */
-  toast?: (text: string) => void;
 }
 
 /**
- * The «Árbol de habilidades» panel: the soldier, what waits, the tree and
- * «Guardar». It redraws itself as the draft changes; a redraw of the whole
- * screen keeps the draft (drafts).
+ * The «Tablero de habilidades» panel: the soldier, its points and its six
+ * lines' bars, the hex board with its card, and «Cerrar». The board is the
+ * same element across redraws (hexBoard.ts), so nothing it is doing is lost.
  */
 export function treePanel(ctx: TreePanelContext): HTMLElement {
-  const host = h('div.x-panel.wide.service.sm-host');
-  const draw = () => {
-    const { s, editable } = ctx;
-    const draft = draftOf(s);
-    const pending = pendingPicks(s.skills, s.picks);
-    const waiting = pending.filter((p) => !p.pair.some((id) => draft.includes(id)));
-    const all = [...s.picks, ...draft];
-    const blocked = draft.length ? picksBlocker(s.skills, all) : null;
-    const setDraft = (next: PerkId[]) => {
-      drafts.set(s.id, next);
-      draw();
-    };
-    const tree = skillMatrix({
-      id: s.id,
-      portrait: ctx.portrait,
-      skills: s.skills,
-      saved: s.picks,
-      draft,
-      editable,
-      female: s.female,
-      // One per pair: picking a talent lets go of its mate.
-      onPick: (id) => setDraft([...draft.filter((x) => x !== mateOf(id)), id]),
-      onUnpick: (id) => setDraft(draft.filter((x) => x !== id)),
-    });
-    const save = () => {
-      if (!draft.length || blocked) return;
-      // The draft stays until the soldier comes back with it saved (draftOf drops what is saved), or for another go if refused.
-      ctx.onSave(all);
-      stamps.set(s.id, performance.now() + 2600);
-      uiSound('stamp');
-      ctx.toast?.(`Guardado para ${s.name}: ${draft.map((id) => SKILL_TALENTS[id]!.name).join(', ')}.`);
-      draw();
-      window.setTimeout(draw, 2700);
-    };
-    const close = () => {
-      drafts.delete(s.id);
-      ctx.onClose();
-    };
-    const stamped = (stamps.get(s.id) ?? 0) > performance.now();
-    let help: string | null = null;
-    if (editable && pending.length) {
-      help = waiting.length
-        ? `${waiting.length === 1 ? 'Tiene un talento por elegir' : `Tiene ${waiting.length} talentos por elegir`}: ${waiting.map((p) => `${SKILLS[p.skill].name} ${p.level}`).join(', ')}. Uno de cada pareja, para siempre; nada cuenta hasta que pulses «Guardar».`
-        : 'Todo elegido. Pulsa «Guardar» para apuntarlo; después ya no se cambia.';
-    }
-    host.replaceChildren(
-      ...[
-        stamped ? h('div.saved-stamp', {}, 'GUARDADO') : null,
-        h('div.alert-kicker', {}, `ÁRBOL DE HABILIDADES · ${vetName(veterancyRank(veterancy(s.skills)), s.female).toUpperCase()}`),
-        h('h2.x-title', {}, s.name),
-        help ? h('p.service-help', {}, help) : null,
-        tree,
-        blocked ? h('p.x-why', {}, blocked) : null,
-        h(
-          'div.alert-actions',
-          {},
-          editable && pending.length ? h('button.x-btn.primary', { disabled: !draft.length || !!blocked, onclick: save }, draft.length ? `Guardar (${draft.length})` : 'Guardar') : null,
-          editable && draft.length ? h('button.x-btn', { onclick: () => setDraft([]) }, 'Deshacer todo') : null,
-          h('button.x-btn', { onclick: close }, draft.length ? 'Cerrar sin guardar' : 'Cerrar'),
-        ),
-      ].filter((x): x is HTMLElement => !!x),
-    );
-  };
-  draw();
-  return host;
+  const { s } = ctx;
+  let board = boards.get(s.id);
+  if (!board) boards.set(s.id, (board = new HexBoard((cell) => ctx.onUnlock(cell))));
+  board.update({ skills: s.skills, board: s.board, editable: ctx.editable, owner: ctx.owner, describe: (id) => BOARD_ABOUT[id] });
+  const points = pointsLeft(s.skills, s.board);
+  const rank = veterancyRank(s.board.length);
+  const bust = h('span.hb-bust');
+  void ctx.portrait?.then((url) => bust.style.setProperty('--portrait', `url('${url}')`)).catch(() => undefined);
+  return h(
+    'div.x-panel.wide.service.sm-host',
+    {},
+    h('div.alert-kicker', {}, `TABLERO DE HABILIDADES · ${vetName(rank, s.female).toUpperCase()}`),
+    h(
+      'div.hb-head',
+      {},
+      bust,
+      h('h2.x-title', {}, s.name),
+      h(`span.hb-points${points ? '.some' : ''}`, { title: 'Se gana un punto cada vez que se llena una barra' }, h('b', {}, String(points)), points === 1 ? ' punto' : ' puntos'),
+      h(
+        'span.hb-lines',
+        {},
+        ...SKILL_IDS.map((id) => h(`span.hb-line.sk-${id}`, { title: `${SKILLS[id].name}: ${barsOf(s.skills[id]).filled} barras llenas` }, h('i'), `${SKILLS[id].short} ${barsOf(s.skills[id]).filled}`)),
+      ),
+    ),
+    h('p.service-help', {}, ctx.editable ? 'Pasa el cursor por una casilla para leerla. Mantenla pulsada un segundo para desbloquearla. Arrastra para moverte y usa la rueda para acercarte.' : `Es de ${ctx.owner}: puedes leerlo, pero solo lo desbloquea quien lo lleva.`),
+    board.el,
+    h('div.alert-actions', {}, h('button.x-btn', { onclick: ctx.onClose }, 'Cerrar')),
+  );
 }

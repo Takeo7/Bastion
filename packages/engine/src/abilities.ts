@@ -10,7 +10,6 @@ import {
   firesPrimary,
   fullyLoaded,
   HACK_BASE,
-  HACK_PER_RANK,
   HACK_SPECIALIST,
   hasMod,
   hasPerk,
@@ -20,9 +19,10 @@ import {
   PSI_BASE,
   roundsOf,
   TEMPLATES,
+  THROWN,
   WEAPONS,
 } from './content';
-import { SKILL_TALENTS } from './skills';
+import { PERK_ABILITY } from './board';
 import { hasAnyCover } from './cover';
 import { canStandOn, DIRS4, DIRS8, distance, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, slabAt, toPos, unitAt } from './grid';
 import { reachesToSearch, roomAt, roomSearched, searchable, searchableTiles, searchSpot } from './loot';
@@ -41,12 +41,17 @@ export function abilitiesOf(u: Unit): AbilityId[] {
   }
   // Nobody throws grenades without having carried some (docs/FASE9.md §4): the squad's come only from the belt.
   if (u.team === 'xcom' && u.charges.grenade === undefined && list.includes('grenade')) list.splice(list.indexOf('grenade'), 1);
-  for (const granted of [...u.perks.map((id) => SKILL_TALENTS[id]?.ability), ...u.gear.map((id) => ITEMS[id]?.ability)]) {
+  for (const granted of [...u.perks.map((id) => PERK_ABILITY[id]), ...u.gear.map((id) => ITEMS[id]?.ability)]) {
     if (granted && !list.includes(granted)) list.push(granted);
   }
   if (u.team === 'xcom' && !u.captive && TEMPLATES[u.template].team === 'xcom') {
     // Evacuating is the squad's, by the bus (the `evac` command, docs/PRUEBA-2026-10-14.md P1), not one soldier's ability.
     if (u.template !== 'vip') list.push('hack', 'search', 'searchRoom', 'openDoor', 'closeDoor');
+    // Fase 10 (docs/FASE10.md §4): a stone is always at hand, and the blade can keep watch too.
+    if (u.arms) {
+      list.push('stone');
+      if (list.includes('overwatch')) list.splice(list.indexOf('overwatch') + 1, 0, 'overwatchMelee');
+    }
   }
   return list;
 }
@@ -65,7 +70,7 @@ export function canHackFrom(s: GameState, u: Unit, from: Pos = u.pos): boolean {
 }
 
 export function hackChance(s: GameState, u: Unit): number {
-  const bonus = (u.template === 'specialist' ? HACK_SPECIALIST : 0) + u.rank * HACK_PER_RANK + u.mods.hack + s.mission.hackBonus;
+  const bonus = (u.template === 'specialist' ? HACK_SPECIALIST : 0) + u.mods.hack + s.mission.hackBonus;
   return Math.max(5, Math.min(95, HACK_BASE + bonus));
 }
 
@@ -150,7 +155,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
     if (u.mags === 0) return 'Sin munición y sin cargadores.';
     return ammo > 1 ? `Necesita ${ammo} balas en el cargador: recarga.` : 'Sin munición: recarga.';
   }
-  if (u.disoriented && def.target === 'tile' && !def.teleport && !BY_HAND.has(ability)) return 'Desorientado: no puede usar explosivos.';
+  if (u.disoriented && def.target === 'tile' && !def.teleport && !BY_HAND.has(ability) && ability !== 'stone') return 'Desorientado: no puede usar explosivos.';
   if (firesPrimary(u, ability) && conditionOf(u) <= 0) return 'Rota: no dispara. Se arregla en la Armería.';
   if (def.psi && inSilence(s, u.pos)) return 'Petardos: aquí no se puede gritar.';
   switch (ability) {
@@ -337,7 +342,7 @@ export function canTargetTile(s: GameState, u: Unit, ability: AbilityId, at: Pla
 /** Reach of a targeted ability for this unit (talents can lengthen grenade throws). */
 export function abilityRange(u: Unit | undefined, ability: AbilityId): number {
   const base = ABILITIES[ability].range ?? 0;
-  return ability === 'grenade' || ability === 'launch' ? base + (u?.mods.grenadeRange ?? 0) : base;
+  return THROWN.has(ability) ? base + (u?.mods.grenadeRange ?? 0) : base;
 }
 
 /** Blast radius of an area ability for this unit (perks can widen grenades). */
@@ -417,6 +422,7 @@ export function noiseOf(s: GameState, u: Unit, ability: AbilityId): number {
   }
   // Sin hacer ruido (docs/FASE9.md): searching and opening boxes in silence. A silencer halves a shot's noise.
   if (u.mods.quiet && (ability === 'search' || ability === 'searchRoom')) return 0;
+  if (ability === 'stone') noise += u.mods.stoneNoise;
   if (firesPrimary(u, ability) && hasMod(u, 'silencer')) noise = Math.ceil(noise / 2);
   return def.song && s.quietSongs ? Math.max(0, noise - OFICIO_QUIET) : noise;
 }

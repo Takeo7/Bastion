@@ -47,6 +47,7 @@ import {
   loadedFor,
   MEDICINE_HEAL,
   MEDKIT_HEAL,
+  STONE_DAMAGE,
   PATCH_UP,
   conditionOf,
   NIGHT,
@@ -304,12 +305,20 @@ export class Sim {
         this.flashbang(u, tile!);
         break;
       case 'firstAid':
-        // Medicina 2 and 4, and Buen pulso, heal more (docs/FASE9.md).
+        // What Curar has grown and the board's cells heal more (docs/FASE10.md); Primeros auxilios and the rest also shelter.
         this.emit({ t: 'healed', unit: u.id, target: target!.id, amount: Math.min(MEDKIT_HEAL + u.mods.heal, target!.maxHp - target!.hp) });
+        if (u.mods.aid > target!.aided) this.emit({ t: 'aided', unit: u.id, target: target!.id, amount: u.mods.aid });
         break;
       case 'overwatch':
       case 'killZone':
         this.emit({ t: 'overwatch', unit: u.id, killZone: ability === 'killZone' });
+        break;
+      case 'overwatchMelee':
+        // With Muro de acero it strikes everyone that comes alongside, once each, as Nadie pasa does with the gun.
+        this.emit({ t: 'overwatch', unit: u.id, killZone: hasPerk(u, 'bladeWall'), melee: true });
+        break;
+      case 'stone':
+        this.stone(u, tile!);
         break;
       case 'hunker':
         this.emit({ t: 'hunker', unit: u.id });
@@ -519,6 +528,10 @@ export class Sim {
       if (weapon.melee && TEMPLATES[attacker.template].undead && target.hp < before) this.infect(target, attacker, INFECTION.bite[attacker.template] ?? 0);
       if (ability === 'rupture' && target.alive) this.emit({ t: 'ruptured', unit: target.id, amount: RUPTURE_DAMAGE });
       if (!target.alive && !reaction) this.afterKill(attacker, target, ability, preview.origin);
+      // Segundo aliento: a blade kill heals 1.
+      if (!target.alive && weapon.melee && hasPerk(attacker, 'secondWind') && attacker.alive && attacker.hp < attacker.maxHp) {
+        this.emit({ t: 'healed', unit: attacker.id, target: attacker.id, amount: 1 });
+      }
     }
     if (attacker.team === 'xcom' && !attacker.controlledBy) this.breakConcealment({ reason: 'attack', unit: attacker.id, by: target.id });
     if (target.team === 'alien') this.activatePodOf(target, attacker);
@@ -580,6 +593,22 @@ export class Sim {
     if (u.alive) this.emit({ t: 'died', unit: u.id });
     this.explode(u, u.pos, 'burst');
     this.makeNoise(u.pos, WEAPONS.bloaterBurst.noise, u);
+  }
+
+  /**
+   * A stone (docs/FASE10.md §4): heard where it lands (perform makes the
+   * noise), and whoever stands there takes its damage. Only a hit gives the
+   * squad away.
+   */
+  private stone(u: Unit, at: Pos): void {
+    const hit = unitAt(this.s, at);
+    const struck = hit?.alive && hit.id !== u.id && !hit.objective ? hit : undefined;
+    this.emit({ t: 'stoneThrown', unit: u.id, target: { ...at }, hit: struck?.id ?? null });
+    if (!struck) return;
+    this.damage(struck, STONE_DAMAGE + u.mods.stoneDamage, 0, u);
+    if (u.team === 'xcom') this.breakConcealment({ reason: 'attack', unit: u.id, by: struck.id });
+    if (struck.team === 'alien') this.activatePodOf(struck, u);
+    this.checkOutcome();
   }
 
   meleeAttack(u: Unit, option: MeleeOption, ability: AttackAbility): void {
@@ -705,7 +734,7 @@ export class Sim {
   }
 
   private reanimate(caster: Unit, corpse: Unit): void {
-    const zombie = makeUnit(this.zombieId(), 'zombie', risenName(corpse), null, corpse.pos, caster.podId);
+    const zombie = risenUnit(this.zombieId(), corpse, corpse.pos, caster.podId);
     this.emit({ t: 'reanimated', unit: caster.id, corpse: corpse.id, zombie });
   }
 
@@ -738,7 +767,7 @@ export class Sim {
         (p) => inBounds(this.s, p.x, p.y) && canStandOn(kindAt(this.s, p)) && heightAt(this.s, p) === heightAt(this.s, corpse.pos) && !unitAt(this.s, p),
       );
       if (!at) continue;
-      const zombie = makeUnit(this.zombieId(), 'zombie', risenName(corpse), null, at, null);
+      const zombie = risenUnit(this.zombieId(), corpse, at, null);
       const pod: Pod = { id: `p${zombie.id}`, active: true, unitIds: [], patrol: [], patrolIndex: 0 };
       this.emit({ t: 'reanimated', corpse: corpse.id, zombie: { ...zombie, podId: pod.id }, pod });
     }
@@ -825,10 +854,16 @@ export class Sim {
       // Shadowstep: nobody gets a reaction shot at this unit.
       const shadow = hasPerk(u, 'shadowstep');
       const loaded = (o: Unit) => loadedFor(o, 'shoot');
+      // Overwatch with the blade (docs/FASE10.md §4) strikes whoever comes alongside; the gun's, whoever moves in sight.
       const reactors = shadow
         ? []
         : this.s.units.filter(
-            (o) => o.alive && o.team !== u.team && o.overwatch && !(o.killZone && o.reactedTo.includes(u.id)) && loaded(o) && this.watches(o, step),
+            (o) =>
+              o.alive &&
+              o.team !== u.team &&
+              o.overwatch &&
+              !(o.killZone && o.reactedTo.includes(u.id)) &&
+              (o.watchMelee ? inMeleeReach(this.s, o.pos, step) : loaded(o) && this.watches(o, step)),
           );
       const suppressors = shadow ? [] : this.s.units.filter((o) => o.alive && o.team !== u.team && o.suppressing === u.id && loaded(o));
       const noticing = u.team === 'xcom' ? this.podsNoticing(step) : [];
@@ -837,7 +872,7 @@ export class Sim {
       flush();
       for (const r of reactors) {
         if (!u.alive || this.over) break;
-        if (r.alive && r.overwatch) this.attack(r, u, 'shoot', true);
+        if (r.alive && r.overwatch) this.attack(r, u, r.watchMelee ? 'slash' : 'shoot', true);
       }
       for (const r of suppressors) {
         if (!u.alive || this.over) break;
@@ -1197,9 +1232,9 @@ export class Sim {
     // They rise now, but only act from the next turn on (they had no turn to begin).
     this.riseInfected();
     const active = this.s.units.filter((u) => u.alive && u.team === 'alien' && !u.objective && this.s.pods.find((p) => p.id === u.podId)?.active);
-    // The dead with nobody to reach this turn walk first, each group in one go; then everyone else, in order (docs/UX-RITMO.md).
+    // Whoever is going for the squad acts first, one by one; then the dead with nobody to reach, all together (playtest 2026-10-16).
     const walkers = active.filter((u) => onlyWalks(this.s, u));
-    const actors = [...walkers, ...active.filter((u) => !walkers.includes(u))].map((u) => u.id);
+    const actors = [...active.filter((u) => !walkers.includes(u)), ...walkers].map((u) => u.id);
     for (const id of actors) {
       const u = getUnit(this.s, id)!;
       if (this.over) return;
@@ -1332,6 +1367,16 @@ export class Sim {
 /** What a corpse is called once it rises: a soldier keeps its name («Zombi · Clara Bosch»), anyone else is a Zombi. */
 export function risenName(corpse: Unit): string {
   return TEMPLATES[corpse.template].team === 'xcom' ? `${TEMPLATES.zombie.name} · ${corpse.name}` : TEMPLATES.zombie.name;
+}
+
+/**
+ * The zombie a corpse rises as. A soldier's keeps its look (playtest
+ * 2026-10-16): `risenFrom` says whose, and the client draws that soldier dead.
+ */
+function risenUnit(id: string, corpse: Unit, at: Pos, podId: string | null): Unit {
+  const zombie = makeUnit(id, 'zombie', risenName(corpse), null, at, podId);
+  if (TEMPLATES[corpse.template].team !== 'xcom' || !corpse.appearance) return zombie;
+  return { ...zombie, risenFrom: corpse.id, appearance: { ...corpse.appearance } };
 }
 
 /** «A dos voces»: a partner's singer within 2 tiles adds one more to a song. */

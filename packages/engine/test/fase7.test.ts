@@ -214,28 +214,27 @@ describe('floors that break', () => {
 describe('sight through windows (docs/PRUEBA-2026-10-14.md)', () => {
   const at = (x: number, y: number, z = 0) => ({ x, y, z });
 
-  it('a line of sight goes through two windows at most, both ways, and the fog agrees', () => {
+  it('a line of sight goes through one window at most, both ways (playtest 2026-10-16): in, never out again', () => {
     // Three walls with a window each, one after another along the row.
     const s = stateFrom(['.........', '.#.#.#...', '.=.=.=...', '.#.#.#...', '.........']);
     expect(lineClear(s, at(0, 2), at(2, 2))).toBe(true);
-    expect(lineClear(s, at(0, 2), at(4, 2))).toBe(true);
-    expect(lineClear(s, at(0, 2), at(6, 2))).toBe(false);
-    expect(lineClear(s, at(6, 2), at(0, 2))).toBe(false);
-    expect(MAX_WINDOWS_SEEN_THROUGH).toBe(2);
+    expect(lineClear(s, at(0, 2), at(4, 2))).toBe(false);
+    expect(lineClear(s, at(4, 2), at(0, 2))).toBe(false);
+    expect(MAX_WINDOWS_SEEN_THROUGH).toBe(1);
   });
 
   it('upstairs too, counting the windows of the floor the line crosses', () => {
     const ground = ['.........', '.........', '.........', '.........', '.........'];
     const s = withLevels(stateFrom(ground), [['         ', ' # # #   ', ' = = =   ', ' # # #   ', '         '].map((r) => r.replace(/ /g, '.'))]);
-    expect(lineClear(s, at(0, 2, 1), at(4, 2, 1))).toBe(true);
-    expect(lineClear(s, at(0, 2, 1), at(6, 2, 1))).toBe(false);
+    expect(lineClear(s, at(0, 2, 1), at(2, 2, 1))).toBe(true);
+    expect(lineClear(s, at(0, 2, 1), at(4, 2, 1))).toBe(false);
     // The same line on the ground floor, under them, crosses no window.
     expect(lineClear(s, at(0, 2), at(6, 2))).toBe(true);
     const eye = addUnit(s, 's1', 'assault', 0, 2, { z: 1 });
     const fog = teamVisibility(s, 'xcom');
     const node = (p: { x: number; y: number; z: number }) => p.z * s.width * s.height + p.y * s.width + p.x;
-    expect(fog[node(at(4, 2, 1))]).toBe(true);
-    expect(fog[node(at(6, 2, 1))]).toBe(false);
+    expect(fog[node(at(2, 2, 1))]).toBe(true);
+    expect(fog[node(at(4, 2, 1))]).toBe(false);
     expect(eye.pos.z).toBe(1);
   });
 });

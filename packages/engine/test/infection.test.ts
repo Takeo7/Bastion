@@ -104,7 +104,8 @@ describe('infection in combat', () => {
 
   it('an infected soldier who falls rises as the zombies’ turn begins, and acts from the next', () => {
     const s = field();
-    const fallen = addUnit(s, 's1', 'rookie', 5, 5, { infected: true });
+    const look = { primary: '#123456', secondary: '#654321', visor: '#9fe3ff', head: 'helmet' as const, build: 'normal' as const, sex: 'f' as const };
+    const fallen = addUnit(s, 's1', 'rookie', 5, 5, { infected: true, appearance: look });
     const clean = addUnit(s, 's2', 'rookie', 7, 5);
     const out = addUnit(s, 's3', 'rookie', 0, 0, { infected: true, alive: false, evacuated: true });
     addUnit(s, 's4', 'rookie', 0, 11, { hp: 99, maxHp: 99 });
@@ -121,8 +122,8 @@ describe('infection in combat', () => {
     expect(risen[0]).toMatchObject({ corpse: 's1', pod: { active: true } });
     expect(risen[0]!.unit).toBeUndefined();
     const zombie = s.units.find((u) => u.id === risen[0]!.zombie.id)!;
-    // The soldier keeps its name; anyone else rises as a Zombi.
-    expect(zombie).toMatchObject({ template: 'zombie', name: 'Zombi · s1', alive: true, pos: { x: 5, y: 5 } });
+    // The soldier keeps its name and its look (playtest 2026-10-16); anyone else rises as a Zombi.
+    expect(zombie).toMatchObject({ template: 'zombie', name: 'Zombi · s1', alive: true, pos: { x: 5, y: 5 }, risenFrom: 's1', appearance: look });
     expect(risenName(addUnit(cloneState(s), 'a9', 'trooper', 0, 0))).toBe(TEMPLATES.zombie.name);
     expect(s.pods.find((p) => p.id === zombie.podId)?.unitIds).toEqual([zombie.id]);
     expect(fallen.reanimated).toBe(true);

@@ -139,6 +139,9 @@ const droneRingGeometry = new THREE.TorusGeometry(0.16, 0.02, 6, 20).rotateX(Mat
 /** Faceted, like Synty's blasts. */
 const blastGeometry = new THREE.IcosahedronGeometry(1, 1);
 const shellGeometry = new THREE.SphereGeometry(0.09, 10, 8);
+/** A thrown stone (docs/FASE10.md §4), ours: a faceted lump, a little flat. */
+const stoneGeometry = new THREE.IcosahedronGeometry(0.06, 0).scale(1, 0.72, 0.88);
+const stoneMaterial = new THREE.MeshStandardMaterial({ color: 0x77736b, roughness: 1, flatShading: true });
 const debrisGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.12);
 const groundGeometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 const screamRingGeometry = new THREE.TorusGeometry(1, 0.04, 4, 40);
@@ -564,6 +567,40 @@ export class Fx {
       shell.rotation.x += 0.4;
     });
     this.group.remove(shell);
+  }
+
+  /**
+   * A stone thrown (docs/FASE10.md §4): a low, quick arc from the hand to
+   * `to`, a dull knock where it lands (a puff of dust, a short hop) and it
+   * lies there a moment; no blast, no smoke. `struck`: `to` is someone's
+   * chest, and from there it drops at their feet. Resolves as it lands or
+   * strikes.
+   */
+  async stone(from: THREE.Vector3, to: THREE.Vector3, struck = false): Promise<void> {
+    const rock = new THREE.Mesh(stoneGeometry, stoneMaterial);
+    rock.castShadow = true;
+    this.group.add(rock);
+    const d = from.distanceTo(to);
+    const height = (struck ? 0.25 : 0.5) + d * 0.12;
+    await tween(0.3 + d * 0.025, (t) => {
+      rock.position.lerpVectors(from, to, t);
+      rock.position.y += Math.sin(t * Math.PI) * height;
+      rock.rotation.x += 0.5;
+      rock.rotation.z += 0.3;
+    });
+    const ground = struck ? to.clone().setY(0) : to.clone();
+    const away = new THREE.Vector3(to.x - from.x, 0, to.z - from.z).setLength(struck ? 0.2 : 0.18);
+    if (!struck) this.dust(ground, 2);
+    // Off the body down to the feet, or a short hop on from where it hit the ground.
+    const start = rock.position.clone();
+    void tween(struck ? 0.26 : 0.16, (t) => {
+      rock.position.lerpVectors(start, ground.clone().add(away), t);
+      rock.position.y = struck ? THREE.MathUtils.lerp(start.y, ground.y + 0.04, t * t) : ground.y + 0.04 + Math.sin(t * Math.PI) * 0.1;
+      rock.rotation.x += 0.2;
+    }).then(() => {
+      if (struck) this.dust(rock.position, 1);
+      return wait(1.6);
+    }).then(() => this.group.remove(rock));
   }
 
   /** Fireball (or an electric burst for the drone's discharge) with shockwave, debris and smoke. */

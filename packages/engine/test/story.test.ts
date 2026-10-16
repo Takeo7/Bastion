@@ -43,20 +43,14 @@ function fly(c: CampaignState, offer: MissionOffer, outcome: 'victory' | 'defeat
 }
 
 describe('story', () => {
-  it('updates the saved opening title without changing its map, squad or progress', () => {
+  it('a saved campaign of Fase 10 keeps its soldiers\' bars, growth and board', () => {
     const old = solo();
-    const first = chapter(old, 1)!;
-    first.name = 'Primer invierno';
-    old.activeMission = first.id;
-    // A campaign of the 0.3.0 (version 17), from before the approved title.
-    old.version = 17 as CampaignState['version'];
-    const expected = JSON.parse(JSON.stringify(old)) as CampaignState;
+    const s = old.soldiers[0]!;
+    s.board = ['steadyHand'];
     const updated = migrateCampaign(old);
-    expected.version = updated.version;
-    chapter(expected, 1)!.name = STORY[0]!.title;
-    expect(updated).toEqual(expected);
-    expect(first.name).toBe('Primer invierno');
+    expect(updated.soldiers[0]).toMatchObject({ skills: s.skills, growth: s.growth, board: ['steadyHand'] });
   });
+
 
   it('updates the presentation of a saved opening battle without resetting the battle', () => {
     const state = createMission({ map: { kind: 'generated', biome: 'city', seed: 2 }, slots: [0], rng: new Rng(2), campaignMission: { id: 'opening', story: 1, name: 'Primer invierno', kicker: 'DIARIO · HOJA 1', briefing: 'Old report.' } });

@@ -6,7 +6,7 @@
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
 import { FOUND_WEAPONS } from './content';
-import { DEED_XP, SKILL_TALENTS, SKILLS, type DeedId, type Deeds, type SkillId } from './skills';
+import { DEED_XP, SKILLS, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
 /** Bastion level at which the doom track gets its name: until the radio is fixed nobody knows the Marea is coming. */
@@ -63,7 +63,7 @@ export const GLOSSARY: Record<string, string> = {
   Registrar: 'Una acción dentro de una habitación. Sale lo que haya según el sitio: comida y medicinas en las casas, piezas en las oficinas, comida en las tiendas, de todo en los almacenes. Cada habitación se registra una vez, para toda la escuadra. Hace un poco de ruido.',
   Cajas: 'Marcadas, como mucho tres por mapa, cada una de un tipo: armas, medicinas, munición o comida. Su marca se ve cuando están a la vista, y se queda en el mapa. Se abren con una acción, al lado, y dan siempre lo suyo.',
   Mochila: 'Tres cosas por soldado, cuatro con la Chapistería. Se suelta gratis, se pasa a un compañero de al lado con una acción, y las armas y las medicinas se usan ahí mismo. El botín cuenta si vuelve: lo que llevaba un caído se pierde.',
-  Armería: 'Las armas de Atalaya: las que se encuentran, las que hace el Taller y las que trae el nivel del Bastión. Cada una es de quien la lleve, sea de la clase que sea.',
+  Armería: 'Las armas de Atalaya: las que se encuentran, las que hace el Taller y las que trae el nivel del Bastión. Cada una es de quien la lleve.',
   Cargadores: 'Los de repuesto los hace el Taller: cada soldado sale con uno por tanda hecha, hasta tres. Valen para todas las armas; recargar llena primero la principal y luego la pistola. Registrando aparecen más.',
   Suministros: 'Lo que se saquea y se cambia: sirve para construir, reclutar y equipar.',
   Medicinas: 'Se cuentan en ✚. El tratamiento de un mordido cuesta 2 (1 con la Enfermería a nivel 2), y una dosis le quita 3 días de cama a un herido. En la misión, las de la mochila curan 3 con una acción. Nunca hay bastantes.',
@@ -76,13 +76,13 @@ export const GLOSSARY: Record<string, string> = {
   Enclave: 'Un grupo de supervivientes con el que tenéis contacto por radio. Si sigue vivo, manda suministros.',
   Rumor: 'Algo que se oye por la radio en una zona. Si lo seguís unos días a la escucha, sabréis qué era.',
   Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
-  Oficio: 'Lo que Teo enseña en el Taller de oficios: machete, fuego, ballesta y enfermería de campo.',
-  'Taller de oficios': 'Donde Teo enseña los oficios. Abre la cuarta rama de cada clase.',
-  Maña: 'La aptitud de las manos: arreglar equipos, lanzar granadas y curar.',
-  Grillo: 'El dron del Especialista: uno de juguete con una batería de coche, montado por Teo. Cura, cubre, da calambres y arregla a distancia.',
+  'Taller de oficios': 'Lo que se aprende fuera, allí se repasa: cada misión llena las barras un poco más.',
   'La Lata': 'El autobús de Atalaya: uno de línea, con la chapa que Teo le soldó por encima. Lleva a los equipos y los espera en la zona de evacuación.',
   Evacuar: `Se sale ${BUS.in}, desde la zona de evacuación: lo pide uno y lo acepta el otro. Quien esté fuera cuando sale, se pierde. En la Limpieza, salir es retirarse y la misión se pierde.`,
-  Recluta: 'Superviviente todavía sin clase, con cuchillo y pistola. Al llegar a Capitán se especializa en el eje del árbol de habilidades en que más haya aprendido.',
+  Recluta: 'Superviviente recién llegado, con cuchillo y pistola. Aprende de lo que hace fuera, como todos.',
+  Barras: 'Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo en las misiones. Cada barra llena sube un poco lo suyo y da un punto para el tablero.',
+  Tablero: 'Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos, siempre al lado de una que ya tenga, y lo comprado es para siempre.',
+  Veteranía: 'Los puntos gastados en el tablero, contados: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.',
 };
 
 // ---------------------------------------------------------- enemy files
@@ -301,17 +301,22 @@ export function findLabel(find: SearchFind | null): string {
 
 // -------------------------------------------------------------- learning
 
-/** How each deed reads in the debrief (docs/FASE9.md §1), one and many, and whether the noun is feminine. */
+/** How each deed reads in the debrief (docs/FASE10.md §3), one and many, and whether the noun is feminine. */
 const DEED_WORDS: Record<DeedId, [string, string, boolean]> = {
+  shot: ['disparo', 'disparos', false],
   hit: ['acierto', 'aciertos', false],
   gunKill: ['baja', 'bajas', true],
+  swing: ['tajo', 'tajos', false],
   blow: ['golpe', 'golpes', false],
   bladeKill: ['baja', 'bajas', true],
+  throw: ['lanzamiento', 'lanzamientos', false],
+  throwHit: ['lanzamiento con blanco', 'lanzamientos con blanco', false],
   healOther: ['cura a un compañero', 'curas a compañeros', true],
   healSelf: ['cura propia', 'curas propias', true],
   search: ['registro', 'registros', false],
   fix: ['arreglo', 'arreglos', false],
-  blast: ['explosivo con blanco', 'explosivos con blanco', false],
+  hunker: ['vez a cubierto', 'veces a cubierto', true],
+  run: ['carrera', 'carreras', true],
 };
 
 const NUMBERS = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez'];
@@ -337,10 +342,17 @@ export function learnedLine(skill: SkillId, gained: number, deeds: Deeds): strin
   return why.length ? `${head}: ${joinAnd(why)}${base}` : head;
 }
 
-/** A skill going up: «Ana sube a Tiro 3.»; at a talent's level, it says one waits in the Cuartel. */
-export function levelUpLine(who: string, skill: SkillId, level: number): string {
-  const talent = Object.values(SKILL_TALENTS).some((t) => t?.skill === skill && t.level === level);
-  return `${who} sube a ${SKILLS[skill].name} ${level}.${talent ? ' Tiene un talento por elegir en el Cuartel.' : ''}`;
+/**
+ * Bars filled on coming back (docs/FASE10.md §2), one line per line: «Ana
+ * llena una barra de Disparo: +7 % de puntería con armas de fuego. Tiene un
+ * punto para el tablero.». `growth`, what each bar added.
+ */
+export function barLine(who: string, skill: SkillId, growth: number[]): string {
+  const n = growth.length;
+  const bars = n === 1 ? 'una barra' : `${NUMBERS[n] ?? n} barras`;
+  const percent = growth.reduce((a, b) => a + b, 0);
+  const stat = SKILLS[skill].stat.charAt(0).toLowerCase() + SKILLS[skill].stat.slice(1);
+  return `${who} llena ${bars} de ${SKILLS[skill].name}: +${percent} % de ${stat}. ${n === 1 ? 'Tiene un punto' : `Tiene ${NUMBERS[n] ?? n} puntos`} para el tablero.`;
 }
 
 /**
@@ -353,6 +365,183 @@ export function wornLine(who: string, kind: FoundWeaponId, broken = false): stri
   const female = w.find.startsWith('una ');
   return `${female ? 'La' : 'El'} ${w.name.toLowerCase()} de ${who} vuelve ${broken ? (female ? 'rota' : 'roto') : female ? 'gastada' : 'gastado'}.`;
 }
+
+/**
+ * Each cell of the hex board (board.ts), in a line of the world, in the
+ * Bastión's voice: never the effect, which the sheet shows apart
+ * (docs/FASE10.md §6). By cell id, the core's too.
+ */
+export const BOARD_ABOUT: Record<string, string> = {
+  core: 'Lo que le ha mantenido vivo hasta hoy. Lo demás se aprende encima.',
+  steadyHand: 'Respirar, soltar el aire a medias, y entonces.',
+  grip: 'Cinta en el mango y la muñeca firme.',
+  looseArm: 'Se pasó la infancia tirando piedras al río.',
+  bandage: 'Apretar donde sangra, y apretar bien.',
+  tinker: 'Desmonta cualquier cosa para ver cómo va.',
+  stamina: 'Subía a la sierra corriendo antes de que hubiera de qué huir.',
+  lightTrigger: 'El gatillo no se aprieta: se acaricia.',
+  sidearm: 'La pistola es lo último que queda. Más vale que sirva.',
+  edge: 'Una hoja afilada cada noche corta a la primera.',
+  sidestep: 'Un muerto embiste en línea recta. Basta con no estar ahí.',
+  sharpStone: 'Mejor una piedra con aristas que una redonda.',
+  curtain: 'Humo de sobra para cruzar una calle.',
+  calmVoice: 'Hablar bajo cuando todos gritan.',
+  revival: 'Un cachete, su nombre en voz alta, y vuelve.',
+  lookout: 'Mira antes de entrar. Siempre.',
+  quiet: 'Abre los cajones como si hubiera alguien durmiendo.',
+  crouch: 'Lo primero que se aprende fuera.',
+  quickReflex: 'Salta antes de saber por qué.',
+  aimedShot: 'Es lo único que los para del todo.',
+  closeIn: 'A esa distancia no hay excusas.',
+  fineTrigger: 'Una pistola bien cuidada no tiembla.',
+  elbowRoom: 'Cuando le rodean, hay que abrir hueco a golpes.',
+  bladeCrit: 'A la sien, a la nuca. Donde acaba.',
+  closeRanks: 'Juntos, no se cuela nadie.',
+  salvo: 'La anilla, el brazo, y a lo siguiente.',
+  bigCharge: 'Teo pone algo más de lo que dice el manual.',
+  decoy: 'Un golpe contra una chapa lejos de aquí, y todos miran allí.',
+  bridge: 'Los del otro también son de los nuestros.',
+  bigKit: 'Una bolsa más grande y mejor ordenada.',
+  firstAid: 'Primero se aparta al herido de la línea de tiro; luego se le cura.',
+  patchUp: 'Cinta, alambre y un poco de paciencia.',
+  deft: 'Las cerraduras le duran poco.',
+  crossfire: 'Dos ángulos y ningún sitio donde esconderse.',
+  sprinter: 'Cuando hay que correr, llega antes que nadie.',
+  lungs: 'Aguanta sin resollar donde otros se paran.',
+  dodgeFire: 'De esquina en esquina, nunca en línea recta.',
+  rapidFire: 'Cuando no hay tiempo para apuntar dos veces.',
+  flanker: 'Por donde no miran, duele más.',
+  rooftop: 'Arriba se respira, y se ve todo.',
+  coldBlood: 'Esperar a que se acerquen sin que tiemble la mano.',
+  implacable: 'Sin pararse a mirar al que acaba de caer.',
+  heavyBlow: 'Todo el peso del cuerpo en el golpe.',
+  parry: 'Por debajo de la línea de tiro, siempre.',
+  grit: 'Ha visto de cerca lo que otros solo ven de lejos.',
+  goodArm: 'Llega más lejos, y siempre lleva una de más.',
+  shrapnel: 'Tornillos y clavos dentro de la carga.',
+  dazzle: 'Un destello de más en el bolsillo.',
+  overhand: 'Por encima del hombro, llega más lejos.',
+  lightHands: 'Nwosu le enseñó qué dar, cuánto y cuándo.',
+  suture: 'Aguja, hilo y pulso.',
+  bedside: 'Alguien que se sienta al lado y no se va.',
+  toughSkin: 'Las heridas pequeñas ya ni las nota.',
+  care: 'Limpia el arma cada noche, aunque no la haya usado.',
+  sideBySide: 'Con el otro al lado, se apunta mejor.',
+  parapet: 'El compañero cubre lo que uno no ve.',
+  picklock: 'Un alambre doblado abre más puertas que una llave.',
+  runAndGun: 'Cuando hace falta, saca fuerzas de donde no hay.',
+  sturdy: 'Nació para trabajar, no para quejarse.',
+  temper: 'Ya no le tiembla nada.',
+  fixedPost: 'Elige su sitio y no se mueve de él.',
+  chainShot: 'Si el primero entra, el segundo ya va de camino.',
+  hollowPoint: 'Munición de caza, limada en el taller de Teo.',
+  bigBore: 'Una pistola vieja, de las que ya no se fabrican.',
+  sentryCrit: 'Quien espera, elige dónde dar.',
+  deathFromAbove: 'Desde arriba, uno cae y el siguiente ya está en la mira.',
+  bladeMaster: 'Años de monte antes de que todo empezara.',
+  earBlow: 'Un buen golpe en la cabeza aturde hasta a los muertos.',
+  butcher: 'Antes de la Pandemia, trabajaba en un matadero.',
+  bladeWall: 'Quien llega a su lado no da el segundo paso.',
+  backstab: 'Si no le ve llegar, no se gira a tiempo.',
+  safeBlast: 'Sabe dónde están los suyos antes de soltar la anilla.',
+  blastWave: 'La metralla vuela más lejos de lo que parece.',
+  bandolier: 'Una cinta cruzada al pecho, y una granada más.',
+  boulder: 'No hace falta que sea bonita, solo que pese.',
+  demolition: 'Abría galerías en la mina de Carvik con dinamita.',
+  restoration: 'Una vuelta por todos, sin dejarse a nadie.',
+  surgeon: 'Ha cosido en sitios peores que este.',
+  lullaby: 'Sabe qué decir para que nadie salga corriendo.',
+  spares: 'Vendas y gasas de sobra en cada bolsillo.',
+  triage: 'Mientras venda, se pone en medio.',
+  morePatch: 'Siempre le queda un trozo de cinta.',
+  binoculars: 'Unos prismáticos de cazador, sin una raya.',
+  coolHead: 'Primero piensa, luego se mueve.',
+  shoulder: 'Dos que se conocen pelean como uno.',
+  pointOut: 'Un gesto, y el otro ya sabe dónde disparar.',
+  shadowstep: 'Cuando quieren apuntarle, ya no está.',
+  leathery: 'Ni los muertos pueden con su pellejo.',
+  eel: 'Se escurre entre las manos de cualquiera.',
+  vest: 'Ha salido de peores.',
+  dugIn: 'Sacos terreros, y a esperar.',
+  lightningHands: 'La pistola sale antes de que nadie se dé cuenta.',
+  apRounds: 'Todo chaleco tiene un hueco. Hay que saber dónde.',
+  shredder: 'Lo que no atraviesa, rompe.',
+  serenity: 'Si da, da de verdad.',
+  coveringFire: 'Mientras vigila, nadie toca a los suyos.',
+  noEscape: 'De cerca, ya no hay adónde huir.',
+  steelNerves: 'Ha oído gritar a un Chillón muchas veces.',
+  cleanCut: 'Un tajo, y no hace falta otro.',
+  waist: 'Un giro de cadera vale más que un escudo.',
+  onGuard: 'La hoja en alto y los pies quietos.',
+  hardHead: 'Se ha llevado más golpes de los que cuenta.',
+  sweep: 'Un paso de más es un mordisco.',
+  thrower: 'Una piedra bien tirada llega a la otra acera.',
+  smokeEyes: 'Sabe dónde estaban antes de que subiera el humo.',
+  doubleCharge: 'El doble de lo que hace falta, por si acaso.',
+  crater: 'Donde estalla, no queda nada en pie.',
+  fog: 'Para salir de un sitio sin que lo vean.',
+  stoning: 'Una buena pedrada tumba a cualquiera.',
+  rounds: 'Otra vuelta antes de que acabe el día.',
+  fieldMedic: 'Ha curado tirado en el barro, bajo la lluvia.',
+  ironBlood: 'Come poco, duerme menos y no enferma nunca.',
+  cheer: 'Con alguien así al lado, se aguanta un poco más.',
+  courage: 'Tiene miedo, como todos. No se le nota.',
+  kitBag: 'El maletín de un médico de pueblo, encontrado en una casa vacía.',
+  engineer: 'Trabajaba en la central del Pantano Gris.',
+  magnifier: 'Se fija en lo que nadie mira.',
+  weakSpot: 'Todo tiene un punto por donde cede.',
+  temperance: 'Ha oído gritos peores que los de un Chillón.',
+  lynx: 'Ve moverse algo en la niebla antes que nadie.',
+  bodge: 'No queda bonito, pero aguanta hasta casa.',
+  marathon: 'Va y vuelve de Brena sin parar.',
+  ironBody: 'Las caídas, los golpes, el frío: todo le resbala.',
+  poise: 'Nada le hace perder la calma.',
+  feline: 'Cae de pie y sigue corriendo.',
+  ironWill: 'Sabe por qué sigue, y eso le basta.',
+  agile: 'Salta vallas como si no estuvieran.',
+  killZone: 'Una calle, un arma y toda la noche.',
+  faceoff: 'Cuando le rodean, se dispara a todos a la vez.',
+  rupture: 'Una herida abierta por la que entra todo lo demás.',
+  suppression: 'Que no asome la cabeza. Ni lo intente.',
+  marker: 'Donde da uno, apuntan todos.',
+  heavyHand: 'El arma de siempre, y la costumbre de usarla.',
+  eagleEye: 'Lo que otros ven como una mancha, aquí tiene cara.',
+  secondWind: 'Cada uno que cae le da fuerzas para el siguiente.',
+  cleaver: 'Lo que corta leña corta hueso.',
+  slippery: 'Nunca está donde le esperan.',
+  duelist: 'De uno en uno, no hay muerto que aguante.',
+  rampart: 'Cuero, cinta y lo que haga falta bajo la ropa.',
+  bladeDance: 'La hoja, siempre en medio de lo que viene.',
+  killerInstinct: 'Lo que antes era alguien ya no lo es. No lo piensa.',
+  blaster: 'Las cargas las prepara a mano, y nunca le han fallado.',
+  shockwave: 'Lo que no alcanza la metralla, lo alcanza el golpe.',
+  cartridge: 'Cada hueco del cinturón, aprovechado.',
+  flares: 'Para cuando hay que cegar a muchos a la vez.',
+  lure: 'Los muertos van al ruido. Basta con decidir dónde suena.',
+  ironArm: 'Años cargando sacos en el puerto de Galen.',
+  sling: 'Una tira de cuero y un buen giro.',
+  miracles: 'Lo que otros darían por perdido, se cose.',
+  presence: 'Basta con que esté para que los demás se calmen.',
+  vigor: 'Se recupera antes que nadie.',
+  serenityMind: 'Ha visto morir a mucha gente. Ya no se asusta.',
+  warKit: 'Material militar de los almacenes de Atalaya.',
+  fieldHospital: 'Donde se para, se cura a todos.',
+  goodHand: 'Los heridos se calman en cuanto le ven las manos.',
+  mastermind: 'Teo dice que tiene manos de taller.',
+  inseparable: 'Saben dónde está el otro sin mirar.',
+  watchman: 'Mientras uno avanza, el otro mira por los dos.',
+  anatomy: 'Sabe dónde dar para que no se levanten.',
+  watchtower: 'Desde lo alto de cualquier cosa, todo el pueblo.',
+  shadow: 'Se mueve junto a las paredes, sin ruido y sin prisa.',
+  ingenuity: 'Con lo que hay a mano, arregla lo que haga falta.',
+  titan: 'Grande como un armario, y igual de difícil de mover.',
+  longRunner: 'Lleva dos inviernos sin dejar de correr.',
+  rock: 'Le pueden dar. No le mueven.',
+  untouchable: 'Dicen que nadie le ha puesto la mano encima.',
+  bulwark: 'Donde se planta, los demás se ponen detrás.',
+  lastStand: 'No piensa caer antes que nadie.',
+  tireless: 'Nunca se sienta antes que los demás.',
+};
 
 // -------------------------------------------------------------- backpack
 
@@ -812,7 +1001,7 @@ export const PREMISE = {
   title: 'Atalaya',
   lines: [
     'La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
-    'En la vieja estación militar se ha ido reuniendo gente de todas partes. Necesitamos comida, medicinas y combustible si queremos llegar todos vivos al final de la temporada.',
+    'En la vieja estación militar se ha ido reuniendo gente de todas partes. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.',
     'Toca volver a sacar La Lata, ese trasto forrado con chapas que tenemos por autocar, y salir a buscar lo que nos hace falta.',
   ],
 };

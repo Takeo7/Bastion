@@ -20,7 +20,7 @@ import { defaultAppearance } from '../src/appearance';
 import { hasTech, LEVEL_XP } from '../src/progression';
 import { QUESTS } from '../src/quests';
 import { Rng } from '../src/rng';
-import { veterancy } from '../src/skills';
+import { totalBars } from '../src/skills';
 import { createMission } from '../src/setup';
 import type { Slot } from '../src/types';
 
@@ -129,7 +129,7 @@ describe('side quests', () => {
     const ibarra = c.soldiers.find((s) => s.name === 'Vera Lindqvist')!;
     // She has been out there: three levels more than a recruit (docs/FASE9.md).
     expect(ibarra).toMatchObject({ traits: ['scarred'] });
-    expect(veterancy(ibarra.skills)).toBeGreaterThanOrEqual(4);
+    expect(totalBars(ibarra.skills)).toBeGreaterThanOrEqual(4);
     // Her model is a woman's, whatever name the recruit drew first.
     expect(ibarra.appearance).toEqual(defaultAppearance(ibarra.owner, undefined, 'f'));
     expect(squadMember(c, ibarra).will).toBeLessThan(squadMember(c, { ...ibarra, traits: [] }).will);

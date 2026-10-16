@@ -54,14 +54,17 @@ const g = (motion: GaitMotion, seconds: number): Gait => ({ motion, seconds });
 /** The living (the squad, the Cuervos, the VIP): a run for a move (8 tiles: 3 s), a sprint for a dash (16: 3.8 s). */
 const LIVING: Gaits = { one: g('run', 0.375), two: g('sprint', 0.24), style: null };
 
-/** The dead (Gameplay, 2026-10-14: slower than the living, a dash quicker than a move). */
+/**
+ * The dead (Gameplay, 2026-10-14: slower than the living, a dash quicker than a move); the walkers a fifth
+ * quicker since the playtest of 16/10 (#6: «el turno enemigo es muy lento»), their clips with them.
+ */
 const GAITS: Partial<Record<TemplateId, Gaits>> = {
-  // The slowest, dragging a foot (4 tiles: 4.1 s), but a turn of many of them doesn't drag on.
-  zombie: { one: g('walk', 1.02), two: g('walk', 0.77), style: 'drag' },
+  // The slowest, dragging a foot (4 tiles: 3.3 s), but a turn of many of them doesn't drag on.
+  zombie: { one: g('walk', 0.82), two: g('walk', 0.62), style: 'drag' },
   xenoid: { one: g('run', 0.52), two: g('sprint', 0.2), style: 'hunched' },
-  mec: { one: g('walk', 0.97), two: g('walk', 0.71), style: 'heavy' },
-  sectoid: { one: g('walk', 0.92), two: g('walk', 0.66), style: null },
-  bloater: { one: g('walk', 1.08), two: g('walk', 0.8), style: 'wobble' },
+  mec: { one: g('walk', 0.8), two: g('walk', 0.6), style: 'heavy' },
+  sectoid: { one: g('walk', 0.75), two: g('walk', 0.56), style: null },
+  bloater: { one: g('walk', 0.86), two: g('walk', 0.64), style: 'wobble' },
 };
 
 /** Moving crouched (hunkered, held): the crouched walk. */

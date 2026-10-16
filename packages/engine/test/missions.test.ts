@@ -285,8 +285,8 @@ describe('patrols and reinforcements', () => {
   });
 });
 
-describe('skirmish soldiers (docs/FASE9.md §6)', () => {
-  it('each one a weapon and gear at random; veterans, every pair of talents they opened picked; the same seed, the same squad', () => {
+describe('skirmish soldiers (docs/FASE10.md §7)', () => {
+  it('each one a weapon and gear at random; veterans, bars in every line and their points spent; the same seed, the same squad', () => {
     const kinds = new Set<string>();
     for (let seed = 1; seed <= 20; seed++) {
       const veterans = (rng: Rng) => createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0, 1], rng, veterans: true }).units.filter((u) => u.team === 'xcom');
@@ -297,8 +297,7 @@ describe('skirmish soldiers (docs/FASE9.md §6)', () => {
         expect(u.template).toBe('rookie');
         expect(u.gear).toContain('fragGrenade');
         expect(abilitiesOf(u)).toContain('grenade');
-        // Skills of 2 to 4: a talent of each level 2, at least, from Fogueado on.
-        expect(u.perks.length).toBeGreaterThanOrEqual(4);
+        // Two to five bars in each of the six lines: Curtido at least.
         expect(u.rank).toBeGreaterThanOrEqual(2);
       }
     }

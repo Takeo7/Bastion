@@ -27,8 +27,20 @@ function enter(el: HTMLElement): void {
   el.dataset.enterTimer = String(window.setTimeout(() => el.classList.remove('entering'), ENTER_MS));
 }
 
-/** Counts `b` from `from` to its own number, easing out; the plate flashes the way it went. */
+/**
+ * Counts `b` from `from` to its own number, easing out; the plate flashes the
+ * way it went. The number it goes to stays in `data-to`: the text shows the
+ * count on its way, and is never taken for the value (playtest 16/10 #5: two
+ * renders in a row read the count's first number as the new value, counted
+ * back to it, and the supplies seemed not to go down).
+ */
 function tick(b: HTMLElement, from: number, to: number): void {
+  b.dataset.to = String(to);
+  // Nobody sees it: straight to the number.
+  if (document.hidden) {
+    b.textContent = String(to);
+    return;
+  }
   const plate = b.parentElement;
   plate?.classList.add(to > from ? 'tick-up' : 'tick-down');
   const start = performance.now();
@@ -49,7 +61,7 @@ function resources(top: Element): void {
   // A bar out of sight (a screen taking off, a hidden view) only remembers: nothing counts where nobody sees.
   const visible = (top as HTMLElement).offsetParent !== null;
   for (const b of top.querySelectorAll<HTMLElement>('.strat-res .strat-credits > b')) {
-    const value = Number(b.textContent);
+    const value = Number(b.dataset.to ?? b.textContent);
     if (!Number.isFinite(value)) continue;
     const key = b.parentElement!.className.replace(/\s*(tick-up|tick-down|x-bad)\b/g, '');
     const before = shown.get(key);
@@ -64,11 +76,14 @@ export function installMotion(): void {
   if (installed || typeof MutationObserver === 'undefined') return;
   installed = true;
   new MutationObserver((records) => {
+    // Each top bar once, however many changes it had: a second look would see the first's count.
+    const tops = new Set<HTMLElement>();
     for (const r of records) {
       const el = r.target as HTMLElement;
       if (r.type === 'attributes') {
         if (el.classList.contains('strat') && r.oldValue !== el.dataset.view) enter(el);
-      } else if (el.classList?.contains('strat-top')) resources(el);
+      } else if (el.classList?.contains('strat-top')) tops.add(el);
     }
+    for (const top of tops) resources(top);
   }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-view'], attributeOldValue: true });
 }

@@ -1,0 +1,449 @@
+/*
+ * The hex board of Fase 10 (hexBoard.ts), in the interface's steel («Mixta»):
+ * a dark planning board with a faint grid, the round frame of lines, the 169
+ * cells and, beside it, the card of the last cell consulted.
+ *
+ * - Each line's family has its colour, --cc (.sk-*; the core, the accent).
+ * - A cell's state is its fill, edge and icon, never only its colour:
+ *   unlocked = filled with the colour, the icon dark and sharp; open = dull,
+ *   barely tinted, the icon grey; locked = dimmer still, the cell seen, the
+ *   icon not. Consulting a cell doesn't change how it looks.
+ * - Holding: an indicator runs round the outline in a second; bought: a small
+ *   bounce and a pulse round it. Reduced motion: neither moves.
+ * Sizes inside the SVG are in board units (a cell is 30 across its corners).
+ */
+
+.sk-shooting {
+  --cc: #5aa9ec;
+}
+
+.sk-melee {
+  --cc: #ec644e;
+}
+
+.sk-throwing {
+  --cc: #a585ea;
+}
+
+.sk-medicine {
+  --cc: #4fcaa3;
+}
+
+.sk-searching {
+  --cc: #b7c64a;
+}
+
+.sk-fitness {
+  --cc: #e57fae;
+}
+
+.sk-core {
+  --cc: var(--t-accent, #f2c230);
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.hb {
+  --board: #15191b;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hb-view {
+  position: relative;
+  height: clamp(440px, 66vh, 760px);
+  overflow: hidden;
+  border-radius: 2px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(242, 194, 48, 0.05), transparent 55%),
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 40px 40px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 40px 40px,
+    var(--board);
+  box-shadow: var(--m-sink, inset 0 1px 3px rgba(0, 0, 0, 0.75)), inset 0 0 70px rgba(0, 0, 0, 0.6);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.hb-view.dragging {
+  cursor: grabbing;
+}
+
+.hb-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .hb {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------------------------------------------ frame */
+
+.hb-ring {
+  fill: none;
+  stroke: rgba(201, 205, 200, 0.16);
+  stroke-width: 1.2;
+}
+
+.hb-ring.outer {
+  stroke: rgba(201, 205, 200, 0.3);
+  stroke-width: 2;
+}
+
+.hb-spoke {
+  stroke: rgba(201, 205, 200, 0.28);
+  stroke-width: 1.4;
+}
+
+.hb-tick {
+  stroke: rgba(201, 205, 200, 0.22);
+  stroke-width: 1;
+}
+
+.hb-tick.long {
+  stroke: rgba(201, 205, 200, 0.4);
+  stroke-width: 1.6;
+}
+
+/* Each sector's middle: a notch in its family's colour, pointing in. */
+.hb-notch {
+  fill: var(--cc);
+  opacity: 0.8;
+}
+
+/* ------------------------------------------------------------------ cells */
+
+.hx {
+  --face: color-mix(in srgb, var(--cc) 10%, #1d2123);
+  --edge: color-mix(in srgb, var(--cc) 34%, #2b3033);
+  --icon: #8e948f;
+  --icon-o: 1;
+  cursor: pointer;
+  outline: none;
+}
+
+.hx-shadow {
+  fill: rgba(0, 0, 0, 0.55);
+  transform: translateY(3px);
+}
+
+.hx-face {
+  fill: var(--face);
+}
+
+.hx-edge {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.6;
+}
+
+.hx-icon {
+  fill: none;
+  stroke: var(--icon);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: var(--icon-o);
+  pointer-events: none;
+}
+
+.hx-icon .fill {
+  fill: var(--icon);
+  stroke: none;
+}
+
+.hx-icon .dash,
+.hb-card-icon svg .dash {
+  stroke-dasharray: 2 2.4;
+}
+
+/* Unlocked: the family's colour, the icon dark and sharp. */
+.hx.unlocked {
+  --face: var(--cc);
+  --edge: color-mix(in srgb, var(--cc) 62%, #fff);
+  --icon: #0d0f10;
+}
+
+.hx.unlocked .hx-icon {
+  stroke-width: 2.1;
+}
+
+/* Locked: much dimmer; the cell is there, its icon isn't. */
+.hx.locked {
+  --face: color-mix(in srgb, var(--cc) 4%, #121517);
+  --edge: color-mix(in srgb, var(--cc) 12%, #1e2225);
+  --icon-o: 0;
+}
+
+/* The core: steel in a double brass rim, its mark in the accent. */
+.hx.kind-core {
+  --face: #2a2f31;
+  --edge: var(--t-accent, #f2c230);
+  --icon: var(--t-accent, #f2c230);
+}
+
+.hx.kind-core .hx-edge {
+  stroke-width: 3;
+}
+
+.hx.kind-core .hx-shadow {
+  stroke: color-mix(in srgb, var(--t-accent, #f2c230) 45%, transparent);
+  stroke-width: 7;
+}
+
+/* Risen in the wave: the shadow shows a little more under it. */
+.hx.raised .hx-shadow {
+  fill: rgba(0, 0, 0, 0.72);
+}
+
+/* The keyboard's focus: a thin white ring (a hover or a click changes nothing). */
+.hx:focus-visible .hx-edge {
+  stroke: #f4f5f1;
+  stroke-width: 2.6;
+}
+
+/* ------------------------------------------------------------ hold and buy */
+
+/* The hold's indicator: a light running round the outline in a second; let go, it drops back at once. */
+.hx-hold {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  opacity: 0;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--cc) 80%, #fff));
+  transition:
+    stroke-dashoffset 0.12s,
+    opacity 0.12s;
+  pointer-events: none;
+}
+
+.hx.holding .hx-hold {
+  stroke-dashoffset: 0;
+  opacity: 1;
+  transition:
+    stroke-dashoffset 1s linear,
+    opacity 0.08s;
+}
+
+.hx-pop {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.hx-pulse {
+  fill: none;
+  stroke: color-mix(in srgb, var(--cc) 70%, #fff);
+  stroke-width: 2.5;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+/* Bought: a small bounce, and a pulse running out from the outline. */
+.hx.bought .hx-pop {
+  animation: hx-bounce 0.42s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.hx.bought .hx-pulse {
+  animation: hx-pulse 0.75s ease-out;
+}
+
+@keyframes hx-bounce {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes hx-pulse {
+  0% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hx.bought .hx-pop {
+    animation: none;
+  }
+
+  .hx.bought .hx-pulse {
+    animation: hx-pulse-still 0.6s ease-out;
+  }
+
+  @keyframes hx-pulse-still {
+    from {
+      opacity: 0.9;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ the card */
+
+/* The last cell consulted, beside the board: it stays when the pointer leaves. */
+.hb-card {
+  --cc: var(--t-accent, #f2c230);
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  border-radius: 3px;
+  background: var(--m-well-bg, rgba(0, 0, 0, 0.35));
+  box-shadow: var(--m-sink), inset 0 3px 0 color-mix(in srgb, var(--cc) 75%, transparent);
+  min-height: 0;
+}
+
+.hb-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hb-card-head > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hb-card-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: color-mix(in srgb, var(--cc) 14%, #1d2123);
+  color: #8e948f;
+}
+
+.hb-card.unlocked .hb-card-icon {
+  background: var(--cc);
+  color: #0d0f10;
+}
+
+.hb-card-icon svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hb-card-icon svg .fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.hb-card-name {
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  color: #fff;
+}
+
+.hb-card-kind {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cc);
+}
+
+.hb-card-lore {
+  margin: 0;
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.35;
+  color: #c9cdc8;
+}
+
+.hb-card-effect {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #eef0ea;
+}
+
+.hb-card-needs {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.hb-card-needs li {
+  display: flex;
+  gap: 7px;
+}
+
+.hb-card-needs li::before {
+  content: '';
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.hb-card-needs .ok {
+  color: var(--x-good, #8fd05a);
+}
+
+.hb-card-needs .ok::before {
+  background: currentColor;
+}
+
+.hb-card-needs .miss {
+  color: var(--x-muted, #a1a79d);
+}
+
+.hb-card-status {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hb-card-status.go {
+  color: var(--t-accent, #f2c230);
+}
+
+.hb-card-status.done {
+  color: var(--x-good, #8fd05a);
+}
+
+.hb-card-status.no {
+  color: var(--x-muted, #a1a79d);
+}

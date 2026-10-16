@@ -5,7 +5,7 @@ import { decorOf } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { BODY_HEIGHT, elevAt, EYE_HEIGHT, posOf, sightTop } from '../src/grid';
 import { rollLoot } from '../src/loot';
-import { canSee, canSeeTile, detectionTo, isLit, lightTiles, lineClear, litMask, nightSight, sightOf, sightTo, teamVisibility } from '../src/los';
+import { canSee, canSeeTile, detectionTo, isLit, lightTiles, lineClear, litMask, MAX_WINDOWS_SEEN_THROUGH, nightSight, sightOf, sightTo, teamVisibility } from '../src/los';
 import { generateLayout } from '../src/mapgen';
 import { Rng } from '../src/rng';
 import { Sim } from '../src/rules';
@@ -31,7 +31,7 @@ function pod(s: GameState, id: string, active: boolean, units: Unit[]): Pod {
   return p;
 }
 
-/** lineClear as it was before storeys existed (commit 3655d07), to hold today's results against. */
+/** lineClear as it was before storeys existed (commit 3655d07), to hold today's results against; with today's window rule (MAX_WINDOWS_SEEN_THROUGH). */
 function lineClearBefore(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y) + EYE_HEIGHT, hb = elevAt(s, b.x, b.y) + BODY_HEIGHT): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -46,6 +46,7 @@ function lineClearBefore(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y
   let y = a.y;
   let ix = 0;
   let iy = 0;
+  let windows = 0;
   while (ix < nx || iy < ny) {
     const decision = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
     if (decision === 0) {
@@ -63,6 +64,8 @@ function lineClearBefore(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y
     }
     if (x === b.x && y === b.y) return true;
     if (blocks(x, y)) return false;
+    const i = y * s.width + x;
+    if ((s.tiles[i] === 'window' || s.tiles[i] === 'windowBroken') && lineAt(x, y) < (s.elev[i] ?? 0) + 1 && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
   }
   return true;
 }

@@ -18,8 +18,9 @@ import {
   missionInfo,
   operationAim,
   rumorAim,
-  veterancy,
+  totalBars,
   veterancyName,
+  proposalCost,
   contactCapacity,
   contactCost,
   costText,
@@ -164,7 +165,7 @@ import { uiSound } from '../audio/ui';
 import { plotIcon } from './plotIcons';
 import { kindOf, loadoutEl, modPanel, placeOf, weaponCare, weaponIcon, weaponMarks } from './arms';
 import { soldierPortrait } from './portraits';
-import { learnedTags, levelUpLines, skillDigits, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
+import { barLines, learnedTags, skillDigits, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
 import { deadlineEl } from '../ui/deadline';
 import { SURVIVOR_CHOICES } from '../game/syntyManifest';
 
@@ -421,6 +422,10 @@ export class StrategyScreen {
     // The partner's proposal waits on its note (with «Ver»): it never takes this player away from what they are doing.
     const proposed = !!c.proposal && c.proposal.by !== this.mySlot && prev?.proposal?.text !== c.proposal.text;
     if (proposed) this.blink('.strat-proposal');
+    // One's own proposal that costs: said at once that nothing is paid until the yes (playtest 16/10 #5).
+    if (c.proposal && c.proposal.by === this.mySlot && prev?.proposal?.text !== c.proposal.text && proposalCost(c, c.proposal.action)) {
+      this.toast(`Propuesto a ${this.partner()?.name ?? 'tu compañero'}: se paga cuando diga que sí.`);
+    }
     this.bastion.setBase(c);
     this.geo.flyTo(this.offerById(c.activeMission)?.region ?? HOME_REGION);
     if (prev) this.collectAlerts(prev, c);
@@ -1089,7 +1094,7 @@ export class StrategyScreen {
       h(
         'div.strat-res',
         {},
-        h('span.strat-credits', { title: 'Suministros: construir, comprar accesorios, reclutar y contactar zonas' }, h('i', {}, '§'), h('b', {}, String(c.credits))),
+        h('span.strat-credits', { title: 'Suministros: construir, comprar accesorios, reclutar y contactar zonas' }, h('i', {}, '§'), h('b', {}, String(c.credits)), this.owedEl(c, 'credits')),
         h('span.strat-credits.medicines', { title: 'Medicinas: se traen de los saqueos. Curan heridas y tratan a los mordidos.' }, h('i', {}, '✚'), h('b', {}, String(c.medicines ?? 0))),
         // Food and parts (docs/FASE4.md): the base eats every day; the Taller makes weapons and armour with parts.
         // Red too when what is left, with the Huerto's, does not cover the next meal.
@@ -1105,7 +1110,7 @@ export class StrategyScreen {
           h('i', { 'aria-hidden': 'true' }),
           h('b', {}, String(c.food ?? 0)),
         ),
-        h('span.strat-credits.parts', { title: 'Piezas: el Taller hace con ellas armas y armaduras mejores' }, h('i', { 'aria-hidden': 'true' }), h('b', {}, String(c.parts ?? 0))),
+        h('span.strat-credits.parts', { title: 'Piezas: el Taller hace con ellas armas y armaduras mejores' }, h('i', { 'aria-hidden': 'true' }), h('b', {}, String(c.parts ?? 0)), this.owedEl(c, 'parts')),
         this.levelBadge(c),
       ),
       h(
@@ -1229,6 +1234,22 @@ export class StrategyScreen {
     }
   }
 
+  /** What a pending proposal will cost, in supplies and parts: it is paid when the partner says yes (playtest 16/10 #5). */
+  private owed(c: CampaignState): { credits: number; parts: number } {
+    const a = c.proposal?.action;
+    if (!a) return { credits: 0, parts: 0 };
+    return { credits: proposalCost(c, a), parts: a.type === 'craft' ? CRAFTS[a.project]?.parts ?? 0 : 0 };
+  }
+
+  /** «−80» after a store's number while a proposal would spend it, with who has to say yes. */
+  private owedEl(c: CampaignState, store: 'credits' | 'parts'): HTMLElement | null {
+    const n = this.owed(c)[store];
+    if (!n || !c.proposal) return null;
+    const mine = c.proposal.by === this.mySlot;
+    const title = mine ? `Pendiente: se paga cuando ${this.partner()?.name ?? 'tu compañero'} diga que sí` : `Pendiente: se paga si aceptas la propuesta de ${this.playerName(c.proposal.by)}`;
+    return h('small.strat-owed', { title }, `−${n}`);
+  }
+
   private renderProposal(c: CampaignState): void {
     clear(this.proposalEl);
     const p = c.proposal;
@@ -1241,16 +1262,20 @@ export class StrategyScreen {
     const mine = p.by === this.mySlot;
     this.proposalEl.classList.toggle('mine', mine);
     const kicker = h('div.proposal-kicker', {}, mine ? 'Tu propuesta' : 'Propuesta');
+    // What it costs is paid on the yes, not on the proposal (playtest 16/10 #5: «el dinero no baja al pagar»).
+    const owed = this.owed(c);
+    const price = [owed.credits ? `${owed.credits} §` : '', owed.parts ? `${owed.parts} ${owed.parts === 1 ? 'pieza' : 'piezas'}` : ''].filter(Boolean).join(' y ');
+    const cost = price ? h('small.proposal-cost', {}, mine ? `Se paga al aceptar: ${price}.` : `Si aceptas, se paga: ${price}.`) : null;
     if (mine) {
       append(
         this.proposalEl,
-        h('div.proposal-text', {}, kicker, h('span', {}, `Has propuesto ${p.text}. Esperando a ${this.partner()?.name ?? 'tu compañero'}…`), detail, proposalTimer(true)),
+        h('div.proposal-text', {}, kicker, h('span', {}, `Has propuesto ${p.text}. Esperando a ${this.partner()?.name ?? 'tu compañero'}…`), cost, detail, proposalTimer(true)),
         h('div.proposal-actions', {}, h('button.x-btn', { onclick: () => this.send({ type: 'withdraw' }) }, 'Retirar')),
       );
     } else {
       append(
         this.proposalEl,
-        h('div.proposal-text', {}, kicker, h('span', {}, h('b', { style: { color: this.playerColor(p.by) } }, this.playerName(p.by)), ` propone ${p.text}.`), detail, proposalTimer(false)),
+        h('div.proposal-text', {}, kicker, h('span', {}, h('b', { style: { color: this.playerColor(p.by) } }, this.playerName(p.by)), ` propone ${p.text}.`), cost, detail, proposalTimer(false)),
         h(
           'div.proposal-actions',
           {},
@@ -2095,8 +2120,8 @@ export class StrategyScreen {
   private renderBarracks(c: CampaignState): void {
     // With a Camposanto the fallen rest there, out of this list.
     const listed = (s: CampaignSoldier) => s.alive || !facilityCount(c, 'memorial');
-    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || veterancy(b.skills) - veterancy(a.skills));
-    const theirs = c.soldiers.filter((s) => s.owner !== this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || veterancy(b.skills) - veterancy(a.skills));
+    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || b.board.length - a.board.length || totalBars(b.skills) - totalBars(a.skills));
+    const theirs = c.soldiers.filter((s) => s.owner !== this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || b.board.length - a.board.length || totalBars(b.skills) - totalBars(a.skills));
     if (!this.soldier || !c.soldiers.some((s) => s.id === this.soldier)) this.soldier = mine.find((s) => s.alive)?.id ?? c.soldiers[0]?.id ?? null;
     const row = (s: CampaignSoldier) =>
       h(
@@ -2113,7 +2138,7 @@ export class StrategyScreen {
         },
         skillDigits(s.skills),
         h('b', {}, displayName(s.name, s.nickname)),
-        veterancyBadge(s.skills, s.appearance?.sex === 'f'),
+        veterancyBadge(s.board, s.appearance?.sex === 'f'),
         this.hasPoints(s)
           ? this.chip('▲', 'good', 'Talento por elegir')
           : this.healthTag(c, s, true),
@@ -2460,9 +2485,9 @@ export class StrategyScreen {
       s: skillsOf(s),
       editable: s.owner === this.mySlot && s.alive,
       portrait: soldierPortrait(SOLDIER, PLAYER_COLORS[s.owner], s.appearance, s.id),
-      onSave: (picks) => this.send({ type: 'picks', soldier: s.id, picks }),
+      owner: this.playerName(s.owner),
+      onUnlock: (cell) => this.send({ type: 'unlock', soldier: s.id, cell }),
       onClose: () => ((this.promoting = false), this.render()),
-      toast: (text) => this.toast(text),
     });
   }
 
@@ -2719,7 +2744,7 @@ export class StrategyScreen {
               { disabled: !ready && !on, onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
               skillDigits(s.skills),
               h('b', { title: gear.join(' · ') }, displayName(s.name, s.nickname)),
-              veterancyBadge(s.skills, s.appearance?.sex === 'f'),
+              veterancyBadge(s.board, s.appearance?.sex === 'f'),
               on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
             );
           }),
@@ -2910,7 +2935,7 @@ export class StrategyScreen {
           h('p.x-sub', {}, report.missionName),
           tally,
           report.loot?.line ? h('p.debrief-loot', {}, report.loot.line) : null,
-          ...levelUpLines(report.squad).map((line) => h('p.debrief-loot', {}, line)),
+          ...barLines(report.squad).map((line) => h('p.debrief-loot', {}, line)),
           report.night ? h('p.debrief-loot', {}, NIGHT_TEXT.report) : null,
           story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
         ),

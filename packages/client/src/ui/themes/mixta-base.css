@@ -97,6 +97,16 @@
   --rc: #ffd25a;
 }
 
+/* What a pending proposal would spend (playtest 16/10 #5): after the number, in amber, paid on the yes. */
+:root[data-ui='mixta'] .strat-owed {
+  margin-left: -2px;
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--t-accent);
+  cursor: help;
+}
+
 :root[data-ui='mixta'] .strat-credits.medicines {
   --ri: var(--mi-medicines);
   --rc: var(--t-good);
@@ -907,6 +917,13 @@
   color: #fff;
 }
 
+/* What it costs, paid on the yes (playtest 16/10 #5). */
+:root[data-ui='mixta'] .proposal-cost {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--t-accent);
+}
+
 :root[data-ui='mixta'] .proposal-kicker {
   display: flex;
   align-items: center;
@@ -1312,7 +1329,7 @@
   transform: none;
 }
 
-:root[data-ui='mixta'] .lineup-card b {
+:root[data-ui='mixta'] .lineup-card > b {
   font-family: var(--t-font-title);
   font-weight: 500;
   font-size: 16px;
@@ -1322,7 +1339,7 @@
 
 /* The portrait reaches 14 px past the padding: the name, the only line beside it, starts after it
    («rjun Mehta» had lost its initial, UX-REVISION-3 #2); two lines break evenly. */
-:root[data-ui='mixta'] .lineup-card[data-bust]:not(.empty) b {
+:root[data-ui='mixta'] .lineup-card[data-bust]:not(.empty) > b {
   margin-left: 14px;
   text-wrap: balance;
 }
@@ -1338,7 +1355,7 @@
   outline-offset: -5px;
 }
 
-:root[data-ui='mixta'] .lineup-card.empty b {
+:root[data-ui='mixta'] .lineup-card.empty > b {
   font-family: var(--t-font-title);
   font-weight: 500;
   letter-spacing: 0.14em;

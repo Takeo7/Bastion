@@ -5,6 +5,7 @@ import {
   contactCapacity,
   roadRoute,
   createCampaign,
+  proposalCost,
   EVENTS,
   executeCampaignCommand,
   itemsFree,
@@ -37,7 +38,7 @@ import { defaultAppearance } from '../src/appearance';
 import { sexOfName } from '../src/content';
 import { bastionLevel, LEVEL_XP, missionXp } from '../src/progression';
 import { Rng } from '../src/rng';
-import { skillLevel, veterancy } from '../src/skills';
+import { totalBars } from '../src/skills';
 import { createMission } from '../src/setup';
 import type { Appearance, Slot } from '../src/types';
 
@@ -210,8 +211,8 @@ describe('buildings and their levels', () => {
     put('1,3', 'quarters');
     run(c, { type: 'recruit' });
     const recruit = c.soldiers[c.soldiers.length - 1]!;
-    expect(veterancy(recruit.skills)).toBeGreaterThanOrEqual(3);
-    expect(veterancy(recruit.skills)).toBeLessThanOrEqual(4);
+    expect(totalBars(recruit.skills)).toBeGreaterThanOrEqual(3);
+    expect(totalBars(recruit.skills)).toBeLessThanOrEqual(4);
     // Works brigade: a quarter off the days of every work.
     put('4,2', 'crew');
     run(c, { type: 'build', plot: '4,4', facility: 'infirmary' });
@@ -348,6 +349,18 @@ describe('alien bodies', () => {
 });
 
 describe('equipment', () => {
+  it('a proposal says what it will cost, paid only when the partner accepts (playtest 2026-10-16)', () => {
+    const c = createCampaign(both, new Rng(1));
+    c.credits = 500;
+    const plot = c.base.plots.find((p) => p.terrain === 'clear' && !p.building)!;
+    run(c, { type: 'build', plot: plot.id, facility: 'quarters' }, 0, both);
+    expect(c.credits).toBe(500);
+    expect(proposalCost(c, c.proposal!.action)).toBe(FACILITIES.quarters.cost);
+    run(c, { type: 'vote', accept: true }, 1, both);
+    expect(c.credits).toBe(500 - FACILITIES.quarters.cost);
+    expect(proposalCost(c, { type: 'chooseMission', id: 'x' })).toBe(0);
+  });
+
   it('accessories are bought into a shared stock and each player equips their own soldiers', () => {
     const c = createCampaign(both, new Rng(1));
     c.credits = 500;
@@ -377,7 +390,7 @@ describe('equipment', () => {
     run(c, { type: 'equip', soldier: s.id, slot: 'utility', item: 'smokeGrenade' });
     const grenades = c.inventory.fragGrenade!;
     const member = squadMember(c, s);
-    expect(member.charges.grenade).toBe(2 + (skillLevel(s.skills.craft) >= 2 ? 1 : 0));
+    expect(member.charges.grenade).toBe(2);
     expect(member.charges.smoke).toBe(1);
     run(c, { type: 'chooseMission', id: c.offers[0]!.id });
     run(c, { type: 'squad', soldier: s.id, on: true });
@@ -427,7 +440,7 @@ describe('customization', () => {
     for (const s of c.soldiers.slice(2)) s.alive = false;
     run(c, { type: 'recruit' });
     const s = c.soldiers.at(-1)!;
-    expect(s.picks).toEqual([]);
+    expect(s.board).toEqual([]);
     expect(s.appearance).toEqual(defaultAppearance(0, undefined, sexOfName(s.name)));
     expect(s.appearance.head).toBe('helmet');
   });

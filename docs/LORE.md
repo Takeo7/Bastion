@@ -23,18 +23,19 @@ Lo nuevo de verdad es la supervivencia: saquear, el ruido, la infección y la es
 
 Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se levanta zombi. Atalaya, una vieja estación militar en la sierra, aguanta con cuarenta supervivientes llegados de todas partes. Los dos jugadores la dirigen y mandan sus equipos a los pueblos del valle a por comida, medicinas y gente viva. Cada disparo atrae a más.
 
-**La premisa en el juego** (`PREMISE` en `lore.ts`, la tarjeta antes de la primera misión, aprobada por Arturo el 13/10):
+**La premisa en el juego** (`PREMISE` en `lore.ts`, la tarjeta antes de la primera misión; la de Ana, aprobada por Arturo en la 0.3.1):
 
-> Hace dos inviernos, la Pandemia vació el valle de Kessra. Los muertos se levantaron y siguen andando.
+> La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.
 >
-> Atalaya, una vieja estación militar en la sierra de Brena, aguanta con cuarenta supervivientes llegados de todas partes.
+> En la vieja estación militar se ha ido reuniendo gente de todas partes. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.
 >
-> Vosotros dos la dirigís. Lo importante lo decidís juntos.
->
-> Atalaya vive de lo que sus equipos traen de fuera. El primero sale hoy.
+> Toca volver a sacar La Lata, ese trasto forrado con chapas que tenemos por autocar, y salir a buscar lo que nos hace falta.
+
+La de antes («Hace dos inviernos, la Pandemia vació el valle de Kessra…») queda en el Diario (hoja 1) y en los textos del tráiler aparcado.
 
 ## Tono
 
+- **«Caminantes»** (la premisa de Ana, 0.3.1) vale como otra forma de decir zombis, en boca de los personajes. En las reglas y las fichas se sigue diciendo «zombi».
 - **Adulto y seco** (prueba del 13/10): frases cortas, nada de explicar lo que se ve, nada de chistes ni guiños. Los personajes hablan como adultos cansados. La regla va en la línea pequeña del consejo, no en el diálogo.
 - **Morse habla poco** (prueba del 14/10, Arturo y Ana): solo un aviso táctico o algo que el jugador no ve. Nada de presentaciones, nada de repetir el objetivo ni el informe, nada que el juego ya enseñe en pantalla.
 - **Sin metáforas sobre el mando compartido** (prueba del 14/10): ni «dos llaves» ni «llave doble». Se dice lo que pasa: uno propone, el otro acepta; lo deciden los dos.
@@ -52,7 +53,8 @@ Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se l
 | Tres semanas después | Los muertos se levantan en las ciudades. Ya nadie dice «infectados»: dicen **zombis**. |
 | Invierno, año 0 | Caen Galen y Corran. El ejército se repliega y desaparece. La radio se queda muda. |
 | Año 1 | Los vivos se esconden en los pueblos de la sierra. Aparecen los Cuervos, bandas que viven de saquear a otros. |
-| Primavera, año 2 · Día 1 de la campaña | Dos grupos de supervivientes llegan a la vez a la Estación Atalaya. Se quedan los dos, y se mandan a medias. |
+| Años 1 y 2 | Gente de todas partes se va reuniendo en la Estación Atalaya. La dirigen dos personas, a medias. |
+| Invierno, año 2 · Día 1 de la campaña | Las nevadas sepultan a muchos muertos y se vuelve a salir en La Lata. |
 
 ## El mundo: el valle de Kessra
 
@@ -178,15 +180,15 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
 
 ## Lo que aprenden los soldados
 
-Desde la 0.3.0 no hay clases ni árbol de ejes ([FASE9.md](FASE9.md), «Se aprende haciendo»). Cada soldado aprende de lo que hace en las misiones: los nombres y las líneas están en FASE9.md, «Textos», y en el código, en `skills.ts`.
+Desde la Fase 10 ([FASE10.md](FASE10.md), Arturo, 16/10), cada soldado aprende de lo que hace en las misiones, sin clases:
 
-- **Cuatro habilidades:** Tiro, Cuerpo a cuerpo, Medicina y Maña. Suben con el uso: aciertos, bajas, curas, registros, arreglos.
-- **Talentos por parejas** en los niveles 2 y 4: uno de cada dos, para siempre. Nombres secos, de lo que pasa en el tablero («A la cabeza», «Nadie pasa», «Hacerse sitio», «Pasar visita», «Apaños»), nunca de videojuego ni de fantasía.
-- **La veteranía** es la suma de las cuatro: Novato, Fogueado, Curtido, Veterano, Superviviente (en femenino, Novata, Fogueada, Curtida, Veterana). Arriba del todo no hay leyendas: hay quien sobrevive.
-- **Las armas** son de la Armería y no de la clase: se encuentran, se fabrican o llegan con el nivel del Bastión. Se gastan («Gastada», «Rota») y llevan mejoras: mira, culata, cargador ampliado y silenciador.
-- **El Taller de oficios** se queda: lo que se aprende fuera, allí se repasa (cada misión enseña un poco más).
+- **Seis barras:** Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo. Cada barra llena sube un poco su estadística y da un punto.
+- **El tablero:** 168 habilidades en seis sectores alrededor del **Instinto**. Cada una tiene su nombre (`board.ts`) y una línea del mundo (`BOARD_ABOUT` en `lore.ts`) que nunca repite el efecto. Los nombres son secos, de lo que pasa en el tablero o de la vida de antes («A la cabeza», «Nadie pasa», «Matarife», «Duro de pelar»), nunca de videojuego ni de fantasía, y no chocan con nada del mundo (nada se llama «Atalaya», «Chaleco» ni «Vigía»).
+- **Las líneas del tablero** no usan «él» ni adjetivos que no concuerden con una soldado.
+- **La veteranía** cuenta los puntos gastados en el tablero, un rango cada cinco: Novato, Fogueado, Curtido, Veterano, Superviviente (en femenino, Novata, Fogueada, Curtida, Veterana). Cada rango da voluntad, y Veterano, la tercera acción.
+- **Las armas** son de la Armería: se encuentran, se fabrican o llegan con el nivel del Bastión. Se gastan («Gastada», «Rota») y llevan mejoras: mira, culata, cargador ampliado y silenciador.
 
-Lo de antes, por si se busca: el Oficio (la rama de Machete, Fuego, Ballesta y Enfermería que sustituyó al Canto de Velmar), el Grillo del Especialista y las clases desaparecen con la 0.3.0. «Espabilar» y «Manos de enfermero» siguen, como talentos de Medicina.
+Lo de antes, por si se busca: el Oficio (la rama de Machete, Fuego, Ballesta y Enfermería que sustituyó al Canto de Velmar), el Grillo, las clases y las habilidades con talentos por parejas (Fase 9) desaparecen.
 
 ## Lo que se queda y lo que cambia
 

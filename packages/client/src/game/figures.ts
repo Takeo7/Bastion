@@ -32,6 +32,8 @@ export interface FigurePose {
   swing?: number;
   /** How far into its hit reaction (react), 0 to 1; 0 none. */
   react?: number;
+  /** A stone tossed underhand with the free hand (docs/FASE10.md §4), 0 to 1 through it; 0 none. */
+  toss?: number;
 }
 
 /** The blow that kills a unit, for how it falls (syntyManifest.ts DEATHS). */

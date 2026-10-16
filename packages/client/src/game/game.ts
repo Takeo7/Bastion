@@ -149,7 +149,7 @@ import {
 import type { Net, NetStatus } from '../net';
 import { deadlineLeft } from '../ui/deadline';
 import { clear } from '../ui/dom';
-import { Hud, type AbilityView, type BarActionId, type HordeView, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
+import { Hud, isMenu, type AbilityView, type BarActionId, type HordeView, type MenuId, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
 import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
@@ -243,8 +243,38 @@ const READ_MISS = 0.7;
 const BETWEEN = 0.5;
 /** Within this of where the camera looks, the next enemy needs no camera move: it never goes back and forth. */
 const NEAR_ENOUGH = 5;
+/**
+ * The dead with nobody in reach walk this many times quicker than their gait
+ * (playtest 16/10 #6: «que anden más rápido, que es muy lento»), all at once,
+ * each one's two actions as one stretch. With Arte's gaits of 16/10 (a fifth
+ * quicker), a common zombie's walk comes to 0.66 s a tile (it was 1.02).
+ */
+const WALKERS_PACE = 1.25;
 /** After the player takes the camera, the enemy turn leaves it to them this long (ms): it never fights them. */
 const PLAYER_CAMERA_MS = 2500;
+/**
+ * The bar's menus (docs/FASE10.md §4): their members in order, and which of
+ * them to offer. Investigar offers the room, and the box only when there is
+ * one beside (Registrar can be done).
+ */
+const MENUS: { id: MenuId; name: string; icon: AbilityId; members: AbilityId[]; shows: (v: AbilityView) => boolean }[] = [
+  { id: 'menu:watch', name: 'Vigilancia', icon: 'overwatch', members: ['overwatch', 'overwatchMelee'], shows: () => true },
+  { id: 'menu:throw', name: 'Lanzar', icon: 'stone', members: ['stone', 'grenade', 'smoke', 'flashbang'], shows: () => true },
+  { id: 'menu:investigate', name: 'Investigar', icon: 'searchRoom', members: ['searchRoom', 'search'], shows: (v) => v.id === 'searchRoom' || v.enabled },
+];
+
+/** How a menu's choices read inside it (docs/FASE10.md §4): what the menu already says is left out. */
+const MENU_LABELS: Partial<Record<AbilityId, string>> = {
+  overwatch: 'A distancia',
+  overwatchMelee: 'Cuerpo a cuerpo',
+  stone: 'Piedra',
+  grenade: 'Granada',
+  smoke: 'Humo',
+  flashbang: 'Aturdidora',
+  searchRoom: 'Habitación',
+  search: 'Caja',
+};
+
 /** What follows an enemy's action and belongs to it: it doesn't end the action, nor start the next. */
 const FOLLOW_UP: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['damaged', 'died', 'infected', 'stunned', 'disoriented', 'noise', 'tileChanged', 'floorBroken', 'fell', 'itemDropped']);
 
@@ -614,7 +644,7 @@ export class Game {
   private alarmRaised = false;
   /** A bitten soldier of ours has risen in this mission already: the stamp only comes the first time. */
   private risenSeen = false;
-  /** The enemy last shown acting in this enemy turn (a unit id, or a group of the dead as `group:` and its pod): the next one is shown anew. */
+  /** The enemy last shown acting in this enemy turn (a unit id, or `walkers` for the dead walking in one run): the next one is shown anew. */
   private lastActor: string | null = null;
   /** The result of the enemy attack just played, still to be read (seconds), before anything new starts. */
   private resultHold = 0;
@@ -665,6 +695,8 @@ export class Game {
       onBackToMenu: () => this.net.send({ t: 'backToMenu' }),
       onAbandon: () => this.net.send({ t: 'abandon' }),
       onPassCommand: () => this.passCommand(),
+      onWatchPartner: () => this.watchPartner(),
+      onMenu: () => this.hud.setAbilities(this.abilities()),
       onItem: (o) => this.itemOrder(o),
       onSwap: (take, drop) => this.swapItem(take, drop),
       onToggleSound: () => !this.sfx.toggleMute(),
@@ -797,6 +829,8 @@ export class Game {
       void this.veiled.then(() => !this.gone && this.intro());
       return;
     }
+    // Over before the veil lifted: the outcome is what there is to see.
+    if (this.state.outcome) return;
     const s = this.state;
     const mission = this.missionView();
     // What the mission is for, said at the start and not only in the strip (playtest 13/10 #7):
@@ -964,7 +998,7 @@ export class Game {
     // No speed-up for a backlog (docs/UX-RITMO.md): the enemy turn arrives whole, and it played at ×2.5.
     while (this.queue.length) {
       const item = this.queue.shift()!;
-      // The dead of one group that walk in the same stretch walk together, under one framing.
+      // The dead that only walk this turn come last (rules.ts runAlienTurn), and walk all at once, under one framing.
       const group = this.walkingWith(item);
       if (group.length) {
         await this.playGroup([item, ...group]);
@@ -1139,26 +1173,31 @@ export class Game {
     } else if ((e.t === 'explosive' || e.t === 'psi') && this.enemyActor(e)) this.resultHold = READ_HIT;
   }
 
-  /** The pod `e` moves if it is a walk of one of the dead in the enemy turn (they only bite: docs/ZOMBIS-PRIMERO.md). */
-  private deadWalker(e: GameEvent): string | null {
-    if (e.t !== 'moved' || this.view.activeTeam !== 'alien') return null;
+  /** Whether `e` is a walk of one of the dead in the enemy turn (they only bite: docs/ZOMBIS-PRIMERO.md). */
+  private deadWalker(e: GameEvent): boolean {
+    if (e.t !== 'moved' || this.view.activeTeam !== 'alien') return false;
     const u = getUnit(this.view, e.unit);
-    return u && u.team === 'alien' && u.alive && u.podId && !shootsFromRange(u) ? u.podId : null;
+    return !!u && u.team === 'alien' && u.alive && !shootsFromRange(u);
   }
 
-  /** The walks of the same group of the dead right after `item`'s, taken off the queue (none if it walks alone). */
+  /**
+   * The walks of the dead right after `item`'s, whatever their group, taken
+   * off the queue (none if it walks alone). The engine moves the dead with
+   * nobody in reach after those going for the squad (ai.ts onlyWalks; playtest
+   * 16/10 #6), so theirs come in one run at the end of the turn.
+   */
   private walkingWith(item: QueuedEvent): QueuedEvent[] {
-    const pod = this.deadWalker(item.e);
-    if (!pod) return [];
+    if (!this.deadWalker(item.e)) return [];
     let n = 0;
-    while (n < this.queue.length && this.deadWalker(this.queue[n]!.e) === pod) n++;
+    while (n < this.queue.length && this.deadWalker(this.queue[n]!.e)) n++;
     return this.queue.splice(0, n);
   }
 
   /**
-   * A group of the dead walking in the same stretch (docs/UX-RITMO.md): one
+   * The dead walking in one run (docs/UX-RITMO.md; playtest 16/10 #6): one
    * framing over where they are and where they go, a still moment, and they
-   * all walk at once; their attacks come after, one by one.
+   * all walk at once, each one's actions as one stretch, WALKERS_PACE times
+   * quicker; the attacks came before, one by one.
    */
   private async playGroup(items: QueuedEvent[]): Promise<void> {
     const v = this.view;
@@ -1167,7 +1206,7 @@ export class Game {
     this.resultHold = 0;
     if (shown.length) {
       const first = this.lastActor === null;
-      this.lastActor = `group:${this.deadWalker(items[0]!.e)}`;
+      this.lastActor = 'walkers';
       await wait(Math.max(first ? 0 : BETWEEN, hold));
       const points = shown.flatMap((q) => {
         const e = q.e as Extract<GameEvent, { t: 'moved' }>;
@@ -1178,9 +1217,16 @@ export class Game {
       await this.showEnemy(points);
     } else if (hold) await wait(hold);
     const epoch = this.rig.epoch;
+    // Each one's walks as one: its two actions a single stretch at the dash's gait, no stop between.
+    const walks = new Map<string, QueuedEvent>();
+    for (const q of items) {
+      const e = q.e as Extract<GameEvent, { t: 'moved' }>;
+      const had = walks.get(e.unit)?.e as typeof e | undefined;
+      walks.set(e.unit, had ? { ...q, e: { ...e, path: [...had.path, ...e.path], ap: had.ap + e.ap } } : q);
+    }
     this.current = items[0]!;
     this.grouped = true;
-    await Promise.all(items.map((q) => this.play(q).catch((err) => console.error('[anim]', err))));
+    await Promise.all([...walks.values()].map((q) => this.play(q).catch((err) => console.error('[anim]', err))));
     this.grouped = false;
     this.current = null;
     for (const q of items) await this.settle(q, epoch);
@@ -1294,6 +1340,7 @@ export class Game {
             if (steps++ % 2 === 0) this.sfx.step(u, p);
           },
           e.ap,
+          this.grouped ? WALKERS_PACE : 1,
         );
         return;
       }
@@ -1348,12 +1395,27 @@ export class Game {
         await wait(0.5);
         return;
       }
+      case 'stoneThrown': {
+        // A stone (docs/FASE10.md §4): thrown underhand (Arte's tossStone), its low arc and its knock where it lands or
+        // on whom it hits (fx.stone), and its sound out and in (Red's sfx). The `damaged` that follows a hit is its own.
+        const u = getUnit(v, e.unit)!;
+        if (!this.shownToSquad(u) && !this.mapView.isVisible(e.target.x, e.target.y)) return;
+        const to = tileToWorld(e.target);
+        const struck = e.hit ? getUnit(v, e.hit) : undefined;
+        look(this.units.worldPos(u.id).lerp(to, 0.5));
+        const hand = await this.units.tossStone(u.id, to);
+        this.sfx.stoneThrow(hand);
+        await this.fx.stone(hand, struck ? this.units.chestPos(struck.id) : to, !!struck);
+        this.sfx.stoneLand(to, !!struck);
+        return;
+      }
       case 'overwatch':
       case 'hunker': {
         const u = getUnit(v, e.unit)!;
         if (!this.shownToSquad(u)) return;
         look(this.units.worldPos(u.id));
-        const text = e.t === 'hunker' ? 'AGAZAPADO' : e.killZone ? 'ZONA LETAL' : 'VIGILANCIA';
+        // The blade's watch (docs/FASE10.md §4) is said as such: on guard, not watching with a gun.
+        const text = e.t === 'hunker' ? 'AGAZAPADO' : e.killZone ? 'ZONA LETAL' : e.melee ? 'HOJA EN ALTO' : 'VIGILANCIA';
         this.fx.floatText(this.units.chestPos(u.id), text, 'info');
         if (e.t === 'hunker') this.sfx.hunker(this.units.worldPos(u.id));
         else this.sfx.overwatch(this.units.chestPos(u.id));
@@ -1711,9 +1773,11 @@ export class Game {
         return;
       }
       case 'evacuated': {
-        // Into the bus: a puff of dust where they stood; the view hides them once the event is applied. After the last, it goes.
+        // Into the bus: a puff of dust where they stood, and out of sight at once (Arte's units.board), not when the
+        // event is applied: after the last one, the bus goes, and nobody is left standing outside (playtest 16/10 #2).
         this.fx.dust(this.units.worldPos(e.unit), 4);
         await wait(0.18);
+        this.units.board(e.unit);
         const bus = this.busTile(v);
         if (bus && this.queue[0]?.e.t !== 'evacuated') await this.busLeaves(bus);
         return;
@@ -2085,7 +2149,7 @@ export class Game {
       this.rig.cinematicZoom(THREE.MathUtils.clamp(shooterPos.distanceTo(targetPos) * 1.1 + 9, 13, 24));
     }
     if (e.reaction) {
-      this.fx.floatText(this.units.chestPos(shooter.id), 'FUEGO DE REACCIÓN', 'warn');
+      this.fx.floatText(this.units.chestPos(shooter.id), weapon.melee ? 'TAJO DE REACCIÓN' : 'FUEGO DE REACCIÓN', 'warn');
       this.sfx.alert();
     }
 
@@ -2299,6 +2363,8 @@ export class Game {
       this.hud.showOutcome(null);
       return;
     }
+    // The mission over before its briefing was closed (rejoining mid-mission, the partner abandoning): it goes, so the outcome is seen.
+    this.hud.closeIntro(true);
     const s = this.state;
     const lost = s.units.filter((u) => u.team === 'xcom' && !u.alive && !u.evacuated && !u.lost).length;
     const left = s.units.filter((u) => u.lost).length;
@@ -2504,6 +2570,25 @@ export class Game {
       default:
         return 'Os han localizado';
     }
+  }
+
+  /**
+   * «Ver» (playtest 16/10 #8): with the partner holding the command, the
+   * camera goes to what they are doing: their soldier in play, else the last
+   * one they moved; on its floor.
+   */
+  private watchPartner(): void {
+    const s = this.state;
+    const inPlay = s.activeUnit ? getUnit(this.view, s.activeUnit) : undefined;
+    const id = inPlay && inPlay.owner !== this.mySlot ? inPlay.id : this.partnerLast;
+    const u = id ? getUnit(this.view, id) : undefined;
+    if (!u?.alive) {
+      this.hud.toast(`Todavía no hay nada que ver: ${this.playerName(s.command)} no ha movido a nadie.`);
+      return;
+    }
+    this.setLevel(u.pos.z ?? 0);
+    this.rig.takeControl();
+    this.rig.focus(this.units.worldPos(u.id));
   }
 
   private seeMoment(): void {
@@ -2824,7 +2909,8 @@ export class Game {
     if (id === 'evac' || id === 'evacAccept' || id === 'evacRefuse') return this.useEvac(id);
     const u = this.selectedUnit();
     if (!u || !this.canAct()) return;
-    const view = this.abilities().find((a) => a.id === id);
+    if (isMenu(id)) return;
+    const view = this.barView(id);
     if (!view?.enabled) {
       if (view?.reason) this.hud.toast(view.reason);
       return;
@@ -3006,7 +3092,64 @@ export class Game {
     const u = this.selectedUnit();
     const evac = this.evacActions(u);
     if (!u || !this.isMine(u)) return evac;
-    return [...this.soldierAbilities(u), ...evac];
+    return [...this.withMenus(this.soldierAbilities(u)), ...evac];
+  }
+
+  /**
+   * The actions with a menu (docs/FASE10.md §4) folded into one button each,
+   * where the first of them was: Lanzar (the stone, and the grenades, smoke or
+   * flashbangs it carries), Vigilancia (from afar or with the blade) and
+   * Investigar (the room; the box too when there is one beside). The keys are
+   * numbered again along the folded bar.
+   */
+  private withMenus(views: AbilityView[]): AbilityView[] {
+    const out: AbilityView[] = [];
+    const done = new Set<MenuId>();
+    for (const v of views) {
+      const menu = MENUS.find((m) => m.members.includes(v.id as AbilityId));
+      if (!menu) {
+        out.push(v);
+        continue;
+      }
+      if (done.has(menu.id)) continue;
+      done.add(menu.id);
+      const options = menu.members
+        .map((id) => views.find((x) => x.id === id))
+        .filter((x): x is AbilityView => !!x && menu.shows(x))
+        .map((o) => ({ ...o, label: MENU_LABELS[o.id as AbilityId] ?? o.label }));
+      if (!options.length) continue;
+      const usable = options.filter((o) => o.enabled);
+      out.push({
+        ...options[0]!,
+        id: menu.id,
+        label: menu.name,
+        name: menu.name,
+        icon: menu.icon,
+        enabled: usable.length > 0,
+        reason: usable.length ? undefined : options[0]!.reason,
+        description: options.length > 1 ? `${menu.name}: ${options.map((o) => o.name.toLowerCase()).join(', ')}. Pulsa para elegir.` : options[0]!.description,
+        active: options.some((o) => o.active),
+        count: undefined,
+        cooldown: undefined,
+        depleted: options.every((o) => o.depleted),
+        options,
+      });
+    }
+    // Lanzar always right after Vigilancia, whatever the soldier carries: the same key for everyone.
+    const throwAt = out.findIndex((v) => v.id === 'menu:throw');
+    const watchAt = out.findIndex((v) => v.id === 'menu:watch');
+    if (throwAt >= 0 && watchAt >= 0 && throwAt !== watchAt + 1) out.splice(watchAt + 1, 0, ...out.splice(throwAt, 1));
+    return out.map((v, i) => ({ ...v, hotkey: i < 9 ? (v.id === 'shoot' ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '' }));
+  }
+
+  /** A view of the bar by its id, inside a menu too. */
+  private barView(id: BarActionId): AbilityView | undefined {
+    for (const v of this.abilities()) {
+      if (v.id === id) return v;
+      const o = v.options?.find((x) => x.id === id);
+      if (o) return o;
+    }
+    return undefined;
   }
 
   private soldierAbilities(u: Unit): AbilityView[] {
@@ -3833,10 +3976,18 @@ export class Game {
         return;
       }
       if (/^Digit[0-9]$/.test(e.code)) {
-        const u = this.selectedUnit();
         const n = Number(e.code.slice(5));
-        const id = u ? this.abilityList(u)[n === 0 ? 9 : n - 1] : undefined;
-        if (id) this.useAbility(id);
+        // A menu open on the bar: the numbers pick its choices.
+        if (this.hud.abilityMenuOpen) {
+          this.hud.pickMenu(n);
+          return;
+        }
+        const v = this.abilities()[n === 0 ? 9 : n - 1];
+        if (!v || v.id.startsWith('evac')) return;
+        if (v.options && v.options.length > 1) {
+          if (v.enabled) this.hud.toggleBarMenu(v.id as MenuId);
+          else if (v.reason) this.hud.toast(v.reason);
+        } else this.useAbility(v.options?.[0]?.id ?? v.id);
         return;
       }
       switch (e.code) {
@@ -3856,7 +4007,8 @@ export class Game {
           this.confirmOrAttack();
           break;
         case 'Escape':
-          // Esc backs out of aiming or of a pending confirmation first; otherwise it opens the menu.
+          // Esc closes a menu of the bar, then backs out of aiming or of a pending confirmation; otherwise it opens the menu.
+          if (this.hud.closeAbilityMenu()) break;
           if (this.mode.kind !== 'move') this.cancelMode();
           else if (this.endArmed || this.concealWarn) {
             this.concealWarn = null;
@@ -3885,9 +4037,13 @@ export class Game {
           this.hud.toast(this.sfx.toggleMute() ? 'Sonido desactivado (M)' : 'Sonido activado (M)');
           break;
         case 'KeyF': {
-          // With a partner's moment on screen, F goes there; otherwise to the soldier.
+          // With a partner's moment on screen, F goes there; with the partner holding the command, to what they do; otherwise to the soldier.
           if (this.moment) {
             this.seeMoment();
+            break;
+          }
+          if (this.partnerHere() && !this.hasCommand() && this.canAct()) {
+            this.watchPartner();
             break;
           }
           const u = this.selectedUnit();

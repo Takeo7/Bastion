@@ -1026,7 +1026,7 @@ dl.briefing {
   opacity: 0.9;
 }
 
-.lineup-card b {
+.lineup-card > b {
   display: block;
   font-family: var(--font-display);
   font-size: 15px;
@@ -1040,7 +1040,7 @@ dl.briefing {
   flex-direction: column;
 }
 
-.strat[data-view='squad'] .lineup-card b {
+.strat[data-view='squad'] .lineup-card > b {
   min-height: 44px;
   line-height: 22px;
   display: flex;
@@ -2113,7 +2113,7 @@ dl.briefing {
 
 /* Soldiers: class, name, chevrons, state, all on one line. */
 .x-row.soldier {
-  grid-template-columns: 4px 44px 1fr auto auto;
+  grid-template-columns: 4px 56px 1fr auto auto;
 }
 
 .x-row.soldier .cls {
@@ -2541,7 +2541,7 @@ dl.x-pairs dd {
 }
 
 .x-row.soldier {
-  grid-template-columns: 4px 44px 1fr auto auto;
+  grid-template-columns: 4px 56px 1fr auto auto;
 }
 
 /* Recruiting: the whole class name, two per row. */

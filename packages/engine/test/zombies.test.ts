@@ -163,7 +163,7 @@ describe('the dead', () => {
     expect(Math.hypot(walker.pos.x - near.pos.x, walker.pos.y - near.pos.y)).toBeLessThanOrEqual(13 - 8 + 0.5);
   });
 
-  it('the dead with nobody in reach walk first, each group together; the bites come after', () => {
+  it('whoever goes for the squad acts first; then the dead with nobody in reach walk, all together (playtest 2026-10-16)', () => {
     const s = field(40, 30);
     s.activeTeam = 'alien';
     addUnit(s, 's1', 'rookie', 5, 5, { hp: 50, maxHp: 50 });
@@ -174,11 +174,11 @@ describe('the dead', () => {
     const turn = sim(s);
     turn.runAlienTurn();
     const acts = turn.events.filter((e): e is Extract<GameEvent, { t: 'moved' | 'shot' }> => e.t === 'moved' || e.t === 'shot').map((e) => e.unit);
-    // Both far ones' walks come before anything of the one that bites, though it comes first in its group.
-    const firstBiter = acts.indexOf('a1');
-    expect(firstBiter).toBeGreaterThan(0);
-    expect(new Set(acts.slice(0, firstBiter))).toEqual(new Set(['a2', 'a3']));
-    expect(acts.slice(firstBiter).every((id) => id === 'a1')).toBe(true);
+    // Everything of the one that bites comes before the far ones' walks.
+    const firstWalker = acts.findIndex((id) => id !== 'a1');
+    expect(firstWalker).toBeGreaterThan(0);
+    expect(acts.slice(0, firstWalker).every((id) => id === 'a1')).toBe(true);
+    expect(new Set(acts.slice(firstWalker))).toEqual(new Set(['a2', 'a3']));
     expect(of(turn.events, 'shot').filter((e) => e.unit === 'a1')).toEqual([expect.objectContaining({ ability: 'claw', target: 's1' })]);
   });
 

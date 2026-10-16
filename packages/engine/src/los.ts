@@ -25,11 +25,10 @@ import {
 import type { GameState, Place, Pos, Unit, Vec2 } from './types';
 
 /**
- * The most windows a line of sight goes through (playtest 2026-10-14): out of
- * a building or into it, and at most across one from window to window, never
- * on through the next.
+ * The most windows a line of sight goes through (playtest 2026-10-16): from
+ * outside, through a window, what is inside; never on out through a second one.
  */
-export const MAX_WINDOWS_SEEN_THROUGH = 2;
+export const MAX_WINDOWS_SEEN_THROUGH = 1;
 
 /**
  * Whether a line from `a`, `ha` storeys up, to `b`, `hb` up (by default a

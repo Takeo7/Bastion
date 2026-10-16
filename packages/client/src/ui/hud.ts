@@ -38,7 +38,11 @@ import { typed } from './typed';
  * What the action bar holds: the soldier's abilities, and the evacuation's own
  * (playtest 15/10 #10): «Evacuar» from La Lata, and the partner's answer to it.
  */
-export type BarActionId = AbilityId | 'evac' | 'evacAccept' | 'evacRefuse';
+export type BarActionId = AbilityId | 'evac' | 'evacAccept' | 'evacRefuse' | MenuId;
+
+/** The bar's actions with a menu (docs/FASE10.md §4): Lanzar, Vigilancia, Investigar. */
+export type MenuId = 'menu:throw' | 'menu:watch' | 'menu:investigate';
+export const isMenu = (id: BarActionId): id is MenuId => id.startsWith('menu:');
 
 export interface AbilityView {
   id: BarActionId;
@@ -65,6 +69,10 @@ export interface AbilityView {
   free?: boolean;
   /** Nothing left to use (no ammo, no charges): stamped, not explained. */
   depleted?: boolean;
+  /** Its drawing when it isn't its id's (a menu shows its family's). */
+  icon?: AbilityId;
+  /** A menu's choices: with two or more, pressing it opens them above it; with one, it is that one. */
+  options?: AbilityView[];
 }
 
 /**
@@ -211,6 +219,10 @@ export interface HudHandlers {
   onBackToMenu(): void;
   onAbandon(): void;
   onPassCommand(): void;
+  /** A menu of the bar opened or closed: draw the bar again. */
+  onMenu(): void;
+  /** The camera to what the partner holding the command is doing. */
+  onWatchPartner(): void;
   /** Toggles the sound; returns whether it is now on. */
   onToggleSound(): boolean;
   soundOn(): boolean;
@@ -287,6 +299,9 @@ export class Hud {
   private readonly target = h('div.shot-panel.panel');
   private readonly endTurn = h('button.end-turn');
   private readonly passBtn = h('button.pass-command', { title: 'Tu compañero da las órdenes hasta que te lo devuelva (C)' });
+  /** With the partner holding the command: the camera to what they are doing (playtest 16/10 #8). */
+  private readonly watchBtn = h('button.pass-command.watch-partner', { title: 'Lleva la cámara a lo que está haciendo tu compañero (F)' });
+  private readonly watchWho = h('span');
   private readonly logEl = h('div.log');
   private readonly logLines: HTMLElement[] = [];
   private logOpen = false;
@@ -313,6 +328,12 @@ export class Hud {
     this.endTurn.addEventListener('click', () => handlers.onEndTurn());
     this.passBtn.addEventListener('click', () => handlers.onPassCommand());
     this.passBtn.append(h('span', {}, 'CEDER EL MANDO'), h('small', {}, 'C'));
+    this.watchBtn.addEventListener('click', () => handlers.onWatchPartner());
+    // A menu of the bar closes with a press anywhere else.
+    document.addEventListener('pointerdown', (e) => {
+      if (this.barMenu && !(e.target as Element | null)?.closest?.('.ability-slot')) this.closeAbilityMenu();
+    });
+    this.watchBtn.append(this.watchWho, h('small', {}, 'F'));
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
     this.root.append(
       this.frame,
@@ -321,7 +342,7 @@ export class Hud {
       this.unitPanel,
       this.abilities,
       this.target,
-      h('div.turn-actions', {}, this.passBtn, this.endTurn),
+      h('div.turn-actions', {}, this.passBtn, this.watchBtn, this.endTurn),
       h('div.side', {}, menuButton, this.logEl),
       this.bannerEl,
       this.toastEl,
@@ -482,7 +503,7 @@ export class Hud {
           u.infected && u.alive ? h('em.bite', { title: this.biteNote }, BITE_TAG) : null,
           u.evacuated ? h('em.evac', {}, 'EVACUADO') : null,
           carrier === u.id ? h('em.data', {}, this.itemTag) : null,
-          u.overwatch ? h('em.ow', {}, u.killZone ? 'ZONA LETAL' : 'VIGILANCIA') : null,
+          u.overwatch ? h('em.ow', {}, u.killZone ? 'ZONA LETAL' : u.watchMelee ? 'HOJA EN ALTO' : 'VIGILANCIA') : null,
           u.hunkered ? h('em.hk', {}, 'AGAZAPADO') : null,
           u.stunned ? h('em.stun', {}, 'ATURDIDO') : null,
         ),
@@ -742,29 +763,88 @@ export class Hud {
     return h('div.pack-menu', { role: 'menu' }, h('div.pack-menu-head', {}, h('b', {}, title), h('button.pack-menu-x', { type: 'button', title: 'Cerrar', onclick: close }, '✕')), ...items);
   }
 
+  /** The menu open on the bar (Lanzar, Vigilancia, Investigar), and its choices as last drawn. */
+  private barMenu: MenuId | null = null;
+  private menuOptions: AbilityView[] = [];
+
   setAbilities(list: AbilityView[]): void {
     clear(this.abilities);
+    // A menu whose choices are gone (another soldier, the turn over) closes.
+    const menu = list.find((a) => a.id === this.barMenu);
+    if (!menu || (menu.options?.length ?? 0) < 2 || !menu.enabled) this.barMenu = null;
     // No explanations on the cards: they live in the card shown on hover, and an empty one gets a stamp.
     for (const a of list) {
-      this.abilities.append(
-        h(
-          `button.ability${a.active ? '.active' : ''}${a.free ? '.free' : ''}${a.depleted ? '.depleted' : ''}`,
-          {
-            disabled: !a.enabled,
-            'data-ability': a.id,
-            'aria-label': `${a.name}. ${a.cost}. ${a.description}`,
-            onclick: () => this.handlers.onAbility(a.id),
-          },
-          h('span.key', {}, a.hotkey),
-          abilityIcon(a.id),
-          h('span.label', {}, a.label),
-          a.count !== undefined ? h('span.count', {}, `×${a.count}`) : null,
-          a.cooldown ? h('span.cd', {}, String(a.cooldown)) : null,
-          a.depleted ? h('span.stamp', { 'aria-label': 'Agotado' }) : null,
-          this.abilityCard(a),
+      const card = this.abilityButton(a, () => {
+        const options = a.options;
+        if (!options) return this.handlers.onAbility(a.id);
+        if (options.length === 1) return this.handlers.onAbility(options[0]!.id);
+        this.toggleBarMenu(a.id as MenuId);
+      });
+      if (a.id !== this.barMenu) {
+        this.abilities.append(card);
+        continue;
+      }
+      // Its choices above it, numbered from 1 (the keys pick them while it is open).
+      this.menuOptions = a.options!;
+      card.classList.add('menu-open');
+      const choices = h(
+        'div.ability-menu',
+        { role: 'menu', 'aria-label': a.name },
+        ...a.options!.map((o, i) =>
+          this.abilityButton({ ...o, hotkey: String(i + 1) }, () => {
+            this.barMenu = null;
+            this.handlers.onAbility(o.id);
+          }),
         ),
       );
+      this.abilities.append(h('span.ability-slot', {}, card, choices));
     }
+  }
+
+  private abilityButton(a: AbilityView, onclick: () => void): HTMLElement {
+    return h(
+      `button.ability${a.active ? '.active' : ''}${a.free ? '.free' : ''}${a.depleted ? '.depleted' : ''}${a.options && a.options.length > 1 ? '.has-menu' : ''}`,
+      {
+        disabled: !a.enabled,
+        'data-ability': a.icon ?? a.id,
+        'aria-label': `${a.name}. ${a.cost}. ${a.description}`,
+        'aria-haspopup': a.options && a.options.length > 1 ? 'menu' : null,
+        onclick,
+      },
+      h('span.key', {}, a.hotkey),
+      abilityIcon(a.icon ?? (a.id as AbilityId)),
+      h('span.label', {}, a.label),
+      a.count !== undefined ? h('span.count', {}, `×${a.count}`) : null,
+      a.cooldown ? h('span.cd', {}, String(a.cooldown)) : null,
+      a.depleted ? h('span.stamp', { 'aria-label': 'Agotado' }) : null,
+      this.abilityCard(a),
+    );
+  }
+
+  /** Whether a menu of the bar is open: the number keys pick its choices then. */
+  get abilityMenuOpen(): boolean {
+    return this.barMenu !== null;
+  }
+
+  /** Opens `id`'s menu above its button, or closes it if it was open; the screen redraws the bar. */
+  toggleBarMenu(id: MenuId): void {
+    this.barMenu = this.barMenu === id ? null : id;
+    this.handlers.onMenu();
+  }
+
+  closeAbilityMenu(): boolean {
+    if (!this.barMenu) return false;
+    this.barMenu = null;
+    this.handlers.onMenu();
+    return true;
+  }
+
+  /** The open menu's `n`-th choice (from 1), as a click on it. */
+  pickMenu(n: number): void {
+    const o = this.menuOptions[n - 1];
+    if (!o) return;
+    this.barMenu = null;
+    this.handlers.onAbility(o.id);
   }
 
   /** What hovering a card tells before anything is pressed: name, cost, limits, what it does and why not now. */
@@ -882,15 +962,15 @@ export class Hud {
     return this.menuOpen || this.modal.classList.contains('show') || this.introOpen;
   }
 
-  /** Closes the mission's briefing, when it is up. */
-  private introClose: (() => void) | null = null;
+  /** Closes the mission's briefing, when it is up; `quiet`, without its click. */
+  private introClose: ((quiet?: boolean) => void) | null = null;
 
   get introOpen(): boolean {
     return this.introClose !== null;
   }
 
-  closeIntro(): void {
-    this.introClose?.();
+  closeIntro(quiet = false): void {
+    this.introClose?.(quiet);
   }
 
   /**
@@ -921,6 +1001,8 @@ export class Hud {
   setCommand(view: CommandView | null): void {
     this.passBtn.classList.toggle('hidden', !view?.mine);
     this.passBtn.disabled = !view?.canPass;
+    this.watchBtn.classList.toggle('hidden', !view || view.mine);
+    this.watchWho.textContent = view && !view.mine ? `VER A ${view.holder.toUpperCase()}` : '';
     this.root.classList.toggle('has-command', !!view?.mine);
     this.root.classList.toggle('waiting-command', !!view && !view.mine);
   }
@@ -961,9 +1043,9 @@ export class Hud {
     );
     this.root.append(catcher, el);
     return new Promise((resolve) => {
-      this.introClose = () => {
+      this.introClose = (quiet = false) => {
         this.introClose = null;
-        uiSound('confirm');
+        if (!quiet) uiSound('confirm');
         catcher.remove();
         el.classList.add('out');
         window.setTimeout(() => el.remove(), 800);

@@ -7,9 +7,10 @@
  */
 
 :root {
-  --font: 'Barlow', 'Segoe UI', sans-serif;
-  --font-display: 'Barlow', 'Segoe UI', sans-serif;
-  --font-hand: 'Barlow', 'Segoe UI', sans-serif;
+  /* 'Bastion Suministros': only «§», drawn as the supplies' crate (ui/themes/mixta.css). */
+  --font: 'Bastion Suministros', 'Barlow', 'Segoe UI', sans-serif;
+  --font-display: 'Bastion Suministros', 'Barlow', 'Segoe UI', sans-serif;
+  --font-hand: 'Bastion Suministros', 'Barlow', 'Segoe UI', sans-serif;
 
   --paper: #f1e6c6;
   --paper-dark: #e2d3aa;
@@ -1019,6 +1020,68 @@ em.bite::before {
 
 .ability:hover:not(:disabled) {
   transform: translateY(-3px);
+}
+
+/* An action with a menu (docs/FASE10.md §4): a small triangle in its corner; open, its choices stand above it. */
+.ability-slot {
+  position: relative;
+  display: inline-flex;
+}
+
+.ability.has-menu::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid currentColor;
+  opacity: 0.55;
+}
+
+.ability.menu-open {
+  transform: translateY(-3px);
+}
+
+.ability-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  gap: 5px;
+  padding: 6px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  background: rgba(20, 23, 25, 0.96);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  animation: ability-menu-in 0.14s ease-out;
+}
+
+.ability-menu::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid rgba(20, 23, 25, 0.96);
+}
+
+@keyframes ability-menu-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ability-menu {
+    animation: none;
+  }
 }
 
 .ability.active {

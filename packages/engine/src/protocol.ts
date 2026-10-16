@@ -3,10 +3,10 @@ import { BUILDS, HEADS, NAME_MAX, NICKNAME_MAX } from './appearance';
 import { FACILITIES, REGIONS } from './campaign';
 import { ABILITIES, ITEMS, WEAPON_MODS } from './content';
 import { CRAFTS } from './progression';
-import { SKILL_TALENTS } from './skills';
+import { BOARD } from './board';
 import type { CampaignState } from './campaign';
 import type { GameEvent } from './events';
-import type { AbilityId, GameState, PerkId, Place, Slot } from './types';
+import type { AbilityId, GameState, Place, Slot } from './types';
 
 const vec2 = z.object({ x: z.number().int(), y: z.number().int() });
 /** A place (types.ts Pos): without `z`, on the ground (docs/FASE6-PLAN.md). */
@@ -80,7 +80,7 @@ const facilityId = z.enum(keys(FACILITIES));
 const regionId = z.enum(keys(REGIONS));
 const itemId = z.enum(keys(ITEMS));
 /** Fase 9's talents (skills.ts SKILL_TALENTS). */
-const pickId = z.enum(keys(SKILL_TALENTS as Record<PerkId, unknown>));
+const cellId = z.enum(BOARD.map((c) => c.id) as [string, ...string[]]);
 const id = z.string().min(1).max(16);
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 // The pieces are optional (appearance.ts): older clients and saves send none.
@@ -110,7 +110,7 @@ export const campaignCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('squad'), soldier: id, on: z.boolean() }),
   z.object({ type: z.literal('recruit'), squad: z.boolean().optional() }),
   /** «Guardar» in the tree (docs/FASE9.md §2): the whole list of talents picked. */
-  z.object({ type: z.literal('picks'), soldier: id, picks: z.array(pickId).max(8) }),
+  z.object({ type: z.literal('unlock'), soldier: id, cell: cellId }),
   /** The Armería (docs/FASE9.md §5): mend a weapon; mount or take off an improvement. */
   z.object({ type: z.literal('repair'), weapon: id }),
   z.object({ type: z.literal('mod'), weapon: id, mod: z.enum(keys(WEAPON_MODS)), on: z.boolean() }),

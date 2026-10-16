@@ -212,7 +212,7 @@ const room = ((): Room => {
   try {
     return new Room(new SaveStore(SAVE_PATH, netLog), hosts, https ? HTTPS_PORT : null);
   } catch (e) {
-    // A campaign from before 0.3 that could not be kept aside (persistence.ts): stop, rather than start and write over it.
+    // A campaign too old for this release that could not be kept aside (persistence.ts): stop, rather than start and write over it.
     console.log(`\n  ${(e as Error).message}\n`);
     netLog(`no arranca: ${(e as Error).message}`);
     process.exit(1);

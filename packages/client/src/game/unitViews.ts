@@ -49,6 +49,8 @@ interface Pose {
   swing: number;
   /** How far into its hit reaction (hitReact), 0 to 1. */
   react: number;
+  /** Through a stone's toss (tossStone), 0 to 1. */
+  toss: number;
   yaw: number;
   yawTarget: number;
   phase: number;
@@ -86,7 +88,12 @@ interface UnitView {
   /** Its last walk (moveAlong), which the next waits for, and how many it has set off on. */
   walk: Promise<void> | null;
   walks: number;
+  /** On guard with the blade (Vigilancia cuerpo a cuerpo: Unit.watchMelee), as last shown. */
+  guard: boolean;
 }
+
+/** How high the blade is held on guard (the pose's aim): up in front, its point a little up. */
+const GUARD_AIM = 0.72;
 
 /** A sabotage's alarm by the map, where the mission does not say (skirmishes, older saves): as sfx.ts picks its sound. */
 const ALARM_BY_MAP: Record<Biome, Alarm> = { city: 'police', wilds: 'ambulance', facility: 'factory' };
@@ -212,7 +219,10 @@ export class UnitViews {
     const sex = u.appearance ? undefined : sexOfPerson(u.name);
     // A campaign soldier's own weapons (docs/FASE8.md §A); anyone else's are its template's.
     const gear: Gear = { ...gearOf(u.weaponTier, u.armorTier), arms: u.arms ?? null };
-    const rig = buildUnit(u.template, color, u.appearance, gear, u.campaignId ?? (u.team === 'xcom' ? u.name : u.id), sex, u.template === 'relay' ? this.sirenOf(u) : undefined);
+    // A soldier risen as one of the dead (Unit.risenFrom, its look theirs) keeps the body they had: picked as theirs was.
+    const fallen = u.risenFrom ? this.shown?.units.find((x) => x.id === u.risenFrom) : undefined;
+    const seed = fallen ? (fallen.campaignId ?? fallen.name) : (u.campaignId ?? (u.team === 'xcom' ? u.name : u.id));
+    const rig = buildUnit(u.template, color, u.appearance, gear, seed, sex, u.template === 'relay' ? this.sirenOf(u) : undefined);
     const ring = new THREE.Mesh(
       ringGeometry,
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
@@ -232,14 +242,14 @@ export class UnitViews {
     const facing = u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
       crouch: 0, crouchTarget: 0, aim: 0, aimTarget: 0, aimFx: 0, run: 0, recoil: 0, hit: 0, flash: 0,
-      fall: u.alive || u.lost ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, yaw: facing, yawTarget: facing,
+      fall: u.alive || u.lost ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, toss: 0, yaw: facing, yawTarget: facing,
       phase: Math.random() * Math.PI * 2,
     };
     this.group.add(rig.root);
 
     const view: UnitView = {
       id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, droneAway: false, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0,
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, guard: false,
     };
     this.views.set(u.id, view);
     // Left outside when La Mula went (sync): standing, not dead.
@@ -289,7 +299,13 @@ export class UnitViews {
       v.rig.root.visible = shown;
       v.flag.visible = shown && u.alive;
       v.pose.crouchTarget = u.hunkered || u.captive ? 1 : 0;
-      v.pose.aimTarget = u.overwatch ? 1 : 0;
+      // On watch: the gun up; with the blade (docs/FASE10.md §4: Unit.watchMelee), drawn from the belt and held on guard.
+      const guard = !!u.overwatch && !!u.watchMelee && u.alive;
+      v.pose.aimTarget = u.overwatch ? (guard ? GUARD_AIM : 1) : 0;
+      if (guard !== v.guard && !v.animating && isFigure(v.rig)) {
+        v.guard = guard;
+        v.rig.draw?.(guard ? 'belt' : 'weapon');
+      }
       // Down to half its health or less, a soldier stands slumped.
       if (u.team === 'xcom' && isFigure(v.rig)) v.rig.setStance?.(u.alive && u.hp * 2 <= u.maxHp ? 'slumped' : null);
       // A weapon from the backpack taken in hand (the engine's weaponEquipped).
@@ -349,7 +365,7 @@ export class UnitViews {
       cover === null ? '' : `<b class="cover c${cover}" title="${cover === 2 ? 'Cobertura alta' : cover === 1 ? 'Cobertura baja' : 'Flanqueado'}"></b>`;
     const status = [
       u.controlledBy ? '<em class="psi">CONTROLADO</em>' : '',
-      u.overwatch ? `<em class="ow">${u.killZone ? 'ZONA LETAL' : 'VIGILANCIA'}</em>` : '',
+      u.overwatch ? `<em class="ow">${u.killZone ? 'ZONA LETAL' : u.watchMelee ? 'HOJA EN ALTO' : 'VIGILANCIA'}</em>` : '',
       u.hunkered ? '<em class="hk">AGAZAPADO</em>' : '',
       u.aided ? '<em class="aid">PROTEGIDO</em>' : '',
       u.stunned ? '<em class="stun">ATURDIDO</em>' : '',
@@ -437,6 +453,17 @@ export class UnitViews {
   forceVisible(id: string): void {
     const v = this.views.get(id);
     if (v) v.rig.root.visible = true;
+  }
+
+  /**
+   * Into La Lata (the event `evacuated`): out of sight at once, its ring and
+   * flag with it, so the last one aboard is not left standing outside as the
+   * bus pulls away (playtest 16/10 #2: sync hides them, but only once the
+   * event is applied, after the bus has gone).
+   */
+  board(id: string): void {
+    const v = this.views.get(id);
+    if (v) v.rig.root.visible = false;
   }
 
   // ---------------------------------------------------------- selection
@@ -566,6 +593,7 @@ export class UnitViews {
     posed.climb = p.climb;
     posed.swing = p.swing;
     posed.react = p.react;
+    posed.toss = p.toss;
     rig.applyPose(posed, time);
     if (!rig.ownsReload) rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
   }
@@ -585,15 +613,17 @@ export class UnitViews {
    * A unit's walks go one after the other, even when they are played at once
    * (a group of the dead walking together, where one may move twice: game.ts
    * playGroup; playtest 15/10 #19, two walks pulling a body back and forth):
-   * the next sets off from where the last ends, without stopping.
+   * the next sets off from where the last ends, without stopping. `pace`: how
+   * many times quicker than its gait, the clip keeping pace (the enemy turn's
+   * walkers, all at once: game.ts, playtest 16/10 #6).
    */
-  async moveAlong(id: string, path: Place[], onStep?: (p: THREE.Vector3) => void, ap = 1): Promise<void> {
+  async moveAlong(id: string, path: Place[], onStep?: (p: THREE.Vector3) => void, ap = 1, pace = 1): Promise<void> {
     const v = this.views.get(id);
     if (!v || !path.length) return;
     const before = v.walk;
     const walk = (async () => {
       await before?.catch(() => undefined);
-      await this.walk(v, id, path, onStep, ap);
+      await this.walk(v, id, path, onStep, ap, pace);
     })();
     v.walk = walk;
     try {
@@ -603,12 +633,13 @@ export class UnitViews {
     }
   }
 
-  private async walk(v: UnitView, id: string, path: Place[], onStep: ((p: THREE.Vector3) => void) | undefined, ap: number): Promise<void> {
+  private async walk(v: UnitView, id: string, path: Place[], onStep: ((p: THREE.Vector3) => void) | undefined, ap: number, pace = 1): Promise<void> {
     v.animating = true;
     const walks = ++v.walks;
     const p = v.pose;
     const gaits = gaitsOf(v.template);
-    const gait = p.crouchTarget > 0.5 ? CROUCHED : ap >= 2 ? gaits.two : gaits.one;
+    const base = p.crouchTarget > 0.5 ? CROUCHED : ap >= 2 ? gaits.two : gaits.one;
+    const gait = pace === 1 ? base : { ...base, seconds: base.seconds / pace };
     if (isFigure(v.rig)) v.rig.setGait?.(gait.motion, clipSpeed(v.template, gait));
     try {
       void tween(0.12, (t) => (p.run = Math.max(p.run, t)));
@@ -944,6 +975,23 @@ export class UnitViews {
     });
     v.pose.spin = 0;
     v.pose.aimFx = 0;
+  }
+
+  /**
+   * A stone tossed at `to` (docs/FASE10.md §4): turned to it, the free arm
+   * back and swung through underhand. Resolves as it leaves the hand, with
+   * where the hand is then (for fx.stone).
+   */
+  async tossStone(id: string, to: THREE.Vector3): Promise<THREE.Vector3> {
+    const v = this.views.get(id);
+    if (!v) return to.clone();
+    this.face(id, to);
+    await wait(0.12);
+    await tween(0.24, (t) => (v.pose.toss = 0.6 * easeInOut(t)));
+    v.rig.root.updateMatrixWorld(true);
+    const hand = v.rig.root.getObjectByName('Hand_L')?.getWorldPosition(new THREE.Vector3()) ?? this.chestPos(id);
+    void tween(0.22, (t) => (v.pose.toss = 0.6 + 0.4 * t)).then(() => (v.pose.toss = 0));
+    return hand;
   }
 
   /** Wind-up and release of a throw; resolves at the release point. */

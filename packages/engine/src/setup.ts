@@ -111,12 +111,12 @@ const SKIRMISH_ARMS: FoundWeaponId[] = ['assaultRifle', 'pumpShotgun', 'precisio
 /** And on the belt: grenades, and one of these. */
 const SKIRMISH_BELT: ItemId[] = ['firstAid', 'smokeGrenade', 'flashbang'];
 
-/** A skirmish soldier (docs/FASE9.md §6): a weapon and gear at random; a veteran, skills of 2 to 4 and their talents. */
+/** A skirmish soldier (docs/FASE10.md §7): a weapon and gear at random; a veteran, bars filled in every line and its board. */
 function skirmishSoldier(rng: Rng, veteran: boolean): { stats: FighterStats; arms: Arms; gear: ItemId[] } {
   const arms: Arms = { primary: rng.pick(SKIRMISH_ARMS), melee: rng.next() < 0.5 ? 'machete' : null };
   const gear: ItemId[] = ['fragGrenade', rng.pick(SKIRMISH_BELT)];
-  const { skills, picks } = veteran ? veteranSkills(rng) : { skills: recruitSkills(rng), picks: [] };
-  return { stats: fighterStats(skills, picks, gear, arms), arms, gear };
+  const { skills, growth, board } = veteran ? veteranSkills(rng) : { ...recruitSkills(rng), board: [] };
+  return { stats: fighterStats(skills, growth, board, gear, arms), arms, gear };
 }
 
 /** Whether a unit counts its spare magazines (docs/FASE7.md): the squad's, with a weapon that takes them. */
