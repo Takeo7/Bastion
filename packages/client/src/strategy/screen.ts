@@ -360,6 +360,8 @@ export class StrategyScreen {
   private leaving = false;
   /** «Salir del juego» asked from the menu (desktop app only, ui/quit.ts): its question in the same window. */
   private quitting = false;
+  /** The sides folded away on a phone (panel's handle): kept while the screen redraws. */
+  private readonly folded = new Set<'left' | 'right'>();
   /** Settings open over the base: only for this player, the partner stays where they are. */
   private settingsOpen = false;
   /** News keys already seen (navNews), for the campaign `seenNewsFor`. */
@@ -826,10 +828,25 @@ export class StrategyScreen {
 
   /** Remembers each panel's scroll across re-renders. */
   private panel(key: string, side: 'left' | 'right' | 'left.compact', ...children: (Node | null | false | undefined)[]): HTMLElement {
-    const wrap = h(`div.strat-${side}`, { onscroll: (e: Event) => this.scroll.set(key, (e.target as HTMLElement).scrollTop) });
+    // On a phone (docs/FASE11.md §4) each side folds away behind its handle, to see the base; it stays folded across redraws.
+    const edge = side === 'right' ? 'right' : 'left';
+    const folded = this.folded.has(edge);
+    const wrap = h(`div.strat-${side}${folded ? '.folded' : ''}`, { onscroll: (e: Event) => this.scroll.set(key, (e.target as HTMLElement).scrollTop) });
     const inner = h('div.x-panel');
     append(inner, ...children);
-    wrap.append(inner);
+    const handle = h(
+      'button.panel-fold',
+      {
+        type: 'button',
+        'aria-label': folded ? 'Desplegar el panel' : 'Plegar el panel',
+        onclick: () => {
+          if (!this.folded.delete(edge)) this.folded.add(edge);
+          this.render();
+        },
+      },
+      (edge === 'left') === folded ? '›' : '‹',
+    );
+    wrap.append(handle, inner);
     const top = this.scroll.get(key) ?? 0;
     queueMicrotask(() => (wrap.scrollTop = top));
     return wrap;
@@ -1129,7 +1146,7 @@ export class StrategyScreen {
         'div.strat-players',
         {},
         ...this.players.map((p) => {
-          const where = p.slot === this.mySlot ? 'tú' : !p.connected ? 'desconectado' : this.partnerView ? VIEW_NAMES[this.partnerView] : '';
+          const where = p.slot === this.mySlot ? 'tú' : !p.connected ? 'desconectado' : p.away ? 'en otra app' : this.partnerView ? VIEW_NAMES[this.partnerView] : '';
           const ready = c.advanceReady[p.slot] || c.launchReady[p.slot];
           return h(
             `div.strat-player${p.connected ? '' : '.offline'}`,
@@ -1315,8 +1332,9 @@ export class StrategyScreen {
       this.nav.append(
         h(
           `button${this.view === item.view ? '.on' : ''}${item.view === 'squad' ? '.urgent' : ''}`,
-          { 'data-view': item.view, onclick: () => void this.go(item.view), title: todo ? todo.what.join(' · ') : '' },
-          item.label,
+          { 'data-view': item.view, onclick: () => void this.go(item.view), title: todo ? todo.what.join(' · ') : '', 'aria-label': item.label },
+          // Its own span: on a phone the tabs are icons only (docs/FASE11.md §4).
+          h('span.nav-label', {}, item.label),
           todo ? h(`span.nav-count${todo.urgent ? '.urgent' : ''}`, {}, todo.n) : null,
           here ? h('span.partner-dot', { style: { '--accent': partner!.color }, title: `${partner!.name} está aquí` }, partner!.name.slice(0, 1).toUpperCase()) : null,
         ),

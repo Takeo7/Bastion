@@ -371,3 +371,31 @@
   font-size: 12.5px;
   color: var(--x-muted, #a1a79d);
 }
+
+/* A phone sideways (docs/FASE11.md §4): the board as tall as the screen allows, its card beside it. */
+@media (max-height: 520px) {
+  :root[data-touch='1'] .hb {
+    grid-template-columns: minmax(0, 1fr) 210px;
+    gap: 8px;
+  }
+
+  :root[data-touch='1'] .hb-view {
+    height: calc(100vh - 124px);
+    min-height: 180px;
+  }
+
+  :root[data-touch='1'] .hb-card {
+    max-height: calc(100vh - 124px);
+    overflow-y: auto;
+    padding: 8px 10px;
+  }
+
+  :root[data-touch='1'] .hb-card-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  :root[data-touch='1'] .hb-card-name {
+    font-size: 17px;
+  }
+}

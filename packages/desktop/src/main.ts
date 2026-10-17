@@ -224,11 +224,26 @@ ipcMain.on('bastion:hosting', (e) => {
   e.returnValue = fromGame(e) && server !== null && gameOrigin === `http://localhost:${serverPort}`;
 });
 
-/** «192.168.1.20», «192.168.1.20:3002» or a pasted «http://…/» → «192.168.1.20:3000». */
-function normalise(address: string): string | null {
-  const bare = address.trim().replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '');
+/**
+ * Where an address typed or pasted may be, in the order to try: «192.168.1.20»,
+ * «192.168.1.20:3002» or «http://…/» → a game in an app on the local network
+ * (http, port 3000 if none); «https://…» → a website (docs/WEB.md); a bare
+ * domain, «bastion.example.com» → its website first, then an app's game there.
+ */
+function candidates(address: string): string[] | null {
+  const text = address.trim();
+  const scheme = /^(https?):\/\//i.exec(text)?.[1]?.toLowerCase();
+  const bare = text.replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '');
   if (!/^[\w.-]+(:\d{1,5})?$/.test(bare)) return null;
-  return bare.includes(':') ? bare : `${bare}:${FIRST_PORT}`;
+  if (scheme) return [new URL(`${scheme}://${bare}/`).origin];
+  if (bare.includes(':')) return [`http://${bare}`];
+  const local = /^\d+\.\d+\.\d+\.\d+$/.test(bare) || !bare.includes('.') || /\.(local|lan|home|internal)$/i.test(bare);
+  return local ? [`http://${bare}:${FIRST_PORT}`] : [`https://${bare}`, `http://${bare}:${FIRST_PORT}`];
+}
+
+/** How the start screen shows an address: a local game as «host:port», a website as its https address. */
+function shown(origin: string): string {
+  return origin.startsWith('http://') ? origin.slice('http://'.length) : origin;
 }
 
 ipcMain.handle('bastion:info', (e) => {
@@ -251,15 +266,20 @@ ipcMain.handle('bastion:host', async (e): Promise<string | null> => {
 
 ipcMain.handle('bastion:join', async (e, address: unknown): Promise<string | null> => {
   if (!fromLauncher(e) || !win) return null;
-  const target = typeof address === 'string' ? normalise(address) : null;
-  if (!target) return 'Escribe la dirección que ve tu compañero en su pantalla, por ejemplo 192.168.1.20:3000.';
-  if (!(await answers(`http://${target}/`, 4000))) {
-    return `No responde nadie en ${target}. ¿Tiene abierta la partida (Ser anfitrión) y estáis en la misma red o en Tailscale?`;
+  const tries = typeof address === 'string' ? candidates(address) : null;
+  if (!tries) return 'Escribe la dirección que ve tu compañero en su pantalla, por ejemplo 192.168.1.20:3000, o la de vuestra web.';
+  let origin: string | null = null;
+  for (const t of tries) if (!origin && (await answers(`${t}/`, 4000))) origin = t;
+  if (!origin) {
+    return tries[0]!.startsWith('https:')
+      ? `No responde ${new URL(tries[0]!).host}. ¿Está en marcha el servidor de la web?`
+      : `No responde nadie en ${shown(tries[0]!)}. ¿Tiene abierta la partida (Ser anfitrión) y estáis en la misma red o en Tailscale?`;
   }
-  writeSettings({ ...readSettings(), last: target });
+  writeSettings({ ...readSettings(), last: shown(origin) });
   stopListeningForGames();
-  gameOrigin = new URL(`http://${target}/`).origin;
-  await win.loadURL(`http://${target}/`);
+  // A website asks for its password itself (client ui/password.ts); the browser's cookie keeps it in the app's session.
+  gameOrigin = origin;
+  await win.loadURL(`${origin}/`);
   return null;
 });
 

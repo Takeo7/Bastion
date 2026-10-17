@@ -15,8 +15,8 @@ import type { FogOfWar } from './fogOfWar';
 /** 1 by night, 0 by day: what glows only at night reads it (lit windows: buildings.ts). */
 export const NIGHT = { value: 0 };
 
-/** Real lights, wherever they're most needed. */
-const REAL_LIGHTS = 6;
+/** Real lights, wherever they're most needed (each costs every lit pixel: the phone's take half, docs/FASE11.md §5). */
+export const REAL_LIGHTS = 6;
 const LAMP = new THREE.Color(1.0, 0.62, 0.3);
 /**
  * How strong each light is (Arturo 17/10: «la luz deslumbra mucho de noche»): the pools still read from afar,
@@ -100,6 +100,7 @@ export class NightLights {
     lamps: Glow[],
     headlights: Glow[],
     private readonly fog: FogOfWar,
+    realLights = REAL_LIGHTS,
   ) {
     this.group.visible = NIGHT.value > 0.5;
     this.lamps = lamps;
@@ -119,7 +120,7 @@ export class NightLights {
       mesh.matrixAutoUpdate = false;
       this.group.add(mesh);
     }
-    for (let k = 0; k < REAL_LIGHTS; k++) {
+    for (let k = 0; k < realLights; k++) {
       const light = new THREE.PointLight(LAMP, 0, 7, 2);
       this.lights.push(light);
       this.group.add(light);

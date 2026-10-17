@@ -362,7 +362,7 @@ export class Lobby {
         { style: { '--accent': p?.color ?? '#3a4652' } },
         h('span.dot'),
         h('b', {}, p ? `${p.name}${slot === this.mySlot ? ' (tú)' : ''}` : 'Esperando jugador…'),
-        h('small', {}, p ? (p.connected ? 'Conectado' : 'Desconectado') : ''),
+        h('small', {}, p ? (!p.connected ? 'Desconectado' : p.away ? 'En otra app' : 'Conectado') : ''),
       );
     });
     append(

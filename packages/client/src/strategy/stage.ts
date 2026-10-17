@@ -169,6 +169,7 @@ export class Stage {
   /** Graphics settings, live: resolution, shadows and how much post-processing. */
   private applyGraphics(g: GraphicsSettings): void {
     this.effects = g.effects;
+    this.post.bloom.enabled = g.effects !== 'mobile';
     this.gl.shadowMap.needsUpdate = true;
     if (this.gl.shadowMap.enabled !== g.shadows) {
       this.gl.shadowMap.enabled = g.shadows;
@@ -479,7 +480,8 @@ export class Stage {
     this.gl.setPixelRatio(pixelRatio(w, h));
     this.gl.setSize(w, h);
     this.post.composer.setPixelRatio(this.gl.getPixelRatio());
-    fitPostToPixelRatio(this.post, this.gl.getPixelRatio());
+    const ratio = this.gl.getPixelRatio();
+    fitPostToPixelRatio(this.post, ratio, this.effects === 'mobile' ? { width: w * ratio, height: h * ratio } : undefined);
     this.post.composer.setSize(w, h);
     for (const labels of this.labels.values()) labels.setSize(w, h);
     this.camera.aspect = w / h;

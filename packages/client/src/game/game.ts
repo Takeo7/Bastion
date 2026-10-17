@@ -97,6 +97,7 @@ import {
   NIGHT,
   NIGHT_LABEL,
   NIGHT_TEXT,
+  TOUCH_TEXT,
   litNote,
   NOISE,
   noiseOf,
@@ -161,6 +162,7 @@ import {
 } from '@bastion/engine';
 import type { Net, NetStatus } from '../net';
 import { deadlineLeft } from '../ui/deadline';
+import { isTouch, LONG_PRESS_MS, TAP_SLOP } from '../ui/touch';
 import { clear } from '../ui/dom';
 import { Hud, isMenu, type AbilityView, type BarActionId, type HordeView, type MenuId, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
@@ -238,8 +240,12 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
  * `LIGHT_LINES`, what a Bengala or a fire lights up.
  */
 const NIGHT_RULES = NIGHT_TEXT.rules.join('\n');
+/** How far two fingers turn (radians) for the camera to rotate a quarter (docs/FASE11.md §3). */
+const TOUCH_TURN = 0.6;
 /** How long after the player last moved the camera the turn's changes leave it alone (#47: «que nunca pelee con el jugador»). */
 const TURN_CAMERA_QUIET_MS = 4000;
+/** The touch help's card, once, the first mission on a phone (per browser). */
+const TOUCH_SEEN_KEY = 'bastion.seenTouchHelp';
 /** The first night is explained once, on a card (per browser). */
 const NIGHT_SEEN_KEY = 'bastion.seenNight';
 const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fuego ilumina la zona' } as const;
@@ -656,6 +662,8 @@ export class Game {
   private reachCache: { key: string; reach: Reach; tiles: MoveTile[] } | null = null;
   /** The last enemy's field of view worked out (visionOf), until it or the state moves. */
   private visionCache: { key: string; v: Vision } | null = null;
+  /** The tile a first tap previewed: a second tap on it does what a click would (touchTap). */
+  private tapArmed: Pos | null = null;
   /** The enemy whose field of view is shown (under the pointer, or aimed at), and whether a dead one was turning last frame. */
   private watched: string | null = null;
   private wasTurning = false;
@@ -723,6 +731,8 @@ export class Game {
       onAbility: (id) => this.useAbility(id),
       onEndTurn: () => this.toggleReady(),
       onSelectUnit: (id) => this.select(id, true),
+      onCycleUnit: (dir) => this.cycleUnit(dir),
+      onHurry: (on) => setHurry(on && this.enemyTurnPlaying()),
       onConfirmTarget: () => this.confirmTarget(),
       onCancel: () => this.cancelMode(),
       onCycleTarget: (dir) => this.cycleTarget(dir),
@@ -783,6 +793,8 @@ export class Game {
   loadSnapshot(s: GameState): void {
     // A battle built from nothing, or a new mission on the same screen, goes under the loading veil.
     const fresh = !this.view || s.seq === 0;
+    // Joining a mission already under way there is no arrival card: the touch help comes a moment in.
+    if (!this.view && s.seq !== 0) this.firstTouchHelp(new Promise((done) => window.setTimeout(done, 1200)));
     this.plans.clear();
     this.exposure = null;
     this.state = cloneState(s);
@@ -898,6 +910,7 @@ export class Game {
       }
       if (!seen) void closed.then(() => this.hud.nightCard(NIGHT_TEXT.label, NIGHT_TEXT.rules));
     }
+    this.firstTouchHelp(closed);
     void this.openingShot();
   }
 
@@ -2828,7 +2841,7 @@ export class Game {
     else this.plans.set(u.id, { slot: this.mySlot, tile });
     this.net.send({ t: 'plan', unit: u.id, tile: withdraw ? null : tile });
     this.drawPlans();
-    this.hud.toast(withdraw ? 'Plan retirado.' : `Plan para ${u.name}: lo ve ${this.playerName(this.state.command)}. Otro clic ahí lo quita.`);
+    this.hud.toast(withdraw ? 'Plan retirado.' : `Plan para ${u.name}: lo ve ${this.playerName(this.state.command)}. ${isTouch() ? 'Otro toque' : 'Otro clic'} ahí lo quita.`);
   }
 
   /** Draws every plan along the path it would take now; a plan that no longer fits is dropped. */
@@ -3233,7 +3246,8 @@ export class Game {
     const base = { kind: 'self' as const, action: def.name, locked: this.lockLabel(), cost: costText(u, id), noise: noiseText(this.state, u, id), effect: def.description };
     if (id !== 'search') {
       const what = id === 'openDoor' ? 'abrir' : 'cerrar';
-      return { ...base, title: def.name, hint: `Otra vez, Espacio o clic en la puerta: ${what}${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} puerta` : ''} · Esc: cancelar` };
+      // A finger taps the door, or another (docs/FASE11.md §3); keys are for a keyboard.
+      return { ...base, title: def.name, hint: isTouch() ? `Toca la puerta otra vez: ${what}` : `Otra vez, Espacio o clic en la puerta: ${what}${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} puerta` : ''} · Esc: cancelar` };
     }
     const decor = searchSpot(this.state, tile);
     if (!decor) return null;
@@ -3243,7 +3257,7 @@ export class Game {
       ...base,
       title: boxTitle(decor),
       detail: `Mochila: ${room === 1 ? 'queda 1 hueco' : `quedan ${room} huecos`} de ${slots}`,
-      hint: `Otra vez, Espacio o clic en la caja: abrir${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} caja` : ''} · Esc: cancelar`,
+      hint: isTouch() ? 'Toca la caja otra vez: abrir' : `Otra vez, Espacio o clic en la caja: abrir${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} caja` : ''} · Esc: cancelar`,
     };
   }
 
@@ -4029,7 +4043,7 @@ export class Game {
     // A closed door beside the soldier: the click opens it, for free.
     if (this.handTiles('openDoor').some((t) => samePlace(t, tile))) {
       this.overlays.setSpots([{ pos: tile, kind: 'pick' }], false);
-      this.overlays.setNote(tile, 'Puerta · clic: abrir (no gasta acciones)');
+      this.overlays.setNote(tile, isTouch() ? 'Puerta · tócala: abrir (no gasta acciones)' : 'Puerta · clic: abrir (no gasta acciones)');
       return;
     }
     // Only furniture the squad has seen: the fog keeps what is in an unexplored house.
@@ -4087,7 +4101,7 @@ export class Game {
     const near = this.handTiles('search').some((t) => samePlace(t, tile));
     const blocked = near ? abilityBlocker(this.state, u, 'search') : null;
     this.overlays.setSpots([{ pos: tile, kind: near && !blocked ? 'pick' : 'open' }]);
-    this.overlays.setNote(tile, !near ? `${name} · se puede abrir` : blocked ? `${name} · ${blocked.replace(/\.$/, '').toLowerCase()}` : `${name} · clic: abrir`);
+    this.overlays.setNote(tile, !near ? `${name} · se puede abrir` : blocked ? `${name} · ${blocked.replace(/\.$/, '').toLowerCase()}` : `${name} · ${isTouch() ? 'tócala' : 'clic'}: abrir`);
   }
 
   /**
@@ -4206,21 +4220,102 @@ export class Game {
         this.drag.y = e.clientY;
         return;
       }
+      // A finger doesn't hover: its taps say where it looks (below).
+      if (e.pointerType === 'touch') return;
       const t = tileAtPointer(e);
       if (t?.x === this.hoverTile?.x && t?.y === this.hoverTile?.y && t?.z === this.hoverTile?.z) return;
       this.hoverTile = t;
       this.updateHover();
       this.sendPresence();
     });
-    canvas.addEventListener('pointerleave', () => {
+    canvas.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'touch') return;
       this.hoverTile = null;
       this.updateHover();
       this.sendPresence();
     });
     canvas.addEventListener('click', (e) => {
+      // A tap's own click: the touch handlers took it already.
+      if (performance.now() - lastTouch < 700) return;
       const t = tileAtPointer(e);
       if (t) this.clickTile(t);
     });
+
+    // Touch (docs/FASE11.md §3), where nothing can hang on hovering: one finger drags the camera, two
+    // pinch it nearer or farther and, turned, rotate it a quarter at a time; a tap on a unit, or while
+    // aiming, acts as a click; on the ground it previews (path, cost, noise) and a second tap on the
+    // same tile does it; a long press shows what the pointer would (a zombie's cone, its tags, notes).
+    canvas.style.touchAction = 'none';
+    const fingers = new Map<number, { x: number; y: number }>();
+    let press: { id: number; x: number; y: number; moved: boolean; long: boolean; timer: number } | null = null;
+    let pair: { d: number; a: number; turn: number } | null = null;
+    let lastTouch = 0;
+    const twoFingers = () => {
+      const [a, b] = [...fingers.values()];
+      return { d: Math.hypot(a!.x - b!.x, a!.y - b!.y), a: Math.atan2(b!.y - a!.y, b!.x - a!.x) };
+    };
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size === 1) {
+        const at = { clientX: e.clientX, clientY: e.clientY } as PointerEvent;
+        press = {
+          id: e.pointerId,
+          x: e.clientX,
+          y: e.clientY,
+          moved: false,
+          long: false,
+          timer: window.setTimeout(() => {
+            if (!press || press.moved) return;
+            press.long = true;
+            this.touchPeek(tileAtPointer(at));
+          }, LONG_PRESS_MS),
+        };
+      } else {
+        // A second finger: a pinch or a turn, never a tap.
+        if (press) window.clearTimeout(press.timer);
+        press = null;
+        if (fingers.size === 2) pair = { ...twoFingers(), turn: 0 };
+      }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'touch' || !fingers.has(e.pointerId)) return;
+      const before = fingers.get(e.pointerId)!;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pair && fingers.size === 2) {
+        const now = twoFingers();
+        // Fingers apart, nearer: the camera's distance by the inverse of the spread.
+        if (now.d > 0 && pair.d > 0) this.rig.zoom((pair.d / now.d - 1) / 0.001);
+        pair.turn += Math.atan2(Math.sin(now.a - pair.a), Math.cos(now.a - pair.a));
+        if (Math.abs(pair.turn) > TOUCH_TURN) {
+          this.rig.rotate(pair.turn > 0 ? 1 : -1);
+          pair.turn = 0;
+        }
+        pair.d = now.d;
+        pair.a = now.a;
+        return;
+      }
+      if (!press || press.id !== e.pointerId) return;
+      if (!press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP) {
+        press.moved = true;
+        window.clearTimeout(press.timer);
+      }
+      if (press.moved) this.rig.panPixels(e.clientX - before.x, e.clientY - before.y);
+    });
+    const touchEnd = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      fingers.delete(e.pointerId);
+      lastTouch = performance.now();
+      if (fingers.size < 2) pair = null;
+      if (!press || press.id !== e.pointerId) return;
+      window.clearTimeout(press.timer);
+      const done = press;
+      press = null;
+      if (done.moved || done.long || e.type === 'pointercancel') return;
+      this.touchTap(tileAtPointer(e));
+    };
+    canvas.addEventListener('pointerup', touchEnd);
+    canvas.addEventListener('pointercancel', touchEnd);
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       // Shift or Alt and the wheel: the floor (Shift turns the wheel sideways on a Mac, hence deltaX).
@@ -4345,9 +4440,52 @@ export class Game {
   }
 
   /**
-   * First floor the ray meets, rooftops included. Walls and cover are ignored,
-   * so the cursor always lands on a tile a unit could stand on.
+   * A tap (docs/FASE11.md §3): on a soldier or an enemy in sight, or while
+   * aiming or with a self ability armed, it does what a click does (picks,
+   * aims, fires the second time); elsewhere the first tap previews the tile
+   * (the path, its cost and noise, an area) and a second tap on it does it.
    */
+  private touchTap(t: Pos | null): void {
+    if (!t) return;
+    const occupant = unitAt(this.view, t);
+    const onUnit = !!occupant && occupant.alive && (occupant.team === 'xcom' || this.visibleAliens.has(occupant.id));
+    const direct = onUnit || this.mode.kind === 'target' || this.mode.kind === 'self';
+    const again = !!this.tapArmed && samePlace(this.tapArmed, t);
+    this.hoverTile = t;
+    this.updateHover();
+    this.sendPresence();
+    if (direct || again) {
+      this.tapArmed = null;
+      this.clickTile(t);
+      return;
+    }
+    this.tapArmed = t;
+  }
+
+  /**
+   * The first battle on a phone (a new mission, or one joined half played):
+   * how the fingers play it, on a card, once per browser (docs/FASE11.md §3),
+   * after `after` (the arrival card).
+   */
+  private firstTouchHelp(after: Promise<void>): void {
+    if (!isTouch()) return;
+    let seen = true;
+    try {
+      seen = localStorage.getItem(TOUCH_SEEN_KEY) === '1';
+      localStorage.setItem(TOUCH_SEEN_KEY, '1');
+    } catch {
+      /* storage unavailable: no card rather than one every mission */
+    }
+    if (!seen) void after.then(() => this.hud.nightCard(TOUCH_TEXT.setting, TOUCH_TEXT.help));
+  }
+
+  /** A long press: what the pointer would show over `t` (a zombie's cone, the tags, the tile's note), and nothing armed. */
+  private touchPeek(t: Pos | null): void {
+    this.tapArmed = null;
+    this.hoverTile = t;
+    this.updateHover();
+  }
+
   /**
    * The unit whose body the pointer's ray goes through, nearest first: a
    * soldier or an enemy in sight, as an upright cylinder where its model
@@ -4377,6 +4515,10 @@ export class Game {
     return best?.pos ?? null;
   }
 
+  /**
+   * First floor the ray meets, rooftops included. Walls and cover are ignored,
+   * so the cursor always lands on a tile a unit could stand on.
+   */
   private pickTile(ray: THREE.Ray): Pos | null {
     const s = this.state;
     const top = (Math.max(0, this.level, ...s.elev) + 1) * STOREY;
@@ -4500,7 +4642,7 @@ export class Game {
       const key = `${u.id}|${tile.x},${tile.y}`;
       if (dest.detected && this.concealWarn !== key) {
         this.concealWarn = key;
-        this.hud.toast('Desde ahí os ven: se rompe la ocultación. Haz clic otra vez para mover.');
+        this.hud.toast(`Desde ahí os ven: se rompe la ocultación. ${isTouch() ? 'Toca' : 'Haz clic'} otra vez para mover.`);
         return;
       }
       this.concealWarn = null;

@@ -3,9 +3,12 @@
 # dark rounded square with a snowy sierra and a rust glow low down.
 #
 #   python3 packages/desktop/scripts/icon.py
+#   python3 packages/desktop/scripts/icon.py web
 #
 # Writes build/icon.png (1024, the window's), build/icon.icns (macOS, with
 # Apple's margin) and build/icon.ico (Windows, filling more of its square).
+# With `web`, only the web app's (docs/FASE11.md §2): the square filled to the
+# edge, as phones round it themselves, into packages/client/public/icono-*.png.
 # Needs Pillow; iconutil comes with macOS.
 import shutil
 import subprocess
@@ -16,6 +19,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 BUILD = Path(__file__).resolve().parent.parent / 'build'
+PUBLIC = Path(__file__).resolve().parents[2] / 'client' / 'public'
 SIZE = 1024
 
 
@@ -23,8 +27,8 @@ def lerp(a, b, k):
     return tuple(round(x + (y - x) * k) for x, y in zip(a, b))
 
 
-def tile(square: int) -> Image.Image:
-    """The rounded square: night sky to dark ground, the sierra, a rust glow."""
+def tile(square: int, rounded: bool = True) -> Image.Image:
+    """The rounded square (or, not `rounded`, the whole square): night sky to dark ground, the sierra, a rust glow."""
     top, bottom = (44, 54, 66), (16, 19, 24)
     bg = Image.new('RGBA', (square, square))
     px = bg.load()
@@ -53,6 +57,8 @@ def tile(square: int) -> Image.Image:
     d = ImageDraw.Draw(ridges)
     d.polygon([(x * square, y * square) for x, y in near], fill=(30, 35, 42, 255))
     bg.alpha_composite(ridges.filter(ImageFilter.GaussianBlur(square * 0.003)))
+    if not rounded:
+        return bg
     # The rounded corners, and a faint light edge on top.
     mask = Image.new('L', (square, square), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, square - 1, square - 1), radius=round(square * 0.225), fill=255)
@@ -63,22 +69,24 @@ def tile(square: int) -> Image.Image:
     return bg
 
 
-def icon(margin: float) -> Image.Image:
-    """The whole icon at 1024: the tile `margin` in from each edge, La Mula on it with a shadow under its wheels."""
+def icon(margin: float, flat: bool = False, bus_width: float = 0.8, bus_y: float = 0.64) -> Image.Image:
+    """The whole icon at 1024: the tile `margin` in from each edge, La Mula on it with a shadow under its wheels.
+    `flat`: the tile filling the square, no shadow, for a phone to round; the bus `bus_width` of it across, its middle at `bus_y`."""
     square = round(SIZE * (1 - 2 * margin))
     out = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
-    # A soft drop shadow under the tile, as macOS icons have.
-    shade = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
     o = (SIZE - square) // 2
-    ImageDraw.Draw(shade).rounded_rectangle((o, o + SIZE * 0.012, o + square, o + square + SIZE * 0.012), radius=round(square * 0.225), fill=(0, 0, 0, 110))
-    out.alpha_composite(shade.filter(ImageFilter.GaussianBlur(SIZE * 0.012)))
-    out.alpha_composite(tile(square), (o, o))
+    if not flat:
+        # A soft drop shadow under the tile, as macOS icons have.
+        shade = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
+        ImageDraw.Draw(shade).rounded_rectangle((o, o + SIZE * 0.012, o + square, o + square + SIZE * 0.012), radius=round(square * 0.225), fill=(0, 0, 0, 110))
+        out.alpha_composite(shade.filter(ImageFilter.GaussianBlur(SIZE * 0.012)))
+    out.alpha_composite(tile(square, rounded=not flat), (o, o))
     bus = Image.open(BUILD / 'mula-1024.png').convert('RGBA')
     bus = bus.crop(bus.getchannel('A').getbbox())
-    width = round(square * 0.8)
+    width = round(square * bus_width)
     bus = bus.resize((width, round(bus.height * width / bus.width)), Image.LANCZOS)
     x = (SIZE - bus.width) // 2
-    y = o + round(square * 0.64) - bus.height // 2
+    y = o + round(square * bus_y) - bus.height // 2
     ground = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
     ImageDraw.Draw(ground).ellipse((x + bus.width * 0.08, y + bus.height * 0.86, x + bus.width * 0.92, y + bus.height * 1.04), fill=(0, 0, 0, 150))
     out.alpha_composite(ground.filter(ImageFilter.GaussianBlur(SIZE * 0.015)))
@@ -86,7 +94,19 @@ def icon(margin: float) -> Image.Image:
     return out
 
 
+def web() -> None:
+    """The web app's icons (manifest.webmanifest, index.html): opaque squares a phone rounds or crops itself."""
+    full = icon(0, flat=True).convert('RGB')
+    for size in (180, 192, 512):
+        full.resize((size, size), Image.LANCZOS).save(PUBLIC / f'icono-{size}.png', optimize=True)
+    # Android may cut it to a circle: the bus inside the middle 80%.
+    icon(0, flat=True, bus_width=0.62, bus_y=0.54).convert('RGB').resize((512, 512), Image.LANCZOS).save(PUBLIC / 'icono-maskable-512.png', optimize=True)
+    print(f'Iconos de la web en {PUBLIC}')
+
+
 def main() -> None:
+    if sys.argv[1:] == ['web']:
+        return web()
     # macOS: Apple's grid keeps the tile at 824 of 1024.
     mac = icon(0.098)
     mac.save(BUILD / 'icon.png')

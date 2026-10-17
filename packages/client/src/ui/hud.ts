@@ -2,6 +2,7 @@ import {
   ABANDON_TEXT,
   BITE_TAG,
   NIGHT_TEXT,
+  TOUCH_TEXT,
   biteNote,
   clipOf,
   displayName,
@@ -36,6 +37,7 @@ import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
 import { wearMarks } from '../strategy/arms';
 import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from './quit';
+import { canFullscreen, fullscreenLabel, isTouch, toggleFullscreen } from './touch';
 import { graphicsSettings, soundSettings } from './settingsPanel';
 import { typed } from './typed';
 
@@ -228,6 +230,10 @@ export interface HudHandlers {
   onAbility(id: BarActionId): void;
   onEndTurn(): void;
   onSelectUnit(id: string): void;
+  /** The soldier before or after (Tab on a keyboard; the touch bar's buttons, docs/FASE11.md §3). */
+  onCycleUnit(dir: 1 | -1): void;
+  /** The enemy turn played quicker while held (Space on a keyboard; a finger on «Turno enemigo»). */
+  onHurry(on: boolean): void;
   onConfirmTarget(): void;
   onCancel(): void;
   onCycleTarget(dir: 1 | -1): void;
@@ -356,6 +362,11 @@ export class Hud {
 
   constructor(container: HTMLElement, private readonly handlers: HudHandlers) {
     this.endTurn.addEventListener('click', () => handlers.onEndTurn());
+    // A finger held on «Turno enemigo» plays it quicker, as Space held does (docs/FASE11.md §3).
+    this.endTurn.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') handlers.onHurry(true);
+    });
+    for (const t of ['pointerup', 'pointercancel', 'pointerleave'] as const) this.endTurn.addEventListener(t, () => handlers.onHurry(false));
     this.passBtn.addEventListener('click', () => handlers.onPassCommand());
     this.passBtn.append(h('span', {}, 'CEDER EL MANDO'), h('small', {}, 'C'));
     this.watchBtn.addEventListener('click', () => handlers.onWatchPartner());
@@ -375,6 +386,24 @@ export class Hud {
     });
     this.drawFollow();
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
+    // Touch only (docs/FASE11.md §3; styles.css shows them with data-touch): the squad's list folded
+    // behind a button, the soldier before and after, and full screen where the browser has it.
+    const squadBtn = h('button.pass-command.touch-btn.squad-toggle', { type: 'button', 'aria-expanded': 'false', onclick: () => squadBtn.setAttribute('aria-expanded', String(this.squad.classList.toggle('open'))) }, TOUCH_TEXT.squad);
+    const touchBar = h(
+      'div.touch-units',
+      {},
+      h('button.pass-command.touch-btn', { type: 'button', title: TOUCH_TEXT.prevTitle, 'aria-label': TOUCH_TEXT.prevTitle, onclick: () => handlers.onCycleUnit(-1) }, arrowIcon('left'), h('span', {}, TOUCH_TEXT.prev)),
+      h('button.pass-command.touch-btn', { type: 'button', title: TOUCH_TEXT.nextTitle, 'aria-label': TOUCH_TEXT.nextTitle, onclick: () => handlers.onCycleUnit(1) }, h('span', {}, TOUCH_TEXT.next), arrowIcon('right')),
+      squadBtn,
+    );
+    const fullBtn = canFullscreen() ? h('button.pass-command.touch-btn.fullscreen-btn', { type: 'button', onclick: () => void toggleFullscreen() }, fullscreenLabel()) : null;
+    if (fullBtn) document.addEventListener('fullscreenchange', () => (fullBtn.textContent = fullscreenLabel()));
+    // A soldier picked from the folded list closes it.
+    this.squad.addEventListener('click', () => {
+      if (!isTouch()) return;
+      this.squad.classList.remove('open');
+      squadBtn.setAttribute('aria-expanded', 'false');
+    });
     this.root.append(
       this.frame,
       h('div.top', {}, this.turn, this.floor, this.mission, this.players),
@@ -383,7 +412,8 @@ export class Hud {
       this.abilities,
       this.target,
       h('div.turn-actions', {}, this.followBtn, this.passBtn, this.watchBtn, this.endTurn),
-      h('div.side', {}, menuButton, this.logEl),
+      h('div.side', {}, fullBtn, menuButton, this.logEl),
+      touchBar,
       this.bannerEl,
       this.toastEl,
       this.noticeEl,
@@ -496,7 +526,8 @@ export class Hud {
     for (const p of players) {
       const holds = commander === p.slot;
       // Who holds the command is the turn label's business now («TURNO DE ANA»): here only the underline.
-      const status = !p.connected ? 'Desconectado' : alone || holds ? '' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
+      // In another app on their phone (docs/FASE11.md §6): back soon, their turn waits for them.
+      const status = !p.connected ? 'Desconectado' : p.away ? 'En otra app' : alone || holds ? '' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
       this.players.append(
         h(
           `div.player${p.slot === mySlot ? '.me' : ''}${ready[p.slot] ? '.ready' : ''}${p.connected ? '' : '.offline'}${holds ? '.command' : ''}`,
@@ -927,7 +958,7 @@ export class Hud {
         h('div.self-cost', {}, [view.cost, view.limits, view.noise].filter(Boolean).join(' · ')),
         h('div.self-desc', {}, view.effect),
         view.detail ? h('div.effect', {}, view.detail) : null,
-        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : view.hint ?? 'Otra vez, Espacio o Intro: usar · Esc: cancelar'),
+        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : view.hint ?? (isTouch() ? 'Tócala otra vez para usarla' : 'Otra vez, Espacio o Intro: usar · Esc: cancelar')),
         h(
           'div.shot-actions',
           {},
@@ -1040,7 +1071,7 @@ export class Hud {
       this.endTurn.append(h('span', {}, `MANDO: ${(waitingFor ?? '').toUpperCase()}`), h('small', {}, 'Puedes planear: clic en una casilla'));
     } else if (mode === 'enemy') {
       // The enemy turn plays (docs/UX-RITMO.md): the space bar held shows it in «Rápida».
-      this.endTurn.append(h('span', {}, 'TURNO ENEMIGO'), h('small', {}, 'Espacio: más rápido'));
+      this.endTurn.append(h('span', {}, 'TURNO ENEMIGO'), h(`small${isTouch() ? '.touch-hint' : ''}`, {}, isTouch() ? 'Mantén pulsado: más rápido' : 'Espacio: más rápido'));
     } else {
       this.endTurn.append(h('span', {}, 'TERMINAR TURNO'), h('small', {}, 'Retroceso'));
     }
@@ -1100,7 +1131,8 @@ export class Hud {
       lines.length ? h('p.intro-meta', {}, lines.join(' · ')) : null,
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
       briefing ? h('p.intro-briefing', {}, briefing) : null,
-      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR'), h('small', {}, 'clic o Intro')),
+      // A finger has no Intro key (docs/FASE11.md §3).
+      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR'), h('small', {}, isTouch() ? 'toca' : 'clic o Intro')),
     );
     this.root.append(catcher, el);
     return new Promise((resolve) => {
@@ -1207,7 +1239,10 @@ export class Hud {
       append(
         card,
         h('h2', {}, 'Controles'),
-        h('dl.controls', {}, ...CONTROLS.flatMap(([key, what]) => [h('dt', {}, key), h('dd', {}, what)])),
+        // On a phone, its gestures; on a computer, the keys.
+        isTouch()
+          ? h('ul.night-rules.touch-help', {}, ...TOUCH_TEXT.help.map((line) => h('li', {}, line)))
+          : h('dl.controls', {}, ...CONTROLS.flatMap(([key, what]) => [h('dt', {}, key), h('dd', {}, what)])),
         // How the light works at night (Lore's, #50), here too for whenever it is wanted.
         h('h3.controls-night', {}, NIGHT_TEXT.label),
         h('ul.night-rules', {}, ...NIGHT_TEXT.rules.map((line) => h('li', {}, line))),

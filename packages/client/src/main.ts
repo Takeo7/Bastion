@@ -10,6 +10,7 @@ import { StrategyScreen } from './strategy/screen';
 import { setDeadline } from './ui/deadline';
 import { applyUiTheme } from './ui/theme';
 import { Lobby } from './ui/lobby';
+import { installTouch } from './ui/touch';
 
 const NAME_KEY = storageKey('name');
 
@@ -28,6 +29,8 @@ const app = document.getElementById('app')!;
 applyUiTheme();
 // The interface's sounds, and the menu's music once sound can start.
 installUiSounds();
+// On a phone: touch controls, the notice to turn it sideways, and long presses for the tooltips (docs/FASE11.md).
+installTouch();
 music.play('base');
 const net = new Net(serverUrl());
 let slot: Slot | null = null;

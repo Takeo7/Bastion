@@ -168,6 +168,11 @@
   color: var(--ink-soft);
 }
 
+/* A finger has no Intro key (docs/FASE11.md §3). */
+:root[data-touch='1'] .radio.ready .radio-next::after {
+  content: ' · toca';
+}
+
 /* In battle, Enter and Space belong to the battle (they fire): the card is closed with a click. */
 .radio.combat.ready .radio-next::after {
   content: ' · clic';

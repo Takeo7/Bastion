@@ -5,8 +5,12 @@
 import { storageKey } from './net';
 
 export type FpsCap = 0 | 30 | 60;
-/** high: ambient occlusion and bloom · medium: bloom only · low: no post-processing. */
-export type EffectsLevel = 'high' | 'medium' | 'low';
+/**
+ * high: ambient occlusion and bloom · medium: bloom only · low: no post-processing · mobile: the phone's
+ * (docs/FASE11.md §5, chosen in touch mode): the colour grade only, at most one pixel per CSS pixel,
+ * 30 FPS, lighter shadows, fewer trinkets and particles.
+ */
+export type EffectsLevel = 'high' | 'medium' | 'low' | 'mobile';
 /** «Velocidad del combate» (docs/UX-RITMO.md): every action as long ×1.4, ×1 or ×0.6. */
 export type CombatSpeed = 'slow' | 'normal' | 'fast';
 export const COMBAT_RATES: Record<CombatSpeed, number> = { slow: 1 / 1.4, normal: 1, fast: 1 / 0.6 };
@@ -22,9 +26,13 @@ export interface GraphicsSettings {
   /** Interface size (0.9 to 1.3): scales the HUD and the base's sheets, not the 3D view. */
   uiScale: number;
   combatSpeed: CombatSpeed;
+  /** Touch controls (docs/FASE11.md §1): by the screen («auto»: touch and no mouse), or forced on or off (ui/touch.ts). */
+  touch: TouchMode;
 }
 
-const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1, combatSpeed: 'normal' };
+export type TouchMode = 'auto' | 'on' | 'off';
+
+const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1, combatSpeed: 'normal', touch: 'auto' };
 const KEY = storageKey('graphics');
 /** Version of the stored settings: 2 made the resolution automatic by default. */
 const VERSION = 2;
@@ -50,7 +58,8 @@ export function graphics(): GraphicsSettings {
   return current;
 }
 
-export function setGraphics(patch: Partial<GraphicsSettings>): void {
+/** `byPlayer` false: a change the game makes by itself (touch mode's «Móvil», ui/touch.ts), which leaves the effects unchosen. */
+export function setGraphics(patch: Partial<GraphicsSettings>, byPlayer = true): void {
   current = { ...current, ...patch };
   try {
     localStorage.setItem(KEY, JSON.stringify({ ...current, v: VERSION }));
@@ -58,7 +67,8 @@ export function setGraphics(patch: Partial<GraphicsSettings>): void {
     /* private mode: the settings last until the page closes */
   }
   // What the player picks is theirs: the frame-rate guard steps back from it.
-  if (patch.effects !== undefined) saveAuto({ ...auto, effectsChosen: true, ao: 0, bloom: 0 });
+  // The game's own pick is stored as unchosen, or the next load would take it for a choice (loadAuto).
+  if (patch.effects !== undefined) saveAuto(byPlayer ? { ...auto, effectsChosen: true, ao: 0, bloom: 0 } : auto);
   if (patch.resolution !== undefined) saveAuto({ ...auto, resolution: 0 });
   notify();
 }
@@ -97,7 +107,7 @@ const PIXEL_BUDGET = 2560 * 1600;
  * the frame-rate guard watches (the battle), where Auto also takes its steps.
  */
 export function pixelRatio(width: number, height: number, adaptive = false): number {
-  const screen = Math.min(window.devicePixelRatio, 2);
+  const screen = Math.min(window.devicePixelRatio, current.effects === 'mobile' ? 1 : 2);
   if (current.resolution > 0) return screen * current.resolution;
   const fit = Math.sqrt(PIXEL_BUDGET / Math.max(1, width * height));
   const steps = adaptive && auto.on ? auto.resolution : 0;
@@ -174,7 +184,7 @@ function applies([key, level]: (typeof LADDER)[number]): boolean {
   if (auto[key] >= level) return false;
   if (key === 'resolution') return current.resolution === 0;
   if (auto.effectsChosen) return false;
-  return key === 'ao' ? current.effects === 'high' : current.effects !== 'low';
+  return key === 'ao' ? current.effects === 'high' : current.effects !== 'low' && current.effects !== 'mobile';
 }
 
 /** Takes the next step down that changes something; false when there is none left. */
@@ -191,7 +201,7 @@ export function postQuality(): { ao: 'full' | 'light' | 'off'; bloom: 'full' | '
   const taken = auto.on && !auto.effectsChosen ? auto : { ao: 0, bloom: 0 };
   return {
     ao: current.effects !== 'high' || taken.ao >= 2 ? 'off' : taken.ao === 1 ? 'light' : 'full',
-    bloom: current.effects === 'low' ? 'off' : taken.bloom >= 1 ? 'light' : 'full',
+    bloom: current.effects === 'low' || current.effects === 'mobile' ? 'off' : taken.bloom >= 1 ? 'light' : 'full',
   };
 }
 
@@ -209,6 +219,13 @@ export function autoQualityNote(): string | null {
 
 /** Below this, a mission is not fluid: the guard steps in. */
 const SLOW_FPS = 45;
+/** The phone's frame rate (effects «mobile»), unless the player picks one: steady, and the phone stays cool. */
+const MOBILE_FPS = 30;
+
+/** Frames per second at most: the player's cap, or the phone's. */
+function frameCap(): number {
+  return current.fps || (current.effects === 'mobile' ? MOBILE_FPS : 0);
+}
 /** Later on, it takes two windows in a row under this. */
 const WATCH_FPS = 38;
 /** Nothing counts in the first seconds (shaders compiling, the map being built) nor right after a step. */
@@ -242,7 +259,9 @@ export class QualityGuard {
   /** Called with every frame drawn. */
   frame(now: number): void {
     // Only while the player is at it: a hidden or unfocused page may be throttled.
-    if (document.hidden || !document.hasFocus() || !auto.on || (current.fps > 0 && current.fps < SLOW_FPS)) {
+    // Under a cap below the bar there is nothing to watch, but on the phone it watches the cap itself.
+    const mobile = current.effects === 'mobile' && frameCap() === MOBILE_FPS;
+    if (document.hidden || !document.hasFocus() || !auto.on || (!mobile && current.fps > 0 && current.fps < SLOW_FPS)) {
       this.last = 0;
       return;
     }
@@ -258,7 +277,8 @@ export class QualityGuard {
     const fps = (1000 * kept.length) / kept.reduce((sum, t) => sum + t, 0);
     this.times = [];
     this.spent = 0;
-    this.slowWindows = fps < (close ? SLOW_FPS : WATCH_FPS) ? this.slowWindows + 1 : 0;
+    const bar = mobile ? MOBILE_FPS * (close ? 0.9 : 0.8) : close ? SLOW_FPS : WATCH_FPS;
+    this.slowWindows = fps < bar ? this.slowWindows + 1 : 0;
     if (this.slowWindows < (close ? 1 : 2)) return;
     this.slowWindows = 0;
     if (!lowerQuality()) return;
@@ -275,7 +295,7 @@ export class FrameLimiter {
   private last = 0;
 
   ready(now = performance.now()): boolean {
-    const cap = current.fps;
+    const cap = frameCap();
     if (cap) {
       const step = 1000 / cap;
       // A small tolerance, so a 60 cap on a 60 Hz screen never drops frames.

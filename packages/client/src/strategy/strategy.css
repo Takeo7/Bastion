@@ -3369,3 +3369,214 @@ dl.x-pairs dd {
   text-align: center;
   color: var(--x-good);
 }
+
+/* ======================================================= a phone sideways (docs/FASE11.md §4)
+   Touch and little height (some 740–915 × 360–412 px): the header one slim
+   row of figures, the tabs a bar of icons, the two side panels half the
+   screen each, from the header to the tabs, each folding away behind its
+   handle to see the base. Every button 44 px at least. */
+
+.panel-fold {
+  display: none;
+}
+
+@media (max-height: 520px) {
+  :root[data-touch='1'] .strat-top {
+    gap: 8px;
+    padding: 2px 8px;
+    min-height: 44px;
+  }
+
+  :root[data-touch='1'] .strat-brand,
+  :root[data-touch='1'] .strat-players,
+  :root[data-touch='1'] .strat-doom {
+    display: none;
+  }
+
+  :root[data-touch='1'] .strat-res {
+    gap: 6px;
+    zoom: 0.85;
+  }
+
+  :root[data-touch='1'] .strat-top .x-btn {
+    min-height: 44px;
+  }
+
+  /* The tabs: icons, a finger wide, their names for who asks (aria-label). */
+  :root[data-touch='1'] .strat-nav .nav-label {
+    display: none;
+  }
+
+  :root[data-touch='1'] .strat-nav button {
+    min-width: 58px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+  }
+
+  :root[data-touch='1'] .strat-nav button::before {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* The side panels: half the screen each, from under the header to over the tabs. */
+  :root[data-touch='1'] :is(.strat-left, .strat-right) {
+    top: 48px;
+    bottom: 50px;
+    max-height: none;
+    width: calc(50% - 14px);
+    padding-right: 6px;
+    transition: transform 0.22s ease;
+  }
+
+  :root[data-touch='1'] .strat-left {
+    left: 6px;
+  }
+
+  :root[data-touch='1'] .strat-right {
+    right: 6px;
+  }
+
+  :root[data-touch='1'] .strat-right > .x-panel {
+    margin-top: 2px;
+    transform: none;
+  }
+
+  /* The handle on each panel's inner edge; folded, only it shows. */
+  :root[data-touch='1'] .panel-fold {
+    display: grid;
+    place-items: center;
+    position: sticky;
+    top: 0;
+    float: right;
+    z-index: 2;
+    width: 44px;
+    height: 44px;
+    margin: 0 -6px 4px 6px;
+    font-size: 26px;
+    line-height: 1;
+    color: var(--x-text);
+    background: var(--paper-grain), var(--paper-dark);
+    border: 0;
+    border-radius: 0 6px 6px 0;
+    box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+  }
+
+  :root[data-touch='1'] .strat-right .panel-fold {
+    float: left;
+    margin: 0 6px 4px -6px;
+    border-radius: 6px 0 0 6px;
+  }
+
+  :root[data-touch='1'] .strat-left.folded {
+    transform: translateX(calc(-100% + 44px));
+    overflow: hidden;
+  }
+
+  :root[data-touch='1'] .strat-right.folded {
+    transform: translateX(calc(100% - 44px));
+    overflow: hidden;
+  }
+  /* The hangar (Escuadra): no tabs below; the roster on the left picks who goes (its ✓), so the
+     cards over the 3D soldiers go; the mission's order fills the right half, its buttons under it. */
+  :root[data-touch='1'] .strat:is([data-view='squad'], [data-view='debrief']) :is(.strat-left, .strat-right) {
+    bottom: 6px;
+  }
+
+  :root[data-touch='1'] .strat-left.compact {
+    max-height: none;
+  }
+
+  /* What sits at the bottom middle over the 3D (El valle's day and «Esperar noticias»): in the right half, over the tabs. */
+  :root[data-touch='1'] .strat-center-bottom {
+    left: auto;
+    right: 6px;
+    bottom: 54px;
+    width: calc(50% - 14px);
+    transform: none;
+  }
+
+  /* Any window of the base (alerts, events, the settings, the board): within the screen, scrolling. */
+  :root[data-touch='1'] .strat-modal > .x-panel {
+    max-height: calc(100vh - 12px);
+    overflow-y: auto;
+  }
+
+  :root[data-touch='1'] .strat[data-view='squad'] .lineup-cards {
+    display: none;
+  }
+
+  :root[data-touch='1'] .strat[data-view='squad'] .strat-center-top {
+    left: auto;
+    right: 6px;
+    top: 48px;
+    bottom: 156px;
+    width: calc(50% - 14px);
+    overflow-y: auto;
+    transform: none;
+    padding: 8px 10px;
+    background: rgba(12, 14, 15, 0.82);
+    border-radius: 3px;
+  }
+
+  :root[data-touch='1'] .strat[data-view='squad'] .strat-center-bottom {
+    left: auto;
+    right: 6px;
+    bottom: 6px;
+    width: calc(50% - 14px);
+    transform: none;
+  }
+
+  :root[data-touch='1'] .strat[data-view='squad'] .strat-center-bottom .alert-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  /* The debrief (Informe): each soldier's card carries its report, so they stay, but as a list in
+     two columns on the left (not over their 3D bodies, where they piled up); the mission's report
+     on the right, «Continuar» under it. */
+  :root[data-touch='1'] .strat[data-view='debrief'] .lineup-cards {
+    inset: 48px auto 6px 6px;
+    width: calc(50% - 14px);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 6px;
+    overflow-y: auto;
+    pointer-events: auto;
+  }
+
+  :root[data-touch='1'] .strat[data-view='debrief'] .lineup-card {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    width: auto;
+    margin: 30px 0 0;
+  }
+
+  :root[data-touch='1'] .strat[data-view='debrief'] .strat-center-top {
+    left: auto;
+    right: 6px;
+    top: 48px;
+    bottom: 62px;
+    width: calc(50% - 14px);
+    overflow-y: auto;
+    transform: none;
+  }
+
+  :root[data-touch='1'] .strat[data-view='debrief'] .strat-center-bottom {
+    bottom: 6px;
+  }
+}
+
+/* Touch, at any size: every button and list row of the base a finger high (docs/FASE11.md §4). */
+:root[data-touch='1'] .strat :is(button, .x-btn, button.x-row, .x-pick-field, .x-pick-list button) {
+  min-height: 44px;
+}
+
+:root[data-touch='1'] .strat .x-btn.small {
+  padding-block: 8px;
+}

@@ -1031,6 +1031,56 @@ export function hostClosedLine(host?: string): string {
   return host ? `${host} ha cerrado la partida.` : 'Quien aloja la partida la ha cerrado.';
 }
 
+// ------------------------------------------------------------------ phone
+
+/** Playing from a phone's browser (docs/FASE11.md): the notices, the setting and the touch help (UI). */
+export const TOUCH_TEXT = {
+  /** Held upright: the full-screen notice. */
+  rotate: { title: 'Gira el móvil', line: 'Bastión se juega en horizontal.' },
+  fullscreen: 'Pantalla completa',
+  fullscreenOff: 'Salir de pantalla completa',
+  /** The setting in Ajustes, its options and what «Auto» does. */
+  setting: 'Controles táctiles',
+  modes: { auto: 'Auto', on: 'Sí', off: 'No' },
+  settingAbout: 'En «Auto» se activan solos en un móvil o una tablet.',
+  /** The buttons for what is a key on a computer: the squad's list and the soldier before or after (`*Title`: on the button, for who wonders). */
+  squad: 'Escuadra',
+  prev: 'Anterior',
+  next: 'Siguiente',
+  prevTitle: 'Soldado anterior',
+  nextTitle: 'Siguiente soldado',
+  /** The touch help, a line each: Esc → Controles, and the first mission on a phone. */
+  help: [
+    'Toca una casilla para ver el camino, el coste y el ruido; tócala otra vez para moverte.',
+    'Toca un enemigo para apuntar y ver la probabilidad y el daño; tócalo otra vez, o pulsa la acción, para atacar.',
+    'Mantén pulsado un soldado, un zombi, una casilla o un botón para ver su ficha; en un zombi, también lo que ve.',
+    'Un dedo mueve la cámara, dos dedos la giran, y pellizcando se acerca y se aleja.',
+  ],
+};
+
+/** The web game's door (docs/FASE11.md §6, Red): the password screen, the sound and coming back from another app. */
+export const WEB_TEXT = {
+  passwordTitle: 'Contraseña de la partida',
+  passwordLine: 'Esta partida es privada. Pídele la contraseña a quien la aloja.',
+  passwordField: 'Contraseña',
+  enter: 'Entrar',
+  wrong: 'Esa no es la contraseña.',
+  tooMany: 'Demasiados intentos. Espera un minuto.',
+  /** The password went out and nothing came back: no network, or the server is down. */
+  noAnswer: 'El servidor no contesta. Prueba otra vez.',
+  /** Until the first touch, the browser keeps the game silent. */
+  sound: 'Toca la pantalla para activar el sonido.',
+  /** Back from another app, while the socket comes back. */
+  rejoin: 'Volviendo a la partida…',
+};
+
+/** The web app's manifest: the name under the icon, and its line. */
+export const WEB_APP = {
+  name: 'Bastión',
+  shortName: 'Bastión',
+  description: 'Táctica por turnos cooperativa para dos jugadores, en un valle tomado por los muertos.',
+};
+
 // ------------------------------------------------------------------ rubble
 
 /** Walls and floors a grenade breaks (docs/FASE7.md §4–5): the log lines and the floating word. */

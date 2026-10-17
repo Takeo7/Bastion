@@ -71,6 +71,12 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('ping'), tile: spot, kind: pingKindSchema }),
   /** A move planned without the command, shown to the partner; `tile: null` withdraws it. */
   z.object({ t: z.literal('plan'), unit: unitId, tile: spot.nullable() }),
+  /**
+   * The page went to sleep (a phone switched to another app) or woke up (docs/FASE11.md §6): while away, a
+   * dropped socket keeps its turn and the command longer. Always answered with `room`, which the client
+   * takes as proof the socket survived the sleep.
+   */
+  z.object({ t: z.literal('away'), away: z.boolean() }),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
@@ -152,6 +158,8 @@ export interface PlayerInfo {
   name: string;
   color: string;
   connected: boolean;
+  /** In another app on their phone (the `away` message): back soon, their turn waits. */
+  away?: boolean;
 }
 
 export type RoomPhase = 'lobby' | 'base' | 'mission';

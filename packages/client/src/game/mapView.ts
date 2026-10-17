@@ -7,7 +7,7 @@ import { atlasRect, mapAtlasTexture } from './mapAtlas';
 import { BuildingsView, floorFadePatch, piecesLoaded, preloadPieces, RAISED_FLATS, RAISED_PLATFORM, syntyPiece, type Focus } from './buildings';
 import { STOREY } from './coords';
 import { dressEdges, dressStreets } from './dressing';
-import { NIGHT, NightLights, type Glow } from './night';
+import { NIGHT, NightLights, REAL_LIGHTS, type Glow } from './night';
 import { unitPosNow } from './unitViews';
 import { beforeNextFrame, shadowsChanged } from './renderer';
 import { ExploredMemory } from './explored';
@@ -46,7 +46,7 @@ preloadSyntyProps();
 preloadPieces();
 
 /** How much ground cover (tufts, papers…) each level of Ajustes → Efectos scatters. */
-const COVER_DENSITY = { high: 1, medium: 0.6, low: 0.3 } as const;
+const COVER_DENSITY = { high: 1, medium: 0.6, low: 0.3, mobile: 0.3 } as const;
 
 /** Which props stand on each kind of cover, per biome (when the generator gave no hint). */
 const PROP_SETS: Record<Biome, { low: PropSet; high: PropSet }> = {
@@ -1205,7 +1205,8 @@ export class MapView {
 
   private lightNight(): void {
     if (!this.nightPlan) return;
-    this.night = new NightLights(this.nightPlan.lamps, this.nightPlan.headlights, this.fog);
+    // The lit tiles still glow on the phone's (fogOfWar.ts): fewer real lights only light fewer pools round the view.
+    this.night = new NightLights(this.nightPlan.lamps, this.nightPlan.headlights, this.fog, graphics().effects === 'mobile' ? REAL_LIGHTS / 2 : REAL_LIGHTS);
     this.group.add(this.night.group);
   }
 

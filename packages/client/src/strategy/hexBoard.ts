@@ -129,6 +129,9 @@ export class HexBoard {
   private py = 0;
   private z = 1;
   private framed = false;
+  /** The view's size the board was last framed for; a new size frames it again until the player moves it. */
+  private framedFor = '';
+  private moved = false;
   private drag: { id: number; x: number; y: number; px: number; py: number; moved: boolean } | null = null;
   private pinch: { d: number; z: number } | null = null;
   private readonly touches = new Map<number, { x: number; y: number }>();
@@ -328,10 +331,12 @@ export class HexBoard {
   private apply(): void {
     const { w, h: hh } = this.size();
     if (!w || !hh) return;
-    if (!this.framed) {
+    const size = `${w}x${hh}`;
+    if (!this.framed || (size !== this.framedFor && !this.moved)) {
       this.z = this.fitZoom();
       this.px = this.py = 0;
       this.framed = true;
+      this.framedFor = size;
     }
     this.clamp();
     this.svg.setAttribute('viewBox', `0 0 ${w} ${hh}`);
@@ -340,6 +345,7 @@ export class HexBoard {
 
   /** Zooms by `k` keeping the board point under (sx, sy) (px in the view) where it is. */
   private zoomAt(k: number, sx: number, sy: number): void {
+    this.moved = true;
     const { w, h: hh } = this.size();
     const bx = (sx - w / 2 - this.px) / this.z;
     const by = (sy - hh / 2 - this.py) / this.z;
@@ -454,6 +460,7 @@ export class HexBoard {
           v.classList.add('dragging');
         }
         if (drag.moved) {
+          this.moved = true;
           this.px = drag.px + (at.x - drag.x);
           this.py = drag.py + (at.y - drag.y);
           this.apply();

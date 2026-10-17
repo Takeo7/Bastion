@@ -213,6 +213,29 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 - **Efectos,** con el aspecto de Particle FX: humo, polvo y gas en bocanadas facetadas, sangre en gotas planas, fogonazos en estrellas y fuego en lenguas de llama. La luz (fogonazos, trazadoras, chispas) queda como brillo suave. Aparte, los del Oficio (`songFx.ts`).
 - **Renders para la interfaz:** cosas del juego como modelos de Synty, en vista de 3/4 y sobre fondo transparente, cada una con su silueta para teñir con CSS. Salen a `public/ui/synty/renders/`. Hay clases, recluta, molotov, La Mula (tres vistas), botiquín, ración, piezas, camposanto, roca y ruinas.
 
+### El móvil (`settings.ts` nivel `mobile`, `post.ts`, `renderer.ts`, `stage.ts`, `night.ts`, `fx.ts`; [FASE11.md](FASE11.md) §5)
+
+- **El nivel de efectos «Móvil»** (`EffectsLevel` `'mobile'`; lo elige UI en modo táctil):
+  - como mucho un píxel por píxel CSS (`pixelRatio`); el ajuste auto puede bajar al 80 % y al 65 %;
+  - 30 fps salvo que el jugador elija otro tope, y el ajuste auto vigila ese tope (baja si va por debajo de 27);
+  - sin oclusión ni resplandor, pero con el tono y el grado de color, para que la noche se lea igual;
+  - FXAA después del grado en lugar del MSAA de la imagen de alto rango, que era el 40 % del fotograma;
+  - sombras de 1024 (cuestan unos 0,2 ms) y la mitad de luces reales de noche (3). Los charcos a la luz siguen, porque los pinta la niebla;
+  - adornos del suelo y de la calle al 30 %, y la mitad de partículas en cada ráfaga.
+- **Medido** (17/10) con el Mac (M2 Pro) emulando un móvil en horizontal: 844×390 CSS a densidad 3, de noche en Ensanche y sin tope, para que la gráfica vaya a tope. Tiempo de gráfica por fotograma:
+  | Ajustes | Gráfica |
+  |---|---|
+  | Altos, como en escritorio (×2: 1688×780) | 6,2 ms |
+  | Altos a ×1 | 4,9 ms |
+  | «Móvil» con MSAA | 3,3 ms |
+  | «Móvil» con FXAA (el que queda) | 2,0 ms |
+  | «Móvil» sin sombras | 1,8 ms |
+  | Bajos a ×1 (sin posprocesado) | 2,0 ms |
+  - La CPU, ralentizada ×4, va a unos 5–7 ms por fotograma; la base, a 1,8 ms de gráfica y 2,6 de CPU.
+  - Un móvil de gama media tiene una gráfica de 4 a 10 veces más lenta. «Móvil» debería quedar en unos 8–20 ms, dentro de los 33 ms de 30 fps; con los ajustes de escritorio, en 25–60 ms.
+  - Falta medirlo en un móvil de verdad (telemetría `[rend …]`, «efectos móvil»).
+  - Herramienta: `capture-perf.cjs` con `Emulation.setDeviceMetricsOverride` y `setCPUThrottlingRate` (en mi borrador; no se sube).
+
 ## Laboratorios
 
 Se abren con el cliente de pruebas (el mío, en el 5197). Todos usan el código del juego y su luz.

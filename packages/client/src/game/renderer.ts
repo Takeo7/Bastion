@@ -164,7 +164,7 @@ const CASTERS_EVERY = 30;
 const MIN_CASTER = 0.25;
 
 /** The sun's shadow map by effects level: its size and how soft its edges (PCF's disk radius, in texels). */
-const SHADOW_QUALITY = { high: { size: 4096, radius: 3 }, medium: { size: 2048, radius: 2 }, low: { size: 2048, radius: 1 } } as const;
+const SHADOW_QUALITY = { high: { size: 4096, radius: 3 }, medium: { size: 2048, radius: 2 }, low: { size: 2048, radius: 1 }, mobile: { size: 1024, radius: 1 } } as const;
 
 /** Owns the WebGL renderer, the scene, the lights and the render loop. */
 export class Renderer {
@@ -249,6 +249,8 @@ export class Renderer {
     shadowsStale = true;
     const q = postQuality();
     this.post.ao.enabled = q.ao !== 'off' && !this.near;
+    // The phone's keeps the post chain for its tone and grade (the night must read), without the bloom.
+    this.post.bloom.enabled = q.bloom !== 'off';
     lightenPost(this.post, q.ao === 'light', q.bloom === 'light');
     if (this.gl.shadowMap.enabled !== g.shadows) {
       this.gl.shadowMap.enabled = g.shadows;
@@ -405,7 +407,8 @@ export class Renderer {
     this.gl.setPixelRatio(pixelRatio(w, h, true));
     this.gl.setSize(w, h);
     this.post.composer.setPixelRatio(this.gl.getPixelRatio());
-    fitPostToPixelRatio(this.post, this.gl.getPixelRatio());
+    const ratio = this.gl.getPixelRatio();
+    fitPostToPixelRatio(this.post, ratio, this.effects === 'mobile' ? { width: w * ratio, height: h * ratio } : undefined);
     this.post.composer.setSize(w, h);
     this.labels.setSize(w, h);
     this.camera.aspect = w / h;

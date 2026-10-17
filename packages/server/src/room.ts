@@ -54,16 +54,22 @@ interface Seat {
   droppedAt: number | null;
   /** The base screen this player is on, so a reconnecting partner sees it. */
   view?: BaseView;
+  /** Their page is asleep in another app (the `away` message): a drop then waits AWAY_GRACE_MS. */
+  away?: boolean;
 }
 
 export type RoomMode = 'skirmish' | 'campaign';
 
 /** A dropped player keeps blocking the end of turn this long, so a reload or Wi-Fi blip never costs them their turn. */
 const RECONNECT_GRACE_MS = 30_000;
+/** The same for a phone gone to another app (docs/FASE11.md §6): back from a message or a call, the turn and the command are still theirs. */
+const AWAY_GRACE_MS = 5 * 60_000;
 /** How long a joint decision waits for the partner's answer before it goes ahead (playtest 2026-10-14, #28: in case they left; 16/10: 90 s was too long). */
 const ANSWER_WAIT_MS = 30_000;
 
 type AnyMessage = ClientMessage | CampaignMessage;
+
+const sameName = (a: string, b: string): boolean => a.trim().toLocaleLowerCase('es') === b.trim().toLocaleLowerCase('es');
 
 /**
  * A single co-op session for two seats. The room owns the authoritative state:
@@ -73,7 +79,7 @@ type AnyMessage = ClientMessage | CampaignMessage;
 export class Room {
   private seats: [Seat | null, Seat | null] = [null, null];
   /** The waits on joint decisions now running (ANSWER_WAIT_MS): what each waits on, and when it ends. */
-  private waits: Record<DeadlineKind, { key: string; at: number; timer: ReturnType<typeof setTimeout> } | null> = { proposal: null, evac: null, abandon: null };
+  private waits: Record<DeadlineKind, { key: string; at: number; since: number; timer: ReturnType<typeof setTimeout> } | null> = { proposal: null, evac: null, abandon: null };
   private phase: RoomPhase = 'lobby';
   private mode: RoomMode = 'skirmish';
   private state: GameState | null = null;
@@ -143,12 +149,14 @@ export class Room {
       seat.droppedAt = Date.now();
       console.log(`[room] ${seat.name} se ha desconectado.`);
       this.broadcastRoom();
-      setTimeout(() => this.resyncTurn(), RECONNECT_GRACE_MS + 100);
+      setTimeout(() => this.resyncTurn(), (seat.away ? AWAY_GRACE_MS : RECONNECT_GRACE_MS) + 100);
     });
   }
 
   private join(socket: WebSocket, name: string, token?: string): Seat | null {
-    let seat = this.seats.find((s) => s && token && s.token === token) ?? null;
+    // By the seat's token; from a browser or device without it (the phone, the app, the website: docs/WEB.md),
+    // by the player's name, so each finds their own seat and soldiers.
+    let seat = this.seats.find((s) => s && token && s.token === token) ?? this.seats.find((s) => s && sameName(s.name, name)) ?? null;
     if (!seat) {
       const free = this.seats.findIndex((s) => s === null);
       if (free >= 0) {
@@ -169,6 +177,7 @@ export class Room {
     if (seat.socket && seat.socket !== socket) seat.socket.close(4000, 'Sesión abierta en otra ventana');
     seat.socket = socket;
     seat.droppedAt = null;
+    seat.away = false;
     seat.name = name;
     console.log(`[room] ${name} ocupa el puesto ${seat.slot + 1}.`);
 
@@ -251,6 +260,14 @@ export class Room {
         seat.view = msg.view;
         this.toPartner(seat, { t: 'baseView', slot: seat.slot, view: msg.view });
         break;
+      case 'away': {
+        // The partner hears of a change; whoever asked always gets an answer, its proof the socket is alive (net.ts).
+        const changed = !!seat.away !== msg.away;
+        seat.away = msg.away;
+        if (changed) this.broadcastRoom();
+        else this.send(seat.socket!, this.roomMessage());
+        break;
+      }
 
       // ---- tactical
       case 'abandon': {
@@ -437,13 +454,30 @@ export class Room {
     }
     if (!key) return;
     const timer = setTimeout(() => this.answerForPartner(kind, key), ANSWER_WAIT_MS);
-    this.waits[kind] = { key, at: Date.now() + ANSWER_WAIT_MS, timer };
+    this.waits[kind] = { key, at: Date.now() + ANSWER_WAIT_MS, since: Date.now(), timer };
     this.broadcast({ t: 'deadline', kind, ms: ANSWER_WAIT_MS });
+  }
+
+  /** Who is to answer a question of `kind`: the one who didn't ask. */
+  private answerer(kind: DeadlineKind): Slot | null {
+    const by = kind === 'proposal' ? this.campaign?.proposal?.by : kind === 'evac' ? this.state?.evacCall?.by : this.state?.abandonCall?.by;
+    return by === undefined ? null : by === 0 ? 1 : 0;
   }
 
   /** The wait ran out: the decision goes ahead, as if the partner had said yes. */
   private answerForPartner(kind: DeadlineKind, key: string): void {
-    if (this.waits[kind]?.key !== key) return;
+    const wait = this.waits[kind];
+    if (wait?.key !== key) return;
+    // Whoever is to answer is in another app on their phone (a call, a message): the question waits for them, up to AWAY_GRACE_MS.
+    const answerer = this.answerer(kind);
+    const away = answerer !== null && this.seats[answerer]?.away;
+    if (away && Date.now() - wait.since < AWAY_GRACE_MS) {
+      const left = Math.max(1000, wait.since + AWAY_GRACE_MS - Date.now());
+      wait.at = Date.now() + left;
+      wait.timer = setTimeout(() => this.answerForPartner(kind, key), left);
+      this.broadcast({ t: 'deadline', kind, ms: left });
+      return;
+    }
     this.waits[kind] = null;
     if (kind === 'proposal' && this.campaign?.proposal && this.phase === 'base') {
       const partner: Slot = this.campaign.proposal.by === 0 ? 1 : 0;
@@ -485,7 +519,7 @@ export class Room {
   private activeSlots(): Slot[] {
     const now = Date.now();
     return this.seats
-      .filter((s): s is Seat => !!s && (!!s.socket || (s.droppedAt !== null && now - s.droppedAt < RECONNECT_GRACE_MS)))
+      .filter((s): s is Seat => !!s && (!!s.socket || (s.droppedAt !== null && now - s.droppedAt < (s.away ? AWAY_GRACE_MS : RECONNECT_GRACE_MS))))
       .map((s) => s.slot);
   }
 
@@ -503,14 +537,18 @@ export class Room {
   private players(): PlayerInfo[] {
     return this.seats
       .filter((s): s is Seat => s !== null)
-      .map((s) => ({ slot: s.slot, name: s.name, color: PLAYER_COLORS[s.slot], connected: !!s.socket }));
+      .map((s) => ({ slot: s.slot, name: s.name, color: PLAYER_COLORS[s.slot], connected: !!s.socket, ...(s.away ? { away: true } : {}) }));
   }
 
   private broadcastRoom(): void {
+    this.broadcast(this.roomMessage());
+  }
+
+  private roomMessage(): ServerMessage {
     const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, doom: this.campaign.doom, level: bastionLevel(this.campaign) } : null;
     // A campaign from before the 0.3 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
     const setAside = this.store.setAside ? basename(this.store.setAside) : null;
-    this.broadcast({ t: 'room', players: this.players(), phase: this.phase, savedCampaign, ...(setAside ? { setAside } : {}) });
+    return { t: 'room', players: this.players(), phase: this.phase, savedCampaign, ...(setAside ? { setAside } : {}) };
   }
 
   private broadcast(msg: ServerMessage): void {

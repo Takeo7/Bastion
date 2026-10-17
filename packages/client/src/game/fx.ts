@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { graphics } from '../settings';
 import { NIGHT } from './night';
 import { fxTexture, loadModel } from './synty';
 import { FX_MODELS, type FxModelId, type FxTextureId } from './syntyManifest';
@@ -10,6 +11,11 @@ import { tween, wait } from './tween';
 // swell and shrink away, blood and gore are flat polygon drops and low-poly
 // chunks, flashes are sparkle stars, fire is a lick of flame shapes. Light
 // itself (flashes, tracers, sparks) stays as soft additive glows.
+
+/** On the phone's effects (docs/FASE11.md §5), half the particles of every burst, at least one. */
+function few(count: number): number {
+  return graphics().effects === 'mobile' ? Math.max(1, Math.round(count / 2)) : count;
+}
 
 /** Soft radial glow used for flashes, sparks and tracers. */
 function glowTexture(): THREE.CanvasTexture {
@@ -263,7 +269,7 @@ export class Fx {
    */
   puffs(at: THREE.Vector3, color: number, count: number, o: { size?: number; spread?: number; rise?: number; out?: number; life?: number; grow?: number } = {}): void {
     const size = o.size ?? 0.4;
-    for (let i = 0; i < count; i++) {
+    for (let i = 0, n = few(count); i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const d = Math.random() * (o.spread ?? 0.3);
       const puff = new THREE.Mesh(shape('smokePuff'), solid(color));
@@ -285,7 +291,7 @@ export class Fx {
   flames(at: THREE.Vector3, count: number, radius = 0.3, o: { size?: number; life?: number } = {}): void {
     // Yellower than fire looks: past white the tone mapping turns a saturated orange pink.
     const colors = [0xffb030, 0xffd050, 0xff9a20, 0xffe080];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0, n = few(count); i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const d = Math.sqrt(Math.random()) * radius;
       const flame = new THREE.Mesh(shape('flame'), hot(colors[i % colors.length]!, 1.3));
@@ -305,7 +311,7 @@ export class Fx {
 
   /** Embers (or a flare's sparks, in its colour) drifting up off a fire. */
   embers(at: THREE.Vector3, count: number, radius = 0.3, color?: number): void {
-    for (let i = 0; i < count; i++) {
+    for (let i = 0, n = few(count); i < n; i++) {
       const s = this.glowSprite(color ?? (i % 2 ? 0xffa040 : 0xff6a20), rand(0.06, 0.11));
       s.position.copy(at).add(new THREE.Vector3(rand(-radius, radius), rand(0.1, 0.5), rand(-radius, radius)));
       this.spawn(s, s.material, { velocity: new THREE.Vector3(rand(-0.3, 0.3), rand(0.8, 1.6), rand(-0.3, 0.3)), life: rand(0.6, 1.2) });
@@ -379,7 +385,7 @@ export class Fx {
 
   /** Low-poly gore flying out and bouncing. */
   gore(at: THREE.Vector3, count: number, speed = 4): void {
-    for (let i = 0; i < count; i++) {
+    for (let i = 0, n = few(count); i < n; i++) {
       const chunk = new THREE.Mesh(shape(GORE[i % GORE.length]!), solid(GORE_COLORS[i % GORE_COLORS.length]!));
       chunk.position.copy(at);
       const dir = new THREE.Vector3(rand(-1, 1), rand(0.5, 1.4), rand(-1, 1)).normalize();
@@ -395,7 +401,7 @@ export class Fx {
 
   /** Splinters (wood, glass, paper) flying out. */
   chips(at: THREE.Vector3, color: number, count: number, speed = 3): void {
-    for (let i = 0; i < count; i++) {
+    for (let i = 0, n = few(count); i < n; i++) {
       const chip = new THREE.Mesh(shape('woodChip'), solid(color));
       chip.position.copy(at);
       const dir = new THREE.Vector3(rand(-1, 1), rand(0.4, 1.2), rand(-1, 1)).normalize();
@@ -411,7 +417,7 @@ export class Fx {
 
   /** Small lights rising round a body (an aura, a heal). */
   motes(at: THREE.Vector3, color: number, count: number): void {
-    for (let i = 0; i < count; i++) {
+    for (let i = 0, n = few(count); i < n; i++) {
       const s = this.glowSprite(color, rand(0.1, 0.16));
       s.position.copy(at).add(new THREE.Vector3(rand(-0.35, 0.35), rand(-0.4, 0.5), rand(-0.35, 0.35)));
       this.spawn(s, s.material, { velocity: new THREE.Vector3(0, rand(0.7, 1.4), 0), life: rand(0.8, 1.3) });
@@ -448,7 +454,7 @@ export class Fx {
   }
 
   sparks(at: THREE.Vector3, color: number, count = 9): void {
-    for (let i = 0; i < count; i++) {
+    for (let i = 0, n = few(count); i < n; i++) {
       const s = this.glowSprite(color, 0.12 + Math.random() * 0.08);
       s.position.copy(at);
       const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).normalize();
@@ -640,7 +646,7 @@ export class Fx {
 
   /** Chunks flying out of a destroyed cover block. */
   debris(at: THREE.Vector3, color: number, count = 8): void {
-    for (let i = 0; i < count; i++) this.debrisPiece(at, color, 3 + Math.random() * 2);
+    for (let i = 0, n = few(count); i < n; i++) this.debrisPiece(at, color, 3 + Math.random() * 2);
     this.puffs(at, 0x8f8676, 3, { size: 0.35, spread: 0.3, rise: 0.4, out: 0.5, life: 1.2 });
   }
 
