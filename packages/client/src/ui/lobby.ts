@@ -5,6 +5,7 @@ import { GeoscapeSet } from '../strategy/geoscape';
 import { Stage } from '../strategy/stage';
 import '../strategy/strategy.css';
 import { append, clear, h } from './dom';
+import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from './quit';
 import { graphicsSettings, soundSettings } from './settingsPanel';
 
 export interface LobbyHandlers {
@@ -62,6 +63,8 @@ export class Lobby {
   private night = false;
   /** Asking before a new campaign replaces the saved one, or starts without the partner. */
   private confirming = false;
+  /** Asking before «Salir de Bastión» closes the desktop app. */
+  private quitting = false;
   /** «Otras direcciones» unfolded: the menu is redrawn often, and it stays as the player left it. */
   private othersOpen = false;
 
@@ -129,6 +132,7 @@ export class Lobby {
     else this.renderMain();
     this.column.append(this.errorEl);
     this.renderConfirm();
+    this.renderQuit();
   }
 
   /** In-game confirmation (replaces the browser's confirm()). */
@@ -169,6 +173,33 @@ export class Lobby {
               saved ? 'Empezar de cero' : 'Empezar',
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /** «¿Salir de Bastión?», as UI's menus ask it (ui/quit.ts): a host whose partner is in hears they will be disconnected. */
+  private renderQuit(): void {
+    if (!this.quitting || !canQuit()) return;
+    this.root.querySelector('.menu-modal')?.remove();
+    const partner = this.players.find((p) => p.connected && p.slot !== this.mySlot);
+    const q = quitQuestion(partner?.name ?? null, false);
+    const close = () => {
+      this.quitting = false;
+      this.render();
+    };
+    this.root.append(
+      h(
+        'div.menu-modal',
+        {},
+        h(
+          'div.x-panel',
+          {},
+          h('h2.x-title', {}, q.title),
+          q.warning ? h('p.x-text', {}, q.warning) : null,
+          // That the game is saved, only if there is one (Lore): an empty lobby needs no line.
+          this.savedCampaign ? h('p.x-text', {}, q.text) : null,
+          h('div.alert-actions', {}, h('button.x-btn', { onclick: close }, q.no), h('button.x-btn.primary', { onclick: quitGame }, q.yes)),
         ),
       ),
     );
@@ -221,6 +252,19 @@ export class Lobby {
         'Ajustes',
         h('small', {}, 'Gráficos y rendimiento'),
       ),
+      // The desktop app only (playtest 17/10): a browser closes its tab.
+      canQuit()
+        ? h(
+            'button.menu-item',
+            {
+              onclick: () => {
+                this.quitting = true;
+                this.render();
+              },
+            },
+            QUIT_BUTTON,
+          )
+        : null,
       ok ? null : h('p.menu-hint', {}, 'Conectando con el servidor…'),
       // Said while the host's server runs; the file stays beside the save, as it was.
       this.setAside ? h('p.menu-hint', {}, setAsideNote(this.setAside)) : null,

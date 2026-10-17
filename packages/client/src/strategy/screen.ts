@@ -157,6 +157,7 @@ import { gearOf } from '../game/models';
 import { storageKey } from '../net';
 import { append, clear, h } from '../ui/dom';
 import { arrowIcon } from '../ui/icons';
+import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from '../ui/quit';
 import { graphicsSettings, soundSettings } from '../ui/settingsPanel';
 import { BastionSet, LAUNCH_SECONDS, type FixedRoom, type LineupEntry } from './bastion';
 import { GeoscapeSet } from './geoscape';
@@ -357,6 +358,8 @@ export class StrategyScreen {
   private shownAlert: Alert | null = null;
   /** "Volver al menú" asked: it takes both players, so it is confirmed first. */
   private leaving = false;
+  /** «Salir del juego» asked from the menu (desktop app only, ui/quit.ts): its question in the same window. */
+  private quitting = false;
   /** Settings open over the base: only for this player, the partner stays where they are. */
   private settingsOpen = false;
   /** News keys already seen (navNews), for the campaign `seenNewsFor`. */
@@ -391,11 +394,12 @@ export class StrategyScreen {
 
   /** Esc: closes what is open, lets go of what is picked, and otherwise goes back to the Bastión. */
   private back(): void {
-    if (this.picking || this.custom || this.promoting || this.leaving || this.newsOpen || this.settingsOpen) {
+    if (this.picking || this.custom || this.promoting || this.leaving || this.quitting || this.newsOpen || this.settingsOpen) {
       this.picking = null;
       this.custom = null;
       this.promoting = false;
       this.leaving = false;
+      this.quitting = false;
       this.newsOpen = false;
       this.settingsOpen = false;
       this.render();
@@ -3073,6 +3077,23 @@ export class StrategyScreen {
         graphicsSettings(redraw),
         h('div.alert-actions', {}, h('button.x-btn.primary', { onclick: () => ((this.settingsOpen = false), this.render()) }, 'Cerrar')),
       );
+    } else if (this.quitting) {
+      const partner = c.players.length > 1 && this.partner()?.connected ? this.partner()!.name : null;
+      const q = quitQuestion(partner, false);
+      content = h(
+        'div.x-panel',
+        {},
+        h('div.alert-kicker', {}, QUIT_BUTTON.toUpperCase()),
+        h('h2.x-title', {}, q.title),
+        h('p.x-text', {}, q.text),
+        q.warning ? h('p.x-text.quit-warning', {}, q.warning) : null,
+        h(
+          'div.alert-actions',
+          {},
+          h('button.x-btn.danger', { onclick: () => quitGame() }, q.yes),
+          h('button.x-btn', { onclick: () => ((this.quitting = false), this.render()) }, q.no),
+        ),
+      );
     } else if (this.leaving && !c.outcome) {
       const partnerHere = c.players.length > 1 && !!this.partner()?.connected;
       content = h(
@@ -3086,6 +3107,8 @@ export class StrategyScreen {
           {},
           h('button.x-btn.primary', { onclick: () => ((this.leaving = false), this.handlers.onLeave()) }, 'Volver al menú'),
           h('button.x-btn', { onclick: () => ((this.leaving = false), (this.settingsOpen = true), this.render()), title: 'Sin salir de la campaña' }, 'Solo los ajustes'),
+          // Closing the game, in the desktop app only (playtest 17/10).
+          canQuit() ? h('button.x-btn', { onclick: () => ((this.leaving = false), (this.quitting = true), this.render()) }, QUIT_BUTTON) : null,
           h('button.x-btn', { onclick: () => ((this.leaving = false), this.render()) }, 'Seguir aquí'),
         ),
       );

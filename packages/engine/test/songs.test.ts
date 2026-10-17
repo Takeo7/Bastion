@@ -39,8 +39,8 @@ describe('songs', () => {
     expect(q.concealed).toBe(true);
     expect(quiet.events.some((e) => e.t === 'noise')).toBe(false);
     expect(noiseOf(q, v, 'silence')).toBe(10);
-    // The shotgun is as loud as ever.
-    expect(noiseOf(q, v, 'shoot')).toBe(10);
+    // The shotgun is as loud as ever (16 since 17/10).
+    expect(noiseOf(q, v, 'shoot')).toBe(16);
   });
 
   it('a song costs its own action: the spectral arrow needs no sniper set-up', () => {

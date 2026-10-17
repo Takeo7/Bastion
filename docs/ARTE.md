@@ -157,12 +157,14 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 - **Noche** (`night.ts`), contra la captura del motel de Woodland de Synty: neblina verdosa y luna fría, y la luz cálida de lo que aún funciona (farolas, algún faro, bengalas y fuegos). Qué casillas están a la luz lo dice el motor.
   - **Sin deslumbrar** (Arturo 17/10: «la luz deslumbra mucho de noche»):
     - bloom de noche a 0,45 con umbral 0,88, para que solo florezca lo que emite y no el suelo iluminado;
-    - farolas a 13 y bengalas y fuegos a 16 (antes 22 y 30); la luz del fuego, 0,55 por encima de las llamas;
-    - cabezas de farola y faros más bajos; el tinte cálido de las casillas a la luz, a 0,8 (antes 1,4);
+    - farolas a 9 y bengalas y fuegos a 16 (antes 22 y 30); la luz del fuego, 0,55 por encima de las llamas;
+    - cabezas de farola y faros más bajos;
+    - el tinte de las casillas a la luz (lo que blanqueaba el centro de los charcos sobre la acera clara, medido: sin él, de 0,68 a 0,41) es un naranja más hondo a 0,6 (antes 1,4), y suma menos donde la luz ya da brillo. Los charcos se leen por el color frente a la noche verdosa más que por el brillo;
     - los faros de los refuerzos y las luces de La Mula, a la mitad de noche.
   - **Medido a 1920×1080** (bengala y fuego junto a la tropa, a distancia de juego):
     - en la ciudad, del 5,3 % al 1,4 % de píxeles quemados;
-    - en las afueras, del 2,0 % al 0,4 %; lo que queda son sobre todo los anillos y las líneas de la interfaz.
+    - en las afueras, del 2,0 % al 0,4 %; lo que queda son sobre todo los anillos y las líneas de la interfaz;
+    - en la segunda tanda (17/10), la ciudad pasa al 0,8 %, y el centro del charco de una farola sobre la acera, de 0,70 a 0,57 (la plaza a la luna está a 0,41).
     - Las zonas a la luz se siguen leyendo cálidas desde lejos.
 - **Niebla de guerra** (`fogOfWar.ts`, `explored.ts`) sobre los materiales, por planta.
 - **Coste:**

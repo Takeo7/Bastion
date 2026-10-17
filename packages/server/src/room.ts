@@ -489,6 +489,12 @@ export class Room {
       .map((s) => s.slot);
   }
 
+  /** The server is shutting down (index.ts): the game is saved, then everyone hears it, so the partner stops waiting. */
+  closing(): void {
+    this.persist();
+    this.broadcast({ t: 'closing' });
+  }
+
   /** Who is playing and where, for the app's announcement on the local network (index.ts). */
   summary(): { players: string[]; phase: RoomPhase } {
     return { players: this.players().filter((p) => p.connected).map((p) => p.name), phase: this.phase };

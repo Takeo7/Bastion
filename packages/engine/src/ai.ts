@@ -331,14 +331,15 @@ const byDistance = (s: GameState, from: Pos) => (a: Unit, b: Unit) => farness(s,
 const stride = (u: Unit) => TEMPLATES[u.template].mobility + u.mods.mobility + 1.5;
 
 /**
- * Whether one of the dead can only walk this turn: no soldier within reach of
- * a bite or a burst in its two actions, and it doesn't scream. The enemy turn
- * moves these first (Sim.runAlienTurn), so each group's walk comes in one go
- * and the client shows it together (docs/UX-RITMO.md); the bites come after.
+ * Whether one of the dead can only walk this turn, and doesn't scream. It
+ * bites (or bursts) only beside a soldier: one already there, or one it sees
+ * and can reach with a step (two actions: a step and a bite, playtest 16/10).
+ * The rest only walk, and the enemy turn moves them after those who go for
+ * the squad, all at once (Sim.runAlienTurn; Arturo, 17/10).
  */
 export function onlyWalks(s: GameState, u: Unit): boolean {
   if (!TEMPLATES[u.template].undead || abilitiesOf(u).includes('mindspin')) return false;
-  return combatants(s, 'xcom').every((e) => farness(s, u.pos, e.pos) > 2 * stride(u));
+  return !combatants(s, 'xcom').some((e) => inMeleeReach(s, u.pos, e.pos) || (farness(s, u.pos, e.pos) <= stride(u) + 1 && canSee(s, u, e)));
 }
 
 /** One action's walk toward `goal`, round whatever is in the way; false when it gets no closer. */

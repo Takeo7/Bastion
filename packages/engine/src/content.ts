@@ -195,11 +195,12 @@ const weapon = (w: Partial<WeaponDef> & Pick<WeaponDef, 'id' | 'name' | 'damage'
 });
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
-  rifle: weapon({ id: 'rifle', name: 'Fusil de asalto', damage: 4, spread: 1, critDamage: 2, clip: 4, noise: 12 }),
-  shotgun: weapon({ id: 'shotgun', name: 'Escopeta', damage: 5, spread: 1, critDamage: 3, clip: 4, crit: 10, range: 'short', burst: 1, noise: 10 }),
-  cannon: weapon({ id: 'cannon', name: 'Ametralladora', damage: 5, spread: 1, critDamage: 2, clip: 3, burst: 5, noise: 14 }),
-  sniper: weapon({ id: 'sniper', name: 'Fusil de precisión', damage: 5, spread: 1, critDamage: 2, clip: 3, crit: 10, range: 'long', apCost: 2, burst: 1, noise: 16 }),
-  pistol: weapon({ id: 'pistol', name: 'Pistola', damage: 2, plusOne: 50, critDamage: 1, burst: 1, noise: 8 }),
+  // The squad's guns are heard further (Arturo, 17/10: «disparar debería hacer más ruido»), and a grenade further still.
+  rifle: weapon({ id: 'rifle', name: 'Fusil de asalto', damage: 4, spread: 1, critDamage: 2, clip: 4, noise: 18 }),
+  shotgun: weapon({ id: 'shotgun', name: 'Escopeta', damage: 5, spread: 1, critDamage: 3, clip: 4, crit: 10, range: 'short', burst: 1, noise: 16 }),
+  cannon: weapon({ id: 'cannon', name: 'Ametralladora', damage: 5, spread: 1, critDamage: 2, clip: 3, burst: 5, noise: 20 }),
+  sniper: weapon({ id: 'sniper', name: 'Fusil de precisión', damage: 5, spread: 1, critDamage: 2, clip: 3, crit: 10, range: 'long', apCost: 2, burst: 1, noise: 22 }),
+  pistol: weapon({ id: 'pistol', name: 'Pistola', damage: 2, plusOne: 50, critDamage: 1, burst: 1, noise: 12 }),
   sword: weapon({ id: 'sword', name: 'Machete', damage: 4, spread: 1, critDamage: 2, aim: 20, crit: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
   /** Everyone's blade in the campaign (docs/FASE8.md §A), until a machete. */
   knife: weapon({ id: 'knife', name: 'Cuchillo', damage: 3, spread: 1, critDamage: 1, aim: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
@@ -214,7 +215,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   /** The Chillón doesn't bite: it only screams (mindspin). */
   sectoidPistol: weapon({ id: 'sectoidPistol', name: 'Chillido', damage: 0, range: 'none', burst: 0 }),
   bloaterBurst: weapon({ id: 'bloaterBurst', name: 'Reventón', damage: 3, burst: 0, noise: 6 }),
-  fragGrenade: weapon({ id: 'fragGrenade', name: 'Granada de fragmentación', damage: 3, plusOne: 20, shred: 1, burst: 0, noise: 18 }),
+  fragGrenade: weapon({ id: 'fragGrenade', name: 'Granada de fragmentación', damage: 3, plusOne: 20, shred: 1, burst: 0, noise: 26 }),
   microMissiles: weapon({ id: 'microMissiles', name: 'Micromisiles', damage: 3, shred: 1, burst: 0, noise: 18 }),
   droneZap: weapon({ id: 'droneZap', name: 'Descarga del Grillo', damage: 2, burst: 0, noise: 2 }),
   discharge: weapon({ id: 'discharge', name: 'Descarga de batería', damage: 3, burst: 0, noise: 4 }),
@@ -266,8 +267,8 @@ export interface AbilityDef {
 }
 
 export const ABILITIES: Record<AbilityId, AbilityDef> = {
-  shoot: { id: 'shoot', name: 'Disparar', description: 'Dispara el arma principal. Gasta una acción; el fusil de precisión, las dos.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'primary' },
-  pistol: { id: 'pistol', name: 'Pistola', description: 'Dispara la pistola: munición infinita. Gasta una acción.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'secondary' },
+  shoot: { id: 'shoot', name: 'Disparar', description: 'Dispara el arma principal.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'primary' },
+  pistol: { id: 'pistol', name: 'Pistola', description: 'Dispara la pistola, sin gastar las balas del arma principal.', target: 'enemy', ap: 1, endsTurn: false, weapon: 'secondary' },
   // An action, like a shot (playtest 16/10): the turn goes on.
   slash: { id: 'slash', name: 'Tajo', description: 'Golpea con la hoja a un enemigo que tengas al lado. Ignora la cobertura.', target: 'melee', ap: 1, endsTurn: false, weapon: 'melee' },
   stunLance: { id: 'stunLance', name: 'Red y porra', description: 'Atrapa con la red y golpea con la porra: aturde.', target: 'melee', ap: 1, endsTurn: true, weapon: 'melee' },
@@ -275,7 +276,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   claw: { id: 'claw', name: 'Mordisco', description: 'Muerde a quien tiene al lado.', target: 'melee', ap: 1, endsTurn: false, weapon: 'melee' },
   overwatch: { id: 'overwatch', name: 'Vigilancia', description: 'Dispara al primer enemigo que se mueva a la vista.', target: 'self', ap: 1, endsTurn: true },
   // Fase 10 (docs/FASE10.md §4): the reach is the throw's (abilityRange), the noise grows with Señuelo and Reclamo.
-  stone: { id: 'stone', name: 'Piedra', description: 'Lanza una piedra: suena donde cae y los zombis van a mirar. Si le da a alguien, 1 de daño. No acaba el turno.', target: 'tile', ap: 1, endsTurn: false, range: 10, noise: 8 },
+  stone: { id: 'stone', name: 'Piedra', description: 'Lanza una piedra: suena donde cae y los zombis van a mirar. Si le da a alguien, 1 de daño.', target: 'tile', ap: 1, endsTurn: false, range: 10, noise: 8 },
   overwatchMelee: { id: 'overwatchMelee', name: 'Vigilancia cuerpo a cuerpo', description: 'Golpea con la hoja al primer enemigo que se le ponga al lado.', target: 'self', ap: 1, endsTurn: true },
   hunker: { id: 'hunker', name: 'Cubrirse', description: '+30 de defensa y +50 de esquiva hasta tu próximo turno.', target: 'self', ap: 1, endsTurn: true },
   reload: { id: 'reload', name: 'Recargar', description: 'Mete un cargador lleno y gasta uno de repuesto: primero en el arma principal y, si está llena, en la pistola. Los de repuesto los hace el Taller; registrando aparecen más.', target: 'self', ap: 1, endsTurn: false },
@@ -316,18 +317,18 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
     noise: 2,
   },
   // A door beside the soldier, without moving: free, and as quiet as walking through it (NOISE.door). Texts are placeholders for Lore.
-  openDoor: { id: 'openDoor', name: 'Abrir la puerta', description: 'Abre una puerta cerrada que tengas al lado. No gasta acciones.', target: 'tile', ap: 0, endsTurn: false, range: 1.5, noise: 1 },
-  closeDoor: { id: 'closeDoor', name: 'Cerrar la puerta', description: 'Cierra una puerta abierta que tengas al lado, si no hay nadie en ella. No gasta acciones.', target: 'tile', ap: 0, endsTurn: false, range: 1.5, noise: 1 },
-  runAndGun: { id: 'runAndGun', name: 'Correr y disparar', description: 'Acción gratuita: +1 acción este turno.', target: 'self', ap: 0, endsTurn: false, cooldown: 4 },
+  openDoor: { id: 'openDoor', name: 'Abrir la puerta', description: 'Abre una puerta cerrada que tengas al lado.', target: 'tile', ap: 0, endsTurn: false, range: 1.5, noise: 1 },
+  closeDoor: { id: 'closeDoor', name: 'Cerrar la puerta', description: 'Cierra una puerta abierta que tengas al lado, si no hay nadie en ella.', target: 'tile', ap: 0, endsTurn: false, range: 1.5, noise: 1 },
+  runAndGun: { id: 'runAndGun', name: 'Correr y disparar', description: 'Una acción más este turno.', target: 'self', ap: 0, endsTurn: false, cooldown: 4 },
   rapidFire: { id: 'rapidFire', name: 'Ráfaga', description: 'Dos disparos seguidos, cada uno con −15 de puntería. Gasta dos balas.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -15, ammo: 2 },
-  suppression: { id: 'suppression', name: 'Supresión', description: 'Inmoviliza al objetivo: −50 de puntería hasta tu próximo turno, y si se mueve, le disparas. Gasta 2 balas.', target: 'enemy', ap: 1, endsTurn: true, ammo: 2 },
+  suppression: { id: 'suppression', name: 'Supresión', description: 'Inmoviliza al objetivo: −50 de puntería hasta tu próximo turno, y si se mueve, le disparas. Gasta dos balas.', target: 'enemy', ap: 1, endsTurn: true, ammo: 2 },
   chainShot: { id: 'chainShot', name: 'Disparo en cadena', description: 'Disparo con −15 de puntería; si acierta, vuelves a disparar.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -15 },
   rupture: { id: 'rupture', name: 'Ruptura', description: 'Disparo con +3 de daño; el objetivo recibe +3 de daño de todos los ataques.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 4, weapon: 'primary', damageBonus: 3 },
   aimedShot: { id: 'aimedShot', name: 'A la cabeza', description: 'Un disparo con −25 de puntería que hace la mitad más de daño.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -25, damageMult: 1.5 },
-  lightningHands: { id: 'lightningHands', name: 'Manos rápidas', description: 'Acción gratuita: un disparo de pistola.', target: 'enemy', ap: 0, endsTurn: false, cooldown: 4, weapon: 'secondary' },
+  lightningHands: { id: 'lightningHands', name: 'Manos rápidas', description: 'Un disparo rápido con la pistola.', target: 'enemy', ap: 0, endsTurn: false, cooldown: 4, weapon: 'secondary' },
   faceoff: { id: 'faceoff', name: 'Cara a cara', description: 'Un disparo de pistola a cada enemigo que veas.', target: 'self', ap: 1, endsTurn: true, cooldown: 4, weapon: 'secondary' },
   killZone: { id: 'killZone', name: 'Nadie pasa', description: 'Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno.', target: 'self', ap: 1, endsTurn: true, cooldown: 4 },
-  combatProtocol: { id: 'combatProtocol', name: 'Calambrazo', description: 'El Grillo electrocuta a un enemigo a la vista de la escuadra: 2 de daño (4 a Acorazados y alarmas). Nunca falla e ignora el blindaje. Termina el turno.', target: 'enemy', ap: 1, endsTurn: true, charge: 'combatProtocol', range: 15, noise: 2 },
+  combatProtocol: { id: 'combatProtocol', name: 'Calambrazo', description: 'El Grillo electrocuta a un enemigo a la vista de la escuadra: 2 de daño (4 a Acorazados y alarmas). Nunca falla e ignora el blindaje.', target: 'enemy', ap: 1, endsTurn: true, charge: 'combatProtocol', range: 15, noise: 2 },
   // Fase 9 (skills.ts): Espabilar without the Grillo's medkit, Pasar visita once a mission.
   revival: { id: 'revival', name: 'Espabilar', description: 'Quita a un compañero de al lado el aturdimiento, la desorientación o el pánico. Sin botiquín.', target: 'ally', ap: 1, endsTurn: false, range: 1.5 },
   restoration: { id: 'restoration', name: 'Pasar visita', description: 'Cura 2 a cada compañero a 4 casillas o menos y les quita los estados alterados. Una vez por misión.', target: 'self', ap: 1, endsTurn: true, charge: 'restoration', range: 4 },
@@ -342,7 +343,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Cura 4 de salud a uno mismo o a un compañero de al lado.', target: 'ally', ap: 1, endsTurn: false, charge: 'firstAid', range: 1.5 },
   // The Oficio: learnt in the Taller de oficios. Each makes its own noise; none gives the squad away by itself.
   aegis: { id: 'aegis', name: 'Escudo antidisturbios', description: 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 3, song: true, noise: 0 },
-  echoStep: { id: 'echoStep', name: 'Saltar por la ventana', description: 'Saltas a una casilla libre a la vista, a 6 o menos, por encima de lo que haya en medio. No termina el turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 6, radius: 0, teleport: true, song: true, noise: 1 },
+  echoStep: { id: 'echoStep', name: 'Saltar por la ventana', description: 'Saltas a una casilla libre a la vista, a 6 o menos, por encima de lo que haya en medio.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 6, radius: 0, teleport: true, song: true, noise: 1 },
   layOnHands: { id: 'layOnHands', name: 'Vendaje rápido', description: 'Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación.', target: 'ally', ap: 1, endsTurn: false, charge: 'layOnHands', range: 1.5, song: true, noise: 0 },
   velmarOath: { id: 'velmarOath', name: '¡Aguantad!', description: 'Durante 2 turnos, los aliados a 4 casillas no pueden entrar en pánico ni caer bajo el grito del Chillón, y tú recibes la mitad del daño.', target: 'self', ap: 1, endsTurn: false, charge: 'velmarOath', range: 4, song: true, noise: 2 },
   bolt: { id: 'bolt', name: 'Bengala', description: 'Una bengala encendida a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 2, range: 20, song: true, noise: 6 },

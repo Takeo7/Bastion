@@ -24,8 +24,13 @@ const EXPLORE_FADE = 0.9;
 const LIT_FADE = 0.6;
 /** The fog texture's alpha holds each tile's floor, this much per storey. */
 const FLOOR_STEP = 32;
-/** Night: what lit tiles get (a lamp's warm light over their own colours), and the darker tints of the remembered and the unknown. */
-const LAMP = new THREE.Color(1.0, 0.62, 0.3).multiplyScalar(0.8);
+/**
+ * Night: what lit tiles get, a lamp's warm light over their own colours, and the darker tints of the
+ * remembered and the unknown. The pools read by their colour against the teal night more than by their
+ * brightness: a deep orange, not too much of it, and less where a light already makes the tile bright,
+ * so pale pavement doesn't burn white (Arturo 17/10).
+ */
+const LAMP = new THREE.Color(1.0, 0.55, 0.22).multiplyScalar(0.6);
 const REMEMBERED_NIGHT = new THREE.Color(0x0e1a20);
 const UNKNOWN_NIGHT = new THREE.Color(0x070d11);
 
@@ -255,7 +260,8 @@ export class FogOfWar {
             lit
               ? `// Night: a lit tile glows warm, so players read where they'd be seen.
           float fowFloor = fowTile.a * ${(255 / FLOOR_STEP).toFixed(3)} * ${STOREY.toFixed(3)};
-          gl_FragColor.rgb += diffuseColor.rgb * fowLamp * fowTile.b * fowNight * fowInside * (1.0 - smoothstep(${(STOREY * 0.6).toFixed(2)}, ${(STOREY * 1.2).toFixed(2)}, vFowPos.y - fowFloor));`
+          float fowHot = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+          gl_FragColor.rgb += diffuseColor.rgb * fowLamp * fowTile.b * fowNight * fowInside * (1.0 - smoothstep(${(STOREY * 0.6).toFixed(2)}, ${(STOREY * 1.2).toFixed(2)}, vFowPos.y - fowFloor)) / (1.0 + 2.5 * fowHot);`
               : ''
           }
           {

@@ -22,7 +22,7 @@ const LAMP = new THREE.Color(1.0, 0.62, 0.3);
  * How strong each light is (Arturo 17/10: «la luz deslumbra mucho de noche»): the pools still read from afar,
  * where the squad is seen, without burning the ground and what stands on it white, or the bloom veiling the rest.
  */
-const LAMP_LIGHT = 13;
+const LAMP_LIGHT = 9;
 const BURNING_LIGHT = 16;
 /** The lamps' heads and the headlights left on (HDR, for the bloom). */
 const LAMP_HEAD = new THREE.Color(2.2, 1.5, 0.9);

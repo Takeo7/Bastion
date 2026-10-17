@@ -156,6 +156,27 @@ function reshape(line: Line2, points: number[]): void {
 }
 
 /**
+ * The column of light over an objective (playtest 17/10 #48: «la línea verde
+ * que indica hacia dónde ir»): a line of a fixed width on screen, so it reads
+ * from far off, solid green with a dark edge (an additive glow vanished over
+ * the snow), from over the heads (it hides nothing of the fighting below) up
+ * to GUIDE_HEIGHT. Local to its group, which stands on the tile; `from`
+ * raises its foot (an objective upstairs).
+ */
+const GUIDE_HEIGHT = 40;
+function guideBeam(color: number, from = 0): THREE.Group {
+  const g = new THREE.Group();
+  const points = [0, from + 1.6, 0, 0, from + GUIDE_HEIGHT, 0];
+  const casing = new Line2(new LineGeometry(), new LineMaterial({ color: 0x0b1a12, linewidth: 7, transparent: true, opacity: 0.5, depthWrite: false }));
+  const core = new Line2(new LineGeometry(), new LineMaterial({ color, linewidth: 3.5, transparent: true, opacity: 0.95, depthWrite: false }));
+  for (const line of [casing, core]) line.geometry.setPositions(points);
+  casing.renderOrder = 7;
+  core.renderOrder = 8;
+  g.add(casing, core);
+  return g;
+}
+
+/**
  * The edge of what an enemy sees (Arturo, 17/10: the dead see in a cone, not
  * all round): its VIEW_CONE ahead out to `range`, and the AWARE_RANGE circle
  * all round, behind it too, as one closed line, a keyhole. Without a facing
@@ -177,8 +198,13 @@ function keyhole(c: THREE.Vector3, range: number, facing: number | undefined): n
   return out;
 }
 
+/** Planning without the command (playtest 17/10 #49): the move's preview in grey, so it shows it isn't one's turn to order. */
+const PLAN_GREY = 0x9aa0a4;
+
 export class Overlays {
   readonly group = new THREE.Group();
+  /** Without the command: the range's borders, the path and the pointer's ring go grey (#49). */
+  private planning = false;
   private readonly tiles: THREE.InstancedMesh;
   /** The range's borders: one action (solid) and the dash (dashed), at the tiles' own heights. */
   private readonly walkEdge = new LineSegments2(
@@ -243,6 +269,19 @@ export class Overlays {
   private readonly spotFrame = new THREE.RingGeometry(0.62, 0.74, 4).rotateZ(Math.PI / 4).rotateX(-Math.PI / 2);
   /** Noise spreading from where it was made (docs/FASE2.md): a ring and a faint disc, gone once spread. */
   private readonly noises = new THREE.Group();
+  /**
+   * Where the squad must go, beside the soldier picked, while that place is off
+   * the screen (playtest 17/10 #48: the column of light can't reach the screen
+   * from far off with this camera): a short dashed green line along the
+   * ground, flowing towards it, and its arrowhead.
+   */
+  private readonly guide = new THREE.Group();
+  private readonly guideLine = new Line2(
+    new LineGeometry(),
+    new LineMaterial({ color: 0x4dff9a, linewidth: 4, dashed: true, dashSize: 0.34, gapSize: 0.22, transparent: true, opacity: 0.95, depthTest: false }),
+  );
+  private readonly guideCasing = new Line2(new LineGeometry(), new LineMaterial({ color: 0x0b1a12, linewidth: 9, transparent: true, opacity: 0.7, depthTest: false }));
+  private readonly guideHead = new Line2(new LineGeometry(), new LineMaterial({ color: 0x4dff9a, linewidth: 4, transparent: true, opacity: 0.95, depthTest: false }));
   private readonly noiseCircle = new THREE.CircleGeometry(1, 64).rotateX(-Math.PI / 2);
   /** One short line on a tile: what a move or a throw sounds like, what a piece of furniture is. */
   private readonly note = new CSS2DObject(document.createElement('div'));
@@ -339,11 +378,7 @@ export class Overlays {
     );
     core.position.y = 0.45;
     core.castShadow = true;
-    const beacon = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.08, 6, 10, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0x4dff9a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }),
-    );
-    beacon.position.y = 3;
+    const beacon = guideBeam(0x4dff9a);
     const glow = new THREE.PointLight(0x4dff9a, 4, 4, 2);
     glow.position.y = 0.6;
     this.item.add(core, beacon, glow);
@@ -373,6 +408,11 @@ export class Overlays {
     this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
     this.group.add(this.walkEdge, this.dashEdge, this.near, this.seen, this.noticed, this.sightEdge);
     this.group.add(this.spots, this.noises, this.note);
+    this.guideCasing.renderOrder = 9;
+    this.guideLine.renderOrder = this.guideHead.renderOrder = 10;
+    this.guide.add(this.guideCasing, this.guideLine, this.guideHead);
+    this.guide.visible = false;
+    this.group.add(this.guide);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -383,10 +423,13 @@ export class Overlays {
       core.position.y = 0.45 + Math.sin(time * 2.4) * 0.06;
     }
     (this.evac.material as THREE.MeshBasicMaterial).opacity = 0.18 + Math.sin(time * 2.2) * 0.06;
+    // The columns breathe a little (their core line; guideBeam).
     for (const b of this.beacons.children) {
-      const beam = b.children[0] as THREE.Mesh;
-      (beam.material as THREE.MeshBasicMaterial).opacity = 0.22 + Math.sin(time * 2 + b.position.x) * 0.08;
+      const core = b.children[0]?.children[1] as Line2 | undefined;
+      if (core) (core.material as LineMaterial).opacity = 0.85 + Math.sin(time * 2 + b.position.x) * 0.1;
     }
+    // The ground guide's dashes flow towards where it points.
+    if (this.guide.visible) (this.guideLine.material as LineMaterial).dashOffset = -time * 0.9;
     for (const puff of this.smoke.children) puff.scale.setScalar(1 + Math.sin(time * 0.8 + puff.userData.phase) * 0.08);
     this.flares.children.forEach((f, i) => {
       const k = (time * 0.9 + i * 0.3) % 1;
@@ -505,14 +548,18 @@ export class Overlays {
     const key = JSON.stringify(list);
     if (this.beacons.userData.key === key) return;
     this.beacons.userData.key = key;
-    for (const child of [...this.beacons.children]) this.beacons.remove(child);
+    for (const child of [...this.beacons.children]) {
+      this.beacons.remove(child);
+      child.traverse((o) => {
+        if (o instanceof THREE.Mesh || o instanceof Line2) {
+          o.geometry.dispose();
+          (o.material as THREE.Material).dispose();
+        }
+      });
+    }
     for (const b of list) {
       const g = new THREE.Group();
-      const beam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.1, 0.1, 7, 10, 1, true),
-        new THREE.MeshBasicMaterial({ color: b.color, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
-      beam.position.y = 3.5 + (b.height ?? 0);
+      const beam = guideBeam(b.color, b.height ?? 0);
       const ring = flatRing(0.48, 0.6, b.color, 0.75);
       ring.visible = true;
       ring.position.y = 0.05;
@@ -592,6 +639,9 @@ export class Overlays {
   showMoveRange(tiles: MoveTile[], planning = false): void {
     for (const [mesh, opacity] of this.rangeLayers) (mesh.material as THREE.MeshBasicMaterial).opacity = planning ? opacity * 0.5 : opacity;
     for (const edge of [this.walkEdge, this.dashEdge]) edge.material.opacity = planning ? 0.5 : 0.95;
+    this.planning = planning;
+    this.walkEdge.material.color.set(planning ? PLAN_GREY : 0x6cc4ff);
+    this.dashEdge.material.color.set(planning ? PLAN_GREY : 0xffc93a);
     this.range = new Map(tiles.map((t) => [t.pos.x * 1024 + t.pos.y, t]));
     const m = new THREE.Matrix4();
     let frames = 0;
@@ -752,6 +802,38 @@ export class Overlays {
     if (v) reshape(this.sightEdge, keyhole(tileToWorld(v.pos, 0.06), v.range, v.facing));
   }
 
+  /**
+   * The ground guide from the soldier on `from` towards `to` (#48), or none:
+   * from a step out to some four tiles along, an arrowhead at its end.
+   */
+  setGuide(from: Place | null, to: Place | null): void {
+    const key = from && to ? `${from.x},${from.y},${from.z ?? 0}>${to.x},${to.y}` : '';
+    if (this.guide.userData.key === key) return;
+    this.guide.userData.key = key;
+    if (!from || !to) {
+      this.guide.visible = false;
+      return;
+    }
+    const a = tileToWorld(from, 0.14);
+    const dir = new THREE.Vector3(to.x - from.x, 0, to.y - from.y);
+    const far = dir.length();
+    if (far < 3) {
+      this.guide.visible = false;
+      return;
+    }
+    dir.normalize();
+    const start = a.clone().addScaledVector(dir, 1.1);
+    const end = a.clone().addScaledVector(dir, Math.min(4.6, far - 0.5));
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    const tip = end.clone().addScaledVector(dir, 0.3);
+    const back = end.clone().addScaledVector(dir, -0.25);
+    reshape(this.guideCasing, [...start.toArray(), ...tip.toArray()]);
+    reshape(this.guideLine, [...start.toArray(), ...end.toArray()]);
+    this.guideLine.computeLineDistances();
+    reshape(this.guideHead, [...back.clone().addScaledVector(side, 0.38).toArray(), ...tip.toArray(), ...back.clone().addScaledVector(side, -0.38).toArray()]);
+    this.guide.visible = true;
+  }
+
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {
     if (!from || !path?.length) {
       this.path.visible = this.pathCasing.visible = false;
@@ -759,7 +841,7 @@ export class Overlays {
     }
     const pts = [from, ...path].flatMap((p) => tileToWorld(p, 0.08).toArray());
     reshape(this.path, pts);
-    (this.path.material as LineMaterial).color.set(dash ? 0xffd34d : 0xeafaff);
+    (this.path.material as LineMaterial).color.set(this.planning ? PLAN_GREY : dash ? 0xffd34d : 0xeafaff);
     this.path.visible = this.pathCasing.visible = true;
   }
 
@@ -780,7 +862,7 @@ export class Overlays {
     this.hover.visible = !!tile;
     if (tile) {
       this.hover.position.copy(tileToWorld(tile, 0.04));
-      (this.hover.material as THREE.MeshBasicMaterial).color.set(color);
+      (this.hover.material as THREE.MeshBasicMaterial).color.set(this.planning && color === 0xffffff ? PLAN_GREY : color);
     }
   }
 

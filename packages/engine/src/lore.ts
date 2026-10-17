@@ -5,7 +5,7 @@
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
-import { FOUND_WEAPONS, THIRD_ACTION_RANK, type RangeTable } from './content';
+import { FOUND_WEAPONS, NIGHT, THIRD_ACTION_RANK, type RangeTable } from './content';
 import { BAR_GROWTH, DEED_XP, RANK_STEP, SKILLS, VETERANCY, WILL_PER_RANK, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
@@ -58,7 +58,7 @@ export const GLOSSARY: Record<string, string> = {
   Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega a Atalaya, la campaña está perdida.',
   Nido: 'Un sitio donde los zombis se juntan y la Marea crece. Quemarlo la hace retroceder.',
   Sirena: 'La de un coche patrulla: los Cuervos la encienden cerca de quien no les paga, y los muertos acuden. En el valle también suenan ambulancias atascadas y alarmas de naves.',
-  Ruido: 'Cada acción suena: un disparo se oye a una docena de casillas, un registro a dos. Lo que lo oye va a mirar. El ruido no os delata: os delata que os vean.',
+  Ruido: 'Cada acción suena: un disparo se oye de doce a veintidós casillas, según el arma; una granada, a veintiséis; un registro, a dos. Lo que lo oye va a mirar. El ruido no os delata: os delata que os vean.',
   Saqueo: 'Misión de registrar un pueblo: llenad las mochilas y evacuad. No hay reloj, pero llegan zombis por los bordes, y antes cuanto más ruido.',
   Registrar: 'Una acción dentro de una habitación. Sale lo que haya según el sitio: comida y medicinas en las casas, piezas en las oficinas, comida en las tiendas, de todo en los almacenes. Cada habitación se registra una vez, para toda la escuadra. Hace un poco de ruido.',
   Cajas: 'Marcadas, como mucho tres por mapa, cada una de un tipo: armas, medicinas, munición o comida. Su marca se ve cuando están a la vista, y se queda en el mapa. Se abren con una acción, al lado, y dan siempre lo suyo.',
@@ -72,7 +72,7 @@ export const GLOSSARY: Record<string, string> = {
   Comida: 'Se cuenta en raciones. Cada día el Bastión gasta una por cada cuatro soldados. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan despacio.',
   Huerto: 'Bancales, un invernadero y bidones para el agua de lluvia: da raciones cada día, más cuanto más nivel.',
   Piezas: 'Muelles, motores, tornillería: con ellas el Taller hace armas y armaduras mejores. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.',
-  Noche: 'De noche se ve poco y os ven poco, salvo bajo una farola, una bengala o un fuego. Hay más muertos en la calle, pero el botín vale la mitad más.',
+  Noche: 'De noche, lo que está a oscuras solo se ve de cerca, y los muertos tardan más en descubriros; bajo una farola, una bengala o un fuego, todo se ve como de día. Hay más muertos en la calle, pero el botín vale la mitad más.',
   Enclave: 'Un grupo de supervivientes con el que tenéis contacto por radio. Si sigue vivo, manda suministros.',
   Rumor: 'Algo que se oye por la radio en una zona. Si lo seguís unos días a la escucha, sabréis qué era.',
   Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
@@ -994,6 +994,43 @@ export function leftBehindLine(who: string): string {
   return `${who} se queda fuera.`;
 }
 
+// ------------------------------------------------------------------ quit
+
+/**
+ * Leaving the game from the desktop app (the Esc menu in a mission, the
+ * base's menu, the lobby), named like the app's own menu. The room saves
+ * after every action, so nothing is lost; what changes is the partner's side.
+ */
+export const QUIT_TEXT = {
+  button: 'Salir de Bastión',
+  title: '¿Salir de Bastión?',
+  saved: 'La partida queda guardada tal como está.',
+  savedMission: 'La partida queda guardada tal como está, con la misión a medias.',
+  accept: 'Salir',
+  refuse: 'Seguir',
+};
+
+/** For the host, with the partner connected: the server stops with the app. «La partida está en tu ordenador: si sales, Ana se desconecta hasta que vuelvas a abrirla.» */
+export function quitHostWarning(partner: string): string {
+  return `La partida está en tu ordenador: si sales, ${partner} se desconecta hasta que vuelvas a abrirla.`;
+}
+
+/** For the guest in a mission, with the host connected: the turns go on, and an absent player's soldiers never act. */
+export function quitGuestWarning(partner: string): string {
+  return `${partner} sigue la misión sin ti: tus soldados se quedan quietos donde están hasta que vuelvas.`;
+}
+
+/** For the guest when the host's game closes (client net.ts): the notice, its second line and, in a browser, the button. */
+export const HOST_CLOSED = {
+  back: 'Cuando la vuelva a abrir, podrás entrar de nuevo.',
+  retry: 'Volver a entrar',
+};
+
+/** «Arturo ha cerrado la partida.»; without the host's name, a neutral one. */
+export function hostClosedLine(host?: string): string {
+  return host ? `${host} ha cerrado la partida.` : 'Quien aloja la partida la ha cerrado.';
+}
+
 // ------------------------------------------------------------------ rubble
 
 /** Walls and floors a grenade breaks (docs/FASE7.md §4–5): the log lines and the floating word. */
@@ -1214,9 +1251,26 @@ export function floodedZoneNote(level: number): string {
 /** Night missions (docs/ALTURA-Y-NOCHE.md): the tag, the briefing's last line and the debrief's. */
 export const NIGHT_TEXT = {
   label: 'De noche',
-  briefing: 'Iréis de noche: veréis poco y os verán poco, salvo bajo una farola o una bengala. Habrá más muertos en la calle, pero lo que traigáis vale la mitad más.',
+  briefing: 'Iréis de noche: a oscuras veréis poco y los muertos tardarán más en descubriros; bajo una farola o una bengala, todo se ve como de día. Habrá más muertos en la calle, pero lo que traigáis vale la mitad más.',
   report: 'Volvéis con la primera luz. De noche, el botín y la recompensa valen la mitad más.',
+  /**
+   * How the light works (los.ts sightTo, detectionTo), a line each, for the
+   * help and the first night: the living see less in the dark; the dead see
+   * as ever, but notice the hidden squad from closer unless it stands in light.
+   */
+  rules: [
+    'De noche, vuestros soldados ven mucho menos: lo que está a oscuras, solo de cerca.',
+    'A la luz se ve como de día: al zombi que está bajo una farola lo veis desde lejos, y al soldado que se pone debajo, también.',
+    'Mientras no os hayan visto, los muertos solo notan de cerca a quien está a oscuras. Cuando ya os han visto, de noche ven igual que de día.',
+    `Las farolas no se apagan. La Bengala ilumina al enemigo que alcanza y lo que tiene alrededor durante ${NIGHT.flare.turns} turnos; el Cóctel molotov y El bidón dejan fuego, que dura ${NIGHT.fire.turns}.`,
+  ],
 };
+
+/** A lit tile under the cursor, at night: «A la luz: quien esté aquí, vivo o muerto, se ve desde tan lejos como de día. Se apaga en 2 turnos.» (`turns`: Light.turns; none for a street lamp). */
+export function litNote(turns?: number): string {
+  const lit = 'A la luz: quien esté aquí, vivo o muerto, se ve desde tan lejos como de día.';
+  return turns ? `${lit} Se apaga en ${turns} ${turns === 1 ? 'turno' : 'turnos'}.` : lit;
+}
 
 // ---------------------------------------------------------------- briefings
 

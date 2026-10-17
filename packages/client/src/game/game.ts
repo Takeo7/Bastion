@@ -96,6 +96,8 @@ import {
   MISSION_NAMES,
   NIGHT,
   NIGHT_LABEL,
+  NIGHT_TEXT,
+  litNote,
   NOISE,
   noiseOf,
   OBJECTIVE_DONE,
@@ -230,11 +232,16 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
 };
 
 /**
- * Night missions (docs/ALTURA-Y-NOCHE.md §2), as the HUD explains them; the
- * lines are placeholders for Lore. `NIGHT_RULES` goes in the «De noche» tag's
- * tooltip and the log, `LIGHT_LINES` what a Bengala or a fire lights up.
+ * Night missions (docs/ALTURA-Y-NOCHE.md §2), as the HUD explains them (Lore's
+ * NIGHT_TEXT.rules; playtest 17/10 #50: «la luz no está muy explicada»): in the
+ * «De noche» tag's tooltip, the log, the first night's card and the controls.
+ * `LIGHT_LINES`, what a Bengala or a fire lights up.
  */
-const NIGHT_RULES = `De noche: los vivos ven ${NIGHT.sightCut} casillas menos (${NIGHT.minSight} como mínimo) y os detectan a la mitad de distancia. A la luz de una farola, una bengala o un fuego os ven como de día.`;
+const NIGHT_RULES = NIGHT_TEXT.rules.join('\n');
+/** How long after the player last moved the camera the turn's changes leave it alone (#47: «que nunca pelee con el jugador»). */
+const TURN_CAMERA_QUIET_MS = 4000;
+/** The first night is explained once, on a card (per browser). */
+const NIGHT_SEEN_KEY = 'bastion.seenNight';
 const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fuego ilumina la zona' } as const;
 
 /**
@@ -308,7 +315,6 @@ const ATTACK_NOTES: Partial<Record<AttackAbility, string>> = {
   chainShot: 'Si acierta, dispara otra vez',
   aimedShot: '+50 % de daño',
   rupture: '+3 de daño; el objetivo recibirá +3 de todos los ataques',
-  lightningHands: 'No gasta acciones',
 };
 
 /** Abilities whose name pops up over the unit when used. */
@@ -358,11 +364,16 @@ function capitalize(text: string): string {
   return text[0]!.toUpperCase() + text.slice(1);
 }
 
-/** What using an ability costs, in the cards' words, from the rules the server charges by. */
+/**
+ * What using an ability costs, from the rules the server charges by (with the
+ * weapon it carries: the precision rifle's two), in one wording on every
+ * button (playtest 17/10 #52): «1 acción», «2 acciones», «Sin acción»,
+ * «Acaba el turno».
+ */
 function costText(u: Unit, id: AbilityId): string {
   const need = apNeeded(u, id);
-  if (need === 0) return 'Gratis';
-  if (endsTurn(u, id)) return 'Termina el turno';
+  if (need === 0) return 'Sin acción';
+  if (endsTurn(u, id)) return 'Acaba el turno';
   return need === 1 ? '1 acción' : `${need} acciones`;
 }
 
@@ -758,7 +769,10 @@ export class Game {
     this.fx.tick(dt * rate);
     this.songFx.tick(dt * rate);
     this.overlays?.tick(time);
-    if (this.overlays && this.view) this.followTurns();
+    if (this.overlays && this.view) {
+      this.followTurns();
+      this.updateGuide();
+    }
     this.mapView.tick(dt);
     const from = this.selected ? getUnit(this.view, this.selected) : undefined;
     this.edge.update(this.renderer.camera, from?.alive ? from.pos : null);
@@ -872,7 +886,18 @@ export class Game {
       briefing,
     );
     // A night mission: the log keeps the rules. No radio in the middle of a mission (playtest 15/10 #8).
-    if (s.mission.night) this.hud.log(NIGHT_RULES, '#2a4a7a');
+    if (s.mission.night) {
+      this.hud.log(NIGHT_TEXT.rules.join(' '), '#2a4a7a');
+      // The first night ever, a card with how the light works, once the arrival card is closed (#50).
+      let seen = true;
+      try {
+        seen = localStorage.getItem(NIGHT_SEEN_KEY) === '1';
+        localStorage.setItem(NIGHT_SEEN_KEY, '1');
+      } catch {
+        /* storage unavailable: no card rather than one every night */
+      }
+      if (!seen) void closed.then(() => this.hud.nightCard(NIGHT_TEXT.label, NIGHT_TEXT.rules));
+    }
     void this.openingShot();
   }
 
@@ -1215,9 +1240,17 @@ export class Game {
    */
   private walkingWith(item: QueuedEvent): QueuedEvent[] {
     if (!this.deadWalker(item.e)) return [];
+    // A door one of them opens on its way (its tileChanged and its noise) stays in the run: it split
+    // the dead into one framing per door, walking in a row (playtest 17/10 #46).
     let n = 0;
-    while (n < this.queue.length && this.deadWalker(this.queue[n]!.e)) n++;
-    return this.queue.splice(0, n);
+    let last = 0;
+    while (n < this.queue.length) {
+      const e = this.queue[n]!.e;
+      if (this.deadWalker(e)) last = ++n;
+      else if (e.t === 'tileChanged' || e.t === 'noise') n++;
+      else break;
+    }
+    return this.queue.splice(0, last);
   }
 
   /**
@@ -1226,8 +1259,11 @@ export class Game {
    * all walk at once, each one's actions as one stretch, WALKERS_PACE times
    * quicker; the attacks came before, one by one.
    */
-  private async playGroup(items: QueuedEvent[]): Promise<void> {
+  private async playGroup(all: QueuedEvent[]): Promise<void> {
     const v = this.view;
+    // The doors they open go first, at once (no ring nor pause each: the walk is what is seen).
+    const doors = all.filter((q) => q.e.t !== 'moved');
+    const items = all.filter((q) => q.e.t === 'moved');
     const shown = items.filter((q) => this.enemyActor(q.e));
     const hold = this.resultHold;
     this.resultHold = 0;
@@ -1244,6 +1280,7 @@ export class Game {
       await this.showEnemy(points);
     } else if (hold) await wait(hold);
     const epoch = this.rig.epoch;
+    for (const q of doors) await this.settle(q, epoch);
     // Each one's walks as one: its two actions a single stretch at the dash's gait, no stop between.
     const walks = new Map<string, QueuedEvent>();
     for (const q of items) {
@@ -2096,6 +2133,8 @@ export class Game {
         // Whose turn opens: mine, the partner's (they hold the command) or the enemy's.
         const partner = e.team === 'xcom' && !!this.partnerHere() && e.command !== undefined && e.command !== this.mySlot;
         this.hud.banner(e.team === 'alien' ? 'TURNO ENEMIGO' : partner ? `TURNO DE ${this.playerName(e.command).toUpperCase()}` : 'TU TURNO', e.team === 'xcom' ? 'xcom' : 'alien');
+        // The squad's turn: the camera to the soldier who plays first (#47).
+        if (e.team === 'xcom') this.turnCamera(this.turnSoldier(v, e.command ?? this.mySlot));
         await wait(1);
         return;
       }
@@ -2105,6 +2144,8 @@ export class Game {
           if (e.to === this.mySlot) this.hud.banner('TU TURNO', 'xcom', 'Tienes el mando: das tú las órdenes');
           else this.hud.banner(`TURNO DE ${this.playerName(e.to).toUpperCase()}`, 'xcom', this.state.ready[this.mySlot] ? 'Has terminado: juega tu compañero' : 'Mientras, puedes apuntar y planear');
         }
+        // To the soldier who plays now: the one in play of whoever takes the command, or their first with actions (#47).
+        this.turnCamera(this.turnSoldier(v, e.to));
         this.hud.log(e.to === this.mySlot ? 'Tienes el mando' : `${this.playerName(e.to)} tiene el mando`, PLAYER_COLORS[e.to]);
         return;
       }
@@ -2559,6 +2600,22 @@ export class Game {
     return Math.round((now ?? a.facing) * 100) / 100;
   }
 
+  /**
+   * Every frame: the ground guide (#48) beside one's own soldier picked, on the
+   * squad's turn and still, towards the objective (or the evacuation once it
+   * is done: missionMarks) while that is off the screen.
+   */
+  private updateGuide(): void {
+    const u = this.selectedUnit();
+    const mark = this.missionMarks()[0];
+    let show = !!u?.alive && !!mark && this.isMine(u!) && this.view.activeTeam === 'xcom' && !this.view.outcome && !this.isBusy(u!.id) && !this.mapView.isCutAway(u!.pos);
+    if (show) {
+      const p = tileToWorld(mark!.pos).project(this.renderer.camera);
+      show = p.z > 1 || Math.abs(p.x) > 0.92 || Math.abs(p.y) > 0.92;
+    }
+    this.overlays.setGuide(show ? u!.pos : null, show ? mark!.pos : null);
+  }
+
   /** Every frame: while a dead one in sight is turning, its cones are drawn again as it goes; once more when it stops. */
   private followTurns(): void {
     const turning = this.view.units.some((a) => {
@@ -2785,7 +2842,8 @@ export class Game {
         continue;
       }
       const path = buildPath(this.state, u, reach, plan.tile);
-      if (path?.length) list.push({ from: u.pos, path, color: PLAYER_COLORS[plan.slot] });
+      // One's own plans, while the partner holds the command, in grey like the rest of the preview (#49); theirs, in their colour.
+      if (path?.length) list.push({ from: u.pos, path, color: plan.slot === this.mySlot && !this.hasCommand() ? '#9aa0a4' : PLAYER_COLORS[plan.slot] });
     }
     this.overlays.setPlans(list);
   }
@@ -2890,14 +2948,37 @@ export class Game {
       if (current?.id === mineInPlay.id) return;
       this.selected = mineInPlay.id;
       this.units.setSelected(this.selected);
-      this.rig.focus(tileToWorld(mineInPlay.pos));
+      this.turnCamera(mineInPlay);
       return;
     }
+    // The partner's soldier comes into play: the camera to it too, if wanted (#47).
+    if (turned && playing?.alive && !this.isMine(playing) && playing.team === 'xcom') this.turnCamera(playing);
     if (current && this.isMine(current) && (current.ap > 0 || !this.canAct())) return;
     const next = mineInPlay ?? this.myUnits().find((u) => u.ap > 0) ?? (current && this.isMine(current) ? current : this.myUnits()[0]);
     this.selected = next?.id ?? null;
     this.units.setSelected(this.selected);
-    if (next && current && next.id !== current.id && this.canAct()) this.rig.focus(tileToWorld(next.pos));
+    if (next && current && next.id !== current.id && this.canAct()) this.turnCamera(next);
+  }
+
+  /** Who plays first for `slot`: its soldier in play, else the one picked (one's own), else its first with actions. */
+  private turnSoldier(v: GameState, slot: Slot): Unit | undefined {
+    const inPlay = v.activeUnit ? getUnit(v, v.activeUnit) : undefined;
+    if (inPlay?.alive && inPlay.owner === slot) return inPlay;
+    const picked = slot === this.mySlot ? this.selectedUnit() : undefined;
+    if (picked?.alive && picked.ap > 0) return picked;
+    return v.units.find((u) => u.alive && u.team === 'xcom' && u.owner === slot && u.ap > 0);
+  }
+
+  /**
+   * The camera to the soldier whose turn it is (playtest 17/10 #47): as the
+   * turn begins, the command passes or a soldier comes into play, if the HUD's
+   * switch says so; never fighting the player (not if they moved the camera
+   * in the last few seconds).
+   */
+  private turnCamera(u: Unit | undefined): void {
+    if (!u?.alive || !this.hud.followsTurn || performance.now() - this.rig.takenAt < TURN_CAMERA_QUIET_MS) return;
+    this.setLevel(u.pos.z ?? 0);
+    this.rig.focus(this.units.worldPos(u.id));
   }
 
   private myUnits(): Unit[] {
@@ -3308,7 +3389,8 @@ export class Game {
         hotkey: i < 9 ? (id === 'shoot' ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '',
         enabled: !reason,
         reason: reason ?? undefined,
-        name: def.name,
+        // An attack's card names the weapon it fires: its cost and its noise are that weapon's.
+        name: isAttack(id) && !def.song ? `${def.name} · ${weaponLabel(u, id as AttackAbility)}` : def.name,
         cost: costText(u, id),
         limits: limitsText(u, id),
         damage: damageText(this.state, u, id),
@@ -3877,6 +3959,8 @@ export class Game {
     this.overlays.setNote(null);
     this.overlays.setRangeFocus(null);
     this.overlays.setHover(tile);
+    // At night, a lit tile says what the light does there, and how long it lasts (#50; a move or an aim says theirs below).
+    if (tile && this.view.mission.night && isLit(this.view, tile)) this.overlays.setNote(tile, litNote(this.lightTurns(tile)));
     const hovered = tile ? unitAt(this.view, tile) : undefined;
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
     this.units.setTags(this.enemyTags(u, tile));
@@ -3968,6 +4052,19 @@ export class Game {
   }
 
   /** At night a tile in the light is seen from as far as by day (los.ts sightTo, detectionTo): the previews say so. */
+  /** The turns left of the light on `p`: a Bengala's or a fire's; none for a street lamp, which never goes out. */
+  private lightTurns(p: Place): number | undefined {
+    const s = this.view;
+    const node = nodeOf(s, toPos(p));
+    let lasting: number | undefined;
+    for (const l of s.lights ?? []) {
+      if (!(l.tiles ? l.tiles.includes(node) : distance(l.tile, p) <= l.radius)) continue;
+      if (l.turns === undefined) return undefined;
+      lasting = Math.max(lasting ?? 0, l.turns);
+    }
+    return lasting;
+  }
+
   private litNote(tile: Vec2): string {
     return this.state.mission.night && isLit(this.state, tile) ? 'A la luz: os ven de lejos' : '';
   }
@@ -4075,7 +4172,8 @@ export class Game {
       const rect = canvas.getBoundingClientRect();
       pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       this.raycaster.setFromCamera(pointer, this.renderer.camera);
-      return this.pickTile(this.raycaster.ray);
+      // A body under the pointer is its tile: the ground alone took a click on a zombie's head for the tile behind it (#51).
+      return this.pickUnit(this.raycaster.ray) ?? this.pickTile(this.raycaster.ray);
     };
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -4250,6 +4348,35 @@ export class Game {
    * First floor the ray meets, rooftops included. Walls and cover are ignored,
    * so the cursor always lands on a tile a unit could stand on.
    */
+  /**
+   * The unit whose body the pointer's ray goes through, nearest first: a
+   * soldier or an enemy in sight, as an upright cylinder where its model
+   * stands now (unitViews). Its tile, so a click on its body picks it.
+   */
+  private pickUnit(ray: THREE.Ray): Pos | null {
+    if (ray.direction.y >= 0) return null;
+    const RADIUS = 0.42;
+    const HEIGHT = 1.8;
+    let best: { t: number; pos: Pos } | null = null;
+    const p = new THREE.Vector3();
+    for (const u of this.view.units) {
+      if (!u.alive || u.evacuated || (u.team !== 'xcom' && !this.visibleAliens.has(u.id)) || this.mapView.isCutAway(u.pos)) continue;
+      const base = this.units.worldPos(u.id);
+      // Where the ray crosses the body's height, sampled from its head down to its feet.
+      const t0 = (ray.origin.y - (base.y + HEIGHT)) / -ray.direction.y;
+      const t1 = (ray.origin.y - base.y) / -ray.direction.y;
+      for (let k = 0; k <= 8; k++) {
+        const t = t0 + ((t1 - t0) * k) / 8;
+        ray.at(t, p);
+        if (Math.hypot(p.x - base.x, p.z - base.z) <= RADIUS && (!best || t < best.t)) {
+          best = { t, pos: { ...u.pos, z: u.pos.z ?? 0 } };
+          break;
+        }
+      }
+    }
+    return best?.pos ?? null;
+  }
+
   private pickTile(ray: THREE.Ray): Pos | null {
     const s = this.state;
     const top = (Math.max(0, this.level, ...s.elev) + 1) * STOREY;

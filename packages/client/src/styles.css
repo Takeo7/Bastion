@@ -1346,6 +1346,16 @@ em.bite::before {
   opacity: 0.45;
 }
 
+/* «Cámara al turno» (#47): a smaller switch over the others; off, it says so and fades a little. */
+.pass-command.follow-turn {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.pass-command.follow-turn:not(.on) {
+  opacity: 0.7;
+}
+
 /* The clock on a question left open (ui/deadline.ts, PRUEBA-2026-10-14 #28): the time left over a draining bar. */
 .deadline {
   display: grid;
@@ -1913,6 +1923,51 @@ em.bite::before {
   color: var(--pen);
 }
 
+/* How the light works at night, under the controls (#50). */
+.controls-night {
+  margin: 14px 0 4px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.night-rules,
+.night-card ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+/* The first night's card (hud.ts nightCard): under the turn bar, until it is closed. */
+.night-card {
+  position: absolute;
+  top: 74px;
+  left: 50%;
+  z-index: 12;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  width: min(520px, calc(100vw - 32px));
+  padding: 12px 16px 14px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.night-card > b {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.night-card button.fire {
+  justify-self: end;
+}
+
 dl.controls {
   margin: 0;
   display: grid;
@@ -2048,6 +2103,13 @@ dl.controls dd {
   margin: 0 0 6px;
   font-family: var(--font-display);
   font-weight: 400;
+}
+
+/* Leaving the game while hosting it, with the partner in (ui/quit.ts): said plainly, in the warning colour. */
+.modal-card p.quit-warning,
+.x-text.quit-warning {
+  font-weight: 700;
+  color: var(--warn);
 }
 
 .modal-actions,

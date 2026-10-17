@@ -5,7 +5,7 @@
 // the window. The partner joins from their own app or from Chrome at the
 // address the host's lobby shows. Plain http: both ends are Chromium, which
 // runs it at full speed, so there are no certificates (only Safari needed https).
-import { app, BrowserWindow, ipcMain, Menu, shell, utilityProcess, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, shell, utilityProcess, type IpcMainEvent, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type UtilityProcess } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
@@ -91,6 +91,8 @@ async function startServer(): Promise<number> {
     if (server !== child) return;
     server = null;
     serverPort = 0;
+    // Quitting: the app goes too, there is no start screen to come back to.
+    if (quitting) return;
     // The host's game has lost its server: back to the start, saying so.
     if (win && !win.isDestroyed() && win.webContents.getURL().startsWith(`http://localhost:${port}`)) {
       void showLauncher(`El servidor de la partida se ha cerrado (código ${code}). La partida está guardada: vuelve a abrirla.`);
@@ -188,6 +190,40 @@ function fromLauncher(e: IpcMainInvokeEvent): boolean {
   return e.senderFrame?.url.startsWith('file:') ?? false;
 }
 
+/** The game this window opened: its own server's (hosting) or the partner's address (joining). */
+let gameOrigin: string | null = null;
+/** The app is on its way out (before-quit), waiting for its server to say goodbye. */
+let quitting = false;
+
+/**
+ * The game's page may only ask to leave (quit, back to the start screen) and
+ * whether it is the host's: and only the window's top frame, at the address
+ * the app itself opened, never anything else it may have been led to.
+ */
+function fromGame(e: IpcMainEvent): boolean {
+  const frame = e.senderFrame;
+  if (!win || win.isDestroyed() || !frame || frame !== win.webContents.mainFrame || !gameOrigin) return false;
+  try {
+    return new URL(frame.url).origin === gameOrigin;
+  } catch {
+    return false;
+  }
+}
+
+// «Salir del juego» (playtest 17/10): the page asks first, and warns a host whose partner is in (UI, lobby.ts).
+// Quitting as host closes the server inside (before-quit); every change is already saved (server persistence.ts).
+ipcMain.on('bastion:quit', (e) => {
+  if (fromGame(e)) app.quit();
+});
+// With a note, it says on the start screen why we are back (the host closed the game: client net.ts).
+ipcMain.on('bastion:toLauncher', (e, note: unknown) => {
+  if (fromGame(e)) void showLauncher(typeof note === 'string' ? note.slice(0, 200) : '');
+});
+// Asked once by the preload, as the page loads: is this window the host's (its server runs here)?
+ipcMain.on('bastion:hosting', (e) => {
+  e.returnValue = fromGame(e) && server !== null && gameOrigin === `http://localhost:${serverPort}`;
+});
+
 /** «192.168.1.20», «192.168.1.20:3002» or a pasted «http://…/» → «192.168.1.20:3000». */
 function normalise(address: string): string | null {
   const bare = address.trim().replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '');
@@ -205,6 +241,7 @@ ipcMain.handle('bastion:host', async (e): Promise<string | null> => {
   try {
     const port = await startServer();
     stopListeningForGames();
+    gameOrigin = `http://localhost:${port}`;
     await win.loadURL(`http://localhost:${port}/`);
     return null;
   } catch (err) {
@@ -221,6 +258,7 @@ ipcMain.handle('bastion:join', async (e, address: unknown): Promise<string | nul
   }
   writeSettings({ ...readSettings(), last: target });
   stopListeningForGames();
+  gameOrigin = new URL(`http://${target}/`).origin;
   await win.loadURL(`http://${target}/`);
   return null;
 });
@@ -292,8 +330,20 @@ else {
     void showLauncher();
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => {
+  app.on('before-quit', (e) => {
     stopListeningForGames();
-    server?.kill();
+    const child = server;
+    if (!child || quitting) return;
+    // As host: the server saves and tells the partner it is closing (server index.ts shutdown) before the app
+    // goes. Asked by message, which works on Windows too; never more than a second and a half.
+    e.preventDefault();
+    quitting = true;
+    const go = () => app.quit();
+    child.once('exit', go);
+    child.postMessage('cerrar');
+    setTimeout(() => {
+      child.kill();
+      go();
+    }, 1500);
   });
 }

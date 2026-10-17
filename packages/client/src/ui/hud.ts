@@ -1,6 +1,7 @@
 import {
   ABANDON_TEXT,
   BITE_TAG,
+  NIGHT_TEXT,
   biteNote,
   clipOf,
   displayName,
@@ -34,6 +35,7 @@ import type { NetStatus } from '../net';
 import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
 import { wearMarks } from '../strategy/arms';
+import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from './quit';
 import { graphicsSettings, soundSettings } from './settingsPanel';
 import { typed } from './typed';
 
@@ -55,7 +57,7 @@ export interface AbilityView {
   enabled: boolean;
   /** Why it can't be used now. */
   reason?: string;
-  /** The hover card: name, cost («1 acción», «Termina el turno»…), limits and what it does. */
+  /** The hover card: name, cost («1 acción», «Acaba el turno»…), limits and what it does. */
   name: string;
   cost: string;
   /** Cooldown and uses left («Disponible en 2 turnos · Usos: 1»). */
@@ -208,6 +210,17 @@ const ITEM_ICONS: Record<ItemId, string> = {
 
 const KINDS: MissionKind[] = ['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge'];
 const MAPS: SkirmishMap[] = ['city', 'wilds', 'facility'];
+const FOLLOW_TURN_KEY = 'bastion.followTurn';
+
+/** The camera switch as last left (on unless switched off). */
+function readFollowTurn(): boolean {
+  try {
+    return localStorage.getItem(FOLLOW_TURN_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
 const randomKind = () => KINDS[Math.floor(Math.random() * KINDS.length)]!;
 const randomMap = () => MAPS[Math.floor(Math.random() * MAPS.length)]!;
 
@@ -305,6 +318,8 @@ export class Hud {
   private readonly players = h('div.players');
   /** There is a partner in the room, connected or not: abandoning ends the mission for both. */
   private paired = false;
+  /** The partner, while connected: whom leaving the game would leave without it, if this window hosts it (ui/quit.ts). */
+  private partnerOnline: string | null = null;
   private readonly squad = h('div.squad.panel');
   private readonly unitPanel = h('div.unit-panel.panel');
   private readonly abilities = h('div.abilities');
@@ -313,6 +328,9 @@ export class Hud {
   private readonly passBtn = h('button.pass-command', { title: 'Tu compañero da las órdenes hasta que te lo devuelva (C)' });
   /** With the partner holding the command: the camera to what they are doing (playtest 16/10 #8). */
   private readonly watchBtn = h('button.pass-command.watch-partner', { title: 'Lleva la cámara a lo que está haciendo tu compañero (F)' });
+  /** The camera to the soldier whose turn it is, or not (playtest 17/10 #47): a switch beside «Ver», kept per browser. */
+  private followTurn = readFollowTurn();
+  private readonly followBtn = h('button.pass-command.follow-turn', { type: 'button', title: 'Al cambiar el turno o el mando, la cámara va al soldado al que le toca (si no acabas de moverla tú)' });
   private readonly watchWho = h('span');
   private readonly logEl = h('div.log');
   private readonly logLines: HTMLElement[] = [];
@@ -346,6 +364,16 @@ export class Hud {
       if (this.barMenu && !(e.target as Element | null)?.closest?.('.ability-slot')) this.closeAbilityMenu();
     });
     this.watchBtn.append(this.watchWho, h('small', {}, 'F'));
+    this.followBtn.addEventListener('click', () => {
+      this.followTurn = !this.followTurn;
+      try {
+        localStorage.setItem(FOLLOW_TURN_KEY, this.followTurn ? '1' : '0');
+      } catch {
+        /* storage unavailable: it holds for this game */
+      }
+      this.drawFollow();
+    });
+    this.drawFollow();
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
     this.root.append(
       this.frame,
@@ -354,7 +382,7 @@ export class Hud {
       this.unitPanel,
       this.abilities,
       this.target,
-      h('div.turn-actions', {}, this.passBtn, this.watchBtn, this.endTurn),
+      h('div.turn-actions', {}, this.followBtn, this.passBtn, this.watchBtn, this.endTurn),
       h('div.side', {}, menuButton, this.logEl),
       this.bannerEl,
       this.toastEl,
@@ -462,6 +490,7 @@ export class Hud {
   setPlayers(players: PlayerInfo[], ready: [boolean, boolean], mySlot: Slot, busy: Set<Slot>, commander: Slot | null = null): void {
     clear(this.players);
     this.paired = players.some((p) => p.slot !== mySlot);
+    this.partnerOnline = players.find((p) => p.slot !== mySlot && p.connected)?.name ?? null;
     // Alone, the turn state is the end-turn button's business: a status here read as "you are waiting".
     const alone = !players.some((p) => p.slot !== mySlot && p.connected);
     for (const p of players) {
@@ -1017,6 +1046,18 @@ export class Hud {
     }
   }
 
+  /** Whether the camera goes to the soldier whose turn it is (game.ts turnCamera). */
+  get followsTurn(): boolean {
+    return this.followTurn;
+  }
+
+  private drawFollow(): void {
+    clear(this.followBtn);
+    this.followBtn.setAttribute('aria-pressed', String(this.followTurn));
+    this.followBtn.classList.toggle('on', this.followTurn);
+    this.followBtn.append(h('span', {}, 'Cámara al turno'), h('small', {}, this.followTurn ? 'Sí' : 'No'));
+  }
+
   /** The "pass the command" button: only for the holder, while playing with a partner. */
   setCommand(view: CommandView | null): void {
     this.passBtn.classList.toggle('hidden', !view?.mine);
@@ -1159,9 +1200,19 @@ export class Hud {
         h('button.menu-entry', { onclick: () => this.renderMenu('controls') }, 'Controles'),
         h('button.menu-entry', { onclick: () => this.renderMenu('settings') }, 'Ajustes'),
         this.abandonEntry(),
+        // Closing the game, in the desktop app only (playtest 17/10).
+        canQuit() ? h('button.menu-entry', { onclick: () => (this.toggleMenu(false), this.confirmQuit()) }, QUIT_BUTTON) : null,
       );
     } else if (page === 'controls') {
-      append(card, h('h2', {}, 'Controles'), h('dl.controls', {}, ...CONTROLS.flatMap(([key, what]) => [h('dt', {}, key), h('dd', {}, what)])), back);
+      append(
+        card,
+        h('h2', {}, 'Controles'),
+        h('dl.controls', {}, ...CONTROLS.flatMap(([key, what]) => [h('dt', {}, key), h('dd', {}, what)])),
+        // How the light works at night (Lore's, #50), here too for whenever it is wanted.
+        h('h3.controls-night', {}, NIGHT_TEXT.label),
+        h('ul.night-rules', {}, ...NIGHT_TEXT.rules.map((line) => h('li', {}, line))),
+        back,
+      );
     } else {
       const sound = h(
         'button.menu-entry.toggle',
@@ -1272,6 +1323,47 @@ export class Hud {
           {},
           h('button.danger', { onclick: () => (close(), this.handlers.onAbandon()) }, ABANDON_TEXT.accept.toUpperCase()),
           h('button.fire', { onclick: close }, ABANDON_TEXT.refuse.toUpperCase()),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * The first night (playtest 17/10 #50: «la luz no está muy explicada»): a
+   * card under the turn bar with how the light works, until it is closed. Its
+   * lines stay in the «De noche» tag and the controls.
+   */
+  nightCard(title: string, lines: readonly string[]): void {
+    this.root.querySelector('.night-card')?.remove();
+    const card = h(
+      'div.night-card.panel',
+      { role: 'note' },
+      h('b', {}, title),
+      h('ul', {}, ...lines.map((line) => h('li', {}, line))),
+      h('button.fire', { onclick: () => card.remove() }, 'ENTENDIDO'),
+    );
+    this.root.append(card);
+  }
+
+  /** Before closing the game: it is saved; hosting it, the partner is left without it (ui/quit.ts). */
+  private confirmQuit(): void {
+    uiSound('paper');
+    clear(this.modal);
+    this.modal.classList.add('show');
+    const close = () => this.modal.classList.remove('show');
+    const q = quitQuestion(this.partnerOnline, true);
+    this.modal.append(
+      h(
+        'div.modal-card.panel',
+        {},
+        h('h2', {}, q.title),
+        h('p', {}, q.text),
+        q.warning ? h('p.quit-warning', {}, q.warning) : null,
+        h(
+          'div.modal-actions',
+          {},
+          h('button.danger', { onclick: () => (close(), quitGame()) }, q.yes.toUpperCase()),
+          h('button.fire', { onclick: close }, q.no.toUpperCase()),
         ),
       ),
     );

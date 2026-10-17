@@ -274,3 +274,25 @@ http.on('error', (e: Error & { code?: string }) => {
   process.exit(1);
 });
 https?.listen(HTTPS_PORT);
+
+/**
+ * Shutting down (Ctrl+C in the terminal, or the desktop app quitting): the
+ * game is saved and the players hear it (room.closing), so a partner stops
+ * waiting for a server that is not coming back; then out, once the sockets
+ * have closed or after a moment whatever happens.
+ */
+let closing = false;
+function shutdown(): void {
+  if (closing) return;
+  closing = true;
+  netLog('servidor cerrado: se avisa a los jugadores');
+  room.closing();
+  for (const socket of wss.clients) socket.close(1001, 'cierre');
+  setTimeout(() => process.exit(0), 300);
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+// The desktop app asks by message (packages/desktop main.ts): on Windows, a signal would just end the process.
+(process as { parentPort?: { on(event: 'message', fn: (e: { data: unknown }) => void): void } }).parentPort?.on('message', (e) => {
+  if (e.data === 'cerrar') shutdown();
+});

@@ -177,7 +177,7 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
 
 **Armas encontradas** (raras, al registrar): fusil de cerrojo, escopeta recortada, fusil con mira y ametralladora ligera. Van a la Armería, y a quien la lleve, su arma le sube un nivel.
 
-**De noche:** se ve poco y os ven poco, salvo bajo farolas, bengalas o fuego. Hay más muertos en la calle, y el botín vale la mitad más.
+**De noche:** lo que está a oscuras solo se ve de cerca, y los muertos tardan más en descubrir a la escuadra; una vez la han visto, ven como de día. Bajo farolas, bengalas o fuego, todo se ve como de día. Hay más muertos en la calle, y el botín vale la mitad más.
 
 ## Lo que aprenden los soldados
 

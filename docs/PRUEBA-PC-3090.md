@@ -58,6 +58,7 @@ Guía para Arturo y Ana. La preparó Red el 2026-10-14. El objetivo es comprobar
   ```
 
 - Si macOS pregunta por la red local, «Permitir». Con cada versión nueva puede volver a preguntarlo: es por la firma provisional, y se responde igual.
+- **Si el Mac tiene el cortafuegos encendido, la primera vez hay que permitir las conexiones entrantes.** macOS pregunta si Bastion puede aceptarlas: «Permitir». Si se deniega, la partida de Arturo no sale en «Partidas en tu red», aunque «Unirse por dirección» sigue funcionando. En un Mac anfitrión, el compañero no podría entrar. Si ya se denegó, se cambia en Ajustes del Sistema → Red → Cortafuegos → Opciones.
 - En un PC con Windows, el aviso «Windows protegió tu PC» del instalador se pasa igual que en el paso 1: «Más información» → «Ejecutar de todas formas».
 - Si no conecta, apuntar el mensaje exacto que sale.
 

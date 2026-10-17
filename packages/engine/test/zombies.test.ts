@@ -7,6 +7,7 @@ import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { broughtBack, rollLoot, roomAt, searchable, searchableTiles, SEARCHABLE } from '../src/loot';
 import { lootSummary } from '../src/lore';
 import { canSee } from '../src/los';
+import { onlyWalks } from '../src/ai';
 import { Rng } from '../src/rng';
 import { executeCommand, Sim } from '../src/rules';
 import { createMission, hordeWave, MISSION_NAMES } from '../src/setup';
@@ -32,12 +33,13 @@ describe('noise', () => {
   it('every weapon and action is heard as far as the table says', () => {
     const s = field();
     const kit = (template: Parameters<typeof addUnit>[2]) => addUnit(s, `s${s.units.length}`, template, 0, 0);
-    expect(noiseOf(s, kit('sharpshooter'), 'pistol')).toBe(8);
-    expect(noiseOf(s, kit('assault'), 'shoot')).toBe(10);
-    expect(noiseOf(s, kit('rookie'), 'shoot')).toBe(12);
-    expect(noiseOf(s, kit('grenadier'), 'shoot')).toBe(14);
-    expect(noiseOf(s, kit('sharpshooter'), 'shoot')).toBe(16);
-    expect(noiseOf(s, kit('rookie'), 'grenade')).toBe(18);
+    // Louder since 17/10 (Arturo: «disparar debería hacer más ruido»).
+    expect(noiseOf(s, kit('sharpshooter'), 'pistol')).toBe(12);
+    expect(noiseOf(s, kit('assault'), 'shoot')).toBe(16);
+    expect(noiseOf(s, kit('rookie'), 'shoot')).toBe(18);
+    expect(noiseOf(s, kit('grenadier'), 'shoot')).toBe(20);
+    expect(noiseOf(s, kit('sharpshooter'), 'shoot')).toBe(22);
+    expect(noiseOf(s, kit('rookie'), 'grenade')).toBe(26);
     expect(noiseOf(s, kit('rookie'), 'search')).toBe(2);
     expect(noiseOf(s, kit('assault'), 'slash')).toBe(1);
     expect(noiseOf(s, kit('sharpshooter'), 'spectralArrow')).toBe(1);
@@ -242,6 +244,16 @@ describe('the dead', () => {
     };
     expect(run(Math.PI)).toBe(true);
     expect(run(0)).toBe(false);
+  });
+
+  it('only those that will bite this turn go first: beside a soldier, or seeing one a step away (Arturo, 17/10)', () => {
+    const s = field(30, 30);
+    addUnit(s, 's1', 'rookie', 10, 10);
+    const beside = addUnit(s, 'a1', 'zombie', 11, 10, { facing: 0 });
+    const near = addUnit(s, 'a2', 'zombie', 14, 10, { facing: Math.PI });
+    const blind = addUnit(s, 'a3', 'zombie', 14, 12, { facing: 0 });
+    const far = addUnit(s, 'a4', 'zombie', 25, 10, { facing: Math.PI });
+    expect([beside, near, blind, far].map((z) => onlyWalks(s, z))).toEqual([false, false, true, true]);
   });
 
   it('seeing nobody, a zombie goes to the last noise it heard; with nothing heard, it wanders', () => {

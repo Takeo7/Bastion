@@ -187,6 +187,8 @@ export type ServerMessage =
    * milliseconds, counted on the client's own clock; `ms: null`, it was answered.
    */
   | { t: 'deadline'; kind: DeadlineKind; ms: number | null }
+  /** The server is shutting down (the host quit the app, or stopped it): the game is saved; don't wait for it to come back. */
+  | { t: 'closing' }
   | { t: 'error'; message: string };
 
 export type DeadlineKind = 'proposal' | 'evac' | 'abandon';

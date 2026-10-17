@@ -1,5 +1,7 @@
-import type { CampaignMessage, ClientMessage, HostAddress, ServerMessage } from '@bastion/engine';
+import { HOST_CLOSED, hostClosedLine, type CampaignMessage, type ClientMessage, type HostAddress, type PlayerInfo, type ServerMessage, type Slot } from '@bastion/engine';
+import { desktop } from './desktop';
 import { post } from './report';
+import { h } from './ui/dom';
 
 export type NetStatus = 'connecting' | 'open' | 'closed';
 
@@ -47,7 +49,7 @@ export function inviteLinks(): InviteLink[] {
   const links: InviteLink[] = hosts.map((h) =>
     h.kind === 'tailscale' ? { label: 'Por internet (Tailscale)', url: url(h.address) } : { label: 'En tu misma red', url: url(h.address), other: lan++ > 0 },
   );
-  const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  const local = LOOPBACK.has(location.hostname);
   if (!local && !hosts.some((h) => h.address === location.hostname)) links.unshift({ label: 'Esta dirección', url: url(location.hostname) });
   return links;
 }
@@ -68,6 +70,9 @@ export class Net {
   private stopped = false;
   /** Whether a connection ever opened: if not, the host hears about it (a browser turning the certificate down). */
   private opened = false;
+  /** Who is in the room and which seat is ours, for the partner's name when the host closes the game. */
+  private players: PlayerInfo[] = [];
+  private slot: Slot | null = null;
   private readonly messageHandlers = new Set<(m: ServerMessage) => void>();
   private readonly statusHandlers = new Set<(s: NetStatus) => void>();
 
@@ -104,7 +109,17 @@ export class Net {
     };
     ws.onmessage = (ev) => {
       const msg = JSON.parse(String(ev.data)) as ServerMessage;
-      if (msg.t === 'welcome') storage()?.setItem(TOKEN_KEY, msg.token);
+      if (msg.t === 'welcome') {
+        storage()?.setItem(TOKEN_KEY, msg.token);
+        this.slot = msg.slot;
+      }
+      if (msg.t === 'room') this.players = msg.players;
+      if (msg.t === 'closing') {
+        // The host closed the game (server index.ts shutdown): there is nobody to reconnect to. The host's own
+        // window (on this machine, by localhost) is closing with it, or its server was stopped there: no note.
+        this.stopped = true;
+        if (!LOOPBACK.has(location.hostname)) hostClosed(this.players.find((p) => p.slot !== this.slot)?.name);
+      }
       for (const fn of this.messageHandlers) fn(msg);
     };
     ws.onclose = (ev) => {
@@ -121,6 +136,33 @@ export class Net {
   private emitStatus(s: NetStatus): void {
     for (const fn of this.statusHandlers) fn(s);
   }
+}
+
+/** This machine, as a page's address names it. */
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * The host closed the game: in the desktop app, back to its start screen saying
+ * so (where the game shows up again once reopened); in a browser, the note over
+ * whatever was on screen and a way back in. Never «Conectando…» for ever.
+ */
+function hostClosed(host?: string): void {
+  const app = desktop();
+  // Lore's words (engine lore.ts).
+  if (app) return app.toLauncher(`${hostClosedLine(host)} ${HOST_CLOSED.back}`);
+  document.body.append(
+    h(
+      'div.menu-modal',
+      { style: { position: 'fixed', zIndex: '1000' } },
+      h(
+        'div.x-panel',
+        {},
+        h('h2.x-title', {}, hostClosedLine(host)),
+        h('p.x-text', {}, HOST_CLOSED.back),
+        h('div.alert-actions', {}, h('button.x-btn.primary', { onclick: () => location.reload() }, HOST_CLOSED.retry)),
+      ),
+    ),
+  );
 }
 
 export function serverUrl(): string {
