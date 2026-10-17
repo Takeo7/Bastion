@@ -40,6 +40,7 @@ import {
   FALL_DAMAGE,
   hasPerk,
   hasSquadsight,
+  commandsFor,
   HOLO_AIM,
   HORDE,
   INFECTION,
@@ -1476,11 +1477,11 @@ function bridged(u: Unit, target: Unit): boolean {
   return hasPerk(u, 'bridge') && u.owner !== null && target.owner !== null && u.owner !== target.owner;
 }
 
-function commandUnit(s: GameState, id: string, slot: Slot): Unit | string {
+function commandUnit(s: GameState, id: string, slot: Slot, connected: readonly Slot[]): Unit | string {
   const u = getUnit(s, id);
   if (!u || !u.alive) return 'Esa unidad no existe o está fuera de combate.';
   if (u.team !== 'xcom') return 'No puedes dar órdenes a esa unidad.';
-  if (u.owner !== null && u.owner !== slot) return 'Ese soldado pertenece a tu compañero.';
+  if (!commandsFor(slot, u.owner, connected)) return 'Ese soldado pertenece a tu compañero.';
   if (u.ap <= 0) return 'Ese soldado no tiene acciones.';
   return u;
 }
@@ -1491,11 +1492,11 @@ type ItemCommand = Extract<Command, { type: 'item' }>;
  * Why a backpack order can't go through (docs/FASE8.md §C), or null. Dropping and taking are free, even with no
  * actions left; giving, using a medicine and equipping a weapon take one.
  */
-function backpackRefusal(s: GameState, cmd: ItemCommand, slot: Slot): string | null {
+function backpackRefusal(s: GameState, cmd: ItemCommand, slot: Slot, connected: readonly Slot[]): string | null {
   const u = getUnit(s, cmd.unit);
   if (!u || !u.alive) return 'Esa unidad no existe o está fuera de combate.';
   if (u.team !== 'xcom' || u.captive || u.objective) return 'No puedes dar órdenes a esa unidad.';
-  if (u.owner !== null && u.owner !== slot) return 'Ese soldado pertenece a tu compañero.';
+  if (!commandsFor(slot, u.owner, connected)) return 'Ese soldado pertenece a tu compañero.';
   if (u.controlledBy || u.panicked) return 'Ese soldado no responde.';
   const free = cmd.action === 'drop' || cmd.action === 'take';
   if (!free && u.ap <= 0) return 'Ese soldado no tiene acciones.';
@@ -1596,7 +1597,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
   if (cmd.type === 'evac') {
     const u = getUnit(s, cmd.unit);
     if (!u || !u.alive || u.team !== 'xcom' || u.captive) return { ok: false, error: 'Esa unidad no puede evacuar.' };
-    if (u.owner !== null && u.owner !== ctx.slot) return { ok: false, error: 'Ese soldado pertenece a tu compañero.' };
+    if (!commandsFor(ctx.slot, u.owner, ctx.connected)) return { ok: false, error: 'Ese soldado pertenece a tu compañero.' };
     if (!inEvacZone(s, u.pos)) return { ok: false, error: 'Solo desde el autobús, en la zona de evacuación.' };
     if (s.evacCall?.by === ctx.slot) return { ok: false, error: 'Ya has pedido evacuar: falta que conteste tu compañero.' };
     if (u.infected && s.mission.quarantine === false) return { ok: false, error: 'Con un mordisco no se sube a La Lata sin una Cuarentena en el Bastión.' };
@@ -1620,7 +1621,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     return busy && busy.alive && busy.ap > 0 && busy.owner === ctx.slot && sim.alternates(partner) ? `Primero termina con ${busy.name}, o cede el turno.` : null;
   };
   if (cmd.type === 'item') {
-    const refusal = backpackRefusal(s, cmd, ctx.slot);
+    const refusal = backpackRefusal(s, cmd, ctx.slot, ctx.connected);
     if (refusal) return { ok: false, error: refusal };
     const free = cmd.action === 'drop' || cmd.action === 'take';
     const busy = free ? null : inPlay(cmd.unit);
@@ -1633,7 +1634,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
     sim.afterXcomAction();
     return { ok: true, events: sim.events };
   }
-  const u = commandUnit(s, cmd.unit, ctx.slot);
+  const u = commandUnit(s, cmd.unit, ctx.slot, ctx.connected);
   if (typeof u === 'string') return { ok: false, error: u };
   const busy = inPlay(u.id);
   if (busy) return { ok: false, error: busy };

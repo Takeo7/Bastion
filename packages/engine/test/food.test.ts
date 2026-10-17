@@ -232,9 +232,9 @@ describe('found weapons', () => {
     const w = c.foundWeapons![0]!;
     expect(w).toMatchObject({ kind: 'huntingRifle', holder: null });
     const rookie = c.soldiers.find((s) => s.owner === 0 && s.alive)!;
-    // Not for a partner's soldier; any of yours, whatever its class (docs/FASE8.md §A).
+    // Not for a partner's soldier while the partner is here; any of yours, whatever its class (docs/FASE8.md §A).
     const theirs = c.soldiers.find((s) => s.owner === 1)!;
-    expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: theirs.id }, 0).ok).toBe(false);
+    expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: theirs.id }, 0, [0, 1]).ok).toBe(false);
     const assault = c.soldiers.find((s) => s.owner === 0 && s.alive && s !== rookie)!;
     expect(run(c, { type: 'assignWeapon', weapon: w.id, soldier: assault.id }, 0).ok).toBe(true);
     expect(w.holder).toBe(assault.id);

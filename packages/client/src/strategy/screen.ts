@@ -120,6 +120,7 @@ import {
   treatCost,
   TURNED_CAUSE,
   turnDay,
+  commandsFor,
   squadLimit,
   squadPads,
   squadPlace,
@@ -617,12 +618,25 @@ export class StrategyScreen {
     return this.players.filter((p) => p.connected).map((p) => p.slot);
   }
 
+  /**
+   * Whether this player gives orders to `owner`'s soldiers (campaign.ts commandsFor): its own, and the
+   * partner's while the partner isn't connected (Arturo, 17/10: «si juego solo, debería poder usarlo solo»).
+   */
+  private commands(owner: Slot): boolean {
+    return commandsFor(this.mySlot, owner, this.connected());
+  }
+
   private playerName(slot: Slot): string {
     return this.players.find((p) => p.slot === slot)?.name ?? `Jugador ${slot + 1}`;
   }
 
   private playerColor(slot: Slot): string {
     return this.players.find((p) => p.slot === slot)?.color ?? '#888';
+  }
+
+  /** «de Ana», in her colour: a partner's soldier in a list of those one commands while she's gone. */
+  private whoseTag(owner: Slot): HTMLElement {
+    return h('small.x-whose', { style: { '--accent': this.playerColor(owner) } }, ` · de ${this.playerName(owner)}`);
   }
 
   /** The soldier's own bust on a lineup card ([data-bust]), once drawn (portraits.ts); until then, the empty frame. */
@@ -1324,7 +1338,7 @@ export class StrategyScreen {
       const fresh = items.filter((i) => !this.seenNews.has(i.key));
       if (fresh.length) pending.set(view, { n: String(fresh.length), urgent: fresh.some((i) => i.urgent), what: fresh.map((i) => i.label) });
     }
-    const promotions = c.soldiers.filter((s) => s.owner === this.mySlot && this.hasPoints(s));
+    const promotions = c.soldiers.filter((s) => this.commands(s.owner) && this.hasPoints(s));
     if (promotions.length) pending.set('barracks', { n: `▲${promotions.length}`, urgent: false, what: promotions.map((s) => `${s.name}: talento por elegir`) });
     for (const item of items) {
       const here = partner?.connected && this.partnerView === item.view;
@@ -1977,7 +1991,7 @@ export class StrategyScreen {
       const panel = this.engPick.startsWith('f:')
         ? this.foundPanel(c, this.engPick.slice(2))
         : this.engPick.startsWith('x:')
-          ? modPanel(c, this.mySlot, this.engPick.slice(2) as WeaponModId, (cmd) => this.send(cmd), (s) => displayName(s.name, s.nickname))
+          ? modPanel(c, this.mySlot, this.engPick.slice(2) as WeaponModId, (cmd) => this.send(cmd), (s) => displayName(s.name, s.nickname), this.connected())
           : this.engPick.startsWith('m:')
             ? this.makePanel(c, this.engPick.slice(2) as CraftId)
             : this.tierPanel(c, this.engPick);
@@ -2083,7 +2097,8 @@ export class StrategyScreen {
     if (!w) return [h('p.x-muted', {}, 'Esa arma ya no está.')];
     const def = FOUND_WEAPONS[w.kind];
     const holder = w.holder ? c.soldiers.find((x) => x.id === w.holder) : undefined;
-    const mine = c.soldiers.filter((s) => s.owner === this.mySlot && s.alive);
+    // One's own, then the partner's while they're gone (their colour and name say whose).
+    const mine = c.soldiers.filter((s) => s.alive && this.commands(s.owner)).sort((a, b) => Number(a.owner !== this.mySlot) - Number(b.owner !== this.mySlot));
     const melee = def.slot === 'melee';
     const carries = (s: CampaignState['soldiers'][number]) => (melee ? (meleeWeaponOf(c, s) ? 'Machete' : 'Cuchillo') : weaponLabel(c, s));
     return [
@@ -2099,17 +2114,17 @@ export class StrategyScreen {
       // What it does, as it is (Arturo, 17/10: «para saber qué elegir»); against each soldier's own, below.
       weaponStats(profileOf(w)),
       // Fase 9: its state, «Arreglar» and its improvements (strategy/arms.ts).
-      ...weaponCare(c, this.mySlot, w, (cmd) => this.send(cmd)),
+      ...weaponCare(c, this.mySlot, w, (cmd) => this.send(cmd), this.connected()),
       h('div.x-group', {}, 'La lleva'),
       holder
         ? h(
             'div.x-gear',
             {},
             h('span', {}, displayName(holder.name, holder.nickname)),
-            holder.owner === this.mySlot ? h('button.x-btn.small', { onclick: () => this.send({ type: 'assignWeapon', weapon: w.id, soldier: null }) }, 'Quitársela') : null,
+            this.commands(holder.owner) ? h('button.x-btn.small', { onclick: () => this.send({ type: 'assignWeapon', weapon: w.id, soldier: null }) }, 'Quitársela') : null,
           )
         : h('p.x-muted', {}, 'Nadie: está en la Armería.'),
-      h('div.x-group', {}, 'Tus soldados'),
+      h('div.x-group', {}, mine.some((s) => s.owner !== this.mySlot) ? `Tus soldados y los de ${this.partner()?.name ?? 'tu compañero'}` : 'Tus soldados'),
       mine.length
         ? h(
             'div.x-list',
@@ -2122,6 +2137,7 @@ export class StrategyScreen {
                   'span',
                   {},
                   displayName(s.name, s.nickname),
+                  s.owner === this.mySlot ? null : this.whoseTag(s.owner),
                   h('small', {}, ` · ${melee ? 'al cinto' : 'en la mano'}: ${carries(s)}`),
                   // Against what it carries now: what would be better in green, what worse in red.
                   s.id === w.holder ? null : weaponDiff(profileOf(w), carriedProfile(c, s, melee)),
@@ -2204,7 +2220,7 @@ export class StrategyScreen {
         h('div.x-head', {}, 'Tus soldados'),
         h('div.x-list', {}, ...mine.map(row)),
         recruit,
-        theirs.length ? h('div.x-head', {}, `De ${this.playerName(theirs[0]!.owner)}`) : null,
+        theirs.length ? h('div.x-head', {}, `De ${this.playerName(theirs[0]!.owner)}`, this.commands(theirs[0]!.owner) ? h('small', {}, ' · no está: los preparas tú') : null) : null,
         h('div.x-list', {}, ...theirs.map(row)),
       ),
     );
@@ -2216,7 +2232,9 @@ export class StrategyScreen {
       this.viewEl.append(this.panel('barracks-right', 'right', ...this.customizer(s, draft)));
       return;
     }
-    const isMine = s.owner === this.mySlot;
+    // Own, or the partner's while they're gone: either way, this player prepares them (commands).
+    const own = s.owner === this.mySlot;
+    const isMine = this.commands(s.owner);
     const stats = squadMember(c, s);
     // Equipment is a form field that opens its list of choices.
     const weaponPicking = (place: 'hand' | 'belt'): WeaponPickContext => {
@@ -2225,6 +2243,7 @@ export class StrategyScreen {
         c,
         s,
         mySlot: this.mySlot,
+        connected: this.connected(),
         open: this.picking === key,
         toggle: () => {
           this.picking = this.picking === key ? null : key;
@@ -2279,9 +2298,10 @@ export class StrategyScreen {
       this.panel(
         'barracks-right',
         'right',
-        h('div.alert-kicker', {}, `${veterancyName(s).toUpperCase()} · ${isMine ? 'TUYO' : `DE ${this.playerName(s.owner).toUpperCase()}`}`),
+        h('div.alert-kicker', {}, `${veterancyName(s).toUpperCase()} · ${own ? 'TUYO' : `DE ${this.playerName(s.owner).toUpperCase()}`}`),
         h('h2.x-title', { title: `Misiones: ${s.missions} · Bajas: ${s.kills}` }, displayName(s.name, s.nickname)),
         h('p.x-sub', {}, weaponLabel(c, s)),
+        !own && isMine && s.alive ? h('p.x-muted', {}, `${this.playerName(s.owner)} no está: lo preparas tú hasta que vuelva.`) : null,
         isMine && s.alive
           ? h(
               'button.x-btn.small',
@@ -2535,7 +2555,7 @@ export class StrategyScreen {
   private promotionPanel(s: CampaignSoldier): HTMLElement {
     return treePanel({
       s: skillsOf(s),
-      editable: s.owner === this.mySlot && s.alive,
+      editable: this.commands(s.owner) && s.alive,
       portrait: soldierPortrait(SOLDIER, PLAYER_COLORS[s.owner], s.appearance, s.id),
       owner: this.playerName(s.owner),
       onUnlock: (cell) => this.send({ type: 'unlock', soldier: s.id, cell }),
@@ -2775,6 +2795,21 @@ export class StrategyScreen {
       ),
     );
     const roster = c.soldiers.filter((s) => s.owner === this.mySlot && s.alive);
+    // The partner's too while they're gone (commandsFor): this player fills the squad with both.
+    const lent = c.soldiers.filter((s) => s.owner !== this.mySlot && s.alive && this.commands(s.owner));
+    const pickRow = (s: CampaignSoldier) => {
+      const on = c.squad.includes(s.id);
+      const ready = soldierReady(s);
+      const gear = [s.loadout.utility, s.loadout.ammo].filter((g): g is ItemId => !!g).map((g) => ITEMS[g].name);
+      return h(
+        `button.x-row.soldier${on ? '.selected' : ''}${ready ? '' : '.dim'}`,
+        { style: { '--row-accent': this.playerColor(s.owner) }, disabled: !ready && !on, onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
+        roleDot(s.board),
+        h('b', { title: gear.join(' · ') }, displayName(s.name, s.nickname)),
+        veterancyBadge(s.board, s.appearance?.sex === 'f'),
+        on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
+      );
+    };
     this.viewEl.append(
       this.panel(
         'squad-left',
@@ -2782,25 +2817,15 @@ export class StrategyScreen {
         h(
           'div.x-head',
           { title: 'Pulsa un soldado para meterlo o sacarlo. Si tu compañero no llena su parte, puedes ocupar sus huecos; los recupera cuando tenga a quién llevar. El equipo se cambia en el Cuartel.' },
-          myCount > limit ? `Tus soldados · ${myCount} (${myCount - limit} en huecos de ${this.partner()?.name ?? 'tu compañero'})` : `Tus soldados · ${myCount}/${limit}`,
+          lent.length
+            ? `Tus soldados · ${myCount}`
+            : myCount > limit
+              ? `Tus soldados · ${myCount} (${myCount - limit} en huecos de ${this.partner()?.name ?? 'tu compañero'})`
+              : `Tus soldados · ${myCount}/${limit}`,
         ),
-        h(
-          'div.x-list',
-          {},
-          ...roster.map((s) => {
-            const on = c.squad.includes(s.id);
-            const ready = soldierReady(s);
-            const gear = [s.loadout.utility, s.loadout.ammo].filter((g): g is ItemId => !!g).map((g) => ITEMS[g].name);
-            return h(
-              `button.x-row.soldier${on ? '.selected' : ''}${ready ? '' : '.dim'}`,
-              { disabled: !ready && !on, onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
-              roleDot(s.board),
-              h('b', { title: gear.join(' · ') }, displayName(s.name, s.nickname)),
-              veterancyBadge(s.board, s.appearance?.sex === 'f'),
-              on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
-            );
-          }),
-        ),
+        h('div.x-list', {}, ...roster.map(pickRow)),
+        lent.length ? h('div.x-head', {}, `De ${this.playerName(lent[0]!.owner)} · ${squad.length - myCount}`, h('small', {}, ' · no está: los eliges tú')) : null,
+        lent.length ? h('div.x-list', {}, ...lent.map(pickRow)) : null,
       ),
     );
 
@@ -2861,7 +2886,7 @@ export class StrategyScreen {
             h('b', {}, displayName(s.name, s.nickname)),
             h('small', {}, roleDot(s.board), veterancyName(s)),
             c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
-            s.owner === this.mySlot ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
+            this.commands(s.owner) ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
           )
         : recruitable
           ? this.recruitCard(c, cost)

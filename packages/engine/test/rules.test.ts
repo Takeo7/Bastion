@@ -328,6 +328,17 @@ describe('recovery missions', () => {
     expect(s.outcomeReason).toBe('abandoned');
   });
 
+  it('alone, a player commands the partner’s soldiers too; with the partner here, not (Arturo, 17/10)', () => {
+    const s = field();
+    addUnit(s, 's1', 'rookie', 2, 2, { owner: 0 });
+    const theirs = addUnit(s, 's2', 'rookie', 4, 2, { owner: 1 });
+    addUnit(s, 'a1', 'zombie', 18, 18);
+    const move = { type: 'move', unit: 's2', to: { x: 5, y: 2 } } as const;
+    expect(executeCommand(s, move, { slot: 0, connected: [0, 1], rng: new Rng(1) })).toEqual({ ok: false, error: 'Ese soldado pertenece a tu compañero.' });
+    expect(executeCommand(s, move, { slot: 0, connected: [0], rng: new Rng(1) }).ok).toBe(true);
+    expect(theirs.pos).toMatchObject({ x: 5, y: 2 });
+  });
+
   it('with the partner here, abandoning is asked first: a no keeps it going, a yes ends it (playtest 16/10)', () => {
     const { s } = recovery();
     expect(callAbandon(s, 0, [0, 1])).toEqual([{ t: 'abandonCalled', slot: 0 }]);

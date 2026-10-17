@@ -1,5 +1,6 @@
 import {
   baseWeaponProfile,
+  commandsFor,
   FOUND_WEAPONS,
   foundWeaponOf,
   MOD_SLOTS,
@@ -272,6 +273,8 @@ export interface WeaponPickContext {
   c: CampaignState;
   s: CampaignSoldier;
   mySlot: Slot;
+  /** Who is connected: a partner gone leaves their soldiers' weapons to this player (commandsFor). */
+  connected: readonly Slot[];
   open: boolean;
   toggle: () => void;
   /** The campaign's `assignWeapon`: this weapon to the soldier, or (`soldier` null) back to the Armería. */
@@ -299,12 +302,16 @@ export function weaponPick(place: 'hand' | 'belt', ctx: WeaponPickContext): HTML
     if (cmd) ctx.send(cmd);
   };
   const holderOf = (w: FoundWeapon) => (w.holder ? c.soldiers.find((x) => x.id === w.holder) : undefined);
-  // Free ones first, then one's own soldiers', then the partner's (off).
-  const rank = (w: FoundWeapon) => (!w.holder ? 0 : holderOf(w)?.owner === ctx.mySlot ? 1 : 2);
+  // Free ones first, then those of soldiers one commands, then the partner's (off).
+  const theirsOf = (w: FoundWeapon) => {
+    const holder = holderOf(w);
+    return !!holder && !commandsFor(ctx.mySlot, holder.owner, ctx.connected);
+  };
+  const rank = (w: FoundWeapon) => (!w.holder ? 0 : theirsOf(w) ? 2 : 1);
   const options = (c.foundWeapons ?? []).filter((w) => w.id !== current?.id && (FOUND_WEAPONS[w.kind].slot === 'melee') === melee).sort((a, b) => rank(a) - rank(b));
   const option = (w: FoundWeapon) => {
     const holder = holderOf(w);
-    const theirs = holder && holder.owner !== ctx.mySlot;
+    const theirs = theirsOf(w);
     const note = !holder ? 'En la Armería' : theirs ? `La lleva ${holder.name}, de ${ctx.ownerName(holder.owner)}` : `La lleva ${holder.name}: se la quitas`;
     return h(
       'button.wpick',
@@ -351,13 +358,13 @@ export function weaponPick(place: 'hand' | 'belt', ctx: WeaponPickContext): HTML
  * for improvements, each with what is mounted and «Quitar», or what there is
  * loose to put on.
  */
-export function weaponCare(c: CampaignState, slot: Slot, w: FoundWeapon, send: (cmd: CampaignCommand) => void): HTMLElement[] {
+export function weaponCare(c: CampaignState, slot: Slot, w: FoundWeapon, send: (cmd: CampaignCommand) => void, connected?: readonly Slot[]): HTMLElement[] {
   if (FOUND_WEAPONS[w.kind].slot !== 'primary') return [];
   const condition = w.condition ?? 100;
   const wear = wearOf(condition);
   const missing = repairParts(w);
   const have = c.parts ?? 0;
-  const repairWhy = repairBlocker(c, slot, w.id);
+  const repairWhy = repairBlocker(c, slot, w.id, connected);
   const out: HTMLElement[] = [
     h('div.x-group', {}, 'Estado'),
     h('div.wcare-state', {}, conditionEl(condition), WEAR_LINE[wear] ? h(`p.x-text.wcare-line.${wear}`, {}, WEAR_LINE[wear]) : null),
@@ -389,7 +396,7 @@ export function weaponCare(c: CampaignState, slot: Slot, w: FoundWeapon, send: (
   const loose = (Object.keys(WEAPON_MODS) as WeaponModId[]).filter((m) => (c.weaponMods?.[m] ?? 0) > 0 && !mounted.includes(m));
   out.push(h('div.x-group', {}, `Mejoras · ${mounted.length}/${MOD_SLOTS}`));
   for (const m of mounted) {
-    const why = modBlocker(c, slot, w.id, m, false);
+    const why = modBlocker(c, slot, w.id, m, false, connected);
     out.push(
       h(
         'div.x-gear.wmod-row',
@@ -410,7 +417,7 @@ export function weaponCare(c: CampaignState, slot: Slot, w: FoundWeapon, send: (
               'span.wmod-offer',
               {},
               ...loose.map((m) => {
-                const why = modBlocker(c, slot, w.id, m, true);
+                const why = modBlocker(c, slot, w.id, m, true, connected);
                 return h(
                   'button.x-btn.small',
                   { disabled: !!why, title: why ?? WEAPON_MODS[m].line, onclick: () => send({ type: 'mod', weapon: w.id, mod: m, on: true }) },
@@ -431,7 +438,7 @@ export function weaponCare(c: CampaignState, slot: Slot, w: FoundWeapon, send: (
  * An improvement loose in the Armería: what it does, how many there are, and
  * your firearms, each with what it carries and «Ponérsela».
  */
-export function modPanel(c: CampaignState, slot: Slot, mod: WeaponModId, send: (cmd: CampaignCommand) => void, name: (s: CampaignSoldier) => string): HTMLElement[] {
+export function modPanel(c: CampaignState, slot: Slot, mod: WeaponModId, send: (cmd: CampaignCommand) => void, name: (s: CampaignSoldier) => string, connected?: readonly Slot[]): HTMLElement[] {
   const def = WEAPON_MODS[mod];
   const count = c.weaponMods?.[mod] ?? 0;
   const guns = (c.foundWeapons ?? []).filter((w) => FOUND_WEAPONS[w.kind].slot === 'primary');
@@ -447,7 +454,7 @@ export function modPanel(c: CampaignState, slot: Slot, mod: WeaponModId, send: (
           {},
           ...guns.map((w) => {
             const holder = w.holder ? c.soldiers.find((s) => s.id === w.holder) : undefined;
-            const why = modBlocker(c, slot, w.id, mod, true);
+            const why = modBlocker(c, slot, w.id, mod, true, connected);
             return h(
               'div.x-gear',
               {},

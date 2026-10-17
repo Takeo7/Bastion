@@ -30,6 +30,7 @@ export function installTouch(): void {
     document.documentElement.dataset.touch = on ? '1' : '0';
     turnNotice(on);
     mobileEffects(on);
+    applyFit();
   };
   onGraphics(apply);
   for (const q of ['(pointer: coarse)', '(hover: none)', '(orientation: portrait)']) matchMedia(q).addEventListener('change', apply);
@@ -63,6 +64,27 @@ function mobileEffects(touch: boolean): void {
   } catch {
     /* storage unavailable: no automatic effects */
   }
+}
+
+// ------------------------------------------------------------------ size
+
+/**
+ * How much the interface shrinks on a small screen (Arturo, 17/10: «la UI está
+ * muy grande»): 1 on a desktop or a tablet, less as the window gets lower or
+ * narrower, smoothly, down to 0.76; on a phone sideways about 0.79 (740 × 360)
+ * to 0.86 (an iPhone Air, 912 × 420). The panels zoom by it times the player's
+ * «Tamaño de la interfaz» (--ui-zoom, styles.css), and a finger's targets
+ * divide by it (--tap), so they still measure 42 px on the glass.
+ */
+export function uiFit(w = window.innerWidth, h = window.innerHeight): number {
+  return Math.min(1, Math.max(0.76, Math.min(0.33 + h / 790, 0.33 + w / 1500)));
+}
+
+function applyFit(): void {
+  const fit = uiFit();
+  const root = document.documentElement.style;
+  root.setProperty('--ui-fit', fit.toFixed(3));
+  root.setProperty('--ui-zoom', (fit * graphics().uiScale).toFixed(3));
 }
 
 // ------------------------------------------------------------------ upright

@@ -1,7 +1,7 @@
 // Gameplay data. Combat numbers mirror XCOM 2's defaults (XComGameCore.ini /
 // XComGameData_*.ini) converted to tiles (1 tile = 1.5 m), so the game "feels"
 // like the original before we start tuning our own values.
-import type { AbilityId, AttackAbility, ChargeId, ClassId, FoundWeaponId, ItemId, ItemSlot, PerkId, Team, TemplateId, Unit, UnitMods, WeaponModId } from './types';
+import type { AbilityId, AttackAbility, ChargeId, ClassId, FoundWeaponId, ItemId, ItemSlot, PerkId, Slot, Team, TemplateId, Unit, UnitMods, WeaponModId } from './types';
 
 export const AP_PER_TURN = 2;
 
@@ -813,6 +813,15 @@ export const ZERO_MODS: UnitMods = {
   stoneNoise: 0,
   care: 0,
 };
+
+/**
+ * Whether `slot` gives orders to what belongs to `owner` (a soldier, a weapon it carries): its own, and its
+ * partner's while the partner isn't connected (Arturo, 17/10: «si juego solo, debería poder usarlo solo»).
+ * Without `connected`, only its own. Shared units (owner null) are everyone's.
+ */
+export function commandsFor(slot: Slot, owner: Slot | null, connected?: readonly Slot[]): boolean {
+  return owner === null || owner === slot || (!!connected && !connected.includes(owner));
+}
 
 export function hasPerk(u: Pick<Unit, 'perks'>, id: PerkId): boolean {
   return u.perks.includes(id);

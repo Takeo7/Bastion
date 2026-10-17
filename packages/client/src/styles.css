@@ -752,6 +752,19 @@ em.bite::before {
   mask: var(--i-bite) center / contain no-repeat;
 }
 
+/* A partner's soldier on the sheet (DE ANA), in the partner's colour: whose it is, even while one commands it. */
+em.whose {
+  flex: none;
+  padding: 0 3px;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--accent);
+  border: 1.5px solid currentColor;
+}
+
 /* ------------------------------------------------- soldier sheet: symbols */
 
 .unit-panel {
@@ -2750,9 +2763,16 @@ body:has(.strat) .fps-counter {
   color: var(--ink-soft);
 }
 
-/* Interface size (Ajustes → Interfaz, --ui-scale from settings.ts): each panel
-   zooms, so the layout still works out at 130 %. The 3D view and anything
-   placed from JS (labels over units, markers at the screen edge) stay as they are. */
+/* Interface size: each panel zooms by --ui-zoom, the player's size (Ajustes →
+   Interfaz, --ui-scale from settings.ts) times the screen's fit (ui/touch.ts
+   uiFit: smaller on a phone), so the layout still works out at 130 %. The 3D
+   view and anything placed from JS (labels over units, markers at the screen
+   edge) stay as they are. A finger's target inside divides by the fit (--tap),
+   so it still measures 42 px on the glass. */
+:root {
+  --tap: 42px;
+}
+
 .top,
 .squad,
 .unit-panel,
@@ -2766,7 +2786,8 @@ body:has(.strat) .fps-counter {
 .outcome-card,
 .modal-card,
 .mission-intro {
-  zoom: var(--ui-scale, 1);
+  --tap: calc(42px / var(--ui-fit, 1));
+  zoom: var(--ui-zoom, var(--ui-scale, 1));
 }
 
 /* ------------------------------------------- UX review 2: new combat pieces */
@@ -3334,8 +3355,8 @@ body:has(.strat) .fps-counter {
 }
 
 :root[data-touch='1'] .hud .touch-btn {
-  min-width: 44px;
-  min-height: 44px;
+  min-width: var(--tap);
+  min-height: var(--tap);
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
@@ -3349,12 +3370,13 @@ body:has(.strat) .fps-counter {
 
 /* Top left: the soldier before and after, and the squad's list behind its button. */
 :root[data-touch='1'] .touch-units {
+  --tap: calc(42px / var(--ui-fit, 1));
   position: absolute;
   top: var(--edge);
   left: var(--edge);
   display: flex;
   gap: 6px;
-  zoom: var(--ui-scale, 1);
+  zoom: var(--ui-zoom, var(--ui-scale, 1));
 }
 
 :root[data-touch='1'] .hud .touch-units .squad-toggle {
@@ -3372,7 +3394,7 @@ body:has(.strat) .fps-counter {
 }
 
 :root[data-touch='1'] .hud .squad-card {
-  min-height: 44px;
+  min-height: var(--tap);
   align-items: center;
 }
 
@@ -3382,7 +3404,7 @@ body:has(.strat) .fps-counter {
 }
 
 :root[data-touch='1'] .hud .menu-button {
-  min-height: 44px;
+  min-height: var(--tap);
   min-width: 64px;
 }
 
@@ -3392,11 +3414,11 @@ body:has(.strat) .fps-counter {
 
 /* Every other button of the battle, finger-sized. */
 :root[data-touch='1'] .hud :is(.pass-command, .end-turn, .shot-panel button, .floor-ind button, .pack-act, .pack-slot-btn, .menu-entry, .modal-actions button, .outcome-actions button, .night-card button) {
-  min-height: 44px;
+  min-height: var(--tap);
 }
 
 :root[data-touch='1'] .hud :is(.floor-ind button, .shot-panel .cycle) {
-  min-width: 44px;
+  min-width: var(--tap);
 }
 
 /* The keys' hints mean nothing to a finger. */
@@ -3533,9 +3555,9 @@ body:has(.strat) .fps-counter {
     display: none;
   }
 
+  /* Between the soldier's arrows on the left and full screen on the right: px zoom with them, % don't. */
   :root[data-touch='1'] .hud .top {
-    max-width: calc((100% - 2 * 200px) / 0.82);
-    zoom: 0.82;
+    max-width: calc(100% - 2 * 200px);
   }
 
   :root[data-touch='1'] .hud .players {
@@ -3587,16 +3609,16 @@ body:has(.strat) .fps-counter {
 
 /* The settings' choices, a finger wide (battle menu and base alike). */
 :root[data-touch='1'] .setting-choices button {
-  min-width: 44px;
-  min-height: 44px;
+  min-width: var(--tap);
+  min-height: var(--tap);
 }
 
 /* Red's notices on a phone (docs/FASE11.md §6): «Toca la pantalla para activar el sonido» and
-   «Volviendo a la partida…», at the top in the middle, under the turn bar or the base's header,
-   clear of every button. */
+   «Volviendo a la partida…», at the top in the middle, under the turn bar (and its mission line)
+   or the base's header, clear of every button. */
 .toast.sound-hint,
 .connection.rejoin-note {
-  top: 58px;
+  top: 92px;
   bottom: auto;
   left: 50%;
   right: auto;

@@ -100,3 +100,9 @@ Hecho todo lo de arriba, sin probar aún en un móvil de verdad ni en el dominio
   - el puesto se recupera por el nombre.
   
   La guía está en [WEB.md](WEB.md).
+
+## 9. Después de la 0.5.0 (Arturo, 17/10)
+
+- **Jugar solo** (0.5.1): mientras el compañero no está conectado, sus soldados obedecen al que juega, en combate y en la base (`commandsFor` en content.ts). Cuando vuelve, cada uno manda en lo suyo.
+- **La interfaz, más pequeña** (0.5.1): la referencia es el iPhone Air en horizontal (unos 912 × 420 px CSS). Todo escala con la pantalla (`uiFit`), de 740 × 360 a las tablets, sin tocar el escritorio.
+- **Pendiente:** el tablero de habilidades en el móvil, encuadrado sobre lo desbloqueado y con casillas cómodas para el dedo.

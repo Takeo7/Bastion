@@ -1588,7 +1588,7 @@ dl.briefing {
 
 /* Árbol de habilidades: the tree's panel (skillSheet.ts; the tree itself is skillMatrix.css). */
 .strat-modal .x-panel.wide.service {
-  width: min(1180px, calc(96vw / var(--ui-scale, 1)));
+  width: min(1180px, calc(96vw / var(--ui-zoom, var(--ui-scale, 1))));
 }
 
 /* --------------------------------------------------------------- modal */
@@ -1609,14 +1609,14 @@ dl.briefing {
 .strat-modal .x-panel {
   /* The panel zooms with --ui-scale (bottom of this file), and so would 92vw:
      dividing keeps it inside the screen at 115 and 130 %. Too tall, it scrolls. */
-  width: min(520px, calc(92vw / var(--ui-scale, 1)));
-  max-height: calc(94vh / var(--ui-scale, 1));
+  width: min(520px, calc(92vw / var(--ui-zoom, var(--ui-scale, 1))));
+  max-height: calc(94vh / var(--ui-zoom, var(--ui-scale, 1)));
   overflow-y: auto;
   transform: rotate(-0.4deg);
 }
 
 .strat-modal .x-panel.wide {
-  width: min(920px, calc(94vw / var(--ui-scale, 1)));
+  width: min(920px, calc(94vw / var(--ui-zoom, var(--ui-scale, 1))));
 }
 
 .alert-kicker {
@@ -2845,7 +2845,9 @@ dl.x-pairs dd {
   border-top: 1px dashed rgba(42, 35, 24, 0.35);
 }
 
-/* Interface size: the base's sheets zoom with --ui-scale (the lineup cards follow the 3D soldiers, so they don't). */
+/* Interface size: the base's sheets zoom with --ui-zoom, the player's size times the screen's fit
+   (ui/touch.ts uiFit; the lineup cards follow the 3D soldiers, so they don't). A finger's target
+   inside divides by the fit, so it still measures --tap on the glass. */
 .strat-top,
 .strat-left,
 .strat-right,
@@ -2858,7 +2860,8 @@ dl.x-pairs dd {
 .strat-fold,
 .menu-column,
 .radio {
-  zoom: var(--ui-scale, 1);
+  --tap: calc(42px / var(--ui-fit, 1));
+  zoom: var(--ui-zoom, var(--ui-scale, 1));
 }
 
 /* Over the 3D scene (the hangar's buttons) the typed red needs its slip of paper. */
@@ -3257,6 +3260,21 @@ dl.x-pairs dd {
   color: var(--x-muted);
 }
 
+/* «de Ana»: a partner's soldier, among those one commands while she's gone, in her colour. */
+.x-gear small.x-whose {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* «no está: los preparas tú» after a partner's name in a heading. */
+.x-head small {
+  font-family: var(--font);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--x-muted);
+}
+
 .gear-note {
   margin: 2px 0 0;
   font-size: 11.5px;
@@ -3372,9 +3390,10 @@ dl.x-pairs dd {
 
 /* ======================================================= a phone sideways (docs/FASE11.md §4)
    Touch and little height (some 740–915 × 360–412 px): the header one slim
-   row of figures, the tabs a bar of icons, the two side panels half the
-   screen each, from the header to the tabs, each folding away behind its
-   handle to see the base. Every button 44 px at least. */
+   row of figures, the tabs a bar of icons, the two side panels under half
+   the screen each, from the header to the tabs, each folding away behind its
+   handle to see the base. Everything zooms by the screen's fit (--ui-zoom);
+   every button measures --tap at least. */
 
 .panel-fold {
   display: none;
@@ -3384,7 +3403,7 @@ dl.x-pairs dd {
   :root[data-touch='1'] .strat-top {
     gap: 8px;
     padding: 2px 8px;
-    min-height: 44px;
+    min-height: var(--tap);
   }
 
   :root[data-touch='1'] .strat-brand,
@@ -3399,7 +3418,7 @@ dl.x-pairs dd {
   }
 
   :root[data-touch='1'] .strat-top .x-btn {
-    min-height: 44px;
+    min-height: var(--tap);
   }
 
   /* The tabs: icons, a finger wide, their names for who asks (aria-label). */
@@ -3409,7 +3428,7 @@ dl.x-pairs dd {
 
   :root[data-touch='1'] .strat-nav button {
     min-width: 58px;
-    min-height: 44px;
+    min-height: var(--tap);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3421,12 +3440,18 @@ dl.x-pairs dd {
     height: 24px;
   }
 
-  /* The side panels: half the screen each, from under the header to over the tabs. */
+  /* Titles a size down: the panels are narrower than a desktop's, and a mission's name should fit one
+     line (`html`: over the theme's squad title, mixta-base.css). */
+  html:root[data-touch='1'] .strat[data-view] :is(.x-title, .briefing-head h1) {
+    font-size: 22px;
+  }
+
+  /* The side panels: under half the screen each, from under the header to over the tabs; the base between them. */
   :root[data-touch='1'] :is(.strat-left, .strat-right) {
-    top: 48px;
-    bottom: 50px;
+    top: calc(var(--tap) + 14px);
+    bottom: calc(var(--tap) + 10px);
     max-height: none;
-    width: calc(50% - 14px);
+    width: calc(43% - 10px);
     padding-right: 6px;
     transition: transform 0.22s ease;
   }
@@ -3452,8 +3477,8 @@ dl.x-pairs dd {
     top: 0;
     float: right;
     z-index: 2;
-    width: 44px;
-    height: 44px;
+    width: var(--tap);
+    height: var(--tap);
     margin: 0 -6px 4px 6px;
     font-size: 26px;
     line-height: 1;
@@ -3471,12 +3496,12 @@ dl.x-pairs dd {
   }
 
   :root[data-touch='1'] .strat-left.folded {
-    transform: translateX(calc(-100% + 44px));
+    transform: translateX(calc(-100% + var(--tap)));
     overflow: hidden;
   }
 
   :root[data-touch='1'] .strat-right.folded {
-    transform: translateX(calc(100% - 44px));
+    transform: translateX(calc(100% - var(--tap)));
     overflow: hidden;
   }
   /* The hangar (Escuadra): no tabs below; the roster on the left picks who goes (its ✓), so the
@@ -3493,8 +3518,8 @@ dl.x-pairs dd {
   :root[data-touch='1'] .strat-center-bottom {
     left: auto;
     right: 6px;
-    bottom: 54px;
-    width: calc(50% - 14px);
+    bottom: calc(var(--tap) + 14px);
+    width: calc(43% - 10px);
     transform: none;
   }
 
@@ -3511,9 +3536,10 @@ dl.x-pairs dd {
   :root[data-touch='1'] .strat[data-view='squad'] .strat-center-top {
     left: auto;
     right: 6px;
-    top: 48px;
-    bottom: 156px;
-    width: calc(50% - 14px);
+    top: calc(var(--tap) + 14px);
+    /* Clear of «Lanzar misión», the count and the two buttons under it. */
+    bottom: 180px;
+    width: calc(43% - 10px);
     overflow-y: auto;
     transform: none;
     padding: 8px 10px;
@@ -3525,7 +3551,7 @@ dl.x-pairs dd {
     left: auto;
     right: 6px;
     bottom: 6px;
-    width: calc(50% - 14px);
+    width: calc(43% - 10px);
     transform: none;
   }
 
@@ -3538,8 +3564,8 @@ dl.x-pairs dd {
      two columns on the left (not over their 3D bodies, where they piled up); the mission's report
      on the right, «Continuar» under it. */
   :root[data-touch='1'] .strat[data-view='debrief'] .lineup-cards {
-    inset: 48px auto 6px 6px;
-    width: calc(50% - 14px);
+    inset: calc(var(--tap) + 14px) auto 6px 6px;
+    width: calc(43% - 10px);
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
@@ -3560,9 +3586,9 @@ dl.x-pairs dd {
   :root[data-touch='1'] .strat[data-view='debrief'] .strat-center-top {
     left: auto;
     right: 6px;
-    top: 48px;
+    top: calc(var(--tap) + 14px);
     bottom: 62px;
-    width: calc(50% - 14px);
+    width: calc(43% - 10px);
     overflow-y: auto;
     transform: none;
   }
@@ -3574,7 +3600,7 @@ dl.x-pairs dd {
 
 /* Touch, at any size: every button and list row of the base a finger high (docs/FASE11.md §4). */
 :root[data-touch='1'] .strat :is(button, .x-btn, button.x-row, .x-pick-field, .x-pick-list button) {
-  min-height: 44px;
+  min-height: var(--tap);
 }
 
 :root[data-touch='1'] .strat .x-btn.small {

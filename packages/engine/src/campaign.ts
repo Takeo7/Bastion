@@ -15,7 +15,7 @@
 // The campaign is small and changes rarely, so the server broadcasts it whole after
 // every command instead of streaming events like the tactical layer.
 import { defaultAppearance, displayName, isAppearance, NAME_MAX, NICKNAME_MAX, normalizeAppearance } from './appearance';
-import { addMods, BACKPACK_SLOTS, conditionOf, FOUND_WEAPONS, MOD_SLOTS, WORN_BELOW, PLAIN_WEAPON, REPAIR_PER_PART, WEAPON_MODS, WEAPONS, ITEMS, NIGHT, sexOfName, SOLDIER_NAMES, TEMPLATES } from './content';
+import { addMods, BACKPACK_SLOTS, commandsFor, conditionOf, FOUND_WEAPONS, MOD_SLOTS, WORN_BELOW, PLAIN_WEAPON, REPAIR_PER_PART, WEAPON_MODS, WEAPONS, ITEMS, NIGHT, sexOfName, SOLDIER_NAMES, TEMPLATES } from './content';
 import {
   ARMOR_TIERS,
   armorTier,
@@ -1445,11 +1445,11 @@ export function soldierArms(c: CampaignState, s: Pick<CampaignSoldier, 'id'>): A
 // --------------------------------------------- the Armería (docs/FASE9.md §5)
 
 /** A weapon of the Armería a commander may work on: on the rack, or carried by one of theirs. */
-function weaponBlocker(c: CampaignState, slot: Slot, id: string): string | null {
+function weaponBlocker(c: CampaignState, slot: Slot, id: string, connected?: readonly Slot[]): string | null {
   const w = (c.foundWeapons ?? []).find((x) => x.id === id);
   if (!w) return 'Esa arma no está en la Armería.';
   const holder = w.holder ? c.soldiers.find((s) => s.id === w.holder) : undefined;
-  if (holder && holder.owner !== slot) return `La lleva ${holder.name}, de tu compañero.`;
+  if (holder && !commandsFor(slot, holder.owner, connected)) return `La lleva ${holder.name}, de tu compañero.`;
   return null;
 }
 
@@ -1459,8 +1459,8 @@ export function repairParts(w: Pick<FoundWeapon, 'condition'>): number {
 }
 
 /** Why a weapon can't be mended now, or null: the parts there are mend what they can. */
-export function repairBlocker(c: CampaignState, slot: Slot, id: string): string | null {
-  const blocked = weaponBlocker(c, slot, id);
+export function repairBlocker(c: CampaignState, slot: Slot, id: string, connected?: readonly Slot[]): string | null {
+  const blocked = weaponBlocker(c, slot, id, connected);
   if (blocked) return blocked;
   const w = c.foundWeapons!.find((x) => x.id === id)!;
   if (FOUND_WEAPONS[w.kind].slot !== 'primary' || !repairParts(w)) return 'Está como nueva.';
@@ -1469,8 +1469,8 @@ export function repairBlocker(c: CampaignState, slot: Slot, id: string): string 
 }
 
 /** Why `mod` can't go on (`on`) or come off that weapon, or null. */
-export function modBlocker(c: CampaignState, slot: Slot, id: string, mod: WeaponModId, on: boolean): string | null {
-  const blocked = weaponBlocker(c, slot, id);
+export function modBlocker(c: CampaignState, slot: Slot, id: string, mod: WeaponModId, on: boolean, connected?: readonly Slot[]): string | null {
+  const blocked = weaponBlocker(c, slot, id, connected);
   if (blocked) return blocked;
   const w = c.foundWeapons!.find((x) => x.id === id)!;
   const mounted = w.mods ?? [];
@@ -2753,13 +2753,13 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       const w = (c.foundWeapons ?? []).find((x) => x.id === cmd.weapon);
       if (!w) return { ok: false, error: 'Esa arma no está en la Armería.' };
       const holder = w.holder ? c.soldiers.find((s) => s.id === w.holder) : undefined;
-      if (holder && holder.owner !== slot) return { ok: false, error: `La lleva ${holder.name}, de tu compañero.` };
+      if (holder && !commandsFor(slot, holder.owner, ctx.connected)) return { ok: false, error: `La lleva ${holder.name}, de tu compañero.` };
       if (cmd.soldier === null) {
         w.holder = null;
         return { ok: true };
       }
       const s = c.soldiers.find((x) => x.id === cmd.soldier && x.alive);
-      if (!s || s.owner !== slot) return { ok: false, error: 'Solo puedes armar a tus soldados.' };
+      if (!s || !commandsFor(slot, s.owner, ctx.connected)) return { ok: false, error: 'Solo puedes armar a tus soldados.' };
       const hand = FOUND_WEAPONS[w.kind].slot;
       for (const other of c.foundWeapons ?? []) if (other.holder === s.id && FOUND_WEAPONS[other.kind].slot === hand) other.holder = null;
       w.holder = s.id;
@@ -2768,7 +2768,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'repair': {
       const w = (c.foundWeapons ?? []).find((x) => x.id === cmd.weapon);
-      const blocked = repairBlocker(c, slot, cmd.weapon);
+      const blocked = repairBlocker(c, slot, cmd.weapon, ctx.connected);
       if (blocked || !w) return { ok: false, error: blocked ?? 'Esa arma no está en la Armería.' };
       const parts = Math.min(c.parts ?? 0, repairParts(w));
       c.parts = (c.parts ?? 0) - parts;
@@ -2779,7 +2779,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'mod': {
       const w = (c.foundWeapons ?? []).find((x) => x.id === cmd.weapon);
-      const blocked = modBlocker(c, slot, cmd.weapon, cmd.mod, cmd.on);
+      const blocked = modBlocker(c, slot, cmd.weapon, cmd.mod, cmd.on, ctx.connected);
       if (blocked || !w) return { ok: false, error: blocked ?? 'Esa arma no está en la Armería.' };
       const stock = (c.weaponMods ??= {});
       if (cmd.on) {
@@ -2824,13 +2824,14 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
     case 'squad': {
       if (!c.activeMission) return { ok: false, error: 'Primero elegid una misión.' };
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
-      if (!s || s.owner !== slot) return { ok: false, error: 'Solo puedes elegir a tus soldados.' };
+      if (!s || !commandsFor(slot, s.owner, ctx.connected)) return { ok: false, error: 'Solo puedes elegir a tus soldados.' };
       if (!cmd.on) {
         c.squad = c.squad.filter((id) => id !== s.id);
       } else if (!c.squad.includes(s.id)) {
         if (s.infection) return { ok: false, error: `${s.name} tiene fiebre: hay que tratarle antes.` };
         if (!soldierReady(s)) return { ok: false, error: `${s.name} no está en condiciones.` };
-        const place = squadPlace(c, slot, ctx.connected);
+        // A partner's soldier, picked while they are away, takes a place of theirs.
+        const place = squadPlace(c, s.owner, ctx.connected);
         if (place.error) return { ok: false, error: place.error };
         joinSquad(c, s, place);
       }
@@ -2914,7 +2915,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'customize': {
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
-      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes personalizar a tus soldados.' };
+      if (!s || !commandsFor(slot, s.owner, ctx.connected) || !s.alive) return { ok: false, error: 'Solo puedes personalizar a tus soldados.' };
       const name = cmd.name.trim();
       const nickname = cmd.nickname.trim();
       if (!name || name.length > NAME_MAX) return { ok: false, error: `El nombre debe tener entre 1 y ${NAME_MAX} letras.` };
@@ -2929,7 +2930,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'unlock': {
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
-      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes elegir las habilidades de tus soldados.' };
+      if (!s || !commandsFor(slot, s.owner, ctx.connected) || !s.alive) return { ok: false, error: 'Solo puedes elegir las habilidades de tus soldados.' };
       const blocked = unlockBlocker(s.skills, s.board, cmd.cell);
       if (blocked) return { ok: false, error: blocked };
       s.board.push(cmd.cell);
@@ -2950,7 +2951,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'equip': {
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
-      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes equipar a tus soldados.' };
+      if (!s || !commandsFor(slot, s.owner, ctx.connected) || !s.alive) return { ok: false, error: 'Solo puedes equipar a tus soldados.' };
       if (cmd.item) {
         // The belt (docs/FASE9.md §4): two places for any accessory; the special rounds are the weapons' mods now.
         if (ITEMS[cmd.item].slot !== 'utility') return { ok: false, error: 'Eso no va en el cinturón.' };

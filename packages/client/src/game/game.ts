@@ -24,6 +24,7 @@ import {
   buildPath,
   canTargetTile,
   cloneState,
+  commandsFor,
   computeReach,
   costPerAp,
   coverAgainst,
@@ -258,8 +259,10 @@ const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fu
 const VEIL_MODELS_MS = 15000;
 const VEIL_SHADERS_MS = 4000;
 
-/** The server's reconnection grace (room.ts RECONNECT_GRACE_MS): a partner who dropped this recently still answers a call to leave. */
+/** The server's reconnection grace (room.ts RECONNECT_GRACE_MS): a partner who dropped this recently still counts as here. */
 const RECONNECT_GRACE_MS = 30_000;
+/** Its longer grace for a phone gone to another app (room.ts AWAY_GRACE_MS). */
+const AWAY_GRACE_MS = 5 * 60_000;
 
 /**
  * The enemy turn's pace (docs/UX-RITMO.md; Arturo, 14/10: «el turno de la IA va
@@ -615,8 +618,10 @@ export class Game {
   private medicineHeal = false;
   /** The next `cured` is a medicine's: its line already says so. */
   private medicineCure = false;
-  /** When each player's connection dropped (setPlayers): within the server's grace they still answer a call to leave. */
+  /** When each player's connection dropped (setPlayers): within the server's grace they still count as here. */
   private readonly droppedAt = new Map<Slot, number>();
+  /** The partner gone whose soldiers this player commands too (commandChanged), by name. */
+  private commandingFor: string | null = null;
   /** How the squad lost its concealment, once it has: the contact that follows says who saw whom. */
   private exposure: Extract<GameEvent, { t: 'concealmentBroken' }> | null = null;
   private readonly sfx = new Sfx();
@@ -835,6 +840,8 @@ export class Game {
     const focus = this.selected ? getUnit(this.state, this.selected) : this.state.units.find((u) => u.team === 'xcom');
     if (focus) this.rig.focus(tileToWorld(focus.pos), true);
     this.refreshInteractive();
+    // Playing alone, with the partner's soldiers on the field: said from the start.
+    this.commandChanged();
     if (fresh) this.raiseVeil();
   }
 
@@ -1005,10 +1012,30 @@ export class Game {
     const now = performance.now();
     for (const p of players) {
       if (p.connected) this.droppedAt.delete(p.slot);
-      else if (this.players.find((q) => q.slot === p.slot)?.connected) this.droppedAt.set(p.slot, now);
+      else if (this.players.find((q) => q.slot === p.slot)?.connected) {
+        this.droppedAt.set(p.slot, now);
+        // Past the server's grace their soldiers take this player's orders; no message says so.
+        window.setTimeout(() => this.gone || this.commandChanged(), (p.away ? AWAY_GRACE_MS : RECONNECT_GRACE_MS) + 200);
+      }
     }
     this.players = players;
-    this.refreshHud();
+    if (!this.commandChanged()) this.refreshHud();
+  }
+
+  /**
+   * The partner's soldiers come under this player's orders (the partner is
+   * gone) or go back to them: said once, and the selection and the HUD
+   * redrawn. Whether it changed.
+   */
+  private commandChanged(): boolean {
+    const gone = this.partnerGone()?.name ?? null;
+    if (gone === this.commandingFor) return false;
+    const before = this.commandingFor;
+    this.commandingFor = gone;
+    if (gone) this.hud.toast(`${gone} no está: mandas también sus soldados.`);
+    else if (before) this.hud.toast(`${before} ha vuelto: cada uno manda en lo suyo.`);
+    this.refreshInteractive();
+    return true;
   }
 
   setConnection(status: NetStatus): void {
@@ -2621,7 +2648,7 @@ export class Game {
   private updateGuide(): void {
     const u = this.selectedUnit();
     const mark = this.missionMarks()[0];
-    let show = !!u?.alive && !!mark && this.isMine(u!) && this.view.activeTeam === 'xcom' && !this.view.outcome && !this.isBusy(u!.id) && !this.mapView.isCutAway(u!.pos);
+    let show = !!u?.alive && !!mark && this.commands(u!) && this.view.activeTeam === 'xcom' && !this.view.outcome && !this.isBusy(u!.id) && !this.mapView.isCutAway(u!.pos);
     if (show) {
       const p = tileToWorld(mark!.pos).project(this.renderer.camera);
       show = p.z > 1 || Math.abs(p.x) > 0.92 || Math.abs(p.y) > 0.92;
@@ -2871,8 +2898,27 @@ export class Game {
     return this.hasCommand() ? undefined : `MANDO: ${this.playerName(this.state.command).toUpperCase()}`;
   }
 
-  private isMine(u: Unit): boolean {
-    return u.team === 'xcom' && (u.owner === this.mySlot || u.owner === null);
+  /**
+   * Whether this player gives orders to `u` (rules.ts commandsFor): its own, the shared ones, and the
+   * partner's while the partner is gone (Arturo, 17/10: «si juego solo, debería poder usarlo solo»).
+   */
+  private commands(u: Unit): boolean {
+    return u.team === 'xcom' && commandsFor(this.mySlot, u.owner, this.activeSlots());
+  }
+
+  /**
+   * The players who count as here (the server's activeSlots, room.ts): connected, or dropped within
+   * its grace, longer from another app. Past it, their soldiers take the other player's orders.
+   */
+  private activeSlots(): Slot[] {
+    const now = performance.now();
+    return this.players.filter((p) => p.connected || now - (this.droppedAt.get(p.slot) ?? -Infinity) < (p.away ? AWAY_GRACE_MS : RECONNECT_GRACE_MS)).map((p) => p.slot);
+  }
+
+  /** The partner who is gone and has soldiers on the field: this player commands them too. */
+  private partnerGone(): PlayerInfo | undefined {
+    const active = this.activeSlots();
+    return this.players.find((p) => p.slot !== this.mySlot && !active.includes(p.slot) && this.state.units.some((u) => u.alive && u.team === 'xcom' && u.owner === p.slot));
   }
 
   /** Orders are accepted once the alien turn has finished playing on screen, not just on the server. */
@@ -2939,7 +2985,7 @@ export class Game {
     const u = this.selectedUnit();
     if (u && focus) this.rig.focus(tileToWorld(u.pos));
     // Picking another of one's own while one is in play is allowed, to look: it says why it can't act yet.
-    const waiting = u && this.isMine(u) && u.ap > 0 ? this.waitingFor(u.id) : null;
+    const waiting = u && this.commands(u) && u.ap > 0 ? this.waitingFor(u.id) : null;
     if (waiting) this.hud.toast(waiting);
     this.refreshInteractive();
     this.sendPresence();
@@ -2953,7 +2999,7 @@ export class Game {
     // The one in play, if it is mine (playtest 15/10 #9): picked once, as it comes into play or the
     // command comes back to it; one picked afterwards to look at stays picked.
     const playing = this.state.activeUnit ? getUnit(this.state, this.state.activeUnit) : undefined;
-    const mineInPlay = playing?.alive && playing.ap > 0 && this.isMine(playing) ? playing : undefined;
+    const mineInPlay = playing?.alive && playing.ap > 0 && this.commands(playing) ? playing : undefined;
     const turned = this.state.command !== this.lastCommand || this.state.activeUnit !== this.lastInPlay;
     this.lastCommand = this.state.command;
     this.lastInPlay = this.state.activeUnit;
@@ -2965,9 +3011,9 @@ export class Game {
       return;
     }
     // The partner's soldier comes into play: the camera to it too, if wanted (#47).
-    if (turned && playing?.alive && !this.isMine(playing) && playing.team === 'xcom') this.turnCamera(playing);
-    if (current && this.isMine(current) && (current.ap > 0 || !this.canAct())) return;
-    const next = mineInPlay ?? this.myUnits().find((u) => u.ap > 0) ?? (current && this.isMine(current) ? current : this.myUnits()[0]);
+    if (turned && playing?.alive && !this.commands(playing) && playing.team === 'xcom') this.turnCamera(playing);
+    if (current && this.commands(current) && (current.ap > 0 || !this.canAct())) return;
+    const next = mineInPlay ?? this.myUnits().find((u) => u.ap > 0) ?? (current && this.commands(current) ? current : this.myUnits()[0]);
     this.selected = next?.id ?? null;
     this.units.setSelected(this.selected);
     if (next && current && next.id !== current.id && this.canAct()) this.turnCamera(next);
@@ -2995,7 +3041,7 @@ export class Game {
   }
 
   private myUnits(): Unit[] {
-    return this.state.units.filter((u) => u.alive && this.isMine(u));
+    return this.state.units.filter((u) => u.alive && this.commands(u));
   }
 
   private cycleUnit(dir: 1 | -1): void {
@@ -3008,7 +3054,7 @@ export class Game {
 
   private reach(): { reach: Reach; tiles: MoveTile[] } | null {
     const u = this.selectedUnit();
-    if (!u || !this.canAct() || !this.isMine(u) || u.ap <= 0 || this.waitingFor(u.id)) return null;
+    if (!u || !this.canAct() || !this.commands(u) || u.ap <= 0 || this.waitingFor(u.id)) return null;
     const key = `${u.id}:${this.state.seq}`;
     if (this.reachCache?.key === key) return this.reachCache;
     const reach = computeReach(this.state, u, maxMoveCost(u));
@@ -3310,7 +3356,7 @@ export class Game {
   private abilities(): AbilityView[] {
     const u = this.selectedUnit();
     const evac = [...this.abandonActions(), ...this.evacActions(u)];
-    if (!u || !this.isMine(u)) return evac;
+    if (!u || !this.commands(u)) return evac;
     return [...this.withMenus(this.soldierAbilities(u), u), ...evac];
   }
 
@@ -3555,12 +3601,12 @@ export class Game {
 
   /**
    * The partner whose yes leaving needs (Sim.callEvac): still on the field,
-   * and connected or dropped within the server's reconnection grace (its
-   * activeSlots, room.ts RECONNECT_GRACE_MS). Past it, the bus leaves alone.
+   * and here or within the server's grace (activeSlots). Past it, the bus
+   * leaves alone.
    */
   private evacPartner(): PlayerInfo | undefined {
-    const now = performance.now();
-    const p = this.players.find((q) => q.slot !== this.mySlot && (q.connected || now - (this.droppedAt.get(q.slot) ?? -Infinity) < RECONNECT_GRACE_MS));
+    const active = this.activeSlots();
+    const p = this.players.find((q) => q.slot !== this.mySlot && active.includes(q.slot));
     return p && this.state.units.some((u) => u.alive && u.team === 'xcom' && u.owner === p.slot) ? p : undefined;
   }
 
@@ -3601,7 +3647,7 @@ export class Game {
   /** Our soldiers in La Mula, on the state orders go by. */
   private mineAboard(): Unit[] {
     const s = this.state;
-    return s.units.filter((u) => u.alive && this.isMine(u) && inEvacZone(s, u.pos));
+    return s.units.filter((u) => u.alive && this.commands(u) && inEvacZone(s, u.pos));
   }
 
   /**
@@ -3812,9 +3858,12 @@ export class Game {
       { 0: PLAYER_COLORS[0], 1: PLAYER_COLORS[1] },
       v.mission.item?.carrier ?? null,
       inPlay?.id ?? null,
+      (u) => this.commands(u),
     );
     const shown = this.selected ? getUnit(v, this.selected) : undefined;
-    this.hud.setSelected(shown?.alive ? shown : null, shown?.alive ? this.packView(shown) : null);
+    // A partner's soldier on the sheet says whose it is, in their colour (picked to look, or to command while they're gone).
+    const whose = shown?.team === 'xcom' && shown.owner !== null && shown.owner !== this.mySlot ? { name: this.playerName(shown.owner), color: PLAYER_COLORS[shown.owner] } : null;
+    this.hud.setSelected(shown?.alive ? shown : null, shown?.alive ? this.packView(shown) : null, whose);
   }
 
   /** The soldier's backpack and the squad's haul for the sheet: where there is anything to search, or it carries something. */
@@ -3822,7 +3871,7 @@ export class Game {
     const v = this.view;
     if (TEMPLATES[u.template].team !== 'xcom' || u.template === 'vip' || (!this.hasSpots && !u.backpack?.length)) return null;
     const squad = lootTotals(v.units.filter((o) => o.team === 'xcom' && (o.alive || o.evacuated)).flatMap((o) => o.backpack ?? []));
-    const mine = this.isMine(u) && u.alive && this.canAct();
+    const mine = this.commands(u) && u.alive && this.canAct();
     return {
       slots: packSlots(u.backpack ?? []),
       size: u.packSlots ?? BACKPACK_SLOTS,
@@ -4113,8 +4162,8 @@ export class Game {
    */
   private enemyTags(u: Unit | undefined, tile: Vec2 | null): Map<string, EnemyTag> {
     const tags = new Map<string, EnemyTag>();
-    if (u && tile && this.mode.kind === 'tile' && !this.handArmed() && this.canAct() && this.isMine(u) && !this.isBusy(u.id)) return this.blastTags(u, this.mode.ability, tile);
-    if (!u || !tile || this.mode.kind !== 'move' || !this.canAct() || !this.isMine(u) || this.isBusy(u.id)) return tags;
+    if (u && tile && this.mode.kind === 'tile' && !this.handArmed() && this.canAct() && this.commands(u) && !this.isBusy(u.id)) return this.blastTags(u, this.mode.ability, tile);
+    if (!u || !tile || this.mode.kind !== 'move' || !this.canAct() || !this.commands(u) || this.isBusy(u.id)) return tags;
     if (!abilitiesOf(u).includes('shoot')) return tags;
     const occupant = unitAt(this.state, tile);
     if (occupant) {
@@ -4573,7 +4622,7 @@ export class Game {
     // With an area armed, a soldier's tile is a place to throw at like any other: the preview already
     // warns «¡Aliado!», and a grenade upstairs may be meant to sink the floor under one (docs/FASE7.md §5).
     if (occupant?.team === 'xcom' && this.mode.kind !== 'tile') {
-      if (this.isMine(occupant)) this.select(occupant.id);
+      if (this.commands(occupant)) this.select(occupant.id);
       else this.hud.toast(`${occupant.name} es de tu compañero.`);
       return;
     }

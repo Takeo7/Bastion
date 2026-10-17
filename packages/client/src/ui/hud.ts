@@ -546,18 +546,30 @@ export class Hud {
   }
 
   /** `inPlay`: the soldier in play (playtest 15/10 #9), marked on its card. */
-  setSquad(units: Unit[], mySlot: Slot, selected: string | null, colors: Record<number, string>, carrier: string | null, inPlay: string | null = null): void {
+  /** `commands`: whether this player gives the unit orders (its own, and the partner's while the partner is gone). */
+  setSquad(
+    units: Unit[],
+    mySlot: Slot,
+    selected: string | null,
+    colors: Record<number, string>,
+    carrier: string | null,
+    inPlay: string | null = null,
+    commands: (u: Unit) => boolean = (u) => u.team === 'xcom' && (u.owner === mySlot || u.owner === null),
+  ): void {
     clear(this.squad);
-    const sorted = [...units].sort((a, b) => Number(b.owner === mySlot) - Number(a.owner === mySlot));
+    // One's own first, then the partner's commanded while they're gone, then the rest.
+    const rank = (u: Unit) => (!commands(u) ? 2 : u.owner === mySlot || u.owner === null ? 0 : 1);
+    const sorted = [...units].sort((a, b) => rank(a) - rank(b));
     for (const u of sorted) {
-      const mine = (u.owner === mySlot || u.owner === null) && u.team === 'xcom';
+      const mine = commands(u);
+      const theirs = u.owner !== null && u.owner !== mySlot;
       const state = u.evacuated ? '.evacuated' : u.alive ? '' : '.dead';
       const card = h(
         `div.squad-card${u.id === selected ? '.selected' : ''}${state}${mine ? '.mine' : ''}${u.id === inPlay ? '.in-play' : ''}`,
         {
           style: { '--accent': u.owner === null ? '#e8edf2' : colors[u.owner] },
           onclick: () => mine && u.alive && this.handlers.onSelectUnit(u.id),
-          title: mine ? 'Seleccionar' : 'Soldado de tu compañero',
+          title: !theirs ? 'Seleccionar' : mine ? 'Soldado de tu compañero: lo mandas tú mientras no está' : 'Soldado de tu compañero',
         },
         // Fase 9: soldiers have no class any more; only who isn't one (the VIP) says what it is.
         h('div.card-name', {}, u.template === 'rookie' ? null : h('b.cls', {}, TEMPLATES[u.template].short), u.template === 'rookie' ? null : ' ', u.nickname ? `«${u.nickname}»` : u.name),
@@ -589,7 +601,7 @@ export class Hud {
    * words in the tooltips). `pack`: the backpack, when the map has anything to
    * search or the soldier carries something.
    */
-  setSelected(u: Unit | null, pack: PackView | null = null): void {
+  setSelected(u: Unit | null, pack: PackView | null = null, whose: { name: string; color: string } | null = null): void {
     clear(this.unitPanel);
     this.unitPanel.classList.toggle('hidden', !u);
     if (!u) return;
@@ -615,7 +627,11 @@ export class Hud {
         { title: soldier ? rank : t.name },
         soldier ? h('span.rank', { title: rank }, ...Array.from({ length: u.rank }, () => h('i'))) : null,
         h('span.unit-name', {}, type(displayName(u.name, u.nickname))),
-        h('span.unit-class', {}, soldier ? rank : t.short),
+        // The partner's soldier says whose, in the partner's colour (Arturo, 17/10), where the veterancy
+        // goes: its chevrons and the sheet's tooltip still say it, and the name keeps its room.
+        whose
+          ? h('em.whose', { style: { '--accent': whose.color }, title: `Soldado de ${whose.name}${rank ? ` · ${rank}` : ''}` }, `DE ${whose.name.toUpperCase()}`)
+          : h('span.unit-class', {}, soldier ? rank : t.short),
         // Bitten (playtest 15/10 #13): what it does to them, on the sheet as on the list.
         u.infected && u.alive ? h('em.bite', { title: this.biteNote }, BITE_TAG) : null,
       ),
