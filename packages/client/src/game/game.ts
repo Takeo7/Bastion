@@ -84,6 +84,18 @@ import {
   hasAnyCover,
   hasPerk,
   HORDE,
+  breakableTip,
+  GIVE_WAY_FLOAT,
+  breachMark,
+  giveWayLine,
+  nextWaveLine,
+  nextWaveShort,
+  posOf,
+  SIDES,
+  SIEGE,
+  SIEGE_TEXT,
+  siegeObjectiveTip,
+  waveInLine,
   inEvacZone,
   inMeleeReach,
   isAttack,
@@ -527,6 +539,40 @@ function edgeName(s: GameState, p: Vec2): string {
   return gaps.sort((a, b) => a[0] - b[0])[0]![1];
 }
 
+/** A siege's door or barricade at `p` (docs/FASE12.md §10): which it is, and what it holds whole. */
+function breakableOf(s: GameState, p: Vec2 & { z?: number }): { kind: 'door' | 'barricade'; full: number } {
+  const k = kindAt(s, { x: p.x, y: p.y, z: p.z ?? 0 });
+  return k === 'door' || k === 'doorOpen' ? { kind: 'door', full: SIEGE.door } : { kind: 'barricade', full: SIEGE.barricade };
+}
+
+/** How far from a siege's heart its room's door is (the Bastión's: 3.6 tiles; the next door, 4.5). */
+const RADIO_DOOR_REACH = 4;
+
+/** Where a siege's wave by `side` (Reinforcement.side: 0 north, 1 east, 2 south, 3 west) comes in: the middle of that edge. */
+function sideMid(s: GameState, side: number): Vec2 {
+  const w = s.width - 1;
+  const h = s.height - 1;
+  const mids = [{ x: Math.round(w / 2), y: 0 }, { x: w, y: Math.round(h / 2) }, { x: Math.round(w / 2), y: h }, { x: 0, y: Math.round(h / 2) }];
+  return mids[side] ?? mids[0]!;
+}
+
+/** The side of the base a tile on its wall stands on (DIRS4: 0 north, 1 east, 2 south, 3 west): the nearest edge of the map. */
+function sideOf(s: GameState, p: Vec2): number {
+  const gaps = [p.y, s.width - 1 - p.x, s.height - 1 - p.y, p.x];
+  return gaps.indexOf(Math.min(...gaps));
+}
+
+/** A siege's waves in order, each once (one comes in groups that share its turn): its turn, its side, whether it is in. */
+function siegeWaves(s: GameState): { turn: number; side: number; landed: boolean }[] {
+  const waves = new Map<number, { turn: number; side: number; landed: boolean }>();
+  for (const r of s.mission.reinforcements) {
+    const w = waves.get(r.turn) ?? { turn: r.turn, side: r.side ?? 0, landed: true };
+    w.landed &&= r.landed;
+    waves.set(r.turn, w);
+  }
+  return [...waves.values()].sort((a, b) => a.turn - b.turn);
+}
+
 /** «3 zombis», «un enemigo»: the dead by their name, the living (or a mix) as enemies. */
 function heardCount(units: Unit[]): string {
   const dead = units.every((u) => TEMPLATES[u.template].undead);
@@ -845,6 +891,12 @@ export class Game {
     if (fresh) this.raiseVeil();
   }
 
+  /** The mission's name on its card and veil: the operation's, «Asedio» (docs/FASE12.md), or what kind of fight it is. */
+  private missionName(): string {
+    const s = this.state;
+    return s.campaignMission?.name ?? (s.mission.siege ? SIEGE_TEXT.name : MISSION_NAMES[s.mission.kind]);
+  }
+
   /** The briefing's kicker: the operation's, the story chapter's, or what kind of fight it is. */
   private kicker(): string {
     const cm = this.state.campaignMission;
@@ -861,7 +913,7 @@ export class Game {
    */
   private raiseVeil(): void {
     const s = this.state;
-    const lift = this.hud.veil(this.kicker(), s.campaignMission?.name ?? MISSION_NAMES[s.mission.kind], s.mapName);
+    const lift = this.hud.veil(this.kicker(), this.missionName(), s.mapName);
     const timer = (ms: number) => new Promise<void>((done) => window.setTimeout(done, ms));
     const frames = (n: number) =>
       new Promise<void>((done) => {
@@ -896,10 +948,11 @@ export class Game {
     // What the mission is for, said at the start and not only in the strip (playtest 13/10 #7):
     // the objective, and a line of the operation's briefing when the mission carries one.
     const cm = s.campaignMission;
-    const briefing = cm && 'briefing' in cm && typeof cm.briefing === 'string' ? briefingLine(cm.briefing) : undefined;
+    // A siege's, Lore's: how they come and what loses it.
+    const briefing = cm && 'briefing' in cm && typeof cm.briefing === 'string' ? briefingLine(cm.briefing) : s.mission.siege ? SIEGE_TEXT.briefing : undefined;
     const closed = this.hud.intro(
       this.kicker(),
-      cm?.name ?? MISSION_NAMES[s.mission.kind],
+      this.missionName(),
       [s.mapName, s.mission.night ? NIGHT_LABEL : '', mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
       mission.objective,
       briefing,
@@ -1950,9 +2003,39 @@ export class Game {
         await wait(0.4);
         return;
       }
+      case 'smashed': {
+        // A siege (docs/FASE12.md §10): one of the dead beats on a door or a barricade. Seen, it lunges at
+        // it, the blow lands with its damage over it and its sound, and if it gives way, the board says so.
+        const u = getUnit(v, e.unit)!;
+        const b = breakableOf(v, e.tile);
+        const at = tileToWorld(e.tile, b.kind === 'door' ? 1.1 : 0.6);
+        const gone = e.left <= 0;
+        const radio = gone && b.kind === 'door' && this.isRadioDoor(e.tile);
+        // What gives way is known even unseen: a breach in the wall is what matters (its line and marks).
+        if (gone) this.noteBreach(e.tile, b.kind);
+        // The blows, like breaking glass: where no soldier sees them, they are neither seen nor heard.
+        if (!this.shownToSquad(u) && !this.mapView.isVisible(e.tile.x, e.tile.y)) return;
+        this.units.forceVisible(u.id);
+        look(at);
+        // Arte's: the lunge resolves as the blow lands (it steps back by itself); the gate shakes, and sparks or earth fly.
+        await this.units.smash(u.id, e.tile);
+        this.mapView.knock(e.tile);
+        this.fx.smash(at, b.kind, gone);
+        this.sfx.smash(at, b.kind, gone);
+        this.fx.floatText(at, `−${e.amount}`, 'damage');
+        if (gone) {
+          await wait(0.2);
+          this.fx.floatText(tileToWorld(e.tile, 1.6), GIVE_WAY_FLOAT[b.kind], radio ? 'alert' : 'warn');
+        }
+        await wait(cam() ? 0.35 : 0.15);
+        return;
+      }
       case 'tileChanged': {
         // On its own floor (docs/FASE6.md): a door upstairs opens upstairs.
         const before = kindAt(v, e.pos);
+        // A siege's barricade blown away by a grenade, not by blows: a breach all the same, said once (the blows' in 'smashed', which
+        // leaves it at 0 before this). A door a grenade opens stays a door: it can be shut again.
+        if ((v.breakables?.[nodeOf(v, e.pos)] ?? 0) > 0 && e.kind !== 'door' && e.kind !== 'doorOpen' && e.kind !== 'low') this.noteBreach(e.pos, breakableOf(v, e.pos).kind);
         if (e.kind === 'doorOpen' && before === 'door') {
           if (this.mapView.isVisible(e.pos.x, e.pos.y)) this.sfx.door(tileToWorld(e.pos, 1));
           return;
@@ -1964,6 +2047,8 @@ export class Game {
           this.sfx.glass(tileToWorld(e.pos, 1.3));
           return;
         }
+        // A siege's door broken down (docs/FASE12.md §10): the blow that felled it showed it (fx.smash), and the map draws the gap.
+        if (before === 'door' || before === 'doorOpen') return;
         // A breached wall (docs/FASE7.md §4) bursts higher and in brick and plaster, not in the cover's colours.
         if (before === 'wall') {
           this.fx.debris(tileToWorld(e.pos, 1.2), 0x9a8a78, 12);
@@ -2044,8 +2129,17 @@ export class Game {
         if (wave?.horde) {
           // They walk in by the edge, on the prowl: no capsules, no beams.
           const where = edgeName(v, wave.pos ?? e.units[0]?.pos ?? { x: 0, y: 0 });
-          this.hud.log(`La horda llega por ${where}: ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
-          this.hud.banner('¡LA HORDA!', 'alien', `${e.units.length === 1 ? 'Ha llegado un zombi' : `Han llegado ${e.units.length} zombis`} por ${where}${seen.length ? '' : ', fuera de vuestra vista'}`);
+          // A siege's wave says which of how many, once (it comes in groups), in Lore's words.
+          const waves = v.mission.siege && wave.side !== undefined ? siegeWaves(v) : null;
+          const first = !waves || v.mission.reinforcements.find((r) => r.turn === wave.turn)?.id === wave.id;
+          const line = waves ? waveInLine(wave.side!, waves.findIndex((w) => w.turn === wave.turn) + 1, waves.length) : `La horda llega por ${where}:`;
+          // A siege's line is whole (who comes is «zombis» all through); a horde's names them.
+          if (waves) {
+            if (first) this.hud.log(line, '#ff6b5a');
+          } else this.hud.log(`${line} ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
+          // The banner counts the whole wave, all its groups.
+          const n = waves ? v.mission.reinforcements.filter((r) => r.turn === wave.turn).reduce((sum, r) => sum + r.units.length, 0) : e.units.length;
+          if (first) this.hud.banner(waves ? '¡OLEADA!' : '¡LA HORDA!', 'alien', `${n === 1 ? 'Ha llegado un zombi' : `Han llegado ${n} zombis`} por ${where}${seen.length ? '' : ', fuera de vuestra vista'}`);
           if (!seen.length) return;
           look(tileToWorld(seen[0]!.pos));
           await playArrival(this.units, this.fx, this.sfx, v, seen);
@@ -2535,6 +2629,11 @@ export class Game {
       abandoned: s.mission.evacDone ? (s.mission.kind === 'elimination' ? EVAC_TEXT.retreat : EVAC_TEXT.withoutObjective) : 'Misión abandonada',
       objectiveLost: vip ? `${vip} ha muerto` : 'El VIP ha muerto',
     };
+    // A siege (docs/FASE12.md §10, Lore's words): the Bastión holds, with dead still out or none standing; or it falls.
+    if (s.mission.siege) {
+      const standing = s.units.some((u) => u.alive && u.team === 'alien');
+      Object.assign(titles, { objective: standing ? SIEGE_TEXT.held : SIEGE_TEXT.cleared, objectiveLost: SIEGE_TEXT.fallen, wiped: SIEGE_TEXT.wiped });
+    }
     // One short line: why it ended. A skirmish has no debrief after, so it adds the count.
     const why = reason ? titles[reason] : '';
     const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -2544,7 +2643,7 @@ export class Game {
     const line = s.campaignMission
       ? why
       : [head, count(killed, 'abatido', 'abatidos'), lost ? count(lost, 'baja', 'bajas') : 'sin bajas', left ? (left === 1 ? '1 se quedó fuera' : `${left} se quedaron fuera`) : ''].filter(Boolean).join(' · ');
-    this.hud.showOutcome(outcome, line, !!s.campaignMission);
+    this.hud.showOutcome(outcome, line, !!s.campaignMission, !!s.mission.siege);
   }
 
   /** Re-derives fog, alien visibility, flags and mission markers from the shown state. */
@@ -2573,8 +2672,14 @@ export class Game {
     if (m.terminal && !m.objectiveDone) beacons.push({ pos: m.terminal, color: 0x54d1ff });
     const objective = m.objectiveUnit ? getUnit(this.view, m.objectiveUnit) : undefined;
     if (objective?.alive && !m.objectiveDone) beacons.push({ pos: objective.pos, color: objective.team === 'alien' ? 0xff4a6a : 0x4dff9a });
+    // A siege's heart, the Sala de radio (docs/FASE12.md §10): marked like an objective; each breach, an orange beam.
+    if (m.siege) beacons.push({ pos: m.siege.heart, color: 0x4dff9a });
+    for (const pos of this.breaches()) beacons.push({ pos, color: 0xff8a2a });
     this.overlays.setBeacons(beacons);
-    this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
+    // A siege's next wave: a red flare in the middle of its side, where it comes in.
+    const wave = m.siege ? siegeWaves(this.view).find((w) => !w.landed) : undefined;
+    this.overlays.setFlares(wave ? [sideMid(this.view, wave.side)] : m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
+    this.overlays.setBreakables(this.breakables());
     this.overlays.setSmoke(this.view.smoke);
     this.songMarks.setSilences((this.view.silences ?? []).map((z) => ({ at: tileToWorld(z.pos), radius: z.radius })));
     this.songMarks.setOaths(this.view.units.filter((u) => u.alive && (u.oath ?? 0) > 0).map((u) => tileToWorld(u.pos)));
@@ -2647,7 +2752,8 @@ export class Game {
    */
   private updateGuide(): void {
     const u = this.selectedUnit();
-    const mark = this.missionMarks()[0];
+    // Not in a siege: the squad stands at the walls, away from the heart on purpose.
+    const mark = this.view.mission.siege ? undefined : this.missionMarks()[0];
     let show = !!u?.alive && !!mark && this.commands(u!) && this.view.activeTeam === 'xcom' && !this.view.outcome && !this.isBusy(u!.id) && !this.mapView.isCutAway(u!.pos);
     if (show) {
       const p = tileToWorld(mark!.pos).project(this.renderer.camera);
@@ -2678,7 +2784,62 @@ export class Game {
 
   private marks(): EdgeMark[] {
     const marks = this.missionMarks();
+    // A siege's next wave, by its side: with the camera turned, «por el norte» alone says little.
+    const wave = this.view.mission.siege && !this.view.outcome ? siegeWaves(this.view).find((w) => !w.landed) : undefined;
+    if (wave) marks.push({ kind: 'alert', label: `Oleada · ${SIDES[wave.side]}`, pos: sideMid(this.view, wave.side) });
+    // Its breaches, one mark a side (a gate gives way leaf by leaf, a barricade tile by tile), and the radio's own.
+    const sides = new Map<string, Place[]>();
+    for (const pos of this.breaches()) {
+      const key = this.isRadioDoor(pos) ? 'radio' : String(sideOf(this.view, pos));
+      sides.set(key, [...(sides.get(key) ?? []), pos]);
+    }
+    for (const [key, ps] of sides) {
+      const pos = { x: Math.round(ps.reduce((n, p) => n + p.x, 0) / ps.length), y: Math.round(ps.reduce((n, p) => n + p.y, 0) / ps.length) };
+      marks.push({ kind: 'alert', label: key === 'radio' ? breachMark(0, true) : breachMark(Number(key)), pos });
+    }
     return this.moment ? [...marks, { kind: 'alert', label: this.moment.who, pos: this.moment.pos }] : marks;
+  }
+
+  /**
+   * A siege's doors and barricades that gave way (GameState.breakables at 0),
+   * seen or not (Gameplay, 18/10: a breach is what the player must know):
+   * their marks on the board and at the screen's edge. In the state, so a
+   * reload or a player joining midway sees them too.
+   */
+  private breaches(): Place[] {
+    const s = this.view;
+    return Object.entries(s.breakables ?? {})
+      .filter(([, left]) => left <= 0)
+      .map(([node]) => posOf(s, Number(node)));
+  }
+
+  /** A siege's door or barricade gave way at `tile`, as it happens: the log says which and where, seen or not (the marks: breaches). */
+  private noteBreach(tile: Place, kind: 'door' | 'barricade'): void {
+    const radio = kind === 'door' && this.isRadioDoor(tile);
+    this.hud.log(giveWayLine(kind, radio, sideOf(this.view, tile)), '#ff6b5a');
+  }
+
+  /** A siege's Sala de radio door: the door nearest the heart, within a few tiles (its room has only one). */
+  private isRadioDoor(tile: Vec2): boolean {
+    const heart = this.view.mission.siege?.heart;
+    return !!heart && distance(tile, heart) <= RADIO_DOOR_REACH;
+  }
+
+  /** What a siege's door or barricade at `tile` still holds, in Lore's words («Puerta: aguanta 12 de 18»); '' elsewhere, or out of sight. */
+  private breakableNote(tile: Place): string {
+    const left = this.view.breakables?.[nodeOf(this.view, { x: tile.x, y: tile.y, z: tile.z ?? 0 })];
+    if (!left || !this.mapView.isVisible(tile.x, tile.y)) return '';
+    const b = breakableOf(this.view, tile);
+    return breakableTip(b.kind, left, b.full);
+  }
+
+  /** A siege's doors and barricades still standing (GameState.breakables) that the squad sees: where, which, and what they hold. */
+  private breakables(): { pos: Place; kind: 'door' | 'barricade'; left: number; full: number }[] {
+    const s = this.view;
+    return Object.entries(s.breakables ?? {})
+      .map(([node, left]) => ({ pos: posOf(s, Number(node)), left }))
+      .filter((b) => b.left > 0 && this.mapView.isVisible(b.pos.x, b.pos.y))
+      .map((b) => ({ ...b, ...breakableOf(s, b.pos) }));
   }
 
   /**
@@ -2837,6 +2998,7 @@ export class Game {
       }
     }
     if (goal) return [{ kind: 'objective', label: 'Objetivo', pos: goal }];
+    if (m.siege) return [{ kind: 'objective', label: 'Sala de radio', pos: m.siege.heart }];
     const bus = this.evacCentre(s);
     return bus ? [{ kind: 'evac', label: 'Evacuación', pos: bus }] : [];
   }
@@ -3733,6 +3895,7 @@ export class Game {
   private missionView(): MissionView {
     const s = this.view;
     const m = s.mission;
+    if (m.siege) return this.siegeView(m.siege.hold);
     let objective = 'Eliminad a todos los hostiles';
     let objectiveTip: string | undefined;
     switch (m.kind) {
@@ -3780,6 +3943,32 @@ export class Game {
     const now = incoming.some((r) => r.horde && r.turn <= s.turn);
     const alert = !incoming.length ? null : incoming.some((r) => !r.horde) ? 'VIENEN MÁS' : now ? 'ZOMBIS: LLEGAN ESTE TURNO' : 'ZOMBIS EN CAMINO';
     return { kind: m.kind, objective, objectiveTip, turnsLeft: m.turnsLeft, alert, area: s.mapName, horde: m.horde?.length ? this.hordeView() : null };
+  }
+
+  /**
+   * A siege's strip (docs/FASE12.md §10, Lore's words): «Asedio», keep them
+   * from the Sala de radio, the turns left to hold (a count towards the win,
+   * not a threat) and the next wave, by when and which side; or that none
+   * are coming any more.
+   */
+  private siegeView(hold: number): MissionView {
+    const s = this.view;
+    const next = siegeWaves(s).find((w) => !w.landed);
+    const wave = next
+      ? { text: `OLEADA · ${nextWaveShort(next.side, next.turn, s.turn).toUpperCase()}`, tip: nextWaveLine(next.side, next.turn, s.turn), urgent: next.turn <= s.turn }
+      : { text: SIEGE_TEXT.noMoreWaves.toUpperCase(), tip: SIEGE_TEXT.noMoreWaves, urgent: false };
+    return {
+      kind: s.mission.kind,
+      label: SIEGE_TEXT.name,
+      objective: SIEGE_TEXT.objective,
+      objectiveTip: siegeObjectiveTip(hold),
+      turnsLeft: Math.max(0, hold - s.turn + 1),
+      hold: true,
+      alert: null,
+      area: s.mapName,
+      horde: null,
+      wave,
+    };
   }
 
   /**
@@ -4022,8 +4211,12 @@ export class Game {
     this.overlays.setNote(null);
     this.overlays.setRangeFocus(null);
     this.overlays.setHover(tile);
-    // At night, a lit tile says what the light does there, and how long it lasts (#50; a move or an aim says theirs below).
-    if (tile && this.view.mission.night && isLit(this.view, tile)) this.overlays.setNote(tile, litNote(this.lightTurns(tile)));
+    // At night, a lit tile says what the light does there, and how long it lasts (#50; a move or an aim says theirs below);
+    // in a siege, a door or a barricade what it still holds (docs/FASE12.md §10).
+    if (tile) {
+      const notes = [this.view.mission.night && isLit(this.view, tile) ? litNote(this.lightTurns(tile)) : '', this.breakableNote(tile)].filter(Boolean);
+      if (notes.length) this.overlays.setNote(tile, notes.join(' · '));
+    }
     const hovered = tile ? unitAt(this.view, tile) : undefined;
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
     this.units.setTags(this.enemyTags(u, tile));

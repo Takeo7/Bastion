@@ -354,6 +354,9 @@ export class Sim {
       case 'burst':
         this.burst(u);
         break;
+      case 'smash':
+        this.smash(u, tile!);
+        break;
       // Velmar's Canto.
       case 'aegis':
         this.bless(u, ability, this.alliesWithin(u, 1.5), AEGIS_DEFENSE, 0);
@@ -430,6 +433,18 @@ export class Sim {
   }
 
   // ------------------------------------------------------------- the Canto
+
+  /**
+   * One of the dead beats on a door or a barricade (docs/FASE12.md §4): its
+   * blow's damage off what it still holds. At nothing it gives way, and the
+   * way in is open ground.
+   */
+  private smash(u: Unit, tile: Pos): void {
+    const left = this.s.breakables?.[nodeOf(this.s, tile)] ?? 0;
+    const amount = Math.min(left, attackWeapon(u, 'claw').damage);
+    this.emit({ t: 'smashed', unit: u.id, tile: { ...tile }, amount, left: left - amount });
+    if (left - amount <= 0) this.emit({ t: 'tileChanged', pos: { ...tile }, kind: 'floor' });
+  }
 
   /** A Bengala or a fire lights what it sees round `tile` for `turns` of the squad's turns: at night only, by day nothing changes. */
   private light(tile: Pos, { radius, turns, height }: { radius: number; turns: number; height: number }): void {
@@ -1013,16 +1028,19 @@ export class Sim {
   /**
    * Picks open tiles for a drop: not too close to the squad, not too far, on
    * the ground. The horde (`edge`) comes in by the map's edges instead, well
-   * away from the squad and the evac zone.
+   * away from the squad and the evac zone; a siege's wave, by the middle half
+   * of its `side` (a DIRS4 index), off the corners, where it would be by two.
    */
-  chooseDropZone(count: number, edge = false): Pos[] | null {
+  chooseDropZone(count: number, edge = false, side?: number): Pos[] | null {
     const s = this.s;
     const soldiers = combatants(s, 'xcom');
     if (!soldiers.length) return null;
     const free = (x: number, y: number) =>
       inBounds(s, x, y) && canStandOn(tileAt(s, x, y)) && (s.elev[tileIndex(s, x, y)] ?? 0) === 0 && !unitAt(s, { x, y, z: 0 });
+    const sides = (x: number, y: number) => [y < EDGE_BAND, x >= s.width - EDGE_BAND, y >= s.height - EDGE_BAND, x < EDGE_BAND];
+    const middle = (along: number, span: number) => along >= span / 4 && along < (span * 3) / 4;
     const onEdge = (x: number, y: number) =>
-      (x < EDGE_BAND || y < EDGE_BAND || x >= s.width - EDGE_BAND || y >= s.height - EDGE_BAND) &&
+      (side === undefined ? sides(x, y).some(Boolean) : !!sides(x, y)[side] && (side % 2 === 0 ? middle(x, s.width) : middle(y, s.height))) &&
       !s.mission.evacZone.some((z) => distance(z, { x, y }) < EDGE_EVAC_GAP);
     const bands = edge ? EDGE_GAP.map((lo) => [lo, Infinity] as const) : ([[DROP_MIN, DROP_MAX], [4, 20], [2, 60]] as const);
     for (const [lo, hi] of bands) {
@@ -1085,25 +1103,29 @@ export class Sim {
    * edge, where it lands, on the prowl: an inactive pod heading for the
    * soldier nearest to it, which only wakes up (and gives the squad away) on
    * seeing someone. A drop with a flare (only in missions saved before the
-   * playtest of 2026-10-13) lands where it was announced, already alert.
+   * playtest of 2026-10-13) lands where it was announced, already alert. A
+   * siege's wave comes in by its side, alert, for the heart of the base
+   * (docs/FASE12.md §4).
    */
   landReinforcements(turn: number): void {
+    const siege = this.s.mission.siege;
     for (const r of this.s.mission.reinforcements) {
       if (r.landed || (!r.horde && !r.pos) || r.turn > turn || this.over) continue;
-      const zone = r.horde ? this.chooseDropZone(r.units.length, true) : this.chooseDropZoneAround(r.pos!, r.units.length);
+      const zone = r.horde ? this.chooseDropZone(r.units.length, true, r.side) : this.chooseDropZoneAround(r.pos!, r.units.length);
       // No edge free today: they come next turn.
       if (!zone?.length) continue;
       const at = zone[0]!;
-      const pod: Pod = { id: `p${r.id}`, active: !r.horde, unitIds: [], patrol: [], patrolIndex: 0 };
+      const pod: Pod = { id: `p${r.id}`, active: !r.horde || !!siege, unitIds: [], patrol: [], patrolIndex: 0 };
       const near = r.horde ? [...combatants(this.s, 'xcom')].sort((a, b) => distance(a.pos, at) - distance(b.pos, at))[0] : undefined;
+      const goal = r.horde ? (siege?.heart ?? near?.pos) : undefined;
       const units = r.units.map((template, i) => {
         const id = `${r.id}u${i + 1}`;
         pod.unitIds.push(id);
         const u = makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? at, pod.id);
         // They come in looking the way they come: to what they heard, or to the middle of the map (Arte, 17/10).
-        const toward = near?.pos ?? { x: (this.s.width - 1) / 2, y: (this.s.height - 1) / 2, z: 0 };
+        const toward = goal ?? { x: (this.s.width - 1) / 2, y: (this.s.height - 1) / 2, z: 0 };
         const facing = TEMPLATES[template].undead ? (facingTo(u.pos, toward) ?? u.facing) : u.facing;
-        return { ...u, ...(facing !== undefined ? { facing } : {}), ...(near ? { heard: { ...near.pos } } : {}) };
+        return { ...u, ...(facing !== undefined ? { facing } : {}), ...(goal ? { heard: { ...goal } } : {}) };
       });
       this.emit({ t: 'spawned', units, pod, reinforcement: r.id });
       if (r.horde) continue;
@@ -1170,6 +1192,14 @@ export class Sim {
     const end = (outcome: 'victory' | 'defeat', reason: 'objective' | 'wiped' | 'objectiveLost' | 'abandoned') =>
       this.emit({ t: 'missionEnded', outcome, reason });
 
+    // A siege (docs/FASE12.md §4): the base falls with one of the dead beside its heart; it holds once every wave is in and down.
+    if (m.siege) {
+      const heart = m.siege.heart;
+      if (hostiles.some((h) => distance(h.pos, heart) <= 1.5 && storeysApart(s, h.pos, heart) === 0)) end('defeat', 'objectiveLost');
+      else if (!squad.length) end('defeat', 'wiped');
+      else if (!hostiles.length && m.reinforcements.every((r) => r.landed)) end('victory', 'objective');
+      return;
+    }
     // The Limpieza is won clearing the map; leaving it by the bus is a retreat.
     if (m.kind === 'elimination') {
       if (!hostiles.length) end('victory', 'objective');
@@ -1246,6 +1276,8 @@ export class Sim {
       const u = getUnit(this.s, id)!;
       if (this.over) return;
       if (u.alive) takeAlienTurn(this, u);
+      // In a siege the base falls the moment one of them gets to its heart.
+      if (this.s.mission.siege) this.checkOutcome();
     }
     // What the squad did on the enemy's move (overwatch, the blade on guard) fills bars too.
     this.settleBars();
@@ -1265,6 +1297,12 @@ export class Sim {
     }
     this.checkOutcome();
     if (this.over) return;
+    // A siege is held once its last turn is over: those still out there fall back (docs/FASE12.md §4).
+    const siege = this.s.mission.siege;
+    if (siege && turn >= siege.hold) {
+      this.emit({ t: 'missionEnded', outcome: 'victory', reason: 'objective' });
+      return;
+    }
     const left = this.s.mission.turnsLeft;
     if (left !== null && left - 1 <= 0 && !this.s.mission.objectiveDone) {
       this.emit({ t: 'missionEnded', outcome: 'defeat', reason: 'timer' });

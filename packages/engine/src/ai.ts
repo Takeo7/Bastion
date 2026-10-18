@@ -1,10 +1,11 @@
-import { abilitiesOf, abilityBlocker, abilityTargets, blastTiles, canTargetTile, meleeTargets, psiChance } from './abilities';
+import { abilitiesOf, abilityBlocker, abilityTargets, blastTiles, breakable, canTargetTile, meleeTargets, psiChance } from './abilities';
 import { inMeleeReach, previewShot, weaponOf } from './aim';
 import { ABILITIES, isAttack, TEMPLATES } from './content';
 import { coverAgainst, hasAnyCover } from './cover';
-import { canStandOn, combatants, DIRS8, distance, getUnit, heightAt, inBounds, kindAt, nodeOf, samePos, storeysApart, unitAt } from './grid';
+import { canStandOn, combatants, DIRS8, distance, getUnit, heightAt, inBounds, kindAt, nodeOf, posOf, samePos, storeysApart, unitAt } from './grid';
+import { reachesToSearch } from './loot';
 import { canSee, sightOrigin, sightTo } from './los';
-import { buildPath, computeReach, costPerAp, destinations, type Reach } from './path';
+import { buildPath, COST_ORTHO, computeReach, costPerAp, destinations, type Reach } from './path';
 import type { Sim } from './rules';
 import type { AbilityId, AttackAbility, GameState, Pod, Unit, Pos } from './types';
 
@@ -151,7 +152,9 @@ const LOOKAHEAD_STOREYS = 40;
 /**
  * A unit's walk this turn toward `goal`: the shortest way to the free tile
  * nearest it (a pod on patrol goes round by the doors and keeps out of
- * windows), as far along as `actions` go. Null when it gets no closer.
+ * windows), as far along as `actions` go. When that way runs through its own
+ * (a crowd at a siege's gate) with nowhere to stop within reach, the free tile
+ * nearest the goal that `actions` reach. Null when it gets no closer.
  */
 function walkPath(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Pos[] | null {
   const ahead = storeysApart(s, u.pos, goal) > 0 ? LOOKAHEAD_STOREYS : LOOKAHEAD;
@@ -166,7 +169,10 @@ function walkPath(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Po
     if (all.cost.get(nodeOf(s, p))! > budget) break;
     if (canStandOn(kindAt(s, p)) && !unitAt(s, p)) end = i;
   }
-  return end >= 0 ? path.slice(0, end + 1) : null;
+  if (end >= 0) return path.slice(0, end + 1);
+  const near = computeReach(s, u, budget);
+  const step = closestTo(s, u, near, goal, minGap);
+  return step && buildPath(s, u, near, step);
 }
 
 /** Actions a pod still unaware spends going to look where it heard something (its round takes one). */
@@ -350,6 +356,59 @@ function walk(sim: Sim, u: Unit, goal: Pos, minGap: number): boolean {
   return true;
 }
 
+/** In a siege, tiles of walk a point of what a door or barricade holds is worth: the dead go for the weakest. */
+const BREACH_HP_WEIGHT = 0.5;
+
+/**
+ * In a siege (docs/FASE12.md §4), where one of the dead breaks its way to
+ * `goal` when it has no way there: the door or barricade beside a free tile
+ * it can get to, counting the walk to it, the way left from it to the goal
+ * and what it still holds. Only one that opens the way somewhere it can't get
+ * to yet (not the other leaf of a gate already broken). `stand`, where it
+ * beats on it from. Null when it has a way there, or nothing to break.
+ */
+export function breachPlan(s: GameState, u: Unit, goal: Pos): { tile: Pos; stand: Pos } | null {
+  const holds = s.breakables;
+  if (!s.mission.siege || !holds) return null;
+  const all = computeReach(s, u, Infinity);
+  for (const i of all.cost.keys()) if (arrived(s, posOf(s, i), goal, 1.5)) return null;
+  let best: { tile: Pos; stand: Pos; score: number } | null = null;
+  for (const key of Object.keys(holds)) {
+    const tile = posOf(s, Number(key));
+    if (!breakable(s, tile)) continue;
+    const opens = DIRS8.some((d) => {
+      const beyond = { x: tile.x + d.x, y: tile.y + d.y, z: tile.z };
+      const kind = kindAt(s, beyond);
+      return kind !== 'door' && canStandOn(kind) && !all.cost.has(nodeOf(s, beyond));
+    });
+    if (!opens) continue;
+    for (const d of DIRS8) {
+      const stand = { x: tile.x + d.x, y: tile.y + d.y, z: tile.z };
+      if (!inBounds(s, stand.x, stand.y) || !reachesToSearch(s, stand, tile)) continue;
+      const here = samePos(stand, u.pos);
+      const cost = here ? 0 : all.cost.get(nodeOf(s, stand));
+      if (cost === undefined || (!here && (unitAt(s, stand) || !canStandOn(kindAt(s, stand))))) continue;
+      const score = cost / COST_ORTHO + farness(s, tile, goal) + holds[Number(key)]! * BREACH_HP_WEIGHT;
+      if (!best || score < best.score - 1e-9) best = { tile, stand, score };
+    }
+  }
+  return best && { tile: best.tile, stand: best.stand };
+}
+
+/**
+ * One action toward `goal`: a walk, or in a siege, with no way there, the
+ * way broken open (breachPlan): a blow at the door or barricade beside it,
+ * or the walk up to it. False when it does neither.
+ */
+function advance(sim: Sim, u: Unit, goal: Pos, minGap: number): boolean {
+  const plan = abilitiesOf(u).includes('smash') ? breachPlan(sim.s, u, goal) : null;
+  if (!plan) return walk(sim, u, goal, minGap);
+  if (!samePos(plan.stand, u.pos)) return walk(sim, u, plan.stand, 0);
+  if (abilityBlocker(sim.s, u, 'smash')) return false;
+  sim.perform(u, 'smash', { tile: plan.tile });
+  return true;
+}
+
 /** The way, within one action, to a tile beside one of `soldiers` (the cheapest): for the Hinchado. */
 function besideSoldier(s: GameState, u: Unit, soldiers: Unit[]): Pos[] | null {
   const near = soldiers.filter((t) => farness(s, u.pos, t.pos) <= stride(u));
@@ -397,7 +456,9 @@ function wander(sim: Sim, u: Unit): void {
  * it heard, and having heard nothing, it wanders. The Chillón screams (and
  * every zombie within 16 tiles hears it) and keeps its distance; the Hinchado
  * walks up to a soldier and bursts. Cheap enough for a horde of twenty: one
- * reach per action and a sight check per soldier.
+ * reach per action and a sight check per soldier. In a siege, having heard
+ * nothing, they go for the heart of the base, and with no way to where they
+ * go, they break one (advance).
  */
 export function takeZombieTurn(sim: Sim, u: Unit): void {
   const s = sim.s;
@@ -460,15 +521,20 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
         }
       }
       if (seen.length) {
-        if (walk(sim, u, seen[0]!.pos, 1)) continue;
+        if (advance(sim, u, seen[0]!.pos, 1)) continue;
         return;
       }
     }
 
-    // Nobody in sight: to the last noise heard, and having found nobody there, wandering.
+    // Nobody in sight: to the last noise heard, and having found nobody there, wandering (in a siege, for the heart).
     if (u.heard) {
-      if (!arrived(s, u.pos, u.heard, 1.5) && walk(sim, u, u.heard, 0)) continue;
+      if (!arrived(s, u.pos, u.heard, 1.5) && advance(sim, u, u.heard, 0)) continue;
       sim.emit({ t: 'forgot', unit: u.id });
+    }
+    const heart = s.mission.siege?.heart;
+    if (heart) {
+      if (advance(sim, u, heart, 0)) continue;
+      return;
     }
     wander(sim, u);
     return;

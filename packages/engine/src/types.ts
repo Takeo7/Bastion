@@ -286,6 +286,8 @@ export type AbilityId =
   | 'reanimate'
   /** The Hinchado bursts. */
   | 'burst'
+  /** In a siege (docs/FASE12.md §4), the dead beat on a door or a barricade beside them. */
+  | 'smash'
   // Granted by equipment.
   | 'smoke'
   | 'flashbang'
@@ -847,6 +849,22 @@ export interface Reinforcement {
   horde?: boolean;
   /** The few that come in every turn (playtest 2026-10-15, #11), apart from the waves. */
   trickle?: boolean;
+  /** A siege's wave (docs/FASE12.md §4): the map edge it comes in by, a DIRS4 index (0 north, 1 east, 2 south, 3 west). */
+  side?: number;
+}
+
+/**
+ * A siege of the base (docs/FASE12.md): the dead come in waves
+ * (MissionState.reinforcements, each by its `side`) and go for the heart of
+ * the base, breaking down the doors and barricades in their way
+ * (GameState.breakables). One of them beside the heart, and the base falls;
+ * the squad holds once enemy turn `hold` is over, or when every wave is in
+ * and down.
+ */
+export interface Siege {
+  /** The Sala de radio. */
+  heart: Pos;
+  hold: number;
 }
 
 export interface MissionItem {
@@ -889,6 +907,8 @@ export interface MissionState {
   horde?: TemplateId[];
   /** A night mission (docs/ALTURA-Y-NOCHE.md): the living see less, light matters. Missing in older saves: day. */
   night?: boolean;
+  /** A siege of the base (docs/FASE12.md); an elimination mission otherwise. */
+  siege?: Siege;
 }
 
 export type MedicalUse = 'reception' | 'consultation' | 'treatment' | 'ward' | 'equipment' | 'nurses' | 'waiting' | 'supplies' | 'hygiene' | 'stairs';
@@ -1018,4 +1038,10 @@ export interface GameState {
   dropped?: { id: string; pos: Pos; loot: Loot }[];
   /** How many things have been left on the floor so far: the next one's id. */
   droppedCount?: number;
+  /**
+   * In a siege (docs/FASE12.md §4), what each door and barricade still holds,
+   * by node (grid.ts nodeOf); 0 once it gave way, to blows or a blast: the
+   * breaches stay known through a reload.
+   */
+  breakables?: Record<number, number>;
 }

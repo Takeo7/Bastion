@@ -64,6 +64,14 @@ export const NOISE = {
 export const OFICIO_QUIET = 2;
 
 /**
+ * The siege of the base (docs/FASE12.md §4). What a door and a barricade
+ * hold, in damage of the dead's blows (a Zombi takes off 3, a Corredor 2, an
+ * Acorazado 4); how far a blow is heard; the spare magazines each soldier has
+ * at home; and the turns to hold.
+ */
+export const SIEGE = { door: 18, barricade: 9, smashNoise: 8, mags: 8, hold: 11 } as const;
+
+/**
  * The Saqueo's horde (docs/FASE2.md): each squad turn winds its clock up by
  * `perTurn` points and every noise the squad makes by its radius / `perNoise`
  * (hordePoints); every `wave` points a wave comes in by the edges. One a turn
@@ -338,6 +346,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   mindspin: { id: 'mindspin', name: 'Grito', description: 'El Chillón grita: desorienta o asusta a los soldados cercanos, y todo zombi a 16 casillas lo oye y viene.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, range: 14, psi: true, noise: 16 },
   reanimate: { id: 'reanimate', name: 'Despertar a un muerto', description: 'El grito del Chillón despierta un cadáver, que se levanta como Zombi.', target: 'corpse', ap: 1, endsTurn: true, cooldown: 4, range: 12, psi: true, noise: 8 },
   burst: { id: 'burst', name: 'Reventón', description: 'Al morir o al llegar a un soldado revienta: 3 de daño a quien tenga al lado.', target: 'self', ap: 1, endsTurn: true, radius: 1.5, explosive: 'bloaterBurst' },
+  smash: { id: 'smash', name: 'Golpear', description: 'Golpea la puerta o la barricada que tiene al lado hasta tirarla. Se oye, y acuden más.', target: 'tile', ap: 1, endsTurn: false, range: 1.5, noise: SIEGE.smashNoise },
   smoke: { id: 'smoke', name: 'Granada de humo', description: 'Cubre una zona de humo durante 2 turnos: −20 a la puntería contra quien esté dentro.', target: 'tile', ap: 1, endsTurn: true, charge: 'smoke', range: 10, radius: 2, noise: 4 },
   flashbang: { id: 'flashbang', name: 'Granada aturdidora', description: 'Desorienta a los enemigos de la zona (−20 de puntería, sin explosivos). No hace daño.', target: 'tile', ap: 1, endsTurn: true, charge: 'flashbang', range: 10, radius: 2.5, noise: 18 },
   firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Cura 4 de salud a uno mismo o a un compañero de al lado.', target: 'ally', ap: 1, endsTurn: false, charge: 'firstAid', range: 1.5 },
@@ -617,9 +626,9 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
   // The dead (docs/FASE2.md): claws and teeth, no cover, the horde's AI (ai.ts takeZombieTurn).
   // Harder to put down (playtest 2026-10-15, #12): two more points of health each.
   // Playtest 16/10 #19 and #21: 3 of health, and they move 60 % of what a soldier does (ZOMBIE_PACE).
-  zombie: alien({ id: 'zombie', name: 'Zombi', short: 'ZOM', weapon: 'claws', meleeWeapon: 'claws', hp: 3, aim: 60, defense: -10, mobility: SOLDIER_MOBILITY * ZOMBIE_PACE, sight: 14, detection: 6, will: 100, undead: true, abilities: ['claw'] }),
-  xenoid: alien({ id: 'xenoid', name: 'Corredor', short: 'COR', weapon: 'xenoPistol', meleeWeapon: 'xenoPistol', hp: 7, aim: 60, mobility: 8, detection: 10, will: 100, undead: true, abilities: ['claw'] }),
-  mec: alien({ id: 'mec', name: 'Acorazado', short: 'ACO', weapon: 'mecCannon', meleeWeapon: 'mecCannon', hp: 9, armor: 1, aim: 60, mobility: SOLDIER_MOBILITY * ZOMBIE_PACE, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: ['claw'] }),
+  zombie: alien({ id: 'zombie', name: 'Zombi', short: 'ZOM', weapon: 'claws', meleeWeapon: 'claws', hp: 3, aim: 60, defense: -10, mobility: SOLDIER_MOBILITY * ZOMBIE_PACE, sight: 14, detection: 6, will: 100, undead: true, abilities: ['claw', 'smash'] }),
+  xenoid: alien({ id: 'xenoid', name: 'Corredor', short: 'COR', weapon: 'xenoPistol', meleeWeapon: 'xenoPistol', hp: 7, aim: 60, mobility: 8, detection: 10, will: 100, undead: true, abilities: ['claw', 'smash'] }),
+  mec: alien({ id: 'mec', name: 'Acorazado', short: 'ACO', weapon: 'mecCannon', meleeWeapon: 'mecCannon', hp: 9, armor: 1, aim: 60, mobility: SOLDIER_MOBILITY * ZOMBIE_PACE, sight: 14, detection: 6, robotic: true, will: 100, undead: true, abilities: ['claw', 'smash'] }),
   /** The Chillón doesn't bite: it screams (mindspin, noise 16) and raises the dead. */
   sectoid: alien({ id: 'sectoid', name: 'Chillón', short: 'CHI', weapon: 'sectoidPistol', hp: 7, mobility: 5, will: 100, undead: true, abilities: ['mindspin', 'reanimate'] }),
   /** The Hinchado: slow; it bursts when it dies or reaches a soldier (rules.ts burst). */

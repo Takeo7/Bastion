@@ -127,7 +127,7 @@ export function ammoNeeded(u: Unit, ability: AbilityId): number {
 }
 
 /** Tile abilities done with the hands beside the soldier, not thrown: a disoriented soldier can still do them. */
-const BY_HAND: ReadonlySet<AbilityId> = new Set<AbilityId>(['search', 'searchRoom', 'openDoor', 'closeDoor']);
+const BY_HAND: ReadonlySet<AbilityId> = new Set<AbilityId>(['search', 'searchRoom', 'openDoor', 'closeDoor', 'smash']);
 
 /**
  * Doors beside `u` it can open (`door`) or close (`doorOpen`, with nobody in
@@ -138,6 +138,18 @@ export function doorTiles(s: GameState, u: Unit, kind: 'door' | 'doorOpen'): Pos
   return DIRS8.map((d) => ({ x: u.pos.x + d.x, y: u.pos.y + d.y, z: u.pos.z })).filter(
     (p) => kindAt(s, p) === kind && reachesToSearch(s, u.pos, p) && !(kind === 'doorOpen' && unitAt(s, p)),
   );
+}
+
+/** In a siege (docs/FASE12.md §4), a door still shut or a barricade still up, that the dead can break down. */
+export function breakable(s: GameState, p: Pos): boolean {
+  const kind = kindAt(s, p);
+  return (kind === 'door' || kind === 'low') && (s.breakables?.[nodeOf(s, p)] ?? 0) > 0;
+}
+
+/** What one of the dead on `from` can beat on: beside it, reached as with the hands (doorTiles). */
+export function breakablesBeside(s: GameState, from: Pos): Pos[] {
+  if (!s.breakables) return [];
+  return DIRS8.map((d) => ({ x: from.x + d.x, y: from.y + d.y, z: from.z })).filter((p) => inBounds(s, p.x, p.y) && breakable(s, p) && reachesToSearch(s, from, p));
 }
 
 /** Why the ability cannot be used right now (ignoring targets), or null if it can. */
@@ -202,6 +214,9 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
       break;
     case 'closeDoor':
       if (!doorTiles(s, u, 'doorOpen').length) return 'No hay ninguna puerta abierta a tu lado.';
+      break;
+    case 'smash':
+      if (!breakablesBeside(s, u.pos).length) return 'No hay ninguna puerta ni barricada a su lado.';
       break;
   }
   return null;
@@ -317,6 +332,7 @@ export function canTargetTile(s: GameState, u: Unit, ability: AbilityId, at: Pla
   if (distance(u.pos, tile) > abilityRange(u, ability)) return false;
   if (ability === 'search') return searchable(s, tile) && reachesToSearch(s, u.pos, tile);
   if (ability === 'openDoor' || ability === 'closeDoor') return doorTiles(s, u, ability === 'openDoor' ? 'door' : 'doorOpen').some((p) => samePos(p, tile));
+  if (ability === 'smash') return breakablesBeside(s, u.pos).some((p) => samePos(p, tile));
   if (def.teleport) return !samePos(u.pos, tile) && canStandOn(kindAt(s, tile)) && !unitAt(s, tile) && canSeeTile(s, u.pos, tile, sightTo(s, u, tile));
   return s.units.some((o) => isViewer(o, u.team) && canSeeTile(s, o.pos, tile, sightTo(s, o, tile)));
 }

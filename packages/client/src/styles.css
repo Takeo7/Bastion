@@ -2792,6 +2792,43 @@ body:has(.strat) .fps-counter {
 
 /* ------------------------------------------- UX review 2: new combat pieces */
 
+/* A siege's door or barricade that has taken blows (overlays.ts setBreakables, docs/FASE12.md §10):
+   what it still holds, as a short bar and the number; red near the end. Over the scene, like the flags. */
+.break-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  font: 700 11px var(--font);
+  line-height: 1;
+  color: #f2efe6;
+  background: rgba(14, 16, 17, 0.82);
+  border-radius: 2px;
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.break-bar span {
+  display: block;
+  width: 28px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.break-bar i {
+  display: block;
+  height: 100%;
+  background: #d9a441;
+}
+
+.break-bar.low i {
+  background: #ff5a4a;
+}
+
+.break-bar.low b {
+  color: #ff8a7a;
+}
+
 /* What the selected soldier gets against an enemy, over its flag (#50/#51):
    typed on a slip; flanked from the hovered tile is XCOM's yellow. */
 .uflag-tag {

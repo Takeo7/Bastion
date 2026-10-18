@@ -1,5 +1,7 @@
 # Bastión en una web
 
+**Abandonada por Arturo el 18/10:** no se desarrolla más ni se publica el paquete web; solo la aplicación de escritorio ([FASE11.md](FASE11.md)). La guía se queda como estaba, para la 0.5.0 y la 0.5.1.
+
 Para jugar desde el navegador, del móvil o del ordenador, en una web propia, por ejemplo `bastion.yumewagener.com` (Fase 11, [FASE11.md](FASE11.md) §6).
 
 - El servidor de la web hace de anfitrión: la partida vive allí.

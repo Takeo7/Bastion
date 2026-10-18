@@ -1,5 +1,5 @@
 import { defaultAppearance } from './appearance';
-import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, RECOVERY_TURNS, SOLDIER_NAMES, SPARE_MAGS, SQUAD_SIZE, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
+import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, RECOVERY_TURNS, SIEGE, SOLDIER_NAMES, SPARE_MAGS, SQUAD_SIZE, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
 import { ground, toPos } from './grid';
 import { lightTiles } from './los';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
@@ -23,6 +23,7 @@ import type {
   PerkId,
   Pod,
   Reinforcement,
+  Siege,
   Site,
   Slot,
   Team,
@@ -386,6 +387,36 @@ export function garrison(kind: MissionKind, difficulty: number, living = false):
   return [...(living ? GARRISON : DEAD_GARRISON)[Math.max(1, Math.min(4, difficulty))]!];
 }
 
+/** A siege's wave comes in groups of at most this many, so that each finds room by its edge. */
+const SIEGE_GROUP = 5;
+
+/**
+ * The test siege's waves (docs/FASE12.md, hito 1): the dead by one side, the
+ * first at the end of the first enemy turn and then every other turn, more
+ * each time; the third by a flank. Each with its own: a Corredor, a Hinchado,
+ * an Acorazado, and a Chillón with the last.
+ */
+export function siegeWaves(difficulty: number, rng: Rng): Reinforcement[] {
+  const d = Math.max(1, Math.min(4, difficulty));
+  const side = rng.int(4);
+  const flank = (side + (rng.next() < 0.5 ? 1 : 3)) % 4;
+  const zombies = (n: number) => Array.from({ length: n }, () => 'zombie' as const);
+  const waves: { turn: number; side: number; units: TemplateId[] }[] = [
+    { turn: 1, side, units: zombies(3 + d) },
+    { turn: 3, side, units: [...zombies(4 + d), 'xenoid'] },
+    { turn: 5, side: flank, units: [...zombies(4 + d), 'bloater'] },
+    { turn: 7, side, units: [...zombies(5 + d), 'mec'] },
+    { turn: 9, side, units: [...zombies(5 + d), 'xenoid', 'sectoid'] },
+  ];
+  const out: Reinforcement[] = [];
+  for (const w of waves) {
+    for (let i = 0; i < w.units.length; i += SIEGE_GROUP) {
+      out.push({ id: `r${out.length + 1}`, turn: w.turn, pos: null, units: w.units.slice(i, i + SIEGE_GROUP), landed: false, horde: true, side: w.side });
+    }
+  }
+  return out;
+}
+
 /** The pressure on the clock of sabotage and hack: zombies drawn in by the edges, at the end of these enemy turns. */
 function hordeTurns(kind: MissionKind): number[] {
   return kind === 'sabotage' || kind === 'hack' ? [4, 8] : [];
@@ -415,7 +446,8 @@ export function createMission(opts: MissionOptions): GameState {
   if (!opts.slots.length) throw new Error('A mission needs at least one player');
   const difficulty = opts.difficulty ?? 2;
   const handmade = opts.map.kind === 'handmade' ? MAPS[opts.map.id] : undefined;
-  let kind = opts.kind ?? 'elimination';
+  // On a base, it is always a siege (docs/FASE12.md).
+  let kind = handmade?.siege ? 'elimination' : (opts.kind ?? 'elimination');
   const base = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : missionPods(difficulty, kind, opts.living));
   // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
   const extra = garrison(kind, difficulty, opts.living);
@@ -518,7 +550,19 @@ export function createMission(opts: MissionOptions): GameState {
   const leader = opts.leader && units.find((u) => u.team === 'alien' && u.template === opts.leader!.template);
   if (leader) leader.name = opts.leader!.name;
 
-  const reinforcements: Reinforcement[] = hordeTurns(kind).map((turn, i) => ({ id: `r${i + 1}`, turn, pos: null, units: hordeWave(difficulty), landed: false, horde: true }));
+  // A siege of the base (docs/FASE12.md): its waves; every door and barricade holds so much; the squad has its magazines at hand.
+  const siege: Siege | undefined = layout.heart ? { heart: toPos(layout.heart), hold: SIEGE.hold } : undefined;
+  const reinforcements: Reinforcement[] = siege
+    ? siegeWaves(difficulty, opts.rng)
+    : hordeTurns(kind).map((turn, i) => ({ id: `r${i + 1}`, turn, pos: null, units: hordeWave(difficulty), landed: false, horde: true }));
+  const breakables: Record<number, number> = {};
+  if (siege) {
+    layout.tiles.forEach((k, i) => {
+      if (k === 'door') breakables[i] = SIEGE.door;
+    });
+    for (const b of layout.barricades ?? []) breakables[b.y * layout.width + b.x] = SIEGE.barricade;
+    for (const u of units) if (u.team === 'xcom' && u.mags !== undefined) u.mags = Math.max(u.mags, SIEGE.mags);
+  }
 
   const mission: MissionState = {
     kind,
@@ -538,6 +582,7 @@ export function createMission(opts: MissionOptions): GameState {
     // The dead keep coming by the edges on every mission you leave by bus (playtest 2026-10-15, #11).
     ...(kind !== 'elimination' ? { horde: hordeWave(difficulty) } : {}),
     night: !!opts.night,
+    ...(siege ? { siege } : {}),
   };
 
   const tiles = [...layout.tiles];
@@ -566,13 +611,15 @@ export function createMission(opts: MissionOptions): GameState {
     mission,
     turn: 1,
     activeTeam: 'xcom',
-    concealed: true,
+    // The dead know where the base is.
+    concealed: !siege,
     ready: [false, false],
     command: opts.slots[0] ?? 0,
     outcome: null,
     outcomeReason: null,
     campaignMission: opts.campaignMission ?? null,
     ...(opts.snow ? { snow: true } : {}),
+    ...(siege ? { breakables } : {}),
     smoke: [],
   };
   // The map's street lights (they never go out): each lights what its lamp sees round it, worked out once.

@@ -1157,6 +1157,87 @@ export const SCAVENGE = {
   horde: 'Llegan más zombis por los bordes',
 };
 
+// ------------------------------------------------------------------- siege
+
+/** The map edges, by DIRS4 index (Reinforcement.side: 0 north, 1 east, 2 south, 3 west). */
+export const SIDES = ['norte', 'este', 'sur', 'oeste'] as const;
+
+/**
+ * The siege (docs/FASE12.md §10): the dead come at the base in waves and go
+ * for its heart, the radio in the Sala de radio. Headlines without a full
+ * stop, like the other missions' outcomes.
+ */
+export const SIEGE_TEXT = {
+  /** In place of MISSION_NAMES: the card and the strip. */
+  name: 'Asedio',
+  /** The skirmish menu's line under «El Bastión», like the other maps'. */
+  menu: 'La muralla, cuatro torres y cinco oleadas',
+  briefing: 'Vienen en oleadas, cada una más grande. Tiran puertas y barricadas para llegar a la Sala de radio. Si llega uno, el Bastión cae.',
+  /** The strip's objective. */
+  objective: 'Que no lleguen a la Sala de radio',
+  /** Once the last wave is in. */
+  noMoreWaves: 'No vienen más',
+  /** The outcomes: held to the last turn, every wave down, a dead at the heart, nobody left. */
+  held: 'El Bastión aguanta: los que quedan se retiran',
+  cleared: 'El Bastión aguanta: no queda ninguno en pie',
+  fallen: 'El Bastión ha caído: han llegado a la Sala de radio',
+  wiped: 'El Bastión ha caído: no queda nadie para defenderlo',
+};
+
+/** The objective in full, for the card and the strip's tooltip (`hold`: SIEGE.hold, the last turn). */
+export function siegeObjectiveTip(hold: number): string {
+  return `Si un muerto llega hasta la radio, el Bastión cae. Aguantad hasta el final del turno ${hold} o acabad con todas las oleadas.`;
+}
+
+/** Which turn a wave lands at the end of (`turn`: Reinforcement.turn), seen on squad turn `now`: «este turno», «próximo turno», «turno 5». */
+function waveTurn(turn: number, now: number): string {
+  if (turn <= now) return 'este turno';
+  return turn === now + 1 ? 'próximo turno' : `turno ${turn}`;
+}
+
+/** The next wave, in full: «Próxima oleada, por el norte: al final del turno 5.» */
+export function nextWaveLine(side: number, turn: number, now: number): string {
+  const when = waveTurn(turn, now);
+  return `Próxima oleada, por el ${SIDES[side]}: al final ${when === 'este turno' ? 'de' : 'del'} ${when}.`;
+}
+
+/** The same, short for the strip: «Norte · turno 5», «Este · próximo turno». */
+export function nextWaveShort(side: number, turn: number, now: number): string {
+  const name = SIDES[side];
+  return `${name[0]!.toUpperCase()}${name.slice(1)} · ${waveTurn(turn, now)}`;
+}
+
+/** The log line as a wave comes in: «Entra la oleada 2 de 5, por el este.»; the last one says so. */
+export function waveInLine(side: number, n: number, total: number): string {
+  return n >= total ? `Entra la última oleada, por el ${SIDES[side]}.` : `Entra la oleada ${n} de ${total}, por el ${SIDES[side]}.`;
+}
+
+/** A door or a barricade under the cursor: «Puerta: aguanta 12 de 18». */
+export function breakableTip(kind: 'door' | 'barricade', left: number, full: number): string {
+  return `${kind === 'door' ? 'Puerta' : 'Barricada'}: aguanta ${left} de ${full}`;
+}
+
+/** The floating word when one gives way in sight. */
+export const GIVE_WAY_FLOAT = { door: 'CEDE LA PUERTA', barricade: 'CEDE LA BARRICADA' };
+
+/**
+ * The log's line when one gives way, seen or not (`radio`: the Sala de radio's
+ * own door; `side`: a SIDES index): «Han tirado una puerta, al norte.», «Han
+ * abierto un hueco en la barricada del este.». A gate's leaves fall one by one,
+ * and a barricade's three tiles too: each says so.
+ */
+export function giveWayLine(kind: 'door' | 'barricade', radio = false, side?: number): string {
+  if (radio) return 'Han tirado la puerta de la Sala de radio.';
+  const where = side === undefined ? undefined : SIDES[side];
+  if (kind === 'door') return where ? `Han tirado una puerta, al ${where}.` : 'Han tirado una puerta.';
+  return where ? `Han abierto un hueco en la barricada del ${where}.` : 'Han abierto un hueco en una barricada.';
+}
+
+/** The mark on the screen's edge and on the map where they broke in, like «Oleada · sur»: «Brecha · este». */
+export function breachMark(side: number, radio = false): string {
+  return radio ? 'Brecha · Sala de radio' : `Brecha · ${SIDES[side]}`;
+}
+
 // ------------------------------------------------------------------ people
 
 /** The sex of every named person who can be on the battlefield or join the squad, so their model matches their name. */

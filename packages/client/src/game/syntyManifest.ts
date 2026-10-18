@@ -641,6 +641,12 @@ export interface PropAsset {
   origin?: boolean;
   /** Painted from another atlas than its pack's (a texture of its own). */
   atlas?: AtlasId;
+  /** Cut to this box first, in the FBX's metres (a guard tower without its stairs). */
+  keep?: [[number, number, number], [number, number, number]];
+  /** And these boxes taken out of it (the guard tower's hut off its deck). */
+  hole?: [[number, number, number], [number, number, number]][];
+  /** A deck one stands on at this height in the FBX (metres): the game sets it one STOREY up, however that stretches it. */
+  deck?: number;
 }
 
 const prop = (pack: PackId, fbx: string, o: Omit<PropAsset, 'pack' | 'fbx'> = {}): PropAsset => ({ pack, fbx, ...o });
@@ -663,6 +669,14 @@ export const PROPS = {
   barricadeTall: prop('apocalypse', 'SM_Prop_Barricade_05', { fit: 1, stretch: true, yaw: 1 }),
   barricadePallet: prop('apocalypse', 'SM_Prop_Barricade_Pallet_01', { fit: 1, stretch: true, yaw: 1 }),
   sandbags: prop('apocalypse', 'SM_Prop_Sandbag_Wall_02', { fit: 1, stretch: true, yaw: 1 }),
+  // The siege's base (docs/FASE12.md §10): a loose sandbag of a barricade knocked about, a gate's leaf down, Military's
+  // guard tower as a deck on legs with its rail (its hut and its stairs taken off: the map's ladder climbs to it), the
+  // Sala de radio's mast and its head.
+  sandbag: prop('apocalypse', 'SM_Prop_Sandbag_01', { fit: 0.45 }),
+  gateLeafDown: prop('apocalypse', 'SM_Prop_Wall_Quarantine_GateDoor_01', { fit: 1.25 }),
+  guardTower: prop('military', 'SM_Bld_GuardTower_02', { fit: 3, deck: 3.58, keep: [[-2.2, -2.2, -0.1], [2.2, 2.06, 4.6]], hole: [[[-1.07, -1.07, 3.62], [1.07, 1.07, 6]]] }),
+  radioMast: prop('apocalypse', 'SM_Bld_RadioTower_01', { origin: true }),
+  radioMastTop: prop('apocalypse', 'SM_Bld_RadioTower_Top_01', { origin: true }),
   crate: prop('apocalypse', 'SM_Prop_Crate_01'),
   crates: prop('apocalypse', 'SM_Prop_Crate_Large_02'),
   barrels: prop('apocalypse', 'SM_Prop_BarrelStack_02', { fit: 0.95 }),
@@ -975,6 +989,10 @@ export interface PieceAsset {
   keep?: [[number, number, number], [number, number, number]];
   parts?: boolean;
   leaf?: string;
+  /** Narrower along its run than the kit's scale (a gate's leaf, one to a tile). */
+  squeeze?: number;
+  /** Its leaf turns on its far end along the run, not its near one (a gate's second leaf). */
+  hingeFar?: boolean;
   drop?: string[];
   /** Painted from another atlas than its pack's (a texture of its own). */
   atlas?: AtlasId;
@@ -986,6 +1004,8 @@ interface PieceOptions {
   unit?: number;
   storey?: number;
   base?: number;
+  squeeze?: number;
+  hingeFar?: boolean;
   /** Keep only this much of the module across its run, from its middle plane out (and as much in): the outer face alone. */
   depth?: number;
   /** And nothing above this height (FBX units): a lid. */
@@ -1079,6 +1099,9 @@ export const PIECES = {
   fenceWall: strip('apocalypse', 'SM_Prop_Wall_Quarantine_Bottom_01', [-2.5, -0.47], { storey: 3, top: 2.95 }),
   fenceColumn: whole('apocalypse', 'SM_Prop_Wall_Quarantine_Column_Tall_01', [0, 0], { storey: 3, keep: [[-5, -5, -0.02], [5, 5, 3.4]] }),
   barbedWire: whole('apocalypse', 'SM_Prop_Wall_Quarantine_BarbedWire_01', [0, 0], { storey: 3 }),
+  // A siege's gate (docs/FASE12.md §10): Quarantine's sheet-metal leaves, a tile each, each hinged at its end of the gate.
+  gateLeaf: whole('apocalypse', 'SM_Prop_Wall_Quarantine_GateDoor_02', [0.87, 0.08], { storey: 3.4, squeeze: 0.68, parts: true, leaf: 'SM_Prop_Wall_Quarantine_GateDoor_02' }),
+  gateLeafFar: whole('apocalypse', 'SM_Prop_Wall_Quarantine_GateDoor_01', [-0.87, 0.08], { storey: 3.4, squeeze: 0.68, hingeFar: true, parts: true, leaf: 'SM_Prop_Wall_Quarantine_GateDoor_01' }),
   /** Loading platforms: shipping-container sides. */
   containerWall: bunker('SM_Bld_Bunker_Wall_Container_x1_01'),
   // Sheds (#25): sheet metal, a skin outside a bunker wall as the warehouses' brick is: a tile of the side of

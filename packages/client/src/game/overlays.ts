@@ -246,6 +246,8 @@ export class Overlays {
   /** Objective markers (terminal, relay, VIP) and reinforcement flares, rebuilt on demand. */
   private readonly beacons = new THREE.Group();
   private readonly flares = new THREE.Group();
+  /** A siege's doors and barricades that have taken blows: a bar over each (setBreakables). */
+  private readonly breakBars = new THREE.Group();
   private readonly smoke = new THREE.Group();
   /** Moves planned without the command (UX-REVISION-2 #35): a dashed line in the planner's colour. */
   private readonly plans = new THREE.Group();
@@ -405,7 +407,7 @@ export class Overlays {
     this.rangeRing.renderOrder = 9;
     this.note.element.className = 'tile-note';
     this.note.visible = false;
-    this.group.add(this.beacons, this.flares, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.beacons, this.flares, this.breakBars, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
     this.group.add(this.walkEdge, this.dashEdge, this.near, this.seen, this.noticed, this.sightEdge);
     this.group.add(this.spots, this.noises, this.note);
     this.guideCasing.renderOrder = 9;
@@ -609,6 +611,36 @@ export class Overlays {
       g.add(smoke, ring);
       g.position.copy(tileToWorld(p));
       this.flares.add(g);
+    }
+  }
+
+  /**
+   * A siege's doors and barricades that have taken blows (docs/FASE12.md
+   * §10): a short bar over each with what it still holds, red near the end.
+   * Whole ones show nothing; what it holds whole is under the cursor (game.ts).
+   */
+  setBreakables(list: { pos: Place; kind: 'door' | 'barricade'; left: number; full: number }[]): void {
+    const hurt = list.filter((b) => b.left < b.full);
+    const key = JSON.stringify(hurt);
+    if (this.breakBars.userData.key === key) return;
+    this.breakBars.userData.key = key;
+    for (const child of [...this.breakBars.children]) {
+      this.breakBars.remove(child);
+      (child as CSS2DObject).element.remove();
+    }
+    for (const b of hurt) {
+      const el = document.createElement('div');
+      el.className = `break-bar${b.left * 3 <= b.full ? ' low' : ''}`;
+      const track = document.createElement('span');
+      const fill = document.createElement('i');
+      fill.style.width = `${Math.round((b.left / b.full) * 100)}%`;
+      track.append(fill);
+      const count = document.createElement('b');
+      count.textContent = String(b.left);
+      el.append(track, count);
+      const label = new CSS2DObject(el);
+      label.position.copy(tileToWorld(b.pos, b.kind === 'door' ? 2.4 : 1.3));
+      this.breakBars.add(label);
     }
   }
 

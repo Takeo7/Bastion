@@ -50,8 +50,8 @@ export type Command = z.infer<typeof commandSchema>;
 
 export const missionKindSchema = z.enum(['elimination', 'recovery', 'sabotage', 'hack', 'rescue', 'scavenge']);
 /** Skirmish battlefield: a hand-made map (the district; «la torre», with storeys: docs/FASE6-PLAN.md) or a procedural map of a biome. */
-/** 'roadside' and 'industrial': the scenarios (playtest 2026-10-14, #25), in the wilds and in a city. */
-export const skirmishMapSchema = z.enum(['plaza', 'city', 'wilds', 'facility', 'torre', 'roadside', 'industrial']);
+/** 'roadside' and 'industrial': the scenarios (playtest 2026-10-14, #25), in the wilds and in a city. 'bastion': the base under siege (docs/FASE12.md). */
+export const skirmishMapSchema = z.enum(['plaza', 'city', 'wilds', 'facility', 'torre', 'roadside', 'industrial', 'bastion']);
 export type SkirmishMap = z.infer<typeof skirmishMapSchema>;
 export const pingKindSchema = z.enum(['point', 'enemy']);
 export type PingKind = z.infer<typeof pingKindSchema>;

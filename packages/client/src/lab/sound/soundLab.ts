@@ -43,6 +43,10 @@ const LABELS: Record<string, string> = {
   'stone.land': 'Piedra: cae en suelo duro (calle, fábrica)',
   'stone.thud': 'Piedra: cae en tierra (afueras)',
   'stone.hit': 'Piedra: da a alguien',
+  'smash.door': 'Asedio: un muerto golpea una puerta',
+  'smash.barricade': 'Asedio: un muerto golpea una barricada',
+  'smash.give.door': 'Asedio: la puerta cede',
+  'smash.give.barricade': 'Asedio: la barricada cede',
   'grenade.throw': 'Lanzar granada',
   'grenade.land': 'Granada al caer',
   launch: 'Lanzagranadas',
@@ -140,7 +144,11 @@ const FAMILIES: [string, (n: string) => boolean][] = [
   ['Interfaz (Holotáctico)', (n) => n.startsWith('holo.')],
   ['Radio', (n) => n.startsWith('radio.')],
   ['Estrategia', (n) => ['geo.ping', 'build'].includes(n)],
+  ['Piedra y asedio', (n) => n.startsWith('stone.') || n.startsWith('smash.')],
 ];
+// Whatever no family takes (the sirens, the board's cells…) still gets its buttons.
+const named = [...FAMILIES];
+FAMILIES.push(['Otros', (n) => !named.some(([, test]) => test(n))]);
 
 function label(name: string): string {
   const tier = /^shot\.\w+\.(\d)$/.exec(name);

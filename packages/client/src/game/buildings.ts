@@ -65,6 +65,8 @@ const isShed = (kit: KitId) => kit.startsWith('shed');
 export const RAISED_FLATS = 1;
 export const RAISED_PLATFORM = 2;
 export const RAISED_HILL = 3;
+/** A siege's watchtower (docs/FASE12.md §10): a deck on legs, the guard tower's own (mapView); the ground shows under it. */
+export const RAISED_TOWER = 4;
 
 export interface Building {
   /** Index in the plan (the cutaway's texel). */
@@ -99,6 +101,8 @@ export interface Building {
   leveled: boolean;
   /** Its top storey is a roof one can walk on (a flat roof with stairs or a ladder up): drawn as a deck, open where the stairs come up. */
   walkableRoof: boolean;
+  /** A siege's Sala de radio, the heart's building: its mast on the roof (roofProps). */
+  radio?: boolean;
 }
 
 /** Wall pieces stand on tile middles, half a tile each way: these are the tiles a building of bounds b spans. */
@@ -133,6 +137,8 @@ export class BuildingPlan {
   readonly massive: Uint8Array;
   /** The kit of walls that belong to no building (a perimeter, a lone stretch). */
   readonly looseKit: KitId;
+  /** A base to defend (docs/FASE12.md §10): its wall is Quarantine's, its gates sheet metal, its corners watchtowers. */
+  readonly siege: boolean;
   /**
    * What each tile was when the map was built, per storey (0 the ground):
    * WAS_WALL for a wall, a door or a window, WAS_SLAB for a storey's floor.
@@ -149,7 +155,8 @@ export class BuildingPlan {
     this.raised = new Uint8Array(n);
     this.floor = new Uint8Array(n);
     this.massive = new Uint8Array(n);
-    this.looseKit = s.biome === 'facility' ? 'fence' : 'brick';
+    this.siege = !!s.mission.siege;
+    this.looseKit = s.biome === 'facility' || this.siege ? 'fence' : 'brick';
     this.findRaised();
     const wallAt = (i: number) => this.wallIn(i);
     for (let y = 0; y + 1 < h; y++) {
@@ -291,7 +298,18 @@ export class BuildingPlan {
         const look = hash(r.x0, r.y0, 5);
         // Sheet metal (#25): the sawmill by the forest road, three warehouses in four on an industrial estate.
         const shed = (kind === 'barn' && s.site === 'roadside') || (kind === 'hall' && s.site === 'industrial' && look < 0.75);
-        const kit: KitId = kind === 'medical' ? 'house' : shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
+        let kit: KitId = kind === 'medical' ? 'house' : shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
+        // A siege's base (docs/FASE12.md §10): the old military station's own, a storey high and flat-roofed: the
+        // Sala de radio (round the heart) of concrete under its mast, the barracks of block, the infirmary of concrete,
+        // the workshop and the store of sheet metal.
+        let radio = false;
+        if (this.siege) {
+          const heart = s.mission.siege!.heart;
+          radio = heart.x > r.x0 && heart.x < r.x1 && heart.y > r.y0 && heart.y < r.y1;
+          const west = r.x0 + r.x1 < w;
+          const north = r.y0 + r.y1 < h;
+          [kind, kit] = radio ? ['office', 'bunker'] : west ? ['office', north ? 'brick' : 'bunker'] : ['hall', north ? 'shedGrey' : 'shedRed'];
+        }
         // As tall as the engine says (it stops sight up to its roof: GameState.storeys), read on a tile of its floor
         // (a wall two share takes the taller one's); older saves and hand-made maps: town's shops and offices two or three, some houses two.
         const floorTile = (() => {
@@ -299,11 +317,11 @@ export class BuildingPlan {
           return r.y0 * w + r.x0;
         })();
         const told = s.storeys?.[floorTile];
-        const tall = s.biome !== 'city' || base > 0 ? 0 : kind === 'shop' ? (look < 0.55 ? 1 : 2) : kind === 'office' ? (look < 0.6 ? 1 : 2) : kind === 'house' ? (look < 0.3 ? 1 : 0) : 0;
+        const tall = this.siege || s.biome !== 'city' || base > 0 ? 0 : kind === 'shop' ? (look < 0.55 ? 1 : 2) : kind === 'office' ? (look < 0.6 ? 1 : 2) : kind === 'house' ? (look < 0.3 ? 1 : 0) : 0;
         const storeys = told && told > 0 ? told : 1 + tall;
         const leveled = this.slabsOver(r) > 0;
         const walkableRoof = leveled && this.walkableAt(r, storeys);
-        this.buildings.push({ index: own, ...r, kind, kit, medicalWear, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1, leveled, walkableRoof });
+        this.buildings.push({ index: own, ...r, kind, kit, medicalWear, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1, leveled, walkableRoof, ...(radio ? { radio } : {}) });
       });
       for (const i of tiles) if (this.inside[i]) this.floor[i] = 1;
     }
@@ -390,7 +408,7 @@ export class BuildingPlan {
           tiles.push(j);
         }
       }
-      const style = s.biome === 'wilds' ? RAISED_HILL : tall && s.biome === 'city' ? RAISED_FLATS : RAISED_PLATFORM;
+      const style = s.mission.siege ? RAISED_TOWER : s.biome === 'wilds' ? RAISED_HILL : tall && s.biome === 'city' ? RAISED_FLATS : RAISED_PLATFORM;
       for (const i of tiles) this.raised[i] = style;
     }
   }
@@ -506,6 +524,8 @@ export interface PiecePart {
   /** The part that swings open (a door's leaf); its hinge, in the piece's frame. */
   leaf: boolean;
   hinge: THREE.Vector3;
+  /** Its hinge is on its far end (it swings the other way to open inwards, as a gate's second leaf). */
+  far?: boolean;
 }
 
 const pieces = new Map<PieceId, PiecePart[]>();
@@ -533,7 +553,7 @@ function prepare(id: PieceId, model: THREE.Group): void {
   // KIT_SCALE bigger (in metres, whatever the FBX's unit), and a storey of the kit stretched to STOREY.
   const k = KIT_SCALE * (a.unit ?? 1);
   const fit = new THREE.Matrix4()
-    .makeScale(k, k * (STOREY / ((a.storey ?? 2.9) * KIT)), k)
+    .makeScale(k * (a.squeeze ?? 1), k * (STOREY / ((a.storey ?? 2.9) * KIT)), k)
     .multiply(new THREE.Matrix4().makeRotationY(turn))
     .multiply(new THREE.Matrix4().makeTranslation(-centre.x, -(a.base ?? 0) * SYNTY_SCALE, -centre.z));
   const list: PiecePart[] = [];
@@ -542,7 +562,7 @@ function prepare(id: PieceId, model: THREE.Group): void {
     const matrix = fit.clone().multiply(o.matrixWorld);
     const leaf = !!a.leaf && o.name === a.leaf;
     const box = new THREE.Box3().setFromBufferAttribute(o.geometry.getAttribute('position') as THREE.BufferAttribute).applyMatrix4(matrix);
-    list.push({ name: o.name, geometry: o.geometry, atlas: atlasOf(o), matrix, leaf, hinge: new THREE.Vector3(box.min.x, 0, (box.min.z + box.max.z) / 2) });
+    list.push({ name: o.name, geometry: o.geometry, atlas: atlasOf(o), matrix, leaf, hinge: new THREE.Vector3(a.hingeFar ? box.max.x : box.min.x, 0, (box.min.z + box.max.z) / 2), far: !!a.hingeFar });
   });
   pieces.set(id, list);
 }
@@ -557,7 +577,11 @@ function pieceNow(id: PieceId): PiecePart[] | null {
       id,
       loadModel(a.pack, 'piece', id)
         .then((m) => prepare(id, m))
-        .catch(() => undefined),
+        // One that won't load (not converted yet) is drawn as nothing: waited for, the walls rebuilt for it without end.
+        .catch((e: unknown) => {
+          console.warn(`[synty] piece ${id} did not load`, e);
+          pieces.set(id, []);
+        }),
     );
   }
   return null;
@@ -1402,6 +1426,9 @@ interface RoofProp {
   yaw: number;
 }
 
+/** The height of the Sala de radio's lattice mast (Apocalypse's SM_Bld_RadioTower_01, 6.8 m), where its head goes. */
+const RADIO_MAST = 6.8 * SYNTY_SCALE;
+
 /**
  * What stands on the roof of b, always the same for a building: a chimney on
  * some houses; air conditioners, vents and a dish on flat roofs, the stair
@@ -1425,6 +1452,13 @@ function roofProps(b: Building, open?: (x: number, y: number) => boolean): RoofP
   }
   if (b.kind === 'barn' || b.kind === 'ruin') return out;
   const y = b.base + STOREY * b.storeys + 0.04;
+  if (b.radio) {
+    // A siege's Sala de radio (docs/FASE12.md §10): Apocalypse's lattice mast in the middle of the roof, its head of
+    // aerials on top, a dish by the parapet.
+    out.push({ id: 'radioMast', x: cx, y, z: cz, yaw: 0 }, { id: 'radioMastTop', x: cx, y: y + RADIO_MAST, z: cz, yaw: 0 });
+    out.push({ id: 'roofDish', x: b.x0 + 1.5, y, z: b.y1 - 1, yaw: Math.PI * 0.75 });
+    return out;
+  }
   // A roof one walks on keeps clear: only what's been left up there, never over the stairwell.
   const walk = b.walkableRoof;
   // Free spots on the roof, a tile in from the parapet, taken as things are put down.
@@ -2040,7 +2074,9 @@ export class BuildingsView {
     let layer: readonly (TileKind | null)[] = s.tiles;
     const at = (x: number, y: number): TileKind | undefined => (x < 0 || y < 0 || x >= w || y >= h ? undefined : (layer[y * w + x] ?? undefined));
     /** Wall-like, or a wall blown down (it still joins the walls beside it). */
-    const wallish = (x: number, y: number) => isWallLike(at(x, y)) || (x >= 0 && y >= 0 && x < w && y < h && plan.breached(y * w + x, level));
+    // A siege's watchtower carries the wall on round its base (below): the wall runs into it, without a column at its end.
+    const wallish = (x: number, y: number) =>
+      isWallLike(at(x, y)) || (x >= 0 && y >= 0 && x < w && y < h && (plan.breached(y * w + x, level) || (!level && plan.raised[y * w + x] === RAISED_TOWER)));
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -2094,6 +2130,7 @@ export class BuildingsView {
             piece: m.clone(),
             local,
             hinge: new THREE.Vector3(part.hinge.x, 0, part.hinge.z * thick),
+            far: !!part.far,
             consts: {
               aCut: o.roof ? [b + 1, ON_ROOF, ON_ROOF, base] : [b + 1, between ? 0 : out.x, between ? 0 : out.y, base],
               aLevel: [storeyOf(building, base)],
@@ -2347,10 +2384,23 @@ export class BuildingsView {
           const kit = between && building?.kind !== 'medical' ? BETWEEN : outerKit;
           const along = run === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
           if (!loose) storeys(broken ? 'wall' : kind, cx, cz, run === 0 ? x : y, out, between, b, other);
-          if (kind === 'door' || kind === 'doorOpen') {
+          if ((kind === 'door' || kind === 'doorOpen') && loose && plan.siege) {
+            // A siege's gate (docs/FASE12.md §10): a sheet-metal leaf to a tile under the open sky, each hinged at its
+            // end of the gate (the piece's near end is the other way from its +x; the partner turns on its far end),
+            // and a column of the wall where the gate meets it.
+            const gateAt = (k: number) => {
+              const t = at(x + along.x * k, y + along.y * k);
+              return t === 'door' || t === 'doorOpen';
+            };
+            const partner = gateAt(1) ? 1 : gateAt(-1) ? -1 : isWallLike(at(x + along.x, y + along.y)) ? -1 : 1;
+            const turn = Math.atan2(out.x, out.y);
+            const near = (Math.cos(turn) * along.x - Math.sin(turn) * along.y) * partner > 0;
+            put(near ? 'gateLeaf' : 'gateLeafFar', cx, cz, base, out, false, b, { thick: kit.thick, open: kind === 'doorOpen' });
+            for (const side of [-1, 1]) if (!gateAt(side) && isWallLike(at(x + along.x * side, y + along.y * side))) post(kit, cx + along.x * side * 0.5, cz + along.y * side * 0.5, base, out, false, b);
+          } else if (kind === 'door' || kind === 'doorOpen') {
             putAll(kit.door, cx, cz, base, out, between, b, kit, kind === 'doorOpen');
             // A shop's name over its front door: the first door of its outline (whatever part of the map is being redone).
-            if (!level && !between && building && signDoor.get(b) === i && (building.kind === 'shop' || (building.kind === 'office' && building.look < 0.35))) sign(building, cx, cz, base, out);
+            if (!level && !between && !plan.siege && building && signDoor.get(b) === i && (building.kind === 'shop' || (building.kind === 'office' && building.look < 0.35))) sign(building, cx, cz, base, out);
             if (kit.leaf) {
               put(kit.leaf, cx, cz, base, out, between, b, { thick: kit.thick, open: kind === 'doorOpen' });
               // Jambs either side of the leaf.
@@ -2416,6 +2466,39 @@ export class BuildingsView {
     layer = s.tiles;
 
     this.layRaised(s, batches, () => (ready = false), area);
+
+    // A siege's watchtowers (docs/FASE12.md §10) stand on a block the engine won't let anyone under or see through: on the
+    // sides out of the base, Quarantine's wall goes on under the deck as the wall does; on the sides in, a shed of sheet
+    // metal closes it, its door shut in the middle of the side without the ladder. Each stretch runs on to the wall or the
+    // next side, a column where it turns.
+    if (plan.siege) {
+      const tower = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && plan.raised[y * w + x] === RAISED_TOWER;
+      const solid = (x: number, y: number) => tower(x, y) || (x >= 0 && y >= 0 && x < w && y < h && isWallLike(s.tiles[y * w + x]));
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (!tower(x, y) || (area && !area[y * w + x])) continue;
+          const cx = x + 0.5;
+          const cz = y + 0.5;
+          for (const d of DIRS4) {
+            if (tower(x + d.x, y + d.y)) continue;
+            const r = { x: Math.abs(d.y), y: Math.abs(d.x) };
+            const a = solid(x - r.x, y - r.y) ? -0.5 : 0;
+            const b = solid(x + r.x, y + r.y) ? 0.5 : 0;
+            if (b - a <= 0) continue;
+            const outward = d.x * (cx - w / 2) + d.y * (cz - h / 2) > 0;
+            const kit = outward ? KITS.fence : KITS.shedGrey;
+            // The ladder leans on this side: on the tile out from this one or from either beside it.
+            const ladder = [-1, 0, 1].some((n) => s.tiles[(y + d.y + r.y * n) * w + x + d.x + r.x * n] === 'ladder');
+            const door = !outward && !ladder && tower(x - r.x, y - r.y) && tower(x + r.x, y + r.y);
+            const ids = door ? KITS.bunker.window : kit.wall;
+            const c = (a + b) / 2;
+            ids.forEach((id, n) => put(id, cx + r.x * c, cz + r.y * c, 0, d, false, -1, { along: b - a, thick: kit.thick, tint: n === 0 }));
+            // The column where it turns, kept under the deck (Quarantine's is a little taller than a storey).
+            if (a === 0 || b === 0) put(kit.post, cx, cz, 0, d, false, -1, { along: kit.postAlong, thick: kit.thick, square: kit.postSquare, tall: outward ? 0.86 : 1 });
+          }
+        }
+      }
+    }
 
     // A motel's sign on its pole, by the road at one end of its car park (no cutaway: it stands outside).
     for (const b of plan.buildings) {
@@ -2588,7 +2671,8 @@ export class BuildingsView {
           }
         }
         const style = plan.raised[i];
-        if (!style) continue;
+        // A watchtower's sides are its legs (the guard tower, mapView).
+        if (!style || style === RAISED_TOWER) continue;
         for (const d of DIRS4) {
           const low = elev(x + d.x, y + d.y);
           if (low >= e) continue;
@@ -2666,6 +2750,17 @@ export class BuildingsView {
   }
 
   /** Moves the cutaway on (`inside`: buildings whose inside is in sight lose their roof). */
+  /** A siege's doors as worn as they are now (siegeDressing.ts), by ground tile. */
+  wearDoors(wear: ReadonlyMap<number, number>): void {
+    const tiles = this.plan.s.tiles;
+    for (const [tile, stage] of wear) if (tiles[tile] === 'door' || tiles[tile] === 'doorOpen') this.doors.setWear(tile, stage);
+  }
+
+  /** A blow on a siege's door at ground tile `tile`: it shakes. */
+  knock(tile: number): void {
+    this.doors.knock(tile);
+  }
+
   update(dt: number, s: GameState, camera: THREE.Camera | null, focus: Focus | null, visible: readonly boolean[] | null, inside = true): void {
     this.cutaway.update(dt, s, camera, focus, visible, inside);
     this.doors.update(dt);

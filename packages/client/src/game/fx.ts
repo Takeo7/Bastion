@@ -650,6 +650,27 @@ export class Fx {
     this.puffs(at, 0x8f8676, 3, { size: 0.35, spread: 0.3, rise: 0.4, out: 0.5, life: 1.2 });
   }
 
+  /**
+   * A blow on a siege's door or barricade (the 'smashed' event, docs/FASE12.md
+   * §10), `at` where it lands: on a gate's sheet metal, sparks, flakes of rust
+   * and paint and the dust it shakes off; on sandbags, earth bursting out and
+   * grit. `gives`: the blow that brings it down, a good deal more. Shown at
+   * once, whatever is in sight: the caller says whether the tile is seen.
+   */
+  smash(at: THREE.Vector3, kind: 'door' | 'barricade', gives = false): void {
+    const k = gives ? 2.5 : 1;
+    if (kind === 'door') {
+      this.sparks(at, 0xffc46b, Math.round(6 * k));
+      this.chips(at, 0x6f6a5e, Math.round(4 * k), 2.6);
+      this.puffs(at.clone().setY(at.y - 0.5), 0x8f8a80, Math.round(2 * k), { size: 0.3, spread: 0.35, rise: 0.25, out: 0.45, life: 1.1 });
+      if (gives) this.debris(at.clone().setY(at.y - 0.8), 0x5a5e62, 6);
+    } else {
+      this.puffs(at, 0x9a8462, Math.round(3 * k), { size: 0.34, spread: 0.3, rise: 0.35, out: 0.6, life: 1.3, grow: 1.3 });
+      this.chips(at, 0xb39a6c, Math.round(6 * k), 2.2);
+      if (gives) this.dust(at.clone().setY(at.y - 0.5), 10);
+    }
+  }
+
   private debrisPiece(at: THREE.Vector3, color: number, speed: number): void {
     const material = new THREE.MeshStandardMaterial({ color, transparent: true, opacity: 1 });
     const piece = new THREE.Mesh(debrisGeometry, material);

@@ -332,7 +332,7 @@ export class Room {
     this.mode = 'skirmish';
     const seed = this.rng.int(2 ** 31);
     const source: MapSource =
-      map === 'plaza' || map === 'torre'
+      map === 'plaza' || map === 'torre' || map === 'bastion'
         ? { kind: 'handmade', id: map }
         : map === 'roadside'
           ? { kind: 'generated', biome: 'wilds', seed, site: 'roadside' }

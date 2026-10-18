@@ -12,6 +12,18 @@ import { timeRate } from './tween';
 
 /** Seconds a door takes to swing open or shut. */
 const SWING_SECONDS = 0.45;
+/** Seconds a blow shakes a siege's gate (docs/FASE12.md §10). */
+const KNOCK_SECONDS = 0.4;
+/**
+ * A siege's door as it gives (docs/FASE12.md §10), by its stage of wear (1:
+ * knocked about, 2: about to go): a little ajar, leaning in or out of its
+ * wall, and hanging off its hinge (radians).
+ */
+const WEAR = [
+  { ajar: 0, lean: 0, sag: 0 },
+  { ajar: 0.1, lean: 0.06, sag: 0.03 },
+  { ajar: 0.28, lean: 0.15, sag: 0.085 },
+] as const;
 
 /** What a door leaf carries for its wall's material (wallCutPatch), one value per instance. */
 export interface LeafConsts {
@@ -35,6 +47,8 @@ export interface LeafPlace {
   local: THREE.Matrix4;
   /** The hinge in the piece's frame, thickened too. */
   hinge: THREE.Vector3;
+  /** Hinged on its far end: it turns the other way, so it opens to the same side. */
+  far?: boolean;
   consts: LeafConsts;
   open: boolean;
 }
@@ -66,6 +80,10 @@ export class DoorLeaves {
   private readonly bases = new Map<string, THREE.BufferGeometry>();
   /** Some leaf is between shut and open, or on its way. */
   private moving = false;
+  /** A siege's doors' wear by tile (WEAR), and the blows shaking them now (seconds left). */
+  private readonly wear = new Map<number, number>();
+  private readonly knocks = new Map<number, number>();
+  private worn = false;
 
   /** A rebuild of the tiles marked in `area` (null: every one): their leaves are put again, the others stay. */
   begin(area: Uint8Array | null): void {
@@ -109,16 +127,31 @@ export class DoorLeaves {
     }
   }
 
-  /** Swings the doors that are opening or shutting, at the battle's speed (tween.ts timeRate). */
+  /** A siege's door at tile `tile` as worn as this (0 whole, 1 knocked about, 2 about to go). */
+  setWear(tile: number, stage: number): void {
+    if ((this.wear.get(tile) ?? 0) === stage) return;
+    if (stage) this.wear.set(tile, stage);
+    else this.wear.delete(tile);
+    this.worn = true;
+  }
+
+  /** A blow on the door at tile `tile`: it shakes on its hinges for a moment. */
+  knock(tile: number): void {
+    this.knocks.set(tile, KNOCK_SECONDS);
+  }
+
+  /** Swings the doors that are opening or shutting, at the battle's speed (tween.ts timeRate); shakes the ones struck. */
   update(dt: number): void {
-    if (!this.moving) return;
+    if (!this.moving && !this.knocks.size && !this.worn) return;
     const step = (dt * timeRate()) / SWING_SECONDS;
+    for (const [tile, left] of this.knocks) this.knocks.set(tile, left - dt * timeRate());
     let moving = false;
     for (const { mesh, leaves } of this.meshes) {
       let touched = false;
       leaves.forEach((leaf, k) => {
         const goal = leaf.open ? 1 : 0;
-        if (leaf.swing === goal) return;
+        const shaken = this.knocks.has(leaf.tile);
+        if (leaf.swing === goal && !shaken && !this.worn) return;
         leaf.swing = goal > leaf.swing ? Math.min(goal, leaf.swing + step) : Math.max(goal, leaf.swing - step);
         mesh.setMatrixAt(k, this.place(leaf));
         touched = true;
@@ -126,18 +159,30 @@ export class DoorLeaves {
       });
       if (touched) mesh.instanceMatrix.needsUpdate = true;
     }
+    for (const [tile, left] of this.knocks) if (left <= 0) this.knocks.delete(tile);
     this.moving = moving;
+    this.worn = false;
   }
 
-  /** A leaf's matrix: its piece's place, turned on the hinge as far as it is open (eased at both ends). */
+  /**
+   * A leaf's matrix: its piece's place, turned on the hinge as far as it is
+   * open (eased at both ends; a far-hinged leaf the other way, to open to the
+   * same side), then as worn as its door is and shaken by a blow.
+   */
   private place(leaf: Leaf): THREE.Matrix4 {
     const s = leaf.swing;
-    const turn = ((s * s * (3 - 2 * s)) * Math.PI) / 2;
+    const dir = leaf.far ? -1 : 1;
+    const wear = WEAR[this.wear.get(leaf.tile) ?? 0]!;
+    const knock = this.knocks.get(leaf.tile) ?? 0;
+    const shake = knock > 0 ? Math.sin((KNOCK_SECONDS - knock) * 46) * 0.05 * (knock / KNOCK_SECONDS) : 0;
+    const turn = ((s * s * (3 - 2 * s)) * Math.PI) / 2 + wear.ajar + shake;
     const h = leaf.hinge;
     return m1
       .copy(leaf.piece)
       .multiply(m2.makeTranslation(h.x, 0, h.z))
-      .multiply(m2.makeRotationY(turn))
+      .multiply(m2.makeRotationY(turn * dir))
+      .multiply(m2.makeRotationX(wear.lean + shake * 0.4))
+      .multiply(m2.makeRotationZ(-wear.sag * dir))
       .multiply(m2.makeTranslation(-h.x, 0, -h.z))
       .multiply(leaf.local);
   }

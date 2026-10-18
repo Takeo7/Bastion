@@ -114,6 +114,18 @@ export class Sfx {
     this.at(struck ? 'stone.hit' : this.softGround ? 'stone.thud' : 'stone.land', at);
   }
 
+  /**
+   * One of the dead beating on a door or a barricade in a siege (docs/FASE12.md §10, the 'smashed' event): a
+   * dull blow on wood, or on wood and sheet metal; if it `gaveWay`, the crack and what falls, and the music
+   * dips under it. game.ts calls it as the blow lands, and only where a soldier sees it.
+   */
+  smash(at: THREE.Vector3 | undefined, kind: 'door' | 'barricade', gaveWay: boolean): void {
+    this.at(`smash.${kind}`, at, 1, { spread: 0.06 });
+    if (!gaveWay) return;
+    this.at(`smash.give.${kind}`, at, 1, { delay: 0.04 });
+    audio.duck(0.75, 0.3, 1.2);
+  }
+
   launch(at?: THREE.Vector3): void {
     this.at('launch', at);
   }

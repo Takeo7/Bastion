@@ -212,10 +212,12 @@ export function onPatrol(s: GameState, u: Unit): boolean {
  * stopped on), enemies block their place (not the floor above or below), and
  * diagonals may not cut corners of blocked tiles. A pod on patrol keeps to
  * doors and open ground (playtest: undiscovered aliens went into a building
- * through a window): vaulting in is for aliens in the fight.
+ * through a window): vaulting in is for aliens in the fight. In a siege the
+ * dead don't open doors: they break them down (docs/FASE12.md §4).
  */
 export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos = u.pos): Reach {
   const windows = !onPatrol(s, u);
+  const shut = !!s.mission.siege && !!TEMPLATES[u.template].undead;
   const blockedByEnemy = new Set<number>();
   for (const o of s.units) {
     if (o.alive && o.team !== u.team) blockedByEnemy.add(nodeOf(s, o.pos));
@@ -234,7 +236,7 @@ export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos =
     for (const d of DIRS8) {
       for (const { to, cost: step } of stepsFrom(s, p, d.x, d.y)) {
         const ni = nodeOf(s, to);
-        if (blockedByEnemy.has(ni) || (!windows && isWindow(kindAt(s, to)))) continue;
+        if (blockedByEnemy.has(ni) || (!windows && isWindow(kindAt(s, to))) || (shut && kindAt(s, to) === 'door')) continue;
         if (d.x !== 0 && d.y !== 0) {
           const h = heightAt(s, p);
           if (blocked(surfaceAt(s, to.x, p.y, h)) || blocked(surfaceAt(s, p.x, to.y, h))) continue;

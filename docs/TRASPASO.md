@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 17/10 con la 0.5.1. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 18/10 con la 0.6.0. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.5.1)
+## 3. Estado (versión 0.6.0)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0 y v0.5.1 en GitHub (desde la 0.5.0, también el paquete web) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1 y v0.6.0 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
 - **Lo nuevo de la 0.2.2** (2026-10-14):
   - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
   - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
@@ -89,6 +89,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+- **Lo nuevo de la 0.6.0** (2026-10-18), el hito 1 de la Fase 12, el asedio ([FASE12.md](FASE12.md) §10): «El Bastión» en el menú de escaramuza, la base como mapa de combate (muralla, portones, barricadas, torres de vigía y la Sala de radio), cinco oleadas por un lado anunciado, muertos que tiran puertas y barricadas («Golpear»), brechas a la vista y el corazón de la base que no hay que perder. También el tablero de habilidades encuadrado en táctil, lo último de la Fase 11.
 - **Lo nuevo de la 0.5.1** (2026-10-17): jugando solo, los soldados del compañero que no está obedecen al que juega, en combate y en la base (`commandsFor`); la interfaz escala con la pantalla, con el iPhone Air en horizontal (912 × 420) como referencia.
 - **Lo nuevo de la 0.5.0** (2026-10-17), la Fase 11, móvil y navegador ([FASE11.md](FASE11.md)): el modo táctil (se detecta solo), el combate y la base con el dedo en horizontal, el ajuste gráfico «Móvil», y el juego servido en una web propia con contraseña (`npm run web:dist`, guía en [WEB.md](WEB.md)), con reconexión al volver de otra app y entrada desde la app con «Unirse por dirección».
 - **Lo nuevo de la 0.4.5** (2026-10-17), notas #44–#52: «Salir de Bastión» (y el compañero sabe cuándo cierra el anfitrión, mensaje `closing`); disparos más ruidosos; en el turno enemigo, primero solo los que muerden y el resto a la vez; la cámara al turno (con interruptor); en gris sin el mando; la luz de noche explicada y sin quemar; cambiar de objetivo con un clic en el cuerpo; el coste en acciones siempre igual y con el arma; la columna del objetivo y una guía en el suelo.
@@ -154,7 +155,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - **Solo Synty POLYGON** (Arturo tiene la suscripción), Kenney CC0 o lo nuestro. Nada de vóxel ni de otros packs.
   - El aspecto objetivo son las capturas promocionales de Synty.
 - **Rendimiento:** el PC de referencia es Windows con una RTX 3090; objetivo ≥240 fps en «alto» (≤4,2 ms por fotograma). El Mac es el mínimo («medio» ≥30). El aspecto no se recorta por el Mac: para eso están los ajustes.
-- **Plataforma:** Three.js y web, más la aplicación de escritorio en Electron (Tauri no: en Mac usa WebKit). WebGPU, más adelante.
+- **Plataforma:** Three.js en la aplicación de escritorio de Electron (Tauri no: en Mac usa WebKit). La versión web y móvil se abandonó el 18/10 (Arturo): solo se desarrolla y se publica la de escritorio. WebGPU, más adelante.
 - **Tema y tono** ([LORE-PROPUESTA-2026-10-13.md](LORE-PROPUESTA-2026-10-13.md)):
   - supervivencia zombi clásica;
   - premisa: Atalaya, una vieja estación militar en la sierra de Brena, con supervivientes de todas partes;
@@ -186,6 +187,9 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - probar la 0.4.0 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
 - **Probar en partida** la Fase 10: si las barras se llenan a buen ritmo, si el tablero da elecciones de verdad y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `BAR_FIRST`, `BAR_STEP`, `BAR_GROWTH`, `DEED_XP`, `BASE_AIM`; en `board.ts`, las cifras de cada celda; en `content.ts`: `STONE_DAMAGE`, `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
+- **Fase 12, el asedio** ([FASE12.md](FASE12.md)): aprobada por Arturo (18/10). El hito 1 salió en la 0.6.0: «El Bastión» en el menú de escaramuza (§10). Falta probarlo jugando; luego, construir (hito 2).
+- **Para revisar más adelante (Arturo, 18/10): «La Lata», la base móvil.** No hay base fija: el Bastión es el autobús con remolques, y la campaña es un viaje por el valle antes de que llegue la Marea. Se elige ruta y se carga el autobús, que tiene poco sitio (gente, combustible, comida, munición), y las instalaciones pasan a ser remolques. Fue la opción 2 al repensar la base; la elegida fue la 1, el asedio ([FASE12.md](FASE12.md)).
+- **La versión móvil y web** ([FASE11.md](FASE11.md)): abandonada por Arturo el 18/10. No se desarrolla más ni se publica el paquete web; solo la aplicación de escritorio. El código de la 0.5.0 y la 0.5.1 sigue en el repositorio.
 - **El tráiler:** aparcado por Arturo (15/10). El último borrador, la portada y las 10 capturas de la ficha están en `.dev-snapshots/trailer/` (no se suben); las herramientas siguen en `packages/client/tools/trailer/` ([TRAILER.md](TRAILER.md)) por si se retoma.
 - **Escenarios:** la cárcel y el centro comercial esperan los packs «POLYGON – Police Station» y «POLYGON – Shops», que tienen los atlas de sus piezas. Para después: la cafetería con aspecto propio y el portón grande de las naves (un hueco de 5 casillas).
 - **Para más adelante:**
@@ -207,4 +211,4 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md), [PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
 | [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), [FIRMA.md](FIRMA.md) | La guía de la prueba en el PC de referencia; cómo se firma la aplicación y qué cambiar con la cuenta de Apple |
-| [WEB.md](WEB.md), [FASE11.md](FASE11.md) | Servir el juego en una web propia (Fase 11: móvil y navegador): el paquete, la contraseña, el proxy con https y cómo llevar la partida de la app a la web |
+| [WEB.md](WEB.md), [FASE11.md](FASE11.md) | Abandonadas el 18/10. Servir el juego en una web propia (Fase 11: móvil y navegador): el paquete, la contraseña, el proxy con https y cómo llevar la partida de la app a la web |

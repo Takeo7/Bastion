@@ -1,5 +1,7 @@
 # Fase 11 · Móvil y navegador
 
+**Abandonada por Arturo el 18/10:** «quiero abandonar la versión web y móvil. No se desarrolla esa línea más. Solo la versión desktop». Antes, ese mismo día, la había aparcado como prueba de concepto. Lo hecho está en la 0.5.0 y la 0.5.1, y el encuadre del tablero de habilidades en táctil (hexBoard.ts), en la 0.6.0. Desde la 0.6.0 no se publica el paquete web.
+
 Lo pidió Arturo el 17/10: jugar desde el navegador del móvil, con controles táctiles, en una web suya (bastion.yumewagener.com). Es para jugar ellos dos y en horizontal. El servidor lo pone Arturo; nosotros damos el juego listo para servir y las instrucciones.
 
 La versión de escritorio (la app) sigue igual. Lo táctil se activa solo cuando hace falta.

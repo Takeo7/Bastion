@@ -105,6 +105,7 @@ const ICONS: Record<AbilityId, string> = {
   restoration: heartWaves,
   discharge: star,
   claw,
+  smash: claw,
   mindspin: spiral,
   reanimate: skull,
   burst: star,

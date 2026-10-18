@@ -113,6 +113,8 @@ export type GameEvent =
   | { t: 'leftBehind'; unit: string }
   /** `decor`: what it is to look like from now on (a breached wall); without it, the decor stays. */
   | { t: 'tileChanged'; pos: Pos; kind: TileKind; decor?: DecorKind }
+  /** One of the dead beats on a door or a barricade (docs/FASE12.md §4): `left`, what it still holds; at 0 a `tileChanged` follows, it gave way. */
+  | { t: 'smashed'; unit: string; tile: Pos; amount: number; left: number }
   /** A storey's slab gives way under a grenade (docs/FASE7.md §5): the place is open air. */
   | { t: 'floorBroken'; pos: Pos }
   /** Down through a broken floor onto `to` (docs/FASE7.md §5); the damage comes after, as `damaged`. */
@@ -600,11 +602,21 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       // On the ground, or on a storey's slab (docs/FASE6-PLAN.md).
       const tiles = e.pos.z === 0 ? s.tiles : s.levels?.[e.pos.z - 1]?.tiles;
       if (tiles) tiles[tileIndex(s, e.pos.x, e.pos.y)] = e.kind;
+      // A door or barricade of a siege that is gone (a blast took it): a breach.
+      const holds = s.breakables;
+      const node = nodeOf(s, e.pos);
+      if (holds && node in holds && e.kind !== 'door' && e.kind !== 'doorOpen' && e.kind !== 'low') holds[node] = 0;
       if (e.decor) {
         // A breached wall keeps its look through a reload (docs/FASE7.md §4).
         const level = e.pos.z === 0 ? s : s.levels?.[e.pos.z - 1];
         if (level) (level.decor ??= new Array<Decor>(s.width * s.height).fill(0))[tileIndex(s, e.pos.x, e.pos.y)] = decorCode(e.decor);
       }
+      break;
+    }
+    case 'smashed': {
+      const u = unit(s, e.unit);
+      u.facing = facingTo(u.pos, e.tile) ?? u.facing;
+      if (s.breakables) s.breakables[nodeOf(s, e.tile)] = Math.max(0, e.left);
       break;
     }
     case 'podActivated': {

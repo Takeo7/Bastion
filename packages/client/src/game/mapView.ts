@@ -4,7 +4,7 @@ import { carPartner, decorOf, DIRS4, floorLevels, litMask, type Biome, type Deco
 import { graphics } from '../settings';
 import { StaticBatch, type Dirty, type UvRect } from './batch';
 import { atlasRect, mapAtlasTexture } from './mapAtlas';
-import { BuildingsView, floorFadePatch, piecesLoaded, preloadPieces, RAISED_FLATS, RAISED_PLATFORM, syntyPiece, type Focus } from './buildings';
+import { BuildingsView, floorFadePatch, piecesLoaded, preloadPieces, RAISED_FLATS, RAISED_PLATFORM, RAISED_TOWER, syntyPiece, type Focus } from './buildings';
 import { STOREY } from './coords';
 import { dressEdges, dressStreets } from './dressing';
 import { NIGHT, NightLights, REAL_LIGHTS, type Glow } from './night';
@@ -13,6 +13,7 @@ import { beforeNextFrame, shadowsChanged } from './renderer';
 import { ExploredMemory } from './explored';
 import { FogOfWar } from './fogOfWar';
 import { GroundMap, scatterCover } from './ground';
+import { inwards, madeAs, towersOf, wearOf, type Wear } from './siegeDressing';
 import { SnowCover, snowyMission, snowTexture } from './snow';
 import { DroppedView } from './dropped';
 import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
@@ -349,7 +350,9 @@ export class MapView {
   /** Where the night's lamps and headlights go, as of the last rebuild. */
   private nightPlan: { lamps: Glow[]; headlights: Glow[] } | null = null;
   /** The tiles and searches the last rebuild drew (what changed since is all a rebuild redoes); null: redo everything. */
-  private drawn: { tiles: TileKind[]; levels: (TileKind | null)[][]; searched: string } | null = null;
+  private drawn: { tiles: TileKind[]; levels: (TileKind | null)[][]; searched: string; wear: Map<number, Wear> } | null = null;
+  /** A siege's doors' and barricades' wear as last drawn (siegeDressing.ts), as a key. */
+  private wearSeen = '';
   /** The contact occlusion baked over the map (groundAO.ts), and which bake is the latest. */
   private ao: GroundOcclusion | null = null;
   /** Where the contact occlusion is to be baked again (the next frame does it). */
@@ -868,6 +871,46 @@ export class MapView {
       }
     };
 
+    // A siege's base (docs/FASE12.md §10): its barricades' sandbags as worn as they are, what is left of a gate or a
+    // barricade that has given way (the map as it was made says which), and its watchtowers.
+    const siege = !!s.mission.siege;
+    const wear = siege ? wearOf(s) : new Map<number, Wear>();
+    /** A barricade's sandbags: lower and spilt as it wears (Wear), knocked flat and spread round once it has given way (3). */
+    const sandbags = (i: number, x: number, y: number, base: number, stage: number) => {
+      const r = (salt: number) => hash(x, y, 80 + salt);
+      const facing = decorOf(decor[i])?.facing ?? 0;
+      addSyntyId('sandbags', placed(x + 0.5, base, y + 0.5, 1, [1, 0.78, 0.5, 0.2][stage]!, 1, (facing ? Math.PI / 2 : 0) + (r(0) - 0.5) * 0.08 * stage));
+      // The bags knocked off: most out where the dead strike, a few in.
+      const into = inwards(s, x, y);
+      const loose = [0, 2, 4, 7][stage]!;
+      for (let k = 0; k < loose; k++) {
+        const out = r(10 + k) < 0.7 ? -1 : 1;
+        const d = 0.32 + r(20 + k) * (stage === 3 ? 0.55 : 0.3);
+        const t = (r(30 + k) - 0.5) * 0.9;
+        const px = x + 0.5 + into.x * out * d + into.z * t;
+        const pz = y + 0.5 + into.z * out * d + into.x * t;
+        addSyntyId('sandbag', placed(px, base + (k > 3 ? 0.05 : 0.01), pz, 1, 1, 1, r(40 + k) * Math.PI * 2), false);
+      }
+    };
+    /** A gate or a door given way: its leaf down flat, fallen in, the foot on its line, and grit off the posts. */
+    const fallenDoor = (i: number, x: number, y: number, base: number) => {
+      const r = (salt: number) => hash(x, y, 90 + salt);
+      const into = inwards(s, x, y);
+      const big = buildings.plan.owner[i]! < 0 ? 1 : 0.8;
+      const m = new THREE.Matrix4().compose(
+        new THREE.Vector3(x + 0.5 + into.x * 0.06, base + 0.09, y + 0.5 + into.z * 0.06),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2 + 0.05, Math.atan2(-into.x, -into.z) + (r(0) - 0.5) * 0.5, (r(1) - 0.5) * 0.08, 'YXZ')),
+        new THREE.Vector3(big, big, big),
+      );
+      addSyntyId('gateLeafDown', m);
+      for (const side of [-1, 1]) {
+        const px = x + 0.5 + into.z * side * 0.42 + into.x * (r(2 + side) - 0.3) * 0.3;
+        const pz = y + 0.5 + into.x * side * 0.42 + into.z * (r(4 + side) - 0.3) * 0.3;
+        addSyntyId('pebbles', placed(px, base + 0.01, pz, 1, 1, 1, r(6 + side) * Math.PI * 2), false);
+      }
+    };
+    if (siege) for (const t of towersOf(s, buildings.plan.raised)) if (!area || area[t.tile]) addSyntyId('guardTower', placed(t.x, 0, t.z, 1, 1, 1, t.yaw));
+
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
         const i = y * s.width + x;
@@ -883,8 +926,26 @@ export class MapView {
         const floor = e > 0 ? (hills ? pal.ground : pal.roof) : [pal.ground, pal.street, pal.floor][ground.kinds[i]!] ?? pal.ground;
         const raised = buildings.plan.raised[i] ?? 0;
         const covered = !!buildings.plan.floor[i] || raised === RAISED_FLATS || raised === RAISED_PLATFORM;
-        if (!covered) slabs.add(placed(cx, base - 0.05, cz, 1, 1, 1), floor);
+        // Under a watchtower's deck, the ground.
+        if (raised === RAISED_TOWER) slabs.add(placed(cx, -0.05, cz, 1, 1, 1), pal.ground);
+        else if (!covered) slabs.add(placed(cx, base - 0.05, cz, 1, 1, 1), floor);
+        // A siege's door knocked about: grit and flakes at its foot, out where the dead strike it.
+        if (siege && (kind === 'door' || kind === 'doorOpen') && wear.get(i)) {
+          const into = inwards(s, x, y);
+          const stage = wear.get(i)!;
+          for (let k = 0; k < stage + 1; k++) {
+            const r = (salt: number) => hash(x, y, 100 + k * 4 + salt);
+            const t = (r(0) - 0.5) * 0.8;
+            addSyntyId('pebbles', placed(cx - into.x * (0.35 + r(1) * 0.25) + into.z * t, base + 0.01, cz - into.z * (0.35 + r(1) * 0.25) + into.x * t, 1, 1, 1, r(2) * Math.PI * 2), false);
+          }
+          if (stage === 2) addSyntyId('rubble1', placed(cx - into.x * 0.45, base, cz - into.z * 0.45, 0.4, 0.35, 0.4, hash(x, y, 120) * Math.PI * 2));
+        }
         if (isWallLike(kind)) continue;
+        if (siege && kind === 'floor' && e === 0) {
+          const was = madeAs(s, x, y);
+          if (was === 'b') sandbags(i, x, y, base, 3);
+          else if (was === '+') fallenDoor(i, x, y, base);
+        }
 
         const v = hash(x, y, 1);
         switch (kind) {
@@ -892,6 +953,10 @@ export class MapView {
             if (!dressed(i, x, y, kind, base)) addProp(i, props.high, cx, base, cz, v, Math.floor(hash(x, y, 2) * 4), randomWiggle);
             break;
           case 'low':
+            if (siege && madeAs(s, x, y) === 'b') {
+              sandbags(i, x, y, base, wear.get(i) ?? 0);
+              break;
+            }
             // A wall blown down (docs/FASE7.md §4): its rubble, over the stump the walls draw (buildings.ts).
             if (buildings.plan.breached(i, 0)) {
               rubbleOf(x, y, 0, base, s.tiles);
@@ -1090,7 +1155,8 @@ export class MapView {
     dirty = union(dirty, buildings.dirty);
     this.group.add(buildings.group, buildings.walls);
     // What's drawn now, for the next rebuild to compare with; with props still loading, the next one redoes everything.
-    this.drawn = { tiles: s.tiles.slice(), levels: (s.levels ?? []).map((l) => l.tiles.slice()), searched: (s.searched ?? []).join(',') };
+    this.drawn = { tiles: s.tiles.slice(), levels: (s.levels ?? []).map((l) => l.tiles.slice()), searched: (s.searched ?? []).join(','), wear };
+    buildings.wearDoors(wear);
     if (this.waitingForProps) {
       this.waitingForProps = false;
       this.drawn = null;
@@ -1128,6 +1194,8 @@ export class MapView {
     s.levels?.forEach((l, k) => {
       for (let i = 0; i < l.tiles.length; i++) if (l.tiles[i] !== drawn.levels[k]![i]) touched.push(i);
     });
+    // A siege's door or barricade worn a stage further: the sandbags, the grit at a door's foot.
+    if (s.mission.siege) for (const [i, stage] of wearOf(s)) if (drawn.wear.get(i) !== stage) touched.push(i);
     const searched = s.searched ?? [];
     if (searched.join(',') !== drawn.searched) {
       const before = new Set(drawn.searched ? drawn.searched.split(',').map(Number) : []);
@@ -1224,6 +1292,11 @@ export class MapView {
 
   /** Buildings whose inside the squad sees through a window or a door lose their roof (off in the lab, where all is in sight). */
   seeInside = true;
+
+  /** A blow on a siege's door or barricade at `tile` (the 'smashed' event, docs/FASE12.md §10): a gate shakes on its hinges. */
+  knock(tile: Place): void {
+    if (this.shown) this.buildings?.knock(tile.y * this.shown.width + tile.x);
+  }
 
   /**
    * What the squad sees now (a mask by place: the ground's tiles first, then
@@ -1434,6 +1507,18 @@ export class MapView {
     this.fog.update(dt);
     // A search opened a piece of furniture: redraw (searches are few, a rebuild is cheap).
     if (this.shown && (this.shown.searched?.length ?? 0) !== this.searchedSeen) this.rebuild(this.shown);
+    // A siege's door or barricade struck to another stage of wear (the game applies 'smashed' to the state it shows):
+    // a door's leaf wears where it hangs (doors.ts); the sandbags and the grit are placed again.
+    if (this.shown?.mission.siege) {
+      const wear = wearOf(this.shown);
+      let key = '';
+      for (const [i, stage] of wear) key += `${i}:${stage},`;
+      if (key !== this.wearSeen) {
+        this.wearSeen = key;
+        this.buildings?.wearDoors(wear);
+        if ([...wear].some(([i, stage]) => this.drawn?.wear.get(i) !== stage)) this.rebuild(this.shown);
+      }
+    }
     // Lights on and off (lightOn, lightOff: the game applies them to the state it shows).
     if (this.shown && NIGHT.value > 0.5) {
       const lights = this.shown.lights ?? [];

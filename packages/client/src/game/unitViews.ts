@@ -1070,6 +1070,15 @@ export class UnitViews {
     });
   }
 
+  /**
+   * A blow on a siege's door or barricade at `tile` (the 'smashed' event,
+   * docs/FASE12.md §10): the dead one lunges at it with its arms. Resolves as
+   * the blow lands, 0.34 s on; it steps back in 0.35 s more on its own.
+   */
+  async smash(id: string, tile: Place): Promise<void> {
+    await this.lunge(id, this.standAt(tile));
+  }
+
   /** Lifted out by the dropship: rises into the sky and disappears. */
   async evacuate(id: string): Promise<void> {
     const v = this.views.get(id);

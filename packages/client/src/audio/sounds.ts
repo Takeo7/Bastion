@@ -580,6 +580,44 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.amp(body, hit(0, 0.001, 0.16, 1)));
     s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 1100), hit(0, 0.001, 0.1, 0.7)));
   }, { variants: 3, reverb: 0.1 }),
+  // A siege (docs/FASE12.md §10): one of the dead beating on what keeps it out. On a door: a dull blow on the
+  // boards, the panel booming low, and the door rattling in its frame and at the latch.
+  'smash.door': def('sfx', 0.6, (s) => {
+    const body = s.osc('sine', [[0, s.vary(115)], [0.12, s.vary(62)]], 0, 0.35);
+    s.to(s.amp(body, hit(0, 0.002, 0.22, 1)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(420), 1.6), hit(0, 0.001, 0.09, 0.9)));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 600), hit(0, 0.002, 0.16, 0.8)));
+    s.to(s.filter(s.grains(0.03, 0.3, 8, 0.008), 'bandpass', s.vary(1700), 1.1), 0.35);
+    s.to(s.metal(0.02, [s.vary(1850), s.vary(2900)], 0.07, 0.12));
+  }, { variants: 4, reverb: 0.2 }),
+  // On a barricade: boards and sheet metal, the sheets ringing hollow and clattering against the boards.
+  'smash.barricade': def('sfx', 0.7, (s) => {
+    s.to(s.amp(s.osc('sine', [[0, s.vary(140)], [0.1, s.vary(75)]], 0, 0.3), hit(0, 0.002, 0.16, 0.8)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(650), 1.2), hit(0, 0.001, 0.07, 0.8)));
+    s.to(s.metal(0, [310, 520, 785, 1130, 1690].map((f) => s.vary(f, 0.07)), 0.45, 0.55));
+    s.to(s.filter(s.grains(0.02, 0.4, 12, 0.01), 'bandpass', s.vary(2300), 0.9), 0.4);
+  }, { variants: 4, reverb: 0.2 }),
+  // A door giving way: the wood splitting with a crack and a tearing that sinks, splinters, and the door
+  // slapping down flat.
+  'smash.give.door': def('sfx', 1.2, (s) => {
+    s.to(s.shape(s.amp(s.filter(s.noise('white'), 'highpass', 1400), hit(0, 0.0005, 0.05, 1)), 2));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', [[0, 1600], [0.35, 500]], 2.2), [[0, 0], [0.02, 0.7], [0.38, 0.001]]));
+    s.to(s.filter(s.grains(0.01, 0.45, 26, 0.006), 'highpass', 2200, 0.7), 0.5);
+    const down = s.vary(0.42, 0.1);
+    s.to(s.amp(s.osc('sine', [[down, 95], [down + 0.15, 45]], down, 0.4), hit(down, 0.002, 0.25, 1.1)));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 900), hit(down, 0.001, 0.2, 0.9)));
+    s.to(s.filter(s.grains(down + 0.03, down + 0.6, 14, 0.012), 'bandpass', 1200, 0.8), 0.3);
+  }, { variants: 3, reverb: 0.3, level: 1 }),
+  // A barricade giving way: the same crack, and its sheets and boards tumbling over a second.
+  'smash.give.barricade': def('sfx', 1.3, (s) => {
+    s.to(s.shape(s.amp(s.filter(s.noise('white'), 'highpass', 1400), hit(0, 0.0005, 0.05, 1)), 2));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', [[0, 1400], [0.3, 450]], 2), [[0, 0], [0.02, 0.6], [0.32, 0.001]]));
+    for (const at of [s.r(0.12, 0.2), s.r(0.3, 0.45), s.r(0.55, 0.75)]) {
+      s.to(s.metal(at, [s.vary(380), s.vary(610), s.vary(940), s.vary(1450)], 0.3, 0.4));
+      s.to(s.amp(s.osc('sine', [[at, s.vary(170)], [at + 0.06, s.vary(90)]], at, 0.15), hit(at, 0.001, 0.08, 0.6)));
+    }
+    s.to(s.filter(s.grains(0.05, 1.1, 30, 0.01), 'bandpass', 1800, 0.8), 0.45);
+  }, { variants: 3, reverb: 0.3, level: 1 }),
   'grenade.throw': def('sfx', 0.45, (s) => {
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 700], [0.25, 1300]], 1.2), [[0, 0], [0.12, 0.6], [0.35, 0.001]]));
     s.to(s.metal(0, [3800, 5100], 0.06, 0.15));

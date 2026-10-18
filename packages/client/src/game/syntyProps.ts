@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { STOREY } from './coords';
 import { atlasOf, loadModel } from './synty';
-import { PROP_SETS, PROPS, type AtlasId, type PropId, type PropSet } from './syntyManifest';
+import { PROP_SETS, PROPS, SYNTY_SCALE, type AtlasId, type PropId, type PropSet } from './syntyManifest';
 
 // Synty props for the map: each prop's meshes, normalised to a tile as the
 // manifest says (fit, yaw, shift) and standing on y = 0, ready to instance.
@@ -16,7 +17,7 @@ const parts = new Map<PropId, PropPart[]>();
 const pending = new Map<PropId, Promise<void>>();
 
 function prepare(id: PropId, model: THREE.Group): void {
-  const a = PROPS[id] as { fit?: number; stretch?: boolean; thick?: number; yaw?: number; shift?: [number, number]; origin?: boolean };
+  const a = PROPS[id] as { fit?: number; stretch?: boolean; thick?: number; yaw?: number; shift?: [number, number]; origin?: boolean; deck?: number };
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
@@ -26,6 +27,8 @@ function prepare(id: PropId, model: THREE.Group): void {
   const along = a.fit ? a.fit / Math.max(size.x, size.z) : 1;
   const across = (a.stretch ? 1 : along) * (a.thick ?? 1);
   const scale = size.x >= size.z ? new THREE.Vector3(along, across, across) : new THREE.Vector3(across, across, along);
+  // A deck one stands on, one storey up whatever its width took (a guard tower's on its legs).
+  if (a.deck) scale.y = STOREY / (a.deck * SYNTY_SCALE);
   // Centred on the tile and on the floor, turned to face north, then shifted along its own axes.
   const fit = new THREE.Matrix4()
     .makeTranslation(a.shift?.[0] ?? 0, 0, a.shift?.[1] ?? 0)
@@ -49,7 +52,11 @@ export function syntyProp(id: PropId): PropPart[] | null {
       id,
       loadModel(a.pack, a.base ? 'base' : 'prop', a.base ?? id)
         .then((m) => prepare(id, m))
-        .catch(() => undefined),
+        // One that won't load (not converted yet) is drawn as nothing: waited for, the map rebuilt for it without end.
+        .catch((e: unknown) => {
+          console.warn(`[synty] prop ${id} did not load`, e);
+          parts.set(id, []);
+        }),
     );
   }
   return null;

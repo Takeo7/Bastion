@@ -146,10 +146,16 @@ export interface HordeView {
 
 export interface MissionView {
   kind: MissionKind;
+  /** In place of the kind's name (a siege: «Asedio», docs/FASE12.md). */
+  label?: string;
   objective: string;
   /** The objective in full, when the strip shows a short version. */
   objectiveTip?: string;
   turnsLeft: number | null;
+  /** The turns left are to hold out (a siege): the count runs towards the win, so it is never urgent. */
+  hold?: boolean;
+  /** A siege's next wave: short, in full for its tooltip, and whether it comes in this turn. */
+  wave?: { text: string; tip: string; urgent: boolean } | null;
   /** Urgent notice under the objective (reinforcements on the way). */
   alert: string | null;
   /** Name of the area (map). */
@@ -498,9 +504,12 @@ export class Hud {
     clear(this.mission);
     append(
       this.mission,
-      h('span.mission-kind', { title: m.area }, type(MISSION_NAMES[m.kind].toUpperCase())),
+      h('span.mission-kind', { title: m.area }, type((m.label ?? MISSION_NAMES[m.kind]).toUpperCase())),
       h('span.mission-goal', { title: m.objectiveTip ?? m.objective }, type(m.objective)),
-      m.turnsLeft !== null ? h(`span.timer${m.turnsLeft <= 3 ? '.urgent' : ''}`, {}, `${m.turnsLeft} ${m.turnsLeft === 1 ? 'TURNO' : 'TURNOS'}`) : null,
+      m.turnsLeft !== null
+        ? h(`span.timer${m.turnsLeft <= 3 && !m.hold ? '.urgent' : ''}`, { title: m.hold ? m.objectiveTip : undefined }, `${m.turnsLeft} ${m.turnsLeft === 1 ? 'TURNO' : 'TURNOS'}`)
+        : null,
+      m.wave ? h(`span.timer.wave${m.wave.urgent ? '.urgent' : ''}`, { title: m.wave.tip }, m.wave.text) : null,
       m.horde ? this.hordeGauge(m.horde) : null,
       m.alert ? h('span.timer.urgent.alert', {}, m.alert) : null,
     );
@@ -1285,7 +1294,8 @@ export class Hud {
   }
 
   /** The stamp, one short line (`line`) and the way on: nothing more (playtest: «devuelve mucho texto»). */
-  showOutcome(outcome: Outcome | null, line = '', campaign = false): void {
+  /** `siege`: its «again» is another siege on the same base, not a new map. */
+  showOutcome(outcome: Outcome | null, line = '', campaign = false, siege = false): void {
     // The result is stamped on the report as it appears (not again on a reconnect).
     if (outcome && !this.outcome.classList.contains('show')) uiSound('stamp', { delay: 0.25 });
     if (!outcome) this.outcome.classList.remove('leaving');
@@ -1304,7 +1314,7 @@ export class Hud {
           : h(
               'div.outcome-actions',
               {},
-              h('button.fire', { onclick: () => this.handlers.onNewMission() }, 'OTRA IGUAL (MAPA NUEVO)'),
+              h('button.fire', { onclick: () => this.handlers.onNewMission() }, siege ? 'OTRO ASEDIO' : 'OTRA IGUAL (MAPA NUEVO)'),
               h('button.secondary', { onclick: () => this.handlers.onNewMission(randomKind(), randomMap()) }, 'MISIÓN AL AZAR'),
               h('button.secondary', { onclick: () => this.handlers.onBackToMenu(), title: 'Los dos volvéis al menú principal' }, 'VOLVER AL MENÚ'),
             ),

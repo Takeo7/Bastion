@@ -400,7 +400,17 @@ def static(job, scale):
         assign_atlases(m, slots.get(m.name) or slots.get(m.data.name), job['atlas'])
         keep_uv(m)
     turn = Matrix.Rotation(-math.pi / 2, 4, 'Z') if job['kind'] == 'weapon' else Matrix()
-    bake(meshes, scale)
+    # Boxes in the FBX's metres: cut to `keep`, then `hole` taken out (a guard tower's hut off its deck).
+    bake(meshes)
+    for m in meshes:
+        if job.get('keep'):
+            cut(m, job['keep'])
+        if job.get('hole'):
+            hole(m, job['hole'])
+        m.data.transform(Matrix.Scale(scale, 4))
+    for m in [m for m in meshes if not len(m.data.polygons)]:
+        meshes.remove(m)
+        bpy.data.objects.remove(m)
     for m in meshes:
         m.data.transform(turn)
     bpy.ops.object.select_all(action='DESELECT')
@@ -436,6 +446,18 @@ def cut(obj, keep):
             normal[axis] = 1
             geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
             bmesh.ops.bisect_plane(bm, geom=geom, plane_co=normal * value, plane_no=normal, clear_inner=above, clear_outer=not above)
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def hole(obj, boxes):
+    """Takes out of a mesh (its data in the FBX's metres) the faces whose middle is in one of `boxes` ([[x0, y0, z0], [x1, y1, z1]] each)."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    inside = lambda c, b: all(b[0][k] <= c[k] <= b[1][k] for k in range(3))
+    gone = [f for f in bm.faces if any(inside(f.calc_center_median(), b) for b in boxes)]
+    bmesh.ops.delete(bm, geom=gone, context='FACES')
     bm.to_mesh(obj.data)
     bm.free()
 

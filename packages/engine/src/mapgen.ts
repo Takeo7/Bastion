@@ -75,6 +75,9 @@ export interface MissionLayout {
   evacBus?: { tiles: Vec2[]; heading: number };
   /** The scenario, when not the biome's usual one (GenOptions.site). */
   site?: Site;
+  /** A base to defend (docs/FASE12.md): its heart, and its barricades (low cover the dead break down). */
+  heart?: Vec2;
+  barricades?: Vec2[];
 }
 
 // ------------------------------------------------------------------- rects
@@ -3984,6 +3987,8 @@ export function handmadeLayout(def: MapDef, kind: MissionKind): MissionLayout {
     terminal: kind === 'hack' ? spot : null,
     objectiveSpot: objective && (kind === 'sabotage' || kind === 'rescue') ? spot : null,
     evacZone: objective ? map.evacZone : [],
+    ...(def.siege && spot ? { heart: spot } : {}),
+    ...(map.barricades.length ? { barricades: map.barricades } : {}),
   };
 }
 

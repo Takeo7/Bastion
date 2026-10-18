@@ -56,7 +56,8 @@ export class GroundMap {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
         const e = s.elev[i] ?? 0;
-        let kind = e > 0 ? (wilds ? HILL : ROOF) : s.ground?.[i] === 2 ? INDOOR : s.ground?.[i] === 3 ? YARD : isStreet(x, y) ? STREET : OPEN;
+        // A siege's watchtowers stand on the ground (docs/FASE12.md §10): their decks are the guard tower's own.
+        let kind = e > 0 && !s.mission.siege ? (wilds ? HILL : ROOF) : s.ground?.[i] === 2 ? INDOOR : s.ground?.[i] === 3 ? YARD : isStreet(x, y) ? STREET : OPEN;
         let axis = 0;
         let offset = 0;
         // A one-tile strip in the wilds is a furrow of a field, not the track.
@@ -574,6 +575,8 @@ export function scatterCover(s: GameState, ground: GroundMap, density = 1): { id
       const i = y * w + x;
       if (s.tiles[i] !== 'floor') continue;
       const e = elev(x, y);
+      // A siege's watchtower deck (docs/FASE12.md §10) is planks: nothing grows on it.
+      if (e && s.mission.siege) continue;
       const kind = ground.kinds[i]!;
       if (kind === INDOOR) continue;
       const lawn = s.biome === 'city' && kind === OPEN && data[i * 4 + 2] === LAWN;

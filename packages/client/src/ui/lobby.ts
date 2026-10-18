@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { doomName, MISSION_NAMES, type MissionKind, type PlayerInfo, type SkirmishMap, type Slot } from '@bastion/engine';
+import { doomName, MISSION_NAMES, SIEGE_TEXT, type MissionKind, type PlayerInfo, type SkirmishMap, type Slot } from '@bastion/engine';
 import { inviteLinks, type InviteLink, type NetStatus } from '../net';
 import { GeoscapeSet } from '../strategy/geoscape';
 import { Stage } from '../strategy/stage';
@@ -36,6 +36,8 @@ const MAPS: { id: SkirmishMap; name: string; text: string }[] = [
   { id: 'plaza', name: 'Distrito Comercial', text: 'El mapa hecho a mano' },
   // Phase 6's test map (docs/FASE6-PLAN.md): a building with real storeys and stairs.
   { id: 'torre', name: 'La torre', text: 'Un edificio de dos plantas: pruebas' },
+  // Fase 12's test siege (docs/FASE12.md, hito 1).
+  { id: 'bastion', name: 'El Bastión', text: SIEGE_TEXT.menu },
 ];
 
 /**
@@ -310,7 +312,10 @@ export class Lobby {
         'div.x-panel.menu-panel',
         {},
         h('div.x-head', {}, 'Misión'),
-        h('div.menu-options', {}, ...MISSIONS.map((m) => option(this.mission, m.id, (v) => (this.mission = v), MISSION_NAMES[m.id], m.text))),
+        // On the Bastión it is always a siege (docs/FASE12.md §10): the kinds would choose nothing.
+        map === 'bastion'
+          ? h('div.menu-options', {}, h('div.menu-option.on', {}, h('b', {}, SIEGE_TEXT.name), h('small', {}, SIEGE_TEXT.objective)))
+          : h('div.menu-options', {}, ...MISSIONS.map((m) => option(this.mission, m.id, (v) => (this.mission = v), MISSION_NAMES[m.id], m.text))),
         h('div.x-head', {}, 'Mapa'),
         h('div.menu-options.two', {}, ...MAPS.filter((m) => !fixedMap || m.id === fixedMap).map((m) => option(map, m.id, (v) => (this.map = v), m.name, m.text))),
         h('div.x-head', {}, 'Escuadra'),

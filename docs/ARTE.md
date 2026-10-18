@@ -172,6 +172,24 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - la reconstrucción por trozos baja de 160–270 ms a 4–13 ms;
   - los ocho atlas del mapa en una textura: de 83 a 63 llamadas en la manzana de referencia.
 
+### El Bastión, el mapa del asedio ([FASE12.md](FASE12.md) §10; `buildings.ts`, `doors.ts`, `mapView.ts`, `siegeDressing.ts`)
+
+- **La vieja estación militar sobre Brena** (`maps.ts`, `bastion`, de Gameplay); cuando el estado trae `mission.siege`:
+  - **la muralla:** el muro de cuarentena de Apocalypse (el kit `fence`: paneles de hormigón, columnas y alambre de espino);
+  - **los portones:** las hojas de chapa `SM_Prop_Wall_Quarantine_GateDoor_01/02`, una por casilla (`gateLeaf`, `gateLeafFar`), sin dintel. Cada hoja gira en su extremo del portón (`hingeFar`: la segunda gira al revés para abrir al mismo lado) y lleva una columna del muro a cada lado;
+  - **las barricadas `b`:** sacos terreros (`sandbags`);
+  - **las torres:** `SM_Bld_GuardTower_02` de POLYGON Military sin su caseta ni su escalera (recortadas en el conversor: `keep` y `hole`). Queda la plataforma sobre patas con barandilla, a 3 × 3 casillas y con el suelo justo a una planta (`deck`), girada hacia su escalera de mano (`RAISED_TOWER`). Para el motor es un bloque macizo, así que por debajo no se pasa: por los lados de fuera sigue el muro de cuarentena, de modo que la muralla no se corta en la esquina, y por los de dentro la cierra una caseta de chapa, con la puerta cerrada en el lado sin escalera. Los muros llegan a la torre sin columna;
+  - **los edificios:** de una planta y tejado plano. La Sala de radio (la del corazón), de hormigón, con el mástil de celosía `SM_Bld_RadioTower_01`, su remate de antenas y una parabólica en el tejado; el barracón, de bloque; la enfermería, de hormigón; el taller y el almacén, de chapa. Sin letreros.
+- **El daño** (`s.breakables` frente a `SIEGE.door` 18 y `SIEGE.barricade` 9; `siegeDressing.ts` `wearStage`):
+  - a 2/3 o menos, «tocada»; a 1/3 o menos, «casi rota»;
+  - las hojas se entreabren, se ladean y se descuelgan (`doors.ts` `WEAR`), con gravilla al pie por fuera;
+  - los sacos, más bajos (78 % y 50 %) y con sacos sueltos;
+  - un golpe sacude el portón 0,4 s (`mapView.knock`).
+- **Al ceder** (la casilla pasa a suelo y su entrada queda a 0; se sabe qué era por el mapa tal como se hizo, `madeAs`, también al recargar):
+  - el portón deja su hoja tirada hacia dentro y gravilla en las columnas;
+  - la barricada, un resto bajo y los sacos desparramados.
+- **El golpe:** `unitViews.smash(id, tile)` embiste (resuelve al dar, 0,34 s; vuelve en 0,35 s). `fx.smash(at, 'door' | 'barricade', cede)` da chispas, escamas y polvo en la chapa, o tierra y arena en los sacos, más si cede. Lo reproduce UI (game.ts), solo si la casilla se ve.
+
 ### Base y valle (`strategy/bastion.ts`, `baseKit.ts`, `stage.ts`, `geoscape.ts`, `valleyGeography.ts`, `valleyRoads.ts`, `valley.css`, `tools/valle/mapa.ts`)
 
 - **El Bastión:** Atalaya en la sierra, con la luz de la manzana de referencia (de 524 a 132 llamadas). Tiene el Cuartel, el Taller de oficios, obras con Construction y el Huerto por niveles: bancales con plástico, invernadero con estufa, riego por goteo y espantapájaros.

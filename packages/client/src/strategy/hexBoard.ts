@@ -15,6 +15,7 @@ import {
 } from '@bastion/engine';
 import { uiSound } from '../audio/ui';
 import { append, clear, h } from '../ui/dom';
+import { isTouch } from '../ui/touch';
 import { boardIconStyle, boardIconSvg } from './boardIcons';
 
 // The hex board of Fase 10 (docs/FASE10.md §6, Arturo's prototype of 16/10):
@@ -36,7 +37,9 @@ import { boardIconStyle, boardIconSvg } from './boardIcons';
 // - The wave: the cells near the pointer rise with the distance, face and icon
 //   together, and settle slowly when it leaves.
 // - Moving: dragging pans, the wheel zooms towards the pointer (two fingers
-//   pinch), within limits; it opens with the whole tree framed.
+//   pinch), within limits; it opens with the whole tree framed, or, on a
+//   finger's screen, on what the soldier has and can take next, its cells a
+//   finger wide (pinching out shows the whole).
 // - Keyboard: the arrows go from cell to cell (and consult); holding Enter or
 //   Space unlocks. Reduced motion: no wave, no bounce.
 //
@@ -72,6 +75,9 @@ const hexPoints = (radius: number) =>
 const OUTER = 424;
 /** The view's half-size in board units, to frame it whole. */
 const HALF = 440;
+
+/** On a finger's screen, a cell's width (flat side to flat side) on the glass where the board opens (Gameplay, 17/10). */
+const FINGER_CELL_PX = 40;
 
 const HOLD_MS = 1000;
 /** Pointer travel (px) that turns a press into a drag. */
@@ -156,6 +162,11 @@ export class HexBoard {
   update(data: HexBoardData): void {
     const before = this.data?.board;
     this.data = data;
+    // The first data: where the board opens depends on it (openingFrame), unless the player has moved it already.
+    if (!before && !this.moved) {
+      this.framed = false;
+      this.apply();
+    }
     for (const v of this.cells.values()) this.paint(v);
     if (before) for (const id of data.board) if (!before.includes(id)) this.celebrate(id);
     this.showCard(this.shown);
@@ -317,10 +328,52 @@ export class HexBoard {
     return Math.min(w, hh) / (2 * HALF);
   }
 
-  /** The camera within its limits: from the whole tree to four times closer, the tree never out of the view. */
+  /** The view's px per screen px: the sheet may be zoomed (--ui-zoom). */
+  private screenScale(): number {
+    return this.view.getBoundingClientRect().width / (this.view.clientWidth || 1) || 1;
+  }
+
+  /** On a finger's screen, the zoom that makes a cell FINGER_CELL_PX wide on the glass; 0 with a mouse. */
+  private fingerZoom(): number {
+    return isTouch() ? FINGER_CELL_PX / (SQ3 * SIZE * this.screenScale()) : 0;
+  }
+
+  /** The closest the camera goes: four times the whole tree's, or a little past a finger's. */
+  private maxZoom(): number {
+    return Math.max(this.fitZoom() * 4, this.fingerZoom() * 1.5);
+  }
+
+  /**
+   * Where the board opens: the whole tree; on a finger's screen, centred on
+   * what the soldier has and can take next (the cells that aren't locked),
+   * each a finger wide, unless the whole tree is already that large.
+   */
+  private openingFrame(): void {
+    this.z = this.fitZoom();
+    this.px = this.py = 0;
+    const finger = this.fingerZoom();
+    if (!finger || finger <= this.z || !this.data) return;
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const v of this.cells.values()) {
+      if (cellState(this.data.board, v.cell.id) === 'locked') continue;
+      x0 = Math.min(x0, v.x);
+      x1 = Math.max(x1, v.x);
+      y0 = Math.min(y0, v.y);
+      y1 = Math.max(y1, v.y);
+    }
+    if (x0 > x1) return;
+    this.z = finger;
+    this.px = -((x0 + x1) / 2) * finger;
+    this.py = -((y0 + y1) / 2) * finger;
+  }
+
+  /** The camera within its limits: from the whole tree to four times closer (or a finger's), the tree never out of the view. */
   private clamp(): void {
     const fit = this.fitZoom();
-    this.z = Math.min(fit * 4, Math.max(fit * 0.9, this.z));
+    this.z = Math.min(this.maxZoom(), Math.max(fit * 0.9, this.z));
     const { w, h: hh } = this.size();
     const mx = Math.max(0, OUTER * this.z - w * 0.3);
     const my = Math.max(0, OUTER * this.z - hh * 0.3);
@@ -333,8 +386,7 @@ export class HexBoard {
     if (!w || !hh) return;
     const size = `${w}x${hh}`;
     if (!this.framed || (size !== this.framedFor && !this.moved)) {
-      this.z = this.fitZoom();
-      this.px = this.py = 0;
+      this.openingFrame();
       this.framed = true;
       this.framedFor = size;
     }
@@ -349,8 +401,7 @@ export class HexBoard {
     const { w, h: hh } = this.size();
     const bx = (sx - w / 2 - this.px) / this.z;
     const by = (sy - hh / 2 - this.py) / this.z;
-    const fit = this.fitZoom();
-    const z = Math.min(fit * 4, Math.max(fit * 0.9, this.z * k));
+    const z = Math.min(this.maxZoom(), Math.max(this.fitZoom() * 0.9, this.z * k));
     this.px = sx - w / 2 - bx * z;
     this.py = sy - hh / 2 - by * z;
     this.z = z;
@@ -365,8 +416,8 @@ export class HexBoard {
 
   private local(e: { clientX: number; clientY: number }): { x: number; y: number } {
     const r = this.view.getBoundingClientRect();
-    // The sheet may be zoomed (--ui-scale): screen px back to the view's own.
-    const k = r.width / (this.view.clientWidth || 1) || 1;
+    // The sheet may be zoomed (--ui-zoom): screen px back to the view's own.
+    const k = this.screenScale();
     return { x: (e.clientX - r.left) / k, y: (e.clientY - r.top) / k };
   }
 
@@ -532,7 +583,11 @@ export class HexBoard {
     window.addEventListener('blur', () => this.cancelHold());
     if (typeof ResizeObserver !== 'undefined') {
       const watch = new ResizeObserver(() => {
-        if (!this.el.isConnected) return;
+        // Closed (off the page for a frame, not just redrawn): on a finger's screen it opens framed afresh.
+        if (!this.el.isConnected) {
+          if (isTouch()) this.framed = this.moved = false;
+          return;
+        }
         this.apply();
       });
       watch.observe(v);

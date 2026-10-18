@@ -9,8 +9,10 @@ import type { Biome, Decor, Level, Place, TemplateId, TileKind, Vec2 } from './t
  *   H  high cover     h  low cover
  *   +  door           =  window          L  ladder
  *   S  a building's stairs (a ladder to the storey above, drawn as stairs)
+ *   b  barricade: low cover the dead break down in a siege (docs/FASE12.md)
  *   x  XCOM spawn     1-9  alien pod spawn (members listed in `pods`)
- *   D  objective spot (data, terminal, relay or VIP depending on the mission)
+ *   D  objective spot (data, terminal, relay or VIP depending on the mission;
+ *      on a base, its heart)
  *   E  evacuation zone
  *
  * `heights`, when present, gives each tile's elevation as a digit (storeys).
@@ -19,6 +21,9 @@ import type { Biome, Decor, Level, Place, TemplateId, TileKind, Vec2 } from './t
  * (docs/FASE6-PLAN.md), drawn like `rows`: a space where the storey has no
  * slab (open air, the stairwell over a flight of stairs), `R` a roof nobody
  * stands on, and pod spawns (digits) for enemies posted up there.
+ *
+ * `siege`: a base to defend (docs/FASE12.md). Every mission on it is a siege:
+ * no enemies at the start, the dead come in waves for its heart.
  */
 export interface MapDef {
   id: string;
@@ -28,6 +33,7 @@ export interface MapDef {
   heights?: string[];
   levels?: string[][];
   pods: Record<string, TemplateId[]>;
+  siege?: boolean;
 }
 
 export const MAPS: Record<string, MapDef> = {
@@ -179,6 +185,93 @@ export const MAPS: Record<string, MapDef> = {
       '2': ['zombie', 'zombie', 'zombie'],
     },
   },
+  // The base as a battlefield (docs/FASE12.md, hito 1): the old military
+  // station over Brena, its wall with a gate and a barricade on each side,
+  // a raised watchtower on each corner (a ladder up from inside), and the
+  // Sala de radio in the middle, its heart.
+  bastion: {
+    id: 'bastion',
+    name: 'El Bastión',
+    biome: 'city',
+    rows: [
+      '....................................',
+      '....................H...............',
+      '....H...................hh.......H..',
+      '........hh..H.......................',
+      '...............h...........H...h....',
+      '....................................',
+      '.........########++####bbb#.........',
+      '.........L................L.........',
+      '......................h.............',
+      '......#.........h..h.######..#...H..',
+      '..H...#..##=###......#....=..b......',
+      '......#..#....#......#....#..b.h....',
+      '....h.#..#....+......##+###..b......',
+      '......#..######............h.#......',
+      '......#........######........#......',
+      '......#........#....#........#.H....',
+      '....H.#..h..H..#.D..#..H..h..#......',
+      '......+........#....#........+......',
+      '......+........#....#........+......',
+      '......#..h..H..###+##..H..h..#..h...',
+      '...h..#......................#......',
+      '......#..##+##..xxxx.........#....H.',
+      '.H....#.h#...#..xxxx..#####..#......',
+      '......b..#...=........+...#..#......',
+      '....h.b..#...#........#...#..#.h....',
+      '......b..#####........##=##..#......',
+      '......#.........h..h.........#......',
+      '.............h..................H...',
+      '...H.....L................L.........',
+      '.........#bbb####++########.........',
+      '....................................',
+      '.........h..............H...........',
+      '.....H...............hh.....h.......',
+      '............H.................H.....',
+      '..............h.....................',
+      '....................................',
+    ],
+    heights: [
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000111000000000000000000111000000',
+      '000000111000000000000000000111000000',
+      '000000111000000000000000000111000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000111000000000000000000111000000',
+      '000000111000000000000000000111000000',
+      '000000111000000000000000000111000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+      '000000000000000000000000000000000000',
+    ],
+    pods: {},
+    siege: true,
+  },
 };
 
 export interface ParsedMap {
@@ -196,6 +289,8 @@ export interface ParsedMap {
   podSpawns: Record<string, Place[]>;
   item: Vec2 | null;
   evacZone: Vec2[];
+  /** The barricades' tiles (`b`): low cover that looks like a barricade. */
+  barricades: Vec2[];
 }
 
 const LEGEND: Record<string, TileKind> = {
@@ -217,6 +312,7 @@ export function parseMap(def: MapDef): ParsedMap {
   const spawns: Vec2[] = [];
   const podSpawns: Record<string, Place[]> = {};
   const evacZone: Vec2[] = [];
+  const barricades: Vec2[] = [];
   let item: Vec2 | null = null;
 
   def.rows.forEach((row, y) => {
@@ -230,6 +326,11 @@ export function parseMap(def: MapDef): ParsedMap {
         tiles.push(kind);
         return;
       }
+      if (ch === 'b') {
+        tiles.push('low');
+        barricades.push({ x, y });
+        return;
+      }
       tiles.push('floor');
       if (ch === 'x') spawns.push({ x, y });
       else if (ch === 'D') item = { x, y };
@@ -239,7 +340,20 @@ export function parseMap(def: MapDef): ParsedMap {
     });
   });
 
-  if (!def.levels?.length) return { width, height, tiles, elev, spawns, podSpawns, item, evacZone };
+  // Barricades look like barricades, facing across their line (decor.ts).
+  const barricaded = (base: Decor[] | undefined): Decor[] | undefined => {
+    if (!barricades.length) return base;
+    const out = base ? [...base] : new Array<Decor>(width * height).fill(0);
+    for (const b of barricades) {
+      const along = [-1, 1].some((dx) => '#b'.includes(def.rows[b.y]![b.x + dx] ?? ' '));
+      out[b.y * width + b.x] = decorCode('barricade', along ? 0 : 1);
+    }
+    return out;
+  };
+  if (!def.levels?.length) {
+    const decor = barricaded(undefined);
+    return { width, height, tiles, elev, ...(decor ? { decor } : {}), spawns, podSpawns, item, evacZone, barricades };
+  }
 
   // The storeys above (docs/FASE6-PLAN.md).
   const levels: Level[] = def.levels.map((rows, k) => {
@@ -274,12 +388,12 @@ export function parseMap(def: MapDef): ParsedMap {
     );
     return out;
   };
-  const decor = stairs(def.rows, levels[0]?.tiles);
+  const decor = barricaded(stairs(def.rows, levels[0]?.tiles));
   def.levels.forEach((rows, k) => {
     const look = stairs(rows, levels[k + 1]?.tiles);
     if (look) levels[k]!.decor = look;
   });
   // How tall each building stands: up to its highest slab.
   const storeys = tiles.map((_, i) => levels.reduce((top, l, k) => (l.tiles[i] !== null ? k + 1 : top), 0));
-  return { width, height, tiles, elev, ...(decor ? { decor } : {}), levels, storeys, spawns, podSpawns, item, evacZone };
+  return { width, height, tiles, elev, ...(decor ? { decor } : {}), levels, storeys, spawns, podSpawns, item, evacZone, barricades };
 }
