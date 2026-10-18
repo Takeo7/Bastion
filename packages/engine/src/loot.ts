@@ -5,7 +5,7 @@ import { BACKPACK_SLOTS, FOUND_WEAPONS, ITEMS, NIGHT, TEMPLATES, WEAPON_MODS } f
 import { decorOf } from './decor';
 import { DIRS4, DIRS8, heightAt, inBounds, isWalkable, kindAt, nodeOf, slabAt, tileIndex, toPos } from './grid';
 import type { Rng } from './rng';
-import type { DecorKind, FoundWeaponId, GameState, ItemId, Loot, Place, Pos, TileKind, Unit, WeaponModId } from './types';
+import type { ChargeId, DecorKind, FoundWeaponId, GameState, ItemId, Loot, Place, Pos, TileKind, Unit, WeaponModId } from './types';
 
 /** What kind of place a searchable piece of furniture belongs to: it sets what turns up in it. */
 type Spot = 'home' | 'office' | 'shop' | 'store' | 'trunk' | 'glovebox';
@@ -325,6 +325,23 @@ export function bringsLootHome(s: GameState, u: Unit): boolean {
 
 /** What the squad brings back from the mission (docs/FASE2.md): only what comes home counts. */
 export function broughtBack(s: GameState): LootTotals {
-  // A vest put on out there comes home on the soldier, as if in the backpack.
-  return lootTotals(s.units.filter((u) => bringsLootHome(s, u)).flatMap((u) => [...(u.backpack ?? []), ...(u.worn ?? []).map((item) => ({ item }))]));
+  // A vest put on out there comes home on the soldier, as if in the backpack; a belt thing too, if not dipped into.
+  return lootTotals(s.units.filter((u) => bringsLootHome(s, u)).flatMap((u) => [...(u.backpack ?? []), ...(u.worn ?? []).map((item) => ({ item })), ...beltedBack(u)]));
+}
+
+/**
+ * The belt things found and put on out there that come home (playtest 18/10
+ * #5): those whose uses are all still there, counting the soldier's own as
+ * spent first (they are the Armería's, and it fills them again).
+ */
+export function beltedBack(u: Unit): Loot[] {
+  const left: Partial<Record<ChargeId, number>> = { ...u.charges };
+  const back: Loot[] = [];
+  for (const item of [...(u.belted ?? [])].reverse()) {
+    const uses = Object.entries(ITEMS[item].charges ?? {}) as [ChargeId, number][];
+    if (!uses.every(([charge, n]) => (left[charge] ?? 0) >= n)) continue;
+    for (const [charge, n] of uses) left[charge] = (left[charge] ?? 0) - n;
+    back.push({ item });
+  }
+  return back;
 }

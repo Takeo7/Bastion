@@ -78,7 +78,7 @@ describe('story', () => {
     gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
     // Chapters don't chain back to back: the next one waits some days after the last win.
     expect(chapter(c, 2)).toBeUndefined();
-    for (let i = 0; i < 10 && !chapter(c, 2); i++) run(c, { type: 'advance', ready: true });
+    for (let i = 0; i < 10 && !chapter(c, 2); i++) advanceTime(c, new Rng(7 + i));
     expect(c.day).toBeGreaterThanOrEqual(c.story.nextDay!);
     expect(chapter(c, 2)).toMatchObject({ kind: 'rescue', region: 'afr', expiresDay: null });
     expect(missionInfo(c, chapter(c, 2)!).kicker).toBe('DIARIO · HOJA 2');

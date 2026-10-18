@@ -1062,6 +1062,27 @@ dl.briefing {
   font-size: 13px;
 }
 
+/* Two rows centred over the controls, when there are more than a row holds (a siege's defenders: anchorCards). */
+.lineup-cards.rows {
+  right: auto;
+  bottom: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-end;
+  gap: 10px 0;
+}
+
+.lineup-cards.rows .lineup-card {
+  margin: 0 5px;
+}
+
+/* Over the theme's centring on the pad (synty-base.css): here they flow in their rows. */
+.strat[data-view] .lineup-cards.rows .lineup-card {
+  position: relative;
+  transform: none;
+}
+
 .lineup-card:nth-child(even) {
   transform: translateX(-50%) rotate(1.2deg);
 }
@@ -1588,7 +1609,7 @@ dl.briefing {
 
 /* Árbol de habilidades: the tree's panel (skillSheet.ts; the tree itself is skillMatrix.css). */
 .strat-modal .x-panel.wide.service {
-  width: min(1180px, calc(96vw / var(--ui-zoom, var(--ui-scale, 1))));
+  width: min(1180px, calc(96vw / var(--ui-scale, 1)));
 }
 
 /* --------------------------------------------------------------- modal */
@@ -1609,14 +1630,14 @@ dl.briefing {
 .strat-modal .x-panel {
   /* The panel zooms with --ui-scale (bottom of this file), and so would 92vw:
      dividing keeps it inside the screen at 115 and 130 %. Too tall, it scrolls. */
-  width: min(520px, calc(92vw / var(--ui-zoom, var(--ui-scale, 1))));
-  max-height: calc(94vh / var(--ui-zoom, var(--ui-scale, 1)));
+  width: min(520px, calc(92vw / var(--ui-scale, 1)));
+  max-height: calc(94vh / var(--ui-scale, 1));
   overflow-y: auto;
   transform: rotate(-0.4deg);
 }
 
 .strat-modal .x-panel.wide {
-  width: min(920px, calc(94vw / var(--ui-zoom, var(--ui-scale, 1))));
+  width: min(920px, calc(94vw / var(--ui-scale, 1)));
 }
 
 .alert-kicker {
@@ -1723,7 +1744,8 @@ dl.briefing {
 .launch-banner {
   position: absolute;
   left: 50%;
-  top: 40%;
+  /* High: La Lata leaves from the middle of the screen, by the caravan (screen.ts launch). */
+  top: 22%;
   padding: 6px 28px;
   font-family: var(--font-display);
   font-size: 46px;
@@ -2845,9 +2867,7 @@ dl.x-pairs dd {
   border-top: 1px dashed rgba(42, 35, 24, 0.35);
 }
 
-/* Interface size: the base's sheets zoom with --ui-zoom, the player's size times the screen's fit
-   (ui/touch.ts uiFit; the lineup cards follow the 3D soldiers, so they don't). A finger's target
-   inside divides by the fit, so it still measures --tap on the glass. */
+/* Interface size: the base's sheets zoom with --ui-scale (the lineup cards follow the 3D soldiers, so they don't). */
 .strat-top,
 .strat-left,
 .strat-right,
@@ -2860,8 +2880,7 @@ dl.x-pairs dd {
 .strat-fold,
 .menu-column,
 .radio {
-  --tap: calc(42px / var(--ui-fit, 1));
-  zoom: var(--ui-zoom, var(--ui-scale, 1));
+  zoom: var(--ui-scale, 1);
 }
 
 /* Over the 3D scene (the hangar's buttons) the typed red needs its slip of paper. */
@@ -3388,221 +3407,234 @@ dl.x-pairs dd {
   color: var(--x-good);
 }
 
-/* ======================================================= a phone sideways (docs/FASE11.md §4)
-   Touch and little height (some 740–915 × 360–412 px): the header one slim
-   row of figures, the tabs a bar of icons, the two side panels under half
-   the screen each, from the header to the tabs, each folding away behind its
-   handle to see the base. Everything zooms by the screen's fit (--ui-zoom);
-   every button measures --tap at least. */
+/* ===================================================== Construir (the clearing) */
 
-.panel-fold {
-  display: none;
+/* The line under the pointer on the clearing: what goes there and what it costs, or why not. */
+.clearing-hint {
+  position: absolute;
+  z-index: 3;
+  max-width: 280px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  background: rgba(12, 14, 15, 0.88);
+  box-shadow: 0 0 0 1px var(--t-line, rgba(255, 255, 255, 0.1));
+  color: var(--t-text, #eef0ea);
+  font: 600 13px/1.3 var(--t-font, sans-serif);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
-@media (max-height: 520px) {
-  :root[data-touch='1'] .strat-top {
-    gap: 8px;
-    padding: 2px 8px;
-    min-height: var(--tap);
-  }
+.clearing-hint.bad {
+  color: #ffb1a4;
+  box-shadow: 0 0 0 1px rgba(240, 80, 60, 0.55);
+}
 
-  :root[data-touch='1'] .strat-brand,
-  :root[data-touch='1'] .strat-players,
-  :root[data-touch='1'] .strat-doom {
-    display: none;
-  }
+.build-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 
-  :root[data-touch='1'] .strat-res {
-    gap: 6px;
-    zoom: 0.85;
-  }
+.fell-tool.on,
+.build-tab.on {
+  background: var(--t-primary, #f2c230);
+  color: var(--t-primary-ink, #1e1706);
+}
 
-  :root[data-touch='1'] .strat-top .x-btn {
-    min-height: var(--tap);
-  }
+.build-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0 8px;
+}
 
-  /* The tabs: icons, a finger wide, their names for who asks (aria-label). */
-  :root[data-touch='1'] .strat-nav .nav-label {
-    display: none;
-  }
+.build-tab {
+  flex: 1;
+  padding: 5px 4px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--t-panel-lo, rgba(12, 14, 15, 0.92));
+  color: var(--t-muted, #a1a79d);
+  font: 700 12px/1 var(--t-font, sans-serif);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
 
-  :root[data-touch='1'] .strat-nav button {
-    min-width: 58px;
-    min-height: var(--tap);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 12px;
-  }
+.piece-list {
+  display: grid;
+  gap: 4px;
+}
 
-  :root[data-touch='1'] .strat-nav button::before {
-    width: 24px;
-    height: 24px;
-  }
+/* One piece of the palette: its name and cost on a line, what it is for under it. */
+.piece-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--t-panel-hi, rgba(46, 50, 52, 0.97));
+  color: var(--t-text, #eef0ea);
+  text-align: left;
+  cursor: pointer;
+}
 
-  /* Titles a size down: the panels are narrower than a desktop's, and a mission's name should fit one
-     line (`html`: over the theme's squad title, mixta-base.css). */
-  html:root[data-touch='1'] .strat[data-view] :is(.x-title, .briefing-head h1) {
-    font-size: 22px;
-  }
+.piece-item:hover {
+  background: var(--t-panel-hover, rgba(60, 64, 64, 0.98));
+}
 
-  /* The side panels: under half the screen each, from under the header to over the tabs; the base between them. */
-  :root[data-touch='1'] :is(.strat-left, .strat-right) {
-    top: calc(var(--tap) + 14px);
-    bottom: calc(var(--tap) + 10px);
-    max-height: none;
-    width: calc(43% - 10px);
-    padding-right: 6px;
-    transition: transform 0.22s ease;
-  }
+.piece-item.on {
+  box-shadow: inset 0 0 0 2px var(--t-accent, #f2c230);
+}
 
-  :root[data-touch='1'] .strat-left {
-    left: 6px;
-  }
+.piece-name {
+  font: 700 14px/1.2 var(--t-font, sans-serif);
+}
 
-  :root[data-touch='1'] .strat-right {
-    right: 6px;
-  }
+.piece-cost {
+  color: #ffd25a;
+  font: 700 13px/1.2 var(--t-font, sans-serif);
+  white-space: nowrap;
+}
 
-  :root[data-touch='1'] .strat-right > .x-panel {
-    margin-top: 2px;
-    transform: none;
-  }
+.piece-line,
+.piece-vote {
+  grid-column: 1 / -1;
+  color: var(--t-muted, #a1a79d);
+  font: 12px/1.3 var(--t-font, sans-serif);
+}
 
-  /* The handle on each panel's inner edge; folded, only it shows. */
-  :root[data-touch='1'] .panel-fold {
-    display: grid;
-    place-items: center;
-    position: sticky;
-    top: 0;
-    float: right;
-    z-index: 2;
-    width: var(--tap);
-    height: var(--tap);
-    margin: 0 -6px 4px 6px;
-    font-size: 26px;
-    line-height: 1;
-    color: var(--x-text);
-    background: var(--paper-grain), var(--paper-dark);
-    border: 0;
-    border-radius: 0 6px 6px 0;
-    box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
-  }
+.piece-vote {
+  color: var(--t-accent, #f2c230);
+  font-weight: 600;
+}
 
-  :root[data-touch='1'] .strat-right .panel-fold {
-    float: left;
-    margin: 0 6px 4px -6px;
-    border-radius: 6px 0 0 6px;
-  }
+/* Locked by the Bastion's level: grey. Short of what it costs: the cost in red. */
+.piece-item.locked {
+  opacity: 0.45;
+  cursor: default;
+}
 
-  :root[data-touch='1'] .strat-left.folded {
-    transform: translateX(calc(-100% + var(--tap)));
-    overflow: hidden;
-  }
+.piece-item.short .piece-cost {
+  color: var(--t-danger, #f0503c);
+}
 
-  :root[data-touch='1'] .strat-right.folded {
-    transform: translateX(calc(100% - var(--tap)));
-    overflow: hidden;
-  }
-  /* The hangar (Escuadra): no tabs below; the roster on the left picks who goes (its ✓), so the
-     cards over the 3D soldiers go; the mission's order fills the right half, its buttons under it. */
-  :root[data-touch='1'] .strat:is([data-view='squad'], [data-view='debrief']) :is(.strat-left, .strat-right) {
-    bottom: 6px;
-  }
+.build-keys {
+  margin: 8px 0 2px;
+  color: var(--t-muted, #a1a79d);
+  font: 12px/1.35 var(--t-font, sans-serif);
+}
 
-  :root[data-touch='1'] .strat-left.compact {
-    max-height: none;
-  }
+/* The card of a piece picked on the clearing. */
+.piece-close {
+  float: right;
+}
 
-  /* What sits at the bottom middle over the 3D (El valle's day and «Esperar noticias»): in the right half, over the tabs. */
-  :root[data-touch='1'] .strat-center-bottom {
-    left: auto;
-    right: 6px;
-    bottom: calc(var(--tap) + 14px);
-    width: calc(43% - 10px);
-    transform: none;
-  }
+.piece-level-line {
+  margin: 4px 0;
+  color: var(--t-text, #eef0ea);
+  font-style: italic;
+}
 
-  /* Any window of the base (alerts, events, the settings, the board): within the screen, scrolling. */
-  :root[data-touch='1'] .strat-modal > .x-panel {
-    max-height: calc(100vh - 12px);
-    overflow-y: auto;
-  }
+.piece-hp {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+  font: 600 13px/1 var(--t-font, sans-serif);
+}
 
-  :root[data-touch='1'] .strat[data-view='squad'] .lineup-cards {
-    display: none;
-  }
+.piece-hp i {
+  height: 8px;
+  border-radius: 1px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
 
-  :root[data-touch='1'] .strat[data-view='squad'] .strat-center-top {
-    left: auto;
-    right: 6px;
-    top: calc(var(--tap) + 14px);
-    /* Clear of «Lanzar misión», the count and the two buttons under it. */
-    bottom: 180px;
-    width: calc(43% - 10px);
-    overflow-y: auto;
-    transform: none;
-    padding: 8px 10px;
-    background: rgba(12, 14, 15, 0.82);
-    border-radius: 3px;
-  }
+.piece-hp i b {
+  display: block;
+  height: 100%;
+  background: var(--t-good, #8fd05a);
+}
 
-  :root[data-touch='1'] .strat[data-view='squad'] .strat-center-bottom {
-    left: auto;
-    right: 6px;
-    bottom: 6px;
-    width: calc(43% - 10px);
-    transform: none;
-  }
+.piece-hp.low i b {
+  background: var(--t-danger, #f0503c);
+}
 
-  :root[data-touch='1'] .strat[data-view='squad'] .strat-center-bottom .alert-actions {
-    display: flex;
-    gap: 6px;
-  }
+.piece-hp em {
+  font-style: normal;
+}
 
-  /* The debrief (Informe): each soldier's card carries its report, so they stay, but as a list in
-     two columns on the left (not over their 3D bodies, where they piled up); the mission's report
-     on the right, «Continuar» under it. */
-  :root[data-touch='1'] .strat[data-view='debrief'] .lineup-cards {
-    inset: calc(var(--tap) + 14px) auto 6px 6px;
-    width: calc(43% - 10px);
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-content: start;
-    gap: 6px;
-    overflow-y: auto;
-    pointer-events: auto;
-  }
+.piece-uses,
+.piece-beside {
+  margin: 4px 0;
+  color: var(--t-muted, #a1a79d);
+  font-size: 13px;
+}
 
-  :root[data-touch='1'] .strat[data-view='debrief'] .lineup-card {
-    position: relative !important;
-    left: auto !important;
-    top: auto !important;
-    transform: none !important;
-    width: auto;
-    margin: 30px 0 0;
-  }
+.piece-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
 
-  :root[data-touch='1'] .strat[data-view='debrief'] .strat-center-top {
-    left: auto;
-    right: 6px;
-    top: calc(var(--tap) + 14px);
-    bottom: 62px;
-    width: calc(43% - 10px);
-    overflow-y: auto;
-    transform: none;
-  }
+.piece-action {
+  display: grid;
+  gap: 2px;
+}
 
-  :root[data-touch='1'] .strat[data-view='debrief'] .strat-center-bottom {
-    bottom: 6px;
+.piece-tip {
+  color: var(--t-muted, #a1a79d);
+  font-size: 12px;
+}
+
+.piece-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The next siege, in the strip: amber, red the mission before and while it is on. */
+.strat-siege {
+  align-self: center;
+  padding: 4px 9px;
+  border-radius: 2px;
+  background: rgba(245, 165, 36, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(245, 165, 36, 0.55);
+  color: var(--t-warn, #f5a524);
+  font: 700 12px/1 var(--t-font, sans-serif);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.strat-siege.near,
+.strat-siege.now {
+  background: rgba(240, 80, 60, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(240, 80, 60, 0.7);
+  color: #ff8a78;
+}
+
+.strat-siege.now {
+  animation: strat-siege-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes strat-siege-pulse {
+  50% {
+    box-shadow: inset 0 0 0 1px rgba(240, 80, 60, 0.7), 0 0 12px rgba(240, 80, 60, 0.45);
   }
 }
 
-/* Touch, at any size: every button and list row of the base a finger high (docs/FASE11.md §4). */
-:root[data-touch='1'] .strat :is(button, .x-btn, button.x-row, .x-pick-field, .x-pick-list button) {
-  min-height: var(--tap);
-}
-
-:root[data-touch='1'] .strat .x-btn.small {
-  padding-block: 8px;
+/* The partner's piece in hand on the clearing: their name over it, in their colour. */
+.clearing-partner {
+  padding: 2px 7px;
+  border-radius: 2px;
+  background: rgba(12, 14, 15, 0.8);
+  box-shadow: inset 3px 0 0 var(--accent, #fff);
+  color: #fff;
+  font: 700 12px/1.2 var(--t-font, sans-serif);
+  pointer-events: none;
+  white-space: nowrap;
 }

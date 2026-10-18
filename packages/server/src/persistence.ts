@@ -10,7 +10,7 @@ const SAVE_VERSION = 6;
  * older ones are kept aside under its name, save.antes-<release>.json, and the messages say it. Change it
  * with FRESH_CAMPAIGN_VERSION; copies kept aside for an earlier release stay as they are.
  */
-export const FRESH_RELEASE = '0.4';
+export const FRESH_RELEASE = '0.7';
 
 export interface SavedSeat {
   slot: Slot;

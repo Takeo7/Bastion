@@ -234,34 +234,3 @@
   flex: 1 1 260px;
   max-width: 440px;
 }
-
-/* A phone sideways (docs/FASE11.md §4): the board's panel to the screen's edges, its head one slim row. */
-@media (max-height: 520px) {
-  :root[data-touch='1'] .strat-modal > .x-panel:has(.hb) {
-    max-height: calc(100vh - 12px);
-    padding: 6px 10px 8px;
-    overflow-y: auto;
-  }
-
-  :root[data-touch='1'] .x-panel:has(.hb) > .alert-kicker {
-    display: none;
-  }
-
-  :root[data-touch='1'] .hb-head {
-    gap: 8px;
-    margin-bottom: 4px;
-  }
-
-  :root[data-touch='1'] .hb-head .hb-bust {
-    width: 36px;
-    height: 36px;
-  }
-
-  :root[data-touch='1'] .hb-head .x-title {
-    font-size: 20px;
-  }
-
-  :root[data-touch='1'] .x-panel:has(.hb) > .alert-actions {
-    margin-top: 6px;
-  }
-}

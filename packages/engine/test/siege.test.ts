@@ -20,8 +20,8 @@ const sim = (s: GameState, seed = 1) => new Sim(s, new Rng(seed), [0]);
 const ground = (x: number, y: number) => ({ x, y, z: 0 });
 
 /**
- * A small walled yard: a door (north) and two barricades (south), the heart
- * in the middle. In a siege every door and barricade holds what SIEGE says.
+ * A small walled yard: a door (north) and two barricades (south). In a siege
+ * every door and barricade holds what SIEGE says.
  */
 function yard(): GameState {
   const s = stateFrom([
@@ -33,7 +33,7 @@ function yard(): GameState {
     '.###hh###.',
     '..........',
   ]);
-  s.mission.siege = { heart: ground(4, 3), hold: SIEGE.hold };
+  s.mission.siege = { hold: SIEGE.hold };
   s.breakables = { [tileIndex(s, 4, 1)]: SIEGE.door, [tileIndex(s, 4, 5)]: SIEGE.barricade, [tileIndex(s, 5, 5)]: SIEGE.barricade };
   return s;
 }
@@ -46,13 +46,12 @@ function pod(s: GameState, id: string, units: Unit[]): Pod {
 }
 
 describe('the base as a battlefield', () => {
-  it('«El Bastión» is a walled base: a gate and a barricade on each side, a watchtower on each corner, its heart in the middle', () => {
+  it('«El Bastión» is a walled base: a gate and a barricade on each side, a watchtower on each corner, the Sala de radio in the middle', () => {
     const def = MAPS.bastion!;
     const map = parseMap(def);
     expect(def.siege).toBe(true);
     expect(map.width).toBe(36);
     expect(map.height).toBe(36);
-    expect(map.item).toEqual({ x: 17, y: 16 });
     expect(map.barricades).toHaveLength(12);
     expect(map.tiles.filter((k) => k === 'door').length).toBe(8 + 5);
     // The barricades look like barricades, facing across the wall they stand in.
@@ -81,10 +80,10 @@ describe('the base as a battlefield', () => {
     }
   });
 
-  it('a mission on it is always a siege: no enemies yet, waves by a side, every door and barricade holding, magazines at hand', () => {
+  it('a mission on it is always a siege: no enemies yet, waves from every front, every door and barricade holding, magazines at hand', () => {
     const s = createMission({ map: { kind: 'handmade', id: 'bastion' }, slots: [0, 1], rng: new Rng(7), kind: 'recovery' });
     expect(s.mission.kind).toBe('elimination');
-    expect(s.mission.siege).toEqual({ heart: ground(17, 16), hold: SIEGE.hold });
+    expect(s.mission.siege).toEqual({ hold: SIEGE.hold });
     expect(s.units.filter((u) => u.team === 'alien')).toHaveLength(0);
     expect(s.concealed).toBe(false);
     const soldiers = s.units.filter((u) => u.team === 'xcom');
@@ -94,7 +93,7 @@ describe('the base as a battlefield', () => {
     expect(holds.filter(([, hp]) => hp === SIEGE.door)).toHaveLength(13);
     expect(holds.filter(([, hp]) => hp === SIEGE.barricade)).toHaveLength(12);
     for (const [node] of holds) expect(['door', 'low']).toContain(s.tiles[Number(node)]);
-    // Five waves, in groups of five at most, each by its side; the third by a flank.
+    // Five waves, in groups of five at most, each group by a side at random (Arturo, 18/10: from every front).
     const waves = s.mission.reinforcements;
     expect([...new Set(waves.map((r) => r.turn))]).toEqual([1, 3, 5, 7, 9]);
     for (const r of waves) {
@@ -103,10 +102,10 @@ describe('the base as a battlefield', () => {
       expect(r.side).toBeGreaterThanOrEqual(0);
       expect(r.side).toBeLessThan(4);
     }
-    const sideOf = (turn: number) => waves.find((r) => r.turn === turn)!.side!;
-    expect(sideOf(3)).toBe(sideOf(1));
-    expect(Math.abs(sideOf(5) - sideOf(1)) % 2).toBe(1);
     expect(waves.flatMap((r) => r.units)).toContain('sectoid');
+    // Over a few sieges, every side.
+    const sides = new Set([7, 8, 9, 10].flatMap((seed) => createMission({ map: { kind: 'handmade', id: 'bastion' }, slots: [0], rng: new Rng(seed) }).mission.reinforcements.map((r) => r.side)));
+    expect([...sides].sort()).toEqual([0, 1, 2, 3]);
   });
 });
 
@@ -122,9 +121,9 @@ describe('the dead against doors and barricades', () => {
     expect(computeReach(s, z, 100).cost.has(door)).toBe(true);
   });
 
-  it('with no way in it beats on the door beside it: a Zombi takes off 3 a blow, twice a turn, and the blow is heard', () => {
+  it('with no way to the soldiers it beats on the door beside it: a Zombi takes off 3 a blow, twice a turn, and the blow is heard', () => {
     const s = yard();
-    const z = addUnit(s, 'z1', 'zombie', 4, 0, { heard: ground(4, 3) });
+    const z = addUnit(s, 'z1', 'zombie', 4, 0);
     const far = addUnit(s, 'z2', 'zombie', 9, 6, { heard: null });
     pod(s, 'p1', [z]);
     pod(s, 'p2', [far]);
@@ -147,7 +146,7 @@ describe('the dead against doors and barricades', () => {
   it('at nothing it gives way: the way in is open ground, and the next one walks in', () => {
     const s = yard();
     s.breakables![tileIndex(s, 4, 1)] = 3;
-    const z = addUnit(s, 'z1', 'zombie', 4, 0, { heard: ground(4, 3) });
+    const z = addUnit(s, 'z1', 'zombie', 4, 0);
     pod(s, 'p1', [z]);
     addUnit(s, 's1', 'rookie', 7, 4);
     const run = sim(s);
@@ -161,7 +160,7 @@ describe('the dead against doors and barricades', () => {
     expect(z.pos.y).toBeGreaterThan(1);
   });
 
-  it('it goes for the weakest point, counting the walk there and the way left to the heart', () => {
+  it('it goes for the weakest point, counting the walk there and the way left to the soldier', () => {
     const s = yard();
     // A barricade in the north wall too, two tiles off.
     s.tiles[tileIndex(s, 2, 1)] = 'low';
@@ -169,10 +168,10 @@ describe('the dead against doors and barricades', () => {
     const z = addUnit(s, 'z1', 'zombie', 4, 0);
     addUnit(s, 's1', 'rookie', 4, 4);
     // The barricade holds half of what the door does: worth the two steps.
-    expect(breachPlan(s, z, s.mission.siege!.heart)).toEqual({ tile: ground(2, 1), stand: expect.objectContaining({ y: 0 }) });
+    expect(breachPlan(s, z, ground(4, 3))).toEqual({ tile: ground(2, 1), stand: expect.objectContaining({ y: 0 }) });
     // As strong as the door, the door beside it.
     s.breakables![tileIndex(s, 2, 1)] = SIEGE.door;
-    expect(breachPlan(s, z, s.mission.siege!.heart)).toEqual({ tile: ground(4, 1), stand: ground(4, 0) });
+    expect(breachPlan(s, z, ground(4, 3))).toEqual({ tile: ground(4, 1), stand: ground(4, 0) });
   });
 
   it('it never beats on what opens nothing new: the other leaf of a gate already broken', () => {
@@ -185,13 +184,13 @@ describe('the dead against doors and barricades', () => {
       '.#..####..#.',
       '.##########.',
     ]);
-    s.mission.siege = { heart: ground(5, 4), hold: SIEGE.hold };
+    s.mission.siege = { hold: SIEGE.hold };
     s.breakables = { [tileIndex(s, 5, 1)]: SIEGE.door, [tileIndex(s, 6, 1)]: SIEGE.door, [tileIndex(s, 7, 4)]: SIEGE.door };
     const z = addUnit(s, 'z1', 'zombie', 6, 0);
     addUnit(s, 's1', 'rookie', 9, 5);
     // Both leaves shut: the one on the way in.
     expect(breachPlan(s, z, ground(5, 4))?.tile.y).toBe(1);
-    // One broken: through it, for the door of the room with the heart.
+    // One broken: through it, for the door of the room where the goal is.
     s.tiles[tileIndex(s, 5, 1)] = 'floor';
     s.breakables[tileIndex(s, 5, 1)] = 0;
     expect(breachPlan(s, z, ground(5, 4))).toEqual({ tile: ground(7, 4), stand: expect.anything() });
@@ -200,17 +199,17 @@ describe('the dead against doors and barricades', () => {
   it('with a way in it walks, and it bites before it beats', () => {
     const s = yard();
     s.tiles[tileIndex(s, 4, 1)] = 'doorOpen';
-    const z = addUnit(s, 'z1', 'zombie', 4, 0, { heard: ground(4, 3) });
+    const z = addUnit(s, 'z1', 'zombie', 4, 0);
     pod(s, 'p1', [z]);
     addUnit(s, 's1', 'rookie', 7, 4);
-    expect(breachPlan(s, z, ground(4, 3))).toBeNull();
+    expect(breachPlan(s, z, ground(7, 4))).toBeNull();
     const run = sim(s);
     takeZombieTurn(run, z);
     expect(of(run.events, 'smashed')).toHaveLength(0);
     expect(of(run.events, 'moved').length).toBeGreaterThan(0);
 
     const t = yard();
-    const biter = addUnit(t, 'z1', 'zombie', 3, 0, { heard: ground(4, 3) });
+    const biter = addUnit(t, 'z1', 'zombie', 3, 0);
     pod(t, 'p1', [biter]);
     const soldier = addUnit(t, 's1', 'rookie', 2, 0, { hp: 20, maxHp: 20 });
     const run2 = sim(t);
@@ -236,7 +235,7 @@ describe('the dead against doors and barricades', () => {
     expect(TEMPLATES.mec.abilities).toContain('smash');
     expect(TEMPLATES.bloater.abilities).not.toContain('smash');
     const s = yard();
-    const b = addUnit(s, 'b1', 'bloater', 4, 0, { heard: ground(4, 3) });
+    const b = addUnit(s, 'b1', 'bloater', 4, 0);
     pod(s, 'p1', [b]);
     addUnit(s, 's1', 'rookie', 4, 4);
     const run = sim(s);
@@ -246,17 +245,17 @@ describe('the dead against doors and barricades', () => {
 });
 
 describe('how a siege ends', () => {
-  it('one of the dead beside the heart, and the base falls', () => {
+  it('the dead inside are no defeat; nobody left to defend it is', () => {
     const s = yard();
     s.mission.reinforcements = [{ id: 'r1', turn: 5, pos: null, units: ['zombie'], landed: false, horde: true, side: 0 }];
-    addUnit(s, 's1', 'rookie', 7, 4);
-    const z = addUnit(s, 'z1', 'zombie', 2, 2);
+    const soldier = addUnit(s, 's1', 'rookie', 7, 4);
+    addUnit(s, 'z1', 'zombie', 4, 3);
     const run = sim(s);
     run.checkOutcome();
     expect(s.outcome).toBeNull();
-    z.pos = ground(4, 2);
+    run.damage(soldier, 99, 0);
     run.checkOutcome();
-    expect([s.outcome, s.outcomeReason]).toEqual(['defeat', 'objectiveLost']);
+    expect([s.outcome, s.outcomeReason]).toEqual(['defeat', 'wiped']);
   });
 
   it('held through its last enemy turn, or every wave in and down, the base stands', () => {
@@ -276,27 +275,42 @@ describe('how a siege ends', () => {
     expect([t.outcome, t.outcomeReason]).toEqual(['victory', 'objective']);
   });
 
-  it('a wave comes in by its side, alert, for the heart', () => {
+  it('each group of a wave comes in by its side, alert', () => {
     const s = createMission({ map: { kind: 'handmade', id: 'bastion' }, slots: [0], rng: new Rng(3) });
     const first = s.mission.reinforcements.filter((r) => r.turn === 1);
-    const side = first[0]!.side!;
     const run = sim(s);
     run.landReinforcements(1);
-    const landed = s.units.filter((u) => u.team === 'alien');
-    expect(landed).toHaveLength(first.reduce((n, r) => n + r.units.length, 0));
-    const onSide = (u: Unit) => [u.pos.y < 2, u.pos.x >= s.width - 2, u.pos.y >= s.height - 2, u.pos.x < 2][side];
-    // In the middle half of that side, not round the corner.
-    const along = (u: Unit) => (side % 2 === 0 ? u.pos.x : u.pos.y);
-    for (const u of landed) {
-      expect(onSide(u)).toBe(true);
-      expect(along(u)).toBeGreaterThanOrEqual(9);
-      expect(along(u)).toBeLessThan(27);
-      expect(u.heard).toEqual(s.mission.siege!.heart);
+    expect(s.units.filter((u) => u.team === 'alien')).toHaveLength(first.reduce((n, r) => n + r.units.length, 0));
+    for (const r of first) {
+      const side = r.side!;
+      const onSide = (u: Unit) => [u.pos.y < 2, u.pos.x >= s.width - 2, u.pos.y >= s.height - 2, u.pos.x < 2][side];
+      // In the middle half of that side, not round the corner.
+      const along = (u: Unit) => (side % 2 === 0 ? u.pos.x : u.pos.y);
+      for (const u of s.units.filter((x) => x.id.startsWith(`${r.id}u`))) {
+        expect(onSide(u)).toBe(true);
+        expect(along(u)).toBeGreaterThanOrEqual(9);
+        expect(along(u)).toBeLessThan(27);
+        // They know where the living are: nothing to listen for.
+        expect(u.heard ?? null).toBeNull();
+      }
     }
     for (const p of s.pods) expect(p.active).toBe(true);
   });
 
-  it('left undefended, the dead break in and the base falls', () => {
+  it('seeing nobody, the dead of a siege go for the nearest soldier', () => {
+    const s = yard();
+    s.tiles[tileIndex(s, 4, 1)] = 'doorOpen';
+    const z = addUnit(s, 'z1', 'zombie', 9, 0, { heard: ground(0, 6) });
+    pod(s, 'p1', [z]);
+    addUnit(s, 's1', 'rookie', 5, 4);
+    const run = sim(s);
+    takeZombieTurn(run, z);
+    // Through the open door, not to the noise.
+    expect(z.pos.y).toBeGreaterThan(0);
+    expect(Math.abs(z.pos.x - 5) + Math.abs(z.pos.y - 4)).toBeLessThan(9 + 4);
+  });
+
+  it('left undefended, the dead break in and go for the soldiers', () => {
     const s = createMission({ map: { kind: 'handmade', id: 'bastion' }, slots: [0], rng: new Rng(11), difficulty: 4 });
     // The squad shut in the barracks, out of the way: nobody to hold the wall.
     const barracks = [ground(10, 11), ground(11, 11), ground(12, 11), ground(13, 11), ground(10, 12), ground(11, 12)];
@@ -310,6 +324,8 @@ describe('how a siege ends', () => {
     }
     expect(of(events, 'smashed').length).toBeGreaterThan(0);
     expect(of(events, 'tileChanged').some((e) => e.kind === 'floor')).toBe(true);
-    expect(s.outcome).toBe('defeat');
+    // Shut in, they are hunted down: bitten, and some of them lost.
+    expect(of(events, 'abilityUsed').filter((e) => e.ability === 'claw').length).toBeGreaterThan(0);
+    expect(of(events, 'died').some((e) => s.units.find((u) => u.id === e.unit)?.team === 'xcom')).toBe(true);
   });
 });

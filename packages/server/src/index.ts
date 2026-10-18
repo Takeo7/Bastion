@@ -8,7 +8,6 @@ import type { TLSSocket } from 'node:tls';
 import { hostname, networkInterfaces } from 'node:os';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { Access } from './access';
 import { announce } from './lan';
 import { SaveStore } from './persistence';
 import type { HostAddress } from '@bastion/engine';
@@ -20,32 +19,14 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-/**
- * Served on a website, behind its https proxy (the web package, scripts/web.mjs
- * sets it; docs/WEB.md): no https or certificate of its own, no local network
- * addresses to offer, only the proxy on this machine talks to it, and never
- * without a password.
- */
-const WEB = process.env.BASTION_WEB === '1';
 /** `--port 3000` wins over the PORT env var (dev tooling sometimes sets PORT for the web client). */
 const PORT = Number(arg('port') ?? process.env.PORT ?? 3000);
-/** The same game over https (Safari needs it, see tls.ts); `--https-port 0` turns it off. On a website, the proxy does it. */
-const HTTPS_PORT = Number(arg('https-port') ?? (WEB ? 0 : PORT + 1));
-/** The address to listen on: every one, or on a website only this machine's, where its proxy is (BASTION_HOST to change it). */
-const HOST = process.env.BASTION_HOST || (WEB ? '127.0.0.1' : undefined);
-/** The game's password (access.ts): BASTION_PASSWORD. */
-const PASSWORD = process.env.BASTION_PASSWORD || null;
+/** The same game over https (Safari needs it, see tls.ts); `--https-port 0` turns it off. */
+const HTTPS_PORT = Number(arg('https-port') ?? PORT + 1);
 const ROOT = resolve(import.meta.dirname, '../../..');
-/** A client built next to this file: the web package's (scripts/web.mjs). */
-const BESIDE = join(import.meta.dirname, 'client');
 /** `--client <dir>`: a client built elsewhere (a test build that leaves the players' one alone). */
-const CLIENT_DIST = resolve(arg('client') ?? (existsSync(BESIDE) ? BESIDE : join(ROOT, 'packages/client/dist')));
-/**
- * The game's folder (BASTION_DATA): the save and red.log. `--save` or SAVE_PATH name the save itself. On a
- * website it is next to the program's folder by default, never in it: a new version replaces that whole folder.
- */
-const DATA = process.env.BASTION_DATA || (WEB ? join(import.meta.dirname, '..', 'bastion-partida') : null);
-const SAVE_PATH = resolve(arg('save') ?? process.env.SAVE_PATH ?? (DATA ? join(DATA, 'save.json') : join(ROOT, 'data/save.json')));
+const CLIENT_DIST = resolve(arg('client') ?? join(ROOT, 'packages/client/dist'));
+const SAVE_PATH = resolve(arg('save') ?? process.env.SAVE_PATH ?? join(ROOT, 'data/save.json'));
 /** Who connects, how, and what their browser reports: kept next to the save to diagnose a partner who cannot play. */
 const NET_LOG = join(dirname(SAVE_PATH), 'red.log');
 
@@ -61,7 +42,6 @@ const MIME: Record<string, string> = {
   '.webp': 'image/webp',
   '.glb': 'model/gltf-binary',
   '.wav': 'audio/wav',
-  '.webmanifest': 'application/manifest+json',
 };
 
 /** Debug only (`--snapshots <dir>`): the client's `__bastion.snap()` posts frames here. */
@@ -77,12 +57,6 @@ function netLog(line: string): void {
 
 function peer(socket: Socket): string {
   return socket.remoteAddress?.replace(/^::ffff:/, '') ?? '?';
-}
-
-/** Who asks: on a website every request comes from its proxy, which names the browser last in X-Forwarded-For. */
-function client(req: IncomingMessage): string {
-  const forwarded = WEB ? String(req.headers['x-forwarded-for'] ?? '').split(',').pop()?.trim() : '';
-  return forwarded || peer(req.socket);
 }
 
 /** The host's own browser: it stays on http, which is fast on localhost. */
@@ -106,8 +80,6 @@ function toHttps(req: IncomingMessage, res: ServerResponse): boolean {
 }
 
 function handle(req: IncomingMessage, res: ServerResponse): void {
-  // The password first (access.ts): without it, only what asks for it.
-  if (access.handle(req, res, client(req))) return;
   // The partner's browser reports its errors and hangs here (client report.ts): the host sees them.
   if (req.method === 'POST' && req.url === '/__report') {
     let body = '';
@@ -117,7 +89,7 @@ function handle(req: IncomingMessage, res: ServerResponse): void {
     req.on('end', () => {
       const text = body.slice(0, 2000);
       // How each browser draws (client perf.ts) comes tagged with the player's name, `[rend ana] …`; the address stands in for a missing one.
-      const line = /^\[rend[ \]]/.test(text) ? text.replace(/^\[rend\]/, `[rend ${client(req)}]`) : `[navegador ${client(req)}] ${text}`;
+      const line = /^\[rend[ \]]/.test(text) ? text.replace(/^\[rend\]/, `[rend ${peer(req.socket)}]`) : `[navegador ${peer(req.socket)}] ${text}`;
       console.log(line);
       netLog(line);
       res.end('ok');
@@ -223,15 +195,7 @@ function hostAddresses(main: string | null): HostAddress[] {
   return out.sort((a, b) => Number(b.address === main) - Number(a.address === main));
 }
 
-// A website's server offers its own address only (the page's): its machine's are not the partner's way in.
-const hosts = WEB ? [] : hostAddresses(await outbound());
-if (WEB && !PASSWORD) {
-  // Synty's licence: on a website, only the two players may see the models.
-  console.log('\n  Falta la contraseña de la partida: arranca con BASTION_PASSWORD=… (docs/WEB.md).\n');
-  process.exit(1);
-}
-mkdirSync(dirname(SAVE_PATH), { recursive: true });
-const access = new Access(PASSWORD, netLog);
+const hosts = hostAddresses(await outbound());
 const tls: Tls | null = HTTPS_PORT ? certificate(join(dirname(SAVE_PATH), 'tls'), hosts.map((h) => h.address)) : null;
 const http = createServer((req, res) => toHttps(req, res) || handle(req, res));
 const https = tls ? createHttpsServer(tls, handle) : null;
@@ -264,17 +228,12 @@ const alive = new WeakSet<WebSocket>();
 for (const server of [http, https].filter((s): s is Server => !!s)) {
   server.on('upgrade', (req, socket, head) => {
     if (new URL(req.url ?? '/', 'http://x').pathname !== '/ws') return socket.destroy();
-    if (!access.allows(req)) {
-      netLog(`WebSocket sin contraseña rechazado: ${client(req)}`);
-      socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
-      return;
-    }
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   });
 }
 
 wss.on('connection', (socket, req) => {
-  const who = `${client(req)} ${(req.socket as TLSSocket).encrypted || req.headers['x-forwarded-proto'] === 'https' ? 'wss' : 'ws'}`;
+  const who = `${peer(req.socket)} ${(req.socket as TLSSocket).encrypted ? 'wss' : 'ws'}`;
   // A browser that declines compression still plays: the log says so, in case it is slow to load a mission.
   netLog(`conecta ${who}${socket.extensions.includes('permessage-deflate') ? '' : ' (sin comprimir)'}`);
   socket.on('close', (code) => netLog(`desconecta ${who} (${code})`));
@@ -298,13 +257,8 @@ setInterval(() => {
 /** `--anunciar`: the desktop app's server tells the local network there is a game here (lan.ts). */
 const ANNOUNCE = process.argv.includes('--anunciar');
 
-http.listen(PORT, HOST, () => {
-  netLog(`servidor arrancado: http ${PORT}${https ? `, https ${HTTPS_PORT}` : ''} · ${WEB ? `web en ${HOST ?? 'todas las direcciones'}` : hosts.map((h) => h.address).join(', ')}${access.locked ? ' · con contraseña' : ''}${ANNOUNCE ? ' · anunciado en la red' : ''}`);
-  if (WEB) {
-    console.log(`\n  Bastión — servidor web listo en ${HOST ?? 'todas las direcciones'}, puerto ${PORT}, con contraseña`);
-    console.log(`    El proxy con https lo sirve en la web (docs/WEB.md). Partida: ${SAVE_PATH}\n`);
-    return;
-  }
+http.listen(PORT, () => {
+  netLog(`servidor arrancado: http ${PORT}${https ? `, https ${HTTPS_PORT}` : ''} · ${hosts.map((h) => h.address).join(', ')}${ANNOUNCE ? ' · anunciado en la red' : ''}`);
   if (ANNOUNCE) announce(PORT, hostname().replace(/\.local$/, ''), () => room.summary());
   console.log(`\n  Bastión — servidor listo en el puerto ${PORT}`);
   console.log(`    Tú:              http://localhost:${PORT}`);
@@ -331,14 +285,9 @@ let closing = false;
 function shutdown(): void {
   if (closing) return;
   closing = true;
-  // A website's server stops to be updated or restarted, and is back in a moment: the players just reconnect
-  // (1012, «restarting»). Everything is saved already, after every change.
-  if (WEB) netLog('servidor web parado: los jugadores volverán a conectar');
-  else {
-    netLog('servidor cerrado: se avisa a los jugadores');
-    room.closing();
-  }
-  for (const socket of wss.clients) socket.close(WEB ? 1012 : 1001, 'cierre');
+  netLog('servidor cerrado: se avisa a los jugadores');
+  room.closing();
+  for (const socket of wss.clients) socket.close(1001, 'cierre');
   setTimeout(() => process.exit(0), 300);
 }
 process.on('SIGINT', shutdown);

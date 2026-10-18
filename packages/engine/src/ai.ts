@@ -456,9 +456,9 @@ function wander(sim: Sim, u: Unit): void {
  * it heard, and having heard nothing, it wanders. The Chillón screams (and
  * every zombie within 16 tiles hears it) and keeps its distance; the Hinchado
  * walks up to a soldier and bursts. Cheap enough for a horde of twenty: one
- * reach per action and a sight check per soldier. In a siege, having heard
- * nothing, they go for the heart of the base, and with no way to where they
- * go, they break one (advance).
+ * reach per action and a sight check per soldier. In a siege they know where
+ * the living are: seeing nobody, they go for the nearest soldier, and with no
+ * way to them, they break one (advance; Arturo, 18/10).
  */
 export function takeZombieTurn(sim: Sim, u: Unit): void {
   const s = sim.s;
@@ -526,15 +526,16 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
       }
     }
 
-    // Nobody in sight: to the last noise heard, and having found nobody there, wandering (in a siege, for the heart).
+    // Nobody in sight: in a siege, for the nearest soldier, wherever they are.
+    if (s.mission.siege) {
+      const prey = [...soldiers].sort(byDistance(s, u.pos))[0]!;
+      if (advance(sim, u, prey.pos, 1)) continue;
+      return;
+    }
+    // Elsewhere, to the last noise heard, and having found nobody there, wandering.
     if (u.heard) {
       if (!arrived(s, u.pos, u.heard, 1.5) && advance(sim, u, u.heard, 0)) continue;
       sim.emit({ t: 'forgot', unit: u.id });
-    }
-    const heart = s.mission.siege?.heart;
-    if (heart) {
-      if (advance(sim, u, heart, 0)) continue;
-      return;
     }
     wander(sim, u);
     return;

@@ -3,9 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { AO_PASS } from './fogOfWar';
 
 // Post-processing, shared by the battle renderer and the strategy stage:
@@ -143,8 +141,6 @@ export interface PostChain {
   bloom: UnrealBloomPass;
   /** The colour grade after tone mapping (each view sets its own: renderer.ts). */
   grade: Grade;
-  /** Edge smoothing after the grade, on the phone's effects instead of the HDR target's MSAA (fitPostToPixelRatio). */
-  fxaa: ShaderPass;
 }
 
 /** The occlusion's samples, as it comes and lightened. */
@@ -168,15 +164,10 @@ export function lightenPost(post: PostChain, ao: boolean, bloom: boolean): void 
 /**
  * MSAA on the post chain pays off on standard screens, but on high-density
  * ones (Retina) the pixels are already tiny and it was the costliest step:
- * at 2x it took most of a 29 ms frame. On the phone's effects (`fxaa`, the
- * drawing buffer's size: docs/FASE11.md §5) FXAA after the grade smooths
- * the edges instead: the HDR target's MSAA was 40 % of the frame there, FXAA
- * costs next to nothing. Call after every pixel-ratio change.
+ * at 2x it took most of a 29 ms frame. Call after every pixel-ratio change.
  */
-export function fitPostToPixelRatio(post: PostChain, pixelRatio: number, fxaa?: { width: number; height: number }): void {
-  post.fxaa.enabled = !!fxaa;
-  if (fxaa) (post.fxaa.material.uniforms['resolution']!.value as THREE.Vector2).set(1 / Math.max(1, fxaa.width), 1 / Math.max(1, fxaa.height));
-  const samples = fxaa || pixelRatio >= 1.5 ? 0 : 4;
+export function fitPostToPixelRatio(post: PostChain, pixelRatio: number): void {
+  const samples = pixelRatio >= 1.5 ? 0 : 4;
   for (const target of [post.composer.renderTarget1, post.composer.renderTarget2]) {
     if (target.samples === samples) continue;
     target.samples = samples;
@@ -201,16 +192,12 @@ export function postChain(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: T
   composer.addPass(bloom);
   const output = new GradedOutputPass();
   composer.addPass(output);
-  const fxaa = new ShaderPass(FXAAShader);
-  fxaa.enabled = false;
-  composer.addPass(fxaa);
   const u = output.uniforms as unknown as Grade;
   return {
     composer,
     scene: pass,
     ao,
     bloom,
-    fxaa,
     grade: { saturation: u.saturation, contrast: u.contrast, vignette: u.vignette, shadowTint: u.shadowTint, highlightTint: u.highlightTint, lift: u.lift },
   };
 }

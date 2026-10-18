@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { BUS, HOME_REGION, LANDMARKS, MAREA_SOURCE, REGIONS, roadRoute, underMarea, type CampaignState, type MissionOffer, type RegionId } from '@bastion/engine';
 import type { Shot, Stage, StageMood, StageSet } from './stage';
-import { ATALAYA, D, FIELD, HD, HW, mareaReach, mareaRoads, roadLine, threshold, VALLEY_LANDMARKS, W, ZONES } from './valleyGeography';
+import { ATALAYA_WORKS, BASTION, D, FIELD, HD, HW, mareaReach, mareaRoads, roadLine, threshold, VALLEY_LANDMARKS, W, ZONES } from './valleyGeography';
 import './valley.css';
 
 // «El valle»: the map of the valley of Kessra (docs/LORE.md, «El mundo»), the
@@ -70,9 +70,12 @@ const GROUND_VERTEX = /* glsl */ `
   }`;
 
 /**
- * The painting, and the Marea over it: where the activity has reached, the
- * ground bled of colour and stained violet, a veil drifting over it; at its
- * edge a glow and a bright line (a few pixels whatever the size).
+ * The painting, and what has happened to it: Atalaya's works burnt out
+ * (black and grey, a few embers, smoke drifting off east), the Bastion's
+ * clearing in the pines above Brena (a meadow, its cross of tracks, the
+ * caravan in the middle); and the Marea over it all: where the activity has
+ * reached, the ground bled of colour and stained violet, a veil drifting over
+ * it; at its edge a glow and a bright line (a few pixels whatever the size).
  */
 const GROUND_FRAGMENT = /* glsl */ `
   uniform sampler2D map;
@@ -92,14 +95,52 @@ const GROUND_FRAGMENT = /* glsl */ `
     return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
   }
 
+  float box(vec2 p, vec2 size, float r) {
+    vec2 q = abs(p) - size + r;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+  }
+
   void main() {
     vec3 c = texture2D(map, (vMap + vec2(${f1(HW)}, ${f1(HD)})) / vec2(${f1(W)}, ${f1(D)})).rgb;
+    // Atalaya, burnt out: its works charred (its roofs and yards most, the grass round them scorched), soot in patches,
+    // a few embers glowing, smoke off east on the wind. Colours here are linear, as the painting is read.
+    vec2 ra = (vMap - vec2(${f1(ATALAYA_WORKS.x)}, ${f1(ATALAYA_WORKS.z)})) / vec2(${f1(ATALAYA_WORKS.rx)}, ${f1(ATALAYA_WORKS.rz)});
+    float ruin = smoothstep(1.0, 0.6, length(ra) + (noise(vMap * 2.6) - 0.5) * 0.4);
+    float soot = noise(vMap * 5.0 + 2.0) * 0.6 + noise(vMap * 13.0) * 0.4;
+    float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec3 scorched = mix(c * vec3(0.55, 0.45, 0.3), vec3(lum) * vec3(0.3, 0.27, 0.24), 0.5);
+    vec3 charred = mix(vec3(lum) * vec3(0.32, 0.3, 0.28), vec3(0.008, 0.007, 0.006), smoothstep(0.4, 0.75, soot) * 0.8);
+    c = mix(c, mix(scorched, charred, smoothstep(0.12, 0.35, lum)), ruin);
+    float ember = smoothstep(0.93, 0.985, noise(vMap * 24.0 + 4.0)) * ruin * (0.55 + 0.45 * sin(time * 2.1 + vMap.x * 11.0 + vMap.y * 7.0));
+    c += vec3(1.0, 0.38, 0.1) * ember * 0.75;
+    vec2 wind = vec2(1.0, 0.35);
+    vec2 off = vMap - vec2(${f1(ATALAYA_WORKS.x)}, ${f1(ATALAYA_WORKS.z)});
+    float down = dot(off, normalize(wind));
+    float across = dot(off, vec2(-normalize(wind).y, normalize(wind).x));
+    float plume = smoothstep(-0.4, 0.3, down) * exp(-down / 3.2) * exp(-across * across / (0.25 + max(down, 0.0) * 0.35));
+    float puff = noise(off * 1.6 - wind * time * 0.12) * 0.65 + noise(off * 3.7 - wind * time * 0.2 + 5.0) * 0.35;
+    c = mix(c, vec3(0.25, 0.25, 0.24), clamp(plume * smoothstep(0.3, 0.8, puff), 0.0, 1.0) * 0.55);
+    // The Bastion: a meadow cut out of the pines, its tracks out to the four sides, the caravan in the middle.
+    vec2 rb = vMap - vec2(${f1(BASTION.x)}, ${f1(BASTION.z)});
+    float d = length(rb * vec2(1.0, 1.12)) + (noise(vMap * 9.0) - 0.5) * 0.12;
+    // The pines round it, in clumps, darker than the painting's woods; the meadow inside sunlit and dry.
+    float ring = smoothstep(0.24, 0.32, d) * smoothstep(0.62, 0.4, d) * smoothstep(0.35, 0.62, noise(vMap * 16.0 + 3.0));
+    c = mix(c, vec3(0.012, 0.045, 0.014) * (0.8 + 0.4 * noise(vMap * 40.0)), ring * 0.75);
+    float glade = smoothstep(0.3, 0.22, d);
+    c = mix(c, vec3(0.36, 0.38, 0.11) * (0.9 + 0.2 * noise(vMap * 30.0)), glade * 0.9);
+    float track = max(1.0 - smoothstep(0.012, 0.024, abs(rb.x)), 1.0 - smoothstep(0.012, 0.024, abs(rb.y))) * smoothstep(0.5, 0.22, length(rb));
+    c = mix(c, vec3(0.33, 0.21, 0.11), track * 0.85);
+    float shade = box(rb - vec2(0.012, 0.014), vec2(0.05, 0.026), 0.012);
+    c *= 1.0 - 0.45 * (1.0 - smoothstep(0.0, 0.012, shade));
+    float caravan = box(rb, vec2(0.05, 0.026), 0.012);
+    c = mix(c, vec3(0.52, 0.12, 0.025), 1.0 - smoothstep(0.0, 0.004, caravan));
+    c = mix(c, vec3(0.8, 0.74, 0.62), 1.0 - smoothstep(0.0, 0.004, box(rb - vec2(-0.012, -0.003), vec2(0.009, 0.008), 0.002)));
     // Where it reaches, the field read a little askew: its edge wavers the same everywhere, steep or not.
     vec2 warp = (vec2(noise(vMap * 0.8 + 3.1), noise(vMap * 0.8 + 9.7)) - 0.5) * 0.7 + (vec2(noise(vMap * 2.7 + 1.3), noise(vMap * 2.7 + 5.9)) - 0.5) * 0.22;
     vec2 fuv = (vMap + warp + vec2(${f1(HW)}, ${f1(HD)})) / vec2(${f1(W)}, ${f1(D)});
-    float d = texture2D(field, fuv).r - level;
+    float edge = texture2D(field, fuv).r - level;
     // Screen pixels from the edge (CSS ones), negative inside.
-    float px = d / max(fwidth(d), 1e-5) / pixel;
+    float px = edge / max(fwidth(edge), 1e-5) / pixel;
     vec2 drift = vMap * 0.7 + vec2(time * 0.05, time * 0.018);
     float veil = noise(drift) * 0.6 + noise(drift * 2.3 + 7.0) * 0.4;
     vec3 under = c * vec3(0.305, 0.127, 0.429);
@@ -252,11 +293,11 @@ export class GeoscapeSet implements StageSet {
     this.scanRing.renderOrder = 10;
     this.map.add(this.scanRing);
 
-    // Atalaya, the Bastion, under the peaks.
+    // The Bastion: the clearing in the pines above Brena.
     const home = el('div', 'valley-place');
     home.append(el('i', 'valley-home'), el('b', 'valley-name', LANDMARKS.atalaya.toUpperCase()));
     this.atalaya = new CSS2DObject(home);
-    this.atalaya.position.set(ATALAYA.x, 0, ATALAYA.z);
+    this.atalaya.position.set(BASTION.x, 0, BASTION.z);
     this.atalaya.visible = false;
     this.map.add(this.atalaya);
 
@@ -337,7 +378,8 @@ export class GeoscapeSet implements StageSet {
       const badges = el('span', 'valley-badges');
       // A Nido first, then the operations in the list's colours and icons, then a rumour (brighter while the Bastion listens).
       if (r.facility) badges.append(el('i', 'valley-nest'));
-      for (const o of c.offers.filter((x) => x.region === r.id)) {
+      // The siege is at home, not out in the valley: no pin for it.
+      for (const o of c.offers.filter((x) => x.region === r.id && !x.siege)) {
         const icon = el('span', 'mission-icon');
         icon.dataset.kind = o.kind;
         icon.style.setProperty('--icon', offerTone(o));

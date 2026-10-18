@@ -20,12 +20,13 @@
 // sure every walkable area can be reached (adding ladders or doors if needed),
 // and only reachable tiles are used to place the squad, the pods and objectives.
 import { dressMedical } from './medicalDressing';
+import { dressHome } from './homeDressing';
 import { MAPS, parseMap, type MapDef } from './maps';
 import { stepCost } from './path';
 import { Rng } from './rng';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from './grid';
 import { carPartner, decorCode, decorOf } from './decor';
-import type { Alarm, Biome, Decor, DecorKind, GameState, GroundKind, Level, MedicalRoom, MedicalUse, MedicalSite, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
+import type { Alarm, Biome, Decor, DecorKind, GameState, GroundKind, HomeRoom, HomeSite, HomeUse, Level, MedicalRoom, MedicalUse, MedicalSite, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
 
 /** Side of every procedural map, in tiles. */
 export const GEN_SIZE = 48;
@@ -52,6 +53,8 @@ export interface MissionLayout {
   /** What the floor of each tile is (procedural maps only). */
   ground?: GroundKind[];
   medical?: MedicalSite[];
+  /** The houses' rooms by use (playtest 2026-10-18, #15). */
+  homes?: HomeSite[];
   /** What each piece of cover is meant to be (procedural maps only; cosmetic). */
   decor?: Decor[];
   /** Storeys of the building each tile belongs to, 0 outside (procedural maps only; GameState.storeys). */
@@ -60,8 +63,8 @@ export interface MissionLayout {
   levels?: Level[];
   /** A few places together on an upper floor, by a window and far from the squad, for a group of the living posted up there (decision 7). */
   perch?: Pos[];
-  /** Where the map's street lights and floodlights stand (procedural maps only; GameState.lights). */
-  lights?: Vec2[];
+  /** Where the map's street lights and floodlights stand (procedural maps only; GameState.lights); `radius`, if not a street light's. */
+  lights?: (Vec2 & { radius?: number })[];
   spawns: Vec2[];
   /** Spawn tiles and patrol route of each pod, in the order the pod plan lists them (on the ground unless they say `z`). */
   pods: { tiles: (Vec2 & { z?: number })[]; patrol: (Vec2 & { z?: number })[] }[];
@@ -75,9 +78,11 @@ export interface MissionLayout {
   evacBus?: { tiles: Vec2[]; heading: number };
   /** The scenario, when not the biome's usual one (GenOptions.site). */
   site?: Site;
-  /** A base to defend (docs/FASE12.md): its heart, and its barricades (low cover the dead break down). */
-  heart?: Vec2;
+  /** A base to defend (docs/FASE12.md), and its barricades (low cover the dead break down). */
+  siege?: boolean;
   barricades?: Vec2[];
+  /** What each piece of the base holds, by tile (the new base, base.ts baseLayout); missing, a hand-made base's doors and barricades. */
+  breakables?: Record<number, number>;
 }
 
 // ------------------------------------------------------------------- rects
@@ -378,6 +383,9 @@ interface Building {
   medicalKind?: 'clinic' | 'ward' | 'hospital';
   medicalRooms?: MedicalRoom[];
   front?: number;
+  /** A house's rooms by use on every storey (homeUses), and how worn it is (homeWear). */
+  homeRooms?: HomeRoom[];
+  homeWear?: number;
 }
 
 /**
@@ -848,10 +856,90 @@ function inward(room: Rect, p: Vec2): number {
 }
 
 /**
- * Furniture of one room, along its walls and in its middle; door approaches
- * stay clear. Wardrobes, shelves and racks are full cover, the rest low.
+ * A room of a house cut in two by a wall across its length with a door in
+ * it (playtest 2026-10-18, #15): a strip `small` tiles deep at one end (a
+ * bathroom, a bedroom) and the rest, both at least 3 a side; [the rest, the
+ * strip]. Null if it is too short, or if the wall would end on a doorway or
+ * cross the way through one. By position (mix): no rng drawn.
  */
-function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish): void {
+function splitOff(c: Canvas, r: Rect, small = 3): [Rect, Rect] | null {
+  const alongX = r.w >= r.h;
+  const long = alongX ? r.w : r.h;
+  const short = alongX ? r.h : r.w;
+  if (long < small * 2 + 1 || short < 3) return null;
+  const m = mix(r.x * 13 + 7, r.y * 17 + 3);
+  for (const atEnd of m % 2 ? [true, false] : [false, true]) {
+    const k = atEnd ? long - small - 1 : small;
+    const line = alongX ? tilesIn(rect(r.x + k, r.y, 1, r.h)) : tilesIn(rect(r.x, r.y + k, r.w, 1));
+    const ends = alongX ? [{ x: r.x + k, y: r.y - 1 }, { x: r.x + k, y: r.y + r.h }] : [{ x: r.x - 1, y: r.y + k }, { x: r.x + r.w, y: r.y + k }];
+    if (!ends.every((e) => c.get(e.x, e.y) === 'wall') || !line.every((p) => c.free(p.x, p.y))) continue;
+    // The door off the ends of the wall where there is room.
+    const at = short > 2 ? 1 + (m % (short - 2)) : m % short;
+    const normal = alongX ? DIRS4[1]! : DIRS4[2]!;
+    line.forEach((p, i) => {
+      c.force(p.x, p.y, i === at ? 'door' : 'wall');
+      if (i === at) for (const q of [p, add(p, normal), add(p, { x: -normal.x, y: -normal.y })]) c.reserve(q.x, q.y);
+    });
+    const before = alongX ? rect(r.x, r.y, k, r.h) : rect(r.x, r.y, r.w, k);
+    const after = alongX ? rect(r.x + k + 1, r.y, r.w - k - 1, r.h) : rect(r.x, r.y + k + 1, r.w, r.h - k - 1);
+    return atEnd ? [before, after] : [after, before];
+  }
+  return null;
+}
+
+/**
+ * What each room of a house is, on its storey (`z`), by its size and by the
+ * one the way in opens into (`entry`, on the ground): there the living room,
+ * a kitchen beside it, the smallest the bathroom, the rest bedrooms and, in a
+ * big house, a study. Upstairs, bedrooms, a bathroom and maybe a study. A
+ * house of one or two rooms has its kitchen in the living room. Decided by
+ * size and place alone: the generator's rng draws as before.
+ */
+function homeUses(rooms: Rect[], entry: Rect | null, z: number): HomeUse[] {
+  const n = rooms.length;
+  const area = (r: Rect) => r.w * r.h;
+  const uses: HomeUse[] = rooms.map(() => 'bedroom');
+  const order = [...rooms.keys()].sort((a, b) => area(rooms[a]!) - area(rooms[b]!) || rooms[a]!.x - rooms[b]!.x || rooms[a]!.y - rooms[b]!.y);
+  const free = (k: number) => uses[k] === 'bedroom';
+  if (z === 0) {
+    const living = entry ? Math.max(0, rooms.indexOf(entry)) : order[n - 1]!;
+    uses[living] = n > 2 && area(rooms[living]!) < 10 ? 'hall' : 'living';
+    if (n >= 3) {
+      // The kitchen through a wall from the living room, the bigger of those that are.
+      const touching = (a: Rect, b: Rect) => a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h;
+      const beside = order.filter((k) => free(k) && touching(rooms[k]!, rooms[living]!));
+      uses[beside.length ? beside[beside.length - 1]! : order.filter(free).pop()!] = 'kitchen';
+    }
+    // A hall only where there is a living room too.
+    if (uses[living] === 'hall' && !uses.includes('living')) {
+      const big = order.filter(free).pop();
+      if (big !== undefined) uses[big] = 'living';
+    }
+  }
+  const small = order.find(free);
+  if (small !== undefined && (z > 0 ? n >= 2 : n >= 3)) uses[small] = 'bath';
+  const left = order.filter(free);
+  if (left.length >= (z > 0 ? 3 : 2) && n >= (z > 0 ? 3 : 5)) uses[left[left.length - 1]!] = 'study';
+  return uses;
+}
+
+/**
+ * How worn a house is (0 kept, near 1 wrecked): an old town's houses worse off
+ * than a grid's, each its own by where it stands (mix: no rng drawn).
+ */
+function homeWear(b: Rect, style: Style): number {
+  const r = (mix(b.x * 3 + 1, b.y * 5 + 2) % 100) / 100;
+  return style.organic ? 0.35 + r * 0.6 : 0.1 + r * 0.55;
+}
+
+/**
+ * Furniture of one room, along its walls and in its middle; door approaches
+ * stay clear. Wardrobes, shelves and racks are full cover, the rest low. A
+ * house's room is furnished as what it is (`use`, homeUses; with a kitchen in
+ * the living room of a house that has none, `kitchenette`), and in a wrecked
+ * one (`wear`) a wardrobe may lie on its face, low cover.
+ */
+function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish, use?: HomeUse, wear = 0, kitchenette = false, studio = false): void {
   const long = Math.max(room.w, room.h);
   const short = Math.min(room.w, room.h);
   const alongX = room.w >= room.h;
@@ -864,6 +952,10 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish): void {
   const mid = Math.floor(long / 2);
   switch (kind) {
     case 'home':
+      if (use) {
+        furnishHome(c, room, use, wear, kitchenette, studio, { P, toward, corner, long, short, mid });
+        break;
+      }
       corner('high', 'wardrobe');
       if (short >= 4) {
         // A living room (a sofa facing the table) or a dining room (a table two tiles long).
@@ -921,6 +1013,84 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish): void {
       }
       break;
     case 'bare':
+      break;
+  }
+}
+
+/** furnishRoom's frame of a room: P(a, b) a along its long side and b across it, the way a step faces, a corner. */
+interface RoomFrame {
+  P: (a: number, b: number) => Vec2;
+  toward: (da: number, db: number) => number;
+  corner: (k: TileKind, what: DecorKind) => boolean;
+  long: number;
+  short: number;
+  mid: number;
+}
+
+/**
+ * A house's room as what it is (playtest 2026-10-18, #15). By position alone
+ * (mix): nothing drawn from the generator's rng.
+ *   - living: a bookcase in a corner, the sofa facing the television or the
+ *     table, a kitchenette's counter and cooker along a wall if it is the kitchen
+ *     too, and a bed in a corner if it is all the house has (`studio`);
+ *   - kitchen: the fridge, counters and the cooker along one wall, a table in the middle of a big one;
+ *   - bedroom: the bed and the wardrobe in corners;
+ *   - bath: the bath in a corner, the toilet (wc) and the washbasin;
+ *   - study: a desk, a bookcase and a cabinet;
+ *   - hall: a cupboard.
+ */
+function furnishHome(c: Canvas, room: Rect, use: HomeUse, wear: number, kitchenette: boolean, studio: boolean, f: RoomFrame): void {
+  const { P, toward, corner, long, short, mid } = f;
+  const m = mix(room.x * 7 + 3, room.y * 11 + 5);
+  // In a wrecked house a wardrobe may lie on its face (low cover).
+  const fallen = wear > 0.65 && m % 3 === 0;
+  switch (use) {
+    case 'living': {
+      corner('high', 'shelf');
+      const row = Math.floor(short / 2);
+      if (short >= 4) {
+        put(c, P(mid, row), 'low', ['table', toward(0, 1)]);
+        if (long >= 5) put(c, P(mid - 1, row), 'low', ['sofa', toward(1, 0)]);
+      } else {
+        put(c, P(mid, 0), 'low', ['sofa', toward(0, 1)]);
+        if (short >= 3) put(c, P(mid, short - 1), 'low', ['tvStand', toward(0, -1)]);
+      }
+      if (kitchenette && long >= 5) {
+        put(c, P(long - 1, short - 1), 'low', ['counter', toward(0, -1)]);
+        put(c, P(long - 2, short - 1), 'low', ['stove', toward(0, -1)]);
+      }
+      if (studio) corner('low', 'bed');
+      break;
+    }
+    case 'kitchen': {
+      // Along one long wall: the fridge at its end, the counters and the cooker.
+      const wall = m % 2 === 0 ? 0 : short - 1;
+      const into = wall === 0 ? 1 : -1;
+      const run = Math.min(long, 4);
+      for (let a = 0; a < run; a++) {
+        const p = P(a, wall);
+        if (a === 0) put(c, p, 'high', ['fridge', toward(0, into)]);
+        else put(c, p, 'low', [a === 2 ? 'stove' : 'counter', toward(0, into)]);
+      }
+      if (short >= 4 && long >= 4) put(c, P(mid, wall === 0 ? short - 2 : 1), 'low', ['table', toward(0, -into)]);
+      break;
+    }
+    case 'bedroom':
+      corner('low', 'bed');
+      corner(fallen ? 'low' : 'high', 'wardrobe');
+      break;
+    case 'bath':
+      corner('low', 'bathtub');
+      corner('low', 'wc');
+      if (long >= 3) put(c, P(mid, 0), 'low', ['washbasin', toward(0, 1)]);
+      break;
+    case 'study':
+      put(c, P(mid, short >= 4 ? 1 : 0), 'low', ['desk', toward(0, 1)]);
+      corner('high', 'shelf');
+      corner(fallen ? 'low' : 'high', 'cabinet');
+      break;
+    case 'hall':
+      corner('high', 'cabinet');
       break;
   }
 }
@@ -987,6 +1157,26 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
   // A back door for houses with more than one room.
   const back = opposite(front);
   if (plan !== 'corridor' && plan !== 'hall' && rooms.length > 1 && doors[back] === null && rng.next() < 0.45) doors[back] = entrance(c, b, back, rng);
+  // A house's rooms (playtest 18/10, #15): the one the front door opens into is the living room; a small house has
+  // its room behind cut into a bedroom and a bathroom (one of a single room, a living room and a bedroom), its
+  // kitchen in the living room. Before the windows, so that none comes where a new wall meets the outer one.
+  let home: { uses: HomeUse[]; kitchenette: boolean; strip: Rect | null } | null = null;
+  if (furnish === 'home' && !medicalRooms) {
+    const side = doors[front] !== null ? front : doors.findIndex((d) => d !== null);
+    const inside = side >= 0 ? localPt(b, side, doors[side]!, 1) : null;
+    const entry = inside ? (rooms.find((r) => inRect(r, inside)) ?? null) : null;
+    const living = entry ?? rooms[0]!;
+    if (rooms.length <= 2) {
+      const back = rooms.find((r) => r !== living);
+      const cut = back ? splitOff(c, back) : splitOff(c, living);
+      if (cut && back) rooms.splice(rooms.indexOf(back), 1, ...cut);
+      else if (cut) rooms.splice(rooms.indexOf(living), 1, ...cut);
+      home = { uses: rooms.map((r) => (r === living || (!back && r === cut?.[0]) ? 'living' : cut && r === cut[1] ? (back ? 'bath' : 'bedroom') : 'bedroom')), kitchenette: true, strip: cut?.[1] ?? null };
+    } else {
+      const uses = homeUses(rooms, entry, 0);
+      home = { uses, kitchenette: !uses.includes('kitchen'), strip: null };
+    }
+  }
   // Shops show their goods: a window every other tile.
   windows(c, b, plan === 'shop' ? 2 : style.windowEvery, doors);
   if (medicalRooms) {
@@ -994,6 +1184,15 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
   } else if (plan === 'hall') {
     furnishHall(c, rooms[0]!, front, rng, furnish, office);
     if (office) furnishRoom(c, office, rng, 'office');
+  } else if (home) {
+    // Each room as what it is (furnishHome).
+    // The strip cut off a room is furnished on a roll of its own: the generator's rng draws as it did before.
+    const { uses, kitchenette, strip } = home;
+    const wear = homeWear(b, style);
+    rooms.forEach((room, k) => furnishRoom(c, room, room === strip ? new Rng(mix(room.x, room.y)) : rng, 'home', uses[k], wear, kitchenette && uses[k] === 'living', rooms.length === 1));
+    const raised: Building = { outer: b, rooms, furnish, homeWear: wear, homeRooms: rooms.map((r, k) => ({ ...r, z: 0, use: uses[k]! })) };
+    c.buildings.push(raised);
+    return raised;
   } else {
     rooms.forEach((room, k) => furnishRoom(c, room, rng, furnish === 'shop' && k > 0 ? 'store' : furnish));
   }
@@ -1413,33 +1612,65 @@ function plantAndLitter(c: Canvas, r: Rect, trees: boolean): void {
 }
 
 /**
+ * A fountain, `n` tiles a side (3 or 2), from its north-west corner: the
+ * basin's rim, and on a big one the statue in its middle. An edge faces out
+ * of the fountain; a corner faces one of its two outer sides, the other one
+ * on its left (the north-west corner faces north).
+ */
+function fountain(n: 2 | 3): Part[] {
+  const rim = (k: number): Look => ['fountainCorner', k];
+  const edge = (k: number): Look => ['fountain', k];
+  if (n === 2) return [[0, 0, 'low', rim(0)], [1, 0, 'low', rim(1)], [0, 1, 'low', rim(3)], [1, 1, 'low', rim(2)]];
+  return [
+    [0, 0, 'low', rim(0)],
+    [1, 0, 'low', edge(0)],
+    [2, 0, 'low', rim(1)],
+    [0, 1, 'low', edge(3)],
+    [1, 1, 'high', ['statue']],
+    [2, 1, 'low', edge(1)],
+    [0, 2, 'low', rim(3)],
+    [1, 2, 'low', edge(2)],
+    [2, 2, 'low', rim(2)],
+  ];
+}
+
+/** A park bench facing `f` (a DIRS4 index): two tiles along its seat, the second on the left of one sitting on the first. */
+function benchOf(f: number): Part[] {
+  const along = DIRS4[(f + 1) % 4]!;
+  return [[0, 0, 'low', ['bench', f]], [along.x, along.y, 'low', ['bench', f]]];
+}
+
+/**
+ * Where a bench beside a fountain `n` tiles a side at `at` goes, on its side
+ * `side` (a DIRS4 index) a tile clear of the rim, facing it: the bench's
+ * first tile (benchOf) and the way it faces.
+ */
+function benchBy(at: Vec2, n: number, side: number): [Vec2, number] {
+  const mid = n === 3 ? 1 : 0;
+  switch (side) {
+    case 0:
+      return [{ x: at.x + mid + 1, y: at.y - 2 }, 2];
+    case 1:
+      return [{ x: at.x + n + 1, y: at.y + mid + 1 }, 3];
+    case 2:
+      return [{ x: at.x + mid, y: at.y + n + 1 }, 0];
+    default:
+      return [{ x: at.x - 2, y: at.y + mid }, 1];
+  }
+}
+
+/**
  * A square: a fountain with a statue in the middle, planters mirrored around
- * it on a regular grid and a kiosk or two by the edges; `extras`, its trees
- * and rubble (plantAndLitter), all but on the squad's and the objective's.
+ * it on a regular grid, two benches facing the fountain and a kiosk or two
+ * by the edges; `extras`, its trees and rubble (plantAndLitter), all but on
+ * the squad's and the objective's.
  */
 function plaza(c: Canvas, r: Rect, rng: Rng, extras = true): void {
   const m = centre(r);
   const cx = Math.floor(m.x);
   const cy = Math.floor(m.y);
-  // The basin's rim: an edge faces out of the fountain; a corner faces one of its
-  // two outer sides, the other one on its left (the north-west corner faces north).
-  const rim = (k: number): Look => ['fountainCorner', k];
-  const edge = (k: number): Look => ['fountain', k];
-  if (r.w >= 9 && r.h >= 9) {
-    group(c, { x: cx - 1, y: cy - 1 }, [
-      [0, 0, 'low', rim(0)],
-      [1, 0, 'low', edge(0)],
-      [2, 0, 'low', rim(1)],
-      [0, 1, 'low', edge(3)],
-      [1, 1, 'high', ['statue']],
-      [2, 1, 'low', edge(1)],
-      [0, 2, 'low', rim(3)],
-      [1, 2, 'low', edge(2)],
-      [2, 2, 'low', rim(2)],
-    ]);
-  } else if (r.w >= 6 && r.h >= 6) {
-    group(c, { x: cx, y: cy }, [[0, 0, 'low', rim(0)], [1, 0, 'low', rim(1)], [0, 1, 'low', rim(3)], [1, 1, 'low', rim(2)]]);
-  }
+  if (r.w >= 9 && r.h >= 9) group(c, { x: cx - 1, y: cy - 1 }, fountain(3));
+  else if (r.w >= 6 && r.h >= 6) group(c, { x: cx, y: cy }, fountain(2));
   if (r.w >= 8 && r.h >= 8) {
     const alongX = r.w >= r.h;
     const len = r.w >= 12 && r.h >= 12 ? 3 : 2;
@@ -1453,12 +1684,67 @@ function plaza(c: Canvas, r: Rect, rng: Rng, extras = true): void {
       }
     }
   }
+  // Two benches facing the fountain from either end of the square's length, else across it (where the planters leave
+  // room). Nothing drawn from the rng: the rest of a seed's layout stays as it was.
+  if (r.w >= 9 && r.h >= 9) {
+    const ends = r.w >= r.h ? [1, 3, 0, 2] : [0, 2, 1, 3];
+    let benches = 0;
+    for (const side of ends) {
+      const [p, f] = benchBy({ x: cx - 1, y: cy - 1 }, 3, side);
+      if (benches < 2 && group(c, p, benchOf(f))) benches++;
+    }
+  }
   const sides = shuffle([0, 1, 2, 3], rng).slice(0, rng.range(1, 2));
   for (const side of sides) {
     const p = localPt(r, side, Math.floor(sideLen(r, side) / 2) + rng.range(-1, 1), 1);
     group(c, p, turn(dressed(PAIR, 'bin', 'kiosk'), rng.int(4)));
   }
   if (extras) plantAndLitter(c, r, true);
+}
+
+/**
+ * The squad's square (playtest 2026-10-18, #12: «mobiliario al azar»), laid
+ * out like any other round the corner the squad starts in, which stays
+ * clear: the fountain at its far end, two benches facing it from the squad's
+ * side (a bin by the first), and a tree with a planter at its foot on each
+ * of its corners along the map's edges. They are the squad's cover on its
+ * first move (generateLayout adds no posts where they stand). Nothing on the
+ * map's edges, where the dead come in, nor off the square. It draws from the
+ * rng what the plain square drew for its kiosks, so the rest of the town
+ * comes out as it did.
+ */
+function squadSquare(c: Canvas, r: Rect, rng: Rng): void {
+  for (const _ of shuffle([0, 1, 2, 3], rng).slice(0, rng.range(1, 2))) {
+    rng.range(-1, 1);
+    rng.int(4);
+  }
+  const place = (p: Vec2, parts: Part[]) =>
+    parts.every(([x, y]) => inRect(r, { x: p.x + x, y: p.y + y }) && p.x + x >= EDGE_CLEAR && p.y + y >= EDGE_CLEAR) && group(c, p, parts);
+  // The biggest fountain that fits a tile in from the square's edges, as far from the corner as it goes, on its diagonal.
+  for (const n of [3, 2] as const) {
+    const spots = tilesIn(rect(r.x + 1, r.y + 1, r.w - n - 1, r.h - n - 1)).sort((a, b) => b.x + b.y - (a.x + a.y) || Math.abs(a.x - a.y) - Math.abs(b.x - b.y));
+    const at = spots.find((p) => place(p, fountain(n)));
+    if (!at) continue;
+    // The squad's sides of it first: the squad's corner is the north-west one.
+    let benches = 0;
+    for (const side of [0, 3, 1, 2]) {
+      const [p, f] = benchBy(at, n, side);
+      const along = DIRS4[(f + 1) % 4]!;
+      const withBin: Part[] = [...benchOf(f), [2 * along.x, 2 * along.y, 'low', ['bin']]];
+      if (benches < 2 && ((benches === 0 && place(p, withBin)) || place(p, benchOf(f)))) benches++;
+    }
+    break;
+  }
+  // Where each tree would stand, the way further in along the edge (if the squad's corner is there), and its planter's side.
+  const corners: [Vec2, Vec2, Vec2][] = [
+    [{ x: r.x + r.w - 2, y: r.y + 1 }, { x: 0, y: 1 }, { x: -1, y: 0 }],
+    [{ x: r.x + 1, y: r.y + r.h - 2 }, { x: 1, y: 0 }, { x: 0, y: -1 }],
+  ];
+  for (const [corner, inward, foot] of corners) {
+    for (let k = 0; k < 4; k++) {
+      if (place(add(corner, { x: inward.x * k, y: inward.y * k }), [[0, 0, 'high', ['tree']], [foot.x, foot.y, 'low', ['planter']]])) break;
+    }
+  }
 }
 
 /** Car park: bays across the lot facing an aisle, two rows when deep enough, and a booth; `extras`, its rubble (plantAndLitter), but on the objective's. */
@@ -1714,9 +2000,9 @@ function motelWing(c: Canvas, b: Rect, front: number, rng: Rng): Building {
     rooms.push(room);
     opening(c, localPt(b, front, 1 + 4 * k, 0), front, 'door');
     c.force(localPt(b, front, 3 + 4 * k, 0).x, localPt(b, front, 3 + 4 * k, 0).y, 'window');
-    furnishRoom(c, room, rng, 'home');
+    furnishRoom(c, room, rng, 'home', 'bedroom');
   }
-  const wing: Building = { outer: b, rooms, furnish: 'home', storeys: 1, flat: true };
+  const wing: Building = { outer: b, rooms, furnish: 'home', storeys: 1, flat: true, homeWear: 0.5, homeRooms: rooms.map((r) => ({ ...r, z: 0, use: 'bedroom' as const })) };
   c.buildings.push(wing);
   return wing;
 }
@@ -1884,12 +2170,19 @@ function cornerLots(lot: Lot, corner: number, yard: number): { square: Rect; lot
   return { square, lots };
 }
 
-/** A small square on a corner of an old town's block: a fountain, or trees and a bench, and a bin by the kerb. */
+/** A small square on a corner of an old town's block: a fountain with a bench facing it, or trees and bushes, and a bin by the kerb. */
 function plazuela(c: Canvas, r: Rect, rng: Rng): void {
   const m = centre(r);
   if (rng.next() < 0.4) {
-    const rim = (k: number): Look => ['fountainCorner', k];
-    group(c, { x: Math.floor(m.x), y: Math.floor(m.y) }, [[0, 0, 'low', rim(0)], [1, 0, 'low', rim(1)], [0, 1, 'low', rim(3)], [1, 1, 'low', rim(2)]]);
+    const at = { x: Math.floor(m.x), y: Math.floor(m.y) };
+    if (group(c, at, fountain(2))) {
+      // On the first side with room, by position: the rng draws as before.
+      for (let k = 0; k < 4; k++) {
+        const [p, f] = benchBy(at, 2, (mix(r.x, r.y) + k) % 4);
+        const parts = benchOf(f);
+        if (parts.every(([x, y]) => inRect(r, { x: p.x + x, y: p.y + y })) && group(c, p, parts)) break;
+      }
+    }
   } else {
     groupNear(c, m, rng, [dressed(CORNER, 'bush', 'tree'), dressed(PAIR, 'planter', 'tree')], 1, 0, 6);
   }
@@ -2175,7 +2468,7 @@ function city(c: Canvas, rng: Rng, map: Style, role: Role, clinic = false, hospi
       // The squad's corner: an open square, with buildings round it if the block is big (on a small block, a narrower square).
       const corner = cornerLots({ r: lot, roads }, 0, lot.w >= 16 || lot.h >= 16 ? 8 : 6);
       if (style.industrial) parking(c, corner.square, rng, 2, false);
-      else plaza(c, corner.square, rng, false);
+      else squadSquare(c, corner.square, rng);
       lots.push(...corner.lots);
     } else if (block !== objBlock && inRect(block, { x: S - 1, y: 0 })) {
       // The other corner on the squad's side keeps a yard for the evac zone (generateLayout carves it there), a few crates in it.
@@ -3461,10 +3754,11 @@ function clearMedicalAisles(st: Storey, r: Rect, from: Vec2): void {
  * Stairs up through building `r` from the floor below (`lower`: the ground
  * canvas, or a storey) to storey `upper`: away from walls on both floors,
  * with free floor behind its foot and at its landing, and a hole above the
- * flight (the stairwell). Never where the hole would cut that storey in two.
- * Returns the landing, or null if no place fits.
+ * flight (the stairwell). Never where the hole would cut that storey in two,
+ * and in a house's bathroom (`shun`) only if nowhere else fits. Returns the
+ * landing, or null if no place fits.
  */
-function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, r: Rect, rng: Rng, avoid: Set<number>, zones?: Rect[]): Vec2 | null {
+function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, r: Rect, rng: Rng, avoid: Set<number>, zones?: Rect[], shun: Rect[] = []): Vec2 | null {
   const inner = inset(r, 1);
   const options: { at: Vec2; up: number; key: number }[] = [];
   for (const at of tilesIn(inner)) {
@@ -3485,7 +3779,9 @@ function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, 
       options.push({ at, up, key: rng.next() });
     });
   }
-  options.sort((a, b) => a.key - b.key);
+  // Out of a house's bathroom if it can be (#15): last in line, so the rng draws as it did.
+  const shunned = (at: Vec2) => (shun.some((q) => inRect(q, at)) ? 1 : 0);
+  options.sort((a, b) => shunned(a.at) - shunned(b.at) || a.key - b.key);
   for (const { at, up } of options) {
     const i = lower.i(at.x, at.y);
     const landing = add(at, DIRS4[up]!);
@@ -3589,7 +3885,7 @@ function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<numb
       e.landing = null;
       // No way up to the storey below: none here either.
       if (!(e.n > k || (e.n === k && k >= 2 && e.walkable)) || e.reached !== k - 1) continue;
-      e.landing = placeStairs(lower, lowerSlab, st, e.b.outer, rng, k === 1 ? avoid : new Set(), e.b.medicalKind === 'hospital' ? e.b.medicalRooms?.filter((r) => r.use === 'stairs') : undefined);
+      e.landing = placeStairs(lower, lowerSlab, st, e.b.outer, rng, k === 1 ? avoid : new Set(), e.b.medicalKind === 'hospital' ? e.b.medicalRooms?.filter((r) => r.use === 'stairs') : undefined, e.b.homeRooms?.filter((r) => r.use === 'bath' && r.z === k - 1));
       if (e.landing) e.reached = k;
     }
     for (const e of going) {
@@ -3597,6 +3893,20 @@ function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<numb
       if (e.b.medicalKind) {
         for (const room of e.rooms as MedicalRoom[]) furnishMedical(lc, room, rng, e.b.medicalKind === 'clinic' ? undefined : e.b.medicalKind);
         e.b.medicalRooms!.push(...e.rooms as MedicalRoom[]);
+      } else if (e.b.homeRooms) {
+        // A house's storey above: bedrooms, a bathroom (cut off the biggest room if none is small), maybe a study.
+        let strip: Rect | null = null;
+        if (!e.rooms.some((r) => r.w * r.h <= 9)) {
+          const big = e.rooms.reduce((a, r) => (r.w * r.h > a.w * a.h ? r : a), e.rooms[0]!);
+          const cut = big ? splitOff(lc, big) : null;
+          if (cut) {
+            e.rooms.splice(e.rooms.indexOf(big), 1, ...cut);
+            strip = cut[1];
+          }
+        }
+        const uses = homeUses(e.rooms, null, k);
+        e.rooms.forEach((room, j) => furnishRoom(lc, room, room === strip ? new Rng(mix(room.x, room.y)) : rng, 'home', uses[j], e.b.homeWear ?? 0));
+        e.b.homeRooms.push(...e.rooms.map((r, j) => ({ ...r, z: k, use: uses[j]! })));
       } else for (const room of e.rooms) furnishRoom(lc, room, rng, UPSTAIRS[e.b.furnish]);
       if (e.b.medicalKind) clearMedicalAisles(st, e.b.outer, e.landing);
       else unblockStorey(st, e.b.outer, e.landing);
@@ -3751,9 +4061,11 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     compound?.objective ??
     (biome === 'city' ? city(c, rng, { ...style, industrial: site === 'industrial' }, role, clinic, hospital, ward) : site === 'roadside' ? roadside(c, rng, style, role) : wilds(c, rng, style, role));
   thinClutter(c, opts.seed);
-  // Something to take cover behind on the squad's first move: barricades and crates, rocks in the wilds.
+  // Something to take cover behind on the squad's first move: barricades and crates, rocks in the wilds. In town, only
+  // with nothing else a few tiles round (the squad's square has its fountain, benches and trees: playtest 18/10, #12).
   const posts = [BARRICADE, CORNER, PAIR].map((parts) => (biome === 'wilds' ? dressed(parts, 'rock') : dressed(parts, 'barricade', 'crates')));
-  for (const at of [{ x: 8, y: 3 }, { x: 3, y: 8 }, { x: 8, y: 8 }]) groupNear(c, at, rng, posts, 1, 0, 5);
+  const bare = (p: Vec2) => biome !== 'city' || tilesIn(rect(p.x - 3, p.y - 3, 7, 7)).every((q) => c.get(q.x, q.y) !== 'low' && c.get(q.x, q.y) !== 'high');
+  for (const at of [{ x: 8, y: 3 }, { x: 3, y: 8 }, { x: 8, y: 8 }]) if (bare(at)) groupNear(c, at, rng, posts, 1, 0, 5);
 
   let evacZone: Vec2[] = [];
   if (needsEvac) {
@@ -3934,6 +4246,17 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   });
 
   for (const b of medical) b.dressing = dressMedical(b, S, tiles, decor, levels, opts.seed, [...spawns, item, terminal, objectiveSpot].filter((p): p is Vec2 => !!p).map(T));
+  // The houses (playtest 18/10, #15): their rooms by use, and what lies about in them.
+  const homes: HomeSite[] = c.buildings.flatMap((b) => {
+    if (!b.homeRooms || b.ruined) return [];
+    const a = T(b.outer);
+    const z = T({ x: b.outer.x + b.outer.w - 1, y: b.outer.y + b.outer.h - 1 });
+    return [{ x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, wear: b.homeWear ?? 0, rooms: b.homeRooms.map((r) => {
+      const a = T(r), z = T({ x: r.x + r.w - 1, y: r.y + r.h - 1 });
+      return { x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, z: r.z, use: r.use };
+    }) }];
+  });
+  for (const h of homes) h.dressing = dressHome(h, S, tiles, decor, levels, opts.seed, [...spawns, item, terminal, objectiveSpot].filter((p): p is Vec2 => !!p).map(T));
 
   return {
     id: `gen-${site ?? biome}-${opts.seed}`,
@@ -3946,6 +4269,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     elev,
     ground,
     ...(medical.length ? { medical } : {}),
+    ...(homes.length ? { homes } : {}),
     decor,
     storeys,
     ...(levels.length ? { levels } : {}),
@@ -3987,7 +4311,7 @@ export function handmadeLayout(def: MapDef, kind: MissionKind): MissionLayout {
     terminal: kind === 'hack' ? spot : null,
     objectiveSpot: objective && (kind === 'sabotage' || kind === 'rescue') ? spot : null,
     evacZone: objective ? map.evacZone : [],
-    ...(def.siege && spot ? { heart: spot } : {}),
+    ...(def.siege ? { siege: true } : {}),
     ...(map.barricades.length ? { barricades: map.barricades } : {}),
   };
 }

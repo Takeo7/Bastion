@@ -113,6 +113,8 @@ export type GameEvent =
   | { t: 'leftBehind'; unit: string }
   /** `decor`: what it is to look like from now on (a breached wall); without it, the decor stays. */
   | { t: 'tileChanged'; pos: Pos; kind: TileKind; decor?: DecorKind }
+  /** A trap of the base goes off under one of the dead (docs/FASE12.md §11.4): one use less. Its harm follows (`damaged`, `stunned`). */
+  | { t: 'trapSprung'; trap: string; unit: string }
   /** One of the dead beats on a door or a barricade (docs/FASE12.md §4): `left`, what it still holds; at 0 a `tileChanged` follows, it gave way. */
   | { t: 'smashed'; unit: string; tile: Pos; amount: number; left: number }
   /** A storey's slab gives way under a grenade (docs/FASE7.md §5): the place is open air. */
@@ -163,6 +165,8 @@ export type GameEvent =
   | { t: 'weaponEquipped'; unit: string; index: number }
   /** A vest from the backpack put on (playtest 16/10 #18): its health at once, the new points full. */
   | { t: 'vestWorn'; unit: string; index: number }
+  /** A belt thing from the backpack put on the belt (playtest 18/10 #5), for an action: its uses, its ability and what it gives, at once. */
+  | { t: 'beltEquipped'; unit: string; index: number }
   /** A bite's contagion stopped (docs/FASE8.md §C). */
   | { t: 'cured'; unit: string; by: string }
   /** Apaños (docs/FASE9.md): `amount` of condition back to the weapon in `target`'s hand. */
@@ -255,7 +259,8 @@ export function applyEvent(s: GameState, e: GameEvent): void {
           if (u.disoriented > 0) u.disoriented--;
           continue;
         }
-        u.ap = u.captive || u.objective ? 0 : u.stunned ? 1 : apPerTurn(u);
+        // A turret has no turn of its own: it keeps watch in the enemy's (docs/FASE12.md §11.4).
+        u.ap = u.captive || u.objective || u.automaton ? 0 : u.stunned ? 1 : apPerTurn(u);
         u.stunned = false;
         u.overwatch = false;
         u.killZone = false;
@@ -613,6 +618,11 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       }
       break;
     }
+    case 'trapSprung': {
+      const trap = s.traps?.find((t) => t.piece === e.trap);
+      if (trap) trap.charges = Math.max(0, trap.charges - 1);
+      break;
+    }
     case 'smashed': {
       const u = unit(s, e.unit);
       u.facing = facingTo(u.pos, e.tile) ?? u.facing;
@@ -748,6 +758,17 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       u.maxHp += hp;
       u.hp += hp;
       (u.worn ??= []).push(loot!.item!);
+      break;
+    }
+    case 'beltEquipped': {
+      const u = unit(s, e.unit);
+      u.ap = Math.max(0, u.ap - 1);
+      const [loot] = u.backpack!.splice(e.index, 1);
+      const def = ITEMS[loot!.item!];
+      u.gear.push(def.id);
+      for (const [charge, n] of Object.entries(def.charges ?? {}) as [ChargeId, number][]) u.charges[charge] = (u.charges[charge] ?? 0) + n;
+      if (def.mods) u.mods = addMods(u.mods, def.mods);
+      (u.belted ??= []).push(def.id);
       break;
     }
     case 'roomSearched': {

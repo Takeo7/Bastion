@@ -86,6 +86,15 @@ const IDS: Record<DecorKind, number> = {
   toilet: 69,
   clinicalBin: 70,
   consultDesk: 71,
+  // The squares (playtest 2026-10-18, #12).
+  bench: 72,
+  // A house's rooms (playtest 2026-10-18, #15).
+  fridge: 73,
+  stove: 74,
+  bathtub: 75,
+  washbasin: 76,
+  tvStand: 77,
+  wc: 78,
 };
 
 const KINDS: DecorKind[] = [];

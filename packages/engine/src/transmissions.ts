@@ -81,7 +81,7 @@ export interface Scene {
 
 const trusted = (c: CampaignState) => c.story.simon === 'trusted';
 
-const hasEchoes = (c: CampaignState) => c.base.plots.some((p) => (p.building as string | null) === 'echoes');
+const hasEchoes = (c: CampaignState) => (c.bastion?.pieces ?? []).some((p) => p.piece === 'echoes');
 const chapterOpen = (c: CampaignState, n: number) => c.story.done >= n || c.offers.some((o) => o.story === n);
 const bitten = (c: CampaignState) => c.soldiers.filter((s) => s.alive && s.infection);
 
@@ -93,7 +93,7 @@ export const SCENES: Scene[] = [
     channel: 'Correo a pie · leída por Morse',
     when: (c) => c.day > 31,
     lines: [
-      { who: 'halvorsen', text: 'A Atalaya, del Refugio de Brena. Con esta carta suben los suministros del mes.' },
+      { who: 'halvorsen', text: 'Al Bastión, del Refugio de Brena. Con esta carta suben los suministros del mes.' },
       { who: 'halvorsen', text: 'Cada caja sale de una despensa que también pasa hambre. Esperamos resultados.' },
     ],
   },
@@ -170,7 +170,7 @@ export const SCENES: Scene[] = [
     when: (c) => bastionLevel(c) >= 4,
     lines: [
       { who: 'morse', text: 'Con la antena nueva oigo a los otros enclaves. Todos dicen lo mismo: con el deshielo sube algo desde los Llanos de Ceniza, miles de muertos que no se dispersan. La llaman la Marea.' },
-      { who: 'teo', text: 'Y Atalaya está al final de la cuesta.' },
+      { who: 'teo', text: 'Y el Bastión está al final de la cuesta.' },
       { who: 'morse', text: 'Desde hoy, el reloj de la sala de mando cuenta kilómetros.' },
     ],
   },
@@ -290,7 +290,7 @@ export const SCENES: Scene[] = [
       { who: 'teo', text: 'Y el parte de aquella noche. «03:10, alarma en el sótano. Apagada por el vigilante.»' },
       { who: 'nwosu', text: 'Esa alarma saltaba tres veces por semana, Teo. También lo pone aquí.' },
       { who: 'morse', text: 'Alguien ha entrado en nuestra frecuencia.' },
-      { who: 'coro', text: 'Atalaya. Quemad esos cuadernos. Nadie está enfermo. Solo os falta dar el último paso.' },
+      { who: 'coro', text: 'Los de Atalaya. Quemad esos cuadernos. Nadie está enfermo. Solo os falta dar el último paso.' },
       { who: 'morse', text: 'La Congregación. Saben lo que hemos traído.' },
     ],
   },
@@ -310,7 +310,7 @@ export const SCENES: Scene[] = [
   {
     id: 'voz',
     title: 'Fuera de antena',
-    channel: 'Atalaya · celda del sótano',
+    channel: 'El Bastión · bajo llave',
     when: (c) => c.story.done >= 7,
     lines: [
       { who: 'voz', text: 'Buenas noches, Kessra. Están escuchando a la Voz.' },
@@ -326,7 +326,7 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · todas las salas',
     when: (c) => c.offers.some((o) => o.final) || c.event === 'finale' || c.ending !== null,
     lines: [
-      { who: 'morse', text: 'La Marea se ve desde la presa. Llena el valle.' },
+      { who: 'morse', text: 'La Marea se ve desde lo alto de la cuesta. Llena el valle.' },
       { who: 'teo', text: 'La Lata tiene gasolina para un viaje y la sirena de los Cuervos atornillada al techo.' },
       { who: 'nwosu', text: 'La vacuna está lista. Pocas dosis. Habrá que decidir para quién.' },
       { who: 'simon', text: 'Los Cuervos no se la merecen. Aunque mi hermano siga con ellos.', if: trusted },
@@ -339,7 +339,7 @@ export const SCENES: Scene[] = [
     channel: 'Onda corta · todas las frecuencias',
     when: (c) => c.ending === 'break',
     lines: [
-      { who: 'morse', text: 'Aquí Atalaya, a cualquiera con una radio encendida. Coged papel: así se hace la vacuna.' },
+      { who: 'morse', text: 'Aquí el Bastión, a cualquiera con una radio encendida. Coged papel: así se hace la vacuna.' },
       { who: 'nwosu', text: 'La receta entera, en abierto. Para los enclaves y para los Cuervos.' },
       { who: 'teo', text: 'Alguno la venderá. Otro la usará para mandar.' },
       { who: 'morse', text: 'Contestan sitios que no sabía que seguían vivos. Doce frecuencias. Trece.' },
@@ -356,7 +356,7 @@ export const SCENES: Scene[] = [
       { who: 'nwosu', text: 'En el refugio, bajo llave.' },
       { who: 'morse', text: 'Anoche llamaron desde el otro lado de la sierra. Preguntaban por una vacuna.' },
       { who: 'teo', text: '¿Qué les dijiste?' },
-      { who: 'morse', text: 'Que aquí no sabemos nada. Atalaya, cambio y corto.' },
+      { who: 'morse', text: 'Que aquí no sabemos nada. El Bastión, cambio y corto.' },
     ],
   },
   {
@@ -367,7 +367,7 @@ export const SCENES: Scene[] = [
     lines: [
       { who: 'coro', text: 'Kilómetro cero. Las campanas suenan en la sierra.' },
       { who: 'coro', text: 'Abrid las puertas. Todos seréis salvados.' },
-      { who: 'morse', text: 'Aquí Atalaya. Si alguien recibe esto: lo intentamos.' },
+      { who: 'morse', text: 'Aquí el Bastión. Si alguien recibe esto: lo intentamos.' },
     ],
   },
 ];
@@ -398,7 +398,7 @@ export function sceneLines(scene: Scene, c: CampaignState): SceneLine[] {
 // ---------------------------------------------------------------- recap
 
 /** Played to whoever opens a campaign already under way (a partner arriving late, another browser). */
-export const RECAP: Scene = { id: 'recap', title: 'Relevo', channel: 'Línea interna · Estación Atalaya', when: () => false, lines: [] };
+export const RECAP: Scene = { id: 'recap', title: 'Relevo', channel: 'Línea interna · El Bastión', when: () => false, lines: [] };
 
 /** Where the campaign stands, for `slot`: the day, the Bastion, the Marea, their soldiers and the first thing to do. */
 export function recapLines(c: CampaignState, slot: Slot): SceneLine[] {

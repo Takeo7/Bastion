@@ -1,6 +1,6 @@
+import { SETTINGS_TEXT } from '@bastion/engine';
 import { audio, type Volumes } from '../audio/engine';
-import { autoQuality, autoQualityNote, graphics, setAutoQuality, setGraphics, type GraphicsSettings } from '../settings';
-import { TOUCH_TEXT } from '@bastion/engine';
+import { autoQuality, autoQualityNote, ENEMY_SPEED, graphics, setAutoQuality, setGraphics, type GraphicsSettings } from '../settings';
 import { h } from './dom';
 
 type Choice<K extends keyof GraphicsSettings> = [GraphicsSettings[K], string, string?];
@@ -49,8 +49,6 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
         ['high', 'Altos', 'Oclusión ambiental y brillo'],
         ['medium', 'Medios', 'Solo brillo'],
         ['low', 'Bajos', 'Sin posprocesado'],
-        // Arte's level for phones (docs/FASE11.md §5); touch mode picks it by itself (ui/touch.ts).
-        ['mobile', 'Móvil', 'Para el móvil: menos resolución, 30 imágenes por segundo y sin brillo'],
       ],
       // All live but the mission's dressing and night lights, which are placed when the map is built (mapView.ts).
       'El posprocesado es lo que más cuesta dibujar. Todo cambia al momento, menos los adornos del mapa y las luces de noche, que cambian en la siguiente misión.',
@@ -70,19 +68,9 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
       redraw,
     ),
     row('showFps', 'Mostrar FPS', [[true, 'Sí'], [false, 'No']], 'Un contador de imágenes por segundo en una esquina.', redraw),
-    // Touch controls (docs/FASE11.md §1): by the screen, or forced either way (ui/touch.ts).
-    row('touch', TOUCH_TEXT.setting, [['auto', TOUCH_TEXT.modes.auto], ['on', TOUCH_TEXT.modes.on], ['off', TOUCH_TEXT.modes.off]], TOUCH_TEXT.settingAbout, redraw),
-    row(
-      'combatSpeed',
-      'Velocidad del combate',
-      [
-        ['slow', 'Lenta', 'Cada acción tarda más en verse'],
-        ['normal', 'Normal'],
-        ['fast', 'Rápida', 'Cada acción tarda menos en verse'],
-      ],
-      'Lo que tarda en verse cada acción, la vuestra y la del enemigo. En el turno enemigo, mantén la barra espaciadora para verlo en Rápida.',
-      redraw,
-    ),
+    // The enemy turn's speed, a slider (playtest 18/10 #6); the squad's own actions play at their own pace.
+    speedRow(),
+    row('autoPlan', SETTINGS_TEXT.plans, [[true, 'Sí'], [false, 'No']], SETTINGS_TEXT.plansAbout, redraw),
     row(
       'uiScale',
       'Interfaz',
@@ -106,11 +94,40 @@ function autoQualityRow(redraw: () => void): HTMLElement {
   const choice = (value: boolean, text: string, tip: string) => h(`button${value === on ? '.on' : ''}`, { title: tip, onclick: () => (setAutoQuality(value), redraw()) }, text);
   return h(
     'div.setting',
-    { title: 'Si el combate va a menos de 45 imágenes por segundo (27 en «Móvil», que va a 30), baja poco a poco la resolución automática, la oclusión ambiental y el brillo. Lo que elijas tú en Efectos o Resolución no lo toca.' },
+    { title: 'Si el combate va a menos de 45 imágenes por segundo, baja poco a poco la resolución automática, la oclusión ambiental y el brillo. Lo que elijas tú en Efectos o Resolución no lo toca.' },
     h('span.setting-name', {}, 'Ajuste auto'),
     h('div.setting-choices', {}, choice(true, 'Sí', 'Baja la calidad si el combate no va fluido'), choice(false, 'No', 'Siempre la calidad elegida')),
     note ? h('small.setting-note', {}, note) : null,
   );
+}
+
+/** «Velocidad del turno enemigo»: a slider from ENEMY_SPEED.min to .max, its value beside it («×1,4»), applied as it moves. */
+function speedRow(): HTMLElement {
+  const value = h('b.setting-value', {}, speedText(graphics().enemySpeed));
+  const input = h('input.setting-slider', {
+    type: 'range',
+    min: String(ENEMY_SPEED.min),
+    max: String(ENEMY_SPEED.max),
+    step: String(ENEMY_SPEED.step),
+    value: String(graphics().enemySpeed),
+    'aria-label': SETTINGS_TEXT.enemySpeed,
+  }) as HTMLInputElement;
+  input.addEventListener('input', () => {
+    const k = Number(input.value);
+    value.textContent = speedText(k);
+    setGraphics({ enemySpeed: k });
+  });
+  return h(
+    'div.setting',
+    { title: `${SETTINGS_TEXT.enemySpeedAbout} En el turno enemigo, mantén la barra espaciadora para verlo más rápido.` },
+    h('span.setting-name', {}, SETTINGS_TEXT.enemySpeed),
+    h('div.setting-choices.slider', {}, h('small', {}, 'Lenta'), input, h('small', {}, 'Rápida'), value),
+  );
+}
+
+/** «×1,4»: a speed's rate, the Spanish way. */
+function speedText(k: number): string {
+  return `×${k.toFixed(1).replace('.', ',')}`;
 }
 
 const LEVELS: [number, string][] = [

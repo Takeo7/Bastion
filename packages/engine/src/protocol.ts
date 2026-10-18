@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BUILDS, HEADS, NAME_MAX, NICKNAME_MAX } from './appearance';
+import { PIECES, type PieceId } from './base';
 import { FACILITIES, REGIONS } from './campaign';
 import { ABILITIES, ITEMS, WEAPON_MODS } from './content';
 import { CRAFTS } from './progression';
@@ -72,7 +73,7 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
   /** A move planned without the command, shown to the partner; `tile: null` withdraws it. */
   z.object({ t: z.literal('plan'), unit: unitId, tile: spot.nullable() }),
   /**
-   * The page went to sleep (a phone switched to another app) or woke up (docs/FASE11.md §6): while away, a
+   * The game went out of sight (its window minimized or behind another, the laptop asleep) or came back: while away, a
    * dropped socket keeps its turn and the command longer. Always answered with `room`, which the client
    * takes as proof the socket survived the sleep.
    */
@@ -105,7 +106,17 @@ const appearanceSchema = z.object({
   character: z.string().regex(/^[a-z][a-zA-Z0-9]{0,23}$/).optional(),
 });
 
+/** A tile of the base's map (docs/FASE12.md §11). */
+const tileCoord = z.number().int().min(0).max(255);
+
 export const campaignCommandSchema = z.discriminatedUnion('type', [
+  /** The base (docs/FASE12.md §11): put a piece somewhere, turned; fell trees; mend, raise a level, set again or take down a piece. */
+  z.object({ type: z.literal('place'), piece: z.enum(keys(PIECES)), x: tileCoord, y: tileCoord, rot: z.number().int().min(0).max(3) }),
+  z.object({ type: z.literal('fell'), tiles: z.array(z.object({ x: tileCoord, y: tileCoord })).min(1).max(400) }),
+  z.object({ type: z.literal('mend'), piece: id }),
+  z.object({ type: z.literal('raise'), piece: id }),
+  z.object({ type: z.literal('rearm'), piece: id }),
+  z.object({ type: z.literal('dismantle'), piece: id }),
   z.object({ type: z.literal('chooseMission'), id }),
   z.object({ type: z.literal('clear'), plot: id }),
   z.object({ type: z.literal('build'), plot: id, facility: facilityId }),
@@ -149,6 +160,11 @@ export const campaignMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('backToMenu') }),
   /** Which base screen the player is looking at (shown to the partner). */
   z.object({ t: z.literal('baseView'), view: baseViewSchema }),
+  /**
+   * Building on the base (docs/FASE12.md §11.7): the piece in hand and where it points, for the partner to see;
+   * null once it is put down or the build mode closed. Passed on as it comes, never kept.
+   */
+  z.object({ t: z.literal('baseCursor'), piece: z.enum(keys(PIECES)).nullable(), x: tileCoord, y: tileCoord, rot: z.number().int().min(0).max(3) }),
 ]);
 
 export type CampaignMessage = z.infer<typeof campaignMessageSchema>;
@@ -158,7 +174,7 @@ export interface PlayerInfo {
   name: string;
   color: string;
   connected: boolean;
-  /** In another app on their phone (the `away` message): back soon, their turn waits. */
+  /** Their game out of sight (the `away` message): back soon, their turn waits. */
   away?: boolean;
 }
 
@@ -177,12 +193,15 @@ export type ServerMessage =
       t: 'room';
       players: PlayerInfo[];
       phase: RoomPhase;
-      savedCampaign: { day: number; doom: number; level: number } | null;
+      /** `missions`: missions flown (time goes by them, docs/FASE12.md §11.6); `day`, the clock inside. */
+      savedCampaign: { day: number; missions: number; doom: number; level: number } | null;
       /** A campaign from before Fase 9 the host put aside on starting (docs/FASE9.md §7): the file's name. */
       setAside?: string;
     }
   | { t: 'campaign'; state: CampaignState }
   | { t: 'baseView'; slot: Slot; view: BaseView }
+  /** The partner's piece in hand on the base, and where (null: nothing in hand). */
+  | { t: 'baseCursor'; slot: Slot; piece: PieceId | null; x: number; y: number; rot: number }
   | { t: 'snapshot'; state: GameState }
   | { t: 'events'; events: GameEvent[]; seq: number; by: Slot | null }
   | { t: 'presence'; slot: Slot; unit: string | null; tile: Place | null }

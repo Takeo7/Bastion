@@ -40,6 +40,13 @@ import {
   findLabel,
   firesSidearm,
   FOUND_WEAPONS,
+  apPerTurn,
+  displayName,
+  BOARD,
+  VETERANCY,
+  WEAPONS,
+  weaponName,
+  type CampaignState,
   lootDroppedLine,
   lootGivenLine,
   lootName,
@@ -88,14 +95,20 @@ import {
   GIVE_WAY_FLOAT,
   breachMark,
   giveWayLine,
-  nextWaveLine,
-  nextWaveShort,
+  siegeObjective,
+  waveDueLine,
+  waveDueShort,
+  waveEntersLine,
   posOf,
-  SIDES,
   SIEGE,
   SIEGE_TEXT,
+  BELT_TEXT,
+  beltLine,
+  planBlockedLine,
+  planFollowedLine,
+  TIME_TEXT,
+  turnsLeftWarning,
   siegeObjectiveTip,
-  waveInLine,
   inEvacZone,
   inMeleeReach,
   isAttack,
@@ -110,7 +123,6 @@ import {
   NIGHT,
   NIGHT_LABEL,
   NIGHT_TEXT,
-  TOUCH_TEXT,
   litNote,
   NOISE,
   noiseOf,
@@ -175,7 +187,6 @@ import {
 } from '@bastion/engine';
 import type { Net, NetStatus } from '../net';
 import { deadlineLeft } from '../ui/deadline';
-import { isTouch, LONG_PRESS_MS, TAP_SLOP } from '../ui/touch';
 import { clear } from '../ui/dom';
 import { Hud, isMenu, type AbilityView, type BarActionId, type HordeView, type MenuId, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
@@ -184,6 +195,7 @@ import { Fx } from './fx';
 import { piecesLoaded } from './buildings';
 import { MapView } from './mapView';
 import { Overlays, type MoveTile, type SpotKind } from './overlays';
+import { cycleTileLook } from './tileLooks';
 import { Renderer } from './renderer';
 import { Sfx } from './sfx';
 import { syntyPropsLoaded } from './syntyProps';
@@ -192,7 +204,9 @@ import { setCombatRate, setHurry, timeRate, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
 import { playArrival } from './arrivals';
-import { COMBAT_RATES, graphics, onGraphics } from '../settings';
+import { graphics } from '../settings';
+import { soldierPortrait } from '../strategy/portraits';
+import { skillsOf, treePanel } from '../strategy/skillSheet';
 
 /** `self`: a self ability pressed once, waiting for the second press (or Enter) that uses it. */
 type Mode = { kind: 'move' } | { kind: 'target'; ability: AbilityId } | { kind: 'tile'; ability: AbilityId } | { kind: 'self'; ability: AbilityId };
@@ -253,12 +267,11 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
  * `LIGHT_LINES`, what a Bengala or a fire lights up.
  */
 const NIGHT_RULES = NIGHT_TEXT.rules.join('\n');
-/** How far two fingers turn (radians) for the camera to rotate a quarter (docs/FASE11.md §3). */
-const TOUCH_TURN = 0.6;
+/** Drawn back this far (CameraRig.zoomFraction), the wheel shows the top storey with its roofs; this close, the floor of the soldier looked at (#1). */
+const ROOFS_FAR = 0.72;
+const FLOOR_NEAR = 0.35;
 /** How long after the player last moved the camera the turn's changes leave it alone (#47: «que nunca pelee con el jugador»). */
 const TURN_CAMERA_QUIET_MS = 4000;
-/** The touch help's card, once, the first mission on a phone (per browser). */
-const TOUCH_SEEN_KEY = 'bastion.seenTouchHelp';
 /** The first night is explained once, on a card (per browser). */
 const NIGHT_SEEN_KEY = 'bastion.seenNight';
 const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fuego ilumina la zona' } as const;
@@ -273,7 +286,7 @@ const VEIL_SHADERS_MS = 4000;
 
 /** The server's reconnection grace (room.ts RECONNECT_GRACE_MS): a partner who dropped this recently still counts as here. */
 const RECONNECT_GRACE_MS = 30_000;
-/** Its longer grace for a phone gone to another app (room.ts AWAY_GRACE_MS). */
+/** Its longer grace for a partner whose window is minimized or whose laptop sleeps (room.ts AWAY_GRACE_MS). */
 const AWAY_GRACE_MS = 5 * 60_000;
 
 /**
@@ -545,28 +558,17 @@ function breakableOf(s: GameState, p: Vec2 & { z?: number }): { kind: 'door' | '
   return k === 'door' || k === 'doorOpen' ? { kind: 'door', full: SIEGE.door } : { kind: 'barricade', full: SIEGE.barricade };
 }
 
-/** How far from a siege's heart its room's door is (the Bastión's: 3.6 tiles; the next door, 4.5). */
-const RADIO_DOOR_REACH = 4;
-
-/** Where a siege's wave by `side` (Reinforcement.side: 0 north, 1 east, 2 south, 3 west) comes in: the middle of that edge. */
-function sideMid(s: GameState, side: number): Vec2 {
-  const w = s.width - 1;
-  const h = s.height - 1;
-  const mids = [{ x: Math.round(w / 2), y: 0 }, { x: w, y: Math.round(h / 2) }, { x: Math.round(w / 2), y: h }, { x: 0, y: Math.round(h / 2) }];
-  return mids[side] ?? mids[0]!;
-}
-
 /** The side of the base a tile on its wall stands on (DIRS4: 0 north, 1 east, 2 south, 3 west): the nearest edge of the map. */
 function sideOf(s: GameState, p: Vec2): number {
   const gaps = [p.y, s.width - 1 - p.x, s.height - 1 - p.y, p.x];
   return gaps.indexOf(Math.min(...gaps));
 }
 
-/** A siege's waves in order, each once (one comes in groups that share its turn): its turn, its side, whether it is in. */
-function siegeWaves(s: GameState): { turn: number; side: number; landed: boolean }[] {
-  const waves = new Map<number, { turn: number; side: number; landed: boolean }>();
+/** A siege's waves in order, each once (one comes in groups that share its turn): its turn and whether it is in. */
+function siegeWaves(s: GameState): { turn: number; landed: boolean }[] {
+  const waves = new Map<number, { turn: number; landed: boolean }>();
   for (const r of s.mission.reinforcements) {
-    const w = waves.get(r.turn) ?? { turn: r.turn, side: r.side ?? 0, landed: true };
+    const w = waves.get(r.turn) ?? { turn: r.turn, landed: true };
     w.landed &&= r.landed;
     waves.set(r.turn, w);
   }
@@ -710,11 +712,23 @@ export class Game {
   private levelFor: string | null = null;
   /** When the wheel last changed the floor. */
   private levelWheel = 0;
+  /** Drawn back past the top storey with the wheel: the buildings keep their roofs (wheelLevel, buildings.ts Focus.roofs). */
+  private roofs = false;
+  /** A floor picked by hand (keys, Shift+wheel, the HUD's arrows): the wheel leaves it until it turns again (wheelLevel). */
+  private levelByHand = false;
   private reachCache: { key: string; reach: Reach; tiles: MoveTile[] } | null = null;
   /** The last enemy's field of view worked out (visionOf), until it or the state moves. */
   private visionCache: { key: string; v: Vision } | null = null;
-  /** The tile a first tap previewed: a second tap on it does what a click would (touchTap). */
-  private tapArmed: Pos | null = null;
+  /** The campaign, for a soldier's board on its sheet (setCampaign). */
+  private campaign: CampaignState | null = null;
+  /** The command has just come to this player: once the events are seen, a planned route is walked (followPlan). */
+  private planDue = false;
+  /** La Lata left by itself as time ran out (playtest 18/10 #8): the outcome says so. */
+  private departedOnTime = false;
+  /** «Señalar» pressed: the next click on the map signals that spot (armPing). */
+  private pingArmed = false;
+  /** A soldier with no actions left that the player picked to look at (select, autoSelect). */
+  private looking: string | null = null;
   /** The enemy whose field of view is shown (under the pointer, or aimed at), and whether a dead one was turning last frame. */
   private watched: string | null = null;
   private wasTurning = false;
@@ -775,15 +789,15 @@ export class Game {
     this.units.setCutAway((p) => this.mapView.isCutAway(p));
     // `level`: the active floor, for the buildings' cutaway.
     this.mapView.watch(this.renderer.camera, () => {
-      const focus = { selected: this.selected, hover: this.hoverTile, target: this.targetId, level: this.level };
+      const focus = { selected: this.selected, hover: this.hoverTile, target: this.targetId, level: this.level, roofs: this.roofs && this.level === this.maxLevel };
       return focus;
     });
     this.hud = new Hud(this.root, {
       onAbility: (id) => this.useAbility(id),
       onEndTurn: () => this.toggleReady(),
       onSelectUnit: (id) => this.select(id, true),
-      onCycleUnit: (dir) => this.cycleUnit(dir),
-      onHurry: (on) => setHurry(on && this.enemyTurnPlaying()),
+      onPingArm: () => this.armPing(!this.pingArmed),
+      onSheet: (id) => this.openSheet(id),
       onConfirmTarget: () => this.confirmTarget(),
       onCancel: () => this.cancelMode(),
       onCycleTarget: (dir) => this.cycleTarget(dir),
@@ -806,7 +820,7 @@ export class Game {
 
     this.disposers.push(this.renderer.onFrame((dt, time) => this.frame(dt, time)));
     // «Velocidad del combate» (docs/UX-RITMO.md), live; the base and the menus always play at normal speed.
-    this.disposers.push(onGraphics((g) => setCombatRate(COMBAT_RATES[g.combatSpeed] ?? 1)), () => (setCombatRate(1), setHurry(false)));
+    this.disposers.push(() => (setCombatRate(1), setHurry(false)));
     this.renderer.onQualityLowered = () => this.qualityLowered();
     this.bindInput();
     this.loadSnapshot(snapshot);
@@ -830,10 +844,7 @@ export class Game {
     this.fx.tick(dt * rate);
     this.songFx.tick(dt * rate);
     this.overlays?.tick(time);
-    if (this.overlays && this.view) {
-      this.followTurns();
-      this.updateGuide();
-    }
+    if (this.overlays && this.view) this.followTurns();
     this.mapView.tick(dt);
     const from = this.selected ? getUnit(this.view, this.selected) : undefined;
     this.edge.update(this.renderer.camera, from?.alive ? from.pos : null);
@@ -844,8 +855,7 @@ export class Game {
   loadSnapshot(s: GameState): void {
     // A battle built from nothing, or a new mission on the same screen, goes under the loading veil.
     const fresh = !this.view || s.seq === 0;
-    // Joining a mission already under way there is no arrival card: the touch help comes a moment in.
-    if (!this.view && s.seq !== 0) this.firstTouchHelp(new Promise((done) => window.setTimeout(done, 1200)));
+    if (fresh) this.departedOnTime = false;
     this.plans.clear();
     this.exposure = null;
     this.state = cloneState(s);
@@ -857,8 +867,10 @@ export class Game {
 
     if (!this.overlays || this.overlays.group.parent === null) {
       this.overlays = new Overlays(s.width * s.height);
+      this.overlays.setPlanColor(PLAYER_COLORS[this.mySlot]);
       this.renderer.scene.add(this.overlays.group);
     }
+    this.overlays.setNight(!!s.mission.night);
     this.renderer.fitMap(s.width, s.height);
     this.rig.setBounds(s.width, s.height);
     setTerrain(this.view);
@@ -970,7 +982,6 @@ export class Game {
       }
       if (!seen) void closed.then(() => this.hud.nightCard(NIGHT_TEXT.label, NIGHT_TEXT.rules));
     }
-    this.firstTouchHelp(closed);
     void this.openingShot();
   }
 
@@ -1049,6 +1060,8 @@ export class Game {
 
   onPing(slot: Slot, tile: Place, kind: PingKind): void {
     this.fx.ping(tileToWorld(tile), PLAYER_COLORS[slot], kind === 'enemy');
+    // Whose, over it, for 4 s (playtest 18/10 #7: «que se quede 3–5 s»).
+    this.overlays.pingTag(tile, this.playerName(slot), PLAYER_COLORS[slot]);
     this.sfx.command();
     if (slot !== this.mySlot) {
       const who = this.players.find((p) => p.slot === slot)?.name ?? 'Tu compañero';
@@ -1126,6 +1139,58 @@ export class Game {
     window.setTimeout(() => (this.awaitingReply = false), 1500);
   }
 
+  /** The campaign as last heard (main.ts), for a soldier's board on its sheet (openSheet); none in a skirmish. */
+  setCampaign(c: CampaignState | null): void {
+    this.campaign = c;
+  }
+
+  /**
+   * «Hoja» (playtest 18/10 #23): a soldier's sheet over the battle, only to
+   * look at (no action spent, no command passed): its figures, what it
+   * carries and its skills, and in a campaign its board, as in the Cuartel.
+   */
+  private openSheet(id: string): void {
+    const u = getUnit(this.view, id);
+    if (!u || u.team !== 'xcom') return;
+    const t = TEMPLATES[u.template];
+    const soldier = u.template === 'rookie';
+    const step = VETERANCY[u.rank];
+    const rank = soldier && step ? (u.appearance?.sex === 'f' ? step.female : step.name) : t.name;
+    const whose = u.owner !== null && u.owner !== this.mySlot ? { name: this.playerName(u.owner), color: PLAYER_COLORS[u.owner] } : null;
+    const stats: [string, string, string?][] = [
+      ['Salud', `${u.hp} de ${u.maxHp}`],
+      ['Acciones', `${u.ap} de ${apPerTurn(u)}`],
+      ['Puntería con armas de fuego', String(t.aim + u.mods.aim + u.mods.gunAim)],
+      ['Puntería cuerpo a cuerpo', String(t.aim + u.mods.aim + u.mods.meleeAim)],
+      ['Voluntad', String(u.will)],
+    ];
+    if (u.armor) stats.push(['Blindaje', String(u.armor)]);
+    // As the soldier's panel says it (hud.ts setSelected): what is in the hand, the pistol beside it, the blade.
+    const arms = u.arms;
+    const weapon = u.weaponName ?? (arms ? (arms.primary ? FOUND_WEAPONS[arms.primary].name : WEAPONS.pistol.name) : weaponName(t.weapon, u.weaponTier ?? 1));
+    const extras = arms ? [arms.primary ? WEAPONS.pistol.name : '', arms.melee ? FOUND_WEAPONS[arms.melee].name : WEAPONS.knife.name] : [t.secondary ? WEAPONS[t.secondary].name : '', t.meleeWeapon ? WEAPONS[t.meleeWeapon].name : ''];
+    const belt = u.gear.map((g) => {
+      const charge = Object.keys(ITEMS[g].charges ?? {})[0] as keyof typeof u.charges | undefined;
+      return charge ? `${ITEMS[g].name} (${u.charges[charge] ?? 0})` : ITEMS[g].name;
+    });
+    const carries: [string, string][] = [['Armas', [weapon, ...extras].filter(Boolean).join(' · ')], ['Cinturón', belt.join(' · ') || 'Nada']];
+    if (u.worn?.length) carries.push(['Puesto', u.worn.map((w) => ITEMS[w].name).join(' · ')]);
+    carries.push(['Mochila', (u.backpack ?? []).map((l) => lootName(l)).join(' · ') || 'Vacía']);
+    const skills = u.perks.map((p) => BOARD.find((c) => c.perk === p)?.name).filter((n): n is string => !!n);
+    const cs = u.campaignId ? this.campaign?.soldiers.find((x) => x.id === u.campaignId) : undefined;
+    const board = cs
+      ? treePanel({ s: skillsOf(cs), editable: false, owner: this.playerName(cs.owner), portrait: soldierPortrait('rookie', PLAYER_COLORS[cs.owner], cs.appearance, cs.id), onUnlock: () => undefined, onClose: () => void this.hud.closeModal() })
+      : null;
+    this.hud.soldierSheet({ name: displayName(u.name, u.nickname), rank, whose, stats, carries, skills }, board);
+  }
+
+  /** «Señalar» (playtest 18/10 #7): armed, the next click on the map signals it; the cursor says so. */
+  private armPing(on: boolean): void {
+    this.pingArmed = on;
+    this.hud.setPingArmed(on);
+    this.renderer.gl.domElement.style.cursor = on ? 'crosshair' : '';
+  }
+
   private ping(tile: Place): void {
     const now = performance.now();
     if (now - this.lastPing < 400) return;
@@ -1142,11 +1207,19 @@ export class Game {
     this.playing = true;
     // No speed-up for a backlog (docs/UX-RITMO.md): the enemy turn arrives whole, and it played at ×2.5.
     while (this.queue.length) {
+      // The enemy turn plays at the player's chosen speed (playtest 18/10 #6); the squad's own, at its own pace.
+      setCombatRate(this.view.activeTeam === 'alien' ? graphics().enemySpeed : 1);
       const item = this.queue.shift()!;
       // The dead that only walk this turn come last (rules.ts runAlienTurn), and walk all at once, under one framing.
       const group = this.walkingWith(item);
       if (group.length) {
         await this.playGroup([item, ...group]);
+        continue;
+      }
+      // Arrivals, or contacts, of the same moment play together too (playtest 18/10 #6).
+      const moment = this.sameMoment(item);
+      if (moment.length) {
+        await this.playTogether([item, ...moment]);
         continue;
       }
       await this.beforeActing(item);
@@ -1174,6 +1247,10 @@ export class Game {
     }
     this.playing = false;
     this.refreshInteractive();
+    if (this.planDue) {
+      this.planDue = false;
+      this.followPlan();
+    }
   }
 
   /** What an animated event leaves behind: the view, the fog, the HUD, the sightings, and the pause after one's own action. */
@@ -1197,7 +1274,13 @@ export class Game {
     }
     // A call nobody answered lapses with the squad's turn.
     if (e.t === 'turnBegan' && call && !this.view.evacCall) this.hud.log(EVAC_TEXT.lapsed, '#ffc93a');
-    if (e.t === 'turnBegan') this.plans.clear();
+    // Plans (playtest 18/10 #3): the partner's go as a turn begins; one's own last until the command comes to
+    // this player, who then walks one (followPlan), or until the squad's next turn opens with the partner's.
+    if (e.t === 'turnBegan') {
+      const mine = e.team === 'xcom' && (e.command ?? this.mySlot) === this.mySlot;
+      for (const [id, plan] of this.plans) if (plan.slot !== this.mySlot || (e.team === 'xcom' && !mine)) this.plans.delete(id);
+      if (mine) this.planDue = true;
+    } else if (e.t === 'commandPassed' && e.to === this.mySlot) this.planDue = true;
     else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') this.plans.delete(e.unit);
     if (item.e.t === 'tileChanged' || item.e.t === 'floorBroken') this.mapView.rebuild(this.view);
     this.refreshView();
@@ -1316,6 +1399,42 @@ export class Game {
       const shooter = getUnit(this.view, e.unit);
       if (shooter?.team === 'alien' && (this.shownToSquad(shooter) || getUnit(this.view, e.target)?.team === 'xcom')) this.resultHold = e.result === 'miss' ? READ_MISS : READ_HIT;
     } else if ((e.t === 'explosive' || e.t === 'psi') && this.enemyActor(e)) this.resultHold = READ_HIT;
+  }
+
+  /**
+   * The arrivals (`spawned`) or the contacts (`podActivated`) that follow
+   * `item` one after another, of its own kind: they happen at the same moment,
+   * so they are seen at once (playtest 18/10 #6, like the walkers).
+   */
+  private sameMoment(item: QueuedEvent): QueuedEvent[] {
+    const kind = item.e.t;
+    if (kind !== 'spawned' && kind !== 'podActivated') return [];
+    let n = 0;
+    while (n < this.queue.length && this.queue[n]!.e.t === kind) n++;
+    return this.queue.splice(0, n);
+  }
+
+  /** A moment's arrivals or contacts at once: one framing over all of them in sight, then each plays at the same time. */
+  private async playTogether(all: QueuedEvent[]): Promise<void> {
+    const v = this.view;
+    const points = all.flatMap((q) => {
+      const e = q.e;
+      if (e.t === 'spawned') return e.units.filter((u) => this.mapView.isVisible(u.pos.x, u.pos.y)).map((u) => tileToWorld(u.pos));
+      if (e.t !== 'podActivated') return [];
+      const pod = v.pods.find((p) => p.id === e.pod);
+      return (pod?.unitIds ?? []).map((id) => getUnit(v, id)).filter((m): m is Unit => !!m?.alive).map((m) => tileToWorld(m.pos));
+    });
+    if (points.length && (v.activeTeam === 'alien' || all.some((q) => q.by === this.mySlot))) await this.showEnemy(points);
+    const epoch = this.rig.epoch;
+    this.current = all[0]!;
+    this.grouped = true;
+    await Promise.all(all.map((q) => this.play(q).catch((err) => console.error('[anim]', err))));
+    this.grouped = false;
+    this.current = null;
+    for (const q of all) {
+      this.noteResult(q);
+      await this.settle(q, epoch);
+    }
   }
 
   /** Whether `e` is a walk of one of the dead in the enemy turn (they only bite: docs/ZOMBIS-PRIMERO.md). */
@@ -1926,6 +2045,18 @@ export class Game {
         await wait(0.6);
         return;
       }
+      // A found grenade, smoke, medkit or ear plugs on the belt (playtest 18/10 #5): ready to use at once.
+      case 'beltEquipped': {
+        const u = getUnit(v, e.unit)!;
+        const item = u.backpack?.[e.index]?.item;
+        if (!item) return;
+        this.hud.log(beltLine(u.name, item), '#6dff9a');
+        if (!this.shownToSquad(u)) return;
+        look(this.units.worldPos(u.id));
+        this.fx.floatText(this.units.chestPos(u.id), BELT_TEXT.float, 'info');
+        await wait(0.5);
+        return;
+      }
       // Leaving in La Mula (docs/PRUEBA-2026-10-14.md P1): one asks, the other answers, and the bus goes.
       case 'evacCalled': {
         const ask = evacAsk(this.playerName(e.slot), this.evacSituation(v));
@@ -1957,6 +2088,11 @@ export class Game {
         // Both players see it go (whoever said yes): the camera to the bus, everyone in it boards (the
         // `evacuated` that follow), and then it pulls away (Arte's mapView.busDeparts).
         const aboard = v.units.filter((u) => u.alive && u.team === 'xcom' && inEvacZone(v, u.pos));
+        // Leaving in the enemy turn is leaving on time (playtest 18/10 #8): nobody asked for it.
+        if (v.activeTeam === 'alien') {
+          this.departedOnTime = true;
+          this.hud.log(TIME_TEXT.departs, '#ff6b5a');
+        }
         this.hud.log(evacDepartLine(aboard.map((u) => u.name)), '#6dff9a');
         const bus = this.busTile(v);
         if (!bus) return;
@@ -2010,7 +2146,6 @@ export class Game {
         const b = breakableOf(v, e.tile);
         const at = tileToWorld(e.tile, b.kind === 'door' ? 1.1 : 0.6);
         const gone = e.left <= 0;
-        const radio = gone && b.kind === 'door' && this.isRadioDoor(e.tile);
         // What gives way is known even unseen: a breach in the wall is what matters (its line and marks).
         if (gone) this.noteBreach(e.tile, b.kind);
         // The blows, like breaking glass: where no soldier sees them, they are neither seen nor heard.
@@ -2025,7 +2160,7 @@ export class Game {
         this.fx.floatText(at, `−${e.amount}`, 'damage');
         if (gone) {
           await wait(0.2);
-          this.fx.floatText(tileToWorld(e.tile, 1.6), GIVE_WAY_FLOAT[b.kind], radio ? 'alert' : 'warn');
+          this.fx.floatText(tileToWorld(e.tile, 1.6), GIVE_WAY_FLOAT[b.kind], 'warn');
         }
         await wait(cam() ? 0.35 : 0.15);
         return;
@@ -2130,18 +2265,21 @@ export class Game {
           // They walk in by the edge, on the prowl: no capsules, no beams.
           const where = edgeName(v, wave.pos ?? e.units[0]?.pos ?? { x: 0, y: 0 });
           // A siege's wave says which of how many, once (it comes in groups), in Lore's words.
-          const waves = v.mission.siege && wave.side !== undefined ? siegeWaves(v) : null;
+          const waves = v.mission.siege ? siegeWaves(v) : null;
           const first = !waves || v.mission.reinforcements.find((r) => r.turn === wave.turn)?.id === wave.id;
-          const line = waves ? waveInLine(wave.side!, waves.findIndex((w) => w.turn === wave.turn) + 1, waves.length) : `La horda llega por ${where}:`;
+          // Without a Sala de radio it isn't known where they come from (18/10 #20): which wave, not the side.
+          const line = waves ? waveEntersLine(waves.findIndex((w) => w.turn === wave.turn) + 1, waves.length) : `La horda llega por ${where}:`;
           // A siege's line is whole (who comes is «zombis» all through); a horde's names them.
           if (waves) {
             if (first) this.hud.log(line, '#ff6b5a');
           } else this.hud.log(`${line} ${e.units.map((u) => u.name).join(', ')}`, '#ff6b5a');
           // The banner counts the whole wave, all its groups.
           const n = waves ? v.mission.reinforcements.filter((r) => r.turn === wave.turn).reduce((sum, r) => sum + r.units.length, 0) : e.units.length;
-          if (first) this.hud.banner(waves ? '¡OLEADA!' : '¡LA HORDA!', 'alien', `${n === 1 ? 'Ha llegado un zombi' : `Han llegado ${n} zombis`} por ${where}${seen.length ? '' : ', fuera de vuestra vista'}`);
+          // A siege's wave comes in on every side (18/10 #20): no side on its stamp.
+          // «Muertos», not «zombis»: a wave brings Hinchados and the rest among them (Gameplay, 18/10).
+          if (first) this.hud.banner(waves ? '¡OLEADA!' : '¡LA HORDA!', 'alien', `${n === 1 ? 'Ha llegado un muerto' : `Han llegado ${n} muertos`}${waves ? '' : ` por ${where}`}${seen.length ? '' : ', fuera de vuestra vista'}`);
           if (!seen.length) return;
-          look(tileToWorld(seen[0]!.pos));
+          if (!this.grouped) look(tileToWorld(seen[0]!.pos));
           await playArrival(this.units, this.fx, this.sfx, v, seen);
           for (const u of seen) this.fx.floatText(tileToWorld(u.pos, 1), `¡APARECE UN ${TEMPLATES[u.template].name.toUpperCase()}!`, 'callout');
           await wait(cam() ? 0.8 : 0.3);
@@ -2151,7 +2289,7 @@ export class Game {
         // Nobody drops in unannounced: the stamp says how many, and where if the squad sees it.
         this.hud.banner('¡LLEGAN MÁS!', 'alien', `${e.units.length === 1 ? 'Ha llegado un enemigo' : `Han llegado ${e.units.length} enemigos`}${seen.length ? '' : ' fuera de vuestra vista'}`);
         if (!seen.length) return;
-        look(spots[0]!);
+        if (!this.grouped) look(spots[0]!);
         // They come in on foot from the edge, or get up out of the dust: no capsules (arrivals.ts).
         await playArrival(this.units, this.fx, this.sfx, v, seen);
         for (const u of seen) this.fx.floatText(tileToWorld(u.pos, 1), `¡APARECE UN ${TEMPLATES[u.template].name.toUpperCase()}!`, 'callout');
@@ -2224,8 +2362,11 @@ export class Game {
         const members = pod?.unitIds.map((id) => getUnit(v, id)!).filter((m) => m.alive) ?? [];
         if (!members.length) return;
         const center = members.reduce((acc, m) => acc.add(tileToWorld(m.pos)), new THREE.Vector3()).divideScalar(members.length);
-        look(center);
-        if (cam()) await wait(0.35);
+        // With others of the same moment (playTogether), the framing is theirs together.
+        if (!this.grouped) {
+          look(center);
+          if (cam()) await wait(0.35);
+        }
         for (const m of members) {
           this.units.forceVisible(m.id);
           this.units.face(m.id, this.closestSoldier(m.pos));
@@ -2269,6 +2410,14 @@ export class Game {
         this.hud.banner(e.team === 'alien' ? 'TURNO ENEMIGO' : partner ? `TURNO DE ${this.playerName(e.command).toUpperCase()}` : 'TU TURNO', e.team === 'xcom' ? 'xcom' : 'alien');
         // The squad's turn: the camera to the soldier who plays first (#47).
         if (e.team === 'xcom') this.turnCamera(this.turnSoldier(v, e.command ?? this.mySlot));
+        // Time running out (playtest 18/10 #8, #9, Lore's words): with 5 turns left, and on the last, after which
+        // La Lata leaves by itself. Not in a siege, nor once the objective is done (the clock is gone then).
+        const left = v.mission.turnsLeft !== null && e.turn > 1 ? v.mission.turnsLeft - 1 : v.mission.turnsLeft;
+        if (e.team === 'xcom' && !v.mission.siege && !v.mission.objectiveDone && (left === 5 || left === 1)) {
+          const line = left === 1 ? TIME_TEXT.lastTurn : turnsLeftWarning(left);
+          this.hud.log(line, '#ff6b5a');
+          this.hud.toast(line);
+        }
         await wait(1);
         return;
       }
@@ -2622,9 +2771,11 @@ export class Game {
       scavenge: loot ? SCAVENGE.success : SCAVENGE.emptyHanded,
     };
     const titles: Record<EndReason, string> = {
-      objective: success[s.mission.kind],
+      // Won as La Lata left on time, the objective aboard.
+      objective: this.departedOnTime ? TIME_TEXT.wonOnTime : success[s.mission.kind],
       wiped: evacuated ? 'La escuadra se retiró sin cumplir el objetivo' : 'Escuadra eliminada',
-      timer: 'Se agotó el tiempo',
+      // Time ran out (playtest 18/10 #8): La Lata left with somebody aboard but not the objective, with nobody, or there was none.
+      timer: !s.mission.evacZone.length ? TIME_TEXT.timeUp : s.units.some((u) => u.team === 'xcom' && u.evacuated) ? TIME_TEXT.lostOnTime : TIME_TEXT.leftEmpty,
       // Gone in La Mula too early (P1): a Limpieza is a retreat; the rest, out without the objective.
       abandoned: s.mission.evacDone ? (s.mission.kind === 'elimination' ? EVAC_TEXT.retreat : EVAC_TEXT.withoutObjective) : 'Misión abandonada',
       objectiveLost: vip ? `${vip} ha muerto` : 'El VIP ha muerto',
@@ -2632,7 +2783,7 @@ export class Game {
     // A siege (docs/FASE12.md §10, Lore's words): the Bastión holds, with dead still out or none standing; or it falls.
     if (s.mission.siege) {
       const standing = s.units.some((u) => u.alive && u.team === 'alien');
-      Object.assign(titles, { objective: standing ? SIEGE_TEXT.held : SIEGE_TEXT.cleared, objectiveLost: SIEGE_TEXT.fallen, wiped: SIEGE_TEXT.wiped });
+      Object.assign(titles, { objective: standing ? SIEGE_TEXT.held : SIEGE_TEXT.cleared, wiped: SIEGE_TEXT.wiped });
     }
     // One short line: why it ended. A skirmish has no debrief after, so it adds the count.
     const why = reason ? titles[reason] : '';
@@ -2649,7 +2800,10 @@ export class Game {
   /** Re-derives fog, alien visibility, flags and mission markers from the shown state. */
   private refreshView(): void {
     this.mapView.setVisibility(teamVisibility(this.view, 'xcom'));
-    this.visibleAliens = new Set(visibleEnemies(this.view, 'xcom').map((u) => u.id));
+    // In a siege the base has no fog (playtest 18/10 #18): by day every enemy is in sight. By night the ground
+    // still is, but the dead in the dark are not, as on any night (Arturo, 18/10: the floodlights are for that).
+    const allSeen = this.view.mission.siege && !this.view.mission.night;
+    this.visibleAliens = new Set((allSeen ? this.view.units.filter((u) => u.alive && u.team === 'alien') : visibleEnemies(this.view, 'xcom')).map((u) => u.id));
     // Only those that shoot: cover means nothing against the dead, who come to bite (docs/ZOMBIS-PRIMERO.md).
     const watchers = this.view.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && shootsFromRange(a));
     const selected = this.selected ? getUnit(this.view, this.selected) : undefined;
@@ -2672,13 +2826,10 @@ export class Game {
     if (m.terminal && !m.objectiveDone) beacons.push({ pos: m.terminal, color: 0x54d1ff });
     const objective = m.objectiveUnit ? getUnit(this.view, m.objectiveUnit) : undefined;
     if (objective?.alive && !m.objectiveDone) beacons.push({ pos: objective.pos, color: objective.team === 'alien' ? 0xff4a6a : 0x4dff9a });
-    // A siege's heart, the Sala de radio (docs/FASE12.md §10): marked like an objective; each breach, an orange beam.
-    if (m.siege) beacons.push({ pos: m.siege.heart, color: 0x4dff9a });
+    // A siege's breaches, an orange beam each (the dead go for the squad now: no heart to mark, 18/10 #17).
     for (const pos of this.breaches()) beacons.push({ pos, color: 0xff8a2a });
     this.overlays.setBeacons(beacons);
-    // A siege's next wave: a red flare in the middle of its side, where it comes in.
-    const wave = m.siege ? siegeWaves(this.view).find((w) => !w.landed) : undefined;
-    this.overlays.setFlares(wave ? [sideMid(this.view, wave.side)] : m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
+    this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
     this.overlays.setBreakables(this.breakables());
     this.overlays.setSmoke(this.view.smoke);
     this.songMarks.setSilences((this.view.silences ?? []).map((z) => ({ at: tileToWorld(z.pos), radius: z.radius })));
@@ -2745,23 +2896,6 @@ export class Game {
     return Math.round((now ?? a.facing) * 100) / 100;
   }
 
-  /**
-   * Every frame: the ground guide (#48) beside one's own soldier picked, on the
-   * squad's turn and still, towards the objective (or the evacuation once it
-   * is done: missionMarks) while that is off the screen.
-   */
-  private updateGuide(): void {
-    const u = this.selectedUnit();
-    // Not in a siege: the squad stands at the walls, away from the heart on purpose.
-    const mark = this.view.mission.siege ? undefined : this.missionMarks()[0];
-    let show = !!u?.alive && !!mark && this.commands(u!) && this.view.activeTeam === 'xcom' && !this.view.outcome && !this.isBusy(u!.id) && !this.mapView.isCutAway(u!.pos);
-    if (show) {
-      const p = tileToWorld(mark!.pos).project(this.renderer.camera);
-      show = p.z > 1 || Math.abs(p.x) > 0.92 || Math.abs(p.y) > 0.92;
-    }
-    this.overlays.setGuide(show ? u!.pos : null, show ? mark!.pos : null);
-  }
-
   /** Every frame: while a dead one in sight is turning, its cones are drawn again as it goes; once more when it stops. */
   private followTurns(): void {
     const turning = this.view.units.some((a) => {
@@ -2784,18 +2918,15 @@ export class Game {
 
   private marks(): EdgeMark[] {
     const marks = this.missionMarks();
-    // A siege's next wave, by its side: with the camera turned, «por el norte» alone says little.
-    const wave = this.view.mission.siege && !this.view.outcome ? siegeWaves(this.view).find((w) => !w.landed) : undefined;
-    if (wave) marks.push({ kind: 'alert', label: `Oleada · ${SIDES[wave.side]}`, pos: sideMid(this.view, wave.side) });
-    // Its breaches, one mark a side (a gate gives way leaf by leaf, a barricade tile by tile), and the radio's own.
-    const sides = new Map<string, Place[]>();
+    // Its breaches, one mark a side (a gate gives way leaf by leaf, a barricade tile by tile).
+    const sides = new Map<number, Place[]>();
     for (const pos of this.breaches()) {
-      const key = this.isRadioDoor(pos) ? 'radio' : String(sideOf(this.view, pos));
-      sides.set(key, [...(sides.get(key) ?? []), pos]);
+      const side = sideOf(this.view, pos);
+      sides.set(side, [...(sides.get(side) ?? []), pos]);
     }
-    for (const [key, ps] of sides) {
+    for (const [side, ps] of sides) {
       const pos = { x: Math.round(ps.reduce((n, p) => n + p.x, 0) / ps.length), y: Math.round(ps.reduce((n, p) => n + p.y, 0) / ps.length) };
-      marks.push({ kind: 'alert', label: key === 'radio' ? breachMark(0, true) : breachMark(Number(key)), pos });
+      marks.push({ kind: 'alert', label: breachMark(side), pos });
     }
     return this.moment ? [...marks, { kind: 'alert', label: this.moment.who, pos: this.moment.pos }] : marks;
   }
@@ -2815,14 +2946,7 @@ export class Game {
 
   /** A siege's door or barricade gave way at `tile`, as it happens: the log says which and where, seen or not (the marks: breaches). */
   private noteBreach(tile: Place, kind: 'door' | 'barricade'): void {
-    const radio = kind === 'door' && this.isRadioDoor(tile);
-    this.hud.log(giveWayLine(kind, radio, sideOf(this.view, tile)), '#ff6b5a');
-  }
-
-  /** A siege's Sala de radio door: the door nearest the heart, within a few tiles (its room has only one). */
-  private isRadioDoor(tile: Vec2): boolean {
-    const heart = this.view.mission.siege?.heart;
-    return !!heart && distance(tile, heart) <= RADIO_DOOR_REACH;
+    this.hud.log(giveWayLine(kind, sideOf(this.view, tile)), '#ff6b5a');
   }
 
   /** What a siege's door or barricade at `tile` still holds, in Lore's words («Puerta: aguanta 12 de 18»); '' elsewhere, or out of sight. */
@@ -2998,7 +3122,6 @@ export class Game {
       }
     }
     if (goal) return [{ kind: 'objective', label: 'Objetivo', pos: goal }];
-    if (m.siege) return [{ kind: 'objective', label: 'Sala de radio', pos: m.siege.heart }];
     const bus = this.evacCentre(s);
     return bus ? [{ kind: 'evac', label: 'Evacuación', pos: bus }] : [];
   }
@@ -3030,24 +3153,57 @@ export class Game {
     else this.plans.set(u.id, { slot: this.mySlot, tile });
     this.net.send({ t: 'plan', unit: u.id, tile: withdraw ? null : tile });
     this.drawPlans();
-    this.hud.toast(withdraw ? 'Plan retirado.' : `Plan para ${u.name}: lo ve ${this.playerName(this.state.command)}. ${isTouch() ? 'Otro toque' : 'Otro clic'} ahí lo quita.`);
+    this.hud.toast(withdraw ? 'Plan retirado.' : `Plan para ${u.name}: lo ve ${this.playerName(this.state.command)}. Otro clic ahí lo quita.`);
   }
 
-  /** Draws every plan along the path it would take now; a plan that no longer fits is dropped. */
+  /**
+   * Draws every plan along the path it would take now; one it no longer
+   * reaches keeps its ring alone (playtest 18/10 #3: it stays, marked). One's
+   * own while the partner holds the command, in one's colour dimmed, like
+   * the rest of the preview (#49; 18/10 #4: grey didn't show); theirs, in
+   * their colour.
+   */
   private drawPlans(): void {
     const list: { from: Vec2; path: Vec2[]; color: string }[] = [];
     for (const [id, plan] of this.plans) {
       const u = getUnit(this.state, id);
-      const reach = u?.alive ? computeReach(this.state, u, maxMoveCost(u)) : null;
-      if (!u || !reach?.cost.has(nodeOf(this.state, toPos(plan.tile)))) {
+      if (!u?.alive) {
         this.plans.delete(id);
         continue;
       }
-      const path = buildPath(this.state, u, reach, plan.tile);
-      // One's own plans, while the partner holds the command, in grey like the rest of the preview (#49); theirs, in their colour.
-      if (path?.length) list.push({ from: u.pos, path, color: plan.slot === this.mySlot && !this.hasCommand() ? '#9aa0a4' : PLAYER_COLORS[plan.slot] });
+      const color = plan.slot === this.mySlot && !this.hasCommand() ? this.overlays.planHex : PLAYER_COLORS[plan.slot];
+      const reach = computeReach(this.state, u, maxMoveCost(u));
+      const path = reach.cost.has(nodeOf(this.state, toPos(plan.tile))) ? buildPath(this.state, u, reach, plan.tile) : null;
+      list.push(path?.length ? { from: u.pos, path, color } : { from: plan.tile, path: [plan.tile], color });
     }
     this.overlays.setPlans(list);
+  }
+
+  /**
+   * The command has come to this player (playtest 18/10 #3, «Seguir las rutas
+   * planeadas» in Ajustes): the soldier picked, or else the first, with a
+   * route planned walks it with one ordinary move, the engine checking it as
+   * any other; one that no longer reaches it keeps its plan, and it is said.
+   * One at a time: after it, that soldier is in play.
+   */
+  private followPlan(): void {
+    if (!graphics().autoPlan || !this.hasCommand() || !this.canAct()) return;
+    const mine = [...this.plans].filter(([id, p]) => p.slot === this.mySlot && getUnit(this.state, id)?.alive);
+    const [id, plan] = mine.find(([unit]) => unit === this.selected) ?? mine[0] ?? [];
+    const u = id ? getUnit(this.state, id) : undefined;
+    // Another of one's own still in play: the plan waits, as it is.
+    if (!u || !plan || u.ap <= 0 || this.waitingFor(u.id)) return;
+    const reach = computeReach(this.state, u, maxMoveCost(u));
+    if (!reach.cost.has(nodeOf(this.state, toPos(plan.tile)))) {
+      const line = planBlockedLine(u.name);
+      this.hud.log(line, PLAYER_COLORS[this.mySlot]);
+      this.hud.toast(line);
+      this.drawPlans();
+      return;
+    }
+    if (this.selected !== u.id) this.select(u.id, true);
+    this.hud.log(planFollowedLine(u.name), PLAYER_COLORS[this.mySlot]);
+    this.send({ type: 'move', unit: u.id, to: plan.tile });
   }
 
   /** Why an order cannot go out yet: the partner holds the command. */
@@ -3065,7 +3221,8 @@ export class Game {
    * partner's while the partner is gone (Arturo, 17/10: «si juego solo, debería poder usarlo solo»).
    */
   private commands(u: Unit): boolean {
-    return u.team === 'xcom' && commandsFor(this.mySlot, u.owner, this.activeSlots());
+    // A siege's turret fires on its own (docs/FASE12.md §11.4): nobody picks it or gives it orders.
+    return u.team === 'xcom' && !u.automaton && commandsFor(this.mySlot, u.owner, this.activeSlots());
   }
 
   /**
@@ -3145,6 +3302,8 @@ export class Game {
     }
     this.units.setSelected(id);
     const u = this.selectedUnit();
+    // Picked with no actions left: only to look (autoSelect leaves it); it doesn't change who is in play or the command.
+    this.looking = u && u.ap <= 0 && this.canAct() ? u.id : null;
     if (u && focus) this.rig.focus(tileToWorld(u.pos));
     // Picking another of one's own while one is in play is allowed, to look: it says why it can't act yet.
     const waiting = u && this.commands(u) && u.ap > 0 ? this.waitingFor(u.id) : null;
@@ -3166,6 +3325,7 @@ export class Game {
     this.lastCommand = this.state.command;
     this.lastInPlay = this.state.activeUnit;
     if (mineInPlay && turned && this.canAct() && this.hasCommand()) {
+      this.looking = null;
       if (current?.id === mineInPlay.id) return;
       this.selected = mineInPlay.id;
       this.units.setSelected(this.selected);
@@ -3174,6 +3334,11 @@ export class Game {
     }
     // The partner's soldier comes into play: the camera to it too, if wanted (#47).
     if (turned && playing?.alive && !this.commands(playing) && playing.team === 'xcom') this.turnCamera(playing);
+    // One picked with no actions left, to look at its sheet and backpack (playtest 18/10 #2): it stays until another is picked.
+    if (current && current.id === this.looking) {
+      if (current.alive && current.ap <= 0) return;
+      this.looking = null;
+    }
     if (current && this.commands(current) && (current.ap > 0 || !this.canAct())) return;
     const next = mineInPlay ?? this.myUnits().find((u) => u.ap > 0) ?? (current && this.commands(current) ? current : this.myUnits()[0]);
     this.selected = next?.id ?? null;
@@ -3454,8 +3619,7 @@ export class Game {
     const base = { kind: 'self' as const, action: def.name, locked: this.lockLabel(), cost: costText(u, id), noise: noiseText(this.state, u, id), effect: def.description };
     if (id !== 'search') {
       const what = id === 'openDoor' ? 'abrir' : 'cerrar';
-      // A finger taps the door, or another (docs/FASE11.md §3); keys are for a keyboard.
-      return { ...base, title: def.name, hint: isTouch() ? `Toca la puerta otra vez: ${what}` : `Otra vez, Espacio o clic en la puerta: ${what}${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} puerta` : ''} · Esc: cancelar` };
+      return { ...base, title: def.name, hint: `Otra vez, Espacio o clic en la puerta: ${what}${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} puerta` : ''} · Esc: cancelar` };
     }
     const decor = searchSpot(this.state, tile);
     if (!decor) return null;
@@ -3465,7 +3629,7 @@ export class Game {
       ...base,
       title: boxTitle(decor),
       detail: `Mochila: ${room === 1 ? 'queda 1 hueco' : `quedan ${room} huecos`} de ${slots}`,
-      hint: isTouch() ? 'Toca la caja otra vez: abrir' : `Otra vez, Espacio o clic en la caja: abrir${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} caja` : ''} · Esc: cancelar`,
+      hint: `Otra vez, Espacio o clic en la caja: abrir${others ? ` · Tab: ${others === 1 ? 'la otra' : 'otra'} caja` : ''} · Esc: cancelar`,
     };
   }
 
@@ -3694,10 +3858,37 @@ export class Game {
     if (u) this.setLevel(u.pos.z, false);
   }
 
-  /** One floor up (1) or down (-1), by key, wheel or the HUD's arrows. */
+  /** One floor up (1) or down (-1), by key, wheel or the HUD's arrows: by hand. */
   private stepLevel(dir: 1 | -1): void {
     if (!this.maxLevel) return;
+    this.levelByHand = true;
+    this.roofs = false;
     this.setLevel(this.level + dir);
+  }
+
+  /**
+   * The floor follows the wheel (Arturo, 18/10 #1): drawn back, up to the top
+   * storey with the roofs on; close in, down to the floor of the soldier
+   * looked at (the one picked, if near the middle of the view, else the
+   * nearest there). Only on maps with storeys, and not over a floor picked by
+   * hand until the wheel turns again (the camera never fights the player).
+   */
+  private wheelLevel(): void {
+    if (!this.maxLevel || this.levelByHand) return;
+    const k = this.rig.zoomFraction;
+    if (k >= ROOFS_FAR) {
+      this.roofs = true;
+      this.setLevel(this.maxLevel);
+      return;
+    }
+    if (k < ROOFS_FAR - 0.1) this.roofs = false;
+    if (k > FLOOR_NEAR) return;
+    const at = this.rig.focusPoint;
+    const off = (u: Unit) => Math.hypot(u.pos.x + 0.5 - at.x, u.pos.y + 0.5 - at.z);
+    const picked = this.selectedUnit();
+    const around = this.view.units.filter((u) => u.alive && (u.team === 'xcom' || this.visibleAliens.has(u.id)) && off(u) < 6).sort((a, b) => off(a) - off(b));
+    const looked = picked && off(picked) < 8 ? picked : around[0];
+    if (looked) this.setLevel(looked.pos.z ?? 0);
   }
 
   /**
@@ -3946,21 +4137,21 @@ export class Game {
   }
 
   /**
-   * A siege's strip (docs/FASE12.md §10, Lore's words): «Asedio», keep them
-   * from the Sala de radio, the turns left to hold (a count towards the win,
-   * not a threat) and the next wave, by when and which side; or that none
-   * are coming any more.
+   * A siege's strip (docs/FASE12.md §10, Lore's words): «Asedio», hold to the
+   * last turn, the turns left (a count towards the win, not a threat) and
+   * when the next wave comes, not where (18/10 #20); or that none are coming
+   * any more.
    */
   private siegeView(hold: number): MissionView {
     const s = this.view;
     const next = siegeWaves(s).find((w) => !w.landed);
     const wave = next
-      ? { text: `OLEADA · ${nextWaveShort(next.side, next.turn, s.turn).toUpperCase()}`, tip: nextWaveLine(next.side, next.turn, s.turn), urgent: next.turn <= s.turn }
+      ? { text: `OLEADA · ${waveDueShort(next.turn, s.turn).toUpperCase()}`, tip: waveDueLine(next.turn, s.turn), urgent: next.turn <= s.turn }
       : { text: SIEGE_TEXT.noMoreWaves.toUpperCase(), tip: SIEGE_TEXT.noMoreWaves, urgent: false };
     return {
       kind: s.mission.kind,
       label: SIEGE_TEXT.name,
-      objective: SIEGE_TEXT.objective,
+      objective: siegeObjective(hold),
       objectiveTip: siegeObjectiveTip(hold),
       turnsLeft: Math.max(0, hold - s.turn + 1),
       hold: true,
@@ -4041,6 +4232,7 @@ export class Game {
     this.hud.setMission(this.missionView());
     this.hud.setPlayers(this.players, v.ready, this.mySlot, busySlots(v), sharing ? holder : null);
     this.hud.setSquad(
+      // A siege's turrets too, for their health and their rounds (Gameplay, 18/10); not to be picked (commands).
       v.units.filter((u) => u.team === 'xcom' || u.controlledBy),
       this.mySlot,
       this.selected,
@@ -4070,6 +4262,7 @@ export class Game {
       near: v.units.filter((o) => o.id !== u.id && o.alive && o.team === 'xcom' && !o.captive && o.template !== 'vip' && inMeleeReach(v, u.pos, o.pos)).map((o) => ({ id: o.id, name: o.name })),
       floor: (v.dropped ?? []).filter((d) => samePos(d.pos, u.pos)).map((d) => ({ id: d.id, label: findLabel(d.loot), name: lootName(d.loot), kind: packSlots([d.loot])[0]!.kind })),
       worn: u.worn ?? [],
+      gear: u.gear,
       squad: {
         supplies: squad.supplies,
         items: squad.items.length,
@@ -4285,7 +4478,7 @@ export class Game {
     // A closed door beside the soldier: the click opens it, for free.
     if (this.handTiles('openDoor').some((t) => samePlace(t, tile))) {
       this.overlays.setSpots([{ pos: tile, kind: 'pick' }], false);
-      this.overlays.setNote(tile, isTouch() ? 'Puerta · tócala: abrir (no gasta acciones)' : 'Puerta · clic: abrir (no gasta acciones)');
+      this.overlays.setNote(tile, 'Puerta · clic: abrir (no gasta acciones)');
       return;
     }
     // Only furniture the squad has seen: the fog keeps what is in an unexplored house.
@@ -4300,7 +4493,7 @@ export class Game {
     const path = buildPath(this.state, u, r.reach, tile);
     this.overlays.showPath(u.pos, path, dest.dash);
     this.overlays.showCover(tile, coverSides(this.state, tile));
-    this.overlays.setHover(tile, dest.detected ? 0xff4a4a : dest.dash ? 0xffc93a : 0x9fe8ff);
+    this.overlays.setHover(tile, dest.detected ? 0xff4a4a : this.overlays.ringColor(dest.dash));
     // Running, a door or a window is heard (docs/FASE2.md): said under the destination.
     // And at night, whether it ends in the light.
     const note = [moveNoise(this.state, path ?? [], dest.dash), this.litNote(tile)].filter(Boolean).join(' · ');
@@ -4343,7 +4536,7 @@ export class Game {
     const near = this.handTiles('search').some((t) => samePlace(t, tile));
     const blocked = near ? abilityBlocker(this.state, u, 'search') : null;
     this.overlays.setSpots([{ pos: tile, kind: near && !blocked ? 'pick' : 'open' }]);
-    this.overlays.setNote(tile, !near ? `${name} · se puede abrir` : blocked ? `${name} · ${blocked.replace(/\.$/, '').toLowerCase()}` : `${name} · ${isTouch() ? 'tócala' : 'clic'}: abrir`);
+    this.overlays.setNote(tile, !near ? `${name} · se puede abrir` : blocked ? `${name} · ${blocked.replace(/\.$/, '').toLowerCase()}` : `${name} · clic: abrir`);
   }
 
   /**
@@ -4462,102 +4655,28 @@ export class Game {
         this.drag.y = e.clientY;
         return;
       }
-      // A finger doesn't hover: its taps say where it looks (below).
-      if (e.pointerType === 'touch') return;
       const t = tileAtPointer(e);
       if (t?.x === this.hoverTile?.x && t?.y === this.hoverTile?.y && t?.z === this.hoverTile?.z) return;
       this.hoverTile = t;
       this.updateHover();
       this.sendPresence();
     });
-    canvas.addEventListener('pointerleave', (e) => {
-      if (e.pointerType === 'touch') return;
+    canvas.addEventListener('pointerleave', () => {
       this.hoverTile = null;
       this.updateHover();
       this.sendPresence();
     });
     canvas.addEventListener('click', (e) => {
-      // A tap's own click: the touch handlers took it already.
-      if (performance.now() - lastTouch < 700) return;
       const t = tileAtPointer(e);
+      // Alt+click signals, for a trackpad with no middle click; so does a click once «Señalar» is armed.
+      if (e.altKey || this.pingArmed) {
+        if (t) this.ping(t);
+        this.armPing(false);
+        return;
+      }
       if (t) this.clickTile(t);
     });
 
-    // Touch (docs/FASE11.md §3), where nothing can hang on hovering: one finger drags the camera, two
-    // pinch it nearer or farther and, turned, rotate it a quarter at a time; a tap on a unit, or while
-    // aiming, acts as a click; on the ground it previews (path, cost, noise) and a second tap on the
-    // same tile does it; a long press shows what the pointer would (a zombie's cone, its tags, notes).
-    canvas.style.touchAction = 'none';
-    const fingers = new Map<number, { x: number; y: number }>();
-    let press: { id: number; x: number; y: number; moved: boolean; long: boolean; timer: number } | null = null;
-    let pair: { d: number; a: number; turn: number } | null = null;
-    let lastTouch = 0;
-    const twoFingers = () => {
-      const [a, b] = [...fingers.values()];
-      return { d: Math.hypot(a!.x - b!.x, a!.y - b!.y), a: Math.atan2(b!.y - a!.y, b!.x - a!.x) };
-    };
-    canvas.addEventListener('pointerdown', (e) => {
-      if (e.pointerType !== 'touch') return;
-      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (fingers.size === 1) {
-        const at = { clientX: e.clientX, clientY: e.clientY } as PointerEvent;
-        press = {
-          id: e.pointerId,
-          x: e.clientX,
-          y: e.clientY,
-          moved: false,
-          long: false,
-          timer: window.setTimeout(() => {
-            if (!press || press.moved) return;
-            press.long = true;
-            this.touchPeek(tileAtPointer(at));
-          }, LONG_PRESS_MS),
-        };
-      } else {
-        // A second finger: a pinch or a turn, never a tap.
-        if (press) window.clearTimeout(press.timer);
-        press = null;
-        if (fingers.size === 2) pair = { ...twoFingers(), turn: 0 };
-      }
-    });
-    canvas.addEventListener('pointermove', (e) => {
-      if (e.pointerType !== 'touch' || !fingers.has(e.pointerId)) return;
-      const before = fingers.get(e.pointerId)!;
-      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pair && fingers.size === 2) {
-        const now = twoFingers();
-        // Fingers apart, nearer: the camera's distance by the inverse of the spread.
-        if (now.d > 0 && pair.d > 0) this.rig.zoom((pair.d / now.d - 1) / 0.001);
-        pair.turn += Math.atan2(Math.sin(now.a - pair.a), Math.cos(now.a - pair.a));
-        if (Math.abs(pair.turn) > TOUCH_TURN) {
-          this.rig.rotate(pair.turn > 0 ? 1 : -1);
-          pair.turn = 0;
-        }
-        pair.d = now.d;
-        pair.a = now.a;
-        return;
-      }
-      if (!press || press.id !== e.pointerId) return;
-      if (!press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP) {
-        press.moved = true;
-        window.clearTimeout(press.timer);
-      }
-      if (press.moved) this.rig.panPixels(e.clientX - before.x, e.clientY - before.y);
-    });
-    const touchEnd = (e: PointerEvent) => {
-      if (e.pointerType !== 'touch') return;
-      fingers.delete(e.pointerId);
-      lastTouch = performance.now();
-      if (fingers.size < 2) pair = null;
-      if (!press || press.id !== e.pointerId) return;
-      window.clearTimeout(press.timer);
-      const done = press;
-      press = null;
-      if (done.moved || done.long || e.type === 'pointercancel') return;
-      this.touchTap(tileAtPointer(e));
-    };
-    canvas.addEventListener('pointerup', touchEnd);
-    canvas.addEventListener('pointercancel', touchEnd);
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       // Shift or Alt and the wheel: the floor (Shift turns the wheel sideways on a Mac, hence deltaX).
@@ -4570,6 +4689,9 @@ export class Game {
         return;
       }
       this.rig.zoom(e.deltaY);
+      // The wheel takes the floor back from a hand-picked one (#1).
+      this.levelByHand = false;
+      this.wheelLevel();
     }, { passive: false });
 
     const onKey = (e: KeyboardEvent) => {
@@ -4620,6 +4742,12 @@ export class Game {
         case 'Escape':
           // Esc closes a menu of the bar, then backs out of aiming or of a pending confirmation; otherwise it opens the menu.
           if (this.hud.closeAbilityMenu()) break;
+          // A soldier's sheet or an enemy's file goes first.
+          if (this.hud.closeModal()) break;
+          if (this.pingArmed) {
+            this.armPing(false);
+            break;
+          }
           if (this.mode.kind !== 'move') this.cancelMode();
           else if (this.endArmed || this.concealWarn) {
             this.concealWarn = null;
@@ -4641,6 +4769,9 @@ export class Game {
           e.preventDefault();
           this.stepLevel(-1);
           break;
+        case 'KeyH':
+          if (this.selected) this.openSheet(this.selected);
+          break;
         case 'KeyG':
           if (this.hoverTile) this.ping(this.hoverTile);
           break;
@@ -4661,6 +4792,15 @@ export class Game {
           if (u) this.rig.focus(tileToWorld(u.pos));
           break;
         }
+        case 'F8': {
+          // The tiles' looks Arturo chooses from (playtest 18/10 #14), one after another; kept in this browser.
+          const look = cycleTileLook();
+          this.overlays.setLook(look);
+          // The pointer's ring takes the look's colours.
+          this.updateHover();
+          this.hud.toast(`Casillas: ${look.name}. ${look.line}`);
+          break;
+        }
         case 'KeyO': {
           const marks = this.missionMarks();
           if (!marks.length) this.hud.toast('Esta misión no tiene un punto al que ir: eliminad a los hostiles.');
@@ -4679,53 +4819,6 @@ export class Game {
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
     this.disposers.push(() => window.removeEventListener('keyup', onKeyUp), () => window.removeEventListener('blur', onBlur));
-  }
-
-  /**
-   * A tap (docs/FASE11.md §3): on a soldier or an enemy in sight, or while
-   * aiming or with a self ability armed, it does what a click does (picks,
-   * aims, fires the second time); elsewhere the first tap previews the tile
-   * (the path, its cost and noise, an area) and a second tap on it does it.
-   */
-  private touchTap(t: Pos | null): void {
-    if (!t) return;
-    const occupant = unitAt(this.view, t);
-    const onUnit = !!occupant && occupant.alive && (occupant.team === 'xcom' || this.visibleAliens.has(occupant.id));
-    const direct = onUnit || this.mode.kind === 'target' || this.mode.kind === 'self';
-    const again = !!this.tapArmed && samePlace(this.tapArmed, t);
-    this.hoverTile = t;
-    this.updateHover();
-    this.sendPresence();
-    if (direct || again) {
-      this.tapArmed = null;
-      this.clickTile(t);
-      return;
-    }
-    this.tapArmed = t;
-  }
-
-  /**
-   * The first battle on a phone (a new mission, or one joined half played):
-   * how the fingers play it, on a card, once per browser (docs/FASE11.md §3),
-   * after `after` (the arrival card).
-   */
-  private firstTouchHelp(after: Promise<void>): void {
-    if (!isTouch()) return;
-    let seen = true;
-    try {
-      seen = localStorage.getItem(TOUCH_SEEN_KEY) === '1';
-      localStorage.setItem(TOUCH_SEEN_KEY, '1');
-    } catch {
-      /* storage unavailable: no card rather than one every mission */
-    }
-    if (!seen) void after.then(() => this.hud.nightCard(TOUCH_TEXT.setting, TOUCH_TEXT.help));
-  }
-
-  /** A long press: what the pointer would show over `t` (a zombie's cone, the tags, the tile's note), and nothing armed. */
-  private touchPeek(t: Pos | null): void {
-    this.tapArmed = null;
-    this.hoverTile = t;
-    this.updateHover();
   }
 
   /**
@@ -4815,6 +4908,8 @@ export class Game {
     // With an area armed, a soldier's tile is a place to throw at like any other: the preview already
     // warns «¡Aliado!», and a grenade upstairs may be meant to sink the floor under one (docs/FASE7.md §5).
     if (occupant?.team === 'xcom' && this.mode.kind !== 'tile') {
+      // A turret is nobody's to pick.
+      if (occupant.automaton) return;
       if (this.commands(occupant)) this.select(occupant.id);
       else this.hud.toast(`${occupant.name} es de tu compañero.`);
       return;
@@ -4884,7 +4979,7 @@ export class Game {
       const key = `${u.id}|${tile.x},${tile.y}`;
       if (dest.detected && this.concealWarn !== key) {
         this.concealWarn = key;
-        this.hud.toast(`Desde ahí os ven: se rompe la ocultación. ${isTouch() ? 'Toca' : 'Haz clic'} otra vez para mover.`);
+        this.hud.toast(`Desde ahí os ven: se rompe la ocultación. Haz clic otra vez para mover.`);
         return;
       }
       this.concealWarn = null;

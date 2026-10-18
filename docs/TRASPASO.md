@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 18/10 con la 0.6.0. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 18/10 con la 0.7.0. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 384 tests.
+   Deben pasar 462 tests.
 5. **Jugar en el navegador:**
 
    ```bash
@@ -56,9 +56,9 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.6.0)
+## 3. Estado (versión 0.7.0)
 
-- **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene base, el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
+- **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
   - Saqueo, ruido e IA de zombis ([FASE2.md](FASE2.md));
   - contagio y medicinas ([FASE3.md](FASE3.md));
@@ -74,7 +74,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1 y v0.6.0 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0 y v0.7.0 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
 - **Lo nuevo de la 0.2.2** (2026-10-14):
   - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
   - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
@@ -89,9 +89,17 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+- **Lo nuevo de la 0.7.0** (2026-10-18), la base nueva en la campaña ([FASE12.md](FASE12.md) §11) y la prueba del 18/10 ([PRUEBA-2026-10-18.md](PRUEBA-2026-10-18.md)):
+  - la campaña empieza con una caravana en un claro del pinar, distinto cada vez; se tala, se construye (edificios, empalizadas, muros, puertas, torres, focos, alambre, minas, pinchos, cepos y torretas), se repara, se repone y se desmonta. Lo que pasa de 30 § se vota;
+  - las instalaciones son los edificios del claro: un edificio con la mitad de su aguante o menos no funciona;
+  - el tiempo se cuenta en misiones (5 días cada una), sin «Esperar noticias». Solo se espera cuando nadie puede salir ni hay con qué reclutar;
+  - cada pocas misiones, un asedio en la base: los muertos llegan por cualquier lado y van a por los soldados; defienden todos los sanos, y las torretas y las trampas actúan solas. Con la Sala de radio se sabe por dónde y cuántos. Uno de cada tres, desde el segundo, de noche: el foco alumbra 4 casillas. Si caen todos, la base cae y se empieza en otro claro; si no queda nadie, se pierde la campaña;
+  - la campaña es nueva: la de antes se guarda aparte (`save.antes-0.7.json`);
+  - la prueba del 18/10: plantas con la rueda, soldados ya jugados que se pueden mirar, rutas planeadas que se siguen solas, objetos encontrados al cinturón, La Lata que se va al acabar el tiempo, el aviso de 5 turnos, señalar, velocidad del turno enemigo, la hoja del soldado en combate, sonidos nuevos, casas por salas, plazas y alcantarillas con sentido, y las líneas y casillas nuevas («Degradado» con contorno de «Tiza», en «Hueso y óxido»);
+  - quitado lo de la web y el móvil: solo la aplicación de escritorio.
 - **Lo nuevo de la 0.6.0** (2026-10-18), el hito 1 de la Fase 12, el asedio ([FASE12.md](FASE12.md) §10): «El Bastión» en el menú de escaramuza, la base como mapa de combate (muralla, portones, barricadas, torres de vigía y la Sala de radio), cinco oleadas por un lado anunciado, muertos que tiran puertas y barricadas («Golpear»), brechas a la vista y el corazón de la base que no hay que perder. También el tablero de habilidades encuadrado en táctil, lo último de la Fase 11.
 - **Lo nuevo de la 0.5.1** (2026-10-17): jugando solo, los soldados del compañero que no está obedecen al que juega, en combate y en la base (`commandsFor`); la interfaz escala con la pantalla, con el iPhone Air en horizontal (912 × 420) como referencia.
-- **Lo nuevo de la 0.5.0** (2026-10-17), la Fase 11, móvil y navegador ([FASE11.md](FASE11.md)): el modo táctil (se detecta solo), el combate y la base con el dedo en horizontal, el ajuste gráfico «Móvil», y el juego servido en una web propia con contraseña (`npm run web:dist`, guía en [WEB.md](WEB.md)), con reconexión al volver de otra app y entrada desde la app con «Unirse por dirección».
+- **Lo nuevo de la 0.5.0** (2026-10-17), la Fase 11, móvil y navegador ([FASE11.md](FASE11.md)): el modo táctil (se detecta solo), el combate y la base con el dedo en horizontal, el ajuste gráfico «Móvil», y el juego servido en una web propia con contraseña (quitado el 18/10), con reconexión al volver de otra app y entrada desde la app con «Unirse por dirección».
 - **Lo nuevo de la 0.4.5** (2026-10-17), notas #44–#52: «Salir de Bastión» (y el compañero sabe cuándo cierra el anfitrión, mensaje `closing`); disparos más ruidosos; en el turno enemigo, primero solo los que muerden y el resto a la vez; la cámara al turno (con interruptor); en gris sin el mando; la luz de noche explicada y sin quemar; cambiar de objetivo con un clic en el cuerpo; el coste en acciones siempre igual y con el arma; la columna del objetivo y una guía en el suelo.
 - **Lo nuevo de la 0.4.4** (2026-10-17), nota #43: la puntería cuerpo a cuerpo junto a la de disparo en la ficha del Cuartel y en la de combate.
 - **Lo nuevo de la 0.4.3** (2026-10-17), notas #40–#42: la ficha de cada arma (daño, crítico, puntería, cargador, acciones, ruido, blindaje y puntería por distancia; `weaponProfile` y `baseWeaponProfile` en aim.ts) en la Armería, el Taller y el Cuartel, con la comparación con lo que lleva cada soldado; el arma se elige también en la ficha del soldado («Mano» y «Cinto»); la noche sin deslumbrar (menos resplandor y la mitad de luz en farolas, bengalas y fuegos).
@@ -161,8 +169,8 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - premisa: Atalaya, una vieja estación militar en la sierra de Brena, con supervivientes de todas partes;
   - tono adulto y seco, sin explicar de más, con nombres internacionales.
 - **Nombres:**
-  - pestañas «Bastión», «El valle», «Diario», «Armería», «Cuartel», «Instalaciones», «Cochera»;
-  - el tiempo pasa con «Esperar noticias»; la amenaza se llama «Infestación» (y «la Marea» desde el nivel 4).
+  - pestañas «Campaña», «El valle», «Armería», «Cuartel», «Construir» y «Escuadra» (la cochera);
+  - el tiempo pasa con las misiones (desde la 0.7.0); la amenaza se llama «Infestación» (y «la Marea» desde el nivel 4).
 - **Los zombis primero** (14/10, [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos; los humanos solo en Rescate y en los capítulos y encargos que son suyos.
 - **Reglas** (de las pruebas de juego del 12 y del 13/10):
   - disparar gasta una acción;
@@ -177,7 +185,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - empieza con 16 raciones;
   - disparar desde más alto da +20 de puntería; la IA de los vivos valora la altura con +6 por planta al elegir sitio;
   - subir o bajar una planta por la escalera cuesta como 2 casillas; la IA cuenta 3 casillas de rodeo por planta.
-- **Interfaz:** Mixta, votada por Arturo. La cuadrícula del suelo, opción A (solo contornos).
+- **Interfaz:** Mixta, votada por Arturo. La cuadrícula del suelo, opción A (solo contornos). Las líneas y casillas, «Degradado» con el contorno de «Tiza», en «Hueso y óxido» (18/10).
 - **Cómo se juega:** Arturo y Ana juegan con la aplicación de escritorio; la web queda para probar (por eso Safari no se prueba).
 - **Sesiones de Claude:** Gameplay (coordina), Arte, Lore, UI y Networking, todas con Remote Control para seguirlas desde claude.ai/code ([EQUIPO.md](EQUIPO.md)).
 
@@ -187,9 +195,9 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - probar la 0.4.0 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
   - escuchar los sonidos nuevos (`sonido.html`).
 - **Probar en partida** la Fase 10: si las barras se llenan a buen ritmo, si el tablero da elecciones de verdad y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `BAR_FIRST`, `BAR_STEP`, `BAR_GROWTH`, `DEED_XP`, `BASE_AIM`; en `board.ts`, las cifras de cada celda; en `content.ts`: `STONE_DAMAGE`, `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
-- **Fase 12, el asedio** ([FASE12.md](FASE12.md)): aprobada por Arturo (18/10). El hito 1 salió en la 0.6.0: «El Bastión» en el menú de escaramuza (§10). Falta probarlo jugando; luego, construir (hito 2).
+- **Fase 12, el asedio** ([FASE12.md](FASE12.md)): hecha. El hito 1 salió en la 0.6.0 y la base nueva en la campaña, en la 0.7.0 (§11). Falta ajustar las cifras jugando: el tamaño de las oleadas (`SIEGE_FIRST`, `SIEGE_GROWTH` en campaign.ts), el precio y la munición de la torreta y de las trampas (`PIECES` en base.ts).
 - **Para revisar más adelante (Arturo, 18/10): «La Lata», la base móvil.** No hay base fija: el Bastión es el autobús con remolques, y la campaña es un viaje por el valle antes de que llegue la Marea. Se elige ruta y se carga el autobús, que tiene poco sitio (gente, combustible, comida, munición), y las instalaciones pasan a ser remolques. Fue la opción 2 al repensar la base; la elegida fue la 1, el asedio ([FASE12.md](FASE12.md)).
-- **La versión móvil y web** ([FASE11.md](FASE11.md)): abandonada por Arturo el 18/10. No se desarrolla más ni se publica el paquete web; solo la aplicación de escritorio. El código de la 0.5.0 y la 0.5.1 sigue en el repositorio.
+- **La versión móvil y web** ([FASE11.md](FASE11.md)): abandonada por Arturo el 18/10, y su código quitado para aligerar el juego: modo táctil, ajuste «Móvil», paquete web, contraseña y manifest. Solo la aplicación de escritorio. Se quedan la reconexión, la espera a quien se ausenta, recuperar el puesto por el nombre y jugar con los soldados del compañero ausente.
 - **El tráiler:** aparcado por Arturo (15/10). El último borrador, la portada y las 10 capturas de la ficha están en `.dev-snapshots/trailer/` (no se suben); las herramientas siguen en `packages/client/tools/trailer/` ([TRAILER.md](TRAILER.md)) por si se retoma.
 - **Escenarios:** la cárcel y el centro comercial esperan los packs «POLYGON – Police Station» y «POLYGON – Shops», que tienen los atlas de sus piezas. Para después: la cafetería con aspecto propio y el portón grande de las naves (un hueco de 5 casillas).
 - **Para más adelante:**
@@ -211,4 +219,4 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md), [PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
 | [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), [FIRMA.md](FIRMA.md) | La guía de la prueba en el PC de referencia; cómo se firma la aplicación y qué cambiar con la cuenta de Apple |
-| [WEB.md](WEB.md), [FASE11.md](FASE11.md) | Abandonadas el 18/10. Servir el juego en una web propia (Fase 11: móvil y navegador): el paquete, la contraseña, el proxy con https y cómo llevar la partida de la app a la web |
+| [FASE11.md](FASE11.md) | Abandonada y quitada el 18/10. Lo que fue la Fase 11, móvil y navegador (la guía de la web, WEB.md, está en el historial de Git) |

@@ -1412,7 +1412,7 @@ export class BastionSet implements StageSet {
    */
   beforeRender(gl: THREE.WebGLRenderer, dt: number): void {
     // The shadow map's size by effects level, as in battle (renderer.ts): drawn rarely, its size costs little.
-    const size = { high: 4096, medium: 2048, low: 2048, mobile: 1024 }[graphics().effects];
+    const size = graphics().effects === 'high' ? 4096 : 2048;
     if (this.sun.shadow.mapSize.x !== size) {
       this.sun.shadow.mapSize.set(size, size);
       this.sun.shadow.map?.dispose();

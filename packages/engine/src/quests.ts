@@ -181,7 +181,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      success: { text: '{relative} llega a Atalaya en los huesos. Al día siguiente pide un fusil.', tone: 'good', recruit: { name: '{relative}' }, retry: 40 },
+      success: { text: '{relative} llega al Bastión en los huesos. Al día siguiente pide un fusil.', tone: 'good', recruit: { name: '{relative}' }, retry: 40 },
       refused: { text: '{soldier} no dice nada. Desde entonces dispara antes de preguntar.', tone: 'bad', trait: 'grudge', retry: 30 },
       failure: { text: 'El campamento estaba vacío cuando llegamos. {soldier} no habla de ello. Ahora dispara antes de preguntar.', tone: 'bad', trait: 'grudge', retry: 30 },
     },
@@ -221,14 +221,14 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         title: 'Vera Lindqvist',
         text: 'Lindqvist está herida entre los escombros. No pide perdón. Dice que lo volvería a hacer. Sabe mandar, y sabe dónde guarda su banda lo robado.',
         options: [
-          { label: 'Llevarla a Atalaya', effect: 'Se une como sargento, con el rasgo «Pesadillas»', then: 'captured' },
+          { label: 'Llevarla al Bastión', effect: 'Se une como sargento, con el rasgo «Pesadillas»', then: 'captured' },
           { label: 'Acabar con esto', effect: '+150 suministros de su alijo', then: 'killed' },
         ],
       },
     ],
     outcomes: {
-      captured: { text: 'Lindqvist duerme en Atalaya, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.', tone: 'good', recruit: { name: 'Vera Lindqvist', cls: 'sharpshooter', rank: 3, trait: 'scarred' } },
-      killed: { text: 'Lindqvist está muerta. Su alijo pasa a Atalaya (+150 suministros).', tone: 'good', credits: 150 },
+      captured: { text: 'Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.', tone: 'good', recruit: { name: 'Vera Lindqvist', cls: 'sharpshooter', rank: 3, trait: 'scarred' } },
+      killed: { text: 'Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).', tone: 'good', credits: 150 },
       failure: { text: 'Lindqvist ha escapado. Volverá a aparecer.', tone: 'bad', retry: 25 },
     },
   },
@@ -340,7 +340,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      success: { text: 'Otto Brandt monta su radio en Atalaya. Con él, la red llega a una zona más.', tone: 'good', contacts: 1 },
+      success: { text: 'Otto Brandt monta su radio en el Bastión. Con él, la red llega a una zona más.', tone: 'good', contacts: 1 },
       failure: { text: 'No llegamos a tiempo. Morse firma el informe y no añade nada.', tone: 'bad' },
     },
   },
@@ -376,7 +376,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      success: { text: 'Los Camioneros vuelven a la Ruta 50 y paran en Atalaya en cada viaje (+15 suministros al mes).', tone: 'good', income: 15 },
+      success: { text: 'Los Camioneros vuelven a la Ruta 50 y paran en el Bastión en cada viaje (+15 suministros al mes).', tone: 'good', income: 15 },
       failure: { text: 'Los Camioneros dejan de pasar por los Llanos (−10 suministros al mes).', tone: 'bad', income: -10 },
     },
   },
@@ -429,7 +429,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'event',
         title: 'El topo',
-        text: 'Alguien de Atalaya pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.',
+        text: 'Alguien del Bastión pasa información a los Cuervos. Las noches de los sabotajes solo bajaron dos personas al generador: {a} y {b}. Podemos vigilar a una durante una semana.',
         options: [
           { label: 'Vigilar a {a}', effect: 'Una semana de vigilancia', then: 'next', clue: true },
           { label: 'Vigilar a {b}', effect: 'Una semana de vigilancia', then: 'next', clue: true },
@@ -503,7 +503,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       {
         type: 'event',
         title: 'El camión del río',
-        text: 'Con el río bajo ha aparecido un camión de suministros hundido junto al puente de La Vega. Las cajas están precintadas y muchas siguen secas. Los Cuervos también lo han visto.',
+        text: 'Con el río bajo ha aparecido un camión de suministros hundido junto al puente de La Vega. La carga va precintada y casi toda sigue seca. Los Cuervos también lo han visto.',
         options: [
           { label: 'Llegar antes que ellos', effect: 'Una operación de recuperación', then: 'next' },
           { label: 'Dejarlo en el río', effect: 'Sin efecto', then: 'left' },
@@ -515,15 +515,15 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         kind: 'recovery',
         biome: 'wilds',
         days: 6,
-        briefing: 'Los de las Bodegas han sacado las cajas del camión y las han dejado junto a la carretera, bajo una lona. El pueblo de al lado está lleno de muertos, y los Cuervos vienen de camino. Recuperadlas y sacadlas en La Lata antes de que lleguen.',
-        item: 'las cajas',
+        briefing: 'Los de las Bodegas han sacado la carga del camión y la han dejado junto a la carretera, bajo una lona. El pueblo de al lado está lleno de muertos, y los Cuervos vienen de camino. Recuperadla y sacadla en La Lata antes de que lleguen.',
+        item: 'la carga',
         outdoors: true,
       },
     ],
     outcomes: {
-      success: { text: 'Las cajas traen conservas, vendas y munición (+150 suministros).', tone: 'good', credits: 150 },
+      success: { text: 'La carga trae conservas, vendas y munición (+150 suministros).', tone: 'good', credits: 150 },
       left: { text: 'El camión se queda en el fondo del río.', tone: 'bad' },
-      failure: { text: 'Los Cuervos se llevan las cajas del embarcadero.', tone: 'bad' },
+      failure: { text: 'Los Cuervos se llevan la carga del embarcadero.', tone: 'bad' },
     },
   },
 };
@@ -555,7 +555,7 @@ export const RUMOR_LINES = [
   'un perro que ladra en una granja abandonada',
 ];
 
-/** "{relative} llega a Atalaya…" with the quest's names. */
+/** "{relative} llega al Bastión…" with the quest's names. */
 export function fill(text: string, names: Record<string, string>): string {
   return text.replace(/\{(\w+)\}/g, (match, key: string) => names[key] ?? match);
 }

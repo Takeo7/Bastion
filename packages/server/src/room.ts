@@ -4,6 +4,8 @@ import {
   answerAbandon,
   callAbandon,
   activeOffer,
+  offerMap,
+  siegePlan,
   addPlayer,
   applyMissionResult,
   bastionLevel,
@@ -54,7 +56,7 @@ interface Seat {
   droppedAt: number | null;
   /** The base screen this player is on, so a reconnecting partner sees it. */
   view?: BaseView;
-  /** Their page is asleep in another app (the `away` message): a drop then waits AWAY_GRACE_MS. */
+  /** Their game is out of sight (the `away` message): a drop then waits AWAY_GRACE_MS. */
   away?: boolean;
 }
 
@@ -62,7 +64,7 @@ export type RoomMode = 'skirmish' | 'campaign';
 
 /** A dropped player keeps blocking the end of turn this long, so a reload or Wi-Fi blip never costs them their turn. */
 const RECONNECT_GRACE_MS = 30_000;
-/** The same for a phone gone to another app (docs/FASE11.md §6): back from a message or a call, the turn and the command are still theirs. */
+/** The same for a player whose game was out of sight when it dropped (a laptop put to sleep): back, the turn and the command are still theirs. */
 const AWAY_GRACE_MS = 5 * 60_000;
 /** How long a joint decision waits for the partner's answer before it goes ahead (playtest 2026-10-14, #28: in case they left; 16/10: 90 s was too long). */
 const ANSWER_WAIT_MS = 30_000;
@@ -154,8 +156,8 @@ export class Room {
   }
 
   private join(socket: WebSocket, name: string, token?: string): Seat | null {
-    // By the seat's token; from a browser or device without it (the phone, the app, the website: docs/WEB.md),
-    // by the player's name, so each finds their own seat and soldiers.
+    // By the seat's token; from a browser or an app without it (another computer, the app after Chrome, a
+    // campaign carried over from another host), by the player's name, so each finds their own seat and soldiers.
     let seat = this.seats.find((s) => s && token && s.token === token) ?? this.seats.find((s) => s && sameName(s.name, name)) ?? null;
     if (!seat) {
       const free = this.seats.findIndex((s) => s === null);
@@ -259,6 +261,10 @@ export class Room {
       case 'baseView':
         seat.view = msg.view;
         this.toPartner(seat, { t: 'baseView', slot: seat.slot, view: msg.view });
+        break;
+      case 'baseCursor':
+        // What the partner has in hand on the base, passed on as it comes (docs/FASE12.md §11.7).
+        if (this.phase === 'base') this.toPartner(seat, { t: 'baseCursor', slot: seat.slot, piece: msg.piece, x: msg.x, y: msg.y, rot: msg.rot });
         break;
       case 'away': {
         // The partner hears of a change; whoever asked always gets an answer, its proof the socket is alive (net.ts).
@@ -378,8 +384,11 @@ export class Room {
     const offer = activeOffer(c);
     if (!offer) return;
     const info = missionInfo(c, offer);
+    const siege = siegePlan(c, offer);
     this.state = createMission({
-      map: offer.map,
+      // A siege is fought on the base as it stands now (docs/FASE12.md §11.5).
+      map: offerMap(c, offer),
+      ...(siege ? { siegePlan: siege } : {}),
       slots: c.players,
       rng: this.rng,
       kind: offer.kind,
@@ -468,7 +477,7 @@ export class Room {
   private answerForPartner(kind: DeadlineKind, key: string): void {
     const wait = this.waits[kind];
     if (wait?.key !== key) return;
-    // Whoever is to answer is in another app on their phone (a call, a message): the question waits for them, up to AWAY_GRACE_MS.
+    // Whoever is to answer has the window minimized or the laptop asleep: the question waits for them, up to AWAY_GRACE_MS.
     const answerer = this.answerer(kind);
     const away = answerer !== null && this.seats[answerer]?.away;
     if (away && Date.now() - wait.since < AWAY_GRACE_MS) {
@@ -545,7 +554,7 @@ export class Room {
   }
 
   private roomMessage(): ServerMessage {
-    const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, doom: this.campaign.doom, level: bastionLevel(this.campaign) } : null;
+    const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, missions: this.campaign.missionsFlown ?? 0, doom: this.campaign.doom, level: bastionLevel(this.campaign) } : null;
     // A campaign from before the 0.3 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
     const setAside = this.store.setAside ? basename(this.store.setAside) : null;
     return { t: 'room', players: this.players(), phase: this.phase, savedCampaign, ...(setAside ? { setAside } : {}) };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advanceTime,
   CAMPAIGN_VERSION,
   contactBlocker,
   createCampaign,
@@ -11,7 +12,6 @@ import {
   mareaThreshold,
   migrateCampaign,
   missionInfo,
-  plotById,
   REGIONS,
   roadHops,
   roadRoute,
@@ -26,6 +26,7 @@ import { doomName, mareaAlert, missionName } from '../src/lore';
 import { LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
 import type { Slot } from '../src/types';
+import { raise } from './helpers';
 
 // Phase 5: the valley of Kessra (docs/FASE5.md).
 
@@ -36,14 +37,23 @@ const run = (c: CampaignState, cmd: CampaignCommand, slot: Slot = 0, connected: 
 function quiet(): CampaignState {
   const c = createCampaign([0], new Rng(1));
   Object.assign(c, { nextEventDay: 999, nextMissionDay: 999, nextRumorDay: 999, nextFacilityDay: 999, nextSupplyDay: 999, nextDoomDay: 999, nextMedicineDay: 999, nextFoodDay: 999, credits: 5000 });
-  plotById(c, '2,2')!.building = 'relay';
-  plotById(c, '4,4')!.building = 'relay';
+  // The Sala de radio at its top: the Centro de comunicaciones in it (docs/FASE12.md §11.3).
+  raise(c, 'radio', 3);
   return c;
 }
 
-const offerIn = (c: CampaignState, region: RegionId): MissionOffer => ({ ...c.offers.find((o) => !o.story)!, id: `t-${region}`, region, story: null, quest: null, facility: null, expiresDay: null });
+/** An operation of its own in `region` (its groups its own too: the copy of another's would move with it). */
+const offerIn = (c: CampaignState, region: RegionId): MissionOffer => {
+  const like = c.offers.find((o) => !o.story && !o.tide)!;
+  return { ...like, pods: like.pods.map((p) => [...p]), id: `t-${region}`, region, story: null, quest: null, facility: null, expiresDay: null };
+};
 /** Any command the base takes looks at where the Marea is; this one passes no time. */
 const look = (c: CampaignState) => run(c, { type: 'advance', ready: false });
+/** Days go by until something happens (the clock goes on inside, with the missions: docs/FASE12.md §11.6), and the base looks. */
+const wait = (c: CampaignState) => {
+  advanceTime(c, new Rng(7));
+  look(c);
+};
 
 describe('the valley', () => {
   // Lore, 2026-10-13: invented, neutral names.
@@ -63,7 +73,7 @@ describe('the valley', () => {
       // The opening mission is presented without the Diario label.
       const story = c.offers.find((x) => x.story === 1)!;
       expect(missionInfo(c, story).kicker).toBeUndefined();
-      expect(missionInfo(c, story).item).toBe('las medicinas');
+      expect(missionInfo(c, story).item).toBe('el maletín de urgencias');
     }
     expect(ordinary).toBeGreaterThan(10);
     expect(FACILITIES.simulation.name).toBe('Sala de mapas');
@@ -124,7 +134,7 @@ describe('the Marea', () => {
     // At 12, the campaign is lost, as ever.
     c.doom = DOOM_MAX - 1;
     c.nextDoomDay = c.day + 1;
-    run(c, { type: 'advance', ready: true });
+    wait(c);
     expect(c.outcome).toBe('defeat');
   });
 
@@ -163,7 +173,7 @@ describe('the Marea', () => {
     c.nextFoodDay = c.day + 1;
     const credits = c.credits;
     const medicines = c.medicines!;
-    run(c, { type: 'advance', ready: true });
+    wait(c);
     expect(c.credits).toBe(credits + 60 + 30);
     expect(c.medicines).toBe(medicines);
     expect(c.log.some((l) => /La Vega manda/.test(l.text))).toBe(false);
@@ -191,7 +201,7 @@ describe('the Marea', () => {
     for (let seed = 1; seed <= n; seed++) {
       const c = createCampaign([0], new Rng(seed));
       Object.assign(c, { nextEventDay: 999, nextMissionDay: 999, nextRumorDay: 999, nextSupplyDay: 999, nextDoomDay: 999, doom: 6, nextFacilityDay: c.day + 1 });
-      run(c, { type: 'advance', ready: true });
+      wait(c);
       const nest = c.regions.find((r) => r.facility);
       if (nest && near.includes(nest.id)) close++;
     }

@@ -33,7 +33,7 @@ const LAWN = 3;
 /** A street tile of a zebra crossing (blue channel; +1 when the street runs along z). */
 const CROSSWALK = 4;
 /** Things that stand on paving: open ground round them stays paved. */
-const PAVED = new Set<DecorKind>(['planter', 'fountain', 'fountainCorner', 'statue', 'kiosk', 'carFront', 'carRear', 'crates', 'barricade', 'bin']);
+const PAVED = new Set<DecorKind>(['planter', 'fountain', 'fountainCorner', 'statue', 'kiosk', 'carFront', 'carRear', 'crates', 'barricade', 'bin', 'bench']);
 
 /** What each tile's floor is, for the ground shader and the scattered details. */
 export class GroundMap {
@@ -547,6 +547,10 @@ const COVER: Record<Biome, Partial<Record<number, [PropId, number][]>>> = {
   },
 };
 
+/** A manhole every this many tiles down a street's middle (some 24 m), a drain in each gutter every this many. */
+const MANHOLE_EVERY = 16;
+const DRAIN_EVERY = 13;
+
 /**
  * Small Synty props scattered off the grid: grass tufts and flowers in the
  * wilds and on lawns, papers and pebbles in town, leaves under trees, weeds
@@ -607,14 +611,21 @@ export function scatterCover(s: GameState, ground: GroundMap, density = 1): { id
           put(id, px, e * STOREY, pz, r() * Math.PI * 2, 0.8 + r() * 0.45);
         }
       }
-      // Street furniture in the ground: drains in the gutter, manholes down the middle.
+      // Street furniture in the ground, spaced as a street has it (playtest 18/10, #11: there were far too many): a
+      // manhole down the middle every MANHOLE_EVERY tiles along each street, a drain in each gutter every
+      // DRAIN_EVERY, each street's own offset so they never line up across the map.
       if (s.biome === 'city' && kind === STREET && e === 0) {
         const axis = data[i * 4 + 2]!;
-        if (axis && hash2(x, y, 31) < 0.06) put('manhole', x + 0.5, 0.002, y + 0.5, (hash2(x, y, 32) * 4) | 0, 1);
+        if (axis) {
+          const [along, across] = axis === 1 ? [x, y] : [y, x];
+          if ((along + Math.floor(hash2(across, axis, 34) * MANHOLE_EVERY)) % MANHOLE_EVERY === 0) put('manhole', x + 0.5, 0.002, y + 0.5, (hash2(x, y, 32) * 4) | 0, 1);
+        }
         const kerb = DIRS4.findIndex((d) => ground.kinds[(y + d.y) * w + x + d.x] === OPEN && at(x + d.x, y + d.y) !== null);
-        if (kerb >= 0 && hash2(x, y, 33) < 0.08) {
+        if (kerb >= 0) {
           const d = DIRS4[kerb]!;
-          put('drain', x + 0.5 + d.x * 0.36, 0.002, y + 0.5 + d.y * 0.36, Math.atan2(d.x, d.y), 1);
+          // Along the kerb: x for one to the north or south, y for one to the east or west.
+          const [along, across] = d.y !== 0 ? [x, y * 4 + kerb] : [y, x * 4 + kerb];
+          if ((along + Math.floor(hash2(across, kerb, 35) * DRAIN_EVERY)) % DRAIN_EVERY === 0) put('drain', x + 0.5 + d.x * 0.36, 0.002, y + 0.5 + d.y * 0.36, Math.atan2(d.x, d.y), 1);
         }
       }
     }

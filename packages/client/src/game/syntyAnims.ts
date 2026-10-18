@@ -18,6 +18,14 @@ import { ANIMATIONS, DEAD_MOTIONS, DEATHS, HITS, IDLE_VARIATIONS, MOTIONS, STANC
 // of the fall the unit view says.
 
 const N = SYNTY_BONES.length;
+/** The bones the clips pose (the body's, ahead of the fingers in SYNTY_BONES); the fingers are each hand's (syntyFigures.ts hands). */
+const BODY = SYNTY_BONES.indexOf('Thumb_01_L');
+const FINGER = /^(Thumb|Index|Finger)_0\d_[LR]$/;
+
+/** A clip without its finger tracks: the figure poses the fingers by what each hand does, and the mixer is spared them. */
+function bodyOnly(clip: THREE.AnimationClip): THREE.AnimationClip {
+  return new THREE.AnimationClip(clip.name, clip.duration, clip.tracks.filter((t) => !FINGER.test(t.name.split('.')[0]!)));
+}
 const HIPS = SYNTY_BONES.indexOf('Hips');
 /** The bones a hit reaction moves: from the spine up (the legs and hips keep what they do). */
 const UPPER = new Set(['Spine_01', 'Spine_02', 'Spine_03', 'Neck', 'Head', 'Clavicle_L', 'Clavicle_R', 'Shoulder_L', 'Shoulder_R', 'Elbow_L', 'Elbow_R', 'Hand_L', 'Hand_R']);
@@ -84,10 +92,10 @@ function prepare(
   mixer.stopAllAction();
   return {
     template: tpose,
-    clips: motionClips,
-    variations,
-    stances,
-    deaths,
+    clips: motionClips.map(bodyOnly),
+    variations: variations.map(bodyOnly),
+    stances: stances.map(bodyOnly),
+    deaths: deaths.map(bodyOnly),
     settles: deaths.map(settleOf),
     hits: hits.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
     restInv: bones.map((b) => (b ? b.getWorldQuaternion(new THREE.Quaternion()).invert() : new THREE.Quaternion())),
@@ -343,7 +351,7 @@ export class AnimDriver {
    */
   read(out: THREE.Quaternion[], hips: THREE.Vector3): void {
     const { set, world, bones } = this;
-    for (let i = 0; i < N; i++) {
+    for (let i = 0; i < BODY; i++) {
       const parent = set.parent[i]!;
       const w = world[i]!.copy(parent < 0 ? set.rootQ : world[parent]!).multiply(bones[i]!.quaternion);
       out[i]!.copy(w).multiply(set.restInv[i]!);

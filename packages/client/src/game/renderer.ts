@@ -22,7 +22,7 @@ function skyGradient(stops: string[]): THREE.Texture {
 }
 
 /** A time of day: the sky, the haze, the lights, the exposure and the grade. */
-interface Mood {
+export interface Mood {
   sky: string[];
   haze: number;
   hazeDensity: number;
@@ -144,6 +144,11 @@ const SNOW_DAY: Mood = {
   grade: { ...MOODS.day.grade, shadowTint: [0.92, 0.98, 1.06], highlightTint: [1, 1, 1.02], lift: [0.04, 0.05, 0.065] },
 };
 
+/** The battle's daylight, or the snow's: for a scene that is the map but not the battle (the base's clearing, strategy/clearingArt.ts). */
+export function dayMood(snow: boolean): Mood {
+  return snow ? SNOW_DAY : MOODS.day;
+}
+
 /** The map changed (rebuilt): the sun's shadow map is drawn again on the next frame. */
 let shadowsStale = true;
 export function shadowsChanged(): void {
@@ -156,6 +161,18 @@ export function beforeNextFrame(job: (gl: THREE.WebGLRenderer) => void): void {
   jobs.push(job);
 }
 
+/**
+ * For a renderer other than the battle's drawing the map (the base's clearing,
+ * on the strategy stage): the map's pending GPU work done on it, and whether
+ * the shadow map is to be drawn again (it is taken).
+ */
+export function runMapJobs(gl: THREE.WebGLRenderer): boolean {
+  while (jobs.length) jobs.shift()!(gl);
+  const stale = shadowsStale;
+  shadowsStale = false;
+  return stale;
+}
+
 /** While animated characters cast shadows and nothing else moves, the shadow map catches up with their poses this often. */
 const POSE_SHADOWS = 0.1;
 /** Frames between looks for what casts shadows and moves (units come and go). */
@@ -164,7 +181,7 @@ const CASTERS_EVERY = 30;
 const MIN_CASTER = 0.25;
 
 /** The sun's shadow map by effects level: its size and how soft its edges (PCF's disk radius, in texels). */
-const SHADOW_QUALITY = { high: { size: 4096, radius: 3 }, medium: { size: 2048, radius: 2 }, low: { size: 2048, radius: 1 }, mobile: { size: 1024, radius: 1 } } as const;
+const SHADOW_QUALITY = { high: { size: 4096, radius: 3 }, medium: { size: 2048, radius: 2 }, low: { size: 2048, radius: 1 } } as const;
 
 /** Owns the WebGL renderer, the scene, the lights and the render loop. */
 export class Renderer {
@@ -249,8 +266,6 @@ export class Renderer {
     shadowsStale = true;
     const q = postQuality();
     this.post.ao.enabled = q.ao !== 'off' && !this.near;
-    // The phone's keeps the post chain for its tone and grade (the night must read), without the bloom.
-    this.post.bloom.enabled = q.bloom !== 'off';
     lightenPost(this.post, q.ao === 'light', q.bloom === 'light');
     if (this.gl.shadowMap.enabled !== g.shadows) {
       this.gl.shadowMap.enabled = g.shadows;
@@ -407,8 +422,7 @@ export class Renderer {
     this.gl.setPixelRatio(pixelRatio(w, h, true));
     this.gl.setSize(w, h);
     this.post.composer.setPixelRatio(this.gl.getPixelRatio());
-    const ratio = this.gl.getPixelRatio();
-    fitPostToPixelRatio(this.post, ratio, this.effects === 'mobile' ? { width: w * ratio, height: h * ratio } : undefined);
+    fitPostToPixelRatio(this.post, this.gl.getPixelRatio());
     this.post.composer.setSize(w, h);
     this.labels.setSize(w, h);
     this.camera.aspect = w / h;

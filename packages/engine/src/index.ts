@@ -19,6 +19,7 @@ export * from './appearance';
 export * from './progression';
 export * from './skills';
 export * from './board';
+export * from './base';
 export * from './lore';
 export * from './quests';
 export * from './transmissions';

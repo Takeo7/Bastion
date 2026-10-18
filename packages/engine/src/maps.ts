@@ -11,8 +11,7 @@ import type { Biome, Decor, Level, Place, TemplateId, TileKind, Vec2 } from './t
  *   S  a building's stairs (a ladder to the storey above, drawn as stairs)
  *   b  barricade: low cover the dead break down in a siege (docs/FASE12.md)
  *   x  XCOM spawn     1-9  alien pod spawn (members listed in `pods`)
- *   D  objective spot (data, terminal, relay or VIP depending on the mission;
- *      on a base, its heart)
+ *   D  objective spot (data, terminal, relay or VIP depending on the mission)
  *   E  evacuation zone
  *
  * `heights`, when present, gives each tile's elevation as a digit (storeys).
@@ -23,7 +22,7 @@ import type { Biome, Decor, Level, Place, TemplateId, TileKind, Vec2 } from './t
  * stands on, and pod spawns (digits) for enemies posted up there.
  *
  * `siege`: a base to defend (docs/FASE12.md). Every mission on it is a siege:
- * no enemies at the start, the dead come in waves for its heart.
+ * no enemies at the start, the dead come in waves for the soldiers.
  */
 export interface MapDef {
   id: string;
@@ -188,7 +187,7 @@ export const MAPS: Record<string, MapDef> = {
   // The base as a battlefield (docs/FASE12.md, hito 1): the old military
   // station over Brena, its wall with a gate and a barricade on each side,
   // a raised watchtower on each corner (a ladder up from inside), and the
-  // Sala de radio in the middle, its heart.
+  // Sala de radio in the middle.
   bastion: {
     id: 'bastion',
     name: 'El Bastión',
@@ -210,7 +209,7 @@ export const MAPS: Record<string, MapDef> = {
       '......#..######............h.#......',
       '......#........######........#......',
       '......#........#....#........#.H....',
-      '....H.#..h..H..#.D..#..H..h..#......',
+      '....H.#..h..H..#....#..H..h..#......',
       '......+........#....#........+......',
       '......+........#....#........+......',
       '......#..h..H..###+##..H..h..#..h...',

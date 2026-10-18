@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { Carried, FigurePose, FigureRig } from '../../game/figures';
 import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
 import { Renderer } from '../../game/renderer';
-import { SYNTY_LOD, SyntyFigure } from '../../game/syntyFigures';
+import { SYNTY_HANDS, SYNTY_LOD, SyntyFigure } from '../../game/syntyFigures';
 import type { CharacterId } from '../../game/syntyManifest';
 
 // Weapons lab (/armas.html): how every weapon sits in the hands of every kind
@@ -13,6 +13,8 @@ import type { CharacterId } from '../../game/syntyManifest';
 // dead, windup, strike; views: right, left, front, back. `__weapons.ARMS_CASES`
 // are a campaign soldier's own (docs/FASE8.md §A), with what each has drawn;
 // `__weapons.MOD_CASES`, what is mounted on the gun and its wear (FASE9.md §5).
+// `__weapons.HANDS.fingers` / `.elbows` off: the hands flat and the arms as
+// the IK leaves them, to compare.
 
 const container = document.getElementById('weapons')!;
 const renderer = new Renderer(container);
@@ -158,4 +160,4 @@ async function sheet(
   return name;
 }
 
-(window as unknown as { __weapons: unknown }).__weapons = { sheet, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES, MOD_CASES };
+(window as unknown as { __weapons: unknown }).__weapons = { sheet, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES, MOD_CASES, HANDS: SYNTY_HANDS };

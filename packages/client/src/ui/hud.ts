@@ -1,8 +1,11 @@
 import {
+  PIECES,
   ABANDON_TEXT,
+  BELT_TEXT,
+  beltable,
+  SETTINGS_TEXT,
   BITE_TAG,
   NIGHT_TEXT,
-  TOUCH_TEXT,
   biteNote,
   clipOf,
   displayName,
@@ -37,7 +40,6 @@ import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
 import { wearMarks } from '../strategy/arms';
 import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from './quit';
-import { canFullscreen, fullscreenLabel, isTouch, toggleFullscreen } from './touch';
 import { graphicsSettings, soundSettings } from './settingsPanel';
 import { typed } from './typed';
 
@@ -191,6 +193,8 @@ export interface PackView {
   floor?: { id: string; label: string; name: string; kind: PackSlot['kind'] }[];
   /** What it has on (Unit.worn): one vest at a time (rules.ts wearable). */
   worn?: ItemId[];
+  /** What it carries (Unit.gear): what only gives, once (rules.ts beltable). */
+  gear?: ItemId[];
 }
 
 /** An order on a thing carried or lying on the floor: the engine's `item` command (docs/FASE8.md §C). */
@@ -236,10 +240,6 @@ export interface HudHandlers {
   onAbility(id: BarActionId): void;
   onEndTurn(): void;
   onSelectUnit(id: string): void;
-  /** The soldier before or after (Tab on a keyboard; the touch bar's buttons, docs/FASE11.md §3). */
-  onCycleUnit(dir: 1 | -1): void;
-  /** The enemy turn played quicker while held (Space on a keyboard; a finger on «Turno enemigo»). */
-  onHurry(on: boolean): void;
   onConfirmTarget(): void;
   onCancel(): void;
   onCycleTarget(dir: 1 | -1): void;
@@ -269,6 +269,23 @@ export interface HudHandlers {
   onItem(order: ItemOrder): void;
   /** Leave slot `drop` on the floor and pick up `take` from it: the swap when the backpack is full. */
   onSwap(take: string, drop: number): void;
+  /** «Señalar» (playtest 18/10 #7): the next click on the map signals that spot to the partner; again, it's put away. */
+  onPingArm(): void;
+  /** «Hoja» (playtest 18/10 #23): the soldier's sheet, only to look at. */
+  onSheet(unit: string): void;
+}
+
+/** A soldier's sheet in the battle (playtest 18/10 #23): who, the figures, what it carries and its skills; only to look at. */
+export interface SoldierSheetView {
+  name: string;
+  /** Its veterancy (or what it is, if not a soldier) and, a partner's, whose. */
+  rank: string;
+  whose: { name: string; color: string } | null;
+  /** Label, value and, when it helps, the long version. */
+  stats: [string, string, string?][];
+  carries: [string, string][];
+  /** The board's cells it has (in a skirmish, where there is no board to show). */
+  skills: string[];
 }
 
 const CONTROLS: [string, string][] = [
@@ -278,8 +295,10 @@ const CONTROLS: [string, string][] = [
   ['Espacio · Intro', 'Usar la habilidad elegida; sin ninguna, disparar'],
   ['C', 'Ceder el mando'],
   ['Retroceso', 'Terminar turno'],
-  ['G · clic central', 'Marcar'],
+  ['G · Alt+clic · clic con la rueda', SETTINGS_TEXT.pingControls],
+  ['H · clic en su nombre', 'Hoja del soldado: tablero, estadísticas y lo que lleva'],
   ['Q / E', 'Girar la cámara'],
+  ['Rueda', 'Acercar o alejar: de lejos se ven los tejados; de cerca, la planta del soldado'],
   ['RePág / AvPág · Mayús + rueda', 'Subir o bajar de planta'],
   ['WASD', 'Mover la cámara'],
   ['F', 'Centrar en el soldado'],
@@ -366,13 +385,10 @@ export class Hud {
   private bannerTimer = 0;
   private toastTimer = 0;
 
+  private readonly pingBtn = h('button.menu-button.ping-button', { type: 'button', title: `${SETTINGS_TEXT.pingTip} ${SETTINGS_TEXT.pingKeys}` }, SETTINGS_TEXT.ping);
+
   constructor(container: HTMLElement, private readonly handlers: HudHandlers) {
     this.endTurn.addEventListener('click', () => handlers.onEndTurn());
-    // A finger held on «Turno enemigo» plays it quicker, as Space held does (docs/FASE11.md §3).
-    this.endTurn.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'touch') handlers.onHurry(true);
-    });
-    for (const t of ['pointerup', 'pointercancel', 'pointerleave'] as const) this.endTurn.addEventListener(t, () => handlers.onHurry(false));
     this.passBtn.addEventListener('click', () => handlers.onPassCommand());
     this.passBtn.append(h('span', {}, 'CEDER EL MANDO'), h('small', {}, 'C'));
     this.watchBtn.addEventListener('click', () => handlers.onWatchPartner());
@@ -392,24 +408,8 @@ export class Hud {
     });
     this.drawFollow();
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
-    // Touch only (docs/FASE11.md §3; styles.css shows them with data-touch): the squad's list folded
-    // behind a button, the soldier before and after, and full screen where the browser has it.
-    const squadBtn = h('button.pass-command.touch-btn.squad-toggle', { type: 'button', 'aria-expanded': 'false', onclick: () => squadBtn.setAttribute('aria-expanded', String(this.squad.classList.toggle('open'))) }, TOUCH_TEXT.squad);
-    const touchBar = h(
-      'div.touch-units',
-      {},
-      h('button.pass-command.touch-btn', { type: 'button', title: TOUCH_TEXT.prevTitle, 'aria-label': TOUCH_TEXT.prevTitle, onclick: () => handlers.onCycleUnit(-1) }, arrowIcon('left'), h('span', {}, TOUCH_TEXT.prev)),
-      h('button.pass-command.touch-btn', { type: 'button', title: TOUCH_TEXT.nextTitle, 'aria-label': TOUCH_TEXT.nextTitle, onclick: () => handlers.onCycleUnit(1) }, h('span', {}, TOUCH_TEXT.next), arrowIcon('right')),
-      squadBtn,
-    );
-    const fullBtn = canFullscreen() ? h('button.pass-command.touch-btn.fullscreen-btn', { type: 'button', onclick: () => void toggleFullscreen() }, fullscreenLabel()) : null;
-    if (fullBtn) document.addEventListener('fullscreenchange', () => (fullBtn.textContent = fullscreenLabel()));
-    // A soldier picked from the folded list closes it.
-    this.squad.addEventListener('click', () => {
-      if (!isTouch()) return;
-      this.squad.classList.remove('open');
-      squadBtn.setAttribute('aria-expanded', 'false');
-    });
+    // Signalling a spot, in view (playtest 18/10 #7: Arturo didn't know it was there, and a trackpad has no middle click).
+    this.pingBtn.addEventListener('click', () => handlers.onPingArm());
     this.root.append(
       this.frame,
       h('div.top', {}, this.turn, this.floor, this.mission, this.players),
@@ -418,8 +418,7 @@ export class Hud {
       this.abilities,
       this.target,
       h('div.turn-actions', {}, this.followBtn, this.passBtn, this.watchBtn, this.endTurn),
-      h('div.side', {}, fullBtn, menuButton, this.logEl),
-      touchBar,
+      h('div.side', {}, h('div.side-row', {}, this.pingBtn, menuButton), this.logEl),
       this.bannerEl,
       this.toastEl,
       this.noticeEl,
@@ -515,6 +514,11 @@ export class Hud {
     );
   }
 
+  /** «Señalar» armed: the next click on the map signals it (lit while it waits). */
+  setPingArmed(on: boolean): void {
+    this.pingBtn.classList.toggle('on', on);
+  }
+
   /** The horde's clock in the strip: a short bar that fills towards the next wave (full: it comes this turn). */
   private hordeGauge(horde: HordeView): HTMLElement {
     const level = horde.fill >= 1 ? '.full' : horde.fill >= 0.7 ? '.near' : '';
@@ -535,8 +539,8 @@ export class Hud {
     for (const p of players) {
       const holds = commander === p.slot;
       // Who holds the command is the turn label's business now («TURNO DE ANA»): here only the underline.
-      // In another app on their phone (docs/FASE11.md §6): back soon, their turn waits for them.
-      const status = !p.connected ? 'Desconectado' : p.away ? 'En otra app' : alone || holds ? '' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
+      // The window minimized or the laptop asleep: back soon, their turn waits for them.
+      const status = !p.connected ? 'Desconectado' : p.away ? 'Ausente' : alone || holds ? '' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
       this.players.append(
         h(
           `div.player${p.slot === mySlot ? '.me' : ''}${ready[p.slot] ? '.ready' : ''}${p.connected ? '' : '.offline'}${holds ? '.command' : ''}`,
@@ -578,7 +582,8 @@ export class Hud {
         {
           style: { '--accent': u.owner === null ? '#e8edf2' : colors[u.owner] },
           onclick: () => mine && u.alive && this.handlers.onSelectUnit(u.id),
-          title: !theirs ? 'Seleccionar' : mine ? 'Soldado de tu compañero: lo mandas tú mientras no está' : 'Soldado de tu compañero',
+          // A siege's turret: in the list for its health and rounds, nobody's to pick (rules.ts).
+          title: u.automaton ? 'Va sola: nadie le da órdenes.' : !theirs ? 'Seleccionar' : mine ? 'Soldado de tu compañero: lo mandas tú mientras no está' : 'Soldado de tu compañero',
         },
         // Fase 9: soldiers have no class any more; only who isn't one (the VIP) says what it is.
         h('div.card-name', {}, u.template === 'rookie' ? null : h('b.cls', {}, TEMPLATES[u.template].short), u.template === 'rookie' ? null : ' ', u.nickname ? `«${u.nickname}»` : u.name),
@@ -586,7 +591,10 @@ export class Hud {
           'div.card-row',
           {},
           h('span.hp', {}, ...Array.from({ length: u.maxHp }, (_, i) => h(`i${i < u.hp ? '.on' : ''}`))),
-          h('span.ap', {}, ...Array.from({ length: Math.max(apPerTurn(u), u.ap) }, (_, i) => h(`i${i < u.ap ? '.on' : ''}`))),
+          // A turret has no actions of its own: its rounds instead, against what a full load holds.
+          u.automaton
+            ? h('span.ap.rounds', { title: `Munición: ${u.ammo}/${PIECES.turret.charges ?? u.ammo}` }, ...Array.from({ length: Math.max(PIECES.turret.charges ?? 0, u.ammo) }, (_, i) => h(`i${i < u.ammo ? '.on' : ''}`)))
+            : h('span.ap', {}, ...Array.from({ length: Math.max(apPerTurn(u), u.ap) }, (_, i) => h(`i${i < u.ap ? '.on' : ''}`))),
           u.id === inPlay ? h('em.in-play', { title: 'En juego: termina sus acciones antes que otro' }, 'EN JUEGO') : null,
           u.controlledBy ? h('em.psi', {}, 'CONTROLADO') : null,
           u.captive ? h('em.data', {}, 'CAUTIVO') : null,
@@ -632,8 +640,9 @@ export class Hud {
     append(
       this.unitPanel,
       h(
-        'div.unit-head',
-        { title: soldier ? rank : t.name },
+        // A soldier's head opens its whole sheet, to look at (playtest 18/10 #23); H does too.
+        `div.unit-head${soldier ? '.opens' : ''}`,
+        soldier ? { title: `${rank} · La hoja del soldado: tablero, estadísticas y lo que lleva (H)`, onclick: () => this.handlers.onSheet(u.id) } : { title: t.name },
         soldier ? h('span.rank', { title: rank }, ...Array.from({ length: u.rank }, () => h('i'))) : null,
         h('span.unit-name', {}, type(displayName(u.name, u.nickname))),
         // The partner's soldier says whose, in the partner's colour (Arturo, 17/10), where the veterancy
@@ -846,6 +855,11 @@ export class Hud {
       if (s.kind === 'weapon') items.push(act('Equipar', '1 acción', () => order({ action: 'equip', index: i }), '.main'));
       // A vest is put on there and then (playtest 16/10), one at a time (rules.ts).
       if (s.kind === 'item' && wearable(s.item)) items.push(act('Ponerse', '1 acción', () => order({ action: 'equip', index: i }), '.main', pack.worn?.length ? 'Ya lleva un chaleco puesto.' : null));
+      // On the belt, to use there and then (playtest 18/10 #5): grenades, smoke, the stun one, the medkit, ear plugs; what only gives, once.
+      if (s.kind === 'item' && beltable(s.item)) {
+        const worn = !ITEMS[s.item].charges && !!pack.gear?.includes(s.item);
+        items.push(act(BELT_TEXT.button, '1 acción', () => order({ action: 'equip', index: i }), '.main', worn ? 'Ya lleva eso puesto.' : null));
+      }
       if (s.kind === 'medicines') {
         items.push(act('Usar', '1 acción', () => order({ action: 'use', index: i }), '.main'));
         for (const n of pack.near ?? []) items.push(act(`Curar a ${n.name}`, '1 acción', () => order({ action: 'use', index: i, to: n.id })));
@@ -983,7 +997,7 @@ export class Hud {
         h('div.self-cost', {}, [view.cost, view.limits, view.noise].filter(Boolean).join(' · ')),
         h('div.self-desc', {}, view.effect),
         view.detail ? h('div.effect', {}, view.detail) : null,
-        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : view.hint ?? (isTouch() ? 'Tócala otra vez para usarla' : 'Otra vez, Espacio o Intro: usar · Esc: cancelar')),
+        h('div.self-hint', {}, view.locked ? 'Sin el mando solo puedes consultarla' : view.hint ?? 'Otra vez, Espacio o Intro: usar · Esc: cancelar'),
         h(
           'div.shot-actions',
           {},
@@ -1096,7 +1110,7 @@ export class Hud {
       this.endTurn.append(h('span', {}, `MANDO: ${(waitingFor ?? '').toUpperCase()}`), h('small', {}, 'Puedes planear: clic en una casilla'));
     } else if (mode === 'enemy') {
       // The enemy turn plays (docs/UX-RITMO.md): the space bar held shows it in «Rápida».
-      this.endTurn.append(h('span', {}, 'TURNO ENEMIGO'), h(`small${isTouch() ? '.touch-hint' : ''}`, {}, isTouch() ? 'Mantén pulsado: más rápido' : 'Espacio: más rápido'));
+      this.endTurn.append(h('span', {}, 'TURNO ENEMIGO'), h('small', {}, 'Espacio: más rápido'));
     } else {
       this.endTurn.append(h('span', {}, 'TERMINAR TURNO'), h('small', {}, 'Retroceso'));
     }
@@ -1157,7 +1171,7 @@ export class Hud {
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
       briefing ? h('p.intro-briefing', {}, briefing) : null,
       // A finger has no Intro key (docs/FASE11.md §3).
-      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR'), h('small', {}, isTouch() ? 'toca' : 'clic o Intro')),
+      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR'), h('small', {}, 'clic o Intro')),
     );
     this.root.append(catcher, el);
     return new Promise((resolve) => {
@@ -1264,10 +1278,7 @@ export class Hud {
       append(
         card,
         h('h2', {}, 'Controles'),
-        // On a phone, its gestures; on a computer, the keys.
-        isTouch()
-          ? h('ul.night-rules.touch-help', {}, ...TOUCH_TEXT.help.map((line) => h('li', {}, line)))
-          : h('dl.controls', {}, ...CONTROLS.flatMap(([key, what]) => [h('dt', {}, key), h('dd', {}, what)])),
+        h('dl.controls', {}, ...CONTROLS.flatMap(([key, what]) => [h('dt', {}, key), h('dd', {}, what)])),
         // How the light works at night (Lore's, #50), here too for whenever it is wanted.
         h('h3.controls-night', {}, NIGHT_TEXT.label),
         h('ul.night-rules', {}, ...NIGHT_TEXT.rules.map((line) => h('li', {}, line))),
@@ -1448,6 +1459,46 @@ export class Hud {
         h('div.modal-actions', {}, h('button.fire', { onclick: close }, 'CERRAR')),
       ),
     );
+  }
+
+  /**
+   * A soldier's sheet over the battle (playtest 18/10 #23): its figures, what
+   * it carries and its skills on the left, and its board (strategy's
+   * treePanel, not editable) beside them in a campaign; nothing to spend, no
+   * command passed.
+   */
+  soldierSheet(view: SoldierSheetView, board: HTMLElement | null): void {
+    clear(this.modal);
+    this.modal.classList.add('show');
+    const close = () => this.modal.classList.remove('show');
+    const rows = (list: [string, string, string?][]) => h('dl.sheet-rows', {}, ...list.flatMap(([k, v, tip]) => [h('dt', { title: tip ?? '' }, k), h('dd', { title: tip ?? '' }, v)]));
+    this.modal.append(
+      h(
+        `div.modal-card.panel.soldier-sheet${board ? '.with-board' : ''}`,
+        {},
+        h(
+          'div.sheet-side',
+          {},
+          h('small.enemy-file-kicker', {}, 'HOJA DEL SOLDADO'),
+          h('h2', {}, view.name),
+          h('p.sheet-rank', {}, view.rank, view.whose ? h('em.whose', { style: { '--accent': view.whose.color } }, ` DE ${view.whose.name.toUpperCase()}`) : null),
+          rows(view.stats),
+          h('h3', {}, 'Lleva'),
+          rows(view.carries),
+          view.skills.length && !board ? h('h3', {}, 'Habilidades') : null,
+          view.skills.length && !board ? h('ul.sheet-skills', {}, ...view.skills.map((name) => h('li', {}, name))) : null,
+          board ? null : h('div.modal-actions', {}, h('button.fire', { onclick: close }, 'CERRAR')),
+        ),
+        board,
+      ),
+    );
+  }
+
+  /** Closes the window over the battle (a sheet, an enemy's file); whether one was up (Esc closes it first). */
+  closeModal(): boolean {
+    const open = this.modal.classList.contains('show');
+    this.modal.classList.remove('show');
+    return open;
   }
 
   setConnection(status: NetStatus): void {

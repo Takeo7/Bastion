@@ -1702,6 +1702,46 @@ em.whose {
   background: var(--paper-grain), var(--paper-light);
 }
 
+/* «Señalar» beside «Menú» (playtest 18/10 #7); lit while armed: the next click on the map signals it. */
+.side-row {
+  display: flex;
+  gap: 5px;
+}
+
+.hud .ping-button.on {
+  color: #1a1406;
+  background: #f2c230;
+  box-shadow: 0 0 0 2px rgba(242, 194, 48, 0.45), 1px 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* A signal's tag over the spot (overlays.ts pingTag): whose, in their colour, for 4 s. */
+.ping-tag {
+  padding: 2px 7px;
+  font: 700 13px var(--font);
+  white-space: nowrap;
+  color: #fff;
+  background: color-mix(in srgb, var(--accent) 78%, #000);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent), 0 2px 6px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  animation: ping-tag 4s ease-out forwards;
+}
+
+@keyframes ping-tag {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  8%,
+  85% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* The log is typed on a strip of paper; folded, only the last two lines. */
 .log {
   width: 100%;
@@ -2756,6 +2796,32 @@ body:has(.strat) .fps-counter {
   transform: rotate(-2deg);
 }
 
+/* «Velocidad del turno enemigo» (playtest 18/10 #6): a slider between «Lenta» and «Rápida», its rate beside it. */
+.setting-choices.slider {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 8px;
+}
+
+.setting-choices.slider small {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.setting-slider {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--t-accent, var(--pen));
+  cursor: pointer;
+}
+
+.setting-value {
+  min-width: 3.2em;
+  font-size: 14px;
+  text-align: right;
+}
+
 /* What the frame-rate guard has lowered, under its row. */
 .setting-note {
   grid-column: 1 / -1;
@@ -2763,16 +2829,9 @@ body:has(.strat) .fps-counter {
   color: var(--ink-soft);
 }
 
-/* Interface size: each panel zooms by --ui-zoom, the player's size (Ajustes →
-   Interfaz, --ui-scale from settings.ts) times the screen's fit (ui/touch.ts
-   uiFit: smaller on a phone), so the layout still works out at 130 %. The 3D
-   view and anything placed from JS (labels over units, markers at the screen
-   edge) stay as they are. A finger's target inside divides by the fit (--tap),
-   so it still measures 42 px on the glass. */
-:root {
-  --tap: 42px;
-}
-
+/* Interface size (Ajustes → Interfaz, --ui-scale from settings.ts): each panel
+   zooms, so the layout still works out at 130 %. The 3D view and anything
+   placed from JS (labels over units, markers at the screen edge) stay as they are. */
 .top,
 .squad,
 .unit-panel,
@@ -2786,8 +2845,7 @@ body:has(.strat) .fps-counter {
 .outcome-card,
 .modal-card,
 .mission-intro {
-  --tap: calc(42px / var(--ui-fit, 1));
-  zoom: var(--ui-zoom, var(--ui-scale, 1));
+  zoom: var(--ui-scale, 1);
 }
 
 /* ------------------------------------------- UX review 2: new combat pieces */
@@ -2899,6 +2957,83 @@ body:has(.strat) .fps-counter {
 .enemy-file {
   max-width: 420px;
   text-align: left;
+}
+
+/* A soldier's sheet over the battle (hud.ts soldierSheet, playtest 18/10 #23): figures and gear on the
+   left; in a campaign its board beside them (strategy's treePanel, not editable). */
+.soldier-sheet {
+  display: grid;
+  grid-template-columns: 260px;
+  gap: 14px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  text-align: left;
+}
+
+.soldier-sheet.with-board {
+  grid-template-columns: 260px minmax(0, 1fr);
+  width: min(1180px, calc(100vw - 40px));
+}
+
+.soldier-sheet h2 {
+  margin: 0;
+}
+
+.soldier-sheet h3 {
+  margin: 12px 0 4px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.sheet-rank {
+  margin: 2px 0 10px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.sheet-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.sheet-rows dt {
+  color: var(--ink-soft);
+}
+
+.sheet-rows dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.sheet-skills {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+/* The board's panel inside the sheet: its own frame off, it is the sheet's right half. */
+.soldier-sheet > .x-panel {
+  margin: 0;
+  min-width: 0;
+}
+
+/* The soldier's name opens its sheet (playtest 18/10 #23): a hand, and a faint underline on hovering. */
+.unit-head.opens {
+  cursor: pointer;
+}
+
+.unit-head.opens:hover .unit-name {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 .enemy-file-kicker {
@@ -3380,280 +3515,8 @@ body:has(.strat) .fps-counter {
   border: 1px solid currentColor;
 }
 
-/* ======================================================= touch (docs/FASE11.md)
-   data-touch='1' on <html> (ui/touch.ts): a phone held sideways, played with
-   the fingers. Nothing hangs on hovering; every button is 44 px at least; the
-   keys' hints go; the squad's list folds behind a button. */
-
-.touch-units,
-.squad-toggle,
-.fullscreen-btn {
-  display: none;
-}
-
-:root[data-touch='1'] .hud .touch-btn {
-  min-width: var(--tap);
-  min-height: var(--tap);
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  font-family: var(--font-display);
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  pointer-events: auto;
-}
-
-/* Top left: the soldier before and after, and the squad's list behind its button. */
-:root[data-touch='1'] .touch-units {
-  --tap: calc(42px / var(--ui-fit, 1));
-  position: absolute;
-  top: var(--edge);
-  left: var(--edge);
-  display: flex;
-  gap: 6px;
-  zoom: var(--ui-zoom, var(--ui-scale, 1));
-}
-
-:root[data-touch='1'] .hud .touch-units .squad-toggle {
-  display: inline-flex;
-}
-
-:root[data-touch='1'] .hud .squad {
-  display: none;
-  top: calc(var(--edge) + 52px);
-}
-
-:root[data-touch='1'] .hud .squad.open {
-  display: grid;
-  z-index: 13;
-}
-
-:root[data-touch='1'] .hud .squad-card {
-  min-height: var(--tap);
-  align-items: center;
-}
-
-/* Top right: full screen and the menu, finger-sized; the log only when opened. */
-:root[data-touch='1'] .hud .fullscreen-btn {
-  display: inline-flex;
-}
-
-:root[data-touch='1'] .hud .menu-button {
-  min-height: var(--tap);
-  min-width: 64px;
-}
-
-:root[data-touch='1'] .hud .log:not(.open) {
-  display: none;
-}
-
-/* Every other button of the battle, finger-sized. */
-:root[data-touch='1'] .hud :is(.pass-command, .end-turn, .shot-panel button, .floor-ind button, .pack-act, .pack-slot-btn, .menu-entry, .modal-actions button, .outcome-actions button, .night-card button) {
-  min-height: var(--tap);
-}
-
-:root[data-touch='1'] .hud :is(.floor-ind button, .shot-panel .cycle) {
-  min-width: var(--tap);
-}
-
-/* The keys' hints mean nothing to a finger. */
-:root[data-touch='1'] .hud :is(.ability .key, .ac-key, .pass-command:not(.follow-turn) small, .end-turn small:not(.touch-hint)) {
-  display: none;
-}
-
-/* An ability's card: shown by a long press (ui/touch.ts .peek), not by hovering. */
-:root[data-touch='1'] .ability:hover .ability-card {
-  display: none;
-}
-
-:root[data-touch='1'] .ability.peek .ability-card {
-  display: grid;
-}
-
-/* The tooltip a long press shows (ui/touch.ts). */
-.touch-bubble {
-  position: fixed;
-  z-index: 60;
-  max-width: min(320px, calc(100vw - 16px));
-  padding: 6px 10px;
-  font-size: 13px;
-  line-height: 1.35;
-  color: #f2efe6;
-  background: rgba(14, 16, 17, 0.94);
-  border-radius: 3px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
-}
-
-/* A phone held upright: the whole screen asks to turn it (ui/touch.ts). */
-.turn-phone {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 10px;
-  padding: 24px;
-  text-align: center;
-  color: #f2efe6;
-  background: #0d0f10;
-}
-
-.turn-phone b {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-}
-
-.turn-phone p {
-  margin: 0;
-  font-size: 15px;
-  color: #b9bdb6;
-}
-
-/* A phone drawn upright, turning to lie sideways. */
-.turn-phone-icon {
-  width: 46px;
-  height: 78px;
-  border: 4px solid #f2c230;
-  border-radius: 9px;
-  animation: turn-phone 2.4s ease-in-out infinite;
-}
-
-@keyframes turn-phone {
-  0%,
-  25% {
-    transform: rotate(0deg);
-  }
-  55%,
-  100% {
-    transform: rotate(-90deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .turn-phone-icon {
-    animation: none;
-    transform: rotate(-90deg);
-  }
-}
-
-/* No double-tap zoom on a button, no bounce of the page under a drag. */
-:root[data-touch='1'] button {
-  touch-action: manipulation;
-}
-
-:root[data-touch='1'],
-:root[data-touch='1'] body {
-  overscroll-behavior: none;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-
-/* A phone sideways (touch and little height, some 740–915 × 360–412 px): the
-   battle compact, the scene as large as it can be. The sheet stays (health,
-   actions, the backpack), narrower; the ability cards narrower; the turn bar
-   one slim row, its long words cut; the soldier before and after as arrows. */
-@media (max-height: 520px) {
-  :root[data-touch='1'] .hud {
-    --unit-w: 158px;
-    --end-w: 124px;
-    --edge: 6px;
-  }
-
-  :root[data-touch='1'] .hud .abilities {
-    gap: 4px 4px;
-  }
-
-  :root[data-touch='1'] .hud .unit-panel {
-    display: grid;
-    padding: 4px 8px 5px;
-  }
-
-  :root[data-touch='1'] .hud .unit-panel .unit-weapon {
-    display: none;
-  }
-
-  :root[data-touch='1'] .hud .ability {
-    width: 52px;
-    min-height: 48px;
-  }
-
-  :root[data-touch='1'] .hud .ability .label {
-    font-size: 10.5px;
-  }
-
-  :root[data-touch='1'] .hud .touch-units .touch-btn span {
-    display: none;
-  }
-
-  /* Between the soldier's arrows on the left and full screen on the right: px zoom with them, % don't. */
-  :root[data-touch='1'] .hud .top {
-    max-width: calc(100% - 2 * 200px);
-  }
-
-  :root[data-touch='1'] .hud .players {
-    display: none;
-  }
-
-  :root[data-touch='1'] .hud .mission {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  :root[data-touch='1'] .hud .fullscreen-btn {
-    font-size: 11px;
-    padding: 0 8px;
-  }
-
-  :root[data-touch='1'] .hud .end-turn {
-    padding: 4px 6px;
-    font-size: 14px;
-  }
-
-  /* Aiming: the shot's panel over the right side, from under the menu to the bottom, the turn's
-     buttons under it; the odds ring smaller and the breakdown of the aim left out (a long press
-     on the shot's button still shows its card). */
-  :root[data-touch='1'] .hud .shot-panel:not(.anchored) {
-    top: 54px;
-    bottom: var(--edge);
-    width: 216px;
-    max-height: none;
-    overflow-y: auto;
-    transform: rotate(0.6deg);
-    z-index: 12;
-    align-content: start;
-  }
-
-  :root[data-touch='1'] .hud .shot-panel .mods {
-    display: none;
-  }
-
-  :root[data-touch='1'] .hud .shot-panel .shot-numbers {
-    zoom: 0.72;
-  }
-
-  :root[data-touch='1'] .hud:has(.shot-panel:not(.hidden):not(.anchored)) .turn-actions {
-    visibility: hidden;
-  }
-}
-
-/* The settings' choices, a finger wide (battle menu and base alike). */
-:root[data-touch='1'] .setting-choices button {
-  min-width: var(--tap);
-  min-height: var(--tap);
-}
-
-/* Red's notices on a phone (docs/FASE11.md §6): «Toca la pantalla para activar el sonido» and
-   «Volviendo a la partida…», at the top in the middle, under the turn bar (and its mission line)
-   or the base's header, clear of every button. */
-.toast.sound-hint,
+/* Red's «Volviendo a la partida…» (the window back after its socket died): at the top in the middle,
+   under the turn bar (and its mission line) or the base's header, clear of every button. */
 .connection.rejoin-note {
   top: 92px;
   bottom: auto;

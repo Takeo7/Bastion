@@ -42,7 +42,28 @@ import { broughtBack, type CarriedWeapon, type LootTotals } from './loot';
 import { fighterStats, learn, missionLines, NO_GROWTH, NO_SKILLS, oneMoreBar, recruitSkills, totalBars, unlockBlocker, veterancyRank, VETERANCY, type BarFilled, type Deeds, type Growth, type Skills } from './skills';
 import { BOARD_CELLS, type CellId } from './board';
 import {
+  besidePieces,
+  dismantleBlocker,
+  dismantleRefund,
+  fellBlocker,
+  fellTree,
+  freshBase as freshClearing,
+  pieceCells,
+  PIECES,
+  placeBlocker,
+  placePiece,
+  rearmCost,
+  repairCost,
+  type BasePiece,
+  type BaseState,
+  type PieceId,
+} from './base';
+import {
   barLine,
+  BASE_SIEGE_TEXT,
+  PIECE_TEXT,
+  SIEGE_TEXT,
+  siegeWarning,
   wornLine,
   briefingSignature,
   doomChangeText,
@@ -455,9 +476,24 @@ export function adjacencyBonuses(c: CampaignState): { plot: string; next: string
   return out;
 }
 
+/** The pieces on the base that stand for a building of before (docs/FASE12.md §11.3): the caravan is the bunker, the Cuartel and the Armería. */
+const BUILDING_PIECES: Record<FixedBuildingId, PieceId> = { command: 'caravan', barracks: 'caravan', engineering: 'caravan', research: 'radio' };
+
+/**
+ * The adjacency bonus a building on the base has as `facility` (its own; the
+ * Sala de radio is the relay and the listening post too): its partner next to
+ * it on the map (docs/FASE12.md §11.3).
+ */
+export function pieceAdjacency(c: CampaignState, p: BasePiece, facility = PIECES[p.piece].facility): AdjacencyDef | null {
+  const def = facility && ADJACENCY.find((a) => a.facility === facility);
+  if (!def) return null;
+  const partner = (q: BasePiece) => (def.next in BUILDING_PIECES ? q.piece === BUILDING_PIECES[def.next as FixedBuildingId] : PIECES[q.piece].facility === def.next);
+  return besidePieces(c.bastion, p).some((q) => partner(q) && buildingWorks(q)) ? def : null;
+}
+
 /** Whether some built `facility` has its adjacency bonus. */
 export function hasAdjacency(c: CampaignState, facility: FacilityId): boolean {
-  return c.base.plots.some((p) => p.building === facility && !!adjacencyAt(c, p, facility));
+  return facilityPieces(c, facility).some((f) => !!pieceAdjacency(c, f.piece, facility));
 }
 
 // ------------------------------------------------------------------ regions
@@ -783,7 +819,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
       },
       {
         label: 'Para la Red',
-        effect: 'La Lata reparte las dosis enclave por enclave, solo a quienes estuvieron. La fórmula se queda en Atalaya, bajo llave.',
+        effect: 'La Lata reparte las dosis enclave por enclave, solo a quienes estuvieron. La fórmula se queda en el Bastión, bajo llave.',
         apply: (c) => ((c.ending = 'record'), (c.outcome = 'victory')),
       },
     ],
@@ -909,9 +945,14 @@ export interface MissionOffer {
   vip?: string;
   /** A sabotage: what makes the noise (#14). */
   alarm?: Alarm;
+  /** A siege of the base (docs/FASE12.md §11.5): fought on the base as it stands when it starts (siegeMap), by every soldier fit to. */
+  siege?: true;
 }
 
 export type ProposalAction =
+  /** The base (docs/FASE12.md §11): what is dear goes to a vote. */
+  | { type: 'place'; piece: PieceId; x: number; y: number; rot: number }
+  | { type: 'raise'; piece: string }
   | { type: 'chooseMission'; id: string }
   | { type: 'clear'; plot: string }
   | { type: 'build'; plot: string; facility: FacilityId }
@@ -968,6 +1009,11 @@ export interface MissionReport {
   infected?: string[];
   /** Parts stripped from the Acorazados brought down (docs/FASE4.md), already added. */
   scrap?: number;
+  /** A siege of the base (docs/FASE12.md §11.5); `fallen`, the base fell (and the rest fled to another clearing). */
+  siege?: true;
+  fallen?: true;
+  /** What a siege held left of the base: pieces broken down, pieces beaten, traps and turrets with uses spent (to mend and rearm). */
+  damage?: { broken: number; hurt: number; spent: number };
 }
 
 /** The haul of a mission: suministros (to the credits), accessories (to the inventory), medicines, rations, parts and found weapons. */
@@ -1022,7 +1068,7 @@ export interface Rumor {
  * Campaigns from before Fase 10 (docs/FASE10.md) aren't carried over: the
  * progression is another. The host puts such a save aside and starts anew.
  */
-export const FRESH_CAMPAIGN_VERSION = 19;
+export const FRESH_CAMPAIGN_VERSION = 20;
 
 /** A saved campaign the current progression can't take (campaignOutdated): the host keeps it aside. */
 export function campaignOutdated(c: { version: number }): boolean {
@@ -1030,7 +1076,7 @@ export function campaignOutdated(c: { version: number }): boolean {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 19;
+export const CAMPAIGN_VERSION = 20;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1067,8 +1113,16 @@ export interface CampaignState {
   weaponMods?: Partial<Record<WeaponModId, number>>;
   /** Zones under the Marea when it was last looked at (syncMarea), for the alerts; missing before version 14. */
   flooded?: RegionId[];
-  /** `works`: the projects going on, one per crew (two, three with the works brigade). */
+  /**
+   * The Taller's projects going on (`works`, kind 'craft'). `plots` is the base
+   * of before the new one (docs/FASE12.md §11), always empty now: it goes once
+   * the base's screen is the new one.
+   */
   base: { plots: BasePlot[]; works: Construction[] };
+  /** The base (docs/FASE12.md §11): the clearing in the pines and what stands on it (base.ts). */
+  bastion: BaseState;
+  /** When the next siege comes, and what the Sala de radio hears of it (§11.5). */
+  siege: SiegeClock;
   regions: RegionState[];
   offers: MissionOffer[];
   activeMission: string | null;
@@ -1110,6 +1164,17 @@ export interface CampaignState {
   /** Tells campaigns apart in each browser (scenes already played); missing in campaigns from before it. */
   uid?: string;
   nextId: number;
+}
+
+/** The next siege of the base (docs/FASE12.md §11.5). */
+export interface SiegeClock {
+  /** Missions to go before it; at 0, it is the next thing the base does. */
+  in: number;
+  /** How many of the dead come, and by which sides (DIRS4 indices): what the Sala de radio hears. */
+  count: number;
+  sides: number[];
+  /** Sieges held so far: each one comes bigger. */
+  held: number;
 }
 
 /** A weapon found searching (docs/FASE4.md), in the Armería. */
@@ -1204,13 +1269,43 @@ function neediestPlayer(c: CampaignState): Slot {
   return owners.sort((a, b) => a.count - b.count)[0]!.slot;
 }
 
-export function facilityCount(c: CampaignState, id: FacilityId): number {
-  return c.base.plots.filter((p) => p.building === id).length;
+/**
+ * The buildings of a facility standing and working on the base (docs/FASE12.md
+ * §11.3): one beaten down to half or less stops working until it is mended.
+ * The Sala de radio takes the Centro de comunicaciones from its level 2 and the
+ * Estación de escucha at its level 3.
+ */
+function facilityPieces(c: CampaignState, id: FacilityId): { piece: BasePiece; level: number }[] {
+  const out: { piece: BasePiece; level: number }[] = [];
+  for (const p of c.bastion?.pieces ?? []) {
+    if (!buildingWorks(p)) continue;
+    const level = p.level ?? 1;
+    if (id === 'relay' || id === 'listening') {
+      if (p.piece !== 'radio') continue;
+      const at = id === 'relay' ? level - 1 : level - 2;
+      if (at > 0) out.push({ piece: p, level: at });
+    } else if (PIECES[p.piece].facility === id) out.push({ piece: p, level });
+  }
+  return out;
 }
 
-/** Level of a facility: its best copy's (0 when not built). */
+/** Whether a building on the base works: standing, with more than half of what it holds. */
+export function buildingWorks(p: BasePiece): boolean {
+  return PIECES[p.piece].kind === 'building' && p.hp * 2 > PIECES[p.piece].hp;
+}
+
+export function facilityCount(c: CampaignState, id: FacilityId): number {
+  return facilityPieces(c, id).length;
+}
+
+/** Level of a facility: its best copy's (0 when not built, or not working). */
 export function facilityLevel(c: CampaignState, id: FacilityId): number {
-  return Math.max(0, ...c.base.plots.filter((p) => p.building === id).map((p) => p.level ?? 1));
+  return Math.max(0, ...facilityPieces(c, id).map((f) => f.level));
+}
+
+/** The base's Sala de radio, working: it hears the sieges coming (docs/FASE12.md §11.5). */
+export function hasRadio(c: CampaignState): boolean {
+  return (c.bastion?.pieces ?? []).some((p) => p.piece === 'radio' && buildingWorks(p));
 }
 
 /** The workshop takes 25/35/45 % off accessories, 15 % more next to the armoury. */
@@ -1227,14 +1322,9 @@ export function recruitCost(c: CampaignState): number {
   return hasAdjacency(c, 'training') ? 20 : RECRUIT_COST;
 }
 
-/** Beds in the Bastion: the bunker's, and each barracón's (2/3/4, one more next to the Cuartel). */
+/** Beds in the Bastion: the caravan's, and each barracón's (2/3/4, one more next to the caravan). */
 export function beds(c: CampaignState): number {
-  return (
-    BUNKER_BEDS +
-    c.base.plots
-      .filter((p) => p.building === 'quarters')
-      .reduce((sum, p) => sum + 1 + (p.level ?? 1) + (adjacencyAt(c, p, 'quarters') ? 1 : 0), 0)
-  );
+  return BUNKER_BEDS + facilityPieces(c, 'quarters').reduce((sum, f) => sum + 1 + f.level + (pieceAdjacency(c, f.piece) ? 1 : 0), 0);
 }
 
 /** Beds nobody sleeps in: recruiting needs one. */
@@ -1320,6 +1410,15 @@ export function soldierReady(s: CampaignSoldier): boolean {
   return s.alive && s.woundedDays === 0 && !s.infection;
 }
 
+/**
+ * Nobody fit to go out and nobody to recruit (18/10 test: after a fall, only
+ * the wounded left and no suministros): time, which only goes by with the
+ * missions, would stand still. Then, and only then, one waits for them to heal.
+ */
+export function mustWait(c: CampaignState): boolean {
+  return c.version >= 20 && !c.outcome && !c.activeMission && !c.soldiers.some(soldierReady) && !(canAfford(c, recruitCost(c)) && bedsFree(c) > 0);
+}
+
 // ------------------------------------------------------------ infection
 
 /** Medicines a campaign starts with. */
@@ -1398,8 +1497,9 @@ function addFood(c: CampaignState, n: number): void {
 // ---------------------------------------------------------- the Taller
 
 /** The Taller's plot, where its work is done. */
-function workshopPlot(c: CampaignState): BasePlot | undefined {
-  return c.base.plots.find((p) => p.building === 'workshop');
+/** The Taller on the base, working (docs/FASE12.md §11.3). */
+function workshopPiece(c: CampaignState): BasePiece | undefined {
+  return facilityPieces(c, 'workshop')[0]?.piece;
 }
 
 /** Why the Taller can't start making `id` now, or null (docs/FASE4.md). */
@@ -1408,14 +1508,13 @@ export function craftBlocker(c: CampaignState, id: CraftId): string | null {
   // A weapon or an improvement for the Armería is made again and again (docs/FASE8.md §A).
   if (def.kind !== 'arms' && def.kind !== 'mod' && hasCrafted(c, id)) return 'Ya está hecho.';
   if (c.base.works.some((w) => w.project === id)) return 'Ya se está haciendo.';
-  const plot = workshopPlot(c);
-  if (!plot) return 'Hace falta el Taller.';
-  if ((plot.level ?? 1) < def.workshop) return `Hace falta el Taller a nivel ${def.workshop}.`;
+  const shop = workshopPiece(c);
+  if (!shop) return 'Hace falta el Taller.';
+  if ((shop.level ?? 1) < def.workshop) return `Hace falta el Taller a nivel ${def.workshop}.`;
   if (def.tech && !hasTech(c, def.tech)) return `Hace falta el nivel ${TECHS[def.tech].level} del Bastión.`;
   if (def.level && bastionLevel(c) < def.level) return `Hace falta el nivel ${def.level} del Bastión.`;
   if (def.after && !hasCrafted(c, def.after)) return `Antes hay que hacer ${CRAFTS[def.after].the}.`;
-  const busy = worksBlocker(c, plot);
-  if (busy) return busy;
+  if (c.base.works.some((w) => w.kind === 'craft')) return 'El Taller ya está con otro encargo.';
   if (!canAfford(c, def.cost)) return 'No hay suministros suficientes.';
   if ((c.parts ?? 0) < def.parts) return 'No hay piezas suficientes.';
   return null;
@@ -1505,7 +1604,7 @@ function turn(c: CampaignState, s: CampaignSoldier): void {
 
 export function contactCapacity(c: CampaignState): number {
   const quests = questOutcomes(c).reduce((sum, q) => sum + (q.outcome.contacts ?? 0), 0);
-  const relays = c.base.plots.filter((p) => p.building === 'relay').reduce((sum, p) => sum + 1 + (p.level ?? 1), 0);
+  const relays = facilityPieces(c, 'relay').reduce((sum, f) => sum + 1 + f.level, 0);
   return 2 + relays + (hasAdjacency(c, 'relay') ? 1 : 0) + (hasTech(c, 'encryption') ? 1 : 0) + quests;
 }
 
@@ -1787,6 +1886,8 @@ export function offerVip(c: CampaignState, offer: MissionOffer): string | undefi
 
 /** Morse's report for an operation; side quests write their own. */
 export function offerBriefing(c: CampaignState, offer: MissionOffer): string {
+  // The dead at the base: nobody writes to warn of it (docs/FASE12.md §11.5).
+  if (offer.siege) return `${BASE_SIEGE_TEXT.here} ${SIEGE_TEXT.briefing} ${BASE_SIEGE_TEXT.defenders}${offer.night ? ` ${BASE_SIEGE_TEXT.night}` : ''}`;
   const q = questOf(c, offer);
   const step = q && QUESTS[q.id].steps[q.step];
   if (q && step?.type === 'mission') return fill(step.briefing, q.names);
@@ -1795,6 +1896,7 @@ export function offerBriefing(c: CampaignState, offer: MissionOffer): string {
 
 /** Who signs an operation's report. */
 export function offerSignature(c: CampaignState, offer: MissionOffer): string {
+  if (offer.siege) return '';
   const q = questOf(c, offer);
   return q ? QUESTS[q.id].signature : briefingSignature(offer);
 }
@@ -2082,19 +2184,174 @@ function resolveRumor(c: CampaignState, rumor: Rumor, rng: Rng): void {
   }
 }
 
-// ------------------------------------------------------------------- create
+// ------------------------------------------------------------------ the base
 
-/** The bunker and its three buildings, cleared ground around them and the wild beyond. */
-function freshBase(): CampaignState['base'] {
-  const plots: BasePlot[] = [];
-  for (let y = 0; y < BASE_SIZE; y++) {
-    for (let x = 0; x < BASE_SIZE; x++) {
-      const fixed = (Object.keys(FIXED_BUILDINGS) as FixedBuildingId[]).find((id) => FIXED_BUILDINGS[id].x === x && FIXED_BUILDINGS[id].y === y);
-      plots.push({ id: `${x},${y}`, x, y, terrain: terrainAt(x, y), building: fixed ?? null });
-    }
-  }
-  return { plots, works: [] };
+/** Pieces dearer than this go to a vote between the two (docs/FASE12.md §11.7); cheaper, each one builds at once. */
+export const VOTE_ABOVE = 30;
+/** The answer to an order for the plots of before. */
+const BASE_GONE = 'Eso era de la base de antes: ahora se construye en el claro.';
+/** The answer to choosing another mission, or picking the squad, while the siege waits. */
+const SIEGE_NOW = 'Viene el asedio: no hay otra cosa que hacer.';
+
+/** Why the base can't pay `supplies` and `parts`, or null. */
+function costBlocker(c: CampaignState, supplies: number, parts: number): string | null {
+  if (!canAfford(c, supplies)) return 'No hay suministros suficientes.';
+  if ((c.parts ?? 0) < parts) return 'No hay piezas suficientes.';
+  return null;
 }
+
+/**
+ * What raising a building of the base a level costs, and the Bastion's level
+ * it needs: its facility's (upgradeCost). The Sala de radio rises into the
+ * Centro de comunicaciones and then the Estación de escucha (§11.3).
+ */
+export function raiseCost(p: BasePiece): { cost: number; level: number } | string {
+  const def = PIECES[p.piece];
+  if (def.kind !== 'building' || p.piece === 'caravan') return 'Eso no se mejora.';
+  const level = p.level ?? 1;
+  if (level >= 3) return 'Ya está al máximo.';
+  if (p.piece === 'radio') {
+    const step = FACILITIES[level === 1 ? 'relay' : 'listening'];
+    return { cost: step.cost, level: step.level };
+  }
+  const next = upgradeCost(def.facility!, level + 1);
+  return { cost: next.cost, level: next.level };
+}
+
+// ---------------------------------------------------------------- the sieges
+
+/** Missions before the first siege (docs/FASE12.md §11.5), and between one and the next: three, two once the Marea is half way. */
+export const SIEGE_FIRST_IN = 3;
+export const SIEGE_EVERY = 3;
+/** The dead in the first siege; each one held brings SIEGE_GROWTH more, and every point of the Marea one more. */
+export const SIEGE_FIRST = 14;
+export const SIEGE_GROWTH = 6;
+/** Days that go by with each mission (docs/FASE12.md §11.6): time is counted in missions, the clock inside in days. */
+export const DAYS_PER_MISSION = 5;
+
+/** The sides a siege comes by: one to three of the four, at random. */
+function siegeSides(rng: Rng): number[] {
+  const sides = [0, 1, 2, 3];
+  for (let i = sides.length - 1; i > 0; i--) {
+    const j = rng.int(i + 1);
+    [sides[i], sides[j]] = [sides[j]!, sides[i]!];
+  }
+  return sides.slice(0, 1 + rng.int(3)).sort();
+}
+
+/** The next siege, once one is over: a few missions off, bigger than the last. */
+function nextSiege(c: CampaignState, rng: Rng): SiegeClock {
+  const held = c.siege.held;
+  return { in: c.doom * 2 >= DOOM_MAX ? SIEGE_EVERY - 1 : SIEGE_EVERY, count: SIEGE_FIRST + held * SIEGE_GROWTH + c.doom, sides: siegeSides(rng), held };
+}
+
+/** What the base knows of the next siege (§11.5): when, always; how many and by where, only with the Sala de radio. */
+export function siegeHeard(c: CampaignState): { in: number; count?: number; sides?: number[] } {
+  return hasRadio(c) ? { in: c.siege.in, count: c.siege.count, sides: [...c.siege.sides] } : { in: c.siege.in };
+}
+
+/**
+ * The siege has come (§11.5): it is the next thing the base does, and every
+ * soldier fit to fight defends; the wounded and the bitten stay inside.
+ */
+/** One siege in three by night (Arturo, 18/10), never the first one held: in the dark only the floodlights let the squad see far. */
+export const SIEGE_NIGHT = 3;
+
+function startSiege(c: CampaignState, rng: Rng): void {
+  const night = c.siege.held > 0 && rng.int(SIEGE_NIGHT) === 0;
+  const offer: MissionOffer = {
+    id: newId(c, 'o'),
+    name: 'Asedio',
+    kind: 'elimination',
+    difficulty: Math.min(4, 1 + Math.floor(c.siege.held / 2)),
+    expiresDay: null,
+    reward: {},
+    // Fought on the base as it stands when it starts (siegeMap): this one is never used.
+    map: { kind: 'handmade', id: 'bastion' },
+    pods: [],
+    final: false,
+    region: HOME_REGION,
+    facility: null,
+    story: null,
+    quest: null,
+    siege: true,
+    ...(night ? { night: true } : {}),
+  };
+  c.offers.push(offer);
+  c.activeMission = offer.id;
+  c.squad = c.soldiers.filter(soldierReady).map((s) => s.id);
+  c.launchReady = [false, false];
+  syncPads(c);
+  log(c, `${BASE_SIEGE_TEXT.here} ${BASE_SIEGE_TEXT.defenders}`, 'bad', { kicker: 'Asedio', title: BASE_SIEGE_TEXT.here });
+}
+
+/** The map a mission is fought on: a siege, on the base as it is now (§11.5); any other, its own. */
+export function offerMap(c: CampaignState, offer: MissionOffer): MapSource {
+  return offer.siege ? { kind: 'base', base: c.bastion } : offer.map;
+}
+
+/** The siege's own plan for the mission: how many come, and by which sides. */
+export function siegePlan(c: CampaignState, offer: MissionOffer): { count: number; sides: number[] } | undefined {
+  return offer.siege ? { count: c.siege.count, sides: [...c.siege.sides] } : undefined;
+}
+
+/**
+ * What a siege left of the base (§11.4): each piece as beaten as the worst of
+ * its tiles, the traps with the uses they have left, the turrets as they ended.
+ * What broke stays broken until it is mended.
+ */
+function takeBackBase(c: CampaignState, s: GameState): { broken: number; hurt: number; spent: number } {
+  const damage = { broken: 0, hurt: 0, spent: 0 };
+  if (!s.base) return damage;
+  for (const p of c.bastion.pieces) {
+    if (!s.base.pieces.some((q) => q.id === p.id)) continue;
+    const [hp, charges] = [p.hp, p.charges];
+    for (const cell of pieceCells(p.piece, p.x, p.y, p.rot)) {
+      const left = s.breakables?.[cell.y * s.width + cell.x];
+      if (left !== undefined) p.hp = Math.min(p.hp, left);
+    }
+    const trap = s.traps?.find((t) => t.piece === p.id);
+    if (trap) p.charges = trap.charges;
+    const turret = s.units.find((u) => u.automaton?.piece === p.id);
+    if (turret) {
+      p.hp = turret.alive ? turret.hp : 0;
+      p.charges = turret.ammo;
+    }
+    if (p.hp < hp) damage[p.hp <= 0 ? 'broken' : 'hurt']++;
+    if ((p.charges ?? 0) < (charges ?? 0)) damage.spent++;
+  }
+  return damage;
+}
+
+/**
+ * The base has fallen (§11.5): whoever is left flees to another clearing with
+ * the caravan and what they stand in. What was built and the stores are lost;
+ * the soldiers keep what they learnt and carry.
+ */
+function fallBase(c: CampaignState, rng: Rng): void {
+  c.bastion = freshClearing(rng);
+  c.credits = 0;
+  c.parts = 0;
+  c.medicines = 0;
+  c.food = Math.floor(START_FOOD / 2);
+  // Only what someone carries: the rest of the Armería stays behind.
+  const alive = c.soldiers.filter((s) => s.alive);
+  const carried: Partial<Record<ItemId, number>> = {};
+  for (const s of alive) for (const id of [s.loadout.utility, s.loadout.ammo]) if (id) carried[id] = (carried[id] ?? 0) + 1;
+  c.inventory = carried;
+  c.foundWeapons = (c.foundWeapons ?? []).filter((w) => w.holder && alive.some((s) => s.id === w.holder));
+  c.weaponMods = {};
+  c.crafted = [];
+  c.base.works = [];
+  log(c, `${BASE_SIEGE_TEXT.fallen}. ${BASE_SIEGE_TEXT.fallenLine}`, 'bad', { kicker: 'Asedio', title: BASE_SIEGE_TEXT.fallen });
+}
+
+/** At least two ordinary operations to choose from: time only goes by with the missions now (§11.6). */
+function topUpOffers(c: CampaignState, rng: Rng): void {
+  while (c.offers.filter((o) => !o.final && !o.facility && !o.story && !o.quest && !o.siege).length < 2) c.offers.push(makeOffer(c, rng));
+}
+
+// ------------------------------------------------------------------- create
 
 function freshRegions(): RegionState[] {
   return (Object.keys(REGIONS) as RegionId[]).map((id) => ({ id, contacted: id === HOME_REGION, facility: null }));
@@ -2102,7 +2359,7 @@ function freshRegions(): RegionState[] {
 
 /** The base's first line, and the same once the opening operation is chosen (placeholders for Lore). */
 const WELCOME = 'El Bastión entra en servicio. Elegid la primera misión: el combate hará subir de nivel al Bastión.';
-const WELCOME_OPENING = 'Primera salida: las medicinas del consultorio de Brena. La escuadra espera en la cochera.';
+const WELCOME_OPENING = 'Primera salida: el maletín de urgencias del consultorio de Brena. La escuadra espera en la cochera.';
 
 /**
  * A new campaign opens with a mission (playtest 2026-10-13): the first story
@@ -2140,7 +2397,9 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     crafted: [],
     foundWeapons: [],
     flooded: [],
-    base: freshBase(),
+    base: { plots: [], works: [] },
+    bastion: freshClearing(rng),
+    siege: { in: SIEGE_FIRST_IN, count: SIEGE_FIRST, sides: [], held: 0 },
     regions: freshRegions(),
     offers: [],
     activeMission: null,
@@ -2173,6 +2432,7 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
   // Everyone starts as a recruit: classes come at Capitán.
   for (let i = 0; i < 2 * START_KIT; i++) addSoldier(c, players.length > 1 ? players[i % 2]! : players[0]!, rng);
   c.offers.push(makeOffer(c, rng), makeOffer(c, rng));
+  c.siege.sides = siegeSides(rng);
   log(c, WELCOME, 'good');
   refreshNarrative(c, rng);
   syncMarea(c);
@@ -2183,6 +2443,13 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
 // ----------------------------------------------------------------- commands
 
 export type CampaignCommand =
+  /** The base (docs/FASE12.md §11). */
+  | { type: 'place'; piece: PieceId; x: number; y: number; rot: number }
+  | { type: 'fell'; tiles: Vec2[] }
+  | { type: 'mend'; piece: string }
+  | { type: 'raise'; piece: string }
+  | { type: 'rearm'; piece: string }
+  | { type: 'dismantle'; piece: string }
   | { type: 'chooseMission'; id: string }
   | { type: 'clear'; plot: string }
   | { type: 'build'; plot: string; facility: FacilityId }
@@ -2347,7 +2614,8 @@ export interface NextStep {
   label: string;
   count?: number;
   tone: 'urgent' | 'info';
-  go?: { offer?: string; soldier?: string; plot?: string; region?: RegionId; rumor?: string };
+  /** `piece`: a piece of the base (docs/FASE12.md §11); `plot`: one of the plots of before. */
+  go?: { offer?: string; soldier?: string; plot?: string; piece?: string; region?: RegionId; rumor?: string };
 }
 
 /**
@@ -2382,7 +2650,11 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
         : null;
   if (short && !mission) steps.push(short);
 
-  if (mission) {
+  if (mission?.siege) {
+    // The dead at the base: straight to the cochera, where everyone healthy is already on the squad.
+    const partnerReady = shared && c.launchReady[partner] && !c.launchReady[slot];
+    steps.push({ view: 'squad', label: partnerReady ? `Tu compañero está listo: ${mission.name}` : `${BASE_SIEGE_TEXT.here} Defended el Bastión`, tone: 'urgent' });
+  } else if (mission) {
     const partnerReady = shared && c.launchReady[partner] && !c.launchReady[slot];
     steps.push({
       view: 'squad',
@@ -2405,12 +2677,26 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     });
   }
 
+  // The base (docs/FASE12.md §11): the siege close and the base not ready; what it broke or spent; a Sala de radio to
+  // hear it coming. Right after the operations: it is what the next siege is fought with (18/10 test).
+  const broken = (c.bastion?.pieces ?? []).find((p) => p.hp < PIECES[p.piece].hp && canAfford(c, repairCost(p).supplies));
+  const spent = (c.bastion?.pieces ?? []).find((p) => p.hp > 0 && rearmCost(p) > 0 && (c.parts ?? 0) >= rearmCost(p));
+  if (c.bastion && c.siege.in <= 1 && !activeOffer(c)?.siege) steps.push({ view: 'facilities', label: 'Prepara la base: el asedio está cerca', tone: 'urgent' });
+  if (broken) steps.push({ view: 'facilities', label: `Repara ${PIECE_TEXT[broken.piece].the}`, tone: 'info', go: { piece: broken.id } });
+  if (spent) steps.push({ view: 'facilities', label: `Repón ${PIECE_TEXT[spent.piece].the}`, tone: 'info', go: { piece: spent.id } });
+  if (!broken && !spent && c.bastion && !c.bastion.pieces.some((p) => p.piece === 'radio') && canAfford(c, PIECES.radio.cost.supplies)) {
+    steps.push({ view: 'facilities', label: `Construye ${PIECE_TEXT.radio.a}`, tone: 'info' });
+  }
+
   const promotions = mine.filter((s) => s.alive && canSpendPoints(c, s));
   if (promotions.length) {
     steps.push({ view: 'barracks', label: promotions.length === 1 ? `Puntos por gastar: ${promotions[0]!.name}` : 'Puntos por gastar', count: promotions.length, tone: 'info', go: { soldier: promotions[0]!.id } });
   }
 
-  if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) steps.push({ view: 'geoscape', label: 'Tu compañero quiere esperar noticias', tone: 'urgent' });
+  if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) {
+    steps.push({ view: 'geoscape', label: c.version >= 20 ? 'Tu compañero quiere esperar a que se curen' : 'Tu compañero quiere esperar noticias', tone: 'urgent' });
+  }
+  if (mustWait(c) && !c.advanceReady[slot]) steps.push({ view: 'barracks', label: 'Nadie puede salir: esperad a que se curen', tone: 'urgent' });
 
   // The Marea (docs/FASE5.md): the zones it covers send nothing and their missions are harder.
   const flooded = floodedZones(c);
@@ -2448,26 +2734,8 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
     if (fillable && first) steps.push({ view: 'barracks', label: 'Equipa a tu escuadra con lo del almacén', count: fillable, tone: 'info', go: { soldier: first.id } });
   }
 
-  if (c.base.works.length < workCrews(c)) {
-    // A crew is free: something affordable to build on a free plot, else ground to clear next to the compound.
-    const options = c.base.plots.flatMap((p) => Object.values(FACILITIES).filter((f) => !buildable(c, p, f.id) && canAfford(c, f.cost)).map((f) => ({ p, f })));
-    const best = options.find((o) => adjacencyAt(c, o.p, o.f.id)) ?? options[0];
-    const wild = c.base.plots
-      .filter((p) => !clearable(c, p) && canAfford(c, clearCost(p).cost))
-      .sort((a, b) => plotRing(a) - plotRing(b))[0];
-    // A level up for what is already built, when it can be paid.
-    const raise = c.base.plots.find((p) => !upgradable(c, p) && canAfford(c, upgradeCost(p.building as FacilityId, (p.level ?? 1) + 1).cost));
-    if (best) steps.push({ view: 'facilities', label: 'Construye junto a la base', tone: 'info', go: { plot: best.p.id } });
-    else if (!c.base.plots.some((p) => p.terrain === 'clear' && !p.building) && wild) {
-      steps.push({ view: 'facilities', label: 'Despeja terreno para crecer', tone: 'info', go: { plot: wild.id } });
-    } else if (raise) {
-      steps.push({ view: 'facilities', label: `Mejora ${FACILITIES[raise.building as FacilityId].name}`, tone: 'info', go: { plot: raise.id } });
-    }
-  }
-
   if (c.regions.filter((r) => r.contacted).length < contactCapacity(c) && canAfford(c, contactCost(c))) steps.push({ view: 'geoscape', label: 'Contacta una zona', tone: 'info' });
 
-  if (!mission && !c.offers.length) steps.push({ view: 'geoscape', label: 'Espera noticias hasta que pase algo', tone: 'info' });
 
   // Urgent first, keeping the order above within each tone.
   return [...steps.filter((x) => x.tone === 'urgent'), ...steps.filter((x) => x.tone === 'info')];
@@ -2476,6 +2744,12 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
 
 function proposalText(c: CampaignState, action: ProposalAction): string {
   switch (action.type) {
+    case 'place':
+      return `construir ${PIECE_TEXT[action.piece].a}`;
+    case 'raise': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece);
+      return p ? `mejorar ${PIECE_TEXT[p.piece].the} a nivel ${(p.level ?? 1) + 1}` : 'mejorar…';
+    }
     case 'chooseMission':
       return `ir a la misión ${c.offers.find((o) => o.id === action.id)?.name ?? ''}`;
     case 'clear': {
@@ -2503,12 +2777,27 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
 
 function validateAction(c: CampaignState, action: ProposalAction): string | null {
   switch (action.type) {
+    case 'place': {
+      const def = PIECES[action.piece];
+      if (bastionLevel(c) < def.level) return `Se desbloquea con el nivel ${def.level} del Bastión.`;
+      return placeBlocker(c.bastion, action.piece, action.x, action.y, action.rot) ?? costBlocker(c, def.cost.supplies, def.cost.parts ?? 0);
+    }
+    case 'raise': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece);
+      if (!p) return 'Eso ya no está.';
+      const next = raiseCost(p);
+      if (typeof next === 'string') return next;
+      if (bastionLevel(c) < next.level) return `Requiere nivel ${next.level} del Bastión.`;
+      if (!buildingWorks(p)) return 'No se mejora con daños: repara antes.';
+      return costBlocker(c, next.cost, 0);
+    }
     case 'chooseMission':
       // Another operation may take the place of the one chosen, until it takes off.
       if (c.activeMission === action.id) return 'Esa misión ya está elegida.';
       if (!c.offers.some((o) => o.id === action.id)) return 'Esa misión ya no está disponible.';
       return null;
     case 'clear': {
+      if (c.version >= 20) return BASE_GONE;
       const plot = plotById(c, action.plot);
       if (!plot) return 'Esa parcela no existe.';
       const busy = worksBlocker(c, plot);
@@ -2519,6 +2808,7 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       return null;
     }
     case 'build': {
+      if (c.version >= 20) return BASE_GONE;
       const plot = plotById(c, action.plot);
       if (!plot) return 'Esa parcela no existe.';
       const busy = worksBlocker(c, plot);
@@ -2529,6 +2819,7 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       return null;
     }
     case 'upgrade': {
+      if (c.version >= 20) return BASE_GONE;
       const plot = plotById(c, action.plot);
       if (!plot) return 'Esa parcela no existe.';
       const busy = worksBlocker(c, plot);
@@ -2556,6 +2847,23 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
 function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignContext): void {
   const { rng } = ctx;
   switch (action.type) {
+    case 'place': {
+      const def = PIECES[action.piece];
+      pay(c, def.cost.supplies);
+      c.parts = (c.parts ?? 0) - (def.cost.parts ?? 0);
+      placePiece(c.bastion, action.piece, action.x, action.y, action.rot);
+      log(c, `Construido: ${PIECE_TEXT[action.piece].name}.`, 'good');
+      break;
+    }
+    case 'raise': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece)!;
+      const next = raiseCost(p) as { cost: number; level: number };
+      pay(c, next.cost);
+      p.level = (p.level ?? 1) + 1;
+      const lines = PIECE_TEXT[p.piece].levels;
+      log(c, `${PIECE_TEXT[p.piece].name}, nivel ${p.level}.${lines?.[p.level - 1] ? ` ${lines[p.level - 1]}` : ''}`, 'good');
+      break;
+    }
     case 'chooseMission': {
       c.activeMission = action.id;
       // The squad comes ready, like in XCOM: players only swap who they want.
@@ -2624,11 +2932,11 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
     case 'craft': {
       // A work like any other: a crew at the Taller, paid in suministros and parts.
       const def = CRAFTS[action.project];
-      const plot = workshopPlot(c)!;
+      const shop = workshopPiece(c)!;
       const days = workDays(c, def.days);
       pay(c, def.cost);
       c.parts = (c.parts ?? 0) - def.parts;
-      c.base.works.push({ plot: plot.id, kind: 'craft', facility: 'workshop', daysLeft: days, total: days, project: def.id });
+      c.base.works.push({ plot: shop.id, kind: 'craft', facility: 'workshop', daysLeft: days, total: days, project: def.id });
       log(c, `El Taller se pone con ${def.the}: ${days} días.`);
       break;
     }
@@ -2641,6 +2949,13 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
  */
 export function proposalCost(c: CampaignState, action: ProposalAction): number {
   switch (action.type) {
+    case 'place':
+      return PIECES[action.piece].cost.supplies;
+    case 'raise': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece);
+      const next = p && raiseCost(p);
+      return next && typeof next !== 'string' ? next.cost : 0;
+    }
     case 'clear': {
       const plot = plotById(c, action.plot);
       return plot ? clearCost(plot).cost : 0;
@@ -2730,7 +3045,65 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
   const { slot } = ctx;
 
   switch (cmd.type) {
+    case 'place': {
+      // Each one builds at once with what is shared; what is dear goes to a vote (docs/FASE12.md §11.7).
+      const action: ProposalAction = { type: 'place', piece: cmd.piece, x: cmd.x, y: cmd.y, rot: cmd.rot };
+      if (PIECES[cmd.piece].cost.supplies > VOTE_ABOVE) return propose(c, action, ctx);
+      const error = validateAction(c, action);
+      if (error) return { ok: false, error };
+      applyAction(c, action, ctx);
+      return { ok: true };
+    }
+    case 'raise':
+      return propose(c, { type: 'raise', piece: cmd.piece }, ctx);
+    case 'fell': {
+      for (const t of cmd.tiles) {
+        const blocked = fellBlocker(c.bastion, t.x, t.y);
+        if (blocked) return { ok: false, error: blocked };
+      }
+      let got = 0;
+      for (const t of cmd.tiles) got += fellTree(c.bastion, t.x, t.y);
+      c.credits += got;
+      log(c, cmd.tiles.length === 1 ? `Talado un árbol: +${got} §.` : `Talados ${cmd.tiles.length} árboles: +${got} §.`);
+      return { ok: true };
+    }
+    case 'mend': {
+      const p = c.bastion.pieces.find((x) => x.id === cmd.piece);
+      if (!p) return { ok: false, error: 'Eso ya no está.' };
+      const cost = repairCost(p);
+      if (!cost.supplies) return { ok: false, error: 'No le falta nada.' };
+      const blocked = costBlocker(c, cost.supplies, cost.parts);
+      if (blocked) return { ok: false, error: blocked };
+      pay(c, cost.supplies);
+      c.parts = (c.parts ?? 0) - cost.parts;
+      p.hp = PIECES[p.piece].hp;
+      log(c, `Reparado: ${PIECE_TEXT[p.piece].name}.`, 'good');
+      return { ok: true };
+    }
+    case 'rearm': {
+      const p = c.bastion.pieces.find((x) => x.id === cmd.piece);
+      if (!p) return { ok: false, error: 'Eso ya no está.' };
+      const parts = rearmCost(p);
+      if (!parts) return { ok: false, error: 'Está lista.' };
+      if ((c.parts ?? 0) < parts) return { ok: false, error: 'No hay piezas suficientes.' };
+      c.parts = (c.parts ?? 0) - parts;
+      p.charges = PIECES[p.piece].charges;
+      log(c, `Repuesto: ${PIECE_TEXT[p.piece].name}.`, 'good');
+      return { ok: true };
+    }
+    case 'dismantle': {
+      const p = c.bastion.pieces.find((x) => x.id === cmd.piece);
+      if (!p) return { ok: false, error: 'Eso ya no está.' };
+      const blocked = dismantleBlocker(p);
+      if (blocked) return { ok: false, error: blocked };
+      const back = dismantleRefund(p);
+      c.bastion.pieces = c.bastion.pieces.filter((x) => x !== p);
+      c.credits += back;
+      log(c, back ? `Desmontado: ${PIECE_TEXT[p.piece].name}, +${back} §.` : `Desmontado: ${PIECE_TEXT[p.piece].name}.`);
+      return { ok: true };
+    }
     case 'chooseMission':
+      if (activeOffer(c)?.siege) return { ok: false, error: SIEGE_NOW };
       return propose(c, { type: 'chooseMission', id: cmd.id }, ctx);
     case 'clear':
       return propose(c, { type: 'clear', plot: cmd.plot }, ctx);
@@ -2815,6 +3188,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'cancelMission':
       if (!c.activeMission) return { ok: false, error: 'No hay misión elegida.' };
+      if (activeOffer(c)?.siege) return { ok: false, error: SIEGE_NOW };
       c.activeMission = null;
       c.squad = [];
       c.launchReady = [false, false];
@@ -2823,6 +3197,8 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'squad': {
       if (!c.activeMission) return { ok: false, error: 'Primero elegid una misión.' };
+      // In a siege every soldier fit to fight defends (docs/FASE12.md §11.5).
+      if (activeOffer(c)?.siege) return { ok: false, error: BASE_SIEGE_TEXT.defenders };
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
       if (!s || !commandsFor(slot, s.owner, ctx.connected)) return { ok: false, error: 'Solo puedes elegir a tus soldados.' };
       if (!cmd.on) {
@@ -2883,6 +3259,18 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
     }
 
     case 'advance': {
+      // Time goes by with the missions now (docs/FASE12.md §11.6): there is no waiting for news (only taking back a «ready»).
+      if (c.version >= 20) {
+        if (cmd.ready && !mustWait(c)) return { ok: false, error: 'Ya no se espera: el tiempo pasa con cada misión.' };
+        if (cmd.ready && c.event) return { ok: false, error: 'Antes hay que decidir qué hacer con el acontecimiento.' };
+        c.advanceReady[slot] = cmd.ready;
+        if (cmd.ready && everyoneReady(c.advanceReady, ctx.connected)) {
+          c.advanceReady = [false, false];
+          // The days go by until someone can go out again (or something has to be decided first).
+          for (let i = 0; i < 60 && mustWait(c) && !c.event; i++) passDay(c, ctx.rng);
+        }
+        return { ok: true };
+      }
       if (c.activeMission) return { ok: false, error: 'Hay una misión elegida: lanzadla o cancelad.' };
       if (c.event) return { ok: false, error: 'Antes hay que decidir qué hacer con el acontecimiento.' };
       c.advanceReady[slot] = cmd.ready;
@@ -3034,7 +3422,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   }
 
   for (const o of [...c.offers]) {
-    if (o.expiresDay === null || o.expiresDay >= c.day) continue;
+    if (o.expiresDay === null || o.expiresDay >= c.day || o.id === c.activeMission) continue;
     c.offers = c.offers.filter((x) => x.id !== o.id);
     const q = questOf(c, o);
     if (q) {
@@ -3169,7 +3557,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   if (syncMarea(c)) stop = true;
   if (c.doom >= DOOM_MAX) {
     c.outcome = 'defeat';
-    log(c, 'La Marea ha llegado a Atalaya.', 'bad');
+    log(c, 'La Marea ha llegado al Bastión.', 'bad');
     return true;
   }
   // A story chapter whose wait is over opens today.
@@ -3289,7 +3677,11 @@ function lootLine(h: LootTotals): string | null {
 export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rng): MissionReport {
   const offer = activeOffer(c);
   const victory = mission.outcome === 'victory';
+  const siege = !!offer?.siege;
   c.missionsFlown = (c.missionsFlown ?? 0) + 1;
+  // Time goes by with the missions (docs/FASE12.md §11.6): the days pass while the squad is out, so whoever
+  // comes back hurt or bitten starts from today; the mission they flew doesn't expire under them (passDay).
+  if (c.version >= 20) passDays(c, DAYS_PER_MISSION, rng);
   const report: MissionReport = {
     day: c.day,
     missionName: offer?.name ?? 'Misión',
@@ -3305,7 +3697,14 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     salvage: 0,
     story: offer?.story ?? null,
     ...(mission.mission.night ? { night: true } : {}),
+    ...(siege ? { siege: true } : {}),
   };
+  // What the siege left of the base: beaten, broken, traps gone off (docs/FASE12.md §11.4).
+  if (siege) {
+    // Held, it is what there is to mend; lost, the base is left behind anyway.
+    const damage = takeBackBase(c, mission);
+    if (victory && (damage.broken || damage.hurt || damage.spent)) report.damage = damage;
+  }
 
   // Abandoning counts as a retreat: whoever is still standing comes home.
   // Down, or left behind when the bus went (docs/PRUEBA-2026-10-14.md P1): either way, gone.
@@ -3473,7 +3872,18 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
 
   if (!c.soldiers.some((s) => s.alive)) {
     c.outcome = 'defeat';
-    log(c, 'No quedan soldados. El Bastión ha caído.', 'bad');
+    log(c, siege ? `${BASE_SIEGE_TEXT.nobody}. ${BASE_SIEGE_TEXT.nobodyLine}` : 'No quedan soldados. El Bastión ha caído.', 'bad');
+  } else if (siege && !victory) {
+    // The base falls with someone left (the wounded who stayed inside): they flee to another clearing (§11.5).
+    fallBase(c, rng);
+    report.fallen = true;
+  }
+  // The siege clock (§11.5): one mission less to the next; once a siege is over, the next one is set.
+  if (c.version >= 20) {
+    if (siege) {
+      if (victory) c.siege.held++;
+      c.siege = nextSiege(c, rng);
+    } else c.siege.in = Math.max(0, c.siege.in - 1);
   }
 
   // Ordinary offers are gone either way; facility assaults, story chapters and the final mission stay until won.
@@ -3483,7 +3893,6 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   c.launchReady = [false, false];
   c.lastReport = report;
   maybeFaces(c, report, rng);
-  // No days pass on a mission (docs/PRUEBA-2026-10-14.md P7): the clock moves while waiting for news.
   // The bitten come home with a fever: their days count from their arrival (docs/FASE3.md).
   report.infected = [];
   for (const u of mission.units) {
@@ -3494,6 +3903,12 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     log(c, `${s.name} vuelve con un mordisco: tiene fiebre.`, 'bad');
   }
   syncMarea(c);
+  if (c.version >= 20 && !c.outcome) {
+    // Always something to fly (time only goes by with missions), and the next siege announced, or here.
+    topUpOffers(c, rng);
+    if (c.siege.in === 0 && !siege) startSiege(c, rng);
+    else log(c, siegeWarning(c.siege.in, hasRadio(c) ? { count: c.siege.count, sides: c.siege.sides } : undefined), c.siege.in <= 1 ? 'bad' : 'info');
+  }
   return report;
 }
 

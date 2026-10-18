@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advanceTime,
   applyMissionResult,
   buildSquad,
   CAMPAIGN_VERSION,
   craftBlocker,
   createCampaign,
   dailyRations,
+  DAYS_PER_MISSION,
   executeCampaignCommand,
   HUNGRY_WILL,
   LA_VEGA_FOOD,
   LA_VEGA_FOOD_DAYS,
   migrateCampaign,
-  plotById,
   squadMember,
   START_FOOD,
   type CampaignCommand,
@@ -23,6 +24,7 @@ import { armorTier, CRAFTS, LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
 import type { DecorKind, Slot } from '../src/types';
+import { raise } from './helpers';
 
 // Phase 4 of the zombies: food, the Taller's work and found weapons (docs/FASE4.md).
 
@@ -37,14 +39,14 @@ function quiet(players: Slot[] = [0]): CampaignState {
   return c;
 }
 
-/** Days pass one at a time (an «advance» may run several when nothing happens). */
+/** Days pass one at a time (the clock of days goes on inside, with the missions: docs/FASE12.md §11.6). */
 function days(c: CampaignState, n: number): void {
   const until = c.day + n;
   for (let i = 0; i < 4 * n && c.day < until; i++) {
     const at = c.day;
-    // One day: everything else scheduled far away, so only the day ends the advance.
+    // One day: everything else scheduled far away, so only the day stops the clock.
     c.nextEventDay = Math.min(c.nextEventDay, at + 1);
-    run(c, { type: 'advance', ready: true });
+    advanceTime(c, new Rng(7));
     c.event = null;
     c.nextEventDay = 999;
   }
@@ -90,9 +92,7 @@ describe('food', () => {
     days(c, 2);
     expect(wounded.woundedDays).toBe(0);
     // A Huerto brings rations: with enough for a day, the hunger ends.
-    const plot = plotById(c, '4,4')!;
-    plot.building = 'garden';
-    plot.level = 3;
+    raise(c, 'garden', 3);
     days(c, 1);
     expect(c.hungry).toBe(false);
     expect(c.food).toBe(1);
@@ -100,9 +100,7 @@ describe('food', () => {
 
   it('the Huerto grows a ration a day for each level', () => {
     const c = quiet();
-    const plot = plotById(c, '4,4')!;
-    plot.building = 'garden';
-    plot.level = 2;
+    raise(c, 'garden', 2);
     const food = c.food!;
     days(c, 4);
     expect(c.food).toBe(food + 4 * (2 - dailyRations(c)));
@@ -144,9 +142,7 @@ describe('the Taller', () => {
   /** A campaign with a Taller at `level` and plenty to pay with. */
   function workshop(level: number, xp = LEVEL_XP[5]!) {
     const c = quiet();
-    const plot = plotById(c, '4,4')!;
-    plot.building = 'workshop';
-    plot.level = level;
+    const plot = raise(c, 'workshop', level);
     Object.assign(c, { xp, credits: 1000, parts: 30 });
     return { c, plot };
   }
@@ -285,8 +281,9 @@ describe('the campaign', () => {
     const report = applyMissionResult(c, mission, new Rng(4));
     expect(report.scrap).toBe(2);
     expect(c.parts).toBe(2 + 2);
-    // The ration reward, less what the days back ate.
-    expect(c.food! + (c.day - report.day) * dailyRations(c)).toBe(food + 4);
+    // The ration reward, less what the days out ate (docs/FASE12.md §11.6).
+    expect(report.day - DAYS_PER_MISSION).toBe(c.day - DAYS_PER_MISSION);
+    expect(c.food).toBe(food + 4 - DAYS_PER_MISSION * dailyRations(c));
   });
 
 });

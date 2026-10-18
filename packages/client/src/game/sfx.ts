@@ -83,7 +83,8 @@ export class Sfx {
   impact(kind: 'flesh' | 'armor' | 'robot' | 'miss', at?: THREE.Vector3, crit = false): void {
     this.at(`impact.${kind}`, at);
     if (kind === 'miss' && Math.random() < 0.6) this.at('impact.cover', at, 0.8, { delay: 0.05 });
-    if (crit) this.at('impact.crit', at);
+    // A critical hit, over it: flesh and bone, or bent metal on a machine (playtest 18/10 #22).
+    if (crit) this.at(kind === 'robot' ? 'impact.crit.metal' : 'impact.crit', at);
   }
 
   /** The kind of flesh a target is, for its impacts. */

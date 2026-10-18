@@ -5,6 +5,7 @@
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
+import { DISMANTLE_BACK, TREE_SUPPLIES, type PieceId } from './base';
 import { FOUND_WEAPONS, NIGHT, THIRD_ACTION_RANK, type RangeTable } from './content';
 import { BAR_GROWTH, DEED_XP, RANK_STEP, SKILLS, VETERANCY, WILL_PER_RANK, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
@@ -55,7 +56,7 @@ export const GLOSSARY: Record<string, string> = {
   Hinchado: 'Un zombi lento y lleno de gases. Revienta al morir o al llegar a vosotros: hace daño a quien tenga al lado y puede contagiarlo.',
   Cuervos: 'Bandas de saqueadores. Viven de robar a otros vivos y atraen hordas con sirenas.',
   Congregación: 'Una secta que cree que los zombis están salvados. Los guía con campanas y por radio.',
-  Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega a Atalaya, la campaña está perdida.',
+  Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega al Bastión, la campaña está perdida.',
   Nido: 'Un sitio donde los zombis se juntan y la Marea crece. Quemarlo la hace retroceder.',
   Sirena: 'La de un coche patrulla: los Cuervos la encienden cerca de quien no les paga, y los muertos acuden. En el valle también suenan ambulancias atascadas y alarmas de naves.',
   Ruido: 'Cada acción suena: un disparo se oye de doce a veintidós casillas, según el arma; una granada, a veintiséis; un registro, a dos. Lo que lo oye va a mirar. El ruido no os delata: os delata que os vean.',
@@ -63,7 +64,7 @@ export const GLOSSARY: Record<string, string> = {
   Registrar: 'Una acción dentro de una habitación. Sale lo que haya según el sitio: comida y medicinas en las casas, piezas en las oficinas, comida en las tiendas, de todo en los almacenes. Cada habitación se registra una vez, para toda la escuadra. Hace un poco de ruido.',
   Cajas: 'Marcadas, como mucho tres por mapa, cada una de un tipo: armas, medicinas, munición o comida. Su marca se ve cuando están a la vista, y se queda en el mapa. Se abren con una acción, al lado, y dan siempre lo suyo.',
   Mochila: 'Tres cosas por soldado, cuatro con la Chapistería. Se suelta gratis, se pasa a un compañero de al lado con una acción, y las armas y las medicinas se usan ahí mismo. El botín cuenta si vuelve: lo que llevaba un caído se pierde.',
-  Armería: 'Las armas de Atalaya: las que se encuentran, las que hace el Taller y las que trae el nivel del Bastión. Cada una es de quien la lleve.',
+  Armería: 'Las armas del Bastión: las que se encuentran, las que hace el Taller y las que trae el nivel del Bastión. Cada una es de quien la lleve.',
   Cargadores: 'Los de repuesto los hace el Taller: cada soldado sale con uno por tanda hecha, hasta tres. Valen para todas las armas; recargar llena primero la principal y luego la pistola. Registrando aparecen más.',
   Suministros: 'Lo que se saquea y se cambia: sirve para construir, reclutar y equipar.',
   Medicinas: 'Se cuentan en ✚. El tratamiento de un mordido cuesta 2 (1 con la Enfermería a nivel 2), y una dosis le quita 3 días de cama a un herido. En la misión, las de la mochila curan 3 con una acción. Nunca hay bastantes.',
@@ -77,7 +78,7 @@ export const GLOSSARY: Record<string, string> = {
   Rumor: 'Algo que se oye por la radio en una zona. Si lo seguís unos días a la escucha, sabréis qué era.',
   Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
   'Taller de oficios': 'Lo que se aprende fuera, allí se repasa: cada misión llena las barras un poco más.',
-  'La Lata': 'El autobús de Atalaya: uno de línea, con la chapa que Teo le soldó por encima. Lleva a los equipos y los espera en la zona de evacuación.',
+  'La Lata': 'El autobús del Bastión: uno de línea, con la chapa que Teo le soldó por encima. Salió de Atalaya cuando cayó, con la caravana detrás. Lleva a los equipos y los espera en la zona de evacuación.',
   Evacuar: `Se sale ${BUS.in}, desde la zona de evacuación: lo pide uno y lo acepta el otro. Quien esté fuera cuando sale, se pierde. En la Limpieza, salir es retirarse y la misión se pierde.`,
   Recluta: 'Superviviente recién llegado, con cuchillo y pistola. Aprende de lo que hace fuera, como todos.',
   Barras: 'Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo en las misiones. Cada barra llena sube un poco lo suyo y da un punto de habilidad para el tablero.',
@@ -154,7 +155,7 @@ export interface RegionLore {
 }
 
 export const REGION_LORE: Record<RegionId, RegionLore> = {
-  weu: { ally: 'el Refugio de Brena', situation: 'Los pueblos de la sierra, junto a Atalaya. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
+  weu: { ally: 'el Refugio de Brena', situation: 'Los pueblos de la sierra, bajo el Bastión. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
   afr: { ally: 'los del Hospital', situation: 'La primera ciudad caída. Calles llenas de zombis y farmacias que nadie ha terminado de vaciar.' },
   eas: { ally: 'la Red Callada', situation: 'Un embalse y una central muerta. La Red Callada sobrevivió hablando en lengua de signos: sin un ruido.' },
   eeu: { ally: 'los Pastores', situation: 'Valles cerrados y aldeas que aún resisten. Los Cuervos cobran aquí su peaje.' },
@@ -201,7 +202,7 @@ export const MEDICINE_FINDS = ['un blíster de antibióticos', 'una caja de ibup
 
 /** Accessories as they read when found: with their article. */
 export const ITEM_FINDS: Record<ItemId, string> = {
-  fragGrenade: 'una granada',
+  fragGrenade: 'dos granadas',
   smokeGrenade: 'una granada de humo',
   flashbang: 'una granada aturdidora',
   firstAid: 'un botiquín',
@@ -524,7 +525,7 @@ export const BOARD_ABOUT: Record<string, string> = {
   presence: 'Basta con que esté para que los demás se calmen.',
   vigor: 'Se recupera antes que nadie.',
   serenityMind: 'Ha visto morir a mucha gente. Ya no se asusta.',
-  warKit: 'Material militar de los almacenes de Atalaya.',
+  warKit: 'Material militar que se sacó de Atalaya.',
   fieldHospital: 'Donde se para, se cura a todos.',
   goodHand: 'Los heridos se calman en cuanto le ven las manos.',
   mastermind: 'Teo dice que tiene manos de taller.',
@@ -666,6 +667,18 @@ export const CURED_FLOAT = 'SIN CONTAGIO';
 /** Taking up a found weapon in the field: «Ana empuña un fusil de asalto.» */
 export function weaponEquippedLine(who: string, kind: FoundWeaponId): string {
   return `${who} empuña ${FOUND_WEAPONS[kind].find}.`;
+}
+
+/** Putting on the belt what was found (playtest 18/10 #5): the backpack's button, its tooltip and the floating word. */
+export const BELT_TEXT = {
+  button: 'Al cinturón',
+  tip: 'Lo lleva en el cinturón y puede usarlo ya.',
+  float: 'AL CINTURÓN',
+};
+
+/** The log line: «Ana se cuelga dos granadas al cinturón.»; the earplugs go in the ears: «Ana se pone unos tapones.» */
+export function beltLine(who: string, item: ItemId): string {
+  return item === 'mindShield' ? `${who} se pone ${ITEM_FINDS[item]}.` : `${who} se cuelga ${ITEM_FINDS[item]} al cinturón.`;
 }
 
 // --------------------------------------------------------------- objective
@@ -912,6 +925,29 @@ export const EVAC_TEXT = {
 };
 
 /**
+ * A mission against the clock (playtest 18/10 #8–9): at the end of its last
+ * turn the bus leaves by itself with whoever is in the zone, and those
+ * outside are lost. The outcomes are headlines without a full stop.
+ */
+export const TIME_TEXT = {
+  /** At the start of the last turn: the strip's alert and the log. */
+  lastTurn: `Último turno: ${BUS.name} sale al acabarlo, con quien esté en la zona de evacuación.`,
+  lastTurnFloat: 'ÚLTIMO TURNO',
+  /** Log, as it leaves on time. */
+  departs: `${BUS.name} no espera más.`,
+  /** Outcomes: on time with the objective aboard (a win), without it (`timer`), with nobody aboard, and a mission with no bus. */
+  wonOnTime: `Se acabó el tiempo, pero ${BUS.name} salió con el objetivo a bordo`,
+  lostOnTime: `Se acabó el tiempo: ${BUS.name} se fue sin cumplir el objetivo`,
+  leftEmpty: `Se acabó el tiempo: ${BUS.name} se fue sin nadie`,
+  timeUp: 'Se acabó el tiempo',
+};
+
+/** With `n` turns left (5, playtest 18/10 #9): «Quedan 5 turnos. Al acabar el último, La Lata se va.» */
+export function turnsLeftWarning(n: number): string {
+  return `Quedan ${n} turnos. Al acabar el último, ${BUS.name} se va.`;
+}
+
+/**
  * The countdown on a proposal nobody answers (docs/PRUEBA-2026-10-14.md #28):
  * when it runs out, it is accepted. `left` comes formatted («1:25»); `mine`:
  * shown to whoever proposed it.
@@ -1031,55 +1067,35 @@ export function hostClosedLine(host?: string): string {
   return host ? `${host} ha cerrado la partida.` : 'Quien aloja la partida la ha cerrado.';
 }
 
-// ------------------------------------------------------------------ phone
+/** Back to the window (minimised, or the laptop asleep) while the dead socket comes back (client net.ts). */
+export const REJOIN_LINE = 'Volviendo a la partida…';
 
-/** Playing from a phone's browser (docs/FASE11.md): the notices, the setting and the touch help (UI). */
-export const TOUCH_TEXT = {
-  /** Held upright: the full-screen notice. */
-  rotate: { title: 'Gira el móvil', line: 'Bastión se juega en horizontal.' },
-  fullscreen: 'Pantalla completa',
-  fullscreenOff: 'Salir de pantalla completa',
-  /** The setting in Ajustes, its options and what «Auto» does. */
-  setting: 'Controles táctiles',
-  modes: { auto: 'Auto', on: 'Sí', off: 'No' },
-  settingAbout: 'En «Auto» se activan solos en un móvil o una tablet.',
-  /** The buttons for what is a key on a computer: the squad's list and the soldier before or after (`*Title`: on the button, for who wonders). */
-  squad: 'Escuadra',
-  prev: 'Anterior',
-  next: 'Siguiente',
-  prevTitle: 'Soldado anterior',
-  nextTitle: 'Siguiente soldado',
-  /** The touch help, a line each: Esc → Controles, and the first mission on a phone. */
-  help: [
-    'Toca una casilla para ver el camino, el coste y el ruido; tócala otra vez para moverte.',
-    'Toca un enemigo para apuntar y ver la probabilidad y el daño; tócalo otra vez, o pulsa la acción, para atacar.',
-    'Mantén pulsado un soldado, un zombi, una casilla o un botón para ver su ficha; en un zombi, también lo que ve.',
-    'Un dedo mueve la cámara, dos dedos la giran, y pellizcando se acerca y se aleja.',
-  ],
+// --------------------------------------------------------------- settings
+
+/** Ajustes and Controles (playtest 18/10 #3, #6, #7): labels, their help, and the plan's log lines. */
+export const SETTINGS_TEXT = {
+  /** #3: a soldier's route planned without the command, walked when it comes. */
+  plans: 'Seguir las rutas planeadas',
+  plansAbout: 'Sin el mando, puedes marcar el camino de un soldado. Cuando te llega el mando, lo recorre solo.',
+  /** #6: the slider. */
+  enemySpeed: 'Velocidad del turno enemigo',
+  enemySpeedAbout: 'Lo deprisa que se ve el turno de los enemigos: cómo se mueven, cuándo aparecen y cuándo os ven.',
+  /** #7: the ping: its line in Controles (an infinitive, like the rest), its button and the button's tooltip, with the keys. */
+  pingControls: 'Señalar un sitio unos segundos, para que lo veáis los dos',
+  ping: 'Señalar',
+  pingTip: 'Marca un sitio unos segundos, para que lo veáis los dos.',
+  pingKeys: 'También con Alt+clic, clic con la rueda o G.',
 };
 
-/** The web game's door (docs/FASE11.md §6, Red): the password screen, the sound and coming back from another app. */
-export const WEB_TEXT = {
-  passwordTitle: 'Contraseña de la partida',
-  passwordLine: 'Esta partida es privada. Pídele la contraseña a quien la aloja.',
-  passwordField: 'Contraseña',
-  enter: 'Entrar',
-  wrong: 'Esa no es la contraseña.',
-  tooMany: 'Demasiados intentos. Espera un minuto.',
-  /** The password went out and nothing came back: no network, or the server is down. */
-  noAnswer: 'El servidor no contesta. Prueba otra vez.',
-  /** Until the first touch, the browser keeps the game silent. */
-  sound: 'Toca la pantalla para activar el sonido.',
-  /** Back from another app, while the socket comes back. */
-  rejoin: 'Volviendo a la partida…',
-};
+/** #3: the soldier walks the planned route: «Mateo sigue la ruta planeada.» */
+export function planFollowedLine(who: string): string {
+  return `${who} sigue la ruta planeada.`;
+}
 
-/** The web app's manifest: the name under the icon, and its line. */
-export const WEB_APP = {
-  name: 'Bastión',
-  shortName: 'Bastión',
-  description: 'Táctica por turnos cooperativa para dos jugadores, en un valle tomado por los muertos.',
-};
+/** #3: the route can no longer be walked; it stays marked: «Mateo ya no llega: la ruta sigue marcada.» */
+export function planBlockedLine(who: string): string {
+  return `${who} ya no llega: la ruta sigue marcada.`;
+}
 
 // ------------------------------------------------------------------ rubble
 
@@ -1157,36 +1173,297 @@ export const SCAVENGE = {
   horde: 'Llegan más zombis por los bordes',
 };
 
+// -------------------------------------------------------------------- base
+
+/**
+ * The base in the clearing (docs/FASE12.md §11; the draft in docs/LORE-BASE.md):
+ * each piece's name, what it is for (the figures come from base.ts), and a
+ * building's line of the world at each of its levels.
+ */
+export interface PieceText {
+  name: string;
+  /** With its article, for a sentence: «Repara la empalizada», «mejorar la Sala de radio»; buildings keep their capital, as names. */
+  the: string;
+  /** «construir una empalizada», «un Barracón». */
+  a: string;
+  line: string;
+  levels?: [string, string, string];
+}
+
+export const PIECE_TEXT: Record<PieceId, PieceText> = {
+  caravan: { name: 'Caravana', the: 'la caravana', a: 'una caravana', line: 'Literas para los primeros y el almacén debajo de los asientos. Todo lo demás está por levantar.' },
+  radio: {
+    name: 'Sala de radio', the: 'la Sala de radio', a: 'una Sala de radio',
+    line: 'Avisa de los asedios, por dónde y cuántos, y trae misiones y zonas que contactar.',
+    levels: ['Una radio de coche, una batería y Morse con los cascos.', 'Una antena en el pino más alto.', 'La antena llega hasta el mar: Morse oye antes lo que viene.'],
+  },
+  quarters: { name: 'Barracón', the: 'el Barracón', a: 'un Barracón', line: 'Camas para soldados.', levels: ['Literas de madera y una estufa que solo se enciende de noche.', 'Un segundo piso de literas.', 'Mantas de verdad.'] },
+  infirmary: {
+    name: 'Enfermería', the: 'la Enfermería', a: 'una Enfermería',
+    line: 'Las heridas curan antes.',
+    levels: ['Una camilla y un hornillo para hervir el agua.', 'Agua caliente en la sala de curas.', 'Un quirófano de verdad, con lámpara y generador propio.'],
+  },
+  workshop: { name: 'Taller', the: 'el Taller', a: 'un Taller', line: 'Accesorios y armas más baratos.', levels: ['Un banco de trabajo y las herramientas de Teo.', 'Un torno de verdad.', 'Teo deja de quejarse.'] },
+  garden: { name: 'Huerto', the: 'el Huerto', a: 'un Huerto', line: 'Raciones.', levels: ['Bancales bajo plástico y bidones para el agua de lluvia.', 'Un invernadero de verdad, con estufa.', 'Riego por goteo y semillas de La Vega.'] },
+  quarantine: {
+    name: 'Cuarentena', the: 'la Cuarentena', a: 'una Cuarentena',
+    line: `Sin ella, un mordido no sube ${BUS.to}.`,
+    levels: ['Una nave aparte, con cerrojo por fuera.', 'Catres separados y una ventana con rejas.', 'Una sala de guardia, y alguien despierto toda la noche.'],
+  },
+  memorial: {
+    name: 'Camposanto', the: 'el Camposanto', a: 'un Camposanto',
+    line: 'Los caídos descansan aquí y salen de la lista del Cuartel; sus nombres se guardan.',
+    levels: ['Cruces de pino bajo la nieve, una por cada uno.', 'Una cerca y un banco.', 'Los nombres, grabados en una tabla.'],
+  },
+  range: { name: 'Campo de tiro', the: 'el Campo de tiro', a: 'un Campo de tiro', line: 'Puntería para todos.', levels: ['Dianas de cartón en una trinchera del pinar.', 'Siluetas de zombi a cincuenta metros.', 'Blancos móviles, con una polea de Teo.'] },
+  training: {
+    name: 'Centro de entrenamiento', the: 'el Centro de entrenamiento', a: 'un Centro de entrenamiento',
+    line: 'Más soldados por misión, y reclutas que llegan sabiendo más.',
+    levels: ['Un patio despejado y un horario.', 'Una semana de prácticas antes de salir.', 'Alguien que ya ha vuelto de fuera les enseña.'],
+  },
+  simulation: {
+    name: 'Sala de mapas', the: 'la Sala de mapas', a: 'una Sala de mapas',
+    line: 'Más experiencia por misión.',
+    levels: ['Un tablero con los caminos del valle.', 'Mapas de arena con los combates de verdad.', 'Cintas de cada misión, fotograma a fotograma.'],
+  },
+  garage: {
+    name: 'Chapistería', the: 'la Chapistería', a: 'una Chapistería',
+    line: `Las heridas curan antes: ${BUS.name} lleva camilla.`,
+    levels: [`${BUS.name} lleva camilla.`, 'Mantas y un botiquín fijo atrás.', `${BUS.name} ya no para a repostar con heridos dentro.`],
+  },
+  echoes: {
+    name: 'Taller de oficios', the: 'el Taller de oficios', a: 'un Taller de oficios',
+    line: 'Las barras se llenan más en cada misión.',
+    levels: ['Lo que se aprende fuera, aquí se repasa.', 'Más herramientas, y Nwosu repasa las curas.', 'Gente de otros enclaves enseña lo suyo.'],
+  },
+  palisade: { name: 'Empalizada', the: 'la empalizada', a: 'una empalizada', line: 'Troncos del pinar, afilados y clavados. Barata, y cede pronto.' },
+  wall: { name: 'Muro', the: 'el muro', a: 'un muro', line: 'Bloques y hormigón. Caro, pero aguanta.' },
+  gate: { name: 'Puerta', the: 'la puerta', a: 'una puerta', line: 'Se abre y se cierra con una acción. Cerrada, los muertos tienen que tirarla.' },
+  sandbags: { name: 'Barricada de sacos', the: 'la barricada de sacos', a: 'una barricada de sacos', line: 'Sacos de tierra apilados: cobertura para disparar detrás.' },
+  logs: { name: 'Pila de troncos', the: 'la pila de troncos', a: 'una pila de troncos', line: 'Lo talado, apilado: cobertura baja, y lo más barato.' },
+  tower: { name: 'Torre de vigía', the: 'la torre de vigía', a: 'una torre de vigía', line: 'Una plataforma de troncos a una planta de altura: se ve más y se dispara desde arriba.' },
+  floodlight: { name: 'Foco', the: 'el foco', a: 'un foco', line: 'Alumbra a su alrededor: de noche, lo que tiene cerca se ve como de día.' },
+  wire: { name: 'Alambre de espino', the: 'el alambre de espino', a: 'un tramo de alambre de espino', line: 'Quien lo cruza va más despacio, vivo o muerto.' },
+  mine: { name: 'Mina', the: 'la mina', a: 'una mina', line: 'Estalla una vez, cuando algo la pisa. Se repone con piezas.' },
+  spikes: { name: 'Foso con pinchos', the: 'el foso con pinchos', a: 'un foso con pinchos', line: 'Hiere a quien cae dentro. Aguanta unas cuantas veces; luego se repone con piezas.' },
+  snare: { name: 'Cepo', the: 'el cepo', a: 'un cepo', line: 'Atrapa al primero que lo pisa y lo retiene. Se repone con piezas.' },
+  turret: { name: 'Torreta', the: 'la torreta', a: 'una torreta', line: 'Dispara sola, en el turno enemigo, a lo que se acerque. Sin munición se calla; se recarga con piezas.' },
+};
+
+/** A piece's state, a tag beside its name («Foso con pinchos · por reponer») and its line in the card; never gendered, the names are of both. */
+export const PIECE_STATE = {
+  spent: 'por reponer',
+  spentLine: 'No le quedan usos: se repone con piezas.',
+  silent: 'sin munición',
+  silentLine: 'No dispara hasta que se recargue con piezas.',
+  broken: 'por reparar',
+  brokenLine: 'No sirve hasta que se repare.',
+};
+
+/** The base screen (UI: strategy/buildMode.ts, clearing.ts, screen.ts): its labels and its help. */
+export const BUILD_TEXT = {
+  build: 'Construir',
+  fell: 'Talar',
+  repair: 'Reparar',
+  dismantle: 'Desmontar',
+  rotate: 'Girar',
+  upgrade: 'Mejorar',
+  rearm: 'Reponer',
+  fellTip: `Talar: +${TREE_SUPPLIES} suministros, y el sitio queda libre.`,
+  dismantleTip: `Desmontar: se recupera ${DISMANTLE_BACK === 0.5 ? 'la mitad' : `el ${Math.round(DISMANTLE_BACK * 100)} %`} de lo que costó, menos si está dañado.`,
+  /** The palette's tabs, by PieceKind. */
+  tabs: { building: 'Edificios', defence: 'Defensas', trap: 'Automáticas' },
+  /** The card's kicker, by PieceKind (a building adds its level: buildingKicker). */
+  kinds: { building: 'EDIFICIO', defence: 'DEFENSA', trap: 'AUTOMÁTICA' },
+  paletteHelp: 'Elige una pieza y ponla en el claro: R la gira; Esc o el botón derecho la sueltan.',
+  /** The bottom line, by what is in hand: felling, or nothing (a piece in hand: holdingLine). */
+  felling: 'Arrastra sobre los árboles que quieras talar. Esc para dejarlo.',
+  idle: 'Pulsa una pieza del claro para repararla, mejorarla o desmontarla.',
+  noTrees: 'Aquí no hay árboles: arrastra sobre el pinar.',
+  /** A dear piece with the partner connected: its tag (voteTip has the why). */
+  vote: 'se propone',
+  /** Dismantling's confirmation, and its two buttons. */
+  dismantleAsk: '¿Desmontar?',
+  dismantleYes: 'Desmontar',
+  dismantleNo: 'Dejarlo',
+};
+
+/** The mark at the top, where «DÍA n» was (§11.6): «7 SALIDAS», «1 SALIDA», «AÚN SIN SALIR». */
+export function outingsMark(n: number): string {
+  if (n <= 0) return 'AÚN SIN SALIR';
+  return n === 1 ? '1 SALIDA' : `${n} SALIDAS`;
+}
+
+/** Its tooltip: time is missions now, and building is free of it (`level`: the Bastion's, for the doom's name). */
+export function timeHelp(level: number): string {
+  return `El tiempo pasa con cada misión: mientras la escuadra está fuera, en el Bastión se curan las heridas, se come y ${doomSubject(level)} avanza. Construir, comprar o reclutar no gasta tiempo.`;
+}
+
+/** What locks a piece, or an upgrade: «Hace falta el nivel 2 del Bastión.»; the palette's tag is «Nivel 2». */
+export function needsLevelLine(level: number): string {
+  return `Hace falta el nivel ${level} del Bastión.`;
+}
+
+/** Why a dear piece goes to a vote (`over`: the price above which it does): «Cuesta más de 30 §: se propone, y se paga cuando los dos estáis de acuerdo.» */
+export function voteTip(over: number): string {
+  return `Cuesta más de ${over} §: se propone, y se paga cuando los dos estáis de acuerdo.`;
+}
+
+/** The bottom line with a piece in hand: «Empalizada: clic para poner, R para girar, Esc para soltar.» */
+export function holdingLine(piece: PieceId): string {
+  return `${PIECE_TEXT[piece].name}: clic para poner, R para girar, Esc para soltar.`;
+}
+
+/** By the pointer, where it fits: «Empalizada · Cuesta 6 §», « · se propone» when dear; where it doesn't: «Sala de radio · Hay árboles: tala antes.» */
+export function placeHint(piece: PieceId, cost: { supplies: number; parts?: number }, vote = false, blocked?: string): string {
+  const name = PIECE_TEXT[piece].name;
+  if (blocked) return `${name} · ${blocked}`;
+  return `${name} · ${buildCostLine(cost)}${vote ? ` · ${BUILD_TEXT.vote}` : ''}`;
+}
+
+/** By the pointer, felling: «Talar un árbol · +2 §», «Talar 12 árboles · +24 §». */
+export function fellHint(trees: number): string {
+  return `Talar ${trees === 1 ? 'un árbol' : `${trees} árboles`} · +${trees * TREE_SUPPLIES} §`;
+}
+
+/** A piece under the pointer: «Barricada de sacos · 5/15», «Foso con pinchos · por reponer», «Taller · nivel 2». */
+export function pieceHint(piece: PieceId, what: { hp?: [number, number]; state?: keyof typeof PIECE_STATE; level?: number }): string {
+  const name = PIECE_TEXT[piece].name;
+  if (what.state) return `${name} · ${PIECE_STATE[what.state]}`;
+  if (what.level) return `${name} · nivel ${what.level}`;
+  return what.hp ? `${name} · ${what.hp[0]}/${what.hp[1]}` : name;
+}
+
+/** The card's kicker for a building: «EDIFICIO · NIVEL 2». */
+export function buildingKicker(level: number): string {
+  return `${BUILD_TEXT.kinds.building} · NIVEL ${level}`;
+}
+
+/** The card's figures: «Aguante 12/30», «Usos 0/3», «Junto a: Enfermería, Huerto». */
+export function holdsLine(hp: number, full: number): string {
+  return `Aguante ${hp}/${full}`;
+}
+export function usesLine(left: number, full: number): string {
+  return `Usos ${left}/${full}`;
+}
+export function besideLine(names: readonly string[]): string {
+  return `Junto a: ${names.join(', ')}`;
+}
+
+/** The card's buttons with their price: «Reparar · 4 §», «Mejorar · 60 §», «Reponer · 1 pieza», «Desmontar · +12 §». */
+export function actionPrice(action: 'repair' | 'upgrade' | 'rearm' | 'dismantle', cost: { supplies?: number; parts?: number }): string {
+  const what = [cost.supplies ? `${action === 'dismantle' ? '+' : ''}${cost.supplies} §` : '', cost.parts ? partsCount(cost.parts) : ''].filter(Boolean).join(' y ');
+  return what ? `${BUILD_TEXT[action]} · ${what}` : BUILD_TEXT[action];
+}
+
+/** Under «Mejorar»: what the next level brings, as the world sees it: «Nivel 2: Un torno de verdad.» */
+export function upgradeLine(piece: PieceId, to: number): string {
+  const line = PIECE_TEXT[piece].levels?.[to - 1];
+  return line ? `Nivel ${to}: ${line}` : `Nivel ${to}`;
+}
+
+/** Dismantling's confirmation line: «Se recuperan 12 §.», «Se recupera 1 §.», «No se recupera nada.» */
+export function dismantleBack(supplies: number): string {
+  if (supplies <= 0) return 'No se recupera nada.';
+  return supplies === 1 ? 'Se recupera 1 §.' : `Se recuperan ${supplies} §.`;
+}
+
+/** «Cuesta 15 § y 1 pieza», «Cuesta 6 §». */
+export function buildCostLine(cost: { supplies: number; parts?: number }): string {
+  return cost.parts ? `Cuesta ${cost.supplies} § y ${partsCount(cost.parts)}` : `Cuesta ${cost.supplies} §`;
+}
+
+/** What is short: «Faltan 5 §», «Falta 1 pieza», «Faltan 5 § y 2 piezas». */
+export function buildShortLine(supplies: number, parts = 0): string {
+  const what = [supplies > 0 ? `${supplies} §` : '', parts > 0 ? partsCount(parts) : ''].filter(Boolean);
+  const one = what.length === 1 && (supplies === 1 || (!supplies && parts === 1));
+  return `${one ? 'Falta' : 'Faltan'} ${what.join(' y ')}`;
+}
+
+/** A dear piece put to the partner (§11.7): «Propuesta de Arturo: Muro, 15 § y 1 pieza». */
+export function buildProposalLine(who: string, piece: PieceId, cost: { supplies: number; parts?: number }): string {
+  return `Propuesta de ${who}: ${PIECE_TEXT[piece].name}, ${buildCostLine(cost).replace(/^Cuesta /, '')}`;
+}
+
+/** When the next siege comes, in missions (§11.6): «tras la próxima misión», «dentro de 3 misiones». */
+export function inMissions(n: number): string {
+  return n <= 1 ? 'tras la próxima misión' : `dentro de ${n} misiones`;
+}
+
+/** How many, as the radio hears it: never the exact count. */
+function roughly(n: number): string {
+  if (n < 8) return 'unos pocos';
+  if (n >= 50) return 'más de cincuenta';
+  return `unos ${['diez', 'veinte', 'treinta', 'cuarenta'][Math.min(3, Math.round(n / 10) - 1)]}`;
+}
+
+/** Map edges as the radio says them: «por el norte y el este»; all four, «por todos lados». */
+function bySides(sides: readonly number[]): string {
+  const names = [...new Set(sides)].sort().map((i) => `el ${SIDES[i]}`);
+  if (names.length >= 4) return 'por todos lados';
+  return `por ${names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}` : names[0]}`;
+}
+
+/**
+ * The siege's warning (§11.5): without a Sala de radio, only when; with one,
+ * how many and by where. «Viene un asedio: llegará dentro de 3 misiones.»,
+ * «Por la radio: unos veinte, por el norte, dentro de 3 misiones.»
+ */
+export function siegeWarning(missions: number, heard?: { count: number; sides: readonly number[] }): string {
+  if (!heard) return `Viene un asedio: llegará ${inMissions(missions)}.`;
+  return `Por la radio: ${roughly(heard.count)}, ${bySides(heard.sides)}, ${inMissions(missions)}.`;
+}
+
+/** The same, short for the strip: «ASEDIO EN 3 MISIONES», «ASEDIO TRAS LA PRÓXIMA». */
+export function siegeWarningShort(missions: number): string {
+  return missions <= 1 ? 'ASEDIO TRAS LA PRÓXIMA' : `ASEDIO EN ${missions} MISIONES`;
+}
+
+/** When it comes, and when the base falls: with someone left (to another clearing) or with nobody (the campaign is over). */
+export const BASE_SIEGE_TEXT = {
+  here: 'Ya están aquí.',
+  /** A siege by night (one in three from the second): the squad starts in sight, so the dark only hides the dead from it. */
+  night: 'De noche. A oscuras veréis poco, y ellos os verán como siempre; bajo los focos, se ve como de día.',
+  defenders: 'Defienden los sanos. Los heridos y los mordidos se quedan dentro.',
+  fallen: 'El Bastión ha caído',
+  fallenLine: 'Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la caravana y lo puesto, y vuelven a empezar en otro claro.',
+  nobody: 'No queda nadie',
+  nobodyLine: 'El Bastión ha caído con todos dentro. La campaña termina aquí.',
+};
+
 // ------------------------------------------------------------------- siege
 
 /** The map edges, by DIRS4 index (Reinforcement.side: 0 north, 1 east, 2 south, 3 west). */
 export const SIDES = ['norte', 'este', 'sur', 'oeste'] as const;
 
 /**
- * The siege (docs/FASE12.md §10): the dead come at the base in waves and go
- * for its heart, the radio in the Sala de radio. Headlines without a full
- * stop, like the other missions' outcomes.
+ * The siege (docs/FASE12.md §10; playtest 18/10 #17, #20): the dead come at
+ * the base in waves and go for the living, from no side anyone can tell; the
+ * base falls with the last of its defenders. Headlines without a full stop,
+ * like the other missions' outcomes.
  */
 export const SIEGE_TEXT = {
   /** In place of MISSION_NAMES: the card and the strip. */
   name: 'Asedio',
   /** The skirmish menu's line under «El Bastión», like the other maps'. */
   menu: 'La muralla, cuatro torres y cinco oleadas',
-  briefing: 'Vienen en oleadas, cada una más grande. Tiran puertas y barricadas para llegar a la Sala de radio. Si llega uno, el Bastión cae.',
-  /** The strip's objective. */
-  objective: 'Que no lleguen a la Sala de radio',
+  briefing: 'Vienen en oleadas, cada una más grande, y van a por los vivos. Tiran puertas y barricadas para llegar a vosotros, y no se sabe por dónde entrarán.',
   /** Once the last wave is in. */
   noMoreWaves: 'No vienen más',
-  /** The outcomes: held to the last turn, every wave down, a dead at the heart, nobody left. */
+  /** The outcomes: held to the last turn, every wave down, nobody left. */
   held: 'El Bastión aguanta: los que quedan se retiran',
   cleared: 'El Bastión aguanta: no queda ninguno en pie',
-  fallen: 'El Bastión ha caído: han llegado a la Sala de radio',
   wiped: 'El Bastión ha caído: no queda nadie para defenderlo',
 };
 
-/** The objective in full, for the card and the strip's tooltip (`hold`: SIEGE.hold, the last turn). */
+/** The strip's objective (`hold`: SIEGE.hold, the last turn): «Aguantad hasta el turno 11». */
+export function siegeObjective(hold: number): string {
+  return `Aguantad hasta el turno ${hold}`;
+}
+
+/** The objective in full, for the card and the strip's tooltip. */
 export function siegeObjectiveTip(hold: number): string {
-  return `Si un muerto llega hasta la radio, el Bastión cae. Aguantad hasta el final del turno ${hold} o acabad con todas las oleadas.`;
+  return `Aguantad hasta el final del turno ${hold} o acabad con todas las oleadas. Si caen todos, el Bastión cae.`;
 }
 
 /** Which turn a wave lands at the end of (`turn`: Reinforcement.turn), seen on squad turn `now`: «este turno», «próximo turno», «turno 5». */
@@ -1195,21 +1472,21 @@ function waveTurn(turn: number, now: number): string {
   return turn === now + 1 ? 'próximo turno' : `turno ${turn}`;
 }
 
-/** The next wave, in full: «Próxima oleada, por el norte: al final del turno 5.» */
-export function nextWaveLine(side: number, turn: number, now: number): string {
+/** When the next wave lands, in full: «Próxima oleada: al final del turno 5.» */
+export function waveDueLine(turn: number, now: number): string {
   const when = waveTurn(turn, now);
-  return `Próxima oleada, por el ${SIDES[side]}: al final ${when === 'este turno' ? 'de' : 'del'} ${when}.`;
+  return `Próxima oleada: al final ${when === 'este turno' ? 'de' : 'del'} ${when}.`;
 }
 
-/** The same, short for the strip: «Norte · turno 5», «Este · próximo turno». */
-export function nextWaveShort(side: number, turn: number, now: number): string {
-  const name = SIDES[side];
-  return `${name[0]!.toUpperCase()}${name.slice(1)} · ${waveTurn(turn, now)}`;
+/** The same, short for the strip: «Turno 5», «Próximo turno», «Este turno». */
+export function waveDueShort(turn: number, now: number): string {
+  const when = waveTurn(turn, now);
+  return `${when[0]!.toUpperCase()}${when.slice(1)}`;
 }
 
-/** The log line as a wave comes in: «Entra la oleada 2 de 5, por el este.»; the last one says so. */
-export function waveInLine(side: number, n: number, total: number): string {
-  return n >= total ? `Entra la última oleada, por el ${SIDES[side]}.` : `Entra la oleada ${n} de ${total}, por el ${SIDES[side]}.`;
+/** The log line as a wave comes in, from wherever it does: «Entra la oleada 2 de 5.»; the last one says so. */
+export function waveEntersLine(n: number, total: number): string {
+  return n >= total ? 'Entra la última oleada.' : `Entra la oleada ${n} de ${total}.`;
 }
 
 /** A door or a barricade under the cursor: «Puerta: aguanta 12 de 18». */
@@ -1221,21 +1498,20 @@ export function breakableTip(kind: 'door' | 'barricade', left: number, full: num
 export const GIVE_WAY_FLOAT = { door: 'CEDE LA PUERTA', barricade: 'CEDE LA BARRICADA' };
 
 /**
- * The log's line when one gives way, seen or not (`radio`: the Sala de radio's
- * own door; `side`: a SIDES index): «Han tirado una puerta, al norte.», «Han
- * abierto un hueco en la barricada del este.». A gate's leaves fall one by one,
- * and a barricade's three tiles too: each says so.
+ * The log's line when one gives way, seen or not (`side`: a SIDES index):
+ * «Han tirado una puerta, al norte.», «Han abierto un hueco en la barricada
+ * del este.». A gate's leaves fall one by one, and a barricade's three tiles
+ * too: each says so.
  */
-export function giveWayLine(kind: 'door' | 'barricade', radio = false, side?: number): string {
-  if (radio) return 'Han tirado la puerta de la Sala de radio.';
+export function giveWayLine(kind: 'door' | 'barricade', side?: number): string {
   const where = side === undefined ? undefined : SIDES[side];
   if (kind === 'door') return where ? `Han tirado una puerta, al ${where}.` : 'Han tirado una puerta.';
   return where ? `Han abierto un hueco en la barricada del ${where}.` : 'Han abierto un hueco en una barricada.';
 }
 
 /** The mark on the screen's edge and on the map where they broke in, like «Oleada · sur»: «Brecha · este». */
-export function breachMark(side: number, radio = false): string {
-  return radio ? 'Brecha · Sala de radio' : `Brecha · ${SIDES[side]}`;
+export function breachMark(side: number): string {
+  return `Brecha · ${SIDES[side]}`;
 }
 
 // ------------------------------------------------------------------ people
@@ -1262,10 +1538,10 @@ export const NAMED_SEX: Record<string, 'f' | 'm'> = {
 
 /** The card before the first mission: who the players are and why they fight. One paragraph per line. */
 export const PREMISE = {
-  title: 'Atalaya',
+  title: 'El claro',
   lines: [
     'La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
-    'En la vieja estación militar, sobre el pueblo de Brena, se ha ido reuniendo gente de todas partes. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.',
+    'Atalaya, la vieja estación militar, cayó en otoño. Los que salimos con vida hemos parado en un claro del pinar, sobre Brena, con una caravana y lo puesto. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.',
     'Toca volver a sacar La Lata, ese trasto forrado con chapas que tenemos por autocar, y salir a buscar lo que nos hace falta.',
   ],
 };
@@ -1301,7 +1577,10 @@ export function missionName(biome: Biome, zone: string, seed: number, site?: Sit
  * the Voz's, the Pico Gris holds the repeater of chapter 4.
  */
 export const LANDMARKS = {
-  atalaya: 'Atalaya',
+  /** The home: a clearing in the pines above Brena (the key is the old one, kept for the map). */
+  atalaya: 'El Bastión',
+  /** Brena: the old station, burnt in the autumn (Arturo, 18/10: «Atalaya cayó»); just its name, the drawing says the rest. */
+  ruins: 'Atalaya',
   /** Brena: the village of the bells (quest «Las campanas de Telm»). */
   telm: 'Telm',
   /** Carvik: the Sindicato's mine. */
@@ -1420,9 +1699,9 @@ const BRIEFINGS: Record<MissionKind, string[]> = {
     'Los muertos se han quedado allí, y por ahí pasa la ruta de la sierra. Abatidlos a todos.',
   ],
   recovery: [
-    `Dentro hay medicinas, intactas desde el primer invierno. Recuperadlas y volved ${BUS.to}.`,
-    'Uno de sus mensajeros murió allí, a la intemperie. Su mochila sigue junto al cuerpo. Recuperadla antes de que se acabe el tiempo.',
-    'Los Cuervos escondieron allí su botín y no volvieron a por él: los muertos llegaron antes. Llevaos lo que podáis.',
+    `Allí quedó el mapa de los pozos de la comarca. Sin él, el agua del verano es una apuesta. Recuperadlo y volved ${BUS.to}.`,
+    'Uno de sus mensajeros murió allí, a la intemperie. La saca del correo sigue junto al cuerpo. Recuperadla antes de que se acabe el tiempo.',
+    'Los Cuervos escondieron allí su libro de cuentas y no volvieron a por él: los muertos llegaron antes. Dice quién les paga y por dónde pasan. Traedlo.',
   ],
   sabotage: [
     'Algo suena allí cada noche, y los muertos de toda la comarca acuden. Que deje de sonar antes de que termine la cuenta atrás.',
@@ -1459,7 +1738,8 @@ function briefingSeed(o: MissionOffer): number {
  * medicines and the Cuervos' warehouse are indoors, the courier's backpack
  * lies in the street.
  */
-const RECOVERY_ITEMS: { item: string; outdoors?: true }[] = [{ item: 'las medicinas' }, { item: 'la mochila', outdoors: true }, { item: 'el botín' }];
+/** Never anything a search turns up (playtest 18/10 #13): the objective must not look like the loot. */
+const RECOVERY_ITEMS: { item: string; outdoors?: true }[] = [{ item: 'el mapa de los pozos' }, { item: 'la saca del correo', outdoors: true }, { item: 'el libro de cuentas' }];
 
 function ordinaryRecovery(o: MissionOffer): { item: string; outdoors?: true } | undefined {
   if (o.kind !== 'recovery' || o.story || o.quest || o.final || o.facility) return undefined;
@@ -1523,11 +1803,11 @@ export interface ExpedientePage {
 export const EXPEDIENTE: ExpedientePage[] = [
   {
     title: 'Atalaya',
-    summary: 'La Pandemia lo vació todo. Atalaya aguanta: muros, agua y una sola carretera.',
+    summary: 'La Pandemia lo vació todo. Atalaya cayó en otoño; los que quedan empiezan de cero en un claro del pinar.',
     paragraphs: [
       'Hace dos inviernos llegó la Pandemia. Quien se contagia muere en un día y se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.',
-      'Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra, la presa al lado y una sola carretera. Por eso sigue en pie. Quienes llegaron después conservaron su orden: equipos, rangos y armería. Los equipos salen en La Lata, un autobús de línea al que Teo le soldó chapa por encima.',
-      'La dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.',
+      'Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en La Lata, el autobús al que Teo le soldó chapa por encima, con la caravana enganchada detrás.',
+      'Hemos parado en un claro del pinar, sobre Brena. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.',
     ],
     note: 'Lo que entra por la puerta se apunta aquí. — N. A.',
   },
@@ -1644,10 +1924,10 @@ export const STORY: StoryChapter[] = [
     difficulty: 1,
     reward: { credits: 90 },
     briefing:
-      'El consultorio de Brena, el pueblo de abajo, sigue cerrado. Puede que todavía queden medicinas dentro. En la estación apenas nos quedan paracetamoles.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Tendréis que buscar una entrada y cargar lo que encontréis.',
+      'El consultorio de Brena, el pueblo de abajo, sigue cerrado. Dentro debería seguir el maletín de urgencias: instrumental, sutura, lo que el médico llevaba a las casas. En el campamento curamos con trapos.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Buscad una entrada y traed el maletín.',
     signature: '',
-    item: 'las medicinas',
-    after: 'Las medicinas del consultorio ya están en la enfermería. Por primera vez desde el otoño, nadie tiene que elegir quién se cura.',
+    item: 'el maletín de urgencias',
+    after: 'El maletín de urgencias ya está en la caravana: pinzas, sutura, un fonendo. Ahora falta quien sepa usarlo.',
   },
   {
     title: 'La doctora',
@@ -1766,11 +2046,11 @@ export function epilogue(outcome: 'victory' | 'defeat', ending: Ending | null, d
       return 'La Marea se deshizo en la sierra. Esa noche, Morse leyó la fórmula de la vacuna por todas las frecuencias, despacio, dos veces. La oyeron los enclaves, la oyeron los Cuervos y la oyó quien quisiera oírla. Nadie sabe qué harán con ella. Por primera vez en dos inviernos, nadie se queda fuera.';
     }
     if (ending === 'record') {
-      return 'La Marea se deshizo en la sierra. La vacuna salió de Atalaya en La Lata, enclave por enclave, solo para quienes estuvieron. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en una caja del refugio.';
+      return 'La Marea se deshizo en la sierra. La vacuna salió del Bastión en La Lata, enclave por enclave, solo para quienes estuvieron. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en una caja del refugio.';
     }
     return 'La Marea se ha deshecho en la sierra. Por primera vez en dos inviernos, el valle duerme sin oír pasos.';
   }
   return doomFull
-    ? 'Kilómetro cero. La Marea llegó a Atalaya con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.'
-    : 'No queda nadie que conteste por radio. Atalaya vuelve a quedarse a oscuras.';
+    ? 'Kilómetro cero. La Marea llegó al Bastión con la primera niebla. Morse siguió emitiendo hasta el final. La última hoja del diario se quedó a medio escribir.'
+    : 'No queda nadie que conteste por radio. El Bastión se queda a oscuras.';
 }

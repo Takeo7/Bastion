@@ -200,3 +200,139 @@ Sin camino hasta su objetivo, golpean el punto más débil que les abre paso: cu
   - la Sala de radio con su antena;
   - el daño de puertas y barricadas según lo que aguantan, y el hueco cuando ceden.
 - **Lore:** los textos del asedio («Golpear», la tarjeta, los avisos de oleada, los finales) y la entrada del menú.
+
+## 11. La base nueva (Arturo, 18/10 por la tarde)
+
+Tras probar la 0.6.0, Arturo cambia el planteamiento y lo quiere en la campaña para la próxima versión. Donde choque con lo de arriba, manda esto.
+
+**La idea:**
+- Se empieza con **una caravana** en una explanada; todo lo demás se construye y se mejora: edificios, barricadas, cajas, muros.
+- El objetivo a largo plazo es **automatizar la defensa**, como en PlateUp: al principio defiendes tú; al final, minas, trampas y torretas defienden la base casi solas. Una especie de tower defense.
+- **El asedio se juega siempre:** torretas y trampas actúan solas en el combate y tú mueves a los soldados; con buenas defensas apenas hay que hacer nada.
+
+### 11.1 La explanada
+
+- El mapa de la base se genera al empezar la campaña: un claro en el pinar, unas veces con más árboles y otras con más claros (pocos claros grandes). La caravana, en medio.
+- Sin niebla ni oscuridad: es nuestra.
+- Se construye en lo despejado. **Talar** un árbol da sitio y da suministros (Arturo: no hay recursos nuevos).
+
+### 11.2 La caravana
+
+- Camas para la escuadra del principio y el almacén. Nada más: radio, enfermería, taller y lo demás se construyen.
+
+### 11.3 Los edificios
+
+Las instalaciones de ahora, con su sitio en el mapa, su tamaño, su salud y tres niveles. El efecto, más o menos el de ahora, contado por misión. Lo de «junto a…» pasa a ser estar al lado en el mapa.
+- **Sala de radio:** los avisos de asedio (por dónde y cuántos) y las misiones; absorbe el Centro de comunicaciones y la Estación de escucha.
+- **Barracón** (camas), **Enfermería**, **Taller**, **Huerto**, **Cuarentena**, **Camposanto**, **Campo de tiro**, **Centro de entrenamiento**, **Taller de oficios**, **Chapistería**, **Sala de mapas**.
+- La **Brigada de obras** desaparece: construir es al momento.
+
+### 11.4 Las defensas
+
+- **A mano:**
+  - empalizada (barata, débil);
+  - muro (caro, aguanta);
+  - puerta;
+  - barricada de sacos;
+  - cajas (cobertura);
+  - torre de vigía;
+  - foco (ilumina y atrae);
+  - alambre de espino (frena).
+- **Automáticas, que gastan:**
+  - **mina:** estalla una vez; se repone con piezas;
+  - **foso con pinchos** y **cepo:** dañan o retienen; se reponen con piezas;
+  - **torreta:** dispara sola, en el turno enemigo, a lo que se acerque; gasta munición del almacén y se queda muda sin ella.
+- Todo tiene salud. Lo roto se queda roto hasta repararlo, y reparar cuesta.
+
+### 11.5 Los asedios en la campaña
+
+- Cada pocas misiones (para empezar, cada 3; antes con más Marea) y cada vez más grandes.
+- Los muertos llegan **por cualquier lado** y van **a por los soldados**.
+- **Avisos:** sin Sala de radio, solo cuándo (en cuántas misiones); con ella, también por dónde y cuántos.
+- **Defienden los sanos.** Los heridos y los mordidos se quedan dentro, fuera del combate.
+- **Se pierde si caen todos los que defienden:** la base cae y se empieza de cero con los que queden. Se pierden los edificios, las defensas y lo del almacén; los soldados conservan sus barras y su tablero. **Si no queda nadie, se pierde la campaña** (Arturo).
+- **Se gana** aguantando hasta que se retiran o acabando con todos.
+
+### 11.6 El tiempo, en misiones
+
+Lo que hoy cuenta días pasa a contar misiones:
+- las heridas y la fiebre;
+- la comida;
+- la Marea;
+- las ofertas, los rumores, los encargos y los capítulos.
+
+«Esperar noticias» desaparece.
+
+### 11.7 La pantalla de la base
+
+- El mapa de la base en 3D, como el combate, con un **modo construir**: elegir la pieza, colocarla, girarla, reparar y desmontar, viendo lo que cuesta.
+- El Cuartel, la Armería, el valle y las misiones siguen, como paneles sobre el mapa.
+- **Cooperativo:** los recursos son comunes y cada uno construye al momento; lo caro va a propuesta y se vota.
+
+### 11.8 Campaña nueva
+
+La base de ahora no se puede convertir. La partida de antes se guarda aparte, como en la 0.3 y la 0.4. El asedio de prueba («El Bastión» en escaramuza) se queda para probar.
+
+### 11.9 Decidido y por decidir
+
+- **Sin recursos nuevos** (Arturo): talar da suministros; se construye con suministros y piezas.
+- **Si la base cae y no queda nadie, se pierde la campaña** (Arturo).
+- **El plan, aprobado** por Arturo el 18/10.
+- **Por decidir, la historia:** hasta ahora, el Bastión era la vieja estación militar sobre Brena. Con la caravana, Lore propone dónde y cómo se planta el campamento.
+
+### 11.10 Por partes, para la 0.7
+
+1. **Motor (Gameplay):**
+   - el estado de la base en la campaña: mapa, piezas, edificios y salud;
+   - la explanada al azar;
+   - construir, talar, reparar y desmontar, con sus costes;
+   - los efectos de los edificios;
+   - el asedio desde la base;
+   - torretas, minas y trampas en el combate;
+   - el tiempo en misiones;
+   - la campaña nueva.
+2. **UI:**
+   - la pantalla de la base en 3D con el modo construir;
+   - los avisos;
+   - quitar lo que cuenta días.
+3. **Arte:**
+   - la explanada (pinar y claros);
+   - la caravana;
+   - los edificios por niveles;
+   - las defensas y torretas con sus daños.
+4. **Lore:**
+   - nombres y textos de piezas y edificios;
+   - la caravana en la historia;
+   - los avisos.
+5. **Red:** la partida nueva, y que el mapa de la base viaje bien por la red.
+
+Es la fase más grande hasta ahora: toca casi toda la campaña (campaign.ts) y la pantalla de la base entera.
+
+### 11.11 Estado del motor (18/10)
+
+Hecho en el motor, con 462 tests:
+- **La base:** `base.ts` con las 25 piezas (`PIECES`), el claro al azar (`freshBase`), dónde cabe cada cosa, talar, reparar, reponer, desmontar y «junto a» en el mapa. En la campaña, `c.bastion`.
+- **El asedio sobre la base:** `baseLayout` pasa la base a casillas de combate; las torretas son unidades que nadie manda y vigilan en el turno enemigo; las minas, los pinchos y los cepos saltan al pisarlos; el alambre frena. Los muertos golpean cualquier pieza que se les ponga en medio, y lo roto se queda roto.
+- **Los edificios:** los efectos de las instalaciones salen de los edificios de la base, y un edificio con la mitad o menos de su aguante no funciona. La caravana hace de búnker, Cuartel y Armería (8 camas). La Sala de radio es el Centro de comunicaciones a nivel 2 y la Estación de escucha a nivel 3. La Brigada de obras ya no está.
+- **Construir:** órdenes `place`, `fell`, `mend`, `raise`, `rearm` y `dismantle`. Lo que cuesta más de 30 § (`VOTE_ABOVE`) y las mejoras van a voto.
+- **El tiempo:** cada misión son 5 días por dentro (`DAYS_PER_MISSION`), que pasan mientras la escuadra está fuera. «Esperar noticias» ya no existe, y siempre hay al menos dos misiones normales.
+- **Los asedios en la campaña:**
+  - el primero tras 3 misiones, y luego cada 3 (cada 2 con la Marea a la mitad), cada vez más grandes (14 muertos, +6 por cada asedio aguantado, +1 por punto de Marea), por uno a tres lados;
+  - la Sala de radio oye cuántos y por dónde;
+  - defienden todos los sanos;
+  - si la base cae y queda alguien, se huye a otro claro: se pierden lo levantado, el almacén y los recursos, y se conserva lo que llevan encima. Si no queda nadie, se pierde la campaña.
+- **Campaña nueva** (versión 20): la de antes se guarda aparte como `save.antes-0.7.json`.
+
+### 11.12 La prueba entera (18/10)
+
+UI, Arte y Lore terminaron su parte: el claro en 3D con el modo construir, las piezas de Arte, La Lata que sale y vuelve por la pista, el aviso del asedio, el valle con el claro y Atalaya quemada, y los textos. Probado de punta a punta en la campaña: construir (con voto a partir de 30 §), una misión, el asedio con uno y con dos jugadores, ganarlo y perderlo. Lo que salió y cómo queda:
+- **Oleadas sin salida:** una oleada podía aparecer en un calvero del pinar cerrado por árboles y quedarse allí. Ahora solo llega por donde hay camino hasta los soldados, abierto o rompiendo lo construido.
+- **El reloj y los lados:** la oleada traía uno de más por el redondeo (15 con 14), y los lados anunciados podían quedarse sin nadie. Ahora el total es el del reloj, y por cada lado anunciado llega al menos un grupo.
+- **La torreta** perdía puntería en el fuego de reacción como un soldado (un 27 % contra un Corredor). Ahora no pierde nada: está hecha para eso.
+- **El informe** de un asedio ganado dice lo roto, lo tocado y lo gastado (`report.damage`), y la agenda pone «Repara…» y «Repón…» justo después de las operaciones.
+- **Nadie puede salir:** tras una caída pueden quedar solo heridos y ningún suministro para reclutar; como el tiempo solo pasa con las misiones, la campaña se quedaba parada. Entonces, y solo entonces, se puede esperar a que se curen (`mustWait`).
+- **Asedios de noche** (Arturo): uno de cada tres, desde el segundo. A oscuras solo se ve lo cercano; el foco alumbra 4 casillas (`NIGHT.floodlight`). De noche no hay más muertos que los de las oleadas.
+- **La ficha del asedio** en el valle y en la cochera es la suya: «El Bastión», sin cancelar ni quitar a nadie, y con todos los que defienden.
+- Sitio de salida para 24 defensores.
+
+Falta: ajustar las cifras jugando (tamaño de las oleadas, precio y munición de la torreta).

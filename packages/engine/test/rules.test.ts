@@ -314,11 +314,28 @@ describe('recovery missions', () => {
     expect(b.lost).toBe(true);
   });
 
-  it('the mission fails when the timer runs out', () => {
-    const { s } = recovery();
+  it('when the timer runs out La Lata leaves: nobody aboard with the objective, the mission is lost to the clock', () => {
+    const { s, a, b } = recovery();
+    run(s, { type: 'move', unit: 's1', to: { x: 0, y: 5 } });
     for (let i = 0; i < 4 && !s.outcome; i++) run(s, { type: 'endTurn', ready: true });
+    expect(s.mission.evacDone).toBe(true);
+    // Whoever was aboard got out; the rest are lost.
+    expect(a.evacuated).toBe(true);
+    expect(b.lost).toBe(true);
     expect(s.outcome).toBe('defeat');
     expect(s.outcomeReason).toBe('timer');
+  });
+
+  it('when the timer runs out with the objective aboard, the mission is won; whoever was outside is lost (playtest 18/10, #8)', () => {
+    const { s, a, b } = recovery();
+    run(s, { type: 'move', unit: 's1', to: { x: 4, y: 0 } });
+    run(s, { type: 'move', unit: 's1', to: { x: 0, y: 5 } });
+    expect(s.mission.item?.carrier).toBe('s1');
+    for (let i = 0; i < 4 && !s.outcome; i++) run(s, { type: 'endTurn', ready: true });
+    expect(s.mission.item?.evacuated).toBe(true);
+    expect(a.evacuated).toBe(true);
+    expect(b.lost).toBe(true);
+    expect([s.outcome, s.outcomeReason]).toEqual(['victory', 'objective']);
   });
 
   it('either player can abandon the mission', () => {

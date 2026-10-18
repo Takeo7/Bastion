@@ -33,7 +33,7 @@ const POOL = 8;
 const NAME_KEY = storageKey('name');
 /** The stage's sets, in the players' words; any other view goes as it is named. */
 const VIEWS: Record<string, string> = { bastion: 'base', geo: 'globo' };
-const EFFECTS = { high: 'altos', medium: 'medios', low: 'bajos', mobile: 'móvil' } as const;
+const EFFECTS = { high: 'altos', medium: 'medios', low: 'bajos' } as const;
 
 /** Time between frames drawn, as performance.now() sees it at their end. */
 const intervals = new Float32Array(RING);

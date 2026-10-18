@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advanceTime,
   applyMissionResult,
   buildSquad,
   CAMPAIGN_VERSION,
@@ -8,7 +9,6 @@ import {
   ENCLAVE_DAYS,
   executeCampaignCommand,
   migrateCampaign,
-  plotById,
   soldierReady,
   START_MEDICINES,
   treatCost,
@@ -24,7 +24,7 @@ import { Rng } from '../src/rng';
 import { risenName, Sim } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { GameState, Pod, Slot, TemplateId, Unit } from '../src/types';
-import { addUnit, stateFrom } from './helpers';
+import { addUnit, raise, stateFrom } from './helpers';
 
 // Phase 3 of the zombies: infection and medicines (docs/FASE3.md).
 
@@ -169,7 +169,7 @@ describe('infection at the base', () => {
     expect(fallen.alive).toBe(false);
     expect(fallen.infection).toBeUndefined();
     expect(turnDay(c, s)).toBe(c.day + TURN_DAYS);
-    plotById(c, '4,4')!.building = 'infirmary';
+    raise(c, 'infirmary');
     expect(turnDay(c, s)).toBe(c.day + TURN_DAYS + 2);
     expect(soldierReady(s)).toBe(false);
     expect(defaultSquad(c, [0, 1])).not.toContain(s.id);
@@ -179,7 +179,7 @@ describe('infection at the base', () => {
     const { c, sick } = bitten();
     const [s] = sick as [CampaignSoldier];
     const day = turnDay(c, s)!;
-    for (let i = 0; i < 10 && s.alive; i++) run(c, { type: 'advance', ready: true }, 0, [0]);
+    for (let i = 0; i < 10 && s.alive; i++) advanceTime(c, new Rng(7 + i));
     expect(s.alive).toBe(false);
     expect(c.day).toBe(day);
     expect(s).toMatchObject({ fellDay: day, fellCause: 'turned' });
@@ -206,9 +206,7 @@ describe('infection at the base', () => {
     expect(c.treatment).toBeNull();
     expect(b.infection).toBeDefined();
     // With the Enfermería at level 2, one ✚; and a player alone needs no second key.
-    const plot = plotById(c, '4,4')!;
-    plot.building = 'infirmary';
-    plot.level = 2;
+    raise(c, 'infirmary', 2);
     expect(treatCost(c)).toBe(1);
     expect(run(c, { type: 'treat', soldier: b.id, ready: true }, 0, [0]).ok).toBe(true);
     expect(b.infection).toBeUndefined();
@@ -257,7 +255,7 @@ describe('infection at the base', () => {
       // The log is newest first (and short): what's new is what comes before the entry on top now.
       const mark = c.log[0];
       const start = c.medicines!;
-      for (let i = 0; i < 60 && c.day < until; i++) run(c, { type: 'advance', ready: true }, 0, [0]);
+      for (let i = 0; i < 60 && c.day < until; i++) advanceTime(c, new Rng(7 + i));
       const fresh = mark && c.log.includes(mark) ? c.log.slice(0, c.log.indexOf(mark)) : c.log;
       const convoys = fresh.filter((l) => /medicinas: \+/.test(l.text)).map((l) => Number(/\+(\d+) ✚/.exec(l.text)![1]));
       expect(c.medicines! - start).toBe(convoys.reduce((a, b) => a + b, 0));

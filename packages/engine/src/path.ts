@@ -1,4 +1,4 @@
-import { TEMPLATES } from './content';
+import { TEMPLATES, TRAPS } from './content';
 import { decorOf } from './decor';
 import { canStandOn, DIRS4, DIRS8, elevAt, heightAt, inBounds, isWalkable, isWindow, kindAt, nodeOf, posOf, slabAt, surfaceAt, toPos } from './grid';
 import type { GameState, Place, Pos, Unit } from './types';
@@ -218,6 +218,8 @@ export function onPatrol(s: GameState, u: Unit): boolean {
 export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos = u.pos): Reach {
   const windows = !onPatrol(s, u);
   const shut = !!s.mission.siege && !!TEMPLATES[u.template].undead;
+  // Barbed wire (docs/FASE12.md §11.4): costlier to cross, for everyone.
+  const slow = s.slow?.length ? new Set(s.slow) : null;
   const blockedByEnemy = new Set<number>();
   for (const o of s.units) {
     if (o.alive && o.team !== u.team) blockedByEnemy.add(nodeOf(s, o.pos));
@@ -241,7 +243,7 @@ export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos =
           const h = heightAt(s, p);
           if (blocked(surfaceAt(s, to.x, p.y, h)) || blocked(surfaceAt(s, p.x, to.y, h))) continue;
         }
-        const nc = c + step;
+        const nc = c + step + (slow?.has(ni) ? TRAPS.wire : 0);
         if (nc > maxCost) continue;
         if (nc < (cost.get(ni) ?? Infinity)) {
           cost.set(ni, nc);

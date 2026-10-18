@@ -61,6 +61,12 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 
 ### Personajes (`game/syntyFigures.ts`, `syntyAnims.ts`, `unitViews.ts`)
 
+- **Manos y codos** (Arturo 18/10: «todos tienen las manos abiertas y meten los brazos dentro de los cuerpos»):
+  - **los dedos:** los modelos de Synty traen 22 huesos de dedos (pulgar de tres, índice de cuatro, y los otros tres juntos de cuatro), y el conversor ya no los pliega en la mano. Los nombres de cada fuente se unifican como `Thumb_01_L`, `Index_01_L`, `Finger_01_L` (`convert.py`: `thumb_01_l`, `Thumb_01`/`Thumb_01_1`, City Zombies `Thumb_01.001`);
+  - **la postura de cada mano** (`HAND_POSES`, `hands()` sobre la mano ya colocada por el IK): gatillo con el índice estirado en la empuñadura; empuñadura cerrada en el cuchillo, el machete y la escalera; apoyo bajo el guardamanos; puño con la piedra y la granada; abierta al registrar; garra en los muertos; relajada en el resto. Se pasa de una a otra suave (`HAND_EASE`). Las pistas de dedos de los clips se quitan al cargar: los pone la mano;
+  - **los codos:** el pecho de cada personaje se mide en su propia malla (armadura incluida, `torsoOf`). Si el codo o la mitad del brazo o del antebrazo quedan dentro (en el marco del pecho, que se inclina y gira), el codo gira alrededor de la línea hombro–mano, sin mover la mano, hasta salir (`clearElbow`);
+  - **para comparar:** `__weapons.HANDS.fingers` / `.elbows` en el laboratorio de armas;
+  - **coste:** los dedos doblaban los huesos (de 22 a 44). Ahora los nodos del modelo no se recalculan solos: cada hueso hace su matriz al escribirlo, y el modelo solo arrastra a sus huesos cuando se mueve (`stillUnlessMoved`). En Ensanche, pantalla de móvil emulada y sin tope, la CPU baja a 1,3 ms por fotograma: sin dedos estaba en 1,4 y con dedos sin el ajuste, en 1,7–1,8.
 - **Supervivientes:** 16 personajes para elegir en el Cuartel (`SURVIVOR_CHOICES`). Sin elección, el soldado sale de su complexión y de su sexo (`SQUAD_BODIES`), y es el mismo en todas partes.
 - **Los muertos:** comunes (10 modelos), corredores (4), acorazados (4, un poco más grandes), el Chillón y el Hinchado (`UNIT_BODIES`). Cada uno sale de su id, así que una horda es de todo tipo. Hasta el 15/10 salían del nombre, que comparten («Zombi»), y todos los de una misión eran el mismo cuerpo.
 - **Animación,** por capas:
@@ -130,6 +136,13 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - escaleras con pasamanos a los lados del tramo y barandilla alrededor del hueco, abierta solo al rellano, que es por donde se dejan ([FASE7.md](FASE7.md));
   - paredes que rompe una granada: un muñón a la altura de cobertura baja, el dintel encima (la planta de arriba sigue en pie) y escombros a cada lado. Se reconocen por el decorado `breach`, también tras recargar;
   - forjados rotos: el agujero, por el que se ve la planta de abajo, y cascotes planos debajo. Rehacer las plantas con un agujero nuevo cuesta 7–10 ms, una vez por explosión.
+- **Casas por salas** (prueba del 18/10, #15; el reparto en `mapgen.ts`, de acuerdo con Gameplay; `homeDressing.ts`; `GameState.homes`):
+  - **las salas,** por tamaño y por dónde se entra (`homeUses`): la del portal es el salón; una cocina pegada a él si hay sitio; la más pequeña, el baño; el resto, dormitorios y, en una casa grande, un despacho. Arriba, dormitorios, un baño y quizá un despacho. Una casa de dos salas parte la de atrás en dormitorio y baño, y la de una sola, en salón y dormitorio, si mide 7 o más (`splitOff`: un tabique con puerta, salas de 3 o más de lado, como pide la prueba de mapgen); la cocina va entonces en el salón, y una casa de una sala es un estudio, con su cama;
+  - **los muebles por sala** (`furnishHome`): salón, con librería, sofá frente a la tele o la mesa y cocina pequeña; cocina, con nevera, encimeras, fogón y mesa; dormitorio, con cama y armario; baño, con bañera, váter y lavabo; despacho, con mesa, librería y archivador. Muebles nuevos del motor: `fridge`, `stove`, `bathtub`, `washbasin`, `tvStand` y `wc` (el `toilet` es de las clínicas), con modelos de Town y Apocalypse;
+  - **el suelo de cada sala** (`HOME_FLOORS` en buildings.ts): tablas de tonos distintos en salón, dormitorios, despacho y recibidor, y baldosa clara en cocina y baño. Una casa sigue siendo casa aunque tenga encimeras (antes, una encimera la hacía tienda);
+  - **el desgaste,** por casa (`homeWear`): las del pueblo viejo, peor que las de la cuadrícula. En una destrozada, algún armario cae de cara (cobertura baja; se dibuja tumbado). Con semilla propia (`dressHome`): los muertos donde cayeron, su sangre y su rastro, ropa fuera de las camas, libros y papeles por el suelo, una silla volcada, maletas hechas, suciedad junto a las paredes y sangre en una pared en las destrozadas. Son los detalles de las clínicas, dibujados igual;
+  - **el azar del generador,** el mismo: las salas nuevas se amueblan con un azar aparte, así que el resto de cada ciudad sale como antes. Probado con la semilla 31: las casas, en el mismo sitio y del mismo tamaño;
+  - capturas en `.dev-snapshots/arte/casas/`.
 - **Cajas de botín** (`lootBox` en `mapView.ts`, `lootMarks.ts`; [FASE8.md](FASE8.md) §B): cada tipo con su forma y su color para que se distinga de lejos. Armas, una caja larga de madera con tapa; medicinas, el contenedor rojo con el botiquín encima; munición, la caja militar verde con su lata; comida, cajas de cartón. Abiertas (`s.searched`), la tapa o lo de encima queda en el suelo, con algo de lo que había. Encima de cada una, su marca: el icono de Synty del tipo en una placa de acero con el anillo de su color (amarillo, verde, ámbar y latón). Sale cuando la casilla se ha visto, se queda en lo explorado y se va al abrirla.
 - **Lo que se deja en el suelo** (`dropped.ts`; [FASE8.md](FASE8.md) §C, `GameState.dropped`): una cosa por casilla, apartada del centro para que no la tape quien está encima. Un arma, su modelo tumbado de lado; una medicina, su botiquín; comida, una caja de cartón con una lata encima; lo demás, y varias cosas juntas, una bolsa de lona. Debajo, un aro fino y claro que la separa de la basura de la calle. Se va al recogerla y sigue el corte de los edificios.
 - **Escenarios** (#25; `GameState.site`, el plano lo hace Gameplay en `mapgen.ts`):
@@ -154,6 +167,12 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - papeles, escombros y basura sueltos, todo plano y cosmético (`ground.ts`, `dressing.ts`);
   - los tejados con trastos (`buildings.ts`); cajas solo en los que no se pisan.
   Lo que pueda leerse como cobertura lo pone el motor, nunca el decorado. El generador (mapgen.ts, acordado con Gameplay) pone árboles en las esquinas de las plazas, escombros en plazas y aparcamientos y más coches abandonados, siempre fuera del despliegue, del objetivo, de la evacuación y de los bordes, y a 2 casillas o más de paredes, puertas y escaleras. La cobertura cercana pasa del 25,7 % al 26,9 % del suelo abierto.
+  - **Alcantarillas** (prueba del 18/10, #11: «muchísimas»): una tapa cada 16 casillas por calle, desfasada al azar entre una calle y otra, y un sumidero cada 13 por bordillo. Antes salían al azar en el 6 % de las casillas de calzada y el 8 % de las de bordillo.
+- **Plazas** (prueba del 18/10, #12: «mobiliario al azar»):
+  - **la fuente,** entera: la de Apocalypse (`SM_Prop_Fountain_01`, `fountainWhole`) sobre sus 3 × 3 casillas, con la estatua por remate, o más pequeña sobre las 2 × 2 de una plazuela. Antes, su borde eran bloques de hormigón (los «quitamiedos haciendo formas raras»). Lo que deja una explosión es escombro;
+  - **los bancos** (decorado nuevo `bench` del motor, dos casillas de cobertura baja; se dibujan como bloque): el de City (`SM_Prop_ParkBench_01`) y, uno de cada tres, el roto de Apocalypse, también cuando la explosión se lleva una de las dos casillas. En cada plaza, dos que miran a la fuente; en la plazuela con fuente, uno;
+  - **la plaza de salida** (`squadSquare` en `mapgen.ts`), ya como las del medio del mapa. La fuente queda al fondo; dos bancos la miran desde el lado de la escuadra, con una papelera; en las dos esquinas de los bordes, un árbol con su jardinera. Es la cobertura del primer movimiento. Los tres «puestos» de barricadas y cajas que el generador ponía junto a la escuadra solo salen en la ciudad si no hay nada en 3 casillas. La plaza tira del azar lo mismo que la de antes: el resto de la ciudad de cada semilla sale igual;
+  - **las cajas altas,** una grande con otra encima, torcida. Antes, una máquina de refrescos o una barrera alta al azar: de ahí las «7 máquinas».
 - **Noche** (`night.ts`), contra la captura del motel de Woodland de Synty: neblina verdosa y luna fría, y la luz cálida de lo que aún funciona (farolas, algún faro, bengalas y fuegos). Qué casillas están a la luz lo dice el motor.
   - **Sin deslumbrar** (Arturo 17/10: «la luz deslumbra mucho de noche»):
     - bloom de noche a 0,45 con umbral 0,88, para que solo florezca lo que emite y no el suelo iluminado;
@@ -179,7 +198,7 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - **los portones:** las hojas de chapa `SM_Prop_Wall_Quarantine_GateDoor_01/02`, una por casilla (`gateLeaf`, `gateLeafFar`), sin dintel. Cada hoja gira en su extremo del portón (`hingeFar`: la segunda gira al revés para abrir al mismo lado) y lleva una columna del muro a cada lado;
   - **las barricadas `b`:** sacos terreros (`sandbags`);
   - **las torres:** `SM_Bld_GuardTower_02` de POLYGON Military sin su caseta ni su escalera (recortadas en el conversor: `keep` y `hole`). Queda la plataforma sobre patas con barandilla, a 3 × 3 casillas y con el suelo justo a una planta (`deck`), girada hacia su escalera de mano (`RAISED_TOWER`). Para el motor es un bloque macizo, así que por debajo no se pasa: por los lados de fuera sigue el muro de cuarentena, de modo que la muralla no se corta en la esquina, y por los de dentro la cierra una caseta de chapa, con la puerta cerrada en el lado sin escalera. Los muros llegan a la torre sin columna;
-  - **los edificios:** de una planta y tejado plano. La Sala de radio (la del corazón), de hormigón, con el mástil de celosía `SM_Bld_RadioTower_01`, su remate de antenas y una parabólica en el tejado; el barracón, de bloque; la enfermería, de hormigón; el taller y el almacén, de chapa. Sin letreros.
+  - **los edificios:** de una planta y tejado plano. La Sala de radio (el edificio en el centro del mapa), de hormigón, con el mástil de celosía `SM_Bld_RadioTower_01`, su remate de antenas y una parabólica en el tejado; el barracón, de bloque; la enfermería, de hormigón; el taller y el almacén, de chapa. Sin letreros.
 - **El daño** (`s.breakables` frente a `SIEGE.door` 18 y `SIEGE.barricade` 9; `siegeDressing.ts` `wearStage`):
   - a 2/3 o menos, «tocada»; a 1/3 o menos, «casi rota»;
   - las hojas se entreabren, se ladean y se descuelgan (`doors.ts` `WEAR`), con gravilla al pie por fuera;
@@ -188,7 +207,36 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 - **Al ceder** (la casilla pasa a suelo y su entrada queda a 0; se sabe qué era por el mapa tal como se hizo, `madeAs`, también al recargar):
   - el portón deja su hoja tirada hacia dentro y gravilla en las columnas;
   - la barricada, un resto bajo y los sacos desparramados.
+- **Sin niebla ni oscuridad** (prueba del 18/10, #18): en el asedio, el mapa se ve entero, aunque el motor mande la vista de cada soldado (`mapView.setVisibility`). La vista de verdad sigue llegando a los edificios, para el corte y los tejados.
 - **El golpe:** `unitViews.smash(id, tile)` embiste (resuelve al dar, 0,34 s; vuelve en 0,35 s). `fx.smash(at, 'door' | 'barricade', cede)` da chispas, escamas y polvo en la chapa, o tierra y arena en los sacos, más si cede. Lo reproduce UI (game.ts), solo si la casilla se ve.
+
+### La base nueva, el claro del pinar ([FASE12.md](FASE12.md) §11; `basePieces.ts`, `mapView.ts`, `strategy/clearingArt.ts`, `syntyFigures.ts` TurretRig, `evacBus.ts`)
+
+- **Una sola manera de dibujarla:** el MapView del combate, en su asedio y en la pantalla de la base (el `ClearingSet` de UI, que mete `ClearingArtView`). En la pantalla, el estado sale de `createMission({ map: { kind: 'base', base } })` sin unidades; se ve todo, con la luz de día del combate o la de la nieve (`dayMood` en renderer.ts), y su cielo y neblina (`dress`). Las tareas del mapa en la GPU y las sombras van en el `beforeRender` del set (`runMapJobs`).
+- **Las piezas** (`GameState.base.pieces`, base.ts `PIECES`): buildings.ts y ground.ts ven suelo llano donde hay una (`terrainOf`), y `drawPiece` la dibuja desde la casilla bajo su centro. Un cambio en una pieza (puesta, quitada, de nivel, de desgaste o de cargas: `pieceKey`) rehace solo los trozos que toca, también en la pantalla de la base (talar, construir, mejorar).
+- **La explanada:** pinos de Nature de tres tamaños, fuera de la rejilla y girados, algún pino seco (`basePines`); las pistas (`ground` a 3) en tierra pisada, como los caminos del bosque; un tocón (`bStump`) donde se taló (`felled`), plano, hasta que se construye encima. Nada crece dentro de los edificios ni de sus ruinas.
+- **La caravana:** `SK_Veh_Caravan_01` de Apocalypse, a 4,35 × 1,6 casillas.
+- **Los edificios, por nivel 1–3** (`BUILDINGS`): los modelos de la base de antes (BASE_MODELS reutilizados como props `b…`, sin GLB propio), encajados en su huella (`Lot.fill`). Por ejemplo:
+  - la Sala de radio: refugio de chatarra con lona y antena; luego el mástil; luego la parabólica;
+  - el barracón: la tienda pequeña y el fuego; luego la tienda militar;
+  - la enfermería: la tienda con botiquín y gotero; luego la de cuarentena; luego la ducha y la camilla;
+  - el taller: el cobertizo de Farm con el banco; el huerto, bancales, plantas y espantapájaros;
+  - la cuarentena: una jaula de paneles de malla de Military (`cagePanel`; el contenedor de antes no cabe en 3×3);
+  - el camposanto, cruces; el campo de tiro, dianas y sacos; la sala de mapas, la tienda abierta con mesas y pizarra; la chapistería, el garaje; el taller de oficios, el cobertizo y los caballetes.
+- **Las defensas a mano:**
+  - la empalizada, medias estacas de Apocalypse (`SM_Prop_SpikeWall_01`) hacia cada vecina;
+  - el muro, los bloques en T de Military, uno por casilla, dos en una esquina;
+  - la puerta, de tablas junto a la empalizada y de chapa (la de cuarentena) junto al muro; gira en su bisagra hacia dentro al abrirse (`doorOpen`);
+  - los sacos, los del asedio; los troncos, la pila de Farm; el alambre, una bobina de Apocalypse;
+  - la torre, la del asedio a 2/3 con la cubierta a una planta y su escalera apoyada delante;
+  - el foco, la torre de luz de Construction, con su luz de noche en la cabeza (el doble que una farola: `Glow.power`).
+- **Las trampas:** la mina, medio enterrada (gastada, un cráter); el foso, un hoyo con estacas hacia fuera (gastado, rotas); el cepo, abierto (gastado, sus dos mandíbulas cerradas). Las cargas, de `s.traps` en el asedio o de la pieza fuera.
+- **La torreta:** una unidad (`template: 'turret'`) con figura propia (`TurretRig`): el cañón antiaéreo de Apocalypse en sus piezas (trípode, giro, cuerpo y tambor, cada una en su origen), que gira hacia donde apunta, retrocede al disparar y se vuelca al caer. Fuera del asedio, el mismo cañón quieto.
+- **El daño:** por etapas, como el asedio («tocada» a 2/3, «casi rota» a 1/3): inclinado, con piezas de menos, más bajo y con restos al pie; cedido (hp 0, o todas sus casillas en suelo), su ruina: estacas o muros caídos, la puerta en el suelo, montones quemados y chatarra en un edificio. En el asedio, por `s.breakables` de sus casillas frente a `PIECES[id].hp`; fuera, por su `hp`.
+- **La Lata** en el claro (`EvacBus`): aparcada junto a la caravana en el hueco de pista más cercano sin piezas ni pinos debajo (a un lado del carril si el medio está ocupado), de cara a la salida; si no hay ninguno, está fuera. `depart()` se va por la pista; `arrive()` llega de frente, da la vuelta y se queda lista para salir.
+- **La pieza suelta** (`pieceModel`): el fantasma de lo que se va a construir, con los modelos como los dibuja `drawPiece`, centrado en su huella; si sus modelos aún cargan, se completa con el material de `userData.material`.
+- **Laboratorio:** `/claro.html` (`?seed`, `?bare`, `?snow`, `?ghost`; `__claro.look`, `fell`, `depart`, `arrive`). Capturas a 2560×1600 en `.dev-snapshots/arte/claro/`.
+- **Coste** (asedio de muestra, 1920×1080, Mac M2 Pro): 60 fps en medio y en alto; cpu 1,5–1,9 ms; gpu 15–18 ms; 85–94 llamadas; 0,8–1,1 M triángulos, casi todo los pinos.
 
 ### Base y valle (`strategy/bastion.ts`, `baseKit.ts`, `stage.ts`, `geoscape.ts`, `valleyGeography.ts`, `valleyRoads.ts`, `valley.css`, `tools/valle/mapa.ts`)
 
@@ -204,6 +252,7 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - **la pintura se ve siempre entera** (prueba del 15/10, #1 y #2): sin desenfoque, nada reflejado alrededor y sin zoom. Alrededor, el fondo liso de la mesa (el acero de los paneles);
   - **en vivo encima,** solo:
     - la Marea, en el sombreador del suelo: el suelo apagado y teñido de violeta, un velo que se mueve, y el borde con su brillo y una línea clara de pocos píxeles a cualquier tamaño. Sube por las carreteras con la infestación, con los umbrales del motor; en el menú, solo la franja del sur;
+    - por debajo de la Marea, en el mismo sombreador (Lore, «Atalaya cayó», 18/10): Atalaya, la estación amurallada de la pintura, quemada (tejados y patios negros, tizne, brasas que titilan, el agua cenicienta, humo que se va al este; `ATALAYA_WORKS`), con su nombre (`LANDMARKS.ruins`); y el Bastión, un claro en el pinar de encima, sobre Brena (`BASTION`): un prado seco rodeado de pinos más oscuros, su cruz de pistas y la caravana en medio, bajo la casa del mapa. Sin llamadas de más;
     - los marcadores y los nombres, en HTML (`valley.css`): chincheta por zona (azul con contacto, violeta bajo la Marea, amarilla la elegida, con su anillo), Nido, operaciones con el mismo marcador que la lista, rumor (verde si se escucha), Atalaya, La Lata (`BUS.name`) por las carreteras y los lugares de Lore, que solo salen si el mapa es lo bastante grande;
   - **la geografía es la del motor** (REGIONS, ROADS); La Lata sigue `roadRoute`;
   - **el valle cabe siempre entero entre los paneles:** el encuadre lo mide el propio valle cada pocos fotogramas, con los paneles como estén (entran con animación). Se mide sin la ficha de la derecha y con el panel izquierdo desplegado, así que abrir una ficha no cambia el tamaño del mapa;
@@ -230,29 +279,6 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 
 - **Efectos,** con el aspecto de Particle FX: humo, polvo y gas en bocanadas facetadas, sangre en gotas planas, fogonazos en estrellas y fuego en lenguas de llama. La luz (fogonazos, trazadoras, chispas) queda como brillo suave. Aparte, los del Oficio (`songFx.ts`).
 - **Renders para la interfaz:** cosas del juego como modelos de Synty, en vista de 3/4 y sobre fondo transparente, cada una con su silueta para teñir con CSS. Salen a `public/ui/synty/renders/`. Hay clases, recluta, molotov, La Mula (tres vistas), botiquín, ración, piezas, camposanto, roca y ruinas.
-
-### El móvil (`settings.ts` nivel `mobile`, `post.ts`, `renderer.ts`, `stage.ts`, `night.ts`, `fx.ts`; [FASE11.md](FASE11.md) §5)
-
-- **El nivel de efectos «Móvil»** (`EffectsLevel` `'mobile'`; lo elige UI en modo táctil):
-  - como mucho un píxel por píxel CSS (`pixelRatio`); el ajuste auto puede bajar al 80 % y al 65 %;
-  - 30 fps salvo que el jugador elija otro tope, y el ajuste auto vigila ese tope (baja si va por debajo de 27);
-  - sin oclusión ni resplandor, pero con el tono y el grado de color, para que la noche se lea igual;
-  - FXAA después del grado en lugar del MSAA de la imagen de alto rango, que era el 40 % del fotograma;
-  - sombras de 1024 (cuestan unos 0,2 ms) y la mitad de luces reales de noche (3). Los charcos a la luz siguen, porque los pinta la niebla;
-  - adornos del suelo y de la calle al 30 %, y la mitad de partículas en cada ráfaga.
-- **Medido** (17/10) con el Mac (M2 Pro) emulando un móvil en horizontal: 844×390 CSS a densidad 3, de noche en Ensanche y sin tope, para que la gráfica vaya a tope. Tiempo de gráfica por fotograma:
-  | Ajustes | Gráfica |
-  |---|---|
-  | Altos, como en escritorio (×2: 1688×780) | 6,2 ms |
-  | Altos a ×1 | 4,9 ms |
-  | «Móvil» con MSAA | 3,3 ms |
-  | «Móvil» con FXAA (el que queda) | 2,0 ms |
-  | «Móvil» sin sombras | 1,8 ms |
-  | Bajos a ×1 (sin posprocesado) | 2,0 ms |
-  - La CPU, ralentizada ×4, va a unos 5–7 ms por fotograma; la base, a 1,8 ms de gráfica y 2,6 de CPU.
-  - Un móvil de gama media tiene una gráfica de 4 a 10 veces más lenta. «Móvil» debería quedar en unos 8–20 ms, dentro de los 33 ms de 30 fps; con los ajustes de escritorio, en 25–60 ms.
-  - Falta medirlo en un móvil de verdad (telemetría `[rend …]`, «efectos móvil»).
-  - Herramienta: `capture-perf.cjs` con `Emulation.setDeviceMetricsOverride` y `setCPUThrottlingRate` (en mi borrador; no se sube).
 
 ## Laboratorios
 

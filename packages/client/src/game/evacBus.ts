@@ -63,6 +63,54 @@ export class EvacBus {
     return this.mula ? this.mula.size.z * SCALE : 7;
   }
 
+  /**
+   * Back from a mission to where it is parked (the base's clearing, strategy/clearingArt.ts): in along the way its
+   * nose points, `distance` tiles out, slowing, then round on a turn of `radius` tiles to stop where it was parked,
+   * nose out, ready to go again; its lights off and its doors open at the end. Resolves once it stands.
+   */
+  async arrive(distance = 14, radius = 1.4): Promise<void> {
+    await this.ready;
+    const m = this.mula;
+    if (!m) return;
+    const park = this.root.position.clone();
+    const heading = this.root.rotation.y;
+    const out = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+    // The turn's middle to its right as it comes in (its left once parked).
+    const side = new THREE.Vector3(out.z, 0, -out.x);
+    const centre = park.clone().addScaledVector(side, radius);
+    const start = centre.clone().addScaledVector(side, radius);
+    const far = start.clone().addScaledVector(out, distance);
+    this.root.visible = true;
+    for (const d of m.doors) d.leaf.position.copy(d.shut);
+    m.lights.emissiveIntensity = 0.2 + (NIGHT.value > 0.5 ? 1.3 : 2.6);
+    const roll = (step: number) => {
+      for (const w of m.wheels) w.rotation.x += step / (m.wheelRadius * SCALE);
+    };
+    // In, slowing as it comes.
+    let last = 0;
+    this.root.rotation.y = heading + Math.PI;
+    await tween(AWAY_SECONDS * 0.8, (t) => {
+      const along = distance * (1 - (1 - t) * (1 - t));
+      this.root.position.copy(far).addScaledVector(out, -along);
+      roll(along - last);
+      last = along;
+    });
+    // Round, to stand nose out.
+    await tween(1.3, (t) => {
+      const a = t * Math.PI;
+      this.root.position.copy(centre).addScaledVector(side, radius * Math.cos(a)).addScaledVector(out, -radius * Math.sin(a));
+      const v = side.clone().multiplyScalar(-Math.sin(a)).addScaledVector(out, -Math.cos(a));
+      this.root.rotation.y = Math.atan2(v.x, v.z);
+      roll((Math.PI * radius) / 60);
+    });
+    this.root.position.copy(park);
+    this.root.rotation.y = heading;
+    await tween(SHUT_SECONDS, (t) => {
+      for (const d of m.doors) d.leaf.position.lerpVectors(d.shut, d.open, t);
+      m.lights.emissiveIntensity = 0.2 + (1 - t) * (NIGHT.value > 0.5 ? 1.3 : 2.6);
+    });
+  }
+
   /** Its doors shut, its lights on, then away along its nose `distance` tiles, gathering speed; resolves once it is gone. */
   async depart(distance = 12): Promise<void> {
     await this.ready;

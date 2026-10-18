@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { SnowCover } from './snow';
-import { decorOf, DIRS4, isWalkable, type DecorKind, type GameState, type Place, type TileKind, type Vec2 } from '@bastion/engine';
+import { decorOf, DIRS4, isWalkable, type DecorKind, type GameState, type HomeRoom, type HomeUse, type Place, type TileKind, type Vec2 } from '@bastion/engine';
 import { StaticBatch, type Dirty } from './batch';
 import { groundAt, STOREY } from './coords';
 import { DoorLeaves } from './doors';
@@ -284,8 +284,11 @@ export class BuildingPlan {
         // Older saved clinics have no bounds yet. Their existing clinical
         // furniture identifies them without repainting ordinary houses.
         const medicalWear = medical?.wear ?? (n('hospitalBed') || n('medicalShelf') ? (s.campaignMission?.story === 1 ? 0.08 : 0.65) : undefined);
+        // A house says it is one (GameState.homes, playtest 18/10 #15): its kitchen's counters don't make it a shop.
+        const home = s.homes?.some((b) => r.x0 >= b.x && r.y0 >= b.y && r.x1 < b.x + b.w && r.y1 < b.y + b.h);
         if (medicalWear !== undefined) kind = 'medical';
         else if (n('bed') && doorsBySide[most]! >= 3) kind = 'motel';
+        else if (home) kind = 'house';
         else if (n('counter')) kind = 'shop';
         // A warehouse is rows of shelves, whatever desk its office corner has; a small one full of them too (a sawmill).
         else if (
@@ -300,12 +303,12 @@ export class BuildingPlan {
         const shed = (kind === 'barn' && s.site === 'roadside') || (kind === 'hall' && s.site === 'industrial' && look < 0.75);
         let kit: KitId = kind === 'medical' ? 'house' : shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
         // A siege's base (docs/FASE12.md §10): the old military station's own, a storey high and flat-roofed: the
-        // Sala de radio (round the heart) of concrete under its mast, the barracks of block, the infirmary of concrete,
-        // the workshop and the store of sheet metal.
+        // Sala de radio (the one in the middle of the map) of concrete under its mast, the barracks of block, the
+        // infirmary of concrete, the workshop and the store of sheet metal.
         let radio = false;
         if (this.siege) {
-          const heart = s.mission.siege!.heart;
-          radio = heart.x > r.x0 && heart.x < r.x1 && heart.y > r.y0 && heart.y < r.y1;
+          const [mx, my] = [Math.floor(w / 2), Math.floor(h / 2)];
+          radio = mx > r.x0 && mx < r.x1 && my > r.y0 && my < r.y1;
           const west = r.x0 + r.x1 < w;
           const north = r.y0 + r.y1 < h;
           [kind, kit] = radio ? ['office', 'bunker'] : west ? ['office', north ? 'brick' : 'bunker'] : ['hall', north ? 'shedGrey' : 'shedRed'];
@@ -722,6 +725,26 @@ const STYLES: Record<BuildingKind, Style> = {
 
 const pick = (list: number[], k: number) => list[Math.floor(k * list.length) % list.length]!;
 
+/**
+ * A house's floor by room (GameState.homes, playtest 18/10 #15): boards in
+ * the living room, the bedrooms, the study and the hall, each its own shade;
+ * pale tiles in the kitchen and the bathroom.
+ */
+const HOME_FLOORS: Record<HomeUse, [keyof typeof MEAN & keyof typeof SWATCH, number[]]> = {
+  living: ['boards', [0x966c46, 0xac845c, 0x8a5e3e]],
+  bedroom: ['boards', [0xb08c66, 0x9c7a58, 0xa47c5c]],
+  study: ['boards', [0x765236, 0x6e4a32]],
+  hall: ['boards', [0x88543e, 0x7c5a44]],
+  kitchen: ['panels', [0xd8d2c4, 0xc8c2b2, 0xd4ccbc]],
+  bath: ['panels', [0xc8d6dc, 0xd4dcdc, 0xbccad2]],
+};
+
+/** The patch and tint of a room's floor, picked by where it is. */
+function homeFloor(r: HomeRoom): { swatch: ReturnType<typeof swatch>; tint: THREE.Color } {
+  const [patch, tints] = HOME_FLOORS[r.use];
+  return { swatch: SWATCH[patch], tint: tintTo(pick(tints, hash(r.x, r.y, 7 + r.z)), MEAN[patch]) };
+}
+
 /** A shed's gables and trim in its sheet metal's colour. */
 const SHED_TINT: Partial<Record<KitId, number>> = { shedGrey: 0xa4a8aa, shedRed: 0x9a4436, shedBlue: 0x4a6a8a };
 
@@ -784,6 +807,12 @@ export interface Focus {
   hover: Place | null;
   target: string | null;
   level?: number | null;
+  /**
+   * The roofs on (the camera drawn back past the top storey: Arturo's note of 18/10, #1): no building opens for
+   * the storey in view, for an inside seen through a window or for the cursor; one with the squad's or an enemy
+   * in sight inside, or standing between the camera and them, still does, so nobody is hidden.
+   */
+  roofs?: boolean;
 }
 
 /** The cut map's alpha holds the storey in view, this much a storey. */
@@ -888,7 +917,8 @@ export class Cutaway {
       seen.delete(-1);
       this.seenInside = [...seen];
     }
-    if (inside) for (const b of this.seenInside) mark(b, 0);
+    const roofs = !!focus?.roofs;
+    if (inside && !roofs) for (const b of this.seenInside) mark(b, 0);
     /** Opens building b for something inside it on storey `level`: what stands above off, the walls facing the camera down. */
     const within = (p: Vec2, level: number, keen = false) => {
       const b = plan.at(p);
@@ -933,7 +963,7 @@ export class Cutaway {
       this.point.y += 0.9;
     };
     // The cursor first: the storey under it is the one the player looks at in that building.
-    if (focus?.hover) {
+    if (focus?.hover && !roofs) {
       const p = focus.hover;
       within(p, p.z ?? view, true);
       this.point.set(p.x + 0.5, groundAt(p) + 0.2, p.y + 0.5);
@@ -959,7 +989,7 @@ export class Cutaway {
         }
       }
     }
-    if (camera) {
+    if (camera && !roofs) {
       // Zoomed in: the roofs round where the camera looks.
       camera.getWorldDirection(this.look);
       if (this.look.y < -0.05) {
@@ -976,7 +1006,7 @@ export class Cutaway {
       }
     }
     // A storey chosen by hand: every building with storeys above it opens down to it.
-    if (chosen) for (const b of plan.buildings) if (b.leveled && b.storeys > view) mark(b.index, 0);
+    if (chosen && !roofs) for (const b of plan.buildings) if (b.leveled && b.storeys > view) mark(b.index, 0);
     // The storey each opened building shows: the cursor's or the selected soldier's in theirs; else the one chosen by
     // hand; else the highest anyone in it stands on; else the one in view. A building whose storeys aren't real shows
     // its ground floor. Kept while it fades back.
@@ -1738,6 +1768,13 @@ export class BuildingsView {
       // The floor runs to the walls' middle lines (the outer half of a wall tile is the street's).
       const [x0, x1, z0, z1, y] = [b.x0 + 0.5, b.x1 + 0.5, b.y0 + 0.5, b.y1 + 0.5, b.base + 0.004];
       floors.poly([V(x0, y, z0), V(x0, y, z1), V(x1, y, z1), V(x1, y, z0)], [[x0, z0], [x0, z1], [x1, z1], [x1, z0]], looks.floorSwatch, looks.floor, -1);
+      // A house's rooms each with its floor, over the house's (#15).
+      for (const r of this.homeRooms(s, b)) {
+        if (r.z) continue;
+        const f = homeFloor(r);
+        const [ax, bx, az, bz] = [r.x, r.x + r.w, r.y, r.y + r.h];
+        floors.poly([V(ax, y + 0.002, az), V(ax, y + 0.002, bz), V(bx, y + 0.002, bz), V(bx, y + 0.002, az)], [[ax, az], [ax, bz], [bx, bz], [bx, az]], f.swatch, f.tint, -1);
+      }
       if (b.leveled) this.storeyFloors(b, storeys, looks);
       roofs.level = b.storeys;
       if (b.walkableRoof) b.top = this.roofDeck(b, decks, looks);
@@ -1815,6 +1852,7 @@ export class BuildingsView {
    */
   private storeyFloors(b: Building, out: Surfaces, looks: ReturnType<typeof looksOf>): void {
     const [x0, x1, z0, z1] = [b.x0 + 0.5, b.x1 + 0.5, b.y0 + 0.5, b.y1 + 0.5];
+    const rooms = this.homeRooms(this.plan.s, b);
     for (let k = 1; k < b.storeys; k++) {
       out.level = k;
       const y = b.base + k * STOREY + 0.004;
@@ -1824,10 +1862,19 @@ export class BuildingsView {
           if (kind === null || kind === 'roof') continue;
           const [ax, bx, az, bz] = [Math.max(tx, x0), Math.min(tx + 1, x1), Math.max(ty, z0), Math.min(ty + 1, z1)];
           if (bx <= ax || bz <= az) continue;
-          out.poly([V(ax, y, az), V(ax, y, bz), V(bx, y, bz), V(bx, y, az)], [[ax, az], [ax, bz], [bx, bz], [bx, az]], looks.floorSwatch, looks.floor, b.index);
+          // A house's room its floor (#15), else the house's.
+          const room = rooms.find((r) => r.z === k && tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h);
+          const f = room ? homeFloor(room) : { swatch: looks.floorSwatch, tint: looks.floor };
+          out.poly([V(ax, y, az), V(ax, y, bz), V(bx, y, bz), V(bx, y, az)], [[ax, az], [ax, bz], [bx, bz], [bx, az]], f.swatch, f.tint, b.index);
         }
       }
     }
+  }
+
+  /** The rooms of the house on building b's ground, if it is one (GameState.homes). */
+  private homeRooms(s: GameState, b: Building): HomeRoom[] {
+    const home = s.homes?.find((h) => b.x0 >= h.x && b.y0 >= h.y && b.x1 < h.x + h.w && b.y1 < h.y + h.h);
+    return home?.rooms ?? [];
   }
 
   /**

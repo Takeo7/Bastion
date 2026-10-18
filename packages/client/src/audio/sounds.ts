@@ -483,17 +483,24 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.filter(s.grains(0, 0.12, 9, 0.012), 'bandpass', s.vary(1500), 0.8));
     s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 500), hit(0, 0.002, 0.1, 0.8)));
   }, { level: -3 }),
-  // On a critical hit, a sharper crack and a bright sting on top of the impact.
-  'impact.crit': def(
-    'sfx',
-    0.8,
-    (s) => {
-      s.to(s.amp(s.filter(s.noise('white'), 'highpass', 3000), hit(0, 0.0005, 0.04, 1)));
-      s.to(s.metal(0.01, [1760, 2640, 3520], 0.6, 0.35));
-      s.to(s.amp(s.osc('sine', [[0, 70], [0.25, 35]]), hit(0, 0.004, 0.25, 1)));
-    },
-    { reverb: 0.2 },
-  ),
+  // On a critical hit, over the impact: a harder blow than a plain hit, flesh and bone (playtest 18/10 #22:
+  // the old bright sting rang like a bell). A deep, heavy thump with some grit to it, a wet slap, the dry crack
+  // of a bone and a few splinters after it. Nothing that rings or sings.
+  'impact.crit': def('sfx', 0.5, (s) => {
+    const thump = s.osc('sine', [[0, s.vary(85)], [0.16, 38]], 0, 0.3);
+    s.to(s.shape(s.amp(thump, hit(0, 0.003, 0.2, 1.2)), 1.6));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 450), hit(0, 0.002, 0.14, 1)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(1100), 1.3), hit(0.004, 0.002, 0.07, 0.75)));
+    s.to(s.amp(s.filter(s.noise('white', 0.012, 0.05), 'bandpass', s.vary(2600), 2.5), hit(0.012, 0.0004, 0.018, 0.9)));
+    s.to(s.filter(s.grains(0.02, 0.09, 5, 0.004, false), 'bandpass', s.vary(3200), 1.5), 0.5);
+  }, { variants: 4, reverb: 0.08 }),
+  // The same on a machine (the alarm box, the Acorazado's plates): metal bent in, a dull crunch, no ring.
+  'impact.crit.metal': def('sfx', 0.45, (s) => {
+    s.to(s.shape(s.amp(s.osc('sine', [[0, s.vary(110)], [0.12, 50]], 0, 0.25), hit(0, 0.002, 0.15, 1)), 1.5));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 700), hit(0, 0.001, 0.12, 0.9)));
+    s.to(s.filter(s.grains(0, 0.12, 14, 0.006, false), 'bandpass', s.vary(1400), 0.8), 0.8);
+    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 2500), hit(0, 0.0005, 0.03, 0.6)));
+  }, { variants: 3, reverb: 0.1 }),
   'impact.glass': def(
     'sfx',
     0.7,
@@ -727,10 +734,11 @@ export const SOUNDS: Record<string, SoundDef> = {
     click(0.66, 3200, 0.7);
     click(0.74, 2400, 0.8);
   }, { level: -4 }),
-  // Overwatch: the bolt ready and a short beep from the visor.
-  overwatch: def('ui', 0.5, (s) => {
+  // Overwatch: the safety off, the bolt ready and the rifle brought up.
+  overwatch: def('ui', 0.4, (s) => {
     for (const at of [0, 0.08]) s.to(s.amp(s.filter(s.noise('white'), 'bandpass', s.vary(2900), 4), hit(at, 0.001, 0.03, 0.7)));
-    s.to(s.amp(s.osc('sine', 1400), hit(0.18, 0.004, 0.09, 0.3)));
+    s.to(s.metal(0.16, [s.vary(1900), s.vary(3100)], 0.03, 0.4));
+    s.to(s.amp(s.filter(s.grains(0.18, 0.36, 8, 0.02, false), 'bandpass', 1300, 0.7), [[0.18, 0], [0.22, 1], [0.36, 0.001]]), 0.4);
   }),
   // Hunkering down: cloth and kit shifting.
   hunker: def('sfx', 0.45, (s) => {
@@ -775,23 +783,41 @@ export const SOUNDS: Record<string, SoundDef> = {
     buzz.connect(trem);
     s.to(s.amp(trem, [[0, 0], [0.12, 0.7], [0.75, 0.001]]));
   }, { level: -6 }),
-  heal: def('sfx', 1.2, (s) => {
-    [1047, 1319, 1568].forEach((f, i) => s.to(s.metal(i * 0.07, [f, f * 2.01], 0.9, 0.4)));
-    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 6000), [[0, 0], [0.1, 0.15], [0.9, 0.001]]));
-  }, { reverb: 0.3, level: -3 }),
-  shield: def('sfx', 1, (s) => {
-    s.to(s.amp(s.filter(s.osc('sawtooth', 110), 'lowpass', [[0, 300], [0.4, 2200], [0.9, 600]]), [[0, 0], [0.3, 0.5], [0.95, 0.001]]));
-    s.to(s.metal(0.3, [880, 1320], 0.6, 0.25));
-  }, { reverb: 0.25, level: -3 }),
-  // Hacking: data chirps.
+  // Someone patched up (a medkit, the medic's drone): a pouch torn open, a hiss of spray and a pat on the
+  // dressing. No chime (playtest 18/10 #22: the old one was a power-up's arpeggio).
+  heal: def('sfx', 0.9, (s) => {
+    const velcro = s.filter(s.grains(0, 0.17, 40, 0.004, false), 'bandpass', s.vary(2500), 0.8);
+    s.to(s.amp(velcro, [[0, 0], [0.03, 1], [0.15, 0.7], [0.18, 0.001]]));
+    const spray = s.filter(s.noise('white'), 'bandpass', s.vary(5200), 0.7);
+    s.to(s.amp(spray, [[0.24, 0], [0.27, 0.3], [0.52, 0.25], [0.58, 0.001]]));
+    s.to(s.amp(s.osc('sine', [[0.66, s.vary(180)], [0.72, 100]], 0.66, 0.12), hit(0.66, 0.002, 0.06, 0.4)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 900), hit(0.66, 0.001, 0.05, 0.4)));
+  }, { variants: 3, reverb: 0.15, level: -3 }),
+  // Covering someone (+20 defence): a plate or a riot shield braced with a dull thunk, and its strap pulled tight.
+  shield: def('sfx', 0.6, (s) => {
+    s.to(s.amp(s.osc('sine', [[0, s.vary(140)], [0.1, 70]], 0, 0.2), hit(0, 0.002, 0.12, 0.8)));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 600), hit(0, 0.001, 0.1, 0.8)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(900), 1.4), hit(0, 0.001, 0.05, 0.6)));
+    s.to(s.metal(0, [430, 1010, 1730].map((f) => s.vary(f, 0.06)), 0.04, 0.12));
+    s.to(s.amp(s.filter(s.grains(0.14, 0.34, 14, 0.006, false), 'bandpass', 1600, 0.8), [[0.14, 0], [0.2, 1], [0.34, 0.001]]), 0.6);
+  }, { variants: 3, reverb: 0.15, level: -3 }),
+  // Working on the radio (the hack mission, «Arreglad la radio»): a screwdriver's clicks, static spitting
+  // and a tuning sweep through the noise. No computer chirps.
   hack: def('ui', 0.8, (s) => {
-    for (let i = 0; i < 9; i++) {
-      const at = i * 0.07;
-      s.to(s.amp(s.osc('square', s.r(600, 2400), at, 0.05), hit(at, 0.002, 0.04, 0.25)));
-    }
-  }),
-  'hack.ok': def('ui', 0.8, (s) => {
-    [1047, 1319, 1568].forEach((f, i) => s.to(s.amp(s.filter(s.osc('square', f, i * 0.11, 0.2), 'lowpass', 3000), hit(i * 0.11, 0.004, 0.16, 0.35))));
+    for (const at of [0, s.r(0.06, 0.1), s.r(0.15, 0.2)]) s.to(s.metal(at, [s.vary(2400), s.vary(3700)], 0.02, 0.35));
+    const crackle = s.filter(s.grains(0.18, 0.75, 26, 0.012, false), 'bandpass', s.vary(1800), 0.7);
+    s.to(s.amp(crackle, [[0.18, 0], [0.25, 1], [0.7, 0.6], [0.78, 0.001]]), 0.6);
+    const tune = s.filter(s.noise('white'), 'bandpass', [[0.3, s.vary(700)], [0.72, s.vary(2300)]], 9);
+    s.to(s.amp(tune, [[0.3, 0], [0.4, 0.35], [0.7, 0.3], [0.78, 0.001]]));
+  }, { variants: 3 }),
+  // The radio back to life: the switch clacking on, a burst of static settling, and the set humming.
+  'hack.ok': def('ui', 0.9, (s) => {
+    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 2000), hit(0, 0.0005, 0.015, 0.8)));
+    s.to(s.amp(s.osc('sine', [[0, 300], [0.04, 150]], 0, 0.08), hit(0, 0.001, 0.04, 0.5)));
+    const fizz = s.filter(s.noise('white'), 'bandpass', 2000, 0.6);
+    s.to(s.amp(fizz, [[0.05, 0], [0.08, 0.6], [0.45, 0.15], [0.85, 0.001]]));
+    const hum = s.filter(s.osc('sawtooth', 100, 0.1, 0.8), 'lowpass', 320);
+    s.to(s.amp(hum, [[0.1, 0], [0.25, 0.15], [0.85, 0.001]]));
   }),
   // The alarm: a two-tone klaxon.
   alarm: def('sfx', 1.6, (s) => {
@@ -857,29 +883,33 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 2500, 0.8), [[0.02, 0], [0.1, 0.4], [0.9, 0.001]]));
     for (const f of [98, 147]) s.to(s.amp(s.filter(s.osc('sawtooth', f), 'lowpass', 600), [[0.5, 0], [0.9, 0.25], [2.1, 0.001]]));
   }, { reverb: 0.5 }),
-  // Data recovered: chirps climbing.
-  data: def('ui', 0.6, (s) => {
-    for (let i = 0; i < 6; i++) s.to(s.amp(s.osc('sine', 800 * Math.pow(1.25, i)), hit(i * 0.06, 0.003, 0.05, 0.3)));
-  }),
-  // Something found while searching: the thing lifted out (a small knock), slipped into the
-  // pack (a cloth swish) and two soft notes going up, quieter than the data chime.
+  // The cargo taken (a Recovery): grabbed, stuffed into a pack with a zip, and its weight settling.
+  data: def('ui', 0.75, (s) => {
+    const grab = s.filter(s.grains(0, 0.24, 22, 0.012, false), 'bandpass', 1400, 0.8);
+    s.to(s.amp(grab, [[0, 0], [0.04, 1], [0.24, 0.001]]), 0.6);
+    const zip = s.filter(s.grains(0.26, 0.5, 34, 0.003, false), 'highpass', 2500, 0.7);
+    s.to(s.amp(zip, [[0.26, 0], [0.3, 0.8], [0.48, 1], [0.5, 0.001]]), 0.5);
+    s.to(s.amp(s.osc('sine', [[0.56, s.vary(150)], [0.63, 80]], 0.56, 0.12), hit(0.56, 0.002, 0.08, 0.6)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 900), hit(0.56, 0.001, 0.06, 0.5)));
+  }, { variants: 3 }),
+  // Something found while searching: the thing lifted out (a small knock), slipped into the pack (a cloth
+  // swish) and settling with a rattle. No notes (playtest 18/10 #22).
   found: def('sfx', 0.6, (s) => {
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', s.vary(1800), 3), hit(0, 0.001, 0.03, 0.5)));
     s.to(s.amp(s.osc('sine', [[0, s.vary(230)], [0.06, 120]]), hit(0, 0.002, 0.06, 0.5)));
     s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', [[0.06, 1200], [0.28, 3000]], 1.2), [[0.06, 0], [0.12, 0.5], [0.3, 0.001]]));
-    for (const [at, f] of [
-      [0.12, 660],
-      [0.24, 830],
-    ] as const)
-      s.to(s.amp(s.osc('sine', s.vary(f, 0.01)), hit(at, 0.004, 0.22, 0.22)));
+    s.to(s.amp(s.osc('sine', [[0.32, s.vary(260)], [0.38, 140]], 0.32, 0.1), hit(0.32, 0.002, 0.05, 0.4)));
+    s.to(s.filter(s.grains(0.33, 0.48, 6, 0.006, false), 'bandpass', s.vary(2600), 1), 0.35);
   }, { variants: 3, level: -8 }),
-  rescue: def('ui', 1.2, (s) => {
-    for (const [at, f] of [
-      [0, 784],
-      [0.16, 1175],
-    ] as const)
-      s.to(s.metal(at, [f, f * 2.02], 0.9, 0.4));
-  }, { reverb: 0.3 }),
+  // The VIP joins the squad: a walkie-talkie keyed («lo tenemos») and gear shifting as they fall in.
+  rescue: def('ui', 0.7, (s) => {
+    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 2200), hit(0, 0.0005, 0.012, 0.6)));
+    const squelch = s.filter(s.noise('white'), 'bandpass', s.vary(1700), 1.2);
+    s.to(s.amp(squelch, [[0.01, 0], [0.02, 0.45], [0.13, 0.35], [0.15, 0]]));
+    const gear = s.filter(s.grains(0.2, 0.55, 12, 0.02, false), 'bandpass', 1200, 0.7);
+    s.to(s.amp(gear, [[0.2, 0], [0.25, 1], [0.55, 0.001]]), 0.5);
+    s.to(s.amp(s.osc('sine', [[0.24, 130], [0.3, 70]], 0.24, 0.12), hit(0.24, 0.002, 0.07, 0.5)));
+  }, { variants: 3, reverb: 0.15 }),
 
   // ------------------------------------------------------------ deaths
   'death.human': def('sfx', 0.9, (s) => {
@@ -950,37 +980,41 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.amp(s.osc('sine', [[0.65, 90], [1.1, 45]]), hit(0.65, 0.003, 0.6, 1.2)));
     for (const f of [146.8, 207.7]) s.to(s.amp(s.filter(s.osc('sawtooth', f, 0.65), 'lowpass', 1200), hit(0.65, 0.01, 0.6, 0.25)));
   }, { reverb: 0.4 }),
-  // Our turn: two radio chirps. Theirs: a low swell with a metal scrape.
-  'turn.xcom': def('ui', 0.6, (s) => {
-    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 1800, 1), hit(0, 0.002, 0.08, 0.3)));
-    for (const [at, f] of [
-      [0.06, 880],
-      [0.16, 1320],
-    ] as const)
-      s.to(s.amp(s.osc('sine', f), hit(at, 0.004, 0.08, 0.35)));
-  }),
+  // Our turn: a walkie-talkie keyed, a breath of static and the key let go. Theirs: a low swell with a metal scrape.
+  'turn.xcom': def('ui', 0.45, (s) => {
+    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 2200), hit(0, 0.0005, 0.012, 0.6)));
+    const squelch = s.filter(s.noise('white'), 'bandpass', s.vary(1600), 1.1);
+    s.to(s.amp(squelch, [[0.01, 0], [0.02, 0.35], [0.2, 0.25], [0.22, 0]]));
+    s.to(s.amp(s.filter(s.noise('white', 0.22, 0.05), 'bandpass', 2600, 1.5), hit(0.22, 0.0005, 0.02, 0.5)));
+  }, { variants: 3 }),
   'turn.alien': def('sfx', 2, (s) => {
     for (const f of [55, 58.3, 82.4]) s.to(s.amp(s.filter(s.osc('sawtooth', f), 'lowpass', [[0, 200], [0.8, 700], [1.9, 200]]), [[0, 0], [0.5, 0.35], [1.9, 0.001]]));
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 800], [1, 2400]], 6), [[0.2, 0], [0.7, 0.15], [1.4, 0.001]]));
   }, { reverb: 0.4 }),
-  // The command passed between partners: a click and a chirp.
-  command: def('ui', 0.4, (s) => {
+  // The command passed between partners: a radio's click and a short hiss.
+  command: def('ui', 0.25, (s) => {
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 2800, 4), hit(0, 0.001, 0.02, 0.6)));
-    s.to(s.amp(s.osc('sine', 1180), hit(0.05, 0.003, 0.1, 0.3)));
-  }),
+    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', s.vary(1700), 1.2), [[0.02, 0], [0.03, 0.25], [0.11, 0.18], [0.13, 0]]));
+  }, { variants: 3 }),
+  // The mission won: a low chord swelling in like a held breath let out, over a soft drum. No fanfare or bell
+  // (playtest 18/10 #22).
   victory: def('music', 3.5, (s) => {
-    [[146.8, 0], [185, 0.12], [220, 0.24], [293.7, 0.36]].forEach(([f, at]) => {
-      const o = s.filter(s.osc('sawtooth', f!, at!, 3, s.r(-6, 6)), 'lowpass', [[at!, 900], [at! + 0.6, 2600], [3.2, 800]]);
-      s.to(s.amp(o, [[at!, 0], [at! + 0.08, 0.25], [3.3, 0.001]]));
-    });
-    s.to(s.metal(0.36, [1175, 1762, 2350], 2.2, 0.3));
+    for (const f of [73.4, 146.8, 185, 220]) {
+      const o = s.filter(s.osc('sawtooth', f, 0, 3.4, s.r(-7, 7)), 'lowpass', [[0, 400], [1.2, 1400], [3.3, 500]]);
+      s.to(s.amp(o, [[0, 0], [0.9, 0.22], [2.2, 0.16], [3.4, 0.001]]));
+    }
+    s.to(s.amp(s.osc('sine', [[0, 70], [0.6, 45]]), hit(0, 0.01, 0.8, 0.9)));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 300), hit(0, 0.01, 0.6, 0.5)));
   }, { reverb: 0.5, level: 2 }),
+  // The mission lost: a dark, close chord rising out of the low end and fading, a far boom under it, wind.
+  // No falling notes (playtest 18/10 #22: they sounded like an arcade's game over).
   defeat: def('music', 3.8, (s) => {
-    [[293.7, 0], [261.6, 0.6], [233.1, 1.2], [220, 1.8]].forEach(([f, at]) => {
-      const o = s.filter(s.osc('triangle', f!, at!, 1.9), 'lowpass', 1400);
-      s.to(s.amp(o, [[at!, 0], [at! + 0.05, 0.35], [at! + 1.8, 0.001]]));
-    });
-    for (const f of [73.4, 87.3]) s.to(s.amp(s.filter(s.osc('sawtooth', f), 'lowpass', 400), [[0, 0], [0.8, 0.3], [3.6, 0.001]]));
+    for (const f of [73.4, 77.8, 110]) {
+      const o = s.filter(s.osc('sawtooth', f, 0, 3.7, s.r(-6, 6)), 'lowpass', [[0, 250], [1.4, 700], [3.6, 200]]);
+      s.to(s.amp(o, [[0, 0], [1, 0.25], [3.7, 0.001]]));
+    }
+    s.to(s.amp(s.osc('sine', [[0.1, 55], [1.2, 30]]), hit(0.1, 0.02, 1.4, 0.9)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', [[0, 400], [3, 900]], 0.8), [[0, 0], [1.2, 0.12], [3.7, 0.001]]));
   }, { reverb: 0.5, level: 2 }),
 
   // ------------------------------------------------------------ the case file (interface)

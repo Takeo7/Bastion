@@ -7,6 +7,8 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { AWARE_RANGE, DIRS4, VIEW_CONE, type CoverLevel, type Place, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
+import { graphics } from '../settings';
+import { tileLook, type TileLook } from './tileLooks';
 import { wait } from './tween';
 import eyeUrl from '../assets/expediente/eye.png';
 import hatchUrl from '../assets/expediente/hatch.png';
@@ -33,6 +35,11 @@ export interface MoveTile {
 
 const COLOR_MOVE = new THREE.Color(0x3aa0ff);
 const COLOR_DASH = new THREE.Color(0xffc93a);
+/** The dark casing under a path that has one («Clásico»). */
+const CASING = new THREE.Color(0x081018);
+const IDENTITY = new THREE.Quaternion();
+/** The brightest the ground goes under a shade (shadeMaterial). */
+const SHADE = new THREE.Color(0x56606a);
 const COLOR_DETECT = new THREE.Color(0xff4a4a);
 const COLOR_BLAST = new THREE.Color(0xff8a2a);
 /** A blast that can't be thrown there. */
@@ -134,6 +141,83 @@ function flatRing(inner: number, outer: number, color: number, opacity: number):
   return mesh;
 }
 
+/**
+ * A mark for the middle of a tile («Puntos»): a white disc (or ring, `hollow`,
+ * for the dash) on a dark rim, so it reads on snow; the instance's colour
+ * tints the white and leaves the rim. Its white reaches DOT_CORE of the half.
+ */
+function dotTexture(hollow: boolean): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  g.fillStyle = 'rgba(8,12,16,0.55)';
+  g.beginPath();
+  g.arc(32, 32, 30, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.beginPath();
+  g.arc(32, 32, 32 * DOT_CORE, 0, Math.PI * 2);
+  if (hollow) g.arc(32, 32, 32 * DOT_CORE * 0.5, 0, Math.PI * 2, true);
+  g.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const DOT_CORE = 0.6;
+
+/** A strip's fade («Degradado»): opaque on its top row, gone at the bottom. */
+function fadeTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 4;
+  c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createLinearGradient(0, 0, 0, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 4, 64);
+  return new THREE.CanvasTexture(c);
+}
+/** How far into the tile a «Degradado» strip goes. */
+const FADE_DEPTH = 0.55;
+
+/**
+ * A line colour as light (tileLooks.ts, playtest 18/10 #14): `hex` pushed past
+ * 1 by `k`, so Arte's bloom takes it up at medium and high effects.
+ */
+function glow(hex: THREE.ColorRepresentation, k: number): THREE.Color {
+  return new THREE.Color(hex).multiplyScalar(k);
+}
+
+/** The soft halo under a light line: the same shape, wider, faint and additive (a chalk line's dust: plain). */
+function haloMaterial(color: THREE.ColorRepresentation, dashed = false, width = 5, alpha = 0.12): LineMaterial {
+  return new LineMaterial({ color: new THREE.Color(color), linewidth: width, transparent: true, opacity: alpha, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, dashed, dashSize: 0.24, gapSize: 0.18 });
+}
+
+/**
+ * A dark stroke under a line (TileLook.shade). It blends by the minimum: the
+ * ground goes no brighter than SHADE there, so it shows on snow and sand and
+ * not at all on dark ground, and where its pieces overlap (the joints) it
+ * doesn't darken twice.
+ */
+function shadeMaterial(dashed = false): LineMaterial {
+  const m = new LineMaterial({ color: SHADE, linewidth: 5, transparent: true, depthTest: false, depthWrite: false, dashed, dashSize: 0.24, gapSize: 0.18 });
+  shadeBlend(m);
+  return m;
+}
+
+function shadeBlend(m: THREE.Material): void {
+  m.blending = THREE.CustomBlending;
+  m.blendEquation = THREE.MinEquation;
+}
+
+/** A hand's wobble for a chalk stroke: a few hundredths of a tile, the same for the same point. */
+function wobble(x: number, z: number, axis: number): number {
+  const h = Math.sin(x * 12.9898 + z * 78.233 + axis * 37.719) * 43758.5453;
+  return (h - Math.floor(h) - 0.5) * 0.09;
+}
+
 function fatLine(color: number, width: number): Line2 {
   const line = new Line2(
     new LineGeometry(),
@@ -198,13 +282,21 @@ function keyhole(c: THREE.Vector3, range: number, facing: number | undefined): n
   return out;
 }
 
-/** Planning without the command (playtest 17/10 #49): the move's preview in grey, so it shows it isn't one's turn to order. */
-const PLAN_GREY = 0x9aa0a4;
+/**
+ * Planning without the command (playtest 17/10 #49): the move's preview in
+ * the player's colour, dimmed (18/10 #4: it was grey, and didn't show), so it
+ * shows it isn't one's turn to order, like the plan's own line.
+ */
+const PLAN_DIM = 0.3;
+/** How long a signal's tag stays over the spot, in seconds (fx.ping's beam is 3.5). */
+const PING_TAG_S = 4;
 
 export class Overlays {
   readonly group = new THREE.Group();
-  /** Without the command: the range's borders, the path and the pointer's ring go grey (#49). */
+  /** Without the command: the range's borders, the path and the pointer's ring go the plan's colour (#49). */
   private planning = false;
+  /** The plan's colour: the player's, dimmed (setPlanColor). */
+  private readonly planTint = new THREE.Color(0x9aa0a4);
   private readonly tiles: THREE.InstancedMesh;
   /** The range's borders: one action (solid) and the dash (dashed), at the tiles' own heights. */
   private readonly walkEdge = new LineSegments2(
@@ -215,6 +307,27 @@ export class Overlays {
     new LineSegmentsGeometry(),
     new LineMaterial({ color: 0xffc93a, linewidth: 2.5, dashed: true, dashSize: 0.32, gapSize: 0.2, transparent: true, opacity: 0.95, depthTest: false }),
   );
+  /** Their halos (a light look's glow, a chalk look's dust), on the same geometry (drawBorders shapes both). */
+  private readonly walkHalo = new LineSegments2(this.walkEdge.geometry, haloMaterial(0x6cc4ff));
+  private readonly dashHalo = new LineSegments2(this.dashEdge.geometry, haloMaterial(0xffc93a, true));
+  /** A soft dark stroke under them (TileLook.shade), for snow and sand. */
+  private readonly walkShade = new LineSegments2(this.walkEdge.geometry, shadeMaterial());
+  private readonly dashShade = new LineSegments2(this.dashEdge.geometry, shadeMaterial(true));
+  /** How the preview looks (tileLooks.ts: the five proposals of playtest 18/10 #14, and «Clásico»). */
+  private look: TileLook = tileLook();
+  /** A mark in the middle of each tile in reach («Puntos»): one action's, filled, and the dash's, hollow. */
+  private readonly dots: [THREE.InstancedMesh, THREE.InstancedMesh];
+  /** «Degradado»: a strip inside each side on the range's edge, bright at the edge and fading inwards. */
+  private readonly fade: THREE.InstancedMesh;
+  /** A dotted path («Puntos»): marks along it like the tiles'. */
+  private readonly pathDots: THREE.InstancedMesh;
+  /** What was last shown, to draw it again in another look. */
+  private lastRange: { tiles: MoveTile[]; planning: boolean } = { tiles: [], planning: false };
+  private lastPath: { from: Vec2 | null; path: Vec2[] | null; dash: boolean } = { from: null, path: null, dash: false };
+  private lastPlans: { from: Vec2; path: Vec2[]; color: string }[] = [];
+  private lastFocus: Vec2 | null = null;
+  /** A night mission: the lines glow less (Arte, 18/10: the threshold of the night's bloom doubled them), and a flat wash adds light instead of paint. */
+  private night = false;
   /** The tiles' squares round the pointer, brighter the nearer (additive: a fade to nothing). */
   private readonly near: THREE.InstancedMesh;
   /** The range last shown, by tile (x * 1024 + y), for the squares round the pointer. */
@@ -229,10 +342,9 @@ export class Overlays {
   /** Walls a frag grenade will breach (docs/FASE7.md §4). */
   private readonly breach: THREE.InstancedMesh;
   private readonly path = fatLine(0xeafaff, 4);
-  private readonly pathCasing = new Line2(
-    this.path.geometry,
-    new LineMaterial({ color: 0x081018, linewidth: 8, transparent: true, opacity: 0.6, depthTest: false }),
-  );
+  /** Under the path, on its geometry: a dark casing so it reads over the tiles («Clásico»; a softer one, TileLook.shade), and a halo of light. */
+  private readonly pathCasing = new Line2(this.path.geometry, new LineMaterial({ color: CASING, linewidth: 8, transparent: true, opacity: 0.6, depthTest: false }));
+  private readonly pathHalo = new Line2(this.path.geometry, haloMaterial(0xffffff, false, 8, 0.28));
   private readonly aim = fatLine(0xff5a5a, 3);
   /** How far a grenade reaches from the thrower. */
   private readonly rangeRing = fatLine(0xffb070, 2);
@@ -271,19 +383,6 @@ export class Overlays {
   private readonly spotFrame = new THREE.RingGeometry(0.62, 0.74, 4).rotateZ(Math.PI / 4).rotateX(-Math.PI / 2);
   /** Noise spreading from where it was made (docs/FASE2.md): a ring and a faint disc, gone once spread. */
   private readonly noises = new THREE.Group();
-  /**
-   * Where the squad must go, beside the soldier picked, while that place is off
-   * the screen (playtest 17/10 #48: the column of light can't reach the screen
-   * from far off with this camera): a short dashed green line along the
-   * ground, flowing towards it, and its arrowhead.
-   */
-  private readonly guide = new THREE.Group();
-  private readonly guideLine = new Line2(
-    new LineGeometry(),
-    new LineMaterial({ color: 0x4dff9a, linewidth: 4, dashed: true, dashSize: 0.34, gapSize: 0.22, transparent: true, opacity: 0.95, depthTest: false }),
-  );
-  private readonly guideCasing = new Line2(new LineGeometry(), new LineMaterial({ color: 0x0b1a12, linewidth: 9, transparent: true, opacity: 0.7, depthTest: false }));
-  private readonly guideHead = new Line2(new LineGeometry(), new LineMaterial({ color: 0x4dff9a, linewidth: 4, transparent: true, opacity: 0.95, depthTest: false }));
   private readonly noiseCircle = new THREE.CircleGeometry(1, 64).rotateX(-Math.PI / 2);
   /** One short line on a tile: what a move or a throw sounds like, what a piece of furniture is. */
   private readonly note = new CSS2DObject(document.createElement('div'));
@@ -306,8 +405,13 @@ export class Overlays {
     this.near.renderOrder = 9;
     this.near.frustumCulled = false;
     this.walkEdge.renderOrder = this.dashEdge.renderOrder = 9;
-    this.walkEdge.frustumCulled = this.dashEdge.frustumCulled = false;
-    this.walkEdge.visible = this.dashEdge.visible = false;
+    // The glow first, then the shade over it (an additive glow on snow would wash it out), then the line.
+    this.walkHalo.renderOrder = this.dashHalo.renderOrder = 7;
+    this.walkShade.renderOrder = this.dashShade.renderOrder = 8;
+    for (const edge of [this.walkEdge, this.dashEdge, this.walkHalo, this.dashHalo, this.walkShade, this.dashShade]) {
+      edge.frustumCulled = false;
+      edge.visible = false;
+    }
     this.tiles.count = 0;
     this.tiles.position.y = 0.02;
     // A four-segment ring is a square frame; turned 45° its sides follow the tile's.
@@ -373,6 +477,19 @@ export class Overlays {
     this.evac.count = 0;
     this.evac.position.y = 0.015;
 
+    const dotMaterial = (hollow: boolean) => new THREE.MeshBasicMaterial({ map: dotTexture(hollow), transparent: true, depthWrite: false });
+    const unit = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    this.dots = [new THREE.InstancedMesh(unit, dotMaterial(false), capacity), new THREE.InstancedMesh(unit, dotMaterial(true), capacity)];
+    this.pathDots = new THREE.InstancedMesh(unit, dotMaterial(false), 256);
+    this.pathDots.renderOrder = 10;
+    // The strip lies along the tile's north side (-z), its fade's top row on the edge; turned for the others.
+    this.fade = new THREE.InstancedMesh(
+      new THREE.PlaneGeometry(1, FADE_DEPTH).rotateX(-Math.PI / 2).translate(0, 0, -0.5 + FADE_DEPTH / 2),
+      new THREE.MeshBasicMaterial({ map: fadeTexture(), transparent: true, depthWrite: false }),
+      capacity,
+    );
+    for (const mesh of [...this.dots, this.pathDots, this.fade]) mesh.count = 0;
+
     // Objective: a glowing data core with a beacon of light above it.
     const core = new THREE.Mesh(
       new THREE.BoxGeometry(0.34, 0.34, 0.34),
@@ -398,23 +515,92 @@ export class Overlays {
     // instances were then (nowhere, for an empty one), and culls it by them
     // from then on: a grenade area or a move range elsewhere on the map would
     // vanish whenever that first spot left the screen. They are cheap to draw.
-    for (const mesh of [this.tiles, this.detect, this.hatch, this.eyes, this.blast, this.breach, this.evac, this.seen, this.noticed]) mesh.frustumCulled = false;
+    for (const mesh of [this.tiles, this.detect, this.hatch, this.eyes, this.blast, this.breach, this.evac, this.seen, this.noticed, ...this.dots, this.pathDots, this.fade]) mesh.frustumCulled = false;
     this.rangeLayers = [this.tiles, this.hatch, this.detect, this.eyes].map((mesh) => [mesh, (mesh.material as THREE.MeshBasicMaterial).opacity]);
 
-    // The path gets a dark casing, so it reads over the blue and the yellow tiles alike.
+    // The path's halo under it, so it reads over the ground and the range alike.
+    this.pathHalo.renderOrder = 8;
     this.pathCasing.renderOrder = 9;
-    this.pathCasing.visible = false;
+    this.pathCasing.visible = this.pathHalo.visible = false;
     this.rangeRing.renderOrder = 9;
     this.note.element.className = 'tile-note';
     this.note.visible = false;
-    this.group.add(this.beacons, this.flares, this.breakBars, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
-    this.group.add(this.walkEdge, this.dashEdge, this.near, this.seen, this.noticed, this.sightEdge);
-    this.group.add(this.spots, this.noises, this.note);
-    this.guideCasing.renderOrder = 9;
-    this.guideLine.renderOrder = this.guideHead.renderOrder = 10;
-    this.guide.add(this.guideCasing, this.guideLine, this.guideHead);
-    this.guide.visible = false;
-    this.group.add(this.guide);
+    this.group.add(this.beacons, this.flares, this.breakBars, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.pathHalo, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.walkShade, this.dashShade, this.walkHalo, this.dashHalo, this.walkEdge, this.dashEdge, this.near, this.seen, this.noticed, this.sightEdge);
+    this.group.add(this.spots, this.noises, this.note, this.fade, ...this.dots, this.pathDots);
+    this.applyLook();
+  }
+
+  /** A night mission or not (game.ts, on each map): the look is drawn again for it. */
+  setNight(on: boolean): void {
+    if (this.night === on) return;
+    this.night = on;
+    this.setLook(this.look);
+  }
+
+  /**
+   * How far past 1 a line goes (TileLook's glow): by night, less (the edges
+   * half as much, the path a third: Arte, 18/10); with low effects, never past
+   * 1, as there is no tone mapping then and it would clip to a garish colour.
+   */
+  private glowOf(k: number, path = false): number {
+    if (graphics().effects === 'low') return 1;
+    return this.night ? 1 + (k - 1) * (path ? 0.35 : 0.5) : k;
+  }
+
+  /** Another look for the preview (tileLooks.ts; F8 in the battle): what is on show is drawn again in it. */
+  setLook(look: TileLook): void {
+    this.look = look;
+    this.applyLook();
+    this.showMoveRange(this.lastRange.tiles, this.lastRange.planning);
+    this.showPath(this.lastPath.from, this.lastPath.path, this.lastPath.dash);
+    this.setRangeFocus(this.lastFocus);
+    this.plans.userData.key = undefined;
+    this.setPlans(this.lastPlans);
+  }
+
+  /** The look's widths, dashes, halos and ring on the lines and meshes that keep them. */
+  private applyLook(): void {
+    const { edges, path, ring } = this.look;
+    if (edges) {
+      for (const edge of [this.walkEdge, this.dashEdge]) edge.material.linewidth = edges.width;
+      this.dashEdge.material.dashed = this.dashHalo.material.dashed = this.dashShade.material.dashed = edges.dashDashed;
+      for (const shade of [this.walkShade, this.dashShade]) shade.material.linewidth = edges.width + 4;
+      // Their dashes over the line's own.
+      for (const under of [this.dashHalo, this.dashShade]) {
+        under.material.dashSize = this.dashEdge.material.dashSize;
+        under.material.gapSize = this.dashEdge.material.gapSize;
+      }
+      // Chalk's shadow is dark and plain, under it; light's halo, additive.
+      for (const halo of [this.walkHalo, this.dashHalo]) {
+        halo.material.blending = edges.chalk ? THREE.NormalBlending : THREE.AdditiveBlending;
+        halo.material.linewidth = edges.chalk ? edges.width + 3.5 : 5;
+        halo.material.opacity = edges.chalk ? 0.35 : 0.12;
+      }
+    }
+    const line = this.path.material as LineMaterial;
+    line.linewidth = path.width;
+    line.dashed = path.chalk;
+    line.dashSize = 0.2;
+    line.gapSize = 0.14;
+    const casing = this.pathCasing.material as LineMaterial;
+    casing.linewidth = path.casing ? 8 : path.width + 4;
+    casing.color.copy(path.casing ? CASING : SHADE);
+    if (path.casing) casing.blending = THREE.NormalBlending;
+    else shadeBlend(casing);
+    // Under a chalk path, dashed as it is.
+    casing.dashed = path.chalk;
+    casing.dashSize = line.dashSize;
+    casing.gapSize = line.gapSize;
+    // A flat wash is the look's fill; otherwise the faint one of `soft`. By night it adds light to the ground
+    // instead of flattening it like paint (Arte, 18/10), as the lamps' pools do: the colour, scaled down, at full opacity.
+    const flat = this.look.fill?.kind === 'flat';
+    const lit = flat && this.night;
+    const wash = this.tiles.material as THREE.MeshBasicMaterial;
+    wash.blending = lit ? THREE.AdditiveBlending : THREE.NormalBlending;
+    this.rangeLayers[0] = [this.tiles, lit ? 1 : flat ? this.look.fill!.alpha : 0.1];
+    this.hover.geometry.dispose();
+    this.hover.geometry = new THREE.RingGeometry(ring[0], ring[1], 36).rotateX(-Math.PI / 2);
   }
 
   /** Animates the objective beacon and the evac zone pulse. */
@@ -430,8 +616,6 @@ export class Overlays {
       const core = b.children[0]?.children[1] as Line2 | undefined;
       if (core) (core.material as LineMaterial).opacity = 0.85 + Math.sin(time * 2 + b.position.x) * 0.1;
     }
-    // The ground guide's dashes flow towards where it points.
-    if (this.guide.visible) (this.guideLine.material as LineMaterial).dashOffset = -time * 0.9;
     for (const puff of this.smoke.children) puff.scale.setScalar(1 + Math.sin(time * 0.8 + puff.userData.phase) * 0.08);
     this.flares.children.forEach((f, i) => {
       const k = (time * 0.9 + i * 0.3) % 1;
@@ -540,6 +724,21 @@ export class Overlays {
     this.group.add(label);
     // A found weapon is rare: it stays up longer, to be read.
     void wait(kind === 'rare' ? 3.4 : 2.2).then(() => {
+      this.group.remove(label);
+      el.remove();
+    });
+  }
+
+  /** A signal's tag over the spot (game.ts onPing, playtest 18/10 #7): whose, in their colour, for PING_TAG_S. */
+  pingTag(tile: Place, who: string, color: string): void {
+    const el = document.createElement('div');
+    el.className = 'ping-tag';
+    el.style.setProperty('--accent', color);
+    el.textContent = who;
+    const label = new CSS2DObject(el);
+    label.position.copy(tileToWorld(tile, 2.9));
+    this.group.add(label);
+    void wait(PING_TAG_S).then(() => {
       this.group.remove(label);
       el.remove();
     });
@@ -669,22 +868,40 @@ export class Overlays {
    * `planning`: without the command the range is only for planning, so it is drawn fainter.
    */
   showMoveRange(tiles: MoveTile[], planning = false): void {
+    this.lastRange = { tiles, planning };
     for (const [mesh, opacity] of this.rangeLayers) (mesh.material as THREE.MeshBasicMaterial).opacity = planning ? opacity * 0.5 : opacity;
     for (const edge of [this.walkEdge, this.dashEdge]) edge.material.opacity = planning ? 0.5 : 0.95;
     this.planning = planning;
-    this.walkEdge.material.color.set(planning ? PLAN_GREY : 0x6cc4ff);
-    this.dashEdge.material.color.set(planning ? PLAN_GREY : 0xffc93a);
+    const { edges, fill, dots } = this.look;
+    if (edges) {
+      this.walkEdge.material.color.copy(glow(planning ? this.planTint : edges.walk, this.glowOf(edges.glow)));
+      this.dashEdge.material.color.copy(glow(planning ? this.planTint : edges.dash, this.glowOf(edges.glow)));
+      for (const [halo, hex] of [[this.walkHalo, edges.walk], [this.dashHalo, edges.dash]] as const) halo.material.color.set(edges.chalk ? 0x0c1014 : planning ? this.planTint : hex);
+    }
     this.range = new Map(tiles.map((t) => [t.pos.x * 1024 + t.pos.y, t]));
     const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    const tint = (walk: number, dash: number, t: MoveTile, k = 1) => (planning ? c.copy(this.planTint) : c.set(t.dash ? dash : walk)).multiplyScalar(k);
+    const flat = fill?.kind === 'flat' ? fill : null;
+    const dotSize = dots ? (dots.radius * 2) / DOT_CORE : 0;
+    const marks = [0, 0];
     let frames = 0;
     let washed = 0;
     for (const t of tiles.slice(0, this.tiles.instanceMatrix.count)) {
-      m.setPosition(tileToWorld(t.pos));
-      if (this.rangeStyle === 'soft') {
+      const at = tileToWorld(t.pos);
+      m.makeTranslation(at.x, at.y, at.z);
+      if (flat || this.rangeStyle === 'soft') {
         this.tiles.setMatrixAt(washed, m);
-        this.tiles.setColorAt(washed++, t.dash ? COLOR_DASH : COLOR_MOVE);
+        this.tiles.setColorAt(washed++, flat ? tint(flat.walk, flat.dash, t, this.night ? (t.dash ? 0.12 : 0.15) : 1) : c.copy(t.dash ? COLOR_DASH : COLOR_MOVE));
+      }
+      if (dots) {
+        const mesh = this.dots[t.dash ? 1 : 0];
+        const i = marks[t.dash ? 1 : 0]++;
+        mesh.setMatrixAt(i, m.compose(at.setY(at.y + 0.03), IDENTITY, new THREE.Vector3(dotSize, 1, dotSize)));
+        mesh.setColorAt(i, tint(dots.walk, dots.dash, t, this.glowOf(this.look.path.glow)));
       }
       if (t.detected) {
+        m.setPosition(tileToWorld(t.pos));
         this.detect.setMatrixAt(frames, m);
         this.eyes.setMatrixAt(frames++, m);
       }
@@ -692,6 +909,12 @@ export class Overlays {
     this.tiles.count = washed;
     this.tiles.instanceMatrix.needsUpdate = true;
     if (this.tiles.instanceColor) this.tiles.instanceColor.needsUpdate = true;
+    this.dots.forEach((mesh, i) => {
+      mesh.count = marks[i]!;
+      (mesh.material as THREE.MeshBasicMaterial).opacity = planning ? 0.5 : 0.95;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    });
     this.hatch.count = 0;
     this.detect.count = frames;
     this.detect.instanceMatrix.needsUpdate = true;
@@ -708,25 +931,54 @@ export class Overlays {
   private drawBorders(tiles: MoveTile[]): void {
     const walk: number[] = [];
     const dash: number[] = [];
+    const { edges, fill } = this.look;
+    const fade = fill?.kind === 'fade' ? fill : null;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const c = new THREE.Color();
+    const up = new THREE.Vector3(0, 1, 0);
+    const one = new THREE.Vector3(1, 1, 1);
+    let strips = 0;
+    // Each side: the neighbour across it, its ends, and how a «Degradado» strip (drawn on the north side) turns to it.
     const sides = [
-      [1, 0, 1, 0, 1, 1],
-      [-1, 0, 0, 0, 0, 1],
-      [0, 1, 0, 1, 1, 1],
-      [0, -1, 0, 0, 1, 0],
+      [1, 0, 1, 0, 1, 1, -Math.PI / 2],
+      [-1, 0, 0, 0, 0, 1, Math.PI / 2],
+      [0, 1, 0, 1, 1, 1, Math.PI],
+      [0, -1, 0, 0, 1, 0, 0],
     ] as const;
     for (const t of tiles) {
       const y = tileToWorld(t.pos, 0.06).y;
-      for (const [dx, dy, ax, az, bx, bz] of sides) {
+      for (const [dx, dy, ax, az, bx, bz, turn] of sides) {
         const n = this.range.get((t.pos.x + dx) * 1024 + t.pos.y + dy);
         const out = t.dash ? !n : !n || n.dash;
         if (!out) continue;
-        (t.dash ? dash : walk).push(t.pos.x + ax, y, t.pos.y + az, t.pos.x + bx, y, t.pos.y + bz);
+        const into = t.dash ? dash : walk;
+        const [x0, z0, x1, z1] = [t.pos.x + ax, t.pos.y + az, t.pos.x + bx, t.pos.y + bz];
+        if (edges?.chalk) {
+          // Two strokes by hand, each wobbling at the corners and halfway along.
+          for (const pass of [0, 1]) {
+            const pts = [[x0, z0], [(x0 + x1) / 2, (z0 + z1) / 2], [x1, z1]].map(([x, z]) => [x! + wobble(x!, z!, pass * 2), y, z! + wobble(x!, z!, pass * 2 + 1)]);
+            into.push(...pts[0]!, ...pts[1]!, ...pts[1]!, ...pts[2]!);
+          }
+        } else into.push(x0, y, z0, x1, y, z1);
+        if (fade && strips < this.fade.instanceMatrix.count) {
+          m.compose(tileToWorld(t.pos, 0.03), q.setFromAxisAngle(up, turn), one);
+          this.fade.setMatrixAt(strips, m);
+          this.fade.setColorAt(strips++, this.planning ? c.copy(this.planTint) : c.set(t.dash ? fade.dash : fade.walk));
+        }
       }
     }
-    for (const [edge, points] of [[this.walkEdge, walk], [this.dashEdge, dash]] as const) {
-      edge.visible = points.length > 0;
+    this.fade.count = strips;
+    (this.fade.material as THREE.MeshBasicMaterial).opacity = fade ? fade.alpha * (this.planning ? 0.5 : 1) : 0;
+    this.fade.instanceMatrix.needsUpdate = true;
+    if (this.fade.instanceColor) this.fade.instanceColor.needsUpdate = true;
+    for (const [edge, halo, shade, points] of [[this.walkEdge, this.walkHalo, this.walkShade, walk], [this.dashEdge, this.dashHalo, this.dashShade, dash]] as const) {
+      edge.visible = !!edges && points.length > 0;
+      halo.visible = edge.visible && edges!.halo;
+      // A chalk stroke's halo is already its shadow.
+      shade.visible = edge.visible && this.look.shade && !edges!.chalk;
       edge.geometry.dispose();
-      if (!points.length) continue;
+      if (!edge.visible) continue;
       edge.geometry.setPositions(points);
       edge.computeLineDistances();
     }
@@ -734,10 +986,11 @@ export class Overlays {
 
   /** The tiles' squares round the pointer (`tile`), fading with the distance; none off the range. */
   setRangeFocus(tile: Vec2 | null): void {
+    this.lastFocus = tile;
     const m = new THREE.Matrix4();
     const c = new THREE.Color();
     let n = 0;
-    if (tile) {
+    if (tile && this.look.near) {
       const r = Math.ceil(NEAR_RADIUS);
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
@@ -756,8 +1009,19 @@ export class Overlays {
     if (this.near.instanceColor) this.near.instanceColor.needsUpdate = true;
   }
 
+  /** The plan's colour as CSS (game.ts drawPlans: one's own plans while the partner holds the command). */
+  get planHex(): string {
+    return `#${this.planTint.getHexString()}`;
+  }
+
+  /** The player's colour (PLAYER_COLORS), for the preview while planning: dimmed towards the night's ink. */
+  setPlanColor(color: string): void {
+    this.planTint.set(color).lerp(new THREE.Color(0x1c2024), PLAN_DIM);
+  }
+
   /** Planned moves, each a dashed line from the soldier to a ring on its destination. */
   setPlans(list: { from: Vec2; path: Vec2[]; color: string }[]): void {
+    this.lastPlans = list;
     const key = JSON.stringify(list);
     if (this.plans.userData.key === key) return;
     this.plans.userData.key = key;
@@ -768,18 +1032,25 @@ export class Overlays {
         (child.material as THREE.Material).dispose();
       }
     }
+    const { plan: style, path } = this.look;
     for (const plan of list) {
+      // In the look's line (#14): with a halo, a light's thin core over it.
       const line = new Line2(
         new LineGeometry(),
-        new LineMaterial({ color: plan.color, linewidth: 3, dashed: true, dashSize: 0.28, gapSize: 0.18, transparent: true, opacity: 0.9, depthTest: false }),
+        new LineMaterial({ color: glow(plan.color, this.glowOf(path.glow, true)), linewidth: style.width, dashed: true, dashSize: style.dashSize, gapSize: style.gapSize, transparent: true, opacity: 0.9, depthTest: false }),
       );
       line.geometry.setPositions([plan.from, ...plan.path].flatMap((p) => tileToWorld(p, 0.1).toArray()));
       line.computeLineDistances();
       line.renderOrder = 10;
-      const ring = flatRing(0.3, 0.44, 0xffffff, 0.9);
+      const ring = flatRing(style.ring[0], style.ring[1], 0xffffff, 0.9);
       (ring.material as THREE.MeshBasicMaterial).color.set(plan.color);
       ring.position.copy(tileToWorld(plan.path[plan.path.length - 1]!, 0.05));
       ring.visible = true;
+      if (style.halo) {
+        const halo = new Line2(line.geometry, haloMaterial(plan.color));
+        halo.renderOrder = 9;
+        this.plans.add(halo);
+      }
       this.plans.add(line, ring);
     }
   }
@@ -834,47 +1105,49 @@ export class Overlays {
     if (v) reshape(this.sightEdge, keyhole(tileToWorld(v.pos, 0.06), v.range, v.facing));
   }
 
-  /**
-   * The ground guide from the soldier on `from` towards `to` (#48), or none:
-   * from a step out to some four tiles along, an arrowhead at its end.
-   */
-  setGuide(from: Place | null, to: Place | null): void {
-    const key = from && to ? `${from.x},${from.y},${from.z ?? 0}>${to.x},${to.y}` : '';
-    if (this.guide.userData.key === key) return;
-    this.guide.userData.key = key;
-    if (!from || !to) {
-      this.guide.visible = false;
-      return;
-    }
-    const a = tileToWorld(from, 0.14);
-    const dir = new THREE.Vector3(to.x - from.x, 0, to.y - from.y);
-    const far = dir.length();
-    if (far < 3) {
-      this.guide.visible = false;
-      return;
-    }
-    dir.normalize();
-    const start = a.clone().addScaledVector(dir, 1.1);
-    const end = a.clone().addScaledVector(dir, Math.min(4.6, far - 0.5));
-    const side = new THREE.Vector3(-dir.z, 0, dir.x);
-    const tip = end.clone().addScaledVector(dir, 0.3);
-    const back = end.clone().addScaledVector(dir, -0.25);
-    reshape(this.guideCasing, [...start.toArray(), ...tip.toArray()]);
-    reshape(this.guideLine, [...start.toArray(), ...end.toArray()]);
-    this.guideLine.computeLineDistances();
-    reshape(this.guideHead, [...back.clone().addScaledVector(side, 0.38).toArray(), ...tip.toArray(), ...back.clone().addScaledVector(side, -0.38).toArray()]);
-    this.guide.visible = true;
-  }
-
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {
+    this.lastPath = { from, path, dash };
+    this.pathDots.count = 0;
     if (!from || !path?.length) {
-      this.path.visible = this.pathCasing.visible = false;
+      this.path.visible = this.pathCasing.visible = this.pathHalo.visible = false;
       return;
     }
-    const pts = [from, ...path].flatMap((p) => tileToWorld(p, 0.08).toArray());
+    const style = this.look.path;
+    const tone = this.planning ? this.planTint : new THREE.Color(dash ? style.dash : style.color);
+    const at = [from, ...path].map((p) => tileToWorld(p, 0.08));
+    if (style.dotted) {
+      // Marks every third of a tile, like the range's, from the first step on.
+      const m = new THREE.Matrix4();
+      const size = new THREE.Vector3(0.15, 1, 0.15);
+      const p = new THREE.Vector3();
+      const color = tone.clone().multiplyScalar(this.glowOf(style.glow, true));
+      for (let i = 1; i < at.length; i++) {
+        const steps = Math.max(1, Math.round(at[i - 1]!.distanceTo(at[i]!) * 3));
+        for (let k = 1; k <= steps && this.pathDots.count < this.pathDots.instanceMatrix.count; k++) {
+          this.pathDots.setMatrixAt(this.pathDots.count, m.compose(p.lerpVectors(at[i - 1]!, at[i]!, k / steps), IDENTITY, size));
+          this.pathDots.setColorAt(this.pathDots.count++, color);
+        }
+      }
+      this.pathDots.instanceMatrix.needsUpdate = true;
+      if (this.pathDots.instanceColor) this.pathDots.instanceColor.needsUpdate = true;
+      this.path.visible = this.pathCasing.visible = this.pathHalo.visible = false;
+      return;
+    }
+    // Chalk: by hand, wobbling at each tile and between them; the ends stay put.
+    const pts = style.chalk
+      ? at.flatMap((v, i) => {
+          const mid = i ? v.clone().lerp(at[i - 1]!, 0.5) : null;
+          const shake = (w: THREE.Vector3, end: boolean) => (end ? w : w.clone().add(new THREE.Vector3(wobble(w.x, w.z, 4), 0, wobble(w.x, w.z, 5))));
+          return [...(mid ? [shake(mid, false)] : []), shake(v, i === 0 || i === at.length - 1)];
+        }).flatMap((v) => v.toArray())
+      : at.flatMap((v) => v.toArray());
     reshape(this.path, pts);
-    (this.path.material as LineMaterial).color.set(this.planning ? PLAN_GREY : dash ? 0xffd34d : 0xeafaff);
-    this.path.visible = this.pathCasing.visible = true;
+    if (style.chalk) this.path.computeLineDistances();
+    (this.path.material as LineMaterial).color.copy(glow(tone, this.glowOf(style.glow, true)));
+    (this.pathHalo.material as LineMaterial).color.copy(tone);
+    this.path.visible = true;
+    this.pathCasing.visible = style.casing || this.look.shade;
+    this.pathHalo.visible = style.halo;
   }
 
   /** The circle a thrower can reach, or none. */
@@ -890,11 +1163,18 @@ export class Overlays {
     reshape(this.rangeRing, pts);
   }
 
+  /** The pointer's ring colour on a tile of the range (game.ts): the look's, one action away or for the dash. */
+  ringColor(dash: boolean): number {
+    const [walk, run] = this.look.ringColors ?? [0x9fe8ff, 0xffc93a];
+    return dash ? run : walk;
+  }
+
+  /** The pointer's ring, in the look's size (applyLook). */
   setHover(tile: Vec2 | null, color = 0xffffff): void {
     this.hover.visible = !!tile;
     if (tile) {
       this.hover.position.copy(tileToWorld(tile, 0.04));
-      (this.hover.material as THREE.MeshBasicMaterial).color.set(this.planning && color === 0xffffff ? PLAN_GREY : color);
+      (this.hover.material as THREE.MeshBasicMaterial).color.set(this.planning && color === 0xffffff ? this.planTint : color);
     }
   }
 

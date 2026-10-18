@@ -1,14 +1,11 @@
-import { WEB_TEXT } from '@bastion/engine';
 import { storageKey } from '../net';
 import { trace } from '../report';
-import { h } from '../ui/dom';
 
 // The game's sound: one AudioContext for everything, with a bus per kind of
 // sound so each has its own volume (Ajustes → Sonido), a compressor before the
 // speakers, a shared reverb, and the music ducking under loud moments and the
 // radio. Browsers only start audio after a gesture: the context opens on the
-// first click, touch or key, and whatever waits on it (music, ambience) starts
-// then. On a phone, until that first touch, a line says to touch the screen.
+// first click or key, and whatever waits on it (music, ambience) starts then.
 
 export type Bus = 'sfx' | 'ui' | 'radio' | 'music' | 'ambience';
 
@@ -64,8 +61,6 @@ class AudioEngine {
   volumes = load();
   muted: boolean;
   private readyFns: (() => void)[] = [];
-  /** «Toca la pantalla para activar el sonido», on a phone while sound waits for a touch. */
-  private hint: HTMLElement | null = null;
   private played = false;
   private volumeFns = new Set<() => void>();
 
@@ -80,11 +75,9 @@ class AudioEngine {
     if (typeof window === 'undefined') return;
     // `?sinsonido`: no audio at all, for a browser whose sound gets in the way.
     if (new URLSearchParams(location.search).has('sinsonido')) return;
-    // Not every event is a gesture: a finger's pointerdown is not (only a mouse's), its pointerup and touchend
-    // are, so a phone never got its sound (docs/FASE11.md §6). Each is listened to, for good: after another app
-    // or a call, a phone's context is held again, and the next touch lets it go.
-    const wake = () => this.wake();
-    for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(type, wake, { capture: true, passive: true });
+    const unlock = () => this.unlock();
+    window.addEventListener('pointerdown', unlock, { once: true, capture: true });
+    window.addEventListener('keydown', unlock, { once: true, capture: true });
     // A hidden tab makes no sound and costs nothing.
     document.addEventListener('visibilitychange', () => {
       if (!this.ctx) return;
@@ -96,35 +89,7 @@ class AudioEngine {
   /** Runs `fn` once the context exists (right away if it already does). */
   onReady(fn: () => void): void {
     if (this.ctx) fn();
-    else {
-      this.readyFns.push(fn);
-      this.waiting();
-    }
-  }
-
-  /** Inside a gesture: the context made, or let go if held (iOS lets it go for a silent sound played here). */
-  private wake(): void {
-    if (this.ctx?.state === 'running') return;
-    if (!this.ctx) this.unlock();
-    const ctx = this.ctx;
-    if (!ctx || document.hidden) return;
-    void ctx.resume();
-    const src = ctx.createBufferSource();
-    src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-    src.connect(ctx.destination);
-    src.start();
-  }
-
-  /** Something wants to sound and cannot yet: on a phone (the interface's data-touch), the line to touch the screen. */
-  private waiting(): void {
-    if (this.hint || this.muted || document.documentElement.dataset.touch !== '1') return;
-    this.hint = h('div.toast.show.sound-hint', { role: 'status', style: { position: 'fixed', zIndex: '60', pointerEvents: 'none' } }, WEB_TEXT.sound);
-    document.body.append(this.hint);
-  }
-
-  private heard(): void {
-    this.hint?.remove();
-    this.hint = null;
+    else this.readyFns.push(fn);
   }
 
   /** Called when volumes or mute change (the settings panel redraws). */
@@ -139,8 +104,6 @@ class AudioEngine {
     const ctx = new AudioContext({ latencyHint: 'interactive' });
     this.ctx = ctx;
     trace(`audio: contexto ${ctx.state}, ${ctx.sampleRate} Hz`);
-    ctx.addEventListener('statechange', () => ctx.state === 'running' && this.heard());
-    if (ctx.state === 'running') this.heard();
     // Compressor last: many shots and an explosion at once must not clip.
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
@@ -211,10 +174,7 @@ class AudioEngine {
   /** The context, if sound can play now; null before the first gesture, when muted or hidden. */
   live(): AudioContext | null {
     if (!this.ctx || this.muted || document.hidden) return null;
-    if (this.ctx.state !== 'running') {
-      void this.ctx.resume();
-      this.waiting();
-    }
+    if (this.ctx.state === 'suspended') void this.ctx.resume();
     return this.ctx;
   }
 

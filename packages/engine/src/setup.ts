@@ -1,7 +1,8 @@
 import { defaultAppearance } from './appearance';
-import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, RECOVERY_TURNS, SIEGE, SOLDIER_NAMES, SPARE_MAGS, SQUAD_SIZE, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
+import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, REACTION_PENALTY, RECOVERY_TURNS, SIEGE, SOLDIER_NAMES, SPARE_MAGS, SQUAD_SIZE, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
 import { ground, toPos } from './grid';
 import { lightTiles } from './los';
+import { baseLayout, PIECES, type BaseState } from './base';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import { STORY } from './lore';
@@ -24,6 +25,7 @@ import type {
   Pod,
   Reinforcement,
   Siege,
+  Trap,
   Site,
   Slot,
   Team,
@@ -67,8 +69,11 @@ export interface SquadMember {
 }
 
 /** Hand-made map by id, or a procedural one from a biome and a seed. */
-/** `site`: a scenario other than the biome's usual one (playtest 2026-10-14, #25). */
-export type MapSource = { kind: 'handmade'; id: string } | { kind: 'generated'; biome: Biome; seed: number; site?: Site; medical?: 'clinic' | 'ward' | 'hospital' };
+/** `site`: a scenario other than the biome's usual one (playtest 2026-10-14, #25). `base`: the campaign's base, for its siege (docs/FASE12.md §11). */
+export type MapSource =
+  | { kind: 'handmade'; id: string }
+  | { kind: 'generated'; biome: Biome; seed: number; site?: Site; medical?: 'clinic' | 'ward' | 'hospital' }
+  | { kind: 'base'; base: BaseState };
 
 export interface MissionOptions {
   map: MapSource;
@@ -109,6 +114,8 @@ export interface MissionOptions {
   quarantine?: boolean;
   /** Still winter in the campaign (campaign.ts wintry): the map under snow. */
   snow?: boolean;
+  /** A campaign's siege (docs/FASE12.md §11.5): how many of the dead come in all, and by which sides; without it, the test siege's waves. */
+  siegePlan?: { count: number; sides: number[] };
 }
 
 /** What a skirmish soldier carries in the hand (docs/FASE9.md §6): one of these, at random. */
@@ -391,27 +398,45 @@ export function garrison(kind: MissionKind, difficulty: number, living = false):
 const SIEGE_GROUP = 5;
 
 /**
- * The test siege's waves (docs/FASE12.md, hito 1): the dead by one side, the
- * first at the end of the first enemy turn and then every other turn, more
- * each time; the third by a flank. Each with its own: a Corredor, a Hinchado,
- * an Acorazado, and a Chillón with the last.
+ * The test siege's waves (docs/FASE12.md, hito 1): the first at the end of the
+ * first enemy turn and then every other turn, more each time, each with its
+ * own: a Corredor, a Hinchado, an Acorazado, and a Chillón with the last.
+ * Every group of a wave by any of the four sides, at random (Arturo, 18/10:
+ * they come from every front).
  */
-export function siegeWaves(difficulty: number, rng: Rng): Reinforcement[] {
+export function siegeWaves(difficulty: number, rng: Rng, plan?: { count: number; sides: number[] }): Reinforcement[] {
   const d = Math.max(1, Math.min(4, difficulty));
-  const side = rng.int(4);
-  const flank = (side + (rng.next() < 0.5 ? 1 : 3)) % 4;
   const zombies = (n: number) => Array.from({ length: n }, () => 'zombie' as const);
-  const waves: { turn: number; side: number; units: TemplateId[] }[] = [
-    { turn: 1, side, units: zombies(3 + d) },
-    { turn: 3, side, units: [...zombies(4 + d), 'xenoid'] },
-    { turn: 5, side: flank, units: [...zombies(4 + d), 'bloater'] },
-    { turn: 7, side, units: [...zombies(5 + d), 'mec'] },
-    { turn: 9, side, units: [...zombies(5 + d), 'xenoid', 'sectoid'] },
+  // A campaign's siege brings its own count, the same five specials and the zombies for the rest, spread over
+  // the five waves (more each time; what the rounding leaves, to the waves it shortchanged most).
+  const share = [0.14, 0.18, 0.2, 0.22, 0.26];
+  const total = plan ? Math.max(share.length, plan.count - 5) : 0;
+  const counts = share.map((s) => Math.max(1, Math.floor(total * s)));
+  for (const k of share.map((s, k) => k).sort((a, b) => (total * share[b]!) % 1 - (total * share[a]!) % 1 || b - a)) {
+    if (counts.reduce((a, b) => a + b, 0) >= total) break;
+    counts[k]!++;
+  }
+  const many = (k: number, test: number) => (plan ? counts[k]! : test);
+  const waves: { turn: number; units: TemplateId[] }[] = [
+    { turn: 1, units: zombies(many(0, 3 + d)) },
+    { turn: 3, units: [...zombies(many(1, 4 + d)), 'xenoid'] },
+    { turn: 5, units: [...zombies(many(2, 4 + d)), 'bloater'] },
+    { turn: 7, units: [...zombies(many(3, 5 + d)), 'mec'] },
+    { turn: 9, units: [...zombies(many(4, 5 + d)), 'xenoid', 'sectoid'] },
   ];
+  // By the sides the plan says (what the Sala de radio hears), or any of the four.
+  const sides = plan?.sides.length ? plan.sides : [0, 1, 2, 3];
+  // Each side the plan names sees someone come by it: its first groups go one to each, in a random order.
+  const first = plan ? [...sides] : [];
+  for (let i = first.length - 1; i > 0; i--) {
+    const j = rng.int(i + 1);
+    [first[i], first[j]] = [first[j]!, first[i]!];
+  }
   const out: Reinforcement[] = [];
   for (const w of waves) {
     for (let i = 0; i < w.units.length; i += SIEGE_GROUP) {
-      out.push({ id: `r${out.length + 1}`, turn: w.turn, pos: null, units: w.units.slice(i, i + SIEGE_GROUP), landed: false, horde: true, side: w.side });
+      const side = out.length < first.length ? first[out.length]! : sides[rng.int(sides.length)]!;
+      out.push({ id: `r${out.length + 1}`, turn: w.turn, pos: null, units: w.units.slice(i, i + SIEGE_GROUP), landed: false, horde: true, side });
     }
   }
   return out;
@@ -434,6 +459,7 @@ export const VIP_NAMES = ['Dra. Irina Sokolova', 'Ing. Kenji Mori', 'Alcaldesa M
 const LAYOUT_KIND: Partial<Record<MissionKind, MissionKind>> = { scavenge: 'recovery' };
 
 export function missionLayout(map: MapSource, kind: MissionKind, podSizes: number[], itemOutdoors = false, clinic = false, hospital = false, alarm?: Alarm): MissionLayout {
+  if (map.kind === 'base') return baseLayout(map.base);
   if (map.kind === 'handmade') {
     const def = MAPS[map.id];
     if (!def) throw new Error(`Unknown map ${map.id}`);
@@ -447,11 +473,12 @@ export function createMission(opts: MissionOptions): GameState {
   const difficulty = opts.difficulty ?? 2;
   const handmade = opts.map.kind === 'handmade' ? MAPS[opts.map.id] : undefined;
   // On a base, it is always a siege (docs/FASE12.md).
-  let kind = handmade?.siege ? 'elimination' : (opts.kind ?? 'elimination');
+  let kind = handmade?.siege || opts.map.kind === 'base' ? 'elimination' : (opts.kind ?? 'elimination');
   const base = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : missionPods(difficulty, kind, opts.living));
   // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
   const extra = garrison(kind, difficulty, opts.living);
-  const plan = [...base, ...(extra ? [extra] : []), ...(opts.night ? [nightPod(difficulty)] : [])];
+  // A siege by night brings no more than its waves: nobody waits inside the base.
+  const plan = [...base, ...(extra ? [extra] : []), ...(opts.night && opts.map.kind !== 'base' ? [nightPod(difficulty)] : [])];
   const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors, opts.campaignMission?.story === 1, opts.campaignMission?.story === 2, opts.alarm);
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
@@ -521,6 +548,10 @@ export function createMission(opts: MissionOptions): GameState {
     }
   }
 
+  // The base's own defences (docs/FASE12.md §11.4): its turrets, standing and with whatever they have left in them.
+  const defences = opts.map.kind === 'base' ? baseDefences(opts.map.base, layout.width) : null;
+  if (defences) units.push(...defences.turrets);
+
   let objectiveUnit: string | null = null;
   if (kind === 'sabotage' && layout.objectiveSpot) {
     units.push({ ...makeUnit('relay', 'relay', opts.objectiveName ?? TEMPLATES.relay.name, null, layout.objectiveSpot, null), objective: true });
@@ -551,16 +582,18 @@ export function createMission(opts: MissionOptions): GameState {
   if (leader) leader.name = opts.leader!.name;
 
   // A siege of the base (docs/FASE12.md): its waves; every door and barricade holds so much; the squad has its magazines at hand.
-  const siege: Siege | undefined = layout.heart ? { heart: toPos(layout.heart), hold: SIEGE.hold } : undefined;
+  const siege: Siege | undefined = layout.siege ? { hold: SIEGE.hold } : undefined;
   const reinforcements: Reinforcement[] = siege
-    ? siegeWaves(difficulty, opts.rng)
+    ? siegeWaves(difficulty, opts.rng, opts.siegePlan)
     : hordeTurns(kind).map((turn, i) => ({ id: `r${i + 1}`, turn, pos: null, units: hordeWave(difficulty), landed: false, horde: true }));
-  const breakables: Record<number, number> = {};
-  if (siege) {
+  const breakables: Record<number, number> = { ...layout.breakables };
+  if (siege && !layout.breakables) {
     layout.tiles.forEach((k, i) => {
       if (k === 'door') breakables[i] = SIEGE.door;
     });
     for (const b of layout.barricades ?? []) breakables[b.y * layout.width + b.x] = SIEGE.barricade;
+  }
+  if (siege) {
     for (const u of units) if (u.team === 'xcom' && u.mags !== undefined) u.mags = Math.max(u.mags, SIEGE.mags);
   }
 
@@ -602,6 +635,7 @@ export function createMission(opts: MissionOptions): GameState {
     elev: [...layout.elev],
     ...(layout.ground ? { ground: [...layout.ground] } : {}),
     ...(layout.medical ? { medical: layout.medical.map((b) => ({ ...b, ...(b.rooms ? { rooms: b.rooms.map((r) => ({ ...r })) } : {}), ...(b.dressing ? { dressing: b.dressing.map((d) => ({ ...d })) } : {}) })) } : {}),
+    ...(layout.homes ? { homes: layout.homes.map((h) => ({ ...h, rooms: h.rooms.map((r) => ({ ...r })), ...(h.dressing ? { dressing: h.dressing.map((d) => ({ ...d })) } : {}) })) } : {}),
     ...(layout.decor ? { decor: [...layout.decor] } : {}),
     ...(layout.storeys ? { storeys: [...layout.storeys] } : {}),
     ...(layout.levels ? { levels: layout.levels.map((l) => ({ tiles: [...l.tiles], ...(l.decor ? { decor: [...l.decor] } : {}) })) } : {}),
@@ -620,16 +654,44 @@ export function createMission(opts: MissionOptions): GameState {
     campaignMission: opts.campaignMission ?? null,
     ...(opts.snow ? { snow: true } : {}),
     ...(siege ? { breakables } : {}),
+    // The campaign's base, as it stands (docs/FASE12.md §11): what the client draws, and what the siege's end gives back.
+    ...(opts.map.kind === 'base' ? { base: { pieces: opts.map.base.pieces.map((p) => ({ ...p })), ...(opts.map.base.felled?.length ? { felled: [...opts.map.base.felled] } : {}) } } : {}),
+    ...(defences?.traps.length ? { traps: defences.traps } : {}),
+    ...(defences?.slow.length ? { slow: defences.slow } : {}),
     smoke: [],
   };
   // The map's street lights (they never go out): each lights what its lamp sees round it, worked out once.
   state.lights = (layout.lights ?? []).map((tile, i) => ({
     id: `l${i + 1}`,
     tile: ground(tile),
-    radius: NIGHT.streetLight,
-    tiles: lightTiles(state, ground(tile), NIGHT.streetLight, NIGHT.lampHeight),
+    radius: tile.radius ?? NIGHT.streetLight,
+    tiles: lightTiles(state, ground(tile), tile.radius ?? NIGHT.streetLight, NIGHT.lampHeight),
   }));
   return state;
+}
+
+/**
+ * The base's defences that act in a siege (docs/FASE12.md §11.4), from what
+ * stands on it: its turrets as units with nobody's orders (their health and
+ * the rounds left in them), its traps still set, and its barbed wire.
+ */
+function baseDefences(base: BaseState, width: number): { turrets: Unit[]; traps: Trap[]; slow: number[] } {
+  const turrets: Unit[] = [];
+  const traps: Trap[] = [];
+  const slow: number[] = [];
+  for (const p of base.pieces) {
+    if (p.hp <= 0) continue;
+    const node = p.y * width + p.x;
+    if (p.piece === 'turret') {
+      const u = makeUnit(`tur-${p.id}`, 'turret', TEMPLATES.turret.name, null, { x: p.x, y: p.y }, null);
+      // Made to fire at what comes in: none of a soldier's loss of aim on a reaction shot (18/10 test: 27 against a Corredor).
+      const mods = { ...u.mods, reactionKeep: Math.round(REACTION_PENALTY * 100) };
+      turrets.push({ ...u, mods, ap: 0, hp: p.hp, maxHp: PIECES.turret.hp, ammo: p.charges ?? 0, automaton: { piece: p.id } });
+    } else if (p.piece === 'mine' || p.piece === 'spikes' || p.piece === 'snare') {
+      if ((p.charges ?? 0) > 0) traps.push({ piece: p.id, kind: p.piece, node, charges: p.charges! });
+    } else if (p.piece === 'wire') slow.push(node);
+  }
+  return { turrets, traps, slow };
 }
 
 /**

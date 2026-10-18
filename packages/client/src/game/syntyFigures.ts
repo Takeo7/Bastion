@@ -169,6 +169,8 @@ const UNSEEN_EVERY = 1 / 8;
 const FAR2 = 24 * 24;
 /** The level of detail on or off (the horde lab compares both). */
 export const SYNTY_LOD = { on: true };
+/** The fingers posed by what each hand does, and the arms kept out of the chest (the weapons lab compares with and without). */
+export const SYNTY_HANDS = { fingers: true, elbows: true };
 
 // --------------------------------------------------------------- rest pose
 
@@ -187,11 +189,60 @@ interface Rest {
   hip: number;
   chest: number;
   top: number;
+  /** The fingers of each hand the model has (some have none): their joints and the axis each bends on, in its own frame. */
+  fingers: FingerChain[];
+  /** The chest as the model's own mesh fills it (armour and all), in the rest pose: the arms keep out of it (reach). */
+  torso: Torso | null;
+}
+
+/** A body's chest, round its spine: across it, out in front, out behind, from the belly to the neck (model space, at rest). */
+interface Torso {
+  cx: number;
+  cz: number;
+  across: number;
+  front: number;
+  back: number;
+  low: number;
+  high: number;
+}
+
+/** One of a hand's fingers (Synty's: the thumb, the index, the other three as one), from the knuckle out. */
+interface FingerChain {
+  side: 'L' | 'R';
+  kind: 'thumb' | 'index' | 'finger';
+  joints: number[];
+  /** The axis each joint curls on towards the palm, in that joint's rest frame. */
+  axes: THREE.Vector3[];
 }
 
 const rests = new WeakMap<THREE.Object3D, Rest>();
 
 const RIGHT_FINGERS = new THREE.Vector3(0.0, -0.55, 0.84).normalize();
+/** The palm's way in the T-pose (down): the fingers curl towards it. */
+const PALM = new THREE.Vector3(0, -1, 0);
+
+/**
+ * What a hand does with its fingers (radians at each joint, from the knuckle out; the thumb has three): relaxed at
+ * the side, round a gun's grip with the index along the trigger, closed on a handle, cradling a handguard, a fist,
+ * a dead one's claw, open to take something.
+ */
+type HandPose = 'relaxed' | 'trigger' | 'grip' | 'support' | 'fist' | 'claw' | 'open';
+const HAND_POSES: Record<HandPose, { thumb: number[]; index: number[]; finger: number[] }> = {
+  relaxed: { thumb: [0.1, 0.15, 0.1], index: [0.25, 0.35, 0.25, 0], finger: [0.4, 0.5, 0.35, 0] },
+  trigger: { thumb: [0.35, 0.45, 0.35], index: [0.45, 0.35, 0.2, 0], finger: [1.2, 1.35, 0.9, 0] },
+  grip: { thumb: [0.45, 0.5, 0.4], index: [1.15, 1.3, 0.85, 0], finger: [1.25, 1.35, 0.9, 0] },
+  support: { thumb: [0.3, 0.25, 0.2], index: [0.75, 0.6, 0.4, 0], finger: [0.85, 0.7, 0.45, 0] },
+  fist: { thumb: [0.6, 0.7, 0.5], index: [1.4, 1.5, 1.1, 0], finger: [1.45, 1.55, 1.1, 0] },
+  claw: { thumb: [0.25, 0.3, 0.4], index: [0.15, 0.9, 0.8, 0], finger: [0.25, 1.0, 0.85, 0] },
+  open: { thumb: [0, 0.05, 0.05], index: [0.05, 0.08, 0.05, 0], finger: [0.1, 0.12, 0.08, 0] },
+};
+const FLAT = [0, 0, 0, 0];
+/** How fast a hand's fingers go to a new pose (per second, eased). */
+const HAND_EASE = 14;
+/** How far an arm's middle keeps from the chest's mesh (its own half-thickness), and the elbow's swing in steps (clearElbow). */
+const ARM_CLEAR = 0.045;
+const ELBOW_STEP = Math.PI / 30;
+const ELBOW_STEPS = 14;
 const RIGHT_PALM = new THREE.Vector3(1, 0, 0);
 /** Where a gun's grip sits from the right wrist, in the gun's frame. */
 const GRIP = RIGHT_FINGERS.clone().multiplyScalar(0.05).addScaledVector(RIGHT_PALM, 0.03);
@@ -204,6 +255,52 @@ const LEFT_PALM = new THREE.Vector3(-0.4, 0.92, 0).normalize();
 const LEFT_FINGERS = new THREE.Vector3(-0.62, -0.1, 0.78).projectOnPlane(LEFT_PALM).normalize();
 /** From the middle of the support palm back to the left wrist, in the gun's frame. */
 const FORE_WRIST = LEFT_FINGERS.clone().multiplyScalar(-0.045).addScaledVector(LEFT_PALM, -0.018);
+
+/**
+ * A node whose world matrix only passes a change on to its children when it moved: the figure's model, under the
+ * yaw and the pivot that are set at every pose. Its bones then make their matrices again only when written.
+ */
+function stillUnlessMoved(node: THREE.Object3D): void {
+  const last = new THREE.Matrix4();
+  node.updateMatrixWorld = function (force?: boolean): void {
+    let moved = false;
+    if (this.matrixWorldNeedsUpdate || force) {
+      if (this.parent) this.matrixWorld.multiplyMatrices(this.parent.matrixWorld, this.matrix);
+      else this.matrixWorld.copy(this.matrix);
+      this.matrixWorldNeedsUpdate = false;
+      moved = !this.matrixWorld.equals(last);
+      if (moved) last.copy(this.matrixWorld);
+    }
+    for (const child of this.children) child.updateMatrixWorld(moved);
+  };
+}
+
+/** How far out a body's chest goes (its mesh round the spine, the arms left out), as the model stands at rest. */
+function torsoOf(model: THREE.Object3D, p: THREE.Vector3[]): Torso | null {
+  const spine = p[B.Spine_03]!;
+  const shoulder = Math.abs(p[B.Shoulder_L]!.x - spine.x);
+  const low = p[B.Spine_01]!.y - 0.04;
+  const high = p[B.Neck]!.y;
+  if (!shoulder || high <= low) return null;
+  let across = 0;
+  let front = 0;
+  let back = 0;
+  const v = new THREE.Vector3();
+  model.traverse((o) => {
+    if (!(o instanceof THREE.SkinnedMesh) || o.name !== 'body') return;
+    const pos = o.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      if (v.y < low || v.y > high) continue;
+      const dx = Math.abs(v.x - spine.x);
+      if (dx > shoulder * 0.92) continue;
+      across = Math.max(across, dx);
+      front = Math.max(front, v.z - spine.z);
+      back = Math.max(back, spine.z - v.z);
+    }
+  });
+  return across > 0 ? { cx: spine.x, cz: spine.z, across, front, back, low, high } : null;
+}
 
 function restOf(model: THREE.Object3D): Rest {
   let rest = rests.get(model);
@@ -238,7 +335,25 @@ function restOf(model: THREE.Object3D): Rest {
   const rootQ = new THREE.Quaternion();
   const rootP = new THREE.Vector3();
   bones[B.Hips]?.parent?.matrixWorld.decompose(rootP, rootQ, s);
+  // The fingers, as the T-pose has them (palm down): each joint curls about the line across it and the palm's normal.
+  const fingers: FingerChain[] = [];
+  for (const side of ['L', 'R'] as const) {
+    for (const [kind, count] of [['thumb', 3], ['index', 4], ['finger', 4]] as const) {
+      const name = kind === 'thumb' ? 'Thumb' : kind === 'index' ? 'Index' : 'Finger';
+      const joints = Array.from({ length: count }, (_, j) => B[`${name}_0${j + 1}_${side}` as SyntyBone]);
+      if (joints.some((j) => !bones[j])) continue;
+      const axes = joints.map((j, k) => {
+        const next = joints[k + 1];
+        const from = next !== undefined ? p[j]! : p[joints[k - 1]!]!;
+        const to = next !== undefined ? p[next]! : p[j]!;
+        const along = to.clone().sub(from).normalize();
+        return along.cross(PALM).normalize().applyQuaternion(q[j]!.clone().invert());
+      });
+      fingers.push({ side, kind, joints, axes });
+    }
+  }
   rest = {
+    torso: torsoOf(model, p),
     parent,
     rootQ: rootQ.invert(),
     rootP,
@@ -249,6 +364,7 @@ function restOf(model: THREE.Object3D): Rest {
     hip: p[B.Hips]!.y,
     chest: p[B.Spine_03]!.y + 0.06,
     top,
+    fingers,
   };
   rests.set(model, rest);
   return rest;
@@ -262,6 +378,17 @@ const v3 = new THREE.Vector3();
 const v4 = new THREE.Vector3();
 const q1 = new THREE.Quaternion();
 const q2 = new THREE.Quaternion();
+/** For the fingers (hands): a joint's turn in the model, its rest turn from the one before, its curl, an inverse. */
+const fq = new THREE.Quaternion();
+/** For an elbow kept out of the chest (clearElbow). */
+const cv = new THREE.Vector3();
+const cu = new THREE.Vector3();
+const ca = new THREE.Vector3();
+const cf = new THREE.Vector3();
+const ce = new THREE.Vector3();
+const lq = new THREE.Quaternion();
+const cq = new THREE.Quaternion();
+const iq = new THREE.Quaternion();
 const e1 = new THREE.Euler();
 const m1 = new THREE.Matrix4();
 const m2 = new THREE.Matrix4();
@@ -455,6 +582,8 @@ export class SyntyFigure implements FigureRig {
   /** Its weapons' models (cloned), which of them is in the hand, and where the others ride (hung from bones: stows). */
   private readonly carried: Partial<Record<Carry, THREE.Object3D>> = {};
   private drawn: Carry = 'weapon';
+  /** How far each finger joint is curled now (radians), easing to its hand's pose (hands). */
+  private readonly curl = new Float32Array(N);
   private readonly stows: Partial<Record<Carry, THREE.Group>> = {};
   /** Something in the right hand. */
   private armed = false;
@@ -603,6 +732,14 @@ export class SyntyFigure implements FigureRig {
     this.material = material;
     if (material) this.paint(material);
     this.bones = SYNTY_BONES.map((n) => model.getObjectByName(n) ?? null);
+    // Each bone's matrix is made when write() poses it, not every frame, and the model's own nodes never move: a figure
+    // posed less often (far off, at rest, out of sight: SYNTY_LOD) costs nothing in between, whatever its bones (the
+    // fingers doubled them). What hangs from the bones later (a hat, the gun) goes on as ever.
+    model.traverse((o) => {
+      o.updateMatrix();
+      o.matrixAutoUpdate = false;
+    });
+    stillUnlessMoved(model);
     onUnitLayer(model);
     this.body.add(model);
     this.model = model;
@@ -972,6 +1109,7 @@ export class SyntyFigure implements FigureRig {
     // A stone tossed with the free hand, over whatever that arm was doing.
     const toss = (p.toss ?? 0) * live;
     if (toss > 0 && !dead) this.tossArm(toss);
+    this.hands(p, dt, live, climb, search, throwing, toss);
     this.write();
     this.poses++;
     if (clip) this.dropWeapon(Math.min(1, p.fall) * clip.seconds);
@@ -1517,9 +1655,46 @@ export class SyntyFigure implements FigureRig {
     axis.normalize();
     const upper = dir.applyAxisAngle(axis, alpha);
     const elbow = v2.copy(s).addScaledVector(upper, a);
+    // Out of the chest: the elbow swung round the shoulder–hand line, the hand where it is.
+    if (this.clearElbow(s, target, elbow)) upper.copy(elbow).sub(s).normalize();
     const fore = elbow.sub(target).negate().normalize();
     // setArm uses v1 and v2 itself: hand it copies.
     this.setArm(side, tmpU.copy(upper), tmpF.copy(fore));
+  }
+
+  /**
+   * Keeps an arm out of its own body (the elbow pulled in through the chest, a forearm across it): if the elbow,
+   * or the middle of the upper arm or of the forearm, is inside the torso (in the chest's frame, as it leans and
+   * turns), the elbow swings round the line from the shoulder to the hand, a step at a time either way, to the
+   * first place all three are clear. True if it moved.
+   */
+  private clearElbow(shoulder: THREE.Vector3, hand: THREE.Vector3, elbow: THREE.Vector3): boolean {
+    const r = this.rest!;
+    const t = r.torso;
+    if (!t || this.spec.dead || !SYNTY_HANDS.elbows) return false;
+    const chest = this.p[B.Spine_03]!;
+    const back = iq.copy(this.d[B.Spine_03]!).invert();
+    const depth = (e: THREE.Vector3) => {
+      cv.copy(e).sub(chest).applyQuaternion(back).add(r.p[B.Spine_03]!);
+      if (cv.y < t.low || cv.y > t.high) return 0;
+      const z = cv.z - t.cz;
+      return 1 - Math.hypot((cv.x - t.cx) / (t.across + ARM_CLEAR), z / ((z > 0 ? t.front : t.back) + ARM_CLEAR));
+    };
+    const inside = (e: THREE.Vector3) =>
+      Math.max(depth(e), depth(cu.copy(e).add(shoulder).multiplyScalar(0.5)), depth(cu.copy(e).add(hand).multiplyScalar(0.5)));
+    if (inside(elbow) <= 0) return false;
+    const axis = ca.copy(hand).sub(shoulder).normalize();
+    const from = cf.copy(elbow).sub(shoulder);
+    for (let k = 1; k <= ELBOW_STEPS; k++) {
+      for (const sign of [1, -1]) {
+        ce.copy(from).applyAxisAngle(axis, sign * k * ELBOW_STEP).add(shoulder);
+        if (inside(ce) <= 0) {
+          elbow.copy(ce);
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /** An arm hanging at the side, swinging by `swing`. */
@@ -1557,6 +1732,38 @@ export class SyntyFigure implements FigureRig {
   }
 
   /** Model-space turns to bone-local rotations; the hips also move. */
+  /**
+   * The fingers of both hands as each is busy now (HAND_POSES): round the gun's grip with the index along the
+   * trigger, cradling the handguard, closed on a blade's handle, a rung or a stone, open to take something, a dead
+   * one's claws, else at ease; eased to it, over the hand where the arm left it.
+   */
+  private hands(p: FigurePose, dt: number, live: number, climb: number, search: number, throwing: boolean, toss: number): void {
+    const r = this.rest!;
+    if (!r.fingers.length) return;
+    const dead = this.spec.dead;
+    const fallen = live < 0.5;
+    const right: HandPose = fallen ? (this.armed ? 'grip' : 'relaxed') : dead ? 'claw' : this.armed ? (this.melee ? 'grip' : 'trigger') : climb > 0.5 ? 'grip' : search > 0.3 ? 'open' : 'relaxed';
+    const left: HandPose = fallen ? 'relaxed' : dead ? 'claw' : toss > 0 || throwing ? 'fist' : climb > 0.5 || (p.spin ?? 0) > 0.01 ? 'grip' : search > 0.3 ? 'open' : this.armed && this.fore ? 'support' : 'relaxed';
+    const k = dt > 0 ? 1 - Math.exp(-dt * HAND_EASE) : 1;
+    const d = this.d;
+    for (const chain of r.fingers) {
+      // (Off in the weapons lab: straight, as the hand would be without them.)
+      const goal = SYNTY_HANDS.fingers ? HAND_POSES[chain.side === 'L' ? left : right][chain.kind] : FLAT;
+      const hand = chain.side === 'L' ? B.Hand_L : B.Hand_R;
+      // The hand as it ended up, then each joint out from it: its rest turn from the one before, and its curl.
+      fq.copy(d[hand]!).multiply(r.q[hand]!);
+      let before = r.q[hand]!;
+      for (let n = 0; n < chain.joints.length; n++) {
+        const j = chain.joints[n]!;
+        this.curl[j] = this.curl[j]! + (goal[n]! - this.curl[j]!) * k;
+        lq.copy(before).invert().multiply(r.q[j]!);
+        fq.multiply(lq).multiply(cq.setFromAxisAngle(chain.axes[n]!, this.curl[j]!));
+        d[j]!.copy(fq).multiply(iq.copy(r.q[j]!).invert());
+        before = r.q[j]!;
+      }
+    }
+  }
+
   private write(): void {
     const r = this.rest!;
     const { d, w, bones } = this;
@@ -1567,8 +1774,13 @@ export class SyntyFigure implements FigureRig {
       const parent = r.parent[i]!;
       if (parent < 0) bone.quaternion.copy(r.rootQ).multiply(w[i]!);
       else bone.quaternion.copy(w[parent]!).invert().multiply(w[i]!);
+      if (i !== B.Hips) bone.updateMatrix();
     }
-    bones[B.Hips]?.position.copy(this.p[B.Hips]!).sub(r.rootP).applyQuaternion(r.rootQ);
+    const hips = bones[B.Hips];
+    if (hips) {
+      hips.position.copy(this.p[B.Hips]!).sub(r.rootP).applyQuaternion(r.rootQ);
+      hips.updateMatrix();
+    }
   }
 }
 
@@ -1827,6 +2039,83 @@ class SirenRig implements FigureRig {
   }
 }
 
+/** Where the turret's parts sit on one another (game units, as converted), and how much it is scaled to its tile. */
+const TURRET = { swivel: 1.0 / 1.5, gun: 1.32 / 1.5, drum: [0.1 / 1.5, 1.62 / 1.5] as const, muzzle: 1.23 / 1.5, scale: 0.78 };
+
+/**
+ * The base's turret (docs/FASE12.md §11.4), a unit of its own: Apocalypse's
+ * AA gun on its tripod, the gun turning on the swivel to where it aims and
+ * kicking back as it fires; knocked over once it is destroyed. Its muzzle is
+ * where the unit views' shots start.
+ */
+class TurretRig implements FigureRig {
+  readonly root = new THREE.Group();
+  readonly yaw = new THREE.Group();
+  readonly pivot = new THREE.Group();
+  readonly gunPivot = new THREE.Group();
+  readonly muzzle = new THREE.Object3D();
+  readonly flash: THREE.Mesh;
+  readonly drone = null;
+  readonly hip = 0;
+  readonly chest = TURRET.gun * TURRET.scale;
+  readonly top = (TURRET.drum[1] + 0.2) * TURRET.scale;
+  /** The tripod, which stays put; the swivel and the gun go round with `yaw`. */
+  private readonly stand = new THREE.Group();
+
+  constructor() {
+    const k = TURRET.scale;
+    this.root.add(this.stand, this.yaw);
+    this.stand.scale.setScalar(k);
+    this.yaw.add(this.pivot);
+    this.pivot.scale.setScalar(k);
+    this.pivot.add(this.gunPivot);
+    this.gunPivot.position.y = TURRET.gun;
+    // The gun's barrels run along the model's +x: turned to +z, the way a unit faces.
+    this.gunPivot.rotation.y = -Math.PI / 2;
+    this.muzzle.position.set(TURRET.muzzle, 0, 0);
+    this.gunPivot.add(this.muzzle);
+    this.flash = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 1.3, 1.1).translate(0, 0.65, 0),
+      new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    this.flash.visible = false;
+    this.root.add(this.flash);
+    this.part('turretTripod', this.stand, 0, 0);
+    this.part('turretSwivel', this.pivot, 0, TURRET.swivel);
+    this.part('turretGun', this.gunPivot, 0, 0);
+    this.part('turretDrum', this.gunPivot, TURRET.drum[0], TURRET.drum[1] - TURRET.gun);
+    onUnitLayer(this.root);
+  }
+
+  /** One of its parts into `into`, at (x, y) there, as soon as its model is in. */
+  private part(id: 'turretTripod' | 'turretSwivel' | 'turretGun' | 'turretDrum', into: THREE.Group, x: number, y: number): void {
+    const put = (source: THREE.Group) => {
+      const model = source.clone();
+      model.position.set(x, y, 0);
+      model.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = true;
+      });
+      into.add(model);
+      onUnitLayer(this.root);
+    };
+    const now = modelNow(PROPS[id].pack, 'prop', id);
+    if (now) put(now);
+    else void loadModel(PROPS[id].pack, 'prop', id).then(put).catch(() => undefined);
+  }
+
+  applyPose(p: FigurePose, _time: number): void {
+    this.yaw.rotation.y = p.yaw;
+    // The kick of a burst, the barrels up a touch as it aims.
+    this.gunPivot.position.x = -p.recoil * 0.09;
+    this.gunPivot.rotation.z = -p.aim * 0.06 + p.recoil * 0.05;
+    // Destroyed: knocked over on its side, the gun off its swivel.
+    this.root.rotation.z = p.fall * 1.25;
+    this.root.position.y = -p.fall * 0.05;
+    this.flash.visible = p.flash > 0.01;
+    (this.flash.material as THREE.MeshBasicMaterial).opacity = p.flash * 0.4;
+  }
+}
+
 // ----------------------------------------------------------------- choice
 
 /** Stable pick from a list by a string (FNV-1a). */
@@ -1852,6 +2141,7 @@ const PIECES: ArmorPart[] = ['helmet', 'torso', 'arms', 'legs'];
  */
 export function syntyFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm', siren?: Siren): FigureRig | null {
   if (template === 'relay') return new SirenRig(siren?.alarm ?? 'factory', siren?.heading ?? 0);
+  if (template === 'turret') return new TurretRig();
   // One of the dead with a look of its own is a soldier risen (playtest 16/10 #7: Unit.risenFrom): their body,
   // clothes and helmet as they fell, the skin gone grey, the dead's walk; no band, no weapons.
   const risen = DEAD_TEMPLATES.has(template) && !!look;

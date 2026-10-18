@@ -9,7 +9,7 @@ import { executeCommand, Sim } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { Command } from '../src/protocol';
 import type { GameState, Slot } from '../src/types';
-import { addUnit, stateFrom } from './helpers';
+import { addUnit, raise, stateFrom } from './helpers';
 
 // The playtest of 2026-10-15 (docs/PRUEBA-2026-10-15.md).
 
@@ -121,7 +121,7 @@ describe('the bitten and the Cuarentena (#13)', () => {
     const s = c.soldiers[0]!;
     s.infection = { since: c.day };
     const before = turnDay(c, s)!;
-    Object.assign(c.base.plots.find((p) => p.terrain === 'clear' && !p.building)!, { building: 'quarantine', level: 3 });
+    raise(c, 'quarantine', 3);
     expect(turnDay(c, s)).toBe(before + 2);
   });
 });

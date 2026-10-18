@@ -3,6 +3,7 @@ import { addPlayer, createCampaign, gainXp } from '../src/campaign';
 import { ENEMY_FILES, EXPEDIENTE } from '../src/lore';
 import { LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
+import { raise } from './helpers';
 import { nextScene, recapLines, sceneLines, SCENES, SPEAKERS, unlockedScenes, type SceneId } from '../src/transmissions';
 
 const ids = (c: Parameters<typeof unlockedScenes>[0]) => unlockedScenes(c).map((s) => s.id);
@@ -72,7 +73,7 @@ describe('the song of Velmar', () => {
   it('the Taller de oficios unlocks its scene', () => {
     const c = createCampaign([0], new Rng(1));
     expect(ids(c)).not.toContain('velmar');
-    (c.base.plots[0] as { building: string | null }).building = 'echoes';
+    raise(c, 'echoes');
     expect(ids(c)).toContain('velmar');
   });
 });

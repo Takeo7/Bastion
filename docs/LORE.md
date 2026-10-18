@@ -21,13 +21,13 @@ Lo nuevo de verdad es la supervivencia: saquear, el ruido, la infección y la es
 
 ## La idea en una frase
 
-Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se levanta zombi. Atalaya, una vieja estación militar en la sierra, aguanta con cuarenta supervivientes llegados de todas partes. Los dos jugadores la dirigen y mandan sus equipos a los pueblos del valle a por comida, medicinas y gente viva. Cada disparo atrae a más.
+Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se levanta zombi. Atalaya, la vieja estación militar de la sierra donde se refugiaban, cayó en otoño. Los que salieron vivos empiezan de cero en un claro del pinar, sobre Brena, con una caravana y La Lata: lo que levantan allí es el Bastión. Los dos jugadores lo dirigen y mandan sus equipos a los pueblos del valle a por comida, medicinas y gente viva. Cada disparo atrae a más.
 
 **La premisa en el juego** (`PREMISE` en `lore.ts`, la tarjeta antes de la primera misión; la de Ana, aprobada por Arturo en la 0.3.1):
 
 > La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.
 >
-> En la vieja estación militar se ha ido reuniendo gente de todas partes. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.
+> Atalaya, la vieja estación militar, cayó en otoño. Los que salimos con vida hemos parado en un claro del pinar, sobre Brena, con una caravana y lo puesto. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.
 >
 > Toca volver a sacar La Lata, ese trasto forrado con chapas que tenemos por autocar, y salir a buscar lo que nos hace falta.
 
@@ -54,6 +54,7 @@ La de antes («Hace dos inviernos, la Pandemia vació el valle de Kessra…») q
 | Invierno, año 0 | Caen Galen y Corran. El ejército se repliega y desaparece. La radio se queda muda. |
 | Año 1 | Los vivos se esconden en los pueblos de la sierra. Aparecen los Cuervos, bandas que viven de saquear a otros. |
 | Años 1 y 2 | Gente de todas partes se va reuniendo en la Estación Atalaya. La dirigen dos personas, a medias. |
+| Otoño, año 2 | Una horda va derecha a Atalaya y la toma. Los que salen vivos huyen en La Lata, con una caravana enganchada, y paran en un claro del pinar sobre Brena (Arturo, 18/10). Más adelante se podrá saber que la llevó la Congregación. |
 | Invierno, año 2 · Día 1 de la campaña | Las nevadas sepultan a muchos muertos y se vuelve a salir en La Lata. Las misiones están nevadas hasta el capítulo 3. |
 | Deshielo · tras el capítulo 3 | Se calla la sirena de los Llanos y se va la nieve: lo que tapó vuelve a andar. Con el deshielo sube la Marea, que se descubre en el capítulo 4. |
 
@@ -63,7 +64,7 @@ Es una comarca inventada entre una sierra alta y una llanura, con dos ciudades m
 
 | Zona | Id | Qué hay | Aliado (enclave) |
 |---|---|---|---|
-| Brena | `weu` | Los pueblos de la sierra, junto a Atalaya (la de partida) | El Refugio de Brena |
+| Brena | `weu` | Los pueblos de la sierra, bajo el Bastión (la de partida) | El Refugio de Brena |
 | Corran | `afr` | La primera ciudad caída, llena de zombis | Los del Hospital |
 | El Pantano Gris | `eas` | Un embalse y una central eléctrica muerta | La Red Callada |
 | Velsa | `eeu` | Valles cerrados, aldeas que aún resisten | Los Pastores |
@@ -97,9 +98,10 @@ Los ids del código se mantienen; cambian el nombre, el aspecto y, donde haga fa
 
 ## El Bastión
 
-- **La Estación Atalaya:** una vieja estación militar en lo alto de la sierra de Brena, con refugio subterráneo, muros de hormigón y una presa al lado. La nieve, la altura y una sola carretera la mantienen viva. Quienes llegaron conservaron su orden militar: equipos, rangos y armería.
-- **La base en superficie** encaja tal cual: el refugio en el centro y alrededor barracones, huerto, barricadas y pasarelas. Se despejan rocas, bosque y ruinas, y las ruinas dan suministros.
-- **La Lata:** un autobús de línea con la chapa que Teo le soldó por encima; de ahí el nombre que le puso la gente de Atalaya (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
+- **Atalaya cayó** (Arturo, 18/10, con la base nueva de la Fase 12 §11). Era una vieja estación militar en lo alto de la sierra de Brena: refugio subterráneo, muros de hormigón y una sola carretera. Aguantó dos años; en otoño una horda fue derecha a ella. Queda como lo que se perdió: en los textos, «Atalaya» es el pasado y nunca la base de ahora.
+- **El Bastión** es lo que se levanta en un claro del pinar, sobre Brena: al principio, una caravana y La Lata. Todo lo demás se construye (edificios, defensas, trampas, torretas), y se tala para hacer sitio. Los textos de las piezas están en [LORE-BASE.md](LORE-BASE.md) y en `PIECE_TEXT` (`lore.ts`).
+- **Si el Bastión cae**, se huye otra vez, como de Atalaya: los que quedan vuelven a empezar en otro claro con la caravana y lo puesto. Si no queda nadie, la campaña termina.
+- **La Lata:** un autobús de línea con la chapa que Teo le soldó por encima; de ahí el nombre que le puso la gente de Atalaya, de donde salió con la caravana detrás (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
 - **Las decisiones a medias se quedan, con otra historia.** Dos grupos que llegaron a la vez y no se fían del todo: lo importante lo deciden los dos. El año pasado, un líder solo vendió su refugio a los Cuervos a cambio de su vida.
 
 ## Personajes
@@ -108,7 +110,7 @@ Se mantienen las voces de la radio que ya existen y cambian sus vidas.
 
 | Personaje | Papel nuevo |
 |---|---|
-| **Nadia Albescu, «Morse»** | Radioaficionada de toda la vida. Mantiene la radio de Atalaya y es la primera en oír a otros vivos. Firma los informes. |
+| **Nadia Albescu, «Morse»** | Radioaficionada de toda la vida. Mantiene la radio del Bastión y es la primera en oír a otros vivos. Firma los informes. |
 | **Teodor Vidić, «Teo»** | Mecánico jubilado. Blindó La Lata, arregla armas y enseña oficios. Secreto: trabajó de vigilante en el Instituto Galen la noche en que todo empezó. |
 | **Dra. Amara Nwosu** | Viróloga del Instituto Galen. Huyó con sus cuadernos y cree que hay una vacuna. |
 | **Simão Ferreira** | Desertor de los Cuervos. Sabe dónde guardan lo que roban y a quién. |
@@ -121,18 +123,18 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 
 | Nivel | Capítulo | Tipo · zona | Qué pasa |
 |---|---|---|---|
-| 1 | **Primer invierno** | Recuperación · Brena | Las medicinas del consultorio del pueblo, antes de que caduquen. |
+| 1 | **Primer invierno** | Recuperación · Brena | El maletín de urgencias del consultorio del pueblo. |
 | 2 | **La doctora** | Rescate · Corran | Sacar a la Dra. Nwosu de un hospital lleno de zombis. |
 | 3 | **La sirena** | Sabotaje · Los Llanos de Ceniza | Callar la sirena con la que los Cuervos atraen hordas. |
 | 4 | **La torre del Pico Gris** | Pirateo (arreglar la radio) · El Pantano Gris | Volver a poner en marcha el repetidor: oír a los demás enclaves. |
 | 5 | **Los inmunes** | Rescate · Velsa | Una niña a la que la Pandemia no mata. Simão sabe dónde la tienen los Cuervos. |
 | 6 | **Los cuadernos de Galen** | Recuperación · Galen | Lo que pasó de verdad en el laboratorio. Teo estaba allí. |
 | 7 | **La Voz** | Rescate · Los Llanos de Ceniza | Asaltar la emisora de la Congregación y sacar a la Voz con vida: solo ella sabe parar la Marea. |
-| 8 | **La Marea** | Final | La horda llega a la sierra. Atalaya resiste, y la vacuna está lista. |
+| 8 | **La Marea** | Final | La horda llega a la sierra. El Bastión resiste, y la vacuna está lista. |
 
 **El reloj: la Marea.**
 - Es una horda inmensa que sube desde la llanura con el deshielo, y sustituye a la Partitura.
-- En vez de compases cuenta kilómetros: «La Marea, a 9 km». Cuando llega a 0, Atalaya cae.
+- En vez de compases cuenta kilómetros: «La Marea, a 9 km». Cuando llega a 0, el Bastión cae.
 - Hasta el nivel 4 del Bastión (cuando se arregla la radio del Pico Gris) nadie sabe que existe: el reloj se llama **Infestación** («Infestación 3/12») y las zonas caídas están «en manos de los muertos». Desde el nivel 4 es la Marea.
 - Entra por Los Llanos de Ceniza y sube por las carreteras: cubre las zonas a 4, 6, 9, 10 y 11, según lo lejos que estén de Los Llanos ([FASE5.md](FASE5.md)). Brena no cae: a 12, la campaña se pierde. Los textos no conjugan verbos con el nombre de la zona, que puede ser plural.
 - Los **Nidos**, sitios donde los zombis se juntan (antes, los Órganos), la alimentan. Quemarlos la hace retroceder.
@@ -149,6 +151,7 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
   - Hay que entrar en casas y registrar muebles con 1 acción. Los mapas ya marcan armarios, cómodas, escritorios, estanterías, mostradores y camas.
   - Lo encontrado va en la mochila de cada soldado, que tiene un límite.
   - Se evacúa con el botín. Lo que se deja atrás se pierde.
+- **El objeto de una misión** nunca es algo que se encuentre registrando (medicinas, comida, suministros, piezas, armas, munición, cajas) ni se llama «mochila» o «botín»: es una cosa concreta que solo está allí (el maletín de urgencias, el mapa de los pozos, la saca del correo). Así no se confunde con el botín (prueba del 18/10, #13).
 - **Ruido:**
   - Cada disparo tiene un radio de ruido, y los zombis y los grupos inactivos van hacia el último ruido.
   - El machete y la ballesta no suenan.
@@ -198,7 +201,7 @@ Lo de antes, por si se busca: el Oficio (la rama de Machete, Fuego, Ballesta y E
 | Árbol de habilidades, ramas, aptitudes, rangos | Se quedaron con la nueva piel; en la 0.3.0 los sustituye «Se aprende haciendo» (ver «Lo que aprenden los soldados»). |
 | Base en superficie, edificios, cercanías | Se quedan, con otra piel: huerto, barricadas, depósito de agua, Camposanto… |
 | Capítulos, encargos, rumores | Se quedan como sistema y se reescriben todos los textos. |
-| Radio, Expediente, avisos de Morse | Se quedan. El Expediente pasa a ser el **Diario** de Atalaya, que escribe Morse. Se reescriben las escenas, las hojas y las fichas. |
+| Radio, Expediente, avisos de Morse | Se quedan. El Expediente pasa a ser el **Diario** del Bastión, que escribe Morse. Se reescriben las escenas, las hojas y las fichas. |
 | Decisiones a medias, cooperativo | Se quedan, con la nueva historia. |
 | Geoesfera | Pasa a ser el mapa del valle de Kessra, en Synty (hecho). |
 | Créditos, pago mensual, venta de cuerpos | Se cambian por suministros, medicinas (y luego comida), saqueo y enclaves aliados. |
@@ -213,7 +216,7 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 |---|---|
 | Geoesfera, globo | **El valle** (pestaña y mapa) |
 | Región | **Zona** |
-| Expediente | **Diario** («DIARIO · HOJA N»): el diario de Atalaya, que escribe Morse. Desde la 0.4.1, la pestaña se llama **Campaña** y el edificio, **Sala de radio**; las hojas siguen siendo del Diario |
+| Expediente | **Diario** («DIARIO · HOJA N»): el diario del Bastión, que escribe Morse. Desde la 0.4.1, la pestaña se llama **Campaña** y el edificio, **Sala de radio**; las hojas siguen siendo del Diario |
 | Hangar | **Cochera** |
 | La Mula (el autobús), Taller de La Mula | **La Lata**, **Chapistería** |
 | Escanear, escaneando, días de escaneo | **Esperar noticias**, «A LA ESCUCHA…», días a la escucha |

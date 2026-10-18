@@ -13,8 +13,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p packages/engine && tsc -p packages/server && tsc -p packages/client && tsc -p packages/desktop",
     "desktop": "npm run start -w @bastion/desktop",
-    "desktop:dist": "npm run dist -w @bastion/desktop",
-    "web:dist": "node packages/server/scripts/web.mjs"
+    "desktop:dist": "npm run dist -w @bastion/desktop"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

@@ -15,12 +15,13 @@ import {
 import { attackWeapon, clipOf, hasSquadsight, PISTOL_CLIP } from '../src/content';
 import { weaponProfile } from '../src/aim';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
+import { beltedBack } from '../src/loot';
 import { CRAFTS, LEVEL_XP, spareMags } from '../src/progression';
 import { Rng } from '../src/rng';
 import { executeCommand } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { Arms, GameState, Pod, Slot, Unit } from '../src/types';
-import { addUnit, stateFrom } from './helpers';
+import { addUnit, raise, stateFrom } from './helpers';
 
 // The weapons from zero (docs/FASE8.md §A): the class no longer brings a weapon.
 
@@ -112,7 +113,7 @@ describe('the weapons from zero', () => {
 
   it('the Taller makes weapons again and again, and munition three times; the Bastion\'s level brings some', () => {
     const c = createCampaign([0], new Rng(1));
-    c.base.plots.find((p) => p.terrain === 'clear' && !p.building)!.building = 'workshop';
+    raise(c, 'workshop');
     c.credits = 999;
     c.parts = 99;
     expect(craftBlocker(c, 'makeRifle')).toBeNull();
@@ -170,7 +171,49 @@ describe('a weapon found in the mission (docs/FASE8.md §C)', () => {
     expect(client).toEqual(s);
     // Only weapons, and only a campaign soldier.
     u.backpack!.push({ food: 2 });
-    expect(executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 1 }, ctx())).toEqual({ ok: false, error: 'Solo se equipan las armas y los chalecos.' });
+    expect(executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 1 }, ctx())).toEqual({ ok: false, error: 'Solo se equipan las armas, los chalecos y lo del cinturón.' });
+  });
+
+  it('a grenade found goes on the belt for an action, and is thrown at once (playtest 18/10 #5)', () => {
+    const { s, u } = field({ primary: 'assaultRifle', melee: null }, { backpack: [{ item: 'fragGrenade' }, { item: 'smokeGrenade' }], charges: {}, gear: [] });
+    expect(abilitiesOf(u)).not.toContain('grenade');
+    const client = cloneState(s);
+    const r = executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 0 }, ctx());
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(of(r.events, 'beltEquipped')).toHaveLength(1);
+    expect(u).toMatchObject({ ap: 1, charges: { grenade: 2 }, belted: ['fragGrenade'], backpack: [{ item: 'smokeGrenade' }] });
+    expect(abilitiesOf(u)).toContain('grenade');
+    expect(abilityBlocker(s, u, 'grenade')).toBeNull();
+    for (const e of r.events) applyEvent(client, e);
+    expect(client).toEqual(s);
+    // The smoke brings its own ability.
+    u.ap = 2;
+    expect(executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 0 }, ctx()).ok).toBe(true);
+    expect(abilitiesOf(u)).toContain('smoke');
+    expect(u.charges.smoke).toBe(1);
+  });
+
+  it('ear plugs go on once; ammunition is mounted at home', () => {
+    const { s, u } = field({ primary: 'assaultRifle', melee: null }, { backpack: [{ item: 'mindShield' }, { item: 'mindShield' }, { item: 'apRounds' }] });
+    const will = u.mods.will;
+    expect(executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 0 }, ctx()).ok).toBe(true);
+    expect(u.mods.will).toBe(will + 100);
+    expect(executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 0 }, ctx())).toEqual({ ok: false, error: 'Ya lleva eso puesto.' });
+    expect(executeCommand(s, { type: 'item', unit: 's1', action: 'equip', index: 1 }, ctx())).toEqual({ ok: false, error: 'La munición se monta en el arma, en la Armería.' });
+  });
+
+  it('a belt thing found comes home if its uses are still there, the soldier\'s own counted as spent first', () => {
+    const { u } = field({ primary: 'assaultRifle', melee: null }, { gear: ['fragGrenade'], charges: { grenade: 2 }, backpack: [] });
+    // Own two, and two found on the belt: one thrown still leaves the find whole.
+    Object.assign(u, { charges: { grenade: 3 }, belted: ['fragGrenade'] });
+    expect(beltedBack(u)).toEqual([{ item: 'fragGrenade' }]);
+    // Three thrown: the find was dipped into.
+    u.charges.grenade = 1;
+    expect(beltedBack(u)).toEqual([]);
+    // Ear plugs have no uses: always home.
+    Object.assign(u, { belted: ['mindShield'] });
+    expect(beltedBack(u)).toEqual([{ item: 'mindShield' }]);
   });
 
   it('without a primary, the pistol keeps its rounds beside the new gun', () => {

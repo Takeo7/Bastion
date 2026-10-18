@@ -12,7 +12,7 @@ import { Rng } from '../src/rng';
 import { executeCommand, Sim } from '../src/rules';
 import { createMission, hordeWave, MISSION_NAMES } from '../src/setup';
 import type { GameState, Loot, Pod, Slot, Unit } from '../src/types';
-import { addUnit, stateFrom } from './helpers';
+import { addUnit, raise, stateFrom } from './helpers';
 
 // Phase 2 of the zombies (docs/FASE2.md): noise, the dead, searching and the Saqueo.
 
@@ -819,9 +819,8 @@ describe('the backpack (docs/FASE8.md §C)', () => {
     const c = createCampaign([0], new Rng(1));
     expect(buildSquad(c).every((m) => m.packSlots === undefined)).toBe(true);
     expect(medicineCures(c)).toBe(false);
-    const free = c.base.plots.filter((p) => p.terrain === 'clear' && !p.building);
-    Object.assign(free[0]!, { building: 'garage', level: 1 });
-    Object.assign(free[1]!, { building: 'infirmary', level: 2 });
+    raise(c, 'garage');
+    raise(c, 'infirmary', 2);
     expect(buildSquad(c).every((m) => m.packSlots === 4)).toBe(true);
     expect(medicineCures(c)).toBe(true);
     const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 3 }, slots: [0], rng: new Rng(1), squad: buildSquad(c), medicineCures: medicineCures(c) });

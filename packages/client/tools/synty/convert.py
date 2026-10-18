@@ -49,6 +49,15 @@ BONES = {
     'foot_l': 'Ankle_L', 'foot_r': 'Ankle_R', 'ankle_l': 'Ankle_L', 'ankle_r': 'Ankle_R',
     'ball_l': 'Ball_L', 'ball_r': 'Ball_R',
 }
+# The fingers: the thumb, the index and the other three in one (Synty's hands), three or four joints each. The
+# characters name them thumb_01_l, indexFinger_01_l, finger_01_l; the animation packs Thumb_01 on the left hand and
+# Thumb_01_1 on the right; City Zombies' rig Thumb_01 and, its right hand's names taken, Thumb_01.001 (as Blender
+# reads it).
+for side, suffixes in (('L', ('_l', '')), ('R', ('_r', '_1', '.001'))):
+    for chain, joints, name in (('Thumb', 3, 'thumb'), ('Index', 4, 'indexfinger'), ('Finger', 4, 'finger')):
+        for j in range(1, joints + 1):
+            for suffix in suffixes:
+                BONES[f'{name}_0{j}{suffix}'] = f'{chain}_0{j}_{side}'
 
 # Armour piece of each bone, for the "part" UV (u = PART / 8 + 1/16).
 # 0 never dyed (head, hands, feet), 1 headgear, 2 torso, 3 arms, 4 legs, 5 the owner's band.
@@ -512,7 +521,12 @@ def anim(job):
     for o in objs:
         if o is not arm:
             bpy.data.objects.remove(o)
-    # Fingers, face, props and toes are leaves the game does not pose.
+    # The fingers take the game's names (renaming a bone renames its tracks); face, props and toes are leaves the game
+    # does not pose.
+    for b in arm.data.bones:
+        c = canonical(b.name)
+        if c and c != b.name and c.split('_')[0] in ('Thumb', 'Index', 'Finger'):
+            b.name = c
     keep = set(BONES.values()) | {'Root'}
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode='EDIT')

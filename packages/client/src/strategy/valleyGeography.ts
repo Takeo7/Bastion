@@ -38,12 +38,18 @@ export const ZONE_PIXELS: Record<RegionId, [number, number]> = {
 export const ZONES = Object.fromEntries((Object.keys(ZONE_PIXELS) as RegionId[]).map((id) => [id, onMap(...ZONE_PIXELS[id])])) as Record<RegionId, { x: number; z: number }>;
 const ZONE_LIST = Object.values(ZONES);
 
-/** Atalaya: the walled works with its water, up in the north-west above Brena. */
+/** Atalaya: the walled works with its water, up in the north-west above Brena; burnt out since the autumn (Lore, «Atalaya cayó»). */
 export const ATALAYA = onMap(222, 118);
+/** The middle of Atalaya's works and how far they spread (map units), for its ruin over the painting (geoscape.ts). */
+export const ATALAYA_WORKS = { ...onMap(260, 135), rx: 1.55, rz: 1.55 };
+/** The Bastion (docs/FASE12.md §11): the clearing in the pines above Brena where the caravan stands. */
+export const BASTION = onMap(352, 72);
 
 /** The places one knows the valley by (Lore's names, engine lore.ts LANDMARKS), each on something of the painting. */
 export const VALLEY_LANDMARKS: { key: keyof typeof LANDMARKS; at: [number, number] }[] = (
   [
+    // Atalaya: the walled works, burnt out (Lore, «Atalaya cayó»).
+    ['ruins', 222, 118],
     // Brena: the hamlet on the road east.
     ['telm', 620, 150],
     // Carvik's mine: the works on the hill with its conveyor, east of the town.

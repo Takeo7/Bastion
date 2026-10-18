@@ -64,6 +64,13 @@ export const NOISE = {
 export const OFICIO_QUIET = 2;
 
 /**
+ * The base's traps (docs/FASE12.md §11.4): what a mine does to whoever is
+ * within its radius, the spikes to whoever falls in, and what crossing barbed
+ * wire adds to a step (path.ts costs, in half-tiles).
+ */
+export const TRAPS = { mine: 4, mineRadius: 1.5, spikes: 2, wire: 3 } as const;
+
+/**
  * The siege of the base (docs/FASE12.md §4). What a door and a barricade
  * hold, in damage of the dead's blows (a Zombi takes off 3, a Corredor 2, an
  * Acorazado 4); how far a blow is heard; the spare magazines each soldier has
@@ -98,6 +105,8 @@ export const NIGHT = {
   minSight: 6,
   detection: 0.5,
   streetLight: 2,
+  /** A floodlight of the base (docs/FASE12.md §11.4; Arturo, 18/10: for the sieges by night) lights twice as far. */
+  floodlight: 4,
   lampHeight: 2,
   flare: { radius: 3, turns: 2, height: 0.5 },
   fire: { radius: 2, turns: 2, height: 0.5 },
@@ -148,6 +157,7 @@ export type WeaponId =
   | 'sword'
   | 'knife'
   | 'trooperRifle'
+  | 'turretGun'
   | 'officerRifle'
   | 'xenoPistol'
   | 'lancerRifle'
@@ -213,6 +223,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   /** Everyone's blade in the campaign (docs/FASE8.md §A), until a machete. */
   knife: weapon({ id: 'knife', name: 'Cuchillo', damage: 3, spread: 1, critDamage: 1, aim: 10, range: 'none', melee: true, burst: 1, noise: 1 }),
   trooperRifle: weapon({ id: 'trooperRifle', name: 'Fusil de caza', damage: 3, critDamage: 1, clip: 3, noise: 12 }),
+  // The base's turret (docs/FASE12.md §11.4): its clip is its piece's charges (base.ts PIECES.turret), reloaded at home with piezas.
+  turretGun: weapon({ id: 'turretGun', name: 'Torreta', damage: 3, critDamage: 1, clip: 6, aim: 5, noise: 16 }),
   officerRifle: weapon({ id: 'officerRifle', name: 'Fusil automático', damage: 3, plusOne: 50, critDamage: 2, clip: 3, noise: 14 }),
   lancerRifle: weapon({ id: 'lancerRifle', name: 'Carabina', damage: 3, plusOne: 50, critDamage: 2, clip: 3, noise: 12 }),
   stunLance: weapon({ id: 'stunLance', name: 'Red y porra', damage: 3, spread: 1, critDamage: 2, range: 'none', melee: true, burst: 1, noise: 1 }),
@@ -634,6 +646,7 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
   /** The Hinchado: slow; it bursts when it dies or reaches a soldier (rules.ts burst). */
   bloater: alien({ id: 'bloater', name: 'Hinchado', short: 'HIN', weapon: 'bloaterBurst', hp: 8, aim: 0, defense: -15, mobility: 3, sight: 12, detection: 5, will: 100, undead: true, abilities: ['burst'] }),
   // Objectives. The relay is an alien "unit" so every weapon can hit it; it never acts.
+  turret: soldier({ id: 'turret', name: 'Torreta', short: 'TOR', weapon: 'turretGun', hp: 12, armor: 1, aim: 60, mobility: 0, sight: 14, will: 100, robotic: true, abilities: [], charges: {} }),
   relay: alien({ id: 'relay', name: 'Alarma', short: 'ALA', weapon: 'trooperRifle', hp: 8, armor: 1, aim: 0, mobility: 0, sight: 0, detection: 0, robotic: true, abilities: [] }),
   vip: soldier({ id: 'vip', name: 'VIP', short: 'VIP', weapon: 'pistol', hp: 4, aim: 50, will: 30, abilities: ['hunker'], charges: {} }),
 };

@@ -50,6 +50,7 @@ import {
   MEDICINE_HEAL,
   MEDKIT_HEAL,
   STONE_DAMAGE,
+  TRAPS,
   PATCH_UP,
   conditionOf,
   NIGHT,
@@ -64,6 +65,7 @@ import { applyEvent, type GameEvent } from './events';
 import {
   canStandOn,
   combatants,
+  DIRS4,
   DIRS8,
   distance,
   getUnit,
@@ -105,6 +107,7 @@ import type {
   Pos,
   TileKind,
   Unit,
+  Vec2,
 } from './types';
 
 // Velmar's Canto (docs/LORE.md, «El Canto de Velmar»).
@@ -849,6 +852,9 @@ export class Sim {
       }
       if (blocker) continue; // passing through an ally: nothing can interrupt here
 
+      // A trap of the base under one of the dead (docs/FASE12.md §11.4): it stops there.
+      if (u.team === 'alien' && this.springTrap(u, step, flush)) return;
+
       const item = this.s.mission.item;
       if (u.team === 'xcom' && item && !item.carrier && item.pos && samePos(item.pos, step)) {
         flush();
@@ -903,6 +909,27 @@ export class Sim {
       if (!u.alive || this.over) return;
     }
     flush();
+  }
+
+  /**
+   * One of the dead steps on a trap that is set (docs/FASE12.md §11.4): a mine
+   * blows up whoever is round it, the spikes hurt, a snare holds it (one action
+   * less next turn). It stops on the tile, if it is still standing; true when
+   * the walk ends there.
+   */
+  private springTrap(u: Unit, step: Pos, flush: () => void): boolean {
+    const node = nodeOf(this.s, step);
+    const trap = this.s.traps?.find((t) => t.node === node && t.charges > 0);
+    if (!trap) return false;
+    flush();
+    this.emit({ t: 'trapSprung', trap: trap.piece, unit: u.id });
+    if (trap.kind === 'mine') {
+      this.makeNoise(step, WEAPONS.fragGrenade.noise);
+      for (const v of this.s.units.filter((o) => o.alive && distance(o.pos, step) <= TRAPS.mineRadius && sameSpace(this.s, o.pos, step))) this.damage(v, TRAPS.mine, 0);
+    } else if (trap.kind === 'spikes') this.damage(u, TRAPS.spikes, 0);
+    else if (u.alive) this.emit({ t: 'stunned', unit: u.id });
+    this.checkOutcome();
+    return true;
   }
 
   /** Whether an overwatcher covers `step`: own sight, or the squad's with Long Watch. */
@@ -1039,9 +1066,12 @@ export class Sim {
       inBounds(s, x, y) && canStandOn(tileAt(s, x, y)) && (s.elev[tileIndex(s, x, y)] ?? 0) === 0 && !unitAt(s, { x, y, z: 0 });
     const sides = (x: number, y: number) => [y < EDGE_BAND, x >= s.width - EDGE_BAND, y >= s.height - EDGE_BAND, x < EDGE_BAND];
     const middle = (along: number, span: number) => along >= span / 4 && along < (span * 3) / 4;
+    // In a siege, never in a glade the pines close off: only where the way to the squad is open, or opened by breaking what was built.
+    const open = edge && s.mission.siege ? this.openToSquad() : null;
     const onEdge = (x: number, y: number) =>
       (side === undefined ? sides(x, y).some(Boolean) : !!sides(x, y)[side] && (side % 2 === 0 ? middle(x, s.width) : middle(y, s.height))) &&
-      !s.mission.evacZone.some((z) => distance(z, { x, y }) < EDGE_EVAC_GAP);
+      !s.mission.evacZone.some((z) => distance(z, { x, y }) < EDGE_EVAC_GAP) &&
+      (!open || open.has(tileIndex(s, x, y)));
     const bands = edge ? EDGE_GAP.map((lo) => [lo, Infinity] as const) : ([[DROP_MIN, DROP_MAX], [4, 20], [2, 60]] as const);
     for (const [lo, hi] of bands) {
       const candidates: Pos[] = [];
@@ -1068,6 +1098,30 @@ export class Sim {
       }
     }
     return null;
+  }
+
+  /** The ground tiles joined to a soldier's by ground one can walk, or by what can be broken down (GameState.breakables). */
+  private openToSquad(): Set<number> {
+    const s = this.s;
+    const seen = new Set<number>();
+    const queue: Vec2[] = [];
+    for (const o of combatants(s, 'xcom')) {
+      if (seen.has(tileIndex(s, o.pos.x, o.pos.y))) continue;
+      seen.add(tileIndex(s, o.pos.x, o.pos.y));
+      queue.push(o.pos);
+    }
+    while (queue.length) {
+      const p = queue.pop()!;
+      for (const d of DIRS4) {
+        const x = p.x + d.x;
+        const y = p.y + d.y;
+        const i = tileIndex(s, x, y);
+        if (!inBounds(s, x, y) || seen.has(i) || (!canStandOn(tileAt(s, x, y)) && s.breakables?.[i] === undefined)) continue;
+        seen.add(i);
+        queue.push({ x, y });
+      }
+    }
+    return seen;
   }
 
   /**
@@ -1104,8 +1158,8 @@ export class Sim {
    * soldier nearest to it, which only wakes up (and gives the squad away) on
    * seeing someone. A drop with a flare (only in missions saved before the
    * playtest of 2026-10-13) lands where it was announced, already alert. A
-   * siege's wave comes in by its side, alert, for the heart of the base
-   * (docs/FASE12.md §4).
+   * siege's wave comes in by its side, alert, looking at the soldier nearest
+   * (docs/FASE12.md §4): it goes for the soldiers (ai.ts takeZombieTurn).
    */
   landReinforcements(turn: number): void {
     const siege = this.s.mission.siege;
@@ -1117,7 +1171,7 @@ export class Sim {
       const at = zone[0]!;
       const pod: Pod = { id: `p${r.id}`, active: !r.horde || !!siege, unitIds: [], patrol: [], patrolIndex: 0 };
       const near = r.horde ? [...combatants(this.s, 'xcom')].sort((a, b) => distance(a.pos, at) - distance(b.pos, at))[0] : undefined;
-      const goal = r.horde ? (siege?.heart ?? near?.pos) : undefined;
+      const goal = r.horde ? near?.pos : undefined;
       const units = r.units.map((template, i) => {
         const id = `${r.id}u${i + 1}`;
         pod.unitIds.push(id);
@@ -1125,7 +1179,7 @@ export class Sim {
         // They come in looking the way they come: to what they heard, or to the middle of the map (Arte, 17/10).
         const toward = goal ?? { x: (this.s.width - 1) / 2, y: (this.s.height - 1) / 2, z: 0 };
         const facing = TEMPLATES[template].undead ? (facingTo(u.pos, toward) ?? u.facing) : u.facing;
-        return { ...u, ...(facing !== undefined ? { facing } : {}), ...(goal ? { heard: { ...goal } } : {}) };
+        return { ...u, ...(facing !== undefined ? { facing } : {}), ...(goal && !siege ? { heard: { ...goal } } : {}) };
       });
       this.emit({ t: 'spawned', units, pod, reinforcement: r.id });
       if (r.horde) continue;
@@ -1192,11 +1246,9 @@ export class Sim {
     const end = (outcome: 'victory' | 'defeat', reason: 'objective' | 'wiped' | 'objectiveLost' | 'abandoned') =>
       this.emit({ t: 'missionEnded', outcome, reason });
 
-    // A siege (docs/FASE12.md §4): the base falls with one of the dead beside its heart; it holds once every wave is in and down.
+    // A siege (docs/FASE12.md §4): the base falls with nobody left to defend it (turrets don't count); it holds once every wave is in and down.
     if (m.siege) {
-      const heart = m.siege.heart;
-      if (hostiles.some((h) => distance(h.pos, heart) <= 1.5 && storeysApart(s, h.pos, heart) === 0)) end('defeat', 'objectiveLost');
-      else if (!squad.length) end('defeat', 'wiped');
+      if (!squad.some((u) => !u.automaton)) end('defeat', 'wiped');
       else if (!hostiles.length && m.reinforcements.every((r) => r.landed)) end('victory', 'objective');
       return;
     }
@@ -1235,15 +1287,23 @@ export class Sim {
     else this.emit({ t: 'evacCalled', slot, unit: u.id });
   }
 
-  /** The bus leaves: whoever is in it gets out (first), everyone else is lost; then the mission is decided. */
-  departEvac(): void {
+  /**
+   * The bus leaves: whoever is in it gets out (first), everyone else is lost;
+   * then the mission is decided. `timeUp`: it leaves because time ran out
+   * (playtest 18/10, #8); without the objective on board, the mission is lost
+   * to the clock.
+   */
+  departEvac(timeUp = false): void {
     this.emit({ t: 'evacDeparted' });
     const squad = this.s.units.filter((o) => o.alive && o.team === 'xcom');
     // The bitten board only with a Cuarentena at home (playtest 2026-10-15, #13).
     const boards = (o: Unit) => inEvacZone(this.s, o.pos) && !(o.infected && this.s.mission.quarantine === false);
     for (const u of squad.filter(boards)) this.emit({ t: 'evacuated', unit: u.id });
     for (const u of squad.filter((o) => !boards(o))) this.emit({ t: 'leftBehind', unit: u.id });
-    this.checkOutcome();
+    const m = this.s.mission;
+    const won = this.s.units.some((u) => u.team === 'xcom' && u.evacuated) && (m.kind === 'scavenge' || m.objectiveDone);
+    if (timeUp && !won) this.emit({ t: 'missionEnded', outcome: 'defeat', reason: 'timer' });
+    else this.checkOutcome();
   }
 
   /** Ends the XCOM turn once every player with soldiers able to act is ready. */
@@ -1266,6 +1326,8 @@ export class Sim {
     const turn = this.s.turn;
     this.alienBudget = { explosives: 1, psi: 1 };
     this.emit({ t: 'turnBegan', team: 'alien', turn });
+    // The base's turrets keep watch through the enemy's turn: each of the dead that moves in sight, once (docs/FASE12.md §11.4).
+    for (const t of this.s.units.filter((x) => x.alive && x.automaton && loadedFor(x, 'shoot'))) this.emit({ t: 'overwatch', unit: t.id, killZone: true });
     // They rise now, but only act from the next turn on (they had no turn to begin).
     this.riseInfected();
     const active = this.s.units.filter((u) => u.alive && u.team === 'alien' && !u.objective && this.s.pods.find((p) => p.id === u.podId)?.active);
@@ -1276,8 +1338,6 @@ export class Sim {
       const u = getUnit(this.s, id)!;
       if (this.over) return;
       if (u.alive) takeAlienTurn(this, u);
-      // In a siege the base falls the moment one of them gets to its heart.
-      if (this.s.mission.siege) this.checkOutcome();
     }
     // What the squad did on the enemy's move (overwatch, the blade on guard) fills bars too.
     this.settleBars();
@@ -1305,7 +1365,9 @@ export class Sim {
     }
     const left = this.s.mission.turnsLeft;
     if (left !== null && left - 1 <= 0 && !this.s.mission.objectiveDone) {
-      this.emit({ t: 'missionEnded', outcome: 'defeat', reason: 'timer' });
+      // Time's up: La Lata leaves with whoever is in it (playtest 18/10, #8); the objective on board, it is a win.
+      if (this.s.mission.evacZone.length) this.departEvac(true);
+      else this.emit({ t: 'missionEnded', outcome: 'defeat', reason: 'timer' });
       return;
     }
     // Bengalas and fires on their last turn burn out; the rest burn down as the squad's turn begins.
@@ -1392,10 +1454,13 @@ export class Sim {
         if (target.infected && medicineStopsBite(this.s, u)) this.emit({ t: 'cured', unit: target.id, by: u.id });
         break;
       }
-      case 'equip':
-        if (u.backpack?.[cmd.index!]?.weapon) this.emit({ t: 'weaponEquipped', unit: u.id, index: cmd.index! });
-        else this.emit({ t: 'vestWorn', unit: u.id, index: cmd.index! });
+      case 'equip': {
+        const loot = u.backpack?.[cmd.index!];
+        if (loot?.weapon) this.emit({ t: 'weaponEquipped', unit: u.id, index: cmd.index! });
+        else if (loot?.item && wearable(loot.item)) this.emit({ t: 'vestWorn', unit: u.id, index: cmd.index! });
+        else this.emit({ t: 'beltEquipped', unit: u.id, index: cmd.index! });
         break;
+      }
     }
   }
 
@@ -1519,6 +1584,7 @@ function commandUnit(s: GameState, id: string, slot: Slot, connected: readonly S
   const u = getUnit(s, id);
   if (!u || !u.alive) return 'Esa unidad no existe o está fuera de combate.';
   if (u.team !== 'xcom') return 'No puedes dar órdenes a esa unidad.';
+  if (u.automaton) return 'Va sola: nadie le da órdenes.';
   if (!commandsFor(slot, u.owner, connected)) return 'Ese soldado pertenece a tu compañero.';
   if (u.ap <= 0) return 'Ese soldado no tiene acciones.';
   return u;
@@ -1533,7 +1599,7 @@ type ItemCommand = Extract<Command, { type: 'item' }>;
 function backpackRefusal(s: GameState, cmd: ItemCommand, slot: Slot, connected: readonly Slot[]): string | null {
   const u = getUnit(s, cmd.unit);
   if (!u || !u.alive) return 'Esa unidad no existe o está fuera de combate.';
-  if (u.team !== 'xcom' || u.captive || u.objective) return 'No puedes dar órdenes a esa unidad.';
+  if (u.team !== 'xcom' || u.captive || u.objective || u.automaton) return 'No puedes dar órdenes a esa unidad.';
   if (!commandsFor(slot, u.owner, connected)) return 'Ese soldado pertenece a tu compañero.';
   if (u.controlledBy || u.panicked) return 'Ese soldado no responde.';
   const free = cmd.action === 'drop' || cmd.action === 'take';
@@ -1567,10 +1633,19 @@ function backpackRefusal(s: GameState, cmd: ItemCommand, slot: Slot, connected: 
     case 'equip':
       // A vest found is put on there and then (playtest 16/10 #18); one at a time.
       if (loot.item && wearable(loot.item)) return u.worn?.length ? 'Ya lleva un chaleco puesto.' : null;
-      if (!loot.weapon) return 'Solo se equipan las armas y los chalecos.';
+      // A belt thing goes on the belt, to use there and then (playtest 18/10 #5); what only gives, once.
+      if (loot.item && beltable(loot.item)) return !ITEMS[loot.item].charges && u.gear.includes(loot.item) ? 'Ya lleva eso puesto.' : null;
+      if (loot.item) return 'La munición se monta en el arma, en la Armería.';
+      if (!loot.weapon) return 'Solo se equipan las armas, los chalecos y lo del cinturón.';
       if (!u.arms) return 'Las armas encontradas son para el Bastión.';
       return null;
   }
+}
+
+/** A found accessory that goes on the belt, out there (playtest 18/10 #5): grenades, the medkit, ear plugs; not ammunition, which is the weapon's. */
+export function beltable(item: ItemId): boolean {
+  const def = ITEMS[item];
+  return def.slot === 'utility' && !wearable(item);
 }
 
 /** A found accessory worn over the clothes, out there: what only gives health (the Chaleco antibalas). */

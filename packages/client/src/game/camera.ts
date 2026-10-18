@@ -27,15 +27,35 @@ export class CameraRig {
   private readonly keys = new Set<string>();
   private bounds = new THREE.Box2(new THREE.Vector2(0, 0), new THREE.Vector2(30, 30));
 
-  constructor(private readonly camera: THREE.PerspectiveCamera) {
-    window.addEventListener('keydown', (e) => {
-      if (isTyping(e)) return;
-      this.keys.add(e.code);
-      if (e.code === 'KeyQ') this.rotate(-1);
-      if (e.code === 'KeyE') this.rotate(1);
-    });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
+  /** `enabled`: whether the keys move it now (the base's clearing, strategy/clearing.ts, only while it is shown). */
+  constructor(
+    private readonly camera: THREE.PerspectiveCamera,
+    private readonly enabled: () => boolean = () => true,
+  ) {
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onBlur);
+  }
+
+  private readonly onKeyDown = (e: KeyboardEvent): void => {
+    if (isTyping(e) || !this.enabled()) return;
+    this.keys.add(e.code);
+    if (e.code === 'KeyQ') this.rotate(-1);
+    if (e.code === 'KeyE') this.rotate(1);
+  };
+  private readonly onKeyUp = (e: KeyboardEvent): void => void this.keys.delete(e.code);
+  private readonly onBlur = (): void => this.keys.clear();
+
+  /** Lets go of the keys (a screen that goes away). */
+  dispose(): void {
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onBlur);
+  }
+
+  /** Which way it looks round, in quarter turns from where it starts (0–3): a piece's turn on screen follows it. */
+  get quarter(): number {
+    return (((Math.round((this.desiredYaw - Math.PI / 4) / (Math.PI / 2)) % 4) + 4) % 4);
   }
 
   setBounds(width: number, height: number): void {
@@ -72,6 +92,11 @@ export class CameraRig {
   rotate(dir: number): void {
     this.takeControl();
     this.desiredYaw += (dir * Math.PI) / 2;
+  }
+
+  /** How far the player has drawn the camera back: 0 as close as it goes, 1 as far (where the cinematics leave it after). */
+  get zoomFraction(): number {
+    return ((this.savedDistance ?? this.desiredDistance) - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE);
   }
 
   zoom(deltaY: number): void {

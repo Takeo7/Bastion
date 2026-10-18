@@ -140,10 +140,10 @@ export function doorTiles(s: GameState, u: Unit, kind: 'door' | 'doorOpen'): Pos
   );
 }
 
-/** In a siege (docs/FASE12.md §4), a door still shut or a barricade still up, that the dead can break down. */
+/** In a siege (docs/FASE12.md §4), a door still shut, or a barricade, a wall or a building still up, that the dead can break down. */
 export function breakable(s: GameState, p: Pos): boolean {
   const kind = kindAt(s, p);
-  return (kind === 'door' || kind === 'low') && (s.breakables?.[nodeOf(s, p)] ?? 0) > 0;
+  return (kind === 'door' || kind === 'low' || kind === 'wall' || kind === 'high') && (s.breakables?.[nodeOf(s, p)] ?? 0) > 0;
 }
 
 /** What one of the dead on `from` can beat on: beside it, reached as with the hands (doorTiles). */

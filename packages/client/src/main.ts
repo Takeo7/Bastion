@@ -10,7 +10,6 @@ import { StrategyScreen } from './strategy/screen';
 import { setDeadline } from './ui/deadline';
 import { applyUiTheme } from './ui/theme';
 import { Lobby } from './ui/lobby';
-import { installTouch } from './ui/touch';
 
 const NAME_KEY = storageKey('name');
 
@@ -29,8 +28,6 @@ const app = document.getElementById('app')!;
 applyUiTheme();
 // The interface's sounds, and the menu's music once sound can start.
 installUiSounds();
-// On a phone: touch controls, the notice to turn it sideways, and long presses for the tooltips (docs/FASE11.md).
-installTouch();
 music.play('base');
 const net = new Net(serverUrl());
 let slot: Slot | null = null;
@@ -118,6 +115,7 @@ function showPhase(phase: 'lobby' | 'base' | 'mission'): void {
       base = new StrategyScreen(app, slot, {
         send: (cmd) => net.send({ t: 'ccmd', cmd }),
         onView: (view) => net.send({ t: 'baseView', view }),
+        onCursor: (c) => net.send({ t: 'baseCursor', piece: c?.piece ?? null, x: c?.x ?? 0, y: c?.y ?? 0, rot: c?.rot ?? 0 }),
         onLeave: () => net.send({ t: 'backToMenu' }),
       });
       trace('base: escena creada');
@@ -163,9 +161,13 @@ function handle(m: ServerMessage): void {
     case 'campaign':
       campaign = m.state;
       base?.update(m.state);
+      game?.setCampaign(m.state);
       break;
     case 'baseView':
       base?.setPartnerView(m.view);
+      break;
+    case 'baseCursor':
+      base?.setPartnerCursor(m);
       break;
     case 'snapshot':
       if (slot === null) return;
@@ -174,6 +176,7 @@ function handle(m: ServerMessage): void {
       else {
         lobby.hide();
         game = new Game(app, net, slot, players, m.state);
+        game.setCampaign(campaign);
       }
       // A fresh mission opens with its briefing, also a new skirmish on the same screen.
       if (m.state.seq === 0) game.intro();

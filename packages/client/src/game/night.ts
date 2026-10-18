@@ -15,8 +15,8 @@ import type { FogOfWar } from './fogOfWar';
 /** 1 by night, 0 by day: what glows only at night reads it (lit windows: buildings.ts). */
 export const NIGHT = { value: 0 };
 
-/** Real lights, wherever they're most needed (each costs every lit pixel: the phone's take half, docs/FASE11.md §5). */
-export const REAL_LIGHTS = 6;
+/** Real lights, wherever they're most needed. */
+const REAL_LIGHTS = 6;
 const LAMP = new THREE.Color(1.0, 0.62, 0.3);
 /**
  * How strong each light is (Arturo 17/10: «la luz deslumbra mucho de noche»): the pools still read from afar,
@@ -41,6 +41,8 @@ export interface Glow {
   /** The way it faces (a headlight's beam), on the ground. */
   dx: number;
   dz: number;
+  /** How much stronger and further it shines than a street light (the base's floodlights, basePieces.ts); 1 if not said. */
+  power?: number;
 }
 
 /** A Bengala or a fire as drawn: its glow, how far it has come up, whether it's going out. */
@@ -100,7 +102,6 @@ export class NightLights {
     lamps: Glow[],
     headlights: Glow[],
     private readonly fog: FogOfWar,
-    realLights = REAL_LIGHTS,
   ) {
     this.group.visible = NIGHT.value > 0.5;
     this.lamps = lamps;
@@ -120,7 +121,7 @@ export class NightLights {
       mesh.matrixAutoUpdate = false;
       this.group.add(mesh);
     }
-    for (let k = 0; k < realLights; k++) {
+    for (let k = 0; k < REAL_LIGHTS; k++) {
       const light = new THREE.PointLight(LAMP, 0, 7, 2);
       this.lights.push(light);
       this.group.add(light);
@@ -207,8 +208,8 @@ export class NightLights {
       this.chosen[k] = best;
       const l = this.lamps[best]!;
       light.color.copy(LAMP);
-      light.intensity = LAMP_LIGHT;
-      light.distance = 7;
+      light.intensity = LAMP_LIGHT * (l.power ?? 1);
+      light.distance = 7 * Math.sqrt(l.power ?? 1);
       // Well under the lamp's own head: a point light right at a surface overflows the half-float target (and bloom spreads it).
       light.position.set(l.x, l.y - 0.6, l.z);
     }

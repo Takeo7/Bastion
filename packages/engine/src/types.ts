@@ -1,3 +1,4 @@
+import type { BasePiece } from './base';
 import type { Deeds, MissionLines } from './skills';
 export interface Vec2 {
   x: number;
@@ -176,7 +177,22 @@ export type DecorKind =
   /** Factory machinery, a `high` tile inside a hall. */
   | 'machine'
   /** A silo, a 2 × 2 block of `high` tiles. */
-  | 'silo';
+  | 'silo'
+  /** A park bench on a square (playtest 2026-10-18, #12), two `low` tiles side by side; facing: the way one sits. */
+  | 'bench'
+  // A house's rooms by what they are (playtest 2026-10-18, #15): the kitchen's, the bathroom's, the living room's.
+  /** A fridge, a `high` tile against a kitchen's wall; facing: its door. */
+  | 'fridge'
+  /** A cooker, a `low` tile in a kitchen's run of counters; facing: its front. */
+  | 'stove'
+  /** A bath, a `low` tile in a bathroom's corner; facing: away from the wall. */
+  | 'bathtub'
+  /** A washbasin, a `low` tile against a bathroom's wall; facing: away from it. */
+  | 'washbasin'
+  /** The television on its stand, a `low` tile against a living room's wall, facing the sofa. */
+  | 'tvStand'
+  /** A house's toilet (not the clinics' 'toilet'), a `low` tile in a bathroom's corner. */
+  | 'wc';
 
 /** What makes the noise a sabotage has to silence (playtest 2026-10-15, #14): a patrol car, an ambulance, a factory's alarm. */
 export type Alarm = 'police' | 'ambulance' | 'factory';
@@ -195,8 +211,10 @@ export type ClassId = 'assault' | 'grenadier' | 'sharpshooter' | 'specialist';
 export type AlienId = 'trooper' | 'officer' | 'xenoid' | 'lancer' | 'mec' | 'sectoid' | 'zombie' | 'bloater';
 /** Mission objectives that are units: the alien relay to destroy and the VIP to extract. */
 export type ObjectiveId = 'relay' | 'vip';
+/** The base's defences that are units (docs/FASE12.md §11.4): the turret, which shoots on its own. */
+export type DefenceId = 'turret';
 /** 'rookie': a recruit with no class yet (classes.ts), a rifle and the basic actions. */
-export type TemplateId = ClassId | 'rookie' | AlienId | ObjectiveId;
+export type TemplateId = ClassId | 'rookie' | AlienId | ObjectiveId | DefenceId;
 
 /** Head pieces a soldier can wear (barracks customization). */
 export type HeadId = 'helmet' | 'hood' | 'beret' | 'cap' | 'mask' | 'bare';
@@ -740,6 +758,14 @@ export interface Unit {
   /** A vest found and put on out there (playtest 16/10 #18): its health counts at once, and it comes home. */
   worn?: ItemId[];
   /**
+   * A defence of the base that acts on its own (a turret, docs/FASE12.md §11.4):
+   * nobody gives it orders, it has no turn, it keeps watch in the enemy's and
+   * it doesn't hold the base (only soldiers do). `piece`: its piece on the base.
+   */
+  automaton?: { piece: string };
+  /** Belt things found and put on the belt out there (playtest 18/10 #5): usable at once; home if not dipped into (loot.ts beltedBack). */
+  belted?: ItemId[];
+  /**
    * Where the unit looks, in radians round the map (0 along +x, π/2 along +y):
    * the way it last walked, struck or heard something. The dead see only in
    * a cone that way (los.ts inViewCone, Arturo 17/10).
@@ -804,6 +830,14 @@ export interface SilenceZone {
  * is seen from as far as by day. The map's street lights never go out; a
  * Bengala's light and fire last `turns` of the squad's turns.
  */
+/** A trap of the base on a tile (docs/FASE12.md §11.4): it goes off when one of the dead steps on it. `piece`: its piece on the base. */
+export interface Trap {
+  piece: string;
+  kind: 'mine' | 'spikes' | 'snare';
+  node: number;
+  charges: number;
+}
+
 export interface Light {
   id: string;
   tile: Pos;
@@ -855,15 +889,13 @@ export interface Reinforcement {
 
 /**
  * A siege of the base (docs/FASE12.md): the dead come in waves
- * (MissionState.reinforcements, each by its `side`) and go for the heart of
- * the base, breaking down the doors and barricades in their way
- * (GameState.breakables). One of them beside the heart, and the base falls;
- * the squad holds once enemy turn `hold` is over, or when every wave is in
- * and down.
+ * (MissionState.reinforcements, each by its `side`, any of the four) and go
+ * for the soldiers, breaking down the doors and barricades in their way
+ * (GameState.breakables). The base falls when nobody is left to defend it;
+ * it holds once enemy turn `hold` is over, or when every wave is in and down
+ * (Arturo, 18/10).
  */
 export interface Siege {
-  /** The Sala de radio. */
-  heart: Pos;
   hold: number;
 }
 
@@ -932,6 +964,33 @@ export interface MedicalDetail {
 }
 
 /** A medical building's bounds, including walls; wear is cosmetic, from 0 to 1. */
+/** What a room of a house is (playtest 2026-10-18, #15). */
+export type HomeUse = 'living' | 'kitchen' | 'bedroom' | 'bath' | 'study' | 'hall';
+export interface HomeRoom {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z: number;
+  use: HomeUse;
+}
+
+/**
+ * A house and its rooms by use, as the client finishes and dresses them: how
+ * worn it is (0 kept, about 0.5 lived in rough, near 1 wrecked) and, seeded,
+ * what lies about in it (the medical centres' details: bodies, blood, mess).
+ */
+export interface HomeSite {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  wear: number;
+  rooms: HomeRoom[];
+  /** Seeded scenery, stored with the mission. Never affects movement, cover or AI. */
+  dressing?: MedicalDetail[];
+}
+
 export interface MedicalSite {
   x: number;
   y: number;
@@ -963,6 +1022,8 @@ export interface GameState {
   ground?: GroundKind[];
   /** Clinical finishes stay attached to the building after furniture is destroyed. */
   medical?: MedicalSite[];
+  /** The houses, their rooms by use and how worn (playtest 2026-10-18, #15). */
+  homes?: HomeSite[];
   /**
    * What the cover of each tile is meant to look like (procedural maps; see
    * decor.ts). Cosmetic and never updated: a tile whose kind has changed since
@@ -1044,4 +1105,10 @@ export interface GameState {
    * breaches stay known through a reload.
    */
   breakables?: Record<number, number>;
+  /** The campaign's base under siege (docs/FASE12.md §11): its pieces as they stood when it began, and its stumps (base.ts). */
+  base?: { pieces: BasePiece[]; felled?: number[] };
+  /** The base's traps set (docs/FASE12.md §11.4), with their uses left; spent, 0. */
+  traps?: Trap[];
+  /** Tiles with barbed wire, by node: costlier to cross. */
+  slow?: number[];
 }

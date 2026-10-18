@@ -669,6 +669,12 @@
   letter-spacing: 0.06em;
 }
 
+:root[data-ui='mixta'] .ping-button.on {
+  color: #1a1406;
+  background: #f2c230;
+  box-shadow: 0 0 0 2px rgba(242, 194, 48, 0.45), var(--m-raise);
+}
+
 /* Morse on the radio: her portrait in a sunken frame, faint scan lines over it only. */
 :root[data-ui='mixta'] .radio-portrait {
   position: relative;

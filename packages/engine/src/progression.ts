@@ -4,6 +4,7 @@
 // (CRAFTS, docs/FASE4.md), and a soldier carries the best tier made *and*
 // their rank allows, so promotions show up as better guns. A found weapon
 // lifts one soldier a tier above the rest.
+import { PIECES } from './base';
 import { FOUND_WEAPONS, ITEMS, WEAPONS, type WeaponId } from './content';
 import type { CampaignSoldier, CampaignState, FacilityId, FoundWeapon } from './campaign';
 import type { FoundWeaponId, ItemId, TemplateId, WeaponModId } from './types';
@@ -215,12 +216,21 @@ export function upgradeLevel(base: number, to: number): number {
   return Math.min(8, base + (to <= 2 ? 2 : 4));
 }
 
-/** Everything a level brings, for the progression screen and level-up alerts. */
-export function levelUnlocks(level: number, facilities: Record<FacilityId, { name: string; level: number }>): string[] {
+/** What the base can build (docs/FASE12.md §11), by the Bastion level that opens it: every piece but the caravan; `building`, it rises levels. */
+export const BASE_UNLOCKS: Record<string, { name: string; level: number; building: boolean }> = Object.fromEntries(
+  Object.values(PIECES)
+    .filter((p) => p.id !== 'caravan')
+    .map((p) => [p.id, { name: p.name, level: p.level, building: p.kind === 'building' }]),
+);
+
+/** Everything a level brings, for the progression screen and level-up alerts: by default, the new base's pieces. */
+export function levelUnlocks(level: number, facilities: Record<string, { name: string; level: number; building?: boolean }> = BASE_UNLOCKS): string[] {
   return [
     ...Object.values(TECHS).filter((t) => t.level === level).map((t) => t.name),
     ...Object.values(ITEMS).filter((i) => i.level === level).map((i) => i.name),
     ...Object.values(facilities).filter((f) => f.level === level).map((f) => f.name),
-    ...Object.values(facilities).flatMap((f) => [2, 3].filter((to) => upgradeLevel(f.level, to) === level).map((to) => `${f.name}, nivel ${to}`)),
+    ...Object.values(facilities)
+      .filter((f) => f.building !== false)
+      .flatMap((f) => [2, 3].filter((to) => upgradeLevel(f.level, to) === level).map((to) => `${f.name}, nivel ${to}`)),
   ];
 }

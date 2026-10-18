@@ -1,4 +1,4 @@
-import { HOST_CLOSED, hostClosedLine, WEB_TEXT, type CampaignMessage, type ClientMessage, type HostAddress, type PlayerInfo, type ServerMessage, type Slot } from '@bastion/engine';
+import { HOST_CLOSED, hostClosedLine, REJOIN_LINE, type CampaignMessage, type ClientMessage, type HostAddress, type PlayerInfo, type ServerMessage, type Slot } from '@bastion/engine';
 import { desktop } from './desktop';
 import { post } from './report';
 import { h } from './ui/dom';
@@ -62,13 +62,13 @@ function storage(): Storage | null {
   }
 }
 
-/** Back from another app, how long the old socket has to show it is alive before a new one is opened. */
+/** Back to the window, how long the old socket has to show it is alive before a new one is opened. */
 const PROBE_MS = 2500;
 
 /**
- * WebSocket with automatic reconnection and seat token persistence. On a
- * phone, the page sleeps while another app is up and its socket may die
- * without a word (docs/FASE11.md §6): the server hears it went away (so the
+ * WebSocket with automatic reconnection and seat token persistence. While
+ * the window is out of sight (minimized, behind another, the laptop asleep)
+ * its socket may die without a word: the server hears it went away (so the
  * turn and the command wait for it, room.ts), and back here the socket is
  * tried at once and replaced if it does not answer.
  */
@@ -147,7 +147,7 @@ export class Net {
       this.rejoinNote?.remove();
       this.rejoinNote = null;
     } else if (!this.rejoinNote) {
-      this.rejoinNote = h('div.connection.show.rejoin-note', { role: 'status', style: { position: 'fixed', zIndex: '60' } }, WEB_TEXT.rejoin);
+      this.rejoinNote = h('div.connection.show.rejoin-note', { role: 'status', style: { position: 'fixed', zIndex: '60' } }, REJOIN_LINE);
       document.body.append(this.rejoinNote);
     }
   }

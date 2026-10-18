@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MAPS, nodeOf, SIEGE, type GameState } from '@bastion/engine';
+import { MAPS, nodeOf, PIECES, pieceCells, SIEGE, type GameState } from '@bastion/engine';
 import { RAISED_TOWER } from './buildings';
 
 // A siege's base dressed (docs/FASE12.md §10, El Bastión): how worn each of
@@ -22,17 +22,20 @@ export function madeAs(s: GameState, x: number, y: number): string | null {
 
 /**
  * Each ground tile with a door or barricade standing, and its wear (GameState.breakables, by node). One that has
- * given way stays there at 0, but its tile is open ground now: it is the map's remains (madeAs), not worn.
+ * given way stays there at 0, but its tile is open ground now: it is the map's remains (madeAs), not worn. On the
+ * new base (docs/FASE12.md §11), against the health of the piece the tile is part of.
  */
 export function wearOf(s: GameState): Map<number, Wear> {
   const out = new Map<number, Wear>();
   if (!s.breakables) return out;
   const area = s.width * s.height;
+  const full = new Map<number, number>();
+  for (const p of s.base?.pieces ?? []) for (const c of pieceCells(p.piece, p.x, p.y, p.rot)) full.set(c.y * s.width + c.x, PIECES[p.piece].hp);
   for (let i = 0; i < area; i++) {
     const left = s.breakables[nodeOf(s, { x: i % s.width, y: Math.floor(i / s.width), z: 0 })];
     if (left === undefined || s.tiles[i] === 'floor') continue;
     const door = s.tiles[i] === 'door' || s.tiles[i] === 'doorOpen';
-    out.set(i, wearStage(left, door ? SIEGE.door : SIEGE.barricade));
+    out.set(i, wearStage(left, full.get(i) ?? (door ? SIEGE.door : SIEGE.barricade)));
   }
   return out;
 }

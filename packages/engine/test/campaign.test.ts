@@ -3,6 +3,8 @@ import { previewShot } from '../src/aim';
 import { defaultAppearance } from '../src/appearance';
 import {
   addPlayer,
+  advanceTime,
+  DAYS_PER_MISSION,
   canSpendPoints,
   craftBlocker,
   defaultSquad,
@@ -31,6 +33,7 @@ import { BASE_AIM, barsCost, missionLines, NO_GROWTH, NO_SKILLS, randomBoard, to
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
 import type { PerkId, Slot } from '../src/types';
+import { freeSpot, raise } from './helpers';
 
 const both: Slot[] = [0, 1];
 
@@ -75,40 +78,40 @@ describe('shared decisions', () => {
   });
 
   it('a rejected proposal changes nothing; alone, decisions apply directly', () => {
+    // The Sala de radio is dear: it goes to a vote (docs/FASE12.md §11.7).
     const c = createCampaign(both, new Rng(1));
-    run(c, { type: 'clear', plot: '3,5' }, 1);
+    const spot = freeSpot(c, 'radio');
+    run(c, { type: 'place', piece: 'radio', x: spot.x, y: spot.y, rot: 0 }, 1);
+    expect(c.proposal?.action).toEqual({ type: 'place', piece: 'radio', x: spot.x, y: spot.y, rot: 0 });
     run(c, { type: 'vote', accept: false }, 0);
-    expect(c.base.works).toEqual([]);
-    run(c, { type: 'clear', plot: '3,5' }, 1, [1]);
-    expect(c.base.works[0]?.plot).toBe('3,5');
+    expect(c.bastion.pieces.some((p) => p.piece === 'radio')).toBe(false);
+    run(c, { type: 'place', piece: 'radio', x: spot.x, y: spot.y, rot: 0 }, 1, [1]);
+    expect(c.bastion.pieces.some((p) => p.piece === 'radio')).toBe(true);
   });
 });
 
 describe('time', () => {
-  it('only advances when everyone is ready, and stops when the works finish', () => {
+  it('goes by with the missions: no waiting for news, and a «ready» taken back changes nothing', () => {
     const c = createCampaign(both, new Rng(1));
-    c.nextEventDay = 999;
-    run(c, { type: 'clear', plot: '3,5' }, 0, [0]);
-    run(c, { type: 'advance', ready: true }, 0);
+    expect(executeCampaignCommand(c, { type: 'advance', ready: true }, { slot: 0, connected: both, rng: new Rng(1) })).toEqual({ ok: false, error: 'Ya no se espera: el tiempo pasa con cada misión.' });
+    run(c, { type: 'advance', ready: false }, 0);
     expect(c.day).toBe(1);
-    run(c, { type: 'advance', ready: true }, 1);
-    expect(c.day).toBeGreaterThan(1);
-    for (let i = 0; i < 8 && c.base.works.length; i++) {
-      run(c, { type: 'advance', ready: true }, 0);
-      run(c, { type: 'advance', ready: true }, 1);
-    }
-    expect(c.base.plots.find((p) => p.id === '3,5')!.terrain).toBe('clear');
-    expect(c.advanceReady).toEqual([false, false]);
+    const offer = c.offers.find((o) => !o.story)!;
+    run(c, { type: 'chooseMission', id: offer.id }, 0, [0]);
+    const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
+    mission.outcome = 'victory';
+    applyMissionResult(c, mission, new Rng(4));
+    expect(c.day).toBe(1 + DAYS_PER_MISSION);
   });
 
   it('wounds heal day by day; the enemy project ends the campaign at its maximum', () => {
     const c = createCampaign([0], new Rng(1));
     c.nextEventDay = 999;
     c.soldiers[0]!.woundedDays = 2;
-    run(c, { type: 'advance', ready: true }, 0, [0]);
+    advanceTime(c, new Rng(7));
     expect(c.soldiers[0]!.woundedDays).toBeLessThan(2);
     c.doom = DOOM_MAX - 1;
-    for (let i = 0; i < 10 && !c.outcome; i++) run(c, { type: 'advance', ready: true }, 0, [0]);
+    for (let i = 0; i < 10 && !c.outcome; i++) advanceTime(c, new Rng(7 + i));
     expect(c.outcome).toBe('defeat');
   });
 });
@@ -137,8 +140,8 @@ describe('missions', () => {
   it('a share the partner cannot fill is lent to the other player, and comes back when they can', () => {
     const c = createCampaign(both, new Rng(2));
     c.credits = 500;
-    // The bunker sleeps the eight starting soldiers: recruiting needs a barracón.
-    c.base.plots.find((p) => p.id === '2,4')!.building = 'quarters';
+    // The caravan sleeps the eight starting soldiers: recruiting needs a barracón.
+    raise(c, 'quarters');
     const theirs = c.soldiers.filter((s) => s.owner === 1);
     // Player 1 has a single soldier fit to fight.
     for (const s of theirs.slice(1)) s.woundedDays = 5;
@@ -284,7 +287,7 @@ describe('missions', () => {
   it('the Taller de oficios makes a mission teach 20 % more for every level', () => {
     const { c, offer } = ready();
     expect(learningBonus(c)).toBe(0);
-    Object.assign(c.base.plots.find((p) => p.terrain === 'clear' && !p.building)!, { building: 'echoes', level: 2 });
+    raise(c, 'echoes', 2);
     expect(learningBonus(c)).toBeCloseTo(0.4);
     const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
     const unit = mission.units.find((u) => u.team === 'xcom')!;
@@ -457,9 +460,9 @@ describe('helping the players', () => {
     const c = createCampaign([0], new Rng(1));
     const mine = c.soldiers.filter((s) => s.owner === 0);
     for (const s of mine.slice(1)) s.woundedDays = 8;
-    // The bunker is full: first a barracón for the recruits to sleep in.
+    // The caravan is full: first a barracón for the recruits to sleep in.
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'facilities', label: 'Solo 1 soldado listo y sin camas: construye un barracón' });
-    c.base.plots.find((p) => p.id === '2,4')!.building = 'quarters';
+    raise(c, 'quarters');
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'barracks', label: 'Solo 1 soldado listo: recluta (30 §)' });
     // An operation about to expire still comes first.
     c.offers.find((o) => o.expiresDay !== null)!.expiresDay = c.day + 1;

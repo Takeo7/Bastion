@@ -24,6 +24,9 @@ import {
   contactCapacity,
   contactCost,
   costText,
+  PIECE_TEXT,
+  PIECES,
+  raiseCost,
   defaultAppearance,
   displayName,
   DOOM_MAX,
@@ -138,6 +141,21 @@ import {
   ARMOR_PART_IDS,
   partColor,
   type BaseView,
+  BASE_SIEGE_TEXT,
+  VOTE_ABOVE,
+  siegeHeard,
+  mustWait,
+  PIECE_STATE,
+  BUILD_TEXT,
+  siegeWarning,
+  siegeWarningShort,
+  inMissions,
+  wintry,
+  outingsMark,
+  timeHelp,
+  SIEGE_TEXT,
+  DAYS_PER_MISSION,
+  type PieceKind,
   type CampaignCommand,
   type CampaignSoldier,
   type CraftDef,
@@ -162,6 +180,9 @@ import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from '../ui/quit';
 import { graphicsSettings, soundSettings } from '../ui/settingsPanel';
 import { BastionSet, LAUNCH_SECONDS, type FixedRoom, type LineupEntry } from './bastion';
 import { GeoscapeSet } from './geoscape';
+import { ClearingSet, footprint, type BaseCursor } from './clearing';
+import { ClearingArtView } from './clearingArt';
+import { palette, pieceCard, placeBlockerFor, placeLine } from './buildMode';
 import { Stage, type Shot } from './stage';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
@@ -176,6 +197,8 @@ export interface StrategyHandlers {
   send(cmd: CampaignCommand): void;
   onView(view: BaseView): void;
   onLeave(): void;
+  /** The piece in this player's hand on the clearing, for the partner (null: none). */
+  onCursor?(c: BaseCursor | null): void;
 }
 
 interface Alert {
@@ -208,7 +231,29 @@ const MAX_NEWS = 20;
 
 const REPORT_KEY = storageKey('seenReport');
 /** The rule of time, wherever the day is shown. */
-const TIME_HELP = 'El tiempo solo pasa al esperar noticias, hasta que ocurre algo. Las misiones, comprar, reclutar, entrenar o proponer no gastan días; las obras, las curas y las escuchas avanzan mientras pasan.';
+/** Days counted in missions (docs/FASE12.md §11.6): each one takes DAYS_PER_MISSION days inside, and any day left is one more. */
+function missionsFor(days: number): number {
+  return Math.max(1, Math.ceil(days / DAYS_PER_MISSION));
+}
+
+/** «1 misión», «3 misiones». */
+function missionsText(n: number): string {
+  return n === 1 ? '1 misión' : `${n} misiones`;
+}
+
+/** How far off `day` is, in missions, for a chip: «ahora», «próxima», «en 3». */
+function aheadChip(c: CampaignState, day: number): string {
+  const left = day - c.day;
+  if (left <= 0) return 'ahora';
+  const n = missionsFor(left);
+  return n === 1 ? 'próxima' : `en ${n}`;
+}
+
+/** The same in words: «tras la próxima misión», «dentro de 3 misiones» (Lore's inMissions). */
+function aheadText(c: CampaignState, day: number): string {
+  const left = day - c.day;
+  return left <= 0 ? 'ya' : inMissions(missionsFor(left));
+}
 
 /** What each browser has already seen of every campaign's news (the tabs' numbers). */
 const NEWS_KEY = storageKey('seenNews');
@@ -226,7 +271,8 @@ const NAV: { view: BaseView; label: string }[] = [
   { view: 'geoscape', label: 'El valle' },
   { view: 'engineering', label: 'Armería' },
   { view: 'barracks', label: 'Cuartel' },
-  { view: 'facilities', label: 'Instalaciones' },
+  // The base is built on the clearing now (docs/FASE12.md §11.7): the tab is where it is built (B).
+  { view: 'facilities', label: 'Construir' },
 ];
 
 /** Room of the Bastion each screen happens in (for the partner marker and the camera). */
@@ -245,7 +291,7 @@ const VIEW_NAMES: Record<BaseView, string> = {
   research: 'Campaña',
   engineering: 'Armería',
   barracks: 'Cuartel',
-  facilities: 'Instalaciones',
+  facilities: 'Construir',
   squad: 'Cochera',
   debrief: 'Informe',
 };
@@ -317,6 +363,18 @@ export class StrategyScreen {
   private readonly stage = new Stage();
   private readonly bastion: BastionSet;
   private readonly geo: GeoscapeSet;
+  /** The base in the clearing (docs/FASE12.md §11.7): Campaña and Construir look at it. */
+  private readonly clearing: ClearingSet;
+  /** Construir: the palette's tab, the piece picked on the clearing, and «Desmontar» pressed once. */
+  private buildKind: PieceKind = 'building';
+  private piece: string | null = null;
+  private dismantling = false;
+  private partnerCursorTimer = 0;
+  /** The clearing is drawn under snow (still winter in the campaign: wintry); null until the first state. */
+  private clearingSnow: boolean | null = null;
+  private clearingArt: ClearingArtView | null = null;
+  /** Back from a mission: La Lata comes in up the track the first time the clearing is shown. */
+  private arriving = false;
   private readonly top = h('div.strat-top');
   private readonly proposalEl = h('div.strat-proposal.x-panel');
   private readonly viewEl = h('div.strat-view');
@@ -361,8 +419,6 @@ export class StrategyScreen {
   private leaving = false;
   /** «Salir del juego» asked from the menu (desktop app only, ui/quit.ts): its question in the same window. */
   private quitting = false;
-  /** The sides folded away on a phone (panel's handle): kept while the screen redraws. */
-  private readonly folded = new Set<'left' | 'right'>();
   /** Settings open over the base: only for this player, the partner stays where they are. */
   private settingsOpen = false;
   /** News keys already seen (navNews), for the campaign `seenNewsFor`. */
@@ -379,18 +435,38 @@ export class StrategyScreen {
       this.geo.focus(region);
       this.render();
     });
+    this.clearing = new ClearingSet({
+      blocker: (piece, x, y, rot) => (this.state ? placeBlockerFor(this.state, piece, x, y, rot) : 'Un momento.'),
+      placeHint: (piece, blocked) => (this.state ? placeLine(this.state, piece, !!this.partner()?.connected, blocked) : ''),
+      place: (piece, x, y, rot) => {
+        this.send({ type: 'place', piece, x, y, rot });
+        // Walls and traps go down one after another; a building (most are only one) or what goes to a vote, once.
+        if (PIECES[piece].kind === 'building' || PIECES[piece].unique || (this.partner()?.connected && PIECES[piece].cost.supplies > VOTE_ABOVE)) this.dropTool();
+      },
+      fell: (tiles) => this.send({ type: 'fell', tiles }),
+      select: (id) => this.pickPiece(id),
+      cancel: () => this.dropTool(),
+      cursor: (c) => this.handlers.onCursor?.(c),
+    });
     this.stage.add('bastion', this.bastion);
     this.stage.add('geo', this.geo);
+    this.stage.add('clearing', this.clearing);
     this.root.append(this.stage.element, this.viewEl, this.top, this.proposalEl, this.nav, this.modal, this.radio.element, this.toastEl);
     container.append(this.root);
-    void this.stage.show('bastion', this.bastion.overview(), true);
+    void this.stage.show('clearing', this.clearing.shot(), true);
     handlers.onView(this.view);
     window.addEventListener('keydown', this.onKey);
   }
 
   private readonly onKey = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape' || e.defaultPrevented || !this.state || this.root.classList.contains('launching')) return;
+    if (e.defaultPrevented || !this.state || this.root.classList.contains('launching')) return;
     if ((e.target as HTMLElement | null)?.closest?.('input, textarea')) return;
+    // B: in and out of Construir, from the clearing.
+    if (e.code === 'KeyB' && !e.ctrlKey && !e.metaKey && !this.modal.classList.contains('show') && (this.view === 'research' || this.view === 'facilities')) {
+      void this.go(this.view === 'facilities' ? 'research' : 'facilities');
+      return;
+    }
+    if (e.key !== 'Escape') return;
     e.preventDefault();
     this.back();
   };
@@ -410,7 +486,9 @@ export class StrategyScreen {
     }
     // Alerts and events are answered with their own buttons.
     if (this.modal.classList.contains('show')) return;
-    if (this.view === 'facilities' && this.plot) this.pickPlot(null);
+    // Construir: the piece in hand first, then the one picked.
+    if (this.view === 'facilities' && this.clearing.currentTool.kind !== 'look') return this.dropTool();
+    if (this.view === 'facilities' && this.piece) return this.pickPiece(null);
     else if (this.view !== 'research' && this.view !== 'debrief') void this.go('research');
   }
 
@@ -423,6 +501,8 @@ export class StrategyScreen {
    */
   update(c: CampaignState, before?: CampaignState | null): void {
     const prev = this.state ?? before ?? null;
+    // A screen made anew after a mission (main.ts passes the base as it took off): La Lata is on its way back.
+    if (before && !this.state) this.arriving = true;
     this.state = c;
     this.loadSeenNews(c);
     // News arriving on the screen being looked at is seen at once.
@@ -435,6 +515,14 @@ export class StrategyScreen {
       this.toast(`Propuesto a ${this.partner()?.name ?? 'tu compañero'}: se paga cuando diga que sí.`);
     }
     this.bastion.setBase(c);
+    if (this.clearingSnow !== wintry(c)) {
+      this.clearingSnow = wintry(c);
+      this.clearing.setArt((this.clearingArt = new ClearingArtView(this.clearingSnow)));
+    }
+    this.clearing.setBase(c.bastion);
+    const placing = c.proposal?.action.type === 'place' ? c.proposal.action : null;
+    this.clearing.setProposal(placing ? { piece: placing.piece, x: placing.x, y: placing.y, rot: placing.rot } : null);
+    if (this.piece && !c.bastion.pieces.some((p) => p.id === this.piece)) this.piece = null;
     this.geo.flyTo(this.offerById(c.activeMission)?.region ?? HOME_REGION);
     if (prev) this.collectAlerts(prev, c);
     this.showPremise(c);
@@ -444,6 +532,15 @@ export class StrategyScreen {
     if (!c.activeMission && !this.reportPending(c)) this.bastion.setLineup([]);
     if (this.reportPending(c) && this.view !== 'debrief') void this.go('debrief');
     else this.render();
+    // Back without a debrief to read: the clearing is already on screen.
+    if (this.arriving && !this.reportPending(c) && this.setFor(this.view) === 'clearing') this.arrive();
+  }
+
+  /** La Lata comes back up the track and stops by the caravan (clearingArt.ts), with the camera on it. */
+  private arrive(): void {
+    this.arriving = false;
+    this.clearing.focusCaravan(true);
+    void this.clearingArt?.arrive();
   }
 
   setPlayers(players: PlayerInfo[]): void {
@@ -458,7 +555,21 @@ export class StrategyScreen {
 
   setPartnerView(view: BaseView): void {
     this.partnerView = view;
+    // Off Construir, nothing in the partner's hand.
+    if (view !== 'facilities') this.setPartnerCursor(null);
     this.render();
+  }
+
+  /** The partner's piece in hand on the clearing (main.ts, 'baseCursor'); it goes if nothing comes for a while. */
+  setPartnerCursor(m: { slot: Slot; piece: BaseCursor['piece'] | null; x: number; y: number; rot: number } | null): void {
+    window.clearTimeout(this.partnerCursorTimer);
+    const p = m && this.players.find((x) => x.slot === m.slot);
+    if (!m?.piece || !p) {
+      this.clearing.setPartnerCursor(null);
+      return;
+    }
+    this.clearing.setPartnerCursor({ piece: m.piece, x: m.x, y: m.y, rot: m.rot, color: p.color, name: p.name });
+    this.partnerCursorTimer = window.setTimeout(() => this.clearing.setPartnerCursor(null), 6000);
   }
 
   toast(text: string): void {
@@ -468,22 +579,51 @@ export class StrategyScreen {
     this.toastTimer = window.setTimeout(() => this.toastEl.classList.remove('show'), 2600);
   }
 
-  /** Take-off: the dropship leaves the hangar before the mission loads. */
+  /**
+   * Take-off: La Lata leaves the clearing by its track (clearingArt.ts, docs/FASE12.md
+   * §11.7) before the mission loads; the screen goes black once it is gone.
+   */
   async launch(): Promise<void> {
-    if (this.view !== 'squad') await this.go('squad');
     clear(this.modal);
     this.modal.classList.remove('show');
     this.root.classList.add('launching');
     this.root.append(h('div.launch-banner', {}, 'EN MARCHA'));
-    void this.stage.show('bastion', this.bastion.takeoff());
-    const gone = this.bastion.launch();
-    window.setTimeout(() => this.stage.blackout(), (LAUNCH_SECONDS - 0.5) * 1000);
-    await gone;
+    const art = this.clearingArt;
+    // A siege: nobody leaves, they are here (docs/FASE12.md §11.5). The clearing, its line, and into the fight.
+    if (this.offerById(this.state?.activeMission ?? null)?.siege && art) {
+      this.root.querySelector('.launch-banner')!.textContent = BASE_SIEGE_TEXT.here.replace(/\.$/, '').toUpperCase();
+      this.clearing.setBuilding(false);
+      this.clearing.leave();
+      this.clearing.focusCaravan(true);
+      await this.stage.show('clearing', this.clearing.shot());
+      await new Promise((r) => setTimeout(r, 1600));
+      this.stage.blackout();
+      await new Promise((r) => setTimeout(r, 450));
+      return;
+    }
+    if (!art) {
+      // No clearing yet (no state): the hangar's take-off of before.
+      void this.stage.show('bastion', this.bastion.takeoff());
+      const gone = this.bastion.launch();
+      window.setTimeout(() => this.stage.blackout(), (LAUNCH_SECONDS - 0.5) * 1000);
+      await gone;
+      return;
+    }
+    this.clearing.setBuilding(false);
+    this.clearing.leave();
+    this.clearing.focusCaravan(true);
+    await this.stage.show('clearing', this.clearing.shot());
+    // Never held up for long whatever happens to the drawing.
+    await Promise.race([art.depart(), new Promise((r) => setTimeout(r, 9000))]);
+    this.stage.blackout();
+    await new Promise((r) => setTimeout(r, 450));
   }
 
   destroy(): void {
     window.removeEventListener('keydown', this.onKey);
+    window.clearTimeout(this.partnerCursorTimer);
     cancelAnimationFrame(this.anchorFrame);
+    this.clearing.dispose();
     this.stage.dispose();
     this.root.remove();
   }
@@ -499,14 +639,36 @@ export class StrategyScreen {
     this.picking = null;
     this.custom = null;
     this.handlers.onView(view);
+    if (view !== 'facilities') {
+      this.clearing.setTool({ kind: 'look' });
+      this.piece = null;
+    }
+    this.clearing.setBuilding(view === 'facilities');
+    if (this.setFor(view) !== 'clearing') this.clearing.leave();
+    else if (this.arriving) {
+      // Back from a mission, the first time on the clearing (after the debrief): La Lata comes in.
+      this.render();
+      await this.stage.show('clearing', this.shotFor(view));
+      this.arrive();
+      return;
+    }
     this.render();
-    await this.stage.show(view === 'geoscape' ? 'geo' : 'bastion', this.shotFor(view));
+    await this.stage.show(this.setFor(view), this.shotFor(view));
+  }
+
+  /** The 3D set each screen happens in: the valley, the clearing, or the rooms that are screens (the Cuartel's, the Armería's, the hangar). */
+  private setFor(view: BaseView): 'geo' | 'clearing' | 'bastion' {
+    return view === 'geoscape' ? 'geo' : view === 'research' || view === 'hub' || view === 'facilities' ? 'clearing' : 'bastion';
   }
 
   private shotFor(view: BaseView): Shot {
     switch (view) {
       case 'geoscape':
         return this.geo.shot();
+      case 'research':
+      case 'hub':
+      case 'facilities':
+        return this.clearing.shot();
       // Campaña looks at the whole Bastión, as the old «Bastión» did.
       case 'engineering':
         return this.bastion.room(view);
@@ -710,11 +872,10 @@ export class StrategyScreen {
     const tag = (tone: string, text: string, title = '') => h(`${short ? 'span.x-side' : 'b.x-state'}${tone}`, title ? { title } : {}, text);
     if (!s.alive) return tag('.x-bad', s.fellCause === 'turned' ? TURNED_CAUSE : 'Caído');
     if (s.infection) {
-      const left = turnDay(c, s)! - c.day;
-      const when = left <= 0 ? 'hoy' : left === 1 ? 'mañana' : `en ${left} d`;
-      return tag('.x-bad', short ? `Fiebre · ${when}` : `Mordido · se convierte ${when}`, 'Un mordisco: tiene fiebre. Sin el tratamiento, se convierte.');
+      const day = turnDay(c, s)!;
+      return tag('.x-bad', short ? `Fiebre · ${aheadChip(c, day)}` : `Mordisco · se convierte ${aheadText(c, day)}`, 'Un mordisco: tiene fiebre. Sin el tratamiento, se convierte.');
     }
-    if (s.woundedDays) return tag('.x-warn', short ? `${s.woundedDays} d` : `Herido · ${s.woundedDays} d`);
+    if (s.woundedDays) return tag('.x-warn', short ? missionsText(missionsFor(s.woundedDays)) : `Heridas · ${missionsText(missionsFor(s.woundedDays))}`);
     return tag(short ? '' : '.x-good', 'Listo');
   }
 
@@ -772,7 +933,7 @@ export class StrategyScreen {
             title: have < MEDICATE_COST ? 'No quedan medicinas.' : `Gasta ${MEDICATE_COST} ✚ de las ${have} que tenéis.`,
             onclick: () => this.send({ type: 'medicate', soldier: s.id }),
           },
-          `Curar (${MEDICATE_COST} ✚): ${MEDICATE_DAYS} días menos`,
+          `Curar (${MEDICATE_COST} ✚): vuelve antes`,
         ),
       );
     }
@@ -830,37 +991,22 @@ export class StrategyScreen {
     for (const i of Object.values(ITEMS).filter((x) => x.level === level)) add('flag', i.name, i.description);
     for (const f of Object.values(FACILITIES).filter((x) => x.level === level)) add('pick', f.name, f.description);
     // The rest are facilities going up a level («Barracón, nivel 2»).
-    for (const name of levelUnlocks(level, FACILITIES).filter((n) => !known.has(n))) add('pick', name);
+    for (const name of levelUnlocks(level).filter((n) => !known.has(n))) add('pick', name);
     return out;
   }
 
   /** "Armas magnéticas · Sala de simulación": what a Bastion level unlocks. */
   private unlocksText(level: number): string {
-    const list = levelUnlocks(level, FACILITIES);
+    const list = levelUnlocks(level);
     return list.length ? `Desbloquea: ${list.join(' · ')}.` : 'Sin desbloqueos nuevos.';
   }
 
   /** Remembers each panel's scroll across re-renders. */
   private panel(key: string, side: 'left' | 'right' | 'left.compact', ...children: (Node | null | false | undefined)[]): HTMLElement {
-    // On a phone (docs/FASE11.md §4) each side folds away behind its handle, to see the base; it stays folded across redraws.
-    const edge = side === 'right' ? 'right' : 'left';
-    const folded = this.folded.has(edge);
-    const wrap = h(`div.strat-${side}${folded ? '.folded' : ''}`, { onscroll: (e: Event) => this.scroll.set(key, (e.target as HTMLElement).scrollTop) });
+    const wrap = h(`div.strat-${side}`, { onscroll: (e: Event) => this.scroll.set(key, (e.target as HTMLElement).scrollTop) });
     const inner = h('div.x-panel');
     append(inner, ...children);
-    const handle = h(
-      'button.panel-fold',
-      {
-        type: 'button',
-        'aria-label': folded ? 'Desplegar el panel' : 'Plegar el panel',
-        onclick: () => {
-          if (!this.folded.delete(edge)) this.folded.add(edge);
-          this.render();
-        },
-      },
-      (edge === 'left') === folded ? '›' : '‹',
-    );
-    wrap.append(handle, inner);
+    wrap.append(inner);
     const top = this.scroll.get(key) ?? 0;
     queueMicrotask(() => (wrap.scrollTop = top));
     return wrap;
@@ -998,7 +1144,7 @@ export class StrategyScreen {
         kicker: doomName(level).toUpperCase(),
         rank: 50,
         title: doomStatus(level, c.doom),
-        text: `Si llega a Atalaya, la campaña está perdida. Quemar Nidos la hace retroceder.`,
+        text: `Si llega al Bastión, la campaña está perdida. Quemar Nidos la hace retroceder.`,
       });
     }
   }
@@ -1015,7 +1161,7 @@ export class StrategyScreen {
       region: rumor?.region,
       action: rumor
         ? {
-            label: `${this.decide('escuchar')} · ${rumor.daysLeft} días`,
+            label: `${this.decide('escuchar')} · ${missionsText(missionsFor(rumor.daysLeft))}`,
             go: () => {
               const now = this.state;
               if (now?.rumors.some((r) => r.id === rumor.id) && now.listening !== rumor.id) this.send({ type: 'investigate', id: rumor.id });
@@ -1126,7 +1272,8 @@ export class StrategyScreen {
     for (let i = 0; i < DOOM_MAX; i++) pips.append(h(`i${i < c.doom ? '.on' : ''}`));
     append(
       this.top,
-      h('div.strat-brand', { title: TIME_HELP }, h('b', {}, 'BASTIÓN'), h('span', {}, `DÍA ${c.day}`)),
+      h('div.strat-brand', { title: timeHelp(bastionLevel(c)) }, h('b', {}, 'BASTIÓN'), h('span', {}, outingsMark(c.missionsFlown ?? 0))),
+      this.siegeEl(c),
       h(
         'div.strat-res',
         {},
@@ -1160,14 +1307,15 @@ export class StrategyScreen {
         'div.strat-players',
         {},
         ...this.players.map((p) => {
-          const where = p.slot === this.mySlot ? 'tú' : !p.connected ? 'desconectado' : p.away ? 'en otra app' : this.partnerView ? VIEW_NAMES[this.partnerView] : '';
+          const where = p.slot === this.mySlot ? 'tú' : !p.connected ? 'desconectado' : p.away ? 'ausente' : this.partnerView ? VIEW_NAMES[this.partnerView] : '';
           const ready = c.advanceReady[p.slot] || c.launchReady[p.slot];
           return h(
             `div.strat-player${p.connected ? '' : '.offline'}`,
             { style: { '--accent': p.color } },
             h('span.dot'),
             h('b', {}, p.name),
-            h('small', {}, ready ? 'listo' : where),
+            // Without gender (Lore, 18/10): the player may be Ana.
+            h('small', {}, ready ? 'a punto' : where),
           );
         }),
       ),
@@ -1179,6 +1327,19 @@ export class StrategyScreen {
     );
   }
 
+  /**
+   * The next siege (docs/FASE12.md §11.5): when, and with the Sala de radio how
+   * many and by where, in the strip; red the mission before, and while it is on.
+   */
+  private siegeEl(c: CampaignState): HTMLElement | null {
+    if (!c.siege) return null;
+    const now = c.offers.find((o) => o.siege);
+    if (now) return h('div.strat-siege.now', { title: BASE_SIEGE_TEXT.defenders }, `${SIEGE_TEXT.name.toUpperCase()}${now.night ? ` · ${NIGHT_TEXT.label.toUpperCase()}` : ''}`);
+    const heard = siegeHeard(c);
+    const full = siegeWarning(heard.in, heard.count !== undefined ? { count: heard.count, sides: heard.sides ?? [] } : undefined);
+    return h(`div.strat-siege${heard.in <= 1 ? '.near' : ''}`, { title: full }, siegeWarningShort(heard.in));
+  }
+
   /** What a proposal costs, takes and does, and where to see it: whoever decides should know as much as whoever proposed. */
   /**
    * What a proposal costs and brings, one kind per line in the same order
@@ -1186,6 +1347,29 @@ export class StrategyScreen {
    */
   private proposalDetail(c: CampaignState, action: NonNullable<CampaignState['proposal']>['action']): { rows: [string, string][]; see: (() => void) | null } {
     switch (action.type) {
+      // The base (docs/FASE12.md §11): what the piece costs and does; the new base's screen will show where.
+      case 'place': {
+        const def = PIECES[action.piece];
+        return {
+          rows: [['Suministros', costText(def.cost.supplies)], ...(def.cost.parts ? [['Piezas', `${def.cost.parts}`] as [string, string]] : []), ['Qué hace', PIECE_TEXT[action.piece].line]],
+          // Where it would go: on the clearing, in blue (ClearingSet.setProposal).
+          see: () => {
+            const [w, h] = footprint(action.piece, action.rot);
+            if (this.view !== 'facilities') void this.go('facilities');
+            this.clearing.focusTile({ x: action.x + (w - 1) / 2, y: action.y + (h - 1) / 2 });
+          },
+        };
+      }
+      case 'raise': {
+        const p = c.bastion.pieces.find((x) => x.id === action.piece);
+        const next = p && raiseCost(p);
+        if (!p || !next || typeof next === 'string') return { rows: [], see: null };
+        return { rows: [['Suministros', costText(next.cost)], ['Qué hace', PIECE_TEXT[p.piece].levels?.[p.level ?? 1] ?? PIECE_TEXT[p.piece].line]], see: () => {
+            if (this.view !== 'facilities') void this.go('facilities');
+            this.clearing.focusPiece(p.id);
+          },
+        };
+      }
       case 'chooseMission': {
         const o = this.offerById(action.id);
         if (!o) return { rows: [], see: null };
@@ -1265,7 +1449,7 @@ export class StrategyScreen {
       case 'craft': {
         // The Taller's work (docs/FASE4.md): placeholder rows until the Taller's screen shows it.
         const def = CRAFTS[action.project];
-        return { rows: [['Tiempo', `${def.days} días de obra`], ['Suministros', `${costText(def.cost)} y ${def.parts} piezas`], ['Qué hace', craftAim(def.kind, def.the)]], see: null };
+        return { rows: [['Tiempo', `Sale ${inMissions(missionsFor(def.days))}`], ['Suministros', `${costText(def.cost)} y ${def.parts} piezas`], ['Qué hace', craftAim(def.kind, def.the)]], see: null };
       }
     }
   }
@@ -1347,8 +1531,7 @@ export class StrategyScreen {
         h(
           `button${this.view === item.view ? '.on' : ''}${item.view === 'squad' ? '.urgent' : ''}`,
           { 'data-view': item.view, onclick: () => void this.go(item.view), title: todo ? todo.what.join(' · ') : '', 'aria-label': item.label },
-          // Its own span: on a phone the tabs are icons only (docs/FASE11.md §4).
-          h('span.nav-label', {}, item.label),
+          item.label,
           todo ? h(`span.nav-count${todo.urgent ? '.urgent' : ''}`, {}, todo.n) : null,
           here ? h('span.partner-dot', { style: { '--accent': partner!.color }, title: `${partner!.name} está aquí` }, partner!.name.slice(0, 1).toUpperCase()) : null,
         ),
@@ -1429,6 +1612,11 @@ export class StrategyScreen {
       return;
     }
     if (go.plot) return this.pickPlot(go.plot, false);
+    if (go.piece) {
+      if (this.view !== 'facilities') void this.go('facilities');
+      this.clearing.focusPiece(go.piece);
+      return;
+    }
     if (step.view !== this.view) void this.go(step.view);
   }
 
@@ -1474,15 +1662,13 @@ export class StrategyScreen {
   }
 
   /**
-   * Calendario: what will happen on which day, so «quedan 3 días» has a date
-   * (playtest: in XCOM too, nobody knew what day it was).
+   * Calendario: what will happen and after how many missions (docs/FASE12.md
+   * §11.6: time passes with each one; the days stay inside).
    */
   private calendar(c: CampaignState): HTMLElement[] {
     const dates: { day: number; icon: string; text: string; go?: () => void }[] = [];
-    for (const work of c.base.works) {
-      const what = work.kind === 'clear' ? 'Terreno despejado' : work.kind === 'upgrade' ? `${FACILITIES[work.facility!].name}, nivel ${(plotById(c, work.plot)?.level ?? 1) + 1}` : `${FACILITIES[work.facility!].name} terminado`;
-      dates.push({ day: c.day + work.daysLeft, icon: 'pick', text: what, go: () => this.pickPlot(work.plot, false) });
-    }
+    // Only the Taller's works are left (the base is built at once, on the clearing).
+    for (const work of c.base.works.filter((w) => w.kind === 'craft' && w.project)) dates.push({ day: c.day + work.daysLeft, icon: 'pick', text: `${CRAFTS[work.project!].name}, del Taller` });
     for (const s of c.soldiers.filter((x) => x.alive && x.woundedDays > 0 && x.owner === this.mySlot)) dates.push({ day: c.day + s.woundedDays, icon: 'hp', text: `${s.name} vuelve al servicio` });
     // The bitten, both players': whoever has medicines can save them (docs/FASE3.md).
     for (const s of c.soldiers.filter((x) => x.alive && x.infection)) dates.push({ day: turnDay(c, s)!, icon: 'hp', text: `${s.name} se convierte si no recibe el tratamiento`, go: () => this.openSoldier(s.id) });
@@ -1492,9 +1678,8 @@ export class StrategyScreen {
     dates.push({ day: c.nextSupplyDay, icon: 'clock', text: 'Convoy de Brena' });
     dates.push({ day: c.nextDoomDay, icon: 'clock', text: `Avanza ${doomSubject(bastionLevel(c))}` });
     dates.sort((a, b) => a.day - b.day);
-    const when = (day: number) => (day <= c.day ? 'hoy' : day === c.day + 1 ? 'mañana' : `en ${day - c.day} d`);
     return [
-      h('div.x-head', { title: TIME_HELP }, `Calendario · hoy, día ${c.day}`),
+      h('div.x-head', { title: timeHelp(bastionLevel(c)) }, 'Calendario'),
       h(
         'div.x-list.calendar',
         {},
@@ -1503,12 +1688,12 @@ export class StrategyScreen {
             `${d.go ? 'button' : 'div'}.x-row.agenda.calendar-row`,
             d.go ? { onclick: d.go } : {},
             h(`span.agenda-icon.${d.icon}`),
-            h('b', {}, h('span.calendar-day', {}, `Día ${d.day}`), ` ${d.text}`),
-            this.chip(when(d.day)),
+            h('b', {}, d.text),
+            this.chip(aheadChip(c, d.day), '', aheadText(c, d.day)),
           ),
         ),
       ),
-      h('p.calendar-note', {}, 'Los días solo pasan al esperar noticias. Obras, curas y escuchas avanzan con ellos.'),
+      h('p.calendar-note', {}, 'El tiempo pasa con cada misión: las curas, las escuchas y los encargos avanzan con ellas.'),
     ];
   }
 
@@ -1526,28 +1711,28 @@ export class StrategyScreen {
     );
     const list = h('div.x-list');
     for (const o of offers) {
-      const days = o.expiresDay === null ? null : o.expiresDay - c.day;
+      const days = o.expiresDay === null ? null : missionsFor(o.expiresDay - c.day);
       list.append(
         h(
           `button.x-row.mission${this.offer === o.id ? '.selected' : ''}`,
           { onclick: () => this.focusOffer(o.id) },
           // data-kind: the theme draws the kind's icon from the packs over the glyph (ui/themes/mixta-base.css).
-          h('span.mission-icon', { 'data-kind': o.kind, style: { '--icon': o.final ? '#ff5a8a' : o.facility ? '#ff4a5a' : o.story ? '#4a7dff' : o.quest ? '#2f9e6a' : '#ffb030' } }, h('span', {}, KIND_ICON[o.kind])),
+          h('span.mission-icon', { 'data-kind': o.kind, style: { '--icon': o.final || o.siege ? '#ff5a8a' : o.facility ? '#ff4a5a' : o.story ? '#4a7dff' : o.quest ? '#2f9e6a' : '#ffb030' } }, h('span', {}, KIND_ICON[o.kind])),
           h(
             'div',
-            { title: `${o.facility ? 'Nido' : o.story ? `Historia · ${MISSION_NAMES[o.kind]}` : o.quest ? `Encargo · ${MISSION_NAMES[o.kind]}` : MISSION_NAMES[o.kind]} · ${REGIONS[o.region].name}` },
+            { title: o.siege ? `${SIEGE_TEXT.name} · El Bastión` : `${o.facility ? 'Nido' : o.story ? `Historia · ${MISSION_NAMES[o.kind]}` : o.quest ? `Encargo · ${MISSION_NAMES[o.kind]}` : MISSION_NAMES[o.kind]} · ${REGIONS[o.region].name}` },
             h('b', {}, o.name),
-            h('small', {}, REGIONS[o.region].name),
+            h('small', {}, `${o.siege ? 'El Bastión' : REGIONS[o.region].name}${o.night ? ` · ${NIGHT_TEXT.label}` : ''}`),
           ),
           h(
-            `span.x-side.days${days !== null && days <= 2 ? '.x-bad' : ''}`,
-            { title: days === null ? 'No caduca' : `Caduca el día ${o.expiresDay} (${days <= 0 ? 'hoy' : `en ${days} ${days === 1 ? 'día' : 'días'}`})` },
-            days === null ? '' : days <= 0 ? 'hoy' : `${days} d`,
+            `span.x-side.days${days !== null && days <= 1 ? '.x-bad' : ''}`,
+            { title: o.expiresDay === null ? 'No caduca' : `Caduca ${aheadText(c, o.expiresDay)}` },
+            o.expiresDay === null ? '' : aheadChip(c, o.expiresDay),
           ),
         ),
       );
     }
-    if (!offers.length) list.append(h('p.x-muted', {}, 'Ninguna a la vista: esperad noticias.'));
+    if (!offers.length) list.append(h('p.x-muted', {}, 'Ninguna a la vista.'));
     const threats = c.regions.filter((r) => r.facility);
     const network = c.regions.filter((r) => r.contacted).length;
     // Sections only appear when they have something in them.
@@ -1600,47 +1785,7 @@ export class StrategyScreen {
       );
     }
 
-    // Scan: advancing time is the Bastion's dropship scanning for activity.
-    const ready = c.advanceReady[this.mySlot];
-    const partner = this.partner();
-    const waiting = partner?.connected && c.players.length > 1 && !c.advanceReady[partner.slot];
-    const partnerReady = partner?.connected && !ready && c.advanceReady[partner.slot];
-    const blocked = c.activeMission ? 'Hay una misión elegida: id a la cochera' : c.event ? 'Antes decidid qué hacer con el acontecimiento' : '';
-    // The main action here is choosing an operation; scanning lets them expire. With a
-    // briefing open, deploying is the only action on screen.
-    if (offer && !ready) return;
-    const expiring = c.offers.find((o) => o.expiresDay !== null && o.expiresDay - c.day <= 1);
-    const secondary = c.offers.length > 0 && !ready && !partnerReady;
-    this.viewEl.append(
-      h(
-        'div.strat-center-bottom',
-        {},
-        h('div.scan-day', { title: TIME_HELP }, `HOY: DÍA ${c.day}`),
-        h(
-          `button.x-btn.scan-btn${secondary ? '.secondary' : '.big'}${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
-          {
-            disabled: !!blocked,
-            onclick: () => {
-              if (!ready) this.geo.setScanning(true);
-              this.send({ type: 'advance', ready: !ready });
-            },
-          },
-          ready ? 'A LA ESCUCHA…' : 'ESPERAR NOTICIAS',
-          h(
-            'small',
-            {},
-            blocked ||
-              (ready && waiting
-                ? `Esperando a ${partner!.name}`
-                : partnerReady
-                  ? `${partner!.name} quiere esperar noticias`
-                  : expiring
-                    ? `«${expiring.name}» caduca ${expiring.expiresDay! - c.day <= 0 ? 'hoy' : 'mañana'}`
-                    : 'Hace pasar los días hasta que ocurra algo'),
-          ),
-        ),
-      ),
-    );
+    // Time passes with the missions (docs/FASE12.md §11.6): «Esperar noticias» is gone.
   }
 
   /** Side quests under way, with the step they are at. */
@@ -1660,7 +1805,7 @@ export class StrategyScreen {
             `button.x-row${offer && this.offer === offer.id ? '.selected' : ''}`,
             { style: { '--row-accent': '#2f9e6a' }, onclick: () => (offer ? this.focusOffer(offer.id) : undefined) },
             h('div', {}, h('b', {}, def.title), h('small', {}, `Paso ${q.step + 1} de ${def.steps.length} · ${where}${whose}`)),
-            h('span.x-side', {}, offer?.expiresDay != null ? `${Math.max(0, offer.expiresDay - c.day)} d` : '—'),
+            h('span.x-side', {}, offer?.expiresDay != null ? aheadChip(c, offer.expiresDay) : '—'),
           );
         }),
       ),
@@ -1687,15 +1832,15 @@ export class StrategyScreen {
               h('b', {}, REGIONS[r.region].name),
               h('small', {}, `Se habla de ${r.text}.`),
               listening
-                ? h('small.x-good', {}, `Escuchando · faltan ${r.daysLeft} días`)
+                ? h('small.x-good', {}, `Escuchando · ${missionsText(missionsFor(r.daysLeft))}`)
                 : h(
                     'button.x-btn.small',
-                    { disabled: !!blocked, title: blocked || `Hacen falta ${r.daysLeft} días a la escucha`, onclick: () => this.send({ type: 'investigate', id: r.id }) },
-                    `${this.decide('escuchar')} · ${r.daysLeft} días`,
+                    { disabled: !!blocked, title: blocked || `Se sabrá ${inMissions(missionsFor(r.daysLeft))}`, onclick: () => this.send({ type: 'investigate', id: r.id }) },
+                    `${this.decide('escuchar')} · ${missionsText(missionsFor(r.daysLeft))}`,
                   ),
             ),
             // The clock is always "caduca en", as for the operations.
-            h('span.x-side.days', { title: `Caduca en ${Math.max(0, r.expiresDay - c.day)} días` }, listening ? '' : `${Math.max(0, r.expiresDay - c.day)} d`),
+            h('span.x-side.days', { title: `Caduca ${aheadText(c, r.expiresDay)}` }, listening ? '' : aheadChip(c, r.expiresDay)),
           );
         }),
       ),
@@ -1714,6 +1859,25 @@ export class StrategyScreen {
     if (quest) rewards.push(`Al final del encargo: ${fill(QUESTS[quest.id].prize, quest.names)}`);
     const chosen = c.activeMission === o.id;
     const biome = o.map.kind === 'generated' ? BIOME_NAMES[o.map.biome] : 'Distrito Comercial';
+    // The siege (docs/FASE12.md §11.5) is fought at home: no region's ground, nothing that expires, no reward but holding.
+    if (o.siege) {
+      return [
+        h('div.alert-kicker', { className: 'alert-kicker bad' }, SIEGE_TEXT.name.toUpperCase()),
+        h('h2.x-title', {}, o.name),
+        h('p.x-sub', {}, o.night ? `El Bastión · ${NIGHT_TEXT.label}` : 'El Bastión'),
+        h('p.x-text', {}, offerBriefing(c, o)),
+        offerSignature(c, o) ? h('p.x-note', {}, offerSignature(c, o)) : null,
+        h(
+          'dl.briefing',
+          {},
+          h('dt', {}, 'Tipo'),
+          h('dd', {}, SIEGE_TEXT.name),
+          h('dt', {}, 'Dificultad'),
+          h('dd', {}, h('span.stars', {}, '★'.repeat(o.difficulty)), ` ${DIFFICULTY[o.difficulty]}`),
+        ),
+        chosen ? h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la cochera') : this.deployButton(c, o),
+      ];
+    }
     return [
       o.story === 1 ? null : h(
         'div.alert-kicker',
@@ -1732,7 +1896,7 @@ export class StrategyScreen {
                 : 'OPERACIÓN',
       ),
       h('h2.x-title', {}, o.name),
-      h('p.x-sub', {}, `${REGIONS[o.region].name} · ${biome}${quest ? ` · paso ${quest.step + 1} de ${QUESTS[quest.id].steps.length}` : ''}`),
+      h('p.x-sub', {}, `${REGIONS[o.region].name} · ${biome}${o.night ? ` · ${NIGHT_TEXT.label}` : ''}${quest ? ` · paso ${quest.step + 1} de ${QUESTS[quest.id].steps.length}` : ''}`),
       h('p.x-text', {}, offerBriefing(c, o)),
       offerSignature(c, o) ? h('p.x-note', {}, offerSignature(c, o)) : null,
       h(
@@ -1743,7 +1907,7 @@ export class StrategyScreen {
         h('dt', {}, 'Dificultad'),
         h('dd', {}, h('span.stars', {}, '★'.repeat(o.difficulty)), ` ${DIFFICULTY[o.difficulty]}`),
         h('dt', {}, 'Caduca'),
-        h('dd', {}, o.expiresDay === null ? 'No caduca' : `${Math.max(0, o.expiresDay - c.day)} días`),
+        h('dd', {}, o.expiresDay === null ? 'No caduca' : aheadText(c, o.expiresDay)),
         h('dt', {}, 'Recompensa'),
         h('dd', {}, rewards.filter(Boolean).join(' · ') || 'La victoria'),
       ),
@@ -1800,7 +1964,7 @@ export class StrategyScreen {
       flooded ? h('p.x-text.x-bad', {}, floodedZoneNote(bastionLevel(c))) : null,
       h('p.x-muted', { title: 'Suministros que manda con cada convoy mensual una vez contactada' }, `${REGION_LORE[id].ally} · +${regionIncome(c, id)} § al mes`),
       this.regionQuest(c, id),
-      r.facility ? h('p.x-text.x-bad', {}, `Nido: hace avanzar ${doomSubject(bastionLevel(c))} cada 14 días.${r.contacted ? '' : ' Contactad para quemarlo.'}`) : null,
+      r.facility ? h('p.x-text.x-bad', {}, `Nido: hace avanzar ${doomSubject(bastionLevel(c))} cada ${missionsText(missionsFor(14))}.${r.contacted ? '' : ' Contactad para quemarlo.'}`) : null,
       r.contacted
         ? null
         : h(
@@ -1824,7 +1988,7 @@ export class StrategyScreen {
     const rows = LEVEL_XP.map((xp, i) => {
       const n = i + 1;
       const reached = n <= level;
-      const unlocks = levelUnlocks(n, FACILITIES);
+      const unlocks = levelUnlocks(n);
       return h(
         `button.x-row.level${this.levelPick === n ? '.selected' : ''}${reached ? '.reached' : '.dim'}`,
         { onclick: () => ((this.levelPick = n), this.render()), title: unlocks.join(' · ') || 'El Bastión entra en servicio' },
@@ -1850,7 +2014,9 @@ export class StrategyScreen {
     const reached = n <= level;
     const techs = Object.values(TECHS).filter((t) => t.level === n);
     const items = Object.values(ITEMS).filter((i) => i.level === n);
-    const facilities = Object.values(FACILITIES).filter((f) => f.level === n);
+    // The base's pieces it opens (docs/FASE12.md §11; progression.ts BASE_UNLOCKS).
+    const pieces = (Object.keys(PIECES) as (keyof typeof PIECES)[]).filter((id) => PIECES[id].level === n && id !== 'caravan');
+    const KIND_LABEL = { building: 'Edificio', defence: 'Defensa', trap: 'Automática' } as const;
     const page = EXPEDIENTE[n - 1]!;
     const line = (kind: string, name: string, detail: string, tag: HTMLElement | null = null) =>
       h('div.x-row.unlock', { title: detail }, h(`span.agenda-icon.${kind}`), h('div', {}, h('b', {}, name), h('small', {}, detail), tag));
@@ -1861,11 +2027,11 @@ export class StrategyScreen {
         h('div.alert-kicker', { className: `alert-kicker${reached ? ' good' : ''}` }, reached ? `ALCANZADO · DIARIO, HOJA ${n}` : `FALTAN ${LEVEL_XP[n - 1]! - c.xp} XP`),
         h('h2.x-title', {}, reached ? page.title : `Nivel ${n}`),
         ...(reached ? [...page.paragraphs.map((p) => h('p.x-text.page', {}, p)), h('p.x-note', {}, page.note)] : []),
-        techs.length || items.length || facilities.length ? h('div.x-group', {}, reached ? 'Desbloqueado' : 'Desbloquea') : null,
+        techs.length || items.length || pieces.length ? h('div.x-group', {}, reached ? 'Desbloqueado' : 'Desbloquea') : null,
         ...techs.map((t) => line('xp', t.name, t.description)),
         ...items.map((i) => line('flag', i.name, i.description, this.chip(costText(i.cost), '', 'En la Armería'))),
-        ...facilities.map((f) => line('pick', f.name, f.description, this.chip('Instalación'))),
-        !techs.length && !items.length && !facilities.length ? h('p.x-muted', {}, 'Lo básico: armas convencionales, kevlar, granadas, humo y botiquines.') : null,
+        ...pieces.map((id) => line('pick', PIECE_TEXT[id].name, PIECE_TEXT[id].line, this.chip(KIND_LABEL[PIECES[id].kind], '', 'Se construye en el claro'))),
+        !techs.length && !items.length && !pieces.length ? h('p.x-muted', {}, 'Lo básico: armas convencionales, kevlar, granadas, humo y botiquines.') : null,
       ),
     );
   }
@@ -1960,7 +2126,7 @@ export class StrategyScreen {
             `button.x-row${this.engPick === `m:${def.id}` ? '.selected' : ''}${done || !craftBlocker(c, def.id) || work ? '' : '.dim'}`,
             { onclick: () => ((this.engPick = `m:${def.id}`), this.render()) },
             h('b', {}, weaponIcon(def.kind === 'mod' ? 'mod' : def.kind === 'ammo' || !def.makes ? 'ammo' : kindOf(def.makes)), def.name),
-            h('span.x-side', {}, done ? '✓' : work ? this.chip(`Taller · ${work.daysLeft} d`, 'good') : def.makes ? h('small.x-place', {}, placeOf(def.makes)) : ''),
+            h('span.x-side', {}, done ? '✓' : work ? this.chip(`Taller · ${missionsText(missionsFor(work.daysLeft))}`, 'good') : def.makes ? h('small.x-place', {}, placeOf(def.makes)) : ''),
           ),
         );
       }
@@ -2038,7 +2204,7 @@ export class StrategyScreen {
   private craftChip(c: CampaignState, key: string): HTMLElement | null {
     const def = this.craftFor(key[0] === 'w' ? 'weapon' : 'armor', Number(key[1]));
     const work = def && c.base.works.find((w) => w.project === def.id);
-    return work ? this.chip(`Taller · ${work.daysLeft} d`, 'good', `El Taller la está haciendo: ${work.daysLeft} días`) : null;
+    return work ? this.chip(`Taller · ${missionsText(missionsFor(work.daysLeft))}`, 'good', `El Taller está en ello: sale ${inMissions(missionsFor(work.daysLeft))}.`) : null;
   }
 
   /** Make a tier in the Taller: a shared decision, like building, then a work for a crew. */
@@ -2046,13 +2212,13 @@ export class StrategyScreen {
     const def = this.craftFor(kind, tier);
     if (!def) return null;
     const work = c.base.works.find((w) => w.project === def.id);
-    if (work) return h('p.x-text', {}, `El Taller la está haciendo: ${work.daysLeft} ${work.daysLeft === 1 ? 'día' : 'días'}.`);
+    if (work) return h('p.x-text', {}, `El Taller está en ello: sale ${inMissions(missionsFor(work.daysLeft))}.`);
     const blocker = craftBlocker(c, def.id);
     return h(
       'div',
       {},
       h('div.x-group', {}, 'Hacerla en el Taller'),
-      h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.parts} piezas`, '', `Tenéis ${c.parts ?? 0}`), this.chip(`${def.days} d`, '', `${def.days} días de obra`)),
+      h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.parts} piezas`, '', `Tenéis ${c.parts ?? 0}`), this.chip(missionsText(missionsFor(def.days)), '', `Sale ${inMissions(missionsFor(def.days))}`)),
       h('button.x-btn.primary', { disabled: !!blocker, title: blocker ?? '', onclick: () => this.send({ type: 'craft', project: def.id }) }, `Hacer ${def.name.toLowerCase()}`),
       blocker ? h('p.x-muted', {}, blocker) : null,
     );
@@ -2080,11 +2246,11 @@ export class StrategyScreen {
       done
         ? h('p.x-muted', {}, 'Ya está hecha.')
         : work
-          ? h('p.x-text', {}, `El Taller la está haciendo: ${work.daysLeft} ${work.daysLeft === 1 ? 'día' : 'días'}.`)
+          ? h('p.x-text', {}, `El Taller está en ello: sale ${inMissions(missionsFor(work.daysLeft))}.`)
           : h(
               'div',
               {},
-              h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.parts} piezas`, '', `Tenéis ${c.parts ?? 0}`), this.chip(`${def.days} d`, '', `${def.days} días de obra`)),
+              h('p.x-chips', {}, this.chip(costText(def.cost)), this.chip(`${def.parts} piezas`, '', `Tenéis ${c.parts ?? 0}`), this.chip(missionsText(missionsFor(def.days)), '', `Sale ${inMissions(missionsFor(def.days))}`)),
               h('button.x-btn.primary', { disabled: !!blocker, title: blocker ?? '', onclick: () => this.send({ type: 'craft', project: def.id }) }, `Hacer ${def.the}`),
               blocker ? h('p.x-muted', {}, blocker) : null,
             ),
@@ -2167,7 +2333,54 @@ export class StrategyScreen {
 
   // ---------------------------------------------------------- barracks
 
+  /**
+   * A siege held (report.damage): what the base was left with, to mend and set again, and the way to Construir.
+   * Only when it held: a fallen base is lost anyway.
+   */
+  private damageLine(damage: { broken: number; hurt: number; spent: number } | undefined): HTMLElement | null {
+    if (!damage) return null;
+    const parts = [
+      damage.broken ? `${damage.broken} ${damage.broken === 1 ? 'rota' : 'rotas'}` : '',
+      damage.hurt ? `${damage.hurt} ${damage.hurt === 1 ? 'tocada' : 'tocadas'}` : '',
+      damage.spent ? `${damage.spent} ${PIECE_STATE.spent}` : '',
+    ].filter(Boolean);
+    if (!parts.length) return h('p.debrief-damage', {}, 'En la base: todo en pie.');
+    return h('p.debrief-damage.x-warn', {}, `En la base: ${parts.join(', ')}. `, h('button.x-btn.small', { onclick: () => void this.go('facilities') }, BUILD_TEXT.build));
+  }
+
+  /**
+   * Nobody can go out (mustWait, docs/FASE12.md §11.6): only the hurt left, and nothing to recruit
+   * with. Time passes with the missions, so here it passes by waiting, both agreeing as before.
+   */
+  private waitEl(c: CampaignState): HTMLElement | null {
+    if (!mustWait(c)) return null;
+    const ready = c.advanceReady[this.mySlot];
+    const partner = this.partner();
+    const together = !!partner?.connected && c.players.length > 1;
+    const partnerReady = together && !ready && c.advanceReady[partner!.slot];
+    return h(
+      'div.strat-center-bottom',
+      {},
+      h(
+        `button.x-btn.big${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
+        { onclick: () => this.send({ type: 'advance', ready: !ready }) },
+        ready ? 'ESPERANDO…' : partnerReady ? `ESPERAR CON ${partner!.name.toUpperCase()}` : 'ESPERAR A QUE SE CUREN',
+      ),
+      h(
+        'small.x-muted',
+        {},
+        ready && together
+          ? `Esperando a ${partner!.name}`
+          : partnerReady
+            ? `${partner!.name} quiere esperar a que se curen`
+            : 'Nadie puede salir: pasan los días hasta que alguien se cure o haya suministros para reclutar.',
+      ),
+    );
+  }
+
   private renderBarracks(c: CampaignState): void {
+    const waiting = this.waitEl(c);
+    if (waiting) this.viewEl.append(waiting);
     // With a Camposanto the fallen rest there, out of this list.
     const listed = (s: CampaignSoldier) => s.alive || !facilityCount(c, 'memorial');
     const mine = c.soldiers.filter((s) => s.owner === this.mySlot && listed(s)).sort((a, b) => Number(b.alive) - Number(a.alive) || b.board.length - a.board.length || totalBars(b.skills) - totalBars(a.skills));
@@ -2202,7 +2415,7 @@ export class StrategyScreen {
       'div.recruit-card',
       { title: `Como mucho ${cap} soldados por jugador${price < RECRUIT_COST ? '. Más barato: el centro de entrenamiento está junto al cuartel' : ''}` },
       h('div.x-group', {}, 'Reclutar un soldado'),
-      h('p.x-text', {}, `Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento, sin gastar días.`),
+      h('p.x-text', {}, `Un recluta nuevo: sale con cuchillo y pistola y con algo de práctica en una o dos habilidades. Llega al momento.`),
       h(
         'p.x-chips',
         {},
@@ -2565,202 +2778,93 @@ export class StrategyScreen {
 
   // -------------------------------------------------------- facilities
 
+  /**
+   * Construir (docs/FASE12.md §11.7): the palette on the left, with what the
+   * buildings give; the card of the piece picked on the clearing on the right.
+   * Where it goes and felling are on the clearing itself (clearing.ts).
+   */
   private renderFacilities(c: CampaignState): void {
     const lines: [string, string][] = [];
     const alive = c.soldiers.filter((s) => s.alive).length;
     lines.push(['flag', `Camas: ${alive}/${beds(c)}`]);
-    lines.push(['pick', `Cuadrillas: ${c.base.works.length}/${workCrews(c)} en obra`]);
     if (facilityCount(c, 'simulation')) lines.push(['xp', `XP de misión +${Math.round((xpMultiplier(c) - 1) * 100)} %`]);
     if (facilityCount(c, 'workshop')) lines.push(['flag', `Accesorios −${Math.round((1 - shopPrice(c, 'smokeGrenade') / ITEMS.smokeGrenade.cost) * 100)} %`]);
     if (facilityCount(c, 'infirmary')) lines.push(['hp', `Heridas ×${healRate(c)} de rápido`]);
     if (facilityCount(c, 'training')) lines.push(['flag', `Escuadra de ${squadMax(c)}`]);
     if (rangeAim(c)) lines.push(['xp', `Puntería +${rangeAim(c)}`]);
-    if (garageCut(c).wounds) lines.push(['hp', `Heridas −${garageCut(c).wounds} d`]);
-    if (listeningDelay(c)) lines.push(['will', `Reloj enemigo +${listeningDelay(c)} d`]);
-    if (facilityLevel(c, 'crew')) lines.push(['flag', `Obras −${[25, 40, 50][facilityLevel(c, 'crew') - 1]} %`]);
+    if (garageCut(c).wounds) lines.push(['hp', 'Las heridas curan antes (Chapistería)']);
+    if (listeningDelay(c)) {
+      const doom = doomSubject(bastionLevel(c));
+      lines.push(['will', `${doom.charAt(0).toUpperCase()}${doom.slice(1)} avanza más despacio (Sala de radio)`]);
+    }
     lines.push(['will', `Contactos: ${contactCapacity(c)} zonas`]);
-    const bonuses = adjacencyBonuses(c);
-    const works = c.base.works;
-    const workOn = (id: string) => works.find((w) => w.plot === id);
-    // Every crew busy: nothing new starts until one finishes.
-    const crewsFull = works.length >= workCrews(c);
-    const crewsText = `Todas las cuadrillas están ocupadas (${workCrews(c)})`;
-    // Every plot that can be acted on, with its state and its action: the same as clicking it in 3D.
-    // The compound as it is seen from above: a 7 × 7 grid, each plot with the mark of what stands on it.
-    const cells = c.base.plots.map((p) => {
-      const work = workOn(p.id);
-      const fixed = !!p.building && p.building in FIXED_NAMES_SET;
-      const level = p.building && p.building in FACILITIES ? (p.level ?? 1) : 0;
-      const kind = work ? 'work' : (p.building ?? (p.terrain === 'clear' ? null : p.terrain));
-      const state = work ? '.work' : fixed ? '.fixed' : p.building ? '.built' : p.terrain === 'clear' ? (neighbours(c, p).some((q) => q.building) ? '.free' : '.free.far') : `.terrain${clearable(c, p) ? '.far' : ''}`;
-      return h(
-        `button.plot-cell${state}${this.plot === p.id ? '.selected' : ''}${this.plotHovered === p.id ? '.hovered' : ''}${!work && p.building && !upgradable(c, p) ? '.can-up' : ''}`,
-        {
-          title: `${plotCode(p)} · ${this.plotLine(c, p.id)}`,
-          'aria-label': `${plotCode(p)}: ${this.plotLine(c, p.id)}`,
-          'data-plot': p.id,
-          onclick: () => this.pickPlot(p.id),
-          onmouseenter: () => this.bastion.hover(`plot:${p.id}`),
-          onmouseleave: () => this.bastion.hover(null),
-        },
-        kind ? plotIcon(kind) : null,
-        level > 1 ? h('small.plot-level', {}, String(level)) : null,
-        work ? h('small.plot-days', {}, `${work.daysLeft} d`) : null,
-      );
-    });
-    const pointed = this.plotHovered ?? this.plot;
+    const tool = this.clearing.currentTool;
     this.viewEl.append(
       this.panel(
-        'fac-left',
+        'build-left',
         'left',
-        h(
-          'div.x-head',
-          { title: 'Pulsa una parcela aquí o en el Bastión. Se construye pegado a otro edificio y se despeja junto a terreno ya despejado.' },
-          'Parcelas',
-          this.plot ? h('button.x-btn.small.plot-drop', { title: 'Soltar la parcela (Esc)', onclick: () => this.pickPlot(null) }, 'Soltar ✕') : null,
+        ...palette(
+          { c, kind: this.buildKind, tool, partnerHere: !!this.partner()?.connected },
+          {
+            kind: (k) => {
+              this.buildKind = k;
+              this.render();
+            },
+            take: (piece) => {
+              this.piece = null;
+              this.dismantling = false;
+              this.clearing.setTool({ kind: 'place', piece, rot: tool.kind === 'place' ? tool.rot : 0 });
+              this.render();
+            },
+            fell: () => {
+              this.piece = null;
+              this.clearing.setTool({ kind: 'fell' });
+              this.render();
+            },
+            drop: () => this.dropTool(),
+          },
         ),
-        h('div.plot-grid', {}, ...cells),
-        h('p.plot-hover', {}, ...this.plotHoverLine(c, pointed)),
         h('div.x-head', {}, 'Efectos'),
-
         ...lines.map(([icon, text]) => h('div.x-effect', {}, h(`span.agenda-icon.${icon}`), h('span', {}, text))),
-        ...bonuses.map((b) =>
-          h('div.x-effect.bonus', { title: b.def.text }, h('span.agenda-icon.flag'), h('span', {}, `${FACILITIES[b.def.facility].name} + ${buildingName(b.def.next)}`)),
+      ),
+    );
+    const p = this.piece ? c.bastion.pieces.find((x) => x.id === this.piece) : undefined;
+    if (!p) return;
+    this.viewEl.append(
+      this.panel(
+        'build-right',
+        'right',
+        ...pieceCard(
+          { c, piece: p, dismantling: this.dismantling, partnerHere: !!this.partner()?.connected },
+          {
+            send: (cmd) => {
+              this.dismantling = false;
+              this.send(cmd);
+            },
+            dismantle: (ask) => {
+              this.dismantling = ask;
+              this.render();
+            },
+            close: () => this.pickPiece(null),
+          },
         ),
       ),
     );
-    const plot = this.plot ? plotById(c, this.plot) : undefined;
-    if (!plot) return;
-    const work = workOn(plot.id);
-    const content: (HTMLElement | null)[] = [h('div.alert-kicker', {}, `PARCELA ${plotCode(plot)}`)];
-    if (work) {
-      content.push(
-        h('h2.x-title', {}, work.kind === 'clear' ? 'Despejando el terreno' : work.kind === 'upgrade' ? `${FACILITIES[work.facility!].name} → nivel ${(plot.level ?? 1) + 1}` : FACILITIES[work.facility!].name),
-        this.bar(work.total - work.daysLeft, work.total),
-        h('p.x-muted', {}, `Faltan ${work.daysLeft} días`),
-      );
-    } else if (plot.terrain !== 'clear') {
-      const terrain = TERRAINS[plot.terrain];
-      const { cost, salvage } = clearCost(plot);
-      const days = workDays(c, clearCost(plot).days);
-      const blocked = this.why(
-        [!!clearable(c, plot), clearable(c, plot) ?? ''],
-        [crewsFull, crewsText],
-        [!!c.proposal, 'Hay una propuesta pendiente'],
-        [!canAfford(c, cost), this.shortfall(cost)],
-      );
-      content.push(
-        h('h2.x-title', {}, terrain.name),
-        h('p.x-text', {}, terrain.description),
-        h('p.x-chips', {}, this.chip(costText(cost)), this.chip(`${days} días`), salvage ? this.chip(`+${salvage} §`, 'good') : null),
-        h('button.x-btn.primary', { disabled: !!blocked, onclick: () => this.send({ type: 'clear', plot: plot.id }) }, this.decide('despejar')),
-        this.whyEl(blocked),
-      );
-    } else if (plot.building && plot.building in FIXED_NAMES_SET) {
-      content.push(h('h2.x-title', {}, buildingName(plot.building)), h('p.x-muted', {}, 'Del búnker original: no se mueve.'));
-    } else if (plot.building) {
-      const def = FACILITIES[plot.building as keyof typeof FACILITIES];
-      const adj = ADJACENCY.find((a) => a.facility === def.id);
-      const active = bonuses.find((b) => b.plot === plot.id);
-      const level = plot.level ?? 1;
-      const now = level === 1 ? def.description : def.upgrades[level - 2]!;
-      content.push(
-        h('h2.x-title', {}, `${def.name} · nivel ${level}`),
-        h('p.x-good', {}, 'En servicio'),
-        h('p.x-text', {}, now),
-        adj ? h(active ? 'p.x-good' : 'p.x-muted', {}, `${active ? `Pared con pared con ${withArticle(adj.next)}` : `Mejor ${nextTo(adj.next)}`}: ${adj.text}`) : null,
-      );
-      if (def.id === 'memorial') {
-        // The names, as Lore asked: veterancy, missions and the day they fell.
-        const fallen = c.soldiers.filter((s) => !s.alive).sort((a, b) => (b.fellDay ?? 0) - (a.fellDay ?? 0));
-        content.push(
-          h('div.x-head', {}, `Caídos · ${fallen.length}`),
-          fallen.length
-            ? h(
-                'div.x-list.fallen',
-                {},
-                ...fallen.map((s) =>
-                  h(
-                    'div.x-row.fallen-row',
-                    { style: { '--row-accent': this.playerColor(s.owner) } },
-                    h('b', {}, displayName(s.name, s.nickname)),
-                    h('small', {}, `${veterancyName(s)} · ${s.missions} ${s.missions === 1 ? 'misión' : 'misiones'}${s.fellCause === 'turned' ? ` · ${TURNED_CAUSE.toLowerCase()}` : ''}${s.fellDay !== undefined ? ` · ${s.fellCause === 'turned' ? 'el' : 'cayó el'} día ${s.fellDay}` : ''}`),
-                  ),
-                ),
-              )
-            : h('p.x-muted', {}, 'Nadie todavía. Que siga así.'),
-        );
-      }
-      if (level < 3) {
-        // The next level: what it brings, its price and why it can't be done yet.
-        const next = upgradeCost(def.id, level + 1);
-        const blocker = upgradable(c, plot);
-        const why = this.why(
-          [!!blocker, blocker ?? ''],
-          [crewsFull, crewsText],
-          [!!c.proposal, 'Hay una propuesta pendiente'],
-          [!canAfford(c, next.cost), this.shortfall(next.cost)],
-        );
-        content.push(
-          h('div.x-head', {}, `Nivel ${level + 1}`),
-          h('p.x-text', {}, def.upgrades[level - 1]!),
-          h('p.x-chips', {}, this.chip(costText(next.cost)), this.chip(`${workDays(c, next.days)} días`), this.chip(`Bastión nivel ${next.level}`)),
-          h('button.x-btn.primary', { disabled: !!why, onclick: () => this.send({ type: 'upgrade', plot: plot.id }) }, this.decide('mejorar')),
-          this.whyEl(why),
-        );
-      } else {
-        content.push(h('p.x-muted', {}, 'Al máximo.'));
-      }
-    } else {
-      content.push(h('h2.x-title', {}, 'Terreno libre'), crewsFull ? h('p.x-why', {}, crewsText) : null);
-      // By what they are for, each with its mark: the effect in one line, the rest in the card's title.
-      const locked: HTMLElement[] = [];
-      for (const [group, ids] of BUILD_GROUPS) {
-        const cards: HTMLElement[] = [];
-        for (const id of ids) {
-          const def = FACILITIES[id];
-          const blocker = buildable(c, plot, def.id);
-          if (blocker) {
-            locked.push(h('div.build-card.locked', { title: `${def.description}\n\n${blocker}` }, plotIcon(def.id), h('b', {}, def.name), h('small.x-warn', {}, blocker)));
-            continue;
-          }
-          const bonus = adjacencyAt(c, plot, def.id);
-          const why = this.why([!!c.proposal, 'Hay una propuesta pendiente'], [!canAfford(c, def.cost), this.shortfall(def.cost)]);
-          cards.push(
-            h(
-              `div.build-card${bonus ? '.bonus' : ''}`,
-              { title: `${def.description}${bonus ? `\n\n${cap(nextTo(bonus.next))}: ${bonus.text}` : ''}` },
-              plotIcon(def.id),
-              h('b', {}, def.name),
-              h('small', {}, def.description.split('.')[0] + '.'),
-              h(
-                'span.build-meta',
-                {},
-                this.chip(`${def.cost} §`),
-                this.chip(`${workDays(c, def.days)} d de obra`, '', 'Días de obra: avanzan cuando pasa el tiempo'),
-                bonus ? this.chip(`+ ${cap(nextTo(bonus.next))}`, 'good', bonus.text) : null,
-              ),
-              h(
-                'button.x-btn.small',
-                { disabled: crewsFull || !!why, title: why, onclick: () => this.send({ type: 'build', plot: plot.id, facility: def.id }) },
-                this.decide('construir'),
-              ),
-            ),
-          );
-        }
-        if (cards.length) content.push(h('div.x-group', {}, group), h('div.build-grid', {}, ...cards));
-      }
-      if (locked.length)
-        content.push(
-          h(
-            'details.build-locked',
-            {},
-            h('summary', {}, `Aún no se pueden construir aquí (${locked.length})`),
-            h('div.build-grid', {}, ...locked),
-          ),
-        );
-    }
-    this.viewEl.append(this.panel('fac-right', 'right', ...content));
+  }
+
+  /** Construir: the piece in hand (or felling) is let go. */
+  private dropTool(): void {
+    this.clearing.setTool({ kind: 'look' });
+    this.render();
+  }
+
+  /** A piece of the clearing picked (null: let go): its card in Construir. */
+  private pickPiece(id: string | null): void {
+    this.piece = id;
+    this.dismantling = false;
+    this.clearing.select(id, false);
+    if (id && this.view !== 'facilities') void this.go('facilities');
+    else this.render();
   }
 
   // -------------------------------------------------------------- squad
@@ -2772,10 +2876,12 @@ export class StrategyScreen {
       this.bastion.setLineup([]);
       return;
     }
-    const max = squadMax(c);
-    const limit = squadLimit(c, this.connected());
+    // The siege (docs/FASE12.md §11.5): every soldier fit to fight defends, however many; nobody picks, nobody leaves.
+    const siege = !!offer.siege;
     const squad = c.squad.map((id) => c.soldiers.find((s) => s.id === id)).filter((s): s is CampaignSoldier => !!s);
-    const pads = squadPads(c).map((id) => squad.find((s) => s.id === id) ?? null);
+    const max = siege ? squad.length : squadMax(c);
+    const limit = squadLimit(c, this.connected());
+    const pads = siege ? squad : squadPads(c).map((id) => squad.find((s) => s.id === id) ?? null);
     this.bastion.setLineup(pads.map((s) => (s ? { template: SOLDIER, color: this.playerColor(s.owner), appearance: s.appearance, gear: this.gearFor(c, s), seed: s.id } : null)));
     const myCount = squad.filter((s) => s.owner === this.mySlot).length;
 
@@ -2786,9 +2892,13 @@ export class StrategyScreen {
         h(
           'div.x-panel.briefing-head',
           {},
-          h('div.alert-kicker', {}, 'SELECCIÓN DE ESCUADRA'),
+          h('div.alert-kicker', siege ? { className: 'alert-kicker bad' } : {}, siege ? SIEGE_TEXT.name.toUpperCase() : 'SELECCIÓN DE ESCUADRA'),
           h('h1', {}, offer.name),
-          h('p.x-sub', {}, `${MISSION_NAMES[offer.kind]} · ${REGIONS[offer.region].name} · ${'★'.repeat(offer.difficulty)}`),
+          h(
+            'p.x-sub',
+            {},
+            `${siege ? 'El Bastión' : `${MISSION_NAMES[offer.kind]} · ${REGIONS[offer.region].name}`}${offer.night ? ` · ${NIGHT_TEXT.label}` : ''} · ${'★'.repeat(offer.difficulty)}`,
+          ),
           // What the mission is for, in view before choosing the squad (playtest 13/10: it was only a tooltip).
           h('p.x-text.briefing-goal', {}, offerBriefing(c, offer)),
         ),
@@ -2803,11 +2913,12 @@ export class StrategyScreen {
       const gear = [s.loadout.utility, s.loadout.ammo].filter((g): g is ItemId => !!g).map((g) => ITEMS[g].name);
       return h(
         `button.x-row.soldier${on ? '.selected' : ''}${ready ? '' : '.dim'}`,
-        { style: { '--row-accent': this.playerColor(s.owner) }, disabled: !ready && !on, onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
+        // In a siege who defends is the healthy, all of them: nothing to pick.
+        { style: { '--row-accent': this.playerColor(s.owner) }, disabled: siege || (!ready && !on), onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
         roleDot(s.board),
         h('b', { title: gear.join(' · ') }, displayName(s.name, s.nickname)),
         veterancyBadge(s.board, s.appearance?.sex === 'f'),
-        on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(`${s.woundedDays} d`, 'warn', 'Herido'),
+        on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(missionsText(missionsFor(s.woundedDays)), 'warn', 'Herido'),
       );
     };
     this.viewEl.append(
@@ -2816,15 +2927,17 @@ export class StrategyScreen {
         'left.compact',
         h(
           'div.x-head',
-          { title: 'Pulsa un soldado para meterlo o sacarlo. Si tu compañero no llena su parte, puedes ocupar sus huecos; los recupera cuando tenga a quién llevar. El equipo se cambia en el Cuartel.' },
-          lent.length
+          { title: siege ? BASE_SIEGE_TEXT.defenders : 'Pulsa un soldado para meterlo o sacarlo. Si tu compañero no llena su parte, puedes ocupar sus huecos; los recupera cuando tenga a quién llevar. El equipo se cambia en el Cuartel.' },
+          siege
+            ? `Tus soldados · ${myCount}`
+            : lent.length
             ? `Tus soldados · ${myCount}`
             : myCount > limit
               ? `Tus soldados · ${myCount} (${myCount - limit} en huecos de ${this.partner()?.name ?? 'tu compañero'})`
               : `Tus soldados · ${myCount}/${limit}`,
         ),
         h('div.x-list', {}, ...roster.map(pickRow)),
-        lent.length ? h('div.x-head', {}, `De ${this.playerName(lent[0]!.owner)} · ${squad.length - myCount}`, h('small', {}, ' · no está: los eliges tú')) : null,
+        lent.length ? h('div.x-head', {}, `De ${this.playerName(lent[0]!.owner)} · ${squad.length - myCount}`, siege ? null : h('small', {}, ' · no está: los eliges tú')) : null,
         lent.length ? h('div.x-list', {}, ...lent.map(pickRow)) : null,
       ),
     );
@@ -2843,10 +2956,10 @@ export class StrategyScreen {
             // A plate each (playtest 15/10 #5): who, and a light that says whether they are ready.
             h(
               `span.ready-mark${c.launchReady[slot] ? '.on' : ''}`,
-              { style: { '--accent': this.playerColor(slot) }, title: c.launchReady[slot] ? 'Listo para despegar' : 'Aún elige la escuadra' },
+              { style: { '--accent': this.playerColor(slot) }, title: c.launchReady[slot] ? (siege ? 'A punto para defender' : 'A punto para salir') : 'Aún elige la escuadra' },
               h('i.ready-lamp'),
               h('b', {}, slot === this.mySlot ? `${this.playerName(slot)} (tú)` : this.playerName(slot)),
-              h('small', {}, c.launchReady[slot] ? 'LISTO' : 'ELIGIENDO'),
+              h('small', {}, c.launchReady[slot] ? 'A PUNTO' : 'ELIGIENDO'),
             ),
           ),
         )
@@ -2859,14 +2972,29 @@ export class StrategyScreen {
         h(
           `button.x-btn.big${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
           { disabled: !c.squad.length, onclick: () => this.send({ type: 'launch', ready: !ready }) },
-          ready ? 'LISTOS PARA DESPEGAR' : partnerReady ? `DESPEGAR: ${partner!.name.toUpperCase()} YA ESTÁ LISTO` : 'LANZAR MISIÓN',
+          siege
+            ? ready
+              ? 'LISTOS PARA DEFENDER'
+              : partnerReady
+                ? `DEFENDER CON ${partner!.name.toUpperCase()}`
+                : 'DEFENDER EL BASTIÓN'
+            : ready
+              ? 'LISTOS PARA SALIR'
+              : partnerReady
+                ? `SALIR CON ${partner!.name.toUpperCase()}`
+                : 'LANZAR MISIÓN',
         ),
-        h('small.x-muted', {}, ready && waiting ? `Esperando a ${partner!.name}` : partnerReady ? `${partner!.name} espera para salir` : `${squad.length}/${max} soldados`),
+        h(
+          'small.x-muted',
+          {},
+          ready && waiting ? `Esperando a ${partner!.name}` : partnerReady ? `${partner!.name} espera para salir` : siege ? BASE_SIEGE_TEXT.defenders : `${squad.length}/${max} soldados`,
+        ),
         h(
           'div.alert-actions',
           {},
           h('button.x-btn', { onclick: () => void this.go('research') }, 'Volver al Bastión'),
-          h('button.x-btn.danger', { onclick: () => this.send({ type: 'cancelMission' }) }, 'Cancelar misión'),
+          // A siege can't be called off.
+          siege ? null : h('button.x-btn.danger', { onclick: () => this.send({ type: 'cancelMission' }) }, 'Cancelar misión'),
         ),
       ),
     );
@@ -2874,7 +3002,7 @@ export class StrategyScreen {
     const cards = h('div.lineup-cards');
     // A free place this player could take but has nobody ready to put in: recruit straight into it (#39).
     const spare = roster.some((s) => soldierReady(s) && !c.squad.includes(s.id));
-    const room = !spare && roster.length < soldierCap(c) && !squadPlace(c, this.mySlot, this.connected()).error;
+    const room = !siege && !spare && roster.length < soldierCap(c) && !squadPlace(c, this.mySlot, this.connected()).error;
     const recruitable = room && bedsFree(c) > 0;
     const cost = recruitCost(c);
     pads.forEach((s, i) => {
@@ -2886,7 +3014,7 @@ export class StrategyScreen {
             h('b', {}, displayName(s.name, s.nickname)),
             h('small', {}, roleDot(s.board), veterancyName(s)),
             c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
-            this.commands(s.owner) ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
+            this.commands(s.owner) && !siege ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
           )
         : recruitable
           ? this.recruitCard(c, cost)
@@ -2931,6 +3059,30 @@ export class StrategyScreen {
 
   /** Keeps the lineup cards under each soldier while the camera moves. */
   private anchorCards(cards: HTMLElement, count: number): void {
+    // More than a row of the hangar holds (a siege's defenders, up to 12: Gameplay, 18/10): no longer one
+    // under each figure, but two rows centred over the controls, as wide as the screen lets them.
+    if (count > 8) {
+      cards.classList.add('rows');
+      const place = () => {
+        // In the room right of the soldiers' list, half of them a row.
+        const perRow = Math.ceil(count / 2);
+        const width = cards.parentElement?.clientWidth ?? window.innerWidth;
+        const from = (this.viewEl.querySelector<HTMLElement>('.strat-left')?.getBoundingClientRect().right ?? 0) + 12;
+        const room = Math.max(perRow * 86, width - from - 12);
+        const cw = Math.max(76, Math.min(124, room / perRow - 10));
+        cards.style.setProperty('--card-w', `${cw}px`);
+        cards.style.width = `${perRow * (cw + 10)}px`;
+        cards.style.left = `${Math.max(0, from + (room - perRow * (cw + 10)) / 2)}px`;
+        // Just above the controls, counted from where the cards' box starts.
+        const controls = this.viewEl.querySelector<HTMLElement>('.strat-center-bottom');
+        const origin = cards.offsetParent?.getBoundingClientRect().top ?? 0;
+        const floor = controls ? controls.getBoundingClientRect().top : window.innerHeight - 170;
+        cards.style.top = `${Math.max(0, floor - origin - cards.offsetHeight - 14)}px`;
+        this.anchorFrame = requestAnimationFrame(place);
+      };
+      place();
+      return;
+    }
     const step = () => {
       const pads = Array.from({ length: count }, (_, i) => this.stage.project(this.bastion.padPosition(i, count)));
       const spacing = count > 1 ? Math.min(...pads.slice(1).map((p, i) => Math.abs(p.x - pads[i]!.x))) : 140;
@@ -2961,8 +3113,8 @@ export class StrategyScreen {
     const last = Math.max(...wounded.map((e) => e.woundedDays));
     const text =
       wounded.length === 1
-        ? `${displayName(wounded[0]!.name, c.soldiers.find((x) => x.id === wounded[0]!.id)?.nickname)} no podrá desplegar hasta el día ${c.day + last}.`
-        : `${wounded.length} heridos: no podrán desplegar hasta el día ${c.day + last} como mucho.`;
+        ? `${displayName(wounded[0]!.name, c.soldiers.find((x) => x.id === wounded[0]!.id)?.nickname)} no podrá desplegar en ${missionsText(missionsFor(last))}.`
+        : `${wounded.length} heridos: no podrán desplegar en ${missionsText(missionsFor(last))} como mucho.`;
     return h('p.x-text.x-warn', { title: 'La enfermería cura las heridas el doble de rápido' }, text);
   }
 
@@ -3011,6 +3163,7 @@ export class StrategyScreen {
           h('h1', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'),
           h('p.x-sub', {}, report.missionName),
           tally,
+          this.damageLine(report.damage),
           report.loot?.line ? h('p.debrief-loot', {}, report.loot.line) : null,
           ...barLines(report.squad).map((line) => h('p.debrief-loot', {}, line)),
           report.night ? h('p.debrief-loot', {}, NIGHT_TEXT.report) : null,
@@ -3021,7 +3174,7 @@ export class StrategyScreen {
     const cards = h('div.lineup-cards');
     report.squad.forEach((e, i) => {
       const bitten = report.infected?.includes(e.id) ? ` · ${BITE_TAG}` : '';
-      const status = (e.status === 'dead' ? 'CAÍDO EN COMBATE' : e.status === 'wounded' ? `HERIDO · ${e.woundedDays} días` : 'ILESO') + bitten;
+      const status = (e.status === 'dead' ? 'CAÍDO EN COMBATE' : e.status === 'wounded' ? `HERIDAS · ${missionsText(missionsFor(e.woundedDays)).toUpperCase()}` : 'ILESO') + bitten;
       const card = h(
         `div.lineup-card.${e.status}`,
         { style: { '--accent': this.playerColor(e.owner) }, 'data-bust': '' },
