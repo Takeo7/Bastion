@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { BASE_EDGE, BUILD_TEXT, buildingWorks, fellHint, pieceAt, pieceCells, pieceHint, PIECES, treeAt, type BasePiece, type BaseState, type PieceId, type Vec2 } from '@bastion/engine';
+import { BASE_EDGE, BUILD_TEXT, buildingWorks, fellHint, pieceAt, pieceCells, pieceHint, PIECES, treeAt, type Appearance, type BasePiece, type BaseState, type PieceId, type TemplateId, type Vec2 } from '@bastion/engine';
 import { CameraRig } from '../game/camera';
+import type { Gear } from '../game/figures';
+import type { LineupEntry } from './bastion';
 import { STOREY } from '../game/coords';
 import type { Shot, Stage, StageMood, StageSet } from './stage';
 
@@ -32,10 +34,42 @@ export interface ClearingArt {
   watch?(camera: THREE.Camera): void;
   /** GPU work before a frame, and whether the shadow map is drawn again (StageSet.beforeRender). */
   beforeRender?(gl: THREE.WebGLRenderer): void;
+  /** The soldier looked at in Soldados, standing on the clearing (null: nobody), as BastionSet's showcase. */
+  setShowcase?(template: TemplateId | null, color: string, appearance?: Appearance, gear?: Gear, seed?: string): void;
+  /** Soldados' and the Armería's views of the clearing (the caravan is barracks and armoury: docs/FASE12.md §11). */
+  soldierShot?(): Shot;
+  armoryShot?(): Shot;
+  /**
+   * The squad by La Lata (playtest 18/10 #44: choosing it and the debrief on the clearing), as
+   * BastionSet's lineup: the soldiers standing (an empty list clears them), where each stands for the
+   * cards under them, and the shot of it.
+   */
+  setLineup?(entries: (LineupEntry | null)[], opts?: { mirror?: boolean }): void;
+  padPosition?(i: number, count: number): THREE.Vector3;
+  lineupShot?(): Shot;
+  /** La Lata leaving by the track, and coming back to stop by the caravan; each resolves once done. */
+  depart?(): Promise<void>;
+  arrive?(): Promise<void>;
+  /** Which vehicle stands parked on the track (engine vehicleOf); the same one again does nothing. */
+  setVehicle?(vehicle: number): void;
+  /** The siege's defenders standing at their posts (Arturo, 18/10 #58), tile (x, y) each; an empty list clears them. */
+  setPosts?(posts: { entry: LineupEntry; x: number; y: number }[]): void;
+}
+
+/** A defender's post for the siege (#58): where it starts, whose (its commander's colour), and whether it is this player's. */
+export interface SiegePost {
+  id: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
+  mine: boolean;
+  /** Its figure, for the drawing (ClearingArt.setPosts). */
+  entry?: LineupEntry;
 }
 
 /** What the pointer does on the clearing. */
-export type ClearingTool = { kind: 'look' } | { kind: 'place'; piece: PieceId; rot: number } | { kind: 'fell' };
+export type ClearingTool = { kind: 'look' } | { kind: 'place'; piece: PieceId; rot: number } | { kind: 'fell' } | { kind: 'post'; soldier: string };
 
 export interface ClearingHandlers {
   /** Why `piece` can't go there (the place, the Bastion's level, the cost), or null. */
@@ -43,13 +77,31 @@ export interface ClearingHandlers {
   /** The line by the pointer with `piece` in hand: its cost, or why it doesn't fit (`blocked`). */
   placeHint(piece: PieceId, blocked: string | null): string;
   place(piece: PieceId, x: number, y: number, rot: number): void;
+  /**
+   * Building by dragging a line (playtest 18/10 #35): whether `piece` goes down so (walls, sandbags, wire…),
+   * why the whole line can't (all or nothing), the line by the pointer, and laying it.
+   */
+  lineable?(piece: PieceId): boolean;
+  lineBlocker?(piece: PieceId, cells: Vec2[], rot: number): string | null;
+  lineHint?(piece: PieceId, cells: Vec2[], blocked: string | null): string;
+  placeLine?(piece: PieceId, cells: Vec2[], rot: number): void;
   fell(tiles: Vec2[]): void;
+  /** Why `trees` trees can't be felled now (felling costs: #41), or null. */
+  fellBlocker?(trees: number): string | null;
   /** A piece picked (null: let go). */
   select(id: string | null): void;
   /** The tool was let go (Esc, or a right click while placing). */
   cancel(): void;
   /** The piece in hand and where it would go, for the partner (null: none); at most ten times a second, on change. */
   cursor?(c: BaseCursor | null): void;
+  /**
+   * The siege's posts (Arturo, 18/10 #58): why `soldier` can't start at (x, y), the line by the pointer, putting
+   * it there; and one of this player's defenders picked on the clearing (to move it).
+   */
+  postBlocker?(soldier: string, x: number, y: number): string | null;
+  postHint?(soldier: string, blocked: string | null): string;
+  post?(soldier: string, x: number, y: number): void;
+  pickPost?(soldier: string): void;
 }
 
 /** A piece in somebody's hand on the clearing, where it would go. */
@@ -89,6 +141,8 @@ export class ClearingSet implements StageSet {
   private base: BaseState | null = null;
   private art: ClearingArt = new SketchArt();
   private tool: ClearingTool = { kind: 'look' };
+  /** A fixed shot of the clearing is on (Soldados, the Armería): the camera and the pointer leave it alone. */
+  private held = false;
   /** The building tools are out: the grid and the edge band show. */
   private building = false;
   private hoverTile: Vec2 | null = null;
@@ -99,6 +153,11 @@ export class ClearingSet implements StageSet {
   private press: { x: number; y: number; tile: Vec2 | null; moved: boolean; button: number } | null = null;
   /** The rectangle being dragged to fell: its corners. */
   private fellBox: { from: Vec2; to: Vec2 } | null = null;
+  /** The line being dragged to build (#35): its tiles, from where the press began. */
+  private line: Vec2[] | null = null;
+  /** One model per tile of that line, as the piece in hand's ghost. */
+  private lineGhosts: THREE.Object3D[] = [];
+  private lineKey = '';
   // Over the ground.
   private readonly grid: THREE.LineSegments;
   private readonly edgeBand = new THREE.Group();
@@ -118,6 +177,10 @@ export class ClearingSet implements StageSet {
   private partnerKey = '';
   private readonly partnerMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.38, depthWrite: false });
   private readonly partnerTag = new CSS2DObject(document.createElement('div'));
+  /** The siege's posts (#58): a ring on each tile in its commander's colour, and the name over it. */
+  private posts: SiegePost[] = [];
+  private postsKey = '';
+  private readonly postMarks = new THREE.Group();
   /** What was last sent of this player's hand (cursor), and when. */
   private cursorKey = 'null';
   private cursorAt = 0;
@@ -152,7 +215,7 @@ export class ClearingSet implements StageSet {
     this.hint.hidden = true;
     this.partnerTag.element.className = 'clearing-partner';
     this.partnerTag.visible = false;
-    this.scene.add(this.partnerTag);
+    this.scene.add(this.partnerTag, this.postMarks);
   }
 
   /** Arte's drawing in place of the blocks (clearingArt.ts), or another one of it (the snow's). */
@@ -163,6 +226,7 @@ export class ClearingSet implements StageSet {
     art.dress?.(this.scene);
     if (this.stage) art.watch?.(this.stage.camera);
     if (this.base) art.setBase(this.base);
+    art.setPosts?.(figures(this.posts));
     this.ghostKey = '';
     this.partnerKey = '';
     this.setProposal(this.proposal);
@@ -171,7 +235,7 @@ export class ClearingSet implements StageSet {
   attach(stage: Stage): void {
     this.stage = stage;
     this.art.watch?.(stage.camera);
-    this.rig = new CameraRig(stage.camera, () => stage.current === 'clearing' && stage.element.isConnected);
+    this.rig = new CameraRig(stage.camera, () => stage.current === 'clearing' && stage.element.isConnected && !this.held);
     const el = stage.element;
     el.append(this.hint);
     el.addEventListener('pointerdown', this.onDown);
@@ -234,6 +298,38 @@ export class ClearingSet implements StageSet {
     this.partnerTag.element.style.setProperty('--accent', p.color);
   }
 
+  /**
+   * The siege's posts (#58): a ring on each in its commander's colour and the name over it (over the figure's head
+   * when the drawing stands one there); the one in hand, brighter.
+   */
+  setPosts(list: SiegePost[]): void {
+    this.posts = list;
+    const key = JSON.stringify(list.map((p) => [p.id, p.name, p.color, p.x, p.y, p.mine]));
+    if (key !== this.postsKey) {
+      this.postsKey = key;
+      for (const o of [...this.postMarks.children]) {
+        if ((o as THREE.Mesh).isMesh) ((o as THREE.Mesh).material as THREE.Material).dispose();
+        this.postMarks.remove(o);
+      }
+      const lift = this.art.setPosts ? 2.05 : 0.45;
+      for (const p of list) {
+        const ring = new THREE.Mesh(POST_RING, new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.9, depthWrite: false }));
+        ring.position.set(p.x + 0.5, 0.045, p.y + 0.5);
+        ring.renderOrder = 6;
+        ring.userData.post = p.id;
+        const tag = new CSS2DObject(document.createElement('div'));
+        tag.element.className = `clearing-post${p.mine ? ' mine' : ''}`;
+        tag.element.textContent = p.name;
+        tag.element.style.setProperty('--accent', p.color);
+        tag.element.dataset.post = p.id;
+        tag.position.set(p.x + 0.5, lift, p.y + 0.5);
+        this.postMarks.add(ring, tag);
+      }
+      this.art.setPosts?.(figures(list));
+    }
+    this.refresh();
+  }
+
   /** A piece's model alone, centred on where it would stand, with `material` on every mesh (and no shadow). */
   private model(p: { piece: PieceId; x: number; y: number; rot: number }, material: THREE.Material): THREE.Object3D {
     const m = this.art.pieceModel(p.piece, p.rot);
@@ -253,9 +349,27 @@ export class ClearingSet implements StageSet {
 
   /** The camera, where it is now: the stage cuts to it (Stage.show). */
   shot(): Shot {
-    this.rig?.update(1);
+    // Where the rig would put the camera, without moving it yet: the stage eases it there.
     const camera = this.stage!.camera;
-    return { pos: camera.position.clone(), target: this.rig!.focusPoint.clone(), fov: 40 };
+    const was = { pos: camera.position.clone(), quat: camera.quaternion.clone() };
+    this.rig?.update(1);
+    const shot = { pos: camera.position.clone(), target: this.rig!.focusPoint.clone(), fov: 40 };
+    camera.position.copy(was.pos);
+    camera.quaternion.copy(was.quat);
+    return shot;
+  }
+
+  /**
+   * A fixed shot of the clearing is on (Soldados, the Armería: Arte's) or not: while it is, the camera
+   * isn't the rig's, and the pointer neither builds nor picks.
+   */
+  hold(on: boolean): void {
+    if (this.held === on) return;
+    this.held = on;
+    if (on) {
+      this.setTool({ kind: 'look' });
+      this.leave();
+    }
   }
 
   /** The camera goes to the middle of tile `t` (fractions allowed). */
@@ -296,6 +410,7 @@ export class ClearingSet implements StageSet {
   setTool(tool: ClearingTool): void {
     this.tool = tool;
     this.fellBox = null;
+    this.line = null;
     if (tool.kind !== 'look') this.select(null, false);
     this.refresh();
   }
@@ -325,13 +440,19 @@ export class ClearingSet implements StageSet {
   }
 
   /** A left drag pans, except while felling (it draws the rectangle). */
+  /**
+   * A left drag pans the clearing, except while building (playtest 18/10 #35: the camera moved under the
+   * hand; the left drag fells and lays lines there): then the right drag, WASD and the arrows move it.
+   */
   drag(dx: number, dy: number): boolean {
-    if (this.tool.kind === 'fell') return true;
+    if (this.held) return false;
+    if (this.building) return true;
     this.rig?.panPixels(dx, dy);
     return true;
   }
 
   zoom(factor: number): void {
+    if (this.held) return;
     this.rig?.zoom((factor - 1) * 1000);
   }
 
@@ -341,7 +462,7 @@ export class ClearingSet implements StageSet {
   }
 
   tick(dt: number, time: number): void {
-    this.rig?.update(dt);
+    if (!this.held) this.rig?.update(dt);
     this.art.tick?.(dt, time);
     if (this.outline.visible) (this.outline.material as THREE.LineBasicMaterial).opacity = 0.7 + Math.sin(time * 4) * 0.3;
   }
@@ -360,12 +481,12 @@ export class ClearingSet implements StageSet {
   }
 
   private readonly onDown = (e: PointerEvent): void => {
-    if (this.stage?.current !== 'clearing' || e.target !== this.stage.element.querySelector('canvas')) return;
+    if (this.stage?.current !== 'clearing' || this.held || e.target !== this.stage.element.querySelector('canvas')) return;
     this.press = { x: e.clientX, y: e.clientY, tile: this.tileAt(e), moved: false, button: e.button };
   };
 
   private readonly onMove = (e: PointerEvent): void => {
-    if (this.stage?.current !== 'clearing') return;
+    if (this.stage?.current !== 'clearing' || this.held) return;
     const press = this.press;
     if (press && Math.abs(e.clientX - press.x) + Math.abs(e.clientY - press.y) > 4) {
       // A right drag pans (the left one comes through the stage's drag).
@@ -374,6 +495,7 @@ export class ClearingSet implements StageSet {
     }
     const tile = this.tileAt(e);
     if (press?.moved && press.button === 0 && this.tool.kind === 'fell' && press.tile && tile) this.fellBox = { from: press.tile, to: tile };
+    if (press?.moved && press.button === 0 && this.tool.kind === 'place' && press.tile && tile && this.handlers.lineable?.(this.tool.piece)) this.line = lineCells(press.tile, tile);
     this.setHover(tile, e);
   };
 
@@ -392,8 +514,18 @@ export class ClearingSet implements StageSet {
       const box = this.fellBox ?? (tile ? { from: tile, to: tile } : null);
       this.fellBox = null;
       if (box) {
-        const trees = this.treesIn(box);
-        if (trees.length) this.handlers.fell(trees.slice(0, FELL_MAX));
+        const trees = this.treesIn(box).slice(0, FELL_MAX);
+        if (trees.length && !this.handlers.fellBlocker?.(trees.length)) this.handlers.fell(trees);
+      }
+      this.refresh();
+      return;
+    }
+    if (this.line) {
+      const cells = this.line;
+      this.line = null;
+      if (this.tool.kind === 'place' && !this.handlers.lineBlocker?.(this.tool.piece, cells, this.tool.rot)) {
+        if (cells.length === 1) this.handlers.place(this.tool.piece, cells[0]!.x, cells[0]!.y, this.tool.rot);
+        else this.handlers.placeLine?.(this.tool.piece, cells, this.tool.rot);
       }
       this.refresh();
       return;
@@ -402,6 +534,17 @@ export class ClearingSet implements StageSet {
     if (this.tool.kind === 'place') {
       const at = placeAt(this.tool.piece, this.tool.rot, tile);
       if (!this.handlers.blocker(this.tool.piece, at.x, at.y, this.tool.rot)) this.handlers.place(this.tool.piece, at.x, at.y, this.tool.rot);
+      return;
+    }
+    // Another of this player's defenders clicked: that one is taken up instead; else the one in hand goes there.
+    const own = this.posts.find((p) => p.mine && p.x === tile.x && p.y === tile.y);
+    if (this.tool.kind === 'post') {
+      if (own && own.id !== this.tool.soldier) this.handlers.pickPost?.(own.id);
+      else if (!this.handlers.postBlocker?.(this.tool.soldier, tile.x, tile.y)) this.handlers.post?.(this.tool.soldier, tile.x, tile.y);
+      return;
+    }
+    if (own) {
+      this.handlers.pickPost?.(own.id);
       return;
     }
     const p = this.base ? pieceAt(this.base, tile.x, tile.y) : undefined;
@@ -450,7 +593,19 @@ export class ClearingSet implements StageSet {
     this.cursor.visible = false;
     let ghostAt: { piece: PieceId; rot: number; x: number; y: number; ok: boolean } | null = null;
 
-    if (base && tile && this.tool.kind === 'place') {
+    let lineAt: { piece: PieceId; rot: number; cells: Vec2[]; ok: boolean } | null = null;
+    if (base && this.line && this.tool.kind === 'place') {
+      // A line being dragged: each tile in green or red, the whole of it all or nothing.
+      const { piece, rot } = this.tool;
+      const why = this.handlers.lineBlocker?.(piece, this.line, rot) ?? null;
+      for (const c of this.line) {
+        const off = c.x < BASE_EDGE || c.y < BASE_EDGE || c.x >= base.width - BASE_EDGE || c.y >= base.height - BASE_EDGE;
+        const bad = !!why && (off || treeAt(base, c.x, c.y) || !!pieceAt(base, c.x, c.y) || !/árbol|borde|ya hay/i.test(why));
+        mark(c.x, c.y, bad ? RED : GREEN);
+      }
+      lineAt = { piece, rot, cells: this.line, ok: !why };
+      hint = { text: this.handlers.lineHint?.(piece, this.line, why) ?? '', bad: !!why };
+    } else if (base && tile && this.tool.kind === 'place') {
       const { piece, rot } = this.tool;
       const at = placeAt(piece, rot, tile);
       const why = this.handlers.blocker(piece, at.x, at.y, rot);
@@ -461,6 +616,15 @@ export class ClearingSet implements StageSet {
       }
       ghostAt = { piece, rot, x: at.x, y: at.y, ok: !why };
       hint = { text: this.handlers.placeHint(piece, why), bad: !!why };
+    } else if (base && tile && this.tool.kind === 'post') {
+      // A defender in hand (#58): the tile in green or red, and why not by the pointer.
+      const { soldier } = this.tool;
+      const own = this.posts.find((p) => p.mine && p.x === tile.x && p.y === tile.y && p.id !== soldier);
+      const why = own ? null : (this.handlers.postBlocker?.(soldier, tile.x, tile.y) ?? null);
+      mark(tile.x, tile.y, why ? RED : own ? AMBER : GREEN);
+      setLoop(this.cursor, tile.x, tile.y, 1, 1, 0.05);
+      this.cursor.visible = true;
+      hint = own ? { text: own.name } : { text: this.handlers.postHint?.(soldier, why) ?? '', bad: !!why };
     } else if (base && this.tool.kind === 'fell') {
       const box = this.fellBox ?? (tile ? { from: tile, to: tile } : null);
       if (box) {
@@ -471,27 +635,68 @@ export class ClearingSet implements StageSet {
         setLoop(this.cursor, x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0.06);
         this.cursor.visible = true;
         const k = Math.min(trees.length, FELL_MAX);
-        hint = k ? { text: fellHint(k) } : { text: BUILD_TEXT.noTrees, bad: true };
+        const why = k ? this.handlers.fellBlocker?.(k) : null;
+        hint = !k ? { text: BUILD_TEXT.noTrees, bad: true } : why ? { text: `${fellHint(k)} · ${why}`, bad: true } : { text: fellHint(k) };
       }
     } else if (base && tile) {
       const p = pieceAt(base, tile.x, tile.y);
-      if (p) {
+      const post = this.posts.find((x) => x.x === tile.x && x.y === tile.y);
+      if (post) {
+        hint = { text: post.name };
+        setLoop(this.cursor, tile.x, tile.y, 1, 1, 0.05);
+      } else if (p) {
         hint = { text: pieceLine(p) };
         setLoop(this.cursor, p.x, p.y, ...footprint(p.piece, p.rot), 0.06);
       } else setLoop(this.cursor, tile.x, tile.y, 1, 1, 0.05);
-      this.cursor.visible = this.building || !!p;
+      this.cursor.visible = this.building || !!p || !!post;
     }
     this.cells.count = n;
     this.cells.instanceMatrix.needsUpdate = true;
     if (this.cells.instanceColor) this.cells.instanceColor.needsUpdate = true;
 
     const sel = this.selected ? base?.pieces.find((p) => p.id === this.selected) : undefined;
-    this.outline.visible = !!sel;
+    // The defender in hand, where it stands now (if it has a post): outlined like a picked piece.
+    const held = this.tool.kind === 'post' ? this.posts.find((p) => p.id === (this.tool as { soldier: string }).soldier) : undefined;
+    this.outline.visible = !!sel || !!held;
     if (sel) setLoop(this.outline, sel.x, sel.y, ...footprint(sel.piece, sel.rot), 0.08);
+    else if (held) setLoop(this.outline, held.x, held.y, 1, 1, 0.08);
+    for (const o of this.postMarks.children) if (o instanceof CSS2DObject) o.element.classList.toggle('held', o.element.dataset.post === held?.id);
 
     this.setGhost(ghostAt);
+    this.setLineGhosts(lineAt);
     this.showHint(hint, e);
-    this.sendCursor(ghostAt);
+    this.sendCursor(ghostAt ?? (lineAt ? { piece: lineAt.piece, rot: lineAt.rot, x: lineAt.cells[0]!.x, y: lineAt.cells[0]!.y } : null));
+  }
+
+  /** The line's ghosts (#35): one model per tile, in the ghost's green or red. */
+  private setLineGhosts(l: { piece: PieceId; rot: number; cells: Vec2[]; ok: boolean } | null): void {
+    const key = l ? `${l.piece}:${l.rot}` : '';
+    if (key !== this.lineKey) {
+      for (const g of this.lineGhosts) this.scene.remove(g);
+      this.lineGhosts = [];
+      this.lineKey = key;
+    }
+    if (!l) return;
+    while (this.lineGhosts.length < l.cells.length) {
+      const m = this.art.pieceModel(l.piece, l.rot);
+      m.userData.material = this.ghostMaterial;
+      m.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.material = this.ghostMaterial;
+          mesh.castShadow = false;
+        }
+      });
+      this.scene.add(m);
+      this.lineGhosts.push(m);
+    }
+    const [w, h] = footprint(l.piece, l.rot);
+    this.lineGhosts.forEach((g, i) => {
+      const c = l.cells[i];
+      g.visible = !!c;
+      if (c) g.position.set(c.x + w / 2, 0.02, c.y + h / 2);
+    });
+    this.ghostMaterial.color.copy(l.ok ? GREEN : RED);
   }
 
   /** This player's hand, for the partner: only on change, at most every 100 ms (the last one always goes). */
@@ -569,6 +774,27 @@ export class ClearingSet implements StageSet {
     strip(0, BASE_EDGE, BASE_EDGE, base.height - BASE_EDGE * 2);
     strip(base.width - BASE_EDGE, BASE_EDGE, BASE_EDGE, base.height - BASE_EDGE * 2);
   }
+}
+
+/** A post's ring on its tile (#58). */
+const POST_RING = new THREE.RingGeometry(0.3, 0.4, 28).rotateX(-Math.PI / 2);
+
+/** The posts with a figure, for the drawing. */
+function figures(list: SiegePost[]): { entry: LineupEntry; x: number; y: number }[] {
+  return list.filter((p) => p.entry).map((p) => ({ entry: p.entry!, x: p.x, y: p.y }));
+}
+
+/** Building lines sends at most this many tiles (protocol.ts placeLine). */
+const LINE_MAX = 60;
+
+/** The tiles of a straight line from `a` towards `b`, along whichever way it went further. */
+function lineCells(a: Vec2, b: Vec2): Vec2[] {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const along = Math.abs(dx) >= Math.abs(dy);
+  const n = Math.min(LINE_MAX, (along ? Math.abs(dx) : Math.abs(dy)) + 1);
+  const step = Math.sign(along ? dx : dy);
+  return Array.from({ length: n }, (_, i) => (along ? { x: a.x + i * step, y: a.y } : { x: a.x, y: a.y + i * step }));
 }
 
 /** The middle of a piece, in tiles. */

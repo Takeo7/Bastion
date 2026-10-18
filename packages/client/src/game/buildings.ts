@@ -289,6 +289,8 @@ export class BuildingPlan {
         if (medicalWear !== undefined) kind = 'medical';
         else if (n('bed') && doorsBySide[most]! >= 3) kind = 'motel';
         else if (home) kind = 'house';
+        // Hay says barn, however small (playtest 18/10, #53: one came out an office block of tiles).
+        else if (n('hay') >= 2) kind = 'barn';
         else if (n('counter')) kind = 'shop';
         // A warehouse is rows of shelves, whatever desk its office corner has; a small one full of them too (a sawmill).
         else if (
@@ -704,7 +706,8 @@ const STYLES: Record<BuildingKind, Style> = {
   barn: {
     outer: [0x9c3a2c, 0x8a3428, 0xa8a49a, 0x7c5a3c],
     inner: [0xa88c6c, 0x9c8468],
-    floor: ['flat', [0x8c7a58, 0x9a8660]],
+    // Worn boards (#53), not a hall's concrete.
+    floor: ['boards', [0x7c6446, 0x6e5a40]],
     roof: [0x4a4a48, 0x6a4a3a, 0x5a5e62],
   },
   // A roadside motel: pastel render and a flat roof.

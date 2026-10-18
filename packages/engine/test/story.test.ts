@@ -5,7 +5,7 @@ import {
   createCampaign,
   eventDef,
   executeCampaignCommand,
-  gainXp,
+  setBastionLevel,
   migrateCampaign,
   missionInfo,
   offerVip,
@@ -75,7 +75,7 @@ describe('story', () => {
     expect(c.story.done).toBe(1);
     expect(chapter(c, 1)).toBeUndefined();
     expect(chapter(c, 2)).toBeUndefined();
-    gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
+    setBastionLevel(c, 2, new Rng(1));
     // Chapters don't chain back to back: the next one waits some days after the last win.
     expect(chapter(c, 2)).toBeUndefined();
     for (let i = 0; i < 10 && !chapter(c, 2); i++) advanceTime(c, new Rng(7 + i));
@@ -89,12 +89,12 @@ describe('story', () => {
     const answer = (option: 0 | 1) => {
       const c = solo();
       c.story.done = SIMON_CHAPTER - 1;
-      gainXp(c, LEVEL_XP[SIMON_CHAPTER - 1]! - c.xp, new Rng(1));
+      setBastionLevel(c, SIMON_CHAPTER, new Rng(1));
       expect(c.event).toBe('simon');
       expect(chapter(c, SIMON_CHAPTER)).toBeUndefined();
-      const xp = c.xp;
+      const offers = c.offers.length;
       run(c, { type: 'answerEvent', option });
-      return { c, offer: chapter(c, SIMON_CHAPTER)!, xp };
+      return { c, offer: chapter(c, SIMON_CHAPTER)!, offers };
     };
     const trusted = answer(0);
     expect(trusted.c.story.simon).toBe('trusted');
@@ -102,7 +102,8 @@ describe('story', () => {
     expect(offerVip(trusted.c, trusted.offer)).toBe('Simão Ferreira');
     const refused = answer(1);
     expect(refused.c.story.simon).toBe('refused');
-    expect(refused.c.xp).toBe(refused.xp + 12);
+    // What he knew, now that the Bastion has no experience (18/10 #40): a new operation, besides the chapter.
+    expect(refused.c.offers.length).toBe(refused.offers + 2);
     expect(refused.offer.difficulty).toBe(STORY[SIMON_CHAPTER - 1]!.difficulty + 1);
     expect(offerVip(refused.c, refused.offer)).toBe('Noor Haddad');
   });
@@ -110,7 +111,7 @@ describe('story', () => {
   it('the rescue VIP of a chapter reaches the battlefield with their name', () => {
     const c = solo();
     c.story.done = 6;
-    gainXp(c, LEVEL_XP[6]! - c.xp, new Rng(1));
+    setBastionLevel(c, 7, new Rng(1));
     const offer = chapter(c, 7)!;
     const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(2), kind: offer.kind, pods: offer.pods, vipName: offerVip(c, offer) });
     expect(mission.units.find((u) => u.template === 'vip')?.name).toBe('Celia Marsh');
@@ -132,7 +133,7 @@ describe('story', () => {
     c.nextEventDay = 999;
     c.story.done = 6;
     c.story.simon = 'trusted';
-    gainXp(c, LEVEL_XP[MAX_LEVEL - 1]! - c.xp, new Rng(1));
+    setBastionLevel(c, MAX_LEVEL, new Rng(1));
     expect(c.offers.some((o) => o.final)).toBe(false);
     fly(c, chapter(c, 7)!, 'victory');
     const final = c.offers.find((o) => o.final)!;

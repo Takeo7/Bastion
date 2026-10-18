@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 18/10 con la 0.7.0. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 18/10 con la 0.7.1. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.7.0)
+## 3. Estado (versión 0.7.1)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0 y v0.7.0 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0 y v0.7.1 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
 - **Lo nuevo de la 0.2.2** (2026-10-14):
   - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
   - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
@@ -89,6 +89,17 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
   - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
 - **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+- **Lo nuevo de la 0.7.1** (2026-10-18), el resto de la prueba del 18/10 ([PRUEBA-2026-10-18.md](PRUEBA-2026-10-18.md), #24–#58):
+  - el nivel del Bastión ya no sale de la experiencia: se compra con suministros y misiones hechas (`levelUp`, `LEVEL_COST`, `LEVEL_MISSIONS`), y en el claro el Bastión pasa de la caravana a un edificio, cada dos niveles, sobre su solar de 6×6. La Sala de mapas da más suministros por misión;
+  - las misiones no caducan: hasta 3 a la vez (4 con la Sala de radio), y con el asedio solo se ve el asedio;
+  - La Lata empieza siendo el todoterreno de Teo (4 plazas) y se mejora con misiones de vehículo: furgoneta 6, camión 7 y autobús 8, que está en Atalaya. Las partidas empezadas pasan a la furgoneta. El Centro de entrenamiento da reclutas con más nivel;
+  - cada uno lleva a sus soldados: solo el dueño sube sus habilidades y los mete en la escuadra, aunque el otro esté desconectado. La escuadra se elige en el claro, junto a La Lata, y la fila sale en espejo para que cada uno vea a los suyos junto a su nombre;
+  - todo lo de la base va a voto con el otro conectado. Talar cuesta 3 § por árbol. Las vallas, los muros, los sacos, los troncos y el alambre se ponen en fila arrastrando;
+  - antes de un asedio, cada uno coloca a sus defensores donde quiera del claro (`post`);
+  - los enemigos vivos ven en cono, y vivos y muertos se atacan entre sí (`hostileTo`). El soldado que cae deja su mochila con lo que llevaba;
+  - en combate, los objetivos siempre a la vista en una tarjeta a la derecha; las rutas planeadas se siguen en orden y se quitan con el botón derecho; un solo círculo en el soldado elegido; el cono rojo tenue; líneas continuas; sin modales de doble botón;
+  - arriba, el nombre de cada recurso al pasar el ratón y lo que gastan las raciones; fuera el «(tú)»; no entran dos jugadores con el mismo nombre;
+  - interiores con su ajuar, tiendas por oficio y bibliotecas; el granero de verdad; bordes del mapa cerrados con sentido; textos de ayuda directos, sin adornos.
 - **Lo nuevo de la 0.7.0** (2026-10-18), la base nueva en la campaña ([FASE12.md](FASE12.md) §11) y la prueba del 18/10 ([PRUEBA-2026-10-18.md](PRUEBA-2026-10-18.md)):
   - la campaña empieza con una caravana en un claro del pinar, distinto cada vez; se tala, se construye (edificios, empalizadas, muros, puertas, torres, focos, alambre, minas, pinchos, cepos y torretas), se repara, se repone y se desmonta. Lo que pasa de 30 § se vota;
   - las instalaciones son los edificios del claro: un edificio con la mitad de su aguante o menos no funciona;
@@ -169,7 +180,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - premisa: Atalaya, una vieja estación militar en la sierra de Brena, con supervivientes de todas partes;
   - tono adulto y seco, sin explicar de más, con nombres internacionales.
 - **Nombres:**
-  - pestañas «Campaña», «El valle», «Armería», «Cuartel», «Construir» y «Escuadra» (la cochera);
+  - pestañas «Campaña», «El valle», «Armería», «Soldados» (antes «Cuartel»), «Construir» y «Escuadra» (en el claro, junto a La Lata);
   - el tiempo pasa con las misiones (desde la 0.7.0); la amenaza se llama «Infestación» (y «la Marea» desde el nivel 4).
 - **Los zombis primero** (14/10, [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos; los humanos solo en Rescate y en los capítulos y encargos que son suyos.
 - **Reglas** (de las pruebas de juego del 12 y del 13/10):

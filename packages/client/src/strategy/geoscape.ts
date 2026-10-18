@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { BUS, HOME_REGION, LANDMARKS, MAREA_SOURCE, REGIONS, roadRoute, underMarea, type CampaignState, type MissionOffer, type RegionId } from '@bastion/engine';
+import { activeOffer, BUS, HOME_REGION, LANDMARKS, MAREA_SOURCE, REGIONS, roadRoute, underMarea, type CampaignState, type MissionOffer, type RegionId } from '@bastion/engine';
 import type { Shot, Stage, StageMood, StageSet } from './stage';
 import { ATALAYA_WORKS, BASTION, D, FIELD, HD, HW, mareaReach, mareaRoads, roadLine, threshold, VALLEY_LANDMARKS, W, ZONES } from './valleyGeography';
 import './valley.css';
@@ -200,6 +200,15 @@ interface Rect {
  * The valley map: the eight zones with their markers, the Marea, La Lata on
  * the roads. A click on a zone selects it.
  */
+/**
+ * The operations the valley shows: while the siege is on (Arturo, 18/10 #50: «cuando toque asedio, solo tiene
+ * que aparecer esa misión»), only it; the others wait, hidden, and come back once it is over.
+ */
+export function shownOffers(c: CampaignState): MissionOffer[] {
+  const now = activeOffer(c);
+  return now?.siege ? [now] : c.offers;
+}
+
 export class GeoscapeSet implements StageSet {
   readonly scene = new THREE.Scene();
   readonly ambientOcclusion = false;
@@ -362,7 +371,8 @@ export class GeoscapeSet implements StageSet {
     this.levelGoal = c.doom;
     if (!this.levelKnown) this.level = c.doom;
     this.levelKnown = true;
-    const key = JSON.stringify([c.regions, c.offers.map((o) => [o.id, o.region, o.kind, o.facility, o.final, o.story, o.quest]), c.rumors.map((x) => [x.id, x.region]), c.listening, selected, c.doom]);
+    const offers = shownOffers(c);
+    const key = JSON.stringify([c.regions, offers.map((o) => [o.id, o.region, o.kind, o.facility, o.final, o.story, o.quest]), c.rumors.map((x) => [x.id, x.region]), c.listening, selected, c.doom]);
     if (key === this.lastKey) return;
     this.lastKey = key;
     for (const m of this.markers) {
@@ -379,7 +389,7 @@ export class GeoscapeSet implements StageSet {
       // A Nido first, then the operations in the list's colours and icons, then a rumour (brighter while the Bastion listens).
       if (r.facility) badges.append(el('i', 'valley-nest'));
       // The siege is at home, not out in the valley: no pin for it.
-      for (const o of c.offers.filter((x) => x.region === r.id && !x.siege)) {
+      for (const o of offers.filter((x) => x.region === r.id && !x.siege)) {
         const icon = el('span', 'mission-icon');
         icon.dataset.kind = o.kind;
         icon.style.setProperty('--icon', offerTone(o));

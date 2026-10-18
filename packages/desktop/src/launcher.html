@@ -165,7 +165,7 @@
       <p class="kicker">TÁCTICA POR TURNOS COOPERATIVA</p>
       <button class="choice" id="host" type="button">
         <strong>SER ANFITRIÓN</strong>
-        <small>La partida se abre en este ordenador. Tu compañero entra desde su app o desde Chrome.</small>
+        <small>La partida se abre en este ordenador. Quien juegue contigo entra desde su app o desde Chrome.</small>
       </button>
       <section id="lan">
         <span class="label">PARTIDAS EN TU RED</span>
@@ -174,7 +174,7 @@
       </section>
       <form id="join">
         <label class="label" for="address">UNIRSE POR DIRECCIÓN</label>
-        <span class="hint">Por Tailscale, o si la partida no sale arriba: la dirección que ve tu compañero en su pantalla de inicio.</span>
+        <span class="hint">Por Tailscale, o si la partida no sale arriba: escribe la dirección que aparece en la pantalla de inicio de quien la aloja.</span>
         <div class="row">
           <input id="address" placeholder="192.168.1.20:3000" autocomplete="off" spellcheck="false" />
           <button id="go" type="submit">UNIRSE</button>
@@ -217,7 +217,7 @@
       function showGames(games) {
         const list = document.getElementById('games');
         list.replaceChildren();
-        lanHint.textContent = games.length ? '' : searching ? 'Buscando partidas en tu red…' : 'Ninguna por ahora. Cuando tu compañero pulse «Ser anfitrión», saldrá aquí.';
+        lanHint.textContent = games.length ? '' : searching ? 'Buscando partidas en tu red…' : 'Ninguna por ahora. Cuando el otro jugador pulse «Ser anfitrión», saldrá aquí.';
         for (const g of games) {
           const button = document.createElement('button');
           button.type = 'button';
@@ -239,7 +239,7 @@
       document.getElementById('host').addEventListener('click', () => attempt(() => api.host(), 'Abriendo la partida…'));
       document.getElementById('join').addEventListener('submit', (e) => {
         e.preventDefault();
-        attempt(() => api.join(address.value), 'Buscando a tu compañero…');
+        attempt(() => api.join(address.value), 'Buscando la partida…');
       });
       api.info().then((info) => {
         if (!info) return;

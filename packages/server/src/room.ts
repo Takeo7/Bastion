@@ -26,10 +26,13 @@ import {
   missionInfo,
   offerBriefing,
   PLAYER_COLORS,
+  pointsLeft,
   Rng,
   syncPads,
   syncTurn,
+  vehicleOf,
   type BaseView,
+  type CampaignCommand,
   type CampaignMessage,
   type CampaignState,
   type ClientMessage,
@@ -158,7 +161,16 @@ export class Room {
   private join(socket: WebSocket, name: string, token?: string): Seat | null {
     // By the seat's token; from a browser or an app without it (another computer, the app after Chrome, a
     // campaign carried over from another host), by the player's name, so each finds their own seat and soldiers.
-    let seat = this.seats.find((s) => s && token && s.token === token) ?? this.seats.find((s) => s && sameName(s.name, name)) ?? null;
+    // Only a seat nobody plays from: one in use with that name is someone else's (below).
+    let seat = this.seats.find((s) => s && token && s.token === token) ?? this.seats.find((s) => s && !s.socket && sameName(s.name, name)) ?? null;
+    // Two commanders with one name can't be told apart (Arturo, 18/10 #51): the other seat's name is theirs.
+    // Asked before any seat is made, so a refusal leaves none behind.
+    const clash = this.seats.find((s) => s && s !== seat && sameName(s.name, name));
+    if (clash) {
+      // The socket stays open and seatless (closing it, the app would come back with the same name, again and again).
+      this.send(socket, { t: 'error', message: 'Ese nombre ya lo usa el otro jugador: elige otro.' });
+      return null;
+    }
     if (!seat) {
       const free = this.seats.findIndex((s) => s === null);
       if (free >= 0) {
@@ -241,12 +253,19 @@ export class Room {
         break;
       }
       case 'ccmd': {
-        if (this.phase !== 'base' || !this.campaign) return;
+        // Orders that don't go through are written to red.log, to find out why when a player says nothing happened
+        // (Arturo, 18/10: a skill that would not unlock, with no message).
+        if (this.phase !== 'base' || !this.campaign) {
+          this.store.log(`[campaña] ${seat.name}: «${msg.cmd.type}» ignorada (fase ${this.phase}${this.campaign ? '' : ', sin campaña'})`);
+          return;
+        }
         const result = executeCampaignCommand(this.campaign, msg.cmd, { slot: seat.slot, connected: this.connectedSlots(), rng: this.rng });
         if (!result.ok) {
+          this.store.log(`[campaña] ${seat.name} (puesto ${seat.slot + 1}): «${msg.cmd.type}» rechazada: ${result.error}${this.commandDetail(msg.cmd)}`);
           this.send(seat.socket!, { t: 'rejected', message: result.error });
           return;
         }
+        if (msg.cmd.type === 'unlock') this.store.log(`[campaña] ${seat.name}: ${msg.cmd.cell} para ${msg.cmd.soldier}${this.commandDetail(msg.cmd)}`);
         if (result.launch) this.launchCampaignMission();
         else this.broadcast({ t: 'campaign', state: this.campaign });
         this.persist();
@@ -389,6 +408,8 @@ export class Room {
       // A siege is fought on the base as it stands now (docs/FASE12.md §11.5).
       map: offerMap(c, offer),
       ...(siege ? { siegePlan: siege } : {}),
+      vehicle: vehicleOf(c),
+      ...(siege && c.siegePosts ? { posts: c.siegePosts } : {}),
       slots: c.players,
       rng: this.rng,
       kind: offer.kind,
@@ -519,6 +540,14 @@ export class Room {
   }
 
   // -------------------------------------------------------------- helpers
+
+  /** For red.log: the soldier an order is about, as the campaign has it (whose, alive, points, board). */
+  private commandDetail(cmd: CampaignCommand): string {
+    const id = 'soldier' in cmd ? cmd.soldier : undefined;
+    const s = id ? this.campaign?.soldiers.find((x) => x.id === id) : undefined;
+    if (!s) return id ? ` · ${id} no está en la campaña` : '';
+    return ` · ${s.name} (${s.id}), de ${s.owner + 1}, ${s.alive ? 'vivo' : 'caído'}, ${pointsLeft(s.skills, s.board)} puntos, tablero [${s.board.join(' ')}] · conectados ${this.connectedSlots().map((x) => x + 1).join(',')}`;
+  }
 
   private connectedSlots(): Slot[] {
     return this.seats.filter((s): s is Seat => !!s?.socket).map((s) => s.slot);

@@ -25,6 +25,9 @@ import {
   foundWeaponOf,
   hasCrafted,
   LEVEL_ARMS,
+  LEVEL_COST,
+  LEVEL_MISSIONS,
+  MAX_LEVEL,
   meleeWeaponOf,
   hasTech,
   itemUnlocked,
@@ -38,16 +41,22 @@ import {
   weaponName,
   weaponTier,
 } from './progression';
-import { broughtBack, type CarriedWeapon, type LootTotals } from './loot';
+import { bringsLootHome, broughtBack, type CarriedWeapon, type LootTotals } from './loot';
 import { fighterStats, learn, missionLines, NO_GROWTH, NO_SKILLS, oneMoreBar, recruitSkills, totalBars, unlockBlocker, veterancyRank, VETERANCY, type BarFilled, type Deeds, type Growth, type Skills } from './skills';
 import { BOARD_CELLS, type CellId } from './board';
 import {
   besidePieces,
   dismantleBlocker,
   dismantleRefund,
+  FELL_COST,
   fellBlocker,
   fellTree,
   freshBase as freshClearing,
+  onBastionLot,
+  baseLayout,
+  BASE_EDGE,
+  pieceAt,
+  treeAt,
   pieceCells,
   PIECES,
   placeBlocker,
@@ -62,6 +71,11 @@ import {
   barLine,
   BASE_SIEGE_TEXT,
   PIECE_TEXT,
+  rationsLowLine,
+  vehicleBriefing,
+  vehicleMissionName,
+  vehicleWonLine,
+  VEHICLES,
   SIEGE_TEXT,
   siegeWarning,
   wornLine,
@@ -154,8 +168,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   quarters: {
     id: 'quarters',
     name: 'Barracón',
-    description: '+2 camas para soldados (+1 junto al Cuartel). Literas de madera y una estufa que solo se enciende de noche.',
-    upgrades: ['+3 camas (+1 junto al Cuartel). Un segundo piso de literas.', '+4 camas (+1 junto al Cuartel). Mantas de verdad.'],
+    description: '+2 camas para soldados (+1 junto a la caravana). Literas de madera y una estufa que solo se enciende de noche.',
+    upgrades: ['+3 camas (+1 junto a la caravana). Un segundo piso de literas.', '+4 camas (+1 junto a la caravana). Mantas de verdad.'],
     cost: 40,
     days: 2,
     level: 1,
@@ -164,8 +178,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   training: {
     id: 'training',
     name: 'Centro de entrenamiento',
-    description: 'Cada jugador puede llevar un soldado más a las misiones.',
-    upgrades: ['Los reclutas llegan con un nivel más en una habilidad. Una semana de prácticas antes de salir.', 'Los reclutas llegan con dos niveles más. Dos semanas, y alguien que ya ha vuelto de fuera les enseña.'],
+    description: 'Los reclutas llegan con un nivel más en una habilidad. Un patio despejado y un horario.',
+    upgrades: ['Los reclutas llegan con dos niveles más. Una semana de prácticas antes de salir.', 'Los reclutas llegan con tres niveles más. Alguien que ya ha vuelto de fuera les enseña.'],
     cost: 140,
     days: 6,
     level: 2,
@@ -194,8 +208,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   simulation: {
     id: 'simulation',
     name: 'Sala de mapas',
-    description: 'Las misiones dan un 25 % más de experiencia al Bastión.',
-    upgrades: ['+40 % de experiencia en las misiones. Mapas de arena con los combates de verdad.', '+55 % de experiencia. Cintas de cada misión, fotograma a fotograma.'],
+    description: 'Las misiones rinden un 25 % más de suministros: se sabe dónde buscar. Un tablero con los caminos del valle.',
+    upgrades: ['+40 % de suministros en las misiones. Cada casa registrada, marcada con una chincheta.', '+55 % de suministros. Las rutas de los Camioneros, y dónde paraban.'],
     cost: 100,
     days: 5,
     level: 3,
@@ -235,7 +249,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   memorial: {
     id: 'memorial',
     name: 'Camposanto',
-    description: 'Los caídos descansan aquí y salen de la lista del Cuartel; sus nombres se guardan. Cruces de pino bajo la nieve, una por cada uno.',
+    description: 'Los caídos descansan aquí y salen de la lista de Soldados; sus nombres se guardan. Cruces de pino bajo la nieve, una por cada uno.',
     upgrades: [
       '+5 de voluntad para todos los soldados. Saben que, si caen, alguien los recordará.',
       '+10 de voluntad para todos. Y quien vuelve de una misión en la que cayó alguien de la escuadra aprende un 20 % más: por ellos. Teo graba cada nombre en latón.',
@@ -315,7 +329,7 @@ export const FIXED_BUILDINGS: Readonly<Record<FixedBuildingId, Vec2>> = {
 
 export const FIXED_NAMES: Record<FixedBuildingId, string> = {
   command: 'Búnker de mando',
-  barracks: 'Cuartel',
+  barracks: 'Caravana',
   research: 'Sala de radio',
   engineering: 'Armería',
 };
@@ -356,10 +370,10 @@ export interface AdjacencyDef {
 export const ADJACENCY: AdjacencyDef[] = [
   { facility: 'infirmary', next: 'barracks', text: 'Las heridas curan un grado más rápido (×3 a nivel 1). Nadie cruza la nieve con una herida abierta.' },
   { facility: 'workshop', next: 'engineering', text: 'Accesorios un 15 % más baratos aún (−40 % a nivel 1). Las piezas pasan por un ventanuco.' },
-  { facility: 'simulation', next: 'research', text: '+15 % de experiencia más (+40 % a nivel 1). Teo corrige los ejercicios en caliente.' },
+  { facility: 'simulation', next: 'research', text: '+15 % de suministros más (+40 % a nivel 1). Morse marca en el mapa lo que oye por radio.' },
   { facility: 'relay', next: 'command', text: '+1 zona contactable. La antena, pegada a la sala de Morse, llega más lejos.' },
   { facility: 'training', next: 'barracks', text: 'Reclutar cuesta 20 § en vez de 30. Los novatos se forman en casa.' },
-  { facility: 'quarters', next: 'barracks', text: 'Una cama más. El Cuartel presta la estufa.' },
+  { facility: 'quarters', next: 'barracks', text: 'Una cama más. La caravana presta la estufa.' },
   { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
   { facility: 'listening', next: 'relay', text: 'Los muertos avanzan 2 días más tarde aún. Dos antenas oyen más que una.' },
   { facility: 'echoes', next: 'listening', text: 'Los oficios hacen menos ruido (−2). Junto a la escucha se aprende a no hacer ruido.' },
@@ -705,7 +719,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
           log(c, `${s.name} se une al Bastión (${veterancyName(s)}).`, 'good');
         },
       },
-      { label: 'Cambiarles provisiones por lo que saben', effect: '−10 suministros, +8 de experiencia del Bastión', apply: (c, rng) => (credit(c, -10), gainXp(c, 8, rng)) },
+      { label: 'Cambiarles provisiones por lo que saben', effect: '−10 suministros, una misión nueva', apply: (c, rng) => (credit(c, -10), tipOff(c, rng)) },
     ],
   },
   signal: {
@@ -713,7 +727,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
     title: 'Transmisión interceptada',
     text: 'Morse ha captado en onda corta una transmisión cifrada de los Cuervos.',
     options: [
-      { label: 'Descifrarla', effect: '+10 de experiencia del Bastión', apply: (c, rng) => gainXp(c, 10, rng) },
+      { label: 'Descifrarla', effect: 'Una misión nueva', apply: (c, rng) => tipOff(c, rng) },
       { label: 'Venderla en el mercado negro', effect: '+30 suministros', apply: (c) => credit(c, 30) },
     ],
   },
@@ -724,13 +738,13 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
     options: [
       {
         label: 'Enviar a alguien a socorrerlo',
-        effect: 'Un soldado al azar queda herido 4 días; +60 suministros',
+        effect: 'Un soldado al azar, de baja una misión; +60 suministros',
         available: (c) => c.soldiers.some((s) => soldierReady(s)),
         apply: (c, rng) => {
           const s = rng.pick(c.soldiers.filter((x) => soldierReady(x)));
           s.woundedDays = 4;
           credit(c, 60);
-          log(c, `${s.name} vuelve herido del rescate del convoy.`, 'bad');
+          log(c, `${s.name} vuelve con heridas del rescate del convoy.`, 'bad');
         },
       },
       { label: 'No arriesgar a nadie', effect: 'Los muertos avanzan (+1)', apply: (c) => (c.doom += 1) },
@@ -741,7 +755,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
     title: 'Un desertor',
     text: 'Un Saqueador de los Cuervos quiere desertar y ofrece lo que sabe.',
     options: [
-      { label: 'Interrogarlo', effect: '+12 de experiencia del Bastión', apply: (c, rng) => gainXp(c, 12, rng) },
+      { label: 'Interrogarlo', effect: 'Una misión nueva', apply: (c, rng) => tipOff(c, rng) },
       { label: 'Mandarlo a llevarse una horda lejos', effect: 'Los muertos retroceden (−1)', apply: (c) => (c.doom = Math.max(0, c.doom - 1)) },
     ],
   },
@@ -750,7 +764,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
     title: 'Mercado negro',
     text: 'Los Camioneros han montado mercado en la carretera, con género interesante.',
     options: [
-      { label: 'Comprar mapas de la zona', effect: '−40 suministros, +15 de experiencia del Bastión', available: (c) => c.credits >= 40, apply: (c, rng) => (credit(c, -40), gainXp(c, 15, rng)) },
+      { label: 'Comprar mapas de la zona', effect: '−40 suministros, dos misiones nuevas', available: (c) => c.credits >= 40, apply: (c, rng) => (credit(c, -40), tipOff(c, rng), tipOff(c, rng)) },
       { label: 'Venderles la munición que sobra', effect: '+35 suministros', apply: (c) => credit(c, 35) },
     ],
   },
@@ -762,9 +776,16 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
       { label: 'Repararlo a toda prisa', effect: '−35 suministros', available: (c) => c.credits >= 35, apply: (c) => credit(c, -35) },
       {
         label: 'Repararlo con calma',
-        effect: 'Las obras en curso se retrasan 4 días',
-        apply: (c) => {
-          for (const w of c.base.works) w.daysLeft += 4;
+        // The new base builds at once: no works to put back (18/10). A building is left without power instead,
+        // at half its strength: it doesn't work until it is mended.
+        effect: 'Un edificio se queda sin luz hasta repararlo',
+        apply: (c, rng) => {
+          const buildings = c.bastion.pieces.filter((p) => buildingWorks(p));
+          const others = buildings.filter((p) => p.piece !== 'caravan');
+          const hit = (others.length ? others : buildings)[rng.int((others.length ? others : buildings).length)];
+          if (!hit) return;
+          hit.hp = Math.floor(PIECES[hit.piece].hp / 2);
+          log(c, `${PIECE_TEXT[hit.piece].name}: sin luz hasta que se repare.`, 'bad');
         },
       },
     ],
@@ -778,9 +799,9 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
     options: [
       {
         label: 'Darle asilo',
-        effect: '−20 suministros, +12 de experiencia del Bastión',
+        effect: '−20 suministros, una misión nueva',
         available: (c) => c.credits >= 20,
-        apply: (c, rng) => (credit(c, -20), gainXp(c, 12, rng)),
+        apply: (c, rng) => (credit(c, -20), tipOff(c, rng)),
       },
       { label: 'Llevarla con otro enclave', effect: '+15 suministros', apply: (c) => credit(c, 15) },
     ],
@@ -798,10 +819,10 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
       },
       {
         label: 'Interrogarlo y echarlo',
-        effect: '+12 de experiencia del Bastión; «Los inmunes» sin ayuda, más difícil',
+        effect: 'Una misión nueva; «Los inmunes» sin ayuda, más difícil',
         apply: (c, rng) => {
           c.story.simon = 'refused';
-          gainXp(c, 12, rng);
+          tipOff(c, rng);
         },
       },
     ],
@@ -914,6 +935,8 @@ export interface MissionReward {
   /** Rations and parts (docs/FASE4.md). */
   food?: number;
   parts?: number;
+  /** A better vehicle for La Lata (Arturo, 18/10 #45): its tier (1 furgoneta … 3 autobús). */
+  vehicle?: number;
 }
 
 export interface MissionOffer {
@@ -953,6 +976,12 @@ export type ProposalAction =
   /** The base (docs/FASE12.md §11): what is dear goes to a vote. */
   | { type: 'place'; piece: PieceId; x: number; y: number; rot: number }
   | { type: 'raise'; piece: string }
+  | { type: 'placeLine'; piece: PieceId; cells: Vec2[]; rot: number }
+  | { type: 'fell'; tiles: Vec2[] }
+  | { type: 'mend'; piece: string }
+  | { type: 'rearm'; piece: string }
+  | { type: 'dismantle'; piece: string }
+  | { type: 'levelUp' }
   | { type: 'chooseMission'; id: string }
   | { type: 'clear'; plot: string }
   | { type: 'build'; plot: string; facility: FacilityId }
@@ -1076,7 +1105,7 @@ export function campaignOutdated(c: { version: number }): boolean {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 20;
+export const CAMPAIGN_VERSION = 22;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1085,8 +1114,14 @@ export interface CampaignState {
   players: Slot[];
   /** The only currency: builds, buys accessories, recruits and contacts regions. */
   credits: number;
-  /** Bastion experience from combat; its level unlocks technology (progression.ts). */
+  /** Bastion experience from combat, before version 21: its level then came from it (progression.ts). */
   xp: number;
+  /** The Bastion's level, bought (Arturo, 18/10 #40: suministros and missions flown, `levelUp`); since version 21. */
+  level?: number;
+  /** La Lata (Arturo, 18/10 #45): 0 todoterreno, 1 furgoneta, 2 camión, 3 autobús (VEHICLE_SEATS); since version 22. */
+  vehicle?: number;
+  /** Where each defender stands when the siege begins (Arturo, 18/10 #58), by soldier; the rest, by the Bastion. */
+  siegePosts?: Record<string, Vec2>;
   soldiers: CampaignSoldier[];
   /** Accessories bought: copies owned (equipped ones included). */
   inventory: Partial<Record<ItemId, number>>;
@@ -1338,11 +1373,17 @@ export function healRate(c: CampaignState): number {
   return level ? 1 + level + (hasAdjacency(c, 'infirmary') ? 1 : 0) : 1;
 }
 
-/** Bastion experience a mission's earned XP becomes: +25/40/55 % with simulation, 15 % more next to the Diario. */
-export function xpMultiplier(c: CampaignState): number {
+/**
+ * The suministros an operation pays, with the Sala de mapas (Arturo, 18/10
+ * #40: the Bastion has no experience now, so the maps find better pickings):
+ * +25/40/55 %, 15 % more beside the Sala de radio.
+ */
+export function rewardMultiplier(c: CampaignState): number {
   const level = facilityLevel(c, 'simulation');
   return level ? 1.25 + 0.15 * (level - 1) + (hasAdjacency(c, 'simulation') ? 0.15 : 0) : 1;
 }
+/** @deprecated the Sala de mapas' bonus is on suministros now: rewardMultiplier. */
+export const xpMultiplier = rewardMultiplier;
 
 /** Aim every soldier gets from the shooting range: 3/6/10, two more next to the training centre. */
 /** Will the Camposanto gives every soldier: +5 at level 2, +10 at level 3. */
@@ -1548,7 +1589,7 @@ function weaponBlocker(c: CampaignState, slot: Slot, id: string, connected?: rea
   const w = (c.foundWeapons ?? []).find((x) => x.id === id);
   if (!w) return 'Esa arma no está en la Armería.';
   const holder = w.holder ? c.soldiers.find((s) => s.id === w.holder) : undefined;
-  if (holder && !commandsFor(slot, holder.owner, connected)) return `La lleva ${holder.name}, de tu compañero.`;
+  if (holder && !commandsFor(slot, holder.owner, connected)) return `La lleva ${holder.name}, de la escuadra del otro jugador.`;
   return null;
 }
 
@@ -1697,7 +1738,8 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
     name: final ? 'El campamento de la sierra' : missionName(biome, REGIONS[region].name, seed, site),
     kind,
     difficulty,
-    expiresDay: final ? null : c.day + 6 + rng.int(4),
+    // Operations don't expire (Arturo, 18/10 #39): they wait, and more come.
+    expiresDay: null,
     reward,
     map: { kind: 'generated', biome, seed, ...(site ? { site } : {}) },
     pods: regionPods(c, region, difficulty, kind, living),
@@ -1885,7 +1927,35 @@ export function offerVip(c: CampaignState, offer: MissionOffer): string | undefi
 }
 
 /** Morse's report for an operation; side quests write their own. */
+/** The next vehicle can turn up: La Lata isn't the bus yet, none is on offer, and enough missions are flown. */
+function vehicleDue(c: CampaignState): boolean {
+  const next = vehicleOf(c) + 1;
+  return next < VEHICLE_SEATS.length && (c.missionsFlown ?? 0) >= VEHICLE_FROM[next]! && !c.offers.some((o) => o.reward.vehicle);
+}
+
+/**
+ * An operation to bring back a better vehicle (#45): a Limpieza («despejad la
+ * zona y es nuestro»); the bus, always at Atalaya, in Brena, a military station.
+ */
+function vehicleOffer(c: CampaignState, rng: Rng): MissionOffer {
+  const tier = vehicleOf(c) + 1;
+  const base = makeOffer(c, rng);
+  const bus = tier >= VEHICLE_SEATS.length - 1;
+  const region: RegionId = bus ? HOME_REGION : base.region;
+  const map: MapSource = bus ? { kind: 'generated', biome: 'facility', seed: rng.int(2 ** 31) } : base.map;
+  return {
+    ...base,
+    kind: 'elimination',
+    region,
+    map,
+    pods: bus ? regionPods(c, region, base.difficulty, 'elimination', false) : base.pods,
+    name: vehicleMissionName(tier, REGIONS[region].name),
+    reward: { ...base.reward, vehicle: tier },
+  };
+}
+
 export function offerBriefing(c: CampaignState, offer: MissionOffer): string {
+  if (offer.reward.vehicle) return vehicleBriefing(offer.reward.vehicle, REGIONS[offer.region].name);
   // The dead at the base: nobody writes to warn of it (docs/FASE12.md §11.5).
   if (offer.siege) return `${BASE_SIEGE_TEXT.here} ${SIEGE_TEXT.briefing} ${BASE_SIEGE_TEXT.defenders}${offer.night ? ` ${BASE_SIEGE_TEXT.night}` : ''}`;
   const q = questOf(c, offer);
@@ -1996,7 +2066,7 @@ function makeQuestOffer(c: CampaignState, q: QuestState, step: QuestMission, rng
     name: fill(step.name, q.names),
     kind: step.kind,
     difficulty,
-    expiresDay: c.day + step.days,
+    expiresDay: null,
     reward: { ...step.reward },
     map: { kind: 'generated', biome: step.biome, seed: rng.int(2 ** 31) },
     pods,
@@ -2177,8 +2247,8 @@ function resolveRumor(c: CampaignState, rumor: Rumor, rng: Rng): void {
     c.credits += credits;
     log(c, `El rumor ${ofZone(name)} era un alijo de otros supervivientes: +${credits} suministros.`, 'good', alert);
   } else if (roll < 80) {
-    log(c, `El rumor ${ofZone(name)} era un Saqueador que hablaba demasiado. Lo que sabía vale experiencia.`, 'good', alert);
-    gainXp(c, 6 + rng.int(5), rng);
+    log(c, `El rumor ${ofZone(name)} era un Saqueador que hablaba demasiado: sabía adónde ir.`, 'good', alert);
+    tipOff(c, rng);
   } else {
     log(c, `El rumor ${ofZone(name)} era un bulo.`, 'info', alert);
   }
@@ -2257,6 +2327,26 @@ export function siegeHeard(c: CampaignState): { in: number; count?: number; side
 /** One siege in three by night (Arturo, 18/10), never the first one held: in the dark only the floodlights let the squad see far. */
 export const SIEGE_NIGHT = 3;
 
+/**
+ * Why `soldier` can't stand at `at` when the siege begins (Arturo, 18/10 #58:
+ * each places their own, anywhere free on the clearing but its edge), or null.
+ */
+export function postBlocker(c: CampaignState, slot: Slot, soldier: string, at: Vec2 | null): string | null {
+  if (!activeOffer(c)?.siege) return 'Solo se coloca antes de que empiece el asedio.';
+  const s = c.soldiers.find((x) => x.id === soldier);
+  if (!s || s.owner !== slot) return 'Solo puedes colocar a tus soldados.';
+  if (!c.squad.includes(s.id)) return `${s.name} no defiende: no está en condiciones.`;
+  if (!at) return null;
+  const base = c.bastion;
+  if (at.x < BASE_EDGE || at.y < BASE_EDGE || at.x >= base.width - BASE_EDGE || at.y >= base.height - BASE_EDGE) return 'Ahí no: es el borde del claro.';
+  if (treeAt(base, at.x, at.y)) return 'Ahí hay árboles.';
+  const piece = pieceAt(base, at.x, at.y);
+  if (piece && PIECES[piece.piece].kind === 'trap') return 'Ahí hay una trampa.';
+  if (baseLayout(base).tiles[at.y * base.width + at.x] !== 'floor') return 'Ahí no se puede estar.';
+  if (Object.entries(c.siegePosts ?? {}).some(([id, p]) => id !== soldier && p.x === at.x && p.y === at.y)) return 'Ahí ya hay alguien.';
+  return null;
+}
+
 function startSiege(c: CampaignState, rng: Rng): void {
   const night = c.siege.held > 0 && rng.int(SIEGE_NIGHT) === 0;
   const offer: MissionOffer = {
@@ -2280,6 +2370,7 @@ function startSiege(c: CampaignState, rng: Rng): void {
   c.offers.push(offer);
   c.activeMission = offer.id;
   c.squad = c.soldiers.filter(soldierReady).map((s) => s.id);
+  c.siegePosts = {};
   c.launchReady = [false, false];
   syncPads(c);
   log(c, `${BASE_SIEGE_TEXT.here} ${BASE_SIEGE_TEXT.defenders}`, 'bad', { kicker: 'Asedio', title: BASE_SIEGE_TEXT.here });
@@ -2329,7 +2420,8 @@ function takeBackBase(c: CampaignState, s: GameState): { broken: number; hurt: n
  * the soldiers keep what they learnt and carry.
  */
 function fallBase(c: CampaignState, rng: Rng): void {
-  c.bastion = freshClearing(rng);
+  // The level stays: the new clearing has the building of its stage.
+  c.bastion = { ...freshClearing(rng), level: bastionLevel(c) };
   c.credits = 0;
   c.parts = 0;
   c.medicines = 0;
@@ -2359,7 +2451,7 @@ function freshRegions(): RegionState[] {
 
 /** The base's first line, and the same once the opening operation is chosen (placeholders for Lore). */
 const WELCOME = 'El Bastión entra en servicio. Elegid la primera misión: el combate hará subir de nivel al Bastión.';
-const WELCOME_OPENING = 'Primera salida: el maletín de urgencias del consultorio de Brena. La escuadra espera en la cochera.';
+const WELCOME_OPENING = 'Primera salida: la insulina del consultorio de Brena. La escuadra espera en la cochera.';
 
 /**
  * A new campaign opens with a mission (playtest 2026-10-13): the first story
@@ -2385,6 +2477,8 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     players: [...players],
     credits: 200,
     xp: 0,
+    level: 1,
+    vehicle: 0,
     soldiers: [],
     inventory: { fragGrenade: 2, firstAid: 1 },
     medicines: START_MEDICINES,
@@ -2448,6 +2542,12 @@ export type CampaignCommand =
   | { type: 'fell'; tiles: Vec2[] }
   | { type: 'mend'; piece: string }
   | { type: 'raise'; piece: string }
+  /** Pieces in a row, dragged (Arturo, 18/10 #35): all or none, to a vote when together they are dear. */
+  | { type: 'placeLine'; piece: PieceId; cells: Vec2[]; rot: number }
+  /** The Bastion one level up, bought (#40). */
+  | { type: 'levelUp' }
+  /** A defender put where it will stand when the siege begins (#58); null takes it back to the Bastion. */
+  | { type: 'post'; soldier: string; at: Vec2 | null }
   | { type: 'rearm'; piece: string }
   | { type: 'dismantle'; piece: string }
   | { type: 'chooseMission'; id: string }
@@ -2491,14 +2591,24 @@ export interface CampaignContext {
 
 export type CampaignResult = { ok: true; launch?: boolean } | { ok: false; error: string };
 
-/** Max soldiers each player may bring: half the squad (one more with the training centre), all of it alone. */
+/** Soldiers La Lata takes, by vehicle (Arturo, 18/10 #45): todoterreno, furgoneta, camión, autobús. */
+export const VEHICLE_SEATS = [4, 6, 7, 8];
+/** Missions flown before an operation for each vehicle can turn up. */
+export const VEHICLE_FROM = [0, 2, 6, 10];
+
+/** La Lata's vehicle (campaigns before version 22 had the bus's six seats: the furgoneta). */
+export function vehicleOf(c: Pick<CampaignState, 'vehicle'>): number {
+  return c.vehicle ?? 1;
+}
+
+/** Max soldiers each player may bring: half of La Lata (rounded up), all of it alone. */
 export function squadLimit(c: CampaignState, connected: readonly Slot[]): number {
-  const bonus = facilityCount(c, 'training') > 0 ? 1 : 0;
-  return c.players.length > 1 && connected.length > 1 ? 3 + bonus : 6 + 2 * bonus;
+  const seats = squadMax(c);
+  return c.players.length > 1 && connected.length > 1 ? Math.ceil(seats / 2) : seats;
 }
 
 export function squadMax(c: CampaignState): number {
-  return facilityCount(c, 'training') > 0 ? 8 : 6;
+  return VEHICLE_SEATS[vehicleOf(c)]!;
 }
 
 function squadCount(c: CampaignState, slot: Slot): number {
@@ -2512,23 +2622,10 @@ function squadCount(c: CampaignState, slot: Slot): number {
  * its owner wants it: `evict` is the soldier that leaves to make room.
  */
 export function squadPlace(c: CampaignState, slot: Slot, connected: readonly Slot[]): { error: string | null; evict?: string } {
+  // Each their own part (Arturo, 18/10 #43): a part the other leaves empty stays empty.
+  if (c.squad.length >= squadMax(c)) return { error: `La Lata va llena: caben ${squadMax(c)}.` };
   const limit = squadLimit(c, connected);
-  const mine = squadCount(c, slot);
-  if (c.squad.length >= squadMax(c)) {
-    const lent = mine < limit ? [...c.squad].reverse().find((id) => {
-      const owner = c.soldiers.find((s) => s.id === id)?.owner;
-      return owner !== undefined && owner !== slot && squadCount(c, owner) > limit;
-    }) : undefined;
-    return lent ? { error: null, evict: lent } : { error: 'La escuadra está completa.' };
-  }
-  if (mine < limit) return { error: null };
-  const partner = c.players.find((p) => p !== slot);
-  const spare =
-    partner !== undefined &&
-    connected.includes(partner) &&
-    squadCount(c, partner) < limit &&
-    c.soldiers.some((s) => s.owner === partner && soldierReady(s) && !c.squad.includes(s.id));
-  return spare ? { error: `Máximo ${limit} soldados por jugador: tu compañero aún puede completar su parte.` } : { error: null };
+  return squadCount(c, slot) < limit ? { error: null } : { error: `Máximo ${limit} soldados por jugador.` };
 }
 
 /** The more veterancy (and then missions) first. */
@@ -2554,11 +2651,7 @@ export function defaultSquad(c: CampaignState, connected: readonly Slot[]): stri
     const ready = c.soldiers.filter((s) => s.owner === slot && soldierReady(s)).sort(seasonedFirst);
     squad.push(...ready.slice(0, limit).map((s) => s.id));
   }
-  // A share left short (wounded, fallen) is filled with the other player's best soldiers left out.
-  const spare = c.soldiers
-    .filter((s) => connected.includes(s.owner) && c.players.includes(s.owner) && soldierReady(s) && !squad.includes(s.id))
-    .sort(seasonedFirst);
-  for (const s of spare) if (squad.length < squadMax(c)) squad.push(s.id);
+  // A part left short stays short: each their own (Arturo, 18/10 #43).
   return squad.slice(0, squadMax(c));
 }
 
@@ -2623,13 +2716,17 @@ export interface NextStep {
  * now". Shared matters (operations, building, rumours) and personal ones
  * (promotions, equipment) mixed by urgency.
  */
-export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
+/**
+ * `partnerName`: who the other player is, for lines that speak of them (Lore, 18/10: «compañero» doesn't fit
+ * Ana); the lines don't depend on whether it is a man or a woman.
+ */
+export function nextSteps(c: CampaignState, slot: Slot, partnerName = 'El otro jugador'): NextStep[] {
   if (c.outcome) return [];
   const steps: NextStep[] = [];
   const partner: Slot = slot === 0 ? 1 : 0;
   const shared = c.players.length > 1;
 
-  if (c.proposal && c.proposal.by !== slot) steps.push({ view: 'hub', label: `Tu compañero propone ${c.proposal.text}`, tone: 'urgent' });
+  if (c.proposal && c.proposal.by !== slot) steps.push({ view: 'hub', label: `${partnerName} propone ${c.proposal.text}`, tone: 'urgent' });
   const event = eventDef(c);
   if (event) steps.push({ view: 'hub', label: `Decidid: ${event.title}`, tone: 'urgent' });
 
@@ -2653,12 +2750,12 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   if (mission?.siege) {
     // The dead at the base: straight to the cochera, where everyone healthy is already on the squad.
     const partnerReady = shared && c.launchReady[partner] && !c.launchReady[slot];
-    steps.push({ view: 'squad', label: partnerReady ? `Tu compañero está listo: ${mission.name}` : `${BASE_SIEGE_TEXT.here} Defended el Bastión`, tone: 'urgent' });
+    steps.push({ view: 'squad', label: partnerReady ? `${partnerName} ya ha dado el sí: ${mission.name}` : `${BASE_SIEGE_TEXT.here} Defended el Bastión`, tone: 'urgent' });
   } else if (mission) {
     const partnerReady = shared && c.launchReady[partner] && !c.launchReady[slot];
     steps.push({
       view: 'squad',
-      label: partnerReady ? `Tu compañero está listo para despegar: ${mission.name}` : `Revisa la escuadra y despega: ${mission.name}`,
+      label: partnerReady ? `${partnerName} ya quiere despegar: ${mission.name}` : `Revisa la escuadra y despega: ${mission.name}`,
       tone: partnerReady ? 'urgent' : 'info',
       go: { offer: mission.id },
     });
@@ -2694,7 +2791,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   }
 
   if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) {
-    steps.push({ view: 'geoscape', label: c.version >= 20 ? 'Tu compañero quiere esperar a que se curen' : 'Tu compañero quiere esperar noticias', tone: 'urgent' });
+    steps.push({ view: 'geoscape', label: c.version >= 20 ? `${partnerName} quiere esperar a que se curen` : `${partnerName} quiere esperar noticias`, tone: 'urgent' });
   }
   if (mustWait(c) && !c.advanceReady[slot]) steps.push({ view: 'barracks', label: 'Nadie puede salir: esperad a que se curen', tone: 'urgent' });
 
@@ -2703,9 +2800,14 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   if (flooded.length) steps.push({ view: 'geoscape', label: floodedListLabel(bastionLevel(c), flooded.map((id) => REGIONS[id].name)), tone: 'info' });
 
   // Food (docs/FASE4.md): hunger, or the pantry running low.
-  const days = Math.floor((c.food ?? 0) / Math.max(1, dailyRations(c)));
+  // Counted in missions now, five days each (18/10 #37, Lore's words).
+  const missions = Math.floor((c.food ?? 0) / Math.max(1, dailyRations(c) * DAYS_PER_MISSION));
   if (c.hungry) steps.push({ view: 'facilities', label: 'Pasáis hambre: −10 de voluntad y heridas lentas. Buscad raciones o un Huerto', tone: 'urgent' });
-  else if (days < 3) steps.push({ view: 'facilities', label: `Quedan raciones para ${days} ${days === 1 ? 'día' : 'días'}`, tone: 'info' });
+  else if (missions < 2) steps.push({ view: 'facilities', label: rationsLowLine(missions), tone: missions < 1 ? 'urgent' : 'info' });
+
+  // The Bastion one level up, once it can be bought (18/10 #40).
+  const up = nextLevel(c);
+  if (up && !levelUpBlocker(c)) steps.push({ view: 'hub', label: `Sube el Bastión al nivel ${up.level} (${up.cost} §)`, tone: 'info' });
   // The Taller has something within reach to make.
   const craft = (Object.keys(CRAFTS) as CraftId[]).find((id) => !craftBlocker(c, id));
   if (craft) steps.push({ view: 'engineering', label: `El Taller puede hacer ${CRAFTS[craft].the}`, tone: 'info' });
@@ -2713,7 +2815,7 @@ export function nextSteps(c: CampaignState, slot: Slot): NextStep[] {
   // The bitten (docs/FASE3.md): the partner's treatment to confirm, and every fever with its deadline.
   const treating = c.treatment && c.soldiers.find((s) => s.id === c.treatment!.soldier);
   if (treating && shared && c.treatment!.ready[partner] && !c.treatment!.ready[slot]) {
-    steps.push({ view: 'barracks', label: `Tu compañero quiere tratar a ${treating.name} (${treatCost(c)} ✚)`, tone: 'urgent', go: { soldier: treating.id } });
+    steps.push({ view: 'barracks', label: `${partnerName} quiere tratar a ${treating.name} (${treatCost(c)} ✚)`, tone: 'urgent', go: { soldier: treating.id } });
   }
   for (const s of c.soldiers.filter((x) => x.alive && x.infection).sort((a, b) => turnDay(c, a)! - turnDay(c, b)!)) {
     const left = turnDay(c, s)! - c.day;
@@ -2750,6 +2852,19 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
       const p = c.bastion.pieces.find((x) => x.id === action.piece);
       return p ? `mejorar ${PIECE_TEXT[p.piece].the} a nivel ${(p.level ?? 1) + 1}` : 'mejorar…';
     }
+    case 'placeLine':
+      return `construir ${action.cells.length} × ${PIECE_TEXT[action.piece].name.toLowerCase()}`;
+    case 'fell':
+      return action.tiles.length === 1 ? 'talar un árbol' : `talar ${action.tiles.length} árboles`;
+    case 'mend':
+    case 'rearm':
+    case 'dismantle': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece);
+      const what = p ? PIECE_TEXT[p.piece].the : 'la pieza';
+      return `${action.type === 'mend' ? 'reparar' : action.type === 'rearm' ? 'reponer' : 'desmontar'} ${what}`;
+    }
+    case 'levelUp':
+      return `subir el Bastión al nivel ${bastionLevel(c) + 1}`;
     case 'chooseMission':
       return `ir a la misión ${c.offers.find((o) => o.id === action.id)?.name ?? ''}`;
     case 'clear': {
@@ -2790,6 +2905,45 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (bastionLevel(c) < next.level) return `Requiere nivel ${next.level} del Bastión.`;
       if (!buildingWorks(p)) return 'No se mejora con daños: repara antes.';
       return costBlocker(c, next.cost, 0);
+    }
+    case 'placeLine': {
+      const def = PIECES[action.piece];
+      if (bastionLevel(c) < def.level) return `Se desbloquea con el nivel ${def.level} del Bastión.`;
+      // Each in its place, the ones before it already standing.
+      const trial: BaseState = JSON.parse(JSON.stringify(c.bastion));
+      for (const cell of action.cells) {
+        const blocked = placeBlocker(trial, action.piece, cell.x, cell.y, action.rot);
+        if (blocked) return blocked;
+        placePiece(trial, action.piece, cell.x, cell.y, action.rot);
+      }
+      return costBlocker(c, def.cost.supplies * action.cells.length, (def.cost.parts ?? 0) * action.cells.length);
+    }
+    case 'fell': {
+      for (const t of action.tiles) {
+        const blocked = fellBlocker(c.bastion, t.x, t.y);
+        if (blocked) return blocked;
+      }
+      return costBlocker(c, FELL_COST * action.tiles.length, 0);
+    }
+    case 'levelUp':
+      return levelUpBlocker(c);
+    case 'mend': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece);
+      if (!p) return 'Eso ya no está.';
+      const cost = repairCost(p);
+      if (!cost.supplies) return 'No le falta nada.';
+      return costBlocker(c, cost.supplies, cost.parts);
+    }
+    case 'rearm': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece);
+      if (!p) return 'Eso ya no está.';
+      const parts = rearmCost(p);
+      if (!parts) return 'Está lista.';
+      return (c.parts ?? 0) < parts ? 'No hay piezas suficientes.' : null;
+    }
+    case 'dismantle': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece);
+      return p ? dismantleBlocker(p) : 'Eso ya no está.';
     }
     case 'chooseMission':
       // Another operation may take the place of the one chosen, until it takes off.
@@ -2862,6 +3016,52 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       p.level = (p.level ?? 1) + 1;
       const lines = PIECE_TEXT[p.piece].levels;
       log(c, `${PIECE_TEXT[p.piece].name}, nivel ${p.level}.${lines?.[p.level - 1] ? ` ${lines[p.level - 1]}` : ''}`, 'good');
+      break;
+    }
+    case 'placeLine': {
+      const def = PIECES[action.piece];
+      pay(c, def.cost.supplies * action.cells.length);
+      c.parts = (c.parts ?? 0) - (def.cost.parts ?? 0) * action.cells.length;
+      for (const cell of action.cells) placePiece(c.bastion, action.piece, cell.x, cell.y, action.rot);
+      log(c, `Construido: ${action.cells.length} × ${PIECE_TEXT[action.piece].name.toLowerCase()}.`, 'good');
+      break;
+    }
+    case 'fell': {
+      const felled = action.tiles.reduce((n, t) => n + fellTree(c.bastion, t.x, t.y), 0);
+      pay(c, FELL_COST * felled);
+      log(c, felled === 1 ? `Talado un árbol: −${FELL_COST} §.` : `Talados ${felled} árboles: −${FELL_COST * felled} §.`);
+      break;
+    }
+    case 'mend': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece)!;
+      const cost = repairCost(p);
+      pay(c, cost.supplies);
+      c.parts = (c.parts ?? 0) - cost.parts;
+      p.hp = PIECES[p.piece].hp;
+      log(c, `Reparado: ${PIECE_TEXT[p.piece].name}.`, 'good');
+      break;
+    }
+    case 'rearm': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece)!;
+      c.parts = (c.parts ?? 0) - rearmCost(p);
+      p.charges = PIECES[p.piece].charges;
+      log(c, `Repuesto: ${PIECE_TEXT[p.piece].name}.`, 'good');
+      break;
+    }
+    case 'dismantle': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece)!;
+      const back = dismantleRefund(p);
+      c.bastion.pieces = c.bastion.pieces.filter((x) => x !== p);
+      c.credits += back;
+      log(c, back ? `Desmontado: ${PIECE_TEXT[p.piece].name}, +${back} §.` : `Desmontado: ${PIECE_TEXT[p.piece].name}.`);
+      break;
+    }
+    case 'levelUp': {
+      const level = bastionLevel(c) + 1;
+      pay(c, LEVEL_COST[level - 1]!);
+      c.level = level;
+      c.bastion.level = level;
+      reachedLevel(c, level, ctx.rng);
       break;
     }
     case 'chooseMission': {
@@ -2956,6 +3156,19 @@ export function proposalCost(c: CampaignState, action: ProposalAction): number {
       const next = p && raiseCost(p);
       return next && typeof next !== 'string' ? next.cost : 0;
     }
+    case 'placeLine':
+      return PIECES[action.piece].cost.supplies * action.cells.length;
+    case 'fell':
+      return FELL_COST * action.tiles.length;
+    case 'mend': {
+      const p = c.bastion.pieces.find((x) => x.id === action.piece);
+      return p ? repairCost(p).supplies : 0;
+    }
+    case 'rearm':
+    case 'dismantle':
+      return 0;
+    case 'levelUp':
+      return LEVEL_COST[bastionLevel(c)] ?? 0;
     case 'clear': {
       const plot = plotById(c, action.plot);
       return plot ? clearCost(plot).cost : 0;
@@ -3045,63 +3258,21 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
   const { slot } = ctx;
 
   switch (cmd.type) {
-    case 'place': {
-      // Each one builds at once with what is shared; what is dear goes to a vote (docs/FASE12.md §11.7).
-      const action: ProposalAction = { type: 'place', piece: cmd.piece, x: cmd.x, y: cmd.y, rot: cmd.rot };
-      if (PIECES[cmd.piece].cost.supplies > VOTE_ABOVE) return propose(c, action, ctx);
-      const error = validateAction(c, action);
-      if (error) return { ok: false, error };
-      applyAction(c, action, ctx);
-      return { ok: true };
-    }
+    // Everything on the base goes to a vote with the other one here (Arturo, 18/10 #55: «todo lo de la base»).
+    case 'place':
+      return propose(c, { type: 'place', piece: cmd.piece, x: cmd.x, y: cmd.y, rot: cmd.rot }, ctx);
     case 'raise':
       return propose(c, { type: 'raise', piece: cmd.piece }, ctx);
-    case 'fell': {
-      for (const t of cmd.tiles) {
-        const blocked = fellBlocker(c.bastion, t.x, t.y);
-        if (blocked) return { ok: false, error: blocked };
-      }
-      let got = 0;
-      for (const t of cmd.tiles) got += fellTree(c.bastion, t.x, t.y);
-      c.credits += got;
-      log(c, cmd.tiles.length === 1 ? `Talado un árbol: +${got} §.` : `Talados ${cmd.tiles.length} árboles: +${got} §.`);
-      return { ok: true };
-    }
-    case 'mend': {
-      const p = c.bastion.pieces.find((x) => x.id === cmd.piece);
-      if (!p) return { ok: false, error: 'Eso ya no está.' };
-      const cost = repairCost(p);
-      if (!cost.supplies) return { ok: false, error: 'No le falta nada.' };
-      const blocked = costBlocker(c, cost.supplies, cost.parts);
-      if (blocked) return { ok: false, error: blocked };
-      pay(c, cost.supplies);
-      c.parts = (c.parts ?? 0) - cost.parts;
-      p.hp = PIECES[p.piece].hp;
-      log(c, `Reparado: ${PIECE_TEXT[p.piece].name}.`, 'good');
-      return { ok: true };
-    }
-    case 'rearm': {
-      const p = c.bastion.pieces.find((x) => x.id === cmd.piece);
-      if (!p) return { ok: false, error: 'Eso ya no está.' };
-      const parts = rearmCost(p);
-      if (!parts) return { ok: false, error: 'Está lista.' };
-      if ((c.parts ?? 0) < parts) return { ok: false, error: 'No hay piezas suficientes.' };
-      c.parts = (c.parts ?? 0) - parts;
-      p.charges = PIECES[p.piece].charges;
-      log(c, `Repuesto: ${PIECE_TEXT[p.piece].name}.`, 'good');
-      return { ok: true };
-    }
-    case 'dismantle': {
-      const p = c.bastion.pieces.find((x) => x.id === cmd.piece);
-      if (!p) return { ok: false, error: 'Eso ya no está.' };
-      const blocked = dismantleBlocker(p);
-      if (blocked) return { ok: false, error: blocked };
-      const back = dismantleRefund(p);
-      c.bastion.pieces = c.bastion.pieces.filter((x) => x !== p);
-      c.credits += back;
-      log(c, back ? `Desmontado: ${PIECE_TEXT[p.piece].name}, +${back} §.` : `Desmontado: ${PIECE_TEXT[p.piece].name}.`);
-      return { ok: true };
-    }
+    case 'levelUp':
+      return propose(c, { type: 'levelUp' }, ctx);
+    case 'placeLine':
+      return propose(c, { type: 'placeLine', piece: cmd.piece, cells: cmd.cells, rot: cmd.rot }, ctx);
+    case 'fell':
+      return propose(c, { type: 'fell', tiles: cmd.tiles }, ctx);
+    case 'mend':
+    case 'rearm':
+    case 'dismantle':
+      return propose(c, { type: cmd.type, piece: cmd.piece }, ctx);
     case 'chooseMission':
       if (activeOffer(c)?.siege) return { ok: false, error: SIEGE_NOW };
       return propose(c, { type: 'chooseMission', id: cmd.id }, ctx);
@@ -3126,7 +3297,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       const w = (c.foundWeapons ?? []).find((x) => x.id === cmd.weapon);
       if (!w) return { ok: false, error: 'Esa arma no está en la Armería.' };
       const holder = w.holder ? c.soldiers.find((s) => s.id === w.holder) : undefined;
-      if (holder && !commandsFor(slot, holder.owner, ctx.connected)) return { ok: false, error: `La lleva ${holder.name}, de tu compañero.` };
+      if (holder && !commandsFor(slot, holder.owner, ctx.connected)) return { ok: false, error: `La lleva ${holder.name}, de la escuadra del otro jugador.` };
       if (cmd.soldier === null) {
         w.holder = null;
         return { ok: true };
@@ -3195,19 +3366,29 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       log(c, 'Misión cancelada.');
       return { ok: true };
 
+    case 'post': {
+      const blocked = postBlocker(c, slot, cmd.soldier, cmd.at);
+      if (blocked) return { ok: false, error: blocked };
+      const posts = (c.siegePosts ??= {});
+      if (cmd.at) posts[cmd.soldier] = { x: cmd.at.x, y: cmd.at.y };
+      else delete posts[cmd.soldier];
+      c.launchReady = [false, false];
+      return { ok: true };
+    }
+
     case 'squad': {
       if (!c.activeMission) return { ok: false, error: 'Primero elegid una misión.' };
       // In a siege every soldier fit to fight defends (docs/FASE12.md §11.5).
       if (activeOffer(c)?.siege) return { ok: false, error: BASE_SIEGE_TEXT.defenders };
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
-      if (!s || !commandsFor(slot, s.owner, ctx.connected)) return { ok: false, error: 'Solo puedes elegir a tus soldados.' };
+      // Each manages their own, the other here or not (#43).
+      if (!s || s.owner !== slot) return { ok: false, error: 'Solo puedes elegir a tus soldados.' };
       if (!cmd.on) {
         c.squad = c.squad.filter((id) => id !== s.id);
       } else if (!c.squad.includes(s.id)) {
         if (s.infection) return { ok: false, error: `${s.name} tiene fiebre: hay que tratarle antes.` };
         if (!soldierReady(s)) return { ok: false, error: `${s.name} no está en condiciones.` };
-        // A partner's soldier, picked while they are away, takes a place of theirs.
-        const place = squadPlace(c, s.owner, ctx.connected);
+        const place = squadPlace(c, slot, ctx.connected);
         if (place.error) return { ok: false, error: place.error };
         joinSquad(c, s, place);
       }
@@ -3284,14 +3465,15 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
     case 'recruit': {
       const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).length;
       if (mine >= soldierCap(c)) return { ok: false, error: `Máximo ${soldierCap(c)} soldados por jugador.` };
-      if (bedsFree(c) <= 0) return { ok: false, error: 'Para reclutar más soldados, construid un barracón: no quedan camas.' };
+      if (bedsFree(c) <= 0) return { ok: false, error: 'No quedan camas: para reclutar más, construid un Barracón.' };
       if (!canAfford(c, recruitCost(c))) return { ok: false, error: 'No hay suministros suficientes.' };
       const place = cmd.squad ? (c.activeMission ? squadPlace(c, slot, ctx.connected) : { error: 'Primero elegid una misión.' }) : null;
       if (place?.error) return { ok: false, error: place.error };
       pay(c, recruitCost(c));
       const s = addSoldier(c, slot, ctx.rng);
-      // The training centre sends them in with something more learnt: a level at its level 2, two at 3.
-      const trained = Math.max(0, facilityLevel(c, 'training') - 1);
+      // The training centre sends them in with something more learnt: a level for each of its own (its places in the
+      // squad are La Lata's now: 18/10 #45).
+      const trained = facilityLevel(c, 'training');
       if (trained) seasoned(s, trained, ctx.rng);
       log(c, `Llega a la escuadra: ${s.name} (${veterancyName(s)}).`);
       if (place) {
@@ -3318,7 +3500,8 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'unlock': {
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
-      if (!s || !commandsFor(slot, s.owner, ctx.connected) || !s.alive) return { ok: false, error: 'Solo puedes elegir las habilidades de tus soldados.' };
+      // Only its own commander, the other here or not (Arturo, 18/10 #42).
+      if (!s || s.owner !== slot || !s.alive) return { ok: false, error: 'Solo puedes elegir las habilidades de tus soldados.' };
       const blocked = unlockBlocker(s.skills, s.board, cmd.cell);
       if (blocked) return { ok: false, error: blocked };
       s.board.push(cmd.cell);
@@ -3456,7 +3639,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   if (c.day >= c.nextMissionDay) {
     c.nextMissionDay = c.day + 5 + rng.int(3);
     if (c.offers.filter((o) => !o.final && !o.facility && !o.story).length < MAX_OFFERS + (facilityLevel(c, 'listening') ? 1 : 0)) {
-      const offer = makeOffer(c, rng);
+      const offer = vehicleDue(c) && rng.int(3) === 0 ? vehicleOffer(c, rng) : makeOffer(c, rng);
       c.offers.push(offer);
       log(c, `Nueva misión en ${REGIONS[offer.region].name}: ${offer.name}.`);
       stop = true;
@@ -3658,14 +3841,53 @@ export function gainXp(c: CampaignState, amount: number, rng: Rng): void {
   const before = bastionLevel(c);
   c.xp += amount;
   const after = bastionLevel(c);
-  for (let level = before + 1; level <= after; level++) {
-    log(c, `El Bastión sube al nivel ${level}.`, 'good');
-    // Weapons the level brings to the Armería (docs/FASE8.md §A).
-    const arms = LEVEL_ARMS[level] ?? [];
-    for (const kind of arms) (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind, holder: null });
-    if (arms.length) log(c, `A la Armería ${arms.length === 1 ? 'llega' : 'llegan'} ${listOf(arms.map((k) => FOUND_WEAPONS[k].find))}.`, 'good');
-  }
+  for (let level = before + 1; level <= after; level++) reachedLevel(c, level, rng);
+}
+
+/** The Bastion straight to `level` (tests and old ways in): every level on the way reached as if bought. */
+export function setBastionLevel(c: CampaignState, level: number, rng: Rng): void {
+  const from = bastionLevel(c);
+  c.level = Math.max(1, Math.min(MAX_LEVEL, level));
+  c.bastion.level = c.level;
+  for (let l = from + 1; l <= c.level; l++) reachedLevel(c, l, rng);
+}
+
+/** A level reached: said, the weapons it brings to the Armería (docs/FASE8.md §A), and the story it may open. */
+function reachedLevel(c: CampaignState, level: number, rng: Rng): void {
+  log(c, `El Bastión sube al nivel ${level}.`, 'good');
+  const arms = LEVEL_ARMS[level] ?? [];
+  for (const kind of arms) (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind, holder: null });
+  if (arms.length) log(c, `A la Armería ${arms.length === 1 ? 'llega' : 'llegan'} ${listOf(arms.map((k) => FOUND_WEAPONS[k].find))}.`, 'good');
   refreshNarrative(c, rng);
+}
+
+/**
+ * The next level of the Bastion (Arturo, 18/10 #40): what it costs, the
+ * missions it asks to have flown and how many have been; null at the top.
+ */
+export function nextLevel(c: CampaignState): { level: number; cost: number; missions: number; flown: number } | null {
+  const level = bastionLevel(c) + 1;
+  if (level > MAX_LEVEL) return null;
+  return { level, cost: LEVEL_COST[level - 1]!, missions: LEVEL_MISSIONS[level - 1]!, flown: c.missionsFlown ?? 0 };
+}
+
+/** Why the Bastion can't go up a level now, or null. */
+export function levelUpBlocker(c: CampaignState): string | null {
+  const next = nextLevel(c);
+  if (!next) return 'El Bastión ya está en su nivel más alto.';
+  if (next.flown < next.missions) return `Para el nivel ${next.level} hacen falta ${next.missions} misiones hechas: lleváis ${next.flown}.`;
+  return costBlocker(c, next.cost, 0);
+}
+
+/**
+ * What someone knew (an event, a rumour), now that the Bastion's level is
+ * bought and has no experience (#40): where to go, a new operation; they don't
+ * expire (#39).
+ */
+function tipOff(c: CampaignState, rng: Rng): void {
+  const offer = makeOffer(c, rng);
+  c.offers.push(offer);
+  log(c, `Nueva misión en ${REGIONS[offer.region].name}: ${offer.name}.`, 'good');
 }
 
 /** The debrief's loot line (lore.ts lootSummary), or null when nothing came back. */
@@ -3688,7 +3910,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     victory,
     reason: mission.outcomeReason ?? 'wiped',
     squad: [],
-    reward: victory && offer ? offer.reward : null,
+    reward: victory && offer ? { ...offer.reward, ...(offer.reward.credits ? { credits: Math.round(offer.reward.credits * rewardMultiplier(c)) } : {}) } : null,
     doomChange: 0,
     xp: 0,
     levelFrom: bastionLevel(c),
@@ -3701,6 +3923,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   };
   // What the siege left of the base: beaten, broken, traps gone off (docs/FASE12.md §11.4).
   if (siege) {
+    delete c.siegePosts;
     // Held, it is what there is to mend; lost, the base is left behind anyway.
     const damage = takeBackBase(c, mission);
     if (victory && (damage.broken || damage.hurt || damage.spent)) report.damage = damage;
@@ -3714,6 +3937,12 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   // Weapons that changed hands in the mission (docs/FASE8.md §C): what a soldier comes home holding is theirs;
   // their own, swapped for a find, comes back only in a backpack. Armería id → whose it was.
   const swapped = new Map<string, string>();
+  // A fallen soldier's weapon another brought home (its backpack left where it fell: 18/10 #49) isn't lost.
+  const cameHome = new Set<string>();
+  for (const u of mission.units.filter((x) => bringsLootHome(mission, x))) {
+    for (const l of u.backpack ?? []) if (l.weaponId) cameHome.add(l.weaponId);
+    for (const id of [u.arms?.primaryId, u.arms?.meleeId]) if (id) cameHome.add(id);
+  }
   for (const u of mission.units) {
     const s = u.campaignId ? c.soldiers.find((x) => x.id === u.campaignId) : undefined;
     if (!s) continue;
@@ -3739,6 +3968,10 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
       for (const item of [s.loadout.utility, s.loadout.ammo]) if (item) c.inventory[item] = Math.max(0, (c.inventory[item] ?? 0) - 1);
       s.loadout = { utility: null, ammo: null };
       for (const carried of (c.foundWeapons ?? []).filter((w) => w.holder === s.id)) {
+        if (cameHome.has(carried.id)) {
+          carried.holder = null;
+          continue;
+        }
         c.foundWeapons = c.foundWeapons!.filter((w) => w !== carried);
         log(c, `Con ${s.name} se pierde su ${FOUND_WEAPONS[carried.kind].name.toLowerCase()}.`, 'bad');
       }
@@ -3754,6 +3987,9 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
           swapped.set(before.id, s.name);
         }
         if (kind && !id) (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind, holder: s.id, ...(hand === 'primary' ? wornAs(u.arms) : {}) });
+        // Another's weapon taken up out there (a fallen one's: #49) is this soldier's now.
+        const taken = id && id !== before?.id ? c.foundWeapons?.find((w) => w.id === id) : undefined;
+        if (taken) taken.holder = s.id;
       }
       // What the shots took off the weapon in the hand (docs/FASE9.md §5) comes home with it, and is told when it shows.
       const own = u.arms.primaryId ? c.foundWeapons?.find((w) => w.id === u.arms!.primaryId) : undefined;
@@ -3821,9 +4057,13 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     }
   }
 
+  if (victory && offer?.reward.vehicle && offer.reward.vehicle > vehicleOf(c)) {
+    c.vehicle = offer.reward.vehicle;
+    log(c, vehicleWonLine(c.vehicle, VEHICLE_SEATS[c.vehicle]!), 'good');
+  }
   if (victory && offer) {
     const r = offer.reward;
-    c.credits += r.credits ?? 0;
+    c.credits += Math.round((r.credits ?? 0) * rewardMultiplier(c));
     c.medicines = (c.medicines ?? 0) + (r.medicines ?? 0);
     addFood(c, r.food ?? 0);
     c.parts = (c.parts ?? 0) + (r.parts ?? 0);
@@ -3863,11 +4103,9 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   }
   for (const e of report.squad) if (e.status === 'dead') log(c, `${e.name} ha caído en combate.`, 'bad');
 
-  // Combat is what makes the Bastion grow.
-  const kills = report.squad.reduce((sum, e) => sum + e.kills, 0);
-  const earned = missionXp(victory, offer?.difficulty ?? 1, kills);
-  report.xp = Math.round(earned * xpMultiplier(c));
-  gainXp(c, report.xp, rng);
+  // The Bastion's level is bought now (#40): a mission brings it no experience, but the story moves on.
+  report.xp = 0;
+  refreshNarrative(c, rng);
   report.levelTo = bastionLevel(c);
 
   if (!c.soldiers.some((s) => s.alive)) {
@@ -3923,6 +4161,26 @@ export function migrateCampaign(old: CampaignState): CampaignState {
   if (campaignOutdated(old)) throw new Error(`Campaña de la versión ${old.version}: de antes de la 0.4, no se convierte.`);
   const c = JSON.parse(JSON.stringify(old)) as CampaignState;
   c.version = CAMPAIGN_VERSION;
+  if (old.version < 21) {
+    // The level is bought from now on (#40): it starts where the experience had it.
+    c.level ??= levelForXp(c.xp);
+    // Operations don't expire (#39).
+    for (const o of c.offers) o.expiresDay = null;
+  }
+  if (old.version < 22) {
+    // La Lata grows from a 4×4 (#45): a campaign under way keeps the six seats it had, the furgoneta's.
+    c.vehicle ??= 1;
+    // The Bastion's lot (#40): what stood on it comes down, all its cost back.
+    c.bastion.level = bastionLevel(c);
+    for (const p of [...c.bastion.pieces]) {
+      if (p.piece === 'caravan' || !pieceCells(p.piece, p.x, p.y, p.rot).some((t) => onBastionLot(c.bastion, t.x, t.y))) continue;
+      const def = PIECES[p.piece];
+      c.bastion.pieces = c.bastion.pieces.filter((q) => q !== p);
+      c.credits += def.cost.supplies;
+      c.parts = (c.parts ?? 0) + (def.cost.parts ?? 0);
+      log(c, `Se desmonta ${PIECE_TEXT[p.piece].the} para dejar sitio al Bastión: +${def.cost.supplies} §.`);
+    }
+  }
   for (const s of c.soldiers) {
     s.skills ??= { ...NO_SKILLS };
     s.growth ??= { ...NO_GROWTH };

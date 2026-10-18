@@ -64,6 +64,8 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
  */
 export const ATLASES = {
   apocalypse: { pack: 'apocalypse', src: 'Textures/PolygonApocalypse_Texture_01_A.png', albedo: 'PolygonApocalypse_01_A.png', size: 2048 },
+  // Apocalypse's vehicles are painted from a texture of their own: the muddy one, for La Lata (playtest 18/10, #45).
+  apocalypseVehicle: { pack: 'apocalypse', src: 'Textures/Veh/PolygonApocalypse_Veh_Texture_01_Mud.png', albedo: 'Vehicle_01_Mud.png', size: 1024 },
   cityZombies: { pack: 'cityZombies', src: 'Assets/Synty/PolygonCityZombies/Textures/Alts/PolygonZombie_01_A.png', albedo: 'PolygonZombie_01_A.png', size: 1024 },
   bossZombies: { pack: 'bossZombies', src: 'Textures/PolygonZombieBoss_Texture_01_A.png', albedo: 'PolygonZombieBoss_01_A.png', size: 1024 },
   town: { pack: 'town', src: 'Textures/PolygonTown_01_A.png', albedo: 'PolygonTown_01_A.png', size: 2048 },
@@ -688,6 +690,20 @@ export const PROPS = {
   // The new base (docs/FASE12.md §11, basePieces.ts): the caravan, and what is built by hand. A palisade's or a gate's
   // stakes run north–south as modelled; a half one from the post to the north edge, like a fence's.
   caravan: prop('apocalypse', 'SK_Veh_Caravan_01', { fit: 3.9 }),
+  // What the caravan grows into with the Bastion's level (playtest 18/10, #40; basePieces.ts drawBastion): a mobile
+  // home on its skirt, its porch; Military's plywood barracón on stilts; a house with its porch and chimney. Each on the
+  // FBX's own origin (its glass and its skirt are models of their own, made to fit it), at its own size.
+  mobileHome: prop('apocalypse', 'SM_Bld_Trailer_01', { origin: true }),
+  mobileHomeGlass: prop('apocalypse', 'SM_Bld_Trailer_Glass_01', { origin: true }),
+  mobileHomeWreck: prop('apocalypse', 'SM_Bld_Trailer_Damaged_01', { origin: true }),
+  mobileHomeWreckGlass: prop('apocalypse', 'SM_Bld_Trailer_Damaged_Glass_01', { origin: true }),
+  mobileHomeSkirt: prop('apocalypse', 'SM_Bld_Trailer_Skirt_01', { origin: true }),
+  trailerDeck: prop('apocalypse', 'SM_Prop_Trailer_Deck_01', { origin: true }),
+  trailerSteps: prop('apocalypse', 'SM_Prop_Trailer_Steps_01', { origin: true }),
+  plywoodShed: prop('military', 'SM_Bld_Plywood_Shed_01', { origin: true }),
+  plywoodShedRuin: prop('military', 'SM_Bld_Plywood_Shed_Destroyed_01', { origin: true }),
+  bastionHouse: prop('apocalypse', 'SM_Bld_House_03', { origin: true }),
+  bastionHouseGlass: prop('apocalypse', 'SM_Bld_House_03_Glass_01', { origin: true }),
   palisade: prop('apocalypse', 'SM_Prop_SpikeWall_01', { fit: 0.5, stretch: true, shift: [0, -0.25] }),
   gateWood: prop('apocalypse', 'SM_Prop_Fence_Wood_Gate_01', { fit: 1, stretch: true }),
   gateMetal: prop('apocalypse', 'SM_Prop_Wall_Quarantine_GateDoor_01', { fit: 1, stretch: true, yaw: 1 }),
@@ -775,6 +791,7 @@ export const PROPS = {
   bPlankRack: prop('construction', 'SM_Prop_StorageShelf_Plank_01', { base: 'plankRack' }),
   bTrestle: prop('construction', 'SM_Prop_Trestle_Table_01', { base: 'trestle' }),
   bStump: prop('nature', 'SM_Tree_Stump_01', { base: 'stump' }),
+  bSupplyCrate: prop('apocalypse', 'SM_Prop_Crate_01', { base: 'supplyCrate' }),
   pineDead: prop('nature', 'SM_Tree_Pine_Dead_01', { base: 'pineDead' }),
   crate: prop('apocalypse', 'SM_Prop_Crate_01'),
   crates: prop('apocalypse', 'SM_Prop_Crate_Large_02'),
@@ -806,6 +823,51 @@ export const PROPS = {
   shelfLow: prop('apocalypse', 'SM_Prop_ShopShelf_Wall_01', { fit: 1, yaw: 1 }),
   shelfHigh: prop('apocalypse', 'SM_Prop_Shop_Shelf_01', { fit: 1, stretch: true, yaw: 1 }),
   bookshelf: prop('town', 'SM_Prop_Bookshelf_01', { fit: 1, stretch: true, yaw: 2 }),
+  bookshelf2: prop('town', 'SM_Prop_Bookshelf_02', { fit: 1, stretch: true, yaw: 2 }),
+  // What a house's rooms have besides their cover (playtest 18/10, #36; homeFurnishing.ts): rugs, chairs at the
+  // table, a lamp, plants, the bedside table, a desk chair, the towels; small things on tables and counters.
+  // Cosmetic, never cover: one style of each for a house, at their true size (a tile is 1.5 m; `fit` is the longest
+  // side across, not the height). Town's furniture faces south as modelled (yaw 2).
+  rug: prop('town', 'SM_Prop_Rug_01', { fit: 1.3, yaw: 2 }),
+  rug2: prop('town', 'SM_Prop_Rug_02', { fit: 1.4, yaw: 2 }),
+  rug3: prop('town', 'SM_Prop_Rug_03', { fit: 1.2, yaw: 2 }),
+  bathRug: prop('town', 'SM_Prop_BathroomRug_01', { fit: 0.75, yaw: 2 }),
+  coffeeTable: prop('town', 'SM_Prop_CoffeeTable_01', { fit: 0.75, yaw: 2 }),
+  armchair: prop('apocalypse', 'SM_Prop_Chair_Soft_01', { fit: 0.68, yaw: 1 }),
+  armchairWorn: prop('apocalypse', 'SM_Prop_Chair_Soft_Damaged_01', { fit: 0.68, yaw: 1 }),
+  diningChair: prop('town', 'SM_Prop_DiningChair_01', { fit: 0.45, yaw: 2 }),
+  diningChair2: prop('town', 'SM_Prop_DiningChair_02', { fit: 0.45, yaw: 2 }),
+  floorLamp: prop('town', 'SM_Prop_LampStanding_01', { fit: 0.3, yaw: 2 }),
+  floorLamp2: prop('town', 'SM_Prop_LampStanding_02', { fit: 0.36, yaw: 2 }),
+  tableLamp: prop('town', 'SM_Prop_Lamp_01', { fit: 0.22, yaw: 2 }),
+  tableLamp2: prop('town', 'SM_Prop_Lamp_02', { fit: 0.22, yaw: 2 }),
+  pottedPlant: prop('town', 'SM_Prop_PotPlant_01', { fit: 0.32, yaw: 2 }),
+  pottedPlant2: prop('town', 'SM_Prop_PotPlant_02', { fit: 0.34, yaw: 2 }),
+  pottedPlant3: prop('town', 'SM_Prop_PotPlant_04', { fit: 0.24, yaw: 2 }),
+  bedsideTable: prop('town', 'SM_Prop_BedsideTable_01', { fit: 0.3, yaw: 2 }),
+  deskChair: prop('town', 'SM_Prop_DeskChair_01', { fit: 0.68, yaw: 2 }),
+  towelRack: prop('town', 'SM_Prop_TowelRack_01', { fit: 0.5, yaw: 2 }),
+  bookPile: prop('town', 'SM_Prop_Book_Group_01', { fit: 0.25, yaw: 2 }),
+  bookPile2: prop('town', 'SM_Prop_Book_Group_04', { fit: 0.2, yaw: 2 }),
+  breadBin: prop('town', 'SM_Prop_BreadBin_01', { fit: 0.25, yaw: 2 }),
+  coffeeMachine: prop('town', 'SM_Prop_CoffeeMachine_01', { fit: 0.2, yaw: 2 }),
+  coatRack: prop('office', 'SM_Prop_CoatRack_01', { fit: 0.45 }),
+  // And a shop's, by its trade (homeFurnishing.ts furnishShops): a café's tables and chairs and the stools at its
+  // bar; a grocer's drinks fridge and cooler; a bookshop's books on its counter.
+  cafeTable: prop('apocalypse', 'SM_Prop_Cafe_Table_01', { fit: 0.75, yaw: 1 }),
+  cafeChair: prop('apocalypse', 'SM_Prop_Cafe_Chair_01', { fit: 0.38, yaw: 1 }),
+  barStool: prop('town', 'SM_Prop_Stool_01', { fit: 0.27, yaw: 2 }),
+  drinksCooler: prop('town', 'SM_Prop_Cooler_01', { fit: 0.4, yaw: 2 }),
+  drinksFridge: prop('town', 'SM_Prop_FridgeDrinks_01', { fit: 0.52, yaw: 2 }),
+  bookPile3: prop('town', 'SM_Prop_Book_Group_06', { fit: 0.2, yaw: 2 }),
+  // A barn's (playtest 18/10, #53): its old tractor over the 2×4 block the generator leaves for it, the tools against
+  // its walls, a wheelbarrow, buckets.
+  tractor: prop('farm', 'SM_Veh_TractorOld_01', { fit: 2.6, yaw: 2 }),
+  pitchfork: prop('farm', 'SM_Prop_Tool_Pitchfork_01', { fit: 0.2 }),
+  rake: prop('farm', 'SM_Prop_Tool_Rake_01', { fit: 0.35 }),
+  spade: prop('farm', 'SM_Prop_Tool_Spade_01', { fit: 0.17 }),
+  wheelbarrow: prop('farm', 'SM_Prop_Wheelbarrow_01', { fit: 1 }),
+  bucket: prop('farm', 'SM_Prop_Tool_Bucket_01', { fit: 0.24 }),
   counter: prop('town', 'SM_Prop_Kitchen_Counter_01', { fit: 1, stretch: true, yaw: 2 }),
   shopCounter: prop('apocalypse', 'SM_Prop_ShopCounter_01', { fit: 1, stretch: true, yaw: 1 }),
   table: prop('town', 'SM_Prop_DiningTable_01', { fit: 1, stretch: true }),
@@ -821,6 +883,8 @@ export const PROPS = {
   wc: prop('town', 'SM_Prop_Toilet_01', { fit: 0.55, yaw: 2 }),
   tvStand: prop('town', 'SM_Prop_TVCabinet_01', { fit: 0.95, yaw: 2 }),
   television: prop('town', 'SM_Prop_Television_Flat_01', { fit: 0.75, yaw: 2 }),
+  // The Armería by the caravan (clearingArt.ts): Military's gun rack, its rifles the soldiers' own.
+  gunRack: prop('military', 'SM_Prop_Gunrack_01'),
   // Static poses baked from existing licensed characters; see tools/synty/bake-medical-corpses.mjs.
   corpseCivilian: prop('apocalypse', 'SK_Chr_Business_Male_01', { fit: 0.92, baked: 'tools/synty/bake-medical-corpses.mjs' }),
   corpseStaff: prop('apocalypse', 'SK_Chr_Waitress_Female_01', { fit: 0.92, baked: 'tools/synty/bake-medical-corpses.mjs' }),
@@ -886,6 +950,8 @@ export const PROPS = {
   lootRice: prop('apocalypse', 'SM_Item_Rice_01', { fit: 0.14 }),
   // What is left on the floor (docs/FASE8.md §C, dropped.ts): a bag, unless it is a weapon or a medicine.
   dropBag: prop('apocalypse', 'SM_Item_Duffle_Bag_01', { fit: 0.44 }),
+  // A fallen soldier's things (playtest 18/10, #49): Military's rucksack, the one the soldiers carry.
+  fallenPack: prop('military', 'SM_Chr_Attach_Backpack_01', { fit: 0.5 }),
   // The scenarios (#25). The forest stop, from «Woodland Apocalypse»: the sawmill's log piles, wrecked lorries (nose
   // north, a block of 2×4), the lumberjack on his plinth, the roadside signs and broken fences; Nature's solid pines
   // (Woodland's own are painted from an atlas we don't have).
@@ -955,6 +1021,14 @@ export const PROPS = {
   milBarrier: prop('military', 'SM_Prop_Barrier_01', { fit: 1, stretch: true }),
   milBarrierTall: prop('military', 'SM_Prop_Barrier_Tall_01', { fit: 1 }),
   milCrate: prop('military', 'SM_Prop_Crate_Cube_01', { fit: 0.8 }),
+  // What shuts the map's edges where there is no street (dressing.ts dressEdges, playtest 18/10, #32): a block
+  // come down in heaps, Construction's sheet-metal hoardings and precast walls; at their own size, along their x.
+  debrisPile: prop('military', 'SM_Prop_DebrisPile_01'),
+  debrisPile2: prop('military', 'SM_Prop_DebrisPile_03'),
+  ruinPile: prop('military', 'SM_Bld_Destroyed_02'),
+  sheetFence: prop('construction', 'SM_Prop_Fence_MetalSheet_01'),
+  sheetFence2: prop('construction', 'SM_Prop_Fence_MetalSheet_02'),
+  concreteFence: prop('construction', 'SM_Prop_Fence_Concrete_01'),
   // A filling station's pumps (town `tank` hints), a motel's sign by the road, billboards on roofs.
   pump: prop('apocalypse', 'SM_Prop_Gaspump_01'),
   pump2: prop('apocalypse', 'SM_Prop_Gaspump_02'),
@@ -1266,6 +1340,8 @@ export interface BaseAsset {
   fbx: string;
   parts?: boolean;
   drop?: string[];
+  /** Painted from another atlas than its pack's (Apocalypse's vehicles). */
+  atlas?: AtlasId;
 }
 
 const apocalypseAt = (name: string): BaseAsset => ({ pack: 'apocalypse', fbx: `FBX/${name}` });
@@ -1389,6 +1465,19 @@ export const BASE_MODELS = {
   plateSlit: apocalypseAt('SM_Veh_Attach_Plating_10'),
   plate: apocalypseAt('SM_Veh_Attach_Plating_01'),
   plateRoof: apocalypseAt('SM_Veh_Attach_Plating_05'),
+  // La Lata before it is the bus (playtest 18/10, #45): Apocalypse's vehicles with their own armour, bars and racks
+  // (each a model of its own, in place round the vehicle's origin); the bodies keep their wheels and doors apart.
+  lataCar: at('apocalypse', 'Vehicles/SK_Veh_Car_Medium_01', { parts: true, atlas: 'apocalypseVehicle' }),
+  lataCarArmour: at('apocalypse', 'Vehicles/SK_Veh_Car_Medium_Armour_01', { atlas: 'apocalypseVehicle' }),
+  lataCarBars: at('apocalypse', 'Vehicles/SK_Veh_Car_Medium_Glass_Armour_01', { atlas: 'apocalypseVehicle' }),
+  lataVan: at('apocalypse', 'Vehicles/SK_Veh_NewsVan_01', { parts: true, atlas: 'apocalypseVehicle' }),
+  lataVanArmour: at('apocalypse', 'Vehicles/SK_Veh_NewsVan_Armour_01', { atlas: 'apocalypseVehicle' }),
+  lataVanRoof: at('apocalypse', 'Vehicles/SK_Veh_NewsVan_Roof_Props_01', { atlas: 'apocalypseVehicle' }),
+  lataVanBars: at('apocalypse', 'Vehicles/SK_Veh_NewsVan_Glass_Armour_01', { atlas: 'apocalypseVehicle' }),
+  lataTruck: at('apocalypse', 'Vehicles/SK_Veh_Army_Truck_01', { parts: true, atlas: 'apocalypseVehicle' }),
+  lataTruckArmour: at('apocalypse', 'Vehicles/SK_Veh_Army_Truck_Armour_01', { atlas: 'apocalypseVehicle' }),
+  lataTruckCanopy: at('apocalypse', 'Vehicles/SK_Veh_Army_Truck_Canopy_01', { atlas: 'apocalypseVehicle' }),
+  lataTruckBars: at('apocalypse', 'Vehicles/SK_Veh_Army_Truck_Glass_Armour_01', { atlas: 'apocalypseVehicle' }),
   snowmobile: at('snow', 'SM_Veh_Snowmobile_01'),
   sled: at('snow', 'SM_Prop_Sled_01'),
   // Building sites, the works brigade and the trades workshop (POLYGON Construction).

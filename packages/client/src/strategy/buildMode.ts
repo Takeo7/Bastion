@@ -1,9 +1,11 @@
 import {
+  FELL_COST,
   actionPrice,
   bastionLevel,
   besideLine,
   besidePieces,
   BUILD_TEXT,
+  buildCostLine,
   buildingKicker,
   buildingWorks,
   buildShortLine,
@@ -14,7 +16,6 @@ import {
   placeHint,
   upgradeLine,
   usesLine,
-  voteTip,
   dismantleBlocker,
   dismantleRefund,
   PIECE_STATE,
@@ -24,12 +25,12 @@ import {
   raiseCost,
   rearmCost,
   repairCost,
-  VOTE_ABOVE,
   type BasePiece,
   type CampaignCommand,
   type CampaignState,
   type PieceId,
   type PieceKind,
+  type Vec2,
 } from '@bastion/engine';
 import { h } from '../ui/dom';
 import type { ClearingTool } from './clearing';
@@ -50,8 +51,20 @@ function short(c: CampaignState, cost: { supplies: number; parts?: number }): { 
   return { supplies: Math.max(0, cost.supplies - c.credits), parts: Math.max(0, (cost.parts ?? 0) - (c.parts ?? 0)) };
 }
 
-/** Why `piece` can't be taken up at all (before choosing where): the level, only one, what it costs. */
-export function pieceBlocker(c: CampaignState, piece: PieceId): string | null {
+/**
+ * With the other one connected everything on the base goes to a vote (Arturo, 18/10 #55: «todo lo de la base»),
+ * one at a time: while one waits for its yes or no, nothing else can be proposed (campaign.ts propose).
+ */
+export const PENDING = 'Ya hay una propuesta pendiente.';
+
+/** The palette's and the card's note while the other one is here: what is done is proposed (#55). */
+export function voteNote(partner: string): string {
+  return `Con ${partner} en la partida, todo se propone: se hace y se paga cuando diga que sí.`;
+}
+
+/** Why `piece` can't be taken up at all (before choosing where): the level, only one, what it costs; a vote waiting. */
+export function pieceBlocker(c: CampaignState, piece: PieceId, voting = false): string | null {
+  if (voting && c.proposal) return PENDING;
   const def = PIECES[piece];
   if (def.level > bastionLevel(c)) return needsLevelLine(def.level);
   if (def.unique && c.bastion.pieces.some((p) => p.piece === piece)) return 'Ya está en la base.';
@@ -61,22 +74,55 @@ export function pieceBlocker(c: CampaignState, piece: PieceId): string | null {
 }
 
 /** Why `piece` can't go at (x, y) turned `rot`: the place first (what the pointer shows), then the rest. */
-export function placeBlockerFor(c: CampaignState, piece: PieceId, x: number, y: number, rot: number): string | null {
-  return placeBlocker(c.bastion, piece, x, y, rot) ?? pieceBlocker(c, piece);
+export function placeBlockerFor(c: CampaignState, piece: PieceId, x: number, y: number, rot: number, voting = false): string | null {
+  return placeBlocker(c.bastion, piece, x, y, rot) ?? pieceBlocker(c, piece, voting);
 }
 
-/** The line by the pointer with a piece in hand: what it costs and whether it goes to a vote, or why it doesn't fit. */
+/** What goes down in a line by dragging (playtest 18/10 #35): what is built a tile at a time along a wall. */
+export const LINE_PIECES: ReadonlySet<PieceId> = new Set<PieceId>(['palisade', 'wall', 'sandbags', 'logs', 'wire']);
+
+/** Why a whole line of `piece` can't go down (all or nothing, as the engine's placeLine): a tile, the level, what it all costs. */
+export function lineBlockerFor(c: CampaignState, piece: PieceId, cells: Vec2[], rot: number, voting = false): string | null {
+  for (const cell of cells) {
+    const why = placeBlocker(c.bastion, piece, cell.x, cell.y, rot);
+    if (why) return why;
+  }
+  if (voting && c.proposal) return PENDING;
+  const def = PIECES[piece];
+  if (def.level > bastionLevel(c)) return needsLevelLine(def.level);
+  const s = short(c, { supplies: def.cost.supplies * cells.length, parts: (def.cost.parts ?? 0) * cells.length });
+  return s.supplies || s.parts ? `${buildShortLine(s.supplies, s.parts)}.` : null;
+}
+
+/** The line by the pointer while dragging one: how many, what they cost, and that it is proposed (#55); or why not. */
+export function lineLine(c: CampaignState, piece: PieceId, cells: Vec2[], partnerHere: boolean, blocked: string | null): string {
+  const def = PIECES[piece];
+  const cost = { supplies: def.cost.supplies * cells.length, ...(def.cost.parts ? { parts: def.cost.parts * cells.length } : {}) };
+  const name = `${PIECE_TEXT[piece].name} × ${cells.length}`;
+  return blocked ? `${name} · ${blocked}` : `${name} · ${buildCostLine(cost)}${partnerHere ? ` · ${BUILD_TEXT.vote}` : ''}`;
+}
+
+/** Why `trees` trees can't be felled (#41: felling costs FELL_COST each), or null; a vote waiting (#55). */
+export function fellBlockerFor(c: CampaignState, trees: number, voting = false): string | null {
+  if (voting && c.proposal) return PENDING;
+  const s = short(c, { supplies: FELL_COST * trees });
+  return s.supplies ? `${buildShortLine(s.supplies)}.` : null;
+}
+
+/** The line by the pointer with a piece in hand: what it costs and that it is proposed (#55), or why it doesn't fit. */
 export function placeLine(c: CampaignState, piece: PieceId, partnerHere: boolean, blocked: string | null): string {
   const def = PIECES[piece];
-  return placeHint(piece, def.cost, partnerHere && def.cost.supplies > VOTE_ABOVE, blocked ?? undefined);
+  return placeHint(piece, def.cost, partnerHere, blocked ?? undefined);
 }
 
 export interface PaletteView {
   c: CampaignState;
   kind: PieceKind;
   tool: ClearingTool;
-  /** The partner is connected: what is dear goes to a vote (campaign.ts VOTE_ABOVE). */
-  partnerHere: boolean;
+  /** The partner, while connected (their name): everything goes to a vote (#55). */
+  partner: string | null;
+  /** This player's slot: whose proposal is waiting. */
+  me: number;
 }
 
 export interface PaletteHandlers {
@@ -96,7 +142,6 @@ export function palette(v: PaletteView, on: PaletteHandlers): HTMLElement[] {
     const def = PIECES[id];
     const locked = def.level > level;
     const why = pieceBlocker(c, id);
-    const vote = v.partnerHere && def.cost.supplies > VOTE_ABOVE;
     const state = locked ? '.locked' : why ? '.short' : '';
     return h(
       `button.piece-item${state}${inHand === id ? '.on' : ''}`,
@@ -108,16 +153,18 @@ export function palette(v: PaletteView, on: PaletteHandlers): HTMLElement[] {
       h('b.piece-name', {}, PIECE_TEXT[id].name),
       h('span.piece-cost', {}, locked ? `Nivel ${def.level}` : costLabel(def.cost)),
       h('small.piece-line', {}, locked ? needsLevelLine(def.level) : why && !/^Falta/.test(why) ? why : PIECE_TEXT[id].line),
-      vote && !locked ? h('small.piece-vote', { title: voteTip(VOTE_ABOVE) }, BUILD_TEXT.vote) : null,
     );
   });
-  return [
+  // Said once for the whole palette, not under every piece (#55); a vote waiting, in red, since nothing goes down meanwhile.
+  const pending = !!v.partner && !!c.proposal;
+  return ([
     h(
       'div.x-head.build-head',
       { title: BUILD_TEXT.paletteHelp },
       BUILD_TEXT.build,
       h(`button.x-btn.small.fell-tool${felling ? '.on' : ''}`, { title: `${BUILD_TEXT.fellTip} Arrastra un rectángulo sobre el pinar.`, onclick: () => (felling ? on.drop() : on.fell()) }, BUILD_TEXT.fell),
     ),
+    v.partner ? h(`p.build-vote${pending ? '.x-why' : ''}`, {}, pending ? `${PENDING} ${c.proposal!.by === v.me ? `Espera a que ${v.partner} conteste.` : 'Contesta arriba.'}` : voteNote(v.partner)) : null,
     h(
       'div.build-tabs',
       {},
@@ -127,9 +174,9 @@ export function palette(v: PaletteView, on: PaletteHandlers): HTMLElement[] {
     h(
       'p.build-keys',
       {},
-      inHand ? holdingLine(inHand) : felling ? BUILD_TEXT.felling : BUILD_TEXT.idle,
+      inHand ? `${holdingLine(inHand)}${LINE_PIECES.has(inHand) ? ' Arrastra para poner una fila.' : ''}` : felling ? BUILD_TEXT.felling : BUILD_TEXT.idle,
     ),
-  ];
+  ] as (HTMLElement | null)[]).filter((x): x is HTMLElement => !!x);
 }
 
 /** «15 §», «15 § · 1 pieza». */
@@ -142,8 +189,8 @@ export interface CardView {
   piece: BasePiece;
   /** «Desmontar» was pressed once: the second press does it. */
   dismantling: boolean;
-  /** The partner is connected: raising goes to a vote. */
-  partnerHere: boolean;
+  /** The partner, while connected (their name): every action goes to a vote (#55). */
+  partner: string | null;
 }
 
 export interface CardHandlers {
@@ -182,12 +229,13 @@ export function pieceCard(v: CardView, on: CardHandlers): HTMLElement[] {
   const beside = besidePieces(c.bastion, p);
   if (def.kind === 'building' && beside.length) out.push(h('p.piece-beside', {}, besideLine([...new Set(beside.map((b) => PIECE_TEXT[b.piece].name))])));
 
-  // What can be done to it.
+  // What can be done to it: nothing while a vote waits (#55), said on each.
   const actions: (HTMLElement | null)[] = [];
+  const pending = v.partner && c.proposal ? PENDING : '';
   if (hurt) {
     const cost = repairCost(p);
     const s = short(c, cost);
-    const why = s.supplies || s.parts ? `${buildShortLine(s.supplies, s.parts)}.` : '';
+    const why = pending || (s.supplies || s.parts ? `${buildShortLine(s.supplies, s.parts)}.` : '');
     actions.push(button(actionPrice('repair', cost), why, () => on.send({ type: 'mend', piece: p.id })));
   }
   if (building) {
@@ -195,13 +243,13 @@ export function pieceCard(v: CardView, on: CardHandlers): HTMLElement[] {
     if (typeof next === 'string') actions.push(button(BUILD_TEXT.upgrade, next, () => {}));
     else {
       const why =
-        bastionLevel(c) < next.level ? needsLevelLine(next.level) : !buildingWorks(p) ? PIECE_STATE.brokenLine : c.credits < next.cost ? `${buildShortLine(next.cost - c.credits)}.` : '';
-      actions.push(button(actionPrice('upgrade', { supplies: next.cost }), why, () => on.send({ type: 'raise', piece: p.id }), upgradeLine(p.piece, level + 1), v.partnerHere ? voteTip(VOTE_ABOVE) : ''));
+        bastionLevel(c) < next.level ? needsLevelLine(next.level) : !buildingWorks(p) ? PIECE_STATE.brokenLine : c.credits < next.cost ? `${buildShortLine(next.cost - c.credits)}.` : pending;
+      actions.push(button(actionPrice('upgrade', { supplies: next.cost }), why, () => on.send({ type: 'raise', piece: p.id }), upgradeLine(p.piece, level + 1)));
     }
   }
   if (def.charges && (p.charges ?? 0) < def.charges) {
     const parts = rearmCost(p);
-    const why = (c.parts ?? 0) < parts ? `${buildShortLine(0, parts - (c.parts ?? 0))}.` : '';
+    const why = pending || ((c.parts ?? 0) < parts ? `${buildShortLine(0, parts - (c.parts ?? 0))}.` : '');
     actions.push(button(actionPrice('rearm', { parts }), why, () => on.send({ type: 'rearm', piece: p.id })));
   }
   const cant = dismantleBlocker(p);
@@ -216,10 +264,11 @@ export function pieceCard(v: CardView, on: CardHandlers): HTMLElement[] {
             h('button.x-btn.small.bad', { onclick: () => on.send({ type: 'dismantle', piece: p.id }) }, BUILD_TEXT.dismantleYes),
             h('button.x-btn.small', { onclick: () => on.dismantle(false) }, BUILD_TEXT.dismantleNo),
           )
-        : button(actionPrice('dismantle', { supplies: back }), '', () => on.dismantle(true), BUILD_TEXT.dismantleTip),
+        : button(actionPrice('dismantle', { supplies: back }), pending, () => on.dismantle(true), BUILD_TEXT.dismantleTip),
     );
   }
   out.push(h('div.piece-actions', {}, ...actions));
+  if (v.partner && !pending && actions.length) out.push(h('p.build-vote', {}, voteNote(v.partner)));
   return out.filter((x): x is HTMLElement => !!x);
 }
 

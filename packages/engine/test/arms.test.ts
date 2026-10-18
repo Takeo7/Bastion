@@ -6,7 +6,7 @@ import {
   craftBlocker,
   createCampaign,
   executeCampaignCommand,
-  gainXp,
+  setBastionLevel,
   migrateCampaign,
   squadMember,
   type CampaignCommand,
@@ -126,7 +126,7 @@ describe('the weapons from zero', () => {
     c.crafted.push('makeRifle');
     expect(craftBlocker(c, 'makeRifle')).toBeNull();
     expect(craftBlocker(c, 'ammo1')).toBe('Ya está hecho.');
-    gainXp(c, LEVEL_XP[2]! - c.xp, new Rng(1));
+    setBastionLevel(c, 3, new Rng(1));
     expect((c.foundWeapons ?? []).map((w) => w.kind).sort()).toEqual(['assaultRifle', 'machete', 'precisionRifle', 'pumpShotgun']);
   });
 

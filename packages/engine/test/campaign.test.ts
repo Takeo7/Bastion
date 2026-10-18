@@ -11,6 +11,13 @@ import {
   learningBonus,
   openingMission,
   LATE_KIT,
+  squadLimit,
+  squadMax,
+  offerBriefing,
+  type MissionOffer,
+  levelUpBlocker,
+  migrateCampaign,
+  nextLevel,
   applyMissionResult,
   buildSquad,
   contactCost,
@@ -28,8 +35,11 @@ import {
   THAW_AFTER_STORY,
 } from '../src/campaign';
 import { abilitiesOf } from '../src/abilities';
-import { armorTier, bastionLevel, LEVEL_XP, MAX_LEVEL, missionXp, nextTierBlocker, weaponTier } from '../src/progression';
-import { BASE_AIM, barsCost, missionLines, NO_GROWTH, NO_SKILLS, randomBoard, totalBars, veteranWill } from '../src/skills';
+import { armorTier, bastionLevel, LEVEL_COST, LEVEL_MISSIONS, LEVEL_XP, MAX_LEVEL, nextTierBlocker, weaponTier } from '../src/progression';
+import { BASE_AIM, barsCost, missionLines, NO_GROWTH, NO_SKILLS, pointsLeft, randomBoard, totalBars, unlockBlocker, veteranWill } from '../src/skills';
+import { BOARD_CELLS, type CellId } from '../src/board';
+import { bastionLot, PIECES, placePiece } from '../src/base';
+import { applyEvent } from '../src/events';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
 import type { PerkId, Slot } from '../src/types';
@@ -117,8 +127,10 @@ describe('time', () => {
 });
 
 describe('missions', () => {
+  /** Two commanders with a squad of six (La Lata a furgoneta: 18/10 #45), three each. */
   function ready() {
     const c = createCampaign(both, new Rng(2));
+    c.vehicle = 1;
     const offer = c.offers[0]!;
     run(c, { type: 'chooseMission', id: offer.id }, 0, [0]);
     // Start from an empty squad to pick it by hand (it comes filled in: see "default squad").
@@ -137,30 +149,118 @@ describe('missions', () => {
     expect(executeCampaignCommand(c, { type: 'squad', soldier: theirs[3]!.id, on: true }, { slot: 0, connected: both, rng: new Rng(1) }).ok).toBe(false);
   });
 
-  it('a share the partner cannot fill is lent to the other player, and comes back when they can', () => {
+  it('each their own part: a part the other leaves empty stays empty, and nobody touches the other\'s (Arturo, 18/10 #43)', () => {
     const c = createCampaign(both, new Rng(2));
-    c.credits = 500;
-    // The caravan sleeps the eight starting soldiers: recruiting needs a barracón.
-    raise(c, 'quarters');
+    c.vehicle = 1;
     const theirs = c.soldiers.filter((s) => s.owner === 1);
     // Player 1 has a single soldier fit to fight.
     for (const s of theirs.slice(1)) s.woundedDays = 5;
     run(c, { type: 'chooseMission', id: c.offers[0]!.id }, 0, both);
     run(c, { type: 'vote', accept: true }, 1, both);
     const count = (slot: Slot) => c.squad.filter((id) => c.soldiers.find((s) => s.id === id)!.owner === slot).length;
-    // The squad comes as full as it can: player 0's fourth soldier takes a place player 1 can't fill.
-    expect([count(0), count(1)]).toEqual([4, 1]);
-    // Recruiting from a free place in the hangar goes straight into the squad.
-    run(c, { type: 'recruit', squad: true }, 0, both);
-    expect([count(0), count(1)]).toEqual([5, 1]);
-    // Player 1's wounded soldier heals: the lent place comes back, and the last of player 0's lent soldiers leaves.
-    theirs[1]!.woundedDays = 0;
-    run(c, { type: 'squad', soldier: theirs[1]!.id, on: true }, 1, both);
-    expect([count(0), count(1)]).toEqual([4, 2]);
-    // While player 1 still has someone ready to bring, their share is theirs.
-    run(c, { type: 'squad', soldier: theirs[1]!.id, on: false }, 1, both);
-    const out = c.soldiers.find((s) => s.owner === 0 && !c.squad.includes(s.id))!;
-    expect(() => run(c, { type: 'squad', soldier: out.id, on: true }, 0, both)).toThrow(/compañero/);
+    expect([count(0), count(1)]).toEqual([3, 1]);
+    const out = c.soldiers.find((s) => s.owner === 0 && !c.squad.includes(s.id) && s.woundedDays === 0)!;
+    expect(() => run(c, { type: 'squad', soldier: out.id, on: true }, 0, both)).toThrow('Máximo 3 soldados por jugador.');
+    // The other's soldiers are theirs, here or not.
+    expect(() => run(c, { type: 'squad', soldier: theirs[0]!.id, on: false }, 0, both)).toThrow('Solo puedes elegir a tus soldados.');
+    expect(() => run(c, { type: 'squad', soldier: theirs[0]!.id, on: false }, 0, [0])).toThrow('Solo puedes elegir a tus soldados.');
+    // Alone in the room, one fills La Lata with their own.
+    run(c, { type: 'squad', soldier: out.id, on: true }, 0, [0]);
+    expect(count(0)).toBe(4);
+  });
+
+  it('La Lata takes as many as its vehicle: 4, 6, 7 and 8, half each when both are here (18/10 #45)', () => {
+    const c = createCampaign(both, new Rng(2));
+    expect(c.vehicle).toBe(0);
+    expect([0, 1, 2, 3].map((v) => ((c.vehicle = v), [squadMax(c), squadLimit(c, both), squadLimit(c, [0])]))).toEqual([
+      [4, 2, 4],
+      [6, 3, 6],
+      [7, 4, 7],
+      [8, 4, 8],
+    ]);
+  });
+
+  it('a better vehicle turns up now and then; won, La Lata is it (18/10 #45)', () => {
+    let found: MissionOffer | undefined;
+    let c = createCampaign([0], new Rng(1));
+    for (let seed = 1; seed <= 40 && !found; seed++) {
+      c = createCampaign([0], new Rng(seed));
+      Object.assign(c, { nextEventDay: 999, nextRumorDay: 999, missionsFlown: 2, offers: [] });
+      for (let i = 0; i < 12 && !found; i++) {
+        advanceTime(c, new Rng(seed * 100 + i));
+        c.event = null;
+        found = c.offers.find((o) => o.reward.vehicle);
+        // Room for more operations.
+        if (!found) c.offers = [];
+      }
+    }
+    expect(found).toMatchObject({ kind: 'elimination', reward: { vehicle: 1 } });
+    expect(found!.name).toMatch(/^La furgoneta /);
+    expect(offerBriefing(c, found!)).toMatch(/una furgoneta/);
+    // Not before its missions, and one at a time.
+    const early = createCampaign([0], new Rng(1));
+    Object.assign(early, { nextEventDay: 999, nextRumorDay: 999, offers: [] });
+    for (let i = 0; i < 30; i++) {
+      advanceTime(early, new Rng(i));
+      early.event = null;
+      expect(early.offers.some((o) => o.reward.vehicle)).toBe(false);
+      early.offers = [];
+    }
+    // Won: La Lata grows, and the squad with it.
+    run(c, { type: 'chooseMission', id: found!.id }, 0, [0]);
+    const s = createMission({ map: found!.map, slots: [0], rng: new Rng(3), kind: found!.kind, pods: found!.pods });
+    s.outcome = 'victory';
+    applyMissionResult(c, s, new Rng(4));
+    expect(c.vehicle).toBe(1);
+    expect(squadMax(c)).toBe(6);
+    expect(c.log.some((l) => l.text === 'La Lata ya es una furgoneta: caben seis.')).toBe(true);
+  });
+
+  it('a campaign from before 22 keeps its six seats, and what stood on the Bastion\'s lot comes down with its cost back', () => {
+    const c = createCampaign([0], new Rng(1));
+    const lot = bastionLot(c.bastion)!;
+    const old = { ...JSON.parse(JSON.stringify(c)), version: 21 } as CampaignState;
+    delete old.vehicle;
+    const credits = old.credits;
+    placePiece(old.bastion, 'sandbags', lot.x, lot.y, 0);
+    const now = migrateCampaign(old);
+    expect(now.vehicle).toBe(1);
+    expect(now.bastion.pieces.map((p) => p.piece)).toEqual(['caravan']);
+    expect(now.credits).toBe(credits + PIECES.sandbags.cost.supplies);
+    expect(now.bastion.level).toBe(1);
+  });
+
+  it('a fallen soldier leaves its backpack, weapons and whole belt where it fell; brought home, its weapon carries on (18/10 #49)', () => {
+    const { c, offer } = ready();
+    const dead = c.soldiers.find((s) => c.squad.includes(s.id))!;
+    c.foundWeapons = [...(c.foundWeapons ?? []), { id: 'w99', kind: 'assaultRifle', holder: dead.id }];
+    dead.loadout.utility = 'firstAid';
+    const s = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
+    const u = s.units.find((x) => x.campaignId === dead.id)!;
+    u.backpack = [{ supplies: 5 }];
+    applyEvent(s, { t: 'died', unit: u.id });
+    const left = s.dropped!.filter((d) => d.from === u.id);
+    expect(left.every((d) => d.pos.x === u.pos.x && d.pos.y === u.pos.y)).toBe(true);
+    expect(left.map((d) => d.loot)).toEqual([{ supplies: 5 }, expect.objectContaining({ weapon: 'assaultRifle', weaponId: 'w99' }), { item: 'firstAid' }]);
+    expect(u.backpack).toEqual([]);
+    // Another picks the rifle up and comes home with it: it stays in the Armería, theirs.
+    const other = s.units.find((x) => x.team === 'xcom' && x.alive && x.campaignId)!;
+    applyEvent(s, { t: 'lootTaken', unit: other.id, id: left[1]!.id });
+    s.outcome = 'victory';
+    applyMissionResult(c, s, new Rng(1));
+    expect(c.foundWeapons!.find((w) => w.id === 'w99')).toBeDefined();
+    expect(c.log.some((l) => /se pierde su fusil/.test(l.text))).toBe(false);
+  });
+
+  it('skills are only for their own commander, the other here or not (18/10 #42)', () => {
+    const c = createCampaign(both, new Rng(2));
+    const theirs = c.soldiers.find((s) => s.owner === 1 && pointsLeft(s.skills, s.board) > 0)!;
+    const cell = Object.keys(BOARD_CELLS).find((id) => unlockBlocker(theirs.skills, theirs.board, id as CellId) === null)! as CellId;
+    for (const connected of [both, [0] as Slot[]]) {
+      expect(() => run(c, { type: 'unlock', soldier: theirs.id, cell }, 0, connected)).toThrow('Solo puedes elegir las habilidades de tus soldados.');
+    }
+    run(c, { type: 'unlock', soldier: theirs.id, cell }, 1, both);
+    expect(theirs.board).toEqual([cell]);
   });
 
   // Playtest 2026-10-13: a new campaign opens with a mission straight away.
@@ -241,9 +341,9 @@ describe('missions', () => {
     expect(c.day).toBe(report.day);
     expect(veteran.skills).toEqual({ ...before, shooting: before.shooting + 18, medicine: before.medicine + 2 });
     expect(c.credits).toBe(credits + (offer.reward.credits ?? 0) + report.salvage);
-    // The Bastion learns from every mission: showing up, winning and the kills.
-    expect(report.xp).toBe(missionXp(true, offer.difficulty, 6));
-    expect(c.xp).toBe(report.xp);
+    // The Bastion's level is bought now (18/10 #40): a mission brings it no experience.
+    expect(report.xp).toBe(0);
+    expect(c.xp).toBe(0);
     expect(c.offers.some((o) => o.id === offer.id)).toBe(false);
     expect(c.activeMission).toBeNull();
   });
@@ -318,7 +418,7 @@ describe('missions', () => {
     s.growth = { ...NO_GROWTH, shooting: 25, melee: 20 };
     for (const cell of ['steadyHand', 'lightTrigger', 'aimedShot', 'grip']) run(c, { type: 'unlock', soldier: s.id, cell }, 0, [0]);
     // Plate armour made by the Taller (docs/FASE4.md): everyone wears it, whatever their veterancy.
-    c.xp = LEVEL_XP[3]!;
+    c.level = 4;
     c.crafted = ['armor2'];
     const member = squadMember(c, s);
     expect(member).toMatchObject({ weaponTier: 1, armorTier: 2, rank: 0, perks: ['aimedShot'] });
@@ -345,7 +445,7 @@ describe('progression', () => {
   it('weapons have no tiers; the armour the Taller makes is for everyone (docs/FASE9.md §5)', () => {
     const c = createCampaign([0], new Rng(1));
     const s = { id: 'x' };
-    c.xp = LEVEL_XP[5]!;
+    c.level = 6;
     c.crafted = ['armor2'];
     expect(weaponTier(c, s)).toBe(1);
     expect(nextTierBlocker(c, s, 'weapon')).toBeNull();
@@ -353,17 +453,46 @@ describe('progression', () => {
     expect(nextTierBlocker(c, s, 'armor')).toMatch(/nivel 7 del Bastión/);
   });
 
-  it('reaching the top level with every story chapter won reveals the final mission', () => {
+  it('the Bastion goes up a level when it is bought, after enough missions (Arturo, 18/10 #40)', () => {
+    const c = createCampaign([0, 1], new Rng(1));
+    expect(bastionLevel(c)).toBe(1);
+    expect(nextLevel(c)).toEqual({ level: 2, cost: LEVEL_COST[1], missions: LEVEL_MISSIONS[1], flown: 0 });
+    c.credits = 5000;
+    expect(() => run(c, { type: 'levelUp' }, 0, [0, 1])).toThrow(`Para el nivel 2 hacen falta ${LEVEL_MISSIONS[1]} misiones hechas: lleváis 0.`);
+    c.missionsFlown = LEVEL_MISSIONS[1];
+    // Always together: a proposal, paid when the partner says yes.
+    run(c, { type: 'levelUp' }, 0, [0, 1]);
+    expect(c.proposal?.text).toBe('subir el Bastión al nivel 2');
+    run(c, { type: 'vote', accept: true }, 1, [0, 1]);
+    expect(bastionLevel(c)).toBe(2);
+    expect(c.credits).toBe(5000 - LEVEL_COST[1]!);
+    expect(c.log.some((l) => l.text === 'El Bastión sube al nivel 2.')).toBe(true);
+    // Short of suministros, it waits.
+    c.missionsFlown = 99;
+    c.credits = LEVEL_COST[2]! - 1;
+    expect(levelUpBlocker(c)).toMatch(/suministros/);
+    c.level = MAX_LEVEL;
+    expect(nextLevel(c)).toBeNull();
+    expect(levelUpBlocker(c)).toBe('El Bastión ya está en su nivel más alto.');
+  });
+
+  it('a campaign from before keeps its level, and its operations stop expiring', () => {
+    const c = createCampaign([0], new Rng(1));
+    const old = { ...JSON.parse(JSON.stringify(c)), version: 20, xp: LEVEL_XP[3]! } as CampaignState;
+    delete old.level;
+    old.offers[0]!.expiresDay = old.day + 4;
+    const now = migrateCampaign(old);
+    expect(bastionLevel(now)).toBe(4);
+    expect(now.offers.every((o) => o.expiresDay === null)).toBe(true);
+  });
+
+  it('buying the top level with every story chapter won reveals the final mission', () => {
     const c = createCampaign([0], new Rng(1));
     c.story.done = 7;
-    const offer = c.offers[0]!;
-    run(c, { type: 'chooseMission', id: offer.id }, 0, [0]);
-    c.xp = LEVEL_XP[MAX_LEVEL - 1]! - 1;
-    const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(3), kind: offer.kind, pods: offer.pods });
-    mission.outcome = 'defeat';
-    const report = applyMissionResult(c, mission, new Rng(4));
-    expect(report.levelFrom).toBe(MAX_LEVEL - 1);
-    expect(report.levelTo).toBe(MAX_LEVEL);
+    c.level = MAX_LEVEL - 1;
+    Object.assign(c, { credits: 5000, missionsFlown: 99 });
+    run(c, { type: 'levelUp' }, 0, [0]);
+    expect(bastionLevel(c)).toBe(MAX_LEVEL);
     expect(c.offers.some((o) => o.final)).toBe(true);
   });
 });
@@ -371,6 +500,7 @@ describe('progression', () => {
 describe('helping the players', () => {
   it('a chosen mission comes with its squad: the most seasoned ready soldiers first', () => {
     const c = createCampaign(both, new Rng(2));
+    c.vehicle = 1;
     const mine = c.soldiers.filter((s) => s.owner === 0);
     const veteran = mine[mine.length - 1]!;
     veteran.skills = { ...NO_SKILLS, shooting: barsCost(4), melee: barsCost(4) };
@@ -390,6 +520,7 @@ describe('helping the players', () => {
 
   it('in the hangar each commander has a half, and nobody moves when others come and go', () => {
     const c = createCampaign(both, new Rng(2));
+    c.vehicle = 1;
     run(c, { type: 'chooseMission', id: c.offers[0]!.id }, 0);
     run(c, { type: 'vote', accept: true }, 1);
     const owner = (id: string | null) => c.soldiers.find((s) => s.id === id)?.owner;
@@ -440,9 +571,8 @@ describe('helping the players', () => {
   it('what to do now: the most pressing thing first', () => {
     const c = createCampaign(both, new Rng(1));
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'geoscape', label: 'Elige una operación', count: c.offers.length });
-    const expiring = c.offers.find((o) => o.expiresDay !== null)!;
-    expiring.expiresDay = c.day + 1;
-    expect(nextSteps(c, 0)[0]).toMatchObject({ tone: 'urgent', label: `${expiring.name} caduca en 1 día`, go: { offer: expiring.id } });
+    // Operations don't expire (18/10 #39).
+    expect(c.offers.every((o) => o.expiresDay === null)).toBe(true);
     // Every recruit comes with a point or two to spend.
     const promoted = c.soldiers.find((s) => s.owner === 1)!;
     expect(nextSteps(c, 1).some((x) => x.view === 'barracks' && x.go?.soldier === promoted.id)).toBe(true);
@@ -464,10 +594,6 @@ describe('helping the players', () => {
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'facilities', label: 'Solo 1 soldado listo y sin camas: construye un barracón' });
     raise(c, 'quarters');
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'barracks', label: 'Solo 1 soldado listo: recluta (30 §)' });
-    // An operation about to expire still comes first.
-    c.offers.find((o) => o.expiresDay !== null)!.expiresDay = c.day + 1;
-    expect(nextSteps(c, 0)[0]).toMatchObject({ tone: 'urgent' });
-    expect(nextSteps(c, 0)[1]).toMatchObject({ view: 'barracks' });
     // Without the credits (or at the cap) there is nothing to do about it here.
     c.credits = 0;
     expect(nextSteps(c, 0).some((x) => x.label.includes('recluta'))).toBe(false);

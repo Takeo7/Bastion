@@ -8,10 +8,20 @@ import '../styles.css';
 // (strategy/clearingArt.ts), with no building tools: a sample of pieces round
 // the caravan, and a piece alone (pieceModel, as the one about to be built)
 // beside them (`?ghost`). `?seed=n` another clearing; `?bare` just the
-// caravan; `?snow` the winter's light. `__claro.look(x, z, distance, yaw)`
+// caravan; `?snow` the winter's light; `?cerco` pieces in the way of
+// the Soldados' and the Armería's shots. `__claro.look(x, z, distance, yaw)`
 // frames a spot; `__claro.fell(x0, y0, x1, y1)` fells a rectangle (redrawn
 // by chunks); `__claro.depart()` and `__claro.arrive()` send La Lata off
-// down its track and bring it back.
+// down its track and bring it back; `__claro.soldados()` and
+// `__claro.armeria()`, the Soldados' and the Armería's shots;
+// `__claro.escuadra(n, informe, espejo)`, a squad of n by La Lata as its screen
+// frames it (the debrief's: some wounded, one fallen; mirrored, as the second
+// player sees it); `__claro.puestos()`, soldiers at their siege posts round
+// the clearing (#58); and `__claro.subir()` boards it
+// and sends La Lata off; `__claro.lata(v)` makes La Lata the campaign's
+// vehicle v (0 4×4, 1 van, 2 lorry, 3 the bus); `?lata=v` from the start.
+// `?nivel=n` the Bastion at level n (1 to 8: its stage, base.ts bastionStage),
+// `__claro.nivel(n, desgaste)` another one, worn 0 to 3.
 
 const params = new URLSearchParams(location.search);
 const stage = new Stage();
@@ -33,6 +43,7 @@ stage.add('claro', set);
 art.watch(stage.camera);
 
 const base: BaseState = freshBase(new Rng(Number(params.get('seed') ?? 3)));
+if (params.has('nivel')) base.level = Number(params.get('nivel'));
 const c = Math.floor(base.width / 2);
 if (!params.has('bare')) {
   for (let y = c - 9; y <= c + 9; y++) for (let x = c - 11; x <= c + 11; x++) fellTree(base, x, y);
@@ -53,8 +64,14 @@ if (!params.has('bare')) {
   put('floodlight', c - 7, c);
   put('turret', c + 7, c + 1);
   put('snare', c - 5, c + 2);
+  // `?cerco`: a palisade across the barracks' front and a tower by the caravan's end, in the way of both shots.
+  if (params.has('cerco')) {
+    for (let x = c - 7; x <= c; x++) put('palisade', x, c - 2);
+    put('tower', c + 4, c + 1);
+  }
 }
 art.setBase(base);
+if (params.has('lata')) art.setVehicle(Number(params.get('lata')));
 // A piece alone, as the one about to be built, by the caravan.
 if (params.has('ghost')) {
   const ghost = art.pieceModel('infirmary', 1, 2);
@@ -79,4 +96,38 @@ look(c, c, 34);
   },
   depart: () => art.depart(),
   arrive: () => art.arrive(),
+  /** Soldados and the Armería as their screens frame them, a soldier by the caravan. */
+  soldados() {
+    art.setShowcase('assault', '#e8a33a', undefined, undefined, 'lab');
+    void stage.show('claro', art.soldierShot(), true);
+  },
+  armeria() {
+    void stage.show('claro', art.armoryShot(), true);
+  },
+  /** The squad's screen: `n` soldiers by La Lata, the two commanders' halves; the debrief's, with its wounded and its fallen. */
+  escuadra(n = 6, debrief = false, mirror = false) {
+    const templates = ['assault', 'sharpshooter', 'specialist', 'grenadier', 'rookie'] as const;
+    art.setLineup(Array.from({ length: n }, (_, i) => ({
+      template: templates[i % templates.length]!,
+      color: i < Math.ceil(n / 2) ? '#e8a33a' : '#4fb0e8',
+      seed: `lab${i}`,
+      ...(debrief ? { status: i === 1 ? ('dead' as const) : i % 3 === 2 ? ('wounded' as const) : ('ok' as const) } : {}),
+    })), { mirror });
+    void stage.show('claro', art.lineupShot(), true);
+  },
+  subir: () => art.depart(),
+  /** A siege's posts: six soldiers about the clearing, both commanders', one on the tower. */
+  puestos() {
+    const spots = [[c - 6, c - 3], [c - 5, c - 3], [c + 7, c - 3], [c + 3, c + 3], [c - 3, c + 4], [c + 6, c + 1]];
+    const templates = ['assault', 'sharpshooter', 'specialist', 'grenadier', 'rookie', 'assault'] as const;
+    art.setPosts(spots.map(([x, y], i) => ({ entry: { template: templates[i]!, color: i % 2 ? '#4fb0e8' : '#e8a33a', seed: `post${i}` }, x: x!, y: y! })));
+    look(c, c, 22, 0);
+  },
+  lata: (v: number) => art.setVehicle(v),
+  nivel(n: number, wear = 0) {
+    base.level = n;
+    const caravan = base.pieces.find((p) => p.piece === 'caravan');
+    if (caravan) caravan.hp = [40, 26, 12, 0][wear] ?? 40;
+    art.setBase(base);
+  },
 };

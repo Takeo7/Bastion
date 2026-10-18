@@ -29,13 +29,14 @@ Hace dos inviernos llegó la Pandemia: quien se contagia muere en un día y se l
 >
 > Atalaya, la vieja estación militar, cayó en otoño. Los que salimos con vida hemos parado en un claro del pinar, sobre Brena, con una caravana y lo puesto. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.
 >
-> Toca volver a sacar La Lata, ese trasto forrado con chapas que tenemos por autocar, y salir a buscar lo que nos hace falta.
+> Toca volver a sacar La Lata, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.
 
 La de antes («Hace dos inviernos, la Pandemia vació el valle de Kessra…») queda en el Diario (hoja 1) y en los textos del tráiler aparcado.
 
 ## Tono
 
 - **«Caminantes»** (la premisa de Ana, 0.3.1) vale como otra forma de decir zombis, en boca de los personajes. En las reglas y las fichas se sigue diciendo «zombi».
+- **Las ayudas, directas** (prueba del 18/10, #57, Arturo: «sin metáforas ni floripondios»). El glosario, las fichas de enemigos, Controles, los tooltips y toda explicación dicen la regla tal cual: cortas, con cifras cuando las hay y hablando al jugador de tú («tus soldados»). Ejemplo, la noche: «De noche, tus soldados solo ven de cerca. Bajo una farola, una bengala o un fuego se ve como de día. Hasta que te descubren, los enemigos solo te notan de cerca si estás a oscuras.» Conservan su voz la historia, la radio, los informes de las misiones y las líneas del mundo (los niveles de los edificios, `BOARD_ABOUT`).
 - **Adulto y seco** (prueba del 13/10): frases cortas, nada de explicar lo que se ve, nada de chistes ni guiños. Los personajes hablan como adultos cansados. La regla va en la línea pequeña del consejo, no en el diálogo.
 - **Morse habla poco** (prueba del 14/10, Arturo y Ana): solo un aviso táctico o algo que el jugador no ve. Nada de presentaciones, nada de repetir el objetivo ni el informe, nada que el juego ya enseñe en pantalla.
 - **Sin metáforas sobre el mando compartido** (prueba del 14/10): ni «dos llaves» ni «llave doble». Se dice lo que pasa: uno propone, el otro acepta; lo deciden los dos.
@@ -54,7 +55,7 @@ La de antes («Hace dos inviernos, la Pandemia vació el valle de Kessra…») q
 | Invierno, año 0 | Caen Galen y Corran. El ejército se repliega y desaparece. La radio se queda muda. |
 | Año 1 | Los vivos se esconden en los pueblos de la sierra. Aparecen los Cuervos, bandas que viven de saquear a otros. |
 | Años 1 y 2 | Gente de todas partes se va reuniendo en la Estación Atalaya. La dirigen dos personas, a medias. |
-| Otoño, año 2 | Una horda va derecha a Atalaya y la toma. Los que salen vivos huyen en La Lata, con una caravana enganchada, y paran en un claro del pinar sobre Brena (Arturo, 18/10). Más adelante se podrá saber que la llevó la Congregación. |
+| Otoño, año 2 | Una horda va derecha a Atalaya y la toma. Los que salen vivos huyen en el todoterreno de Teo, con una caravana enganchada, y paran en un claro del pinar sobre Brena (Arturo, 18/10). El autobús se queda en la cochera de Atalaya. Más adelante se podrá saber que la llevó la Congregación. |
 | Invierno, año 2 · Día 1 de la campaña | Las nevadas sepultan a muchos muertos y se vuelve a salir en La Lata. Las misiones están nevadas hasta el capítulo 3. |
 | Deshielo · tras el capítulo 3 | Se calla la sirena de los Llanos y se va la nieve: lo que tapó vuelve a andar. Con el deshielo sube la Marea, que se descubre en el capítulo 4. |
 
@@ -101,7 +102,7 @@ Los ids del código se mantienen; cambian el nombre, el aspecto y, donde haga fa
 - **Atalaya cayó** (Arturo, 18/10, con la base nueva de la Fase 12 §11). Era una vieja estación militar en lo alto de la sierra de Brena: refugio subterráneo, muros de hormigón y una sola carretera. Aguantó dos años; en otoño una horda fue derecha a ella. Queda como lo que se perdió: en los textos, «Atalaya» es el pasado y nunca la base de ahora.
 - **El Bastión** es lo que se levanta en un claro del pinar, sobre Brena: al principio, una caravana y La Lata. Todo lo demás se construye (edificios, defensas, trampas, torretas), y se tala para hacer sitio. Los textos de las piezas están en [LORE-BASE.md](LORE-BASE.md) y en `PIECE_TEXT` (`lore.ts`).
 - **Si el Bastión cae**, se huye otra vez, como de Atalaya: los que quedan vuelven a empezar en otro claro con la caravana y lo puesto. Si no queda nadie, la campaña termina.
-- **La Lata:** un autobús de línea con la chapa que Teo le soldó por encima; de ahí el nombre que le puso la gente de Atalaya, de donde salió con la caravana detrás (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
+- **La Lata:** el apodo del vehículo de la escuadra, por la chapa que Teo le suelda encima (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Era el autobús de línea de Atalaya, que se quedó en su cochera; ahora el apodo pasa de un trasto a otro: el todoterreno de Teo, que tiró de la caravana, y luego una furgoneta, un camión y, al final, el mismo autobús, que se recupera en Atalaya (prueba del 18/10, #45). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
 - **Las decisiones a medias se quedan, con otra historia.** Dos grupos que llegaron a la vez y no se fían del todo: lo importante lo deciden los dos. El año pasado, un líder solo vendió su refugio a los Cuervos a cambio de su vida.
 
 ## Personajes
@@ -123,7 +124,7 @@ Mantiene la estructura actual: siete capítulos, uno por nivel del Bastión, que
 
 | Nivel | Capítulo | Tipo · zona | Qué pasa |
 |---|---|---|---|
-| 1 | **Primer invierno** | Recuperación · Brena | El maletín de urgencias del consultorio del pueblo. |
+| 1 | **Primer invierno** | Recuperación · Brena | La insulina del consultorio del pueblo, que el frío ha conservado (prueba del 18/10, #34). |
 | 2 | **La doctora** | Rescate · Corran | Sacar a la Dra. Nwosu de un hospital lleno de zombis. |
 | 3 | **La sirena** | Sabotaje · Los Llanos de Ceniza | Callar la sirena con la que los Cuervos atraen hordas. |
 | 4 | **La torre del Pico Gris** | Pirateo (arreglar la radio) · El Pantano Gris | Volver a poner en marcha el repetidor: oír a los demás enclaves. |
@@ -151,7 +152,7 @@ Las reglas son de Gameplay. Esto es lo que pide el mundo.
   - Hay que entrar en casas y registrar muebles con 1 acción. Los mapas ya marcan armarios, cómodas, escritorios, estanterías, mostradores y camas.
   - Lo encontrado va en la mochila de cada soldado, que tiene un límite.
   - Se evacúa con el botín. Lo que se deja atrás se pierde.
-- **El objeto de una misión** nunca es algo que se encuentre registrando (medicinas, comida, suministros, piezas, armas, munición, cajas) ni se llama «mochila» o «botín»: es una cosa concreta que solo está allí (el maletín de urgencias, el mapa de los pozos, la saca del correo). Así no se confunde con el botín (prueba del 18/10, #13).
+- **El objeto de una misión** nunca es algo que se encuentre registrando (medicinas, comida, suministros, piezas, armas, munición, cajas) ni se llama «mochila» o «botín»: es una cosa concreta que solo está allí (la insulina del consultorio, el mapa de los pozos, la saca del correo). Tampoco es nada de lo que nombran las medicinas encontradas (antibióticos, vendas, yodo…). Así no se confunde con el botín (prueba del 18/10, #13).
 - **Ruido:**
   - Cada disparo tiene un radio de ruido, y los zombis y los grupos inactivos van hacia el último ruido.
   - El machete y la ballesta no suenan.

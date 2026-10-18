@@ -13,6 +13,7 @@ import {
   HACK_SPECIALIST,
   hasMod,
   hasPerk,
+  hostileTo,
   isAttack,
   ITEMS,
   OFICIO_QUIET,
@@ -222,7 +223,7 @@ export function abilityBlocker(s: GameState, u: Unit, ability: AbilityId): strin
   return null;
 }
 
-const hostile = (u: Unit, t: Unit) => t.alive && t.team !== u.team && !t.captive;
+const hostile = (u: Unit, t: Unit) => t.alive && hostileTo(u, t) && !t.captive;
 
 /** Enemies within reach of a blade without a step (Hacerse sitio, docs/FASE9.md). */
 export function besideEnemies(s: GameState, u: Unit): Unit[] {

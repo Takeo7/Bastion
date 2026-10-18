@@ -85,6 +85,8 @@ export class Net {
   private rejoinNote: HTMLElement | null = null;
   /** Whether a connection ever opened: if not, the host hears about it (a browser turning the certificate down). */
   private opened = false;
+  /** Whether this socket got its seat (welcome): an error before it is the hello refused. */
+  private welcomed = false;
   /** Who is in the room and which seat is ours, for the partner's name when the host closes the game. */
   private players: PlayerInfo[] = [];
   private slot: Slot | null = null;
@@ -98,10 +100,12 @@ export class Net {
     window.addEventListener('online', () => this.awake());
   }
 
+  /** Asks for a seat as `name`: on the socket already open if there is one (a name refused, another tried), else on a new one. */
   connect(name: string): void {
     this.name = name;
     this.stopped = false;
-    this.open();
+    if (this.ws?.readyState === WebSocket.OPEN && !this.welcomed) this.send({ t: 'hello', name, token: storage()?.getItem(TOKEN_KEY) ?? undefined });
+    else this.open();
   }
 
   send(msg: ClientMessage | CampaignMessage): void {
@@ -156,6 +160,7 @@ export class Net {
     this.emitStatus('connecting');
     const ws = new WebSocket(this.url);
     this.ws = ws;
+    this.welcomed = false;
     ws.onopen = () => {
       this.retry = 0;
       this.opened = true;
@@ -171,8 +176,12 @@ export class Net {
       if (msg.t === 'welcome') {
         storage()?.setItem(TOKEN_KEY, msg.token);
         this.slot = msg.slot;
+        this.welcomed = true;
         this.showRejoin(false);
       }
+      // The hello refused (a name the other player has, a full game: room.ts join): coming back on its own would
+      // only be refused again. The lobby asks for another name (ui/lobby.ts error), and connect tries it.
+      if (msg.t === 'error' && !this.welcomed) this.stopped = true;
       if (msg.t === 'room') this.players = msg.players;
       if (msg.t === 'closing') {
         // The host closed the game (server index.ts shutdown): there is nobody to reconnect to. The host's own

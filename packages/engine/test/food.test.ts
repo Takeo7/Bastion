@@ -140,19 +140,19 @@ describe('food', () => {
 
 describe('the Taller', () => {
   /** A campaign with a Taller at `level` and plenty to pay with. */
-  function workshop(level: number, xp = LEVEL_XP[5]!) {
+  function workshop(level: number, bastion = 6) {
     const c = quiet();
     const plot = raise(c, 'workshop', level);
-    Object.assign(c, { xp, credits: 1000, parts: 30 });
+    Object.assign(c, { level: bastion, credits: 1000, parts: 30 });
     return { c, plot };
   }
 
   it('making plate armour: Taller, Bastion level 4, 60 §, 4 parts and 3 days of a crew; then everyone wears it', () => {
     const none = quiet();
     expect(craftBlocker(none, 'armor2')).toBe('Hace falta el Taller.');
-    const { c, plot } = workshop(1, LEVEL_XP[1]!);
+    const { c, plot } = workshop(1, 2);
     expect(craftBlocker(c, 'armor2')).toMatch(/nivel 4 del Bastión/);
-    c.xp = LEVEL_XP[3]!;
+    c.level = 4;
     c.parts = 3;
     expect(craftBlocker(c, 'armor2')).toBe('No hay piezas suficientes.');
     c.parts = 10;
@@ -169,9 +169,9 @@ describe('the Taller', () => {
   });
 
   it('improvements for the weapons: culatas and silenciadores from «Culatas y silenciadores», miras and cargadores from «Miras y cargadores ampliados», again and again', () => {
-    const { c } = workshop(1, LEVEL_XP[1]!);
+    const { c } = workshop(1, 2);
     expect(craftBlocker(c, 'makeStock')).toMatch(/nivel 3 del Bastión/);
-    c.xp = LEVEL_XP[2]!;
+    c.level = 3;
     expect(craftBlocker(c, 'makeStock')).toBeNull();
     expect(craftBlocker(c, 'makeScope')).toMatch(/nivel 6 del Bastión/);
     expect(run(c, { type: 'craft', project: 'makeStock' }).ok).toBe(true);
@@ -181,13 +181,13 @@ describe('the Taller', () => {
   });
 
   it('armour 3 needs the Taller at level 2, its level of the Bastion and armour 2 made first; two players decide together', () => {
-    const { c, plot } = workshop(1, LEVEL_XP[6]!);
+    const { c, plot } = workshop(1, 7);
     expect(craftBlocker(c, 'armor3')).toBe('Hace falta el Taller a nivel 2.');
     plot.level = 2;
     expect(craftBlocker(c, 'armor3')).toMatch(/Antes hay que hacer/);
     c.crafted = ['armor2'];
     expect(craftBlocker(c, 'armor3')).toBeNull();
-    const two = workshop(2, LEVEL_XP[6]!);
+    const two = workshop(2, 7);
     two.c.players = [0, 1];
     two.c.crafted = ['armor2'];
     expect(run(two.c, { type: 'craft', project: 'armor3' }, 0, [0, 1]).ok).toBe(true);

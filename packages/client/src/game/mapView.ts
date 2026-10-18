@@ -17,6 +17,7 @@ import { inwards, madeAs, towersOf, wearOf, type Wear } from './siegeDressing';
 import { DRAWN, drawPiece, pieceKey, pieceMap, pieceWear, terrainOf, type PieceMap } from './basePieces';
 import { SnowCover, snowyMission, snowTexture } from './snow';
 import { DroppedView } from './dropped';
+import { furnishBarns, furnishHomes, furnishShops, shopTrade } from './homeFurnishing';
 import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
 import { EvacBus } from './evacBus';
 import { medicalDetails, medicalWallPatch } from './medicalDetails';
@@ -758,7 +759,9 @@ export class MapView {
       const yaw = turnTo(b.facing) * (Math.PI / 2);
       switch (kind) {
         case 'truck':
-          addSynty('truck', r, placed(cx, base, cz, 1, 1, 1, yaw));
+          // In a barn, its old tractor (playtest 18/10, #53); elsewhere a lorry's wreck.
+          if (buildings.plan.buildings[buildings.plan.owner[b.anchor]!]?.kind === 'barn') addSyntyId('tractor', placed(cx, base, cz, 1, 1, 1, yaw));
+          else addSynty('truck', r, placed(cx, base, cz, 1, 1, 1, yaw));
           break;
         case 'container':
           addSynty('container', r, placed(cx, base, cz, 1, 1, 1, yaw));
@@ -907,6 +910,28 @@ export class MapView {
       if (s.base && look.kind === 'tree' && kind === 'high') {
         const k = 0.8 + hash(x, y, 14) * 0.45;
         addSynty('basePines', pick, placed(cx + (hash(x, y, 15) - 0.5) * 0.45, base, cz + (hash(x, y, 16) - 0.5) * 0.45, k, k * (0.9 + hash(x, y, 17) * 0.25), k, hash(x, y, 18) * Math.PI * 2));
+        return true;
+      }
+      // In a barn, high hay is square bales stacked, three high, against its wall (playtest 18/10, #53).
+      if (look.kind === 'hay' && kind === 'high' && buildings.plan.buildings[buildings.plan.owner[i]!]?.kind === 'barn') {
+        const yaw = turn * (Math.PI / 2);
+        for (let k = 0; k < 3; k++) addSyntyId('hayBale', placed(cx + (hash(x, y, 50 + k) - 0.5) * 0.08, base + k * topOf('hayBale'), cz + (hash(x, y, 53 + k) - 0.5) * 0.08, 1, 1, 1, yaw + (hash(x, y, 56 + k) - 0.5) * 0.25));
+        return true;
+      }
+      // A house's counters are its kitchen's; a shop's, its own (one kind for the building, playtest 18/10 #36).
+      if (look.kind === 'counter' && kind === 'low') {
+        const bd = buildings.plan.buildings[buildings.plan.owner[i]!];
+        addSyntyId(bd && bd.kind !== 'house' ? 'shopCounter' : 'counter', placed(cx, base, cz, 1, 1, 1, turn * (Math.PI / 2)));
+        return true;
+      }
+      // Shelves as the building is (playtest 18/10, #36): a house's are its bookcases, one kind for the house, and an
+      // office's; a shop's or a warehouse's are shelving, but in a bookshop or a library (three in ten), all books.
+      if ((look.kind === 'shelf' || look.kind === 'cabinet') && kind === 'high') {
+        const bd = buildings.plan.buildings[buildings.plan.owner[i]!];
+        const books = !!bd && (bd.kind === 'house' || bd.kind === 'office' || (bd.kind === 'shop' && shopTrade(bd.look) === 'books') || (bd.kind === 'hall' && bd.look < 0.3));
+        const id: PropId =
+          look.kind === 'shelf' ? (books ? ((bd!.look * 7) % 1 < 0.5 ? 'bookshelf' : 'bookshelf2') : 'shelfHigh') : bd?.kind === 'house' ? 'cabinet' : pick < 0.5 ? 'officeCabinet' : 'cabinet';
+        addSyntyId(id, placed(cx, base, cz, 1, 1, 1, turn * (Math.PI / 2)));
         return true;
       }
       // A fallen tree is a row of logs: it keeps to the grid.
@@ -1154,6 +1179,19 @@ export class MapView {
     decorNow = decor;
     tilesNow = s.tiles;
     placeBase = 0;
+
+    // What a house's rooms have besides their cover (playtest 18/10, #36): cosmetic, on clear floor only, fading with its storey.
+    for (const f of [...furnishHomes(s), ...furnishShops(s, buildings.plan.buildings), ...furnishBarns(s, buildings.plan.buildings)]) {
+      const i = f.y * s.width + f.x;
+      if (area && !area[i]) continue;
+      const tiles = f.z ? s.levels?.[f.z - 1]?.tiles : s.tiles;
+      if (!tiles || buildings.plan.breached(i, f.z)) continue;
+      floor.building = buildings.plan.owner[i]!;
+      floor.level = f.z;
+      addSyntyId(f.id, f.matrix, f.cast);
+    }
+    floor.building = -1;
+    floor.level = 0;
 
     // Under a slab blown through (docs/FASE7.md §5): what came down with it, on the floor below. Flat: no cover.
     for (let k = 1; k <= (s.levels?.length ?? 0); k++) {
@@ -1443,7 +1481,7 @@ export class MapView {
   }
 
   /**
-   * La Mula by the evacuation zone, its doors to it, unless it has gone
+   * La Lata (La Mula, or the campaign's vehicle before it) by the evacuation zone, its doors to it, unless it has gone
    * (mission.evacDone): on its bay (mission.evacBus), its nose to the edge it
    * leaves by; on a map without one, just off the edge nearest the zone and
    * along it, its nose to the nearer corner.
@@ -1455,7 +1493,13 @@ export class MapView {
       this.busWay = null;
       return;
     }
-    const bus = (this.bus ??= new EvacBus());
+    // La Lata as the campaign has it (playtest 18/10, #45; a skirmish's, the bus).
+    const vehicle = s.vehicle ?? 3;
+    if (this.bus && this.bus.vehicle !== vehicle) {
+      this.bus.root.removeFromParent();
+      this.bus = null;
+    }
+    const bus = (this.bus ??= new EvacBus(vehicle));
     const mid = (tiles: readonly { x: number; y: number }[]) =>
       new THREE.Vector3(tiles.reduce((a, t) => a + t.x + 0.5, 0) / tiles.length, 0, tiles.reduce((a, t) => a + t.y + 0.5, 0) / tiles.length);
     const zone = mid(zoneTiles);

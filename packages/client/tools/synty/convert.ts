@@ -253,7 +253,7 @@ for (const [id, p] of Object.entries(PIECES) as [string, PieceAsset][]) {
 // The base's models convert as whole pieces (no cut); their fbx is a path in the pack.
 for (const [id, b] of Object.entries(BASE_MODELS) as [string, BaseAsset][]) {
   const piece = { keep: null, parts: !!b.parts, drop: b.drop ?? [] };
-  add({ kind: 'piece', id, name: id, out: join(PUBLIC, modelFile(b.pack, 'base', id)), fbx: findFbx(b.pack, b.fbx), atlas: atlasOf(b.pack), slots: slotsOf(b.pack, basename(b.fbx)), ...piece });
+  add({ kind: 'piece', id, name: id, out: join(PUBLIC, modelFile(b.pack, 'base', id)), fbx: findFbx(b.pack, b.fbx), atlas: b.atlas ?? atlasOf(b.pack), slots: slotsOf(b.pack, basename(b.fbx)), ...piece });
 }
 
 for (const [id, t] of Object.entries(BASE_TEXTURES) as [keyof typeof BASE_TEXTURES, (typeof BASE_TEXTURES)[keyof typeof BASE_TEXTURES]][]) {

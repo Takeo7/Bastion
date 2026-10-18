@@ -252,7 +252,7 @@ ipcMain.handle('bastion:host', async (e): Promise<string | null> => {
 ipcMain.handle('bastion:join', async (e, address: unknown): Promise<string | null> => {
   if (!fromLauncher(e) || !win) return null;
   const target = typeof address === 'string' ? normalise(address) : null;
-  if (!target) return 'Escribe la dirección que ve tu compañero en su pantalla, por ejemplo 192.168.1.20:3000.';
+  if (!target) return 'Escribe la dirección que aparece en la pantalla de quien aloja la partida; por ejemplo, 192.168.1.20:3000.';
   if (!(await answers(`http://${target}/`, 4000))) {
     return `No responde nadie en ${target}. ¿Tiene abierta la partida (Ser anfitrión) y estáis en la misma red o en Tailscale?`;
   }

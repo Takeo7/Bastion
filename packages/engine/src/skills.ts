@@ -84,11 +84,11 @@ export interface VeterancyDef {
 }
 
 export const VETERANCY: VeterancyDef[] = [
-  { name: 'Novato', female: 'Novata', from: 0, line: 'Todavía no ha visto lo peor.' },
-  { name: 'Fogueado', female: 'Fogueada', from: 5, line: 'Ya ha salido y ha vuelto.' },
-  { name: 'Curtido', female: 'Curtida', from: 10, line: 'Sabe cuándo no disparar.' },
-  { name: 'Veterano', female: 'Veterana', from: 15, line: 'Tercera acción por turno. Los demás le siguen sin que lo pida.' },
-  { name: 'Superviviente', female: 'Superviviente', from: 20, line: 'Ha vuelto de todo.' },
+  { name: 'Novato', female: 'Novata', from: 0, line: 'Sin rango: menos de 5 puntos gastados en el tablero.' },
+  { name: 'Fogueado', female: 'Fogueada', from: 5, line: '+10 de voluntad.' },
+  { name: 'Curtido', female: 'Curtida', from: 10, line: '+20 de voluntad.' },
+  { name: 'Veterano', female: 'Veterana', from: 15, line: '+30 de voluntad y una tercera acción por turno.' },
+  { name: 'Superviviente', female: 'Superviviente', from: 20, line: '+40 de voluntad y una tercera acción por turno.' },
 ];
 
 /** A rank more for every so many points spent on the board, and this much will with each (Arturo, 16/10). */

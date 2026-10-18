@@ -72,10 +72,10 @@ export class SaveStore {
   /** Where a campaign from before FRESH_RELEASE was put aside on loading, if one was (docs/FASE9.md §7, FASE10.md). */
   setAside: string | null = null;
 
-  /** `log`: a line for the host's red.log (index.ts). */
+  /** `log`: a line for the host's red.log (index.ts); the room writes there too. */
   constructor(
     private readonly path: string,
-    private readonly log: (line: string) => void = () => {},
+    readonly log: (line: string) => void = () => {},
   ) {}
 
   load(): SaveFile | null {

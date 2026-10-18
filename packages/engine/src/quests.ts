@@ -283,7 +283,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
     title: 'Las campanas de Telm',
     signature: '— Los de Telm',
     hook: 'Las campanas de Telm tocan a rebato.',
-    prize: 'dos granadas aturdidoras y +10 suministros al mes',
+    prize: 'dos granadas aturdidoras y +10 suministros en cada convoy',
     region: 'weu',
     rumor: true,
     steps: [
@@ -293,7 +293,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         text: 'Telm es un pueblo de la sierra. Cada noche llega una horda y la gente se encierra en la iglesia. Un coche patrulla de los Cuervos, con la sirena puesta en el valle, atrae a los zombis hacia el pueblo. Cuando no quede nadie, bajarán a saquearlo.',
         options: [
           { label: 'Callar la sirena', effect: 'Una operación de sabotaje', then: 'next' },
-          { label: 'Ahora no podemos', effect: 'Telm se vacía: −10 suministros al mes', then: 'failure' },
+          { label: 'Ahora no podemos', effect: 'Telm se vacía: −10 suministros en cada convoy', then: 'failure' },
         ],
       },
       {
@@ -306,8 +306,8 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      success: { text: 'Telm resiste. El pueblo nos da las dos granadas aturdidoras del cuartelillo y parte de cada cosecha (+10 suministros al mes).', tone: 'good', items: { flashbang: 2 }, income: 10 },
-      failure: { text: 'Las campanas de Telm ya no suenan. El pueblo está vacío (−10 suministros al mes).', tone: 'bad', income: -10 },
+      success: { text: 'Telm resiste. El pueblo nos da las dos granadas aturdidoras del cuartelillo y parte de cada cosecha (+10 suministros en cada convoy).', tone: 'good', items: { flashbang: 2 }, income: 10 },
+      failure: { text: 'Las campanas de Telm ya no suenan. El pueblo está vacío (−10 suministros en cada convoy).', tone: 'bad', income: -10 },
     },
   },
 
@@ -350,7 +350,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
     title: 'Ruta 50',
     signature: '— Los Camioneros',
     hook: 'Los Camioneros han perdido un convoy en los Llanos de Ceniza.',
-    prize: '+15 suministros al mes',
+    prize: '+15 suministros en cada convoy',
     region: 'na',
     rumor: true,
     steps: [
@@ -376,8 +376,8 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      success: { text: 'Los Camioneros vuelven a la Ruta 50 y paran en el Bastión en cada viaje (+15 suministros al mes).', tone: 'good', income: 15 },
-      failure: { text: 'Los Camioneros dejan de pasar por los Llanos (−10 suministros al mes).', tone: 'bad', income: -10 },
+      success: { text: 'Los Camioneros vuelven a la Ruta 50 y paran en el Bastión (+15 suministros en cada convoy).', tone: 'good', income: 15 },
+      failure: { text: 'Los Camioneros dejan de pasar por los Llanos (−10 suministros en cada convoy).', tone: 'bad', income: -10 },
     },
   },
 
@@ -386,7 +386,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
     title: 'Manos',
     signature: '— La Red Callada',
     hook: 'La Red Callada ha perdido a una de sus enlaces.',
-    prize: '+15 de experiencia y 50 suministros',
+    prize: '125 suministros',
     region: 'eas',
     rumor: true,
     steps: [
@@ -412,7 +412,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      success: { text: 'La Red Callada nos enseña sus señas. Las escuadras se comunican sin ruido y sabemos por dónde pasan las hordas del Pantano.', tone: 'good', xp: 15, credits: 50 },
+      success: { text: 'La Red Callada nos enseña sus señas y comparte lo que guarda (+125 suministros). Ahora sabemos por dónde pasan las hordas del Pantano.', tone: 'good', credits: 125 },
       failure: { text: 'La Red Callada se esconde. No volveremos a saber de ella.', tone: 'bad' },
     },
   },
@@ -487,7 +487,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
     outcomes: {
       success: { text: 'La mina queda en silencio. El Sindicato nos cede a quien mejor maneja los explosivos y dos cargas de dinamita (+2 granadas).', tone: 'good', recruit: { cls: 'grenadier' }, items: { fragGrenade: 2 } },
       sealed: { text: 'El Sindicato sella la mina. Nadie sabe cuántos quedaron dentro.', tone: 'bad' },
-      failure: { text: 'Los mineros abandonan Carvik (−10 suministros al mes).', tone: 'bad', income: -10 },
+      failure: { text: 'Los mineros abandonan Carvik (−10 suministros en cada convoy).', tone: 'bad', income: -10 },
     },
   },
 

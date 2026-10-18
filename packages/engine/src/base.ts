@@ -159,14 +159,59 @@ export interface BaseState {
   felled?: number[];
   pieces: BasePiece[];
   nextPiece: number;
+  /** The Bastion's level, as bought (campaign.ts `level`): what stands on its lot (bastionFootprint). Missing: 1. */
+  level?: number;
+}
+
+/**
+ * The Bastion's lot (Arturo, 18/10 #40: the caravan grows into a building
+ * with the level): 6 × 6 round the caravan, from one tile left and two up of
+ * it, where nothing else is built; what isn't the building is its yard.
+ */
+export const BASTION_LOT = 6;
+/** What the Bastion takes up at each stage (two levels each): the caravan, the mobile home, the barracón, the house (Arte). */
+export const BASTION_STAGES: readonly [number, number][] = [
+  [4, 2],
+  [6, 3],
+  [5, 4],
+  [6, 5],
+];
+
+/** The lot, from the caravan; null with no caravan. */
+export function bastionLot(base: BaseState): { x: number; y: number; w: number; h: number } | null {
+  const caravan = base.pieces.find((p) => p.piece === 'caravan');
+  return caravan ? { x: caravan.x - 1, y: caravan.y - 2, w: BASTION_LOT, h: BASTION_LOT } : null;
+}
+
+/** The stage the Bastion's level shows (0 to 3). */
+export function bastionStage(base: Pick<BaseState, 'level'>): number {
+  return Math.min(BASTION_STAGES.length - 1, Math.max(0, Math.ceil((base.level ?? 1) / 2) - 1));
+}
+
+/** The tiles the Bastion's building stands on, at the middle of its lot (rounded down). */
+export function bastionFootprint(base: BaseState): Vec2[] {
+  const lot = bastionLot(base);
+  if (!lot) return [];
+  const [w, h] = BASTION_STAGES[bastionStage(base)]!;
+  const x0 = lot.x + Math.floor((lot.w - w) / 2);
+  const y0 = lot.y + Math.floor((lot.h - h) / 2);
+  const cells: Vec2[] = [];
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) cells.push({ x, y });
+  return cells;
+}
+
+/** Whether (x, y) lies on the Bastion's lot. */
+export function onBastionLot(base: BaseState, x: number, y: number): boolean {
+  const lot = bastionLot(base);
+  return !!lot && x >= lot.x && y >= lot.y && x < lot.x + lot.w && y < lot.y + lot.h;
 }
 
 /** The base's map, across and deep. */
 export const BASE_MAP = 40;
 /** The dead come in by this band at the edge: nothing is built in it. */
 export const BASE_EDGE = 2;
-/** Suministros a tree gives when it is felled (Arturo, 18/10: no new resources). */
-export const TREE_SUPPLIES = 2;
+/** Suministros felling a tree costs; it gives nothing back (Arturo, 18/10 #41: «solo cuesta recursos y no da nada»). */
+export const FELL_COST = 3;
 /** Of a piece's cost, what dismantling it gives back. */
 export const DISMANTLE_BACK = 0.5;
 
@@ -217,6 +262,7 @@ export function placeBlocker(base: BaseState, id: PieceId, x: number, y: number,
     if (c.x < BASE_EDGE || c.y < BASE_EDGE || c.x >= base.width - BASE_EDGE || c.y >= base.height - BASE_EDGE) return 'Ahí no: es el borde del claro.';
     if (treeAt(base, c.x, c.y)) return 'Hay árboles: tala antes.';
     if (pieceAt(base, c.x, c.y)) return 'Ahí ya hay algo.';
+    if (id !== 'caravan' && onBastionLot(base, c.x, c.y)) return 'Ahí no: ese sitio es para el Bastión, que crece con cada nivel.';
   }
   return null;
 }
@@ -248,14 +294,14 @@ export function fellBlocker(base: BaseState, x: number, y: number): string | nul
   return treeAt(base, x, y) ? null : 'Ahí no hay ningún árbol.';
 }
 
-/** Fells the tree at (x, y): the ground is clear, and it gives TREE_SUPPLIES. */
+/** Fells the tree at (x, y): the ground is clear. 1 if there was one, else 0 (what it costs: FELL_COST each). */
 export function fellTree(base: BaseState, x: number, y: number): number {
   const i = y * base.width + x;
   const at = base.trees.indexOf(i);
   if (at < 0) return 0;
   base.trees.splice(at, 1);
   (base.felled ??= []).push(i);
-  return TREE_SUPPLIES;
+  return 1;
 }
 
 /** What mending `p` costs: its cost in proportion to what it has lost, a suministro at least. */
@@ -285,11 +331,17 @@ export function dismantleRefund(p: BasePiece): number {
 
 /** Pieces touching `p` side by side (§11.3: «junto a» is next to it on the map). */
 export function besidePieces(base: BaseState, p: BasePiece): BasePiece[] {
-  const mine = pieceCells(p.piece, p.x, p.y, p.rot);
+  // The caravan is its whole lot (nothing is built on it): beside the lot is beside the caravan.
+  const caravan = base.pieces.find((q) => q.piece === 'caravan');
+  const lot = bastionLot(base);
+  const lotCells: Vec2[] = [];
+  if (lot) for (let y = lot.y; y < lot.y + lot.h; y++) for (let x = lot.x; x < lot.x + lot.w; x++) lotCells.push({ x, y });
+  const mine = p === caravan ? lotCells : pieceCells(p.piece, p.x, p.y, p.rot);
+  const at = (x: number, y: number) => (caravan && onBastionLot(base, x, y) ? caravan : pieceAt(base, x, y));
   const out = new Set<BasePiece>();
   for (const c of mine) {
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const q = pieceAt(base, c.x + dx, c.y + dy);
+      const q = at(c.x + dx, c.y + dy);
       if (q && q !== p) out.add(q);
     }
   }
@@ -379,7 +431,9 @@ export function baseLayout(base: BaseState): MissionLayout {
     // What a siege broke and nobody has mended is a gap (the client draws its ruin from GameState.base).
     if (p.hp <= 0) continue;
     const look = PIECE_LOOK[p.piece];
-    for (const c of pieceCells(p.piece, p.x, p.y, p.rot)) {
+    // The caravan stands for the Bastion: the building of its stage, solid, holding what the caravan holds.
+    const cells: { x: number; y: number; tile: TileKind; elev?: number }[] = p.piece === 'caravan' ? bastionFootprint(base).map((t) => ({ ...t, tile: 'wall' as TileKind })) : pieceCells(p.piece, p.x, p.y, p.rot);
+    for (const c of cells) {
       const i = c.y * width + c.x;
       tiles[i] = c.tile;
       elev[i] = c.elev ?? 0;
@@ -388,10 +442,9 @@ export function baseLayout(base: BaseState): MissionLayout {
       if (c.tile === 'wall' || c.tile === 'door' || c.tile === 'low' || c.tile === 'high') breakables[i] = p.hp;
     }
   }
-  // The squad round the caravan: the free tiles nearest it.
-  const caravan = base.pieces.find((p) => p.piece === 'caravan');
-  const [w, h] = PIECES.caravan.size;
-  const middle = caravan ? { x: caravan.x + w / 2, y: caravan.y + h / 2 } : { x: width / 2, y: height / 2 };
+  // The squad round the Bastion: the free tiles nearest the middle of its lot.
+  const lot = bastionLot(base);
+  const middle = lot ? { x: lot.x + lot.w / 2, y: lot.y + lot.h / 2 } : { x: width / 2, y: height / 2 };
   const spawns: Vec2[] = [];
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (tiles[y * width + x] === 'floor' && elev[y * width + x] === 0) spawns.push({ x, y });
   spawns.sort((a, b) => Math.hypot(a.x - middle.x, a.y - middle.y) - Math.hypot(b.x - middle.x, b.y - middle.y) || a.y - b.y || a.x - b.x);

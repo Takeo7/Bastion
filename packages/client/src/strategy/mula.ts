@@ -8,6 +8,11 @@ import { KitBatch, kitMesh, kitModel } from './baseKit';
 // doors and wheels are parts of their own, so they move. The same bus waits
 // in the base's hangar (bastion.ts) and at a mission's evacuation
 // (game/evacBus.ts).
+//
+// Before it is the bus, La Lata is one of Apocalypse's vehicles with its own
+// armour (playtest 18/10, #45: buildLata): a 4×4 with bars on its windows and
+// spikes on its nose, a TV van with its dish still on the roof (its back doors
+// swing open), an army lorry under its canvas.
 
 /** What a scene has to have loaded (baseKit.ts loadKitModels) to build La Mula. */
 export const MULA_MODELS: BaseModelId[] = ['mulaBus', 'plate', 'plateSlit', 'plateRoof'];
@@ -17,8 +22,8 @@ const UNIT = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 export interface Mula {
   /** The bus in its model's space: its nose +z, its doors on its −x side, true size, standing on y = 0. */
   body: THREE.Group;
-  /** Each door leaf, and where it is shut and open (in the body's space). */
-  doors: { leaf: THREE.Object3D; shut: THREE.Vector3; open: THREE.Vector3 }[];
+  /** Each door leaf, and where it is shut and open (in the body's space); one that swings on its hinge, how far (radians) when open. */
+  doors: { leaf: THREE.Object3D; shut: THREE.Vector3; open: THREE.Vector3; swing?: number }[];
   /** Each wheel's hub, turned about its own axle (x). */
   wheels: THREE.Object3D[];
   wheelRadius: number;
@@ -27,6 +32,108 @@ export interface Mula {
   /** Each doorway's middle, in the body's space. */
   doorCentres: THREE.Vector3[];
   size: THREE.Vector3;
+}
+
+/** La Lata's vehicles before the bus (GameState.vehicle 0 4×4, 1 van, 2 lorry): the body and its armour, and where one gets in. */
+const LATA: Record<number, { body: BaseModelId; extras: BaseModelId[]; way: 'side' | 'back' }> = {
+  0: { body: 'lataCar', extras: ['lataCarArmour', 'lataCarBars'], way: 'side' },
+  1: { body: 'lataVan', extras: ['lataVanArmour', 'lataVanRoof', 'lataVanBars'], way: 'back' },
+  2: { body: 'lataTruck', extras: ['lataTruckArmour', 'lataTruckCanopy', 'lataTruckBars'], way: 'back' },
+};
+
+/** What a scene has to have loaded to build La Lata as `vehicle` (3, or none: the bus). */
+export function lataModels(vehicle = 3): BaseModelId[] {
+  const v = LATA[vehicle];
+  return v ? [v.body, ...v.extras] : MULA_MODELS;
+}
+
+/**
+ * La Lata as `vehicle` (3, or none: La Mula), built from the kit, as La Mula is (its nose +z, its left −x, standing on
+ * y = 0); null if its models haven't loaded. A van's back doors swing on their hinges (`swing`).
+ */
+export function buildLata(vehicle = 3): Mula | null {
+  const v = LATA[vehicle];
+  if (!v) return buildMula();
+  const model = kitModel(v.body);
+  if (!model) return null;
+  const body = new THREE.Group();
+  const statics = new StaticBatch(50);
+  statics.begin(null);
+  const still = new THREE.Matrix4();
+  // Each model back where it was made to go round the body, turned nose +z (the kit has it +x).
+  const placed = (id: BaseModelId, g: THREE.BufferGeometry) => {
+    const shift = (kitModel(id)?.origin ?? model.origin).clone().sub(model.origin);
+    const out = g.clone().translate(shift.x, shift.y, shift.z).rotateY(-Math.PI / 2);
+    out.computeBoundingBox();
+    return out;
+  };
+  const box = new THREE.Box3();
+  const wheels: THREE.Object3D[] = [];
+  let wheelRadius = 0.3;
+  const leaves = new Map<string, THREE.Mesh[]>();
+  for (const id of [v.body, ...v.extras]) {
+    for (const part of kitMesh(id, 'plain').children.slice()) {
+      const mesh = part as THREE.Mesh;
+      const geometry = placed(id, mesh.geometry);
+      const bb = geometry.boundingBox!;
+      box.union(bb);
+      if (id === v.body && /wheel/i.test(mesh.name)) {
+        // Turned about its own axle.
+        const centre = bb.getCenter(new THREE.Vector3());
+        const hub = new THREE.Group();
+        hub.position.copy(centre);
+        hub.add(new THREE.Mesh(geometry.translate(-centre.x, -centre.y, -centre.z), mesh.material));
+        body.add(hub);
+        wheels.push(hub);
+        wheelRadius = (bb.max.y - bb.min.y) / 2;
+        continue;
+      }
+      const door = id === v.body ? /Door_([lr])/i.exec(mesh.name)?.[1]?.toLowerCase() : undefined;
+      if (door) {
+        const m = new THREE.Mesh(geometry, mesh.material);
+        leaves.set(door, [...(leaves.get(door) ?? []), m]);
+        continue;
+      }
+      statics.add(geometry, mesh.material as THREE.Material, still, true, undefined, false);
+    }
+  }
+  statics.commit();
+  body.add(statics.group);
+  // The back doors, each on its outer edge, opening out and round towards the side.
+  const doors: Mula['doors'] = [];
+  for (const meshes of leaves.values()) {
+    const bb = new THREE.Box3();
+    for (const m of meshes) bb.union(m.geometry.boundingBox!);
+    const outer = Math.abs(bb.max.x) > Math.abs(bb.min.x) ? bb.max.x : bb.min.x;
+    const hinge = new THREE.Vector3(outer, 0, (bb.min.z + bb.max.z) / 2);
+    const leaf = new THREE.Group();
+    leaf.position.copy(hinge);
+    for (const m of meshes) {
+      m.geometry.translate(-hinge.x, 0, -hinge.z);
+      m.castShadow = true;
+      leaf.add(m);
+    }
+    body.add(leaf);
+    doors.push({ leaf, shut: hinge.clone(), open: hinge.clone(), swing: outer > 0 ? -1.97 : 1.97 });
+  }
+  const size = box.getSize(new THREE.Vector3());
+  // Where one gets in: by its left doors (the 4×4), or at its back.
+  const doorCentres = v.way === 'side' ? [new THREE.Vector3(box.min.x, 0.5, box.min.z + size.z * 0.62), new THREE.Vector3(box.min.x, 0.5, box.min.z + size.z * 0.38)] : [new THREE.Vector3((box.min.x + box.max.x) / 2, 0.6, box.min.z)];
+  // Headlights, off while it stands.
+  const lights = new THREE.MeshStandardMaterial({ color: 0x2a2a20, emissive: 0xfff2c0, emissiveIntensity: 0.2 });
+  for (const x of [-1, 1]) {
+    const lamp = new THREE.Mesh(UNIT, lights);
+    lamp.scale.set(0.2, 0.1, 0.04);
+    lamp.position.set((box.min.x + box.max.x) / 2 + x * (size.x / 2 - 0.25), size.y * 0.3, box.max.z + 0.005);
+    body.add(lamp);
+  }
+  return { body, doors, wheels, wheelRadius, lights, doorCentres, size };
+}
+
+/** A door at `k` of the way open (0 shut, 1 open): slid along, or swung on its hinge. */
+export function doorAt(d: Mula['doors'][number], k: number): void {
+  d.leaf.position.lerpVectors(d.shut, d.open, k);
+  if (d.swing) d.leaf.rotation.y = d.swing * k;
 }
 
 /** La Mula, built from the kit (null if its models haven't loaded). */

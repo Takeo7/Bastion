@@ -32,7 +32,7 @@ export interface TileLook {
    * (light; a chalk stroke's is a dark shadow, for the snow), a hand-drawn
    * stroke (chalk) and the dash's contour dashed or not.
    */
-  edges: { width: number; walk: number; dash: number; glow: number; halo: boolean; chalk: boolean; dashDashed: boolean } | null;
+  edges: { width: number; walk: number; dash: number; glow: number; halo: boolean; chalk: boolean; dashDashed: boolean; opacity?: number; shadeWidth?: number } | null;
   /** The tiles themselves: a flat wash, or bright at the range's edge and fading inwards. */
   fill: { kind: 'flat' | 'fade'; walk: number; dash: number; alpha: number } | null;
   /** A mark in the middle of each tile in reach: filled for one action, hollow for the dash. */
@@ -47,8 +47,13 @@ export interface TileLook {
   ring: [number, number];
   /** Its colour on a tile one action away and on one for the dash (game.ts); the old cyan and yellow if missing. */
   ringColors?: [number, number];
-  /** A plan's line: width, a halo under it, its dashes, and the ring on its end (inner and outer radius). */
-  plan: { width: number; halo: boolean; dashSize: number; gapSize: number; ring: [number, number] };
+  /** A plan's line: width, a halo under it, its dashes (`solid`: none), and the ring on its end (inner and outer radius). */
+  plan: { width: number; halo: boolean; dashSize: number; gapSize: number; ring: [number, number]; solid?: boolean };
+  /**
+   * Planning without the command: one colour for every player instead of one's own dimmed (playtest
+   * 18/10 #31: Ana's orange looked like the rust of the dash). Missing: one's own colour, dimmed.
+   */
+  planning?: number;
 }
 
 export const TILE_LOOKS: readonly TileLook[] = [
@@ -147,12 +152,29 @@ export const TILE_LOOKS: readonly TileLook[] = [
   // Arturo, 18/10: the blue is «demasiado sci-fi». Five colours for «Degradado con tiza», survival-like,
   // each a pair (one action, light; the dash, darker, and dashed), clear of what means something already:
   // the players' purple and orange, the enemies' red, the objective's green, the covers' cyan and amber.
-  chalkFade('huesoOxido', 'Hueso y óxido', 'Hueso a una acción; óxido al correr.', { walk: 0xcdb486, dash: 0x9a4a2c, chalkWalk: 0xf3ecdc, chalkDash: 0xc4704a, pathWalk: 0xf6f0e2, pathDash: 0xe2a684 }),
+  clean(chalkFade('huesoOxido', 'Hueso y óxido', 'Hueso a una acción; óxido al correr.', { walk: 0xcdb486, dash: 0x9a4a2c, chalkWalk: 0xf3ecdc, chalkDash: 0xc4704a, pathWalk: 0xf6f0e2, pathDash: 0xe2a684 })),
   chalkFade('salviaAmbar', 'Salvia y ámbar', 'Verde salvia apagado a una acción; ámbar viejo al correr.', { walk: 0x7fa276, dash: 0xb8862e, chalkWalk: 0xdde9d6, chalkDash: 0xd4a454, pathWalk: 0xeaf3e4, pathDash: 0xefcf8c }),
   chalkFade('lonaOcre', 'Lona y ocre', 'Caqui de lona a una acción; ocre tostado al correr.', { walk: 0xb3a06a, dash: 0x8a5e26, chalkWalk: 0xefe6ca, chalkDash: 0xb48644, pathWalk: 0xf6efdc, pathDash: 0xdcb684 }),
   chalkFade('militarSenal', 'Verde militar y amarillo señal', 'Oliva a una acción; amarillo de chaleco al correr (el naranja chocaba con el de Ana).', { walk: 0x6f7e36, dash: 0xd2cc38, chalkWalk: 0xc9d1a0, chalkDash: 0xe4de6a, pathWalk: 0xe6ebcf, pathDash: 0xf0ec9a }),
   chalkFade('linternaBrasa', 'Luz de linterna', 'Luz cálida de linterna a una acción; brasa al correr.', { walk: 0xf0d282, dash: 0xbe5a2c, chalkWalk: 0xfff7e2, chalkDash: 0xe0845a, pathWalk: 0xfffaee, pathDash: 0xf4b48c }),
 ];
+
+/**
+ * Arturo's look made cleaner (playtest 18/10 #31): no dashed line anywhere, the
+ * dash told by its colour and brightness; a plain stroke instead of the
+ * chalk's two that wobble (they read as a dashed line with its gaps closed);
+ * all of it fainter; and a cold blue to plan with, apart from the rust.
+ */
+function clean(look: TileLook): TileLook {
+  return {
+    ...look,
+    edges: look.edges && { ...look.edges, width: 1.8, halo: false, chalk: false, dashDashed: false, opacity: 0.75, shadeWidth: 2.2 },
+    fill: look.fill && { ...look.fill, alpha: 0.45 },
+    path: { ...look.path, width: 2, glow: 1.15, halo: false },
+    plan: { ...look.plan, width: 1.8, halo: false, solid: true },
+    planning: 0x7fb2d4,
+  };
+}
 
 /** «Degradado con tiza» in another pair of colours (Arturo, 18/10). */
 function chalkFade(

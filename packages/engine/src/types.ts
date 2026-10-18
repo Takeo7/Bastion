@@ -1085,6 +1085,8 @@ export interface GameState {
   /** `briefing`: the operation's briefing, for the mission's intro card (playtest 13/10: what the mission is for). */
   campaignMission: { id: string; name: string; story?: number; kicker?: string; item?: string; briefing?: string } | null;
   smoke: SmokeCloud[];
+  /** La Lata's vehicle (Arturo, 18/10 #45): 0 todoterreno, 1 furgoneta, 2 camión, 3 autobús; absent, the bus. What comes to take the squad out. */
+  vehicle?: number;
   /** Silencio zones (missing in missions saved before the Canto). */
   silences?: SilenceZone[];
   /** The Taller de oficios is next to the listening post: the Oficio makes less noise (OFICIO_QUIET). */
@@ -1095,8 +1097,11 @@ export interface GameState {
   searched?: number[];
   /** Rooms the squad has searched, by id (loot.ts roomAt; docs/FASE8.md §B). */
   roomsSearched?: number[];
-  /** Things left on the floor (docs/FASE8.md §C): dropped, or found with a full backpack. */
-  dropped?: { id: string; pos: Pos; loot: Loot }[];
+  /**
+   * Things left on the floor (docs/FASE8.md §C): dropped, found with a full backpack, or what a fallen soldier
+   * carried (Arturo, 18/10 #49: «la mochila de ‹nombre›», Lore), `from` that soldier (its unit id).
+   */
+  dropped?: { id: string; pos: Pos; loot: Loot; from?: string }[];
   /** How many things have been left on the floor so far: the next one's id. */
   droppedCount?: number;
   /**
@@ -1106,7 +1111,7 @@ export interface GameState {
    */
   breakables?: Record<number, number>;
   /** The campaign's base under siege (docs/FASE12.md §11): its pieces as they stood when it began, and its stumps (base.ts). */
-  base?: { pieces: BasePiece[]; felled?: number[] };
+  base?: { pieces: BasePiece[]; felled?: number[]; level?: number };
   /** The base's traps set (docs/FASE12.md §11.4), with their uses left; spent, 0. */
   traps?: Trap[];
   /** Tiles with barbed wire, by node: costlier to cross. */

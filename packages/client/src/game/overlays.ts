@@ -41,6 +41,9 @@ const IDENTITY = new THREE.Quaternion();
 /** The brightest the ground goes under a shade (shadeMaterial). */
 const SHADE = new THREE.Color(0x56606a);
 const COLOR_DETECT = new THREE.Color(0xff4a4a);
+/** The detection light at the enemy: its colour and how much of it there (it fades to nothing at the edge). Very faint (#30). */
+const DETECT_GLOW = new THREE.Color(0xff3a26);
+const DETECT_ALPHA = 0.22;
 const COLOR_BLAST = new THREE.Color(0xff8a2a);
 /** A blast that can't be thrown there. */
 const COLOR_OFF = new THREE.Color(0x8a939c);
@@ -360,11 +363,14 @@ export class Overlays {
   private readonly flares = new THREE.Group();
   /** A siege's doors and barricades that have taken blows: a bar over each (setBreakables). */
   private readonly breakBars = new THREE.Group();
+  /** Where a fallen soldier's rucksack lies (playtest 18/10 #49): a tag over it (setFallenPacks). */
+  private readonly packTags = new THREE.Group();
   private readonly smoke = new THREE.Group();
   /** Moves planned without the command (UX-REVISION-2 #35): a dashed line in the planner's colour. */
   private readonly plans = new THREE.Group();
-  /** While concealed: how close each enemy in sight lets a soldier get unseen (a dashed red keyhole: its cone and arm's length). */
+  /** While concealed: how close each enemy in sight lets a soldier get unseen (its cone and arm's length), as a faint red light. */
   private readonly detection = new THREE.Group();
+  private readonly detectionMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide });
   /**
    * One enemy's field of view (Arturo, 17/10), under the pointer or aimed at:
    * the tiles it sees, in its cone and its line of sight, washed faintly; the
@@ -527,7 +533,7 @@ export class Overlays {
     this.note.visible = false;
     this.group.add(this.beacons, this.flares, this.breakBars, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.pathHalo, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
     this.group.add(this.walkShade, this.dashShade, this.walkHalo, this.dashHalo, this.walkEdge, this.dashEdge, this.near, this.seen, this.noticed, this.sightEdge);
-    this.group.add(this.spots, this.noises, this.note, this.fade, ...this.dots, this.pathDots);
+    this.group.add(this.spots, this.noises, this.note, this.fade, ...this.dots, this.pathDots, this.packTags);
     this.applyLook();
   }
 
@@ -561,11 +567,12 @@ export class Overlays {
 
   /** The look's widths, dashes, halos and ring on the lines and meshes that keep them. */
   private applyLook(): void {
+    this.tintPlanning();
     const { edges, path, ring } = this.look;
     if (edges) {
       for (const edge of [this.walkEdge, this.dashEdge]) edge.material.linewidth = edges.width;
       this.dashEdge.material.dashed = this.dashHalo.material.dashed = this.dashShade.material.dashed = edges.dashDashed;
-      for (const shade of [this.walkShade, this.dashShade]) shade.material.linewidth = edges.width + 4;
+      for (const shade of [this.walkShade, this.dashShade]) shade.material.linewidth = edges.width + (edges.shadeWidth ?? 4);
       // Their dashes over the line's own.
       for (const under of [this.dashHalo, this.dashShade]) {
         under.material.dashSize = this.dashEdge.material.dashSize;
@@ -843,6 +850,25 @@ export class Overlays {
     }
   }
 
+  /** The fallen soldiers' rucksacks on the floor: «MOCHILA DE CHIARA» over each (#49). */
+  setFallenPacks(list: { pos: Place; label: string }[]): void {
+    const key = JSON.stringify(list);
+    if (this.packTags.userData.key === key) return;
+    this.packTags.userData.key = key;
+    for (const child of [...this.packTags.children]) {
+      this.packTags.remove(child);
+      (child as CSS2DObject).element.remove();
+    }
+    for (const p of list) {
+      const el = document.createElement('div');
+      el.className = 'pack-tag';
+      el.textContent = p.label;
+      const tag = new CSS2DObject(el);
+      tag.position.copy(tileToWorld(p.pos, 0.6));
+      this.packTags.add(tag);
+    }
+  }
+
   showEvacZone(tiles: Vec2[]): void {
     const m = new THREE.Matrix4();
     tiles.slice(0, this.evac.instanceMatrix.count).forEach((t, i) => {
@@ -870,7 +896,8 @@ export class Overlays {
   showMoveRange(tiles: MoveTile[], planning = false): void {
     this.lastRange = { tiles, planning };
     for (const [mesh, opacity] of this.rangeLayers) (mesh.material as THREE.MeshBasicMaterial).opacity = planning ? opacity * 0.5 : opacity;
-    for (const edge of [this.walkEdge, this.dashEdge]) edge.material.opacity = planning ? 0.5 : 0.95;
+    const opacity = this.look.edges?.opacity ?? 0.95;
+    for (const edge of [this.walkEdge, this.dashEdge]) edge.material.opacity = planning ? opacity * 0.55 : opacity;
     this.planning = planning;
     const { edges, fill, dots } = this.look;
     if (edges) {
@@ -1014,9 +1041,18 @@ export class Overlays {
     return `#${this.planTint.getHexString()}`;
   }
 
-  /** The player's colour (PLAYER_COLORS), for the preview while planning: dimmed towards the night's ink. */
+  /** The player's colour (PLAYER_COLORS), for the preview while planning: dimmed towards the night's ink (or the look's own, applyLook). */
   setPlanColor(color: string): void {
-    this.planTint.set(color).lerp(new THREE.Color(0x1c2024), PLAN_DIM);
+    this.playerColor = color;
+    this.tintPlanning();
+  }
+
+  private playerColor = '#9aa0a4';
+
+  /** The planning colour: the look's (one for everyone: 18/10 #31), else the player's dimmed. */
+  private tintPlanning(): void {
+    if (this.look.planning !== undefined) this.planTint.set(this.look.planning);
+    else this.planTint.set(this.playerColor).lerp(new THREE.Color(0x1c2024), PLAN_DIM);
   }
 
   /** Planned moves, each a dashed line from the soldier to a ring on its destination. */
@@ -1037,7 +1073,7 @@ export class Overlays {
       // In the look's line (#14): with a halo, a light's thin core over it.
       const line = new Line2(
         new LineGeometry(),
-        new LineMaterial({ color: glow(plan.color, this.glowOf(path.glow, true)), linewidth: style.width, dashed: true, dashSize: style.dashSize, gapSize: style.gapSize, transparent: true, opacity: 0.9, depthTest: false }),
+        new LineMaterial({ color: glow(plan.color, this.glowOf(path.glow, true)), linewidth: style.width, dashed: !style.solid, dashSize: style.dashSize, gapSize: style.gapSize, transparent: true, opacity: 0.9, depthTest: false }),
       );
       line.geometry.setPositions([plan.from, ...plan.path].flatMap((p) => tileToWorld(p, 0.1).toArray()));
       line.computeLineDistances();
@@ -1064,21 +1100,28 @@ export class Overlays {
     const key = JSON.stringify(list);
     if (this.detection.userData.key === key) return;
     this.detection.userData.key = key;
-    for (const child of [...this.detection.children] as Line2[]) {
+    for (const child of [...this.detection.children] as THREE.Mesh[]) {
       this.detection.remove(child);
       child.geometry.dispose();
-      child.material.dispose();
     }
+    // A faint red light on the ground (playtest 18/10 #30: no dashed lines): brightest at the enemy and
+    // gone by the keyhole's edge, a fan of triangles from it with the colour fading out to the rim.
     for (const d of list) {
-      const points = keyhole(tileToWorld(d.pos, 0.07), d.radius, d.facing);
-      const ring = new Line2(
-        new LineGeometry(),
-        new LineMaterial({ color: 0xff4a4a, linewidth: 2, dashed: true, dashSize: 0.4, gapSize: 0.3, transparent: true, opacity: 0.6, depthTest: false }),
-      );
-      ring.geometry.setPositions(points);
-      ring.computeLineDistances();
-      ring.renderOrder = 8;
-      this.detection.add(ring);
+      const c = tileToWorld(d.pos, 0.05);
+      const rim = keyhole(c, d.radius, d.facing);
+      const pos = [c.x, c.y, c.z, ...rim];
+      // RGBA: the red at the enemy, gone (alpha 0) at the rim; a tint, not added light, so it shows on snow too.
+      const col = [DETECT_GLOW.r, DETECT_GLOW.g, DETECT_GLOW.b, DETECT_ALPHA];
+      for (let i = 0; i < rim.length / 3; i++) col.push(DETECT_GLOW.r, DETECT_GLOW.g, DETECT_GLOW.b, 0);
+      const index: number[] = [];
+      for (let i = 1; i < rim.length / 3; i++) index.push(0, i, i + 1);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+      geometry.setIndex(index);
+      const fan = new THREE.Mesh(geometry, this.detectionMaterial);
+      fan.renderOrder = 3;
+      this.detection.add(fan);
     }
   }
 
@@ -1101,8 +1144,8 @@ export class Overlays {
       mesh.count = n;
       mesh.instanceMatrix.needsUpdate = true;
     }
-    this.sightEdge.visible = !!v;
-    if (v) reshape(this.sightEdge, keyhole(tileToWorld(v.pos, 0.06), v.range, v.facing));
+    // The tiles it sees say it; no edge line any more (18/10 #30).
+    this.sightEdge.visible = false;
   }
 
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {

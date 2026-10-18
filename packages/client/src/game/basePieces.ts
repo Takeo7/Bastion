@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DIRS4, nodeOf, PIECES, pieceCells, type BasePiece, type GameState, type PieceCell, type PieceDef, type PieceId, type TileKind, type Vec2 } from '@bastion/engine';
+import { bastionFootprint, bastionLot, bastionStage, BASTION_STAGES, DIRS4, nodeOf, PIECES, pieceCells, type BasePiece, type BaseState, type GameState, type PieceCell, type PieceDef, type PieceId, type TileKind, type Vec2 } from '@bastion/engine';
 import { STOREY } from './coords';
 import { inwards, wearStage } from './siegeDressing';
 import type { PropId } from './syntyManifest';
@@ -32,8 +32,10 @@ export function pieceMap(s: GameState): PieceMap | null {
   if (!s.base) return null;
   const w = s.width;
   const at = new Int16Array(w * s.height).fill(-1);
+  const base = s.base as unknown as BaseState;
   const spots = s.base.pieces.map((piece, k): PieceSpot => {
-    const cells = pieceCells(piece.piece, piece.x, piece.y, piece.rot);
+    // The caravan stands for the Bastion: the building of its stage, on its footprint.
+    const cells = piece.piece === 'caravan' && bastionStage(base) > 0 ? bastionFootprint(base).map((c) => ({ ...c, tile: 'wall' as TileKind }) as PieceCell & Vec2) : pieceCells(piece.piece, piece.x, piece.y, piece.rot);
     for (const c of cells) at[c.y * w + c.x] = k;
     const xs = cells.map((c) => c.x);
     const ys = cells.map((c) => c.y);
@@ -97,7 +99,7 @@ export function pieceWear(s: GameState, spot: PieceSpot): PieceWear {
 export function pieceKey(s: GameState, spot: PieceSpot): string {
   const p = spot.piece;
   const charges = s.traps ? (s.traps.find((t) => t.piece === p.id)?.charges ?? 0) : (p.charges ?? 0);
-  return `${p.piece}|${p.x},${p.y},${p.rot}|${p.level ?? 0}|${pieceWear(s, spot)}|${charges}`;
+  return `${p.piece}|${p.x},${p.y},${p.rot}|${p.level ?? 0}|${pieceWear(s, spot)}|${charges}${p.piece === 'caravan' ? `|${s.base?.level ?? 1}` : ''}`;
 }
 
 /** What draws a piece: a prop at a matrix, how tall a prop stands (its model's top), and the map's tiles. */
@@ -154,11 +156,9 @@ export function drawPiece(s: GameState, map: PieceMap, spot: PieceSpot, wear: Pi
   // Pushed in by the dead: the lean goes towards the middle of the map.
   const into = inwards(s, x, y);
   switch (piece.piece) {
-    case 'caravan': {
-      const tilt = [0, 0.012, 0.03, 0][wear]!;
-      art.put('caravan', at(cx, wear === 3 ? -0.18 : 0, cz, spot.yaw, [1, 1, 1], tilt * (r(0) < 0.5 ? -1 : 1), wear === 3 ? 0.06 : 0));
+    case 'caravan':
+      drawBastion(s, spot, wear, art, r);
       break;
-    }
     case 'palisade': {
       // A half to each neighbour it joins (a lone one, along its line), leant in as it wears; fallen flat when it gives way.
       const sy = FENCE_HEIGHT / art.top('palisade');
@@ -315,6 +315,105 @@ export function drawPiece(s: GameState, map: PieceMap, spot: PieceSpot, wear: Pi
 }
 
 /**
+ * The Bastion on its lot (playtest 18/10, #40; base.ts bastionLot): the
+ * building of its stage (two levels each) on its footprint, its front to the
+ * lot's yard (south), the second level of a stage with more on it; worn as the
+ * siege leaves it. The caravan; the mobile home on its skirt (its porch, its
+ * dish); Military's plywood barracón on stilts (solar panels, sandbags, a
+ * floodlight); the house with its porch and chimney (sandbags on the porch, a
+ * mast). Round it, its yard: a fire with chairs by it, wood.
+ */
+function drawBastion(s: GameState, spot: PieceSpot, wear: PieceWear, art: PieceArt, r: (salt: number) => number): void {
+  const base = s.base as unknown as BaseState;
+  const level = s.base?.level ?? 1;
+  const stage = bastionStage({ level });
+  const more = level % 2 === 0;
+  const plot = bastionLot(base);
+  const [w, h] = BASTION_STAGES[stage]!;
+  // The footprint's frame (u across, v deep, its front +v) and the lot's.
+  const here = new Lot(art, { ...spot, yaw: stage ? 0 : spot.yaw }, w, h);
+  const yard = new Lot(art, { ...spot, x: plot ? plot.x + plot.w / 2 : spot.x, z: plot ? plot.y + plot.h / 2 : spot.z, yaw: 0 }, plot?.w ?? w, plot?.h ?? h);
+  const lean = (k: number) => (r(k) < 0.5 ? -1 : 1) * [0, 0.012, 0.03, 0.06][wear]!;
+  const sunk = wear === 3 ? -0.15 : 0;
+  switch (stage) {
+    case 0: {
+      const tilt = [0, 0.012, 0.03, 0][wear]!;
+      art.put('caravan', at(spot.x, wear === 3 ? -0.18 : 0, spot.z, spot.yaw, [1, 1, 1], tilt * (r(0) < 0.5 ? -1 : 1), wear === 3 ? 0.06 : 0));
+      if (more && wear < 3) {
+        // Settled in: its steps, an aerial on the roof, a tarp by its side and the generator.
+        here.put('trailerSteps', 0.6, h / 2 + 0.25, 0, 0.8);
+        here.put('bAerial', -1.1, 0, 0, 0.45, here.top('caravan') - 0.05);
+        yard.fill('bShackTarp', -1.6, 1.9, 2.2, 1.6);
+        yard.put('bPowerGenerator', 2.35, -1.9, 1, 0.75);
+      }
+      break;
+    }
+    case 1: {
+      // On its skirt, the wheels hidden: it isn't going anywhere. Worn, its broken twin.
+      const k = 0.94;
+      const body = wear >= 2 ? 'mobileHomeWreck' : 'mobileHome';
+      for (const id of [body, wear >= 2 ? 'mobileHomeWreckGlass' : 'mobileHomeGlass', 'mobileHomeSkirt'] as const) {
+        if (id === 'mobileHomeSkirt' && wear === 3) continue;
+        const m = here.matrix(-0.03 * k, -0.12 * k, 0, k, sunk);
+        if (wear) m.multiply(new THREE.Matrix4().makeRotationZ(lean(1)));
+        art.put(id, m);
+      }
+      if (more && wear < 3) {
+        here.put('trailerDeck', 0.9, 1.36 * k + 0.56 * k, 0, k);
+        here.put('bDish', 2.2, -0.5, 1, 0.7, 2.61 * k);
+        here.put('trailerSteps', -1.9, 1.4 * k + 0.2, 0, 0.8);
+      }
+      break;
+    }
+    case 2: {
+      // Plywood on stilts, its steps to the front; a ruin once it gives way.
+      const k = 0.93;
+      const m = here.matrix(0, 1.475 * k, 0, k, sunk);
+      if (wear && wear < 3) m.multiply(new THREE.Matrix4().makeRotationZ(lean(2)));
+      art.put(wear === 3 ? 'plywoodShedRuin' : 'plywoodShed', m);
+      if (more && wear < 3) {
+        // Its power by its side (the lot's free column), sandbags either side of its steps, a floodlight.
+        yard.put('bSolarPanel', 2.55, -1.6, 1, 0.6);
+        yard.put('bSolarPanel', 2.55, -0.2, 1, 0.6);
+        yard.put('bPowerGenerator', 2.5, 1.2, 1, 0.7);
+        yard.put('sandbags', -2.2, 2.45, 0, [1.3, 1, 1]);
+        yard.put('sandbags', 0.95, 2.45, 0, [1.2, 1, 1]);
+        yard.put('bFloodlights', 2.6, -2.6, 2.5, 0.45);
+      }
+      break;
+    }
+    default: {
+      // The house, its porch to the yard; given way, a heap of what it was.
+      const k = 0.977;
+      if (wear === 3) {
+        here.put('ruinPile', 0, 0, 0, 0.82);
+        break;
+      }
+      for (const id of ['bastionHouse', 'bastionHouseGlass'] as const) {
+        const m = yard.matrix(0.088 * k, -3 + 2.12 * k, -1, k, sunk);
+        if (wear) m.multiply(new THREE.Matrix4().makeRotationX(lean(3) * 0.5));
+        art.put(id, m);
+      }
+      if (more) {
+        for (const u of [-2.1, 2.1]) yard.put('sandbags', u, 2.75, 0, [1.2, 0.9, 1]);
+        here.put('bMast', 1.6, -0.8, 0, 0.6, 3.6);
+        yard.put('bFloodlights', -2.75, 2.7, 0.5, 0.45);
+      }
+    }
+  }
+  if (wear === 1 || wear === 2) debris(here, wear, r);
+  if (wear === 3 && stage) ruin(here, r);
+  // The yard: a fire and its chairs, the wood, where the building leaves room (the barracón's sandbags, the house's porch).
+  const fire = stage === 2 ? { u: 2.35, v: 2.35 } : { u: 1.55, v: 2.25 };
+  if (stage < 3) {
+    yard.put('bFirePit', fire.u, fire.v, 0, 0.75);
+    yard.put('bCampChair', fire.u - (stage === 2 ? 0.55 : 0.8), fire.v + 0.25, 1.3, 0.95);
+    yard.put('bCampChair', fire.u + (stage === 2 ? 0.35 : 0.8), fire.v - 0.45, 2.6, 0.95);
+  }
+  yard.put('bWoodPile', -2.55, stage === 3 ? 2.65 : 2.35, 1, 0.8);
+}
+
+/**
  * A building's ground in its own frame, as it was built (before its turn):
  * u across its width and v into its depth, in tiles from its middle; its
  * front (+v) is south when it isn't turned.
@@ -335,8 +434,13 @@ class Lot {
 
   /** `id` at (u, v), turned `turn` quarter turns (counter-clockwise from above), scaled `k` (or per axis), `y` up. */
   put(id: PropId, u: number, v: number, turn = 0, k: number | [number, number, number] = 1, y = 0, shadows = true): void {
+    this.art.put(id, this.matrix(u, v, turn, k, y), shadows);
+  }
+
+  /** The matrix `put` puts a model at. */
+  matrix(u: number, v: number, turn = 0, k: number | [number, number, number] = 1, y = 0): THREE.Matrix4 {
     const p = this.world(u, v);
-    this.art.put(id, at(p.x, y, p.z, this.spot.yaw + (turn * Math.PI) / 2, typeof k === 'number' ? [k, k, k] : k), shadows);
+    return at(p.x, y, p.z, this.spot.yaw + (turn * Math.PI) / 2, typeof k === 'number' ? [k, k, k] : k);
   }
 
   /** `id` as big as it fits in a `w` × `d` space round (u, v), turned `turn`; its scale. */

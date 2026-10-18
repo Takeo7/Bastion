@@ -334,6 +334,26 @@ export function broughtBack(s: GameState): LootTotals {
  * #5): those whose uses are all still there, counting the soldier's own as
  * spent first (they are the Armería's, and it fills them again).
  */
+/**
+ * What a fallen soldier leaves where it fell (Arturo, 18/10 #49): its
+ * backpack, its weapons (the Armería's, by id: brought home, they go back) and
+ * what on its belt is still whole (beltedBack's count, then its own gear).
+ */
+export function fallenGear(u: Unit): Loot[] {
+  const out: Loot[] = [...(u.backpack ?? [])];
+  const arms = u.arms;
+  if (arms?.primary) out.push({ weapon: arms.primary, ...(arms.primaryId ? { weaponId: arms.primaryId } : {}), ...(arms.condition !== undefined ? { condition: arms.condition } : {}), ...(arms.mods?.length ? { mods: [...arms.mods] } : {}) });
+  if (arms?.melee) out.push({ weapon: arms.melee, ...(arms.meleeId ? { weaponId: arms.meleeId } : {}) });
+  const left: Partial<Record<ChargeId, number>> = { ...u.charges };
+  for (const item of [...(u.belted ?? []), ...(u.gear ?? [])].reverse()) {
+    const uses = Object.entries(ITEMS[item].charges ?? {}) as [ChargeId, number][];
+    if (!uses.every(([charge, n]) => (left[charge] ?? 0) >= n)) continue;
+    for (const [charge, n] of uses) left[charge] = (left[charge] ?? 0) - n;
+    out.push({ item });
+  }
+  return out;
+}
+
 export function beltedBack(u: Unit): Loot[] {
   const left: Partial<Record<ChargeId, number>> = { ...u.charges };
   const back: Loot[] = [];

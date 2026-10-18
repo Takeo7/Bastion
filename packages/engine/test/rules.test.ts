@@ -351,7 +351,7 @@ describe('recovery missions', () => {
     const theirs = addUnit(s, 's2', 'rookie', 4, 2, { owner: 1 });
     addUnit(s, 'a1', 'zombie', 18, 18);
     const move = { type: 'move', unit: 's2', to: { x: 5, y: 2 } } as const;
-    expect(executeCommand(s, move, { slot: 0, connected: [0, 1], rng: new Rng(1) })).toEqual({ ok: false, error: 'Ese soldado pertenece a tu compañero.' });
+    expect(executeCommand(s, move, { slot: 0, connected: [0, 1], rng: new Rng(1) })).toEqual({ ok: false, error: 'Es de la escuadra del otro jugador.' });
     expect(executeCommand(s, move, { slot: 0, connected: [0], rng: new Rng(1) }).ok).toBe(true);
     expect(theirs.pos).toMatchObject({ x: 5, y: 2 });
   });

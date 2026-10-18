@@ -1,4 +1,4 @@
-import { TEMPLATES, TRAPS } from './content';
+import { hostileTo, TEMPLATES, TRAPS } from './content';
 import { decorOf } from './decor';
 import { canStandOn, DIRS4, DIRS8, elevAt, heightAt, inBounds, isWalkable, isWindow, kindAt, nodeOf, posOf, slabAt, surfaceAt, toPos } from './grid';
 import type { GameState, Place, Pos, Unit } from './types';
@@ -222,7 +222,7 @@ export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos =
   const slow = s.slow?.length ? new Set(s.slow) : null;
   const blockedByEnemy = new Set<number>();
   for (const o of s.units) {
-    if (o.alive && o.team !== u.team) blockedByEnemy.add(nodeOf(s, o.pos));
+    if (o.alive && hostileTo(o, u)) blockedByEnemy.add(nodeOf(s, o.pos));
   }
   const blocked = (p: Pos | null) => !!p && blockedByEnemy.has(nodeOf(s, p));
   const start = nodeOf(s, from);

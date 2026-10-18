@@ -24,6 +24,8 @@ export interface KitModel {
   parts: KitPart[];
   /** Size of the whole model (x, y, z), in game units. */
   size: THREE.Vector3;
+  /** Where its parts were moved from (they come centred, standing on y = 0): to put models made to fit together back in place. */
+  origin: THREE.Vector3;
 }
 
 /**
@@ -81,7 +83,7 @@ function prepare(scene: THREE.Group): KitModel {
     p.geometry.translate(-centre.x, -box.min.y, -centre.z);
     p.geometry.computeBoundingSphere();
   }
-  return { parts, size: box.getSize(new THREE.Vector3()) };
+  return { parts, size: box.getSize(new THREE.Vector3()), origin: new THREE.Vector3(centre.x, box.min.y, centre.z) };
 }
 
 /** Loads every model of the base (once); resolves when all have loaded or failed. */

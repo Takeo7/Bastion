@@ -1096,10 +1096,14 @@ function furnishHome(c: Canvas, room: Rect, use: HomeUse, wear: number, kitchene
 }
 
 /**
- * Rows of shelving (or hay) along a hall's depth, two-tile aisles between them
- * and a cross aisle halfway down long halls.
+ * Rows of shelving along a hall's depth, two-tile aisles between them and a
+ * cross aisle halfway down long halls; a barn as a barn (furnishBarn).
  */
 function furnishHall(c: Canvas, inner: Rect, front: number, rng: Rng, kind: Furnish, avoid: Rect | null): void {
+  if (kind === 'barn') {
+    furnishBarn(c, inner, front, avoid);
+    return;
+  }
   const across = sideLen(inner, front);
   const depth = depthOf(inner, front);
   const rows = Math.floor((across - 2) / 3);
@@ -1110,11 +1114,42 @@ function furnishHall(c: Canvas, inner: Rect, front: number, rng: Rng, kind: Furn
     const u = start + 3 * r;
     for (let v = 2; v <= depth - 3; v++) {
       if (v === cross || v === cross - 1) continue;
-      if (kind === 'barn' && v % 3 === 1) continue;
       const p = localPt(inner, front, u, v);
       if (blocked && inRect(blocked, p)) continue;
       // Rows run along the depth: each piece faces across its row.
-      put(c, p, kind === 'barn' ? 'low' : rng.next() < 0.8 ? 'high' : 'low', [kind === 'barn' ? 'hay' : 'shelf', (front + 1) % 4]);
+      put(c, p, rng.next() < 0.8 ? 'high' : 'low', ['shelf', (front + 1) % 4]);
+    }
+  }
+}
+
+/**
+ * A barn (playtest 18/10, #53: «tiene que parecer un granero»): its hay
+ * against the walls, the sides and the back, stacked high here and there
+ * with gaps between, and its old tractor (a 2×4 lorry's block, the client
+ * draws it as one) on the floor in the middle, its nose to the doors; the way
+ * in from them kept clear, the tack room (`avoid`) left as it is. By position
+ * (mix): no rng drawn.
+ */
+function furnishBarn(c: Canvas, inner: Rect, front: number, avoid: Rect | null): void {
+  const across = sideLen(inner, front);
+  const depth = depthOf(inner, front);
+  const blocked = avoid ? rect(avoid.x - 1, avoid.y - 1, avoid.w + 2, avoid.h + 2) : null;
+  const m0 = mix(inner.x * 5 + 3, inner.y * 7 + 1);
+  // The tractor first, while the middle is clear: off the middle to one side.
+  if (across >= 6 && depth >= 8) {
+    const u0 = Math.floor(across / 2) - 1 + (m0 % 2 ? 1 : -1);
+    const v0 = Math.floor((depth - 4) / 2);
+    const cells = tilesIn(rect(0, 0, 2, 4)).map((q) => localPt(inner, front, u0 + q.x, v0 + q.y));
+    if (cells.every((p) => c.free(p.x, p.y) && !(blocked && inRect(blocked, p)))) for (const p of cells) put(c, p, 'high', ['truck', front]);
+  }
+  for (let v = 2; v < depth; v++) {
+    for (let u = 0; u < across; u++) {
+      if (u !== 0 && u !== across - 1 && v !== depth - 1) continue;
+      const p = localPt(inner, front, u, v);
+      if (blocked && inRect(blocked, p)) continue;
+      const m = mix(p.x * 7 + 1, p.y * 13 + 5);
+      if (m % 5 === 0) continue;
+      put(c, p, m % 3 === 0 ? 'high' : 'low', ['hay', inward(inner, p)]);
     }
   }
 }
@@ -1183,7 +1218,8 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
     medicalRooms.forEach((room) => furnishMedical(c, room, rng, medicalKind === 'clinic' ? undefined : medicalKind));
   } else if (plan === 'hall') {
     furnishHall(c, rooms[0]!, front, rng, furnish, office);
-    if (office) furnishRoom(c, office, rng, 'office');
+    // A barn's corner room is its tack room, with hay of its own (the same rng drawn as an office's).
+    if (office) furnishRoom(c, office, rng, furnish === 'barn' ? 'barn' : 'office');
   } else if (home) {
     // Each room as what it is (furnishHome).
     // The strip cut off a room is furnished on a roll of its own: the generator's rng draws as it did before.

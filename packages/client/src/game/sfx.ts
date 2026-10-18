@@ -284,6 +284,11 @@ export class Sfx {
     sound('command');
   }
 
+  /** Señalar: a mark put on the map by either player (game.ts onPing): a pin pushed in, where it is. */
+  mark(at?: THREE.Vector3): void {
+    this.at('mark', at, 1, { spread: 0.05 });
+  }
+
   /** Something to notice (an alert ability, reaction fire, a warning). */
   alert(): void {
     sound('overwatch', { gain: 0.8 });

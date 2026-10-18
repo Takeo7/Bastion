@@ -116,6 +116,10 @@ export interface MissionOptions {
   snow?: boolean;
   /** A campaign's siege (docs/FASE12.md §11.5): how many of the dead come in all, and by which sides; without it, the test siege's waves. */
   siegePlan?: { count: number; sides: number[] };
+  /** La Lata's vehicle in a campaign (campaign.ts VEHICLE_SEATS: 0 todoterreno … 3 autobús); the bus without it. */
+  vehicle?: number;
+  /** Where defenders stand when a siege begins (campaign.ts siegePosts, by campaignId): the rest, at the spawns. */
+  posts?: Record<string, Vec2>;
 }
 
 /** What a skirmish soldier carries in the hand (docs/FASE9.md §6): one of these, at random. */
@@ -153,8 +157,8 @@ function armed(u: Unit, m: Pick<SquadMember, 'arms' | 'mags'>): Partial<Unit> {
 export function makeUnit(id: string, template: TemplateId, name: string, owner: Slot | null, pos: Vec2 & { z?: number }, podId: string | null): Unit {
   const t = TEMPLATES[template];
   return {
-    // The dead look one way from the start (los.ts inViewCone): one of eight, from where they stand, no dice spent.
-    ...(t.undead ? { facing: (((pos.x * 7 + pos.y * 13 + id.length) % 8) * Math.PI) / 4 } : {}),
+    // The enemies look one way from the start (los.ts inViewCone): one of eight, from where they stand, no dice spent.
+    ...(t.team !== 'xcom' ? { facing: (((pos.x * 7 + pos.y * 13 + id.length) % 8) * Math.PI) / 4 } : {}),
     id,
     team: t.team,
     template,
@@ -497,8 +501,16 @@ export function createMission(opts: MissionOptions): GameState {
 
   const units: Unit[] = [];
   if (opts.squad) {
+    // Posted defenders where they were put (#58: on free ground); the rest, at the spawns left over.
+    const at = (p: Vec2) => p.y * layout.width + p.x;
+    const posted = opts.squad.map((m) => {
+      const p = m.campaignId ? opts.posts?.[m.campaignId] : undefined;
+      return p && layout.tiles[at(p)] === 'floor' ? p : undefined;
+    });
+    const taken = new Set(posted.filter((p): p is Vec2 => !!p).map(at));
+    const spare = layout.spawns.filter((p) => !taken.has(at(p)));
     opts.squad.slice(0, layout.spawns.length).forEach((m, i) => {
-      const u = makeUnit(`s${i + 1}`, m.template, m.name, m.owner, layout.spawns[i]!, null);
+      const u = makeUnit(`s${i + 1}`, m.template, m.name, m.owner, posted[i] ?? spare.shift() ?? layout.spawns[i]!, null);
       units.push({
         ...u,
         ap: apPerTurn({ team: u.team, rank: m.rank }),
@@ -655,10 +667,13 @@ export function createMission(opts: MissionOptions): GameState {
     ...(opts.snow ? { snow: true } : {}),
     ...(siege ? { breakables } : {}),
     // The campaign's base, as it stands (docs/FASE12.md §11): what the client draws, and what the siege's end gives back.
-    ...(opts.map.kind === 'base' ? { base: { pieces: opts.map.base.pieces.map((p) => ({ ...p })), ...(opts.map.base.felled?.length ? { felled: [...opts.map.base.felled] } : {}) } } : {}),
+    ...(opts.map.kind === 'base'
+      ? { base: { pieces: opts.map.base.pieces.map((p) => ({ ...p })), ...(opts.map.base.felled?.length ? { felled: [...opts.map.base.felled] } : {}), ...(opts.map.base.level ? { level: opts.map.base.level } : {}) } }
+      : {}),
     ...(defences?.traps.length ? { traps: defences.traps } : {}),
     ...(defences?.slow.length ? { slow: defences.slow } : {}),
     smoke: [],
+    ...(opts.vehicle !== undefined ? { vehicle: opts.vehicle } : {}),
   };
   // The map's street lights (they never go out): each lights what its lamp sees round it, worked out once.
   state.lights = (layout.lights ?? []).map((tile, i) => ({

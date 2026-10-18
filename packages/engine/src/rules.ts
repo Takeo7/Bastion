@@ -43,6 +43,7 @@ import {
   commandsFor,
   HOLO_AIM,
   HORDE,
+  hostileTo,
   INFECTION,
   isAttack,
   ITEMS,
@@ -578,7 +579,7 @@ export class Sim {
     const watchers = this.s.units.filter(
       (o) =>
         o.alive &&
-        o.team !== attacker.team &&
+        hostileTo(o, attacker) &&
         o.overwatch &&
         hasPerk(o, 'coveringFire') &&
         !(o.killZone && o.reactedTo.includes(attacker.id)) &&
@@ -840,7 +841,7 @@ export class Sim {
     for (let i = 0; i < path.length; i++) {
       const step = path[i]!;
       const blocker = unitAt(this.s, step);
-      if (blocker && blocker !== u && (blocker.team !== u.team || i === path.length - 1)) break;
+      if (blocker && blocker !== u && (hostileTo(blocker, u) || i === path.length - 1)) break;
       segment.push(step);
 
       // Doors swing open and windows shatter as the unit goes through.
@@ -885,12 +886,12 @@ export class Sim {
         : this.s.units.filter(
             (o) =>
               o.alive &&
-              o.team !== u.team &&
+              hostileTo(o, u) &&
               o.overwatch &&
               !(o.killZone && o.reactedTo.includes(u.id)) &&
               (o.watchMelee ? inMeleeReach(this.s, o.pos, step) : loaded(o) && this.watches(o, step)),
           );
-      const suppressors = shadow ? [] : this.s.units.filter((o) => o.alive && o.team !== u.team && o.suppressing === u.id && loaded(o));
+      const suppressors = shadow ? [] : this.s.units.filter((o) => o.alive && hostileTo(o, u) && o.suppressing === u.id && loaded(o));
       const noticing = u.team === 'xcom' ? this.podsNoticing(step) : [];
       if (!reactors.length && !suppressors.length && !noticing.length) continue;
 
@@ -1033,7 +1034,8 @@ export class Sim {
     const spotted = first.unit ? getUnit(this.s, first.unit) : undefined;
     const seen = first.cause === 'sighted' || first.cause === 'patrol';
     const range = spotter && spotted ? detectionTo(this.s, spotter, spotted.pos) : spotter && TEMPLATES[spotter.template].detection;
-    this.breakConcealment({ reason: EXPOSURE[first.cause], unit: first.unit, by: first.by, ...(seen && spotter ? { range } : {}) });
+    // Woken by the dead (18/10 #47: they fight the living too), not by the squad: it stays hidden.
+    if (first.cause !== 'attacked' || first.unit) this.breakConcealment({ reason: EXPOSURE[first.cause], unit: first.unit, by: first.by, ...(seen && spotter ? { range } : {}) });
     for (const pod of pods) this.emit({ t: 'podActivated', pod: pod.id, ...whyOf(pod) });
     for (const pod of pods) this.scamper(pod.unitIds);
   }
@@ -1178,7 +1180,7 @@ export class Sim {
         const u = makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? at, pod.id);
         // They come in looking the way they come: to what they heard, or to the middle of the map (Arte, 17/10).
         const toward = goal ?? { x: (this.s.width - 1) / 2, y: (this.s.height - 1) / 2, z: 0 };
-        const facing = TEMPLATES[template].undead ? (facingTo(u.pos, toward) ?? u.facing) : u.facing;
+        const facing = facingTo(u.pos, toward) ?? u.facing;
         return { ...u, ...(facing !== undefined ? { facing } : {}), ...(goal && !siege ? { heard: { ...goal } } : {}) };
       });
       this.emit({ t: 'spawned', units, pod, reinforcement: r.id });
@@ -1585,7 +1587,7 @@ function commandUnit(s: GameState, id: string, slot: Slot, connected: readonly S
   if (!u || !u.alive) return 'Esa unidad no existe o está fuera de combate.';
   if (u.team !== 'xcom') return 'No puedes dar órdenes a esa unidad.';
   if (u.automaton) return 'Va sola: nadie le da órdenes.';
-  if (!commandsFor(slot, u.owner, connected)) return 'Ese soldado pertenece a tu compañero.';
+  if (!commandsFor(slot, u.owner, connected)) return 'Es de la escuadra del otro jugador.';
   if (u.ap <= 0) return 'Ese soldado no tiene acciones.';
   return u;
 }
@@ -1600,7 +1602,7 @@ function backpackRefusal(s: GameState, cmd: ItemCommand, slot: Slot, connected: 
   const u = getUnit(s, cmd.unit);
   if (!u || !u.alive) return 'Esa unidad no existe o está fuera de combate.';
   if (u.team !== 'xcom' || u.captive || u.objective || u.automaton) return 'No puedes dar órdenes a esa unidad.';
-  if (!commandsFor(slot, u.owner, connected)) return 'Ese soldado pertenece a tu compañero.';
+  if (!commandsFor(slot, u.owner, connected)) return 'Es de la escuadra del otro jugador.';
   if (u.controlledBy || u.panicked) return 'Ese soldado no responde.';
   const free = cmd.action === 'drop' || cmd.action === 'take';
   if (!free && u.ap <= 0) return 'Ese soldado no tiene acciones.';
@@ -1710,9 +1712,9 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
   if (cmd.type === 'evac') {
     const u = getUnit(s, cmd.unit);
     if (!u || !u.alive || u.team !== 'xcom' || u.captive) return { ok: false, error: 'Esa unidad no puede evacuar.' };
-    if (!commandsFor(ctx.slot, u.owner, ctx.connected)) return { ok: false, error: 'Ese soldado pertenece a tu compañero.' };
+    if (!commandsFor(ctx.slot, u.owner, ctx.connected)) return { ok: false, error: 'Es de la escuadra del otro jugador.' };
     if (!inEvacZone(s, u.pos)) return { ok: false, error: 'Solo desde el autobús, en la zona de evacuación.' };
-    if (s.evacCall?.by === ctx.slot) return { ok: false, error: 'Ya has pedido evacuar: falta que conteste tu compañero.' };
+    if (s.evacCall?.by === ctx.slot) return { ok: false, error: 'Ya has pedido evacuar: falta que conteste el otro jugador.' };
     if (u.infected && s.mission.quarantine === false) return { ok: false, error: 'Con un mordisco no se sube a La Lata sin una Cuarentena en el Bastión.' };
     sim.callEvac(ctx.slot, u);
     return { ok: true, events: sim.events };
@@ -1720,14 +1722,14 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
 
   if (cmd.type === 'pass') {
     if (!holds) return { ok: false, error: 'No tienes el mando.' };
-    if (!ctx.connected.includes(partner)) return { ok: false, error: 'Tu compañero no está conectado.' };
-    if (s.ready[partner]) return { ok: false, error: 'Tu compañero ya ha terminado el turno.' };
-    if (!sim.hasActions(partner)) return { ok: false, error: 'A tu compañero no le quedan acciones.' };
+    if (!ctx.connected.includes(partner)) return { ok: false, error: 'El otro jugador no está conectado.' };
+    if (s.ready[partner]) return { ok: false, error: 'El otro jugador ya ha terminado el turno.' };
+    if (!sim.hasActions(partner)) return { ok: false, error: 'Al otro jugador no le quedan acciones.' };
     sim.passCommand(partner);
     return { ok: true, events: sim.events };
   }
 
-  if (!holds) return { ok: false, error: 'Tiene el mando tu compañero: espera a que te lo ceda.' };
+  if (!holds) return { ok: false, error: 'Tiene el mando el otro jugador: espera a que te lo ceda.' };
   // Turns go one soldier at a time (playtest 2026-10-15, #9): the one in play is finished before another of yours.
   const inPlay = (id: string): string | null => {
     const busy = s.activeUnit && s.activeUnit !== id ? getUnit(s, s.activeUnit) : undefined;

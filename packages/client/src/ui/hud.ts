@@ -1,4 +1,6 @@
 import {
+  fallenPackAction,
+  fallenPackMark,
   PIECES,
   ABANDON_TEXT,
   BELT_TEXT,
@@ -190,7 +192,8 @@ export interface PackView {
   /** Partners right next to it: who it can hand a thing to, or treat. */
   near?: { id: string; name: string }[];
   /** Things on its tile (GameState.dropped), to pick up. */
-  floor?: { id: string; label: string; name: string; kind: PackSlot['kind'] }[];
+  /** `from`: the fallen soldier it was carried by (playtest 18/10 #49), by name. */
+  floor?: { id: string; label: string; name: string; kind: PackSlot['kind']; from?: string }[];
   /** What it has on (Unit.worn): one vest at a time (rules.ts wearable). */
   worn?: ItemId[];
   /** What it carries (Unit.gear): what only gives, once (rules.ts beltable). */
@@ -267,6 +270,8 @@ export interface HudHandlers {
   onFloor(dir: 1 | -1): void;
   /** An order on the backpack or the floor (docs/FASE8.md §C). */
   onItem(order: ItemOrder): void;
+  /** Take these things from the floor one after another, while they fit (a fallen soldier's rucksack: #49). */
+  onTakeAll?(ids: string[]): void;
   /** Leave slot `drop` on the floor and pick up `take` from it: the swap when the backpack is full. */
   onSwap(take: string, drop: number): void;
   /** «Señalar» (playtest 18/10 #7): the next click on the map signals that spot to the partner; again, it's put away. */
@@ -346,6 +351,12 @@ export class Hud {
   private readonly floor = h('div.floor-ind.hidden');
   private floorKey = '';
   private readonly mission = h('div.mission');
+  /**
+   * The objective's card on the right, under «Señalar» and «Menú» (playtest 18/10 #52: «siempre en pantalla
+   * sin estorbar»): the arrival card shrinks into it (dock) and it stays the whole mission, with the mission's
+   * name, its objective as it goes and what counts (turns, waves, the horde). Hidden while that card is open.
+   */
+  private readonly goalDock = h('div.goal-dock.panel', {}, this.mission);
   private readonly players = h('div.players');
   /** There is a partner in the room, connected or not: abandoning ends the mission for both. */
   private paired = false;
@@ -356,9 +367,9 @@ export class Hud {
   private readonly abilities = h('div.abilities');
   private readonly target = h('div.shot-panel.panel');
   private readonly endTurn = h('button.end-turn');
-  private readonly passBtn = h('button.pass-command', { title: 'Tu compañero da las órdenes hasta que te lo devuelva (C)' });
+  private readonly passBtn = h('button.pass-command', { title: 'El otro jugador da las órdenes hasta que te lo devuelva (C)' });
   /** With the partner holding the command: the camera to what they are doing (playtest 16/10 #8). */
-  private readonly watchBtn = h('button.pass-command.watch-partner', { title: 'Lleva la cámara a lo que está haciendo tu compañero (F)' });
+  private readonly watchBtn = h('button.pass-command.watch-partner', { title: 'Lleva la cámara a lo que está haciendo el otro jugador (F)' });
   /** The camera to the soldier whose turn it is, or not (playtest 17/10 #47): a switch beside «Ver», kept per browser. */
   private followTurn = readFollowTurn();
   private readonly followBtn = h('button.pass-command.follow-turn', { type: 'button', title: 'Al cambiar el turno o el mando, la cámara va al soldado al que le toca (si no acabas de moverla tú)' });
@@ -412,13 +423,13 @@ export class Hud {
     this.pingBtn.addEventListener('click', () => handlers.onPingArm());
     this.root.append(
       this.frame,
-      h('div.top', {}, this.turn, this.floor, this.mission, this.players),
+      h('div.top', {}, this.turn, this.floor, this.players),
       this.squad,
       this.unitPanel,
       this.abilities,
       this.target,
       h('div.turn-actions', {}, this.followBtn, this.passBtn, this.watchBtn, this.endTurn),
-      h('div.side', {}, h('div.side-row', {}, this.pingBtn, menuButton), this.logEl),
+      h('div.side', {}, h('div.side-row', {}, this.pingBtn, menuButton), this.goalDock, this.logEl),
       this.bannerEl,
       this.toastEl,
       this.noticeEl,
@@ -583,7 +594,7 @@ export class Hud {
           style: { '--accent': u.owner === null ? '#e8edf2' : colors[u.owner] },
           onclick: () => mine && u.alive && this.handlers.onSelectUnit(u.id),
           // A siege's turret: in the list for its health and rounds, nobody's to pick (rules.ts).
-          title: u.automaton ? 'Va sola: nadie le da órdenes.' : !theirs ? 'Seleccionar' : mine ? 'Soldado de tu compañero: lo mandas tú mientras no está' : 'Soldado de tu compañero',
+          title: u.automaton ? 'Va sola: nadie le da órdenes.' : !theirs ? 'Seleccionar' : mine ? 'Soldado del otro jugador: lo mandas tú mientras no está' : 'Soldado del otro jugador',
         },
         // Fase 9: soldiers have no class any more; only who isn't one (the VIP) says what it is.
         h('div.card-name', {}, u.template === 'rookie' ? null : h('b.cls', {}, TEMPLATES[u.template].short), u.template === 'rookie' ? null : ' ', u.nickname ? `«${u.nickname}»` : u.name),
@@ -772,6 +783,30 @@ export class Hud {
           'div.pack-floor',
           {},
           h('small', {}, 'EN EL SUELO'),
+          // A fallen soldier's rucksack (#49): its name, and one order that takes what fits.
+          ...[...new Set(pack.floor.map((f) => f.from).filter((x): x is string => !!x))].map((who) => {
+            const ids = pack.floor!.filter((f) => f.from === who).map((f) => f.id);
+            const room = pack.size - pack.slots.length;
+            return h(
+              'div.pack-fallen',
+              {},
+              h('b', {}, fallenPackMark(who)),
+              h(
+                'button.x-btn.small',
+                {
+                  type: 'button',
+                  disabled: room <= 0,
+                  title: room <= 0 ? 'La mochila está llena: deja algo antes' : `Coge lo que quepa: ${Math.min(room, ids.length)} de ${ids.length}`,
+                  onclick: () => {
+                    this.packMenu = null;
+                    if (this.handlers.onTakeAll) this.handlers.onTakeAll(ids);
+                    else this.handlers.onItem({ action: 'take', id: ids[0]! });
+                  },
+                },
+                fallenPackAction(who),
+              ),
+            );
+          }),
           ...pack.floor.map((f) =>
             h(
               `button.pack-floor-item.${f.kind}`,
@@ -1002,7 +1037,7 @@ export class Hud {
           'div.shot-actions',
           {},
           view.locked
-            ? h('button.fire', { disabled: true, title: 'Tiene el mando tu compañero' }, view.locked)
+            ? h('button.fire', { disabled: true, title: 'Tiene el mando el otro jugador' }, view.locked)
             : h('button.fire', { onclick: () => this.handlers.onConfirmTarget(), title: 'Espacio o Intro' }, view.action.toUpperCase()),
           h('button.cancel', { onclick: () => this.handlers.onCancel(), title: 'Esc' }, 'Cancelar'),
         ),
@@ -1159,6 +1194,7 @@ export class Hud {
    */
   intro(kicker: string, title: string, lines: string[], objective?: string, briefing?: string): Promise<void> {
     this.introClose?.();
+    this.goalDock.classList.add('waiting');
     const close = () => this.introClose?.();
     // A click anywhere closes it; nothing under it is played meanwhile.
     const catcher = h('div.intro-catcher', { onpointerdown: close });
@@ -1170,8 +1206,8 @@ export class Hud {
       lines.length ? h('p.intro-meta', {}, lines.join(' · ')) : null,
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
       briefing ? h('p.intro-briefing', {}, briefing) : null,
-      // A finger has no Intro key (docs/FASE11.md §3).
-      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR'), h('small', {}, 'clic o Intro')),
+      // Only what starts it (playtest 18/10 #27); a click anywhere, Enter, Space or Esc do too.
+      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR')),
     );
     this.root.append(catcher, el);
     return new Promise((resolve) => {
@@ -1179,11 +1215,36 @@ export class Hud {
         this.introClose = null;
         if (!quiet) uiSound('confirm');
         catcher.remove();
-        el.classList.add('out');
-        window.setTimeout(() => el.remove(), 800);
+        this.dock(el);
         resolve();
       };
     });
+  }
+
+  /**
+   * The arrival card, closed, shrinks into the objective's card on the right (#52), which shows as it gets
+   * there. Its centre goes to the card's centre: scaled round itself (transform-origin on it, styles.css).
+   */
+  private dock(card: HTMLElement): void {
+    const dock = this.goalDock;
+    const from = card.getBoundingClientRect();
+    const to = dock.getBoundingClientRect();
+    const show = () => dock.classList.remove('waiting');
+    if (!to.width || !from.width || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      card.classList.add('out');
+      show();
+      window.setTimeout(() => card.remove(), 800);
+      return;
+    }
+    // Moves are in the card's own pixels, which the interface size zooms (--ui-scale).
+    const zoom = from.width / (card.offsetWidth || from.width) || 1;
+    const dx = (to.left + to.width / 2 - (from.left + from.width / 2)) / zoom;
+    const dy = (to.top + to.height / 2 - (from.top + from.height / 2)) / zoom;
+    card.classList.add('docking');
+    card.style.translate = `${Math.round(dx)}px ${Math.round(dy)}px`;
+    card.style.scale = String(Math.max(0.15, to.width / from.width));
+    window.setTimeout(show, 380);
+    window.setTimeout(() => card.remove(), 700);
   }
 
   /**
@@ -1368,7 +1429,7 @@ export class Hud {
   /** The menu's «Abandonar la misión»: off while this player's call waits for the partner. */
   private abandonEntry(): HTMLElement {
     const { partner, waiting } = this.handlers.abandonState();
-    if (waiting) return h('button.menu-entry.danger', { disabled: true, title: 'Contesta en su barra' }, evacWaiting(partner ?? 'tu compañero'));
+    if (waiting) return h('button.menu-entry.danger', { disabled: true, title: 'Contesta en su barra' }, evacWaiting(partner ?? 'el otro jugador'));
     return h(
       'button.menu-entry.danger',
       { onclick: () => (this.toggleMenu(false), this.confirmAbandon()), title: partner ? `Se lo pregunta a ${partner}` : this.paired ? 'Termina la misión para los dos' : 'Termina la misión' },

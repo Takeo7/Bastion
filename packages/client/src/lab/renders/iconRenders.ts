@@ -3,7 +3,8 @@ import { fxShape } from '../../game/fx';
 import { molotov } from '../../game/songFx';
 import { loadModel } from '../../game/synty';
 import { UI_MODELS, type BaseModelId, type PackId, type WeaponId } from '../../game/syntyManifest';
-import { KitBatch, kitMesh, kitModel, loadBaseKit } from '../../strategy/baseKit';
+import { KitBatch, kitMesh, kitModel, loadBaseKit, loadKitModels } from '../../strategy/baseKit';
+import { buildLata, lataModels } from '../../strategy/mula';
 
 // Icon renders for the interface (/renders.html): things of the game as
 // Synty models, in a 3/4 view, lit like the radio portraits, on a transparent
@@ -151,6 +152,15 @@ async function mulaIcon(): Promise<THREE.Object3D> {
   return body;
 }
 
+/** La Lata before it is the bus (playtest 18/10, #45): the 4×4, the van or the lorry with its armour, its lights on. */
+const lataIcon = (vehicle: number) => async (): Promise<THREE.Object3D> => {
+  await loadKitModels(lataModels(vehicle));
+  const lata = buildLata(vehicle);
+  if (!lata) throw new Error(`La Lata ${vehicle} did not load`);
+  lata.lights.emissiveIntensity = 0.6;
+  return lata.body;
+};
+
 /** One of the base's models as it stands in the Bastion (strategy/baseKit.ts), in its atlas colours. */
 const kit = (id: BaseModelId) => async (): Promise<THREE.Object3D> => {
   await loadBaseKit();
@@ -219,9 +229,9 @@ const prop = (pack: PackId, id: string) => async (): Promise<THREE.Object3D> => 
  * What to render: the subject and the direction it is seen from (its nose or
  * face towards +z); `masks`: only its white silhouettes are wanted; `trim`: as
  * the packs' weapon icons (public/ui/synty/icons), cut to the silhouette and
- * 128 wide, as tall as it comes.
+ * 128 wide, as tall as it comes; `light`: brighter than the rest by so much.
  */
-const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.Vector3; masks?: boolean; trim?: boolean }> = {
+const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.Vector3; masks?: boolean; trim?: boolean; light?: number }> = {
   molotov: { make: molotovIcon, view: new THREE.Vector3(0.9, 0.35, 1.3) },
   // More nose than side: chunkier, so it still reads at 128 px.
   mula: { make: mulaIcon, view: new THREE.Vector3(0.95, 0.6, 1.45) },
@@ -236,6 +246,18 @@ const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.V
   ruinas: { make: kit('brokenWall'), view: new THREE.Vector3(1, 0.15, 0.3), masks: true },
   // La Mula nose on, for the Mixta panels.
   'mula-front': { make: mulaIcon, view: new THREE.Vector3(0.05, 0.12, 1) },
+  // La Lata before it is the bus, the same two ways (the garage's header goes by the campaign's vehicle).
+  // The van's and the lorry's noses are narrow and dark at 88 px: a little of their side shows, and more light.
+  todoterreno: { make: lataIcon(0), view: new THREE.Vector3(0.95, 0.6, 1.45) },
+  'todoterreno-front': { make: lataIcon(0), view: new THREE.Vector3(0.05, 0.12, 1) },
+  furgoneta: { make: lataIcon(1), view: new THREE.Vector3(0.95, 0.6, 1.45) },
+  'furgoneta-front': { make: lataIcon(1), view: new THREE.Vector3(0.32, 0.14, 1), light: 1.35 },
+  camion: { make: lataIcon(2), view: new THREE.Vector3(0.95, 0.6, 1.45) },
+  'camion-front': { make: lataIcon(2), view: new THREE.Vector3(0.32, 0.14, 1), light: 1.35 },
+  // Their pure profiles cut to the silhouette, as La Mula's (r-mula), for La Lata on El Valle's map.
+  'todoterreno-side': { make: lataIcon(0), view: new THREE.Vector3(1, 0, 0), masks: true, trim: true },
+  'furgoneta-side': { make: lataIcon(1), view: new THREE.Vector3(1, 0, 0), masks: true, trim: true },
+  'camion-side': { make: lataIcon(2), view: new THREE.Vector3(1, 0, 0), masks: true, trim: true },
   // Items.
   botiquin: { make: kit('medKit'), view: new THREE.Vector3(0.55, 0.85, 1) },
   racion: { make: rationIcon, view: new THREE.Vector3(0.6, 0.5, 1) },
@@ -254,7 +276,9 @@ const only = new URLSearchParams(location.search).get('only')?.split(',');
 for (const [name, icon] of Object.entries(ICONS).filter(([n]) => !only || only.includes(n))) {
   void icon.make().then(async (subject) => {
     await painted(subject);
+    renderer.toneMappingExposure = 1.1 * (icon.light ?? 1);
     const url = shoot(subject, icon.view);
+    renderer.toneMappingExposure = 1.1;
     shots.set(name, url);
     const cell = document.createElement('figure');
     cell.style.margin = '0';

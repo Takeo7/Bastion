@@ -196,20 +196,55 @@
   font-size: 15px;
 }
 
-/* La Lata: the pack's vehicle, yellow. */
+/* La Lata: a bus, yellow (playtest 18/10 #26: the pack's vehicle was a jeep). */
 .valley-bus i {
   position: absolute;
-  left: -17px;
-  top: -9px;
-  width: 34px;
-  height: 17px;
+  left: -22px;
+  top: -7px;
+  width: 44px;
+  height: 13px;
   --valley-tone: #ffc43a;
-  --valley-icon: url('/ui/synty/icons/map-vehicle.webp');
+  --valley-icon: url('/ui/synty/icons/r-mula.webp');
+}
+
+/* Before it is the bus (playtest 18/10 #45: the campaign's vehicle, `.strat[data-vehicle]`), its own profile,
+   at its own proportions (each cut to 128 wide), the name just past it. */
+.strat[data-vehicle='0'] .valley-bus i {
+  left: -19px;
+  top: -7px;
+  width: 38px;
+  height: 14px;
+  --valley-icon: url('/ui/synty/icons/r-todoterreno.webp');
+}
+
+.strat[data-vehicle='1'] .valley-bus i {
+  left: -16px;
+  top: -10px;
+  width: 32px;
+  height: 20px;
+  --valley-icon: url('/ui/synty/icons/r-furgoneta.webp');
+}
+
+.strat[data-vehicle='2'] .valley-bus i {
+  left: -18px;
+  top: -7px;
+  width: 37px;
+  height: 15px;
+  --valley-icon: url('/ui/synty/icons/r-camion.webp');
+}
+
+.strat[data-vehicle='0'] .valley-bus b,
+.strat[data-vehicle='2'] .valley-bus b {
+  left: 22px;
+}
+
+.strat[data-vehicle='1'] .valley-bus b {
+  left: 19px;
 }
 
 .valley-bus b {
   position: absolute;
-  left: 20px;
+  left: 25px;
   top: 0;
   translate: 0 -50%;
   font-family: var(--t-font, 'Barlow', sans-serif);

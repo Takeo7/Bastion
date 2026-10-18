@@ -3,6 +3,8 @@ import {
   BASE_EDGE,
   BASE_MAP,
   besidePieces,
+  bastionFootprint,
+  bastionLot,
   dismantleBlocker,
   dismantleRefund,
   fellBlocker,
@@ -15,7 +17,6 @@ import {
   placePiece,
   rearmCost,
   repairCost,
-  TREE_SUPPLIES,
   treeAt,
   type BaseState,
 } from '../src/base';
@@ -63,6 +64,46 @@ describe('the clearing', () => {
   });
 });
 
+describe('the Bastion\'s lot (18/10 #40)', () => {
+  it('is 6 × 6 round the caravan, nothing else is built on it, and the building on it grows with the level', () => {
+    const base = freshBase(new Rng(1));
+    const caravan = base.pieces[0]!;
+    expect(bastionLot(base)).toEqual({ x: caravan.x - 1, y: caravan.y - 2, w: 6, h: 6 });
+    expect(placeBlocker(base, 'sandbags', caravan.x - 1, caravan.y - 2, 0)).toBe('Ahí no: ese sitio es para el Bastión, que crece con cada nivel.');
+    expect(placeBlocker(base, 'sandbags', caravan.x - 2, caravan.y - 2, 0)).toBeNull();
+    // Each stage, two levels: the caravan where it is, the mobile home, the barracón, the house.
+    const box = (level: number) => {
+      const cells = bastionFootprint({ ...base, level });
+      const xs = cells.map((c) => c.x);
+      const ys = cells.map((c) => c.y);
+      return [Math.min(...xs) - caravan.x, Math.min(...ys) - caravan.y, Math.max(...xs) - Math.min(...xs) + 1, Math.max(...ys) - Math.min(...ys) + 1];
+    };
+    expect([1, 2, 3, 5, 7, 8].map(box)).toEqual([
+      [0, 0, 4, 2],
+      [0, 0, 4, 2],
+      [-1, -1, 6, 3],
+      [-1, -1, 5, 4],
+      [-1, -2, 6, 5],
+      [-1, -2, 6, 5],
+    ]);
+    // In a siege, the building is solid and holds the caravan's strength; the squad stands outside it.
+    const s = createMission({ map: { kind: 'base', base: { ...base, level: 7 } }, slots: [0], rng: new Rng(2) });
+    for (const t of bastionFootprint({ ...base, level: 7 })) {
+      expect(s.tiles[t.y * s.width + t.x]).toBe('wall');
+      expect(s.breakables![t.y * s.width + t.x]).toBe(PIECES.caravan.hp);
+    }
+    for (const u of s.units.filter((x) => x.team === 'xcom')) expect(s.tiles[u.pos.y * s.width + u.pos.x]).toBe('floor');
+  });
+
+  it('beside the lot is beside the caravan', () => {
+    const base = freshBase(new Rng(1));
+    const lot = bastionLot(base)!;
+    const bags = placePiece(base, 'sandbags', lot.x - 1, lot.y + 2, 0);
+    expect(besidePieces(base, bags)).toEqual([base.pieces[0]]);
+    expect(besidePieces(base, base.pieces[0]!)).toEqual([bags]);
+  });
+});
+
 describe('building', () => {
   it('turns a piece about its own box', () => {
     const at = (rot: number) => pieceCells('caravan', 10, 10, rot).map((c) => `${c.x},${c.y}`).sort();
@@ -104,12 +145,12 @@ describe('building', () => {
     expect(pieceAt(base, 8, 6)).toBeUndefined();
   });
 
-  it('felling a tree clears its tile and gives suministros', () => {
+  it('felling a tree clears its tile (what it costs, the campaign charges)', () => {
     const base = bare();
     base.trees = [10 * BASE_MAP + 10, 10 * BASE_MAP + 11];
     expect(fellBlocker(base, 12, 10)).toBe('Ahí no hay ningún árbol.');
     expect(fellBlocker(base, 11, 10)).toBeNull();
-    expect(fellTree(base, 11, 10)).toBe(TREE_SUPPLIES);
+    expect(fellTree(base, 11, 10)).toBe(1);
     expect(treeAt(base, 11, 10)).toBe(false);
     expect(treeAt(base, 10, 10)).toBe(true);
     expect(fellTree(base, 11, 10)).toBe(0);

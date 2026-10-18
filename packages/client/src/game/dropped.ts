@@ -9,12 +9,18 @@ import { syntyProp, syntyPropsLoaded } from './syntyProps';
 // What is left on the floor (docs/FASE8.md §C: GameState.dropped), one thing
 // a tile, to be read from the tactical camera: a weapon lies on its side; a
 // medicine is its first-aid box; food a carton with a can on it; anything
-// else, and several things together, a bag. Each lies off the tile's middle
-// (whoever stands there doesn't hide it), turned its own way, on a thin pale
-// ring that tells it from the street's litter, and goes once it is picked up.
+// else, and several things together, a bag. What a fallen soldier carried
+// (`from`, playtest 18/10 #49) is their rucksack, tipped over, with their
+// main weapon beside it, one for each of them on a tile, until nothing of
+// theirs is left. Each lies off the tile's middle (whoever stands there
+// doesn't hide it), turned its own way, on a thin pale ring that tells it
+// from the street's litter, and goes once it is picked up.
 
-/** A tile's things as they look: a weapon's model, or props (each its size, set on the one before if `on`). */
-type Look = { weapon: WeaponId } | { props: { id: PropId; size: number; on?: boolean; turn?: number }[] };
+/**
+ * A tile's things as they look: a weapon's model, props (each its size, set on the one before if `on`), or a
+ * fallen soldier's rucksack and their weapon.
+ */
+type Look = { weapon: WeaponId } | { props: { id: PropId; size: number; on?: boolean; turn?: number }[] } | { pack: true; weapon?: WeaponId };
 
 const BAG: Look = { props: [{ id: 'dropBag', size: 1 }] };
 
@@ -62,12 +68,13 @@ export class DroppedView {
   private build(dropped: NonNullable<GameState['dropped']>): void {
     this.group.clear();
     this.tiles = [];
-    const byTile = new Map<string, { pos: Pos; id: string; things: Loot[] }>();
+    // By tile, and on it each fallen soldier's things apart.
+    const byTile = new Map<string, { pos: Pos; id: string; things: Loot[]; from?: string }>();
     for (const d of dropped) {
-      const k = `${d.pos.x},${d.pos.y},${d.pos.z}`;
+      const k = `${d.pos.x},${d.pos.y},${d.pos.z}${d.from ? `:${d.from}` : ''}`;
       const t = byTile.get(k);
       if (t) t.things.push(d.loot);
-      else byTile.set(k, { pos: d.pos, id: d.id, things: [d.loot] });
+      else byTile.set(k, { pos: d.pos, id: d.from ?? d.id, things: [d.loot], ...(d.from ? { from: d.from } : {}) });
     }
     let waiting = false;
     for (const t of byTile.values()) {
@@ -75,7 +82,9 @@ export class DroppedView {
       const way = hash(t.id, 1) * Math.PI * 2;
       g.position.copy(tileToWorld(t.pos)).add(new THREE.Vector3(Math.sin(way) * OFF, 0, Math.cos(way) * OFF));
       g.rotation.y = hash(t.id, 2) * Math.PI * 2;
-      if (!this.dress(g, lookOf(t.things))) waiting = true;
+      const weapon = t.things.find((l) => l.weapon)?.weapon;
+      const look: Look = t.from ? { pack: true, ...(weapon ? { weapon: foundModel(weapon) } : {}) } : lookOf(t.things);
+      if (!this.dress(g, look)) waiting = true;
       const ring = new THREE.Mesh(RING, RING_MATERIAL);
       ring.position.y = 0.025;
       ring.renderOrder = 1;
@@ -95,21 +104,44 @@ export class DroppedView {
     });
   }
 
+  /** A weapon on its side (its own x up), its middle `aside` along the tile's x from the spot, resting on the floor; false if not loaded. */
+  private laid(g: THREE.Group, weapon: WeaponId, aside = 0, turn = 0): boolean {
+    const source = modelNow(WEAPONS[weapon].pack, 'wep', weapon);
+    if (!source) return false;
+    const gun = source.clone();
+    gun.rotation.set(0, turn, Math.PI / 2, 'YXZ');
+    gun.scale.setScalar((WEAPONS[weapon] as { size?: number }).size ?? 1);
+    gun.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(gun);
+    gun.position.set(aside - (box.min.x + box.max.x) / 2, -box.min.y + 0.005, -(box.min.z + box.max.z) / 2);
+    g.add(gun);
+    return true;
+  }
+
   /** Puts a look's models in `g`, on the floor; false if some haven't loaded yet. */
   private dress(g: THREE.Group, look: Look): boolean {
-    if ('weapon' in look) {
-      const source = modelNow(WEAPONS[look.weapon].pack, 'wep', look.weapon);
-      if (!source) return false;
-      // On its side (its own x up), its middle on the spot, resting on the floor.
-      const gun = source.clone();
-      gun.rotation.set(0, 0, Math.PI / 2);
-      gun.scale.setScalar((WEAPONS[look.weapon] as { size?: number }).size ?? 1);
-      gun.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(gun);
-      gun.position.set(-(box.min.x + box.max.x) / 2, -box.min.y + 0.005, -(box.min.z + box.max.z) / 2);
-      g.add(gun);
-      return true;
+    if ('pack' in look) {
+      // The rucksack tipped onto its back, a little askew; the weapon beside it.
+      const parts = syntyProp('fallenPack');
+      const gun = look.weapon ? this.laid(g, look.weapon, 0.17, 0.25) : true;
+      if (!parts) return false;
+      const pack = new THREE.Group();
+      for (const part of parts) {
+        const mesh = new THREE.Mesh(part.geometry, atlasMaterial(part.atlas));
+        mesh.matrixAutoUpdate = false;
+        mesh.matrix.copy(part.matrix);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        pack.add(mesh);
+      }
+      pack.rotation.set(-1.35, 0.5, 0.12, 'YXZ');
+      pack.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(pack);
+      pack.position.set(-0.12 - (box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+      g.add(pack);
+      return gun;
     }
+    if ('weapon' in look) return this.laid(g, look.weapon);
     let base = 0;
     let all = true;
     for (const p of look.props) {

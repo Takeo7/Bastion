@@ -991,11 +991,18 @@ export const SOUNDS: Record<string, SoundDef> = {
     for (const f of [55, 58.3, 82.4]) s.to(s.amp(s.filter(s.osc('sawtooth', f), 'lowpass', [[0, 200], [0.8, 700], [1.9, 200]]), [[0, 0], [0.5, 0.35], [1.9, 0.001]]));
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 800], [1, 2400]], 6), [[0.2, 0], [0.7, 0.15], [1.4, 0.001]]));
   }, { reverb: 0.4 }),
-  // The command passed between partners: a radio's click and a short hiss.
-  command: def('ui', 0.25, (s) => {
-    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', 2800, 4), hit(0, 0.001, 0.02, 0.6)));
-    s.to(s.amp(s.filter(s.noise('white'), 'bandpass', s.vary(1700), 1.2), [[0.02, 0], [0.03, 0.25], [0.11, 0.18], [0.13, 0]]));
-  }, { variants: 3 }),
+  // The command passed between partners: a radio's click and a short, soft breath of static.
+  command: def('ui', 0.2, (s) => {
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', 2400, 1.5), hit(0, 0.001, 0.015, 0.5)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(1500), 0.9), [[0.02, 0], [0.03, 0.12], [0.09, 0.08], [0.11, 0]]));
+  }, { variants: 3, level: -3 }),
+  // Señalar (playtest 18/10 #7; #33: the radio squelch it borrowed from the command was «mega desagradable»): a
+  // pin pushed into the map, soft and short, so it is heard without getting in the way however often it is used.
+  mark: def('ui', 0.15, (s) => {
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(1900), 0.9), hit(0, 0.0008, 0.012, 0.6)));
+    s.to(s.amp(s.osc('sine', [[0, s.vary(430)], [0.04, 260]], 0, 0.08), hit(0, 0.002, 0.04, 0.5)));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 1100), hit(0.002, 0.002, 0.03, 0.4)));
+  }, { variants: 3, level: -5 }),
   // The mission won: a low chord swelling in like a held breath let out, over a soft drum. No fanfare or bell
   // (playtest 18/10 #22).
   victory: def('music', 3.5, (s) => {

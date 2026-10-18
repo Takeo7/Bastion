@@ -83,6 +83,8 @@ export class Lobby {
 
   join(name: string): void {
     this.joined = true;
+    this.defaultName = name;
+    this.errorEl.textContent = '';
     this.handlers.onJoin(name);
     this.render();
   }
@@ -102,6 +104,12 @@ export class Lobby {
 
   error(message: string): void {
     this.errorEl.textContent = message;
+    // Not seated yet: the server turned the name down (Arturo, 18/10 #51: the other player's own). Back to the
+    // name, with it in the field and the reason under it, to write another one.
+    if (this.joined && this.mySlot === null) {
+      this.joined = false;
+      this.render();
+    }
   }
 
   show(): void {
@@ -156,9 +164,9 @@ export class Lobby {
           'div.x-panel',
           {},
           h('div.alert-kicker', {}, 'Nueva campaña'),
-          h('h2.x-title', {}, saved ? '¿Empezar de cero?' : '¿Empezar sin tu compañero?'),
+          h('h2.x-title', {}, saved ? '¿Empezar de cero?' : '¿Empezar sin el otro jugador?'),
           saved ? h('p.x-text', {}, `La campaña guardada (${outingsMark(saved.missions ?? 0).toLowerCase()}) se sustituye por una nueva.`) : null,
-          alone ? h('p.x-text', {}, 'Tu compañero aún no ha entrado. Puedes empezar igualmente: cuando entre, tomará el mando de 4 soldados.') : null,
+          alone ? h('p.x-text', {}, 'El otro jugador aún no ha entrado. Puedes empezar igualmente: cuando entre, tomará el mando de 4 soldados.') : null,
           h(
             'div.alert-actions',
             {},
@@ -366,7 +374,7 @@ export class Lobby {
         `div.menu-seat${p ? '' : '.empty'}${p && !p.connected ? '.offline' : ''}`,
         { style: { '--accent': p?.color ?? '#3a4652' } },
         h('span.dot'),
-        h('b', {}, p ? `${p.name}${slot === this.mySlot ? ' (tú)' : ''}` : 'Esperando jugador…'),
+        h('b', {}, p ? p.name : 'Esperando jugador…'),
         h('small', {}, p ? (!p.connected ? 'Desconectado' : p.away ? 'Ausente' : 'Conectado') : ''),
       );
     });
@@ -382,7 +390,7 @@ export class Lobby {
   private invite(): (HTMLElement | null)[] {
     if (this.players.filter((p) => p.connected).length >= 2) return [];
     const links = inviteLinks();
-    if (!links.length) return [h('p.menu-hint', {}, 'Tu compañero necesita la dirección de red de este ordenador: está en la ventana del servidor.')];
+    if (!links.length) return [h('p.menu-hint', {}, 'Quien juegue contigo necesita la dirección de red de este ordenador: está en la ventana del servidor.')];
     // In the desktop app the partner joins from theirs, which asks for the address and port, not a web address.
     const app = /\bElectron\//.test(navigator.userAgent);
     const row = (l: InviteLink) => {
@@ -392,7 +400,7 @@ export class Lobby {
     };
     const others = links.filter((l) => l.other);
     return [
-      h('p.menu-hint', {}, app ? 'Tu compañero te verá en «Partidas en tu red» de su app. Si no te ve, que use «Unirse por dirección» con:' : 'Tu compañero entra abriendo en su navegador:'),
+      h('p.menu-hint', {}, app ? 'Quien juegue contigo te verá en «Partidas en tu red» de su app. Si no te ve, que use «Unirse por dirección» con:' : 'Quien juegue contigo entra abriendo en su navegador:'),
       ...links.filter((l) => !l.other).map(row),
       others.length
         ? h(

@@ -584,6 +584,47 @@
   margin: 0;
 }
 
+/* The top strip's names on hover (playtest 18/10 #56: «que diga qué recurso es»): the name and what it is for,
+   at once, under what the pointer is on (screen.ts showTopTip). */
+.top-tip {
+  position: absolute;
+  z-index: 30;
+  max-width: 300px;
+  padding: 8px 11px 9px;
+  border-radius: 3px;
+  background: rgba(16, 18, 20, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(242, 194, 48, 0.35),
+    0 8px 18px rgba(0, 0, 0, 0.5);
+  color: #d8dde0;
+  font-size: 13px;
+  line-height: 1.35;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s;
+}
+
+.top-tip.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.top-tip span {
+  white-space: pre-line;
+}
+
+.top-tip b {
+  display: block;
+  margin-bottom: 3px;
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t-accent, #f2c230);
+}
+
 .strat-doom {
   flex: 1;
   display: flex;
@@ -3498,16 +3539,22 @@ dl.x-pairs dd {
   white-space: nowrap;
 }
 
-.piece-line,
-.piece-vote {
+.piece-line {
   grid-column: 1 / -1;
   color: var(--t-muted, #a1a79d);
   font: 12px/1.3 var(--t-font, sans-serif);
 }
 
-.piece-vote {
+/* With the other one here, everything on the base is proposed (playtest 18/10 #55): said once, under the palette's
+   head and under a piece's actions; a proposal waiting, in red (.x-why), since nothing else goes down meanwhile. */
+.build-vote {
+  margin: 2px 0 6px;
   color: var(--t-accent, #f2c230);
-  font-weight: 600;
+  font: 600 12.5px/1.3 var(--t-font, sans-serif);
+}
+
+.build-vote.x-why {
+  color: var(--t-danger, #f0503c);
 }
 
 /* Locked by the Bastion's level: grey. Short of what it costs: the cost in red. */
@@ -3637,4 +3684,48 @@ dl.x-pairs dd {
   font: 700 12px/1.2 var(--t-font, sans-serif);
   pointer-events: none;
   white-space: nowrap;
+}
+
+/* A defender's post for the siege (playtest 18/10 #58), over its ring: the name in its commander's colour;
+   this player's own, brighter; the one in hand, lit. */
+.clearing-post {
+  padding: 2px 7px;
+  border-radius: 2px;
+  background: rgba(12, 14, 15, 0.72);
+  box-shadow: inset 3px 0 0 var(--accent, #fff);
+  color: #cfd3cc;
+  font: 600 11.5px/1.2 var(--t-font, sans-serif);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.clearing-post.mine {
+  color: #fff;
+  background: rgba(12, 14, 15, 0.85);
+}
+
+.clearing-post.held {
+  box-shadow: inset 3px 0 0 var(--accent, #fff), 0 0 0 2px #ffe08a;
+}
+
+/* What a mission eats, by the rations left (playtest 18/10 #37). */
+.strat-credits .food-use {
+  margin-left: 4px;
+  color: var(--t-muted, #a1a79d);
+  font: 600 11px/1 var(--t-font, sans-serif);
+  white-space: nowrap;
+}
+
+/* Under 1440 px the strip has no room for «/misión»: the number, and the why on hover. */
+@media (max-width: 1440px) {
+  .strat-credits .food-use span {
+    display: none;
+  }
+}
+
+/* Buying the next level of the Bastion (playtest 18/10 #40). */
+.level-up {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 10px;
 }

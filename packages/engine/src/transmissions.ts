@@ -93,7 +93,7 @@ export const SCENES: Scene[] = [
     channel: 'Correo a pie · leída por Morse',
     when: (c) => c.day > 31,
     lines: [
-      { who: 'halvorsen', text: 'Al Bastión, del Refugio de Brena. Con esta carta suben los suministros del mes.' },
+      { who: 'halvorsen', text: 'Al Bastión, del Refugio de Brena. Con esta carta sube el convoy con los suministros.' },
       { who: 'halvorsen', text: 'Cada caja sale de una despensa que también pasa hambre. Esperamos resultados.' },
     ],
   },

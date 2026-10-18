@@ -305,7 +305,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   missiles: { id: 'missiles', name: 'Granada del chaleco', description: 'Le estalla una granada que aún cuelga del chaleco. También abre boquetes en las paredes y, arriba, hunde el suelo.', target: 'tile', ap: 1, endsTurn: true, charge: 'missiles', range: 15, radius: 2.5, explosive: 'microMissiles' },
   medkit: { id: 'medkit', name: 'Botiquín volante', description: 'El Grillo, el dron casero del especialista, cura 4 de salud a un aliado.', target: 'ally', ap: 1, endsTurn: false, charge: 'medkit', range: 15 },
   aid: { id: 'aid', name: 'Cobertura del Grillo', description: 'El Grillo protege a un aliado: +20 de defensa hasta vuestro próximo turno.', target: 'ally', ap: 1, endsTurn: false, range: 15 },
-  evac: { id: 'evac', name: 'Evacuar', description: 'Desde La Lata, pide salir. Si tu compañero acepta, salen los que estén dentro y los de fuera se pierden. En la Limpieza es una retirada: la misión se pierde.', target: 'self', ap: 0, endsTurn: false },
+  evac: { id: 'evac', name: 'Evacuar', description: 'Desde La Lata, pide salir. Si el otro jugador acepta, salen los que estén dentro y los de fuera se pierden. En la Limpieza es una retirada: la misión se pierde.', target: 'self', ap: 0, endsTurn: false },
   hack: {
     id: 'hack',
     name: 'Arreglar',
@@ -841,6 +841,16 @@ export const ZERO_MODS: UnitMods = {
  * partner's while the partner isn't connected (Arturo, 17/10: «si juego solo, debería poder usarlo solo»).
  * Without `connected`, only its own. Shared units (owner null) are everyone's.
  */
+/**
+ * Whether `a` and `b` fight each other: the squad against everyone, and among
+ * the enemies the dead against the living (Arturo, 18/10 #47: «los saqueadores
+ * y los zombis se atacan entre sí»).
+ */
+export function hostileTo(a: Pick<Unit, 'team' | 'template'>, b: Pick<Unit, 'team' | 'template'>): boolean {
+  if (a.team !== b.team) return true;
+  return a.team === 'alien' && !!TEMPLATES[a.template].undead !== !!TEMPLATES[b.template].undead;
+}
+
 export function commandsFor(slot: Slot, owner: Slot | null, connected?: readonly Slot[]): boolean {
   return owner === null || owner === slot || (!!connected && !connected.includes(owner));
 }

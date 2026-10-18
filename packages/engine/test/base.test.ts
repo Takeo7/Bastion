@@ -41,7 +41,7 @@ import {
   type CampaignCommand,
   type CampaignState,
 } from '../src/campaign';
-import { PIECES, pieceCells, TREE_SUPPLIES } from '../src/base';
+import { bastionLot, FELL_COST, fellTree, PIECES, pieceCells } from '../src/base';
 import { abilitiesOf } from '../src/abilities';
 import { defaultAppearance } from '../src/appearance';
 import { sexOfName } from '../src/content';
@@ -49,7 +49,7 @@ import { bastionLevel, LEVEL_XP, missionXp } from '../src/progression';
 import { Rng } from '../src/rng';
 import { totalBars } from '../src/skills';
 import { createMission } from '../src/setup';
-import { BASE_SIEGE_TEXT } from '../src/lore';
+import { BASE_SIEGE_TEXT, PIECE_TEXT } from '../src/lore';
 import type { Appearance, GameState, Slot } from '../src/types';
 import { freeSpot, raise } from './helpers';
 
@@ -93,13 +93,30 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(siegeHeard(c)).toEqual({ in: SIEGE_FIRST_IN });
   });
 
-  it('each one builds the cheap at once; the dear goes to a vote; the Bastion level opens what it opens', () => {
+  it('everything on the base goes to a vote with the other here, cheap or dear (18/10 #55); alone, at once; the Bastion level opens what it opens', () => {
     const c = createCampaign(both, new Rng(3));
     c.credits = 500;
     const bags = freeSpot(c, 'sandbags');
     run(c, { type: 'place', piece: 'sandbags', x: bags.x, y: bags.y, rot: 0 }, 0, both);
+    expect(c.proposal?.text).toBe(`construir ${PIECE_TEXT.sandbags.a}`);
+    expect(c.bastion.pieces.some((p) => p.piece === 'sandbags')).toBe(false);
+    run(c, { type: 'vote', accept: true }, 1, both);
     expect(c.bastion.pieces.some((p) => p.piece === 'sandbags')).toBe(true);
     expect(c.credits).toBe(500 - PIECES.sandbags.cost.supplies);
+    // Mending, setting again and taking down too.
+    const placed = c.bastion.pieces.find((p) => p.piece === 'sandbags')!;
+    placed.hp = 1;
+    run(c, { type: 'mend', piece: placed.id }, 0, both);
+    expect(c.proposal?.text).toBe(`reparar ${PIECE_TEXT.sandbags.the}`);
+    run(c, { type: 'vote', accept: true }, 1, both);
+    expect(placed.hp).toBe(PIECES.sandbags.hp);
+    run(c, { type: 'dismantle', piece: placed.id }, 0, both);
+    expect(c.proposal?.text).toBe(`desmontar ${PIECE_TEXT.sandbags.the}`);
+    run(c, { type: 'vote', accept: false }, 1, both);
+    expect(c.bastion.pieces).toContain(placed);
+    // With the other away, it is done at once.
+    run(c, { type: 'dismantle', piece: placed.id }, 0, [0]);
+    expect(c.bastion.pieces).not.toContain(placed);
     expect(PIECES.radio.cost.supplies).toBeGreaterThan(VOTE_ABOVE);
     const radio = freeSpot(c, 'radio');
     run(c, { type: 'place', piece: 'radio', x: radio.x, y: radio.y, rot: 0 }, 0, both);
@@ -110,18 +127,53 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(siegeHeard(c)).toEqual({ in: c.siege.in, count: c.siege.count, sides: c.siege.sides });
     const wall = freeSpot(c, 'wall');
     expect(() => run(c, { type: 'place', piece: 'wall', x: wall.x, y: wall.y, rot: 0 }, 0, both)).toThrow(/nivel 2/);
-    c.xp = LEVEL_XP[1]!;
+    c.level = 2;
     c.parts = 0;
     expect(() => run(c, { type: 'place', piece: 'wall', x: wall.x, y: wall.y, rot: 0 }, 0, both)).toThrow(/piezas/);
   });
 
-  it('felling gives suministros; mending, setting again and taking down cost and give what they say', () => {
+  it('a row dragged is built at once, all or none, and to a vote when together it is dear (18/10 #35)', () => {
+    const c = solo();
+    const caravan = c.bastion.pieces[0]!;
+    // A clear row of four below the caravan.
+    const y = caravan.y + 5;
+    const cells = [0, 1, 2, 3].map((i) => ({ x: caravan.x + i, y }));
+    for (const t of cells) for (const i of [t.y * c.bastion.width + t.x]) c.bastion.trees = c.bastion.trees.filter((x) => x !== i);
+    const credits = c.credits;
+    run(c, { type: 'placeLine', piece: 'palisade', cells, rot: 0 });
+    expect(c.bastion.pieces.filter((p) => p.piece === 'palisade').map((p) => [p.x, p.y])).toEqual(cells.map((t) => [t.x, t.y]));
+    expect(c.credits).toBe(credits - 4 * PIECES.palisade.cost.supplies);
+    // One in the way, and none goes up.
+    const again = cells.map((t) => ({ x: t.x, y: t.y + 1 }));
+    for (const t of again) c.bastion.trees = c.bastion.trees.filter((x) => x !== t.y * c.bastion.width + t.x);
+    expect(() => run(c, { type: 'placeLine', piece: 'palisade', cells: [...again, cells[0]!], rot: 0 })).toThrow(/Ahí ya hay algo/);
+    expect(c.bastion.pieces.filter((p) => p.piece === 'palisade')).toHaveLength(4);
+    // Six together cost more than 30: with the partner here, a vote.
+    c.players = [0, 1];
+    const six = [0, 1, 2, 3, 4, 5].map((i) => ({ x: caravan.x + i, y: y + 2 }));
+    for (const t of six) c.bastion.trees = c.bastion.trees.filter((x) => x !== t.y * c.bastion.width + t.x);
+    run(c, { type: 'placeLine', piece: 'palisade', cells: six, rot: 0 }, 0, both);
+    expect(c.proposal?.text).toBe('construir 6 × empalizada');
+    run(c, { type: 'vote', accept: true }, 1, both);
+    expect(c.bastion.pieces.filter((p) => p.piece === 'palisade')).toHaveLength(10);
+  });
+
+  it('felling costs and gives nothing; mending, setting again and taking down cost and give what they say', () => {
     const c = solo();
     const tree = c.bastion.trees[0]!;
     const credits = c.credits;
     run(c, { type: 'fell', tiles: [{ x: tree % c.bastion.width, y: Math.floor(tree / c.bastion.width) }] });
-    expect(c.credits).toBe(credits + TREE_SUPPLIES);
+    // Arturo, 18/10 #41: «solo cuesta recursos y no da nada».
+    expect(c.credits).toBe(credits - FELL_COST);
     expect(c.bastion.trees).not.toContain(tree);
+    // Many at once, dear together: to a vote with the partner here.
+    const many = c.bastion.trees.slice(0, 12).map((i) => ({ x: i % c.bastion.width, y: Math.floor(i / c.bastion.width) }));
+    c.players = [0, 1];
+    run(c, { type: 'fell', tiles: many }, 0, both);
+    expect(c.proposal?.text).toBe('talar 12 árboles');
+    run(c, { type: 'vote', accept: true }, 1, both);
+    expect(c.credits).toBe(credits - 13 * FELL_COST);
+    c.players = [0];
     const gate = raise(c, 'gate');
     expect(() => run(c, { type: 'mend', piece: gate.id })).toThrow(/No le falta nada/);
     gate.hp = 9;
@@ -175,7 +227,7 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     const c = solo();
     const shop = raise(c, 'workshop');
     expect(() => run(c, { type: 'raise', piece: shop.id })).toThrow(/nivel 3/);
-    c.xp = LEVEL_XP[2]!;
+    c.level = 3;
     const credits = c.credits;
     run(c, { type: 'raise', piece: shop.id });
     expect(shop.level).toBe(2);
@@ -183,7 +235,7 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(shopPrice(c, 'smokeGrenade')).toBe(Math.round(25 * 0.65));
     const radio = raise(c, 'radio');
     expect(raiseCost(radio)).toEqual({ cost: FACILITIES.relay.cost, level: FACILITIES.relay.level });
-    c.xp = LEVEL_XP[6]!;
+    c.level = 7;
     const capacity = contactCapacity(c);
     run(c, { type: 'raise', piece: radio.id });
     expect(facilityLevel(c, 'relay')).toBe(1);
@@ -197,7 +249,7 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
 
   it('range, La Mula, the simulation room and training do what they say', () => {
     const c = solo();
-    c.xp = LEVEL_XP[7]!;
+    c.level = 8;
     const s0 = c.soldiers[0]!;
     const aim = squadMember(c, s0).mods.aim;
     const range = raise(c, 'range');
@@ -207,20 +259,22 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     raise(c, 'garage', 2);
     expect(garageCut(c).wounds).toBe(2);
     expect(squadLimit(c, [0])).toBeGreaterThan(0);
+    // The squad's size is La Lata's now (18/10 #45): the training centre no longer adds to it.
     const limit = createCampaign(both, new Rng(1));
-    expect(squadLimit(limit, both)).toBe(3);
+    expect(squadLimit(limit, both)).toBe(2);
     raise(limit, 'training');
-    expect(squadLimit(limit, both)).toBe(4);
+    expect(squadLimit(limit, both)).toBe(2);
+    // The Sala de mapas: the operations pay more suministros (the Bastion has no experience now: 18/10 #40).
     raise(c, 'simulation');
+    run(c, { type: 'chooseMission', id: c.offers.find((o) => !o.story && o.reward.credits)!.id });
+    const pay = activeOffer(c)!.reward.credits!;
+    const credits = c.credits;
     const report = fly(c);
-    expect(report.xp).toBe(Math.round(missionXp(true, report.reward ? activeDifficulty(report) : 1, 0) * 1.25));
+    expect(report.xp).toBe(0);
+    expect(report.reward?.credits).toBe(Math.round(pay * 1.25));
+    expect(c.credits).toBeGreaterThanOrEqual(credits + Math.round(pay * 1.25));
   });
 });
-
-/** The difficulty a report's mission was flown at: the tests fly ordinary offers, whose difficulty the XP needs. */
-function activeDifficulty(report: { xp: number }): number {
-  return [1, 2, 3, 4].find((d) => Math.round(missionXp(true, d, 0) * 1.25) === report.xp) ?? 1;
-}
 
 describe('the sieges in the campaign (docs/FASE12.md §11.5)', () => {
   it('the clock counts missions; at 0 the siege is the next thing the base does, by every soldier fit to fight', () => {
@@ -327,6 +381,33 @@ describe('the sieges in the campaign (docs/FASE12.md §11.5)', () => {
     expect(nights[1]).toBeLessThan(30);
   });
 
+  it('each places their own defenders anywhere free on the clearing, and the siege begins with them there (18/10 #58)', () => {
+    const c = createCampaign(both, new Rng(3));
+    c.nextEventDay = 999;
+    c.siege.in = 0;
+    fly(c);
+    expect(activeOffer(c)?.siege).toBe(true);
+    const mine = c.soldiers.find((s) => s.owner === 0 && c.squad.includes(s.id))!;
+    const theirs = c.soldiers.find((s) => s.owner === 1 && c.squad.includes(s.id))!;
+    const lot = bastionLot(c.bastion)!;
+    const spot = { x: lot.x - 3, y: lot.y - 3 };
+    for (let x = spot.x - 1; x <= spot.x + 1; x++) fellTree(c.bastion, x, spot.y);
+    expect(() => run(c, { type: 'post', soldier: theirs.id, at: spot }, 0, both)).toThrow('Solo puedes colocar a tus soldados.');
+    expect(() => run(c, { type: 'post', soldier: mine.id, at: { x: 0, y: 5 } }, 0, both)).toThrow(/borde/);
+    expect(() => run(c, { type: 'post', soldier: mine.id, at: { x: lot.x + 2, y: lot.y + 2 } }, 0, both)).toThrow('Ahí no se puede estar.');
+    run(c, { type: 'post', soldier: mine.id, at: spot }, 0, both);
+    expect(() => run(c, { type: 'post', soldier: theirs.id, at: spot }, 1, both)).toThrow('Ahí ya hay alguien.');
+    expect(c.siegePosts).toEqual({ [mine.id]: spot });
+    const offer = activeOffer(c)!;
+    const s = createMission({ map: offerMap(c, offer), siegePlan: siegePlan(c, offer)!, posts: c.siegePosts, slots: c.players, rng: new Rng(2), kind: offer.kind, squad: buildSquad(c), pods: offer.pods });
+    expect(s.units.find((u) => u.campaignId === mine.id)!.pos).toMatchObject(spot);
+    // The rest, by the Bastion, none on the posted tile.
+    expect(s.units.filter((u) => u.team === 'xcom' && u.pos.x === spot.x && u.pos.y === spot.y)).toHaveLength(1);
+    // Once the siege is over, the posts go.
+    fly(c);
+    expect(c.siegePosts).toBeUndefined();
+  });
+
   it('fallen with nobody left: the campaign is lost', () => {
     const c = solo();
     c.siege.in = 0;
@@ -369,6 +450,18 @@ describe('the Camposanto', () => {
 });
 
 describe('the world', () => {
+  it('a sabotage mended slowly leaves a building without power, not working until it is mended', () => {
+    const c = solo();
+    const radio = raise(c, 'radio');
+    expect(hasRadio(c)).toBe(true);
+    c.event = 'sabotage';
+    run(c, { type: 'answerEvent', option: 1 });
+    expect(radio.hp).toBe(Math.floor(PIECES.radio.hp / 2));
+    expect(hasRadio(c)).toBe(false);
+    run(c, { type: 'mend', piece: radio.id });
+    expect(hasRadio(c)).toBe(true);
+  });
+
   it('contacting regions costs credits, grows the monthly payment and is capped by communications', () => {
     const c = solo();
     expect(contactCapacity(c)).toBe(2);
@@ -392,7 +485,7 @@ describe('the world', () => {
     if (!region.contacted) {
       expect(c.offers.some((o) => o.facility)).toBe(false);
       c.credits = 2000;
-      c.xp = LEVEL_XP[6]!;
+      c.level = 7;
       raise(c, 'radio', 3);
       // Contacts go by road: every zone on the way first.
       for (const id of roadRoute('weu', region.id).slice(1)) if (!c.regions.find((r) => r.id === id)!.contacted) run(c, { type: 'contact', region: id });
@@ -421,11 +514,12 @@ describe('the world', () => {
     expect(() => run(c, { type: 'launch', ready: true }, 0, both)).toThrow(/acontecimiento/);
     Object.assign(c, { activeMission, squad });
     c.event = 'defector';
-    const xp = c.xp;
+    const offers = c.offers.length;
     run(c, { type: 'answerEvent', option: 0 }, 0, both);
     expect(c.proposal?.text).toMatch(/Interrogarlo/);
     run(c, { type: 'vote', accept: true }, 1, both);
-    expect(c.xp).toBe(xp + 12);
+    // What he knows: where to go, a new operation (18/10 #40).
+    expect(c.offers.length).toBe(offers + 1);
     expect(c.event).toBeNull();
     expect(Object.keys(EVENTS).length).toBeGreaterThanOrEqual(8);
   });
@@ -486,7 +580,7 @@ describe('equipment', () => {
   it('equipment reaches the battlefield and is lost with its bearer', () => {
     const c = solo();
     const s = c.soldiers[0]!;
-    c.xp = LEVEL_XP[3]!;
+    c.level = 4;
     run(c, { type: 'buy', item: 'fragGrenade' });
     run(c, { type: 'buy', item: 'smokeGrenade' });
     run(c, { type: 'equip', soldier: s.id, slot: 'ammo', item: 'fragGrenade' });

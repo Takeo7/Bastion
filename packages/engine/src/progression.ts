@@ -40,16 +40,25 @@ export function levelForXp(xp: number): number {
   return level;
 }
 
-export function bastionLevel(c: Pick<CampaignState, 'xp'>): number {
-  return levelForXp(c.xp);
+/**
+ * What raising the Bastion to each level asks (Arturo, 18/10 #40: «se va
+ * upgradeando a mano, comprando»; «suministros y misiones»): the suministros
+ * it costs, and the missions flown before it can be. Index 0 is level 1.
+ */
+export const LEVEL_COST = [0, 100, 160, 240, 330, 440, 560, 700];
+export const LEVEL_MISSIONS = [0, 2, 4, 6, 9, 12, 16, 20];
+
+/** The Bastion's level: bought since campaign version 21 (`level`); from its experience before. */
+export function bastionLevel(c: Pick<CampaignState, 'xp' | 'level'>): number {
+  return c.level ?? levelForXp(c.xp);
 }
 
 /** Unlocked by the Bastion's level, or granted earlier by a side quest (`CampaignState.techs`). */
-export function hasTech(c: Pick<CampaignState, 'xp'> & { techs?: readonly TechId[] }, id: TechId): boolean {
+export function hasTech(c: Pick<CampaignState, 'xp' | 'level'> & { techs?: readonly TechId[] }, id: TechId): boolean {
   return !!c.techs?.includes(id) || bastionLevel(c) >= TECHS[id].level;
 }
 
-export function itemUnlocked(c: Pick<CampaignState, 'xp'>, id: ItemId): boolean {
+export function itemUnlocked(c: Pick<CampaignState, 'xp' | 'level'>, id: ItemId): boolean {
   return bastionLevel(c) >= ITEMS[id].level;
 }
 
@@ -196,7 +205,7 @@ export function weaponName(id: WeaponId, _tier = 1): string {
  * Taller's work (and the Bastion's level that allows it). Only armour has
  * tiers now (docs/FASE9.md §5).
  */
-export function nextTierBlocker(c: Pick<CampaignState, 'xp'> & Armoury & { techs?: readonly TechId[] }, _s: Pick<CampaignSoldier, 'id'>, kind: 'weapon' | 'armor'): string | null {
+export function nextTierBlocker(c: Pick<CampaignState, 'xp' | 'level'> & Armoury & { techs?: readonly TechId[] }, _s: Pick<CampaignSoldier, 'id'>, kind: 'weapon' | 'armor'): string | null {
   // No weapon tiers (docs/FASE9.md §5); the armour, for everyone.
   if (kind === 'weapon') return null;
   const tier = armorTier(c);

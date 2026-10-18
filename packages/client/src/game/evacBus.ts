@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadKitModels } from '../strategy/baseKit';
-import { buildMula, MULA_MODELS, type Mula } from '../strategy/mula';
+import { buildLata, doorAt, lataModels, type Mula } from '../strategy/mula';
 import { NIGHT } from './night';
 import { SYNTY_SCALE } from './syntyManifest';
 import { tween } from './tween';
@@ -10,6 +10,8 @@ import { tween } from './tween';
 // where the squad gets out, its doors open to them and its lights off; when
 // it goes (the engine's evacDeparted) its doors shut, its lights come on and
 // it pulls away, gathering speed, its wheels turning, until it is gone.
+// Before it is the bus, La Lata is the campaign's vehicle (GameState.vehicle,
+// playtest 18/10 #45): the 4×4, the van or the lorry, which do the same.
 
 /** The bus on the map: a metre of it as the map's props are (SYNTY_SCALE). */
 const SCALE = SYNTY_SCALE;
@@ -22,13 +24,14 @@ export class EvacBus {
   private mula: Mula | null = null;
   private readonly ready: Promise<void>;
 
-  constructor() {
+  /** La Lata as `vehicle` (0 4×4, 1 van, 2 lorry; 3 or none, the bus). */
+  constructor(readonly vehicle = 3) {
     this.root.visible = false;
-    this.ready = loadKitModels(MULA_MODELS).then(() => {
-      const mula = buildMula();
+    this.ready = loadKitModels(lataModels(vehicle)).then(() => {
+      const mula = buildLata(vehicle);
       if (!mula) return;
       mula.body.scale.setScalar(SCALE);
-      for (const d of mula.doors) d.leaf.position.copy(d.open);
+      for (const d of mula.doors) doorAt(d, 1);
       mula.body.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.castShadow = true;
@@ -54,13 +57,32 @@ export class EvacBus {
     this.root.visible = shown;
     if (this.mula) {
       this.mula.lights.emissiveIntensity = 0.2;
-      for (const d of this.mula.doors) d.leaf.position.copy(d.open);
+      for (const d of this.mula.doors) doorAt(d, 1);
     }
   }
 
   /** How long the bus is, in the map's tiles (once built; 7 until then). */
   get length(): number {
     return this.mula ? this.mula.size.z * SCALE : 7;
+  }
+
+  /** How wide, in tiles (once built; 1.7 until then). */
+  get width(): number {
+    return this.mula ? this.mula.size.x * SCALE : 1.7;
+  }
+
+  /** Where one gets in, in its parent's space: the middle of each doorway, on the ground (once built; its doors' side until then). */
+  doorways(): THREE.Vector3[] {
+    this.root.updateMatrix();
+    const m = this.mula;
+    if (!m) return [new THREE.Vector3(-0.9, 0, 0).applyMatrix4(this.root.matrix)];
+    m.body.updateMatrix();
+    return m.doorCentres.map((c) => new THREE.Vector3(c.x, 0, c.z).applyMatrix4(m.body.matrix).applyMatrix4(this.root.matrix));
+  }
+
+  /** Resolves once it is built (its size and doors known). */
+  loaded(): Promise<void> {
+    return this.ready;
   }
 
   /**
@@ -81,7 +103,7 @@ export class EvacBus {
     const start = centre.clone().addScaledVector(side, radius);
     const far = start.clone().addScaledVector(out, distance);
     this.root.visible = true;
-    for (const d of m.doors) d.leaf.position.copy(d.shut);
+    for (const d of m.doors) doorAt(d, 0);
     m.lights.emissiveIntensity = 0.2 + (NIGHT.value > 0.5 ? 1.3 : 2.6);
     const roll = (step: number) => {
       for (const w of m.wheels) w.rotation.x += step / (m.wheelRadius * SCALE);
@@ -106,7 +128,7 @@ export class EvacBus {
     this.root.position.copy(park);
     this.root.rotation.y = heading;
     await tween(SHUT_SECONDS, (t) => {
-      for (const d of m.doors) d.leaf.position.lerpVectors(d.shut, d.open, t);
+      for (const d of m.doors) doorAt(d, t);
       m.lights.emissiveIntensity = 0.2 + (1 - t) * (NIGHT.value > 0.5 ? 1.3 : 2.6);
     });
   }
@@ -117,7 +139,7 @@ export class EvacBus {
     const m = this.mula;
     if (!m || !this.root.visible) return;
     await tween(SHUT_SECONDS, (t) => {
-      for (const d of m.doors) d.leaf.position.lerpVectors(d.open, d.shut, t);
+      for (const d of m.doors) doorAt(d, 1 - t);
       // By night they would dazzle (Arturo 17/10): half as bright.
       m.lights.emissiveIntensity = 0.2 + t * (NIGHT.value > 0.5 ? 1.3 : 2.6);
     });

@@ -262,9 +262,9 @@ http.listen(PORT, () => {
   if (ANNOUNCE) announce(PORT, hostname().replace(/\.local$/, ''), () => room.summary());
   console.log(`\n  Bastión — servidor listo en el puerto ${PORT}`);
   console.log(`    Tú:              http://localhost:${PORT}`);
-  for (const h of hosts) console.log(`    Tu compañero:    ${https ? `https://${h.address}:${HTTPS_PORT}` : `http://${h.address}:${PORT}`}${h.kind === 'tailscale' ? '  (Tailscale)' : ''}`);
+  for (const h of hosts) console.log(`    El otro jugador: ${https ? `https://${h.address}:${HTTPS_PORT}` : `http://${h.address}:${PORT}`}${h.kind === 'tailscale' ? '  (Tailscale)' : ''}`);
   if (https) console.log('    (la primera vez su navegador avisa del certificado: es el de este ordenador, que lo acepte)');
-  else if (HTTPS_PORT) console.log('    Sin https (no hay openssl en este ordenador): con Chrome, Edge o la app va bien; en Safari, tu compañero irá muy lento.');
+  else if (HTTPS_PORT) console.log('    Sin https (no hay openssl en este ordenador): con Chrome, Edge o la app va bien; en Safari, al otro jugador el juego le irá muy lento.');
   console.log('');
 });
 https?.on('error', (e) => console.log(`  No se pudo abrir https en el puerto ${HTTPS_PORT}: ${e.message}`));

@@ -3,7 +3,7 @@ import { ABILITIES, addMods, apPerTurn, attackWeapon, conditionOf, firesPrimary,
 import { decorCode } from './decor';
 import { getUnit, nodeOf, tileIndex } from './grid';
 import { facingTo } from './los';
-import { packSlots } from './loot';
+import { fallenGear, packSlots } from './loot';
 import { growthDelta, type DeedId, type SkillId } from './skills';
 import type {
   AbilityId,
@@ -366,6 +366,11 @@ export function applyEvent(s: GameState, e: GameEvent): void {
         }
       }
       if (s.mission.kind === 'sabotage' && s.mission.objectiveUnit === u.id) completeObjective(s);
+      // A soldier leaves what it carried where it fell, for another to take (Arturo, 18/10 #49).
+      if (u.team === 'xcom' && !u.automaton && !u.objective && !u.captive) {
+        for (const loot of fallenGear(u)) leaveOnFloor(s, u.pos, loot, u.id);
+        u.backpack = [];
+      }
       break;
     }
     case 'stunned':
@@ -833,9 +838,9 @@ function stow(s: GameState, u: Unit, loot: Loot): void {
 }
 
 /** Something left on the floor of `pos`, with the next id. */
-function leaveOnFloor(s: GameState, pos: Pos, loot: Loot): void {
+function leaveOnFloor(s: GameState, pos: Pos, loot: Loot, from?: string): void {
   s.droppedCount = (s.droppedCount ?? 0) + 1;
-  (s.dropped ??= []).push({ id: `l${s.droppedCount}`, pos: { ...pos }, loot: { ...loot } });
+  (s.dropped ??= []).push({ id: `l${s.droppedCount}`, pos: { ...pos }, loot: { ...loot }, ...(from ? { from } : {}) });
 }
 
 /** The mission's objective is secured: the timer stops. */

@@ -5,7 +5,7 @@
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
-import { DISMANTLE_BACK, TREE_SUPPLIES, type PieceId } from './base';
+import { DISMANTLE_BACK, FELL_COST, type PieceId } from './base';
 import { FOUND_WEAPONS, NIGHT, THIRD_ACTION_RANK, type RangeTable } from './content';
 import { BAR_GROWTH, DEED_XP, RANK_STEP, SKILLS, VETERANCY, WILL_PER_RANK, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
@@ -48,42 +48,42 @@ export function doomChangeText(level: number, delta: number): string {
 
 /** One line for each word of the world, for tooltips. */
 export const GLOSSARY: Record<string, string> = {
-  Pandemia: 'Empezó hace dos inviernos en el Instituto Galen. Quien se contagia muere en un día y se levanta.',
-  Zombi: 'Un muerto que anda. Va a por el vivo que ve y, si no ve a nadie, hacia el último ruido que oyó.',
-  Corredor: 'Un zombi reciente, todavía ágil. Rápido, y ve de lejos.',
-  Acorazado: 'Fue policía o soldado: el chaleco y el casco le dan blindaje.',
-  Chillón: 'Un zombi que no muerde: grita. Su grito asusta a los que están cerca, llama a todos los zombis que lo oyen y levanta a los muertos.',
-  Hinchado: 'Un zombi lento y lleno de gases. Revienta al morir o al llegar a vosotros: hace daño a quien tenga al lado y puede contagiarlo.',
-  Cuervos: 'Bandas de saqueadores. Viven de robar a otros vivos y atraen hordas con sirenas.',
-  Congregación: 'Una secta que cree que los zombis están salvados. Los guía con campanas y por radio.',
-  Marea: 'Una horda inmensa que sube desde los Llanos de Ceniza. Si llega al Bastión, la campaña está perdida.',
-  Nido: 'Un sitio donde los zombis se juntan y la Marea crece. Quemarlo la hace retroceder.',
-  Sirena: 'La de un coche patrulla: los Cuervos la encienden cerca de quien no les paga, y los muertos acuden. En el valle también suenan ambulancias atascadas y alarmas de naves.',
-  Ruido: 'Cada acción suena: un disparo se oye de doce a veintidós casillas, según el arma; una granada, a veintiséis; un registro, a dos. Lo que lo oye va a mirar. El ruido no os delata: os delata que os vean.',
-  Saqueo: 'Misión de registrar un pueblo: llenad las mochilas y evacuad. No hay reloj, pero llegan zombis por los bordes, y antes cuanto más ruido.',
-  Registrar: 'Una acción dentro de una habitación. Sale lo que haya según el sitio: comida y medicinas en las casas, piezas en las oficinas, comida en las tiendas, de todo en los almacenes. Cada habitación se registra una vez, para toda la escuadra. Hace un poco de ruido.',
-  Cajas: 'Marcadas, como mucho tres por mapa, cada una de un tipo: armas, medicinas, munición o comida. Su marca se ve cuando están a la vista, y se queda en el mapa. Se abren con una acción, al lado, y dan siempre lo suyo.',
-  Mochila: 'Tres cosas por soldado, cuatro con la Chapistería. Se suelta gratis, se pasa a un compañero de al lado con una acción, y las armas y las medicinas se usan ahí mismo. El botín cuenta si vuelve: lo que llevaba un caído se pierde.',
-  Armería: 'Las armas del Bastión: las que se encuentran, las que hace el Taller y las que trae el nivel del Bastión. Cada una es de quien la lleve.',
-  Cargadores: 'Los de repuesto los hace el Taller: cada soldado sale con uno por tanda hecha, hasta tres. Valen para todas las armas; recargar llena primero la principal y luego la pistola. Registrando aparecen más.',
-  Suministros: 'Lo que se saquea y se cambia: sirve para construir, reclutar y equipar.',
-  Medicinas: 'Se cuentan en ✚. El tratamiento de un mordido cuesta 2 (1 con la Enfermería a nivel 2), y una dosis le quita 3 días de cama a un herido. En la misión, las de la mochila curan 3 con una acción. Nunca hay bastantes.',
-  Mordisco: 'El de un zombi puede contagiar. En la misión, el mordido pierde 1 de salud cada turno, y sin una Cuarentena en el Bastión no sube a La Lata. Si vuelve, tiene fiebre y se convierte en 3 días (5 con la Enfermería, uno más por cada mejora de la Cuarentena) si no recibe el tratamiento. Si cae contagiado, se levanta.',
-  Cuarentena: 'La nave donde se aísla a los mordidos, con cerrojo por fuera. Sin ella, un mordido no sube a La Lata y se queda en la misión.',
-  Comida: 'Se cuenta en raciones. Cada día el Bastión gasta una por cada cuatro soldados. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan despacio.',
-  Huerto: 'Bancales, un invernadero y bidones para el agua de lluvia: da raciones cada día, más cuanto más nivel.',
-  Piezas: 'Muelles, motores, tornillería: con ellas el Taller hace armas y armaduras mejores. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.',
-  Noche: 'De noche, lo que está a oscuras solo se ve de cerca, y los muertos tardan más en descubriros; bajo una farola, una bengala o un fuego, todo se ve como de día. Hay más muertos en la calle, pero el botín vale la mitad más.',
-  Enclave: 'Un grupo de supervivientes con el que tenéis contacto por radio. Si sigue vivo, manda suministros.',
-  Rumor: 'Algo que se oye por la radio en una zona. Si lo seguís unos días a la escucha, sabréis qué era.',
-  Encargo: 'Misión secundaria en cadena: varias operaciones y decisiones con un desenlace que se queda.',
-  'Taller de oficios': 'Lo que se aprende fuera, allí se repasa: cada misión llena las barras un poco más.',
-  'La Lata': 'El autobús del Bastión: uno de línea, con la chapa que Teo le soldó por encima. Salió de Atalaya cuando cayó, con la caravana detrás. Lleva a los equipos y los espera en la zona de evacuación.',
-  Evacuar: `Se sale ${BUS.in}, desde la zona de evacuación: lo pide uno y lo acepta el otro. Quien esté fuera cuando sale, se pierde. En la Limpieza, salir es retirarse y la misión se pierde.`,
-  Recluta: 'Superviviente recién llegado, con cuchillo y pistola. Aprende de lo que hace fuera, como todos.',
-  Barras: 'Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo en las misiones. Cada barra llena sube un poco lo suyo y da un punto de habilidad para el tablero.',
-  Tablero: 'Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, siempre al lado de una que ya tenga, y lo comprado es para siempre.',
-  Veteranía: 'Los puntos gastados en el tablero, contados: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.',
+  Pandemia: 'Empezó hace dos inviernos en el Instituto Galen. Quien se contagia muere en un día y se levanta como zombi.',
+  Zombi: 'Va a por el vivo que ve. Si no ve a nadie, va hacia el último ruido que oyó.',
+  Corredor: 'Zombi rápido que ve de lejos.',
+  Acorazado: 'Zombi con chaleco y casco: tiene blindaje.',
+  Chillón: 'Zombi que no muerde: grita. El grito asusta a los soldados cercanos, atrae a los zombis que lo oyen y levanta a los muertos.',
+  Hinchado: 'Zombi lento. Revienta al morir o al llegar a un soldado: hace daño a quien tenga al lado y puede contagiarlo.',
+  Cuervos: 'Bandas de saqueadores armados. Atacan a otros vivos y atraen hordas con sirenas. Los zombis también van a por ellos.',
+  Congregación: 'Secta que cree que los zombis están salvados. Los guía con campanas y por radio.',
+  Marea: 'Horda enorme que sube desde los Llanos de Ceniza. Si llega al Bastión, se pierde la campaña.',
+  Nido: 'Sitio donde se juntan los zombis. Hace crecer la Marea; quemarlo la hace retroceder.',
+  Sirena: 'Mientras suena, atrae a todos los zombis de la zona. Puede ser un coche patrulla, una ambulancia o la alarma de una nave.',
+  Ruido: 'Cada acción hace ruido. Un disparo se oye a entre 12 y 22 casillas, según el arma; una granada, a 26; un registro, a 2. Los enemigos van a ver qué ha sido. El ruido no te descubre: te descubre que te vean.',
+  Saqueo: 'Misión de registrar y volver con el botín. No hay límite de turnos, pero entran zombis por los bordes, y antes cuanto más ruido hagas.',
+  Registrar: 'Una acción dentro de una habitación. Da lo que haya según el sitio: comida y medicinas en las casas, piezas en las oficinas, comida en las tiendas, de todo en los almacenes. Cada habitación se registra una sola vez. Hace un poco de ruido.',
+  Cajas: 'Hasta tres por mapa, cada una de un tipo: armas, medicinas, munición o comida. Su marca queda en el mapa en cuanto se ve. Se abren con una acción, desde al lado, y siempre dan lo suyo.',
+  Mochila: 'Tres huecos por soldado, cuatro con la Chapistería. Soltar es gratis; pasar algo a un soldado de al lado cuesta una acción. Las armas y las medicinas se pueden usar ahí mismo. El botín solo cuenta si vuelve. Lo que llevaba un caído se queda en el suelo, y otro puede recogerlo.',
+  Armería: 'Las armas del Bastión: las encontradas, las que hace el Taller y las que llegan al subir de nivel. Cada una es de quien la lleva.',
+  Cargadores: 'Los de repuesto los hace el Taller: cada soldado sale con uno por tanda hecha, hasta tres. Valen para todas las armas. Recargar llena primero el arma principal y luego la pistola. Registrando se encuentran más.',
+  Suministros: 'Sirven para construir, reparar, subir de nivel, reclutar, equipar y contactar zonas. Se consiguen en las misiones y de los enclaves.',
+  Medicinas: 'Se cuentan en ✚. Tratar a un mordido cuesta 2 (1 con la Enfermería a nivel 2). Una dosis acorta la baja de un herido. En la misión, las de la mochila curan 3 con una acción.',
+  Mordisco: 'El de un zombi puede contagiar. En la misión, el contagiado pierde 1 de salud cada turno y, sin Cuarentena, no puede subir a La Lata. Al volver tiene fiebre: si no se le trata, se convierte. La Enfermería y la Cuarentena dan más tiempo. Si muere contagiado, se levanta.',
+  Cuarentena: 'Sin ella, un mordido no puede subir a La Lata y se queda en la misión.',
+  Comida: 'Se cuenta en raciones. Cada misión son cinco días, y cada día se gasta una ración por cada cuatro soldados. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad.',
+  Huerto: 'Da raciones en cada misión; más cuanto más nivel.',
+  Piezas: 'Con ellas el Taller hace armas y armaduras mejores, y se reponen las trampas. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.',
+  Noche: 'De noche, tus soldados solo ven de cerca. Bajo una farola, una bengala o un fuego se ve como de día. Hasta que te descubren, los enemigos solo te notan de cerca si estás a oscuras. Hay más zombis, y el botín vale la mitad más.',
+  Enclave: 'Grupo de supervivientes con el que hay contacto por radio. Mientras su zona no caiga, manda suministros en cada convoy.',
+  Rumor: 'Algo que se oye por radio en una zona. Si se escucha durante unas misiones, se sabe qué es.',
+  Encargo: 'Cadena de misiones y decisiones con un desenlace que se queda.',
+  'Taller de oficios': 'Cada misión llena más las barras.',
+  'La Lata': `El vehículo que lleva a la escuadra y la espera en la zona de evacuación. Empieza siendo un todoterreno; luego, furgoneta, camión y autobús. Cuanto más grande, más soldados caben.`,
+  Evacuar: `Se sale ${BUS.in} desde la zona de evacuación: lo pide un jugador y lo acepta el otro. Quien esté fuera cuando sale, se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.`,
+  Recluta: 'Superviviente recién llegado, con cuchillo y pistola.',
+  Barras: 'Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo en las misiones. Cada barra llena sube un poco su habilidad y da un punto para el tablero.',
+  Tablero: 'Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, siempre al lado de una que ya tenga. Lo comprado no se pierde.',
+  Veteranía: 'Cuenta los puntos gastados en el tablero: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.',
 };
 
 // ---------------------------------------------------------- enemy files
@@ -100,49 +100,49 @@ export interface EnemyFile {
 /** The Bastion's file on each enemy, for the enemy sheet in combat. */
 export const ENEMY_FILES: Partial<Record<TemplateId, EnemyFile>> = {
   zombie: {
-    what: 'Un muerto que anda. Lo que queda de alguien, sin nada dentro.',
-    does: 'Lento, sin miedo y sin cubrirse. Va a por el vivo más cercano que vea; si no ve a nadie, adonde oyó el último ruido. Muerde cuerpo a cuerpo, y un mordisco de cada cuatro contagia.',
-    tip: 'Uno solo no es nada. Diez, sí. Sin ruido pasan de largo; con ruido, vienen todos.',
+    what: 'El muerto corriente.',
+    does: 'Lento. No se cubre ni tiene miedo. Va a por el vivo más cercano que vea; si no ve a nadie, hacia el último ruido. Muerde cuerpo a cuerpo: uno de cada cuatro mordiscos contagia.',
+    tip: 'Peligroso en grupo. El ruido los atrae.',
   },
   xenoid: {
-    what: 'Un Corredor: un zombi reciente, que aún tiene piernas.',
-    does: 'Corre mucho más que los otros y ve de lejos. Ataca con las uñas, cuerpo a cuerpo, y también contagia, aunque algo menos que un zombi.',
-    tip: 'Llega antes de lo que creéis. Vigilancia en su camino, y que nadie se quede solo.',
+    what: 'Zombi reciente y rápido.',
+    does: 'Corre más que los demás y ve de lejos. Ataca cuerpo a cuerpo y también contagia, algo menos que un zombi.',
+    tip: 'Llega antes de lo que parece: pon vigilancia en su camino.',
   },
   mec: {
-    what: 'Un Acorazado: fue policía o soldado, y conserva el chaleco y el casco.',
-    does: 'Blindaje 1: resta daño a cada golpe que recibe. Aguanta mucho y embiste cuerpo a cuerpo. Es el que más contagia.',
-    tip: 'Los explosivos le quitan el blindaje y la munición perforante lo atraviesa. Que no llegue a vuestro lado.',
+    what: 'Zombi con chaleco y casco.',
+    does: 'Blindaje 1: resta 1 de daño a cada golpe. Aguanta mucho. Es el que más contagia.',
+    tip: 'Los explosivos le quitan el blindaje, y la munición perforante lo atraviesa.',
   },
   sectoid: {
-    what: 'Un Chillón: un zombi que grita.',
-    does: 'No muerde. Su grito desorienta o asusta a los soldados cercanos, y se oye a dieciséis casillas: todo zombi que lo oiga viene. Además, levanta a los muertos que tenga cerca.',
-    tip: 'Primero el Chillón. Cada grito trae más, y cada cadáver a su alcance puede volver a andar.',
+    what: 'Zombi que grita.',
+    does: 'No muerde. Su grito desorienta o asusta a los soldados cercanos y se oye a 16 casillas: atrae a todos los zombis que lo oyen. Levanta a los muertos que tiene cerca.',
+    tip: 'Mátalo primero.',
   },
   bloater: {
-    what: 'Un Hinchado: un cuerpo lleno de gases, a punto de reventar.',
-    does: 'Lento. Al morir o al llegar a un soldado revienta: 3 de daño a quien tenga al lado, y a uno de cada dos lo contagia.',
-    tip: 'Abatidlo de lejos, y nunca junto a los vuestros.',
+    what: 'Zombi lleno de gases.',
+    does: 'Lento. Revienta al morir o al llegar a un soldado: 3 de daño a quien tenga al lado, y contagia a uno de cada dos.',
+    tip: 'Mátalo de lejos, y lejos de tus soldados.',
   },
   trooper: {
-    what: 'Un Saqueador de los Cuervos. Vive de robar a otros vivos.',
-    does: 'Escopeta o fusil de caza, y alguna granada. Se cubre y dispara como una persona.',
-    tip: 'Rompedle la cobertura o buscadle el flanco. Y recordad que sus disparos también hacen ruido.',
+    what: 'Saqueador de los Cuervos.',
+    does: 'Escopeta o fusil de caza, y alguna granada. Se cubre y dispara.',
+    tip: 'Rómpele la cobertura o flanquéalo. Sus disparos también atraen zombis.',
   },
   officer: {
-    what: 'Un Cabecilla: manda un grupo de Cuervos.',
-    does: 'Mejor arma y más aguante que un Saqueador. Aguanta en vigilancia.',
-    tip: 'Sin él, los suyos dudan. Merece el mejor disparo del turno.',
+    what: 'Jefe de un grupo de Cuervos.',
+    does: 'Mejor arma y más aguante que un Saqueador. Usa la vigilancia.',
+    tip: 'Es el más peligroso del grupo: dispárale primero.',
   },
   lancer: {
-    what: 'Un Cazador de los Cuervos: no mata, captura. Los vivos valen más.',
+    what: 'Cuervo que captura en vez de matar.',
     does: 'Red y porra cuerpo a cuerpo: el soldado inmovilizado empieza su siguiente turno con una sola acción.',
-    tip: 'Corre mucho y no necesita línea de tiro. Vigilancia en su camino, y nadie solo.',
+    tip: 'Corre mucho y no necesita línea de tiro. Pon vigilancia en su camino y no dejes a nadie solo.',
   },
   relay: {
-    what: 'Lo que suena: un coche patrulla, una ambulancia o la alarma de una nave.',
-    does: 'No dispara. Tiene salud y blindaje 1, y mientras suene, la zona se llena de zombis.',
-    tip: 'Es el objetivo: que deje de sonar antes de que termine la cuenta atrás. Los explosivos ayudan.',
+    what: 'La alarma: un coche patrulla, una ambulancia o la de una nave.',
+    does: 'No dispara. Tiene salud y blindaje 1. Mientras suena, la zona se llena de zombis.',
+    tip: 'Es el objetivo: hay que callarla antes de que acabe la cuenta atrás. Los explosivos ayudan.',
   },
 };
 
@@ -828,7 +828,7 @@ export function clearAim(terrain: 'rocks' | 'forest' | 'ruins', plot: string): s
 
 /** «Qué hace» for a contact: who answers, what they send and what it opens. */
 export function contactAim(id: RegionId, income: number): string {
-  return `Hablar por radio con ${REGION_LORE[id].ally}: ${income} § al mes mientras su zona no caiga, y se pueden asaltar sus Nidos.`;
+  return `Hablar por radio con ${REGION_LORE[id].ally}: ${income} § en cada convoy mientras su zona no caiga, y se pueden asaltar sus Nidos.`;
 }
 
 /** «Qué hace» for listening to a rumour: what it may turn out to be. */
@@ -1079,7 +1079,7 @@ export const SETTINGS_TEXT = {
   plansAbout: 'Sin el mando, puedes marcar el camino de un soldado. Cuando te llega el mando, lo recorre solo.',
   /** #6: the slider. */
   enemySpeed: 'Velocidad del turno enemigo',
-  enemySpeedAbout: 'Lo deprisa que se ve el turno de los enemigos: cómo se mueven, cuándo aparecen y cuándo os ven.',
+  enemySpeedAbout: 'A qué velocidad se ve el turno enemigo: movimientos, apariciones y detecciones.',
   /** #7: the ping: its line in Controles (an infinitive, like the rest), its button and the button's tooltip, with the keys. */
   pingControls: 'Señalar un sitio unos segundos, para que lo veáis los dos',
   ping: 'Señalar',
@@ -1191,7 +1191,7 @@ export interface PieceText {
 }
 
 export const PIECE_TEXT: Record<PieceId, PieceText> = {
-  caravan: { name: 'Caravana', the: 'la caravana', a: 'una caravana', line: 'Literas para los primeros y el almacén debajo de los asientos. Todo lo demás está por levantar.' },
+  caravan: { name: 'Caravana', the: 'la caravana', a: 'una caravana', line: 'Camas para los primeros soldados y el almacén. No se desmonta.' },
   radio: {
     name: 'Sala de radio', the: 'la Sala de radio', a: 'una Sala de radio',
     line: 'Avisa de los asedios, por dónde y cuántos, y trae misiones y zonas que contactar.',
@@ -1204,7 +1204,7 @@ export const PIECE_TEXT: Record<PieceId, PieceText> = {
     levels: ['Una camilla y un hornillo para hervir el agua.', 'Agua caliente en la sala de curas.', 'Un quirófano de verdad, con lámpara y generador propio.'],
   },
   workshop: { name: 'Taller', the: 'el Taller', a: 'un Taller', line: 'Accesorios y armas más baratos.', levels: ['Un banco de trabajo y las herramientas de Teo.', 'Un torno de verdad.', 'Teo deja de quejarse.'] },
-  garden: { name: 'Huerto', the: 'el Huerto', a: 'un Huerto', line: 'Raciones.', levels: ['Bancales bajo plástico y bidones para el agua de lluvia.', 'Un invernadero de verdad, con estufa.', 'Riego por goteo y semillas de La Vega.'] },
+  garden: { name: 'Huerto', the: 'el Huerto', a: 'un Huerto', line: 'Da raciones en cada misión.', levels: ['Bancales bajo plástico y bidones para el agua de lluvia.', 'Un invernadero de verdad, con estufa.', 'Riego por goteo y semillas de La Vega.'] },
   quarantine: {
     name: 'Cuarentena', the: 'la Cuarentena', a: 'una Cuarentena',
     line: `Sin ella, un mordido no sube ${BUS.to}.`,
@@ -1212,23 +1212,23 @@ export const PIECE_TEXT: Record<PieceId, PieceText> = {
   },
   memorial: {
     name: 'Camposanto', the: 'el Camposanto', a: 'un Camposanto',
-    line: 'Los caídos descansan aquí y salen de la lista del Cuartel; sus nombres se guardan.',
+    line: 'Los caídos descansan aquí y salen de la lista de Soldados; sus nombres se guardan.',
     levels: ['Cruces de pino bajo la nieve, una por cada uno.', 'Una cerca y un banco.', 'Los nombres, grabados en una tabla.'],
   },
   range: { name: 'Campo de tiro', the: 'el Campo de tiro', a: 'un Campo de tiro', line: 'Puntería para todos.', levels: ['Dianas de cartón en una trinchera del pinar.', 'Siluetas de zombi a cincuenta metros.', 'Blancos móviles, con una polea de Teo.'] },
   training: {
     name: 'Centro de entrenamiento', the: 'el Centro de entrenamiento', a: 'un Centro de entrenamiento',
-    line: 'Más soldados por misión, y reclutas que llegan sabiendo más.',
+    line: 'Los reclutas llegan sabiendo más; junto a la caravana, reclutar cuesta menos.',
     levels: ['Un patio despejado y un horario.', 'Una semana de prácticas antes de salir.', 'Alguien que ya ha vuelto de fuera les enseña.'],
   },
   simulation: {
     name: 'Sala de mapas', the: 'la Sala de mapas', a: 'una Sala de mapas',
-    line: 'Más experiencia por misión.',
-    levels: ['Un tablero con los caminos del valle.', 'Mapas de arena con los combates de verdad.', 'Cintas de cada misión, fotograma a fotograma.'],
+    line: 'Las misiones dan más suministros.',
+    levels: ['Un tablero con los caminos del valle.', 'Cada casa registrada, marcada con una chincheta.', 'Las rutas de los Camioneros, y dónde paraban.'],
   },
   garage: {
     name: 'Chapistería', the: 'la Chapistería', a: 'una Chapistería',
-    line: `Las heridas curan antes: ${BUS.name} lleva camilla.`,
+    line: 'Las heridas curan antes.',
     levels: [`${BUS.name} lleva camilla.`, 'Mantas y un botiquín fijo atrás.', `${BUS.name} ya no para a repostar con heridos dentro.`],
   },
   echoes: {
@@ -1236,13 +1236,13 @@ export const PIECE_TEXT: Record<PieceId, PieceText> = {
     line: 'Las barras se llenan más en cada misión.',
     levels: ['Lo que se aprende fuera, aquí se repasa.', 'Más herramientas, y Nwosu repasa las curas.', 'Gente de otros enclaves enseña lo suyo.'],
   },
-  palisade: { name: 'Empalizada', the: 'la empalizada', a: 'una empalizada', line: 'Troncos del pinar, afilados y clavados. Barata, y cede pronto.' },
-  wall: { name: 'Muro', the: 'el muro', a: 'un muro', line: 'Bloques y hormigón. Caro, pero aguanta.' },
+  palisade: { name: 'Empalizada', the: 'la empalizada', a: 'una empalizada', line: 'Barata y débil: cede pronto.' },
+  wall: { name: 'Muro', the: 'el muro', a: 'un muro', line: 'Caro, pero aguanta mucho.' },
   gate: { name: 'Puerta', the: 'la puerta', a: 'una puerta', line: 'Se abre y se cierra con una acción. Cerrada, los muertos tienen que tirarla.' },
-  sandbags: { name: 'Barricada de sacos', the: 'la barricada de sacos', a: 'una barricada de sacos', line: 'Sacos de tierra apilados: cobertura para disparar detrás.' },
-  logs: { name: 'Pila de troncos', the: 'la pila de troncos', a: 'una pila de troncos', line: 'Lo talado, apilado: cobertura baja, y lo más barato.' },
-  tower: { name: 'Torre de vigía', the: 'la torre de vigía', a: 'una torre de vigía', line: 'Una plataforma de troncos a una planta de altura: se ve más y se dispara desde arriba.' },
-  floodlight: { name: 'Foco', the: 'el foco', a: 'un foco', line: 'Alumbra a su alrededor: de noche, lo que tiene cerca se ve como de día.' },
+  sandbags: { name: 'Barricada de sacos', the: 'la barricada de sacos', a: 'una barricada de sacos', line: 'Cobertura para disparar detrás.' },
+  logs: { name: 'Pila de troncos', the: 'la pila de troncos', a: 'una pila de troncos', line: 'Cobertura baja. Lo más barato.' },
+  tower: { name: 'Torre de vigía', the: 'la torre de vigía', a: 'una torre de vigía', line: 'Una planta de altura: más vista, y ventaja de altura al disparar.' },
+  floodlight: { name: 'Foco', the: 'el foco', a: 'un foco', line: 'De noche, alumbra a su alrededor: ahí se ve como de día.' },
   wire: { name: 'Alambre de espino', the: 'el alambre de espino', a: 'un tramo de alambre de espino', line: 'Quien lo cruza va más despacio, vivo o muerto.' },
   mine: { name: 'Mina', the: 'la mina', a: 'una mina', line: 'Estalla una vez, cuando algo la pisa. Se repone con piezas.' },
   spikes: { name: 'Foso con pinchos', the: 'el foso con pinchos', a: 'un foso con pinchos', line: 'Hiere a quien cae dentro. Aguanta unas cuantas veces; luego se repone con piezas.' },
@@ -1269,7 +1269,7 @@ export const BUILD_TEXT = {
   rotate: 'Girar',
   upgrade: 'Mejorar',
   rearm: 'Reponer',
-  fellTip: `Talar: +${TREE_SUPPLIES} suministros, y el sitio queda libre.`,
+  fellTip: `Talar: cuesta ${FELL_COST} suministros, y el sitio queda libre.`,
   dismantleTip: `Desmontar: se recupera ${DISMANTLE_BACK === 0.5 ? 'la mitad' : `el ${Math.round(DISMANTLE_BACK * 100)} %`} de lo que costó, menos si está dañado.`,
   /** The palette's tabs, by PieceKind. */
   tabs: { building: 'Edificios', defence: 'Defensas', trap: 'Automáticas' },
@@ -1287,6 +1287,18 @@ export const BUILD_TEXT = {
   dismantleYes: 'Desmontar',
   dismantleNo: 'Dejarlo',
 };
+
+/** The Bastion's level, bought now (playtest 18/10 #40: suministros and missions done, no experience). */
+export const LEVEL_TEXT = {
+  button: 'Subir de nivel',
+  about: 'Cada nivel del Bastión abre piezas nuevas para construir y el siguiente capítulo de la historia.',
+  top: 'El Bastión ya está en su nivel más alto.',
+};
+
+/** The button's line: «Subir el Bastión al nivel 3: 160 §.» (what blocks it is levelUpBlocker's, in campaign.ts). */
+export function levelUpLine(level: number, cost: number): string {
+  return `Subir el Bastión al nivel ${level}: ${cost} §.`;
+}
 
 /** The mark at the top, where «DÍA n» was (§11.6): «7 SALIDAS», «1 SALIDA», «AÚN SIN SALIR». */
 export function outingsMark(n: number): string {
@@ -1323,7 +1335,7 @@ export function placeHint(piece: PieceId, cost: { supplies: number; parts?: numb
 
 /** By the pointer, felling: «Talar un árbol · +2 §», «Talar 12 árboles · +24 §». */
 export function fellHint(trees: number): string {
-  return `Talar ${trees === 1 ? 'un árbol' : `${trees} árboles`} · +${trees * TREE_SUPPLIES} §`;
+  return `Talar ${trees === 1 ? 'un árbol' : `${trees} árboles`} · ${trees * FELL_COST} §`;
 }
 
 /** A piece under the pointer: «Barricada de sacos · 5/15», «Foso con pinchos · por reponer», «Taller · nivel 2». */
@@ -1385,6 +1397,20 @@ export function buildProposalLine(who: string, piece: PieceId, cost: { supplies:
   return `Propuesta de ${who}: ${PIECE_TEXT[piece].name}, ${buildCostLine(cost).replace(/^Cuesta /, '')}`;
 }
 
+/**
+ * What the rations are for (playtest 18/10 #37), for the top mark's tooltip:
+ * five days a mission, a ration a day for every four soldiers (`perMission`:
+ * dailyRations × DAYS_PER_MISSION).
+ */
+export function rationsHelp(perMission: number): string {
+  return `Cada día se gasta una ración por cada cuatro soldados, y una misión son cinco días: ahora, ${perMission} raciones por misión. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad. Se consiguen en las misiones, en el Huerto y de los enclaves.`;
+}
+
+/** The agenda's line when there is food for less than two missions (`missions`: how many it lasts, 0 or 1). */
+export function rationsLowLine(missions: number): string {
+  return missions >= 1 ? 'Hay raciones para una misión más: traed comida o levantad un Huerto.' : 'No llegan las raciones para la próxima misión: traed comida o levantad un Huerto.';
+}
+
 /** When the next siege comes, in missions (§11.6): «tras la próxima misión», «dentro de 3 misiones». */
 export function inMissions(n: number): string {
   return n <= 1 ? 'tras la próxima misión' : `dentro de ${n} misiones`;
@@ -1420,10 +1446,70 @@ export function siegeWarningShort(missions: number): string {
 }
 
 /** When it comes, and when the base falls: with someone left (to another clearing) or with nobody (the campaign is over). */
+/**
+ * La Lata as it grows (Arturo, 18/10 #45; Lore's story: the bus stayed at
+ * Atalaya, and they fled in Teo's 4×4): the vehicle by `c.vehicle`. Lore
+ * writes the lines; these are the names.
+ */
+export const VEHICLES = [
+  { name: 'Todoterreno', the: 'el todoterreno', a: 'un todoterreno', female: false, line: 'El de Teo, el que tiró de la caravana. Cuatro plazas y el maletero.' },
+  { name: 'Furgoneta', the: 'la furgoneta', a: 'una furgoneta', female: true, line: 'De reparto, con las ventanillas tapadas con chapa.' },
+  { name: 'Camión', the: 'el camión', a: 'un camión', female: false, line: 'De mudanzas: la caja atrás, con bancos y una trampilla.' },
+  { name: 'Autobús', the: 'el autobús', a: 'un autobús', female: false, line: 'El de línea de Atalaya, con la chapa que Teo le soldó. La Lata de verdad.' },
+] as const;
+
+/** A zone's name after «en»: «en el Pantano Gris», «en La Vega». */
+export function inZone(name: string): string {
+  return name.startsWith('El ') ? `en el ${name.slice(3)}` : `en ${name}`;
+}
+
+/** The operation's name: «La furgoneta del Pantano Gris», «El camión de La Vega»; the bus's is always «El autobús de Atalaya». */
+export function vehicleMissionName(tier: number, zone: string): string {
+  if (tier >= 3) return 'El autobús de Atalaya';
+  const the = (VEHICLES[tier] ?? VEHICLES[1]).the;
+  return `${the[0]!.toUpperCase()}${the.slice(1)} ${ofZone(zone)}`;
+}
+
+/** An operation to bring back a better vehicle (#45), a Limpieza: who saw it, where, and that it is ours once the zone is clear. */
+export function vehicleBriefing(tier: number, zone: string): string {
+  if (tier >= 3) return 'El autobús sigue en Atalaya, en la cochera, donde lo dejamos al huir. Desde la cuesta se ve entero. Despejad la zona y La Lata vuelve a ser La Lata.';
+  if (tier === 2) return `Teo ha visto un camión de mudanzas ${inZone(zone)}, con medio depósito. Arranca, dice, si alguien empuja. Despejad la zona: el camión es nuestro.`;
+  return `Teo ha visto una furgoneta de reparto entera ${inZone(zone)}. Las ruedas aguantan. Despejad la zona: la furgoneta es nuestra.`;
+}
+
+const SEATS = ['cero', 'una', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez'];
+
+/** What La Lata is now, said when it is won (`seats`: soldiers it takes): «La Lata ya es una furgoneta: caben seis.» */
+export function vehicleWonLine(tier: number, seats: number): string {
+  const n = SEATS[seats] ?? String(seats);
+  return tier >= 3 ? `La Lata vuelve a ser el autobús: caben ${n}.` : `La Lata ya es ${(VEHICLES[tier] ?? VEHICLES[1]).a}: caben ${n}.`;
+}
+
+/**
+ * What a fallen soldier carried (#49): it stays on the ground, marked with
+ * whose it was, and anyone can search it. Never «caja»: those are the loot's.
+ */
+export function fallenPackLine(who: string): string {
+  return `${who} cae. Su mochila se queda en el suelo, con sus armas.`;
+}
+export function fallenPackMark(who: string): string {
+  return `MOCHILA DE ${who.split(' ')[0]!.toUpperCase()}`;
+}
+export function fallenPackAction(who: string): string {
+  return `Registrar la mochila de ${who.split(' ')[0]}`;
+}
+/** «Mateo recoge lo que llevaba Chiara: un fusil de asalto y dos granadas.» */
+export function fallenPackTakenLine(taker: string, fallen: string, what: string): string {
+  return `${taker} recoge lo que llevaba ${fallen.split(' ')[0]}: ${what}.`;
+}
+
+/** Missions with the living (#47): the dead go for anyone alive, them too. */
+export const LIVING_TIP = 'Los muertos van a por cualquier vivo, también a por ellos, y el tiroteo los atrae.';
+
 export const BASE_SIEGE_TEXT = {
   here: 'Ya están aquí.',
   /** A siege by night (one in three from the second): the squad starts in sight, so the dark only hides the dead from it. */
-  night: 'De noche. A oscuras veréis poco, y ellos os verán como siempre; bajo los focos, se ve como de día.',
+  night: 'Asedio de noche: tus soldados solo ven de cerca, salvo junto a un foco. Los zombis ven como de día.',
   defenders: 'Defienden los sanos. Los heridos y los mordidos se quedan dentro.',
   fallen: 'El Bastión ha caído',
   fallenLine: 'Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la caravana y lo puesto, y vuelven a empezar en otro claro.',
@@ -1542,7 +1628,7 @@ export const PREMISE = {
   lines: [
     'La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
     'Atalaya, la vieja estación militar, cayó en otoño. Los que salimos con vida hemos parado en un claro del pinar, sobre Brena, con una caravana y lo puesto. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.',
-    'Toca volver a sacar La Lata, ese trasto forrado con chapas que tenemos por autocar, y salir a buscar lo que nos hace falta.',
+    'Toca volver a sacar La Lata, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.',
   ],
 };
 
@@ -1661,24 +1747,24 @@ export function floodedZoneNote(level: number): string {
 /** Night missions (docs/ALTURA-Y-NOCHE.md): the tag, the briefing's last line and the debrief's. */
 export const NIGHT_TEXT = {
   label: 'De noche',
-  briefing: 'Iréis de noche: a oscuras veréis poco y los muertos tardarán más en descubriros; bajo una farola o una bengala, todo se ve como de día. Habrá más muertos en la calle, pero lo que traigáis vale la mitad más.',
-  report: 'Volvéis con la primera luz. De noche, el botín y la recompensa valen la mitad más.',
+  briefing: 'De noche: tus soldados solo ven de cerca, salvo bajo una farola, una bengala o un fuego. Hay más zombis, y el botín vale la mitad más.',
+  report: 'Misión de noche: el botín y la recompensa valen la mitad más.',
   /**
    * How the light works (los.ts sightTo, detectionTo), a line each, for the
    * help and the first night: the living see less in the dark; the dead see
    * as ever, but notice the hidden squad from closer unless it stands in light.
    */
   rules: [
-    'De noche, vuestros soldados ven mucho menos: lo que está a oscuras, solo de cerca.',
-    'A la luz se ve como de día: al zombi que está bajo una farola lo veis desde lejos, y al soldado que se pone debajo, también.',
-    'Mientras no os hayan visto, los muertos solo notan de cerca a quien está a oscuras. Cuando ya os han visto, de noche ven igual que de día.',
-    `Las farolas no se apagan. La Bengala ilumina al enemigo que alcanza y lo que tiene alrededor durante ${NIGHT.flare.turns} turnos; el Cóctel molotov y El bidón dejan fuego, que dura ${NIGHT.fire.turns}.`,
+    'De noche, tus soldados solo ven de cerca.',
+    'Bajo una farola, una bengala o un fuego se ve como de día.',
+    'Hasta que te descubren, los enemigos solo te notan de cerca si estás a oscuras. Después, los zombis ven como de día.',
+    `Las farolas no se apagan. La Bengala ilumina al enemigo que alcanza y lo que tiene alrededor durante ${NIGHT.flare.turns} turnos. El Cóctel molotov y El bidón dejan fuego durante ${NIGHT.fire.turns}.`,
   ],
 };
 
 /** A lit tile under the cursor, at night: «A la luz: quien esté aquí, vivo o muerto, se ve desde tan lejos como de día. Se apaga en 2 turnos.» (`turns`: Light.turns; none for a street lamp). */
 export function litNote(turns?: number): string {
-  const lit = 'A la luz: quien esté aquí, vivo o muerto, se ve desde tan lejos como de día.';
+  const lit = 'Iluminado: quien esté aquí se ve desde lejos, como de día.';
   return turns ? `${lit} Se apaga en ${turns} ${turns === 1 ? 'turno' : 'turnos'}.` : lit;
 }
 
@@ -1806,7 +1892,7 @@ export const EXPEDIENTE: ExpedientePage[] = [
     summary: 'La Pandemia lo vació todo. Atalaya cayó en otoño; los que quedan empiezan de cero en un claro del pinar.',
     paragraphs: [
       'Hace dos inviernos llegó la Pandemia. Quien se contagia muere en un día y se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.',
-      'Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en La Lata, el autobús al que Teo le soldó chapa por encima, con la caravana enganchada detrás.',
+      'Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en el todoterreno de Teo, con la caravana enganchada detrás. El autobús se quedó en la cochera de Atalaya, y el nombre de La Lata ha pasado al todoterreno.',
       'Hemos parado en un claro del pinar, sobre Brena. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.',
     ],
     note: 'Lo que entra por la puerta se apunta aquí. — N. A.',
@@ -1924,10 +2010,10 @@ export const STORY: StoryChapter[] = [
     difficulty: 1,
     reward: { credits: 90 },
     briefing:
-      'El consultorio de Brena, el pueblo de abajo, sigue cerrado. Dentro debería seguir el maletín de urgencias: instrumental, sutura, lo que el médico llevaba a las casas. En el campamento curamos con trapos.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Buscad una entrada y traed el maletín.',
+      'El consultorio de Brena, el pueblo de abajo, sigue cerrado. En su nevera quedaba insulina, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Buscad una entrada y traed la insulina.',
     signature: '',
-    item: 'el maletín de urgencias',
-    after: 'El maletín de urgencias ya está en la caravana: pinzas, sutura, un fonendo. Ahora falta quien sepa usarlo.',
+    item: 'la insulina',
+    after: 'La insulina ya está en la caravana, en una caja con nieve. Hay para todo el invierno.',
   },
   {
     title: 'La doctora',

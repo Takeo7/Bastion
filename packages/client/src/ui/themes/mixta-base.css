@@ -208,6 +208,32 @@
   color: #ff8a78;
 }
 
+/* Short of room (the siege's «ASEDIO EN 3 MISIONES» at 1440 px cut the count to «2/1»), the name gives way
+   first, then the cells narrow; the count always shows whole (the name and the rest are in its tooltip, #56). */
+:root[data-ui='mixta'] .strat-doom small {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+:root[data-ui='mixta'] .strat-doom .pips {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+:root[data-ui='mixta'] .strat-doom .pips i {
+  flex: 0 1 12px;
+  min-width: 5px;
+}
+
+/* Up to 1536 px its name is cut half way («INFESTACI» at 1440): only its icon, then. */
+@media (max-width: 1536px) {
+  :root[data-ui='mixta'] .strat-doom small {
+    flex: none;
+    font-size: 0;
+  }
+}
+
 :root[data-ui='mixta'] .strat-player b {
   font-weight: 700;
   color: #fff;
@@ -1266,11 +1292,28 @@
 
 /* ================================================================ cochera */
 
-/* The operation's head in the cochera: La Mula, from the front, at its side. */
+/* The operation's head in the cochera: La Lata, from the front, at its side, as it is now (screen.ts data-vehicle,
+   engine vehicleOf: 0 the todoterreno … 3 the bus; Arte's renders). */
+:root[data-ui='mixta'] .strat {
+  --lata-front: url('/ui/synty/renders/mula-front.webp');
+}
+
+:root[data-ui='mixta'] .strat[data-vehicle='0'] {
+  --lata-front: url('/ui/synty/renders/todoterreno-front.webp');
+}
+
+:root[data-ui='mixta'] .strat[data-vehicle='1'] {
+  --lata-front: url('/ui/synty/renders/furgoneta-front.webp');
+}
+
+:root[data-ui='mixta'] .strat[data-vehicle='2'] {
+  --lata-front: url('/ui/synty/renders/camion-front.webp');
+}
+
 :root[data-ui='mixta'] .strat[data-view='squad'] .briefing-head {
   padding-left: 120px;
   background:
-    url('/ui/synty/renders/mula-front.webp') 16px 50% / 88px auto no-repeat,
+    var(--lata-front) 16px 50% / 88px auto no-repeat,
     var(--m-rivets),
     var(--t-sheet);
 }

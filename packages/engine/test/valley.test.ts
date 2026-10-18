@@ -73,7 +73,7 @@ describe('the valley', () => {
       // The opening mission is presented without the Diario label.
       const story = c.offers.find((x) => x.story === 1)!;
       expect(missionInfo(c, story).kicker).toBeUndefined();
-      expect(missionInfo(c, story).item).toBe('el maletín de urgencias');
+      expect(missionInfo(c, story).item).toBe('la insulina');
     }
     expect(ordinary).toBeGreaterThan(10);
     expect(FACILITIES.simulation.name).toBe('Sala de mapas');
@@ -153,7 +153,7 @@ describe('the Marea', () => {
     expect(c.log[0]!.alert?.title).toMatch(/se retira/);
     expect(c.flooded).toEqual(['na']);
     // From level 4, the Marea by its name.
-    c.xp = LEVEL_XP[3]!;
+    c.level = 4;
     c.doom = 9;
     look(c);
     expect(alerts(doomName(4))).toEqual(titles(4, ['afr', 'me', 'oce', 'sa'], true));

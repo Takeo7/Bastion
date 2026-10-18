@@ -6,7 +6,7 @@ import {
   createCampaign,
   eventDef,
   executeCampaignCommand,
-  gainXp,
+  setBastionLevel,
   migrateCampaign,
   missionInfo,
   regionIncome,
@@ -96,7 +96,8 @@ describe('side quests', () => {
     run(c, { type: 'answerEvent', option: 0 });
     const offer = questOffer(c, 'bells');
     expect(offer).toMatchObject({ kind: 'sabotage', region: 'weu' });
-    expect(offer.expiresDay).toBe(c.day + 8);
+    // Operations don't expire (18/10 #39), a quest's either.
+    expect(offer.expiresDay).toBeNull();
     const flashbangs = c.inventory.flashbang ?? 0;
     fly(c, offer, 'victory');
     expect(c.quests).toHaveLength(0);
@@ -105,12 +106,18 @@ describe('side quests', () => {
     expect(regionIncome(c, 'weu')).toBe(40);
   });
 
-  it('an operation left to expire loses the quest with its consequence', () => {
+  it('an operation lost loses the quest with its consequence; left waiting, it waits (18/10 #39)', () => {
     const c = solo();
     listen(c, 'na');
     const offer = questOffer(c, 'route50');
     expect(missionInfo(c, offer).vipName).toBe('Lola Haskins');
-    advanceUntil(c, () => !!c.questLog.route50);
+    for (let i = 0; i < 6; i++) {
+      c.event = null;
+      advanceTime(c, new Rng(1 + i));
+    }
+    expect(c.questLog.route50).toBeUndefined();
+    expect(c.offers).toContain(offer);
+    fly(c, offer, 'defeat');
     expect(c.questLog.route50?.outcome).toBe('failure');
     expect(regionIncome(c, 'na')).toBe(25);
   });
@@ -118,7 +125,7 @@ describe('side quests', () => {
   it('Lindqvist (quest «ibarra») leads her own squad, and capturing her brings her back scarred', () => {
     const c = solo();
     c.story.done = 1;
-    gainXp(c, LEVEL_XP[2]! - c.xp, new Rng(1));
+    setBastionLevel(c, 3, new Rng(1));
     fly(c, questOffer(c, 'ibarra'), 'victory');
     const hunt = questOffer(c, 'ibarra');
     expect(hunt.kind).toBe('elimination');
@@ -152,7 +159,7 @@ describe('side quests', () => {
   it('the numbers station adds a contact', () => {
     const c = solo();
     c.day = 20;
-    gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
+    setBastionLevel(c, 2, new Rng(1));
     const before = contactCapacity(c);
     fly(c, questOffer(c, 'numbers'), 'victory');
     fly(c, questOffer(c, 'numbers'), 'victory');
@@ -185,7 +192,7 @@ describe('side quests', () => {
   it('turning down a soldier who saw a relative leaves a grudge', () => {
     for (let seed = 0; seed < 60; seed++) {
       const c = solo(seed);
-      gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
+      setBastionLevel(c, 2, new Rng(1));
       c.quests = [];
       c.offers = c.offers.filter((o) => !o.quest);
       for (const s of c.soldiers) s.nickname = 'Mula';
@@ -211,7 +218,7 @@ describe('side quests', () => {
     let found = 0;
     for (let seed = 0; seed < 300 && found < 12; seed++) {
       const c = solo(seed);
-      gainXp(c, LEVEL_XP[1]! - c.xp, new Rng(1));
+      setBastionLevel(c, 2, new Rng(1));
       c.quests = [];
       c.offers = c.offers.filter((o) => !o.quest);
       // Every soldier shares a first name with one of the relatives.

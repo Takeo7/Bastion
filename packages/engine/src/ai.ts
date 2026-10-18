@@ -1,6 +1,6 @@
 import { abilitiesOf, abilityBlocker, abilityTargets, blastTiles, breakable, canTargetTile, meleeTargets, psiChance } from './abilities';
 import { inMeleeReach, previewShot, weaponOf } from './aim';
-import { ABILITIES, isAttack, TEMPLATES } from './content';
+import { ABILITIES, hostileTo, isAttack, TEMPLATES } from './content';
 import { coverAgainst, hasAnyCover } from './cover';
 import { canStandOn, combatants, DIRS8, distance, getUnit, heightAt, inBounds, kindAt, nodeOf, posOf, samePos, storeysApart, unitAt } from './grid';
 import { reachesToSearch } from './loot';
@@ -240,6 +240,14 @@ function headFor(sim: Sim, u: Unit, enemies: Unit[]): Pos[] {
   return enemies.map((e) => e.pos);
 }
 
+/** Whom `u` fights (content.ts hostileTo), able to be fought. */
+function foes(s: GameState, u: Unit): Unit[] {
+  return s.units.filter((t) => t.alive && hostileTo(u, t) && !t.objective && !t.captive);
+}
+
+/** How near one of the dead must be for the living to turn on it. */
+const ZOMBIE_THREAT = 8;
+
 /**
  * One enemy's full turn (also drives mind-controlled soldiers). The living
  * take cover and shoot; the dead have their own (takeZombieTurn).
@@ -253,7 +261,8 @@ export function takeAlienTurn(sim: Sim, u: Unit): void {
   const abilities = abilitiesOf(u);
   const usable = (a: AbilityId) => abilities.includes(a) && !abilityBlocker(s, u, a);
   for (let guard = 0; guard < 6 && u.alive && u.ap > 0 && !sim.over; guard++) {
-    const enemies = combatants(s, 'xcom');
+    // The squad, and the dead it sees close by (18/10 #47): a zombie at hand is a threat too.
+    const enemies = [...combatants(s, 'xcom'), ...foes(s, u).filter((e) => e.team !== 'xcom' && farness(s, u.pos, e.pos) <= ZOMBIE_THREAT && canSee(s, u, e))];
     if (!enemies.length) return;
 
     if (weaponOf(u).clip > 0 && u.ammo <= 0 && usable('reload')) {
@@ -291,7 +300,8 @@ export function takeAlienTurn(sim: Sim, u: Unit): void {
     for (const e of enemies) {
       const p = previewShot(s, u, e);
       if (!p) continue;
-      const value = p.hit + (p.flanked ? 20 : 0) + (e.hp <= dmg ? 15 : 0);
+      // The squad first; a zombie right on them before anyone.
+      const value = p.hit + (p.flanked ? 20 : 0) + (e.hp <= dmg ? 15 : 0) + (e.team === 'xcom' ? 10 : farness(s, u.pos, e.pos) <= 2 ? 30 : 0);
       if (!best || value > best.value) best = { target: e, hit: p.hit, value };
     }
 
@@ -345,7 +355,7 @@ const stride = (u: Unit) => TEMPLATES[u.template].mobility + u.mods.mobility + 1
  */
 export function onlyWalks(s: GameState, u: Unit): boolean {
   if (!TEMPLATES[u.template].undead || abilitiesOf(u).includes('mindspin')) return false;
-  return !combatants(s, 'xcom').some((e) => inMeleeReach(s, u.pos, e.pos) || (farness(s, u.pos, e.pos) <= stride(u) + 1 && canSee(s, u, e)));
+  return !foes(s, u).some((e) => inMeleeReach(s, u.pos, e.pos) || (farness(s, u.pos, e.pos) <= stride(u) + 1 && canSee(s, u, e)));
 }
 
 /** One action's walk toward `goal`, round whatever is in the way; false when it gets no closer. */
@@ -466,7 +476,8 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
   const usable = (a: AbilityId) => abilities.includes(a) && !abilityBlocker(s, u, a);
   const bite = abilities.find((a): a is AttackAbility => ABILITIES[a].target === 'melee' && isAttack(a));
   for (let guard = 0; guard < 6 && u.alive && u.ap > 0 && !sim.over; guard++) {
-    const soldiers = combatants(s, 'xcom');
+    // Any of the living: the squad, and the Saqueadores too (18/10 #47).
+    const soldiers = foes(s, u);
     if (!soldiers.length) return;
     const seen = soldiers.filter((e) => canSee(s, u, e)).sort(byDistance(s, u.pos));
 
@@ -475,7 +486,7 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
       if (usable('mindspin') && sim.alienBudget.psi > 0) {
         // Only at whoever it sees itself: the dead don't tell each other (Arturo, 16/10).
         const victims = abilityTargets(s, u, 'mindspin')
-          .filter((v) => seen.includes(v))
+          .filter((v) => seen.includes(v) && v.team === 'xcom')
           .sort((a, b) => b.rank - a.rank || psiChance(b, s) - psiChance(a, s) || a.id.localeCompare(b.id));
         if (victims.length) {
           sim.alienBudget.psi--;

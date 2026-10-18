@@ -52,12 +52,12 @@ Cada uno tiene tres niveles. Lo de «junto a…» pasa a ser estar al lado en el
 | **Taller** | Accesorios y armas más baratos. | Un banco de trabajo y las herramientas de Teo. | Un torno de verdad. | Teo deja de quejarse. |
 | **Huerto** | Raciones. | Bancales bajo plástico y bidones para el agua de lluvia. | Un invernadero de verdad, con estufa. | Riego por goteo y semillas de La Vega. |
 | **Cuarentena** | Sin ella, un mordido no sube a La Lata. | Una nave aparte, con cerrojo por fuera. | [efecto] | [efecto] |
-| **Camposanto** | Los caídos descansan aquí y salen de la lista del Cuartel. | Cruces de pino bajo la nieve, una por cada uno. | (las de ahora) | (las de ahora) |
+| **Camposanto** | Los caídos descansan aquí y salen de la lista de Soldados. | Cruces de pino bajo la nieve, una por cada uno. | (las de ahora) | (las de ahora) |
 | **Campo de tiro** | Puntería para todos. | Dianas de cartón en una trinchera del pinar. | Siluetas de zombi a cincuenta metros. | Blancos móviles, con una polea de Teo. |
 | **Centro de entrenamiento** | Más soldados por misión; reclutas mejores. | Un patio despejado y un horario. | Una semana de prácticas antes de salir. | Alguien que ya ha vuelto de fuera les enseña. |
 | **Taller de oficios** | Las barras se llenan más en cada misión. | Lo que se aprende fuera, aquí se repasa. | Más herramientas, y Nwosu repasa las curas. | Gente de otros enclaves enseña lo suyo. |
 | **Chapistería** | Las heridas curan antes; La Lata lleva camilla. | La Lata lleva camilla. | Mantas y un botiquín fijo atrás. | La Lata ya no para a repostar con heridos dentro. |
-| **Sala de mapas** | Más experiencia por misión. | Un tablero con los caminos del valle. | Mapas de arena con los combates de verdad. | Cintas de cada misión, fotograma a fotograma. |
+| **Sala de mapas** | Las misiones rinden más suministros: se sabe dónde buscar (ya no hay experiencia del Bastión). | Un tablero con los caminos del valle. | Cada casa registrada, marcada con una chincheta. | Las rutas de los Camioneros, y dónde paraban. |
 
 Lo que se va:
 - la **Brigada de obras**, porque construir es al momento;
@@ -66,7 +66,7 @@ Lo que se va:
 ## Construir (para UI)
 
 - **Botones:** Construir · Talar · Reparar · Desmontar · Girar · Mejorar.
-- **Talar:** «Talar: +2 suministros, y el sitio queda libre.»
+- **Talar** (cuesta, no da; Arturo, 18/10): «Talar: cuesta 3 suministros, y el sitio queda libre.»; junto al puntero, «Talar 12 árboles · 36 §».
 - **Coste:** «Cuesta N § y N piezas». Sin bastante: «Faltan N §» / «Faltan N piezas».
 - **Desmontar:** «Desmontar: se recupera la mitad de lo que costó, menos si está dañado.»
 - **Sitio:** ocupado, «Ahí ya hay algo»; árbol, «Primero hay que talar».

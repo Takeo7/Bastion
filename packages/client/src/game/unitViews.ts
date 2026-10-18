@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { BITE_TAG, canStandOn, coverAt, decorOf, kindAt, PLAYER_COLORS, sexOfPerson, TEMPLATES, type Alarm, type Biome, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { BITE_TAG, canStandOn, coverAt, decorOf, kindAt, PLAYER_COLORS, sexOfPerson, type Alarm, type Biome, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
 import { STOREY, tileToWorld } from './coords';
 import type { Blow, FigurePose, Gear } from './figures';
 import { clipSpeed, CROUCHED, gaitsOf } from './gaits';
@@ -178,15 +179,14 @@ export class UnitViews {
   private bodyTime = 0;
 
   constructor() {
-    // Selection is white, never a player's colour (playtest: a selected soldier looked like Arturo's),
-    // and a dark edge keeps it apart from the owner's ring just inside it.
-    this.selection = new THREE.Mesh(
-      new THREE.RingGeometry(0.55, 0.65, 40).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false }),
-    );
+    // Selection is white, never a player's colour (playtest: a selected soldier looked like Arturo's). One ring
+    // and nothing else round the soldier (playtest 18/10 #28): crisp, in three arcs that turn slowly (tick), on a
+    // thin dark edge that keeps it apart from the ground, snow included.
+    const arcs = [0, 1, 2].map((i) => new THREE.RingGeometry(0.5, 0.58, 24, 1, (i * 2 * Math.PI) / 3, (Math.PI * 2) / 3 - 0.35).rotateX(-Math.PI / 2));
+    this.selection = new THREE.Mesh(mergeGeometries(arcs)!, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false }));
     const edge = new THREE.Mesh(
-      new THREE.RingGeometry(0.49, 0.69, 40).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false }),
+      new THREE.RingGeometry(0.47, 0.61, 48).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
     );
     edge.position.y = -0.003;
     edge.renderOrder = 1;
@@ -301,9 +301,10 @@ export class UnitViews {
         v.rig.root.visible = false;
         continue;
       }
-      // Mind control turns rings and flags hostile.
+      // Mind control turns rings and flags hostile. The squad's own go without (18/10 #28): only the one picked has a ring.
       const color = unitColor(u);
       (v.ring.material as THREE.MeshBasicMaterial).color.set(color);
+      (v.ring.material as THREE.MeshBasicMaterial).visible = u.team !== 'xcom';
       v.flagEl.style.setProperty('--accent', color);
       v.flagEl.classList.toggle('alien', u.team === 'alien');
       v.flagEl.classList.toggle('xcom', u.team === 'xcom');
@@ -311,9 +312,9 @@ export class UnitViews {
       v.rig.root.visible = shown;
       v.flag.visible = shown && u.alive;
       v.pose.crouchTarget = u.hunkered || u.captive ? 1 : 0;
-      // The dead see in a cone (los.ts inViewCone): standing still, the model looks where the engine says,
-      // turning on the spot when that changes (a noise heard); a walk or a bite ends on the same angle.
-      if (u.alive && !v.animating && u.facing !== undefined && TEMPLATES[u.template].undead) {
+      // The enemies see in a cone (los.ts inViewCone, the living too: 18/10 #46): standing still, the model looks
+      // where the engine says, turning on the spot when that changes (a noise heard); a walk or a bite ends on the same angle.
+      if (u.alive && !v.animating && u.facing !== undefined && u.team !== 'xcom') {
         const yaw = yawOf(u.facing);
         if (Math.abs(wrapAngle(yaw - v.pose.yawTarget)) > 0.01) {
           v.pose.yawTarget = yaw;
@@ -568,7 +569,8 @@ export class UnitViews {
 
   tick(dt: number, time: number): void {
     const pulse = 1 + Math.sin(time * 5) * 0.06;
-    this.selection.scale.setScalar(pulse);
+    // The picked one's ring turns (18/10 #28: «en movimiento»); the partner's still breathes.
+    this.selection.rotation.y = -time * 0.9;
     this.partnerSelection.scale.setScalar(2 - pulse);
     // Re-checked every frame: the cutaway follows the camera and the floor in view.
     if (this.cutAway) for (const v of this.views.values()) this.setCut(v, !!v.place.z && this.cutAway(v.place));

@@ -50,6 +50,9 @@ import {
   lootDroppedLine,
   lootGivenLine,
   lootName,
+  fallenPackLine,
+  fallenPackMark,
+  fallenPackTakenLine,
   lootTakenLine,
   medicineLine,
   packFullLine,
@@ -123,6 +126,7 @@ import {
   NIGHT,
   NIGHT_LABEL,
   NIGHT_TEXT,
+  LIVING_TIP,
   litNote,
   NOISE,
   noiseOf,
@@ -303,6 +307,8 @@ const READ_MISS = 0.7;
 const BETWEEN = 0.5;
 /** Within this of where the camera looks, the next enemy needs no camera move: it never goes back and forth. */
 const NEAR_ENOUGH = 5;
+/** The log's colour for enemies fighting each other (18/10 #47): neither ours nor against us. */
+const FEUD_COLOR = '#e8d8c0';
 /**
  * The dead with nobody in reach walk this many times quicker than their gait
  * (playtest 16/10 #6: «que anden más rápido, que es muy lento»), all at once,
@@ -609,6 +615,11 @@ function anEnemy(u: Unit | undefined): string {
   return u ? `${FEMININE[u.template] ? 'una' : 'un'} ${TEMPLATES[u.template].name}` : 'un enemigo';
 }
 
+/** A pod woken by the other enemies (the dead against the living, 18/10 #47): attacked, and not by the squad. */
+function wokenByFoes(e: Extract<GameEvent, { t: 'podActivated' }>): boolean {
+  return e.cause === 'attacked' && !e.unit;
+}
+
 function unitOf(e: GameEvent): string | undefined {
   return 'unit' in e ? (e.unit ?? undefined) : undefined;
 }
@@ -660,6 +671,8 @@ export class Game {
   /** «Evacuar» pressed once, for this soldier: the second press asks (playtest 15/10 #10). */
   private evacArmed: string | null = null;
   private evacArmTimer = 0;
+  /** A fallen soldier's rucksack being taken (takeAll): who takes, and what is left to take. */
+  private packQueue: { unit: string; ids: string[] } | null = null;
   /** A swap under way (docs/FASE8.md §C): once the slot is dropped, this is picked up from the floor. */
   private swapTake: { unit: string; id: string } | null = null;
   /** The next `healed` is a medicine's, not the Grillo's: no drone flies. */
@@ -690,6 +703,8 @@ export class Game {
   private holdAfter = 0.2;
   private visibleAliens = new Set<string>();
   private lastShot: { target: string; result: ShotResult } | null = null;
+  /** Who made the last attack or blast played: whether a hurt enemy was hurt by another (18/10 #47). */
+  private lastAttacker: string | null = null;
   /** Last ability activated, so its follow-up events can be staged (e.g. Restoration's heals). */
   private lastUsed: { unit: string; ability: AbilityId } | null = null;
 
@@ -721,8 +736,16 @@ export class Game {
   private visionCache: { key: string; v: Vision } | null = null;
   /** The campaign, for a soldier's board on its sheet (setCampaign). */
   private campaign: CampaignState | null = null;
-  /** The command has just come to this player: once the events are seen, a planned route is walked (followPlan). */
+  /** The command has just come to this player: once the events are seen, the planned routes are walked (followPlan). */
   private planDue = false;
+  /**
+   * Walking one's plans with the command (playtest 18/10 #24): one after another, each move seen whole, until
+   * none is left that can go. `planSent`, the one last ordered (if it is still there next time, the engine
+   * refused it); `planSkip`, those already said not to reach (said once, kept, passed over).
+   */
+  private following = false;
+  private planSent: string | null = null;
+  private readonly planSkip = new Set<string>();
   /** La Lata left by itself as time ran out (playtest 18/10 #8): the outcome says so. */
   private departedOnTime = false;
   /** «Señalar» pressed: the next click on the map signals that spot (armPing). */
@@ -810,6 +833,7 @@ export class Game {
       onWatchPartner: () => this.watchPartner(),
       onMenu: () => this.hud.setAbilities(this.abilities()),
       onItem: (o) => this.itemOrder(o),
+      onTakeAll: (ids) => this.takeAll(ids),
       onSwap: (take, drop) => this.swapItem(take, drop),
       onToggleSound: () => !this.sfx.toggleMute(),
       onFloor: (dir) => this.stepLevel(dir),
@@ -969,6 +993,8 @@ export class Game {
       mission.objective,
       briefing,
     );
+    // With the living among the dead (18/10 #47), the log says they fight each other.
+    if (s.units.some((u) => u.alive && u.team === 'alien' && !u.objective && !TEMPLATES[u.template].undead)) this.hud.log(LIVING_TIP, FEUD_COLOR);
     // A night mission: the log keeps the rules. No radio in the middle of a mission (playtest 15/10 #8).
     if (s.mission.night) {
       this.hud.log(NIGHT_TEXT.rules.join(' '), '#2a4a7a');
@@ -1051,8 +1077,9 @@ export class Game {
   /** The partner planned a move (or withdrew one, `tile: null`). */
   onPlan(slot: Slot, unit: string, tile: Place | null): void {
     if (slot === this.mySlot) return;
+    // A changed plan counts from when it changed (#24): out, and in again at the end.
+    this.plans.delete(unit);
     if (tile) this.plans.set(unit, { slot, tile });
-    else this.plans.delete(unit);
     this.drawPlans();
     const u = getUnit(this.state, unit);
     if (tile && u) this.hud.log(`${this.playerName(slot)} planea mover a ${u.name}`, PLAYER_COLORS[slot]);
@@ -1062,9 +1089,9 @@ export class Game {
     this.fx.ping(tileToWorld(tile), PLAYER_COLORS[slot], kind === 'enemy');
     // Whose, over it, for 4 s (playtest 18/10 #7: «que se quede 3–5 s»).
     this.overlays.pingTag(tile, this.playerName(slot), PLAYER_COLORS[slot]);
-    this.sfx.command();
+    this.sfx.mark(tileToWorld(tile));
     if (slot !== this.mySlot) {
-      const who = this.players.find((p) => p.slot === slot)?.name ?? 'Tu compañero';
+      const who = this.players.find((p) => p.slot === slot)?.name ?? 'El otro jugador';
       this.hud.log(`${who} marca ${kind === 'enemy' ? 'un enemigo' : 'una posición'}`, PLAYER_COLORS[slot]);
     }
   }
@@ -1249,8 +1276,11 @@ export class Game {
     this.refreshInteractive();
     if (this.planDue) {
       this.planDue = false;
-      this.followPlan();
+      this.following = true;
+      this.planSent = null;
+      this.planSkip.clear();
     }
+    if (this.following) this.followPlan();
   }
 
   /** What an animated event leaves behind: the view, the fog, the HUD, the sightings, and the pause after one's own action. */
@@ -1260,6 +1290,20 @@ export class Game {
     const floorBefore = new Set((this.view.dropped ?? []).map((d) => d.id));
     applyEvent(this.view, item.e);
     const e = item.e;
+    // The next thing of a rucksack being taken (takeAll), while it fits and is still there.
+    if (e.t === 'lootTaken' && this.packQueue?.unit === e.unit) {
+      const q = this.packQueue;
+      const u = getUnit(this.view, e.unit);
+      const next = q.ids.find((id) => this.view.dropped?.some((d) => d.id === id));
+      q.ids = q.ids.filter((id) => id !== next);
+      if (u && next && (u.backpack?.length ?? 0) < (u.packSlots ?? BACKPACK_SLOTS)) this.send({ type: 'item', unit: u.id, action: 'take', id: next });
+      else this.packQueue = null;
+    }
+    // A soldier falls and their rucksack stays on the floor (#49), said once.
+    if (e.t === 'died' && (this.view.dropped ?? []).some((d) => d.from === e.unit && !floorBefore.has(d.id))) {
+      const fallen = getUnit(this.view, e.unit);
+      if (fallen) this.hud.log(fallenPackLine(fallen.name), '#ff8a78');
+    }
     // A find with the backpack full stays on the floor (docs/FASE8.md §C): say so, with «Cambiar».
     if ((e.t === 'searched' || e.t === 'roomSearched') && item.by === this.mySlot && e.loot) {
       const u = getUnit(this.view, e.unit);
@@ -1279,9 +1323,14 @@ export class Game {
     if (e.t === 'turnBegan') {
       const mine = e.team === 'xcom' && (e.command ?? this.mySlot) === this.mySlot;
       for (const [id, plan] of this.plans) if (plan.slot !== this.mySlot || (e.team === 'xcom' && !mine)) this.plans.delete(id);
+      this.following = false;
       if (mine) this.planDue = true;
     } else if (e.t === 'commandPassed' && e.to === this.mySlot) this.planDue = true;
-    else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') this.plans.delete(e.unit);
+    else if (e.t === 'moved' || e.t === 'died' || e.t === 'evacuated') {
+      this.plans.delete(e.unit);
+      // The one ordered went: not to be taken for refused next time.
+      if (this.planSent?.startsWith(`${e.unit}:`)) this.planSent = null;
+    }
     if (item.e.t === 'tileChanged' || item.e.t === 'floorBroken') this.mapView.rebuild(this.view);
     this.refreshView();
     // A weapon taken in hand changes on the figure as the view syncs (unitViews, 0.7 s): seen whole before what follows.
@@ -1320,7 +1369,11 @@ export class Game {
     for (const { e } of this.queue) {
       if (e.t === 'turnBegan') return false;
       if (e.t === 'reinforcementsIncoming' || e.t === 'missionEnded' || e.t === 'concealmentBroken') return true;
-      if (e.t === 'shot' && getUnit(this.view, e.target)?.team === 'xcom') return true;
+      // An attack on one of ours, or on whoever the squad sees (an enemy on another: 18/10 #47).
+      if (e.t === 'shot') {
+        const target = getUnit(this.view, e.target);
+        if (target && this.shownToSquad(target)) return true;
+      }
       const id = unitOf(e);
       const u = id ? getUnit(this.view, id) : undefined;
       if (u && (u.team === 'xcom' || this.shownToSquad(u) || (e.t === 'moved' && e.path.some((p) => this.mapView.isVisible(p.x, p.y))))) return true;
@@ -1397,7 +1450,8 @@ export class Game {
     if (this.view.activeTeam !== 'alien') return;
     if (e.t === 'shot') {
       const shooter = getUnit(this.view, e.unit);
-      if (shooter?.team === 'alien' && (this.shownToSquad(shooter) || getUnit(this.view, e.target)?.team === 'xcom')) this.resultHold = e.result === 'miss' ? READ_MISS : READ_HIT;
+      const target = getUnit(this.view, e.target);
+      if (shooter?.team === 'alien' && (this.shownToSquad(shooter) || (!!target && this.shownToSquad(target)))) this.resultHold = e.result === 'miss' ? READ_MISS : READ_HIT;
     } else if ((e.t === 'explosive' || e.t === 'psi') && this.enemyActor(e)) this.resultHold = READ_HIT;
   }
 
@@ -1422,7 +1476,8 @@ export class Game {
       if (e.t === 'spawned') return e.units.filter((u) => this.mapView.isVisible(u.pos.x, u.pos.y)).map((u) => tileToWorld(u.pos));
       if (e.t !== 'podActivated') return [];
       const pod = v.pods.find((p) => p.id === e.pod);
-      return (pod?.unitIds ?? []).map((id) => getUnit(v, id)).filter((m): m is Unit => !!m?.alive).map((m) => tileToWorld(m.pos));
+      const feud = wokenByFoes(e);
+      return (pod?.unitIds ?? []).map((id) => getUnit(v, id)).filter((m): m is Unit => !!m?.alive && (!feud || this.shownToSquad(m))).map((m) => tileToWorld(m.pos));
     });
     if (points.length && (v.activeTeam === 'alien' || all.some((q) => q.by === this.mySlot))) await this.showEnemy(points);
     const epoch = this.rig.epoch;
@@ -1628,8 +1683,12 @@ export class Game {
         const bite = this.biteTick && target.infected;
         const shot = bite ? null : this.lastShot?.target === e.unit ? this.lastShot.result : null;
         const crit = shot === 'crit';
+        // Enemies fighting each other (18/10 #47): only what the squad sees of it.
+        const from = this.lastAttacker ? getUnit(v, this.lastAttacker) : undefined;
+        const feud = target.team === 'alien' && from?.team === 'alien';
+        if (feud && !this.shownToSquad(target)) return;
         if (e.amount) {
-          this.hud.log(bite ? biteLossLine(target.name) : `${target.name} recibe ${e.amount} de daño${crit ? ' (crítico)' : ''}`, target.team === 'alien' ? '#54d1ff' : '#ff6b5a');
+          this.hud.log(bite ? biteLossLine(target.name) : `${target.name} recibe ${e.amount} de daño${crit ? ' (crítico)' : ''}`, feud ? FEUD_COLOR : target.team === 'alien' ? '#54d1ff' : '#ff6b5a');
         }
         if (!this.shownToSquad(target)) return;
         const chest = this.units.chestPos(target.id);
@@ -1648,7 +1707,12 @@ export class Game {
       }
       case 'died': {
         const u = getUnit(v, e.unit)!;
-        this.hud.log(u.team === 'xcom' ? `${u.name} ha caído en combate` : `${u.name} eliminado`, u.team === 'xcom' ? '#ff6b5a' : '#54d1ff');
+        // One enemy at another's hands (18/10 #47): said where the squad sees it, as what it is.
+        const killer = e.by ? getUnit(v, e.by) : undefined;
+        if (u.team === 'alien' && killer?.team === 'alien') {
+          if (!this.shownToSquad(u) && !this.shownToSquad(killer)) return;
+          this.hud.log(`${capitalize(anEnemy(killer))} acaba con ${anEnemy(u)}.`, FEUD_COLOR);
+        } else this.hud.log(u.team === 'xcom' ? `${u.name} ha caído en combate` : `${u.name} eliminado`, u.team === 'xcom' ? '#ff6b5a' : '#54d1ff');
         if (!this.shownToSquad(u)) return;
         this.sfx.death(u, this.units.chestPos(u.id));
         // The Hinchado bursts as it falls: the blast (the next event) doesn't wait for the body.
@@ -1976,7 +2040,9 @@ export class Game {
         const left = v.dropped?.find((d) => d.id === e.id);
         if (left) {
           this.fx.floatText(this.units.chestPos(u.id), findLabel(left.loot), 'info');
-          this.hud.log(lootTakenLine(u.name, left.loot), '#6dff9a');
+          // A fallen soldier's (#49): whose it was, in Lore's words.
+          const fallen = left.from ? getUnit(v, left.from) : undefined;
+          this.hud.log(fallen ? fallenPackTakenLine(u.name.split(' ')[0]!, fallen.name, lootName(left.loot)) : lootTakenLine(u.name, left.loot), '#6dff9a');
         }
         await wait(0.3);
         return;
@@ -2359,8 +2425,20 @@ export class Game {
       }
       case 'podActivated': {
         const pod = v.pods.find((p) => p.id === e.pod);
-        const members = pod?.unitIds.map((id) => getUnit(v, id)!).filter((m) => m.alive) ?? [];
+        const all = pod?.unitIds.map((id) => getUnit(v, id)!).filter((m) => m.alive) ?? [];
+        // Woken by the other enemies (18/10 #47), not by the squad: no contact, and only those in sight are seen.
+        const feud = wokenByFoes(e);
+        const members = feud ? all.filter((m) => this.shownToSquad(m)) : all;
         if (!members.length) return;
+        if (feud) {
+          for (const m of members) {
+            this.fx.floatText(this.units.chestPos(m.id), '!', 'alert');
+            void this.units.alert(m.id);
+          }
+          this.hud.log(`Vivos y muertos se pelean: ${members.map((m) => m.name).join(', ')}`, FEUD_COLOR);
+          await wait(0.5);
+          return;
+        }
         const center = members.reduce((acc, m) => acc.add(tileToWorld(m.pos)), new THREE.Vector3()).divideScalar(members.length);
         // With others of the same moment (playTogether), the framing is theirs together.
         if (!this.grouped) {
@@ -2425,7 +2503,7 @@ export class Game {
         this.sfx.command();
         if (this.partnerHere()) {
           if (e.to === this.mySlot) this.hud.banner('TU TURNO', 'xcom', 'Tienes el mando: das tú las órdenes');
-          else this.hud.banner(`TURNO DE ${this.playerName(e.to).toUpperCase()}`, 'xcom', this.state.ready[this.mySlot] ? 'Has terminado: juega tu compañero' : 'Mientras, puedes apuntar y planear');
+          else this.hud.banner(`TURNO DE ${this.playerName(e.to).toUpperCase()}`, 'xcom', this.state.ready[this.mySlot] ? `Has terminado: juega ${this.playerName(e.to)}` : 'Mientras, puedes apuntar y planear');
         }
         // To the soldier who plays now: the one in play of whoever takes the command, or their first with actions (#47).
         this.turnCamera(this.turnSoldier(v, e.to));
@@ -2524,6 +2602,7 @@ export class Game {
     const shooter = getUnit(v, e.unit)!;
     const target = getUnit(v, e.target)!;
     this.lastShot = { target: target.id, result: e.result };
+    this.lastAttacker = shooter.id;
     if (!this.shownToSquad(shooter) && !this.shownToSquad(target)) return;
 
     const weapon = attackWeapon(shooter, e.ability);
@@ -2623,6 +2702,7 @@ export class Game {
   ): Promise<void> {
     this.lastShot = null;
     const u = getUnit(this.view, e.unit)!;
+    this.lastAttacker = u.id;
     const def = ABILITIES[e.ability];
     const to = tileToWorld(e.target, 0.15);
     // An enemy's blast nobody sees, thrown from out of sight, costs no time (docs/UX-RITMO.md).
@@ -2831,6 +2911,13 @@ export class Game {
     this.overlays.setBeacons(beacons);
     this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
     this.overlays.setBreakables(this.breakables());
+    // Where a fallen soldier's rucksack lies (#49): «MOCHILA DE CHIARA», once per tile and soldier.
+    const packs = new Map<string, { pos: Place; label: string }>();
+    for (const d of this.view.dropped ?? []) {
+      const who = d.from ? getUnit(this.view, d.from) : undefined;
+      if (who) packs.set(`${d.from}:${d.pos.x},${d.pos.y},${d.pos.z ?? 0}`, { pos: d.pos, label: fallenPackMark(who.name) });
+    }
+    this.overlays.setFallenPacks([...packs.values()]);
     this.overlays.setSmoke(this.view.smoke);
     this.songMarks.setSilences((this.view.silences ?? []).map((z) => ({ at: tileToWorld(z.pos), radius: z.radius })));
     this.songMarks.setOaths(this.view.units.filter((u) => u.alive && (u.oath ?? 0) > 0).map((u) => tileToWorld(u.pos)));
@@ -2852,14 +2939,14 @@ export class Game {
     const show = v.concealed && !v.outcome && !!this.selectedUnit();
     // Not one up on a storey the cutaway hides: its ring would float over the cut (its flag says where it is).
     const watchers = show ? v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && TEMPLATES[a.template].detection > 0 && !this.mapView.isCutAway(a.pos)) : [];
-    // The dead notice in their cone (and at arm's length all round): the ring is a keyhole (Arturo, 17/10).
+    // The enemies notice in their cone (and at arm's length all round): the ring is a keyhole (Arturo, 17/10; the living too, 18/10 #46).
     this.overlays.setDetection(watchers.map((a) => ({ pos: a.pos, radius: this.darkDetection(a), facing: this.lookOf(a) })));
   }
 
   /**
    * What enemy `a` sees from where it stands: the tiles on its floor in its
-   * cone (los.ts inViewCone: the dead see VIEW_CONE ahead and AWARE_RANGE all
-   * round) and in its line of sight, as far as it sees there (sightTo, shorter
+   * cone (los.ts inViewCone: the enemies see VIEW_CONE ahead and AWARE_RANGE
+   * all round, dead or living) and in its line of sight, as far as it sees there (sightTo, shorter
    * in the dark); and, while the squad is hidden, those it would notice a
    * soldier on (detectionTo). Worked out once per enemy and state.
    */
@@ -2880,23 +2967,23 @@ export class Game {
         if (s.concealed && distance(a.pos, p) <= detectionTo(s, a, p)) noticed.push(p);
       }
     }
-    const v: Vision = { pos: a.pos, facing: TEMPLATES[a.template].undead ? a.facing : undefined, range, seen, noticed };
+    const v: Vision = { pos: a.pos, facing: a.facing, range, seen, noticed };
     this.visionCache = { key, v };
     return v;
   }
 
   /**
-   * Where a dead one looks right now, for its cone's edge: its model's turn
+   * Where an enemy looks right now, for its cone's edge: its model's turn
    * (Arte's unitViews.facingNow, 0.6 s on a noise), so the cone turns with it
-   * and never ahead of it; the engine's facing at rest. The living: none.
+   * and never ahead of it; the engine's facing at rest. Without one, none.
    */
   private lookOf(a: Unit): number | undefined {
-    if (!TEMPLATES[a.template].undead || a.facing === undefined) return undefined;
+    if (a.team === 'xcom' || a.facing === undefined) return undefined;
     const now = this.units.facingNow(a.id);
     return Math.round((now ?? a.facing) * 100) / 100;
   }
 
-  /** Every frame: while a dead one in sight is turning, its cones are drawn again as it goes; once more when it stops. */
+  /** Every frame: while an enemy in sight is turning, its cones are drawn again as it goes; once more when it stops. */
   private followTurns(): void {
     const turning = this.view.units.some((a) => {
       if (!a.alive || a.team !== 'alien' || a.facing === undefined || !this.visibleAliens.has(a.id)) return false;
@@ -2981,6 +3068,7 @@ export class Game {
     let text: string;
     switch (e.t) {
       case 'podActivated': {
+        if (wokenByFoes(e)) return;
         const pod = v.pods.find((p) => p.id === e.pod);
         const first = pod?.unitIds.map((id) => getUnit(v, id)).find((m) => m?.alive);
         pos = first?.pos;
@@ -3145,15 +3233,26 @@ export class Game {
 
   // ================================================== planning without the command
 
-  /** Plans a move for `u` (or withdraws it, clicking the same tile again); the partner sees it. */
+  /**
+   * Plans a move for `u` (or withdraws it, clicking the same tile again); the partner sees it. A plan
+   * changed counts from when it changed (#24: they are walked in that order): out, and in at the end.
+   */
   private togglePlan(u: Unit, tile: Place): void {
     const current = this.plans.get(u.id);
-    const withdraw = !!current && samePlace(current.tile, tile);
-    if (withdraw) this.plans.delete(u.id);
-    else this.plans.set(u.id, { slot: this.mySlot, tile });
-    this.net.send({ t: 'plan', unit: u.id, tile: withdraw ? null : tile });
+    if (current && samePlace(current.tile, tile)) return this.withdrawPlan(u);
+    this.plans.delete(u.id);
+    this.plans.set(u.id, { slot: this.mySlot, tile });
+    this.net.send({ t: 'plan', unit: u.id, tile });
     this.drawPlans();
-    this.hud.toast(withdraw ? 'Plan retirado.' : `Plan para ${u.name}: lo ve ${this.playerName(this.state.command)}. Otro clic ahí lo quita.`);
+    this.hud.toast(`Plan para ${u.name}: lo ve ${this.playerName(this.state.command)}. Otro clic ahí lo quita.`);
+  }
+
+  /** Takes `u`'s plan away (the same tile again, or a right click while planning: #25); the partner sees it go. */
+  private withdrawPlan(u: Unit): void {
+    this.plans.delete(u.id);
+    this.net.send({ t: 'plan', unit: u.id, tile: null });
+    this.drawPlans();
+    this.hud.toast('Plan retirado.');
   }
 
   /**
@@ -3180,30 +3279,46 @@ export class Game {
   }
 
   /**
-   * The command has come to this player (playtest 18/10 #3, «Seguir las rutas
-   * planeadas» in Ajustes): the soldier picked, or else the first, with a
-   * route planned walks it with one ordinary move, the engine checking it as
-   * any other; one that no longer reaches it keeps its plan, and it is said.
-   * One at a time: after it, that soldier is in play.
+   * With the command (playtest 18/10 #3, «Seguir las rutas planeadas» in
+   * Ajustes), one's planned routes are walked in the order they were planned
+   * (#24), each with one ordinary move the engine checks as any other, and
+   * the next once that one has been seen whole. One soldier at a time still
+   * (15/10 #9): while another of one's own is in play and the partner still
+   * plays, the next waits, quietly, and goes as soon as it can. One that no
+   * longer reaches its tile keeps its plan, said once, and the next goes.
    */
   private followPlan(): void {
-    if (!graphics().autoPlan || !this.hasCommand() || !this.canAct()) return;
-    const mine = [...this.plans].filter(([id, p]) => p.slot === this.mySlot && getUnit(this.state, id)?.alive);
-    const [id, plan] = mine.find(([unit]) => unit === this.selected) ?? mine[0] ?? [];
-    const u = id ? getUnit(this.state, id) : undefined;
-    // Another of one's own still in play: the plan waits, as it is.
-    if (!u || !plan || u.ap <= 0 || this.waitingFor(u.id)) return;
-    const reach = computeReach(this.state, u, maxMoveCost(u));
-    if (!reach.cost.has(nodeOf(this.state, toPos(plan.tile)))) {
-      const line = planBlockedLine(u.name);
-      this.hud.log(line, PLAYER_COLORS[this.mySlot]);
-      this.hud.toast(line);
-      this.drawPlans();
+    if (!graphics().autoPlan || !this.hasCommand()) {
+      this.following = false;
       return;
     }
-    if (this.selected !== u.id) this.select(u.id, true);
-    this.hud.log(planFollowedLine(u.name), PLAYER_COLORS[this.mySlot]);
-    this.send({ type: 'move', unit: u.id, to: plan.tile });
+    if (!this.canAct()) return;
+    for (const [id, plan] of [...this.plans]) {
+      if (plan.slot !== this.mySlot) continue;
+      const u = getUnit(this.state, id);
+      if (!u?.alive || u.ap <= 0) continue;
+      const key = `${id}:${plan.tile.x},${plan.tile.y},${plan.tile.z ?? 0}`;
+      if (this.planSkip.has(key)) continue;
+      // Another of one's own still in play: this one waits, as it is, and so do those after it.
+      if (this.waitingFor(u.id)) return;
+      // Ordered last time and still here: the engine refused it. Passed over, as one that doesn't reach.
+      const refused = this.planSent === key;
+      const reach = computeReach(this.state, u, maxMoveCost(u));
+      if (refused || !reach.cost.has(nodeOf(this.state, toPos(plan.tile)))) {
+        this.planSkip.add(key);
+        const line = planBlockedLine(u.name);
+        this.hud.log(line, PLAYER_COLORS[this.mySlot]);
+        this.hud.toast(line);
+        this.drawPlans();
+        continue;
+      }
+      if (this.selected !== u.id) this.select(u.id, true);
+      this.hud.log(planFollowedLine(u.name), PLAYER_COLORS[this.mySlot]);
+      this.planSent = key;
+      this.send({ type: 'move', unit: u.id, to: plan.tile });
+      return;
+    }
+    this.following = false;
   }
 
   /** Why an order cannot go out yet: the partner holds the command. */
@@ -3252,7 +3367,7 @@ export class Game {
   }
 
   private playerName(slot: Slot | undefined): string {
-    return this.players.find((p) => p.slot === slot)?.name ?? 'tu compañero';
+    return this.players.find((p) => p.slot === slot)?.name ?? 'el otro jugador';
   }
 
   /**
@@ -3280,7 +3395,7 @@ export class Game {
       return;
     }
     const partner = this.partnerHere();
-    if (!partner) this.hud.toast('Tu compañero no está conectado.');
+    if (!partner) this.hud.toast('El otro jugador no está conectado.');
     else if (this.state.ready[partner.slot]) this.hud.toast(`${partner.name} ya ha terminado el turno.`);
     else if (!busySlots(this.state).has(partner.slot)) this.hud.toast(`A ${partner.name} no le quedan acciones.`);
     else this.send({ type: 'pass' });
@@ -3521,7 +3636,8 @@ export class Game {
           const hand = id as HandAbility;
           const tiles = this.handTiles(hand);
           if (this.handArmed() === hand) this.confirmHand();
-          else if (hand !== 'search' && tiles.length === 1) this.useDoor(hand, tiles[0]!);
+          else if (tiles.length === 1) this.useDoor(hand, tiles[0]!);
+          // Several within reach: armed, to pick one; a click on it searches.
           else this.armHand(hand);
           return;
         }
@@ -3597,8 +3713,11 @@ export class Game {
     this.cancelMode();
   }
 
-  /** A door beside the soldier, opened or closed at once: it costs nothing and can be undone. */
-  private useDoor(id: 'openDoor' | 'closeDoor', tile: Vec2): void {
+  /**
+   * By hand on `tile`, at once: a door opened or closed (free, and it can be undone), or furniture searched
+   * (playtest 18/10 #29: pressing Registrar, or clicking the box, is enough; no second «Abrir»).
+   */
+  private useDoor(id: HandAbility, tile: Vec2): void {
     const u = this.selectedUnit();
     if (!u || !this.canAct()) return;
     if (!this.hasCommand()) {
@@ -3993,7 +4112,7 @@ export class Game {
       const limits = left ? proposalClock(left, false) : undefined;
       return [view('abandonAccept', ABANDON_TEXT.accept, `${ask}. ${ABANDON_TEXT.stakes}`, { limits }), view('abandonRefuse', ABANDON_TEXT.refuse, `${ask}. Seguís en la misión.`, { limits })];
     }
-    const waiting = evacWaiting(this.onlinePartner()?.name ?? 'tu compañero');
+    const waiting = evacWaiting(this.onlinePartner()?.name ?? 'el otro jugador');
     return [view('abandon', ABANDON_TEXT.accept, waiting, { enabled: false, reason: left ? proposalClock(left, true) : waiting })];
   }
 
@@ -4038,13 +4157,13 @@ export class Game {
     if (call?.by === this.mySlot) {
       const partner = this.evacPartner();
       const name = s.mission.kind === 'elimination' ? 'Retirarse' : 'Evacuar';
-      return [view('evac', name, evacWaiting(partner?.name ?? 'tu compañero'), { enabled: false, reason: left ? evacClock(left, true) : evacWaiting(partner?.name ?? 'tu compañero') })];
+      return [view('evac', name, evacWaiting(partner?.name ?? 'el otro jugador'), { enabled: false, reason: left ? evacClock(left, true) : evacWaiting(partner?.name ?? 'el otro jugador') })];
     }
     if (!aboard) return [];
     if (aboard.infected && s.mission.quarantine === false) return [view('evac', s.mission.kind === 'elimination' ? 'Retirarse' : 'Evacuar', BITE_NO_BOARD, { enabled: false, reason: BITE_NO_BOARD })];
     const p = evacPrompt(o, this.evacPartner()?.name ?? null);
     const armed = this.evacArmed === aboard.id;
-    return [view('evac', armed ? `Confirmar: ${p.go}` : p.go, `${p.title}. ${p.text}`, { active: armed, cost: this.evacPartner() ? 'Lo acepta tu compañero' : 'Termina la misión' })];
+    return [view('evac', armed ? `Confirmar: ${p.go}` : p.go, `${p.title}. ${p.text}`, { active: armed, cost: this.evacPartner() ? `Lo acepta ${this.onlinePartner()?.name ?? 'el otro jugador'}` : 'Termina la misión' })];
   }
 
   /** The bar's evacuation, pressed: arm then ask (ours), or answer (the partner's). */
@@ -4250,7 +4369,9 @@ export class Game {
   /** The soldier's backpack and the squad's haul for the sheet: where there is anything to search, or it carries something. */
   private packView(u: Unit): PackView | null {
     const v = this.view;
-    if (TEMPLATES[u.template].team !== 'xcom' || u.template === 'vip' || (!this.hasSpots && !u.backpack?.length)) return null;
+    // Also with nothing carried on a map with nothing to search, if something lies on its tile (a fallen soldier's rucksack: #49).
+    const underfoot = (v.dropped ?? []).some((d) => samePos(d.pos, u.pos));
+    if (TEMPLATES[u.template].team !== 'xcom' || u.template === 'vip' || (!this.hasSpots && !u.backpack?.length && !underfoot)) return null;
     const squad = lootTotals(v.units.filter((o) => o.team === 'xcom' && (o.alive || o.evacuated)).flatMap((o) => o.backpack ?? []));
     const mine = this.commands(u) && u.alive && this.canAct();
     return {
@@ -4260,7 +4381,9 @@ export class Game {
       labels: (u.backpack ?? []).map((l) => findLabel(l)),
       names: (u.backpack ?? []).map((l) => lootName(l)),
       near: v.units.filter((o) => o.id !== u.id && o.alive && o.team === 'xcom' && !o.captive && o.template !== 'vip' && inMeleeReach(v, u.pos, o.pos)).map((o) => ({ id: o.id, name: o.name })),
-      floor: (v.dropped ?? []).filter((d) => samePos(d.pos, u.pos)).map((d) => ({ id: d.id, label: findLabel(d.loot), name: lootName(d.loot), kind: packSlots([d.loot])[0]!.kind })),
+      floor: (v.dropped ?? [])
+        .filter((d) => samePos(d.pos, u.pos))
+        .map((d) => ({ id: d.id, label: findLabel(d.loot), name: lootName(d.loot), kind: packSlots([d.loot])[0]!.kind, from: d.from ? getUnit(v, d.from)?.name : undefined })),
       worn: u.worn ?? [],
       gear: u.gear,
       squad: {
@@ -4282,6 +4405,18 @@ export class Game {
     const u = this.selectedUnit();
     if (!u || !this.canAct()) return;
     this.send({ type: 'item', unit: u.id, ...o });
+    this.refreshStatus();
+  }
+
+  /**
+   * A fallen soldier's rucksack taken (#49): one thing after another, each once the last is in (settle),
+   * while the backpack has room.
+   */
+  private takeAll(ids: string[]): void {
+    const u = this.selectedUnit();
+    if (!u || !this.canAct() || !ids.length) return;
+    this.packQueue = { unit: u.id, ids: ids.slice(1) };
+    this.send({ type: 'item', unit: u.id, action: 'take', id: ids[0]! });
     this.refreshStatus();
   }
 
@@ -4637,9 +4772,12 @@ export class Game {
     window.addEventListener('pointerup', (e) => {
       if (e.button === 2 && this.drag) {
         if (!this.drag.moved) {
-          // A right click (not a drag) on a known enemy opens its file; elsewhere it backs out of aiming.
+          // A right click (not a drag) on a known enemy opens its file; planning, it takes the picked soldier's
+          // plan away (playtest 18/10 #25); elsewhere it backs out of aiming.
           const enemy = this.mode.kind === 'move' && this.hoverTile ? unitAt(this.view, this.hoverTile) : undefined;
+          const planned = this.selectedUnit();
           if (enemy?.team === 'alien' && this.visibleAliens.has(enemy.id)) this.showEnemyFile(enemy);
+          else if (this.mode.kind === 'move' && !this.hasCommand() && planned && this.plans.get(planned.id)?.slot === this.mySlot) this.withdrawPlan(planned);
           else this.cancelMode();
         }
         this.drag = null;
@@ -4911,7 +5049,7 @@ export class Game {
       // A turret is nobody's to pick.
       if (occupant.automaton) return;
       if (this.commands(occupant)) this.select(occupant.id);
-      else this.hud.toast(`${occupant.name} es de tu compañero.`);
+      else this.hud.toast(`${occupant.name} es de la escuadra de ${occupant.owner !== null && occupant.owner !== undefined ? this.playerName(occupant.owner) : 'el otro jugador'}.`);
       return;
     }
     if (!this.canAct() || !u) return;
@@ -4953,7 +5091,7 @@ export class Game {
       this.cancelMode();
       return;
     }
-    // Furniture beside the soldier: the click arms Registrar on it (the next click, or Space, searches).
+    // Furniture beside the soldier: the click searches it (18/10 #29).
     // A closed door beside the soldier: the click opens it (free; playtest 13/10 #2).
     if (this.handTiles('openDoor').some((t) => samePlace(t, tile))) {
       const view = this.abilities().find((a) => a.id === 'openDoor');
@@ -4963,7 +5101,7 @@ export class Game {
     }
     if (this.handTiles('search').some((t) => samePlace(t, tile))) {
       const view = this.abilities().find((a) => a.id === 'search');
-      if (view?.enabled) this.armHand('search', tile);
+      if (view?.enabled) this.useDoor('search', tile);
       else if (view?.reason) this.hud.toast(view.reason);
       return;
     }

@@ -290,19 +290,20 @@ export function canSee(s: GameState, viewer: Unit, target: Unit, viewerPos: Pos 
   return inViewCone(viewer, target.pos, viewerPos) && sightOrigin(s, viewerPos, target.pos, sightTo(s, viewer, target.pos)) !== null;
 }
 
-/** How wide the dead see, in degrees round where they face (Arturo, 17/10: «en cono y no en área»). */
+/** How wide the enemies see, in degrees round where they face (Arturo, 17/10: «en cono y no en área»; the living too, 18/10 #46). */
 export const VIEW_CONE = 120;
 /** Whoever is this close, a dead one notices whatever way it faces. */
 export const AWARE_RANGE = 1.5;
 
 /**
- * Whether `p` lies in `viewer`'s field of view from `from`: the living look
- * all round; the dead only ahead of them, in VIEW_CONE, or right beside them.
- * `facing` overrides the unit's own (a patrol on its way, before its move is
- * written down).
+ * Whether `p` lies in `viewer`'s field of view from `from`: the squad looks
+ * all round; the enemies, dead or living («tienen ojos igual», Arturo 18/10
+ * #46), only ahead of them, in VIEW_CONE, or right beside them. `facing`
+ * overrides the unit's own (a patrol on its way, before its move is written
+ * down). Without a facing, all round.
  */
 export function inViewCone(viewer: Unit, p: Place, from: Pos = viewer.pos, facing = viewer.facing): boolean {
-  if (!TEMPLATES[viewer.template].undead || facing === undefined) return true;
+  if (viewer.team === 'xcom' || facing === undefined) return true;
   const dx = p.x - from.x;
   const dy = p.y - from.y;
   if (Math.hypot(dx, dy) <= AWARE_RANGE) return true;

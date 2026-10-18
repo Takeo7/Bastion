@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { abilityBlocker, canTargetTile, noiseOf } from '../src/abilities';
 import { applyMissionResult, buildSquad, CAMPAIGN_VERSION, createCampaign, executeCampaignCommand, medicineCures, migrateCampaign, type CampaignState } from '../src/campaign';
-import { HORDE, hordePoints, NOISE, TEMPLATES } from '../src/content';
+import { HORDE, hordePoints, hostileTo, NOISE, TEMPLATES } from '../src/content';
 import { decorCode, decorOf } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { broughtBack, rollLoot, roomAt, searchable, searchableTiles, SEARCHABLE } from '../src/loot';
@@ -213,8 +213,11 @@ describe('the dead', () => {
     // Straight down from it is 90° off where it faces: outside the 120° cone.
     expect(canSee(s, side, soldier)).toBe(false);
     expect(canSee(s, beside, soldier)).toBe(true);
-    // The living look all round.
-    expect(canSee(s, addUnit(s, 'h1', 'trooper', 16, 11, { facing: 0 }), soldier)).toBe(true);
+    // The living enemies too: they have eyes all the same (Arturo, 18/10 #46).
+    expect(canSee(s, addUnit(s, 'h1', 'trooper', 16, 11, { facing: 0 }), soldier)).toBe(false);
+    expect(canSee(s, addUnit(s, 'h2', 'trooper', 16, 12, { facing: Math.PI }), soldier)).toBe(true);
+    // The squad still looks all round.
+    expect(canSee(s, addUnit(s, 's2', 'rookie', 4, 12, { facing: Math.PI }), behind)).toBe(true);
   });
 
   it('the dead turn to what they hear, and look the way they walk or strike', () => {
@@ -865,5 +868,50 @@ describe('replication of the new events', () => {
     const r2 = executeCommand(host, { type: 'ability', unit: 's1', ability: 'shoot', target: 'a2' }, ctx(9));
     for (const r of [r1, r2]) if (r.ok) for (const e of r.events) applyEvent(client, e);
     expect(client).toEqual(host);
+  });
+});
+
+describe('the dead and the living fight each other (Arturo, 18/10 #47)', () => {
+  it('the dead are the living\'s enemies, and the other way round; the squad is everyone\'s', () => {
+    const s = field();
+    const soldier = addUnit(s, 's1', 'rookie', 1, 1);
+    const zombie = addUnit(s, 'z1', 'zombie', 5, 5);
+    const raider = addUnit(s, 'r1', 'trooper', 9, 9);
+    const other = addUnit(s, 'z2', 'zombie', 12, 12);
+    expect([hostileTo(zombie, raider), hostileTo(raider, zombie), hostileTo(zombie, soldier), hostileTo(raider, soldier)]).toEqual([true, true, true, true]);
+    expect(hostileTo(zombie, other)).toBe(false);
+  });
+
+  it('one of the dead with a Saqueador beside it and no soldier near bites the Saqueador', () => {
+    const s = field();
+    addUnit(s, 's1', 'rookie', 1, 1);
+    const zombie = addUnit(s, 'z1', 'zombie', 15, 15, { facing: Math.PI });
+    const raider = addUnit(s, 'r1', 'trooper', 14, 15, { facing: 0 });
+    pod(s, 'pz', true, [zombie]);
+    pod(s, 'pr', false, [raider]);
+    s.activeTeam = 'alien';
+    const run = sim(s);
+    run.runAlienTurn();
+    const bites = of(run.events, 'shot').filter((e) => e.unit === 'z1');
+    expect(bites.length).toBeGreaterThan(0);
+    expect(bites.every((e) => e.target === 'r1')).toBe(true);
+    // Woken by the dead, not by the squad: the squad stays hidden.
+    expect(of(run.events, 'concealmentBroken')).toEqual([]);
+  });
+
+  it('a Saqueador on watch shoots one of the dead coming at him', () => {
+    const s = field();
+    addUnit(s, 's1', 'rookie', 1, 1);
+    const raider = addUnit(s, 'r1', 'trooper', 10, 10, { facing: 0, overwatch: true });
+    const zombie = addUnit(s, 'z1', 'zombie', 16, 10, { facing: Math.PI });
+    pod(s, 'pr', true, [raider]);
+    pod(s, 'pz', true, [zombie]);
+    s.concealed = false;
+    s.activeTeam = 'alien';
+    const run = sim(s);
+    run.runAlienTurn();
+    const shots = of(run.events, 'shot').filter((e) => e.unit === 'r1');
+    expect(shots.length).toBeGreaterThan(0);
+    expect(shots.every((e) => e.target === 'z1' && e.reaction)).toBe(true);
   });
 });

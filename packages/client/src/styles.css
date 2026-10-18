@@ -539,11 +539,6 @@ em.in-play {
   height: 8px;
 }
 
-.player.me .name::after {
-  content: ' (tú)';
-  color: var(--ink-soft);
-}
-
 .player .status {
   font-size: 12px;
   color: var(--ink-soft);
@@ -1742,6 +1737,49 @@ em.whose {
   }
 }
 
+/* The objective's card (hud.ts goalDock, playtest 18/10 #52: the objectives always in sight, out of the way):
+   the mission's name, its objective whole, then what counts (turns, a wave, the horde, an alert), over the log.
+   Hidden while the arrival card is open; it shows as that card shrinks into it. */
+.goal-dock {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px 8px;
+  transition: opacity 0.3s ease;
+}
+
+.goal-dock.waiting {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+.hud .goal-dock .mission {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 5px 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.hud .goal-dock :is(.mission-kind, .mission-goal) {
+  flex: 1 1 100%;
+}
+
+.hud .goal-dock .mission-goal {
+  display: block;
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+  text-align: left;
+  line-height: 1.25;
+}
+
 /* The log is typed on a strip of paper; folded, only the last two lines. */
 .log {
   width: 100%;
@@ -2194,6 +2232,18 @@ dl.controls dd {
   opacity: 0;
 }
 
+/* Closed, it shrinks into the objective's card on the right (hud.ts dock, playtest 18/10 #52), scaled round its
+   own centre: once translate(-50%, -50%) is done, that is the box's corner, where transform-origin goes. */
+.mission-intro.docking {
+  transform-origin: 0 0;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    translate 0.5s cubic-bezier(0.5, 0, 0.2, 1),
+    scale 0.5s cubic-bezier(0.5, 0, 0.2, 1),
+    opacity 0.2s ease 0.32s;
+}
+
 /* It waits to be closed (playtest 14/10 #3): the card takes clicks, and so does the screen under it. */
 .mission-intro.open {
   pointer-events: auto;
@@ -2390,17 +2440,6 @@ dl.controls dd {
 
 .uflag.named .uflag-name {
   display: block;
-}
-
-/* The selected soldier: a white pointer over its flag, as neutral as the ring at its feet. */
-.uflag.selected::before {
-  content: '';
-  width: 0;
-  height: 0;
-  border: 8px solid transparent;
-  border-bottom: 0;
-  border-top: 10px solid #fff;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.8));
 }
 
 /* A paper tag, edged with the owner's colour. */
@@ -3526,4 +3565,26 @@ body:has(.strat) .fps-counter {
   transform: translateX(-50%);
   font-size: 15px;
   text-align: center;
+}
+
+/* A fallen soldier's rucksack on the floor (playtest 18/10 #49): their name over it, like a tag tied on. */
+.pack-tag {
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: rgba(12, 14, 15, 0.82);
+  box-shadow: inset 0 -2px 0 #c9b48a;
+  color: #efe6d2;
+  font: 700 11px/1.3 var(--t-font, sans-serif);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.pack-fallen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: 11px;
 }
