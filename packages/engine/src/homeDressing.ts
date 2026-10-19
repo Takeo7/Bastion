@@ -1,7 +1,7 @@
 import { decorOf } from './decor';
 import { DIRS4 } from './grid';
 import { Rng } from './rng';
-import type { Decor, HomeRoom, HomeSite, Level, MedicalDetail, TileKind, Vec2 } from './types';
+import type { Decor, HomeRoom, HomeSite, Level, MedicalDetail, Pos, TileKind, Vec2 } from './types';
 
 /**
  * What lies about in a house (playtest 2026-10-18, #15: «cadáveres, sangre,
@@ -9,11 +9,14 @@ import type { Decor, HomeRoom, HomeSite, Level, MedicalDetail, TileKind, Vec2 } 
  * wear): the dead where they fell, their blood and its trail, papers and
  * books strewn about, clothes off the beds, a chair over, bags left packed
  * by the door, grime along the walls and blood up them. The medical centres'
- * details (types.ts MedicalDetail), drawn the same way. Cosmetic only, on a
- * seed of its own: rooms, cover, objectives and combat rolls are unchanged;
- * never on a doorway's or a ladder's approach, nor where somebody stands.
+ * details (types.ts MedicalDetail), drawn the same way. On a seed of its own:
+ * rooms, objectives and combat rolls are unchanged; never on a doorway's or a
+ * ladder's approach, nor where somebody stands. What stands up (a chair over,
+ * the bags) takes its tile, as cover (Arturo, 19/10: «que ocupen»), where
+ * `strew` lets it (furnishing.ts Furnisher.strew: it closes no way); where it
+ * doesn't, papers lie there instead. Without `strew`, nothing changes the map.
  */
-export function dressHome(site: HomeSite, width: number, tiles: TileKind[], decor: Decor[], levels: Level[], seed: number, reserved: Vec2[] = []): MedicalDetail[] {
+export function dressHome(site: HomeSite, width: number, tiles: TileKind[], decor: Decor[], levels: Level[], seed: number, reserved: Vec2[] = [], strew?: (p: Pos) => boolean): MedicalDetail[] {
   const rng = new Rng((seed ^ 0x484f4d45 ^ (site.x * 40503 + site.y * 977)) >>> 0);
   const details: MedicalDetail[] = [];
   const used = new Set<string>();
@@ -80,7 +83,8 @@ export function dressHome(site: HomeSite, width: number, tiles: TileKind[], deco
     for (const p of floor.slice(0, mess)) {
       if (used.has(key(p.x, p.y, p.z))) continue;
       const pick = rng.next();
-      add(pick < 0.45 ? 'scatteredPapers' : pick < 0.7 && (r.use === 'kitchen' || r.use === 'living' || r.use === 'study') ? 'overturnedChair' : pick < 0.85 && r.use === 'bedroom' ? 'luggage' : 'scatteredPapers', p);
+      const kind = pick < 0.45 ? 'scatteredPapers' : pick < 0.7 && (r.use === 'kitchen' || r.use === 'living' || r.use === 'study') ? 'overturnedChair' : pick < 0.85 && r.use === 'bedroom' ? 'luggage' : 'scatteredPapers';
+      add(kind !== 'scatteredPapers' && strew && !strew(p) ? 'scatteredPapers' : kind, p);
     }
     // Grime along the walls; blood up one in a wrecked house.
     const edges = floor.filter((p) => p.x === r.x || p.y === r.y || p.x === r.x + r.w - 1 || p.y === r.y + r.h - 1);

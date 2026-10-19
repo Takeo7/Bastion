@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { kitModel } from '../strategy/baseKit';
-import { carPartner, decorOf, DIRS4, floorLevels, litMask, type Biome, type DecorKind, type GameState, type Place, type Site, type TileKind } from '@bastion/engine';
+import { carPartner, decorOf, DIRS4, floorLevels, FURNITURE_OF_ITS_OWN, litMask, objectAt, type Biome, type DecorKind, type GameState, type Place, type Site, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
 import { StaticBatch, type Dirty, type UvRect } from './batch';
 import { atlasRect, mapAtlasTexture } from './mapAtlas';
@@ -17,14 +17,14 @@ import { inwards, madeAs, towersOf, wearOf, type Wear } from './siegeDressing';
 import { DRAWN, drawPiece, pieceKey, pieceMap, pieceWear, terrainOf, type PieceMap } from './basePieces';
 import { SnowCover, snowyMission, snowTexture } from './snow';
 import { DroppedView } from './dropped';
-import { furnishBarns, furnishHomes, furnishShops, shopTrade } from './homeFurnishing';
+import { furnishBarns, furnishHomes, furnishOwnTiles, furnishShops, shopTradeIn } from './homeFurnishing';
 import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
 import { EvacBus } from './evacBus';
 import { medicalDetails, medicalWallPatch } from './medicalDetails';
 import { medicalFurniture } from './medicalFurniture';
 import { contactPatch, GroundOcclusion } from './groundAO';
 import { atlasTexture } from './synty';
-import type { AtlasId, PropId, PropSet } from './syntyManifest';
+import { CHARACTER_SCALE, FOOTPRINT_FIT, PROPS, type AtlasId, type PropId, type PropSet } from './syntyManifest';
 import { preloadSyntyProps, syntyProp, syntyPropsLoaded, syntySet } from './syntyProps';
 
 /**
@@ -193,6 +193,27 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'silo':
       // Drawn whole over its 2×2 block (block); what a blast leaves of one is rubble.
       return low ? 'rubble' : null;
+    // What stands on a tile of its own (engine furnishing.ts, Arturo 19/10): homeFurnishing.ts and dressing.ts draw it.
+    case 'armchair':
+    case 'coffeeTable':
+    case 'floorLamp':
+    case 'pottedPlant':
+    case 'nightstand':
+    case 'diningChair':
+    case 'towelRack':
+    case 'coatRack':
+    case 'cafeTable':
+    case 'readingTable':
+    case 'drinksFridge':
+    case 'wheelbarrow':
+    case 'tools':
+    case 'hydrant':
+    case 'mailbox':
+    case 'strewn':
+      return null;
+    case 'part':
+      // Another tile of an object over several (docs/MAPAS.md, phase 1): its anchor's model covers it (MapView thingOf).
+      return null;
   }
 }
 
@@ -214,6 +235,29 @@ const BLOCKS: Partial<Record<DecorKind, TileKind>> = { truck: 'high', container:
 const FOUNTAIN: Partial<Record<DecorKind, TileKind>> = { fountain: 'low', fountainCorner: 'low', statue: 'high' };
 /** The kind a block is joined by: a fountain's pieces are one. */
 const blockKind = (kind: DecorKind | undefined): DecorKind | undefined => (kind && FOUNTAIN[kind] ? 'fountain' : kind);
+
+/**
+ * What an object over several tiles stands on (docs/MAPAS.md, phase 1: an anchor and its parts), as it was made:
+ * a siren's car is full cover, the rest (a car, the furniture) low.
+ */
+const MADE: Partial<Record<DecorKind, TileKind>> = { sirenCar: 'high' };
+
+/**
+ * An object over several tiles of the new form (an anchor and its parts): its kind and facing, its anchor and
+ * tiles, their bounds, whether all of it still stands as it was made, and the tile under its middle that draws it.
+ */
+interface Thing {
+  kind: DecorKind;
+  facing: number;
+  anchor: number;
+  tiles: number[];
+  x0: number;
+  y0: number;
+  w: number;
+  h: number;
+  whole: boolean;
+  draw: number;
+}
 
 /** A block: its tiles' bounds, the way it faces, whether all of it still stands, and the tile that draws it (under its middle). */
 interface Block {
@@ -638,6 +682,25 @@ export class MapView {
       for (const part of syntyProp(id) ?? []) box.union((part.geometry.boundingBox ?? (part.geometry.computeBoundingBox(), part.geometry.boundingBox!)).clone().applyMatrix4(part.matrix));
       return box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
     };
+    /** The prop of `set` that `pick` (in [0, 1)) chooses, as addSynty picks it. */
+    const pickOf = (set: PropSet, pick: number): PropId => {
+      const ids = syntySet(set);
+      return ids[Math.min(ids.length - 1, Math.floor(pick * ids.length))]!;
+    };
+    /**
+     * Prop `id` over an object of several tiles (FOOTPRINT_FIT, docs/MAPAS.md phase 1): at (x, base, z), turned
+     * `yaw`, its longest side as long as said there, the rest with it (a stretched one's × CHARACTER_SCALE), narrowed
+     * by `thin`.
+     */
+    const fitted = (id: PropId, x: number, base: number, z: number, yaw: number): THREE.Matrix4 => {
+      const want = FOOTPRINT_FIT[id];
+      const a = PROPS[id] as { fit?: number; stretch?: boolean };
+      if (!want || !a.fit) return placed(x, base, z, 1, 1, 1, yaw);
+      const along = want.fit / a.fit;
+      const across = (a.stretch ? CHARACTER_SCALE : along) * (want.thin ?? 1);
+      const size = sizeOf(id);
+      return size.x >= size.z ? placed(x, base, z, along, across, across, yaw) : placed(x, base, z, across, across, along, yaw);
+    };
     /**
      * A special loot box (docs/FASE8.md §B) on tile i, turned `yaw`: each kind
      * its own shape and colour from afar, its lid or what is in it on top;
@@ -760,12 +823,15 @@ export class MapView {
       const cz = b.y0 + b.h / 2;
       const r = hash(b.x0, b.y0, 31);
       const yaw = turnTo(b.facing) * (Math.PI / 2);
+      // A lorry of 2 × 6 or a tractor of 2 × 3 (docs/MAPAS.md, phase 1) at its size; one of 2 × 4, a block of before, as it was.
+      const long = Math.max(b.w, b.h);
       switch (kind) {
-        case 'truck':
+        case 'truck': {
           // In a barn, its old tractor (playtest 18/10, #53); elsewhere a lorry's wreck.
-          if (buildings.plan.buildings[buildings.plan.owner[b.anchor]!]?.kind === 'barn') addSyntyId('tractor', placed(cx, base, cz, 1, 1, 1, yaw));
-          else addSynty('truck', r, placed(cx, base, cz, 1, 1, 1, yaw));
+          const id = buildings.plan.buildings[buildings.plan.owner[b.anchor]!]?.kind === 'barn' ? 'tractor' : pickOf('truck', r);
+          addSyntyId(id, long === (id === 'tractor' ? 3 : 6) ? fitted(id, cx, base, cz, yaw) : placed(cx, base, cz, 1, 1, 1, yaw));
           break;
+        }
         case 'container':
           addSynty('container', r, placed(cx, base, cz, 1, 1, 1, yaw));
           break;
@@ -787,6 +853,72 @@ export class MapView {
           break;
       }
     };
+    /** The objects over several tiles found so far, by place (every tile of one points at it; null: none of the new form). */
+    const things = new Map<number, Thing | null>();
+    /** The object of the new form (an anchor and its parts) tile i of the storey being dressed is (part of), or null. */
+    const thingOf = (i: number): Thing | null => {
+      const known = things.get(placeBase + i);
+      if (known !== undefined) return known;
+      const o = objectAt(decorNow, s.width, i);
+      // Only an anchor and its parts: an old car's halves and the blocks of a kind are drawn their own ways.
+      if (!o || o.tiles.length < 2 || decorOf(decorNow[o.tiles[1]!])?.kind !== 'part') {
+        things.set(placeBase + i, null);
+        return null;
+      }
+      const xs = o.tiles.map((t) => t % s.width);
+      const ys = o.tiles.map((t) => Math.floor(t / s.width));
+      const x0 = Math.min(...xs);
+      const y0 = Math.min(...ys);
+      const w = Math.max(...xs) - x0 + 1;
+      const h = Math.max(...ys) - y0 + 1;
+      const made = MADE[o.kind] ?? 'low';
+      const t: Thing = { ...o, x0, y0, w, h, whole: o.tiles.every((j) => tilesNow[j] === made), draw: Math.floor(y0 + h / 2) * s.width + Math.floor(x0 + w / 2) };
+      for (const j of o.tiles) things.set(placeBase + j, t);
+      return t;
+    };
+    /** An object over several tiles, one model over all of them at its size (FOOTPRINT_FIT), the way it faces. */
+    const drawThing = (t: Thing, base: number) => {
+      const cx = t.x0 + t.w / 2;
+      const cz = t.y0 + t.h / 2;
+      const ax = t.anchor % s.width;
+      const ay = Math.floor(t.anchor / s.width);
+      const yaw = turnTo(t.facing) * (Math.PI / 2);
+      const d = DIRS4[t.facing]!;
+      switch (t.kind) {
+        case 'carFront': {
+          // Searched (its boot or its glovebox, in a mission of before), it's the one with the boot lid up.
+          const id = t.tiles.some((j) => searched.has(placeBase + j)) ? 'carOpen' : pickOf('carFront', hash(ax, ay, 1));
+          addSyntyId(id, fitted(id, cx, base, cz, yaw));
+          const nose = (FOOTPRINT_FIT[id]?.fit ?? 2.95) / 2 - 0.055;
+          if (hash(ax, ay, 9) < 0.25) headlights.push({ x: cx + d.x * nose, y: base + 0.32, z: cz + d.y * nose, dx: d.x, dz: d.y });
+          break;
+        }
+        case 'bed': {
+          // A double one over 2 × 2.
+          const id: PropId = t.w === t.h ? 'bedDouble' : 'bed';
+          addSyntyId(id, fitted(id, cx, base, cz, yaw));
+          break;
+        }
+        case 'hospitalBed': {
+          // A clinic's bed stripped or with a body under its sheet is its detail's (medicalDetails), not Synty's.
+          if (bedVariants.has(placeBase + t.anchor)) break;
+          addSyntyId('hospitalBed', fitted('hospitalBed', cx, base, cz, yaw));
+          // The slim drip by its head, within its tiles.
+          addSyntyId('ivStand', placed(cx, base, cz, 1, 1, 1, yaw).multiply(new THREE.Matrix4().makeTranslation(0.45, 0, 0.6)), true);
+          break;
+        }
+        case 'gurney':
+          addSyntyId('gurney', fitted('gurney', cx, base, cz, yaw));
+          break;
+        case 'sofa':
+        case 'table':
+        case 'bathtub': {
+          const id = pickOf(t.kind, hash(ax, ay, 1));
+          addSyntyId(id, fitted(id, cx, base, cz, yaw));
+          break;
+        }
+      }
+    };
     /**
      * Draws the cover on tile i as its decor hint says, if it has one for what
      * the tile is now; false to fall back to the biome's random props.
@@ -795,6 +927,17 @@ export class MapView {
       const look = decorOf(decorNow[i]);
       // The bus's bay: La Mula stands on it whole (placeBus), nothing else.
       if (look?.kind === 'bus') return true;
+      // On a tile of its own (engine furnishing.ts): drawn as a house's, a shop's or the street's (homeFurnishing.ts,
+      // dressing.ts), or by its detail (what lies about and stands up, a chair over), nothing else here.
+      if (look && FURNITURE_OF_ITS_OWN.has(look.kind)) return true;
+      // An object over several tiles (docs/MAPAS.md, phase 1): one model over all of them, from the tile under its middle,
+      // while all of it stands as it was made (a siren's car: its rig draws it, SirenRig); what a blast left of one, rubble.
+      const thing = look ? thingOf(i) : null;
+      if (thing || look?.kind === 'part') {
+        if (!thing?.whole) addProp(i, 'rubble', x + 0.5, base, y + 0.5, hash(x, y, 1), 0, 2);
+        else if (i === thing.draw && thing.kind !== 'sirenCar') drawThing(thing, base);
+        return true;
+      }
       // The siren's car's nose: the car is the siren's own (SirenRig), nothing else here.
       if (look?.kind === 'sirenCar' && kind === 'high') return true;
       // A lorry, a container, a water tower, a log pile: one model over its block while all of it stands.
@@ -931,7 +1074,7 @@ export class MapView {
       // office's; a shop's or a warehouse's are shelving, but in a bookshop or a library (three in ten), all books.
       if ((look.kind === 'shelf' || look.kind === 'cabinet') && kind === 'high') {
         const bd = buildings.plan.buildings[buildings.plan.owner[i]!];
-        const books = !!bd && (bd.kind === 'house' || bd.kind === 'office' || (bd.kind === 'shop' && shopTrade(bd.look) === 'books') || (bd.kind === 'hall' && bd.look < 0.3));
+        const books = !!bd && (bd.kind === 'house' || bd.kind === 'office' || (bd.kind === 'shop' && shopTradeIn(s, bd) === 'books') || (bd.kind === 'hall' && bd.look < 0.3));
         const id: PropId =
           look.kind === 'shelf' ? (books ? ((bd!.look * 7) % 1 < 0.5 ? 'bookshelf' : 'bookshelf2') : 'shelfHigh') : bd?.kind === 'house' ? 'cabinet' : pick < 0.5 ? 'officeCabinet' : 'cabinet';
         addSyntyId(id, placed(cx, base, cz, 1, 1, 1, turn * (Math.PI / 2)));
@@ -945,11 +1088,11 @@ export class MapView {
         // The slim drip stays within this bed's cover tile.
         addSyntyId('ivStand', at.multiply(new THREE.Matrix4().makeTranslation(0.31, 0, 0.22)), true);
       }
-      // A chair at each desk, pushed back a little (cosmetic: it stands on the floor in front).
+      // A chair at each desk, pushed in under it: on its tile, not on the floor in front, where one walks (Arturo, 19/10).
       if (look.kind === 'desk' && kind === 'low') {
         const f = DIRS4[look.facing]!;
         const yaw = Math.atan2(f.x, f.y) + Math.PI + (hash(x, y, 8) - 0.5) * 0.6;
-        addSyntyId('officeChair', placed(cx + f.x * 0.62, base, cz + f.y * 0.62, 1, 1, 1, yaw));
+        addSyntyId('officeChair', placed(cx + f.x * 0.3, base, cz + f.y * 0.3, 1, 1, 1, yaw));
       }
       if (look.kind === 'fence' || look.kind === 'gatePost') {
         DIRS4.forEach((d, k) => {
@@ -1066,8 +1209,8 @@ export class MapView {
           if (stage === 2) addSyntyId('rubble1', placed(cx - into.x * 0.45, base, cz - into.z * 0.45, 0.4, 0.35, 0.4, hash(x, y, 120) * Math.PI * 2));
         }
         if (isWallLike(kind)) continue;
-        // The base's pieces are drawn whole above.
-        if (pieces && pieces.at[i]! >= 0 && DRAWN.has(pieces.spots[pieces.at[i]!]!.piece.piece)) continue;
+        // The base's pieces are drawn whole above, and the Bastion's yard with it.
+        if (pieces && ((pieces.at[i]! >= 0 && DRAWN.has(pieces.spots[pieces.at[i]!]!.piece.piece)) || pieces.yard.has(i))) continue;
         if (siege && kind === 'floor' && e === 0) {
           const was = madeAs(s, x, y);
           if (was === 'b') sandbags(i, x, y, base, 3);
@@ -1158,7 +1301,12 @@ export class MapView {
       const wallX = d.x - normal.x, wallY = d.y - normal.y;
       if (isWall && st?.tiles[wallY * s.width + wallX] !== 'wall') continue;
       floor.building = buildings.plan.owner[i]!; floor.level = d.z;
-      const at = placed(d.x + 0.5, d.z * STOREY + d.height, d.y + 0.5, 1, 1, 1, turnTo(d.facing) * Math.PI / 2);
+      // On a bed over two tiles (docs/MAPAS.md, phase 1), its stripped frame or its body over the whole of it, the screen along it.
+      const bed = (isBed || d.kind === 'privacyScreen') && st?.decor ? objectAt(st.decor, s.width, i) : null;
+      const long = bed && bed.tiles.length === 2 ? { x: (bed.tiles[0]! % s.width + bed.tiles[1]! % s.width) / 2, y: (Math.floor(bed.tiles[0]! / s.width) + Math.floor(bed.tiles[1]! / s.width)) / 2 } : null;
+      const at = long
+        ? placed(long.x + 0.5, d.z * STOREY + d.height, long.y + 0.5, isBed ? 1.5 : 1, isBed ? 1.15 : 1, isBed ? 1.75 : 1.9, turnTo(d.facing) * Math.PI / 2)
+        : placed(d.x + 0.5, d.z * STOREY + d.height, d.y + 0.5, 1, 1, 1, turnTo(d.facing) * Math.PI / 2);
       if (d.kind === 'corpseCivilian' || d.kind === 'corpseStaff') { addSyntyId(d.kind, at); continue; }
       if (!kit.clinical) {
         kit.clinical = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }));
@@ -1177,14 +1325,17 @@ export class MapView {
         color: [part.color.r, part.color.g, part.color.b], aFloor: [floor.building + 1, floor.level],
         ...(isWall ? { aMedicalWall: outside ? [-normal.x, -normal.y] : [0, 0] } : {}),
       }, !flat && !isWall);
-      if (d.kind === 'coveredBed') addSyntyId('ivStand', at.clone().multiply(new THREE.Matrix4().makeTranslation(-0.31, 0, 0.22)));
+      if (d.kind === 'coveredBed') {
+        const by = long ? placed(long.x + 0.5, d.z * STOREY + d.height, long.y + 0.5, 1, 1, 1, turnTo(d.facing) * Math.PI / 2).multiply(new THREE.Matrix4().makeTranslation(-0.45, 0, 0.6)) : at.clone().multiply(new THREE.Matrix4().makeTranslation(-0.31, 0, 0.22));
+        addSyntyId('ivStand', by);
+      }
     }
     decorNow = decor;
     tilesNow = s.tiles;
     placeBase = 0;
 
     // What a house's rooms have besides their cover (playtest 18/10, #36): cosmetic, on clear floor only, fading with its storey.
-    for (const f of [...furnishHomes(s), ...furnishShops(s, buildings.plan.buildings), ...furnishBarns(s, buildings.plan.buildings)]) {
+    for (const f of [...furnishHomes(s), ...furnishShops(s, buildings.plan.buildings), ...furnishBarns(s, buildings.plan.buildings), ...furnishOwnTiles(s)]) {
       const i = f.y * s.width + f.x;
       if (area && !area[i]) continue;
       const tiles = f.z ? s.levels?.[f.z - 1]?.tiles : s.tiles;
@@ -1361,6 +1512,14 @@ export class MapView {
     if (this.pieces) for (const place of [...touched]) {
       const k = this.pieces.at[place % (s.width * s.height)] ?? -1;
       if (k >= 0) touched.push(this.pieces.spots[k]!.anchor);
+    }
+    // An object over several tiles (docs/MAPAS.md, phase 1) is drawn from its middle: all of it.
+    const area = s.width * s.height;
+    for (const place of [...touched]) {
+      for (const decor of [s.decor, ...(s.levels ?? []).map((l) => l.decor)]) {
+        const o = decor ? objectAt(decor, s.width, place % area) : null;
+        if (o && o.tiles.length > 1) touched.push(...o.tiles);
+      }
     }
     const chunks = new Set<string>();
     for (const place of touched) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from '../src/grid';
-import { carPartner, decorOf } from '../src/decor';
+import { anchorOf, decorOf, FOOTPRINT, objectTiles } from '../src/decor';
 import { GEN_SIZE, generateLayout, type MissionLayout } from '../src/mapgen';
 import { roomAt } from '../src/loot';
 import { computeReach, stepCost } from '../src/path';
@@ -271,13 +271,15 @@ describe('procedural maps', () => {
           kinds.add(look.kind);
           // A building's stairs are a ladder tile (docs/FASE6-PLAN.md); everything else dressed is cover.
           expect(look.kind === 'stairs' ? ['ladder'] : ['low', 'high'], `${label}: ${look.kind} on ${l.tiles[i]}`).toContain(l.tiles[i]);
-          if (look.kind === 'carFront' || look.kind === 'carRear') expect(carPartner(l.decor!, l.width, i), `${label}: half a car`).toBeGreaterThanOrEqual(0);
+          // A car whole, over its three tiles (docs/MAPAS.md, phase 1); every other tile of an object leads to its anchor.
+          if (look.kind === 'carFront') expect(objectTiles(l.decor!, l.width, i).length, `${label}: a car in pieces`).toBe(FOOTPRINT.car[1]);
+          if (look.kind === 'part') expect(anchorOf(l.decor!, l.width, i), `${label}: a part of nothing`).toBeGreaterThanOrEqual(0);
         });
         // Everything on the ground is dressed; only rooftop parapets are left to the client.
         const plain = l.tiles.filter((t, i) => (t === 'low' || t === 'high') && !l.decor![i] && l.elev[i] === 0).length;
         expect(plain, label).toBe(0);
       }
-      const expected = { city: ['carFront', 'streetTree', 'shelf', 'desk', 'fountain'], wilds: ['fence', 'gatePost', 'hay', 'tree', 'bush', 'rock'], facility: ['shelf', 'machine', 'container', 'pallets', 'drums', 'truck', 'silo', 'carRear'] }[biome];
+      const expected = { city: ['carFront', 'streetTree', 'shelf', 'desk', 'fountain'], wilds: ['fence', 'gatePost', 'hay', 'tree', 'bush', 'rock'], facility: ['shelf', 'machine', 'container', 'pallets', 'drums', 'truck', 'silo', 'carFront'] }[biome];
       for (const k of expected) expect(kinds, `${biome}: ${k}`).toContain(k);
     }
     // The mission keeps the hints; hand-made maps have none.
@@ -348,10 +350,9 @@ describe('the scenarios (playtest 2026-10-14, #25)', () => {
       const n = counts(road);
       expect(road.site).toBe('roadside');
       for (const k of ['truck', 'waterTower', 'sign', 'tank', 'counter']) expect(n[k] ?? 0, `roadside ${seed}: ${k}`).toBeGreaterThan(0);
-      // A lorry is 2 × 4, a water tower 2 × 2: blocks that never touch another of their kind.
-      for (const [k, size] of [['truck', 8], ['waterTower', 4]] as const) {
-        for (const a of areas(road, (i) => kindAt(road, i) === k)) expect(a.n, `roadside ${seed}: ${k}`).toBe(size);
-      }
+      // A lorry is 2 × 6 where it fits, else 2 × 4 (docs/MAPAS.md, phase 1), a water tower 2 × 2: blocks that never touch another of their kind.
+      for (const a of areas(road, (i) => kindAt(road, i) === 'truck')) expect([8, 12], `roadside ${seed}: truck`).toContain(a.n);
+      for (const a of areas(road, (i) => kindAt(road, i) === 'waterTower')) expect(a.n, `roadside ${seed}: waterTower`).toBe(4);
       const estate = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [3, 3], seed, site: 'industrial' });
       const m = counts(estate);
       expect(m.container ?? 0, `industrial ${seed}`).toBeGreaterThanOrEqual(10);

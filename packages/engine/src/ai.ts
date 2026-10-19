@@ -2,7 +2,7 @@ import { abilitiesOf, abilityBlocker, abilityTargets, blastTiles, breakable, can
 import { inMeleeReach, previewShot, weaponOf } from './aim';
 import { ABILITIES, hostileTo, isAttack, TEMPLATES } from './content';
 import { coverAgainst, hasAnyCover } from './cover';
-import { canStandOn, combatants, DIRS8, distance, getUnit, heightAt, inBounds, kindAt, nodeOf, posOf, samePos, storeysApart, unitAt } from './grid';
+import { canStandOn, combatants, DIRS8, distance, getUnit, heightAt, inBounds, kindAt, nodeOf, placesOn, posOf, samePos, storeysApart, surfaceAt, unitAt } from './grid';
 import { reachesToSearch } from './loot';
 import { canSee, sightOrigin, sightTo } from './los';
 import { buildPath, COST_ORTHO, computeReach, costPerAp, destinations, type Reach } from './path';
@@ -133,15 +133,18 @@ function moveToward(sim: Sim, u: Unit, goals: Pos[]): boolean {
 
 /** Reachable tile closest to `goal` (ties: cheaper, then reading order). */
 function closestTo(s: GameState, u: Unit, reach: Reach, goal: Pos, minGap = 0): Pos | null {
+  // Without storeys, the distance squared: the same order, without a root for every tile (a horde asks it a lot).
+  const far = s.levels ? (p: Pos) => farness(s, p, goal) : (p: Pos) => (p.x - goal.x) ** 2 + (p.y - goal.y) ** 2;
+  const gap = s.levels ? minGap : minGap * minGap;
   let best: { pos: Pos; d: number; cost: number } | null = null;
   for (const o of destinations(s, u, reach)) {
-    const d = farness(s, o.pos, goal);
-    if (d < minGap) continue;
+    const d = far(o.pos);
+    if (d < gap) continue;
     if (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) < 1e-9 && (o.cost < best.cost || (o.cost === best.cost && (o.pos.y < best.pos.y || (o.pos.y === best.pos.y && o.pos.x < best.pos.x)))))) {
       best = { pos: o.pos, d, cost: o.cost };
     }
   }
-  return best && best.d < farness(s, u.pos, goal) ? best.pos : null;
+  return best && best.d < far(u.pos) ? best.pos : null;
 }
 
 /** How far ahead a walk is planned, in actions: enough to go round a building to its door. */
@@ -149,30 +152,86 @@ const LOOKAHEAD = 4;
 /** To a goal on another storey, the way round by the stairs may first lead away: planned as far as it goes. */
 const LOOKAHEAD_STOREYS = 40;
 
+/** How much longer a way round its own may be than the way through them, in half-tiles (COST_ORTHO a tile): a few tiles. */
+const DETOUR = 4 * COST_ORTHO;
+
+/** A planned walk, and whether it waits behind its own (none of it free to take). */
+interface Walk {
+  path: Pos[] | null;
+  jammed: boolean;
+}
+
 /**
  * A unit's walk this turn toward `goal`: the shortest way to the free tile
  * nearest it (a pod on patrol goes round by the doors and keeps out of
- * windows), as far along as `actions` go. When that way runs through its own
- * (a crowd at a siege's gate) with nowhere to stop within reach, the free tile
- * nearest the goal that `actions` reach. Null when it gets no closer.
+ * windows), as far along as `actions` go. The way is planned through its own
+ * side, who will move on, as the walls won't; but nobody walks through anyone
+ * (Arturo, 19/10). With its own in the way, it goes round them if that is
+ * hardly longer (DETOUR), and so a crowd spreads over open ground; else it
+ * queues behind them, as at a siege's gate, rather than press on a wall
+ * beside it; its way taken from the start, it closes in on where it jams as
+ * far as the free ground lets it, or waits (`jammed`). Ending nowhere one can
+ * stand within reach (a window), the free tile nearest the goal that
+ * `actions` reach. No path when it gets no closer.
  */
-function walkPath(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Pos[] | null {
+function planWalk(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Walk {
   const ahead = storeysApart(s, u.pos, goal) > 0 ? LOOKAHEAD_STOREYS : LOOKAHEAD;
-  const all = computeReach(s, u, costPerAp(u) * Math.max(ahead, actions));
-  const dest = closestTo(s, u, all, goal, minGap);
-  const path = dest && buildPath(s, u, all, dest);
-  if (!path) return null;
+  const reachOf = (round: boolean) => computeReach(s, u, costPerAp(u) * Math.max(ahead, actions), u.pos, round ? undefined : (o) => !hostileTo(o, u));
+  const through = reachOf(false);
+  const dest = closestTo(s, u, through, goal, minGap);
+  const path = dest && buildPath(s, u, through, dest);
+  if (!path) return { path: null, jammed: false };
   const budget = costPerAp(u) * actions;
-  let end = -1;
-  for (let i = 0; i < path.length; i++) {
-    const p = path[i]!;
-    if (all.cost.get(nodeOf(s, p))! > budget) break;
-    if (canStandOn(kindAt(s, p)) && !unitAt(s, p)) end = i;
+  /** How far along `way` the unit can go now (the last place it can stop at), and who stops it first. */
+  const stretch = (way: Pos[], reach: Reach) => {
+    let end = -1;
+    let jam: Pos | null = null;
+    for (let i = 0; i < way.length; i++) {
+      const p = way[i]!;
+      if (reach.cost.get(nodeOf(s, p))! > budget) break;
+      if (inTheWay(s, i ? way[i - 1]! : u.pos, p)) {
+        jam = p;
+        break;
+      }
+      if (canStandOn(kindAt(s, p))) end = i;
+    }
+    return { end, jam };
+  };
+  const { end, jam } = stretch(path, through);
+  // Held up behind its own before half its walk: the way round them, if there is one.
+  const round = jam && (end < 0 || through.cost.get(nodeOf(s, path[end]!))! * 2 < budget) ? reachOf(true) : null;
+  if (round) {
+    const cost = round.cost.get(nodeOf(s, dest!));
+    if (cost !== undefined && cost <= through.cost.get(nodeOf(s, dest!))! + DETOUR) {
+      const other = buildPath(s, u, round, dest!)!;
+      const go = stretch(other, round).end;
+      if (go >= 0) return { path: other.slice(0, go + 1), jammed: false };
+    }
   }
-  if (end >= 0) return path.slice(0, end + 1);
-  const near = computeReach(s, u, budget);
-  const step = closestTo(s, u, near, goal, minGap);
-  return step && buildPath(s, u, near, step);
+  if (end >= 0) return { path: path.slice(0, end + 1), jammed: false };
+  // Within reach now, round everyone (the way round, cut to this walk's actions: a Dijkstra's way there costs no more).
+  const near = round ? within(round, budget) : computeReach(s, u, budget);
+  const step = closestTo(s, u, near, jam ?? goal, jam ? 0 : minGap);
+  const closer = step && buildPath(s, u, near, step);
+  return { path: closer ?? null, jammed: !closer && !!jam };
+}
+
+/** `reach` cut to what costs `budget` at most. */
+function within(reach: Reach, budget: number): Reach {
+  return { origin: reach.origin, cost: new Map([...reach.cost].filter(([, c]) => c <= budget)), prev: reach.prev };
+}
+
+/** planWalk's path. */
+function walkPath(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Pos[] | null {
+  return planWalk(s, u, goal, minGap, actions).path;
+}
+
+/** Whether somebody stops the step from `a` onto `b`: standing on it, or, on a diagonal, on a corner it would cut (path.ts computeReach). */
+function inTheWay(s: GameState, a: Pos, b: Pos): boolean {
+  if (unitAt(s, b)) return true;
+  if (a.x === b.x || a.y === b.y) return false;
+  const h = heightAt(s, a);
+  return [surfaceAt(s, b.x, a.y, h), surfaceAt(s, a.x, b.y, h)].some((p) => !!p && !!unitAt(s, p));
 }
 
 /** Actions a pod still unaware spends going to look where it heard something (its round takes one). */
@@ -358,9 +417,24 @@ export function onlyWalks(s: GameState, u: Unit): boolean {
   return !foes(s, u).some((e) => inMeleeReach(s, u.pos, e.pos) || (farness(s, u.pos, e.pos) <= stride(u) + 1 && canSee(s, u, e)));
 }
 
+/**
+ * The dead that only walk, in the order they go: the nearest to the living
+ * first (ties by id), so a crowd moves from its front and those behind find
+ * the way ahead free, not taken by the ones still to move (19/10).
+ */
+export function frontFirst(s: GameState, walkers: Unit[]): Unit[] {
+  const gap = (u: Unit) => Math.min(Infinity, ...foes(s, u).map((e) => farness(s, u.pos, e.pos)));
+  return walkers
+    .map((u) => ({ u, d: gap(u) }))
+    .sort((a, b) => a.d - b.d || a.u.id.localeCompare(b.u.id))
+    .map((o) => o.u);
+}
+
 /** One action's walk toward `goal`, round whatever is in the way; false when it gets no closer. */
 function walk(sim: Sim, u: Unit, goal: Pos, minGap: number): boolean {
-  const path = walkPath(sim.s, u, goal, minGap);
+  const { path, jammed } = planWalk(sim.s, u, goal, minGap);
+  // Waiting behind its own: it goes again once the rest have moved (Sim.runAlienTurn).
+  if (jammed) sim.jammed.add(u.id);
   if (!path) return false;
   sim.moveAlong(u, path, 1);
   return true;
@@ -377,11 +451,21 @@ const BREACH_HP_WEIGHT = 0.5;
  * to yet (not the other leaf of a gate already broken). `stand`, where it
  * beats on it from. Null when it has a way there, or nothing to break.
  */
-export function breachPlan(s: GameState, u: Unit, goal: Pos): { tile: Pos; stand: Pos } | null {
+export function breachPlan(s: GameState, u: Unit, goal: Pos, ways?: Map<number, Reach>): { tile: Pos; stand: Pos } | null {
   const holds = s.breakables;
   if (!s.mission.siege || !holds) return null;
-  const all = computeReach(s, u, Infinity);
-  for (const i of all.cost.keys()) if (arrived(s, posOf(s, i), goal, 1.5)) return null;
+  // Whether the ground leaves a way: its own crowd in a gap is about to move on, it doesn't close it. The same for
+  // all the dead from one place, while nothing changes (`ways`, Sim.ways: one that waited behind its own asks again).
+  const from = nodeOf(s, u.pos);
+  const all = ways?.get(from) ?? computeReach(s, u, Infinity, u.pos, (o) => !hostileTo(o, u));
+  ways?.set(from, all);
+  // Somewhere to stand by the goal: a window's frame beside it is no way in, nobody stops there.
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!inBounds(s, goal.x + dx, goal.y + dy)) continue;
+      for (const p of placesOn(s, goal.x + dx, goal.y + dy)) if (all.cost.has(nodeOf(s, p)) && arrived(s, p, goal, 1.5) && canStandOn(kindAt(s, p))) return null;
+    }
+  }
   let best: { tile: Pos; stand: Pos; score: number } | null = null;
   for (const key of Object.keys(holds)) {
     const tile = posOf(s, Number(key));
@@ -411,7 +495,7 @@ export function breachPlan(s: GameState, u: Unit, goal: Pos): { tile: Pos; stand
  * or the walk up to it. False when it does neither.
  */
 function advance(sim: Sim, u: Unit, goal: Pos, minGap: number): boolean {
-  const plan = abilitiesOf(u).includes('smash') ? breachPlan(sim.s, u, goal) : null;
+  const plan = abilitiesOf(u).includes('smash') ? breachPlan(sim.s, u, goal, sim.ways) : null;
   if (!plan) return walk(sim, u, goal, minGap);
   if (!samePos(plan.stand, u.pos)) return walk(sim, u, plan.stand, 0);
   if (abilityBlocker(sim.s, u, 'smash')) return false;

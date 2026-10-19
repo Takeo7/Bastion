@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { canStandOn, createMission, DIRS4, levelCount, Rng, teamVisibility, type Biome, type GameState, type MapSource, type MissionKind, type Site, type Vec2 } from '@bastion/engine';
+import { canStandOn, createMission, DIRS4, levelCount, Rng, teamVisibility, type Alarm, type Biome, type GameState, type MapSource, type MissionKind, type Site, type Vec2 } from '@bastion/engine';
 import type { Focus } from '../game/buildings';
 import { setGraphics, type EffectsLevel } from '../settings';
 import { CameraRig } from '../game/camera';
@@ -21,8 +21,8 @@ import '../styles.css';
 // `__ref.bench(300)` draws 300 frames back to back, uncapped, and reports the
 // JS cost and the throughput (frames finished per second). Keys: 1/2/3 alto,
 // medio, bajo; N day/night; U units; C capture camera / play camera; P snapshot.
-// URL: ?biome=city&seed=7&kind=recovery&night&fog&site=roadside (kind: the mission, a Limpieza by default; site: a
-// scenario of the biome, roadside in the wilds, industrial in town; fog: the squad's own sight instead of
+// URL: ?biome=city&seed=7&kind=recovery&night&fog&site=roadside&alarm=ambulance (kind: the mission, a Limpieza by default; site: a
+// scenario of the biome, roadside in the wilds, industrial in town; alarm: a sabotage's, police or ambulance; fog: the squad's own sight instead of
 // everything; `__ref.peek()` then stands a soldier outside a window);
 // ?map=torre draws a hand-made map instead. `__ref.focus` is what the
 // cutaway follows (the selected soldier, the cursor, the active storey).
@@ -45,6 +45,7 @@ const handmade = params.get('map');
 const state: GameState = handmade
   ? createMission({ map: { kind: 'handmade', id: handmade }, slots: [0], rng: new Rng(seed), difficulty: 3 })
   : createMission({ map: { kind: 'generated', biome, seed, site, ...(medical ? { medical } : {}) } as MapSource, slots: [0], rng: new Rng(seed), kind: (params.get('kind') as MissionKind) ?? (medical === 'hospital' ? 'rescue' : medical ? 'recovery' : 'elimination'), difficulty: 3,
+    ...(params.get('alarm') ? { alarm: params.get('alarm') as Alarm } : {}),
     ...(story ? { campaignMission: { id: 'medical-reference', name: medical === 'clinic' ? 'El consultorio de Brena' : 'La doctora', story } } : {}),
   });
 if (params.has('exterior')) state.units = []; // Synthetic façade inspection, without unit-driven cutaway.

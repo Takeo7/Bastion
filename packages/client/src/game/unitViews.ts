@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BITE_TAG, canStandOn, coverAt, decorOf, kindAt, PLAYER_COLORS, sexOfPerson, type Alarm, type Biome, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
-import { STOREY, tileToWorld } from './coords';
+import { BITE_TAG, canStandOn, coverAt, decorOf, DIRS4, kindAt, objectAt, PLAYER_COLORS, sexOfPerson, type Alarm, type Biome, type DecorKind, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
+import { pieceMap, TOWER_LADDER } from './basePieces';
+import { groundAt, STOREY, tileToWorld } from './coords';
 import type { Blow, FigurePose, Gear } from './figures';
-import { clipSpeed, CROUCHED, gaitsOf } from './gaits';
+import { clipSpeed, CROUCHED, gaitsOf, type Gait } from './gaits';
 import { CROWD } from './crowd';
 import { buildUnit, gearOf, IDLE_POSE, isFigure, type UnitRig } from './models';
 import { armamentOf, type Siren } from './syntyFigures';
@@ -20,8 +21,49 @@ const HOP_SECONDS = 0.16;
 const LADDER_SECONDS = 1.2;
 /** How high a window's sill is over its floor (the kits' windows), where a unit climbs to jump out. */
 const SILL = 0.75;
+/**
+ * How far out of a window's wall (tiles from its middle) a unit vaulting it stays crouched: its head under
+ * the frame's top (1.84 over the floor; standing on the sill, upright, it came to 2.1).
+ */
+const UNDER_LINTEL = 0.35;
 /** Seconds a blow (a shot, a strike, a blast) still says which way the unit it came at falls if it dies. */
 const BLOW_SECONDS = 8;
+/**
+ * A building's stairs (buildings.ts stairs): STAIR_STEPS treads across the tile, from its back edge up to
+ * the landing a storey higher; a unit's feet go up the line half a riser over the treads' front edges.
+ * For today's one-tile flights only (stairsOf, stairHeight, stairWay and walk's 'stairs' step, nothing else):
+ * the flights are to become several tiles long, and this goes with them.
+ */
+const STAIR_STEPS = 9;
+/** On the way onto the stairs from beside them or round the corner: the foot of the flight, behind its first tread, and the corner's point (tiles from the stairs' middle). */
+const STAIR_FOOT = 0.7;
+/** A climber's middle stands this far behind the rungs (tiles): its hands reach them, its chest clear (rung: syntyFigures.ts). */
+const CLIMB_GAP = 0.2;
+/** Where a climber's chest is over its feet, where the rungs it holds are (tiles). */
+const CLIMB_CHEST = 0.9;
+/**
+ * A building's ladder (buildings.ts): upright against the tile one storey up, this far from the ladder tile's
+ * middle towards it.
+ */
+const LADDER_RUNGS = 0.44;
+/** Aimed at one close by, the muzzle stays this far short of its middle (its body's front, and a little), the body stepped back this much at most (tiles). */
+const CLOSE_GAP = 0.3;
+const CLOSE_BACK = 0.3;
+/** How far to one side of a tile's middle a walker goes by another there (walkPlan.ts passes), in tiles. */
+const SWERVE = 0.24;
+/** A melee lunge goes this far at most, and stops this far short of the target's middle (an adjacent one: 0.72 apart). */
+const LUNGE = 0.45;
+const LUNGE_SHORT = 0.72;
+/** What stands on a floor tile and takes it whole (furniture, crates, machines): no body steps out onto it nor falls across it. */
+const BULKY = new Set<DecorKind>([
+  'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'crates', 'barricade', 'tank', 'machine', 'forklift',
+  'drums', 'pallets', 'hospitalBed', 'medicalShelf', 'gurney', 'medicalCabinet', 'medicalCart', 'receptionDesk', 'waitingSeats', 'examTable',
+  'xray', 'bedsideTable', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'consultDesk', 'bench', 'fridge',
+  'stove', 'bathtub', 'washbasin', 'tvStand', 'wc', 'lootWeapons', 'lootMedical', 'lootAmmo', 'lootFood', 'statue', 'kiosk', 'planter', 'bin',
+]);
+
+/** One step of a walk as walk() plays it: what kind of step, and the seconds it takes. */
+type StepKind = 'flat' | 'stairs' | 'sill' | 'offSill' | 'ladderUp' | 'ladderDown' | 'drop';
 
 /**
  * Pose values combined every frame into the rig transform.
@@ -52,6 +94,8 @@ interface Pose {
   react: number;
   /** Through a stone's toss (tossStone), 0 to 1. */
   toss: number;
+  /** Aiming at one this close (tiles; 0 none): at point blank the body steps back from it with a long gun (raiseWeapon, apply). */
+  close: number;
   yaw: number;
   yawTarget: number;
   /** How fast the yaw eases to its target: brisk for a step or a strike, slower for a turn on the spot. */
@@ -252,7 +296,7 @@ export class UnitViews {
     const facing = u.facing !== undefined ? yawOf(u.facing) : u.team === 'alien' ? 0 : Math.PI;
     const pose: Pose = {
       crouch: 0, crouchTarget: 0, aim: 0, aimTarget: 0, aimFx: 0, run: 0, recoil: 0, hit: 0, flash: 0,
-      fall: u.alive || u.lost ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, toss: 0, yaw: facing, yawTarget: facing, turn: TURN,
+      fall: u.alive || u.lost ? 0 : 1, lean: 0, hop: 0, spin: 0, search: 0, climb: 0, swing: 0, react: 0, toss: 0, close: 0, yaw: facing, yawTarget: facing, turn: TURN,
       phase: Math.random() * Math.PI * 2,
     };
     this.group.add(rig.root);
@@ -584,6 +628,10 @@ export class UnitViews {
     posed.react = p.react;
     posed.toss = p.toss;
     rig.applyPose(posed, time);
+    // At point blank (raiseWeapon) it steps back as it shoulders a long gun, its muzzle short of whoever it aims at
+    // (a machine gun reached 0.86 of a tile ahead, into one beside): the body, not the unit's place, moves.
+    const back = p.close > 0 ? Math.min(CLOSE_BACK, Math.max(0, (rig.aimReach?.() ?? 0) - (p.close - CLOSE_GAP))) * Math.max(p.aim, p.aimFx) : 0;
+    if (back > 0 || rig.yaw.position.x || rig.yaw.position.z) rig.yaw.position.set(-Math.sin(p.yaw) * back, 0, -Math.cos(p.yaw) * back);
     if (!rig.ownsReload) rig.gunPivot.rotation.z = p.spin * Math.PI * 2;
   }
 
@@ -614,15 +662,18 @@ export class UnitViews {
    * playGroup; playtest 15/10 #19, two walks pulling a body back and forth):
    * the next sets off from where the last ends, without stopping. `pace`: how
    * many times quicker than its gait, the clip keeping pace (the enemy turn's
-   * walkers, all at once: game.ts, playtest 16/10 #6).
+   * walkers, all at once: game.ts, playtest 16/10 #6). `waits`: seconds it
+   * stands before each step, so that walks played at once don't go through
+   * one another, and `passes`, the tiles of the path where it goes by another
+   * all the same, swerving round them (walkPlan.ts).
    */
-  async moveAlong(id: string, path: Place[], onStep?: (p: THREE.Vector3) => void, ap = 1, pace = 1): Promise<void> {
+  async moveAlong(id: string, path: Place[], onStep?: (p: THREE.Vector3) => void, ap = 1, pace = 1, waits?: readonly number[], passes?: readonly boolean[]): Promise<void> {
     const v = this.views.get(id);
     if (!v || !path.length) return;
     const before = v.walk;
     const walk = (async () => {
       await before?.catch(() => undefined);
-      await this.walk(v, id, path, onStep, ap, pace);
+      await this.walk(v, id, path, onStep, ap, pace, waits, passes);
     })();
     v.walk = walk;
     try {
@@ -632,71 +683,237 @@ export class UnitViews {
     }
   }
 
-  private async walk(v: UnitView, id: string, path: Place[], onStep: ((p: THREE.Vector3) => void) | undefined, ap: number, pace = 1): Promise<void> {
+  /** The gait of unit `v`'s walk of `ap` actions, `pace` times quicker. */
+  private gaitFor(v: UnitView, ap: number, pace: number): Gait {
+    const gaits = gaitsOf(v.template);
+    const base = v.pose.crouchTarget > 0.5 ? CROUCHED : ap >= 2 ? gaits.two : gaits.one;
+    return pace === 1 ? base : { ...base, seconds: base.seconds / pace };
+  }
+
+  /**
+   * The seconds each step of unit `id`'s walk along `path` from `start` takes, as walk() plays it (for walks
+   * planned together: walkPlan.ts); empty without its view.
+   */
+  stepSeconds(id: string, start: Place, path: readonly Place[], ap = 1, pace = 1): number[] {
+    const v = this.views.get(id);
+    if (!v) return [];
+    const gait = this.gaitFor(v, ap, pace);
+    let from = start;
+    return path.map((to) => {
+      const seconds = this.stepOf(from, to, gait).seconds;
+      from = to;
+      return seconds;
+    });
+  }
+
+  /** What the step from `from` to `to` is, and the seconds it takes at `gait`. */
+  private stepOf(from: Place, to: Place, gait: Gait): { kind: StepKind; seconds: number } {
+    const fromY = this.standAt(from).y + (this.windowAt(from) ? SILL : 0);
+    const rise = this.standAt(to).y - fromY;
+    const g = gait.seconds;
+    if (this.stairsOf(to) || this.stairsOf(from)) {
+      // Round the corner from beside the flight is longer than straight up it: a little longer to walk.
+      const way = this.stairWay(from, to);
+      let length = 0;
+      for (let k = 1; k < way.length; k++) length += Math.hypot(way[k]!.x - way[k - 1]!.x, way[k]!.z - way[k - 1]!.z);
+      return { kind: 'stairs', seconds: g * (Math.abs(rise) > 0.5 ? 1.6 : 1) * Math.max(1, length / 1.6) };
+    }
+    if (Math.abs(rise) < 0.5 && this.windowAt(to)) return { kind: 'sill', seconds: HOP_SECONDS * 1.8 };
+    if (this.windowAt(from)) return { kind: 'offSill', seconds: HOP_SECONDS * (1.2 + 0.45 * Math.max(0, -rise)) };
+    if (rise > 0.5) return { kind: 'ladderUp', seconds: g + LADDER_SECONDS * (rise / STOREY) };
+    if (rise < -0.5 && this.ladderDown(from, to, rise)) return { kind: 'ladderDown', seconds: g + LADDER_SECONDS * (-rise / STOREY) };
+    if (rise < -0.5) return { kind: 'drop', seconds: HOP_SECONDS * (1.2 + 0.45 * -rise) };
+    return { kind: 'flat', seconds: g * (from.x !== to.x && from.y !== to.y ? 1.4 : 1) };
+  }
+
+  /** Down a storey from `from` onto a ladder (not a building's stairs): climbed down, not jumped (path.ts stepBetween's COST_CLIMB). */
+  private ladderDown(from: Place, to: Place, rise: number): boolean {
+    const s = this.shown;
+    if (!s || Math.abs(rise + STOREY) > 0.3 || Math.abs(to.x - from.x) + Math.abs(to.y - from.y) !== 1) return false;
+    return kindAt(s, { x: to.x, y: to.y, z: to.z ?? 0 }) === 'ladder' && !this.stairsOf(to);
+  }
+
+  private async walk(v: UnitView, id: string, path: Place[], onStep: ((p: THREE.Vector3) => void) | undefined, ap: number, pace = 1, waits?: readonly number[], passes?: readonly boolean[]): Promise<void> {
     v.animating = true;
     const walks = ++v.walks;
     const p = v.pose;
-    const gaits = gaitsOf(v.template);
-    const base = p.crouchTarget > 0.5 ? CROUCHED : ap >= 2 ? gaits.two : gaits.one;
-    const gait = pace === 1 ? base : { ...base, seconds: base.seconds / pace };
+    const gait = this.gaitFor(v, ap, pace);
     if (isFigure(v.rig)) v.rig.setGait?.(gait.motion, clipSpeed(v.template, gait));
+    const pos = v.rig.root.position;
+    const swerves = passes?.some(Boolean) ? this.swerves(v.place, path, passes, gait) : null;
+    /** Its own crouch (hunkered or not) while a window's vault holds it down, from the sill to the ground beyond. */
+    let vaulting: number | null = null;
     try {
-      void tween(0.12, (t) => (p.run = Math.max(p.run, t)));
-      for (const step of path) {
-        const from = v.rig.root.position.clone();
+      for (let k = 0; k < path.length; k++) {
+        const step = path[k]!;
+        // Its turn to go there (walkPlan.ts): it stands, turned to it, until then.
+        const hold = waits?.[k] ?? 0;
+        if (hold > 0.02) {
+          this.face(id, this.standAt(step));
+          const from = p.run;
+          await tween(hold, (t) => (p.run = from * (1 - Math.min(1, (t * hold) / 0.15))));
+        }
+        if (k === 0 || hold > 0.02) void tween(0.12, (t) => (p.run = Math.max(p.run, t)));
+        const from = pos.clone();
         const to = this.standAt(step);
+        const { kind, seconds } = this.stepOf(v.place, step, gait);
         this.face(id, to);
         const rise = to.y - from.y;
-        if (this.stairsAt(step) || this.stairsAt(v.place)) {
-          // On or off a building's stairs (a tile of flight between two floors): walked up or down its slope.
-          await tween(gait.seconds * (Math.abs(rise) > 0.5 ? 1.6 : 1), (t) => v.rig.root.position.lerpVectors(from, to, t));
-        } else if (Math.abs(rise) < 0.5 && this.windowAt(step)) {
-          // Onto a window's sill (docs/FASE7.md): a crouched climb up to it. Out of it is the next step: down
-          // to the ground beyond, or from a storey up, the fall.
-          const sill = to.clone().setY(to.y + SILL);
-          p.run = 0;
-          await tween(HOP_SECONDS * 1.8, (t) => {
-            v.rig.root.position.lerpVectors(from, sill, t);
-            v.rig.root.position.y = from.y + (sill.y - from.y) * Math.min(1, t / 0.65) ** 0.6;
-            p.crouch = Math.sin(t * Math.PI) * 0.7;
+        if (kind === 'stairs') {
+          // On or off a building's stairs: up or down the line of its treads, onto them by their foot (or off by it)
+          // when coming from beside them, never across the banisters.
+          const way = this.stairWay(v.place, step);
+          way[0]!.copy(from);
+          const lengths = way.slice(1).map((q, i) => Math.hypot(q.x - way[i]!.x, q.z - way[i]!.z));
+          const total = lengths.reduce((a, b) => a + b, 0) || 1;
+          let leg = -1;
+          await tween(seconds, (t) => {
+            let left = t * total;
+            let i = 0;
+            while (i < lengths.length - 1 && left > lengths[i]!) left -= lengths[i++]!;
+            const a = way[i]!;
+            const b = way[i + 1]!;
+            pos.lerpVectors(a, b, Math.min(1, left / (lengths[i]! || 1)));
+            // Turned to where it goes a few tenths of a tile on (round the foot of the flight, it turns with the way).
+            if (i !== leg && i + 1 < way.length - 1) {
+              leg = i;
+              this.face(id, way[Math.min(way.length - 1, i + 3)]!);
+            }
           });
-          p.run = 1;
-        } else if (rise > 0.5) {
-          // Up a ladder: to the wall, climb, then onto the roof.
-          const foot = from.clone().lerp(to, 0.4).setY(from.y);
-          const top = foot.clone().setY(to.y);
-          await tween(gait.seconds * 0.4, (t) => v.rig.root.position.lerpVectors(from, foot, t));
+        } else if (kind === 'sill') {
+          // Onto a window's sill (docs/FASE7.md): a crouched climb up to it, down low by the time the head comes
+          // under the frame's top and staying so on the sill. Out of it is the next step.
+          const sill = to.clone().setY(to.y + SILL);
+          vaulting ??= p.crouchTarget;
+          p.crouchTarget = 1;
           p.run = 0;
-          p.climb = 1;
-          await tween(LADDER_SECONDS * (rise / STOREY), (t) => v.rig.root.position.lerpVectors(foot, top, t));
-          p.climb = 0;
+          await tween(seconds, (t) => {
+            pos.lerpVectors(from, sill, t);
+            pos.y = from.y + (sill.y - from.y) * Math.min(1, t / 0.65) ** 0.6;
+            p.crouch = Math.max(p.crouch, easeInOut(Math.min(1, t / 0.6)));
+          });
+          p.crouch = 1;
+        } else if (kind === 'offSill') {
+          // Off the sill, still crouched through the frame, then down to the ground beyond (or the fall, from a
+          // storey up): no hop up into the lintel.
+          const crouch = vaulting ?? p.crouchTarget;
+          vaulting = null;
+          p.crouchTarget = 1;
+          p.run = 0;
+          const out = UNDER_LINTEL / Math.max(0.5, Math.hypot(to.x - from.x, to.z - from.z));
+          await tween(seconds, (t) => {
+            const along = Math.min(1, t * 1.3);
+            pos.lerpVectors(from, to, along);
+            const down = THREE.MathUtils.clamp((along - out) / (1 - out), 0, 1);
+            pos.y = from.y + rise * down * down;
+            p.crouch = along < out ? 1 : 1 - 0.6 * easeInOut(down);
+          });
+          p.crouchTarget = crouch;
           p.run = 1;
-          await tween(gait.seconds * 0.6, (t) => v.rig.root.position.lerpVectors(top, to, t));
-        } else if (rise < -0.5) {
-          // Drop off an edge or out of a window: a short hop out, then the fall, longer the higher it is
-          // (off a roof one storey up, as it always was).
-          await tween(HOP_SECONDS * (1.2 + 0.45 * -rise), (t) => {
-            v.rig.root.position.lerpVectors(from, to, Math.min(1, t * 1.3));
-            v.rig.root.position.y = from.y + rise * t * t + Math.sin(Math.min(1, t * 2) * Math.PI) * 0.35;
+          void tween(0.2, (t) => (p.crouch = Math.max(p.crouchTarget, 0.4 + Math.sin(t * Math.PI) * 0.4 - 0.4 * t)));
+        } else if (kind === 'ladderUp' || kind === 'ladderDown') {
+          await this.climbLadder(v, id, kind === 'ladderUp' ? v.place : step, kind === 'ladderUp' ? step : v.place, kind === 'ladderUp', from, to, gait);
+        } else if (kind === 'drop') {
+          // Drop off an edge: a short hop out, then the fall, longer the higher it is (off a roof one storey up, as it always was).
+          await tween(seconds, (t) => {
+            pos.lerpVectors(from, to, Math.min(1, t * 1.3));
+            pos.y = from.y + rise * t * t + Math.sin(Math.min(1, t * 2) * Math.PI) * 0.35;
           });
           void tween(0.2, (t) => (p.crouch = Math.sin(t * Math.PI) * 0.8));
         } else {
-          const seconds = gait.seconds * (from.distanceTo(to) > 1.2 ? 1.4 : 1);
+          // Going by another there (walkPlan.ts): to one side of the tile's middle.
+          const swerve = swerves?.[k];
+          if (swerve) to.add(swerve);
           await tween(seconds, (t) => {
-            v.rig.root.position.lerpVectors(from, to, t);
+            pos.lerpVectors(from, to, t);
           });
         }
         // On its storey once there (docs/FASE6.md): the cutaway checks this.
         v.place = { ...step };
-        onStep?.(v.rig.root.position);
+        onStep?.(pos);
       }
     } finally {
       v.animating = false;
+      if (vaulting !== null) p.crouchTarget = vaulting;
       // Down to a stand, unless it has set off again meanwhile.
       void tween(0.18, (t) => {
         if (v.walks === walks) p.run = 1 - t;
       });
     }
+  }
+
+  /**
+   * Where a walk along `path` from `start` goes by another (`passes`, by path tile): SWERVE to the right of
+   * its way through that tile, if the steps in and out of it are plain ones (two going opposite ways pass on
+   * opposite sides); never on its last tile, where it stands.
+   */
+  private swerves(start: Place, path: readonly Place[], passes: readonly boolean[], gait: Gait): (THREE.Vector3 | null)[] {
+    return path.map((tile, k) => {
+      const next = path[k + 1];
+      if (!passes[k] || !next) return null;
+      const prev = k ? path[k - 1]! : start;
+      if (this.stepOf(prev, tile, gait).kind !== 'flat' || this.stepOf(tile, next, gait).kind !== 'flat') return null;
+      const dx = next.x - prev.x;
+      const dz = next.y - prev.y;
+      const length = Math.hypot(dx, dz);
+      return length ? new THREE.Vector3((-dz / length) * SWERVE, 0, (dx / length) * SWERVE) : null;
+    });
+  }
+
+  /**
+   * Up a ladder from tile `low` to `high` (`up`), or down it: walked to it, climbed facing the rungs with
+   * the body CLIMB_GAP behind them all the way (a building's ladder upright, the siege tower's leant on
+   * its deck: TOWER_LADDER), and off at the top onto the floor, or at the foot to the ladder's tile.
+   */
+  private async climbLadder(v: UnitView, id: string, low: Place, high: Place, up: boolean, from: THREE.Vector3, to: THREE.Vector3, gait: Gait): Promise<void> {
+    const p = v.pose;
+    const pos = v.rig.root.position;
+    const base = tileToWorld(low);
+    const dir = new THREE.Vector3(high.x - low.x, 0, high.y - low.y).normalize();
+    const height = Math.abs(to.y - from.y);
+    const rungs = this.rungsOf(low);
+    /** Where the climber's middle is with its feet `h` over the ladder's foot. */
+    const at = (h: number, out = new THREE.Vector3()) => out.copy(base).addScaledVector(dir, rungs(h + CLIMB_CHEST) - CLIMB_GAP).setY(base.y + h);
+    const foot = at(0);
+    const top = at(height);
+    const climb = (a: number, b: number) =>
+      tween(LADDER_SECONDS * (height / STOREY), (t) => {
+        at(a + (b - a) * t, pos);
+      });
+    if (up) {
+      await tween(gait.seconds * 0.4, (t) => pos.lerpVectors(from, foot, t));
+      this.face(id, foot.clone().add(dir));
+      p.run = 0;
+      p.climb = 1;
+      await climb(0, height);
+      p.climb = 0;
+      p.run = 1;
+      this.face(id, to);
+      await tween(gait.seconds * 0.6, (t) => pos.lerpVectors(top, to, t));
+      return;
+    }
+    // Down: to the top of it, turned round to face the rungs, down them, and off at the foot.
+    await tween(gait.seconds * 0.6, (t) => pos.lerpVectors(from, top, t));
+    this.face(id, top.clone().add(dir));
+    p.run = 0;
+    p.climb = 1;
+    await climb(height, 0);
+    p.climb = 0;
+    p.run = 1;
+    this.face(id, to);
+    await tween(gait.seconds * 0.4, (t) => pos.lerpVectors(foot, to, t));
+  }
+
+  /** How far the rungs of the ladder on tile `p` stand from its middle, towards where it climbs, `h` tiles up its foot. */
+  private rungsOf(p: Place): (h: number) => number {
+    const s = this.shown;
+    // The siege tower's (basePieces.ts): leant from its foot onto the deck's edge.
+    if (s?.base && !p.z) {
+      const map = pieceMap(s);
+      const k = map?.at[p.y * s.width + p.x] ?? -1;
+      if (k >= 0 && map!.spots[k]!.piece.piece === 'tower') return (h) => TOWER_LADDER.foot + TOWER_LADDER.lean * Math.min(h, TOWER_LADDER.top);
+    }
+    return () => LADDER_RUNGS;
   }
 
   /**
@@ -729,34 +946,107 @@ export class UnitViews {
    * What a sabotage's objective is in this battle (its alarm; sfx.ts picks its
    * sound the same way) and where a car's nose points: at the tile the map
    * blocks for it (sirenCar), else along the first tile beside it one could
-   * stand on.
+   * stand on; how long the car is and how far to one side its middle lies, by
+   * the tiles it takes (docs/MAPAS.md, phase 1: the nose's and its parts).
    */
   private sirenOf(u: Unit): Siren {
     const s = this.shown!;
     const alarm = s.mission.alarm ?? ALARM_BY_MAP[s.biome];
     const at = ([dx, dy]: [number, number]) => ({ x: u.pos.x + dx, y: u.pos.y + dy, z: 0 });
     const inside = (p: Place) => p.x >= 0 && p.y >= 0 && p.x < s.width && p.y < s.height;
-    const way =
-      SIDES.find((d) => inside(at(d)) && decorOf(s.decor?.[at(d).y * s.width + at(d).x])?.kind === 'sirenCar') ??
-      SIDES.find((d) => inside(at(d)) && canStandOn(kindAt(s, at(d)))) ??
-      SIDES[0]!;
-    return { alarm, heading: Math.atan2(way[0], way[1]) };
+    const car = SIDES.find((d) => inside(at(d)) && decorOf(s.decor?.[at(d).y * s.width + at(d).x])?.kind === 'sirenCar');
+    const way = car ?? SIDES.find((d) => inside(at(d)) && canStandOn(kindAt(s, at(d)))) ?? SIDES[0]!;
+    const siren: Siren = { alarm, heading: Math.atan2(way[0], way[1]) };
+    const nose = car && at(car);
+    const tiles = nose && s.decor ? (objectAt(s.decor, s.width, nose.y * s.width + nose.x)?.tiles ?? []) : [];
+    if (tiles.length > 1) {
+      // Along the way it points, and across it to its right (the rig's +x).
+      const off = [...tiles.map((i) => ({ x: (i % s.width) - u.pos.x, y: Math.floor(i / s.width) - u.pos.y })), { x: 0, y: 0 }];
+      siren.length = Math.max(...off.map((o) => o.x * way[0] + o.y * way[1])) + 1;
+      siren.side = off.reduce((a, o) => a + o.x * way[1] - o.y * way[0], 0) / off.length;
+    }
+    return siren;
   }
 
-  /** A building's stairs on place `p` (a ladder tile dressed as stairs), in the state last shown. */
-  private stairsAt(p: Place): boolean {
+  /** The way a building's stairs on place `p` climb (a ladder tile dressed as stairs), in the state last shown; null if none. */
+  private stairsOf(p: Place): Vec2 | null {
     const s = this.shown;
-    if (!s || p.x < 0 || p.y < 0 || p.x >= s.width || p.y >= s.height) return false;
+    if (!s || p.x < 0 || p.y < 0 || p.x >= s.width || p.y >= s.height) return null;
     const level = p.z ? s.levels?.[p.z - 1] : undefined;
     const i = p.y * s.width + p.x;
-    return (p.z ? level?.tiles[i] : s.tiles[i]) === 'ladder' && decorOf((p.z ? level?.decor : s.decor)?.[i])?.kind === 'stairs';
+    if ((p.z ? level?.tiles[i] : s.tiles[i]) !== 'ladder') return null;
+    const look = decorOf((p.z ? level?.decor : s.decor)?.[i]);
+    return look?.kind === 'stairs' ? DIRS4[look.facing]! : null;
   }
 
-  /** Where a unit on place `p` stands: its tile's floor, or halfway up a building's stairs on them. */
+  /**
+   * How high the feet are over the floor of a building's stairs, `u` tiles from their middle along the climb:
+   * half a riser over the treads' front edges, from the foot of the flight up to the landing's floor.
+   */
+  private static stairHeight(u: number): number {
+    return THREE.MathUtils.clamp((u + 0.5) * STOREY + STOREY / (2 * STAIR_STEPS), 0, STOREY);
+  }
+
+  /** Where a unit on place `p` stands: its tile's floor, or on the middle tread of a building's stairs on them. */
   private standAt(p: Place): THREE.Vector3 {
     const at = tileToWorld(p);
-    if (this.stairsAt(p)) at.y += STOREY / 2;
+    if (this.stairsOf(p)) at.y += UnitViews.stairHeight(0);
     return at;
+  }
+
+  /**
+   * The way of a step onto or off a building's stairs (from `from` to `to`, one of them the stairs), as
+   * points to walk through, each at the height of the treads under it: straight up or down the flight from
+   * its foot or its landing; from beside it or the corner behind, round to the foot first (and off the
+   * same way), never across a banister. Where the corner is no floor to pass by, straight (the old way).
+   */
+  private stairWay(from: Place, to: Place): THREE.Vector3[] {
+    const onStairs = this.stairsOf(to) ? to : from;
+    const other = onStairs === to ? from : to;
+    const d = this.stairsOf(onStairs)!;
+    const side = { x: -d.y, y: d.x };
+    const mid = tileToWorld(onStairs);
+    const floor = groundAt({ x: onStairs.x, y: onStairs.y, z: onStairs.z ?? 0 });
+    const rel = { x: other.x - onStairs.x, y: other.y - onStairs.y };
+    const u = rel.x * d.x + rel.y * d.y;
+    const v = rel.x * side.x + rel.y * side.y;
+    const sameFloor = (other.z ?? 0) === (onStairs.z ?? 0);
+    // From the floor in front of the flight's high end (the rules allow it): straight on, as it was.
+    const underTop = sameFloor && u > 0;
+    /** A point `a` along the climb and `b` across from the stairs' middle, at the height of what is under it. */
+    const point = (a: number, b: number) => {
+      const p = new THREE.Vector3(mid.x + d.x * a + side.x * b, floor, mid.z + d.y * a + side.y * b);
+      if (underTop) p.y = floor + UnitViews.stairHeight(0) * THREE.MathUtils.clamp(1 - a, 0, 1);
+      else if (Math.abs(b) <= 0.5 + 1e-6 && a >= -0.6) p.y = floor + UnitViews.stairHeight(a);
+      return p;
+    };
+    const way: [number, number][] = [[u, v]];
+    // From beside the flight or the corner behind it: round by its foot.
+    if (v !== 0 && sameFloor && u <= 0) {
+      const sv = Math.sign(v);
+      const corner = { x: onStairs.x - d.x + side.x * sv, y: onStairs.y - d.y + side.y * sv, z: onStairs.z ?? 0 };
+      const s = this.shown;
+      const cornerFree = !!s && (u === -1 || (canStandOn(kindAt(s, corner)) && groundAt(corner) === floor && !this.stairsOf(corner)));
+      const footKind = s ? kindAt(s, { x: onStairs.x - d.x, y: onStairs.y - d.y, z: onStairs.z ?? 0 }) : null;
+      if (cornerFree && canStandOn(footKind)) {
+        if (u === 0) way.push([-STAIR_FOOT, STAIR_FOOT * sv]);
+        way.push([-STAIR_FOOT, 0]);
+      }
+    }
+    way.push([0, 0]);
+    if (onStairs === from) way.reverse();
+    // Every tenth of a tile, so that the feet follow the treads.
+    const out: THREE.Vector3[] = [point(way[0]![0], way[0]![1])];
+    for (let k = 1; k < way.length; k++) {
+      const [a0, b0] = way[k - 1]!;
+      const [a1, b1] = way[k]!;
+      const n = Math.max(1, Math.ceil(Math.hypot(a1 - a0, b1 - b0) / 0.1));
+      for (let i = 1; i <= n; i++) out.push(point(a0 + ((a1 - a0) * i) / n, b0 + ((b1 - b0) * i) / n));
+    }
+    // The landing (a storey up) and any floor off the flight: the points there on that floor.
+    const end = onStairs === from ? out[out.length - 1]! : out[0]!;
+    end.y = this.standAt(other).y;
+    return out;
   }
 
   /** Whether place `p` is a window (whole or broken) on its storey, in the state last shown. */
@@ -788,13 +1078,20 @@ export class UnitViews {
     this.face(id, target);
     if (isFigure(v.rig)) v.rig.draw?.(sidearm ? 'sidearm' : 'weapon');
     this.struck(target, v.rig.root.position, false);
+    // How close it is: at point blank the figure pulls a long gun back (syntyFigures.ts holdWeapon).
+    v.pose.close = Math.hypot(target.x - v.rig.root.position.x, target.z - v.rig.root.position.z);
     await tween(0.28, (t) => (v.pose.aimFx = easeInOut(t)));
   }
 
   /** Down from aiming; a pistol drawn from its holster goes back once lowered. */
   lowerWeapon(id: string): void {
     const v = this.views.get(id);
-    if (v) void tween(0.35, (t) => (v.pose.aimFx = 1 - easeInOut(t))).then(() => isFigure(v.rig) && v.rig.draw?.('weapon'));
+    if (v) {
+      void tween(0.35, (t) => (v.pose.aimFx = 1 - easeInOut(t))).then(() => {
+        v.pose.close = 0;
+        if (isFigure(v.rig)) v.rig.draw?.('weapon');
+      });
+    }
   }
 
   recoil(id: string): void {
@@ -825,12 +1122,39 @@ export class UnitViews {
     }
   }
 
-  /** The blow `v` falls from, in its own frame (Blow), and where it has room to fall: not into a wall or high cover. */
+  /**
+   * Whether a body could take place `p` (stepping out to shoot there, a fall across it): a floor at the
+   * height of `level` (none, or a lower one, is an edge, a hole or a stairwell), not a stairs' flight, a
+   * ladder, a closed door or a window, nothing bulky standing on it, nobody alive on it but `except`, and
+   * with `bodies`, no body lying there either.
+   */
+  clearFor(p: Place, except: string | null, bodies = false, level: Place = p): boolean {
+    const s = this.shown;
+    if (!s || p.x < 0 || p.y < 0 || p.x >= s.width || p.y >= s.height) return false;
+    const z = p.z ?? 0;
+    const kind = kindAt(s, { x: p.x, y: p.y, z });
+    if (!canStandOn(kind) || kind === 'door' || kind === 'ladder') return false;
+    const i = p.y * s.width + p.x;
+    if (groundAt({ x: p.x, y: p.y, z }) !== groundAt({ x: level.x, y: level.y, z: level.z ?? 0 })) return false;
+    const look = decorOf((z ? s.levels?.[z - 1]?.decor : s.decor)?.[i]);
+    if (look && BULKY.has(look.kind)) return false;
+    const here = (q: Place) => q.x === p.x && q.y === p.y && (q.z ?? 0) === z;
+    for (const u of s.units) if (u.alive && u.id !== except && !u.evacuated && here(u.pos)) return false;
+    if (bodies) for (const o of this.views.values()) if (o.dead && o.id !== except && o.rig.root.visible && here(o.place)) return false;
+    return true;
+  }
+
+  /**
+   * The blow `v` falls from, in its own frame (Blow), and where it has room to fall: not into a wall or any
+   * cover, nor onto anyone standing or lying there (its killer's tile too), furniture, the stairs or off an
+   * edge (a roof's, a platform's, a stairwell).
+   */
   private blowAt(v: UnitView, from: THREE.Vector3 | null, head: boolean, melee: boolean): Blow {
     const way = from ? angleTo(v.rig.root.position, from) : null;
     const s = this.shown;
     const at = { x: v.place.x, y: v.place.y, z: v.place.z ?? 0 };
     const yaw = v.pose.yaw;
+    const checked = new Map<number, boolean>();
     // Every tile on the way, a quarter of a tile at a time out to where the head comes down, the shoulders' width across.
     const room = s && ((falls: number, reach: number) => {
       const dx = Math.sin(yaw + falls);
@@ -838,8 +1162,12 @@ export class UnitViews {
       for (let d = 0.25; d < reach + 0.25; d += 0.25) {
         for (const side of [-0.2, 0, 0.2]) {
           const along = Math.min(d, reach);
-          const tile = { x: Math.floor(at.x + 0.5 + dx * along + dy * side), y: Math.floor(at.y + 0.5 + dy * along - dx * side) };
-          if ((tile.x !== at.x || tile.y !== at.y) && coverAt(s, at, tile) >= 2) return false;
+          const tile = { x: Math.floor(at.x + 0.5 + dx * along + dy * side), y: Math.floor(at.y + 0.5 + dy * along - dx * side), z: at.z };
+          if (tile.x === at.x && tile.y === at.y) continue;
+          const key = tile.y * s.width + tile.x;
+          let ok = checked.get(key);
+          if (ok === undefined) checked.set(key, (ok = coverAt(s, at, tile) === 0 && this.clearFor(tile, v.id, true, at)));
+          if (!ok) return false;
         }
       }
       return true;
@@ -988,14 +1316,18 @@ export class UnitViews {
     void tween(0.25, (t) => (v.pose.lean = 0.3 * (1 - t)));
   }
 
-  /** Melee strike: a quick lunge towards the target and back. */
+  /**
+   * Melee strike: a quick lunge towards the target and back, stopping LUNGE_SHORT from its middle (one
+   * beside: 0.28 of a tile, it went 0.45 and stood 0.55 from it), LUNGE at most (one on the diagonal).
+   */
   async lunge(id: string, target: THREE.Vector3): Promise<void> {
     const v = this.views.get(id);
     if (!v) return;
     this.face(id, target);
     const home = v.rig.root.position.clone();
     this.struck(target, home, true);
-    const toward = target.clone().setY(home.y).sub(home).setLength(0.45);
+    const gap = Math.hypot(target.x - home.x, target.z - home.z);
+    const toward = target.clone().setY(home.y).sub(home).setLength(THREE.MathUtils.clamp(gap - LUNGE_SHORT, 0, LUNGE));
     v.animating = true;
     // The knife or the machete from the belt (a soldier's Tajo); whoever has none strikes with what it holds.
     const rig = isFigure(v.rig) ? v.rig : null;
@@ -1079,21 +1411,40 @@ export class UnitViews {
 
   /**
    * A unit that arrives (reinforcements, the horde): its view is made now, if
-   * the state has not got it yet, and it comes on foot from `from` to its
-   * tile, the dead staggering and the living running; the event that follows
-   * puts it in the state where it already stands.
+   * the state has not got it yet, and it comes on foot along `way` (from the
+   * map's edge through each tile to its own: arrivals.ts), each leg taking
+   * `seconds[k]` after standing `waits[k]` (walkPlan.ts), the dead staggering
+   * and the living running; the event that follows puts it in the state
+   * where it already stands.
    */
-  async arrive(u: Unit, from: THREE.Vector3, seconds: number): Promise<void> {
+  async arrive(u: Unit, way: THREE.Vector3[], seconds: readonly number[], waits: readonly number[] = []): Promise<void> {
     const v = this.views.get(u.id) ?? this.create(u);
-    const to = tileToWorld(u.pos);
+    const pos = v.rig.root.position;
     v.animating = true;
     v.flag.visible = false;
     v.rig.root.visible = true;
-    v.rig.root.position.copy(from);
-    this.face(u.id, to);
+    pos.copy(way[0]!);
+    if (way[1]) this.face(u.id, way[1]);
     v.pose.yaw = v.pose.yawTarget;
     v.pose.run = 1;
-    await tween(seconds, (t) => v.rig.root.position.lerpVectors(from, to, t));
+    // Its feet at the pace it walks in at (a tile in its straight legs' time).
+    const tile = seconds.find((t, k) => k > 0 && t > 0) ?? seconds[0] ?? 0.4;
+    if (isFigure(v.rig) && tile > 0) {
+      const gait = { motion: gaitsOf(v.template).one.motion, seconds: tile };
+      v.rig.setGait?.(gait.motion, clipSpeed(v.template, gait));
+    }
+    for (let k = 1; k < way.length; k++) {
+      const hold = waits[k - 1] ?? 0;
+      if (hold > 0.02) {
+        await tween(hold, (t) => (v.pose.run = 1 - Math.min(1, (t * hold) / 0.15)));
+        void tween(0.12, (t) => (v.pose.run = Math.max(v.pose.run, t)));
+      }
+      const a = way[k - 1]!;
+      const b = way[k]!;
+      this.face(u.id, b);
+      await tween(seconds[k - 1] ?? 0.3, (t) => pos.lerpVectors(a, b, t));
+    }
+    v.place = { ...u.pos };
     void tween(0.2, (t) => (v.pose.run = 1 - t));
     v.animating = false;
   }

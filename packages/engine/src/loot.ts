@@ -2,7 +2,7 @@
 // turns up in it and what the squad brings home. The rolls happen on the host
 // (Sim.search); the `searched` event carries what was found.
 import { BACKPACK_SLOTS, FOUND_WEAPONS, ITEMS, NIGHT, TEMPLATES, WEAPON_MODS } from './content';
-import { decorOf } from './decor';
+import { decorOf, objectAt } from './decor';
 import { DIRS4, DIRS8, heightAt, inBounds, isWalkable, kindAt, nodeOf, slabAt, tileIndex, toPos } from './grid';
 import type { Rng } from './rng';
 import type { ChargeId, DecorKind, FoundWeaponId, GameState, ItemId, Loot, Place, Pos, TileKind, Unit, WeaponModId } from './types';
@@ -185,7 +185,8 @@ function roomFloor(kind: TileKind | null): boolean {
  * The room place `at` stands in (docs/FASE8.md §B): the floor joined to it on
  * its level, inside the building, without crossing a doorway or a window.
  * Its kind of place is the one most of its furniture makes it (a home, an
- * office, a shop, a store), a home when it has none. Null outdoors, on a
+ * office, a shop, a store; a piece over several tiles counts once), a home
+ * when it has none. Null outdoors, on a
  * roof, in a doorway, or on a hand-made map (they mark no inside).
  */
 export function roomAt(s: GameState, at: Place): Room | null {
@@ -208,9 +209,10 @@ export function roomAt(s: GameState, at: Place): Room | null {
       const q = { x, y, z };
       const kind = kindAt(s, q);
       if ((kind === 'low' || kind === 'high') && decor) {
-        const look = decorOf(decor[i]);
+        // An object over several tiles (a bed, a table) by its anchor: once, whichever of its tiles is beside the floor.
+        const look = objectAt(decor, s.width, i);
         const spot = look && SPOTS[look.kind];
-        if (spot) furniture.set(i, spot);
+        if (spot) furniture.set(look.anchor, spot);
       }
       if (seen.has(i) || !roomFloor(kind) || !interior(s, x, y, z)) continue;
       seen.add(i);

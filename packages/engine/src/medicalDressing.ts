@@ -2,10 +2,14 @@ import { medicalAbandonment } from './medicalAbandonment';
 import { decorOf } from './decor';
 import { DIRS4 } from './grid';
 import { Rng } from './rng';
-import type { Decor, Level, MedicalDetail, MedicalRoom, MedicalSite, TileKind, Vec2 } from './types';
+import type { Decor, Level, MedicalDetail, MedicalRoom, MedicalSite, Pos, TileKind, Vec2 } from './types';
 
-/** Cosmetic only. A separate seed leaves rooms, cover, objectives and combat rolls unchanged. */
-export function dressMedical(site: MedicalSite, width: number, tiles: TileKind[], decor: Decor[], levels: Level[], seed: number, reserved: Vec2[] = []): MedicalDetail[] {
+/**
+ * A separate seed leaves rooms, objectives and combat rolls unchanged. What
+ * stands up in the mess takes its tile where `strew` lets it
+ * (medicalAbandonment); without it, nothing changes the map.
+ */
+export function dressMedical(site: MedicalSite, width: number, tiles: TileKind[], decor: Decor[], levels: Level[], seed: number, reserved: Vec2[] = [], strew?: (p: Pos) => boolean): MedicalDetail[] {
   const rng = new Rng((seed ^ 0x4d454449 ^ (site.x * 65537 + site.y)) >>> 0);
   const details: MedicalDetail[] = [], used = new Set<string>();
   const layer = (z: number) => z ? levels[z - 1]! : { tiles, decor };
@@ -71,5 +75,5 @@ export function dressMedical(site: MedicalSite, width: number, tiles: TileKind[]
     const wall = shuffled(walls)[0];
     if (wall) add(r.use === 'ward' ? 'wallCross' : r.use === 'waiting' || r.use === 'reception' || r.use === 'nurses' ? 'safeSign' : 'cautionSign', wall.x, wall.y, r.z, wall.facing);
   }
-  return [...details, ...medicalAbandonment(site, width, tiles, decor, levels, seed, reserved, details)];
+  return [...details, ...medicalAbandonment(site, width, tiles, decor, levels, seed, reserved, details, strew)];
 }

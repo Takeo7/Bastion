@@ -13,6 +13,7 @@ import {
   CHARACTERS,
   DEAD_TEMPLATES,
   DEATHS,
+  FOOTPRINT_FIT,
   HITS,
   HEAD_GEAR,
   HEADGEAR,
@@ -119,9 +120,11 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
  * (for a critical, one to the head if any fits; at arm's length, doubling up
  * fits too), the nearest if none does, any for an unknown blow; and of those,
  * one with room to fall (Gameplay: no body through a wall), else the one that
- * takes least room. The same unit picks the same among those that fit.
+ * takes least room. The same unit picks the same among those that fit. With
+ * room for none, the crumple (the one that takes least), `cramped`: pulled in
+ * to lie within its own tile (die).
  */
-function deathFor(deaths: readonly Death[], blow: Blow, scale: number): number {
+function deathFor(deaths: readonly Death[], blow: Blow, scale: number): { k: number; cramped: boolean } {
   const all = deaths.map((_, k) => k);
   const room = (k: number) => !blow.room || blow.room(deaths[k]!.falls, deaths[k]!.reach * SYNTY_SCALE * scale);
   const least = (ks: number[]) => ks.reduce((a, b) => (deaths[b]!.reach < deaths[a]!.reach ? b : a));
@@ -134,10 +137,13 @@ function deathFor(deaths: readonly Death[], blow: Blow, scale: number): number {
     if (!fits.length) fits = [all.reduce((a, b) => (off(b) < off(a) ? b : a))];
   }
   const roomy = fits.filter(room);
-  if (roomy.length) return pick(roomy, blow.seed);
+  if (roomy.length) return { k: pick(roomy, blow.seed), cramped: false };
   const anywhere = all.filter(room);
-  return least(anywhere.length ? anywhere : all);
+  return anywhere.length ? { k: least(anywhere), cramped: false } : { k: least(all), cramped: true };
 }
+
+/** A cramped death (deathFor) lies with its head this far from its tile's middle at most (tiles): inside the tile. */
+const CRAMPED_REACH = 0.42;
 
 /**
  * Which of `hits` a unit plays for `blow`: at arm's length (a blade, a bite)
@@ -631,8 +637,8 @@ export class SyntyFigure implements FigureRig {
   cutAway = false;
   /** The stance it stands in (STANCE_ORDER), −1 the plain idle. */
   private stance = -1;
-  /** The death it plays (DEATHS[build]) and the seconds it takes; null standing. */
-  private death: { k: number; seconds: number } | null = null;
+  /** The death it plays (DEATHS[build]), the seconds it takes and how far it is drawn in (model space: a cramped death); null standing. */
+  private death: { k: number; seconds: number; tuck: { x: number; z: number } } | null = null;
   /** A death asked for before the clips loaded: taken once they have, the body lying. */
   private pending: Blow | null = null;
   /** The hit reaction it plays (HITS[build]), the seconds it takes and how much of the upper body it takes; null none. */
@@ -905,6 +911,16 @@ export class SyntyFigure implements FigureRig {
       this.gunPivot.quaternion.identity();
       this.armed = false;
     }
+  }
+
+  /**
+   * How far ahead of its feet the muzzle of the long gun in its hands comes when shouldered (tiles): the grip
+   * where holdWeapon puts it aimed, and the muzzle along the gun from there. Null unarmed, for a pistol or a blade.
+   */
+  aimReach(): number | null {
+    const r = this.rest;
+    if (!r || !this.armed || this.melee || this.pistol) return null;
+    return (r.p[B.Shoulder_R]!.z + 0.19 + this.muzzle.position.z) * this.scale;
   }
 
   /** Which of its weapons is in the hand: the main one, the pistol from its holster or the blade from the belt (one it doesn't carry: the main one). */
@@ -1300,8 +1316,11 @@ export class SyntyFigure implements FigureRig {
       return null;
     }
     this.pending = null;
-    const k = deathFor(DEATHS[this.build], blow, this.scale);
-    this.death = { k, seconds: a.set.settles[k]! };
+    const { k, cramped } = deathFor(DEATHS[this.build], blow, this.scale);
+    // With room for no fall, the body is drawn in towards where it stood: its head comes down inside its tile.
+    const death = DEATHS[this.build][k]!;
+    const tuck = cramped ? Math.max(0, death.reach * SYNTY_SCALE - CRAMPED_REACH / this.scale) : 0;
+    this.death = { k, seconds: a.set.settles[k]!, tuck: { x: -Math.sin(death.falls) * tuck, z: -Math.cos(death.falls) * tuck } };
     return this.death.seconds;
   }
 
@@ -1403,6 +1422,13 @@ export class SyntyFigure implements FigureRig {
       a.fallen(this.death.k, Math.min(1, p.fall) * this.death.seconds);
       a.read(this.d, this.hipsShift);
       this.p[B.Hips]!.copy(this.hipsShift).multiplyScalar(r.hip).add(r.p[B.Hips]!);
+      const tuck = this.death.tuck;
+      if (tuck.x || tuck.z) {
+        const f = Math.min(1, p.fall);
+        const k = 1 - (1 - f) * (1 - f);
+        this.p[B.Hips]!.x += tuck.x * k;
+        this.p[B.Hips]!.z += tuck.z * k;
+      }
       this.lastYaw = p.yaw;
       return;
     }
@@ -1813,10 +1839,16 @@ const SIRENS: Record<Alarm, SirenLook> = {
   factory: { prop: null, fit: 0, turn: 0, pole: 2.1, lights: [{ x: 0, y: 0.04, z: 0, color: 0xff8a1a }], spin: 1.1, stop: 2.5 },
 };
 
-/** A sabotage's objective as the battle has it: its alarm, and where a car's nose points (radians about y; 0 along +z). */
+/**
+ * A sabotage's objective as the battle has it: its alarm, and where a car's nose points (radians about y; 0 along
+ * +z); how many tiles long the car is, counting the siren's own (2 before docs/MAPAS.md phase 1: 3 a patrol car, 4
+ * an ambulance), and how far its middle lies to its right of the siren's tile (an ambulance is two tiles wide).
+ */
 export interface Siren {
   alarm: Alarm;
   heading: number;
+  length?: number;
+  side?: number;
 }
 
 /** A light's beam: white in the middle, gone at the edge (a texture made here). */
@@ -1846,9 +1878,10 @@ function beams(color: number, radius: number, opacity: number): THREE.Mesh {
 
 /**
  * The sabotage's objective (playtest 15/10 #14), as the mission's alarm says:
- * a patrol car or an ambulance with its lights going round, two tiles long
- * (the unit on the back tile, the nose over the one the map blocks for it,
- * `sirenCar`), or a factory's motor siren on a pole with its beacon. Each
+ * a patrol car or an ambulance with its lights going round, over the tiles
+ * the map blocks for it (the unit on a back tile, the rest `sirenCar` and its
+ * parts: two tiles long before, three or four now, at its size beside a
+ * survivor, FOOTPRINT_FIT), or a factory's motor siren on a pole with its beacon. Each
  * light throws two fans that sweep the air and, wider and fainter, the
  * ground. Silenced (its fall), the cars' lights go out at once with a spark;
  * the motor runs down and its beacon fades with it (as Red's sound does:
@@ -1874,16 +1907,20 @@ class SirenRig implements FigureRig {
   private clock = 0;
   /** When it was silenced (its clock); −1 sounding. */
   private silenced = -1;
+  /** Its longest side, in tiles (a car's: as long as its tiles let it be). */
+  private readonly fit: number;
 
-  constructor(alarm: Alarm, heading: number) {
+  constructor(alarm: Alarm, heading: number, length = 2, side = 0) {
     const look = (this.look = SIRENS[alarm]);
     const car = !look.pole;
+    this.fit = car && length > 2 && look.prop ? Math.min(FOOTPRINT_FIT[look.prop]?.fit ?? look.fit, length - 0.05) : look.fit;
     this.root.add(this.yaw);
     this.yaw.add(this.pivot);
     this.yaw.rotation.y = heading;
     this.pivot.add(this.gunPivot, this.body);
     this.gunPivot.add(this.muzzle);
-    if (car) this.body.position.z = 0.5;
+    // Over the middle of its tiles: ahead of the siren's tile, and to one side for one two wide.
+    if (car) this.body.position.set(side, 0, (length - 1) / 2);
     // The factory's pole and the box at its foot, ours.
     if (!car) {
       const steel = new THREE.MeshStandardMaterial({ color: 0x6d7378, metalness: 0.55, roughness: 0.5 });
@@ -1948,7 +1985,7 @@ class SirenRig implements FigureRig {
     fitted.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(fitted);
     const size = box.getSize(new THREE.Vector3());
-    const k = look.fit / Math.max(size.x, size.z);
+    const k = this.fit / Math.max(size.x, size.z);
     const centre = box.getCenter(new THREE.Vector3());
     fitted.scale.setScalar(k);
     fitted.position.set(-centre.x * k, look.pole - box.min.y * k, -centre.z * k);
@@ -1962,11 +1999,12 @@ class SirenRig implements FigureRig {
     this.root.updateMatrixWorld(true);
   }
 
-  /** Its lights, on its top at `height`. */
+  /** Its lights, on its top at `height` (on a car bigger than the two tiles it had, as far apart as it is bigger). */
   private addLamps(height: number): void {
+    const k = this.look.fit ? this.fit / this.look.fit : 1;
     for (const l of this.look.lights) {
       const group = new THREE.Group();
-      group.position.set(l.x, height + l.y, l.z);
+      group.position.set(l.x * k, height + l.y, l.z * k);
       const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.08, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(l.color).multiplyScalar(2.4), toneMapped: false }));
       const air = beams(l.color, 1.6, 0.55);
       const ground = beams(l.color, 2.6, 0.32);
@@ -2137,7 +2175,7 @@ const PIECES: ArmorPart[] = ['helmet', 'torso', 'arms', 'legs'];
  * `siren` is what a sabotage's objective is (SirenRig).
  */
 export function syntyFigure(template: TemplateId, accent: string, look?: Appearance, gear?: Gear, seed?: string, sex?: 'f' | 'm', siren?: Siren): FigureRig | null {
-  if (template === 'relay') return new SirenRig(siren?.alarm ?? 'factory', siren?.heading ?? 0);
+  if (template === 'relay') return new SirenRig(siren?.alarm ?? 'factory', siren?.heading ?? 0, siren?.length, siren?.side);
   if (template === 'turret') return new TurretRig();
   // One of the dead with a look of its own is a soldier risen (playtest 16/10 #7: Unit.risenFrom): their body,
   // clothes and helmet as they fell, the skin gone grey, the dead's walk; no band, no weapons.

@@ -1,9 +1,15 @@
 import { DIRS4 } from './grid';
 import { Rng } from './rng';
-import type { Decor, Level, MedicalDetail, MedicalSite, TileKind, Vec2 } from './types';
+import type { Decor, Level, MedicalDetail, MedicalSite, Pos, TileKind, Vec2 } from './types';
 
-/** Separate scenery roll: preserves the approved bodies, furniture and combat RNG. */
-export function medicalAbandonment(site: MedicalSite, width: number, tiles: TileKind[], decor: Decor[], levels: Level[], seed: number, reserved: Vec2[], existing: MedicalDetail[]): MedicalDetail[] {
+/**
+ * Separate scenery roll: preserves the approved bodies, furniture and combat
+ * RNG. A chair over or a fallen drip takes its tile, as cover (Arturo, 19/10:
+ * «que ocupen»), where `strew` lets it (furnishing.ts Furnisher.strew: it
+ * closes no way); where it doesn't, papers lie there instead. Without
+ * `strew`, nothing changes the map.
+ */
+export function medicalAbandonment(site: MedicalSite, width: number, tiles: TileKind[], decor: Decor[], levels: Level[], seed: number, reserved: Vec2[], existing: MedicalDetail[], strew?: (p: Pos) => boolean): MedicalDetail[] {
   const rng = new Rng((seed ^ 0x424c4f4f ^ (site.x * 8191 + site.y * 131)) >>> 0);
   const details: MedicalDetail[] = [];
   const layer = (z: number) => z ? levels[z - 1]! : { tiles, decor };
@@ -41,7 +47,7 @@ export function medicalAbandonment(site: MedicalSite, width: number, tiles: Tile
     for (const [i, p] of clear.slice(0, intensity).entries()) {
       if (i === 0) add('scatteredPapers', p);
       else if (i === 1) add(room.use === 'ward' ? 'rumpledLinen' : 'spilledSupplies', p);
-      else if (i === 2 && edges.some((e) => e.x === p.x && e.y === p.y)) add(room.use === 'waiting' || room.use === 'reception' ? 'overturnedChair' : 'fallenIV', p);
+      else if (i === 2 && edges.some((e) => e.x === p.x && e.y === p.y)) add(strew && !strew(p) ? 'scatteredPapers' : room.use === 'waiting' || room.use === 'reception' ? 'overturnedChair' : 'fallenIV', p);
       else add(rng.pick(['scatteredPapers', 'medicalWaste', 'spilledSupplies'] as const), p);
     }
     const nearby = bodies.filter((d) => d.z === room.z && d.x >= room.x && d.x < room.x + room.w && d.y >= room.y && d.y < room.y + room.h);

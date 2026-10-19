@@ -205,6 +205,7 @@ import { setCombatRate, setHurry, timeRate, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
 import { playArrival } from './arrivals';
+import { planWalks, type Walker, type WalkPlan } from './walkPlan';
 import { graphics } from '../settings';
 import { soldierPortrait } from '../strategy/portraits';
 import { skillsOf, treePanel } from '../strategy/skillSheet';
@@ -316,6 +317,8 @@ const FEUD_COLOR = '#e8d8c0';
  * quicker), a common zombie's walk comes to 0.66 s a tile (it was 1.02).
  */
 const WALKERS_PACE = 1.25;
+/** A shooter stepping out onto a tile someone (or something) takes leans this far towards it instead (tiles). */
+const LEAN_OUT = 0.35;
 /** After the player takes the camera, the enemy turn leaves it to them this long (ms): it never fights them. */
 const PLAYER_CAMERA_MS = 2500;
 /**
@@ -772,6 +775,8 @@ export class Game {
   private resultHold = 0;
   /** A group of the dead is walking together: no single walker takes the camera. */
   private grouped = false;
+  /** While a group of the dead walks (playGroup): when each of them stands and where it swerves, so none walks through another. */
+  private groupPlans: Map<string, WalkPlan> | null = null;
   /** The mission's item just went down with a broken floor: its own drop line would say it twice. */
   private itemFell = false;
   /** The framing of the last group of the dead shown walking: who was in it and what it took in. */
@@ -1566,12 +1571,43 @@ export class Game {
       const had = walks.get(e.unit)?.e as typeof e | undefined;
       walks.set(e.unit, had ? { ...q, e: { ...e, path: [...had.path, ...e.path], ap: had.ap + e.ap } } : q);
     }
+    this.groupPlans = this.planGroup([...walks.values()]);
     this.current = items[0]!;
     this.grouped = true;
     await Promise.all([...walks.values()].map((q) => this.play(q).catch((err) => animFailed(err))));
     this.grouped = false;
+    this.groupPlans = null;
     this.current = null;
     for (const q of items) await this.settle(q, epoch);
+  }
+
+  /**
+   * When each of a group's walkers sets off and where it stands a moment (walkPlan.ts): the engine planned
+   * them one after another (in `walks`' order), each from where the ones before ended, and they are played
+   * at once, at their own paces; so nobody walks into a tile another still holds or one planned before it
+   * is still to go through. Only the walks the squad sees (the others are not played).
+   */
+  private planGroup(walks: QueuedEvent[]): Map<string, WalkPlan> {
+    const v = this.view;
+    const ids: string[] = [];
+    const walkers: Walker[] = [];
+    for (const q of walks) {
+      const e = q.e as Extract<GameEvent, { t: 'moved' }>;
+      const u = getUnit(v, e.unit);
+      if (!u || !e.path.length || !(this.shownToSquad(u) || e.path.some((p) => this.mapView.isVisible(p.x, p.y)))) continue;
+      const tiles = [toPos(u.pos), ...e.path.map(toPos)];
+      ids.push(u.id);
+      walkers.push({
+        tiles: tiles.map((p) => nodeOf(v, p)),
+        steps: this.units.stepSeconds(u.id, u.pos, e.path, e.ap, WALKERS_PACE),
+        corners: tiles.map((p, k) => {
+          const next = tiles[k + 1];
+          return next && next.x !== p.x && next.y !== p.y && next.z === p.z ? ([nodeOf(v, { x: next.x, y: p.y, z: p.z }), nodeOf(v, { x: p.x, y: next.y, z: p.z })] as const) : null;
+        }),
+      });
+    }
+    const plans = planWalks(walkers);
+    return new Map(ids.map((id, i) => [id, plans[i]!]));
   }
 
   /**
@@ -1683,6 +1719,8 @@ export class Game {
           },
           e.ap,
           this.grouped ? WALKERS_PACE : 1,
+          this.groupPlans?.get(u.id)?.waits,
+          this.groupPlans?.get(u.id)?.passes.slice(1),
         );
         return;
       }
@@ -2202,6 +2240,9 @@ export class Game {
         }
         // A siege's door broken down (docs/FASE12.md §10): the blow that felled it showed it (fx.smash), and the map draws the gap.
         if (before === 'door' || before === 'doorOpen') return;
+        // A silenced siren's car stays as it stood, solid now (rules.ts damage: its tile the car's, a part of it): its own
+        // lights go out, nothing bursts.
+        if (e.decor === 'sirenCar' || e.decor === 'part') return;
         // A breached wall (docs/FASE7.md §4) bursts higher and in brick and plaster, not in the cover's colours.
         if (before === 'wall') {
           this.fx.debris(tileToWorld(e.pos, 1.2), 0x9a8a78, 12);
@@ -2497,8 +2538,14 @@ export class Game {
       return;
     }
 
+    // Out from behind the cover to shoot (los.ts peekOrigins), onto the tile beside; with someone or something
+    // there (the rules don't ask), it leans out towards it instead of stepping into it.
     const stepOut = !samePlace(e.from, shooter.pos);
-    if (stepOut) await this.units.slide(shooter.id, tileToWorld(e.from), 0.22, false);
+    if (stepOut) {
+      const beside = tileToWorld(e.from);
+      const out = this.units.clearFor(e.from, shooter.id) ? beside : shooterPos.clone().add(beside.sub(shooterPos).setY(0).setLength(LEAN_OUT));
+      await this.units.slide(shooter.id, out, 0.22, false);
+    }
     await this.units.raiseWeapon(shooter.id, targetPos, firesSidearm(shooter, e.ability));
     await wait(cam() ? 0.25 : 0.08);
 

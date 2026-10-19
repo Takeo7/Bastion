@@ -109,8 +109,8 @@ export type GameEvent =
   | { t: 'evacDeparted' }
   /** Not in the bus when it left: lost (docs/PRUEBA-2026-10-14.md P1). */
   | { t: 'leftBehind'; unit: string }
-  /** `decor`: what it is to look like from now on (a breached wall); without it, the decor stays. */
-  | { t: 'tileChanged'; pos: Pos; kind: TileKind; decor?: DecorKind }
+  /** `decor`: what it is to look like from now on (a breached wall), turned `facing` (DIRS4; north if none); without it, the decor stays. */
+  | { t: 'tileChanged'; pos: Pos; kind: TileKind; decor?: DecorKind; facing?: number }
   /** A trap of the base goes off under one of the dead (docs/FASE12.md §11.4): one use less. Its harm follows (`damaged`, `stunned`). */
   | { t: 'trapSprung'; trap: string; unit: string }
   /** One of the dead beats on a door or a barricade (docs/FASE12.md §4): `left`, what it still holds; at 0 a `tileChanged` follows, it gave way. */
@@ -561,7 +561,7 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       if (e.decor) {
         // A breached wall keeps its look through a reload (docs/FASE7.md §4).
         const level = e.pos.z === 0 ? s : s.levels?.[e.pos.z - 1];
-        if (level) (level.decor ??= new Array<Decor>(s.width * s.height).fill(0))[tileIndex(s, e.pos.x, e.pos.y)] = decorCode(e.decor);
+        if (level) (level.decor ??= new Array<Decor>(s.width * s.height).fill(0))[tileIndex(s, e.pos.x, e.pos.y)] = decorCode(e.decor, e.facing);
       }
       break;
     }

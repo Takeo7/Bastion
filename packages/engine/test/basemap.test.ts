@@ -294,7 +294,8 @@ describe('the siege of the base', () => {
       landed += at.size;
     }
     expect(landed).toBeGreaterThan(50);
-  });
+    // Sixty enemy turns of hordes of thirty a side, each of the dead finding its way round the rest (19/10): time for it.
+  }, 20_000);
 });
 
 describe('the defences that act on their own', () => {

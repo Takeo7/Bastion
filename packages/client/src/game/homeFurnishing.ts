@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { decorOf, DIRS4, type DecorKind, type GameState, type HomeRoom, type HomeSite, type TileKind, type Vec2 } from '@bastion/engine';
+import { decorOf, DIRS4, objectAt, type DecorKind, type GameState, type HomeRoom, type HomeSite, type TileKind, type Vec2 } from '@bastion/engine';
 import { STOREY } from './coords';
 import type { PropId } from './syntyManifest';
 
@@ -12,8 +12,16 @@ import type { PropId } from './syntyManifest';
 // desk its books and lamp; a rug and the towels in the bathroom; the
 // coats by the door in the hall. One style of each for a house, by where it
 // stands; in a wrecked one the chairs are over and the lamp is down.
-// Cosmetic only, as the rest of the map's dressing: never cover, never on a
-// way through a door or up a ladder, only where the floor is clear.
+// What stands up takes a tile of its own, and the engine picks it (Arturo,
+// 19/10: «que ocupen»; engine furnishing.ts): the armchairs, the coffee
+// table, the lamps, the plants, the bedside tables, the chair in a corner,
+// the towel rail and the coat stand are drawn where its decor says, while
+// their tile stands. Only what lies flat (the rugs) or on the furniture (a
+// lamp, books, the bread bin) is picked here, on clear floor; chairs round a
+// table are tucked in on its own tile. A mission saved before has none of
+// the engine's: its rooms only show less. The bed, the sofa, the table and
+// the bath take two tiles or four (docs/MAPAS.md, phase 1): what goes with
+// them goes round the whole of them.
 
 export interface Furnishing {
   id: PropId;
@@ -39,8 +47,13 @@ const turnTo = (f: number) => (4 - f) % 4;
 /** How high the top of what stands on a tile is, for what is put on it (tiles). */
 const TOP: Partial<Record<DecorKind, number>> = { table: 0.57, desk: 0.5, counter: 0.6, stove: 0.6 };
 const BEDSIDE_TOP = 0.3;
+/** How far from a table's middle the chairs tucked in round it sit, on its own tile (and the stools at a counter). */
+const TUCKED = 0.3;
 
 const WAYS = new Set<TileKind>(['door', 'doorOpen', 'ladder']);
+
+/** Cover still standing: what the engine put there, and no blast took. */
+const standing = (tile: TileKind | null | undefined) => tile === 'low' || tile === 'high';
 
 export function furnishHomes(s: GameState): Furnishing[] {
   const out: Furnishing[] = [];
@@ -65,10 +78,9 @@ function furnishHome(s: GameState, home: HomeSite, out: Furnishing[]): void {
     const tileAt = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= s.height ? null : layer.tiles[y * w + x]);
     const inRoom = (p: Vec2) => p.x >= room.x && p.y >= room.y && p.x < room.x + room.w && p.y < room.y + room.h;
     const key = (p: Vec2) => `${p.x},${p.y},${room.z}`;
-    /** Clear floor in the room, off the ways through its doors and up its ladders, nothing put there yet. */
+    /** Clear floor in the room, off the ways through its doors and up its ladders, nothing put there yet: for what lies flat. */
     const clear = (p: Vec2) =>
       inRoom(p) && tileAt(p.x, p.y) === 'floor' && !decorOf(layer.decor?.[p.y * w + p.x]) && !used.has(key(p)) && !DIRS4.some((d) => WAYS.has(tileAt(p.x + d.x, p.y + d.y) ?? 'floor'));
-    const wallBy = (p: Vec2) => DIRS4.findIndex((d) => tileAt(p.x + d.x, p.y + d.y) === 'wall');
     const base = room.z * STOREY + (room.z ? 0 : (s.elev[room.y * w + room.x] ?? 0) * STOREY);
     const r = (p: Vec2, salt: number) => hash(p.x * 3 + room.z, p.y * 5, salt);
     /** `id` on tile p, its front to DIRS4[f] (a turn more `turn`), off the tile's middle by (du, dv) along x and y, `y` up. */
@@ -87,91 +99,115 @@ function furnishHome(s: GameState, home: HomeSite, out: Furnishing[]): void {
     for (let y = room.y; y < room.y + room.h; y++) {
       for (let x = room.x; x < room.x + room.w; x++) {
         const look = decorOf(layer.decor?.[y * w + x]);
-        if (look) things.push({ p: { x, y }, ...look });
+        if (look && standing(tileAt(x, y))) things.push({ p: { x, y }, ...look });
       }
     }
     const of = (kind: DecorKind) => things.filter((t) => t.kind === kind);
     const step = (p: Vec2, f: number): Vec2 => ({ x: p.x + DIRS4[f]!.x, y: p.y + DIRS4[f]!.y });
-    const corners = [
-      { x: room.x, y: room.y },
-      { x: room.x + room.w - 1, y: room.y },
-      { x: room.x, y: room.y + room.h - 1 },
-      { x: room.x + room.w - 1, y: room.y + room.h - 1 },
-    ];
-    /** The middle of the room's open floor nearest p's way. */
-    const inward = (p: Vec2) => {
-      const cx = room.x + (room.w - 1) / 2;
-      const cy = room.y + (room.h - 1) / 2;
-      return Math.abs(cx - p.x) > Math.abs(cy - p.y) ? (cx > p.x ? 1 : 3) : cy > p.y ? 2 : 0;
+    /** The tiles of the piece anchored on p (several for a bed, a sofa, a table, a bath: docs/MAPAS.md, phase 1). */
+    const tilesOf = (p: Vec2): Vec2[] => (layer.decor ? objectAt(layer.decor, w, p.y * w + p.x)?.tiles ?? [p.y * w + p.x] : [p.y * w + p.x]).map((i) => ({ x: i % w, y: Math.floor(i / w) }));
+    /**
+     * Before a piece facing f, at its middle: the tile ahead of its front row nearest the anchor's, and how far off
+     * that tile's middle the piece's middle lies across (a sofa or a bed two wide).
+     */
+    const before = (p: Vec2, f: number) => {
+      const own = tilesOf(p);
+      const d = DIRS4[f]!;
+      const depth = Math.max(...own.map((q) => (q.x - p.x) * d.x + (q.y - p.y) * d.y)) + 1;
+      const mid = { x: own.reduce((a, q) => a + q.x, 0) / own.length - p.x, y: own.reduce((a, q) => a + q.y, 0) / own.length - p.y };
+      return { at: { x: p.x + d.x * depth, y: p.y + d.y * depth }, du: d.x ? 0 : mid.x, dv: d.y ? 0 : mid.y };
     };
-    const cornerThing = (id: PropId, salt: number, k = 1) => {
-      const c = corners.filter(clear).sort((a, b) => r(a, salt) - r(b, salt))[0];
-      if (c) put(id, c, inward(c), { du: (c.x === room.x ? -0.15 : 0.15), dv: (c.y === room.y ? -0.15 : 0.15), k, over: id.startsWith('floorLamp') ? over(c, salt + 1) : 0 });
-    };
-    /** Chairs round a table, on its clear sides (three at most), facing it; over in a wrecked house. */
+    /** Pushed into the corner of the room it stands in (along no wall, not at all). */
+    const cornered = (p: Vec2, by = 0.15) => ({
+      du: p.x === room.x ? -by : p.x === room.x + room.w - 1 ? by : 0,
+      dv: p.y === room.y ? -by : p.y === room.y + room.h - 1 ? by : 0,
+    });
+    /**
+     * Chairs round a table, tucked in on its own tiles on their sides facing open floor (three at most, four round
+     * one of two tiles), facing it; over in a wrecked house.
+     */
     const roundTable = (t: Vec2) => {
+      const own = tilesOf(t);
       let n = 0;
-      for (let f = 0; f < 4 && n < 3; f++) {
-        const seat = step(t, f);
-        if (!clear(seat)) continue;
-        put(chair, seat, (f + 2) % 4, { du: -DIRS4[f]!.x * 0.18, dv: -DIRS4[f]!.y * 0.18, over: over(seat, 70 + f), turn: (r(seat, 80) - 0.5) * 0.3 });
-        n++;
+      for (const q of own) {
+        for (let f = 0; f < 4 && n < (own.length > 1 ? 4 : 3); f++) {
+          const side = step(q, f);
+          if (!inRoom(side) || tileAt(side.x, side.y) !== 'floor') continue;
+          put(chair, q, (f + 2) % 4, { du: DIRS4[f]!.x * TUCKED, dv: DIRS4[f]!.y * TUCKED, y: 0.001, over: over(side, 70 + f), turn: (r(side, 80) - 0.5) * 0.3 });
+          n++;
+        }
       }
     };
+    // What the engine put in the room on tiles of their own, each as it was drawn.
+    for (const t of things) {
+      switch (t.kind) {
+        case 'armchair':
+          put(wrecked ? 'armchairWorn' : 'armchair', t.p, t.facing, { over: over(t.p, 20) });
+          break;
+        case 'coffeeTable':
+          put('coffeeTable', t.p, t.facing);
+          break;
+        case 'floorLamp':
+          put(lamp, t.p, t.facing, { ...cornered(t.p), over: over(t.p, 31) });
+          break;
+        case 'pottedPlant': {
+          const salt = room.use === 'kitchen' ? 11 : room.use === 'bedroom' ? 10 : room.use === 'study' ? 8 : room.use === 'hall' ? 9 : 5;
+          put(plants[style(salt, 3)]!, t.p, t.facing, { ...cornered(t.p), k: room.use === 'kitchen' || room.use === 'hall' ? 0.9 : 1 });
+          break;
+        }
+        case 'diningChair':
+          put(chair, t.p, t.facing, cornered(t.p));
+          break;
+        case 'nightstand': {
+          // Against the bed's side, towards its head; its lamp on it (in a wrecked house, now and then).
+          const bed = DIRS4.findIndex((d) => !!layer.decor && objectAt(layer.decor, w, (t.p.y + d.y) * w + t.p.x + d.x)?.kind === 'bed');
+          const side = bed >= 0 ? (bed + 2) % 4 : (t.facing + 1) % 4;
+          const at = { du: -DIRS4[side]!.x * 0.25 - DIRS4[t.facing]!.x * 0.3, dv: -DIRS4[side]!.y * 0.25 - DIRS4[t.facing]!.y * 0.3 };
+          put('bedsideTable', t.p, t.facing, at);
+          if (!wrecked || r(t.p, 40) < 0.5) put(small, t.p, t.facing, { ...at, y: BEDSIDE_TOP, cast: false });
+          break;
+        }
+        case 'towelRack': {
+          const wall = DIRS4[(t.facing + 2) % 4]!;
+          put('towelRack', t.p, t.facing, { du: wall.x * 0.3, dv: wall.y * 0.3 });
+          break;
+        }
+        case 'coatRack':
+          put('coatRack', t.p, t.facing, { ...cornered(t.p, 0.2), over: over(t.p, 60) });
+          break;
+      }
+    }
     switch (room.use) {
       case 'living': {
-        // The sofa's rug, the table (or the television) before it, an armchair across from it.
+        // The sofa's rug before it (under the coffee table, if one stands there), at its middle.
         for (const sofa of of('sofa')) {
-          const ahead = step(sofa.p, sofa.facing);
-          if (inRoom(ahead)) put(rug, ahead, sofa.facing, { du: -DIRS4[sofa.facing]!.x * 0.45, dv: -DIRS4[sofa.facing]!.y * 0.45, cast: false });
-          const beyond = step(ahead, sofa.facing);
-          const table = decorOf(layer.decor?.[ahead.y * w + ahead.x])?.kind === 'table';
-          if (table && clear(beyond)) put(wrecked ? 'armchairWorn' : 'armchair', beyond, (sofa.facing + 2) % 4, { over: over(beyond, 20) });
-          else if (clear(ahead)) put('coffeeTable', ahead, sofa.facing, { dv: 0 });
-          // An armchair at the side of the table (or of the sofa), turned to it.
-          for (const side of [(sofa.facing + 1) % 4, (sofa.facing + 3) % 4]) {
-            const by = step(table ? ahead : sofa.p, side);
-            if (!clear(by)) continue;
-            put(wrecked ? 'armchairWorn' : 'armchair', by, (side + 2) % 4, { turn: table ? 0 : -0.5, over: over(by, 21) });
-            break;
-          }
+          const ahead = before(sofa.p, sofa.facing);
+          if (inRoom(ahead.at)) put(rug, ahead.at, sofa.facing, { du: ahead.du - DIRS4[sofa.facing]!.x * 0.45, dv: ahead.dv - DIRS4[sofa.facing]!.y * 0.45, y: 0.001, cast: false });
         }
         for (const table of of('table')) if (!of('sofa').length) roundTable(table.p);
-        cornerThing(lamp, 30);
-        cornerThing(plants[style(5, 3)]!, 31);
         break;
       }
       case 'kitchen': {
         for (const table of of('table')) roundTable(table.p);
-        cornerThing(plants[style(11, 3)]!, 44, 0.9);
         // On the counter: the bread bin, or the coffee machine.
         const counter = of('counter')[0];
         if (counter) put(style(6, 2) ? 'breadBin' : 'coffeeMachine', counter.p, counter.facing, { y: TOP.counter, du: -DIRS4[counter.facing]!.x * 0.2, dv: -DIRS4[counter.facing]!.y * 0.2 });
         break;
       }
       case 'bedroom': {
+        // A rug at the foot of the bed.
         for (const bed of of('bed')) {
-          // The bedside table beside the bed, its lamp on it; a rug before it.
-          for (const side of [(bed.facing + 1) % 4, (bed.facing + 3) % 4]) {
-            const by = step(bed.p, side);
-            if (!clear(by)) continue;
-            put('bedsideTable', by, bed.facing, { du: -DIRS4[side]!.x * 0.25 - DIRS4[bed.facing]!.x * 0.3, dv: -DIRS4[side]!.y * 0.25 - DIRS4[bed.facing]!.y * 0.3 });
-            if (!wrecked || r(by, 40) < 0.5) put(small, by, bed.facing, { du: -DIRS4[side]!.x * 0.25 - DIRS4[bed.facing]!.x * 0.3, dv: -DIRS4[side]!.y * 0.25 - DIRS4[bed.facing]!.y * 0.3, y: BEDSIDE_TOP, cast: false });
-            break;
-          }
-          const foot = step(bed.p, bed.facing);
-          if (clear(foot)) put('rug3', foot, bed.facing, { du: -DIRS4[bed.facing]!.x * 0.2, dv: -DIRS4[bed.facing]!.y * 0.2, cast: false, k: 0.8 });
+          const foot = before(bed.p, bed.facing);
+          if (clear(foot.at)) put('rug3', foot.at, bed.facing, { du: foot.du - DIRS4[bed.facing]!.x * 0.2, dv: foot.dv - DIRS4[bed.facing]!.y * 0.2, cast: false, k: 0.8 });
         }
-        if (r(corners[0]!, 41) < 0.5) cornerThing(chair, 42);
-        else cornerThing(plants[style(10, 3)]!, 43);
         break;
       }
       case 'bath': {
+        // The bath rug beside the tub (by its anchor first).
         const tub = of('bathtub')[0];
-        const by = tub ? DIRS4.map((_, f) => step(tub.p, f)).find(clear) : undefined;
-        if (by && tub) put('bathRug', by, inward(by), { cast: false });
-        const spot = [...corners, ...room.w > 2 ? [{ x: room.x + 1, y: room.y }] : []].find((p) => clear(p) && wallBy(p) >= 0);
-        if (spot) put('towelRack', spot, (wallBy(spot) + 2) % 4, { du: DIRS4[wallBy(spot)]!.x * 0.3, dv: DIRS4[wallBy(spot)]!.y * 0.3 });
+        const spots = tub ? tilesOf(tub.p).flatMap((q) => [0, 1, 2, 3].map((f) => ({ p: step(q, f), f }))) : [];
+        const spot = spots.find((o) => clear(o.p));
+        if (spot) put('bathRug', spot.p, spot.f, { cast: false });
         break;
       }
       case 'study': {
@@ -182,14 +218,6 @@ function furnishHome(s: GameState, home: HomeSite, out: Furnishing[]): void {
         }
         const middle = { x: room.x + Math.floor(room.w / 2), y: room.y + Math.floor(room.h / 2) };
         if (clear(middle)) put(rug, middle, 0, { cast: false, k: 0.9 });
-        cornerThing(plants[style(8, 3)]!, 51);
-        break;
-      }
-      case 'hall': {
-        // The coats by the door.
-        const spot = corners.find((p) => clear(p) && wallBy(p) >= 0);
-        if (spot) put('coatRack', spot, (wallBy(spot) + 2) % 4, { du: (spot.x === room.x ? -0.2 : 0.2), dv: (spot.y === room.y ? -0.2 : 0.2), over: over(spot, 60) });
-        cornerThing(plants[style(9, 3)]!, 61, 0.9);
         break;
       }
     }
@@ -212,12 +240,29 @@ export function shopTrade(look: number): 'books' | 'cafe' | 'grocer' {
 }
 
 /**
+ * A shop's trade as its floor shows it: by what the engine furnished it with
+ * (furnishing.ts: a café's tables, a reading table, a drinks fridge), else by
+ * its looks, as the engine picked it from the same number.
+ */
+export function shopTradeIn(s: GameState, b: ShopSite): 'books' | 'cafe' | 'grocer' {
+  for (let y = b.y0; y <= b.y1; y++) {
+    for (let x = b.x0; x <= b.x1; x++) {
+      const kind = decorOf(s.decor?.[y * s.width + x])?.kind;
+      if (kind === 'cafeTable') return 'cafe';
+      if (kind === 'readingTable') return 'books';
+      if (kind === 'drinksFridge') return 'grocer';
+    }
+  }
+  return shopTrade(b.look);
+}
+
+/**
  * The shops dressed as their trade (playtest 18/10, #36), on their ground
- * floor: a bookshop's books on its counter and a reading corner; a café's
- * stools at the bar, the coffee machine on it and its tables with their chairs
- * out on the open floor; a grocer's drinks fridge against a wall, the cooler,
- * boxes of stock by the shelves. A library (a hall of bookcases) its reading
- * tables. Upstairs, the stock room's boxes. Cosmetic, on clear floor only.
+ * floor: a bookshop's books on its counter; a café's stools at the bar,
+ * tucked in under it, and the coffee machine on it; a grocer's cooler and
+ * boxes of stock by the shelves. Upstairs, the stock room's boxes. Small
+ * things, on clear floor or on the furniture. The tables and the drinks
+ * fridge stand on tiles of their own (furnishOwnTiles).
  */
 export function furnishShops(s: GameState, sites: readonly ShopSite[]): Furnishing[] {
   const out: Furnishing[] = [];
@@ -225,7 +270,7 @@ export function furnishShops(s: GameState, sites: readonly ShopSite[]): Furnishi
   for (const b of sites) {
     const library = b.kind === 'hall' && b.look < 0.3;
     if (b.kind !== 'shop' && !library) continue;
-    const trade = library ? 'books' : shopTrade(b.look);
+    const trade = library ? 'books' : shopTradeIn(s, b);
     for (let z = 0; z <= (s.levels?.length ?? 0); z++) {
       const layer = z ? s.levels?.[z - 1] : { tiles: s.tiles, decor: s.decor };
       if (!layer) continue;
@@ -234,11 +279,6 @@ export function furnishShops(s: GameState, sites: readonly ShopSite[]): Furnishi
       const used = new Set<number>();
       const clear = (x: number, y: number) =>
         tileAt(x, y) === 'floor' && !lookAt(x, y) && !used.has(y * w + x) && !DIRS4.some((d) => WAYS.has(tileAt(x + d.x, y + d.y) ?? 'floor'));
-      /** Open floor all round (a table and its chairs stand clear of walls and furniture). */
-      const open = (x: number, y: number) => {
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (tileAt(x + dx, y + dy) !== 'floor' || lookAt(x + dx, y + dy)) return false;
-        return clear(x, y);
-      };
       const base = z * STOREY;
       const put = (id: PropId, x: number, y: number, yaw: number, o: { du?: number; dv?: number; y?: number; k?: number; cast?: boolean } = {}) => {
         const m = new THREE.Matrix4().compose(
@@ -255,8 +295,9 @@ export function furnishShops(s: GameState, sites: readonly ShopSite[]): Furnishi
       for (let y = b.y0; y <= b.y1; y++) {
         for (let x = b.x0; x <= b.x1; x++) {
           const look = lookAt(x, y);
-          if (look?.kind === 'counter') counters.push({ x, y, f: look.facing });
-          if (look?.kind === 'shelf') shelves.push({ x, y, f: look.facing });
+          if (!look || !standing(tileAt(x, y))) continue;
+          if (look.kind === 'counter') counters.push({ x, y, f: look.facing });
+          if (look.kind === 'shelf') shelves.push({ x, y, f: look.facing });
         }
       }
       const yawOf = (f: number) => (turnTo(f) * Math.PI) / 2;
@@ -268,51 +309,21 @@ export function furnishShops(s: GameState, sites: readonly ShopSite[]): Furnishi
         }
         continue;
       }
-      // Tables out on the open floor, every few tiles: a café's with two chairs, a bookshop's reading table with one.
-      const tables = (max: number, chairs: number) => {
-        let n = 0;
-        for (let y = b.y0 + 1; y < b.y1 && n < max; y++) {
-          for (let x = b.x0 + 1; x < b.x1 && n < max; x++) {
-            if ((x + 2 * y) % 4 !== Math.floor(b.look * 4) || !open(x, y)) continue;
-            const turn = r(x, y, 3) * 0.6;
-            put(trade === 'cafe' ? 'cafeTable' : 'coffeeTable', x, y, turn);
-            for (let k = 0; k < chairs; k++) {
-              const a = turn + k * Math.PI + Math.PI / 2;
-              put(trade === 'cafe' ? 'cafeChair' : 'diningChair', x, y, a + Math.PI, { du: Math.sin(a) * 0.42, dv: Math.cos(a) * 0.42, y: 0.001 });
-            }
-            used.add(y * w + x + 1);
-            used.add(y * w + x - 1);
-            n++;
-          }
-        }
-      };
-      const area = (b.x1 - b.x0 - 1) * (b.y1 - b.y0 - 1);
       switch (trade) {
         case 'books':
           counters.forEach((c, k) => {
             if (k % 2 === 0) put(k % 4 ? 'bookPile3' : 'bookPile', c.x, c.y, yawOf(c.f) + r(c.x, c.y, 4) * 0.6, { y: TOP.counter, cast: false });
           });
-          tables(library ? Math.max(2, Math.floor(area / 18)) : 1, 1);
           break;
         case 'cafe':
+          // The stools at the bar, tucked in under it on its tile.
           counters.forEach((c, k) => {
-            const p = { x: c.x + DIRS4[c.f]!.x, y: c.y + DIRS4[c.f]!.y };
-            if (clear(p.x, p.y)) put('barStool', p.x, p.y, yawOf(c.f), { du: -DIRS4[c.f]!.x * 0.25, dv: -DIRS4[c.f]!.y * 0.25 });
+            put('barStool', c.x, c.y, yawOf(c.f), { du: DIRS4[c.f]!.x * TUCKED, dv: DIRS4[c.f]!.y * TUCKED, y: 0.001 });
             if (k === 1) put('coffeeMachine', c.x, c.y, yawOf(c.f), { y: TOP.counter, cast: false });
           });
-          tables(Math.max(1, Math.floor(area / 12)), 2);
           break;
         case 'grocer': {
-          // The drinks fridge against a wall, the cooler by the counter, stock by the shelves.
-          let fridge = false;
-          for (let y = b.y0 + 1; y < b.y1 && !fridge; y++) {
-            for (let x = b.x0 + 1; x < b.x1 && !fridge; x++) {
-              const wall = DIRS4.findIndex((d) => tileAt(x + d.x, y + d.y) === 'wall');
-              if (wall < 0 || !clear(x, y) || r(x, y, 5) < 0.6) continue;
-              put('drinksFridge', x, y, yawOf((wall + 2) % 4), { du: DIRS4[wall]!.x * 0.2, dv: DIRS4[wall]!.y * 0.2 });
-              fridge = true;
-            }
-          }
+          // The cooler by the counter, stock by the shelves.
           const c = counters[0];
           if (c) {
             const p = DIRS4.map((d) => ({ x: c.x + d.x, y: c.y + d.y })).find((q) => clear(q.x, q.y));
@@ -331,9 +342,73 @@ export function furnishShops(s: GameState, sites: readonly ShopSite[]): Furnishi
 }
 
 /**
- * A barn's floor (playtest 18/10, #53): the tools leaning against its
- * walls, a wheelbarrow and buckets, on clear ground. Cosmetic.
+ * What the engine stood on tiles of their own in shops, libraries and barns
+ * (furnishing.ts), wherever they are and while they stand, whatever the
+ * client makes of the building: a café's tables with their two chairs, a
+ * reading table with its chair, tucked in on its tile; a grocer's drinks
+ * fridge against its wall; a barn's tools leant against its wall and its
+ * wheelbarrow.
  */
+export function furnishOwnTiles(s: GameState): Furnishing[] {
+  const out: Furnishing[] = [];
+  const w = s.width;
+  let tools = 0;
+  for (let z = 0; z <= (s.levels?.length ?? 0); z++) {
+    const layer = z ? s.levels?.[z - 1] : { tiles: s.tiles, decor: s.decor };
+    if (!layer?.decor) continue;
+    for (let i = 0; i < layer.tiles.length; i++) {
+      const look = decorOf(layer.decor[i]);
+      if (!look || !standing(layer.tiles[i])) continue;
+      const x = i % w;
+      const y = (i - x) / w;
+      const r = (salt: number) => hash(x * 3 + z, y * 5, salt);
+      const base = z * STOREY + (z ? 0 : (s.elev[i] ?? 0) * STOREY);
+      const put = (id: PropId, yaw: number, o: { du?: number; dv?: number; y?: number; lean?: number } = {}) =>
+        out.push({
+          id,
+          matrix: new THREE.Matrix4().compose(
+            new THREE.Vector3(x + 0.5 + (o.du ?? 0), base + (o.y ?? 0), y + 0.5 + (o.dv ?? 0)),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(o.lean ?? 0, yaw, 0, 'YXZ')),
+            new THREE.Vector3(1, 1, 1),
+          ),
+          x,
+          y,
+          z,
+          cast: true,
+        });
+      switch (look.kind) {
+        case 'cafeTable':
+        case 'readingTable': {
+          const cafe = look.kind === 'cafeTable';
+          const turn = r(3) * 0.6;
+          put(cafe ? 'cafeTable' : 'coffeeTable', turn);
+          for (let k = 0; k < (cafe ? 2 : 1); k++) {
+            const a = turn + k * Math.PI + Math.PI / 2;
+            put(cafe ? 'cafeChair' : 'diningChair', a + Math.PI, { du: Math.sin(a) * TUCKED, dv: Math.cos(a) * TUCKED, y: 0.001 });
+          }
+          break;
+        }
+        case 'drinksFridge': {
+          const wall = DIRS4[(look.facing + 2) % 4]!;
+          put('drinksFridge', (turnTo(look.facing) * Math.PI) / 2, { du: wall.x * 0.2, dv: wall.y * 0.2 });
+          break;
+        }
+        case 'tools': {
+          // Leant against the wall, its handle up to it.
+          const d = DIRS4[look.facing]!;
+          put((['pitchfork', 'rake', 'spade'] as const)[tools++ % 3]!, (turnTo(look.facing) * Math.PI) / 2 + (r(2) - 0.5) * 0.4, { du: d.x * 0.36, dv: d.y * 0.36, lean: -0.22 });
+          break;
+        }
+        case 'wheelbarrow':
+          put('wheelbarrow', r(4) * 6.3);
+          break;
+      }
+    }
+  }
+  return out;
+}
+
+/** A barn's floor (playtest 18/10, #53): buckets on clear ground (its tools and wheelbarrow, furnishOwnTiles). */
 export function furnishBarns(s: GameState, sites: readonly ShopSite[]): Furnishing[] {
   const out: Furnishing[] = [];
   const w = s.width;
@@ -358,26 +433,10 @@ export function furnishBarns(s: GameState, sites: readonly ShopSite[]): Furnishi
       });
       used.add(y * w + x);
     };
-    let tools = 0;
-    let barrow = false;
     for (let y = b.y0 + 1; y < b.y1; y++) {
       for (let x = b.x0 + 1; x < b.x1; x++) {
-        if (!clear(x, y)) continue;
         const r = (salt: number) => hash(x, y, salt);
-        const wall = DIRS4.findIndex((d) => tileAt(x + d.x, y + d.y) === 'wall');
-        if (wall >= 0 && tools < 3 && r(1) < 0.3) {
-          // Leant against the wall, its handle up to it.
-          const d = DIRS4[wall]!;
-          put((['pitchfork', 'rake', 'spade'] as const)[tools]!, x, y, (turnTo(wall) * Math.PI) / 2 + (r(2) - 0.5) * 0.4, { du: d.x * 0.36, dv: d.y * 0.36, lean: -0.22 });
-          tools++;
-          continue;
-        }
-        if (wall < 0 && !barrow && r(3) < 0.2) {
-          put('wheelbarrow', x, y, r(4) * 6.3);
-          barrow = true;
-          continue;
-        }
-        if (r(5) < 0.1) put('bucket', x, y, r(6) * 6.3, { du: (r(7) - 0.5) * 0.5, dv: (r(8) - 0.5) * 0.5 });
+        if (clear(x, y) && r(5) < 0.1) put('bucket', x, y, r(6) * 6.3, { du: (r(7) - 0.5) * 0.5, dv: (r(8) - 0.5) * 0.5 });
       }
     }
   }

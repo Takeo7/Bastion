@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { bastionFootprint, bastionLot, createMission, onBastionLot, pieceAt, pieceCells, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type PieceId, type TemplateId } from '@bastion/engine';
+import { bastionFootprint, bastionLot, bastionStage, createMission, onBastionLot, pieceAt, pieceCells, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type PieceId, type TemplateId } from '@bastion/engine';
 import { drawPiece, pieceMap, type PieceArt } from '../game/basePieces';
 import { EvacBus } from '../game/evacBus';
 import { MapView } from '../game/mapView';
@@ -47,6 +47,8 @@ export class ClearingArtView implements ClearingArt {
   /** La Lata, parked on a track by the caravan (parkBus), as the campaign has it (setVehicle); and how far it goes to be out of the clearing. */
   private bus = new EvacBus();
   private busWay = 14;
+  /** Its way out along its track (and back in by it) is clear to the clearing's edge; if not, it fades out and in where it stands. */
+  private busRoute = true;
   /** La Lata is out on a mission (gone down its track until it comes back); and while it drives, the vehicle a change asked for, for after. */
   private away = false;
   private driving: Promise<void> | null = null;
@@ -320,7 +322,10 @@ export class ClearingArtView implements ClearingArt {
    * La Lata by the caravan, nose out along a track (base.ts onTrack), where
    * nothing is built and no pine stands under it: the nearest such spot up
    * each track from the caravan, a lane to either side if the middle is
-   * taken; its doors to the caravan. Nowhere clear, it is away (hidden).
+   * taken; its doors to the caravan. Best where its way out along the track
+   * to the clearing's edge is clear too (it leaves and comes back by it:
+   * busRoute); if no spot has one, it fades out and in where it stands.
+   * Nowhere clear, it is away (hidden).
    */
   private parkBus(base: BaseState): void {
     // From the Bastion's lot out (never on it: playtest 18/10, #40).
@@ -328,28 +333,38 @@ export class ClearingArtView implements ClearingArt {
     const [cw, ch] = lot ? [lot.w, lot.h] : [0, 0];
     const mid = lot ? { x: lot.x + lot.w / 2, z: lot.y + lot.h / 2 } : { x: base.width / 2, z: base.height / 2 };
     const length = this.bus.length;
-    const clear = (at: THREE.Vector3, dir: { x: number; z: number }) => {
-      for (let k = -length / 2; k <= length / 2; k += 0.5) {
-        for (const side of [-0.8, 0, 0.8]) {
+    const halfWidth = this.bus.width / 2;
+    const blocked = (x: number, y: number) => pieceAt(base, x, y) || treeAt(base, x, y) || onBastionLot(base, x, y);
+    /**
+     * Nothing under it from `from` to `to` tiles along `dir` from `at` (its middle), its width across; `out`:
+     * past the clearing's edge the way goes on (its way out), else it is no place to stand.
+     */
+    const clear = (at: THREE.Vector3, dir: { x: number; z: number }, from: number, to: number, out = false) => {
+      for (let k = from; k <= to + 1e-6; k += 0.5) {
+        for (const side of [-halfWidth, 0, halfWidth]) {
           const x = Math.floor(at.x + dir.x * k + dir.z * side);
           const y = Math.floor(at.z + dir.z * k + dir.x * side);
-          if (x < 0 || y < 0 || x >= base.width || y >= base.height || pieceAt(base, x, y) || treeAt(base, x, y) || onBastionLot(base, x, y)) return false;
+          if (x < 0 || y < 0 || x >= base.width || y >= base.height) return out;
+          if (blocked(x, y)) return false;
         }
       }
       return true;
     };
-    let best: { at: THREE.Vector3; dir: { x: number; z: number }; way: number; cost: number } | null = null;
+    let best: { at: THREE.Vector3; dir: { x: number; z: number }; way: number; route: boolean; cost: number } | null = null;
     for (const dir of [{ x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 }]) {
       const half = (dir.x ? cw : ch) / 2;
       for (let reach = half + 0.5; reach <= half + 9; reach += 0.5) {
         for (const lane of [0, -1.5, 1.5]) {
           const along = reach + length / 2;
           const at = new THREE.Vector3(base.width / 2 + dir.x * along + dir.z * lane, 0, base.height / 2 + dir.z * along + dir.x * lane);
-          // Nearest the caravan, the middle of the track first.
-          const cost = reach + Math.abs(lane) * 1.5;
-          if ((best && cost >= best.cost) || !clear(at, dir)) continue;
+          // Nearest the caravan, the middle of the track first, and above all with its way out clear.
+          let cost = reach + Math.abs(lane) * 1.5;
+          if ((best && cost >= best.cost) || !clear(at, dir, -length / 2, length / 2)) continue;
           const way = (dir.x ? base.width : base.height) / 2 - along + length + 2;
-          best = { at, dir, way, cost };
+          const route = clear(at, dir, length / 2, way + length / 2, true);
+          if (!route) cost += 40;
+          if (best && cost >= best.cost) continue;
+          best = { at, dir, way, route, cost };
         }
       }
     }
@@ -358,6 +373,7 @@ export class ClearingArtView implements ClearingArt {
       return;
     }
     this.busWay = best.way;
+    this.busRoute = best.route;
     this.bus.park(best.at, Math.atan2(best.dir.x, best.dir.z), new THREE.Vector3(mid.x, 0, mid.z), !this.away);
   }
 
@@ -515,15 +531,20 @@ export class ClearingArtView implements ClearingArt {
     const heading = parked ? root.rotation.y : 0;
     const dir = { x: Math.sin(heading), z: Math.cos(heading) };
     const side = { x: dir.z, z: -dir.x };
-    const at = parked ? { x: root.position.x, z: root.position.z } : { x: base.width / 2, z: base.height / 2 + 5 };
+    // Without La Lata, in front of the Bastion's lot (its yard and building are no place to stand).
+    const lot = parked ? null : bastionLot(base);
+    const at = parked ? { x: root.position.x, z: root.position.z } : lot ? { x: lot.x + lot.w / 2, z: lot.y + lot.h + 1.5 } : { x: base.width / 2, z: base.height / 2 + 5 };
     const length = parked ? this.bus.length : 0;
     const reach = parked ? this.bus.width / 2 + 0.95 : 0;
+    // The Bastion grown out of the caravan stands on its whole footprint (pieceAt only knows the caravan's tiles).
+    const footprint = new Set(base && bastionStage(base) > 0 ? bastionFootprint(base).map((c) => c.y * base.width + c.x) : []);
     const height = (x: number, z: number) => {
       if (!base) return 0;
       const tx = Math.floor(x);
       const tz = Math.floor(z);
       if (tx < 0 || tz < 0 || tx >= base.width || tz >= base.height) return 0;
       if (treeAt(base, tx, tz)) return 4.5;
+      if (footprint.has(tz * base.width + tx)) return 3;
       const p = pieceAt(base, tx, tz);
       if (!p || p.hp <= 0) return 0;
       const def = PIECES[p.piece];
@@ -532,14 +553,20 @@ export class ClearingArtView implements ClearingArt {
     const rows = count > LINEUP_ROW ? 2 : 1;
     const front = rows === 2 ? Math.ceil(count / 2) : count;
     const halfWidth = (rows === 1 ? ((count - 1) / 2) * LINEUP_STEP + (count > 1 ? LINEUP_GAP / 2 : 0) : ((front - 1) / 2) * LINEUP_STEP + LINEUP_STEP / 2) + 0.7;
-    const candidates = [
-      { centre: { x: at.x + side.x * reach, z: at.z + side.z * reach }, toward: side },
-      { centre: { x: at.x - side.x * reach, z: at.z - side.z * reach }, toward: { x: -side.x, z: -side.z } },
-      { centre: { x: at.x - dir.x * (length / 2 + 1.3), z: at.z - dir.z * (length / 2 + 1.3) }, toward: { x: -dir.x, z: -dir.z } },
-    ];
+    // Along either side (also moved up towards the nose, away from the Bastion's lot behind it: a long row went past
+    // the tail onto its yard), or across the track at its tail.
+    const candidates: { centre: { x: number; z: number }; toward: { x: number; z: number }; k: number; shift: number }[] = [];
+    for (const shift of [0, 0.6, 1.2]) {
+      candidates.push(
+        { centre: { x: at.x + side.x * reach + dir.x * shift, z: at.z + side.z * reach + dir.z * shift }, toward: side, k: 0, shift },
+        { centre: { x: at.x - side.x * reach + dir.x * shift, z: at.z - side.z * reach + dir.z * shift }, toward: { x: -side.x, z: -side.z }, k: 1, shift },
+      );
+    }
+    candidates.push({ centre: { x: at.x - dir.x * (length / 2 + 1.3), z: at.z - dir.z * (length / 2 + 1.3) }, toward: { x: -dir.x, z: -dir.z }, k: 2, shift: 0 });
     let best: LineupPlace | null = null;
     let bestCost = Infinity;
-    candidates.forEach((c, k) => {
+    candidates.forEach((c) => {
+      const k = c.k;
       // Left to right as the camera sees them (right to left, mirrored); the second row a step behind, between the first's.
       const right = this.mirror ? { x: -c.toward.z, z: c.toward.x } : { x: c.toward.z, z: -c.toward.x };
       const spots: { x: number; z: number }[] = [];
@@ -555,8 +582,9 @@ export class ClearingArtView implements ClearingArt {
         }
         spots.push({ x: c.centre.x + right.x * u + c.toward.x * v, z: c.centre.z + right.z * u + c.toward.z * v });
       }
-      let standing = k === 2 ? 0.5 : 0;
-      for (const p of spots) if (height(p.x, p.z) > 0) standing += 20;
+      // Nobody stands on anything built, a pine, the Bastion or its yard (its lot), nor off the clearing.
+      let standing = (k === 2 ? 0.5 : 0) + c.shift * 2;
+      for (const p of spots) if (height(p.x, p.z) > 0 || (base && (onBastionLot(base, Math.floor(p.x), Math.floor(p.z)) || p.x < 0 || p.z < 0 || p.x >= base.width || p.z >= base.height))) standing += 20;
       const near = Math.max(5.5, halfWidth / 0.42);
       const middle = { x: c.centre.x - c.toward.x * (rows - 1) * 0.45, z: c.centre.z - c.toward.z * (rows - 1) * 0.45 };
       for (const a of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9]) {
@@ -600,8 +628,10 @@ export class ClearingArtView implements ClearingArt {
       const from = rig.root.position.clone();
       const door = doors.reduce((a, b) => (a.distanceTo(from) <= b.distanceTo(from) ? a : b));
       const offset = door.clone().sub(centre);
-      // A door on its side (the bus's, the 4×4's) or at its back (the van's, the lorry's).
-      const back = Math.abs(offset.dot(dir)) > Math.abs(offset.dot(across)) + 0.3;
+      // A door on its side (the bus's, the 4×4's) or at its back (the van's, the lorry's): at its very end, the back (a
+      // side's door near the end counted as a back one, and the runners went round the far corner to it, through the
+      // rest of the row).
+      const back = Math.abs(offset.dot(dir)) > half - 0.35;
       const normal = back ? dir.clone().multiplyScalar(Math.sign(offset.dot(dir)) || -1) : across.clone().multiplyScalar(Math.sign(offset.dot(across)) || 1);
       const foot = door.clone().addScaledVector(normal, 0.55);
       const inside = door.clone().addScaledVector(normal, -0.5);
@@ -614,8 +644,23 @@ export class ClearingArtView implements ClearingArt {
       path.push(foot, inside);
       const lengths = path.slice(1).map((p, k) => p.distanceTo(path[k]!));
       const total = lengths.reduce((a, b) => a + b, 0);
-      return { rig, path, lengths, total, delay: i * 0.14, seconds: total / 3.4 };
+      // When it would get to the door's foot, setting off at once.
+      const atFoot = (total - lengths[lengths.length - 1]!) / BOARD_SPEED;
+      // A double doorway's two leaves are one way in: one at a time through it.
+      const way = doors.findIndex((d) => d.distanceTo(door) < 0.7);
+      return { rig, path, lengths, total, door: way, atFoot, delay: 0, seconds: total / BOARD_SPEED };
     });
+    // One at a time at each door, the nearest first (out of the way of those behind, who run past where it stood):
+    // each held back at its place in the row until the one before it is through (they all made for the same spot
+    // at once, a seventh of a second apart, and climbed in through one another).
+    for (let d = 0; d < doors.length; d++) {
+      let free = -Infinity;
+      for (const p of plans.filter((q) => q.door === d).sort((a, b) => a.atFoot - b.atFoot)) {
+        p.delay = Math.max(0, free - p.atFoot);
+        p.atFoot += p.delay;
+        free = p.atFoot + DOOR_GAP;
+      }
+    }
     const seconds = Math.max(...plans.map((p) => p.delay + p.seconds)) + 0.05;
     await tween(seconds, (t) => {
       const now = t * seconds;
@@ -647,16 +692,16 @@ export class ClearingArtView implements ClearingArt {
     return this.drive(async () => {
       if (this.lineupRigs.length && this.bus.root.visible) await this.board();
       for (const o of this.lineup.children) if (o.userData.pad) o.visible = false;
-      await this.bus.depart(this.busWay);
+      await this.bus.depart(this.busWay, !this.busRoute);
       this.away = true;
     });
   }
 
-  /** La Lata back up its track and round to stand by the caravan again; resolves once it stands. */
+  /** La Lata backed in along its track to stand by the caravan again (faded in, its track built over); resolves once it stands. */
   arrive(): Promise<void> {
     return this.drive(async () => {
       this.away = false;
-      await this.bus.arrive(this.busWay);
+      await this.bus.arrive(this.busWay, !this.busRoute);
     });
   }
 
@@ -725,6 +770,9 @@ interface LineupPlace {
 const LINEUP_STEP = 0.95;
 const LINEUP_GAP = 0.5;
 const LINEUP_ROW = 8;
+/** How fast the squad runs to board La Lata (tiles a second), and how long one takes from a door's foot until the next can come (seconds). */
+const BOARD_SPEED = 3.4;
+const DOOR_GAP = 0.4;
 const CANDLE = new THREE.MeshStandardMaterial({ color: 0x2a1a00, emissive: 0xffb050, emissiveIntensity: 2.2 });
 
 /** The pieces that stand tall enough to hide a soldier from a camera a storey up (but the buildings, by their tiles). */

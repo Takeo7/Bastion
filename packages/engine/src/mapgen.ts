@@ -21,11 +21,12 @@
 // and only reachable tiles are used to place the squad, the pods and objectives.
 import { dressMedical } from './medicalDressing';
 import { dressHome } from './homeDressing';
+import { furnishMap, joinedAsBefore, keepsWays, storeyPieces, type FurnishSite } from './furnishing';
 import { parseMap, type MapDef } from './maps';
 import { stepCost } from './path';
 import { Rng } from './rng';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from './grid';
-import { carPartner, decorCode, decorOf } from './decor';
+import { BLOCK_KINDS, decorCode, decorOf, FOOTPRINT, objectAt } from './decor';
 import type { Alarm, Biome, Decor, DecorKind, GameState, GroundKind, HomeRoom, HomeSite, HomeUse, Level, MedicalRoom, MedicalUse, MedicalSite, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
 
 /** Side of every procedural map, in tiles. */
@@ -173,6 +174,8 @@ class Canvas {
   readonly decor: Decor[];
   /** Every walled building raised so far, for their storeys (storeysOf). */
   readonly buildings: Building[] = [];
+  /** The objects over several tiles put so far (putObject): each tile and the decor it was given, for tidyObjects. */
+  readonly objects: { i: number; code: Decor }[][] = [];
 
   constructor(
     readonly width: number,
@@ -256,6 +259,110 @@ function put(c: Canvas, p: Vec2, kind: TileKind, look?: Look, elev = 0): boolean
 
 type Part = [number, number, TileKind, Look?];
 
+/**
+ * The tiles of an object `wide` × `deep` from `at` (decor.ts FOOTPRINT): `deep` of them along DIRS4[along], `wide`
+ * along DIRS4[across]; `at` first.
+ */
+function footprint(at: Vec2, along: number, across: number, wide: number, deep: number): Vec2[] {
+  const a = DIRS4[along]!;
+  const b = DIRS4[across]!;
+  const out: Vec2[] = [];
+  for (let i = 0; i < deep; i++) for (let j = 0; j < wide; j++) out.push({ x: at.x + a.x * i + b.x * j, y: at.y + a.y * i + b.y * j });
+  return out;
+}
+
+/**
+ * Dresses `cells` as one object (docs/MAPAS.md, phase 1): the first, its anchor, as `look` facing `facing`; every
+ * other one a part facing the step towards it, nearest first (decor.ts objectTiles). Kept in c.objects, so that
+ * whatever later takes a tile of it takes all of it (tidyObjects).
+ */
+function dressObject(c: Canvas, cells: Vec2[], look: DecorKind, facing: number): void {
+  c.dress(cells[0]!, look, facing);
+  const done = [cells[0]!];
+  const left = cells.slice(1);
+  while (left.length) {
+    const k = left.findIndex((p) => done.some((q) => Math.abs(p.x - q.x) + Math.abs(p.y - q.y) === 1));
+    if (k < 0) break;
+    const p = left.splice(k, 1)[0]!;
+    const q = done.find((o) => Math.abs(p.x - o.x) + Math.abs(p.y - o.y) === 1)!;
+    c.dress(p, 'part', DIRS4.findIndex((d) => d.x === q.x - p.x && d.y === q.y - p.y));
+    done.push(p);
+  }
+  c.objects.push(done.map((p) => ({ i: c.i(p.x, p.y), code: c.decor[c.i(p.x, p.y)]! })));
+}
+
+/** An object over several tiles on free floor (all of `cells`, as `kind` cover), its anchor the first; false if any is taken. */
+function putObject(c: Canvas, cells: Vec2[], kind: TileKind, look: DecorKind, facing: number, elev = 0): boolean {
+  if (!cells.every((p) => c.free(p.x, p.y, elev) && !c.decor[c.i(p.x, p.y)])) return false;
+  for (const p of cells) c.force(p.x, p.y, kind);
+  dressObject(c, cells, look, facing);
+  return true;
+}
+
+/** The ways through a wall or up a storey: no furniture over several tiles stands beside one (doors, windows one vaults, ladders and stairs). */
+const WAYS_THROUGH: ReadonlySet<TileKind> = new Set<TileKind>(['door', 'doorOpen', 'window', 'windowBroken', 'ladder']);
+
+/**
+ * Furniture over several tiles (a bed, a sofa, a bath, a table, a hospital bed: decor.ts FOOTPRINT) on `cells` of
+ * `room`, if it closes no way: all of it on free floor of the room, none beside a door, a window, a ladder or the
+ * stairs, and the floor round it still joined round the whole of it (furnishing.ts keepsWays). False, and nothing
+ * put, if not: the room goes without it rather than lose a way (rooms of 3 × 3 or more, playtest 12/10).
+ */
+function putFurniture(c: Canvas, room: Rect, cells: Vec2[], kind: TileKind, look: DecorKind, facing: number): boolean {
+  if (!cells.every((p) => inRect(room, p) && c.free(p.x, p.y) && !c.decor[c.i(p.x, p.y)])) return false;
+  if (cells.some((p) => DIRS4.some((d) => WAYS_THROUGH.has(c.get(p.x + d.x, p.y + d.y))))) return false;
+  if (!keepsWays(c, c.width, c.height, cells, c.elev)) return false;
+  return putObject(c, cells, kind, look, facing);
+}
+
+/**
+ * Furniture `wide` × `deep` in a corner of `room` (the first of `corners` it fits), its back to a wall: facing away
+ * from it as inward() has it (a bed's head to the long wall), else from the other wall of the corner; its width
+ * along the wall at its back, into the room.
+ */
+function cornerFurniture(c: Canvas, room: Rect, corners: Vec2[], kind: TileKind, look: DecorKind, wide: number, deep: number): Vec2 | null {
+  for (const p of corners) {
+    const first = inward(room, p);
+    const walls = [0, 1, 2, 3].filter((s) => !inRect(room, add(p, DIRS4[s]!)));
+    const facings = [first, ...walls.map(opposite).filter((f) => f !== first && inRect(room, add(p, DIRS4[f]!)))];
+    for (const f of facings) {
+      const across = [(f + 1) % 4, (f + 3) % 4].find((a) => inRect(room, add(p, DIRS4[a]!)));
+      if (across === undefined) continue;
+      if (putFurniture(c, room, footprint(p, f, across, wide, deep), kind, look, f)) return p;
+    }
+  }
+  return null;
+}
+
+/**
+ * Takes whatever clearing a tile left of an object over several (a car the evacuation, a lane or connect() cut
+ * through, a bed the stairs' storey cleared): the rest of it goes too, to bare floor. True if any did.
+ */
+function tidyObjects(c: Canvas): boolean {
+  let changed = false;
+  for (let k = c.objects.length - 1; k >= 0; k--) {
+    const tiles = c.objects[k]!;
+    if (tiles.every((t) => c.decor[t.i] === t.code && (c.tiles[t.i] === 'low' || c.tiles[t.i] === 'high'))) continue;
+    for (const t of tiles) {
+      if (c.decor[t.i] !== t.code) continue;
+      c.tiles[t.i] = 'floor';
+      c.decor[t.i] = 0;
+    }
+    c.objects.splice(k, 1);
+    changed = true;
+  }
+  return changed;
+}
+
+/** Clears the object standing on `p` whole (all its tiles, if it stands over several), to bare floor. */
+function clearObject(c: Canvas, p: Vec2): void {
+  const i = c.i(p.x, p.y);
+  for (const j of objectAt(c.decor, c.width, i)?.tiles ?? [i]) {
+    c.tiles[j] = 'floor';
+    c.decor[j] = 0;
+  }
+}
+
 /** `parts` turned by `q` quarter turns (north turns to east first, like DIRS4); their looks turn with them. */
 const turn = (parts: Part[], q: number): Part[] =>
   parts.map(([x, y, k, look]) => {
@@ -295,6 +402,9 @@ function group(c: Canvas, at: Vec2, parts: Part[], elev = 0): boolean {
     c.force(t.x, t.y, t.kind);
     if (t.look) c.dress(t, t.look[0], t.look[1]);
   }
+  // A lorry, a container, a silo… is a block of its kind (decor.ts BLOCK_KINDS): what takes a tile of it takes it all (tidyObjects).
+  const kind = tiles[0]?.look?.[0];
+  if (tiles.length > 1 && kind && BLOCK_KINDS.has(kind) && tiles.every((t) => t.look?.[0] === kind)) c.objects.push(tiles.map((t) => ({ i: c.i(t.x, t.y), code: c.decor[c.i(t.x, t.y)]! })));
   return true;
 }
 
@@ -386,6 +496,8 @@ interface Building {
   /** A house's rooms by use on every storey (homeUses), and how worn it is (homeWear). */
   homeRooms?: HomeRoom[];
   homeWear?: number;
+  /** One open hall (plan 'hall'): a warehouse, a factory's hall, a sawmill, a barn. */
+  hall?: boolean;
 }
 
 /**
@@ -612,29 +724,69 @@ function medicalPlan(c: Canvas, b: Rect, front: number, rng: Rng, z: number, hos
   return rooms;
 }
 
+/**
+ * Whether a clinical room's floor is all one, and every piece of its furniture stands beside it (an object over
+ * several tiles, by any of them): one walks up to each.
+ */
+function roomJoined(c: Canvas, room: Rect): boolean {
+  const cells = tilesIn(room);
+  const floor = cells.filter((p) => c.get(p.x, p.y) === 'floor');
+  const seen = new Set<number>(), queue = floor.length ? [floor[0]!] : [];
+  while (queue.length) {
+    const p = queue.pop()!, i = c.i(p.x, p.y);
+    if (seen.has(i) || !inRect(room, p) || c.get(p.x, p.y) !== 'floor') continue;
+    seen.add(i);
+    for (const d of DIRS4) queue.push(add(p, d));
+  }
+  if (!floor.length || !floor.every((p) => seen.has(c.i(p.x, p.y)))) return false;
+  const beside = new Map<number, boolean>();
+  for (const p of cells) {
+    const i = c.i(p.x, p.y);
+    if (!c.decor[i]) continue;
+    const a = objectAt(c.decor, c.width, i)?.anchor ?? i;
+    beside.set(a, !!beside.get(a) || DIRS4.some((d) => seen.has(c.i(p.x + d.x, p.y + d.y))));
+  }
+  return [...beside.values()].every(Boolean);
+}
+
+/** Takes an object just put on `cells` off again (bare floor), and out of c.objects. */
+function takeObject(c: Canvas, cells: Vec2[]): void {
+  const at = cells.map((p) => c.i(p.x, p.y));
+  for (const i of at) {
+    c.tiles[i] = 'floor';
+    c.decor[i] = 0;
+  }
+  const k = c.objects.findIndex((o) => o.length === at.length && o.every((t) => at.includes(t.i)));
+  if (k >= 0) c.objects.splice(k, 1);
+}
+
+/** How deep the clinics' furniture over several tiles is, along the way it faces (decor.ts FOOTPRINT): a bed's head to the wall. */
+const CLINICAL_DEPTH: Partial<Record<DecorKind, number>> = { hospitalBed: FOOTPRINT.hospitalBed[1], gurney: FOOTPRINT.gurney[1] };
+
+/**
+ * Clinical furniture on `p` of `room`, facing into it (inward), if the room stays joined (roomJoined); a hospital
+ * bed or a gurney two tiles deep from the wall (in a corner, from either of its walls). Its tiles, or null and
+ * nothing put.
+ */
+function placeClinical(c: Canvas, room: Rect, kind: DecorKind, p: Vec2, high: boolean): Vec2[] | null {
+  const deep = CLINICAL_DEPTH[kind] ?? 1;
+  const first = inward(room, p);
+  const facings = deep > 1 ? [first, ...[0, 1, 2, 3].filter((s) => !inRect(room, add(p, DIRS4[s]!))).map(opposite).filter((f) => f !== first)] : [first];
+  for (const f of facings) {
+    const cells = footprint(p, f, f, 1, deep);
+    if (deep > 1 ? !putFurniture(c, room, cells, high ? 'high' : 'low', kind, f) : !put(c, p, high ? 'high' : 'low', [kind, f])) continue;
+    if (roomJoined(c, room)) return cells;
+    takeObject(c, cells);
+  }
+  return null;
+}
+
 /** Furniture expresses each room's use and leaves its doorway and central aisle clear. */
 function furnishMedical(c: Canvas, room: MedicalRoom, rng: Rng, care?: 'ward' | 'hospital'): void {
   if (care) { furnishCareRoom(c, room, rng, care); return; }
   const long = Math.max(room.w, room.h), short = Math.min(room.w, room.h), alongX = room.w >= room.h;
   const P = (a: number, b: number): Vec2 => alongX ? { x: room.x + a, y: room.y + b } : { x: room.x + b, y: room.y + a };
-  const joined = () => {
-    const floor = tilesIn(room).filter((p) => c.get(p.x, p.y) === 'floor');
-    const seen = new Set<number>(), queue = floor.length ? [floor[0]!] : [];
-    while (queue.length) {
-      const p = queue.pop()!, i = c.i(p.x, p.y);
-      if (seen.has(i) || !inRect(room, p) || c.get(p.x, p.y) !== 'floor') continue;
-      seen.add(i);
-      for (const d of DIRS4) queue.push(add(p, d));
-    }
-    return floor.length > 0 && floor.every((p) => seen.has(c.i(p.x, p.y)))
-      && tilesIn(room).filter((p) => c.decor[c.i(p.x, p.y)]).every((p) => DIRS4.some((d) => seen.has(c.i(p.x + d.x, p.y + d.y))));
-  };
-  const place = (kind: DecorKind, points: Vec2[], high = false) => points.some((p) => {
-    if (!put(c, p, high ? 'high' : 'low', [kind, inward(room, p)])) return false;
-    if (joined()) return true;
-    c.force(p.x, p.y, 'floor'); c.decor[c.i(p.x, p.y)] = 0;
-    return false;
-  });
+  const place = (kind: DecorKind, points: Vec2[], high = false) => points.some((p) => !!placeClinical(c, room, kind, p, high));
   const edge = shuffle([P(0, 0), P(long - 1, 0), P(0, short - 1), P(long - 1, short - 1)], rng);
   const near = [P(Math.floor(long / 2), 0), P(Math.floor(long / 2), short - 1), ...edge];
   switch (room.use) {
@@ -688,34 +840,23 @@ function furnishCareRoom(c: Canvas, room: MedicalRoom, rng: Rng, care: 'ward' | 
   const corners = shuffle([P(0, 0), P(long - 1, 0), P(0, short - 1), P(long - 1, short - 1)], rng);
   const boundary = shuffle(cells.filter((p) => p.x === room.x || p.y === room.y || p.x === room.x + room.w - 1 || p.y === room.y + room.h - 1), rng);
   const positions = [...corners, ...boundary];
-  const joined = () => {
-    const floor = cells.filter((p) => c.get(p.x, p.y) === 'floor');
-    const seen = new Set<number>(), queue = floor.length ? [floor[0]!] : [];
-    while (queue.length) {
-      const p = queue.pop()!, i = c.i(p.x, p.y);
-      if (seen.has(i) || !inRect(room, p) || c.get(p.x, p.y) !== 'floor') continue;
-      seen.add(i);
-      for (const d of DIRS4) queue.push(add(p, d));
-    }
-    return floor.length > 0 && floor.every((p) => seen.has(c.i(p.x, p.y)))
-      && cells.filter((p) => c.decor[c.i(p.x, p.y)]).every((p) => DIRS4.some((d) => seen.has(c.i(p.x + d.x, p.y + d.y))));
-  };
   const high = new Set<DecorKind>(['medicalCabinet', 'medicalShelf', 'waterDispenser', 'xray']);
-  const place = (kind: DecorKind, points = positions): Vec2 | null => {
+  const fit = (kind: DecorKind, points = positions): Vec2[] | null => {
     for (const p of points) {
-      if (!put(c, p, high.has(kind) ? 'high' : 'low', [kind, inward(room, p)])) continue;
-      if (joined()) return p;
-      c.force(p.x, p.y, 'floor'); c.decor[c.i(p.x, p.y)] = 0;
+      const cells = placeClinical(c, room, kind, p, high.has(kind));
+      if (cells) return cells;
     }
     return null;
   };
+  const place = (kind: DecorKind, points = positions) => !!fit(kind, points);
   switch (room.use) {
     case 'ward': {
-      // One bed in 3×3; at most two in 3×4. Keep beds and bedside tables together.
-      const beds = long >= 4 && short >= 3 ? 2 : 1;
+      // A bed of 1 × 2 in a room up to 3 × 4, two from 4 × 5 (docs/MAPAS.md §4.3). Keep beds and bedside tables
+      // together: by its head, else by its foot.
+      const beds = long >= 5 && short >= 4 ? 2 : 1;
       for (let k = 0; k < beds; k++) {
-        const p = place('hospitalBed', k ? [P(long - 1, 0), P(long - 1, short - 1), ...corners] : [P(0, 0), ...corners]);
-        if (p) place('bedsideTable', DIRS4.map((d) => add(p, d)).filter((q) => inRect(room, q)));
+        const bed = fit('hospitalBed', [...(k ? [P(long - 1, 0), P(long - 1, short - 1)] : [P(0, 0)]), ...corners, ...boundary]);
+        if (bed) place('bedsideTable', bed.flatMap((q) => DIRS4.map((d) => add(q, d))).filter((q) => inRect(room, q)));
       }
       place('medicalMonitor');
       place('medicalCabinet');
@@ -948,22 +1089,30 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish, use?: HomeU
   /** The DIRS4 index of a step (da, db) in the room's frame. */
   const toward = (da: number, db: number) => DIRS4.findIndex((d) => d.x === (alongX ? da : db) && d.y === (alongX ? db : da));
   const corners = shuffle([P(0, 0), P(long - 1, 0), P(0, short - 1), P(long - 1, short - 1)], rng);
-  const corner = (k: TileKind, what: DecorKind) => corners.some((p) => put(c, p, k, [what, inward(room, p)]));
+  /** A piece on one tile, where it cuts no way across the room (furnishing.ts keepsWays: the floor round it stays joined). */
+  const putIn = (p: Vec2, k: TileKind, look: Look) => c.free(p.x, p.y) && keepsWays(c, c.width, c.height, p, c.elev) && put(c, p, k, look);
+  const corner = (k: TileKind, what: DecorKind) => corners.some((p) => putIn(p, k, [what, inward(room, p)]));
+  const cornerObject = (k: TileKind, what: DecorKind, [wide, deep]: readonly [number, number]) => !!cornerFurniture(c, room, corners, k, what, wide, deep);
+  const wide2 = (at: Vec2, side: number, k: TileKind, what: DecorKind, facing: number) => {
+    const d = DIRS4[side]!;
+    return putFurniture(c, room, [at, add(at, d)], k, what, facing) || putFurniture(c, room, [at, { x: at.x - d.x, y: at.y - d.y }], k, what, facing);
+  };
   const mid = Math.floor(long / 2);
   switch (kind) {
     case 'home':
       if (use) {
-        furnishHome(c, room, use, wear, kitchenette, studio, { P, toward, corner, long, short, mid });
+        furnishHome(c, room, use, wear, kitchenette, studio, { P, toward, putIn, corner, cornerObject, wide2, long, short, mid });
         break;
       }
       corner('high', 'wardrobe');
       if (short >= 4) {
-        // A living room (a sofa facing the table) or a dining room (a table two tiles long).
+        // A living room (a sofa facing the table, two tiles long) or a dining room.
         const dining = mix(room.x, room.y) % 2 === 0;
-        put(c, P(mid, Math.floor(short / 2)), 'low', ['table', toward(0, 1)]);
-        if (long >= 5) put(c, P(mid - 1, Math.floor(short / 2)), 'low', dining ? ['table', toward(0, 1)] : ['sofa', toward(1, 0)]);
+        const row = Math.floor(short / 2);
+        putFurniture(c, room, [P(mid, row), P(mid + 1, row)], 'low', 'table', toward(0, 1));
+        if (long >= 5 && !dining) wide2(P(mid - 1, row), toward(0, 1), 'low', 'sofa', toward(1, 0));
       } else {
-        corner('low', 'bed');
+        cornerObject('low', 'bed', FOOTPRINT.bed);
       }
       break;
     case 'office':
@@ -996,7 +1145,7 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish, use?: HomeU
       corner('low', 'hay');
       break;
     case 'clinic':
-      corner('low', 'hospitalBed');
+      cornerObject('low', 'hospitalBed', FOOTPRINT.hospitalBed);
       corner('high', 'medicalShelf');
       // Along the room's edge, with a central aisle. Different room shapes
       // and shuffled corners give consultation rooms and wards their own plan.
@@ -1006,10 +1155,11 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish, use?: HomeU
       }
       if (short >= 5) {
         corner('high', 'medicalCabinet');
-        corner('low', rng.int(2) ? 'gurney' : 'wheelchair');
+        if (rng.int(2)) cornerObject('low', 'gurney', FOOTPRINT.gurney);
+        else corner('low', 'wheelchair');
       }
       if (long >= 8 && short >= 5) {
-        for (const a of [2, long - 3]) put(c, P(a, 0), 'low', ['hospitalBed', toward(0, 1)]);
+        for (const a of [2, long - 3]) putFurniture(c, room, [P(a, 0), P(a, 1)], 'low', 'hospitalBed', toward(0, 1));
       }
       break;
     case 'bare':
@@ -1017,11 +1167,19 @@ function furnishRoom(c: Canvas, room: Rect, rng: Rng, kind: Furnish, use?: HomeU
   }
 }
 
-/** furnishRoom's frame of a room: P(a, b) a along its long side and b across it, the way a step faces, a corner. */
+/**
+ * furnishRoom's frame of a room: P(a, b) a along its long side and b across it, the way a step faces; a piece on a
+ * tile or in a corner where it cuts no way across the room; furniture over several tiles (decor.ts FOOTPRINT) in a
+ * corner, or two tiles wide from a tile, its second a step `side` (a DIRS4 index) or else the other way
+ * (putFurniture: where it closes no way).
+ */
 interface RoomFrame {
   P: (a: number, b: number) => Vec2;
   toward: (da: number, db: number) => number;
+  putIn: (p: Vec2, k: TileKind, look: Look) => boolean;
   corner: (k: TileKind, what: DecorKind) => boolean;
+  cornerObject: (k: TileKind, what: DecorKind, size: readonly [number, number]) => boolean;
+  wide2: (at: Vec2, side: number, k: TileKind, what: DecorKind, facing: number) => boolean;
   long: number;
   short: number;
   mid: number;
@@ -1034,13 +1192,17 @@ interface RoomFrame {
  *     table, a kitchenette's counter and cooker along a wall if it is the kitchen
  *     too, and a bed in a corner if it is all the house has (`studio`);
  *   - kitchen: the fridge, counters and the cooker along one wall, a table in the middle of a big one;
- *   - bedroom: the bed and the wardrobe in corners;
+ *   - bedroom: the bed and the wardrobe in corners, a double bed in most of
+ *     those 3 × 4 or more;
  *   - bath: the bath in a corner, the toilet (wc) and the washbasin;
  *   - study: a desk, a bookcase and a cabinet;
  *   - hall: a cupboard.
+ * The sofa, the tables, the beds and the bath over the tiles they take
+ * (decor.ts FOOTPRINT: docs/MAPAS.md, phase 1), and every piece only where
+ * it closes no way across the room.
  */
 function furnishHome(c: Canvas, room: Rect, use: HomeUse, wear: number, kitchenette: boolean, studio: boolean, f: RoomFrame): void {
-  const { P, toward, corner, long, short, mid } = f;
+  const { P, toward, putIn, corner, cornerObject, wide2, long, short, mid } = f;
   const m = mix(room.x * 7 + 3, room.y * 11 + 5);
   // In a wrecked house a wardrobe may lie on its face (low cover).
   const fallen = wear > 0.65 && m % 3 === 0;
@@ -1049,17 +1211,18 @@ function furnishHome(c: Canvas, room: Rect, use: HomeUse, wear: number, kitchene
       corner('high', 'shelf');
       const row = Math.floor(short / 2);
       if (short >= 4) {
-        put(c, P(mid, row), 'low', ['table', toward(0, 1)]);
-        if (long >= 5) put(c, P(mid - 1, row), 'low', ['sofa', toward(1, 0)]);
+        // The table along the room, the sofa across it facing the table's end.
+        putFurniture(c, room, [P(mid, row), P(mid + 1, row)], 'low', 'table', toward(0, 1));
+        if (long >= 5) wide2(P(mid - 1, row), toward(0, 1), 'low', 'sofa', toward(1, 0));
       } else {
-        put(c, P(mid, 0), 'low', ['sofa', toward(0, 1)]);
-        if (short >= 3) put(c, P(mid, short - 1), 'low', ['tvStand', toward(0, -1)]);
+        wide2(P(mid, 0), toward(1, 0), 'low', 'sofa', toward(0, 1));
+        if (short >= 3) putIn(P(mid, short - 1), 'low', ['tvStand', toward(0, -1)]);
       }
       if (kitchenette && long >= 5) {
-        put(c, P(long - 1, short - 1), 'low', ['counter', toward(0, -1)]);
-        put(c, P(long - 2, short - 1), 'low', ['stove', toward(0, -1)]);
+        putIn(P(long - 1, short - 1), 'low', ['counter', toward(0, -1)]);
+        putIn(P(long - 2, short - 1), 'low', ['stove', toward(0, -1)]);
       }
-      if (studio) corner('low', 'bed');
+      if (studio) cornerObject('low', 'bed', FOOTPRINT.bed);
       break;
     }
     case 'kitchen': {
@@ -1069,23 +1232,24 @@ function furnishHome(c: Canvas, room: Rect, use: HomeUse, wear: number, kitchene
       const run = Math.min(long, 4);
       for (let a = 0; a < run; a++) {
         const p = P(a, wall);
-        if (a === 0) put(c, p, 'high', ['fridge', toward(0, into)]);
-        else put(c, p, 'low', [a === 2 ? 'stove' : 'counter', toward(0, into)]);
+        if (a === 0) putIn(p, 'high', ['fridge', toward(0, into)]);
+        else putIn(p, 'low', [a === 2 ? 'stove' : 'counter', toward(0, into)]);
       }
-      if (short >= 4 && long >= 4) put(c, P(mid, wall === 0 ? short - 2 : 1), 'low', ['table', toward(0, -into)]);
+      if (short >= 4 && long >= 4) wide2(P(mid, wall === 0 ? short - 2 : 1), toward(1, 0), 'low', 'table', toward(0, -into));
       break;
     }
     case 'bedroom':
-      corner('low', 'bed');
+      // A double bed only where it leaves room (3 × 4 or more), else a single.
+      if (!(short >= 3 && long >= 4 && m % 3 !== 2 && cornerObject('low', 'bed', FOOTPRINT.doubleBed))) cornerObject('low', 'bed', FOOTPRINT.bed);
       corner(fallen ? 'low' : 'high', 'wardrobe');
       break;
     case 'bath':
-      corner('low', 'bathtub');
+      cornerObject('low', 'bathtub', FOOTPRINT.bathtub);
       corner('low', 'wc');
-      if (long >= 3) put(c, P(mid, 0), 'low', ['washbasin', toward(0, 1)]);
+      if (long >= 3) putIn(P(mid, 0), 'low', ['washbasin', toward(0, 1)]);
       break;
     case 'study':
-      put(c, P(mid, short >= 4 ? 1 : 0), 'low', ['desk', toward(0, 1)]);
+      putIn(P(mid, short >= 4 ? 1 : 0), 'low', ['desk', toward(0, 1)]);
       corner('high', 'shelf');
       corner(fallen ? 'low' : 'high', 'cabinet');
       break;
@@ -1125,10 +1289,10 @@ function furnishHall(c: Canvas, inner: Rect, front: number, rng: Rng, kind: Furn
 /**
  * A barn (playtest 18/10, #53: «tiene que parecer un granero»): its hay
  * against the walls, the sides and the back, stacked high here and there
- * with gaps between, and its old tractor (a 2×4 lorry's block, the client
- * draws it as one) on the floor in the middle, its nose to the doors; the way
- * in from them kept clear, the tack room (`avoid`) left as it is. By position
- * (mix): no rng drawn.
+ * with gaps between, and its old tractor (a lorry's block, of 2 × 3: decor.ts
+ * FOOTPRINT; the client draws it as one) on the floor in the middle, its nose
+ * to the doors; the way in from them kept clear, the tack room (`avoid`) left
+ * as it is. By position (mix): no rng drawn.
  */
 function furnishBarn(c: Canvas, inner: Rect, front: number, avoid: Rect | null): void {
   const across = sideLen(inner, front);
@@ -1137,10 +1301,14 @@ function furnishBarn(c: Canvas, inner: Rect, front: number, avoid: Rect | null):
   const m0 = mix(inner.x * 5 + 3, inner.y * 7 + 1);
   // The tractor first, while the middle is clear: off the middle to one side.
   if (across >= 6 && depth >= 8) {
+    const [wide, deep] = FOOTPRINT.tractor;
     const u0 = Math.floor(across / 2) - 1 + (m0 % 2 ? 1 : -1);
-    const v0 = Math.floor((depth - 4) / 2);
-    const cells = tilesIn(rect(0, 0, 2, 4)).map((q) => localPt(inner, front, u0 + q.x, v0 + q.y));
-    if (cells.every((p) => c.free(p.x, p.y) && !(blocked && inRect(blocked, p)))) for (const p of cells) put(c, p, 'high', ['truck', front]);
+    const v0 = Math.floor((depth - deep) / 2);
+    const cells = tilesIn(rect(0, 0, wide, deep)).map((q) => localPt(inner, front, u0 + q.x, v0 + q.y));
+    if (cells.every((p) => c.free(p.x, p.y) && !(blocked && inRect(blocked, p)))) {
+      for (const p of cells) put(c, p, 'high', ['truck', front]);
+      c.objects.push(cells.map((p) => ({ i: c.i(p.x, p.y), code: c.decor[c.i(p.x, p.y)]! })));
+    }
   }
   for (let v = 2; v < depth; v++) {
     for (let u = 0; u < across; u++) {
@@ -1232,7 +1400,7 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
   } else {
     rooms.forEach((room, k) => furnishRoom(c, room, rng, furnish === 'shop' && k > 0 ? 'store' : furnish));
   }
-  const raised: Building = { outer: b, rooms, furnish, ...(medicalRooms ? { medicalKind, medicalRooms, front } : {}) };
+  const raised: Building = { outer: b, rooms, furnish, ...(medicalRooms ? { medicalKind, medicalRooms, front } : {}), ...(plan === 'hall' ? { hall: true } : {}) };
   c.buildings.push(raised);
   return raised;
 }
@@ -1509,10 +1677,10 @@ function frontOf(c: Canvas, lot: Rect, roads: boolean[], rng: Rng): number {
 }
 
 /**
- * Cars parked along the curb of streets three or more tiles wide: two tiles
- * each, in line with the street, never at a crossing. `more`: a further chance
- * of a wreck where new cover may stand (the second look: the captures' streets
- * are full of them).
+ * Cars parked along the curb of streets three or more tiles wide: three tiles
+ * each (decor.ts FOOTPRINT), in line with the street, never at a crossing.
+ * `more`: a further chance of a wreck where new cover may stand (the second
+ * look: the captures' streets are full of them).
  */
 function parkCars(c: Canvas, roads: Road[], rng: Rng, chance: number, more = 0): void {
   for (const road of roads) {
@@ -1526,24 +1694,23 @@ function parkCars(c: Canvas, roads: Road[], rng: Rng, chance: number, more = 0):
       const inner = lane === 0 ? 1 : width - 2;
       // Cars keep to the right: on the far lane of a north–south street they face north, and so on.
       const facing = road.vertical ? (lane === 0 ? 2 : 0) : lane === 0 ? 3 : 1;
-      const ahead = facing === 1 || facing === 2 ? 1 : 0;
-      for (let t = 1 + rng.int(3); t + 2 < length; t++) {
+      const long = FOOTPRINT.car[1];
+      for (let t = 1 + rng.int(3); t + long < length; t++) {
         const roll = rng.next();
         if (roll > chance + more) continue;
-        const car = [at(lane, t), at(lane, t + 1)];
+        const car = Array.from({ length: long }, (_, k) => at(lane, t + k));
         // Past `chance`, the second look's extra wrecks: only where new cover may stand (roomForCover).
         if (roll > chance && !car.every((p) => roomForCover(c, p, 2))) continue;
-        const kerb = [-1, 0, 1, 2].map((k) => at(curb, t + k));
-        const clear = [at(lane, t - 1), at(lane, t + 2), at(inner, t), at(inner, t + 1)];
+        const kerb = Array.from({ length: long + 2 }, (_, k) => at(curb, t + k - 1));
+        const clear = [at(lane, t - 1), at(lane, t + long), ...car.map((_, k) => at(inner, t + k))];
         if (!car.every((p) => c.free(p.x, p.y) && c.groundAt(p.x, p.y) === ROAD)) continue;
         if (kerb.some((p) => c.groundAt(p.x, p.y) === ROAD)) continue;
         // Where houses stand on the street, never across a door or a window.
         if (kerb.some((p) => ['door', 'window'].includes(c.get(p.x, p.y)))) continue;
         if (!clear.every((p) => c.get(p.x, p.y) === 'floor')) continue;
-        for (const p of car) c.force(p.x, p.y, 'low');
-        c.dress(car[ahead]!, 'carFront', facing);
-        c.dress(car[1 - ahead]!, 'carRear', facing);
-        t += 2 + rng.int(3);
+        // Its nose (the anchor) the way it faces: on the far end of a car facing east or south.
+        putObject(c, facing === 1 || facing === 2 ? car.reverse() : car, 'low', 'carFront', facing);
+        t += long + rng.int(3);
       }
     }
   }
@@ -1783,26 +1950,24 @@ function squadSquare(c: Canvas, r: Rect, rng: Rng): void {
   }
 }
 
-/** Car park: bays across the lot facing an aisle, two rows when deep enough, and a booth; `extras`, its rubble (plantAndLitter), but on the objective's. */
+/**
+ * Car park: bays across the lot facing an aisle, two rows when deep enough, and a booth; `extras`, its rubble
+ * (plantAndLitter), but on the objective's. Its cars three tiles long (decor.ts FOOTPRINT), with a row clear behind.
+ */
 function parking(c: Canvas, r: Rect, rng: Rng, front: number, extras = true): void {
   const across = sideLen(r, front);
   const depth = depthOf(r, front);
   if (across < 5 || depth < 4) return;
-  const rows = depth >= 10 ? [1, depth - 3] : [depth >= 6 ? 2 : 1];
+  const long = FOOTPRINT.car[1];
+  const rows = depth >= 2 * long + 5 ? [1, depth - long - 1] : depth >= long + 4 ? [2] : depth >= long + 2 ? [1] : [];
   for (const v of rows) {
     // Nose out: the first row faces into the lot, the second one back towards the street.
     const first = v === rows[0];
     const facing = first ? opposite(front) : front;
     for (let u = 1; u < across - 1; u += 2) {
       if (rng.next() < 0.35) continue;
-      const a = localPt(r, front, u, v);
-      const b = localPt(r, front, u, v + 1);
-      if (c.free(a.x, a.y) && c.free(b.x, b.y)) {
-        c.force(a.x, a.y, 'low');
-        c.force(b.x, b.y, 'low');
-        c.dress(first ? b : a, 'carFront', facing);
-        c.dress(first ? a : b, 'carRear', facing);
-      }
+      const car = Array.from({ length: long }, (_, k) => localPt(r, front, u, v + k));
+      putObject(c, first ? car.reverse() : car, 'low', 'carFront', facing);
     }
   }
   group(c, localPt(r, front, rng.int(2) === 0 ? 0 : across - 1, 0), [[0, 0, 'high', ['kiosk']]]);
@@ -1983,16 +2148,10 @@ function gasStation(c: Canvas, lot: Rect, front: number, rng: Rng, style: Style)
     const u = first + du;
     if (u + 1 >= L) continue;
     for (const v of [2, 3]) put(c, localPt(lot, front, u, v), 'low', ['tank', (front + 1) % 4]);
-    // A car at the pump now and then, in the lane beside it.
+    // A car at the pump now and then, in the lane beside it, its nose to the road (decor.ts FOOTPRINT: three tiles).
     if (rng.next() < 0.5) {
-      const a = localPt(lot, front, u + 1, 2);
-      const z = localPt(lot, front, u + 1, 3);
-      if (c.free(a.x, a.y) && c.free(z.x, z.y)) {
-        c.force(a.x, a.y, 'low');
-        c.force(z.x, z.y, 'low');
-        c.dress(a, 'carFront', front);
-        c.dress(z, 'carRear', front);
-      }
+      const car = (v: number) => Array.from({ length: FOOTPRINT.car[1] }, (_, k) => localPt(lot, front, u + 1, v + k));
+      if (!putObject(c, car(2), 'low', 'carFront', front)) putObject(c, car(1), 'low', 'carFront', front);
     }
   }
   return [b];
@@ -2629,14 +2788,17 @@ function mainHall(c: Canvas, b: Rect, front: number, rng: Rng, style: Style): Bu
   const empty = rng.int(Math.max(1, docks.length));
   docks.forEach((u, k) => {
     if (k === empty) return;
-    const parts: Part[] = [];
-    for (let du = 0; du < 2; du++) {
-      for (let d = 2; d < 6; d++) {
-        const p = localPt(b, front, u + du, -d);
-        parts.push([p.x, p.y, 'high', ['truck', front]]);
+    // As long as the yard lets it be (decor.ts FOOTPRINT): 2 × 6, else 2 × 4.
+    for (const [wide, deep] of [FOOTPRINT.truck, FOOTPRINT.truckShort]) {
+      const parts: Part[] = [];
+      for (let du = 0; du < wide; du++) {
+        for (let d = 2; d < 2 + deep; d++) {
+          const p = localPt(b, front, u + du, -d);
+          parts.push([p.x, p.y, 'high', ['truck', front]]);
+        }
       }
+      if (group(c, { x: 0, y: 0 }, parts)) break;
     }
-    group(c, { x: 0, y: 0 }, parts);
   });
   return hall;
 }
@@ -2779,7 +2941,7 @@ function facility(c: Canvas, rng: Rng, style: Style, role: Role): { objective: R
   for (const road of aprons) {
     const along = road.vertical ? road.r.h : road.r.w;
     const at = road.vertical ? { x: road.r.x + road.r.w / 2, y: road.r.y + along * rng.next() } : { x: road.r.x + along * rng.next(), y: road.r.y + road.r.h / 2 };
-    groupNear(c, at, rng, [road.vertical ? TRUCK : turn(TRUCK, 1)], 3, 0, 10);
+    lorryNear(c, at, rng, !road.vertical, 3, 10);
   }
   // Inside, a walk along the fence (two tiles) and the map's edge (one).
   const inner = inside ? rect(1, 1, line - 3, line - 3) : rect(p + 3, p + 3, S - p - 4, S - p - 4);
@@ -3032,8 +3194,13 @@ function wilds(c: Canvas, rng: Rng, style: Style, role: Role): Rect {
   return objective ?? rect(Math.round(far.x) - 6, Math.round(far.y) - 6, 12, 12);
 }
 
-/** A wrecked lorry (2 × 4), drawn nose north. */
-const TRUCK: Part[] = dressed(tilesIn(rect(0, 0, 2, 4)).map((p): Part => [p.x, p.y, 'high']), 'truck');
+/** A wrecked lorry (2 × 6 where it fits, else 2 × 4: decor.ts FOOTPRINT), drawn nose north. */
+const TRUCK: Part[] = dressed(tilesIn(rect(0, 0, ...FOOTPRINT.truck)).map((p): Part => [p.x, p.y, 'high']), 'truck');
+const TRUCK_SHORT: Part[] = dressed(tilesIn(rect(0, 0, ...FOOTPRINT.truckShort)).map((p): Part => [p.x, p.y, 'high']), 'truck');
+
+/** A lorry near `at` (groupNear): a long one where it fits, else one as long as they were. */
+const lorryNear = (c: Canvas, at: Vec2, rng: Rng, turned: boolean, spread: number, tries: number): boolean =>
+  groupNear(c, at, rng, [turned ? turn(TRUCK, 1) : TRUCK], spread, 0, tries) || groupNear(c, at, rng, [turned ? turn(TRUCK_SHORT, 1) : TRUCK_SHORT], spread, 0, tries);
 const LOG_PILES: Part[][] = [dressed([[0, 0, 'low'], [1, 0, 'low']], 'logPile'), dressed(tilesIn(rect(0, 0, 2, 2)).map((p): Part => [p.x, p.y, 'low']), 'logPile')];
 const WATER_TOWER: Part[] = dressed(tilesIn(rect(0, 0, 2, 2)).map((p): Part => [p.x, p.y, 'high']), 'waterTower');
 /** A shipping container (2 × 5), drawn doors north. */
@@ -3141,7 +3308,7 @@ function roadside(c: Canvas, rng: Rng, style: Style, role: Role): Rect {
     const yard = local(mill.r, mill.front, 0, 0, 13, d - hd);
     pave(yard);
     for (let k = 0; k < 3; k++) groupNear(c, localPt(mill.r, mill.front, rng.range(1, 11), rng.range(1, Math.max(1, d - hd - 2))), rng, LOG_PILES, 2, 0, 8);
-    groupNear(c, centre(yard), rng, [TRUCK], 3, 0, 12);
+    lorryNear(c, centre(yard), rng, false, 3, 12);
   }
   // The motel further on, its car park onto the road.
   // Off the road down a drive if there's no room on it.
@@ -3159,7 +3326,7 @@ function roadside(c: Canvas, rng: Rng, style: Style, role: Role): Rect {
     groupNear(c, back, rng, [WIRE], 6, 0, 16);
   }
   // Lorries left on the shoulder, and the big signs by the road.
-  for (const t of [0.3, 0.78]) groupNear(c, at(t), rng, [TRUCK], 4, 0, 16);
+  for (const t of [0.3, 0.78]) lorryNear(c, at(t), rng, false, 4, 16);
   for (const t of [0.22, 0.55, 0.92]) {
     const near = tilesIn(rect(at(t).x - 4, at(t).y - 4, 9, 9)).filter((p) => c.in(p.x, p.y) && toTrack[c.i(p.x, p.y)] === 2 && c.free(p.x, p.y));
     const p = near.length ? rng.pick(near) : null;
@@ -3499,12 +3666,12 @@ function thinClutter(c: Canvas, seed: number): void {
 
 /**
  * Decor stays only on what is still cover (making room and opening ways
- * through clears some of it), and on cars only while both halves are there.
+ * through clears some of it), and an object over several tiles only whole
+ * (tidyObjects).
  */
 function tidyDecor(c: Canvas): void {
+  tidyObjects(c);
   for (let i = 0; i < c.tiles.length; i++) if (c.tiles[i] !== 'low' && c.tiles[i] !== 'high') c.decor[i] = 0;
-  const kind = (i: number) => decorOf(c.decor[i])?.kind;
-  for (let i = 0; i < c.tiles.length; i++) if ((kind(i) === 'carFront' || kind(i) === 'carRear') && carPartner(c.decor, c.width, i) < 0) c.decor[i] = 0;
 }
 
 // ---------------------------------------------------------------- placing
@@ -3608,9 +3775,13 @@ const BUS_L = 5;
  * Parks the bus beside the 3 × 3 evac `zone` (docs/PRUEBA-2026-10-14.md P1):
  * along one of its sides, out in the open, its long side to the zone (the
  * doors), on open ground only. It is solid (`high`, decor 'bus') and drives
- * off along its length toward the nearer map edge. Null if no side has room.
+ * off along its length toward the nearer map edge, by its `lane` (19/10: it
+ * drove through what stood there): open ground out to the edge, where only
+ * what can be cleared stands (it is cleared, and kept clear); the client
+ * leaves the edge open there (dressing.ts dressEdges). Null if no side has
+ * room.
  */
-function parkBus(c: Canvas, zone: Vec2[], rng: Rng): { tiles: Vec2[]; heading: number } | null {
+function parkBus(c: Canvas, zone: Vec2[], rng: Rng): { tiles: Vec2[]; heading: number; lane: Vec2[] } | null {
   const x0 = Math.min(...zone.map((p) => p.x));
   const y0 = Math.min(...zone.map((p) => p.y));
   // North, south (lying along x) and west, east (along y), beside the zone. Centred on it if it fits;
@@ -3631,10 +3802,45 @@ function parkBus(c: Canvas, zone: Vec2[], rng: Rng): { tiles: Vec2[]; heading: n
   const touches = (o: { r: Rect; alongX: boolean }) => (o.alongX ? Math.min(o.r.x + o.r.w, x0 + 3) - Math.max(o.r.x, x0) : Math.min(o.r.y + o.r.h, y0 + 3) - Math.max(o.r.y, y0)) >= 3;
   const fits = (r: Rect) =>
     tilesIn(r).every((p) => c.in(p.x, p.y) && c.elevAt(p.x, p.y) === 0 && c.groundAt(p.x, p.y) !== INDOOR && c.free(p.x, p.y) && ['floor', 'low', 'high'].includes(c.get(p.x, p.y)!));
+  // Off toward the nearer end of the map along its length.
+  const headingOf = (o: { r: Rect; alongX: boolean }) => {
+    const mid = centre(o.r);
+    return o.alongX ? (mid.x < c.width / 2 ? 3 : 1) : mid.y < c.height / 2 ? 0 : 2;
+  };
+  /** Its way out: the ground from its nose to the map's edge, as wide as it. */
+  const laneOf = (o: { r: Rect; alongX: boolean }) => {
+    const { r } = o;
+    switch (headingOf(o)) {
+      case 0:
+        return tilesIn(rect(r.x, 0, r.w, r.y));
+      case 1:
+        return tilesIn(rect(r.x + r.w, r.y, c.width - r.x - r.w, r.h));
+      case 2:
+        return tilesIn(rect(r.x, r.y + r.h, r.w, c.height - r.y - r.h));
+      default:
+        return tilesIn(rect(0, r.y, r.x, r.h));
+    }
+  };
+  /** A parked car (any of its tiles), as a whole. */
+  const car = (p: Vec2) => {
+    const o = objectAt(c.decor, c.width, c.i(p.x, p.y));
+    return o && (o.kind === 'carFront' || o.kind === 'carRear') ? o.tiles : null;
+  };
+  /** What can be cleared out of its way: open ground's clutter, trees, a parked car (whole). */
+  const clearable = (p: Vec2) => {
+    const kind = c.get(p.x, p.y);
+    if (kind === 'floor') return true;
+    if ((kind !== 'low' && kind !== 'high') || c.keep[c.i(p.x, p.y)]) return false;
+    const look = decorOf(c.decor[c.i(p.x, p.y)]!);
+    return !look || SOFT.has(look.kind) || !!car(p);
+  };
+  const laneOpen = (o: { r: Rect; alongX: boolean }) => laneOf(o).every((p) => c.elevAt(p.x, p.y) === 0 && c.groundAt(p.x, p.y) !== INDOOR && clearable(p));
   const options = sides
     .filter((o) => touches(o) && fits(o.r))
     .map((o) => ({ ...o, cost: tilesIn(o.r).filter((p) => c.get(p.x, p.y) !== 'floor').length + o.slide * 0.3 + rng.next() * 0.5 }));
-  const pick = best(options, (o) => o.cost);
+  // With its way out open if it can be; else as before, what stands in its way cleared where it can be.
+  const out = options.filter(laneOpen);
+  const pick = best(out.length ? out : options, (o) => o.cost);
   if (!pick) return null;
   const tiles = tilesIn(pick.r);
   for (const p of tiles) {
@@ -3642,10 +3848,17 @@ function parkBus(c: Canvas, zone: Vec2[], rng: Rng): { tiles: Vec2[]; heading: n
     c.dress(p, 'bus');
     c.reserve(p.x, p.y);
   }
-  // Off toward the nearer end of the map along its length.
-  const mid = centre(pick.r);
-  const heading = pick.alongX ? (mid.x < c.width / 2 ? 3 : 1) : mid.y < c.height / 2 ? 0 : 2;
-  return { tiles, heading };
+  const lane = laneOf(pick).filter((p) => c.elevAt(p.x, p.y) === 0 && c.groundAt(p.x, p.y) !== INDOOR && clearable(p));
+  for (const p of lane) {
+    const i = c.i(p.x, p.y);
+    // A car partly in the way goes whole.
+    for (const j of car(p) ?? [i]) {
+      c.tiles[j] = 'floor';
+      c.decor[j] = 0;
+    }
+    c.reserve(p.x, p.y);
+  }
+  return { tiles, heading: headingOf(pick), lane };
 }
 
 // ------------------------------------------------------- storeys and lights
@@ -3760,8 +3973,8 @@ function unblockStorey(st: Storey, r: Rect, from: Vec2): void {
       return (k === 'low' || k === 'high') && DIRS4.some((d) => isWalkable(st.c.get(p.x + d.x, p.y + d.y)));
     });
     if (!blocked) return;
-    st.c.force(blocked.x, blocked.y, 'floor');
-    st.c.decor[st.c.i(blocked.x, blocked.y)] = 0;
+    // A bed or a table over several tiles goes whole.
+    clearObject(st.c, blocked);
   }
 }
 
@@ -3782,7 +3995,7 @@ function clearMedicalAisles(st: Storey, r: Rect, from: Vec2): void {
     const cover = cells.filter((p) => st.slab[c.i(p.x, p.y)] && ['low', 'high'].includes(c.get(p.x, p.y)) && DIRS4.some((d) => seen.has(c.i(p.x + d.x, p.y + d.y))));
     const p = best(cover, (p) => Math.min(...isolated.map((q) => Math.abs(p.x - q.x) + Math.abs(p.y - q.y))));
     if (!p) return;
-    c.force(p.x, p.y, 'floor'); c.decor[c.i(p.x, p.y)] = 0;
+    clearObject(c, p);
   }
 }
 
@@ -4114,10 +4327,14 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   // The bus waits beside it, drawn on its own seed so nothing else in the layout moves.
   const bus = evacZone.length ? parkBus(c, evacZone, new Rng(opts.seed ^ 0x6275)) : null;
   placeLootBoxes(c, opts.seed);
+  // What the evacuation and the bus's way out cut of a car goes whole.
+  tidyObjects(c);
   const startTile = { x: 0, y: 0 };
   openDeadEnds(c, startTile);
 
-  const reach = connect(c, startTile);
+  let reach = connect(c, startTile);
+  // A way cut through a car or a lorry (connect: only where nothing else opens one) takes the rest of it.
+  if (tidyObjects(c)) reach = flood(c, startTile);
   const taken = new Set<number>();
   const standable = (p: Vec2) => c.in(p.x, p.y) && reach.has(c.i(p.x, p.y)) && canStandOn(c.get(p.x, p.y)) && !taken.has(c.i(p.x, p.y));
 
@@ -4149,23 +4366,36 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     else objectiveSpot = spot;
   } else if (kind === 'sabotage') {
     objectiveSpot = objTiles.find((p) => c.elevAt(p.x, p.y) === 0 && DIRS8.filter((d) => standable({ x: p.x + d.x, y: p.y + d.y })).length >= 5) ?? objTiles[0] ?? null;
-    // A patrol car or an ambulance stands over two tiles (#14): its nose blocks a neighbour of the siren,
-    // on the paving and with room beyond it if it can, and never where it would close a way.
+    // A patrol car (1 × 3) or an ambulance (2 × 4) stands over the siren's tile and the rest of its footprint
+    // (#14; decor.ts FOOTPRINT): its nose ahead of the siren, the rest blocked, `sirenCar` the tile before the siren's
+    // and the others its parts; on the paving and with room round it if it can, and never where it would close a way.
+    // Where the whole of it doesn't fit, a shorter one: down to the two tiles it took before.
     if (objectiveSpot && (opts.alarm === 'police' || opts.alarm === 'ambulance')) {
       const at = objectiveSpot;
       const room = (p: Vec2) => DIRS8.filter((d) => standable({ x: p.x + d.x, y: p.y + d.y })).length;
-      const noses = DIRS4.map((d, f) => ({ f, p: add(at, d) }))
-        .filter(({ p }) => standable(p) && c.free(p.x, p.y))
-        .sort((a, b) => Number(c.groundAt(b.p.x, b.p.y) !== OPEN) - Number(c.groundAt(a.p.x, a.p.y) !== OPEN) || room(b.p) - room(a.p) || a.f - b.f);
-      for (const { f, p } of noses) {
-        c.force(p.x, p.y, 'high');
+      const sizes: (readonly [number, number])[] = opts.alarm === 'ambulance' ? [FOOTPRINT.ambulance, FOOTPRINT.patrolCar, [1, 2]] : [FOOTPRINT.patrolCar, [1, 2]];
+      const options = sizes.flatMap(([wide, deep], k) =>
+        DIRS4.flatMap((_, f) =>
+          (wide > 1 ? [(f + 1) % 4, (f + 3) % 4] : [(f + 1) % 4]).map((side) => {
+            const cells = footprint(at, f, side, wide, deep).slice(1);
+            // The tile before the siren's first: the car's anchor.
+            const nose = add(at, DIRS4[f]!);
+            return { k, f, cells: [nose, ...cells.filter((p) => p.x !== nose.x || p.y !== nose.y)] };
+          }),
+        ),
+      ).filter((o) => o.cells.every((p) => standable(p) && c.free(p.x, p.y)));
+      const paved = (o: { cells: Vec2[] }) => o.cells.filter((p) => c.groundAt(p.x, p.y) !== OPEN).length;
+      options.sort((a, b) => a.k - b.k || paved(b) - paved(a) || room(b.cells[0]!) - room(a.cells[0]!) || a.f - b.f);
+      for (const { f, cells } of options) {
+        for (const p of cells) c.force(p.x, p.y, 'high');
         const after = flood(c, startTile);
-        if ([...reach].every((i) => i === c.i(p.x, p.y) || after.has(i))) {
-          c.dress(p, 'sirenCar', f);
-          reach.delete(c.i(p.x, p.y));
+        const own = new Set(cells.map((p) => c.i(p.x, p.y)));
+        if ([...reach].every((i) => own.has(i) || after.has(i))) {
+          dressObject(c, cells, 'sirenCar', f);
+          for (const i of own) reach.delete(i);
           break;
         }
-        c.force(p.x, p.y, 'floor');
+        for (const p of cells) c.force(p.x, p.y, 'floor');
       }
     }
   } else if (kind === 'hack') {
@@ -4215,7 +4445,8 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   tidyDecor(c);
   const heights = buildingStoreys(c, biome, opts.seed);
   const tall = storeysOf(c, heights);
-  const lamps = streetLights(c, biome, opts.seed);
+  // None on the bus's way out (parkBus): it would drive through the post.
+  const lamps = streetLights(c, biome, opts.seed).filter((p) => !bus?.lane.some((q) => q.x === p.x && q.y === p.y));
   // The storeys above the ground (docs/FASE6-PLAN.md), last: stairs and ladders keep off what is already placed.
   const placed = new Set<number>([...beforePods, ...lamps.map((p) => c.i(p.x, p.y)), ...[item, terminal].filter((p): p is Vec2 => !!p).map((p) => c.i(p.x, p.y))]);
   const upper = upperFloors(c, heights, opts.seed, placed, reach, squadCenter);
@@ -4281,7 +4512,6 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     }) }];
   });
 
-  for (const b of medical) b.dressing = dressMedical(b, S, tiles, decor, levels, opts.seed, [...spawns, item, terminal, objectiveSpot].filter((p): p is Vec2 => !!p).map(T));
   // The houses (playtest 18/10, #15): their rooms by use, and what lies about in them.
   const homes: HomeSite[] = c.buildings.flatMap((b) => {
     if (!b.homeRooms || b.ruined) return [];
@@ -4292,7 +4522,31 @@ export function generateLayout(opts: GenOptions): MissionLayout {
       return { x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, z: r.z, use: r.use };
     }) }];
   });
-  for (const h of homes) h.dressing = dressHome(h, S, tiles, decor, levels, opts.seed, [...spawns, item, terminal, objectiveSpot].filter((p): p is Vec2 => !!p).map(T));
+  // What stands on the floor takes its tile (Arturo, 19/10: «que ocupen»; furnishing.ts): the houses' furniture, the shops'
+  // by their trade, a library's tables, a barn's tools (a sawmill's too, as the client sees it), the kerbs' hydrants and
+  // mailboxes. Clear of everyone's place, of what lies on the floor and of the bus's way out; then what lies about in the
+  // houses and the clinics, the chairs over and the bags among it. If the map lost a way after all, none of it blocks.
+  const sites: FurnishSite[] = c.buildings.flatMap((b) => {
+    const kind = b.ruined ? null : b.furnish === 'barn' || (biome === 'wilds' && b.hall) ? 'barn' : b.hall && b.furnish === 'store' ? 'hall' : b.furnish === 'shop' ? 'shop' : null;
+    if (!kind) return [];
+    const a = T(b.outer);
+    const z = T({ x: b.outer.x + b.outer.w - 1, y: b.outer.y + b.outer.h - 1 });
+    return [{ kind, x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1 }];
+  });
+  // The terminal, the relay or VIP and the loot boxes keep the room round them they were given (a box is opened from beside it).
+  const boxes = c.decor.flatMap((d, i) => (['lootWeapons', 'lootMedical', 'lootAmmo', 'lootFood'].includes(decorOf(d)?.kind ?? '') ? [{ x: i % S, y: Math.floor(i / S) }] : []));
+  const round = [terminal, objectiveSpot, ...boxes].flatMap((p) => (p ? DIRS8.map((d) => add(p, d)) : []));
+  const placedOn = [...spawns, item, terminal, objectiveSpot, ...round, ...evacZone, ...(bus?.lane ?? []), ...lamps, ...pods.flatMap((p) => [...p.tiles, ...p.patrol])]
+    .filter((p): p is Vec2 => !!p)
+    .map((p) => ({ ...T(p), z: 0 }));
+  const map = { width: S, height: S, tiles, elev, decor, levels, ground };
+  const before = storeyPieces(map);
+  const furnisher = furnishMap(map, homes, sites, opts.seed, [...placedOn, ...upper.perch.map((p) => ({ ...T(p), z: p.z }))], biome === 'wilds' ? null : { lamps: lamps.map(T) });
+  const reserved = [...spawns, item, terminal, objectiveSpot].filter((p): p is Vec2 => !!p).map(T);
+  for (const b of medical) b.dressing = dressMedical(b, S, tiles, decor, levels, opts.seed, reserved, furnisher.strew);
+  for (const h of homes) h.dressing = dressHome(h, S, tiles, decor, levels, opts.seed, reserved, furnisher.strew);
+  // Each storey's flood fill, as it was: what was joined is joined still, or none of it stands.
+  if (!joinedAsBefore(before, storeyPieces(map))) furnisher.undo();
 
   return {
     id: `gen-${site ?? biome}-${opts.seed}`,

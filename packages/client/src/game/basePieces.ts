@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { bastionFootprint, bastionLot, bastionStage, BASTION_STAGES, DIRS4, nodeOf, PIECES, pieceCells, type BasePiece, type BaseState, type GameState, type PieceCell, type PieceDef, type PieceId, type TileKind, type Vec2 } from '@bastion/engine';
+import { bastionFootprint, bastionLot, bastionStage, BASTION_STAGES, bastionYard, DIRS4, nodeOf, PIECES, pieceCells, type BasePiece, type BaseState, type GameState, type PieceCell, type PieceDef, type PieceId, type TileKind, type Vec2 } from '@bastion/engine';
 import { STOREY } from './coords';
 import { inwards, wearStage } from './siegeDressing';
 import type { PropId } from './syntyManifest';
@@ -26,6 +26,8 @@ export interface PieceSpot {
 export interface PieceMap {
   spots: PieceSpot[];
   at: Int16Array;
+  /** The Bastion's yard, by tile (engine base.ts bastionYard): low cover in a siege, drawn with the Bastion (drawBastion), nothing else there. */
+  yard: Set<number>;
 }
 
 export function pieceMap(s: GameState): PieceMap | null {
@@ -43,7 +45,7 @@ export function pieceMap(s: GameState): PieceMap | null {
     const z = (Math.min(...ys) + Math.max(...ys) + 1) / 2;
     return { piece, def: PIECES[piece.piece], cells, x, z, anchor: Math.floor(z) * w + Math.floor(x), yaw: (-piece.rot * Math.PI) / 2 };
   });
-  return { spots, at };
+  return { spots, at, yard: new Set(bastionYard(base).map((p) => p.y * w + p.x)) };
 }
 
 /** The pieces drawn here: all of them. */
@@ -66,6 +68,7 @@ export function terrainOf(s: GameState, map: PieceMap): GameState {
       elev[i] = 0;
     }
   }
+  for (const i of map.yard) tiles[i] = 'floor';
   const ground = s.ground?.map((g) => (g === 3 ? 1 : g));
   return Object.create(s, { tiles: { value: tiles }, elev: { value: elev }, ground: { value: ground } }) as GameState;
 }
@@ -124,6 +127,13 @@ function at(x: number, y: number, z: number, yaw: number, s: [number, number, nu
 
 /** Quarter turns (counter-clockwise from above) that make a prop modelled facing north face DIRS4[f]. */
 const turnTo = (f: number) => (4 - f) % 4;
+
+/**
+ * The tower's ladder: its foot this far from its tile's middle towards the deck, its top over the deck's edge,
+ * leant `lean` tiles towards the deck for each tile up (its tilt's tangent), `top` tall. The units climb it by
+ * the same numbers (unitViews.ts rungsOf).
+ */
+export const TOWER_LADDER = { foot: 0.1, lean: Math.tan(0.16), top: STOREY + 0.35 };
 
 /** How tall a palisade, a wall and a gate stand (a little lower than a storey's walls). */
 const FENCE_HEIGHT = 1.9;
@@ -241,7 +251,8 @@ export function drawPiece(s: GameState, map: PieceMap, spot: PieceSpot, wear: Pi
       if (ladder) {
         // Its rungs across the way up (the model's x is the ladder's face), its top leant onto the deck's edge.
         const face = Math.atan2(front.z, -front.x);
-        art.put('towerLadder', at(ladder.x + 0.5 - front.x * 0.1, 0, ladder.y + 0.5 - front.z * 0.1, face, [1, (STOREY + 0.35) / art.top('towerLadder'), 1], -0.16));
+        const { foot, lean, top } = TOWER_LADDER;
+        art.put('towerLadder', at(ladder.x + 0.5 - front.x * foot, 0, ladder.y + 0.5 - front.z * foot, face, [1, top / art.top('towerLadder'), 1], -Math.atan(lean)));
       }
       break;
     }

@@ -1,4 +1,4 @@
-import { hostileTo, TEMPLATES, TRAPS } from './content';
+import { TEMPLATES, TRAPS } from './content';
 import { decorOf } from './decor';
 import { canStandOn, DIRS4, DIRS8, elevAt, heightAt, inBounds, isWalkable, isWindow, kindAt, nodeOf, posOf, slabAt, surfaceAt, toPos } from './grid';
 import type { GameState, Place, Pos, Unit } from './types';
@@ -208,23 +208,27 @@ export function onPatrol(s: GameState, u: Unit): boolean {
 
 /**
  * Dijkstra over 8 directions, on every level (docs/FASE6-PLAN.md: up and down
- * ladders and stairs, off edges). Allies can be walked through (but not
- * stopped on), enemies block their place (not the floor above or below), and
- * diagonals may not cut corners of blocked tiles. A pod on patrol keeps to
- * doors and open ground (playtest: undiscovered aliens went into a building
- * through a window): vaulting in is for aliens in the fight. In a siege the
- * dead don't open doors: they break them down (docs/FASE12.md §4).
+ * ladders and stairs, off edges). Every living unit but the walker blocks its
+ * place, whoever's side (Arturo, 19/10: «los compañeros se bloquean», as in
+ * XCOM): a soldier, one of the dead, a turret, the VIP; not the floor above or
+ * below. Diagonals may not cut the corners of blocked tiles. A pod on patrol
+ * keeps to doors and open ground (playtest: undiscovered aliens went into a
+ * building through a window): vaulting in is for aliens in the fight. In a
+ * siege the dead don't open doors: they break them down (docs/FASE12.md §4).
+ * `ignore`: units a plan may look past, as if gone (ai.ts breachPlan asks
+ * whether the ground leaves a way, its own crowd about to move); never for a
+ * walk.
  */
-export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos = u.pos): Reach {
+export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos = u.pos, ignore?: (o: Unit) => boolean): Reach {
   const windows = !onPatrol(s, u);
   const shut = !!s.mission.siege && !!TEMPLATES[u.template].undead;
   // Barbed wire (docs/FASE12.md §11.4): costlier to cross, for everyone.
   const slow = s.slow?.length ? new Set(s.slow) : null;
-  const blockedByEnemy = new Set<number>();
+  const taken = new Set<number>();
   for (const o of s.units) {
-    if (o.alive && hostileTo(o, u)) blockedByEnemy.add(nodeOf(s, o.pos));
+    if (o.alive && o !== u && !ignore?.(o)) taken.add(nodeOf(s, o.pos));
   }
-  const blocked = (p: Pos | null) => !!p && blockedByEnemy.has(nodeOf(s, p));
+  const blocked = (p: Pos | null) => !!p && taken.has(nodeOf(s, p));
   const start = nodeOf(s, from);
   const cost = new Map<number, number>([[start, 0]]);
   const prev = new Map<number, number>();
@@ -238,7 +242,7 @@ export function computeReach(s: GameState, u: Unit, maxCost: number, from: Pos =
     for (const d of DIRS8) {
       for (const { to, cost: step } of stepsFrom(s, p, d.x, d.y)) {
         const ni = nodeOf(s, to);
-        if (blockedByEnemy.has(ni) || (!windows && isWindow(kindAt(s, to))) || (shut && kindAt(s, to) === 'door')) continue;
+        if (taken.has(ni) || (!windows && isWindow(kindAt(s, to))) || (shut && kindAt(s, to) === 'door')) continue;
         if (d.x !== 0 && d.y !== 0) {
           const h = heightAt(s, p);
           if (blocked(surfaceAt(s, to.x, p.y, h)) || blocked(surfaceAt(s, p.x, to.y, h))) continue;

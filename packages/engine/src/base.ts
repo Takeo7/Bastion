@@ -200,6 +200,67 @@ export function bastionFootprint(base: BaseState): Vec2[] {
   return cells;
 }
 
+/**
+ * What stands in the Bastion's yard at each stage (Arte's drawing of it,
+ * client basePieces.ts drawBastion), by tile of its lot (x across, y deep, its
+ * front the last row): what is always there, and what its second level adds.
+ *   - the caravan: the fire, its two chairs and the wood; then its steps, the
+ *     tarp shelter by its side and the generator;
+ *   - the mobile home: the same; then the porch deck along its front, its steps;
+ *   - the barracón: the fire in the corner, its chairs, the wood; then the solar
+ *     panels and the generator up its free side, sandbags either side of its
+ *     steps, the floodlight;
+ *   - the house: its porch, the whole front row, with the wood on it.
+ */
+const BASTION_YARD: { always: [number, number][]; more: [number, number][] }[] = [
+  { always: [[4, 5], [3, 5], [5, 4], [0, 5]], more: [[3, 4], [0, 4], [1, 4], [2, 4], [1, 5], [2, 5], [5, 1]] },
+  { always: [[4, 5], [3, 5], [5, 4], [0, 5]], more: [[1, 4], [2, 4], [3, 4], [4, 4]] },
+  { always: [[5, 5], [4, 5], [5, 4], [0, 5]], more: [[5, 1], [5, 2], [1, 5], [3, 5], [5, 0]] },
+  { always: [[0, 5], [1, 5], [2, 5], [3, 5], [4, 5], [5, 5]], more: [] },
+];
+
+/**
+ * The tiles of the Bastion's yard that what is drawn there stands on (Arturo,
+ * 19/10: «que ocupen»; BASTION_YARD), and those of the lot it shuts in, that
+ * nobody could get to: in a siege, low cover nobody stands on (baseLayout).
+ * The client draws the yard as it always has, and nothing else there.
+ */
+export function bastionYard(base: Pick<BaseState, 'pieces' | 'level'>): Vec2[] {
+  const lot = bastionLot(base as BaseState);
+  if (!lot) return [];
+  const level = base.level ?? 1;
+  const yard = BASTION_YARD[bastionStage(base)]!;
+  const solid = new Set(bastionFootprint(base as BaseState).map((p) => `${p.x - lot.x},${p.y - lot.y}`));
+  const things = [...yard.always, ...(level % 2 === 0 ? yard.more : [])].map(([x, y]) => `${x},${y}`);
+  for (const t of things) solid.add(t);
+  // What is left of the lot joins the clearing by its edge, or it is shut in.
+  const open = new Set<string>();
+  const queue: [number, number][] = [];
+  for (let y = 0; y < lot.h; y++) {
+    for (let x = 0; x < lot.w; x++) {
+      if ((x === 0 || y === 0 || x === lot.w - 1 || y === lot.h - 1) && !solid.has(`${x},${y}`)) {
+        open.add(`${x},${y}`);
+        queue.push([x, y]);
+      }
+    }
+  }
+  while (queue.length) {
+    const [x, y] = queue.pop()!;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const k = `${x + dx},${y + dy}`;
+      if (x + dx < 0 || y + dy < 0 || x + dx >= lot.w || y + dy >= lot.h || solid.has(k) || open.has(k)) continue;
+      open.add(k);
+      queue.push([x + dx, y + dy]);
+    }
+  }
+  const out = new Set(things);
+  for (let y = 0; y < lot.h; y++) for (let x = 0; x < lot.w; x++) if (!solid.has(`${x},${y}`) && !open.has(`${x},${y}`)) out.add(`${x},${y}`);
+  return [...out].map((k) => {
+    const [x, y] = k.split(',').map(Number) as [number, number];
+    return { x: lot.x + x, y: lot.y + y };
+  });
+}
+
 /** Whether (x, y) lies on the Bastion's lot. */
 export function onBastionLot(base: BaseState, x: number, y: number): boolean {
   const lot = bastionLot(base);
@@ -454,6 +515,10 @@ export function baseLayout(base: BaseState): MissionLayout {
       // What stands in the way holds its piece's health; the ground of a trap or a deck doesn't.
       if (c.tile === 'wall' || c.tile === 'door' || c.tile === 'low' || c.tile === 'high') breakables[i] = p.hp;
     }
+  }
+  // What stands in its yard takes its tile (19/10): the fire, the chairs, the wood, the porch… low, and nobody starts there.
+  if (base.pieces.some((p) => p.piece === 'caravan' && p.hp > 0)) {
+    for (const p of bastionYard(base)) if (tiles[p.y * width + p.x] === 'floor') tiles[p.y * width + p.x] = 'low';
   }
   // The squad round the Bastion: the free tiles nearest the middle of its lot.
   const lot = bastionLot(base);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DIRS4, type GameState, type TileKind, type Vec2 } from '@bastion/engine';
+import { decorOf, DIRS4, type GameState, type TileKind, type Vec2 } from '@bastion/engine';
 import { STOREY } from './coords';
 import { FLOOR, type GroundMap } from './ground';
 import type { PropId } from './syntyManifest';
@@ -10,11 +10,14 @@ import type { PropId } from './syntyManifest';
 // (batch.ts), so it costs no draw calls. Nothing here may read as cover:
 //  - tall things are slim and stand by the kerb, near a tile's corner, where
 //    nobody stands: street lights over the road, power poles with their wires
-//    along straight streets, a stop sign at a block's corner, now and then a
-//    hydrant or a mailbox;
-//  - what lies about is flat: bags and tyres against the façades, a pallet,
-//    a bike, weeds in the cracks of the paving and in the gutters.
+//    along straight streets, a stop sign at a block's corner;
+//  - what lies about is flat or small, below the knee: bags and tyres
+//    against the façades, a pallet, a bike, weeds in the cracks of the
+//    paving and in the gutters.
 // Piles of rubbish big enough to hide behind are cover (PROP_SETS: cityLow).
+// The hydrants and mailboxes stand on tiles of their own, where the engine
+// puts them (furnishing.ts, Arturo 19/10: «que ocupen»): drawn here, by the
+// kerb as before, while their tile stands.
 
 export interface Dressing {
   id: PropId;
@@ -44,6 +47,45 @@ function placed(id: PropId, x: number, y: number, z: number, dx: number, dz: num
 }
 
 /**
+ * Where the tall things by a kerb stand, from the middle of their tile (tiles): towards the street `KERB_OUT`,
+ * along it `KERB_ALONG`. A tile's corner (0.4, 0.4) put them on the line of a diagonal step (0.14 from the
+ * corner, none from the line); here they are 0.18 or more from every line a step between tile middles takes
+ * (straight or diagonal), about as far as anything on open ground can be (the most is 0.21).
+ */
+const KERB_OUT = 0.47;
+const KERB_ALONG = 0.21;
+
+/**
+ * Half the size of the props the map's edge is shut with (tiles, along their own x and z, as syntyProps fits
+ * them: measured on the models), so that none of them reaches over the edge tile, where units walk.
+ */
+const HALF: Partial<Record<PropId, readonly [number, number]>> = {
+  rubble1: [0.475, 0.402], rubble2: [0.475, 0.423], razorWire: [0.5, 0.316], trashPile: [0.343, 0.525], tirePile: [0.261, 0.5],
+  bush: [0.45, 0.237], boulder: [0.475, 0.665], rock: [0.443, 0.475], cliff: [0.2, 0.7], cliff2: [0.237, 0.7], log: [0.412, 0.5],
+  sheetFence: [0.878, 0.124], sheetFence2: [0.836, 0.113], concreteFence: [0.833, 0.083], milBarrierTall: [0.203, 0.5],
+  container: [0.988, 2.425], containerBlue: [0.988, 2.425], containerOrange: [0.988, 2.425], debrisPile: [2.704, 1.266],
+  debrisPile2: [2.099, 1.252], bus: [3.809, 1.079], sandbags: [0.5, 0.279], barricade1: [0.5, 0.063], carWreck: [0.41, 0.975],
+  carRusted: [0.41, 0.975], tire: [0.275, 0.275],
+};
+/** What stands past the edge keeps this much clear of the edge tile (tiles). */
+const EDGE_CLEAR = 0.02;
+
+/**
+ * How far past the middle of an edge tile (along `out`) prop `id` has to stand, placed with its own +x
+ * towards (dx, dz), `scale` along it and `size` all over, to keep off that tile: its outer side (0.5), and as
+ * far again as the prop reaches that way.
+ */
+function clearOf(id: PropId, dx: number, dz: number, out: Vec2, scale = 1, size = 1): number {
+  const half = HALF[id];
+  if (!half) return 0;
+  const l = Math.hypot(dx, dz) || 1;
+  // Its own x is (dx, dz); its own z, (-dz, dx) (placed's turn).
+  const along = Math.abs((dx * out.x + dz * out.y) / l);
+  const across = Math.abs((-dz * out.x + dx * out.y) / l);
+  return 0.5 + (half[0] * scale * along + half[1] * across) * size + EDGE_CLEAR;
+}
+
+/**
  * The dressing of a map's streets and pavements (towns and facilities; the
  * wilds have their grass and only their lamps). The street lights stand where
  * the engine says (`lamps`: the map's own lights, which light tiles at night),
@@ -61,7 +103,7 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
     });
     const d = DIRS4[k < 0 ? 0 : k]!;
     const along = { x: -d.y, y: d.x };
-    out.push(placed('streetLight', p.x + 0.5 + d.x * 0.4 + along.x * 0.4, (s.elev[p.y * w + p.x] ?? 0) * STOREY, p.y + 0.5 + d.y * 0.4 + along.y * 0.4, d.x, d.y, true));
+    out.push(placed('streetLight', p.x + 0.5 + d.x * KERB_OUT + along.x * KERB_ALONG, (s.elev[p.y * w + p.x] ?? 0) * STOREY, p.y + 0.5 + d.y * KERB_OUT + along.y * KERB_ALONG, d.x, d.y, true));
   }
   if (s.biome === 'wilds') return out;
   const kind = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? -1 : ground.kinds[y * w + x]!);
@@ -94,7 +136,7 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
             let last: THREE.Vector3 | null = null;
             for (let k = 1; k < run.length - 1; k += POLE_EVERY) {
               const t = run[k]!;
-              const p = new THREE.Vector3(t.x + 0.5 + side.x * 0.4 - dx * 0.4, 0, t.y + 0.5 + side.y * 0.4 - dy * 0.4);
+              const p = new THREE.Vector3(t.x + 0.5 + side.x * KERB_OUT - dx * KERB_ALONG, 0, t.y + 0.5 + side.y * KERB_OUT - dy * KERB_ALONG);
               out.push(placed('powerPole', p.x, 0, p.z, dx, dy, true));
               if (last) out.push(placed('powerLine', last.x, 0, last.z, dx, dy, false, p.distanceTo(last) / POLE_EVERY));
               last = p;
@@ -114,6 +156,18 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
     }
   }
 
+  // The engine's hydrants and mailboxes, on the pavement by the street: near the tile's corner, as they always stood.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const look = tile(x, y) === 'low' ? decorOf(s.decor?.[y * w + x]) : null;
+      if (look?.kind !== 'hydrant' && look?.kind !== 'mailbox') continue;
+      const d = DIRS4[look.facing]!;
+      const along = { x: -d.y, y: d.x };
+      out.push(placed(look.kind, x + 0.5 + d.x * 0.36 - along.x * 0.36, 0, y + 0.5 + d.y * 0.36 - along.y * 0.36, -d.x, -d.y, true));
+      taken.push({ x, y });
+    }
+  }
+
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (!free(x, y)) continue;
@@ -128,23 +182,19 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
           // A block's corner (the street on two sides): a stop sign.
           if (toStreet.length >= 2 && r(1) < 0.45 && !near(x, y, 3)) {
             const e = toStreet[1]!;
-            out.push(placed('stopSign', cx + (d.x + e.x) * 0.38, 0, cz + (d.y + e.y) * 0.38, d.x + e.x, d.y + e.y, true));
+            out.push(placed('stopSign', cx + d.x * KERB_OUT + e.x * KERB_ALONG, 0, cz + d.y * KERB_OUT + e.y * KERB_ALONG, d.x + e.x, d.y + e.y, true));
             taken.push({ x, y });
             continue;
           }
           // Street lights along the kerb, the arm over the road (where the engine places none).
           if (!lamps && r(2) < 1 / LIGHT_EVERY + 0.04 && !near(x, y, LIGHT_EVERY - 2)) {
-            out.push(placed('streetLight', cx + d.x * 0.4 + along.x * 0.4, 0, cz + d.y * 0.4 + along.y * 0.4, d.x, d.y, true));
-            taken.push({ x, y });
-            continue;
-          }
-          if (r(3) < 0.035 * density && !near(x, y, 2)) {
-            out.push(placed(r(4) < 0.6 ? 'hydrant' : 'mailbox', cx + d.x * 0.36 - along.x * 0.36, 0, cz + d.y * 0.36 - along.y * 0.36, -d.x, -d.y, true));
+            out.push(placed('streetLight', cx + d.x * KERB_OUT + along.x * KERB_ALONG, 0, cz + d.y * KERB_OUT + along.y * KERB_ALONG, d.x, d.y, true));
             taken.push({ x, y });
             continue;
           }
         }
-        // Against a façade: a few bags, rubble fallen from it, a tyre or a pallet, now and then.
+        // Against a façade: a few bags, rubble fallen from it, a tyre or a pallet, now and then. Small, below the knee
+        // (19/10): the low bags only, at most their own size; the tall one would stand in the way where one walks.
         const toWall = DIRS4.filter((d) => wallish(x + d.x, y + d.y));
         if (toWall.length && r(5) < 0.22 * density) {
           const d = toWall[0]!;
@@ -153,9 +203,9 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
           for (let k = 0; k < n; k++) {
             const u = (r(10 + k) - 0.5) * 0.7;
             const pick = r(20 + k);
-            const id: PropId = pick < 0.55 ? (['trashBag', 'trashBag2', 'trashBag3'] as const)[Math.floor(r(30 + k) * 3)]! : pick < 0.78 ? 'pebbles' : r(40 + k) < 0.5 ? 'tire' : 'pallet';
+            const id: PropId = pick < 0.55 ? (['trashBag', 'trashBag2'] as const)[Math.floor(r(30 + k) * 2)]! : pick < 0.78 ? 'pebbles' : r(40 + k) < 0.5 ? 'tire' : 'pallet';
             const yaw = r(50 + k) * Math.PI * 2;
-            out.push(placed(id, cx + d.x * 0.3 + along.x * u, 0, cz + d.y * 0.3 + along.y * u, Math.cos(yaw), Math.sin(yaw), id !== 'pallet' && id !== 'tire' && id !== 'pebbles', 1, 0.8 + r(60 + k) * 0.3));
+            out.push(placed(id, cx + d.x * 0.3 + along.x * u, 0, cz + d.y * 0.3 + along.y * u, Math.cos(yaw), Math.sin(yaw), id !== 'pallet' && id !== 'tire' && id !== 'pebbles', 1, 0.75 + r(60 + k) * 0.25));
           }
           continue;
         }
@@ -198,18 +248,19 @@ function shut(a: Vec2, b: Vec2, out: Vec2, kind: number, r: (salt: number) => nu
     }
   } else if (kind === 1) {
     // A bus across the street, sandbags where it doesn't reach.
-    const p = at(mid, 1.6);
+    const p = at(mid, Math.max(1.6, clearOf('bus', along.x, along.y, out)));
     list.push(placed('bus', p.x, 0, p.z, along.x, along.y, true));
     for (const t of [-0.6, width - 0.4]) {
       const q = at(t, 0.9);
       if (width > 6) list.push(placed('sandbags', q.x, 0, q.z, along.x, along.y, true));
     }
   } else {
-    // Burnt-out cars nose to tail across it, planks nailed between them.
+    // Burnt-out cars nose to tail across it, planks nailed between them (off the edge tile: they reached 0.27 over it).
     for (let t = 0.5; t < width; t += 2.6) {
-      const p = at(Math.min(t + 0.5, width - 1), 1.35 + (r(40 + t) - 0.5) * 0.3);
       const flip = r(50 + t) < 0.5 ? 1 : -1;
-      list.push(placed(r(60 + t) < 0.5 ? 'carWreck' : 'carRusted', p.x, 0, p.z, along.x * flip, along.y * flip, true));
+      const id: PropId = r(60 + t) < 0.5 ? 'carWreck' : 'carRusted';
+      const p = at(Math.min(t + 0.5, width - 1), Math.max(1.35 + (r(40 + t) - 0.5) * 0.3, clearOf(id, along.x, along.y, out)));
+      list.push(placed(id, p.x, 0, p.z, along.x * flip, along.y * flip, true));
     }
     for (let t = 0; t < width; t += 2.6) {
       const p = at(t, 0.85);
@@ -240,12 +291,16 @@ function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, numb
     for (let i = 0; i < n; i++) put(from + (length / n) * (i + 0.5), i);
   };
   const turn = (salt: number, by: number) => (r(salt) - 0.5) * by;
+  // Nothing reaches over the edge tile, where units walk (they stood 0.25 to 0.3 past its middle: inside it).
+  const off = (id: PropId, beyond: number, dx: number, dz: number, scale = 1, size = 1) => Math.max(beyond, clearOf(id, dx, dz, out, scale, size));
   if (kind === 0) {
     // A block come down: its heaps along the edge, a wall of it still up, the whole ruin where there is room.
     row(4.6, (t, i) => {
-      const p = at(t, 1.9 + turn(70 + i, 0.4));
       const flip = r(80 + i) < 0.5 ? 1 : -1;
-      const heap = placed(r(90 + i) < 0.5 ? 'debrisPile' : 'debrisPile2', p.x, -0.05, p.z, along.x * flip - out.x * turn(100 + i, 0.3), along.y * flip - out.y * turn(100 + i, 0.3), true);
+      const id: PropId = r(90 + i) < 0.5 ? 'debrisPile' : 'debrisPile2';
+      const [hx, hz] = [along.x * flip - out.x * turn(100 + i, 0.3), along.y * flip - out.y * turn(100 + i, 0.3)];
+      const p = at(t, off(id, 1.9 + turn(70 + i, 0.4), hx, hz));
+      const heap = placed(id, p.x, -0.05, p.z, hx, hz, true);
       // Lower than they come: a storey's worth of rubble, not a hill of it.
       heap.matrix.multiply(new THREE.Matrix4().makeScale(1, 0.7, 1));
       list.push(heap);
@@ -256,8 +311,10 @@ function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, numb
     }
     row(3.1, (t, i) => {
       if (r(120 + i) < 0.5) return;
-      const p = at(t + turn(130 + i, 1), 0.65);
-      list.push(placed(r(140 + i) < 0.5 ? 'rubble1' : 'rubble2', p.x, 0, p.z, Math.cos(r(150 + i) * 6.3), Math.sin(r(150 + i) * 6.3), true));
+      const id: PropId = r(140 + i) < 0.5 ? 'rubble1' : 'rubble2';
+      const [rx, rz] = [Math.cos(r(150 + i) * 6.3), Math.sin(r(150 + i) * 6.3)];
+      const p = at(t + turn(130 + i, 1), off(id, 0.65, rx, rz));
+      list.push(placed(id, p.x, 0, p.z, rx, rz, true));
     });
   } else if (kind === 1) {
     // A hoarding of sheet metal, put up in a hurry: its panels a little askew.
@@ -267,17 +324,24 @@ function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, numb
       list.push(placed(r(180 + i) < 0.5 ? 'sheetFence' : 'sheetFence2', p.x, 0, p.z, along.x - out.x * k, along.y - out.y * k, true));
     });
   } else if (kind === 2) {
-    // A precast wall, panel by panel, rubbish at its foot; a facility's with coils of razor wire before it.
+    // A precast wall, panel by panel, rubbish at its foot; a facility's with coils of razor wire before it. The
+    // wire and the rubbish clear of the edge tile, the wall behind them (it stood at 0.75, they at 0.3 and 0.25).
+    const wire = clearOf('razorWire', along.x, along.y, out, 1.62);
+    // The rubbish with its length along the wall (it stood across it).
+    const heap = clearOf('trashPile', out.x, out.y, out);
+    const front = look.wired ? wire + (wire - 0.5 - EDGE_CLEAR) : heap + (heap - 0.5 - EDGE_CLEAR);
+    const wall = Math.max(0.75, front + (HALF.concreteFence![1] + EDGE_CLEAR));
     row(1.62, (t, i) => {
       // Its origin is at its left end.
-      const p = at(t - 0.83, 0.75);
+      const p = at(t - 0.83, wall);
       list.push(placed('concreteFence', p.x, 0, p.z, along.x, along.y, true));
       if (look.wired) {
-        const q = at(t, 0.3);
+        const q = at(t, wire);
         list.push(placed('razorWire', q.x, 0, q.z, along.x, along.y, false, 1.62));
       } else if (r(190 + i) < 0.3) {
-        const q = at(t + turn(200 + i, 0.6), 0.25);
-        list.push(placed(r(210 + i) < 0.5 ? 'trashPile' : 'tirePile', q.x, 0, q.z, along.x, along.y, true));
+        const id: PropId = r(210 + i) < 0.5 ? 'trashPile' : 'tirePile';
+        const q = at(t + turn(200 + i, 0.6), clearOf(id, out.x, out.y, out));
+        list.push(placed(id, q.x, 0, q.z, out.x, out.y, true));
       }
     });
   } else if (kind === 3) {
@@ -296,19 +360,25 @@ function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, numb
         list.push(placed(trees[Math.floor(r(300 + i * 2 + k) * trees.length)]!, p.x, 0, p.z, Math.cos(a), Math.sin(a), cast, 1, 0.9 + r(310 + i * 2 + k) * 0.35));
       }
       if (r(320 + i) < 0.55) {
-        const q = at(t + turn(330 + i, 0.8), 0.3);
-        list.push(placed('bush', q.x, 0, q.z, Math.cos(i * 2.1), Math.sin(i * 2.1), false, 1, 0.85 + r(340 + i) * 0.3));
+        const size = 0.85 + r(340 + i) * 0.3;
+        const q = at(t + turn(330 + i, 0.8), off('bush', 0.3, Math.cos(i * 2.1), Math.sin(i * 2.1), 1, size));
+        list.push(placed('bush', q.x, 0, q.z, Math.cos(i * 2.1), Math.sin(i * 2.1), false, 1, size));
       }
     });
   } else if (kind === 6) {
     // A rock face, boulders before it, a few trees above.
     row(1.3, (t, i) => {
-      const p = at(t + turn(350 + i, 0.3), 0.95 + turn(360 + i, 0.25));
       const a = (r(370 + i) - 0.5) * 0.5;
-      list.push(placed(r(380 + i) < 0.5 ? 'cliff' : 'cliff2', p.x, 0, p.z, along.x * Math.cos(a) - out.x * Math.sin(a), along.y * Math.cos(a) - out.y * Math.sin(a), true, 1, 1 + r(390 + i) * 0.35));
+      const id: PropId = r(380 + i) < 0.5 ? 'cliff' : 'cliff2';
+      const [cx, cz] = [along.x * Math.cos(a) - out.x * Math.sin(a), along.y * Math.cos(a) - out.y * Math.sin(a)];
+      const size = 1 + r(390 + i) * 0.35;
+      const p = at(t + turn(350 + i, 0.3), off(id, 0.95 + turn(360 + i, 0.25), cx, cz, 1, size));
+      list.push(placed(id, p.x, 0, p.z, cx, cz, true, 1, size));
       if (r(400 + i) < 0.45) {
-        const q = at(t + turn(410 + i, 0.9), 0.3);
-        list.push(placed(r(420 + i) < 0.5 ? 'boulder' : 'rock', q.x, 0, q.z, Math.cos(i * 1.7), Math.sin(i * 1.7), true, 1, 0.8 + r(430 + i) * 0.4));
+        const rock: PropId = r(420 + i) < 0.5 ? 'boulder' : 'rock';
+        const big = 0.8 + r(430 + i) * 0.4;
+        const q = at(t + turn(410 + i, 0.9), off(rock, 0.3, Math.cos(i * 1.7), Math.sin(i * 1.7), 1, big));
+        list.push(placed(rock, q.x, 0, q.z, Math.cos(i * 1.7), Math.sin(i * 1.7), true, 1, big));
       }
       if (r(440 + i) < 0.5) {
         const q = at(t + turn(450 + i, 0.8), 2.3);
@@ -318,10 +388,15 @@ function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, numb
   } else if (kind === 7) {
     // Trees felled across the way, trunk over trunk, the wood behind them.
     row(2.2, (t, i) => {
+      let behind = 0;
       for (let k = 0; k < 2; k++) {
-        const p = at(t + turn(470 + i * 2 + k, 0.5), 0.6 + k * 0.45);
         const a = (r(480 + i * 2 + k) - 0.5) * 0.6;
-        list.push(placed('log', p.x, 0.12 * k, p.z, along.x * Math.cos(a) - out.x * Math.sin(a), along.y * Math.cos(a) - out.y * Math.sin(a), true, 2.4));
+        const [lx, lz] = [along.x * Math.cos(a) - out.x * Math.sin(a), along.y * Math.cos(a) - out.y * Math.sin(a)];
+        // The second over the first, a little further out.
+        const beyond = Math.max(0.6 + k * 0.45, clearOf('log', lx, lz, out, 2.4), behind);
+        behind = beyond + 0.45;
+        const p = at(t + turn(470 + i * 2 + k, 0.5), beyond);
+        list.push(placed('log', p.x, 0.12 * k, p.z, lx, lz, true, 2.4));
       }
       const q = at(t + 0.6, 1.8 + turn(490 + i, 0.3));
       const a = r(500 + i) * 6.3;
@@ -331,10 +406,12 @@ function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, numb
     // Shipping containers end to end, dragged there.
     const colours: PropId[] = ['container', 'containerBlue', 'containerOrange'];
     row(4.85, (t, i) => {
-      const p = at(t, 1.45 + turn(240 + i, 0.2));
       const k = turn(250 + i, 0.06);
+      const id = colours[Math.floor(r(260 + i) * 3)]!;
       // Their length (the model's z) along the edge.
-      list.push(placed(colours[Math.floor(r(260 + i) * 3)]!, p.x, 0, p.z, -along.y + out.y * k, along.x - out.x * k, true));
+      const [dx, dz] = [-along.y + out.y * k, along.x - out.x * k];
+      const p = at(t, off(id, 1.45 + turn(240 + i, 0.2), dx, dz));
+      list.push(placed(id, p.x, 0, p.z, dx, dz, true));
     });
   }
   return list;
@@ -370,8 +447,22 @@ export function dressEdges(s: GameState, ground: GroundMap): Dressing[] {
   const palette = city ? [0, 1, 2, 3, 4] : wilds ? [5, 6, 5, 5, 6] : [2, 3, 4, 2, 1];
   const out: Dressing[] = [];
   const { width: w, height: h } = s;
+  // La Lata's way out (mission.evacBus; the engine keeps it clear, mapgen.ts parkBus): the edge it drives off by stays
+  // open where it goes, a tile more either side (19/10: it drove through the closure).
+  const lane = new Set<number>();
+  const bus = s.mission.evacBus;
+  if (bus?.tiles.length) {
+    const d = DIRS4[bus.heading] ?? DIRS4[0]!;
+    for (const t of bus.tiles) {
+      for (const k of [-1, 0, 1]) {
+        const x = d.x ? (d.x > 0 ? w - 1 : 0) : t.x + k;
+        const y = d.y ? (d.y > 0 ? h - 1 : 0) : t.y + k;
+        if (x >= 0 && y >= 0 && x < w && y < h) lane.add(y * w + x);
+      }
+    }
+  }
   // Only a town's streets are shut by a closure across them; elsewhere a track is walled off with the rest.
-  const street = (x: number, y: number) => city && ground.kinds[y * w + x] === FLOOR.STREET;
+  const street = (x: number, y: number) => city && ground.kinds[y * w + x] === FLOOR.STREET && !lane.has(y * w + x);
   const track = (x: number, y: number) => ground.kinds[y * w + x] === FLOOR.STREET;
   let closures = Math.floor(hash(w, h, 7) * 3);
   let fences = Math.floor(hash(w, h, 8) * palette.length);
@@ -400,7 +491,7 @@ export function dressEdges(s: GameState, ground: GroundMap): Dressing[] {
         // The way shut, its pavements too (up to two tiles of open ground either side of the street).
         const pave = (q: number) => {
           const p = q >= 0 && q < side.n ? side.at(q) : null;
-          return !!p && s.tiles[p.y * w + p.x] === 'floor' && ground.kinds[p.y * w + p.x] === FLOOR.OPEN;
+          return !!p && s.tiles[p.y * w + p.x] === 'floor' && ground.kinds[p.y * w + p.x] === FLOOR.OPEN && !lane.has(p.y * w + p.x);
         };
         let from = start;
         let to = k - 1;
@@ -429,7 +520,7 @@ export function dressEdges(s: GameState, ground: GroundMap): Dressing[] {
     const open = (k: number) => {
       const p = side.at(k);
       const i = p.y * w + p.x;
-      return !shutOff[k] && s.tiles[i] !== 'wall' && ground.kinds[i] !== FLOOR.INDOOR && ground.kinds[i] !== FLOOR.ROOF;
+      return !shutOff[k] && !lane.has(i) && s.tiles[i] !== 'wall' && ground.kinds[i] !== FLOOR.INDOOR && ground.kinds[i] !== FLOOR.ROOF;
     };
     start = -1;
     for (let k = 0; k <= side.n; k++) {

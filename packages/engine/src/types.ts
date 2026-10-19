@@ -192,7 +192,46 @@ export type DecorKind =
   /** The television on its stand, a `low` tile against a living room's wall, facing the sofa. */
   | 'tvStand'
   /** A house's toilet (not the clinics' 'toilet'), a `low` tile in a bathroom's corner. */
-  | 'wc';
+  | 'wc'
+  // What used to be drawn on free floor, now on tiles of its own (Arturo, 19/10: «que ocupen»; furnishing.ts). All `low`
+  // but the drinks fridge; the client draws each as before (homeFurnishing.ts, dressing.ts).
+  /** An armchair across the table from a sofa, or at its side; facing: the way one sits. */
+  | 'armchair'
+  /** A coffee table before a sofa; facing: the sofa's. */
+  | 'coffeeTable'
+  /** A standard lamp in a corner. */
+  | 'floorLamp'
+  /** A potted plant in a corner (or a dining chair's place in a bedroom's). */
+  | 'pottedPlant'
+  /** A house's bedside table by its bed (its lamp on it); facing: the bed's. */
+  | 'nightstand'
+  /** A chair on its own in a bedroom's corner; facing: into the room. */
+  | 'diningChair'
+  /** A towel rail against a bathroom's wall; facing: away from it. */
+  | 'towelRack'
+  /** A coat stand in a hall's corner; facing: away from the wall. */
+  | 'coatRack'
+  /** A café's table, its two chairs tucked in on its tile. */
+  | 'cafeTable'
+  /** A bookshop's or a library's reading table, its chair tucked in on its tile. */
+  | 'readingTable'
+  /** A grocer's drinks fridge, a `high` tile against a wall; facing: its door. */
+  | 'drinksFridge'
+  /** A barn's wheelbarrow. */
+  | 'wheelbarrow'
+  /** A barn's tool leant against its wall (a pitchfork, a rake, a spade); facing: the wall. */
+  | 'tools'
+  /** A fire hydrant by the kerb; facing: the street. */
+  | 'hydrant'
+  /** A mailbox by the kerb; facing: the street. */
+  | 'mailbox'
+  /** What lies about and stands up (homeDressing, medicalAbandonment: a chair over, bags, a fallen drip): its MedicalDetail draws it. */
+  | 'strewn'
+  /**
+   * Another tile of an object that stands over several (docs/MAPAS.md, phase 1: a car 1 × 3, a bed 1 × 2): what it is
+   * is its anchor's, the tile that says the object's kind; facing: the step towards the anchor (decor.ts objectTiles).
+   */
+  | 'part';
 
 /** What makes the noise a sabotage has to silence (playtest 2026-10-15, #14): a patrol car, an ambulance, a factory's alarm. */
 export type Alarm = 'police' | 'ambulance' | 'factory';

@@ -18,6 +18,10 @@ const SCALE = SYNTY_SCALE;
 /** Seconds the doors take to shut, and the bus to pull away and be gone. */
 const SHUT_SECONDS = 0.35;
 const AWAY_SECONDS = 2.2;
+/** Seconds it takes to back in to where it parks (its way in and round took 3.1). */
+const ARRIVE_SECONDS = 2.6;
+/** Seconds it takes to fade in or out where it stands, when its track is built over. */
+const FADE_SECONDS = 0.9;
 
 export class EvacBus {
   readonly root = new THREE.Group();
@@ -86,55 +90,78 @@ export class EvacBus {
   }
 
   /**
-   * Back from a mission to where it is parked (the base's clearing, strategy/clearingArt.ts): in along the way its
-   * nose points, `distance` tiles out, slowing, then round on a turn of `radius` tiles to stop where it was parked,
-   * nose out, ready to go again; its lights off and its doors open at the end. Resolves once it stands.
+   * Back from a mission to where it is parked (the base's clearing, strategy/clearingArt.ts): backed in along
+   * its track from `distance` tiles out, on the line it is parked on (the one it leaves by, nose first), slowing
+   * to a stop, nose out, ready to go again; its lights off and its doors open at the end. With `fade` (its way
+   * in is built over: clearingArt's route) it fades in where it stands. Resolves once it stands.
    */
-  async arrive(distance = 14, radius = 1.4): Promise<void> {
+  async arrive(distance = 14, fade = false): Promise<void> {
     await this.ready;
     const m = this.mula;
     if (!m) return;
     const park = this.root.position.clone();
     const heading = this.root.rotation.y;
     const out = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-    // The turn's middle to its right as it comes in (its left once parked).
-    const side = new THREE.Vector3(out.z, 0, -out.x);
-    const centre = park.clone().addScaledVector(side, radius);
-    const start = centre.clone().addScaledVector(side, radius);
-    const far = start.clone().addScaledVector(out, distance);
     this.root.visible = true;
     for (const d of m.doors) doorAt(d, 0);
     m.lights.emissiveIntensity = 0.2 + (NIGHT.value > 0.5 ? 1.3 : 2.6);
-    const roll = (step: number) => {
-      for (const w of m.wheels) w.rotation.x += step / (m.wheelRadius * SCALE);
-    };
-    // In, slowing as it comes.
-    let last = 0;
-    this.root.rotation.y = heading + Math.PI;
-    await tween(AWAY_SECONDS * 0.8, (t) => {
-      const along = distance * (1 - (1 - t) * (1 - t));
-      this.root.position.copy(far).addScaledVector(out, -along);
-      roll(along - last);
-      last = along;
-    });
-    // Round, to stand nose out.
-    await tween(1.3, (t) => {
-      const a = t * Math.PI;
-      this.root.position.copy(centre).addScaledVector(side, radius * Math.cos(a)).addScaledVector(out, -radius * Math.sin(a));
-      const v = side.clone().multiplyScalar(-Math.sin(a)).addScaledVector(out, -Math.cos(a));
-      this.root.rotation.y = Math.atan2(v.x, v.z);
-      roll((Math.PI * radius) / 60);
-    });
+    if (fade) await this.fade(0, 1);
+    else {
+      // In backwards, slowing as it comes, its wheels turning back.
+      let last = distance;
+      await tween(ARRIVE_SECONDS, (t) => {
+        const along = distance * (1 - t) * (1 - t);
+        this.root.position.copy(park).addScaledVector(out, along);
+        for (const w of m.wheels) w.rotation.x -= (last - along) / (m.wheelRadius * SCALE);
+        last = along;
+      });
+    }
     this.root.position.copy(park);
-    this.root.rotation.y = heading;
     await tween(SHUT_SECONDS, (t) => {
       for (const d of m.doors) doorAt(d, t);
       m.lights.emissiveIntensity = 0.2 + (1 - t) * (NIGHT.value > 0.5 ? 1.3 : 2.6);
     });
   }
 
-  /** Its doors shut, its lights on, then away along its nose `distance` tiles, gathering speed; resolves once it is gone. */
-  async depart(distance = 12): Promise<void> {
+  /**
+   * See-through from opacity `from` to `to` (1, solid) where it stands: on copies of its materials meanwhile
+   * (the kit's are shared with every other model of it), the kit's back once done; hidden at 0.
+   */
+  private async fade(from: number, to: number): Promise<void> {
+    const m = this.mula;
+    if (!m) return;
+    const copies = new Map<THREE.Material, THREE.Material>();
+    const own = (mat: THREE.Material) => {
+      let c = copies.get(mat);
+      if (!c) {
+        c = mat.clone();
+        c.onBeforeCompile = mat.onBeforeCompile;
+        c.customProgramCacheKey = mat.customProgramCacheKey;
+        c.transparent = true;
+        c.opacity = from;
+        copies.set(mat, c);
+      }
+      return c;
+    };
+    const swapped: [THREE.Mesh, THREE.Material | THREE.Material[]][] = [];
+    m.body.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      swapped.push([o, o.material]);
+      o.material = Array.isArray(o.material) ? o.material.map(own) : own(o.material);
+    });
+    await tween(FADE_SECONDS, (t) => {
+      for (const c of copies.values()) c.opacity = from + (to - from) * t;
+    });
+    if (to <= 0) this.root.visible = false;
+    for (const [o, mat] of swapped) o.material = mat;
+    for (const c of copies.values()) c.dispose();
+  }
+
+  /**
+   * Its doors shut, its lights on, then away along its nose `distance` tiles, gathering speed; resolves once it
+   * is gone. With `fade` (its way out is built over: clearingArt's route) it fades away where it stands.
+   */
+  async depart(distance = 12, fade = false): Promise<void> {
     await this.ready;
     const m = this.mula;
     if (!m || !this.root.visible) return;
@@ -143,6 +170,7 @@ export class EvacBus {
       // By night they would dazzle (Arturo 17/10): half as bright.
       m.lights.emissiveIntensity = 0.2 + t * (NIGHT.value > 0.5 ? 1.3 : 2.6);
     });
+    if (fade) return this.fade(1, 0);
     const from = this.root.position.clone();
     const ahead = new THREE.Vector3(Math.sin(this.root.rotation.y), 0, Math.cos(this.root.rotation.y));
     let last = 0;
@@ -155,5 +183,7 @@ export class EvacBus {
       for (const w of m.wheels) w.rotation.x += turned;
     });
     this.root.visible = false;
+    // Gone, it is back where it parks (out of sight): the way it comes back to (arrive).
+    this.root.position.copy(from);
   }
 }

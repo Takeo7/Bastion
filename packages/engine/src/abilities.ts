@@ -23,10 +23,10 @@ import {
 } from './content';
 import { PERK_ABILITY } from './board';
 import { hasAnyCover } from './cover';
-import { DIRS4, DIRS8, distance, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, slabAt, toPos, unitAt } from './grid';
+import { canStandOn, DIRS4, DIRS8, distance, heightAt, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, slabAt, toPos, unitAt } from './grid';
 import { reachesToSearch, roomAt, roomSearched, searchable, searchableTiles, searchSpot } from './loot';
 import { canSee, canSeeTile, isViewer, sightTo } from './los';
-import { buildPath, computeReach, costPerAp } from './path';
+import { buildPath, computeReach, costPerAp, stepBetween } from './path';
 import type { AbilityId, AttackAbility, GameState, Place, Pos, Unit, Vec2 } from './types';
 
 export function abilitiesOf(u: Unit): AbilityId[] {
@@ -249,7 +249,24 @@ export function allyTargets(s: GameState, u: Unit, ability: 'revival' | 'firstAi
   });
 }
 
-/** Corpses a sectoid can raise: in range and in sight, flesh and blood. */
+/**
+ * Where a corpse gets up (the Chillón's, or one of the bitten): on its own
+ * tile if nobody stands there, else on the first free tile a step away on its
+ * floor (not a shut door); null with none, and it can't rise yet. Nobody
+ * rises on top of anyone (Arturo, 19/10).
+ */
+export function riseSpot(s: GameState, corpse: Unit): Pos | null {
+  const from = corpse.pos;
+  const free = (p: Pos) => inBounds(s, p.x, p.y) && canStandOn(kindAt(s, p)) && !unitAt(s, p);
+  if (free(from)) return { ...from };
+  for (const d of DIRS8) {
+    const p = { x: from.x + d.x, y: from.y + d.y, z: from.z };
+    if (free(p) && kindAt(s, p) !== 'door' && heightAt(s, p) === heightAt(s, from) && stepBetween(s, from, p) !== null) return p;
+  }
+  return null;
+}
+
+/** Corpses a sectoid can raise: in range and in sight, flesh and blood, with room to get up (riseSpot). */
 export function corpseTargets(s: GameState, u: Unit): Unit[] {
   const range = ABILITIES.reanimate.range ?? 0;
   return s.units.filter(
@@ -261,7 +278,8 @@ export function corpseTargets(s: GameState, u: Unit): Unit[] {
       !TEMPLATES[t.template].robotic &&
       t.template !== 'zombie' &&
       distance(u.pos, t.pos) <= range &&
-      canSeeTile(s, u.pos, t.pos, sightTo(s, u, t.pos)),
+      canSeeTile(s, u.pos, t.pos, sightTo(s, u, t.pos)) &&
+      riseSpot(s, t) !== null,
   );
 }
 

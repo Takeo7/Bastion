@@ -842,7 +842,7 @@ export const PROPS = {
   pottedPlant2: prop('town', 'SM_Prop_PotPlant_02', { fit: 0.34, yaw: 2 }),
   pottedPlant3: prop('town', 'SM_Prop_PotPlant_04', { fit: 0.24, yaw: 2 }),
   bedsideTable: prop('town', 'SM_Prop_BedsideTable_01', { fit: 0.3, yaw: 2 }),
-  deskChair: prop('town', 'SM_Prop_DeskChair_01', { fit: 0.68, yaw: 2 }),
+  deskChair: prop('town', 'SM_Prop_DeskChair_01', { fit: 0.5, yaw: 2 }),
   towelRack: prop('town', 'SM_Prop_TowelRack_01', { fit: 0.5, yaw: 2 }),
   bookPile: prop('town', 'SM_Prop_Book_Group_01', { fit: 0.25, yaw: 2 }),
   bookPile2: prop('town', 'SM_Prop_Book_Group_04', { fit: 0.2, yaw: 2 }),
@@ -870,15 +870,17 @@ export const PROPS = {
   table: prop('town', 'SM_Prop_DiningTable_01', { fit: 1, stretch: true }),
   sofa: prop('town', 'SM_Prop_Couch_01', { fit: 1, stretch: true, yaw: 2 }),
   sofaDirty: prop('apocalypse', 'SM_Prop_Couch_01', { fit: 1, stretch: true, yaw: 1 }),
-  bed: prop('town', 'SM_Prop_Bed_Single_01', { fit: 1, stretch: true, yaw: 2 }),
+  bed: prop('town', 'SM_Prop_Bed_Single_01', { fit: 1, yaw: 2 }),
+  // A double bed over its 2 × 2 (docs/MAPAS.md, phase 1), never on a tile of its own: 2.61 m long as modelled, × 1.125.
+  bedDouble: prop('town', 'SM_Prop_Bed_Double_01', { fit: 1.95, yaw: 2 }),
   // A house's rooms (playtest 18/10, #15): the kitchen's fridge and cooker, the bathroom's bath, washbasin and toilet,
   // the living room's television on its stand.
-  fridge: prop('town', 'SM_Prop_Kitchen_Fridge_01', { fit: 0.9, yaw: 2 }),
-  stove: prop('town', 'SM_Prop_Oven_01', { fit: 0.95, yaw: 2 }),
+  fridge: prop('town', 'SM_Prop_Kitchen_Fridge_01', { fit: 0.65, yaw: 2 }),
+  stove: prop('town', 'SM_Prop_Oven_01', { fit: 0.75, yaw: 2 }),
   bathtub: prop('apocalypse', 'SM_Prop_Bathtub_01', { fit: 1, stretch: true }),
   washbasin: prop('town', 'SM_Prop_BathroomSink_02', { fit: 0.6, yaw: 2 }),
   wc: prop('town', 'SM_Prop_Toilet_01', { fit: 0.55, yaw: 2 }),
-  tvStand: prop('town', 'SM_Prop_TVCabinet_01', { fit: 0.95, yaw: 2 }),
+  tvStand: prop('town', 'SM_Prop_TVCabinet_01', { fit: 0.95, stretch: true, yaw: 2 }),
   television: prop('town', 'SM_Prop_Television_Flat_01', { fit: 0.75, yaw: 2 }),
   // The Armería by the caravan (clearingArt.ts): Military's gun rack, its rifles the soldiers' own.
   gunRack: prop('military', 'SM_Prop_Gunrack_01'),
@@ -1004,8 +1006,8 @@ export const PROPS = {
   signDiner: prop('apocalypse', 'SM_Prop_Sign_Diner_01'),
   signPets: prop('apocalypse', 'SM_Prop_Sign_Pets_01'),
   // Offices (POLYGON Office): desks, a chair at each, filing cabinets.
-  officeDesk: prop('office', 'SM_Prop_Desk_01', { fit: 0.95 }),
-  officeDesk2: prop('office', 'SM_Prop_Desk_03', { fit: 0.95 }),
+  officeDesk: prop('office', 'SM_Prop_Desk_01', { fit: 0.95, thick: 1.4 }),
+  officeDesk2: prop('office', 'SM_Prop_Desk_03', { fit: 0.95, thick: 1.4 }),
   officeChair: prop('office', 'SM_Prop_Chair_01'),
   officeCabinet: prop('office', 'SM_Prop_Cabinets_01'),
   // Building sites (POLYGON Construction): barriers, stacks of bricks and pallets, sacks of cement, a portaloo.
@@ -1046,6 +1048,41 @@ export const PROPS = {
 } satisfies Record<string, PropAsset>;
 
 export type PropId = keyof typeof PROPS;
+
+/**
+ * How long a prop is drawn over an object that takes several tiles (docs/MAPAS.md, phase 1; mapView.ts), in tiles
+ * along its longest side: its model's size × CHARACTER_SCALE (1.125: beside a survivor as Synty made them; sizes
+ * measured 19/10, in metres), or as long as its tiles, 0.05 short, where that is more. `thin`: its other sides
+ * times that, where they would overflow its tiles (Synty's single bed is 1.7 m wide). The fit above stays what one
+ * on a tile of its own takes, or on the blocks of before: a mission saved before phase 1, the street's wrecks
+ * beyond the map's edge. A stretched prop takes its other sides × 1.125 too.
+ */
+export const FOOTPRINT_FIT: Partial<Record<PropId, { fit: number; thin?: number }>> = {
+  // A car, 1 × 3: 5.16 m (the SUV 4.97 m) would be 3.87 tiles; 0.83 wide.
+  carWreck: { fit: 2.95 },
+  carRusted: { fit: 2.95 },
+  carSuv: { fit: 2.95 },
+  carOpen: { fit: 2.95 },
+  // The sabotage's patrol car (5.25 m), 1 × 3; the ambulance (6.45 m, 4.84 tiles), 2 × 4: 1.64 wide.
+  sirenPolice: { fit: 2.95 },
+  sirenAmbulance: { fit: 3.9 },
+  // A barn's tractor, 2 × 3: 3.3 m, 2.48 tiles (1.58 wide).
+  tractor: { fit: 2.48 },
+  // A lorry, 2 × 6: 9.52 m (7.14 tiles); the other is 3.27 m wide, so as long as two tiles wide lets it be.
+  truckWreck: { fit: 5.9 },
+  truckWreck2: { fit: 4.7 },
+  // A single bed, 1 × 2: 2.69 m, 2.02 tiles; 1.22 wide narrowed to 0.95.
+  bed: { fit: 1.95, thin: 0.78 },
+  bedDouble: { fit: 1.95 },
+  // A sofa, a table, a bath (2 × 1): 1.83, 2.1 and 2.07 m long; the worn sofa 2.8 m, as long as its tiles.
+  sofa: { fit: 1.37 },
+  sofaDirty: { fit: 1.95 },
+  table: { fit: 1.58 },
+  bathtub: { fit: 1.55 },
+  // A hospital bed and a gurney, 1 × 2: 2.51 and 2.33 m; the bed's 1.44 m (rails) narrowed to 0.8 tiles, room for a screen.
+  hospitalBed: { fit: 1.88, thin: 0.74 },
+  gurney: { fit: 1.75 },
+};
 
 /**
  * The Synty props each of the map's prop sets draws (mapView.ts), one picked

@@ -12,7 +12,7 @@ const mission = (medical: 'clinic' | 'ward' | 'hospital', seed: number) => creat
 });
 
 describe('medical atmosphere', () => {
-  it('gives every centre seeded bodies, including centres with five and ten, without adding units or cover', () => {
+  it('gives every centre seeded bodies, including centres with five and ten, without adding units (what stands up in the mess takes its tile: furnishing.test.ts)', () => {
     const counts = new Set<number>(), kinds = new Set<string>();
     for (const medical of ['clinic', 'ward', 'hospital'] as const) for (let seed = 0; seed < 48; seed++) {
       const s = mission(medical, seed * 7919), b = s.medical![0]!, details = b.dressing!;
@@ -55,7 +55,7 @@ describe('medical atmosphere', () => {
     expect(plain.medical).toBeUndefined();
   });
 
-  it('places blood and litter on their own floor or wall, preserves bodies, and never changes the tactical map', () => {
+  it('places blood and litter on their own floor or wall, preserves bodies, and on its own (no strew) never changes the tactical map', () => {
     const added = new Set(['bloodPool', 'bloodDrops', 'wallBlood', 'floorGrime', 'scatteredPapers', 'medicalWaste', 'overturnedChair', 'fallenIV', 'spilledSupplies', 'rumpledLinen']);
     const seen = new Set<string>(), variations = new Set<number>();
     for (const medical of ['clinic', 'ward', 'hospital'] as const) for (let seed = 0; seed < 24; seed++) {

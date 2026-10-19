@@ -251,7 +251,9 @@ describe('recovery missions', () => {
   }
 
   it('walking over the objective picks it up; a carrier who falls drops it', () => {
-    const { s, a } = recovery();
+    const { s, a, b } = recovery();
+    // Nobody walks through anyone (19/10): the partner steps out of the row first.
+    b.pos = { x: 1, y: 3, z: 0 };
     run(s, { type: 'move', unit: 's1', to: { x: 6, y: 0 } });
     expect(s.mission.item?.carrier).toBe('s1');
     const sim = new Sim(s, new Rng(1), [0]);

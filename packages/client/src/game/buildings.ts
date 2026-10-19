@@ -531,6 +531,8 @@ export interface PiecePart {
   hinge: THREE.Vector3;
   /** Its hinge is on its far end (it swings the other way to open inwards, as a gate's second leaf). */
   far?: boolean;
+  /** A leaf's other end (x, in the piece's frame): hinged there instead, it opens from the other jamb. */
+  otherEnd?: number;
 }
 
 const pieces = new Map<PieceId, PiecePart[]>();
@@ -567,9 +569,18 @@ function prepare(id: PieceId, model: THREE.Group): void {
     const matrix = fit.clone().multiply(o.matrixWorld);
     const leaf = !!a.leaf && o.name === a.leaf;
     const box = new THREE.Box3().setFromBufferAttribute(o.geometry.getAttribute('position') as THREE.BufferAttribute).applyMatrix4(matrix);
-    list.push({ name: o.name, geometry: o.geometry, atlas: atlasOf(o), matrix, leaf, hinge: new THREE.Vector3(a.hingeFar ? box.max.x : box.min.x, 0, (box.min.z + box.max.z) / 2), far: !!a.hingeFar });
+    list.push({ name: o.name, geometry: o.geometry, atlas: atlasOf(o), matrix, leaf, hinge: new THREE.Vector3(a.hingeFar ? box.max.x : box.min.x, 0, (box.min.z + box.max.z) / 2), far: !!a.hingeFar, otherEnd: a.hingeFar ? box.min.x : box.max.x });
   });
   pieces.set(id, list);
+}
+
+/** Where the door leaf among pieces `ids` is hinged (x in the piece's frame); 0 if none has one or they are still loading. */
+function leafHinge(ids: readonly PieceId[]): number {
+  for (const id of ids) {
+    const leaf = pieceNow(id)?.find((p) => p.leaf);
+    if (leaf) return leaf.hinge.x;
+  }
+  return 0;
 }
 
 /** The parts of a piece, or null while it loads (asking for it starts the load). */
@@ -2149,7 +2160,7 @@ export class BuildingsView {
       out: Vec2,
       between: boolean,
       b: number,
-      o: { along?: number; thick?: number; square?: boolean; tint?: boolean; open?: boolean; roof?: boolean; tall?: number } = {},
+      o: { along?: number; thick?: number; square?: boolean; tint?: boolean; open?: boolean; roof?: boolean; tall?: number; otherHinge?: boolean } = {},
     ) => {
       const parts = pieceNow(id);
       if (!parts) {
@@ -2179,8 +2190,9 @@ export class BuildingsView {
             uv: atlasRect(part.atlas) ?? undefined,
             piece: m.clone(),
             local,
-            hinge: new THREE.Vector3(part.hinge.x, 0, part.hinge.z * thick),
-            far: !!part.far,
+            // On the other jamb (otherHinge), it turns the other way to open to the same side.
+            hinge: new THREE.Vector3(o.otherHinge && part.otherEnd !== undefined ? part.otherEnd : part.hinge.x, 0, part.hinge.z * thick),
+            far: o.otherHinge && part.otherEnd !== undefined ? !part.far : !!part.far,
             consts: {
               aCut: o.roof ? [b + 1, ON_ROOF, ON_ROOF, base] : [b + 1, between ? 0 : out.x, between ? 0 : out.y, base],
               aLevel: [storeyOf(building, base)],
@@ -2204,8 +2216,8 @@ export class BuildingsView {
       }
     };
     /** A list of pieces: the first one in the building's colours. */
-    const putAll = (ids: PieceId[], x: number, z: number, base: number, out: Vec2, between: boolean, b: number, kit: Kit, open = false, roof = false) =>
-      ids.forEach((id, k) => put(id, x, z, base, out, between, b, { thick: kit.thick, tint: k === 0, open, roof }));
+    const putAll = (ids: PieceId[], x: number, z: number, base: number, out: Vec2, between: boolean, b: number, kit: Kit, open = false, roof = false, otherHinge = false) =>
+      ids.forEach((id, k) => put(id, x, z, base, out, between, b, { thick: kit.thick, tint: k === 0, open, roof, otherHinge }));
     const post = (kit: Kit, x: number, z: number, base: number, out: Vec2, between: boolean, b: number, roof = false) =>
       put(kit.post, x, z, base, out, between, b, { along: kit.postAlong, thick: kit.thick, square: kit.postSquare, roof });
     /** A window pane at (x, z), `base` its storey's floor (upper storeys' go with the roof). */
@@ -2448,11 +2460,19 @@ export class BuildingsView {
             put(near ? 'gateLeaf' : 'gateLeafFar', cx, cz, base, out, false, b, { thick: kit.thick, open: kind === 'doorOpen' });
             for (const side of [-1, 1]) if (!gateAt(side) && isWallLike(at(x + along.x * side, y + along.y * side))) post(kit, cx + along.x * side * 0.5, cz + along.y * side * 0.5, base, out, false, b);
           } else if (kind === 'door' || kind === 'doorOpen') {
-            putAll(kit.door, cx, cz, base, out, between, b, kit, kind === 'doorOpen');
+            // The leaf hinged on a jamb against a wall (or a window), never on one between two doorways: open, a leaf
+            // there stood across the diagonal step past it (a double door's middle post: path.ts lets one by there).
+            const hingeSide = Math.sign(leafHinge([...kit.door, ...(kit.leaf ? [kit.leaf] : [])]) * (out.y * along.x - out.x * along.y));
+            const shuts = (k: number) => {
+              const t = at(x + along.x * k, y + along.y * k);
+              return !isWalkable(t ?? null) || t === 'window' || t === 'windowBroken';
+            };
+            const otherHinge = hingeSide !== 0 && !shuts(hingeSide) && shuts(-hingeSide);
+            putAll(kit.door, cx, cz, base, out, between, b, kit, kind === 'doorOpen', false, otherHinge);
             // A shop's name over its front door: the first door of its outline (whatever part of the map is being redone).
             if (!level && !between && !plan.siege && building && signDoor.get(b) === i && (building.kind === 'shop' || (building.kind === 'office' && building.look < 0.35))) sign(building, cx, cz, base, out);
             if (kit.leaf) {
-              put(kit.leaf, cx, cz, base, out, between, b, { thick: kit.thick, open: kind === 'doorOpen' });
+              put(kit.leaf, cx, cz, base, out, between, b, { thick: kit.thick, open: kind === 'doorOpen', otherHinge });
               // Jambs either side of the leaf.
               for (const side of [-1, 1]) put(kit.post, cx + along.x * side * 0.46, cz + along.y * side * 0.46, base, out, between, b, { along: 0.08, thick: kit.thick });
             }

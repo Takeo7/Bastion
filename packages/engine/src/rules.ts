@@ -15,9 +15,10 @@ import {
   noiseOf,
   psiChance,
   rangedTargets,
+  riseSpot,
   type MeleeOption,
 } from './abilities';
-import { chooseScamperTile, onlyWalks, patrolPod, takeAlienTurn } from './ai';
+import { chooseScamperTile, frontFirst, onlyWalks, patrolPod, takeAlienTurn } from './ai';
 import {
   adjacent,
   damageRange,
@@ -59,12 +60,12 @@ import {
   TEMPLATES,
   WEAPONS,
 } from './content';
+import { objectAt } from './decor';
 import { applyEvent, type GameEvent } from './events';
 import {
   canStandOn,
   combatants,
   DIRS4,
-  DIRS8,
   distance,
   getUnit,
   heightAt,
@@ -83,7 +84,7 @@ import {
 } from './grid';
 import { packSlots, rollBox, rollRoom, roomAt, searchSpot } from './loot';
 import { canSee, detectionTo, facingTo, inViewCone, sightOrigin, sightTo } from './los';
-import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol } from './path';
+import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol, type Reach } from './path';
 import type { Command } from './protocol';
 import type { Rng } from './rng';
 import { hordeWave, makeUnit } from './setup';
@@ -116,6 +117,12 @@ const EDGE_GAP = [12, 8, 0] as const;
 /** Nor this close to the evac zone. */
 const EDGE_EVAC_GAP = 3;
 
+/** What leaves the dead's ways as they were (Sim.ways): neither the ground nor where the living stand changes. */
+const KEEPS_WAYS: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['abilityUsed', 'noise', 'forgot', 'smashed', 'shot', 'damaged', 'infected', 'stunned', 'disoriented', 'psi', 'overwatch', 'trapSprung']);
+
+/** How many more times in an enemy turn those waiting behind their own get to go on (Sim.runAlienTurn). */
+const JAM_PASSES = 2;
+
 /** The Chillón's scream (docs/FASE2.md): out of 100, this many disorient and the rest panic. It never takes control. */
 const SCREAM_DISORIENT = 60;
 
@@ -126,6 +133,16 @@ const BLAST_RESULT: Partial<Record<TileKind, TileKind>> = {
   door: 'doorOpen',
   window: 'windowBroken',
 };
+
+/**
+ * The places of the whole object standing on place `p` (decor.ts objectAt: a car over three tiles, a bed over two,
+ * a lorry's block), on its storey; `p` alone for anything on one tile.
+ */
+function objectPlaces(s: GameState, p: Pos): Pos[] {
+  const decor = p.z ? s.levels?.[p.z - 1]?.decor : s.decor;
+  const o = decor ? objectAt(decor, s.width, tileIndex(s, p.x, p.y)) : null;
+  return o && o.tiles.length > 1 ? o.tiles.map((i) => ({ x: i % s.width, y: Math.floor(i / s.width), z: p.z })) : [p];
+}
 
 /**
  * Where someone (or something) on storey place `p` lands when its slab gives
@@ -182,6 +199,13 @@ export class Sim {
    * explosive and one Mindspin per turn, so a pod can't stack area attacks.
    */
   alienBudget = { explosives: 1, psi: 1 };
+  /** Enemies left waiting behind their own this enemy turn (ai.ts walk): they go again once the others have moved. */
+  readonly jammed = new Set<string>();
+  /**
+   * In a siege, where the dead get to from each place, their own aside (ai.ts breachPlan), while nothing changes
+   * that would change it: what stands where (a door gives way), or the living (one falls). Their own moving doesn't.
+   */
+  readonly ways = new Map<number, Reach>();
 
   constructor(
     readonly s: GameState,
@@ -192,6 +216,9 @@ export class Sim {
   emit(e: GameEvent): void {
     applyEvent(this.s, e);
     this.events.push(e);
+    if (!this.ways.size || KEEPS_WAYS.has(e.t)) return;
+    const mover = e.t === 'moved' ? getUnit(this.s, e.unit) : undefined;
+    if (!(mover && TEMPLATES[mover.template].undead)) this.ways.clear();
   }
 
   get over(): boolean {
@@ -431,6 +458,20 @@ export class Sim {
     if (u.hp > 0) return;
     if (this.s.mission.item?.carrier === u.id) this.emit({ t: 'itemDropped', pos: { ...u.pos } });
     this.emit({ t: 'died', unit: u.id, by: source?.id });
+    // A patrol car's or an ambulance's siren silenced: the car stays, over its tile as over its nose's (19/10), solid. Without
+    // an alarm said (a skirmish, older saves), a car but in a facility, as the client draws it (unitViews.ts ALARM_BY_MAP).
+    const alarm = this.s.mission.alarm;
+    const car = alarm ? alarm !== 'factory' : this.s.biome !== 'facility';
+    if (u.objective && this.s.mission.kind === 'sabotage' && car && canStandOn(kindAt(this.s, u.pos))) {
+      // Its tile a part of the car beside it (docs/MAPAS.md, phase 1: the rest of its footprint), facing it; without one, the car's own.
+      const decor = u.pos.z ? this.s.levels?.[u.pos.z - 1]?.decor : this.s.decor;
+      const toCar = DIRS4.findIndex((d) => {
+        const x = u.pos.x + d.x;
+        const y = u.pos.y + d.y;
+        return !!decor && inBounds(this.s, x, y) && objectAt(decor, this.s.width, tileIndex(this.s, x, y))?.kind === 'sirenCar';
+      });
+      this.emit({ t: 'tileChanged', pos: { ...u.pos }, kind: 'high', ...(toCar >= 0 ? { decor: 'part' as const, facing: toCar } : { decor: 'sirenCar' as const }) });
+    }
     // A sectoid's death frees the minds it held.
     for (const v of this.s.units) if (v.alive && v.controlledBy === u.id) this.emit({ t: 'released', unit: v.id });
     if (TEMPLATES[u.template].abilities.includes('burst')) this.burst(u);
@@ -492,10 +533,18 @@ export class Sim {
     }
     // The Hinchado's burst is only gas: it leaves the scenery alone.
     if (!bursting) {
+      // An object over several tiles goes as one (a car, a bed, a lorry): all of it as the tile the blast reached.
+      const done = new Set<number>();
       for (const p of tiles) {
         const kind = kindAt(this.s, p);
-        const next = kind && BLAST_RESULT[kind];
-        if (next) this.emit({ t: 'tileChanged', pos: p, kind: next });
+        for (const q of kind === 'low' || kind === 'high' ? objectPlaces(this.s, p) : [p]) {
+          const node = nodeOf(this.s, q);
+          if (done.has(node)) continue;
+          done.add(node);
+          const now = kindAt(this.s, q);
+          const next = now && BLAST_RESULT[now];
+          if (next) this.emit({ t: 'tileChanged', pos: q, kind: next });
+        }
       }
       // The frag grenades breach the walls they reach (docs/FASE7.md §4): rubble, low cover, on that floor only.
       for (const p of breachedWalls(this.s, ability, center, source)) this.emit({ t: 'tileChanged', pos: p, kind: 'low', decor: 'breach' });
@@ -574,8 +623,11 @@ export class Sim {
     this.checkOutcome();
   }
 
+  /** The corpse gets up where it lies, or beside it if somebody stands there (riseSpot): never on top of anyone. */
   private reanimate(caster: Unit, corpse: Unit): void {
-    const zombie = risenUnit(this.zombieId(), corpse, corpse.pos, caster.podId);
+    const at = riseSpot(this.s, corpse);
+    if (!at) return;
+    const zombie = risenUnit(this.zombieId(), corpse, at, caster.podId);
     this.emit({ t: 'reanimated', unit: caster.id, corpse: corpse.id, zombie });
   }
 
@@ -599,14 +651,12 @@ export class Sim {
   /**
    * The infected fallen rise as the zombies' turn begins (docs/FASE3.md), as
    * the Chillón's corpses do but by themselves: each a group of its own, alert.
-   * One whose tile is taken rises beside it, or waits for a free one.
+   * One whose tile is taken rises beside it (riseSpot), or waits for a free one.
    */
   private riseInfected(): void {
     for (const corpse of this.s.units.filter((x) => !x.alive && !x.evacuated && x.infected && !x.reanimated)) {
       if (this.over) return;
-      const at = [corpse.pos, ...DIRS8.map((d) => ({ x: corpse.pos.x + d.x, y: corpse.pos.y + d.y, z: corpse.pos.z }))].find(
-        (p) => inBounds(this.s, p.x, p.y) && canStandOn(kindAt(this.s, p)) && heightAt(this.s, p) === heightAt(this.s, corpse.pos) && !unitAt(this.s, p),
-      );
+      const at = riseSpot(this.s, corpse);
       if (!at) continue;
       const zombie = risenUnit(this.zombieId(), corpse, at, null);
       const pod: Pod = { id: `p${zombie.id}`, active: true, unitIds: [], patrol: [], patrolIndex: 0 };
@@ -643,7 +693,9 @@ export class Sim {
   /**
    * Walks the path tile by tile. Enemy overwatch, pod detection and picking up
    * the objective interrupt the walk, so a move may be emitted as several
-   * `moved` segments.
+   * `moved` segments. Nobody walks through anyone (Arturo, 19/10): one who came
+   * into the way since the walk was planned (a pod scampering to cover) stops
+   * it short of them, never in a window's frame.
    */
   moveAlong(u: Unit, path: Pos[], ap: number): void {
     let segment: Pos[] = [];
@@ -655,21 +707,28 @@ export class Sim {
       segment = [];
     };
 
+    const origin = { ...u.pos };
     const patrolling = onPatrol(this.s, u);
     for (let i = 0; i < path.length; i++) {
       const step = path[i]!;
       const blocker = unitAt(this.s, step);
-      if (blocker && blocker !== u && (hostileTo(blocker, u) || i === path.length - 1)) break;
-      segment.push(step);
+      if (blocker && blocker !== u) {
+        flush();
+        // Halted in a window's frame, where nobody stands: back the way it came.
+        const back = i >= 2 ? path[i - 2]! : origin;
+        if (u.alive && !canStandOn(kindAt(this.s, u.pos)) && canStandOn(kindAt(this.s, back)) && !unitAt(this.s, back)) this.emit({ t: 'moved', unit: u.id, path: [{ ...back }], ap: 0 });
+        return;
+      }
 
-      // Doors swing open and windows shatter as the unit goes through.
+      // Doors swing open and windows shatter before the unit steps in (19/10: it walked into the shut door, then the leaf
+      // swung through it): the walk so far, the door, then on through it.
       const kind = kindAt(this.s, step);
       if (kind === 'door' || kind === 'window') {
         flush();
         this.emit({ t: 'tileChanged', pos: step, kind: kind === 'door' ? 'doorOpen' : 'windowBroken' });
         this.makeNoise(step, kind === 'door' ? NOISE.door : NOISE.breach, u);
       }
-      if (blocker) continue; // passing through an ally: nothing can interrupt here
+      segment.push(step);
 
       // A trap of the base under one of the dead (docs/FASE12.md §11.4): it stops there.
       if (u.team === 'alien' && this.springTrap(u, step, flush)) return;
@@ -983,8 +1042,8 @@ export class Sim {
     for (const r of this.s.mission.reinforcements) {
       if (r.landed || (!r.horde && !r.pos) || r.turn > turn || this.over) continue;
       const zone = r.horde ? this.chooseDropZone(r.units.length, true, r.side) : this.chooseDropZoneAround(r.pos!, r.units.length);
-      // No edge free today: they come next turn.
-      if (!zone?.length) continue;
+      // No edge free today, or no room for all of them round a flare: they come next turn. Nobody lands on anyone.
+      if (!zone || zone.length < r.units.length) continue;
       const at = zone[0]!;
       const pod: Pod = { id: `p${r.id}`, active: !r.horde || !!siege, unitIds: [], patrol: [], patrolIndex: 0 };
       const near = r.horde ? [...combatants(this.s, 'xcom')].sort((a, b) => distance(a.pos, at) - distance(b.pos, at))[0] : undefined;
@@ -992,7 +1051,7 @@ export class Sim {
       const units = r.units.map((template, i) => {
         const id = `${r.id}u${i + 1}`;
         pod.unitIds.push(id);
-        const u = makeUnit(id, template, TEMPLATES[template].name, null, zone[i] ?? at, pod.id);
+        const u = makeUnit(id, template, TEMPLATES[template].name, null, zone[i]!, pod.id);
         // They come in looking the way they come: to what they heard, or to the middle of the map (Arte, 17/10).
         const toward = goal ?? { x: (this.s.width - 1) / 2, y: (this.s.height - 1) / 2, z: 0 };
         const facing = facingTo(u.pos, toward) ?? u.facing;
@@ -1148,13 +1207,28 @@ export class Sim {
     // They rise now, but only act from the next turn on (they had no turn to begin).
     this.riseInfected();
     const active = this.s.units.filter((u) => u.alive && u.team === 'alien' && !u.objective && this.s.pods.find((p) => p.id === u.podId)?.active);
-    // Whoever is going for the squad acts first, one by one; then the dead with nobody to reach, all together (playtest 2026-10-16).
-    const walkers = active.filter((u) => onlyWalks(this.s, u));
+    // Whoever is going for the squad acts first, one by one; then the dead with nobody to reach, all together (playtest 2026-10-16),
+    // the nearest to the living first: those behind follow them, instead of finding the way taken (nobody walks through anyone, 19/10).
+    const walkers = frontFirst(this.s, active.filter((u) => onlyWalks(this.s, u)));
     const actors = [...active.filter((u) => !walkers.includes(u)), ...walkers].map((u) => u.id);
+    this.jammed.clear();
     for (const id of actors) {
       const u = getUnit(this.s, id)!;
       if (this.over) return;
       if (u.alive) takeAlienTurn(this, u);
+    }
+    // Those who waited behind their own (nobody walks through anyone, 19/10) go on with what they have left, now that the
+    // ones ahead have moved: again while somebody gets further.
+    for (let pass = 0; pass < JAM_PASSES && this.jammed.size; pass++) {
+      const waiting = actors.filter((id) => this.jammed.has(id));
+      this.jammed.clear();
+      const before = this.events.length;
+      for (const id of waiting) {
+        const u = getUnit(this.s, id)!;
+        if (this.over) return;
+        if (u.alive && u.ap > 0) takeAlienTurn(this, u);
+      }
+      if (this.events.length === before) break;
     }
     // What the squad did on the enemy's move (overwatch, the blade on guard) fills bars too.
     this.settleBars();

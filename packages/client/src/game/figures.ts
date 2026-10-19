@@ -54,6 +54,8 @@ export interface FigureRig extends UnitRig {
   applyPose(p: FigurePose, time: number): void;
   /** What its moves play, and how fast (gaits.ts), on figures that play clips. */
   setGait?(motion: GaitMotion, speed: number): void;
+  /** How far ahead of its feet the muzzle of a long gun in its hands comes when shouldered (tiles); null for anything else. */
+  aimReach?(): number | null;
   /**
    * How it dies, on figures that play clips: from then on its pose's `fall`
    * (0 to 1) is how far into the death it is. Returns the seconds the fall

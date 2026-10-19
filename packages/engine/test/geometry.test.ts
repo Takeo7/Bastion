@@ -69,15 +69,23 @@ describe('pathfinding', () => {
     expect(path.at(-1)).toEqual({ x: 2, y: 2, z: 0 });
   });
 
-  it('can pass through allies but not stop on them, and enemies block', () => {
+  it('allies block as enemies do (Arturo, 19/10: «los compañeros se bloquean»): nobody walks through anyone', () => {
     const s = stateFrom(['.....']);
     const u = addUnit(s, 's1', 'specialist', 0, 0);
     addUnit(s, 's2', 'specialist', 1, 0);
     const reach = computeReach(s, u, 100);
     expect(buildPath(s, u, reach, { x: 1, y: 0, z: 0 })).toBeNull();
-    expect(buildPath(s, u, reach, { x: 2, y: 0, z: 0 })).toHaveLength(2);
+    expect(buildPath(s, u, reach, { x: 2, y: 0, z: 0 })).toBeNull();
+    expect(reach.cost.has(2)).toBe(false);
 
-    addUnit(s, 'a1', 'trooper', 3, 0);
-    expect(computeReach(s, u, 100).cost.has(4)).toBe(false);
+    // In the open it goes round, and never cuts the corner of the one it passes.
+    const open = stateFrom(['.....', '.....', '.....']);
+    const v = addUnit(open, 's1', 'specialist', 0, 1);
+    addUnit(open, 's2', 'specialist', 1, 1);
+    addUnit(open, 'a1', 'trooper', 3, 0);
+    const round = computeReach(open, v, 100);
+    expect(buildPath(open, v, round, { x: 2, y: 1, z: 0 })).toHaveLength(4);
+    expect(round.cost.get(1 * 5 + 2)).toBe(COST_ORTHO * 4);
+    expect(round.cost.has(3)).toBe(false);
   });
 });
