@@ -3,7 +3,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { BASE_EDGE, BUILD_TEXT, buildingWorks, fellHint, pieceAt, pieceCells, pieceHint, PIECES, treeAt, type Appearance, type BasePiece, type BaseState, type PieceId, type TemplateId, type Vec2 } from '@bastion/engine';
 import { CameraRig } from '../game/camera';
 import type { Gear } from '../game/figures';
-import type { LineupEntry } from './bastion';
+import type { LineupEntry } from './clearingArt';
 import { STOREY } from '../game/coords';
 import type { Shot, Stage, StageMood, StageSet } from './stage';
 
@@ -34,15 +34,15 @@ export interface ClearingArt {
   watch?(camera: THREE.Camera): void;
   /** GPU work before a frame, and whether the shadow map is drawn again (StageSet.beforeRender). */
   beforeRender?(gl: THREE.WebGLRenderer): void;
-  /** The soldier looked at in Soldados, standing on the clearing (null: nobody), as BastionSet's showcase. */
+  /** The soldier looked at in Soldados, standing on the clearing (null: nobody). */
   setShowcase?(template: TemplateId | null, color: string, appearance?: Appearance, gear?: Gear, seed?: string): void;
   /** Soldados' and the Armería's views of the clearing (the caravan is barracks and armoury: docs/FASE12.md §11). */
   soldierShot?(): Shot;
   armoryShot?(): Shot;
   /**
-   * The squad by La Lata (playtest 18/10 #44: choosing it and the debrief on the clearing), as
-   * BastionSet's lineup: the soldiers standing (an empty list clears them), where each stands for the
-   * cards under them, and the shot of it.
+   * The squad by La Lata (playtest 18/10 #44: choosing it and the debrief on the clearing): the
+   * soldiers standing (an empty list clears them), where each stands for the cards under them, and
+   * the shot of it.
    */
   setLineup?(entries: (LineupEntry | null)[], opts?: { mirror?: boolean }): void;
   padPosition?(i: number, count: number): THREE.Vector3;

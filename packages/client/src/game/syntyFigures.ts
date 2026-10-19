@@ -42,7 +42,7 @@ import {
 
 // Units as Synty characters (syntyManifest.ts says who is who). They keep the
 // rig contract of figures.ts (root, yaw, pivot, gunPivot, muzzle, flash,
-// drone, hip, chest, applyPose), so the unit views animate them unchanged.
+// hip, chest, applyPose), so the unit views animate them unchanged.
 //
 // Every bone gets a rotation in model space on top of its rest (T) pose, in
 // layers:
@@ -562,7 +562,6 @@ export class SyntyFigure implements FigureRig {
   readonly gunPivot = new THREE.Group();
   readonly muzzle = new THREE.Object3D();
   readonly flash = new THREE.Mesh();
-  drone: THREE.Object3D | null = null;
   hip = 0.6;
   chest = 0.82;
   top = 1.2;
@@ -1862,7 +1861,6 @@ class SirenRig implements FigureRig {
   readonly gunPivot = new THREE.Group();
   readonly muzzle = new THREE.Object3D();
   readonly flash: THREE.Mesh;
-  readonly drone = null;
   readonly hip = 0;
   readonly chest: number;
   readonly top: number;
@@ -2055,7 +2053,6 @@ class TurretRig implements FigureRig {
   readonly gunPivot = new THREE.Group();
   readonly muzzle = new THREE.Object3D();
   readonly flash: THREE.Mesh;
-  readonly drone = null;
   readonly hip = 0;
   readonly chest = TURRET.gun * TURRET.scale;
   readonly top = (TURRET.drum[1] + 0.2) * TURRET.scale;

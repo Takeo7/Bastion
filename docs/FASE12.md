@@ -1,6 +1,6 @@
-# Fase 12 · El asedio (propuesta)
+# Fase 12 · El asedio
 
-**Estado:** aprobada por Arturo el 18/10, con sus respuestas (§8). Hito 1 hecho en el motor (§10); falta el cliente (UI, Arte, Lore).
+**Estado:** hecha. Aprobada por Arturo el 18/10, con sus respuestas (§8). El hito 1 (§10) salió en la 0.6.0 y la base nueva (§11), en la 0.7.0 y la 0.7.1. Falta ajustar las cifras jugando (§11.12). La revisión del 19/10 ([REVISION-2026-10-19.md](REVISION-2026-10-19.md)) arregló el daño del edificio del Bastión y los defensores que empezaban encima de una torreta o una trampa.
 
 Arturo quiere que la gestión del Bastión sea divertida y tenga sentido, no un trámite entre combates. Entre tres opciones eligió la 1, «El asedio». La 2, «La Lata, base móvil», queda pendiente para revisarla más adelante (TRASPASO §5).
 
@@ -186,7 +186,7 @@ Sin camino hasta su objetivo, golpean el punto más débil que les abre paso: cu
 - el evento `smashed` (`unit`, `tile`, `amount`, `left`) y, si cede, un `tileChanged` a `floor`;
 - al acabar, `objectiveLost` es «la base ha caído».
 
-**Falta:**
+**Faltaba (hecho en la 0.6.0):**
 - **UI:**
   - la tarjeta y la franja del asedio en lugar de «Limpieza» (aguantad N turnos, que no lleguen a la Sala de radio);
   - la próxima oleada (turno y lado);

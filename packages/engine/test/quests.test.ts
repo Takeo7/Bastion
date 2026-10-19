@@ -6,7 +6,6 @@ import {
   createCampaign,
   eventDef,
   executeCampaignCommand,
-  setBastionLevel,
   migrateCampaign,
   missionInfo,
   regionIncome,
@@ -17,12 +16,13 @@ import {
   type RegionId,
 } from '../src/campaign';
 import { defaultAppearance } from '../src/appearance';
-import { hasTech, LEVEL_XP } from '../src/progression';
+import { hasTech } from '../src/progression';
 import { QUESTS } from '../src/quests';
 import { Rng } from '../src/rng';
 import { totalBars } from '../src/skills';
 import { createMission } from '../src/setup';
 import type { Slot } from '../src/types';
+import { levelTo } from './helpers';
 
 function run(c: CampaignState, cmd: CampaignCommand, slot: Slot = 0, connected: Slot[] = [0]) {
   const r = executeCampaignCommand(c, cmd, { slot, connected, rng: new Rng(5) });
@@ -125,7 +125,7 @@ describe('side quests', () => {
   it('Lindqvist (quest «ibarra») leads her own squad, and capturing her brings her back scarred', () => {
     const c = solo();
     c.story.done = 1;
-    setBastionLevel(c, 3, new Rng(1));
+    levelTo(c, 3, new Rng(1));
     fly(c, questOffer(c, 'ibarra'), 'victory');
     const hunt = questOffer(c, 'ibarra');
     expect(hunt.kind).toBe('elimination');
@@ -159,7 +159,7 @@ describe('side quests', () => {
   it('the numbers station adds a contact', () => {
     const c = solo();
     c.day = 20;
-    setBastionLevel(c, 2, new Rng(1));
+    levelTo(c, 2, new Rng(1));
     const before = contactCapacity(c);
     fly(c, questOffer(c, 'numbers'), 'victory');
     fly(c, questOffer(c, 'numbers'), 'victory');
@@ -192,7 +192,7 @@ describe('side quests', () => {
   it('turning down a soldier who saw a relative leaves a grudge', () => {
     for (let seed = 0; seed < 60; seed++) {
       const c = solo(seed);
-      setBastionLevel(c, 2, new Rng(1));
+      levelTo(c, 2, new Rng(1));
       c.quests = [];
       c.offers = c.offers.filter((o) => !o.quest);
       for (const s of c.soldiers) s.nickname = 'Mula';
@@ -218,7 +218,7 @@ describe('side quests', () => {
     let found = 0;
     for (let seed = 0; seed < 300 && found < 12; seed++) {
       const c = solo(seed);
-      setBastionLevel(c, 2, new Rng(1));
+      levelTo(c, 2, new Rng(1));
       c.quests = [];
       c.offers = c.offers.filter((o) => !o.quest);
       // Every soldier shares a first name with one of the relatives.

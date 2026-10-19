@@ -1,4 +1,4 @@
-import { constants, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, copyFileSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { CAMPAIGN_VERSION, campaignOutdated, migrateCampaign, normalizeMission, ZERO_MODS, type CampaignState, type GameState, type MissionKind, type RoomPhase, type SkirmishMap, type Slot } from '@bastion/engine';
 
@@ -40,6 +40,12 @@ export interface SaveFile {
  * the base (or the lobby for a skirmish).
  */
 function migrate(data: { version: number } & Record<string, unknown>): SaveFile | null {
+  // From a newer Bastión: taken down to this shape it would lose what it has, so it isn't read (load keeps it aside).
+  const campaignVersion = (data.campaign as { version?: unknown } | null | undefined)?.version;
+  if (data.version > SAVE_VERSION || (typeof campaignVersion === 'number' && campaignVersion > CAMPAIGN_VERSION)) {
+    throw new Error('es de una versión más nueva de Bastión');
+  }
+  if (!Array.isArray(data.seats)) throw new Error('no tiene puestos');
   if (data.version === SAVE_VERSION) {
     const save = data as unknown as SaveFile;
     if (save.campaign && save.campaign.version !== CAMPAIGN_VERSION) save.campaign = migrateCampaign(save.campaign);
@@ -78,56 +84,109 @@ export class SaveStore {
     readonly log: (line: string) => void = () => {},
   ) {}
 
+  /** The save before the last one, <name>.anterior.json: save() keeps it on every write, load() reads it when the save can't be. */
+  private get backup(): string {
+    return this.beside('anterior');
+  }
+
   load(): SaveFile | null {
-    if (!existsSync(this.path)) return null;
+    // No save but its backup: save() stopped between its two renames, and the backup is the last one.
+    if (!existsSync(this.path)) return existsSync(this.backup) ? this.fromBackup('no estaba') : null;
+    const read = this.read(this.path);
+    if ('save' in read) return read.save;
+    // Never written over: moved aside as it is, and the game goes on
+    // from the backup if there is one. If it can't be moved, keepAside throws and the server stops rather than write over it.
+    const aside = this.keepAside('ilegible', this.path, true);
+    this.warn(`[save] No se pudo leer ${this.path} (${read.error}): queda en ${aside}.`);
+    return existsSync(this.backup) ? this.fromBackup('no se podía leer') : null;
+  }
+
+  /** A copy of the save as it is now, before something replaces it (a new campaign); null without a save. */
+  keepCopy(label: string): string | null {
+    return existsSync(this.path) ? this.keepAside(label) : null;
+  }
+
+  private fromBackup(why: string): SaveFile | null {
+    const read = this.read(this.backup);
+    if ('save' in read) {
+      this.warn(`[save] La partida ${why}: se sigue desde la copia anterior (${this.backup}).`);
+      return read.save;
+    }
+    this.warn(`[save] Tampoco se pudo leer la copia anterior (${read.error}): se empieza en el vestíbulo.`);
+    return null;
+  }
+
+  /** The save in `file`, brought to the current shape (null: nothing to carry on with), or why it can't be read. */
+  private read(file: string): { save: SaveFile | null } | { error: string } {
     let data: { version: number } & Record<string, unknown>;
     try {
-      data = JSON.parse(readFileSync(this.path, 'utf8')) as { version: number } & Record<string, unknown>;
+      data = JSON.parse(readFileSync(file, 'utf8')) as { version: number } & Record<string, unknown>;
     } catch (err) {
-      console.warn(`[save] No se pudo leer ${this.path}:`, err);
-      return null;
+      return { error: (err as Error).message };
     }
+    if (!data || typeof data !== 'object' || typeof data.version !== 'number') return { error: 'no es una partida de Bastión' };
     // A campaign from before FRESH_RELEASE can't take the new progression (docs/FASE9.md §7, FASE10.md): the file is kept aside
     // as it is and the room starts in the lobby. Checked before migrating, so every old shape of save goes
     // the same way. Outside the try: if it can't be kept aside the server stops, rather than write over it.
     const campaign = data.campaign as { version?: unknown } | null | undefined;
     if (campaign && typeof campaign.version === 'number' && campaignOutdated({ version: campaign.version })) {
-      this.setAside = this.keepAside();
-      const line = `[save] Partida de antes de la ${FRESH_RELEASE}: guardada aparte en ${this.setAside}; se empieza en el vestíbulo.`;
-      console.warn(line);
-      this.log(line);
-      return null;
+      this.setAside = this.keepAside(`antes-${FRESH_RELEASE}`, file);
+      this.warn(`[save] Partida de antes de la ${FRESH_RELEASE}: guardada aparte en ${this.setAside}; se empieza en el vestíbulo.`);
+      return { save: null };
     }
     try {
       const save = migrate(data);
       if (!save) console.warn(`[save] Partida guardada de una versión anterior (${data.version}); se empieza de cero.`);
-      return save;
+      return { save };
     } catch (err) {
-      console.warn(`[save] No se pudo leer ${this.path}:`, err);
-      return null;
+      return { error: (err as Error).message };
     }
   }
 
-  /** Copies the save, as it is, next to it as <name>.antes-<FRESH_RELEASE>.json (-2, -3… never over one already there); returns where. */
-  private keepAside(): string {
-    const stem = join(dirname(this.path), basename(this.path, '.json'));
+  /**
+   * Keeps `from`, as it is, next to the save as <name>.<label>.json (-2, -3… never over one already there);
+   * `move` takes it away instead of copying it. Returns where; throws if it can't.
+   */
+  private keepAside(label: string, from = this.path, move = false): string {
     for (let n = 1; ; n++) {
-      const target = `${stem}.antes-${FRESH_RELEASE}${n > 1 ? `-${n}` : ''}.json`;
+      const target = this.beside(`${label}${n > 1 ? `-${n}` : ''}`);
       try {
-        copyFileSync(this.path, target, constants.COPYFILE_EXCL);
+        if (move) {
+          if (existsSync(target)) continue;
+          renameSync(from, target);
+        } else copyFileSync(from, target, constants.COPYFILE_EXCL);
         return target;
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
-        throw new Error(`No se pudo guardar aparte la partida de antes de la ${FRESH_RELEASE} (${(err as Error).message}); no se toca ${this.path}.`);
+        throw new Error(`No se pudo guardar aparte ${from} (${(err as Error).message}); no se toca.`);
       }
     }
   }
 
-  /** Atomic write: a crash mid-write never leaves a corrupt save. */
+  private beside(label: string): string {
+    return join(dirname(this.path), `${basename(this.path, '.json')}.${label}.json`);
+  }
+
+  private warn(line: string): void {
+    console.warn(line);
+    this.log(line);
+  }
+
+  /**
+   * On the disk before it takes the save's name, so a crash or a power cut never leaves one cut short;
+   * the one it replaces stays as the backup.
+   */
   save(data: Omit<SaveFile, 'version'>): void {
     mkdirSync(dirname(this.path), { recursive: true });
     const tmp = `${this.path}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ version: SAVE_VERSION, ...data }));
+    const fd = openSync(tmp, 'w');
+    try {
+      writeFileSync(fd, JSON.stringify({ version: SAVE_VERSION, ...data }));
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    if (existsSync(this.path)) renameSync(this.path, this.backup);
     renameSync(tmp, this.path);
   }
 }

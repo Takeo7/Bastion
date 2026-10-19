@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { addPlayer, createCampaign, setBastionLevel } from '../src/campaign';
+import { addPlayer, createCampaign } from '../src/campaign';
 import { ENEMY_FILES, EXPEDIENTE } from '../src/lore';
-import { LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
-import { raise } from './helpers';
+import { levelTo, raise } from './helpers';
 import { nextScene, recapLines, sceneLines, SCENES, SPEAKERS, unlockedScenes, type SceneId } from '../src/transmissions';
 
 const ids = (c: Parameters<typeof unlockedScenes>[0]) => unlockedScenes(c).map((s) => s.id);
@@ -29,7 +28,7 @@ describe('transmissions', () => {
   it('scenes follow the story: chapters, levels and Simão', () => {
     const c = createCampaign([0], new Rng(1));
     c.story.done = 1;
-    setBastionLevel(c, 2, new Rng(1));
+    levelTo(c, 2, new Rng(1));
     expect(ids(c)).toEqual(['ch1After', 'ch2Before']);
     c.event = 'simon';
     expect(ids(c)).toContain('simon');
@@ -43,7 +42,7 @@ describe('transmissions', () => {
   it('one scene per moment, in story order; urgent ones play at once', () => {
     const c = createCampaign([0], new Rng(1));
     c.story.done = 1;
-    setBastionLevel(c, 2, new Rng(1));
+    levelTo(c, 2, new Rng(1));
     const seen = new Set<SceneId>();
     expect(nextScene(c, seen, false)).toBeNull();
     expect(nextScene(c, seen, true)?.id).toBe('ch1After');

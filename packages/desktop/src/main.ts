@@ -259,7 +259,14 @@ ipcMain.handle('bastion:join', async (e, address: unknown): Promise<string | nul
   writeSettings({ ...readSettings(), last: target });
   stopListeningForGames();
   gameOrigin = new URL(`http://${target}/`).origin;
-  await win.loadURL(`http://${target}/`);
+  try {
+    // `?http`: a host started with `npm start` sends pages from other computers over to its https port, whose
+    // certificate the app doesn't take; the app is fast on http.
+    await win.loadURL(`http://${target}/?http`);
+  } catch (err) {
+    // The launcher is already gone and its buttons would never come back: back to it, saying why.
+    void showLauncher(`No se pudo abrir la partida de ${target}: ${err instanceof Error ? err.message : String(err)}`);
+  }
   return null;
 });
 

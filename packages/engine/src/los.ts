@@ -106,7 +106,7 @@ function lineFlat(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number): boole
 /**
  * The same walk on a map with storeys (docs/FASE6-PLAN.md), heights taken the
  * same way. On each tile the line crosses, what stands there at its height
- * stops it (opaqueAt: the ground's objects; a storey's walls and closed doors,
+ * stops it (opaqueAtIndex: the ground's objects; a storey's walls and closed doors,
  * not its windows). Between two tiles, a floor or ceiling it passes through
  * stops it: the slab of the tile where it crosses that height, the one it
  * leaves or the one it enters. So does one between the two heights when the

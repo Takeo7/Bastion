@@ -35,7 +35,7 @@ import {
   THAW_AFTER_STORY,
 } from '../src/campaign';
 import { abilitiesOf } from '../src/abilities';
-import { armorTier, bastionLevel, LEVEL_COST, LEVEL_MISSIONS, LEVEL_XP, MAX_LEVEL, nextTierBlocker, weaponTier } from '../src/progression';
+import { armorTier, bastionLevel, LEVEL_COST, LEVEL_MISSIONS, MAX_LEVEL, nextTierBlocker, weaponTier } from '../src/progression';
 import { BASE_AIM, barsCost, missionLines, NO_GROWTH, NO_SKILLS, pointsLeft, randomBoard, totalBars, unlockBlocker, veteranWill } from '../src/skills';
 import { BOARD_CELLS, type CellId } from '../src/board';
 import { bastionLot, PIECES, placePiece } from '../src/base';
@@ -277,7 +277,7 @@ describe('missions', () => {
     expect(c.squad.length).toBeGreaterThan(0);
     expect(c.launchReady).toEqual([false, false]);
     expect(Object.keys(c.pads ?? {}).sort()).toEqual([...c.squad].sort());
-    expect(c.log.some((l) => /Primera salida: .* La escuadra espera en la cochera/.test(l.text))).toBe(true);
+    expect(c.log.some((l) => /Primera salida: .* La escuadra espera junto a La Lata/.test(l.text))).toBe(true);
     expect(c.log.some((l) => /Elegid la primera misión/.test(l.text))).toBe(false);
     expect(nextSteps(c, 0)[0]?.label).not.toBe('Elige una operación');
     // Nothing else changes: the same offers, soldiers and day as a campaign opened by hand.
@@ -478,7 +478,7 @@ describe('progression', () => {
 
   it('a campaign from before keeps its level, and its operations stop expiring', () => {
     const c = createCampaign([0], new Rng(1));
-    const old = { ...JSON.parse(JSON.stringify(c)), version: 20, xp: LEVEL_XP[3]! } as CampaignState;
+    const old = { ...JSON.parse(JSON.stringify(c)), version: 20, xp: 55 } as CampaignState;
     delete old.level;
     old.offers[0]!.expiresDay = old.day + 4;
     const now = migrateCampaign(old);

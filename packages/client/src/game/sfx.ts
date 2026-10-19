@@ -182,10 +182,6 @@ export class Sfx {
     this.at('impact.glass', at);
   }
 
-  drone(at?: THREE.Vector3): void {
-    this.at('drone', at);
-  }
-
   heal(at?: THREE.Vector3): void {
     this.at('heal', at);
   }
@@ -252,11 +248,6 @@ export class Sfx {
     const t = u.template;
     const name = TEMPLATES[t].robotic ? 'death.robot' : t === 'sectoid' ? 'death.sectoid' : t === 'xenoid' ? 'death.runner' : t === 'zombie' ? 'death.zombie' : u.team === 'alien' ? 'death.advent' : 'death.human';
     this.at(name, at);
-  }
-
-  /** A song of Velmar's Canto (audio/sounds.ts, 'song.*'), at a place, after `delay` seconds. */
-  song(name: string, at?: THREE.Vector3, delay = 0): void {
-    this.at(`song.${name}`, at, 1, { delay });
   }
 
   // ------------------------------------------------------------ moments

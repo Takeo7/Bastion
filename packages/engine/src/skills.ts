@@ -60,13 +60,6 @@ export function barsOf(xp: number): { filled: number; into: number; need: number
   return { filled, into: xp - barsCost(filled), need: barCost(filled) };
 }
 
-/** Bars filled in every line. */
-export function filledBars(skills: Skills): Record<SkillId, number> {
-  const out = { ...NO_SKILLS };
-  for (const id of SKILL_IDS) out[id] = barsOf(skills[id]).filled;
-  return out;
-}
-
 /** What a bar adds when it fills: 5 to 10 % (BAR_GROWTH), at random. */
 export function rollGrowth(rng: Rng): number {
   return rng.range(BAR_GROWTH[0], BAR_GROWTH[1]);

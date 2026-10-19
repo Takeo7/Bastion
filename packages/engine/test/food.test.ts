@@ -20,7 +20,7 @@ import {
 } from '../src/campaign';
 import { FOUND_WEAPONS } from '../src/content';
 import { rollLoot } from '../src/loot';
-import { armorTier, CRAFTS, LEVEL_XP } from '../src/progression';
+import { armorTier, CRAFTS } from '../src/progression';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
 import type { DecorKind, Slot } from '../src/types';

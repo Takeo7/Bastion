@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { post } from '../report';
 import { snowyMission } from './snow';
 import {
   ABILITIES,
@@ -120,7 +121,6 @@ import {
   lootSummary,
   lootTotals,
   maxMoveCost,
-  MEDKIT_HEAL,
   meleeTargets,
   MISSION_NAMES,
   NIGHT,
@@ -155,8 +155,6 @@ import {
   sightOf,
   sightOrigin,
   sightTo,
-  songTargets,
-  STORM_TARGETS,
   STORY,
   teamVisibility,
   TEMPLATES,
@@ -203,7 +201,6 @@ import { cycleTileLook } from './tileLooks';
 import { Renderer } from './renderer';
 import { Sfx } from './sfx';
 import { syntyPropsLoaded } from './syntyProps';
-import { SONG, SongFx, SongMarks } from './songFx';
 import { setCombatRate, setHurry, timeRate, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
@@ -251,7 +248,6 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
   explosive: 0.6,
   hacked: 0.8,
   vipRescued: 0.5,
-  zapped: 0.6,
   suppressed: 0.6,
   cleansed: 0.4,
   refund: 0.4,
@@ -268,7 +264,6 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
  * Night missions (docs/ALTURA-Y-NOCHE.md §2), as the HUD explains them (Lore's
  * NIGHT_TEXT.rules; playtest 17/10 #50: «la luz no está muy explicada»): in the
  * «De noche» tag's tooltip, the log, the first night's card and the controls.
- * `LIGHT_LINES`, what a Bengala or a fire lights up.
  */
 const NIGHT_RULES = NIGHT_TEXT.rules.join('\n');
 /** Drawn back this far (CameraRig.zoomFraction), the wheel shows the top storey with its roofs; this close, the floor of the soldier looked at (#1). */
@@ -278,7 +273,6 @@ const FLOOR_NEAR = 0.35;
 const TURN_CAMERA_QUIET_MS = 4000;
 /** The first night is explained once, on a card (per browser). */
 const NIGHT_SEEN_KEY = 'bastion.seenNight';
-const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fuego ilumina la zona' } as const;
 
 /**
  * The loading veil (UX-REVISION-3 #1) waits at most this long for the map's
@@ -287,6 +281,12 @@ const LIGHT_LINES = { bolt: 'La bengala lo ilumina todo alrededor', fire: 'El fu
  */
 const VEIL_MODELS_MS = 15000;
 const VEIL_SHADERS_MS = 4000;
+
+/** An animation that throws is skipped and the turn goes on; the host's red.log hears of it, from the partner too. */
+function animFailed(err: unknown): void {
+  console.error('[anim]', err);
+  post(`anim: ${err instanceof Error ? `${err.message} · ${err.stack?.split('\n')[1]?.trim() ?? ''}` : String(err)}`);
+}
 
 /** The server's reconnection grace (room.ts RECONNECT_GRACE_MS): a partner who dropped this recently still counts as here. */
 const RECONNECT_GRACE_MS = 30_000;
@@ -443,14 +443,9 @@ function critText(hit: DamageRange, crit: DamageRange): string {
 const DAMAGE_EACH: Partial<Record<AbilityId, string>> = {
   rapidFire: ' por disparo',
   faceoff: ' a cada uno',
-  lightRain: ' por flecha',
-  velmarStorm: ` a hasta ${STORM_TARGETS} enemigos`,
   grenade: ' en el área',
   launch: ' en el área',
   missiles: ' en el área',
-  discharge: ' en el área',
-  fireball: ' en el área',
-  combatProtocol: ' (+2 a Acorazados y alarmas)',
 };
 
 /** The hover card's damage line, from the rules' own numbers: «Daño 4–6 · crítico +2». */
@@ -464,7 +459,6 @@ function damageText(s: GameState, u: Unit, id: AbilityId): string | undefined {
     `Daño ${span(d.hit)}${watch ? ' por disparo' : DAMAGE_EACH[id] ?? ''}`,
     crit ? critText(d.hit, crit) : '',
     d.shred ? `destroza ${d.shred} de blindaje` : '',
-    d.ignoresArmor ? 'ignora el blindaje' : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -472,7 +466,7 @@ function damageText(s: GameState, u: Unit, id: AbilityId): string | undefined {
 
 /**
  * How far using it is heard, for the cards (docs/FASE2.md): «ruido 12», or
- * «sin ruido» for a silent attack or trade. Vigilancia is heard when it fires.
+ * «sin ruido» for a silent attack. Vigilancia is heard when it fires.
  */
 function noiseText(s: GameState, u: Unit, id: AbilityId): string | undefined {
   if (id === 'overwatch' || id === 'killZone') {
@@ -481,7 +475,7 @@ function noiseText(s: GameState, u: Unit, id: AbilityId): string | undefined {
   }
   const n = noiseOf(s, u, id);
   if (n > 0) return `ruido ${n}`;
-  return isAttack(id) || ABILITIES[id].song ? 'sin ruido' : undefined;
+  return isAttack(id) ? 'sin ruido' : undefined;
 }
 
 /** What a move sounds like (NOISE in content.ts): running, a door, a window's glass. Null when it is quiet. */
@@ -599,9 +593,8 @@ function lethality(d: DamagePreview, t: Unit): string | undefined {
 /** What armour does to a hit on `t`: soaks, is pierced, is stripped. */
 function armorNotes(d: DamagePreview, t: Unit): string[] {
   const notes: string[] = [];
-  if (d.ignoresArmor && t.armor) notes.push('Ignora su blindaje');
-  else if (d.armor) notes.push(`Blindaje ${d.armor}: −${d.armor} por impacto`);
-  if (!d.ignoresArmor && t.armor > d.armor) notes.push(`Perfora ${t.armor - d.armor} de blindaje`);
+  if (d.armor) notes.push(`Blindaje ${d.armor}: −${d.armor} por impacto`);
+  if (t.armor > d.armor) notes.push(`Perfora ${t.armor - d.armor} de blindaje`);
   if (d.shred && t.armor) notes.push(`Destroza ${Math.min(d.shred, t.armor)} de blindaje`);
   if (t.ruptured) notes.push(`Ruptura: +${t.ruptured} a cada impacto`);
   return notes;
@@ -675,7 +668,7 @@ export class Game {
   private packQueue: { unit: string; ids: string[] } | null = null;
   /** A swap under way (docs/FASE8.md §C): once the slot is dropped, this is picked up from the floor. */
   private swapTake: { unit: string; id: string } | null = null;
-  /** The next `healed` is a medicine's, not the Grillo's: no drone flies. */
+  /** The next `healed` is a medicine's: its line already says how much. */
   private medicineHeal = false;
   /** The next `cured` is a medicine's: its line already says so. */
   private medicineCure = false;
@@ -686,9 +679,6 @@ export class Game {
   /** How the squad lost its concealment, once it has: the contact that follows says who saw whom. */
   private exposure: Extract<GameEvent, { t: 'concealmentBroken' }> | null = null;
   private readonly sfx = new Sfx();
-  /** The Oficio: its light tiles, and what stays on the field (Petardos, ¡Aguantad!). */
-  private readonly songFx = new SongFx();
-  private readonly songMarks = new SongMarks();
   private overlays!: Overlays;
   private readonly hud: Hud;
 
@@ -807,7 +797,7 @@ export class Game {
     this.renderer = new Renderer(this.root);
     this.rig = new CameraRig(this.renderer.camera);
     this.sfx.attach(this.renderer.camera, () => this.rig.focusPoint);
-    this.renderer.scene.add(this.mapView.group, this.units.group, this.fx.group, this.songFx.group, this.songMarks.group);
+    this.renderer.scene.add(this.mapView.group, this.units.group, this.fx.group);
     // Units on a storey the cutaway hides lose their body (their flag stays, with the floor: unitViews).
     this.units.setCutAway((p) => this.mapView.isCutAway(p));
     // `level`: the active floor, for the buildings' cutaway.
@@ -866,7 +856,6 @@ export class Game {
     this.rig.update(this.playing ? dt * rate : dt);
     this.units.tick(dt, time);
     this.fx.tick(dt * rate);
-    this.songFx.tick(dt * rate);
     this.overlays?.tick(time);
     if (this.overlays && this.view) this.followTurns();
     this.mapView.tick(dt);
@@ -961,13 +950,33 @@ export class Game {
       });
     const veiled = Promise.race([Promise.all([syntyPropsLoaded(), piecesLoaded()]), timer(VEIL_MODELS_MS)])
       // The map has rebuilt with its models by now (mapView waits on the same loads).
-      .then(() => (this.gone ? undefined : Promise.race([this.renderer.gl.compileAsync(this.renderer.scene, this.renderer.camera).catch(() => undefined), timer(VEIL_SHADERS_MS)])))
+      .then(() => (this.gone ? undefined : Promise.race([this.compileShaders(Date.now() + VEIL_SHADERS_MS).catch(() => undefined), timer(VEIL_SHADERS_MS)])))
       .then(() => (this.gone ? undefined : Promise.race([frames(2), timer(1000)])))
       .then(() => {
         if (this.veiled === veiled) this.veiled = null;
         lift();
       });
     this.veiled = veiled;
+  }
+
+  /**
+   * The scene's materials compiled behind the veil, and again with one and two lights more while there is time:
+   * a shot's flash or a bang adds a light for a moment (fx.ts), and a count of lights not seen yet compiled
+   * every lit material on the spot, a stall at the first shot of each mission.
+   */
+  private async compileShaders(until: number): Promise<void> {
+    const { gl, scene, camera } = this.renderer;
+    await gl.compileAsync(scene, camera);
+    const extra: THREE.PointLight[] = [];
+    try {
+      for (let i = 0; i < 2 && !this.gone && Date.now() < until; i++) {
+        extra.push(new THREE.PointLight(0xffffff, 0));
+        scene.add(extra[i]!);
+        await gl.compileAsync(scene, camera);
+      }
+    } finally {
+      scene.remove(...extra);
+    }
   }
 
   /** The arrival briefing, XCOM-style: operation, area and objective. */
@@ -1153,6 +1162,8 @@ export class Game {
     window.clearTimeout(this.momentTimer);
     for (const d of this.disposers) d();
     this.sfx.siren(null);
+    this.rig.dispose();
+    this.hud.destroy();
     this.renderer.dispose();
     clear(this.root);
     this.root.remove();
@@ -1255,7 +1266,7 @@ export class Game {
       try {
         await this.play(item);
       } catch (err) {
-        console.error('[anim]', err);
+        animFailed(err);
       }
       this.current = null;
       this.noteResult(item);
@@ -1339,7 +1350,7 @@ export class Game {
     try {
       await this.announceSighted(item, seen, epoch);
     } catch (err) {
-      console.error('[anim]', err);
+      animFailed(err);
     }
     // The noise that follows an action doesn't set the pause after it: what was done does.
     if (item.by === this.mySlot && e.t !== 'noise') this.holdAfter = HOLD_AFTER[e.t] ?? 0.2;
@@ -1483,7 +1494,7 @@ export class Game {
     const epoch = this.rig.epoch;
     this.current = all[0]!;
     this.grouped = true;
-    await Promise.all(all.map((q) => this.play(q).catch((err) => console.error('[anim]', err))));
+    await Promise.all(all.map((q) => this.play(q).catch((err) => animFailed(err))));
     this.grouped = false;
     this.current = null;
     for (const q of all) {
@@ -1557,7 +1568,7 @@ export class Game {
     }
     this.current = items[0]!;
     this.grouped = true;
-    await Promise.all([...walks.values()].map((q) => this.play(q).catch((err) => console.error('[anim]', err))));
+    await Promise.all([...walks.values()].map((q) => this.play(q).catch((err) => animFailed(err))));
     this.grouped = false;
     this.current = null;
     for (const q of items) await this.settle(q, epoch);
@@ -1582,7 +1593,7 @@ export class Game {
       const these = items.filter((q) => phase(q.e.t));
       if (!these.length) continue;
       this.current = these[0]!;
-      await Promise.all(these.map((q) => this.play(q).catch((err) => console.error('[anim]', err))));
+      await Promise.all(these.map((q) => this.play(q).catch((err) => animFailed(err))));
     }
     this.grouped = false;
     this.current = null;
@@ -1795,59 +1806,6 @@ export class Game {
         await wait(0.45);
         return;
       }
-      case 'zapped': {
-        const u = getUnit(v, e.unit)!;
-        const target = getUnit(v, e.target)!;
-        look(this.units.worldPos(u.id).lerp(this.units.worldPos(target.id), 0.5));
-        const home = this.units.dronePos(u.id);
-        const dest = this.units.chestPos(target.id).add(new THREE.Vector3(0, 0.7, 0));
-        this.units.setDroneAway(u.id, true);
-        this.sfx.drone(home);
-        await this.fx.droneFlight(home, dest);
-        this.fx.sparks(this.units.chestPos(target.id), 0x8ad8ff, 18);
-        this.sfx.stun(this.units.chestPos(target.id));
-        this.hud.log(`${u.name}: calambrazo contra ${target.name}`, '#54d1ff');
-        void this.fx.droneFlight(dest, this.units.dronePos(u.id)).then(() => this.units.setDroneAway(u.id, false));
-        return;
-      }
-      // The Oficio: the effects proper are Arte's; this shows what happened.
-      case 'sung': {
-        const u = getUnit(v, e.unit)!;
-        this.hud.log(`${u.name}: ${ABILITIES[e.ability].name}`, '#1f8a5c');
-        if (!this.shownToSquad(u)) return;
-        look(this.units.worldPos(u.id));
-        this.fx.floatText(this.units.chestPos(u.id), ABILITIES[e.ability].name.toUpperCase(), 'info');
-        await this.playSong(u, e);
-        return;
-      }
-      case 'teleported': {
-        // The body comes apart in light tiles and gathers again where the song sends it.
-        const u = getUnit(v, e.unit)!;
-        if (!this.shownToSquad(u)) return;
-        const from = tileToWorld(e.from);
-        const to = tileToWorld(e.to);
-        this.sfx.song('vanish', from);
-        void this.songFx.vanish(from);
-        await wait(0.15);
-        this.units.setHidden(u.id, true);
-        await this.units.slide(u.id, to, 0.01);
-        await wait(0.2);
-        look(to);
-        this.sfx.song('appear', to);
-        await this.songFx.appear(to);
-        this.units.setHidden(u.id, false);
-        await wait(0.15);
-        return;
-      }
-      case 'revived': {
-        const u = getUnit(v, e.unit)!;
-        this.hud.log(`${u.name} vuelve en pie`, '#6dff9a');
-        look(this.units.worldPos(u.id));
-        await this.units.rise(u.id);
-        this.fx.floatText(this.units.chestPos(u.id), 'EN PIE', 'heal');
-        await wait(0.3);
-        return;
-      }
       case 'cleansed': {
         const target = getUnit(v, e.target)!;
         this.fx.heal(this.units.chestPos(target.id));
@@ -1979,11 +1937,11 @@ export class Game {
       case 'aided': {
         const u = getUnit(v, e.unit)!;
         const target = getUnit(v, e.target)!;
-        // A medicine from the backpack (docs/FASE8.md §C), like Restoration, needs no drone.
+        // A medicine from the backpack (docs/FASE8.md §C), like Restoration, heals at once.
         const medicine = e.t === 'healed' && this.medicineHeal;
         if (medicine) this.medicineHeal = false;
         if (e.t === 'healed' && (medicine || (this.lastUsed?.unit === u.id && this.lastUsed.ability === 'restoration'))) {
-          // Restoration heals everyone at once: no drone trips. A medicine's line already says how much.
+          // Restoration heals everyone at once. A medicine's line already says how much.
           this.fx.heal(this.units.chestPos(target.id));
           this.sfx.heal(this.units.chestPos(target.id));
           this.fx.floatText(this.units.chestPos(target.id), `+${e.amount}`, 'heal');
@@ -1992,11 +1950,7 @@ export class Game {
           return;
         }
         look(this.units.worldPos(u.id).lerp(this.units.worldPos(target.id), 0.5));
-        const home = this.units.dronePos(u.id);
-        const dest = this.units.chestPos(target.id).add(new THREE.Vector3(0, 0.9, 0));
-        this.units.setDroneAway(u.id, true);
-        this.sfx.drone(home);
-        await this.fx.droneFlight(home, dest);
+        await wait(0.3);
         if (e.t === 'healed') {
           this.fx.heal(this.units.chestPos(target.id));
           this.sfx.heal(this.units.chestPos(target.id));
@@ -2005,12 +1959,10 @@ export class Game {
         } else {
           this.fx.shield(this.units.chestPos(target.id));
           this.sfx.shield(this.units.chestPos(target.id));
-          this.fx.floatText(this.units.chestPos(target.id), '+20 DEFENSA', 'info');
+          this.fx.floatText(this.units.chestPos(target.id), `+${e.amount} DEFENSA`, 'info');
           this.hud.log(`${u.name} protege a ${target.name}`, '#54d1ff');
         }
         await wait(0.45);
-        await this.fx.droneFlight(dest, this.units.dronePos(u.id));
-        this.units.setDroneAway(u.id, false);
         return;
       }
       // The backpack (docs/FASE8.md §C). Lore's words to come; these say what happened, plainly.
@@ -2264,14 +2216,8 @@ export class Game {
         if (!terminal) return;
         const screen = tileToWorld(terminal, 1.3);
         look(this.units.worldPos(u.id).lerp(screen, 0.5));
-        if (e.remote) {
-          const home = this.units.dronePos(u.id);
-          this.units.setDroneAway(u.id, true);
-          await this.fx.droneFlight(home, screen.clone().add(new THREE.Vector3(0, 0.6, 0)));
-        } else {
-          this.units.face(u.id, screen);
-          await this.units.raiseWeapon(u.id, screen);
-        }
+        this.units.face(u.id, screen);
+        await this.units.raiseWeapon(u.id, screen);
         this.sfx.hack(screen);
         this.fx.sparks(screen, e.success ? 0x4dff9a : 0xff4a3a, 16);
         await wait(0.5);
@@ -2282,12 +2228,7 @@ export class Game {
         else this.hud.banner('¡ALARMA!', 'alien');
         // A failed repair sets the alarm off: the horde it brings says so (reinforcementsIncoming).
         if (!e.success) this.alarmRaised = true;
-        if (e.remote) {
-          await this.fx.droneFlight(screen.clone().add(new THREE.Vector3(0, 0.6, 0)), this.units.dronePos(u.id));
-          this.units.setDroneAway(u.id, false);
-        } else {
-          this.units.lowerWeapon(u.id);
-        }
+        this.units.lowerWeapon(u.id);
         return;
       }
       case 'vipRescued': {
@@ -2364,15 +2305,10 @@ export class Game {
       }
       case 'patrol':
       case 'forgot':
-      // A light going out fades on the map (MapView draws the lights from the state): nothing to say.
+      // A light going on or out shows on the map (MapView draws the lights from the state): nothing to say.
+      case 'lightOn':
       case 'lightOff':
         return;
-      case 'lightOn': {
-        // Only a Bengala or a fire lights up during a mission (the street lights come with the map).
-        const flare = this.lastUsed?.ability === 'bolt';
-        this.hud.log(flare ? LIGHT_LINES.bolt : LIGHT_LINES.fire, '#ffc93a');
-        return;
-      }
       case 'noise':
         this.playNoise(e);
         return;
@@ -2520,82 +2456,6 @@ export class Game {
     }
   }
 
-  /**
-   * An Oficio ability's effect (songFx.ts) and sound, landing before the
-   * events that follow it (damage, healing, the leap…): the flare, the
-   * molotov, the bolts, the bandage.
-   */
-  private async playSong(u: Unit, e: Extract<GameEvent, { t: 'sung' }>): Promise<void> {
-    const v = this.view;
-    const hands = this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.25, 0));
-    const targets = e.targets.map((id) => getUnit(v, id)).filter((t): t is Unit => !!t);
-    const first = targets[0];
-    const chest = (t: Unit) => this.units.chestPos(t.id);
-    const feet = (t: Unit) => this.units.worldPos(t.id);
-    if (first && first.id !== u.id) this.units.face(u.id, feet(first));
-    switch (e.ability) {
-      case 'bolt':
-        this.sfx.song('bolt', hands);
-        if (first) await this.songFx.bolt(hands, chest(first));
-        return;
-      case 'velmarStorm':
-        this.sfx.song('storm', hands);
-        targets.forEach((t, i) => this.sfx.song('thunder', chest(t), 0.2 + i * 0.18));
-        await this.songFx.storm(targets.map(chest));
-        return;
-      case 'aegis':
-      case 'hymn':
-        this.sfx.song('aura', hands);
-        this.songFx.aura(feet(u), ABILITIES[e.ability].range ?? 1.5, targets.map(feet), e.ability === 'aegis' ? SONG.cyan : SONG.green);
-        await wait(0.6);
-        return;
-      case 'velmarOath':
-        this.sfx.song('aura', hands);
-        this.songFx.aura(feet(u), 4, [feet(u)], SONG.gold);
-        await wait(0.6);
-        return;
-      case 'layOnHands':
-        this.sfx.song('heal', hands);
-        if (first) this.songFx.heal(feet(first));
-        await wait(0.4);
-        return;
-      case 'silence':
-        this.sfx.song('dome', e.tile ? tileToWorld(e.tile) : hands);
-        if (e.tile) await this.songFx.dome(tileToWorld(e.tile), ABILITIES.silence.radius ?? 2);
-        return;
-      case 'huntersMark':
-        this.sfx.song('mark', first ? chest(first) : hands);
-        if (first) this.songFx.mark(chest(first));
-        await wait(0.5);
-        return;
-      case 'counterSong':
-        this.sfx.song('cleanse', first ? chest(first) : hands);
-        if (first) await this.songFx.cleanse(feet(first));
-        return;
-      case 'lastVerse':
-        if (first && !first.alive) {
-          this.sfx.song('revive', feet(first));
-          await this.songFx.revive(feet(first));
-        } else {
-          this.sfx.song('heal', hands);
-          this.songFx.aura(feet(u), ABILITIES.lastVerse.range ?? 6, targets.map(feet), SONG.green);
-          await wait(0.6);
-        }
-        return;
-      case 'lightRain':
-        // The arrows themselves come with the shots that follow.
-        this.sfx.song('voice', hands);
-        this.songFx.rise(feet(u), SONG.cyan, 14);
-        await wait(0.35);
-        return;
-      default:
-        // Salto de eco, Paso de sombra (the teleport comes next) and anything new.
-        this.sfx.song('voice', hands);
-        this.songFx.rise(feet(u), SONG.green, 10);
-        await wait(0.2);
-    }
-  }
-
   /** Melee lunge, or aim + burst for ranged weapons; then hit or miss feedback. */
   private async playAttack(e: ShotEvent, cam: () => boolean, look: (p: THREE.Vector3) => void): Promise<void> {
     const v = this.view;
@@ -2643,24 +2503,19 @@ export class Game {
     await wait(cam() ? 0.25 : 0.08);
 
     const heavy = weapon.apCost > 1;
-    // Flecha perforante and Lluvia de flechas: crossbow bolts instead of rounds.
-    const sung = !!ABILITIES[e.ability]?.song;
     const pellets = weapon.range === 'short' ? 6 : 0;
     const rounds = Math.max(1, weapon.burst);
     for (let i = 0; i < rounds; i++) {
       const from = this.units.muzzlePos(shooter.id);
       this.units.recoil(shooter.id);
-      if (sung) this.sfx.song('arrow', from);
-      else {
-        this.fx.muzzleFlash(from, color);
-        this.sfx.shot(shooter, weapon, from);
-      }
+      this.fx.muzzleFlash(from, color);
+      this.sfx.shot(shooter, weapon, from);
       if (heavy && cam()) this.rig.shake(0.08, 0.15);
       const last = i === rounds - 1;
       const shots = pellets || 1;
       for (let p = 0; p < shots; p++) {
         const dest = hit ? chest.clone().add(jitter(pellets ? 0.6 : 0.25)) : missPoint(from, chest, i + p, pellets ? 1.6 : 1);
-        void (sung ? this.songFx.arrow(from, dest) : this.fx.bullet(from, dest, color, heavy ? 45 : 60, heavy)).then(() => {
+        void this.fx.bullet(from, dest, color, heavy ? 45 : 60, heavy).then(() => {
           this.fx.sparks(dest, hit ? 0xff7a5a : 0xffd28a, pellets ? 3 : hit ? 8 : 5);
           if (last && p === 0) this.sfx.impact(hit ? this.sfx.body(target) : 'miss', dest, e.result === 'crit');
         });
@@ -2729,31 +2584,11 @@ export class Game {
     }
     this.units.face(u.id, to);
     await wait(0.25);
-    if (e.ability === 'discharge') {
-      const home = this.units.dronePos(u.id);
-      this.units.setDroneAway(u.id, true);
-      this.sfx.drone(home);
-      await this.fx.droneFlight(home, to.clone().add(new THREE.Vector3(0, 1.4, 0)));
-      this.sfx.explosion(to);
-      if (cam()) this.rig.shake(0.25, 0.4);
-      void this.fx.explosion(to, def.radius ?? 1.5, true);
-      void this.fx.droneFlight(to.clone().add(new THREE.Vector3(0, 1.4, 0)), this.units.dronePos(u.id)).then(() => this.units.setDroneAway(u.id, false));
-      await wait(0.4);
-      return;
-    } else if (e.ability === 'missiles') {
+    if (e.ability === 'missiles') {
       const from = this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.5, 0));
       const spots = [to, ...Array.from({ length: 3 }, () => to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2)))];
       this.sfx.missile(from);
       await this.fx.missiles(from, spots);
-    } else if (e.ability === 'fireball') {
-      // Cóctel molotov: a lobbed burning bottle and a sheet of flame (songFx.ts).
-      const hands = this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.3, 0));
-      this.fx.floatText(this.units.chestPos(u.id), def.name.toUpperCase(), 'info');
-      this.sfx.song('fire', hands);
-      await this.songFx.fireball(hands, to, blastRadius(u, e.ability) || 2.5);
-      if (cam()) this.rig.shake(0.4, 0.5);
-      await wait(0.4);
-      return;
     } else if (e.ability === 'launch') {
       await this.units.raiseWeapon(u.id, to);
       const from = this.units.muzzlePos(u.id);
@@ -2919,8 +2754,6 @@ export class Game {
     }
     this.overlays.setFallenPacks([...packs.values()]);
     this.overlays.setSmoke(this.view.smoke);
-    this.songMarks.setSilences((this.view.silences ?? []).map((z) => ({ at: tileToWorld(z.pos), radius: z.radius })));
-    this.songMarks.setOaths(this.view.units.filter((u) => u.alive && (u.oath ?? 0) > 0).map((u) => tileToWorld(u.pos)));
     this.drawPlans();
     this.drawDetection();
     this.edge.set(this.marks());
@@ -3130,8 +2963,6 @@ export class Game {
         return `${capitalize(who)} ha atacado${alien ? ` a ${anEnemy(alien)}` : ''}: el combate os delata.`;
       case 'explosive':
         return `La explosión de ${who} se ha oído en toda la zona.`;
-      case 'song':
-        return `${capitalize(who)} ha hecho ruido: se oye desde lejos.`;
       case 'alarm':
         return `${soldier ? `${who} no ha podido arreglarlo` : 'El arreglo ha fallado'}: ha saltado la alarma.`;
       case 'reinforcements':
@@ -3895,7 +3726,7 @@ export class Game {
         enabled: !reason,
         reason: reason ?? undefined,
         // An attack's card names the weapon it fires: its cost and its noise are that weapon's.
-        name: isAttack(id) && !def.song ? `${def.name} · ${weaponLabel(u, id as AttackAbility)}` : def.name,
+        name: isAttack(id) ? `${def.name} · ${weaponLabel(u, id as AttackAbility)}` : def.name,
         cost: costText(u, id),
         limits: limitsText(u, id),
         damage: damageText(this.state, u, id),
@@ -4226,7 +4057,7 @@ export class Game {
         objective = m.objectiveDone ? OBJECTIVE_DONE.sabotage! : alarmObjective(m.alarm);
         break;
       case 'hack':
-        objective = m.objectiveDone ? OBJECTIVE_DONE.hack! : 'Arreglad el equipo (junto a él, o con el Grillo del especialista)';
+        objective = m.objectiveDone ? OBJECTIVE_DONE.hack! : 'Arreglad el equipo (junto a él)';
         break;
       case 'rescue': {
         const vip = m.objectiveUnit ? getUnit(s, m.objectiveUnit) : undefined;
@@ -4461,15 +4292,10 @@ export class Game {
     if (def.target === 'ally' || !isAttack(ability)) {
       const friendly = def.target === 'ally';
       this.overlays.showAim(u.pos, target.pos, friendly);
-      // Bengala and the Grillo's protocol never miss: the panel is all about their damage.
       const dmg = friendly ? null : abilityDamage(this.state, u, ability, target);
       const effects: Partial<Record<AbilityId, string>> = {
-        medkit: `Cura +${Math.min(MEDKIT_HEAL + u.mods.heal, target.maxHp - target.hp)} (salud ${target.hp}/${target.maxHp})`,
-        aid: `+${20 + u.mods.aid} de defensa hasta vuestro próximo turno`,
         revival: 'Quita el aturdimiento, la desorientación y el pánico',
         suppression: '−50 de puntería al objetivo hasta tu próximo turno; si se mueve, le disparas',
-        combatProtocol: 'Nunca falla',
-        bolt: 'Nunca falla e ignora la cobertura',
       };
       const damage = dmg ? { hit: span(dmg.hit), notes: armorNotes(dmg, target), kill: lethality(dmg, target) } : undefined;
       const noise = noiseOf(this.state, u, ability);
@@ -4516,9 +4342,6 @@ export class Game {
     switch (id) {
       case 'faceoff':
         return enemies(rangedTargets(s, u, 'faceoff').filter((t) => this.visibleAliens.has(t.id)).length);
-      case 'lightRain':
-      case 'velmarStorm':
-        return enemies(songTargets(s, u, id).filter((t) => this.visibleAliens.has(t.id)).length);
       case 'hack':
         return `Probabilidad: ${hackChance(s, u)} %`;
       case 'reload':
@@ -4589,15 +4412,14 @@ export class Game {
       this.overlays.setHover(null);
       const loud = noiseOf(this.state, u, ability);
       const rubble = [walls.length ? (walls.length === 1 ? 'Rompe una pared' : `Rompe ${walls.length} paredes`) : '', breaksFloor(this.state, ability, center) ? 'Hunde el suelo' : ''];
-      // A jump lands the soldier there: at night, whether it is in the light.
-      const note = [loud ? `Ruido ${loud}` : '', ...rubble, ABILITIES[ability].teleport ? this.litNote(center) : ''].filter(Boolean).join(' · ');
+      const note = [loud ? `Ruido ${loud}` : '', ...rubble].filter(Boolean).join(' · ');
       if (note) this.overlays.setNote(center, note);
       return;
     }
     if (this.mode.kind === 'self') {
-      // A song or Restoration reaches the allies around: the circle says how far.
+      // Restoration reaches the allies around: the circle says how far.
       const range = ABILITIES[this.mode.ability].range;
-      if (range && this.mode.ability !== 'hack') this.overlays.showRange(u.pos, range);
+      if (range) this.overlays.showRange(u.pos, range);
       return;
     }
     if (!tile) return;
@@ -4769,7 +4591,7 @@ export class Game {
         if (t) this.ping(t);
       }
     });
-    window.addEventListener('pointerup', (e) => {
+    const onUp = (e: PointerEvent): void => {
       if (e.button === 2 && this.drag) {
         if (!this.drag.moved) {
           // A right click (not a drag) on a known enemy opens its file; planning, it takes the picked soldier's
@@ -4782,7 +4604,10 @@ export class Game {
         }
         this.drag = null;
       }
-    });
+    };
+    // On the window, so a drag let go off the canvas ends too; taken off with the game, which it kept alive.
+    window.addEventListener('pointerup', onUp);
+    this.disposers.push(() => window.removeEventListener('pointerup', onUp));
     canvas.addEventListener('pointermove', (e) => {
       if (this.drag) {
         const dx = e.clientX - this.drag.x;
@@ -5034,7 +4859,7 @@ export class Game {
     const occupant = unitAt(this.state, tile);
     const u = this.selectedUnit();
 
-    // Ally targeting (medkit, aid): clicking a soldier picks them.
+    // Ally targeting (the Botiquín, Espabilar, Apaños): clicking a soldier picks them.
     if (this.mode.kind === 'target' && ABILITIES[this.mode.ability].target === 'ally' && occupant?.team === 'xcom') {
       if (this.targetId === occupant.id) this.confirmTarget();
       else if (this.targetOptions(this.mode.ability).some((o) => o.unit.id === occupant.id)) {

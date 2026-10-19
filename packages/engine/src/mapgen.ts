@@ -21,7 +21,7 @@
 // and only reachable tiles are used to place the squad, the pods and objectives.
 import { dressMedical } from './medicalDressing';
 import { dressHome } from './homeDressing';
-import { MAPS, parseMap, type MapDef } from './maps';
+import { parseMap, type MapDef } from './maps';
 import { stepCost } from './path';
 import { Rng } from './rng';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from './grid';
@@ -4350,8 +4350,4 @@ export function handmadeLayout(def: MapDef, kind: MissionKind): MissionLayout {
     ...(def.siege ? { siege: true } : {}),
     ...(map.barricades.length ? { barricades: map.barricades } : {}),
   };
-}
-
-export function handmadeMap(id: string): MapDef | undefined {
-  return MAPS[id];
 }

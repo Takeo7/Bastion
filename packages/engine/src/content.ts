@@ -23,7 +23,6 @@ export const LOW_COVER_BONUS = 20;
 export const HIGH_COVER_BONUS = 40;
 export const HUNKER_DEFENSE = 30;
 export const HUNKER_DODGE = 50;
-export const AID_DEFENSE = 20;
 /** Reaction shots lose this fraction of their hit chance (XCOM 2 REACTION_FINALMOD). */
 export const REACTION_PENALTY = 0.3;
 export const GRAZE_DAMAGE_MULT = 0.5;
@@ -60,8 +59,6 @@ export const NOISE = {
   /** A failed hack: the alarm blares at the terminal and draws a horde in by the edges. */
   alarm: 16,
 } as const;
-/** The Taller de oficios by the listening post: the Oficio is this much quieter (never below 0). */
-export const OFICIO_QUIET = 2;
 
 /**
  * The base's traps (docs/FASE12.md §11.4): what a mine does to whoever is
@@ -93,12 +90,11 @@ export const HORDE = { perTurn: 10, perNoise: 5, wave: 50, cap: 60, trickle: [0,
  * Night missions (docs/ALTURA-Y-NOCHE.md). The living see `sightCut` tiles
  * less (never under `minSight`) and the dead as ever, but whoever stands in
  * the light is seen from as far as by day; the enemy detects the hidden squad
- * at `detection` of its range, unless lit. Lights: the map's street lights,
- * the Bengala's flare and fire, for `turns` squad turns. One more group of
- * the dead, the Saqueo's horde `hordeHead` turns sooner, and `supplies`
- * times the suministros found and paid. A light reaches only what it sees
- * from its `height` (storeys above its floor): a street lamp from high up, a
- * flare or a fire from the ground.
+ * at `detection` of its range, unless lit. Lights: the map's street lights
+ * and the base's floodlights. One more group of the dead, the Saqueo's horde
+ * `hordeHead` turns sooner, and `supplies` times the suministros found and
+ * paid. A light reaches only what it sees from its height (storeys above its
+ * floor): a street lamp from `lampHeight`.
  */
 export const NIGHT = {
   sightCut: 8,
@@ -108,8 +104,6 @@ export const NIGHT = {
   /** A floodlight of the base (docs/FASE12.md §11.4; Arturo, 18/10: for the sieges by night) lights twice as far. */
   floodlight: 4,
   lampHeight: 2,
-  flare: { radius: 3, turns: 2, height: 0.5 },
-  fire: { radius: 2, turns: 2, height: 0.5 },
   hordeHead: 1,
   supplies: 1.5,
 } as const;
@@ -167,9 +161,6 @@ export type WeaponId =
   | 'claws'
   | 'fragGrenade'
   | 'microMissiles'
-  | 'droneZap'
-  | 'discharge'
-  | 'songFire'
   | 'bloaterBurst';
 
 export interface WeaponDef {
@@ -237,9 +228,6 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   bloaterBurst: weapon({ id: 'bloaterBurst', name: 'Reventón', damage: 3, burst: 0, noise: 6 }),
   fragGrenade: weapon({ id: 'fragGrenade', name: 'Granada de fragmentación', damage: 3, plusOne: 20, shred: 1, burst: 0, noise: 26 }),
   microMissiles: weapon({ id: 'microMissiles', name: 'Micromisiles', damage: 3, shred: 1, burst: 0, noise: 18 }),
-  droneZap: weapon({ id: 'droneZap', name: 'Descarga del Grillo', damage: 2, burst: 0, noise: 2 }),
-  discharge: weapon({ id: 'discharge', name: 'Descarga de batería', damage: 3, burst: 0, noise: 4 }),
-  songFire: weapon({ id: 'songFire', name: 'Cóctel molotov', damage: 4, burst: 0, noise: 10 }),
 };
 
 // ---------------------------------------------------------------- abilities
@@ -272,12 +260,6 @@ export interface AbilityDef {
   ammo?: number;
   /** Psionic: the victim's will resists it. */
   psi?: boolean;
-  /** The Oficio: learnt in the Taller de oficios; quieter with it by the listening post (OFICIO_QUIET). */
-  song?: boolean;
-  /** The target counts as flanked: cover doesn't count (Flecha perforante). */
-  ignoreCover?: boolean;
-  /** Tile ability that moves the user there (Salto de eco, Paso de sombra). */
-  teleport?: boolean;
   /**
    * Noise radius in tiles when it isn't its weapon's (docs/FASE2.md; see
    * abilities.ts noiseOf). Heard where it lands for tile abilities, where the
@@ -303,8 +285,6 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   grenade: { id: 'grenade', name: 'Granada', description: 'Lanza una granada: daña a todos en el área, destruye cobertura y abre boquetes en las paredes. Arriba hunde el suelo donde cae, y quien esté encima cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 10, radius: 2.5, explosive: 'fragGrenade' },
   launch: { id: 'launch', name: 'Lanzagranadas', description: 'Dispara una granada más lejos y con más radio. También abre boquetes en las paredes y, arriba, hunde el suelo donde cae.', target: 'tile', ap: 1, endsTurn: true, charge: 'grenade', range: 14, radius: 3.5, explosive: 'fragGrenade' },
   missiles: { id: 'missiles', name: 'Granada del chaleco', description: 'Le estalla una granada que aún cuelga del chaleco. También abre boquetes en las paredes y, arriba, hunde el suelo.', target: 'tile', ap: 1, endsTurn: true, charge: 'missiles', range: 15, radius: 2.5, explosive: 'microMissiles' },
-  medkit: { id: 'medkit', name: 'Botiquín volante', description: 'El Grillo, el dron casero del especialista, cura 4 de salud a un aliado.', target: 'ally', ap: 1, endsTurn: false, charge: 'medkit', range: 15 },
-  aid: { id: 'aid', name: 'Cobertura del Grillo', description: 'El Grillo protege a un aliado: +20 de defensa hasta vuestro próximo turno.', target: 'ally', ap: 1, endsTurn: false, range: 15 },
   evac: { id: 'evac', name: 'Evacuar', description: 'Desde La Lata, pide salir. Si el otro jugador acepta, salen los que estén dentro y los de fuera se pierden. En la Limpieza es una retirada: la misión se pierde.', target: 'self', ap: 0, endsTurn: false },
   hack: {
     id: 'hack',
@@ -313,7 +293,6 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
     target: 'self',
     ap: 1,
     endsTurn: true,
-    range: 10,
     noise: 2,
   },
   // Lore's texts (docs/FASE8.md §B).
@@ -348,13 +327,11 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   lightningHands: { id: 'lightningHands', name: 'Manos rápidas', description: 'Un disparo rápido con la pistola.', target: 'enemy', ap: 0, endsTurn: false, cooldown: 4, weapon: 'secondary' },
   faceoff: { id: 'faceoff', name: 'Cara a cara', description: 'Un disparo de pistola a cada enemigo que veas.', target: 'self', ap: 1, endsTurn: true, cooldown: 4, weapon: 'secondary' },
   killZone: { id: 'killZone', name: 'Nadie pasa', description: 'Vigilancia que dispara a cada enemigo que se mueva a la vista, una vez a cada uno.', target: 'self', ap: 1, endsTurn: true, cooldown: 4 },
-  combatProtocol: { id: 'combatProtocol', name: 'Calambrazo', description: 'El Grillo electrocuta a un enemigo a la vista de la escuadra: 2 de daño (4 a Acorazados y alarmas). Nunca falla e ignora el blindaje.', target: 'enemy', ap: 1, endsTurn: true, charge: 'combatProtocol', range: 15, noise: 2 },
-  // Fase 9 (skills.ts): Espabilar without the Grillo's medkit, Pasar visita once a mission.
+  // Fase 9 (skills.ts): Espabilar without a medkit, Pasar visita once a mission.
   revival: { id: 'revival', name: 'Espabilar', description: 'Quita a un compañero de al lado el aturdimiento, la desorientación o el pánico. Sin botiquín.', target: 'ally', ap: 1, endsTurn: false, range: 1.5 },
   restoration: { id: 'restoration', name: 'Pasar visita', description: 'Cura 2 a cada compañero a 4 casillas o menos y les quita los estados alterados. Una vez por misión.', target: 'self', ap: 1, endsTurn: true, charge: 'restoration', range: 4 },
   elbowRoom: { id: 'elbowRoom', name: 'Hacerse sitio', description: 'Un Tajo a cada enemigo que tengas al lado.', target: 'self', ap: 1, endsTurn: true, cooldown: 3, weapon: 'melee' },
   patchUp: { id: 'patchUp', name: 'Apaños', description: 'Arregla 40 de estado del arma propia o de un compañero de al lado. Una vez por misión.', target: 'ally', ap: 1, endsTurn: false, charge: 'patchUp', range: 1.5 },
-  discharge: { id: 'discharge', name: 'Descarga de batería', description: 'El Grillo descarga en una zona: 3 de daño a todos los que estén dentro, aliados incluidos.', target: 'tile', ap: 1, endsTurn: true, cooldown: 4, range: 10, radius: 1.5, explosive: 'discharge' },
   mindspin: { id: 'mindspin', name: 'Grito', description: 'El Chillón grita: desorienta o asusta a los soldados cercanos, y todo zombi a 16 casillas lo oye y viene.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 3, range: 14, psi: true, noise: 16 },
   reanimate: { id: 'reanimate', name: 'Despertar a un muerto', description: 'El grito del Chillón despierta un cadáver, que se levanta como Zombi.', target: 'corpse', ap: 1, endsTurn: true, cooldown: 4, range: 12, psi: true, noise: 8 },
   burst: { id: 'burst', name: 'Reventón', description: 'Al morir o al llegar a un soldado revienta: 3 de daño a quien tenga al lado.', target: 'self', ap: 1, endsTurn: true, radius: 1.5, explosive: 'bloaterBurst' },
@@ -362,39 +339,10 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   smoke: { id: 'smoke', name: 'Granada de humo', description: 'Cubre una zona de humo durante 2 turnos: −20 a la puntería contra quien esté dentro.', target: 'tile', ap: 1, endsTurn: true, charge: 'smoke', range: 10, radius: 2, noise: 4 },
   flashbang: { id: 'flashbang', name: 'Granada aturdidora', description: 'Desorienta a los enemigos de la zona (−20 de puntería, sin explosivos). No hace daño.', target: 'tile', ap: 1, endsTurn: true, charge: 'flashbang', range: 10, radius: 2.5, noise: 18 },
   firstAid: { id: 'firstAid', name: 'Botiquín', description: 'Cura 4 de salud a uno mismo o a un compañero de al lado.', target: 'ally', ap: 1, endsTurn: false, charge: 'firstAid', range: 1.5 },
-  // The Oficio: learnt in the Taller de oficios. Each makes its own noise; none gives the squad away by itself.
-  aegis: { id: 'aegis', name: 'Escudo antidisturbios', description: 'Tú y los aliados contiguos ganáis +20 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 3, song: true, noise: 0 },
-  echoStep: { id: 'echoStep', name: 'Saltar por la ventana', description: 'Saltas a una casilla libre a la vista, a 6 o menos, por encima de lo que haya en medio.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 6, radius: 0, teleport: true, song: true, noise: 1 },
-  layOnHands: { id: 'layOnHands', name: 'Vendaje rápido', description: 'Cura 3 a un aliado contiguo o a ti mismo y le quita el pánico y la desorientación.', target: 'ally', ap: 1, endsTurn: false, charge: 'layOnHands', range: 1.5, song: true, noise: 0 },
-  velmarOath: { id: 'velmarOath', name: '¡Aguantad!', description: 'Durante 2 turnos, los aliados a 4 casillas no pueden entrar en pánico ni caer bajo el grito del Chillón, y tú recibes la mitad del daño.', target: 'self', ap: 1, endsTurn: false, charge: 'velmarOath', range: 4, song: true, noise: 2 },
-  bolt: { id: 'bolt', name: 'Bengala', description: 'Una bengala encendida a un enemigo a la vista: 3 de daño. Nunca falla e ignora la cobertura, pero no el blindaje.', target: 'enemy', ap: 1, endsTurn: true, cooldown: 2, range: 20, song: true, noise: 6 },
-  silence: {
-    id: 'silence',
-    name: 'Petardos',
-    description: 'Una traca a 10 casillas o menos: suena donde cae (ruido 12) y atrae a los zombis hacia allí. Los enemigos en radio 2 quedan desorientados y los Chillones no pueden gritar durante 2 turnos.',
-    target: 'tile',
-    ap: 1,
-    endsTurn: true,
-    charge: 'silence',
-    range: 10,
-    radius: 2,
-    song: true,
-    noise: 12,
-  },
-  fireball: { id: 'fireball', name: 'Cóctel molotov', description: '4 de daño en radio 2,5 y destruye la cobertura. Daña también a los tuyos.', target: 'tile', ap: 1, endsTurn: true, charge: 'fireball', range: 12, radius: 2.5, explosive: 'songFire', song: true },
-  velmarStorm: { id: 'velmarStorm', name: 'El bidón', description: 'Haces estallar un bidón de gasolina y el fuego alcanza hasta 3 enemigos a la vista: 4 de daño a cada uno. Nunca falla.', target: 'self', ap: 1, endsTurn: true, charge: 'velmarStorm', song: true, noise: 18 },
-  huntersMark: { id: 'huntersMark', name: 'Rastreo', description: 'Tus disparos al enemigo rastreado tienen +15 de puntería y +15 de crítico hasta que muera.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, range: 30, song: true, noise: 0 },
-  spectralArrow: { id: 'spectralArrow', name: 'Flecha perforante', description: 'Disparo que atraviesa la cobertura: el objetivo cuenta como flanqueado, con −10 de puntería.', target: 'enemy', ap: 1, endsTurn: false, cooldown: 3, weapon: 'primary', aim: -10, ignoreCover: true, song: true, noise: 1 },
-  shadowStep: { id: 'shadowStep', name: 'Encaramarse', description: 'Trepas o saltas a una casilla a la vista, a 8 o menos, por encima de lo que haya en medio. Si está más alta, ganas +10 de puntería este turno.', target: 'tile', ap: 1, endsTurn: false, cooldown: 4, range: 8, radius: 0, teleport: true, song: true, noise: 1 },
-  lightRain: { id: 'lightRain', name: 'Lluvia de flechas', description: 'Una flecha perforante a cada enemigo a la vista, con −15 de puntería.', target: 'self', ap: 1, endsTurn: true, charge: 'lightRain', weapon: 'primary', aim: -15, ignoreCover: true, song: true, noise: 1 },
-  counterSong: { id: 'counterSong', name: 'Sedante', description: 'Libera a un aliado del grito del Chillón, el pánico y la desorientación, y lo hace inmune al grito durante 2 turnos.', target: 'ally', ap: 1, endsTurn: false, cooldown: 3, range: 10, song: true, noise: 0 },
-  hymn: { id: 'hymn', name: 'Arenga', description: 'Los aliados a 6 casillas o menos ganan +10 de puntería y +10 de defensa hasta vuestro próximo turno.', target: 'self', ap: 1, endsTurn: false, cooldown: 4, range: 6, song: true, noise: 2 },
-  lastVerse: { id: 'lastVerse', name: 'Desfibrilador', description: 'Un soldado caído este turno vuelve en pie con 3 de salud. Si no hay ninguno, cura 4 a todos los aliados a 6 casillas.', target: 'self', ap: 1, endsTurn: true, charge: 'lastVerse', range: 6, song: true, noise: 0 },
 };
 
 /** Base chance of fixing the objective terminal (Arreglar); Investigar's bars add to it. */
 export const HACK_BASE = 55;
-export const HACK_SPECIALIST = 25;
 
 /** Mindspin: success chance is PSI_BASE − (will − 40), then the effect is rolled. */
 export const PSI_BASE = 70;
@@ -560,7 +508,7 @@ export interface UnitTemplate {
   charges: Partial<Record<ChargeId, number>>;
   squadsight: boolean;
   will: number;
-  /** Machines: immune to psionics, can't be raised, take more from Combat Protocol. */
+  /** Machines: immune to psionics, can't be raised. */
   robotic: boolean;
   /** Zombies (docs/FASE2.md): melee only, never take cover, the horde's AI (ai.ts). */
   undead: boolean;
@@ -629,7 +577,7 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
   }),
   specialist: soldier({
     id: 'specialist', name: 'Especialista', short: 'ESP', weapon: 'rifle',
-    abilities: ['shoot', 'medkit', 'aid', 'overwatch', 'grenade', 'reload', 'hunker'], charges: { grenade: 1, medkit: 2 },
+    abilities: ['shoot', 'overwatch', 'grenade', 'reload', 'hunker'], charges: { grenade: 1 },
   }),
   // The living: they take cover and shoot (ai.ts takeAlienTurn), and hear the noise.
   trooper: alien({ id: 'trooper', name: 'Saqueador', short: 'SAQ', weapon: 'trooperRifle', abilities: ['shoot', 'overwatch', 'reload', 'grenade'], charges: { grenade: 1 } }),
@@ -656,7 +604,7 @@ export const TEMPLATES: Record<TemplateId, UnitTemplate> = {
 export const SQUAD_SIZE = 6;
 
 const ATTACKS: ReadonlySet<AbilityId> = new Set<AttackAbility>([
-  'shoot', 'pistol', 'slash', 'stunLance', 'claw', 'rapidFire', 'chainShot', 'aimedShot', 'rupture', 'lightningHands', 'faceoff', 'spectralArrow', 'lightRain',
+  'shoot', 'pistol', 'slash', 'stunLance', 'claw', 'rapidFire', 'chainShot', 'aimedShot', 'rupture', 'lightningHands', 'faceoff',
 ]);
 
 /** Abilities that fire a weapon (one roll to hit per shot). */
@@ -819,12 +767,9 @@ export const ZERO_MODS: UnitMods = {
   grenadeRange: 0,
   holoAim: 0,
   suppressAim: 0,
-  protocolDamage: 0,
   hack: 0,
   psiGuard: 0,
-  singer: 0,
   slashDisorient: 0,
-  songDamage: 0,
   sight: 0,
   smokeSight: 0,
   calmAura: 0,

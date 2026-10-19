@@ -135,8 +135,6 @@ const bubbleGeometry = new THREE.SphereGeometry(0.85, 20, 14);
 const missileGeometry = new THREE.CylinderGeometry(0.04, 0.05, 0.32, 6).rotateX(Math.PI / 2);
 const beamGeometry = new THREE.CylinderGeometry(0.5, 0.5, 14, 20, 1, true);
 const pingRingGeometry = new THREE.RingGeometry(0.42, 0.55, 32).rotateX(-Math.PI / 2);
-const droneBodyGeometry = new THREE.OctahedronGeometry(0.13, 0);
-const droneRingGeometry = new THREE.TorusGeometry(0.16, 0.02, 6, 20).rotateX(Math.PI / 2);
 /** Faceted, like Synty's blasts. */
 const blastGeometry = new THREE.IcosahedronGeometry(1, 1);
 const shellGeometry = new THREE.SphereGeometry(0.09, 10, 8);
@@ -484,25 +482,6 @@ export class Fx {
     this.spawn(bubble, material, { life: 1.1, grow: 0.25, opacity: 0.35 });
   }
 
-  /** The support drone flying from one point to another along a small arc. */
-  async droneFlight(from: THREE.Vector3, to: THREE.Vector3): Promise<void> {
-    const drone = new THREE.Group();
-    drone.add(
-      new THREE.Mesh(droneBodyGeometry, new THREE.MeshStandardMaterial({ color: 0xb8c4cc, metalness: 0.6, roughness: 0.3 })),
-      new THREE.Mesh(droneRingGeometry, new THREE.MeshStandardMaterial({ color: 0x7dffb0, emissive: 0x2fd97a, emissiveIntensity: 1.6 })),
-    );
-    const light = new THREE.PointLight(0x7dffb0, 3, 3, 2);
-    drone.add(light);
-    this.group.add(drone);
-    const seconds = 0.35 + from.distanceTo(to) * 0.03;
-    await tween(seconds, (t) => {
-      drone.position.lerpVectors(from, to, t);
-      drone.position.y += Math.sin(t * Math.PI) * 0.8;
-      drone.rotation.y += 0.3;
-    });
-    this.group.remove(drone);
-  }
-
   /** A volley of small missiles converging on `targets`; resolves when the last one lands. */
   async missiles(from: THREE.Vector3, targets: THREE.Vector3[]): Promise<void> {
     const flights = targets.map(async (to, i) => {
@@ -604,33 +583,29 @@ export class Fx {
     }).then(() => this.group.remove(rock));
   }
 
-  /** Fireball (or an electric burst for the drone's discharge) with shockwave, debris and smoke. */
-  explosion(at: THREE.Vector3, radius: number, electric = false): Promise<void> {
-    const fireMat = new THREE.MeshBasicMaterial({ color: electric ? 0x8ad8ff : 0xffb050, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+  /** Fireball with shockwave, debris and smoke. */
+  explosion(at: THREE.Vector3, radius: number): Promise<void> {
+    const fireMat = new THREE.MeshBasicMaterial({ color: 0xffb050, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
     const fire = new THREE.Mesh(blastGeometry, fireMat);
     fire.position.copy(at).setY(at.y + 0.45);
     fire.rotation.set(rand(0, 6), rand(0, 6), 0);
-    const light = new THREE.PointLight(electric ? 0x5ac8ff : 0xff8a30, 45, radius * 6, 2);
+    const light = new THREE.PointLight(0xff8a30, 45, radius * 6, 2);
     light.position.copy(at).setY(at.y + 1.35);
     this.group.add(fire, light);
-    const shock = this.decal(at, 'shockRing', electric ? 0xbfefff : 0xffd9a0, radius * 0.6, 0.6, 0.8, 4.5);
+    const shock = this.decal(at, 'shockRing', 0xffd9a0, radius * 0.6, 0.6, 0.8, 4.5);
     (shock.material as THREE.MeshBasicMaterial).blending = THREE.AdditiveBlending;
-    this.flash(at.clone().setY(at.y + 0.6), electric ? 0xbfefff : 0xffe0a0, radius * 1.2, 0, 0.18);
+    this.flash(at.clone().setY(at.y + 0.6), 0xffe0a0, radius * 1.2, 0, 0.18);
 
-    if (electric) {
-      for (let i = 0; i < 3; i++) this.sparks(at.clone().add(new THREE.Vector3((Math.random() - 0.5) * radius, 0.6, (Math.random() - 0.5) * radius)), 0x8ad8ff, 10);
-    } else {
-      for (let i = 0; i < 14; i++) this.debrisPiece(at, i % 3 === 0 ? 0x5a4a3a : 0x2c2f33, 5 + Math.random() * 4);
-      // The scorch left behind, and smoke rolling up out of the fire.
-      this.decal(at, 'groundCrack', 0x1a1714, radius * 1.3, 7, 0.9);
-      this.flames(at, 8, radius * 0.4, { size: 0.6, life: 0.6 });
-      void wait(0.15).then(() => this.puffs(at, 0x3b3936, 8, { size: 0.55, spread: radius * 0.5, rise: 1, out: 0.6, life: 2.2, grow: 1.4 }));
-    }
+    for (let i = 0; i < 14; i++) this.debrisPiece(at, i % 3 === 0 ? 0x5a4a3a : 0x2c2f33, 5 + Math.random() * 4);
+    // The scorch left behind, and smoke rolling up out of the fire.
+    this.decal(at, 'groundCrack', 0x1a1714, radius * 1.3, 7, 0.9);
+    this.flames(at, 8, radius * 0.4, { size: 0.6, life: 0.6 });
+    void wait(0.15).then(() => this.puffs(at, 0x3b3936, 8, { size: 0.55, spread: radius * 0.5, rise: 1, out: 0.6, life: 2.2, grow: 1.4 }));
 
     return tween(0.6, (t) => {
       fire.scale.setScalar(0.3 + radius * Math.sqrt(t));
       fireMat.opacity = 0.95 * (1 - t);
-      if (!electric) fireMat.color.setHSL(0.08 - t * 0.06, 1, 0.6 - t * 0.3);
+      fireMat.color.setHSL(0.08 - t * 0.06, 1, 0.6 - t * 0.3);
       light.intensity = 45 * (1 - t);
     }).then(() => {
       this.group.remove(fire, light);

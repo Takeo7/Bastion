@@ -114,16 +114,6 @@ describe('reactions', () => {
 
 describe('support', () => {
 
-  it('Threat Assessment: Aid Protocol also puts the ally on overwatch', () => {
-    const s = field();
-    squad(s, 's1', 'specialist', 2, 2, ['threatAssessment']);
-    const ally = addUnit(s, 's2', 'sharpshooter', 4, 2, { ap: 0 });
-    addUnit(s, 'a1', 'trooper', 19, 19);
-    run(s, use('s1', 'aid', { target: 's2' }));
-    expect(ally.aided).toBeGreaterThan(0);
-    expect(ally.overwatch).toBe(true);
-  });
-
   it('Pasar visita heals and cleanses everyone within 4, once a mission (Fase 9)', () => {
     const s = field();
     const medic = squad(s, 's1', 'specialist', 2, 2, ['restoration'], { charges: { restoration: 1 } });
@@ -264,7 +254,7 @@ describe('equipment in the field', () => {
 
   it('a flashbang disorients the enemies caught in it, without damage', () => {
     const s = field();
-    squad(s, 's1', 'specialist', 2, 2, [], { gear: ['flashbang'], charges: { grenade: 1, medkit: 2, flashbang: 1 } });
+    squad(s, 's1', 'specialist', 2, 2, [], { gear: ['flashbang'], charges: { grenade: 1, flashbang: 1 } });
     const a = addUnit(s, 'a1', 'trooper', 9, 2);
     const mec = addUnit(s, 'a2', 'mec', 9, 3);
     run(s, use('s1', 'flashbang', { tile: { x: 9, y: 2 } }));
@@ -280,6 +270,14 @@ describe('equipment in the field', () => {
     addUnit(s, 'a1', 'trooper', 19, 19);
     run(s, use('s1', 'firstAid', { target: 's2' }));
     expect(hurt.hp).toBe(5);
+
+    // Entre los dos (board.ts): 2 more on the other player's soldiers.
+    const b = field();
+    squad(b, 's1', 'assault', 2, 2, ['bridge'], { gear: ['firstAid'], charges: { grenade: 1, firstAid: 1 } });
+    const theirs = addUnit(b, 's2', 'sharpshooter', 3, 2, { hp: 1, maxHp: 10, owner: 1 });
+    addUnit(b, 'a1', 'trooper', 19, 19);
+    run(b, use('s1', 'firstAid', { target: 's2' }));
+    expect(theirs.hp).toBe(7);
 
     const t = field();
     const gunner = addUnit(t, 'g1', 'specialist', 2, 2, { mods: { ...addUnit(t, 'tmp', 'specialist', 0, 0).mods, pierce: 1 } });

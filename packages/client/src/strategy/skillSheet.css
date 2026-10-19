@@ -135,11 +135,6 @@
   color: #d9dcd6;
 }
 
-/* A talent kept, on the sheet: its skill's colour on its edge. */
-.x-chip.sk-chip {
-  box-shadow: inset 3px 0 0 var(--cc);
-}
-
 /* The tree's panel: the board under the title, nothing beside it. */
 .strat-modal .x-panel.wide.service.sm-host {
   position: relative;

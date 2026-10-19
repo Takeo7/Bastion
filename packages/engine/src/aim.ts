@@ -68,9 +68,6 @@ export interface ShotOptions {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** Rastreo (huntersMark): aim and crit the marker gets against its prey. */
-const HUNTERS_MARK = 15;
-
 /** Bad luck (XCOM 2's aim assist): aim per miss in a row by a player's soldiers, counting up to two. */
 export const BAD_LUCK_AIM = 10;
 export const BAD_LUCK_MISSES = 2;
@@ -126,8 +123,7 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
   if (!origin) return null;
 
   const dist = distance(origin, target.pos);
-  // Flecha espectral goes through cover: the target counts as flanked.
-  const cover = weapon.melee || def.ignoreCover ? 0 : coverAgainst(s, target.pos, origin);
+  const cover = weapon.melee ? 0 : coverAgainst(s, target.pos, origin);
   const flanked = !weapon.melee && cover === 0;
 
   const sm = shooter.mods;
@@ -148,9 +144,6 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
     mods.push({ label: 'Suprimido', value: -(SUPPRESSED_AIM + (by?.mods.suppressAim ?? 0)) });
   }
   if (target.marked && shooter.team !== target.team) mods.push({ label: 'Marcado', value: target.marked });
-  const hunted = target.huntedBy === shooter.id;
-  if (hunted) mods.push({ label: 'Rastreo', value: HUNTERS_MARK });
-  if (shooter.blessed) mods.push({ label: 'Arenga', value: shooter.blessed });
   const luck = badLuckAim(s, shooter);
   if (luck) mods.push({ label: 'Mala racha', value: luck });
   if (!weapon.melee) {
@@ -202,7 +195,6 @@ export function previewShot(s: GameState, shooter: Unit, target: Unit, opts: Sho
     if (weapon.crit) critMods.push({ label: 'Arma', value: weapon.crit });
     if (close && sm.closeRangeCrit) critMods.push({ label: 'Quemarropa', value: sm.closeRangeCrit });
     if (flanked && st.flankCrit) critMods.push({ label: 'Flanqueo', value: st.flankCrit });
-    if (hunted) critMods.push({ label: 'Rastreo', value: HUNTERS_MARK });
     if (squadsight) critMods.push({ label: 'Visión de escuadra', value: SQUADSIGHT_CRIT_MOD });
   }
   const crit = clamp(critMods.reduce((sum, m) => sum + m.value, 0), 0, 100);
@@ -261,30 +253,28 @@ export function damageRange(weapon: WeaponDef, result: Exclude<ShotResult, 'miss
 }
 
 /**
- * What a hit of `raw` does to `u`: Juramento de Velmar halves it, Ruptura
- * adds to it, then armour (less what the attack pierces) soaks up to its value.
+ * What a hit of `raw` does to `u`: Ruptura adds to it, then armour (less what
+ * the attack pierces) soaks up to its value.
  */
 export function damageTaken(u: Unit, raw: number, pierce = 0): { total: number; mitigated: number } {
-  const total = ((u.oath ?? 0) > 0 ? Math.ceil(raw / 2) : raw) + u.ruptured;
+  const total = raw + u.ruptured;
   return { total, mitigated: Math.min(Math.max(0, u.armor - pierce), total) };
 }
 
 /**
  * What an attack would take off, for the players to decide with: the health a
- * hit, a critical and a graze remove (after the target's armour, Ruptura and
- * Juramento; with no target, the weapon's own numbers), and the armour.
+ * hit, a critical and a graze remove (after the target's armour and Ruptura;
+ * with no target, the weapon's own numbers), and the armour.
  */
 export interface DamagePreview {
   hit: DamageRange;
-  /** Null for what never crits or grazes (explosives, songs, the Grillo). */
+  /** Null for what never crits or grazes (explosives). */
   crit: DamageRange | null;
   graze: DamageRange | null;
   /** Armour that soaks each hit, after what the attack pierces (0 without a target). */
   armor: number;
   /** Armour each hit strips. */
   shred: number;
-  /** Goes straight through armour (Protocolo de combate). */
-  ignoresArmor: boolean;
 }
 
 /** `range` as it lands on `target` (unchanged without one). */
@@ -298,7 +288,7 @@ export function rangeOn(target: Unit | undefined, range: DamageRange, pierce = 0
 }
 
 /**
- * Damage of an attack (shots, blades, Cara a cara, Lluvia de luz): `shot`
+ * Damage of an attack (shots, blades, Cara a cara): `shot`
  * gives the flank and the distance it is fired from; without it, as from the
  * front and out of point-blank range, which is what the cards show.
  */
@@ -312,7 +302,6 @@ export function shotDamage(shooter: Unit, ability: AttackAbility, target?: Unit,
     graze: roll('graze'),
     armor: target ? Math.max(0, target.armor - dm.pierce) : 0,
     shred: dm.shred,
-    ignoresArmor: false,
   };
 }
 

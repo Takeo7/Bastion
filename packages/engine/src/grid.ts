@@ -230,18 +230,14 @@ export function roofSide(s: GameState, x: number, y: number, h: number): 'under'
 }
 
 /**
- * On a map with storeys (docs/FASE6-PLAN.md), whether what stands on a tile
- * stops a line crossing it at height `h`: the ground and its object, as
- * sightTop, and on each storey what stands on its slab, from the slab up — a
- * wall or a closed door the whole storey, a window nothing (a hole on its
- * floor). The slabs, floors and ceilings, are lineClear's: a line can only
- * cross one between two tiles. `storeys` plays no part.
+ * On a map with storeys (docs/FASE6-PLAN.md), whether what stands on tile `i`
+ * (on the map: lineClear's walk) stops a line crossing it at height `h`: the
+ * ground and its object, as sightTop, and on each storey what stands on its
+ * slab, from the slab up — a wall or a closed door the whole storey, a window
+ * nothing (a hole on its floor). The slabs, floors and ceilings, are
+ * lineClear's: a line can only cross one between two tiles. `storeys` plays
+ * no part.
  */
-export function opaqueAt(s: GameState, x: number, y: number, h: number): boolean {
-  return !inBounds(s, x, y) || opaqueAtIndex(s, tileIndex(s, x, y), h);
-}
-
-/** opaqueAt by tile index, for a tile on the map (lineClear's walk, where it counts). */
 export function opaqueAtIndex(s: GameState, i: number, h: number): boolean {
   if ((s.elev[i] ?? 0) + OBSTACLE_HEIGHT[s.tiles[i]!] > h + 1e-6) return true;
   const k = Math.floor(h + 1e-6);
@@ -255,10 +251,6 @@ export function obstacleHeight(kind: TileKind): number {
   return OBSTACLE_HEIGHT[kind];
 }
 
-/** Legacy flat check: whether the object on a tile blocks sight at ground level. */
-export function blocksSight(kind: TileKind): boolean {
-  return OBSTACLE_HEIGHT[kind] >= 0.75;
-}
 
 /** Cover offered by the tile `side` to a unit standing at elevation `standElev`. */
 export function coverFrom(s: GameState, standElev: number, side: Vec2): CoverLevel {
@@ -319,10 +311,6 @@ export function unitAt(s: GameState, p: Place): Unit | undefined {
 
 export function getUnit(s: GameState, id: string): Unit | undefined {
   return s.units.find((u) => u.id === id);
-}
-
-export function aliveUnits(s: GameState, team?: Unit['team']): Unit[] {
-  return s.units.filter((u) => u.alive && (team === undefined || u.team === team));
 }
 
 /** Living enemies that fight: the relay and captive VIPs don't count. */

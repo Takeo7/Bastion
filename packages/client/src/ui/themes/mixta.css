@@ -41,8 +41,6 @@
   --t-good: #8fd05a;
   --t-warn: #f5a524;
   --t-danger: #f0503c;
-  /* The Oficio is a trade: brass. */
-  --t-song: #d9a464;
   --t-hunt: #e0b04a;
 
   --t-panel: rgba(27, 30, 32, 0.96);
@@ -104,13 +102,6 @@
   --m-hazard-red: url('/ui/synty/hud/hazard-red.webp');
   --m-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  /* Each class's colour (the skill tree, class tags). Neither player's violet nor orange, nor the hazard yellow. */
-  --cls-assault: #ec644e;
-  --cls-grenadier: #b7c64a;
-  --cls-sharpshooter: #5aa9ec;
-  --cls-specialist: #4fcaa3;
-  --cls-rookie: #c8ccc4;
-
   /* The packs' silhouettes used across the screens (masks, coloured by the text). */
   --mi-supplies: url('/ui/synty/icons/mh-crate.webp');
   --mi-medicines: url('/ui/synty/icons/mh-medkit.webp');
@@ -130,7 +121,7 @@
 /* ============================================================== materials */
 
 /* The big plates: steel with its rivets, never the pack's torn chalk frame. */
-:root[data-ui='mixta'] :is(.strat-left, .strat-right, .strat-ticker, .strat-center-top, .strat-center-bottom) > .x-panel,
+:root[data-ui='mixta'] :is(.strat-left, .strat-right, .strat-center-top, .strat-center-bottom) > .x-panel,
 :root[data-ui='mixta'] :is(.menu-column, .menu-squad, .modal-card, .game-menu-card, .outcome-card, .unit-panel, .shot-panel, .radio, .mission-intro, .strat-modal .x-panel, .menu-modal .x-panel) {
   background: var(--m-rivets), var(--t-sheet);
   box-shadow: var(--t-sheet-shadow);
@@ -141,7 +132,7 @@
 
 /* The big plates in a steel frame of the packs (playtest 15/10 #5; Military Combat HUD, mh/frame-a, made grey
    so its teal doesn't fight the yellow), cut in nine and drawn outside the plate, so nothing moves. */
-:root[data-ui='mixta'] :is(.strat-left, .strat-right, .strat-ticker, .strat-center-top, .strat-center-bottom) > .x-panel,
+:root[data-ui='mixta'] :is(.strat-left, .strat-right, .strat-center-top, .strat-center-bottom) > .x-panel,
 :root[data-ui='mixta'] :is(.menu-column, .menu-squad, .modal-card, .game-menu-card, .outcome-card, .unit-panel, .shot-panel, .mission-intro, .strat-modal .x-panel, .menu-modal .x-panel) {
   border-image: url('/ui/synty/mh/frame-a.webp') 34 / 15px / 8px stretch;
 }
@@ -253,7 +244,7 @@
 
 /* What to press next: a hazard-yellow plate, cut at the ends like the packs' buttons. Also a pop-up's
    only button and the big ones («Lanzar misión», «Continuar»). */
-:root[data-ui='mixta'] :is(.x-btn.primary, .x-btn.big:not(.danger, .ready), .alert-actions > .x-btn:only-child:not(.danger, .ready), .hud button.fire, .scan-btn:not(.secondary):not(.ready)) {
+:root[data-ui='mixta'] :is(.x-btn.primary, .x-btn.big:not(.danger, .ready), .alert-actions > .x-btn:only-child:not(.danger, .ready), .hud button.fire) {
   clip-path: polygon(var(--t-cut) 0, 100% 0, calc(100% - var(--t-cut)) 100%, 0 100%);
   padding-left: 18px;
   padding-right: 18px;
@@ -269,14 +260,14 @@
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
-:root[data-ui='mixta'] :is(.x-btn.primary, .x-btn.big:not(.danger, .ready), .alert-actions > .x-btn:only-child:not(.danger, .ready), .hud button.fire, .scan-btn:not(.secondary):not(.ready)):hover:not(:disabled) {
+:root[data-ui='mixta'] :is(.x-btn.primary, .x-btn.big:not(.danger, .ready), .alert-actions > .x-btn:only-child:not(.danger, .ready), .hud button.fire):hover:not(:disabled) {
   background: var(--t-primary-hover);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.7),
     inset 0 -3px 0 rgba(122, 82, 0, 0.45);
 }
 
-:root[data-ui='mixta'] :is(.x-btn.primary, .x-btn.big:not(.danger, .ready), .alert-actions > .x-btn:only-child:not(.danger, .ready), .hud button.fire, .scan-btn:not(.secondary):not(.ready)):active:not(:disabled) {
+:root[data-ui='mixta'] :is(.x-btn.primary, .x-btn.big:not(.danger, .ready), .alert-actions > .x-btn:only-child:not(.danger, .ready), .hud button.fire):active:not(:disabled) {
   box-shadow: inset 0 2px 3px rgba(80, 52, 0, 0.55);
 }
 
@@ -438,26 +429,6 @@
 }
 
 /* ================================================================ classes */
-
-:root[data-ui='mixta'] .cls-assault {
-  --cls-c: var(--cls-assault);
-}
-
-:root[data-ui='mixta'] .cls-grenadier {
-  --cls-c: var(--cls-grenadier);
-}
-
-:root[data-ui='mixta'] .cls-sharpshooter {
-  --cls-c: var(--cls-sharpshooter);
-}
-
-:root[data-ui='mixta'] .cls-specialist {
-  --cls-c: var(--cls-specialist);
-}
-
-:root[data-ui='mixta'] .cls-rookie {
-  --cls-c: var(--cls-rookie);
-}
 
 /* The class tag: its letters in the class's colour, its emblem on a small dark plate. */
 :root[data-ui='mixta'] .cls {

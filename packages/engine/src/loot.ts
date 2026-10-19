@@ -269,11 +269,6 @@ export function searchableTiles(s: GameState, u: Unit): Pos[] {
   return DIRS8.map((d) => ({ x: u.pos.x + d.x, y: u.pos.y + d.y, z: u.pos.z })).filter((p) => searchable(s, p) && reachesToSearch(s, u.pos, p));
 }
 
-/** Room left in the backpack. */
-export function backpackRoom(u: Unit, slots: number): number {
-  return slots - (u.backpack?.length ?? 0);
-}
-
 // --------------------------------------------------------------- the haul
 
 export interface LootTotals {

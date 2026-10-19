@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allyTargets, blastTiles, canHackFrom, inSilence, inSmoke } from '../src/abilities';
+import { allyTargets, blastTiles, canHackFrom } from '../src/abilities';
 import { previewShot } from '../src/aim';
 import { coverAgainst, coverSides } from '../src/cover';
 import { decorCode, decorOf } from '../src/decor';
@@ -35,7 +35,7 @@ import { MAPS, parseMap } from '../src/maps';
 import { buildPath, COST_CLIMB, COST_DIAG, COST_DROP, COST_ORTHO, COST_VAULT, computeReach, destinations, stepBetween, stepCost, stepsFrom } from '../src/path';
 import { campaignCommandSchema, commandSchema } from '../src/protocol';
 import { Rng } from '../src/rng';
-import { duet, executeCommand, Sim } from '../src/rules';
+import { executeCommand, Sim } from '../src/rules';
 import { roomAt, searchSpot } from '../src/loot';
 import { TEMPLATES } from '../src/content';
 import { createMission, makeUnit, normalizeMission } from '../src/setup';
@@ -693,36 +693,18 @@ describe('noise and blasts by floor', () => {
     expect(tiles.every((p) => p.z === 0)).toBe(true);
   });
 
-  it('smoke and Silencio stay on their floor', () => {
-    const s = building();
-    s.smoke = [{ pos: at(4, 3, 1), radius: 2, turns: 2 }];
-    s.silences = [{ pos: at(4, 3, 1), radius: 2, turns: 2 }];
-    expect(inSmoke(s, at(5, 3, 1))).toBe(true);
-    expect(inSmoke(s, at(5, 3))).toBe(false);
-    expect(inSilence(s, at(5, 3, 1))).toBe(true);
-    expect(inSilence(s, { x: 5, y: 3 })).toBe(false);
-  });
-
-  it('by hand only beside you on your floor: first aid, the terminal, a partner singing; the Grillo flies anywhere in range', () => {
+  it('by hand only beside you on your floor: first aid, the terminal', () => {
     const s = building();
     const medic = addUnit(s, 's1', 'assault', 4, 3, { z: 1, gear: ['firstAid'], charges: { firstAid: 1 } });
     const hurtBelow = addUnit(s, 's2', 'assault', 5, 3, { hp: 2 });
     const hurtBeside = addUnit(s, 's3', 'assault', 5, 4, { z: 1, hp: 2 });
     expect(allyTargets(s, medic, 'firstAid')).toEqual([hurtBeside]);
     expect(hurtBelow.pos).toEqual(at(5, 3));
-    const grillo = addUnit(s, 's4', 'specialist', 12, 3, { charges: { medkit: 2 } });
-    expect(allyTargets(s, grillo, 'medkit')).toEqual(expect.arrayContaining([hurtBelow, hurtBeside]));
     // The terminal: from beside it, on its floor.
     s.mission.terminal = at(3, 4);
     s.tiles[tileIndex(s, 3, 4)] = 'console';
     expect(canHackFrom(s, medic, at(3, 3, 1))).toBe(false);
     expect(canHackFrom(s, medic, at(3, 3))).toBe(true);
-    // «A dos voces»: the partner's singer beside you, not on the floor below.
-    const singer = addUnit(s, 's5', 'assault', 4, 4, { owner: 1 });
-    singer.mods = { ...singer.mods, singer: 1 };
-    expect(duet(s, medic)).toBe(0);
-    singer.pos = at(4, 4, 1);
-    expect(duet(s, medic)).toBe(1);
   });
 });
 

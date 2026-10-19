@@ -69,8 +69,6 @@ interface UnitView {
   /** True while an animation owns the position; sync() leaves it alone. */
   animating: boolean;
   dead: boolean;
-  /** The support drone is away on a mission. */
-  droneAway: boolean;
   /** Casts a shadow (off for the dead, and for the far end of a big crowd). */
   shadow: boolean;
   /** Flag contents from the unit's state, and the hover line above them. */
@@ -260,7 +258,7 @@ export class UnitViews {
     this.group.add(rig.root);
 
     const view: UnitView = {
-      id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, droneAway: false, shadow: true, body: '', tag: '',
+      id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, shadow: true, body: '', tag: '',
       place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, guard: false,
     };
     this.views.set(u.id, view);
@@ -397,10 +395,6 @@ export class UnitViews {
       u.suppressedBy ? '<em class="stun">SUPRIMIDO</em>' : '',
       u.marked ? '<em class="aid">MARCADO</em>' : '',
       u.ruptured ? '<em class="stun">VULNERABLE</em>' : '',
-      u.oath ? '<em class="song">JURAMENTO</em>' : '',
-      u.ward ? '<em class="song">GUARDA</em>' : '',
-      u.blessed ? '<em class="song">HIMNO</em>' : '',
-      u.huntedBy ? '<em class="hunt">PRESA</em>' : '',
       carrier ? `<em class="data">${this.itemTag}</em>` : '',
       u.captive ? '<em class="data">CAUTIVO</em>' : '',
       u.objective ? '<em class="stun">OBJETIVO</em>' : '',
@@ -443,33 +437,11 @@ export class UnitViews {
     return this.worldPos(id).add(new THREE.Vector3(0, v?.rig.chest ?? 1.0, 0));
   }
 
-  dronePos(id: string): THREE.Vector3 {
-    const v = this.views.get(id);
-    if (!v?.rig.drone) return this.chestPos(id).add(new THREE.Vector3(0, 0.8, 0));
-    v.rig.root.updateMatrixWorld(true);
-    return v.rig.drone.getWorldPosition(new THREE.Vector3());
-  }
-
-  setDroneAway(id: string, away: boolean): void {
-    const v = this.views.get(id);
-    if (!v?.rig.drone) return;
-    v.droneAway = away;
-    v.rig.drone.visible = !away;
-  }
-
   muzzlePos(id: string): THREE.Vector3 {
     const v = this.views.get(id);
     if (!v) return new THREE.Vector3();
     v.rig.root.updateMatrixWorld(true);
     return v.rig.muzzle.getWorldPosition(new THREE.Vector3());
-  }
-
-  /** Hides a unit for a moment (a song taking it apart and putting it back elsewhere). */
-  setHidden(id: string, hidden: boolean): void {
-    const v = this.views.get(id);
-    if (!v) return;
-    v.animating = hidden;
-    v.rig.root.visible = !hidden;
   }
 
   forceVisible(id: string): void {
@@ -586,12 +558,6 @@ export class UnitViews {
       p.aim += (p.aimTarget - p.aim) * k;
       p.yaw += wrapAngle(p.yawTarget - p.yaw) * (1 - Math.exp(-dt * p.turn));
       this.apply(v, time);
-      if (v.rig.drone && !v.droneAway) {
-        const d = v.rig.drone;
-        d.userData.baseY ??= d.position.y;
-        d.position.y = d.userData.baseY + Math.sin(time * 2.4 + p.phase) * 0.07;
-        v.rig.drone.rotation.y += dt * 1.6;
-      }
     }
   }
 
@@ -947,21 +913,6 @@ export class UnitViews {
       if (o instanceof THREE.Mesh) o.castShadow = false;
     });
     v.shadow = false;
-    v.animating = false;
-  }
-
-  /** Último verso: the fallen soldier gets back on its feet. */
-  async rise(id: string): Promise<void> {
-    const v = this.views.get(id);
-    if (!v || !v.dead) return;
-    v.animating = true;
-    // Its death played backwards, a little quicker; or the topple undone.
-    const clip = v.fell?.seconds ?? 0;
-    await tween(Math.max(0.6, clip * 0.7), (t) => {
-      v.pose.fall = clip ? 1 - t : 1 - t * (2 - t);
-      v.pose.flash = 0.5 * (1 - t);
-    });
-    this.standUp(v);
     v.animating = false;
   }
 

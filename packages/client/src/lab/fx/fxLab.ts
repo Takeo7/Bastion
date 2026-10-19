@@ -4,13 +4,12 @@ import type { FigurePose, FigureRig } from '../../game/figures';
 import { Fx } from '../../game/fx';
 import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
 import { Renderer } from '../../game/renderer';
-import { SONG, SongFx, SongMarks } from '../../game/songFx';
 import { wait } from '../../game/tween';
 
-// Effects lab (/efectos.html): every combat effect (fx.ts) and every trade of
-// the Oficio (songFx.ts) on a survivor and three zombies, in the game's light.
-// The buttons play one; `#molotov` plays it on load, `__fx.play('bengala')`
-// from a script and `__fx.sheet(name, [[effect, ms], …])` saves a contact sheet.
+// Effects lab (/efectos.html): every combat effect (fx.ts) on a survivor and
+// three zombies, in the game's light. The buttons play one; `#granada` plays
+// it on load, `__fx.play('granada')` from a script and
+// `__fx.sheet(name, [[effect, ms], …])` saves a contact sheet.
 
 // A preview that isn't on screen gets no animation frames, counts as hidden (tweens skip to their end)
 // and has its timers throttled. `?virtual` runs the page on a clock of its own instead: time only moves
@@ -47,9 +46,7 @@ const container = document.getElementById('fx')!;
 const renderer = new Renderer(container);
 const scene = renderer.scene;
 const fx = new Fx();
-const song = new SongFx();
-const marks = new SongMarks();
-scene.add(fx.group, song.group, marks.group);
+scene.add(fx.group);
 
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 30).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x77705f, roughness: 0.95 }));
 ground.position.set(10, 0, 10);
@@ -97,31 +94,6 @@ const EFFECTS: Record<string, () => Promise<unknown> | void> = {
   escombros: () => fx.debris(new THREE.Vector3(10, 0.6, 10), 0x8f6c45, 8),
   polvo: () => fx.dust(me, 9),
   botiquín: () => fx.heal(chest(ally)),
-  bengala: () => song.bolt(hands, chest(them[0]!)),
-  molotov: () => song.fireball(hands, them[1]!, 2.5),
-  bidón: () => song.storm(them.map(chest)),
-  flecha: () => song.arrow(hands, chest(them[1]!)),
-  lluvia: () => song.arrows(hands, them.map(chest)),
-  petardos: async () => {
-    const at = new THREE.Vector3(13.2, 0, 10.8);
-    await song.dome(at, 2);
-    marks.setSilences([{ at, radius: 2 }]);
-  },
-  vendaje: () => song.heal(ally),
-  desfibrilador: () => song.revive(ally),
-  sedante: () => song.cleanse(ally),
-  rastreo: () => song.mark(chest(them[0]!)),
-  escudo: () => song.aura(me, 1.5, [me, ally], SONG.cyan),
-  arenga: () => song.aura(me, 6, [me, ally], SONG.green),
-  aguantad: () => {
-    song.aura(me, 4, [me], SONG.gold);
-    marks.setOaths([me]);
-  },
-  saltar: async () => {
-    await song.vanish(me);
-    await wait(0.3);
-    await song.appear(me);
-  },
   grito: async () => {
     const mouth = chest(them[0]!).add(new THREE.Vector3(0, 0.45, 0));
     fx.scream(mouth);
@@ -132,12 +104,7 @@ const EFFECTS: Record<string, () => Promise<unknown> | void> = {
     await fx.psiBeam(chest(them[0]!).add(new THREE.Vector3(0, 0.45, 0)), corpse.clone().setY(0.5));
     fx.evacBeam(corpse);
   },
-  limpiar: () => {
-    marks.setSilences([]);
-    marks.setOaths([]);
-    fx.clear();
-    song.clear();
-  },
+  limpiar: () => fx.clear(),
 };
 
 const bar = document.getElementById('fx-buttons')!;
@@ -156,7 +123,6 @@ renderer.onFrame((dt) => {
   clock += dt;
   for (const a of actors) a.rig.applyPose(a.pose, clock);
   fx.tick(dt);
-  song.tick(dt);
 });
 
 function play(name: string): Promise<unknown> | void {
@@ -191,6 +157,6 @@ async function sheet(name: string, shots: [string, number][]): Promise<void> {
   await fetch(`/__snap?name=${name}`, { method: 'POST', body: out.toDataURL('image/jpeg', 0.85) });
 }
 
-(window as unknown as { __fx: unknown }).__fx = { play, sheet, advance, renderer, fx, song, marks };
+(window as unknown as { __fx: unknown }).__fx = { play, sheet, advance, renderer, fx };
 const first = decodeURIComponent(location.hash.slice(1));
 if (first) void wait(2).then(() => play(first));

@@ -270,7 +270,7 @@ describe('what a soldier does in a mission is counted by the events', () => {
       { t: 'cured', unit: 's2', by: 's1' },
       { t: 'searched', unit: 's2', tile: { x: 2, y: 2, z: 0 }, loot: null },
       { t: 'roomSearched', unit: 's2', room: 1, loot: null },
-      { t: 'hacked', unit: 's2', success: true, chance: 60, remote: false },
+      { t: 'hacked', unit: 's2', success: true, chance: 60 },
       shot('s1', 'r1', 'shoot', 'hit'),
       { t: 'died', unit: 'r1', by: 's1' },
       { t: 'hunker', unit: 's2' },

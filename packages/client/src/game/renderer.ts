@@ -214,6 +214,7 @@ export class Renderer {
   onQualityLowered?: () => void;
   private effects: GraphicsSettings['effects'] = 'high';
   private readonly unsubscribe: () => void;
+  private readonly resizeObserver = new ResizeObserver(() => this.resize());
   /**
    * The shadow map is drawn only when something in it changes (240 fps budget:
    * it was a second drawing of the whole map every frame). What moves and casts
@@ -248,7 +249,7 @@ export class Renderer {
     this.post = postChain(this.gl, this.scene, this.camera);
     this.setMood(MOODS.day);
 
-    new ResizeObserver(() => this.resize()).observe(container);
+    this.resizeObserver.observe(container);
     this.unsubscribe = onGraphics((g) => this.applyGraphics(g));
     this.gl.setAnimationLoop(() => this.frame());
   }
@@ -281,9 +282,12 @@ export class Renderer {
 
   dispose(): void {
     this.unsubscribe();
+    this.resizeObserver.disconnect();
     this.gl.setAnimationLoop(null);
     this.post.composer.dispose();
     this.gl.dispose();
+    // dispose() leaves the WebGL context alive until the page goes: one per mission, and Chrome keeps about 16.
+    this.gl.forceContextLoss();
   }
 
   /** Day or night (the reference block's night test; missions are by day). */

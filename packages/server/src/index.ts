@@ -1,12 +1,12 @@
 import { X509Certificate } from 'node:crypto';
 import { createSocket } from 'node:dgram';
-import { appendFileSync, createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, createReadStream, existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import type { Socket } from 'node:net';
 import type { TLSSocket } from 'node:tls';
 import { hostname, networkInterfaces } from 'node:os';
-import { dirname, extname, join, normalize, resolve } from 'node:path';
+import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { announce } from './lan';
 import { SaveStore } from './persistence';
@@ -47,8 +47,14 @@ const MIME: Record<string, string> = {
 /** Debug only (`--snapshots <dir>`): the client's `__bastion.snap()` posts frames here. */
 const SNAPSHOT_DIR = arg('snapshots');
 
+/** Past this, red.log starts again and the old one stays as red.anterior.log: a few days of play each. */
+const NET_LOG_MAX = 8 * 1024 * 1024;
+let netLogLines = 0;
+
 function netLog(line: string): void {
   try {
+    // Two players send a line every 10 s: checked now and then, not on every line.
+    if (netLogLines++ % 500 === 0 && existsSync(NET_LOG) && statSync(NET_LOG).size > NET_LOG_MAX) renameSync(NET_LOG, NET_LOG.replace(/\.log$/, '.anterior.log'));
     appendFileSync(NET_LOG, `${new Date().toISOString()} ${line}\n`);
   } catch {
     /* the log helps, it never stops the game */
@@ -121,7 +127,7 @@ function handle(req: IncomingMessage, res: ServerResponse): void {
   }
   const url = new URL(req.url ?? '/', 'http://localhost');
   const requested = normalize(join(CLIENT_DIST, decodeURIComponent(url.pathname)));
-  let file = requested.startsWith(CLIENT_DIST) ? requested : CLIENT_DIST;
+  let file = requested === CLIENT_DIST || requested.startsWith(CLIENT_DIST + sep) ? requested : CLIENT_DIST;
   if (!existsSync(file) || statSync(file).isDirectory()) {
     // A missing model or script is an error, not the page: a loader fed the page's HTML fails in odd ways.
     if (extname(url.pathname)) {
@@ -147,7 +153,26 @@ function handle(req: IncomingMessage, res: ServerResponse): void {
     'cache-control': fresh ? 'public, max-age=31536000, immutable' : 'no-cache',
     'last-modified': modified.toUTCString(),
   });
-  createReadStream(file).pipe(res);
+  // A file gone mid-request (a build while serving) closes that request, not the server.
+  createReadStream(file)
+    .on('error', () => res.destroy())
+    .pipe(res);
+}
+
+/**
+ * Anyone on the network can ask anything: a request the handler trips on (an address that
+ * doesn't decode, `/%E0%A4%A`) gets a 400 and a line in red.log, and the game goes on.
+ */
+function guarded(serve: (req: IncomingMessage, res: ServerResponse) => unknown): (req: IncomingMessage, res: ServerResponse) => void {
+  return (req, res) => {
+    try {
+      serve(req, res);
+    } catch (err) {
+      netLog(`[http] ${peer(req.socket)} ${req.method} ${req.url}: ${(err as Error).message}`);
+      if (!res.headersSent) res.writeHead(400);
+      res.end();
+    }
+  };
 }
 
 /**
@@ -197,8 +222,8 @@ function hostAddresses(main: string | null): HostAddress[] {
 
 const hosts = hostAddresses(await outbound());
 const tls: Tls | null = HTTPS_PORT ? certificate(join(dirname(SAVE_PATH), 'tls'), hosts.map((h) => h.address)) : null;
-const http = createServer((req, res) => toHttps(req, res) || handle(req, res));
-const https = tls ? createHttpsServer(tls, handle) : null;
+const http = createServer(guarded((req, res) => toHttps(req, res) || handle(req, res)));
+const https = tls ? createHttpsServer(tls, guarded(handle)) : null;
 // A browser that turns the certificate down (the warning page, or Safari refusing it for the WebSocket) ends
 // here. By then its TLS socket has forgotten the address: it is noted when the TCP connection arrives.
 const tcpPeers = new WeakMap<Socket, string>();

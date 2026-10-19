@@ -2,7 +2,7 @@ import { defaultAppearance } from './appearance';
 import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, REACTION_PENALTY, RECOVERY_TURNS, SIEGE, SOLDIER_NAMES, SPARE_MAGS, SQUAD_SIZE, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
 import { ground, toPos } from './grid';
 import { lightTiles } from './los';
-import { baseLayout, PIECES, type BaseState } from './base';
+import { armedTiles, baseLayout, PIECES, type BaseState } from './base';
 import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import { STORY } from './lore';
@@ -503,9 +503,11 @@ export function createMission(opts: MissionOptions): GameState {
   if (opts.squad) {
     // Posted defenders where they were put (#58: on free ground); the rest, at the spawns left over.
     const at = (p: Vec2) => p.y * layout.width + p.x;
+    // A post a turret, a trap or the wire was built on since goes back to the spawns.
+    const held = opts.map.kind === 'base' ? armedTiles(opts.map.base) : new Set<number>();
     const posted = opts.squad.map((m) => {
       const p = m.campaignId ? opts.posts?.[m.campaignId] : undefined;
-      return p && layout.tiles[at(p)] === 'floor' ? p : undefined;
+      return p && layout.tiles[at(p)] === 'floor' && !held.has(at(p)) ? p : undefined;
     });
     const taken = new Set(posted.filter((p): p is Vec2 => !!p).map(at));
     const spare = layout.spawns.filter((p) => !taken.has(at(p)));
@@ -733,7 +735,6 @@ export function normalizeMission(s: GameState): GameState {
   if (m.terminal) fix(m.terminal);
   for (const r of m.reinforcements) if (r.pos) fix(r.pos);
   for (const c of s.smoke) fix(c.pos);
-  for (const z of s.silences ?? []) fix(z.pos);
   for (const l of s.lights ?? []) fix(l.tile);
   repairStairAccess(s);
   return s;

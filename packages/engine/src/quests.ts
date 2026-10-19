@@ -8,7 +8,7 @@
  */
 import type { MissionReward, RegionId } from './campaign';
 import type { TechId } from './progression';
-import type { Biome, ClassId, ItemId, MissionKind, TemplateId } from './types';
+import type { Biome, ItemId, MissionKind, TemplateId } from './types';
 
 export type QuestId = 'faces' | 'ibarra' | 'amara' | 'bells' | 'numbers' | 'route50' | 'hands' | 'mole' | 'mine' | 'sunken';
 
@@ -85,8 +85,6 @@ export interface QuestOutcome {
   text: string;
   tone: 'good' | 'bad';
   credits?: number;
-  /** Bastion experience. */
-  xp?: number;
   /** Change of the doom track: negative sets it back. */
   doom?: number;
   items?: Partial<Record<ItemId, number>>;
@@ -97,7 +95,7 @@ export interface QuestOutcome {
   /** Technology granted before its level. */
   tech?: TechId;
   /** Someone joins the Bastion (owned by the quest's commander, if it has one). */
-  recruit?: { name?: string; cls?: ClassId; rank?: number; trait?: TraitId };
+  recruit?: { name?: string; rank?: number; trait?: TraitId };
   /** Left on the quest's soldier. */
   trait?: TraitId;
   /** One more of these in the first group of every operation in the region. */
@@ -227,7 +225,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      captured: { text: 'Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.', tone: 'good', recruit: { name: 'Vera Lindqvist', cls: 'sharpshooter', rank: 3, trait: 'scarred' } },
+      captured: { text: 'Lindqvist duerme en el Bastión, poco y con la luz encendida. Nadie le habla si no hace falta. Sabe mandar.', tone: 'good', recruit: { name: 'Vera Lindqvist', rank: 3, trait: 'scarred' } },
       killed: { text: 'Lindqvist está muerta. Su alijo pasa al Bastión (+150 suministros).', tone: 'good', credits: 150 },
       failure: { text: 'Lindqvist ha escapado. Volverá a aparecer.', tone: 'bad', retry: 25 },
     },
@@ -485,7 +483,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       },
     ],
     outcomes: {
-      success: { text: 'La mina queda en silencio. El Sindicato nos cede a quien mejor maneja los explosivos y dos cargas de dinamita (+2 granadas).', tone: 'good', recruit: { cls: 'grenadier' }, items: { fragGrenade: 2 } },
+      success: { text: 'La mina queda en silencio. El Sindicato nos cede a quien mejor maneja los explosivos y dos cargas de dinamita (+2 granadas).', tone: 'good', recruit: {}, items: { fragGrenade: 2 } },
       sealed: { text: 'El Sindicato sella la mina. Nadie sabe cuántos quedaron dentro.', tone: 'bad' },
       failure: { text: 'Los mineros abandonan Carvik (−10 suministros en cada convoy).', tone: 'bad', income: -10 },
     },

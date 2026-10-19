@@ -533,6 +533,8 @@ export class Stage {
     window.removeEventListener('pointerup', this.onUp);
     this.post.composer.dispose();
     this.gl.dispose();
+    // dispose() leaves the WebGL context alive until the page goes: one per visit to the base.
+    this.gl.forceContextLoss();
     this.element.remove();
   }
 }

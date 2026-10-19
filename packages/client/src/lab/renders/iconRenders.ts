@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import { fxShape } from '../../game/fx';
-import { molotov } from '../../game/songFx';
 import { loadModel } from '../../game/synty';
 import { UI_MODELS, type BaseModelId, type PackId, type WeaponId } from '../../game/syntyManifest';
 import { KitBatch, kitMesh, kitModel, loadBaseKit, loadKitModels } from '../../strategy/baseKit';
@@ -82,31 +80,9 @@ async function painted(subject: THREE.Object3D): Promise<void> {
   }
 }
 
-/** The molotov, a little tilted, its rag well alight. */
-async function molotovIcon(): Promise<THREE.Object3D> {
-  fxShape('flame');
-  await Promise.all([loadModel('apocalypse', 'fx', 'molotov'), loadModel('particleFx', 'fx', 'flame')]);
-  const g = molotov();
-  // Two more licks round the rag's flame, yellow at the heart.
-  const rag = g.children[g.children.length - 1]!;
-  const lick = (color: number, k: number, dx: number, dy: number, s: number, tilt: number) => {
-    const flame = new THREE.Mesh(fxShape('flame'), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(k) }));
-    flame.position.copy(rag.position).add(new THREE.Vector3(dx, dy, 0));
-    flame.rotation.z = tilt;
-    flame.scale.setScalar(s);
-    g.add(flame);
-  };
-  rag.scale.setScalar(0.1);
-  lick(0xff6a10, 1.3, 0.016, -0.03, 0.07, -0.4);
-  lick(0xffd050, 1.2, -0.004, -0.035, 0.055, 0.15);
-  g.rotation.z = -0.22;
-  return g;
-}
-
 /**
- * La Mula, as the hangar builds it (strategy/bastion.ts, buildBus): POLYGON
- * Town's bus with steel plates over its windows, slits in the windscreen and
- * plates on the roof. Copied here so the base's file stays as it is.
+ * La Mula, as the old hangar built it: POLYGON Town's bus with steel plates
+ * over its windows, slits in the windscreen and plates on the roof.
  */
 async function mulaIcon(): Promise<THREE.Object3D> {
   await loadBaseKit();
@@ -232,7 +208,6 @@ const prop = (pack: PackId, id: string) => async (): Promise<THREE.Object3D> => 
  * 128 wide, as tall as it comes; `light`: brighter than the rest by so much.
  */
 const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.Vector3; masks?: boolean; trim?: boolean; light?: number }> = {
-  molotov: { make: molotovIcon, view: new THREE.Vector3(0.9, 0.35, 1.3) },
   // More nose than side: chunkier, so it still reads at 128 px.
   mula: { make: mulaIcon, view: new THREE.Vector3(0.95, 0.6, 1.45) },
   // A pure profile, both wheels showing, like the pack's weapon icons: what reads at 26 px.

@@ -6,7 +6,6 @@ import {
   craftBlocker,
   createCampaign,
   executeCampaignCommand,
-  setBastionLevel,
   migrateCampaign,
   squadMember,
   type CampaignCommand,
@@ -16,12 +15,12 @@ import { attackWeapon, clipOf, hasSquadsight, PISTOL_CLIP } from '../src/content
 import { weaponProfile } from '../src/aim';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { beltedBack } from '../src/loot';
-import { CRAFTS, LEVEL_XP, spareMags } from '../src/progression';
+import { CRAFTS, spareMags } from '../src/progression';
 import { Rng } from '../src/rng';
 import { executeCommand } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { Arms, GameState, Pod, Slot, Unit } from '../src/types';
-import { addUnit, raise, stateFrom } from './helpers';
+import { addUnit, levelTo, raise, stateFrom } from './helpers';
 
 // The weapons from zero (docs/FASE8.md §A): the class no longer brings a weapon.
 
@@ -126,7 +125,7 @@ describe('the weapons from zero', () => {
     c.crafted.push('makeRifle');
     expect(craftBlocker(c, 'makeRifle')).toBeNull();
     expect(craftBlocker(c, 'ammo1')).toBe('Ya está hecho.');
-    setBastionLevel(c, 3, new Rng(1));
+    levelTo(c, 3, new Rng(1));
     expect((c.foundWeapons ?? []).map((w) => w.kind).sort()).toEqual(['assaultRifle', 'machete', 'precisionRifle', 'pumpShotgun']);
   });
 

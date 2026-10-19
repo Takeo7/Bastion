@@ -70,10 +70,10 @@ describe('hack', () => {
     return s;
   }
 
-  it('only next to the terminal, or within the drone range for a specialist', () => {
+  it('only next to the terminal', () => {
     const s = hackField();
     addUnit(s, 's1', 'assault', 0, 0);
-    addUnit(s, 's2', 'specialist', 5, 12);
+    addUnit(s, 's2', 'assault', 5, 6);
     addUnit(s, 'a1', 'trooper', 19, 0);
     expect(executeCommand(s, { type: 'ability', unit: 's1', ability: 'hack' }, ctx()).ok).toBe(false);
     expect(executeCommand(s, { type: 'ability', unit: 's2', ability: 'hack' }, ctx()).ok).toBe(true);

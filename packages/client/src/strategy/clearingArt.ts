@@ -12,9 +12,20 @@ import { buildUnit, IDLE_POSE, isFigure, type UnitRig } from '../game/models';
 import { STOREY } from '../game/coords';
 import { atlasTexture, loadModel } from '../game/synty';
 import { tween } from '../game/tween';
-import type { LineupEntry } from './bastion';
 import type { ClearingArt } from './clearing';
 import { skyTexture, type Shot, type StageMood } from './stage';
+
+/** A soldier standing by La Lata (the squad, the debrief) or at its post for a siege. */
+export interface LineupEntry {
+  template: TemplateId;
+  color: string;
+  appearance?: Appearance;
+  gear?: Gear;
+  /** Debrief pose: wounded soldiers slump, the fallen leave a memorial. */
+  status?: 'ok' | 'wounded' | 'dead';
+  /** Picks the same Synty survivor everywhere for this soldier (their campaign id). */
+  seed?: string;
+}
 
 // The base's clearing drawn (docs/FASE12.md §11.7) for UI's ClearingSet: the
 // battle's own map (MapView) over the clearing as its siege would have it

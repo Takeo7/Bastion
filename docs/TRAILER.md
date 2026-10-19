@@ -39,6 +39,8 @@ Los textos de pantalla son de Lore (15/10): cortos, secos y que se lean en dos s
 | 7 | 0:56–1:06 | El clímax: la horda llega a la zona de evacuación; uno pide evacuar, el otro acepta, y La Lata arranca. Uno se queda fuera. | «Quien se queda fuera, se pierde.» |
 | 8 | 1:06–1:15 | El logo de BASTIÓN entra con su animación; debajo, el lema y «Próximamente». | «BASTIÓN» · «Supervivencia táctica para dos» · «Próximamente» |
 
+El plano 3 se rodaba en la base de antes (`strategy/bastion.ts`), que ya no existe: la toma `lab/trailer/shots/atalaya.ts` se quitó con ella el 19/10 ([REVISION-2026-10-19.md](REVISION-2026-10-19.md)). Si se retoma el tráiler, el plano hay que hacerlo de nuevo con el claro (Fase 12).
+
 Los planos del montaje (5), unos dos segundos cada uno:
 - la escuadra en vigilancia en un tejado y un disparo de reacción;
 - el machete (Tajo) contra un zombi que se cae de verdad;

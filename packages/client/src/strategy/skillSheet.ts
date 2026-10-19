@@ -185,6 +185,12 @@ export function barLines(squad: Pick<ReportSoldier, 'name' | 'status' | 'bars'>[
 
 /** Each soldier's board, kept while the screen redraws (its camera, its wave, the cell on its card). */
 const boards = new Map<string, HexBoard>();
+/**
+ * The `onUnlock` of the panel drawn last for each soldier. The board keeps the
+ * one it was built with, so a board first opened from the battle sheet (which
+ * buys nothing) bought nothing at the base until the app restarted (18/10, #38, #48).
+ */
+const unlocks = new Map<string, (cell: CellId) => void>();
 
 export interface TreePanelContext {
   s: SkillsOf;
@@ -206,8 +212,9 @@ export interface TreePanelContext {
  */
 export function treePanel(ctx: TreePanelContext): HTMLElement {
   const { s } = ctx;
+  unlocks.set(s.id, ctx.onUnlock);
   let board = boards.get(s.id);
-  if (!board) boards.set(s.id, (board = new HexBoard((cell) => ctx.onUnlock(cell))));
+  if (!board) boards.set(s.id, (board = new HexBoard((cell) => unlocks.get(s.id)?.(cell))));
   board.update({ skills: s.skills, board: s.board, editable: ctx.editable, owner: ctx.owner, describe: (id) => BOARD_ABOUT[id] });
   const points = pointsLeft(s.skills, s.board);
   const rank = veterancyRank(s.board.length);

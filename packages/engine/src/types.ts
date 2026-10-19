@@ -263,8 +263,6 @@ export type AbilityId =
   | 'grenade'
   | 'launch'
   | 'missiles'
-  | 'medkit'
-  | 'aid'
   | 'evac'
   | 'hack'
   /** Opening a special loot box beside the soldier (docs/FASE8.md §B; before, any furniture or car). */
@@ -284,10 +282,8 @@ export type AbilityId =
   | 'lightningHands'
   | 'faceoff'
   | 'killZone'
-  | 'combatProtocol'
   | 'revival'
   | 'restoration'
-  | 'discharge'
   // Fase 9's talents (skills.ts).
   /** Hacerse sitio: a Slash at every enemy alongside. */
   | 'elbowRoom'
@@ -309,23 +305,7 @@ export type AbilityId =
   // Granted by equipment.
   | 'smoke'
   | 'flashbang'
-  | 'firstAid'
-  // Velmar's Canto (the Cámara de Ecos): songs, `song: true` in ABILITIES.
-  | 'aegis'
-  | 'echoStep'
-  | 'layOnHands'
-  | 'velmarOath'
-  | 'bolt'
-  | 'silence'
-  | 'fireball'
-  | 'velmarStorm'
-  | 'huntersMark'
-  | 'spectralArrow'
-  | 'shadowStep'
-  | 'lightRain'
-  | 'counterSong'
-  | 'hymn'
-  | 'lastVerse';
+  | 'firstAid';
 
 /** Abilities that roll to hit against a single unit. */
 export type AttackAbility =
@@ -339,30 +319,18 @@ export type AttackAbility =
   | 'aimedShot'
   | 'rupture'
   | 'lightningHands'
-  | 'faceoff'
-  | 'spectralArrow'
-  | 'lightRain';
+  | 'faceoff';
 
 /** Area abilities thrown or fired at a tile. */
-export type BlastAbility = 'grenade' | 'launch' | 'missiles' | 'discharge' | 'smoke' | 'flashbang' | 'echoStep' | 'shadowStep' | 'silence' | 'fireball' | 'burst';
+export type BlastAbility = 'grenade' | 'launch' | 'missiles' | 'smoke' | 'flashbang' | 'burst';
 
 /** Limited-use items. */
 export type ChargeId =
   | 'grenade'
-  | 'medkit'
   | 'missiles'
-  | 'combatProtocol'
   | 'smoke'
   | 'flashbang'
   | 'firstAid'
-  // Songs with uses: named after their ability.
-  | 'layOnHands'
-  | 'velmarOath'
-  | 'silence'
-  | 'fireball'
-  | 'velmarStorm'
-  | 'lightRain'
-  | 'lastVerse'
   // Fase 9's talents with uses per mission (skills.ts).
   | 'restoration'
   | 'patchUp';
@@ -440,10 +408,10 @@ export type ShotResult = 'miss' | 'graze' | 'hit' | 'crit';
 /**
  * Why the squad lost its concealment (the client explains it): an alien saw a
  * soldier walk into its detection range (`spotted`) or a patrol walked up to
- * one (`patrol`); a soldier attacked, set off an explosive or sang; a failed
- * hack raised the alarm; reinforcements landed.
+ * one (`patrol`); a soldier attacked or set off an explosive; a failed hack
+ * raised the alarm; reinforcements landed.
  */
-export type ConcealReason = 'spotted' | 'patrol' | 'attack' | 'explosive' | 'song' | 'alarm' | 'reinforcements';
+export type ConcealReason = 'spotted' | 'patrol' | 'attack' | 'explosive' | 'alarm' | 'reinforcements';
 
 /**
  * Why a pod came alive: a soldier came into its sight (`sighted`), it ran into
@@ -466,140 +434,48 @@ export type EndReason = 'objective' | 'wiped' | 'timer' | 'abandoned' | 'objecti
  */
 export type MissionKind = 'elimination' | 'recovery' | 'sabotage' | 'hack' | 'rescue' | 'scavenge';
 
-/** Talents of the Rosa (classes.ts TALENTS); the first ten of each class are the original perks. */
+/**
+ * Behaviours the rules know by name: a soldier gets them from the cells of its
+ * hex board (board.ts `perk`), and the active ones bring their ability
+ * (board.ts PERK_ABILITY).
+ */
 export type PerkId =
-  // Fase 9's own talents (skills.ts SKILL_TALENTS; the rest it takes over from the old tree).
+  // Shooting.
+  | 'aimedShot'
+  | 'rapidFire'
+  | 'chainShot'
+  | 'guardCrit'
+  | 'deathFromAbove'
+  | 'lightningHands'
+  | 'serenity'
+  | 'coveringFire'
+  | 'killZone'
+  | 'faceoff'
+  | 'rupture'
+  | 'suppression'
+  | 'holoTargeting'
+  // Melee.
   | 'elbowRoom'
-  | 'goodArm'
-  | 'quiet'
-  | 'patchUp'
-  // Fase 10's (board.ts).
+  | 'implacable'
+  | 'bladeMaster'
   /** Muro de acero: melee overwatch strikes every enemy that comes alongside, once each. */
   | 'bladeWall'
   /** Segundo aliento: a melee kill heals 1. */
   | 'secondWind'
-  // Centre: open to every soldier
-  | 'drill'
-  | 'fitness'
-  | 'coolHead'
-  | 'spareGrenade'
-  // Canto (Velmar), one branch per class
-  | 'songBlade'
-  | 'aegis'
-  | 'echoStep'
-  | 'layOnHands'
-  | 'velmarOath'
-  | 'bolt'
-  | 'silence'
-  | 'fireball'
-  | 'highFlame'
-  | 'velmarStorm'
-  | 'huntersMark'
-  | 'spectralArrow'
-  | 'shadowStep'
-  | 'windEyes'
-  | 'lightRain'
-  | 'calmSong'
-  | 'counterSong'
-  | 'hymn'
-  | 'lightHands'
-  | 'lastVerse'
-  // Assault
-  | 'pointBlank'
-  | 'keenBlade'
-  | 'shadowstep'
-  | 'runner'
-  | 'runAndGun'
-  | 'implacable'
-  | 'rapidFire'
-  | 'toughSkin'
-  | 'bladeMaster'
-  | 'hunter'
-  | 'steadyHand'
-  | 'bladeCrit'
-  | 'instinct'
-  | 'slug'
-  | 'sideBySide'
-  | 'buckshot'
-  | 'relentless'
-  | 'closeKill'
-  | 'light'
-  | 'feline'
-  | 'evasion'
-  | 'scoutEye'
-  | 'untouchable'
-  // Grenadier
-  | 'demolition'
-  | 'heavyFire'
-  | 'shredder'
-  | 'bigBore'
-  | 'suppression'
-  | 'holoTargeting'
+  // Throwing.
   | 'salvo'
-  | 'armoured'
-  | 'chainShot'
-  | 'rupture'
-  | 'bandolier'
-  | 'shrapnel'
-  | 'longArm'
+  | 'goodArm'
   | 'safeBlast'
-  | 'blastWave'
-  | 'steadyCannon'
-  | 'apCannon'
-  | 'heavyCrit'
-  | 'tripod'
-  | 'marker'
-  | 'bulwark'
-  | 'suppressor'
-  | 'ironNerves'
-  | 'dugIn'
-  // Sharpshooter
-  | 'deadeye'
-  | 'gunslinger'
-  | 'longWatch'
-  | 'quickdraw'
-  | 'aimedShot'
-  | 'lightningHands'
-  | 'deathFromAbove'
-  | 'hawkEye'
-  | 'faceoff'
-  | 'killZone'
-  | 'farsight'
-  | 'caliber'
-  | 'armorRounds'
-  | 'serenity'
-  | 'magnum'
-  | 'dancer'
-  | 'holster'
-  | 'fineTrigger'
-  | 'patience'
-  | 'nest'
-  | 'crossfire'
-  | 'post'
-  | 'coldBlood'
-  | 'guardCrit'
-  // Specialist
-  | 'fieldMedic'
-  | 'guardian'
-  | 'coveringFire'
-  | 'combatProtocol'
-  | 'threatAssessment'
+  // Medicine.
   | 'revivalProtocol'
-  | 'slippery'
-  | 'marksman'
-  | 'restoration'
-  | 'capacitorDischarge'
-  | 'bigKit'
-  | 'vocation'
-  | 'surgeon'
-  | 'overcharge'
-  | 'battery'
-  | 'intrusion'
-  | 'tunedRifle'
   | 'bridge'
-  | 'calm'
-  | 'mutualCover'
-  | 'instructor';
+  | 'lightHands'
+  | 'restoration'
+  // Searching.
+  | 'patchUp'
+  // Fitness.
+  | 'runAndGun'
+  | 'shadowstep';
 
 /**
  * Bonuses baked into a unit when a mission starts (rank, perks and the
@@ -661,22 +537,16 @@ export interface UnitMods {
   holoAim: number;
   /** Extra aim this unit's Suppression takes away. */
   suppressAim: number;
-  protocolDamage: number;
   hack: number;
-  /** Against the Chillón's scream: 1 = never panics, 2 = immune (Temple 10, «Nervios de acero»). */
+  /** Against the Chillón's scream: 1 = never panics («Nervios de acero»), 2 = immune («Serenidad»). */
   psiGuard: number;
-  // Velmar's Canto (filled in by soldierStats from the Canto talents).
-  /** Knows some song (1/0): for «A dos voces». */
-  singer: number;
-  /** Hoja cantada level 2: the Slash disorients on a hit. */
+  /** Golpe al oído (board.ts): the Slash disorients on a hit. */
   slashDisorient: number;
-  /** Llama alta: extra damage of Saeta, Bola de fuego and Tormenta. */
-  songDamage: number;
   /** Ojos del viento: extra tiles of sight. */
   sight: number;
   /** Ojos del viento: smoke doesn't shield targets from this unit (1/0). */
   smokeSight: number;
-  /** Canto de calma level: +10 will per level to allies within 4 tiles. */
+  /** Voz tranquila and the like (board.ts): +10 will per level to allies within 4 tiles. */
   calmAura: number;
   // Fase 9 (skills.ts).
   /** Tiro: aim with firearms (the pistol too), not with the blade. */
@@ -792,17 +662,6 @@ export interface Unit {
   refunded: boolean;
   /** Equipment carried (grants abilities such as smoke grenades). */
   gear: ItemId[];
-  // Velmar's Canto (absent until a song touches the unit).
-  /** Juramento de Velmar: turns left (allies around can't panic or be controlled; half damage). */
-  oath?: number;
-  /** Contracanto: turns of immunity to the Cantor's songs. */
-  ward?: number;
-  /** Himno and Paso de sombra: extra aim until the unit's team's next turn. */
-  blessed?: number;
-  /** Marca del cazador: the shooter whose shots get +15 aim and crit against this unit. */
-  huntedBy?: string | null;
-  /** Turn it fell on (Último verso brings back those who fell this turn). */
-  fellTurn?: number;
   /** Enemies: where the last noise it heard came from (docs/FASE2.md); it goes to look while it sees nobody. */
   heard?: Pos | null;
   /** Soldiers: what they found searching (BACKPACK_SLOTS at most). It counts if they get out or stand at a victory. */
@@ -815,14 +674,6 @@ export interface Unit {
   risenFrom?: string;
   /** Bitten and infected (docs/FASE3.md): no effect in combat, but if it falls it rises, and back at base it turns. */
   infected?: boolean;
-}
-
-/** Silencio: inside, the Cantores can't sing. */
-export interface SilenceZone {
-  pos: Pos;
-  radius: number;
-  /** XCOM turns it still lasts. */
-  turns: number;
 }
 
 /**
@@ -1087,10 +938,6 @@ export interface GameState {
   smoke: SmokeCloud[];
   /** La Lata's vehicle (Arturo, 18/10 #45): 0 todoterreno, 1 furgoneta, 2 camión, 3 autobús; absent, the bus. What comes to take the squad out. */
   vehicle?: number;
-  /** Silencio zones (missing in missions saved before the Canto). */
-  silences?: SilenceZone[];
-  /** The Taller de oficios is next to the listening post: the Oficio makes less noise (OFICIO_QUIET). */
-  quietSongs?: boolean;
   /** Under snow (playtest 16/10): still winter in the campaign. Missing, only the opening chapter is. */
   snow?: boolean;
   /** Tiles already searched, by node (grid.ts nodeOf; on the ground, y * width + x); missing before searching existed. */

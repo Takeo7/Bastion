@@ -404,9 +404,7 @@ export class Hud {
     this.passBtn.append(h('span', {}, 'CEDER EL MANDO'), h('small', {}, 'C'));
     this.watchBtn.addEventListener('click', () => handlers.onWatchPartner());
     // A menu of the bar closes with a press anywhere else.
-    document.addEventListener('pointerdown', (e) => {
-      if (this.barMenu && !(e.target as Element | null)?.closest?.('.ability-slot')) this.closeAbilityMenu();
-    });
+    document.addEventListener('pointerdown', this.onPressAnywhere);
     this.watchBtn.append(this.watchWho, h('small', {}, 'F'));
     this.followBtn.addEventListener('click', () => {
       this.followTurn = !this.followTurn;
@@ -685,7 +683,6 @@ export class Hud {
         // And with the blade, for a soldier (playtest 17/10).
         soldier ? stat('melee', `Puntería cuerpo a cuerpo ${t.aim + u.mods.aim + u.mods.meleeAim}`, h('b', {}, String(t.aim + u.mods.aim + u.mods.meleeAim))) : null,
         u.charges.grenade !== undefined ? stat('grenade', `Granadas: ${u.charges.grenade}`, h('b', {}, `×${u.charges.grenade}`)) : null,
-        u.charges.medkit !== undefined ? stat('medkit', `Botiquín: ${u.charges.medkit}`, h('b', {}, `×${u.charges.medkit}`)) : null,
         u.armor ? stat('armor', `Blindaje ${u.armor}`, h('b', {}, String(u.armor))) : null,
         // A vest found and put on out there (playtest 16/10): its health is already in the pips.
         ...(u.worn ?? []).map((item) => stat('worn', `Lleva puesto: ${ITEMS[item].name} (${ITEMS[item].description.replace(/\.$/, '')})`, h('b', {}, `+${ITEMS[item].hp ?? 0}`))),
@@ -1567,7 +1564,13 @@ export class Hud {
     this.connection.classList.toggle('show', status !== 'open');
   }
 
+  private readonly onPressAnywhere = (e: PointerEvent): void => {
+    if (this.barMenu && !(e.target as Element | null)?.closest?.('.ability-slot')) this.closeAbilityMenu();
+  };
+
   destroy(): void {
+    // The listener held the HUD, and through its handlers the whole game, after each mission.
+    document.removeEventListener('pointerdown', this.onPressAnywhere);
     this.root.remove();
   }
 }

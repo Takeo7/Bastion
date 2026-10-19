@@ -8,10 +8,8 @@ import {
   BIOME_NAMES,
   BITE_TAG,
   BUILD_IDS,
-  buildable,
   BUILDS,
   canAfford,
-  clearAim,
   contactAim,
   craftAim,
   CRAFTS,
@@ -43,7 +41,6 @@ import {
   epilogue,
   eventDef,
   eventOptionAvailable,
-  ADJACENCY,
   beds,
   bedsFree,
   facilityLevel,
@@ -51,23 +48,6 @@ import {
   healRate,
   listeningDelay,
   rangeAim,
-  upgradable,
-  upgradeCost,
-  workDays,
-  workCrews,
-  xpMultiplier,
-  clearCost,
-  clearable,
-  neighbours,
-  adjacencyAt,
-  adjacencyBonuses,
-  buildingName,
-  plotById,
-  plotRing,
-  TERRAINS,
-  type BasePlot,
-  type BuildingId,
-  type FacilityId,
   EXPEDIENTE,
   FACILITIES,
   facilityCount,
@@ -79,7 +59,6 @@ import {
   ITEMS,
   itemsFree,
   itemUnlocked,
-  LEVEL_XP,
   levelUnlocks,
   MAX_LEVEL,
   soldierCap,
@@ -108,7 +87,6 @@ import {
   Rng,
   shopPrice,
   soldierArms,
-  plotName,
   soldierReady,
   canSpendPoints,
   PREMISE,
@@ -196,16 +174,13 @@ import { append, clear, h } from '../ui/dom';
 import { arrowIcon } from '../ui/icons';
 import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from '../ui/quit';
 import { graphicsSettings, soundSettings } from '../ui/settingsPanel';
-import { BastionSet, LAUNCH_SECONDS, type FixedRoom, type LineupEntry } from './bastion';
 import { GeoscapeSet, shownOffers } from './geoscape';
 import { ClearingSet, footprint, type BaseCursor, type ClearingArt, type ClearingTool } from './clearing';
-import { ClearingArtView } from './clearingArt';
+import { ClearingArtView, type LineupEntry } from './clearingArt';
 import { fellBlockerFor, LINE_PIECES, lineBlockerFor, lineLine, palette, pieceCard, placeBlockerFor, placeLine } from './buildMode';
 import { Stage, type Shot } from './stage';
-import type { Vector3 } from 'three';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
-import { plotIcon } from './plotIcons';
 import { carriedProfile, kindOf, loadoutEl, modPanel, placeOf, profileOf, weaponCare, weaponDiff, weaponIcon, weaponMarks, weaponPick, weaponStats, type WeaponPickContext } from './arms';
 import { soldierPortrait } from './portraits';
 import { barLines, learnedTags, roleDot, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
@@ -296,16 +271,6 @@ const NAV: { view: BaseView; label: string }[] = [
   { view: 'facilities', label: 'Construir' },
 ];
 
-/** Room of the Bastion each screen happens in (for the partner marker and the camera). */
-const ROOM_OF: Partial<Record<BaseView, FixedRoom | 'hangar'>> = {
-  geoscape: 'command',
-  research: 'research',
-  engineering: 'engineering',
-  barracks: 'barracks',
-  squad: 'hangar',
-  debrief: 'hangar',
-};
-
 const VIEW_NAMES: Record<BaseView, string> = {
   hub: 'Campaña',
   geoscape: 'El valle',
@@ -313,47 +278,13 @@ const VIEW_NAMES: Record<BaseView, string> = {
   engineering: 'Armería',
   barracks: 'Soldados',
   facilities: 'Construir',
-  squad: 'Cochera',
+  squad: 'Escuadra',
   debrief: 'Informe',
 };
 
-/** "la parcela C2" → "La parcela C2". */
+/** «la Marea» → «La Marea». */
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/** The bunker's own buildings: shown in 3D, not in the list of plots. */
-const FIXED_NAMES_SET: Record<string, true> = { command: true, barracks: true, research: true, engineering: true };
-
-/** Whether `facility` stands wall to wall with its partner building. */
-function hasBonus(c: CampaignState, facility: FacilityId): boolean {
-  return adjacencyBonuses(c).some((b) => b.def.facility === facility);
-}
-
-/** «el Cuartel», «la Armería»: a building's name with its article. */
-function withArticle(id: BuildingId): string {
-  const name = buildingName(id);
-  return /^(Armería|Enfermería|Sala|Estación|Brigada|Cámara|Caravana)\b/.test(name) ? `la ${name}` : `el ${name}`;
-}
-
-/** «junto al Cuartel», «junto a la Armería». */
-function nextTo(id: BuildingId): string {
-  return `junto ${withArticle(id).replace(/^el /, 'al ').replace(/^la /, 'a la ')}`;
-}
-
-const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
-/** The facilities by what they are for, in the build list (playtest: «mucha lista seguida, mucho que leer»). */
-const BUILD_GROUPS: [string, FacilityId[]][] = [
-  ['Soldados', ['quarters', 'infirmary', 'garden', 'training', 'range', 'memorial']],
-  ['Equipo y obras', ['workshop', 'garage', 'crew']],
-  ['Información', ['relay', 'listening', 'simulation']],
-  ['El Oficio', ['echoes']],
-];
-
-/** "C2": the plot's column letter and row number, as on a map. */
-function plotCode(p: BasePlot): string {
-  return `${'ABCDEFG'[p.x] ?? '?'}${p.y + 1}`;
 }
 
 function loadSeenReport(): string {
@@ -382,7 +313,6 @@ function proposalTimer(mine: boolean): HTMLElement | null {
 export class StrategyScreen {
   private readonly root = h('div.strat');
   private readonly stage = new Stage();
-  private readonly bastion: BastionSet;
   private readonly geo: GeoscapeSet;
   /** The base in the clearing (docs/FASE12.md §11.7): Campaña and Construir look at it. */
   private readonly clearing: ClearingSet;
@@ -430,10 +360,6 @@ export class StrategyScreen {
   private soldier: string | null = null;
   /** The barracks customizer's draft; saved only when the player confirms. */
   private custom: { soldier: string; name: string; nickname: string; appearance: Appearance } | null = null;
-  /** The plot picked in the facilities view ("x,y"). */
-  private plot: string | null = null;
-  /** The plot under the pointer, in 3D or in the grid. */
-  private plotHovered: string | null = null;
   /** The Árbol de habilidades is open on the soldier's sheet (skillSheet.ts keeps its draft). */
   private promoting = false;
   /** Open equipment picker ("soldierId:slot"). */
@@ -452,8 +378,6 @@ export class StrategyScreen {
 
   constructor(container: HTMLElement, private readonly mySlot: Slot, private readonly handlers: StrategyHandlers) {
     this.radio = new Transmissions(() => ({ saludo: greeting(this.commanderNames()), yo: greeting([this.playerName(mySlot)]) }), mySlot);
-    this.bastion = new BastionSet((hot) => this.pickRoom(hot));
-    this.bastion.onHover = (hot) => this.onPlotHover(hot);
     this.geo = new GeoscapeSet((region) => {
       this.region = region;
       this.offer = (this.state ? shownOffers(this.state) : []).find((o) => o.region === region)?.id ?? null;
@@ -494,7 +418,6 @@ export class StrategyScreen {
       post: (soldier, x, y) => this.post(soldier, { x, y }),
       pickPost: (soldier) => this.pickPost(soldier),
     });
-    this.stage.add('bastion', this.bastion);
     this.stage.add('geo', this.geo);
     this.stage.add('clearing', this.clearing);
     this.root.append(this.stage.element, this.viewEl, this.top, this.topTip, this.proposalEl, this.nav, this.modal, this.radio.element, this.toastEl);
@@ -564,7 +487,6 @@ export class StrategyScreen {
     if (c.proposal && c.proposal.by === this.mySlot && prev?.proposal?.text !== c.proposal.text && proposalCost(c, c.proposal.action)) {
       this.toast(`Propuesto a ${this.partner()?.name ?? 'el otro jugador'}: se paga cuando diga que sí.`);
     }
-    this.bastion.setBase(c);
     if (this.clearingSnow !== wintry(c)) {
       this.clearingSnow = wintry(c);
       this.clearing.setArt((this.clearingArt = new ClearingArtView(this.clearingSnow)));
@@ -655,11 +577,9 @@ export class StrategyScreen {
       return;
     }
     if (!art) {
-      // No clearing yet (no state): the hangar's take-off of before.
-      void this.stage.show('bastion', this.bastion.takeoff());
-      const gone = this.bastion.launch();
-      window.setTimeout(() => this.stage.blackout(), (LAUNCH_SECONDS - 0.5) * 1000);
-      await gone;
+      // No clearing drawn yet (no state): straight to black.
+      this.stage.blackout();
+      await new Promise((r) => setTimeout(r, 450));
       return;
     }
     this.clearing.setBuilding(false);
@@ -684,6 +604,8 @@ export class StrategyScreen {
     window.removeEventListener('keydown', this.onKey);
     window.clearTimeout(this.partnerCursorTimer);
     cancelAnimationFrame(this.anchorFrame);
+    // A transmission open at take-off held the sound down at 40 % for the whole mission.
+    this.radio.panel.dispose();
     this.clearing.dispose();
     this.stage.dispose();
     this.root.remove();
@@ -728,36 +650,28 @@ export class StrategyScreen {
     if (!fixed && this.view === view) this.clearing.hold(false);
   }
 
-  /** The 3D set each screen happens in: the valley, the clearing (Soldados and the Armería too, by the caravan), or the hangar. */
-  private setFor(view: BaseView): 'geo' | 'clearing' | 'bastion' {
-    if (view === 'geoscape') return 'geo';
-    return view === 'research' || view === 'hub' || view === 'facilities' || (view === 'squad' && this.siegeNow()) || this.fixedShot(view) ? 'clearing' : 'bastion';
+  /** The 3D set each screen happens in: the valley, or the clearing (Soldados, the Armería and the squad too, by the caravan). */
+  private setFor(view: BaseView): 'geo' | 'clearing' {
+    return view === 'geoscape' ? 'geo' : 'clearing';
   }
 
-  /** Soldados, the Armería, the squad and the debrief, on the clearing when its drawing has their shots (Arte, 18/10 #44); else the old rooms. */
+  /** Soldados, the Armería, the squad and the debrief: fixed shots of the clearing, when its drawing has them (Arte, 18/10 #44). */
   private fixedShot(view: BaseView): boolean {
     const art = this.clearingArt;
     return (view === 'barracks' && !!art?.soldierShot) || (view === 'engineering' && !!art?.armoryShot) || (((view === 'squad' && !this.siegeNow()) || view === 'debrief') && !!art?.lineupShot);
   }
 
-  /** The squad standing (the cochera, the debrief): by La Lata on the clearing when it can, else in the old hangar. */
+  /** The squad standing (its screen, the debrief): by La Lata on the clearing. */
   private lineup(entries: (LineupEntry | null)[]): void {
     // Each sees their own half on the left, by their name (playtest 18/10 #51): the second player's row in a mirror.
     const c = this.state;
     const mirror = !!c && c.players.length > 1 && c.players[1] === this.mySlot;
-    if (this.clearingArt?.setLineup) this.clearingArt.setLineup(entries, { mirror });
-    else this.bastion.setLineup(entries);
+    this.clearingArt?.setLineup?.(entries, { mirror });
   }
 
-  /** Where the `i`th of `count` stands, for the cards under them. */
-  private padAt(i: number, count: number): Vector3 {
-    return this.clearingArt?.padPosition ? this.clearingArt.padPosition(i, count) : this.bastion.padPosition(i, count);
-  }
-
-  /** The soldier looked at, standing on the clearing (or in the old room): Soldados, and its customizer. */
-  private showcase(...args: Parameters<BastionSet['setShowcase']>): void {
-    if (this.clearingArt?.setShowcase) this.clearingArt.setShowcase(...args);
-    else this.bastion.setShowcase(...args);
+  /** The soldier looked at, standing on the clearing: Soldados, and its customizer. */
+  private showcase(...args: Parameters<NonNullable<ClearingArt['setShowcase']>>): void {
+    this.clearingArt?.setShowcase?.(...args);
   }
 
   private shotFor(view: BaseView): Shot {
@@ -768,92 +682,22 @@ export class StrategyScreen {
       case 'hub':
       case 'facilities':
         return this.clearing.shot();
-      // Campaña looks at the whole Bastión, as the old «Bastión» did.
       case 'engineering':
-        return this.clearingArt?.armoryShot?.() ?? this.bastion.room(view);
+        return this.clearingArt?.armoryShot?.() ?? this.clearing.shot();
       case 'barracks':
-        return this.clearingArt?.soldierShot?.() ?? this.bastion.armory();
+        return this.clearingArt?.soldierShot?.() ?? this.clearing.shot();
       case 'squad':
         // The siege's squad is the clearing from above, round the caravan (#58).
         if (this.siegeNow()) {
           this.clearing.focusCaravan(true);
           return this.clearing.shot();
         }
-        return this.clearingArt?.lineupShot?.() ?? this.bastion.hangar();
+        return this.clearingArt?.lineupShot?.() ?? this.clearing.shot();
       case 'debrief':
-        return this.clearingArt?.lineupShot?.() ?? this.bastion.hangar();
-      case 'facilities':
-        return this.plot ? this.bastion.room(this.plot) : this.bastion.facilities();
+        return this.clearingArt?.lineupShot?.() ?? this.clearing.shot();
       default:
-        return this.bastion.overview();
+        return this.clearing.shot();
     }
-  }
-
-  /** Clicking a room of the Bastion opens its screen. */
-  private pickRoom(hot: string): void {
-    if (hot.startsWith('plot:')) {
-      this.pickPlot(hot.slice(5));
-      return;
-    }
-    const target: Record<string, BaseView> = { command: 'geoscape', research: 'research', engineering: 'engineering', barracks: 'barracks' };
-    if (hot === 'hangar') void this.go(this.state?.activeMission ? 'squad' : 'geoscape');
-    else if (target[hot]) void this.go(target[hot]!);
-  }
-
-  /**
-   * Picks a plot of the facilities view, here or in 3D. Picking it again lets
-   * it go (`toggle`); «Ver» buttons pick without letting go, and make it blink.
-   */
-  private pickPlot(id: string | null, toggle = true): void {
-    this.plot = toggle && id === this.plot ? null : id;
-    if (this.view !== 'facilities') {
-      void this.go('facilities');
-    } else {
-      this.render();
-      void this.stage.show('bastion', this.shotFor('facilities'));
-    }
-    if (!toggle && id) this.blink(`[data-plot="${id}"], .strat-right .x-title`);
-  }
-
-  /** The pointer on a plot, in 3D or in the grid: both light the same one, without redrawing the panel. */
-  private onPlotHover(hot: string | null): void {
-    this.plotHovered = hot?.startsWith('plot:') ? hot.slice(5) : null;
-    if (this.view !== 'facilities' || !this.state) return;
-    for (const el of this.viewEl.querySelectorAll<HTMLElement>('.plot-cell')) el.classList.toggle('hovered', el.dataset.plot === this.plotHovered);
-    const line = this.viewEl.querySelector('.plot-hover');
-    if (line) {
-      clear(line);
-      append(line, ...this.plotHoverLine(this.state, this.plotHovered ?? this.plot));
-    }
-  }
-
-  private plotHoverLine(c: CampaignState, id: string | null): (HTMLElement | string)[] {
-    const p = id ? plotById(c, id) : undefined;
-    if (!p) return ['Pasa por encima de una parcela para ver qué hay; púlsala para elegirla.'];
-    return [h('b', {}, plotCode(p)), ` · ${this.plotLine(c, p.id)}`, id === this.plot && !this.plotHovered ? ' · pulsa otra vez o Esc para soltarla' : ''];
-  }
-
-  /** What stands on a plot and what can be done with it, in one line. */
-  private plotLine(c: CampaignState, id: string): string {
-    const p = plotById(c, id)!;
-    const work = c.base.works.find((w) => w.plot === p.id);
-    const level = p.building && p.building in FACILITIES ? (p.level ?? 1) : 0;
-    if (work) {
-      const what =
-        work.kind === 'clear'
-          ? `Despejando: ${TERRAINS[p.terrain as keyof typeof TERRAINS]?.name.toLowerCase() ?? ''}`
-          : work.kind === 'upgrade'
-            ? `${FACILITIES[work.facility!].name} → nivel ${level + 1}`
-            : `En obras: ${FACILITIES[work.facility!].name}`;
-      return `${what} · faltan ${work.daysLeft} días`;
-    }
-    if (p.building && p.building in FIXED_NAMES_SET) return `${buildingName(p.building)} · del búnker original`;
-    if (p.building) {
-      const pair = adjacencyBonuses(c).some((b) => b.plot === p.id);
-      return `${buildingName(p.building)} · nivel ${level}${!upgradable(c, p) ? ' · se puede mejorar' : pair ? ' · con su pareja al lado' : ''}`;
-    }
-    if (p.terrain !== 'clear') return `${TERRAINS[p.terrain].name} · ${clearable(c, p) ? 'aún no se puede despejar: despeja antes a su lado' : `despejar cuesta ${clearCost(p).cost} §`}`;
-    return neighbours(c, p).some((q) => q.building) ? 'Libre · se puede construir' : 'Libre · sin acceso: construye antes a su lado';
   }
 
   /** Makes what a «Ver» points at blink, so it is found even when it is already on screen. */
@@ -1206,21 +1050,9 @@ export class StrategyScreen {
         text: `${MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}. ${offerBriefing(c, o)}`,
       });
     }
-    // Works that were going on and are no longer: finished.
-    for (const work of prev.base.works.filter((w) => !c.base.works.some((x) => x.plot === w.plot && x.kind === w.kind))) {
-      const plot = plotById(c, work.plot)!;
-      fresh.push({
-        tone: 'good',
-        kicker: 'OBRAS TERMINADAS',
-        rank: 20,
-        title: work.kind === 'clear' ? 'Terreno despejado' : work.kind === 'upgrade' ? `${FACILITIES[work.facility!].name} · nivel ${plot.level ?? 2}` : FACILITIES[work.facility!].name,
-        text:
-          work.kind === 'clear'
-            ? `${capitalize(plotName(plot))} está lista para construir.`
-            : work.kind === 'upgrade'
-              ? FACILITIES[work.facility!].upgrades[(plot.level ?? 2) - 2]!
-              : FACILITIES[work.facility!].description,
-      });
+    // The Taller's work that was going on and is no longer: finished.
+    for (const work of prev.base.works.filter((w) => w.project && !c.base.works.some((x) => x.plot === w.plot && x.kind === w.kind))) {
+      fresh.push({ tone: 'good', kicker: 'OBRAS TERMINADAS', rank: 20, title: CRAFTS[work.project!].name, text: `El Taller ha terminado ${CRAFTS[work.project!].the}.` });
     }
     for (const r of c.regions.filter((x) => x.facility && !prev.regions.find((p) => p.id === x.id)?.facility)) {
       fresh.push({
@@ -1329,17 +1161,12 @@ export class StrategyScreen {
   private renderScreen(c: CampaignState): void {
     cancelAnimationFrame(this.anchorFrame);
     this.root.dataset.view = this.view;
-    // La Lata as it is now (#45): the cochera's head shows its picture (mixta-base.css --lata-front).
+    // La Lata as it is now (#45): the squad's head shows its picture (mixta-base.css --lata-front).
     this.root.dataset.vehicle = String(vehicleOf(c));
     this.renderTop(c);
     this.renderProposal(c);
     this.renderNav(c);
     clear(this.viewEl);
-    const room = this.partnerView ? ROOM_OF[this.partnerView] : undefined;
-    const partner = this.partner();
-    this.bastion.setPartner(partner?.connected && room ? room : null, partner?.color ?? '#fff', partner?.name ?? '');
-    this.bastion.select(this.view === 'facilities' ? this.plot : null);
-    this.bastion.setLabels(this.view === 'research' || (this.view === 'facilities' && !this.plot));
     switch (this.view) {
       case 'geoscape':
         this.renderGeoscape(c);
@@ -1556,49 +1383,6 @@ export class StrategyScreen {
           see: () => this.focusOffer(o.id),
         };
       }
-      case 'clear': {
-        const plot = plotById(c, action.plot);
-        if (!plot) return { rows: [], see: null };
-        const { cost, days, salvage } = clearCost(plot);
-        return {
-          rows: [
-            ['Tiempo', `${workDays(c, days)} días de obra; no hace pasar el tiempo`],
-            ['Suministros', costText(cost)],
-            ['Qué hace', clearAim(plot.terrain as 'rocks' | 'forest' | 'ruins', plotCode(plot))],
-            ...(salvage ? [['Extra', `+${salvage} § de chatarra`] as [string, string]] : []),
-          ],
-          see: () => this.pickPlot(plot.id, false),
-        };
-      }
-      case 'build': {
-        const def = FACILITIES[action.facility];
-        const plot = plotById(c, action.plot);
-        const bonus = plot ? adjacencyAt(c, plot, def.id) : null;
-        return {
-          rows: [
-            ['Tiempo', `${workDays(c, def.days)} días de obra; no hace pasar el tiempo`],
-            ['Suministros', costText(def.cost)],
-            ['Qué hace', def.description],
-            ...(bonus ? [['Extra', `${cap(nextTo(bonus.next))}: ${bonus.text}`] as [string, string]] : []),
-          ],
-          see: () => this.pickPlot(action.plot, false),
-        };
-      }
-      case 'upgrade': {
-        const plot = plotById(c, action.plot);
-        if (!plot?.building || !(plot.building in FACILITIES)) return { rows: [], see: null };
-        const id = plot.building as FacilityId;
-        const to = (plot.level ?? 1) + 1;
-        const next = upgradeCost(id, to);
-        return {
-          rows: [
-            ['Tiempo', `${workDays(c, next.days)} días de obra; no hace pasar el tiempo`],
-            ['Suministros', costText(next.cost)],
-            ['Qué hace', `Nivel ${to}: ${FACILITIES[id].upgrades[to - 2]}`],
-          ],
-          see: () => this.pickPlot(plot.id, false),
-        };
-      }
       case 'contact':
         return {
           rows: [
@@ -1722,12 +1506,6 @@ export class StrategyScreen {
           ...c.rumors.map((r) => ({ key: `rumor:${r.id}`, label: `Rumor en ${REGIONS[r.region].name}`, urgent: false })),
         ],
       ],
-      [
-        'facilities',
-        c.base.plots
-          .filter((p) => p.building && !(p.building in FIXED_NAMES_SET))
-          .map((p) => ({ key: `built:${p.id}:${p.building}:${p.level ?? 1}`, label: `Obra terminada: ${buildingName(p.building!)}${(p.level ?? 1) > 1 ? ` · nivel ${p.level}` : ''}`, urgent: false })),
-      ],
       ['research', [{ key: `level:${bastionLevel(c)}`, label: `Nueva hoja del Diario: nivel ${bastionLevel(c)}`, urgent: false }]],
     ]);
   }
@@ -1784,7 +1562,6 @@ export class StrategyScreen {
       void this.go('barracks');
       return;
     }
-    if (go.plot) return this.pickPlot(go.plot, false);
     if (go.piece) {
       if (this.view !== 'facilities') void this.go('facilities');
       this.clearing.focusPiece(go.piece);
@@ -2053,7 +1830,7 @@ export class StrategyScreen {
           h('dt', {}, 'Dificultad'),
           h('dd', {}, h('span.stars', {}, '★'.repeat(o.difficulty)), ` ${DIFFICULTY[o.difficulty]}`),
         ),
-        chosen ? h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la cochera') : this.deployButton(c, o),
+        chosen ? h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la escuadra') : this.deployButton(c, o),
       ];
     }
     return [
@@ -2089,7 +1866,7 @@ export class StrategyScreen {
         h('dt', {}, 'Recompensa'),
         h('dd', {}, rewards.filter(Boolean).join(' · ') || 'La victoria'),
       ),
-      chosen ? h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la cochera') : this.deployButton(c, o),
+      chosen ? h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la escuadra') : this.deployButton(c, o),
     ];
   }
 
@@ -2161,9 +1938,8 @@ export class StrategyScreen {
   private renderResearch(c: CampaignState): void {
     const level = bastionLevel(c);
     this.levelPick ??= Math.min(level + 1, MAX_LEVEL);
-    const next = LEVEL_XP[level];
     // One line per level: number, page title once reached, how many things it opens.
-    const rows = LEVEL_XP.map((xp, i) => {
+    const rows = LEVEL_COST.map((_, i) => {
       const n = i + 1;
       const reached = n <= level;
       const unlocks = levelUnlocks(n);
@@ -3336,23 +3112,26 @@ export class StrategyScreen {
         const from = (this.viewEl.querySelector<HTMLElement>('.strat-left')?.getBoundingClientRect().right ?? 0) + 12;
         const room = Math.max(perRow * 86, width - from - 12);
         const cw = Math.max(76, Math.min(124, room / perRow - 10));
-        cards.style.setProperty('--card-w', `${cw}px`);
-        cards.style.width = `${perRow * (cw + 10)}px`;
-        cards.style.left = `${Math.max(0, from + (room - perRow * (cw + 10)) / 2)}px`;
+        restyle(cards, '--card-w', `${cw}px`);
+        restyle(cards, 'width', `${perRow * (cw + 10)}px`);
+        restyle(cards, 'left', `${Math.max(0, from + (room - perRow * (cw + 10)) / 2)}px`);
         // Just above the controls, counted from where the cards' box starts.
         const controls = this.viewEl.querySelector<HTMLElement>('.strat-center-bottom');
         const origin = cards.offsetParent?.getBoundingClientRect().top ?? 0;
         const floor = controls ? controls.getBoundingClientRect().top : window.innerHeight - 170;
-        cards.style.top = `${Math.max(0, floor - origin - cards.offsetHeight - 14)}px`;
+        restyle(cards, 'top', `${Math.max(0, floor - origin - cards.offsetHeight - 14)}px`);
         this.anchorFrame = requestAnimationFrame(place);
       };
       place();
       return;
     }
+    // Where the `i`th of `count` stands by La Lata, for the cards under them.
+    const padAt = this.clearingArt?.padPosition?.bind(this.clearingArt);
+    if (!padAt) return;
     const step = () => {
-      const pads = Array.from({ length: count }, (_, i) => this.stage.project(this.padAt(i, count)));
+      const pads = Array.from({ length: count }, (_, i) => this.stage.project(padAt(i, count)));
       const spacing = count > 1 ? Math.min(...pads.slice(1).map((p, i) => Math.abs(p.x - pads[i]!.x))) : 140;
-      cards.style.setProperty('--card-w', `${Math.max(84, Math.min(150, spacing - 8))}px`);
+      restyle(cards, '--card-w', `${Math.max(84, Math.min(150, spacing - 8))}px`);
       // One row with a shared height, above the launch controls even after a resize or UI zoom.
       const children = Array.from(cards.children) as HTMLElement[];
       const height = Math.max(0, ...children.map((el) => el.offsetHeight));
@@ -3362,8 +3141,8 @@ export class StrategyScreen {
       for (const el of children) {
         const p = pads[Number(el.dataset.pad)];
         if (!p) continue;
-        el.style.left = `${p.x}px`;
-        el.style.top = `${top}px`;
+        restyle(el, 'left', `${p.x}px`);
+        restyle(el, 'top', `${top}px`);
       }
       this.anchorFrame = requestAnimationFrame(step);
     };
@@ -3688,4 +3467,9 @@ export class StrategyScreen {
     this.modal.classList.toggle('show', !!content);
     if (content) this.modal.append(content);
   }
+}
+
+/** A style written only when it changes: the lineup's cards are placed every frame, and each write laid the page out again for the next read. */
+function restyle(el: HTMLElement, prop: string, value: string): void {
+  if (el.style.getPropertyValue(prop) !== value) el.style.setProperty(prop, value);
 }

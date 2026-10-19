@@ -217,4 +217,4 @@ Va en la **0.3.0**. Antes sale la 0.2.9 con las notas de la prueba del 15/10.
 - fuera del motor: las clases, las aptitudes, el árbol viejo, los rangos (`classes.ts`, `RANKS`), los niveles de arma y la migración de las campañas de antes;
 - el Taller de oficios hace que cada misión enseñe un 20 % más por nivel, y el Camposanto a nivel 3, otro 20 % tras una misión con bajas.
 
-**Queda para después:** el código muerto del árbol viejo. Las habilidades del Grillo y del Oficio, sus perks y los vuelos del dron siguen en el motor y en el cliente, aunque ninguna unidad puede tenerlos. Se quitan en una pasada aparte (Gameplay, UI y Arte).
+**El código muerto del árbol viejo, quitado el 19/10** ([REVISION-2026-10-19.md](REVISION-2026-10-19.md)): las habilidades del Grillo y del Oficio (con la Bengala y el Cóctel molotov), sus ventajas (`PerkId` se queda con las 28 del tablero) y los vuelos del dron, en el motor y en el cliente. La plantilla `specialist` se queda, porque la usan los tests.

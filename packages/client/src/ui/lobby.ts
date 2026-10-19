@@ -338,7 +338,7 @@ export class Lobby {
           'div.menu-options.two',
           {},
           option(this.night, false, (v) => (this.night = v), 'De día', 'Como siempre'),
-          option(this.night, true, (v) => (this.night = v), 'De noche', 'Se ve poco: farolas y bengalas. Más muertos y más botín'),
+          option(this.night, true, (v) => (this.night = v), 'De noche', 'Se ve poco, salvo bajo las farolas. Más muertos y más botín'),
         ),
       ),
       // Start and back stay at the foot of the sheet, in view however long the options get.

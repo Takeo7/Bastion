@@ -1,9 +1,8 @@
-// Campaign progression: the Bastion levels up with combat experience and each
-// level unlocks technology, accessories and facilities. Weapons and armour are
-// never bought: the Bastion's level allows each tier, the Taller makes it
-// (CRAFTS, docs/FASE4.md), and a soldier carries the best tier made *and*
-// their rank allows, so promotions show up as better guns. A found weapon
-// lifts one soldier a tier above the rest.
+// Campaign progression: the Bastion's level is bought, with suministros and
+// missions flown (Arturo, 18/10 #40), and each level unlocks technology,
+// accessories and the base's pieces. Weapons and armour are never bought: the
+// level opens what the Taller can make (CRAFTS, docs/FASE4.md), the armour is
+// for everyone, and some levels bring weapons to the Armería (LEVEL_ARMS).
 import { PIECES } from './base';
 import { FOUND_WEAPONS, ITEMS, WEAPONS, type WeaponId } from './content';
 import type { CampaignSoldier, CampaignState, FacilityId, FoundWeapon } from './campaign';
@@ -30,16 +29,6 @@ export const TECHS: Record<TechId, TechDef> = {
   signal: { id: 'signal', name: 'La sirena en La Lata', description: 'La sirena de los Cuervos, atornillada al techo de La Lata para llevarse a la Marea: desbloquea la misión final.', level: 8 },
 };
 
-/** Bastion experience needed for each level (index 0 is level 1). */
-export const LEVEL_XP = [0, 12, 30, 55, 85, 120, 160, 205];
-export const MAX_LEVEL = LEVEL_XP.length;
-
-export function levelForXp(xp: number): number {
-  let level = 1;
-  while (level < MAX_LEVEL && xp >= LEVEL_XP[level]!) level++;
-  return level;
-}
-
 /**
  * What raising the Bastion to each level asks (Arturo, 18/10 #40: «se va
  * upgradeando a mano, comprando»; «suministros y misiones»): the suministros
@@ -47,10 +36,11 @@ export function levelForXp(xp: number): number {
  */
 export const LEVEL_COST = [0, 100, 160, 240, 330, 440, 560, 700];
 export const LEVEL_MISSIONS = [0, 2, 4, 6, 9, 12, 16, 20];
+export const MAX_LEVEL = LEVEL_COST.length;
 
-/** The Bastion's level: bought since campaign version 21 (`level`); from its experience before. */
+/** The Bastion's level, bought (`level`; migrateCampaign gives one to campaigns from before version 21). */
 export function bastionLevel(c: Pick<CampaignState, 'xp' | 'level'>): number {
-  return c.level ?? levelForXp(c.xp);
+  return c.level ?? 1;
 }
 
 /** Unlocked by the Bastion's level, or granted earlier by a side quest (`CampaignState.techs`). */
@@ -60,14 +50,6 @@ export function hasTech(c: Pick<CampaignState, 'xp' | 'level'> & { techs?: reado
 
 export function itemUnlocked(c: Pick<CampaignState, 'xp' | 'level'>, id: ItemId): boolean {
   return bastionLevel(c) >= ITEMS[id].level;
-}
-
-/**
- * Bastion experience from one mission: showing up, winning (harder is worth
- * more) and every enemy the squad brought down.
- */
-export function missionXp(victory: boolean, difficulty: number, kills: number): number {
-  return 2 + (victory ? 3 + difficulty : 0) + kills;
 }
 
 // ------------------------------------------------------------------ tiers

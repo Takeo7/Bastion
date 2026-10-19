@@ -37,15 +37,14 @@ import {
   squadLimit,
   squadMember,
   upgradeCost,
-  VOTE_ABOVE,
   type CampaignCommand,
   type CampaignState,
 } from '../src/campaign';
-import { bastionLot, FELL_COST, fellTree, PIECES, pieceCells } from '../src/base';
+import { armedTiles, bastionFootprint, bastionLot, FELL_COST, fellTree, PIECES, pieceCells } from '../src/base';
 import { abilitiesOf } from '../src/abilities';
 import { defaultAppearance } from '../src/appearance';
 import { sexOfName } from '../src/content';
-import { bastionLevel, LEVEL_XP, missionXp } from '../src/progression';
+import { bastionLevel } from '../src/progression';
 import { Rng } from '../src/rng';
 import { totalBars } from '../src/skills';
 import { createMission } from '../src/setup';
@@ -85,7 +84,7 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     const c = createCampaign([0], new Rng(3));
     expect(c.version).toBe(CAMPAIGN_VERSION);
     expect(c.bastion.pieces.map((p) => p.piece)).toEqual(['caravan']);
-    expect(c.base.plots).toEqual([]);
+    expect(c.base).toEqual({ works: [] });
     expect(c.siege).toMatchObject({ in: SIEGE_FIRST_IN, count: SIEGE_FIRST, held: 0 });
     expect(c.siege.sides.length).toBeGreaterThanOrEqual(1);
     expect(c.siege.sides.length).toBeLessThanOrEqual(3);
@@ -117,7 +116,6 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     // With the other away, it is done at once.
     run(c, { type: 'dismantle', piece: placed.id }, 0, [0]);
     expect(c.bastion.pieces).not.toContain(placed);
-    expect(PIECES.radio.cost.supplies).toBeGreaterThan(VOTE_ABOVE);
     const radio = freeSpot(c, 'radio');
     run(c, { type: 'place', piece: 'radio', x: radio.x, y: radio.y, rot: 0 }, 0, both);
     expect(c.proposal?.text).toBe('construir una Sala de radio');
@@ -130,6 +128,18 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     c.level = 2;
     c.parts = 0;
     expect(() => run(c, { type: 'place', piece: 'wall', x: wall.x, y: wall.y, rot: 0 }, 0, both)).toThrow(/piezas/);
+  });
+
+  it('a proposal that no longer goes through when accepted is dropped and said so, never left on both screens', () => {
+    const c = createCampaign(both, new Rng(3));
+    c.credits = 500;
+    const bags = freeSpot(c, 'sandbags');
+    run(c, { type: 'place', piece: 'sandbags', x: bags.x, y: bags.y, rot: 0 }, 0, both);
+    c.credits = 0;
+    run(c, { type: 'vote', accept: true }, 1, both);
+    expect(c.proposal).toBeNull();
+    expect(c.bastion.pieces.some((p) => p.piece === 'sandbags')).toBe(false);
+    expect(c.log[0]!.text).toMatch(/^Propuesta aceptada, pero ya no se puede: construir/);
   });
 
   it('a row dragged is built at once, all or none, and to a vote when together it is dear (18/10 #35)', () => {
@@ -166,13 +176,18 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     // Arturo, 18/10 #41: «solo cuesta recursos y no da nada».
     expect(c.credits).toBe(credits - FELL_COST);
     expect(c.bastion.trees).not.toContain(tree);
+    // A tree listed twice is one tree, paid once.
+    const twice = c.bastion.trees[0]!;
+    const at = { x: twice % c.bastion.width, y: Math.floor(twice / c.bastion.width) };
+    run(c, { type: 'fell', tiles: [at, at] });
+    expect(c.credits).toBe(credits - 2 * FELL_COST);
     // Many at once, dear together: to a vote with the partner here.
     const many = c.bastion.trees.slice(0, 12).map((i) => ({ x: i % c.bastion.width, y: Math.floor(i / c.bastion.width) }));
     c.players = [0, 1];
     run(c, { type: 'fell', tiles: many }, 0, both);
     expect(c.proposal?.text).toBe('talar 12 árboles');
     run(c, { type: 'vote', accept: true }, 1, both);
-    expect(c.credits).toBe(credits - 13 * FELL_COST);
+    expect(c.credits).toBe(credits - 14 * FELL_COST);
     c.players = [0];
     const gate = raise(c, 'gate');
     expect(() => run(c, { type: 'mend', piece: gate.id })).toThrow(/No le falta nada/);
@@ -188,8 +203,8 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     run(c, { type: 'dismantle', piece: gate.id });
     expect(c.credits).toBe(before + Math.floor(PIECES.gate.cost.supplies / 2));
     expect(() => run(c, { type: 'dismantle', piece: c.bastion.pieces[0]!.id })).toThrow(/caravana/);
-    // The plots of before are gone.
-    expect(() => run(c, { type: 'clear', plot: '3,5' })).toThrow(/base de antes/);
+    // The plots of before are gone: their orders are refused like any order that doesn't exist.
+    expect(() => run(c, { type: 'clear', plot: '3,5' } as unknown as CampaignCommand)).toThrow(/no existe/);
   });
 
   it('a building works by its facility, better next to its partner (the caravan is the Cuartel and the Armería); broken, it stops', () => {
@@ -321,6 +336,39 @@ describe('the sieges in the campaign (docs/FASE12.md §11.5)', () => {
     expect(at).toBeGreaterThanOrEqual(0);
     expect(at).toBeLessThanOrEqual(1);
     expect(labels[at + 1]).toBe('Repón la mina');
+  });
+
+  it('the Bastion\'s building keeps the hits on all of it, past the caravan\'s own tiles', () => {
+    const c = solo();
+    c.level = 5;
+    c.bastion.level = 5;
+    c.siege.in = 0;
+    fly(c);
+    const caravan = c.bastion.pieces.find((p) => p.piece === 'caravan')!;
+    const own = pieceCells('caravan', caravan.x, caravan.y, caravan.rot);
+    const outer = bastionFootprint(c.bastion).find((t) => !own.some((o) => o.x === t.x && o.y === t.y))!;
+    fly(c, 'victory', (s) => {
+      s.breakables![outer.y * s.width + outer.x] = 5;
+    });
+    expect(caravan.hp).toBe(5);
+  });
+
+  it('nobody starts a siege on a turret, a trap or the wire, posted there before it was built or not', () => {
+    const c = solo();
+    c.siege.in = 0;
+    fly(c);
+    raise(c, 'turret');
+    const spot = freeSpot(c, 'mine');
+    fellTree(c.bastion, spot.x, spot.y);
+    run(c, { type: 'post', soldier: c.squad[0]!, at: spot });
+    expect(raise(c, 'mine')).toMatchObject({ x: spot.x, y: spot.y });
+    const armed = armedTiles(c.bastion);
+    expect(armed.size).toBe(2);
+    const offer = activeOffer(c)!;
+    const s = createMission({ map: offerMap(c, offer), siegePlan: siegePlan(c, offer)!, posts: c.siegePosts, slots: c.players, rng: new Rng(2), kind: offer.kind, squad: buildSquad(c), pods: offer.pods });
+    const defenders = s.units.filter((u) => u.team === 'xcom' && !u.automaton);
+    expect(defenders.length).toBe(c.squad.length);
+    for (const u of defenders) expect(armed.has(u.pos.y * s.width + u.pos.x)).toBe(false);
   });
 
   it('fallen with someone left: another clearing, the stores lost, the soldiers keep what they carry', () => {

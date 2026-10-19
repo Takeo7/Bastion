@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 18/10 con la 0.7.1. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 19/10 con la 0.7.2, la de la revisión del código. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -17,7 +17,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 
 ## 2. Poner la máquina en marcha
 
-1. `git clone` de `github.com/Takeo7/Bastion` (privado: hace falta acceso).
+1. `git clone` de `github.com/Takeo7/Bastion` (público desde el 6/10; ver §5).
 2. **Node.js** 22 o superior. Aquí se usa la 26.
 3. Instalar las dependencias:
 
@@ -35,8 +35,8 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 462 tests.
-5. **Jugar en el navegador:**
+   Deben pasar 466 tests.
+5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
    npm run build
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.7.1)
+## 3. Estado (versión 0.7.2)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,21 +74,14 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0 y v0.7.1 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
-- **Lo nuevo de la 0.2.2** (2026-10-14):
-  - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
-  - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
-  - el valle con relieve, campos, pueblos y carreteras; en combate, luz más cálida, suciedad y plazas con árboles y escombros;
-  - los textos que quedaban del globo y de XCOM, fuera; nombres que chocaban, cambiados.
-- **Lo nuevo de la 0.2.3** (2026-10-14):
-  - los zombis primero ([ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos; los humanos, solo en las suyas;
-  - la fase 7 ([FASE7.md](FASE7.md)): saltar por ventanas altas, escaleras que solo se dejan por el rellano, munición contada (3 cargadores), paredes y suelos que rompen las granadas.
-- **Lo nuevo de la 0.2.4** (2026-10-14), lo que pidió Arturo: «el turno de la IA va muy rápido, corren muy rápido, no se ve bien la animación de andar ni correr, y al morir se desploman como un tronco»:
-  - pasos sin patinar y por plantilla (`game/gaits.ts`): el soldado trota en el azul (0,50 s/casilla) y esprinta en el amarillo (0,24); el zombi anda arrastrándose (1,02) con el andar de Goblin Locomotion;
-  - muertes de verdad (Bow Combat y Sword Combat), según de dónde viene el golpe y con sitio para caer; posturas de reposo (Idles); Tajo con arco y mordisco que agarra; escaleras que se suben andando;
-  - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
-  - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
-- **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1 y v0.7.2 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.7.2** (2026-10-19), la revisión del código ([REVISION-2026-10-19.md](REVISION-2026-10-19.md)):
+  - el tablero de habilidades ya compra siempre (era el fallo #38 y #48 del 18/10);
+  - la partida no se pierde: copia anterior (`save.anterior.json`), una ilegible se aparta y se sigue desde la copia, y un fallo al escribir no tumba el servidor; «Campaña nueva» guarda la de antes;
+  - las propuestas que ya no se pueden pagar se quitan a la vista de los dos; «Entre los dos» cura de verdad; el daño del asedio cuenta todo el edificio del Bastión; nadie empieza un asedio encima de una torreta o una trampa;
+  - el servidor aguanta direcciones mal escritas; «Unirse» vuelve al inicio si no carga; el `red.log` no crece sin fin;
+  - menos fugas y tirones: contextos WebGL, eventos que retenían el combate, shaders compilados detrás del velo;
+  - fuera el código muerto: la base de parcelas y su vista 3D, el dron, el Oficio, las ventajas que ya no da nadie y la experiencia del Bastión; «Cochera» pasa a «Escuadra».
 - **Lo nuevo de la 0.7.1** (2026-10-18), el resto de la prueba del 18/10 ([PRUEBA-2026-10-18.md](PRUEBA-2026-10-18.md), #24–#58):
   - el nivel del Bastión ya no sale de la experiencia: se compra con suministros y misiones hechas (`levelUp`, `LEVEL_COST`, `LEVEL_MISSIONS`), y en el claro el Bastión pasa de la caravana a un edificio, cada dos niveles, sobre su solar de 6×6. La Sala de mapas da más suministros por misión;
   - las misiones no caducan: hasta 3 a la vez (4 con la Sala de radio), y con el asedio solo se ve el asedio;
@@ -166,6 +159,20 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - el árbol de habilidades nuevo, más orgánico;
   - sin días de viaje a las misiones; más acciones al subir mucho de rango; reclutas algo distintos;
   - hordas horneadas: 45 o 90 zombis cuestan lo mismo que 15.
+- **Lo nuevo de la 0.2.5:** reacciones a los golpes según de dónde vienen (Bow Combat y Sword Combat, de cintura para arriba) y puertas que giran sobre la bisagra al abrirse y cerrarse (`game/doors.ts`).
+- **Lo nuevo de la 0.2.4** (2026-10-14), lo que pidió Arturo: «el turno de la IA va muy rápido, corren muy rápido, no se ve bien la animación de andar ni correr, y al morir se desploman como un tronco»:
+  - pasos sin patinar y por plantilla (`game/gaits.ts`): el soldado trota en el azul (0,50 s/casilla) y esprinta en el amarillo (0,24); el zombi anda arrastrándose (1,02) con el andar de Goblin Locomotion;
+  - muertes de verdad (Bow Combat y Sword Combat), según de dónde viene el golpe y con sitio para caer; posturas de reposo (Idles); Tajo con arco y mordisco que agarra; escaleras que se suben andando;
+  - el turno enemigo se ve entero ([UX-RITMO.md](UX-RITMO.md)): sin la aceleración por cola, la cámara se asienta en cada enemigo, el resultado se lee, y los muertos de un grupo que solo andan lo hacen juntos (y la IA los mueve antes que a los que muerden);
+  - «Velocidad del combate» en Ajustes (Lenta, Normal, Rápida), y la barra espaciadora acelera el turno enemigo.
+- **Lo nuevo de la 0.2.3** (2026-10-14):
+  - los zombis primero ([ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)): las misiones normales son de los muertos; los humanos, solo en las suyas;
+  - la fase 7 ([FASE7.md](FASE7.md)): saltar por ventanas altas, escaleras que solo se dejan por el rellano, munición contada (3 cargadores), paredes y suelos que rompen las granadas.
+- **Lo nuevo de la 0.2.2** (2026-10-14):
+  - un velo de carga al entrar en combate, y la interfaz cabe en ventanas de 1024 px;
+  - el estado viaja comprimido por la red (de ~110 KB a ~9 KB por misión) y el panel «Comandantes» solo enseña direcciones útiles;
+  - el valle con relieve, campos, pueblos y carreteras; en combate, luz más cálida, suciedad y plazas con árboles y escombros;
+  - los textos que quedaban del globo y de XCOM, fuera; nombres que chocaban, cambiados.
 - **Rendimiento:** la telemetría de cada navegador va a `data/red.log` (o `%APPDATA%\Bastion\red.log` en la aplicación).
 
 ## 4. Decisiones importantes (y por qué)
@@ -203,7 +210,8 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 ## 5. Pendiente
 
 - **De Arturo y Ana:**
-  - probar la 0.4.0 en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), y mandar el `red.log` del anfitrión;
+  - probar la versión actual en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md) (escrita para la 0.4.0), y mandar el `red.log` del anfitrión;
+  - decidir lo de la revisión del 19/10 ([REVISION-2026-10-19.md](REVISION-2026-10-19.md), «Para decidir»): el repositorio público frente a la norma de que sea privado, si la torre, el alambre y las trampas se rompen, y quitar F8 si «Hueso y óxido» se queda;
   - escuchar los sonidos nuevos (`sonido.html`).
 - **Probar en partida** la Fase 10: si las barras se llenan a buen ritmo, si el tablero da elecciones de verdad y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `BAR_FIRST`, `BAR_STEP`, `BAR_GROWTH`, `DEED_XP`, `BASE_AIM`; en `board.ts`, las cifras de cada celda; en `content.ts`: `STONE_DAMAGE`, `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
 - **Fase 12, el asedio** ([FASE12.md](FASE12.md)): hecha. El hito 1 salió en la 0.6.0 y la base nueva en la campaña, en la 0.7.0 (§11). Falta ajustar las cifras jugando: el tamaño de las oleadas (`SIEGE_FIRST`, `SIEGE_GROWTH` en campaign.ts), el precio y la munición de la torreta y de las trampas (`PIECES` en base.ts).
@@ -213,7 +221,6 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Escenarios:** la cárcel y el centro comercial esperan los packs «POLYGON – Police Station» y «POLYGON – Shops», que tienen los atlas de sus piezas. Para después: la cafetería con aspecto propio y el portón grande de las naves (un hueco de 5 casillas).
 - **Para más adelante:**
   - firmar la aplicación (cuenta de desarrollador de Apple; los pasos, en [FIRMA.md](FIRMA.md)) y Steam;
-- **Limpieza del código muerto** del árbol viejo (habilidades del Grillo y del Oficio, sus perks, los vuelos del dron): Gameplay, UI y Arte, en una pasada aparte ([FASE9.md](FASE9.md) §9).
 - **Textos pendientes de revisar por Lore:** [TEXTOS-PENDIENTES.md](TEXTOS-PENDIENTES.md).
 
 ## 6. Mapa de los documentos
@@ -229,5 +236,6 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [TRAILER.md](TRAILER.md) | El tráiler, la portada y las capturas de la ficha: guion, quién hace qué y cómo se rehace |
 | [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md), [PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
+| [REVISION-2026-10-19.md](REVISION-2026-10-19.md) | La revisión del código del 19/10: los fallos arreglados, lo quitado y lo que queda por decidir |
 | [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), [FIRMA.md](FIRMA.md) | La guía de la prueba en el PC de referencia; cómo se firma la aplicación y qué cambiar con la cuenta de Apple |
 | [FASE11.md](FASE11.md) | Abandonada y quitada el 18/10. Lo que fue la Fase 11, móvil y navegador (la guía de la web, WEB.md, está en el historial de Git) |

@@ -12,8 +12,6 @@ import { preloadSynty, syntyFigure, type Siren } from './syntyFigures';
 //     │ ├ flash      red overlay shown when hit
 //     │ └ gunPivot   shoulder: aim (rotation.x) and recoil (position.z)
 //     │   └ muzzle   where tracers and flashes start
-//     └ drone   the Grillo's drone over the shoulder: none since 0.3.0 (no classes); kept null until
-//               game.ts drops its flights (units.dronePos falls back to above the chest)
 
 export interface UnitRig {
   root: THREE.Group;
@@ -22,7 +20,6 @@ export interface UnitRig {
   gunPivot: THREE.Group;
   muzzle: THREE.Object3D;
   flash: THREE.Mesh;
-  drone: THREE.Object3D | null;
   /** Hip height; the pivot rests here when standing. */
   hip: number;
   /** Height of the chest, for aiming and damage numbers. */

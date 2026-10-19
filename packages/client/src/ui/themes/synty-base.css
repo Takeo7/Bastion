@@ -34,7 +34,6 @@
   --ink-blue-soft: var(--t-accent-soft);
   --pen: var(--t-accent);
   --stamp: var(--t-danger);
-  --song: var(--t-song);
   --hunt: var(--t-hunt);
   --good: var(--t-good);
   --warn: var(--t-warn);
@@ -63,10 +62,6 @@
   --t-danger-bg-strong: color-mix(in srgb, var(--t-danger) 22%, rgba(0, 0, 0, 0.85));
   --t-danger-hover: color-mix(in srgb, var(--t-danger) 32%, rgba(0, 0, 0, 0.6));
   --t-danger-glow: 0 0 12px color-mix(in srgb, var(--t-danger) 45%, transparent);
-  --t-note: color-mix(in srgb, var(--t-warn) 14%, rgba(0, 0, 0, 0.88));
-  --t-note-edge: var(--t-warn);
-  --t-note-ink: color-mix(in srgb, var(--t-warn) 45%, #fff);
-  --t-note-glow: 0 0 10px color-mix(in srgb, var(--t-warn) 30%, transparent);
   --t-text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
   --t-shade: linear-gradient(90deg, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.45) 45%, rgba(0, 0, 0, 0) 70%);
 
@@ -96,13 +91,13 @@
 /* ============================================================ materials */
 
 /* Typed and pen text: plain light letters with a faint glow, nothing crooked. */
-:root[data-ui='mixta'] :is(.pen, .shot-numbers .big, .shot-panel .effect, .type-ink, .unit-name, .card-name, .mission-kind, .shot-target, .outcome-card h2, .modal-card h2, .mission-intro h1, .typed .w > span) {
+:root[data-ui='mixta'] :is(.shot-numbers .big, .shot-panel .effect, .unit-name, .card-name, .mission-kind, .shot-target, .outcome-card h2, .modal-card h2, .mission-intro h1, .typed .w > span) {
   text-shadow: var(--t-text-shadow);
 }
 
 /* No ink clipped to the letters: plain text fill, so a shadow can't show through it and
    a theme's own background (the dial behind the odds) isn't cut to the digits' shape. */
-:root[data-ui='mixta'] :is(.pen, .shot-numbers .big, .shot-panel .effect, .type-ink, .unit-name, .card-name, .mission-kind, .shot-target, .outcome-card h2, .modal-card h2, .mission-intro h1, .typed .w > span) {
+:root[data-ui='mixta'] :is(.shot-numbers .big, .shot-panel .effect, .unit-name, .card-name, .mission-kind, .shot-target, .outcome-card h2, .modal-card h2, .mission-intro h1, .typed .w > span) {
   -webkit-background-clip: border-box;
   background-clip: border-box;
   -webkit-text-fill-color: currentColor;
@@ -123,7 +118,7 @@
 }
 
 /* Handwriting becomes the same face, in the accent colour. */
-:root[data-ui='mixta'] :is(.x-why, .x-note, .x-state, .toast, .strat-toast, .strat-proposal, .partner-tag, .radio-next, .lineup-card .promo, .float-text) {
+:root[data-ui='mixta'] :is(.x-why, .x-note, .x-state, .toast, .strat-toast, .strat-proposal, .radio-next, .lineup-card .promo, .float-text) {
   font-style: normal;
   letter-spacing: 0.03em;
 }
@@ -139,7 +134,7 @@
   transform: none;
 }
 
-:root[data-ui='mixta'] :is(.x-note, .room-label, .globe-label, .partner-tag, .radio-portrait span) {
+:root[data-ui='mixta'] :is(.x-note, .radio-portrait span) {
   rotate: none;
 }
 
@@ -215,7 +210,7 @@
 }
 
 /* Rubber stamps become flat warning bars. */
-:root[data-ui='mixta'] :is(.outcome-card h1, .stamp-wear) {
+:root[data-ui='mixta'] .outcome-card h1 {
   -webkit-mask: none;
   mask: none;
 }
@@ -280,24 +275,6 @@
 
 :root[data-ui='mixta'] .x-btn.danger:hover:not(:disabled) {
   background: var(--t-danger-hover);
-}
-
-/* ================================================================ labels */
-
-/* Labels over the 3D scene: small glass tags with a cyan edge. */
-:root[data-ui='mixta'] :is(.room-label, .globe-label, .partner-tag) {
-  background: var(--t-tag);
-  border: 1px solid var(--t-line);
-  border-left: 2px solid var(--t-accent);
-  color: var(--ink);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-}
-
-:root[data-ui='mixta'] .room-label.command {
-  color: var(--t-accent);
-  outline: none;
-  border: 1px solid var(--t-accent);
-  box-shadow: var(--t-glow);
 }
 
 /* ================================================================ combat */
@@ -495,20 +472,6 @@
   color: var(--t-primary-ink);
 }
 
-:root[data-ui='mixta'] .scan-btn:not(.ready):not(:disabled) {
-  background: var(--t-primary);
-  border-color: var(--t-primary-edge);
-  color: var(--t-primary-ink);
-  box-shadow: var(--t-glow);
-}
-
-:root[data-ui='mixta'] .scan-btn.secondary:not(.ready):not(:disabled) {
-  background: var(--t-panel-hi);
-  border-color: var(--t-line);
-  color: var(--ink);
-  box-shadow: none;
-}
-
 /* Urgent things are amber; red stays for danger. */
 :root[data-ui='mixta'] .strat-now.urgent {
   background: var(--t-urgent);
@@ -517,20 +480,6 @@
 
 :root[data-ui='mixta'] .strat-now.urgent:hover:not(:disabled) {
   background: var(--t-urgent-hover);
-}
-
-/* The partner's name tag: amber glass, not a sticky note (the proposal is a plate: mixta-base.css). */
-:root[data-ui='mixta'] .partner-tag {
-  background: var(--t-note);
-  border: 1px solid var(--t-note-edge);
-  color: var(--t-note-ink);
-  box-shadow: var(--t-note-glow);
-}
-
-/* The name tag keeps the partner's colour on its edge, and stays small. */
-:root[data-ui='mixta'] .partner-tag {
-  border-left: 3px solid var(--accent);
-  font-size: 13px;
 }
 
 :root[data-ui='mixta'] :is(.x-chip, .menu-address) {

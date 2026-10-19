@@ -42,7 +42,6 @@ describe('noise', () => {
     expect(noiseOf(s, kit('rookie'), 'grenade')).toBe(26);
     expect(noiseOf(s, kit('rookie'), 'search')).toBe(2);
     expect(noiseOf(s, kit('assault'), 'slash')).toBe(1);
-    expect(noiseOf(s, kit('sharpshooter'), 'spectralArrow')).toBe(1);
     expect(noiseOf(s, kit('rookie'), 'overwatch')).toBe(0);
     expect(noiseOf(s, addUnit(s, 'a1', 'sectoid', 0, 0), 'mindspin')).toBe(16);
     expect(NOISE).toEqual({ door: 1, breach: 6, dash: 3, alarm: 16 });

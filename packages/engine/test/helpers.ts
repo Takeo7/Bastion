@@ -1,5 +1,7 @@
 import { BASE_EDGE, besidePieces, fellTree, PIECES, pieceCells, placeBlocker, placePiece, type BasePiece, type PieceId } from '../src/base';
-import type { CampaignState } from '../src/campaign';
+import { executeCampaignCommand, type CampaignState } from '../src/campaign';
+import { bastionLevel, MAX_LEVEL } from '../src/progression';
+import { Rng } from '../src/rng';
 import { makeUnit } from '../src/setup';
 import type { GameState, Slot, TemplateId, TileKind, Unit } from '../src/types';
 
@@ -102,4 +104,23 @@ export function freeSpot(c: CampaignState, piece: PieceId, beside?: BasePiece): 
     return beside ? next.includes(beside) : !next.length;
   };
   return spots.find((s) => !placeBlocker({ ...base, trees: [] }, piece, s.x, s.y, 0) && touches(s.x, s.y))!;
+}
+
+/**
+ * The Bastion straight up to `level`, every level bought as the players buy it
+ * (the `levelUp` order, alone at the base), without spending what the test
+ * set: the suministros and the missions flown are put back after.
+ */
+export function levelTo(c: CampaignState, level: number, rng = new Rng(1)): void {
+  const { credits, missionsFlown } = c;
+  const slot = c.players[0]!;
+  while (bastionLevel(c) < Math.min(level, MAX_LEVEL)) {
+    c.credits = 1e6;
+    c.missionsFlown = 1e3;
+    const r = executeCampaignCommand(c, { type: 'levelUp' }, { slot, connected: [slot], rng });
+    if (!r.ok) throw new Error(r.error);
+  }
+  c.credits = credits;
+  if (missionsFlown === undefined) delete c.missionsFlown;
+  else c.missionsFlown = missionsFlown;
 }

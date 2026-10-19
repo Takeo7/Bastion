@@ -228,6 +228,19 @@ export function pieceCells(id: PieceId, x: number, y: number, rot: number): (Pie
   });
 }
 
+/**
+ * The tiles of the turrets, the traps and the wire still standing: ground (floor) on the map, but nobody
+ * starts a siege on them (a defender on a turret's tile shared it with the turret).
+ */
+export function armedTiles(base: BaseState): Set<number> {
+  const armed = new Set<number>();
+  for (const p of base.pieces) {
+    if (p.hp <= 0 || (PIECES[p.piece].kind !== 'trap' && p.piece !== 'wire')) continue;
+    for (const c of pieceCells(p.piece, p.x, p.y, p.rot)) armed.add(c.y * base.width + c.x);
+  }
+  return armed;
+}
+
 /** The piece standing on a tile, if any. */
 export function pieceAt(base: BaseState, x: number, y: number): BasePiece | undefined {
   return base.pieces.find((p) => pieceCells(p.piece, p.x, p.y, p.rot).some((c) => c.x === x && c.y === y));
@@ -445,8 +458,9 @@ export function baseLayout(base: BaseState): MissionLayout {
   // The squad round the Bastion: the free tiles nearest the middle of its lot.
   const lot = bastionLot(base);
   const middle = lot ? { x: lot.x + lot.w / 2, y: lot.y + lot.h / 2 } : { x: width / 2, y: height / 2 };
+  const armed = armedTiles(base);
   const spawns: Vec2[] = [];
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (tiles[y * width + x] === 'floor' && elev[y * width + x] === 0) spawns.push({ x, y });
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (tiles[y * width + x] === 'floor' && elev[y * width + x] === 0 && !armed.has(y * width + x)) spawns.push({ x, y });
   spawns.sort((a, b) => Math.hypot(a.x - middle.x, a.y - middle.y) - Math.hypot(b.x - middle.x, b.y - middle.y) || a.y - b.y || a.x - b.x);
   return {
     id: 'base',

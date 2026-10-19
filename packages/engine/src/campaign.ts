@@ -6,8 +6,8 @@
 //  - Shared decisions (building, contacting regions, which mission to take, how to
 //    answer an event) are proposals the partner accepts; a player alone in the base
 //    decides directly.
-//  - Progress comes from combat: missions give the Bastion experience, and its
-//    levels unlock technology, accessories and facilities (progression.ts).
+//  - The Bastion's level is bought, with suministros and missions flown (nextLevel),
+//    and its levels unlock technology, accessories and the base's pieces (progression.ts).
 //  - Time only advances, and a mission only launches, when every connected player is ready.
 //  - The story (lore.ts) opens a chapter per Bastion level; side quests (quests.ts)
 //    chain operations and decisions, and rumours on the geoscape lead to some of them.
@@ -31,9 +31,6 @@ import {
   meleeWeaponOf,
   hasTech,
   itemUnlocked,
-  LEVEL_XP,
-  levelForXp,
-  missionXp,
   spareMags,
   TECHS,
   type TechId,
@@ -55,6 +52,7 @@ import {
   onBastionLot,
   baseLayout,
   BASE_EDGE,
+  bastionFootprint,
   pieceAt,
   treeAt,
   pieceCells,
@@ -105,7 +103,7 @@ import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecis
 import type { BaseView } from './protocol';
 import type { Rng } from './rng';
 import { missionPods, podPlan, VIP_NAMES, type MapSource, type SquadMember } from './setup';
-import type { Alarm, Appearance, Arms, Biome, ClassId, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Site, Slot, TemplateId, Vec2, WeaponModId } from './types';
+import type { Alarm, Appearance, Arms, Biome, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Site, Slot, TemplateId, Vec2, WeaponModId } from './types';
 
 // --------------------------------------------------------------- facilities
 
@@ -304,60 +302,9 @@ export const BUNKER_BEDS = 8;
 
 // ----------------------------------------------------------- the compound
 
-// Atalaya on the surface (the user's redesign, 2026-10-11): from above, the
-// 1989 bunker in the middle of a square grid of plots. New buildings go next
-// to what is already built and are joined by walkways; some pairs side by
-// side work better (adjacency). Growing means clearing the rock, the forest
-// or the ruins around. La Lata's garage lies outside the grid.
-
-/** Side of the square grid of plots. */
-export const BASE_SIZE = 7;
-/** The command bunker, in the middle. */
-export const BUNKER: Readonly<Vec2> = { x: 3, y: 3 };
-
-/** Buildings that come with the bunker and open the strategy screens; they can't be moved. */
+/** The buildings of before that pieces of the base stand for (BUILDING_PIECES): partners in ADJACENCY. */
 export type FixedBuildingId = 'command' | 'barracks' | 'research' | 'engineering';
 export type BuildingId = FixedBuildingId | FacilityId;
-
-/** Where the fixed buildings stand: the bunker and three around it (the side to the airstrip stays free). */
-export const FIXED_BUILDINGS: Readonly<Record<FixedBuildingId, Vec2>> = {
-  command: BUNKER,
-  barracks: { x: 2, y: 3 },
-  research: { x: 3, y: 2 },
-  engineering: { x: 4, y: 3 },
-};
-
-export const FIXED_NAMES: Record<FixedBuildingId, string> = {
-  command: 'Búnker de mando',
-  barracks: 'Caravana',
-  research: 'Sala de radio',
-  engineering: 'Armería',
-};
-
-export type Terrain = 'clear' | 'rocks' | 'forest' | 'ruins';
-
-export interface TerrainDef {
-  name: string;
-  description: string;
-  /** Credits recovered when it is cleared. */
-  salvage: number;
-  /** Extra days to clear it. */
-  days: number;
-  /** Log line when the work starts; `{parcela}` is the plot's name. */
-  start: string;
-}
-
-export const TERRAINS: Record<Exclude<Terrain, 'clear'>, TerrainDef> = {
-  rocks: { name: 'Roca', description: 'Roca viva de la sierra. Barrenos, carretillas y paciencia.', salvage: 0, days: 1, start: 'Empiezan los barrenos en {parcela}.' },
-  forest: { name: 'Bosque', description: 'Pinar cerrado. La madera va a las estufas, que solo se encienden de noche.', salvage: 0, days: 0, start: 'Empieza la tala en {parcela}.' },
-  ruins: {
-    name: 'Ruinas',
-    description: 'Casas de antes de la Pandemia. Se desmontan a mano y lo que sirve se guarda: +15 §.',
-    salvage: 15,
-    days: 0,
-    start: 'Empieza el desmontaje de las ruinas de {parcela}.',
-  },
-};
 
 /** A facility works better next to a certain building: wall to wall. */
 export interface AdjacencyDef {
@@ -376,118 +323,18 @@ export const ADJACENCY: AdjacencyDef[] = [
   { facility: 'quarters', next: 'barracks', text: 'Una cama más. La caravana presta la estufa.' },
   { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
   { facility: 'listening', next: 'relay', text: 'Los muertos avanzan 2 días más tarde aún. Dos antenas oyen más que una.' },
-  { facility: 'echoes', next: 'listening', text: 'Los oficios hacen menos ruido (−2). Junto a la escucha se aprende a no hacer ruido.' },
 ];
 
-export interface BasePlot {
-  /** "x,y" */
-  id: string;
-  x: number;
-  y: number;
-  terrain: Terrain;
-  building: BuildingId | null;
-  /** A facility's level, 1–3 (missing in saves from before upgrades: 1). */
-  level?: number;
-}
-
 export interface Construction {
+  /** The Taller's piece on the base, where the work is done. */
   plot: string;
-  /** `craft`: the Taller makes a tier of weapons or armour (docs/FASE4.md), on its own plot. */
-  kind: 'clear' | 'build' | 'upgrade' | 'craft';
+  /** The Taller makes a tier of armour, a weapon, munition or an improvement (docs/FASE4.md). */
+  kind: 'craft';
   facility: FacilityId | null;
   daysLeft: number;
   total: number;
-  /** What a `craft` work makes. */
+  /** What it makes. */
   project?: CraftId;
-}
-
-const DIRS: readonly Vec2[] = [
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-];
-
-export function plotAt(c: CampaignState, x: number, y: number): BasePlot | undefined {
-  return x < 0 || y < 0 || x >= BASE_SIZE || y >= BASE_SIZE ? undefined : c.base.plots[y * BASE_SIZE + x];
-}
-
-export function plotById(c: CampaignState, id: string): BasePlot | undefined {
-  return c.base.plots.find((p) => p.id === id);
-}
-
-/** The plots wall to wall with `p` (no diagonals). */
-export function neighbours(c: CampaignState, p: Vec2): BasePlot[] {
-  return DIRS.map((d) => plotAt(c, p.x + d.x, p.y + d.y)).filter((q): q is BasePlot => !!q);
-}
-
-/** Rings out from the bunker: 1 around it, 3 at the edge. */
-export function plotRing(p: Vec2): number {
-  return Math.max(Math.abs(p.x - BUNKER.x), Math.abs(p.y - BUNKER.y));
-}
-
-/** "la parcela C2": columns A–G from west to east, rows 1–7 from north to south. */
-export function plotName(p: Vec2): string {
-  return `la parcela ${'ABCDEFG'[p.x] ?? '?'}${p.y + 1}`;
-}
-
-export function buildingName(id: BuildingId): string {
-  return id in FIXED_NAMES ? FIXED_NAMES[id as FixedBuildingId] : FACILITIES[id as FacilityId].name;
-}
-
-/** Clearing a plot: farther from the bunker costs more; the terrain adds days and maybe scrap. */
-export function clearCost(p: BasePlot): { cost: number; days: number; salvage: number } {
-  const terrain = p.terrain === 'clear' ? null : TERRAINS[p.terrain];
-  const ring = plotRing(p);
-  return { cost: ring <= 2 ? 25 : 40, days: (ring <= 2 ? 3 : 5) + (terrain?.days ?? 0), salvage: terrain?.salvage ?? 0 };
-}
-
-/**
- * What grows around the bunker, the same for every campaign: a hash of the
- * plot, so both players (and old saves) see the same ground.
- */
-function terrainAt(x: number, y: number): Terrain {
-  if (plotRing({ x, y }) <= 1) return 'clear';
-  const h = ((x * 73856093) ^ (y * 19349663)) >>> 0;
-  const roll = h % 10;
-  return roll < 4 ? 'forest' : roll < 7 ? 'rocks' : 'ruins';
-}
-
-/** Why the plot can't be cleared, or null if it can. */
-export function clearable(c: CampaignState, p: BasePlot): string | null {
-  if (p.terrain === 'clear') return 'Ese terreno ya está despejado.';
-  if (!neighbours(c, p).some((q) => q.terrain === 'clear')) return 'Hay que despejar antes una parcela a su lado.';
-  return null;
-}
-
-/** Built pairs wall to wall: they get a walkway. */
-export function walkways(c: CampaignState): [BasePlot, BasePlot][] {
-  const pairs: [BasePlot, BasePlot][] = [];
-  for (const p of c.base.plots) {
-    if (!p.building) continue;
-    for (const d of [DIRS[0]!, DIRS[2]!]) {
-      const q = plotAt(c, p.x + d.x, p.y + d.y);
-      if (q?.building) pairs.push([p, q]);
-    }
-  }
-  return pairs;
-}
-
-/** The adjacency bonus a facility would get standing on `p`, if any. */
-export function adjacencyAt(c: CampaignState, p: Vec2, facility: FacilityId): AdjacencyDef | null {
-  const def = ADJACENCY.find((a) => a.facility === facility);
-  return def && neighbours(c, p).some((q) => q.building === def.next) ? def : null;
-}
-
-/** Adjacency bonuses in force: the facility's plot, its partner's plot and what it does. */
-export function adjacencyBonuses(c: CampaignState): { plot: string; next: string; def: AdjacencyDef }[] {
-  const out: { plot: string; next: string; def: AdjacencyDef }[] = [];
-  for (const p of c.base.plots) {
-    const def = ADJACENCY.find((a) => a.facility === p.building);
-    const partner = def && neighbours(c, p).find((q) => q.building === def.next);
-    if (def && partner) out.push({ plot: p.id, next: partner.id, def });
-  }
-  return out;
 }
 
 /** The pieces on the base that stand for a building of before (docs/FASE12.md §11.3): the caravan is the bunker, the Cuartel and the Armería. */
@@ -927,7 +774,8 @@ export interface CampaignSoldier {
 
 export interface MissionReward {
   credits?: number;
-  recruit?: ClassId;
+  /** A recruit joins the Bastion, with no class (saves from before name the class it once came with: just as true). */
+  recruit?: true;
   /** Slows the enemy project. */
   doom?: number;
   /** Medicines (✚, docs/FASE3.md). */
@@ -983,9 +831,6 @@ export type ProposalAction =
   | { type: 'dismantle'; piece: string }
   | { type: 'levelUp' }
   | { type: 'chooseMission'; id: string }
-  | { type: 'clear'; plot: string }
-  | { type: 'build'; plot: string; facility: FacilityId }
-  | { type: 'upgrade'; plot: string }
   | { type: 'contact'; region: RegionId }
   | { type: 'event'; option: 0 | 1 }
   | { type: 'investigate'; id: string }
@@ -1148,12 +993,8 @@ export interface CampaignState {
   weaponMods?: Partial<Record<WeaponModId, number>>;
   /** Zones under the Marea when it was last looked at (syncMarea), for the alerts; missing before version 14. */
   flooded?: RegionId[];
-  /**
-   * The Taller's projects going on (`works`, kind 'craft'). `plots` is the base
-   * of before the new one (docs/FASE12.md §11), always empty now: it goes once
-   * the base's screen is the new one.
-   */
-  base: { plots: BasePlot[]; works: Construction[] };
+  /** The Taller's projects going on (saves from 0.7.1 and before also hold `plots`, always empty: the base of before). */
+  base: { works: Construction[] };
   /** The base (docs/FASE12.md §11): the clearing in the pines and what stands on it (base.ts). */
   bastion: BaseState;
   /** When the next siege comes, and what the Sala de radio hears of it (§11.5). */
@@ -1382,8 +1223,6 @@ export function rewardMultiplier(c: CampaignState): number {
   const level = facilityLevel(c, 'simulation');
   return level ? 1.25 + 0.15 * (level - 1) + (hasAdjacency(c, 'simulation') ? 0.15 : 0) : 1;
 }
-/** @deprecated the Sala de mapas' bonus is on suministros now: rewardMultiplier. */
-export const xpMultiplier = rewardMultiplier;
 
 /** Aim every soldier gets from the shooting range: 3/6/10, two more next to the training centre. */
 /** Will the Camposanto gives every soldier: +5 at level 2, +10 at level 3. */
@@ -1422,24 +1261,6 @@ export function workCrews(c: CampaignState): number {
   return 2 + (facilityLevel(c, 'crew') ? 1 : 0);
 }
 
-/** Why no new work can start on `plot`: every crew busy, or that plot already in works. */
-export function worksBlocker(c: CampaignState, plot: BasePlot): string | null {
-  if (c.base.works.some((w) => w.plot === plot.id)) return 'Ya hay obras en esa parcela.';
-  if (c.base.works.length >= workCrews(c)) return `Todas las cuadrillas están ocupadas (${workCrews(c)}).`;
-  return null;
-}
-
-/** Why the facility on `plot` can't be raised a level, or null if it can. */
-export function upgradable(c: CampaignState, plot: BasePlot): string | null {
-  const id = plot.building as FacilityId;
-  if (!plot.building || !(plot.building in FACILITIES)) return 'Aquí no hay nada que mejorar.';
-  const level = plot.level ?? 1;
-  if (level >= 3) return 'Ya está al máximo.';
-  const next = upgradeCost(id, level + 1);
-  if (bastionLevel(c) < next.level) return `Requiere nivel ${next.level} del Bastión.`;
-  return null;
-}
-
 /** Copies not equipped by any living soldier. */
 export function itemsFree(c: CampaignState, id: ItemId): number {
   const used = c.soldiers.filter((s) => s.alive).reduce((n, s) => n + (s.loadout.utility === id ? 1 : 0) + (s.loadout.ammo === id ? 1 : 0), 0);
@@ -1457,7 +1278,7 @@ export function soldierReady(s: CampaignSoldier): boolean {
  * missions, would stand still. Then, and only then, one waits for them to heal.
  */
 export function mustWait(c: CampaignState): boolean {
-  return c.version >= 20 && !c.outcome && !c.activeMission && !c.soldiers.some(soldierReady) && !(canAfford(c, recruitCost(c)) && bedsFree(c) > 0);
+  return !c.outcome && !c.activeMission && !c.soldiers.some(soldierReady) && !(canAfford(c, recruitCost(c)) && bedsFree(c) > 0);
 }
 
 // ------------------------------------------------------------ infection
@@ -1537,7 +1358,6 @@ function addFood(c: CampaignState, n: number): void {
 
 // ---------------------------------------------------------- the Taller
 
-/** The Taller's plot, where its work is done. */
 /** The Taller on the base, working (docs/FASE12.md §11.3). */
 function workshopPiece(c: CampaignState): BasePiece | undefined {
   return facilityPieces(c, 'workshop')[0]?.piece;
@@ -1653,17 +1473,6 @@ export function contactCost(c: CampaignState): number {
   return 30 + 20 * c.regions.filter((r) => r.contacted).length;
 }
 
-/** Why `id` can't be built on `plot`, or null if it can. */
-export function buildable(c: CampaignState, plot: BasePlot, id: FacilityId): string | null {
-  const def = FACILITIES[id];
-  if (plot.terrain !== 'clear') return 'Hay que despejar el terreno primero.';
-  if (plot.building) return 'Ya hay un edificio aquí.';
-  if (!neighbours(c, plot).some((q) => q.building)) return 'Tiene que estar pegado a otro edificio.';
-  if (bastionLevel(c) < def.level) return `Requiere nivel ${def.level} del Bastión.`;
-  if (def.unique && (facilityCount(c, id) > 0 || c.base.works.some((w) => w.kind === 'build' && w.facility === id))) return 'Solo se puede construir una.';
-  return null;
-}
-
 // ----------------------------------------------------------------- missions
 
 /** Mission types offered by the resistance network, with their relative frequency. */
@@ -1721,7 +1530,11 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   // Data and relays are worth more to the Council than a firefight; a Saqueo pays in what it brings back.
   const bonus = kind === 'recovery' || kind === 'hack' || kind === 'sabotage' ? 20 : kind === 'scavenge' ? -30 : 0;
   const reward: MissionReward = final ? {} : { credits: 50 + difficulty * 25 + bonus + rng.int(4) * 5 };
-  if (!final && (kind === 'rescue' || rng.int(5) === 0)) reward.recruit = rng.pick(['assault', 'grenadier', 'sharpshooter', 'specialist'] as const);
+  if (!final && (kind === 'rescue' || rng.int(5) === 0)) {
+    // The roll that once picked the recruit's class stays, so the offers after it come out as before.
+    rng.int(4);
+    reward.recruit = true;
+  }
   if (!final && (kind === 'sabotage' || (kind === 'hack' && rng.int(3) === 0))) reward.doom = 1;
   const seed = rng.int(2 ** 31);
   // Who a rescue is for and what a sabotage silences, chosen now so the report can say it (playtest 2026-10-15, #14, #20).
@@ -2140,7 +1953,6 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
     if (r.trait) s.traits.push(r.trait);
     log(c, `${s.name} se une al Bastión (${veterancyName(s)}).`, 'good');
   }
-  if (outcome.xp) gainXp(c, outcome.xp, rng);
   if (c.doom >= DOOM_MAX) c.outcome = 'defeat';
 }
 
@@ -2256,10 +2068,6 @@ function resolveRumor(c: CampaignState, rumor: Rumor, rng: Rng): void {
 
 // ------------------------------------------------------------------ the base
 
-/** Pieces dearer than this go to a vote between the two (docs/FASE12.md §11.7); cheaper, each one builds at once. */
-export const VOTE_ABOVE = 30;
-/** The answer to an order for the plots of before. */
-const BASE_GONE = 'Eso era de la base de antes: ahora se construye en el claro.';
 /** The answer to choosing another mission, or picking the squad, while the siege waits. */
 const SIEGE_NOW = 'Viene el asedio: no hay otra cosa que hacer.';
 
@@ -2342,6 +2150,7 @@ export function postBlocker(c: CampaignState, slot: Slot, soldier: string, at: V
   if (treeAt(base, at.x, at.y)) return 'Ahí hay árboles.';
   const piece = pieceAt(base, at.x, at.y);
   if (piece && PIECES[piece.piece].kind === 'trap') return 'Ahí hay una trampa.';
+  if (piece?.piece === 'wire') return 'Ahí hay alambre.';
   if (baseLayout(base).tiles[at.y * base.width + at.x] !== 'floor') return 'Ahí no se puede estar.';
   if (Object.entries(c.siegePosts ?? {}).some(([id, p]) => id !== soldier && p.x === at.x && p.y === at.y)) return 'Ahí ya hay alguien.';
   return null;
@@ -2397,7 +2206,9 @@ function takeBackBase(c: CampaignState, s: GameState): { broken: number; hurt: n
   for (const p of c.bastion.pieces) {
     if (!s.base.pieces.some((q) => q.id === p.id)) continue;
     const [hp, charges] = [p.hp, p.charges];
-    for (const cell of pieceCells(p.piece, p.x, p.y, p.rot)) {
+    // The caravan stands for the Bastion's building, all of it, as baseLayout put it up: hits past the caravan's own 4×2 count too.
+    const cells = p.piece === 'caravan' ? bastionFootprint(c.bastion) : pieceCells(p.piece, p.x, p.y, p.rot);
+    for (const cell of cells) {
       const left = s.breakables?.[cell.y * s.width + cell.x];
       if (left !== undefined) p.hp = Math.min(p.hp, left);
     }
@@ -2450,8 +2261,8 @@ function freshRegions(): RegionState[] {
 }
 
 /** The base's first line, and the same once the opening operation is chosen (placeholders for Lore). */
-const WELCOME = 'El Bastión entra en servicio. Elegid la primera misión: el combate hará subir de nivel al Bastión.';
-const WELCOME_OPENING = 'Primera salida: la insulina del consultorio de Brena. La escuadra espera en la cochera.';
+const WELCOME = 'El Bastión entra en servicio. Elegid la primera misión.';
+const WELCOME_OPENING = 'Primera salida: la insulina del consultorio de Brena. La escuadra espera junto a La Lata.';
 
 /**
  * A new campaign opens with a mission (playtest 2026-10-13): the first story
@@ -2491,7 +2302,7 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     crafted: [],
     foundWeapons: [],
     flooded: [],
-    base: { plots: [], works: [] },
+    base: { works: [] },
     bastion: freshClearing(rng),
     siege: { in: SIEGE_FIRST_IN, count: SIEGE_FIRST, sides: [], held: 0 },
     regions: freshRegions(),
@@ -2551,9 +2362,6 @@ export type CampaignCommand =
   | { type: 'rearm'; piece: string }
   | { type: 'dismantle'; piece: string }
   | { type: 'chooseMission'; id: string }
-  | { type: 'clear'; plot: string }
-  | { type: 'build'; plot: string; facility: FacilityId }
-  | { type: 'upgrade'; plot: string }
   | { type: 'contact'; region: RegionId }
   | { type: 'answerEvent'; option: 0 | 1 }
   | { type: 'investigate'; id: string }
@@ -2707,8 +2515,8 @@ export interface NextStep {
   label: string;
   count?: number;
   tone: 'urgent' | 'info';
-  /** `piece`: a piece of the base (docs/FASE12.md §11); `plot`: one of the plots of before. */
-  go?: { offer?: string; soldier?: string; plot?: string; piece?: string; region?: RegionId; rumor?: string };
+  /** `piece`: a piece of the base (docs/FASE12.md §11). */
+  go?: { offer?: string; soldier?: string; piece?: string; region?: RegionId; rumor?: string };
 }
 
 /**
@@ -2748,7 +2556,7 @@ export function nextSteps(c: CampaignState, slot: Slot, partnerName = 'El otro j
   if (short && !mission) steps.push(short);
 
   if (mission?.siege) {
-    // The dead at the base: straight to the cochera, where everyone healthy is already on the squad.
+    // The dead at the base: straight to the squad, by La Lata, where everyone healthy is already on it.
     const partnerReady = shared && c.launchReady[partner] && !c.launchReady[slot];
     steps.push({ view: 'squad', label: partnerReady ? `${partnerName} ya ha dado el sí: ${mission.name}` : `${BASE_SIEGE_TEXT.here} Defended el Bastión`, tone: 'urgent' });
   } else if (mission) {
@@ -2791,7 +2599,7 @@ export function nextSteps(c: CampaignState, slot: Slot, partnerName = 'El otro j
   }
 
   if (!mission && shared && c.advanceReady[partner] && !c.advanceReady[slot]) {
-    steps.push({ view: 'geoscape', label: c.version >= 20 ? `${partnerName} quiere esperar a que se curen` : `${partnerName} quiere esperar noticias`, tone: 'urgent' });
+    steps.push({ view: 'geoscape', label: `${partnerName} quiere esperar a que se curen`, tone: 'urgent' });
   }
   if (mustWait(c) && !c.advanceReady[slot]) steps.push({ view: 'barracks', label: 'Nadie puede salir: esperad a que se curen', tone: 'urgent' });
 
@@ -2867,16 +2675,6 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
       return `subir el Bastión al nivel ${bastionLevel(c) + 1}`;
     case 'chooseMission':
       return `ir a la misión ${c.offers.find((o) => o.id === action.id)?.name ?? ''}`;
-    case 'clear': {
-      const plot = plotById(c, action.plot)!;
-      return `despejar ${plotName(plot)}${plot.terrain === 'clear' ? '' : ` (${TERRAINS[plot.terrain].name.toLowerCase()})`}`;
-    }
-    case 'build':
-      return `construir ${FACILITIES[action.facility].name} en ${plotName(plotById(c, action.plot)!)}`;
-    case 'upgrade': {
-      const plot = plotById(c, action.plot)!;
-      return `mejorar ${FACILITIES[plot.building as FacilityId].name} a nivel ${(plot.level ?? 1) + 1}`;
-    }
     case 'contact':
       return `contactar con ${REGIONS[action.region].name}`;
     case 'event':
@@ -2950,39 +2748,6 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (c.activeMission === action.id) return 'Esa misión ya está elegida.';
       if (!c.offers.some((o) => o.id === action.id)) return 'Esa misión ya no está disponible.';
       return null;
-    case 'clear': {
-      if (c.version >= 20) return BASE_GONE;
-      const plot = plotById(c, action.plot);
-      if (!plot) return 'Esa parcela no existe.';
-      const busy = worksBlocker(c, plot);
-      if (busy) return busy;
-      const blocker = clearable(c, plot);
-      if (blocker) return blocker;
-      if (!canAfford(c, clearCost(plot).cost)) return 'No hay suministros suficientes.';
-      return null;
-    }
-    case 'build': {
-      if (c.version >= 20) return BASE_GONE;
-      const plot = plotById(c, action.plot);
-      if (!plot) return 'Esa parcela no existe.';
-      const busy = worksBlocker(c, plot);
-      if (busy) return busy;
-      const blocker = buildable(c, plot, action.facility);
-      if (blocker) return blocker;
-      if (!canAfford(c, FACILITIES[action.facility].cost)) return 'No hay suministros suficientes.';
-      return null;
-    }
-    case 'upgrade': {
-      if (c.version >= 20) return BASE_GONE;
-      const plot = plotById(c, action.plot);
-      if (!plot) return 'Esa parcela no existe.';
-      const busy = worksBlocker(c, plot);
-      if (busy) return busy;
-      const blocker = upgradable(c, plot);
-      if (blocker) return blocker;
-      if (!canAfford(c, upgradeCost(plot.building as FacilityId, (plot.level ?? 1) + 1).cost)) return 'No hay suministros suficientes.';
-      return null;
-    }
     case 'contact':
       return contactBlocker(c, action.region);
     case 'event':
@@ -3072,34 +2837,6 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       log(c, `Misión elegida: ${c.offers.find((o) => o.id === action.id)!.name}. Revisad la escuadra.`);
       break;
     }
-    case 'clear': {
-      const plot = plotById(c, action.plot)!;
-      const { cost } = clearCost(plot);
-      const days = workDays(c, clearCost(plot).days);
-      pay(c, cost);
-      c.base.works.push({ plot: plot.id, kind: 'clear', facility: null, daysLeft: days, total: days });
-      if (plot.terrain !== 'clear') log(c, TERRAINS[plot.terrain].start.replace('{parcela}', plotName(plot)));
-      break;
-    }
-    case 'build': {
-      const plot = plotById(c, action.plot)!;
-      const def = FACILITIES[action.facility];
-      const days = workDays(c, def.days);
-      pay(c, def.cost);
-      c.base.works.push({ plot: plot.id, kind: 'build', facility: def.id, daysLeft: days, total: days });
-      log(c, `Empiezan las obras: ${def.name}, en ${plotName(plot)}.`);
-      break;
-    }
-    case 'upgrade': {
-      const plot = plotById(c, action.plot)!;
-      const id = plot.building as FacilityId;
-      const next = upgradeCost(id, (plot.level ?? 1) + 1);
-      const days = workDays(c, next.days);
-      pay(c, next.cost);
-      c.base.works.push({ plot: plot.id, kind: 'upgrade', facility: id, daysLeft: days, total: days });
-      log(c, `Empiezan las obras: ${FACILITIES[id].name} a nivel ${(plot.level ?? 1) + 1}.`);
-      break;
-    }
     case 'contact': {
       pay(c, contactCost(c));
       const region = c.regions.find((r) => r.id === action.region)!;
@@ -3169,16 +2906,6 @@ export function proposalCost(c: CampaignState, action: ProposalAction): number {
       return 0;
     case 'levelUp':
       return LEVEL_COST[bastionLevel(c)] ?? 0;
-    case 'clear': {
-      const plot = plotById(c, action.plot);
-      return plot ? clearCost(plot).cost : 0;
-    }
-    case 'build':
-      return FACILITIES[action.facility].cost;
-    case 'upgrade': {
-      const plot = plotById(c, action.plot);
-      return plot?.building ? upgradeCost(plot.building as FacilityId, (plot.level ?? 1) + 1).cost : 0;
-    }
     case 'contact':
       return contactCost(c);
     case 'craft':
@@ -3267,8 +2994,11 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       return propose(c, { type: 'levelUp' }, ctx);
     case 'placeLine':
       return propose(c, { type: 'placeLine', piece: cmd.piece, cells: cmd.cells, rot: cmd.rot }, ctx);
-    case 'fell':
-      return propose(c, { type: 'fell', tiles: cmd.tiles }, ctx);
+    case 'fell': {
+      // A tree listed twice is one tree: counted twice, it was paid (and proposed) as two.
+      const tiles = cmd.tiles.filter((t, i) => cmd.tiles.findIndex((o) => o.x === t.x && o.y === t.y) === i);
+      return propose(c, { type: 'fell', tiles }, ctx);
+    }
     case 'mend':
     case 'rearm':
     case 'dismantle':
@@ -3276,12 +3006,6 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
     case 'chooseMission':
       if (activeOffer(c)?.siege) return { ok: false, error: SIEGE_NOW };
       return propose(c, { type: 'chooseMission', id: cmd.id }, ctx);
-    case 'clear':
-      return propose(c, { type: 'clear', plot: cmd.plot }, ctx);
-    case 'build':
-      return propose(c, { type: 'build', plot: cmd.plot, facility: cmd.facility }, ctx);
-    case 'upgrade':
-      return propose(c, { type: 'upgrade', plot: cmd.plot }, ctx);
     case 'contact':
       return propose(c, { type: 'contact', region: cmd.region }, ctx);
     case 'answerEvent':
@@ -3346,8 +3070,13 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
         log(c, `Propuesta rechazada: ${p.text}.`, 'bad');
         return { ok: true };
       }
+      // What no longer goes through (the supplies spent since) is dropped and said so: a refusal here would leave
+      // both screens showing a proposal the campaign no longer has, and nothing new could be proposed.
       const error = validateAction(c, p.action);
-      if (error) return { ok: false, error };
+      if (error) {
+        log(c, `Propuesta aceptada, pero ya no se puede: ${p.text}. ${error}`, 'bad');
+        return { ok: true };
+      }
       applyAction(c, p.action, ctx);
       return { ok: true };
     }
@@ -3441,23 +3170,13 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'advance': {
       // Time goes by with the missions now (docs/FASE12.md §11.6): there is no waiting for news (only taking back a «ready»).
-      if (c.version >= 20) {
-        if (cmd.ready && !mustWait(c)) return { ok: false, error: 'Ya no se espera: el tiempo pasa con cada misión.' };
-        if (cmd.ready && c.event) return { ok: false, error: 'Antes hay que decidir qué hacer con el acontecimiento.' };
-        c.advanceReady[slot] = cmd.ready;
-        if (cmd.ready && everyoneReady(c.advanceReady, ctx.connected)) {
-          c.advanceReady = [false, false];
-          // The days go by until someone can go out again (or something has to be decided first).
-          for (let i = 0; i < 60 && mustWait(c) && !c.event; i++) passDay(c, ctx.rng);
-        }
-        return { ok: true };
-      }
-      if (c.activeMission) return { ok: false, error: 'Hay una misión elegida: lanzadla o cancelad.' };
-      if (c.event) return { ok: false, error: 'Antes hay que decidir qué hacer con el acontecimiento.' };
+      if (cmd.ready && !mustWait(c)) return { ok: false, error: 'Ya no se espera: el tiempo pasa con cada misión.' };
+      if (cmd.ready && c.event) return { ok: false, error: 'Antes hay que decidir qué hacer con el acontecimiento.' };
       c.advanceReady[slot] = cmd.ready;
       if (cmd.ready && everyoneReady(c.advanceReady, ctx.connected)) {
         c.advanceReady = [false, false];
-        advanceTime(c, ctx.rng);
+        // The days go by until someone can go out again (or something has to be decided first).
+        for (let i = 0; i < 60 && mustWait(c) && !c.event; i++) passDay(c, ctx.rng);
       }
       return { ok: true };
     }
@@ -3531,6 +3250,10 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       s.loadout[cmd.slot] = cmd.item;
       return { ok: true };
     }
+
+    default:
+      // An order of an older version (the plots of before) or a mistyped one: refused, never a crash.
+      return { ok: false, error: 'Esa orden no existe.' };
   }
 }
 
@@ -3565,40 +3288,17 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 
   for (const work of [...c.base.works]) {
     if (--work.daysLeft > 0) continue;
-    const plot = plotById(c, work.plot)!;
-    if (work.kind === 'clear') {
-      const { salvage } = clearCost(plot);
-      const ruins = plot.terrain === 'ruins';
-      plot.terrain = 'clear';
-      c.credits += salvage;
-      log(c, ruins ? `Ruinas desmontadas en ${plotName(plot)}: +${salvage} § en materiales.` : `Terreno despejado en ${plotName(plot)}: listo para construir.`, 'good');
-    } else if (work.kind === 'craft') {
-      const def = CRAFTS[work.project!];
-      if (def.makes) {
-        (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind: def.makes, holder: null });
-        log(c, `El Taller ha terminado ${def.the}. Ya está en la Armería.`, 'good');
-      } else if (def.makesMod) {
-        (c.weaponMods ??= {})[def.makesMod] = (c.weaponMods?.[def.makesMod] ?? 0) + 1;
-        log(c, `El Taller ha terminado ${def.the}. Ya está en la Armería, para montar en un arma.`, 'good');
-      } else {
-        (c.crafted ??= []).push(def.id);
-        if (def.kind === 'ammo') log(c, `El Taller ha terminado ${def.the}: un cargador de repuesto más para cada soldado que salga.`, 'good');
-        else log(c, `El Taller ha terminado: ${def.name.toLowerCase()} para todos (cada uno, hasta lo que permita su rango).`, 'good');
-      }
-    } else if (work.kind === 'upgrade') {
-      plot.level = (plot.level ?? 1) + 1;
-      log(c, `${FACILITIES[work.facility!].name}, nivel ${plot.level}: ${FACILITIES[work.facility!].upgrades[plot.level - 2]!.split('.')[0]}.`, 'good');
+    const def = CRAFTS[work.project!];
+    if (def.makes) {
+      (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind: def.makes, holder: null });
+      log(c, `El Taller ha terminado ${def.the}. Ya está en la Armería.`, 'good');
+    } else if (def.makesMod) {
+      (c.weaponMods ??= {})[def.makesMod] = (c.weaponMods?.[def.makesMod] ?? 0) + 1;
+      log(c, `El Taller ha terminado ${def.the}. Ya está en la Armería, para montar en un arma.`, 'good');
     } else {
-      plot.building = work.facility;
-      plot.level = 1;
-      const bonus = adjacencyAt(c, plot, work.facility!);
-      log(
-        c,
-        bonus
-          ? `${FACILITIES[work.facility!].name} y ${buildingName(bonus.next)}, pared con pared: ${bonus.text.split('.')[0]}.`
-          : `Instalación terminada: ${FACILITIES[work.facility!].name}.`,
-        'good',
-      );
+      (c.crafted ??= []).push(def.id);
+      if (def.kind === 'ammo') log(c, `El Taller ha terminado ${def.the}: un cargador de repuesto más para cada soldado que salga.`, 'good');
+      else log(c, `El Taller ha terminado: ${def.name.toLowerCase()} para todos.`, 'good');
     }
     c.base.works = c.base.works.filter((w) => w !== work);
     stop = true;
@@ -3773,7 +3473,7 @@ export function squadMember(c: CampaignState, s: CampaignSoldier): SquadMember {
   if (hasTech(c, 'plasmaGrenades')) mods = addMods(mods, { grenadeDamage: 2 });
   if (hasTech(c, 'nanoMedkit')) {
     mods = addMods(mods, { heal: 2 });
-    // The belt's Botiquín (the Grillo's flying medkit is gone with the classes).
+    // The belt's Botiquín: one more use.
     if (charges.firstAid !== undefined) charges.firstAid += 1;
   }
   const traits = s.traits.map((t) => TRAITS[t]);
@@ -3833,25 +3533,6 @@ function listOf(parts: string[]): string {
   return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : (parts[0] ?? '');
 }
 
-/**
- * Adds Bastion experience and announces every level reached. New levels can
- * open the next story chapter and, at the top, the final mission.
- */
-export function gainXp(c: CampaignState, amount: number, rng: Rng): void {
-  const before = bastionLevel(c);
-  c.xp += amount;
-  const after = bastionLevel(c);
-  for (let level = before + 1; level <= after; level++) reachedLevel(c, level, rng);
-}
-
-/** The Bastion straight to `level` (tests and old ways in): every level on the way reached as if bought. */
-export function setBastionLevel(c: CampaignState, level: number, rng: Rng): void {
-  const from = bastionLevel(c);
-  c.level = Math.max(1, Math.min(MAX_LEVEL, level));
-  c.bastion.level = c.level;
-  for (let l = from + 1; l <= c.level; l++) reachedLevel(c, l, rng);
-}
-
 /** A level reached: said, the weapons it brings to the Armería (docs/FASE8.md §A), and the story it may open. */
 function reachedLevel(c: CampaignState, level: number, rng: Rng): void {
   log(c, `El Bastión sube al nivel ${level}.`, 'good');
@@ -3903,7 +3584,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
   c.missionsFlown = (c.missionsFlown ?? 0) + 1;
   // Time goes by with the missions (docs/FASE12.md §11.6): the days pass while the squad is out, so whoever
   // comes back hurt or bitten starts from today; the mission they flew doesn't expire under them (passDay).
-  if (c.version >= 20) passDays(c, DAYS_PER_MISSION, rng);
+  passDays(c, DAYS_PER_MISSION, rng);
   const report: MissionReport = {
     day: c.day,
     missionName: offer?.name ?? 'Misión',
@@ -4117,12 +3798,10 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     report.fallen = true;
   }
   // The siege clock (§11.5): one mission less to the next; once a siege is over, the next one is set.
-  if (c.version >= 20) {
-    if (siege) {
-      if (victory) c.siege.held++;
-      c.siege = nextSiege(c, rng);
-    } else c.siege.in = Math.max(0, c.siege.in - 1);
-  }
+  if (siege) {
+    if (victory) c.siege.held++;
+    c.siege = nextSiege(c, rng);
+  } else c.siege.in = Math.max(0, c.siege.in - 1);
 
   // Ordinary offers are gone either way; facility assaults, story chapters and the final mission stay until won.
   if (offer && ((!offer.final && !offer.facility && !offer.story) || victory)) c.offers = c.offers.filter((o) => o.id !== offer.id);
@@ -4141,7 +3820,7 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     log(c, `${s.name} vuelve con un mordisco: tiene fiebre.`, 'bad');
   }
   syncMarea(c);
-  if (c.version >= 20 && !c.outcome) {
+  if (!c.outcome) {
     // Always something to fly (time only goes by with missions), and the next siege announced, or here.
     topUpOffers(c, rng);
     if (c.siege.in === 0 && !siege) startSiege(c, rng);
@@ -4152,18 +3831,21 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
 
 // ---------------------------------------------------------------- migration
 
+/** The Bastion experience each level took before version 21 (index 0 is level 1), for migrateCampaign. */
+const OLD_LEVEL_XP = [0, 12, 30, 55, 85, 120, 160, 205];
+
 /**
  * Brings a campaign saved by an earlier version of the current progression
  * up to the current shape. Campaigns from before Fase 10 aren't carried over
  * (campaignOutdated, docs/FASE10.md): the host keeps them aside instead.
  */
 export function migrateCampaign(old: CampaignState): CampaignState {
-  if (campaignOutdated(old)) throw new Error(`Campaña de la versión ${old.version}: de antes de la 0.4, no se convierte.`);
+  if (campaignOutdated(old)) throw new Error(`Campaña de la versión ${old.version}: de antes de la 0.7, no se convierte.`);
   const c = JSON.parse(JSON.stringify(old)) as CampaignState;
   c.version = CAMPAIGN_VERSION;
   if (old.version < 21) {
-    // The level is bought from now on (#40): it starts where the experience had it.
-    c.level ??= levelForXp(c.xp);
+    // The level is bought from now on (#40): it starts where the experience had it, with the levels' experience then.
+    c.level ??= Math.max(1, OLD_LEVEL_XP.filter((xp) => c.xp >= xp).length);
     // Operations don't expire (#39).
     for (const o of c.offers) o.expiresDay = null;
   }

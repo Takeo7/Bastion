@@ -119,9 +119,9 @@ describe('walls that break', () => {
     expect(before.decor).toEqual(s.decor);
   });
 
-  it('smoke, a flashbang or a molotov leave the walls alone', () => {
+  it('smoke or a flashbang leave the walls alone', () => {
     const s = room();
-    for (const ability of ['smoke', 'flashbang', 'fireball'] as const) expect(breachedWalls(s, ability, at(2, 3))).toEqual([]);
+    for (const ability of ['smoke', 'flashbang'] as const) expect(breachedWalls(s, ability, at(2, 3))).toEqual([]);
     expect(breachedWalls(s, 'launch', at(2, 3)).length).toBeGreaterThan(0);
   });
 

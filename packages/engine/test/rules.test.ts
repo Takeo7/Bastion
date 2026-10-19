@@ -99,7 +99,6 @@ describe('classes', () => {
     expect(kit('assault')).toEqual(expect.arrayContaining(['slash', 'shoot']));
     expect(kit('grenadier')).toContain('launch');
     expect(kit('sharpshooter')).toEqual(expect.arrayContaining(['pistol', 'shoot']));
-    expect(kit('specialist')).toEqual(expect.arrayContaining(['medkit', 'aid']));
   });
 
   it('the sniper rifle needs both actions, the pistol only one', () => {
@@ -138,22 +137,6 @@ describe('classes', () => {
     expect(events.some((e) => e.t === 'moved')).toBe(false);
     expect(events.some((e) => e.t === 'shot' && e.ability === 'slash')).toBe(true);
     expect(ranger.pos).toEqual({ x: 4, y: 5, z: 0 });
-  });
-
-  it('the medkit heals and spends a charge; aid protocol raises defense', () => {
-    const s = field();
-    const medic = addUnit(s, 's1', 'specialist', 0, 0);
-    const hurt = addUnit(s, 's2', 'assault', 3, 3, { hp: 1 });
-    addUnit(s, 'a1', 'trooper', 10, 3);
-    expect(allyTargets(s, medic, 'medkit')).toContain(hurt);
-    run(s, ability('s1', 'medkit', { target: 's2' }));
-    expect(hurt.hp).toBe(5);
-    expect(medic.charges.medkit).toBe(1);
-    expect(medic.ap).toBe(1);
-    run(s, ability('s1', 'aid', { target: 's2' }));
-    expect(hurt.aided).toBe(20);
-    const shot = previewShot(s, s.units.find((u) => u.id === 'a1')!, hurt)!;
-    expect(shot.mods.find((m) => m.label === 'Atendido')?.value).toBe(-20);
   });
 });
 

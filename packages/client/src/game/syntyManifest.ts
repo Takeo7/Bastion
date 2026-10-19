@@ -42,7 +42,7 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
   snow: { dir: 'POLYGON_Snow_SourceFiles', materialList: 'MaterialList_PolygonSnow.txt' },
   // «POLYGON – Office»: the radio's voices (strategy/portraits.ts).
   office: { dir: 'POLYGON_Office_SourceFiles' },
-  // «POLYGON – Particle FX»: shapes and sprites for the effects (fx.ts, songFx.ts).
+  // «POLYGON – Particle FX»: shapes and sprites for the effects (fx.ts).
   particleFx: { dir: 'POLYGON_ParticleFX_SourceFiles' },
   // «POLYGON – Icons»: a few of its pieces for the interface's renders (lab/renders).
   icons: { dir: 'POLYGON_Icons_SourceFiles_v4', materialList: 'MaterialList_PolygonIcons.txt' },
@@ -570,7 +570,7 @@ export const UNIT_WEAPONS: Partial<Record<TemplateId, [WeaponId, WeaponId, Weapo
 // ----------------------------------------------------------------- effects
 
 /**
- * Particle FX's shapes (fx.ts, songFx.ts): Synty builds its effects from
+ * Particle FX's shapes (fx.ts): Synty builds its effects from
  * faceted puffs, chunks and flat polygon sprites, tinted by the effect, and
  * so do we. The meshes keep only their shape (each effect gives its colour);
  * the gore takes the pack's dark reds from its atlas.
@@ -583,9 +583,6 @@ export const FX_MODELS = {
   flame: { pack: 'particleFx', fbx: 'SM_Flame_FX' },
   medCross: { pack: 'particleFx', fbx: 'FX_Healthcube_01' },
   woodChip: { pack: 'particleFx', fbx: 'FX_WoodChip_01' },
-  // Apocalypse's molotov, upright, rag at the neck: thrown by the Oficio (songFx.ts) and the interface's icon.
-  // (Its path: the pack has a second copy among the vehicle weapons.)
-  molotov: { pack: 'apocalypse', fbx: 'FBX/SM_Wep_Molotov_01' },
 } satisfies Record<string, { pack: PackId; fbx: string }>;
 
 export type FxModelId = keyof typeof FX_MODELS;

@@ -37,7 +37,9 @@ Sesiones abiertas (2026-10-14), todas con Remote Control para seguirlas desde cl
 - Los packs de Synty originales viven en `assets-src/synty/`, que no se sube: la licencia no deja redistribuirlos. Al repositorio solo van los modelos convertidos que use el juego.
 - El repositorio `Takeo7/Bastion` es **siempre privado**: lleva los modelos de Synty convertidos y la licencia no deja publicarlos. Nadie cambia su visibilidad. Si algún día hace falta una descarga pública, será un repositorio o sitio aparte solo con los binarios, y siempre preguntando antes a Arturo. Las releases (`v0.1.0`) solo las ve quien tiene acceso al repositorio; para pasar el juego a alguien, Arturo le manda el zip.
 
-## En marcha (2026-10-14)
+## En marcha (2026-10-14, histórico)
+
+Esta sección se quedó en el 14/10. Lo de ahora está en [TRASPASO.md](TRASPASO.md) §3 y §5; la última revisión del código, en [REVISION-2026-10-19.md](REVISION-2026-10-19.md).
 
 Subida la 0.2.2 (bdf4953 y 0d4db5b) y, después, la 0.2.3: la fase 7 ([FASE7.md](FASE7.md)) y los zombis primero ([ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md)), con el cliente de Arte y UI y los textos de Lore; y la 0.2.4: pasos sin patinar por plantilla, muertes de verdad, posturas, andar de zombi y el ritmo del turno enemigo ([UX-RITMO.md](UX-RITMO.md)). Las carpetas de `assets-src/synty/` tienen ya el nombre de su pack (tabla en `packages/client/tools/synty/README.md`). Lo que hizo cada sesión antes de eso:
 

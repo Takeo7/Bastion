@@ -7,8 +7,8 @@ import { hit, type Env, type Synth } from './synth';
 //
 // Families: weapons (by gun and tier, and alien guns), impacts, explosives,
 // steps and actions, deaths, combat stingers, the interface of the case file
-// (typewriter keys, carriage bell, rubber stamp, paper, pen), the Oficio's
-// trades and tools, the radio and the strategy layer.
+// (typewriter keys, carriage bell, rubber stamp, paper, pen), the radio and
+// the strategy layer.
 
 export interface SoundDef {
   bus: Bus;
@@ -162,13 +162,9 @@ function adventGun(level = 1): (s: Synth) => void {
   };
 }
 
-// ---------------------------------------------------------------- the Oficio
+// ---------------------------------------------------------------- pulsing
 
-// The Oficio's trades and tools (engine content.ts): machete, flares,
-// firecrackers, petrol, crossbow, bandages, syringes and the defibrillator.
-// The ids keep the old «song.*» names, so the battle (game.ts) plays them as it did.
-
-/** `input` pulsing in level `rate` times a second (a spinning bottle, a sputtering flame, a shock's buzz). */
+/** `input` pulsing in level `rate` times a second (a torn throat, a gurgle, a shock's buzz). */
 function pulse(s: Synth, input: AudioNode, rate: number, depth: number, at = 0, dur = s.dur - at): GainNode {
   const g = s.ctx.createGain();
   g.gain.value = 1 - depth;
@@ -178,33 +174,6 @@ function pulse(s: Synth, input: AudioNode, rate: number, depth: number, at = 0, 
   lfo.connect(d).connect(g.gain);
   input.connect(g);
   return g;
-}
-
-/** Something burning: the low roar of the flames and their crackle. */
-function flames(s: Synth, at: number, dur: number, level = 1): void {
-  const roar = s.filter(s.noise('brown', at, dur), 'lowpass', s.vary(700), 0.7);
-  s.to(s.amp(pulse(s, roar, s.vary(5), 0.3, at, dur), [[at, 0], [at + 0.15, level], [at + dur * 0.5, level * 0.6], [at + dur, 0.0005]]));
-  s.to(s.filter(s.grains(at, at + dur, Math.round(dur * 45), 0.004), 'bandpass', s.vary(2600), 0.8), level * 0.9);
-}
-
-/** Petrol catching: a deep whoomp that opens up. */
-function whoomp(s: Synth, at: number, level = 1): void {
-  const body = s.filter(s.noise('brown', at, 1.2), 'lowpass', [[at, 180], [at + 0.25, 1400], [at + 1, 500]], 0.8);
-  s.to(s.shape(s.amp(body, [[at, 0], [at + 0.07, 1.4 * level], [at + 1.1, 0.0005]]), 1.8));
-  s.to(s.amp(s.osc('sine', [[at, 70], [at + 0.5, 32]]), hit(at, 0.03, 0.5, level)));
-}
-
-/** A bottle breaking: the snap, a dull knock and the shards scattering. */
-function smash(s: Synth, at: number, level = 1): void {
-  s.to(s.amp(s.filter(s.noise('white', at, 0.1), 'highpass', 2500), hit(at, 0.0005, 0.03, level)));
-  s.to(s.amp(s.osc('sine', [[at, 160], [at + 0.08, 70]]), hit(at, 0.002, 0.08, level * 0.6)));
-  for (const f of [3100, 4600, 6200, 8100]) s.to(s.filter(s.grains(at + 0.005, at + 0.4, 9, 0.018), 'bandpass', s.vary(f, 0.1), 10), level * 2.2);
-}
-
-/** A firecracker: a sharp crack with a little body. */
-function banger(s: Synth, at: number, level: number, out: AudioNode): void {
-  s.shape(s.amp(s.filter(s.noise('white', at, 0.08), 'highpass', s.vary(1800)), hit(at, 0.0004, s.vary(0.025), level)), 3).connect(out);
-  s.amp(s.filter(s.noise('pink', at, 0.1), 'bandpass', s.vary(700), 1.2), hit(at, 0.001, 0.05, level * 0.5)).connect(out);
 }
 
 // ---------------------------------------------------------------- the dead's throats
@@ -243,140 +212,9 @@ function gurgle(s: Synth, at: number, dur: number, level = 1): void {
   s.to(s.amp(pulse(s, voice, s.vary(17), 0.8, at, dur), [[at, 0], [at + 0.04, level * 1.2], [at + dur * 0.7, level * 0.9], [at + dur, 0.001]]));
 }
 
-const OFICIO: Record<string, SoundDef> = {
-  // The cue of the Oficio's moves (Saltar por la ventana, Encaramarse, Lluvia de flechas): kit shifting, a buckle.
-  'song.voice': def('sfx', 0.6, (s) => {
-    s.to(s.amp(s.filter(s.grains(0, 0.4, 26, 0.025, false), 'bandpass', s.vary(1400), 0.8), [[0, 0], [0.05, 1.2], [0.45, 0.001]]));
-    s.to(s.metal(s.r(0.12, 0.2), [s.vary(2600), s.vary(3900), s.vary(5200)], 0.08, 0.3));
-  }, { level: -5 }),
-  // Bengala: the striker scraped, the flare catching with a pop, and its hiss as it flies, sputtering.
-  'song.bolt': def('sfx', 1.3, (s) => {
-    s.to(s.filter(s.grains(0, 0.09, 22, 0.006, false), 'bandpass', s.vary(3200), 1.2), 1.2);
-    s.to(s.amp(s.osc('sine', [[0.1, 340], [0.16, 120]]), hit(0.1, 0.002, 0.07, 0.6)));
-    s.to(s.amp(s.filter(s.noise('white', 0.1, 0.1), 'highpass', 900), hit(0.1, 0.001, 0.04, 0.7)));
-    const hiss = s.filter(s.noise('white', 0.1), 'bandpass', [[0.1, 2800], [1.2, 4200]], 0.9);
-    s.to(s.amp(pulse(s, hiss, s.vary(23), 0.3, 0.1), [[0.1, 0], [0.16, 0.9], [0.6, 0.6], [1.25, 0.001]]));
-  }, { reverb: 0.2 }),
-  // Cóctel molotov: the bottle spinning through the air, smashing, and the petrol going up in flames.
-  'song.fire': def('sfx', 2.6, (s) => {
-    const spin = s.filter(s.noise('pink', 0, 0.75), 'bandpass', [[0, 600], [0.7, 1100]], 1.5);
-    s.to(s.amp(pulse(s, spin, s.vary(9), 0.5, 0, 0.75), [[0, 0], [0.15, 0.5], [0.65, 0.4], [0.72, 0.001]]));
-    smash(s, 0.7);
-    whoomp(s, 0.74);
-    flames(s, 0.8, 1.7, 0.6);
-  }, { level: 2, reverb: 0.35 }),
-  // Flecha perforante, Lluvia de flechas: the crossbow's trigger, the string slapping home and the bolt hissing off.
-  'song.arrow': def('sfx', 0.7, (s) => {
-    s.to(s.amp(s.filter(s.noise('white', 0, 0.05), 'bandpass', s.vary(3000), 4), hit(0, 0.0005, 0.012, 0.6)));
-    const string = s.filter(s.osc('sawtooth', [[0.012, s.vary(190)], [0.2, 120]], 0.012, 0.3), 'lowpass', [[0.012, 2400], [0.2, 500]]);
-    s.to(s.amp(string, hit(0.012, 0.001, 0.18, 0.9)));
-    s.to(s.amp(s.filter(s.noise('pink', 0.012, 0.1), 'bandpass', s.vary(900), 1.5), hit(0.012, 0.001, 0.05, 1)));
-    s.to(s.amp(s.filter(s.noise('white', 0.02, 0.4), 'bandpass', [[0.02, 2600], [0.4, 1200]], 2), [[0.02, 0], [0.06, 0.35], [0.4, 0.001]]));
-  }, { level: -1, reverb: 0.15 }),
-  // Saltar por la ventana, Encaramarse: boots pushing off and the body going over...
-  'song.vanish': def('sfx', 0.6, (s) => {
-    s.to(s.filter(s.grains(0, 0.08, 12, 0.012, false), 'bandpass', s.vary(1100), 0.9), 1.2);
-    s.to(s.amp(s.osc('sine', [[0, 110], [0.06, 60]]), hit(0, 0.002, 0.07, 0.6)));
-    s.to(s.amp(s.filter(s.noise('pink', 0.05), 'bandpass', [[0.05, 500], [0.45, 1400]], 1), [[0.05, 0], [0.2, 0.5], [0.5, 0.001]]));
-    s.to(s.amp(s.filter(s.grains(0.06, 0.4, 14, 0.02, false), 'bandpass', 1600, 0.7), [[0.06, 0], [0.1, 0.8], [0.45, 0.001]]));
-  }, { level: -3 }),
-  // ...and landing: a heavy thud, grit under the boots and the kit rattling.
-  'song.appear': def('sfx', 0.8, (s) => {
-    s.to(s.amp(s.osc('sine', [[0, 95], [0.15, 42]]), hit(0, 0.003, 0.18, 1)));
-    s.to(s.amp(s.filter(s.noise('pink', 0, 0.3), 'lowpass', 900), hit(0, 0.002, 0.08, 0.9)));
-    s.to(s.filter(s.grains(0.01, 0.25, 30, 0.006), 'bandpass', s.vary(2400), 0.9), 1);
-    for (const at of [s.r(0.06, 0.12), s.r(0.16, 0.26)]) s.to(s.metal(at, [s.vary(2200), s.vary(3300)], 0.06, 0.25));
-  }, { level: -2 }),
-  // Petardos: the fuse fizzing, then the string of crackers going off and echoing down the street.
-  'song.dome': def('sfx', 2.8, (s) => {
-    s.to(s.amp(s.filter(s.noise('white', 0, 0.6), 'bandpass', s.vary(4200), 1.5), [[0, 0], [0.05, 0.3], [0.5, 0.25], [0.55, 0.001]]));
-    s.to(s.filter(s.grains(0, 0.55, 30, 0.003, false), 'highpass', 3000), 0.5);
-    // Close together at first, then the last few straggling.
-    const bangs = s.ctx.createGain();
-    let at = 0.55;
-    for (let i = 0; i < 16; i++) {
-      banger(s, at, s.r(0.6, 1), bangs);
-      at += i < 11 ? s.r(0.04, 0.11) : s.r(0.1, 0.22);
-    }
-    s.to(s.echo(bangs, 0.19, 0.3, 0.35, 2200));
-  }, { level: 2, reverb: 0.35 }),
-  // El bidón: a kick against a steel drum, petrol sloshing, then the drum going up in a ball of fire...
-  'song.storm': def('sfx', 2.4, (s) => {
-    s.to(s.metal(0, [s.vary(165), s.vary(262), s.vary(388), s.vary(611)], 0.9, 0.7));
-    s.to(s.amp(s.filter(s.noise('pink', 0, 0.1), 'lowpass', 600), hit(0, 0.002, 0.05, 0.8)));
-    s.to(s.amp(pulse(s, s.filter(s.noise('brown', 0.05, 0.4), 'lowpass', 500), 7, 0.6, 0.05, 0.4), [[0.05, 0], [0.12, 0.5], [0.4, 0.001]]));
-    whoomp(s, 0.28, 1.2);
-    flames(s, 0.35, 1.9, 0.8);
-  }, { level: 2, reverb: 0.4 }),
-  // ...and the fire reaching each enemy: a gust of flame and its crackle.
-  'song.thunder': def('sfx', 1.4, (s) => {
-    whoomp(s, 0, 0.9);
-    flames(s, 0.05, 1.2, 0.5);
-  }, { reverb: 0.3 }),
-  // Escudo antidisturbios, Arenga, ¡Aguantad!: two blows of a baton on a riot shield, to rally the others.
-  'song.aura': def('sfx', 1.1, (s) => {
-    for (const [at, l] of [
-      [0, 1],
-      [0.3, 0.85],
-    ] as const) {
-      // The shield's hollow plastic boom and its rim rattling.
-      s.to(s.amp(s.filter(s.noise('pink', at, 0.3), 'bandpass', s.vary(420), 2.5), hit(at, 0.001, 0.14, l)));
-      s.to(s.amp(s.osc('sine', [[at, s.vary(150)], [at + 0.12, 80]]), hit(at, 0.002, 0.14, l * 0.8)));
-      s.to(s.metal(at, [s.vary(1150), s.vary(1780)], 0.07, l * 0.25));
-      s.to(s.filter(s.grains(at + 0.01, at + 0.12, 6, 0.006), 'bandpass', 2600, 1), l * 0.5);
-    }
-  }, { level: -1, reverb: 0.3 }),
-  // Vendaje rápido (and the Desfibrilador with no one down): a strip torn off the roll, the gauze wound round, the tape pressed down.
-  'song.heal': def('sfx', 1.1, (s) => {
-    const tear = s.filter(s.grains(0, 0.28, 90, 0.004, false), 'bandpass', [[0, 1800], [0.28, 3400]], 0.9);
-    s.to(s.amp(tear, [[0, 0], [0.02, 1.4], [0.24, 1], [0.3, 0.001]]));
-    s.to(s.amp(s.filter(s.noise('white', 0, 0.3), 'bandpass', 2600, 1.2), [[0, 0], [0.03, 0.3], [0.28, 0.001]]));
-    s.to(s.amp(s.filter(s.noise('pink', 0.35, 0.5), 'bandpass', [[0.35, 900], [0.8, 1400]], 1), [[0.35, 0], [0.45, 0.35], [0.85, 0.001]]));
-    s.to(s.amp(s.filter(s.noise('pink', 0.9, 0.1), 'lowpass', 1200), hit(0.9, 0.002, 0.05, 0.5)));
-  }, { level: -3 }),
-  // Desfibrilador: the charge whining up, the ready beeps, the shock (a thump, a crack, a buzz) and the monitor beeping again.
-  'song.revive': def('sfx', 2.6, (s) => {
-    s.to(s.amp(s.osc('sine', [[0, 700], [0.75, 3600]]), [[0, 0], [0.1, 0.25], [0.75, 0.3], [0.8, 0.001]]));
-    s.to(s.amp(s.osc('sine', [[0, 1400], [0.75, 7200]]), [[0, 0], [0.1, 0.06], [0.75, 0.07], [0.8, 0.001]]));
-    for (const at of [0.8, 0.92]) s.to(s.amp(s.osc('square', 1760, at, 0.07), hit(at, 0.003, 0.06, 0.18)));
-    const at = 1.1;
-    s.to(s.amp(s.osc('sine', [[at, 110], [at + 0.2, 45]]), hit(at, 0.002, 0.22, 1.2)));
-    s.to(s.shape(s.amp(s.filter(s.noise('white', at, 0.15), 'highpass', 1500), hit(at, 0.0005, 0.05, 1)), 3));
-    s.to(s.amp(pulse(s, s.filter(s.noise('white', at, 0.2), 'bandpass', 3000, 1.2), 60, 1, at, 0.2), hit(at, 0.002, 0.15, 0.5)));
-    for (const beat of [1.75, 2.3]) s.to(s.amp(s.osc('sine', 1046, beat, 0.15), hit(beat, 0.005, 0.12, 0.25)));
-  }, { level: 1, reverb: 0.25 }),
-  // Sedante: the syringe's cap pulled off, a squirt to clear it and the plunger pressed home.
-  'song.cleanse': def('sfx', 0.8, (s) => {
-    s.to(s.amp(s.filter(s.noise('white', 0, 0.05), 'bandpass', s.vary(2400), 3), hit(0, 0.0005, 0.02, 0.8)));
-    s.to(s.amp(s.osc('sine', [[0, 900], [0.03, 500]]), hit(0, 0.001, 0.03, 0.3)));
-    s.to(s.amp(s.filter(s.noise('white', 0.14, 0.12), 'highpass', 5000), [[0.14, 0], [0.16, 0.4], [0.24, 0.001]]));
-    s.to(s.amp(s.filter(s.noise('white', 0.4, 0.05), 'bandpass', s.vary(3400), 5), hit(0.4, 0.0005, 0.015, 0.7)));
-    s.to(s.amp(s.filter(s.noise('pink', 0.42, 0.25), 'bandpass', 1200, 2), [[0.42, 0], [0.45, 0.2], [0.65, 0.001]]));
-  }, { level: -5 }),
-  // Rastreo: down on one knee, the scope's dial clicked round to the range, a breath held.
-  'song.mark': def('sfx', 0.9, (s) => {
-    s.to(s.amp(s.filter(s.grains(0, 0.2, 12, 0.025, false), 'bandpass', 1200, 0.7), [[0, 0], [0.04, 0.9], [0.25, 0.001]]));
-    for (let i = 0; i < 3; i++) {
-      const at = 0.3 + i * 0.09;
-      s.to(s.amp(s.filter(s.noise('white', at, 0.03), 'bandpass', s.vary(4200, 0.04), 6), hit(at, 0.0004, 0.01, 0.8)));
-      s.to(s.metal(at, [s.vary(5300, 0.03)], 0.02, 0.2));
-    }
-    s.to(s.amp(s.filter(s.noise('pink', 0.6, 0.3), 'bandpass', 800, 0.8), [[0.6, 0], [0.7, 0.12], [0.88, 0.001]]));
-  }, { level: -6 }),
-  // Machetazo: a heavy machete swung through the air and biting home. Nothing plays it yet: the Tajo has its own sound.
-  'song.blade': def('sfx', 0.7, (s) => {
-    s.to(s.amp(s.filter(s.noise('white', 0, 0.25), 'bandpass', [[0, 600], [0.16, 2400]], 1.8), [[0, 0], [0.13, 0.8], [0.17, 0.001]]));
-    const at = 0.17;
-    s.to(s.amp(s.osc('sine', [[at, 140], [at + 0.1, 60]]), hit(at, 0.002, 0.1, 1)));
-    s.to(s.amp(s.filter(s.noise('pink', at, 0.15), 'bandpass', s.vary(700), 1.2), hit(at, 0.001, 0.07, 1)));
-    s.to(s.metal(at, [s.vary(2100), s.vary(3200), s.vary(4700)], 0.18, 0.25));
-  }, { reverb: 0.15 }),
-};
-
 // ---------------------------------------------------------------- the list
 
 export const SOUNDS: Record<string, SoundDef> = {
-  ...OFICIO,
   ...Object.fromEntries(
     (Object.keys(GUNS) as (keyof typeof GUNS)[]).flatMap((gun) => ([1, 2, 3] as const).map((tier) => [`shot.${gun}.${tier}`, soldierGun(gun, tier)])),
   ),
@@ -753,7 +591,7 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.metal(0.005, [2800, 4100, 5700].map((f) => s.vary(f, 0.03)), 0.55, 0.45));
     s.to(s.amp(s.osc('sine', [[0, 120], [0.1, 60]]), hit(0, 0.003, 0.1, 0.6)));
   }, { reverb: 0.15 }),
-  // Electric: a buzzing zap (stun lance, the drone's shock).
+  // Electric: a buzzing zap (the stun lance).
   'melee.stun': def('sfx', 0.5, (s) => {
     const z = s.filter(s.noise('white'), 'bandpass', 3000, 1.2);
     const chop = s.ctx.createGain();
@@ -771,19 +609,7 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', 800, 1), [[0, 0], [0.1, 0.5], [0.4, 0.001]]));
     s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 400), hit(0.42, 0.003, 0.1, 0.8)));
   }, { level: -4 }),
-  // The specialist's drone taking off: a buzzing hum.
-  drone: def('sfx', 0.8, (s) => {
-    const buzz = s.filter(s.osc('sawtooth', [[0, 160], [0.3, 210]]), 'bandpass', 900, 1.5);
-    const trem = s.ctx.createGain();
-    trem.gain.value = 0.6;
-    const lfo = s.osc('sine', 28);
-    const depth = s.ctx.createGain();
-    depth.gain.value = 0.4;
-    lfo.connect(depth).connect(trem.gain);
-    buzz.connect(trem);
-    s.to(s.amp(trem, [[0, 0], [0.12, 0.7], [0.75, 0.001]]));
-  }, { level: -6 }),
-  // Someone patched up (a medkit, the medic's drone): a pouch torn open, a hiss of spray and a pat on the
+  // Someone patched up (a medkit): a pouch torn open, a hiss of spray and a pat on the
   // dressing. No chime (playtest 18/10 #22: the old one was a power-up's arpeggio).
   heal: def('sfx', 0.9, (s) => {
     const velcro = s.filter(s.grains(0, 0.17, 40, 0.004, false), 'bandpass', s.vary(2500), 0.8);

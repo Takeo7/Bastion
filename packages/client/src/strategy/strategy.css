@@ -305,50 +305,6 @@
   background: repeating-linear-gradient(-45deg, var(--ink) 0 1.5px, transparent 1.5px 5px);
 }
 
-/* Stats as a filled-in form. */
-/* (Old filled-in form for stats, still used by the main menu.) */
-.x-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px 12px;
-  margin: 8px 0 12px;
-}
-
-.x-stats div {
-  display: grid;
-  border-bottom: 1px solid var(--ink);
-}
-
-.x-stats small {
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--x-muted);
-}
-
-.x-stats b {
-  font-family: var(--font-hand);
-  font-size: 26px;
-  line-height: 1;
-  color: var(--pen);
-}
-
-.x-stats b:is(.x-good, .x-warn, .x-bad) {
-  color: inherit;
-}
-
-.x-stats b.x-good {
-  color: var(--good);
-}
-
-.x-stats b.x-warn {
-  color: var(--warn);
-}
-
-.x-stats b.x-bad {
-  color: var(--stamp);
-}
-
 /* A form field that opens a list of choices (replaces the native select). */
 .x-pick {
   position: relative;
@@ -887,8 +843,7 @@
 }
 
 /* Lines that sit straight on the 3D scene get their own slip of paper. */
-.strat-center-bottom > small,
-.scan-day {
+.strat-center-bottom > small {
   padding: 1px 10px;
   background: var(--paper-grain), var(--paper);
   box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
@@ -918,124 +873,7 @@
   min-height: 0;
 }
 
-.strat-ticker {
-  position: absolute;
-  left: 10px;
-  bottom: 52px;
-  width: clamp(230px, 24vw, 300px);
-  z-index: 4;
-}
-
-.strat-ticker .x-row {
-  grid-template-columns: 4px 1fr;
-}
-
-/* Labels over the 3D rooms and regions: slips of paper. Three.js positions
-   them with an inline transform, so they tilt and bob with rotate/translate. */
-.room-label,
-.globe-label,
-.partner-tag {
-  padding: 1px 8px;
-  font-family: var(--font-display);
-  font-size: 13px;
-  white-space: nowrap;
-  color: var(--ink);
-  background: var(--paper-grain), var(--paper);
-  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.6);
-  rotate: -1.5deg;
-}
-
-.room-label.command {
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--stamp);
-  outline: 2px solid var(--stamp);
-  outline-offset: -4px;
-  padding: 4px 10px;
-}
-
-/* Terrain and free plots are only labelled when pointed at or selected: with
-   49 plots, a label on each was noise. Buildings always carry theirs. */
-.room-label:is(.rock, .empty):not(.hovered, .selected) {
-  display: none;
-}
-
-.room-label.rock {
-  font-size: 12px;
-  color: var(--ink-soft);
-  background: var(--paper-grain), var(--paper-dark);
-}
-
-.room-label.built {
-  background: var(--paper-grain), var(--paper-light);
-}
-
-.room-label.busy {
-  color: var(--stamp);
-}
-
-.room-label.fixed {
-  color: var(--ink-soft);
-}
-
-.globe-label.contacted {
-  color: var(--ink-blue);
-}
-
-.globe-label.facility {
-  color: var(--stamp);
-}
-
-.room-label.selected,
-.globe-label.selected {
-  outline: 2px solid var(--ink-blue);
-  outline-offset: 1px;
-}
-
-.partner-tag {
-  font-family: var(--font-hand);
-  font-size: 15px;
-  background: #fff27a;
-  border-left: 4px solid var(--accent);
-  rotate: 2deg;
-  animation: x-bob 1.6s ease-in-out infinite;
-}
-
-@keyframes x-bob {
-  50% {
-    translate: 0 -4px;
-  }
-}
-
 /* ----------------------------------------------------------- geoscape */
-
-.scan-btn {
-  min-width: 240px;
-  display: grid;
-  gap: 2px;
-}
-
-/* Scanning is this screen's main action: the red stamp. */
-.scan-btn:not(.ready):not(:disabled) {
-  background: var(--stamp);
-  border-color: var(--stamp);
-  color: #fff;
-  box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.45);
-}
-
-.scan-btn small {
-  font-family: var(--font);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  opacity: 0.85;
-}
-
-.scan-day {
-  font-size: 14px;
-  letter-spacing: 0.24em;
-}
 
 .mission-icon {
   display: inline-grid;
@@ -2383,10 +2221,6 @@ dl.briefing {
   grid-template-columns: 4px 40px 1fr auto;
 }
 
-.x-list.items .x-row {
-  grid-template-columns: 4px 1fr auto auto;
-}
-
 /* Soldiers: class, name, chevrons, state, all on one line. */
 .x-row.soldier {
   grid-template-columns: 4px 14px 1fr auto auto;
@@ -2440,16 +2274,6 @@ dl.briefing {
   --icon: var(--i-will);
 }
 
-.stat.flag {
-  --c: var(--ink-blue);
-  --icon: var(--i-flag);
-}
-
-.stat.skull {
-  --c: var(--ink);
-  --icon: var(--i-skull);
-}
-
 .x-gear,
 .x-effect {
   display: flex;
@@ -2463,45 +2287,6 @@ dl.briefing {
   margin-left: auto;
 }
 
-dl.x-pairs {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 10px;
-  margin: 2px 0 8px;
-  font-size: 13px;
-}
-
-dl.x-pairs dt {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-}
-
-dl.x-pairs dd {
-  margin: 0;
-}
-
-/* Buildable facilities: name, the whole description, days, and the button with the price under them. */
-.x-row.build {
-  grid-template-columns: 4px 1fr;
-  align-items: start;
-}
-
-.x-row.build > .x-btn {
-  grid-column: 2;
-  justify-self: start;
-  margin: 2px 0 2px;
-  white-space: nowrap;
-}
-
-/* The ones that can't be built yet: one line. */
-.x-row.build.dim small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 @media (max-width: 1200px) {
   .strat-left,
   .strat-right {
@@ -2513,21 +2298,6 @@ dl.x-pairs dd {
   .strat-player small {
     display: none;
   }
-}
-
-/* With operations waiting, scanning (which lets them expire) is a plain button,
-   not the red stamp: choosing an operation is what comes first. */
-.scan-btn.secondary {
-  min-width: 190px;
-  padding: 5px 16px;
-  font-size: 14px;
-}
-
-.scan-btn.secondary:not(.ready):not(:disabled) {
-  background: var(--paper-grain), var(--paper-light);
-  border-color: var(--ink);
-  color: var(--ink);
-  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.4);
 }
 
 /* Days left: a little clock before the number. */
@@ -2550,17 +2320,6 @@ dl.x-pairs dd {
   mask: var(--i-clock) center / contain no-repeat;
 }
 
-/* Rooms list (Instalaciones): number, state, action. */
-.x-row.room {
-  grid-template-columns: 4px 30px minmax(0, 1fr) auto;
-}
-
-.x-row.room .cls {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-
 /* Narrow screens: a briefing folds the list away; a tab brings it back. */
 .strat-fold {
   display: none;
@@ -2578,40 +2337,6 @@ dl.x-pairs dd {
     display: block;
     box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
   }
-}
-
-/* The hangar's label sits right under the top strip in the overview: nudge it down. */
-.room-label.fixed {
-  translate: 0 20px;
-}
-
-/* Labels of neighbouring plots alternate height (bastion.ts marks every other
-   column): zoomed out, «Cuartel · Búnker · Armería» no longer run together. */
-.room-label.low {
-  translate: 0 26px;
-}
-
-/* «Reclutar» on a free hangar place (#39): the four classes as a short list,
-   symbol and full name, as wide as the photo. */
-.recruit-classes {
-  display: grid;
-  gap: 3px;
-  margin-top: 6px;
-}
-
-.lineup-card .recruit-classes .x-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  width: 100%;
-  margin: 0;
-  padding: 2px 6px;
-  text-align: left;
-}
-
-/* The symbol only: the button already says the class in full. */
-.recruit-classes .cls {
-  font-size: 0;
 }
 
 /* "Ahora": the one next thing to do, on top of the Agenda. A red stamp when it
@@ -2786,8 +2511,7 @@ dl.x-pairs dd {
   gap: 3px;
 }
 
-.cls > i,
-.x-recruit button > i {
+.cls > i {
   flex: none;
   width: 11px;
   height: 11px;
@@ -2796,58 +2520,8 @@ dl.x-pairs dd {
   mask: var(--icon) center / contain no-repeat;
 }
 
-.cls-assault {
-  --icon: var(--i-assault);
-}
-
-.cls-grenadier {
-  --icon: var(--i-grenade);
-}
-
-.cls-sharpshooter {
-  --icon: var(--i-aim);
-}
-
-.cls-rookie {
-  --icon: var(--i-rookie);
-}
-
-.cls-specialist {
-  --icon: var(--i-specialist);
-}
-
 .x-row.soldier {
   grid-template-columns: 4px 14px 1fr auto auto;
-}
-
-/* Recruiting: the whole class name, two per row. */
-.x-recruit {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  margin-bottom: 6px;
-}
-
-.x-recruit button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 6px;
-  font-family: var(--font-display);
-  font-size: 12px;
-  text-align: left;
-  background: var(--paper-grain), var(--paper-light);
-  border: 1px solid rgba(42, 35, 24, 0.45);
-  border-radius: 2px;
-  color: var(--ink);
-}
-
-.x-recruit button:hover:not(:disabled) {
-  background: var(--paper-grain), #fff;
-}
-
-.x-recruit button:disabled {
-  opacity: 0.45;
 }
 
 /* A proposal's data under it, typed (the proposal itself is handwritten). */
@@ -2912,7 +2586,6 @@ dl.x-pairs dd {
 .strat-top,
 .strat-left,
 .strat-right,
-.strat-ticker,
 .strat-nav,
 .strat-center-top,
 .strat-center-bottom,
@@ -2928,144 +2601,6 @@ dl.x-pairs dd {
 .strat-center-bottom .x-btn.danger {
   background: var(--paper-grain), var(--paper);
   box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
-}
-
-/* Adjacency (new base): the facility gains a bonus on this plot, and the active
-   bonuses in the effects list. Green like the lit walkways in 3D. */
-.x-row.build.bonus {
-  --row-accent: var(--good);
-  background: rgba(47, 107, 47, 0.07);
-}
-
-.x-row.build.bonus small.x-good {
-  font-weight: 700;
-}
-
-.x-effect.bonus {
-  color: var(--good);
-  font-weight: 700;
-}
-
-/* ------------------------------------------------------- the plots grid */
-
-/* The compound seen from above, 7 × 7: what stands on each plot, marked like a site plan. */
-.plot-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
-  margin: 6px 0 4px;
-}
-
-.plot-cell {
-  position: relative;
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1.5px solid var(--x-line);
-  background: transparent;
-  color: var(--x-text);
-  cursor: pointer;
-}
-
-.plot-ico {
-  display: grid;
-  width: 64%;
-  height: 64%;
-}
-
-.plot-ico .ico {
-  width: 100%;
-  height: 100%;
-}
-
-/* Free and buildable: an empty frame; out of reach: fainter. */
-.plot-cell.free {
-  border-style: dashed;
-  border-color: var(--x-good);
-}
-
-.plot-cell.far {
-  opacity: 0.45;
-}
-
-.plot-cell.terrain {
-  color: var(--x-muted);
-  background: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--x-muted) 22%, transparent) 4px 5px);
-}
-
-.plot-cell.built {
-  border-color: var(--x-text);
-  background: color-mix(in srgb, var(--x-text) 9%, transparent);
-}
-
-.plot-cell.fixed {
-  border-color: var(--x-text);
-  background: var(--x-text);
-  color: var(--paper);
-}
-
-.plot-cell.work {
-  border-color: var(--x-warn);
-  color: var(--x-warn);
-  background: repeating-linear-gradient(-45deg, transparent 0 4px, color-mix(in srgb, var(--x-warn) 20%, transparent) 4px 7px);
-}
-
-.plot-cell:hover,
-.plot-cell.hovered {
-  outline: 2px solid var(--x-text);
-  outline-offset: 1px;
-  opacity: 1;
-}
-
-.plot-cell.selected {
-  outline: 3px solid var(--x-text);
-  outline-offset: 1px;
-  opacity: 1;
-  z-index: 1;
-}
-
-/* A building that can go up a level: a small arrow in the corner. */
-.plot-cell.can-up::after {
-  content: '▲';
-  position: absolute;
-  top: 0;
-  right: 2px;
-  font-size: 8px;
-  color: var(--x-good);
-}
-
-.plot-level,
-.plot-days {
-  position: absolute;
-  bottom: 0;
-  right: 2px;
-  font-family: var(--font-display);
-  font-size: 9px;
-  line-height: 1.1;
-}
-
-.plot-days {
-  left: 0;
-  right: 0;
-  text-align: center;
-}
-
-.plot-hover {
-  min-height: 2.6em;
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--x-muted);
-}
-
-.plot-hover b {
-  color: var(--x-text);
-  font-family: var(--font-display);
-  font-weight: 400;
-}
-
-.x-head .plot-drop {
-  margin-left: auto;
 }
 
 /* What a «Ver» points at blinks, even when it is already on screen. */
@@ -3149,152 +2684,13 @@ dl.x-pairs dd {
   text-align: left;
 }
 
-.debrief-next {
-  display: block;
-  margin-top: 6px;
-  max-width: 52ch;
-  text-align: center;
-  color: var(--x-text);
-}
-
-/* ------------------------------------------------------- the promotion */
-
-/* What waits in the tree, over it: the picks are a draft until «Guardar». */
-.service-help {
-  margin: 2px 0 8px;
-  font-size: 13px;
-  color: var(--x-text);
-}
-
-/* «GUARDADO»: the sheet is stamped when a promotion is written down. */
-.saved-stamp {
-  position: absolute;
-  top: 14px;
-  right: 24px;
-  z-index: 2;
-  padding: 2px 12px;
-  border: 3px solid var(--x-good);
-  color: var(--x-good);
-  font-family: var(--font-display);
-  font-size: 22px;
-  letter-spacing: 0.14em;
-  transform: rotate(-8deg);
-  pointer-events: none;
-  animation: x-stamp 0.35s ease-out;
-}
-
-@keyframes x-stamp {
-  from {
-    transform: rotate(-8deg) scale(1.8);
-    opacity: 0;
-  }
-}
-
 /* ------------------------------------------------------------ calendar */
-
-/* What happens on which day: the date first, then what. */
-.calendar-day {
-  margin-right: 4px;
-  font-family: var(--font-display);
-  font-weight: 400;
-  color: var(--x-muted);
-}
 
 .calendar-note {
   margin: 4px 0 0;
   font-size: 11.5px;
   line-height: 1.3;
   color: var(--x-muted);
-}
-
-/* The Camposanto's names. */
-.fallen-row {
-  grid-template-columns: 4px 1fr;
-  gap: 0 8px;
-}
-
-.fallen-row small {
-  grid-column: 2;
-  color: var(--x-muted);
-}
-
-/* ------------------------------------------------------- the build list */
-
-/* Cards in two columns, each with its mark: name, one line of effect, price and days, and the button. */
-.build-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
-}
-
-.build-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 30px 1fr;
-  gap: 2px 8px;
-  align-content: start;
-  padding: 7px 8px;
-  border: 1.5px solid var(--x-line);
-  background: color-mix(in srgb, var(--x-text) 4%, transparent);
-}
-
-.build-card .plot-ico {
-  grid-row: span 2;
-  width: 28px;
-  height: 28px;
-}
-
-.build-card b {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 13.5px;
-  line-height: 1.15;
-}
-
-.build-card small {
-  grid-column: 2;
-  font-size: 11.5px;
-  line-height: 1.25;
-  color: var(--x-muted);
-}
-
-.build-card .build-meta,
-.build-card .x-btn {
-  grid-column: 1 / -1;
-}
-
-.build-card .build-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.build-card .x-btn {
-  justify-self: stretch;
-  margin-top: 4px;
-}
-
-.build-card.bonus {
-  border-color: var(--x-good);
-}
-
-.build-card.locked {
-  opacity: 0.55;
-}
-
-.build-locked {
-  margin-top: 10px;
-}
-
-.build-locked summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--x-muted);
-}
-
-.build-locked .build-grid {
-  margin-top: 6px;
 }
 
 /* ------------------------------------------------------------ recruiting */
@@ -3333,11 +2729,6 @@ dl.x-pairs dd {
   letter-spacing: 0;
   text-transform: none;
   color: var(--x-muted);
-}
-
-.gear-note {
-  margin: 2px 0 0;
-  font-size: 11.5px;
 }
 
 /* ------------------------------------- customizer: a colour per armour piece (2026-10-12) */

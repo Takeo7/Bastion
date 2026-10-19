@@ -6,7 +6,7 @@
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
 import { DISMANTLE_BACK, FELL_COST, type PieceId } from './base';
-import { FOUND_WEAPONS, NIGHT, THIRD_ACTION_RANK, type RangeTable } from './content';
+import { FOUND_WEAPONS, THIRD_ACTION_RANK, type RangeTable } from './content';
 import { BAR_GROWTH, DEED_XP, RANK_STEP, SKILLS, VETERANCY, WILL_PER_RANK, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
@@ -820,12 +820,6 @@ export function operationAim(kind: MissionKind, o: { item?: string; vip?: string
   }
 }
 
-/** «Qué hace» for clearing a plot (campaign.ts TERRAINS): «Despejar el bosque de C4 y dejar la parcela libre para construir.» */
-export function clearAim(terrain: 'rocks' | 'forest' | 'ruins', plot: string): string {
-  const what = { rocks: 'la roca', forest: 'el bosque', ruins: 'las ruinas' }[terrain];
-  return `Despejar ${what} de ${plot} y dejar la parcela libre para construir.`;
-}
-
 /** «Qué hace» for a contact: who answers, what they send and what it opens. */
 export function contactAim(id: RegionId, income: number): string {
   return `Hablar por radio con ${REGION_LORE[id].ally}: ${income} § en cada convoy mientras su zona no caiga, y se pueden asaltar sus Nidos.`;
@@ -1280,7 +1274,7 @@ export const BUILD_TEXT = {
   felling: 'Arrastra sobre los árboles que quieras talar. Esc para dejarlo.',
   idle: 'Pulsa una pieza del claro para repararla, mejorarla o desmontarla.',
   noTrees: 'Aquí no hay árboles: arrastra sobre el pinar.',
-  /** A dear piece with the partner connected: its tag (voteTip has the why). */
+  /** A piece with the partner connected: its tag (it goes to a vote). */
   vote: 'se propone',
   /** Dismantling's confirmation, and its two buttons. */
   dismantleAsk: '¿Desmontar?',
@@ -1314,11 +1308,6 @@ export function timeHelp(level: number): string {
 /** What locks a piece, or an upgrade: «Hace falta el nivel 2 del Bastión.»; the palette's tag is «Nivel 2». */
 export function needsLevelLine(level: number): string {
   return `Hace falta el nivel ${level} del Bastión.`;
-}
-
-/** Why a dear piece goes to a vote (`over`: the price above which it does): «Cuesta más de 30 §: se propone, y se paga cuando los dos estáis de acuerdo.» */
-export function voteTip(over: number): string {
-  return `Cuesta más de ${over} §: se propone, y se paga cuando los dos estáis de acuerdo.`;
 }
 
 /** The bottom line with a piece in hand: «Empalizada: clic para poner, R para girar, Esc para soltar.» */
@@ -1390,11 +1379,6 @@ export function buildShortLine(supplies: number, parts = 0): string {
   const what = [supplies > 0 ? `${supplies} §` : '', parts > 0 ? partsCount(parts) : ''].filter(Boolean);
   const one = what.length === 1 && (supplies === 1 || (!supplies && parts === 1));
   return `${one ? 'Falta' : 'Faltan'} ${what.join(' y ')}`;
-}
-
-/** A dear piece put to the partner (§11.7): «Propuesta de Arturo: Muro, 15 § y 1 pieza». */
-export function buildProposalLine(who: string, piece: PieceId, cost: { supplies: number; parts?: number }): string {
-  return `Propuesta de ${who}: ${PIECE_TEXT[piece].name}, ${buildCostLine(cost).replace(/^Cuesta /, '')}`;
 }
 
 /**
@@ -1747,7 +1731,7 @@ export function floodedZoneNote(level: number): string {
 /** Night missions (docs/ALTURA-Y-NOCHE.md): the tag, the briefing's last line and the debrief's. */
 export const NIGHT_TEXT = {
   label: 'De noche',
-  briefing: 'De noche: tus soldados solo ven de cerca, salvo bajo una farola, una bengala o un fuego. Hay más zombis, y el botín vale la mitad más.',
+  briefing: 'De noche: tus soldados solo ven de cerca, salvo bajo una farola o un foco. Hay más zombis, y el botín vale la mitad más.',
   report: 'Misión de noche: el botín y la recompensa valen la mitad más.',
   /**
    * How the light works (los.ts sightTo, detectionTo), a line each, for the
@@ -1756,9 +1740,9 @@ export const NIGHT_TEXT = {
    */
   rules: [
     'De noche, tus soldados solo ven de cerca.',
-    'Bajo una farola, una bengala o un fuego se ve como de día.',
+    'Bajo una farola o un foco se ve como de día.',
     'Hasta que te descubren, los enemigos solo te notan de cerca si estás a oscuras. Después, los zombis ven como de día.',
-    `Las farolas no se apagan. La Bengala ilumina al enemigo que alcanza y lo que tiene alrededor durante ${NIGHT.flare.turns} turnos. El Cóctel molotov y El bidón dejan fuego durante ${NIGHT.fire.turns}.`,
+    'Las farolas y los focos no se apagan.',
   ],
 };
 
@@ -2061,7 +2045,7 @@ export const STORY: StoryChapter[] = [
     biome: 'wilds',
     region: 'eeu',
     difficulty: 3,
-    reward: { credits: 80, recruit: 'assault' },
+    reward: { credits: 80, recruit: true },
     prize: 'una niña inmune a salvo en el Bastión',
     briefing:
       'Simão entró en el campamento de los Cuervos a por la niña inmune, pero lo han descubierto. Sabe dónde la esconden. Llegad hasta él y sacadlo con vida.',

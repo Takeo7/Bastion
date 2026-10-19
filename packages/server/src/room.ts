@@ -19,7 +19,6 @@ import {
   defaultSquad,
   executeCampaignCommand,
   executeCommand,
-  hasAdjacency,
   ALARM_NAMES,
   hasQuarantine,
   medicineCures,
@@ -96,6 +95,8 @@ export class Room {
   private skirmishMap: SkirmishMap = 'city';
   private skirmishVeterans = true;
   private skirmishNight = false;
+  /** The last write of the save failed: the players were told once, and are told again only after one goes through. */
+  private saveFailed = false;
 
   constructor(
     private readonly store: SaveStore,
@@ -204,8 +205,10 @@ export class Room {
     if (this.phase === 'mission' && this.state) this.send(socket, { t: 'snapshot', state: this.state });
     this.persist();
     this.resyncTurn();
+    // A proposal saved before the host restarted had no clock: it gets one when someone is back.
+    this.checkWaits();
     // Back in: how long the open decisions have left.
-    for (const kind of ['proposal', 'evac'] as const) {
+    for (const kind of ['proposal', 'evac', 'abandon'] as const) {
       const wait = this.waits[kind];
       if (wait) this.send(socket, { t: 'deadline', kind, ms: Math.max(0, wait.at - Date.now()) });
     }
@@ -233,6 +236,17 @@ export class Room {
       // ---- campaign
       case 'newCampaign':
         if (this.phase !== 'lobby') return;
+        // The campaign it replaces is kept as it was, next to the save: the client asks first, but a click is easy.
+        if (this.campaign) {
+          try {
+            const kept = this.store.keepCopy('antes-de-campana-nueva');
+            if (kept) this.store.log(`[save] La campaña anterior queda en ${kept}.`);
+          } catch (err) {
+            this.store.log(`[save] ${(err as Error).message}`);
+            if (seat.socket) this.send(seat.socket, { t: 'error', message: 'No se pudo guardar aparte la campaña de ahora: no se empieza otra.' });
+            return;
+          }
+        }
         this.campaign = createCampaign(this.connectedSlots(), this.rng);
         // It opens with the first operation chosen and its squad in the hangar (playtest 2026-10-13).
         openingMission(this.campaign);
@@ -428,8 +442,6 @@ export class Room {
       quarantine: hasQuarantine(c),
       snow: info.snow,
     });
-    // The Taller de oficios wall to wall with the listening post: the Oficio makes less noise.
-    if (hasAdjacency(c, 'echoes')) this.state.quietSongs = true;
     this.resultApplied = false;
     this.phase = 'mission';
     console.log(`[room] Misión de campaña: ${offer.name}.`);
@@ -509,9 +521,12 @@ export class Room {
       return;
     }
     this.waits[kind] = null;
+    // Nobody here: it waits for whoever comes back (join starts the clock again).
+    if (kind === 'proposal' && !this.connectedSlots().length) return;
     if (kind === 'proposal' && this.campaign?.proposal && this.phase === 'base') {
       const partner: Slot = this.campaign.proposal.by === 0 ? 1 : 0;
-      const result = executeCampaignCommand(this.campaign, { type: 'vote', accept: true }, { slot: partner, connected: [0, 1], rng: this.rng });
+      // Who is really here: a mission chosen this way fills La Lata as without the partner, not with their soldiers.
+      const result = executeCampaignCommand(this.campaign, { type: 'vote', accept: true }, { slot: partner, connected: this.connectedSlots(), rng: this.rng });
       console.log(`[room] Propuesta sin respuesta: sigue adelante${result.ok ? '' : ` (${result.error})`}.`);
       if (result.ok && result.launch) this.launchCampaignMission();
       else this.broadcast({ t: 'campaign', state: this.campaign });
@@ -603,18 +618,28 @@ export class Room {
   }
 
   private persist(): void {
-    this.store.save({
-      seats: this.seats.map((s) => (s ? { slot: s.slot, name: s.name, token: s.token } : null)),
-      phase: this.phase,
-      mode: this.mode,
-      state: this.state,
-      campaign: this.campaign,
-      resultApplied: this.resultApplied,
-      rng: this.rng.state,
-      missionKind: this.missionKind,
-      skirmishMap: this.skirmishMap,
-      skirmishVeterans: this.skirmishVeterans,
-      skirmishNight: this.skirmishNight,
-    });
+    try {
+      this.store.save({
+        seats: this.seats.map((s) => (s ? { slot: s.slot, name: s.name, token: s.token } : null)),
+        phase: this.phase,
+        mode: this.mode,
+        state: this.state,
+        campaign: this.campaign,
+        resultApplied: this.resultApplied,
+        rng: this.rng.state,
+        missionKind: this.missionKind,
+        skirmishMap: this.skirmishMap,
+        skirmishVeterans: this.skirmishVeterans,
+        skirmishNight: this.skirmishNight,
+      });
+      this.saveFailed = false;
+    } catch (err) {
+      // A disk that's full or an antivirus holding the file (Windows) must not stop the game: the next change tries again.
+      const line = `[save] No se pudo guardar la partida: ${(err as Error).message}`;
+      console.error(line);
+      this.store.log(line);
+      if (!this.saveFailed) this.broadcast({ t: 'error', message: 'No se pudo guardar la partida. Se vuelve a intentar con el siguiente cambio.' });
+      this.saveFailed = true;
+    }
   }
 }

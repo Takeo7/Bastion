@@ -14,7 +14,7 @@
 //   - themes/mixta.css: the --t-* values, the materials, type and motion;
 //   - themes/mixta-base.css: the base screens, the main menu and Ajustes;
 //   - themes/mixta-hud.css: the combat HUD;
-//   - themes/synty-icons.css: the packs' silhouettes on abilities and plots.
+//   - themes/synty-icons.css: the packs' silhouettes on the abilities.
 // ui/motion.ts adds the few motions CSS can't start on its own.
 // Faces (OFL, latin subset; licences in docs/ux/FUENTES.md): Barlow for text,
 // the HUD and small figures; Oswald for titles and big numbers only.

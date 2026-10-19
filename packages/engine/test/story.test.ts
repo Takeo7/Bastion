@@ -5,7 +5,6 @@ import {
   createCampaign,
   eventDef,
   executeCampaignCommand,
-  setBastionLevel,
   migrateCampaign,
   missionInfo,
   offerVip,
@@ -14,10 +13,11 @@ import {
   type MissionOffer,
 } from '../src/campaign';
 import { SIMON_CHAPTER, STORY } from '../src/lore';
-import { LEVEL_XP, MAX_LEVEL } from '../src/progression';
+import { MAX_LEVEL } from '../src/progression';
 import { Rng } from '../src/rng';
 import { createMission, normalizeMission } from '../src/setup';
 import type { Slot } from '../src/types';
+import { levelTo } from './helpers';
 
 function run(c: CampaignState, cmd: CampaignCommand, slot: Slot = 0, connected: Slot[] = [0]) {
   const r = executeCampaignCommand(c, cmd, { slot, connected, rng: new Rng(5) });
@@ -75,7 +75,7 @@ describe('story', () => {
     expect(c.story.done).toBe(1);
     expect(chapter(c, 1)).toBeUndefined();
     expect(chapter(c, 2)).toBeUndefined();
-    setBastionLevel(c, 2, new Rng(1));
+    levelTo(c, 2, new Rng(1));
     // Chapters don't chain back to back: the next one waits some days after the last win.
     expect(chapter(c, 2)).toBeUndefined();
     for (let i = 0; i < 10 && !chapter(c, 2); i++) advanceTime(c, new Rng(7 + i));
@@ -89,7 +89,7 @@ describe('story', () => {
     const answer = (option: 0 | 1) => {
       const c = solo();
       c.story.done = SIMON_CHAPTER - 1;
-      setBastionLevel(c, SIMON_CHAPTER, new Rng(1));
+      levelTo(c, SIMON_CHAPTER, new Rng(1));
       expect(c.event).toBe('simon');
       expect(chapter(c, SIMON_CHAPTER)).toBeUndefined();
       const offers = c.offers.length;
@@ -111,7 +111,7 @@ describe('story', () => {
   it('the rescue VIP of a chapter reaches the battlefield with their name', () => {
     const c = solo();
     c.story.done = 6;
-    setBastionLevel(c, 7, new Rng(1));
+    levelTo(c, 7, new Rng(1));
     const offer = chapter(c, 7)!;
     const mission = createMission({ map: offer.map, slots: [0], rng: new Rng(2), kind: offer.kind, pods: offer.pods, vipName: offerVip(c, offer) });
     expect(mission.units.find((u) => u.template === 'vip')?.name).toBe('Celia Marsh');
@@ -133,7 +133,7 @@ describe('story', () => {
     c.nextEventDay = 999;
     c.story.done = 6;
     c.story.simon = 'trusted';
-    setBastionLevel(c, MAX_LEVEL, new Rng(1));
+    levelTo(c, MAX_LEVEL, new Rng(1));
     expect(c.offers.some((o) => o.final)).toBe(false);
     fly(c, chapter(c, 7)!, 'victory');
     const final = c.offers.find((o) => o.final)!;

@@ -23,7 +23,6 @@ import {
   type RegionId,
 } from '../src/campaign';
 import { doomName, mareaAlert, missionName } from '../src/lore';
-import { LEVEL_XP } from '../src/progression';
 import { Rng } from '../src/rng';
 import type { Slot } from '../src/types';
 import { raise } from './helpers';

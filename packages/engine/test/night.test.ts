@@ -270,13 +270,14 @@ describe('night', () => {
     expect(isLit(s, { x: 4, y: 2 })).toBe(true);
     expect(isLit(s, { x: 5, y: 4 })).toBe(true);
     expect(isLit(s, { x: 7, y: 2 })).toBe(true);
-    // A Bengala burning on the ground doesn't: the wall keeps its light in.
-    const low = lightTiles(s, { x: 5, y: 2, z: 0 }, NIGHT.flare.radius, NIGHT.flare.height);
+    // A light burning on the ground doesn't: the wall keeps its light in.
+    const ground = { radius: 3, height: 0.5 };
+    const low = lightTiles(s, { x: 5, y: 2, z: 0 }, ground.radius, ground.height);
     expect(low).toContain(at(3, 2));
     expect(low).not.toContain(at(7, 2));
-    // In the alley: a lamp's light stops at the house's roof, but a Bengala on the ground lights the room through the window.
+    // In the alley: a lamp's light stops at the house's roof, but a light on the ground lights the room through the window.
     expect(lightTiles(s, { x: 7, y: 3, z: 0 }, NIGHT.streetLight, NIGHT.lampHeight)).not.toContain(at(9, 3));
-    const flare = lightTiles(s, { x: 7, y: 3, z: 0 }, NIGHT.flare.radius, NIGHT.flare.height);
+    const flare = lightTiles(s, { x: 7, y: 3, z: 0 }, ground.radius, ground.height);
     expect(flare).toContain(at(9, 3));
     expect(flare).toContain(at(7, 5));
     expect(flare).not.toContain(at(9, 2));
@@ -321,51 +322,6 @@ describe('night', () => {
     expect(run(true, { x: 2, y: 13, z: 0 })).toBe(true);
   });
 
-  it('a Bengala lights its target and round it for two turns, then burns out; by day it lights nothing', () => {
-    const s = dark();
-    const u = addUnit(s, 's1', 'grenadier', 2, 2);
-    addUnit(s, 's2', 'rookie', 3, 2);
-    const z = addUnit(s, 'a1', 'zombie', 2, 12, { hp: 20, maxHp: 20 });
-    pod(s, 'p1', true, [z]);
-    const run = sim(s);
-    run.perform(u, 'bolt', { target: z });
-    const on = of(run.events, 'lightOn');
-    expect(on).toEqual([{ t: 'lightOn', light: { id: expect.any(String), tile: { x: 2, y: 12, z: 0 }, radius: 3, turns: 2, tiles: expect.any(Array) } }]);
-    const id = on[0]!.light.id;
-    expect(isLit(s, { x: 4, y: 13 })).toBe(true);
-    // Still lit through the next squad turn...
-    const first = sim(s, 2);
-    first.runAlienTurn();
-    expect(of(first.events, 'lightOff')).toEqual([]);
-    expect(s.lights!.find((l) => l.id === id)?.turns).toBe(1);
-    // ...and out at the start of the one after.
-    const second = sim(s, 3);
-    second.runAlienTurn();
-    expect(of(second.events, 'lightOff')).toEqual([{ t: 'lightOff', id }]);
-    expect(s.lights!.map((l) => l.id)).toEqual(['l1']);
-
-    const day = dark();
-    day.mission.night = false;
-    const v = addUnit(day, 's1', 'grenadier', 2, 2);
-    const w = addUnit(day, 'a1', 'zombie', 2, 12, { hp: 20, maxHp: 20 });
-    const lit = sim(day);
-    lit.perform(v, 'bolt', { target: w });
-    expect(of(lit.events, 'lightOn')).toEqual([]);
-  });
-
-  it('fire lights where it burns: the molotov and the bidón', () => {
-    const s = dark();
-    const u = addUnit(s, 's1', 'grenadier', 2, 2, { charges: { fireball: 1, velmarStorm: 1 } });
-    const z = addUnit(s, 'a1', 'zombie', 2, 9, { hp: 30, maxHp: 30 });
-    const run = sim(s);
-    run.perform(u, 'fireball', { tile: { x: 2, y: 9, z: 0 } });
-    expect(of(run.events, 'lightOn')[0]!.light).toMatchObject({ tile: { x: 2, y: 9 }, radius: NIGHT.fire.radius, turns: NIGHT.fire.turns });
-    u.ap = 2;
-    const storm = sim(s, 2);
-    storm.perform(u, 'velmarStorm');
-    expect(of(storm.events, 'lightOn').map((e) => e.light.tile)).toEqual([z.pos]);
-  });
-
   it('a night mission: one more group of the dead, its street lights, and the same map', () => {
     const map = { kind: 'generated' as const, biome: 'city' as const, seed: 21 };
     const day = createMission({ map, slots: [0], rng: new Rng(1), kind: 'elimination', difficulty: 2 });
@@ -401,7 +357,7 @@ describe('night', () => {
       kind: 'elimination',
       difficulty: 2,
       expiresDay: 9,
-      reward: { credits: 100, recruit: 'assault' },
+      reward: { credits: 100, recruit: true },
       map: { kind: 'generated', biome: 'city', seed },
       pods: [],
       final: false,
@@ -411,7 +367,7 @@ describe('night', () => {
       quest: null,
       ...extra,
     });
-    expect(byNight(offer(nights[0]!))).toMatchObject({ night: true, reward: { credits: 150, recruit: 'assault' } });
+    expect(byNight(offer(nights[0]!))).toMatchObject({ night: true, reward: { credits: 150, recruit: true } });
     expect(byNight(offer(seeds.find((x) => !nightFor(x))!))).toEqual(offer(seeds.find((x) => !nightFor(x))!));
     // Story chapters and the final mission are flown by day.
     expect(byNight(offer(nights[0]!, { story: 2 })).night).toBeUndefined();
@@ -445,14 +401,9 @@ describe('night', () => {
     const host = createMission({ map: { kind: 'generated', biome: 'city', seed: 33 }, slots: [0], rng: new Rng(1), night: true });
     const client = cloneState(host);
     const run = sim(host, 4);
-    const u = host.units.find((x) => x.team === 'xcom')!;
-    const z = host.units.find((x) => x.team === 'alien')!;
-    run.perform(u, 'bolt', { target: z });
     run.runAlienTurn();
     run.runAlienTurn();
     for (const e of run.events) applyEvent(client, e);
-    expect(of(run.events, 'lightOn')).toHaveLength(1);
-    expect(of(run.events, 'lightOff')).toHaveLength(1);
     expect(client).toEqual(host);
   });
 });

@@ -159,16 +159,14 @@ describe('damage on screen', () => {
     expect(shotDamage(shooter, 'shoot').hit).toEqual({ min: 3, max: 5 });
   });
 
-  it('grenades, songs and the Grillo use the same numbers as the rules', () => {
+  it('grenades use the same numbers as the rules', () => {
     const s = open();
     const grenadier = addUnit(s, 's1', 'grenadier', 0, 0);
-    grenadier.mods = { ...grenadier.mods, grenadeDamage: 2, songDamage: 1 };
+    grenadier.mods = { ...grenadier.mods, grenadeDamage: 2 };
     const mec = addUnit(s, 'a1', 'mec', 0, 10);
     // Frag 3 (+1 one time in five) +2, shreds 1; the Gólem's armour takes 1.
     expect(abilityDamage(s, grenadier, 'grenade')).toMatchObject({ hit: { min: 5, max: 6 }, shred: 1, crit: null });
     expect(abilityDamage(s, grenadier, 'grenade', mec)!.hit).toEqual({ min: 4, max: 5 });
-    expect(abilityDamage(s, grenadier, 'bolt', mec)!.hit).toEqual({ min: 3, max: 3 });
-    expect(abilityDamage(s, grenadier, 'combatProtocol', mec)).toMatchObject({ hit: { min: 4, max: 4 }, ignoresArmor: true });
     expect(abilityDamage(s, grenadier, 'overwatch')).toBeNull();
   });
 });

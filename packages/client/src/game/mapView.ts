@@ -373,6 +373,8 @@ export class MapView {
   private drawn: { tiles: TileKind[]; levels: (TileKind | null)[][]; searched: string; wear: Map<number, Wear>; pieces: Map<string, { key: string; tiles: number[] }> } | null = null;
   /** A siege's doors' and barricades' wear as last drawn (siegeDressing.ts), as a key. */
   private wearSeen = '';
+  /** What the doors and barricades had left when the wear was last worked out (NaN: never). */
+  private wearLeft = NaN;
   /** The contact occlusion baked over the map (groundAO.ts), and which bake is the latest. */
   private ao: GroundOcclusion | null = null;
   /** Where the contact occlusion is to be baked again (the next frame does it). */
@@ -407,6 +409,7 @@ export class MapView {
     this.canopyMaterials = [];
     this.explored.begin(s);
     this.shown = s;
+    this.wearLeft = NaN;
     this.visibility = null;
     this.fresh = true;
     this.fog.resize(s.width, s.height);
@@ -1684,7 +1687,11 @@ export class MapView {
     if (this.shown && (this.shown.searched?.length ?? 0) !== this.searchedSeen) this.rebuild(this.shown);
     // A siege's door or barricade struck to another stage of wear (the game applies 'smashed' to the state it shows):
     // a door's leaf wears where it hangs (doors.ts); the sandbags and the grit are placed again.
-    if (this.shown?.mission.siege) {
+    // Worked out again only when a blow lands (what is left adds up to less): wearOf goes over the whole map.
+    let left = 0;
+    for (const k in this.shown?.breakables) left += this.shown!.breakables[k as unknown as number]!;
+    if (this.shown?.mission.siege && left !== this.wearLeft) {
+      this.wearLeft = left;
       const wear = wearOf(this.shown);
       let key = '';
       for (const [i, stage] of wear) key += `${i}:${stage},`;

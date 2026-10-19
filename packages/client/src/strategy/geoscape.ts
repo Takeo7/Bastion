@@ -22,6 +22,8 @@ import './valley.css';
 
 /** The painting (tools/valle/mapa.ts). */
 const MAP_URL = 'maps/valle/mapa.jpg';
+/** The painting, decoded: the menu and each visit to the base fetched and decoded (and kept) one of their own. */
+let painting: Promise<ImageBitmap> | null = null;
 /** The valley: the painting's whole, what fits the free part of the screen. */
 const VALLEY = new THREE.Box3(new THREE.Vector3(-HW, 0, -HD), new THREE.Vector3(HW, 0, HD));
 /** The free part of the screen keeps this much round the valley (pixels). */
@@ -572,11 +574,16 @@ export class GeoscapeSet implements StageSet {
     this.aside = Math.min(this.aside, f.x1 - CLEAR * this.worldPerPixel() - x);
   }
 
-  /** The painting, fetched and decoded off the main thread, its mipmaps made on the GPU. */
+  /** The painting, fetched and decoded off the main thread once for the session, its mipmaps made on the GPU. */
   private load(): void {
-    fetch(`${import.meta.env.BASE_URL}${MAP_URL}`)
+    painting ??= fetch(`${import.meta.env.BASE_URL}${MAP_URL}`)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
       .then((blob) => createImageBitmap(blob))
+      .catch((e: Error) => {
+        painting = null;
+        throw e;
+      });
+    painting
       .then((bitmap) => {
         const texture = new THREE.Texture(bitmap);
         texture.flipY = false;

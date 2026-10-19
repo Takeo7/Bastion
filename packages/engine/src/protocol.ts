@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { BUILDS, HEADS, NAME_MAX, NICKNAME_MAX } from './appearance';
 import { PIECES, type PieceId } from './base';
-import { FACILITIES, REGIONS } from './campaign';
+import { REGIONS } from './campaign';
 import { ABILITIES, ITEMS, WEAPON_MODS } from './content';
 import { CRAFTS } from './progression';
 import { BOARD } from './board';
@@ -82,9 +82,7 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
 
-const classId = z.enum(['assault', 'grenadier', 'sharpshooter', 'specialist']);
 const keys = <K extends string>(record: Record<K, unknown>) => Object.keys(record) as [K, ...K[]];
-const facilityId = z.enum(keys(FACILITIES));
 const regionId = z.enum(keys(REGIONS));
 const itemId = z.enum(keys(ITEMS));
 /** Fase 9's talents (skills.ts SKILL_TALENTS). */
@@ -121,9 +119,6 @@ export const campaignCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('rearm'), piece: id }),
   z.object({ type: z.literal('dismantle'), piece: id }),
   z.object({ type: z.literal('chooseMission'), id }),
-  z.object({ type: z.literal('clear'), plot: id }),
-  z.object({ type: z.literal('build'), plot: id, facility: facilityId }),
-  z.object({ type: z.literal('upgrade'), plot: id }),
   z.object({ type: z.literal('contact'), region: regionId }),
   z.object({ type: z.literal('answerEvent'), option: z.union([z.literal(0), z.literal(1)]) }),
   z.object({ type: z.literal('investigate'), id }),

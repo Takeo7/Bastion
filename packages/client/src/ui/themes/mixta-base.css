@@ -558,13 +558,6 @@
   height: 16px;
 }
 
-:root[data-ui='mixta'] .calendar-day {
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  color: var(--t-accent);
-}
-
 /* ========================================================== soldier rows */
 
 /* The Cuartel's list: the class tag in its colour, the name, the rank's badge, a waiting promotion lit. */
@@ -601,30 +594,10 @@
   font-size: 18px;
 }
 
-/* ================================================================ labels */
-
-/* Labels over the 3D base: small steel tags; the four fixed buildings in hazard yellow. */
-:root[data-ui='mixta'] :is(.room-label, .globe-label) {
-  border: 0;
-  border-radius: 2px;
-  background: linear-gradient(180deg, rgba(40, 44, 46, 0.95), rgba(20, 22, 24, 0.95));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 3px 0 0 var(--t-accent), 0 0 0 1px rgba(0, 0, 0, 0.8), 0 3px 8px rgba(0, 0, 0, 0.45);
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-}
-
-:root[data-ui='mixta'] .room-label.command {
-  background: var(--t-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(122, 82, 0, 0.45), 0 0 0 1px #4d3807, 0 4px 10px rgba(0, 0, 0, 0.5);
-  color: var(--t-primary-ink);
-  letter-spacing: 0.14em;
-}
-
 /* ================================================================ motion */
 
 /* A screen opened: its panels slide in from their side. */
-:root[data-ui='mixta'] .strat.entering :is(.strat-left, .strat-ticker) {
+:root[data-ui='mixta'] .strat.entering .strat-left {
   animation: m-in-left 0.3s var(--m-ease) both;
 }
 
@@ -807,31 +780,6 @@
   background: var(--m-plate);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -2px 0 var(--t-accent), 0 0 0 1px var(--m-edge);
   color: #fff;
-}
-
-/* ======================================================= the soldier's sheet */
-
-:root[data-ui='mixta'] .service-help {
-  padding: 6px 10px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, rgba(242, 194, 48, 0.14), transparent);
-  box-shadow: inset 3px 0 0 var(--t-accent);
-}
-
-/* «Guardado»: a plate that drops in, not a rubber stamp. */
-:root[data-ui='mixta'] .saved-stamp {
-  border: 0;
-  border-radius: 2px;
-  background: var(--t-ready);
-  box-shadow: 0 0 0 1px #1d3a0a, 0 6px 16px rgba(0, 0, 0, 0.5);
-  color: var(--t-ready-ink);
-  font-family: var(--t-font-title);
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  -webkit-mask: none;
-  mask: none;
-  transform: none;
-  animation: m-in-down 0.25s var(--m-ease);
 }
 
 /* ================================================================ pop-ups */
@@ -1124,41 +1072,6 @@
   font-weight: 600;
 }
 
-/* On the valley, the day beside the button, not over it: half as tall over the bottom of the painting
-   (Arte: it covered 35 px of it at 1440, 70 at 1920). */
-:root[data-ui='mixta'] .strat-center-bottom:has(> .scan-day) {
-  grid-auto-flow: column;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Passing the days: the day on a small plate by the button. */
-:root[data-ui='mixta'] .scan-day {
-  padding: 2px 12px;
-  border-radius: 2px;
-  background: var(--m-plate);
-  box-shadow: var(--m-raise);
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  color: var(--t-accent);
-}
-
-:root[data-ui='mixta'] .scan-btn {
-  min-width: 260px;
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-
-:root[data-ui='mixta'] .scan-btn small {
-  font-family: var(--t-font);
-  font-weight: 600;
-  font-size: 11.5px;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  text-shadow: none;
-}
-
 /* ============================================================== tabs in a sheet */
 
 /* Tabs inside a sheet (Armería): a segmented switch sunk in the plate, the open one raised with a yellow foot. */
@@ -1192,102 +1105,6 @@
   background: var(--m-plate);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -2px 0 var(--t-accent), 0 0 0 1px var(--m-edge);
   color: #fff;
-}
-
-/* ========================================================== Instalaciones */
-
-/* The compound's plots: wells in the plate. The bunker's four buildings in hazard yellow, the facilities raised
-   steel, free ground rimmed green, rock and forest dim, works on hazard tape; the one picked lit yellow. */
-:root[data-ui='mixta'] .plot-cell {
-  border: 0;
-  border-radius: 2px;
-  background: var(--m-well);
-  box-shadow: var(--m-sink);
-  color: #7d837b;
-  transition: transform 0.1s var(--m-ease);
-}
-
-:root[data-ui='mixta'] .plot-cell.terrain {
-  background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.035) 0 4px, transparent 4px 8px), var(--m-well);
-  color: #6c726b;
-}
-
-:root[data-ui='mixta'] .plot-cell.free {
-  border: 0;
-  box-shadow: var(--m-sink), inset 0 0 0 1px rgba(143, 208, 90, 0.6);
-}
-
-:root[data-ui='mixta'] .plot-cell.built {
-  background: var(--m-plate);
-  box-shadow: var(--m-raise);
-  color: #fff;
-}
-
-:root[data-ui='mixta'] .plot-cell.fixed {
-  background: var(--t-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(122, 82, 0, 0.45), 0 0 0 1px #4d3807;
-  color: var(--t-primary-ink);
-}
-
-:root[data-ui='mixta'] .plot-cell.work {
-  background: var(--m-hazard) 0 0 / 24px 24px;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6);
-  color: #1e1706;
-}
-
-:root[data-ui='mixta'] .plot-cell.work .plot-ico {
-  border-radius: 50%;
-  background: rgba(30, 23, 6, 0.85);
-  color: var(--t-accent);
-}
-
-:root[data-ui='mixta'] :is(.plot-cell:hover, .plot-cell.hovered) {
-  outline: 2px solid rgba(242, 194, 48, 0.65);
-  outline-offset: 1px;
-  transform: translateY(-1px);
-}
-
-:root[data-ui='mixta'] .plot-cell.selected {
-  outline: 2px solid var(--t-accent);
-  outline-offset: 1px;
-  box-shadow: var(--m-sink), 0 0 12px rgba(242, 194, 48, 0.55);
-}
-
-:root[data-ui='mixta'] :is(.plot-level, .plot-days) {
-  font-family: var(--t-font-title);
-  font-weight: 600;
-  font-size: 10px;
-  color: var(--t-accent);
-  text-shadow: 0 1px 0 #000;
-}
-
-:root[data-ui='mixta'] .plot-cell.can-up::after {
-  color: var(--t-good);
-  text-shadow: 0 0 4px rgba(143, 208, 90, 0.8);
-}
-
-/* What can be built: small trays, those that gain from their neighbour rimmed green. */
-:root[data-ui='mixta'] .build-card {
-  border: 0;
-  border-radius: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.12));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-:root[data-ui='mixta'] .build-card.bonus {
-  box-shadow: inset 0 0 0 1px rgba(143, 208, 90, 0.55), inset 3px 0 0 var(--t-good);
-}
-
-:root[data-ui='mixta'] .build-card b {
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  font-size: 16px;
-  letter-spacing: 0.02em;
-  color: #fff;
-}
-
-:root[data-ui='mixta'] .build-card .plot-ico {
-  color: var(--t-accent);
 }
 
 /* ================================================================ cochera */
