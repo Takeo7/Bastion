@@ -78,6 +78,21 @@ describe('objects over several tiles (docs/MAPAS.md, phase 1)', () => {
     expect(before.tiles).toEqual(s.tiles);
   });
 
+  it('in the base each piece stands alone: a grenade takes only the log piles it reaches, not the whole row', () => {
+    const s = stateFrom(['....................', '....................', '....................', '....................', '....................']);
+    const decor = (s.decor = new Array<Decor>(s.width * s.height).fill(0));
+    for (let x = 2; x < 18; x++) {
+      s.tiles[2 * s.width + x] = 'low';
+      decor[2 * s.width + x] = decorCode('logPile', 0);
+    }
+    s.base = { pieces: [] };
+    addUnit(s, 's1', 'assault', 2, 4);
+    const reached = new Set(blastTiles(s, 'grenade', { x: 2, y: 1, z: 0 }, s.units[0]).filter((p) => p.y === 2).map((p) => p.x));
+    run(s, { type: 'ability', unit: 's1', ability: 'grenade', tile: { x: 2, y: 1, z: 0 } });
+    for (let x = 2; x < 18; x++) expect(kindAt(s, { x, y: 2, z: 0 }), `${x}`).toBe(reached.has(x) ? 'floor' : 'low');
+    expect(kindAt(s, { x: 17, y: 2, z: 0 })).toBe('low');
+  });
+
   it('a silenced patrol car takes the siren\'s tile into it, a part of it', () => {
     const s = stateFrom(['......', '......', '......']);
     s.mission = { ...s.mission, kind: 'sabotage', alarm: 'police', objectiveUnit: 'relay', turnsLeft: 5 };

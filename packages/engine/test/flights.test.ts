@@ -245,6 +245,22 @@ describe('the dead and the living on flights', () => {
     }
     expect(heightAt(s, lancer.pos)).toBe(0);
   });
+
+  it('the Hinchado, too slow to climb a flight of three in one action, waits at its foot and climbs it with both', () => {
+    const s = hall();
+    s.activeTeam = 'alien';
+    s.mission.siege = { hold: 99 };
+    const soldier = addUnit(s, 's1', 'assault', 10, 3, { z: 1 });
+    const bloater = addUnit(s, 'a1', 'bloater', 2, 2);
+    active(s, 'p1', [bloater]);
+    for (let turn = 0; turn < 4 && bloater.pos.z === 0; turn++) {
+      soldier.hp = soldier.maxHp;
+      bloater.ap = 2;
+      new Sim(s, new Rng(turn), [0]).runAlienTurn();
+      expect(onFlights(s), `turn ${turn}`).toEqual([]);
+    }
+    expect(bloater.pos.z).toBe(1);
+  });
 });
 
 describe('maps of before', () => {

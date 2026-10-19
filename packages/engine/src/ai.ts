@@ -159,10 +159,14 @@ const LOOKAHEAD_STOREYS = 40;
 /** How much longer a way round its own may be than the way through them, in half-tiles (COST_ORTHO a tile): a few tiles. */
 const DETOUR = 4 * COST_ORTHO;
 
-/** A planned walk, and whether it waits behind its own (none of it free to take). */
+/**
+ * A planned walk, and whether it waits behind its own (none of it free to take), or stops short of all of its way
+ * because it can't clear a flight of stairs or a window in the actions it was planned for (nobody stops on one).
+ */
 interface Walk {
   path: Pos[] | null;
   jammed: boolean;
+  short?: boolean;
 }
 
 /**
@@ -186,22 +190,27 @@ function planWalk(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Wa
   const path = dest && buildPath(s, u, through, dest);
   if (!path) return { path: null, jammed: false };
   const budget = costPerAp(u) * actions;
-  /** How far along `way` the unit can go now (the last place it can stop at), and who stops it first. */
+  /** How far along `way` the unit can go now (the last place it can stop at), who stops it first, and whether it runs out of actions somewhere it can't stop. */
   const stretch = (way: Pos[], reach: Reach) => {
     let end = -1;
     let jam: Pos | null = null;
+    let short = false;
     for (let i = 0; i < way.length; i++) {
       const p = way[i]!;
-      if (reach.cost.get(nodeOf(s, p))! > budget) break;
+      if (reach.cost.get(nodeOf(s, p))! > budget) {
+        // Nowhere to stop before it runs out: at the foot of a flight it can't climb in these actions.
+        short = end < 0 && i > 0;
+        break;
+      }
       if (inTheWay(s, i ? way[i - 1]! : u.pos, p)) {
         jam = p;
         break;
       }
       if (canStopAt(s, p)) end = i;
     }
-    return { end, jam };
+    return { end, jam, short };
   };
-  const { end, jam } = stretch(path, through);
+  const { end, jam, short } = stretch(path, through);
   // Held up behind its own before half its walk: the way round them, if there is one.
   const round = jam && (end < 0 || through.cost.get(nodeOf(s, path[end]!))! * 2 < budget) ? reachOf(true) : null;
   if (round) {
@@ -217,7 +226,7 @@ function planWalk(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Wa
   const near = round ? within(round, budget) : computeReach(s, u, budget);
   const step = closestTo(s, u, near, jam ?? goal, jam ? 0 : minGap);
   const closer = step && buildPath(s, u, near, step);
-  return { path: closer ?? null, jammed: !closer && !!jam };
+  return { path: closer ?? null, jammed: !closer && !!jam, short: !jam && short };
 }
 
 /** `reach` cut to what costs `budget` at most. */
@@ -434,13 +443,20 @@ export function frontFirst(s: GameState, walkers: Unit[]): Unit[] {
     .map((o) => o.u);
 }
 
-/** One action's walk toward `goal`, round whatever is in the way; false when it gets no closer. */
+/**
+ * One action's walk toward `goal`, round whatever is in the way; false when it gets no closer. A flight of stairs it
+ * can't climb in one (the Hinchado's stride and a flight of 3: nobody stops on one) takes both its actions; with one
+ * left, it waits at the foot for the next turn's rather than wander off.
+ */
 function walk(sim: Sim, u: Unit, goal: Pos, minGap: number): boolean {
-  const { path, jammed } = planWalk(sim.s, u, goal, minGap);
+  const once = planWalk(sim.s, u, goal, minGap);
+  if (once.short && u.ap < 2) return false;
+  const twice = once.short ? planWalk(sim.s, u, goal, minGap, 2) : null;
+  const { path, jammed } = twice?.path ? twice : once;
   // Waiting behind its own: it goes again once the rest have moved (Sim.runAlienTurn).
   if (jammed) sim.jammed.add(u.id);
   if (!path) return false;
-  sim.moveAlong(u, path, 1);
+  sim.moveAlong(u, path, twice?.path ? 2 : 1);
   return true;
 }
 

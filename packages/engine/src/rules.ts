@@ -137,9 +137,11 @@ const BLAST_RESULT: Partial<Record<TileKind, TileKind>> = {
 
 /**
  * The places of the whole object standing on place `p` (decor.ts objectAt: a car over three tiles, a bed over two,
- * a lorry's block), on its storey; `p` alone for anything on one tile.
+ * a lorry's block), on its storey; `p` alone for anything on one tile. In the base every piece stands alone: the
+ * players build log piles side by side, and one grenade isn't a whole row of them.
  */
 function objectPlaces(s: GameState, p: Pos): Pos[] {
+  if (s.base) return [p];
   const decor = p.z ? s.levels?.[p.z - 1]?.decor : s.decor;
   const o = decor ? objectAt(decor, s.width, tileIndex(s, p.x, p.y)) : null;
   return o && o.tiles.length > 1 ? o.tiles.map((i) => ({ x: i % s.width, y: Math.floor(i / s.width), z: p.z })) : [p];
