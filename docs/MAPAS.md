@@ -487,6 +487,8 @@ Con las proporciones de hoy estiradas, ciudad y 8 semillas por tamaño:
 
 ## 8. Plan por fases
 
+**Estado (19/10):** hechas las fases 0, 1 y 2 y los tres arreglos de rendimiento de §7 (sombra, `rebuild` por trozos y `teamVisibility`), en la sesión «Experimental/brainstorming». Las fases 3 a 6 las reparte Gameplay con Arte (EQUIPO.md). Lo que queda de rendimiento a 72: `buildWalls` (`buildings.ts`) recorre todas las casillas en cada cambio (unos 2,3 ms de los 4,2 de una puerta) y `layRaised` rehace todos los parapetos.
+
 Cada fase sale sola, con `npm run typecheck` y `npx vitest run --root packages/engine`, y se juega antes de la siguiente.
 
 ### Fase 0 · La medición como test (½ sesión)
@@ -624,7 +626,7 @@ Antes, los arreglos 1–3 de §7.3 (Arte y Gameplay).
 1. **Baños, aseos y despensas de 2 × 3:** sí. Es la única excepción a «salas de 3 × 3 o más» (prueba del 12/10).
 2. **El tamaño del mapa:** 64 en la ciudad y el casco viejo; 72 en afueras, fábrica y polígono, tras los arreglos de rendimiento.
 3. **El largo de la misión:** se mantiene el recorrido de 60–80 casillas. El mapa más grande da flancos, no más camino.
-4. **Las escaleras:** tramo de 3 (38°), de 2 en las casas pequeñas. Solo se entra por el pie y nadie se para a mitad.
+4. **Las escaleras:** tramo de 3 (38°), de 2 en las casas pequeñas. Solo se entra por el pie y nadie se para a mitad. Donde no cabe uno de 3 (tiendas pequeñas, hospitales cortos: 12 de 746 tramos), también de 2 (Arturo, 19/10).
 5. **La base:** 56 × 56, con la base guardada en el centro y lo construido con su tamaño.
 
 ## Anexo · Cómo repetir la medición

@@ -1,8 +1,8 @@
 import { NIGHT, TEMPLATES } from './content';
+import { canStopAt } from './flights';
 import {
   blocksSightAt,
   BODY_HEIGHT,
-  canStandOn,
   coverAt,
   DIRS4,
   distance,
@@ -199,7 +199,7 @@ export function peekOrigins(s: GameState, p: Pos): Pos[] {
     if (coverAt(s, p, { x: p.x + d.x, y: p.y + d.y }) !== 2) continue;
     for (const side of [{ x: d.y, y: -d.x }, { x: -d.y, y: d.x }]) {
       const q = { x: p.x + side.x, y: p.y + side.y, z: p.z };
-      if (canStandOn(kindAt(s, q)) && heightAt(s, q) === h && !origins.some((o) => samePos(o, q))) origins.push(q);
+      if (canStopAt(s, q) && heightAt(s, q) === h && !origins.some((o) => samePos(o, q))) origins.push(q);
     }
   }
   return origins;
@@ -340,34 +340,55 @@ export function teamVisibility(s: GameState, team: Unit['team']): boolean[] {
   const lit = s.mission?.night ? litMask(s) : null;
   // Worked out on every call: it is cheap next to the walks, and the state changes under it.
   const v: Viewing | null = s.levels ? { g: sightGrid(s), w: s.width, area, n: levels - 1, elev: s.elev, mask, lit, ox: [], oy: [], eyes: [], blocked: [], dark: 0 } : null;
-  /** By origin and eye height, the nodes a line from it has already been found not to reach. */
-  const tried = new Map<string, Uint8Array>();
+  // The viewers first, each with its origins and the square it looks over. A line found blocked is remembered
+  // only for an origin that more than one viewer looks from (a viewer looks at each place once), and only over
+  // their squares: no map-sized buffer per origin (docs/MAPAS.md §7.3).
+  const looks: { u: Unit; range: number; origins: Pos[]; eyes: number[]; keys: string[]; minX: number; maxX: number; minY: number; maxY: number }[] = [];
+  /** By origin and eye height, how many viewers look from it, over what, and (shared) what was found blocked from it. */
+  const tried = new Map<string, { viewers: number; x0: number; y0: number; x1: number; y1: number; memo: Blocked | null }>();
   for (const u of s.units) {
     if (!isViewer(u, team)) continue;
     const range = sightOf(u);
-    const dark = lit ? nightSight(u) : range;
     const origins = peekOrigins(s, u.pos);
     const eyes = origins.map((o) => heightAt(s, o) + EYE_HEIGHT);
+    const look = {
+      u, range, origins, eyes, keys: origins.map((o, k) => `${o.x},${o.y},${o.z},${eyes[k]}`),
+      minX: Math.max(0, Math.floor(u.pos.x - range)), maxX: Math.min(s.width - 1, Math.ceil(u.pos.x + range)),
+      minY: Math.max(0, Math.floor(u.pos.y - range)), maxY: Math.min(s.height - 1, Math.ceil(u.pos.y + range)),
+    };
+    looks.push(look);
+    if (!v) continue;
+    for (const key of look.keys) {
+      const t = tried.get(key);
+      if (!t) tried.set(key, { viewers: 1, x0: look.minX, y0: look.minY, x1: look.maxX, y1: look.maxY, memo: null });
+      else {
+        t.viewers++;
+        t.x0 = Math.min(t.x0, look.minX);
+        t.y0 = Math.min(t.y0, look.minY);
+        t.x1 = Math.max(t.x1, look.maxX);
+        t.y1 = Math.max(t.y1, look.maxY);
+      }
+    }
+  }
+  for (const { u, range, origins, eyes, keys, minX, maxX, minY, maxY } of looks) {
+    const dark = lit ? nightSight(u) : range;
     if (v) {
       v.dark = dark;
       v.ox = origins.map((o) => o.x);
       v.oy = origins.map((o) => o.y);
       v.eyes = eyes;
-      v.blocked = origins.map((o, k) => {
-        const key = `${o.x},${o.y},${o.z},${eyes[k]}`;
-        let m = tried.get(key);
-        if (!m) tried.set(key, (m = new Uint8Array(area * levels)));
-        return m;
+      v.blocked = keys.map((key) => {
+        const t = tried.get(key)!;
+        if (t.viewers < 2) return null;
+        const w = t.x1 - t.x0 + 1;
+        const h = t.y1 - t.y0 + 1;
+        return (t.memo ??= { x0: t.x0, y0: t.y0, w, h, data: new Uint8Array(w * h * levels) });
       });
     }
-    const minX = Math.max(0, Math.floor(u.pos.x - range));
-    const maxX = Math.min(s.width - 1, Math.ceil(u.pos.x + range));
-    const minY = Math.max(0, Math.floor(u.pos.y - range));
-    const maxY = Math.min(s.height - 1, Math.ceil(u.pos.y + range));
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         // distance(u.pos, { x, y }), without the object.
-        const d = Math.hypot(u.pos.x - x, u.pos.y - y);
+        const d = hypotOf(u.pos.x - x, u.pos.y - y);
         if (d > range) continue;
         if (v) {
           seeTile(v, x, y, d);
@@ -383,6 +404,22 @@ export function teamVisibility(s: GameState, team: Unit['team']): boolean[] {
     }
   }
   return mask;
+}
+
+/** Math.hypot of whole offsets up to HYPOT_SIDE - 1 a side, by |dy| * HYPOT_SIDE + |dx|: teamVisibility asks at every tile of a square. */
+const HYPOT_SIDE = 64;
+let hypots: Float64Array | null = null;
+
+/** Math.hypot(dx, dy), the same value, from the table for whole offsets. */
+function hypotOf(dx: number, dy: number): number {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax >= HYPOT_SIDE || ay >= HYPOT_SIDE || (ax | 0) !== ax || (ay | 0) !== ay) return Math.hypot(dx, dy);
+  if (!hypots) {
+    hypots = new Float64Array(HYPOT_SIDE * HYPOT_SIDE);
+    for (let y = 0; y < HYPOT_SIDE; y++) for (let x = 0; x < HYPOT_SIDE; x++) hypots[y * HYPOT_SIDE + x] = Math.hypot(x, y);
+  }
+  return hypots[ay * HYPOT_SIDE + ax]!;
 }
 
 /**
@@ -401,19 +438,24 @@ interface SightGrid {
   elev: Float64Array;
 }
 
+/** The last SightGrid made, its buffers filled again for the next map of the same size (teamVisibility runs on every change). */
+let lastGrid: { area: number; n: number; g: SightGrid } | null = null;
+
 function sightGrid(s: GameState): SightGrid {
   const area = s.width * s.height;
   const n = s.levels?.length ?? 0;
-  const ground = new Float64Array(area);
-  const window = new Uint8Array(area * (n + 1));
-  const elev = new Float64Array(area);
+  if (lastGrid?.area !== area || lastGrid.n !== n) {
+    lastGrid = { area, n, g: { ground: new Float64Array(area), top: new Float64Array(area * n), slab: new Uint8Array(area * n), window: new Uint8Array(area * (n + 1)), elev: new Float64Array(area) } };
+  }
+  const { ground, window, elev, top, slab } = lastGrid.g;
+  window.fill(0);
   for (let i = 0; i < area; i++) {
     elev[i] = s.elev[i] ?? 0;
     ground[i] = elev[i]! + obstacleHeight(s.tiles[i]!);
     if (isWindow(s.tiles[i]!)) window[i] = 1;
   }
-  const top = new Float64Array(area * n).fill(-Infinity);
-  const slab = new Uint8Array(area * n);
+  top.fill(-Infinity);
+  slab.fill(0);
   for (let k = 1; k <= n; k++) {
     const tiles = s.levels![k - 1]!.tiles;
     for (let i = 0; i < area; i++) {
@@ -424,7 +466,7 @@ function sightGrid(s: GameState): SightGrid {
       if (isWindow(kind)) window[k * area + i] = 1;
     }
   }
-  return { ground, top, slab, window, elev };
+  return lastGrid.g;
 }
 
 /** opaqueAtIndex on a SightGrid (`n` storeys of `area` tiles). */
@@ -513,8 +555,19 @@ interface Viewing {
   ox: number[];
   oy: number[];
   eyes: number[];
-  blocked: Uint8Array[];
+  /** By origin, what was found blocked from it (null: no other viewer looks from there). */
+  blocked: (Blocked | null)[];
   dark: number;
+}
+
+/** The places of a square (all levels) that lines from one origin were found not to reach. */
+interface Blocked {
+  x0: number;
+  y0: number;
+  w: number;
+  h: number;
+  /** By level, row and column of the square. */
+  data: Uint8Array;
 }
 
 /** teamVisibility's look at tile (x, y), `d` away: the ground, then each storey with a slab here. */
@@ -528,12 +581,13 @@ function seeTile(v: Viewing, x: number, y: number, d: number): void {
     const body = (z === 0 ? (v.elev[i] ?? 0) : z) + BODY_HEIGHT;
     for (let k = 0; k < v.eyes.length; k++) {
       const blocked = v.blocked[k]!;
-      if (blocked[node]) continue;
+      const at = blocked ? (z * blocked.h + y - blocked.y0) * blocked.w + x - blocked.x0 : 0;
+      if (blocked && blocked.data[at]) continue;
       if (gridLine(v.g, v.w, area, v.n, v.ox[k]!, v.oy[k]!, x, y, v.eyes[k]!, body)) {
         v.mask[node] = true;
         break;
       }
-      blocked[node] = 1;
+      if (blocked) blocked.data[at] = 1;
     }
   }
 }

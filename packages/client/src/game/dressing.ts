@@ -89,13 +89,19 @@ function clearOf(id: PropId, dx: number, dz: number, out: Vec2, scale = 1, size 
  * The dressing of a map's streets and pavements (towns and facilities; the
  * wilds have their grass and only their lamps). The street lights stand where
  * the engine says (`lamps`: the map's own lights, which light tiles at night),
- * else every few tiles along the kerbs (older saves).
+ * else every few tiles along the kerbs (older saves). With `area` (a rebuild
+ * of a few chunks: mapView), only what stands on its tiles (each thing stands
+ * on the tile it is placed from), the same as the whole map gives there: the
+ * spacing of the poles, stop signs and street lights is still worked out over
+ * the whole map, the rest only there.
  */
-export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps: readonly Vec2[] | null = null): Dressing[] {
+export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps: readonly Vec2[] | null = null, area: Uint8Array | null = null): Dressing[] {
   const out: Dressing[] = [];
   const { width: w, height: h } = s;
+  const dress = (x: number, y: number) => !area || area[y * w + x] !== 0;
   // The engine's lights: a street light on each, near the kerb, its arm over the road.
   for (const p of lamps ?? []) {
+    if (!dress(p.x, p.y)) continue;
     const k = DIRS4.findIndex((d) => {
       const x = p.x + d.x;
       const y = p.y + d.y;
@@ -116,8 +122,20 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
     const t = tile(x, y);
     return t === 'wall' || t === 'window' || t === 'windowBroken' || t === 'door' || t === 'doorOpen';
   };
-  const taken: { x: number; y: number }[] = [...(lamps ?? [])];
-  const near = (x: number, y: number, r: number) => taken.some((p) => Math.abs(p.x - x) + Math.abs(p.y - y) < r);
+  /** Tiles a tall thing stands on (lamps, poles, hydrants, stop signs): the next keeps its distance. */
+  const taken = new Uint8Array(w * h);
+  const take = (x: number, y: number) => void (taken[y * w + x] = 1);
+  for (const p of lamps ?? []) take(p.x, p.y);
+  /** Something taken less than `r` tiles away, walking (on the map: all of them stand on it). */
+  const near = (x: number, y: number, r: number) => {
+    for (let dy = 1 - r; dy < r; dy++) {
+      const ty = y + dy;
+      if (ty < 0 || ty >= h) continue;
+      const reach = r - 1 - Math.abs(dy);
+      for (let tx = Math.max(0, x - reach); tx <= Math.min(w - 1, x + reach); tx++) if (taken[ty * w + tx]) return true;
+    }
+    return false;
+  };
 
   // Power poles: along straight kerbs over a wire and a bit long, on about half of them, wired pole to pole.
   for (const [dx, dy] of [
@@ -134,13 +152,16 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
         const flush = () => {
           if (run.length >= POLE_EVERY + 3 && hash(run[0]!.x, run[0]!.y, 3 + sign) < 0.5) {
             let last: THREE.Vector3 | null = null;
+            let lastTile = run[0]!;
             for (let k = 1; k < run.length - 1; k += POLE_EVERY) {
               const t = run[k]!;
               const p = new THREE.Vector3(t.x + 0.5 + side.x * KERB_OUT - dx * KERB_ALONG, 0, t.y + 0.5 + side.y * KERB_OUT - dy * KERB_ALONG);
-              out.push(placed('powerPole', p.x, 0, p.z, dx, dy, true));
-              if (last) out.push(placed('powerLine', last.x, 0, last.z, dx, dy, false, p.distanceTo(last) / POLE_EVERY));
+              if (dress(t.x, t.y)) out.push(placed('powerPole', p.x, 0, p.z, dx, dy, true));
+              // The wire hangs from the pole before.
+              if (last && dress(lastTile.x, lastTile.y)) out.push(placed('powerLine', last.x, 0, last.z, dx, dy, false, p.distanceTo(last) / POLE_EVERY));
               last = p;
-              taken.push(t);
+              lastTile = t;
+              take(t.x, t.y);
             }
           }
           run = [];
@@ -163,14 +184,16 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
       if (look?.kind !== 'hydrant' && look?.kind !== 'mailbox') continue;
       const d = DIRS4[look.facing]!;
       const along = { x: -d.y, y: d.x };
-      out.push(placed(look.kind, x + 0.5 + d.x * 0.36 - along.x * 0.36, 0, y + 0.5 + d.y * 0.36 - along.y * 0.36, -d.x, -d.y, true));
-      taken.push({ x, y });
+      if (dress(x, y)) out.push(placed(look.kind, x + 0.5 + d.x * 0.36 - along.x * 0.36, 0, y + 0.5 + d.y * 0.36 - along.y * 0.36, -d.x, -d.y, true));
+      take(x, y);
     }
   }
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (!free(x, y)) continue;
+      // Off the area, only where the stop signs and street lights go (each keeps the next ones away).
+      const here = dress(x, y);
       const r = (salt: number) => hash(x, y, salt);
       const cx = x + 0.5;
       const cz = y + 0.5;
@@ -182,17 +205,18 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
           // A block's corner (the street on two sides): a stop sign.
           if (toStreet.length >= 2 && r(1) < 0.45 && !near(x, y, 3)) {
             const e = toStreet[1]!;
-            out.push(placed('stopSign', cx + d.x * KERB_OUT + e.x * KERB_ALONG, 0, cz + d.y * KERB_OUT + e.y * KERB_ALONG, d.x + e.x, d.y + e.y, true));
-            taken.push({ x, y });
+            if (here) out.push(placed('stopSign', cx + d.x * KERB_OUT + e.x * KERB_ALONG, 0, cz + d.y * KERB_OUT + e.y * KERB_ALONG, d.x + e.x, d.y + e.y, true));
+            take(x, y);
             continue;
           }
           // Street lights along the kerb, the arm over the road (where the engine places none).
           if (!lamps && r(2) < 1 / LIGHT_EVERY + 0.04 && !near(x, y, LIGHT_EVERY - 2)) {
-            out.push(placed('streetLight', cx + d.x * KERB_OUT + along.x * KERB_ALONG, 0, cz + d.y * KERB_OUT + along.y * KERB_ALONG, d.x, d.y, true));
-            taken.push({ x, y });
+            if (here) out.push(placed('streetLight', cx + d.x * KERB_OUT + along.x * KERB_ALONG, 0, cz + d.y * KERB_OUT + along.y * KERB_ALONG, d.x, d.y, true));
+            take(x, y);
             continue;
           }
         }
+        if (!here) continue;
         // Against a façade: a few bags, rubble fallen from it, a tyre or a pallet, now and then. Small, below the knee
         // (19/10): the low bags only, at most their own size; the tall one would stand in the way where one walks.
         const toWall = DIRS4.filter((d) => wallish(x + d.x, y + d.y));
@@ -210,6 +234,7 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
           continue;
         }
       }
+      if (!here) continue;
       // Weeds in the cracks of the paving and in the gutters; a bike or a tyre in the road.
       if ((paving(x, y) || street(x, y)) && r(7) < 0.05 * density) {
         const yaw = r(8) * Math.PI * 2;

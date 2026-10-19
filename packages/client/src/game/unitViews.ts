@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BITE_TAG, canStandOn, coverAt, decorOf, DIRS4, kindAt, objectAt, PLAYER_COLORS, sexOfPerson, type Alarm, type Biome, type DecorKind, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
+import { BITE_TAG, canStandOn, coverAt, decorOf, DIRS4, flightAt, kindAt, objectAt, PLAYER_COLORS, sexOfPerson, type Alarm, type Biome, type DecorKind, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
 import { pieceMap, TOWER_LADDER } from './basePieces';
 import { groundAt, STOREY, tileToWorld } from './coords';
 import type { Blow, FigurePose, Gear } from './figures';
@@ -29,12 +29,13 @@ const UNDER_LINTEL = 0.35;
 /** Seconds a blow (a shot, a strike, a blast) still says which way the unit it came at falls if it dies. */
 const BLOW_SECONDS = 8;
 /**
- * A building's stairs (buildings.ts stairs): STAIR_STEPS treads across the tile, from its back edge up to
- * the landing a storey higher; a unit's feet go up the line half a riser over the treads' front edges.
- * For today's one-tile flights only (stairsOf, stairHeight, stairWay and walk's 'stairs' step, nothing else):
- * the flights are to become several tiles long, and this goes with them.
+ * A building's stairs (buildings.ts stairs; docs/MAPAS.md, phase 2): a flight of several tiles has
+ * FLIGHT_STEPS treads a tile, from the back edge of its lowest tile up to the landing a storey higher in front
+ * of its top; one of a single tile (of before) STAIR_STEPS across it. A unit's feet go up the line half a riser
+ * over the treads' front edges (flightOf, flightHeight, stairWay and walk's 'stairs' step).
  */
 const STAIR_STEPS = 9;
+const FLIGHT_STEPS = 6;
 /** On the way onto the stairs from beside them or round the corner: the foot of the flight, behind its first tread, and the corner's point (tiles from the stairs' middle). */
 const STAIR_FOOT = 0.7;
 /** A climber's middle stands this far behind the rungs (tiles): its hands reach them, its chest clear (rung: syntyFigures.ts). */
@@ -61,6 +62,14 @@ const BULKY = new Set<DecorKind>([
   'xray', 'bedsideTable', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'consultDesk', 'bench', 'fridge',
   'stove', 'bathtub', 'washbasin', 'tvStand', 'wc', 'lootWeapons', 'lootMedical', 'lootAmmo', 'lootFood', 'statue', 'kiosk', 'planter', 'bin',
 ]);
+
+/** A building's flight of stairs as a walk sees it (engine flights.ts): the way it climbs, how many tiles, its lowest, and which tile a place is. */
+interface FlightView {
+  d: Vec2;
+  n: number;
+  low: Place;
+  step: number;
+}
 
 /** One step of a walk as walk() plays it: what kind of step, and the seconds it takes. */
 type StepKind = 'flat' | 'stairs' | 'sill' | 'offSill' | 'ladderUp' | 'ladderDown' | 'drop';
@@ -711,7 +720,10 @@ export class UnitViews {
     const fromY = this.standAt(from).y + (this.windowAt(from) ? SILL : 0);
     const rise = this.standAt(to).y - fromY;
     const g = gait.seconds;
-    if (this.stairsOf(to) || this.stairsOf(from)) {
+    const flight = this.flightOf(to) ?? this.flightOf(from);
+    // A tile of a flight of several, up or down it: a little slower than on the flat.
+    if (flight && flight.n > 1) return { kind: 'stairs', seconds: g * 1.25 };
+    if (flight) {
       // Round the corner from beside the flight is longer than straight up it: a little longer to walk.
       const way = this.stairWay(from, to);
       let length = 0;
@@ -730,7 +742,7 @@ export class UnitViews {
   private ladderDown(from: Place, to: Place, rise: number): boolean {
     const s = this.shown;
     if (!s || Math.abs(rise + STOREY) > 0.3 || Math.abs(to.x - from.x) + Math.abs(to.y - from.y) !== 1) return false;
-    return kindAt(s, { x: to.x, y: to.y, z: to.z ?? 0 }) === 'ladder' && !this.stairsOf(to);
+    return kindAt(s, { x: to.x, y: to.y, z: to.z ?? 0 }) === 'ladder' && !this.flightOf(to);
   }
 
   private async walk(v: UnitView, id: string, path: Place[], onStep: ((p: THREE.Vector3) => void) | undefined, ap: number, pace = 1, waits?: readonly number[], passes?: readonly boolean[]): Promise<void> {
@@ -760,8 +772,8 @@ export class UnitViews {
         this.face(id, to);
         const rise = to.y - from.y;
         if (kind === 'stairs') {
-          // On or off a building's stairs: up or down the line of its treads, onto them by their foot (or off by it)
-          // when coming from beside them, never across the banisters.
+          // On, along or off a building's stairs: up or down the line of its treads, the feet on them; onto a flight of
+          // one (of before) by its foot (or off by it) when coming from beside it, never across the banisters.
           const way = this.stairWay(v.place, step);
           way[0]!.copy(from);
           const lengths = way.slice(1).map((q, i) => Math.hypot(q.x - way[i]!.x, q.z - way[i]!.z));
@@ -968,45 +980,65 @@ export class UnitViews {
     return siren;
   }
 
-  /** The way a building's stairs on place `p` climb (a ladder tile dressed as stairs), in the state last shown; null if none. */
-  private stairsOf(p: Place): Vec2 | null {
+  /** The flight of stairs place `p` is a tile of (a building's: engine flights.ts), in the state last shown; null if none. */
+  private flightOf(p: Place): FlightView | null {
     const s = this.shown;
     if (!s || p.x < 0 || p.y < 0 || p.x >= s.width || p.y >= s.height) return null;
-    const level = p.z ? s.levels?.[p.z - 1] : undefined;
-    const i = p.y * s.width + p.x;
-    if ((p.z ? level?.tiles[i] : s.tiles[i]) !== 'ladder') return null;
-    const look = decorOf((p.z ? level?.decor : s.decor)?.[i]);
-    return look?.kind === 'stairs' ? DIRS4[look.facing]! : null;
+    const on = flightAt(s, { x: p.x, y: p.y, z: p.z ?? 0 });
+    return on && { d: DIRS4[on.flight.up]!, n: on.flight.tiles.length, low: { ...on.flight.tiles[0]!, z: on.flight.z }, step: on.step };
   }
 
   /**
-   * How high the feet are over the floor of a building's stairs, `u` tiles from their middle along the climb:
-   * half a riser over the treads' front edges, from the foot of the flight up to the landing's floor.
+   * How high the feet are over the floor of a flight of `n` tiles, `a` tiles up it from the back edge of its lowest
+   * tile: half a riser over the treads' front edges, from its foot up to its landing's floor.
    */
-  private static stairHeight(u: number): number {
-    return THREE.MathUtils.clamp((u + 0.5) * STOREY + STOREY / (2 * STAIR_STEPS), 0, STOREY);
+  private static flightHeight(a: number, n: number): number {
+    const steps = n === 1 ? STAIR_STEPS : FLIGHT_STEPS * n;
+    return THREE.MathUtils.clamp((a / n) * STOREY + STOREY / (2 * steps), 0, STOREY);
   }
 
-  /** Where a unit on place `p` stands: its tile's floor, or on the middle tread of a building's stairs on them. */
+  /** How high over its tile's floor a unit on place `p` stands: on the treads of a flight of stairs, else 0 (the path's line rides them too). */
+  stairLift(p: Place): number {
+    const f = this.flightOf(p);
+    return f ? UnitViews.flightHeight(f.step + 0.5, f.n) : 0;
+  }
+
+  /** Where a unit on place `p` stands: its tile's floor, or on the treads of a building's stairs over its tile's middle. */
   private standAt(p: Place): THREE.Vector3 {
     const at = tileToWorld(p);
-    if (this.stairsOf(p)) at.y += UnitViews.stairHeight(0);
+    const f = this.flightOf(p);
+    if (f) at.y += UnitViews.flightHeight(f.step + 0.5, f.n);
     return at;
   }
 
   /**
-   * The way of a step onto or off a building's stairs (from `from` to `to`, one of them the stairs), as
-   * points to walk through, each at the height of the treads under it: straight up or down the flight from
-   * its foot or its landing; from beside it or the corner behind, round to the foot first (and off the
-   * same way), never across a banister. Where the corner is no floor to pass by, straight (the old way).
+   * The way of a step onto, along or off a building's stairs (from `from` to `to`, one of them on the stairs), as
+   * points to walk through, each at the height of the treads under it. A flight of several tiles: straight up or
+   * down its line, from its foot or its landing (the rules allow no other way on or off). A flight of one (of
+   * before): straight up or down it from its foot or its landing; from beside it or the corner behind, round to the
+   * foot first (and off the same way), never across a banister. Where the corner is no floor to pass by, straight
+   * (the old way).
    */
   private stairWay(from: Place, to: Place): THREE.Vector3[] {
-    const onStairs = this.stairsOf(to) ? to : from;
+    const onStairs = this.flightOf(to) ? to : from;
     const other = onStairs === to ? from : to;
-    const d = this.stairsOf(onStairs)!;
+    const f = this.flightOf(onStairs)!;
+    const d = f.d;
+    const floor = groundAt({ x: f.low.x, y: f.low.y, z: f.low.z ?? 0 });
+    if (f.n > 1) {
+      /** How far up the flight a place's middle is, from the back edge of its lowest tile. */
+      const up = (p: Place) => (p.x - f.low.x) * d.x + (p.y - f.low.y) * d.y + 0.5;
+      const [a0, a1] = [up(from), up(to)];
+      const [p0, p1] = [tileToWorld(from), tileToWorld(to)];
+      // Every tenth of a tile, so that the feet follow the treads; the foot's floor and the landing's as they are.
+      const n = Math.max(1, Math.ceil(Math.abs(a1 - a0) / 0.1));
+      const out = Array.from({ length: n + 1 }, (_, i) => new THREE.Vector3().lerpVectors(p0, p1, i / n).setY(floor + UnitViews.flightHeight(a0 + ((a1 - a0) * i) / n, f.n)));
+      out[0]!.y = this.standAt(from).y;
+      out[n]!.y = this.standAt(to).y;
+      return out;
+    }
     const side = { x: -d.y, y: d.x };
     const mid = tileToWorld(onStairs);
-    const floor = groundAt({ x: onStairs.x, y: onStairs.y, z: onStairs.z ?? 0 });
     const rel = { x: other.x - onStairs.x, y: other.y - onStairs.y };
     const u = rel.x * d.x + rel.y * d.y;
     const v = rel.x * side.x + rel.y * side.y;
@@ -1016,8 +1048,8 @@ export class UnitViews {
     /** A point `a` along the climb and `b` across from the stairs' middle, at the height of what is under it. */
     const point = (a: number, b: number) => {
       const p = new THREE.Vector3(mid.x + d.x * a + side.x * b, floor, mid.z + d.y * a + side.y * b);
-      if (underTop) p.y = floor + UnitViews.stairHeight(0) * THREE.MathUtils.clamp(1 - a, 0, 1);
-      else if (Math.abs(b) <= 0.5 + 1e-6 && a >= -0.6) p.y = floor + UnitViews.stairHeight(a);
+      if (underTop) p.y = floor + UnitViews.flightHeight(0.5, 1) * THREE.MathUtils.clamp(1 - a, 0, 1);
+      else if (Math.abs(b) <= 0.5 + 1e-6 && a >= -0.6) p.y = floor + UnitViews.flightHeight(a + 0.5, 1);
       return p;
     };
     const way: [number, number][] = [[u, v]];
@@ -1026,7 +1058,7 @@ export class UnitViews {
       const sv = Math.sign(v);
       const corner = { x: onStairs.x - d.x + side.x * sv, y: onStairs.y - d.y + side.y * sv, z: onStairs.z ?? 0 };
       const s = this.shown;
-      const cornerFree = !!s && (u === -1 || (canStandOn(kindAt(s, corner)) && groundAt(corner) === floor && !this.stairsOf(corner)));
+      const cornerFree = !!s && (u === -1 || (canStandOn(kindAt(s, corner)) && groundAt(corner) === floor && !this.flightOf(corner)));
       const footKind = s ? kindAt(s, { x: onStairs.x - d.x, y: onStairs.y - d.y, z: onStairs.z ?? 0 }) : null;
       if (cornerFree && canStandOn(footKind)) {
         if (u === 0) way.push([-STAIR_FOOT, STAIR_FOOT * sv]);

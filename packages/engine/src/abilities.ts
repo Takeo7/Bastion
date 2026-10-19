@@ -23,7 +23,8 @@ import {
 } from './content';
 import { PERK_ABILITY } from './board';
 import { hasAnyCover } from './cover';
-import { canStandOn, DIRS4, DIRS8, distance, heightAt, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, slabAt, toPos, unitAt } from './grid';
+import { bearsFlight, canStopAt, flightFoot, flightLanding, longFlightAt } from './flights';
+import { DIRS4, DIRS8, distance, heightAt, inBounds, kindAt, nodeOf, placesOn, samePos, sameSpace, sameTile, slabAt, toPos, unitAt } from './grid';
 import { reachesToSearch, roomAt, roomSearched, searchable, searchableTiles, searchSpot } from './loot';
 import { canSee, canSeeTile, isViewer, sightTo } from './los';
 import { buildPath, computeReach, costPerAp, stepBetween } from './path';
@@ -253,12 +254,19 @@ export function allyTargets(s: GameState, u: Unit, ability: 'revival' | 'firstAi
  * Where a corpse gets up (the Chillón's, or one of the bitten): on its own
  * tile if nobody stands there, else on the first free tile a step away on its
  * floor (not a shut door); null with none, and it can't rise yet. Nobody
- * rises on top of anyone (Arturo, 19/10).
+ * rises on top of anyone (Arturo, 19/10). One that fell on a flight of stairs
+ * gets up off it, at its nearer end (flights.ts: nobody stops there).
  */
 export function riseSpot(s: GameState, corpse: Unit): Pos | null {
   const from = corpse.pos;
-  const free = (p: Pos) => inBounds(s, p.x, p.y) && canStandOn(kindAt(s, p)) && !unitAt(s, p);
+  const free = (p: Pos) => inBounds(s, p.x, p.y) && canStopAt(s, p) && !unitAt(s, p);
   if (free(from)) return { ...from };
+  const on = kindAt(s, from) === 'ladder' ? longFlightAt(s, from) : null;
+  if (on) {
+    const ends = [flightFoot(on.flight), flightLanding(on.flight)];
+    if (on.step * 2 >= on.flight.tiles.length - 1) ends.reverse();
+    return ends.find(free) ?? null;
+  }
   for (const d of DIRS8) {
     const p = { x: from.x + d.x, y: from.y + d.y, z: from.z };
     if (free(p) && kindAt(s, p) !== 'door' && heightAt(s, p) === heightAt(s, from) && stepBetween(s, from, p) !== null) return p;
@@ -371,10 +379,13 @@ export function breachedWalls(s: GameState, ability: AbilityId, at: Place, throw
   return out;
 }
 
-/** Whether a blast on `at` breaks the slab it went off on (docs/FASE7.md §5): a frag grenade on a storey's floor or a roof. */
+/**
+ * Whether a blast on `at` breaks the slab it went off on (docs/FASE7.md §5): a frag grenade on a storey's floor or a
+ * roof; never where it bears a flight of stairs (flights.ts bearsFlight: its tiles, its foot, its landing).
+ */
 export function breaksFloor(s: GameState, ability: AbilityId, at: Place): boolean {
   const p = toPos(at);
-  return BREACHING.has(ability) && p.z >= 1 && slabAt(s, p.x, p.y, p.z);
+  return BREACHING.has(ability) && p.z >= 1 && slabAt(s, p.x, p.y, p.z) && !bearsFlight(s, p);
 }
 
 /**

@@ -269,8 +269,10 @@ describe('procedural maps', () => {
           const look = decorOf(code);
           if (!look) return;
           kinds.add(look.kind);
-          // A building's stairs are a ladder tile (docs/FASE6-PLAN.md); everything else dressed is cover.
-          expect(look.kind === 'stairs' ? ['ladder'] : ['low', 'high'], `${label}: ${look.kind} on ${l.tiles[i]}`).toContain(l.tiles[i]);
+          // A building's stairs are ladder tiles (docs/FASE6-PLAN.md), a flight's lower ones its parts (docs/MAPAS.md,
+          // phase 2); everything else dressed is cover.
+          const flight = look.kind === 'stairs' || (look.kind === 'part' && decorOf(l.decor![anchorOf(l.decor!, l.width, i)])?.kind === 'stairs');
+          expect(flight ? ['ladder'] : ['low', 'high'], `${label}: ${look.kind} on ${l.tiles[i]}`).toContain(l.tiles[i]);
           // A car whole, over its three tiles (docs/MAPAS.md, phase 1); every other tile of an object leads to its anchor.
           if (look.kind === 'carFront') expect(objectTiles(l.decor!, l.width, i).length, `${label}: a car in pieces`).toBe(FOOTPRINT.car[1]);
           if (look.kind === 'part') expect(anchorOf(l.decor!, l.width, i), `${label}: a part of nothing`).toBeGreaterThanOrEqual(0);

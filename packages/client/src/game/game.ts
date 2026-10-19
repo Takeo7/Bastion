@@ -886,6 +886,7 @@ export class Game {
     if (!this.overlays || this.overlays.group.parent === null) {
       this.overlays = new Overlays(s.width * s.height);
       this.overlays.setPlanColor(PLAYER_COLORS[this.mySlot]);
+      this.overlays.lift = (p) => this.units.stairLift(p);
       this.renderer.scene.add(this.overlays.group);
     }
     this.overlays.setNight(!!s.mission.night);

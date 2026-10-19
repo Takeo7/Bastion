@@ -1,4 +1,5 @@
 import { decorCode, decorOf, objectAt } from './decor';
+import { longFlightTile } from './flights';
 import { DIRS4, DIRS8, isWalkable } from './grid';
 import { stepsFrom } from './path';
 import { Rng } from './rng';
@@ -90,9 +91,10 @@ const PASS: ReadonlySet<TileKind | null> = new Set<TileKind | null>(['floor', 'l
  * diagonal past it needs both sides open: they are two of its neighbours) and
  * the rooms stay one (loot.ts roomAt). `p` may be the tiles of an object over
  * several (decor.ts objectTiles): the open neighbours of all of them stay
- * joined round the whole of it.
+ * joined round the whole of it. A flight of stairs of several tiles (with the
+ * layer's `decor`) is no way round: nobody steps off its sides.
  */
-export function keepsWays(layer: { tiles: readonly (TileKind | null)[] }, width: number, height: number, p: Vec2 | readonly Vec2[], elev?: readonly number[]): boolean {
+export function keepsWays(layer: { tiles: readonly (TileKind | null)[]; decor?: readonly Decor[] }, width: number, height: number, p: Vec2 | readonly Vec2[], elev?: readonly number[]): boolean {
   const at = (x: number, y: number) => y * width + x;
   const own: readonly Vec2[] = 'x' in p ? [p] : p;
   const first = own[0]!;
@@ -103,7 +105,8 @@ export function keepsWays(layer: { tiles: readonly (TileKind | null)[] }, width:
   const y0 = Math.min(...own.map((q) => q.y)) - RADIUS;
   const y1 = Math.max(...own.map((q) => q.y)) + RADIUS;
   const pass = (x: number, y: number) =>
-    x >= 0 && y >= 0 && x < width && y < height && x >= x0 && x <= x1 && y >= y0 && y <= y1 && !taken.has(at(x, y)) && PASS.has(layer.tiles[at(x, y)] ?? null) && (elev?.[at(x, y)] ?? 0) === level;
+    x >= 0 && y >= 0 && x < width && y < height && x >= x0 && x <= x1 && y >= y0 && y <= y1 && !taken.has(at(x, y)) && PASS.has(layer.tiles[at(x, y)] ?? null) && (elev?.[at(x, y)] ?? 0) === level &&
+    !longFlightTile(layer.tiles, layer.decor, width, at(x, y));
   const near: Vec2[] = [];
   for (const q of own) {
     for (const d of DIRS4) {
@@ -130,7 +133,8 @@ export function keepsWays(layer: { tiles: readonly (TileKind | null)[] }, width:
 /**
  * The flood fill of each storey (the ground first): every walkable tile
  * (doors, stairs, ladders and windows too) by the piece of that storey it is
- * joined to, side by side and on the ground at its height; -1 for the rest.
+ * joined to, side by side and on the ground at its height; -1 for the rest,
+ * and for a flight of stairs of several tiles (nobody steps off its sides).
  * The ways between storeys (stairs, ladders, drops) start and end on tiles
  * nothing is ever put on or beside (Furnisher.free), so pieces joined as
  * before mean every place reached as before.
@@ -140,16 +144,18 @@ export function storeyPieces(map: FurnishMap): Int32Array[] {
   return [map.tiles, ...map.levels.map((l) => l.tiles)].map((tiles, z) => {
     const piece = new Int32Array(w * h).fill(-1);
     const level = (i: number) => (z ? 0 : (map.elev[i] ?? 0));
+    const decor = z ? map.levels[z - 1]!.decor : map.decor;
+    const open = (i: number) => isWalkable(tiles[i] ?? null) && !longFlightTile(tiles, decor, w, i);
     let n = 0;
     for (let start = 0; start < w * h; start++) {
-      if (piece[start] !== -1 || !isWalkable(tiles[start] ?? null)) continue;
+      if (piece[start] !== -1 || !open(start)) continue;
       piece[start] = n;
       const queue = [start];
       while (queue.length) {
         const i = queue.pop()!;
         const x = i % w;
         for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
-          if (j < 0 || j >= w * h || piece[j] !== -1 || !isWalkable(tiles[j] ?? null) || level(j) !== level(i)) continue;
+          if (j < 0 || j >= w * h || piece[j] !== -1 || !open(j) || level(j) !== level(i)) continue;
           piece[j] = n;
           queue.push(j);
         }

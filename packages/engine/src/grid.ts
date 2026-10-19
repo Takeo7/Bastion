@@ -176,7 +176,7 @@ export function isWalkable(kind: TileKind | null): boolean {
   return kind === 'floor' || kind === 'ladder' || kind === 'door' || kind === 'doorOpen' || kind === 'window' || kind === 'windowBroken';
 }
 
-/** Units can end a move on the tile (nobody stands inside a window frame). */
+/** Units can end a move on the tile (nobody stands inside a window frame); by its kind alone: a flight of stairs is flights.ts canStopAt's. */
 export function canStandOn(kind: TileKind | null): boolean {
   return isWalkable(kind) && kind !== 'window' && kind !== 'windowBroken';
 }

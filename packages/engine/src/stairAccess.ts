@@ -1,4 +1,5 @@
 import { decorCode, decorOf } from './decor';
+import { longFlightAt } from './flights';
 import { DIRS4, kindAt, nodeOf, posOf, samePos } from './grid';
 import { roomAt } from './loot';
 import { stepBetween, stepsFrom } from './path';
@@ -24,7 +25,9 @@ function reachable(s: GameState, start: Pos): Set<number> {
  * Old generated missions preferred stairs against a wall. Move those flights
  * within their existing room when there is safe floor on both storeys. Never
  * move a unit, remove furniture or an objective, or cut off a reachable floor.
- * If no safe position fits, keep the saved terrain intact.
+ * If no safe position fits, keep the saved terrain intact. Flights of several
+ * tiles (docs/MAPAS.md, phase 2) are laid out right by the generator: left
+ * alone.
  */
 export function repairStairAccess(s: GameState): void {
   if (!s.mapId.startsWith('gen-') || !s.levels || !s.ground || !s.storeys) return;
@@ -37,7 +40,8 @@ export function repairStairAccess(s: GameState): void {
     // Snapshot: a newly moved flight must not be processed a second time.
     const flights: { i: number; up: number }[] = tiles.flatMap((kind, i) => {
       const look = decorOf(decor[i]);
-      return kind === 'ladder' && look?.kind === 'stairs' ? [{ i, up: look.facing }] : [];
+      if (kind !== 'ladder' || look?.kind !== 'stairs' || longFlightAt(s, { x: i % s.width, y: Math.floor(i / s.width), z })) return [];
+      return [{ i, up: look.facing }];
     });
     for (const { i, up } of flights) {
       const at = { x: i % s.width, y: Math.floor(i / s.width), z };

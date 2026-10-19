@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 466 tests.
+   Deben pasar 505 tests.
 5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
@@ -202,7 +202,8 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - la Marea cae por zonas a 4/6/9/10/11 de infestación;
   - empieza con 16 raciones;
   - disparar desde más alto da +20 de puntería; la IA de los vivos valora la altura con +6 por planta al elegir sitio;
-  - subir o bajar una planta por la escalera cuesta como 2 casillas; la IA cuenta 3 casillas de rodeo por planta.
+  - una escalera es un tramo de 3 casillas (2 en casas, tiendas y hospitales pequeños; [MAPAS.md](MAPAS.md)): solo se entra por el pie y nadie se para en él. El tramo de 3 cuesta como 4 casillas y el de 2 como 3; la IA cuenta 4 de rodeo por planta (3 en los mapas de antes, con escaleras de una casilla);
+  - los compañeros se bloquean y los muebles grandes ocupan su casilla (Arturo, 19/10): nadie atraviesa a nadie ni a nada.
 - **Interfaz:** Mixta, votada por Arturo. La cuadrícula del suelo, opción A (solo contornos). Las líneas y casillas, «Degradado» con el contorno de «Tiza», en «Hueso y óxido» (18/10).
 - **Cómo se juega:** Arturo y Ana juegan con la aplicación de escritorio; la web queda para probar (por eso Safari no se prueba).
 - **Sesiones de Claude:** Gameplay (coordina), Arte, Lore, UI y Networking, todas con Remote Control para seguirlas desde claude.ai/code ([EQUIPO.md](EQUIPO.md)).

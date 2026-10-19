@@ -557,9 +557,10 @@ const DRAIN_EVERY = 13;
  * at the kerb, a drain now and then in the gutter and manholes down the
  * middle of streets. Where they fall clumps and thins out across tiles.
  * Cosmetic: no shadows, no picking. `density` scales how much (Ajustes →
- * Efectos: fewer on slower machines).
+ * Efectos: fewer on slower machines). With `area` (a rebuild of a few chunks:
+ * mapView), only on its tiles: each tile's cover is its own, and stays on it.
  */
-export function scatterCover(s: GameState, ground: GroundMap, density = 1): { id: PropId; matrix: THREE.Matrix4 }[] {
+export function scatterCover(s: GameState, ground: GroundMap, density = 1, area: Uint8Array | null = null): { id: PropId; matrix: THREE.Matrix4 }[] {
   const out: { id: PropId; matrix: THREE.Matrix4 }[] = [];
   const { width: w, height: h } = s;
   // On the forest road's tarmac (#25), what a town's street has.
@@ -577,7 +578,7 @@ export function scatterCover(s: GameState, ground: GroundMap, density = 1): { id
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      if (s.tiles[i] !== 'floor') continue;
+      if (s.tiles[i] !== 'floor' || (area && area[i] === 0)) continue;
       const e = elev(x, y);
       // A siege's watchtower deck (docs/FASE12.md §10) is planks: nothing grows on it.
       if (e && s.mission.siege) continue;

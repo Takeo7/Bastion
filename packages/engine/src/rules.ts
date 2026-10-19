@@ -62,6 +62,7 @@ import {
 } from './content';
 import { objectAt } from './decor';
 import { applyEvent, type GameEvent } from './events';
+import { canStopAt, restingPlace } from './flights';
 import {
   canStandOn,
   combatants,
@@ -158,7 +159,7 @@ function landingBelow(s: GameState, p: Pos, taken: ReadonlySet<number>): Pos | n
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !inBounds(s, p.x + dx, p.y + dy)) continue;
         const q = { x: p.x + dx, y: p.y + dy, z };
-        if (canStandOn(kindAt(s, q)) && !unitAt(s, q) && !taken.has(nodeOf(s, q))) return q;
+        if (canStopAt(s, q) && !unitAt(s, q) && !taken.has(nodeOf(s, q))) return q;
       }
     }
   }
@@ -456,7 +457,8 @@ export class Sim {
     const { total, mitigated } = damageTaken(u, raw, pierce);
     this.emit({ t: 'damaged', unit: u.id, amount: total - mitigated, mitigated, shred: Math.min(shred, u.armor) });
     if (u.hp > 0) return;
-    if (this.s.mission.item?.carrier === u.id) this.emit({ t: 'itemDropped', pos: { ...u.pos } });
+    // Off a flight of stairs, at its nearer end (flights.ts): somewhere one can stop to pick it up.
+    if (this.s.mission.item?.carrier === u.id) this.emit({ t: 'itemDropped', pos: restingPlace(this.s, u.pos) });
     this.emit({ t: 'died', unit: u.id, by: source?.id });
     // A patrol car's or an ambulance's siren silenced: the car stays, over its tile as over its nose's (19/10), solid. Without
     // an alarm said (a skirmish, older saves), a car but in a facility, as the client draws it (unitViews.ts ALARM_BY_MAP).
@@ -695,7 +697,8 @@ export class Sim {
    * the objective interrupt the walk, so a move may be emitted as several
    * `moved` segments. Nobody walks through anyone (Arturo, 19/10): one who came
    * into the way since the walk was planned (a pod scampering to cover) stops
-   * it short of them, never in a window's frame.
+   * it short of them, never in a window's frame nor on a flight of stairs
+   * (flights.ts: nobody stops there, docs/MAPAS.md phase 2).
    */
   moveAlong(u: Unit, path: Pos[], ap: number): void {
     let segment: Pos[] = [];
@@ -709,14 +712,25 @@ export class Sim {
 
     const origin = { ...u.pos };
     const patrolling = onPatrol(this.s, u);
+    /** Who a patrol walking up or down a flight of stairs saw: it stops once off it. */
+    let sighted: Unit | undefined;
     for (let i = 0; i < path.length; i++) {
       const step = path[i]!;
       const blocker = unitAt(this.s, step);
       if (blocker && blocker !== u) {
         flush();
-        // Halted in a window's frame, where nobody stands: back the way it came.
-        const back = i >= 2 ? path[i - 2]! : origin;
-        if (u.alive && !canStandOn(kindAt(this.s, u.pos)) && canStandOn(kindAt(this.s, back)) && !unitAt(this.s, back)) this.emit({ t: 'moved', unit: u.id, path: [{ ...back }], ap: 0 });
+        // Halted in a window's frame or on a flight of stairs, where nobody stands: back the way it came, to the last
+        // place it could have stopped on.
+        if (u.alive && !canStopAt(this.s, u.pos)) {
+          const back: Pos[] = [];
+          for (let j = i - 2; j >= -1; j--) {
+            const q = j >= 0 ? path[j]! : origin;
+            back.push({ ...q });
+            if (canStopAt(this.s, q)) break;
+          }
+          const end = back[back.length - 1];
+          if (end && canStopAt(this.s, end) && !unitAt(this.s, end)) this.emit({ t: 'moved', unit: u.id, path: back, ap: 0 });
+        }
         return;
       }
 
@@ -746,9 +760,10 @@ export class Sim {
           this.emit({ t: 'vipRescued', unit: vip.id, by: u.id, owner: u.owner });
         }
       }
-      // A patrolling pod that walks into sight of the squad stops and takes cover.
-      const spotted = patrolling ? this.spottedFrom(u, step, facingTo(i ? path[i - 1]! : u.pos, step) ?? u.facing) : undefined;
-      if (spotted) {
+      // A patrolling pod that walks into sight of the squad stops and takes cover; on a flight of stairs, once off it.
+      const spotted = sighted ?? (patrolling ? this.spottedFrom(u, step, facingTo(i ? path[i - 1]! : u.pos, step) ?? u.facing) : undefined);
+      if (spotted && !canStopAt(this.s, step)) sighted = spotted;
+      else if (spotted) {
         flush();
         this.activatePods([u.podId!], { cause: 'patrol', unit: spotted.id, by: u.id });
         return;
@@ -939,7 +954,7 @@ export class Sim {
     const soldiers = combatants(s, 'xcom');
     if (!soldiers.length) return null;
     const free = (x: number, y: number) =>
-      inBounds(s, x, y) && canStandOn(tileAt(s, x, y)) && (s.elev[tileIndex(s, x, y)] ?? 0) === 0 && !unitAt(s, { x, y, z: 0 });
+      inBounds(s, x, y) && canStopAt(s, { x, y, z: 0 }) && (s.elev[tileIndex(s, x, y)] ?? 0) === 0 && !unitAt(s, { x, y, z: 0 });
     const sides = (x: number, y: number) => [y < EDGE_BAND, x >= s.width - EDGE_BAND, y >= s.height - EDGE_BAND, x < EDGE_BAND];
     const middle = (along: number, span: number) => along >= span / 4 && along < (span * 3) / 4;
     // In a siege, never in a glade the pines close off: only where the way to the squad is open, or opened by breaking what was built.
@@ -1099,7 +1114,7 @@ export class Sim {
         for (let dx = -r; dx <= r && zone.length < count; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
           const p = { x: center.x + dx, y: center.y + dy, z: center.z };
-          if (inBounds(s, p.x, p.y) && canStandOn(kindAt(s, p)) && !unitAt(s, p) && !zone.some((z) => samePos(z, p))) zone.push(p);
+          if (inBounds(s, p.x, p.y) && canStopAt(s, p) && !unitAt(s, p) && !zone.some((z) => samePos(z, p))) zone.push(p);
         }
       }
     }

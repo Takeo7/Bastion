@@ -1,6 +1,7 @@
 import { TEMPLATES, TRAPS } from './content';
 import { decorOf } from './decor';
-import { canStandOn, DIRS4, DIRS8, elevAt, heightAt, inBounds, isWalkable, isWindow, kindAt, nodeOf, posOf, slabAt, surfaceAt, toPos } from './grid';
+import { canStopAt, longFlightAt, type Flight } from './flights';
+import { DIRS4, DIRS8, elevAt, heightAt, inBounds, isWalkable, isWindow, kindAt, nodeOf, posOf, slabAt, surfaceAt, toPos } from './grid';
 import type { GameState, Place, Pos, Unit } from './types';
 
 /** Movement costs in half-tiles so diagonals (1.5 tiles) stay integral. */
@@ -68,7 +69,8 @@ function stairsFacing(s: GameState, p: Pos): number | null {
  * going down onto one costs the same. A building's stairs are left and taken
  * at the top only by their landing, the tile they face (docs/FASE7.md); a
  * ladder by any side. Any other way down is a drop off an edge, with no floor
- * or roof in between, out of an upper window too (docs/FASE7.md).
+ * or roof in between, out of an upper window too (docs/FASE7.md). A flight of
+ * several tiles is flightStep's.
  */
 export function stepBetween(s: GameState, from: Pos, to: Pos): number | null {
   const dx = to.x - from.x;
@@ -77,6 +79,9 @@ export function stepBetween(s: GameState, from: Pos, to: Pos): number | null {
   const fromKind = kindAt(s, from);
   const toKind = kindAt(s, to);
   if (!isWalkable(toKind)) return null;
+  const on = fromKind === 'ladder' ? longFlightAt(s, from) : null;
+  const onto = toKind === 'ladder' ? longFlightAt(s, to) : null;
+  if (on || onto) return flightStep(s, from, to, on, onto);
   const h = heightAt(s, from);
   const landing = heightAt(s, to);
   const dz = landing - h;
@@ -85,7 +90,8 @@ export function stepBetween(s: GameState, from: Pos, to: Pos): number | null {
     if (dz !== 0 || isWindow(fromKind) || isWindow(toKind)) return null;
     for (const [ox, oy] of [[to.x, from.y], [from.x, to.y]] as const) {
       const side = surfaceAt(s, ox, oy, h);
-      if (!side || isWindow(kindAt(s, side))) return null;
+      // Nor past the corner of a flight's banister.
+      if (!side || isWindow(kindAt(s, side)) || (kindAt(s, side) === 'ladder' && longFlightAt(s, side))) return null;
     }
     return COST_DIAG;
   }
@@ -104,6 +110,36 @@ export function stepBetween(s: GameState, from: Pos, to: Pos): number | null {
     cost += toKind === 'ladder' && dz === -1 ? COST_CLIMB : COST_DROP * -dz;
   }
   return cost;
+}
+
+/**
+ * A step onto, along or off a flight of stairs of several tiles (docs/MAPAS.md,
+ * phase 2), `on` the one `from` is on and `onto` the one `to` is on: only
+ * along it, the way it climbs or back; on it from its foot, off it at the top
+ * onto its landing a storey up (and down the same way), off it at the bottom
+ * onto its foot. Never across its banisters, nor diagonally. Each step costs
+ * a tile's walk, the one up to the landing too (no climb on top): a flight of
+ * three, foot to landing, costs as four tiles.
+ */
+function flightStep(s: GameState, from: Pos, to: Pos, on: { flight: Flight; step: number } | null, onto: { flight: Flight; step: number } | null): number | null {
+  const f = (on ?? onto)!.flight;
+  const u = DIRS4[f.up]!;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const along = dx === u.x && dy === u.y ? 1 : dx === -u.x && dy === -u.y ? -1 : 0;
+  if (!along) return null;
+  const top = f.tiles.length - 1;
+  const rise = heightAt(s, to) - heightAt(s, from);
+  const cost = COST_ORTHO + (isWindow(kindAt(s, to)) ? COST_VAULT : 0);
+  if (on && onto) return from.z === to.z && on.flight.tiles[0]!.x === onto.flight.tiles[0]!.x && on.flight.tiles[0]!.y === onto.flight.tiles[0]!.y && onto.step === on.step + along ? cost : null;
+  if (on) {
+    // Off at the top onto the landing, or at the bottom onto the foot.
+    if (along > 0) return on.step === top && to.z === f.z + 1 && rise === 1 ? cost : null;
+    return on.step === 0 && to.z === f.z && rise === 0 ? cost : null;
+  }
+  // On from the foot, or down from the landing onto the top.
+  if (along > 0) return onto!.step === 0 && from.z === f.z && rise === 0 ? cost : null;
+  return onto!.step === top && from.z === f.z + 1 && rise === -1 ? cost : null;
 }
 
 /**
@@ -265,13 +301,13 @@ function occupied(s: GameState, i: number, ignore: Unit): boolean {
   return s.units.some((o) => o !== ignore && o.alive && o.pos.x === p.x && o.pos.y === p.y && o.pos.z === p.z);
 }
 
-/** Tiles the unit may end its move on (excludes origin, occupied tiles and window frames). */
+/** Tiles the unit may end its move on (excludes origin, occupied tiles, window frames and flights of stairs: flights.ts canStopAt). */
 export function destinations(s: GameState, u: Unit, reach: Reach): { pos: Pos; cost: number }[] {
   const out: { pos: Pos; cost: number }[] = [];
   const start = nodeOf(s, reach.origin);
   for (const [i, c] of reach.cost) {
     const p = posOf(s, i);
-    if (i === start || occupied(s, i, u) || !canStandOn(kindAt(s, p))) continue;
+    if (i === start || occupied(s, i, u) || !canStopAt(s, p)) continue;
     out.push({ pos: p, cost: c });
   }
   return out;
@@ -282,7 +318,7 @@ export function buildPath(s: GameState, u: Unit, reach: Reach, to: Place): Pos[]
   if (!inBounds(s, to.x, to.y)) return null;
   const end = nodeOf(s, toPos(to));
   const start = nodeOf(s, reach.origin);
-  if (end === start || !reach.cost.has(end) || occupied(s, end, u) || !canStandOn(kindAt(s, posOf(s, end)))) return null;
+  if (end === start || !reach.cost.has(end) || occupied(s, end, u) || !canStopAt(s, posOf(s, end))) return null;
   const path: Pos[] = [];
   let i: number | undefined = end;
   while (i !== undefined && i !== start) {

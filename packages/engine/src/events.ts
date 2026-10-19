@@ -1,6 +1,7 @@
 import { BAD_LUCK_MISSES } from './aim';
 import { ABILITIES, addMods, apPerTurn, attackWeapon, conditionOf, firesPrimary, wearOf, clipOf, CONTROL_TURNS, firesSidearm, FOUND_WEAPONS, hordePoints, ITEMS, reloadWeapon, TEMPLATES, THROWN, WEAPONS } from './content';
 import { decorCode } from './decor';
+import { restingPlace } from './flights';
 import { getUnit, nodeOf, tileIndex } from './grid';
 import { facingTo } from './los';
 import { fallenGear, packSlots } from './loot';
@@ -340,9 +341,11 @@ export function applyEvent(s: GameState, e: GameEvent): void {
         }
       }
       if (s.mission.kind === 'sabotage' && s.mission.objectiveUnit === u.id) completeObjective(s);
-      // A soldier leaves what it carried where it fell, for another to take (Arturo, 18/10 #49).
+      // A soldier leaves what it carried where it fell, for another to take (Arturo, 18/10 #49); off a flight of stairs
+      // at its nearer end, where one can stop (flights.ts).
       if (u.team === 'xcom' && !u.automaton && !u.objective && !u.captive) {
-        for (const loot of fallenGear(u)) leaveOnFloor(s, u.pos, loot, u.id);
+        const at = restingPlace(s, u.pos);
+        for (const loot of fallenGear(u)) leaveOnFloor(s, at, loot, u.id);
         u.backpack = [];
       }
       break;

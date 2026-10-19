@@ -1370,7 +1370,7 @@ export class MapView {
     const lamps: Glow[] = [];
     // The map's own lights (generated maps): a street light on each. The new base's are its floodlights (below).
     const fixed = pieces ? [] : s.lights ? s.lights.filter((l) => l.turns === undefined).map((l) => l.tile) : null;
-    for (const d of dressStreets(s, ground, COVER_DENSITY[graphics().effects], fixed)) {
+    for (const d of dressStreets(s, ground, COVER_DENSITY[graphics().effects], fixed, area)) {
       addSyntyId(d.id, d.matrix, d.cast);
       if (d.id !== 'streetLight') continue;
       // The lamp hangs at the end of the arm (its +x), over the road.
@@ -1398,7 +1398,7 @@ export class MapView {
 
     // Ground cover (tufts, papers, leaves, drains…), scattered off the grid; no shadows.
     const coverLayers = new Map<string, Layer[]>();
-    for (const { id, matrix } of scatterCover(s, ground, COVER_DENSITY[graphics().effects])) {
+    for (const { id, matrix } of scatterCover(s, ground, COVER_DENSITY[graphics().effects], area)) {
       // Nothing grows through the base's buildings, nor through what is left of them.
       if (pieces) {
         const k = pieces.at[Math.floor(matrix.elements[14]!) * s.width + Math.floor(matrix.elements[12]!)] ?? -1;

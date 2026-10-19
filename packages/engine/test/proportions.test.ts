@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { anchorOf, decorOf, FOOTPRINT, objectAt } from '../src/decor';
+import { flightAt, flightFoot, flightLanding, midFlight } from '../src/flights';
 import { reachableFrom } from '../src/furnishing';
-import { canStandOn, DIRS4, DIRS8, isWalkable } from '../src/grid';
+import { canStandOn, DIRS4, DIRS8, isWalkable, kindAt, slabAt } from '../src/grid';
 import { roomAt } from '../src/loot';
 import type { MissionLayout } from '../src/mapgen';
 import { stepCost } from '../src/path';
@@ -12,6 +13,7 @@ import type { Alarm, Decor, DecorKind, GameState, MissionKind, TileKind, Vec2 } 
 // under. Seeded maps of each type, through the entry the server uses (setup.ts missionLayout → mapgen.ts
 // generateLayout). Phase 1: what stands over several tiles (a car 1 × 3, an ambulance 2 × 4, a bed 1 × 2…) is
 // whole, of its footprint, and closes no way; every place one can stand on is reached still; a seed is one map.
+// Phase 2: the stairs are flights of 3 tiles (2 in small houses), with their stairwell, and nobody starts on one.
 
 interface MapType {
   name: string;
@@ -67,12 +69,15 @@ const SHAPES: Partial<Record<DecorKind, (readonly [number, number])[]>> = {
 /** Furniture over several tiles, indoors: what never stands by a way through a wall or up a storey. */
 const FURNITURE = new Set<DecorKind>(['bed', 'sofa', 'bathtub', 'table', 'hospitalBed', 'gurney']);
 const WAYS = new Set<TileKind | null>(['door', 'doorOpen', 'window', 'windowBroken', 'ladder']);
-/** Where a building's flight of stairs on tile j of `layer` is walked onto from: the tile behind it (it climbs the way it faces). */
-const footOf = (layer: { decor: readonly Decor[] }, width: number, j: number): number | null => {
-  const look = decorOf(layer.decor[j]);
-  if (look?.kind !== 'stairs') return null;
-  const d = DIRS4[look.facing]!;
-  return j - d.y * width - d.x;
+/**
+ * Where a building's flight of stairs with a tile on j of `layer` is walked onto from: the tile behind its lowest (it
+ * climbs the way it faces; docs/MAPAS.md, phase 2: a flight of several tiles, its top dressed 'stairs', the rest parts).
+ */
+const footOf = (s: GameState, layer: { z: number }, j: number): number | null => {
+  const on = flightAt(s, { x: j % s.width, y: Math.floor(j / s.width), z: layer.z });
+  if (!on) return null;
+  const foot = flightFoot(on.flight);
+  return foot.y * s.width + foot.x;
 };
 
 describe('the proportions of the generated maps (docs/MAPAS.md)', () => {
@@ -132,7 +137,7 @@ describe('the proportions of the generated maps (docs/MAPAS.md)', () => {
             for (const d of DIRS4) {
               const j = (p.y + d.y) * l.width + p.x + d.x;
               // A flight of stairs put in later may stand beside it (mapgen.ts placeStairs), never on the tile one climbs it from.
-              const foot = footOf(layer, l.width, j);
+              const foot = footOf(s, layer, j);
               if (foot !== null) expect(foot, `${label}: ${o.kind} at the foot of the stairs at ${p.x},${p.y},${layer.z}`).not.toBe(t);
               else expect(WAYS.has(layer.tiles[j] ?? null), `${label}: ${o.kind} by a way at ${p.x},${p.y},${layer.z}`).toBe(false);
             }
@@ -165,6 +170,37 @@ describe('the proportions of the generated maps (docs/MAPAS.md)', () => {
         });
       }
     }
+  });
+
+  it('phase 2: the stairs are flights of 3 tiles, 2 in a small house, under their stairwell; nobody starts on one', () => {
+    const lengths = new Map<string, number>();
+    for (const { t, l, label } of MAPS) {
+      const s = l as unknown as GameState;
+      for (const layer of layersOf(l)) {
+        layer.decor.forEach((code, i) => {
+          if (decorOf(code)?.kind !== 'stairs') return;
+          const top = { x: i % l.width, y: Math.floor(i / l.width), z: layer.z };
+          const at = `${label}: ${top.x},${top.y},${top.z}`;
+          const { flight } = flightAt(s, top)!;
+          const n = flight.tiles.length;
+          // A house (its rooms small) or a small shop where three has no room, or a short hospital's stairwell: two.
+          const home = (l.homes ?? []).some((h) => top.x >= h.x && top.y >= h.y && top.x < h.x + h.w && top.y < h.y + h.h);
+          const where = home ? 'house' : t.hospital ? 'hospital' : 'other';
+          lengths.set(`${where} ${n}`, (lengths.get(`${where} ${n}`) ?? 0) + 1);
+          expect([2, 3], at).toContain(n);
+          for (const p of flight.tiles) expect(slabAt(s, p.x, p.y, layer.z + 1), `${at}: no stairwell over ${p.x},${p.y}`).toBe(false);
+          expect(kindAt(s, flightFoot(flight)), `${at}: its foot`).toBe('floor');
+          expect(canStandOn(kindAt(s, flightLanding(flight))), `${at}: its landing`).toBe(true);
+        });
+      }
+      // Where the groups start, and the living posted upstairs.
+      for (const p of [...l.pods.flatMap((pod) => pod.tiles), ...(l.perch ?? [])]) expect(midFlight(s, p), `${label}: a group on a flight at ${p.x},${p.y}`).toBe(false);
+    }
+    const count = (key: string) => lengths.get(key) ?? 0;
+    // Three wherever there is room: in shops and offices nearly always, in most houses' and hospitals'.
+    expect(count('other 3')).toBeGreaterThan(100);
+    expect(count('other 2')).toBeLessThanOrEqual(count('other 3') / 20);
+    expect(count('house 3') + count('hospital 3')).toBeGreaterThan(count('house 2') + count('hospital 2'));
   });
 
   it('a seed is one map', () => {

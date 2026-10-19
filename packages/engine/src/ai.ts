@@ -2,7 +2,8 @@ import { abilitiesOf, abilityBlocker, abilityTargets, blastTiles, breakable, can
 import { inMeleeReach, previewShot, weaponOf } from './aim';
 import { ABILITIES, hostileTo, isAttack, TEMPLATES } from './content';
 import { coverAgainst, hasAnyCover } from './cover';
-import { canStandOn, combatants, DIRS8, distance, getUnit, heightAt, inBounds, kindAt, nodeOf, placesOn, posOf, samePos, storeysApart, surfaceAt, unitAt } from './grid';
+import { canStopAt, hasLongFlights } from './flights';
+import { combatants, DIRS8, distance, getUnit, heightAt, inBounds, kindAt, nodeOf, placesOn, posOf, samePos, storeysApart, surfaceAt, unitAt } from './grid';
 import { reachesToSearch } from './loot';
 import { canSee, sightOrigin, sightTo } from './los';
 import { buildPath, COST_ORTHO, computeReach, costPerAp, destinations, type Reach } from './path';
@@ -12,10 +13,13 @@ import type { AbilityId, AttackAbility, GameState, Pod, Unit, Pos } from './type
 /**
  * How far one place is from another for a walker (docs/FASE6-PLAN.md): the
  * tiles between them, and for each storey between them the way round to the
- * stairs. Without storeys, the distance.
+ * stairs. Without storeys, the distance. With flights of several tiles
+ * (docs/MAPAS.md, phase 2) the way round is a tile longer; a map without them
+ * (saved before, hand-made) as it was.
  */
-const STOREY_WALK = 3;
-const farness = (s: GameState, a: Pos, b: Pos) => distance(a, b) + STOREY_WALK * storeysApart(s, a, b);
+const STOREY_WALK = 4;
+const OLD_STOREY_WALK = 3;
+const farness = (s: GameState, a: Pos, b: Pos) => distance(a, b) + (hasLongFlights(s) ? STOREY_WALK : OLD_STOREY_WALK) * storeysApart(s, a, b);
 
 /** Beside `b` (or on it), on its floor: a walker that got there has arrived. */
 const arrived = (s: GameState, a: Pos, b: Pos, gap: number) => distance(a, b) <= gap && storeysApart(s, a, b) === 0;
@@ -193,7 +197,7 @@ function planWalk(s: GameState, u: Unit, goal: Pos, minGap = 0, actions = 1): Wa
         jam = p;
         break;
       }
-      if (canStandOn(kindAt(s, p))) end = i;
+      if (canStopAt(s, p)) end = i;
     }
     return { end, jam };
   };
@@ -463,7 +467,7 @@ export function breachPlan(s: GameState, u: Unit, goal: Pos, ways?: Map<number, 
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (!inBounds(s, goal.x + dx, goal.y + dy)) continue;
-      for (const p of placesOn(s, goal.x + dx, goal.y + dy)) if (all.cost.has(nodeOf(s, p)) && arrived(s, p, goal, 1.5) && canStandOn(kindAt(s, p))) return null;
+      for (const p of placesOn(s, goal.x + dx, goal.y + dy)) if (all.cost.has(nodeOf(s, p)) && arrived(s, p, goal, 1.5) && canStopAt(s, p)) return null;
     }
   }
   let best: { tile: Pos; stand: Pos; score: number } | null = null;
@@ -473,7 +477,7 @@ export function breachPlan(s: GameState, u: Unit, goal: Pos, ways?: Map<number, 
     const opens = DIRS8.some((d) => {
       const beyond = { x: tile.x + d.x, y: tile.y + d.y, z: tile.z };
       const kind = kindAt(s, beyond);
-      return kind !== 'door' && canStandOn(kind) && !all.cost.has(nodeOf(s, beyond));
+      return kind !== 'door' && canStopAt(s, beyond) && !all.cost.has(nodeOf(s, beyond));
     });
     if (!opens) continue;
     for (const d of DIRS8) {
@@ -481,7 +485,7 @@ export function breachPlan(s: GameState, u: Unit, goal: Pos, ways?: Map<number, 
       if (!inBounds(s, stand.x, stand.y) || !reachesToSearch(s, stand, tile)) continue;
       const here = samePos(stand, u.pos);
       const cost = here ? 0 : all.cost.get(nodeOf(s, stand));
-      if (cost === undefined || (!here && (unitAt(s, stand) || !canStandOn(kindAt(s, stand))))) continue;
+      if (cost === undefined || (!here && (unitAt(s, stand) || !canStopAt(s, stand)))) continue;
       const score = cost / COST_ORTHO + farness(s, tile, goal) + holds[Number(key)]! * BREACH_HP_WEIGHT;
       if (!best || score < best.score - 1e-9) best = { tile, stand, score };
     }

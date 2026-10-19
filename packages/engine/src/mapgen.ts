@@ -27,6 +27,7 @@ import { stepCost } from './path';
 import { Rng } from './rng';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from './grid';
 import { BLOCK_KINDS, decorCode, decorOf, FOOTPRINT, objectAt } from './decor';
+import { longFlightTile } from './flights';
 import type { Alarm, Biome, Decor, DecorKind, GameState, GroundKind, HomeRoom, HomeSite, HomeUse, Level, MedicalRoom, MedicalUse, MedicalSite, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
 
 /** Side of every procedural map, in tiles. */
@@ -520,9 +521,10 @@ function partition(c: Canvas, line: Vec2[], normal: Vec2, rng: Rng, width = 1): 
 /**
  * Splits an interior into rooms of at most `maxSide` tiles a side (never under
  * 3), a wall with a door between each two. A new wall never ends against an
- * existing door.
+ * existing door, and with `kept` never crosses a tile kept clear (upstairs,
+ * the stairwell: placeStairs).
  */
-function splitRooms(c: Canvas, r: Rect, rng: Rng, out: Rect[], maxSide: number, open: boolean): void {
+function splitRooms(c: Canvas, r: Rect, rng: Rng, out: Rect[], maxSide: number, open: boolean, kept = false): void {
   const vertical = r.w > r.h || (r.w === r.h && rng.int(2) === 0);
   const span = vertical ? r.w : r.h;
   if (span <= maxSide || span < 7) {
@@ -532,6 +534,7 @@ function splitRooms(c: Canvas, r: Rect, rng: Rng, out: Rect[], maxSide: number, 
   const options: number[] = [];
   for (let k = 3; k <= span - 4; k++) {
     const ends = vertical ? [{ x: r.x + k, y: r.y - 1 }, { x: r.x + k, y: r.y + r.h }] : [{ x: r.x - 1, y: r.y + k }, { x: r.x + r.w, y: r.y + k }];
+    if (kept && tilesIn(vertical ? rect(r.x + k, r.y, 1, r.h) : rect(r.x, r.y + k, r.w, 1)).some((p) => c.keep[c.i(p.x, p.y)])) continue;
     if (ends.every((e) => c.get(e.x, e.y) === 'wall')) options.push(k);
   }
   const k = best(options, (o) => Math.abs(o - (span - 1) / 2) + rng.next() * 1.5);
@@ -541,8 +544,8 @@ function splitRooms(c: Canvas, r: Rect, rng: Rng, out: Rect[], maxSide: number, 
   }
   const line = vertical ? tilesIn(rect(r.x + k, r.y, 1, r.h)) : tilesIn(rect(r.x, r.y + k, r.w, 1));
   partition(c, line, vertical ? DIRS4[1]! : DIRS4[2]!, rng, open ? 2 : 1);
-  splitRooms(c, vertical ? rect(r.x, r.y, k, r.h) : rect(r.x, r.y, r.w, k), rng, out, maxSide, open);
-  splitRooms(c, vertical ? rect(r.x + k + 1, r.y, r.w - k - 1, r.h) : rect(r.x, r.y + k + 1, r.w, r.h - k - 1), rng, out, maxSide, open);
+  splitRooms(c, vertical ? rect(r.x, r.y, k, r.h) : rect(r.x, r.y, r.w, k), rng, out, maxSide, open, kept);
+  splitRooms(c, vertical ? rect(r.x + k + 1, r.y, r.w - k - 1, r.h) : rect(r.x, r.y + k + 1, r.w, r.h - k - 1), rng, out, maxSide, open, kept);
 }
 
 /** Splits `length` tiles into rooms of 3–6 with a 1-tile wall between each two, as evenly as possible. */
@@ -685,6 +688,16 @@ function medicalPlan(c: Canvas, b: Rect, front: number, rng: Rng, z: number, hos
     // treatment, observation and medical stores; avoid cramped one-tile rooms.
     if (!hospital && sizes.some((n) => n < 3) && length >= 7) {
       sizes.splice(0, sizes.length, Math.ceil((length - 1) / 2), Math.floor((length - 1) / 2));
+    }
+    // A hospital's stairwell, each wing's last room, holds a flight with its foot and its landing (docs/MAPAS.md §4.4):
+    // of three, keeping four rooms a wing three deep or more; else of two («2 donde no cabe»); else a room fewer.
+    if (hospital) {
+      const fits = (n: number, well: number) => length - n + 1 - well >= 3 * (n - 1);
+      const plans = [FLIGHT, SHORT_FLIGHT].flatMap((run) => Array.from({ length: count - Math.min(count, 4) + 1 }, (_, j) => ({ n: count - j, well: run + 2 })));
+      const plan = plans.find((q) => fits(q.n, q.well)) ?? { n: count, well: FLIGHT + 2 };
+      while (plan.n > 2 && !fits(plan.n, plan.well)) plan.n--;
+      const rest = length - plan.n + 1 - plan.well;
+      sizes.splice(0, sizes.length, ...Array.from({ length: plan.n - 1 }, (_, k) => Math.floor(rest / (plan.n - 1)) + (k < rest % (plan.n - 1) ? 1 : 0)), plan.well);
     }
     const uses: MedicalUse[][] = !hospital
       ? [['waiting', 'ward', 'hygiene'], ['treatment', 'supplies', 'ward']]
@@ -3999,54 +4012,216 @@ function clearMedicalAisles(st: Storey, r: Rect, from: Vec2): void {
   }
 }
 
+/** A flight of stairs placeStairs laid: its tiles (the lowest first), the way it climbs, its landing and its corridor. */
+interface LaidFlight {
+  tiles: Vec2[];
+  up: number;
+  landing: Vec2;
+  /** The side (a DIRS4 index) of the flight its box's other column lies on: the corridor beside it, or the next flight. */
+  side: number;
+}
+
+/** How long a flight of stairs is (docs/MAPAS.md §4.4; Arturo, 19/10): 3 tiles, 2 in a small house. */
+const FLIGHT = 3;
+const SHORT_FLIGHT = 2;
+/** A building this narrow inside or narrower is a small one: a flight of 2 where 3 has no room, always in a house. */
+const SMALL_BUILDING = 5;
+
 /**
- * Stairs up through building `r` from the floor below (`lower`: the ground
- * canvas, or a storey) to storey `upper`: away from walls on both floors,
- * with free floor behind its foot and at its landing, and a hole above the
- * flight (the stairwell). Never where the hole would cut that storey in two,
- * and in a house's bathroom (`shun`) only if nowhere else fits. Returns the
- * landing, or null if no place fits.
+ * The lengths the flights of building `b`'s stairs may have, the first one
+ * that fits (docs/MAPAS.md §4.4: «2 donde no cabe»): 3; 2 in a small house,
+ * and where 3 has no room in another house (its rooms are small), in a small
+ * shop or in a short hospital.
  */
-function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, r: Rect, rng: Rng, avoid: Set<number>, zones?: Rect[], shun: Rect[] = []): Vec2 | null {
-  const inner = inset(r, 1);
-  const options: { at: Vec2; up: number; key: number }[] = [];
-  for (const at of tilesIn(inner)) {
-    if (zones?.length && !zones.some((r) => inRect(r, at))) continue;
-    const i = lower.i(at.x, at.y);
-    if (!lower.free(at.x, at.y) || lower.decor[i] || avoid.has(i) || (lowerSlab && !lowerSlab[i]) || upper.c.get(at.x, at.y) !== 'floor' || upper.c.keep[i]) continue;
-    // A full tile between the flight and any wall, on both storeys.
-    if (!DIRS4.every((d) => {
-      const p = add(at, d);
-      const j = lower.i(p.x, p.y);
-      return inRect(inner, p) && ['floor', 'low', 'high'].includes(lower.get(p.x, p.y)) && (!lowerSlab || lowerSlab[j]) && upper.slab[j] && upper.c.get(p.x, p.y) === 'floor';
-    })) continue;
-    DIRS4.forEach((d, up) => {
-      const landing = add(at, d);
-      if (!inRect(inner, landing) || upper.c.get(landing.x, landing.y) !== 'floor' || upper.c.keep[upper.c.i(landing.x, landing.y)]) return;
-      const back = { x: at.x - d.x, y: at.y - d.y };
-      if (lower.get(back.x, back.y) !== 'floor' || lower.decor[lower.i(back.x, back.y)]) return;
-      options.push({ at, up, key: rng.next() });
-    });
-  }
-  // Out of a house's bathroom if it can be (#15): last in line, so the rng draws as it did.
-  const shunned = (at: Vec2) => (shun.some((q) => inRect(q, at)) ? 1 : 0);
-  options.sort((a, b) => shunned(a.at) - shunned(b.at) || a.key - b.key);
-  for (const { at, up } of options) {
-    const i = lower.i(at.x, at.y);
-    const landing = add(at, DIRS4[up]!);
-    upper.slab[i] = false;
-    if (!storeyJoined(upper, r, landing)) {
-      upper.slab[i] = true;
-      continue;
+const flightLengths = (b: Building): number[] => {
+  const inner = inset(b.outer, 1);
+  const small = Math.min(inner.w, inner.h) <= SMALL_BUILDING;
+  if (b.furnish === 'home') return small ? [SHORT_FLIGHT] : [FLIGHT, SHORT_FLIGHT];
+  // A short hospital's stairwell has room for a flight of two only (medicalPlan).
+  return small || b.medicalKind === 'hospital' ? [FLIGHT, SHORT_FLIGHT] : [FLIGHT];
+};
+
+/** What lies on the floor and is never cleared for the stairs: the special loot boxes. */
+const BOXES: ReadonlySet<DecorKind> = new Set<DecorKind>(['lootWeapons', 'lootMedical', 'lootAmmo', 'lootFood']);
+
+/**
+ * Whether every place one can stand on in building `r` of storey `c` (with
+ * `slab`: a storey above the ground) that was joined to another still is,
+ * with `closed` taken out of the way (the tiles of a flight: nobody steps on
+ * or off them sideways) and `cleared` furniture gone. Through doors, not
+ * windows.
+ */
+function joinedStill(c: Canvas, slab: boolean[] | null, r: Rect, closed: Vec2[], cleared: Set<number>): boolean {
+  const shut = new Set(closed.map((p) => c.i(p.x, p.y)));
+  const pieces = (after: boolean) => {
+    const open = (p: Vec2) => {
+      if (!inRect(r, p)) return false;
+      const i = c.i(p.x, p.y);
+      if ((slab && !slab[i]) || (after && shut.has(i))) return false;
+      const kind = after && cleared.has(i) ? 'floor' : c.get(p.x, p.y);
+      return isWalkable(kind) && kind !== 'window' && kind !== 'windowBroken';
+    };
+    const piece = new Map<number, number>();
+    let n = 0;
+    for (const p of tilesIn(r)) {
+      if (piece.has(c.i(p.x, p.y)) || !open(p)) continue;
+      piece.set(c.i(p.x, p.y), n);
+      const queue = [p];
+      while (queue.length) {
+        const q = queue.pop()!;
+        for (const d of DIRS4) {
+          const t = add(q, d);
+          if (!open(t) || piece.has(c.i(t.x, t.y))) continue;
+          piece.set(c.i(t.x, t.y), n);
+          queue.push(t);
+        }
+      }
+      n++;
     }
-    lower.force(at.x, at.y, 'ladder');
-    lower.dress(at, 'stairs', up);
-    lower.reserve(at.x, at.y);
-    const back = { x: at.x - DIRS4[up]!.x, y: at.y - DIRS4[up]!.y };
-    lower.reserve(back.x, back.y);
-    upper.c.reserve(at.x, at.y);
-    for (const d of DIRS4) upper.c.reserve(at.x + d.x, at.y + d.y);
-    return landing;
+    return piece;
+  };
+  const before = pieces(false);
+  const after = pieces(true);
+  const into = new Map<number, number>();
+  for (const [i, was] of before) {
+    const now = after.get(i);
+    if (now === undefined) continue;
+    const seen = into.get(was);
+    if (seen === undefined) into.set(was, now);
+    else if (seen !== now) return false;
+  }
+  return true;
+}
+
+/**
+ * A flight of stairs up through building `r` from the floor below (`lower`:
+ * the ground canvas, or a storey) to storey `upper` (docs/MAPAS.md, phase 2):
+ * `length` tiles in a line the way it climbs, from its foot to its landing a
+ * storey up, with a hole over all of it (the stairwell). Its box is two
+ * columns wide (§4.4): beside the flight, all along from the foot to the
+ * landing, a corridor that is no wall on either floor; the flight's other
+ * side may be one. Over a flight from the storey below (`prev`), first the
+ * way back in the corridor's column, the other way (a return stair: its
+ * tiles kept clear there, `ahead`); else anywhere it fits. On free floor
+ * first; else what furniture stands there is taken away (never a loot box,
+ * nor what `avoid` holds). Never where the hole would cut that storey in two,
+ * nor where the flight would cut the floor below (nobody steps off its
+ * sides), and in a house's bathroom (`shun`) only if nowhere else fits.
+ * Returns the flight, or null if no place fits.
+ */
+function placeStairs(lower: Canvas, lowerSlab: boolean[] | null, upper: Storey, r: Rect, rng: Rng, avoid: Set<number>, length: number, zones?: Rect[], shun: Rect[] = [], prev: LaidFlight | null = null, ahead: ReadonlySet<number> = new Set(), aligned = false): LaidFlight | null {
+  const inner = inset(r, 1);
+  const wallish = (k: TileKind | null) => k === null || k === 'wall' || k === 'window' || k === 'windowBroken' || k === 'roof';
+  const doorway = (p: Vec2) => DIRS4.some((d) => ['door', 'doorOpen'].includes(lower.get(p.x + d.x, p.y + d.y)));
+  /** Beside a loot box or a terminal, opened from beside it. */
+  const byBox = (p: Vec2) => DIRS8.some((d) => lower.get(p.x + d.x, p.y + d.y) === 'console' || BOXES.has(decorOf(lower.decor[lower.i(p.x + d.x, p.y + d.y)])?.kind ?? 'part'));
+  /** Furniture on tile i of the floor below that may be taken away for the stairs: no loot box, nothing kept. */
+  const movable = (i: number) => {
+    const k = lower.tiles[i];
+    const look = decorOf(lower.decor[i]);
+    return (k === 'low' || k === 'high') && !lower.keep[i] && !avoid.has(i) && !(look && BOXES.has(look.kind)) && look?.kind !== 'stairs';
+  };
+  /** How a place is looked for, from the best kind to the least: with its corridor, on bare floor, on floor kept clear (not by a door), clearing furniture. */
+  interface Pass {
+    corridor: boolean;
+    kept: boolean;
+    clear: boolean;
+  }
+  /** Whether tile p of the floor below can be a step: plain floor (kept clear for it, `ahead`, or as `pass` lets), or furniture to clear. */
+  const below = (p: Vec2, pass: Pass) => {
+    const i = lower.i(p.x, p.y);
+    if ((lowerSlab && !lowerSlab[i]) || lower.elevAt(p.x, p.y) !== 0) return false;
+    if (lower.get(p.x, p.y) === 'floor' && !lower.decor[i] && (!lower.keep[i] || ahead.has(i) || (pass.kept && !doorway(p) && !byBox(p)))) return true;
+    return pass.clear && movable(i);
+  };
+  /** The flight with its lowest tile on `at`, climbing `up`, its corridor on `side`, if it may go there as `pass` lets. */
+  const fits = (at: Vec2, up: number, side: number, pass: Pass): LaidFlight | null => {
+    const u = DIRS4[up]!;
+    const v = DIRS4[side]!;
+    const tiles = Array.from({ length }, (_, n) => ({ x: at.x + u.x * n, y: at.y + u.y * n }));
+    const foot = { x: at.x - u.x, y: at.y - u.y };
+    const landing = add(tiles[length - 1]!, u);
+    if (![foot, ...tiles, landing].every((p) => inRect(inner, p))) return null;
+    if (zones?.length && !tiles.every((p) => zones.some((z) => inRect(z, p)))) return null;
+    for (const p of tiles) {
+      const i = lower.i(p.x, p.y);
+      if (avoid.has(i) || !below(p, pass) || !upper.slab[i] || upper.c.get(p.x, p.y) !== 'floor' || upper.c.keep[i]) return null;
+    }
+    const fi = lower.i(foot.x, foot.y);
+    const bare = lower.get(foot.x, foot.y) === 'floor' && !lower.decor[fi] && (!lowerSlab || lowerSlab[fi]);
+    if (!bare && !(pass.clear && movable(fi) && (!lowerSlab || lowerSlab[fi]))) return null;
+    if (upper.c.get(landing.x, landing.y) !== 'floor' || upper.c.keep[upper.c.i(landing.x, landing.y)]) return null;
+    // Storeys laid out alike (a clinic's, drawn after): the landing over floor, in the stairwell's room.
+    if (aligned && (wallish(lower.get(landing.x, landing.y)) || lower.get(landing.x, landing.y) === 'door' || (zones?.length && !zones.some((z) => inRect(z, landing))))) return null;
+    // The corridor beside it, from the foot to the landing: no wall on either floor.
+    if (pass.corridor) for (const p of [foot, ...tiles, landing]) {
+      const q = add(p, v);
+      const j = lower.i(q.x, q.y);
+      if (!inRect(inner, q) || wallish(lower.get(q.x, q.y)) || (lowerSlab && !lowerSlab[j]) || !upper.slab[j] || wallish(upper.c.get(q.x, q.y))) return null;
+    }
+    return { tiles, up, landing, side };
+  };
+  /** Lays `flight` if the floors stay joined, clearing what furniture stands on its foot and its tiles; false if not. */
+  const lay = (flight: LaidFlight): boolean => {
+    const { tiles, up, landing } = flight;
+    const u = DIRS4[up]!;
+    const foot = { x: tiles[0]!.x - u.x, y: tiles[0]!.y - u.y };
+    // Furniture in the way goes, whole (a bed over two tiles).
+    const cleared = new Set<number>();
+    for (const p of [foot, ...tiles]) {
+      const i = lower.i(p.x, p.y);
+      if (lower.get(p.x, p.y) !== 'low' && lower.get(p.x, p.y) !== 'high') continue;
+      for (const j of objectAt(lower.decor, lower.width, i)?.tiles ?? [i]) cleared.add(j);
+    }
+    if ([...cleared].some((j) => !movable(j))) return false;
+    for (const p of tiles) upper.slab[upper.c.i(p.x, p.y)] = false;
+    if (!storeyJoined(upper, r, landing) || !joinedStill(lower, lowerSlab, r, tiles, cleared)) {
+      for (const p of tiles) upper.slab[upper.c.i(p.x, p.y)] = true;
+      return false;
+    }
+    for (const j of cleared) {
+      lower.tiles[j] = 'floor';
+      lower.decor[j] = 0;
+    }
+    tiles.forEach((p, n) => {
+      lower.force(p.x, p.y, 'ladder');
+      lower.dress(p, n === tiles.length - 1 ? 'stairs' : 'part', up);
+      lower.reserve(p.x, p.y);
+      upper.c.reserve(p.x, p.y);
+      for (const d of DIRS4) upper.c.reserve(p.x + d.x, p.y + d.y);
+    });
+    lower.reserve(foot.x, foot.y);
+    upper.c.reserve(landing.x, landing.y);
+    return true;
+  };
+  const passes: Pass[] = [
+    { corridor: true, kept: false, clear: false },
+    { corridor: true, kept: false, clear: true },
+    { corridor: true, kept: true, clear: true },
+    { corridor: false, kept: true, clear: true },
+  ];
+  // The way back over the last flight, in its box's other column: its corridor (beside it, the stairwell below).
+  if (prev?.tiles.length === length) {
+    const turn = add(prev.tiles[length - 1]!, DIRS4[prev.side]!);
+    for (const pass of passes.filter((q) => !q.corridor)) {
+      const back = fits(turn, opposite(prev.up), opposite(prev.side), pass);
+      if (back && lay(back)) return back;
+    }
+  }
+  // Out of a house's bathroom if it can be (#15).
+  const shunned = (f: LaidFlight) => (f.tiles.some((p) => shun.some((q) => inRect(q, p))) ? 1 : 0);
+  for (const pass of passes) {
+    const found: { flight: LaidFlight; key: number }[] = [];
+    for (const at of tilesIn(inner)) {
+      for (let up = 0; up < 4; up++) {
+        for (const side of [(up + 1) % 4, (up + 3) % 4]) {
+          const f = fits(at, up, side, pass);
+          if (f) found.push({ flight: f, key: rng.next() });
+        }
+      }
+    }
+    found.sort((a, b) => shunned(a.flight) - shunned(b.flight) || a.key - b.key);
+    for (const { flight } of found) if (lay(flight)) return flight;
   }
   return null;
 }
@@ -4090,8 +4265,10 @@ function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<numb
   const rng = new Rng(seed ^ 0x57a125);
   const area = c.width * c.height;
   const all = c.buildings
-    .map((b, j) => ({ b, n: heights[j]!, walkable: false, reached: 0, landing: null as Vec2 | null, rooms: [] as Rect[] }))
+    .map((b, j) => ({ b, n: heights[j]!, walkable: false, reached: 0, landing: null as Vec2 | null, flight: null as LaidFlight | null, ahead: new Set<number>(), rooms: [] as Rect[] }))
     .filter((e) => !e.b.ruined && e.n >= 1);
+  /** Whether building `e` has stairs up to storey k: to each storey but its top, and onto a flat roof over two or three. */
+  const climbs = (e: (typeof all)[number], k: number) => e.n > k || (e.n === k && k >= 2 && e.walkable);
   // Flat roofs: reached by the stairs over two or three storeys; over one, by a ladder half the time.
   for (const e of all) e.walkable = !pitched(e.b) && !e.b.skylit && (e.n >= 2 || rng.next() < 0.5);
   const top = Math.max(0, ...all.map((e) => e.n));
@@ -4120,22 +4297,50 @@ function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<numb
         st.slab[c.i(p.x, p.y)] = true;
       }
     }
-    for (const e of going) {
-      e.rooms = [];
-      if (e.b.medicalKind) {
-        e.rooms = medicalPlan(lc, e.b.outer, e.b.front!, rng, k, e.b.medicalKind === 'hospital', e.b.medicalKind === 'ward', [null, null, null, null]);
-      } else splitRooms(lc, inset(e.b.outer, 1), rng, e.rooms, e.b.furnish === 'home' ? 6 : 8, e.b.furnish !== 'home');
-      upperWindows(lc, e.b.outer, upstairsWindows(e.b), occupied.map((o, i) => o && !inRect(e.b.outer, { x: i % c.width, y: Math.floor(i / c.width) })));
-    }
-    // Up from the storey below: to each storey of those that go on, and to the flat roofs over two or three.
+    // Up from the storey below, before this storey is split into rooms (docs/MAPAS.md §4.4: the stair box first, its
+    // walls keep off the stairwell): to each storey of those that go on, and to the flat roofs over two or three.
     const lower = k === 1 ? c : storeys[k - 2]!.c;
     const lowerSlab = k === 1 ? null : storeys[k - 2]!.slab;
     for (const e of all) {
       e.landing = null;
       // No way up to the storey below: none here either.
-      if (!(e.n > k || (e.n === k && k >= 2 && e.walkable)) || e.reached !== k - 1) continue;
-      e.landing = placeStairs(lower, lowerSlab, st, e.b.outer, rng, k === 1 ? avoid : new Set(), e.b.medicalKind === 'hospital' ? e.b.medicalRooms?.filter((r) => r.use === 'stairs') : undefined, e.b.homeRooms?.filter((r) => r.use === 'bath' && r.z === k - 1));
-      if (e.landing) e.reached = k;
+      if (!climbs(e, k) || e.reached !== k - 1) continue;
+      const zones = e.b.medicalKind === 'hospital' ? e.b.medicalRooms?.filter((r) => r.use === 'stairs') : undefined;
+      const kept = [...lc.keep];
+      const prev = e.flight;
+      const shun = e.b.homeRooms?.filter((r) => r.use === 'bath' && r.z === k - 1);
+      // A building's flights are all one length: the first one's.
+      e.flight = null;
+      for (const length of prev ? [prev.tiles.length] : flightLengths(e.b)) {
+        e.flight ??= placeStairs(lower, lowerSlab, st, e.b.outer, rng, k === 1 ? avoid : new Set(), length, zones, shun, prev, e.ahead, !!e.b.medicalKind);
+      }
+      e.landing = e.flight?.landing ?? null;
+      if (!e.landing) continue;
+      e.reached = k;
+      // The next flight up goes back over this one, in its box's other column (docs/MAPAS.md §4.4): kept clear of furniture,
+      // and so are the ways round the box's ends, beyond them and beside that column, lest the next flight close them.
+      e.ahead = new Set<number>();
+      if (!climbs(e, k + 1)) continue;
+      const v = DIRS4[e.flight!.side]!;
+      const u = DIRS4[e.flight!.up]!;
+      const first = e.flight!.tiles[0]!;
+      const end = (n: number) => ({ x: first.x + u.x * n, y: first.y + u.y * n });
+      const length = e.flight!.tiles.length;
+      const ends = [end(-2), add(end(-2), v), add(add(end(-1), v), v), end(length + 1), add(end(length + 1), v), add(add(end(length), v), v)];
+      for (const p of [...e.flight!.tiles.map((q) => add(q, v)), add(e.landing, v), ...ends]) {
+        if (!inRect(inset(e.b.outer, 1), p)) continue;
+        // Kept for something else (a doorway), it stays so; kept round the stairwell, it is the way back.
+        if (lc.get(p.x, p.y) !== 'floor' || kept[lc.i(p.x, p.y)]) continue;
+        lc.reserve(p.x, p.y);
+        e.ahead.add(lc.i(p.x, p.y));
+      }
+    }
+    for (const e of going) {
+      e.rooms = [];
+      if (e.b.medicalKind) {
+        e.rooms = medicalPlan(lc, e.b.outer, e.b.front!, rng, k, e.b.medicalKind === 'hospital', e.b.medicalKind === 'ward', [null, null, null, null]);
+      } else splitRooms(lc, inset(e.b.outer, 1), rng, e.rooms, e.b.furnish === 'home' ? 6 : 8, e.b.furnish !== 'home', true);
+      upperWindows(lc, e.b.outer, upstairsWindows(e.b), occupied.map((o, i) => o && !inRect(e.b.outer, { x: i % c.width, y: Math.floor(i / c.width) })));
     }
     for (const e of going) {
       if (!e.landing) continue;
@@ -4207,7 +4412,8 @@ function upperFloors(c: Canvas, heights: number[], seed: number, avoid: Set<numb
   );
   for (const e of upstairs) {
     const st = storeys[0]!;
-    const stand = (p: Vec2) => inRect(e.b.outer, p) && st.slab[c.i(p.x, p.y)]! && canStandOn(st.c.get(p.x, p.y)) && !st.c.keep[c.i(p.x, p.y)];
+    // Never on a flight of stairs (docs/MAPAS.md, phase 2: nobody stops there).
+    const stand = (p: Vec2) => inRect(e.b.outer, p) && st.slab[c.i(p.x, p.y)]! && canStandOn(st.c.get(p.x, p.y)) && st.c.get(p.x, p.y) !== 'ladder' && !st.c.keep[c.i(p.x, p.y)];
     const byWindow = tilesIn(inset(e.b.outer, 1)).filter((p) => stand(p) && DIRS4.some((d) => st.c.get(p.x + d.x, p.y + d.y) === 'window'));
     const anchor = byWindow.length ? rng.pick(byWindow) : null;
     if (!anchor) continue;
@@ -4450,6 +4656,22 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   // The storeys above the ground (docs/FASE6-PLAN.md), last: stairs and ladders keep off what is already placed.
   const placed = new Set<number>([...beforePods, ...lamps.map((p) => c.i(p.x, p.y)), ...[item, terminal].filter((p): p is Vec2 => !!p).map((p) => c.i(p.x, p.y))]);
   const upper = upperFloors(c, heights, opts.seed, placed, reach, squadCenter);
+  // A flight of stairs laid where one of a group was to start (docs/MAPAS.md, phase 2: nobody stands on one): the
+  // nearest free tile one can stand on instead, so the group keeps its size.
+  for (const pod of pods) {
+    pod.tiles = pod.tiles.map((p) => {
+      if (!longFlightTile(c.tiles, c.decor, c.width, c.i(p.x, p.y))) return p;
+      for (let r = 1; r <= 4; r++) {
+        const ring = tilesIn(rect(p.x - r, p.y - r, 2 * r + 1, 2 * r + 1)).filter((q) => Math.max(Math.abs(q.x - p.x), Math.abs(q.y - p.y)) === r);
+        const q = best(ring.filter((q) => standable(q) && c.get(q.x, q.y) !== 'ladder'), (q) => dist(p, q));
+        if (!q) continue;
+        taken.delete(c.i(p.x, p.y));
+        taken.add(c.i(q.x, q.y));
+        return q;
+      }
+      return p;
+    });
+  }
 
   // Mirror/transpose everything into the final frame.
   const T = (p: Vec2): Vec2 => {

@@ -3,6 +3,7 @@ import { allyTargets, blastTiles, canHackFrom } from '../src/abilities';
 import { previewShot } from '../src/aim';
 import { coverAgainst, coverSides } from '../src/cover';
 import { decorCode, decorOf } from '../src/decor';
+import { flightAt, flightFoot, flightLanding } from '../src/flights';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import {
   blocksSightAt,
@@ -763,23 +764,37 @@ describe("the generator's storeys", () => {
     }
   });
 
-  it('keeps stairs away from walls on both floors, with an open foot and a usable landing in both directions', () => {
+  it('lays each flight in its box (docs/MAPAS.md §4.4): a corridor beside it or the stairwell it turns back over, an open foot, a landing both ways', () => {
     let count = 0;
+    let cramped = 0;
+    const wallish = (k: string | null) => k === null || k === 'wall' || k === 'window' || k === 'windowBroken' || k === 'roof';
     for (const s of towns) for (const { at: p, up } of stairsOf(s)) {
       const label = `${s.mapId}: ${p.x},${p.y},${p.z}`;
-      const d = DIRS4[up]!;
-      const foot = { x: p.x - d.x, y: p.y - d.y, z: p.z };
-      const landing = { x: p.x + d.x, y: p.y + d.y, z: p.z + 1 };
-      for (const side of DIRS4) for (const z of [p.z, p.z + 1]) {
-        expect(['floor', 'low', 'high'], label).toContain(kindAt(s, { x: p.x + side.x, y: p.y + side.y, z }));
-      }
+      const { flight } = flightAt(s, p)!;
+      expect(flight.up, label).toBe(up);
+      expect([2, 3], label).toContain(flight.tiles.length);
+      const tiles = flight.tiles.map((t) => ({ ...t, z: p.z }));
+      const foot = flightFoot(flight);
+      const landing = flightLanding(flight);
       expect(kindAt(s, foot), label).toBe('floor');
-      expect(stepBetween(s, foot, p), label).not.toBeNull();
-      expect(stepBetween(s, p, landing), label).toBe(COST_ORTHO + COST_CLIMB);
-      expect(stepBetween(s, landing, p), label).toBe(COST_ORTHO + COST_CLIMB);
+      // Up it and back down, a tile's walk each step; the stairwell over all of it.
+      for (const [a, b] of [[foot, tiles[0]!], ...tiles.slice(1).map((t, k) => [tiles[k]!, t]), [tiles.at(-1)!, landing]] as [Pos, Pos][]) {
+        expect(stepBetween(s, a, b), label).toBe(COST_ORTHO);
+        expect(stepBetween(s, b, a), label).toBe(COST_ORTHO);
+      }
+      for (const t of tiles) expect(slabAt(s, t.x, t.y, p.z + 1), label).toBe(false);
+      // Its box: beside it, from its foot to its landing, a corridor with no wall on either floor; or, going back over
+      // the flight below, that one's stairwell. A few squeezed in where nothing else fits.
+      const d = DIRS4[up]!;
+      const rows = [foot, ...tiles, { ...landing, z: p.z }];
+      const sides = [{ x: -d.y, y: d.x }, { x: d.y, y: -d.x }];
+      const corridor = (v: Vec2) => rows.every((q) => [p.z, p.z + 1].every((z) => !wallish(kindAt(s, { x: q.x + v.x, y: q.y + v.y, z }))));
+      const well = (v: Vec2) => p.z > 0 && tiles.every((q) => kindAt(s, { x: q.x + v.x, y: q.y + v.y, z: p.z }) === null);
+      if (!sides.some((v) => corridor(v) || well(v))) cramped++;
       count++;
     }
     expect(count).toBeGreaterThan(20);
+    expect(cramped).toBeLessThanOrEqual(count / 50);
   });
 
   it('flat roofs: over two or three storeys reached by the stairs, with a parapet; over one, a ladder up the side about half the time; houses pitched', () => {

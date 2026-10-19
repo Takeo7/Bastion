@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decorOf } from '../src/decor';
 import { cloneState } from '../src/events';
+import { flightAt, flightFoot, flightLanding } from '../src/flights';
 import { canStandOn, DIRS4, kindAt, nodeOf, posOf } from '../src/grid';
 import { computeReach, stepBetween } from '../src/path';
 import { Rng } from '../src/rng';
@@ -56,12 +57,14 @@ describe('medical locations', () => {
           const d = decorOf(decor?.[i]);
           if (t !== 'ladder' || d?.kind !== 'stairs') continue;
           stairs++;
-          const dir = DIRS4[d.facing]!;
-          const foot = { x: p.x - dir.x, y: p.y - dir.y, z };
-          const landing = { x: p.x + dir.x, y: p.y + dir.y, z: z + 1 };
+          // A flight of several tiles (docs/MAPAS.md, phase 2): on it from its foot, off it onto its landing.
+          const { flight } = flightAt(s, p)!;
+          const foot = flightFoot(flight);
+          const landing = flightLanding(flight);
+          const first = { ...flight.tiles[0]!, z };
           expect(kindAt(s, foot), label).toBe('floor');
           expect(kindAt(s, landing), label).toBe('floor');
-          expect(stepBetween(s, foot, p), label).not.toBeNull();
+          expect(stepBetween(s, foot, first), label).not.toBeNull();
           expect(stepBetween(s, p, landing), label).not.toBeNull();
           expect(stepBetween(s, landing, p), label).not.toBeNull();
         }

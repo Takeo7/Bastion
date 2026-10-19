@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { SnowCover } from './snow';
-import { decorOf, DIRS4, isWalkable, type DecorKind, type GameState, type HomeRoom, type HomeUse, type Place, type TileKind, type Vec2 } from '@bastion/engine';
+import { decorOf, DIRS4, DIRS8, flightAt, isWalkable, type DecorKind, type GameState, type HomeRoom, type HomeUse, type Place, type TileKind, type Vec2 } from '@bastion/engine';
 import { StaticBatch, type Dirty } from './batch';
 import { groundAt, STOREY } from './coords';
 import { DoorLeaves } from './doors';
@@ -1358,6 +1358,9 @@ const BRICK = new THREE.Color(0x985c4e);
 const STONE = new THREE.Color(0x968770);
 /** The walkable top of a block of flats: pale roofing, weathered (WEATHER_GLSL). */
 const TAR = new THREE.Color(0xbdb1a6);
+/** The treads of a flight of stairs a tile (docs/MAPAS.md, phase 2), and of a flight of one tile (of before) across it. */
+const FLIGHT_STEPS = 6;
+const STAIR_STEPS = 9;
 /** A building's stairs: dark wood. */
 const STAIR_WOOD = new THREE.Color(0x6e4c36);
 /** Platforms' steel decks and posts, and the tops of solid walls. */
@@ -1928,16 +1931,18 @@ export class BuildingsView {
   }
 
   /**
-   * A building's stairs (a ladder tile whose decor is 'stairs', facing the
-   * way it climbs): a flight of steps across the tile, from its back
-   * edge up to the landing a storey higher on the tile it faces. The rules
-   * let one on and off them only by that landing (docs/FASE7.md), so they
-   * have a banister on each side of the flight and a railing round the
-   * stairwell above, open only to the landing; none against a wall.
+   * A building's stairs (docs/MAPAS.md, phase 2; engine flights.ts): a flight
+   * of ladder tiles in a line, its top one dressed 'stairs' facing the way it
+   * climbs and the rest its parts, its steps from the back edge of its lowest
+   * tile up to the landing a storey higher in front of the top, FLIGHT_STEPS
+   * a tile (38° for three tiles, 49° for two); a flight of one (of before) has
+   * STAIR_STEPS across its tile. The rules let one on only at its foot and off
+   * only at its landing (docs/FASE7.md), so it has a banister on each side and
+   * a railing round the stairwell above, open only to the landing; none
+   * against a wall.
    */
   private stairs(s: GameState, out: Surfaces): void {
     const { width: w, height: h } = s;
-    const STEPS = 9;
     const half = 0.4;
     const tilesOf = (k: number) => (k === 0 ? s.tiles : s.levels?.[k - 1]?.tiles);
     /** A wall (or a door, a window) on storey k at (x, y): no railing needed against it. */
@@ -1954,42 +1959,48 @@ export class BuildingsView {
         if (look?.kind !== 'stairs') continue;
         const x = i % w;
         const y = (i - x) / w;
+        const run = flightAt(s, { x, y, z: k })?.flight.tiles ?? [{ x, y }];
+        const n = run.length;
+        const steps = n === 1 ? STAIR_STEPS : FLIGHT_STEPS * n;
         const b = this.plan.owner[i]!;
         const bd = b >= 0 ? this.plan.buildings[b] : undefined;
         const base = (bd?.base ?? 0) + k * STOREY;
         const d = DIRS4[look.facing]!;
+        // The flight's middle: along the climb from it, -n/2 at the foot's edge, n/2 at the landing's.
+        const cx = (run[0]!.x + x) / 2 + 0.5;
+        const cz = (run[0]!.y + y) / 2 + 0.5;
         const wood = bd?.kind === 'medical' ? new THREE.Color(0x79888b) : bd ? STAIR_WOOD : STEEL;
         out.level = k;
-        for (let n = 0; n < STEPS; n++) {
-          // Along the climb, from the tile's back edge (-0.5) to its front (+0.5).
-          const u0 = -0.5 + n / STEPS;
-          const u1 = -0.5 + (n + 1) / STEPS;
-          const top = base + ((n + 1) / STEPS) * STOREY;
-          const [ax, bx] = d.x !== 0 ? [x + 0.5 + Math.min(u0 * d.x, u1 * d.x), x + 0.5 + Math.max(u0 * d.x, u1 * d.x)] : [x + 0.5 - half, x + 0.5 + half];
-          const [az, bz] = d.y !== 0 ? [y + 0.5 + Math.min(u0 * d.y, u1 * d.y), y + 0.5 + Math.max(u0 * d.y, u1 * d.y)] : [y + 0.5 - half, y + 0.5 + half];
+        for (let t = 0; t < steps; t++) {
+          // Along the climb, from the lowest tile's back edge to the top's front.
+          const u0 = -n / 2 + (t * n) / steps;
+          const u1 = -n / 2 + ((t + 1) * n) / steps;
+          const top = base + ((t + 1) / steps) * STOREY;
+          const [ax, bx] = d.x !== 0 ? [cx + Math.min(u0 * d.x, u1 * d.x), cx + Math.max(u0 * d.x, u1 * d.x)] : [cx - half, cx + half];
+          const [az, bz] = d.y !== 0 ? [cz + Math.min(u0 * d.y, u1 * d.y), cz + Math.max(u0 * d.y, u1 * d.y)] : [cz - half, cz + half];
           // Wooden treads are horizontal boards. Filling every step down
           // to the ground made the back of the flight look like a vertical floor.
-          out.box(V(ax, bd ? top - 0.055 : base, az), V(bx, top, bz), SWATCH.flat, n % 2 ? wood : wood.clone().multiplyScalar(0.92), b, !!bd);
+          out.box(V(ax, bd ? top - 0.055 : base, az), V(bx, top, bz), SWATCH.flat, t % 2 ? wood : wood.clone().multiplyScalar(0.92), b, !!bd);
         }
-        if (bd) this.stairStringers(out, x, y, d, base, wood.clone().multiplyScalar(0.72), b);
-        this.banisters(out, x, y, k, d, base, STEPS, wood.clone().multiplyScalar(1.25), b, walled);
+        if (bd) this.stairStringers(out, cx, cz, n, d, base, wood.clone().multiplyScalar(0.72), b);
+        this.banisters(out, run, k, d, base, steps, wood.clone().multiplyScalar(1.25), b, walled);
       }
     }
   }
 
-  /** Two sloping wooden beams carry the horizontal treads, leaving the risers open. */
-  private stairStringers(out: Surfaces, x: number, y: number, d: Vec2, base: number, tint: THREE.Color, b: number): void {
-    const at = (u: number, v: number, h: number) => V(x + 0.5 + d.x * u - d.y * v, h, y + 0.5 + d.y * u + d.x * v);
+  /** Two sloping wooden beams carry the horizontal treads of a flight of `n` tiles about (cx, cz), leaving the risers open. */
+  private stairStringers(out: Surfaces, cx: number, cz: number, n: number, d: Vec2, base: number, tint: THREE.Color, b: number): void {
+    const at = (u: number, v: number, h: number) => V(cx + d.x * u - d.y * v, h, cz + d.y * u + d.x * v);
     const up = V(0, 1, 0);
     const across = V(-d.y, 0, d.x);
     const along = V(d.x, 0, d.y);
     const h0 = base - 0.055;
     const h1 = base + STOREY - 0.055;
     for (const v of [-0.32, 0.32]) {
-      const a = at(-0.5, v - 0.04, h0);
-      const b0 = at(-0.5, v + 0.04, h0);
-      const c = at(0.5, v + 0.04, h1);
-      const d0 = at(0.5, v - 0.04, h1);
+      const a = at(-n / 2, v - 0.04, h0);
+      const b0 = at(-n / 2, v + 0.04, h0);
+      const c = at(n / 2, v + 0.04, h1);
+      const d0 = at(n / 2, v - 0.04, h1);
       const lower = (p: THREE.Vector3) => p.clone().addScaledVector(up, -0.16);
       const faces: [THREE.Vector3[], THREE.Vector3][] = [
         [[a, b0, c, d0], up],
@@ -2004,17 +2015,21 @@ export class BuildingsView {
   }
 
   /**
-   * The railings of the stairs on tile (x, y) of storey k, climbing towards
-   * `d` from `base`: along each side of the flight a handrail stepping up
-   * with the treads, on balusters; round the stairwell a storey up, on each
-   * of its edges but the landing's, a rail on posts at the floor's height.
-   * Boxes in the stairs' own surfaces: no draws of their own.
+   * The railings of the flight on tiles `run` (the lowest first) of storey k,
+   * climbing towards `d` from `base`: along each side, beside each of its
+   * tiles that has no wall there, a handrail sloping up with the treads, on
+   * balusters, and a newel post at the foot; round the stairwell a storey up,
+   * on each of its edges but the landing's, a rail on posts at the floor's
+   * height (none against a wall, nor beside the next flight up, whose own
+   * banister stands there). Boxes in the stairs' own surfaces: no draws of
+   * their own.
    */
-  private banisters(out: Surfaces, x: number, y: number, k: number, d: { x: number; y: number }, base: number, steps: number, tint: THREE.Color, b: number, walled: (x: number, y: number, k: number) => boolean): void {
+  private banisters(out: Surfaces, run: readonly Vec2[], k: number, d: { x: number; y: number }, base: number, steps: number, tint: THREE.Color, b: number, walled: (x: number, y: number, k: number) => boolean): void {
     const RAIL = 0.9;
     const T = 0.035;
-    const cx = x + 0.5;
-    const cz = y + 0.5;
+    const n = run.length;
+    const cx = (run[0]!.x + run[n - 1]!.x) / 2 + 0.5;
+    const cz = (run[0]!.y + run[n - 1]!.y) / 2 + 0.5;
     /** A box from (along, across, height) to (along, across, height), in the stairs' own axes: `along` up the climb, `across` to its left. */
     const box = (u0: number, v0: number, h0: number, u1: number, v1: number, h1: number) => {
       const ax = cx + d.x * u0 - d.y * v0;
@@ -2028,40 +2043,51 @@ export class BuildingsView {
     const across = V(-d.y, 0, d.x);
     const up = V(0, 1, 0);
     /** The handrail's height over the flight at `u`, parallel to its slope. */
-    const rail = (u: number) => base + (u + 0.5) * STOREY + RAIL;
+    const rail = (u: number) => base + ((u + n / 2) / n) * STOREY + RAIL;
     out.level = k;
     for (const side of [1, -1]) {
-      // Against a wall on that side, none.
-      if (walled(x - d.y * side, y + d.x * side, k)) continue;
       const v = side * 0.44;
-      // The handrail: one bar along the slope, from the foot to the landing.
-      const [a, z] = [-0.5, 0.5];
-      const [ha, hz] = [rail(a), rail(z)];
-      const faces: [THREE.Vector3[], THREE.Vector3][] = [
-        [[at(a, v - T, ha), at(a, v + T, ha), at(z, v + T, hz), at(z, v - T, hz)], up],
-        [[at(a, v - T, ha - 0.05), at(z, v - T, hz - 0.05), at(z, v + T, hz - 0.05), at(a, v + T, ha - 0.05)], up.clone().negate()],
-        [[at(a, v + T, ha - 0.05), at(z, v + T, hz - 0.05), at(z, v + T, hz), at(a, v + T, ha)], across],
-        [[at(a, v - T, ha - 0.05), at(a, v - T, ha), at(z, v - T, hz), at(z, v - T, hz - 0.05)], across.clone().negate()],
-      ];
-      for (const [corners, facing] of faces) out.poly(corners, corners.map((c) => [c.x + c.z, c.y] as [number, number]), SWATCH.flat, tint, b, facing);
-      // Balusters on every third tread, and a newel post at the foot.
-      for (let n = 1; n < steps; n += 3) {
-        const u = -0.5 + (n + 0.5) / steps;
-        box(u - T, v - T, base + ((n + 1) / steps) * STOREY, u + T, v + T, rail(u) - 0.03);
-      }
-      box(-0.5, v - T, base, -0.5 + 2 * T, v + T, ha + 0.04);
+      run.forEach((tile, j) => {
+        // Against a wall on that side, none.
+        if (walled(tile.x - d.y * side, tile.y + d.x * side, k)) return;
+        // The handrail beside this tile: one bar along the slope.
+        const [a, z] = [-n / 2 + j, -n / 2 + j + 1];
+        const [ha, hz] = [rail(a), rail(z)];
+        const faces: [THREE.Vector3[], THREE.Vector3][] = [
+          [[at(a, v - T, ha), at(a, v + T, ha), at(z, v + T, hz), at(z, v - T, hz)], up],
+          [[at(a, v - T, ha - 0.05), at(z, v - T, hz - 0.05), at(z, v + T, hz - 0.05), at(a, v + T, ha - 0.05)], up.clone().negate()],
+          [[at(a, v + T, ha - 0.05), at(z, v + T, hz - 0.05), at(z, v + T, hz), at(a, v + T, ha)], across],
+          [[at(a, v - T, ha - 0.05), at(a, v - T, ha), at(z, v - T, hz), at(z, v - T, hz - 0.05)], across.clone().negate()],
+        ];
+        for (const [corners, facing] of faces) out.poly(corners, corners.map((c) => [c.x + c.z, c.y] as [number, number]), SWATCH.flat, tint, b, facing);
+        // Balusters on every third tread, and a newel post at the foot.
+        for (let m = Math.ceil((j * steps) / n); m < ((j + 1) * steps) / n; m++) {
+          if (m % 3 !== 1 || m >= steps - 1) continue;
+          const u = -n / 2 + ((m + 0.5) * n) / steps;
+          box(u - T, v - T, base + ((m + 1) / steps) * STOREY, u + T, v + T, rail(u) - 0.03);
+        }
+        if (j === 0) box(-n / 2, v - T, base, -n / 2 + 2 * T, v + T, ha + 0.04);
+      });
     }
-    // The stairwell above, open to the landing (the tile the stairs face).
+    // The stairwell above, open to the landing (the tile the top faces).
     out.level = k + 1;
     const floor = base + STOREY;
-    for (const [du, dv] of [[-1, 0], [0, 1], [0, -1]] as const) {
-      if (walled(x + d.x * du - d.y * dv, y + d.y * du + d.x * dv, k + 1)) continue;
-      // The edge's two ends, in (along, across), and a post at each.
-      const [ua, va, ub, vb] = du ? [-0.5, -0.5, -0.5 + 2 * T, 0.5] : [-0.5, dv * 0.5 - T, 0.5, dv * 0.5 + T];
+    /** A railing from (ua, va) to (ub, vb), with a post at each end. */
+    const railing = (ua: number, va: number, ub: number, vb: number, posts: [number, number][]) => {
       box(ua, va, floor + RAIL - 0.05, ub, vb, floor + RAIL);
       box(ua, va, floor + 0.42, ub, vb, floor + 0.46);
-      const posts: [number, number][] = du ? [[-0.5, -0.5], [-0.5, 0.5]] : [[-0.5, dv * 0.5], [0.5, dv * 0.5]];
       for (const [u, vv] of posts) box(u - T, vv - T, floor, u + T, vv + T, floor + RAIL);
+    };
+    /** Whether the stairwell's edge towards (x, y) needs no railing: a wall there, or the next flight's foot of the way back. */
+    const shut = (x: number, y: number) => walled(x, y, k + 1) || this.plan.kindAt(x, y, k + 1) === 'ladder';
+    const lowest = run[0]!;
+    if (!shut(lowest.x - d.x, lowest.y - d.y)) railing(-n / 2, -0.5, -n / 2 + 2 * T, 0.5, [[-n / 2, -0.5], [-n / 2, 0.5]]);
+    for (const dv of [1, -1]) {
+      run.forEach((tile, j) => {
+        if (shut(tile.x - d.y * dv, tile.y + d.x * dv)) return;
+        const [ua, ub] = [-n / 2 + j, -n / 2 + j + 1];
+        railing(ua, dv * 0.5 - T, ub, dv * 0.5 + T, [[ua, dv * 0.5], [ub, dv * 0.5]]);
+      });
     }
   }
 
@@ -2597,9 +2623,10 @@ export class BuildingsView {
       });
     }
 
-    // On the roofs: they fade with them.
+    // On the roofs: they fade with them; on a roof one walks on, on its floor and off the stairwell's edge (its railing).
+    const deck = (b: Building, x: number, y: number) => plan.kindAt(x, y, b.storeys) === 'floor' && DIRS8.every((d) => plan.kindAt(x + d.x, y + d.y, b.storeys) !== null);
     for (const b of plan.buildings) {
-      for (const r of roofProps(b, (x, y) => plan.kindAt(x, y, b.storeys) === 'floor')) {
+      for (const r of roofProps(b, (x, y) => deck(b, x, y))) {
         const parts = syntyProp(r.id);
         if (!parts) {
           ready = false;
@@ -2720,8 +2747,8 @@ export class BuildingsView {
         const e = elev(x, y);
         placing = !area || !!area[i];
         // Ladders: against the side of the tile one storey up, whatever it is (a building's roof one walks on, too);
-        // a building's stairs are drawn as stairs (buildStatic).
-        if (s.tiles[i] === 'ladder' && decorOf(s.decor?.[i])?.kind !== 'stairs') {
+        // a building's stairs, every tile of a flight, are drawn as stairs (buildStatic).
+        if (s.tiles[i] === 'ladder' && !flightAt(s, { x, y, z: 0 })) {
           for (const d of DIRS4) {
             const up = elev(x + d.x, y + d.y) === e + 1 || (e === 0 && isWalkable(plan.kindAt(x + d.x, y + d.y, 1)));
             if (up) place('ladder', x + 0.5 + d.x * 0.44, e * STOREY, y + 0.5 + d.y * 0.44, { x: -d.x, y: -d.y });
@@ -2729,7 +2756,7 @@ export class BuildingsView {
         }
         // On a storey: a ladder up to the next one.
         for (let k = 1; k <= (s.levels?.length ?? 0); k++) {
-          if (plan.kindAt(x, y, k) !== 'ladder' || decorOf(s.levels![k - 1]!.decor?.[i])?.kind === 'stairs') continue;
+          if (plan.kindAt(x, y, k) !== 'ladder' || flightAt(s, { x, y, z: k })) continue;
           for (const d of DIRS4) if (isWalkable(plan.kindAt(x + d.x, y + d.y, k + 1))) place('ladder', x + 0.5 + d.x * 0.44, k * STOREY, y + 0.5 + d.y * 0.44, { x: -d.x, y: -d.y });
         }
         // A solid mass of wall: concrete on its sides.

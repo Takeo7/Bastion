@@ -1148,6 +1148,9 @@ export class Overlays {
     this.sightEdge.visible = false;
   }
 
+  /** How high a place's way stands over its floor: the treads of a flight of stairs (game.ts sets it from unitViews). */
+  lift: (p: Place) => number = () => 0;
+
   showPath(from: Vec2 | null, path: Vec2[] | null, dash = false): void {
     this.lastPath = { from, path, dash };
     this.pathDots.count = 0;
@@ -1157,7 +1160,8 @@ export class Overlays {
     }
     const style = this.look.path;
     const tone = this.planning ? this.planTint : new THREE.Color(dash ? style.dash : style.color);
-    const at = [from, ...path].map((p) => tileToWorld(p, 0.08));
+    // Up a flight of stairs it rides the treads, not the floor under them.
+    const at = [from, ...path].map((p) => tileToWorld(p, 0.08 + this.lift(p)));
     if (style.dotted) {
       // Marks every third of a tile, like the range's, from the first step on.
       const m = new THREE.Matrix4();
