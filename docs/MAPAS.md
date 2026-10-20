@@ -354,7 +354,7 @@ La casilla sigue siendo de 1,34 m vistos. Entre paréntesis, el tamaño visto.
 
 - **Mapas rectangulares:** se permiten (W ≠ H), para variar.
 - **Proporción del suelo, en ciudad:**
-  - edificado, 35–45 %;
+  - edificado, 30–35 % de lo jugable (Arturo, 20/10; el 35–45 % se midió en mapas sin aceras y con calles de 2–4);
   - calles y aceras, 25–30 %;
   - patios, plazas y solares, 20–30 %;
   - objetos de cobertura, 4–6 %;
@@ -408,6 +408,37 @@ La casilla sigue siendo de 1,34 m vistos. Entre paréntesis, el tamaño visto.
    - en las calles, coches de 1 × 3 en línea con huecos de 1–3, árboles de acera, contenedores y barricadas;
    - en patios y plazas, la regla de `coverGaps` (ningún claro de más de 6) en todo el mapa, salvo el centro de la plaza.
 9. **Las reglas de hoy siguen:** sin callejones (`openDeadEnds`), todo alcanzable (`connect`), bordes cerrados con sentido (`dressEdges`) y cada pasada con su semilla.
+10. **El contorno** (Arturo, 19/10: «que los mapas no sean cuadrados, que sean más orgánicos, con bordes con sentido»). Ver §5.10.
+
+### 5.10 El contorno
+
+- **La forma:** el mapa sigue siendo un rectángulo de casillas, pero lo que se juega tiene forma propia. El borde entra y sale a distinta profundidad, de 0 a unas 12 casillas, y lo cierra algo que tiene sentido. El rectángulo de fuera no se ve.
+- **Lo que cierra el borde:**
+  - en la ciudad, manzanas cerradas: edificios sin entrada, solares vallados y manzanas derrumbadas o en obras;
+  - en la ciudad, como mucho uno por mapa y a lo largo de un lado (con algún quiebro): un río o canal con su muro, las vías del tren en un terraplén, una autovía elevada o una barrera militar;
+  - en el campo (fase 5): bosque cerrado, barrancos, rocas, un río o un embalse, siguiendo el terreno;
+  - donde una calle cruza el contorno y no es una entrada: barricadas, coches cruzados y escombros, como hoy (`dressEdges`).
+- **Las entradas:** 2–4 calles (caminos, en el campo) siguen abiertas hasta el borde del rectángulo.
+  - La escuadra empieza al pie de una de ellas, dentro del contorno.
+  - Las hordas llegan por ellas: `chooseDropZone` busca suelo pisable a 2 casillas del borde, y con el contorno solo lo hay en las entradas. Si la oleada entera no cabe a 2, entra a 4 (`EDGE_DEEP`, 20/10), antes que más cerca de la escuadra. Con eso, en todos los mapas cabe una oleada de 10.
+  - En el campo, el camino o la carretera cruza el bosque con una cuneta abierta de 2 casillas a cada lado (`MOUTH`, 20/10). Sin ella, junto al borde solo cabían 4 muertos (el camino es de 2) y las oleadas de 6 del sabotaje y el hackeo no entraban nunca.
+- **En el motor:**
+  - lo de fuera son casillas `'wall'`: no se pisan y no se ve a través;
+  - llevan un suelo nuevo, `GroundKind` 4 («fuera»);
+  - una lista cosmética, `MissionLayout.frame` y `GameState.frame`, dice qué es cada trozo: `{ kind, x, y, w, h, side?, storeys? }`, con `kind` 'block', 'lot', 'ruin', 'works', 'street', 'river', 'rail', 'highway', 'barrier', 'containers' (fase 5), 'forest', 'ravine', 'rocks' o 'water';
+  - cada casilla de fuera está en una sola pieza, y todas son rectángulos, sin huecos ni solapes (Arte, 19/10);
+  - 'street' es el tramo de una calle que cruza el contorno sin ser entrada: la calzada sigue hasta el borde, con la barricada en la línea del contorno;
+  - `storeys` va siempre en 'block', 'ruin' y 'works', y a veces en 'highway' y 'rail'. Esas plantas van también en `GameState.storeys` de sus casillas, para que la vista desde un tejado se pare en lo que se dibuja;
+  - `side` (un índice de `DIRS4`) solo en 'river', 'rail', 'highway' y 'barrier': el lado del rectángulo por el que van;
+  - ninguna entrada cruza el río, las vías ni la autovía. Una que cruza la barrera es un control abierto;
+  - las misiones guardadas no tienen `frame` y se ven como hoy.
+- **En el cliente (Arte):**
+  - cada trozo del contorno se dibuja hasta el borde del rectángulo y algo más allá, para que no se vea dónde acaba el mapa;
+  - la niebla no cubre lo de fuera: se ve como fondo;
+  - el corte de tejados y la cámara no entran en lo de fuera.
+- **Medidas:**
+  - lo jugable, el 70–85 % del rectángulo;
+  - el recorrido sigue en 60–80 casillas.
 
 ## 6. Lo que se mueve con la escala
 
@@ -487,9 +518,9 @@ Con las proporciones de hoy estiradas, ciudad y 8 semillas por tamaño:
 
 ## 8. Plan por fases
 
-**Estado (19/10):** hechas las fases 0, 1 y 2 y los tres arreglos de rendimiento de §7 (sombra, `rebuild` por trozos y `teamVisibility`), en la sesión «Experimental/brainstorming». Las fases 3 a 6 las reparte Gameplay con Arte (EQUIPO.md). Lo que queda de rendimiento a 72: `buildWalls` (`buildings.ts`) recorre todas las casillas en cada cambio (unos 2,3 ms de los 4,2 de una puerta) y `layRaised` rehace todos los parapetos.
+**Estado (20/10):** hechas las fases 0 a 6. Las 0, 1 y 2 y los tres arreglos de rendimiento de §7 (sombra, `rebuild` por trozos y `teamVisibility`), en la sesión «Experimental/brainstorming»; las 3 a 6, Gameplay (motor) y Arte (cliente), probadas jugando el 20/10 en los siete tipos de mapa y con una base vieja migrada. Salen juntas en la 0.8.0. Lo que queda de rendimiento a 72: `buildWalls` (`buildings.ts`) recorre todas las casillas en cada cambio (unos 2,3 ms de los 4,2 de una puerta) y `layRaised` rehace todos los parapetos.
 
-Cada fase sale sola, con `npm run typecheck` y `npx vitest run --root packages/engine`, y se juega antes de la siguiente.
+Cada fase acaba con `npm run typecheck` y `npx vitest run --root packages/engine` en verde y la probamos nosotros, jugando, antes de la siguiente. Las fases 3 a 6 salen juntas en una sola versión al final (Arturo, 19/10).
 
 ### Fase 0 · La medición como test (½ sesión)
 
@@ -542,6 +573,37 @@ Cada fase sale sola, con `npm run typecheck` y `npx vitest run --root packages/e
 
 ### Fase 3 · Trazado, calles y tamaño del mapa
 
+**Estado (20/10): hecha** (motor, Gameplay; cliente, Arte). Probada jugando.
+- **Plano y contorno:** `townPlan.ts` hace el plano del pueblo.
+  - **Cuadrícula:** calles cada 26–34 (como pide §5.1, para que salgan patios) y 32–36 en el hospital, con desvíos en los cruces y una avenida de 7.
+  - **Casco viejo:** una plaza, 3–4 calles quebradas con una calle mayor recta de 5, una ronda y callejones.
+  - **Contorno (§5.10):** manzanas cerradas a distinta profundidad, a veces río, vías, autovía o barrera, y 2–4 entradas.
+  - **Medido** en 300 planos: se juega el 77 % en la cuadrícula y el 81 % en el casco viejo (medianas), con un mínimo del 62 %.
+- **El pueblo:** `mapgen.ts` `town()` construye sobre el plano.
+  - Aceras de 2 en las calles de 5 y 7.
+  - Cada manzana se reparte en filas de lotes a lo largo de sus calles, con un patio en medio, y un parque o una plaza si sobran manzanas.
+  - El objetivo va en la manzana con sitio que queda a 58–76 pasos.
+  - El autobús de 2 × 9 espera en una entrada de 5 o más (o en la avenida que sale por ella), con la evacuación de 3 × 7 a lo largo de sus puertas. Se usa en 70 de 72 mapas; el resto lleva la de antes.
+  - Farolas cada 11 casillas, con luz hasta 3.
+- **Tamaños y reglas:**
+  - 64 × 64, y el hospital 72 × 64 (`generatedSize`); el mapa puede salir girado, así que W ≠ H.
+  - Grupos × lado/48 (`podsFor` al lanzar, `scalePods`), con separación lado/3 y 14 entre grupos.
+  - Turnos por el recorrido (`MissionLayout.route`, `routeTurns`, calibrado con la mediana de 83 de los mapas de 48).
+  - `EDGE_GAP` y el goteo de la horda, × lado/48; hasta 4 cajas especiales.
+- **Medido:**
+  - recorrido de la escuadra al objetivo: mediana 52–63 pasos (hoy 58–64);
+  - del objetivo a la evacuación: 28–47 (hoy 43–50);
+  - generar, 36 ms; visión de los enemigos, 4,4 ms; estado, 212 KB (8 KB comprimido).
+- **La partida de bot** (20/10): un bot nuevo, porque el `scavenge-sim` de la fase 6 no se guardó. Seis reclutas registran las salas de la planta baja, disparan con un 40 % o más y se van todos juntos al autobús a partir del turno 9, o antes si hay dos bajas o alguien va cargado o herido. Lo jugó en 16 Saqueos de ciudad por dificultad, con los mapas de hoy (48) y con los nuevos (64, con las parcelas del paso 3 de Arte):
+
+  | | Hoy (48) | Nuevos (64) |
+  |---|---|---|
+  | Dificultad 2 | 8/16 ganadas, 5,1 bajas | 7/16, 5,3 |
+  | Dificultad 3 | 7/16, 5,3 | 8/16, 5,1 |
+
+  El bot es flojo (pierde la mitad en los dos), pero sale lo mismo: los mapas nuevos no hacen el Saqueo ni más duro ni más fácil. El script está en el scratchpad de Gameplay (`f3/scavsim.ts`), no en el repositorio.
+- **Pendiente para la fase 4:** la densidad. Hoy se construye el 20–30 % de lo jugable, frente al 40–46 % de antes, y hay menos oficinas y naves. Las parcelas, las adosadas, los bloques de pisos en los que se entra y las naves a su tamaño lo devuelven. Tres pruebas lo esperan: las salas del Saqueo (> 10, antes > 20), las oficinas de dos plantas y las escaleras de mano en naves de una planta (contadas también en el polígono).
+
 Antes, los arreglos 1–3 de §7.3 (Arte y Gameplay).
 
 - **Motor:**
@@ -549,8 +611,9 @@ Antes, los arreglos 1–3 de §7.3 (Arte y Gameplay).
   - el recorrido elegido por distancia (§5.7);
   - en `setup.ts`: `missionTurns` por recorrido, grupos y `POD_DISTANCE` por lado;
   - en `rules.ts`: `EDGE_GAP` y `trickle`;
-  - las etapas de La Lata con su huella (`evacBus.ts`).
-- **Cliente:** `dressing.ts` (bordes de mapas más grandes, aceras de 2), `evacBus.ts` y `ground.ts` (aceras, chaflanes).
+  - las etapas de La Lata con su huella (`evacBus.ts`);
+  - el contorno de la ciudad (§5.10): manzanas cerradas, el río, las vías, la autovía o la barrera, y las entradas.
+- **Cliente:** `dressing.ts` (bordes de mapas más grandes, aceras de 2), `evacBus.ts`, `ground.ts` (aceras, chaflanes) y el contorno (§5.10).
 - **Tests:**
   - alcance;
   - sin callejones;
@@ -564,6 +627,19 @@ Antes, los arreglos 1–3 de §7.3 (Arte y Gameplay).
   - más rendimiento: medir en el PC de referencia.
 
 ### Fase 4 · Edificios y salas
+
+**Estado (20/10): hecha** (Arte, revisada por Gameplay). Probada jugando.
+- **Parcelas** (`townPlots`, `buildPlots`): a lo largo de las calles de cada manzana, con la fachada por barrio (casco viejo 7–9, cuadrícula 8–10).
+  - Una parcela es una casa o una tienda; dos juntas, una oficina o un bloque de pisos.
+  - Las adosadas comparten pared, en tramos de hasta 16 con un paso al patio entre ellos.
+  - El 6–10 % de las manzanas sigue con plazas, aparcamientos, gasolinera, motel, obras y naves.
+- **Patios de manzana:** traseras con vallas y lindes, cobertizos, tendederos y huertos ('shed', 'washingLine', 'vegPatch'), y al menos dos salidas (`MissionLayout.courtyards`).
+- **Bloques de pisos en los que se entra** (`flatsBlock`): 16 de ancho, 3 plantas, un núcleo de escalera con un piso a cada lado y la azotea pisable.
+- **Recibidor:** las casas de dos plantas lo llevan (`hallPlan2`).
+- **Baños de 2 × 3; 'toilet' y 'pantry'** en `HomeUse`.
+- **A su tamaño:** el hospital, 13–16 × 23–30, con dos alas y 10–12 salas por planta; la enfermería, 11–13 × 13–17.
+- **Construido:** mediana del 32,9 % de lo jugable (23–46 %), dentro de la meta del 30–35 % (decisión 8). Generar, 17–37 ms; estado, 154 KB.
+- **Pruebas de la fase 4** (proportions.test.ts): patios con dos salidas o más, ninguna sala a la que solo se llegue por una ventana, ventanas siempre hacia fuera, salas dentro de su edificio. Vuelven a su sitio las salas del Saqueo (> 20) y las oficinas de 2–3 plantas en 6 pueblos. Las naves de una planta con escalera de mano salen en el polígono, no en los pueblos.
 
 - **Motor** (`mapgen.ts`):
   - parcelas (§5.2–5.4);
@@ -585,6 +661,32 @@ Antes, los arreglos 1–3 de §7.3 (Arte y Gameplay).
 
 ### Fase 5 · Las afueras, la fábrica, el área de servicio y el polígono
 
+**Estado (20/10): hecha** (motor, Gameplay; cliente y naves de la fábrica, Arte). Probada jugando.
+- **Las afueras y el área de servicio:**
+  - 72 × 72 y 64 × 72;
+  - el camino o la carretera entra y sale recto (22 casillas el camino);
+  - contorno del campo (`shutCountry`): bosque y rocas a una profundidad que cambia, y a veces agua o un barranco a lo largo de un lado que no sea entrada;
+  - la escuadra entra por el camino, y el autobús de 2 × 9 espera en su último tramo, con la evacuación de 3 × 7 a un lado;
+  - los dos extremos del camino tienen una boca: el camino y 2 casillas de cuneta a cada lado, abiertas a través del bosque (`MOUTH`, §5.10);
+  - el autobús solo para donde la cuneta junto a su morro está libre. Si no, el camino de delante quedaba sin salida y `sealPockets` lo cerraba con árboles: el autobús miraba al bosque (40 % de las afueras, visto jugando el 20/10). Ahora para junto al camino en el 92 % de las afueras y en todas las áreas; en el resto, la evacuación de antes;
+  - se juega el 68–76 %.
+- **El polígono** (`estate()`, sobre `townPlan` con `estate`):
+  - 72 × 72, con calles cada 34–40, manzanas grandes y lotes de hasta 26: naves, patios de contenedores, talleres y alguna oficina;
+  - contorno de contenedores, solares, obras y naves cerradas, y a veces las vías, la autovía o una barrera;
+  - se juega el 77 %.
+- **Medido en 72:**
+  - generar, 32–40 ms (el área de servicio roza el límite);
+  - visión de los enemigos, 3,3–3,7 ms;
+  - estado, 169–220 KB;
+  - 13 grupos a la dificultad 2.
+- **La fábrica** (`facility`), 72 × 72:
+  - un camino entra desde el lado de la escuadra hasta la explanada, que corre a lo largo de la valla y sale hasta el borde; el autobús espera en ella;
+  - el recinto vallado tiene dos puertas a la explanada y una al lado de enfrente, cada una con su garita;
+  - alrededor de los caminos y del recinto queda una cuneta de 1–4 casillas, y más allá, el contorno: bosque o solares al norte y al oeste, contenedores o bosque al sur, contenedores o solares al otro lado;
+  - ya no hay la variante con la escuadra dentro del recinto: se entra siempre por el camino;
+  - dentro sigue `factory()` de siempre, hasta que Arte haga la nave de 16–20 × 24–30 con sus muelles y los silos (se construye el 7 %).
+- **De paso:** los muebles ya no esperan a los grupos de muertos. Si un muerto empieza sobre un mueble, pasa a la casilla libre más cercana. Así el mapa de noche (con un grupo más) es el mismo que el de día.
+
 - **Qué:**
   - campos de 14–20 × 20–30;
   - camino de 3;
@@ -592,12 +694,30 @@ Antes, los arreglos 1–3 de §7.3 (Arte y Gameplay).
   - patio de gasolinera de 16 × 20;
   - nave de la fábrica de 16–20 × 24–30, con muelles para camiones de 2 × 6;
   - silos de 3 × 3;
-  - mapas de 72.
+  - mapas de 72;
+  - el contorno del campo (§5.10): bosque cerrado, barrancos, rocas, río o embalse.
 - **Archivos:** `mapgen.ts` (`wilds`, `roadside`, `facility`, `factory`, `field`).
 - **Tests:** como en la fase 3.
 - **Riesgo:** el bosque más grande, en árboles dibujados. Van en instancias; medirlo.
 
 ### Fase 6 · La base
+
+**Estado (20/10): hecha** (motor, Gameplay; cliente y patio del solar, Arte). Probada jugando: una base v22 con 15 edificios junto al solar pasa a 56 con todo en su sitio; lo que pisaba el solar de 9 × 9 se devuelve entero.
+- **El mapa:** `BASE_MAP` 56. El claro tiene un radio de 15 de mediana (12–21), sin cambiar cómo se genera.
+- **Las huellas, de los modelos de Arte:**
+  - radio, cuarentena, camposanto y taller de oficios, 4 × 4; sala de mapas, 6 × 6;
+  - barracón y enfermería, 6 × 5; taller, 5 × 4; chapistería, 7 × 5; entrenamiento, 5 × 5;
+  - huerto, 7 × 6; campo de tiro, 10 × 3;
+  - torre, 3 × 4, con la plataforma de 3 × 3 una planta arriba y la escalera delante, en el medio;
+  - caravana, 5 × 2.
+- **El Bastión:** solar de 9 × 9 desde (caravana.x − 2, caravana.y − 3), con etapas de 5 × 2, 7 × 3, 7 × 5 y 7 × 7. El patio (`BASTION_YARD`), el que dibujó Arte.
+- **La base guardada** (campaña 23, `growBase`):
+  - va al centro (+8, +8), rodeada de pinar con los caminos libres;
+  - cada pieza conserva su tamaño de antes en `BasePiece.size`, y la torre vieja, su forma, hasta que se sube de nivel y cabe donde está;
+  - lo que cae en el solar nuevo se desmonta y se devuelve entero;
+  - los puestos del asedio se mueven con todo.
+  - Probado con 50 bases de 40 llenas de piezas: sin solapes, sin pinos encima y con el solar libre.
+- **Para jugarlo:** en 56 los muertos tardan algo más en llegar. Revisar `SIEGE.hold` (11) y las torretas.
 
 - **Motor:**
   - en `base.ts`: `BASE_MAP` 56, el claro, `PIECES` con las huellas de §4.9, `BASTION_LOT` 9 y `BASTION_STAGES`;
@@ -628,6 +748,9 @@ Antes, los arreglos 1–3 de §7.3 (Arte y Gameplay).
 3. **El largo de la misión:** se mantiene el recorrido de 60–80 casillas. El mapa más grande da flancos, no más camino.
 4. **Las escaleras:** tramo de 3 (38°), de 2 en las casas pequeñas. Solo se entra por el pie y nadie se para a mitad. Donde no cabe uno de 3 (tiendas pequeñas, hospitales cortos: 12 de 746 tramos), también de 2 (Arturo, 19/10).
 5. **La base:** 56 × 56, con la base guardada en el centro y lo construido con su tamaño.
+6. **Las fases 3 a 6, juntas:** una sola versión al final; entre fase y fase las probamos nosotros.
+7. **El contorno irregular** (§5.10): la zona jugable tiene forma propia, cerrada por manzanas, río, vías, autovía o barrera en la ciudad; por monte y agua en el campo; y por barricadas y coches donde sale una calle. Vale todo eso.
+8. **La densidad de los pueblos:** un 30–35 % construido de lo jugable, no el 35–45 % de antes. Con calles de 5 y 7 y aceras de 2, calles y aceras ocupan casi la mitad del mapa, y Arturo prefiere quedarse con ellas (20/10).
 
 ## Anexo · Cómo repetir la medición
 

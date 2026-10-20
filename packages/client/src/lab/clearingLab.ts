@@ -56,7 +56,8 @@ if (!params.has('bare')) {
   put('workshop', c + 4, c - 8, 1, 1);
   put('garden', c - 9, c + 3, 0, 2);
   put('memorial', c + 1, c + 4);
-  for (let y = c - 4; y <= c + 1; y++) put(y === c - 2 ? 'gate' : 'palisade', c - 10, y);
+  // `?puertas`: a gate three wide (19/10: none hung on the posts between them).
+  for (let y = c - 4; y <= c + 1; y++) put(y === c - 2 || (params.has('puertas') && (y === c - 3 || y === c - 1)) ? 'gate' : 'palisade', c - 10, y);
   put('sandbags', c - 6, c - 3);
   put('sandbags', c - 5, c - 3);
   put('logs', c + 4, c - 3);

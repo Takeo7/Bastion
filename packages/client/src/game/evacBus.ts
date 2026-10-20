@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { loadKitModels } from '../strategy/baseKit';
 import { buildLata, doorAt, lataModels, type Mula } from '../strategy/mula';
 import { NIGHT } from './night';
-import { SYNTY_SCALE } from './syntyManifest';
 import { tween } from './tween';
 
 // La Mula at a mission's evacuation (docs/PRUEBA-2026-10-14.md P1; UI asked
@@ -13,8 +12,11 @@ import { tween } from './tween';
 // Before it is the bus, La Lata is the campaign's vehicle (GameState.vehicle,
 // playtest 18/10 #45): the 4×4, the van or the lorry, which do the same.
 
-/** The bus on the map: a metre of it as the map's props are (SYNTY_SCALE). */
-const SCALE = SYNTY_SCALE;
+/**
+ * The bus on the map: as the kit has it, already in tiles (baseKit's models are converted at the map's scale: a
+ * Town bus is 7.6 long, its 11.4 m). It used to be scaled down once more (SYNTY_SCALE, 19/10: drawn at two thirds).
+ */
+const SCALE = 1;
 /** Seconds the doors take to shut, and the bus to pull away and be gone. */
 const SHUT_SECONDS = 0.35;
 const AWAY_SECONDS = 2.2;
@@ -27,6 +29,8 @@ export class EvacBus {
   readonly root = new THREE.Group();
   private mula: Mula | null = null;
   private readonly ready: Promise<void>;
+  /** Where it was last parked (park), to stand it again at its size once it is built. */
+  private parked: { at: THREE.Vector3; heading: number; doorsTo: THREE.Vector3; shown: boolean; bay: number } | null = null;
 
   /** La Lata as `vehicle` (0 4×4, 1 van, 2 lorry; 3 or none, the bus). */
   constructor(readonly vehicle = 3) {
@@ -44,16 +48,21 @@ export class EvacBus {
       });
       this.root.add(mula.body);
       this.mula = mula;
+      if (this.parked) this.park(this.parked.at, this.parked.heading, this.parked.doorsTo, this.parked.shown, this.parked.bay);
     });
   }
 
   /**
    * Parked at `at` (the map's world), its nose the way `heading` (radians
    * from +z, as the units' yaw), its doors on the side towards `doorsTo`
-   * (mirrored if they'd face away), shown or not.
+   * (mirrored if they'd face away), shown or not. In a bay `bay` tiles long
+   * (mission.evacBus: 2 × 9, the bus's), centred on `at`, a shorter vehicle
+   * stands at its front, its nose where the bus's would be.
    */
-  park(at: THREE.Vector3, heading: number, doorsTo: THREE.Vector3, shown = true): void {
-    this.root.position.copy(at);
+  park(at: THREE.Vector3, heading: number, doorsTo: THREE.Vector3, shown = true, bay = 0): void {
+    this.parked = { at: at.clone(), heading, doorsTo: doorsTo.clone(), shown, bay };
+    const ahead = Math.max(0, (bay - this.length) / 2);
+    this.root.position.copy(at).add(new THREE.Vector3(Math.sin(heading) * ahead, 0, Math.cos(heading) * ahead));
     this.root.rotation.set(0, heading, 0);
     // The doors are on the bus's −x side: (−cos, 0, sin) of its heading in the world.
     const doors = new THREE.Vector3(-Math.cos(heading), 0, Math.sin(heading));

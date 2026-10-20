@@ -797,7 +797,7 @@ export const PROPS = {
   gasTank: prop('farm', 'SM_Prop_Gastank_01', { fit: 0.95 }),
   pipes: prop('apocalypse', 'SM_Prop_Pipe_Large_01', { fit: 1, stretch: true, thick: 0.5 }),
   loudSpeaker: prop('apocalypse', 'SM_Prop_Loud_Speaker_01', { fit: 0.7 }),
-  // The factory (playtest 15/10 #17): drums, the hall's machines, silos over a 2×2 block (the pallets are `pallet`, stacked).
+  // The factory (playtest 15/10 #17): drums, the hall's machines, silos over a block of 3×3 (mapView scales them to it) (the pallets are `pallet`, stacked).
   drums: prop('apocalypse', 'SM_Prop_BarrelStack_01', { fit: 0.95 }),
   drumsTarp: prop('apocalypse', 'SM_Prop_BarrelStack_01_Tarp', { fit: 0.95 }),
   machine: prop('construction', 'SM_Prop_Generator_Large_01', { fit: 0.95 }),
@@ -896,12 +896,14 @@ export const PROPS = {
   desk: prop('town', 'SM_Prop_Desk_01', { fit: 1, stretch: true }),
   cabinet: prop('town', 'SM_Prop_Cabinet_01', { yaw: 2 }),
   workShelf: prop('apocalypse', 'SM_Prop_WorkShelf_01', { fit: 1, stretch: true, yaw: 1 }),
-  // The wilds.
-  tree: prop('nature', 'SM_Tree_01', { fit: 1.5 }),
+  // The wilds. Trees at their size (19/10, MAPAS.md §4.7: a crown 4–6 m across and 6–9 m high, seen; they were a tile
+  // and a half across, a street's tree 3 m high): their trunk on its tile, their crown over the ones round it, fading
+  // away over what the player looks at (treeFade.ts).
+  tree: prop('nature', 'SM_Tree_01', { fit: 2.73 }),
   // (Nature's needle pines take their leaves from a texture of their own, with holes: the solid ones instead.)
-  treePine: prop('nature', 'SM_Tree_PolyPine_01', { fit: 1.4 }),
-  treeDead: prop('apocalypse', 'SM_Env_Tree_Dead_01', { fit: 1.4 }),
-  streetTree: prop('apocalypse', 'SM_Env_Tree_01', { fit: 1.5 }),
+  treePine: prop('nature', 'SM_Tree_PolyPine_01', { fit: 2.13 }),
+  treeDead: prop('apocalypse', 'SM_Env_Tree_Dead_01', { fit: 3.17 }),
+  streetTree: prop('apocalypse', 'SM_Env_Tree_01', { fit: 3.47 }),
   bush: prop('nature', 'SM_Plant_Bush_01', { fit: 0.9, thick: 0.6 }),
   rock: prop('nature', 'SM_Rock_01', { fit: 0.95 }),
   boulder: prop('nature', 'SM_Rock_Boulder_01', { fit: 0.95, thick: 1.4 }),
@@ -1275,8 +1277,8 @@ const apartment = (fbx: string, run: 'x' | 'y') =>
  * and floor cut off), near its door end, clear of the logo both sides carry; set so the side lies on a
  * bunker wall's outer face; from `floor` up over a door.
  */
-const sheet = (atlas: AtlasId, floor = 0.03) =>
-  strip('woodland', 'SM_Prop_Shipping_Container_01', [2.3, 0.212], { run: 'y', out: 1, storey: 2.59, depth: 0.2, top: 2.56, floor, atlas });
+const sheet = (atlas: AtlasId, floor = 0.03, top = 2.56) =>
+  strip('woodland', 'SM_Prop_Shipping_Container_01', [2.3, 0.212], { run: 'y', out: 1, storey: 2.59, depth: 0.2, top, floor, atlas });
 
 /** Apocalypse's bunker kit: modules from y = 0 to 2.5, walls from x = −0.125 to 0.125. */
 const bunker = (fbx: string, o: PieceOptions = {}) => strip('apocalypse', fbx, [1.25, 0], { run: 'y', out: 1, storey: 3, ...o });
@@ -1313,10 +1315,16 @@ export const PIECES = {
   bunkerLintel: bunker('SM_Bld_Bunker_Wall_Concrete_x1_01', { floor: 2.1 }),
   /** A reinforced window: a steel frame round an opening above a sill. */
   bunkerWindow: bunker('SM_Bld_Bunker_Wall_Metal_Door_x1_01'),
+  /**
+   * Its sill (19/10, MAPAS.md: the frame is a door's, open from 0.47 m): the foot of the wall under it, a metre high
+   * (1.15 m drawn), so that the window opens at a window's height; with the brick or the sheet metal over it outside.
+   */
+  bunkerSill: bunker('SM_Bld_Bunker_Wall_Concrete_x1_01', { top: 1 }),
   metalDoor: whole('apocalypse', 'SM_Bld_Metal_Door_01', [0.47, 0], { storey: 3, base: -1.07, parts: true, leaf: 'SM_Bld_Metal_Door_01' }),
   /** Warehouses: the brick of the Apocalypse warehouse, a skin outside a bunker wall (its panels have one face). */
   brickFace: strip('apocalypse', 'SM_Bld_Warehouse_Brick_01', [-1.83, -4.915], { storey: 3, depth: 0.3, top: 2.95 }),
   brickLintel: strip('apocalypse', 'SM_Bld_Warehouse_Brick_01', [-1.83, -4.915], { storey: 3, depth: 0.3, top: 2.95, floor: 2.1 }),
+  brickSill: strip('apocalypse', 'SM_Bld_Warehouse_Brick_01', [-1.83, -4.915], { storey: 3, depth: 0.3, top: 1 }),
   // A facility's perimeter: the quarantine wall (5 m panels, cut to a storey), its columns at gates and corners.
   fenceWall: strip('apocalypse', 'SM_Prop_Wall_Quarantine_Bottom_01', [-2.5, -0.47], { storey: 3, top: 2.95 }),
   fenceColumn: whole('apocalypse', 'SM_Prop_Wall_Quarantine_Column_Tall_01', [0, 0], { storey: 3, keep: [[-5, -5, -0.02], [5, 5, 3.4]] }),
@@ -1334,6 +1342,10 @@ export const PIECES = {
   sheetGreyLintel: sheet('containerGrey', 1.81),
   sheetRedLintel: sheet('containerRed', 1.81),
   sheetBlueLintel: sheet('containerBlue', 1.81),
+  /** Under a shed's window, as its sill (the container's storey is 2.59 m: 0.86 of it is the bunker's metre). */
+  sheetGreySill: sheet('containerGrey', 0.03, 0.86),
+  sheetRedSill: sheet('containerRed', 0.03, 0.86),
+  sheetBlueSill: sheet('containerBlue', 0.03, 0.86),
   /** A wardrobe someone has searched: its doors and drawers apart, to open them (mapView.ts). */
   wardrobeOpen: whole('town', 'SM_Prop_Wardrobe_01', [0, 0.03], { parts: true, storey: 2.9 }),
 } satisfies Record<string, PieceAsset>;

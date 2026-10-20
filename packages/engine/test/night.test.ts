@@ -334,9 +334,10 @@ describe('night', () => {
     expect(night.tiles).toEqual(day.tiles);
     expect(night.lights!.length).toBeGreaterThan(4);
     for (const l of night.lights!) {
-      expect(l.radius).toBe(NIGHT.streetLight);
+      // A town's street lights reach three (docs/MAPAS.md §6), further than a 48 map's.
+      expect(l.radius).toBe(NIGHT.streetLight + 1);
       expect(l.turns).toBeUndefined();
-      expect(night.tiles[l.tile.y * 48 + l.tile.x]).toBe('floor');
+      expect(night.tiles[l.tile.y * night.width + l.tile.x]).toBe('floor');
     }
   });
 

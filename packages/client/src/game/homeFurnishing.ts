@@ -9,8 +9,8 @@ import type { PropId } from './syntyManifest';
 // with it. The sofa its rug and an armchair across the table, a lamp and a
 // plant in the corners; chairs round the kitchen table, the bread bin on the
 // counter; the bedside table and its lamp by the bed, a rug before it; the
-// desk its books and lamp; a rug and the towels in the bathroom; the
-// coats by the door in the hall. One style of each for a house, by where it
+// desk its books and lamp; a rug and the towels in the bathroom, a mat
+// before the toilet in the aseo; the coats by the door in the hall. One style of each for a house, by where it
 // stands; in a wrecked one the chairs are over and the lamp is down.
 // What stands up takes a tile of its own, and the engine picks it (Arturo,
 // 19/10: «que ocupen»; engine furnishing.ts): the armchairs, the coffee
@@ -208,6 +208,13 @@ function furnishHome(s: GameState, home: HomeSite, out: Furnishing[]): void {
         const spots = tub ? tilesOf(tub.p).flatMap((q) => [0, 1, 2, 3].map((f) => ({ p: step(q, f), f }))) : [];
         const spot = spots.find((o) => clear(o.p));
         if (spot) put('bathRug', spot.p, spot.f, { cast: false });
+        break;
+      }
+      case 'toilet': {
+        // The mat before the toilet.
+        const wc = of('wc')[0];
+        const ahead = wc && step(wc.p, wc.facing);
+        if (ahead && clear(ahead)) put('bathRug', ahead, wc.facing, { cast: false, k: 0.8 });
         break;
       }
       case 'study': {

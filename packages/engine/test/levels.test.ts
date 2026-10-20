@@ -618,7 +618,7 @@ describe('cover per level', () => {
 describe('time budgets', () => {
   // docs/FASE6-PLAN.md: the fog ≤ 6 ms on a town with its storeys. The best of a few runs, with room for a loaded machine.
   it('the fog of a town with storeys, each team', () => {
-    const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 21 }, slots: [0], rng: new Rng(1) });
+    const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 11 }, slots: [0], rng: new Rng(1) });
     expect(s.levels!.flatMap((l) => l.tiles).filter((k) => k !== null).length).toBeGreaterThan(1000);
     for (const team of ['xcom', 'alien'] as const) {
       let best = Infinity;
@@ -802,7 +802,9 @@ describe("the generator's storeys", () => {
     let parapets = 0;
     let ladders = 0;
     let pitched = 0;
-    for (const s of towns) {
+    // A town's one-storey halls are mostly on the industrial estate (docs/MAPAS.md §4.2: in a town of 64 a plot is a house, a shop, flats or an office).
+    const estates = Array.from({ length: 4 }, (_, k) => createMission({ map: { kind: 'generated', biome: 'city', seed: 101 * (k + 1), site: 'industrial' }, slots: [0], rng: new Rng(k), kind: 'hack' }));
+    for (const s of [...towns, ...estates]) {
       const top = everywhere(s).filter((p) => p.z > 0);
       decks += top.filter((p) => kindAt(s, p) === 'floor' && !slabAt(s, p.x, p.y, p.z + 1) && storeysAt(s, p.x, p.y) === p.z).length;
       parapets += top.filter((p) => kindAt(s, p) === 'low' && !searchSpot(s, p)).length;

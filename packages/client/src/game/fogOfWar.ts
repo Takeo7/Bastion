@@ -123,6 +123,8 @@ export class FogOfWar {
   private lit = new Float32Array(0);
   private litGoal = new Uint8Array(0);
   private settled = true;
+  /** Tiles always in sight, whatever the squad sees: the outline round what is played (docs/MAPAS.md §5.10); null, none. */
+  private open: Uint8Array | null = null;
 
   constructor() {
     this.uniforms.fowMap.value.needsUpdate = true;
@@ -139,6 +141,7 @@ export class FogOfWar {
     this.knownGoal = new Uint8Array(size);
     this.lit = new Float32Array(size);
     this.litGoal = new Uint8Array(size);
+    this.open = null;
     this.uniforms.fowMap.value.dispose();
     const texture = new THREE.DataTexture(new Uint8Array(size * 4), width, height);
     texture.magFilter = THREE.LinearFilter;
@@ -148,11 +151,17 @@ export class FogOfWar {
     this.uniforms.fowSize.value.set(width, height);
   }
 
+  /** The tiles always in sight from now on (the map's outline), as a mask of the map's size; null, none. */
+  setOpen(mask: Uint8Array | null): void {
+    this.open = mask && mask.length === this.size ? mask : null;
+  }
+
   /** Tiles in sight and tiles explored; `instant` skips the fade (loading a mission). */
   set(visible: readonly boolean[], explored: Uint8Array, instant = false): void {
     for (let i = 0; i < this.size; i++) {
-      this.sightGoal[i] = visible[i] ? 1 : 0;
-      this.knownGoal[i] = explored[i] || visible[i] ? 1 : 0;
+      const seen = visible[i] || !!this.open?.[i];
+      this.sightGoal[i] = seen ? 1 : 0;
+      this.knownGoal[i] = explored[i] || seen ? 1 : 0;
       if (instant) {
         this.sight[i] = this.sightGoal[i]!;
         this.known[i] = this.knownGoal[i]!;

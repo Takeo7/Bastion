@@ -58,8 +58,9 @@ export class CameraRig {
     return (((Math.round((this.desiredYaw - Math.PI / 4) / (Math.PI / 2)) % 4) + 4) % 4);
   }
 
-  setBounds(width: number, height: number): void {
-    this.bounds = new THREE.Box2(new THREE.Vector2(0, 0), new THREE.Vector2(width, height));
+  /** Where it may look: the map, or within it `play` (what is played on a map with an outline: outline.ts playBounds). */
+  setBounds(width: number, height: number, play?: { x0: number; y0: number; x1: number; y1: number } | null): void {
+    this.bounds = play ? new THREE.Box2(new THREE.Vector2(play.x0, play.y0), new THREE.Vector2(play.x1, play.y1)) : new THREE.Box2(new THREE.Vector2(0, 0), new THREE.Vector2(width, height));
   }
 
   /** Where the camera looks (the sound hears from here). */

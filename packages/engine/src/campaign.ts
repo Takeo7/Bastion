@@ -52,7 +52,12 @@ import {
   onBastionLot,
   baseLayout,
   BASE_EDGE,
+  BASE_MAP,
   bastionFootprint,
+  cellsOf,
+  growBase,
+  grownFits,
+  OLD_PIECE_SIZES,
   pieceAt,
   treeAt,
   pieceCells,
@@ -101,7 +106,7 @@ import {
 } from './lore';
 import { fill, QUESTS, RELATIVES, RUMOR_LINES, SUSPECTS, TRAITS, type QuestDecision, type QuestId, type QuestMission, type QuestOutcome, type TraitId } from './quests';
 import type { BaseView } from './protocol';
-import type { Rng } from './rng';
+import { Rng } from './rng';
 import { missionPods, podPlan, VIP_NAMES, type MapSource, type SquadMember } from './setup';
 import type { Alarm, Appearance, Arms, Biome, EndReason, FoundWeaponId, GameState, ItemId, ItemSlot, MissionKind, PerkId, Site, Slot, TemplateId, Vec2, WeaponModId } from './types';
 
@@ -950,7 +955,7 @@ export function campaignOutdated(c: { version: number }): boolean {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 22;
+export const CAMPAIGN_VERSION = 23;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -2207,7 +2212,7 @@ function takeBackBase(c: CampaignState, s: GameState): { broken: number; hurt: n
     if (!s.base.pieces.some((q) => q.id === p.id)) continue;
     const [hp, charges] = [p.hp, p.charges];
     // The caravan stands for the Bastion's building, all of it, as baseLayout put it up: hits past the caravan's own 4×2 count too.
-    const cells = p.piece === 'caravan' ? bastionFootprint(c.bastion) : pieceCells(p.piece, p.x, p.y, p.rot);
+    const cells = p.piece === 'caravan' ? bastionFootprint(c.bastion) : cellsOf(p);
     for (const cell of cells) {
       const left = s.breakables?.[cell.y * s.width + cell.x];
       if (left !== undefined) p.hp = Math.min(p.hp, left);
@@ -2779,6 +2784,8 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       const next = raiseCost(p) as { cost: number; level: number };
       pay(c, next.cost);
       p.level = (p.level ?? 1) + 1;
+      // One built before the base grew takes its size now, if it fits where it stands (docs/MAPAS.md phase 6).
+      if (grownFits(c.bastion, p)) delete p.size;
       const lines = PIECE_TEXT[p.piece].levels;
       log(c, `${PIECE_TEXT[p.piece].name}, nivel ${p.level}.${lines?.[p.level - 1] ? ` ${lines[p.level - 1]}` : ''}`, 'good');
       break;
@@ -3855,13 +3862,27 @@ export function migrateCampaign(old: CampaignState): CampaignState {
     // The Bastion's lot (#40): what stood on it comes down, all its cost back.
     c.bastion.level = bastionLevel(c);
     for (const p of [...c.bastion.pieces]) {
-      if (p.piece === 'caravan' || !pieceCells(p.piece, p.x, p.y, p.rot).some((t) => onBastionLot(c.bastion, t.x, t.y))) continue;
+      // (At the size it was built then: docs/MAPAS.md phase 6 made the pieces bigger since.)
+      if (p.piece === 'caravan' || !pieceCells(p.piece, p.x, p.y, p.rot, OLD_PIECE_SIZES[p.piece]).some((t) => onBastionLot(c.bastion, t.x, t.y))) continue;
       const def = PIECES[p.piece];
       c.bastion.pieces = c.bastion.pieces.filter((q) => q !== p);
       c.credits += def.cost.supplies;
       c.parts = (c.parts ?? 0) + (def.cost.parts ?? 0);
       log(c, `Se desmonta ${PIECE_TEXT[p.piece].the} para dejar sitio al Bastión: +${def.cost.supplies} §.`);
     }
+  }
+  if (old.version < 23) {
+    // The base grows to 56 (docs/MAPAS.md phase 6): what was built stays in the middle, at its size; what stood on the
+    // Bastion's bigger lot comes down, all its cost back; the posts move with the ground.
+    const was = c.bastion.width;
+    for (const p of growBase(c.bastion, BASE_MAP, new Rng((c.day * 7919 + c.bastion.nextPiece) >>> 0))) {
+      const def = PIECES[p.piece];
+      c.credits += def.cost.supplies;
+      c.parts = (c.parts ?? 0) + (def.cost.parts ?? 0);
+      log(c, `Se desmonta ${PIECE_TEXT[p.piece].the} para dejar sitio al Bastión: +${def.cost.supplies} §.`);
+    }
+    const o = Math.floor((c.bastion.width - was) / 2);
+    if (o > 0 && c.siegePosts) for (const p of Object.values(c.siegePosts)) [p.x, p.y] = [p.x + o, p.y + o];
   }
   for (const s of c.soldiers) {
     s.skills ??= { ...NO_SKILLS };

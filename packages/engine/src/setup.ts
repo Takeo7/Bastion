@@ -1,9 +1,9 @@
 import { defaultAppearance } from './appearance';
 import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, REACTION_PENALTY, RECOVERY_TURNS, SIEGE, SOLDIER_NAMES, SPARE_MAGS, SQUAD_SIZE, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
-import { ground, toPos } from './grid';
+import { DIRS4, ground, toPos } from './grid';
 import { lightTiles } from './los';
 import { armedTiles, baseLayout, PIECES, type BaseState } from './base';
-import { generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
+import { GEN_SIZE, generatedSize, generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import { STORY } from './lore';
 import { repairStairAccess } from './stairAccess';
@@ -248,6 +248,59 @@ export function missionTurns(kind: MissionKind, size: number): number | null {
   return base + Math.round(kind === 'recovery' || kind === 'rescue' ? extra * 1.5 : extra);
 }
 
+/** The walk a generated map of 48 takes, today (the median of MissionLayout.route over its kinds, 19/10). */
+const ROUTE_48 = 83;
+
+/**
+ * Turns by the walk the map's mission takes (docs/MAPAS.md §6: from the squad to the objective and on to the
+ * evacuation), as missionTurns gives a map whose walk is as long: a 48 map's at ROUTE_48, a 36's at three quarters
+ * of it. A bigger map whose walk is no longer gets no more turns.
+ */
+export function routeTurns(kind: MissionKind, route: number): number | null {
+  return missionTurns(kind, 36 + 48 * (route / ROUTE_48 - 0.75));
+}
+
+/** How long La Lata is at each stage (campaign.ts VEHICLE_SEATS: the 4×4, the van, the lorry, the bus), in tiles, as Arte draws it. */
+const VEHICLE_LENGTH = [3, 4, 6, 9] as const;
+
+/**
+ * The place the map keeps for the bus cut to La Lata's length (Arte, 20/10): its nose where it was, what is behind
+ * it ground again. Never longer than the place.
+ */
+function fitVehicle(layout: MissionLayout, vehicle: number): void {
+  const bus = layout.evacBus;
+  if (!bus) return;
+  const d = DIRS4[bus.heading]!;
+  const along = (p: Vec2) => p.x * d.x + p.y * d.y;
+  const nose = Math.max(...bus.tiles.map(along));
+  const length = VEHICLE_LENGTH[Math.max(0, Math.min(VEHICLE_LENGTH.length - 1, vehicle))]!;
+  const kept = bus.tiles.filter((p) => along(p) > nose - length);
+  for (const p of bus.tiles) {
+    if (kept.includes(p)) continue;
+    layout.tiles[p.y * layout.width + p.x] = 'floor';
+    if (layout.decor) layout.decor[p.y * layout.width + p.x] = 0;
+  }
+  bus.tiles = kept;
+}
+
+/** The side of the map a source makes (a generated town is bigger: mapgen.ts generatedSize), for its groups of the dead. */
+export function sideOf(map: MapSource): number {
+  if (map.kind !== 'generated') return GEN_SIZE;
+  const { width, height } = generatedSize(map.biome, map.site, map.medical === 'hospital');
+  return Math.max(width, height);
+}
+
+/** As many groups as the map's side is longer than 48 (docs/MAPAS.md §6: about 11 at 64 and 12 at 72 at difficulty 2), the first ones again. */
+export function scalePods(plan: TemplateId[][], side: number): TemplateId[][] {
+  const n = Math.round((plan.length * side) / GEN_SIZE);
+  return Array.from({ length: Math.max(plan.length, n) }, (_, i) => [...plan[i % plan.length]!]);
+}
+
+/** A plan's groups for the map they go to (scalePods): what a campaign's operation brings when it is launched. */
+export function podsFor(map: MapSource, plan: TemplateId[][]): TemplateId[][] {
+  return map.kind === 'generated' && plan.length ? scalePods(plan, sideOf(map)) : plan;
+}
+
 /**
  * The dead by difficulty for procedural maps (docs/ZOMBIS-PRIMERO.md): every
  * mission is the dead's, but those where the living hold something
@@ -478,12 +531,13 @@ export function createMission(opts: MissionOptions): GameState {
   const handmade = opts.map.kind === 'handmade' ? MAPS[opts.map.id] : undefined;
   // On a base, it is always a siege (docs/FASE12.md).
   let kind = handmade?.siege || opts.map.kind === 'base' ? 'elimination' : (opts.kind ?? 'elimination');
-  const base = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : missionPods(difficulty, kind, opts.living));
+  const base = opts.pods ?? (handmade ? Object.keys(handmade.pods).sort().map((k) => handmade.pods[k]!) : podsFor(opts.map, missionPods(difficulty, kind, opts.living)));
   // The garrison from the start (the living's, if it is theirs); at night, the dead out in force too (a hand-made map has no room for either).
   const extra = garrison(kind, difficulty, opts.living);
   // A siege by night brings no more than its waves: nobody waits inside the base.
   const plan = [...base, ...(extra ? [extra] : []), ...(opts.night && opts.map.kind !== 'base' ? [nightPod(difficulty)] : [])];
   const layout = missionLayout(opts.map, kind, plan.map((p) => p.length), opts.itemOutdoors, opts.campaignMission?.story === 1, opts.campaignMission?.story === 2, opts.alarm);
+  if (opts.vehicle !== undefined) fitVehicle(layout, opts.vehicle);
   // A map that can't host the objective falls back to elimination.
   const objectiveMissing =
     (kind === 'recovery' && !layout.item) ||
@@ -613,7 +667,7 @@ export function createMission(opts: MissionOptions): GameState {
 
   const mission: MissionState = {
     kind,
-    turnsLeft: kind === 'elimination' ? null : opts.turns ?? missionTurns(kind, Math.max(layout.width, layout.height)),
+    turnsLeft: kind === 'elimination' ? null : opts.turns ?? (layout.route ? routeTurns(kind, layout.route) : missionTurns(kind, Math.max(layout.width, layout.height))),
     item: kind === 'recovery' && layout.item ? { pos: toPos(layout.item), carrier: null, evacuated: false } : null,
     evacZone: kind === 'elimination' ? [] : layout.evacZone,
     ...(kind !== 'elimination' && layout.evacBus ? { evacBus: layout.evacBus } : {}),
@@ -652,6 +706,7 @@ export function createMission(opts: MissionOptions): GameState {
     ...(layout.homes ? { homes: layout.homes.map((h) => ({ ...h, rooms: h.rooms.map((r) => ({ ...r })), ...(h.dressing ? { dressing: h.dressing.map((d) => ({ ...d })) } : {}) })) } : {}),
     ...(layout.decor ? { decor: [...layout.decor] } : {}),
     ...(layout.storeys ? { storeys: [...layout.storeys] } : {}),
+    ...(layout.frame ? { frame: layout.frame.map((f) => ({ ...f })) } : {}),
     ...(layout.levels ? { levels: layout.levels.map((l) => ({ tiles: [...l.tiles], ...(l.decor ? { decor: [...l.decor] } : {}) })) } : {}),
     lights: [],
     units,

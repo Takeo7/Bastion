@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { canStandOn, DIRS4, DIRS8, isWalkable } from '../src/grid';
 import { anchorOf, decorOf, FOOTPRINT, objectTiles } from '../src/decor';
-import { GEN_SIZE, generateLayout, type MissionLayout } from '../src/mapgen';
+import { GEN_SIZE, generateLayout, TOWN_SIZE, type MissionLayout } from '../src/mapgen';
 import { roomAt } from '../src/loot';
 import { computeReach, stepCost } from '../src/path';
 import { Rng } from '../src/rng';
-import { createMission, garrison, MISSION_TURNS, missionTurns, podPlan } from '../src/setup';
+import { createMission, garrison, MISSION_TURNS, missionTurns, podPlan, routeTurns } from '../src/setup';
 import type { Biome, GameState, MissionKind, TileKind, Vec2 } from '../src/types';
 
 const BIOMES: Biome[] = ['city', 'wilds', 'facility'];
@@ -103,14 +103,17 @@ describe('procedural maps', () => {
     expect(a).toEqual(b);
   });
 
-  it('are GEN_SIZE square, with streets or tracks on the ground layer', () => {
+  it("are of their size (a town 64, a hospital's 72 × 64 either way round, the outskirts and the factory 72), with streets or tracks on the ground layer", () => {
     for (const biome of BIOMES) {
       const l = layout(biome, 'elimination', 3);
-      expect(l.width).toBe(GEN_SIZE);
-      expect(l.height).toBe(GEN_SIZE);
-      for (const layer of [l.tiles, l.elev, l.ground!]) expect(layer.length).toBe(GEN_SIZE * GEN_SIZE);
+      // (The outskirts and the factory 72: docs/MAPAS.md phase 5.)
+      const side = biome === 'city' ? TOWN_SIZE : 72;
+      expect([l.width, l.height]).toEqual([side, side]);
+      for (const layer of [l.tiles, l.elev, l.ground!]) expect(layer.length).toBe(side * side);
       expect(l.ground!.filter((g) => g === ROAD).length, biome).toBeGreaterThan(40);
     }
+    const hospital = generateLayout({ biome: 'city', kind: 'rescue', podSizes: [3], seed: 7, medical: 'hospital' });
+    expect([hospital.width, hospital.height].sort()).toEqual([64, 72]);
   });
 
   it('every biome and mission kind places the squad, pods and objective where the squad can reach them', () => {
@@ -133,7 +136,8 @@ describe('procedural maps', () => {
             expect(canStandOn(s.tiles[z.y * s.width + z.x]!), label).toBe(true);
             expect(near(z), `${label}: evac`).toBe(true);
           }
-          if (kind !== 'elimination') expect(s.mission.evacZone.length, label).toBe(9);
+          // A town's or the country's along the bus's doors (docs/MAPAS.md §4.5), 3 × 7; elsewhere, or where there is no room, 3 × 3.
+          if (kind !== 'elimination') expect([9, 21], label).toContain(s.mission.evacZone.length);
           if (kind === 'hack') expect(near(s.mission.terminal!), `${label}: terminal`).toBe(true);
           const aliens = s.units.filter((u) => u.team === 'alien' && !u.objective);
           // The plan, and the living enemy's whole strength from the start (playtest 2026-10-13).
@@ -168,11 +172,14 @@ describe('procedural maps', () => {
         for (const b of areas(l, (i) => l.ground![i] === INDOOR)) {
           expect(b.n, `${biome}/${seed}: ragged building`).toBe(b.w * b.h);
           expect(Math.min(b.w, b.h), `${biome}/${seed}`).toBeGreaterThanOrEqual(7);
-          expect(Math.max(b.w, b.h), `${biome}/${seed}`).toBeLessThanOrEqual(16);
+          // (Up to a factory's hall of 30, docs/MAPAS.md §4.2: halls 18–24, the factory's 24–30, offices up to 18, flats 18.)
+          expect(Math.max(b.w, b.h), `${biome}/${seed}`).toBeLessThanOrEqual(30);
         }
         for (const r of areas(l, (i) => l.ground![i] === INDOOR && !openings.has(l.tiles[i]!))) {
+          // A corridor two wide, or a bathroom two by three (Arturo, 19/10), a lavatory, a pantry.
           const corridor = Math.min(r.w, r.h) === 2 && Math.max(r.w, r.h) >= 6;
-          if (!corridor) expect(Math.min(r.w, r.h), `${biome}/${seed}: room ${r.w}×${r.h}`).toBeGreaterThanOrEqual(3);
+          const small = Math.min(r.w, r.h) === 2 && Math.max(r.w, r.h) <= 5;
+          if (!corridor && !small) expect(Math.min(r.w, r.h), `${biome}/${seed}: room ${r.w}×${r.h}`).toBeGreaterThanOrEqual(3);
           rooms++;
         }
       }
@@ -180,26 +187,28 @@ describe('procedural maps', () => {
     }
   });
 
-  it('start the squad on the ground in a corner, with the objective in the far half and the evac on a side', () => {
+  it("start the squad on the ground (in a corner, or a town's way in), with the objective far and the evac away from it", () => {
     for (const biome of BIOMES) {
       for (const kind of ['recovery', 'sabotage', 'hack', 'rescue'] as MissionKind[]) {
         for (let seed = 1; seed <= 6; seed++) {
           const l = layout(biome, kind, seed);
           const label = `${biome}/${kind}/${seed}`;
           expect(l.spawns.length, label).toBe(8);
-          const corner = { x: l.spawns[0]!.x < GEN_SIZE / 2 ? 0 : GEN_SIZE - 1, y: l.spawns[0]!.y < GEN_SIZE / 2 ? 0 : GEN_SIZE - 1 };
+          const W = l.width;
+          const edge = (p: Vec2) => Math.min(p.x, p.y, W - 1 - p.x, l.height - 1 - p.y);
+          const corner = { x: l.spawns[0]!.x < W / 2 ? 0 : W - 1, y: l.spawns[0]!.y < l.height / 2 ? 0 : l.height - 1 };
           for (const p of l.spawns) {
-            expect(dist(p, corner), label).toBeLessThan(6);
-            expect(l.elev[p.y * GEN_SIZE + p.x], label).toBe(0);
+            // A town's squad comes in by a street from the edge, the country's by its track, a factory's by its road (docs/MAPAS.md §5.10).
+            expect(edge(p), label).toBeLessThan(10);
+            expect(l.elev[p.y * W + p.x], label).toBe(0);
           }
           const squad = centroid(l.spawns);
           const objective = l.item ?? l.objectiveSpot ?? l.terminal;
           expect(objective, label).not.toBeNull();
-          expect(dist(objective!, squad), label).toBeGreaterThan(GEN_SIZE * 0.55);
-          // The evac sits near one of the two side corners, far from the squad.
+          expect(dist(objective!, squad), label).toBeGreaterThan(26);
           const evac = centroid(l.evacZone);
-          expect(dist(evac, squad), label).toBeGreaterThan(GEN_SIZE * 0.5);
-          expect(l.evacZone.every((z) => l.ground![z.y * GEN_SIZE + z.x] !== INDOOR && l.elev[z.y * GEN_SIZE + z.x] === 0), label).toBe(true);
+          expect(dist(evac, squad), label).toBeGreaterThan(20);
+          expect(l.evacZone.every((z) => l.ground![z.y * W + z.x] !== INDOOR && l.elev[z.y * W + z.x] === 0), label).toBe(true);
         }
       }
     }
@@ -211,12 +220,12 @@ describe('procedural maps', () => {
         for (const kind of ['recovery', 'rescue'] as MissionKind[]) {
           const l = layout(biome, kind, seed);
           const spot = (kind === 'recovery' ? l.item : l.objectiveSpot)!;
-          expect(l.ground![spot.y * GEN_SIZE + spot.x], `${biome}/${kind}/${seed}`).toBe(INDOOR);
+          expect(l.ground![spot.y * l.width + spot.x], `${biome}/${kind}/${seed}`).toBe(INDOOR);
         }
         const l = layout(biome, 'hack', seed);
         const t = l.terminal!;
-        expect(l.tiles[t.y * GEN_SIZE + t.x]).toBe('console');
-        const free = DIRS8.filter((d) => canStandOn(l.tiles[(t.y + d.y) * GEN_SIZE + t.x + d.x] ?? 'wall')).length;
+        expect(l.tiles[t.y * l.width + t.x]).toBe('console');
+        const free = DIRS8.filter((d) => canStandOn(l.tiles[(t.y + d.y) * l.width + t.x + d.x] ?? 'wall')).length;
         expect(free, `${biome}/${seed}`).toBeGreaterThanOrEqual(3);
       }
     }
@@ -263,7 +272,7 @@ describe('procedural maps', () => {
       for (let seed = 1; seed <= 6; seed++) {
         const l = layout(biome, seed % 2 ? 'recovery' : 'elimination', seed);
         const label = `${biome}/${seed}`;
-        expect(l.decor!.length).toBe(GEN_SIZE * GEN_SIZE);
+        expect(l.decor!.length).toBe(l.width * l.height);
         expect(generateLayout({ biome, kind: seed % 2 ? 'recovery' : 'elimination', podSizes: [2, 3, 3, 2], seed: seed * 104729 }).decor, label).toEqual(l.decor);
         l.decor!.forEach((code, i) => {
           const look = decorOf(code);
@@ -290,24 +299,20 @@ describe('procedural maps', () => {
     expect(createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(3) }).decor).toBeUndefined();
   });
 
-  it('a facility is entered from the apron half the time; the other half the squad lands inside its fence', () => {
-    let outside = 0;
-    for (let seed = 1; seed <= 24; seed++) {
+  it("a factory: its fenced compound with gates onto the apron, the road in from the squad's side, out by the apron to the edge (docs/MAPAS.md phase 5)", () => {
+    for (let seed = 1; seed <= 8; seed++) {
       const m = layout('facility', 'sabotage', seed);
-      // The corner the squad starts in, and the wall line four to seven tiles away from it.
-      const cx = m.spawns.every((p) => p.x < GEN_SIZE / 2) ? 0 : GEN_SIZE - 1;
-      const cy = m.spawns.every((p) => p.y < GEN_SIZE / 2) ? 0 : GEN_SIZE - 1;
-      const wallAt = (d: number) => {
-        const x = Math.abs(cx - d);
-        const y = Math.abs(cy - d);
-        let n = 0;
-        for (let k = 0; k < GEN_SIZE; k++) n += (m.tiles[k * GEN_SIZE + x] === 'wall' ? 1 : 0) + (m.tiles[y * GEN_SIZE + k] === 'wall' ? 1 : 0);
-        return n;
-      };
-      if ([4, 5, 6, 7].some((d) => wallAt(d) >= 60)) outside++;
+      const label = `${seed}`;
+      // The squad on the road in, a few tiles from the edge; the bus by the apron's way out, far from it.
+      const squad = centroid(m.spawns);
+      expect(Math.min(squad.x, squad.y, m.width - 1 - squad.x, m.height - 1 - squad.y), label).toBeLessThan(8);
+      expect(m.evacBus, label).toBeDefined();
+      expect(dist(centroid(m.evacBus!.tiles), squad), label).toBeGreaterThan(20);
+      // A fence: long runs of wall, with gates in them; and the outline round it all.
+      expect(m.tiles.filter((t) => t === 'wall').length, label).toBeGreaterThan(150);
+      expect(m.frame!.length, label).toBeGreaterThan(0);
+      expect(new Set(m.frame!.map((f) => f.kind)).size, label).toBeGreaterThanOrEqual(2);
     }
-    expect(outside).toBeGreaterThan(4);
-    expect(outside).toBeLessThan(20);
   });
 
   it('generate quickly', () => {
@@ -377,8 +382,14 @@ describe('mission timers', () => {
     expect(missionTurns('sabotage', 48)! - MISSION_TURNS.sabotage!).toBe(2);
     expect(missionTurns('recovery', 48)! - MISSION_TURNS.recovery!).toBe(3);
     expect(missionTurns('rescue', 48)! - MISSION_TURNS.rescue!).toBe(3);
+    // A generated map's, by the walk its mission takes (docs/MAPAS.md §6): a 48 map's today at its median walk, no fewer
+    // than on a 36 map.
+    expect(routeTurns('recovery', 83)).toBe(missionTurns('recovery', GEN_SIZE));
+    expect(routeTurns('hack', 40)).toBe(MISSION_TURNS.hack);
+    expect(routeTurns('sabotage', 120)!).toBeGreaterThan(missionTurns('sabotage', GEN_SIZE)!);
     const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 5 }, slots: [0], rng: new Rng(5), kind: 'recovery' });
-    expect(s.mission.turnsLeft).toBe(missionTurns('recovery', GEN_SIZE));
+    const route = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [3], seed: 5 }).route!;
+    expect(s.mission.turnsLeft).toBe(routeTurns('recovery', route));
     const plaza = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(5), kind: 'recovery' });
     expect(plaza.mission.turnsLeft).toBe(MISSION_TURNS.recovery);
   });

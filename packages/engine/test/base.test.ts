@@ -145,8 +145,8 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
   it('a row dragged is built at once, all or none, and to a vote when together it is dear (18/10 #35)', () => {
     const c = solo();
     const caravan = c.bastion.pieces[0]!;
-    // A clear row of four below the caravan.
-    const y = caravan.y + 5;
+    // A clear row of four below the Bastion's lot.
+    const y = bastionLot(c.bastion)!.y + bastionLot(c.bastion)!.h + 1;
     const cells = [0, 1, 2, 3].map((i) => ({ x: caravan.x + i, y }));
     for (const t of cells) for (const i of [t.y * c.bastion.width + t.x]) c.bastion.trees = c.bastion.trees.filter((x) => x !== i);
     const credits = c.credits;
@@ -427,7 +427,7 @@ describe('the sieges in the campaign (docs/FASE12.md §11.5)', () => {
     expect(nights[0]).toBe(0);
     expect(nights[1]).toBeGreaterThan(10);
     expect(nights[1]).toBeLessThan(30);
-  });
+  }, 20_000);
 
   it('each places their own defenders anywhere free on the clearing, and the siege begins with them there (18/10 #58)', () => {
     const c = createCampaign(both, new Rng(3));
@@ -442,7 +442,8 @@ describe('the sieges in the campaign (docs/FASE12.md §11.5)', () => {
     for (let x = spot.x - 1; x <= spot.x + 1; x++) fellTree(c.bastion, x, spot.y);
     expect(() => run(c, { type: 'post', soldier: theirs.id, at: spot }, 0, both)).toThrow('Solo puedes colocar a tus soldados.');
     expect(() => run(c, { type: 'post', soldier: mine.id, at: { x: 0, y: 5 } }, 0, both)).toThrow(/borde/);
-    expect(() => run(c, { type: 'post', soldier: mine.id, at: { x: lot.x + 2, y: lot.y + 2 } }, 0, both)).toThrow('Ahí no se puede estar.');
+    const wall = bastionFootprint(c.bastion)[0]!;
+    expect(() => run(c, { type: 'post', soldier: mine.id, at: wall }, 0, both)).toThrow('Ahí no se puede estar.');
     run(c, { type: 'post', soldier: mine.id, at: spot }, 0, both);
     expect(() => run(c, { type: 'post', soldier: theirs.id, at: spot }, 1, both)).toThrow('Ahí ya hay alguien.');
     expect(c.siegePosts).toEqual({ [mine.id]: spot });

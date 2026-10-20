@@ -60,6 +60,10 @@ const SHAPES: Partial<Record<DecorKind, (readonly [number, number])[]>> = {
   container: [FOOTPRINT.container],
   bed: [FOOTPRINT.bed, FOOTPRINT.doubleBed],
   sofa: [FOOTPRINT.sofa],
+  // A garden's (docs/MAPAS.md phase 4, Arte): the shed, the washing line, the vegetable patch.
+  shed: [FOOTPRINT.shed],
+  washingLine: [FOOTPRINT.washingLine],
+  vegPatch: [FOOTPRINT.vegPatch],
   bathtub: [FOOTPRINT.bathtub],
   table: [FOOTPRINT.table],
   hospitalBed: [FOOTPRINT.hospitalBed],
@@ -211,7 +215,9 @@ describe('the proportions of the generated maps (docs/MAPAS.md)', () => {
     for (const { t, l, label } of MAPS) {
       // (A small clinic's waiting room in front is a lobby two tiles deep.)
       for (const room of [...(l.homes ?? []).flatMap((h) => h.rooms), ...(l.medical ?? []).flatMap((m) => m.rooms ?? [])]) {
-        expect(Math.min(room.w, room.h), `${label}: ${room.use} ${room.w} × ${room.h}`).toBeGreaterThanOrEqual(room.use === 'reception' ? 2 : 3);
+        // (A hall with the stairs is two across or more, docs/MAPAS.md §4.3: «recibidor con escalera 2 × 5 – 3 × 6»; a
+        // bathroom two by three, decided by Arturo 19/10.)
+        expect(Math.min(room.w, room.h), `${label}: ${room.use} ${room.w} × ${room.h}`).toBeGreaterThanOrEqual(['reception', 'hall', 'bath', 'toilet', 'pantry'].includes(room.use) ? 2 : 3);
       }
       const cover = l.tiles.filter((k) => k === 'low' || k === 'high').length / l.tiles.length;
       expect(cover, `${label}: cover`).toBeGreaterThanOrEqual(t.cover[0]);
@@ -238,6 +244,85 @@ describe('the proportions of the generated maps (docs/MAPAS.md)', () => {
       expect(walk, `${label}: the objective out of reach`).toBeDefined();
       expect(walk!, `${label}: walk`).toBeGreaterThanOrEqual(20);
       expect(walk!, `${label}: walk`).toBeLessThanOrEqual(90);
+    }
+  });
+  it('phase 4: every courtyard has two ways out or more; every room a way in that is no window', () => {
+    let courtyards = 0;
+    for (const { l, label } of MAPS) {
+      const W = l.width;
+      const walkable = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < l.height && isWalkable(l.tiles[y * W + x]!) && l.ground?.[y * W + x] !== 4;
+      for (const r of l.courtyards ?? []) {
+        courtyards++;
+        // The walkable tiles just outside it, beside walkable ground inside it: in runs, each a way out.
+        const inside = (x: number, y: number) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
+        const gates = new Set<number>();
+        for (let y = r.y - 1; y <= r.y + r.h; y++) {
+          for (let x = r.x - 1; x <= r.x + r.w; x++) {
+            if (inside(x, y) || !walkable(x, y) || l.tiles[y * W + x] === 'window' || l.tiles[y * W + x] === 'windowBroken') continue;
+            if (DIRS4.some((d) => inside(x + d.x, y + d.y) && walkable(x + d.x, y + d.y))) gates.add(y * W + x);
+          }
+        }
+        let runs = 0;
+        const seen = new Set<number>();
+        for (const g of gates) {
+          if (seen.has(g)) continue;
+          runs++;
+          const queue = [g];
+          seen.add(g);
+          for (let k = 0; k < queue.length; k++) {
+            const i = queue[k]!;
+            for (const d of DIRS8) {
+              const j = i + d.y * W + d.x;
+              if (!gates.has(j) || seen.has(j) || Math.abs((j % W) - (i % W)) > 1) continue;
+              seen.add(j);
+              queue.push(j);
+            }
+          }
+        }
+        expect(runs, `${label}: courtyard ${r.x},${r.y} ${r.w} × ${r.h}`).toBeGreaterThanOrEqual(2);
+      }
+      // A house's room: on its ring, a door or an open way (a hall, an open plan), not only windows.
+      for (const room of [...(l.homes ?? []).flatMap((h) => h.rooms), ...(l.medical ?? []).flatMap((m) => m.rooms ?? [])]) {
+        const layer = room.z ? l.levels![room.z - 1]!.tiles : l.tiles;
+        const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < W && y < l.height ? layer[y * W + x] ?? null : null);
+        let way = false;
+        for (let y = room.y - 1; y <= room.y + room.h && !way; y++) {
+          for (let x = room.x - 1; x <= room.x + room.w && !way; x++) {
+            if (x >= room.x && y >= room.y && x < room.x + room.w && y < room.y + room.h) continue;
+            const k = at(x, y);
+            way = k === 'door' || k === 'doorOpen' || k === 'ladder' || (k !== null && isWalkable(k) && k !== 'window' && k !== 'windowBroken');
+          }
+        }
+        expect(way, `${label}: ${room.use} ${room.x},${room.y},${room.z} only by a window`).toBe(true);
+      }
+    }
+    expect(courtyards).toBeGreaterThanOrEqual(0);
+  });
+
+  it("phase 4: a window looks out, never onto another room nor a neighbour's wall; a house's and a clinic's rooms lie in it", () => {
+    for (const { l, label } of MAPS) {
+      const W = l.width;
+      for (const [z, tiles] of [[0, l.tiles] as const, ...(l.levels ?? []).map((v, k) => [k + 1, v.tiles] as const)]) {
+        tiles.forEach((k, i) => {
+          if (k !== 'window' && k !== 'windowBroken') return;
+          const x = i % W;
+          const y = Math.floor(i / W);
+          // Out of doors on one side at least: open ground, a street or the outline below; no slab up a storey.
+          const out = DIRS4.some((d) => {
+            const j = (y + d.y) * W + x + d.x;
+            if (x + d.x < 0 || y + d.y < 0 || x + d.x >= W || y + d.y >= l.height) return true;
+            return z === 0 ? l.ground?.[j] !== 2 : tiles[j] === null || tiles[j] === undefined;
+          });
+          expect(out, `${label}: a window at ${x},${y},${z} between two insides`).toBe(true);
+        });
+      }
+      for (const site of [...(l.homes ?? []), ...(l.medical ?? [])]) {
+        for (const room of (site.rooms ?? []) as { x: number; y: number; w: number; h: number; z: number }[]) {
+          const inSite = room.x >= site.x && room.y >= site.y && room.x + room.w <= site.x + site.w && room.y + room.h <= site.y + site.h;
+          expect(inSite, `${label}: room ${room.x},${room.y},${room.z} outside its building ${site.x},${site.y}`).toBe(true);
+          expect(room.z === 0 || !!l.levels?.[room.z - 1], `${label}: room ${room.x},${room.y} on storey ${room.z} with no storey`).toBe(true);
+        }
+      }
     }
   });
 });

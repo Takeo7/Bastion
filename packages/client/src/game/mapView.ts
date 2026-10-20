@@ -7,17 +7,19 @@ import { atlasRect, mapAtlasTexture } from './mapAtlas';
 import { BuildingsView, floorFadePatch, piecesLoaded, preloadPieces, RAISED_FLATS, RAISED_PLATFORM, RAISED_TOWER, syntyPiece, type Focus } from './buildings';
 import { STOREY } from './coords';
 import { dressEdges, dressStreets } from './dressing';
+import { dressFrame, SHAPE_GEOMETRY, type FrameArt, type Shape } from './frameArt';
 import { NIGHT, NightLights, type Glow } from './night';
 import { unitPosNow } from './unitViews';
 import { beforeNextFrame, shadowsChanged } from './renderer';
 import { ExploredMemory } from './explored';
 import { FogOfWar } from './fogOfWar';
-import { GroundMap, scatterCover } from './ground';
+import { FLOOR, GroundMap, scatterCover } from './ground';
 import { inwards, madeAs, towersOf, wearOf, type Wear } from './siegeDressing';
 import { DRAWN, drawPiece, pieceKey, pieceMap, pieceWear, terrainOf, type PieceMap } from './basePieces';
 import { SnowCover, snowyMission, snowTexture } from './snow';
 import { DroppedView } from './dropped';
 import { furnishBarns, furnishHomes, furnishOwnTiles, furnishShops, shopTradeIn } from './homeFurnishing';
+import { aimTreeFade, treeFadePatch, TRUNK } from './treeFade';
 import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
 import { EvacBus } from './evacBus';
 import { medicalDetails, medicalWallPatch } from './medicalDetails';
@@ -191,7 +193,7 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
       // Under the siren's car (syntyFigures.ts SirenRig draws it): nothing of its own, rubble if blown down.
       return low ? 'rubble' : null;
     case 'silo':
-      // Drawn whole over its 2×2 block (block); what a blast leaves of one is rubble.
+      // Drawn whole over its block (block: 3×3, 2×2 in a mission of before); what a blast leaves of one is rubble.
       return low ? 'rubble' : null;
     // What stands on a tile of its own (engine furnishing.ts, Arturo 19/10): homeFurnishing.ts and dressing.ts draw it.
     case 'armchair':
@@ -214,6 +216,11 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'part':
       // Another tile of an object over several (docs/MAPAS.md, phase 1): its anchor's model covers it (MapView thingOf).
       return null;
+    // A block's back gardens (docs/MAPAS.md §5.4): drawn whole over their tiles (drawThing).
+    case 'shed':
+    case 'washingLine':
+    case 'vegPatch':
+      return low ? 'rubble' : null;
   }
 }
 
@@ -225,7 +232,7 @@ const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainC
 /**
  * The scenarios' things that stand over several tiles (#25), and what each of
  * their tiles is: a lorry (2×4), a container (2×5), a water tower (2×2, its
- * legs), a factory's silo (2×2), a log pile (1×2 or 2×2); and a square's park
+ * legs), a factory's silo (3×3), a log pile (1×2 or 2×2); and a square's park
  * bench (1×2). The generator never lets two touch, so a block is the tiles of
  * its kind joined to each other.
  */
@@ -346,6 +353,26 @@ class Layer {
   }
 }
 
+/** A tree's part: its instances carry where the tree stands and its trunk's top (aTree, treeFade.ts), for its crown to fade. */
+class TreeLayer {
+  constructor(
+    private readonly batch: StaticBatch,
+    private readonly geometry: THREE.BufferGeometry,
+    private readonly material: THREE.Material,
+    private readonly shadows: boolean,
+    private readonly uv: UvRect | null,
+  ) {}
+
+  /** The part at `matrix`, of the tree standing at `at`'s place. */
+  addAt(matrix: THREE.Matrix4, at: THREE.Matrix4): void {
+    const e = at.elements;
+    this.batch.add(this.geometry, this.material, matrix, this.shadows, { aTree: [e[12]!, e[14]!, e[13]! + TRUNK] }, false, this.uv ?? undefined);
+  }
+}
+
+/** The trees whose crowns are drawn at their size and fade away over what the player looks at (19/10, MAPAS.md §4.7). */
+const CROWNS = new Set<PropId>(['streetTree', 'tree', 'treePine', 'treeDead', 'pineLarge', 'pineLarge2', 'pineDead']);
+
 /** Props that darken no ground: slim (poles, wires, a sign) or overhead (a tree's crown would stand in for the ground under it). */
 const NO_OCCLUSION = new Set<PropId>(['streetLight', 'powerPole', 'powerLine', 'stopSign', 'tree', 'treePine', 'treeDead', 'streetTree']);
 
@@ -434,6 +461,8 @@ export class MapView {
   private readonly canopyGroup = new THREE.Group();
   private canopies: { group: THREE.Group; material: THREE.MeshStandardMaterial; x0: number; z0: number; x1: number; z1: number; shown: number }[] = [];
   private canopyMaterials: THREE.MeshStandardMaterial[] = [];
+  /** What closes the map round what is played (frameArt.ts), worked out once a map: it never changes. */
+  private frameArt: FrameArt | null = null;
   /** La Mula by the evacuation (evacBus.ts), on maps whose mission has its bay (mission.evacBus). */
   private bus: EvacBus | null = null;
   /** How far La Mula drives to be gone (placeBus); null without one. */
@@ -451,6 +480,7 @@ export class MapView {
   build(s: GameState): void {
     this.width = s.width;
     this.canopyMaterials = [];
+    this.frameArt = null;
     this.explored.begin(s);
     this.shown = s;
     this.wearLeft = NaN;
@@ -458,6 +488,8 @@ export class MapView {
     this.fresh = true;
     this.fog.resize(s.width, s.height);
     this.fogFloor = 0;
+    // The outline round what is played (docs/MAPAS.md §5.10) is the map's backdrop: never under the fog.
+    this.fog.setOpen(s.frame?.length && s.ground ? Uint8Array.from(s.ground, (g) => (g === 4 ? 1 : 0)) : null);
     this.fog.set([], this.explored.tiles, true);
     this.fog.setFloors(s.elev);
     this.pieces = pieceMap(s);
@@ -512,6 +544,18 @@ export class MapView {
     };
   }
 
+  /** The outline's shapes' material (frameArt.ts: flat colours per vertex), or its canal's water; one per map. */
+  private frameMaterial(kit: Kit, water: boolean): THREE.Material {
+    const key = (water ? 'outline:water' : 'outline') as AtlasId;
+    let m = kit.atlas.get(key);
+    if (!m) {
+      m = this.own(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: water ? 0.22 : 0.92, metalness: water ? 0.1 : 0, flatShading: !water }));
+      if (!water) this.snow?.patch(m as THREE.MeshStandardMaterial);
+      kit.atlas.set(key, m);
+    }
+    return m;
+  }
+
   private disposeKit(): void {
     this.kit?.batch.dispose();
     for (const m of this.materials) m.dispose();
@@ -549,8 +593,9 @@ export class MapView {
     const slabs = new Layer(batch, kit.slab, kit.ground, false, true, true);
     const hills = s.biome === 'wilds';
 
-    // Synty props: their meshes, each on its pack's atlas.
+    // Synty props: their meshes, each on its pack's atlas; the trees' apart (their crowns fade).
     const syntyLayers = new Map<string, Layer[]>();
+    const treeLayers = new Map<string, TreeLayer[]>();
     /**
      * The props' material: one for every pack in the packed texture (mapAtlas.ts: a draw for all of them), else the
      * pack's own. What stands on a building's storey fades with the floors above the one in view.
@@ -567,6 +612,19 @@ export class MapView {
       }
       return m;
     };
+    /** A tree's material: its pack's, its crown fading over what the player looks at (treeFade.ts); out of doors, no cutaway. */
+    const treeMaterial = (id: AtlasId) => {
+      const key = `tree:${atlasRect(id) ? 'packed' : id}`;
+      let m = kit.atlas.get(key as AtlasId);
+      if (!m) {
+        m = new THREE.MeshStandardMaterial({ map: atlasRect(id) ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 });
+        this.snow?.patch(m);
+        treeFadePatch(m);
+        this.own(m);
+        kit.atlas.set(key as AtlasId, m);
+      }
+      return m;
+    };
     /** Where the props being placed stand (a building's storey: they fade with it; else out of doors). */
     const floor: FloorTag = { building: -1, level: 0 };
     /** A layer for one part of a prop, its UVs moved into its atlas's place. */
@@ -580,6 +638,13 @@ export class MapView {
         return false;
       }
       const key = shadows ? id : `${id}:flat`;
+      if (CROWNS.has(id)) {
+        let trees = treeLayers.get(key);
+        if (!trees) treeLayers.set(key, (trees = prop.map((part) => new TreeLayer(batch, part.geometry, treeMaterial(part.atlas), shadows, atlasRect(part.atlas)))));
+        // Each part knows where the tree stands (the matrix's place), not where the part sits.
+        prop.forEach((part, k) => trees[k]!.addAt(matrix.clone().multiply(part.matrix), matrix));
+        return true;
+      }
       let layers = syntyLayers.get(key);
       const occlude = shadows && !NO_OCCLUSION.has(id);
       if (!layers) syntyLayers.set(key, (layers = prop.map((part) => partLayer(part, shadows, occlude))));
@@ -838,10 +903,12 @@ export class MapView {
         case 'waterTower':
           addSyntyId('waterTower', placed(cx, base, cz, 1, 1, 1, Math.floor(r * 4) * (Math.PI / 2)));
           break;
-        case 'silo':
-          // Its ladder any way round.
-          addSynty('silo', r, placed(cx, base, cz, 1, 1, 1, Math.floor(hash(b.x0, b.y0, 32) * 4) * (Math.PI / 2)));
+        case 'silo': {
+          // Its ladder any way round; as wide as its block (the model fits 2: a silo of before).
+          const k = Math.min(b.w, b.h) / 2;
+          addSynty('silo', r, placed(cx, base, cz, k, k, k, Math.floor(hash(b.x0, b.y0, 32) * 4) * (Math.PI / 2)));
           break;
+        }
         case 'bench':
           // Along its two tiles, its seat the way it faces; a broken one now and then.
           addSyntyId(r < 0.3 ? 'parkBenchBroken' : 'parkBench', placed(cx, base, cz, 1, 1, 1, yaw));
@@ -910,6 +977,23 @@ export class MapView {
         case 'gurney':
           addSyntyId('gurney', fitted('gurney', cx, base, cz, yaw));
           break;
+        case 'shed':
+        case 'washingLine':
+        case 'vegPatch': {
+          // A block's back garden (docs/MAPAS.md §5.4): a lean-to, a washing line, a raised bed, each over its tiles,
+          // its long side along theirs; the lean-to and the line as they are made, scaled whole, the bed to its tiles.
+          const id: PropId = t.kind === 'shed' ? 'bLeanTo' : t.kind === 'washingLine' ? 'bWashingLine' : 'bGardenBed';
+          const size = sizeOf(id);
+          const alongX = size.x >= size.z;
+          const [ml, ms] = alongX ? [size.x, size.z] : [size.z, size.x];
+          const fl = (Math.max(t.w, t.h) - 0.2) / ml;
+          const fs = (Math.min(t.w, t.h) - 0.2) / ms;
+          const k = t.kind === 'washingLine' ? fl : Math.min(fl, fs);
+          const [sx, sy, sz] = t.kind === 'vegPatch' ? (alongX ? [fl, 1, fs] : [fs, 1, fl]) : [k, k, k];
+          const turn = (alongX === t.w >= t.h ? 0 : Math.PI / 2) + (hash(ax, ay, 3) < 0.5 ? 0 : Math.PI);
+          addSyntyId(id, placed(cx, base, cz, sx, sy, sz, turn));
+          break;
+        }
         case 'sofa':
         case 'table':
         case 'bathtub': {
@@ -1194,9 +1278,9 @@ export class MapView {
         const floor = e > 0 ? (hills ? pal.ground : pal.roof) : [pal.ground, pal.street, pal.floor][ground.kinds[i]!] ?? pal.ground;
         const raised = buildings.plan.raised[i] ?? 0;
         const covered = !!buildings.plan.floor[i] || raised === RAISED_FLATS || raised === RAISED_PLATFORM;
-        // Under a watchtower's deck, the ground.
+        // Under a watchtower's deck, the ground; over a canal's water (the outline's river), none.
         if (raised === RAISED_TOWER) slabs.add(placed(cx, -0.05, cz, 1, 1, 1), pal.ground);
-        else if (!covered) slabs.add(placed(cx, base - 0.05, cz, 1, 1, 1), floor);
+        else if (!covered && ground.kinds[i] !== FLOOR.WATER) slabs.add(placed(cx, base - 0.05, cz, 1, 1, 1), floor);
         // A siege's door knocked about: grit and flakes at its foot, out where the dead strike it.
         if (siege && (kind === 'door' || kind === 'doorOpen') && wear.get(i)) {
           const into = inwards(s, x, y);
@@ -1384,15 +1468,28 @@ export class MapView {
       }
     }
 
-    // Beyond the edge: wrecks on the streets that leave the map (off the baked occlusion: they darken no ground).
-    for (const d of dressEdges(s, ground)) {
+    // Beyond the edge: wrecks on the streets that leave the map (off the baked occlusion: they darken no ground). With an
+    // outline (docs/MAPAS.md §5.10), what shuts the map round what is played, and on past the edge, instead.
+    const frame = s.frame?.length ? (this.frameArt ??= dressFrame(s)) : null;
+    if (frame) {
+      // Its own shapes, in flat colours (its water apart): no shadow on the ground's baked occlusion.
+      const shapeLayers = new Map<Shape['form'], Layer>();
+      for (const shape of frame.shapes) {
+        let l = shapeLayers.get(shape.form);
+        if (!l) shapeLayers.set(shape.form, (l = new Layer(batch, SHAPE_GEOMETRY[shape.form], this.frameMaterial(kit, shape.form === 'water'), shape.form !== 'water', true, false)));
+        l.add(shape.matrix, shape.color);
+      }
+    }
+    for (const d of frame ? frame.props : dressEdges(s, ground)) {
       const prop = syntyProp(d.id);
       if (!prop) {
         this.waitingForProps = true;
         continue;
       }
-      let layers = syntyLayers.get(`edge:${d.id}`);
-      if (!layers) syntyLayers.set(`edge:${d.id}`, (layers = prop.map((part) => partLayer(part, true, false))));
+      // A shadow only from what says it casts one (the wood deep in the outline doesn't: frameArt.ts).
+      const key = `edge:${d.id}${d.cast ? '' : ':flat'}`;
+      let layers = syntyLayers.get(key);
+      if (!layers) syntyLayers.set(key, (layers = prop.map((part) => partLayer(part, d.cast, false))));
       prop.forEach((part, k) => layers[k]!.add(d.matrix.clone().multiply(part.matrix)));
     }
 
@@ -1683,7 +1780,7 @@ export class MapView {
       at = e.at;
       d = e.x ? { x: e.along, y: 0 } : { x: 0, y: e.along };
     }
-    bus.park(at, Math.atan2(d.x, d.y), zone, !s.mission.evacDone);
+    bus.park(at, Math.atan2(d.x, d.y), zone, !s.mission.evacDone, bay?.tiles.length ? bay.tiles.length / 2 : 0);
     // How far it drives to be gone: past the map's edge (or its corner) the way it heads, its whole length.
     const ahead = d.x > 0 ? s.width - at.x : d.x < 0 ? at.x : d.y > 0 ? s.height - at.z : at.z;
     this.busWay = Math.max(0, ahead) + bus.length / 2 + 1;
@@ -1777,6 +1874,16 @@ export class MapView {
         c.material.needsUpdate = true;
       }
     }
+  }
+
+  /** The trees' crowns fade over what the player looks at (treeFade.ts): the selected soldier, the target, the tile under the cursor. */
+  private fadeCrowns(): void {
+    const focus = this.focus?.() ?? null;
+    const at = (id: string | null | undefined) => {
+      const p = new THREE.Vector3();
+      return id && unitPosNow(id, p) ? p : null;
+    };
+    aimTreeFade([at(focus?.selected), at(focus?.target), focus?.hover ? new THREE.Vector3(focus.hover.x + 0.5, 0, focus.hover.y + 0.5) : null], this.camera);
   }
 
   /** La Mula goes (the engine's evacDeparted): doors, lights, and away along its heading off the map; resolves once it is gone. */
@@ -1876,6 +1983,7 @@ export class MapView {
     this.markLoot();
     if (this.shown) this.dropped.update(this.shown, (p) => this.isCutAway(p));
     this.fadeCanopies(dt);
+    this.fadeCrowns();
   }
 
   isVisible(x: number, y: number): boolean {

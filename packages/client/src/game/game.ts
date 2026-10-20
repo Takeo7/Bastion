@@ -196,6 +196,7 @@ import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
 import { piecesLoaded } from './buildings';
 import { MapView } from './mapView';
+import { playBounds } from './outline';
 import { Overlays, type MoveTile, type SpotKind } from './overlays';
 import { cycleTileLook } from './tileLooks';
 import { Renderer } from './renderer';
@@ -205,7 +206,7 @@ import { setCombatRate, setHurry, timeRate, wait } from './tween';
 import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
 import { playArrival } from './arrivals';
-import { planWalks, type Walker, type WalkPlan } from './walkPlan';
+import { planHasted, type Walker, type WalkPlan } from './walkPlan';
 import { graphics } from '../settings';
 import { soldierPortrait } from '../strategy/portraits';
 import { skillsOf, treePanel } from '../strategy/skillSheet';
@@ -891,7 +892,7 @@ export class Game {
     }
     this.overlays.setNight(!!s.mission.night);
     this.renderer.fitMap(s.width, s.height);
-    this.rig.setBounds(s.width, s.height);
+    this.rig.setBounds(s.width, s.height, playBounds(s));
     setTerrain(this.view);
     this.maxLevel = topLevel(s);
     this.level = 0;
@@ -1592,12 +1593,14 @@ export class Game {
     const v = this.view;
     const ids: string[] = [];
     const walkers: Walker[] = [];
+    const paced: ((pace: number) => number[])[] = [];
     for (const q of walks) {
       const e = q.e as Extract<GameEvent, { t: 'moved' }>;
       const u = getUnit(v, e.unit);
       if (!u || !e.path.length || !(this.shownToSquad(u) || e.path.some((p) => this.mapView.isVisible(p.x, p.y)))) continue;
       const tiles = [toPos(u.pos), ...e.path.map(toPos)];
       ids.push(u.id);
+      paced.push((pace) => this.units.stepSeconds(u.id, u.pos, e.path, e.ap, pace));
       walkers.push({
         tiles: tiles.map((p) => nodeOf(v, p)),
         steps: this.units.stepSeconds(u.id, u.pos, e.path, e.ap, WALKERS_PACE),
@@ -1607,7 +1610,8 @@ export class Game {
         }),
       });
     }
-    const plans = planWalks(walkers);
+    // Quicker if they would take too long all together (planHasted): each step as walk() plays it at that pace.
+    const plans = planHasted((haste) => (haste === 1 ? walkers : walkers.map((w, i) => ({ ...w, steps: paced[i]!(WALKERS_PACE * haste) }))));
     return new Map(ids.map((id, i) => [id, plans[i]!]));
   }
 
@@ -1719,7 +1723,7 @@ export class Game {
             if (steps++ % 2 === 0) this.sfx.step(u, p);
           },
           e.ap,
-          this.grouped ? WALKERS_PACE : 1,
+          this.grouped ? WALKERS_PACE * (this.groupPlans?.get(u.id)?.haste ?? 1) : 1,
           this.groupPlans?.get(u.id)?.waits,
           this.groupPlans?.get(u.id)?.passes.slice(1),
         );
@@ -1865,7 +1869,7 @@ export class Game {
         const target = getUnit(v, e.target)!;
         look(this.units.worldPos(u.id).lerp(this.units.worldPos(target.id), 0.5));
         const chest = this.units.chestPos(target.id);
-        await this.units.raiseWeapon(u.id, chest);
+        const aim = await this.units.raiseWeapon(u.id, chest);
         for (let i = 0; i < 8; i++) {
           const from = this.units.muzzlePos(u.id);
           this.units.recoil(u.id);
@@ -1877,7 +1881,7 @@ export class Game {
         }
         this.fx.floatText(chest, 'SUPRIMIDO', 'warn');
         this.hud.log(`${u.name} suprime a ${target.name}`, '#ffc93a');
-        void wait(0.8).then(() => this.units.lowerWeapon(u.id));
+        void wait(0.8).then(() => this.units.lowerWeapon(u.id, aim));
         return;
       }
       case 'suppressionEnded':
@@ -2547,7 +2551,7 @@ export class Game {
       const out = this.units.clearFor(e.from, shooter.id) ? beside : shooterPos.clone().add(beside.sub(shooterPos).setY(0).setLength(LEAN_OUT));
       await this.units.slide(shooter.id, out, 0.22, false);
     }
-    await this.units.raiseWeapon(shooter.id, targetPos, firesSidearm(shooter, e.ability));
+    const aim = await this.units.raiseWeapon(shooter.id, targetPos, firesSidearm(shooter, e.ability));
     await wait(cam() ? 0.25 : 0.08);
 
     const heavy = weapon.apCost > 1;
@@ -2578,7 +2582,7 @@ export class Game {
     }
     // Lower the weapon (and step back into cover) once the outcome has been seen.
     void wait(1.1).then(() => {
-      this.units.lowerWeapon(shooter.id);
+      this.units.lowerWeapon(shooter.id, aim);
       if (stepOut) void this.units.slide(shooter.id, tileToWorld(shooter.pos), 0.25);
     });
   }

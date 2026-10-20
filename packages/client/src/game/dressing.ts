@@ -41,7 +41,7 @@ const up = new THREE.Vector3(0, 1, 0);
 const q = new THREE.Quaternion();
 
 /** A prop at (x, y, z), its own +x turned towards (dx, dz), `scale` along its +x (a stretched wire). */
-function placed(id: PropId, x: number, y: number, z: number, dx: number, dz: number, cast: boolean, scale = 1, size = 1): Dressing {
+export function placed(id: PropId, x: number, y: number, z: number, dx: number, dz: number, cast: boolean, scale = 1, size = 1): Dressing {
   q.setFromAxisAngle(up, Math.atan2(-dz, dx));
   return { id, cast, matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(scale * size, size, size)) };
 }
@@ -177,14 +177,14 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
     }
   }
 
-  // The engine's hydrants and mailboxes, on the pavement by the street: near the tile's corner, as they always stood.
+  // The engine's hydrants and mailboxes, on the pavement by the street: towards the kerb in the middle of their tile,
+  // a little narrowed (19/10: by its corner, it stood in the way of a step past it on the diagonal).
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const look = tile(x, y) === 'low' ? decorOf(s.decor?.[y * w + x]) : null;
       if (look?.kind !== 'hydrant' && look?.kind !== 'mailbox') continue;
       const d = DIRS4[look.facing]!;
-      const along = { x: -d.y, y: d.x };
-      if (dress(x, y)) out.push(placed(look.kind, x + 0.5 + d.x * 0.36 - along.x * 0.36, 0, y + 0.5 + d.y * 0.36 - along.y * 0.36, -d.x, -d.y, true));
+      if (dress(x, y)) out.push(placed(look.kind, x + 0.5 + d.x * 0.18, 0, y + 0.5 + d.y * 0.18, -d.x, -d.y, true, 1, 0.85));
       take(x, y);
     }
   }
@@ -253,7 +253,7 @@ export function dressStreets(s: GameState, ground: GroundMap, density = 1, lamps
  * What shuts a street where it leaves the map, from tile `a` to tile `b`
  * along the edge (both at the edge), just past it (`out`): picked by `r`.
  */
-function shut(a: Vec2, b: Vec2, out: Vec2, kind: number, r: (salt: number) => number): Dressing[] {
+export function shut(a: Vec2, b: Vec2, out: Vec2, kind: number, r: (salt: number) => number): Dressing[] {
   const list: Dressing[] = [];
   const along = { x: Math.sign(b.x - a.x), y: Math.sign(b.y - a.y) };
   const width = Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + 1;
@@ -304,7 +304,7 @@ function shut(a: Vec2, b: Vec2, out: Vec2, kind: number, r: (salt: number) => nu
  * `ends` tiles more at each end (a corner's square, or a little over the
  * next stretch).
  */
-function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, number], r: (salt: number) => number, look: EdgeLook = { wired: false, pines: false }): Dressing[] {
+export function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, number], r: (salt: number) => number, look: EdgeLook = { wired: false, pines: false }): Dressing[] {
   const list: Dressing[] = [];
   const along = { x: Math.sign(b.x - a.x) || Math.abs(out.y), y: Math.sign(b.y - a.y) || Math.abs(out.x) };
   const from = -0.5 - ends[0];
@@ -443,7 +443,7 @@ function fenceOff(a: Vec2, b: Vec2, out: Vec2, kind: number, ends: [number, numb
 }
 
 /** How a biome's edges are walled off: a facility's with razor wire, the forest stop's woods of pines. */
-interface EdgeLook {
+export interface EdgeLook {
   wired: boolean;
   pines: boolean;
 }
@@ -464,8 +464,9 @@ interface EdgeLook {
  * across the tracks.
  */
 export function dressEdges(s: GameState, ground: GroundMap): Dressing[] {
-  // The base's clearing goes on into its pines, and the dead come in by its tracks.
-  if (s.base) return [];
+  // The base's clearing goes on into its pines, and the dead come in by its tracks; an outline (docs/MAPAS.md §5.10)
+  // shuts the map itself, and its entrances stay open to the edge (frameArt.ts).
+  if (s.base || s.frame?.length) return [];
   const city = s.biome === 'city';
   const wilds = s.biome === 'wilds';
   const look: EdgeLook = { wired: s.biome === 'facility', pines: s.site === 'roadside' };

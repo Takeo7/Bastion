@@ -404,13 +404,14 @@ export class Renderer {
     const look = this.sun.target.position.clone().sub(this.sun.position).normalize();
     const right = new THREE.Vector3(0, 1, 0).cross(look.clone().negate()).normalize();
     const up = look.clone().negate().cross(right);
-    // The map's box (and a little beyond), from the sun: across, what the box may cover; along, how near and far.
+    // The map's box (and a little beyond), from the sun: across, what the box may cover, roofs too (up to
+    // SHADOW_TOP); along, how near and far, what casts too (up to CASTER_TOP).
     const frame = { right, up, x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
     let near = Infinity;
     let far = -Infinity;
     for (const x of [-SHADOW_BEYOND, width + SHADOW_BEYOND]) {
       for (const z of [-SHADOW_BEYOND, height + SHADOW_BEYOND]) {
-        for (const y of [-1, CASTER_TOP]) {
+        for (const y of [-1, SHADOW_TOP, CASTER_TOP]) {
           const p = this.offset.set(x, y, z).sub(this.sun.position);
           const depth = p.dot(look);
           near = Math.min(near, depth);

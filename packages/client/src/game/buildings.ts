@@ -103,6 +103,8 @@ export interface Building {
   walkableRoof: boolean;
   /** A siege's Sala de radio, the heart's building: its mast on the roof (roofProps). */
   radio?: boolean;
+  /** A block of the outline (docs/MAPAS.md §5.10, GameState.frame): shut, nobody goes in; its inside is plan.shut. */
+  frame?: boolean;
 }
 
 /** Wall pieces stand on tile middles, half a tile each way: these are the tiles a building of bounds b spans. */
@@ -135,6 +137,10 @@ export class BuildingPlan {
   readonly floor: Uint8Array;
   /** Wall tiles in a solid mass two tiles thick or more (a reactor's core): drawn as a block, not as thin walls. */
   readonly massive: Uint8Array;
+  /** Out of play (ground 4, docs/MAPAS.md §5.10): the outline's, which frameArt.ts draws; no building's, no loose wall. */
+  readonly out: Uint8Array;
+  /** The inside of the outline's blocks (Building.frame): the walls take it for a floor, so only its outline is laid. */
+  readonly shut: Uint8Array;
   /** The kit of walls that belong to no building (a perimeter, a lone stretch). */
   readonly looseKit: KitId;
   /** A base to defend (docs/FASE12.md §10): its wall is Quarantine's, its gates sheet metal, its corners watchtowers. */
@@ -155,6 +161,9 @@ export class BuildingPlan {
     this.raised = new Uint8Array(n);
     this.floor = new Uint8Array(n);
     this.massive = new Uint8Array(n);
+    this.out = new Uint8Array(n);
+    this.shut = new Uint8Array(n);
+    if (s.ground) for (let i = 0; i < n; i++) if (s.ground[i] === 4) this.out[i] = 1;
     this.siege = !!s.mission.siege;
     this.looseKit = s.biome === 'facility' || this.siege ? 'fence' : 'brick';
     this.findRaised();
@@ -330,10 +339,40 @@ export class BuildingPlan {
       });
       for (const i of tiles) if (this.inside[i]) this.floor[i] = 1;
     }
+    this.frameBlocks();
     if (s.biome === 'wilds') this.findRuins();
     for (let k = 0; k <= (s.levels?.length ?? 0); k++) {
       const tiles = k ? s.levels![k - 1]!.tiles : s.tiles;
       this.before.push(Uint8Array.from(tiles, (t) => (isWallLike(t ?? undefined) ? WAS_WALL : 0) | (k && t !== null ? WAS_SLAB : 0)));
+    }
+  }
+
+  /**
+   * The outline's blocks shut up (docs/MAPAS.md §5.10): each 'block' of GameState.frame a building of its storeys,
+   * its outline all wall (no door; windows on the storeys above, as any façade's), flat-roofed, with nobody in it.
+   * A strip too thin to have an inside is frameArt.ts's, walled off like a lot.
+   */
+  private frameBlocks(): void {
+    const s = this.s;
+    const w = s.width;
+    for (const p of s.frame ?? []) {
+      if (p.kind !== 'block' || p.w < 3 || p.h < 3) continue;
+      const index = this.buildings.length;
+      const r = { x0: p.x, y0: p.y, x1: p.x + p.w - 1, y1: p.y + p.h - 1 };
+      for (let y = r.y0; y <= r.y1; y++) {
+        for (let x = r.x0; x <= r.x1; x++) {
+          const i = y * w + x;
+          this.owner[i] = index;
+          if (x === r.x0 || y === r.y0 || x === r.x1 || y === r.y1) continue;
+          this.inside[i] = 1;
+          this.shut[i] = 1;
+        }
+      }
+      const look = hash(r.x0, r.y0, 5);
+      const kind: BuildingKind = look < 0.45 ? 'office' : 'shop';
+      const kit: KitId = s.biome === 'facility' ? 'bunker' : hash(r.x0, r.y0, 22) < 0.35 ? 'brick' : 'house';
+      const storeys = Math.max(1, p.storeys ?? 2);
+      this.buildings.push({ index, ...r, kind, kit, look, base: 0, top: STOREY * storeys, storeys, front: -1, leveled: false, walkableRoof: false, frame: true });
     }
   }
 
@@ -356,6 +395,7 @@ export class BuildingPlan {
 
   /** The ground's tile i is part of a building's walls: a wall, a door, a window, or one blown down (breached). */
   private wallIn(i: number): boolean {
+    if (this.out[i]) return false;
     return isWallLike(this.s.tiles[i]) || (this.s.tiles[i] === 'low' && decorOf(this.s.decor?.[i])?.kind === 'breach');
   }
 
@@ -474,8 +514,9 @@ export class BuildingPlan {
   /**
    * Splits a building's bounds at the walls it shares with a neighbour: a
    * straight line of plain wall right across it, with shops on both sides
-   * (shelves, counters). A motel's rooms are walled off from each other too,
-   * but they're one building: they aren't shops.
+   * (shelves, counters), or seven tiles or more of building either side (a
+   * town's houses wall to wall, docs/MAPAS.md §5.3). A motel's rooms are
+   * walled off from each other too, but they're one building: narrower.
    */
   private partyWalls(r: Span): Span[] {
     const s = this.s;
@@ -492,12 +533,14 @@ export class BuildingPlan {
     for (let x = r.x0 + 4; x <= r.x1 - 4; x++) {
       let solid = true;
       for (let y = r.y0; y <= r.y1 && solid; y++) solid = s.tiles[y * w + x] === 'wall';
-      if (solid && shopAt(r.x0, r.y0, x - 1, r.y1) && shopAt(x + 1, r.y0, r.x1, r.y1)) return [{ ...r, x1: x }, ...this.partyWalls({ ...r, x0: x })];
+      const wide = x - r.x0 >= 6 && r.x1 - x >= 6;
+      if (solid && (wide || (shopAt(r.x0, r.y0, x - 1, r.y1) && shopAt(x + 1, r.y0, r.x1, r.y1)))) return [{ ...r, x1: x }, ...this.partyWalls({ ...r, x0: x })];
     }
     for (let y = r.y0 + 4; y <= r.y1 - 4; y++) {
       let solid = true;
       for (let x = r.x0; x <= r.x1 && solid; x++) solid = s.tiles[y * w + x] === 'wall';
-      if (solid && shopAt(r.x0, r.y0, r.x1, y - 1) && shopAt(r.x0, y + 1, r.x1, r.y1)) return [{ ...r, y1: y }, ...this.partyWalls({ ...r, y0: y })];
+      const wide = y - r.y0 >= 6 && r.y1 - y >= 6;
+      if (solid && (wide || (shopAt(r.x0, r.y0, r.x1, y - 1) && shopAt(r.x0, y + 1, r.x1, r.y1)))) return [{ ...r, y1: y }, ...this.partyWalls({ ...r, y0: y })];
     }
     return [r];
   }
@@ -751,7 +794,12 @@ const HOME_FLOORS: Record<HomeUse, [keyof typeof MEAN & keyof typeof SWATCH, num
   hall: ['boards', [0x88543e, 0x7c5a44]],
   kitchen: ['panels', [0xd8d2c4, 0xc8c2b2, 0xd4ccbc]],
   bath: ['panels', [0xc8d6dc, 0xd4dcdc, 0xbccad2]],
+  toilet: ['panels', [0xc8d6dc, 0xd4dcdc, 0xbccad2]],
+  pantry: ['panels', [0xd8d2c4, 0xc8c2b2, 0xd4ccbc]],
 };
+
+/** A zaguán's stone tiles (the panels' patch, greyed). */
+const ZAGUAN_FLOOR = tintTo(0xa49e94, MEAN.panels);
 
 /** The patch and tint of a room's floor, picked by where it is. */
 function homeFloor(r: HomeRoom): { swatch: ReturnType<typeof swatch>; tint: THREE.Color } {
@@ -936,6 +984,8 @@ export class Cutaway {
     /** Opens building b for something inside it on storey `level`: what stands above off, the walls facing the camera down. */
     const within = (p: Vec2, level: number, keen = false) => {
       const b = plan.at(p);
+      // Nobody goes into a block of the outline: it opens only when it stands in the way (behind).
+      if (b >= 0 && plan.buildings[b]!.frame) return;
       mark(b, 0);
       mark(b, 1);
       aim(b, level, keen);
@@ -994,6 +1044,7 @@ export class Cutaway {
       if (u.id !== focus?.selected) continue;
       // The selected soldier by a building's wall (about to go in, or in cover against it).
       for (const b of plan.buildings) {
+        if (b.frame) continue;
         const dx = Math.max(b.x0 - this.tile.x, 0, this.tile.x - b.x1);
         const dy = Math.max(b.y0 - this.tile.y, 0, this.tile.y - b.y1);
         if (dx + dy <= 1) {
@@ -1213,6 +1264,43 @@ function roofFadePatch(material: THREE.Material, cut: Cutaway): void {
  * vertex aFloor, the building (+1; 0 for what stands out of doors) and the
  * storey. They fade with the floors above the one in view.
  */
+/** How many doors in a row, along `along`, the one at (x, y) is in (itself included). */
+function doorRow(at: (x: number, y: number) => TileKind | undefined, x: number, y: number, along: Vec2): number {
+  let n = 1;
+  for (const side of [-1, 1]) {
+    for (let k = 1; ; k++) {
+      const t = at(x + along.x * k * side, y + along.y * k * side);
+      if (t !== 'door' && t !== 'doorOpen') break;
+      n++;
+    }
+  }
+  return n;
+}
+
+/** A rectangle of tiles, both ends in. */
+interface Bounds {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** The tiles marked in `area` (null: the whole map), as the rectangle round them; null if none is. */
+function areaBounds(area: Uint8Array | null, w: number, h: number): Bounds | null {
+  if (!area) return { x0: 0, y0: 0, x1: w - 1, y1: h - 1 };
+  let [x0, y0, x1, y1] = [w, h, -1, -1];
+  for (let i = 0; i < w * h; i++) {
+    if (!area[i]) continue;
+    const x = i % w;
+    const y = (i - x) / w;
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  return x1 < 0 ? null : { x0, y0, x1, y1 };
+}
+
 export function floorFadePatch(material: THREE.Material, cut: Cutaway): void {
   extendShader(material, 'floor-fade', (shader) => {
     Object.assign(shader.uniforms, cut.uniforms);
@@ -1613,9 +1701,10 @@ const KITS = {
     storey: 2.9,
     glass: [0.89, 1.48, 1.45, -0.03],
   },
+  // Its windows on a sill a metre up (19/10: the steel frame is a door's), the glass from there to the frame's top.
   bunker: {
     wall: ['bunkerWall'],
-    window: ['bunkerWindow'],
+    window: ['bunkerWindow', 'bunkerSill'],
     door: ['bunkerLintel'],
     leaf: 'metalDoor',
     lintel: ['bunkerLintel'],
@@ -1624,11 +1713,11 @@ const KITS = {
     postSquare: false,
     thick: THICK,
     storey: 3,
-    glass: [0.93, 1.85, 1.355, 0],
+    glass: [0.93, 1.27, 1.645, 0],
   },
   brick: {
     wall: ['bunkerWall', 'brickFace'],
-    window: ['bunkerWindow'],
+    window: ['bunkerWindow', 'bunkerSill', 'brickSill'],
     door: ['bunkerLintel', 'brickLintel'],
     leaf: 'metalDoor',
     lintel: ['bunkerLintel', 'brickLintel'],
@@ -1637,7 +1726,7 @@ const KITS = {
     postSquare: false,
     thick: THICK,
     storey: 3,
-    glass: [0.93, 1.85, 1.355, 0],
+    glass: [0.93, 1.27, 1.645, 0],
   },
   fence: {
     wall: ['fenceWall'],
@@ -1656,10 +1745,10 @@ const KITS = {
 } as Record<KitId, Kit>;
 
 /** A shed: sheet metal outside a bunker wall (as the warehouses' brick), steel-framed windows, a metal door. */
-const shedKit = (sheet: PieceId, lintel: PieceId): Kit => ({ ...KITS.brick, wall: ['bunkerWall', sheet], door: ['bunkerLintel', lintel], lintel: ['bunkerLintel', lintel] });
-KITS.shedGrey = shedKit('sheetGrey', 'sheetGreyLintel');
-KITS.shedRed = shedKit('sheetRed', 'sheetRedLintel');
-KITS.shedBlue = shedKit('sheetBlue', 'sheetBlueLintel');
+const shedKit = (sheet: PieceId, lintel: PieceId, sill: PieceId): Kit => ({ ...KITS.brick, wall: ['bunkerWall', sheet], window: ['bunkerWindow', 'bunkerSill', sill], door: ['bunkerLintel', lintel], lintel: ['bunkerLintel', lintel] });
+KITS.shedGrey = shedKit('sheetGrey', 'sheetGreyLintel', 'sheetGreySill');
+KITS.shedRed = shedKit('sheetRed', 'sheetRedLintel', 'sheetRedSill');
+KITS.shedBlue = shedKit('sheetBlue', 'sheetBlueLintel', 'sheetBlueSill');
 KITS.medical = { ...KITS.bunker };
 
 /** Walls between rooms: Town's interior walls, whatever the building. */
@@ -1711,8 +1800,11 @@ export class BuildingsView {
   private readonly doors = new DoorLeaves();
   /** Where the walls changed at the last buildWalls (null: nowhere), for the contact occlusion. */
   dirty: Dirty | null = null;
-  /** What the parapets were at the last buildWalls (they're few: drawn whole each time). */
+  /** What the parapets were when last made (a change to them bakes the whole map's occlusion again). */
   private parapetSignature = 0;
+  /** The parapets on raised blocks, as last made, and which tiles had one: kept from one rebuild to the next unless one of those changed. */
+  private parapetMesh: THREE.Mesh | null = null;
+  private parapetTiles: Uint8Array | null = null;
   /** The storeys' floors and the roof decks one walks on, made again when a slab is blown through (redoUpper). */
   private upper: { storeys: THREE.Mesh | null; decks: THREE.Mesh | null } = { storeys: null, decks: null };
   /** The holes in the slabs when they were last made. */
@@ -1791,6 +1883,20 @@ export class BuildingsView {
         const f = homeFloor(r);
         const [ax, bx, az, bz] = [r.x, r.x + r.w, r.y, r.y + r.h];
         floors.poly([V(ax, y + 0.002, az), V(ax, y + 0.002, bz), V(bx, y + 0.002, bz), V(bx, y + 0.002, az)], [[ax, az], [ax, bz], [bx, bz], [bx, az]], f.swatch, f.tint, -1);
+      }
+      // A zaguán (docs/MAPAS.md §5.4): a house's floor in none of its rooms is the way through it, paved in stone out
+      // to its openings.
+      const ground = this.homeRooms(s, b).filter((r) => !r.z);
+      if (b.kind === 'house' && ground.length) {
+        for (let ty = b.y0; ty <= b.y1; ty++) {
+          for (let tx = b.x0; tx <= b.x1; tx++) {
+            if (s.tiles[ty * s.width + tx] !== 'floor' || ground.some((r) => tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h)) continue;
+            // Under the walls beside it to their middle lines, as the house's floor runs.
+            const under = (dx: number, dy: number) => (s.tiles[(ty + dy) * s.width + tx + dx] === 'wall' ? 0.5 : 0);
+            const [ax, bx, az, bz] = [Math.max(tx - under(-1, 0), x0), Math.min(tx + 1 + under(1, 0), x1), Math.max(ty - under(0, -1), z0), Math.min(ty + 1 + under(0, 1), z1)];
+            floors.poly([V(ax, y + 0.002, az), V(ax, y + 0.002, bz), V(bx, y + 0.002, bz), V(bx, y + 0.002, az)], [[ax, az], [ax, bz], [bx, bz], [bx, az]], SWATCH.panels, ZAGUAN_FLOOR, -1);
+          }
+        }
       }
       if (b.leveled) this.storeyFloors(b, storeys, looks);
       roofs.level = b.storeys;
@@ -2149,6 +2255,8 @@ export class BuildingsView {
     this.dirty = null;
     const { width: w, height: h } = s;
     const plan = this.plan;
+    // A partial rebuild walks only the tiles round what changed (19/10: at 72 a side, every tile walked was 2.3 ms a door).
+    const box = areaBounds(area, w, h);
     const batches = new Map<string, Batch>();
     let ready = true;
     const glass = new Map<KitId, { matrices: THREE.Matrix4[]; cut: number[]; level: number[] }>();
@@ -2158,7 +2266,9 @@ export class BuildingsView {
     /** The tile being laid, and how many door leaves it has put so far (doors.ts keys them so). */
     let tile = -1;
     let leaves = 0;
-    let layer: readonly (TileKind | null)[] = s.tiles;
+    // The ground as the walls see it: an outline block's inside a floor (BuildingPlan.shut), so only its outline is laid.
+    const groundTiles: readonly (TileKind | null)[] = plan.shut.includes(1) ? s.tiles.map((t, i) => (plan.shut[i] ? 'floor' : t)) : s.tiles;
+    let layer: readonly (TileKind | null)[] = groundTiles;
     const at = (x: number, y: number): TileKind | undefined => (x < 0 || y < 0 || x >= w || y >= h ? undefined : (layer[y * w + x] ?? undefined));
     /** Wall-like, or a wall blown down (it still joins the walls beside it). */
     // A siege's watchtower carries the wall on round its base (below): the wall runs into it, without a column at its end.
@@ -2292,16 +2402,24 @@ export class BuildingsView {
         if (glazed && !kit.top) pane(ob.kit, x, z, y0, face, false, owner, true);
       }
     };
-    /** Each building's first door on its outline (in tile order): where its sign goes. */
+    /** Each building's first door on its outline (in tile order): where its sign goes. Read off the outlines alone. */
     const signDoor = new Map<number, number>();
-    for (let i = 0; i < w * h; i++) {
-      const b = plan.owner[i]!;
-      const t = s.tiles[i];
-      if (b < 0 || signDoor.has(b) || (t !== 'door' && t !== 'doorOpen')) continue;
-      const bd = plan.buildings[b]!;
-      const x = i % w;
-      const y = (i - x) / w;
-      if (x === bd.x0 || x === bd.x1 || y === bd.y0 || y === bd.y1) signDoor.set(b, i);
+    for (const bd of plan.buildings) {
+      let first = -1;
+      const look = (x: number, y: number) => {
+        const i = y * w + x;
+        const t = s.tiles[i];
+        if ((t === 'door' || t === 'doorOpen') && plan.owner[i] === bd.index && (first < 0 || i < first)) first = i;
+      };
+      for (let x = bd.x0; x <= bd.x1; x++) {
+        look(x, bd.y0);
+        look(x, bd.y1);
+      }
+      for (let y = bd.y0 + 1; y < bd.y1; y++) {
+        look(bd.x0, y);
+        look(bd.x1, y);
+      }
+      if (first >= 0) signDoor.set(bd.index, first);
     }
     /**
      * Where a shed's roller shutters go (#25): the middle of the longest
@@ -2345,14 +2463,14 @@ export class BuildingsView {
      * the cutaway. (The model is 6.84 m wide from x = 0.35, 4.19 m tall, its
      * face to +z; syntyProps stands it on the floor.)
      */
-    const shutter = (bd: Building, x: number, z: number, base: number, out: Vec2, width: number) => {
+    const shutter = (bd: Building, x: number, z: number, base: number, out: Vec2, width: number, tall = 0.75) => {
       const parts = syntyProp('rollerShutter');
       if (!parts) {
         ready = false;
         return;
       }
       const sx = width / (6.84 * SYNTY_SCALE);
-      const sy = (0.75 * STOREY) / (4.19 * SYNTY_SCALE);
+      const sy = (tall * STOREY) / (4.19 * SYNTY_SCALE);
       const off = WALL_HALF + 0.02;
       // Its width along the wall, its face out: the model's x along, its +z the way out.
       const yaw = Math.atan2(out.x, out.y);
@@ -2394,10 +2512,10 @@ export class BuildingsView {
     };
 
     // The ground's walls, then each storey's (GameState.levels).
-    for (level = 0; level <= (s.levels?.length ?? 0); level++) {
-    layer = level ? s.levels![level - 1]!.tiles : s.tiles;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
+    for (level = 0; level <= (s.levels?.length ?? 0) && box; level++) {
+    layer = level ? s.levels![level - 1]!.tiles : groundTiles;
+    for (let y = box.y0; y <= box.y1; y++) {
+      for (let x = box.x0; x <= box.x1; x++) {
         const i = y * w + x;
         if (area && !area[i]) continue;
         const kind = layer[i];
@@ -2408,7 +2526,7 @@ export class BuildingsView {
         const loose = b < 0;
         /** A wall blown down to low cover (docs/FASE7.md §4): laid as a wall, but its stump and the wall above the gap. */
         const broken = kind === 'low' && plan.breached(i, level);
-        if (loose && (level > 0 || (!isWallLike(kind) && !broken) || plan.massive[i])) continue;
+        if (loose && (level > 0 || (!isWallLike(kind) && !broken) || plan.massive[i] || plan.out[i])) continue;
         if (!level && plan.massive[i]) continue;
         const building = loose ? undefined : plan.buildings[b]!;
         const base = building ? building.base + level * STOREY : (s.elev[i] ?? 0) * STOREY;
@@ -2483,8 +2601,18 @@ export class BuildingsView {
             const partner = gateAt(1) ? 1 : gateAt(-1) ? -1 : isWallLike(at(x + along.x, y + along.y)) ? -1 : 1;
             const turn = Math.atan2(out.x, out.y);
             const near = (Math.cos(turn) * along.x - Math.sin(turn) * along.y) * partner > 0;
-            put(near ? 'gateLeaf' : 'gateLeafFar', cx, cz, base, out, false, b, { thick: kit.thick, open: kind === 'doorOpen' });
+            if (gateAt(1) && gateAt(-1)) {
+              // Between two others (a gate three wide or more, 19/10): no post to hang it on but one between two
+              // doorways, so it slides: shut in its place, open run along outside the next one (which swings in).
+              const slide = kind === 'doorOpen' ? 0.9 : 0;
+              put('gateLeaf', cx + along.x * slide + out.x * slide * 0.16, cz + along.y * slide + out.y * slide * 0.16, base, out, false, b, { thick: kit.thick, open: false });
+            } else put(near ? 'gateLeaf' : 'gateLeafFar', cx, cz, base, out, false, b, { thick: kit.thick, open: kind === 'doorOpen' });
             for (const side of [-1, 1]) if (!gateAt(side) && isWallLike(at(x + along.x * side, y + along.y * side))) post(kit, cx + along.x * side * 0.5, cz + along.y * side * 0.5, base, out, false, b);
+          } else if ((kind === 'door' || kind === 'doorOpen') && building && !between && doorRow(at, x, y, along) >= 3) {
+            // A bay of three doors or more (19/10: a dock's, a hall's gate): no leaf to hang but on a post between two
+            // doorways, so a roller shutter instead, down to the floor while shut and up under the lintel once open.
+            putAll(kit.lintel, cx, cz, base, out, between, b, kit);
+            if (kind === 'door') shutter(building, cx, cz, base, out, 1.02, 0.82);
           } else if (kind === 'door' || kind === 'doorOpen') {
             // The leaf hinged on a jamb against a wall (or a window), never on one between two doorways: open, a leaf
             // there stood across the diagonal step past it (a double door's middle post: path.ts lets one by there).
@@ -2561,7 +2689,7 @@ export class BuildingsView {
     level = 0;
     layer = s.tiles;
 
-    this.layRaised(s, batches, () => (ready = false), area);
+    this.layRaised(s, batches, () => (ready = false), area, box);
 
     // A siege's watchtowers (docs/FASE12.md §10) stand on a block the engine won't let anyone under or see through: on the
     // sides out of the base, Quarantine's wall goes on under the deck as the wall does; on the sides in, a shed of sheet
@@ -2570,8 +2698,8 @@ export class BuildingsView {
     if (plan.siege) {
       const tower = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && plan.raised[y * w + x] === RAISED_TOWER;
       const solid = (x: number, y: number) => tower(x, y) || (x >= 0 && y >= 0 && x < w && y < h && isWallLike(s.tiles[y * w + x]));
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
+      for (let y = box?.y0 ?? 0; y <= (box?.y1 ?? -1); y++) {
+        for (let x = box!.x0; x <= box!.x1; x++) {
           if (!tower(x, y) || (area && !area[y * w + x])) continue;
           const cx = x + 0.5;
           const cz = y + 0.5;
@@ -2586,7 +2714,8 @@ export class BuildingsView {
             // The ladder leans on this side: on the tile out from this one or from either beside it.
             const ladder = [-1, 0, 1].some((n) => s.tiles[(y + d.y + r.y * n) * w + x + d.x + r.x * n] === 'ladder');
             const door = !outward && !ladder && tower(x - r.x, y - r.y) && tower(x + r.x, y + r.y);
-            const ids = door ? KITS.bunker.window : kit.wall;
+            // The way in is the steel frame alone, open to the deck (no sill: it is walked through).
+            const ids: PieceId[] = door ? ['bunkerWindow'] : kit.wall;
             const c = (a + b) / 2;
             ids.forEach((id, n) => put(id, cx + r.x * c, cz + r.y * c, 0, d, false, -1, { along: b - a, thick: kit.thick, tint: n === 0 }));
             // The column where it turns, kept under the deck (Quarantine's is a little taller than a storey).
@@ -2626,6 +2755,8 @@ export class BuildingsView {
     // On the roofs: they fade with them; on a roof one walks on, on its floor and off the stairwell's edge (its railing).
     const deck = (b: Building, x: number, y: number) => plan.kindAt(x, y, b.storeys) === 'floor' && DIRS8.every((d) => plan.kindAt(x + d.x, y + d.y, b.storeys) !== null);
     for (const b of plan.buildings) {
+      // Only the buildings round what changed: the rest's are kept where they are merged (they stand on their roof).
+      if (!box || b.x1 < box.x0 || b.x0 > box.x1 || b.y1 < box.y0 || b.y0 > box.y1) continue;
       for (const r of roofProps(b, (x, y) => deck(b, x, y))) {
         const parts = syntyProp(r.id);
         if (!parts) {
@@ -2701,9 +2832,7 @@ export class BuildingsView {
    * parapets on their roof edges; platforms, container sides; hills, rock
    * faces; solid wall masses, concrete. And ladders on every climb.
    */
-  private layRaised(s: GameState, batches: Map<string, Batch>, missing: () => void, area: Uint8Array | null): void {
-    /** Whether this tile's pieces are placed (a partial rebuild skips the rest; the parapets are drawn whole every time). */
-    let placing = true;
+  private layRaised(s: GameState, batches: Map<string, Batch>, missing: () => void, area: Uint8Array | null, box: Bounds | null): void {
     const { width: w, height: h } = s;
     const plan = this.plan;
     const elev = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : (s.elev[y * w + x] ?? 0));
@@ -2725,7 +2854,6 @@ export class BuildingsView {
     };
     /** A piece standing at (x, base, z), its outer face (+Z) turned towards `out`. */
     const place = (id: PieceId, x: number, base: number, z: number, out: Vec2) => {
-      if (!placing) return;
       const parts = pieceNow(id);
       if (!parts) return missing();
       m.compose(pos.set(x, base, z), q.setFromAxisAngle(up, Math.atan2(out.x, out.y)), size.set(1, 1, 1));
@@ -2733,19 +2861,18 @@ export class BuildingsView {
     };
     /** A rock of a hill's side, its face out towards `out`, stretched `tall` times, turned `turn` and `flip`ped. */
     const rock = (id: PropId, x: number, base: number, z: number, out: Vec2, tall: number, along: number, turn: number) => {
-      if (!placing) return;
       const parts = syntyProp(id);
       if (!parts) return missing();
       // The rock lies along x in its own frame: turned to run along the edge.
       m.compose(pos.set(x, base, z), q.setFromAxisAngle(up, Math.atan2(out.x, out.y) + Math.PI / 2 + turn), size.set(along, tall, 1.7));
       parts.forEach((part, k) => add(batchOf(`rock:${id}:${k}`, part.geometry, part.atlas), m.clone().multiply(part.matrix)));
     };
-    const parapets = new Surfaces();
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
+    // Only the tiles round what changed (19/10).
+    for (let y = box?.y0 ?? 0; y <= (box?.y1 ?? -1); y++) {
+      for (let x = box!.x0; x <= box!.x1; x++) {
         const i = y * w + x;
+        if (area && !area[i]) continue;
         const e = elev(x, y);
-        placing = !area || !!area[i];
         // Ladders: against the side of the tile one storey up, whatever it is (a building's roof one walks on, too);
         // a building's stairs, every tile of a flight, are drawn as stairs (buildStatic).
         if (s.tiles[i] === 'ladder' && !flightAt(s, { x, y, z: 0 })) {
@@ -2796,36 +2923,73 @@ export class BuildingsView {
             const id: PieceId = k === e - 1 ? (plain ? 'blockTopPlain' : 'blockTopWindow') : plain ? 'blockPlain' : 'blockWindow';
             place(id, ex, k * STOREY, ez, d);
           }
-          // A parapet along this edge of a roof tile that holds one (low cover with nothing else on it).
-          if (s.tiles[i] === 'low' && !decorOf(s.decor?.[i])) {
-            const top = e * STOREY;
-            const half = 0.5;
-            const along = d.x !== 0 ? V(0, 0, half) : V(half, 0, 0);
-            const inward = V(-d.x * PARAPET_THICK, 0, -d.y * PARAPET_THICK);
-            const lo = V(Math.min(ex - along.x, ex + inward.x), top, Math.min(ez - along.z, ez + inward.z));
-            const hi = V(Math.max(ex + along.x, ex + inward.x), top + PARAPET, Math.max(ez + along.z, ez + inward.z));
-            parapets.box(lo, hi, SWATCH.flat, BRICK, -1);
-            parapets.box(V(lo.x - 0.03, hi.y, lo.z - 0.03), V(hi.x + 0.03, hi.y + 0.07, hi.z + 0.03), SWATCH.flat, STONE, -1);
-          }
         }
       }
     }
+    this.layParapets(s, area);
+  }
+
+  /**
+   * The parapets along the roof edges of flats (low cover with nothing else
+   * on it), in one mesh: made again only when one of them changed (a blast
+   * took it), else kept as they were.
+   */
+  private layParapets(s: GameState, area: Uint8Array | null): void {
+    const { width: w, height: h } = s;
+    const plan = this.plan;
+    /** Whether tile i holds a parapet's low cover: on a block of flats, with nothing else on it. */
+    const holds = (i: number) => plan.raised[i] === RAISED_FLATS && s.tiles[i] === 'low' && !decorOf(s.decor?.[i]);
+    let touched = !area || !this.parapetTiles;
+    for (let i = 0; !touched && i < w * h; i++) touched = !!area![i] && (holds(i) ? 1 : 0) !== this.parapetTiles![i];
+    if (!touched) {
+      if (this.parapetMesh) {
+        this.walls.add(this.parapetMesh);
+        this.wallOccluders.push(this.parapetMesh.geometry);
+      }
+      return;
+    }
+    const elev = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : (s.elev[y * w + x] ?? 0));
+    const parapets = new Surfaces();
+    const tiles = (this.parapetTiles = new Uint8Array(w * h));
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (!holds(i)) continue;
+        tiles[i] = 1;
+        const e = elev(x, y);
+        for (const d of DIRS4) {
+          if (elev(x + d.x, y + d.y) >= e) continue;
+          const [ex, ez] = [x + 0.5 + d.x * 0.5, y + 0.5 + d.y * 0.5];
+          const top = e * STOREY;
+          const half = 0.5;
+          const along = d.x !== 0 ? V(0, 0, half) : V(half, 0, 0);
+          const inward = V(-d.x * PARAPET_THICK, 0, -d.y * PARAPET_THICK);
+          const lo = V(Math.min(ex - along.x, ex + inward.x), top, Math.min(ez - along.z, ez + inward.z));
+          const hi = V(Math.max(ex + along.x, ex + inward.x), top + PARAPET, Math.max(ez + along.z, ez + inward.z));
+          parapets.box(lo, hi, SWATCH.flat, BRICK, -1);
+          parapets.box(V(lo.x - 0.03, hi.y, lo.z - 0.03), V(hi.x + 0.03, hi.y + 0.07, hi.z + 0.03), SWATCH.flat, STONE, -1);
+        }
+      }
+    }
+    this.parapetMesh?.geometry.dispose();
+    this.parapetMesh = null;
+    let sig = 0;
     if (!parapets.empty) {
       const geometry = parapets.geometry();
-      this.wallParts.geometries.push(geometry);
       const mesh = new THREE.Mesh(geometry, this.blockMaterial);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       this.walls.add(mesh);
       this.wallOccluders.push(geometry);
-      // A parapet blown away: the contact occlusion of the whole map is baked again (rare, and they're few).
+      this.parapetMesh = mesh;
       const p = geometry.attributes.position!.array;
-      let sig = p.length;
+      sig = p.length;
       for (let k = 0; k < p.length; k += 7) sig = (sig * 31 + Math.round(p[k]! * 64)) | 0;
-      if (sig !== this.parapetSignature) this.dirty = { x0: 0, y0: 0, x1: w, y1: h };
-      this.parapetSignature = sig;
     }
+    // A parapet blown away: the contact occlusion of the whole map is baked again (rare, and they're few).
+    if (sig !== this.parapetSignature) this.dirty = { x0: 0, y0: 0, x1: w, y1: h };
+    this.parapetSignature = sig;
   }
 
   /** The pieces' material on an atlas (walls are Town's; what stands on roofs comes from other packs too). */
@@ -2866,6 +3030,7 @@ export class BuildingsView {
   dispose(): void {
     this.merged.dispose();
     this.doors.dispose();
+    this.parapetMesh?.geometry.dispose();
     for (const g of this.wallParts.geometries) g.dispose();
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();

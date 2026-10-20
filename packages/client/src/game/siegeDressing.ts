@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MAPS, nodeOf, PIECES, pieceCells, SIEGE, type GameState } from '@bastion/engine';
+import { cellsOf, MAPS, nodeOf, PIECES, SIEGE, type GameState } from '@bastion/engine';
 import { RAISED_TOWER } from './buildings';
 
 // A siege's base dressed (docs/FASE12.md §10, El Bastión): how worn each of
@@ -30,7 +30,7 @@ export function wearOf(s: GameState): Map<number, Wear> {
   if (!s.breakables) return out;
   const area = s.width * s.height;
   const full = new Map<number, number>();
-  for (const p of s.base?.pieces ?? []) for (const c of pieceCells(p.piece, p.x, p.y, p.rot)) full.set(c.y * s.width + c.x, PIECES[p.piece].hp);
+  for (const p of s.base?.pieces ?? []) for (const c of cellsOf(p)) full.set(c.y * s.width + c.x, PIECES[p.piece].hp);
   for (let i = 0; i < area; i++) {
     const left = s.breakables[nodeOf(s, { x: i % s.width, y: Math.floor(i / s.width), z: 0 })];
     if (left === undefined || s.tiles[i] === 'floor') continue;

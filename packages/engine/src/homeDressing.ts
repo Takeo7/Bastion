@@ -79,7 +79,7 @@ export function dressHome(site: HomeSite, width: number, tiles: TileKind[], deco
       }
     }
     // Strewn about, the more the worse off it is.
-    const mess = Math.round(wear * (r.use === 'bath' || r.use === 'hall' ? 1 : 3) + rng.next() * 0.8);
+    const mess = Math.round(wear * (r.use === 'bath' || r.use === 'hall' || r.use === 'toilet' || r.use === 'pantry' ? 1 : 3) + rng.next() * 0.8);
     for (const p of floor.slice(0, mess)) {
       if (used.has(key(p.x, p.y, p.z))) continue;
       const pick = rng.next();

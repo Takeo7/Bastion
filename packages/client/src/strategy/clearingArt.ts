@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { bastionFootprint, bastionLot, bastionStage, createMission, onBastionLot, pieceAt, pieceCells, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type PieceId, type TemplateId } from '@bastion/engine';
+import { bastionFootprint, bastionLot, bastionStage, cellsOf, createMission, onBastionLot, pieceAt, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type PieceId, type TemplateId } from '@bastion/engine';
 import { drawPiece, pieceMap, type PieceArt } from '../game/basePieces';
 import { EvacBus } from '../game/evacBus';
 import { MapView } from '../game/mapView';
@@ -157,7 +157,7 @@ export class ClearingArtView implements ClearingArt {
     };
     /** A piece's middle and its sides (out, and how far its edge is), its own front (+y as built, turned) first; the caravan's, the Bastion's footprint. */
     const sides = (p: BasePiece) => {
-      const cells = p.piece === 'caravan' ? bastionFootprint(base) : pieceCells(p.piece, p.x, p.y, p.rot);
+      const cells = p.piece === 'caravan' ? bastionFootprint(base) : cellsOf(p);
       const xs = cells.map((c) => c.x);
       const ys = cells.map((c) => c.y);
       const mid = { x: (Math.min(...xs) + Math.max(...xs) + 1) / 2, z: (Math.min(...ys) + Math.max(...ys) + 1) / 2 };

@@ -8,7 +8,8 @@
 // tile) while the tile it is about to enter is still held by another walker,
 // or will be entered by one planned before it. No deadlocks and no long turn:
 // each wait is capped, the group as a whole may take only a little longer
-// than played all at once (SLACK), and a standstill lets one through. Where
+// than played all at once (SLACK: it walks quicker to keep to that, if it
+// must, planHasted), and a standstill lets one through. Where
 // one has to go by another all the same (the engine walked it through an
 // ally), the step is marked: the walker swerves round the other (unitViews).
 // Plain numbers only (no three): a group is planned once, before it sets off.
@@ -22,11 +23,13 @@ export interface Walker {
   corners?: readonly (readonly [number, number] | null)[];
 }
 
-/** A walker's plan: the seconds it stands before each step, and the tiles it passes someone on (it swerves). */
+/** A walker's plan: the seconds it stands before each step, the tiles it passes someone on (it swerves), how quick it goes. */
 export interface WalkPlan {
   waits: number[];
   /** By tile index (tiles[k]): another stands there or comes through as it does. */
   passes: boolean[];
+  /** How many times its pace it walks at, the whole group alike (planHasted; 1, at it). */
+  haste: number;
 }
 
 /** How far into a step (0 to 1) the tile it leaves is free again: the walker's body is past the tiles' border by then. */
@@ -46,6 +49,14 @@ const STOP_CAP = 0.8;
  * walker waits no more than lets it get there by then (docs/UX-RITMO.md: the dead walk together for pace).
  */
 const SLACK = 0.8;
+/**
+ * One out of time still waits for another stepping into or out of the tile it goes to; in a crowd, at every
+ * step, past the deadline. Then the group is planned again with the last RESERVE seconds of each walker's
+ * time kept for that, and only for one stepping into it (or across its corner): past them it goes by it.
+ */
+const RESERVE = 0.4;
+/** A group that won't keep to its time otherwise walks quicker, this many times its pace at most (planHasted). */
+const HASTE = 1.4;
 /** The plan gives up (one walk after another) past this many decisions. */
 const MAX_EVENTS = 20000;
 
@@ -58,7 +69,7 @@ interface Live {
   release: number;
   /** When it got to where it waits now (its last step's end, or 0). */
   ready: number;
-  /** Seconds it has stood so far, and may stand in all. */
+  /** Seconds it has stood so far, and may stand in all (but the reserve, kept for when it is out of time). */
   waited: number;
   budget: number;
   /** Let through once regardless (a standstill broken, its time used up). */
@@ -73,12 +84,63 @@ interface Live {
  * walk before it (its first wait, the time until then).
  */
 export function planWalks(walkers: readonly Walker[]): WalkPlan[] {
+  return settle(walkers, deadlineOf(walkers), 1);
+}
+
+/**
+ * planWalks for a group that may walk quicker to keep to its time: `walkers(haste)` gives its walkers at
+ * `haste` times their pace. At it if that keeps to the time; else as much quicker as it takes, HASTE times
+ * at most, nobody going by anybody; past that, those out of time go by others (planWalks).
+ */
+export function planHasted(walkers: (haste: number) => readonly Walker[]): WalkPlan[] {
+  let these = walkers(1);
+  const deadline = deadlineOf(these);
+  let haste = 1;
+  // A few tries, each as much quicker as it fell short: some steps (a sill, a ladder) quicken less than the rest.
+  for (let tries = 0; tries < 4; tries++) {
+    const plans = fit(these, deadline, null, haste);
+    if (!plans) break;
+    const length = planLength(these, plans.map((p) => p.waits));
+    if (length <= deadline + 1e-6) return plans;
+    if (haste >= HASTE) break;
+    haste = Math.min(HASTE, haste * (length / deadline) * 1.01);
+    these = walkers(haste);
+  }
+  return settle(these, deadline, haste);
+}
+
+/** The group's time: its longest walk, and a little longer (SLACK, or a quarter of it). */
+function deadlineOf(walkers: readonly Walker[]): number {
+  const longest = Math.max(0, ...walkers.map((w) => w.steps.reduce((a, b) => a + b, 0)));
+  return longest + Math.max(SLACK, longest * 0.25);
+}
+
+/** The plans by `deadline`: as freely as they go, else again with RESERVE kept; if they can't be fitted, one after another. */
+function settle(walkers: readonly Walker[], deadline: number, haste: number): WalkPlan[] {
+  const free = fit(walkers, deadline, null, haste);
+  const plans = free && planLength(walkers, free.map((p) => p.waits)) <= deadline + 1e-6 ? free : (fit(walkers, deadline, RESERVE, haste) ?? free);
+  if (plans) return plans;
+  // In planning order.
+  let at = 0;
+  return walkers.map((w) => {
+    const waits = w.steps.map(() => 0);
+    if (waits.length) waits[0] = at;
+    at += w.steps.reduce((a, b) => a + b, 0);
+    return { waits, passes: w.tiles.map(() => false), haste };
+  });
+}
+
+/**
+ * The plans by `deadline`, or null if they can't be fitted. Out of time, a walker waits for another stepping
+ * into or out of the tile it goes to, as long as that takes (`reserve` null); or, for one stepping into it,
+ * for as long as `reserve` lets it still get there by the deadline, and goes by the rest. `haste`, the
+ * group's pace (planHasted), only goes on the plans.
+ */
+function fit(walkers: readonly Walker[], deadline: number, reserve: number | null, haste: number): WalkPlan[] | null {
   const n = walkers.length;
   const totals = walkers.map((w) => w.steps.reduce((a, b) => a + b, 0));
-  const longest = Math.max(0, ...totals);
-  const deadline = longest + Math.max(SLACK, longest * 0.25);
   const live: Live[] = walkers.map((w, i) => ({
-    k: 0, moving: false, start: 0, end: 0, release: 0, ready: 0, waited: 0, budget: deadline - totals[i]!, forced: false,
+    k: 0, moving: false, start: 0, end: 0, release: 0, ready: 0, waited: 0, budget: deadline - totals[i]! - (reserve ?? 0), forced: false,
     waits: w.steps.map(() => 0), passes: w.tiles.map(() => false),
   }));
   const last = (w: number) => walkers[w]!.tiles.length - 1;
@@ -157,14 +219,19 @@ export function planWalks(walkers: readonly Walker[]): WalkPlan[] {
     }
     return null;
   };
-  /** For one out of time: only another moving into or out of the tile it goes to holds it back. */
+  /** For one out of time: only another moving into or out of the tile it goes to holds it back (with a reserve, into it, while that lasts). */
   const passing = (w: number, t: number): { why: 'hold'; by: number } | null => {
     const l = live[w]!;
     const walker = walkers[w]!;
     const key = walker.tiles[l.k + 1]!;
     const corner = walker.corners?.[l.k] ?? null;
     for (let o = 0; o < n; o++) {
-      if (o !== w && live[o]!.moving && (holds(o, key, t) || (corner && crossing(o, corner[0], corner[1], t)))) return { why: 'hold', by: o };
+      const other = live[o]!;
+      if (o === w || !other.moving) continue;
+      const across = !!corner && crossing(o, corner[0], corner[1], t);
+      if (reserve === null) {
+        if (holds(o, key, t) || across) return { why: 'hold', by: o };
+      } else if ((walkers[o]!.tiles[other.k] === key || across) && l.waited + (other.end - l.ready) <= l.budget + reserve + 1e-9) return { why: 'hold', by: o };
     }
     return null;
   };
@@ -192,7 +259,7 @@ export function planWalks(walkers: readonly Walker[]): WalkPlan[] {
         l.ready = l.end;
       }
     }
-    if (live.every((_, w) => done(w))) return live.map((l) => ({ waits: l.waits, passes: l.passes }));
+    if (live.every((_, w) => done(w))) return live.map((l) => ({ waits: l.waits, passes: l.passes, haste }));
     // Then, in planning order, whoever can set off does; whoever has stood all it may, goes all the same.
     const stuck: { w: number; why: 'hold' | 'yield'; by: number; until?: number }[] = [];
     for (let w = 0; w < n; w++) {
@@ -229,14 +296,7 @@ export function planWalks(walkers: readonly Walker[]): WalkPlan[] {
     const pick = yielding.length ? yielding[yielding.length - 1]! : onStill.length ? onStill[0]! : stuck[0]!;
     live[pick.w]!.forced = true;
   }
-  // Not fitted: one after another, in planning order.
-  let at = 0;
-  return walkers.map((w, i) => {
-    const waits = w.steps.map(() => 0);
-    if (waits.length) waits[0] = at;
-    at += totals[i]!;
-    return { waits, passes: w.tiles.map(() => false) };
-  });
+  return null;
 }
 
 /** When the last of them gets there, with these waits (for measuring a plan against playing them all at once). */

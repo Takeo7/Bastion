@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 19/10 con la 0.7.2, la de la revisión del código. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 20/10 con la 0.8.0, la de los mapas nuevos. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 505 tests.
+   Deben pasar 520 tests.
 5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.7.2)
+## 3. Estado (versión 0.8.0)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,18 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1 y v0.7.2 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2 y v0.8.0 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.8.0** (2026-10-20), los mapas nuevos ([MAPAS.md](MAPAS.md), fases 0 a 6, decididas por Arturo el 19/10):
+  - nadie atraviesa a nadie: los compañeros se bloquean y los muebles grandes ocupan su casilla; coches, camiones, camas y mesas a su tamaño; las animaciones no atraviesan cosas;
+  - escaleras de tramo: 3 casillas (2 en casas pequeñas), solo se suben desde el pie y nadie se para a mitad;
+  - los pueblos son de 64 (el del hospital, 72 × 64) y salen de un plano: cuadrícula con avenida, o casco viejo con plaza y calle mayor. Casas por parcelas, patios, bloques de pisos, baños y despensas;
+  - el borde no es un cuadrado: lo cierran manzanas cerradas, solares, ruinas y obras, y a veces un río, las vías, una autovía o una barrera. Se entra por 2–4 calles, y la escuadra empieza en una;
+  - el autobús espera junto a la acera en una calle de salida, mirando hacia ella, con la evacuación a lo largo de sus puertas. Los turnos de la misión dependen de lo que hay que andar, y hay más grupos de muertos en los mapas grandes;
+  - el campo es de 72 (el área de servicio, 64 × 72), cerrado por bosque, rocas, agua o un barranco. El camino entra y sale con una boca abierta en el bosque. El polígono y la fábrica, de 72, con la nave a su tamaño;
+  - la base es de 56: piezas a su tamaño nuevo y un solar del Bastión de 9 × 9. Una base guardada va al centro con lo construido a su tamaño de antes; lo que cae en el solar nuevo se desmonta y se devuelve entero (campaña 23);
+  - las hordas entran siempre: si una oleada no cabe junto al borde, entra un poco más adentro. En el campo, las de 6 o más no llegaban nunca;
+  - una granada ya no se lleva toda una fila de troncos en la base, y el Hinchado sube los tramos de 3;
+  - rendimiento para los mapas de 72: la sombra encuadrada en lo que se ve, puertas y muros que rehacen solo lo tocado.
 - **Lo nuevo de la 0.7.2** (2026-10-19), la revisión del código ([REVISION-2026-10-19.md](REVISION-2026-10-19.md)):
   - el tablero de habilidades ya compra siempre (era el fallo #38 y #48 del 18/10);
   - la partida no se pierde: copia anterior (`save.anterior.json`), una ilegible se aparta y se sigue desde la copia, y un fallo al escribir no tumba el servidor; «Campaña nueva» guarda la de antes;
@@ -215,6 +226,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
   - decidir lo de la revisión del 19/10 ([REVISION-2026-10-19.md](REVISION-2026-10-19.md), «Para decidir»): el repositorio público frente a la norma de que sea privado, si la torre, el alambre y las trampas se rompen, y quitar F8 si «Hueso y óxido» se queda;
   - escuchar los sonidos nuevos (`sonido.html`).
 - **Probar en partida** la Fase 10: si las barras se llenan a buen ritmo, si el tablero da elecciones de verdad y si las armas se gastan lo justo. Lo más fácil de ajustar, en `skills.ts`: `BAR_FIRST`, `BAR_STEP`, `BAR_GROWTH`, `DEED_XP`, `BASE_AIM`; en `board.ts`, las cifras de cada celda; en `content.ts`: `STONE_DAMAGE`, `wearOf`, `WORN_BELOW` y `REPAIR_PER_PART`. Y lo de antes: `podPlan` en `setup.ts`, `PISTOL_CLIP` y los precios del Taller (`CRAFTS`).
+- **Los mapas nuevos** ([MAPAS.md](MAPAS.md)): jugarlos y ver si el recorrido y los turnos van bien. En la base de 56 los muertos tardan algo más en llegar: revisar `SIEGE.hold` (11) y las torretas. Medir en el PC de la 3090 un mapa de 72 en «alto».
 - **Fase 12, el asedio** ([FASE12.md](FASE12.md)): hecha. El hito 1 salió en la 0.6.0 y la base nueva en la campaña, en la 0.7.0 (§11). Falta ajustar las cifras jugando: el tamaño de las oleadas (`SIEGE_FIRST`, `SIEGE_GROWTH` en campaign.ts), el precio y la munición de la torreta y de las trampas (`PIECES` en base.ts).
 - **Para revisar más adelante (Arturo, 18/10): «La Lata», la base móvil.** No hay base fija: el Bastión es el autobús con remolques, y la campaña es un viaje por el valle antes de que llegue la Marea. Se elige ruta y se carga el autobús, que tiene poco sitio (gente, combustible, comida, munición), y las instalaciones pasan a ser remolques. Fue la opción 2 al repensar la base; la elegida fue la 1, el asedio ([FASE12.md](FASE12.md)).
 - **La versión móvil y web** ([FASE11.md](FASE11.md)): abandonada por Arturo el 18/10, y su código quitado para aligerar el juego: modo táctil, ajuste «Móvil», paquete web, contraseña y manifest. Solo la aplicación de escritorio. Se quedan la reconexión, la espera a quien se ausenta, recuperar el puesto por el nombre y jugar con los soldados del compañero ausente.
@@ -238,5 +250,6 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md), [PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
 | [REVISION-2026-10-19.md](REVISION-2026-10-19.md) | La revisión del código del 19/10: los fallos arreglados, lo quitado y lo que queda por decidir |
+| [MAPAS.md](MAPAS.md) | Los mapas: medidas, el plano de los pueblos, el contorno, la base de 56 y el plan por fases (hecho en la 0.8.0) |
 | [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), [FIRMA.md](FIRMA.md) | La guía de la prueba en el PC de referencia; cómo se firma la aplicación y qué cambiar con la cuenta de Apple |
 | [FASE11.md](FASE11.md) | Abandonada y quitada el 18/10. Lo que fue la Fase 11, móvil y navegador (la guía de la web, WEB.md, está en el historial de Git) |

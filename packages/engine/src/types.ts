@@ -75,8 +75,34 @@ export type TileKind =
 /** Visual and generation theme of a map. */
 export type Biome = 'city' | 'wilds' | 'facility';
 
-/** What a tile's floor is, on procedural maps: 0 open ground, 1 street or dirt track, 2 inside a building. */
-export type GroundKind = 0 | 1 | 2 | 3;
+/**
+ * What a tile's floor is, on procedural maps: 0 open ground, 1 street or dirt track, 2 inside a building, 3 a yard,
+ * 4 out of play (docs/MAPAS.md §5.10: the outline, a 'wall' the client draws as its piece of GameState.frame).
+ */
+export type GroundKind = 0 | 1 | 2 | 3 | 4;
+
+/**
+ * What closes a map round what is played (docs/MAPAS.md §5.10): blocks shut up, fenced lots, ruins, works, a street
+ * that goes on past a barricade; a river or canal, the railway, the motorway or a military barrier along one side;
+ * in the country, containers, wood, a ravine, rocks or water.
+ */
+export type FrameKind = 'block' | 'lot' | 'ruin' | 'works' | 'street' | 'river' | 'rail' | 'highway' | 'barrier' | 'containers' | 'forest' | 'ravine' | 'rocks' | 'water';
+
+/**
+ * A piece of a map's outline (cosmetic): a rectangle of tiles out of play, every one of them 'wall' with ground 4,
+ * each in one piece only. `storeys` on a block, a ruin or works (and GameState.storeys of its tiles, for sight), maybe
+ * on the motorway and the railway; `side`, the map's side (a DIRS4 index) a river, the railway, the motorway or a
+ * barrier runs along.
+ */
+export interface FramePiece {
+  kind: FrameKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  side?: number;
+  storeys?: number;
+}
 
 /**
  * What a piece of cover on a procedural map is meant to be, so the client can
@@ -176,7 +202,7 @@ export type DecorKind =
   | 'forklift'
   /** Factory machinery, a `high` tile inside a hall. */
   | 'machine'
-  /** A silo, a 2 × 2 block of `high` tiles. */
+  /** A silo, a 3 × 3 block of `high` tiles (docs/MAPAS.md §5: 2 × 2 before phase 5). */
   | 'silo'
   /** A park bench on a square (playtest 2026-10-18, #12), two `low` tiles side by side; facing: the way one sits. */
   | 'bench'
@@ -227,6 +253,12 @@ export type DecorKind =
   | 'mailbox'
   /** What lies about and stands up (homeDressing, medicalAbandonment: a chair over, bags, a fallen drip): its MedicalDetail draws it. */
   | 'strewn'
+  /** A garden shed at the back of a plot (docs/MAPAS.md §5.4), 2 × 3; facing: its door. */
+  | 'shed'
+  /** A washing line between two posts across a back garden, 1 × 3; facing: along it. */
+  | 'washingLine'
+  /** A vegetable patch in a back garden, 2 × 3, low cover; facing: along its rows. */
+  | 'vegPatch'
   /**
    * Another tile of an object that stands over several (docs/MAPAS.md, phase 1: a car 1 × 3, a bed 1 × 2): what it is
    * is its anchor's, the tile that says the object's kind; facing: the step towards the anchor (decor.ts objectTiles).
@@ -855,7 +887,8 @@ export interface MedicalDetail {
 
 /** A medical building's bounds, including walls; wear is cosmetic, from 0 to 1. */
 /** What a room of a house is (playtest 2026-10-18, #15). */
-export type HomeUse = 'living' | 'kitchen' | 'bedroom' | 'bath' | 'study' | 'hall';
+/** What a house's room is for; a lavatory and a pantry two by three at least (docs/MAPAS.md §4.3, decided by Arturo 19/10). */
+export type HomeUse = 'living' | 'kitchen' | 'bedroom' | 'bath' | 'study' | 'hall' | 'toilet' | 'pantry';
 export interface HomeRoom {
   x: number;
   y: number;
@@ -935,6 +968,8 @@ export interface GameState {
   levels?: Level[];
   /** Lit tiles at night: the map's street lights, Bengalas and fires (missing in older saves). */
   lights?: Light[];
+  /** What closes the map round what is played (docs/MAPAS.md §5.10); missing on older saves and maps without an outline. */
+  frame?: FramePiece[];
   units: Unit[];
   pods: Pod[];
   mission: MissionState;

@@ -480,7 +480,7 @@ describe('searching', () => {
     expect(SEARCHABLE).toEqual(expect.arrayContaining(['wardrobe', 'table', 'desk', 'shelf', 'counter', 'cabinet', 'bed', 'crates', 'rack']));
   });
 
-  it('every map has its special boxes: up to 3, each of a different kind, away from the start (docs/FASE8.md §B)', () => {
+  it('every map has its special boxes: up to 3 (4 on the maps of 64 and 72), each of a different kind, away from the start (docs/FASE8.md §B)', () => {
     const kinds = ['lootWeapons', 'lootMedical', 'lootAmmo', 'lootFood'] as const;
     for (const biome of ['city', 'wilds', 'facility'] as const) {
       for (let seed = 1; seed <= 4; seed++) {
@@ -490,7 +490,7 @@ describe('searching', () => {
           return k && (kinds as readonly string[]).includes(k) ? [{ k, x: i % s.width, y: Math.floor(i / s.width) }] : [];
         });
         expect(boxes.length, `${biome} ${seed}`).toBeGreaterThanOrEqual(1);
-        expect(boxes.length).toBeLessThanOrEqual(3);
+        expect(boxes.length).toBeLessThanOrEqual(biome === 'facility' ? 3 : 4);
         expect(new Set(boxes.map((b) => b.k)).size).toBe(boxes.length);
         const squad = s.units.filter((u) => u.team === 'xcom');
         for (const b of boxes) expect(Math.min(...squad.map((u) => Math.hypot(b.x - u.pos.x, b.y - u.pos.y)))).toBeGreaterThanOrEqual(10);
@@ -559,10 +559,13 @@ describe('the Saqueo', () => {
     expect(s.mission.horde).toEqual(hordeWave(2));
     expect(s.units.filter((u) => u.team === 'alien').every((u) => TEMPLATES[u.template].undead)).toBe(true);
     // Rooms to search (docs/FASE8.md §B), and a box or so.
+    // On every storey (the flats and the houses upstairs are searched too: docs/MAPAS.md phase 4).
     const rooms = new Set<number>();
-    for (let i = 0; i < s.tiles.length; i++) {
-      const room = roomAt(s, { x: i % s.width, y: Math.floor(i / s.width), z: 0 });
-      if (room) rooms.add(room.id);
+    for (let z = 0; z <= (s.levels?.length ?? 0); z++) {
+      for (let i = 0; i < s.tiles.length; i++) {
+        const room = roomAt(s, { x: i % s.width, y: Math.floor(i / s.width), z });
+        if (room) rooms.add(room.id);
+      }
     }
     expect(rooms.size).toBeGreaterThan(20);
   });

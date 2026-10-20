@@ -38,7 +38,7 @@ import { abilitiesOf } from '../src/abilities';
 import { armorTier, bastionLevel, LEVEL_COST, LEVEL_MISSIONS, MAX_LEVEL, nextTierBlocker, weaponTier } from '../src/progression';
 import { BASE_AIM, barsCost, missionLines, NO_GROWTH, NO_SKILLS, pointsLeft, randomBoard, totalBars, unlockBlocker, veteranWill } from '../src/skills';
 import { BOARD_CELLS, type CellId } from '../src/board';
-import { bastionLot, PIECES, placePiece } from '../src/base';
+import { BASE_MAP, bastionLot, cellsOf, freshBase, onTrack, PIECES, placePiece, treeAt } from '../src/base';
 import { applyEvent } from '../src/events';
 import { Rng } from '../src/rng';
 import { createMission } from '../src/setup';
@@ -228,6 +228,43 @@ describe('missions', () => {
     expect(now.bastion.pieces.map((p) => p.piece)).toEqual(['caravan']);
     expect(now.credits).toBe(credits + PIECES.sandbags.cost.supplies);
     expect(now.bastion.level).toBe(1);
+  });
+
+  it('a base built on the map of 40 grows to 56: in the middle, at the size it was built, pines round it (docs/MAPAS.md phase 6)', () => {
+    const c = createCampaign(both, new Rng(6));
+    const old = { ...JSON.parse(JSON.stringify(c)), version: 22 } as CampaignState;
+    old.bastion = freshBase(new Rng(6), 40);
+    const caravan = old.bastion.pieces[0]!;
+    // A barracón as it was built then (4 × 3), and sandbags where the Bastion's lot now reaches.
+    const hut = { id: 'b9', piece: 'quarters' as const, x: caravan.x + 9, y: caravan.y, rot: 0, hp: 30, level: 1 };
+    const bags = { id: 'b10', piece: 'sandbags' as const, x: caravan.x - 2, y: caravan.y + 1, rot: 0, hp: 15 };
+    old.bastion.pieces.push(hut, bags);
+    old.bastion.trees = old.bastion.trees.filter((i) => ![...Array(4).keys()].some((dx) => [0, 1, 2].some((dy) => i === (hut.y + dy) * 40 + hut.x + dx)));
+    old.siegePosts = { s1: { x: 5, y: 6 } };
+    const credits = old.credits;
+    const now = migrateCampaign(old);
+    const base = now.bastion;
+    expect([base.width, base.height]).toEqual([BASE_MAP, BASE_MAP]);
+    const kept = base.pieces.find((p) => p.id === 'b9')!;
+    expect([kept.x, kept.y, kept.size]).toEqual([hut.x + 8, hut.y + 8, [4, 3]]);
+    expect(cellsOf(kept)).toHaveLength(12);
+    // What stood on the bigger lot comes down, all its cost back.
+    expect(base.pieces.some((p) => p.id === 'b10')).toBe(false);
+    expect(now.credits).toBe(credits + PIECES.sandbags.cost.supplies);
+    expect(now.siegePosts).toEqual({ s1: { x: 13, y: 14 } });
+    // Pines round the old ground, none on what is built nor on the tracks; the caravan still in the middle.
+    expect(base.trees.filter((i) => i % BASE_MAP < 8).length).toBeGreaterThan(100);
+    for (const p of base.pieces) for (const t of cellsOf(p)) expect(treeAt(base, t.x, t.y)).toBe(false);
+    for (const i of base.trees) expect(onTrack(BASE_MAP, BASE_MAP, i % BASE_MAP, Math.floor(i / BASE_MAP))).toBe(false);
+    const lot = bastionLot(base)!;
+    expect(Math.abs(lot.x + lot.w / 2 - BASE_MAP / 2)).toBeLessThan(4);
+    // Raised, it takes its size if it fits where it stands.
+    now.credits = 1000;
+    now.level = 3;
+    for (let y = kept.y; y < kept.y + 6; y++) for (let x = kept.x; x < kept.x + 6; x++) base.trees = base.trees.filter((i) => i !== y * BASE_MAP + x);
+    run(now, { type: 'raise', piece: kept.id }, 0, [0]);
+    expect(kept.size).toBeUndefined();
+    expect(cellsOf(kept)).toHaveLength(30);
   });
 
   it('a fallen soldier leaves its backpack, weapons and whole belt where it fell; brought home, its weapon carries on (18/10 #49)', () => {

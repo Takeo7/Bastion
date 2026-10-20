@@ -84,22 +84,23 @@ const block = (w: number, h: number, tile: TileKind): PieceCell[] =>
  * in, it gives full cover and the dead only beat on it when it is in their way.
  * The costs of the buildings are the facilities' of before, so the campaign's
  * economy stays as it was; those of the defences, a first guess to tune by
- * playing.
+ * playing. Sizes as drawn, from Arte's models (docs/MAPAS.md §4.9, phase 6);
+ * a base built before keeps what stood at the size it had (BasePiece.size).
  */
 export const PIECES: Record<PieceId, PieceDef> = {
-  caravan: { id: 'caravan', name: 'Caravana', kind: 'building', size: [4, 2], tile: 'wall', cost: { supplies: 0 }, hp: 40, level: 1, unique: true },
-  radio: { id: 'radio', name: 'Sala de radio', kind: 'building', size: [3, 3], tile: 'wall', cost: { supplies: 60 }, hp: 30, level: 1, unique: true, facility: 'relay' },
-  quarters: { id: 'quarters', name: 'Barracón', kind: 'building', size: [4, 3], tile: 'wall', cost: { supplies: 40 }, hp: 30, level: 1, facility: 'quarters' },
-  infirmary: { id: 'infirmary', name: 'Enfermería', kind: 'building', size: [4, 3], tile: 'wall', cost: { supplies: 60 }, hp: 30, level: 1, unique: true, facility: 'infirmary' },
-  workshop: { id: 'workshop', name: 'Taller', kind: 'building', size: [4, 3], tile: 'wall', cost: { supplies: 85 }, hp: 30, level: 1, unique: true, facility: 'workshop' },
-  garden: { id: 'garden', name: 'Huerto', kind: 'building', size: [4, 4], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, unique: true, facility: 'garden' },
-  quarantine: { id: 'quarantine', name: 'Cuarentena', kind: 'building', size: [3, 3], tile: 'wall', cost: { supplies: 50 }, hp: 30, level: 1, unique: true, facility: 'quarantine' },
-  memorial: { id: 'memorial', name: 'Camposanto', kind: 'building', size: [3, 3], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, unique: true, facility: 'memorial' },
-  range: { id: 'range', name: 'Campo de tiro', kind: 'building', size: [6, 2], tile: 'low', cost: { supplies: 90 }, hp: 20, level: 2, unique: true, facility: 'range' },
-  training: { id: 'training', name: 'Centro de entrenamiento', kind: 'building', size: [4, 3], tile: 'wall', cost: { supplies: 140 }, hp: 30, level: 2, unique: true, facility: 'training' },
-  simulation: { id: 'simulation', name: 'Sala de mapas', kind: 'building', size: [3, 3], tile: 'wall', cost: { supplies: 100 }, hp: 30, level: 3, unique: true, facility: 'simulation' },
-  garage: { id: 'garage', name: 'Chapistería', kind: 'building', size: [4, 3], tile: 'wall', cost: { supplies: 110 }, hp: 30, level: 3, unique: true, facility: 'garage' },
-  echoes: { id: 'echoes', name: 'Taller de oficios', kind: 'building', size: [3, 3], tile: 'wall', cost: { supplies: 130 }, hp: 30, level: 5, unique: true, facility: 'echoes' },
+  caravan: { id: 'caravan', name: 'Caravana', kind: 'building', size: [5, 2], tile: 'wall', cost: { supplies: 0 }, hp: 40, level: 1, unique: true },
+  radio: { id: 'radio', name: 'Sala de radio', kind: 'building', size: [4, 4], tile: 'wall', cost: { supplies: 60 }, hp: 30, level: 1, unique: true, facility: 'relay' },
+  quarters: { id: 'quarters', name: 'Barracón', kind: 'building', size: [6, 5], tile: 'wall', cost: { supplies: 40 }, hp: 30, level: 1, facility: 'quarters' },
+  infirmary: { id: 'infirmary', name: 'Enfermería', kind: 'building', size: [6, 5], tile: 'wall', cost: { supplies: 60 }, hp: 30, level: 1, unique: true, facility: 'infirmary' },
+  workshop: { id: 'workshop', name: 'Taller', kind: 'building', size: [5, 4], tile: 'wall', cost: { supplies: 85 }, hp: 30, level: 1, unique: true, facility: 'workshop' },
+  garden: { id: 'garden', name: 'Huerto', kind: 'building', size: [7, 6], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, unique: true, facility: 'garden' },
+  quarantine: { id: 'quarantine', name: 'Cuarentena', kind: 'building', size: [4, 4], tile: 'wall', cost: { supplies: 50 }, hp: 30, level: 1, unique: true, facility: 'quarantine' },
+  memorial: { id: 'memorial', name: 'Camposanto', kind: 'building', size: [4, 4], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, unique: true, facility: 'memorial' },
+  range: { id: 'range', name: 'Campo de tiro', kind: 'building', size: [10, 3], tile: 'low', cost: { supplies: 90 }, hp: 20, level: 2, unique: true, facility: 'range' },
+  training: { id: 'training', name: 'Centro de entrenamiento', kind: 'building', size: [5, 5], tile: 'wall', cost: { supplies: 140 }, hp: 30, level: 2, unique: true, facility: 'training' },
+  simulation: { id: 'simulation', name: 'Sala de mapas', kind: 'building', size: [6, 6], tile: 'wall', cost: { supplies: 100 }, hp: 30, level: 3, unique: true, facility: 'simulation' },
+  garage: { id: 'garage', name: 'Chapistería', kind: 'building', size: [7, 5], tile: 'wall', cost: { supplies: 110 }, hp: 30, level: 3, unique: true, facility: 'garage' },
+  echoes: { id: 'echoes', name: 'Taller de oficios', kind: 'building', size: [4, 4], tile: 'wall', cost: { supplies: 130 }, hp: 30, level: 5, unique: true, facility: 'echoes' },
   palisade: { id: 'palisade', name: 'Empalizada', kind: 'defence', size: [1, 1], tile: 'wall', cost: { supplies: 6 }, hp: 12, level: 1 },
   wall: { id: 'wall', name: 'Muro', kind: 'defence', size: [1, 1], tile: 'wall', cost: { supplies: 15, parts: 1 }, hp: 36, level: 2 },
   gate: { id: 'gate', name: 'Puerta', kind: 'defence', size: [1, 1], tile: 'door', cost: { supplies: 10 }, hp: 18, level: 1 },
@@ -110,15 +111,9 @@ export const PIECES: Record<PieceId, PieceDef> = {
     id: 'tower',
     name: 'Torre de vigía',
     kind: 'defence',
-    size: [2, 3],
-    // The deck a storey up, and the ladder up to it in front.
-    cells: [
-      { dx: 0, dy: 0, tile: 'floor', elev: 1 },
-      { dx: 1, dy: 0, tile: 'floor', elev: 1 },
-      { dx: 0, dy: 1, tile: 'floor', elev: 1 },
-      { dx: 1, dy: 1, tile: 'floor', elev: 1 },
-      { dx: 0, dy: 2, tile: 'ladder' },
-    ],
+    size: [3, 4],
+    // The deck a storey up, three by three, and the ladder up to it in front, in the middle.
+    cells: [...block(3, 3, 'floor').map((c) => ({ ...c, elev: 1 })), { dx: 1, dy: 3, tile: 'ladder' }],
     cost: { supplies: 25 },
     hp: 30,
     level: 1,
@@ -131,6 +126,27 @@ export const PIECES: Record<PieceId, PieceDef> = {
   turret: { id: 'turret', name: 'Torreta', kind: 'trap', size: [1, 1], tile: 'floor', cost: { supplies: 40, parts: 4 }, hp: 12, level: 4, unique: false, charges: 6 },
 };
 
+/** What each piece measured before the base grew (docs/MAPAS.md phase 6), unturned: what a base built then has standing. */
+export const OLD_PIECE_SIZES: Partial<Record<PieceId, [number, number]>> = {
+  caravan: [4, 2],
+  radio: [3, 3],
+  quarters: [4, 3],
+  infirmary: [4, 3],
+  workshop: [4, 3],
+  garden: [4, 4],
+  quarantine: [3, 3],
+  memorial: [3, 3],
+  range: [6, 2],
+  training: [4, 3],
+  simulation: [3, 3],
+  garage: [4, 3],
+  echoes: [3, 3],
+  tower: [2, 3],
+};
+
+/** The watchtower as it was built before the base grew (docs/MAPAS.md phase 6): a deck of two by two, the ladder at a corner. */
+const OLD_TOWER: PieceCell[] = [...block(2, 2, 'floor').map((c) => ({ ...c, elev: 1 })), { dx: 0, dy: 2, tile: 'ladder' }];
+
 /** Something standing on the base: where, which way round, and how it is. */
 export interface BasePiece {
   id: string;
@@ -140,6 +156,11 @@ export interface BasePiece {
   y: number;
   /** Quarter turns clockwise, 0–3. */
   rot: number;
+  /**
+   * Its size unturned, when not its kind's: one built before the base grew (docs/MAPAS.md phase 6), as it stood, until
+   * it is improved or built again.
+   */
+  size?: [number, number];
   hp: number;
   /** A building's level, 1–3. */
   level?: number;
@@ -165,22 +186,23 @@ export interface BaseState {
 
 /**
  * The Bastion's lot (Arturo, 18/10 #40: the caravan grows into a building
- * with the level): 6 × 6 round the caravan, from one tile left and two up of
- * it, where nothing else is built; what isn't the building is its yard.
+ * with the level): 9 × 9 round the caravan (docs/MAPAS.md §4.9), from two
+ * tiles left and three up of it, where nothing else is built; what isn't the
+ * building is its yard.
  */
-export const BASTION_LOT = 6;
-/** What the Bastion takes up at each stage (two levels each): the caravan, the mobile home, the barracón, the house (Arte). */
+export const BASTION_LOT = 9;
+/** What the Bastion takes up at each stage (two levels each): the caravan, the mobile home, the barracón, the house (Arte; §4.9). */
 export const BASTION_STAGES: readonly [number, number][] = [
-  [4, 2],
-  [6, 3],
-  [5, 4],
-  [6, 5],
+  [5, 2],
+  [7, 3],
+  [7, 5],
+  [7, 7],
 ];
 
 /** The lot, from the caravan; null with no caravan. */
 export function bastionLot(base: BaseState): { x: number; y: number; w: number; h: number } | null {
   const caravan = base.pieces.find((p) => p.piece === 'caravan');
-  return caravan ? { x: caravan.x - 1, y: caravan.y - 2, w: BASTION_LOT, h: BASTION_LOT } : null;
+  return caravan ? { x: caravan.x - 2, y: caravan.y - 3, w: BASTION_LOT, h: BASTION_LOT } : null;
 }
 
 /** The stage the Bastion's level shows (0 to 3). */
@@ -202,21 +224,24 @@ export function bastionFootprint(base: BaseState): Vec2[] {
 
 /**
  * What stands in the Bastion's yard at each stage (Arte's drawing of it,
- * client basePieces.ts drawBastion), by tile of its lot (x across, y deep, its
- * front the last row): what is always there, and what its second level adds.
- *   - the caravan: the fire, its two chairs and the wood; then its steps, the
- *     tarp shelter by its side and the generator;
- *   - the mobile home: the same; then the porch deck along its front, its steps;
- *   - the barracón: the fire in the corner, its chairs, the wood; then the solar
- *     panels and the generator up its free side, sandbags either side of its
- *     steps, the floodlight;
- *   - the house: its porch, the whole front row, with the wood on it.
+ * client basePieces.ts drawBastion, on the lot of 9 × 9: docs/MAPAS.md phase
+ * 6), by tile of its lot (x across, y deep, its front the last row): what is
+ * always there, and what its second level adds.
+ *   - the caravan: the fire with a chair either side, the wood; then its steps,
+ *     the tarp over two by two by its side, the generator by its end;
+ *   - the mobile home: the fire and its chairs along the front row, the wood;
+ *     then the deck along its front and its steps;
+ *   - the barracón: its steps, the fire and its chairs in the front corner, the
+ *     wood; then the floodlight, the solar panels and the generator up the free
+ *     column, sandbags either side of its steps;
+ *   - the house (its porch the model's own, inside its 7 × 7): the wood; then
+ *     the floodlight in the other corner.
  */
 const BASTION_YARD: { always: [number, number][]; more: [number, number][] }[] = [
-  { always: [[4, 5], [3, 5], [5, 4], [0, 5]], more: [[3, 4], [0, 4], [1, 4], [2, 4], [1, 5], [2, 5], [5, 1]] },
-  { always: [[4, 5], [3, 5], [5, 4], [0, 5]], more: [[1, 4], [2, 4], [3, 4], [4, 4]] },
-  { always: [[5, 5], [4, 5], [5, 4], [0, 5]], more: [[5, 1], [5, 2], [1, 5], [3, 5], [5, 0]] },
-  { always: [[0, 5], [1, 5], [2, 5], [3, 5], [4, 5], [5, 5]], more: [] },
+  { always: [[5, 7], [4, 7], [6, 7], [0, 8]], more: [[5, 5], [0, 6], [1, 6], [0, 7], [1, 7], [7, 3]] },
+  { always: [[5, 8], [4, 8], [6, 8], [0, 8]], more: [[3, 6], [4, 6], [5, 6], [6, 6], [7, 6], [2, 6]] },
+  { always: [[4, 7], [7, 8], [6, 8], [8, 8], [0, 8]], more: [[8, 0], [8, 1], [8, 2], [8, 3], [3, 7], [5, 7]] },
+  { always: [[0, 8]], more: [[8, 8]] },
 ];
 
 /**
@@ -267,8 +292,8 @@ export function onBastionLot(base: BaseState, x: number, y: number): boolean {
   return !!lot && x >= lot.x && y >= lot.y && x < lot.x + lot.w && y < lot.y + lot.h;
 }
 
-/** The base's map, across and deep. */
-export const BASE_MAP = 40;
+/** The base's map, across and deep (docs/MAPAS.md §4.9: 56, a base built on 40 set in its middle). */
+export const BASE_MAP = 56;
 /** The dead come in by this band at the edge: nothing is built in it. */
 export const BASE_EDGE = 2;
 /** Suministros felling a tree costs; it gives nothing back (Arturo, 18/10 #41: «solo cuesta recursos y no da nada»). */
@@ -276,17 +301,22 @@ export const FELL_COST = 3;
 /** Of a piece's cost, what dismantling it gives back. */
 export const DISMANTLE_BACK = 0.5;
 
-/** A piece's tiles once turned `rot` quarter turns clockwise and set at (x, y). */
-export function pieceCells(id: PieceId, x: number, y: number, rot: number): (PieceCell & Vec2)[] {
+/** A piece's tiles once turned `rot` quarter turns clockwise and set at (x, y); `size`, one built at another (BasePiece.size). */
+export function pieceCells(id: PieceId, x: number, y: number, rot: number, size?: [number, number]): (PieceCell & Vec2)[] {
   const def = PIECES[id];
-  const [w, h] = def.size;
-  const cells = def.cells ?? block(w, h, def.tile ?? 'wall');
+  const [w, h] = size ?? def.size;
+  const cells = size ? (id === 'tower' ? OLD_TOWER : block(w, h, def.tile ?? 'wall')) : (def.cells ?? block(w, h, def.tile ?? 'wall'));
   const r = ((rot % 4) + 4) % 4;
   return cells.map((c) => {
     // Turned about the piece's own box, then set with its top-left at (x, y).
     const [dx, dy] = r === 0 ? [c.dx, c.dy] : r === 1 ? [h - 1 - c.dy, c.dx] : r === 2 ? [w - 1 - c.dx, h - 1 - c.dy] : [c.dy, w - 1 - c.dx];
     return { ...c, dx, dy, x: x + dx, y: y + dy };
   });
+}
+
+/** The tiles a piece on the base stands on, at the size it was built (BasePiece.size). */
+export function cellsOf(p: BasePiece): (PieceCell & Vec2)[] {
+  return pieceCells(p.piece, p.x, p.y, p.rot, p.size);
 }
 
 /**
@@ -297,14 +327,14 @@ export function armedTiles(base: BaseState): Set<number> {
   const armed = new Set<number>();
   for (const p of base.pieces) {
     if (p.hp <= 0 || (PIECES[p.piece].kind !== 'trap' && p.piece !== 'wire')) continue;
-    for (const c of pieceCells(p.piece, p.x, p.y, p.rot)) armed.add(c.y * base.width + c.x);
+    for (const c of cellsOf(p)) armed.add(c.y * base.width + c.x);
   }
   return armed;
 }
 
 /** The piece standing on a tile, if any. */
 export function pieceAt(base: BaseState, x: number, y: number): BasePiece | undefined {
-  return base.pieces.find((p) => pieceCells(p.piece, p.x, p.y, p.rot).some((c) => c.x === x && c.y === y));
+  return base.pieces.find((p) => cellsOf(p).some((c) => c.x === x && c.y === y));
 }
 
 export function treeAt(base: BaseState, x: number, y: number): boolean {
@@ -363,6 +393,69 @@ export function placePiece(base: BaseState, id: PieceId, x: number, y: number, r
   return piece;
 }
 
+/**
+ * Whether a piece built before the base grew (BasePiece.size) now fits at its kind's size where it stands, as it is
+ * turned: what raising it makes it, if so (campaign.ts 'raise').
+ */
+export function grownFits(base: BaseState, p: BasePiece): boolean {
+  if (!p.size) return false;
+  return pieceCells(p.piece, p.x, p.y, p.rot).every((c) => {
+    if (c.x < BASE_EDGE || c.y < BASE_EDGE || c.x >= base.width - BASE_EDGE || c.y >= base.height - BASE_EDGE || treeAt(base, c.x, c.y)) return false;
+    const there = pieceAt(base, c.x, c.y);
+    return (!there || there === p) && (p.piece === 'caravan' || !onBastionLot(base, c.x, c.y));
+  });
+}
+
+/**
+ * A base built on a smaller map, on one `size` across (docs/MAPAS.md phase 6, decided by Arturo 19/10: «con la base
+ * guardada en el centro y lo construido con su tamaño»): all of it set in the middle, what stood at the size it was
+ * built (BasePiece.size), pines round it as thick as freshBase grows them, the tracks out to each side clear. What
+ * stands on the Bastion's bigger lot comes down: returned, for the caller to give back what it cost.
+ */
+export function growBase(base: BaseState, size: number, rng: Rng): BasePiece[] {
+  const old = base.width;
+  const o = Math.floor((size - old) / 2);
+  if (o <= 0) return [];
+  const shift = (i: number) => (Math.floor(i / old) + o) * size + (i % old) + o;
+  const trees = new Set(base.trees.map(shift));
+  const thickness = 0.5 + rng.next() * 0.25;
+  const step = 6;
+  const gw = Math.ceil(size / step) + 2;
+  const grid = Array.from({ length: gw * gw }, () => rng.next());
+  const smooth = (t: number) => t * t * (3 - 2 * t);
+  const noise = (x: number, y: number) => {
+    const fx = x / step;
+    const fy = y / step;
+    const gx = Math.floor(fx);
+    const gy = Math.floor(fy);
+    const tx = smooth(fx - gx);
+    const ty = smooth(fy - gy);
+    const at = (a: number, b: number) => grid[b * gw + a]!;
+    return (at(gx, gy) * (1 - tx) + at(gx + 1, gy) * tx) * (1 - ty) + (at(gx, gy + 1) * (1 - tx) + at(gx + 1, gy + 1) * tx) * ty;
+  };
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const inside = x >= o && y >= o && x < o + old && y < o + old;
+      if (!inside && !onTrack(size, size, x, y) && noise(x, y) < thickness) trees.add(y * size + x);
+    }
+  }
+  base.trees = [...trees].sort((a, b) => a - b);
+  base.felled = base.felled?.map(shift);
+  for (const p of base.pieces) {
+    p.x += o;
+    p.y += o;
+    const was = OLD_PIECE_SIZES[p.piece];
+    if (p.piece !== 'caravan' && was && (was[0] !== PIECES[p.piece].size[0] || was[1] !== PIECES[p.piece].size[1])) p.size = [...was];
+  }
+  base.width = size;
+  base.height = size;
+  const down = base.pieces.filter((p) => p.piece !== 'caravan' && cellsOf(p).some((t) => onBastionLot(base, t.x, t.y)));
+  base.pieces = base.pieces.filter((p) => !down.includes(p));
+  // Nothing grows on the Bastion's lot.
+  if (bastionLot(base)) base.trees = base.trees.filter((i) => !onBastionLot(base, i % size, Math.floor(i / size)));
+  return down;
+}
+
 /** Why the tree at (x, y) can't be felled, or null if it can. */
 export function fellBlocker(base: BaseState, x: number, y: number): string | null {
   return treeAt(base, x, y) ? null : 'Ahí no hay ningún árbol.';
@@ -410,7 +503,7 @@ export function besidePieces(base: BaseState, p: BasePiece): BasePiece[] {
   const lot = bastionLot(base);
   const lotCells: Vec2[] = [];
   if (lot) for (let y = lot.y; y < lot.y + lot.h; y++) for (let x = lot.x; x < lot.x + lot.w; x++) lotCells.push({ x, y });
-  const mine = p === caravan ? lotCells : pieceCells(p.piece, p.x, p.y, p.rot);
+  const mine = p === caravan ? lotCells : cellsOf(p);
   const at = (x: number, y: number) => (caravan && onBastionLot(base, x, y) ? caravan : pieceAt(base, x, y));
   const out = new Set<BasePiece>();
   for (const c of mine) {
@@ -457,7 +550,8 @@ export function freshBase(rng: Rng, size = BASE_MAP): BaseState {
   const thickness = 0.5 + rng.next() * 0.25;
   const cx = (width - 1) / 2;
   const cy = (height - 1) / 2;
-  const clearing = 6 + rng.int(3);
+  // A bigger clearing on a bigger map (docs/MAPAS.md §4.9: 12–16 tiles across from the middle, with its glades).
+  const clearing = Math.round((6 + rng.int(3)) * (size / 40));
   const trees: number[] = [];
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -506,7 +600,7 @@ export function baseLayout(base: BaseState): MissionLayout {
     if (p.hp <= 0) continue;
     const look = PIECE_LOOK[p.piece];
     // The caravan stands for the Bastion: the building of its stage, solid, holding what the caravan holds.
-    const cells: { x: number; y: number; tile: TileKind; elev?: number }[] = p.piece === 'caravan' ? bastionFootprint(base).map((t) => ({ ...t, tile: 'wall' as TileKind })) : pieceCells(p.piece, p.x, p.y, p.rot);
+    const cells: { x: number; y: number; tile: TileKind; elev?: number }[] = p.piece === 'caravan' ? bastionFootprint(base).map((t) => ({ ...t, tile: 'wall' as TileKind })) : cellsOf(p);
     for (const c of cells) {
       const i = c.y * width + c.x;
       tiles[i] = c.tile;

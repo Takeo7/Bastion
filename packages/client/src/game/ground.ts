@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { decorOf, DIRS4, DIRS8, type Biome, type DecorKind, type GameState, type TileKind } from '@bastion/engine';
 import { extendShader } from './fogOfWar';
 import { STOREY } from './coords';
+import { bandOf, FAR_BANK, frameOf, inBand, SUNKEN, type Band } from './outline';
 import { snowTexture, snowyMission } from './snow';
 import { terrainFile, type PropId, type TerrainId } from './syntyManifest';
 
@@ -24,9 +25,11 @@ const HILL = 4;
 const FURROW = 5;
 /** Tarmac that is not a street (the engine's ground 3: a yard, a forecourt, a car park): no paint on it. */
 const YARD = 6;
+/** A canal's water, down between its walls (the outline's river, frameArt.ts): no ground there, nor slab. */
+const WATER = 7;
 
 /** The floor kinds (GroundMap.kinds), for what dresses the ground (dressing.ts). */
-export const FLOOR = { OPEN, STREET, INDOOR, ROOF, HILL, FURROW, YARD } as const;
+export const FLOOR = { OPEN, STREET, INDOOR, ROOF, HILL, FURROW, YARD, WATER } as const;
 
 /** Open ground marked as grass in a town (blue channel). */
 const LAWN = 3;
@@ -40,13 +43,30 @@ export class GroundMap {
   readonly texture: THREE.DataTexture;
   /** Kind per tile (OPEN, STREET…). */
   readonly kinds: Uint8Array;
+  /** The river, the railway or the motorway along a side (the outline: frameArt.ts), if any. */
+  readonly band: Band | null;
 
   constructor(readonly s: GameState) {
     const { width: w, height: h } = s;
     const generated = s.mapId.startsWith('gen-');
     // Procedural maps say which tiles are streets (or dirt tracks) and rooms; older saves had streets on a 13-tile grid.
+    // The outline round what is played (docs/MAPAS.md §5.10): a street that goes on past its closure is street; under
+    // the motorway and a cordon, tarmac; the rest is open ground, which what stands on it covers (frameArt.ts).
+    const outline = new Uint8Array(w * h);
+    for (const p of s.frame ?? []) {
+      const kind = p.kind === 'street' ? STREET : p.kind === 'highway' || p.kind === 'barrier' ? YARD : OPEN;
+      for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) outline[y * w + x] = kind + 1;
+    }
+    // The river's band (its banks past it are ground), or the country's water or ravine: open, down to its water or floor.
+    this.band = bandOf(s);
+    const band = this.band;
+    if (band && SUNKEN.has(band.kind)) {
+      const at = frameOf(s);
+      for (let i = 0; i < w * h; i++) if (inBand(s, band, i % w, Math.floor(i / w), at)) outline[i] = WATER + 1;
+    }
     const isStreet = (x: number, y: number) =>
-      x >= 0 && y >= 0 && x < w && y < h && (s.elev[y * w + x] ?? 0) === 0 && (s.ground ? s.ground[y * w + x] === 1 : generated && w === 36 && (x % 13 >= 10 || y % 13 >= 10));
+      x >= 0 && y >= 0 && x < w && y < h && (s.elev[y * w + x] ?? 0) === 0 &&
+      (outline[y * w + x] === STREET + 1 || (s.ground ? s.ground[y * w + x] === 1 : generated && w === 36 && (x % 13 >= 10 || y % 13 >= 10)));
     const wilds = s.biome === 'wilds';
     // The forest road and the stop's yards (site roadside, #25): tarmac, the road with a town street's centre line.
     const tarmac = wilds && s.site === 'roadside';
@@ -57,7 +77,7 @@ export class GroundMap {
         const i = y * w + x;
         const e = s.elev[i] ?? 0;
         // A siege's watchtowers stand on the ground (docs/FASE12.md §10): their decks are the guard tower's own.
-        let kind = e > 0 && !s.mission.siege ? (wilds ? HILL : ROOF) : s.ground?.[i] === 2 ? INDOOR : s.ground?.[i] === 3 ? YARD : isStreet(x, y) ? STREET : OPEN;
+        let kind = outline[i] === WATER + 1 ? WATER : e > 0 && !s.mission.siege ? (wilds ? HILL : ROOF) : s.ground?.[i] === 2 ? INDOOR : s.ground?.[i] === 3 || outline[i] === YARD + 1 ? YARD : isStreet(x, y) ? STREET : OPEN;
         let axis = 0;
         let offset = 0;
         // A one-tile strip in the wilds is a furrow of a field, not the track.
@@ -100,26 +120,39 @@ export class GroundMap {
   private lawns(data: Uint8Array): void {
     const s = this.s;
     const { width: w, height: h } = s;
-    const far = new Array<number>(w * h).fill(99);
-    const queue: number[] = [];
-    for (let i = 0; i < w * h; i++) {
-      if (this.kinds[i] === STREET || this.kinds[i] === YARD) {
+    /** Tiles from the nearest of `from`'s tiles, four ways round. */
+    const distance = (from: (i: number) => boolean) => {
+      const far = new Array<number>(w * h).fill(99);
+      const queue: number[] = [];
+      for (let i = 0; i < w * h; i++) {
+        if (!from(i)) continue;
         far[i] = 0;
         queue.push(i);
       }
-    }
-    for (let k = 0; k < queue.length; k++) {
-      const i = queue[k]!;
-      const x = i % w;
-      const y = (i - x) / w;
-      for (const d of DIRS4) {
-        const nx = x + d.x;
-        const ny = y + d.y;
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h || far[ny * w + nx]! <= far[i]! + 1) continue;
-        far[ny * w + nx] = far[i]! + 1;
-        queue.push(ny * w + nx);
+      for (let k = 0; k < queue.length; k++) {
+        const i = queue[k]!;
+        const x = i % w;
+        const y = (i - x) / w;
+        for (const d of DIRS4) {
+          const nx = x + d.x;
+          const ny = y + d.y;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h || far[ny * w + nx]! <= far[i]! + 1) continue;
+          far[ny * w + nx] = far[i]! + 1;
+          queue.push(ny * w + nx);
+        }
       }
-    }
+      return far;
+    };
+    const far = distance((i) => this.kinds[i] === STREET || this.kinds[i] === YARD);
+    // A street of five tiles or more across has pavements of two (docs/MAPAS.md §4.1): its second row is paving too.
+    const street = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && this.kinds[y * w + x] === STREET;
+    const span = (x: number, y: number, dx: number, dy: number) => {
+      let n = 1;
+      for (let k = 1; k < 8 && street(x + dx * k, y + dy * k); k++) n++;
+      for (let k = 1; k < 8 && street(x - dx * k, y - dy * k); k++) n++;
+      return n;
+    };
+    const wide = distance((i) => this.kinds[i] === STREET && Math.min(span(i % w, Math.floor(i / w), 1, 0), span(i % w, Math.floor(i / w), 0, 1)) >= 5);
     const paved = new Uint8Array(w * h);
     for (let i = 0; i < w * h; i++) {
       const kind = decorOf(s.decor?.[i])?.kind;
@@ -128,7 +161,7 @@ export class GroundMap {
       const y = (i - x) / w;
       for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (x + dx >= 0 && y + dy >= 0 && x + dx < w && y + dy < h) paved[(y + dy) * w + x + dx] = 1;
     }
-    for (let i = 0; i < w * h; i++) if (this.kinds[i] === OPEN && far[i]! >= 2 && !paved[i]) data[i * 4 + 2] = LAWN;
+    for (let i = 0; i < w * h; i++) if (this.kinds[i] === OPEN && far[i]! >= 2 && wide[i]! >= 3 && !paved[i]) data[i * 4 + 2] = LAWN;
   }
 
   /**
@@ -180,6 +213,8 @@ export class GroundMap {
       gBiome: { value: biome },
       gTarmac: { value: this.s.biome === 'wilds' && this.s.site === 'roadside' ? 1 : 0 },
       gSnow: { value: snowyMission(this.s) ? 1 : 0 },
+      // A canal along a side (DIRS4, −1 none): its water has no ground, as far as its far bank past the map's edge.
+      gWater: { value: new THREE.Vector2(this.band && SUNKEN.has(this.band.kind) ? this.band.side : -1, FAR_BANK) },
       tSnow: { value: snowyMission(this.s) ? snowTexture() : null },
       tAsphalt: { value: terrainTexture('asphalt') },
       tGrass: { value: terrainTexture('grass') },
@@ -292,6 +327,7 @@ const SYNTY_GROUND_GLSL = /* glsl */ `
   uniform float gBiome;
   uniform float gTarmac;
   uniform float gSnow;
+  uniform vec2 gWater;
   uniform sampler2D tSnow;
   uniform sampler2D tAsphalt;
   uniform sampler2D tGrass;
@@ -390,6 +426,11 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
     ivec2 t = ivec2(floor(p));
     vec4 own = sTile(t);
     float k = floor(own.r * 255.0 + 0.5);
+    // A canal's water (the ground beyond the map as the edge's tiles): no ground down to it, up to its far bank.
+    if (gWater.x > -0.5 && abs(k - 7.0) < 0.5) {
+      float past = gWater.x < 0.5 ? -p.y : gWater.x < 1.5 ? p.x - groundSize.x : gWater.x < 2.5 ? p.y - groundSize.y : -p.x;
+      if (past < gWater.y) discard;
+    }
     float level = own.g;
     float big = sFbm(p * 0.07);
     float mid = sFbm(p * 0.33 + 3.1);
@@ -583,7 +624,7 @@ export function scatterCover(s: GameState, ground: GroundMap, density = 1, area:
       // A siege's watchtower deck (docs/FASE12.md §10) is planks: nothing grows on it.
       if (e && s.mission.siege) continue;
       const kind = ground.kinds[i]!;
-      if (kind === INDOOR) continue;
+      if (kind === INDOOR || kind === WATER) continue;
       const lawn = s.biome === 'city' && kind === OPEN && data[i * 4 + 2] === LAWN;
       const list: [PropId, number][] = [...(plan[lawn ? LAWN + 10 : kind] ?? [])];
       const r = random(hash2(x, y, 23) * 4294967296);

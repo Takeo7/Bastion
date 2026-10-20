@@ -114,6 +114,8 @@ const DROP_MIN = 7;
 const DROP_MAX = 13;
 /** The horde comes in this close to the map's edge, and at least this far from every soldier (fallbacks after). */
 const EDGE_BAND = 2;
+/** Where a whole horde has no room that close (a narrow way in through the outline, docs/MAPAS.md §5.10), this close. */
+const EDGE_DEEP = 4;
 const EDGE_GAP = [12, 8, 0] as const;
 /** Nor this close to the evac zone. */
 const EDGE_EVAC_GAP = 3;
@@ -957,37 +959,41 @@ export class Sim {
     if (!soldiers.length) return null;
     const free = (x: number, y: number) =>
       inBounds(s, x, y) && canStopAt(s, { x, y, z: 0 }) && (s.elev[tileIndex(s, x, y)] ?? 0) === 0 && !unitAt(s, { x, y, z: 0 });
-    const sides = (x: number, y: number) => [y < EDGE_BAND, x >= s.width - EDGE_BAND, y >= s.height - EDGE_BAND, x < EDGE_BAND];
+    const sides = (x: number, y: number, band: number) => [y < band, x >= s.width - band, y >= s.height - band, x < band];
     const middle = (along: number, span: number) => along >= span / 4 && along < (span * 3) / 4;
     // In a siege, never in a glade the pines close off: only where the way to the squad is open, or opened by breaking what was built.
     const open = edge && s.mission.siege ? this.openToSquad() : null;
-    const onEdge = (x: number, y: number) =>
-      (side === undefined ? sides(x, y).some(Boolean) : !!sides(x, y)[side] && (side % 2 === 0 ? middle(x, s.width) : middle(y, s.height))) &&
+    const onEdge = (x: number, y: number, band: number) =>
+      (side === undefined ? sides(x, y, band).some(Boolean) : !!sides(x, y, band)[side] && (side % 2 === 0 ? middle(x, s.width) : middle(y, s.height))) &&
       !s.mission.evacZone.some((z) => distance(z, { x, y }) < EDGE_EVAC_GAP) &&
       (!open || open.has(tileIndex(s, x, y)));
-    const bands = edge ? EDGE_GAP.map((lo) => [lo, Infinity] as const) : ([[DROP_MIN, DROP_MAX], [4, 20], [2, 60]] as const);
+    // Further off on a bigger map (docs/MAPAS.md §6: 16 and 10 at 64).
+    const scale = Math.max(1, Math.max(s.width, s.height) / 48);
+    const bands = edge ? EDGE_GAP.map((lo) => [Math.round(lo * scale), Infinity] as const) : ([[DROP_MIN, DROP_MAX], [4, 20], [2, 60]] as const);
     for (const [lo, hi] of bands) {
-      const candidates: Pos[] = [];
-      for (let y = 0; y < s.height; y++) {
-        for (let x = 0; x < s.width; x++) {
-          if (!free(x, y) || (edge && !onEdge(x, y))) continue;
-          const d = Math.min(...soldiers.map((o) => distance(o.pos, { x, y })));
-          if (d >= lo && d <= hi) candidates.push({ x, y, z: 0 });
-        }
-      }
-      while (candidates.length) {
-        const anchor = candidates.splice(this.rng.int(candidates.length), 1)[0]!;
-        const zone = [anchor];
-        for (let r = 1; r <= 2 && zone.length < count; r++) {
-          for (let dy = -r; dy <= r && zone.length < count; dy++) {
-            for (let dx = -r; dx <= r && zone.length < count; dx++) {
-              const p = { x: anchor.x + dx, y: anchor.y + dy, z: 0 };
-              // The horde stays by the edge, all of it.
-              if (free(p.x, p.y) && (!edge || onEdge(p.x, p.y)) && !zone.some((z) => sameTile(z, p))) zone.push(p);
-            }
+      for (const band of edge ? [EDGE_BAND, EDGE_DEEP] : [EDGE_BAND]) {
+        const candidates: Pos[] = [];
+        for (let y = 0; y < s.height; y++) {
+          for (let x = 0; x < s.width; x++) {
+            if (!free(x, y) || (edge && !onEdge(x, y, band))) continue;
+            const d = Math.min(...soldiers.map((o) => distance(o.pos, { x, y })));
+            if (d >= lo && d <= hi) candidates.push({ x, y, z: 0 });
           }
         }
-        if (zone.length >= count) return zone;
+        while (candidates.length) {
+          const anchor = candidates.splice(this.rng.int(candidates.length), 1)[0]!;
+          const zone = [anchor];
+          for (let r = 1; r <= 2 && zone.length < count; r++) {
+            for (let dy = -r; dy <= r && zone.length < count; dy++) {
+              for (let dx = -r; dx <= r && zone.length < count; dx++) {
+                const p = { x: anchor.x + dx, y: anchor.y + dy, z: 0 };
+                // The horde stays by the edge, all of it.
+                if (free(p.x, p.y) && (!edge || onEdge(p.x, p.y, band)) && !zone.some((z) => sameTile(z, p))) zone.push(p);
+              }
+            }
+          }
+          if (zone.length >= count) return zone;
+        }
       }
     }
     return null;
@@ -1092,7 +1098,8 @@ export class Sim {
     if (!m.horde?.length || combatants(this.s, 'alien').length >= HORDE.cap) return;
     // A few every turn, always (playtest 2026-10-15, #11); twice as many while a sabotage's alarm still sounds (#14).
     const alarm = m.kind === 'sabotage' && !m.objectiveDone ? 2 : 1;
-    const few = HORDE.trickle[Math.max(1, Math.min(4, m.difficulty ?? 2))]! * alarm;
+    // A bigger map, more edge to come in by (docs/MAPAS.md §6): as many more as it is longer a side than 48.
+    const few = Math.round(HORDE.trickle[Math.max(1, Math.min(4, m.difficulty ?? 2))]! * alarm * Math.max(1, Math.max(this.s.width, this.s.height) / 48));
     if (few) {
       const r: Reinforcement = { id: `r${m.reinforcements.length + 1}`, turn: turn + 1, pos: null, units: Array.from({ length: few }, () => 'zombie' as const), landed: false, horde: true, trickle: true };
       this.emit({ t: 'reinforcementsIncoming', r });

@@ -6,16 +6,18 @@ import type { Sfx } from './sfx';
 import { DEAD_TEMPLATES } from './syntyManifest';
 import { wait } from './tween';
 import type { UnitViews } from './unitViews';
-import { planWalks, type Walker } from './walkPlan';
+import { planHasted, type Walker } from './walkPlan';
 
 // Reinforcements and the horde arriving (instead of drop pods): the dead
 // stagger in from the edge of the map with a moan and dust, raiders run in, a
 // pickup's headlights flaring at the edge behind them. Each comes in along a
 // real way from the nearest tile of the edge it can walk in by (path.ts, as
-// the rules move them), round what stands in the way, not through it; those
-// going deepest set off first and the rest after them, none through another
-// (walkPlan.ts). Whoever has no such way in (far from any edge, or walled off
-// from it) gets up out of a cloud of dust where they are.
+// the rules move them), round what stands in the way, not through it, and
+// round where the others arriving with it will stand if it can; those going
+// deepest set off first and the rest after them, none through another
+// (walkPlan.ts: one that must go by another goes to one side of it). Whoever
+// has no such way in (far from any edge, or walled off from it) gets up out of
+// a cloud of dust where they are.
 
 /** Tiles in from an edge that a unit still walks in from it (its way's cost, a straight one). */
 const EDGE_WALK = 7;
@@ -44,15 +46,19 @@ export async function playArrival(units: UnitViews, fx: Fx, sfx: Sfx, s: GameSta
   let engine = false;
   const ways: WayIn[] = [];
   const risers: Unit[] = [];
+  // Each way in round where the others come to stand (the state hasn't got them yet); through them only if there
+  // is no other (the plan has it go by them first, or to one side).
+  const crowd: GameState = { ...s, units: [...s.units, ...arrived] };
   for (const u of arrived) {
-    const way = wayIn(s, u);
+    const way = wayIn(crowd, u) ?? wayIn(s, u);
     if (way) ways.push(way);
     else risers.push(u);
   }
   // The deepest in first, so that nobody is left standing in the way of those still to come by them.
   ways.sort((a, b) => b.tiles.length - a.tiles.length);
-  const walkers: Walker[] = ways.map((w) => {
-    const pace = (w.zombie ? PACE.dead : PACE.living) * Math.min(1, LONGEST / natural(w));
+  // At `haste` times their pace (quicker if they would take too long all together: walkPlan.ts planHasted).
+  const walkersAt = (haste: number): Walker[] => ways.map((w) => {
+    const pace = ((w.zombie ? PACE.dead : PACE.living) * Math.min(1, LONGEST / natural(w))) / haste;
     const steps = [0.5 * pace];
     for (let k = 1; k < w.tiles.length; k++) steps.push(pace * (w.tiles[k]!.x !== w.tiles[k - 1]!.x && w.tiles[k]!.y !== w.tiles[k - 1]!.y ? DIAGONAL : 1));
     // Just outside its edge tile: one key for all those coming in by it (they don't hold each other up there).
@@ -64,7 +70,8 @@ export async function playArrival(units: UnitViews, fx: Fx, sfx: Sfx, s: GameSta
     });
     return { tiles: [outside, ...w.tiles.map((t) => nodeOf(s, t))], steps, corners: [null, ...corners] };
   });
-  const plans = planWalks(walkers);
+  const plans = planHasted(walkersAt);
+  const walkers = walkersAt(plans[0]?.haste ?? 1);
   await Promise.all([
     ...ways.map(async (w, i) => {
       const plan = plans[i]!.waits;
@@ -78,7 +85,7 @@ export async function playArrival(units: UnitViews, fx: Fx, sfx: Sfx, s: GameSta
         fx.headlights(from.clone().addScaledVector(out, 1.5), out.clone().negate());
         sfx.vehicle(from);
       }
-      await units.arrive(w.u, [from, ...w.tiles.map((t) => tileToWorld(t))], walkers[i]!.steps, [0, ...plan.slice(1)]);
+      await units.arrive(w.u, [from, ...w.tiles.map((t) => tileToWorld(t))], walkers[i]!.steps, [0, ...plan.slice(1)], plans[i]!.passes);
     }),
     ...risers.map(async (u, i) => {
       await wait(i * 0.2);
@@ -108,7 +115,7 @@ function natural(w: WayIn): number {
 function wayIn(s: GameState, u: Unit): WayIn | null {
   const at: Pos = { x: u.pos.x, y: u.pos.y, z: u.pos.z ?? 0 };
   if (at.z !== 0) return null;
-  const reach = computeReach(s, u, EDGE_WALK * COST_ORTHO, at);
+  const reach = computeReach(s, u, EDGE_WALK * COST_ORTHO, at, (o) => o.id === u.id);
   let best = -1;
   let cost = Infinity;
   for (const [node, c] of reach.cost) {

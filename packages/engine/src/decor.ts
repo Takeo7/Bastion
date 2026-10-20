@@ -120,6 +120,10 @@ const IDS: Record<DecorKind, number> = {
   strewn: 94,
   // Objects over several tiles (docs/MAPAS.md, phase 1): every tile but the anchor.
   part: 95,
+  // A block's back gardens (docs/MAPAS.md §5.4, phase 4).
+  shed: 96,
+  washingLine: 97,
+  vegPatch: 98,
 };
 
 const KINDS: DecorKind[] = [];
@@ -178,6 +182,9 @@ export const FOOTPRINT = {
   table: [2, 1],
   hospitalBed: [1, 2],
   gurney: [1, 2],
+  shed: [2, 3],
+  washingLine: [1, 3],
+  vegPatch: [2, 3],
 } as const satisfies Record<string, readonly [number, number]>;
 
 /**

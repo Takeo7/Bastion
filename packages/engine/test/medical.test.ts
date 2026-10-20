@@ -133,8 +133,9 @@ describe('medical locations', () => {
         const label = `hospital/${seed}/p${r.z}/${r.use}`;
         if (r.use === 'stairs') continue;
         const furniture = contents(r);
+        // (One bed 3 × 4, two 4 × 5: docs/MAPAS.md §4.3.)
         if (r.use === 'ward') {
-          expect(r.w * r.h, label).toBeLessThanOrEqual(12);
+          expect(r.w * r.h, label).toBeLessThanOrEqual(20);
           const beds = furniture.filter((k) => k === 'hospitalBed').length;
           expect(beds, label).toBeGreaterThanOrEqual(1); expect(beds, label).toBeLessThanOrEqual(2);
           expect(furniture.filter((k) => k === 'bedsideTable').length, label).toBeGreaterThanOrEqual(beds);
@@ -142,7 +143,7 @@ describe('medical locations', () => {
           expect(furniture.length, label).toBeGreaterThanOrEqual(4);
         }
         if (r.use === 'consultation') {
-          expect(r.w * r.h, label).toBeLessThanOrEqual(12);
+          expect(r.w * r.h, label).toBeLessThanOrEqual(20);
           for (const k of ['consultDesk', 'examTable', 'clinicalSink', 'medicalCabinet']) expect(furniture, label).toContain(k);
         }
         if (r.use === 'equipment') {

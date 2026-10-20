@@ -65,12 +65,12 @@ describe('the clearing', () => {
 });
 
 describe('the Bastion\'s lot (18/10 #40)', () => {
-  it('is 6 × 6 round the caravan, nothing else is built on it, and the building on it grows with the level', () => {
+  it('is 9 × 9 round the caravan, nothing else is built on it, and the building on it grows with the level', () => {
     const base = freshBase(new Rng(1));
     const caravan = base.pieces[0]!;
-    expect(bastionLot(base)).toEqual({ x: caravan.x - 1, y: caravan.y - 2, w: 6, h: 6 });
-    expect(placeBlocker(base, 'sandbags', caravan.x - 1, caravan.y - 2, 0)).toBe('Ahí no: ese sitio es para el Bastión, que crece con cada nivel.');
-    expect(placeBlocker(base, 'sandbags', caravan.x - 2, caravan.y - 2, 0)).toBeNull();
+    expect(bastionLot(base)).toEqual({ x: caravan.x - 2, y: caravan.y - 3, w: 9, h: 9 });
+    expect(placeBlocker(base, 'sandbags', caravan.x - 2, caravan.y - 3, 0)).toBe('Ahí no: ese sitio es para el Bastión, que crece con cada nivel.');
+    expect(placeBlocker(base, 'sandbags', caravan.x - 3, caravan.y - 3, 0)).toBeNull();
     // Each stage, two levels: the caravan where it is, the mobile home, the barracón, the house.
     const box = (level: number) => {
       const cells = bastionFootprint({ ...base, level });
@@ -78,13 +78,14 @@ describe('the Bastion\'s lot (18/10 #40)', () => {
       const ys = cells.map((c) => c.y);
       return [Math.min(...xs) - caravan.x, Math.min(...ys) - caravan.y, Math.max(...xs) - Math.min(...xs) + 1, Math.max(...ys) - Math.min(...ys) + 1];
     };
+    // (docs/MAPAS.md §4.9: 2 × 5, 3 × 7, 5 × 7 and 7 × 7, in the middle of the lot.)
     expect([1, 2, 3, 5, 7, 8].map(box)).toEqual([
-      [0, 0, 4, 2],
-      [0, 0, 4, 2],
-      [-1, -1, 6, 3],
-      [-1, -1, 5, 4],
-      [-1, -2, 6, 5],
-      [-1, -2, 6, 5],
+      [0, 0, 5, 2],
+      [0, 0, 5, 2],
+      [-1, 0, 7, 3],
+      [-1, -1, 7, 5],
+      [-1, -2, 7, 7],
+      [-1, -2, 7, 7],
     ]);
     // In a siege, the building is solid and holds the caravan's strength; the squad stands outside it.
     const s = createMission({ map: { kind: 'base', base: { ...base, level: 7 } }, slots: [0], rng: new Rng(2) });
@@ -107,16 +108,19 @@ describe('the Bastion\'s lot (18/10 #40)', () => {
 describe('building', () => {
   it('turns a piece about its own box', () => {
     const at = (rot: number) => pieceCells('caravan', 10, 10, rot).map((c) => `${c.x},${c.y}`).sort();
-    expect(at(0)).toEqual(['10,10', '10,11', '11,10', '11,11', '12,10', '12,11', '13,10', '13,11']);
-    // A quarter turn: two across, four deep.
-    expect(at(1)).toEqual(['10,10', '10,11', '10,12', '10,13', '11,10', '11,11', '11,12', '11,13']);
-    // The tower's ladder goes in front, wherever it faces.
+    expect(at(0)).toEqual(['10,10', '10,11', '11,10', '11,11', '12,10', '12,11', '13,10', '13,11', '14,10', '14,11']);
+    // A quarter turn: two across, five deep.
+    expect(at(1)).toEqual(['10,10', '10,11', '10,12', '10,13', '10,14', '11,10', '11,11', '11,12', '11,13', '11,14']);
+    // The tower's ladder goes in front, in the middle, wherever it faces.
     const ladder = (rot: number) => pieceCells('tower', 10, 10, rot).find((c) => c.tile === 'ladder')!;
-    expect([ladder(0).x, ladder(0).y]).toEqual([10, 12]);
-    expect([ladder(1).x, ladder(1).y]).toEqual([10, 10]);
+    expect([ladder(0).x, ladder(0).y]).toEqual([11, 13]);
+    expect([ladder(1).x, ladder(1).y]).toEqual([10, 11]);
     expect([ladder(2).x, ladder(2).y]).toEqual([11, 10]);
-    expect([ladder(3).x, ladder(3).y]).toEqual([12, 11]);
-    expect(pieceCells('tower', 10, 10, 0).filter((c) => c.elev === 1)).toHaveLength(4);
+    expect([ladder(3).x, ladder(3).y]).toEqual([13, 11]);
+    expect(pieceCells('tower', 10, 10, 0).filter((c) => c.elev === 1)).toHaveLength(9);
+    // One built before the base grew keeps its old shape (docs/MAPAS.md phase 6).
+    expect(pieceCells('tower', 10, 10, 0, [2, 3]).filter((c) => c.elev === 1)).toHaveLength(4);
+    expect(pieceCells('quarters', 10, 10, 0, [4, 3])).toHaveLength(12);
   });
 
   it('only on cleared, free ground off the edge, and the unique only once', () => {
@@ -141,8 +145,9 @@ describe('building', () => {
     expect(hut).toMatchObject({ id: 'b1', piece: 'infirmary', rot: 1, hp: PIECES.infirmary.hp, level: 1 });
     expect(placePiece(base, 'mine', 3, 3, 0)).toMatchObject({ id: 'b2', charges: 1 });
     expect(placePiece(base, 'turret', 3, 4, 0).charges).toBe(PIECES.turret.charges);
-    expect(pieceAt(base, 6, 8)).toBe(hut);
-    expect(pieceAt(base, 8, 6)).toBeUndefined();
+    // Six across and five deep, turned: five across and six deep.
+    expect(pieceAt(base, 9, 10)).toBe(hut);
+    expect(pieceAt(base, 10, 6)).toBeUndefined();
   });
 
   it('felling a tree clears its tile (what it costs, the campaign charges)', () => {
@@ -192,13 +197,15 @@ describe('the siege of the base', () => {
   function walled(seed = 1): BaseState {
     const base = freshBase(new Rng(seed));
     const caravan = base.pieces[0]!;
-    const [x0, y0, x1, y1] = [caravan.x - 3, caravan.y - 3, caravan.x + 6, caravan.y + 4];
+    // Round the Bastion's lot, a tile off; the tower outside the ring.
+    const lot = bastionLot(base)!;
+    const [x0, y0, x1, y1] = [lot.x - 2, lot.y - 2, lot.x + lot.w + 1, lot.y + lot.h + 1];
     for (let x = x0; x <= x1; x++) {
       for (const y of [y0, y1]) placePiece(base, x === caravan.x + 1 && y === y0 ? 'gate' : 'palisade', x, y, 0);
     }
     for (let y = y0 + 1; y < y1; y++) for (const x of [x0, x1]) placePiece(base, 'palisade', x, y, 0);
-    placePiece(base, 'sandbags', caravan.x, caravan.y + 3, 0);
-    placePiece(base, 'tower', x0 + 1, y0 + 1, 0);
+    placePiece(base, 'sandbags', lot.x, y1 - 1, 0);
+    placePiece(base, 'tower', x1 + 2, y0, 0);
     return base;
   }
 
@@ -220,7 +227,7 @@ describe('the siege of the base', () => {
     // The tower's deck, a storey up, with its ladder; the deck holds nothing to break.
     const tower = base.pieces.find((p) => p.piece === 'tower')!;
     expect(s.elev[at(tower.x, tower.y)]).toBe(1);
-    expect(s.tiles[at(tower.x, tower.y + 2)]).toBe('ladder');
+    expect(s.tiles[at(tower.x + 1, tower.y + 3)]).toBe('ladder');
     expect(s.breakables![at(tower.x, tower.y)]).toBeUndefined();
     // The tracks, trodden earth; the rest, open ground.
     const mid = Math.floor((s.width - 1) / 2);

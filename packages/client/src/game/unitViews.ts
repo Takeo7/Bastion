@@ -142,6 +142,8 @@ interface UnitView {
   /** Its last walk (moveAlong), which the next waits for, and how many it has set off on. */
   walk: Promise<void> | null;
   walks: number;
+  /** How many aims it has taken (raiseWeapon): a lowering meant for an earlier one leaves a later one be. */
+  aims: number;
   /** On guard with the blade (Vigilancia cuerpo a cuerpo: Unit.watchMelee), as last shown. */
   guard: boolean;
 }
@@ -312,7 +314,7 @@ export class UnitViews {
 
     const view: UnitView = {
       id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, guard: false,
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false,
     };
     this.views.set(u.id, view);
     // Left outside when La Mula went (sync): standing, not dead.
@@ -1103,27 +1105,38 @@ export class UnitViews {
     if (release) v.animating = false;
   }
 
-  /** Up to aim at `target`; `sidearm`, the pistol carried beside a main gun (firesSidearm), drawn from its holster first. */
-  async raiseWeapon(id: string, target: THREE.Vector3, sidearm = false): Promise<void> {
+  /**
+   * Up to aim at `target`; `sidearm`, the pistol carried beside a main gun (firesSidearm), drawn from its
+   * holster first. The aim's number, for lowering this one only (lowerWeapon).
+   */
+  async raiseWeapon(id: string, target: THREE.Vector3, sidearm = false): Promise<number> {
     const v = this.views.get(id);
-    if (!v) return;
+    if (!v) return 0;
+    const aim = ++v.aims;
     this.face(id, target);
     if (isFigure(v.rig)) v.rig.draw?.(sidearm ? 'sidearm' : 'weapon');
     this.struck(target, v.rig.root.position, false);
     // How close it is: at point blank the figure pulls a long gun back (syntyFigures.ts holdWeapon).
     v.pose.close = Math.hypot(target.x - v.rig.root.position.x, target.z - v.rig.root.position.z);
     await tween(0.28, (t) => (v.pose.aimFx = easeInOut(t)));
+    return aim;
   }
 
-  /** Down from aiming; a pistol drawn from its holster goes back once lowered. */
-  lowerWeapon(id: string): void {
+  /**
+   * Down from aiming; a pistol drawn from its holster goes back once lowered. `aim` (raiseWeapon's), only
+   * that one: lowered a while after (game.ts), not one taken since, nor its step back at point blank.
+   */
+  lowerWeapon(id: string, aim?: number): void {
     const v = this.views.get(id);
-    if (v) {
-      void tween(0.35, (t) => (v.pose.aimFx = 1 - easeInOut(t))).then(() => {
-        v.pose.close = 0;
-        if (isFigure(v.rig)) v.rig.draw?.('weapon');
-      });
-    }
+    if (!v || (aim !== undefined && aim !== v.aims)) return;
+    const own = v.aims;
+    void tween(0.35, (t) => {
+      if (v.aims === own) v.pose.aimFx = 1 - easeInOut(t);
+    }).then(() => {
+      if (v.aims !== own) return;
+      v.pose.close = 0;
+      if (isFigure(v.rig)) v.rig.draw?.('weapon');
+    });
   }
 
   recoil(id: string): void {
@@ -1247,7 +1260,10 @@ export class UnitViews {
     if (!v || v.dead) return;
     v.animating = true;
     v.flag.visible = false;
+    // Its aim gone, and with it a lowering still to come and the step back at point blank.
+    v.aims++;
     v.pose.aimFx = 0;
+    v.pose.close = 0;
     const last = v.blow && performance.now() - v.blow.at < BLOW_SECONDS * 1000 ? v.blow : null;
     const blow = this.blowAt(v, from ?? last?.from ?? null, !!last?.head, !from && !!last?.melee);
     const seconds = (isFigure(v.rig) && v.rig.die?.(blow)) || 0;
@@ -1445,11 +1461,12 @@ export class UnitViews {
    * A unit that arrives (reinforcements, the horde): its view is made now, if
    * the state has not got it yet, and it comes on foot along `way` (from the
    * map's edge through each tile to its own: arrivals.ts), each leg taking
-   * `seconds[k]` after standing `waits[k]` (walkPlan.ts), the dead staggering
-   * and the living running; the event that follows puts it in the state
-   * where it already stands.
+   * `seconds[k]` after standing `waits[k]` (walkPlan.ts), to one side of the
+   * points where it goes by another (`passes`, as a walk's swerves), the dead
+   * staggering and the living running; the event that follows puts it in the
+   * state where it already stands.
    */
-  async arrive(u: Unit, way: THREE.Vector3[], seconds: readonly number[], waits: readonly number[] = []): Promise<void> {
+  async arrive(u: Unit, way: THREE.Vector3[], seconds: readonly number[], waits: readonly number[] = [], passes: readonly boolean[] = []): Promise<void> {
     const v = this.views.get(u.id) ?? this.create(u);
     const pos = v.rig.root.position;
     v.animating = true;
@@ -1465,14 +1482,24 @@ export class UnitViews {
       const gait = { motion: gaitsOf(v.template).one.motion, seconds: tile };
       v.rig.setGait?.(gait.motion, clipSpeed(v.template, gait));
     }
-    for (let k = 1; k < way.length; k++) {
+    // SWERVE to the right of its way through a point it goes by another on, on the flat; never where it stops.
+    const points = way.map((p, k) => {
+      const prev = way[k - 1];
+      const next = way[k + 1];
+      if (!passes[k] || !prev || !next || Math.abs(prev.y - p.y) > 0.05 || Math.abs(next.y - p.y) > 0.05) return p;
+      const dx = next.x - prev.x;
+      const dz = next.z - prev.z;
+      const length = Math.hypot(dx, dz);
+      return length ? p.clone().add(new THREE.Vector3((-dz / length) * SWERVE, 0, (dx / length) * SWERVE)) : p;
+    });
+    for (let k = 1; k < points.length; k++) {
       const hold = waits[k - 1] ?? 0;
       if (hold > 0.02) {
         await tween(hold, (t) => (v.pose.run = 1 - Math.min(1, (t * hold) / 0.15)));
         void tween(0.12, (t) => (v.pose.run = Math.max(v.pose.run, t)));
       }
-      const a = way[k - 1]!;
-      const b = way[k]!;
+      const a = points[k - 1]!;
+      const b = points[k]!;
       this.face(u.id, b);
       await tween(seconds[k - 1] ?? 0.3, (t) => pos.lerpVectors(a, b, t));
     }
