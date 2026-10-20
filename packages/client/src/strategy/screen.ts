@@ -178,6 +178,7 @@ import { GeoscapeSet, shownOffers } from './geoscape';
 import { ClearingSet, footprint, type BaseCursor, type ClearingArt, type ClearingTool } from './clearing';
 import { ClearingArtView, type LineupEntry } from './clearingArt';
 import { fellBlockerFor, LINE_PIECES, lineBlockerFor, lineLine, palette, pieceCard, placeBlockerFor, placeLine } from './buildMode';
+import { Box3 } from 'three';
 import { Stage, type Shot } from './stage';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
@@ -271,17 +272,6 @@ const NAV: { view: BaseView; label: string }[] = [
   { view: 'facilities', label: 'Construir' },
 ];
 
-const VIEW_NAMES: Record<BaseView, string> = {
-  hub: 'Campaña',
-  geoscape: 'El valle',
-  research: 'Campaña',
-  engineering: 'Armería',
-  barracks: 'Soldados',
-  facilities: 'Construir',
-  squad: 'Escuadra',
-  debrief: 'Informe',
-};
-
 /** «la Marea» → «La Marea». */
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -368,10 +358,12 @@ export class StrategyScreen {
   private shownAlert: Alert | null = null;
   /** "Volver al menú" asked: it takes both players, so it is confirmed first. */
   private leaving = false;
-  /** «Salir del juego» asked from the menu (desktop app only, ui/quit.ts): its question in the same window. */
+  /** «Salir de Bastión» asked from the menu (desktop app only, ui/quit.ts): its question in the same window. */
   private quitting = false;
   /** Settings open over the base: only for this player, the partner stays where they are. */
   private settingsOpen = false;
+  /** The menu (playtest 19/10 #7): one button and Esc open it; the same list as in combat. */
+  private menuOpen = false;
   /** News keys already seen (navNews), for the campaign `seenNewsFor`. */
   private readonly seenNews = new Set<string>();
   private seenNewsFor: string | null = null;
@@ -442,7 +434,7 @@ export class StrategyScreen {
     this.back();
   };
 
-  /** Esc: closes what is open, lets go of what is picked, and otherwise goes back to the Bastión. */
+  /** Esc: closes what is open, lets go of what is picked, and otherwise opens the menu (playtest 19/10 #7). */
   private back(): void {
     if (this.picking || this.custom || this.promoting || this.leaving || this.quitting || this.newsOpen || this.settingsOpen) {
       this.picking = null;
@@ -455,6 +447,11 @@ export class StrategyScreen {
       this.render();
       return;
     }
+    if (this.menuOpen) {
+      this.menuOpen = false;
+      this.render();
+      return;
+    }
     // Alerts and events are answered with their own buttons.
     if (this.modal.classList.contains('show')) return;
     // Construir: the piece in hand first, then the one picked.
@@ -462,7 +459,8 @@ export class StrategyScreen {
     if (this.view === 'facilities' && this.piece) return this.pickPiece(null);
     // The siege's squad (#58): the defender in hand first.
     if (this.view === 'squad' && this.postPick) return this.pickPost(null);
-    else if (this.view !== 'research' && this.view !== 'debrief') void this.go('research');
+    this.menuOpen = true;
+    this.render();
   }
 
   // ------------------------------------------------------------ public
@@ -661,12 +659,38 @@ export class StrategyScreen {
     return (view === 'barracks' && !!art?.soldierShot) || (view === 'engineering' && !!art?.armoryShot) || (((view === 'squad' && !this.siegeNow()) || view === 'debrief') && !!art?.lineupShot);
   }
 
+  /**
+   * The row's shot kept in what the panels leave free (playtest 19/10 #2: on a laptop the windows went over
+   * the soldiers), as Stage.fitted does: its box from the first place to the last, from the feet to over the
+   * heads, and before them the room their cards take.
+   */
+  private framedLineup(): Shot | undefined {
+    const art = this.clearingArt;
+    const shot = art?.lineupShot?.();
+    const n = this.lineupCount;
+    if (!shot || !art?.padPosition || !n) return shot;
+    const toward = shot.pos.clone().sub(shot.target).setY(0).normalize();
+    const fit = new Box3();
+    for (let i = 0; i < n; i++) {
+      const p = art.padPosition(i, n);
+      fit.expandByPoint(p.clone().setY(2));
+      fit.expandByPoint(p.clone().addScaledVector(toward, 1.6));
+    }
+    fit.expandByScalar(0.4);
+    return { ...shot, fit };
+  }
+
+  /** How many places the lineup has now (lineup()), for its box. */
+  private lineupCount = 0;
+
   /** The squad standing (its screen, the debrief): by La Lata on the clearing. */
   private lineup(entries: (LineupEntry | null)[]): void {
+    this.lineupCount = entries.length;
     // Each sees their own half on the left, by their name (playtest 18/10 #51): the second player's row in a mirror.
     const c = this.state;
     const mirror = !!c && c.players.length > 1 && c.players[1] === this.mySlot;
-    this.clearingArt?.setLineup?.(entries, { mirror });
+    // A commander alone: one row, with no step in its middle between two halves (19/10, #2).
+    this.clearingArt?.setLineup?.(entries, { mirror, halves: !!c && c.players.length > 1 });
   }
 
   /** The soldier looked at, standing on the clearing: Soldados, and its customizer. */
@@ -692,7 +716,7 @@ export class StrategyScreen {
           this.clearing.focusCaravan(true);
           return this.clearing.shot();
         }
-        return this.clearingArt?.lineupShot?.() ?? this.clearing.shot();
+        return this.framedLineup() ?? this.clearing.shot();
       case 'debrief':
         return this.clearingArt?.lineupShot?.() ?? this.clearing.shot();
       default:
@@ -1161,7 +1185,7 @@ export class StrategyScreen {
   private renderScreen(c: CampaignState): void {
     cancelAnimationFrame(this.anchorFrame);
     this.root.dataset.view = this.view;
-    // La Lata as it is now (#45): the squad's head shows its picture (mixta-base.css --lata-front).
+    // La Lata as it is now (#45): the valley's icon is its own (valley.css).
     this.root.dataset.vehicle = String(vehicleOf(c));
     this.renderTop(c);
     this.renderProposal(c);
@@ -1206,7 +1230,8 @@ export class StrategyScreen {
     for (let i = 0; i < DOOM_MAX; i++) pips.append(h(`i${i < c.doom ? '.on' : ''}`));
     append(
       this.top,
-      h('div.strat-brand', { 'data-tip-name': 'Salidas', 'data-tip': timeHelp(bastionLevel(c)) }, h('b', {}, 'BASTIÓN'), h('span', {}, outingsMark(c.missionsFlown ?? 0))),
+      // Before the first outing, nothing beside the name (playtest 19/10 #4: not «Aún sin salir»).
+      h('div.strat-brand', { 'data-tip-name': 'Salidas', 'data-tip': timeHelp(bastionLevel(c)) }, h('b', {}, 'BASTIÓN'), c.missionsFlown ? h('span', {}, outingsMark(c.missionsFlown)) : null),
       this.siegeEl(c),
       h(
         'div.strat-res',
@@ -1215,14 +1240,13 @@ export class StrategyScreen {
         h('span.strat-credits', { 'data-tip-name': 'Suministros', 'data-tip': GLOSSARY.Suministros }, h('i', {}, '§'), h('b', {}, String(c.credits)), this.owedEl(c, 'credits')),
         h('span.strat-credits.medicines', { 'data-tip-name': 'Medicinas', 'data-tip': 'Curan heridas y tratan a los mordidos. Se encuentran registrando.' }, h('i', {}, '✚'), h('b', {}, String(c.medicines ?? 0))),
         // Food and parts (docs/FASE4.md): the base eats every day; the Taller makes weapons and armour with parts.
-        // What a mission eats, in sight (playtest 18/10 #37: nobody knew what rations were for), and Lore's
-        // why on hover. Red when what is left, with the Huerto's, does not cover the next mission.
+        // What a mission eats is in Lore's why on hover (playtest 19/10 #6: «importante, pero no ahí»). Red when
+        // what is left, with the Huerto's, does not cover the next mission.
         h(
           `span.strat-credits.food${c.hungry || (c.food ?? 0) + gardenYield(c) * DAYS_PER_MISSION < dailyRations(c) * DAYS_PER_MISSION ? '.x-bad' : ''}`,
           { 'data-tip-name': 'Raciones', 'data-tip': `${c.hungry ? 'El Bastión pasa hambre ahora mismo. ' : ''}${rationsHelp(dailyRations(c) * DAYS_PER_MISSION)}` },
           h('i', { 'aria-hidden': 'true' }),
           h('b', {}, String(c.food ?? 0)),
-          h('small.food-use', {}, `−${dailyRations(c) * DAYS_PER_MISSION}`, h('span', {}, '/misión')),
         ),
         h('span.strat-credits.parts', { 'data-tip-name': 'Piezas', 'data-tip': GLOSSARY.Piezas }, h('i', { 'aria-hidden': 'true' }), h('b', {}, String(c.parts ?? 0)), this.owedEl(c, 'parts')),
         this.levelBadge(c),
@@ -1234,28 +1258,12 @@ export class StrategyScreen {
         pips,
         h('b', {}, bastionLevel(c) >= PARTITURA_LEVEL ? `${Math.max(0, DOOM_MAX - c.doom)} km` : `${c.doom}/${DOOM_MAX}`),
       ),
-      h(
-        'div.strat-players',
-        {},
-        ...this.players.map((p) => {
-          // Not «tú» under one's own name (playtest 18/10 #51: «ya sabe que es él»).
-          const where = p.slot === this.mySlot ? '' : !p.connected ? 'desconectado' : p.away ? 'ausente' : this.partnerView ? VIEW_NAMES[this.partnerView] : '';
-          const ready = c.advanceReady[p.slot] || c.launchReady[p.slot];
-          return h(
-            `div.strat-player${p.connected ? '' : '.offline'}`,
-            { style: { '--accent': p.color } },
-            h('span.dot'),
-            h('b', {}, p.name),
-            // Without gender (Lore, 18/10): the player may be Ana.
-            h('small', {}, ready ? 'a punto' : where),
-          );
-        }),
-      ),
+      // No players here (playtest 19/10 #10): where the other one is shows on the tabs, and in the Escuadra.
       this.news.length
         ? h('button.x-btn.strat-news', { onclick: () => ((this.newsOpen = !this.newsOpen), this.render()), title: 'Lo que ha pasado y no salió en una ventana' }, 'Novedades ', this.chip(String(this.news.length), 'warn'))
         : null,
-      h('button.x-btn', { onclick: () => ((this.settingsOpen = true), this.render()), title: 'Gráficos y sonido, sin salir de la campaña' }, 'Ajustes'),
-      h('button.x-btn', { onclick: () => ((this.leaving = true), this.render()), title: 'Volver al menú principal (la campaña queda guardada)' }, 'Menú'),
+      // One button (playtest 19/10 #7): Continuar, Ajustes, the main menu and leaving the game are in it.
+      h('button.x-btn.strat-menu', { onclick: () => ((this.menuOpen = true), this.render()), title: 'Menú (Esc)' }, 'Menú'),
     );
   }
 
@@ -1866,7 +1874,15 @@ export class StrategyScreen {
         h('dt', {}, 'Recompensa'),
         h('dd', {}, rewards.filter(Boolean).join(' · ') || 'La victoria'),
       ),
-      chosen ? h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la escuadra') : this.deployButton(c, o),
+      // Called off here, not from the Escuadra (playtest 19/10 #3: there it read as the same as going back).
+      chosen
+        ? h(
+            'div.alert-actions',
+            {},
+            h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la escuadra'),
+            h('button.x-btn.danger', { onclick: () => this.send({ type: 'cancelMission' }) }, 'Cancelar misión'),
+          )
+        : this.deployButton(c, o),
     ];
   }
 
@@ -2926,26 +2942,6 @@ export class StrategyScreen {
     this.lineup(posting ? [] : pads.map((s) => (s ? { template: SOLDIER, color: this.playerColor(s.owner), appearance: s.appearance, gear: this.gearFor(c, s), seed: s.id } : null)));
     const myCount = squad.filter((s) => s.owner === this.mySlot).length;
 
-    this.viewEl.append(
-      h(
-        'div.strat-center-top',
-        {},
-        h(
-          'div.x-panel.briefing-head',
-          {},
-          h('div.alert-kicker', siege ? { className: 'alert-kicker bad' } : {}, siege ? SIEGE_TEXT.name.toUpperCase() : 'SELECCIÓN DE ESCUADRA'),
-          h('h1', {}, offer.name),
-          h(
-            'p.x-sub',
-            {},
-            `${siege ? 'El Bastión' : `${MISSION_NAMES[offer.kind]} · ${REGIONS[offer.region].name}`}${offer.night ? ` · ${NIGHT_TEXT.label}` : ''} · ${'★'.repeat(offer.difficulty)}`,
-          ),
-          // What the mission is for, in view before choosing the squad (playtest 13/10: it was only a tooltip).
-          h('p.x-text.briefing-goal', {}, offerBriefing(c, offer)),
-          offer.living ? h('p.x-text.x-warn', {}, LIVING_TIP) : null,
-        ),
-      ),
-    );
     const roster = c.soldiers.filter((s) => s.owner === this.mySlot && s.alive);
     // The other player's, to see but not to pick: each puts in and takes out only their own (playtest 18/10 #43).
     const lent = c.soldiers.filter((s) => s.owner !== this.mySlot && s.alive);
@@ -3001,41 +2997,44 @@ export class StrategyScreen {
           ),
         )
       : null;
+    // Down by the buttons, the mission on the left and the buttons on the right (playtest 19/10 #3; on a laptop the
+    // mission's window at the top hid the soldiers, #2): its name and what it is for, whole; no kicker, no
+    // «Botín · Brena · ★», no picture of the vehicle.
+    const status = ready && waiting ? `Esperando a ${partner!.name}` : partnerReady ? `${partner!.name} espera para salir` : siege ? BASE_SIEGE_TEXT.defenders : '';
     this.viewEl.append(
       h(
-        'div.strat-center-bottom',
-        { style: { bottom: '24px' } },
-        readyBoard,
+        'div.squad-bottom',
+        {},
         h(
-          `button.x-btn.big${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
-          { disabled: !c.squad.length, onclick: () => this.send({ type: 'launch', ready: !ready }) },
-          siege
-            ? ready
-              ? 'LISTOS PARA DEFENDER'
-              : partnerReady
-                ? `DEFENDER CON ${partner!.name.toUpperCase()}`
-                : 'DEFENDER EL BASTIÓN'
-            : ready
-              ? 'LISTOS PARA SALIR'
-              : partnerReady
-                ? `SALIR CON ${partner!.name.toUpperCase()}`
-                : 'LANZAR MISIÓN',
+          'div.x-panel.squad-mission',
+          {},
+          h('h1', {}, offer.name, offer.night ? h('small', {}, NIGHT_TEXT.label) : null),
+          // What the mission is for, in view before choosing the squad (playtest 13/10: it was only a tooltip).
+          h('p.x-text', {}, offerBriefing(c, offer)),
+          offer.living ? h('p.x-text.x-warn', {}, LIVING_TIP) : null,
         ),
         h(
-          'small.x-muted',
+          'div.squad-actions',
           {},
-          ready && waiting ? `Esperando a ${partner!.name}` : partnerReady
-              ? `${partner!.name} espera para salir`
-              : siege
-                ? BASE_SIEGE_TEXT.defenders
-                : `La Lata (${VEHICLES[vehicleOf(c)]!.name.toLowerCase()}): ${squad.length} de ${max} plazas`,
-        ),
-        h(
-          'div.alert-actions',
-          {},
+          readyBoard,
+          h(
+            `button.x-btn.big.squad-launch${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
+            { disabled: !c.squad.length, onclick: () => this.send({ type: 'launch', ready: !ready }) },
+            siege
+              ? ready
+                ? 'LISTOS PARA DEFENDER'
+                : partnerReady
+                  ? `DEFENDER CON ${partner!.name.toUpperCase()}`
+                  : 'DEFENDER EL BASTIÓN'
+              : ready
+                ? 'LISTOS PARA SALIR'
+                : partnerReady
+                  ? `SALIR CON ${partner!.name.toUpperCase()}`
+                  : 'LANZAR MISIÓN',
+          ),
+          status ? h('small.x-muted', {}, status) : null,
+          // Not «Cancelar misión» here (#3: it read as the same as going back); it is on the mission's card in the valley.
           h('button.x-btn', { onclick: () => void this.go('research') }, 'Volver al Bastión'),
-          // A siege can't be called off.
-          siege ? null : h('button.x-btn.danger', { onclick: () => this.send({ type: 'cancelMission' }) }, 'Cancelar misión'),
         ),
       ),
     );
@@ -3055,8 +3054,10 @@ export class StrategyScreen {
             { style: { '--accent': this.playerColor(s.owner) }, 'data-bust': '' },
             h('b', {}, displayName(s.name, s.nickname)),
             h('small', {}, roleDot(s.board), veterancyName(s)),
-            c.players.length > 1 ? h('small', {}, s.owner === this.mySlot ? 'Tuyo' : `De ${this.playerName(s.owner)}`) : null,
-            s.owner === this.mySlot && !siege ? h('button.x-btn', { onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, 'Quitar') : null,
+            // Low cards (playtest 19/10 #8): whose is its colour and its side; «Quitar», a small x in the corner.
+            s.owner === this.mySlot && !siege
+              ? h('button.card-x', { title: 'Quitar de la escuadra', 'aria-label': `Quitar a ${displayName(s.name, s.nickname)}`, onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, '×')
+              : null,
           )
         : recruitable
           ? this.recruitCard(c, cost)
@@ -3116,7 +3117,7 @@ export class StrategyScreen {
         restyle(cards, 'width', `${perRow * (cw + 10)}px`);
         restyle(cards, 'left', `${Math.max(0, from + (room - perRow * (cw + 10)) / 2)}px`);
         // Just above the controls, counted from where the cards' box starts.
-        const controls = this.viewEl.querySelector<HTMLElement>('.strat-center-bottom');
+        const controls = this.viewEl.querySelector<HTMLElement>('.squad-bottom, .strat-center-bottom');
         const origin = cards.offsetParent?.getBoundingClientRect().top ?? 0;
         const floor = controls ? controls.getBoundingClientRect().top : window.innerHeight - 170;
         restyle(cards, 'top', `${Math.max(0, floor - origin - cards.offsetHeight - 14)}px`);
@@ -3135,14 +3136,15 @@ export class StrategyScreen {
       // One row with a shared height, above the launch controls even after a resize or UI zoom.
       const children = Array.from(cards.children) as HTMLElement[];
       const height = Math.max(0, ...children.map((el) => el.offsetHeight));
-      const controls = this.viewEl.querySelector<HTMLElement>('.strat-center-bottom');
+      const controls = this.viewEl.querySelector<HTMLElement>('.squad-bottom, .strat-center-bottom');
       const ceiling = controls ? controls.getBoundingClientRect().top - cards.getBoundingClientRect().top - height - 18 : Infinity;
-      const top = Math.min(Math.min(...pads.map((p) => p.y)) + 12, ceiling);
+      // Each under its own soldier's feet (playtest 19/10 #2: with the row seen at a slant, one height for all
+      // put the near ones' cards over their bodies), and all above the foot of the screen.
       for (const el of children) {
         const p = pads[Number(el.dataset.pad)];
         if (!p) continue;
         restyle(el, 'left', `${p.x}px`);
-        restyle(el, 'top', `${top}px`);
+        restyle(el, 'top', `${Math.min(p.y + 12, ceiling)}px`);
       }
       this.anchorFrame = requestAnimationFrame(step);
     };
@@ -3337,22 +3339,36 @@ export class StrategyScreen {
         ),
       );
     } else if (this.leaving && !c.outcome) {
-      const partnerHere = c.players.length > 1 && !!this.partner()?.connected;
+      // Asked only with the other one here: it takes them back to the menu too.
       content = h(
         'div.x-panel',
         {},
-        h('div.alert-kicker', {}, 'MENÚ PRINCIPAL'),
-        h('h2.x-title', {}, '¿Volver al menú?'),
-        h('p.x-text', {}, partnerHere ? `La campaña queda guardada. ${this.partner()!.name} vuelve también al menú.` : 'La campaña queda guardada.'),
+        h('div.alert-kicker', {}, 'MENÚ DE INICIO'),
+        h('h2.x-title', {}, '¿Volver al menú de inicio?'),
+        h('p.x-text', {}, `La campaña queda guardada. ${this.partner()?.name ?? 'El otro jugador'} vuelve también al menú.`),
         h(
           'div.alert-actions',
           {},
-          h('button.x-btn.primary', { onclick: () => ((this.leaving = false), this.handlers.onLeave()) }, 'Volver al menú'),
-          h('button.x-btn', { onclick: () => ((this.leaving = false), (this.settingsOpen = true), this.render()), title: 'Sin salir de la campaña' }, 'Solo los ajustes'),
-          // Closing the game, in the desktop app only (playtest 17/10).
-          canQuit() ? h('button.x-btn', { onclick: () => ((this.leaving = false), (this.quitting = true), this.render()) }, QUIT_BUTTON) : null,
+          h('button.x-btn.primary', { onclick: () => ((this.leaving = false), (this.menuOpen = false), this.handlers.onLeave()) }, 'Volver al menú'),
           h('button.x-btn', { onclick: () => ((this.leaving = false), this.render()) }, 'Seguir aquí'),
         ),
+      );
+    } else if (this.menuOpen && !c.outcome) {
+      // The same list as in combat (hud.ts renderMenu), one entry a line, all alike (playtest 19/10 #7).
+      const partnerHere = c.players.length > 1 && !!this.partner()?.connected;
+      content = h(
+        'div.game-menu-card.panel',
+        {},
+        h('h2', {}, 'Menú'),
+        h('button.menu-entry', { onclick: () => ((this.menuOpen = false), this.render()) }, 'Continuar'),
+        h('button.menu-entry', { onclick: () => ((this.settingsOpen = true), this.render()) }, 'Ajustes'),
+        h(
+          'button.menu-entry',
+          { onclick: () => (partnerHere ? ((this.leaving = true), this.render()) : ((this.menuOpen = false), this.handlers.onLeave())), title: 'La campaña queda guardada' },
+          'Volver al menú de inicio',
+        ),
+        // Closing the game, in the desktop app only (playtest 17/10).
+        canQuit() ? h('button.menu-entry', { onclick: () => ((this.quitting = true), this.render()) }, QUIT_BUTTON) : null,
       );
     } else if (c.outcome) {
       content = h(

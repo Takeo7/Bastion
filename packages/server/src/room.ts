@@ -223,6 +223,8 @@ export class Room {
       // ---- lobby and skirmish
       case 'start':
         if (this.phase === 'lobby') {
+          // Not over a campaign mission left half played: it would be lost, and played again.
+          if (this.pausedMission()) return this.send(seat.socket!, { t: 'error', message: 'Antes, acabad la misión de la campaña que está a medias: «Continuar campaña».' });
           if (msg.veterans !== undefined) this.skirmishVeterans = msg.veterans;
           if (msg.night !== undefined) this.skirmishNight = msg.night;
           this.startSkirmish(msg.mission, msg.map);
@@ -248,6 +250,8 @@ export class Room {
             return;
           }
         }
+        // A mission of the old one left half played goes with it (in the copy).
+        if (this.pausedMission()) this.state = null;
         this.campaign = createCampaign(this.connectedSlots(), this.rng);
         // It opens with the first operation chosen and its squad in the hangar (playtest 2026-10-13).
         openingMission(this.campaign);
@@ -255,13 +259,18 @@ export class Room {
         this.enterBase();
         break;
       case 'continueCampaign':
-        if (this.phase === 'lobby' && this.campaign) this.enterBase();
+        if (this.phase !== 'lobby' || !this.campaign) return;
+        // Back to a mission left half played, as it was; else to the base.
+        if (this.pausedMission()) this.resumeMission();
+        else this.enterBase();
         break;
       case 'leaveCampaign':
       case 'backToMenu': {
-        const skirmishOver = this.phase === 'mission' && this.mode === 'skirmish' && !!this.state?.outcome;
-        if (this.phase !== 'base' && !skirmishOver) return;
-        if (skirmishOver) this.state = null;
+        // From the base; from a skirmish, over or not (it ends there); from a campaign mission under way, which waits
+        // as it is for «Continuar campaña» (playtest 19/10, #7). A campaign mission over goes back to the base first.
+        if (this.phase !== 'base' && this.phase !== 'mission') return;
+        if (this.phase === 'mission' && this.mode === 'skirmish') this.state = null;
+        else if (this.phase === 'mission' && (!this.state || this.state.outcome)) return;
         this.phase = 'lobby';
         this.broadcastRoom();
         this.persist();
@@ -410,6 +419,21 @@ export class Room {
     this.mode = 'campaign';
     this.broadcastRoom();
     if (this.campaign) this.broadcast({ t: 'campaign', state: this.campaign });
+    this.persist();
+  }
+
+  /** A campaign mission left for the menu half played (phase 'lobby'), if there is one. */
+  private pausedMission(): GameState | null {
+    return this.phase === 'lobby' && this.mode === 'campaign' && this.state && !this.state.outcome ? this.state : null;
+  }
+
+  /** Back to the campaign mission left half played, as it was. */
+  private resumeMission(): void {
+    this.phase = 'mission';
+    console.log(`[room] Vuelta a la misión de campaña${this.state?.campaignMission ? `: ${this.state.campaignMission.name}` : ''}.`);
+    this.broadcastRoom();
+    if (this.campaign) this.broadcast({ t: 'campaign', state: this.campaign });
+    this.broadcast({ t: 'snapshot', state: this.state! });
     this.persist();
   }
 
@@ -599,7 +623,8 @@ export class Room {
   }
 
   private roomMessage(): ServerMessage {
-    const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, missions: this.campaign.missionsFlown ?? 0, doom: this.campaign.doom, level: bastionLevel(this.campaign) } : null;
+    const paused = this.pausedMission();
+    const savedCampaign = this.campaign && !this.campaign.outcome ? { day: this.campaign.day, missions: this.campaign.missionsFlown ?? 0, doom: this.campaign.doom, level: bastionLevel(this.campaign), ...(paused ? { inMission: paused.campaignMission?.name ?? paused.mapName } : {}) } : null;
     // A campaign from before the 0.3 kept aside (docs/FASE9.md §7): its file's name, for the lobby to say so.
     const setAside = this.store.setAside ? basename(this.store.setAside) : null;
     return { t: 'room', players: this.players(), phase: this.phase, savedCampaign, ...(setAside ? { setAside } : {}) };

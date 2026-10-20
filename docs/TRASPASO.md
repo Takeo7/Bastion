@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 20/10 con la 0.8.0, la de los mapas nuevos. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 20/10 con la 0.8.1, la de las notas del 19/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.8.0)
+## 3. Estado (versión 0.8.1)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,14 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2 y v0.8.0 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0 y v0.8.1 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.8.1** (2026-10-20), las notas de Arturo del 19/10, jugadas con la 0.7.1 ([PRUEBA-2026-10-19.md](PRUEBA-2026-10-19.md)):
+  - la Escuadra: la misión abajo a la izquierda y los botones a la derecha, sin tapar a los soldados; la fila recta y centrada, también con un jugador solo y en la pantalla del segundo; tarjetas bajas con una × para quitar; «Cancelar misión» pasa a la ficha de la misión en El Valle;
+  - arriba, sin los jugadores conectados, sin «Aún sin salir» y sin «−10/misión» (está en la ayuda); la comida con su icono;
+  - un solo «Menú», también con Esc: Continuar, Ajustes, Volver al menú de inicio, (en combate) Abandonar la misión y Salir de Bastión. En mitad de una misión de campaña, volver al menú la deja en pausa y guardada, y «Continuar campaña» vuelve a ella; mientras tanto no hay escaramuza;
+  - en combate: la ventana del principio con el texto entero y los turnos en amarillo; señalar con Mayús+clic; «Cámara al soldado» con interruptor y otra vez «Ir a …» (F); las acciones sin objetivo, de un clic; los datos de cada acción en una tabla igual para todas; sin «Zombis: llegan este turno» ni «Puede matarlo»;
+  - cursores del juego (Apocalypse HUD de Synty), que cambian sobre lo que se pulsa y sobre un enemigo;
+  - el arte: La Lata de la portada más despacio; los soldados suben a La Lata por su puerta, sin atravesarla; una alcantarilla por calle, lejos de los cruces; las puertas se distinguen de las ventanas viendo la primera planta; el «ACTION NEWS» de la furgoneta ya no sale al revés.
 - **Lo nuevo de la 0.8.0** (2026-10-20), los mapas nuevos ([MAPAS.md](MAPAS.md), fases 0 a 6, decididas por Arturo el 19/10):
   - nadie atraviesa a nadie: los compañeros se bloquean y los muebles grandes ocupan su casilla; coches, camiones, camas y mesas a su tamaño; las animaciones no atraviesan cosas;
   - escaleras de tramo: 3 casillas (2 en casas pequeñas), solo se suben desde el pie y nadie se para a mitad;
@@ -247,7 +254,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [ARTE.md](ARTE.md) | Dirección de arte y la tubería de Synty |
 | `FASE2.md`…[FASE10.md](FASE10.md), [ALTURA-Y-NOCHE.md](ALTURA-Y-NOCHE.md), [ZOMBIS-PRIMERO.md](ZOMBIS-PRIMERO.md) | Especificación de cada fase y del reparto de enemigos |
 | [TRAILER.md](TRAILER.md) | El tráiler, la portada y las capturas de la ficha: guion, quién hace qué y cómo se rehace |
-| [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md), [PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md) | Notas de las pruebas de juego y qué se hizo con cada una |
+| [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md), [PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md), [PRUEBA-2026-10-18.md](PRUEBA-2026-10-18.md), [PRUEBA-2026-10-19.md](PRUEBA-2026-10-19.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
 | [REVISION-2026-10-19.md](REVISION-2026-10-19.md) | La revisión del código del 19/10: los fallos arreglados, lo quitado y lo que queda por decidir |
 | [MAPAS.md](MAPAS.md) | Los mapas: medidas, el plano de los pueblos, el contorno, la base de 56 y el plan por fases (hecho en la 0.8.0) |

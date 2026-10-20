@@ -884,6 +884,8 @@ const HOLD = 0.6;
 const FADE = 0.3;
 /** Height the cut walls drop to (about the low cover's). */
 const CUT_LOW = 0.95;
+/** How high a door's leaf stays in the cutaway (tiles: half a metre), below the walls' CUT_LOW. */
+const LEAF_CUT = 0.3;
 /** Closer than this (camera to the point it looks at), roofs near that point fade. */
 const ZOOM_NEAR = 15;
 const ZOOM_RADIUS = 8;
@@ -2330,7 +2332,9 @@ export class BuildingsView {
             hinge: new THREE.Vector3(o.otherHinge && part.otherEnd !== undefined ? part.otherEnd : part.hinge.x, 0, part.hinge.z * thick),
             far: o.otherHinge && part.otherEnd !== undefined ? !part.far : !!part.far,
             consts: {
-              aCut: o.roof ? [b + 1, ON_ROOF, ON_ROOF, base] : [b + 1, between ? 0 : out.x, between ? 0 : out.y, base],
+              // In the cutaway a leaf drops lower than the walls (to LEAF_CUT), so a door reads as the way through it
+              // is, not as a stub of wall like the others (playtest 19/10, #19): its cut is measured from below its floor.
+              aCut: o.roof ? [b + 1, ON_ROOF, ON_ROOF, base] : [b + 1, between ? 0 : out.x, between ? 0 : out.y, base - (CUT_LOW - LEAF_CUT)],
               aLevel: [storeyOf(building, base)],
               aOuter: [outer.r, outer.g, outer.b],
               aInner: [inner.r, inner.g, inner.b],

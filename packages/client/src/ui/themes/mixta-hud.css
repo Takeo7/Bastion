@@ -443,6 +443,15 @@
   letter-spacing: 0.04em;
 }
 
+/* Its figures (#18): the names in the muted grey, every value in the accent, alike. */
+:root[data-ui='mixta'] .ability-card .ac-k {
+  color: var(--t-muted);
+}
+
+:root[data-ui='mixta'] .ability-card .ac-v {
+  color: var(--t-accent);
+}
+
 /* ============================================================= the target */
 
 :root[data-ui='mixta'] .shot-title {
@@ -669,12 +678,6 @@
   letter-spacing: 0.06em;
 }
 
-:root[data-ui='mixta'] .ping-button.on {
-  color: #1a1406;
-  background: #f2c230;
-  box-shadow: 0 0 0 2px rgba(242, 194, 48, 0.45), var(--m-raise);
-}
-
 /* Morse on the radio: her portrait in a sunken frame, faint scan lines over it only. */
 :root[data-ui='mixta'] .radio-portrait {
   position: relative;
@@ -886,10 +889,13 @@
 }
 
 /* The arrival briefing: what the mission is for, standing out (playtest 13/10 #7). */
-:root[data-ui='mixta'] .mission-intro .intro-meta {
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--t-muted);
+:root[data-ui='mixta'] .mission-intro .intro-turns {
+  font-family: var(--t-font-title);
+  font-weight: 500;
+  font-size: 17px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t-accent);
 }
 
 :root[data-ui='mixta'] .mission-intro .intro-objective {

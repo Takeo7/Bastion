@@ -68,7 +68,7 @@
   font-weight: 700;
   white-space: nowrap;
   color: var(--x-muted);
-  cursor: help;
+  cursor: var(--cursor-arrow);
 }
 
 /* The veterancy's bar: its name, the points of this rank in segments, what the next gives. */
@@ -160,7 +160,7 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: color-mix(in srgb, var(--cc) 60%, #fff);
-  cursor: help;
+  cursor: var(--cursor-arrow);
 }
 
 :root[data-ui='mixta'] .lineup-card .promo.sk-up {

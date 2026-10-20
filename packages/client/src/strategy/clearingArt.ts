@@ -80,6 +80,8 @@ export class ClearingArtView implements ClearingArt {
   /** What it was built from: its places, and whether it is mirrored (each player's own on their left: playtest 18/10 #51). */
   private lineupEntries: (LineupEntry | null)[] = [];
   private mirror = false;
+  /** The row in two halves, a step apart (the two commanders' soldiers), or one (a commander alone). */
+  private halves = true;
   private place: LineupPlace | null = null;
   private base: BaseState | null = null;
   /** How high each tile's floor stands (a watchtower's deck), from the clearing as its siege has it. */
@@ -416,22 +418,25 @@ export class ClearingArtView implements ClearingArt {
   private relineup(): void {
     if (!this.lineupKey) return;
     this.lineupKey = '';
-    this.setLineup(this.lineupEntries, { mirror: this.mirror });
+    this.setLineup(this.lineupEntries, { mirror: this.mirror, halves: this.halves });
   }
 
   /**
    * The squad standing by La Lata (null: an empty place); built again only if it changed, [] clears it. In order,
    * left to right as its camera sees them, the first ceil(n / 2) and then the rest; `mirror`, right to left (the
-   * second player's screen: each sees their own on their left, by their name, playtest 18/10 #51).
+   * second player's screen: each sees their own on their left, by their name, playtest 18/10 #51); `halves` false, one
+   * row with no step in its middle (a commander alone: 19/10, #2).
    */
-  setLineup(entries: (LineupEntry | null)[], opts: { mirror?: boolean } = {}): void {
+  setLineup(entries: (LineupEntry | null)[], opts: { mirror?: boolean; halves?: boolean } = {}): void {
     const mirror = !!opts.mirror;
-    const key = entries.length ? JSON.stringify([mirror, entries]) : '';
+    const halves = opts.halves ?? true;
+    const key = entries.length ? JSON.stringify([mirror, halves, entries]) : '';
     if (key === this.lineupKey) return;
     this.lineupKey = key;
     this.lineupEntries = entries;
-    if (mirror !== this.mirror) this.place = null;
+    if (mirror !== this.mirror || halves !== this.halves) this.place = null;
     this.mirror = mirror;
+    this.halves = halves;
     for (const o of this.lineup.children) if (o.userData.pad) (o as THREE.Mesh).geometry.dispose();
     this.lineup.clear();
     this.lineupRigs = [];
@@ -524,7 +529,7 @@ export class ClearingArtView implements ClearingArt {
    * under the row, the camera least turned. Without La Lata, in front of the caravan.
    */
   private placeLineup(count: number): LineupPlace {
-    if (this.place && this.place.count === count && this.place.mirror === this.mirror) return this.place;
+    if (this.place && this.place.count === count && this.place.mirror === this.mirror && this.place.halves === this.halves) return this.place;
     const base = this.base;
     const root = this.bus.root;
     const parked = root.visible || !base;
@@ -538,12 +543,19 @@ export class ClearingArtView implements ClearingArt {
     const reach = parked ? this.bus.width / 2 + 0.95 : 0;
     // The Bastion grown out of the caravan stands on its whole footprint (pieceAt only knows the caravan's tiles).
     const footprint = new Set(base && bastionStage(base) > 0 ? bastionFootprint(base).map((c) => c.y * base.width + c.x) : []);
-    const height = (x: number, z: number) => {
+    const height = (x: number, z: number, crowns = true) => {
       if (!base) return 0;
       const tx = Math.floor(x);
       const tz = Math.floor(z);
       if (tx < 0 || tz < 0 || tx >= base.width || tz >= base.height) return 0;
       if (treeAt(base, tx, tz)) return 4.5;
+      // A pine's crown spreads over the tiles round its trunk, from a storey or so up (it hid the frame's edge); one
+      // stands under it.
+      if (crowns) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+        const nx = tx + dx;
+        const nz = tz + dz;
+        if (nx >= 0 && nz >= 0 && nx < base.width && nz < base.height && treeAt(base, nx, nz)) return 2.5;
+      }
       if (footprint.has(tz * base.width + tx)) return 3;
       const p = pieceAt(base, tx, tz);
       if (!p || p.hp <= 0) return 0;
@@ -552,7 +564,8 @@ export class ClearingArtView implements ClearingArt {
     };
     const rows = count > LINEUP_ROW ? 2 : 1;
     const front = rows === 2 ? Math.ceil(count / 2) : count;
-    const halfWidth = (rows === 1 ? ((count - 1) / 2) * LINEUP_STEP + (count > 1 ? LINEUP_GAP / 2 : 0) : ((front - 1) / 2) * LINEUP_STEP + LINEUP_STEP / 2) + 0.7;
+    const gap = this.halves && count > 1 ? LINEUP_GAP : 0;
+    const halfWidth = (rows === 1 ? ((count - 1) / 2) * LINEUP_STEP + gap / 2 : ((front - 1) / 2) * LINEUP_STEP + LINEUP_STEP / 2) + 0.7;
     // Along either side (also moved up towards the nose, away from the Bastion's lot behind it: a long row went past
     // the tail onto its yard), or across the track at its tail.
     const candidates: { centre: { x: number; z: number }; toward: { x: number; z: number }; k: number; shift: number }[] = [];
@@ -573,7 +586,7 @@ export class ClearingArtView implements ClearingArt {
       for (let i = 0; i < count; i++) {
         let u: number;
         let v = 0;
-        if (rows === 1) u = (i - (count - 1) / 2) * LINEUP_STEP + (count > 1 ? (i < Math.ceil(count / 2) ? -LINEUP_GAP / 2 : LINEUP_GAP / 2) : 0);
+        if (rows === 1) u = (i - (count - 1) / 2) * LINEUP_STEP + (i < Math.ceil(count / 2) ? -gap / 2 : gap / 2);
         else {
           const back = i >= front ? 1 : 0;
           const n = back ? count - front : front;
@@ -584,25 +597,29 @@ export class ClearingArtView implements ClearingArt {
       }
       // Nobody stands on anything built, a pine, the Bastion or its yard (its lot), nor off the clearing.
       let standing = (k === 2 ? 0.5 : 0) + c.shift * 2;
-      for (const p of spots) if (height(p.x, p.z) > 0 || (base && (onBastionLot(base, Math.floor(p.x), Math.floor(p.z)) || p.x < 0 || p.z < 0 || p.x >= base.width || p.z >= base.height))) standing += 20;
+      for (const p of spots) if (height(p.x, p.z, false) > 0 || (base && (onBastionLot(base, Math.floor(p.x), Math.floor(p.z)) || p.x < 0 || p.z < 0 || p.x >= base.width || p.z >= base.height))) standing += 20;
       const near = Math.max(5.5, halfWidth / 0.42);
       const middle = { x: c.centre.x - c.toward.x * (rows - 1) * 0.45, z: c.centre.z - c.toward.z * (rows - 1) * 0.45 };
       for (const a of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9]) {
         const d = { x: c.toward.x * Math.cos(a) - c.toward.z * Math.sin(a), z: c.toward.x * Math.sin(a) + c.toward.z * Math.cos(a) };
-        for (const dist of [near, near + 1.5, near + 3]) {
-          const y = 1.8 + dist * 0.3;
+        for (const [dist, lift] of [near, near + 1.5, near + 3].flatMap((d) => [1, 1.5, 2].map((k) => [d, k] as const))) {
+          // From higher up, over the pines, rather than turned (a little steeper is better than a row seen askew).
+          const y = (1.8 + dist * 0.3) * lift;
           const cam = { x: middle.x + d.x * dist, z: middle.z + d.z * dist };
-          let cost = standing + Math.abs(a) * 3 + (dist - near) * 0.4;
+          // Seen from straight out unless the way is blocked (19/10, #2: turned, the row ran off across the frame).
+          let cost = standing + Math.abs(a) * 25 + (dist - near) * 0.4 + (lift - 1) * 3;
           if (height(cam.x, cam.z) > y - 0.6) cost += 60;
-          for (const q of [middle, { x: middle.x + right.x * halfWidth, z: middle.z + right.z * halfWidth }, { x: middle.x - right.x * halfWidth, z: middle.z - right.z * halfWidth }]) {
+          // What comes between the camera and the row's middle, and (half as much: at the frame's edge) its ends.
+          const out = (k: number) => ({ x: middle.x + right.x * halfWidth * k, z: middle.z + right.z * halfWidth * k });
+          for (const [q, weight] of [[middle, 6], [out(1), 3], [out(-1), 3]] as const) {
             for (let t = 0.8; t < dist; t += 0.4) {
               const f = t / dist;
-              if (height(q.x + (cam.x - q.x) * f, q.z + (cam.z - q.z) * f) > 0.9 + (y - 0.9) * f) cost += 6;
+              if (height(q.x + (cam.x - q.x) * f, q.z + (cam.z - q.z) * f) > 0.9 + (y - 0.9) * f) cost += weight;
             }
           }
           if (cost < bestCost) {
             bestCost = cost;
-            best = { count, mirror: this.mirror, spots, toward: c.toward, cam: new THREE.Vector3(cam.x, y, cam.z), target: new THREE.Vector3(middle.x, 0.5, middle.z) };
+            best = { count, mirror: this.mirror, halves: this.halves, spots, toward: c.toward, cam: new THREE.Vector3(cam.x, y, cam.z), target: new THREE.Vector3(middle.x, 0.5, middle.z) };
           }
         }
       }
@@ -634,7 +651,8 @@ export class ClearingArtView implements ClearingArt {
       const back = Math.abs(offset.dot(dir)) > half - 0.35;
       const normal = back ? dir.clone().multiplyScalar(Math.sign(offset.dot(dir)) || -1) : across.clone().multiplyScalar(Math.sign(offset.dot(across)) || 1);
       const foot = door.clone().addScaledVector(normal, 0.55);
-      const inside = door.clone().addScaledVector(normal, -0.5);
+      // In through the doorway itself: up to its plane, not into the body (19/10, #11: they ran into it and through it).
+      const inside = door.clone().addScaledVector(normal, 0.08);
       // Round its corner first, from behind it to a side door, or from its side to its back.
       const path = [from];
       const behind = from.clone().sub(centre).dot(dir) < -half;
@@ -642,40 +660,51 @@ export class ClearingArtView implements ClearingArt {
       if (behind && !back) path.push(centre.clone().addScaledVector(dir, -half - 0.4).addScaledVector(normal, this.bus.width / 2 + 0.6));
       if (!behind && back) path.push(centre.clone().addScaledVector(dir, -half - 0.4).addScaledVector(across, side * (this.bus.width / 2 + 0.6)));
       path.push(foot, inside);
-      const lengths = path.slice(1).map((p, k) => p.distanceTo(path[k]!));
+      // The run to the door's foot; then the climb in, from the foot to the doorway.
+      const run = path.slice(0, -1);
+      const lengths = run.slice(1).map((p, k) => p.distanceTo(run[k]!));
       const total = lengths.reduce((a, b) => a + b, 0);
       // When it would get to the door's foot, setting off at once.
-      const atFoot = (total - lengths[lengths.length - 1]!) / BOARD_SPEED;
+      const atFoot = total / BOARD_SPEED;
       // A double doorway's two leaves are one way in: one at a time through it.
       const way = doors.findIndex((d) => d.distanceTo(door) < 0.7);
-      return { rig, path, lengths, total, door: way, atFoot, delay: 0, seconds: total / BOARD_SPEED };
+      return { rig, run, lengths, total, foot, inside, door: way, atFoot, delay: 0, running: total / BOARD_SPEED };
     });
     // One at a time at each door, the nearest first (out of the way of those behind, who run past where it stood):
-    // each held back at its place in the row until the one before it is through (they all made for the same spot
-    // at once, a seventh of a second apart, and climbed in through one another).
+    // each held back at its place in the row until the one before it has climbed in (they all made for the same
+    // spot at once, a seventh of a second apart, and climbed in through one another).
     for (let d = 0; d < doors.length; d++) {
       let free = -Infinity;
       for (const p of plans.filter((q) => q.door === d).sort((a, b) => a.atFoot - b.atFoot)) {
         p.delay = Math.max(0, free - p.atFoot);
         p.atFoot += p.delay;
-        free = p.atFoot + DOOR_GAP;
+        free = p.atFoot + CLIMB + DOOR_GAP;
       }
     }
-    const seconds = Math.max(...plans.map((p) => p.delay + p.seconds)) + 0.05;
+    const seconds = Math.max(...plans.map((p) => p.delay + p.running + CLIMB)) + 0.05;
     await tween(seconds, (t) => {
       const now = t * seconds;
       // Their shadows run with them.
       this.warm = Math.max(this.warm, 1);
       for (const p of plans) {
-        const k = THREE.MathUtils.clamp((now - p.delay) / p.seconds, 0, 1);
+        const since = now - p.delay;
         const d = p.rig.root.userData;
-        d.running = k > 0 && k < 1 ? 1 : 0;
-        p.rig.root.visible = k < 1;
-        if (k <= 0) continue;
-        let left = k * p.total;
+        const climbing = since >= p.running;
+        d.running = since > 0 && !climbing ? 1 : 0;
+        p.rig.root.visible = since < p.running + CLIMB;
+        if (since <= 0) continue;
+        if (climbing) {
+          // At the door, turned to it, up and in: a little lower as it goes, gone at the doorway.
+          const c = Math.min(1, (since - p.running) / CLIMB);
+          p.rig.root.position.lerpVectors(p.foot, p.inside, c * c);
+          p.rig.root.position.y = -0.18 * c;
+          d.yaw = Math.atan2(p.inside.x - p.foot.x, p.inside.z - p.foot.z);
+          continue;
+        }
+        let left = (since / p.running) * p.total;
         for (let s = 0; s < p.lengths.length; s++) {
-          const a = p.path[s]!;
-          const b = p.path[s + 1]!;
+          const a = p.run[s]!;
+          const b = p.run[s + 1]!;
           if (left <= p.lengths[s]! || s === p.lengths.length - 1) {
             p.rig.root.position.lerpVectors(a, b, Math.min(1, left / (p.lengths[s]! || 1)));
             d.yaw = Math.atan2(b.x - a.x, b.z - a.z);
@@ -760,6 +789,7 @@ const ghostMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughnes
 interface LineupPlace {
   count: number;
   mirror: boolean;
+  halves: boolean;
   spots: { x: number; z: number }[];
   toward: { x: number; z: number };
   cam: THREE.Vector3;
@@ -770,9 +800,11 @@ interface LineupPlace {
 const LINEUP_STEP = 0.95;
 const LINEUP_GAP = 0.5;
 const LINEUP_ROW = 8;
-/** How fast the squad runs to board La Lata (tiles a second), and how long one takes from a door's foot until the next can come (seconds). */
+/** How fast the squad runs to board La Lata (tiles a second). */
 const BOARD_SPEED = 3.4;
-const DOOR_GAP = 0.4;
+/** How long climbing in takes, from the door's foot (seconds), and how long after one the next gets to that door. */
+const CLIMB = 0.45;
+const DOOR_GAP = 0.15;
 const CANDLE = new THREE.MeshStandardMaterial({ color: 0x2a1a00, emissive: 0xffb050, emissiveIntensity: 2.2 });
 
 /** The pieces that stand tall enough to hide a soldier from a camera a storey up (but the buildings, by their tiles). */

@@ -55,7 +55,8 @@ export class EvacBus {
   /**
    * Parked at `at` (the map's world), its nose the way `heading` (radians
    * from +z, as the units' yaw), its doors on the side towards `doorsTo`
-   * (mirrored if they'd face away), shown or not. In a bay `bay` tiles long
+   * (the bus mirrored if they'd face away: the others get in either side or
+   * at the back, and never are), shown or not. In a bay `bay` tiles long
    * (mission.evacBus: 2 × 9, the bus's), centred on `at`, a shorter vehicle
    * stands at its front, its nose where the bus's would be.
    */
@@ -64,9 +65,10 @@ export class EvacBus {
     const ahead = Math.max(0, (bay - this.length) / 2);
     this.root.position.copy(at).add(new THREE.Vector3(Math.sin(heading) * ahead, 0, Math.cos(heading) * ahead));
     this.root.rotation.set(0, heading, 0);
-    // The doors are on the bus's −x side: (−cos, 0, sin) of its heading in the world.
+    // The bus's doors are on its −x side: (−cos, 0, sin) of its heading in the world. Until it is built, as the bus.
     const doors = new THREE.Vector3(-Math.cos(heading), 0, Math.sin(heading));
-    this.root.scale.set(doors.dot(doorsTo.clone().sub(at)) < 0 ? -1 : 1, 1, 1);
+    const mirror = (this.mula?.oneSided ?? true) && doors.dot(doorsTo.clone().sub(at)) < 0;
+    this.root.scale.set(mirror ? -1 : 1, 1, 1);
     this.root.visible = shown;
     if (this.mula) {
       this.mula.lights.emissiveIntensity = 0.2;

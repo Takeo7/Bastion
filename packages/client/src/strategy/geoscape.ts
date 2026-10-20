@@ -33,6 +33,10 @@ const CLEAR = 150;
 /** What lies round the map: the panels' steel. */
 const TABLE = new THREE.Color(0x1b1e20);
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+/** In the main menu, how long La Lata takes from one zone to the next, and stops at each (seconds). */
+const MENU_TRIP = 9;
+const MENU_STOP = 6;
+
 /** Where La Lata parks at a zone, from its pin: below it, clear of the name and the badges. */
 const PARK = { x: 0.3, z: 0.72 };
 
@@ -631,11 +635,13 @@ export class GeoscapeSet implements StageSet {
 
   private driveBus(dt: number, time: number): void {
     if (this.moving && this.path.length > 1) {
-      // Along its road at a steady pace, never more than a few seconds a trip.
+      // Along its road at a steady pace, never more than a few seconds a trip; in the main menu unhurried, some nine
+      // seconds a trip, easing off and on at its ends (playtest 19/10, #1: it went far too fast).
       let length = 0;
       for (let i = 1; i < this.path.length; i++) length += this.path[i]!.distanceTo(this.path[i - 1]!);
-      this.along = Math.min(length, this.along + dt * Math.max(3.6, length / 3));
-      let left = this.along;
+      this.along = Math.min(length, this.along + dt * (this.inCampaign ? Math.max(3.6, length / 3) : Math.max(1.2, length / MENU_TRIP)));
+      const t = length > 0 ? this.along / length : 1;
+      let left = this.inCampaign ? this.along : length * t * t * (3 - 2 * t);
       for (let i = 1; i < this.path.length; i++) {
         const a = this.path[i - 1]!;
         const b = this.path[i]!;
@@ -647,7 +653,7 @@ export class GeoscapeSet implements StageSet {
         left -= d;
       }
       if (this.along >= length) this.moving = false;
-    } else if (!this.inCampaign && (this.idle += dt) > 3) {
+    } else if (!this.inCampaign && (this.idle += dt) > MENU_STOP) {
       this.idle = 0;
       const next = REGIONS[this.busRegion].roads;
       this.drive(next[Math.floor(Math.random() * next.length)]!);

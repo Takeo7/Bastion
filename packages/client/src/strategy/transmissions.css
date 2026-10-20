@@ -16,7 +16,7 @@
   background: var(--paper-bg);
   box-shadow: var(--paper-shadow);
   transform: rotate(0.4deg);
-  cursor: pointer;
+  cursor: var(--cursor-hot);
   user-select: none;
 }
 
@@ -98,7 +98,7 @@
   color: var(--ink-soft);
   background: none;
   border: none;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .radio-close:hover {
@@ -146,7 +146,7 @@
   padding: 0;
   border: 0;
   background: none;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
   font-family: var(--font-hand);
   font-size: 18px;
   color: var(--pen);

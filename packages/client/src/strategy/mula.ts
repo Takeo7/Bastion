@@ -31,6 +31,11 @@ export interface Mula {
   lights: THREE.MeshStandardMaterial;
   /** Each doorway's middle, in the body's space. */
   doorCentres: THREE.Vector3[];
+  /**
+   * Whether one gets in on its −x side only (the bus), so that it is mirrored to have its doors towards the squad
+   * (evacBus.ts park); the rest (doors on both sides, or at the back) never are: a van's lettering read backwards.
+   */
+  oneSided: boolean;
   size: THREE.Vector3;
 }
 
@@ -117,8 +122,8 @@ export function buildLata(vehicle = 3): Mula | null {
     doors.push({ leaf, shut: hinge.clone(), open: hinge.clone(), swing: outer > 0 ? -1.97 : 1.97 });
   }
   const size = box.getSize(new THREE.Vector3());
-  // Where one gets in: by its left doors (the 4×4), or at its back.
-  const doorCentres = v.way === 'side' ? [new THREE.Vector3(box.min.x, 0.5, box.min.z + size.z * 0.62), new THREE.Vector3(box.min.x, 0.5, box.min.z + size.z * 0.38)] : [new THREE.Vector3((box.min.x + box.max.x) / 2, 0.6, box.min.z)];
+  // Where one gets in: by its doors on either side (the 4×4), or at its back.
+  const doorCentres = v.way === 'side' ? [box.min.x, box.max.x].flatMap((x) => [new THREE.Vector3(x, 0.5, box.min.z + size.z * 0.62), new THREE.Vector3(x, 0.5, box.min.z + size.z * 0.38)]) : [new THREE.Vector3((box.min.x + box.max.x) / 2, 0.6, box.min.z)];
   // Headlights, off while it stands.
   const lights = new THREE.MeshStandardMaterial({ color: 0x2a2a20, emissive: 0xfff2c0, emissiveIntensity: 0.2 });
   for (const x of [-1, 1]) {
@@ -127,7 +132,7 @@ export function buildLata(vehicle = 3): Mula | null {
     lamp.position.set((box.min.x + box.max.x) / 2 + x * (size.x / 2 - 0.25), size.y * 0.3, box.max.z + 0.005);
     body.add(lamp);
   }
-  return { body, doors, wheels, wheelRadius, lights, doorCentres, size };
+  return { body, doors, wheels, wheelRadius, lights, doorCentres, oneSided: false, size };
 }
 
 /** A door at `k` of the way open (0 shut, 1 open): slid along, or swung on its hinge. */
@@ -210,5 +215,5 @@ export function buildMula(): Mula | null {
     body.add(lamp);
   }
   for (const d of doors) d.shut.copy(d.leaf.position);
-  return { body, doors, wheels, wheelRadius, lights, doorCentres, size: model.size.clone() };
+  return { body, doors, wheels, wheelRadius, lights, doorCentres, oneSided: true, size: model.size.clone() };
 }

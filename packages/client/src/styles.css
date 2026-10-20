@@ -6,6 +6,26 @@
  * combat, base and menu share one palette.
  */
 
+/*
+ * The game's own cursors (playtest 19/10 #5: «del estilo del juego», Synty's Apocalypse HUD, ui/synty/cursors):
+ * the arrow; the arrow in the accent's yellow over whatever can be pressed; the crosshair aiming at an enemy;
+ * the brackets to signal a spot (Mayús). Each falls back on the system's own.
+ */
+:root {
+  --cursor-arrow: image-set(url('/ui/synty/cursors/pointer.png') 1x, url('/ui/synty/cursors/pointer@2x.png') 2x) 2 2, default;
+  --cursor-hot: image-set(url('/ui/synty/cursors/pointer-hot.png') 1x, url('/ui/synty/cursors/pointer-hot@2x.png') 2x) 2 2, pointer;
+  --cursor-aim: image-set(url('/ui/synty/cursors/aim.png') 1x, url('/ui/synty/cursors/aim@2x.png') 2x) 16 16, crosshair;
+  --cursor-signal: image-set(url('/ui/synty/cursors/signal.png') 1x, url('/ui/synty/cursors/signal@2x.png') 2x) 16 16, crosshair;
+}
+
+html {
+  cursor: var(--cursor-arrow);
+}
+
+:is(button, a[href], select, summary, label, [role='button'], input[type='checkbox'], input[type='radio'], input[type='range']):not(:disabled) {
+  cursor: var(--cursor-hot);
+}
+
 :root {
   /* 'Bastion Suministros': only «§», drawn as the supplies' crate (ui/themes/mixta.css). */
   --font: 'Bastion Suministros', 'Barlow', 'Segoe UI', sans-serif;
@@ -99,11 +119,11 @@ body,
 button {
   font: inherit;
   color: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 button:disabled {
-  cursor: not-allowed;
+  cursor: var(--cursor-arrow);
 }
 
 .hidden {
@@ -574,7 +594,7 @@ em.in-play {
 
 .squad-card.mine {
   opacity: 1;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .squad-card.mine:hover {
@@ -1216,6 +1236,31 @@ em.whose {
   color: var(--c-ap);
 }
 
+/* Its figures (playtest 19/10 #18: «siempre igual: la misma forma, el mismo color, alineado igual»): a name and its
+   value a line, in two columns; the names small and quiet, the values all in one colour and weight. */
+.ac-stats {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  margin: 2px 0 3px;
+}
+
+.ac-k {
+  align-self: baseline;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.ac-v {
+  align-self: baseline;
+  font-weight: 700;
+  color: var(--ink);
+}
+
 /* What it takes off, in the stamp's red: what an attack is chosen for. */
 .ac-dmg {
   font-weight: 700;
@@ -1328,6 +1373,38 @@ em.whose {
 
 .pass-command.follow-turn:not(.on) {
   opacity: 0.7;
+}
+
+/* Its switch (playtest 19/10 #15: «activado/desactivado, no Sí/No»): the knob to the right and lit when on. */
+.pass-command.follow-turn .switch {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.pass-command.follow-turn .switch b {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  transition: left 0.15s ease;
+}
+
+.pass-command.follow-turn.on .switch {
+  background: var(--good, #5fd28a);
+  box-shadow: none;
+}
+
+.pass-command.follow-turn.on .switch b {
+  left: 14px;
+  background: #fff;
 }
 
 /* The clock on a question left open (ui/deadline.ts, PRUEBA-2026-10-14 #28): the time left over a draining bar. */
@@ -1663,16 +1740,10 @@ em.whose {
   background: var(--paper-grain), var(--paper-light);
 }
 
-/* «Señalar» beside «Menú» (playtest 18/10 #7); lit while armed: the next click on the map signals it. */
+/* «Menú», alone since signalling went to Mayús+clic (playtest 19/10 #14). */
 .side-row {
   display: flex;
   gap: 5px;
-}
-
-.hud .ping-button.on {
-  color: #1a1406;
-  background: #f2c230;
-  box-shadow: 0 0 0 2px rgba(242, 194, 48, 0.45), 1px 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 /* A signal's tag over the spot (overlays.ts pingTag): whose, in their colour, for 4 s. */
@@ -1930,7 +2001,7 @@ em.whose {
   border-bottom: 2px solid var(--ink);
 }
 
-.hud .menu-entry {
+.menu-entry {
   display: block;
   width: 100%;
   padding: 7px 4px;
@@ -1944,7 +2015,7 @@ em.whose {
   color: var(--ink);
 }
 
-.hud .menu-entry:hover {
+.menu-entry:hover {
   background: var(--ink-blue-soft);
 }
 
@@ -1964,7 +2035,7 @@ em.whose {
   background: rgba(179, 38, 30, 0.08);
 }
 
-.hud .menu-entry.toggle {
+.menu-entry.toggle {
   font-family: var(--font);
   font-size: 15px;
 }
@@ -2213,7 +2284,7 @@ dl.controls dd {
 /* It waits to be closed (playtest 14/10 #3): the card takes clicks, and so does the screen under it. */
 .mission-intro.open {
   pointer-events: auto;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .mission-intro.out {
@@ -2259,9 +2330,13 @@ dl.controls dd {
   margin: 2px 0;
 }
 
-/* What the mission is for (playtest 13/10 #7): the objective stands out, the briefing reads under it. */
-.mission-intro .intro-meta {
-  color: var(--ink-soft);
+/* What the mission is for (playtest 13/10 #7): the objective stands out, its turns under it in the accent
+   (playtest 19/10 #12), and the briefing reads under them. */
+.mission-intro .intro-turns {
+  margin-top: 2px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #c8961e;
 }
 
 .mission-intro .intro-objective {
@@ -2818,7 +2893,7 @@ body:has(.strat) .fps-counter {
   flex: 1;
   min-width: 120px;
   accent-color: var(--t-accent, var(--pen));
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .setting-value {
@@ -3032,7 +3107,7 @@ body:has(.strat) .fps-counter {
 
 /* The soldier's name opens its sheet (playtest 18/10 #23): a hand, and a faint underline on hovering. */
 .unit-head.opens {
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .unit-head.opens:hover .unit-name {
@@ -3292,7 +3367,7 @@ body:has(.strat) .fps-counter {
   border: 0;
   background: none;
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .pack-slot-btn:hover .pack-slot,
@@ -3328,7 +3403,7 @@ body:has(.strat) .fps-counter {
   border: 0;
   background: none;
   color: var(--ink-soft);
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .pack-act {
@@ -3344,7 +3419,7 @@ body:has(.strat) .fps-counter {
   font: inherit;
   font-size: 13px;
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .pack-act small {
@@ -3378,7 +3453,7 @@ body:has(.strat) .fps-counter {
   color: var(--ink);
   font: inherit;
   font-size: 12px;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .pack-floor-item small {

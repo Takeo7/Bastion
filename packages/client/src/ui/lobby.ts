@@ -54,7 +54,7 @@ export class Lobby {
   private status: NetStatus = 'closed';
   private players: PlayerInfo[] = [];
   private mySlot: Slot | null = null;
-  private savedCampaign: { day: number; missions?: number; doom: number; level: number } | null = null;
+  private savedCampaign: { day: number; missions?: number; doom: number; level: number; inMission?: string } | null = null;
   /** The file a campaign too old for this release was kept in when the host started (server persistence.ts, docs/FASE9.md §7). */
   private setAside: string | null = null;
   private page: 'main' | 'skirmish' | 'settings' = 'main';
@@ -89,7 +89,7 @@ export class Lobby {
     this.render();
   }
 
-  update(players: PlayerInfo[], mySlot: Slot | null, savedCampaign: { day: number; missions?: number; doom: number; level: number } | null = null, setAside: string | null = null): void {
+  update(players: PlayerInfo[], mySlot: Slot | null, savedCampaign: { day: number; missions?: number; doom: number; level: number; inMission?: string } | null = null, setAside: string | null = null): void {
     this.players = players;
     this.mySlot = mySlot;
     this.savedCampaign = savedCampaign;
@@ -224,7 +224,7 @@ export class Lobby {
     const ok = this.canPlay();
     append(
       this.column,
-      saved ? h('button.menu-item.primary', { disabled: !ok, onclick: () => this.handlers.onContinueCampaign() }, 'Continuar campaña', h('small', {}, `${outingsMark(saved.missions ?? 0).charAt(0)}${outingsMark(saved.missions ?? 0).slice(1).toLowerCase()} · Nivel ${saved.level} · ${doomName(saved.level)} ${saved.doom}/12`)) : null,
+      saved ? h('button.menu-item.primary', { disabled: !ok, onclick: () => this.handlers.onContinueCampaign() }, 'Continuar campaña', h('small', {}, saved.inMission ? `Misión a medias: ${saved.inMission}` : `${outingsMark(saved.missions ?? 0).charAt(0)}${outingsMark(saved.missions ?? 0).slice(1).toLowerCase()} · Nivel ${saved.level} · ${doomName(saved.level)} ${saved.doom}/12`)) : null,
       h(
         'button.menu-item',
         {
@@ -242,14 +242,15 @@ export class Lobby {
       h(
         'button.menu-item',
         {
-          disabled: !ok,
+          // Not with a campaign mission half played (the server keeps it for «Continuar campaña»).
+          disabled: !ok || !!saved?.inMission,
           onclick: () => {
             this.page = 'skirmish';
             this.render();
           },
         },
         'Escaramuza',
-        h('small', {}, 'Una misión suelta, sin consecuencias'),
+        h('small', {}, saved?.inMission ? 'Antes, acabad la misión de la campaña' : 'Una misión suelta, sin consecuencias'),
       ),
       h(
         'button.menu-item',

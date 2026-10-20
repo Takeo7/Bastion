@@ -70,6 +70,8 @@ export interface AbilityView {
   limits?: string;
   /** What it takes off, for what does damage («Daño 4–6 · crítico +2»). */
   damage?: string;
+  /** Its figures, each a name and its value, as the card lists them alike (#18): actions, reach, damage, noise… */
+  stats?: [string, string][];
   /** How far it is heard («ruido 12», «sin ruido»), after the cost (docs/FASE2.md). */
   noise?: string;
   description: string;
@@ -108,7 +110,7 @@ export interface DamageView {
   crit?: string;
   graze?: string;
   notes: string[];
-  /** «Lo mata», «Puede matarlo», «Un crítico lo mata». */
+  /** «Lo mata», «Un crítico lo mata». */
   kill?: string;
 }
 
@@ -258,11 +260,15 @@ export interface HudHandlers {
    * player's own call is waiting for it.
    */
   abandonState(): { partner: string | null; waiting: boolean };
+  /** Back to the main menu (playtest 19/10 #7): who would go too, and whether it is a campaign's (left paused). */
+  leaveState(): { partner: string | null; campaign: boolean };
   onPassCommand(): void;
   /** A menu of the bar opened or closed: draw the bar again. */
   onMenu(): void;
   /** The camera to what the partner holding the command is doing. */
   onWatchPartner(): void;
+  /** The camera to the soldier whose turn it is, picked (playtest 19/10 #15). */
+  onGoToSoldier(): void;
   /** Toggles the sound; returns whether it is now on. */
   onToggleSound(): boolean;
   soundOn(): boolean;
@@ -274,8 +280,6 @@ export interface HudHandlers {
   onTakeAll?(ids: string[]): void;
   /** Leave slot `drop` on the floor and pick up `take` from it: the swap when the backpack is full. */
   onSwap(take: string, drop: number): void;
-  /** «Señalar» (playtest 18/10 #7): the next click on the map signals that spot to the partner; again, it's put away. */
-  onPingArm(): void;
   /** «Hoja» (playtest 18/10 #23): the soldier's sheet, only to look at. */
   onSheet(unit: string): void;
 }
@@ -296,11 +300,12 @@ export interface SoldierSheetView {
 const CONTROLS: [string, string][] = [
   ['Clic', 'Seleccionar y mover'],
   ['Tab', 'Siguiente soldado u objetivo'],
-  ['1–9', 'Elegir habilidad (otra vez para usarla)'],
+  ['1–9', 'Usar una habilidad; si necesita objetivo, elegirlo y pulsar otra vez'],
   ['Espacio · Intro', 'Usar la habilidad elegida; sin ninguna, disparar'],
   ['C', 'Ceder el mando'],
   ['Retroceso', 'Terminar turno'],
-  ['G · Alt+clic · clic con la rueda', SETTINGS_TEXT.pingControls],
+  // Signalling (playtest 19/10 #14): Mayús+clic, with no button; G and the wheel's click still do.
+  ['Mayús + clic · G · clic con la rueda', SETTINGS_TEXT.pingControls],
   ['H · clic en su nombre', 'Hoja del soldado: tablero, estadísticas y lo que lleva'],
   ['Q / E', 'Girar la cámara'],
   ['Rueda', 'Acercar o alejar: de lejos se ven los tejados; de cerca, la planta del soldado'],
@@ -352,11 +357,13 @@ export class Hud {
   private floorKey = '';
   private readonly mission = h('div.mission');
   /**
-   * The objective's card on the right, under «Señalar» and «Menú» (playtest 18/10 #52: «siempre en pantalla
+   * The objective's card on the right, under «Menú» (playtest 18/10 #52: «siempre en pantalla
    * sin estorbar»): the arrival card shrinks into it (dock) and it stays the whole mission, with the mission's
    * name, its objective as it goes and what counts (turns, waves, the horde). Hidden while that card is open.
    */
   private readonly goalDock = h('div.goal-dock.panel', {}, this.mission);
+  /** The right-hand column (Menú, the objective, the log): the aim's panel keeps below it (#20: «se solapan»). */
+  private sideEl!: HTMLElement;
   private readonly players = h('div.players');
   /** There is a partner in the room, connected or not: abandoning ends the mission for both. */
   private paired = false;
@@ -372,7 +379,10 @@ export class Hud {
   private readonly watchBtn = h('button.pass-command.watch-partner', { title: 'Lleva la cámara a lo que está haciendo el otro jugador (F)' });
   /** The camera to the soldier whose turn it is, or not (playtest 17/10 #47): a switch beside «Ver», kept per browser. */
   private followTurn = readFollowTurn();
-  private readonly followBtn = h('button.pass-command.follow-turn', { type: 'button', title: 'Al cambiar el turno o el mando, la cámara va al soldado al que le toca (si no acabas de moverla tú)' });
+  private readonly followBtn = h('button.pass-command.follow-turn', { type: 'button', title: SETTINGS_TEXT.cameraFollowAbout });
+  /** To the soldier whose turn it is (playtest 19/10 #15: it had gone), while this player gives the orders. */
+  private readonly goBtn = h('button.pass-command.go-soldier.hidden', { type: 'button', title: 'Lleva la cámara al soldado al que le toca y lo elige (F)' });
+  private readonly goWho = h('span');
   private readonly watchWho = h('span');
   private readonly logEl = h('div.log');
   private readonly logLines: HTMLElement[] = [];
@@ -396,7 +406,6 @@ export class Hud {
   private bannerTimer = 0;
   private toastTimer = 0;
 
-  private readonly pingBtn = h('button.menu-button.ping-button', { type: 'button', title: `${SETTINGS_TEXT.pingTip} ${SETTINGS_TEXT.pingKeys}` }, SETTINGS_TEXT.ping);
 
   constructor(container: HTMLElement, private readonly handlers: HudHandlers) {
     this.endTurn.addEventListener('click', () => handlers.onEndTurn());
@@ -406,6 +415,8 @@ export class Hud {
     // A menu of the bar closes with a press anywhere else.
     document.addEventListener('pointerdown', this.onPressAnywhere);
     this.watchBtn.append(this.watchWho, h('small', {}, 'F'));
+    this.goBtn.addEventListener('click', () => handlers.onGoToSoldier());
+    this.goBtn.append(this.goWho, h('small', {}, 'F'));
     this.followBtn.addEventListener('click', () => {
       this.followTurn = !this.followTurn;
       try {
@@ -417,8 +428,6 @@ export class Hud {
     });
     this.drawFollow();
     const menuButton = h('button.menu-button', { onclick: () => this.toggleMenu(), title: 'Menú (Esc)' }, 'Menú');
-    // Signalling a spot, in view (playtest 18/10 #7: Arturo didn't know it was there, and a trackpad has no middle click).
-    this.pingBtn.addEventListener('click', () => handlers.onPingArm());
     this.root.append(
       this.frame,
       h('div.top', {}, this.turn, this.floor, this.players),
@@ -426,8 +435,8 @@ export class Hud {
       this.unitPanel,
       this.abilities,
       this.target,
-      h('div.turn-actions', {}, this.followBtn, this.passBtn, this.watchBtn, this.endTurn),
-      h('div.side', {}, h('div.side-row', {}, this.pingBtn, menuButton), this.goalDock, this.logEl),
+      h('div.turn-actions', {}, this.followBtn, this.goBtn, this.passBtn, this.watchBtn, this.endTurn),
+      (this.sideEl = h('div.side', {}, h('div.side-row', {}, menuButton), this.goalDock, this.logEl)),
       this.bannerEl,
       this.toastEl,
       this.noticeEl,
@@ -523,10 +532,6 @@ export class Hud {
     );
   }
 
-  /** «Señalar» armed: the next click on the map signals it (lit while it waits). */
-  setPingArmed(on: boolean): void {
-    this.pingBtn.classList.toggle('on', on);
-  }
 
   /** The horde's clock in the strip: a short bar that fills towards the next wave (full: it comes this turn). */
   private hordeGauge(horde: HordeView): HTMLElement {
@@ -1004,8 +1009,13 @@ export class Hud {
       'span.ability-card',
       { 'aria-hidden': 'true' },
       h('span.ac-head', {}, h('b', {}, a.name), a.hotkey ? h('span.ac-key', {}, a.hotkey) : null),
-      h('span.ac-cost', {}, [a.cost, a.limits, a.noise].filter(Boolean).join(' · ')),
-      a.damage ? h('span.ac-dmg', {}, a.damage) : null,
+      // Its figures, all alike (playtest 19/10 #18): a name and its value a line, in two aligned columns.
+      a.stats?.length
+        ? h('span.ac-stats', {}, ...a.stats.flatMap(([k, v]) => [h('span.ac-k', {}, k), h('span.ac-v', {}, v)]))
+        : [a.cost, a.limits, a.noise].some(Boolean)
+          ? h('span.ac-cost', {}, [a.cost, a.limits, a.noise].filter(Boolean).join(' · '))
+          : null,
+      !a.stats?.length && a.damage ? h('span.ac-dmg', {}, a.damage) : null,
       h('span.ac-desc', {}, a.description),
       a.reason ? h('span.ac-why', {}, a.reason) : null,
     );
@@ -1014,6 +1024,23 @@ export class Hud {
   setTarget(view: TargetView | null): void {
     this.fillTarget(view);
     this.placeTarget(view?.kind === 'self');
+    this.keepClear();
+  }
+
+  /**
+   * The aim's panel, on the right, keeps clear of the column over it (playtest 19/10 #20: the objective's card
+   * and an open log went under it): centred as before when there is room, else just below the column.
+   */
+  private keepClear(): void {
+    const panel = this.target;
+    panel.style.top = '';
+    if (panel.classList.contains('hidden') || panel.classList.contains('anchored') || !this.sideEl) return;
+    const side = this.sideEl.getBoundingClientRect();
+    const r = panel.getBoundingClientRect();
+    if (!r.height || r.top >= side.bottom + EDGE) return;
+    // Its offsets are in its own pixels, which the interface size zooms.
+    const zoom = r.width / (panel.offsetWidth || r.width) || 1;
+    panel.style.top = `calc(50% + ${Math.ceil((side.bottom + EDGE - r.top) / zoom)}px)`;
   }
 
   private fillTarget(view: TargetView | null): void {
@@ -1157,7 +1184,15 @@ export class Hud {
     clear(this.followBtn);
     this.followBtn.setAttribute('aria-pressed', String(this.followTurn));
     this.followBtn.classList.toggle('on', this.followTurn);
-    this.followBtn.append(h('span', {}, 'Cámara al turno'), h('small', {}, this.followTurn ? 'Sí' : 'No'));
+    // A switch, on or off (#15: «activado/desactivado, no Sí/No»): its name, and the track with its knob.
+    this.followBtn.append(h('span', {}, SETTINGS_TEXT.cameraFollow), h('i.switch', { 'aria-hidden': 'true' }, h('b')));
+    this.followBtn.title = `${SETTINGS_TEXT.cameraFollowAbout} ${this.followTurn ? 'Activada.' : 'Desactivada.'}`;
+  }
+
+  /** «Ir a Mateo» (#15): the soldier whose turn it is, while this player gives the orders; null hides it. */
+  setGoTo(name: string | null): void {
+    this.goBtn.classList.toggle('hidden', !name);
+    this.goWho.textContent = name ? `IR A ${name.split(' ')[0]!.toUpperCase()}` : '';
   }
 
   /** The "pass the command" button: only for the holder, while playing with a partner. */
@@ -1189,7 +1224,7 @@ export class Hud {
    * it could be read): «Empezar», a click anywhere, Enter, Space or Esc
    * (game.ts). Resolves when it is closed.
    */
-  intro(kicker: string, title: string, lines: string[], objective?: string, briefing?: string): Promise<void> {
+  intro(kicker: string, title: string, objective?: string, turns?: string, briefing?: string): Promise<void> {
     this.introClose?.();
     this.goalDock.classList.add('waiting');
     const close = () => this.introClose?.();
@@ -1200,8 +1235,9 @@ export class Hud {
       { onclick: close },
       kicker ? h('small', {}, kicker) : null,
       h('h1', {}, type(title)),
-      lines.length ? h('p.intro-meta', {}, lines.join(' · ')) : null,
+      // The objective, the turns under it in the accent, then the briefing whole (playtest 19/10 #12).
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
+      turns ? h('p.intro-turns', {}, turns) : null,
       briefing ? h('p.intro-briefing', {}, briefing) : null,
       // Only what starts it (playtest 18/10 #27); a click anywhere, Enter, Space or Esc do too.
       h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR')),
@@ -1306,6 +1342,7 @@ export class Hud {
         ),
       );
     }
+    this.keepClear();
   }
 
   // --------------------------------------------------------------- menu
@@ -1319,15 +1356,18 @@ export class Hud {
 
   private renderMenu(page: 'main' | 'controls' | 'settings'): void {
     clear(this.menu);
-    const back = h('button.menu-back', { onclick: () => this.renderMenu('main') }, '‹ Volver');
+    const back = (to: 'main' | 'settings' = 'main') => h('button.menu-back', { onclick: () => this.renderMenu(to) }, '‹ Volver');
     const card = h('div.game-menu-card.panel');
     if (page === 'main') {
+      // The same list as the base's (playtest 19/10 #7), one entry a line, all alike; the controls are in Ajustes.
       append(
         card,
         h('h2', {}, 'Menú'),
         h('button.menu-entry', { onclick: () => this.toggleMenu(false) }, 'Continuar'),
-        h('button.menu-entry', { onclick: () => this.renderMenu('controls') }, 'Controles'),
         h('button.menu-entry', { onclick: () => this.renderMenu('settings') }, 'Ajustes'),
+        // The main menu (#7; the server lets one go mid-mission: a campaign's stays paused). Not once it is over:
+        // the report has its own way out.
+        this.outcome.classList.contains('show') ? null : h('button.menu-entry', { onclick: () => (this.toggleMenu(false), this.confirmLeave()) }, 'Volver al menú de inicio'),
         this.abandonEntry(),
         // Closing the game, in the desktop app only (playtest 17/10).
         canQuit() ? h('button.menu-entry', { onclick: () => (this.toggleMenu(false), this.confirmQuit()) }, QUIT_BUTTON) : null,
@@ -1340,7 +1380,7 @@ export class Hud {
         // How the light works at night (Lore's, #50), here too for whenever it is wanted.
         h('h3.controls-night', {}, NIGHT_TEXT.label),
         h('ul.night-rules', {}, ...NIGHT_TEXT.rules.map((line) => h('li', {}, line))),
-        back,
+        back('settings'),
       );
     } else {
       const sound = h(
@@ -1353,7 +1393,15 @@ export class Hud {
         },
         `Sonido: ${this.handlers.soundOn() ? 'activado' : 'desactivado'}`,
       );
-      append(card, h('h2', {}, 'Ajustes'), sound, soundSettings(() => this.renderMenu('settings')), graphicsSettings(() => this.renderMenu('settings')), back);
+      append(
+        card,
+        h('h2', {}, 'Ajustes'),
+        sound,
+        soundSettings(() => this.renderMenu('settings')),
+        graphicsSettings(() => this.renderMenu('settings')),
+        h('button.menu-entry', { onclick: () => this.renderMenu('controls') }, 'Controles'),
+        back(),
+      );
     }
     this.menu.append(card);
   }
@@ -1435,6 +1483,34 @@ export class Hud {
   }
 
   /** What abandoning costs, before it is asked (with the partner there, it waits for a yes on their bar). */
+  /** Back to the main menu: asked with the other one here, who goes too; otherwise at once. */
+  private confirmLeave(): void {
+    const { partner, campaign } = this.handlers.leaveState();
+    if (!partner) {
+      this.handlers.onBackToMenu();
+      return;
+    }
+    uiSound('paper');
+    clear(this.modal);
+    this.modal.classList.add('show');
+    const close = () => this.modal.classList.remove('show');
+    this.modal.append(
+      h(
+        'div.modal-card.panel',
+        {},
+        h('h2', {}, '¿Volver al menú de inicio?'),
+        h('p', {}, campaign ? 'La misión queda guardada tal como está; «Continuar campaña» vuelve a ella.' : 'La escaramuza se acaba.'),
+        h('p', {}, `${partner} vuelve también al menú.`),
+        h(
+          'div.modal-actions',
+          {},
+          h('button.fire', { onclick: () => (close(), this.handlers.onBackToMenu()) }, 'VOLVER AL MENÚ'),
+          h('button.secondary', { onclick: close }, 'SEGUIR AQUÍ'),
+        ),
+      ),
+    );
+  }
+
   private confirmAbandon(): void {
     uiSound('paper');
     clear(this.modal);

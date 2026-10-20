@@ -454,18 +454,49 @@ const DAMAGE_EACH: Partial<Record<AbilityId, string>> = {
 
 /** The hover card's damage line, from the rules' own numbers: «Daño 4–6 · crítico +2». */
 function damageText(s: GameState, u: Unit, id: AbilityId): string | undefined {
+  const value = damageValue(s, u, id);
+  return value ? `Daño ${value}` : undefined;
+}
+
+/** The damage alone, for the cards' figures (#18): «4–6 por disparo · crítico +2». */
+function damageValue(s: GameState, u: Unit, id: AbilityId): string | undefined {
   // Vigilancia fires the rifle at whoever moves: a reaction shot, which only crits with the talent.
   const watch = id === 'overwatch' || id === 'killZone';
   const d = abilityDamage(s, u, watch ? 'shoot' : id);
   if (!d) return undefined;
   const crit = d.crit && (!watch || hasPerk(u, 'guardCrit')) ? d.crit : null;
-  return [
-    `Daño ${span(d.hit)}${watch ? ' por disparo' : DAMAGE_EACH[id] ?? ''}`,
-    crit ? critText(d.hit, crit) : '',
-    d.shred ? `destroza ${d.shred} de blindaje` : '',
-  ]
+  return [`${span(d.hit)}${watch ? ' por disparo' : DAMAGE_EACH[id] ?? ''}`, crit ? critText(d.hit, crit) : '', d.shred ? `destroza ${d.shred} de blindaje` : '']
     .filter(Boolean)
     .join(' · ');
+}
+
+/** Where a weapon hits best, by its range (content.ts RangeTable), for the cards. */
+const RANGE_NAMES: Record<string, string> = { short: 'corto', medium: 'medio', long: 'largo', none: 'cuerpo a cuerpo' };
+
+/**
+ * An ability's figures on its card (playtest 19/10 #18: «siempre igual: la misma forma, el mismo color,
+ * alineado igual»), each a name and its value, in this order and only those that apply: actions, reach,
+ * damage, noise, uses, recharge.
+ */
+function abilityStats(s: GameState, u: Unit, id: AbilityId): [string, string][] {
+  const def = ABILITIES[id];
+  const need = apNeeded(u, id);
+  const watch = id === 'overwatch' || id === 'killZone';
+  const weapon = isAttack(id) ? attackWeapon(u, id) : watch ? attackWeapon(u, 'shoot') : null;
+  const reach = weapon ? RANGE_NAMES[weapon.range] : abilityRange(u, id) ? `${abilityRange(u, id)} casillas` : '';
+  const noise = watch ? attackWeapon(u, 'shoot').noise : noiseOf(s, u, id);
+  const left = u.cooldowns[id] ?? 0;
+  const stats: [string, string | number | undefined][] = [
+    ['Acciones', need === 0 ? 'ninguna' : endsTurn(u, id) ? 'acaba el turno' : need],
+    ['Alcance', reach],
+    ['Daño', damageValue(s, u, id)],
+    // In tiles, as on the weapons' sheet (Lore, 19/10).
+    ['Ruido', noise > 0 ? `${noise} casillas${watch ? ' al disparar' : ''}` : isAttack(id) ? 'ninguno' : undefined],
+    ['Usos', def.charge ? (u.charges[def.charge] ?? 0) : undefined],
+    // Ready, how often; waiting, when (Lore: not to mix them up).
+    ['Recarga', left > 0 ? `lista en ${left} ${left === 1 ? 'turno' : 'turnos'}` : def.cooldown ? `cada ${def.cooldown} turnos` : undefined],
+  ];
+  return stats.filter((x): x is [string, string | number] => x[1] !== undefined && x[1] !== '').map(([k, v]) => [k, String(v)]);
 }
 
 /**
@@ -504,21 +535,6 @@ function haulText(t: LootTotals): string | null {
 function weaponLabel(u: Unit, ability: AttackAbility): string {
   const weapon = attackWeapon(u, ability);
   return u.weaponName && weapon.id === TEMPLATES[u.template].weapon ? u.weaponName : weapon.name;
-}
-
-/**
- * A line of an operation's briefing for the arrival card: its first sentences,
- * up to about two lines, past the sender's «Aviso de…» if it opens with one.
- */
-function briefingLine(text: string): string {
-  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((t) => t.trim()) ?? [text];
-  if (sentences.length > 1 && /^Aviso\b/.test(sentences[0]!)) sentences.shift();
-  let out = '';
-  for (const t of sentences) {
-    if (out && out.length + t.length > 170) break;
-    out = out ? `${out} ${t}` : t;
-  }
-  return out;
 }
 
 /** A backpack's things, one slot each, for the sheet. */
@@ -586,11 +602,11 @@ function heardCount(units: Unit[]): string {
   return `${units.length} ${dead ? 'zombis' : 'enemigos'}`;
 }
 
-/** Whether what `d` takes off kills `t`: surely, maybe, or only with a critical. */
+/** Whether what `d` takes off kills `t`: surely, or only with a critical. */
 function lethality(d: DamagePreview, t: Unit): string | undefined {
+  // Not «Puede matarlo» (playtest 19/10 #20): only what is sure, or what a critical does.
   if (d.hit.min >= t.hp) return 'Lo mata';
-  if (d.hit.max >= t.hp) return 'Puede matarlo';
-  if (d.crit && d.crit.max >= t.hp) return 'Un crítico lo mata';
+  if (d.hit.max < t.hp && d.crit && d.crit.max >= t.hp) return 'Un crítico lo mata';
   return undefined;
 }
 
@@ -742,8 +758,8 @@ export class Game {
   private readonly planSkip = new Set<string>();
   /** La Lata left by itself as time ran out (playtest 18/10 #8): the outcome says so. */
   private departedOnTime = false;
-  /** «Señalar» pressed: the next click on the map signals that spot (armPing). */
-  private pingArmed = false;
+  /** Mayús held over the map: a click signals (playtest 19/10 #14), and the cursor says so. */
+  private signalKey = false;
   /** A soldier with no actions left that the player picked to look at (select, autoSelect). */
   private looking: string | null = null;
   /** The enemy whose field of view is shown (under the pointer, or aimed at), and whether a dead one was turning last frame. */
@@ -815,7 +831,6 @@ export class Game {
       onAbility: (id) => this.useAbility(id),
       onEndTurn: () => this.toggleReady(),
       onSelectUnit: (id) => this.select(id, true),
-      onPingArm: () => this.armPing(!this.pingArmed),
       onSheet: (id) => this.openSheet(id),
       onConfirmTarget: () => this.confirmTarget(),
       onCancel: () => this.cancelMode(),
@@ -825,8 +840,10 @@ export class Game {
       onBackToMenu: () => this.net.send({ t: 'backToMenu' }),
       onAbandon: () => this.net.send({ t: 'abandon' }),
       abandonState: () => ({ partner: this.onlinePartner()?.name ?? null, waiting: this.state.abandonCall?.by === this.mySlot }),
+      leaveState: () => ({ partner: this.onlinePartner()?.name ?? null, campaign: !!this.state.campaignMission }),
       onPassCommand: () => this.passCommand(),
       onWatchPartner: () => this.watchPartner(),
+      onGoToSoldier: () => this.goToSoldier(),
       onMenu: () => this.hud.setAbilities(this.abilities()),
       onItem: (o) => this.itemOrder(o),
       onTakeAll: (ids) => this.takeAll(ids),
@@ -997,16 +1014,17 @@ export class Game {
     if (this.state.outcome) return;
     const s = this.state;
     const mission = this.missionView();
-    // What the mission is for, said at the start and not only in the strip (playtest 13/10 #7):
-    // the objective, and a line of the operation's briefing when the mission carries one.
+    // What the mission is for, said at the start and not only in the strip (playtest 13/10 #7): the objective,
+    // the turns under it, and the operation's briefing whole, as the squad read it (playtest 19/10 #12).
     const cm = s.campaignMission;
     // A siege's, Lore's: how they come and what loses it.
-    const briefing = cm && 'briefing' in cm && typeof cm.briefing === 'string' ? briefingLine(cm.briefing) : s.mission.siege ? SIEGE_TEXT.briefing : undefined;
+    const briefing = cm && 'briefing' in cm && typeof cm.briefing === 'string' ? cm.briefing : s.mission.siege ? SIEGE_TEXT.briefing : undefined;
     const closed = this.hud.intro(
-      this.kicker(),
+      // By night, said with the kind: the grey line under the name is gone (#12).
+      `${this.kicker()}${s.mission.night ? ` · ${NIGHT_LABEL.toUpperCase()}` : ''}`,
       this.missionName(),
-      [s.mapName, s.mission.night ? NIGHT_LABEL : '', mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : ''].filter(Boolean),
       mission.objective,
+      mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : undefined,
       briefing,
     );
     // With the living among the dead (18/10 #47), the log says they fight each other.
@@ -1229,11 +1247,23 @@ export class Game {
     this.hud.soldierSheet({ name: displayName(u.name, u.nickname), rank, whose, stats, carries, skills }, board);
   }
 
-  /** «Señalar» (playtest 18/10 #7): armed, the next click on the map signals it; the cursor says so. */
-  private armPing(on: boolean): void {
-    this.pingArmed = on;
-    this.hud.setPingArmed(on);
-    this.renderer.gl.domElement.style.cursor = on ? 'crosshair' : '';
+  /**
+   * The map's cursor (playtest 19/10 #5, styles.css): the brackets with Mayús held (a click signals, #14), the
+   * crosshair on an enemy in sight while there is a soldier to give orders to, the yellow arrow on another of
+   * this player's soldiers (a click picks it), else the arrow.
+   */
+  /** Mayús pressed or let go (#14): the map's cursor says a click signals. */
+  private holdSignal(on: boolean): void {
+    if (this.signalKey === on) return;
+    this.signalKey = on;
+    this.updateCursor(this.hoverTile ? unitAt(this.view, this.hoverTile) : undefined);
+  }
+
+  private updateCursor(hovered?: Unit): void {
+    const u = this.selectedUnit();
+    const enemy = !!hovered?.alive && hovered.team === 'alien' && this.visibleAliens.has(hovered.id);
+    const kind = this.signalKey ? 'signal' : enemy && u && this.canAct() ? 'aim' : hovered?.alive && hovered.id !== u?.id && this.commands(hovered) ? 'hot' : 'arrow';
+    this.renderer.gl.domElement.style.cursor = `var(--cursor-${kind})`;
   }
 
   private ping(tile: Place): void {
@@ -3365,6 +3395,15 @@ export class Game {
     this.rig.focus(this.units.worldPos(u.id));
   }
 
+  /** The camera to the soldier whose turn it is, and it picked (F, «Ir a…»: playtest 19/10 #15); asked, so at once. */
+  private goToSoldier(): void {
+    const u = this.turnSoldier(this.view, this.mySlot) ?? this.selectedUnit();
+    if (!u?.alive) return;
+    if (u.id !== this.selected && this.commands(u)) this.select(u.id);
+    this.setLevel(u.pos.z ?? 0);
+    this.rig.focus(this.units.worldPos(u.id));
+  }
+
   private myUnits(): Unit[] {
     return this.state.units.filter((u) => u.alive && this.commands(u));
   }
@@ -3528,15 +3567,12 @@ export class Game {
         this.refreshInteractive();
         return;
       case 'self':
-        // Nothing fires on the first press (playtest: «sin arriesgarme a clicar y que se activen»):
-        // it is armed and explained; the second press, Enter or the panel's button uses it.
-        if (this.mode.kind === 'self' && this.mode.ability === id) this.confirmSelf();
-        else {
-          this.mode = { kind: 'self', ability: id };
-          this.targetId = null;
-          this.concealWarn = null;
-          this.refreshInteractive();
-        }
+        // The first press does it (playtest 19/10 #17: «hoy, ponerse en vigilancia son tres clics»): what it
+        // does is on the card's tooltip, and there is nothing to aim.
+        this.mode = { kind: 'self', ability: id };
+        this.targetId = null;
+        this.concealWarn = null;
+        this.confirmSelf();
     }
   }
 
@@ -3641,6 +3677,7 @@ export class Game {
     if (!u || this.mode.kind !== 'self') return;
     if (!this.hasCommand()) {
       this.hud.toast(this.commandLock());
+      this.cancelMode();
       return;
     }
     this.send({ type: 'ability', unit: u.id, ability: this.mode.ability });
@@ -3722,6 +3759,8 @@ export class Game {
         enabled: usable.length > 0,
         reason: usable.length ? undefined : options[0]!.reason,
         description: options.length > 1 ? `${menu.name}: ${options.map((o) => o.name.toLowerCase()).join(', ')}. Pulsa para elegir.` : options[0]!.description,
+        // With a choice to make, each choice's card has its own figures (#18): none on the menu's.
+        ...(options.length > 1 ? { stats: [], cost: '', limits: undefined, damage: undefined, noise: undefined } : {}),
         active: options.some((o) => o.active),
         count: undefined,
         cooldown: undefined,
@@ -3783,6 +3822,7 @@ export class Game {
         limits: limitsText(u, id),
         damage: damageText(this.state, u, id),
         noise: noiseText(this.state, u, id),
+        stats: abilityStats(this.state, u, id),
         description: def.description,
         active,
         count: charge,
@@ -4131,10 +4171,9 @@ export class Game {
         break;
       }
     }
-    // A horde has no announced spot (playtest 13/10 #1); a flare drop (older saves) has one.
-    const incoming = m.reinforcements.filter((r) => !r.landed && (r.horde || r.pos));
-    const now = incoming.some((r) => r.horde && r.turn <= s.turn);
-    const alert = !incoming.length ? null : incoming.some((r) => !r.horde) ? 'VIENEN MÁS' : now ? 'ZOMBIS: LLEGAN ESTE TURNO' : 'ZOMBIS EN CAMINO';
+    // The hordes on the way are not said on the objective's card (playtest 19/10 #20: «fuera "Zombis: llegan este
+    // turno"»): their banner said it, and the Saqueo's gauge counts them down. A flare drop (older saves), still.
+    const alert = m.reinforcements.some((r) => !r.landed && !r.horde && r.pos) ? 'VIENEN MÁS' : null;
     return { kind: m.kind, objective, objectiveTip, turnsLeft: m.turnsLeft, alert, area: s.mapName, horde: m.horde?.length ? this.hordeView() : null };
   }
 
@@ -4207,6 +4246,9 @@ export class Game {
     const detail = mode === 'confirm' ? `${idle} ${idle === 1 ? 'soldado' : 'soldados'} con acciones` : !mine && !ready ? this.playerName(s.command) : waiting;
     this.hud.setEndTurn(mode, detail);
     this.hud.setCommand(sharing && this.canAct() ? { mine, holder: this.playerName(s.command), color: PLAYER_COLORS[s.command ?? this.mySlot], canPass: mine && !s.ready[partner!.slot] && busySlots(s).has(partner!.slot) } : null);
+    // «Ir a …» (#15): while this player gives the orders and someone still has actions.
+    const next = this.canAct() && mine && !ready && s.activeTeam === 'xcom' ? this.turnSoldier(s, this.mySlot) : undefined;
+    this.hud.setGoTo(next?.name ?? null);
   }
 
   /**
@@ -4421,6 +4463,7 @@ export class Game {
       if (notes.length) this.overlays.setNote(tile, notes.join(' · '));
     }
     const hovered = tile ? unitAt(this.view, tile) : undefined;
+    this.updateCursor(hovered);
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
     this.units.setTags(this.enemyTags(u, tile));
     // An enemy under the pointer, or the one aimed at: what it sees (Arturo, 17/10: the dead see in a cone).
@@ -4683,10 +4726,9 @@ export class Game {
     });
     canvas.addEventListener('click', (e) => {
       const t = tileAtPointer(e);
-      // Alt+click signals, for a trackpad with no middle click; so does a click once «Señalar» is armed.
-      if (e.altKey || this.pingArmed) {
+      // Mayús+click signals (playtest 19/10 #14: no button), for a trackpad with no middle click too.
+      if (e.shiftKey) {
         if (t) this.ping(t);
-        this.armPing(false);
         return;
       }
       if (t) this.clickTile(t);
@@ -4710,6 +4752,7 @@ export class Game {
     }, { passive: false });
 
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') this.holdSignal(true);
       if (isTyping(e)) return;
       // The mission's briefing stays until it is closed (playtest 14/10 #3): Enter, Space or Esc close it.
       if (this.hud.introOpen && (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space' || e.code === 'Escape')) {
@@ -4759,10 +4802,6 @@ export class Game {
           if (this.hud.closeAbilityMenu()) break;
           // A soldier's sheet or an enemy's file goes first.
           if (this.hud.closeModal()) break;
-          if (this.pingArmed) {
-            this.armPing(false);
-            break;
-          }
           if (this.mode.kind !== 'move') this.cancelMode();
           else if (this.endArmed || this.concealWarn) {
             this.concealWarn = null;
@@ -4803,8 +4842,7 @@ export class Game {
             this.watchPartner();
             break;
           }
-          const u = this.selectedUnit();
-          if (u) this.rig.focus(tileToWorld(u.pos));
+          this.goToSoldier();
           break;
         }
         case 'F8': {
@@ -4829,8 +4867,12 @@ export class Game {
     // Let go (or the window loses the keyboard), and the chosen speed is back.
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') setHurry(false);
+      if (e.key === 'Shift') this.holdSignal(false);
     };
-    const onBlur = () => setHurry(false);
+    const onBlur = () => {
+      setHurry(false);
+      this.holdSignal(false);
+    };
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
     this.disposers.push(() => window.removeEventListener('keyup', onKeyUp), () => window.removeEventListener('blur', onBlur));

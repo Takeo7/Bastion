@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { fellTree, freshBase, placePiece, Rng, type BaseState, type PieceId } from '@bastion/engine';
+import { BASE_MAP, fellTree, freshBase, growBase, placePiece, Rng, type BaseState, type PieceId } from '@bastion/engine';
 import { ClearingArtView } from '../strategy/clearingArt';
 import { Stage, type StageSet } from '../strategy/stage';
 import '../styles.css';
@@ -14,7 +14,7 @@ import '../styles.css';
 // by chunks); `__claro.depart()` and `__claro.arrive()` send La Lata off
 // down its track and bring it back; `__claro.soldados()` and
 // `__claro.armeria()`, the Soldados' and the Armería's shots;
-// `__claro.escuadra(n, informe, espejo)`, a squad of n by La Lata as its screen
+// `__claro.escuadra(n, informe, espejo, solo, libres)`, a squad of n by La Lata as its screen
 // frames it (the debrief's: some wounded, one fallen; mirrored, as the second
 // player sees it); `__claro.puestos()`, soldiers at their siege posts round
 // the clearing (#58); and `__claro.subir()` boards it
@@ -97,6 +97,12 @@ look(c, c, 34);
   },
   depart: () => art.depart(),
   arrive: () => art.arrive(),
+  /** A campaign's base instead (its `bastion`, as a save has it: grown to the map of today if it is smaller). */
+  base(saved: BaseState) {
+    const b = structuredClone(saved);
+    if (b.width < BASE_MAP) growBase(b, BASE_MAP, new Rng(1));
+    art.setBase(b);
+  },
   /** Soldados and the Armería as their screens frame them, a soldier by the caravan. */
   soldados() {
     art.setShowcase('assault', '#e8a33a', undefined, undefined, 'lab');
@@ -105,15 +111,21 @@ look(c, c, 34);
   armeria() {
     void stage.show('claro', art.armoryShot(), true);
   },
-  /** The squad's screen: `n` soldiers by La Lata, the two commanders' halves; the debrief's, with its wounded and its fallen. */
-  escuadra(n = 6, debrief = false, mirror = false) {
+  /**
+   * The squad's screen: `n` soldiers by La Lata, the two commanders' halves (`alone`: one commander's, in one row, the
+   * last `empty` places free); the debrief's, with its wounded and its fallen.
+   */
+  escuadra(n = 6, debrief = false, mirror = false, alone = false, empty = 0) {
     const templates = ['assault', 'sharpshooter', 'specialist', 'grenadier', 'rookie'] as const;
-    art.setLineup(Array.from({ length: n }, (_, i) => ({
-      template: templates[i % templates.length]!,
-      color: i < Math.ceil(n / 2) ? '#e8a33a' : '#4fb0e8',
-      seed: `lab${i}`,
-      ...(debrief ? { status: i === 1 ? ('dead' as const) : i % 3 === 2 ? ('wounded' as const) : ('ok' as const) } : {}),
-    })), { mirror });
+    art.setLineup([
+      ...Array.from({ length: n }, (_, i) => ({
+        template: templates[i % templates.length]!,
+        color: alone || i < Math.ceil(n / 2) ? '#e8a33a' : '#4fb0e8',
+        seed: `lab${i}`,
+        ...(debrief ? { status: i === 1 ? ('dead' as const) : i % 3 === 2 ? ('wounded' as const) : ('ok' as const) } : {}),
+      })),
+      ...Array.from({ length: empty }, () => null),
+    ], { mirror, halves: !alone });
     void stage.show('claro', art.lineupShot(), true);
   },
   subir: () => art.depart(),

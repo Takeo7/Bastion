@@ -43,6 +43,13 @@ export class GroundMap {
   readonly texture: THREE.DataTexture;
   /** Kind per tile (OPEN, STREET…). */
   readonly kinds: Uint8Array;
+  /**
+   * Down each street two to eight tiles wide (away from crossings), the way it runs on each of its tiles that hold
+   * its centre line (1 along x, 2 along y; 0 none) and where the line lies across the tile (0–1): the manholes'
+   * (scatterCover). The painted centre line is only the narrower streets' (the ground data's own axis).
+   */
+  readonly lineAxis: Uint8Array;
+  readonly lineOffset: Float32Array;
   /** The river, the railway or the motorway along a side (the outline: frameArt.ts), if any. */
   readonly band: Band | null;
 
@@ -72,6 +79,8 @@ export class GroundMap {
     const tarmac = wilds && s.site === 'roadside';
     const data = new Uint8Array(w * h * 4);
     this.kinds = new Uint8Array(w * h);
+    this.lineAxis = new Uint8Array(w * h);
+    this.lineOffset = new Float32Array(w * h);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
@@ -86,7 +95,7 @@ export class GroundMap {
         if (kind === STREET && (furrowX || furrowZ)) {
           [kind, axis] = [FURROW, furrowX ? 1 : 2];
         } else if (kind === STREET && (!wilds || tarmac)) {
-          // Centre line of a street two to four tiles wide, away from crossings.
+          // Centre line of a street two to four tiles wide, away from crossings (the manholes' of one up to eight).
           const run = (dx: number, dy: number) => {
             let n = 0;
             while (n < 8 && isStreet(x + dx * (n + 1), y + dy * (n + 1))) n++;
@@ -95,8 +104,14 @@ export class GroundMap {
           const [up, down, left, right] = [run(0, -1), run(0, 1), run(-1, 0), run(1, 0)];
           const across = up + down + 1;
           const along = left + right + 1;
-          if (across >= 2 && across <= 4 && along >= across + 3 && left && right) [axis, offset] = [1, y - up + across / 2 - y];
-          else if (along >= 2 && along <= 4 && across >= along + 3 && up && down) [axis, offset] = [2, x - left + along / 2 - x];
+          let [line, lineAt] = [0, 0];
+          if (across >= 2 && across <= 8 && along >= across + 3 && left && right) [line, lineAt] = [1, y - up + across / 2 - y];
+          else if (along >= 2 && along <= 8 && across >= along + 3 && up && down) [line, lineAt] = [2, x - left + along / 2 - x];
+          if (line && lineAt >= 0 && lineAt <= 1) {
+            this.lineAxis[i] = line;
+            this.lineOffset[i] = lineAt;
+          }
+          if (line && (line === 1 ? across : along) <= 4) [axis, offset] = [line, lineAt];
           if (offset < 0 || offset > 1) axis = 0;
         }
         this.kinds[i] = kind;
@@ -590,6 +605,8 @@ const COVER: Record<Biome, Partial<Record<number, [PropId, number][]>>> = {
 
 /** A manhole every this many tiles down a street's middle (some 24 m), a drain in each gutter every this many. */
 const MANHOLE_EVERY = 16;
+/** None this near a crossing or a street's end (tiles along it): no two covers a tile apart at a crossing (playtest 19/10, #16). */
+const MANHOLE_CLEAR = 4;
 const DRAIN_EVERY = 13;
 
 /**
@@ -654,13 +671,24 @@ export function scatterCover(s: GameState, ground: GroundMap, density = 1, area:
         }
       }
       // Street furniture in the ground, spaced as a street has it (playtest 18/10, #11: there were far too many): a
-      // manhole down the middle every MANHOLE_EVERY tiles along each street, a drain in each gutter every
-      // DRAIN_EVERY, each street's own offset so they never line up across the map.
+      // manhole on each street's centre line every MANHOLE_EVERY tiles along it, never within MANHOLE_CLEAR of a
+      // crossing or its end (19/10, #16), a drain in each gutter every DRAIN_EVERY; each street's own offset, so they
+      // never line up across the map. Each tile decides its own (a rebuild of some chunks puts the same ones back).
       if (s.biome === 'city' && kind === STREET && e === 0) {
-        const axis = data[i * 4 + 2]!;
-        if (axis) {
+        const axis = ground.lineAxis[i]!;
+        // The centre line's place across the tile: on a tile's edge in a street of even width, where it is the second
+        // of two rows' (offset 1), the first row's cover is the street's one.
+        const offset = ground.lineOffset[i]!;
+        if (axis && offset < 1) {
           const [along, across] = axis === 1 ? [x, y] : [y, x];
-          if ((along + Math.floor(hash2(across, axis, 34) * MANHOLE_EVERY)) % MANHOLE_EVERY === 0) put('manhole', x + 0.5, 0.002, y + 0.5, (hash2(x, y, 32) * 4) | 0, 1);
+          const line = across + offset;
+          const clear = Array.from({ length: MANHOLE_CLEAR * 2 + 1 }, (_, k) => k - MANHOLE_CLEAR).every((k) => {
+            const [nx, ny] = axis === 1 ? [x + k, y] : [x, y + k];
+            return nx >= 0 && ny >= 0 && nx < w && ny < h && ground.lineAxis[ny * w + nx] === axis;
+          });
+          if (clear && (along + Math.floor(hash2(Math.round(line * 2), axis, 34) * MANHOLE_EVERY)) % MANHOLE_EVERY === 0) {
+            put('manhole', axis === 1 ? x + 0.5 : x + offset, 0.002, axis === 1 ? y + offset : y + 0.5, (hash2(x, y, 32) * 4) | 0, 1);
+          }
         }
         const kerb = DIRS4.findIndex((d) => ground.kinds[(y + d.y) * w + x + d.x] === OPEN && at(x + d.x, y + d.y) !== null);
         if (kerb >= 0) {

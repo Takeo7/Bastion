@@ -1074,11 +1074,11 @@ export const SETTINGS_TEXT = {
   /** #6: the slider. */
   enemySpeed: 'Velocidad del turno enemigo',
   enemySpeedAbout: 'A qué velocidad se ve el turno enemigo: movimientos, apariciones y detecciones.',
-  /** #7: the ping: its line in Controles (an infinitive, like the rest), its button and the button's tooltip, with the keys. */
+  /** #7: the ping's line in Controles (an infinitive, like the rest); its keys go beside it. */
   pingControls: 'Señalar un sitio unos segundos, para que lo veáis los dos',
-  ping: 'Señalar',
-  pingTip: 'Marca un sitio unos segundos, para que lo veáis los dos.',
-  pingKeys: 'También con Alt+clic, clic con la rueda o G.',
+  /** Playtest 19/10 #15: the camera goes by itself to whoever's turn it is (18 letters at most). */
+  cameraFollow: 'Cámara al soldado',
+  cameraFollowAbout: 'Al cambiar el turno o el mando, la cámara va sola al soldado al que le toca, salvo si acabas de moverla tú.',
 };
 
 /** #3: the soldier walks the planned route: «Mateo sigue la ruta planeada.» */

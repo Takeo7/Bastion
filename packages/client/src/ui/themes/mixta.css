@@ -105,7 +105,7 @@
   /* The packs' silhouettes used across the screens (masks, coloured by the text). */
   --mi-supplies: url('/ui/synty/icons/mh-crate.webp');
   --mi-medicines: url('/ui/synty/icons/mh-medkit.webp');
-  --mi-food: url('/ui/synty/icons/r-racion.webp');
+  --mi-food: url('/ui/synty/icons/ah-hunger.webp');
   --mi-parts: url('/ui/synty/icons/mh-repair.webp');
   --mi-level: url('/ui/synty/icons/mh-up.webp');
   --mi-day: url('/ui/synty/icons/mh-hourglass.webp');

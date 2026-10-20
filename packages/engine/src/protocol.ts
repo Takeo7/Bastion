@@ -191,8 +191,11 @@ export type ServerMessage =
       t: 'room';
       players: PlayerInfo[];
       phase: RoomPhase;
-      /** `missions`: missions flown (time goes by them, docs/FASE12.md §11.6); `day`, the clock inside. */
-      savedCampaign: { day: number; missions: number; doom: number; level: number } | null;
+      /**
+       * `missions`: missions flown (time goes by them, docs/FASE12.md §11.6); `day`, the clock inside; `inMission`, the
+       * name of a mission left for the menu half played, which «Continuar campaña» goes back to (playtest 19/10, #7).
+       */
+      savedCampaign: { day: number; missions: number; doom: number; level: number; inMission?: string } | null;
       /** A campaign from before Fase 9 the host put aside on starting (docs/FASE9.md §7): the file's name. */
       setAside?: string;
     }

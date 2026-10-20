@@ -64,7 +64,7 @@ export function skyTexture(stops: string[]): THREE.Texture {
 }
 
 /** Panels of the screens over the stage: a fitted shot keeps clear of them. */
-const PANELS = '.strat-top, .strat-nav, .strat-left, .strat-right';
+const PANELS = '.strat-top, .strat-nav, .strat-left, .strat-right, .squad-bottom';
 
 /** One 3D set of the strategy layer (the Bastion cutaway, the geoscape). */
 export interface StageSet {
@@ -461,7 +461,8 @@ export class Stage {
     }
     const hot = this.hotspotAt(e);
     set?.hover?.(hot);
-    this.gl.domElement.style.cursor = hot ? 'pointer' : set?.drag || this.zoom.goal < 0.999 ? 'grab' : 'default';
+    // The game's cursors (styles.css, playtest 19/10 #5): the yellow arrow over what a click picks, else the arrow.
+    this.gl.domElement.style.cursor = hot ? 'var(--cursor-hot)' : 'var(--cursor-arrow)';
   }
 
   private readonly onUp = (e: PointerEvent): void => {

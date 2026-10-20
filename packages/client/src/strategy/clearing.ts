@@ -44,7 +44,7 @@ export interface ClearingArt {
    * soldiers standing (an empty list clears them), where each stands for the cards under them, and
    * the shot of it.
    */
-  setLineup?(entries: (LineupEntry | null)[], opts?: { mirror?: boolean }): void;
+  setLineup?(entries: (LineupEntry | null)[], opts?: { mirror?: boolean; halves?: boolean }): void;
   padPosition?(i: number, count: number): THREE.Vector3;
   lineupShot?(): Shot;
   /** La Lata leaving by the track, and coming back to stop by the caravan; each resolves once done. */
@@ -649,6 +649,8 @@ export class ClearingSet implements StageSet {
         setLoop(this.cursor, p.x, p.y, ...footprint(p.piece, p.rot), 0.06);
       } else setLoop(this.cursor, tile.x, tile.y, 1, 1, 0.05);
       this.cursor.visible = this.building || !!p || !!post;
+      // What a click picks (a piece, one's own defender) takes the game's yellow arrow (#5); the stage set the arrow.
+      if (p || post?.mine) this.canvas()?.style.setProperty('cursor', 'var(--cursor-hot)');
     }
     this.cells.count = n;
     this.cells.instanceMatrix.needsUpdate = true;
@@ -739,6 +741,10 @@ export class ClearingSet implements StageSet {
     const [w, h] = footprint(g.piece, g.rot);
     this.ghost.position.set(g.x + w / 2, 0.02, g.y + h / 2);
     this.ghostMaterial.color.copy(g.ok ? GREEN : RED);
+  }
+
+  private canvas(): HTMLCanvasElement | null {
+    return this.stage?.element.querySelector('canvas') ?? null;
   }
 
   private showHint(hint: { text: string; bad?: boolean } | null, e?: PointerEvent): void {

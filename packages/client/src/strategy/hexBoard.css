@@ -114,7 +114,7 @@
   --face: color-mix(in srgb, var(--cc) 10%, #1d2123);
   --edge: color-mix(in srgb, var(--cc) 34%, #2b3033);
   --icon-o: 1;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
   outline: none;
 }
 

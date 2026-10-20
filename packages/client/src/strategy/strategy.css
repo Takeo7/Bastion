@@ -389,7 +389,7 @@
 
 .x-pick-list button.wpick:disabled {
   opacity: 0.55;
-  cursor: not-allowed;
+  cursor: var(--cursor-arrow);
 }
 
 .x-pick-list button.wpick:disabled:hover {
@@ -628,41 +628,6 @@
   background: var(--stamp);
 }
 
-.strat-players {
-  display: flex;
-  gap: 12px;
-}
-
-.strat-player {
-  display: grid;
-  grid-template-columns: 10px auto;
-  column-gap: 6px;
-  align-items: center;
-  line-height: 1.1;
-}
-
-.strat-player .dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--accent);
-  grid-row: span 2;
-}
-
-.strat-player.offline .dot {
-  background: transparent;
-  border: 2px solid var(--accent);
-}
-
-.strat-player b {
-  font-size: 13px;
-}
-
-.strat-player small {
-  color: var(--x-muted);
-  font-size: 12px;
-}
-
 .strat-top > .x-btn {
   padding: 3px 10px;
   font-size: 12px;
@@ -831,6 +796,67 @@
   pointer-events: none;
 }
 
+/* The Escuadra's foot (playtest 19/10 #3): the mission on the left, its buttons on the right, one strip down by
+   the edge, under the soldiers and their cards (on a laptop the mission's window at the top hid them, #2). */
+.squad-bottom {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.squad-bottom > * {
+  pointer-events: auto;
+}
+
+.squad-mission {
+  flex: 0 1 640px;
+  min-width: 0;
+  padding: 10px 16px 12px;
+}
+
+.squad-mission h1 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.squad-mission h1 small {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--x-muted);
+}
+
+.squad-mission .x-text {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.squad-mission .x-text + .x-text {
+  margin-top: 4px;
+}
+
+.squad-actions {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.squad-actions > small {
+  padding: 1px 10px;
+  background: var(--paper-grain), var(--paper);
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.45);
+}
+
 .strat-center-bottom {
   position: absolute;
   left: 50%;
@@ -985,16 +1011,16 @@ dl.briefing {
   font-weight: 400;
 }
 
-/* Equal slots for short and two-line names; the button stays on the same row. */
+/* Equal slots for short and two-line names, low (playtest 19/10 #8: «muy altas»): the name and its rank. */
 .strat[data-view='squad'] .lineup-card {
-  height: 128px;
+  height: 74px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
 }
 
 .strat[data-view='squad'] .lineup-card > b {
-  min-height: 44px;
-  line-height: 22px;
+  line-height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1002,8 +1028,28 @@ dl.briefing {
 }
 
 .strat[data-view='squad'] .lineup-card > .x-btn {
-  margin-top: auto;
   align-self: center;
+}
+
+/* «Quitar» (#8): a small x in the card's corner, quiet until pointed at. */
+.lineup-card .card-x {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--x-muted);
+  font: 700 16px/20px var(--t-font, sans-serif);
+  text-align: center;
+}
+
+.lineup-card .card-x:hover {
+  background: rgba(240, 80, 60, 0.18);
+  color: var(--t-danger, #f0503c);
 }
 
 .lineup-card small {
@@ -2004,7 +2050,7 @@ dl.briefing {
   padding: 0;
   border: 1px solid var(--ink);
   border-radius: 3px;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .x-swatch {
@@ -2044,7 +2090,7 @@ dl.briefing {
   background: var(--paper-grain), var(--paper-dark);
   border: 1px solid transparent;
   border-radius: 3px;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .x-chips button.on {
@@ -2295,9 +2341,6 @@ dl.briefing {
   .strat-nav button {
     min-width: 0;
   }
-  .strat-player small {
-    display: none;
-  }
 }
 
 /* Days left: a little clock before the number. */
@@ -2379,7 +2422,7 @@ dl.briefing {
 }
 
 .strat-now:disabled {
-  cursor: default;
+  cursor: var(--cursor-arrow);
 }
 
 .strat-now.urgent {
@@ -2478,7 +2521,7 @@ dl.briefing {
   align-items: center;
   gap: 7px;
   list-style: none;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -2671,7 +2714,7 @@ dl.briefing {
 
 /* The story's page after a chapter: there to read, not in the way. */
 .debrief-story summary {
-  cursor: pointer;
+  cursor: var(--cursor-hot);
   font-family: var(--font-display);
   font-size: 12px;
   letter-spacing: 0.1em;
@@ -2788,7 +2831,7 @@ dl.briefing {
   background: none;
   border: 0;
   border-bottom: 1px dashed currentColor;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 /* Twelve swatches and the picker always on one line, as big as the sheet allows. */
@@ -2890,7 +2933,7 @@ dl.briefing {
   font: 700 12px/1 var(--t-font, sans-serif);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .piece-list {
@@ -2909,7 +2952,7 @@ dl.briefing {
   background: var(--t-panel-hi, rgba(46, 50, 52, 0.97));
   color: var(--t-text, #eef0ea);
   text-align: left;
-  cursor: pointer;
+  cursor: var(--cursor-hot);
 }
 
 .piece-item:hover {
@@ -2951,7 +2994,7 @@ dl.briefing {
 /* Locked by the Bastion's level: grey. Short of what it costs: the cost in red. */
 .piece-item.locked {
   opacity: 0.45;
-  cursor: default;
+  cursor: var(--cursor-arrow);
 }
 
 .piece-item.short .piece-cost {
@@ -3097,21 +3140,6 @@ dl.briefing {
 
 .clearing-post.held {
   box-shadow: inset 3px 0 0 var(--accent, #fff), 0 0 0 2px #ffe08a;
-}
-
-/* What a mission eats, by the rations left (playtest 18/10 #37). */
-.strat-credits .food-use {
-  margin-left: 4px;
-  color: var(--t-muted, #a1a79d);
-  font: 600 11px/1 var(--t-font, sans-serif);
-  white-space: nowrap;
-}
-
-/* Under 1440 px the strip has no room for «/misión»: the number, and the why on hover. */
-@media (max-width: 1440px) {
-  .strat-credits .food-use span {
-    display: none;
-  }
 }
 
 /* Buying the next level of the Bastion (playtest 18/10 #40). */
