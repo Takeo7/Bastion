@@ -20,6 +20,9 @@ import {
   defaultSquad,
   executeCampaignCommand,
   executeCommand,
+  applyEvent,
+  realtimeStep,
+  RT_TICK,
   ALARM_NAMES,
   hasQuarantine,
   medicineCures,
@@ -37,6 +40,7 @@ import {
   type CampaignState,
   type ClientMessage,
   type DeadlineKind,
+  type GameEvent,
   type GameState,
   type HostAddress,
   type MapSource,
@@ -96,6 +100,10 @@ export class Room {
   private skirmishMap: SkirmishMap = 'city';
   private skirmishVeterans = true;
   private skirmishNight = false;
+  /** Skirmishes played in real time (docs/TIEMPO-REAL.md, the prototype). */
+  private skirmishRealtime = false;
+  /** The real-time clock, while a mission played so goes on (syncClock). */
+  private clock: ReturnType<typeof setInterval> | null = null;
   /** The last write of the save failed: the players were told once, and are told again only after one goes through. */
   private saveFailed = false;
 
@@ -144,10 +152,12 @@ export class Room {
 
       if (msg.t === 'hello') {
         seat = this.join(socket, msg.name, msg.token);
+        this.syncClock();
         return;
       }
       if (!seat || seat.socket !== socket) return this.send(socket, { t: 'error', message: 'Identifícate primero.' });
       this.handle(seat, msg);
+      this.syncClock();
     });
 
     socket.on('close', () => {
@@ -156,6 +166,8 @@ export class Room {
       seat.droppedAt = Date.now();
       console.log(`[room] ${seat.name} se ha desconectado.`);
       this.broadcastRoom();
+      this.pauseRealtime();
+      this.syncClock();
       setTimeout(() => this.resyncTurn(), (seat.away ? AWAY_GRACE_MS : RECONNECT_GRACE_MS) + 100);
     });
   }
@@ -227,6 +239,7 @@ export class Room {
           if (this.pausedMission()) return this.send(seat.socket!, { t: 'error', message: 'Antes, acabad la misión de la campaña que está a medias: «Continuar campaña».' });
           if (msg.veterans !== undefined) this.skirmishVeterans = msg.veterans;
           if (msg.night !== undefined) this.skirmishNight = msg.night;
+          this.skirmishRealtime = msg.realtime ?? false;
           this.startSkirmish(msg.mission, msg.map);
         }
         break;
@@ -313,6 +326,7 @@ export class Room {
         // The partner hears of a change; whoever asked always gets an answer, its proof the socket is alive (net.ts).
         const changed = !!seat.away !== msg.away;
         seat.away = msg.away;
+        if (msg.away) this.pauseRealtime();
         if (changed) this.broadcastRoom();
         else this.send(seat.socket!, this.roomMessage());
         break;
@@ -350,6 +364,12 @@ export class Room {
         if (this.phase !== 'mission' || !this.state) return;
         const result = executeCommand(this.state, msg.cmd, { slot: seat.slot, connected: this.activeSlots(), rng: this.rng });
         if (!result.ok) {
+          // A real-time order turned down, with where from and where to (the prototype: docs/TIEMPO-REAL.md).
+          const cmd = msg.cmd;
+          if (cmd.type === 'rtOrder') {
+            const u = this.state.units.find((x) => x.id === cmd.unit);
+            this.store.log(`[tiempo real] ${seat.name}: ${cmd.unit} en ${u ? `${u.pos.x},${u.pos.y},${u.pos.z}` : '?'} → ${cmd.to ? `${cmd.to.x},${cmd.to.y},${cmd.to.z ?? 0}` : (cmd.target ?? 'quieto')}: ${result.error}`);
+          }
           this.send(seat.socket!, { t: 'rejected', message: result.error });
           return;
         }
@@ -371,6 +391,44 @@ export class Room {
     }
   }
 
+  /**
+   * The real-time clock (docs/TIEMPO-REAL.md): it runs while a mission played so goes on, unpaused and with someone
+   * here, and stops otherwise. Called after anything that may change that.
+   */
+  private syncClock(): void {
+    const s = this.state;
+    const run = this.phase === 'mission' && !!s?.realtime && !s.realtime.paused && !s.outcome && this.connectedSlots().length > 0;
+    if (run && !this.clock) this.clock = setInterval(() => this.tick(), RT_TICK);
+    else if (!run && this.clock) {
+      clearInterval(this.clock);
+      this.clock = null;
+    }
+  }
+
+  /** A mission in real time stops when a player goes (closed, or the game out of sight): paused for everyone, until one of them goes on. */
+  private pauseRealtime(): void {
+    const s = this.state;
+    if (this.phase !== 'mission' || !s?.realtime || s.realtime.paused || s.outcome) return;
+    const e: GameEvent = { t: 'rtPaused', paused: true, slot: null };
+    applyEvent(s, e);
+    this.broadcast({ t: 'events', events: [e], seq: s.seq, by: null });
+    this.syncClock();
+  }
+
+  /** A tick of the real-time clock: the mission moved on, to everyone. Not saved each time: a mission so is played again from the start. */
+  private tick(): void {
+    const s = this.state;
+    if (this.phase === 'mission' && s?.realtime) {
+      const events = realtimeStep(s, this.rng, this.activeSlots());
+      if (events.length) this.broadcast({ t: 'events', events, seq: s.seq, by: null });
+      if (s.outcome) {
+        this.afterTactical();
+        this.persist();
+      }
+    }
+    this.syncClock();
+  }
+
   private startSkirmish(kind: MissionKind = this.missionKind, map: SkirmishMap = this.skirmishMap): void {
     const slots = this.connectedSlots();
     if (!slots.length) return;
@@ -388,9 +446,9 @@ export class Room {
           : map === 'industrial'
             ? { kind: 'generated', biome: 'city', seed, site: 'industrial' }
             : { kind: 'generated', biome: map, seed };
-    this.state = createMission({ map: source, slots, rng: this.rng, kind, veterans: this.skirmishVeterans, night: this.skirmishNight });
+    this.state = createMission({ map: source, slots, rng: this.rng, kind, veterans: this.skirmishVeterans, night: this.skirmishNight, realtime: this.skirmishRealtime });
     this.phase = 'mission';
-    console.log(`[room] Escaramuza (${kind}${this.skirmishNight ? ', de noche' : ''}, ${this.state.mapName}) con ${slots.length} jugador(es).`);
+    console.log(`[room] Escaramuza (${kind}${this.skirmishNight ? ', de noche' : ''}${this.skirmishRealtime ? ', en tiempo real' : ''}, ${this.state.mapName}) con ${slots.length} jugador(es).`);
     this.broadcastRoom();
     this.broadcast({ t: 'snapshot', state: this.state });
     this.persist();

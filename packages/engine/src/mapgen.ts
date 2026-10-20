@@ -5975,11 +5975,15 @@ export function generateLayout(opts: GenOptions): MissionLayout {
   const taken = new Set<number>();
   const standable = (p: Vec2) => c.in(p.x, p.y) && reach.has(c.i(p.x, p.y)) && canStandOn(c.get(p.x, p.y)) && !taken.has(c.i(p.x, p.y));
 
-  // Squad: the tiles closest to where it comes in (the corner, or a town's way in).
-  const spawns = tilesIn(rect(sq.x - 11, sq.y - 11, 23, 23))
+  // Squad: the tiles closest to where it comes in (the corner, or a town's way in), none side by side with another:
+  // packed shoulder to shoulder, the one in the middle had nowhere to step (nobody walks through anybody since 0.8.0,
+  // 20/10). Where there is no room so, the closest left.
+  const closest = tilesIn(rect(sq.x - 11, sq.y - 11, 23, 23))
     .filter((p) => standable(p) && c.elevAt(p.x, p.y) === 0)
-    .sort((a, b) => dist(a, startTile) - dist(b, startTile) || a.y - b.y || a.x - b.x)
-    .slice(0, MAX_SQUAD);
+    .sort((a, b) => dist(a, startTile) - dist(b, startTile) || a.y - b.y || a.x - b.x);
+  const spawns: Vec2[] = [];
+  for (const p of closest) if (spawns.length < MAX_SQUAD && !spawns.some((q) => Math.abs(q.x - p.x) + Math.abs(q.y - p.y) === 1)) spawns.push(p);
+  for (const p of closest) if (spawns.length < MAX_SQUAD && !spawns.includes(p)) spawns.push(p);
   for (const p of spawns) taken.add(c.i(p.x, p.y));
   const squadCenter = spawns.reduce((acc, p) => ({ x: acc.x + p.x / spawns.length, y: acc.y + p.y / spawns.length }), { x: 0, y: 0 });
 

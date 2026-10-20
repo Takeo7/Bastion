@@ -1,6 +1,6 @@
 # Modo en tiempo real (propuesta)
 
-**Estado:** hablado con Arturo el 20/10. No hay código. Gameplay lo reparte cuando Arturo quiera empezar.
+**Estado:** paso 1 hecho el 20/10 y jugable en Escaramuza («Ritmo: Tiempo real (prueba)»): el motor y el servidor (Gameplay, §6b), la pantalla (UI) y las animaciones (Arte). Falta que Arturo juzgue el ritmo.
 
 La misión se puede jugar en tiempo real en lugar de por turnos, con los mismos controles de hoy: se elige un soldado, se pincha una casilla y va; se pincha un zombi y dispara. Todo pasa a la vez y nadie espera su turno. Es táctica en tiempo real, como Commandos o Door Kickers, con una pausa para pensar.
 
@@ -66,6 +66,27 @@ Cada paso se juega y se prueba solo.
 3. **Cooperativo a dos,** con la pausa compartida.
 4. **El resto de la misión:** registrar, puertas, ventanas, escaleras, objetivos y evacuar en La Lata.
 5. **La campaña:** el interruptor a voto al preparar la misión, la experiencia, las heridas, el botín y el equilibrio.
+
+## 6b. El paso 1 en el código (Gameplay, 20/10)
+
+El motor y el servidor ya están; falta la pantalla (UI y Arte).
+
+- **El estado:** `GameState.realtime` (`types.ts`): `clock` (ms de misión), `paused` y, por unidad, `units[id]`: su orden (`order`: quieto, ir a una casilla o atacar a alguien hasta tumbarlo) y lo que hace ahora (`doing`: `idle`, `walk`, `aim`, `reload`, `strike`, `wait`) hasta `until` (ms del reloj), con `target` si apunta o muerde a alguien.
+- **El reloj:** el anfitrión llama a `realtimeStep` (`realtime.ts`) cada `RT_TICK` (100 ms) mientras la misión va, sin pausa y con alguien conectado (`room.ts syncClock`). Primero acaba lo que cada uno terminaba (el disparo al final de apuntar, el mordisco al final del amago, la recarga) y luego decide lo siguiente. Todo pasa por `Sim`: puertas, quién ve a quién, disparos, mordiscos, contagio y el final de la misión, como por turnos.
+- **Los eventos** llegan en un lote por paso del reloj (`events`, como hoy):
+  - `rtClock` (el reloj, en cada paso), `rtPaused` (quién pausa o sigue), `rtOrder` (la orden nueva de alguien) y `rtDoing` (qué empieza a hacer, hasta cuándo y a quién);
+  - y los de siempre: `moved` (un paso, cuando sale de su casilla: llega a `until` del `rtDoing` `walk` que va con él), `shot`, `damaged`, `died`, `reload`, `tileChanged`…
+- **Los tiempos** (`realtime.ts`): un paso recto del soldado, `RT_STEP` (500 ms), más en diagonal, por escaleras o si es lento (`rtStepMs`: el zombi tarda unos 833 ms); apuntar, `RT_AIM` (700 ms) por cada acción del arma (el fusil de francotirador, el doble: `rtAimMs`); recargar, 1,8 s; el zombi amaga 0,6 s, muerde y recupera 0,9 s.
+- **Las órdenes** (`protocol.ts`): `rtOrder` con `to` (ir), `target` (atacar) o nada (quedarse quieto), y `rtPause`. Las demás órdenes, en tiempo real, se rechazan por ahora.
+- **Cómo se comportan:**
+  - el soldado que va a algún sitio rodea a los demás; si un compañero quieto le tapa el paso, se aparta;
+  - el que ataca apunta, dispara con los números de hoy y sigue hasta tumbarlo, recargando cuando se queda sin balas; sin línea de tiro, va hacia él hasta tenerla;
+  - sin órdenes, se queda quieto: defenderse solo es del paso 2;
+  - los muertos de un grupo despierto van a por el vivo más cercano y muerden; los de un grupo dormido no se mueven hasta que los despiertan. El Chillón y el Hinchado se quedan quietos en este paso.
+- **La escaramuza:** `start` con `realtime: true`; la misión empieza en pausa, y «Empezar» o la barra espaciadora la ponen en marcha.
+- **La pausa sola:** si un jugador se va (cierra o deja el juego en segundo plano), el anfitrión pausa para los dos.
+- **La pantalla** (UI, Arte): los lotes se aplican al llegar; clic en un soldado o 1–8 para elegirlo, clic en una casilla para ir, en un enemigo a la vista para atacar, botón derecho o X para quedarse quieto, barra espaciadora para la pausa. El reloj arriba, el aviso de PAUSA y, en la lista, qué hace cada uno con su barra. Andar, apuntar, recargar y el amago del zombi se animan cada uno a su tiempo. El registro, solo con lo que cambia la partida.
+- **Medido** con un bot en mapas de 64 y 72: cada paso del reloj cuesta menos de 1 ms de media en el anfitrión, y el peor, unos 45 ms.
 
 ## 7. Riesgos
 

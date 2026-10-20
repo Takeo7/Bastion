@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 20/10 con la 0.8.1, la de las notas del 19/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 20/10 con la 0.8.2, la del prototipo en tiempo real. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 520 tests.
+   Deben pasar 530 tests.
 5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.8.1)
+## 3. Estado (versión 0.8.2)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,10 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0 y v0.8.1 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1 y v0.8.2 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.8.2** (2026-10-20):
+  - el prototipo del modo en tiempo real ([TIEMPO-REAL.md](TIEMPO-REAL.md), paso 1): en Escaramuza, «Ritmo: Tiempo real (prueba)». Todo a la vez: clic para ir y para atacar, los zombis persiguen y muerden, barra espaciadora para la pausa. Para juzgar el ritmo; por turnos no cambia nada;
+  - la escuadra ya no sale apiñada: en la 0.8.0 y la 0.8.1 el primer soldado podía empezar encerrado entre sus compañeros, sin casilla adonde ir.
 - **Lo nuevo de la 0.8.1** (2026-10-20), las notas de Arturo del 19/10, jugadas con la 0.7.1 ([PRUEBA-2026-10-19.md](PRUEBA-2026-10-19.md)):
   - la Escuadra: la misión abajo a la izquierda y los botones a la derecha, sin tapar a los soldados; la fila recta y centrada, también con un jugador solo y en la pantalla del segundo; tarjetas bajas con una × para quitar; «Cancelar misión» pasa a la ficha de la misión en El Valle;
   - arriba, sin los jugadores conectados, sin «Aún sin salir» y sin «−10/misión» (está en la ayuda); la comida con su icono;
@@ -236,7 +239,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Los mapas nuevos** ([MAPAS.md](MAPAS.md)): jugarlos y ver si el recorrido y los turnos van bien. En la base de 56 los muertos tardan algo más en llegar: revisar `SIEGE.hold` (11) y las torretas. Medir en el PC de la 3090 un mapa de 72 en «alto».
 - **Fase 12, el asedio** ([FASE12.md](FASE12.md)): hecha. El hito 1 salió en la 0.6.0 y la base nueva en la campaña, en la 0.7.0 (§11). Falta ajustar las cifras jugando: el tamaño de las oleadas (`SIEGE_FIRST`, `SIEGE_GROWTH` en campaign.ts), el precio y la munición de la torreta y de las trampas (`PIECES` en base.ts).
 - **Para revisar más adelante (Arturo, 18/10): «La Lata», la base móvil.** No hay base fija: el Bastión es el autobús con remolques, y la campaña es un viaje por el valle antes de que llegue la Marea. Se elige ruta y se carga el autobús, que tiene poco sitio (gente, combustible, comida, munición), y las instalaciones pasan a ser remolques. Fue la opción 2 al repensar la base; la elegida fue la 1, el asedio ([FASE12.md](FASE12.md)).
-- **Para más adelante (Arturo, 20/10): el modo en tiempo real** ([TIEMPO-REAL.md](TIEMPO-REAL.md)). Un interruptor al preparar la misión para jugarla en tiempo real con los mismos controles de clic en casillas: cada uno manda a todos sus soldados, los disparos con los números de hoy, pausa compartida con la barra espaciadora, y cuenta igual en la campaña. Solo está el diseño.
+- **El modo en tiempo real (Arturo, 20/10)** ([TIEMPO-REAL.md](TIEMPO-REAL.md)): los mismos controles de clic en casillas, todo a la vez, con pausa compartida. Hecho el paso 1, el prototipo: escaramuza en solitario, «Ritmo: Tiempo real (prueba)». Falta que Arturo juzgue el ritmo; si convence, los pasos 2 a 5 (todas las acciones con su tiempo, a dos, el resto de la misión y la campaña).
 - **La versión móvil y web** ([FASE11.md](FASE11.md)): abandonada por Arturo el 18/10, y su código quitado para aligerar el juego: modo táctil, ajuste «Móvil», paquete web, contraseña y manifest. Solo la aplicación de escritorio. Se quedan la reconexión, la espera a quien se ausenta, recuperar el puesto por el nombre y jugar con los soldados del compañero ausente.
 - **El tráiler:** aparcado por Arturo (15/10). El último borrador, la portada y las 10 capturas de la ficha están en `.dev-snapshots/trailer/` (no se suben); las herramientas siguen en `packages/client/tools/trailer/` ([TRAILER.md](TRAILER.md)) por si se retoma.
 - **Escenarios:** la cárcel y el centro comercial esperan los packs «POLYGON – Police Station» y «POLYGON – Shops», que tienen los atlas de sus piezas. Para después: la cafetería con aspecto propio y el portón grande de las naves (un hueco de 5 casillas).
@@ -258,7 +261,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 | [PRUEBA-2026-10-12.md](PRUEBA-2026-10-12.md), [PRUEBA-2026-10-13.md](PRUEBA-2026-10-13.md), [PRUEBA-2026-10-14.md](PRUEBA-2026-10-14.md), [PRUEBA-2026-10-16.md](PRUEBA-2026-10-16.md), [PRUEBA-2026-10-18.md](PRUEBA-2026-10-18.md), [PRUEBA-2026-10-19.md](PRUEBA-2026-10-19.md) | Notas de las pruebas de juego y qué se hizo con cada una |
 | [ux/FUENTES.md](ux/FUENTES.md), [UX-CARENCIAS.md](UX-CARENCIAS.md) | Licencias de tipografías y sonidos; huecos de los packs de interfaz |
 | [MAPAS.md](MAPAS.md) | Los mapas con proporciones reales: la medición, las medidas objetivo, el plan por fases y lo decidido |
-| [TIEMPO-REAL.md](TIEMPO-REAL.md) | El modo en tiempo real con clic en casillas: lo decidido, cómo funciona, qué se aprovecha, pasos y riesgos (solo diseño) |
+| [TIEMPO-REAL.md](TIEMPO-REAL.md) | El modo en tiempo real con clic en casillas: lo decidido, cómo funciona, qué se aprovecha, pasos, riesgos y el paso 1 en el código (§6b) |
 | [REVISION-2026-10-19.md](REVISION-2026-10-19.md) | La revisión del código del 19/10: los fallos arreglados, lo quitado y lo que queda por decidir |
 | [MAPAS.md](MAPAS.md) | Los mapas: medidas, el plano de los pueblos, el contorno, la base de 56 y el plan por fases (hecho en la 0.8.0) |
 | [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), [FIRMA.md](FIRMA.md) | La guía de la prueba en el PC de referencia; cómo se firma la aplicación y qué cambiar con la cuenta de Apple |

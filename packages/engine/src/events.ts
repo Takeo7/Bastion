@@ -24,6 +24,8 @@ import type {
   PodCause,
   PsiEffect,
   Reinforcement,
+  RtDoing,
+  RtOrder,
   ShotResult,
   Slot,
   Team,
@@ -44,6 +46,14 @@ export type GameEvent =
   /** The soldier in play changes (playtest 2026-10-15, #9); null, none. */
   | { t: 'unitActive'; unit: string | null }
   | { t: 'moved'; unit: string; path: Pos[]; ap: number }
+  /** Real time (docs/TIEMPO-REAL.md): the clock, on every tick of the host's. */
+  | { t: 'rtClock'; clock: number }
+  /** Real time: stopped or going again, by a player (null: the host). */
+  | { t: 'rtPaused'; paused: boolean; slot: Slot | null }
+  /** Real time: a unit's standing order changes. */
+  | { t: 'rtOrder'; unit: string; order: RtOrder }
+  /** Real time: what a unit starts doing, until when (clock ms) and at whom. */
+  | { t: 'rtDoing'; unit: string; doing: RtDoing; until: number; target?: string }
   /** An ability was activated: pays its actions (negative = gains), cooldown and charge. */
   | { t: 'abilityUsed'; unit: string; ability: AbilityId; ap: number; cooldown: number; charge: ChargeId | null }
   | {
@@ -215,6 +225,29 @@ function clearStatuses(u: Unit): void {
 export function applyEvent(s: GameState, e: GameEvent): void {
   s.seq++;
   switch (e.t) {
+    case 'rtClock':
+      if (s.realtime) s.realtime.clock = e.clock;
+      break;
+    case 'rtPaused':
+      if (s.realtime) s.realtime.paused = e.paused;
+      break;
+    case 'rtOrder': {
+      if (!s.realtime) break;
+      const me = (s.realtime.units[e.unit] ??= { order: { kind: 'idle' }, doing: 'idle', until: s.realtime.clock });
+      me.order = e.order;
+      delete me.path;
+      delete me.waited;
+      break;
+    }
+    case 'rtDoing': {
+      if (!s.realtime) break;
+      const me = (s.realtime.units[e.unit] ??= { order: { kind: 'idle' }, doing: 'idle', until: s.realtime.clock });
+      me.doing = e.doing;
+      me.until = e.until;
+      if (e.target) me.target = e.target;
+      else delete me.target;
+      break;
+    }
     case 'turnBegan': {
       s.activeTeam = e.team;
       s.turn = e.turn;

@@ -926,9 +926,45 @@ export interface MedicalSite {
   dressing?: MedicalDetail[];
 }
 
+/**
+ * The real-time mode (docs/TIEMPO-REAL.md, step 1): the mission's clock and what each one is doing. The host's clock
+ * (realtime.ts realtimeStep) moves it on a tick at a time; a unit's order stands until it is done or changed.
+ */
+export interface Realtime {
+  /** Mission time, in ms. */
+  clock: number;
+  paused: boolean;
+  /** By unit id (made as each one first does something). */
+  units: Record<string, RtUnit>;
+}
+
+/** A standing order: stay, go to a tile, or keep attacking someone until they are down. */
+export type RtOrder = { kind: 'idle' } | { kind: 'move'; to: Pos } | { kind: 'attack'; target: string };
+
+/**
+ * What a unit is doing: nothing, walking a step (its `moved` came when it set off), aiming (the shot comes when it
+ * ends), reloading, winding up a blow (the bite comes when it ends), or waiting (someone in the way, no line of fire,
+ * getting its breath back after a blow).
+ */
+export type RtDoing = 'idle' | 'walk' | 'aim' | 'reload' | 'strike' | 'wait';
+
+export interface RtUnit {
+  order: RtOrder;
+  doing: RtDoing;
+  /** The clock (ms) at which what it is doing ends. */
+  until: number;
+  /** Whom it is aiming at or striking. */
+  target?: string;
+  /** The host's own bookkeeping, never sent: the steps it means to take, and how often it has waited for one. */
+  path?: Pos[];
+  waited?: number;
+}
+
 export interface GameState {
   /** Number of events applied so far. Clients use it to detect gaps. */
   seq: number;
+  /** Played in real time instead of by turns (docs/TIEMPO-REAL.md); absent, by turns. */
+  realtime?: Realtime;
   mapId: string;
   /** Display name of the area (generated maps get a name per biome). */
   mapName: string;

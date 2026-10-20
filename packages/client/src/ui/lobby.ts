@@ -10,7 +10,7 @@ import { graphicsSettings, soundSettings } from './settingsPanel';
 
 export interface LobbyHandlers {
   onJoin(name: string): void;
-  onStart(mission: MissionKind, map: SkirmishMap, veterans: boolean, night: boolean): void;
+  onStart(mission: MissionKind, map: SkirmishMap, veterans: boolean, night: boolean, realtime: boolean): void;
   onNewCampaign(): void;
   onContinueCampaign(): void;
 }
@@ -63,6 +63,8 @@ export class Lobby {
   private veterans = true;
   /** By night (docs/ALTURA-Y-NOCHE.md): less sight, lights matter, more of the dead and more loot. */
   private night = false;
+  /** In real time instead of by turns (docs/TIEMPO-REAL.md: a prototype). */
+  private realtime = false;
   /** Asking before a new campaign replaces the saved one, or starts without the partner. */
   private confirming = false;
   /** Asking before «Salir de Bastión» closes the desktop app. */
@@ -341,6 +343,13 @@ export class Lobby {
           option(this.night, false, (v) => (this.night = v), 'De día', 'Como siempre'),
           option(this.night, true, (v) => (this.night = v), 'De noche', 'Se ve poco, salvo bajo las farolas. Más muertos y más botín'),
         ),
+        h('div.x-head', {}, 'Ritmo'),
+        h(
+          'div.menu-options.two',
+          {},
+          option(this.realtime, false, (v) => (this.realtime = v), 'Por turnos', 'Como siempre'),
+          option(this.realtime, true, (v) => (this.realtime = v), 'Tiempo real (prueba)', 'Todo a la vez. Barra espaciadora: pausa'),
+        ),
       ),
       // Start and back stay at the foot of the sheet, in view however long the options get.
       h(
@@ -348,7 +357,7 @@ export class Lobby {
         {},
         h(
           'button.menu-item.primary',
-          { disabled: !this.canPlay(), onclick: () => this.handlers.onStart(this.mission, map, this.veterans, this.night) },
+          { disabled: !this.canPlay(), onclick: () => this.handlers.onStart(this.mission, map, this.veterans, this.night, this.realtime) },
           connected < 2 ? 'Empezar en solitario' : 'Empezar escaramuza',
           h('small', {}, connected < 2 ? 'Controlarás a todos los soldados' : 'Cada uno manda a la mitad'),
         ),

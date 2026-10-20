@@ -89,6 +89,7 @@ import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol, t
 import type { Command } from './protocol';
 import type { Rng } from './rng';
 import { hordeWave, makeUnit } from './setup';
+import { executeRealtimeCommand } from './realtime';
 import { pendingBars, rollGrowth } from './skills';
 import type {
   AbilityId,
@@ -1552,6 +1553,9 @@ function allyRefusal(u: Unit, ability: AbilityId, target: Unit | undefined): str
 
 export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext): CommandResult {
   if (s.outcome) return { ok: false, error: 'La misión ha terminado.' };
+  // In real time the clock runs the mission, and the players give standing orders (docs/TIEMPO-REAL.md).
+  if (s.realtime) return executeRealtimeCommand(s, cmd, ctx);
+  if (cmd.type === 'rtOrder' || cmd.type === 'rtPause') return { ok: false, error: 'Eso es del modo en tiempo real.' };
   if (s.activeTeam !== 'xcom') return { ok: false, error: 'Espera a que termine el turno enemigo.' };
 
   const sim = new Sim(s, ctx.rng, ctx.connected);

@@ -362,6 +362,9 @@ export class Hud {
    * name, its objective as it goes and what counts (turns, waves, the horde). Hidden while that card is open.
    */
   private readonly goalDock = h('div.goal-dock.panel', {}, this.mission);
+  /** Real time (docs/TIEMPO-REAL.md): the big «PAUSA» while the clock is stopped. */
+  private readonly rtPauseEl = h('div.rt-pause.hidden', { role: 'status' }, h('b', {}, 'PAUSA'), h('small', {}, 'Espacio para seguir'));
+  private rtKey = '';
   /** The right-hand column (Menú, the objective, the log): the aim's panel keeps below it (#20: «se solapan»). */
   private sideEl!: HTMLElement;
   private readonly players = h('div.players');
@@ -438,6 +441,7 @@ export class Hud {
       h('div.turn-actions', {}, this.followBtn, this.goBtn, this.passBtn, this.watchBtn, this.endTurn),
       (this.sideEl = h('div.side', {}, h('div.side-row', {}, menuButton), this.goalDock, this.logEl)),
       this.bannerEl,
+      this.rtPauseEl,
       this.toastEl,
       this.noticeEl,
       this.packOfferEl,
@@ -492,6 +496,43 @@ export class Hud {
       // The same stamp as the concealment, so every theme dresses it alike; `.night` gives its colour.
       night ? h('span.conceal.night', { title: night.rules }, night.label.toUpperCase()) : null,
     );
+  }
+
+  /**
+   * Real time (docs/TIEMPO-REAL.md), in place of the turn (null: by turns): the mission's clock on the strip (its
+   * figures by tickRealtime), whether it is stopped, and the big «PAUSA»; what belongs to turns is put away (styles.css).
+   */
+  setRealtime(view: { paused: boolean; concealed: boolean; night: { label: string; rules: string } | null } | null): void {
+    this.root.classList.toggle('realtime', !!view);
+    this.rtPauseEl.classList.toggle('hidden', !view?.paused);
+    if (!view) return;
+    const key = JSON.stringify(view);
+    if (key === this.rtKey) return;
+    this.rtKey = key;
+    this.turnKey = '';
+    for (const k of ['mine', 'partner', 'enemy'] as const) this.root.classList.toggle(`turn-${k}`, false);
+    this.frame.className = 'turn-frame';
+    clear(this.turn);
+    append(
+      this.turn,
+      h(`span.turn-label.rt-clock${view.paused ? '.paused' : ''}`, { title: 'Tiempo de misión' }, '00:00'),
+      h(`span.conceal.${view.concealed ? 'on' : 'off'}`, {}, view.concealed ? 'OCULTOS' : 'DETECTADOS'),
+      view.night ? h('span.conceal.night', { title: view.night.rules }, view.night.label.toUpperCase()) : null,
+    );
+  }
+
+  /** Every frame in real time: the clock's figures (mm:ss) and the bars of the squad's aims and reloads. */
+  tickRealtime(clock: number): void {
+    const label = this.turn.querySelector<HTMLElement>('.rt-clock');
+    const secs = Math.floor(clock / 1000);
+    const text = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+    if (label && label.textContent !== text) label.textContent = text;
+    for (const bar of this.squad.querySelectorAll<HTMLElement>('.rt-bar')) {
+      const from = Number(bar.dataset.from);
+      const until = Number(bar.dataset.until);
+      const k = until > from ? Math.min(1, Math.max(0, (clock - from) / (until - from))) : 1;
+      (bar.firstElementChild as HTMLElement | null)?.style.setProperty('width', `${Math.round(k * 100)}%`);
+    }
   }
 
   /**
@@ -582,6 +623,8 @@ export class Hud {
     carrier: string | null,
     inPlay: string | null = null,
     commands: (u: Unit) => boolean = (u) => u.team === 'xcom' && (u.owner === mySlot || u.owner === null),
+    /** Real time: what each one is doing, in place of its actions, with the bar of an aim or a reload. */
+    rt?: (u: Unit) => { text: string; title?: string; from?: number; until?: number } | null,
   ): void {
     clear(this.squad);
     // One's own first, then the partner's commanded while they're gone, then the rest.
@@ -605,10 +648,13 @@ export class Hud {
           'div.card-row',
           {},
           h('span.hp', {}, ...Array.from({ length: u.maxHp }, (_, i) => h(`i${i < u.hp ? '.on' : ''}`))),
+          // In real time, what it is doing (no actions to count), and how far along an aim or a reload is.
           // A turret has no actions of its own: its rounds instead, against what a full load holds.
-          u.automaton
-            ? h('span.ap.rounds', { title: `Munición: ${u.ammo}/${PIECES.turret.charges ?? u.ammo}` }, ...Array.from({ length: Math.max(PIECES.turret.charges ?? 0, u.ammo) }, (_, i) => h(`i${i < u.ammo ? '.on' : ''}`)))
-            : h('span.ap', {}, ...Array.from({ length: Math.max(apPerTurn(u), u.ap) }, (_, i) => h(`i${i < u.ap ? '.on' : ''}`))),
+          rt
+            ? this.rtDoingEl(rt(u))
+            : u.automaton
+              ? h('span.ap.rounds', { title: `Munición: ${u.ammo}/${PIECES.turret.charges ?? u.ammo}` }, ...Array.from({ length: Math.max(PIECES.turret.charges ?? 0, u.ammo) }, (_, i) => h(`i${i < u.ammo ? '.on' : ''}`)))
+              : h('span.ap', {}, ...Array.from({ length: Math.max(apPerTurn(u), u.ap) }, (_, i) => h(`i${i < u.ap ? '.on' : ''}`))),
           u.id === inPlay ? h('em.in-play', { title: 'En juego: termina sus acciones antes que otro' }, 'EN JUEGO') : null,
           u.controlledBy ? h('em.psi', {}, 'CONTROLADO') : null,
           u.captive ? h('em.data', {}, 'CAUTIVO') : null,
@@ -625,6 +671,17 @@ export class Hud {
       );
       this.squad.append(card);
     }
+  }
+
+  /** A card's line in real time: what it does, and (an aim, a reload) a bar that fills to when it ends (tickRealtime). */
+  private rtDoingEl(doing: { text: string; title?: string; from?: number; until?: number } | null): HTMLElement | null {
+    if (!doing) return null;
+    return h(
+      'span.rt-doing',
+      { title: doing.title },
+      h('span', {}, doing.text),
+      doing.until !== undefined ? h('i.rt-bar', { 'data-from': String(doing.from ?? 0), 'data-until': String(doing.until) }, h('b')) : null,
+    );
   }
 
   /**

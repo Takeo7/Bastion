@@ -104,6 +104,8 @@ export interface MissionOptions {
   leader?: { template: TemplateId; name: string };
   /** A night mission (docs/ALTURA-Y-NOCHE.md): one more group of the dead, and the living see less. */
   night?: boolean;
+  /** Played in real time (docs/TIEMPO-REAL.md): the host's clock runs it from a pause at the start. */
+  realtime?: boolean;
   /** The living hold it (docs/ZOMBIS-PRIMERO.md): their bands and their garrison; without it, the dead's. */
   living?: boolean;
   /** A recovery whose story puts the item outdoors (playtest 2026-10-14, #27). */
@@ -739,6 +741,8 @@ export function createMission(opts: MissionOptions): GameState {
     radius: tile.radius ?? NIGHT.streetLight,
     tiles: lightTiles(state, ground(tile), tile.radius ?? NIGHT.streetLight, NIGHT.lampHeight),
   }));
+  // Paused at the start, while the briefing is read: the space bar (or «Empezar») sets the clock going.
+  if (opts.realtime) state.realtime = { clock: 0, paused: true, units: {} };
   return state;
 }
 

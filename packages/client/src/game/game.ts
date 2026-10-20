@@ -10,6 +10,8 @@ import {
   apForCost,
   apNeeded,
   applyEvent,
+  RT_STEP,
+  RT_TICK,
   attackWeapon,
   abilityRange,
   BACKPACK_SLOTS,
@@ -311,6 +313,17 @@ const BETWEEN = 0.5;
 const NEAR_ENOUGH = 5;
 /** The log's colour for enemies fighting each other (18/10 #47): neither ours nor against us. */
 const FEUD_COLOR = '#e8d8c0';
+/** Real time: the events with nothing to play (the clock, what each one does and is told: the HUD reads them). */
+const RT_QUIET: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['rtClock', 'rtDoing', 'rtOrder', 'rtPaused', 'moved']);
+/** Real time: what a soldier is doing, on its card (provisional, for Lore). */
+const RT_TEXT = {
+  idle: 'Sin órdenes',
+  walk: 'Andando',
+  aim: 'Apuntando',
+  reload: 'Recargando',
+  wait: 'Esperando',
+  waitWhy: 'No tiene línea de tiro, o alguien le tapa el paso.',
+};
 /**
  * The dead with nobody in reach walk this many times quicker than their gait
  * (playtest 16/10 #6: «que anden más rápido, que es muy lento»), all at once,
@@ -760,6 +773,14 @@ export class Game {
   private departedOnTime = false;
   /** Mayús held over the map: a click signals (playtest 19/10 #14), and the cursor says so. */
   private signalKey = false;
+  /** Real time (docs/TIEMPO-REAL.md): the host's clock as last heard, and when (performance.now), for the HUD. */
+  private rtHeard = { clock: 0, at: 0 };
+  /** Real time: when (mission clock) each unit started what it does now, for its card's bar. */
+  private readonly rtSince = new Map<string, number>();
+  /** Real time: the picked soldier's ways out, for the pointer's route (rtHover), until it moves or the state does. */
+  private rtReach: { key: string; reach: ReturnType<typeof computeReach> } | null = null;
+  /** Real time: the way each of one's own goes, worked out once per where it stands and where it goes. */
+  private readonly rtRoutes = new Map<string, { key: string; steps: Place[] }>();
   /** A soldier with no actions left that the player picked to look at (select, autoSelect). */
   private looking: string | null = null;
   /** The enemy whose field of view is shown (under the pointer, or aimed at), and whether a dead one was turning last frame. */
@@ -882,6 +903,7 @@ export class Game {
     this.overlays?.tick(time);
     if (this.overlays && this.view) this.followTurns();
     this.mapView.tick(dt);
+    if (this.view?.realtime) this.hud.tickRealtime(this.rtNow());
     const from = this.selected ? getUnit(this.view, this.selected) : undefined;
     this.edge.update(this.renderer.camera, from?.alive ? from.pos : null);
   }
@@ -1027,6 +1049,8 @@ export class Game {
       mission.turnsLeft !== null ? `${mission.turnsLeft} turnos` : undefined,
       briefing,
     );
+    // Real time: «Empezar» sets the clock going (the mission starts stopped: docs/TIEMPO-REAL.md §6b).
+    if (s.realtime) void closed.then(() => this.state.realtime?.paused && this.rtPause(false));
     // With the living among the dead (18/10 #47), the log says they fight each other.
     if (s.units.some((u) => u.alive && u.team === 'alien' && !u.objective && !TEMPLATES[u.template].undead)) this.hud.log(LIVING_TIP, FEUD_COLOR);
     // A night mission: the log keeps the rules. No radio in the middle of a mission (playtest 15/10 #8).
@@ -1085,11 +1109,17 @@ export class Game {
       this.net.send({ t: 'sync' });
       return;
     }
+    this.reachCache = null;
+    // Real time (docs/TIEMPO-REAL.md): no queue, each tick's events shown as they come.
+    if (this.state.realtime) {
+      if (by === this.mySlot) this.awaitingReply = false;
+      this.realtimeBatch(events, by);
+      return;
+    }
     if (by === this.mySlot) {
       this.awaitingReply = false;
       this.myPending += events.length;
     }
-    this.reachCache = null;
     const epoch = this.rig.epoch;
     this.queue.push(...events.map((e) => ({ e, by, epoch })));
     this.refreshInteractive();
@@ -1195,6 +1225,11 @@ export class Game {
   }
 
   private send(cmd: Command): void {
+    // Real time: orders go one after another, a soldier each, with no wait for the last one's answer (Arte, 20/10).
+    if (this.state.realtime) {
+      this.net.send({ t: 'cmd', cmd });
+      return;
+    }
     if (this.awaitingReply && cmd.type !== 'endTurn') return;
     if (cmd.type !== 'endTurn') this.disarmEndTurn();
     this.awaitingReply = cmd.type !== 'endTurn';
@@ -1728,7 +1763,8 @@ export class Game {
     if (by !== null && by !== this.mySlot) this.notePartner(e, by);
     const v = this.view;
     const alienPhase = v.activeTeam === 'alien';
-    const cinematic = by === this.mySlot || alienPhase;
+    // Real time: the camera is the player's alone (docs/TIEMPO-REAL.md §5).
+    const cinematic = !v.realtime && (by === this.mySlot || alienPhase);
     const epoch = alienPhase ? this.rig.epoch : item.epoch;
     const cam = () => cinematic && this.rig.epoch === epoch;
     const look = (p: THREE.Vector3) => {
@@ -1771,7 +1807,8 @@ export class Game {
         const from = this.lastAttacker ? getUnit(v, this.lastAttacker) : undefined;
         const feud = target.team === 'alien' && from?.team === 'alien';
         if (feud && !this.shownToSquad(target)) return;
-        if (e.amount) {
+        // Real time: an enemy's hurt is seen on its bar and over it, not in the log (Gameplay, 20/10).
+        if (e.amount && !(v.realtime && target.team === 'alien')) {
           this.hud.log(bite ? biteLossLine(target.name) : `${target.name} recibe ${e.amount} de daño${crit ? ' (crítico)' : ''}`, feud ? FEUD_COLOR : target.team === 'alien' ? '#54d1ff' : '#ff6b5a');
         }
         if (!this.shownToSquad(target)) return;
@@ -2547,6 +2584,7 @@ export class Game {
     const chest = this.units.chestPos(target.id);
     const hit = e.result !== 'miss';
     const color = shooter.team === 'xcom' ? 0x9fe8ff : 0xff6b5a;
+    if (v.realtime) return this.rtAttack(e, shooter, target, color);
     if (cam()) {
       look(shooterPos.clone().lerp(targetPos, 0.5));
       this.rig.cinematicZoom(THREE.MathUtils.clamp(shooterPos.distanceTo(targetPos) * 1.1 + 9, 13, 24));
@@ -2618,12 +2656,52 @@ export class Game {
   }
 
   /**
+   * Real time (docs/TIEMPO-REAL.md §6b): only the shot itself, at once, for the pose is the aim's (Arte's
+   * rtDoing: the gun up from the aim's start, no stepping out of cover) and the blow's wind-up ends on it.
+   */
+  private async rtAttack(e: ShotEvent, shooter: Unit, target: Unit, color: number): Promise<void> {
+    const weapon = attackWeapon(shooter, e.ability);
+    const chest = this.units.chestPos(target.id);
+    const hit = e.result !== 'miss';
+    if (weapon.melee) {
+      if (hit) {
+        this.fx.slash(chest, 0xe8f6ff);
+        if (e.ability === 'claw') this.fx.bite(chest, this.units.worldPos(shooter.id));
+        this.sfx.melee(e.ability === 'claw' ? 'claw' : 'sword', chest);
+        this.sfx.impact(this.sfx.body(target), chest, e.result === 'crit');
+      } else this.showMiss(e, shooter, target, chest);
+      return;
+    }
+    const heavy = weapon.apCost > 1;
+    const pellets = weapon.range === 'short' ? 6 : 0;
+    const rounds = Math.max(1, weapon.burst);
+    for (let i = 0; i < rounds; i++) {
+      const from = this.units.muzzlePos(shooter.id);
+      this.units.recoil(shooter.id);
+      this.fx.muzzleFlash(from, color);
+      this.sfx.shot(shooter, weapon, from);
+      const last = i === rounds - 1;
+      for (let p = 0; p < (pellets || 1); p++) {
+        const dest = hit ? chest.clone().add(jitter(pellets ? 0.6 : 0.25)) : missPoint(from, chest, i + p, pellets ? 1.6 : 1);
+        void this.fx.bullet(from, dest, color, heavy ? 45 : 60, heavy).then(() => {
+          this.fx.sparks(dest, hit ? 0xff7a5a : 0xffd28a, pellets ? 3 : hit ? 8 : 5);
+          if (last && p === 0) this.sfx.impact(hit ? this.sfx.body(target) : 'miss', dest, e.result === 'crit');
+        });
+      }
+      if (!last) await wait(weapon.burst > 3 ? 0.08 : 0.11);
+    }
+    if (!hit) this.showMiss(e, shooter, target, chest);
+  }
+
+  /**
    * A miss, with the die (playtest: «he fallado con un 93 %»): short over the
    * target, whole in the log. A player's miss also says what bad luck adds to
    * that player's next shot (aim.ts badLuckAim).
    */
   private showMiss(e: ShotEvent, shooter: Unit, target: Unit, chest: THREE.Vector3): void {
     this.fx.floatText(chest, e.roll ? `FALLO · SACÓ ${e.roll}` : 'FALLO', 'miss');
+    // Real time: the log keeps what changes the mission, not every roll (Gameplay, 20/10).
+    if (this.view.realtime) return;
     this.hud.log(e.roll ? `${shooter.name} falla a ${target.name}: sacó ${e.roll} y necesitaba ${e.chance} o menos` : `${shooter.name} falla a ${target.name} (${e.chance}%)`);
     const owner = shooter.team === 'xcom' && !shooter.controlledBy ? shooter.owner : null;
     if (owner === null) return;
@@ -3175,6 +3253,149 @@ export class Game {
    * the rest of the preview (#49; 18/10 #4: grey didn't show); theirs, in
    * their colour.
    */
+  // ============================================================ real time
+
+  /**
+   * Real time (docs/TIEMPO-REAL.md §6b): a tick's events, applied as they come and shown at once, nothing waiting
+   * for anything (each step lasts until its `until`; shots, hits and deaths at once, «cada acción se ve entera»
+   * does not hold here) and the camera left alone.
+   */
+  private realtimeBatch(events: GameEvent[], by: Slot | null): void {
+    const v = this.view;
+    const clock = events.find((e): e is Extract<GameEvent, { t: 'rtClock' }> => e.t === 'rtClock')?.clock ?? v.realtime?.clock ?? 0;
+    let rebuild = false;
+    for (const e of events) {
+      if (e.t === 'moved') this.rtStep(e, events, clock);
+      else if (e.t === 'rtDoing') {
+        const target = e.target ? getUnit(v, e.target) : undefined;
+        this.units.rtDoing(e.unit, e.doing, Math.max(0, (e.until - clock) / 1000), target ? this.units.worldPos(target.id) : null);
+        this.rtSince.set(e.unit, clock);
+      } else if (!RT_QUIET.has(e.t)) void this.play({ e, by, epoch: this.rig.epoch }).catch((err) => console.error('[anim]', err));
+      if (e.t === 'tileChanged' || e.t === 'floorBroken') rebuild = true;
+      // The pause, in the log too: who stopped the clock or set it going (Lore's words).
+      if (e.t === 'rtPaused') {
+        const who = e.slot !== null ? this.playerName(e.slot) : null;
+        this.hud.log(who ? `${who} ${e.paused ? 'pausa' : 'reanuda'} la misión.` : e.paused ? 'Pausa.' : 'En marcha.', '#f2c230');
+      }
+      applyEvent(v, e);
+    }
+    this.rtHeard = { clock, at: performance.now() };
+    if (rebuild) this.mapView.rebuild(v);
+    this.refreshView();
+    this.refreshStatus();
+    this.refreshHud();
+    this.drawOrders();
+    this.updateHover();
+  }
+
+  /** A step (`moved`, one tile), walked so it ends when its `rtDoing walk` of the same tick says; the hidden aren't drawn. */
+  private rtStep(e: Extract<GameEvent, { t: 'moved' }>, events: GameEvent[], clock: number): void {
+    const u = getUnit(this.view, e.unit);
+    if (!u || !(this.shownToSquad(u) || e.path.some((p) => this.mapView.isVisible(p.x, p.y)))) return;
+    const walk = events.find((x): x is Extract<GameEvent, { t: 'rtDoing' }> => x.t === 'rtDoing' && x.unit === e.unit && x.doing === 'walk');
+    const seconds = walk ? Math.max(0.05, (walk.until - clock) / 1000) : RT_STEP / 1000;
+    this.units.forceVisible(u.id);
+    void this.units.rtStep(u.id, e.path, seconds);
+  }
+
+  /** The mission's clock now, between two of the host's ticks; still while paused. */
+  private rtNow(): number {
+    const rt = this.view.realtime;
+    if (!rt) return 0;
+    if (rt.paused || this.view.outcome) return this.rtHeard.clock;
+    return this.rtHeard.clock + Math.min(RT_TICK * 2, performance.now() - this.rtHeard.at);
+  }
+
+  /** What each of the squad does, for its card (#3 of the step): a word, and the bar of an aim or a reload. */
+  private rtCard(u: Unit): { text: string; title?: string; from?: number; until?: number } | null {
+    const rt = this.view.realtime;
+    if (!rt || !u.alive || u.evacuated) return null;
+    const me = rt.units[u.id];
+    if (!me) return { text: RT_TEXT.idle };
+    const target = me.target ? getUnit(this.view, me.target) : undefined;
+    const timed = me.doing === 'aim' || me.doing === 'reload';
+    const bar = timed ? { from: this.rtSince.get(u.id) ?? rt.clock, until: me.until } : {};
+    switch (me.doing) {
+      case 'walk':
+        return { text: RT_TEXT.walk };
+      case 'aim':
+        // Lore's: the kind's name, so the longest («Apuntando: Acorazado») still fits.
+        return { text: target ? `${RT_TEXT.aim}: ${TEMPLATES[target.template].name}` : RT_TEXT.aim, ...bar };
+      case 'reload':
+        return { text: RT_TEXT.reload, ...bar };
+      case 'wait':
+        return { text: RT_TEXT.wait, title: RT_TEXT.waitWhy };
+      default:
+        return { text: me.order.kind === 'move' ? RT_TEXT.walk : RT_TEXT.idle };
+    }
+  }
+
+  /**
+   * One's own soldiers' standing orders on the ground (#2 of the step): the way to where each goes, in their
+   * colour; a line to whom each attacks, in red.
+   */
+  private drawOrders(): void {
+    const rt = this.view.realtime;
+    if (!rt) return;
+    const list: { from: Vec2; path: Vec2[]; color: string }[] = [];
+    for (const u of this.myUnits()) {
+      const order = rt.units[u.id]?.order;
+      if (order?.kind === 'move') {
+        const key = `${u.pos.x},${u.pos.y},${u.pos.z ?? 0}>${order.to.x},${order.to.y},${order.to.z}`;
+        let path = this.rtRoutes.get(u.id);
+        if (path?.key !== key) {
+          const reach = computeReach(this.view, u, 100_000, u.pos, () => true);
+          path = { key, steps: buildPath(this.view, u, reach, order.to) ?? [order.to] };
+          this.rtRoutes.set(u.id, path);
+        }
+        list.push({ from: u.pos, path: path.steps, color: PLAYER_COLORS[u.owner ?? this.mySlot] });
+      } else if (order?.kind === 'attack') {
+        const target = getUnit(this.view, order.target);
+        if (target?.alive) list.push({ from: u.pos, path: [target.pos], color: '#ff5a4a' });
+      }
+    }
+    this.overlays.setPlans(list);
+  }
+
+  /**
+   * The pointer in real time (#2 of the step): no range nor actions; over an enemy in sight, the line to it from the
+   * picked soldier; over a tile, the way there.
+   */
+  private rtHover(u: Unit | undefined, tile: Place | null, hovered: Unit | undefined): void {
+    this.overlays.showAim(null, null);
+    if (!u?.alive || !tile || !this.commands(u) || this.view.outcome) return;
+    if (hovered?.alive && hovered.team === 'alien' && this.visibleAliens.has(hovered.id)) {
+      this.overlays.showAim(u.pos, hovered.pos);
+      return;
+    }
+    if (hovered?.alive) return;
+    const key = `${u.id}@${u.pos.x},${u.pos.y},${u.pos.z ?? 0}#${this.view.seq}`;
+    if (this.rtReach?.key !== key) this.rtReach = { key, reach: computeReach(this.view, u, 100_000, u.pos, () => true) };
+    const path = buildPath(this.view, u, this.rtReach.reach, tile);
+    if (path?.length) this.overlays.showPath(u.pos, path);
+  }
+
+  /** A click on the map in real time (#2 of the step): one of one's own picks it; an enemy in sight, attack; a tile, go. */
+  private rtClick(tile: Place): void {
+    const occupant = unitAt(this.view, tile);
+    if (occupant?.alive && occupant.team === 'xcom' && this.commands(occupant)) return this.select(occupant.id);
+    const u = this.selectedUnit();
+    if (!u?.alive || !this.commands(u) || this.view.outcome) return;
+    if (occupant?.alive && occupant.team === 'alien' && this.visibleAliens.has(occupant.id)) this.send({ type: 'rtOrder', unit: u.id, target: occupant.id });
+    else this.send({ type: 'rtOrder', unit: u.id, to: { x: tile.x, y: tile.y, z: tile.z ?? 0 } });
+  }
+
+  /** The picked soldier stops and stays (the right click, S). */
+  private rtStand(): void {
+    const u = this.selectedUnit();
+    if (u?.alive && this.commands(u) && !this.view.outcome) this.send({ type: 'rtOrder', unit: u.id });
+  }
+
+  /** The clock stopped or going again (the space bar, «Empezar»). */
+  private rtPause(paused = !this.state.realtime?.paused): void {
+    if (this.state.realtime && !this.state.outcome) this.send({ type: 'rtPause', paused });
+  }
+
   private drawPlans(): void {
     const list: { from: Vec2; path: Vec2[]; color: string }[] = [];
     for (const [id, plan] of this.plans) {
@@ -3343,6 +3564,13 @@ export class Game {
   /** Keeps a valid selection: the current unit if it can still act, else the next one that can. */
   private autoSelect(): void {
     const current = this.selectedUnit();
+    // Real time: no turns to follow; one stays picked until it falls, and the camera is left alone.
+    if (this.state.realtime) {
+      if (current?.alive && this.commands(current)) return;
+      this.selected = this.myUnits()[0]?.id ?? null;
+      this.units.setSelected(this.selected);
+      return;
+    }
     // Keep the acting soldier selected until its action has finished playing.
     if (current && this.myPending > 0) return;
     // The one in play, if it is mine (playtest 15/10 #9): picked once, as it comes into play or the
@@ -3885,7 +4113,8 @@ export class Game {
     this.drawDetection();
     this.followLevel();
     // Without the command the range is still shown, fainter: it is for planning (#35). Only the active floor's.
-    const r = this.mode.kind === 'move' && !this.isBusy(this.selected) ? this.reach() : null;
+    // Real time: no range (nothing counts actions); the pointer shows the way (rtHover).
+    const r = this.mode.kind === 'move' && !this.isBusy(this.selected) && !this.view.realtime ? this.reach() : null;
     this.overlays.showMoveRange((r?.tiles ?? []).filter((t) => ((t.pos as Pos).z ?? 0) === this.level), !this.hasCommand());
     this.updateHover();
     this.refreshHud();
@@ -4272,7 +4501,12 @@ export class Game {
     // One soldier at a time with a partner (playtest 15/10 #9): the one in play, by the label and on its card.
     const playing = sharing && v.activeUnit ? getUnit(v, v.activeUnit) : undefined;
     const inPlay = playing?.alive && playing.ap > 0 ? playing : undefined;
-    this.hud.setTurn(v.turn, owner, v.concealed, v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null, inPlay?.name ?? null);
+    // Real time: the mission's clock in place of the turn (docs/TIEMPO-REAL.md).
+    if (v.realtime) this.hud.setRealtime({ paused: v.realtime.paused, concealed: v.concealed, night: v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null });
+    else {
+      this.hud.setRealtime(null);
+      this.hud.setTurn(v.turn, owner, v.concealed, v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null, inPlay?.name ?? null);
+    }
     this.hud.setMission(this.missionView());
     this.hud.setPlayers(this.players, v.ready, this.mySlot, busySlots(v), sharing ? holder : null);
     this.hud.setSquad(
@@ -4284,6 +4518,7 @@ export class Game {
       v.mission.item?.carrier ?? null,
       inPlay?.id ?? null,
       (u) => this.commands(u),
+      v.realtime ? (u) => this.rtCard(u) : undefined,
     );
     const shown = this.selected ? getUnit(v, this.selected) : undefined;
     // A partner's soldier on the sheet says whose it is, in their colour (picked to look, or to command while they're gone).
@@ -4471,6 +4706,7 @@ export class Game {
     const shown = watched?.alive && watched.team === 'alien' && !this.view.outcome && !this.mapView.isCutAway(watched.pos) ? watched : null;
     this.watched = shown?.id ?? null;
     this.overlays.setVision(shown ? { ...this.visionOf(shown), facing: this.lookOf(shown) } : null);
+    if (this.view.realtime) return this.rtHover(u, tile, hovered);
     if (!u || !this.canAct() || this.isBusy(u.id)) return;
 
     const option = this.currentTarget();
@@ -4688,7 +4924,9 @@ export class Game {
     });
     const onUp = (e: PointerEvent): void => {
       if (e.button === 2 && this.drag) {
-        if (!this.drag.moved) {
+        // Real time: the right click stops the picked soldier where it is (docs/TIEMPO-REAL.md §6b).
+        if (!this.drag.moved && this.state.realtime) this.rtStand();
+        else if (!this.drag.moved) {
           // A right click (not a drag) on a known enemy opens its file; planning, it takes the picked soldier's
           // plan away (playtest 18/10 #25); elsewhere it backs out of aiming.
           const enemy = this.mode.kind === 'move' && this.hoverTile ? unitAt(this.view, this.hoverTile) : undefined;
@@ -4759,6 +4997,22 @@ export class Game {
         e.preventDefault();
         this.hud.closeIntro();
         return;
+      }
+      // Real time (docs/TIEMPO-REAL.md §6b): the space bar stops the clock or lets it go on, X stops the picked one,
+      // 1–8 pick one's soldiers; what belongs to turns (abilities, ending the turn, the command) waits for a later step.
+      if (this.state.realtime && !this.hud.covered) {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          this.rtPause();
+          return;
+        }
+        if (e.code === 'KeyX') return this.rtStand();
+        if (/^Digit[1-8]$/.test(e.code)) {
+          const u = this.myUnits()[Number(e.code.slice(5)) - 1];
+          if (u) this.select(u.id);
+          return;
+        }
+        if (e.code === 'Tab' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Backspace' || e.code === 'KeyC' || /^Digit/.test(e.code)) return;
       }
       // In the enemy turn the space bar, held, plays it in «Rápida» (docs/UX-RITMO.md); it gives no orders then.
       if (e.code === 'Space' && this.enemyTurnPlaying() && !this.hud.covered) {
@@ -4950,6 +5204,7 @@ export class Game {
   }
 
   private clickTile(tile: Vec2): void {
+    if (this.state.realtime) return this.rtClick(tile as Place);
     const occupant = unitAt(this.state, tile);
     const u = this.selectedUnit();
 

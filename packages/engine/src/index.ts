@@ -15,6 +15,7 @@ export * from './events';
 export * from './protocol';
 export * from './abilities';
 export * from './rules';
+export * from './realtime';
 export * from './setup';
 export * from './campaign';
 export * from './appearance';

@@ -45,6 +45,10 @@ export const commandSchema = z.discriminatedUnion('type', [
   }),
   /** Hand the command (el mando) to the partner. */
   z.object({ type: z.literal('pass') }),
+  /** Real time (docs/TIEMPO-REAL.md): a soldier's standing order: go to `to`, attack `target` until down, or (neither) stand. */
+  z.object({ type: z.literal('rtOrder'), unit: unitId, to: spot.optional(), target: unitId.optional() }),
+  /** Real time: stop the clock or let it go on, for everyone. */
+  z.object({ type: z.literal('rtPause'), paused: z.boolean() }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;
@@ -59,7 +63,8 @@ export type PingKind = z.infer<typeof pingKindSchema>;
 
 export const clientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('hello'), name: z.string().trim().min(1).max(20), token: z.string().max(64).optional() }),
-  z.object({ t: z.literal('start'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional(), veterans: z.boolean().optional(), night: z.boolean().optional() }),
+  /** `realtime`: played in real time instead of by turns (docs/TIEMPO-REAL.md: a prototype, skirmish only). */
+  z.object({ t: z.literal('start'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional(), veterans: z.boolean().optional(), night: z.boolean().optional(), realtime: z.boolean().optional() }),
   z.object({ t: z.literal('newMission'), mission: missionKindSchema.optional(), map: skirmishMapSchema.optional(), night: z.boolean().optional() }),
   /** Ends the current mission for both players: asked of the partner first, if here (playtest 16/10). */
   z.object({ t: z.literal('abandon') }),

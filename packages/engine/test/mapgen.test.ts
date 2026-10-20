@@ -3,7 +3,7 @@ import { canStandOn, DIRS4, DIRS8, isWalkable } from '../src/grid';
 import { anchorOf, decorOf, FOOTPRINT, objectTiles } from '../src/decor';
 import { GEN_SIZE, generateLayout, TOWN_SIZE, type MissionLayout } from '../src/mapgen';
 import { roomAt } from '../src/loot';
-import { computeReach, stepCost } from '../src/path';
+import { computeReach, destinations, maxMoveCost, stepCost } from '../src/path';
 import { Rng } from '../src/rng';
 import { createMission, garrison, MISSION_TURNS, missionTurns, podPlan, routeTurns } from '../src/setup';
 import type { Biome, GameState, MissionKind, TileKind, Vec2 } from '../src/types';
@@ -150,6 +150,18 @@ describe('procedural maps', () => {
       }
     }
   }, 60_000);
+
+  it("put the squad down with room to move: no soldier hemmed in by the others at the start (20/10)", () => {
+    for (const biome of BIOMES) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const s = createMission({ map: { kind: 'generated', biome, seed: seed * 7919 }, slots: [0], rng: new Rng(seed), kind: 'recovery' });
+        for (const u of s.units.filter((x) => x.team === 'xcom')) {
+          const reach = computeReach(s, u, maxMoveCost(u));
+          expect(destinations(s, u, reach).length, `${biome}/${seed}: ${u.id} at ${u.pos.x},${u.pos.y}`).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
 
   it('leave no walkable pocket out of reach (rooftops, rooms, the heart of a grove)', () => {
     for (const biome of BIOMES) {

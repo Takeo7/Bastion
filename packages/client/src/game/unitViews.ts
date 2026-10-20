@@ -52,6 +52,13 @@ const CLOSE_GAP = 0.3;
 const CLOSE_BACK = 0.3;
 /** How far to one side of a tile's middle a walker goes by another there (walkPlan.ts passes), in tiles. */
 const SWERVE = 0.24;
+/** Real time (rtStep): how long one stands still after a step before easing to a stand (s: the host's tick is 0.1 s). */
+const RT_LINGER = 0.15;
+/** Real time: a step this much quicker than its trot (of its seconds) is run. */
+const RT_RUN = 0.8;
+/** Real time: how far apart two bodies keep going by (tiles), and how long after a shot the weapon goes down (s). */
+const RT_CLEAR = 0.62;
+const RT_LOWER = 0.45;
 /** A melee lunge goes this far at most, and stops this far short of the target's middle (an adjacent one: 0.72 apart). */
 const LUNGE = 0.45;
 const LUNGE_SHORT = 0.72;
@@ -146,6 +153,10 @@ interface UnitView {
   aims: number;
   /** On guard with the blade (Vigilancia cuerpo a cuerpo: Unit.watchMelee), as last shown. */
   guard: boolean;
+  /** Real time (rtStep): its steps keep clear of whoever they go by, and it stands only a while after the last. */
+  rt: boolean;
+  /** Real time: its aim as rtDoing raised it (raiseWeapon's number), 0 none. */
+  rtAim: number;
 }
 
 /** How high the blade is held on guard (the pose's aim): up in front, its point a little up. */
@@ -314,7 +325,7 @@ export class UnitViews {
 
     const view: UnitView = {
       id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false,
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, rt: false, rtAim: 0,
     };
     this.views.set(u.id, view);
     // Left outside when La Mula went (sync): standing, not dead.
@@ -839,7 +850,10 @@ export class UnitViews {
           const swerve = swerves?.[k];
           if (swerve) to.add(swerve);
           await tween(seconds, (t) => {
+            // Fallen mid-step (real time): where it fell.
+            if (v.fell) return;
             pos.lerpVectors(from, to, t);
+            if (v.rt) this.keepClear(v, pos, t);
           });
         }
         // On its storey once there (docs/FASE6.md): the cutaway checks this.
@@ -849,10 +863,13 @@ export class UnitViews {
     } finally {
       v.animating = false;
       if (vaulting !== null) p.crouchTarget = vaulting;
-      // Down to a stand, unless it has set off again meanwhile.
-      void tween(0.18, (t) => {
-        if (v.walks === walks) p.run = 1 - t;
-      });
+      // Down to a stand, unless it has set off again meanwhile (in real time, after a while: the next step comes on the
+      // next tick of the host's clock, up to a tenth of a second after this one ends).
+      void wait(v.rt ? RT_LINGER : 0).then(() =>
+        tween(0.18, (t) => {
+          if (v.walks === walks) p.run = 1 - t;
+        }),
+      );
     }
   }
 
@@ -1551,5 +1568,158 @@ export class UnitViews {
     const v = this.views.get(id);
     if (!v) return Promise.resolve();
     return tween(0.35, (t) => (v.pose.hop = Math.sin(t * Math.PI) * 0.22));
+  }
+
+  // ============================================================== real time (docs/TIEMPO-REAL.md §6b)
+
+  /**
+   * A step in real time (the `moved` of one, set off as it comes: game.ts): along `path` (a tile, as a rule) so it
+   * gets there `seconds` from now, the host's `until`; after the step before it if that one hasn't ended (then the
+   * quicker, so it still gets there on time), with no stop between them; trotting or running by its speed, and to
+   * one side of whoever it goes by (keepClear). Resolves on the tile.
+   */
+  rtStep(id: string, path: Place[], seconds: number): Promise<void> {
+    const v = this.views.get(id);
+    if (!v || !path.length) return Promise.resolve();
+    v.rt = true;
+    // Its gun down to walk (an aim of before: rtDoing raises it again).
+    if (v.rtAim) {
+      this.lowerWeapon(id, v.rtAim);
+      v.rtAim = 0;
+    }
+    const end = performance.now() + seconds * 1000;
+    const before = v.walk;
+    const walk = (async () => {
+      await before?.catch(() => undefined);
+      if (v.dead) return;
+      const left = Math.max(0.12, (end - performance.now()) / 1000);
+      // Its own gait's seconds for these steps, from where it is now: trotting, or running if it is to go a good
+      // deal quicker than that (the soldier's dash, RT_STEP's half).
+      const natural = (ap: number) => this.stepSeconds(id, v.place, path, ap, 1).reduce((a, b) => a + b, 0) || left;
+      const ap = left < natural(1) * RT_RUN ? 2 : 1;
+      await this.walk(v, id, path, undefined, ap, natural(ap) / left);
+    })();
+    v.walk = walk;
+    return walk.finally(() => {
+      if (v.walk === walk) v.walk = null;
+    });
+  }
+
+  /**
+   * What unit `id` does now in real time (the `rtDoing` of the host's clock: game.ts), for `seconds` (until − clock),
+   * at `toward` (whom it aims at or strikes, null none):
+   *   - aim: the weapon up at it, held until the shot (its flash, tracer and hit are game.ts', on the `shot`);
+   *   - reload: a reload lasting those seconds;
+   *   - strike: the dead one's wind-up and blow, the blow landing as they end (the bite's `shot`);
+   *   - wait, idle: the weapon down a moment after (a shot's flash first), standing turned as it was;
+   *   - walk: nothing (rtStep: the weapon goes down for it).
+   */
+  rtDoing(id: string, doing: 'idle' | 'walk' | 'aim' | 'reload' | 'strike' | 'wait', seconds: number, toward: THREE.Vector3 | null): void {
+    const v = this.views.get(id);
+    if (!v || v.dead) return;
+    v.rt = true;
+    switch (doing) {
+      case 'aim': {
+        if (!toward) return;
+        // Already aiming (the next shot at the same one, or another): turned to it, the weapon still up.
+        if (v.rtAim && v.rtAim === v.aims) {
+          this.face(id, toward);
+          v.pose.close = Math.hypot(toward.x - v.rig.root.position.x, toward.z - v.rig.root.position.z);
+          return;
+        }
+        void this.raiseWeapon(id, toward).then((aim) => {
+          if (!v.dead) v.rtAim = aim;
+        });
+        return;
+      }
+      case 'reload': {
+        if (v.rtAim) {
+          this.lowerWeapon(id, v.rtAim);
+          v.rtAim = 0;
+        }
+        // Turned over and down, held so while the magazine goes in, and back up (reload(), stretched to its seconds).
+        const k = Math.max(0.6, seconds);
+        void tween(k, (t) => {
+          const turn = t < 0.25 ? easeInOut(t / 0.25) : t > 0.75 ? 1 - easeInOut((t - 0.75) / 0.25) : 1;
+          v.pose.spin = turn * 0.5;
+          v.pose.aimFx = Math.sin(t * Math.PI) * 0.4;
+        }).then(() => {
+          v.pose.spin = 0;
+          v.pose.aimFx = 0;
+        });
+        return;
+      }
+      case 'strike': {
+        if (!toward) return;
+        void this.rtStrike(v, id, toward, seconds);
+        return;
+      }
+      case 'wait':
+      case 'idle': {
+        const aim = v.rtAim;
+        if (!aim) return;
+        v.rtAim = 0;
+        void wait(RT_LOWER).then(() => this.lowerWeapon(id, aim));
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  /**
+   * A dead one's blow in real time: turned to `target`, wound up (leant back, the arms open) for all of `seconds`
+   * but the stroke's, the stroke at it as they end (the bite's `shot` comes then), and back after.
+   */
+  private async rtStrike(v: UnitView, id: string, target: THREE.Vector3, seconds: number): Promise<void> {
+    this.face(id, target);
+    const home = v.rig.root.position.clone();
+    this.struck(target, home, true);
+    const gap = Math.hypot(target.x - home.x, target.z - home.z);
+    const toward = target.clone().setY(home.y).sub(home).setLength(THREE.MathUtils.clamp(gap - LUNGE_SHORT, 0, LUNGE));
+    const stroke = 0.14;
+    v.animating = true;
+    await tween(Math.max(0.12, seconds - stroke), (t) => {
+      v.pose.lean = -0.25 * easeInOut(t);
+      v.pose.aimFx = t;
+      v.pose.swing = -easeInOut(t);
+    });
+    if (v.dead) return;
+    await tween(stroke, (t) => {
+      v.pose.lean = -0.25 + 0.75 * t;
+      v.pose.swing = -1 + 2 * easeInOut(t);
+      v.rig.root.position.copy(home).addScaledVector(toward, t);
+    });
+    void tween(0.35, (t) => {
+      if (v.dead) return;
+      v.pose.lean = 0.5 * (1 - t);
+      v.pose.aimFx = 1 - t;
+      v.pose.swing = 1 - easeInOut(t);
+      v.rig.root.position.copy(home).addScaledVector(toward, 1 - t);
+    }).then(() => {
+      if (!v.dead) v.animating = false;
+    });
+  }
+
+  /**
+   * In real time, a step mid-way (`t`, 0 to 1) at `pos` kept clear of whoever stands or walks by: pushed off them
+   * sideways, most at the step's middle, none at its ends (it gets onto its tile). The engine never lets two onto
+   * one tile; between two, going by, their bodies would cross.
+   */
+  private keepClear(v: UnitView, pos: THREE.Vector3, t: number): void {
+    const k = Math.sin(t * Math.PI);
+    if (k < 0.05) return;
+    for (const w of this.views.values()) {
+      if (w === v || w.dead || !w.rig.root.visible) continue;
+      const other = w.rig.root.position;
+      if (Math.abs(other.y - pos.y) > 1) continue;
+      const dx = pos.x - other.x;
+      const dz = pos.z - other.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= RT_CLEAR || d < 1e-4) continue;
+      const push = ((RT_CLEAR - d) / d) * 0.5 * k;
+      pos.x += dx * push;
+      pos.z += dz * push;
+    }
   }
 }
