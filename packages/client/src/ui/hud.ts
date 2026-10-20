@@ -364,7 +364,11 @@ export class Hud {
   private readonly goalDock = h('div.goal-dock.panel', {}, this.mission);
   /** Real time (docs/TIEMPO-REAL.md): the big «PAUSA» while the clock is stopped. */
   private readonly rtPauseEl = h('div.rt-pause.hidden', { role: 'status' }, h('b', {}, 'PAUSA'), h('small', {}, 'Espacio para seguir'));
+  /** Real time: the slow motion while someone picks an ability's target (rtSlow), and what to do if it is this player. */
+  private readonly rtSlowEl = h('div.rt-pause.rt-slow.hidden', { role: 'status' }, h('b', {}, 'CÁMARA LENTA'), h('small'));
   private rtKey = '';
+  /** What the target panel last showed (setTarget). */
+  private targetKey = '';
   /** The right-hand column (Menú, the objective, the log): the aim's panel keeps below it (#20: «se solapan»). */
   private sideEl!: HTMLElement;
   private readonly players = h('div.players');
@@ -442,6 +446,7 @@ export class Hud {
       (this.sideEl = h('div.side', {}, h('div.side-row', {}, menuButton), this.goalDock, this.logEl)),
       this.bannerEl,
       this.rtPauseEl,
+      this.rtSlowEl,
       this.toastEl,
       this.noticeEl,
       this.packOfferEl,
@@ -502,9 +507,22 @@ export class Hud {
    * Real time (docs/TIEMPO-REAL.md), in place of the turn (null: by turns): the mission's clock on the strip (its
    * figures by tickRealtime), whether it is stopped, and the big «PAUSA»; what belongs to turns is put away (styles.css).
    */
-  setRealtime(view: { paused: boolean; concealed: boolean; night: { label: string; rules: string } | null } | null): void {
+  setRealtime(view: { paused: boolean; slow: boolean; armed: 'enemy' | 'ally' | 'tile' | null; partner: string | null; concealed: boolean; night: { label: string; rules: string } | null } | null): void {
     this.root.classList.toggle('realtime', !!view);
     this.rtPauseEl.classList.toggle('hidden', !view?.paused);
+    // Slow (not stopped): the notice, and with an ability armed here, how to aim it or let it go.
+    this.rtSlowEl.classList.toggle('hidden', !view?.slow || view.paused);
+    // With an ability armed here, the keys say what they do now (Space uses it, also with the clock stopped).
+    const armed =
+      view?.armed === 'enemy'
+        ? 'Tab: otro blanco · Espacio o Intro: usar · Esc: cancelar'
+        : view?.armed === 'ally'
+          ? 'Tab: otro soldado · Espacio o Intro: usar · Esc: cancelar'
+          : view?.armed === 'tile'
+            ? 'Elige una casilla · Esc: cancelar'
+            : null;
+    this.rtPauseEl.lastElementChild!.textContent = armed ?? 'Espacio para seguir';
+    this.rtSlowEl.lastElementChild!.textContent = armed ?? `${view?.partner ?? 'El otro jugador'} elige a quién`;
     if (!view) return;
     const key = JSON.stringify(view);
     if (key === this.rtKey) return;
@@ -515,7 +533,7 @@ export class Hud {
     clear(this.turn);
     append(
       this.turn,
-      h(`span.turn-label.rt-clock${view.paused ? '.paused' : ''}`, { title: 'Tiempo de misión' }, '00:00'),
+      h(`span.turn-label.rt-clock${view.paused ? '.paused' : view.slow ? '.slow' : ''}`, { title: 'Tiempo de misión' }, '00:00'),
       h(`span.conceal.${view.concealed ? 'on' : 'off'}`, {}, view.concealed ? 'OCULTOS' : 'DETECTADOS'),
       view.night ? h('span.conceal.night', { title: view.night.rules }, view.night.label.toUpperCase()) : null,
     );
@@ -1079,7 +1097,13 @@ export class Hud {
   }
 
   setTarget(view: TargetView | null): void {
-    this.fillTarget(view);
+    // Real time asks for it several times a second: built again only when it says something new (a click on its
+    // button, between press and release, was lost to a rebuild).
+    const key = view ? JSON.stringify(view) : '';
+    if (key !== this.targetKey) {
+      this.targetKey = key;
+      this.fillTarget(view);
+    }
     this.placeTarget(view?.kind === 'self');
     this.keepClear();
   }

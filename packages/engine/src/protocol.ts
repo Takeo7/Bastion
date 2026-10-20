@@ -46,9 +46,11 @@ export const commandSchema = z.discriminatedUnion('type', [
   /** Hand the command (el mando) to the partner. */
   z.object({ type: z.literal('pass') }),
   /** Real time (docs/TIEMPO-REAL.md): a soldier's standing order: go to `to`, attack `target` until down, or (neither) stand. */
-  z.object({ type: z.literal('rtOrder'), unit: unitId, to: spot.optional(), target: unitId.optional() }),
+  z.object({ type: z.literal('rtOrder'), unit: unitId, to: spot.optional(), target: unitId.optional(), ability: abilityIdSchema.optional(), tile: spot.optional() }),
   /** Real time: stop the clock or let it go on, for everyone. */
   z.object({ type: z.literal('rtPause'), paused: z.boolean() }),
+  /** Real time: the clock very slow while an ability is being aimed (Arturo, 20/10), or back to its pace. */
+  z.object({ type: z.literal('rtSlow'), slow: z.boolean() }),
 ]);
 
 export type Command = z.infer<typeof commandSchema>;

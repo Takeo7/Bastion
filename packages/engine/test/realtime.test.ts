@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../src/events';
-import { RT_AIM, RT_RECOVER, RT_STEP, RT_STRIKE, RT_TICK, executeRealtimeCommand, realtimeStep, rtStepMs } from '../src/realtime';
+import { RT_AIM, RT_RECOVER, RT_ROUND, RT_SLOW, RT_STEP, RT_STRIKE, RT_TICK, executeRealtimeCommand, realtimeStep, rtStepMs } from '../src/realtime';
 import { Rng } from '../src/rng';
 import { executeCommand } from '../src/rules';
 import { createMission } from '../src/setup';
@@ -147,6 +147,75 @@ describe('the real-time clock (realtime.ts)', () => {
     }
     expect(asleep.pos).toEqual({ x: 12, y: 2, z: 0 });
     expect(zs.every((z) => !z.alive || Math.abs(z.pos.x - 2) <= 3)).toBe(true);
+  });
+
+  it('while an ability is aimed the clock goes very slow, for everyone; then at its pace again', () => {
+    const s = field();
+    addUnit(s, 's1', 'assault', 2, 5);
+    order(s, { type: 'rtSlow', slow: true });
+    run(s, 1000);
+    expect(s.realtime!.clock).toBe(Math.round(1000 * RT_SLOW));
+    order(s, { type: 'rtSlow', slow: false });
+    run(s, 1000);
+    expect(s.realtime!.clock).toBe(Math.round(1000 * RT_SLOW) + 1000);
+  });
+
+  it('abilities as by turns: a grenade thrown from where it reaches, getting there first; once, and its use spent', () => {
+    const s = field(Array.from({ length: 12 }, () => '.'.repeat(30)));
+    const u = addUnit(s, 's1', 'assault', 1, 5);
+    for (const [id, x, y] of [['z1', 26, 5], ['z2', 27, 5], ['z3', 26, 6]] as const) addUnit(s, id, 'zombie', x, y, { podId: 'p1' });
+    s.pods.push({ id: 'p1', active: false, unitIds: ['z1', 'z2', 'z3'], patrol: [], patrolIndex: 0 });
+    addUnit(s, 'z9', 'zombie', 29, 0, { podId: 'p9' });
+    s.pods.push({ id: 'p9', active: false, unitIds: ['z9'], patrol: [], patrolIndex: 0 });
+    // From 25 tiles off, out of throwing range: it walks nearer first.
+    order(s, { type: 'rtOrder', unit: 's1', ability: 'grenade', tile: { x: 26, y: 5 } });
+    const events = run(s, 15_000);
+    expect(events.some((e) => e.t === 'moved' && e.unit === 's1')).toBe(true);
+    expect(events.filter((e) => e.t === 'explosive' && e.unit === 's1').length).toBe(1);
+    expect(u.charges.grenade ?? 0).toBe(0);
+    expect(s.realtime!.units.s1!.order).toEqual({ kind: 'idle' });
+  });
+
+  it('keeping watch, it shoots what comes in reach, and keeps at it', () => {
+    const s = field();
+    const u = addUnit(s, 's1', 'assault', 2, 5);
+    u.mods.aim = 200;
+    addUnit(s, 'z1', 'zombie', 13, 5, { podId: 'p1', hp: 99, maxHp: 99 });
+    s.pods.push({ id: 'p1', active: true, unitIds: ['z1'], patrol: [], patrolIndex: 0 });
+    order(s, { type: 'rtOrder', unit: 's1', ability: 'overwatch' });
+    const events = run(s, 6000);
+    expect(events.filter((e) => e.t === 'shot' && e.unit === 's1').length).toBeGreaterThan(1);
+    expect(s.realtime!.units.s1!.order).toEqual({ kind: 'watch' });
+    expect(u.pos).toEqual({ x: 2, y: 5, z: 0 });
+  });
+
+  it('a blow: it goes alongside, then strikes with the blade until the other is down', () => {
+    const s = field();
+    const u = addUnit(s, 's1', 'assault', 2, 5);
+    u.mods.aim = 200;
+    const z = addUnit(s, 'z1', 'zombie', 7, 5, { podId: 'p1' });
+    s.pods.push({ id: 'p1', active: false, unitIds: ['z1'], patrol: [], patrolIndex: 0 });
+    addUnit(s, 'z9', 'zombie', 15, 0, { podId: 'p9' });
+    s.pods.push({ id: 'p9', active: false, unitIds: ['z9'], patrol: [], patrolIndex: 0 });
+    order(s, { type: 'rtOrder', unit: 's1', ability: 'slash', target: 'z1' });
+    const events = run(s, 10_000);
+    expect(events.some((e) => e.t === 'shot' && e.unit === 's1' && e.ability === 'slash')).toBe(true);
+    expect(z.alive).toBe(false);
+  });
+
+  it('what lasts a turn lasts a round: under cover a while, then not', () => {
+    const rows = Array.from({ length: 12 }, (_, y) => (y === 4 ? '...h............' : '.'.repeat(16)));
+    const s = field(rows);
+    const u = addUnit(s, 's1', 'assault', 3, 5);
+    // A while into the clock's round first: its cover lasts a whole one from when it took it, not to the clock's next.
+    run(s, 4200);
+    order(s, { type: 'rtOrder', unit: 's1', ability: 'hunker' });
+    run(s, 1000);
+    expect(u.hunkered).toBe(true);
+    run(s, RT_ROUND - 1500);
+    expect(u.hunkered).toBe(true);
+    run(s, 1500);
+    expect(u.hunkered).toBe(false);
   });
 
   it('only real-time orders while in real time; only one’s own soldiers; and not in a mission by turns', () => {

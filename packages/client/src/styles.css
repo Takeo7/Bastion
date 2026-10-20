@@ -1034,6 +1034,22 @@ em.whose {
   display: inline-flex;
 }
 
+/* All the keys in one row, however many (Gameplay, 20/10: with eleven at 1280 px «Investigar» went up alone over
+   the row): they narrow as they must, down to 54 px, their names on two lines. */
+.abilities {
+  flex-wrap: nowrap;
+}
+
+.abilities > :is(.ability, .ability-slot) {
+  flex: 0 1 auto;
+  min-width: 54px;
+}
+
+.ability-slot > .ability {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .ability.has-menu::after {
   content: '';
   position: absolute;
@@ -3632,9 +3648,9 @@ body:has(.strat) .fps-counter {
 
 /* ------------------------------------------- real time (docs/TIEMPO-REAL.md, step 1) */
 
-/* What belongs to turns is put away: ending the turn, the command, the camera to the turn, the abilities (later steps)
-   and the aim's panel; the strip shows the mission's clock instead. */
-.hud.realtime :is(.turn-actions, .abilities, .shot-panel) {
+/* What belongs to turns is put away: ending the turn, the command and the camera to the turn; the strip shows the
+   mission's clock instead. The abilities stay, and the aim's panel with them (Arturo, 20/10). */
+.hud.realtime .turn-actions {
   display: none;
 }
 
@@ -3649,6 +3665,12 @@ body:has(.strat) .fps-counter {
 .hud .rt-clock.paused {
   background: var(--warn, #f2c230);
   color: #1a1406;
+}
+
+/* Slow while a target is picked: the clock in blue, as the notice. */
+.hud .rt-clock.slow {
+  background: #7ac8ff;
+  color: #0c1a26;
 }
 
 /* Stopped: a big «PAUSA» high over the battle, out of the way of what is to be looked at. */
@@ -3670,6 +3692,17 @@ body:has(.strat) .fps-counter {
   display: none;
 }
 
+/* The slow motion's notice: smaller than the pause, a little lower, in blue. */
+.rt-pause.rt-slow {
+  top: 18%;
+  padding: 4px 22px 6px;
+}
+
+.rt-pause.rt-slow b {
+  font-size: 26px;
+  letter-spacing: 0.18em;
+}
+
 .rt-pause b {
   font-family: var(--font-display);
   font-size: 44px;
@@ -3681,6 +3714,11 @@ body:has(.strat) .fps-counter {
 .rt-pause small {
   font-size: 13px;
   letter-spacing: 0.06em;
+}
+
+/* A stamp («Os han oído») while the clock is stopped or slow: under the notice, not over it. */
+.hud:has(> .rt-pause:not(.hidden)) > .banner {
+  top: 34%;
 }
 
 /* A card's line of its own, alike on every card, under its health and to the right like it: what it does, and the

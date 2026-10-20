@@ -1,6 +1,6 @@
 # Modo en tiempo real (propuesta)
 
-**Estado:** paso 1 hecho el 20/10 y jugable en Escaramuza («Ritmo: Tiempo real (prueba)»): el motor y el servidor (Gameplay, §6b), la pantalla (UI) y las animaciones (Arte). Falta que Arturo juzgue el ritmo.
+**Estado:** paso 1 hecho el 20/10 (0.8.2) y, tras la primera prueba de Arturo, el mando nuevo y las habilidades con su tiempo y la cámara lenta (parte del paso 2): jugable en Escaramuza («Ritmo: Tiempo real (prueba)»).
 
 La misión se puede jugar en tiempo real en lugar de por turnos, con los mismos controles de hoy: se elige un soldado, se pincha una casilla y va; se pincha un zombi y dispara. Todo pasa a la vez y nadie espera su turno. Es táctica en tiempo real, como Commandos o Door Kickers, con una pausa para pensar.
 
@@ -15,6 +15,7 @@ La misión se puede jugar en tiempo real en lugar de por turnos, con los mismos 
 - **Pausa con la barra espaciadora.** Se para, se dan órdenes y se sigue. A dos, la pide uno y se para para los dos.
 - **Cuenta igual en la campaña:** experiencia, heridas, botín y muerte permanente.
 - **Si cierra el anfitrión a mitad,** la misión se repite desde el principio, sin consecuencias en la campaña.
+- **El mando (20/10, tras probar la 0.8.2):** Tab pasa al siguiente soldado, o clic en su tarjeta; 1, 2, 3, 4… son las habilidades, como por turnos. Al pulsar una que pide blanco, el juego va a **cámara muy lenta** hasta elegirlo o cancelar, para dar tiempo a decidir. El blanco se elige como por turnos: queda elegido el primero, la cámara lo enseña, Tab pasa al siguiente y la misma tecla, Intro o Espacio la usan; no hace falta pinchar al enemigo.
 
 ## 2. Cómo funciona
 
@@ -83,9 +84,12 @@ El motor y el servidor ya están; falta la pantalla (UI y Arte).
   - el que ataca apunta, dispara con los números de hoy y sigue hasta tumbarlo, recargando cuando se queda sin balas; sin línea de tiro, va hacia él hasta tenerla;
   - sin órdenes, se queda quieto: defenderse solo es del paso 2;
   - los muertos de un grupo despierto van a por el vivo más cercano y muerden; los de un grupo dormido no se mueven hasta que los despiertan. El Chillón y el Hinchado se quedan quietos en este paso.
+- **Las rondas:** cada unidad lleva la suya (`rtRound` con `unit`): sus tiempos de recarga, el aturdimiento o cubrirse duran rondas suyas, y cubrirse la empieza de nuevo (6 s enteros). La del mapa (`rtRound` sin `unit`, cada 6 s del reloj) es la del humo y las bengalas.
+- **Las habilidades (20/10):** `rtOrder` con `ability` (y `target` o `tile`) usa cualquiera de la barra con las reglas de siempre (`Sim.perform`), tras su tiempo de preparación (`rtActMs`; `doing` `act`). Disparar, pistola y tajo siguen hasta tumbar al blanco; los demás ataques, una vez. Si hace falta, va antes adonde se puede (al lado del compañero, a tiro de la casilla, junto al enemigo para el tajo). La vigilancia es una postura: dispara (o golpea) a lo que entre en alcance. Lo que por turnos dura un turno (cubrirse, el humo, el aturdimiento, los tiempos de recarga) dura una ronda de 6 s (`RT_ROUND`, evento `rtRound`). Aún no: evacuar, hackear, correr y disparar, cara a cara, zona de muerte y supresión (`rtBlocker`).
+- **La cámara lenta:** `rtSlow` pone el reloj al 10 % (`RT_SLOW`, evento `rtSpeed`), para los dos.
 - **La escaramuza:** `start` con `realtime: true`; la misión empieza en pausa, y «Empezar» o la barra espaciadora la ponen en marcha.
 - **La pausa sola:** si un jugador se va (cierra o deja el juego en segundo plano), el anfitrión pausa para los dos.
-- **La pantalla** (UI, Arte): los lotes se aplican al llegar; clic en un soldado o 1–8 para elegirlo, clic en una casilla para ir, en un enemigo a la vista para atacar, botón derecho o X para quedarse quieto, barra espaciadora para la pausa. El reloj arriba, el aviso de PAUSA y, en la lista, qué hace cada uno con su barra. Andar, apuntar, recargar y el amago del zombi se animan cada uno a su tiempo. El registro, solo con lo que cambia la partida.
+- **La pantalla** (UI, Arte): los lotes se aplican al llegar; Tab, clic en la tarjeta o en el soldado para elegirlo; 1, 2, 3… las habilidades, con la barra apagada por `rtBlocker` y la recarga en segundos; al armar una que pide blanco, `rtSlow` y el aviso «CÁMARA LENTA» hasta elegirlo o cancelar (Esc, botón derecho, la misma tecla); clic en una casilla para ir, en un enemigo a la vista para atacar, botón derecho o X para quedarse quieto, barra espaciadora para la pausa. Las animaciones van a la velocidad del reloj (`setCombatRate`), con gestos para lanzar, curar, registrar, cubrirse y el tajo. El reloj arriba, el aviso de PAUSA y, en la lista, qué hace cada uno con su barra. Andar, apuntar, recargar y el amago del zombi se animan cada uno a su tiempo. El registro, solo con lo que cambia la partida.
 - **Medido** con un bot en mapas de 64 y 72: cada paso del reloj cuesta menos de 1 ms de media en el anfitrión, y el peor, unos 45 ms.
 
 ## 7. Riesgos

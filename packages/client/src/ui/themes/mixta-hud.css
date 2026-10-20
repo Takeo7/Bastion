@@ -1053,6 +1053,14 @@
   color: #cfd3cc;
 }
 
+:root[data-ui='mixta'] .rt-pause.rt-slow {
+  box-shadow: var(--t-sheet-shadow), inset 0 2px 0 #7ac8ff;
+}
+
+:root[data-ui='mixta'] .rt-pause.rt-slow b {
+  color: #7ac8ff;
+}
+
 :root[data-ui='mixta'] .rt-doing {
   font-family: var(--t-font);
   color: #d8dde0;

@@ -934,19 +934,30 @@ export interface Realtime {
   /** Mission time, in ms. */
   clock: number;
   paused: boolean;
+  /** How fast the clock runs (1, or RT_SLOW while someone chooses what an ability is aimed at: realtime.ts). */
+  speed?: number;
   /** By unit id (made as each one first does something). */
   units: Record<string, RtUnit>;
 }
 
-/** A standing order: stay, go to a tile, or keep attacking someone until they are down. */
-export type RtOrder = { kind: 'idle' } | { kind: 'move'; to: Pos } | { kind: 'attack'; target: string };
+/**
+ * A standing order: stay; go to a tile; attack someone with an attack (the gun's, kept up until they are down; a
+ * special one, once); keep watch (shoot, or strike, whatever comes in reach); or use an ability once, on oneself, an
+ * ally or a tile (getting there first if it must).
+ */
+export type RtOrder =
+  | { kind: 'idle' }
+  | { kind: 'move'; to: Pos }
+  | { kind: 'attack'; target: string; ability?: AbilityId }
+  | { kind: 'watch'; melee?: boolean }
+  | { kind: 'act'; ability: AbilityId; target?: string; tile?: Pos };
 
 /**
  * What a unit is doing: nothing, walking a step (its `moved` came when it set off), aiming (the shot comes when it
  * ends), reloading, winding up a blow (the bite comes when it ends), or waiting (someone in the way, no line of fire,
  * getting its breath back after a blow).
  */
-export type RtDoing = 'idle' | 'walk' | 'aim' | 'reload' | 'strike' | 'wait';
+export type RtDoing = 'idle' | 'walk' | 'aim' | 'reload' | 'strike' | 'wait' | 'act';
 
 export interface RtUnit {
   order: RtOrder;
@@ -955,9 +966,12 @@ export interface RtUnit {
   until: number;
   /** Whom it is aiming at or striking. */
   target?: string;
-  /** The host's own bookkeeping, never sent: the steps it means to take, and how often it has waited for one. */
+  /** With what: the attack it aims or strikes with, the ability it is getting ready (`act`). */
+  ability?: AbilityId;
+  /** The host's own bookkeeping, never sent: the steps it means to take, how often it has waited for one, and when its own round ends (realtime.ts RT_ROUND). */
   path?: Pos[];
   waited?: number;
+  round?: number;
 }
 
 export interface GameState {

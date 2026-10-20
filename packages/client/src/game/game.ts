@@ -7,11 +7,14 @@ import {
   abilityBlocker,
   abilityDamage,
   abilityTargets,
+  allyTargets,
   apForCost,
   apNeeded,
   applyEvent,
+  RT_ROUND,
   RT_STEP,
   RT_TICK,
+  rtBlocker,
   attackWeapon,
   abilityRange,
   BACKPACK_SLOTS,
@@ -323,6 +326,12 @@ const RT_TEXT = {
   reload: 'Recargando',
   wait: 'Esperando',
   waitWhy: 'No tiene línea de tiro, o alguien le tapa el paso.',
+  watch: 'Vigilando',
+  pickEnemy: 'Elige a un enemigo a la vista.',
+  pickAlly: 'Elige a un soldado de la escuadra.',
+  // An armed attack on one out of reach or of sight: no odds yet, it goes towards it first (realtime.ts approach).
+  goShoot: 'Fuera de tiro: se acerca y dispara en cuanto puede.',
+  goStrike: 'Va hasta su lado y golpea.',
 };
 /**
  * The dead with nobody in reach walk this many times quicker than their gait
@@ -775,6 +784,14 @@ export class Game {
   private signalKey = false;
   /** Real time (docs/TIEMPO-REAL.md): the host's clock as last heard, and when (performance.now), for the HUD. */
   private rtHeard = { clock: 0, at: 0 };
+  /** Real time: the ability armed, waiting for its target (the mission slow meanwhile: rtSlow). */
+  private rtArmed: AbilityId | null = null;
+  /** Real time: each ability's targets, for the state they were worked out from (rtTargets). */
+  private rtTargetsKept = new Map<AbilityId, { key: string; list: TargetOption[] }>();
+  /** The line to the one aimed at, as the target panel drew it last. */
+  private aimLine: { from: Vec2; to: Vec2; friendly: boolean } | null = null;
+  /** Real time: the clock (ms) at each unit's last round (rtRound with its `unit`), for its cooldowns in seconds. */
+  private readonly rtRoundAt = new Map<string, number>();
   /** Real time: when (mission clock) each unit started what it does now, for its card's bar. */
   private readonly rtSince = new Map<string, number>();
   /** Real time: the picked soldier's ways out, for the pointer's route (rtHover), until it moves or the state does. */
@@ -1875,7 +1892,8 @@ export class Game {
         const to = tileToWorld(e.target);
         const struck = e.hit ? getUnit(v, e.hit) : undefined;
         look(this.units.worldPos(u.id).lerp(to, 0.5));
-        const hand = await this.units.tossStone(u.id, to);
+        // Real time: the throw was the `act`'s (Arte's), the stone leaves the hand now.
+        const hand = v.realtime ? this.units.handPos(u.id) : await this.units.tossStone(u.id, to);
         this.sfx.stoneThrow(hand);
         await this.fx.stone(hand, struck ? this.units.chestPos(struck.id) : to, !!struck);
         this.sfx.stoneLand(to, !!struck);
@@ -2036,7 +2054,8 @@ export class Game {
         const u = getUnit(v, e.unit)!;
         if (!this.shownToSquad(u)) return;
         look(this.units.worldPos(u.id));
-        this.fx.floatText(this.units.chestPos(u.id), 'RECARGANDO', 'info');
+        // Real time: the event comes as the reload ends (its card said «Recargando» meanwhile): no word over it then.
+        if (!v.realtime) this.fx.floatText(this.units.chestPos(u.id), 'RECARGANDO', 'info');
         this.sfx.reload(this.units.chestPos(u.id));
         await this.units.reload(u.id);
         return;
@@ -2737,31 +2756,35 @@ export class Game {
       await wait(0.55);
       return;
     }
+    // Real time: the throw or the aim was the `act`'s (Arte's): what flies goes now, from the hand or the muzzle.
+    const rt = !!this.view.realtime;
     this.hud.log(`${u.name}: ${def.name.toLowerCase()}`);
     if (cam()) {
       look(this.units.worldPos(u.id).lerp(to, 0.5));
       this.rig.cinematicZoom(18);
     }
-    this.units.face(u.id, to);
-    await wait(0.25);
+    if (!rt) {
+      this.units.face(u.id, to);
+      await wait(0.25);
+    }
     if (e.ability === 'missiles') {
       const from = this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.5, 0));
       const spots = [to, ...Array.from({ length: 3 }, () => to.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2)))];
       this.sfx.missile(from);
       await this.fx.missiles(from, spots);
     } else if (e.ability === 'launch') {
-      await this.units.raiseWeapon(u.id, to);
+      if (!rt) await this.units.raiseWeapon(u.id, to);
       const from = this.units.muzzlePos(u.id);
       this.units.recoil(u.id);
       this.fx.muzzleFlash(from, 0xffc080);
       this.sfx.launch(from);
       await this.fx.grenadeArc(from, to);
       this.sfx.land(to);
-      this.units.lowerWeapon(u.id);
+      if (!rt) this.units.lowerWeapon(u.id);
     } else {
       this.sfx.throw(this.units.chestPos(u.id));
-      await this.units.throwMotion(u.id);
-      await this.fx.grenadeArc(this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.45, 0)), to);
+      if (!rt) await this.units.throwMotion(u.id);
+      await this.fx.grenadeArc(rt ? this.units.handPos(u.id) : this.units.chestPos(u.id).add(new THREE.Vector3(0, 0.45, 0)), to);
       this.sfx.land(to);
     }
     if (e.ability === 'smoke') {
@@ -3268,8 +3291,17 @@ export class Game {
       if (e.t === 'moved') this.rtStep(e, events, clock);
       else if (e.t === 'rtDoing') {
         const target = e.target ? getUnit(v, e.target) : undefined;
-        this.units.rtDoing(e.unit, e.doing, Math.max(0, (e.until - clock) / 1000), target ? this.units.worldPos(target.id) : null);
+        // A throw's tile is the order's (the event names only someone): toward it, for the arm (Arte).
+        const order = v.realtime?.units[e.unit]?.order;
+        const toward = target ? this.units.worldPos(target.id) : e.doing === 'act' && order?.kind === 'act' && order.tile ? tileToWorld(order.tile, 0.15) : null;
+        this.units.rtDoing(e.unit, e.doing, Math.max(0, (e.until - clock) / 1000), toward, e.ability);
         this.rtSince.set(e.unit, clock);
+      } else if (e.t === 'rtSpeed') {
+        // Slow while someone picks a target (rtSlow): the bodies and the effects at the clock's speed.
+        setCombatRate(e.speed);
+      } else if (e.t === 'rtRound') {
+        // Each one's own round (Gameplay, 20/10); the map's (no unit) is for smoke and flares.
+        if (e.unit) this.rtRoundAt.set(e.unit, clock);
       } else if (!RT_QUIET.has(e.t)) void this.play({ e, by, epoch: this.rig.epoch }).catch((err) => console.error('[anim]', err));
       if (e.t === 'tileChanged' || e.t === 'floorBroken') rebuild = true;
       // The pause, in the log too: who stopped the clock or set it going (Lore's words).
@@ -3280,9 +3312,10 @@ export class Game {
       applyEvent(v, e);
     }
     this.rtHeard = { clock, at: performance.now() };
+    setCombatRate(v.realtime?.speed ?? 1);
     if (rebuild) this.mapView.rebuild(v);
     this.refreshView();
-    this.refreshStatus();
+    this.rtKeepAim();
     this.refreshHud();
     this.drawOrders();
     this.updateHover();
@@ -3303,7 +3336,8 @@ export class Game {
     const rt = this.view.realtime;
     if (!rt) return 0;
     if (rt.paused || this.view.outcome) return this.rtHeard.clock;
-    return this.rtHeard.clock + Math.min(RT_TICK * 2, performance.now() - this.rtHeard.at);
+    const speed = rt.speed ?? 1;
+    return this.rtHeard.clock + Math.min(RT_TICK * 2 * speed, (performance.now() - this.rtHeard.at) * speed);
   }
 
   /** What each of the squad does, for its card (#3 of the step): a word, and the bar of an aim or a reload. */
@@ -3313,11 +3347,14 @@ export class Game {
     const me = rt.units[u.id];
     if (!me) return { text: RT_TEXT.idle };
     const target = me.target ? getUnit(this.view, me.target) : undefined;
-    const timed = me.doing === 'aim' || me.doing === 'reload';
+    const timed = me.doing === 'aim' || me.doing === 'reload' || me.doing === 'act';
     const bar = timed ? { from: this.rtSince.get(u.id) ?? rt.clock, until: me.until } : {};
     switch (me.doing) {
       case 'walk':
         return { text: RT_TEXT.walk };
+      case 'act':
+        // An ability being got ready: its name, and the bar to when it goes off.
+        return { text: me.ability ? ABILITIES[me.ability].name : RT_TEXT.walk, ...bar };
       case 'aim':
         // Lore's: the kind's name, so the longest («Apuntando: Acorazado») still fits.
         return { text: target ? `${RT_TEXT.aim}: ${TEMPLATES[target.template].name}` : RT_TEXT.aim, ...bar };
@@ -3326,7 +3363,7 @@ export class Game {
       case 'wait':
         return { text: RT_TEXT.wait, title: RT_TEXT.waitWhy };
       default:
-        return { text: me.order.kind === 'move' ? RT_TEXT.walk : RT_TEXT.idle };
+        return { text: me.order.kind === 'watch' ? RT_TEXT.watch : me.order.kind === 'move' ? RT_TEXT.walk : RT_TEXT.idle };
     }
   }
 
@@ -3339,6 +3376,8 @@ export class Game {
     if (!rt) return;
     const list: { from: Vec2; path: Vec2[]; color: string }[] = [];
     for (const u of this.myUnits()) {
+      // With an ability armed, the picked one's line is the aim's (its order is about to change).
+      if (this.rtArmed && u.id === this.selected) continue;
       const order = rt.units[u.id]?.order;
       if (order?.kind === 'move') {
         const key = `${u.pos.x},${u.pos.y},${u.pos.z ?? 0}>${order.to.x},${order.to.y},${order.to.z}`;
@@ -3352,6 +3391,11 @@ export class Game {
       } else if (order?.kind === 'attack') {
         const target = getUnit(this.view, order.target);
         if (target?.alive) list.push({ from: u.pos, path: [target.pos], color: '#ff5a4a' });
+      } else if (order?.kind === 'act' && (order.target || order.tile)) {
+        // An ability on someone or somewhere: a line to it, in the accent (red at an enemy).
+        const at = order.target ? getUnit(this.view, order.target) : undefined;
+        const to = at?.alive ? at.pos : order.tile;
+        if (to) list.push({ from: u.pos, path: [to], color: at?.team === 'alien' ? '#ff5a4a' : '#f2c230' });
       }
     }
     this.overlays.setPlans(list);
@@ -3363,7 +3407,28 @@ export class Game {
    */
   private rtHover(u: Unit | undefined, tile: Place | null, hovered: Unit | undefined): void {
     this.overlays.showAim(null, null);
-    if (!u?.alive || !tile || !this.commands(u) || this.view.outcome) return;
+    this.overlays.showBlast(null, [], false);
+    if (!u?.alive || !this.commands(u) || this.view.outcome) return;
+    // An ability armed: its line to the one picked (with the pointer anywhere, or off the map), or to an enemy or an
+    // ally under the pointer (a click there uses it on them), or where a throw would land and what it takes.
+    const armed = this.rtArmed;
+    if (armed) {
+      const kind = ABILITIES[armed].target;
+      const other = hovered?.alive && hovered.id !== this.targetId ? hovered : undefined;
+      const foe = (kind === 'enemy' || kind === 'melee') && other?.team === 'alien' && this.visibleAliens.has(other.id) ? other : undefined;
+      if (foe) this.overlays.showAim(u.pos, foe.pos);
+      else if (kind !== 'tile' && this.aimLine) this.overlays.showAim(this.aimLine.from, this.aimLine.to, this.aimLine.friendly);
+      if (!tile) return;
+      if (kind === 'ally' && other?.team === 'xcom') this.overlays.setHover(tile, 0x5fd28a);
+      if (kind === 'tile') {
+        const center = throwTile(u, armed, tile);
+        const area = blastTiles(this.view, armed, center, u);
+        this.overlays.showBlast(center, area, true, area.filter((t) => unitAt(this.view, t)?.team === 'xcom'), breachedWalls(this.view, armed, center, u));
+        this.overlays.setHover(null);
+      }
+      return;
+    }
+    if (!tile) return;
     if (hovered?.alive && hovered.team === 'alien' && this.visibleAliens.has(hovered.id)) {
       this.overlays.showAim(u.pos, hovered.pos);
       return;
@@ -3377,12 +3442,152 @@ export class Game {
 
   /** A click on the map in real time (#2 of the step): one of one's own picks it; an enemy in sight, attack; a tile, go. */
   private rtClick(tile: Place): void {
+    const picked = this.selectedUnit();
+    if (this.rtArmed && picked?.alive && this.commands(picked)) return this.rtTarget(picked, tile);
     const occupant = unitAt(this.view, tile);
     if (occupant?.alive && occupant.team === 'xcom' && this.commands(occupant)) return this.select(occupant.id);
     const u = this.selectedUnit();
     if (!u?.alive || !this.commands(u) || this.view.outcome) return;
     if (occupant?.alive && occupant.team === 'alien' && this.visibleAliens.has(occupant.id)) this.send({ type: 'rtOrder', unit: u.id, target: occupant.id });
     else this.send({ type: 'rtOrder', unit: u.id, to: { x: tile.x, y: tile.y, z: tile.z ?? 0 } });
+  }
+
+  /**
+   * An ability in real time (Arturo, 20/10: the bar as by turns): one with no target goes at once; one that needs
+   * one (a shot, a blade, a throw, an ally to tend) is armed, and the mission goes slow for both (rtSlow) until it
+   * is used or let go (Esc, the right click). One on someone comes with them picked, as when aiming by turns (the
+   * same order, the odds' panel, the camera on both; Tab another), and goes with the same key again, Space or
+   * Enter, or a click on someone else; a throw's tile is picked with the pointer.
+   */
+  private rtUse(id: BarActionId): void {
+    if (isMenu(id)) return;
+    const u = this.selectedUnit();
+    if (!u?.alive || !this.commands(u) || this.view.outcome) return;
+    const view = this.barView(id);
+    if (!view?.enabled) {
+      if (view?.reason) this.hud.toast(view.reason);
+      return;
+    }
+    const ability = id as AbilityId;
+    if (ABILITIES[ability].target === 'self') {
+      this.rtDisarm();
+      this.send({ type: 'rtOrder', unit: u.id, ability });
+      return;
+    }
+    if (this.rtArmed === ability) return this.mode.kind === 'target' ? this.rtFire() : this.rtDisarm();
+    const list = ABILITIES[ability].target === 'tile' ? [] : this.targetOptions(ability);
+    if (ABILITIES[ability].target !== 'tile' && !list.length) {
+      this.hud.toast(ABILITIES[ability].target === 'ally' ? 'No hay aliados válidos.' : 'Sin enemigos a la vista.');
+      return;
+    }
+    if (!this.rtArmed) this.send({ type: 'rtSlow', slow: true });
+    this.rtArmed = ability;
+    // From one ability to another, the one picked stays if the new one can take them too.
+    const kept = this.targetId && list.some((t) => t.unit.id === this.targetId) ? this.targetId : null;
+    this.mode = list.length ? { kind: 'target', ability } : { kind: 'move' };
+    this.targetId = list.length ? (kept ?? list[0]!.unit.id) : null;
+    if (list.length && !kept) this.focusTarget();
+    this.refreshHud();
+    this.drawOrders();
+    this.updateHover();
+  }
+
+  /** The armed ability used on the one picked (the same key again, Space, Enter, the panel's button). */
+  private rtFire(): void {
+    const u = this.selectedUnit();
+    const ability = this.rtArmed;
+    if (!u?.alive || !ability || this.mode.kind !== 'target' || !this.targetId || !this.commands(u)) return;
+    this.send({ type: 'rtOrder', unit: u.id, ability, target: this.targetId });
+    this.rtDisarm();
+  }
+
+  /** The armed ability let go: the mission at its speed again. */
+  private rtDisarm(): void {
+    if (!this.rtArmed) return;
+    this.rtArmed = null;
+    this.mode = { kind: 'move' };
+    this.targetId = null;
+    this.send({ type: 'rtSlow', slow: false });
+    this.overlays.showBlast(null, [], false);
+    this.refreshHud();
+    this.drawOrders();
+    this.updateHover();
+  }
+
+  /**
+   * An armed ability on someone, as the fight goes on: the one picked fallen (or out of sight), the next in the
+   * list, the camera left alone; with nobody left, or its soldier down, it is let go.
+   */
+  private rtKeepAim(): void {
+    if (!this.rtArmed) return;
+    const u = this.selectedUnit();
+    if (!u?.alive || !this.commands(u) || this.view.outcome) return this.rtDisarm();
+    if (this.mode.kind !== 'target') return;
+    const list = this.targetOptions(this.rtArmed);
+    if (!list.length) return this.rtDisarm();
+    if (!list.some((t) => t.unit.id === this.targetId)) this.targetId = list[0]!.unit.id;
+  }
+
+  /**
+   * Whom an ability on someone can be used on in real time, best first. An attack: every enemy in sight; those it
+   * has within reach first, by the odds, as by turns; then the rest, nearest first, as it goes towards them
+   * (realtime.ts approach). Tending: the nearest of the squad it would do something for, wherever they are (it
+   * goes to them), itself last (Arturo, 20/10: «el compañero más cercano»).
+   */
+  private rtTargets(u: Unit, ability: AbilityId): TargetOption[] {
+    const s = this.state;
+    // Asked for several times a refresh (the panel, the bar, the pointer), ten refreshes a second: once per state.
+    const key = `${s.seq}:${u.id}:${ability}:${[...this.visibleAliens].join()}`;
+    const kept = this.rtTargetsKept.get(ability);
+    if (kept?.key === key) return kept.list;
+    const far = (t: Unit) => distance(u.pos, t.pos);
+    let list: TargetOption[];
+    if (ABILITIES[ability].target === 'ally') {
+      const tend = ability as 'revival' | 'firstAid' | 'patchUp';
+      // allyTargets from the ally's own tile: whether it would do anything for them, out of reach or not.
+      list = s.units
+        .filter((t) => allyTargets(s, { ...u, pos: t.pos }, tend).includes(t))
+        .sort((a, b) => Number(a.id === u.id) - Number(b.id === u.id) || far(a) - far(b))
+        .map((unit) => ({ unit }));
+    } else {
+      const odds = new Map<string, number>();
+      const seen = s.units.filter((t) => t.alive && t.team === 'alien' && this.visibleAliens.has(t.id));
+      for (const t of seen) odds.set(t.id, previewShot(s, u, t, { ability: ability as AttackAbility })?.hit ?? -1);
+      list = seen.sort((a, b) => odds.get(b.id)! - odds.get(a.id)! || far(a) - far(b)).map((unit) => ({ unit }));
+    }
+    this.rtTargetsKept.set(ability, { key, list });
+    return list;
+  }
+
+  /** A click with an ability armed: at an enemy (an attack), at one of the squad (to tend), at a tile (a throw). */
+  private rtTarget(u: Unit, tile: Place): void {
+    const ability = this.rtArmed!;
+    const kind = ABILITIES[ability].target;
+    const occupant = unitAt(this.view, tile);
+    if (kind === 'enemy' || kind === 'melee') {
+      if (!occupant?.alive || occupant.team !== 'alien' || !this.visibleAliens.has(occupant.id)) return this.hud.toast(RT_TEXT.pickEnemy);
+      this.send({ type: 'rtOrder', unit: u.id, ability, target: occupant.id });
+    } else if (kind === 'ally') {
+      if (!occupant?.alive || occupant.team !== 'xcom') return this.hud.toast(RT_TEXT.pickAlly);
+      this.send({ type: 'rtOrder', unit: u.id, ability, target: occupant.id });
+    } else this.send({ type: 'rtOrder', unit: u.id, ability, tile: { x: tile.x, y: tile.y, z: tile.z ?? 0 } });
+    this.rtDisarm();
+  }
+
+  /** An ability's figures in real time: no actions; its recharge in seconds, left now or every so many. */
+  private rtStats(u: Unit, id: AbilityId): [string, string][] {
+    const left = this.rtCooldown(u, id);
+    const every = ABILITIES[id].cooldown;
+    return abilityStats(this.state, u, id)
+      .filter(([k]) => k !== 'Acciones' && k !== 'Recarga')
+      .concat(left ? [['Recarga', `lista en ${left} s`]] : every ? [['Recarga', `cada ${(every * RT_ROUND) / 1000} s`]] : []);
+  }
+
+  /** What is left of a cooldown in real time, in seconds: rounds of RT_ROUND, less what has gone of this one. */
+  private rtCooldown(u: Unit, id: AbilityId): number {
+    const left = u.cooldowns[id] ?? 0;
+    if (!left) return 0;
+    return Math.max(1, Math.ceil((left * RT_ROUND - (this.rtNow() - (this.rtRoundAt.get(u.id) ?? 0))) / 1000));
   }
 
   /** The picked soldier stops and stays (the right click, S). */
@@ -3462,7 +3667,8 @@ export class Game {
 
   /** The confirm button's text while planning (null with the command). */
   private lockLabel(): string | undefined {
-    return this.hasCommand() ? undefined : `MANDO: ${this.playerName(this.state.command).toUpperCase()}`;
+    // Real time: no command, each gives their own soldiers orders.
+    return this.state.realtime || this.hasCommand() ? undefined : `MANDO: ${this.playerName(this.state.command).toUpperCase()}`;
   }
 
   /**
@@ -3544,6 +3750,8 @@ export class Game {
   private select(id: string | null, focus = false): void {
     this.rig.takeControl();
     if (this.selected !== id) {
+      // Real time: an ability armed is the one picked's; another picked, it is let go.
+      this.rtDisarm();
       this.selected = id;
       this.mode = { kind: 'move' };
       this.targetId = null;
@@ -3567,6 +3775,7 @@ export class Game {
     // Real time: no turns to follow; one stays picked until it falls, and the camera is left alone.
     if (this.state.realtime) {
       if (current?.alive && this.commands(current)) return;
+      this.rtDisarm();
       this.selected = this.myUnits()[0]?.id ?? null;
       this.units.setSelected(this.selected);
       return;
@@ -3637,7 +3846,8 @@ export class Game {
   }
 
   private cycleUnit(dir: 1 | -1): void {
-    const list = this.myUnits().filter((u) => u.ap > 0 || !this.canAct());
+    // Real time (Arturo, 20/10): Tab goes round all of one's own, nobody counting actions.
+    const list = this.myUnits().filter((u) => this.state.realtime || u.ap > 0 || !this.canAct());
     if (!list.length) return;
     const i = list.findIndex((u) => u.id === this.selected);
     const next = list[(i + dir + list.length) % list.length]!;
@@ -3670,6 +3880,7 @@ export class Game {
     if (!u) return [];
     const s = this.state;
     const def = ABILITIES[ability];
+    if (s.realtime && (def.target === 'ally' || isAttack(ability))) return this.rtTargets(u, ability);
     if (def.target === 'melee' && isAttack(ability)) {
       return meleeTargets(s, u, ability)
         .map((o) => ({ unit: o.target, tile: o.tile, hit: previewShot(s, u, o.target, { ability, from: o.tile })?.hit ?? 0 }))
@@ -3729,6 +3940,7 @@ export class Game {
   }
 
   private confirmTarget(): void {
+    if (this.state.realtime) return this.rtFire();
     if (this.mode.kind === 'self') {
       this.confirmSelf();
       return;
@@ -3750,6 +3962,7 @@ export class Game {
   }
 
   private cancelMode(): void {
+    if (this.rtArmed) return this.rtDisarm();
     this.mode = { kind: 'move' };
     this.targetId = null;
     this.concealWarn = null;
@@ -3757,6 +3970,7 @@ export class Game {
   }
 
   private useAbility(id: BarActionId): void {
+    if (this.state.realtime) return this.rtUse(id);
     if (id === 'evac' || id === 'evacAccept' || id === 'evacRefuse') return this.useEvac(id);
     if (id === 'abandon' || id === 'abandonAccept' || id === 'abandonRefuse') {
       const call = this.state.abandonCall;
@@ -4000,7 +4214,9 @@ export class Game {
     const throwAt = out.findIndex((v) => v.id === 'menu:throw');
     const watchAt = out.findIndex((v) => v.id === 'menu:watch');
     if (throwAt >= 0 && watchAt >= 0 && throwAt !== watchAt + 1) out.splice(watchAt + 1, 0, ...out.splice(throwAt, 1));
-    return out.map((v, i) => ({ ...v, hotkey: i < 9 ? (v.id === 'shoot' ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '' }));
+    // Real time: the space bar is the pause until something is armed.
+    const space = !this.view.realtime;
+    return out.map((v, i) => ({ ...v, hotkey: i < 9 ? (v.id === 'shoot' && space ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '' }));
   }
 
   /** A box beside the soldier, opened or not, that its hands reach (loot.ts searchSpot, reachesToSearch). */
@@ -4030,14 +4246,22 @@ export class Game {
     return this.abilityList(u).map((id, i) => {
       const def = ABILITIES[id];
       const charge = def.charge ? u.charges[def.charge] ?? 0 : undefined;
-      let reason: string | null = !this.canAct()
-        ? 'No es vuestro turno.'
-        : (this.waitingFor(u.id) ?? abilityBlocker(this.state, u, id));
-      if (!reason && (def.target === 'enemy' || def.target === 'melee' || def.target === 'ally') && !this.targetOptions(id).length) {
+      const rt = !!this.view.realtime;
+      let reason: string | null = rt
+        ? // Real time: the engine's reasons (no actions to count); out of reach is none, it goes there first.
+          this.view.outcome
+          ? 'La misión ha terminado.'
+          : rtBlocker(this.state, u, id)
+        : !this.canAct()
+          ? 'No es vuestro turno.'
+          : (this.waitingFor(u.id) ?? abilityBlocker(this.state, u, id));
+      if (!reason && !rt && (def.target === 'enemy' || def.target === 'melee' || def.target === 'ally') && !this.targetOptions(id).length) {
         reason = def.target === 'ally' ? 'No hay aliados válidos.' : def.target === 'melee' ? 'Ningún enemigo a su alcance.' : 'Sin enemigos a la vista.';
       }
-      const active = this.mode.kind !== 'move' && this.mode.ability === id;
-      const cooldown = u.cooldowns[id] ?? 0;
+      if (!reason && rt && (def.target === 'enemy' || def.target === 'melee') && !this.view.units.some((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id))) reason = 'Sin enemigos a la vista.';
+      if (!reason && rt && def.target === 'ally' && !this.rtTargets(u, id).length) reason = 'No hay aliados válidos.';
+      const active = rt ? this.rtArmed === id : this.mode.kind !== 'move' && this.mode.ability === id;
+      const cooldown = rt ? this.rtCooldown(u, id) : (u.cooldowns[id] ?? 0);
       return {
         id,
         label: id === 'hack' ? `${def.name} · ${hackChance(this.state, u)}%` : def.name,
@@ -4050,7 +4274,7 @@ export class Game {
         limits: limitsText(u, id),
         damage: damageText(this.state, u, id),
         noise: noiseText(this.state, u, id),
-        stats: abilityStats(this.state, u, id),
+        stats: rt ? this.rtStats(u, id) : abilityStats(this.state, u, id),
         description: def.description,
         active,
         count: charge,
@@ -4105,7 +4329,8 @@ export class Game {
   /** Recomputes everything that depends on the latest state and the local selection. */
   private refreshInteractive(): void {
     this.autoSelect();
-    if (this.mode.kind === 'target' && !this.currentTarget()) this.cancelModeSilently();
+    if (this.state.realtime) this.rtKeepAim();
+    else if (this.mode.kind === 'target' && !this.currentTarget()) this.cancelModeSilently();
     if (this.mode.kind === 'tile' || this.mode.kind === 'self') {
       const u = this.selectedUnit();
       if (!u || !this.canAct() || abilityBlocker(this.state, u, this.mode.ability)) this.cancelModeSilently();
@@ -4502,7 +4727,11 @@ export class Game {
     const playing = sharing && v.activeUnit ? getUnit(v, v.activeUnit) : undefined;
     const inPlay = playing?.alive && playing.ap > 0 ? playing : undefined;
     // Real time: the mission's clock in place of the turn (docs/TIEMPO-REAL.md).
-    if (v.realtime) this.hud.setRealtime({ paused: v.realtime.paused, concealed: v.concealed, night: v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null });
+    if (v.realtime) {
+      const slow = (v.realtime.speed ?? 1) < 1;
+      // Slow and not armed here: the other one is picking (the only other who can).
+      this.hud.setRealtime({ paused: v.realtime.paused, slow, armed: !this.rtArmed ? null : this.mode.kind !== 'target' ? 'tile' : ABILITIES[this.rtArmed].target === 'ally' ? 'ally' : 'enemy', partner: this.partnerHere()?.name ?? null, concealed: v.concealed, night: v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null });
+    }
     else {
       this.hud.setRealtime(null);
       this.hud.setTurn(v.turn, owner, v.concealed, v.mission.night ? { label: NIGHT_LABEL, rules: NIGHT_RULES } : null, inPlay?.name ?? null);
@@ -4595,22 +4824,28 @@ export class Game {
     this.refreshStatus();
   }
 
+  /** The aim line, kept: real time's pointer draws it again after its own (rtHover). */
+  private aim(from: Vec2 | null, to: Vec2 | null, friendly = false): void {
+    this.aimLine = from && to ? { from, to, friendly } : null;
+    this.overlays.showAim(from, to, friendly);
+  }
+
   /** Builds the target panel and draws the aim line for the current target. */
   private targetPanel(): TargetView | null {
     const u = this.selectedUnit();
     if (u && this.handArmed()) {
-      this.overlays.showAim(null, null);
+      this.aim(null, null);
       return this.handPanel(u);
     }
     if (u && this.mode.kind === 'self') {
       const id = this.mode.ability;
       const def = ABILITIES[id];
-      this.overlays.showAim(null, null);
+      this.aim(null, null);
       return { kind: 'self', title: def.name, action: def.name, locked: this.lockLabel(), cost: costText(u, id), limits: limitsText(u, id), effect: def.description, detail: this.selfDetail(u, id), noise: noiseText(this.state, u, id) };
     }
     const option = this.currentTarget();
     if (!u || !option || this.mode.kind !== 'target') {
-      this.overlays.showAim(null, null);
+      this.aim(null, null);
       return null;
     }
     const ability = this.mode.ability;
@@ -4620,7 +4855,7 @@ export class Game {
     const target = option.unit;
     if (def.target === 'ally' || !isAttack(ability)) {
       const friendly = def.target === 'ally';
-      this.overlays.showAim(u.pos, target.pos, friendly);
+      this.aim(u.pos, target.pos, friendly);
       const dmg = friendly ? null : abilityDamage(this.state, u, ability, target);
       const effects: Partial<Record<AbilityId, string>> = {
         revival: 'Quita el aturdimiento, la desorientación y el pánico',
@@ -4632,11 +4867,18 @@ export class Game {
     }
     const attack = ability as AttackAbility;
     const shot = previewShot(this.state, u, target, { ability: attack, from: option.tile });
+    // Real time: one out of reach or of sight is gone for; no odds until it is there.
+    if (!shot && this.view.realtime) {
+      this.aim(u.pos, target.pos);
+      const loud = noiseOf(this.state, u, attack);
+      const effect = def.target === 'melee' ? RT_TEXT.goStrike : RT_TEXT.goShoot;
+      return { kind: 'support', title: `${def.name} · ${weaponLabel(u, attack)}`, action: def.name, targetName: target.name, effect, index, total: list.length, noise: loud ? `Ruido ${loud}` : 'Sin ruido' };
+    }
     if (!shot) {
-      this.overlays.showAim(null, null);
+      this.aim(null, null);
       return null;
     }
-    this.overlays.showAim(shot.origin, target.pos);
+    this.aim(shot.origin, target.pos);
     const dmg = abilityDamage(this.state, u, attack, target, shot)!;
     const loud = noiseOf(this.state, u, attack);
     return {
@@ -4925,7 +5167,10 @@ export class Game {
     const onUp = (e: PointerEvent): void => {
       if (e.button === 2 && this.drag) {
         // Real time: the right click stops the picked soldier where it is (docs/TIEMPO-REAL.md §6b).
-        if (!this.drag.moved && this.state.realtime) this.rtStand();
+        if (!this.drag.moved && this.state.realtime) {
+          if (this.rtArmed) this.rtDisarm();
+          else this.rtStand();
+        }
         else if (!this.drag.moved) {
           // A right click (not a drag) on a known enemy opens its file; planning, it takes the picked soldier's
           // plan away (playtest 18/10 #25); elsewhere it backs out of aiming.
@@ -5001,18 +5246,21 @@ export class Game {
       // Real time (docs/TIEMPO-REAL.md §6b): the space bar stops the clock or lets it go on, X stops the picked one,
       // 1–8 pick one's soldiers; what belongs to turns (abilities, ending the turn, the command) waits for a later step.
       if (this.state.realtime && !this.hud.covered) {
+        // An ability armed on someone: Space and Enter use it (Arturo, 20/10); Tab, below, picks another.
+        if ((e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') && this.rtArmed && this.mode.kind === 'target') {
+          e.preventDefault();
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          this.rtFire();
+          return;
+        }
         if (e.code === 'Space') {
           e.preventDefault();
           this.rtPause();
           return;
         }
         if (e.code === 'KeyX') return this.rtStand();
-        if (/^Digit[1-8]$/.test(e.code)) {
-          const u = this.myUnits()[Number(e.code.slice(5)) - 1];
-          if (u) this.select(u.id);
-          return;
-        }
-        if (e.code === 'Tab' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Backspace' || e.code === 'KeyC' || /^Digit/.test(e.code)) return;
+        // 1, 2, 3… are the abilities, as by turns, and Tab the next soldier (Arturo, 20/10); no turn to end or to pass.
+        if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Backspace' || e.code === 'KeyC') return;
       }
       // In the enemy turn the space bar, held, plays it in «Rápida» (docs/UX-RITMO.md); it gives no orders then.
       if (e.code === 'Space' && this.enemyTurnPlaying() && !this.hud.covered) {
@@ -5056,6 +5304,10 @@ export class Game {
           if (this.hud.closeAbilityMenu()) break;
           // A soldier's sheet or an enemy's file goes first.
           if (this.hud.closeModal()) break;
+          if (this.rtArmed) {
+            this.rtDisarm();
+            break;
+          }
           if (this.mode.kind !== 'move') this.cancelMode();
           else if (this.endArmed || this.concealWarn) {
             this.concealWarn = null;

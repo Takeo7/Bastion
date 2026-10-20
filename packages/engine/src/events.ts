@@ -52,8 +52,15 @@ export type GameEvent =
   | { t: 'rtPaused'; paused: boolean; slot: Slot | null }
   /** Real time: a unit's standing order changes. */
   | { t: 'rtOrder'; unit: string; order: RtOrder }
-  /** Real time: what a unit starts doing, until when (clock ms) and at whom. */
-  | { t: 'rtDoing'; unit: string; doing: RtDoing; until: number; target?: string }
+  /** Real time: what a unit starts doing, until when (clock ms), at whom and with what. */
+  | { t: 'rtDoing'; unit: string; doing: RtDoing; until: number; target?: string; ability?: AbilityId }
+  /** Real time: the clock runs at this speed (1, or slow while an ability is being aimed). */
+  | { t: 'rtSpeed'; speed: number }
+  /**
+   * Real time: a round has gone by (realtime.ts RT_ROUND): for `unit`, its own (what lasts a turn on it wears off:
+   * cover, a stun, cooldowns), each one's from when it was first about; without, the map's (smoke, bengalas).
+   */
+  | { t: 'rtRound'; unit?: string }
   /** An ability was activated: pays its actions (negative = gains), cooldown and charge. */
   | { t: 'abilityUsed'; unit: string; ability: AbilityId; ap: number; cooldown: number; charge: ChargeId | null }
   | {
@@ -246,6 +253,36 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       me.until = e.until;
       if (e.target) me.target = e.target;
       else delete me.target;
+      if (e.ability) me.ability = e.ability;
+      else delete me.ability;
+      break;
+    }
+    case 'rtSpeed':
+      if (s.realtime) s.realtime.speed = e.speed;
+      break;
+    case 'rtRound': {
+      // What turnBegan wears off, a unit's on its own round and the map's on the clock's; no actions to give back, no mission turn gone.
+      if (!e.unit) {
+        for (const cloud of s.smoke) cloud.turns--;
+        s.smoke = s.smoke.filter((cloud) => cloud.turns > 0);
+        for (const light of s.lights ?? []) if (light.turns !== undefined) light.turns--;
+        break;
+      }
+      for (const u of s.units) {
+        if (!u.alive || u.id !== e.unit) continue;
+        u.marked = 0;
+        if (u.disoriented > 0) u.disoriented--;
+        u.stunned = false;
+        u.hunkered = false;
+        u.aided = 0;
+        u.reactedTo = [];
+        endSuppression(s, u);
+        for (const id of Object.keys(u.cooldowns) as AbilityId[]) {
+          const left = (u.cooldowns[id] ?? 0) - 1;
+          if (left > 0) u.cooldowns[id] = left;
+          else delete u.cooldowns[id];
+        }
+      }
       break;
     }
     case 'turnBegan': {

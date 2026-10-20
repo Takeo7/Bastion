@@ -237,7 +237,8 @@ export class Sim {
   pay(u: Unit, ability: AbilityId): void {
     const def = ABILITIES[ability];
     const need = apNeeded(u, ability);
-    const ap = ability === 'runAndGun' ? -1 : endsTurn(u, ability) ? Math.max(u.ap, need) : need;
+    // In real time nothing counts actions: its time is what an ability costs (realtime.ts).
+    const ap = this.s.realtime ? 0 : ability === 'runAndGun' ? -1 : endsTurn(u, ability) ? Math.max(u.ap, need) : need;
     this.emit({ t: 'abilityUsed', unit: u.id, ability, ap, cooldown: def.cooldown ?? 0, charge: def.charge ?? null });
   }
 
@@ -1555,7 +1556,7 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
   if (s.outcome) return { ok: false, error: 'La misión ha terminado.' };
   // In real time the clock runs the mission, and the players give standing orders (docs/TIEMPO-REAL.md).
   if (s.realtime) return executeRealtimeCommand(s, cmd, ctx);
-  if (cmd.type === 'rtOrder' || cmd.type === 'rtPause') return { ok: false, error: 'Eso es del modo en tiempo real.' };
+  if (cmd.type === 'rtOrder' || cmd.type === 'rtPause' || cmd.type === 'rtSlow') return { ok: false, error: 'Eso es del modo en tiempo real.' };
   if (s.activeTeam !== 'xcom') return { ok: false, error: 'Espera a que termine el turno enemigo.' };
 
   const sim = new Sim(s, ctx.rng, ctx.connected);

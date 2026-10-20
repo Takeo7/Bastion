@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { BITE_TAG, canStandOn, coverAt, decorOf, DIRS4, flightAt, kindAt, objectAt, PLAYER_COLORS, sexOfPerson, type Alarm, type Biome, type DecorKind, type GameState, type Place, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
+import { BITE_TAG, canStandOn, coverAt, decorOf, DIRS4, flightAt, kindAt, objectAt, PLAYER_COLORS, sexOfPerson, type AbilityId, type Alarm, type Biome, type DecorKind, type GameState, type Place, type RtDoing, type TemplateId, type Unit, type Vec2 } from '@bastion/engine';
 import { pieceMap, TOWER_LADDER } from './basePieces';
 import { groundAt, STOREY, tileToWorld } from './coords';
 import type { Blow, FigurePose, Gear } from './figures';
@@ -59,6 +59,8 @@ const RT_RUN = 0.8;
 /** Real time: how far apart two bodies keep going by (tiles), and how long after a shot the weapon goes down (s). */
 const RT_CLEAR = 0.62;
 const RT_LOWER = 0.45;
+/** Real time: what was got ready is called off when something else begins more than this before its end (s, battle's). */
+const RT_EARLY = 0.2;
 /** A melee lunge goes this far at most, and stops this far short of the target's middle (an adjacent one: 0.72 apart). */
 const LUNGE = 0.45;
 const LUNGE_SHORT = 0.72;
@@ -157,6 +159,12 @@ interface UnitView {
   rt: boolean;
   /** Real time: its aim as rtDoing raised it (raiseWeapon's number), 0 none. */
   rtAim: number;
+  /** Real time: how many rtDoings and steps it has had (what one began, the next may call off: rtOff). */
+  rtGen: number;
+  /** Real time: down low while it tends an ally or takes cover (rtBusy), whatever the unit says meanwhile. */
+  rtLow: boolean;
+  /** Real time: the rtGen of the rtBusy now holding its hands and its crouch. */
+  rtBusyGen: number;
 }
 
 /** How high the blade is held on guard (the pose's aim): up in front, its point a little up. */
@@ -325,7 +333,7 @@ export class UnitViews {
 
     const view: UnitView = {
       id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, rt: false, rtAim: 0,
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, rt: false, rtAim: 0, rtGen: 0, rtLow: false, rtBusyGen: 0,
     };
     this.views.set(u.id, view);
     // Left outside when La Mula went (sync): standing, not dead.
@@ -375,7 +383,7 @@ export class UnitViews {
       const shown = u.team === 'xcom' || u.objective || visibleAliens.has(u.id) || (v.dead && v.rig.root.visible);
       v.rig.root.visible = shown;
       v.flag.visible = shown && u.alive;
-      v.pose.crouchTarget = u.hunkered || u.captive ? 1 : 0;
+      v.pose.crouchTarget = u.hunkered || u.captive || v.rtLow ? 1 : 0;
       // The enemies see in a cone (los.ts inViewCone, the living too: 18/10 #46): standing still, the model looks
       // where the engine says, turning on the spot when that changes (a noise heard); a walk or a bite ends on the same angle.
       if (u.alive && !v.animating && u.facing !== undefined && u.team !== 'xcom') {
@@ -1345,7 +1353,8 @@ export class UnitViews {
 
   async reload(id: string): Promise<void> {
     const v = this.views.get(id);
-    if (!v) return;
+    // Real time: the reload was shown while it lasted (rtDoing's reload, or act's); its event comes as it ends.
+    if (!v || v.rt) return;
     await tween(0.6, (t) => {
       v.pose.spin = easeInOut(t);
       v.pose.aimFx = Math.sin(t * Math.PI) * 0.4;
@@ -1582,17 +1591,19 @@ export class UnitViews {
     const v = this.views.get(id);
     if (!v || !path.length) return Promise.resolve();
     v.rt = true;
+    v.rtGen++;
     // Its gun down to walk (an aim of before: rtDoing raises it again).
     if (v.rtAim) {
       this.lowerWeapon(id, v.rtAim);
       v.rtAim = 0;
     }
-    const end = performance.now() + seconds * 1000;
+    // When it is to be there, on the battle's own clock (bodyTime: it runs at the battle's speed, slowed or not).
+    const end = this.bodyTime + seconds;
     const before = v.walk;
     const walk = (async () => {
       await before?.catch(() => undefined);
       if (v.dead) return;
-      const left = Math.max(0.12, (end - performance.now()) / 1000);
+      const left = Math.max(0.12, end - this.bodyTime);
       // Its own gait's seconds for these steps, from where it is now: trotting, or running if it is to go a good
       // deal quicker than that (the soldier's dash, RT_STEP's half).
       const natural = (ap: number) => this.stepSeconds(id, v.place, path, ap, 1).reduce((a, b) => a + b, 0) || left;
@@ -1606,18 +1617,23 @@ export class UnitViews {
   }
 
   /**
-   * What unit `id` does now in real time (the `rtDoing` of the host's clock: game.ts), for `seconds` (until − clock),
-   * at `toward` (whom it aims at or strikes, null none):
-   *   - aim: the weapon up at it, held until the shot (its flash, tracer and hit are game.ts', on the `shot`);
+   * What unit `id` does now in real time (the `rtDoing` of the host's clock: game.ts), for `seconds` of the battle's
+   * clock (until − clock; slowed with it, as all of this, by the battle's speed: tween.ts timeRate, rtSpeed), at
+   * `toward` (whom it aims at or strikes, the tile it throws at, the ally it tends; null none), with `ability`:
+   *   - aim: the weapon up at it (the pistol, for one), held until the shot (its flash, tracer and hit are game.ts');
    *   - reload: a reload lasting those seconds;
-   *   - strike: the dead one's wind-up and blow, the blow landing as they end (the bite's `shot`);
+   *   - strike: a blow, wound up and landing as they end (the bite's or the slash's `shot`): the dead one's arms, a
+   *     soldier's blade from the belt;
+   *   - act: getting an ability ready (rtAct): a throw let go as they end (the `explosive`, the stone, after it),
+   *     the launcher aimed, tending an ally crouched over them, searching, a door, taking cover;
    *   - wait, idle: the weapon down a moment after (a shot's flash first), standing turned as it was;
    *   - walk: nothing (rtStep: the weapon goes down for it).
    */
-  rtDoing(id: string, doing: 'idle' | 'walk' | 'aim' | 'reload' | 'strike' | 'wait', seconds: number, toward: THREE.Vector3 | null): void {
+  rtDoing(id: string, doing: RtDoing, seconds: number, toward: THREE.Vector3 | null, ability?: AbilityId): void {
     const v = this.views.get(id);
     if (!v || v.dead) return;
     v.rt = true;
+    v.rtGen++;
     switch (doing) {
       case 'aim': {
         if (!toward) return;
@@ -1627,31 +1643,24 @@ export class UnitViews {
           v.pose.close = Math.hypot(toward.x - v.rig.root.position.x, toward.z - v.rig.root.position.z);
           return;
         }
-        void this.raiseWeapon(id, toward).then((aim) => {
+        void this.raiseWeapon(id, toward, ability === 'pistol').then((aim) => {
           if (!v.dead) v.rtAim = aim;
         });
         return;
       }
       case 'reload': {
-        if (v.rtAim) {
-          this.lowerWeapon(id, v.rtAim);
-          v.rtAim = 0;
-        }
-        // Turned over and down, held so while the magazine goes in, and back up (reload(), stretched to its seconds).
-        const k = Math.max(0.6, seconds);
-        void tween(k, (t) => {
-          const turn = t < 0.25 ? easeInOut(t / 0.25) : t > 0.75 ? 1 - easeInOut((t - 0.75) / 0.25) : 1;
-          v.pose.spin = turn * 0.5;
-          v.pose.aimFx = Math.sin(t * Math.PI) * 0.4;
-        }).then(() => {
-          v.pose.spin = 0;
-          v.pose.aimFx = 0;
-        });
+        this.rtDown(v, id);
+        this.rtReload(v, seconds);
         return;
       }
       case 'strike': {
         if (!toward) return;
+        this.rtDown(v, id);
         void this.rtStrike(v, id, toward, seconds);
+        return;
+      }
+      case 'act': {
+        this.rtAct(v, id, seconds, toward, ability);
         return;
       }
       case 'wait':
@@ -1667,9 +1676,154 @@ export class UnitViews {
     }
   }
 
+  /** Real time: the weapon down now (an aim rtDoing raised), for what comes instead. */
+  private rtDown(v: UnitView, id: string): void {
+    if (!v.rtAim) return;
+    this.lowerWeapon(id, v.rtAim);
+    v.rtAim = 0;
+  }
+
+  /** Real time: a reload of `seconds`: the weapon turned over and down, held so while the magazine goes in, and back up. */
+  private rtReload(v: UnitView, seconds: number): void {
+    void tween(Math.max(0.6, seconds), (t) => {
+      const turn = t < 0.25 ? easeInOut(t / 0.25) : t > 0.75 ? 1 - easeInOut((t - 0.75) / 0.25) : 1;
+      v.pose.spin = turn * 0.5;
+      v.pose.aimFx = Math.sin(t * Math.PI) * 0.4;
+    }).then(() => {
+      v.pose.spin = 0;
+      v.pose.aimFx = 0;
+    });
+  }
+
   /**
-   * A dead one's blow in real time: turned to `target`, wound up (leant back, the arms open) for all of `seconds`
-   * but the stroke's, the stroke at it as they end (the bite's `shot` comes then), and back after.
+   * Real time: an ability got ready over `seconds` (rtDoing's `act`), at `toward`:
+   *   - a grenade, smoke, a flashbang, a stone: turned to where it goes, the arm back for most of it and let go as
+   *     they end (the throw's arc and what it does are game.ts', on the `explosive`: handPos for where it leaves);
+   *   - the launcher or the missiles: aimed at the tile, as a shot;
+   *   - first aid, patching up, getting one up: crouched over the ally, the hands at work;
+   *   - searching (a room, a box), a door: turned to it, the hands at work, standing;
+   *   - a reload; taking cover: crouched for it (the unit's hunkered keeps it so after);
+   *   - anything else: the hands at work, so that none just stands there.
+   */
+  private rtAct(v: UnitView, id: string, seconds: number, toward: THREE.Vector3 | null, ability?: AbilityId): void {
+    const p = v.pose;
+    const k = Math.max(0.3, seconds);
+    if (toward) this.face(id, toward);
+    switch (ability) {
+      case 'grenade':
+      case 'smoke':
+      case 'flashbang':
+      case 'stone': {
+        this.rtDown(v, id);
+        // Underhand (the stone: the pose's toss) or overarm (the lean back), as tossStone and throwMotion.
+        const underhand = ability === 'stone';
+        const set = (x: number) => (underhand ? (p.toss = x) : (p.lean = x));
+        const wound = underhand ? 0.6 : -0.35;
+        const flung = underhand ? 1 : 0.3;
+        // The wind-up for all but the release's last tenths, the release as they end, and back; or, called off, back.
+        const release = 0.14;
+        const gen = v.rtGen;
+        const end = this.bodyTime + k;
+        let off = false;
+        void tween(k - release, (t) => {
+          off ||= this.rtOff(v, gen, end);
+          if (!off) set(wound * easeInOut(t));
+        })
+          .then(async () => {
+            if (off) {
+              const from = underhand ? p.toss : p.lean;
+              await tween(0.2, (t) => set(from * (1 - easeInOut(t))));
+              return;
+            }
+            await tween(release, (t) => set(wound + (flung - wound) * t));
+            await tween(0.25, (t) => set(flung * (1 - t)));
+          })
+          .then(() => set(0));
+        return;
+      }
+      case 'launch':
+      case 'missiles': {
+        if (toward && !(v.rtAim && v.rtAim === v.aims)) {
+          void this.raiseWeapon(id, toward).then((aim) => {
+            if (!v.dead) v.rtAim = aim;
+          });
+        }
+        return;
+      }
+      case 'reload':
+        this.rtDown(v, id);
+        this.rtReload(v, seconds);
+        return;
+      case 'hunker':
+        this.rtDown(v, id);
+        this.rtBusy(v, k, true, false);
+        return;
+      case 'firstAid':
+      case 'patchUp':
+      case 'revival':
+      case 'restoration':
+        this.rtDown(v, id);
+        this.rtBusy(v, k, true, true);
+        return;
+      default:
+        this.rtDown(v, id);
+        this.rtBusy(v, k, false, true);
+        return;
+    }
+  }
+
+  /**
+   * Real time: busy for `seconds`: the hands at work (`hands`: rummage()'s pose, held) and crouched over it (`low`:
+   * tending an ally, taking cover) or standing; done with as they end, or eased off if called off before (rtOff).
+   */
+  private rtBusy(v: UnitView, seconds: number, low: boolean, hands: boolean): void {
+    const p = v.pose;
+    const gen = v.rtGen;
+    const end = this.bodyTime + seconds;
+    v.rtBusyGen = gen;
+    v.rtLow = low;
+    if (low) p.crouchTarget = 1;
+    const ease = Math.min(0.25, seconds / 3);
+    // From where the hands are (one busy straight after another), up, held with a little to and fro, and down.
+    const from = p.search;
+    const mine = () => v.rtBusyGen === gen;
+    let off = false;
+    void tween(seconds, (t) => {
+      if (off || !mine()) return;
+      if ((off = this.rtOff(v, gen, end))) {
+        const at = p.search;
+        v.rtLow = false;
+        void tween(0.15, (u) => mine() && (p.search = at * (1 - u))).then(() => mine() && (p.search = 0));
+        return;
+      }
+      if (!hands) return;
+      const at = t * seconds;
+      const up = at < ease ? from + (1 - from) * easeInOut(at / ease) : at > seconds - ease ? easeInOut((seconds - at) / ease) : 1;
+      p.search = up * (0.85 + 0.15 * Math.sin(at * 9));
+    }).then(() => {
+      if (off || !mine()) return;
+      p.search = 0;
+      v.rtLow = false;
+    });
+  }
+
+  /** Real time: whether what `v` began at `gen`, to end at `end` (bodyTime), was called off: something else began well before. */
+  private rtOff(v: UnitView, gen: number, end: number): boolean {
+    return v.rtGen !== gen && this.bodyTime < end - RT_EARLY;
+  }
+
+  /** Where unit `id`'s throwing hand is now (a throw's arc leaves from it: game.ts), its chest if it has none. */
+  handPos(id: string): THREE.Vector3 {
+    const v = this.views.get(id);
+    if (!v) return new THREE.Vector3();
+    v.rig.root.updateMatrixWorld(true);
+    return v.rig.root.getObjectByName('Hand_L')?.getWorldPosition(new THREE.Vector3()) ?? this.chestPos(id);
+  }
+
+  /**
+   * A blow in real time (a dead one's, or a soldier's Tajo with the blade from the belt): turned to `target`, wound
+   * up (leant back, the arms open) for all of `seconds` but the stroke's, the stroke at it as they end (the bite's or
+   * the slash's `shot` comes then), and back after.
    */
   private async rtStrike(v: UnitView, id: string, target: THREE.Vector3, seconds: number): Promise<void> {
     this.face(id, target);
@@ -1679,6 +1833,9 @@ export class UnitViews {
     const toward = target.clone().setY(home.y).sub(home).setLength(THREE.MathUtils.clamp(gap - LUNGE_SHORT, 0, LUNGE));
     const stroke = 0.14;
     v.animating = true;
+    // A soldier's knife or machete from the belt (the Tajo); the dead strike with their arms.
+    const rig = isFigure(v.rig) ? v.rig : null;
+    rig?.draw?.('belt');
     await tween(Math.max(0.12, seconds - stroke), (t) => {
       v.pose.lean = -0.25 * easeInOut(t);
       v.pose.aimFx = t;
@@ -1697,7 +1854,9 @@ export class UnitViews {
       v.pose.swing = 1 - easeInOut(t);
       v.rig.root.position.copy(home).addScaledVector(toward, 1 - t);
     }).then(() => {
-      if (!v.dead) v.animating = false;
+      if (v.dead) return;
+      v.animating = false;
+      rig?.draw?.('weapon');
     });
   }
 
