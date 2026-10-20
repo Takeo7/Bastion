@@ -2,97 +2,82 @@
 
 **Estado:** hablado con Arturo el 20/10. No hay código. Gameplay lo reparte cuando Arturo quiera empezar.
 
-La misión se puede jugar en tiempo real en lugar de por turnos. Es un shooter cenital cooperativo, como Alien Swarm, Helldivers (el primero) o Dead Nation: la misma cámara desde arriba, tú llevas a un soldado con el teclado y apuntas con el ratón, y el resto de la escuadra te sigue con su IA.
+La misión se puede jugar en tiempo real en lugar de por turnos, con los mismos controles de hoy: se elige un soldado, se pincha una casilla y va; se pincha un zombi y dispara. Todo pasa a la vez y nadie espera su turno. Es táctica en tiempo real, como Commandos o Door Kickers, con una pausa para pensar.
+
+(Antes se habló de un modo con WASD y apuntar con el ratón; Arturo prefirió este, el 20/10.)
 
 ## 1. Lo que decidió Arturo (20/10)
 
 - **Un interruptor al preparar la misión,** para los dos jugadores y a voto, como todo lo de la base. No cambia a mitad de misión.
-- **La misma cámara desde arriba.** Sigue al soldado que llevas.
-- **WASD para moverse y el ratón para apuntar.** Se dispara hacia el cursor: acierta quien apunta bien.
-- **La puntería del soldado sigue contando,** como dispersión y retroceso del arma. Con más puntería, las balas se abren menos y el arma se recupera antes.
-- **Tab cambia de soldado.** El que dejas pasa a la IA.
-- **Los compañeros con IA** te siguen, se cubren y disparan solos. Con teclas se les dan órdenes sencillas: «aguantad aquí», «seguidme» y «centrad el fuego en ese» (la marca de Señalar).
-- **Sin pausa.**
+- **La misma cámara y los mismos controles:** clic en una casilla para ir, clic en un enemigo para atacar, la barra de habilidades y Señalar.
+- **Cada uno manda a todos sus soldados,** como en un juego de estrategia. Los que no reciben órdenes siguen la última y se defienden solos.
+- **Los disparos aciertan con los números de hoy:** puntería, distancia, cobertura, altura y noche. El tablero y el equilibrio siguen valiendo.
+- **Pausa con la barra espaciadora.** Se para, se dan órdenes y se sigue. A dos, la pide uno y se para para los dos.
 - **Cuenta igual en la campaña:** experiencia, heridas, botín y muerte permanente.
 - **Si cierra el anfitrión a mitad,** la misión se repite desde el principio, sin consecuencias en la campaña.
 
-## 2. Qué se aprovecha
+## 2. Cómo funciona
 
-- Los mapas, con sus proporciones nuevas ([MAPAS.md](MAPAS.md)), el arte, las luces, la noche y la cámara.
-- La niebla y la vista en cono de los enemigos: se recalculan sin parar en vez de por turno.
-- El ruido: los disparos atraen a los muertos igual.
-- Las armas, con su daño, cargador, ruido y alcance, y los zombis, con su vida, velocidad y mordisco.
-- El botín, la mochila y el cinturón.
-- Los objetivos y La Lata.
-- La campaña entera.
-- Las colisiones de hoy: nadie atraviesa a nadie y los muebles ocupan su casilla.
+- **Las acciones cuestan tiempo, no puntos de acción:**
+  - andar una casilla dura lo de hoy (al trote 0,5 s; corriendo 0,24 s; el zombi arrastrándose 1,02 s);
+  - disparar es apuntar un momento, según el arma, y tirar; cada disparo tira su porcentaje;
+  - recargar, registrar, curar y las habilidades tienen su duración y su tiempo de recarga.
+- **Un soldado sin órdenes:** termina lo que hacía y se defiende. Dispara a lo que tenga a tiro y se queda donde está.
+- **La vigilancia pasa a ser una postura:** «disparad a lo que se acerque», que se pone y se quita. Ya no es una orden de fin de turno.
+- **Los zombis deciden sin parar,** no por turno: persiguen, rodean, muerden a su ritmo y se aprietan en las puertas sin atravesarse.
+- **El tiempo de la misión se mide en minutos.** Las hordas llegan por tiempo y con el ruido.
+- **La experiencia** se cuenta igual que hoy: disparar, acertar, curar, registrar.
 
-## 3. Qué cambia
+## 3. Qué se aprovecha
 
-- **Movimiento libre.** La cuadrícula pasa a ser el mapa de colisiones:
-  - paredes, cobertura y muebles son bloques;
-  - los personajes son círculos de unas 0,3 casillas que chocan entre sí;
-  - las puertas se abren al llegar;
-  - los tramos de escalera son rampas;
-  - las ventanas se saltan con una tecla.
-- **Disparar.** La bala sale hacia el cursor, con la dispersión del arma y del soldado.
-  - La cobertura es física: una caja baja entre tú y el zombi para balas a ras de suelo.
-  - Desde una planta alta se dispara por encima.
-- **Habilidades.** La barra 1–8 se queda, con tiempos de recarga en vez de acciones: granada, Tajo, curar, Al cinturón. La vigilancia como orden desaparece: en tiempo real ya disparas tú.
-- **El tiempo.** Las misiones se miden en minutos, no en turnos. Las hordas llegan por tiempo y con el ruido.
-- **La experiencia.** Las barras se llenan con lo mismo que hoy (disparar, acertar, curar, registrar), contado en tiempo real.
+Casi todo:
+- **Los mapas,** con sus proporciones nuevas ([MAPAS.md](MAPAS.md)), y las rutas por casillas.
+- **El movimiento:** el bloqueo entre personajes y los tramos de escalera.
+- **El combate:** la cobertura por casilla, la puntería con todos sus factores, las armas y los zombis.
+- **Lo que se ve y se oye:** la niebla, la vista en cono, la noche y el ruido.
+- **El resto:** el botín, la mochila, los objetivos, La Lata y la campaña.
+- **La red:** el cliente sigue mandando órdenes y el anfitrión las ejecuta. No hace falta predecir ni corregir retardos.
+- **El motor puede seguir siendo determinista,** avanzando a pasos fijos de tiempo. Hoy no hace falta para guardar a medias, porque la misión se repite desde el principio.
 
 ## 4. Qué es nuevo
 
-1. **La simulación en tiempo real,** en el anfitrión, a unas 20–30 veces por segundo. Va aparte del motor por turnos y usa los mismos datos de contenido (armas, zombis, objetos).
-2. **El control y la animación:**
-   - las piernas van en la dirección de WASD y el tronco apunta al ratón;
-   - el pack BaseLocomotion de Synty trae los pasos en 8 direcciones (andar, correr y agachado);
-   - hacen falta el retroceso, la recarga y los impactos.
-3. **La IA de los compañeros:**
-   - seguir sin estorbar;
-   - cubrirse mirando hacia la amenaza;
-   - disparar a quien tienen a tiro;
-   - no herir a los propios;
-   - obedecer las tres órdenes.
-
-   De ella depende que el modo sea divertido.
-4. **La IA de los zombis en tiempo real:** perseguir, rodear, morder a su ritmo y apretarse en las puertas sin atascarse.
-5. **La red:**
-   - el movimiento propio se ve al momento en tu pantalla y el anfitrión lo corrige;
-   - entre amigos, cada uno decide sus propios disparos, lo que simplifica mucho;
-   - si se cae el compañero, su soldado pasa a la IA hasta que vuelve.
-6. **La pantalla.** Hoy reproduce los eventos de uno en uno. En este modo muestra a todos moviéndose y disparando a la vez, interpolando lo que llega del anfitrión.
-7. **El HUD:** munición y recarga, la salud de la escuadra, la orden activa y una retícula.
-8. **El ritmo y la dificultad:** el tamaño de las hordas, la munición y el tiempo de cada misión.
+1. **El reloj en el anfitrión.** Avanza a pasos fijos, unas 10 veces por segundo, y ejecuta a la vez las órdenes de todos los soldados y de los zombis. Cada orden se valida en cualquier momento, no por turno.
+2. **La pantalla.** Hoy reproduce los eventos de uno en uno («cada acción se ve entera»). En este modo muestra a todos moviéndose y disparando a la vez. El plan de pasos de los grupos de zombis (`walkPlan.ts`) ya hace parte de eso.
+3. **El mando de varios soldados:**
+   - seleccionar con clic o con las teclas de número;
+   - el rango de movimiento se queda sin puntos de acción: muestra la ruta, no lo que alcanza un turno;
+   - quizá encadenar órdenes con Mayúsculas (por decidir).
+4. **La pausa compartida** y lo que se ve mientras está parado: las órdenes que esperan y las rutas.
+5. **El HUD:** la barra de turnos sobra. Hacen falta los tiempos de recarga, quién está haciendo qué y el reloj de la misión.
+6. **El ritmo y la dificultad:** las velocidades, los tiempos de cada acción, el tamaño de las hordas y el tiempo de cada misión.
 
 ## 5. Las normas del proyecto en este modo
 
-- **«Cada acción se ve entera»:** no vale en tiempo real. Sigue valiendo por turnos.
-- **«La cámara nunca pelea con el jugador»:** sí vale. La cámara sigue al soldado con un poco de adelanto hacia el cursor, y nunca gira sola.
-- **Rendimiento:** la misma cámara y los mismos mapas. La simulación va en el anfitrión y el cliente interpola. El presupuesto de 4,2 ms por fotograma no cambia.
+- **«Cada acción se ve entera»:** no vale en tiempo real; la pausa es la manera de pensar. Sigue valiendo por turnos.
+- **«La cámara nunca pelea con el jugador»:** sí vale. La cámara no se mueve sola a cada acción como en el turno enemigo; se puede seguir a un soldado si se pide.
+- **Rendimiento:** la misma cámara y los mismos mapas. El reloj va en el anfitrión. El presupuesto de 4,2 ms por fotograma no cambia.
 
 ## 6. Pasos
 
 Cada paso se juega y se prueba solo.
 
-1. **Prototipo:** escaramuza en solitario, un soldado con WASD y ratón contra zombis. Sirve para juzgar la sensación: respuesta del control, impactos, sonido y temblor de cámara. Si no convence, se para aquí.
-2. **Tab y los compañeros** con IA y las tres órdenes.
-3. **Cooperativo a dos.**
-4. **El resto de la misión:** habilidades, objetos, registrar, puertas, ventanas, escaleras, objetivos y evacuar en La Lata.
+1. **Prototipo:** escaramuza en solitario. El reloj, clic para mover y disparar, los zombis persiguiendo y la pausa. Sirve para juzgar el ritmo y si se entiende lo que pasa. Si no convence, se para aquí.
+2. **Todas las acciones con su tiempo:** recargar, habilidades con recarga, la postura de vigilancia y la defensa sola de los soldados sin órdenes.
+3. **Cooperativo a dos,** con la pausa compartida.
+4. **El resto de la misión:** registrar, puertas, ventanas, escaleras, objetivos y evacuar en La Lata.
 5. **La campaña:** el interruptor a voto al preparar la misión, la experiencia, las heridas, el botín y el equilibrio.
 
 ## 7. Riesgos
 
-- **Dos juegos en uno.** Cada cosa nueva tendrá que funcionar en los dos modos, o declararse solo de uno. Si el tiempo real gusta más, el táctico se puede quedar atrás.
-- **La IA de los compañeros:** sin pausa, si no es buena, el modo frustra.
-- **La sensación:** un shooter vive de la respuesta del control y de cómo se notan los impactos. Lo dice el paso 1.
-- **El equilibrio con muerte permanente:** apuntar bien o mal decide quién vive.
+- **Dos juegos en uno.** Cada cosa nueva tendrá que funcionar en los dos modos, o declararse solo de uno.
+- **Demasiado a la vez:** seis u ocho soldados en tiempo real pueden abrumar. La pausa lo alivia, y la defensa sola de los que no tienen órdenes tiene que ser buena.
+- **Que se entienda lo que pasa:** con todo a la vez, la pantalla tiene que dejar claro quién dispara a quién y qué ha pasado (avisos, sonido, marcas).
+- **El equilibrio con muerte permanente:** los tiempos y las velocidades deciden si es justo.
 
 ## 8. Por decidir
 
 - El tiempo de cada tipo de misión.
-- El fuego amigo.
-- Si la munición se cuenta igual que por turnos.
+- Encadenar órdenes con Mayúsculas.
+- Si los soldados sin órdenes también se cubren solos o solo disparan.
 - Qué habilidades del tablero cambian en tiempo real (las de vigilancia, por ejemplo).
-- Si se puede agachar, y si agachado se dispara mejor.
+- Si la velocidad del juego se puede ajustar (más lento o más rápido), como hoy la del turno enemigo.
