@@ -260,11 +260,6 @@
   --bi: var(--mi-menu);
 }
 
-:root[data-ui='mixta'] .strat-top > .x-btn.strat-news {
-  --bi: var(--mi-news);
-  color: var(--t-accent);
-}
-
 /* Narrow windows (UX-REVISION-3 #2): the app goes down to 1024 px, and at 1024 the band held
    1097 px, so «Menú» was off the screen and «DÍA 7» broke in two. The buttons keep their icon
    and their tooltip; the day stays on one line; the rest packs closer. */
@@ -377,16 +372,8 @@
   box-shadow: var(--m-raise), 0 0 0 1px rgba(240, 80, 60, 0.7), 0 6px 14px rgba(0, 0, 0, 0.4);
 }
 
-:root[data-ui='mixta'] .strat-nav button[data-view='hub'] {
-  --ni: url('/ui/synty/icons/home.webp');
-}
-
 :root[data-ui='mixta'] .strat-nav button[data-view='geoscape'] {
   --ni: url('/ui/synty/icons/mh-pin.webp');
-}
-
-:root[data-ui='mixta'] .strat-nav button[data-view='research'] {
-  --ni: url('/ui/synty/icons/mh-notes.webp');
 }
 
 :root[data-ui='mixta'] .strat-nav button[data-view='engineering'] {
@@ -425,6 +412,28 @@
   letter-spacing: 0;
 }
 
+:root[data-ui='mixta'] .unlock-icon {
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --unlock-c: var(--t-accent);
+}
+
+:root[data-ui='mixta'] .unlock-icon.xp {
+  --unlock-c: #7fd38a;
+}
+
+:root[data-ui='mixta'] .unlock-icon.flag {
+  --unlock-c: #8fc8ff;
+}
+
+:root[data-ui='mixta'] .new-tag {
+  background: var(--t-accent);
+  box-shadow: 0 0 0 1px #4d3807, 0 0 8px rgba(242, 194, 48, 0.4);
+  color: var(--t-primary-ink);
+  font-family: var(--t-font-title);
+  font-weight: 600;
+}
+
 :root[data-ui='mixta'] .nav-count.urgent {
   background: #f0503c;
   box-shadow: 0 0 0 1px #3d0d07, 0 0 10px rgba(240, 80, 60, 0.6);
@@ -453,72 +462,6 @@
 }
 
 /* ================================================================== hub */
-
-/* «Ahora»: the one thing to do next, a plate with a lit edge and a round go button. */
-:root[data-ui='mixta'] .strat-now {
-  position: relative;
-  grid-template-columns: 1fr auto;
-  gap: 1px 12px;
-  padding: 9px 10px 10px 16px;
-  border: 0;
-  border-radius: 2px;
-  background: linear-gradient(90deg, rgba(242, 194, 48, 0.16), rgba(242, 194, 48, 0.03) 70%), var(--m-plate);
-  box-shadow: var(--m-raise), inset 4px 0 0 var(--t-accent);
-  color: var(--t-accent);
-  transition:
-    transform 0.14s var(--m-ease),
-    background 0.14s;
-}
-
-:root[data-ui='mixta'] .strat-now :is(small, b) {
-  grid-column: 1;
-}
-
-:root[data-ui='mixta'] .strat-now small {
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: 0.24em;
-}
-
-:root[data-ui='mixta'] .strat-now b {
-  font-family: var(--t-font-title);
-  font-weight: 500;
-  font-size: 19px;
-  letter-spacing: 0.03em;
-  color: #fff;
-}
-
-:root[data-ui='mixta'] .strat-now .ico {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  box-sizing: content-box;
-  width: 18px;
-  height: 18px;
-  padding: 7px;
-  border-radius: 50%;
-  background: var(--t-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 0 1px #4d3807;
-  color: var(--t-primary-ink);
-}
-
-:root[data-ui='mixta'] .strat-now:hover:not(:disabled) {
-  background: linear-gradient(90deg, rgba(242, 194, 48, 0.24), rgba(242, 194, 48, 0.06) 70%), var(--m-plate-hover);
-  transform: translateX(3px);
-}
-
-/* Urgent: the edge becomes hazard tape and the button breathes. */
-:root[data-ui='mixta'] .strat-now.urgent {
-  border-left: 8px solid transparent;
-  border-image: var(--m-hazard) 0 0 0 64 / 0 0 0 8px round;
-  background: linear-gradient(90deg, rgba(242, 194, 48, 0.2), rgba(242, 194, 48, 0.05) 70%), var(--m-plate);
-  color: var(--t-accent);
-  box-shadow: var(--m-raise);
-}
-
-:root[data-ui='mixta'] .strat-now.urgent .ico {
-  animation: m-breathe 1.8s ease-in-out infinite;
-}
 
 /* Lists: rows on the plate, parted by a groove; the one chosen lit yellow from its edge. */
 :root[data-ui='mixta'] .x-row {

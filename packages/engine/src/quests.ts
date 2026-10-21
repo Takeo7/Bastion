@@ -263,7 +263,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         title: 'Tomasz Rybak',
         text: 'Rybak quiere salir. La Congregación lo tiene estudiando cómo guiar a los zombis con sonido. A escondidas, ha avanzado con los antibióticos. Si lo sacamos, trae sus cuadernos. Si quemamos el laboratorio, la Voz pierde un año de trabajo. La Dra. Nwosu no opina.',
         options: [
-          { label: 'Sacarlo de allí', effect: 'Antibióticos sin esperar al nivel 6', then: 'rescued' },
+          { label: 'Sacarlo de allí', effect: 'Antibióticos antes de tiempo', then: 'rescued' },
           { label: 'Quemar el laboratorio', effect: 'Los zombis retroceden (−1)', then: 'ended' },
         ],
       },

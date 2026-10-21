@@ -421,6 +421,10 @@
   font-weight: 600;
 }
 
+:root[data-ui='mixta'] .ability.noted:disabled > .label {
+  color: var(--t-accent);
+}
+
 :root[data-ui='mixta'] .ability .count {
   border-radius: 2px;
   background: rgba(0, 0, 0, 0.55);

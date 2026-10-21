@@ -6,7 +6,7 @@
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
 import { DISMANTLE_BACK, FELL_COST, type PieceId } from './base';
-import { FOUND_WEAPONS, THIRD_ACTION_RANK, type RangeTable } from './content';
+import { FOUND_WEAPONS, NIGHT, TEMPLATES, THIRD_ACTION_RANK, type RangeTable } from './content';
 import { BAR_GROWTH, DEED_XP, RANK_STEP, SKILLS, VETERANCY, WILL_PER_RANK, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
 
@@ -19,6 +19,12 @@ export const PARTITURA_LEVEL = 4;
  */
 const BUS_NAME = 'La Lata';
 export const BUS = { name: BUS_NAME, to: toZone(BUS_NAME), of: ofZone(BUS_NAME), in: `en ${BUS_NAME}` };
+
+/** A soldier's sight by day and in the dark, and how close a zombie notices a hidden one by day and in the dark (los.ts nightSight, detectionTo). */
+const DAY_SIGHT = TEMPLATES.rookie.sight;
+const NIGHT_SIGHT = Math.max(NIGHT.minSight, DAY_SIGHT - NIGHT.sightCut);
+const ZOMBIE_NOTICE = TEMPLATES.zombie.detection;
+const ZOMBIE_NOTICE_DARK = Math.round(ZOMBIE_NOTICE * NIGHT.detection);
 
 /** The doom track as a label: "La Marea" once known. */
 export function doomName(level: number): string {
@@ -71,9 +77,9 @@ export const GLOSSARY: Record<string, string> = {
   Mordisco: 'El de un zombi puede contagiar. En la misión, el contagiado pierde 1 de salud cada turno y, sin Cuarentena, no puede subir a La Lata. Al volver tiene fiebre: si no se le trata, se convierte. La Enfermería y la Cuarentena dan más tiempo. Si muere contagiado, se levanta.',
   Cuarentena: 'Sin ella, un mordido no puede subir a La Lata y se queda en la misión.',
   Comida: 'Se cuenta en raciones. Cada misión son cinco días, y cada día se gasta una ración por cada cuatro soldados. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad.',
-  Huerto: 'Da raciones en cada misión; más cuanto más nivel.',
+  Huerto: 'Cada Huerto da 5 raciones por misión a nivel 1, 10 a nivel 2 y 15 a nivel 3.',
   Piezas: 'Con ellas el Taller hace armas y armaduras mejores, y se reponen las trampas. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.',
-  Noche: 'De noche, tus soldados solo ven de cerca. Bajo una farola, una bengala o un fuego se ve como de día. Hasta que te descubren, los enemigos solo te notan de cerca si estás a oscuras. Hay más zombis, y el botín vale la mitad más.',
+  Noche: `De noche, a oscuras, tus soldados ven ${NIGHT_SIGHT} casillas en vez de ${DAY_SIGHT}. Una farola alumbra ${NIGHT.streetLight} casillas a su alrededor, y un foco, ${NIGHT.floodlight}. Hasta que te descubren, los enemigos notan a un soldado a oscuras a la mitad de distancia. Hay más zombis, y el botín vale la mitad más.`,
   Enclave: 'Grupo de supervivientes con el que hay contacto por radio. Mientras su zona no caiga, manda suministros en cada convoy.',
   Rumor: 'Algo que se oye por radio en una zona. Si se escucha durante unas misiones, se sabe qué es.',
   Encargo: 'Cadena de misiones y decisiones con un desenlace que se queda.',
@@ -820,6 +826,22 @@ export function operationAim(kind: MissionKind, o: { item?: string; vip?: string
   }
 }
 
+/**
+ * A Nest turned up (playtest 20/10 #35): with no contact in its zone, what to
+ * do first. «Para quemarlo, antes hay que contactar por radio con la Red
+ * Callada: desde el Mapa, 50 §.» (`doom`: doomSubject; `cost`: contactCost).
+ */
+export function nestNotice(id: RegionId, contacted: boolean, doom: string, cost: number): string {
+  return contacted
+    ? `Los zombis se han juntado en un Nido. Hará avanzar ${doom} hasta que lo queméis.`
+    : `Los zombis se han juntado en un Nido. Para quemarlo, antes hay que contactar por radio con ${REGION_LORE[id].ally}: desde el Mapa, ${cost} §.`;
+}
+
+/** The «Sin contacto» tag on a Nest: «Contacta por radio con los del Hospital desde el Mapa (50 §) para poder asaltarlo.» */
+export function nestNoContactTip(id: RegionId, cost: number): string {
+  return `Contacta por radio con ${REGION_LORE[id].ally} desde el Mapa (${cost} §) para poder asaltarlo.`;
+}
+
 /** «Qué hace» for a contact: who answers, what they send and what it opens. */
 export function contactAim(id: RegionId, income: number): string {
   return `Hablar por radio con ${REGION_LORE[id].ally}: ${income} § en cada convoy mientras su zona no caiga, y se pueden asaltar sus Nidos.`;
@@ -1198,7 +1220,7 @@ export const PIECE_TEXT: Record<PieceId, PieceText> = {
     levels: ['Una camilla y un hornillo para hervir el agua.', 'Agua caliente en la sala de curas.', 'Un quirófano de verdad, con lámpara y generador propio.'],
   },
   workshop: { name: 'Taller', the: 'el Taller', a: 'un Taller', line: 'Accesorios y armas más baratos.', levels: ['Un banco de trabajo y las herramientas de Teo.', 'Un torno de verdad.', 'Teo deja de quejarse.'] },
-  garden: { name: 'Huerto', the: 'el Huerto', a: 'un Huerto', line: 'Da raciones en cada misión.', levels: ['Bancales bajo plástico y bidones para el agua de lluvia.', 'Un invernadero de verdad, con estufa.', 'Riego por goteo y semillas de La Vega.'] },
+  garden: { name: 'Huerto', the: 'el Huerto', a: 'un Huerto', line: 'Da 5 raciones por misión a nivel 1, 10 a nivel 2 y 15 a nivel 3.', levels: ['Bancales bajo plástico y bidones para el agua de lluvia.', 'Un invernadero de verdad, con estufa.', 'Riego por goteo y semillas de La Vega.'] },
   quarantine: {
     name: 'Cuarentena', the: 'la Cuarentena', a: 'una Cuarentena',
     line: `Sin ella, un mordido no sube ${BUS.to}.`,
@@ -1282,16 +1304,48 @@ export const BUILD_TEXT = {
   dismantleNo: 'Dejarlo',
 };
 
+/**
+ * The Bastion's eight levels by name, never by number (playtest 20/10 #13):
+ * the four buildings it grows through (base.ts BASTION_STAGES, Arte's), each
+ * raised once, and the raised one told apart by what it gains.
+ */
+export const BASTION_LEVELS = [
+  { name: 'Caravana', the: 'la caravana', a: 'una caravana' },
+  { name: 'Caravana con toldo', the: 'la caravana con toldo', a: 'una caravana con toldo' },
+  { name: 'Casa móvil', the: 'la casa móvil', a: 'una casa móvil' },
+  { name: 'Casa móvil con porche', the: 'la casa móvil con porche', a: 'una casa móvil con porche' },
+  { name: 'Albergue', the: 'el albergue', a: 'un albergue' },
+  { name: 'Albergue ampliado', the: 'el albergue ampliado', a: 'un albergue ampliado' },
+  { name: 'Casa', the: 'la casa', a: 'una casa' },
+  { name: 'Casa fortificada', the: 'la casa fortificada', a: 'una casa fortificada' },
+] as const;
+
+function bastionLevelOf(level: number) {
+  return BASTION_LEVELS[Math.max(1, Math.min(BASTION_LEVELS.length, level)) - 1]!;
+}
+
+/** «Casa móvil»: the Bastion's level as it is shown. */
+export function bastionLevelName(level: number): string {
+  return bastionLevelOf(level).name;
+}
+
+/** With its article, for a sentence: «la casa móvil», «una casa móvil». */
+export function bastionLevelThe(level: number): string {
+  return bastionLevelOf(level).the;
+}
+export function bastionLevelA(level: number): string {
+  return bastionLevelOf(level).a;
+}
+
 /** The Bastion's level, bought now (playtest 18/10 #40: suministros and missions done, no experience). */
 export const LEVEL_TEXT = {
-  button: 'Subir de nivel',
   about: 'Cada nivel del Bastión abre piezas nuevas para construir y el siguiente capítulo de la historia.',
   top: 'El Bastión ya está en su nivel más alto.',
 };
 
-/** The button's line: «Subir el Bastión al nivel 3: 160 §.» (what blocks it is levelUpBlocker's, in campaign.ts). */
+/** The button's line: «Subir a la casa móvil: 160 §.» (what blocks it is levelUpBlocker's, in campaign.ts). */
 export function levelUpLine(level: number, cost: number): string {
-  return `Subir el Bastión al nivel ${level}: ${cost} §.`;
+  return `Subir a ${bastionLevelThe(level)}: ${cost} §.`;
 }
 
 /** The mark at the top, where «DÍA n» was (§11.6): «7 SALIDAS», «1 SALIDA», «AÚN SIN SALIR». */
@@ -1305,9 +1359,9 @@ export function timeHelp(level: number): string {
   return `El tiempo pasa con cada misión: mientras la escuadra está fuera, en el Bastión se curan las heridas, se come y ${doomSubject(level)} avanza. Construir, comprar o reclutar no gasta tiempo.`;
 }
 
-/** What locks a piece, or an upgrade: «Hace falta el nivel 2 del Bastión.»; the palette's tag is «Nivel 2». */
+/** What locks a piece, an upgrade or a craft, by the Bastion's level: «Se desbloquea con la casa móvil.»; the palette's tag is its name (bastionLevelName). */
 export function needsLevelLine(level: number): string {
-  return `Hace falta el nivel ${level} del Bastión.`;
+  return `Se desbloquea con ${bastionLevelThe(level)}.`;
 }
 
 /** The bottom line with a piece in hand: «Empalizada: clic para poner, R para girar, Esc para soltar.» */
@@ -1387,7 +1441,7 @@ export function buildShortLine(supplies: number, parts = 0): string {
  * dailyRations × DAYS_PER_MISSION).
  */
 export function rationsHelp(perMission: number): string {
-  return `Cada día se gasta una ración por cada cuatro soldados, y una misión son cinco días: ahora, ${perMission} raciones por misión. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad. Se consiguen en las misiones, en el Huerto y de los enclaves.`;
+  return `Cada día se gasta una ración por cada cuatro soldados, y una misión son cinco días: ahora, ${perMission} raciones por misión. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad. Se consiguen en las misiones, en los Huertos y de los enclaves.`;
 }
 
 /** The agenda's line when there is food for less than two missions (`missions`: how many it lasts, 0 or 1). */
@@ -1493,7 +1547,7 @@ export const LIVING_TIP = 'Los muertos van a por cualquier vivo, también a por 
 export const BASE_SIEGE_TEXT = {
   here: 'Ya están aquí.',
   /** A siege by night (one in three from the second): the squad starts in sight, so the dark only hides the dead from it. */
-  night: 'Asedio de noche: tus soldados solo ven de cerca, salvo junto a un foco. Los zombis ven como de día.',
+  night: `Asedio de noche: a oscuras, tus soldados ven ${NIGHT_SIGHT} casillas en vez de ${DAY_SIGHT}; un foco alumbra ${NIGHT.floodlight} casillas a su alrededor. Los zombis ven como de día.`,
   defenders: 'Defienden los sanos. Los heridos y los mordidos se quedan dentro.',
   fallen: 'El Bastión ha caído',
   fallenLine: 'Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la caravana y lo puesto, y vuelven a empezar en otro claro.',
@@ -1606,13 +1660,13 @@ export const NAMED_SEX: Record<string, 'f' | 'm'> = {
 
 // ----------------------------------------------------------------- premise
 
-/** The card before the first mission: who the players are and why they fight. One paragraph per line. */
+/** The card before the first mission: who the players are and why they fight. One paragraph per line; the key words in **bold** (playtest 20/10 #15, UI renders it). */
 export const PREMISE = {
   title: 'El claro',
   lines: [
-    'La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
-    'Atalaya, la vieja estación militar, cayó en otoño. Los que salimos con vida hemos parado en un claro del pinar, sobre Brena, con una caravana y lo puesto. Necesitamos comida, medicinas y suministros si queremos llegar todos vivos al final de la temporada.',
-    'Toca volver a sacar La Lata, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.',
+    'La infestación parece haber **aflojado este invierno**. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de **volver a intentarlo**.',
+    'Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en **un claro del pinar**, sobre Brena, con una caravana y lo puesto. Necesitamos **comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.',
+    'Toca volver a sacar **La Lata**, ese trasto forrado con chapas que nos sacó de Atalaya, y **salir a buscar** lo que nos hace falta.',
   ],
 };
 
@@ -1729,26 +1783,23 @@ export function floodedZoneNote(level: number): string {
 // ------------------------------------------------------------------- night
 
 /** Night missions (docs/ALTURA-Y-NOCHE.md): the tag, the briefing's last line and the debrief's. */
+/** Night missions (docs/ALTURA-Y-NOCHE.md): the tag, the briefing's last line, the debrief's, and the rules with their figures (playtest 20/10 #33). */
 export const NIGHT_TEXT = {
   label: 'De noche',
-  briefing: 'De noche: tus soldados solo ven de cerca, salvo bajo una farola o un foco. Hay más zombis, y el botín vale la mitad más.',
+  briefing: `De noche: a oscuras, tus soldados ven ${NIGHT_SIGHT} casillas en vez de ${DAY_SIGHT}. Hay más zombis, y el botín vale la mitad más.`,
   report: 'Misión de noche: el botín y la recompensa valen la mitad más.',
-  /**
-   * How the light works (los.ts sightTo, detectionTo), a line each, for the
-   * help and the first night: the living see less in the dark; the dead see
-   * as ever, but notice the hidden squad from closer unless it stands in light.
-   */
+  /** The help and the first night's card, a line each. */
   rules: [
-    'De noche, tus soldados solo ven de cerca.',
-    'Bajo una farola o un foco se ve como de día.',
-    'Hasta que te descubren, los enemigos solo te notan de cerca si estás a oscuras. Después, los zombis ven como de día.',
-    'Las farolas y los focos no se apagan.',
+    `De noche, tus soldados ven ${NIGHT_SIGHT} casillas a oscuras, en vez de ${DAY_SIGHT}.`,
+    `Una farola alumbra ${NIGHT.streetLight} casillas a su alrededor, y un foco, ${NIGHT.floodlight}. Lo que está iluminado se ve desde ${DAY_SIGHT} casillas, como de día.`,
+    `Hasta que te descubren, los enemigos notan a un soldado a oscuras a la mitad de distancia: un zombi, a ${ZOMBIE_NOTICE_DARK} casillas en vez de ${ZOMBIE_NOTICE}.`,
+    'Cuando ya te han descubierto, los zombis ven de noche igual que de día.',
   ],
 };
 
-/** A lit tile under the cursor, at night: «A la luz: quien esté aquí, vivo o muerto, se ve desde tan lejos como de día. Se apaga en 2 turnos.» (`turns`: Light.turns; none for a street lamp). */
+/** A lit tile under the cursor, at night: «Iluminado: aquí se ve desde 18 casillas, como de día.» (`turns`: a light that goes out; none for lamps and floodlights). */
 export function litNote(turns?: number): string {
-  const lit = 'Iluminado: quien esté aquí se ve desde lejos, como de día.';
+  const lit = `Iluminado: aquí se ve desde ${DAY_SIGHT} casillas, como de día.`;
   return turns ? `${lit} Se apaga en ${turns} ${turns === 1 ? 'turno' : 'turnos'}.` : lit;
 }
 
@@ -2074,7 +2125,7 @@ export const STORY: StoryChapter[] = [
     region: 'na',
     difficulty: 4,
     reward: { credits: 100 },
-    prize: 'cómo parar la Marea (con el nivel 8, la misión final)',
+    prize: 'cómo parar la Marea (la misión final, con el Bastión en su último nivel)',
     briefing:
       'Celia Marsh, la Voz de la Congregación, emite cada noche desde una vieja emisora de los Llanos. Es la única que sabe cómo parar la Marea. Asaltad la emisora, llegad hasta ella y sacadla con vida.',
     signature: '— N. A.',

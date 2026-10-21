@@ -659,6 +659,14 @@ export class Overlays {
   }
 
   /**
+   * The shot over the attacker's shoulder (#11): the noise rings, drawn over everything flat on the ground, would
+   * cross it as a line at eye level; out of it while it lasts.
+   */
+  setCloseShot(on: boolean): void {
+    this.noises.visible = !on;
+  }
+
+  /**
    * How far a noise was heard (docs/FASE2.md): a ring spreading to its radius
    * from where it was made, over a faint disc; a loud one sends a second ring
    * after the first and lasts longer. Nothing moves the camera.

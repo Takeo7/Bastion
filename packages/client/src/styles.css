@@ -320,6 +320,7 @@ button:disabled {
 .hud .squad,
 .hud .shot-panel,
 .hud .unit-panel,
+.hud .goal-dock,
 .hud .log.open {
   pointer-events: auto;
 }
@@ -1124,6 +1125,12 @@ em.whose {
   opacity: 0.45;
 }
 
+/* What to do first, in its name's place (Ana, 20/10 #24: «Recarga primero»): read without the card. */
+.ability.noted:disabled > .label {
+  opacity: 1;
+  color: var(--stamp);
+}
+
 .ability .ico {
   width: 21px;
   height: 21px;
@@ -1798,6 +1805,8 @@ em.whose {
   box-sizing: border-box;
   padding: 7px 10px 8px;
   transition: opacity 0.3s ease;
+  /* A click opens the arrival card again (Ana, 20/10 #32). */
+  cursor: var(--cursor-hot);
 }
 
 .goal-dock.waiting {
@@ -2482,6 +2491,12 @@ dl.controls dd {
   justify-items: center;
   gap: 1px;
   transform: translateY(-4px);
+  transition: opacity 0.25s ease;
+}
+
+/* In the shot over the attacker's shoulder (#11): no flags over the units, only the shot and what it does. */
+.labels-layer.close-shot .uflag {
+  opacity: 0;
 }
 
 .uflag-name {

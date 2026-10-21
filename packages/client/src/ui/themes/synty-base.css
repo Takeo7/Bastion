@@ -472,16 +472,6 @@
   color: var(--t-primary-ink);
 }
 
-/* Urgent things are amber; red stays for danger. */
-:root[data-ui='mixta'] .strat-now.urgent {
-  background: var(--t-urgent);
-  color: var(--t-urgent-ink);
-}
-
-:root[data-ui='mixta'] .strat-now.urgent:hover:not(:disabled) {
-  background: var(--t-urgent-hover);
-}
-
 :root[data-ui='mixta'] :is(.x-chip, .menu-address) {
   background: var(--t-accent-soft);
   border-color: var(--t-line);
@@ -557,7 +547,7 @@
 
 /* ===================================================== remaining paper bits */
 
-:root[data-ui='mixta'] :is(.strat-now, .x-recruit button, .pass-command):hover:not(:disabled) {
+:root[data-ui='mixta'] :is(.x-recruit button, .pass-command):hover:not(:disabled) {
   background: var(--t-panel-hover);
 }
 

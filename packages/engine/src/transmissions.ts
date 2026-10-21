@@ -9,7 +9,7 @@
  */
 import { DOOM_MAX, nextSteps, treatCost, type CampaignState } from './campaign';
 import { FOUND_WEAPONS } from './content';
-import { doomStatus, STORY } from './lore';
+import { bastionLevelA, doomStatus, STORY } from './lore';
 import { bastionLevel } from './progression';
 import type { Slot } from './types';
 
@@ -398,6 +398,12 @@ export function sceneLines(scene: Scene, c: CampaignState): SceneLine[] {
 // ---------------------------------------------------------------- recap
 
 /** Played to whoever opens a campaign already under way (a partner arriving late, another browser). */
+/** How far the campaign has gone, in missions (never days): «llevamos 7 salidas», «aún no hemos salido». */
+function outings(n: number): string {
+  if (n <= 0) return 'aún no hemos salido';
+  return n === 1 ? 'llevamos una salida' : `llevamos ${n} salidas`;
+}
+
 export const RECAP: Scene = { id: 'recap', title: 'Relevo', channel: 'Línea interna · El Bastión', when: () => false, lines: [] };
 
 /** Where the campaign stands, for `slot`: the day, the Bastion, the Marea, their soldiers and the first thing to do. */
@@ -408,7 +414,7 @@ export function recapLines(c: CampaignState, slot: Slot): SceneLine[] {
   const names = mine.length > 1 ? `${mine.slice(0, -1).join(', ')} y ${mine[mine.length - 1]}` : (mine[0] ?? 'nadie todavía');
   const first = nextSteps(c, slot)[0];
   const lines: SceneLine[] = [
-    { who: 'morse', text: `{yo}: día ${c.day}. El Bastión está en el nivel ${level}.` },
+    { who: 'morse', text: `{yo}: ${outings(c.missionsFlown ?? 0)}. El Bastión es ${bastionLevelA(level)}.` },
     { who: 'morse', text: `${doomStatus(level, c.doom)}. ${story}` },
     { who: 'teo', text: `A su mando: ${names}.` },
   ];

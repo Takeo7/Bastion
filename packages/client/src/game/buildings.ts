@@ -55,7 +55,7 @@ export type BuildingKind = 'house' | 'shop' | 'office' | 'hall' | 'barn' | 'ruin
  * its warehouses (warehouses, hangars), the quarantine wall (a facility's
  * perimeter); sheet metal in three colours (sheds: #25).
  */
-export type KitId = 'house' | 'bunker' | 'brick' | 'fence' | 'shedGrey' | 'shedRed' | 'shedBlue' | 'medical';
+export type KitId = 'house' | 'bunker' | 'brick' | 'fence' | 'shedGrey' | 'shedRed' | 'shedBlue' | 'medical' | 'shopFront';
 
 /** The sheds' kits, picked per building (twice as often grey). */
 const SHEDS: KitId[] = ['shedGrey', 'shedGrey', 'shedRed', 'shedBlue'];
@@ -105,6 +105,8 @@ export interface Building {
   radio?: boolean;
   /** A block of the outline (docs/MAPAS.md §5.10, GameState.frame): shut, nobody goes in; its inside is plan.shut. */
   frame?: boolean;
+  /** A supermarket (GameState.markets, playtest 20/10 #18): the side (DIRS4) its glass front and sign look onto. */
+  market?: number;
 }
 
 /** Wall pieces stand on tile middles, half a tile each way: these are the tiles a building of bounds b spans. */
@@ -295,7 +297,10 @@ export class BuildingPlan {
         const medicalWear = medical?.wear ?? (n('hospitalBed') || n('medicalShelf') ? (s.campaignMission?.story === 1 ? 0.08 : 0.65) : undefined);
         // A house says it is one (GameState.homes, playtest 18/10 #15): its kitchen's counters don't make it a shop.
         const home = s.homes?.some((b) => r.x0 >= b.x && r.y0 >= b.y && r.x1 < b.x + b.w && r.y1 < b.y + b.h);
+        // And a supermarket (GameState.markets, playtest 20/10 #18): a shop of brick, its front all glass.
+        const market = s.markets?.find((b) => r.x0 >= b.x && r.y0 >= b.y && r.x1 < b.x + b.w && r.y1 < b.y + b.h);
         if (medicalWear !== undefined) kind = 'medical';
+        else if (market) kind = 'shop';
         else if (n('bed') && doorsBySide[most]! >= 3) kind = 'motel';
         else if (home) kind = 'house';
         // Hay says barn, however small (playtest 18/10, #53: one came out an office block of tiles).
@@ -312,7 +317,7 @@ export class BuildingPlan {
         const look = hash(r.x0, r.y0, 5);
         // Sheet metal (#25): the sawmill by the forest road, three warehouses in four on an industrial estate.
         const shed = (kind === 'barn' && s.site === 'roadside') || (kind === 'hall' && s.site === 'industrial' && look < 0.75);
-        let kit: KitId = kind === 'medical' ? 'house' : shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
+        let kit: KitId = kind === 'medical' ? 'house' : shed ? SHEDS[Math.floor(hash(r.x0, r.y0, 21) * SHEDS.length)]! : kind === 'hall' || market ? 'brick' : s.biome === 'facility' ? 'bunker' : 'house';
         // A siege's base (docs/FASE12.md §10): the old military station's own, a storey high and flat-roofed: the
         // Sala de radio (the one in the middle of the map) of concrete under its mast, the barracks of block, the
         // infirmary of concrete, the workshop and the store of sheet metal.
@@ -335,7 +340,7 @@ export class BuildingPlan {
         const storeys = told && told > 0 ? told : 1 + tall;
         const leveled = this.slabsOver(r) > 0;
         const walkableRoof = leveled && this.walkableAt(r, storeys);
-        this.buildings.push({ index: own, ...r, kind, kit, medicalWear, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1, leveled, walkableRoof, ...(radio ? { radio } : {}) });
+        this.buildings.push({ index: own, ...r, kind, kit, medicalWear, look, base, top: base + STOREY * storeys, storeys, front: kind === 'motel' ? most : -1, leveled, walkableRoof, ...(radio ? { radio } : {}), ...(market ? { market: market.front } : {}) });
       });
       for (const i of tiles) if (this.inside[i]) this.floor[i] = 1;
     }
@@ -875,6 +880,13 @@ export interface Focus {
    * in sight inside, or standing between the camera and them, still does, so nobody is hidden.
    */
   roofs?: boolean;
+  /**
+   * The camera in the shot over a shoulder (playtest 20/10 #11), and who is in it: nothing opens for who stands in a
+   * building, for the cursor, for an inside seen or for a soldier by a wall, so the room round the attacker stays as
+   * built; only what stands between the camera and the two of them, while the camera comes down, and not the
+   * building it is in.
+   */
+  close?: { attacker: string | null; target: string | null } | null;
 }
 
 /** The cut map's alpha holds the storey in view, this much a storey. */
@@ -981,7 +993,8 @@ export class Cutaway {
       seen.delete(-1);
       this.seenInside = [...seen];
     }
-    const roofs = !!focus?.roofs;
+    const close = focus?.close ?? null;
+    const roofs = !!focus?.roofs || !!close;
     if (inside && !roofs) for (const b of this.seenInside) mark(b, 0);
     /** Opens building b for something inside it on storey `level`: what stands above off, the walls facing the camera down. */
     const within = (p: Vec2, level: number, keen = false) => {
@@ -1008,7 +1021,7 @@ export class Cutaway {
       const far = this.ray.direction.length();
       this.ray.direction.divideScalar(far);
       for (let b = 0; b < this.n; b++) {
-        if (b === own) continue;
+        if (b === own || (close && this.boxes[b]!.containsPoint(camera.position))) continue;
         const hit = this.ray.intersectBox(this.boxes[b]!, this.hit);
         if (hit && hit.distanceTo(camera.position) < far - 0.3) {
           mark(b, 0);
@@ -1039,11 +1052,12 @@ export class Cutaway {
       if (!u.alive) continue;
       const ours = u.team === 'xcom';
       if (!ours && !(visible?.[((u.pos.z ?? 0) * s.height + u.pos.y) * s.width + u.pos.x] ?? false)) continue;
+      const keen = close ? u.id === close.attacker || u.id === close.target : u.id === focus?.selected || u.id === focus?.target;
+      if (close && !keen) continue;
       locate(u);
-      within(this.tile, u.pos.z ?? 0, u.id === focus?.selected && !chosen);
-      const keen = u.id === focus?.selected || u.id === focus?.target;
+      if (!close) within(this.tile, u.pos.z ?? 0, u.id === focus?.selected && !chosen);
       behind(this.point, plan.at(this.tile), keen);
-      if (u.id !== focus?.selected) continue;
+      if (u.id !== focus?.selected || close) continue;
       // The selected soldier by a building's wall (about to go in, or in cover against it).
       for (const b of plan.buildings) {
         if (b.frame) continue;
@@ -1752,6 +1766,13 @@ KITS.shedGrey = shedKit('sheetGrey', 'sheetGreyLintel', 'sheetGreySill');
 KITS.shedRed = shedKit('sheetRed', 'sheetRedLintel', 'sheetRedSill');
 KITS.shedBlue = shedKit('sheetBlue', 'sheetBlueLintel', 'sheetBlueSill');
 KITS.medical = { ...KITS.bunker };
+/**
+ * A shop's front at street level (playtest 20/10 #18): its windows and doors on the side of its door, whatever its
+ * building's kit (its walls and storeys stay that kit's): a shop window and a glass door, as tall as a house's door
+ * (m), the band over them the building's lintel, its sign on it (SIGN_UP).
+ */
+const SHOP_FRONT_TALL = 1.86;
+KITS.shopFront = { ...KITS.brick, window: ['shopWindow'], door: ['shopDoor'], leaf: undefined, storey: 3 * STOREY / SHOP_FRONT_TALL, glass: [2.22, 2.71, 1.495, 0] };
 
 /** Walls between rooms: Town's interior walls, whatever the building. */
 const BETWEEN: Kit = { ...KITS.house, wall: ['roomWall'], door: ['roomDoorWall'], lintel: ['roomLintel'] };
@@ -1764,6 +1785,21 @@ const SIGNS: [PropId, number][] = [
   ['signDiner', 1.97],
   ['signPets', 3.41],
 ];
+/**
+ * MARKET only over a supermarket's door (playtest 20/10 #18: not on a block of flats): a shop of one storey this
+ * wide at least; the others' signs are the rest. On the band between the door's top and the storey's (it sat on
+ * the door), its middle this high and no taller than SIGN_TALL (m; the models are 0.63).
+ */
+const MARKET_SPAN = 7;
+const SIGN_UP = STOREY - 0.22;
+const SIGN_TALL = 0.42;
+/** A supermarket's MARKET, over its double door on its brick front's deeper band: this big (2.5 m long). */
+const MARKET_SIGN = 0.95;
+
+/** Whether tile (x, y) of building `bd`'s outline is on its side `side` (DIRS4). */
+function onSide(bd: Building, x: number, y: number, side: number): boolean {
+  return side === 0 ? y === bd.y0 : side === 1 ? x === bd.x1 : side === 2 ? y === bd.y1 : x === bd.x0;
+}
 
 /** The barbed wire's length in tiles (one piece is stretched to a tile). */
 const WIRE_LENGTH = 3.94 * KIT;
@@ -2413,7 +2449,7 @@ export class BuildingsView {
       const look = (x: number, y: number) => {
         const i = y * w + x;
         const t = s.tiles[i];
-        if ((t === 'door' || t === 'doorOpen') && plan.owner[i] === bd.index && (first < 0 || i < first)) first = i;
+        if ((t === 'door' || t === 'doorOpen') && plan.owner[i] === bd.index && (first < 0 || i < first) && (bd.market === undefined || onSide(bd, x, y, bd.market))) first = i;
       };
       for (let x = bd.x0; x <= bd.x1; x++) {
         look(x, bd.y0);
@@ -2425,6 +2461,14 @@ export class BuildingsView {
       }
       if (first >= 0) signDoor.set(bd.index, first);
     }
+    /** A shop's front, at street level: whether tile (x, y) of building b is on the side of its sign's door (KITS.shopFront). */
+    const shopFront = (bd: Building | undefined, x: number, y: number): boolean => {
+      const door = bd?.kind === 'shop' && !plan.siege ? signDoor.get(bd.index) : undefined;
+      if (door === undefined || !bd) return false;
+      if (bd.market !== undefined) return onSide(bd, x, y, bd.market);
+      const [dx, dy] = [door % w, Math.floor(door / w)];
+      return dy === bd.y0 ? y === bd.y0 : dy === bd.y1 ? y === bd.y1 : dx === bd.x0 ? x === bd.x0 : x === bd.x1;
+    };
     /**
      * Where a shed's roller shutters go (#25): the middle of the longest
      * stretch of plain wall, four tiles or more, on each of two of its sides;
@@ -2495,15 +2539,25 @@ export class BuildingsView {
     };
     /** A sign over a door, on the wall's outer face, its face out; it drops with the wall in the cutaway. */
     const sign = (bd: Building, x: number, z: number, base: number, out: Vec2) => {
-      const [id, length] = SIGNS[Math.floor(hash(bd.x0, bd.y0, 70) * SIGNS.length)]!;
+      const market = bd.kind === 'shop' && bd.storeys === 1 && Math.min(bd.x1 - bd.x0, bd.y1 - bd.y0) + 1 >= MARKET_SPAN;
+      const signs = bd.market !== undefined ? SIGNS.filter(([id]) => id === 'signMarket') : SIGNS.filter(([id]) => (id === 'signMarket') === market || (market && id === 'signFood'));
+      const [id, length] = signs[Math.floor(hash(bd.x0, bd.y0, 70) * signs.length)]!;
+      // A supermarket's double door: the sign over the middle of the two.
+      if (bd.market !== undefined) {
+        const along = out.x === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
+        const next = s.tiles[(Math.floor(z) + along.y) * w + Math.floor(x) + along.x];
+        const shift = next === 'door' || next === 'doorOpen' ? 0.5 : -0.5;
+        x += along.x * shift;
+        z += along.y * shift;
+      }
       const parts = syntyProp(id);
       if (!parts) {
         ready = false;
         return;
       }
-      const size = Math.min(1, 2.2 / length);
+      const size = bd.market !== undefined ? MARKET_SIGN : Math.min(1, 2.2 / length, SIGN_TALL / 0.63);
       const off = WALL_HALF + 0.05;
-      m.compose(pos.set(x + out.x * off, base + 1.5, z + out.y * off), q.setFromAxisAngle(up, Math.atan2(-out.y, out.x)), scale.set(size, size, size));
+      m.compose(pos.set(x + out.x * off, base + SIGN_UP, z + out.y * off), q.setFromAxisAngle(up, Math.atan2(-out.y, out.x)), scale.set(size, size, size));
       parts.forEach((part, k) => {
         const key = `sign:${id}:${k}`;
         let batch = batches.get(key);
@@ -2591,7 +2645,8 @@ export class BuildingsView {
           // Along x unless the wall runs north–south (a lone tile follows the floor beside it).
           const run: 0 | 1 = nsConn || (!ewConn && plan.interior(b, x - 1, y) && plan.interior(b, x + 1, y)) ? 1 : 0;
           const { out, between, other } = facing(run, 0, 0);
-          const kit = between && building?.kind !== 'medical' ? BETWEEN : outerKit;
+          const front = !level && !between && kind !== 'wall' && kind !== 'low' && shopFront(building, x, y);
+          const kit = between && building?.kind !== 'medical' ? BETWEEN : front ? KITS.shopFront : outerKit;
           const along = run === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
           if (!loose) storeys(broken ? 'wall' : kind, cx, cz, run === 0 ? x : y, out, between, b, other);
           if ((kind === 'door' || kind === 'doorOpen') && loose && plan.siege) {
@@ -2626,7 +2681,11 @@ export class BuildingsView {
               return !isWalkable(t ?? null) || t === 'window' || t === 'windowBroken';
             };
             const otherHinge = hingeSide !== 0 && !shuts(hingeSide) && shuts(-hingeSide);
-            putAll(kit.door, cx, cz, base, out, between, b, kit, kind === 'doorOpen', false, otherHinge);
+            // A shop front's glass takes none of the building's paint (its lintel does).
+            if (front) {
+              for (const id of kit.door) put(id, cx, cz, base, out, between, b, { thick: kit.thick, tint: false, open: kind === 'doorOpen', otherHinge });
+              putAll(outerKit.lintel, cx, cz, base, out, between, b, outerKit);
+            } else putAll(kit.door, cx, cz, base, out, between, b, kit, kind === 'doorOpen', false, otherHinge);
             // A shop's name over its front door: the first door of its outline (whatever part of the map is being redone).
             if (!level && !between && !plan.siege && building && signDoor.get(b) === i && (building.kind === 'shop' || (building.kind === 'office' && building.look < 0.35))) sign(building, cx, cz, base, out);
             if (kit.leaf) {
@@ -2635,9 +2694,12 @@ export class BuildingsView {
               for (const side of [-1, 1]) put(kit.post, cx + along.x * side * 0.46, cz + along.y * side * 0.46, base, out, between, b, { along: 0.08, thick: kit.thick });
             }
           } else if (kind === 'window' || kind === 'windowBroken') {
-            putAll(kit.window, cx, cz, base, out, between, b, kit);
+            if (front) {
+              for (const id of kit.window) put(id, cx, cz, base, out, between, b, { thick: kit.thick, tint: false });
+              putAll(outerKit.lintel, cx, cz, base, out, between, b, outerKit);
+            } else putAll(kit.window, cx, cz, base, out, between, b, kit);
             if (kind === 'window') {
-              const kitId = between ? 'house' : building ? building.kit : plan.looseKit;
+              const kitId = between ? 'house' : front ? 'shopFront' : building ? building.kit : plan.looseKit;
               let pane = glass.get(kitId);
               if (!pane) glass.set(kitId, (pane = { matrices: [], cut: [], level: [] }));
               pane.level.push(level);

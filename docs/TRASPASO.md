@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 20/10 con la 0.8.3, la del mando nuevo del tiempo real. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 21/10 con la 0.8.4, la de las notas de Arturo y Ana del 20/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 535 tests.
+   Deben pasar 537 tests.
 5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.8.3)
+## 3. Estado (versión 0.8.4)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,15 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2 y v0.8.3 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3 y v0.8.4 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.8.4** (2026-10-21), las notas de Arturo y Ana del 20/10, jugadas con la 0.8.3 ([PRUEBA-2026-10-20.md](PRUEBA-2026-10-20.md)):
+  - la base sin la vista de Campaña: se abre en Soldados (también tras el informe); abajo, Mapa · Armería · Soldados · Asentamiento (antes Construir); el Bastión se mejora al pulsar la caravana en Asentamiento; los avisos que llegan juntos salen como ventanas, de uno en uno, el más importante primero;
+  - los niveles del Bastión con nombre (Caravana, Caravana con toldo, Casa móvil, Casa móvil con porche, Albergue, Albergue ampliado, Casa y Casa fortificada), sin «nivel N»; lo que aún no se tiene no aparece y lo nuevo sale con «Nuevo»; cada mejora se ve en el claro;
+  - varios Huertos, cada uno con lo suyo (5, 10 o 15 raciones por misión), dicho antes de ponerlo;
+  - en combate: la cámara por encima del hombro en el disparo o el golpe que mata; «FALLO» en lugar de la tirada, y en el registro la probabilidad que había; los zombis que salen de la niebla entran andando y fundiéndose; el primer disparo ya no se queda pillado; la rueda solo acerca y aleja (las plantas, con Mayús); fuera la barra «HORDA»; la vigilancia sin balas dice «Sin balas: recarga»; la ayuda de la noche, con las cifras;
+  - los mapas: un 25 % más de muertos en los grandes; lo de fuera de la zona jugable, oscuro; supermercados de verdad en 6 de cada 10 pueblos; las tiendas con escaparate y el cartel sobre la puerta; coches de colores y menos montones de basura;
+  - los brazos ya no se meten en el cuerpo ni dan saltos; se sube a La Lata por sus puertas; la Armería es un rincón con banco, armero y caja; la Escuadra y el informe, centrados como en el dibujo de Ana;
+  - 120 fps en Ajustes y el contador de fps sin contar doble; la música en «No» calla del todo; las opciones de «Refugiados» con sentido.
 - **Lo nuevo de la 0.8.3** (2026-10-20), el tiempo real tras la primera prueba de Arturo ([TIEMPO-REAL.md](TIEMPO-REAL.md)):
   - Tab (o clic en la tarjeta) para cambiar de soldado; 1, 2, 3… las habilidades, como por turnos, y al armar una que pide blanco el juego va a cámara muy lenta, con el blanco ya elegido como por turnos (Tab, el siguiente; la misma tecla, Intro o Espacio, usarla);
   - todas las habilidades de la barra en tiempo real, cada una con su tiempo, yendo antes adonde se puede usar; la vigilancia como postura; lo que dura un turno dura una ronda de 6 s de cada uno;

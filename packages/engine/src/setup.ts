@@ -292,9 +292,13 @@ export function sideOf(map: MapSource): number {
   return Math.max(width, height);
 }
 
-/** As many groups as the map's side is longer than 48 (docs/MAPAS.md §6: about 11 at 64 and 12 at 72 at difficulty 2), the first ones again. */
+/** How many more of the dead a map bigger than GEN_SIZE has, besides those its size brings (scalePods). */
+export const BIG_MAP_DEAD = 1.25;
+
+/** As many groups as the map's side is longer than 48 (docs/MAPAS.md §6), and a quarter more on a big one: 13 at 64 and 15 at 72 at difficulty 2, the first ones again. */
 export function scalePods(plan: TemplateId[][], side: number): TemplateId[][] {
-  const n = Math.round((plan.length * side) / GEN_SIZE);
+  // On the big maps a quarter more besides (Ana and Arturo, 20/10: since the maps grew it had got easier).
+  const n = Math.round(((plan.length * side) / GEN_SIZE) * (side > GEN_SIZE ? BIG_MAP_DEAD : 1));
   return Array.from({ length: Math.max(plan.length, n) }, (_, i) => [...plan[i % plan.length]!]);
 }
 
@@ -706,6 +710,7 @@ export function createMission(opts: MissionOptions): GameState {
     ...(layout.ground ? { ground: [...layout.ground] } : {}),
     ...(layout.medical ? { medical: layout.medical.map((b) => ({ ...b, ...(b.rooms ? { rooms: b.rooms.map((r) => ({ ...r })) } : {}), ...(b.dressing ? { dressing: b.dressing.map((d) => ({ ...d })) } : {}) })) } : {}),
     ...(layout.homes ? { homes: layout.homes.map((h) => ({ ...h, rooms: h.rooms.map((r) => ({ ...r })), ...(h.dressing ? { dressing: h.dressing.map((d) => ({ ...d })) } : {}) })) } : {}),
+    ...(layout.markets ? { markets: layout.markets.map((m) => ({ ...m })) } : {}),
     ...(layout.decor ? { decor: [...layout.decor] } : {}),
     ...(layout.storeys ? { storeys: [...layout.storeys] } : {}),
     ...(layout.frame ? { frame: layout.frame.map((f) => ({ ...f })) } : {}),

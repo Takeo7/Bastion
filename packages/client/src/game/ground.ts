@@ -578,14 +578,32 @@ const SYNTY_GROUND_FRAGMENT = /* glsl */ `
     diffuseColor.rgb = c;
   }`;
 
+/** What a town leaves lying about, per tile: on open paving (a square, a car park), in the road, in a yard. */
+const STREET_JUNK: Record<'open' | 'street' | 'yard', [PropId, number][]> = {
+  open: [['trash', 0.006], ['trashBag', 0.004], ['cardboard', 0.003], ['cardboard2', 0.002], ['cardboard4', 0.002], ['tire', 0.002], ['bike', 0.0015], ['luggage', 0.001], ['luggageRetro', 0.001], ['luggageOpen', 0.0015], ['holdall', 0.0015], ['trolley', 0.001], ['trolleyBroken', 0.001]],
+  street: [['trash', 0.005], ['trashBag', 0.004], ['cardboard', 0.002], ['cardboard4', 0.002], ['tire', 0.003], ['bike', 0.0015], ['luggageOpen', 0.001], ['holdall', 0.001], ['trolleyBroken', 0.0005]],
+  yard: [['trash', 0.005], ['trashBag', 0.004], ['cardboard', 0.003], ['cardboard2', 0.002], ['tire', 0.002], ['bike', 0.002], ['luggage', 0.001], ['luggageRetro', 0.001]],
+};
+/**
+ * The ones that stand up made to lie (they are walked through, as all of the cover: upright they would read as
+ * something in the way): the trolleys on a side, the suitcase on its back; each its own model's turn and lift.
+ */
+const LYING: Partial<Record<PropId, THREE.Matrix4>> = {
+  trolley: new THREE.Matrix4().makeTranslation(0, 0.29, -0.39).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)),
+  trolleyBroken: new THREE.Matrix4().makeTranslation(0, 0.34, -0.38).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)),
+  luggage: new THREE.Matrix4().makeTranslation(0.325, 0.09, 0).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2)),
+};
+
 /** Ground cover per tile, by what the floor is (before the clumping): Synty props, cosmetic. */
 const COVER: Record<Biome, Partial<Record<number, [PropId, number][]>>> = {
-  // Town (second look against the capture: «muy vestidas»): litter, rubble and trash spread over paving and road.
+  // Town (second look against the capture: «muy vestidas»): litter, rubble and trash spread over paving and road; and
+  // not only rubbish (playtest 20/10 #20, Ana: «sale demasiado el montón de basura»): boxes, a tyre, a bike, luggage,
+  // a holdall, a trolley, about as many in all as the heaps were.
   city: {
-    [OPEN]: [['papers', 0.06], ['pebbles', 0.09], ['trash', 0.025]],
+    [OPEN]: [['papers', 0.06], ['pebbles', 0.09], ...STREET_JUNK.open],
     [LAWN + 10]: [['tuftLow', 0.6], ['tuft', 0.25], ['flowers', 0.06]],
-    [STREET]: [['papers', 0.045], ['pebbles', 0.07], ['trash', 0.02]],
-    [YARD]: [['papers', 0.04], ['pebbles', 0.08], ['trash', 0.02]],
+    [STREET]: [['papers', 0.045], ['pebbles', 0.07], ...STREET_JUNK.street],
+    [YARD]: [['papers', 0.04], ['pebbles', 0.08], ...STREET_JUNK.yard],
     [ROOF]: [['pebbles', 0.08], ['papers', 0.02]],
   },
   wilds: {
@@ -631,7 +649,9 @@ export function scatterCover(s: GameState, ground: GroundMap, density = 1, area:
   const up = new THREE.Vector3(0, 1, 0);
   const put = (id: PropId, x: number, y: number, z: number, turn: number, size: number) => {
     quaternion.setFromAxisAngle(up, turn);
-    out.push({ id, matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), quaternion, new THREE.Vector3(size, size, size)) });
+    const matrix = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), quaternion, new THREE.Vector3(size, size, size));
+    const lying = LYING[id];
+    out.push({ id, matrix: lying ? matrix.multiply(lying) : matrix });
   };
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {

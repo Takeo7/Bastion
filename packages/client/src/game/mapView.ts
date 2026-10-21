@@ -12,7 +12,7 @@ import { NIGHT, NightLights, type Glow } from './night';
 import { unitPosNow } from './unitViews';
 import { beforeNextFrame, shadowsChanged } from './renderer';
 import { ExploredMemory } from './explored';
-import { FogOfWar } from './fogOfWar';
+import { extendShader, FogOfWar } from './fogOfWar';
 import { FLOOR, GroundMap, scatterCover } from './ground';
 import { inwards, madeAs, towersOf, wearOf, type Wear } from './siegeDressing';
 import { DRAWN, drawPiece, pieceKey, pieceMap, pieceWear, terrainOf, type PieceMap } from './basePieces';
@@ -227,6 +227,37 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
 /** Hints whose prop turns the way the generator said; the others are turned at random, as before. */
 const MEDICAL_FLAT = new Set(['bloodPool', 'bloodDrops', 'floorGrime', 'scatteredPapers']);
 const MEDICAL_SCATTER = new Set([...MEDICAL_FLAT, 'medicalWaste', 'overturnedChair', 'fallenIV', 'spilledSupplies', 'rumpledLinen']);
+/**
+ * A parked car's paint (playtest 20/10 #19, Ana: «todos los coches son rojos»): Apocalypse's own red, or the colour
+ * its texture's alternates give the same texels (the pack's 01_B and 01_C, 02, 03 and 04: two greys, a blue, an olive,
+ * a mustard), sRGB; and that red (its two texels, their middle). Only those texels change: the rust and the rest stay.
+ */
+const CAR_PAINTS: readonly ([number, number, number] | null)[] = [null, [132, 132, 132], [89, 89, 89], [73, 91, 110], [66, 78, 52], [139, 110, 54]];
+const CAR_RED: [number, number, number] = [130, 65, 56];
+const linear = ([r, g, b]: readonly number[]) => new THREE.Color().setRGB(r! / 255, g! / 255, b! / 255, THREE.SRGBColorSpace);
+
+/** A props' material made to repaint Apocalypse's car red with `paint` (CAR_PAINTS), the shading of each texel kept. */
+function carPaintPatch(material: THREE.Material, paint: readonly number[]): void {
+  const from = linear(CAR_RED);
+  const to = linear(paint);
+  const uniforms = { carPaintFrom: { value: new THREE.Vector3(from.r, from.g, from.b) }, carPaintTo: { value: new THREE.Vector3(to.r, to.g, to.b) } };
+  extendShader(material, 'carPaint', (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 carPaintFrom;\nuniform vec3 carPaintTo;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        {
+          // The red, near enough (a distant mip blends it): the paint instead, as bright as the texel against the red.
+          float carNear = 1.0 - smoothstep(0.015, 0.045, distance(diffuseColor.rgb, carPaintFrom));
+          float carLum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / dot(carPaintFrom, vec3(0.2126, 0.7152, 0.0722));
+          diffuseColor.rgb = mix(diffuseColor.rgb, carPaintTo * carLum, carNear);
+        }`,
+      );
+  });
+}
+
 const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'hospitalBed', 'medicalShelf', 'gurney', 'medicalCart', 'medicalCabinet', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'bedsideTable', 'visitorChair', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'clinicalBin', 'consultDesk', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire', 'pallets', 'drums', 'machine', 'bench', 'fridge', 'stove', 'bathtub', 'washbasin', 'wc', 'tvStand']);
 
 /**
@@ -377,6 +408,14 @@ const CROWNS = new Set<PropId>(['streetTree', 'tree', 'treePine', 'treeDead', 'p
 const NO_OCCLUSION = new Set<PropId>(['streetLight', 'powerPole', 'powerLine', 'stopSign', 'tree', 'treePine', 'treeDead', 'streetTree']);
 
 /** Matrix for a box of size (sx, sy, sz) standing at (x, y, z), turned `yaw` radians. */
+/**
+ * A supermarket's shelving (playtest 20/10 #18), stretched up from its models' height at a tile long: the gondolas and
+ * wall shelves to 1.35 m, the rows' low ends to 0.75; a wall shelf this far back against its wall (tiles).
+ */
+const SHELF_TALL = 1.36;
+const END_TALL = 1.35;
+const WALL_SHELF_BACK = 0.28;
+
 function placed(x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw = 0): THREE.Matrix4 {
   return new THREE.Matrix4().compose(
     new THREE.Vector3(x, y, z),
@@ -488,8 +527,9 @@ export class MapView {
     this.fresh = true;
     this.fog.resize(s.width, s.height);
     this.fogFloor = 0;
-    // The outline round what is played (docs/MAPAS.md §5.10) is the map's backdrop: never under the fog.
-    this.fog.setOpen(s.frame?.length && s.ground ? Uint8Array.from(s.ground, (g) => (g === 4 ? 1 : 0)) : null);
+    // The outline round what is played (docs/MAPAS.md §5.10) is dark under the fog, always, as beyond the edge
+    // (playtest 20/10 #23, Arturo): only what is played is ever seen.
+    this.fog.setShut(s.frame?.length && s.ground ? Uint8Array.from(s.ground, (g) => (g === 4 ? 1 : 0)) : null);
     this.fog.set([], this.explored.tiles, true);
     this.fog.setFloors(s.elev);
     this.pieces = pieceMap(s);
@@ -612,6 +652,22 @@ export class MapView {
       }
       return m;
     };
+    /** The props' material for a car painted `paint` (CAR_PAINTS; 0: Apocalypse's own red, the plain one). */
+    const paintMaterial = (id: AtlasId, paint: number) => {
+      const plain = CAR_PAINTS[paint];
+      if (!plain || id !== 'apocalypse') return atlasMaterial(id);
+      const key = `paint${paint}:${atlasRect(id) ? 'packed' : id}`;
+      let m = kit.atlas.get(key as AtlasId);
+      if (!m) {
+        m = new THREE.MeshStandardMaterial({ map: atlasRect(id) ? mapAtlasTexture() : atlasTexture(id), roughness: 0.85 });
+        carPaintPatch(m, plain);
+        this.snow?.patch(m);
+        this.own(m);
+        floorFadePatch(m, buildings.cutaway);
+        kit.atlas.set(key as AtlasId, m);
+      }
+      return m;
+    };
     /** A tree's material: its pack's, its crown fading over what the player looks at (treeFade.ts); out of doors, no cutaway. */
     const treeMaterial = (id: AtlasId) => {
       const key = `tree:${atlasRect(id) ? 'packed' : id}`;
@@ -651,6 +707,22 @@ export class MapView {
       prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
       return true;
     };
+    /** A car (prop `id`) at `matrix`, painted `paint` (CAR_PAINTS); false while it loads. */
+    const addCar = (id: PropId, matrix: THREE.Matrix4, paint: number): boolean => {
+      if (!CAR_PAINTS[paint]) return addSyntyId(id, matrix);
+      const prop = syntyProp(id);
+      if (!prop) {
+        this.waitingForProps = true;
+        return false;
+      }
+      const key = `${id}:paint${paint}`;
+      let layers = syntyLayers.get(key);
+      if (!layers) syntyLayers.set(key, (layers = prop.map((part) => new Layer(batch, part.geometry, paintMaterial(part.atlas, paint), true, false, true, atlasRect(part.atlas), floor))));
+      prop.forEach((part, k) => layers[k]!.add(matrix.clone().multiply(part.matrix), 0xffffff));
+      return true;
+    };
+    /** Which paint a car gets (CAR_PAINTS), from where it stands: the same every time, its boot open or not. */
+    const carPaint = (x: number, y: number) => Math.floor(hash(x, y, 13) * CAR_PAINTS.length) % CAR_PAINTS.length;
     /** One of the set's Synty props (`pick` in [0, 1) chooses), at `matrix`; false while it loads. */
     const addSynty = (set: PropSet, pick: number, matrix: THREE.Matrix4): boolean => {
       const ids = syntySet(set);
@@ -955,7 +1027,7 @@ export class MapView {
         case 'carFront': {
           // Searched (its boot or its glovebox, in a mission of before), it's the one with the boot lid up.
           const id = t.tiles.some((j) => searched.has(placeBase + j)) ? 'carOpen' : pickOf('carFront', hash(ax, ay, 1));
-          addSyntyId(id, fitted(id, cx, base, cz, yaw));
+          addCar(id, fitted(id, cx, base, cz, yaw), carPaint(ax, ay));
           const nose = (FOOTPRINT_FIT[id]?.fit ?? 2.95) / 2 - 0.055;
           if (hash(ax, ay, 9) < 0.25) headlights.push({ x: cx + d.x * nose, y: base + 0.32, z: cz + d.y * nose, dx: d.x, dz: d.y });
           break;
@@ -1078,8 +1150,9 @@ export class MapView {
         const d = DIRS4[look.facing]!;
         const at = placed(cx - d.x * 0.5, base, cz - d.y * 0.5, 1, 1, 1, turn * (Math.PI / 2));
         // Searched (its boot or its glovebox), it's the one with the boot lid up.
-        if (searched.has(placeBase + i) || searched.has(placeBase + j)) addSyntyId('carOpen', at);
-        else addSynty('carFront', pick, at);
+        const ids = syntySet('carFront');
+        if (searched.has(placeBase + i) || searched.has(placeBase + j)) addCar('carOpen', at, carPaint(x, y));
+        else addCar(ids[Math.min(ids.length - 1, Math.floor(pick * ids.length))]!, at, carPaint(x, y));
         if (hash(x, y, 9) < 0.25) headlights.push({ x: cx + d.x * 0.42, y: base + 0.32, z: cz + d.y * 0.42, dx: d.x, dz: d.y });
         return true;
       }
@@ -1153,6 +1226,21 @@ export class MapView {
         const bd = buildings.plan.buildings[buildings.plan.owner[i]!];
         addSyntyId(bd && bd.kind !== 'house' ? 'shopCounter' : 'counter', placed(cx, base, cz, 1, 1, 1, turn * (Math.PI / 2)));
         return true;
+      }
+      // A supermarket's (GameState.markets, playtest 20/10 #18): its rows gondolas with goods both ways, along its walls
+      // shelving with goods, a row's low end a display turned to the checkouts (its front); as tall as SHELF_TALL.
+      if (look.kind === 'shelf') {
+        const bd = buildings.plan.buildings[buildings.plan.owner[i]!];
+        if (bd?.market !== undefined) {
+          const back = DIRS4[(look.facing + 2) % 4]!;
+          const behind = s.tiles[(y + back.y) * s.width + x + back.x];
+          const wall = behind === 'wall' || behind === 'window' || behind === 'windowBroken';
+          const id: PropId = kind === 'low' ? 'endDisplay' : wall ? 'wallShelf' : 'gondola';
+          const yaw = (kind === 'low' ? (4 - bd.market) % 4 : turn) * (Math.PI / 2);
+          const push = wall && kind !== 'low' ? WALL_SHELF_BACK : 0;
+          addSyntyId(id, placed(cx + back.x * push, base, cz + back.y * push, 1, kind === 'low' ? END_TALL : SHELF_TALL, 1, yaw));
+          return true;
+        }
       }
       // Shelves as the building is (playtest 18/10, #36): a house's are its bookcases, one kind for the house, and an
       // office's; a shop's or a warehouse's are shelving, but in a bookshop or a library (three in ten), all books.

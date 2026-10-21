@@ -796,17 +796,18 @@
   pointer-events: none;
 }
 
-/* The Escuadra's foot (playtest 19/10 #3): the mission on the left, its buttons on the right, one strip down by
-   the edge, under the soldiers and their cards (on a laptop the mission's window at the top hid them, #2). */
+/* The Escuadra's foot, centred under the row as Ana drew it (20/10 #16; the debrief's too, #26): who is ready over
+   one panel, the mission on its left and its buttons on its right, down by the edge, under the soldiers and their
+   cards (playtest 19/10 #3: on a laptop the mission's window at the top hid them, #2). */
 .squad-bottom {
   position: absolute;
-  left: 16px;
-  right: 16px;
+  left: 50%;
   bottom: 16px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
+  transform: translateX(-50%);
+  width: min(940px, calc(100% - 32px));
+  display: grid;
+  justify-items: center;
+  gap: 8px;
   z-index: 4;
   pointer-events: none;
 }
@@ -816,16 +817,25 @@
 }
 
 .squad-mission {
-  flex: 0 1 640px;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 22px;
+  padding: 12px 18px 14px;
+}
+
+.squad-text {
   min-width: 0;
-  padding: 10px 16px 12px;
 }
 
 .squad-mission h1 {
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 10px;
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   font-size: 22px;
 }
 
@@ -845,10 +855,19 @@
 }
 
 .squad-actions {
-  flex: none;
   display: grid;
-  justify-items: center;
+  justify-items: stretch;
   gap: 8px;
+  min-width: 200px;
+}
+
+/* The debrief's report on the panel's left: its stamp and the line under it centred, as the Escuadra's title. */
+.debrief-bottom .squad-text {
+  text-align: center;
+}
+
+.debrief-bottom .squad-text > :is(.x-text, .debrief-loot) {
+  text-align: left;
 }
 
 .squad-actions > small {
@@ -893,6 +912,8 @@
 /* Squad select: the roster stays short so the lineup is visible. */
 .strat-left.compact {
   max-height: calc(100vh - 330px);
+  /* Narrow (Ana's drawing, 20/10 #16): the row is centred, and the room this takes is kept on the right too. */
+  width: clamp(210px, 16vw, 250px);
 }
 
 .strat-left.compact > .x-panel {
@@ -1024,7 +1045,8 @@ dl.briefing {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow-wrap: anywhere;
+  /* Between words; inside one only if it fits nowhere else («Marcu s Reid», 20/10). */
+  overflow-wrap: break-word;
 }
 
 .strat[data-view='squad'] .lineup-card > .x-btn {
@@ -2208,58 +2230,40 @@ dl.briefing {
   color: var(--c-hp);
 }
 
-/* Agenda of the Bastion: one line per pending thing, each a shortcut. */
-.x-row.agenda {
-  grid-template-columns: 4px 16px 1fr auto;
+/* What a level of the Bastion brought, in the alert on going up (Ana, 20/10 #31): a row of icons, what each is
+   on hover. */
+.unlock-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 2px;
 }
 
-/* Unlocks: symbol, name, one-line effect, and the price tag under it. */
-/* A level's unlocks in its alert (playtest 14/10 #20): one per line with its icon, as in the Diario. */
-.alert-unlocks {
-  display: grid;
-  gap: 2px;
-  margin: 8px 0 4px;
-  max-height: min(320px, 40vh);
-  overflow-y: auto;
+.unlock-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  cursor: var(--cursor-hot);
 }
 
-.x-row.unlock {
-  grid-template-columns: 4px 16px 1fr;
+.unlock-icon::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--unlock-c, var(--ink-blue));
+  -webkit-mask: var(--unlock-icon) center / 64% no-repeat;
+  mask: var(--unlock-icon) center / 64% no-repeat;
 }
 
-.x-row.unlock .x-chip {
-  margin-top: 3px;
+.unlock-icon.xp {
+  --unlock-c: var(--good);
 }
 
-.x-row.unlock small {
-  font-size: 12px;
-  line-height: 1.25;
-}
-
-/* Level track: a numbered circle per level, green once reached. */
-.x-row.level {
-  grid-template-columns: 4px 22px 1fr auto;
-}
-
-.level-num {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  font-family: var(--font-display);
-  font-size: 12px;
-  border: 1.5px solid currentColor;
-  border-radius: 50%;
-}
-
-.x-row.level.reached .level-num {
-  color: var(--good);
-}
-
-.x-row.level b {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.unlock-icon.pick {
+  --unlock-c: var(--warn);
 }
 
 /* Weapon and armour tiers: diamonds like the guns (steel, magnetic, plasma). */
@@ -2382,63 +2386,6 @@ dl.briefing {
   }
 }
 
-/* "Ahora": the one next thing to do, on top of the Agenda. A red stamp when it
-   is urgent (a partner waiting, an operation about to expire), ink otherwise. */
-.strat-now {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 0 8px;
-  margin: 0 0 10px;
-  padding: 6px 10px 7px;
-  text-align: left;
-  background: var(--paper-grain), var(--paper-light);
-  border: 2px solid var(--ink-blue);
-  border-radius: 2px;
-  color: var(--ink-blue);
-  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.35);
-}
-
-.strat-now small {
-  grid-column: 1 / -1;
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  opacity: 0.8;
-}
-
-.strat-now b {
-  font-size: 14px;
-  line-height: 1.2;
-}
-
-.strat-now .ico {
-  width: 20px;
-  height: 20px;
-}
-
-.strat-now:hover:not(:disabled) {
-  background: var(--paper-grain), #fff;
-}
-
-.strat-now:disabled {
-  cursor: var(--cursor-arrow);
-}
-
-.strat-now.urgent {
-  color: #fff;
-  background: var(--stamp);
-  border-color: var(--stamp);
-}
-
-.strat-now.urgent:hover:not(:disabled) {
-  background: #c9302a;
-}
-
-.x-row.agenda.urgent b {
-  color: var(--stamp);
-}
-
 /* Pending things on each tab: a number in a pen circle (red if urgent). */
 .nav-count {
   display: inline-grid;
@@ -2463,10 +2410,23 @@ dl.briefing {
   background: var(--stamp);
 }
 
-/* Lore's Novedades tray button, in the top strip. */
-.strat-top > .strat-news {
-  padding: 3px 8px;
-  font-size: 12px;
+/* What a level of the Bastion has just brought (playtest 20/10 #13): «Nuevo» after its name, in its menu, until the
+   pointer goes over it (fresh.ts); on a tab, after the tab's name, while there is something new there. */
+.new-tag {
+  display: inline-block;
+  margin: -3px 0 -3px 7px;
+  padding: 1px 6px;
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 14px;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  color: #fff;
+  background: var(--ink-blue);
+  border-radius: 7px;
+  pointer-events: none;
 }
 
 /* The partner's invitation in the main menu: label and an address to copy. */
@@ -2666,7 +2626,6 @@ dl.briefing {
   display: flex;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 6px;
 }
 
 .ready-mark {
@@ -2725,15 +2684,6 @@ dl.briefing {
   max-width: 60ch;
   margin: 4px auto 0;
   text-align: left;
-}
-
-/* ------------------------------------------------------------ calendar */
-
-.calendar-note {
-  margin: 4px 0 0;
-  font-size: 11.5px;
-  line-height: 1.3;
-  color: var(--x-muted);
 }
 
 /* ------------------------------------------------------------ recruiting */
@@ -3142,9 +3092,3 @@ dl.briefing {
   box-shadow: inset 3px 0 0 var(--accent, #fff), 0 0 0 2px #ffe08a;
 }
 
-/* Buying the next level of the Bastion (playtest 18/10 #40). */
-.level-up {
-  display: grid;
-  gap: 4px;
-  margin: 6px 0 10px;
-}

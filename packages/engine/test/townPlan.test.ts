@@ -147,8 +147,8 @@ describe('a town on its plan (docs/MAPAS.md phase 3)', () => {
       const s = createMission({ map, slots: [0], rng: new Rng(seed), kind: 'recovery', difficulty: 2 });
       const l = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [3], seed: seed * 7919 });
       expect(s.mission.turnsLeft).toBe(routeTurns('recovery', l.route!));
-      // Eight groups at 48, eleven at 64 (docs/MAPAS.md §6); and the garrison, if the mission has one.
-      expect(s.pods.length).toBe(11 + (garrison('recovery', 2) ? 1 : 0));
+      // Eight groups at 48, eleven at 64 (docs/MAPAS.md §6) and a quarter more (20/10): thirteen; and the garrison, if the mission has one.
+      expect(s.pods.length).toBe(13 + (garrison('recovery', 2) ? 1 : 0));
       expect(s.frame).toEqual(l.frame);
     }
   });

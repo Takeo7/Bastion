@@ -903,6 +903,15 @@ export interface HomeRoom {
  * worn it is (0 kept, about 0.5 lived in rough, near 1 wrecked) and, seeded,
  * what lies about in it (the medical centres' details: bodies, blood, mess).
  */
+/** A supermarket (playtest 20/10, #18): its bounds, walls included, and the side its glass front and its sign look onto (DIRS4). */
+export interface MarketSite {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  front: number;
+}
+
 export interface HomeSite {
   x: number;
   y: number;
@@ -997,6 +1006,8 @@ export interface GameState {
   medical?: MedicalSite[];
   /** The houses, their rooms by use and how worn (playtest 2026-10-18, #15). */
   homes?: HomeSite[];
+  /** The supermarkets (playtest 2026-10-20, #18): one on a town's map at most. */
+  markets?: MarketSite[];
   /**
    * What the cover of each tile is meant to look like (procedural maps; see
    * decor.ts). Cosmetic and never updated: a tile whose kind has changed since

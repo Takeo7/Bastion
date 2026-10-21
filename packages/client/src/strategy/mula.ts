@@ -39,6 +39,21 @@ export interface Mula {
   size: THREE.Vector3;
 }
 
+/**
+ * The 4×4's doors (playtest 20/10 #7: get in, not vanish in the gap): Synty's body has them in its one shell, so they
+ * are cut out of it, the glass, the bars and the armour with them: along the body (fractions of its length from the
+ * back), front and rear, as its handles and mirrors place them; from the sill to the roof's edge (fractions of its
+ * height); the outer share of its width either side. Each hangs on its front edge and swings out.
+ */
+const CAR_DOORS = [
+  { from: 0.435, to: 0.587 },
+  { from: 0.253, to: 0.435 },
+];
+const CAR_DOOR_LOW = 0.09;
+const CAR_DOOR_HIGH = 0.845;
+const CAR_DOOR_SIDE = 0.55;
+const CAR_DOOR_SWING = 1.15;
+
 /** La Lata's vehicles before the bus (GameState.vehicle 0 4×4, 1 van, 2 lorry): the body and its armour, and where one gets in. */
 const LATA: Record<number, { body: BaseModelId; extras: BaseModelId[]; way: 'side' | 'back' }> = {
   0: { body: 'lataCar', extras: ['lataCarArmour', 'lataCarBars'], way: 'side' },
@@ -76,12 +91,21 @@ export function buildLata(vehicle = 3): Mula | null {
   const wheels: THREE.Object3D[] = [];
   let wheelRadius = 0.3;
   const leaves = new Map<string, THREE.Mesh[]>();
+  // All of it first, for its size (the 4×4's doors are cut by it).
+  const pieces: { id: BaseModelId; mesh: THREE.Mesh; geometry: THREE.BufferGeometry }[] = [];
   for (const id of [v.body, ...v.extras]) {
     for (const part of kitMesh(id, 'plain').children.slice()) {
       const mesh = part as THREE.Mesh;
       const geometry = placed(id, mesh.geometry);
+      box.union(geometry.boundingBox!);
+      pieces.push({ id, mesh, geometry });
+    }
+  }
+  const cut = v.way === 'side' ? carDoors(box) : null;
+  for (const { id, mesh, geometry: whole } of pieces) {
+    let geometry = whole;
+    {
       const bb = geometry.boundingBox!;
-      box.union(bb);
       if (id === v.body && /wheel/i.test(mesh.name)) {
         // Turned about its own axle.
         const centre = bb.getCenter(new THREE.Vector3());
@@ -98,6 +122,12 @@ export function buildLata(vehicle = 3): Mula | null {
         const m = new THREE.Mesh(geometry, mesh.material);
         leaves.set(door, [...(leaves.get(door) ?? []), m]);
         continue;
+      }
+      if (cut && id === v.body) {
+        // The 4×4: what of its own shell and glass lies in a door's box goes with that door.
+        const split = cut.split(geometry);
+        split.doors.forEach((g, k) => g && cut.leaves[k]!.add(Object.assign(new THREE.Mesh(g, mesh.material), { castShadow: true })));
+        geometry = split.rest;
       }
       statics.add(geometry, mesh.material as THREE.Material, still, true, undefined, false);
     }
@@ -121,9 +151,15 @@ export function buildLata(vehicle = 3): Mula | null {
     body.add(leaf);
     doors.push({ leaf, shut: hinge.clone(), open: hinge.clone(), swing: outer > 0 ? -1.97 : 1.97 });
   }
+  if (cut) {
+    for (const [k, leaf] of cut.leaves.entries()) {
+      body.add(leaf);
+      doors.push({ leaf, shut: leaf.position.clone(), open: leaf.position.clone(), swing: cut.swings[k]! });
+    }
+  }
   const size = box.getSize(new THREE.Vector3());
-  // Where one gets in: by its doors on either side (the 4×4), or at its back.
-  const doorCentres = v.way === 'side' ? [box.min.x, box.max.x].flatMap((x) => [new THREE.Vector3(x, 0.5, box.min.z + size.z * 0.62), new THREE.Vector3(x, 0.5, box.min.z + size.z * 0.38)]) : [new THREE.Vector3((box.min.x + box.max.x) / 2, 0.6, box.min.z)];
+  // Where one gets in: by its doors on either side (the 4×4: each door's middle), or at its back.
+  const doorCentres = v.way === 'side' ? [box.min.x, box.max.x].flatMap((x) => CAR_DOORS.map((d) => new THREE.Vector3(x, 0.5, box.min.z + size.z * (d.from + d.to) / 2))) : [new THREE.Vector3((box.min.x + box.max.x) / 2, 0.6, box.min.z)];
   // Headlights, off while it stands.
   const lights = new THREE.MeshStandardMaterial({ color: 0x2a2a20, emissive: 0xfff2c0, emissiveIntensity: 0.2 });
   for (const x of [-1, 1]) {
@@ -133,6 +169,58 @@ export function buildLata(vehicle = 3): Mula | null {
     body.add(lamp);
   }
   return { body, doors, wheels, wheelRadius, lights, doorCentres, oneSided: false, size };
+}
+
+/**
+ * The 4×4's four doors in a body of box `box` (nose +z): a leaf for each (left front, left rear, right front, right
+ * rear) on its hinge, how far each swings open, and what splits a geometry into the doors' triangles and the rest
+ * (a triangle goes by its middle).
+ */
+function carDoors(box: THREE.Box3) {
+  const size = box.getSize(new THREE.Vector3());
+  const midX = (box.min.x + box.max.x) / 2;
+  const half = size.x / 2;
+  const low = box.min.y + size.y * CAR_DOOR_LOW;
+  const high = box.min.y + size.y * CAR_DOOR_HIGH;
+  const doors = [-1, 1].flatMap((side) => CAR_DOORS.map((d) => ({ side, z0: box.min.z + size.z * d.from, z1: box.min.z + size.z * d.to })));
+  const leaves = doors.map((d) => {
+    const leaf = new THREE.Group();
+    // On its front edge, at the body's side.
+    leaf.position.set(midX + d.side * half, 0, d.z1);
+    return leaf;
+  });
+  // A point behind the hinge swings out to its side: −x for the left (x < 0) side, turned the other way.
+  const swings = doors.map((d) => (d.side > 0 ? -CAR_DOOR_SWING : CAR_DOOR_SWING));
+  const which = (x: number, y: number, z: number) =>
+    y < low || y > high || Math.abs(x - midX) < half * CAR_DOOR_SIDE ? -1 : doors.findIndex((d) => Math.sign(x - midX) === d.side && z >= d.z0 - 0.01 && z <= d.z1 + 0.01);
+  const split = (g: THREE.BufferGeometry) => {
+    const source = g.index ? g.toNonIndexed() : g;
+    const names = Object.keys(source.attributes);
+    const out = doors.map(() => names.map(() => [] as number[]));
+    const rest = names.map(() => [] as number[]);
+    const pos = source.getAttribute('position');
+    for (let t = 0; t < pos.count; t += 3) {
+      // A triangle whose three corners are in the same door's box (none across its edge).
+      const k0 = which(pos.getX(t), pos.getY(t), pos.getZ(t));
+      const k = k0 >= 0 && which(pos.getX(t + 1), pos.getY(t + 1), pos.getZ(t + 1)) === k0 && which(pos.getX(t + 2), pos.getY(t + 2), pos.getZ(t + 2)) === k0 ? k0 : -1;
+      const into = k < 0 ? rest : out[k]!;
+      names.forEach((n, a) => {
+        const attr = source.getAttribute(n);
+        for (let v = t; v < t + 3; v++) for (let c = 0; c < attr.itemSize; c++) into[a]!.push(attr.getComponent(v, c));
+      });
+    }
+    const make = (data: number[][], at: THREE.Vector3 | null) => {
+      if (!data[0]!.length) return null;
+      const geometry = new THREE.BufferGeometry();
+      names.forEach((n, a) => geometry.setAttribute(n, new THREE.Float32BufferAttribute(data[a]!, source.getAttribute(n).itemSize)));
+      // A door's about its hinge.
+      if (at) geometry.translate(-at.x, 0, -at.z);
+      geometry.computeBoundingBox();
+      return geometry;
+    };
+    return { doors: out.map((d, k) => make(d, leaves[k]!.position)), rest: make(rest, null) ?? new THREE.BufferGeometry() };
+  };
+  return { leaves, swings, split };
 }
 
 /** A door at `k` of the way open (0 shut, 1 open): slid along, or swung on its hinge. */

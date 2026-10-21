@@ -35,6 +35,13 @@
   margin: 0 auto;
 }
 
+/* In the Escuadra and the debrief the bottom right is the centred panel's buttons (20/10 #16, #26: LANZAR MISIÓN
+   went under it): the radio goes to the top right corner, which is free there. */
+.strat:is([data-view='squad'], [data-view='debrief']) .radio {
+  top: 56px;
+  bottom: auto;
+}
+
 @keyframes radio-in {
   from {
     opacity: 0;

@@ -129,6 +129,11 @@ export interface Dyes {
    * a trace for the dead and the Cuervos, who should stay darker.
    */
   dyeRim: { value: number };
+  /**
+   * How much of the unit is drawn (1 all of it): coming into sight it fades in (playtest 20/10 #10: the dead
+   * popped up on their tiles), dithered, the material still opaque: a fragment shows where a 4 × 4 pattern is under it.
+   */
+  dyeFade: { value: number };
 }
 
 export type DyedMaterial = THREE.MeshStandardMaterial & { userData: { dyes: Dyes } };
@@ -143,6 +148,7 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
     dyeSkin: { value: new THREE.Color(1, 1, 1) },
     dyeSkinOn: { value: 0 },
     dyeRim: { value: 0 },
+    dyeFade: { value: 1 },
   };
   const m = new THREE.MeshStandardMaterial({ map: atlasTexture(atlas), roughness: 0.82, metalness: 0 }) as DyedMaterial;
   m.userData.dyes = uniforms;
@@ -170,11 +176,19 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
         uniform vec3 dyeSkin;
         uniform float dyeSkinOn;
         uniform float dyeRim;
+        uniform float dyeFade;
         uniform float unitNight;`,
       )
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
+        // Fading in: an ordered 4 × 4 pattern decides which fragments show yet.
+        if (dyeFade < 0.999) {
+          ivec2 dyeCell = ivec2(mod(gl_FragCoord.xy, 4.0));
+          int dyeI = dyeCell.x + dyeCell.y * 4;
+          float dyeOrder = float(dyeI == 0 ? 0 : dyeI == 1 ? 8 : dyeI == 2 ? 2 : dyeI == 3 ? 10 : dyeI == 4 ? 12 : dyeI == 5 ? 4 : dyeI == 6 ? 14 : dyeI == 7 ? 6 : dyeI == 8 ? 3 : dyeI == 9 ? 11 : dyeI == 10 ? 1 : dyeI == 11 ? 9 : dyeI == 12 ? 15 : dyeI == 13 ? 7 : dyeI == 14 ? 13 : 5);
+          if ((dyeOrder + 0.5) / 16.0 > dyeFade) discard;
+        }
         // The part map: u is the piece (in eighths), v whether it is cloth (glTF flips v).
         int dyePart = int(vDyePart.x * 8.0);
         bool dyeCloth = vDyePart.y < 0.5;

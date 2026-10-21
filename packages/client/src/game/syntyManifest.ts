@@ -701,6 +701,14 @@ export const PROPS = {
   plywoodShedRuin: prop('military', 'SM_Bld_Plywood_Shed_Destroyed_01', { origin: true }),
   bastionHouse: prop('apocalypse', 'SM_Bld_House_03', { origin: true }),
   bastionHouseGlass: prop('apocalypse', 'SM_Bld_House_03_Glass_01', { origin: true }),
+  // What a stage's second level adds to the Bastion (playtest 20/10 #13): the caravan's awning (a tarp on poles), the
+  // barracón's water tower, the house's armour on its windows and its tank traps.
+  bAwning: prop('apocalypse', 'SM_Bld_Junk_Shelter_06', { origin: true }),
+  bAwningTarp: prop('apocalypse', 'SM_Bld_Junk_Shelter_06_Tarp', { origin: true }),
+  bWaterTower: prop('military', 'SM_Bld_WaterTank_01', { origin: true }),
+  bIronSheet: prop('apocalypse', 'SM_Prop_Iron_Sheet_01', { origin: true }),
+  bPlank: prop('apocalypse', 'SM_Prop_Plank_01', { origin: true }),
+  bTankTrap: prop('apocalypse', 'SM_Prop_TankTrap_01', { origin: true }),
   palisade: prop('apocalypse', 'SM_Prop_SpikeWall_01', { fit: 0.5, stretch: true, shift: [0, -0.25] }),
   gateWood: prop('apocalypse', 'SM_Prop_Fence_Wood_Gate_01', { fit: 1, stretch: true }),
   gateMetal: prop('apocalypse', 'SM_Prop_Wall_Quarantine_GateDoor_01', { fit: 1, stretch: true, yaw: 1 }),
@@ -818,6 +826,11 @@ export const PROPS = {
   hayRound: prop('farm', 'SM_Prop_Hay_Bale_Round_01', { fit: 0.95 }),
   // Indoors.
   shelfLow: prop('apocalypse', 'SM_Prop_ShopShelf_Wall_01', { fit: 1, yaw: 1 }),
+  // A supermarket's shelving (playtest 20/10 #18): Town's gondola, goods both ways, and its wall shelf; City's low
+  // display for the end of a row.
+  gondola: prop('town', 'SM_Prop_ShopShelf_02', { fit: 1, yaw: 2 }),
+  wallShelf: prop('town', 'SM_Prop_ShopShelf_01', { fit: 1, yaw: 2 }),
+  endDisplay: prop('city', 'SM_Prop_ShopInterior_Shelf_04', { fit: 1, yaw: 2 }),
   shelfHigh: prop('apocalypse', 'SM_Prop_Shop_Shelf_01', { fit: 1, stretch: true, yaw: 1 }),
   bookshelf: prop('town', 'SM_Prop_Bookshelf_01', { fit: 1, stretch: true, yaw: 2 }),
   bookshelf2: prop('town', 'SM_Prop_Bookshelf_02', { fit: 1, stretch: true, yaw: 2 }),
@@ -1001,6 +1014,25 @@ export const PROPS = {
   tire: prop('apocalypse', 'SM_Prop_Tire_01'),
   pallet: prop('apocalypse', 'SM_Prop_Pallet_01'),
   bike: prop('apocalypse', 'SM_Prop_Bike_Broken_01'),
+  // What else lies about a street (playtest 20/10 #20, Ana: not only rubbish): luggage dropped, a holdall, a trolley
+  // pushed over, boxes.
+  luggage: prop('apocalypse', 'SM_Prop_Luggage_01'),
+  luggageRetro: prop('apocalypse', 'SM_Prop_Luggage_Retro_01'),
+  luggageOpen: prop('apocalypse', 'SM_Prop_Luggage_Open_01'),
+  holdall: prop('apocalypse', 'SM_Item_Duffle_Bag_01'),
+  trolley: prop('apocalypse', 'SM_Prop_ShoppingCart_01'),
+  trolleyBroken: prop('apocalypse', 'SM_Prop_ShoppingCart_Broken_01'),
+  cardboard2: prop('apocalypse', 'SM_Prop_CardboardBox_02', { fit: 0.45 }),
+  cardboard4: prop('apocalypse', 'SM_Prop_CardboardBox_04', { fit: 0.45 }),
+  // The Armería's bench (playtest 20/10 #29, Ana: a table and boxes with what there is): its grenades, its ammunition.
+  armGrenade: prop('military', 'SM_Chr_Attach_Grenade_01'),
+  armFlashbang: prop('military', 'SM_Chr_Attach_Grenade_Flash_01'),
+  armSmoke: prop('military', 'SM_Chr_Attach_Grenade_Smoke_01'),
+  armAmmo556: prop('apocalypse', 'SM_Item_Ammo_556_01'),
+  armAmmo762: prop('apocalypse', 'SM_Item_Ammo_762_Open_01'),
+  armAmmo12g: prop('apocalypse', 'SM_Item_Ammo_12G_01'),
+  armAmmoCrate: prop('apocalypse', 'SM_Item_Ammo_Crate_01'),
+  armAmmoCrateLid: prop('apocalypse', 'SM_Item_Ammo_Crate_Lid_01'),
   // On shop fronts, over the door.
   signShop: prop('apocalypse', 'SM_Prop_Sign_Shop_01'),
   signFood: prop('apocalypse', 'SM_Prop_Sign_Food_01'),
@@ -1296,6 +1328,11 @@ export const PIECES = {
   houseCorner: whole('town', 'SM_Bld_House_ExteriorWall_GroundFloor_Corner_01', [-0.12, -0.12], { floor: -0.02 }),
   houseDoor: whole('town', 'SM_Bld_House_Door_01', [1.25, -0.1], { parts: true, leaf: 'SM_Bld_House_Door' }),
   houseWindow: whole('town', 'SM_Bld_House_Window_01', [1.25, -0.1], { drop: ['Glass'] }),
+  // A shop's front at street level (playtest 20/10 #18): Office's glass walls, 2.5 m modules 3 m tall (as the bunker
+  // kit's): a shop window from floor to lintel (its pane the kit's), and a glass door beside a pane, seen through
+  // (their glass, painted from the atlas, came out brown).
+  shopWindow: whole('office', 'SM_Bld_Wall_Glass_01', [1.25, -0.075], { drop: ['01_Glass'] }),
+  shopDoor: whole('office', 'SM_Bld_Wall_Glass_Door_01', [1.25, -0.075], { parts: true, leaf: 'SM_Bld_Glass_Door_01', drop: ['Door_01_Glass'] }),
   // Walls between rooms.
   roomWall: house('InteriorWall_01'),
   roomDoorWall: house('InteriorWall_Door_01', { parts: true, leaf: 'SM_Bld_House_InteriorWall_Door_02' }),

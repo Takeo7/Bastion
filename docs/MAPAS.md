@@ -259,6 +259,7 @@ La casilla sigue siendo de 1,34 m vistos. Entre paréntesis, el tamaño visto.
 | Nave de la fábrica | 12 × 16 | 16–20 × 24–30 |
 | Motel (ala) | 7 × 13 | sin cambio (cuartos de 3 × 5) |
 | Gasolinera (tienda; patio) | 7 × 7; 11 × 15 | 7 × 9; patio de 16 × 20 con marquesina |
+| Supermercado (prueba del 20/10, #18) | 12–16 × 10–12 | una planta, como mucho uno por pueblo |
 
 **Variedad por parcela:**
 
@@ -434,7 +435,7 @@ La casilla sigue siendo de 1,34 m vistos. Entre paréntesis, el tamaño visto.
   - las misiones guardadas no tienen `frame` y se ven como hoy.
 - **En el cliente (Arte):**
   - cada trozo del contorno se dibuja hasta el borde del rectángulo y algo más allá, para que no se vea dónde acaba el mapa;
-  - la niebla no cubre lo de fuera: se ve como fondo;
+  - lo de fuera va oscuro, bajo la misma niebla que lo no descubierto, siempre (Ana y Arturo, 20/10; antes se veía como fondo);
   - el corte de tejados y la cámara no entran en lo de fuera.
 - **Medidas:**
   - lo jugable, el 70–85 % del rectángulo;
@@ -633,6 +634,13 @@ Antes, los arreglos 1–3 de §7.3 (Arte y Gameplay).
   - Una parcela es una casa o una tienda; dos juntas, una oficina o un bloque de pisos.
   - Las adosadas comparten pared, en tramos de hasta 16 con un paso al patio entre ellos.
   - El 6–10 % de las manzanas sigue con plazas, aparcamientos, gasolinera, motel, obras y naves.
+- **Supermercado** (`supermarket`; prueba del 20/10, #18, por Ana): en 6 de cada 10 pueblos, uno en una manzana con sitio, sobre una calle norte o sur.
+  - Una planta, 12–14 de fachada en una manzana larga (el resto, parcelas) o lo largo de la manzana (hasta 16), y 10–12 de fondo.
+  - La fachada, toda de cristal salvo las esquinas y la doble puerta del centro; los costados, sin ventanas; detrás, una puerta de servicio.
+  - Dentro (`furnishMarket`): un paso junto al escaparate, 2–3 cajas ('counter') junto a la entrada, un paso, los pasillos de estanterías ('shelf', de 2 de ancho, con el extremo bajo), un paso al fondo y las neveras ('drinksFridge') contra la pared del fondo.
+  - Detrás, si la manzana sigue, su aparcamiento o los contenedores y palés.
+  - Marcado en `GameState.markets` (con el lado de la fachada) para que el cliente lo dibuje: nave baja, fachada de cristal y el cartel MARKET.
+  - La manzana se elige por posición: un pueblo sin supermercado se genera igual que antes.
 - **Patios de manzana:** traseras con vallas y lindes, cobertizos, tendederos y huertos ('shed', 'washingLine', 'vegPatch'), y al menos dos salidas (`MissionLayout.courtyards`).
 - **Bloques de pisos en los que se entra** (`flatsBlock`): 16 de ancho, 3 plantas, un núcleo de escalera con un piso a cada lado y la azotea pisable.
 - **Recibidor:** las casas de dos plantas lo llevan (`hallPlan2`).

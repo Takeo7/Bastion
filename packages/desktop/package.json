@@ -1,7 +1,7 @@
 {
   "name": "@bastion/desktop",
   "productName": "Bastión",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "private": true,
   "description": "Bastión: la app de escritorio, con el servidor de la partida dentro",
   "author": "Arturo Wagener",

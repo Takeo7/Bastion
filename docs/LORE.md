@@ -61,7 +61,7 @@ La de antes («Hace dos inviernos, la Pandemia vació el valle de Kessra…») q
 
 ## El mundo: el valle de Kessra
 
-Es una comarca inventada entre una sierra alta y una llanura, con dos ciudades muertas. El globo de XCOM pasa a ser un **mapa del valle** en Synty (la pestaña «El valle»), con ocho zonas unidas por carreteras en lugar de las ocho regiones ([FASE5.md](FASE5.md)). Para el jugador son siempre **zonas**, nunca «regiones».
+Es una comarca inventada entre una sierra alta y una llanura, con dos ciudades muertas. El globo de XCOM pasa a ser un **mapa del valle** en Synty (la pestaña «Mapa», antes «El valle»: prueba del 20/10, #28), con ocho zonas unidas por carreteras en lugar de las ocho regiones ([FASE5.md](FASE5.md)). Para el jugador son siempre **zonas**, nunca «regiones».
 
 | Zona | Id | Qué hay | Aliado (enclave) |
 |---|---|---|---|
@@ -101,6 +101,7 @@ Los ids del código se mantienen; cambian el nombre, el aspecto y, donde haga fa
 
 - **Atalaya cayó** (Arturo, 18/10, con la base nueva de la Fase 12 §11). Era una vieja estación militar en lo alto de la sierra de Brena: refugio subterráneo, muros de hormigón y una sola carretera. Aguantó dos años; en otoño una horda fue derecha a ella. Queda como lo que se perdió: en los textos, «Atalaya» es el pasado y nunca la base de ahora.
 - **El Bastión** es lo que se levanta en un claro del pinar, sobre Brena: al principio, una caravana y La Lata. Todo lo demás se construye (edificios, defensas, trampas, torretas), y se tala para hacer sitio. Los textos de las piezas están en [LORE-BASE.md](LORE-BASE.md) y en `PIECE_TEXT` (`lore.ts`).
+- **Los niveles del Bastión tienen nombre, nunca número** (prueba del 20/10, #13): Caravana, Caravana con toldo, Casa móvil, Casa móvil con porche, Albergue, Albergue ampliado, Casa y Casa fortificada (`BASTION_LEVELS`, `bastionLevelName` en `lore.ts`). Son los cuatro edificios del solar, cada uno mejorado una vez. No se anuncia qué traerá el siguiente.
 - **Si el Bastión cae**, se huye otra vez, como de Atalaya: los que quedan vuelven a empezar en otro claro con la caravana y lo puesto. Si no queda nadie, la campaña termina.
 - **La Lata:** el apodo del vehículo de la escuadra, por la chapa que Teo le suelda encima (antes, «La Mula»: Ana la quitó en la prueba del 14/10 y Arturo eligió este). Era el autobús de línea de Atalaya, que se quedó en su cochera; ahora el apodo pasa de un trasto a otro: el todoterreno de Teo, que tiró de la caravana, y luego una furgoneta, un camión y, al final, el mismo autobús, que se recupera en Atalaya (prueba del 18/10, #45). Lleva a la escuadra, la espera en la zona de evacuación y vuelve cargado. Su taller en la base es la **Chapistería**. En el código, el nombre sale de `BUS` (`lore.ts`).
 - **Las decisiones a medias se quedan, con otra historia.** Dos grupos que llegaron a la vez y no se fían del todo: lo importante lo deciden los dos. El año pasado, un líder solo vendió su refugio a los Cuervos a cambio de su vida.
@@ -215,7 +216,8 @@ Lo que ve el jugador, para que todos los textos digan lo mismo (aprobado por Art
 
 | No | Sí |
 |---|---|
-| Geoesfera, globo | **El valle** (pestaña y mapa) |
+| Geoesfera, globo | **Mapa** (la pestaña; antes «El valle») |
+| Construir (la pestaña) | **Asentamiento** (Arturo, 20/10): el claro con lo levantado. «Construir» se queda como la acción de colocar una pieza |
 | Región | **Zona** |
 | Expediente | **Diario** («DIARIO · HOJA N»): el diario del Bastión, que escribe Morse. Desde la 0.4.1, la pestaña se llama **Campaña** y el edificio, **Sala de radio**; las hojas siguen siendo del Diario |
 | Hangar | **Cochera** |

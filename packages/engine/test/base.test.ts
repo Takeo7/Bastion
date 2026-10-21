@@ -124,7 +124,7 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(hasRadio(c)).toBe(true);
     expect(siegeHeard(c)).toEqual({ in: c.siege.in, count: c.siege.count, sides: c.siege.sides });
     const wall = freeSpot(c, 'wall');
-    expect(() => run(c, { type: 'place', piece: 'wall', x: wall.x, y: wall.y, rot: 0 }, 0, both)).toThrow(/nivel 2/);
+    expect(() => run(c, { type: 'place', piece: 'wall', x: wall.x, y: wall.y, rot: 0 }, 0, both)).toThrow(/caravana con toldo/);
     c.level = 2;
     c.parts = 0;
     expect(() => run(c, { type: 'place', piece: 'wall', x: wall.x, y: wall.y, rot: 0 }, 0, both)).toThrow(/piezas/);
@@ -241,7 +241,7 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
   it('a building rises a level with its facility\'s cost and the Bastion; the Sala de radio rises into communications and listening', () => {
     const c = solo();
     const shop = raise(c, 'workshop');
-    expect(() => run(c, { type: 'raise', piece: shop.id })).toThrow(/nivel 3/);
+    expect(() => run(c, { type: 'raise', piece: shop.id })).toThrow(/la casa móvil\./);
     c.level = 3;
     const credits = c.credits;
     run(c, { type: 'raise', piece: shop.id });
@@ -515,7 +515,7 @@ describe('the world', () => {
     const c = solo();
     expect(contactCapacity(c)).toBe(2);
     run(c, { type: 'contact', region: 'oce' });
-    expect(() => run(c, { type: 'contact', region: 'afr' })).toThrow(/comunicaciones/);
+    expect(() => run(c, { type: 'contact', region: 'afr' })).toThrow(/Sala de radio/);
     const credits = c.credits;
     c.nextSupplyDay = c.day + 1;
     advanceTime(c, new Rng(11));
@@ -617,7 +617,7 @@ describe('equipment', () => {
     expect(itemsFree(c, 'smokeGrenade')).toBe(0);
     expect(() => run(c, { type: 'equip', soldier: theirs.id, slot: 'utility', item: 'smokeGrenade' }, 1, both)).toThrow(/libres/);
     expect(() => run(c, { type: 'equip', soldier: theirs.id, slot: 'utility', item: 'firstAid' }, 0, both)).toThrow(/tus soldados/);
-    expect(() => run(c, { type: 'buy', item: 'mindShield' }, 0, both)).toThrow(/nivel 6/);
+    expect(() => run(c, { type: 'buy', item: 'mindShield' }, 0, both)).toThrow(/albergue ampliado/);
     // The belt has two places for any accessory (docs/FASE9.md §4); special rounds go no more.
     run(c, { type: 'buy', item: 'smokeGrenade' }, 0, both);
     run(c, { type: 'equip', soldier: mine.id, slot: 'ammo', item: 'smokeGrenade' }, 0, both);

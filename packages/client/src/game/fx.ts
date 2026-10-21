@@ -152,6 +152,8 @@ export class Fx {
   readonly group = new THREE.Group();
   private readonly glow = glowTexture();
   private particles: Particle[] = [];
+  /** samples(): one of each kind of thing drawn, kept for the battle. */
+  private kinds: THREE.Group | null = null;
   /** How big and bright the glow of a shot's impact is (1 in battle; the trailer's close shots, lab/trailer/sala.ts, take less: bloomed up close it swallowed the body). */
   impactGlow = 1;
 
@@ -196,6 +198,30 @@ export class Fx {
       }
     }
     list.length = kept;
+  }
+
+  /**
+   * One of each kind of thing the effects draw (a glow, a streak, a ring, a decal, a flame, a puff, a shell, a piece
+   * fading), for the renderer to compile behind the loading veil (Renderer.warm; game.ts): made at their first use,
+   * they compiled on the spot, at the first shot (playtest 20/10 #8). Kept, never drawn: while one material uses a
+   * program, three.js keeps it, and the effects' own are made and disposed shot by shot.
+   */
+  samples(): THREE.Group {
+    if (this.kinds) return this.kinds;
+    const kinds = new THREE.Group();
+    const mesh = (m: THREE.Material) => kinds.add(new THREE.Mesh(debrisGeometry, m));
+    kinds.add(this.glowSprite(0xffffff, 1), this.sprite('sparkle', 0xffffff, 1, 1, true));
+    mesh(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+    mesh(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    mesh(new THREE.MeshBasicMaterial({ map: fxTexture('sparkle'), transparent: true, opacity: 1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+    mesh(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false }));
+    mesh(hot(0xffb030, 1.3));
+    mesh(solid(0x8a8a86));
+    mesh(stoneMaterial);
+    mesh(new THREE.MeshStandardMaterial({ color: 0x9aa3ad, emissive: 0xff7a2a, emissiveIntensity: 0.6 }));
+    mesh(new THREE.MeshStandardMaterial({ color: 0x3b4a3a }));
+    mesh(new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 1 }));
+    return (this.kinds = kinds);
   }
 
   /** Takes every effect away at once, lights and things in flight included. */

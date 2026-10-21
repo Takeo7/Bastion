@@ -330,7 +330,7 @@ class Music {
     out.gain.setValueAtTime(0, ctx.currentTime);
     out.gain.linearRampToValueAtTime(1, ctx.currentTime + fade);
     out.connect(bus);
-    const verb = audio.reverb();
+    const verb = audio.reverb('music');
     if (verb) {
       const send = ctx.createGain();
       send.gain.value = 0.35;

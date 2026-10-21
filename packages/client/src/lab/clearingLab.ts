@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BASE_MAP, fellTree, freshBase, growBase, placePiece, Rng, type BaseState, type PieceId } from '@bastion/engine';
+import type { ArmoryStock } from '../strategy/clearing';
 import { ClearingArtView } from '../strategy/clearingArt';
 import { Stage, type StageSet } from '../strategy/stage';
 import '../styles.css';
@@ -13,7 +14,7 @@ import '../styles.css';
 // frames a spot; `__claro.fell(x0, y0, x1, y1)` fells a rectangle (redrawn
 // by chunks); `__claro.depart()` and `__claro.arrive()` send La Lata off
 // down its track and bring it back; `__claro.soldados()` and
-// `__claro.armeria()`, the Soldados' and the Armería's shots;
+// `__claro.armeria(stock)`, the Soldados' and the Armería's shots (with what the Armería holds);
 // `__claro.escuadra(n, informe, espejo, solo, libres)`, a squad of n by La Lata as its screen
 // frames it (the debrief's: some wounded, one fallen; mirrored, as the second
 // player sees it); `__claro.puestos()`, soldiers at their siege posts round
@@ -90,6 +91,8 @@ const look = (x: number, z: number, distance = 30, yaw = 0) => {
 };
 look(c, c, 34);
 (window as unknown as { __claro: unknown }).__claro = {
+  /** The clearing's art itself (to look into it). */
+  art,
   look,
   fell(x0: number, y0: number, x1: number, y1: number) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) fellTree(base, x, y);
@@ -108,7 +111,9 @@ look(c, c, 34);
     art.setShowcase('assault', '#e8a33a', undefined, undefined, 'lab');
     void stage.show('claro', art.soldierShot(), true);
   },
-  armeria() {
+  /** `stock`: what the Armería holds (its corner shows it: 20/10 #29); none, as it stands. */
+  armeria(stock?: ArmoryStock) {
+    if (stock) art.setArmory(stock);
     void stage.show('claro', art.armoryShot(), true);
   },
   /**

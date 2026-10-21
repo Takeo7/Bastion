@@ -55,10 +55,10 @@ describe('transmissions', () => {
 
   it('the recap tells a late commander where things stand and who is theirs', () => {
     const c = createCampaign([0], new Rng(1));
-    c.day = 12;
+    c.missionsFlown = 7;
     addPlayer(c, 1, new Rng(2));
     const lines = recapLines(c, 1);
-    expect(lines[0]!.text).toContain('día 12');
+    expect(lines[0]!.text).toContain('llevamos 7 salidas');
     const mine = c.soldiers.filter((s) => s.owner === 1);
     expect(mine).toHaveLength(4);
     for (const s of mine) expect(lines.map((l) => l.text).join(' ')).toContain(s.name);

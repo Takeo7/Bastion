@@ -246,7 +246,7 @@ for (const [id, p] of Object.entries(PROPS) as [string, PropAsset][]) {
 }
 
 for (const [id, p] of Object.entries(PIECES) as [string, PieceAsset][]) {
-  const piece = { keep: p.keep ?? null, parts: !!p.parts, drop: p.drop ?? [] };
+  const piece = { keep: p.keep ?? null, parts: !!p.parts, drop: p.drop ?? [], leaf: p.leaf ?? null };
   add({ kind: 'piece', id, name: id, out: join(PUBLIC, modelFile(p.pack, 'piece', id)), fbx: findFbx(p.pack, p.fbx), atlas: p.atlas ?? atlasOf(p.pack), slots: slotsOf(p.pack, p.fbx), ...piece });
 }
 

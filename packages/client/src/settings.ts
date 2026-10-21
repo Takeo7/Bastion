@@ -4,7 +4,7 @@
 // lower rendering resolution.
 import { storageKey } from './net';
 
-export type FpsCap = 0 | 30 | 60;
+export type FpsCap = 0 | 30 | 60 | 120;
 /** high: ambient occlusion and bloom · medium: bloom only · low: no post-processing. */
 export type EffectsLevel = 'high' | 'medium' | 'low';
 /** The old «Velocidad del combate» (docs/UX-RITMO.md): every action as long ×1.4, ×1 or ×0.6; now enemySpeed's rate. */

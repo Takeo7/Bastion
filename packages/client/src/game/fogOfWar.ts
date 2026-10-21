@@ -38,9 +38,6 @@ const UNKNOWN_NIGHT = new THREE.Color(0x070d11);
 const REMEMBERED_TINT = new THREE.Color(0x26303c);
 /** Never seen. */
 const UNKNOWN = new THREE.Color(0x161e28);
-/** Beyond the map's edge: the haze of the day (renderer.ts), so the map fades into distance, not into a void. */
-const BEYOND_DAY = new THREE.Color(0x837a73);
-const BEYOND_NIGHT = new THREE.Color(0x0c1a1e);
 
 /** 1 while the ambient occlusion draws its normals and depth (post.ts), else 0; shared by every map material. */
 export const AO_PASS = { value: 0 };
@@ -81,18 +78,17 @@ export class FogOfWar {
     fowTime: { value: 0 },
     fowRemembered: { value: REMEMBERED_TINT.clone() },
     fowUnknown: { value: UNKNOWN.clone() },
-    fowBeyond: { value: BEYOND_DAY.clone() },
     /** 1 by night: lit tiles (blue channel) glow warm. */
     fowNight: { value: 0 },
     fowLamp: { value: LAMP.clone() },
   };
 
   /**
-   * Day or night: beyond the map's edge, the tints of what has been seen
-   * (darker, still legible) and the unknown, and whether lit tiles glow.
+   * Day or night: the tints of what has been seen (darker, still legible)
+   * and of the unknown (beyond the map's edge too), and whether lit tiles
+   * glow. (Snow changes none of them now: beyond the edge is the unknown's.)
    */
-  setNight(on: boolean, snow = false): void {
-    this.uniforms.fowBeyond.value.copy(on ? BEYOND_NIGHT : snow ? new THREE.Color(0x9aafc2) : BEYOND_DAY);
+  setNight(on: boolean, _snow = false): void {
     this.uniforms.fowRemembered.value.copy(on ? REMEMBERED_NIGHT : REMEMBERED_TINT);
     this.uniforms.fowUnknown.value.copy(on ? UNKNOWN_NIGHT : UNKNOWN);
     this.uniforms.fowNight.value = on ? 1 : 0;
@@ -123,8 +119,8 @@ export class FogOfWar {
   private lit = new Float32Array(0);
   private litGoal = new Uint8Array(0);
   private settled = true;
-  /** Tiles always in sight, whatever the squad sees: the outline round what is played (docs/MAPAS.md §5.10); null, none. */
-  private open: Uint8Array | null = null;
+  /** Tiles never in sight nor explored, whatever the squad sees: the outline round what is played (playtest 20/10 #23); null, none. */
+  private shut: Uint8Array | null = null;
 
   constructor() {
     this.uniforms.fowMap.value.needsUpdate = true;
@@ -141,7 +137,7 @@ export class FogOfWar {
     this.knownGoal = new Uint8Array(size);
     this.lit = new Float32Array(size);
     this.litGoal = new Uint8Array(size);
-    this.open = null;
+    this.shut = null;
     this.uniforms.fowMap.value.dispose();
     const texture = new THREE.DataTexture(new Uint8Array(size * 4), width, height);
     texture.magFilter = THREE.LinearFilter;
@@ -151,17 +147,18 @@ export class FogOfWar {
     this.uniforms.fowSize.value.set(width, height);
   }
 
-  /** The tiles always in sight from now on (the map's outline), as a mask of the map's size; null, none. */
-  setOpen(mask: Uint8Array | null): void {
-    this.open = mask && mask.length === this.size ? mask : null;
+  /** The tiles under the fog for good from now on (the map's outline), as a mask of the map's size; null, none. */
+  setShut(mask: Uint8Array | null): void {
+    this.shut = mask && mask.length === this.size ? mask : null;
   }
 
   /** Tiles in sight and tiles explored; `instant` skips the fade (loading a mission). */
   set(visible: readonly boolean[], explored: Uint8Array, instant = false): void {
     for (let i = 0; i < this.size; i++) {
-      const seen = visible[i] || !!this.open?.[i];
+      const shut = !!this.shut?.[i];
+      const seen = visible[i] && !shut;
       this.sightGoal[i] = seen ? 1 : 0;
-      this.knownGoal[i] = explored[i] || seen ? 1 : 0;
+      this.knownGoal[i] = (explored[i] || seen) && !shut ? 1 : 0;
       if (instant) {
         this.sight[i] = this.sightGoal[i]!;
         this.known[i] = this.knownGoal[i]!;
@@ -229,7 +226,6 @@ export class FogOfWar {
           uniform float fowTime;
           uniform vec3 fowRemembered;
           uniform vec3 fowUnknown;
-          uniform vec3 fowBeyond;
           uniform float fowNight;
           uniform vec3 fowLamp;
           uniform float fowAoPass;
@@ -277,8 +273,7 @@ export class FogOfWar {
             // Unexplored: the mist, over the scene's haze (which would lift it to a grey where
             // everything reads), a little lighter higher up so tall shapes barely show.
             vec3 fowDark = fowUnknown * (0.55 + 1.1 * fowMist) * (1.0 + 0.15 * clamp(vFowPos.y / 5.0, 0.0, 1.0));
-            // Beyond the map's edge, the haze instead.
-            fowDark = mix(fowBeyond * (0.92 + 0.16 * fowMist), fowDark, fowInside);
+            // Beyond the map's edge the same (playtest 20/10 #23, Arturo: what is not played is dark, always).
             gl_FragColor.rgb = mix(fowDark, gl_FragColor.rgb, fowKnown);
           }`,
         );

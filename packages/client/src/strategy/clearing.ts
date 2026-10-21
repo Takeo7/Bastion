@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { BASE_EDGE, BUILD_TEXT, buildingWorks, fellHint, pieceAt, pieceCells, pieceHint, PIECES, treeAt, type Appearance, type BasePiece, type BaseState, type PieceId, type TemplateId, type Vec2 } from '@bastion/engine';
+import { BASE_EDGE, BUILD_TEXT, buildingWorks, fellHint, pieceAt, pieceCells, pieceHint, PIECES, treeAt, type Appearance, type BasePiece, type BaseState, type FoundWeaponId, type ItemId, type PieceId, type TemplateId, type Vec2, type WeaponModId } from '@bastion/engine';
 import { CameraRig } from '../game/camera';
 import type { Gear } from '../game/figures';
 import type { LineupEntry } from './clearingArt';
@@ -39,6 +39,8 @@ export interface ClearingArt {
   /** Soldados' and the Armería's views of the clearing (the caravan is barracks and armoury: docs/FASE12.md §11). */
   soldierShot?(): Shot;
   armoryShot?(): Shot;
+  /** What the Armería's corner shows (20/10 #29): what the campaign holds there; the same again does nothing. */
+  setArmory?(stock: ArmoryStock): void;
   /**
    * The squad by La Lata (playtest 18/10 #44: choosing it and the debrief on the clearing): the
    * soldiers standing (an empty list clears them), where each stands for the cards under them, and
@@ -54,6 +56,13 @@ export interface ClearingArt {
   setVehicle?(vehicle: number): void;
   /** The siege's defenders standing at their posts (Arturo, 18/10 #58), tile (x, y) each; an empty list clears them. */
   setPosts?(posts: { entry: LineupEntry; x: number; y: number }[]): void;
+}
+
+/** What the Armería holds, as its corner shows it: the weapons found, the accessories bought (counts), the improvements loose (counts). */
+export interface ArmoryStock {
+  weapons: readonly FoundWeaponId[];
+  items: Partial<Record<ItemId, number>>;
+  mods: Partial<Record<WeaponModId, number>>;
 }
 
 /** A defender's post for the siege (#58): where it starts, whose (its commander's colour), and whether it is this player's. */
@@ -439,16 +448,12 @@ export class ClearingSet implements StageSet {
     return [];
   }
 
-  /** A left drag pans, except while felling (it draws the rectangle). */
   /**
-   * A left drag pans the clearing, except while building (playtest 18/10 #35: the camera moved under the
-   * hand; the left drag fells and lays lines there): then the right drag, WASD and the arrows move it.
+   * The mouse never moves the view in the clearing (playtest 20/10 #6: «solo WASD»): a left drag fells or lays
+   * lines while building and otherwise does nothing; WASD and the arrows move it, the wheel brings it closer.
    */
-  drag(dx: number, dy: number): boolean {
-    if (this.held) return false;
-    if (this.building) return true;
-    this.rig?.panPixels(dx, dy);
-    return true;
+  drag(_dx: number, _dy: number): boolean {
+    return !this.held;
   }
 
   zoom(factor: number): void {
@@ -488,11 +493,8 @@ export class ClearingSet implements StageSet {
   private readonly onMove = (e: PointerEvent): void => {
     if (this.stage?.current !== 'clearing' || this.held) return;
     const press = this.press;
-    if (press && Math.abs(e.clientX - press.x) + Math.abs(e.clientY - press.y) > 4) {
-      // A right drag pans (the left one comes through the stage's drag).
-      if (press.button === 2) this.rig?.panPixels(e.movementX, e.movementY);
-      press.moved = true;
-    }
+    // Moved: a drag, not a click (a right drag pans no more: drag above).
+    if (press && Math.abs(e.clientX - press.x) + Math.abs(e.clientY - press.y) > 4) press.moved = true;
     const tile = this.tileAt(e);
     if (press?.moved && press.button === 0 && this.tool.kind === 'fell' && press.tile && tile) this.fellBox = { from: press.tile, to: tile };
     if (press?.moved && press.button === 0 && this.tool.kind === 'place' && press.tile && tile && this.handlers.lineable?.(this.tool.piece)) this.line = lineCells(press.tile, tile);

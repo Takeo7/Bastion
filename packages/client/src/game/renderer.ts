@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { perfBegin, perfFrame } from '../perf';
 import { FrameLimiter, onGraphics, pixelRatio, postQuality, QualityGuard, type GraphicsSettings } from '../settings';
+import { CROWD } from './crowd';
 import { fitPostToPixelRatio, lightenPost, postChain, UNIT_LAYER, type PostChain } from './post';
 
 type FrameFn = (dt: number, time: number) => void;
@@ -203,6 +204,8 @@ const VIEW_REACH = 90;
 const SHADOW_BIAS = -0.0004;
 const BIAS_SPAN = 89;
 const NORMAL_BIAS = 0.02;
+/** Seconds the occlusion takes to fade for the shot over a shoulder, and back. */
+const SHOULDER_FADE = 0.3;
 
 /** Owns the WebGL renderer, the scene, the lights and the render loop. */
 export class Renderer {
@@ -238,6 +241,11 @@ export class Renderer {
   private readonly post: PostChain;
   /** The camera close in (closeUp). */
   private near = false;
+  /** The shot over a shoulder (shoulderShot): whether it is on, and how far the occlusion has faded for it (0 to 1). */
+  private shoulder = false;
+  private shoulderFade = 0;
+  /** warm(): the occlusion's own material compiled (once a battle). */
+  private aoWarmed = false;
   private readonly limiter = new FrameLimiter();
   /** Lowers the quality if the mission doesn't run fluidly (playtest: «me va a 25 fps»). */
   private readonly guard = new QualityGuard(() => this.onQualityLowered?.());
@@ -283,6 +291,45 @@ export class Renderer {
     this.resizeObserver.observe(container);
     this.unsubscribe = onGraphics((g) => this.applyGraphics(g));
     this.gl.setAnimationLoop(() => this.frame());
+    // The crowd's bodies are baked a little a frame, after the veil: each compiled as it comes (#8).
+    CROWD.onMesh = (mesh) => void this.warm(mesh).catch(() => undefined);
+  }
+
+  /**
+   * `object`'s materials compiled now, in the background where the GPU can (KHR_parallel_shader_compile): with the
+   * battle's lights and with one and two more (a shot's flash or a bang adds one for a moment: fx.ts), for the
+   * screen and for the post-processing's buffer (another colour space, no tone mapping). What is made after the
+   * loading veil's compile (the crowd's bodies, the effects at their first use) compiled on the spot otherwise:
+   * the first shot of a mission stalled for seconds (playtest 20/10 #8).
+   */
+  async warm(object: THREE.Object3D): Promise<void> {
+    const { gl, scene, camera } = this;
+    // The occlusion's pre-pass draws all that is opaque with a material of its own (post.ts SolidGTAO), the first
+    // time when it first has something to draw: its program for a mesh and for an instanced one, once a battle
+    // (into its buffer only).
+    let normals: THREE.Group | null = null;
+    let box: THREE.BoxGeometry | null = null;
+    if (!this.aoWarmed) {
+      this.aoWarmed = true;
+      const normal = this.post.ao.normalMaterial;
+      box = new THREE.BoxGeometry();
+      normals = new THREE.Group().add(new THREE.Mesh(box, normal), new THREE.InstancedMesh(box, normal, 1));
+    }
+    for (const target of [null, this.post.composer.readBuffer]) {
+      for (let extra = 0; extra <= 2; extra++) {
+        const lights = Array.from({ length: extra }, () => new THREE.PointLight(0xffffff, 0));
+        // The lights and the target only while the compile reads them: it does so at once (the wait is for the GPU).
+        const was = gl.getRenderTarget();
+        if (lights.length) scene.add(...lights);
+        gl.setRenderTarget(target);
+        const ready = [gl.compileAsync(object, camera, scene)];
+        if (normals && target) ready.push(gl.compileAsync(normals, camera, scene));
+        gl.setRenderTarget(was);
+        if (lights.length) scene.remove(...lights);
+        await Promise.all(ready);
+      }
+    }
+    box?.dispose();
   }
 
   /** Graphics settings, live: resolution, shadows and how much post-processing (less what the guard took). */
@@ -299,7 +346,7 @@ export class Renderer {
     this.shadowBox = null;
     shadowsStale = true;
     const q = postQuality();
-    this.post.ao.enabled = q.ao !== 'off' && !this.near;
+    this.post.ao.enabled = q.ao !== 'off' && !this.near && this.shoulderFade < 1;
     lightenPost(this.post, q.ao === 'light', q.bloom === 'light');
     if (this.gl.shadowMap.enabled !== g.shadows) {
       this.gl.shadowMap.enabled = g.shadows;
@@ -314,6 +361,7 @@ export class Renderer {
   }
 
   dispose(): void {
+    CROWD.onMesh = null;
     this.unsubscribe();
     this.resizeObserver.disconnect();
     this.gl.setAnimationLoop(null);
@@ -336,7 +384,25 @@ export class Renderer {
    */
   set closeUp(on: boolean) {
     this.near = on;
-    this.post.ao.enabled = postQuality().ao !== 'off' && !on;
+    this.post.ao.enabled = postQuality().ao !== 'off' && !on && this.shoulderFade < 1;
+  }
+
+  /**
+   * The shot over a shoulder of the attack that kills (playtest 20/10 #11): the occlusion fades out as the camera
+   * goes in, for the reason closeUp gives, and back as it comes out.
+   */
+  set shoulderShot(on: boolean) {
+    this.shoulder = on;
+  }
+
+  private fadeShoulder(dt: number): void {
+    const goal = this.shoulder ? 1 : 0;
+    if (this.shoulderFade === goal) return;
+    const step = dt / SHOULDER_FADE;
+    this.shoulderFade = goal > this.shoulderFade ? Math.min(goal, this.shoulderFade + step) : Math.max(goal, this.shoulderFade - step);
+    const k = this.shoulderFade;
+    this.post.ao.blendIntensity = 1 - k * k * (3 - 2 * k);
+    this.post.ao.enabled = postQuality().ao !== 'off' && !this.near && k < 1;
   }
 
   /** The time of day by name: also dawn, for the trailer. */
@@ -572,6 +638,7 @@ export class Renderer {
   /** Draws one frame as the player sees it: scene with post-processing, then the CSS2D labels. */
   render(dt = 0): void {
     while (jobs.length) jobs.shift()!(this.gl);
+    this.fadeShoulder(dt);
     this.fitShadow();
     this.updateShadows(dt);
     this.camera.getWorldDirection(this.look);

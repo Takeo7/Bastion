@@ -93,7 +93,7 @@ export const PIECES: Record<PieceId, PieceDef> = {
   quarters: { id: 'quarters', name: 'Barracón', kind: 'building', size: [6, 5], tile: 'wall', cost: { supplies: 40 }, hp: 30, level: 1, facility: 'quarters' },
   infirmary: { id: 'infirmary', name: 'Enfermería', kind: 'building', size: [6, 5], tile: 'wall', cost: { supplies: 60 }, hp: 30, level: 1, unique: true, facility: 'infirmary' },
   workshop: { id: 'workshop', name: 'Taller', kind: 'building', size: [5, 4], tile: 'wall', cost: { supplies: 85 }, hp: 30, level: 1, unique: true, facility: 'workshop' },
-  garden: { id: 'garden', name: 'Huerto', kind: 'building', size: [7, 6], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, unique: true, facility: 'garden' },
+  garden: { id: 'garden', name: 'Huerto', kind: 'building', size: [7, 6], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, facility: 'garden' },
   quarantine: { id: 'quarantine', name: 'Cuarentena', kind: 'building', size: [4, 4], tile: 'wall', cost: { supplies: 50 }, hp: 30, level: 1, unique: true, facility: 'quarantine' },
   memorial: { id: 'memorial', name: 'Camposanto', kind: 'building', size: [4, 4], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, unique: true, facility: 'memorial' },
   range: { id: 'range', name: 'Campo de tiro', kind: 'building', size: [10, 3], tile: 'low', cost: { supplies: 90 }, hp: 20, level: 2, unique: true, facility: 'range' },
@@ -228,20 +228,22 @@ export function bastionFootprint(base: BaseState): Vec2[] {
  * 6), by tile of its lot (x across, y deep, its front the last row): what is
  * always there, and what its second level adds.
  *   - the caravan: the fire with a chair either side, the wood; then its steps,
- *     the tarp over two by two by its side, the generator by its end;
+ *     the table and chairs under its awning by its side (two by two), the
+ *     generator by its end;
  *   - the mobile home: the fire and its chairs along the front row, the wood;
  *     then the deck along its front and its steps;
  *   - the barracón: its steps, the fire and its chairs in the front corner, the
- *     wood; then the floodlight, the solar panels and the generator up the free
+ *     wood; then the water tower, the solar panel and the generator up the free
  *     column, sandbags either side of its steps;
  *   - the house (its porch the model's own, inside its 7 × 7): the wood; then
- *     the floodlight in the other corner.
+ *     the floodlight in the other corner, sandbags across the front row either
+ *     side of the way in, tank traps in the back corners (playtest 20/10 #13).
  */
 const BASTION_YARD: { always: [number, number][]; more: [number, number][] }[] = [
   { always: [[5, 7], [4, 7], [6, 7], [0, 8]], more: [[5, 5], [0, 6], [1, 6], [0, 7], [1, 7], [7, 3]] },
   { always: [[5, 8], [4, 8], [6, 8], [0, 8]], more: [[3, 6], [4, 6], [5, 6], [6, 6], [7, 6], [2, 6]] },
   { always: [[4, 7], [7, 8], [6, 8], [8, 8], [0, 8]], more: [[8, 0], [8, 1], [8, 2], [8, 3], [3, 7], [5, 7]] },
-  { always: [[0, 8]], more: [[8, 8]] },
+  { always: [[0, 8]], more: [[8, 8], [1, 8], [2, 8], [6, 8], [7, 8], [0, 0], [8, 0]] },
 ];
 
 /**

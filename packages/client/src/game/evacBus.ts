@@ -48,7 +48,7 @@ export class EvacBus {
       });
       this.root.add(mula.body);
       this.mula = mula;
-      if (this.parked) this.park(this.parked.at, this.parked.heading, this.parked.doorsTo, this.parked.shown, this.parked.bay);
+      if (this.parked) this.park(this.parked.at, this.parked.heading, this.parked.doorsTo, this.parked.shown, this.parked.bay, this.open);
     });
   }
 
@@ -60,8 +60,9 @@ export class EvacBus {
    * (mission.evacBus: 2 × 9, the bus's), centred on `at`, a shorter vehicle
    * stands at its front, its nose where the bus's would be.
    */
-  park(at: THREE.Vector3, heading: number, doorsTo: THREE.Vector3, shown = true, bay = 0): void {
+  park(at: THREE.Vector3, heading: number, doorsTo: THREE.Vector3, shown = true, bay = 0, open = true): void {
     this.parked = { at: at.clone(), heading, doorsTo: doorsTo.clone(), shown, bay };
+    this.open = open;
     const ahead = Math.max(0, (bay - this.length) / 2);
     this.root.position.copy(at).add(new THREE.Vector3(Math.sin(heading) * ahead, 0, Math.cos(heading) * ahead));
     this.root.rotation.set(0, heading, 0);
@@ -72,9 +73,47 @@ export class EvacBus {
     this.root.visible = shown;
     if (this.mula) {
       this.mula.lights.emissiveIntensity = 0.2;
-      for (const d of this.mula.doors) doorAt(d, 1);
+      this.setDoors(this.mula.doors.map((_, k) => k), open ? 1 : 0);
     }
   }
+
+  /** Doors `which` (indices into its leaves) at `k` of the way open. */
+  setDoors(which: number[], k: number): void {
+    const m = this.mula;
+    if (!m) return;
+    for (const i of which) {
+      const d = m.doors[i];
+      if (!d) continue;
+      doorAt(d, k);
+      this.doorK[i] = k;
+    }
+  }
+
+  /**
+   * Its leaves by the doorway each closes (`doorways`' order): each leaf goes with the doorway nearest it (a van's
+   * two back doors with its one doorway, a 4×4's each with its own).
+   */
+  leavesByDoorway(): number[][] {
+    const m = this.mula;
+    const ways = this.doorways();
+    const by = ways.map(() => [] as number[]);
+    if (!m) return by;
+    m.body.updateMatrix();
+    this.root.updateMatrix();
+    m.doors.forEach((d, k) => {
+      const at = d.shut.clone().applyMatrix4(m.body.matrix).applyMatrix4(this.root.matrix).setY(0);
+      let best = 0;
+      ways.forEach((w, j) => {
+        if (w.distanceTo(at) < ways[best]!.distanceTo(at)) best = j;
+      });
+      by[best]?.push(k);
+    });
+    return by;
+  }
+
+  /** Whether it was parked with its doors open (park), and how far each leaf is open now (setDoors). */
+  private open = true;
+  private readonly doorK: number[] = [];
 
   /** How long the bus is, in the map's tiles (once built; 7 until then). */
   get length(): number {
@@ -132,6 +171,7 @@ export class EvacBus {
       for (const d of m.doors) doorAt(d, t);
       m.lights.emissiveIntensity = 0.2 + (1 - t) * (NIGHT.value > 0.5 ? 1.3 : 2.6);
     });
+    m.doors.forEach((_, k) => (this.doorK[k] = 1));
   }
 
   /**
@@ -176,25 +216,28 @@ export class EvacBus {
     await this.ready;
     const m = this.mula;
     if (!m || !this.root.visible) return;
+    // Shut from however far each is open (the clearing's are shut by those who got in: clearingArt board).
+    const from = m.doors.map((_, k) => this.doorK[k] ?? (this.open ? 1 : 0));
     await tween(SHUT_SECONDS, (t) => {
-      for (const d of m.doors) doorAt(d, 1 - t);
+      m.doors.forEach((d, k) => doorAt(d, from[k]! * (1 - t)));
       // By night they would dazzle (Arturo 17/10): half as bright.
       m.lights.emissiveIntensity = 0.2 + t * (NIGHT.value > 0.5 ? 1.3 : 2.6);
     });
+    m.doors.forEach((_, k) => (this.doorK[k] = 0));
     if (fade) return this.fade(1, 0);
-    const from = this.root.position.clone();
+    const start = this.root.position.clone();
     const ahead = new THREE.Vector3(Math.sin(this.root.rotation.y), 0, Math.cos(this.root.rotation.y));
     let last = 0;
     await tween(AWAY_SECONDS, (t) => {
       // From standing, faster and faster.
       const along = distance * t * t;
-      this.root.position.copy(from).addScaledVector(ahead, along);
+      this.root.position.copy(start).addScaledVector(ahead, along);
       const turned = (along - last) / (m.wheelRadius * SCALE);
       last = along;
       for (const w of m.wheels) w.rotation.x += turned;
     });
     this.root.visible = false;
     // Gone, it is back where it parks (out of sight): the way it comes back to (arrive).
-    this.root.position.copy(from);
+    this.root.position.copy(start);
   }
 }

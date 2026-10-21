@@ -3,6 +3,8 @@ import * as THREE from 'three';
 const PITCH = THREE.MathUtils.degToRad(52);
 const MIN_DISTANCE = 9;
 const MAX_DISTANCE = 42;
+/** How quickly it goes into the shot over the shoulder and back out (per second, eased). */
+const CLOSE_RATE = 4;
 
 /**
  * XCOM-style tactical camera: fixed pitch, yaw in 90° steps (Q/E),
@@ -25,6 +27,11 @@ export class CameraRig {
   private shakeStrength = 0;
   private shakeTime = 0;
   private readonly keys = new Set<string>();
+  /** The shot over a shoulder, where it stands and what it looks at; kept while the camera goes back out of it. */
+  private close: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
+  private closeOn = false;
+  /** How far into it: 0 the rig's own view, 1 the shot (eased both ways). */
+  private closeness = 0;
   private bounds = new THREE.Box2(new THREE.Vector2(0, 0), new THREE.Vector2(30, 30));
 
   /** `enabled`: whether the keys move it now (the base's clearing, strategy/clearing.ts, only while it is shown). */
@@ -73,6 +80,26 @@ export class CameraRig {
     this.epoch++;
     this.takenAt = performance.now();
     this.savedDistance = null;
+    this.closeOn = false;
+  }
+
+  /**
+   * A third-person shot (Arturo, 20/10 #11, the attack that kills): from `pos`, over the attacker's shoulder,
+   * looking at `look` (shotCam.ts overShoulder works both out). The rig's own view stays where it was, and
+   * `endCloseShot` (or the player taking the camera) goes back to it.
+   */
+  closeShot(pos: THREE.Vector3, look: THREE.Vector3): void {
+    this.close = { pos: pos.clone(), look: look.clone() };
+    this.closeOn = true;
+  }
+
+  endCloseShot(): void {
+    this.closeOn = false;
+  }
+
+  /** Whether it is in the shot over a shoulder, or on its way into it (the renderer fades its occlusion for it). */
+  get closeUp(): boolean {
+    return this.closeOn;
   }
 
   /** When the player last took the camera (performance.now): the enemy turn leaves it alone a while after (docs/UX-RITMO.md). */
@@ -165,7 +192,17 @@ export class CameraRig {
       Math.sin(PITCH) * this.distance,
       this.target.z + Math.cos(this.yaw) * horizontal,
     );
-    this.camera.lookAt(this.target);
+    // Into the shot over a shoulder, or back out of it: between the two views, eased.
+    this.closeness += ((this.closeOn ? 1 : 0) - this.closeness) * (1 - Math.exp(-dt * CLOSE_RATE));
+    if (this.closeOn || this.closeness > 0.002) {
+      const w = THREE.MathUtils.smoothstep(this.closeness, 0, 1);
+      this.camera.position.lerp(this.close!.pos, w);
+      this.camera.lookAt(this.target.clone().lerp(this.close!.look, w));
+    } else {
+      this.closeness = 0;
+      this.close = null;
+      this.camera.lookAt(this.target);
+    }
 
     if (this.shakeTime > 0) {
       this.shakeTime = Math.max(0, this.shakeTime - dt);

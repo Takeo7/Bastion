@@ -63,6 +63,8 @@ export interface AbilityView {
   enabled: boolean;
   /** Why it can't be used now. */
   reason?: string;
+  /** What to do first, on the button itself in place of its name, for a reason that wants seeing without the card (#24). */
+  note?: string;
   /** The hover card: name, cost («1 acción», «Acaba el turno»…), limits and what it does. */
   name: string;
   cost: string;
@@ -308,7 +310,7 @@ const CONTROLS: [string, string][] = [
   ['Mayús + clic · G · clic con la rueda', SETTINGS_TEXT.pingControls],
   ['H · clic en su nombre', 'Hoja del soldado: tablero, estadísticas y lo que lleva'],
   ['Q / E', 'Girar la cámara'],
-  ['Rueda', 'Acercar o alejar: de lejos se ven los tejados; de cerca, la planta del soldado'],
+  ['Rueda', 'Acercar o alejar'],
   ['RePág / AvPág · Mayús + rueda', 'Subir o bajar de planta'],
   ['WASD', 'Mover la cámara'],
   ['F', 'Centrar en el soldado'],
@@ -361,14 +363,17 @@ export class Hud {
    * sin estorbar»): the arrival card shrinks into it (dock) and it stays the whole mission, with the mission's
    * name, its objective as it goes and what counts (turns, waves, the horde). Hidden while that card is open.
    */
-  private readonly goalDock = h('div.goal-dock.panel', {}, this.mission);
+  /** The objective's card on the right, where the arrival card shrinks to; a click opens that card again (Ana, 20/10 #32). */
+  private readonly goalDock = h('div.goal-dock.panel', { onclick: () => this.reopenIntro(), title: 'Ver la misión' }, this.mission);
+  /** What the arrival card said, to open it again from the objective's card. */
+  private introArgs: Parameters<Hud['intro']> | null = null;
   /** Real time (docs/TIEMPO-REAL.md): the big «PAUSA» while the clock is stopped. */
   private readonly rtPauseEl = h('div.rt-pause.hidden', { role: 'status' }, h('b', {}, 'PAUSA'), h('small', {}, 'Espacio para seguir'));
   /** Real time: the slow motion while someone picks an ability's target (rtSlow), and what to do if it is this player. */
   private readonly rtSlowEl = h('div.rt-pause.rt-slow.hidden', { role: 'status' }, h('b', {}, 'CÁMARA LENTA'), h('small'));
   private rtKey = '';
-  /** What the target panel last showed (setTarget). */
-  private targetKey = '';
+  /** What the target panel last showed (setTarget); null before the first, which must hide it (Ana, 20/10 #34: an empty frame stood on the screen). */
+  private targetKey: string | null = null;
   /** The right-hand column (Menú, the objective, the log): the aim's panel keeps below it (#20: «se solapan»). */
   private sideEl!: HTMLElement;
   private readonly players = h('div.players');
@@ -1034,7 +1039,7 @@ export class Hud {
 
   private abilityButton(a: AbilityView, onclick: () => void): HTMLElement {
     return h(
-      `button.ability${a.active ? '.active' : ''}${a.free ? '.free' : ''}${a.depleted ? '.depleted' : ''}${a.options && a.options.length > 1 ? '.has-menu' : ''}`,
+      `button.ability${a.active ? '.active' : ''}${a.free ? '.free' : ''}${a.depleted ? '.depleted' : ''}${a.options && a.options.length > 1 ? '.has-menu' : ''}${a.note && !a.enabled ? '.noted' : ''}`,
       {
         disabled: !a.enabled,
         'data-ability': a.icon ?? a.id,
@@ -1044,7 +1049,7 @@ export class Hud {
       },
       h('span.key', {}, a.hotkey),
       abilityIcon(a.icon ?? (a.id as AbilityId)),
-      h('span.label', {}, a.label),
+      h('span.label', {}, a.note && !a.enabled ? a.note : a.label),
       a.count !== undefined ? h('span.count', {}, `×${a.count}`) : null,
       a.cooldown ? h('span.cd', {}, String(a.cooldown)) : null,
       a.depleted ? h('span.stamp', { 'aria-label': 'Agotado' }) : null,
@@ -1307,21 +1312,23 @@ export class Hud {
    */
   intro(kicker: string, title: string, objective?: string, turns?: string, briefing?: string): Promise<void> {
     this.introClose?.();
+    this.introArgs = [kicker, title, objective, turns, briefing];
     this.goalDock.classList.add('waiting');
     const close = () => this.introClose?.();
-    // A click anywhere closes it; nothing under it is played meanwhile.
-    const catcher = h('div.intro-catcher', { onpointerdown: close });
+    // Only «Entendido» (or Enter, Space) closes it (Ana, 20/10 #32: a click by the way lost it); nothing under it is
+    // played meanwhile.
+    const catcher = h('div.intro-catcher');
     const el = h(
       'div.mission-intro.open',
-      { onclick: close },
+      {},
       kicker ? h('small', {}, kicker) : null,
       h('h1', {}, type(title)),
       // The objective, the turns under it in the accent, then the briefing whole (playtest 19/10 #12).
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
       turns ? h('p.intro-turns', {}, turns) : null,
       briefing ? h('p.intro-briefing', {}, briefing) : null,
-      // Only what starts it (playtest 18/10 #27); a click anywhere, Enter, Space or Esc do too.
-      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button' }, 'EMPEZAR')),
+      // Only what closes it (playtest 18/10 #27; Ana, 20/10 #32), the same each time it is opened.
+      h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button', onclick: close }, 'ENTENDIDO')),
     );
     this.root.append(catcher, el);
     return new Promise((resolve) => {
@@ -1333,6 +1340,13 @@ export class Hud {
         resolve();
       };
     });
+  }
+
+  /** The arrival card again, from the objective's card it shrank into (#32). */
+  private reopenIntro(): void {
+    if (this.introOpen || !this.introArgs || this.goalDock.classList.contains('waiting')) return;
+    uiSound('paper');
+    void this.intro(...this.introArgs);
   }
 
   /**

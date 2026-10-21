@@ -116,8 +116,8 @@ describe('the weapons from zero', () => {
     c.credits = 999;
     c.parts = 99;
     expect(craftBlocker(c, 'makeRifle')).toBeNull();
-    expect(craftBlocker(c, 'makeSniper')).toBe('Hace falta el nivel 3 del Bastión.');
-    expect(craftBlocker(c, 'ammo2')).toBe('Hace falta el nivel 3 del Bastión.');
+    expect(craftBlocker(c, 'makeSniper')).toBe('Se desbloquea con la casa móvil.');
+    expect(craftBlocker(c, 'ammo2')).toBe('Se desbloquea con la casa móvil.');
     c.crafted = ['ammo1'];
     expect(spareMags(c)).toBe(1);
     expect(CRAFTS.makeRifle.makes).toBe('assaultRifle');

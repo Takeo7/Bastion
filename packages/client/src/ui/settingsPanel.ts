@@ -41,7 +41,8 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
   return h(
     'div.settings',
     {},
-    row('fps', 'Límite de FPS', [[0, 'Sin límite'], [60, '60'], [30, '30']], 'Menos imágenes por segundo: menos trabajo para la tarjeta gráfica y la batería.', redraw),
+    // 120 for a screen of 120 Hz or more (playtest 20/10 #3).
+    row('fps', 'Límite de FPS', [[0, 'Sin límite'], [120, '120'], [60, '60'], [30, '30']], 'Menos imágenes por segundo: menos trabajo para la tarjeta gráfica y la batería.', redraw),
     row(
       'effects',
       'Efectos',
@@ -172,7 +173,7 @@ export function soundSettings(redraw: () => void): HTMLElement {
     {},
     volumeRow('master', 'Volumen', 'Todo el sonido del juego. La tecla M lo silencia en combate.', redraw),
     volumeRow('sfx', 'Efectos', 'Disparos, explosiones, pasos y acciones.', redraw),
-    volumeRow('music', 'Música', 'La música de la base, del valle y del combate.', redraw),
+    volumeRow('music', 'Música', 'La música de la base, del mapa y del combate.', redraw),
     volumeRow('ambience', 'Ambiente', 'Viento, ciudad, bosque, máquinas.', redraw),
     volumeRow('ui', 'Interfaz y radio', 'Botones, avisos y las transmisiones de radio.', redraw),
   );

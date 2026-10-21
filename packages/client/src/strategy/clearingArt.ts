@@ -1,18 +1,19 @@
 import * as THREE from 'three';
-import { bastionFootprint, bastionLot, bastionStage, cellsOf, createMission, onBastionLot, pieceAt, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type PieceId, type TemplateId } from '@bastion/engine';
+import { bastionFootprint, bastionLot, bastionStage, cellsOf, createMission, onBastionLot, pieceAt, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type ItemId, type PieceId, type TemplateId, type WeaponModId } from '@bastion/engine';
 import { drawPiece, pieceMap, type PieceArt } from '../game/basePieces';
 import { EvacBus } from '../game/evacBus';
 import { MapView } from '../game/mapView';
 import { dayMood, runMapJobs } from '../game/renderer';
 import { graphics } from '../settings';
 import { syntyProp, syntyPropsLoaded } from '../game/syntyProps';
-import type { AtlasId, PropId } from '../game/syntyManifest';
+import { WEAPON_PARTS, WEAPONS, type AtlasId, type PropId, type WeaponId, type WeaponPartId } from '../game/syntyManifest';
+import { foundModel } from '../game/syntyFigures';
 import type { Gear } from '../game/figures';
 import { buildUnit, IDLE_POSE, isFigure, type UnitRig } from '../game/models';
 import { STOREY } from '../game/coords';
 import { atlasTexture, loadModel } from '../game/synty';
 import { tween } from '../game/tween';
-import type { ClearingArt } from './clearing';
+import type { ArmoryStock, ClearingArt } from './clearing';
 import { skyTexture, type Shot, type StageMood } from './stage';
 
 /** A soldier standing by La Lata (the squad, the debrief) or at its post for a siege. */
@@ -67,6 +68,13 @@ export class ClearingArtView implements ClearingArt {
   /** Which way each shot's camera stands from what it looks at (on the ground plan), and how far: the clearest (campPlaces). */
   private soldierView = { dir: { x: 0, z: 1 }, dist: 4 };
   private armoryView = { dir: { x: 0.92, z: 0.4 }, dist: 3.5 };
+  /** Where La Lata stands parked (parkBus): its middle, its heading, half its length and width; null nowhere. */
+  private busBox: { x: number; z: number; dx: number; dz: number; half: number; halfWidth: number } | null = null;
+  /** What the Armería holds (setArmory), and what it was filled with last. */
+  private stock: ArmoryStock = { weapons: [], items: {}, mods: {} };
+  private stocked = '';
+  /** What fillArmory was last called with, to fill it again when the stock changes. */
+  private armoryArgs: { base: BaseState; free: (x: number, z: number) => boolean } | null = null;
   /** Frames left with the shadow map drawn whatever (the first ones, while the props come in). */
   private warm = 30;
   /**
@@ -136,9 +144,9 @@ export class ClearingArtView implements ClearingArt {
     this.map.setVisibility(new Array<boolean>(s.width * s.height).fill(true));
     this.base = base;
     this.parkBus(base);
-    this.campPlaces(base);
-    // The squad stands again where it now can.
+    // The squad stands again where it now can (and the Armería's corner keeps out of its way: campPlaces).
     this.place = null;
+    this.campPlaces(base);
     this.relineup();
   }
 
@@ -151,11 +159,19 @@ export class ClearingArtView implements ClearingArt {
   private campPlaces(base: BaseState): void {
     const caravan = base.pieces.find((p) => p.piece === 'caravan');
     const quarters = base.pieces.find((p) => p.piece === 'quarters' && p.hp > 0);
-    // Off the Bastion's lot (its building and its yard) as off anything built.
+    /** On La Lata parked, `margin` round it (20/10 #29: the Armería's camera was inside the 4×4, the bench behind it). */
+    const bus = this.busBox;
+    const inBus = (x: number, z: number, margin: number) => {
+      if (!bus) return false;
+      const ox = x - bus.x;
+      const oz = z - bus.z;
+      return Math.abs(ox * bus.dx + oz * bus.dz) <= bus.half + margin && Math.abs(ox * bus.dz - oz * bus.dx) <= bus.halfWidth + margin;
+    };
+    // Off the Bastion's lot (its building and its yard) as off anything built, and off La Lata.
     const free = (x: number, z: number) => {
       const tx = Math.floor(x);
       const tz = Math.floor(z);
-      return tx >= 0 && tz >= 0 && tx < base.width && tz < base.height && !pieceAt(base, tx, tz) && !treeAt(base, tx, tz) && !onBastionLot(base, tx, tz);
+      return tx >= 0 && tz >= 0 && tx < base.width && tz < base.height && !pieceAt(base, tx, tz) && !treeAt(base, tx, tz) && !onBastionLot(base, tx, tz) && !inBus(x, z, 0.7);
     };
     /** A piece's middle and its sides (out, and how far its edge is), its own front (+y as built, turned) first; the caravan's, the Bastion's footprint. */
     const sides = (p: BasePiece) => {
@@ -173,6 +189,7 @@ export class ClearingArtView implements ClearingArt {
     const tall = (x: number, z: number) => {
       const tx = Math.floor(x);
       const tz = Math.floor(z);
+      if (inBus(x, z, 0.3)) return true;
       if (tx < 0 || tz < 0 || tx >= base.width || tz >= base.height) return false;
       if (treeAt(base, tx, tz) || footprint.has(tz * base.width + tx)) return true;
       const p = pieceAt(base, tx, tz);
@@ -223,23 +240,67 @@ export class ClearingArtView implements ClearingArt {
     this.armoryCorner.clear();
     if (!caravan) return;
     const { mid, half } = sides(caravan);
-    // The end of the caravan: along its length.
+    // The Armería's corner: at an end of the caravan (along its length), else by one of its long sides, to either hand
+    // (CORNER_SHIFTS) or further out; as near the caravan as the whole corner has room (CORNER_SPOTS); of those, the one
+    // the camera sees most clearly (playtest 0.8.4: a Huerto over the end left it nowhere, and its camera, never
+    // moved, on the Huerto; after a reload, in the pines at the map's corner).
     const along = half.x >= half.z ? { x: 1, z: 0 } : { x: 0, z: 1 };
-    // The caravan's end the camera sees most clearly, from out and to one side or the other of it.
+    const ways = [along, { x: -along.x, z: -along.z }, { x: along.z, z: along.x }, { x: -along.z, z: -along.x }];
+    // Clear of Soldados' soldier too, and of the way from its camera to it (playtest 0.8.4: the bench in front of it).
+    const soldier = this.soldierAt;
+    const shot = this.soldierView;
+    const inShot = (px: number, pz: number) => {
+      const reach = shot.dist + 1;
+      const t = THREE.MathUtils.clamp((px - soldier.x) * shot.dir.x + (pz - soldier.z) * shot.dir.z, 0, reach);
+      return Math.hypot(px - soldier.x - shot.dir.x * t, pz - soldier.z - shot.dir.z * t) <= SOLDIER_ROOM;
+    };
+    // And of the squad's row by La Lata and what its camera sees of it (UI, 0.8.4: the bench at the frame's edge), as
+    // many as it may be.
+    const row = this.placeLineup(Math.max(ROW_GUESS, this.lineupKey ? this.lineupEntries.length : 0));
+    const cam = { x: row.cam.x, z: row.cam.z };
+    const ends = [row.spots[0]!, row.spots[Math.min(row.spots.length - 1, row.count > LINEUP_ROW ? Math.ceil(row.count / 2) - 1 : row.count - 1)]!];
+    // Its frame: from its camera out past either end, and on behind the row (what stands there is its background).
+    const beyond = ends.map((e) => {
+      const d = Math.hypot(e.x - cam.x, e.z - cam.z) || 1;
+      return { x: e.x + ((e.x - cam.x) / d) * ROW_BEHIND, z: e.z + ((e.z - cam.z) / d) * ROW_BEHIND };
+    });
+    const inRow = (px: number, pz: number) =>
+      row.spots.some((q) => Math.hypot(px - q.x, pz - q.z) <= SOLDIER_ROOM) ||
+      nearTriangle(px, pz, cam, beyond[0]!, beyond[1]!, ROW_ROOM);
+    const room = (x: number, z: number, out: { x: number; z: number }) =>
+      CORNER_SPOTS.every(([u, v]) => {
+        const [px, pz] = [x + out.x * v - out.z * u, z + out.z * v + out.x * u];
+        return free(px, pz) && !inShot(px, pz) && !inRow(px, pz);
+      });
     let best: { x: number; z: number; out: { x: number; z: number }; dir: { x: number; z: number }; dist: number; cost: number } | null = null;
-    for (const end of [1, -1]) {
-      const out = { x: along.x * end, z: along.z * end };
-      let reach = (along.x ? half.x : half.z) + 1.1;
-      while (reach < (along.x ? half.x : half.z) + 4 && !free(mid.x + out.x * reach, mid.z + out.z * reach)) reach += 0.5;
-      const x = mid.x + out.x * reach;
-      const z = mid.z + out.z * reach;
-      if (!free(x, z)) continue;
-      for (const lean of [1, -1]) {
-        const side = { x: -out.z * lean, z: out.x * lean };
-        const length = Math.hypot(3.2, 1.4);
-        const v = view(x - out.x * 0.2, z - out.z * 0.2, { x: (out.x * 3.2 + side.x * 1.4) / length, z: (out.z * 3.2 + side.z * 1.4) / length }, 3.5);
-        if (!best || v.cost < best.cost) best = { x, z, out, dir: v.dir, dist: v.dist, cost: v.cost };
-      }
+    // Room for the whole corner; with none anywhere, for its bench at least (the camera never left where it was).
+    for (const fits of [room, (x: number, z: number) => free(x, z)]) {
+      ways.forEach((out, k) => {
+        const edge = out.x ? half.x : half.z;
+        for (const shift of CORNER_SHIFTS) {
+          for (let reach = edge + 1.1; reach <= edge + CORNER_REACH; reach += 0.5) {
+            const x = mid.x + out.x * reach - out.z * shift;
+            const z = mid.z + out.z * reach + out.x * shift;
+            if (!fits(x, z, out)) continue;
+            for (const lean of [1, -1]) {
+              const side = { x: -out.z * lean, z: out.x * lean };
+              const length = Math.hypot(3.2, 1.4);
+              // As far as the shot may go back to keep the corner whole (its fit).
+              const v = view(x - out.x * 0.2, z - out.z * 0.2, { x: (out.x * 3.2 + side.x * 1.4) / length, z: (out.z * 3.2 + side.z * 1.4) / length }, 5);
+              // Its own camera not among the squad, nor the squad before it.
+              const camera = { x: x + v.dir.x * v.dist, z: z + v.dir.z * v.dist };
+              const crowded = row.spots.some((q) => {
+                const t = THREE.MathUtils.clamp((q.x - x) * v.dir.x + (q.z - z) * v.dir.z, 0, v.dist);
+                return Math.hypot(q.x - x - v.dir.x * t, q.z - z - v.dir.z * t) < 0.9 || Math.hypot(q.x - camera.x, q.z - camera.z) < 1.2;
+              });
+              const cost = v.cost + (crowded ? 30 : 0) + (k < 2 ? 0 : 1.5) + Math.abs(shift) * 0.3 + (reach - edge - 1.1) * 0.2;
+              if (!best || cost < best.cost) best = { x, z, out, dir: v.dir, dist: v.dist, cost };
+            }
+            break;
+          }
+        }
+      });
+      if (best) break;
     }
     if (!best) return;
     const b = best as { x: number; z: number; out: { x: number; z: number }; dir: { x: number; z: number }; dist: number };
@@ -248,45 +309,90 @@ export class ClearingArtView implements ClearingArt {
     this.fillArmory(base, free);
   }
 
-  /** The Armería's corner at armoryAt, against the caravan's end: the bench with its toolbox, a rack of rifles, ammunition and supplies. */
+  /**
+   * The Armería's corner at armoryAt, by the caravan, at its end if there is room (playtest 20/10 #29, Ana: a table and boxes with what
+   * there is, near empty at first): the bench, and on it what is bought and found (setArmory: the grenades, smoke and
+   * flash ones, the first-aid kits, boxes of the special rounds, the improvements not yet mounted); the rack with the
+   * weapons found, the rest in a crate open beside it once the rack is full; an ammunition crate, its lid off.
+   */
   private fillArmory(base: BaseState, free: (x: number, z: number) => boolean): void {
+    this.armoryArgs = { base, free };
+    this.stocked = JSON.stringify(this.stock);
+    this.armoryCorner.clear();
     const { x, z, out } = this.armoryAt;
     const side = { x: -out.z, z: out.x };
     const yaw = Math.atan2(out.x, out.z);
     let lacking = false;
+    const at = (u: number, v: number, y: number, turn: number, k: number) =>
+      new THREE.Matrix4().compose(new THREE.Vector3(x + out.x * v + side.x * u, y, z + out.z * v + side.z * u), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw + turn), new THREE.Vector3(k, k, k));
     const put = (id: PropId, u: number, v: number, turn = 0, k = 1, y = 0) => {
-      const px = x + out.x * v + side.x * u;
-      const pz = z + out.z * v + side.z * u;
-      if (!free(px, pz)) return;
-      const m = new THREE.Matrix4().compose(new THREE.Vector3(px, y, pz), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw + turn), new THREE.Vector3(k, k, k));
-      if (!propMeshes(id, m, this.armoryCorner)) lacking = true;
+      if (!free(x + out.x * v + side.x * u, z + out.z * v + side.z * u)) return;
+      if (!propMeshes(id, at(u, v, y, turn, k), this.armoryCorner)) lacking = true;
     };
-    put('bWorkbench', -0.5, -0.45, Math.PI, 0.8);
-    put('bToolbox', -0.15, 0.05, 0.4, 1);
-    put('gunRack', 0.6, -0.5, Math.PI, 0.75);
-    put('lootAmmo', 0.85, 0.35, 0.3, 1);
-    put('lootAmmo', 1.15, 0.55, 1.2, 0.9);
-    put('bSupplyCrate', -1.0, 0.45, 0.2, 0.75);
-    // The rifles in the rack, standing, a little apart.
-    const rack = { x: x + out.x * -0.5 + side.x * 0.6, z: z + out.z * -0.5 + side.z * 0.6 };
-    if (free(rack.x, rack.z)) {
-      (['rifle', 'shotgun', 'huntingRifle'] as const).forEach((id, k) => {
-        void loadModel('apocalypse', 'wep', id).then((gun) => {
-          const g = gun.clone();
-          const t = (k - 1) * 0.15;
-          g.position.set(rack.x + side.x * t + out.x * 0.02, 0.12, rack.z + side.z * t + out.z * 0.02);
-          g.rotation.set(-Math.PI / 2 + 0.12, yaw + Math.PI, 0, 'YXZ');
-          g.traverse((o) => {
-            if (o instanceof THREE.Mesh) o.castShadow = true;
-          });
-          this.armoryCorner.add(g);
-        }).catch(() => undefined);
-      });
-    }
-    if (lacking) void syntyPropsLoaded().then(() => {
-      this.armoryCorner.clear();
-      this.fillArmory(base, free);
+    // (On the corner's own tile, out from the caravan's: a step nearer it is the caravan's.)
+    // Its long side across the camera's view, its board to the caravan.
+    put('bWorkbench', 0, 0, -Math.PI / 2, 0.8);
+    put('bToolbox', 0.6, 0.45, 0.4, 0.9);
+    put('gunRack', -1.0, -0.05, Math.PI, 0.75);
+    put('armAmmoCrate', 1.0, 0.3, 0.25, 0.55);
+    put('armAmmoCrateLid', 1.3, 0.65, 1.1, 0.55);
+    // On the bench: in rows along its top, each thing as many times as there are (a few at most).
+    const top = BENCH_TOP * 0.8;
+    const items = this.stock.items;
+    const onBench: PropId[] = [
+      ...Array<PropId>(Math.min(4, items.fragGrenade ?? 0)).fill('armGrenade'),
+      ...Array<PropId>(Math.min(3, items.smokeGrenade ?? 0)).fill('armSmoke'),
+      ...Array<PropId>(Math.min(3, items.flashbang ?? 0)).fill('armFlashbang'),
+      ...Array<PropId>(Math.min(2, items.firstAid ?? 0)).fill('clinicalKit'),
+      ...Array<PropId>(Math.min(2, items.apRounds ?? 0)).fill('armAmmo556'),
+      ...Array<PropId>(Math.min(2, items.tracerRounds ?? 0)).fill('armAmmo762'),
+    ];
+    onBench.forEach((id, k) => {
+      const row = k % 2;
+      const col = Math.floor(k / 2);
+      put(id, -0.45 + col * 0.13 + row * 0.06, -0.06 + row * 0.14, (k * 1.7) % 1.2 - 0.6, 1, top);
     });
+    // The improvements not yet mounted: a sight, a silencer, lying at the bench's end.
+    const parts: WeaponPartId[] = [...((this.stock.mods.scope ?? 0) > 0 ? (['scope2'] as const) : []), ...((this.stock.mods.silencer ?? 0) > 0 ? (['silencer2'] as const) : [])];
+    parts.forEach((part, k) => {
+      void loadModel(WEAPON_PARTS[part].pack, 'wep', part).then((model) => {
+        const g = model.clone();
+        g.applyMatrix4(at(0.4 - k * 0.14, 0.05, top + 0.02, Math.PI / 2, 1));
+        this.armoryCorner.add(g);
+      }).catch(() => undefined);
+    });
+    // The weapons found: in the rack, standing, a little apart; the rest laid in a crate open by it.
+    const found = this.stock.weapons.map((kind) => foundModel(kind));
+    const gun = (id: WeaponId, place: (g: THREE.Object3D) => void) =>
+      void loadModel(WEAPONS[id].pack, 'wep', id).then((model) => {
+        const g = model.clone();
+        place(g);
+        g.traverse((o) => {
+          if (o instanceof THREE.Mesh) o.castShadow = true;
+        });
+        this.armoryCorner.add(g);
+      }).catch(() => undefined);
+    const rack = { x: x + out.x * -0.05 + side.x * -1.0, z: z + out.z * -0.05 + side.z * -1.0 };
+    if (free(rack.x, rack.z)) {
+      found.slice(0, 3).forEach((id, k) => gun(id, (g) => {
+        const t = (k - 1) * 0.15;
+        g.position.set(rack.x + side.x * t + out.x * 0.02, 0.12, rack.z + side.z * t + out.z * 0.02);
+        g.rotation.set(-Math.PI / 2 + 0.12, yaw + Math.PI, 0, 'YXZ');
+      }));
+    }
+    if (found.length > 3) {
+      put('lootWeapons', -1.1, 0.75, 0.2, 0.8);
+      put('lootWeaponsLid', -1.55, 0.85, 1.2, 0.8);
+      found.slice(3, 6).forEach((id, k) => gun(id, (g) => g.applyMatrix4(at(-1.1 + (k - 1) * 0.12, 0.75, 0.22, 0.2 + Math.PI / 2, 1))));
+    }
+    if (lacking) void syntyPropsLoaded().then(() => this.fillArmory(base, free));
+  }
+
+  /** What the Armería holds (campaign.ts: the weapons found, the accessories bought, the improvements loose): its corner filled again if it changed. */
+  setArmory(stock: ArmoryStock): void {
+    this.stock = stock;
+    if (JSON.stringify(stock) === this.stocked || !this.armoryArgs) return;
+    this.fillArmory(this.armoryArgs.base, this.armoryArgs.free);
   }
 
   /** The soldier looked at in Soldados (as the old Cuartel's pedestal): built again only if it changed; null, none. */
@@ -312,12 +418,24 @@ export class ClearingArtView implements ClearingArt {
     return { pos: target.clone().add(new THREE.Vector3(dir.x * dist, 1.5, dir.z * dist)), target, fov: 38 };
   }
 
-  /** The Armería: its corner at the caravan's end, from out and to the side of it. */
+  /**
+   * The Armería: its corner by the caravan (campPlaces), from in front of the bench and a little to the side, close (20/10
+   * #29: it showed the caravan and La Lata); `fit`, the corner's box, for the screen to keep it whole and centred.
+   */
   armoryShot(): Shot {
     const { x, z, out } = this.armoryAt;
-    const { dir, dist } = this.armoryView;
-    const target = new THREE.Vector3(x + out.x * -0.2, 0.6, z + out.z * -0.2);
-    return { pos: target.clone().add(new THREE.Vector3(dir.x * dist, 1.5, dir.z * dist)), target, fov: 40 };
+    const { dir } = this.armoryView;
+    const target = new THREE.Vector3(x + out.x * 0.2, 0.55, z + out.z * 0.2);
+    // Along the clearest way to it (campPlaces: no pine nor La Lata in between), mostly from in front.
+    const ahead = new THREE.Vector3(out.x * 0.5 + dir.x * 0.5, 0, out.z * 0.5 + dir.z * 0.5).normalize();
+    // What stands by the bench (not a lid thrown further off): the box the screen keeps whole.
+    const fit = new THREE.Box3();
+    for (const o of this.armoryCorner.children) {
+      const b = new THREE.Box3().setFromObject(o);
+      if (!b.isEmpty() && Math.hypot(b.getCenter(cv).x - x, cv.z - z) < 1.4) fit.union(b);
+    }
+    if (fit.isEmpty()) fit.setFromCenterAndSize(target, new THREE.Vector3(2.4, 1.2, 2.4));
+    return { pos: target.clone().addScaledVector(ahead, 2.6).add(new THREE.Vector3(0, 1.3, 0)), target, fov: 40, fit };
   }
 
   /**
@@ -372,11 +490,14 @@ export class ClearingArtView implements ClearingArt {
     }
     if (!best) {
       this.bus.root.visible = false;
+      this.busBox = null;
       return;
     }
+    this.busBox = { x: best.at.x, z: best.at.z, dx: best.dir.x, dz: best.dir.z, half: length / 2, halfWidth };
     this.busWay = best.way;
     this.busRoute = best.route;
-    this.bus.park(best.at, Math.atan2(best.dir.x, best.dir.z), new THREE.Vector3(mid.x, 0, mid.z), !this.away);
+    // Its doors shut, as it stands waiting (who gets in opens them: board).
+    this.bus.park(best.at, Math.atan2(best.dir.x, best.dir.z), new THREE.Vector3(mid.x, 0, mid.z), !this.away, 0, false);
   }
 
   /** La Lata going or coming (`run`); a vehicle asked for meanwhile, once it is done. */
@@ -405,10 +526,15 @@ export class ClearingArtView implements ClearingArt {
     this.bus.root.removeFromParent();
     const bus = (this.bus = new EvacBus(vehicle));
     this.group.add(bus.root);
-    if (this.base) this.parkBus(this.base);
+    if (this.base) {
+      this.parkBus(this.base);
+      this.campPlaces(this.base);
+    }
     void bus.loaded().then(() => {
       if (bus !== this.bus || !this.base) return;
       this.parkBus(this.base);
+      // Where it stands now the Armería's corner and Soldados' soldier keep out of its way.
+      this.campPlaces(this.base);
       this.place = null;
       this.relineup();
     });
@@ -626,11 +752,15 @@ export class ClearingArtView implements ClearingArt {
     });
     const place = best as unknown as LineupPlace;
     // La Lata's doors to the squad.
-    if (parked && root.visible) this.bus.park(root.position.clone(), heading, new THREE.Vector3(place.spots[0]!.x, 0, place.spots[0]!.z).lerp(new THREE.Vector3(place.spots[count - 1]!.x, 0, place.spots[count - 1]!.z), 0.5));
+    if (parked && root.visible) this.bus.park(root.position.clone(), heading, new THREE.Vector3(place.spots[0]!.x, 0, place.spots[0]!.z).lerp(new THREE.Vector3(place.spots[count - 1]!.x, 0, place.spots[count - 1]!.z), 0.5), true, 0, false);
     return (this.place = place);
   }
 
-  /** The squad in the row runs to La Lata's doors, one after another, and climbs in; resolves once all are aboard. */
+  /**
+   * The squad in the row runs to La Lata's doors, one after another, and climbs in (playtest 20/10 #7: not vanishing
+   * in the gap): each doorway's doors open as its first one gets there, each climbs up into it and on in (higher at a
+   * van's or a lorry's back, over its tailgate), and its doors shut behind the last; resolves once all are aboard.
+   */
   private async board(): Promise<void> {
     await this.bus.loaded();
     const rigs = this.lineupRigs.filter((r) => r.root.visible);
@@ -651,8 +781,8 @@ export class ClearingArtView implements ClearingArt {
       const back = Math.abs(offset.dot(dir)) > half - 0.35;
       const normal = back ? dir.clone().multiplyScalar(Math.sign(offset.dot(dir)) || -1) : across.clone().multiplyScalar(Math.sign(offset.dot(across)) || 1);
       const foot = door.clone().addScaledVector(normal, 0.55);
-      // In through the doorway itself: up to its plane, not into the body (19/10, #11: they ran into it and through it).
-      const inside = door.clone().addScaledVector(normal, 0.08);
+      // Up and in through the doorway, on past its plane into the vehicle (19/10, #11: not through the body).
+      const inside = door.clone().addScaledVector(normal, -0.35);
       // Round its corner first, from behind it to a side door, or from its side to its back.
       const path = [from];
       const behind = from.clone().sub(centre).dot(dir) < -half;
@@ -681,9 +811,27 @@ export class ClearingArtView implements ClearingArt {
         free = p.atFoot + CLIMB + DOOR_GAP;
       }
     }
-    const seconds = Math.max(...plans.map((p) => p.delay + p.running + CLIMB)) + 0.05;
+    // Each doorway's doors: opening as its first gets to its foot, shutting once its last is in.
+    const leaves = this.bus.leavesByDoorway();
+    const ways = doors.map((_, d) => {
+      const at = plans.filter((p) => p.door === d);
+      if (!at.length) return null;
+      const first = Math.min(...at.map((p) => p.atFoot));
+      const last = Math.max(...at.map((p) => p.atFoot + CLIMB));
+      // A double doorway's leaves are listed by its two halves.
+      const which = doors.flatMap((w, j) => (w.distanceTo(doors[d]!) < 0.7 ? leaves[j] ?? [] : []));
+      return { which, open: Math.max(0, first - DOOR_OPEN), shut: last + 0.08 };
+    });
+    // How high it is in: the 4×4's sill, the van's floor, over the lorry's tailgate, the bus's step.
+    const rise = [0.22, 0.45, 0.62, 0.3][this.bus.vehicle] ?? 0.3;
+    const seconds = Math.max(...plans.map((p) => p.delay + p.running + CLIMB), ...ways.map((w) => (w ? w.shut + DOOR_OPEN : 0))) + 0.05;
     await tween(seconds, (t) => {
       const now = t * seconds;
+      for (const w of ways) {
+        if (!w) continue;
+        const k = now < w.shut ? THREE.MathUtils.clamp((now - w.open) / DOOR_OPEN, 0, 1) : 1 - THREE.MathUtils.clamp((now - w.shut) / DOOR_OPEN, 0, 1);
+        this.bus.setDoors(w.which, THREE.MathUtils.smoothstep(k, 0, 1));
+      }
       // Their shadows run with them.
       this.warm = Math.max(this.warm, 1);
       for (const p of plans) {
@@ -693,11 +841,12 @@ export class ClearingArtView implements ClearingArt {
         d.running = since > 0 && !climbing ? 1 : 0;
         p.rig.root.visible = since < p.running + CLIMB;
         if (since <= 0) continue;
+        d.climbing = climbing ? 1 : 0;
         if (climbing) {
-          // At the door, turned to it, up and in: a little lower as it goes, gone at the doorway.
+          // At the door, turned to it: a step up onto the sill (or the floor, the tailgate), stooping, and on in.
           const c = Math.min(1, (since - p.running) / CLIMB);
-          p.rig.root.position.lerpVectors(p.foot, p.inside, c * c);
-          p.rig.root.position.y = -0.18 * c;
+          p.rig.root.position.lerpVectors(p.foot, p.inside, THREE.MathUtils.smoothstep(c, 0.15, 1));
+          p.rig.root.position.y = rise * Math.min(1, c / 0.45) - 0.12 * Math.max(0, (c - 0.6) / 0.4);
           d.yaw = Math.atan2(p.inside.x - p.foot.x, p.inside.z - p.foot.z);
           continue;
         }
@@ -764,7 +913,7 @@ export class ClearingArtView implements ClearingArt {
     // The squad breathes in line, the wounded slumped, and runs to board.
     for (const rig of this.lineupRigs) {
       const d = rig.root.userData;
-      if (isFigure(rig)) rig.applyPose({ ...IDLE_POSE, yaw: d.yaw, phase: d.phase, run: d.running, crouch: d.wounded && !d.running ? 0.4 : 0 }, time);
+      if (isFigure(rig)) rig.applyPose({ ...IDLE_POSE, yaw: d.yaw, phase: d.phase, run: d.running, crouch: d.climbing ? 0.45 : d.wounded && !d.running ? 0.4 : 0 }, time);
     }
   }
 
@@ -803,8 +952,10 @@ const LINEUP_ROW = 8;
 /** How fast the squad runs to board La Lata (tiles a second). */
 const BOARD_SPEED = 3.4;
 /** How long climbing in takes, from the door's foot (seconds), and how long after one the next gets to that door. */
-const CLIMB = 0.45;
+const CLIMB = 0.6;
 const DOOR_GAP = 0.15;
+/** How long La Lata's doors take to open or shut as the squad gets in (s). */
+const DOOR_OPEN = 0.35;
 const CANDLE = new THREE.MeshStandardMaterial({ color: 0x2a1a00, emissive: 0xffb050, emissiveIntensity: 2.2 });
 
 /** The pieces that stand tall enough to hide a soldier from a camera a storey up (but the buildings, by their tiles). */
@@ -814,6 +965,42 @@ const TALL = new Set<PieceId>(['palisade', 'wall', 'gate', 'tower', 'floodlight'
 const atlasMaterials = new Map<AtlasId, THREE.MeshStandardMaterial>();
 
 /** A prop's meshes at `m` into `into`, on its pack's atlas; false if its model is still loading. */
+/** Scratch for the Armería's shot. */
+const cv = new THREE.Vector3();
+
+/** The Armería's bench's work surface above the ground, at the model's own size (measured: a shelf on its board is at 0.97, the board goes on up to 1.35). */
+const BENCH_TOP = 0.58;
+/**
+ * Where the Armería's corner puts things (fillArmory: across the caravan's end u, out from it v, tiles): the bench's
+ * middle and ends, the toolbox, the rack, the ammunition crate and its lid, the crate of weapons and its lid; all of
+ * them free and clear of Soldados' soldier and its shot, or the corner goes elsewhere (campPlaces), out to this much
+ * past the caravan's edge.
+ */
+const CORNER_SPOTS: readonly [number, number][] = [[0, 0], [0.8, 0], [-0.8, 0], [0.6, 0.45], [-1, -0.05], [1, 0.3], [1.3, 0.65], [-1.1, 0.75], [-1.55, 0.85]];
+const CORNER_REACH = 8;
+/** And this far to either hand along the side it is out from (m), the nearer first. */
+const CORNER_SHIFTS = [0, 1.5, -1.5, 3, -3];
+/** How far the corner's things keep from Soldados' soldier and from the way its camera looks at it (m). */
+const SOLDIER_ROOM = 1.2;
+/** And from what the squad's row's camera sees (m), for a row of this many at least (the Escuadra's usual), and behind it. */
+const ROW_ROOM = 1.5;
+const ROW_GUESS = 6;
+/** How far behind the row its camera's frame is kept clear (m). */
+const ROW_BEHIND = 4;
+
+/** Whether (x, z) is inside triangle a b c (on the ground plan) or within `margin` of it. */
+function nearTriangle(x: number, z: number, a: { x: number; z: number }, b: { x: number; z: number }, c: { x: number; z: number }, margin: number): boolean {
+  const cross = (p: { x: number; z: number }, q: { x: number; z: number }) => (q.x - p.x) * (z - p.z) - (q.z - p.z) * (x - p.x);
+  const [d1, d2, d3] = [cross(a, b), cross(b, c), cross(c, a)];
+  if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) return true;
+  const edge = (p: { x: number; z: number }, q: { x: number; z: number }) => {
+    const len = Math.hypot(q.x - p.x, q.z - p.z) || 1;
+    const t = THREE.MathUtils.clamp(((x - p.x) * (q.x - p.x) + (z - p.z) * (q.z - p.z)) / (len * len), 0, 1);
+    return Math.hypot(x - p.x - (q.x - p.x) * t, z - p.z - (q.z - p.z) * t);
+  };
+  return Math.min(edge(a, b), edge(b, c), edge(c, a)) <= margin;
+}
+
 function propMeshes(id: PropId, m: THREE.Matrix4, into: THREE.Group): boolean {
   const parts = syntyProp(id);
   if (!parts) return false;

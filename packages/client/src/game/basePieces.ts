@@ -372,12 +372,19 @@ function drawBastion(s: GameState, spot: PieceSpot, wear: PieceWear, art: PieceA
       const tilt = [0, 0.012, 0.03, 0][wear]!;
       art.put('caravan', at(spot.x, wear === 3 ? -0.18 : 0, spot.z, spot.yaw, [1, 1, 1], tilt * (r(0) < 0.5 ? -1 : 1), wear === 3 ? 0.06 : 0));
       if (more && wear < 3) {
-        // Settled in: its steps, an aerial on the roof, a tarp by its side and the generator.
+        // Settled in: its steps, an aerial on the roof and the generator; by its end, its awning (playtest 20/10 #13:
+        // «Caravana con toldo»), a tarp on poles over tiles 0–2 × 5–7 of the lot, a table and two chairs under it on
+        // 0–1 × 6–7 (base.ts BASTION_YARD), the generator on 7, 3.
         here.put('trailerSteps', 0.6, h / 2 + 0.25, 0, 0.8);
         here.put('bAerial', -1.1, 0, 0, 0.45, here.top('caravan') - 0.05);
-        // The tarp over tiles 0–1 × 6–7 of the lot, the generator on 7, 3 (base.ts BASTION_YARD).
-        const tarp = T(0.5, 6.5);
-        yard.fill('bShackTarp', tarp.u, tarp.v, 2, 2);
+        const awning = T(1, 6);
+        for (const id of ['bAwning', 'bAwningTarp'] as const) yard.put(id, awning.u, awning.v, 1, AWNING);
+        const table = T(0.5, 6);
+        yard.fill('bLongTable', table.u, table.v, 1.8, 0.8);
+        for (const x of [0, 1]) {
+          const chair = T(x, 7);
+          yard.put('bCampChair', chair.u, chair.v - 0.1, 2 + (r(50 + x) - 0.5) * 0.3, 0.95);
+        }
         const gen = T(7, 3);
         yard.put('bPowerGenerator', gen.u, gen.v, 1, 0.75);
       }
@@ -407,9 +414,10 @@ function drawBastion(s: GameState, spot: PieceSpot, wear: PieceWear, art: PieceA
       if (wear && wear < 3) m.multiply(new THREE.Matrix4().makeRotationZ(lean(2)));
       art.put(wear === 3 ? 'plywoodShedRuin' : 'plywoodShed', m);
       if (more && wear < 3) {
-        // Its power up the lot's free column (8, 1–3), sandbags either side of its steps (3 and 5, 7), a floodlight
-        // in the far corner (8, 0).
-        for (const [x, y, id, k] of [[8, 1, 'bSolarPanel', 0.6], [8, 2, 'bSolarPanel', 0.6], [8, 3, 'bPowerGenerator', 0.7]] as const) {
+        // Grown (playtest 20/10 #13: «Albergue ampliado»): sandbags either side of its steps (3 and 5, 7); up the
+        // lot's free column its water tower (8, 0–1), taller than it, a floodlight on top, a solar panel and the
+        // generator (8, 2–3).
+        for (const [x, y, id, k] of [[8, 2, 'bSolarPanel', 0.6], [8, 3, 'bPowerGenerator', 0.7]] as const) {
           const t = T(x, y);
           yard.put(id, t.u, t.v, 1, k);
         }
@@ -417,8 +425,9 @@ function drawBastion(s: GameState, spot: PieceSpot, wear: PieceWear, art: PieceA
           const t = T(x, 7);
           yard.put('sandbags', t.u, t.v, 0, [0.95, 1, 1]);
         }
-        const light = T(8, 0);
-        yard.put('bFloodlights', light.u, light.v, 2.5, 0.45);
+        const tower = T(8, 0.5);
+        yard.put('bWaterTower', tower.u, tower.v, 1, WATER_TOWER);
+        yard.put('bFloodlights', tower.u, tower.v + 0.3, 2.5, 0.4, yard.top('bWaterTower') * WATER_TOWER);
       }
       break;
     }
@@ -429,17 +438,27 @@ function drawBastion(s: GameState, spot: PieceSpot, wear: PieceWear, art: PieceA
         here.put('ruinPile', 0, 0, 0, 0.82);
         break;
       }
-      for (const id of ['bastionHouse', 'bastionHouseGlass'] as const) {
-        const m = yard.matrix(0.088 * k, -3 + 2.12 * k, -1, k, sunk);
-        if (wear) m.multiply(new THREE.Matrix4().makeRotationX(lean(3) * 0.5));
-        art.put(id, m);
-      }
+      const house = yard.matrix(0.088 * k, -3 + 2.12 * k, -1, k, sunk);
+      if (wear) house.multiply(new THREE.Matrix4().makeRotationX(lean(3) * 0.5));
+      for (const id of ['bastionHouse', 'bastionHouseGlass'] as const) art.put(id, house);
       if (more) {
-        for (const u of [-2.1, 2.1]) yard.put('sandbags', u, 2.75, 0, [1.2, 0.9, 1]);
+        // Fortified (playtest 20/10 #13: «Casa fortificada»): every window shut, iron sheets and planks over it; a
+        // wall of sandbags along the porch, its steps left open, and another across the lot's front row either side
+        // of the way in (1–2 and 6–7, 8); tank traps in the back corners (0 and 8, 0); the mast; a floodlight in the
+        // front corner (8, 8).
+        for (const [i, w] of HOUSE_WINDOWS.entries()) armour(art, house, w, i, r);
+        for (const u of [-2.4, -1.35, 1.35, 2.4]) yard.put('sandbags', u, 2.75, 0, [1.05, 0.9, 1]);
+        for (const x of [1, 2, 6, 7]) {
+          const bags = T(x, 8);
+          yard.put('sandbags', bags.u, bags.v, 0, [1.02, 0.95, 1]);
+        }
         here.put('bMast', 1.6, -0.8, 0, 0.6, 3.6);
-        // A floodlight in the porch's free corner (8, 8).
+        for (const x of [0, 8]) {
+          const trap = T(x, 0);
+          yard.put('bTankTrap', trap.u, trap.v, r(70 + x) * 4, 1.1);
+        }
         const light = T(8, 8);
-        yard.put('bFloodlights', light.u, light.v, 0.5, 0.45);
+        yard.put('bFloodlights', light.u, light.v, 0.5, 0.6);
       }
     }
   }
@@ -461,6 +480,53 @@ function drawBastion(s: GameState, spot: PieceSpot, wear: PieceWear, art: PieceA
   }
   const wood = T(0, 8);
   yard.put('bWoodPile', wood.u, wood.v, 1, 0.8);
+}
+
+/** The caravan's awning's scale and the barracón's water tower's (drawBastion). */
+const AWNING = 1.25;
+const WATER_TOWER = 0.66;
+
+/**
+ * The house's windows (SM_Bld_House_03, its own frame: bastionHouseGlass's panes, and those broken out of it): the
+ * middle of each, which way it looks (x or z, ±1), as wide and as tall (m).
+ */
+const HOUSE_WINDOWS: { at: [number, number, number]; axis: 'x' | 'z'; out: 1 | -1 }[] = [
+  { at: [-1.71, 1.45, 1.66], axis: 'x', out: -1 },
+  { at: [-1.71, 1.45, -1.67], axis: 'x', out: -1 },
+  { at: [-1.71, 1.45, 0], axis: 'x', out: -1 },
+  { at: [1.72, 1.45, -1.67], axis: 'x', out: 1 },
+  { at: [0.83, 1.45, 2.55], axis: 'z', out: 1 },
+  { at: [-0.83, 1.45, 2.55], axis: 'z', out: 1 },
+  { at: [-0.83, 1.45, -2.55], axis: 'z', out: -1 },
+  { at: [0.84, 1.45, -2.55], axis: 'z', out: -1 },
+];
+const WINDOW_WIDE = 0.62;
+const WINDOW_TALL = 1;
+
+/**
+ * A window of the house shut against the dead, on `house` (its matrix): every other one an iron sheet over it, the
+ * rest three planks across it, each a little askew.
+ */
+function armour(art: PieceArt, house: THREE.Matrix4, w: (typeof HOUSE_WINDOWS)[number], i: number, r: (salt: number) => number): void {
+  const out = w.axis === 'x' ? new THREE.Vector3(w.out, 0, 0) : new THREE.Vector3(0, 0, w.out);
+  const up = new THREE.Vector3(0, 1, 0);
+  const along = new THREE.Vector3().crossVectors(up, out);
+  const at = new THREE.Vector3(...w.at).addScaledVector(out, 0.12);
+  if (i % 2 === 0) {
+    // The sheet lies flat as it comes, its length across x: stood up, its face out.
+    const size = art.size('bIronSheet');
+    const m = new THREE.Matrix4().makeBasis(up, out, new THREE.Vector3().crossVectors(up, out)).scale(new THREE.Vector3((WINDOW_TALL + 0.15) / size.x, 1, (WINDOW_WIDE + 0.12) / size.z));
+    art.put('bIronSheet', house.clone().multiply(new THREE.Matrix4().makeTranslation(at.x, at.y, at.z)).multiply(m));
+    return;
+  }
+  const size = art.size('bPlank');
+  for (const [n, dy] of [-0.32, 0, 0.32].entries()) {
+    const tilt = (r(60 + i * 3 + n) - 0.5) * 0.5;
+    const axis = along.clone().applyAxisAngle(out, tilt);
+    const m = new THREE.Matrix4().makeBasis(axis, out, new THREE.Vector3().crossVectors(axis, out)).scale(new THREE.Vector3((WINDOW_WIDE + 0.25) / size.x, 1, 1));
+    const p = at.clone().addScaledVector(up, dy * WINDOW_TALL).addScaledVector(out, n * 0.012);
+    art.put('bPlank', house.clone().multiply(new THREE.Matrix4().makeTranslation(p.x, p.y, p.z)).multiply(m));
+  }
 }
 
 /**

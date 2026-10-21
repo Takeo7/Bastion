@@ -61,6 +61,16 @@ const RT_CLEAR = 0.62;
 const RT_LOWER = 0.45;
 /** Real time: what was got ready is called off when something else begins more than this before its end (s, battle's). */
 const RT_EARLY = 0.2;
+/** How long an enemy coming into sight takes to fade in (s): never popping up on its tile (playtest 20/10 #10). */
+const FADE_IN = 0.28;
+/**
+ * Out of the way of the shot over a shoulder (clearView): nearer the camera than this (m) to a body this tall, or this
+ * near its view of the target, short of the last metres (the target's own neighbours stay).
+ */
+const VEIL_NEAR = 1.3;
+const VEIL_TALL = 1.5;
+const VEIL_ACROSS = 0.45;
+const VEIL_SPARE = 1.2;
 /** A melee lunge goes this far at most, and stops this far short of the target's middle (an adjacent one: 0.72 apart). */
 const LUNGE = 0.45;
 const LUNGE_SHORT = 0.72;
@@ -165,6 +175,8 @@ interface UnitView {
   rtLow: boolean;
   /** Real time: the rtGen of the rtBusy now holding its hands and its crouch. */
   rtBusyGen: number;
+  /** It has been through sync once: what comes into sight after that fades in (FADE_IN). */
+  synced: boolean;
 }
 
 /** How high the blade is held on guard (the pose's aim): up in front, its point a little up. */
@@ -333,7 +345,7 @@ export class UnitViews {
 
     const view: UnitView = {
       id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, rt: false, rtAim: 0, rtGen: 0, rtLow: false, rtBusyGen: 0,
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, rt: false, rtAim: 0, rtGen: 0, rtLow: false, rtBusyGen: 0, synced: false,
     };
     this.views.set(u.id, view);
     // Left outside when La Mula went (sync): standing, not dead.
@@ -381,7 +393,10 @@ export class UnitViews {
       v.flagEl.classList.toggle('alien', u.team === 'alien');
       v.flagEl.classList.toggle('xcom', u.team === 'xcom');
       const shown = u.team === 'xcom' || u.objective || visibleAliens.has(u.id) || (v.dead && v.rig.root.visible);
+      // An enemy coming into sight fades in (not on the first look at the map: what is there at the start just is).
+      if (shown && !v.rig.root.visible && v.synced && u.team !== 'xcom' && u.alive && isFigure(v.rig)) v.rig.fadeIn?.(FADE_IN);
       v.rig.root.visible = shown;
+      v.synced = true;
       v.flag.visible = shown && u.alive;
       v.pose.crouchTarget = u.hunkered || u.captive || v.rtLow ? 1 : 0;
       // The enemies see in a cone (los.ts inViewCone, the living too: 18/10 #46): standing still, the model looks
@@ -520,7 +535,10 @@ export class UnitViews {
 
   forceVisible(id: string): void {
     const v = this.views.get(id);
-    if (v) v.rig.root.visible = true;
+    if (!v) return;
+    // Out of the fog (a step into sight, a contact): faded in, as sync does (playtest 20/10 #10).
+    if (!v.rig.root.visible && v.synced && !v.dead && isFigure(v.rig)) v.rig.fadeIn?.(FADE_IN);
+    v.rig.root.visible = true;
   }
 
   /**
@@ -632,6 +650,34 @@ export class UnitViews {
       p.aim += (p.aimTarget - p.aim) * k;
       p.yaw += wrapAngle(p.yawTarget - p.yaw) * (1 - Math.exp(-dt * p.turn));
       this.apply(v, time);
+    }
+  }
+
+  /**
+   * The shot over a shoulder (playtest 20/10 #11): with the camera at `camera`, looking at `look`, everyone but
+   * `keep` (the attacker and its target) who stands near it, or across its view of the target, goes out of its way
+   * (FigureRig.veil); with null, all back.
+   */
+  clearView(camera: THREE.Vector3 | null, look: THREE.Vector3 | null, keep: readonly (string | null)[]): void {
+    const chest = new THREE.Vector3();
+    const near = new THREE.Vector3();
+    const view = camera && look ? new THREE.Line3(camera, look) : null;
+    const reach = view ? view.distance() : 0;
+    for (const v of this.views.values()) {
+      if (!isFigure(v.rig) || !v.rig.veil) continue;
+      let veil = false;
+      if (camera && view && !v.dead && !keep.includes(v.id)) {
+        const root = v.rig.root.position;
+        // Its body, from the feet up: how near the camera comes to it.
+        const y = THREE.MathUtils.clamp(camera.y, root.y, root.y + VEIL_TALL);
+        veil = Math.hypot(camera.x - root.x, camera.y - y, camera.z - root.z) < VEIL_NEAR;
+        if (!veil) {
+          chest.set(root.x, root.y + v.rig.chest, root.z);
+          const t = view.closestPointToPointParameter(chest, true);
+          veil = t * reach < reach - VEIL_SPARE && view.at(t, near).distanceTo(chest) < VEIL_ACROSS;
+        }
+      }
+      v.rig.veil(veil);
     }
   }
 

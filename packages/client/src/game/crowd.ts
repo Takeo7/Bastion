@@ -103,6 +103,8 @@ export class Crowd {
   private readonly bodies = new Map<string, Body>();
   /** The crowd on or off (the horde lab compares both). */
   enabled = true;
+  /** A body's mesh made (baked after the loading veil): the renderer compiles its materials then (Renderer.warm). */
+  onMesh: ((mesh: THREE.Object3D) => void) | null = null;
 
   constructor() {
     this.group.name = 'crowd';
@@ -237,6 +239,7 @@ export class Crowd {
     geometry.setAttribute('aCrowd', body.params);
     body.mesh = mesh;
     this.group.add(mesh);
+    this.onMesh?.(mesh);
     b.dispose();
     body.baker = null;
   }

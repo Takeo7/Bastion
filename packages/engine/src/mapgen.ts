@@ -29,7 +29,7 @@ import { canStandOn, DIRS4, DIRS8, isWalkable } from './grid';
 import { BLOCK_KINDS, decorCode, decorOf, FOOTPRINT, objectAt } from './decor';
 import { longFlightTile } from './flights';
 import { rectsOf, townPlan, type PlanRoad, type TownPlan } from './townPlan';
-import type { Alarm, Biome, Decor, DecorKind, FrameKind, FramePiece, GameState, GroundKind, HomeRoom, HomeSite, HomeUse, Level, MedicalRoom, MedicalUse, MedicalSite, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
+import type { Alarm, Biome, Decor, DecorKind, FrameKind, FramePiece, GameState, GroundKind, HomeRoom, HomeSite, HomeUse, Level, MarketSite, MedicalRoom, MedicalUse, MedicalSite, MissionKind, Pos, Site, TileKind, Vec2 } from './types';
 
 /** Side of the procedural maps not yet laid out to scale (docs/MAPAS.md §4.8: the outskirts, the factory, the estate). */
 export const GEN_SIZE = 48;
@@ -81,6 +81,8 @@ export interface MissionLayout {
   medical?: MedicalSite[];
   /** The houses' rooms by use (playtest 2026-10-18, #15). */
   homes?: HomeSite[];
+  /** The supermarkets (playtest 2026-10-20, #18). */
+  markets?: MarketSite[];
   /** What each piece of cover is meant to be (procedural maps only; cosmetic). */
   decor?: Decor[];
   /** Storeys of the building each tile belongs to, 0 outside (procedural maps only; GameState.storeys). */
@@ -518,7 +520,7 @@ function pickStyle(rng: Rng): Style {
 // --------------------------------------------------------------- buildings
 
 /** How the interior is divided. */
-type Plan = 'rooms' | 'open' | 'corridor' | 'shop' | 'hall';
+type Plan = 'rooms' | 'open' | 'corridor' | 'shop' | 'hall' | 'market';
 /** What stands inside. */
 type Furnish = 'home' | 'shop' | 'office' | 'lab' | 'store' | 'barn' | 'bare' | 'clinic';
 
@@ -545,6 +547,8 @@ interface Building {
   homeWear?: number;
   /** One open hall (plan 'hall'): a warehouse, a factory's hall, a sawmill, a barn. */
   hall?: boolean;
+  /** A supermarket (plan 'market'; playtest 20/10, #18): the client draws its glass front and its sign (GameState.markets). */
+  market?: boolean;
   /** A block of flats one goes into (flatsBlock): its stair core, the hall each storey's flats open onto. */
   flatsCore?: Rect;
   /**
@@ -1370,6 +1374,46 @@ function furnishHall(c: Canvas, inner: Rect, front: number, rng: Rng, kind: Furn
   }
 }
 
+/** A supermarket's shop window (playtest 20/10, #18): its whole front side `s` glazed, but its corners and doors. */
+function shopFront(c: Canvas, b: Rect, s: number): void {
+  const back = DIRS4[opposite(s)]!;
+  for (let u = 1; u <= sideLen(b, s) - 2; u++) {
+    const p = localPt(b, s, u, 0);
+    const q = add(p, DIRS4[s]!);
+    if (c.get(p.x, p.y) !== 'wall' || c.get(p.x + back.x, p.y + back.y) !== 'floor') continue;
+    if (!c.in(q.x, q.y) || c.get(q.x, q.y) === 'wall') continue;
+    c.force(p.x, p.y, 'window');
+  }
+}
+
+/**
+ * A supermarket's floor (playtest 20/10, #18), from its front side `s`, its double door at `door` (along the outer
+ * wall, the first of the two): a walk along the windows; the checkouts by the way in, three at most, a lane beside
+ * each and two tiles clear of the doors' columns; a walk across; then the aisles of shelves running back, along both
+ * side walls and in rows between with two tiles between them, each row's end to the checkouts low; a walk along the
+ * back and the drinks fridges against the back wall. By position: no rng drawn.
+ */
+function furnishMarket(c: Canvas, inner: Rect, s: number, door: number): void {
+  const across = sideLen(inner, s);
+  const depth = depthOf(inner, s);
+  const P = (u: number, v: number) => localPt(inner, s, u, v);
+  const d0 = door - 1;
+  const tills = [d0 - 2, d0 + 3, d0 - 4, d0 + 5].filter((u) => u >= 0 && u < across).slice(0, 3);
+  for (const u of tills) put(c, P(u, 1), 'low', ['counter', (s + 1) % 4]);
+  // The rows between the side walls' shelves, an aisle of two at least either side of each.
+  const span = across - 2;
+  const n = Math.max(0, Math.floor((span - 2) / 3));
+  const first = 1 + Math.floor((span - 3 * n + 2) / 2);
+  const rows = [0, across - 1, ...Array.from({ length: n }, (_, k) => first + 3 * k)];
+  for (const u of rows) {
+    for (let v = 3; v <= depth - 3; v++) {
+      const end = v === 3 && u !== 0 && u !== across - 1;
+      put(c, P(u, v), end ? 'low' : 'high', ['shelf', (s + 1) % 4]);
+    }
+  }
+  for (let u = 0; u < across; u++) put(c, P(u, depth - 1), 'high', ['drinksFridge', s]);
+}
+
 /**
  * A barn (playtest 18/10, #53: «tiene que parecer un granero»): its hay
  * against the walls, the sides and the back, stacked high here and there
@@ -1433,6 +1477,8 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
     shopPlan(c, b, front, rng, rooms);
   } else if (plan === 'hall') {
     office = hallPlan(c, b, front, rng, rooms);
+  } else if (plan === 'market') {
+    rooms.push(inset(b, 1));
   } else if (hall && furnish === 'home' && Math.min(sideLen(b, front), depthOf(b, front)) >= 8) {
     // A house's hall, its front door in it (docs/MAPAS.md §4.3); or open at both ends, two wide, through to what is
     // behind the house under its storey above (`through`: a zaguán, §5.4).
@@ -1458,15 +1504,20 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
   } else {
     splitRooms(c, inset(b, 1), rng, rooms, plan === 'open' ? 8 : 6, plan === 'open');
   }
-  const width = plan === 'hall' ? 3 : 1;
+  // A hall's loading bay is 3 wide; a supermarket's way in, a double door.
+  const width = plan === 'hall' ? 3 : plan === 'market' ? 2 : 1;
   const gap: TileKind = plan === 'hall' ? 'floor' : 'door';
   for (const s of [front, (front + 1) % 4, (front + 3) % 4, opposite(front)]) {
     if (doors.some((d) => d !== null)) break;
     doors[s] = entrance(c, b, s, rng, width, gap) ?? entrance(c, b, s, rng, 1);
   }
+  // The side the way in opened on (the street's, unless it had no room).
+  const way = doors.findIndex((d) => d !== null);
   // A back door for houses with more than one room.
   const back = opposite(front);
   if (plan !== 'corridor' && plan !== 'hall' && rooms.length > 1 && doors[back] === null && rng.next() < 0.45) doors[back] = entrance(c, b, back, rng);
+  // A supermarket's staff door, onto its yard.
+  if (plan === 'market' && doors[back] === null) doors[back] = entrance(c, b, back, rng);
   // A house's rooms (playtest 18/10, #15): the one the front door opens into is the living room; a small house has
   // its room behind cut into a bedroom and a bathroom (one of a single room, a living room and a bedroom), its
   // kitchen in the living room. Before the windows, so that none comes where a new wall meets the outer one.
@@ -1516,8 +1567,9 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
       home = { uses, kitchenette: !uses.includes('kitchen'), strip: cut?.[1] ?? null };
     }
   }
-  // Shops show their goods: a window every other tile.
-  windows(c, b, plan === 'shop' ? 2 : style.windowEvery, doors);
+  // Shops show their goods: a window every other tile; a supermarket, its whole front.
+  if (plan === 'market' && way >= 0) shopFront(c, b, way);
+  else windows(c, b, plan === 'shop' ? 2 : style.windowEvery, doors);
   // No window on the wall beside a hall's stairs: a flight before it would leave it no way in or out.
   if (houseHall) {
     for (const p of tilesIn(houseHall.stairs)) {
@@ -1533,6 +1585,8 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
     furnishHall(c, rooms[0]!, front, rng, furnish, office);
     // A barn's corner room is its tack room, with hay of its own (the same rng drawn as an office's).
     if (office) furnishRoom(c, office, rng, furnish === 'barn' ? 'barn' : 'office');
+  } else if (plan === 'market') {
+    if (way >= 0) furnishMarket(c, rooms[0]!, way, doors[way]!);
   } else if (home) {
     // Each room as what it is (furnishHome).
     // The strip cut off a room is furnished on a roll of its own: the generator's rng draws as it did before.
@@ -1547,7 +1601,7 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
   } else {
     rooms.forEach((room, k) => furnishRoom(c, room, rng, furnish === 'shop' && k > 0 ? 'store' : furnish));
   }
-  const raised: Building = { outer: b, rooms, furnish, ...(medicalRooms ? { medicalKind, medicalRooms, front } : {}), ...(plan === 'hall' ? { hall: true } : {}) };
+  const raised: Building = { outer: b, rooms, furnish, ...(medicalRooms ? { medicalKind, medicalRooms, front } : {}), ...(plan === 'hall' ? { hall: true } : {}), ...(plan === 'market' ? { market: true, front: way } : {}) };
   c.buildings.push(raised);
   return raised;
 }
@@ -3325,6 +3379,40 @@ function bigBuilding(c: Canvas, l: Lot, rng: Rng, style: Style, organic: boolean
   return { built: b, rest: piece(l, local(l.r, s, first ? w + 1 : 0, 0, L - w - 1, D)) };
 }
 
+/** The streets (north or south) a supermarket may look onto from lot `l`: room for it, 12 along and 10 deep. */
+const marketSides = (l: Lot) => [0, 2].filter((s) => l.roads[s] && sideLen(l.r, s) >= 12 && depthOf(l.r, s) >= 10);
+
+/**
+ * A supermarket (playtest 20/10, #18: Ana, «los supermercados no tienen esa pinta»): one storey, 10–12 deep along a
+ * street north or south; 12–14 along it at one end of a long block, the rest of the block past a passage of one
+ * (`rest`) for its plots, or else the block's length, 16 at most, and no rest. Its whole front glazed but for the
+ * double door in the middle, the checkouts, the aisles and the fridges inside (furnishMarket), a staff door at the
+ * back. Behind it, when the block goes deeper, its car park past a passage of one, or else its yard, bins and pallets.
+ */
+function supermarket(c: Canvas, l: Lot, rng: Rng, style: Style): { built: Building; rest: Lot | null } | null {
+  const sides = marketSides(l);
+  if (!sides.length) return null;
+  const s = sides.length > 1 ? sides[rng.int(2)]! : sides[0]!;
+  const L = sideLen(l.r, s);
+  const D = depthOf(l.r, s);
+  const long = L >= 12 + 1 + NARROWEST;
+  const w = long ? rng.range(12, Math.min(14, L - 1 - NARROWEST)) : Math.min(L, 16);
+  const d = Math.min(D, rng.range(10, 12));
+  const first = rng.int(2) === 0;
+  const u0 = long ? (first ? 0 : L - w) : Math.floor((L - w) / 2);
+  const b = building(c, local(l.r, s, u0, 0, w, d), rng, 'market', s, style, 'store');
+  b.storeys = 1;
+  const back = opposite(s);
+  if (D - d - 1 >= 6) {
+    parking(c, local(l.r, s, u0, d + 1, w, D - d - 1), rng, l.roads[back] ? back : s);
+  } else if (D - d >= 3) {
+    const bins: Part[] = [[0, 0, 'low', ['bin']], [1, 0, 'low', ['bin']]];
+    groupNear(c, localPt(l.r, s, u0 + 2, d + 1), rng, [bins, [[0, 0, 'low', ['bin']]]], 1, 0, 6);
+    groupNear(c, localPt(l.r, s, u0 + w - 3, d + 1), rng, [dressed(CRATES, 'pallets'), dressed(PAIR, 'pallets', 'crates')], 1, 0, 6);
+  }
+  return { built: b, rest: long ? piece(l, local(l.r, s, first ? w + 1 : 0, 0, L - w - 1, D)) : null };
+}
+
 /** What a plot holds (docs/MAPAS.md §5.3): a house, a shop with homes over it, an office or flats over two plots, or nothing built. */
 type PlotUse = 'house' | 'shop' | 'office' | 'flats' | 'gap';
 
@@ -3630,6 +3718,15 @@ function town(c: Canvas, rng: Rng, map: Style, role: Role, clinic: boolean, hosp
   const biggest = best(plan.blocks, (b) => -b.w * b.h);
   const spare = plan.blocks.filter((b) => Math.min(b.w, b.h) >= 9).length >= 6;
   const green = !organic && spare && rng.next() < 0.5 ? best(inner.filter((b) => b !== biggest), (b) => b.w * b.h) ?? null : null;
+  // A supermarket on most towns (playtest 20/10, #18): one of the blocks left with room for it. Drawn by position, so
+  // that a town without one is built as it was.
+  const lotOf = (b: Rect): Lot => {
+    const roads = [0, 1, 2, 3].map((s) => facesRoad(c, b, s));
+    return { r: planLot(c, b, roads).lot, roads };
+  };
+  const shops = plan.blocks.filter((b) => b !== objBlock && b !== green && marketSides(lotOf(b)).length);
+  const roll = mix(objBlock.x * 31 + plan.squad.x, objBlock.y * 17 + plan.squad.y);
+  const market = roll % 5 !== 0 ? (shops[(roll >> 3) % Math.max(1, shops.length)] ?? null) : null;
   let objective: Rect = objBlock;
   const used = new Map<CityProgram, number>();
   for (const block of plan.blocks) {
@@ -3649,10 +3746,10 @@ function town(c: Canvas, rng: Rng, map: Style, role: Role, clinic: boolean, hosp
     // Not the objective's block: plots along its streets with a building on each (docs/MAPAS.md §5.2–5.3); now and
     // then the lots of before instead, for the open programs (a square, a car park, a filling station, a motel, works)
     // and the warehouses.
-    if (block !== objBlock && rng.next() >= (organic ? 0.06 : 0.1)) {
-      // Now and then a big building at one end of the block (an office, a hall), the rest in plots.
-      const big = rng.next() < (organic ? 0.12 : 0.35) ? bigBuilding(c, { r: lot, roads }, rng, style, organic) : null;
-      const { strips, yard, rest, courtyard } = townPlots(big ? big.rest : { r: lot, roads }, rng, organic);
+    if (block !== objBlock && (block === market || rng.next() >= (organic ? 0.06 : 0.1))) {
+      // Now and then a big building at one end of the block (an office, a hall), the rest in plots; the supermarket's.
+      const big = block === market ? supermarket(c, { r: lot, roads }, rng, style) : rng.next() < (organic ? 0.12 : 0.35) ? bigBuilding(c, { r: lot, roads }, rng, style, organic) : null;
+      const { strips, yard, rest, courtyard } = big && !big.rest ? { strips: [], yard: null, rest: [], courtyard: false } : townPlots(big?.rest ?? { r: lot, roads }, rng, organic);
       if (strips.length || big) {
         buildPlots(c, strips, rng, style, organic, courtyard);
         backGardens(c, strips, yard, courtyard, rng);
@@ -6190,6 +6287,13 @@ export function generateLayout(opts: GenOptions): MissionLayout {
       return { x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, z: r.z, use: r.use };
     }) }];
   });
+  // The supermarkets (playtest 20/10, #18): where the client draws a glass front and its sign.
+  const markets: MarketSite[] = c.buildings.flatMap((b) => {
+    if (!b.market || b.ruined || b.front === undefined) return [];
+    const a = T(b.outer);
+    const z = T({ x: b.outer.x + b.outer.w - 1, y: b.outer.y + b.outer.h - 1 });
+    return [{ x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, front: D(b.front) }];
+  });
   // What stands on the floor takes its tile (Arturo, 19/10: «que ocupen»; furnishing.ts): the houses' furniture, the shops'
   // by their trade, a library's tables, a barn's tools (a sawmill's too, as the client sees it), the kerbs' hydrants and
   // mailboxes. Clear of everyone's place, of what lies on the floor and of the bus's way out; then what lies about in the
@@ -6250,6 +6354,7 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     ground,
     ...(medical.length ? { medical } : {}),
     ...(homes.length ? { homes } : {}),
+    ...(markets.length ? { markets } : {}),
     decor,
     storeys,
     ...(levels.length ? { levels } : {}),

@@ -25,6 +25,11 @@ const MUTE_KEY = storageKey('muted');
 /** How loud each bus sits in the mix before the player's volume. */
 const MIX: Record<Bus, number> = { sfx: 1, ui: 0.55, radio: 0.7, music: 0.42, ambience: 0.5 };
 
+/** Each bus's own volume setting (the radio follows the interface's). */
+function volumeOf(v: Volumes, bus: Bus): number {
+  return v[bus === 'radio' ? 'ui' : bus];
+}
+
 function load(): Volumes {
   try {
     return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(VOLUME_KEY) ?? '{}') as Partial<Volumes>) };
@@ -58,6 +63,11 @@ class AudioEngine {
   /** Between the music bus and the master: lowered while something loud plays. */
   private duckNode: GainNode | null = null;
   private reverbIn: GainNode | null = null;
+  /**
+   * Each bus's way into the reverb, at that bus's volume (playtest 20/10 #14: with the music at «No» its echo
+   * still played, as the sends went straight in). At the default volumes they pass everything, as before.
+   */
+  private wets = new Map<Bus, GainNode>();
   volumes = load();
   muted: boolean;
   private readyFns: (() => void)[] = [];
@@ -128,6 +138,11 @@ class AudioEngine {
     const wet = ctx.createGain();
     wet.gain.value = 0.55;
     this.reverbIn.connect(convolver).connect(wet).connect(this.master);
+    for (const bus of Object.keys(MIX) as Bus[]) {
+      const g = ctx.createGain();
+      g.connect(this.reverbIn);
+      this.wets.set(bus, g);
+    }
     trace('audio: reverb lista');
     this.applyVolumes();
     for (const fn of this.readyFns.splice(0)) fn();
@@ -138,14 +153,8 @@ class AudioEngine {
     if (!this.ctx || !this.master) return;
     const now = this.ctx.currentTime;
     this.master.gain.setTargetAtTime(this.muted ? 0 : this.volumes.master, now, 0.05);
-    const of: Record<Bus, number> = {
-      sfx: this.volumes.sfx,
-      ui: this.volumes.ui,
-      radio: this.volumes.ui,
-      music: this.volumes.music,
-      ambience: this.volumes.ambience,
-    };
-    for (const [bus, g] of this.buses) g.gain.setTargetAtTime(MIX[bus] * of[bus], now, 0.05);
+    for (const [bus, g] of this.buses) g.gain.setTargetAtTime(MIX[bus] * volumeOf(this.volumes, bus), now, 0.05);
+    for (const [bus, g] of this.wets) g.gain.setTargetAtTime(volumeOf(this.volumes, bus) / volumeOf(DEFAULTS, bus), now, 0.05);
   }
 
   setVolumes(patch: Partial<Volumes>): void {
@@ -182,9 +191,9 @@ class AudioEngine {
     return this.buses.get(name) ?? null;
   }
 
-  /** The reverb's input, for sources that want to send to it. */
-  reverb(): GainNode | null {
-    return this.reverbIn;
+  /** The reverb's input for sources on `bus` that want to send to it: at that bus's volume. */
+  reverb(bus: Bus): GainNode | null {
+    return this.wets.get(bus) ?? null;
   }
 
   /** Plays a buffer once; returns its source (to stop it early) or null if nothing can play. */
@@ -205,10 +214,11 @@ class AudioEngine {
       node = node.connect(pan);
     }
     node.connect(bus);
-    if (o.reverb && this.reverbIn) {
+    const verb = this.reverb(o.bus ?? 'sfx');
+    if (o.reverb && verb) {
       const send = ctx.createGain();
       send.gain.value = o.reverb;
-      node.connect(send).connect(this.reverbIn);
+      node.connect(send).connect(verb);
     }
     src.start(ctx.currentTime + (o.delay ?? 0));
     if (!this.played) {
@@ -258,10 +268,11 @@ class AudioEngine {
     gain.gain.value = 0;
     const pan = ctx.createStereoPanner();
     src.connect(air).connect(gain).connect(pan).connect(bus);
-    if (o.reverb && this.reverbIn) {
+    const verb = this.reverb(o.bus ?? 'sfx');
+    if (o.reverb && verb) {
       const send = ctx.createGain();
       send.gain.value = o.reverb;
-      pan.connect(send).connect(this.reverbIn);
+      pan.connect(send).connect(verb);
     }
     // Anywhere in the cycle: two missions never start it on the same note.
     src.start(ctx.currentTime, Math.random() * buffer.duration);

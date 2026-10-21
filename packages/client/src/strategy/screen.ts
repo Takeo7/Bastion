@@ -5,6 +5,9 @@ import {
   armorTier,
   baseArmorTier,
   bastionLevel,
+  bastionLevelA,
+  bastionLevelName,
+  bastionLevelThe,
   BIOME_NAMES,
   BITE_TAG,
   BUILD_IDS,
@@ -43,13 +46,11 @@ import {
   eventOptionAvailable,
   beds,
   bedsFree,
-  facilityLevel,
   garageCut,
   healRate,
   listeningDelay,
   rangeAim,
   EXPEDIENTE,
-  FACILITIES,
   facilityCount,
   fill,
   GLOSSARY,
@@ -60,11 +61,10 @@ import {
   itemsFree,
   itemUnlocked,
   levelUnlocks,
-  MAX_LEVEL,
+  upgradeLevel,
   soldierCap,
   MISSION_NAMES,
   NAME_MAX,
-  nextSteps,
   nextTierBlocker,
   NICKNAME_MAX,
   offerBriefing,
@@ -105,7 +105,6 @@ import {
   type CraftId,
   weaponLabel,
   MEDICATE_COST,
-  MEDICATE_DAYS,
   treatCost,
   TURNED_CAUSE,
   turnDay,
@@ -139,12 +138,11 @@ import {
   VEHICLES,
   VEHICLE_SEATS,
   vehicleOf,
-  levelUpBlocker,
   LEVEL_TEXT,
-  levelUpLine,
+  needsLevelLine,
+  nestNoContactTip,
+  nestNotice,
   rewardMultiplier,
-  LEVEL_COST,
-  LEVEL_MISSIONS,
   wintry,
   outingsMark,
   timeHelp,
@@ -160,7 +158,6 @@ import {
   type ItemSlot,
   type MissionKind,
   type MissionOffer,
-  type NextStep,
   type TemplateId,
   type PlayerInfo,
   type RegionId,
@@ -171,14 +168,14 @@ import type { Gear } from '../game/figures';
 import { gearOf } from '../game/models';
 import { storageKey } from '../net';
 import { append, clear, h } from '../ui/dom';
-import { arrowIcon } from '../ui/icons';
 import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from '../ui/quit';
 import { graphicsSettings, soundSettings } from '../ui/settingsPanel';
 import { GeoscapeSet, shownOffers } from './geoscape';
-import { ClearingSet, footprint, type BaseCursor, type ClearingArt, type ClearingTool } from './clearing';
+import { ClearingSet, footprint, type ArmoryStock, type BaseCursor, type ClearingArt, type ClearingTool } from './clearing';
 import { ClearingArtView, type LineupEntry } from './clearingArt';
 import { fellBlockerFor, LINE_PIECES, lineBlockerFor, lineLine, palette, pieceCard, placeBlockerFor, placeLine } from './buildMode';
-import { Box3 } from 'three';
+import { ARMOR_LEVELS, craftLevel, FreshMarks, markNew, type FreshView } from './fresh';
+import { Box3, Vector3 } from 'three';
 import { Stage, type Shot } from './stage';
 import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
@@ -196,6 +193,52 @@ export interface StrategyHandlers {
   onCursor?(c: BaseCursor | null): void;
 }
 
+/** The packs' icon (public/ui/synty/icons) for what a level brings, in its alert's row (#31); the family's otherwise. */
+const TECH_ICONS: Partial<Record<string, string>> = {
+  magWeapons: 'crafting',
+  plateArmor: 'armor',
+  plasmaGrenades: 'explosives',
+  encryption: 'mh-comms',
+  plasmaWeapons: 'mh-accuracy',
+  nanoMedkit: 'mh-syringe',
+  predatorArmor: 'helmet',
+  signal: 'sound',
+};
+const ITEM_ICONS: Partial<Record<string, string>> = {
+  fragGrenade: 'explosives',
+  smokeGrenade: 'mh-smoke',
+  firstAid: 'medkit',
+  flashbang: 'mh-flashbang',
+  tracerRounds: 'mh-bullets',
+  apRounds: 'ammo',
+  nanoVest: 'armor',
+  mindShield: 'mh-headphones',
+};
+const PIECE_ICONS: Partial<Record<string, string>> = {
+  radio: 'mh-comms',
+  quarters: 'mh-tent',
+  infirmary: 'heal',
+  workshop: 'crafting',
+  garden: 'mh-plants',
+  quarantine: 'biohazard',
+  memorial: 'r-camposanto',
+  range: 'target',
+  training: 'mh-dumbbell',
+  simulation: 'map-pin',
+  garage: 'mh-repair',
+  echoes: 'screwdriver',
+  floodlight: 'lightning',
+  wire: 'mh-pliers',
+  mine: 'mh-dynamite',
+  turret: 'mh-machinegun',
+};
+const KIND_ICONS = { building: 'home', defence: 'mh-shield', trap: 'mh-targeted' } as const;
+
+/** A line with Lore's key words marked «**así**»: those in bold (Ana, 20/10 #15). */
+function marked(line: string): (string | HTMLElement)[] {
+  return line.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? h('strong', {}, part) : part));
+}
+
 interface Alert {
   tone: 'info' | 'good' | 'bad';
   kicker: string;
@@ -211,19 +254,9 @@ interface Alert {
   rank?: number;
   /** Where it happens: the globe turns there when it pops up (rumours). */
   region?: RegionId;
-  /** What a level unlocks, one per line with its icon (UI, playtest 14/10 #20: it came all in one line). */
-  unlocks?: Unlock[];
+  /** The Bastion level whose things it shows, as a row of icons (Ana, 20/10 #31: no list of lines). */
+  brought?: number;
 }
-
-/** One thing a Bastion level unlocks: its icon (agenda-icon kind), its name and a line on it. */
-interface Unlock {
-  kind: string;
-  name: string;
-  detail?: string;
-}
-
-/** The Novedades tray keeps this many alerts at most. */
-const MAX_NEWS = 20;
 
 const REPORT_KEY = storageKey('seenReport');
 /** The rule of time, wherever the day is shown. */
@@ -262,14 +295,15 @@ const DIFFICULTY = ['', 'Moderada', 'Difícil', 'Muy difícil', 'Extrema'];
 const SOLDIER: TemplateId = 'rookie';
 
 const NAV: { view: BaseView; label: string }[] = [
-  // «Bastión» and «Diario» are one tab, «Campaña» (Arturo, 16/10 #33): what to do now, the calendar, the levels.
-  { view: 'research', label: 'Campaña' },
-  { view: 'geoscape', label: 'El valle' },
+  // No «Campaña» (Arturo, 20/10: «no nos está aportando nada»): the Bastion goes up from its card in Construir.
+  // «Mapa», no longer «El valle» (Ana, 20/10 #28).
+  { view: 'geoscape', label: 'Mapa' },
   { view: 'engineering', label: 'Armería' },
   // «Soldados», no longer «Cuartel» (Arturo, 18/10): the place is the caravan now; the tab is who you have.
   { view: 'barracks', label: 'Soldados' },
-  // The base is built on the clearing now (docs/FASE12.md §11.7): the tab is where it is built (B).
-  { view: 'facilities', label: 'Construir' },
+  // The base is built on the clearing now (docs/FASE12.md §11.7): the tab is the place, «Asentamiento» (Arturo, 20/10;
+  // «Construir» is the palette's action, BUILD_TEXT.build). B goes there.
+  { view: 'facilities', label: 'Asentamiento' },
 ];
 
 /** «la Marea» → «La Marea». */
@@ -328,14 +362,12 @@ export class StrategyScreen {
   private readonly toastEl = h('div.strat-toast');
   private state: CampaignState | null = null;
   private players: PlayerInfo[] = [];
-  private view: BaseView = 'research';
+  /** Soldados when the base opens and after a mission (Arturo, 20/10). */
+  private view: BaseView = 'barracks';
   private partnerView: BaseView | null = null;
   private seenReport = loadSeenReport();
   /** The pop-up waiting to be read: one per moment (back at the base, or after a scan). */
   private alerts: Alert[] = [];
-  /** Everything else that happened, in the Novedades tray, newest first. */
-  private news: Alert[] = [];
-  private newsOpen = false;
   /** The story's radio scenes (strategy/transmissions.ts); made in the constructor, which knows this player's seat. */
   private readonly radio: Transmissions;
   private toastTimer = 0;
@@ -344,7 +376,6 @@ export class StrategyScreen {
   // Selections inside the screens.
   private region: RegionId | null = null;
   private offer: string | null = null;
-  private levelPick: number | null = null;
   private engTab: 'gear' | 'items' = 'items';
   private engPick: string | null = null;
   private soldier: string | null = null;
@@ -364,6 +395,8 @@ export class StrategyScreen {
   private settingsOpen = false;
   /** The menu (playtest 19/10 #7): one button and Esc open it; the same list as in combat. */
   private menuOpen = false;
+  /** What the levels bought have brought and this player hasn't looked at yet: its «Nuevo» (#13, fresh.ts). */
+  private readonly freshMarks = new FreshMarks();
   /** News keys already seen (navNews), for the campaign `seenNewsFor`. */
   private readonly seenNews = new Set<string>();
   private seenNewsFor: string | null = null;
@@ -424,9 +457,9 @@ export class StrategyScreen {
   private readonly onKey = (e: KeyboardEvent) => {
     if (e.defaultPrevented || !this.state || this.root.classList.contains('launching')) return;
     if ((e.target as HTMLElement | null)?.closest?.('input, textarea')) return;
-    // B: in and out of Construir, from the clearing.
-    if (e.code === 'KeyB' && !e.ctrlKey && !e.metaKey && !this.modal.classList.contains('show') && (this.view === 'research' || this.view === 'facilities')) {
-      void this.go(this.view === 'facilities' ? 'research' : 'facilities');
+    // B: in and out of Construir.
+    if (e.code === 'KeyB' && !e.ctrlKey && !e.metaKey && !this.modal.classList.contains('show') && (this.view === 'barracks' || this.view === 'facilities')) {
+      void this.go(this.view === 'facilities' ? 'barracks' : 'facilities');
       return;
     }
     if (e.key !== 'Escape') return;
@@ -436,13 +469,12 @@ export class StrategyScreen {
 
   /** Esc: closes what is open, lets go of what is picked, and otherwise opens the menu (playtest 19/10 #7). */
   private back(): void {
-    if (this.picking || this.custom || this.promoting || this.leaving || this.quitting || this.newsOpen || this.settingsOpen) {
+    if (this.picking || this.custom || this.promoting || this.leaving || this.quitting || this.settingsOpen) {
       this.picking = null;
       this.custom = null;
       this.promoting = false;
       this.leaving = false;
       this.quitting = false;
-      this.newsOpen = false;
       this.settingsOpen = false;
       this.render();
       return;
@@ -471,11 +503,13 @@ export class StrategyScreen {
    * operations, the clock) still pop up, after the debrief, for both commanders.
    */
   update(c: CampaignState, before?: CampaignState | null): void {
+    const first = !this.state;
     const prev = this.state ?? before ?? null;
     // A screen made anew after a mission (main.ts passes the base as it took off): La Lata is on its way back.
     if (before && !this.state) this.arriving = true;
     this.state = c;
     this.loadSeenNews(c);
+    this.freshMarks.load(c.uid ?? '', bastionLevel(c));
     // News arriving on the screen being looked at is seen at once.
     this.seeNews(this.view);
     // The partner's proposal waits on its note (with «Ver»): it never takes this player away from what they are doing.
@@ -490,6 +524,7 @@ export class StrategyScreen {
       this.clearing.setArt((this.clearingArt = new ClearingArtView(this.clearingSnow)));
     }
     this.clearingArt?.setVehicle?.(vehicleOf(c));
+    this.clearingArt?.setArmory?.(this.armoryStock(c));
     this.clearing.setBase(c.bastion);
     const placing = c.proposal?.action.type === 'place' ? c.proposal.action : null;
     this.clearing.setProposal(placing ? { piece: placing.piece, x: placing.x, y: placing.y, rot: placing.rot } : null);
@@ -502,6 +537,8 @@ export class StrategyScreen {
     else if (prev?.activeMission && !c.activeMission && this.view === 'squad') void this.go('geoscape');
     if (!c.activeMission && !this.reportPending(c)) this.lineup([]);
     if (this.reportPending(c) && this.view !== 'debrief') void this.go('debrief');
+    // A screen made anew opens on Soldados (Arturo, 20/10), on its own shot.
+    else if (first && this.view === 'barracks') void this.go('barracks');
     else this.render();
     // Back without a debrief to read: the clearing is already on screen.
     if (this.arriving && !this.reportPending(c) && this.setFor(this.view) === 'clearing') this.arrive();
@@ -612,8 +649,8 @@ export class StrategyScreen {
   // -------------------------------------------------------- navigation
 
   private async go(asked: BaseView): Promise<void> {
-    // The old «Bastión» is Campaña now (#33): whatever still asks for it lands there.
-    const view = asked === 'hub' ? 'research' : asked;
+    // The old «Bastión» and Campaña are gone (Arturo, 20/10): whatever still asks for them lands on Soldados.
+    const view = asked === 'hub' || asked === 'research' ? 'barracks' : asked;
     this.view = view;
     this.seeNews(view);
     this.promoting = false;
@@ -646,6 +683,8 @@ export class StrategyScreen {
     this.render();
     await this.stage.show(this.setFor(view), this.shotFor(view));
     if (!fixed && this.view === view) this.clearing.hold(false);
+    // Back from a mission onto Soldados (a fixed shot, Arturo 20/10): La Lata is back by the caravan all the same.
+    if (this.arriving && fixed && view !== 'debrief' && this.setFor(view) === 'clearing') this.arrive();
   }
 
   /** The 3D set each screen happens in: the valley, or the clearing (Soldados, the Armería and the squad too, by the caravan). */
@@ -670,14 +709,40 @@ export class StrategyScreen {
     const n = this.lineupCount;
     if (!shot || !art?.padPosition || !n) return shot;
     const toward = shot.pos.clone().sub(shot.target).setY(0).normalize();
+    const side = new Vector3(-toward.z, 0, toward.x);
     const fit = new Box3();
+    // Each place's own width: over the heads, and on the ground before them for the cards. These points, not
+    // the box round them, are what is fitted (a row at a slant has a box far bigger than itself, framed small).
+    const points: Vector3[] = [];
     for (let i = 0; i < n; i++) {
       const p = art.padPosition(i, n);
-      fit.expandByPoint(p.clone().setY(2));
-      fit.expandByPoint(p.clone().addScaledVector(toward, 1.6));
+      for (const s of [-0.7, 0.7]) points.push(p.clone().addScaledVector(side, s).setY(2.3), p.clone().addScaledVector(side, s).addScaledVector(toward, 1.8));
     }
-    fit.expandByScalar(0.4);
-    return { ...shot, fit };
+    for (const p of points) fit.expandByPoint(p);
+    this.framedKey = this.lineupKey(n);
+    // In the middle of the screen, as Ana drew it (20/10 #16): the list of soldiers on the left doesn't push it over.
+    return { ...shot, fit, fitPoints: points, centred: true };
+  }
+
+  /** Where the row stood when it was last framed (lineupKey). */
+  private framedKey = '';
+
+  /** Where a row of `n` stands now, its ends: it moves once La Lata has come in and parked (clearingArt placeLineup). */
+  private lineupKey(n: number): string {
+    const at = this.clearingArt?.padPosition;
+    if (!at || !n) return '';
+    const [a, b] = [at.call(this.clearingArt, 0, n), at.call(this.clearingArt, n - 1, n)];
+    return [a.x, a.z, b.x, b.z].map((v) => v.toFixed(2)).join(',');
+  }
+
+  /**
+   * The row framed again where it stands now (0.8.4: framed on arriving, before La Lata had parked and the row
+   * moved beside it, it stood off to the right, half out of the screen); the cards' frame loop asks.
+   */
+  private reframeLineup(): void {
+    if ((this.view !== 'squad' && this.view !== 'debrief') || this.siegeNow()) return;
+    if (this.lineupKey(this.lineupCount) === this.framedKey) return;
+    void this.stage.show('clearing', this.shotFor(this.view));
   }
 
   /** How many places the lineup has now (lineup()), for its box. */
@@ -702,12 +767,13 @@ export class StrategyScreen {
     switch (view) {
       case 'geoscape':
         return this.geo.shot();
-      case 'research':
-      case 'hub':
       case 'facilities':
         return this.clearing.shot();
-      case 'engineering':
-        return this.clearingArt?.armoryShot?.() ?? this.clearing.shot();
+      case 'engineering': {
+        // Arte's bench and rack (Ana, 20/10 #29), in the middle of the screen between the list and the sheet.
+        const shot = this.clearingArt?.armoryShot?.();
+        return shot ? { ...shot, centred: true } : this.clearing.shot();
+      }
       case 'barracks':
         return this.clearingArt?.soldierShot?.() ?? this.clearing.shot();
       case 'squad':
@@ -718,7 +784,8 @@ export class StrategyScreen {
         }
         return this.framedLineup() ?? this.clearing.shot();
       case 'debrief':
-        return this.clearingArt?.lineupShot?.() ?? this.clearing.shot();
+        // Framed as the Escuadra's (#26: it came out to the right).
+        return this.framedLineup() ?? this.clearing.shot();
       default:
         return this.clearing.shot();
     }
@@ -936,6 +1003,19 @@ export class StrategyScreen {
     return free === have ? `Tienes ${have}` : `Tienes ${have} (${free} ${free === 1 ? 'libre' : 'libres'})`;
   }
 
+  /**
+   * What the Armería's bench and rack show (Arte's, Ana 20/10 #29): what is there, not what the soldiers carry: the
+   * weapons nobody holds, the accessories nobody has on, the improvements loose.
+   */
+  private armoryStock(c: CampaignState): ArmoryStock {
+    const items: Partial<Record<ItemId, number>> = {};
+    for (const id of Object.keys(ITEMS) as ItemId[]) {
+      const free = itemsFree(c, id);
+      if (free > 0) items[id] = free;
+    }
+    return { weapons: (c.foundWeapons ?? []).filter((w) => !w.holder).map((w) => w.kind), items, mods: c.weaponMods ?? {} };
+  }
+
   /** Tier diamonds, coloured like the guns: steel, magnetic, plasma. */
   private tierMarks(tier: number): HTMLElement {
     return h(`span.tier.t${tier}`, { title: `Nivel ${tier}` }, ...Array.from({ length: tier }, () => h('i')));
@@ -946,31 +1026,53 @@ export class StrategyScreen {
     return h('span.x-meter', { title }, ...Array.from({ length: max }, (_, i) => h(`i${i < value ? '.on' : ''}`)), h('b', {}, `${value}/${max}`));
   }
 
-  /** The Bastion level with its experience bar, for the top strip. */
-  /** The Bastion's level, and the missions flown towards the next (Arturo, 18/10 #40: levels are bought, there is no experience). */
+  /**
+   * What the Bastion is now, by name (#13: never «nivel N»; Lore's names), and the missions flown towards what it
+   * can become (Arturo, 18/10 #40: levels are bought, there is no experience).
+   */
   private levelBadge(c: CampaignState): HTMLElement {
     const level = bastionLevel(c);
     const next = nextLevel(c);
     return h(
       'span.strat-level',
-      { 'data-tip-name': 'Nivel del Bastión', 'data-tip': next ? `Para el nivel ${next.level}: ${next.cost} § y ${next.missions} misiones hechas (llevas ${next.flown}).\n${LEVEL_TEXT.about}` : LEVEL_TEXT.top },
-      h('small', {}, 'NIVEL'),
-      h('b', {}, String(level)),
+      { 'data-tip-name': bastionLevelName(level), 'data-tip': next ? `Para ${bastionLevelThe(next.level)}: ${next.cost} § y ${next.missions} misiones hechas (llevas ${next.flown}).\n${LEVEL_TEXT.about}` : LEVEL_TEXT.top },
+      h('b', {}, bastionLevelName(level).toUpperCase()),
       next ? this.bar(Math.min(next.flown, next.missions), next.missions) : null,
     );
   }
 
-  /** What a Bastion level unlocks, one by one: techs, accessories, facilities and their upgrades (levelUnlocks' order). */
-  private unlocksOf(level: number): Unlock[] {
-    const known = new Set<string>();
-    const out: Unlock[] = [];
-    const add = (kind: string, name: string, detail?: string) => (known.add(name), out.push({ kind, name, detail }));
-    for (const t of Object.values(TECHS).filter((x) => x.level === level)) add('xp', t.name, t.description);
-    for (const i of Object.values(ITEMS).filter((x) => x.level === level)) add('flag', i.name, i.description);
-    for (const f of Object.values(FACILITIES).filter((x) => x.level === level)) add('pick', f.name, f.description);
-    // The rest are facilities going up a level («Barracón, nivel 2»).
-    for (const name of levelUnlocks(level).filter((n) => !known.has(n))) add('pick', name);
-    return out;
+  /**
+   * What a Bastion level brought, as a row of icons (Ana, 20/10 #31: wherever what an upgrade brings is shown):
+   * its techniques, belt items, pieces and buildings' upgrades, each its own icon or its family's, in the family's
+   * colour; «Name: what it is for» on hover. In the alert on going up.
+   */
+  private broughtIcons(level: number): HTMLElement[] {
+    const icon = (file: string, family: string, name: string, detail: string) =>
+      h(`span.unlock-icon.${family}`, { title: `${name}: ${detail}`, 'aria-label': name, style: { '--unlock-icon': `url('/ui/synty/icons/${file}.webp')` } });
+    const pieces = (Object.keys(PIECES) as (keyof typeof PIECES)[]).filter((id) => id !== 'caravan');
+    return [
+      ...Object.values(TECHS)
+        .filter((t) => t.level === level)
+        .map((t) => icon(TECH_ICONS[t.id] ?? 'mh-xp', 'xp', t.name, t.description)),
+      ...Object.values(ITEMS)
+        .filter((i) => i.level === level)
+        .map((i) => icon(ITEM_ICONS[i.id] ?? 'mh-crate', 'flag', i.name, i.description)),
+      ...pieces.filter((id) => PIECES[id].level === level).map((id) => icon(PIECE_ICONS[id] ?? KIND_ICONS[PIECES[id].kind], 'pick', PIECE_TEXT[id].name, PIECE_TEXT[id].line)),
+      // A building going up a level («Barracón, nivel 2»): its own icon, what that level does on hover.
+      ...pieces.flatMap((id) =>
+        PIECES[id].kind === 'building'
+          ? [2, 3]
+              .filter((to) => upgradeLevel(PIECES[id].level, to) === level)
+              .map((to) => icon(PIECE_ICONS[id] ?? KIND_ICONS.building, 'pick', `${PIECE_TEXT[id].name}, nivel ${to}`, PIECE_TEXT[id].levels?.[to - 1] ?? PIECE_TEXT[id].line))
+          : [],
+      ),
+    ];
+  }
+
+  /** broughtIcons under its heading, or nothing for a level that brought nothing. */
+  private broughtRow(level: number, heading: string): HTMLElement[] {
+    const icons = this.broughtIcons(level);
+    return icons.length ? [h('div.x-group', {}, heading), h('div.unlock-icons', {}, ...icons)] : [];
   }
 
   /** "Armas magnéticas · Sala de simulación": what a Bastion level unlocks. */
@@ -1011,10 +1113,11 @@ export class StrategyScreen {
     } catch {
       /* private mode */
     }
+    // Only the words (Ana, 20/10 #15: no «KESSRA», no «El claro» over them); Lore's key words in bold (marked).
     this.alerts.unshift({
       tone: 'info',
-      kicker: 'KESSRA',
-      title: PREMISE.title,
+      kicker: '',
+      title: '',
       body: PREMISE.lines,
       text: '',
     });
@@ -1023,18 +1126,20 @@ export class StrategyScreen {
   /** XCOM-style pop-ups for what happened while time passed. */
   private collectAlerts(prev: CampaignState, c: CampaignState): void {
     const fresh: Alert[] = [];
-    // Each level adds a page to the Diario. After a mission it waits until the debrief is closed.
+    // Each level, a page of the doctor's diary on going up: its line, what the Bastion is now, what it brought. After a
+    // mission it waits until the debrief is closed.
     for (let level = bastionLevel(prev) + 1; level <= bastionLevel(c); level++) {
       const page = EXPEDIENTE[level - 1]!;
       fresh.push({
         tone: 'good',
-        kicker: `DIARIO · HOJA ${level}`,
+        // No page number: it was the level's (#13).
+        kicker: 'DIARIO',
         rank: 90,
         title: page.title,
-        // One line of the page here; the whole page waits in the Diario (playtest: «mucho texto»).
+        // One line of the page (playtest: «mucho texto»).
         body: [page.summary],
-        text: `Bastión nivel ${level}.`,
-        unlocks: this.unlocksOf(level),
+        text: `El Bastión es ${bastionLevelA(level)}.`,
+        brought: level,
         note: page.note,
       });
     }
@@ -1084,9 +1189,8 @@ export class StrategyScreen {
         kicker: 'NIDO',
         rank: 65,
         title: REGIONS[r.id].name,
-        text: r.contacted
-          ? `Los zombis se han juntado en un Nido. Hará avanzar ${doomSubject(bastionLevel(c))} hasta que lo queméis.`
-          : 'Los zombis se han juntado en un Nido. Contactad con la zona para poder quemarlo.',
+        // Who to call and from where, not «la zona» (Ana, 20/10 #35; Lore's words).
+        text: nestNotice(r.id, r.contacted, doomSubject(bastionLevel(c)), contactCost(c)),
       });
     }
     if (c.nextSupplyDay !== prev.nextSupplyDay) {
@@ -1133,17 +1237,13 @@ export class StrategyScreen {
   }
 
   /**
-   * One window per moment: the most important new alert pops up (unless one is
-   * already waiting), and everything else goes to the Novedades tray.
+   * Every new alert as a window, one after another, the most important first, after any already waiting: with
+   * Novedades gone with Campaña (Arturo, 20/10), a Nido or a convoy left out was something not known.
    */
   private flushAlerts(fresh: Alert[]): void {
     if (!fresh.length) return;
     this.geo.setScanning(false);
-    const sorted = [...fresh].sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
-    const [top, ...rest] = sorted;
-    if (!this.alerts.length) this.alerts.push(top!);
-    else rest.unshift(top!);
-    this.news = [...rest, ...this.news].slice(0, MAX_NEWS);
+    this.alerts.push(...[...fresh].sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0)));
   }
 
   private focusOffer(id: string): void {
@@ -1194,10 +1294,6 @@ export class StrategyScreen {
     switch (this.view) {
       case 'geoscape':
         this.renderGeoscape(c);
-        break;
-      case 'hub':
-      case 'research':
-        this.renderResearch(c);
         break;
       case 'engineering':
         this.renderEngineering(c);
@@ -1258,10 +1354,8 @@ export class StrategyScreen {
         pips,
         h('b', {}, bastionLevel(c) >= PARTITURA_LEVEL ? `${Math.max(0, DOOM_MAX - c.doom)} km` : `${c.doom}/${DOOM_MAX}`),
       ),
-      // No players here (playtest 19/10 #10): where the other one is shows on the tabs, and in the Escuadra.
-      this.news.length
-        ? h('button.x-btn.strat-news', { onclick: () => ((this.newsOpen = !this.newsOpen), this.render()), title: 'Lo que ha pasado y no salió en una ventana' }, 'Novedades ', this.chip(String(this.news.length), 'warn'))
-        : null,
+      // No players here (playtest 19/10 #10): where the other one is shows on the tabs, and in the Escuadra. Nor
+      // Novedades (Ana, 20/10 #30: nothing more on the top strip): they are in Campaña.
       // One button (playtest 19/10 #7): Continuar, Ajustes, the main menu and leaving the game are in it.
       h('button.x-btn.strat-menu', { onclick: () => ((this.menuOpen = true), this.render()), title: 'Menú (Esc)' }, 'Menú'),
     );
@@ -1375,7 +1469,7 @@ export class StrategyScreen {
       }
       case 'levelUp': {
         const next = nextLevel(c);
-        return { rows: next ? [['Suministros', costText(next.cost)], ['Qué hace', `El Bastión, al nivel ${next.level}.`]] : [], see: null };
+        return { rows: next ? [['Suministros', costText(next.cost)], ['Qué hace', `El Bastión pasa a ser ${bastionLevelA(next.level)}.`]] : [], see: null };
       }
       case 'chooseMission': {
         const o = this.offerById(action.id);
@@ -1489,15 +1583,19 @@ export class StrategyScreen {
     // Only one's own: a soldier's skills are its owner's alone, there or not (playtest 18/10 #42).
     const promotions = c.soldiers.filter((s) => s.owner === this.mySlot && this.hasPoints(s));
     if (promotions.length) pending.set('barracks', { n: `▲${promotions.length}`, urgent: false, what: promotions.map((s) => `${s.name}: talento por elegir`) });
+    const fresh = this.freshViews(c);
     for (const item of items) {
       const here = partner?.connected && this.partnerView === item.view;
       const todo = pending.get(item.view);
+      const isNew = fresh.has(item.view as FreshView);
       this.nav.append(
         h(
           `button${this.view === item.view ? '.on' : ''}${item.view === 'squad' ? '.urgent' : ''}`,
           { 'data-view': item.view, onclick: () => void this.go(item.view), title: todo ? todo.what.join(' · ') : '', 'aria-label': item.label },
           item.label,
           todo ? h(`span.nav-count${todo.urgent ? '.urgent' : ''}`, {}, todo.n) : null,
+          // Something a level brought, not looked at yet (#13): until the pointer goes over it there.
+          isNew && !todo ? h('span.new-tag', { title: 'Hay cosas nuevas' }, 'Nuevo') : null,
           here ? h('span.partner-dot', { style: { '--accent': partner!.color }, title: `${partner!.name} está aquí` }, partner!.name.slice(0, 1).toUpperCase()) : null,
         ),
       );
@@ -1514,7 +1612,6 @@ export class StrategyScreen {
           ...c.rumors.map((r) => ({ key: `rumor:${r.id}`, label: `Rumor en ${REGIONS[r.region].name}`, urgent: false })),
         ],
       ],
-      ['research', [{ key: `level:${bastionLevel(c)}`, label: `Nueva hoja del Diario: nivel ${bastionLevel(c)}`, urgent: false }]],
     ]);
   }
 
@@ -1526,6 +1623,24 @@ export class StrategyScreen {
     if (!items?.some((i) => !this.seenNews.has(i.key))) return;
     for (const i of items) this.seenNews.add(i.key);
     this.saveSeenNews(c);
+  }
+
+  /** Whether what `key` names came with a level bought and this player hasn't looked at it yet (#13). */
+  private readonly isNew = (key: string): boolean => !!this.state && this.freshMarks.isFresh(key, bastionLevel(this.state));
+
+  /** The pointer went over it: its «Nuevo» goes, and the tab's with it once nothing new is left there. */
+  private readonly seenNew = (key: string): void => {
+    if (this.freshMarks.see(key) && this.state) this.renderNav(this.state);
+  };
+
+  /** Where this player has something new that a level brought: Construir, the Armería (a building's upgrade, only if one can take it). */
+  private freshViews(c: CampaignState): Set<FreshView> {
+    const out = new Set<FreshView>();
+    for (const t of this.freshMarks.fresh(bastionLevel(c))) {
+      if (t.raise && !c.bastion.pieces.some((p) => p.piece === t.raise!.piece && (p.level ?? 1) === t.raise!.to - 1)) continue;
+      out.add(t.view);
+    }
+    return out;
   }
 
   private loadSeenNews(c: CampaignState): void {
@@ -1555,105 +1670,6 @@ export class StrategyScreen {
     } catch {
       /* storage unavailable: the counts reset on reload */
     }
-  }
-
-  // ---------------------------------------------------------------- hub
-
-  /** The Bastion at a glance: only what is waiting, each line a shortcut to its screen. */
-  /** Where a pending step takes you: its operation, soldier, room or region, else its screen. */
-  private follow(step: NextStep): void {
-    const go = step.go ?? {};
-    if (go.offer) return this.focusOffer(go.offer);
-    if (go.region) return this.focusRegion(go.region);
-    if (go.soldier) {
-      this.soldier = go.soldier;
-      void this.go('barracks');
-      return;
-    }
-    if (go.piece) {
-      if (this.view !== 'facilities') void this.go('facilities');
-      this.clearing.focusPiece(go.piece);
-      return;
-    }
-    if (step.view !== this.view) void this.go(step.view);
-  }
-
-  /**
-   * The campaign at a glance, at the head of Campaña (the old «Bastión»,
-   * Arturo 16/10 #33): "Ahora", the one next thing to do, then what else is
-   * pending (each line a shortcut) and the calendar.
-   */
-  private overview(c: CampaignState): (HTMLElement | null)[] {
-    // The partner by name in the agenda (Lore: «Tu compañero» didn't do for Ana).
-    const steps = nextSteps(c, this.mySlot, this.partner()?.name);
-    const icon: Record<BaseView, string> = {
-      hub: 'clock',
-      geoscape: 'flag',
-      research: 'xp',
-      engineering: 'flag',
-      barracks: 'xp',
-      facilities: 'pick',
-      squad: 'flag',
-      debrief: 'flag',
-    };
-    const [now, ...rest] = steps;
-    // Steps on Campaña itself (a proposal, an event) are already on screen: they only inform.
-    const here = (step: NextStep) => step.view === 'hub' || step.view === 'research';
-    const nowEl = now
-      ? h(
-          `button.strat-now${now.tone === 'urgent' ? '.urgent' : ''}`,
-          { disabled: here(now), onclick: () => this.follow(now) },
-          h('small', {}, 'AHORA'),
-          h('b', {}, now.label),
-          here(now) ? null : arrowIcon('right'),
-        )
-      : null;
-    const rows = rest.slice(0, 4).map((step) =>
-      h(
-        `${here(step) ? 'div' : 'button'}.x-row.agenda${step.tone === 'urgent' ? '.urgent' : ''}`,
-        here(step) ? {} : { onclick: () => this.follow(step) },
-        h(`span.agenda-icon.${icon[step.view]}`),
-        h('b', {}, step.label),
-        step.count && step.count > 1 ? this.chip(String(step.count)) : h('span'),
-      ),
-    );
-    return [nowEl, rows.length ? h('div.x-head', { title: 'Pulsa una sala del Bastión para entrar' }, 'Agenda') : null, rows.length ? h('div.x-list', {}, ...rows) : null, ...this.calendar(c)];
-  }
-
-  /**
-   * Calendario: what will happen and after how many missions (docs/FASE12.md
-   * §11.6: time passes with each one; the days stay inside).
-   */
-  private calendar(c: CampaignState): HTMLElement[] {
-    const dates: { day: number; icon: string; text: string; go?: () => void }[] = [];
-    // Only the Taller's works are left (the base is built at once, on the clearing).
-    for (const work of c.base.works.filter((w) => w.kind === 'craft' && w.project)) dates.push({ day: c.day + work.daysLeft, icon: 'pick', text: `${CRAFTS[work.project!].name}, del Taller` });
-    for (const s of c.soldiers.filter((x) => x.alive && x.woundedDays > 0 && x.owner === this.mySlot)) dates.push({ day: c.day + s.woundedDays, icon: 'hp', text: `${s.name} vuelve al servicio` });
-    // The bitten, both players': whoever has medicines can save them (docs/FASE3.md).
-    for (const s of c.soldiers.filter((x) => x.alive && x.infection)) dates.push({ day: turnDay(c, s)!, icon: 'hp', text: `${s.name} se convierte si no recibe el tratamiento`, go: () => this.openSoldier(s.id) });
-    const rumor = c.rumors.find((r) => r.id === c.listening);
-    if (rumor) dates.push({ day: c.day + rumor.daysLeft, icon: 'will', text: `Se sabrá qué pasa en ${REGIONS[rumor.region].name}` });
-    for (const o of shownOffers(c).filter((x) => x.expiresDay !== null)) dates.push({ day: o.expiresDay!, icon: 'flag', text: `Caduca «${o.name}»`, go: () => this.focusOffer(o.id) });
-    dates.push({ day: c.nextSupplyDay, icon: 'clock', text: 'Convoy de Brena' });
-    dates.push({ day: c.nextDoomDay, icon: 'clock', text: `Avanza ${doomSubject(bastionLevel(c))}` });
-    dates.sort((a, b) => a.day - b.day);
-    return [
-      h('div.x-head', { title: timeHelp(bastionLevel(c)) }, 'Calendario'),
-      h(
-        'div.x-list.calendar',
-        {},
-        ...dates.slice(0, 7).map((d) =>
-          h(
-            `${d.go ? 'button' : 'div'}.x-row.agenda.calendar-row`,
-            d.go ? { onclick: d.go } : {},
-            h(`span.agenda-icon.${d.icon}`),
-            h('b', {}, d.text),
-            this.chip(aheadChip(c, d.day), '', aheadText(c, d.day)),
-          ),
-        ),
-      ),
-      h('p.calendar-note', {}, 'El tiempo pasa con cada misión: las curas, las escuchas y los encargos avanzan con ellas.'),
-    ];
   }
 
   // ---------------------------------------------------------- geoscape
@@ -1712,7 +1728,7 @@ export class StrategyScreen {
                   `button.x-row${this.region === r.id && !this.offer ? '.selected' : ''}`,
                   { style: { '--row-accent': '#ff4a5a' }, onclick: () => this.focusRegion(r.id) },
                   h('div', {}, h('b', {}, REGIONS[r.id].name)),
-                  r.contacted ? this.chip('Asaltable', 'bad') : this.chip('Sin contacto', '', 'Contactad con la zona para poder asaltarlo'),
+                  r.contacted ? this.chip('Asaltable', 'bad') : this.chip('Sin contacto', '', nestNoContactTip(r.id, contactCost(c))),
                 ),
               ),
             ),
@@ -1720,7 +1736,7 @@ export class StrategyScreen {
         : []),
       ...this.questRows(c),
       ...this.rumorRows(c),
-      h('div.x-head', { title: 'Pulsa una zona del valle para ver sus datos' }, 'Red de enclaves'),
+      h('div.x-head', { title: 'Pulsa una zona del mapa para ver sus datos' }, 'Red de enclaves'),
       this.meter(network, contactCapacity(c), 'Zonas contactadas / máximo (los centros de comunicaciones dan más)'),
     );
     this.viewEl.append(left);
@@ -1924,7 +1940,7 @@ export class StrategyScreen {
     const flooded = underMarea(c, id);
     const blockedContact = this.why(
       [!r.contacted && !!contactBlocker(c, id), contactBlocker(c, id) ?? ''],
-      [contacted >= capacity, 'Construid un centro de comunicaciones para más contactos'],
+      [contacted >= capacity, 'Construid o mejorad la Sala de radio para más contactos'],
       [!!c.proposal, 'Hay una propuesta pendiente'],
       [!canAfford(c, cost), this.shortfall(cost)],
     );
@@ -1935,7 +1951,7 @@ export class StrategyScreen {
       flooded ? h('p.x-text.x-bad', {}, floodedZoneNote(bastionLevel(c))) : null,
       h('p.x-muted', { title: 'Suministros que manda con cada convoy mensual una vez contactada' }, `${REGION_LORE[id].ally} · +${regionIncome(c, id)} § al mes`),
       this.regionQuest(c, id),
-      r.facility ? h('p.x-text.x-bad', {}, `Nido: hace avanzar ${doomSubject(bastionLevel(c))} cada ${missionsText(missionsFor(14))}.${r.contacted ? '' : ' Contactad para quemarlo.'}`) : null,
+      r.facility ? h('p.x-text.x-bad', {}, `Nido: hace avanzar ${doomSubject(bastionLevel(c))} cada ${missionsText(missionsFor(14))}.${r.contacted ? '' : ` ${nestNoContactTip(r.id, contactCost(c))}`}`) : null,
       r.contacted
         ? null
         : h(
@@ -1945,95 +1961,6 @@ export class StrategyScreen {
           ),
       r.contacted ? null : this.whyEl(blockedContact),
       r.contacted ? null : this.meter(contacted, capacity, 'Zonas contactadas / máximo'),
-    ];
-  }
-
-  // ---------------------------------------------------------- progress
-
-  /** The old laboratory: the Bastion's level track and what each level unlocks. */
-  private renderResearch(c: CampaignState): void {
-    const level = bastionLevel(c);
-    this.levelPick ??= Math.min(level + 1, MAX_LEVEL);
-    // One line per level: number, page title once reached, how many things it opens.
-    const rows = LEVEL_COST.map((_, i) => {
-      const n = i + 1;
-      const reached = n <= level;
-      const unlocks = levelUnlocks(n);
-      return h(
-        `button.x-row.level${this.levelPick === n ? '.selected' : ''}${reached ? '.reached' : '.dim'}`,
-        { onclick: () => ((this.levelPick = n), this.render()), title: unlocks.join(' · ') || 'El Bastión entra en servicio' },
-        h('span.level-num', {}, String(n)),
-        h('b', {}, reached ? EXPEDIENTE[i]!.title : unlocks.length ? `${unlocks.length} ${unlocks.length === 1 ? 'novedad' : 'novedades'}` : 'Sin novedades'),
-        h('span.x-side', { title: reached ? '' : `Hacen falta ${LEVEL_MISSIONS[i]} misiones hechas y ${LEVEL_COST[i]} §` }, reached ? '✓' : `${LEVEL_COST[i]} §`),
-      );
-    });
-    const xpHelp = LEVEL_TEXT.about;
-    const up = nextLevel(c);
-    const upBlocked = up ? levelUpBlocker(c) : null;
-    this.viewEl.append(
-      this.panel(
-        'progress-left',
-        'left',
-        ...this.overview(c),
-        h('div.x-head', { title: xpHelp }, `Bastión · nivel ${level}`),
-        up ? this.bar(Math.min(up.flown, up.missions), up.missions) : h('p.x-muted', {}, LEVEL_TEXT.top),
-        up ? h('p.x-muted', { title: xpHelp }, `${up.flown} de ${up.missions} misiones para el nivel ${up.level} · ${up.cost} §`) : null,
-        up
-          ? h(
-              'div.level-up',
-              {},
-              h('button.x-btn.primary', { disabled: !!upBlocked, title: upBlocked ?? levelUpLine(up.level, up.cost), onclick: () => this.send({ type: 'levelUp' }) }, `${LEVEL_TEXT.button} · ${up.cost} §`),
-              this.whyEl(upBlocked ?? ''),
-            )
-          : null,
-        h('div.x-list', {}, ...rows),
-        ...this.radioArchive(c),
-      ),
-    );
-    const n = this.levelPick;
-    const reached = n <= level;
-    const techs = Object.values(TECHS).filter((t) => t.level === n);
-    const items = Object.values(ITEMS).filter((i) => i.level === n);
-    // The base's pieces it opens (docs/FASE12.md §11; progression.ts BASE_UNLOCKS).
-    const pieces = (Object.keys(PIECES) as (keyof typeof PIECES)[]).filter((id) => PIECES[id].level === n && id !== 'caravan');
-    const KIND_LABEL = { building: 'Edificio', defence: 'Defensa', trap: 'Automática' } as const;
-    const page = EXPEDIENTE[n - 1]!;
-    const line = (kind: string, name: string, detail: string, tag: HTMLElement | null = null) =>
-      h('div.x-row.unlock', { title: detail }, h(`span.agenda-icon.${kind}`), h('div', {}, h('b', {}, name), h('small', {}, detail), tag));
-    this.viewEl.append(
-      this.panel(
-        'progress-right',
-        'right',
-        h('div.alert-kicker', { className: `alert-kicker${reached ? ' good' : ''}` }, reached ? `ALCANZADO · DIARIO, HOJA ${n}` : `${LEVEL_COST[n - 1]} § · ${LEVEL_MISSIONS[n - 1]} MISIONES HECHAS`),
-        h('h2.x-title', {}, reached ? page.title : `Nivel ${n}`),
-        ...(reached ? [...page.paragraphs.map((p) => h('p.x-text.page', {}, p)), h('p.x-note', {}, page.note)] : []),
-        techs.length || items.length || pieces.length ? h('div.x-group', {}, reached ? 'Desbloqueado' : 'Desbloquea') : null,
-        ...techs.map((t) => line('xp', t.name, t.description)),
-        ...items.map((i) => line('flag', i.name, i.description, this.chip(costText(i.cost), '', 'En la Armería'))),
-        ...pieces.map((id) => line('pick', PIECE_TEXT[id].name, PIECE_TEXT[id].line, this.chip(KIND_LABEL[PIECES[id].kind], '', 'Se construye en el claro'))),
-        !techs.length && !items.length && !pieces.length ? h('p.x-muted', {}, 'Lo básico: armas convencionales, kevlar, granadas, humo y botiquines.') : null,
-      ),
-    );
-  }
-
-  /** Every transmission heard so far, to play again; the ones still waiting their moment are marked. */
-  private radioArchive(c: CampaignState): HTMLElement[] {
-    const entries = this.radio.archive(c);
-    if (!entries.length) return [];
-    return [
-      h('div.x-head', { title: 'Las conversaciones por radio del Bastión. Pulsa una para volver a oírla.' }, 'Archivo de transmisiones'),
-      h(
-        'div.x-list',
-        {},
-        ...entries.map(({ scene, fresh }) =>
-          h(
-            'button.x-row',
-            { title: scene.channel, onclick: () => this.radio.replay(c, scene.id, () => this.render()) },
-            h('div', {}, h('b', {}, scene.title)),
-            fresh ? this.chip('Nueva', 'good', 'Todavía no ha sonado') : h('span.x-side', {}, '▸'),
-          ),
-        ),
-      ),
     ];
   }
 
@@ -2051,12 +1978,18 @@ export class StrategyScreen {
     const rows: HTMLElement[] = [];
     if (this.engTab === 'gear') {
       // No weapon tiers any more (docs/FASE9.md §5): the armour's, made in the Taller, for everyone.
-      const tiers: [string, string, number, boolean][] = [
-        ['a1', ARMOR_TIERS[0]!.name, 1, true],
-        ['a2', ARMOR_TIERS[1]!.name, TECHS.plateArmor.level, baseArmorTier(c) >= 2],
-        ['a3', ARMOR_TIERS[2]!.name, TECHS.predatorArmor.level, baseArmorTier(c) >= 3],
-      ];
-      this.engPick ??= (c.foundWeapons ?? [])[0] ? `f:${c.foundWeapons![0]!.id}` : 'a2';
+      // Only the tiers the Bastion's level allows (#13: what isn't had yet isn't shown).
+      const level = bastionLevel(c);
+      const tiers = ([
+        ['a1', ARMOR_TIERS[0]!.name, baseArmorTier(c) >= 1],
+        ['a2', ARMOR_TIERS[1]!.name, baseArmorTier(c) >= 2],
+        ['a3', ARMOR_TIERS[2]!.name, baseArmorTier(c) >= 3],
+      ] as [string, string, boolean][]).filter(([key, , made]) => made || ARMOR_LEVELS[key]! <= level);
+      const crafts = Object.values(CRAFTS).filter((d) => (d.kind === 'arms' || d.kind === 'ammo' || d.kind === 'mod') && craftLevel(d) <= level);
+      // A pick left on something no longer shown: the first that is.
+      const shown = (k: string) => (k.startsWith('a') ? tiers.some(([t]) => t === k) : k.startsWith('m:') ? crafts.some((d) => `m:${d.id}` === k) : true);
+      if (this.engPick && !shown(this.engPick)) this.engPick = null;
+      this.engPick ??= (c.foundWeapons ?? [])[0] ? `f:${c.foundWeapons![0]!.id}` : (tiers.find(([, , made]) => !made)?.[0] ?? 'a1');
       // The Armería's weapons first (docs/FASE8.md §A, FASE9.md §5): each for one soldier; its state and improvements beside its name.
       const found = c.foundWeapons ?? [];
       if (found.length) rows.push(h('div.x-group', {}, 'En la Armería'));
@@ -2084,50 +2017,44 @@ export class StrategyScreen {
           ),
         );
       rows.push(h('div.x-group', {}, 'Armadura'));
-      for (const [key, name, lvl, unlocked] of tiers) {
+      for (const [key, name, unlocked] of tiers) {
         const tier = Number(key[1]);
-        rows.push(
-          h(
-            `button.x-row.tier-row${this.engPick === key ? '.selected' : ''}${unlocked ? '' : '.dim'}`,
-            { onclick: () => ((this.engPick = key), this.render()) },
-            this.tierMarks(tier),
-            h('b', {}, name),
-            unlocked ? h('span.x-side', {}, '✓') : this.craftChip(c, key) ?? this.chip(`Nv ${lvl}`, '', `Nivel ${lvl} del Bastión, y hacerla en el Taller`),
-          ),
+        const row = h(
+          `button.x-row.tier-row${this.engPick === key ? '.selected' : ''}${unlocked ? '' : '.dim'}`,
+          { onclick: () => ((this.engPick = key), this.render()) },
+          this.tierMarks(tier),
+          h('b', {}, name),
+          unlocked ? h('span.x-side', {}, '✓') : (this.craftChip(c, key) ?? this.chip('En el Taller', '', 'Se hace en el Taller')),
         );
+        rows.push(markNew(row, !unlocked && this.isNew(`armor:${key}`), () => this.seenNew(`armor:${key}`)));
       }
       // The Taller's weapons, munition and improvements (docs/FASE8.md §A, FASE9.md §5): munition three times, the rest again and again.
       rows.push(h('div.x-group', {}, 'Hacer en el Taller'));
-      for (const def of Object.values(CRAFTS).filter((d) => d.kind === 'arms' || d.kind === 'ammo' || d.kind === 'mod')) {
+      for (const def of crafts) {
         const work = c.base.works.find((w) => w.project === def.id);
         const done = def.kind === 'ammo' && c.crafted?.includes(def.id);
-        rows.push(
-          h(
-            `button.x-row${this.engPick === `m:${def.id}` ? '.selected' : ''}${done || !craftBlocker(c, def.id) || work ? '' : '.dim'}`,
-            { onclick: () => ((this.engPick = `m:${def.id}`), this.render()) },
-            h('b', {}, weaponIcon(def.kind === 'mod' ? 'mod' : def.kind === 'ammo' || !def.makes ? 'ammo' : kindOf(def.makes)), def.name),
-            h('span.x-side', {}, done ? '✓' : work ? this.chip(`Taller · ${missionsText(missionsFor(work.daysLeft))}`, 'good') : def.makes ? h('small.x-place', {}, placeOf(def.makes)) : ''),
-          ),
+        const row = h(
+          `button.x-row${this.engPick === `m:${def.id}` ? '.selected' : ''}${done || !craftBlocker(c, def.id) || work ? '' : '.dim'}`,
+          { onclick: () => ((this.engPick = `m:${def.id}`), this.render()) },
+          h('b', {}, weaponIcon(def.kind === 'mod' ? 'mod' : def.kind === 'ammo' || !def.makes ? 'ammo' : kindOf(def.makes)), def.name),
+          h('span.x-side', {}, done ? '✓' : work ? this.chip(`Taller · ${missionsText(missionsFor(work.daysLeft))}`, 'good') : def.makes ? h('small.x-place', {}, placeOf(def.makes)) : ''),
         );
+        rows.push(markNew(row, this.isNew(`craft:${def.id}`), () => this.seenNew(`craft:${def.id}`)));
       }
     } else {
       // Only what goes on the belt (docs/FASE9.md §4): the special rounds are the weapons' improvements now.
-      for (const item of Object.values(ITEMS).filter((i) => i.slot === 'utility')) {
-        const unlocked = itemUnlocked(c, item.id);
+      // Only what the Bastion's level allows (#13).
+      const belt = Object.values(ITEMS).filter((i) => i.slot === 'utility' && itemUnlocked(c, i.id));
+      if (this.engPick && !belt.some((i) => i.id === this.engPick)) this.engPick = null;
+      for (const item of belt) {
         this.engPick ??= item.id;
-        rows.push(
-          h(
-            `button.x-row${this.engPick === item.id ? '.selected' : ''}${unlocked ? '' : '.dim'}`,
-            { onclick: () => ((this.engPick = item.id), this.render()) },
-            h(
-              'div',
-              {},
-              h('b', {}, item.name),
-              h('small', {}, unlocked ? this.chip(costText(shopPrice(c, item.id))) : this.chip(`Nv ${item.level}`, '', `Se desbloquea con el nivel ${item.level} del Bastión`)),
-            ),
-            h('span.x-side', { title: 'Se equipan en la ficha de cada soldado' }, this.stockText(c, item.id)),
-          ),
+        const row = h(
+          `button.x-row${this.engPick === item.id ? '.selected' : ''}`,
+          { onclick: () => ((this.engPick = item.id), this.render()) },
+          h('div', {}, h('b', {}, item.name), h('small', {}, this.chip(costText(shopPrice(c, item.id))))),
+          h('span.x-side', { title: 'Se equipan en la ficha de cada soldado' }, this.stockText(c, item.id)),
         );
+        rows.push(markNew(row, this.isNew(`item:${item.id}`), () => this.seenNew(`item:${item.id}`)));
       }
     }
     const note = this.engTab === 'items' && facilityCount(c, 'workshop') ? `Taller: −${Math.round((1 - shopPrice(c, 'smokeGrenade') / ITEMS.smokeGrenade.cost) * 100)} %` : '';
@@ -2167,7 +2094,7 @@ export class StrategyScreen {
           'p.x-chips',
           {},
           this.chip(this.stockText(c, item.id) || 'No tienes ninguno', '', 'Se equipa en la ficha del soldado; si cae, se pierde'),
-          unlocked ? this.chip(costText(cost), '', 'No necesita votación') : this.chip(`Nivel ${item.level} del Bastión`, 'warn'),
+          unlocked ? this.chip(costText(cost), '', 'No necesita votación') : this.chip(needsLevelLine(item.level), 'warn'),
         ),
         unlocked ? h('button.x-btn.primary', { disabled: !canAfford(c, cost), onclick: () => this.send({ type: 'buy', item: item.id }) }, 'Comprar') : null,
         unlocked ? this.whyEl(this.shortfall(cost)) : null,
@@ -2785,7 +2712,7 @@ export class StrategyScreen {
         'build-left',
         'left',
         ...palette(
-          { c, kind: this.buildKind, tool, partner: this.voting() ? this.partner()!.name : null, me: this.mySlot },
+          { c, kind: this.buildKind, tool, partner: this.voting() ? this.partner()!.name : null, me: this.mySlot, isNew: this.isNew },
           {
             kind: (k) => {
               this.buildKind = k;
@@ -2803,6 +2730,7 @@ export class StrategyScreen {
               this.render();
             },
             drop: () => this.dropTool(),
+            seen: this.seenNew,
           },
         ),
         h('div.x-head', {}, 'Efectos'),
@@ -2816,7 +2744,7 @@ export class StrategyScreen {
         'build-right',
         'right',
         ...pieceCard(
-          { c, piece: p, dismantling: this.dismantling, partner: this.voting() ? this.partner()!.name : null },
+          { c, piece: p, dismantling: this.dismantling, partner: this.voting() ? this.partner()!.name : null, isNew: this.isNew },
           {
             send: (cmd) => {
               this.dismantling = false;
@@ -2827,6 +2755,7 @@ export class StrategyScreen {
               this.render();
             },
             close: () => this.pickPiece(null),
+            seen: this.seenNew,
           },
         ),
       ),
@@ -2927,7 +2856,7 @@ export class StrategyScreen {
   private renderSquad(c: CampaignState): void {
     const offer = this.offerById(c.activeMission);
     if (!offer) {
-      this.viewEl.append(h('div.strat-center-top', {}, h('div.x-panel', {}, h('p.x-text', {}, 'No hay ninguna misión elegida.'), h('button.x-btn', { onclick: () => void this.go('geoscape') }, 'Ir al valle'))));
+      this.viewEl.append(h('div.strat-center-top', {}, h('div.x-panel', {}, h('p.x-text', {}, 'No hay ninguna misión elegida.'), h('button.x-btn', { onclick: () => void this.go('geoscape') }, 'Ir al mapa'))));
       this.lineup([]);
       return;
     }
@@ -2997,44 +2926,48 @@ export class StrategyScreen {
           ),
         )
       : null;
-    // Down by the buttons, the mission on the left and the buttons on the right (playtest 19/10 #3; on a laptop the
-    // mission's window at the top hid the soldiers, #2): its name and what it is for, whole; no kicker, no
-    // «Botín · Brena · ★», no picture of the vehicle.
+    // Down under the row, centred (Ana, 20/10 #16, as her drawing): who is ready over one panel, the mission on its
+    // left (its name and what it is for, whole: no kicker, no «Botín · Brena · ★», no picture of the vehicle) and
+    // the buttons on its right (playtest 19/10 #3; on a laptop the mission's window at the top hid the soldiers, #2).
     const status = ready && waiting ? `Esperando a ${partner!.name}` : partnerReady ? `${partner!.name} espera para salir` : siege ? BASE_SIEGE_TEXT.defenders : '';
     this.viewEl.append(
       h(
         'div.squad-bottom',
         {},
+        readyBoard,
         h(
           'div.x-panel.squad-mission',
           {},
-          h('h1', {}, offer.name, offer.night ? h('small', {}, NIGHT_TEXT.label) : null),
-          // What the mission is for, in view before choosing the squad (playtest 13/10: it was only a tooltip).
-          h('p.x-text', {}, offerBriefing(c, offer)),
-          offer.living ? h('p.x-text.x-warn', {}, LIVING_TIP) : null,
-        ),
-        h(
-          'div.squad-actions',
-          {},
-          readyBoard,
           h(
-            `button.x-btn.big.squad-launch${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
-            { disabled: !c.squad.length, onclick: () => this.send({ type: 'launch', ready: !ready }) },
-            siege
-              ? ready
-                ? 'LISTOS PARA DEFENDER'
-                : partnerReady
-                  ? `DEFENDER CON ${partner!.name.toUpperCase()}`
-                  : 'DEFENDER EL BASTIÓN'
-              : ready
-                ? 'LISTOS PARA SALIR'
-                : partnerReady
-                  ? `SALIR CON ${partner!.name.toUpperCase()}`
-                  : 'LANZAR MISIÓN',
+            'div.squad-text',
+            {},
+            h('h1', {}, offer.name, offer.night ? h('small', {}, NIGHT_TEXT.label) : null),
+            // What the mission is for, in view before choosing the squad (playtest 13/10: it was only a tooltip).
+            h('p.x-text', {}, offerBriefing(c, offer)),
+            offer.living ? h('p.x-text.x-warn', {}, LIVING_TIP) : null,
           ),
-          status ? h('small.x-muted', {}, status) : null,
-          // Not «Cancelar misión» here (#3: it read as the same as going back); it is on the mission's card in the valley.
-          h('button.x-btn', { onclick: () => void this.go('research') }, 'Volver al Bastión'),
+          h(
+            'div.squad-actions',
+            {},
+            h(
+              `button.x-btn.big.squad-launch${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
+              { disabled: !c.squad.length, onclick: () => this.send({ type: 'launch', ready: !ready }) },
+              siege
+                ? ready
+                  ? 'LISTOS PARA DEFENDER'
+                  : partnerReady
+                    ? `DEFENDER CON ${partner!.name.toUpperCase()}`
+                    : 'DEFENDER EL BASTIÓN'
+                : ready
+                  ? 'LISTOS PARA SALIR'
+                  : partnerReady
+                    ? `SALIR CON ${partner!.name.toUpperCase()}`
+                    : 'LANZAR MISIÓN',
+            ),
+            status ? h('small.x-muted', {}, status) : null,
+            // Not «Cancelar misión» here (#3: it read as the same as going back); it is on the mission's card on the map.
+            h('button.x-btn', { onclick: () => void this.go('barracks') }, 'Volver al Bastión'),
+          ),
         ),
       ),
     );
@@ -3053,7 +2986,8 @@ export class StrategyScreen {
             // data-bust: the theme puts the soldier's own bust on the card (ui/themes/mixta-base.css), once drawn.
             { style: { '--accent': this.playerColor(s.owner) }, 'data-bust': '' },
             h('b', {}, displayName(s.name, s.nickname)),
-            h('small', {}, roleDot(s.board), veterancyName(s)),
+            // Its rank in words, no role's dot before it (Ana, 20/10 #17).
+            h('small', {}, veterancyName(s)),
             // Low cards (playtest 19/10 #8): whose is its colour and its side; «Quitar», a small x in the corner.
             s.owner === this.mySlot && !siege
               ? h('button.card-x', { title: 'Quitar de la escuadra', 'aria-label': `Quitar a ${displayName(s.name, s.nickname)}`, onclick: () => this.send({ type: 'squad', soldier: s.id, on: false }) }, '×')
@@ -3107,6 +3041,7 @@ export class StrategyScreen {
     if (count > 8) {
       cards.classList.add('rows');
       const place = () => {
+        this.reframeLineup();
         // In the room right of the soldiers' list, half of them a row.
         const perRow = Math.ceil(count / 2);
         const width = cards.parentElement?.clientWidth ?? window.innerWidth;
@@ -3130,6 +3065,7 @@ export class StrategyScreen {
     const padAt = this.clearingArt?.padPosition?.bind(this.clearingArt);
     if (!padAt) return;
     const step = () => {
+      this.reframeLineup();
       const pads = Array.from({ length: count }, (_, i) => this.stage.project(padAt(i, count)));
       const spacing = count > 1 ? Math.min(...pads.slice(1).map((p, i) => Math.abs(p.x - pads[i]!.x))) : 140;
       restyle(cards, '--card-w', `${Math.max(84, Math.min(150, spacing - 8))}px`);
@@ -3168,7 +3104,7 @@ export class StrategyScreen {
   private renderDebrief(c: CampaignState): void {
     const report = c.lastReport;
     if (!report) {
-      void this.go('research');
+      void this.go('barracks');
       return;
     }
     const entries: LineupEntry[] = report.squad.map((e) => {
@@ -3192,30 +3128,47 @@ export class StrategyScreen {
       'p.x-chips.debrief-tally',
       {},
       credits ? this.chip(`+${credits} §`, 'good', creditsWhy) : null,
-      report.levelTo > report.levelFrom ? this.chip(`¡Nivel ${report.levelTo}!`, 'good', Array.from({ length: report.levelTo - report.levelFrom }, (_, i) => this.unlocksText(report.levelFrom + i + 1)).join(' ')) : null,
+      report.levelTo > report.levelFrom ? this.chip(`¡${bastionLevelName(report.levelTo)}!`, 'good', Array.from({ length: report.levelTo - report.levelFrom }, (_, i) => this.unlocksText(report.levelFrom + i + 1)).join(' ')) : null,
       report.doomChange ? this.chip(report.doomChange > 0 ? `Reloj +${report.doomChange}` : `Reloj ${report.doomChange}`, report.doomChange > 0 ? 'bad' : 'good', doomChangeText(report.levelTo, report.doomChange)) : null,
       fallen ? this.chip(`${fallen} ${fallen === 1 ? 'caído' : 'caídos'}`, 'bad') : null,
       wounded.length ? this.chip(`${wounded.length} ${wounded.length === 1 ? 'herido' : 'heridos'}`, 'warn', this.woundedLine(c, report.squad)?.textContent ?? '') : null,
     );
     const story = report.victory && report.story ? STORY[report.story - 1]!.after : '';
+    const close = () => {
+      this.seenReport = this.reportKey(c);
+      try {
+        localStorage.setItem(REPORT_KEY, this.seenReport);
+      } catch {
+        /* storage unavailable: the debrief may show again after a reload */
+      }
+      this.lineup([]);
+      void this.go('barracks');
+    };
+    // Laid out as the Escuadra (Ana, 20/10 #26): the row centred, and under it one panel, the report on its left and
+    // «Continuar» on its right.
     this.viewEl.append(
       h(
-        'div.strat-center-top',
+        'div.squad-bottom.debrief-bottom',
         {},
         h(
-          `div.x-panel.briefing-head.${report.victory ? 'victory' : 'defeat'}`,
+          `div.x-panel.squad-mission.briefing-head.${report.victory ? 'victory' : 'defeat'}`,
           {},
-          h('div.alert-kicker', { className: `alert-kicker ${report.victory ? 'good' : 'bad'}` }, 'INFORME DE MISIÓN'),
-          h('h1', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'),
-          h('p.x-sub', {}, report.missionName),
-          tally,
-          this.damageLine(report.damage),
-          // The base fell (report.fallen): what is lost, in red like the other warnings of the debrief.
-          report.fallen ? h('p.x-text.x-bad.debrief-fallen', {}, h('b', {}, `${BASE_SIEGE_TEXT.fallen}. `), BASE_SIEGE_TEXT.fallenLine) : null,
-          report.loot?.line ? h('p.debrief-loot', {}, report.loot.line) : null,
-          ...barLines(report.squad).map((line) => h('p.debrief-loot', {}, line)),
-          report.night ? h('p.debrief-loot', {}, NIGHT_TEXT.report) : null,
-          story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
+          h(
+            'div.squad-text',
+            {},
+            h('div.alert-kicker', { className: `alert-kicker ${report.victory ? 'good' : 'bad'}` }, 'INFORME DE MISIÓN'),
+            h('h1', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'),
+            h('p.x-sub', {}, report.missionName),
+            tally,
+            this.damageLine(report.damage),
+            // The base fell (report.fallen): what is lost, in red like the other warnings of the debrief.
+            report.fallen ? h('p.x-text.x-bad.debrief-fallen', {}, h('b', {}, `${BASE_SIEGE_TEXT.fallen}. `), BASE_SIEGE_TEXT.fallenLine) : null,
+            report.loot?.line ? h('p.debrief-loot', {}, report.loot.line) : null,
+            ...barLines(report.squad).map((line) => h('p.debrief-loot', {}, line)),
+            report.night ? h('p.debrief-loot', {}, NIGHT_TEXT.report) : null,
+            story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
+          ),
+          h('div.squad-actions', {}, h('button.x-btn.big.primary', { onclick: close }, 'CONTINUAR')),
         ),
       ),
     );
@@ -3238,74 +3191,11 @@ export class StrategyScreen {
     });
     this.viewEl.append(cards);
     this.anchorCards(cards, Math.max(report.squad.length, 1));
-    this.viewEl.append(
-      h(
-        'div.strat-center-bottom',
-        { style: { bottom: '24px' } },
-        h(
-          'button.x-btn.big.primary',
-          {
-            onclick: () => {
-              this.seenReport = this.reportKey(c);
-              try {
-                localStorage.setItem(REPORT_KEY, this.seenReport);
-              } catch {
-                /* storage unavailable: the debrief may show again after a reload */
-              }
-              this.lineup([]);
-              void this.go('research');
-            },
-          },
-          'CONTINUAR',
-        ),
-      ),
-    );
   }
 
   // -------------------------------------------------------------- modal
 
   /** One thing at a time: campaign over, then a pending event, then alerts, then the promotion screen. */
-  /** The Novedades tray: what happened without a window of its own. */
-  private newsPanel(): HTMLElement {
-    const close = () => ((this.newsOpen = false), this.render());
-    return h(
-      'div.x-panel.wide',
-      {},
-      h('div.alert-kicker', {}, 'NOVEDADES'),
-      h(
-        'div.x-list.news',
-        {},
-        ...this.news.map((n, i) =>
-          h(
-            'div.x-row',
-            { title: n.text },
-            h('div', {}, h('small', { className: n.tone === 'info' ? '' : `x-${n.tone}` }, n.kicker), h('b', {}, n.title), h('small', {}, n.text)),
-            n.action
-              ? h(
-                  'button.x-btn.small',
-                  {
-                    onclick: () => {
-                      this.news.splice(i, 1);
-                      this.newsOpen = false;
-                      n.action!.go();
-                      this.render();
-                    },
-                  },
-                  n.action.label,
-                )
-              : null,
-          ),
-        ),
-      ),
-      h(
-        'div.alert-actions',
-        {},
-        h('button.x-btn', { onclick: () => ((this.news = []), close()) }, 'Vaciar'),
-        h('button.x-btn.primary', { onclick: close }, 'Cerrar'),
-      ),
-    );
-  }
-
   private renderModal(c: CampaignState): void {
     clear(this.modal);
     let content: HTMLElement | null = null;
@@ -3441,18 +3331,11 @@ export class StrategyScreen {
       content = h(
         'div.x-panel',
         {},
-        h('div.alert-kicker', { className: `alert-kicker ${alert.tone === 'info' ? '' : alert.tone}` }, alert.kicker),
-        h('h2.x-title', {}, alert.title),
-        ...(alert.body ?? []).map((p) => h('p.x-text', {}, p)),
+        alert.kicker ? h('div.alert-kicker', { className: `alert-kicker ${alert.tone === 'info' ? '' : alert.tone}` }, alert.kicker) : null,
+        alert.title ? h('h2.x-title', {}, alert.title) : null,
+        ...(alert.body ?? []).map((p) => h('p.x-text', {}, ...marked(p))),
         h(`p.${alert.body ? 'x-muted' : 'x-text'}`, {}, alert.text),
-        alert.unlocks?.length
-          ? h(
-              'div.alert-unlocks',
-              {},
-              h('div.x-group', {}, 'Desbloquea'),
-              ...alert.unlocks.map((u) => h('div.x-row.unlock', { title: u.detail ?? '' }, h(`span.agenda-icon.${u.kind}`), h('div', {}, h('b', {}, u.name), u.detail ? h('small', {}, u.detail) : null))),
-            )
-          : null,
+        ...(alert.brought ? this.broughtRow(alert.brought, 'Nuevo') : []),
         alert.note ? h('p.x-note', {}, alert.note) : null,
         h(
           'div.alert-actions',
@@ -3472,8 +3355,6 @@ export class StrategyScreen {
           h(`button.x-btn${alert.action ? '' : '.primary'}`, { onclick: close }, 'Entendido'),
         ),
       );
-    } else if (this.newsOpen && this.news.length) {
-      content = this.newsPanel();
     } else if (this.promoting && this.view === 'barracks') {
       const s = c.soldiers.find((x) => x.id === this.soldier);
       if (s) content = this.promotionPanel(s);

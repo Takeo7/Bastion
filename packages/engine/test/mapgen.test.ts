@@ -267,7 +267,8 @@ describe('procedural maps', () => {
     let hills = 0;
     for (let seed = 1; seed <= 10; seed++) {
       const s = createMission({ map: { kind: 'generated', biome: 'city', seed }, slots: [0], rng: new Rng(seed), kind: 'elimination' });
-      roofs += s.elev.filter((e) => e > 0).length;
+      // Raised ground, or the storeys above the ground with their roofs (docs/FASE6-PLAN.md).
+      roofs += s.elev.filter((e) => e > 0).length + (s.levels ?? []).reduce((n, l) => n + l.tiles.filter((t) => t !== null).length, 0);
       openings += s.tiles.filter((t) => t === 'door' || t === 'window').length;
       // Every pod walks a round, but the living posted upstairs (docs/FASE6-PLAN.md), who stay put.
       for (const pod of s.pods) if (!s.units.some((u) => u.podId === pod.id && u.pos.z > 0)) expect(pod.patrol.length).toBeGreaterThan(0);
@@ -386,6 +387,64 @@ describe('the scenarios (playtest 2026-10-14, #25)', () => {
 });
 
 describe('mission timers', () => {
+  it('a town has a supermarket now and then: one storey, its front glazed but its double door, checkouts, aisles and fridges inside (playtest 20/10, #18)', () => {
+    let towns = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const l = layout('city', 'recovery', seed);
+      const markets = l.markets ?? [];
+      expect(markets.length, `city/${seed}`).toBeLessThanOrEqual(1);
+      if (!markets.length) continue;
+      towns++;
+      const m = markets[0]!;
+      const label = `city/${seed}: market ${m.x},${m.y}`;
+      const W = l.width;
+      const at = (x: number, y: number) => l.tiles[y * W + x]!;
+      // Its front: every tile glass but the corners and the two doors side by side.
+      const d = DIRS4[m.front]!;
+      const along = d.x === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
+      const start = { x: d.x > 0 ? m.x + m.w - 1 : m.x, y: d.y > 0 ? m.y + m.h - 1 : m.y };
+      const n = d.x === 0 ? m.w : m.h;
+      const front = Array.from({ length: n }, (_, k) => at(start.x + along.x * k, start.y + along.y * k));
+      expect(front[0], label).toBe('wall');
+      expect(front[n - 1], label).toBe('wall');
+      const doors = front.flatMap((t, k) => (t === 'door' ? [k] : []));
+      expect(doors.length, label).toBe(2);
+      expect(doors[1]! - doors[0]!, label).toBe(1);
+      expect(front.slice(1, -1).every((t) => t === 'window' || t === 'door'), label).toBe(true);
+      // One storey, and what a supermarket has inside.
+      const kinds: Record<string, number> = {};
+      const floor: number[] = [];
+      for (let y = m.y; y < m.y + m.h; y++) {
+        for (let x = m.x; x < m.x + m.w; x++) {
+          expect(l.storeys![y * W + x], label).toBe(1);
+          const k = decorOf(l.decor![y * W + x]!)?.kind;
+          if (k) kinds[k] = (kinds[k] ?? 0) + 1;
+          if (canStandOn(at(x, y)) && at(x, y) !== 'door') floor.push(y * W + x);
+        }
+      }
+      expect(kinds.counter ?? 0, label).toBeGreaterThanOrEqual(2);
+      expect(kinds.shelf ?? 0, label).toBeGreaterThanOrEqual(8);
+      expect(kinds.drinksFridge ?? 0, label).toBeGreaterThanOrEqual(6);
+      // All its floor reached from its doors.
+      const seen = new Set<number>();
+      const queue = doors.map((k) => (start.y + along.y * k) * W + start.x + along.x * k);
+      for (const i of queue) seen.add(i);
+      for (let q = 0; q < queue.length; q++) {
+        const i = queue[q]!;
+        for (const e of DIRS4) {
+          const j = i + e.y * W + e.x;
+          const x = j % W;
+          const y = Math.floor(j / W);
+          if (seen.has(j) || x < m.x || y < m.y || x >= m.x + m.w || y >= m.y + m.h || !canStandOn(at(x, y))) continue;
+          seen.add(j);
+          queue.push(j);
+        }
+      }
+      for (const i of floor) expect(seen.has(i), `${label}: ${i % W},${Math.floor(i / W)} out of reach`).toBe(true);
+    }
+    expect(towns).toBeGreaterThanOrEqual(4);
+  });
+
   it('keep the values tuned on 36-tile maps and add turns on bigger ones, more when the objective comes back', () => {
     expect(missionTurns('hack', 36)).toBe(MISSION_TURNS.hack);
     expect(missionTurns('rescue', 30)).toBe(MISSION_TURNS.rescue);

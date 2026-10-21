@@ -106,6 +106,16 @@ describe('food', () => {
     expect(c.food).toBe(food + 4 * (2 - dailyRations(c)));
   });
 
+  it('several Huertos, each its own rations (Arturo, 20/10)', () => {
+    const c = quiet();
+    raise(c, 'garden', 2);
+    raise(c, 'garden', 1);
+    expect(c.bastion.pieces.filter((p) => p.piece === 'garden')).toHaveLength(2);
+    const food = c.food!;
+    days(c, 4);
+    expect(c.food).toBe(food + 4 * (2 + 1 - dailyRations(c)));
+  });
+
   it('La Vega, an ally standing, sends 2 rations every 4 days', () => {
     const c = quiet();
     c.food = 100;
@@ -151,7 +161,7 @@ describe('the Taller', () => {
     const none = quiet();
     expect(craftBlocker(none, 'armor2')).toBe('Hace falta el Taller.');
     const { c, plot } = workshop(1, 2);
-    expect(craftBlocker(c, 'armor2')).toMatch(/nivel 4 del Bastión/);
+    expect(craftBlocker(c, 'armor2')).toMatch(/casa móvil con porche/);
     c.level = 4;
     c.parts = 3;
     expect(craftBlocker(c, 'armor2')).toBe('No hay piezas suficientes.');
@@ -170,10 +180,10 @@ describe('the Taller', () => {
 
   it('improvements for the weapons: culatas and silenciadores from «Culatas y silenciadores», miras and cargadores from «Miras y cargadores ampliados», again and again', () => {
     const { c } = workshop(1, 2);
-    expect(craftBlocker(c, 'makeStock')).toMatch(/nivel 3 del Bastión/);
+    expect(craftBlocker(c, 'makeStock')).toMatch(/la casa móvil\./);
     c.level = 3;
     expect(craftBlocker(c, 'makeStock')).toBeNull();
-    expect(craftBlocker(c, 'makeScope')).toMatch(/nivel 6 del Bastión/);
+    expect(craftBlocker(c, 'makeScope')).toMatch(/albergue ampliado/);
     expect(run(c, { type: 'craft', project: 'makeStock' }).ok).toBe(true);
     days(c, CRAFTS.makeStock.days);
     expect(c.weaponMods).toEqual({ stock: 1 });

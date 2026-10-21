@@ -497,6 +497,17 @@ def piece(job, scale):
         meshes.remove(m)
         bpy.data.objects.remove(m)
     if job.get('parts'):
+        # A door leaf's own pane (`leaf`_…Glass) joins the leaf, so it swings with it.
+        leaf = next((m for m in meshes if m.name == job.get('leaf')), None)
+        panes = [m for m in meshes if leaf and m is not leaf and m.name.startswith(leaf.name + '_') and m.name.endswith('Glass')]
+        if panes:
+            bpy.ops.object.select_all(action='DESELECT')
+            for m in [leaf, *panes]:
+                m.select_set(True)
+            bpy.context.view_layer.objects.active = leaf
+            bpy.ops.object.join()
+            for m in panes:
+                meshes.remove(m)
         for m in meshes:
             m.data.name = m.name
     else:

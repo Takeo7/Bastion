@@ -4,14 +4,12 @@
 //
 // Each browser remembers which scenes it has played, per campaign, and plays at
 // most one per "moment" (back at the base, or after a scan); the rest wait for
-// the next moment, and every unlocked scene stays in the archive. No radio plays
-// in the middle of a mission (playtest 15/10 #8).
+// the next moment. No radio plays in the middle of a mission (playtest 15/10 #8).
 import {
   nextScene,
   RECAP,
   recapLines,
   sceneLines,
-  SCENES,
   SPEAKERS,
   unlockedScenes,
   type CampaignState,
@@ -276,21 +274,10 @@ export class Transmissions {
     if (scene) this.start(c, scene);
   }
 
-  /** Unlocked scenes for the archive, in story order; `fresh` ones have not played yet. */
-  archive(c: CampaignState): { scene: Scene; fresh: boolean }[] {
-    this.load(c);
-    return unlockedScenes(c).map((scene) => ({ scene, fresh: !this.seen.has(scene.id) }));
-  }
-
-  replay(c: CampaignState, id: SceneId, onEnd?: () => void): void {
-    const scene = SCENES.find((s) => s.id === id);
-    if (scene) this.start(c, scene, onEnd);
-  }
-
-  private start(c: CampaignState, scene: Scene, onEnd?: () => void): void {
+  private start(c: CampaignState, scene: Scene): void {
     this.seen.add(scene.id);
     this.save();
-    this.panel.play(scene, sceneLines(scene, c), this.vars(), onEnd);
+    this.panel.play(scene, sceneLines(scene, c), this.vars());
   }
 
   /**

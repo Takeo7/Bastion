@@ -99,7 +99,6 @@ import {
   hackChance,
   hasAnyCover,
   hasPerk,
-  HORDE,
   breakableTip,
   GIVE_WAY_FLOAT,
   breachMark,
@@ -195,7 +194,7 @@ import {
 import type { Net, NetStatus } from '../net';
 import { deadlineLeft } from '../ui/deadline';
 import { clear } from '../ui/dom';
-import { Hud, isMenu, type AbilityView, type BarActionId, type HordeView, type MenuId, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
+import { Hud, isMenu, type AbilityView, type BarActionId, type MenuId, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
 import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
@@ -212,6 +211,7 @@ import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
 import { playArrival } from './arrivals';
 import { planHasted, type Walker, type WalkPlan } from './walkPlan';
+import { overShoulder } from './shotCam';
 import { graphics } from '../settings';
 import { soldierPortrait } from '../strategy/portraits';
 import { skillsOf, treePanel } from '../strategy/skillSheet';
@@ -273,9 +273,8 @@ const HOLD_AFTER: Partial<Record<GameEvent['t'], number>> = {
  * «De noche» tag's tooltip, the log, the first night's card and the controls.
  */
 const NIGHT_RULES = NIGHT_TEXT.rules.join('\n');
-/** Drawn back this far (CameraRig.zoomFraction), the wheel shows the top storey with its roofs; this close, the floor of the soldier looked at (#1). */
-const ROOFS_FAR = 0.72;
-const FLOOR_NEAR = 0.35;
+/** On an ability's button that needs rounds in the magazine (#24). */
+const RELOAD_FIRST = 'Sin balas: recarga';
 /** How long after the player last moved the camera the turn's changes leave it alone (#47: «que nunca pelee con el jugador»). */
 const TURN_CAMERA_QUIET_MS = 4000;
 /** The first night is explained once, on a card (per browser). */
@@ -314,6 +313,10 @@ const READ_MISS = 0.7;
 const BETWEEN = 0.5;
 /** Within this of where the camera looks, the next enemy needs no camera move: it never goes back and forth. */
 const NEAR_ENOUGH = 5;
+/** The shot over the shoulder of an attack that kills (#11) stays this long once the target has fallen (s). */
+const KILL_HOLD = 0.5;
+/** Events that start something new: a shot over the shoulder still on is let go before them. */
+const NEW_ACTION = new Set<GameEvent['t']>(['shot', 'moved', 'abilityUsed', 'explosive', 'stoneThrown', 'turnBegan', 'missionEnded']);
 /** The log's colour for enemies fighting each other (18/10 #47): neither ours nor against us. */
 const FEUD_COLOR = '#e8d8c0';
 /** Real time: the events with nothing to play (the clock, what each one does and is told: the HUD reads them). */
@@ -735,6 +738,10 @@ export class Game {
   private holdAfter = 0.2;
   private visibleAliens = new Set<string>();
   private lastShot: { target: string; result: ShotResult } | null = null;
+  /** The target of the attack seen over the attacker's shoulder (#11), until it has fallen. */
+  private killCam: string | null = null;
+  /** The units' flags hidden for that shot. */
+  private flagsHidden = false;
   /** Who made the last attack or blast played: whether a hurt enemy was hurt by another (18/10 #47). */
   private lastAttacker: string | null = null;
   /** Last ability activated, so its follow-up events can be staged (e.g. Restoration's heals). */
@@ -759,10 +766,6 @@ export class Game {
   private levelFor: string | null = null;
   /** When the wheel last changed the floor. */
   private levelWheel = 0;
-  /** Drawn back past the top storey with the wheel: the buildings keep their roofs (wheelLevel, buildings.ts Focus.roofs). */
-  private roofs = false;
-  /** A floor picked by hand (keys, Shift+wheel, the HUD's arrows): the wheel leaves it until it turns again (wheelLevel). */
-  private levelByHand = false;
   private reachCache: { key: string; reach: Reach; tiles: MoveTile[] } | null = null;
   /** The last enemy's field of view worked out (visionOf), until it or the state moves. */
   private visionCache: { key: string; v: Vision } | null = null;
@@ -860,9 +863,10 @@ export class Game {
     this.renderer.scene.add(this.mapView.group, this.units.group, this.fx.group);
     // Units on a storey the cutaway hides lose their body (their flag stays, with the floor: unitViews).
     this.units.setCutAway((p) => this.mapView.isCutAway(p));
-    // `level`: the active floor, for the buildings' cutaway.
+    // `level`: the active floor, for the buildings' cutaway; `close`, the shot over a shoulder (it leaves the room whole).
     this.mapView.watch(this.renderer.camera, () => {
-      const focus = { selected: this.selected, hover: this.hoverTile, target: this.targetId, level: this.level, roofs: this.roofs && this.level === this.maxLevel };
+      const focus = { selected: this.selected, hover: this.hoverTile, target: this.targetId, level: this.level,
+        close: this.rig.closeUp ? { attacker: this.lastAttacker, target: this.killCam } : null };
       return focus;
     });
     this.hud = new Hud(this.root, {
@@ -915,6 +919,16 @@ export class Game {
     // events play, so it arrives in step with them (the player's own panning keeps its speed).
     const rate = timeRate();
     this.rig.update(this.playing ? dt * rate : dt);
+    this.renderer.shoulderShot = this.rig.closeUp;
+    // The units' flags out of the shot over the shoulder (#11, Arte: the names and bars cluttered it), and the noise
+    // rings (a line across it at eye level); the floats stay.
+    if (this.rig.closeUp !== this.flagsHidden) {
+      this.flagsHidden = this.rig.closeUp;
+      this.renderer.labels.domElement.classList.toggle('close-shot', this.flagsHidden);
+      this.overlays?.setCloseShot(this.flagsHidden);
+    }
+    const close = this.rig.closeUp && this.killCam ? this.units.chestPos(this.killCam) : null;
+    this.units.clearView(close && this.renderer.camera.position, close, [this.lastAttacker, this.killCam]);
     this.units.tick(dt, time);
     this.fx.tick(dt * rate);
     this.overlays?.tick(time);
@@ -1029,6 +1043,8 @@ export class Game {
    */
   private async compileShaders(until: number): Promise<void> {
     const { gl, scene, camera } = this.renderer;
+    // The effects' kinds of thing too (Arte's fx.samples), made at their first use otherwise (playtest 20/10 #8).
+    await this.renderer.warm(this.fx.samples());
     await gl.compileAsync(scene, camera);
     const extra: THREE.PointLight[] = [];
     try {
@@ -1337,6 +1353,7 @@ export class Game {
       // The enemy turn plays at the player's chosen speed (playtest 18/10 #6); the squad's own, at its own pace.
       setCombatRate(this.view.activeTeam === 'alien' ? graphics().enemySpeed : 1);
       const item = this.queue.shift()!;
+      if (this.killCam && NEW_ACTION.has(item.e.t)) this.endKillCam();
       // The dead that only walk this turn come last (rules.ts runAlienTurn), and walk all at once, under one framing.
       const group = this.walkingWith(item);
       if (group.length) {
@@ -1360,12 +1377,18 @@ export class Game {
       this.current = null;
       this.noteResult(item);
       await this.settle(item, epoch);
+      // The one it killed has fallen: a moment more over the shoulder, then back.
+      if (this.killCam && item.e.t === 'died' && item.e.unit === this.killCam) {
+        await wait(KILL_HOLD);
+        this.endKillCam();
+      }
       // What a blast does to everyone in it plays at once (playtest 15/10 #16).
       if (item.e.t === 'explosive') {
         const blast = this.blastResults();
         if (blast.length) await this.playBlast(blast);
       }
     }
+    this.endKillCam();
     // The last enemy attack of the turn is read too, before the turn changes hands.
     if (this.resultHold) {
       const hold = this.resultHold;
@@ -1791,9 +1814,11 @@ export class Game {
     switch (e.t) {
       case 'moved': {
         const u = getUnit(v, e.unit)!;
-        const seen = this.shownToSquad(u) || e.path.some((p) => this.mapView.isVisible(p.x, p.y));
-        if (!seen) return;
-        this.units.forceVisible(u.id);
+        // Out of the fog (playtest 20/10 #10: they popped up where they stood): shown from the step it takes into a
+        // tile the squad sees, walking in from where it was; one seen already, from the start.
+        const into = this.shownToSquad(u) ? 0 : e.path.findIndex((p) => this.mapView.isVisible(p.x, p.y));
+        if (into < 0) return;
+        if (into === 0) this.units.forceVisible(u.id);
         // In a group of the dead (playGroup), the framing is the group's: no walker takes the camera.
         if (!this.grouped) look(this.units.worldPos(u.id));
         let steps = 0;
@@ -1803,6 +1828,8 @@ export class Game {
           e.path,
           (p) => {
             if (!this.grouped) look(p);
+            // At the tile before the first one seen: in sight as it steps into it.
+            if (steps + 1 === into) this.units.forceVisible(u.id);
             if (steps++ % 2 === 0) this.sfx.step(u, p);
           },
           e.ap,
@@ -2604,7 +2631,15 @@ export class Game {
     const hit = e.result !== 'miss';
     const color = shooter.team === 'xcom' ? 0x9fe8ff : 0xff6b5a;
     if (v.realtime) return this.rtAttack(e, shooter, target, color);
-    if (cam()) {
+    // The attack that kills, by turns, seen over the attacker's shoulder until the target falls (Arturo, 20/10 #11):
+    // from where it strikes or shoots, at chest height, at the target's chest, where there is room for it (shotCam.ts).
+    // Any other, framed from above.
+    const from = samePlace(e.from, shooter.pos) ? this.units.chestPos(shooter.id) : tileToWorld(e.from).setY(this.units.chestPos(shooter.id).y);
+    const close = cam() && this.shownToSquad(shooter) && this.fells(e) ? overShoulder(v, from, chest, [shooter.id, target.id]) : null;
+    if (close) {
+      this.killCam = target.id;
+      this.rig.closeShot(close.pos, close.look);
+    } else if (cam()) {
       look(shooterPos.clone().lerp(targetPos, 0.5));
       this.rig.cinematicZoom(THREE.MathUtils.clamp(shooterPos.distanceTo(targetPos) * 1.1 + 9, 13, 24));
     }
@@ -2675,6 +2710,25 @@ export class Game {
   }
 
   /**
+   * Whether this attack fells its target: its `died` comes in the same batch, behind the shot, before anyone does
+   * anything else (rules.ts); a burst's first round, followed by another, doesn't.
+   */
+  private fells(e: ShotEvent): boolean {
+    for (const { e: next } of this.queue) {
+      if (next.t === 'died' && next.unit === e.target) return true;
+      if (NEW_ACTION.has(next.t)) return false;
+    }
+    return false;
+  }
+
+  /** Back from the shot over the shoulder to where the camera was. */
+  private endKillCam(): void {
+    if (!this.killCam) return;
+    this.killCam = null;
+    this.rig.endCloseShot();
+  }
+
+  /**
    * Real time (docs/TIEMPO-REAL.md §6b): only the shot itself, at once, for the pose is the aim's (Arte's
    * rtDoing: the gun up from the aim's start, no stepping out of cover) and the blow's wind-up ends on it.
    */
@@ -2718,10 +2772,14 @@ export class Game {
    * that player's next shot (aim.ts badLuckAim).
    */
   private showMiss(e: ShotEvent, shooter: Unit, target: Unit, chest: THREE.Vector3): void {
-    this.fx.floatText(chest, e.roll ? `FALLO · SACÓ ${e.roll}` : 'FALLO', 'miss');
+    // The odds it had, never the roll (playtest 20/10 #4: «sacó 63» said nothing to the player).
+    this.fx.floatText(chest, 'FALLO', 'miss');
     // Real time: the log keeps what changes the mission, not every roll (Gameplay, 20/10).
     if (this.view.realtime) return;
-    this.hud.log(e.roll ? `${shooter.name} falla a ${target.name}: sacó ${e.roll} y necesitaba ${e.chance} o menos` : `${shooter.name} falla a ${target.name} (${e.chance}%)`);
+    // An enemy with its article (Lore): «Marcus Reid falla contra un Zombi», «Un Zombi falla contra Marcus Reid».
+    const who = shooter.team === 'alien' ? capitalize(anEnemy(shooter)) : shooter.name;
+    const whom = target.team === 'alien' ? anEnemy(target) : target.name;
+    this.hud.log(`${who} falla contra ${whom}: tenía un ${e.chance} % de acertar.`);
     const owner = shooter.team === 'xcom' && !shooter.controlledBy ? shooter.owner : null;
     if (owner === null) return;
     const bonus = BAD_LUCK_AIM * Math.min(BAD_LUCK_MISSES, (this.view.missStreak?.[owner] ?? 0) + 1);
@@ -4200,6 +4258,7 @@ export class Game {
         icon: menu.icon,
         enabled: usable.length > 0,
         reason: usable.length ? undefined : options[0]!.reason,
+        note: usable.length ? undefined : options.find((o) => o.note)?.note,
         description: options.length > 1 ? `${menu.name}: ${options.map((o) => o.name.toLowerCase()).join(', ')}. Pulsa para elegir.` : options[0]!.description,
         // With a choice to make, each choice's card has its own figures (#18): none on the menu's.
         ...(options.length > 1 ? { stats: [], cost: '', limits: undefined, damage: undefined, noise: undefined } : {}),
@@ -4268,6 +4327,9 @@ export class Game {
         hotkey: i < 9 ? (id === 'shoot' ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '',
         enabled: !reason,
         reason: reason ?? undefined,
+        // Out of rounds in the magazine (Ana, 20/10 #24: Vigilancia off with rounds in the spare ones, and why only on
+        // the card): said on the button.
+        note: reason && /: recarga\.$/.test(reason) ? RELOAD_FIRST : undefined,
         // An attack's card names the weapon it fires: its cost and its noise are that weapon's.
         name: isAttack(id) ? `${def.name} · ${weaponLabel(u, id as AttackAbility)}` : def.name,
         cost: costText(u, id),
@@ -4354,37 +4416,13 @@ export class Game {
     if (u) this.setLevel(u.pos.z, false);
   }
 
-  /** One floor up (1) or down (-1), by key, wheel or the HUD's arrows: by hand. */
+  /**
+   * One floor up (1) or down (-1): RePág/AvPág, Shift and the wheel, the HUD's arrows. The wheel alone only
+   * brings the view closer or further (playtest 20/10 #9: the floor following it changed the camera's tilt).
+   */
   private stepLevel(dir: 1 | -1): void {
     if (!this.maxLevel) return;
-    this.levelByHand = true;
-    this.roofs = false;
     this.setLevel(this.level + dir);
-  }
-
-  /**
-   * The floor follows the wheel (Arturo, 18/10 #1): drawn back, up to the top
-   * storey with the roofs on; close in, down to the floor of the soldier
-   * looked at (the one picked, if near the middle of the view, else the
-   * nearest there). Only on maps with storeys, and not over a floor picked by
-   * hand until the wheel turns again (the camera never fights the player).
-   */
-  private wheelLevel(): void {
-    if (!this.maxLevel || this.levelByHand) return;
-    const k = this.rig.zoomFraction;
-    if (k >= ROOFS_FAR) {
-      this.roofs = true;
-      this.setLevel(this.maxLevel);
-      return;
-    }
-    if (k < ROOFS_FAR - 0.1) this.roofs = false;
-    if (k > FLOOR_NEAR) return;
-    const at = this.rig.focusPoint;
-    const off = (u: Unit) => Math.hypot(u.pos.x + 0.5 - at.x, u.pos.y + 0.5 - at.z);
-    const picked = this.selectedUnit();
-    const around = this.view.units.filter((u) => u.alive && (u.team === 'xcom' || this.visibleAliens.has(u.id)) && off(u) < 6).sort((a, b) => off(a) - off(b));
-    const looked = picked && off(picked) < 8 ? picked : around[0];
-    if (looked) this.setLevel(looked.pos.z ?? 0);
   }
 
   /**
@@ -4628,7 +4666,8 @@ export class Game {
     // The hordes on the way are not said on the objective's card (playtest 19/10 #20: «fuera "Zombis: llegan este
     // turno"»): their banner said it, and the Saqueo's gauge counts them down. A flare drop (older saves), still.
     const alert = m.reinforcements.some((r) => !r.landed && !r.horde && r.pos) ? 'VIENEN MÁS' : null;
-    return { kind: m.kind, objective, objectiveTip, turnsLeft: m.turnsLeft, alert, area: s.mapName, horde: m.horde?.length ? this.hordeView() : null };
+    // Nor whether a horde comes (Ana, 20/10 #21: «HORDA» beside «8 TURNOS» read as the horde coming in 8): the turns alone.
+    return { kind: m.kind, objective, objectiveTip, turnsLeft: m.turnsLeft, alert, area: s.mapName, horde: null };
   }
 
   /**
@@ -4655,30 +4694,6 @@ export class Game {
       horde: null,
       wave,
     };
-  }
-
-  /**
-   * The Saqueo's horde clock (HORDE in content.ts, Sim.callHorde): every squad
-   * turn and every noise winds it up, and a wave is called at the end of the
-   * alien turn once it reaches the next `wave` points. The bar is how far it
-   * is from the next one; full, the wave is called this very turn.
-   */
-  private hordeView(): HordeView {
-    const s = this.view;
-    const m = s.mission;
-    const sent = m.reinforcements.filter((r) => r.horde).length;
-    // At night the dead are already on their way: the clock runs a turn ahead (Sim.callHorde).
-    const points = (s.turn + (m.night ? NIGHT.hordeHead : 0)) * HORDE.perTurn + (m.noise ?? 0);
-    const left = (sent + 1) * HORDE.wave - points;
-    const fill = Math.max(0, Math.min(1, 1 - left / HORDE.wave));
-    const turns = Math.ceil(left / HORDE.perTurn);
-    const title =
-      left <= 0
-        ? 'Horda: la próxima oleada sale al final de este turno'
-        : turns <= 1
-          ? 'Horda: la próxima oleada sale al final del próximo turno, o de este si hacéis ruido'
-          : `Horda: la próxima oleada, en unos ${turns} turnos; antes cuanto más ruido hagáis`;
-    return { fill, title };
   }
 
   private refreshHud(): void {
@@ -5229,18 +5244,16 @@ export class Game {
         return;
       }
       this.rig.zoom(e.deltaY);
-      // The wheel takes the floor back from a hand-picked one (#1).
-      this.levelByHand = false;
-      this.wheelLevel();
     }, { passive: false });
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Shift') this.holdSignal(true);
       if (isTyping(e)) return;
-      // The mission's briefing stays until it is closed (playtest 14/10 #3): Enter, Space or Esc close it.
+      // The mission's briefing stays until «Entendido» (playtest 14/10 #3; Ana, 20/10 #32): Enter and Space are that
+      // button; Esc does nothing over it.
       if (this.hud.introOpen && (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space' || e.code === 'Escape')) {
         e.preventDefault();
-        this.hud.closeIntro();
+        if (e.code !== 'Escape') this.hud.closeIntro();
         return;
       }
       // Real time (docs/TIEMPO-REAL.md §6b): the space bar stops the clock or lets it go on, X stops the picked one,

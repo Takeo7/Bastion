@@ -54,6 +54,10 @@ export interface FigureRig extends UnitRig {
   applyPose(p: FigurePose, time: number): void;
   /** What its moves play, and how fast (gaits.ts), on figures that play clips. */
   setGait?(motion: GaitMotion, speed: number): void;
+  /** Coming into sight: drawn in over `seconds` instead of at once (syntyFigures.ts). */
+  fadeIn?(seconds: number): void;
+  /** Out of the camera's way (the shot over a shoulder): dithered out, or back in. */
+  veil?(on: boolean): void;
   /** How far ahead of its feet the muzzle of a long gun in its hands comes when shouldered (tiles); null for anything else. */
   aimReach?(): number | null;
   /**

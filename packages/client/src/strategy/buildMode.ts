@@ -2,6 +2,12 @@ import {
   FELL_COST,
   actionPrice,
   bastionLevel,
+  bastionLevelName,
+  bastionLevelThe,
+  LEVEL_TEXT,
+  levelUpBlocker,
+  levelUpLine,
+  nextLevel,
   besideLine,
   besidePieces,
   BUILD_TEXT,
@@ -34,9 +40,11 @@ import {
 } from '@bastion/engine';
 import { h } from '../ui/dom';
 import type { ClearingTool } from './clearing';
+import { markNew } from './fresh';
 
 // Building on the clearing (docs/FASE12.md §11.7): the palette by kind, with
-// what is locked by the Bastion's level in grey and what each thing costs in
+// only what the Bastion's level allows (playtest 20/10 #13: what isn't had yet
+// isn't shown; what a level brings says «Nuevo») and what each thing costs in
 // sight, and the card of a piece picked on the map, with what can be done to
 // it. The pointer's side (the piece about to go down, felling) is clearing.ts.
 
@@ -123,6 +131,8 @@ export interface PaletteView {
   partner: string | null;
   /** This player's slot: whose proposal is waiting. */
   me: number;
+  /** Whether what `key` names came with a level and this player hasn't looked at it yet (fresh.ts). */
+  isNew?(key: string): boolean;
 }
 
 export interface PaletteHandlers {
@@ -130,6 +140,8 @@ export interface PaletteHandlers {
   take(piece: PieceId): void;
   fell(): void;
   drop(): void;
+  /** The pointer went over something new: its «Nuevo» goes. */
+  seen?(key: string): void;
 }
 
 /** The palette: the felling tool, the tabs, and each piece of the tab with its cost or why not. */
@@ -138,22 +150,22 @@ export function palette(v: PaletteView, on: PaletteHandlers): HTMLElement[] {
   const level = bastionLevel(c);
   const felling = tool.kind === 'fell';
   const inHand = tool.kind === 'place' ? tool.piece : null;
-  const items = ORDER.filter((id) => PIECES[id].kind === v.kind && id !== 'caravan').map((id) => {
+  // Only what the Bastion's level allows: the rest isn't said, not even greyed (#13).
+  const items = ORDER.filter((id) => PIECES[id].kind === v.kind && id !== 'caravan' && PIECES[id].level <= level).map((id) => {
     const def = PIECES[id];
-    const locked = def.level > level;
     const why = pieceBlocker(c, id);
-    const state = locked ? '.locked' : why ? '.short' : '';
-    return h(
-      `button.piece-item${state}${inHand === id ? '.on' : ''}`,
+    const item = h(
+      `button.piece-item${why ? '.short' : ''}${inHand === id ? '.on' : ''}`,
       {
         'data-piece': id,
         title: `${PIECE_TEXT[id].line}${why ? `\n${why}` : ''}`,
         onclick: () => (inHand === id ? on.drop() : on.take(id)),
       },
       h('b.piece-name', {}, PIECE_TEXT[id].name),
-      h('span.piece-cost', {}, locked ? `Nivel ${def.level}` : costLabel(def.cost)),
-      h('small.piece-line', {}, locked ? needsLevelLine(def.level) : why && !/^Falta/.test(why) ? why : PIECE_TEXT[id].line),
+      h('span.piece-cost', {}, costLabel(def.cost)),
+      h('small.piece-line', {}, why && !/^Falta/.test(why) ? why : PIECE_TEXT[id].line),
     );
+    return markNew(item, !!v.isNew?.(`piece:${id}`), () => on.seen?.(`piece:${id}`));
   });
   // Said once for the whole palette, not under every piece (#55); a vote waiting, in red, since nothing goes down meanwhile.
   const pending = !!v.partner && !!c.proposal;
@@ -191,12 +203,16 @@ export interface CardView {
   dismantling: boolean;
   /** The partner, while connected (their name): every action goes to a vote (#55). */
   partner: string | null;
+  /** Whether what `key` names came with a level and this player hasn't looked at it yet (fresh.ts). */
+  isNew?(key: string): boolean;
 }
 
 export interface CardHandlers {
   send(cmd: CampaignCommand): void;
   dismantle(ask: boolean): void;
   close(): void;
+  /** The pointer went over something new: its «Nuevo» goes. */
+  seen?(key: string): void;
 }
 
 /** The card of a piece picked on the clearing: how it is, and mending, raising, setting again or taking it down. */
@@ -208,7 +224,8 @@ export function pieceCard(v: CardView, on: CardHandlers): HTMLElement[] {
   const building = def.kind === 'building' && p.piece !== 'caravan';
   const out: (HTMLElement | null)[] = [
     h('div.alert-kicker', {}, building ? buildingKicker(level) : BUILD_TEXT.kinds[def.kind]),
-    h('h2.x-title', {}, text.name, h('button.x-btn.small.piece-close', { title: 'Soltarla (Esc)', onclick: () => on.close() }, '✕')),
+    // The Bastion itself by what it is now (Lore, 20/10: «Caravana», «Casa móvil»…).
+    h('h2.x-title', {}, p.piece === 'caravan' ? bastionLevelName(bastionLevel(c)) : text.name, h('button.x-btn.small.piece-close', { title: 'Soltarla (Esc)', onclick: () => on.close() }, '✕')),
     h('p.x-muted', {}, text.line),
     building && text.levels?.[level - 1] ? h('p.piece-level-line', {}, text.levels[level - 1]) : null,
   ];
@@ -241,10 +258,22 @@ export function pieceCard(v: CardView, on: CardHandlers): HTMLElement[] {
   if (building) {
     const next = raiseCost(p);
     if (typeof next === 'string') actions.push(button(BUILD_TEXT.upgrade, next, () => {}));
+    // An upgrade the Bastion's level doesn't allow yet isn't shown (#13); one a level has just brought says «Nuevo».
+    else if (bastionLevel(c) >= next.level) {
+      const why = !buildingWorks(p) ? PIECE_STATE.brokenLine : c.credits < next.cost ? `${buildShortLine(next.cost - c.credits)}.` : pending;
+      const key = `raise:${p.piece}:${level + 1}`;
+      actions.push(markNew(button(actionPrice('upgrade', { supplies: next.cost }), why, () => on.send({ type: 'raise', piece: p.id }), upgradeLine(p.piece, level + 1)), !!v.isNew?.(key), () => on.seen?.(key)));
+    }
+  }
+  // The Bastion itself goes up here (Arturo, 20/10: Campaña is gone): to what it becomes by name, never what that
+  // brings (the alert says it, in icons); what is missing under the button; a vote with the partner, as the rest.
+  if (p.piece === 'caravan') {
+    const up = nextLevel(c);
+    if (!up) out.push(h('p.x-muted', {}, LEVEL_TEXT.top));
     else {
-      const why =
-        bastionLevel(c) < next.level ? needsLevelLine(next.level) : !buildingWorks(p) ? PIECE_STATE.brokenLine : c.credits < next.cost ? `${buildShortLine(next.cost - c.credits)}.` : pending;
-      actions.push(button(actionPrice('upgrade', { supplies: next.cost }), why, () => on.send({ type: 'raise', piece: p.id }), upgradeLine(p.piece, level + 1)));
+      const why = pending || (levelUpBlocker(c) ?? '');
+      const progress = `${up.flown} de ${up.missions} misiones para ${bastionLevelThe(up.level)}`;
+      actions.push(button(`Subir a ${bastionLevelThe(up.level)} · ${up.cost} §`, why, () => on.send({ type: 'levelUp' }), progress, levelUpLine(up.level, up.cost)));
     }
   }
   if (def.charges && (p.charges ?? 0) < def.charges) {

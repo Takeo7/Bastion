@@ -4,6 +4,7 @@
 // level opens what the Taller can make (CRAFTS, docs/FASE4.md), the armour is
 // for everyone, and some levels bring weapons to the Armería (LEVEL_ARMS).
 import { PIECES } from './base';
+import { bastionLevelThe } from './lore';
 import { FOUND_WEAPONS, ITEMS, WEAPONS, type WeaponId } from './content';
 import type { CampaignSoldier, CampaignState, FacilityId, FoundWeapon } from './campaign';
 import type { FoundWeaponId, ItemId, TemplateId, WeaponModId } from './types';
@@ -196,7 +197,7 @@ export function nextTierBlocker(c: Pick<CampaignState, 'xp' | 'level'> & Armoury
   const needs: string[] = [];
   const craft = CRAFTS[craftFor(next)];
   if (craft && !hasCrafted(c, craft.id)) {
-    if (craft.tech && !hasTech(c, craft.tech)) needs.push(`nivel ${TECHS[craft.tech].level} del Bastión`);
+    if (craft.tech && !hasTech(c, craft.tech)) needs.push(bastionLevelThe(TECHS[craft.tech].level));
     needs.push('fabricarlas en el Taller');
   }
   return `${craft?.name ?? `Nivel ${next}`}: requiere ${needs.join(' y ')}`;

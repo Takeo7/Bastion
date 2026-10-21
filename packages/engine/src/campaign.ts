@@ -73,6 +73,9 @@ import {
 import {
   barLine,
   BASE_SIEGE_TEXT,
+  bastionLevelA,
+  bastionLevelThe,
+  needsLevelLine,
   PIECE_TEXT,
   rationsLowLine,
   vehicleBriefing,
@@ -277,8 +280,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   garden: {
     id: 'garden',
     name: 'Huerto',
-    description: '+1 ración al día. Bancales bajo plástico y bidones para el agua de lluvia.',
-    upgrades: ['+2 raciones al día. Un invernadero de verdad, con estufa.', '+3 raciones al día. Riego por goteo y semillas de La Vega.'],
+    description: '+5 raciones por misión. Bancales bajo plástico y bidones para el agua de lluvia.',
+    upgrades: ['+10 raciones por misión. Un invernadero de verdad, con estufa.', '+15 raciones por misión. Riego por goteo y semillas de La Vega.'],
     cost: 40,
     days: 2,
     level: 1,
@@ -501,7 +504,7 @@ export function contactBlocker(c: CampaignState, id: RegionId): string | null {
     const route = roadRoute(HOME_REGION, id).find((n) => !c.regions.find((r) => r.id === n)?.contacted);
     return noRoadReason((next.length ? next : route ? [route] : []).map((n) => REGIONS[n].name));
   }
-  if (c.regions.filter((r) => r.contacted).length >= contactCapacity(c)) return 'No podemos mantener más contactos: construid un centro de comunicaciones.';
+  if (c.regions.filter((r) => r.contacted).length >= contactCapacity(c)) return 'No caben más contactos: construid o mejorad la Sala de radio.';
   if (!canAfford(c, contactCost(c))) return 'No hay suministros suficientes.';
   return null;
 }
@@ -561,17 +564,19 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
     title: 'Refugiados',
     text: 'Familias huidas de un enclave caído piden asilo en el Bastión. Entre ellas hay antiguos soldados.',
     options: [
+      // Either way they tell what they saw (Ana, 20/10: taken in, they would tell it too); taking them in costs, and gives a soldier.
       {
         label: 'Acogerlas',
-        effect: '−30 suministros; se une un recluta',
+        effect: '−30 suministros; se une un recluta, y cuentan lo que vieron: una misión nueva',
         available: (c) => c.credits >= 30,
         apply: (c, rng) => {
           credit(c, -30);
           const s = addSoldier(c, neediestPlayer(c), rng);
           log(c, `${s.name} se une al Bastión (${veterancyName(s)}).`, 'good');
+          tipOff(c, rng);
         },
       },
-      { label: 'Cambiarles provisiones por lo que saben', effect: '−10 suministros, una misión nueva', apply: (c, rng) => (credit(c, -10), tipOff(c, rng)) },
+      { label: 'Que sigan su camino', effect: 'Antes de irse, cuentan lo que vieron: una misión nueva', apply: (c, rng) => tipOff(c, rng) },
     ],
   },
   signal: {
@@ -1348,7 +1353,8 @@ export function dailyRations(c: Pick<CampaignState, 'soldiers'>): number {
 
 /** Rations the Huerto grows a day: one a level. */
 export function gardenYield(c: CampaignState): number {
-  return facilityLevel(c, 'garden');
+  // Every Huerto that works gives its own (Arturo, 20/10: several of them, each its rations), by its level.
+  return facilityPieces(c, 'garden').reduce((sum, f) => sum + f.level, 0);
 }
 
 /** Rations come in; with enough for a day again, the hunger is over. */
@@ -1377,8 +1383,8 @@ export function craftBlocker(c: CampaignState, id: CraftId): string | null {
   const shop = workshopPiece(c);
   if (!shop) return 'Hace falta el Taller.';
   if ((shop.level ?? 1) < def.workshop) return `Hace falta el Taller a nivel ${def.workshop}.`;
-  if (def.tech && !hasTech(c, def.tech)) return `Hace falta el nivel ${TECHS[def.tech].level} del Bastión.`;
-  if (def.level && bastionLevel(c) < def.level) return `Hace falta el nivel ${def.level} del Bastión.`;
+  if (def.tech && !hasTech(c, def.tech)) return needsLevelLine(TECHS[def.tech].level);
+  if (def.level && bastionLevel(c) < def.level) return needsLevelLine(def.level);
   if (def.after && !hasCrafted(c, def.after)) return `Antes hay que hacer ${CRAFTS[def.after].the}.`;
   if (c.base.works.some((w) => w.kind === 'craft')) return 'El Taller ya está con otro encargo.';
   if (!canAfford(c, def.cost)) return 'No hay suministros suficientes.';
@@ -2620,7 +2626,7 @@ export function nextSteps(c: CampaignState, slot: Slot, partnerName = 'El otro j
 
   // The Bastion one level up, once it can be bought (18/10 #40).
   const up = nextLevel(c);
-  if (up && !levelUpBlocker(c)) steps.push({ view: 'hub', label: `Sube el Bastión al nivel ${up.level} (${up.cost} §)`, tone: 'info' });
+  if (up && !levelUpBlocker(c)) steps.push({ view: 'hub', label: `Sube el Bastión a ${bastionLevelThe(up.level)} (${up.cost} §)`, tone: 'info' });
   // The Taller has something within reach to make.
   const craft = (Object.keys(CRAFTS) as CraftId[]).find((id) => !craftBlocker(c, id));
   if (craft) steps.push({ view: 'engineering', label: `El Taller puede hacer ${CRAFTS[craft].the}`, tone: 'info' });
@@ -2677,7 +2683,7 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
       return `${action.type === 'mend' ? 'reparar' : action.type === 'rearm' ? 'reponer' : 'desmontar'} ${what}`;
     }
     case 'levelUp':
-      return `subir el Bastión al nivel ${bastionLevel(c) + 1}`;
+      return `subir el Bastión a ${bastionLevelThe(bastionLevel(c) + 1)}`;
     case 'chooseMission':
       return `ir a la misión ${c.offers.find((o) => o.id === action.id)?.name ?? ''}`;
     case 'contact':
@@ -2697,7 +2703,7 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
   switch (action.type) {
     case 'place': {
       const def = PIECES[action.piece];
-      if (bastionLevel(c) < def.level) return `Se desbloquea con el nivel ${def.level} del Bastión.`;
+      if (bastionLevel(c) < def.level) return needsLevelLine(def.level);
       return placeBlocker(c.bastion, action.piece, action.x, action.y, action.rot) ?? costBlocker(c, def.cost.supplies, def.cost.parts ?? 0);
     }
     case 'raise': {
@@ -2705,13 +2711,13 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       if (!p) return 'Eso ya no está.';
       const next = raiseCost(p);
       if (typeof next === 'string') return next;
-      if (bastionLevel(c) < next.level) return `Requiere nivel ${next.level} del Bastión.`;
+      if (bastionLevel(c) < next.level) return needsLevelLine(next.level);
       if (!buildingWorks(p)) return 'No se mejora con daños: repara antes.';
       return costBlocker(c, next.cost, 0);
     }
     case 'placeLine': {
       const def = PIECES[action.piece];
-      if (bastionLevel(c) < def.level) return `Se desbloquea con el nivel ${def.level} del Bastión.`;
+      if (bastionLevel(c) < def.level) return needsLevelLine(def.level);
       // Each in its place, the ones before it already standing.
       const trial: BaseState = JSON.parse(JSON.stringify(c.bastion));
       for (const cell of action.cells) {
@@ -3237,7 +3243,7 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
 
     case 'buy': {
       const def = ITEMS[cmd.item];
-      if (!itemUnlocked(c, cmd.item)) return { ok: false, error: `Se desbloquea con el nivel ${def.level} del Bastión.` };
+      if (!itemUnlocked(c, cmd.item)) return { ok: false, error: needsLevelLine(def.level) };
       const cost = shopPrice(c, cmd.item);
       if (!canAfford(c, cost)) return { ok: false, error: 'No hay suministros suficientes.' };
       pay(c, cost);
@@ -3542,7 +3548,7 @@ function listOf(parts: string[]): string {
 
 /** A level reached: said, the weapons it brings to the Armería (docs/FASE8.md §A), and the story it may open. */
 function reachedLevel(c: CampaignState, level: number, rng: Rng): void {
-  log(c, `El Bastión sube al nivel ${level}.`, 'good');
+  log(c, `El Bastión ya es ${bastionLevelA(level)}.`, 'good');
   const arms = LEVEL_ARMS[level] ?? [];
   for (const kind of arms) (c.foundWeapons ??= []).push({ id: newId(c, 'w'), kind, holder: null });
   if (arms.length) log(c, `A la Armería ${arms.length === 1 ? 'llega' : 'llegan'} ${listOf(arms.map((k) => FOUND_WEAPONS[k].find))}.`, 'good');
@@ -3563,7 +3569,7 @@ export function nextLevel(c: CampaignState): { level: number; cost: number; miss
 export function levelUpBlocker(c: CampaignState): string | null {
   const next = nextLevel(c);
   if (!next) return 'El Bastión ya está en su nivel más alto.';
-  if (next.flown < next.missions) return `Para el nivel ${next.level} hacen falta ${next.missions} misiones hechas: lleváis ${next.flown}.`;
+  if (next.flown < next.missions) return `Para ${bastionLevelThe(next.level)} hacen falta ${next.missions} misiones hechas: lleváis ${next.flown}.`;
   return costBlocker(c, next.cost, 0);
 }
 

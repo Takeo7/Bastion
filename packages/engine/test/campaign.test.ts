@@ -487,7 +487,7 @@ describe('progression', () => {
     expect(weaponTier(c, s)).toBe(1);
     expect(nextTierBlocker(c, s, 'weapon')).toBeNull();
     expect(armorTier(c, s)).toBe(2);
-    expect(nextTierBlocker(c, s, 'armor')).toMatch(/nivel 7 del Bastión/);
+    expect(nextTierBlocker(c, s, 'armor')).toMatch(/requiere la casa y/);
   });
 
   it('the Bastion goes up a level when it is bought, after enough missions (Arturo, 18/10 #40)', () => {
@@ -495,15 +495,15 @@ describe('progression', () => {
     expect(bastionLevel(c)).toBe(1);
     expect(nextLevel(c)).toEqual({ level: 2, cost: LEVEL_COST[1], missions: LEVEL_MISSIONS[1], flown: 0 });
     c.credits = 5000;
-    expect(() => run(c, { type: 'levelUp' }, 0, [0, 1])).toThrow(`Para el nivel 2 hacen falta ${LEVEL_MISSIONS[1]} misiones hechas: lleváis 0.`);
+    expect(() => run(c, { type: 'levelUp' }, 0, [0, 1])).toThrow(`Para la caravana con toldo hacen falta ${LEVEL_MISSIONS[1]} misiones hechas: lleváis 0.`);
     c.missionsFlown = LEVEL_MISSIONS[1];
     // Always together: a proposal, paid when the partner says yes.
     run(c, { type: 'levelUp' }, 0, [0, 1]);
-    expect(c.proposal?.text).toBe('subir el Bastión al nivel 2');
+    expect(c.proposal?.text).toBe('subir el Bastión a la caravana con toldo');
     run(c, { type: 'vote', accept: true }, 1, [0, 1]);
     expect(bastionLevel(c)).toBe(2);
     expect(c.credits).toBe(5000 - LEVEL_COST[1]!);
-    expect(c.log.some((l) => l.text === 'El Bastión sube al nivel 2.')).toBe(true);
+    expect(c.log.some((l) => l.text === 'El Bastión ya es una caravana con toldo.')).toBe(true);
     // Short of suministros, it waits.
     c.missionsFlown = 99;
     c.credits = LEVEL_COST[2]! - 1;

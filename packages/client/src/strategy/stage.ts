@@ -17,6 +17,13 @@ export interface Shot {
    * camera keeps its direction and moves along it and sideways until it fits.
    */
   fit?: THREE.Box3;
+  /** The box kept in the middle of the screen across, whatever the panels on one side leave (the squad's row, Ana 20/10 #16). */
+  centred?: boolean;
+  /**
+   * The points to keep in view instead of `fit`'s corners: a row seen at a slant has a box (axis-aligned) far
+   * bigger than itself, and was framed small (the squad's, 20/10 #16).
+   */
+  fitPoints?: THREE.Vector3[];
   /**
    * The wheel (or a trackpad pinch) zooms in, towards the pointer, down to
    * `min` times the shot's distance; zoomed in, a drag pans, up to `reach`
@@ -285,6 +292,7 @@ export class Stage {
     let [left, right, top, bottom] = [inset.left + margin, inset.right + margin, inset.top + margin, inset.bottom + margin];
     // On a small window the panels may cover most of it: the box keeps at least half each way.
     const squeeze = (a: number, b: number, size: number) => (a + b > size / 2 ? (size / 2) / (a + b) : 1);
+    if (shot.centred) left = right = Math.max(left, right);
     const kx = squeeze(left, right, w);
     const ky = squeeze(top, bottom, h);
     [left, right, top, bottom] = [left * kx, right * kx, top * ky, bottom * ky];
@@ -295,7 +303,7 @@ export class Stage {
     back.normalize();
     const target = shot.target.clone();
     const { min, max } = shot.fit;
-    const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z));
+    const corners = shot.fitPoints ?? [0, 1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z));
     const p = new THREE.Vector3();
     const right3 = new THREE.Vector3();
     const up3 = new THREE.Vector3();
@@ -495,6 +503,8 @@ export class Stage {
   private loop = (): void => {
     if (this.disposed) return;
     this.frameId = requestAnimationFrame(this.loop);
+    // Hidden (display: none, under a mission) or detached: no frame of the limiter's, so none counted in the fps.
+    if (!this.element.isConnected || !this.element.clientWidth) return;
     if (!this.limiter.ready()) return;
     this.draw();
   };
