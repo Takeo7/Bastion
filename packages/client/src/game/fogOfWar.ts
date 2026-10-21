@@ -81,6 +81,8 @@ export class FogOfWar {
     /** 1 by night: lit tiles (blue channel) glow warm. */
     fowNight: { value: 0 },
     fowLamp: { value: LAMP.clone() },
+    /** How far beyond the map's edge (tiles) the dark begins and ends going into the haze (MapView.fadeBeyond). */
+    fowFar: { value: new THREE.Vector2(24, 70) },
   };
 
   /**
@@ -226,6 +228,7 @@ export class FogOfWar {
           uniform float fowTime;
           uniform vec3 fowRemembered;
           uniform vec3 fowUnknown;
+          uniform vec2 fowFar;
           uniform float fowNight;
           uniform vec3 fowLamp;
           uniform float fowAoPass;
@@ -273,8 +276,12 @@ export class FogOfWar {
             // Unexplored: the mist, over the scene's haze (which would lift it to a grey where
             // everything reads), a little lighter higher up so tall shapes barely show.
             vec3 fowDark = fowUnknown * (0.55 + 1.1 * fowMist) * (1.0 + 0.15 * clamp(vFowPos.y / 5.0, 0.0, 1.0));
-            // Beyond the map's edge the same (playtest 20/10 #23, Arturo: what is not played is dark, always).
+            // Beyond the map's edge the same (playtest 20/10 #23, Arturo: what is not played is dark, always); far out
+            // (past what the tactical view sees), into the haze, where the sky's horizon begins (sky.ts, 0.9.1).
             gl_FragColor.rgb = mix(fowDark, gl_FragColor.rgb, fowKnown);
+            #ifdef USE_FOG
+              gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, smoothstep(fowFar.x, fowFar.y, length(fowOut)));
+            #endif
           }`,
         );
     });

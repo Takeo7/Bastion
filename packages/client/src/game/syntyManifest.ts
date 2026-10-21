@@ -13,7 +13,7 @@ import type { BuildId, HeadId, TemplateId } from '@bastion/engine';
 /** Metres to game units: a tile is 1.5 m, so a 1.8 m survivor stands 1.2 tall. */
 export const SYNTY_SCALE = 1 / 1.5;
 
-export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza' | 'sidekickSurvivors' | 'sidekickZombies' | 'sidekickOutlaws' | 'sidekickCivilians' | 'sidekickPolice' | 'sidekickStarter';
+export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza' | 'sidekickSurvivors' | 'sidekickZombies' | 'sidekickOutlaws' | 'sidekickCivilians' | 'sidekickPolice' | 'sidekickStarter' | 'natureGeneric';
 
 /**
  * Where each pack lives under assets-src/synty/. A pack that only comes as a
@@ -63,6 +63,8 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
   sidekickCivilians: { dir: 'SIDEKICK_ModernCivilians_Extracted', unitypackage: 'SIDEKICK_Modern_Civilians_Unity_2021_3_v1_0_2.unitypackage' },
   sidekickPolice: { dir: 'SIDEKICK_ModernPolice_Extracted', unitypackage: 'SIDEKICK_Modern_Police_Unity_2021_3_v1_0_0.unitypackage' },
   sidekickStarter: { dir: 'SIDEKICK_Starter_Extracted', unitypackage: 'SIDEKICK_Starter_Unity_2021_3_v1_0_4.unitypackage' },
+  // The Nature Pack's Unity package: its sky (the mountains' skybox) and POLYGON Generic's (clouds, background mountains, skyline).
+  natureGeneric: { dir: 'POLYGON_Nature_Unity_Extracted', unitypackage: 'POLYGON_Nature_Unity_2022_3_v1_2_1.unitypackage' },
 };
 
 /**
@@ -130,7 +132,7 @@ export const ATLASES = {
 export type AtlasId = keyof typeof ATLASES;
 
 /** Kinds of converted model; a model's file is `<kind>-<id>.glb` in its pack's folder. */
-export type ModelKind = 'chr' | 'hat' | 'wep' | 'prop' | 'anim' | 'piece' | 'base' | 'fx' | 'ui' | 'ward';
+export type ModelKind = 'chr' | 'hat' | 'wep' | 'prop' | 'anim' | 'piece' | 'base' | 'fx' | 'ui' | 'ward' | 'sky';
 
 /** Path of a converted file under public/ (the game prefixes Vite's base URL). */
 export const syntyFile = (pack: PackId, file: string) => `models/synty/${pack}/${file}`;
@@ -291,6 +293,8 @@ export interface WardrobeAsset {
   pack: PackId;
   preset: string;
   parts?: string[];
+  /** Palette cells ('x,y' of its 16 × 16) given a colour of their own, over what the parts' presets paint them. */
+  paint?: Record<string, string>;
 }
 
 /** The shapes each piece keeps, as Sidekick's sliders (0 to 1): a woman's body (none: a man's), slim, heavy (none: the middle build). */
@@ -314,7 +318,6 @@ export const SKIN_CELLS: readonly (readonly [number, number])[] = [
 export const HAIR_CELLS: readonly (readonly [number, number])[] = [[6, 10], [7, 10], [6, 11], [7, 11], [6, 12], [7, 12], [6, 14], [7, 14]];
 
 const survivors = (preset: string) => ({ pack: 'sidekickSurvivors' as PackId, preset: `ApocalypseSurvivor_${preset}` });
-const outlaws = (preset: string) => ({ pack: 'sidekickOutlaws' as PackId, preset: `ApocalypseOutlaw_${preset}` });
 const police = (preset: string) => ({ pack: 'sidekickPolice' as PackId, preset: `ModernPolice_${preset}` });
 const civilians = (preset: string) => ({ pack: 'sidekickCivilians' as PackId, preset: `ModernCivilian_${preset}` });
 
@@ -348,7 +351,14 @@ export const OUTFITS = {
   survivor4: { ...survivors('04'), sexes: 'mf' },
   survivor5: { ...survivors('05'), sexes: 'mf' },
   survivor6: { ...survivors('04'), sexes: 'mf', parts: clothes({ torso: 'APOC_SURV_03', upper: 'APOC_SURV_02', lower: 'APOC_SURV_03', hands: 'APOC_SURV_02', hips: 'APOC_SURV_06', legs: 'APOC_SURV_01', feet: 'APOC_SURV_02' }) },
-  survivor7: { ...outlaws('05'), sexes: 'mf', parts: clothes({ torso: 'APOC_OUTL_07', upper: 'APOC_OUTL_07', lower: 'APOC_SURV_03', hands: 'APOC_SURV_01', hips: 'APOC_SURV_04', legs: 'APOC_SURV_01', feet: 'APOC_SURV_01' }) },
+  // A dark hooded jacket (Outlaws' leather one, APOC_OUTL_07, had spikes on the shoulders and the hem: 0.9.1),
+  // painted: its preset would make it yellow. Cells x,0 the jacket and its sleeves, 0,1 the shirt under it, the rest trims.
+  survivor7: {
+    ...civilians('01'),
+    sexes: 'mf',
+    parts: clothes({ torso: 'MDRN_CIVL_07', upper: 'MDRN_CIVL_07', lower: 'APOC_SURV_03', hands: 'APOC_SURV_01', hips: 'APOC_SURV_04', legs: 'APOC_SURV_01', feet: 'APOC_SURV_01' }),
+    paint: { '0,0': '2e2e3b', '1,0': '2e2e3b', '2,0': '2e2e3b', '0,1': '8a8578', '1,1': '3a3a47', '2,1': '3a3a47', '0,2': '5b4a36', '1,2': '5b4a36', '2,2': '5b4a36' },
+  },
   survivor8: { ...survivors('01'), sexes: 'fm', parts: clothes({ torso: 'APOC_SURV_01', upper: 'MDRN_CIVL_09', lower: 'MDRN_CIVL_06', hands: 'APOC_SURV_02', hips: 'APOC_SURV_05', legs: 'APOC_SURV_02', feet: 'APOC_SURV_02' }) },
   civilian1: { ...civilians('01'), sexes: 'fm', parts: clothes({ torso: 'MDRN_CIVL_03', upper: 'MDRN_CIVL_03', lower: 'MDRN_CIVL_03', hands: 'APOC_SURV_01', hips: 'APOC_SURV_04', legs: 'APOC_SURV_01', feet: 'APOC_SURV_01' }) },
   civilian2: { ...civilians('06'), sexes: 'mf' },
@@ -1560,6 +1570,32 @@ export const TERRAIN = {
 export type TerrainId = keyof typeof TERRAIN;
 
 export const terrainFile = (id: TerrainId) => `models/synty/terrain/${id}.webp`;
+
+// --------------------------------------------------------------------- sky
+
+/**
+ * The sky round every scene (game/sky.ts): its horizon's bands, cut from Synty's, and its clouds. The mountains are
+ * the Nature Pack's skybox, a strip of its rows (`rows`: from and to, a share of its height from the top), with snow
+ * on the peaks and without; the skyline, POLYGON Generic's four strips of roofs (darkest at the top). Each saved at
+ * `width` × `height`.
+ */
+const NATURE = 'POLYGON_Nature_Unity_Extracted/Assets/Synty';
+export const SKY_TEXTURES = {
+  mountains: { src: `${NATURE}/PolygonNature/Textures/Misc/Skybox_01_Diff.png`, rows: [0.03, 0.38], width: 2048, height: 352 },
+  skyline: { src: `${NATURE}/PolygonGeneric/Textures/Generic_Skyline.tga`, rows: [0, 1], width: 1024, height: 1024 },
+} satisfies Record<string, { src: string; rows: [number, number]; width: number; height: number }>;
+
+export type SkyTextureId = keyof typeof SKY_TEXTURES;
+
+export const skyTextureFile = (id: SkyTextureId) => `models/synty/sky/${id}.webp`;
+
+/** The clouds round the sky: rings of them, POLYGON Generic's and the Alpine Mountain biome's thin one. */
+export const SKY_MODELS = {
+  cloudRing: { pack: 'natureGeneric', fbx: 'Assets/Synty/PolygonGeneric/Models/SM_Gen_Env_Cloud_Ring_01' },
+  cloudRingThin: { pack: 'alpine', fbx: 'SM_Env_Cloud_Ring_01' },
+} satisfies Record<string, { pack: PackId; fbx: string }>;
+
+export type SkyModelId = keyof typeof SKY_MODELS;
 
 // -------------------------------------------------------------------- base
 

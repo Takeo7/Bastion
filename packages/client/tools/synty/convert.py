@@ -584,7 +584,10 @@ def wardrobe(job, scale):
     write_parts(mesh, arm, atlas, fixed, skins)
     if job['piece'] in ('outfit', 'headwear'):
         fallback = Atlas(job['fallback'], 32)
+        paint = job.get('paint', {})
         def cell(x, y):
+            if f'{x},{y}' in paint:
+                return paint[f'{x},{y}']
             u, v = (x + 0.5) / 16, 1 - (y + 0.5) / 16
             rgb = own.get(y * 16 + x, atlas).rgb(u, v)
             return fallback.rgb(u, v) if unused(rgb) else rgb
@@ -786,6 +789,24 @@ def anim(job):
 def texture(job):
     reset()
     img = bpy.data.images.load(job['src'])
+    if job.get('rows'):
+        # A strip of its rows (from and to, a share of its height from the top), at width × height.
+        import numpy as np
+        top, bottom = job['rows']
+        w = job['width']
+        full = round(job['height'] / (bottom - top))
+        img.scale(w, full)
+        px = np.empty(w * full * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        # Blender's rows go from the bottom.
+        y0 = full - round(bottom * full)
+        band = px.reshape(full, w, 4)[y0:y0 + job['height']]
+        out = bpy.data.images.new(img.name + '_strip', w, band.shape[0], alpha=True)
+        out.pixels.foreach_set(band.ravel())
+        out.file_format = 'WEBP'
+        out.filepath_raw = job['out']
+        out.save(filepath=job['out'], quality=90)
+        return
     size = job['size']
     if job.get('palette') and img.size[0] < size:
         # A palette (Sidekick's 32 × 32 colours): grown with every colour a block of its own, none blended.

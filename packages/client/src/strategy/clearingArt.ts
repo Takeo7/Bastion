@@ -14,7 +14,8 @@ import { STOREY } from '../game/coords';
 import { atlasTexture, loadModel } from '../game/synty';
 import { tween } from '../game/tween';
 import type { ArmoryStock, ClearingArt } from './clearing';
-import { skyTexture, type Shot, type StageMood } from './stage';
+import { Sky } from '../game/sky';
+import { type Shot, type StageMood } from './stage';
 
 /** A soldier standing by La Lata (the squad, the debrief) or at its post for a siege. */
 export interface LineupEntry {
@@ -99,6 +100,8 @@ export class ClearingArtView implements ClearingArt {
    * each, looking out to the nearest edge, where the dead come in; kept from one change to the next by who it is.
    */
   private readonly posts = new THREE.Group();
+  /** The sky round the clearing (sky.ts): the valley's mountains. */
+  private readonly skyDome = new Sky('country');
   private postRigs = new Map<string, UnitRig>();
   private postsKey = '';
 
@@ -106,6 +109,8 @@ export class ClearingArtView implements ClearingArt {
     this.snow = snow;
     const m = (this.look = dayMood(snow));
     this.mood = { exposure: m.exposure, bloom: m.bloom, grade: m.grade };
+    // Nothing is played beyond the woods: what shows between the trunks is the haze under the mountains, not the dark.
+    this.map.fadeBeyond(1, 12);
     this.sun.color.set(m.sun);
     this.sun.intensity = m.sunIntensity;
     this.sun.castShadow = true;
@@ -121,10 +126,12 @@ export class ClearingArtView implements ClearingArt {
     this.group.add(this.map.group, this.bus.root, this.showcase, this.armoryCorner, this.lineup, this.posts, this.sun, this.sun.target, this.sky, this.fill, this.fill.target);
   }
 
-  /** The sky and the haze of the battle on `scene` (the set's): its lights are this group's. */
+  /** The sky and the haze of the battle on `scene` (the set's): its lights are this group's; the mountains round the valley. */
   dress(scene: THREE.Scene): void {
-    scene.background = skyTexture(this.look.sky);
+    scene.background = new THREE.Color(this.look.haze);
     scene.fog = new THREE.FogExp2(this.look.haze, this.look.hazeDensity);
+    this.skyDome.setMood(this.look, { night: false, snow: this.snow });
+    scene.add(this.skyDome.group);
   }
 
   /** The camera the clearing is seen with, for what the map does by it (its lamps, what fades). */

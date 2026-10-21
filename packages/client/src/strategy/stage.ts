@@ -55,21 +55,6 @@ const PLAIN_MOOD: StageMood = {
   grade: { saturation: 1.0, contrast: 1.04, vignette: 0.22, shadowTint: [1, 1, 1], highlightTint: [1, 1, 1], lift: [0, 0, 0] },
 };
 
-/** A vertical sky gradient (top to horizon) as a scene's background. */
-export function skyTexture(stops: string[]): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 2;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
-  const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  stops.forEach((c, i) => g.addColorStop(i / (stops.length - 1), c));
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
 /** Panels of the screens over the stage: a fitted shot keeps clear of them. */
 const PANELS = '.strat-top, .strat-nav, .strat-left, .strat-right, .squad-bottom';
 

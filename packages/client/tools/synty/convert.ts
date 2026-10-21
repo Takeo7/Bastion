@@ -34,6 +34,9 @@ import {
   PIECES,
   PROPS,
   TERRAIN,
+  SKY_TEXTURES,
+  SKY_MODELS,
+  skyTextureFile,
   SYNTY_SCALE,
   WEAPONS,
   WEAPON_PARTS,
@@ -200,6 +203,14 @@ for (const [id, t] of Object.entries(TERRAIN) as [keyof typeof TERRAIN, (typeof 
   add({ kind: 'texture', id, out: join(PUBLIC, terrainFile(id)), src: join(SOURCES, t.src), size: t.size });
 }
 
+// The sky (SKY_TEXTURES: a strip of each source's rows, at its size; SKY_MODELS: its clouds, as props).
+for (const [id, t] of Object.entries(SKY_TEXTURES) as [keyof typeof SKY_TEXTURES, (typeof SKY_TEXTURES)[keyof typeof SKY_TEXTURES]][]) {
+  add({ kind: 'texture', id, out: join(PUBLIC, skyTextureFile(id)), src: join(SOURCES, t.src), rows: t.rows, width: t.width, height: t.height });
+}
+for (const [id, m] of Object.entries(SKY_MODELS) as [keyof typeof SKY_MODELS, (typeof SKY_MODELS)[keyof typeof SKY_MODELS]][]) {
+  add({ kind: 'prop', id, name: id, out: join(PUBLIC, modelFile(m.pack, 'sky', id)), fbx: findFbx(m.pack, m.fbx), atlas: 'generic', slots: {} });
+}
+
 for (const [id, c] of Object.entries(CHARACTERS) as [string, CharacterAsset][]) {
   if (c.sidekick) continue;
   const atlas = atlasOf(c.pack);
@@ -329,6 +340,8 @@ for (const kind of Object.keys(WARDROBE) as WardrobeKind[]) {
       atlasImage: presetPalette(w.pack, w.preset),
       fallback: presetPalette('sidekickSurvivors', 'ApocalypseSurvivor_02'),
       skins: SKIN_CELLS.map(([x, y]) => [(x + 0.5) / 16, 1 - (y + 0.5) / 16]),
+      // Cells given a colour of their own (only those that have some: the others' jobs as they were).
+      ...(w.paint ? { paint: Object.fromEntries(Object.entries(w.paint).map(([cell, hex]) => [cell, [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)])) } : {}),
     });
   }
 }

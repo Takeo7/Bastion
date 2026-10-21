@@ -11,6 +11,7 @@ import { dressFrame, SHAPE_GEOMETRY, type FrameArt, type Shape } from './frameAr
 import { NIGHT, NightLights, type Glow } from './night';
 import { unitPosNow } from './unitViews';
 import { beforeNextFrame, shadowsChanged } from './renderer';
+import { SKY_LAND } from './sky';
 import { ExploredMemory } from './explored';
 import { extendShader, FogOfWar } from './fogOfWar';
 import { FLOOR, GroundMap, scatterCover } from './ground';
@@ -555,6 +556,8 @@ export class MapView {
     this.queueBake({ x0: 0, y0: 0, x1: s.width, y1: s.height });
     // A night mission (docs/ALTURA-Y-NOCHE.md): the night's look and its lights (the game sets the renderer's).
     this.setNight(!!s.mission.night);
+    // What the sky has on its horizon (sky.ts): a town's roofs, a factory's, or the mountains alone.
+    SKY_LAND.value = s.biome === 'city' ? 'town' : s.biome === 'facility' || s.site === 'industrial' ? 'industry' : 'country';
   }
 
   /**
@@ -1772,6 +1775,11 @@ export class MapView {
     ground.matrixAutoUpdate = false;
     ground.updateMatrix();
     return ground;
+  }
+
+  /** Where the dark beyond the map's edge goes into the haze (tiles out): far, past what the tactical view sees, by default. */
+  fadeBeyond(from: number, to: number): void {
+    this.fog.uniforms.fowFar.value.set(from, to);
   }
 
   /** Day or night: the fog's tints, the street lights' heads, the real lights, the lit tiles. */

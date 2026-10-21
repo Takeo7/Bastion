@@ -3,24 +3,10 @@ import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { perfBegin, perfFrame } from '../perf';
 import { FrameLimiter, onGraphics, pixelRatio, postQuality, QualityGuard, type GraphicsSettings } from '../settings';
 import { CROWD } from './crowd';
+import { Sky } from './sky';
 import { fitPostToPixelRatio, lightenPost, postChain, UNIT_LAYER, type PostChain } from './post';
 
 type FrameFn = (dt: number, time: number) => void;
-
-/** Vertical sky gradient (top to horizon) as a screen-space background. */
-function skyGradient(stops: string[]): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 2;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
-  const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  stops.forEach((c, i) => g.addColorStop(i / (stops.length - 1), c));
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
 
 /** A time of day: the sky, the haze, the lights, the exposure and the grade. */
 export interface Mood {
@@ -216,6 +202,9 @@ export class Renderer {
   private readonly sun = new THREE.DirectionalLight();
   private readonly sky = new THREE.HemisphereLight();
   private mood: Mood = MOODS.day;
+  /** The sky round the battle (sky.ts): its dome, the land on its horizon, its clouds; and whether it snows there. */
+  private readonly skyDome = new Sky();
+  private snowing = false;
   /** The map's size, for the sun's shadow camera. */
   private mapSize = { width: 30, height: 30 };
   /**
@@ -276,7 +265,7 @@ export class Renderer {
     container.append(this.labels.domElement);
 
     this.scene.fog = new THREE.FogExp2(0xffffff, 0);
-    this.scene.add(this.sky);
+    this.scene.add(this.sky, this.skyDome.group);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = SHADOW_BIAS;
@@ -373,6 +362,7 @@ export class Renderer {
 
   /** Day or night (the reference block's night test; missions are by day). */
   setNight(on: boolean, snow = false): void {
+    this.snowing = snow;
     this.setMood(on ? MOODS.night : snow ? SNOW_DAY : MOODS.day);
   }
 
@@ -412,8 +402,9 @@ export class Renderer {
 
   private setMood(m: Mood): void {
     this.mood = m;
-    (this.scene.background as THREE.Texture | null)?.dispose();
-    this.scene.background = skyGradient(m.sky);
+    // (The sky's dome covers the background: the haze's colour behind it, for the frame before it loads.)
+    this.scene.background = new THREE.Color(m.haze);
+    this.skyDome.setMood(m, { night: m === MOODS.night, snow: this.snowing });
     const fog = this.scene.fog as THREE.FogExp2;
     fog.color.set(m.haze);
     fog.density = m.hazeDensity;
