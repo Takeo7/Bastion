@@ -942,3 +942,27 @@ describe('the enemy upstairs', () => {
     expect(kept).toBe(woke);
   });
 });
+
+describe('the view (Arturo, 21/10)', () => {
+  it('reaches farther than the sight, day or night, and holds all of it', async () => {
+    const { teamView, teamVisibility, VIEW_REACH } = await import('../src/los');
+    const { createMission } = await import('../src/setup');
+    const { Rng } = await import('../src/rng');
+    for (const night of [false, true]) {
+      const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 3 }, slots: [0], rng: new Rng(3), kind: 'elimination' });
+      s.mission.night = night;
+      const sight = teamVisibility(s, 'xcom');
+      const view = teamView(s, 'xcom');
+      expect(sight.every((v, i) => !v || view[i])).toBe(true);
+      expect(view.filter(Boolean).length).toBeGreaterThan(sight.filter(Boolean).length);
+      // Nothing past the reach of every soldier.
+      const squad = s.units.filter((u) => u.team === 'xcom' && u.alive);
+      view.forEach((v, i) => {
+        if (!v || i >= s.width * s.height) return;
+        const x = i % s.width;
+        const y = Math.floor(i / s.width);
+        expect(squad.some((u) => Math.hypot(u.pos.x - x, u.pos.y - y) <= VIEW_REACH)).toBe(true);
+      });
+    }
+  });
+});

@@ -63,6 +63,25 @@ const AO_FRAGMENT = /* glsl */ `
     gl_FragColor = vec4(pow(1.0 - hidden / ${DIRECTIONS}.0, 2.4), h0, 0.0, 1.0);
   }`;
 
+/**
+ * The bake's two passes, made once and kept (playtest 21/10 #5): made and thrown away at every bake, their programs
+ * went with them and compiled again at each change of the map (a door, a car blown up), a stall on Windows.
+ */
+let passes: { height: THREE.ShaderMaterial; ao: THREE.ShaderMaterial; quad: THREE.Mesh; quadScene: THREE.Scene } | null = null;
+function bakePasses(): NonNullable<typeof passes> {
+  if (passes) return passes;
+  const height = new THREE.ShaderMaterial({ vertexShader: HEIGHT_VERTEX, fragmentShader: HEIGHT_FRAGMENT, side: THREE.DoubleSide });
+  const ao = new THREE.ShaderMaterial({
+    uniforms: { tHeight: { value: null as THREE.Texture | null }, mapSize: { value: new THREE.Vector2(1, 1) } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: AO_FRAGMENT,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ao);
+  return (passes = { height, ao, quad, quadScene: new THREE.Scene().add(quad) });
+}
+
 /** The baked contact occlusion of one map. */
 export class GroundOcclusion {
   /** r: how much sky each point of the ground sees (1 open, 0 hidden); g: the height there. */
@@ -105,9 +124,9 @@ export class GroundOcclusion {
     this.heights.scissorTest = true;
     this.target.scissor.copy(rect(1 + Math.ceil(RADIUS)));
     this.target.scissorTest = true;
+    const pass = bakePasses();
     const scene = new THREE.Scene();
-    const heightMaterial = new THREE.ShaderMaterial({ vertexShader: HEIGHT_VERTEX, fragmentShader: HEIGHT_FRAGMENT, side: THREE.DoubleSide });
-    for (const g of occluders) scene.add(new THREE.Mesh(g, heightMaterial));
+    for (const g of occluders) scene.add(new THREE.Mesh(g, pass.height));
     // From above, looking down: x across, z down the texture (v = 1 − z / height).
     const camera = new THREE.OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, 0.1, 200);
     camera.up.set(0, 0, -1);
@@ -126,27 +145,15 @@ export class GroundOcclusion {
     gl.setRenderTarget(this.heights);
     gl.render(scene, camera);
 
-    const quad = new THREE.Mesh(
-      new THREE.PlaneGeometry(2, 2),
-      new THREE.ShaderMaterial({
-        uniforms: { tHeight: { value: this.heights.texture }, mapSize: { value: new THREE.Vector2(width, height) } },
-        vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-        fragmentShader: AO_FRAGMENT,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    );
-    const quadScene = new THREE.Scene().add(quad);
+    pass.ao.uniforms.tHeight!.value = this.heights.texture;
+    (pass.ao.uniforms.mapSize!.value as THREE.Vector2).set(width, height);
     gl.setRenderTarget(this.target);
-    gl.render(quadScene, camera);
+    gl.render(pass.quadScene, camera);
 
     gl.setRenderTarget(before);
     gl.setClearColor(clear, alpha);
     gl.autoClear = autoClear;
     gl.shadowMap.autoUpdate = shadows;
-    heightMaterial.dispose();
-    quad.geometry.dispose();
-    (quad.material as THREE.Material).dispose();
   }
 
   dispose(): void {

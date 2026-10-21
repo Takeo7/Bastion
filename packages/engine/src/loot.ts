@@ -231,9 +231,25 @@ export function roomSearched(s: GameState, room: Pick<Room, 'id'>): boolean {
   return (s.roomsSearched ?? []).includes(room.id);
 }
 
-/** What searching `room` turns up at that difficulty: the furniture's tables, rolled once for the room. */
-export function rollRoom(room: Room, difficulty: number, rng: Rng, night = false, mags = false): Loot | null {
-  return rollSpot(room.spot, difficulty, rng, night, mags);
+/** Rations a stocked supermarket always gives (playtest 21/10, #19). */
+const MARKET_FOOD = [6, 10] as const;
+
+/** The stock of the supermarket `room` is, or null if it is no supermarket's (GameState.markets). */
+export function marketStock(s: GameState, room: Pick<Room, 'tiles'>): 'full' | 'picked' | null {
+  const p = room.tiles[0];
+  if (!p || p.z !== 0) return null;
+  const m = (s.markets ?? []).find((r) => p.x > r.x && p.y > r.y && p.x < r.x + r.w - 1 && p.y < r.y + r.h - 1);
+  return m ? (m.stock ?? 'picked') : null;
+}
+
+/**
+ * What searching `room` turns up at that difficulty: the furniture's tables, rolled once for the room. A
+ * supermarket with its shelves still stocked (`market` 'full') always gives food, 6 to 10 rations (Ana, 21/10:
+ * «siempre que estén las estanterías llenas de cosas se pueda lutear»); a picked one, a shop's roll.
+ */
+export function rollRoom(room: Room, difficulty: number, rng: Rng, night = false, mags = false, market: 'full' | 'picked' | null = null): Loot | null {
+  if (market === 'full') return { food: rng.range(...MARKET_FOOD) };
+  return rollSpot(market ? 'shop' : room.spot, difficulty, rng, night, mags);
 }
 
 /** Room in a soldier's backpack: BACKPACK_SLOTS, one more with the Chapistería (docs/FASE8.md §C). */

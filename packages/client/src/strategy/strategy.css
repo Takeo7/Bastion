@@ -105,6 +105,12 @@
   line-height: 1.35;
 }
 
+/* Lore's key words (marked «**así**»), to be read at a glance (Ana, 21/10 #14). */
+.x-text strong {
+  font-weight: 800;
+  color: var(--ink-blue);
+}
+
 /* Expediente pages: the story, smaller so it doesn't drown the sheet. */
 .x-text.page {
   font-size: 12.5px;
@@ -861,13 +867,109 @@
   min-width: 200px;
 }
 
-/* The debrief's report on the panel's left: its stamp and the line under it centred, as the Escuadra's title. */
-.debrief-bottom .squad-text {
-  text-align: center;
+/* The debrief (Ana, 21/10 #24: «como si lo hiciera el maquetador sénior»): one column on one left edge, the result
+   and the mission on a head line over a hairline, the figures, what happened a line each, all alike; «Continuar»
+   apart, past a rule, in the middle of its own column. */
+.debrief-card {
+  align-items: stretch;
+  gap: 0;
+  padding: 14px 0 14px 20px;
 }
 
-.debrief-bottom .squad-text > :is(.x-text, .debrief-loot) {
-  text-align: left;
+.debrief-main {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding-right: 20px;
+}
+
+.debrief-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--x-line);
+}
+
+.debrief-card.briefing-head:is(.victory, .defeat) h1.debrief-result {
+  margin: 0;
+  padding: 3px 12px 2px;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  transform: none;
+}
+
+.debrief-name {
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: 0.03em;
+}
+
+.debrief-card .debrief-tally {
+  justify-content: flex-start;
+  margin: 0;
+}
+
+/* The figures read beside the lines under them, not as small print. */
+.debrief-card .debrief-tally .x-chip {
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
+.debrief-lines {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.debrief-lines > li {
+  position: relative;
+  padding-left: 14px;
+}
+
+.debrief-lines > li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.55em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.debrief-lines > li.good {
+  color: var(--x-good);
+}
+
+.debrief-lines > li.warn {
+  color: var(--x-warn);
+}
+
+.debrief-lines > li.bad {
+  color: var(--x-bad);
+}
+
+.debrief-lines .x-btn.small {
+  margin-left: 6px;
+  vertical-align: 1px;
+}
+
+.debrief-card .debrief-story p {
+  margin: 6px 0 0;
+}
+
+.debrief-actions {
+  align-content: center;
+  padding: 0 20px;
+  border-left: 1px solid var(--x-line);
 }
 
 .squad-actions > small {
@@ -909,15 +1011,23 @@
   white-space: pre-line;
 }
 
-/* Squad select: the roster stays short so the lineup is visible. */
-.strat-left.compact {
+/* Squad select: the rosters stay short so the lineup is visible; each player's on their side (Ana, 21/10 #15). */
+.strat-left.compact,
+.strat-right.compact {
   max-height: calc(100vh - 330px);
-  /* Narrow (Ana's drawing, 20/10 #16): the row is centred, and the room this takes is kept on the right too. */
+  /* Narrow (Ana's drawing, 20/10 #16): the row is centred between them. */
   width: clamp(210px, 16vw, 250px);
 }
 
-.strat-left.compact > .x-panel {
+.strat-left.compact > .x-panel,
+.strat-right.compact > .x-panel {
   min-height: 0;
+}
+
+/* The other player's list, level with this player's: not the sheet's taped look. */
+.strat-right.compact > .x-panel {
+  margin-top: 0;
+  transform: none;
 }
 
 /* ----------------------------------------------------------- geoscape */
@@ -2667,8 +2777,7 @@ dl.briefing {
 /* ------------------------------------------------------------- debrief */
 
 .debrief-tally {
-  justify-content: center;
-  margin: 6px 0 2px;
+  margin: 0;
 }
 
 /* The story's page after a chapter: there to read, not in the way. */
@@ -2681,9 +2790,8 @@ dl.briefing {
 }
 
 .debrief-story p {
-  max-width: 60ch;
-  margin: 4px auto 0;
-  text-align: left;
+  max-width: 68ch;
+  margin: 4px 0 0;
 }
 
 /* ------------------------------------------------------------ recruiting */
@@ -2833,13 +2941,6 @@ dl.briefing {
 .x-btn.small.armed {
   color: var(--stamp);
   border-color: var(--stamp);
-}
-
-/* What a scavenge brought home, in one line under the figures. */
-.debrief-loot {
-  margin: 4px 0 0;
-  text-align: center;
-  color: var(--x-good);
 }
 
 /* ===================================================== Construir (the clearing) */

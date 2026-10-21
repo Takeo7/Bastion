@@ -124,6 +124,8 @@ const IDS: Record<DecorKind, number> = {
   shed: 96,
   washingLine: 97,
   vegPatch: 98,
+  // A room's windows barricaded from inside (playtest 21/10, #20).
+  windowBarricade: 99,
 };
 
 const KINDS: DecorKind[] = [];

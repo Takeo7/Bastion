@@ -21,6 +21,8 @@ import hatchUrl from '../assets/expediente/hatch.png';
  * is just that; `soft` adds a faint, gapless wash inside the borders.
  */
 export type RangeStyle = 'outline' | 'soft';
+/** Whether the tile at (x, y) on floor z is a thing in the way the range's border leaves alone (showMoveRange). */
+export type SoftAt = (x: number, y: number, z: number) => boolean;
 
 /** How far round the pointer the tiles' squares show, fading out. */
 const NEAR_RADIUS = 2.5;
@@ -325,10 +327,14 @@ export class Overlays {
   /** A dotted path («Puntos»): marks along it like the tiles'. */
   private readonly pathDots: THREE.InstancedMesh;
   /** What was last shown, to draw it again in another look. */
-  private lastRange: { tiles: MoveTile[]; planning: boolean } = { tiles: [], planning: false };
+  private lastRange: { tiles: MoveTile[]; planning: boolean; soft?: SoftAt } = { tiles: [], planning: false };
+  /** The range's obstacles that don't break its border (showMoveRange's `soft`). */
+  private softAt: SoftAt | null = null;
   private lastPath: { from: Vec2 | null; path: Vec2[] | null; dash: boolean } = { from: null, path: null, dash: false };
   private lastPlans: { from: Vec2; path: Vec2[]; color: string }[] = [];
   private lastFocus: Vec2 | null = null;
+  /** samples(): one of each kind of line, kept for the battle. */
+  private kinds: THREE.Group | null = null;
   /** A night mission: the lines glow less (Arte, 18/10: the threshold of the night's bloom doubled them), and a flat wash adds light instead of paint. */
   private night = false;
   /** The tiles' squares round the pointer, brighter the nearer (additive: a fade to nothing). */
@@ -558,7 +564,7 @@ export class Overlays {
   setLook(look: TileLook): void {
     this.look = look;
     this.applyLook();
-    this.showMoveRange(this.lastRange.tiles, this.lastRange.planning);
+    this.showMoveRange(this.lastRange.tiles, this.lastRange.planning, this.lastRange.soft);
     this.showPath(this.lastPath.from, this.lastPath.path, this.lastPath.dash);
     this.setRangeFocus(this.lastFocus);
     this.plans.userData.key = undefined;
@@ -656,6 +662,25 @@ export class Overlays {
       ring.scale.set(r, 1, r);
       material.opacity = d.peak * (k < 0.15 ? k / 0.15 : (1 - k) / 0.85);
     }
+  }
+
+  /**
+   * One of each kind of line drawn (the range's borders, their halos and shades, the path), on the materials they
+   * use and with something in them, kept for the battle: for the renderer to compile and draw once behind the
+   * loading veil (Renderer.warm). Drawn first when the move range first showed, they stalled that frame (Arte,
+   * playtest 21/10 #5: 43 ms on the Mac, more on Windows).
+   */
+  samples(): THREE.Group {
+    if (this.kinds) return this.kinds;
+    const segments = new LineSegmentsGeometry().setPositions([0, 0, 0, 1, 0, 0]);
+    const line = new LineGeometry().setPositions([0, 0, 0, 1, 0, 0, 1, 0, 1]);
+    const kinds = new THREE.Group();
+    for (const edge of [this.walkEdge, this.dashEdge, this.walkHalo, this.dashHalo, this.walkShade, this.dashShade]) kinds.add(new LineSegments2(segments, edge.material));
+    for (const path of [this.path, this.pathCasing, this.pathHalo]) kinds.add(new Line2(line, path.material));
+    // The dashed ones read the distances along the line: on the shared geometries, once.
+    (kinds.children[0] as LineSegments2).computeLineDistances();
+    (kinds.children[kinds.children.length - 1] as Line2).computeLineDistances();
+    return (this.kinds = kinds);
   }
 
   /**
@@ -901,8 +926,14 @@ export class Overlays {
    * own squares only show round the pointer (setRangeFocus).
    * `planning`: without the command the range is only for planning, so it is drawn fainter.
    */
-  showMoveRange(tiles: MoveTile[], planning = false): void {
-    this.lastRange = { tiles, planning };
+  /**
+   * `soft`: the tiles nobody walks onto that are things, not walls (a car, a crate, someone standing): the border
+   * doesn't go round them (Ana, 21/10 #18: they broke the grid with squares of strong lines); the thing itself is
+   * what is seen there, and its tile is left unlit.
+   */
+  showMoveRange(tiles: MoveTile[], planning = false, soft?: SoftAt): void {
+    this.lastRange = { tiles, planning, soft };
+    this.softAt = soft ?? null;
     for (const [mesh, opacity] of this.rangeLayers) (mesh.material as THREE.MeshBasicMaterial).opacity = planning ? opacity * 0.5 : opacity;
     const opacity = this.look.edges?.opacity ?? 0.95;
     for (const edge of [this.walkEdge, this.dashEdge]) edge.material.opacity = planning ? opacity * 0.55 : opacity;
@@ -987,6 +1018,8 @@ export class Overlays {
         const n = this.range.get((t.pos.x + dx) * 1024 + t.pos.y + dy);
         const out = t.dash ? !n : !n || n.dash;
         if (!out) continue;
+        // Not round a thing in the way: no line on the side that faces it.
+        if (!n && this.softAt?.(t.pos.x + dx, t.pos.y + dy, t.pos.z ?? 0)) continue;
         const into = t.dash ? dash : walk;
         const [x0, z0, x1, z1] = [t.pos.x + ax, t.pos.y + az, t.pos.x + bx, t.pos.y + bz];
         if (edges?.chalk) {

@@ -512,6 +512,11 @@ export class UnitViews {
     }
   }
 
+  /** The enemies that see one of the squad: an eye on their flag (playtest 21/10 #11; game.ts watching). */
+  setWatching(ids: Set<string>): void {
+    for (const v of this.views.values()) v.flagEl.classList.toggle('watching', ids.has(v.id));
+  }
+
   has(id: string): boolean {
     return this.views.has(id);
   }

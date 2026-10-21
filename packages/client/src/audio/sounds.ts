@@ -284,20 +284,25 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 900), hit(0, 0.002, 0.08, 0.7)));
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', s.vary(650), 2), hit(0.01, 0.004, 0.06, 0.4)));
   }),
-  'impact.armor': def('sfx', 0.5, (s) => {
-    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 1800), hit(0, 0.0005, 0.02, 0.8)));
-    s.to(s.metal(0, [1350, 2240, 3170, 4520].map((f) => s.vary(f, 0.06)), 0.3, 0.7));
-    s.to(s.amp(s.osc('sine', [[0, 140], [0.1, 70]]), hit(0, 0.002, 0.1, 0.7)));
-  }),
+  // A round stopped by armour (a vest, a riot suit's plates): a dull knock and a short clatter, not a ring
+  // (playtest 21/10 #23: the old one rang like a bell for 0.4 s).
+  'impact.armor': def('sfx', 0.35, (s) => {
+    s.to(s.amp(s.osc('sine', [[0, s.vary(160)], [0.08, 80]], 0, 0.15), hit(0, 0.002, 0.08, 0.8)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 1500, 0.6), hit(0, 0.001, 0.06, 0.9)));
+    s.to(s.filter(s.grains(0, 0.04, 4, 0.003, false), 'highpass', 1500, 0.7), 0.6);
+    s.to(s.metal(0.002, [900, 1700, 2600].map((f) => s.vary(f, 0.08)), 0.02, 0.15));
+  }, { variants: 3 }),
+  // A machine hit (the alarm box): a clank of sheet metal and bits flying, ringing only briefly.
   'impact.robot': def(
     'sfx',
-    0.7,
+    0.5,
     (s) => {
       s.to(s.amp(s.filter(s.noise('white'), 'highpass', 1200), hit(0, 0.0005, 0.03, 0.8)));
-      s.to(s.metal(0, [480, 910, 1390, 2270].map((f) => s.vary(f, 0.06)), 0.45, 0.8));
-      s.to(s.amp(s.filter(s.grains(0, 0.25, 12, 0.008), 'bandpass', 5200, 1.5), hit(0, 0.001, 0.3, 0.6)));
+      s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 1200, 0.6), hit(0, 0.001, 0.07, 0.7)));
+      s.to(s.metal(0, [480, 910, 1390, 2270].map((f) => s.vary(f, 0.06)), 0.15, 0.6));
+      s.to(s.amp(s.filter(s.grains(0, 0.2, 10, 0.008), 'bandpass', 4000, 0.8), hit(0, 0.001, 0.2, 0.5)));
     },
-    { reverb: 0.15 },
+    { reverb: 0.1 },
   ),
   // A miss: the round whizzes past, or ricochets off something.
   'impact.miss': def(
@@ -321,17 +326,17 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.filter(s.grains(0, 0.12, 9, 0.012), 'bandpass', s.vary(1500), 0.8));
     s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 500), hit(0, 0.002, 0.1, 0.8)));
   }, { level: -3 }),
-  // On a critical hit, over the impact: a harder blow than a plain hit, flesh and bone (playtest 18/10 #22:
-  // the old bright sting rang like a bell). A deep, heavy thump with some grit to it, a wet slap, the dry crack
-  // of a bone and a few splinters after it. Nothing that rings or sings.
-  'impact.crit': def('sfx', 0.5, (s) => {
-    const thump = s.osc('sine', [[0, s.vary(85)], [0.16, 38]], 0, 0.3);
-    s.to(s.shape(s.amp(thump, hit(0, 0.003, 0.2, 1.2)), 1.6));
-    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 450), hit(0, 0.002, 0.14, 1)));
-    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(1100), 1.3), hit(0.004, 0.002, 0.07, 0.75)));
-    s.to(s.amp(s.filter(s.noise('white', 0.012, 0.05), 'bandpass', s.vary(2600), 2.5), hit(0.012, 0.0004, 0.018, 0.9)));
-    s.to(s.filter(s.grains(0.02, 0.09, 5, 0.004, false), 'bandpass', s.vary(3200), 1.5), 0.5);
-  }, { variants: 4, reverb: 0.08 }),
+  // On a critical hit, over the impact: a harder blow than a plain hit, flesh and bone, hard and dry (playtest
+  // 18/10 #22, 21/10 #23). A deep, driven thump, a broad slap, a snap with no pitch to it and a short crunch: no
+  // narrow filters, nothing that rings, no reverb.
+  'impact.crit': def('sfx', 0.4, (s) => {
+    const thump = s.osc('sine', [[0, s.vary(110)], [0.12, 40]], 0, 0.25);
+    s.to(s.shape(s.amp(thump, hit(0, 0.002, 0.16, 1.1)), 1.4));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 700, 0.6), hit(0, 0.001, 0.11, 1.2)));
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', s.vary(900), 0.9), hit(0.003, 0.001, 0.05, 0.8)));
+    s.to(s.amp(s.filter(s.noise('white', 0.008, 0.03), 'highpass', 1500, 0.5), hit(0.008, 0.0003, 0.01, 0.8)));
+    s.to(s.filter(s.grains(0.01, 0.07, 6, 0.003, false), 'lowpass', 3000, 0.5), 0.6);
+  }, { variants: 4 }),
   // The same on a machine (the alarm box, the Acorazado's plates): metal bent in, a dull crunch, no ring.
   'impact.crit.metal': def('sfx', 0.45, (s) => {
     s.to(s.shape(s.amp(s.osc('sine', [[0, s.vary(110)], [0.12, 50]], 0, 0.25), hit(0, 0.002, 0.15, 1)), 1.5));
@@ -493,13 +498,15 @@ export const SOUNDS: Record<string, SoundDef> = {
     },
     { variants: 6, level: -14 },
   ),
+  // The Acorazado (one of the dead in riot or army kit): a heavy boot set down and its kit rattling. No metal
+  // ringing (playtest 21/10 #23: each step rang for 0.4 s).
   'step.mec': def(
     'sfx',
-    0.6,
+    0.45,
     (s) => {
-      s.to(s.amp(s.osc('sine', [[0, 70], [0.2, 34]]), hit(0, 0.004, 0.22, 1)));
-      s.to(s.metal(0.01, [520, 870, 1330], 0.18, 0.3));
-      s.to(s.amp(s.filter(s.osc('sawtooth', [[0, 380], [0.25, 620]]), 'bandpass', 900, 2), [[0, 0], [0.06, 0.12], [0.3, 0.001]]));
+      s.to(s.amp(s.osc('sine', [[0, 70], [0.15, 34]], 0, 0.25), hit(0, 0.004, 0.18, 1)));
+      s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 500, 0.6), hit(0, 0.003, 0.12, 0.8)));
+      s.to(s.filter(s.grains(0.02, 0.2, 7, 0.006, false), 'bandpass', s.vary(1800), 0.8), 0.45);
     },
     { variants: 4, level: -6 },
   ),
@@ -741,8 +748,8 @@ export const SOUNDS: Record<string, SoundDef> = {
   'death.human': def('sfx', 0.9, (s) => {
     s.to(s.amp(s.osc('sine', [[0.05, 75], [0.35, 40]]), hit(0.05, 0.004, 0.3, 1)));
     s.to(s.amp(s.filter(s.noise('pink'), 'lowpass', 700), hit(0.05, 0.003, 0.18, 0.8)));
-    s.to(s.metal(0.08, [2400, 3600], 0.08, 0.2));
-    s.to(s.metal(0.16, [2900, 4300], 0.06, 0.15));
+    // The kit hitting the ground: a clatter with no pitch (playtest 21/10 #23: two clinks a fifth apart rang like a bell).
+    s.to(s.filter(s.grains(0.08, 0.24, 7, 0.005, false), 'bandpass', 2600, 0.7), 0.5);
   }),
   // ADVENT are printed: they come apart in a crackle of glitches.
   'death.advent': def('sfx', 1, (s) => {
@@ -758,7 +765,7 @@ export const SOUNDS: Record<string, SoundDef> = {
   'death.robot': def('sfx', 1.4, (s) => {
     s.to(s.amp(s.filter(s.osc('sawtooth', [[0, 420], [0.9, 38]]), 'lowpass', 1500), [[0, 0], [0.02, 0.5], [1, 0.001]]));
     s.to(s.filter(s.grains(0, 0.5, 14, 0.006), 'bandpass', 4500, 1), 0.7);
-    s.to(s.metal(0.95, [380, 710, 1150], 0.4, 0.6));
+    s.to(s.metal(0.95, [380, 710, 1150], 0.2, 0.6));
     s.to(s.amp(s.osc('sine', [[0.95, 80], [1.2, 40]]), hit(0.95, 0.003, 0.3, 1)));
   }, { reverb: 0.2 }),
   // The Chillón dying (the id is the old sectoid's): a last shriek choked off into a gurgle, and the body down.

@@ -4,6 +4,7 @@ import type { ArmoryStock } from '../strategy/clearing';
 import { OUTFIT_CHOICES, setRoster } from '../game/wardrobe';
 import { ClearingArtView } from '../strategy/clearingArt';
 import { Stage, type StageSet } from '../strategy/stage';
+import { BEYOND } from '../game/mapView';
 import '../styles.css';
 
 // Clearing lab (/claro.html): the base's clearing as its screen draws it
@@ -26,6 +27,8 @@ import '../styles.css';
 // `__claro.nivel(n, desgaste)` another one, worn 0 to 3.
 
 const params = new URLSearchParams(location.search);
+// `?sinbosque`: without the pinar past the edge (mapView BEYOND), to weigh it.
+if (params.has('sinbosque')) BEYOND.baseWood = false;
 const stage = new Stage();
 stage.element.style.cssText = 'position: fixed; inset: 0';
 document.body.append(stage.element);
@@ -94,6 +97,7 @@ look(c, c, 34);
 (window as unknown as { __claro: unknown }).__claro = {
   /** The clearing's art itself (to look into it), and its stage (a shot of one's own: show(pos, target, fov)). */
   art,
+  stage,
   show: (pos: [number, number, number], target: [number, number, number], fov = 38) => void stage.show('claro', { pos: new THREE.Vector3(...pos), target: new THREE.Vector3(...target), fov }, true),
   look,
   fell(x0: number, y0: number, x1: number, y1: number) {

@@ -260,6 +260,11 @@ export type DecorKind =
   /** A vegetable patch in a back garden, 2 × 3, low cover; facing: along its rows. */
   | 'vegPatch'
   /**
+   * Furniture piled against a window from inside so the dead don't get in (playtest 21/10, #20: a wardrobe on its
+   * side, a table, a mattress, planks), a `high` tile; every window of its room has one. Facing: the window.
+   */
+  | 'windowBarricade'
+  /**
    * Another tile of an object that stands over several (docs/MAPAS.md, phase 1: a car 1 × 3, a bed 1 × 2): what it is
    * is its anchor's, the tile that says the object's kind; facing: the step towards the anchor (decor.ts objectTiles).
    */
@@ -910,6 +915,12 @@ export interface MarketSite {
   w: number;
   h: number;
   front: number;
+  /**
+   * How much is left on its shelves (playtest 21/10, #19): 'full', the shelves still stocked, if a little picked
+   * over, and searching it always turns up food; 'picked', stripped bare, maybe something, maybe nothing (loot.ts
+   * rollRoom). Missing on maps made before: 'picked'.
+   */
+  stock?: 'full' | 'picked';
 }
 
 export interface HomeSite {

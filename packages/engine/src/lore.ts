@@ -826,17 +826,6 @@ export function operationAim(kind: MissionKind, o: { item?: string; vip?: string
   }
 }
 
-/**
- * A Nest turned up (playtest 20/10 #35): with no contact in its zone, what to
- * do first. «Para quemarlo, antes hay que contactar por radio con la Red
- * Callada: desde el Mapa, 50 §.» (`doom`: doomSubject; `cost`: contactCost).
- */
-export function nestNotice(id: RegionId, contacted: boolean, doom: string, cost: number): string {
-  return contacted
-    ? `Los zombis se han juntado en un Nido. Hará avanzar ${doom} hasta que lo queméis.`
-    : `Los zombis se han juntado en un Nido. Para quemarlo, antes hay que contactar por radio con ${REGION_LORE[id].ally}: desde el Mapa, ${cost} §.`;
-}
-
 /** The «Sin contacto» tag on a Nest: «Contacta por radio con los del Hospital desde el Mapa (50 §) para poder asaltarlo.» */
 export function nestNoContactTip(id: RegionId, cost: number): string {
   return `Contacta por radio con ${REGION_LORE[id].ally} desde el Mapa (${cost} §) para poder asaltarlo.`;
@@ -1689,9 +1678,9 @@ export const NAMED_SEX: Record<string, 'f' | 'm'> = {
 export const PREMISE = {
   title: 'El claro',
   lines: [
-    'La infestación parece haber **aflojado este invierno**. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de **volver a intentarlo**.',
+    'La infestación parece haber **aflojado este invierno**. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
     'Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en **un claro del pinar**, sobre Brena, con una caravana y lo puesto. Necesitamos **comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.',
-    'Toca volver a sacar **La Lata**, ese trasto forrado con chapas que nos sacó de Atalaya, y **salir a buscar** lo que nos hace falta.',
+    'Toca volver a sacar **La Lata**, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.',
   ],
 };
 

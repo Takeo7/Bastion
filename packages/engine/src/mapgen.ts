@@ -1034,7 +1034,10 @@ function entrance(c: Canvas, b: Rect, s: number, rng: Rng, width = 1, kind: Tile
 /**
  * Windows every `every` tiles along each outer wall, counted from the door of
  * that side (or its middle), never at a corner, beside an opening or where a
- * partition meets the wall.
+ * partition meets the wall. The floor just inside each stays clear of the
+ * furniture (playtest 21/10, #20: a shelf or a wardrobe that happens to stand
+ * there reads as a window blocked by chance); barricadeRooms blocks a room's
+ * windows on purpose.
  */
 function windows(c: Canvas, b: Rect, every: number, doors: (number | null)[]): void {
   for (let s = 0; s < 4; s++) {
@@ -1052,6 +1055,44 @@ function windows(c: Canvas, b: Rect, every: number, doors: (number | null)[]): v
       const q = add(p, DIRS4[s]!);
       if (!c.in(q.x, q.y) || c.get(q.x, q.y) === 'wall') continue;
       c.force(p.x, p.y, 'window');
+      c.reserve(p.x + back.x, p.y + back.y);
+    }
+  }
+}
+
+/** One room in BARRICADED has its windows barricaded from inside (barricadeRooms). */
+const BARRICADED = 4;
+
+/**
+ * Rooms of a house, a shop or an office whose windows were barricaded from
+ * inside by whoever held out there (playtest 21/10, #20, Ana: «si una ventana
+ * de una habitación está bloqueada, el resto también, aunque siempre se puede
+ * entrar por la puerta»): one in BARRICADED, by position (mix: no rng drawn),
+ * every window of the room at once, furniture piled against each
+ * ('windowBarricade', a `high` tile, facing the window). Not a room of fewer
+ * than 3 a side, nor one where a window's inside tile is beside a door, a
+ * ladder or the stairs: then none of its windows.
+ */
+function barricadeRooms(c: Canvas, b: Rect, rooms: Rect[]): void {
+  const outer = (q: Vec2) => q.x === b.x || q.y === b.y || q.x === b.x + b.w - 1 || q.y === b.y + b.h - 1;
+  for (const room of rooms) {
+    if (Math.min(room.w, room.h) < 3 || mix(room.x * 3 + 1, room.y * 5 + 2) % BARRICADED !== 0) continue;
+    const piles: { p: Vec2; facing: number }[] = [];
+    let ok = true;
+    for (const p of tilesIn(room)) {
+      DIRS4.forEach((d, facing) => {
+        const w = add(p, d);
+        const kind = c.get(w.x, w.y);
+        if ((kind !== 'window' && kind !== 'windowBroken') || !outer(w)) return;
+        const near = DIRS4.some((e) => ['door', 'doorOpen', 'ladder'].includes(c.get(p.x + e.x, p.y + e.y) ?? ''));
+        if (near || c.get(p.x, p.y) !== 'floor') ok = false;
+        else piles.push({ p, facing });
+      });
+    }
+    if (!ok || !piles.length) continue;
+    for (const { p, facing } of piles) {
+      c.force(p.x, p.y, 'high');
+      c.dress(p, 'windowBarricade', facing);
     }
   }
 }
@@ -1383,6 +1424,7 @@ function shopFront(c: Canvas, b: Rect, s: number): void {
     if (c.get(p.x, p.y) !== 'wall' || c.get(p.x + back.x, p.y + back.y) !== 'floor') continue;
     if (!c.in(q.x, q.y) || c.get(q.x, q.y) === 'wall') continue;
     c.force(p.x, p.y, 'window');
+    c.reserve(p.x + back.x, p.y + back.y);
   }
 }
 
@@ -1579,6 +1621,8 @@ function building(c: Canvas, b: Rect, rng: Rng, plan: Plan, front: number, style
       }
     }
   }
+  // Now and then a room held out in: its windows barricaded from inside (#20).
+  if (!medicalRooms && plan !== 'hall' && plan !== 'market' && (furnish === 'home' || furnish === 'shop' || furnish === 'office')) barricadeRooms(c, b, rooms);
   if (medicalRooms) {
     medicalRooms.forEach((room) => furnishMedical(c, room, rng, medicalKind === 'clinic' ? undefined : medicalKind));
   } else if (plan === 'hall') {
@@ -6292,7 +6336,9 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     if (!b.market || b.ruined || b.front === undefined) return [];
     const a = T(b.outer);
     const z = T({ x: b.outer.x + b.outer.w - 1, y: b.outer.y + b.outer.h - 1 });
-    return [{ x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, front: D(b.front) }];
+    // Three in five still stocked (#19), by position.
+    const stock = mix(b.outer.x * 7 + 3, b.outer.y * 11 + 5) % 5 < 3 ? 'full' : 'picked';
+    return [{ x: Math.min(a.x, z.x), y: Math.min(a.y, z.y), w: Math.abs(a.x - z.x) + 1, h: Math.abs(a.y - z.y) + 1, front: D(b.front), stock }];
   });
   // What stands on the floor takes its tile (Arturo, 19/10: «que ocupen»; furnishing.ts): the houses' furniture, the shops'
   // by their trade, a library's tables, a barn's tools (a sawmill's too, as the client sees it), the kerbs' hydrants and

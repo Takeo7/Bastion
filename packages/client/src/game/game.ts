@@ -148,6 +148,8 @@ import {
   kindAt,
   toPos,
   canStandOn,
+  canSee,
+  combatants,
   SCAVENGE,
   SEARCH_SPOTS,
   searchableTiles,
@@ -161,6 +163,7 @@ import {
   sightTo,
   STORY,
   teamVisibility,
+  teamView,
   TEMPLATES,
   unitAt,
   vipObjective,
@@ -742,6 +745,8 @@ export class Game {
   private killCam: string | null = null;
   /** The units' flags hidden for that shot. */
   private flagsHidden = false;
+  /** The one walking whom the camera goes along with (#4), while the camera is still the cinematic's (`epoch`). */
+  private walker: { id: string; epoch: number } | null = null;
   /** Who made the last attack or blast played: whether a hurt enemy was hurt by another (18/10 #47). */
   private lastAttacker: string | null = null;
   /** Last ability activated, so its follow-up events can be staged (e.g. Restoration's heals). */
@@ -918,6 +923,11 @@ export class Game {
     // The battle's speed (tween.ts timeRate): the bodies follow it in unitViews; the effects here, and the camera while
     // events play, so it arrives in step with them (the player's own panning keeps its speed).
     const rate = timeRate();
+    // Along with the one walking, each frame (#4); the player taking the camera lets it go.
+    if (this.walker) {
+      if (this.rig.epoch !== this.walker.epoch) this.walker = null;
+      else this.rig.focus(this.units.worldPos(this.walker.id));
+    }
     this.rig.update(this.playing ? dt * rate : dt);
     this.renderer.shoulderShot = this.rig.closeUp;
     // The units' flags out of the shot over the shoulder (#11, Arte: the names and bars cluttered it), and the noise
@@ -1004,7 +1014,7 @@ export class Game {
     const cm = this.state.campaignMission;
     const chapter = cm?.story;
     if (chapter === 1) return '';
-    return cm?.kicker ?? (chapter ? `DIARIO · HOJA ${chapter}` : cm ? 'OPERACIÓN EN CURSO' : 'ESCARAMUZA');
+    return cm?.kicker ?? (chapter ? `DIARIO · HOJA ${chapter}` : cm ? 'MISIÓN EN CURSO' : 'ESCARAMUZA');
   }
 
   /**
@@ -1037,25 +1047,15 @@ export class Game {
   }
 
   /**
-   * The scene's materials compiled behind the veil, and again with one and two lights more while there is time:
-   * a shot's flash or a bang adds a light for a moment (fx.ts), and a count of lights not seen yet compiled
-   * every lit material on the spot, a stall at the first shot of each mission.
+   * The scene's materials compiled and drawn once behind the veil (Renderer.warm: the number of lights never
+   * changes in a battle, the effects' are always there; and a program is only finished on Windows at its first
+   * draw, playtest 21/10 #5), and the effects' kinds of thing too (Arte's fx.samples), made at their first use
+   * otherwise (playtest 20/10 #8), and the overlays' lines, first drawn with the move range (21/10 #5).
    */
-  private async compileShaders(until: number): Promise<void> {
-    const { gl, scene, camera } = this.renderer;
-    // The effects' kinds of thing too (Arte's fx.samples), made at their first use otherwise (playtest 20/10 #8).
+  private async compileShaders(_until: number): Promise<void> {
     await this.renderer.warm(this.fx.samples());
-    await gl.compileAsync(scene, camera);
-    const extra: THREE.PointLight[] = [];
-    try {
-      for (let i = 0; i < 2 && !this.gone && Date.now() < until; i++) {
-        extra.push(new THREE.PointLight(0xffffff, 0));
-        scene.add(extra[i]!);
-        await gl.compileAsync(scene, camera);
-      }
-    } finally {
-      scene.remove(...extra);
-    }
+    if (!this.gone) await this.renderer.warm(this.overlays.samples());
+    if (!this.gone) await this.renderer.warm(this.renderer.scene);
   }
 
   /** The arrival briefing, XCOM-style: operation, area and objective. */
@@ -1406,12 +1406,15 @@ export class Game {
     if (this.following) this.followPlan();
   }
 
-  /** What an animated event leaves behind: the view, the fog, the HUD, the sightings, and the pause after one's own action. */
-  private async settle(item: QueuedEvent, epoch: number): Promise<void> {
+  /**
+   * What an animated event leaves behind: the view, the fog, the HUD, the sightings, and the pause after one's own
+   * action. `applied`: the view has it already (a group's walks, applied together).
+   */
+  private async settle(item: QueuedEvent, epoch: number, applied = false): Promise<void> {
     const seen = this.visibleAliens;
     const call = this.view.evacCall;
     const floorBefore = new Set((this.view.dropped ?? []).map((d) => d.id));
-    applyEvent(this.view, item.e);
+    if (!applied) applyEvent(this.view, item.e);
     const e = item.e;
     // The next thing of a rucksack being taken (takeAll), while it fits and is still there.
     if (e.t === 'lootTaken' && this.packQueue?.unit === e.unit) {
@@ -1499,7 +1502,7 @@ export class Game {
       }
       const id = unitOf(e);
       const u = id ? getUnit(this.view, id) : undefined;
-      if (u && (u.team === 'xcom' || this.shownToSquad(u) || (e.t === 'moved' && e.path.some((p) => this.mapView.isVisible(p.x, p.y))))) return true;
+      if (u && (u.team === 'xcom' || this.shownToSquad(u) || (e.t === 'moved' && e.path.some((p) => this.mapView.inSight(p))))) return true;
     }
     return false;
   }
@@ -1515,7 +1518,7 @@ export class Game {
     const id = unitOf(e);
     const u = id ? getUnit(v, id) : undefined;
     if (!u || u.team !== 'alien' || !u.alive) return null;
-    const seen = this.shownToSquad(u) || (e.t === 'moved' && e.path.some((p) => this.mapView.isVisible(p.x, p.y)));
+    const seen = this.shownToSquad(u) || (e.t === 'moved' && e.path.some((p) => this.mapView.inSight(p)));
     return seen ? u : null;
   }
 
@@ -1685,7 +1688,11 @@ export class Game {
     this.grouped = false;
     this.groupPlans = null;
     this.current = null;
-    for (const q of items) await this.settle(q, epoch);
+    // All of them where they stopped before the view syncs: settled one by one, those still to come stood where they
+    // set off, out of sight, and went while the first one's «A la vista» held (playtest 21/10 #21: they walked in,
+    // vanished, and came back all at once).
+    for (const q of items) applyEvent(v, q.e);
+    for (const q of items) await this.settle(q, epoch, true);
   }
 
   /**
@@ -1702,7 +1709,7 @@ export class Game {
     for (const q of walks) {
       const e = q.e as Extract<GameEvent, { t: 'moved' }>;
       const u = getUnit(v, e.unit);
-      if (!u || !e.path.length || !(this.shownToSquad(u) || e.path.some((p) => this.mapView.isVisible(p.x, p.y)))) continue;
+      if (!u || !e.path.length || !(this.shownToSquad(u) || e.path.some((p) => this.mapView.inSight(p)))) continue;
       const tiles = [toPos(u.pos), ...e.path.map(toPos)];
       ids.push(u.id);
       paced.push((pace) => this.units.stepSeconds(u.id, u.pos, e.path, e.ap, pace));
@@ -1816,27 +1823,32 @@ export class Game {
         const u = getUnit(v, e.unit)!;
         // Out of the fog (playtest 20/10 #10: they popped up where they stood): shown from the step it takes into a
         // tile the squad sees, walking in from where it was; one seen already, from the start.
-        const into = this.shownToSquad(u) ? 0 : e.path.findIndex((p) => this.mapView.isVisible(p.x, p.y));
+        const into = this.shownToSquad(u) ? 0 : e.path.findIndex((p) => this.mapView.inSight(p));
         if (into < 0) return;
         if (into === 0) this.units.forceVisible(u.id);
-        // In a group of the dead (playGroup), the framing is the group's: no walker takes the camera.
+        // In a group of the dead (playGroup), the framing is the group's: no walker takes the camera. Otherwise the
+        // camera goes along with the walker frame by frame, not tile by tile (Arturo, 21/10 #4: it went in jumps).
         if (!this.grouped) look(this.units.worldPos(u.id));
+        if (!this.grouped && cam()) this.walker = { id: u.id, epoch };
         let steps = 0;
-        // The move's cost picks the gait (Arte's gaits.ts): a dash runs, a blue move walks.
-        await this.units.moveAlong(
-          u.id,
-          e.path,
-          (p) => {
-            if (!this.grouped) look(p);
-            // At the tile before the first one seen: in sight as it steps into it.
-            if (steps + 1 === into) this.units.forceVisible(u.id);
-            if (steps++ % 2 === 0) this.sfx.step(u, p);
-          },
-          e.ap,
-          this.grouped ? WALKERS_PACE * (this.groupPlans?.get(u.id)?.haste ?? 1) : 1,
-          this.groupPlans?.get(u.id)?.waits,
-          this.groupPlans?.get(u.id)?.passes.slice(1),
-        );
+        try {
+          // The move's cost picks the gait (Arte's gaits.ts): a dash runs, a blue move walks.
+          await this.units.moveAlong(
+            u.id,
+            e.path,
+            (p) => {
+              // At the tile before the first one seen: in sight as it steps into it.
+              if (steps + 1 === into) this.units.forceVisible(u.id);
+              if (steps++ % 2 === 0) this.sfx.step(u, p);
+            },
+            e.ap,
+            this.grouped ? WALKERS_PACE * (this.groupPlans?.get(u.id)?.haste ?? 1) : 1,
+            this.groupPlans?.get(u.id)?.waits,
+            this.groupPlans?.get(u.id)?.passes.slice(1),
+          );
+        } finally {
+          if (this.walker?.id === u.id) this.walker = null;
+        }
         return;
       }
       case 'shot':
@@ -2582,7 +2594,7 @@ export class Game {
         const partner = e.team === 'xcom' && !!this.partnerHere() && e.command !== undefined && e.command !== this.mySlot;
         this.hud.banner(e.team === 'alien' ? 'TURNO ENEMIGO' : partner ? `TURNO DE ${this.playerName(e.command).toUpperCase()}` : 'TU TURNO', e.team === 'xcom' ? 'xcom' : 'alien');
         // The squad's turn: the camera to the soldier who plays first (#47).
-        if (e.team === 'xcom') this.turnCamera(this.turnSoldier(v, e.command ?? this.mySlot));
+        if (e.team === 'xcom') this.turnCamera(this.turnSoldier(v, e.command ?? this.mySlot, true));
         // Time running out (playtest 18/10 #8, #9, Lore's words): with 5 turns left, and on the last, after which
         // La Lata leaves by itself. Not in a siege, nor once the objective is done (the clock is gone then).
         const left = v.mission.turnsLeft !== null && e.turn > 1 ? v.mission.turnsLeft - 1 : v.mission.turnsLeft;
@@ -2955,7 +2967,7 @@ export class Game {
 
   /** Re-derives fog, alien visibility, flags and mission markers from the shown state. */
   private refreshView(): void {
-    this.mapView.setVisibility(teamVisibility(this.view, 'xcom'));
+    this.mapView.setVisibility(teamVisibility(this.view, 'xcom'), teamView(this.view, 'xcom'));
     // In a siege the base has no fog (playtest 18/10 #18): by day every enemy is in sight. By night the ground
     // still is, but the dead in the dark are not, as on any night (Arturo, 18/10: the floodlights are for that).
     const allSeen = this.view.mission.siege && !this.view.mission.night;
@@ -2975,6 +2987,7 @@ export class Game {
       }
       return null;
     });
+    this.units.setWatching(this.watching());
     const m = this.view.mission;
     this.overlays.showEvacZone(m.evacZone);
     this.overlays.setItem(m.item?.pos ?? null);
@@ -2998,6 +3011,18 @@ export class Game {
     this.drawPlans();
     this.drawDetection();
     this.edge.set(this.marks());
+  }
+
+  /**
+   * The enemies in sight that see one of the squad themselves, for an eye on their flag (playtest 21/10 #11). The
+   * dead go for the nearest of the living they see; seeing nobody, for the last noise they heard; having heard
+   * nothing, they wander (ai.ts takeZombieTurn). While the squad is hidden nobody has seen it (the rings say how close).
+   */
+  private watching(): Set<string> {
+    const v = this.view;
+    if (v.concealed || v.outcome) return new Set();
+    const squad = combatants(v, 'xcom');
+    return new Set(v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && squad.some((u) => canSee(v, a, u))).map((a) => a.id));
   }
 
   /**
@@ -3116,6 +3141,22 @@ export class Game {
     if (!left || !this.mapView.isVisible(tile.x, tile.y)) return '';
     const b = breakableOf(this.view, tile);
     return breakableTip(b.kind, left, b.full);
+  }
+
+  /**
+   * Over one of the dead under the pointer: whom it sees and where it goes next (playtest 21/10 #11; ai.ts
+   * takeZombieTurn). The nearest of the living it sees itself; seeing nobody, the last noise it heard (in a siege,
+   * the nearest soldier); having heard nothing, it wanders. The Chillón screams and keeps away: only whom it sees.
+   */
+  private intentNote(a: Unit | undefined): string {
+    const v = this.view;
+    if (!a?.alive || a.team !== 'alien' || !TEMPLATES[a.template].undead || !this.visibleAliens.has(a.id) || v.concealed || v.outcome) return '';
+    const seen = combatants(v, 'xcom').filter((u) => canSee(v, a, u)).map((u) => (u.nickname ? `«${u.nickname}»` : u.name));
+    const who = seen.length > 1 ? `${seen.slice(0, -1).join(', ')} y ${seen[seen.length - 1]}` : seen[0];
+    if (abilitiesOf(a).includes('mindspin')) return who ? `Ve a ${who}` : '';
+    if (who) return `Ve a ${who}: va a por ${seen.length === 1 ? 'ese soldado' : 'el más cercano'}`;
+    if (v.mission.siege) return 'No os ve: va a por el soldado más cercano';
+    return a.heard ? 'No os ve: va al último ruido que oyó' : 'No os ve: deambula';
   }
 
   /** A siege's doors and barricades still standing (GameState.breakables) that the squad sees: where, which, and what they hold. */
@@ -3382,7 +3423,7 @@ export class Game {
   /** A step (`moved`, one tile), walked so it ends when its `rtDoing walk` of the same tick says; the hidden aren't drawn. */
   private rtStep(e: Extract<GameEvent, { t: 'moved' }>, events: GameEvent[], clock: number): void {
     const u = getUnit(this.view, e.unit);
-    if (!u || !(this.shownToSquad(u) || e.path.some((p) => this.mapView.isVisible(p.x, p.y)))) return;
+    if (!u || !(this.shownToSquad(u) || e.path.some((p) => this.mapView.inSight(p)))) return;
     const walk = events.find((x): x is Extract<GameEvent, { t: 'rtDoing' }> => x.t === 'rtDoing' && x.unit === e.unit && x.doing === 'walk');
     const seconds = walk ? Math.max(0.05, (walk.until - clock) / 1000) : RT_STEP / 1000;
     this.units.forceVisible(u.id);
@@ -3870,12 +3911,17 @@ export class Game {
   }
 
   /** Who plays first for `slot`: its soldier in play, else the one picked (one's own), else its first with actions. */
-  private turnSoldier(v: GameState, slot: Slot): Unit | undefined {
+  /**
+   * `slot`'s soldier in play, else the picked one, else its first with actions. `opening`: the turn's start, played
+   * before its event is applied, when everyone's actions are still the last turn's (often none left: Ana, 21/10 #22,
+   * the camera stayed with the enemy when the turn was Arturo's); then any of theirs, as they all get theirs back.
+   */
+  private turnSoldier(v: GameState, slot: Slot, opening = false): Unit | undefined {
     const inPlay = v.activeUnit ? getUnit(v, v.activeUnit) : undefined;
     if (inPlay?.alive && inPlay.owner === slot) return inPlay;
     const picked = slot === this.mySlot ? this.selectedUnit() : undefined;
-    if (picked?.alive && picked.ap > 0) return picked;
-    return v.units.find((u) => u.alive && u.team === 'xcom' && u.owner === slot && u.ap > 0);
+    if (picked?.alive && picked.team === 'xcom' && (opening || picked.ap > 0)) return picked;
+    return v.units.find((u) => u.alive && u.team === 'xcom' && u.owner === slot && !u.evacuated && (opening || u.ap > 0));
   }
 
   /**
@@ -4402,9 +4448,33 @@ export class Game {
     // Without the command the range is still shown, fainter: it is for planning (#35). Only the active floor's.
     // Real time: no range (nothing counts actions); the pointer shows the way (rtHover).
     const r = this.mode.kind === 'move' && !this.isBusy(this.selected) && !this.view.realtime ? this.reach() : null;
-    this.overlays.showMoveRange((r?.tiles ?? []).filter((t) => ((t.pos as Pos).z ?? 0) === this.level), !this.hasCommand());
+    // With only the last action left, the range in the second action's colour (Arturo, 21/10 #10, as XCOM's): drawn
+    // so, its tiles as they are (a dash's noise is still the move's own).
+    const last = this.lastAction();
+    this.overlays.showMoveRange(
+      (r?.tiles ?? []).filter((t) => ((t.pos as Pos).z ?? 0) === this.level).map((t) => (last ? { ...t, dash: true } : t)),
+      !this.hasCommand(),
+      this.softAt,
+    );
     this.updateHover();
     this.refreshHud();
+  }
+
+  /**
+   * A thing in the way, not a wall (a car or a crate: cover; the objective's console; someone standing): the move
+   * range's border leaves it alone (Ana, 21/10 #18).
+   */
+  private readonly softAt = (x: number, y: number, z: number): boolean => {
+    const p = { x, y, z };
+    const kind = kindAt(this.state, p);
+    if (kind === 'high' || kind === 'low' || kind === 'console') return true;
+    return !!unitAt(this.state, p)?.alive;
+  };
+
+  /** Whether the picked soldier has only its last action left (one gone of two): its move drawn as a dash's (#10). */
+  private lastAction(): boolean {
+    const u = this.selectedUnit();
+    return !!u && u.ap === 1 && apPerTurn(u) > 1;
   }
 
   /** The floor follows the selected soldier: when it is picked, and when it climbs or comes down. */
@@ -4950,11 +5020,11 @@ export class Game {
     this.overlays.setHover(tile);
     // At night, a lit tile says what the light does there, and how long it lasts (#50; a move or an aim says theirs below);
     // in a siege, a door or a barricade what it still holds (docs/FASE12.md §10).
+    const hovered = tile ? unitAt(this.view, tile) : undefined;
     if (tile) {
-      const notes = [this.view.mission.night && isLit(this.view, tile) ? litNote(this.lightTurns(tile)) : '', this.breakableNote(tile)].filter(Boolean);
+      const notes = [this.view.mission.night && isLit(this.view, tile) ? litNote(this.lightTurns(tile)) : '', this.breakableNote(tile), this.intentNote(hovered)].filter(Boolean);
       if (notes.length) this.overlays.setNote(tile, notes.join(' · '));
     }
-    const hovered = tile ? unitAt(this.view, tile) : undefined;
     this.updateCursor(hovered);
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
     this.units.setTags(this.enemyTags(u, tile));
@@ -5036,9 +5106,10 @@ export class Game {
     const dest = r?.tiles.find((t) => samePlace(t.pos, tile));
     if (!r || !dest) return;
     const path = buildPath(this.state, u, r.reach, tile);
-    this.overlays.showPath(u.pos, path, dest.dash);
+    const last = this.lastAction();
+    this.overlays.showPath(u.pos, path, dest.dash || last);
     this.overlays.showCover(tile, coverSides(this.state, tile));
-    this.overlays.setHover(tile, dest.detected ? 0xff4a4a : this.overlays.ringColor(dest.dash));
+    this.overlays.setHover(tile, dest.detected ? 0xff4a4a : this.overlays.ringColor(dest.dash || last));
     // Running, a door or a window is heard (docs/FASE2.md): said under the destination.
     // And at night, whether it ends in the light.
     const note = [moveNoise(this.state, path ?? [], dest.dash), this.litNote(tile)].filter(Boolean).join(' · ');

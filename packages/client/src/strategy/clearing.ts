@@ -34,8 +34,8 @@ export interface ClearingArt {
   watch?(camera: THREE.Camera): void;
   /** GPU work before a frame, and whether the shadow map is drawn again (StageSet.beforeRender). */
   beforeRender?(gl: THREE.WebGLRenderer): void;
-  /** The soldier looked at in Soldados, standing on the clearing (null: nobody). */
-  setShowcase?(template: TemplateId | null, color: string, appearance?: Appearance, gear?: Gear, seed?: string): void;
+  /** The soldier looked at in Soldados, standing on the clearing (null: nobody; `fallen`: their grave). */
+  setShowcase?(template: TemplateId | null, color: string, appearance?: Appearance, gear?: Gear, seed?: string, fallen?: boolean): void;
   /** Soldados' and the Armería's views of the clearing (the caravan is barracks and armoury: docs/FASE12.md §11). */
   soldierShot?(): Shot;
   armoryShot?(): Shot;

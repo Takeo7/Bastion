@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadAnimation } from './synty';
-import { ANIMATIONS, DEAD_MOTIONS, DEATHS, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type Motion } from './syntyManifest';
+import { ACTIONS, ANIMATIONS, DEAD_MOTIONS, DEATHS, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type Motion } from './syntyManifest';
 
 // Locomotion from «ANIMATION – Base Locomotion» on any Synty character. Each
 // unit plays the clips on its own proxy of the pack's skeleton (one mixer,
@@ -29,6 +29,8 @@ function bodyOnly(clip: THREE.AnimationClip): THREE.AnimationClip {
 const HIPS = SYNTY_BONES.indexOf('Hips');
 /** The bones a hit reaction moves: from the spine up (the legs and hips keep what they do). */
 const UPPER = new Set(['Spine_01', 'Spine_02', 'Spine_03', 'Neck', 'Head', 'Clavicle_L', 'Clavicle_R', 'Shoulder_L', 'Shoulder_R', 'Elbow_L', 'Elbow_R', 'Hand_L', 'Hand_R']);
+/** The upper body but the gun arm (a throw's clip: the right hand keeps the gun). */
+const FREE = new Set([...UPPER].filter((b) => !b.endsWith('_R')));
 /** Seconds a death takes to blend in from the pose the unit had. */
 const DEATH_BLEND = 0.2;
 
@@ -51,6 +53,13 @@ export interface AnimSet {
   settles: number[];
   /** HITS, in order, their upper body only. */
   hits: THREE.AnimationClip[];
+  /**
+   * ACTIONS, in order (the living's; none for the dead): whole; their upper body only (over the legs' clips); and that
+   * without the right arm (a throw: the gun arm keeps the gun).
+   */
+  actions: THREE.AnimationClip[];
+  actionsUpper: THREE.AnimationClip[];
+  actionsFree: THREE.AnimationClip[];
   /** Inverse model-space rotation of each bone in the T-pose. */
   restInv: THREE.Quaternion[];
   /** Each bone's parent among SYNTY_BONES (−1: the hips, under the fixed root). */
@@ -59,6 +68,14 @@ export interface AnimSet {
   rootM: THREE.Matrix4;
   /** The hips in the T-pose. */
   hips: THREE.Vector3;
+}
+
+/** One of the weapon's actions as AnimDriver.play takes it: which, how far in, its share of the body: whole, upper, or that but the gun arm ('free'). */
+export interface ActionPlay {
+  id: ActionId;
+  time: number;
+  share: number;
+  upper: boolean | 'free';
 }
 
 /** A build's clips, the living's or the dead's. */
@@ -75,6 +92,7 @@ function prepare(
   stances: THREE.AnimationClip[],
   deaths: THREE.AnimationClip[],
   hits: THREE.AnimationClip[],
+  actions: THREE.AnimationClip[],
 ): AnimSet {
   const proxy = tpose.clone();
   const mixer = new THREE.AnimationMixer(proxy);
@@ -98,6 +116,9 @@ function prepare(
     deaths: deaths.map(bodyOnly),
     settles: deaths.map(settleOf),
     hits: hits.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
+    actions: actions.map(bodyOnly),
+    actionsUpper: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
+    actionsFree: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => FREE.has(t.name.split('.')[0]!)))),
     restInv: bones.map((b) => (b ? b.getWorldQuaternion(new THREE.Quaternion()).invert() : new THREE.Quaternion())),
     parent,
     rootQ: root.getWorldQuaternion(new THREE.Quaternion()),
@@ -136,12 +157,14 @@ export function whenAnimSet(build: Build, dead = false): Promise<AnimSet> {
   if (!p) {
     const variations = IDLE_VARIATIONS[build];
     const motions = MOTION_ORDER.map((m) => (dead && DEAD_MOTIONS[m]) || MOTIONS[build][m]);
-    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id), ...HITS[build].map((h) => h.id)];
+    const actions = dead ? [] : ACTIONS;
+    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id), ...HITS[build].map((h) => h.id), ...actions];
     p = Promise.all([loadAnimation(ANIMATIONS.tpose.pack, 'tpose'), ...ids.map((id) => loadAnimation(ANIMATIONS[id].pack, id))]).then(([pose, ...loaded]) => {
       const clips = loaded.map((c) => c.clip);
       const at = [MOTION_ORDER.length, MOTION_ORDER.length + variations.length, MOTION_ORDER.length + variations.length + STANCE_ORDER.length];
       at.push(at[2]! + DEATHS[build].length);
-      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2], at[3]), clips.slice(at[3]));
+      at.push(at[3]! + HITS[build].length);
+      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2], at[3]), clips.slice(at[3], at[4]), clips.slice(at[4]));
       ready.set(kit, set);
       return set;
     });
@@ -153,6 +176,8 @@ export function whenAnimSet(build: Build, dead = false): Promise<AnimSet> {
 const v = new THREE.Vector3();
 /** Seconds a variation takes to blend in and out, and to wait between two. */
 const BLEND = 0.35;
+/** Seconds a variation takes to go once the unit is no longer calm (it aims, it is hit, it searches). */
+const CUT = 0.2;
 /** Seconds the idle takes to ease from one stance to another. */
 const STANCE_BLEND = 0.6;
 const nextWait = () => 5 + Math.random() * 9;
@@ -163,6 +188,11 @@ export class AnimDriver {
   private readonly actions: THREE.AnimationAction[];
   private readonly variations: THREE.AnimationAction[];
   private variation: THREE.AnimationAction | null = null;
+  /**
+   * How much of the variation playing is still let in: none, quickly, once the unit is no longer calm. It played to
+   * its end whatever came: a soldier shot with half her body turned to look behind her (playtest 21/10 #9).
+   */
+  private keep = 1;
   private readonly stances: THREE.AnimationAction[];
   /** How far each stance has taken the idle's place, easing to the one stood in. */
   private readonly held: Float32Array;
@@ -174,6 +204,11 @@ export class AnimDriver {
   private down = false;
   private readonly hits: THREE.AnimationAction[];
   private hit: THREE.AnimationAction | null = null;
+  /** The weapon's actions playing (ACTIONS), whole or over the upper body, each paused at the time it is set to. */
+  private readonly acts: THREE.AnimationAction[];
+  private readonly actsUpper: THREE.AnimationAction[];
+  private readonly actsFree: THREE.AnimationAction[];
+  private readonly acting = new Set<THREE.AnimationAction>();
   private wait = nextWait();
   private readonly bones: THREE.Object3D[];
   private readonly world = Array.from({ length: N }, () => new THREE.Quaternion());
@@ -215,6 +250,9 @@ export class AnimDriver {
       return a;
     });
     this.hits = set.hits.map((clip) => this.mixer.clipAction(clip));
+    this.acts = set.actions.map((clip) => this.mixer.clipAction(clip));
+    this.actsUpper = set.actionsUpper.map((clip) => this.mixer.clipAction(clip));
+    this.actsFree = set.actionsFree.map((clip) => this.mixer.clipAction(clip));
     this.bones = SYNTY_BONES.map((n) => proxy.getObjectByName(n) ?? new THREE.Object3D());
   }
 
@@ -237,6 +275,47 @@ export class AnimDriver {
     // The mixer averages what plays by weight: against the rest's 1, this weight gives the reaction its share.
     const s = Math.min(0.95, share);
     next.setEffectiveWeight(s / (1 - s));
+  }
+
+  /**
+   * The weapon's action `id` (ACTIONS) `time` seconds in (looped by the caller for one that loops), taking `share` (0
+   * to 1) of what the rest does: of the whole body, or (`upper`) from the spine up only; null lets go of it.
+   */
+  act(id: ActionId | null, time = 0, share = 0, upper: boolean | 'free' = true): void {
+    this.play(id === null ? [] : [{ id, time, share, upper }]);
+  }
+
+  /**
+   * The weapon's actions `plays` at once (an idle and an aim, blended), each `time` seconds in and taking its `share`
+   * of the body, whole or from the spine up (the shares of all add to at most 1); the rest let go.
+   */
+  play(plays: readonly ActionPlay[]): void {
+    let total = 0;
+    for (const a of plays) total += a.share;
+    total = Math.min(0.99, total);
+    // Against the rest's 1, the actions' weights give them `total` of the pose between them.
+    const scale = total > 0 ? total / (1 - total) / Math.max(1e-6, plays.reduce((n, a) => n + a.share, 0)) : 0;
+    const now = new Set<THREE.AnimationAction>();
+    for (const a of plays) {
+      const k = ACTIONS.indexOf(a.id);
+      const action = (a.upper === 'free' ? this.actsFree : a.upper ? this.actsUpper : this.acts)[k];
+      if (!action || a.share <= 0) continue;
+      if (!this.acting.has(action)) {
+        action.reset().play();
+        action.paused = true;
+      }
+      now.add(action);
+      action.time = Math.min(a.time, action.getClip().duration);
+      action.setEffectiveWeight(a.share * scale);
+    }
+    for (const action of this.acting) if (!now.has(action)) action.stop();
+    this.acting.clear();
+    for (const action of now) this.acting.add(action);
+  }
+
+  /** How long action `id` lasts. */
+  actSeconds(id: ActionId): number {
+    return this.set.actions[ACTIONS.indexOf(id)]?.duration ?? 0;
   }
 
   /** The looping clip `k` names: a moving one (MOTION_ORDER), or with −1 what is stood in (the stance, else the idle). */
@@ -323,11 +402,12 @@ export class AnimDriver {
     const current = this.variation;
     if (current) {
       const length = current.getClip().duration;
-      if (!current.isRunning() || current.time >= length - 1e-3) {
+      this.keep = THREE.MathUtils.clamp(this.keep + (calm ? dt : -dt) / CUT, 0, 1);
+      if (!current.isRunning() || current.time >= length - 1e-3 || this.keep === 0) {
         current.stop();
         this.variation = null;
         this.wait = nextWait();
-      } else v = Math.min(1, current.time / BLEND, (length - current.time) / BLEND) * idle * (1 - stood);
+      } else v = Math.min(1, current.time / BLEND, (length - current.time) / BLEND) * idle * (1 - stood) * this.keep;
       current.setEffectiveWeight(v);
     } else if (calm && idle > 0.95 && !stood && this.variations.length) {
       this.wait -= dt;
@@ -335,6 +415,7 @@ export class AnimDriver {
         const next = this.variations[Math.floor(Math.random() * this.variations.length)]!;
         next.reset().setEffectiveWeight(0).play();
         this.variation = next;
+        this.keep = 1;
       }
     } else this.wait = Math.max(this.wait, 2);
     for (let k = 0; k < this.actions.length; k++) {

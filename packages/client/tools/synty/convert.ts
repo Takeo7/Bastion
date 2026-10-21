@@ -160,7 +160,7 @@ const atlasImage = (atlas: AtlasId) => join(SOURCES, PACKS[ATLASES[atlas].pack].
 // ------------------------------------------------------------------- jobs
 
 interface Job {
-  kind: 'character' | 'sidekick' | 'wardrobe' | 'weapon' | 'prop' | 'texture' | 'anim' | 'piece';
+  kind: 'character' | 'sidekick' | 'wardrobe' | 'weapon' | 'prop' | 'texture' | 'anim' | 'mixamo' | 'piece';
   id: string;
   out: string;
   [key: string]: unknown;
@@ -356,6 +356,13 @@ for (const [id, w] of Object.entries(WEAPON_PARTS)) {
 }
 
 for (const [id, a] of Object.entries(ANIMATIONS)) {
+  // Mixamo's turned onto Synty's skeleton, from its own T-pose to Base Locomotion's (convert.py mixamo).
+  if (a.pack === 'mixamo') {
+    const dir = join(SOURCES, PACKS.mixamo.dir);
+    const mirror = 'mirror' in a && a.mirror ? { mirror: true } : {};
+    add({ kind: 'mixamo', id, out: join(PUBLIC, modelFile(a.pack, 'anim', id)), fbx: join(dir, `${a.fbx}.fbx`), tpose: join(dir, 'T-Pose.fbx'), target: findFbx(ANIMATIONS.tpose.pack, ANIMATIONS.tpose.fbx), ...mirror });
+    continue;
+  }
   add({ kind: 'anim', id, out: join(PUBLIC, modelFile(a.pack, 'anim', id)), fbx: findFbx(a.pack, a.fbx) });
 }
 

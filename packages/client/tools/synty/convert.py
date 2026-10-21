@@ -784,6 +784,148 @@ def anim(job):
     export(job['out'], skins=False, animations=True)
 
 
+# The Mixamo rig's bones (X Bot's, mixamorig:…) by the game's names (BONES' values): what a Mixamo clip moves.
+MIXAMO = {
+    'Hips': 'Hips', 'Spine': 'Spine_01', 'Spine1': 'Spine_02', 'Spine2': 'Spine_03', 'Neck': 'Neck', 'Head': 'Head',
+}
+for side, s in (('Left', 'L'), ('Right', 'R')):
+    MIXAMO.update({
+        f'{side}Shoulder': f'Clavicle_{s}', f'{side}Arm': f'Shoulder_{s}', f'{side}ForeArm': f'Elbow_{s}', f'{side}Hand': f'Hand_{s}',
+        f'{side}UpLeg': f'UpperLeg_{s}', f'{side}Leg': f'LowerLeg_{s}', f'{side}Foot': f'Ankle_{s}', f'{side}ToeBase': f'Ball_{s}',
+    })
+    for j in (1, 2, 3):
+        MIXAMO.update({f'{side}HandThumb{j}': f'Thumb_0{j}_{s}', f'{side}HandIndex{j}': f'Index_0{j}_{s}', f'{side}HandMiddle{j}': f'Finger_0{j}_{s}'})
+
+
+def mixamo(job):
+    """
+    A Mixamo clip (Arturo, 21/10: the weapons' animations Synty doesn't have) on Synty's skeleton, as the game's own
+    clips are (anim): each bone turned from Mixamo's T-pose (`tpose`) as much as the clip turns it, onto Synty's
+    T-pose (`target`, Base Locomotion's), in the world, both rigs facing the same way; the hips moved as far for
+    their height. Frame by frame, at the clip's own rate, then exported as anim() exports. `mirror`: the clip's left
+    for the right and the other way round, every turn reflected across the body's middle (a throw with the free hand).
+    """
+    reset()
+    scene = bpy.context.scene
+    target_objs = import_fbx(job['target'])
+    arm = next(o for o in target_objs if o.type == 'ARMATURE')
+    for o in target_objs:
+        if o is not arm:
+            bpy.data.objects.remove(o)
+    for b in arm.data.bones:
+        c = canonical(b.name)
+        if c and c != b.name:
+            b.name = c
+    pose_objs = import_fbx(job['tpose'])
+    rest = next(o for o in pose_objs if o.type == 'ARMATURE')
+    clip_objs = import_fbx(job['fbx'])
+    src = next(o for o in clip_objs if o.type == 'ARMATURE')
+    for o in pose_objs + clip_objs:
+        if o.type != 'ARMATURE':
+            bpy.data.objects.remove(o)
+    action = src.animation_data.action
+    first, last = (int(round(v)) for v in action.frame_range)
+    scene.render.fps = job.get('fps', 30)
+
+    def bone(o, name):
+        return o.pose.bones.get(f'mixamorig:{name}') or o.pose.bones.get(name)
+
+    def world(o, pb):
+        return o.matrix_world @ pb.matrix
+
+    # The T-poses: Mixamo's (its clip's first frame) and Synty's (its action's first frame).
+    scene.frame_set(int(rest.animation_data.action.frame_range[0]) if rest.animation_data and rest.animation_data.action else 0)
+    scene.frame_set(int(arm.animation_data.action.frame_range[0]) if arm.animation_data and arm.animation_data.action else 0)
+    bpy.context.view_layer.update()
+    mirror = job.get('mirror', False)
+    flip = lambda m: m.replace('Left', '\0').replace('Right', 'Left').replace('\0', 'Right') if mirror else m
+    # (Mixamo's bone each of Synty's takes its turn from: its own, or mirrored, the other side's.)
+    pairs = [(flip(m), s) for m, s in MIXAMO.items() if bone(rest, flip(m)) and bone(src, flip(m)) and arm.pose.bones.get(s)]
+    m0 = {m: world(rest, bone(rest, m)).to_quaternion() for m, _ in pairs}
+    s0 = {s: world(arm, arm.pose.bones[s]).to_quaternion() for _, s in pairs}
+    basis0 = {pb.name: pb.matrix_basis.copy() for pb in arm.pose.bones}
+    # Which way each faces (heel to toe, flat): the turn from Mixamo's to Synty's.
+    def facing(o, foot, toe):
+        a = world(o, foot).translation
+        b = world(o, toe).translation
+        v = Vector((b.x - a.x, b.y - a.y, 0))
+        return v.normalized()
+    fm = facing(rest, bone(rest, 'LeftFoot'), bone(rest, 'LeftToeBase'))
+    fs = facing(arm, arm.pose.bones['Ankle_L'], arm.pose.bones['Ball_L'])
+    turn = fm.rotation_difference(fs)
+    # Across the body (Synty's left to right, flat): the plane a mirrored clip is reflected in.
+    side = fs.cross(Vector((0, 0, 1))).normalized()
+    def reflect_q(q):
+        v = Vector((q.x, q.y, q.z))
+        v = -(v - 2 * v.dot(side) * side)
+        return q.__class__((q.w, v.x, v.y, v.z))
+    def reflect_v(v):
+        return v - 2 * v.dot(side) * side
+    hips_m0 = world(rest, bone(rest, 'Hips')).translation.copy()
+    hips_s0 = world(arm, arm.pose.bones['Hips']).translation.copy()
+    floor_m = min(world(rest, bone(rest, n)).translation.z for n in ('LeftToeBase', 'RightToeBase', 'LeftFoot', 'RightFoot'))
+    floor_s = min(world(arm, arm.pose.bones[n]).translation.z for n in ('Ball_L', 'Ball_R', 'Ankle_L', 'Ankle_R'))
+    k = (hips_s0.z - floor_s) / max(1e-6, hips_m0.z - floor_m)
+    inv_arm = arm.matrix_world.inverted()
+    rot_arm = arm.matrix_world.to_quaternion().inverted()
+    # The retargeted clip on Synty's rig, its own action.
+    if not arm.animation_data:
+        arm.animation_data_create()
+    out = bpy.data.actions.new(job['id'])
+    arm.animation_data.action = out
+    order = []
+    def walk(b):
+        order.append(b.name)
+        for c in b.children:
+            walk(c)
+    for b in arm.data.bones:
+        if not b.parent:
+            walk(b)
+    goal = dict(pairs)
+    goal = {s: m for m, s in pairs}
+    for f in range(first, last + 1):
+        scene.frame_set(f)
+        bpy.context.view_layer.update()
+        hips = world(src, bone(src, 'Hips')).translation
+        moved = turn @ ((hips - hips_m0) * k)
+        hips_s = hips_s0 + (reflect_v(moved) if mirror else moved)
+        posed = {}
+        for name in order:
+            pb = arm.pose.bones[name]
+            b = pb.bone
+            if b.parent:
+                parent = posed[b.parent.name]
+                chain = parent @ b.parent.matrix_local.inverted() @ b.matrix_local
+            else:
+                chain = b.matrix_local.copy()
+            m = goal.get(name)
+            if m:
+                delta = turn @ world(src, bone(src, m)).to_quaternion() @ m0[m].inverted() @ turn.inverted()
+                q = (reflect_q(delta) if mirror else delta) @ s0[name]
+                head = (inv_arm @ hips_s) if name == 'Hips' else (chain @ basis0[name]).translation
+                a = Matrix.Translation(head) @ (rot_arm @ q).to_matrix().to_4x4()
+                basis = chain.inverted() @ a
+            else:
+                basis = basis0[name].copy()
+                a = chain @ basis
+            posed[name] = a
+            pb.matrix_basis = basis
+            pb.keyframe_insert('rotation_quaternion', frame=f - first)
+            pb.keyframe_insert('location', frame=f - first)
+    for o in (rest, src):
+        bpy.data.objects.remove(o)
+    keep = set(BONES.values()) | {'Root'}
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode='EDIT')
+    for b in list(arm.data.edit_bones):
+        if b.name not in keep:
+            arm.data.edit_bones.remove(b)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    arm.name = 'rig'
+    print(f"[mixamo] {job['id']}: {last - first + 1} frames, {len(pairs)} bones, hips ×{k:.3f}", flush=True)
+    export(job['out'], skins=False, animations=True)
+
+
 # ------------------------------------------------------------------ textures
 
 def texture(job):
@@ -879,6 +1021,8 @@ def main():
             texture(job)
         elif job['kind'] == 'anim':
             anim(job)
+        elif job['kind'] == 'mixamo':
+            mixamo(job)
         elif job['kind'] == 'piece':
             piece(job, scale)
 

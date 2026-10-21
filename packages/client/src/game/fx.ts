@@ -147,6 +147,20 @@ const screamRingGeometry = new THREE.TorusGeometry(1, 0.04, 4, 40);
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+/**
+ * How many lights the effects have, always in the scene, dark while unused (playtest 21/10 #5): a light added for a
+ * shot's flash changed how many lights every lit material counts, so each drew with another program the first time
+ * something was lit; on Windows (ANGLE over D3D11) every one of them was finished there and then, at the first shot,
+ * for seconds. A flash and an impact at once, or a flare and a flash; one more takes the dimmest.
+ */
+const LAMPS = 2;
+
+/** One of the effects' lights while an effect has it: `set` its brightness, `done` it gives it back (both do nothing once another took it). */
+interface Lamp {
+  set(intensity: number): void;
+  done(): void;
+}
+
 /** Transient visual effects. Particles advance in `tick`, driven by the render loop. */
 export class Fx {
   readonly group = new THREE.Group();
@@ -156,9 +170,34 @@ export class Fx {
   private kinds: THREE.Group | null = null;
   /** How big and bright the glow of a shot's impact is (1 in battle; the trailer's close shots, lab/trailer/sala.ts, take less: bloomed up close it swallowed the body). */
   impactGlow = 1;
+  /** The effects' lights (LAMPS), and which use of each is the current one. */
+  private readonly lamps = Array.from({ length: LAMPS }, () => new THREE.PointLight(0xffffff, 0, 6, 2));
+  private readonly lampUse = new Array<number>(LAMPS).fill(0);
 
   constructor() {
     loadShapes();
+    this.group.add(...this.lamps);
+  }
+
+  /** A light at `at` for an effect: a dark one, or the dimmest if all are lit. */
+  private lamp(at: THREE.Vector3, color: number, intensity: number, distance: number): Lamp {
+    let k = this.lamps.findIndex((l) => l.intensity === 0);
+    if (k < 0) k = this.lamps.reduce((best, l, i) => (l.intensity < this.lamps[best]!.intensity ? i : best), 0);
+    const light = this.lamps[k]!;
+    const use = ++this.lampUse[k]!;
+    light.color.set(color);
+    light.distance = distance;
+    light.position.copy(at);
+    light.intensity = intensity;
+    const mine = () => this.lampUse[k] === use;
+    return {
+      set: (i) => {
+        if (mine()) light.intensity = Math.max(0, i);
+      },
+      done: () => {
+        if (mine()) light.intensity = 0;
+      },
+    };
   }
 
   tick(dt: number): void {
@@ -224,11 +263,16 @@ export class Fx {
     return (this.kinds = kinds);
   }
 
-  /** Takes every effect away at once, lights and things in flight included. */
+  /** Takes every effect away at once, lights and things in flight included (the lights themselves stay, dark). */
   clear(): void {
     for (const p of this.particles) p.material?.dispose();
     this.particles = [];
     this.group.clear();
+    for (let k = 0; k < LAMPS; k++) {
+      this.lampUse[k]!++;
+      this.lamps[k]!.intensity = 0;
+    }
+    this.group.add(...this.lamps);
   }
 
   private spawn(
@@ -345,10 +389,8 @@ export class Fx {
     core.position.copy(at);
     this.spawn(core, core.material, { life: life * 0.7 });
     if (!light) return;
-    const lamp = new THREE.PointLight(color, light, 6, 2);
-    lamp.position.copy(at);
-    this.group.add(lamp);
-    void tween(Math.max(0.08, life), (t) => (lamp.intensity = light * (1 - t))).then(() => this.group.remove(lamp));
+    const lamp = this.lamp(at, color, light, 6);
+    void tween(Math.max(0.08, life), (t) => lamp.set(light * (1 - t))).then(lamp.done);
   }
 
   /** A burning flare lying at `at`: a flickering glow and its light, for `life` seconds. */
@@ -356,10 +398,8 @@ export class Fx {
     const glow = this.glowSprite(color, 0.7, 0.9);
     glow.position.copy(at).setY(at.y + 0.12);
     this.spawn(glow, glow.material, { life, opacity: 0.9 });
-    const lamp = new THREE.PointLight(color, 6, 5, 2);
-    lamp.position.copy(at).setY(at.y + 0.35);
-    this.group.add(lamp);
-    void tween(life, (t) => (lamp.intensity = 6 * (1 - t * t) * (0.8 + Math.random() * 0.4))).then(() => this.group.remove(lamp));
+    const lamp = this.lamp(at.clone().setY(at.y + 0.35), color, 6, 5);
+    void tween(life, (t) => lamp.set(6 * (1 - t * t) * (0.8 + Math.random() * 0.4))).then(lamp.done);
   }
 
   /** An electric jolt at `at`: two crossed bolts, a cold flash and sparks (the defibrillator). */
@@ -615,9 +655,8 @@ export class Fx {
     const fire = new THREE.Mesh(blastGeometry, fireMat);
     fire.position.copy(at).setY(at.y + 0.45);
     fire.rotation.set(rand(0, 6), rand(0, 6), 0);
-    const light = new THREE.PointLight(0xff8a30, 45, radius * 6, 2);
-    light.position.copy(at).setY(at.y + 1.35);
-    this.group.add(fire, light);
+    const light = this.lamp(at.clone().setY(at.y + 1.35), 0xff8a30, 45, radius * 6);
+    this.group.add(fire);
     const shock = this.decal(at, 'shockRing', 0xffd9a0, radius * 0.6, 0.6, 0.8, 4.5);
     (shock.material as THREE.MeshBasicMaterial).blending = THREE.AdditiveBlending;
     this.flash(at.clone().setY(at.y + 0.6), 0xffe0a0, radius * 1.2, 0, 0.18);
@@ -632,9 +671,10 @@ export class Fx {
       fire.scale.setScalar(0.3 + radius * Math.sqrt(t));
       fireMat.opacity = 0.95 * (1 - t);
       fireMat.color.setHSL(0.08 - t * 0.06, 1, 0.6 - t * 0.3);
-      light.intensity = 45 * (1 - t);
+      light.set(45 * (1 - t));
     }).then(() => {
-      this.group.remove(fire, light);
+      this.group.remove(fire);
+      light.done();
       fireMat.dispose();
     });
   }
@@ -742,13 +782,11 @@ export class Fx {
       lamp.position.copy(at).addScaledVector(side, s).setY(at.y + 0.55);
       this.spawn(lamp, lamp.material, { life: 1.8, opacity: 0.95 });
     }
-    const light = new THREE.SpotLight(0xfff0c0, 0, 14, 0.45, 0.6, 1.5);
-    light.position.copy(at).setY(at.y + 0.6);
-    light.target.position.copy(at).addScaledVector(dir, 6);
-    this.group.add(light, light.target);
+    // One of the effects' lights, a few metres ahead and low (a spot of its own would change every material's lights).
+    const light = this.lamp(at.clone().addScaledVector(dir, 3.5).setY(at.y + 0.7), 0xfff0c0, 0, 10);
     // By night less: in the dark it lit the edge white (Arturo 17/10: «la luz deslumbra mucho de noche»).
-    const peak = NIGHT.value > 0.5 ? 16 : 30;
-    void tween(1.8, (t) => (light.intensity = peak * Math.sin(Math.min(1, t * 1.4) * Math.PI))).then(() => this.group.remove(light, light.target));
+    const peak = NIGHT.value > 0.5 ? 9 : 18;
+    void tween(1.8, (t) => light.set(peak * Math.sin(Math.min(1, t * 1.4) * Math.PI))).then(light.done);
     this.dust(at, 8);
   }
 

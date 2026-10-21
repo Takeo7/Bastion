@@ -89,7 +89,7 @@ export class Sfx {
 
   /** The kind of flesh a target is, for its impacts. */
   body(u: Unit): 'flesh' | 'robot' {
-    return TEMPLATES[u.template].robotic ? 'robot' : 'flesh';
+    return machine(u) ? 'robot' : 'flesh';
   }
 
   melee(kind: 'swing' | 'sword' | 'stun' | 'claw', at?: THREE.Vector3): void {
@@ -246,8 +246,9 @@ export class Sfx {
     // The siren falls silent the moment it is destroyed, as its lights go out (Arte's models).
     if (u.objective && this.wail) this.silence(SIREN_STOP[this.wail.name] ?? 0);
     const t = u.template;
-    const name = TEMPLATES[t].robotic ? 'death.robot' : t === 'sectoid' ? 'death.sectoid' : t === 'xenoid' ? 'death.runner' : t === 'zombie' ? 'death.zombie' : u.team === 'alien' ? 'death.advent' : 'death.human';
-    this.at(name, at);
+    const name = machine(u) ? 'death.robot' : t === 'sectoid' ? 'death.sectoid' : t === 'xenoid' ? 'death.runner' : t === 'zombie' || t === 'mec' ? 'death.zombie' : u.team === 'alien' ? 'death.advent' : 'death.human';
+    // The Acorazado falls as the dead do, heavier.
+    this.at(name, at, 1, t === 'mec' ? { rate: 0.85 } : {});
   }
 
   // ------------------------------------------------------------ moments
@@ -360,6 +361,15 @@ export class Sfx {
     const level = THREE.MathUtils.clamp(1.1 - dist / 40, 0.18, 1) * (offScreen ? 0.8 : 1);
     return { level, pan, muffle: THREE.MathUtils.clamp(dist / 50, 0, 1) };
   }
+}
+
+/**
+ * A machine, which clanks when hit and dies as one (the alarm box). The Acorazado is flagged robotic for its armour
+ * but is one of the dead in riot or army kit (Arte's figures): flesh, its own death and steps (playtest 21/10 #23).
+ */
+function machine(u: Unit): boolean {
+  const t = TEMPLATES[u.template];
+  return t.robotic && !t.undead;
 }
 
 /** The sound of a unit's gun: soldiers by gun and tier, aliens by their weapon. */

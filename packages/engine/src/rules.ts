@@ -83,7 +83,7 @@ import {
   toPos,
   unitAt,
 } from './grid';
-import { packSlots, rollBox, rollRoom, roomAt, searchSpot } from './loot';
+import { marketStock, packSlots, rollBox, rollRoom, roomAt, searchSpot } from './loot';
 import { canSee, detectionTo, facingTo, inViewCone, sightOrigin, sightTo } from './los';
 import { apForCost, buildPath, computeReach, costPerAp, maxMoveCost, onPatrol, type Reach } from './path';
 import type { Command } from './protocol';
@@ -684,7 +684,7 @@ export class Sim {
   private searchRoom(u: Unit): void {
     const room = roomAt(this.s, u.pos);
     if (!room) return;
-    const loot = rollRoom(room, this.s.mission.difficulty ?? 2, this.rng, !!this.s.mission.night, u.mags !== undefined);
+    const loot = rollRoom(room, this.s.mission.difficulty ?? 2, this.rng, !!this.s.mission.night, u.mags !== undefined, marketStock(this.s, room));
     this.emit({ t: 'roomSearched', unit: u.id, room: room.id, loot });
   }
 

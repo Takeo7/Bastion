@@ -740,6 +740,13 @@
   color: #dfe2dc;
 }
 
+/* Lore's key words (marked «**así**»: the campaign's opening card), to be read at a glance (Ana, 21/10 #14: the
+   bold hardly showed): in the accent, heavier. */
+:root[data-ui='mixta'] .x-text strong {
+  font-weight: 800;
+  color: var(--t-accent);
+}
+
 :root[data-ui='mixta'] .alert-actions {
   gap: 8px;
   margin-top: 14px;
@@ -1170,15 +1177,17 @@
 :root[data-ui='mixta'] .lineup-card .promo {
   display: inline-block;
   margin-top: 4px;
-  padding: 1px 8px;
+  padding: 1px 6px;
+  /* «▲ DISPARO +9 %» whole on its line, the percent with its figure (21/10). */
+  white-space: nowrap;
   border-radius: 2px;
   background: var(--t-ready);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 10px rgba(143, 208, 90, 0.45);
   color: var(--t-ready-ink);
   font-family: var(--t-font-title);
   font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.1em;
+  font-size: 12px;
+  letter-spacing: 0.04em;
 }
 
 /* Launching: the big yellow plate, its words alone (playtest 19/10 #9: no coach on it). */
@@ -1214,10 +1223,31 @@
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
+:root[data-ui='mixta'] .debrief-name {
+  font-family: var(--t-font-title);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+:root[data-ui='mixta'] .debrief-lines {
+  font-size: 14px;
+}
+
 :root[data-ui='mixta'] .briefing-head.defeat h1 {
   background: linear-gradient(180deg, #ff7a62, #d23a25 55%, #9e2414);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -3px 0 rgba(60, 0, 0, 0.4), 0 0 18px rgba(240, 80, 60, 0.4);
   color: #fff;
+}
+
+/* The debrief's plate on its head line (Ana, 21/10 #24): the mission's name's size, not a banner's. */
+:root[data-ui='mixta'] .debrief-card.briefing-head:is(.victory, .defeat) h1.debrief-result {
+  margin: 0;
+  padding: 4px 14px 3px;
+  font-size: 22px;
 }
 
 /* ============================================================ Ajustes rows */

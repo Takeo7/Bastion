@@ -2582,6 +2582,17 @@ dl.controls dd {
   background: var(--stamp);
 }
 
+/* An enemy that sees one of the squad (playtest 21/10 #11): an eye at the front of its flag. */
+.uflag.watching .uflag-row::before {
+  content: '';
+  flex: none;
+  width: 16px;
+  height: 10px;
+  background: var(--stamp);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath fill-rule='evenodd' d='M8 0C4.4 0 1.4 2.1 0 5c1.4 2.9 4.4 5 8 5s6.6-2.1 8-5C14.6 2.1 11.6 0 8 0zm0 1.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zm0 1.6a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath fill-rule='evenodd' d='M8 0C4.4 0 1.4 2.1 0 5c1.4 2.9 4.4 5 8 5s6.6-2.1 8-5C14.6 2.1 11.6 0 8 0zm0 1.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zm0 1.6a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
 /* Numbers that rise over the units, written in marker. */
 .float-text {
   font-family: var(--font-display);

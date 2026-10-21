@@ -4,8 +4,9 @@ import { coverAgainst } from '../src/cover';
 import { anchorOf, decorCode, objectAt, objectTiles } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { kindAt } from '../src/grid';
-import { roomAt } from '../src/loot';
+import { marketStock, rollRoom, roomAt } from '../src/loot';
 import { Rng } from '../src/rng';
+import { createMission } from '../src/setup';
 import { executeCommand, Sim } from '../src/rules';
 import type { Command } from '../src/protocol';
 import type { Decor, GameState, Slot } from '../src/types';
@@ -124,5 +125,27 @@ describe('objects over several tiles (docs/MAPAS.md, phase 1)', () => {
     put(5, 1, decorCode('desk', 2));
     put(5, 3, decorCode('desk', 0));
     expect(roomAt(s, { x: 3, y: 2, z: 0 })?.spot).toBe('office');
+  });
+});
+
+describe('supermarkets (playtest 21/10, #19)', () => {
+  it('a stocked one always gives food; a picked one is a shop, maybe nothing', () => {
+    const s = createMission({ map: { kind: 'generated', biome: 'city', seed: 2 }, slots: [0], rng: new Rng(2) });
+    const m = s.markets![0]!;
+    const room = roomAt(s, { x: m.x + 2, y: m.y + 2, z: 0 })!;
+    expect(room).not.toBeNull();
+    for (const stock of ['full', 'picked'] as const) {
+      m.stock = stock;
+      expect(marketStock(s, room)).toBe(stock);
+    }
+    const rolls = (stock: 'full' | 'picked') => Array.from({ length: 60 }, (_, k) => rollRoom(room, 2, new Rng(k + 1), false, false, stock));
+    for (const loot of rolls('full')) {
+      expect(loot?.food).toBeGreaterThanOrEqual(6);
+      expect(loot?.food).toBeLessThanOrEqual(10);
+    }
+    expect(rolls('picked').some((loot) => loot === null)).toBe(true);
+    // Elsewhere, no stock.
+    const out = roomAt(s, s.units.find((u) => u.team === 'xcom')!.pos);
+    if (out) expect(marketStock(s, out)).toBeNull();
   });
 });

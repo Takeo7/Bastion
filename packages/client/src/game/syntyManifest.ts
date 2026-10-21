@@ -13,7 +13,7 @@ import type { BuildId, HeadId, TemplateId } from '@bastion/engine';
 /** Metres to game units: a tile is 1.5 m, so a 1.8 m survivor stands 1.2 tall. */
 export const SYNTY_SCALE = 1 / 1.5;
 
-export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza' | 'sidekickSurvivors' | 'sidekickZombies' | 'sidekickOutlaws' | 'sidekickCivilians' | 'sidekickPolice' | 'sidekickStarter' | 'natureGeneric';
+export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza' | 'sidekickSurvivors' | 'sidekickZombies' | 'sidekickOutlaws' | 'sidekickCivilians' | 'sidekickPolice' | 'sidekickStarter' | 'natureGeneric' | 'mixamo';
 
 /**
  * Where each pack lives under assets-src/synty/. A pack that only comes as a
@@ -37,6 +37,8 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
   swordCombat: { dir: 'ANIMATION_SwordCombat_SourceFiles' },
   // «ANIMATION – Goblin Locomotion»: how the dead walk and run (DEAD_MOTIONS).
   goblinLocomotion: { dir: 'ANIMATION_GoblinLocomotion_SourceFiles' },
+  // Mixamo's clips for the weapons (Arturo, 21/10: what Synty doesn't have; docs/MIXAMO.md), X Bot's, in assets-src/mixamo.
+  mixamo: { dir: '../mixamo' },
   // The base (BASE_MODELS): «Nature Biomes – Alpine Mountain» and the snow kit.
   alpine: { dir: 'POLYGON_NatureBiomes_AlpineMountain_SourceFiles_v3', materialList: 'MaterialList_PNB_Alpine_Mountain.txt' },
   snow: { dir: 'POLYGON_Snow_SourceFiles', materialList: 'MaterialList_PolygonSnow.txt' },
@@ -483,6 +485,11 @@ const idle = (path: string) => ({ pack: 'idles' as PackId, fbx: `Animations/Poly
 const bow = (path: string) => ({ pack: 'bowCombat' as PackId, fbx: `Animations/Polygon/${path}` });
 const sword = (path: string) => ({ pack: 'swordCombat' as PackId, fbx: `Animations/Polygon/${path}` });
 const goblin = (path: string) => ({ pack: 'goblinLocomotion' as PackId, fbx: `Animations/Polygon/Neutral/Locomotion/${path}` });
+/**
+ * A Mixamo clip by its file's name (docs/MIXAMO.md, assets-src/mixamo/LISTA.md), turned onto Synty's skeleton
+ * (convert.py mixamo); `mirror`, left for right (a throw with the free hand: the gun is in the right).
+ */
+const mixamo = (file: string, mirror = false) => ({ pack: 'mixamo' as PackId, fbx: file, ...(mirror ? { mirror } : {}) });
 
 export const ANIMATIONS = {
   tpose: loco('Neutral/Additive/TPose/A_TPose_Neut'),
@@ -552,7 +559,32 @@ export const ANIMATIONS = {
   hardDouble: sword('Hit/HitReact/A_Hit_F_React_Sword'),
   hardLeft: sword('Hit/HitReact/A_Hit_L_React_Sword'),
   hardRight: sword('Hit/HitReact/A_Hit_R_React_Sword'),
-} satisfies Record<string, { pack: PackId; fbx: string }>;
+  // Mixamo (docs/MIXAMO.md): the rifle at rest, aimed, fired and reloaded, turning on the spot; kneeling.
+  rifleIdle: mixamo('Rifle Idle'),
+  rifleLowered: mixamo('Rifle Idle 4'),
+  rifleAim: mixamo('Rifle Aiming Idle'),
+  rifleFire: mixamo('Firing Rifle'),
+  rifleReload: mixamo('Reloading'),
+  rifleTurnL45: mixamo('Rifle Turn'),
+  rifleTurnR45: mixamo('Rifle Turn 2'),
+  rifleTurnL90: mixamo('Rifle Turn 6'),
+  rifleTurnR90: mixamo('Rifle Turn 8'),
+  rifleTurnL180: mixamo('Rifle Turn 5'),
+  rifleTurnR180: mixamo('Rifle Turn 3'),
+  rifleKneel: mixamo('Rifle Kneel Idle'),
+  rifleKneelAim: mixamo('Idle Crouching Aiming'),
+  // The pistol in both hands: ready, aimed, fired.
+  pistolReady: mixamo('Pistol Idle 3'),
+  pistolAim: mixamo('Pistol Idle 2'),
+  pistolFire: mixamo('Shooting'),
+  // A grenade tossed with the rifle in the other hand; a stone picked up and thrown; mirrored, with the left, the gun
+  // staying in the right.
+  tossGrenade: mixamo('Toss Grenade', true),
+  throwStone: mixamo('Throw Object', true),
+  // A knife's stab, a machete's swing.
+  knifeStab: mixamo('Stabbing 3'),
+  macheteSwing: mixamo('Standing Melee Attack Horizontal'),
+} satisfies Record<string, { pack: PackId; fbx: string; mirror?: boolean }>;
 
 export type AnimationId = keyof typeof ANIMATIONS;
 
@@ -657,6 +689,20 @@ const hits = (b: 'Masc' | 'Femn'): Hit[] => [
 ];
 
 export const HITS: Record<'masc' | 'femn', Hit[]> = { masc: hits('Masc'), femn: hits('Femn') };
+
+/**
+ * What a soldier's weapon does, from Mixamo (docs/MIXAMO.md; Arturo 21/10, notes 1, 6, 7): the rifle at rest, aimed,
+ * fired, reloaded, the turns on the spot, kneeling; the pistol in both hands; a grenade, a stone, a knife, a machete.
+ * One set for both builds; the living only.
+ */
+export const ACTIONS = [
+  'rifleIdle', 'rifleLowered', 'rifleAim', 'rifleFire', 'rifleReload',
+  'rifleTurnL45', 'rifleTurnR45', 'rifleTurnL90', 'rifleTurnR90', 'rifleTurnL180', 'rifleTurnR180',
+  'rifleKneel', 'rifleKneelAim', 'pistolReady', 'pistolAim', 'pistolFire',
+  'tossGrenade', 'throwStone', 'knifeStab', 'macheteSwing',
+] as const satisfies readonly AnimationId[];
+
+export type ActionId = (typeof ACTIONS)[number];
 
 // ----------------------------------------------------------------- weapons
 
@@ -814,9 +860,33 @@ export interface PropAsset {
   hole?: [[number, number, number], [number, number, number]][];
   /** A deck one stands on at this height in the FBX (metres): the game sets it one STOREY up, however that stretches it. */
   deck?: number;
+  /**
+   * Sunk this far into the ground (tiles, at its size): a pine's trunk ends in a point, up to its widest just above;
+   * stood on the point it looked lifted off the ground (playtest 21/10 #12).
+   */
+  sink?: number;
 }
 
 const prop = (pack: PackId, fbx: string, o: Omit<PropAsset, 'pack' | 'fbx'> = {}): PropAsset => ({ pack, fbx, ...o });
+
+type Box = [[number, number, number], [number, number, number]];
+/**
+ * Town's shop shelving emptied a section at a time (playtest 21/10 #19), for `hole`: its three levels (boards at 0.26,
+ * 0.78 and 1.30 m), each in thirds across; `sides`, the depths its goods stand in (the wall shelf's in front of its
+ * back, the gondola's either side of its middle). `keep` the sections left, as level·3 + third; none, all of them go.
+ */
+const LEVELS: [number, number][] = [[0.28, 0.76], [0.8, 1.28], [1.32, 1.66]];
+const THIRDS: [number, number][] = [[-0.8, -0.27], [-0.27, 0.27], [0.27, 0.8]];
+const WALL_SHELF_GOODS: [number, number][] = [[-0.66, -0.12]];
+const GONDOLA_GOODS: [number, number][] = [[-0.6, -0.08], [0.08, 0.6]];
+const emptied = (sides: [number, number][], keep: (side: number, section: number) => boolean = () => false): Box[] =>
+  sides.flatMap(([y0, y1], side) =>
+    LEVELS.flatMap(([z0, z1], level) => THIRDS.flatMap(([x0, x1], third) => (keep(side, level * 3 + third) ? [] : [[[x0, y0, z0], [x1, y1, z1]] as Box]))),
+  );
+/** Picked over: a third gone here and there. */
+const GAPS = (side: number, k: number) => ![[2, 6], [4, 8]][side]!.includes(k);
+/** Stripped: a section left here and there. */
+const BARE = (side: number, k: number) => [[0], [5]][side]!.includes(k);
 
 export const PROPS = {
   // Streets.
@@ -840,6 +910,12 @@ export const PROPS = {
   barricade2: prop('apocalypse', 'SM_Prop_Barricade_03', { fit: 1, stretch: true, yaw: 1 }),
   barricadeTall: prop('apocalypse', 'SM_Prop_Barricade_05', { fit: 1, stretch: true, yaw: 1 }),
   barricadePallet: prop('apocalypse', 'SM_Prop_Barricade_Pallet_01', { fit: 1, stretch: true, yaw: 1 }),
+  // A room's windows barricaded from inside (playtest 21/10 #20): planks nailed across the window, and a mattress
+  // stood up against it among the room's furniture.
+  boardsCross: prop('apocalypse', 'SM_Prop_Barricade_06', { fit: 1, yaw: 1 }),
+  boardsMany: prop('apocalypse', 'SM_Prop_Barricade_08', { fit: 1, yaw: 1 }),
+  boardsRails: prop('apocalypse', 'SM_Prop_Barricade_12', { fit: 1, yaw: 1 }),
+  mattress: prop('military', 'SM_Prop_Bed_Mattress_01', { fit: 1.27 }),
   sandbags: prop('apocalypse', 'SM_Prop_Sandbag_Wall_02', { fit: 1, stretch: true, yaw: 1 }),
   // The siege's base (docs/FASE12.md §10): a loose sandbag of a barricade knocked about, a gate's leaf down, Military's
   // guard tower as a deck on legs with its rail (its hut and its stairs taken off: the map's ladder climbs to it), the
@@ -962,7 +1038,7 @@ export const PROPS = {
   bTrestle: prop('construction', 'SM_Prop_Trestle_Table_01', { base: 'trestle' }),
   bStump: prop('nature', 'SM_Tree_Stump_01', { base: 'stump' }),
   bSupplyCrate: prop('apocalypse', 'SM_Prop_Crate_01', { base: 'supplyCrate' }),
-  pineDead: prop('nature', 'SM_Tree_Pine_Dead_01', { base: 'pineDead' }),
+  pineDead: prop('nature', 'SM_Tree_Pine_Dead_01', { base: 'pineDead', sink: 0.1 }),
   crate: prop('apocalypse', 'SM_Prop_Crate_01'),
   crates: prop('apocalypse', 'SM_Prop_Crate_Large_02'),
   barrels: prop('apocalypse', 'SM_Prop_BarrelStack_02', { fit: 0.95 }),
@@ -995,6 +1071,17 @@ export const PROPS = {
   // display for the end of a row.
   gondola: prop('town', 'SM_Prop_ShopShelf_02', { fit: 1, yaw: 2 }),
   wallShelf: prop('town', 'SM_Prop_ShopShelf_01', { fit: 1, yaw: 2 }),
+  // As much as is left on them (playtest 21/10 #19, MarketSite.stock): a gap here and there, a few things left, none.
+  gondolaGaps: prop('town', 'SM_Prop_ShopShelf_02', { fit: 1, yaw: 2, hole: emptied(GONDOLA_GOODS, GAPS) }),
+  gondolaBare: prop('town', 'SM_Prop_ShopShelf_02', { fit: 1, yaw: 2, hole: emptied(GONDOLA_GOODS, BARE) }),
+  gondolaEmpty: prop('town', 'SM_Prop_ShopShelf_02', { fit: 1, yaw: 2, hole: emptied(GONDOLA_GOODS) }),
+  wallShelfGaps: prop('town', 'SM_Prop_ShopShelf_01', { fit: 1, yaw: 2, hole: emptied(WALL_SHELF_GOODS, GAPS) }),
+  wallShelfBare: prop('town', 'SM_Prop_ShopShelf_01', { fit: 1, yaw: 2, hole: emptied(WALL_SHELF_GOODS, BARE) }),
+  wallShelfEmpty: prop('town', 'SM_Prop_ShopShelf_01', { fit: 1, yaw: 2, hole: emptied(WALL_SHELF_GOODS) }),
+  // What fell off them, on the floor of the aisles.
+  canFallen1: prop('apocalypse', 'SM_Item_Can_01', { fit: 0.06 }),
+  canFallen2: prop('apocalypse', 'SM_Item_Can_04', { fit: 0.06 }),
+  canFallen3: prop('apocalypse', 'SM_Item_Can_07', { fit: 0.06 }),
   endDisplay: prop('city', 'SM_Prop_ShopInterior_Shelf_04', { fit: 1, yaw: 2 }),
   shelfHigh: prop('apocalypse', 'SM_Prop_Shop_Shelf_01', { fit: 1, stretch: true, yaw: 1 }),
   bookshelf: prop('town', 'SM_Prop_Bookshelf_01', { fit: 1, stretch: true, yaw: 2 }),
@@ -1079,7 +1166,7 @@ export const PROPS = {
   // away over what the player looks at (treeFade.ts).
   tree: prop('nature', 'SM_Tree_01', { fit: 2.73 }),
   // (Nature's needle pines take their leaves from a texture of their own, with holes: the solid ones instead.)
-  treePine: prop('nature', 'SM_Tree_PolyPine_01', { fit: 2.13 }),
+  treePine: prop('nature', 'SM_Tree_PolyPine_01', { fit: 2.13, sink: 0.15 }),
   treeDead: prop('apocalypse', 'SM_Env_Tree_Dead_01', { fit: 3.17 }),
   streetTree: prop('apocalypse', 'SM_Env_Tree_01', { fit: 3.47 }),
   bush: prop('nature', 'SM_Plant_Bush_01', { fit: 0.9, thick: 0.6 }),
@@ -1134,8 +1221,8 @@ export const PROPS = {
   // The scenarios (#25). The forest stop, from «Woodland Apocalypse»: the sawmill's log piles, wrecked lorries (nose
   // north, a block of 2×4), the lumberjack on his plinth, the roadside signs and broken fences; Nature's solid pines
   // (Woodland's own are painted from an atlas we don't have).
-  pineLarge: prop('nature', 'SM_Tree_PolyPine_02', { fit: 1.7 }),
-  pineLarge2: prop('nature', 'SM_Tree_PolyPine_03', { fit: 1.6 }),
+  pineLarge: prop('nature', 'SM_Tree_PolyPine_02', { fit: 1.7, sink: 0.1 }),
+  pineLarge2: prop('nature', 'SM_Tree_PolyPine_03', { fit: 1.6, sink: 0.15 }),
   logPile: prop('woodland', 'SM_Prop_Log_Pile_02', { fit: 1.9 }),
   truckWreck: prop('woodland', 'SM_Prop_Truck_Wrecked_01', { fit: 3.9, yaw: 2 }),
   truckWreck2: prop('woodland', 'SM_Prop_Truck_Wrecked_02', { fit: 3.9, yaw: 2 }),

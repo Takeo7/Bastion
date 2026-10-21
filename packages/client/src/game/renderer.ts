@@ -143,6 +143,9 @@ export function shadowsChanged(): void {
 }
 
 /** GPU work the map asks for (baking its contact occlusion), done before the next frame is drawn. */
+/** A layer no object uses: what Renderer.drawOnce draws, alone. */
+const WARM_LAYER = 31;
+
 const jobs: ((gl: THREE.WebGLRenderer) => void)[] = [];
 export function beforeNextFrame(job: (gl: THREE.WebGLRenderer) => void): void {
   jobs.push(job);
@@ -285,11 +288,12 @@ export class Renderer {
   }
 
   /**
-   * `object`'s materials compiled now, in the background where the GPU can (KHR_parallel_shader_compile): with the
-   * battle's lights and with one and two more (a shot's flash or a bang adds one for a moment: fx.ts), for the
-   * screen and for the post-processing's buffer (another colour space, no tone mapping). What is made after the
-   * loading veil's compile (the crowd's bodies, the effects at their first use) compiled on the spot otherwise:
-   * the first shot of a mission stalled for seconds (playtest 20/10 #8).
+   * `object`'s materials compiled now, in the background where the GPU can (KHR_parallel_shader_compile), for the
+   * screen and for the post-processing's buffer (another colour space, no tone mapping); then drawn once, all of it
+   * whatever the camera sees, before the next frame draws over it (drawOnce). What is made after the loading veil's
+   * compile (the crowd's bodies, the effects at their first use) compiled on the spot otherwise: the first shot of a
+   * mission stalled for seconds (playtest 20/10 #8). The lights a battle has never change in number (the effects'
+   * are always there, dark: fx.ts LAMPS), so its lights are all there is to compile with.
    */
   async warm(object: THREE.Object3D): Promise<void> {
     const { gl, scene, camera } = this;
@@ -305,20 +309,68 @@ export class Renderer {
       normals = new THREE.Group().add(new THREE.Mesh(box, normal), new THREE.InstancedMesh(box, normal, 1));
     }
     for (const target of [null, this.post.composer.readBuffer]) {
-      for (let extra = 0; extra <= 2; extra++) {
-        const lights = Array.from({ length: extra }, () => new THREE.PointLight(0xffffff, 0));
-        // The lights and the target only while the compile reads them: it does so at once (the wait is for the GPU).
-        const was = gl.getRenderTarget();
-        if (lights.length) scene.add(...lights);
-        gl.setRenderTarget(target);
-        const ready = [gl.compileAsync(object, camera, scene)];
-        if (normals && target) ready.push(gl.compileAsync(normals, camera, scene));
-        gl.setRenderTarget(was);
-        if (lights.length) scene.remove(...lights);
-        await Promise.all(ready);
-      }
+      // The target only while the compile reads it: it does so at once (the wait is for the GPU).
+      const was = gl.getRenderTarget();
+      gl.setRenderTarget(target);
+      const ready = [gl.compileAsync(object, camera, scene)];
+      if (normals && target) ready.push(gl.compileAsync(normals, camera, scene));
+      gl.setRenderTarget(was);
+      await Promise.all(ready);
     }
     box?.dispose();
+    await new Promise<void>((done) =>
+      beforeNextFrame(() => {
+        this.drawOnce(object);
+        done();
+      }),
+    );
+  }
+
+  /**
+   * `object` drawn alone, all of it (what is hidden, out of view, an instanced mesh with none in use), with the
+   * battle's lights, into what the scene is drawn into, which the frame about to be drawn covers (warm). ANGLE (on
+   * Windows, over D3D11) finishes a program at its first draw, for the vertex formats it is drawn with (our models'
+   * are quantised): compiled but never drawn, a material stalled the frame it first showed in, as the first shot's
+   * shoulder camera turned on what the tactical view had never drawn (playtest 21/10 #5).
+   */
+  private drawOnce(object: THREE.Object3D): void {
+    const { gl, scene, camera } = this;
+    const undo: (() => void)[] = [];
+    const loose = object !== scene && !object.parent;
+    if (loose) scene.add(object);
+    object.traverse((o) => {
+      o.layers.enable(WARM_LAYER);
+      if (!o.visible) {
+        o.visible = true;
+        undo.push(() => (o.visible = false));
+      }
+      if (o.frustumCulled) {
+        o.frustumCulled = false;
+        undo.push(() => (o.frustumCulled = true));
+      }
+      const many = o as THREE.InstancedMesh;
+      if (many.isInstancedMesh && many.count === 0) {
+        many.count = 1;
+        undo.push(() => (many.count = 0));
+      }
+    });
+    // The lights are picked by the camera's layers too: all of them, so the programs are the battle's.
+    scene.traverse((o) => {
+      if ((o as THREE.Light).isLight && !o.layers.isEnabled(WARM_LAYER)) {
+        o.layers.enable(WARM_LAYER);
+        undo.push(() => o.layers.disable(WARM_LAYER));
+      }
+    });
+    const mask = camera.layers.mask;
+    camera.layers.set(WARM_LAYER);
+    const was = gl.getRenderTarget();
+    gl.setRenderTarget(this.effects === 'low' ? null : this.post.composer.readBuffer);
+    gl.render(scene, camera);
+    gl.setRenderTarget(was);
+    camera.layers.mask = mask;
+    object.traverse((o) => o.layers.disable(WARM_LAYER));
+    for (const u of undo) u();
+    if (loose) scene.remove(object);
   }
 
   /** Graphics settings, live: resolution, shadows and how much post-processing (less what the guard took). */

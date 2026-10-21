@@ -168,6 +168,15 @@ export class StaticBatch {
     bucket.sources.push({ geometry, matrix, consts, uv });
   }
 
+  /** Something that only darkens the ground round it (groundAO.ts), never drawn: a tree's trunk, without its crown. */
+  occlude(geometry: THREE.BufferGeometry, matrix: THREE.Matrix4): void {
+    const chunk = this.chunkOf(matrix);
+    if (this.only && !this.only.has(chunk)) return;
+    let list = this.occluding.get(chunk);
+    if (!list) this.occluding.set(chunk, (list = []));
+    list.push({ geometry, matrix });
+  }
+
   /** Brings the merged meshes up to date with what was added since the last commit; the tiles where something changed, or null. */
   commit(): Dirty | null {
     const dirty: Dirty = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };

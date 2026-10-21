@@ -445,6 +445,41 @@ describe('mission timers', () => {
     expect(towns).toBeGreaterThanOrEqual(4);
   });
 
+  it('nothing stands inside a window by chance; a barricaded room has every window barricaded (playtest 21/10, #20)', () => {
+    let barricades = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const l = layout('city', 'recovery', seed);
+      const W = l.width;
+      const at = (x: number, y: number) => l.tiles[y * W + x];
+      const look = (i: number) => decorOf(l.decor![i]!)?.kind;
+      for (let i = 0; i < l.tiles.length; i++) {
+        if (l.tiles[i] !== 'window') continue;
+        const x = i % W;
+        const y = Math.floor(i / W);
+        for (const d of DIRS4) {
+          const j = (y + d.y) * W + x + d.x;
+          if (l.ground?.[j] !== 2 || (l.tiles[j] !== 'high' && l.tiles[j] !== 'low')) continue;
+          expect(look(j), `city/${seed}: ${look(j)} inside the window at ${x},${y}`).toBe('windowBarricade');
+          barricades++;
+        }
+      }
+      // Each house room on the ground: all its windows barricaded, or none.
+      for (const room of (l.homes ?? []).flatMap((h) => h.rooms).filter((r) => r.z === 0)) {
+        const states = new Set<boolean>();
+        for (let y = room.y; y < room.y + room.h; y++) {
+          for (let x = room.x; x < room.x + room.w; x++) {
+            for (const d of DIRS4) {
+              if (at(x + d.x, y + d.y) !== 'window') continue;
+              states.add(look(y * W + x) === 'windowBarricade');
+            }
+          }
+        }
+        expect(states.size, `city/${seed}: room ${room.x},${room.y} barricaded only in part`).toBeLessThanOrEqual(1);
+      }
+    }
+    expect(barricades).toBeGreaterThan(0);
+  });
+
   it('keep the values tuned on 36-tile maps and add turns on bigger ones, more when the objective comes back', () => {
     expect(missionTurns('hack', 36)).toBe(MISSION_TURNS.hack);
     expect(missionTurns('rescue', 30)).toBe(MISSION_TURNS.rescue);

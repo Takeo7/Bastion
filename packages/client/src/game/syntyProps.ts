@@ -4,7 +4,7 @@ import { atlasOf, loadModel } from './synty';
 import { PROP_SETS, PROPS, SYNTY_SCALE, type AtlasId, type PropId, type PropSet } from './syntyManifest';
 
 // Synty props for the map: each prop's meshes, normalised to a tile as the
-// manifest says (fit, yaw, shift) and standing on y = 0, ready to instance.
+// manifest says (fit, yaw, shift) and standing on y = 0 (or sunk), ready to instance.
 
 /** One mesh of a prop: its geometry, its atlas and where it sits in the prop. */
 export interface PropPart {
@@ -17,7 +17,7 @@ const parts = new Map<PropId, PropPart[]>();
 const pending = new Map<PropId, Promise<void>>();
 
 function prepare(id: PropId, model: THREE.Group): void {
-  const a = PROPS[id] as { fit?: number; stretch?: boolean; thick?: number; yaw?: number; shift?: [number, number]; origin?: boolean; deck?: number };
+  const a = PROPS[id] as { fit?: number; stretch?: boolean; thick?: number; yaw?: number; shift?: [number, number]; origin?: boolean; deck?: number; sink?: number };
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
@@ -29,9 +29,9 @@ function prepare(id: PropId, model: THREE.Group): void {
   const scale = size.x >= size.z ? new THREE.Vector3(along, across, across) : new THREE.Vector3(across, across, along);
   // A deck one stands on, one storey up whatever its width took (a guard tower's on its legs).
   if (a.deck) scale.y = STOREY / (a.deck * SYNTY_SCALE);
-  // Centred on the tile and on the floor, turned to face north, then shifted along its own axes.
+  // Centred on the tile and on the floor (or sunk into it), turned to face north, then shifted along its own axes.
   const fit = new THREE.Matrix4()
-    .makeTranslation(a.shift?.[0] ?? 0, 0, a.shift?.[1] ?? 0)
+    .makeTranslation(a.shift?.[0] ?? 0, -(a.sink ?? 0), a.shift?.[1] ?? 0)
     .multiply(new THREE.Matrix4().makeRotationY(((a.yaw ?? 0) * Math.PI) / 2))
     .multiply(new THREE.Matrix4().makeScale(scale.x, scale.y, scale.z))
     .multiply(new THREE.Matrix4().makeTranslation(-centre.x, -box.min.y, -centre.z));

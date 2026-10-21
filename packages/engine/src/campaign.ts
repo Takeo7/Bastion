@@ -2587,7 +2587,7 @@ export function nextSteps(c: CampaignState, slot: Slot, partnerName = 'El otro j
     const soon = left(first) <= 2;
     steps.push({
       view: 'geoscape',
-      label: soon ? `${first.name} caduca ${left(first) <= 0 ? 'hoy' : `en ${left(first)} ${left(first) === 1 ? 'día' : 'días'}`}` : 'Elige una operación',
+      label: soon ? `${first.name} caduca ${left(first) <= 0 ? 'hoy' : `en ${left(first)} ${left(first) === 1 ? 'día' : 'días'}`}` : 'Elige una misión',
       count: c.offers.length,
       tone: soon ? 'urgent' : 'info',
       go: { offer: first.id },

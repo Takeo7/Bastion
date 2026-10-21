@@ -54,6 +54,10 @@ export class ClearingArtView implements ClearingArt {
   /** La Lata is out on a mission (gone down its track until it comes back); and while it drives, the vehicle a change asked for, for after. */
   private away = false;
   private driving: Promise<void> | null = null;
+  /** The stage's camera (watch): the boarding moves it itself, a shot of its own (playtest 21/10 #3). */
+  private camera: THREE.PerspectiveCamera | null = null;
+  /** Where the boarding's camera started (the row's shot): it goes back out there as La Lata leaves. */
+  private boardFrom: THREE.Vector3 | null = null;
   private nextVehicle: number | null = null;
   /**
    * The Soldados' and the Armería's screens (the caravan is both, FASE12 §11): the soldier looked at, standing by
@@ -85,6 +89,11 @@ export class ClearingArtView implements ClearingArt {
    */
   private readonly lineup = new THREE.Group();
   private lineupRigs: UnitRig[] = [];
+  /**
+   * The lineup's figures by who each is (their entry), kept from one lineup to the next: built again, the whole row
+   * hopped back into its idle at every change of the campaign (pressing «Lanzar misión»: playtest 21/10 #2).
+   */
+  private lineupByWho = new Map<string, UnitRig>();
   private lineupKey = '';
   /** What it was built from: its places, and whether it is mirrored (each player's own on their left: playtest 18/10 #51). */
   private lineupEntries: (LineupEntry | null)[] = [];
@@ -109,8 +118,10 @@ export class ClearingArtView implements ClearingArt {
     this.snow = snow;
     const m = (this.look = dayMood(snow));
     this.mood = { exposure: m.exposure, bloom: m.bloom, grade: m.grade };
-    // Nothing is played beyond the woods: what shows between the trunks is the haze under the mountains, not the dark.
-    this.map.fadeBeyond(1, 12);
+    // Nothing is played beyond the woods: past the edge the pinar goes on, lit, thinning out (mapView: playtest 21/10
+    // #27), into the haze under the mountains, not the dark.
+    this.map.litBeyond(true);
+    this.map.fadeBeyond(8, 30);
     this.sun.color.set(m.sun);
     this.sun.intensity = m.sunIntensity;
     this.sun.castShadow = true;
@@ -136,6 +147,7 @@ export class ClearingArtView implements ClearingArt {
 
   /** The camera the clearing is seen with, for what the map does by it (its lamps, what fades). */
   watch(camera: THREE.Camera): void {
+    if (camera instanceof THREE.PerspectiveCamera) this.camera = camera;
     this.map.watch(camera, () => ({ selected: null, hover: null, target: null, level: null }));
   }
 
@@ -402,13 +414,21 @@ export class ClearingArtView implements ClearingArt {
     this.fillArmory(this.armoryArgs.base, this.armoryArgs.free);
   }
 
-  /** The soldier looked at in Soldados (as the old Cuartel's pedestal): built again only if it changed; null, none. */
-  setShowcase(template: TemplateId | null, color: string, appearance?: Appearance, gear?: Gear, seed?: string): void {
-    const key = `${template}:${color}:${JSON.stringify(appearance ?? null)}:${JSON.stringify(gear ?? null)}:${seed ?? ''}`;
+  /**
+   * The soldier looked at in Soldados (as the old Cuartel's pedestal): built again only if it changed; null, none;
+   * `fallen`, their cross and candle where they would stand (playtest 21/10 #13), as in the debrief's row.
+   */
+  setShowcase(template: TemplateId | null, color: string, appearance?: Appearance, gear?: Gear, seed?: string, fallen = false): void {
+    const key = `${fallen ? 'grave' : template}:${color}:${JSON.stringify(appearance ?? null)}:${JSON.stringify(gear ?? null)}:${seed ?? ''}`;
     if (key === this.showcaseKey) return;
     this.showcaseKey = key;
     this.showcase.clear();
     this.showcaseRig = null;
+    if (fallen) {
+      const { dir } = this.soldierView;
+      grave(this.showcase, { x: 0, z: 0 }, Math.atan2(dir.x, dir.z), () => this.showcaseKey === key);
+      return;
+    }
     if (!template) return;
     const rig = buildUnit(template, color, appearance, gear, seed);
     rig.root.rotation.y = this.showcaseYaw(performance.now() / 1000);
@@ -582,6 +602,8 @@ export class ClearingArtView implements ClearingArt {
     this.lineup.clear();
     this.lineupRigs = [];
     this.warm = Math.max(this.warm, 4);
+    const before = this.lineupByWho;
+    this.lineupByWho = new Map();
     if (!entries.length) return;
     const place = this.placeLineup(entries.length);
     entries.forEach((entry, i) => {
@@ -593,27 +615,20 @@ export class ClearingArtView implements ClearingArt {
       this.lineup.add(pad);
       if (!entry) return;
       if (entry.status === 'dead') {
-        // A cross where they would stand, as tall as a soldier's chest, a candle at its foot.
-        const cross = () => {
-          const parts = syntyProp('bCross');
-          if (!parts) return false;
-          const top = parts.reduce((y, part) => Math.max(y, (part.geometry.boundingBox ?? (part.geometry.computeBoundingBox(), part.geometry.boundingBox!)).clone().applyMatrix4(part.matrix).max.y), 0) || 1;
-          const k = 0.95 / top;
-          return propMeshes('bCross', new THREE.Matrix4().compose(new THREE.Vector3(at.x, 0, at.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), facing), new THREE.Vector3(k, k, k)), this.lineup);
-        };
-        if (!cross()) void syntyPropsLoaded().then(() => this.lineupKey === key && cross());
-        const candle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.07).translate(0, 0.06, 0), CANDLE);
-        candle.position.set(at.x + Math.sin(facing) * 0.25, 0, at.z + Math.cos(facing) * 0.25);
-        this.lineup.add(candle);
+        grave(this.lineup, at, facing, () => this.lineupKey === key);
         return;
       }
-      const rig = buildUnit(entry.template, entry.color, entry.appearance, entry.gear, entry.seed);
+      const who = JSON.stringify(entry);
+      const kept = before.get(who);
+      const rig = kept ?? buildUnit(entry.template, entry.color, entry.appearance, entry.gear, entry.seed);
+      this.lineupByWho.set(who, rig);
       rig.root.position.set(at.x, 0, at.z);
-      rig.root.traverse((o) => {
-        if (o instanceof THREE.Mesh) o.castShadow = true;
-      });
-      // Pose state, applied every frame in tick().
-      Object.assign(rig.root.userData, { yaw: facing + (i % 3 - 1) * 0.12, phase: i * 0.7, wounded: entry.status === 'wounded', running: 0 });
+      if (!kept)
+        rig.root.traverse((o) => {
+          if (o instanceof THREE.Mesh) o.castShadow = true;
+        });
+      // Pose state, applied every frame in tick(); one already standing keeps its breath and its stride.
+      Object.assign(rig.root.userData, { yaw: facing + (i % 3 - 1) * 0.12, wounded: entry.status === 'wounded' }, kept ? {} : { phase: i * 0.7, running: 0 });
       this.lineupRigs.push(rig);
       this.lineup.add(rig.root);
     });
@@ -809,11 +824,13 @@ export class ClearingArtView implements ClearingArt {
       const run = path.slice(0, -1);
       const lengths = run.slice(1).map((p, k) => p.distanceTo(run[k]!));
       const total = lengths.reduce((a, b) => a + b, 0);
-      // When it would get to the door's foot, setting off at once.
-      const atFoot = total / BOARD_SPEED;
+      // A jog that picks up and slows to the door (BOARD_EASE either end: its top speed kept), setting off a beat
+      // after the one before it (not all at once, on a word).
+      const running = total / BOARD_SPEED + BOARD_EASE;
+      const atFoot = running + i * BOARD_STAGGER;
       // A double doorway's two leaves are one way in: one at a time through it.
       const way = doors.findIndex((d) => d.distanceTo(door) < 0.7);
-      return { rig, run, lengths, total, foot, inside, door: way, atFoot, delay: 0, running: total / BOARD_SPEED };
+      return { rig, run, lengths, total, foot, inside, door: way, atFoot, delay: i * BOARD_STAGGER, running };
     });
     // One at a time at each door, the nearest first (out of the way of those behind, who run past where it stood):
     // each held back at its place in the row until the one before it has climbed in (they all made for the same
@@ -821,8 +838,9 @@ export class ClearingArtView implements ClearingArt {
     for (let d = 0; d < doors.length; d++) {
       let free = -Infinity;
       for (const p of plans.filter((q) => q.door === d).sort((a, b) => a.atFoot - b.atFoot)) {
-        p.delay = Math.max(0, free - p.atFoot);
-        p.atFoot += p.delay;
+        const wait = Math.max(0, free - p.atFoot);
+        p.delay += wait;
+        p.atFoot += wait;
         free = p.atFoot + CLIMB + DOOR_GAP;
       }
     }
@@ -840,8 +858,32 @@ export class ClearingArtView implements ClearingArt {
     // How high it is in: the 4×4's sill, the van's floor, over the lorry's tailgate, the bus's step.
     const rise = [0.22, 0.45, 0.62, 0.3][this.bus.vehicle] ?? 0.3;
     const seconds = Math.max(...plans.map((p) => p.delay + p.running + CLIMB), ...ways.map((w) => (w ? w.shut + DOOR_OPEN : 0))) + 0.05;
+    // The camera (playtest 21/10 #3, Ana: a shot of its own): from the row's shot down lower and a little in, turned
+    // to between the row and the doorway most of them take (the whole row still in it, the door at its middle: in
+    // close on the door, those at the far end ran in from out of the frame), then a slow push in on the door while
+    // they climb aboard.
+    const cam = this.camera;
+    const busiest = doors.map((_, d) => plans.filter((p) => p.door === d).length).reduce((best, n, d, all) => (n > all[best]! ? d : best), 0);
+    const door = doors[busiest]!;
+    const from = cam ? { pos: cam.position.clone(), look: this.lineupShot().target.clone() } : null;
+    const into = from
+      ? (() => {
+          const pos = from.pos.clone().lerp(door.clone().setY(from.pos.y), 0.15);
+          pos.y = THREE.MathUtils.lerp(from.pos.y, 1.7, 0.6);
+          return { pos, look: from.look.clone().lerp(door, 0.6).setY(1.0) };
+        })()
+      : null;
+    const look = new THREE.Vector3();
+    const onDoor = door.clone().setY(1.0);
+    this.boardFrom = from?.pos ?? null;
     await tween(seconds, (t) => {
       const now = t * seconds;
+      if (cam && from && into) {
+        const k = THREE.MathUtils.smootherstep(Math.min(1, now / 1.4), 0, 1);
+        const push = Math.max(0, now - 1.4) / Math.max(0.5, seconds - 1.4);
+        cam.position.lerpVectors(from.pos, into.pos, k).lerp(onDoor, push * 0.1 * k);
+        cam.lookAt(look.lerpVectors(from.look, into.look, k).lerp(onDoor, THREE.MathUtils.smoothstep(push, 0, 1) * 0.6));
+      }
       for (const w of ways) {
         if (!w) continue;
         const k = now < w.shut ? THREE.MathUtils.clamp((now - w.open) / DOOR_OPEN, 0, 1) : 1 - THREE.MathUtils.clamp((now - w.shut) / DOOR_OPEN, 0, 1);
@@ -865,13 +907,19 @@ export class ClearingArtView implements ClearingArt {
           d.yaw = Math.atan2(p.inside.x - p.foot.x, p.inside.z - p.foot.z);
           continue;
         }
-        let left = (since / p.running) * p.total;
+        // Picking up speed at the start, slowing at the door (a constant one between); the stride's weight with it.
+        const ease = Math.min(BOARD_EASE, p.running / 2);
+        const top = p.total / Math.max(0.01, p.running - ease);
+        const end = p.running - since;
+        let left = since < ease ? (0.5 * top * since * since) / ease : end < ease ? p.total - (0.5 * top * end * end) / ease : 0.5 * top * ease + top * (since - ease);
+        d.running = Math.min(1, 0.35 + 0.65 * Math.min(since, end, ease) / ease);
         for (let s = 0; s < p.lengths.length; s++) {
           const a = p.run[s]!;
           const b = p.run[s + 1]!;
           if (left <= p.lengths[s]! || s === p.lengths.length - 1) {
             p.rig.root.position.lerpVectors(a, b, Math.min(1, left / (p.lengths[s]! || 1)));
-            d.yaw = Math.atan2(b.x - a.x, b.z - a.z);
+            // Turning to where it goes as it goes, not all at once at each corner.
+            d.yaw = turnToward(d.yaw, Math.atan2(b.x - a.x, b.z - a.z), BOARD_TURN / 60);
             break;
           }
           left -= p.lengths[s]!;
@@ -885,7 +933,26 @@ export class ClearingArtView implements ClearingArt {
     return this.drive(async () => {
       if (this.lineupRigs.length && this.bus.root.visible) await this.board();
       for (const o of this.lineup.children) if (o.userData.pad) o.visible = false;
+      // The camera back out to the row's shot as La Lata goes, turning after it only a little (BUS_FOLLOW): it drives
+      // on out of the frame (the camera turned after it all the way into the pines, 40° and more, and ended on them).
+      const cam = this.camera;
+      const back = this.boardFrom;
+      const start = this.bus.root.position.clone();
+      const reach = cam ? Math.tan(BUS_FOLLOW) * Math.hypot(start.x - cam.position.x, start.z - cam.position.z) : 0;
+      let going = !!cam;
+      const look = cam ? cam.position.clone().add(cam.getWorldDirection(new THREE.Vector3()).multiplyScalar(4)) : null;
+      const follow = () => {
+        if (!going || !cam || !look) return;
+        const along = this.bus.root.position.clone().sub(start);
+        along.setLength(Math.min(along.length(), reach));
+        look.lerp(along.add(start).setY(1.0), 0.04);
+        if (back) cam.position.lerp(back, 0.03);
+        cam.lookAt(look);
+        requestAnimationFrame(follow);
+      };
+      requestAnimationFrame(follow);
       await this.bus.depart(this.busWay, !this.busRoute);
+      going = false;
       this.away = true;
     });
   }
@@ -964,8 +1031,22 @@ interface LineupPlace {
 const LINEUP_STEP = 0.95;
 const LINEUP_GAP = 0.5;
 const LINEUP_ROW = 8;
-/** How fast the squad runs to board La Lata (tiles a second). */
-const BOARD_SPEED = 3.4;
+/**
+ * How fast the squad jogs to board La Lata (tiles a second), the seconds it takes to get going and to slow at the door,
+ * how long after the one before each sets off, and how fast each turns (radians a second).
+ */
+const BOARD_SPEED = 2.9;
+const BOARD_EASE = 0.35;
+const BOARD_STAGGER = 0.12;
+const BOARD_TURN = 7;
+/** How far the camera turns after La Lata as it leaves (radians, from where it stood). */
+const BUS_FOLLOW = THREE.MathUtils.degToRad(18);
+
+/** `yaw` turned towards `goal` by at most `step` (radians), the short way round. */
+function turnToward(yaw: number, goal: number, step: number): number {
+  const d = Math.atan2(Math.sin(goal - yaw), Math.cos(goal - yaw));
+  return yaw + THREE.MathUtils.clamp(d, -step, step);
+}
 /** How long climbing in takes, from the door's foot (seconds), and how long after one the next gets to that door. */
 const CLIMB = 0.6;
 const DOOR_GAP = 0.15;
@@ -1014,6 +1095,22 @@ function nearTriangle(x: number, z: number, a: { x: number; z: number }, b: { x:
     return Math.hypot(x - p.x - (q.x - p.x) * t, z - p.z - (q.z - p.z) * t);
   };
   return Math.min(edge(a, b), edge(b, c), edge(c, a)) <= margin;
+}
+
+/** A cross where a fallen soldier would stand (`at`, in `into`), as tall as a soldier's chest, a candle at its foot; `still`: whether it is still wanted once the props load. */
+function grave(into: THREE.Group, at: { x: number; z: number }, facing: number, still: () => boolean): void {
+  const cross = () => {
+    const parts = syntyProp('bCross');
+    if (!parts) return false;
+    const top = parts.reduce((y, part) => Math.max(y, (part.geometry.boundingBox ?? (part.geometry.computeBoundingBox(), part.geometry.boundingBox!)).clone().applyMatrix4(part.matrix).max.y), 0) || 1;
+    const k = 0.95 / top;
+    // Synty's cross has its arms along z: turned a quarter, it shows them to `facing` (not edge on, a bare post).
+    return propMeshes('bCross', new THREE.Matrix4().compose(new THREE.Vector3(at.x, 0, at.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), facing + Math.PI / 2), new THREE.Vector3(k, k, k)), into);
+  };
+  if (!cross()) void syntyPropsLoaded().then(() => still() && cross());
+  const candle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.07).translate(0, 0.06, 0), CANDLE);
+  candle.position.set(at.x + Math.sin(facing) * 0.25, 0, at.z + Math.cos(facing) * 0.25);
+  into.add(candle);
 }
 
 function propMeshes(id: PropId, m: THREE.Matrix4, into: THREE.Group): boolean {

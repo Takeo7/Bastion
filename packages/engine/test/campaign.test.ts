@@ -316,7 +316,7 @@ describe('missions', () => {
     expect(Object.keys(c.pads ?? {}).sort()).toEqual([...c.squad].sort());
     expect(c.log.some((l) => /Primera salida: .* La escuadra espera junto a La Lata/.test(l.text))).toBe(true);
     expect(c.log.some((l) => /Elegid la primera misión/.test(l.text))).toBe(false);
-    expect(nextSteps(c, 0)[0]?.label).not.toBe('Elige una operación');
+    expect(nextSteps(c, 0)[0]?.label).not.toBe('Elige una misión');
     // Nothing else changes: the same offers, soldiers and day as a campaign opened by hand.
     expect(c.offers).toEqual(plain.offers);
     expect(c.soldiers).toEqual(plain.soldiers);
@@ -607,7 +607,7 @@ describe('helping the players', () => {
 
   it('what to do now: the most pressing thing first', () => {
     const c = createCampaign(both, new Rng(1));
-    expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'geoscape', label: 'Elige una operación', count: c.offers.length });
+    expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'geoscape', label: 'Elige una misión', count: c.offers.length });
     // Operations don't expire (18/10 #39).
     expect(c.offers.every((o) => o.expiresDay === null)).toBe(true);
     // Every recruit comes with a point or two to spend.

@@ -36,10 +36,17 @@
 }
 
 /* In the Escuadra and the debrief the bottom right is the centred panel's buttons (20/10 #16, #26: LANZAR MISIÓN
-   went under it): the radio goes to the top right corner, which is free there. */
+   went under it): the radio goes up, to the top right corner in the debrief; in the Escuadra, where the other
+   player's soldiers take that corner (21/10 #15), to the top centre, between the two lists. */
 .strat:is([data-view='squad'], [data-view='debrief']) .radio {
   top: 56px;
   bottom: auto;
+}
+
+.strat[data-view='squad'] .radio {
+  left: 0;
+  right: 0;
+  margin: 0 auto;
 }
 
 /* In Soldados the right side is the soldier's sheet (or Personalizar) down to the bottom (Gameplay, 21/10: the radio

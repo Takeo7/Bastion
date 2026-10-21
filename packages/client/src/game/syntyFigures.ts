@@ -8,7 +8,7 @@ import type { Armament, Blow, Carried, FigurePose, FigureRig, Gear } from './fig
 import { gaitsOf, type GaitMotion, type GaitStyle } from './gaits';
 import { UNIT_LAYER } from './post';
 import { atlasMaterial, atlasOf, dyedMaterial, loadModel, modelNow, type DyedMaterial } from './synty';
-import { AnimDriver, animSet, MOTION_ORDER, whenAnimSet, type AnimSet, type Build } from './syntyAnims';
+import { AnimDriver, animSet, MOTION_ORDER, whenAnimSet, type ActionPlay, type AnimSet, type Build } from './syntyAnims';
 import {
   CHARACTER_SCALE,
   CHARACTERS,
@@ -24,6 +24,7 @@ import {
   UNIT_WEAPONS,
   WEAPON_PARTS,
   WEAPONS,
+  type ActionId,
   type AtlasId,
   type CharacterAsset,
   type CharacterId,
@@ -447,6 +448,30 @@ const cq = new THREE.Quaternion();
 const iq = new THREE.Quaternion();
 const e1 = new THREE.Euler();
 const m1 = new THREE.Matrix4();
+/**
+ * The throws' clips (direct), timed to the game's: the clip's moment the hand lets go (`release`, measured on it) at
+ * the game's (`lets`, seconds into the throw: unitViews throwMotion, tossStone), `rate` times as fast; over by `end`.
+ * `after`: from that moment on, the clip from another of its moments at another rate (a stab held out, then drawn
+ * back: the drawing back).
+ */
+const THROWS = {
+  grenade: { clip: 'tossGrenade', release: 1.8, lets: 0.49, rate: 1.4, end: 0.8 },
+  stone: { clip: 'throwStone', release: 2.4, lets: 0.24, rate: 1.4, end: 0.5 },
+  // A blade's stroke (unitViews lunge: wound up 0.2 s, the stroke 0.14 s, back 0.35 s): the knife's stab, the machete's swing.
+  knife: { clip: 'knifeStab', release: 0.42, lets: 0.34, rate: 1.3, end: 0.75, after: { from: 1.0, rate: 0.75 } },
+  machete: { clip: 'macheteSwing', release: 1.0, lets: 0.34, rate: 2.0, end: 0.75, after: { from: 1.0, rate: 1.7 } },
+} as const satisfies Record<string, { clip: ActionId; release: number; lets: number; rate: number; end: number; after?: { from: number; rate: number } }>;
+
+/** Where a throw's or a stroke's clip is `t` seconds into it (THROWS). */
+function throwClipTime(k: keyof typeof THROWS, t: number): number {
+  const w: (typeof THROWS)[keyof typeof THROWS] & { after?: { from: number; rate: number } } = THROWS[k];
+  if (t >= w.lets && w.after) return w.after.from + (t - w.lets) * w.after.rate;
+  return w.release + (t - w.lets) * w.rate;
+}
+
+/** For the gun as a clip's hands hold it (clipHold). */
+const hq = new THREE.Quaternion();
+const hr = new THREE.Quaternion();
 const m2 = new THREE.Matrix4();
 const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
@@ -703,6 +728,27 @@ export class SyntyFigure implements FigureRig {
   private poses = 0;
   /** What its moves play (MOTION_ORDER) and how fast (setGait, from the unit view's gaits.ts). */
   private gait = { motion: RUN, speed: 1.5 };
+  /**
+   * A weapon's action from Mixamo (ACTIONS) over the clips, `time` seconds in, taking `share` of the body, whole or
+   * (`upper`) from the spine up; `raw`, with the procedural layers off (the weapons lab's look at a clip alone).
+   */
+  action: { id: ActionId; time: number; share: number; upper: boolean | 'free'; raw?: boolean } | null = null;
+  /** The weapon's actions playing this pose (direct), how much of the arms are theirs (over 0.5, all), and their clock. */
+  private readonly plays: ActionPlay[] = [];
+  private clipped = 0;
+  private actClock = 0;
+  /** A throw playing its clip (direct): a grenade's, a stone's; seconds since it began; and whether its clip has the arms. */
+  private throwKind: keyof typeof THROWS | null = null;
+  private throwT = 0;
+  private thrown = false;
+  /**
+   * The gun's turn in the right hand as the clips hold it (clipHold), in the hand's terms: learnt while both hands
+   * are on it (the barrel along them), kept as it is otherwise, as a gun held fast in the hand (a reload, a throw).
+   */
+  private readonly clipGrip = new THREE.Quaternion();
+  private clipGripKnown = false;
+  /** A blade's stroke playing its clip (strike). */
+  private struck = false;
   private readonly build: Build;
   /** The character's model, dressed (null while it loads), and the atlas it is painted from. */
   private model: THREE.Object3D | null = null;
@@ -1165,6 +1211,13 @@ export class SyntyFigure implements FigureRig {
     // Legs and the spine underneath: the clips, or procedural legs until they load.
     if (anim) this.animate(p, dt);
     else this.legs(p, time);
+    if (anim && this.action?.raw) {
+      // The clips alone (the weapons lab): every bone as they turn it, the weapon in the hand as it hangs there.
+      for (let i = 0; i < N; i++) if (i !== B.Hips) this.fk(i);
+      this.write();
+      this.poses++;
+      return;
+    }
     const climb = (p.climb ?? 0) * live;
     if (climb > 0.5) this.climbLegs(time + p.phase);
     // Knees give way as the body goes down.
@@ -1183,15 +1236,17 @@ export class SyntyFigure implements FigureRig {
     const style = STYLES[this.spec.style ?? 'none'];
     // A hit's knock-back is the clip's when there is one; a little of it stays, for the jolt.
     const knock = p.hit * (this.hit ? 0.12 : 0.38);
-    const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + p.lean - knock - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
+    // (A throw's clip leans the body itself: direct.)
+    const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + (this.thrown || this.struck ? 0 : p.lean) - knock - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
     // A two-handed gun blades the upper body: the support shoulder comes forward so that arm bends under
     // the gun instead of reaching across the chest; the gun and the head keep facing ahead (holdWeapon, the neck).
     // A pistol, hardly: it is held square to the target, both arms out.
-    this.blade = this.fore && !dead ? -(0.22 + 0.24 * p.aim) * (this.pistol ? 0.15 : 1) * live : 0;
+    // (The weapon's clips blade it themselves: direct.)
+    this.blade = this.fore && !dead && this.clipped <= 0.5 && !this.thrown ? -(0.22 + 0.24 * p.aim) * (this.pistol ? 0.15 : 1) * live : 0;
     // A melee stroke turns the living's upper body back and then across (the weapon goes with it); the dead grab instead.
     const swing = (p.swing ?? 0) * live;
     const grab = dead ? Math.abs(swing) : 0;
-    const twist = shamble * this.sway(1.7, 1.7, 0, p, time) * 0.12 * style.twist * live + this.blade + (dead ? 0 : -swing * 0.75);
+    const twist = shamble * this.sway(1.7, 1.7, 0, p, time) * 0.12 * style.twist * live + this.blade + (dead || this.struck ? 0 : -swing * 0.75);
     // Without clips the hips already roll (legs()); with them the roll goes on here, once a stride as they move.
     const roll = anim ? shamble * this.sway(1.3, Math.PI * CADENCE[this.gait.motion], 0, p, time) * (0.05 + p.run * 0.08) * style.roll * live : 0;
     if (anim) d[B.Hips]!.premultiply(rot(q1, Z, roll));
@@ -1201,7 +1256,7 @@ export class SyntyFigure implements FigureRig {
     const upper = this.tilt(B.Spine_03, roll, twist, lean);
     // Neck and head: they keep the eyes up as the spine leans; the dead's lolls, a screamer's goes back.
     // Aiming a gun the head comes down and over to the stock, the eye behind the sights.
-    const sight = this.armed && !this.melee ? p.aim * live : 0;
+    const sight = this.armed && !this.melee && this.clipped <= 0.5 ? p.aim * live : 0;
     const neck = rot(this.neckTurn, Z, shamble * 0.32 * live - sight * 0.12)
       .multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6 + grab * 0.4) * live + sight * 0.16))
       .premultiply(upper)
@@ -1240,11 +1295,17 @@ export class SyntyFigure implements FigureRig {
       else this.reach('R', this.rung(-1, time + p.phase), v4.set(-0.6, -1, -0.3));
     } else if (this.armed) {
       this.holdWeapon(p, lean);
-      if (throwing) this.throwArm(p.lean);
+      if (this.thrown) {
+        // The throw's clip has the free arm.
+      } else if (throwing) this.throwArm(p.lean);
       else if (search > 0.01) {
         // Rummaging: the gun stays low in the right hand, the left goes in among the things.
         const grip = tmpR.copy(this.fore ? this.leftHand(p) : this.p[B.Hand_L]!);
         this.reach('L', v3.lerpVectors(grip, this.rummage(1, time), search), v4.set(0.7, -1, 0.2));
+      } else if (this.fore && this.pistol && this.clipped > 0.5) {
+        // The pistol's clips have both hands round its grip already: the left stays theirs, never let go (21/10 #1).
+        for (let k = 0; k < ARM_L.length; k++) this.fk(ARM_L[k]!);
+        this.letGo = 0;
       } else if (this.fore) {
         this.support(p);
         this.letGoIf(p, upper, anim !== null, time);
@@ -1289,7 +1350,7 @@ export class SyntyFigure implements FigureRig {
     }
     // A stone tossed with the free hand, over whatever that arm was doing.
     const toss = (p.toss ?? 0) * live;
-    if (toss > 0 && !dead) this.tossArm(toss);
+    if (toss > 0 && !dead && !this.thrown) this.tossArm(toss);
     this.hands(p, dt, live, climb, search, throwing, toss);
     this.write();
     this.poses++;
@@ -1635,8 +1696,12 @@ export class SyntyFigure implements FigureRig {
       a.react(null);
       this.hit = null;
     }
-    // A corpse stays as it fell. Only a unit at ease looks round now and then.
-    if (p.fall < 1) a.update(dt, p.aim < 0.05 && p.hit < 0.01 && !(p.search ?? 0) && !dead);
+    this.actClock += dt;
+    const plays = this.action ? [this.action] : this.direct(p);
+    if (this.action) this.clipped = this.action.share;
+    a.play(plays);
+    // A corpse stays as it fell. Only a unit at ease looks round now and then (not over the weapon's clips).
+    if (p.fall < 1) a.update(dt, !plays.length && p.aim < 0.05 && p.hit < 0.01 && !(p.search ?? 0) && !dead);
     a.read(this.d, this.hipsShift);
     // The hips sway as the clip says; their height keeps the lower foot on the ground, whatever the
     // difference between the clip's legs and this character's.
@@ -1644,6 +1709,124 @@ export class SyntyFigure implements FigureRig {
     hips.y = r.p[B.Hips]!.y;
     const lowest = Math.min(this.ankle(B.UpperLeg_L, B.LowerLeg_L, B.Ankle_L), this.ankle(B.UpperLeg_R, B.LowerLeg_R, B.Ankle_R));
     hips.y += r.p[B.Ankle_L]!.y - lowest;
+  }
+
+  /**
+   * The weapon's actions (Mixamo, docs/MIXAMO.md; Arturo 21/10, notes 1, 6, 7) for what the unit does: a two-handed
+   * gun or the pistol in both hands held at rest or aimed, kneeling with a rifle, a reload. None for the dead, a
+   * blade, a climb, a throw, a search, a strike or a fall: those stay procedural. Their shares together say how much
+   * of the arms are the clips' (clipped: over a half, holdWeapon takes the gun as their hands hold it).
+   */
+  private direct(p: FigurePose): ActionPlay[] {
+    const out = this.plays;
+    out.length = 0;
+    this.clipped = 0;
+    this.thrown = false;
+    this.struck = false;
+    const a = this.anim;
+    if (a && !this.spec.dead && this.armed && this.melee && !this.death) return this.strike(p, a);
+    if (!a || this.spec.dead || !this.armed || this.melee || !this.fore || this.death) return out;
+    const live = 1 - Math.min(1, p.fall);
+    if (live <= 0 || (p.climb ?? 0) > 0.01 || (p.search ?? 0) > 0.01 || Math.abs(p.swing ?? 0) > 0.01) return out;
+    // A throw: a grenade's wind-up (the lean back: throwMotion), a stone's toss (tossStone). Its clip, the free
+    // (left) hand's, runs so that it lets go when the game does; the gun stays in the right hand meanwhile.
+    const clock = this.actClock;
+    const loop = (id: ActionId) => clock % Math.max(0.01, a.actSeconds(id));
+    function add(id: ActionId, share: number, upper: boolean | 'free', time = loop(id)): void {
+      if (share > 0.001) out.push({ id, time, share, upper });
+    }
+    const toss = p.toss ?? 0;
+    if (!this.throwKind && (p.lean < -0.02 || toss > 0)) {
+      this.throwKind = toss > 0 ? 'stone' : 'grenade';
+      this.throwT = 0;
+    } else if (this.throwKind) this.throwT += this.dt;
+    if (this.throwKind) {
+      const t = THROWS[this.throwKind];
+      if (this.throwT > t.end && Math.abs(p.lean) < 0.02 && toss <= 0) this.throwKind = null;
+      else {
+        // The clip has the body and the throwing arm; the gun arm keeps the gun low as ever (holdWeapon's own).
+        const share = live * THREE.MathUtils.clamp(Math.min(this.throwT / 0.08, (t.end - this.throwT) / 0.15), 0, 1);
+        add(t.clip, share, 'free', THREE.MathUtils.clamp(throwClipTime(this.throwKind, this.throwT), 0, a.actSeconds(t.clip)));
+        this.thrown = share > 0.5;
+        return out;
+      }
+    }
+    if (Math.abs(p.lean) > 0.04 || toss > 0) return out;
+    const aim = THREE.MathUtils.clamp(p.aim, 0, 1);
+    const crouch = THREE.MathUtils.clamp(p.crouch, 0, 1) * (1 - THREE.MathUtils.clamp(p.run, 0, 1));
+    // A reload (spin 0 to 1) eases in and out over its ends, the clip's own hands on the magazine meanwhile.
+    const spin = THREE.MathUtils.clamp(p.spin ?? 0, 0, 1);
+    const reload = !this.pistol && spin > 0 && spin < 1 ? Math.min(1, spin / 0.12, (1 - spin) / 0.12) : 0;
+    const held = live * (1 - reload);
+    if (this.pistol) {
+      // Both hands on it, at the ready or aimed; crouched the same over the crouch's legs.
+      add('pistolReady', held * (1 - aim), true);
+      add('pistolAim', held * aim, true);
+    } else {
+      // Standing (or moving) the rifle at low ready or shouldered over the legs' clips; kneeling, the whole body.
+      add('rifleLowered', held * (1 - crouch) * (1 - aim), true);
+      add('rifleAim', held * (1 - crouch) * aim, true);
+      add('rifleKneel', held * crouch * (1 - aim), false);
+      add('rifleKneelAim', held * crouch * aim, false);
+      add('rifleReload', live * reload, true, spin * a.actSeconds('rifleReload'));
+    }
+    for (const play of out) this.clipped += play.share;
+    return out;
+  }
+
+  /**
+   * A blade's stroke (the pose's swing: unitViews lunge) with its clip over the upper body, the knife's stab or the
+   * machete's swing, timed so it lands when the game's does; the blade in the clip's hand (clipHold).
+   */
+  private strike(p: FigurePose, a: AnimDriver): ActionPlay[] {
+    const out = this.plays;
+    const swing = p.swing ?? 0;
+    const live = 1 - Math.min(1, p.fall);
+    const blade = this.drawn === 'belt' ? this.spec.belt : this.spec.weapon;
+    const kind = String(blade ?? '').includes('knife') ? 'knife' : 'machete';
+    if (this.throwKind !== kind && Math.abs(swing) > 0.01) {
+      this.throwKind = kind;
+      this.throwT = 0;
+    } else if (this.throwKind === kind) this.throwT += this.dt;
+    if (this.throwKind !== kind || live <= 0) return out;
+    const t = THROWS[kind];
+    if (this.throwT > t.end && Math.abs(swing) < 0.01) {
+      this.throwKind = null;
+      return out;
+    }
+    const share = live * THREE.MathUtils.clamp(Math.min(this.throwT / 0.06, (t.end - this.throwT) / 0.15), 0, 1);
+    if (share > 0.001) out.push({ id: t.clip, time: THREE.MathUtils.clamp(throwClipTime(kind, this.throwT), 0, a.actSeconds(t.clip)), share, upper: true });
+    this.clipped = share;
+    this.struck = share > 0.5;
+    return out;
+  }
+
+  /**
+   * The gun as the clips' hands hold it (direct): fast in the right hand (clipGrip), the right arm the clip's; a
+   * blade as the hand holds it.
+   */
+  private clipHold(): void {
+    const r = this.rest!;
+    const { d, p: pos } = this;
+    for (let k = 0; k < ARMS.length; k++) this.fk(ARMS[k]!);
+    hq.copy(d[B.Hand_R]!).multiply(hr.copy(r.gripTurn).invert());
+    // Both hands on it (no reload): a rifle's barrel from the right hand to the left; a pistol's, both
+    // hands round its grip, along the forearm. What that turn is in the hand's terms is learnt, a little a frame.
+    const steady = !this.melee && this.clipped > 0.9 && !this.plays.some((a) => a.id === 'rifleReload');
+    if (steady) {
+      const toward = this.pistol ? v1.copy(pos[B.Hand_R]!).sub(pos[B.Elbow_R]!) : v1.copy(pos[B.Hand_L]!).sub(pos[B.Hand_R]!);
+      if (toward.lengthSq() > 1e-6) {
+        hr.setFromUnitVectors(v2.copy(Z).applyQuaternion(hq), toward.normalize()).multiply(hq);
+        hr.premultiply(q1.copy(hq).invert());
+        if (this.clipGripKnown) this.clipGrip.slerp(hr, 0.2);
+        else this.clipGrip.copy(hr);
+        this.clipGripKnown = true;
+      }
+    }
+    if (this.clipGripKnown && !this.melee) hq.multiply(this.clipGrip);
+    this.gunQ.copy(hq);
+    this.gunP.copy(GRIP).applyQuaternion(this.gunQ).add(pos[B.Hand_R]!);
+    d[B.Hand_R]!.copy(this.gunQ).multiply(r.gripTurn);
   }
 
   /** Procedural legs, as figures.ts (combat stance, squat, stride, the dead drag a foot), until the clips load. */
@@ -1710,6 +1893,10 @@ export class SyntyFigure implements FigureRig {
    * it up and over, a melee weapon hangs and is raised to strike.
    */
   private holdWeapon(p: FigurePose, lean: number): void {
+    if (this.clipped > 0.5) {
+      this.clipHold();
+      return;
+    }
     const r = this.rest!;
     const { d, p: pos } = this;
     const sh = r.p[B.Shoulder_R]!;
@@ -1736,8 +1923,15 @@ export class SyntyFigure implements FigureRig {
       v1.set(lerp(sh.x * low.across, sh.x * 0.5, aim), lerp(sh.y - down, sh.y - 0.02, aim) + reload * 0.08, lerp(ahead, sh.z + 0.19, aim));
       e1.set((1 - aim) * lerp(low.tip, low.tipWide, wide) - p.recoil * 0.18 - reload * 0.5, (1 - aim) * low.turn + reload * 0.2, reload * 0.9, 'YXZ');
     }
+    // While the free hand throws (direct: the throw's clip turns the chest round), the rifle tucked against the body:
+    // at the hip, pressed to it, the muzzle at the ground, following the hips, not the chest (21/10, Gameplay).
+    const tucked = this.thrown && !this.melee && !this.pistol;
+    if (tucked) {
+      v1.set(sh.x * 0.45, r.hip + 0.1, sh.z + 0.14);
+      e1.set(1.05, 0.55, 0, 'YXZ');
+    }
     // Crouched at low ready: over the knees.
-    if (!this.melee) {
+    if (!this.melee && !tucked) {
       const low = THREE.MathUtils.clamp(p.crouch, 0, 1) * (1 - aim);
       v1.y += low * CROUCH_LIFT;
       v1.z += low * CROUCH_AHEAD;
@@ -1745,8 +1939,9 @@ export class SyntyFigure implements FigureRig {
     this.gunQ.setFromEuler(e1);
     if (this.melee) this.gunQ.premultiply(d[s3]!);
     else if (!this.pistol) {
-      // A gun stays level however the clip bends the spine (a crouch, a hunch): only the chest's heading turns it.
-      const ahead = v2.copy(Z).applyQuaternion(d[s3]!);
+      // A gun stays level however the clip bends the spine (a crouch, a hunch): only the chest's heading turns it
+      // (tucked for a throw, the hips').
+      const ahead = v2.copy(Z).applyQuaternion(d[tucked ? B.Hips : s3]!);
       this.gunQ.premultiply(q1.setFromAxisAngle(Y, Math.atan2(ahead.x, ahead.z) - this.blade));
     }
     // A pistol keeps to the body's own front, not the chest's: the clips turn the chest as for a rifle, and
@@ -1759,7 +1954,8 @@ export class SyntyFigure implements FigureRig {
         this.gunQ.premultiply(q2);
         this.gunP.copy(v1).sub(r.p[s3]!).applyQuaternion(q2).add(pos[s3]!);
       } else this.gunP.copy(v1).sub(r.p[s3]!).add(pos[s3]!);
-    } else this.gunP.copy(v1).sub(r.p[s3]!).applyQuaternion(d[s3]!).add(pos[s3]!);
+    } else if (tucked) this.gunP.copy(v1).sub(r.p[B.Hips]!).applyQuaternion(d[B.Hips]!).add(pos[B.Hips]!);
+    else this.gunP.copy(v1).sub(r.p[s3]!).applyQuaternion(d[s3]!).add(pos[s3]!);
     this.gunP.addScaledVector(v2.copy(Z).applyQuaternion(this.gunQ), -p.recoil * 0.05);
     this.clearGun();
     // Right hand on the grip, holding the gun's turn.

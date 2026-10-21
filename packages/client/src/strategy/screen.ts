@@ -141,7 +141,6 @@ import {
   LEVEL_TEXT,
   needsLevelLine,
   nestNoContactTip,
-  nestNotice,
   rewardMultiplier,
   wintry,
   outingsMark,
@@ -1086,7 +1085,7 @@ export class StrategyScreen {
   }
 
   /** Remembers each panel's scroll across re-renders. */
-  private panel(key: string, side: 'left' | 'right' | 'left.compact', ...children: (Node | null | false | undefined)[]): HTMLElement {
+  private panel(key: string, side: 'left' | 'right' | 'left.compact' | 'right.compact', ...children: (Node | null | false | undefined)[]): HTMLElement {
     const wrap = h(`div.strat-${side}`, { onscroll: (e: Event) => this.scroll.set(key, (e.target as HTMLElement).scrollTop) });
     const inner = h('div.x-panel');
     append(inner, ...children);
@@ -1147,75 +1146,17 @@ export class StrategyScreen {
         note: page.note,
       });
     }
-    // Story chapters and the final mission are announced whenever they open: after a level, a mission or an event.
-    // Chapter 1 is already presented in squad select, immediately after Atalaya.
-    for (const o of shownOffers(c).filter((x) => (x.story || x.final) && x.story !== 1 && !prev.offers.some((p) => p.id === x.id))) {
-      fresh.push({
-        tone: o.final ? 'bad' : 'good',
-        kicker: o.final ? 'DIAPASÓN LOCALIZADO' : `MISIÓN DE HISTORIA · HOJA ${o.story}`,
-        rank: o.final ? 85 : 80,
-        title: o.name,
-        text: `${o.final ? 'Misión final' : MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}. ${offerBriefing(c, o)}`,
-        note: offerSignature(c, o),
-      });
-    }
-    // What the campaign logged as a pop-up: rumours, side quests and how they end. New entries sit at the front.
+    // Of what the campaign logged as a pop-up, only the siege (Ana, 21/10 #26, #28: the windows after a mission kept
+    // her from Soldados; missions, rumours, Nidos, the convoy and errands are on the Mapa, read when she goes there).
+    // The events that ask for a decision have their own window (renderModal). New entries sit at the front.
     const last = prev.log[0];
     const seen = last ? c.log.findIndex((e) => e.day === last.day && e.text === last.text) : c.log.length;
     for (const e of c.log.slice(0, seen === -1 ? c.log.length : seen).reverse()) {
-      if (e.alert) fresh.push(this.logAlert(c, e.tone, e.alert, e.text));
+      if (e.alert?.kicker === 'Asedio') fresh.push(this.logAlert(c, e.tone, e.alert, e.text));
     }
     // The clock as the days pass.
     if (c.day > prev.day) sound('ui.tick');
-    // Missions take days too: what happened meanwhile pops up after the debrief.
-    if (c.day > prev.day) this.timeAlerts(prev, c, fresh);
     this.flushAlerts(fresh);
-  }
-
-  /** What changed while time passed: new operations, works, Nidos, the monthly letter, the doom track. */
-  private timeAlerts(prev: CampaignState, c: CampaignState, fresh: Alert[]): void {
-    for (const o of shownOffers(c).filter((x) => !x.story && !x.final && !x.quest && !prev.offers.some((p) => p.id === x.id))) {
-      fresh.push({
-        tone: o.facility ? 'bad' : 'info',
-        kicker: o.facility ? 'OBJETIVO: NIDO' : 'NUEVA OPERACIÓN',
-        rank: o.facility ? 65 : 40,
-        title: o.name,
-        text: `${MISSION_NAMES[o.kind]} en ${REGIONS[o.region].name}. ${offerBriefing(c, o)}`,
-      });
-    }
-    // The Taller's work that was going on and is no longer: finished.
-    for (const work of prev.base.works.filter((w) => w.project && !c.base.works.some((x) => x.plot === w.plot && x.kind === w.kind))) {
-      fresh.push({ tone: 'good', kicker: 'OBRAS TERMINADAS', rank: 20, title: CRAFTS[work.project!].name, text: `El Taller ha terminado ${CRAFTS[work.project!].the}.` });
-    }
-    for (const r of c.regions.filter((x) => x.facility && !prev.regions.find((p) => p.id === x.id)?.facility)) {
-      fresh.push({
-        tone: 'bad',
-        kicker: 'NIDO',
-        rank: 65,
-        title: REGIONS[r.id].name,
-        // Who to call and from where, not «la zona» (Ana, 20/10 #35; Lore's words).
-        text: nestNotice(r.id, r.contacted, doomSubject(bastionLevel(c)), contactCost(c)),
-      });
-    }
-    if (c.nextSupplyDay !== prev.nextSupplyDay) {
-      fresh.push({
-        tone: 'good',
-        kicker: 'FIN DE MES',
-        rank: 10,
-        title: 'Llega el convoy de Brena',
-        text: `Ruth Halvorsen manda desde Brena ${c.credits - prev.credits} suministros. Cada zona contactada aumenta el envío.`,
-      });
-    }
-    if (c.doom > prev.doom) {
-      const level = bastionLevel(c);
-      fresh.push({
-        tone: 'bad',
-        kicker: doomName(level).toUpperCase(),
-        rank: 50,
-        title: doomStatus(level, c.doom),
-        text: `Si llega al Bastión, la campaña está perdida. Quemar Nidos la hace retroceder.`,
-      });
-    }
   }
 
   /** A pop-up the campaign logged: rumours (which can be listened to from it) and side quests. */
@@ -1612,7 +1553,7 @@ export class StrategyScreen {
       [
         'geoscape',
         [
-          ...shownOffers(c).map((o) => ({ key: `offer:${o.id}`, label: `Nueva operación: ${o.name}`, urgent: !!(o.story || o.final || o.facility) })),
+          ...shownOffers(c).map((o) => ({ key: `offer:${o.id}`, label: `Nueva misión: ${o.name}`, urgent: !!(o.story || o.final || o.facility) })),
           ...c.rumors.map((r) => ({ key: `rumor:${r.id}`, label: `Rumor en ${REGIONS[r.region].name}`, urgent: false })),
         ],
       ],
@@ -1719,7 +1660,8 @@ export class StrategyScreen {
     const left = this.panel(
       'geo-left',
       'left',
-      h('div.x-head', {}, 'Operaciones'),
+      // «Misiones», not «Operaciones» (Ana, 21/10 #25: it wasn't understood).
+      h('div.x-head', {}, 'Misiones'),
       list,
       ...(threats.length
         ? [
@@ -1760,7 +1702,7 @@ export class StrategyScreen {
               this.render();
             },
           },
-          `‹ Operaciones · ${shownOffers(c).length}`,
+          `‹ Misiones · ${shownOffers(c).length}`,
         ),
       );
     }
@@ -1876,7 +1818,7 @@ export class StrategyScreen {
               ? `MISIÓN DE HISTORIA · HOJA ${o.story}`
               : o.quest
                 ? `ENCARGO · ${QUESTS[o.quest].title.toUpperCase()}`
-                : 'OPERACIÓN',
+                : 'MISIÓN',
       ),
       h('h2.x-title', {}, o.name),
       h('p.x-sub', {}, `${REGIONS[o.region].name} · ${biome}${o.night ? ` · ${NIGHT_TEXT.label}` : ''}${quest ? ` · paso ${quest.step + 1} de ${QUESTS[quest.id].steps.length}` : ''}`),
@@ -2255,8 +2197,9 @@ export class StrategyScreen {
       damage.hurt ? `${damage.hurt} ${damage.hurt === 1 ? 'tocada' : 'tocadas'}` : '',
       damage.spent ? `${damage.spent} ${PIECE_STATE.spent}` : '',
     ].filter(Boolean);
-    if (!parts.length) return h('p.debrief-damage', {}, 'En la base: todo en pie.');
-    return h('p.debrief-damage.x-warn', {}, `En la base: ${parts.join(', ')}. `, h('button.x-btn.small', { onclick: () => void this.go('facilities') }, BUILD_TEXT.build));
+    // A line of the debrief's list (renderDebrief).
+    if (!parts.length) return h('li.debrief-damage', {}, 'En la base: todo en pie.');
+    return h('li.debrief-damage.warn', {}, `En la base: ${parts.join(', ')}. `, h('button.x-btn.small', { onclick: () => void this.go('facilities') }, BUILD_TEXT.build));
   }
 
   /**
@@ -2350,7 +2293,8 @@ export class StrategyScreen {
     );
     const s = c.soldiers.find((x) => x.id === this.soldier);
     const draft = this.custom && this.custom.soldier === s?.id ? this.custom : null;
-    this.showcase(s?.alive ? SOLDIER : null, s ? this.playerColor(s.owner) : '#fff', draft?.appearance ?? s?.appearance, s ? this.gearFor(c, s) : undefined, s?.id);
+    // A fallen one: their grave where they would stand (playtest 21/10 #13).
+    this.showcase(s?.alive ? SOLDIER : null, s ? this.playerColor(s.owner) : '#fff', draft?.appearance ?? s?.appearance, s ? this.gearFor(c, s) : undefined, s?.id, !!s && !s.alive);
     if (!s) return;
     if (draft) {
       this.viewEl.append(this.panel('barracks-right', 'right', ...this.customizer(s, draft)));
@@ -2914,24 +2858,33 @@ export class StrategyScreen {
       );
     };
     if (posting) this.viewEl.append(this.postsPanel(c, squad));
-    else this.viewEl.append(
-      this.panel(
-        'squad-left',
-        'left.compact',
-        h(
-          'div.x-head',
-          { title: siege ? BASE_SIEGE_TEXT.defenders : 'Pulsa un soldado para meterlo o sacarlo. Los del otro jugador los elige él; los huecos que no llene se quedan vacíos. El equipo se cambia en Soldados.' },
-          siege ? `Tus soldados · ${myCount}` : `Tus soldados · ${myCount}/${limit}`,
+    else {
+      this.viewEl.append(
+        this.panel(
+          'squad-left',
+          'left.compact',
+          h(
+            'div.x-head',
+            { title: siege ? BASE_SIEGE_TEXT.defenders : 'Pulsa un soldado para meterlo o sacarlo. Los del otro jugador los elige él; los huecos que no llene se quedan vacíos. El equipo se cambia en Soldados.' },
+            siege ? `Tus soldados · ${myCount}` : `Tus soldados · ${myCount}/${limit}`,
+          ),
+          h('div.x-list', {}, ...roster.map(pickRow)),
         ),
-        h('div.x-list', {}, ...roster.map(pickRow)),
-        lent.length ? h('div.x-head', {}, `De ${this.playerName(lent[0]!.owner)} · ${squad.length - myCount}`) : null,
-        lent.length ? h('div.x-list', {}, ...lent.map(pickRow)) : null,
-      ),
-    );
+      );
+      // The other player's on the right (Ana, 21/10 #15), as each sees their own on their left in the row.
+      if (lent.length)
+        this.viewEl.append(
+          this.panel(
+            'squad-right',
+            'right.compact',
+            h('div.x-head', { title: 'Los elige su jugador' }, `De ${this.playerName(lent[0]!.owner)} · ${squad.length - myCount}`),
+            h('div.x-list', {}, ...lent.map(pickRow)),
+          ),
+        );
+    }
 
     const ready = c.launchReady[this.mySlot];
     const partner = this.partner();
-    const waiting = partner?.connected && c.players.length > 1 && !c.launchReady[partner.slot];
     const partnerReady = partner?.connected && !ready && c.launchReady[partner.slot];
     // Who has said «listo», in each one's colour: the partner's yes is seen at a glance.
     const together = c.players.length > 1 && partner?.connected;
@@ -2954,7 +2907,8 @@ export class StrategyScreen {
     // Down under the row, centred (Ana, 20/10 #16, as her drawing): who is ready over one panel, the mission on its
     // left (its name and what it is for, whole: no kicker, no «Botín · Brena · ★», no picture of the vehicle) and
     // the buttons on its right (playtest 19/10 #3; on a laptop the mission's window at the top hid the soldiers, #2).
-    const status = ready && waiting ? `Esperando a ${partner!.name}` : partnerReady ? `${partner!.name} espera para salir` : siege ? BASE_SIEGE_TEXT.defenders : '';
+    // Who is ready is on the plates over the panel (Ana, 21/10 #16: no «Arturo espera para salir» here).
+    const status = siege ? BASE_SIEGE_TEXT.defenders : '';
     this.viewEl.append(
       h(
         'div.squad-bottom',
@@ -2977,17 +2931,9 @@ export class StrategyScreen {
             h(
               `button.x-btn.big.squad-launch${ready ? '.ready' : ''}${partnerReady ? '.waiting' : ''}`,
               { disabled: !c.squad.length, onclick: () => this.send({ type: 'launch', ready: !ready }) },
-              siege
-                ? ready
-                  ? 'LISTOS PARA DEFENDER'
-                  : partnerReady
-                    ? `DEFENDER CON ${partner!.name.toUpperCase()}`
-                    : 'DEFENDER EL BASTIÓN'
-                : ready
-                  ? 'LISTOS PARA SALIR'
-                  : partnerReady
-                    ? `SALIR CON ${partner!.name.toUpperCase()}`
-                    : 'LANZAR MISIÓN',
+              // «Lanzar misión», and «A punto» once pressed (Ana, 21/10 #16: no «Salir con Arturo»; Lore: no gender, as on
+              // the ready board); pressed again, back.
+              ready ? 'A PUNTO' : siege ? 'DEFENDER EL BASTIÓN' : 'LANZAR MISIÓN',
             ),
             status ? h('small.x-muted', {}, status) : null,
             // Not «Cancelar misión» here (#3: it read as the same as going back); it is on the mission's card on the map.
@@ -3169,31 +3115,35 @@ export class StrategyScreen {
       this.lineup([]);
       void this.go('barracks');
     };
-    // Laid out as the Escuadra (Ana, 20/10 #26): the row centred, and under it one panel, the report on its left and
-    // «Continuar» on its right.
+    // Laid out as the Escuadra (Ana, 20/10 #26): the row centred, and under it one panel. Within it (Ana, 21/10 #24:
+    // «como si lo hiciera el maquetador sénior»), one column on one left edge: the result's plate and the mission's
+    // name on a head line, no «Informe de misión» over them; the figures; then what happened, a line each, all alike;
+    // the story's page last. «Continuar» apart on the right.
+    const line = (tone: 'good' | 'warn' | 'bad' | '', ...content: (string | HTMLElement)[]) => h(`li.line${tone ? `.${tone}` : ''}`, {}, ...content);
+    const lines = [
+      // The base fell (report.fallen): what is lost, in red like the other warnings of the debrief.
+      report.fallen ? line('bad', h('b', {}, `${BASE_SIEGE_TEXT.fallen}. `), BASE_SIEGE_TEXT.fallenLine) : null,
+      this.damageLine(report.damage),
+      report.loot?.line ? line('good', report.loot.line) : null,
+      ...barLines(report.squad).map((text) => line('good', text)),
+      report.night ? line('', NIGHT_TEXT.report) : null,
+    ].filter((x): x is HTMLElement => !!x);
     this.viewEl.append(
       h(
         'div.squad-bottom.debrief-bottom',
         {},
         h(
-          `div.x-panel.squad-mission.briefing-head.${report.victory ? 'victory' : 'defeat'}`,
+          `div.x-panel.squad-mission.debrief-card.briefing-head.${report.victory ? 'victory' : 'defeat'}`,
           {},
           h(
-            'div.squad-text',
+            'div.debrief-main',
             {},
-            h('div.alert-kicker', { className: `alert-kicker ${report.victory ? 'good' : 'bad'}` }, 'INFORME DE MISIÓN'),
-            h('h1', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'),
-            h('p.x-sub', {}, report.missionName),
+            h('div.debrief-head', {}, h('h1.debrief-result', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'), h('span.debrief-name', {}, report.missionName)),
             tally,
-            this.damageLine(report.damage),
-            // The base fell (report.fallen): what is lost, in red like the other warnings of the debrief.
-            report.fallen ? h('p.x-text.x-bad.debrief-fallen', {}, h('b', {}, `${BASE_SIEGE_TEXT.fallen}. `), BASE_SIEGE_TEXT.fallenLine) : null,
-            report.loot?.line ? h('p.debrief-loot', {}, report.loot.line) : null,
-            ...barLines(report.squad).map((line) => h('p.debrief-loot', {}, line)),
-            report.night ? h('p.debrief-loot', {}, NIGHT_TEXT.report) : null,
+            lines.length ? h('ul.debrief-lines', {}, ...lines) : null,
             story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
           ),
-          h('div.squad-actions', {}, h('button.x-btn.big.primary', { onclick: close }, 'CONTINUAR')),
+          h('div.squad-actions.debrief-actions', {}, h('button.x-btn.big.primary', { onclick: close }, 'CONTINUAR')),
         ),
       ),
     );

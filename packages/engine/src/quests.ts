@@ -141,7 +141,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         title: 'Caras conocidas',
         text: 'Los Cuervos leen por radio su lista de prisioneros. Los cambian por comida y munición. {soldier} ha oído el nombre de {relation}, {relative}. Encontrar el campamento costará días y soldados.',
         options: [
-          { label: 'Buscar el campamento', effect: 'Tres operaciones', then: 'next' },
+          { label: 'Buscar el campamento', effect: 'Tres misiones', then: 'next' },
           { label: 'No podemos permitírnoslo', effect: '{soldier} gana el rasgo «Rencor»', then: 'refused' },
         ],
       },
@@ -245,7 +245,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         title: 'Una carta para la doctora',
         text: 'Los del Hospital traen una carta para la Dra. Nwosu. La firma Tomasz Rybak, que fue su ayudante en el Instituto Galen. Ella lo daba por muerto. Trabaja para la Congregación en un laboratorio de Corran. Quiere hablar.',
         options: [
-          { label: 'Contestar', effect: 'Una operación en el laboratorio', then: 'next' },
+          { label: 'Contestar', effect: 'Una misión en el laboratorio', then: 'next' },
           { label: 'Quemar la carta', effect: 'Sin efecto', then: 'burned' },
         ],
       },
@@ -272,7 +272,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
       rescued: { text: 'Rybak y la Dra. Nwosu comparten mesa y no se hablan. Los antibióticos llegan antes de tiempo.', tone: 'good', tech: 'nanoMedkit' },
       ended: { text: 'El laboratorio arde con un año de trabajo de la Congregación dentro. Los zombis retroceden. La Dra. Nwosu pasa la noche junto a la radio.', tone: 'good', doom: -1 },
       burned: { text: 'La carta arde. La Dra. Nwosu no pregunta.', tone: 'bad' },
-      failure: { text: 'La Congregación sabe que la buscamos. Sus campanas atraen a Corran a los Acorazados del cuartel: uno más en cada operación de la zona.', tone: 'bad', enemy: 'mec' },
+      failure: { text: 'La Congregación sabe que la buscamos. Sus campanas atraen a Corran a los Acorazados del cuartel: uno más en cada misión de la zona.', tone: 'bad', enemy: 'mec' },
     },
   },
 
@@ -290,7 +290,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         title: 'Las campanas de Telm',
         text: 'Telm es un pueblo de la sierra. Cada noche llega una horda y la gente se encierra en la iglesia. Un coche patrulla de los Cuervos, con la sirena puesta en el valle, atrae a los zombis hacia el pueblo. Cuando no quede nadie, bajarán a saquearlo.',
         options: [
-          { label: 'Callar la sirena', effect: 'Una operación de sabotaje', then: 'next' },
+          { label: 'Callar la sirena', effect: 'Una misión de sabotaje', then: 'next' },
           { label: 'Ahora no podemos', effect: 'Telm se vacía: −10 suministros en cada convoy', then: 'failure' },
         ],
       },
@@ -467,7 +467,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         title: 'La mina',
         text: 'Las galerías de una mina abandonada de Carvik están llenas de zombis. Dentro hay un Chillón que los llama. Cada noche salen más hacia los pueblos.',
         options: [
-          { label: 'Bajar a la mina', effect: 'Una operación contra el Chillón', then: 'next' },
+          { label: 'Bajar a la mina', effect: 'Una misión contra el Chillón', then: 'next' },
           { label: 'Sellarla con dinamita', effect: 'Sin efecto', then: 'sealed' },
         ],
       },
@@ -503,7 +503,7 @@ export const QUESTS: Record<QuestId, QuestDef> = {
         title: 'El camión del río',
         text: 'Con el río bajo ha aparecido un camión de suministros hundido junto al puente de La Vega. La carga va precintada y casi toda sigue seca. Los Cuervos también lo han visto.',
         options: [
-          { label: 'Llegar antes que ellos', effect: 'Una operación de recuperación', then: 'next' },
+          { label: 'Llegar antes que ellos', effect: 'Una misión de recuperación', then: 'next' },
           { label: 'Dejarlo en el río', effect: 'Sin efecto', then: 'left' },
         ],
       },

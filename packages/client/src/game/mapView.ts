@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { kitModel } from '../strategy/baseKit';
-import { carPartner, decorOf, DIRS4, floorLevels, FURNITURE_OF_ITS_OWN, litMask, objectAt, type Biome, type DecorKind, type GameState, type Place, type Site, type TileKind } from '@bastion/engine';
+import { carPartner, decorOf, DIRS4, floorLevels, FURNITURE_OF_ITS_OWN, litMask, objectAt, roomAt, type Biome, type DecorKind, type GameState, type MarketSite, type Place, type Site, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
 import { StaticBatch, type Dirty, type UvRect } from './batch';
 import { atlasRect, mapAtlasTexture } from './mapAtlas';
@@ -13,6 +13,7 @@ import { unitPosNow } from './unitViews';
 import { beforeNextFrame, shadowsChanged } from './renderer';
 import { SKY_LAND } from './sky';
 import { ExploredMemory } from './explored';
+import { outskirtsGeometry } from './outskirts';
 import { extendShader, FogOfWar } from './fogOfWar';
 import { FLOOR, GroundMap, scatterCover } from './ground';
 import { inwards, madeAs, towersOf, wearOf, type Wear } from './siegeDressing';
@@ -27,7 +28,7 @@ import { medicalDetails, medicalWallPatch } from './medicalDetails';
 import { medicalFurniture } from './medicalFurniture';
 import { contactPatch, GroundOcclusion } from './groundAO';
 import { atlasTexture } from './synty';
-import { CHARACTER_SCALE, FOOTPRINT_FIT, PROPS, type AtlasId, type PropId, type PropSet } from './syntyManifest';
+import { CHARACTER_SCALE, FOOTPRINT_FIT, KIT_SCALE, PROPS, SYNTY_SCALE, type AtlasId, type PropId, type PropSet } from './syntyManifest';
 import { preloadSyntyProps, syntyProp, syntyPropsLoaded, syntySet } from './syntyProps';
 
 /**
@@ -125,6 +126,10 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
       return low ? (biome === 'facility' ? 'techCrate' : 'crates') : 'crates';
     case 'barricade':
       return low ? (biome === 'facility' ? 'techBarrier' : biome === 'wilds' ? 'sandbags' : 'barricade') : null;
+    // A room's windows barricaded from inside (playtest 21/10, #20): drawn as a pile of its own (barricadeWindow); the set
+    // is only what the generic path would take.
+    case 'windowBarricade':
+      return 'barricade';
     case 'tree':
       return low ? 'logs' : site === 'roadside' ? 'pines' : biome === 'wilds' ? 'forest' : 'tree';
     case 'rock':
@@ -259,7 +264,7 @@ function carPaintPatch(material: THREE.Material, paint: readonly number[]): void
   });
 }
 
-const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'hospitalBed', 'medicalShelf', 'gurney', 'medicalCart', 'medicalCabinet', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'bedsideTable', 'visitorChair', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'clinicalBin', 'consultDesk', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire', 'pallets', 'drums', 'machine', 'bench', 'fridge', 'stove', 'bathtub', 'washbasin', 'wc', 'tvStand']);
+const FACING = new Set<DecorKind>(['carFront', 'carRear', 'fountain', 'fountainCorner', 'fence', 'gatePost', 'hay', 'shelf', 'counter', 'table', 'sofa', 'bed', 'hospitalBed', 'medicalShelf', 'gurney', 'medicalCart', 'medicalCabinet', 'wheelchair', 'receptionDesk', 'waitingSeats', 'examTable', 'medicalMonitor', 'xray', 'bedsideTable', 'visitorChair', 'clinicalSink', 'sterilizer', 'ultrasound', 'waitingTable', 'waterDispenser', 'toilet', 'clinicalBin', 'consultDesk', 'desk', 'wardrobe', 'cabinet', 'rack', 'pipe', 'barricade', 'log', 'sign', 'wire', 'pallets', 'drums', 'machine', 'bench', 'fridge', 'stove', 'bathtub', 'washbasin', 'wc', 'tvStand', 'windowBarricade']);
 
 /**
  * The scenarios' things that stand over several tiles (#25), and what each of
@@ -349,6 +354,8 @@ interface Kit {
   /** Props' materials: 'packed' for the packed texture's packs, else by pack. */
   atlas: Map<AtlasId | 'packed', THREE.Material>;
   surroundings: THREE.Mesh;
+  /** What lies beyond the edge, in the dark (outskirts.ts): the town's blocks, the sheds, the wood; null for the base. */
+  outskirts: THREE.Mesh | null;
   snowbank: THREE.MeshStandardMaterial | null;
   clinical: THREE.MeshStandardMaterial | null;
   clinicalWall: THREE.MeshStandardMaterial | null;
@@ -402,6 +409,18 @@ class TreeLayer {
   }
 }
 
+/**
+ * A tree's trunk as the ground's occlusion sees it (groundAO.ts), at the tree's place and scale: the trees darken no
+ * ground with their own meshes (from above the crown would stand in for the ground under it), and without it they
+ * stood on the ground with nothing at their foot, as if lifted off it (playtest 21/10 #12).
+ */
+const TRUNK_OCCLUDER = new THREE.CylinderGeometry(0.16, 0.24, 1.3, 6).translate(0, 0.65, 0);
+
+/** How far past its edge the base's pinar can go on (tiles; the line it thins out by wobbles inside that). */
+const BASE_WOOD = 12;
+/** Whether it does (the clearing lab's `?sinbosque` turns it off, to weigh what it costs). */
+export const BEYOND = { baseWood: true };
+
 /** The trees whose crowns are drawn at their size and fade away over what the player looks at (19/10, MAPAS.md §4.7). */
 const CROWNS = new Set<PropId>(['streetTree', 'tree', 'treePine', 'treeDead', 'pineLarge', 'pineLarge2', 'pineDead']);
 
@@ -413,6 +432,29 @@ const NO_OCCLUSION = new Set<PropId>(['streetLight', 'powerPole', 'powerLine', '
  * A supermarket's shelving (playtest 20/10 #18), stretched up from its models' height at a tile long: the gondolas and
  * wall shelves to 1.35 m, the rows' low ends to 0.75; a wall shelf this far back against its wall (tiles).
  */
+/**
+ * A window barricaded from inside (barricadeWindow): how far the wall's inner face is from the middle of the tile
+ * inside it (a wall stands on its tile's middle, buildings.ts WALL_HALF), and how high the window's sill is.
+ */
+const WINDOW_FACE = 1 - 0.1 * 1.75 * SYNTY_SCALE * KIT_SCALE;
+const WINDOW_SILL = 0.62;
+
+/**
+ * A supermarket's shelving as stocked as it is (playtest 21/10 #19, Ana: always a little ransacked): 0 still stocked,
+ * a gap here and there; 1 stocked but searched since, emptier; 2 stripped, a few things left on some. The odds of each
+ * look (full, gaps, bare, empty) and how many things lie on the floor in front of each.
+ */
+const SHELF_LOOKS: readonly (readonly [number, number, number, number])[] = [
+  [0.6, 0.4, 0, 0],
+  [0.1, 0.3, 0.4, 0.2],
+  [0, 0.1, 0.45, 0.45],
+];
+const SHELF_LITTER = [0.9, 1.3, 1.6];
+const SHELF_IDS = {
+  gondola: ['gondola', 'gondolaGaps', 'gondolaBare', 'gondolaEmpty'],
+  wallShelf: ['wallShelf', 'wallShelfGaps', 'wallShelfBare', 'wallShelfEmpty'],
+} as const satisfies Record<string, readonly PropId[]>;
+
 const SHELF_TALL = 1.36;
 const END_TALL = 1.35;
 const WALL_SHELF_BACK = 0.28;
@@ -457,6 +499,8 @@ export class MapView {
   private snow: SnowCover | null = null;
   private snowReady = false;
   private visibility: boolean[] | null = null;
+  /** As far as the squad's line of sight goes (setVisibility): seen, under a light haze, without enemies. */
+  private view: boolean[] | null = null;
   /** What the squad sees as the engine has it (in a siege, visibility is all of it; the cutaway goes by this). */
   private sight: boolean[] | null = null;
   private width = 0;
@@ -492,6 +536,8 @@ export class MapView {
   private aoDirty: Dirty | null = null;
   /** How many tiles had been searched at the last rebuild: a search redraws the map (the furniture opens). */
   private searchedSeen = 0;
+  /** The rooms searched as the map was last drawn (a searched supermarket's shelves are emptier: SHELF_LOOKS). */
+  private roomsSeen = 0;
   /** The special loot boxes as last drawn, by place (a partial rebuild finds again only those in its area), and their marks. */
   private readonly loot = new Map<number, LootSpot>();
   readonly lootMarks = new LootMarks();
@@ -531,7 +577,7 @@ export class MapView {
     // The outline round what is played (docs/MAPAS.md §5.10) is dark under the fog, always, as beyond the edge
     // (playtest 20/10 #23, Arturo): only what is played is ever seen.
     this.fog.setShut(s.frame?.length && s.ground ? Uint8Array.from(s.ground, (g) => (g === 4 ? 1 : 0)) : null);
-    this.fog.set([], this.explored.tiles, true);
+    this.fog.set([], [], true);
     this.fog.setFloors(s.elev);
     this.pieces = pieceMap(s);
     this.terrain = this.pieces ? terrainOf(s, this.pieces) : s;
@@ -583,6 +629,7 @@ export class MapView {
     return {
       batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), clinical: null, clinicalWall: null, clinicalDirt: null,
       surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground),
+      outskirts: this.outskirts(s, ground),
       snowbank: this.snow ? this.own(new THREE.MeshStandardMaterial({ map: snowTexture(), color: 0xe3f0ff, roughness: 0.98 })) : null,
     };
   }
@@ -702,6 +749,7 @@ export class MapView {
         if (!trees) treeLayers.set(key, (trees = prop.map((part) => new TreeLayer(batch, part.geometry, treeMaterial(part.atlas), shadows, atlasRect(part.atlas)))));
         // Each part knows where the tree stands (the matrix's place), not where the part sits.
         prop.forEach((part, k) => trees[k]!.addAt(matrix.clone().multiply(part.matrix), matrix));
+        if (shadows) batch.occlude(TRUNK_OCCLUDER, matrix);
         return true;
       }
       let layers = syntyLayers.get(key);
@@ -738,6 +786,7 @@ export class MapView {
     const headlights: Glow[] = [];
     // The list's own length (tick compares it): a tile listed twice must not redraw the map every frame.
     this.searchedSeen = s.searched?.length ?? 0;
+    this.roomsSeen = s.roomsSearched?.length ?? 0;
     /**
      * A wardrobe someone has searched: its doors swung wide and its drawers
      * pulled out (Town's wardrobe, its parts apart); false while it loads.
@@ -767,6 +816,63 @@ export class MapView {
         layers[0]!.add(at.clone().multiply(local), 0xffffff);
       });
       return true;
+    };
+    /**
+     * A window barricaded from inside, the tile in front of it (`facing` the window's side; playtest 21/10 #20, Ana:
+     * furniture piled up so the dead don't get in): planks nailed across the window frame, and against them what the
+     * room had, a wardrobe pushed up to them, a table on its side, its top to the window, or a mattress stood up
+     * leaning on them; a box or two at their foot. From the street, the planks behind the glass.
+     */
+    /** The supermarket a tile is in, and how stocked: 0 stocked, 1 stocked but searched since, 2 stripped (SHELF_LOOKS). */
+    const stockOf = new Map<MarketSite, number>();
+    const marketStock = (x: number, y: number): number => {
+      const m = s.markets?.find((k) => x >= k.x && x < k.x + k.w && y >= k.y && y < k.y + k.h);
+      if (!m || m.stock !== 'full') return 2;
+      let stock = stockOf.get(m);
+      if (stock === undefined) {
+        // Its room (its floor's: a shelf's tile is none), once.
+        let room = null;
+        for (let k = 0; k < m.w * m.h && !room; k++) room = roomAt(s, { x: m.x + (k % m.w), y: m.y + Math.floor(k / m.w), z: 0 });
+        stockOf.set(m, (stock = room && s.roomsSearched?.includes(room.id) ? 1 : 0));
+      }
+      return stock;
+    };
+    const barricadeWindow = (x: number, y: number, cx: number, base: number, cz: number, facing: number): boolean => {
+      const d = DIRS4[facing]!;
+      // This tile's frame: z out to the window, x along the wall.
+      const frame = new THREE.Matrix4().compose(new THREE.Vector3(cx, base, cz), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(d.x, d.y)), new THREE.Vector3(1, 1, 1));
+      const local = (m: THREE.Matrix4) => frame.clone().multiply(m);
+      const r = (k: number) => hash(x, y, 70 + k);
+      const boards = (['boardsCross', 'boardsMany', 'boardsRails'] as const)[Math.floor(r(0) * 3)]!;
+      const face = WINDOW_FACE - 0.05;
+      let ok = addSyntyId(boards, local(new THREE.Matrix4().makeTranslation((r(1) - 0.5) * 0.06, WINDOW_SILL, face).multiply(new THREE.Matrix4().makeRotationZ((r(2) - 0.5) * 0.06))));
+      const pile = r(3);
+      const against = face - 0.05;
+      if (pile < 0.4) {
+        // The wardrobe, its back to the window, its doors to the room.
+        ok = addSyntyId('wardrobe', local(new THREE.Matrix4().makeTranslation((r(4) - 0.5) * 0.12, 0, against - 0.23).multiply(new THREE.Matrix4().makeRotationY((r(5) - 0.5) * 0.12)))) && ok;
+      } else if (pile < 0.7) {
+        // The table tipped onto its edge, its top against the planks, its legs to the room.
+        const tip = new THREE.Matrix4().makeTranslation((r(4) - 0.5) * 0.1, 0.43, against - 0.58).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+        ok = addSyntyId('table', local(tip)) && ok;
+      } else {
+        // The mattress stood on its end, leaning on the planks.
+        const lean = 0.2;
+        const stood = new THREE.Matrix4()
+          .makeTranslation((r(4) - 0.5) * 0.2, 0, against - 1.28 * Math.sin(lean) - 0.02)
+          .multiply(new THREE.Matrix4().makeRotationX(lean))
+          .multiply(new THREE.Matrix4().makeTranslation(0, 0.64, 0))
+          .multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+        ok = addSyntyId('mattress', local(stood)) && ok;
+      }
+      // A box or two at their foot, or none.
+      const boxes = Math.floor(r(6) * 3);
+      for (let k = 0; k < boxes; k++) {
+        const side = (k ? -1 : 1) * (0.28 + r(7 + k) * 0.1);
+        const box = new THREE.Matrix4().makeTranslation(side, 0, against - 0.62 - r(9 + k) * 0.12).multiply(new THREE.Matrix4().makeRotationY(r(11 + k) * Math.PI));
+        ok = addSyntyId(k ? 'cardboard2' : 'cardboard', local(box)) && ok;
+      }
+      return ok;
     };
     /**
      * What a search leaves in front of a piece of furniture (`front` the way
@@ -1175,6 +1281,7 @@ export class MapView {
         ransack(look.kind, x, y, base, front);
         if (opened) return true;
       }
+      if (look.kind === 'windowBarricade') return barricadeWindow(x, y, cx, base, cz, look.facing);
       // Pallets stacked, three for low cover and six for high, each a little askew; a machine in the hall, the genset stood taller.
       if (look.kind === 'pallets') {
         const n = kind === 'high' ? 6 : 3;
@@ -1238,11 +1345,43 @@ export class MapView {
           const back = DIRS4[(look.facing + 2) % 4]!;
           const behind = s.tiles[(y + back.y) * s.width + x + back.x];
           const wall = behind === 'wall' || behind === 'window' || behind === 'windowBroken';
-          const id: PropId = kind === 'low' ? 'endDisplay' : wall ? 'wallShelf' : 'gondola';
+          const stock = marketStock(x, y);
+          const odds = SHELF_LOOKS[stock]!;
+          let pick = hash(x, y, 80);
+          let k = 0;
+          while (k < 3 && pick >= odds[k]!) pick -= odds[k++]!;
+          const id: PropId = kind === 'low' ? 'endDisplay' : SHELF_IDS[wall ? 'wallShelf' : 'gondola'][k]!;
           const yaw = (kind === 'low' ? (4 - bd.market) % 4 : turn) * (Math.PI / 2);
           const push = wall && kind !== 'low' ? WALL_SHELF_BACK : 0;
-          addSyntyId(id, placed(cx + back.x * push, base, cz + back.y * push, 1, kind === 'low' ? END_TALL : SHELF_TALL, 1, yaw));
-          return true;
+          let ok = addSyntyId(id, placed(cx + back.x * push, base, cz + back.y * push, 1, kind === 'low' ? END_TALL : SHELF_TALL, 1, yaw));
+          // What fell off it into the aisle (either side of a gondola), the more the emptier: papers and wrappers, a few
+          // cans rolled about, and once it was searched or stripped, boxes torn down.
+          const front = DIRS4[look.facing]!;
+          const litter = Math.floor(SHELF_LITTER[stock]! * hash(x, y, 81) * 2);
+          for (let n = 0; n < litter; n++) {
+            const r = (salt: number) => hash(x, y, 82 + n * 7 + salt);
+            const side = wall || r(0) < 0.5 ? 1 : -1;
+            const out = side * (0.62 + r(1) * 0.22);
+            const along = (r(2) - 0.5) * 0.8;
+            const at = (dx: number, dz: number) => [cx + front.x * (out + dz) - front.y * (along + dx), cz + front.y * (out + dz) + front.x * (along + dx)] as const;
+            const what = r(3);
+            if (what < 0.3 && stock > 0) {
+              const [px, pz] = at(0, 0);
+              ok = addSyntyId(r(4) < 0.5 ? 'cardboard' : 'cardboard2', placed(px, base, pz, 0.8, 0.8, 0.8, r(4) * Math.PI * 2)) && ok;
+            } else if (what < 0.65) {
+              const [px, pz] = at(0, 0);
+              ok = addSyntyId('papers', placed(px, base + 0.003, pz, 1, 1, 1, r(4) * Math.PI * 2), false) && ok;
+            } else {
+              // Two or three cans together, lying on their sides, rolled any way.
+              for (let c = 0; c < 2 + Math.floor(r(4) * 2); c++) {
+                const [px, pz] = at((r(5 + c) - 0.5) * 0.25, (r(6 + c) - 0.5) * 0.18);
+                const can = (['canFallen1', 'canFallen2', 'canFallen3'] as const)[(n + c) % 3]!;
+                const lying = new THREE.Matrix4().compose(new THREE.Vector3(px, base + 0.025, pz), new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, r(7 + c) * Math.PI * 2, 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
+                ok = addSyntyId(can, lying, false) && ok;
+              }
+            }
+          }
+          return ok;
         }
       }
       // Shelves as the building is (playtest 18/10, #36): a house's are its bookcases, one kind for the house, and an
@@ -1584,6 +1723,29 @@ export class MapView {
       prop.forEach((part, k) => layers[k]!.add(d.matrix.clone().multiply(part.matrix)));
     }
 
+    // The base's pinar goes on past its edge, thinning out to nothing by a ragged line some tiles out (playtest 21/10
+    // #27, Ana: no square cut): the same pines, sparser the further, its tracks' ways left open (the dead come in by them).
+    if (s.base && BEYOND.baseWood) {
+      const { width: w, height: h } = s;
+      const track = (x: number, y: number) => ground.kinds[THREE.MathUtils.clamp(y, 0, h - 1) * w + THREE.MathUtils.clamp(x, 0, w - 1)] === FLOOR.STREET;
+      for (let y = -BASE_WOOD; y < h + BASE_WOOD; y++) {
+        for (let x = -BASE_WOOD; x < w + BASE_WOOD; x++) {
+          const out = Math.max(-x, x - (w - 1), -y, y - (h - 1));
+          if (out <= 0) continue;
+          // How far the wood reaches here: a slow wobble along the edge, and a little noise.
+          const reach = 4 + 7 * (0.5 + 0.5 * Math.sin(x * 0.21 + y * 0.17)) * (0.6 + 0.4 * hash(x >> 2, y >> 2, 41));
+          if (out > reach || hash(x, y, 42) > 0.8 * (1 - out / reach) ** 1.3) continue;
+          const cx = x < 0 ? 0 : x > w - 1 ? w - 1 : x;
+          const cy = y < 0 ? 0 : y > h - 1 ? h - 1 : y;
+          if (track(cx, cy) || track(cx + 1, cy) || track(cx - 1, cy) || track(cx, cy + 1) || track(cx, cy - 1)) continue;
+          const k = 0.8 + hash(x, y, 14) * 0.45;
+          // No shadow: it would fall off the map, in the haze (and the shadow map is the cost of them: 21/10).
+          const ids = syntySet('basePines');
+          addSyntyId(ids[Math.min(ids.length - 1, Math.floor(hash(x, y, 1) * ids.length))]!, placed(x + 0.5 + (hash(x, y, 15) - 0.5) * 0.6, 0, y + 0.5 + (hash(x, y, 16) - 0.5) * 0.6, k, k * (0.9 + hash(x, y, 17) * 0.25), k, hash(x, y, 18) * Math.PI * 2), false);
+        }
+      }
+    }
+
     // Ground cover (tufts, papers, leaves, drains…), scattered off the grid; no shadows.
     const coverLayers = new Map<string, Layer[]>();
     for (const { id, matrix } of scatterCover(s, ground, COVER_DENSITY[graphics().effects], area)) {
@@ -1656,6 +1818,7 @@ export class MapView {
       });
     }
     this.group.add(kit.surroundings);
+    if (kit.outskirts) this.group.add(kit.outskirts);
     // The night's lights are made when it's night (by day a rebuild needn't pay for them); a partial rebuild keeps them.
     if (!redo) {
       this.night?.dispose();
@@ -1777,9 +1940,26 @@ export class MapView {
     return ground;
   }
 
+  /** What lies beyond the edge (outskirts.ts), under the fog's dark: one mesh, no shadows; null for the base. */
+  private outskirts(s: GameState, ground: GroundMap): THREE.Mesh | null {
+    const geometry = outskirtsGeometry(s, ground);
+    if (!geometry) return null;
+    this.geometries.push(geometry);
+    const material = this.own(new THREE.MeshStandardMaterial({ color: 0x5a5c60, roughness: 1, flatShading: true }));
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
+    return mesh;
+  }
+
   /** Where the dark beyond the map's edge goes into the haze (tiles out): far, past what the tactical view sees, by default. */
   fadeBeyond(from: number, to: number): void {
     this.fog.uniforms.fowFar.value.set(from, to);
+  }
+
+  /** Whether past the edge is as the edge is (the base: its pinar going on, lit) rather than in the dark (a mission's). */
+  litBeyond(on: boolean): void {
+    this.fog.uniforms.fowEdge.value = on ? 1 : 0;
   }
 
   /** Day or night: the fog's tints, the street lights' heads, the real lights, the lit tiles. */
@@ -1819,17 +1999,20 @@ export class MapView {
   }
 
   /**
-   * What the squad sees now (a mask by place: the ground's tiles first, then
-   * each storey's: teamVisibility): it is remembered as explored, and the fog
-   * fades to match on the floor in view.
+   * What the squad sees now (masks by place: the ground's tiles first, then
+   * each storey's): `mask` where enemies show (teamVisibility), `view` as far
+   * as its line of sight goes (teamView; playtest 21/10 #8). What is in view is
+   * remembered as explored (the loot's marks), and the fog fades to match on
+   * the floor in view.
    */
-  setVisibility(mask: boolean[]): void {
+  setVisibility(mask: boolean[], view: boolean[] = mask): void {
     // A siege is fought at home (playtest 18/10, #18): no fog, nothing unexplored; all of the base in sight. What the
     // squad really sees still opens the buildings it looks into (the cutaway), or every roof would go.
     this.sight = mask;
-    if (this.shown?.mission.siege) mask = mask.map(() => true);
+    if (this.shown?.mission.siege) mask = view = mask.map(() => true);
     this.visibility = mask;
-    this.explored.see(mask, this.shown?.seq ?? 0);
+    this.view = view;
+    this.explored.see(view, this.shown?.seq ?? 0);
     this.refog();
     this.fresh = false;
     this.markLoot();
@@ -2013,14 +2196,13 @@ export class MapView {
     return floorLevels(s, this.fogFloor).map((z, i) => !!mask[z * area + i]);
   }
 
-  /** The fog for the floor in view: what is in sight and explored there, and the height of each tile's floor (for the night's light). */
+  /** The fog for the floor in view: what is in sight there, and the height of each tile's floor (for the night's light). */
   private refog(): void {
     const s = this.shown;
     if (!s) return;
     this.fogFloor = this.activeFloor();
-    const area = s.width * s.height;
     const levels = floorLevels(s, this.fogFloor);
-    this.fog.set(this.onFloor(s, this.visibility ?? []), Uint8Array.from(levels, (z, i) => this.explored.tiles[z * area + i] ?? 0), this.fresh);
+    this.fog.set(this.onFloor(s, this.visibility ?? []), this.onFloor(s, this.view ?? this.visibility ?? []), this.fresh);
     this.fog.setFloors(levels.map((z, i) => (z ? z : (s.elev[i] ?? 0))));
     if (NIGHT.value > 0.5) this.fog.setLit(this.onFloor(s, litMask(s)));
   }
@@ -2040,13 +2222,23 @@ export class MapView {
     return this.visibility?.[((p.z ?? 0) * s.height + p.y) * s.width + p.x] ?? true;
   }
 
+  /**
+   * Whether the squad's eyes reach place `p`, on its storey: a siege's base shows whole (no fog), but by night the
+   * dead in the dark are still unseen (UI: where a walker comes into sight, playtest 21/10 #21).
+   */
+  inSight(p: Place): boolean {
+    const s = this.shown;
+    if (!s) return true;
+    return this.sight?.[((p.z ?? 0) * s.height + p.y) * s.width + p.x] ?? true;
+  }
+
   /** Advances the fog's fades and its drifting mist, and the buildings' cutaway; called every frame. */
   tick(dt: number): void {
     // Another storey in view: the fog shows what is seen there.
     if (this.shown && this.visibility && this.activeFloor() !== this.fogFloor) this.refog();
     this.fog.update(dt);
     // A search opened a piece of furniture: redraw (searches are few, a rebuild is cheap).
-    if (this.shown && (this.shown.searched?.length ?? 0) !== this.searchedSeen) this.rebuild(this.shown);
+    if (this.shown && ((this.shown.searched?.length ?? 0) !== this.searchedSeen || (this.shown.roomsSearched?.length ?? 0) !== this.roomsSeen)) this.rebuild(this.shown);
     // A siege's door or barricade struck to another stage of wear (the game applies 'smashed' to the state it shows):
     // a door's leaf wears where it hangs (doors.ts); the sandbags and the grit are placed again.
     // Worked out again only when a blow lands (what is left adds up to less): wearOf goes over the whole map.

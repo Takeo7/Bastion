@@ -328,16 +328,32 @@ export function isViewer(u: Unit, team: Unit['team']): boolean {
 }
 
 /**
+ * How far the squad sees the ground, past where it sees enemies (Arturo, 21/10: «que se vea hasta el final… y
+ * luego un cono más pequeño de largo donde se detecten enemigos»): teamView.
+ */
+export const VIEW_REACH = 40;
+
+/**
+ * Places in the line of sight of any living unit of `team` within VIEW_REACH, day or night (Arturo, 21/10): the
+ * ground the player sees, enemies or not. Enemies only show within teamVisibility.
+ */
+export function teamView(s: GameState, team: Unit['team']): boolean[] {
+  return teamVisibility(s, team, VIEW_REACH);
+}
+
+/**
  * Places visible to any living unit of `team`, as a boolean mask by node
  * (grid.ts nodeOf: the ground first, y * width + x, then each storey, where
  * only its slabs are worked out). At night, the dark ones only from close by.
  * On a map with storeys, the same lines as lineClear, walked on a SightGrid.
+ * With `reach`, every viewer looks that far instead, and the dark cuts nothing
+ * (teamView).
  */
-export function teamVisibility(s: GameState, team: Unit['team']): boolean[] {
+export function teamVisibility(s: GameState, team: Unit['team'], reach?: number): boolean[] {
   const area = s.width * s.height;
   const levels = levelCount(s);
   const mask = new Array<boolean>(area * levels).fill(false);
-  const lit = s.mission?.night ? litMask(s) : null;
+  const lit = s.mission?.night && reach === undefined ? litMask(s) : null;
   // Worked out on every call: it is cheap next to the walks, and the state changes under it.
   const v: Viewing | null = s.levels ? { g: sightGrid(s), w: s.width, area, n: levels - 1, elev: s.elev, mask, lit, ox: [], oy: [], eyes: [], blocked: [], dark: 0 } : null;
   // The viewers first, each with its origins and the square it looks over. A line found blocked is remembered
@@ -348,7 +364,7 @@ export function teamVisibility(s: GameState, team: Unit['team']): boolean[] {
   const tried = new Map<string, { viewers: number; x0: number; y0: number; x1: number; y1: number; memo: Blocked | null }>();
   for (const u of s.units) {
     if (!isViewer(u, team)) continue;
-    const range = sightOf(u);
+    const range = reach ?? sightOf(u);
     const origins = peekOrigins(s, u.pos);
     const eyes = origins.map((o) => heightAt(s, o) + EYE_HEIGHT);
     const look = {

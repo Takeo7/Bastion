@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 21/10 con la 0.9.1, la del cielo. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 21/10 con la 0.9.2, la de las notas de Arturo y Ana del 21/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 538 tests.
+   Deben pasar 541 tests.
 5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.9.1)
+## 3. Estado (versión 0.9.2)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,15 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0 y v0.9.1 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1 y v0.9.2 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.9.2** (2026-10-21), las notas de Arturo y Ana del 21/10 ([PRUEBA-2026-10-21.md](PRUEBA-2026-10-21.md)):
+  - animaciones de armas de Mixamo (Arturo las permitió y las bajó, [MIXAMO.md](MIXAMO.md)): fusil en reposo, apuntando, disparando y recargando; agachado; pistola siempre a dos manos; lanzar granada y piedra con el fusil a la cadera; cuchillo y machete. Las otras siguen siendo de Synty;
+  - la vista en tres zonas (Arturo): cerca, con enemigos; hasta 40 casillas en la línea de visión, el entorno con bruma leve y sin enemigos (`teamView`); fuera, oscuro. Los zombis que te ven llevan un ojo rojo y dicen a por quién van;
+  - el primer disparo ya no congela el juego (los efectos usan dos luces fijas y todo se dibuja una vez tras el velo);
+  - ventanas atrancadas de verdad, todas las de una habitación, con muebles apilados; ningún mueble tapa una ventana por casualidad. Supermercados con género (dan 6–10 raciones) o vaciados;
+  - fuera del mapa, el pueblo o el bosque siguen en lo oscuro; la base, sin corte cuadrado;
+  - la subida a La Lata con su plano; la cámara sigue al soldado sin saltos; sin el saltito al lanzar la misión, sin el disparo mirando atrás y sin árboles flotando;
+  - Escuadra en dos paneles, «Lanzar misión» / «A punto», el informe maquetado de nuevo, solo ventanas para el asedio y la subida de nivel, «Nueva misión», la tumba del caído en Soldados, la zona de movimiento sin recuadros alrededor de coches y personas, y el crítico sin sonido de campana.
 - **Lo nuevo de la 0.9.1** (2026-10-21), el cielo:
   - una cúpula con degradado que sigue la luz del mapa (día, atardecer, noche y nieve), con montañas nevadas en el horizonte (POLYGON Nature), siluetas de edificios en los pueblos y polígonos (Generic_Skyline) y anillos de nubes;
   - se ve en la cámara al hombro, en los primeros planos y en la base; en la vista táctica, con su picado de 52°, no entra;
@@ -256,7 +264,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 
 ## 5. Pendiente
 
-- **Medir la 0.9.0 en el PC con la 3090** (Arturo): las líneas «combate» de red.log, en alto, frente a las de antes.
+- **Medir la 0.9.2 en el PC con la 3090** (Arturo): las líneas «combate» de red.log, en alto, frente a las de antes, y si el primer disparo ya no congela.
 
 - **De Arturo y Ana:**
   - probar la versión actual en el PC con la RTX 3090, con la guía [PRUEBA-PC-3090.md](PRUEBA-PC-3090.md) (escrita para la 0.4.0), y mandar el `red.log` del anfitrión;
