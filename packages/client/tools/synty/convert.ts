@@ -23,8 +23,13 @@ import {
   FX_TEXTURES,
   fxTextureFile,
   UI_MODELS,
-  SURVIVOR_CHOICES,
-  HEADGEAR,
+  OUTFIT_LEAVES,
+  SKIN_CELLS,
+  WARDROBE,
+  WARDROBE_SHAPES,
+  wardrobeFile,
+  type WardrobeAsset,
+  type WardrobeKind,
   PACKS,
   PIECES,
   PROPS,
@@ -74,7 +79,8 @@ function extractUnityPackage(pack: PackId): void {
     const asset = join(temp, guid, 'asset');
     if (!existsSync(pathname) || !existsSync(asset)) continue;
     const path = readFileSync(pathname, 'utf8').split('\n')[0]!.trim();
-    if (!/\.(fbx|png|tga)$/i.test(path)) continue;
+    // (Sidekick's presets, .sk: which parts make a character, its palette and its build.)
+    if (!/\.(fbx|png|tga|sk)$/i.test(path)) continue;
     mkdirSync(dirname(join(target, path)), { recursive: true });
     renameSync(asset, join(target, path));
   }
@@ -151,7 +157,7 @@ const atlasImage = (atlas: AtlasId) => join(SOURCES, PACKS[ATLASES[atlas].pack].
 // ------------------------------------------------------------------- jobs
 
 interface Job {
-  kind: 'character' | 'headgear' | 'weapon' | 'prop' | 'texture' | 'anim' | 'piece';
+  kind: 'character' | 'sidekick' | 'wardrobe' | 'weapon' | 'prop' | 'texture' | 'anim' | 'piece';
   id: string;
   out: string;
   [key: string]: unknown;
@@ -185,7 +191,9 @@ function add(job: Job): void {
 }
 
 for (const [id, a] of Object.entries(ATLASES) as [AtlasId, (typeof ATLASES)[AtlasId]][]) {
-  add({ kind: 'texture', id, out: join(PUBLIC, atlasFile(id)), src: atlasImage(id), size: a.size });
+  // (A Sidekick character's palette is made with it: its job below.)
+  if ('composed' in a && a.composed) continue;
+  add({ kind: 'texture', id, out: join(PUBLIC, atlasFile(id)), src: atlasImage(id), size: a.size, ...('palette' in a && a.palette ? { palette: true } : {}) });
 }
 
 for (const [id, t] of Object.entries(TERRAIN) as [keyof typeof TERRAIN, (typeof TERRAIN)[keyof typeof TERRAIN]][]) {
@@ -193,6 +201,7 @@ for (const [id, t] of Object.entries(TERRAIN) as [keyof typeof TERRAIN, (typeof 
 }
 
 for (const [id, c] of Object.entries(CHARACTERS) as [string, CharacterAsset][]) {
+  if (c.sidekick) continue;
   const atlas = atlasOf(c.pack);
   add({
     kind: 'character',
@@ -203,15 +212,127 @@ for (const [id, c] of Object.entries(CHARACTERS) as [string, CharacterAsset][]) 
     atlas,
     atlasImage: atlasImage(atlas),
     attach: (c.attach ?? []).map((a) => ({ ...a, fbx: findFbx(c.pack, a.fbx) })),
-    // One mesh for those whose hair never comes off; a survivor's stays apart, to hide under a hat.
-    merge: !SURVIVOR_CHOICES.some((s) => s.id === id),
+    // One mesh, its hair and what hangs on it with the body (one draw call a pass).
+    merge: true,
   });
 }
 
-for (const [id, h] of Object.entries(HEADGEAR)) {
-  const atlas = atlasOf(h.pack);
-  add({ kind: 'headgear', id, name: id, out: join(PUBLIC, modelFile(h.pack, 'hat', id)), fbx: findFbx(h.pack, h.fbx), atlas, atlasImage: atlasImage(atlas), dye: h.dye });
+// Sidekick: its packs' presets (Characters/<set>/<preset>/<preset>.sk: a character's parts, build and palette), which
+// preset wears each part first, and which pack a part is in by its name.
+const SIDEKICK_PACKS = (Object.keys(PACKS) as PackId[]).filter((p) => p.startsWith('sidekick'));
+const presetDirs = new Map<string, string>();
+function presetDir(pack: PackId, preset: string): string {
+  const key = `${pack}/${preset}`;
+  let dir = presetDirs.get(key);
+  if (!dir) {
+    const characters = join(SOURCES, PACKS[pack].dir, 'Assets/Synty/SidekickCharacters/Characters');
+    const set = readdirSync(characters).find((s) => existsSync(join(characters, s, preset, `${preset}.sk`)));
+    if (!set) throw new Error(`No Sidekick preset ${preset} in ${PACKS[pack].dir}`);
+    presetDirs.set(key, (dir = join(characters, set, preset)));
+  }
+  return dir;
 }
+const presetParts = (pack: PackId, preset: string) =>
+  [...readFileSync(join(presetDir(pack, preset), `${preset}.sk`), 'utf8').matchAll(/- Name: (SK_\w+)\s+PartType: (\w+)/g)].map(([, name, type]) => ({ name: name!, type: type! }));
+const presetPalette = (pack: PackId, preset: string) => join(presetDir(pack, preset), 'Textures', `T_${preset}ColorMap.png`);
+/** Every Sidekick pack's presets (the species' bases last), and which wears each part first. */
+const presets: { pack: PackId; preset: string }[] = SIDEKICK_PACKS.flatMap((pack) => {
+  const characters = join(SOURCES, PACKS[pack].dir, 'Assets/Synty/SidekickCharacters/Characters');
+  if (!existsSync(characters)) return [];
+  return readdirSync(characters).flatMap((set) => readdirSync(join(characters, set)).filter((p) => existsSync(join(characters, set, p, `${p}.sk`))).map((preset) => ({ pack, preset })));
+}).sort((a, b) => Number(a.preset.startsWith('HumanSpecies')) - Number(b.preset.startsWith('HumanSpecies')));
+const wornBy = new Map<string, { pack: PackId; preset: string }>();
+for (const p of presets) for (const { name } of presetParts(p.pack, p.preset)) if (!wornBy.has(name)) wornBy.set(name, p);
+/** The pack whose parts a part's name says it is (SK_APOC_OUTL_…: Outlaws); the species' are in every pack. */
+const PART_PACKS: [RegExp, PackId][] = [[/^SK_APOC_SURV_/, 'sidekickSurvivors'], [/^SK_APOC_OUTL_/, 'sidekickOutlaws'], [/^SK_MDRN_CIVL_/, 'sidekickCivilians'], [/^SK_MDRN_POLC_/, 'sidekickPolice'], [/^SK_(APOC_ZOMB|ZOMB_BASE)_/, 'sidekickZombies']];
+const partPack = (name: string, own: PackId) => PART_PACKS.find(([re]) => re.test(name))?.[1] ?? own;
+function partPalette(name: string, own: PackId): string {
+  const by = wornBy.get(name) ?? presets.find((p) => p.pack === partPack(name, own));
+  return by ? presetPalette(by.pack, by.preset) : presetPalette('sidekickSurvivors', 'ApocalypseSurvivor_02');
+}
+/** Every palette of a part's pack and then the rest: where a cell a palette left unused (red) is looked for next. */
+const fallbacks = (pack: PackId) => [...presets.filter((p) => p.pack === pack), ...presets.filter((p) => p.pack !== pack)].map((p) => presetPalette(p.pack, p.preset));
+const hasFbx = (pack: PackId, name: string) => {
+  try {
+    findFbx(pack, name);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Sidekick's characters made whole (CHARACTERS with `sidekick`: the dead, the living, the VIP): their preset's parts
+// (the teeth and the tongue never show; nor what `drop` leaves off; `swap` puts others in for some types; `undead`
+// makes a living one dead: the zombies' head, face and bare body, picked by its id), its build (the preset's
+// BlendShapes as the shape keys' values), and a palette of the parts' own (each as a preset that wears it paints it),
+// saved as the character's atlas (the same id).
+const SIDEKICK_NEVER = new Set(['Teeth', 'Tongue']);
+const zb = (n: number, code: string) => `SK_ZOMB_BASE_${String(n).padStart(2, '0')}_${code}_ZB01`;
+const UNDEAD: Record<string, (n: number) => string> = {
+  Head: () => zb(1, '01HEAD'),
+  EyeLeft: () => zb(1, '05EYEL'),
+  EyeRight: () => zb(1, '06EYER'),
+  EarLeft: () => zb(1, '07EARL'),
+  EarRight: () => zb(1, '08EARR'),
+  Nose: (n) => zb((n % 6) + 1, '35NOSE'),
+  EyebrowLeft: (n) => zb((n % 8) + 1, '03EBRL'),
+  EyebrowRight: (n) => zb((n % 8) + 1, '04EBRR'),
+  Hair: (n) => zb((n % 10) + 1, '02HAIR'),
+  FacialHair: (n) => zb((n % 4) + 1, '09FCHR'),
+};
+const idNumber = (id: string) => [...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+for (const [id, c] of Object.entries(CHARACTERS) as [string, CharacterAsset][]) {
+  if (!c.sidekick) continue;
+  const preset = c.sidekick;
+  const sk = readFileSync(join(presetDir(c.pack, preset), `${preset}.sk`), 'utf8');
+  const n = idNumber(id);
+  const own = presetParts(c.pack, preset).filter((p) => !SIDEKICK_NEVER.has(p.type) && !(c.drop ?? []).includes(p.type));
+  const parts = own.map(({ name, type }) => {
+    if (c.swap?.[type]) return c.swap[type]!;
+    if (c.undead && UNDEAD[type]) return UNDEAD[type]!(n);
+    // A bare arm, hand or leg the zombies' bare one.
+    const dead = name.replace(/^SK_HUMN_BASE_\d\d_/, 'SK_ZOMB_BASE_01_').replace(/_HU01$/, '_ZB01');
+    if (c.undead && name.startsWith('SK_HUMN_BASE_') && hasFbx('sidekickZombies', dead)) return dead;
+    return name;
+  });
+  for (const [type, name] of Object.entries(c.swap ?? {})) if (!own.some((p) => p.type === type)) parts.push(name);
+  const value = (key: string) => Number(sk.match(new RegExp(`${key}: (-?[\\d.]+)`))?.[1] ?? 0);
+  const [type, size, muscle] = [value('BodyTypeValue'), value('BodySizeValue'), value('MuscleValue')];
+  add({
+    kind: 'sidekick',
+    id,
+    out: join(PUBLIC, modelFile(c.pack, 'chr', id)),
+    parts: parts.map((name) => findFbx(partPack(name, c.pack), name)),
+    palettes: parts.map((name) => partPalette(name, c.pack)),
+    fallbacks: fallbacks(c.pack),
+    // One of the dead: the skin, the eyes and the hair as one of Sidekick's zombies has them, whatever its clothes'.
+    ...(c.undead ? { bodyPalette: presetPalette('sidekickZombies', `ApocalypseZombie_0${(n % 5) + 1}`) } : {}),
+    // Sidekick's sliders (±100) on its shape keys (0 to 1): feminine at +100, heavy or skinny, buff.
+    body: { masculineFeminine: (type + 100) / 200, defaultHeavy: Math.max(0, size) / 100, defaultSkinny: Math.max(0, -size) / 100, defaultBuff: Math.max(0, muscle) / 100 },
+    atlas: id,
+    paletteOut: join(PUBLIC, atlasFile(id as AtlasId)),
+    paint: Object.fromEntries(Object.entries(c.paint ?? {}).map(([cell, hex]) => [cell, [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)])),
+  });
+}
+
+for (const kind of Object.keys(WARDROBE) as WardrobeKind[]) {
+  for (const [id, w] of Object.entries(WARDROBE[kind]) as [string, WardrobeAsset][]) {
+    const parts = w.parts ?? presetParts(w.pack, w.preset).filter((p) => !OUTFIT_LEAVES.includes(p.type)).map((p) => p.name);
+    add({
+      kind: 'wardrobe',
+      id,
+      out: join(PUBLIC, wardrobeFile(kind, id)),
+      piece: kind,
+      parts: parts.map((name) => findFbx(partPack(name, w.pack), name)),
+      palettes: parts.map((name) => partPalette(name, w.pack)),
+      shapes: WARDROBE_SHAPES,
+      atlasImage: presetPalette(w.pack, w.preset),
+      fallback: presetPalette('sidekickSurvivors', 'ApocalypseSurvivor_02'),
+      skins: SKIN_CELLS.map(([x, y]) => [(x + 0.5) / 16, 1 - (y + 0.5) / 16]),
+    });
+  }
+}
+
 
 for (const [id, w] of Object.entries(WEAPONS)) {
   add({ kind: 'weapon', id, name: id, out: join(PUBLIC, modelFile(w.pack, 'wep', id)), fbx: findFbx(w.pack, w.fbx), atlas: atlasOf(w.pack), slots: slotsOf(w.pack, w.fbx) });

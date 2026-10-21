@@ -400,14 +400,22 @@ export class ClearingArtView implements ClearingArt {
     const key = `${template}:${color}:${JSON.stringify(appearance ?? null)}:${JSON.stringify(gear ?? null)}:${seed ?? ''}`;
     if (key === this.showcaseKey) return;
     this.showcaseKey = key;
-    const turned = this.showcaseRig?.root.rotation.y ?? Math.atan2(this.soldierAt.out.x, this.soldierAt.out.z);
     this.showcase.clear();
     this.showcaseRig = null;
     if (!template) return;
     const rig = buildUnit(template, color, appearance, gear, seed);
-    rig.root.rotation.y = turned;
+    rig.root.rotation.y = this.showcaseYaw(performance.now() / 1000);
     this.showcase.add(rig.root);
     this.showcaseRig = rig;
+  }
+
+  /**
+   * Where the soldier in Soldados faces: its camera, turning a little to either side and back (playtest 21/10: turning
+   * round and round, it stood with its back to Personalizar half the time).
+   */
+  private showcaseYaw(time: number): number {
+    const { dir } = this.soldierView;
+    return Math.atan2(dir.x, dir.z) + Math.sin(time * 0.4) * 0.45;
   }
 
   /** Soldados: the soldier by the caravan (or the barracks), seen from out in the clearing, the pines behind it. */
@@ -903,9 +911,9 @@ export class ClearingArtView implements ClearingArt {
 
   tick(dt: number, time = performance.now() / 1000): void {
     this.map.tick(dt);
-    // The soldier looked at turns slowly, at rest, as on the old pedestal.
+    // The soldier looked at, at rest, facing its camera and turning a little either way.
     if (this.showcaseRig) {
-      this.showcaseRig.root.rotation.y += dt * 0.35;
+      this.showcaseRig.root.rotation.y = this.showcaseYaw(time);
       if (isFigure(this.showcaseRig)) this.showcaseRig.applyPose(IDLE_POSE, time);
     }
     // At their posts, at rest.

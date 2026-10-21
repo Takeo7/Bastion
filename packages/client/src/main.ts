@@ -4,6 +4,7 @@ import { ambience } from './audio/ambience';
 import { music } from './audio/music';
 import { installUiSounds } from './audio/ui';
 import { Game } from './game/game';
+import { setRoster } from './game/wardrobe';
 import { Net, serverUrl, setHosts, storageKey } from './net';
 import { installReport, trace } from './report';
 import { StrategyScreen } from './strategy/screen';
@@ -160,6 +161,7 @@ function handle(m: ServerMessage): void {
       break;
     case 'campaign':
       campaign = m.state;
+      setRoster(m.state.soldiers);
       base?.update(m.state);
       game?.setCampaign(m.state);
       break;

@@ -3,7 +3,8 @@
 Convierte los modelos de Synty POLYGON que usa el juego en GLB ligeros, en `packages/client/public/models/synty/<pack>/`.
 
 - Los packs originales viven en `assets-src/synty/`, que no se sube: la licencia no deja redistribuirlos. Solo se suben los convertidos.
-- La lista de lo que se usa, y para qué, es una sola: `src/game/syntyManifest.ts`. El conversor convierte exactamente eso y el juego lo lee para saber qué modelo lleva cada unidad, arma, sombrero y objeto del mapa.
+- La lista de lo que se usa, y para qué, es una sola: `src/game/syntyManifest.ts`. El conversor convierte exactamente eso y el juego lo lee para saber qué modelo lleva cada unidad, arma, pieza del armario y objeto del mapa.
+- Los personajes son de Synty Sidekick (docs/SIDEKICK.md), menos los jefes (POLYGON Boss Zombies y City Zombies) y las voces de la radio.
 
 ## Los packs en `assets-src/synty/`
 
@@ -13,6 +14,12 @@ Cada carpeta lleva el nombre del pack de Synty que contiene (renombradas el 2026
 |---|---|---|
 | `POLYGON_Apocalypse_SourceFiles_v4` | POLYGON – Apocalypse | Personajes, armas y objetos (`apocalypse`) |
 | `POLYGON_City_Zombies_Extracted` (y su `.unitypackage`) | POLYGON – City Zombies | Zombis (`cityZombies`) |
+| `SIDEKICK_ApocalypseSurvivors_Extracted` (y su `.unitypackage`) | SIDEKICK – Apocalypse Survivors | El armario de los soldados, caras y pelo (`sidekickSurvivors`) |
+| `SIDEKICK_ApocalypseOutlaws_Extracted` (y su `.unitypackage`) | SIDEKICK – Apocalypse Outlaws | Los Cuervos y ropa del armario (`sidekickOutlaws`) |
+| `SIDEKICK_ModernCivilians_Extracted` (y su `.unitypackage`) | SIDEKICK – Modern Civilians | Ropa del armario y zombis civiles (`sidekickCivilians`) |
+| `SIDEKICK_ModernPolice_Extracted` (y su `.unitypackage`) | SIDEKICK – Modern Police | Ropa del armario y zombis policía (`sidekickPolice`) |
+| `SIDEKICK_ApocalypseZombies_Extracted` (y su `.unitypackage`) | SIDEKICK – Apocalypse Zombies | Los zombis (`sidekickZombies`) |
+| `SIDEKICK_Starter_Extracted` (y su `.unitypackage`) | SIDEKICK – Starter | Sin usar (fantasía y ciencia ficción) |
 | `POLYGON_BossZombies_SourceFiles_v4` | POLYGON – Boss Zombies | Muertos especiales (`bossZombies`) |
 | `POLYGON_City_SourceFiles_v6` | POLYGON – City | Ciudad en cuadrícula (`city`) |
 | `POLYGON_Town_SourceFiles_v7` | POLYGON – Town | Pueblo viejo y suelo (`town`) |
@@ -57,33 +64,34 @@ Hace falta Blender (por defecto `/Applications/Blender.app/Contents/MacOS/Blende
 
 ## Qué hace
 
-1. **Desempaqueta** los packs que solo vienen como `.unitypackage` (City Zombies) en `assets-src/synty/POLYGON_City_Zombies_Extracted/`, una sola vez.
+1. **Desempaqueta** los packs que solo vienen como `.unitypackage` (City Zombies y los Sidekick) en su carpeta `…_Extracted/` de `assets-src/synty/`, una sola vez.
 2. **Blender** (`convert.py`, sin ventana):
    - Gira a Y arriba y escala de metros a casillas (`SYNTY_SCALE` = 1/1,5: una casilla son 1,5 m, así que un superviviente de 1,8 m mide 1,2).
    - Exporta sin imágenes. Cada material se llama como el atlas de su pack (`apocalypse`, `town`…), y el juego le pone la textura compartida (`synty.ts`).
    - **Personajes:** los huesos se renombran a los nombres de los packs de animación de Synty (`Hips`, `Spine_01`, `Shoulder_L`…). Dedos, dedos de los pies, IK y cara se funden en su padre: quedan 22 huesos.
      - Pelo, barbas y sombreros cuelgan rígidos de su hueso.
      - Un segundo mapa UV, `part`, dice qué pieza de la armadura es cada vértice (u) y si su texel es tela que se puede teñir (v). La piel, el pelo, las botas y los cinturones no se tiñen.
+   - **Sidekick** (`CHARACTERS` con `sidekick`): las piezas de un preajuste (`.sk`) en una sola malla y un solo esqueleto, con su complexión aplicada. `swap` cambia piezas, `drop` quita tipos y `undead` lo hace zombi (cabeza, cara, cuerpo y piel de zombi). La paleta se compone pieza a pieza, cada una con los colores del preajuste que la lleva, y se guarda como su atlas (`<id>.webp`).
+   - **El armario** (`WARDROBE`: `OUTFITS`, `FACES`, `HAIRS`, `BEARDS`, `HEADWEAR`): cada pieza en su GLB (`ward-<tipo>-<id>.glb`), con tres formas (`WARDROBE_SHAPES`: mujer, delgado, robusto). El juego (`wardrobe.ts`) monta cada soldado con ellas al cargar. Los conjuntos y lo de la cabeza llevan su paleta en los extras.
    - **Armas:** el cañón mira a +Z y la empuñadura queda en el origen; la boca del cañón va en `extras.muzzle`.
-   - **Sombreros** (`HEADGEAR`): centrados en la articulación de la cabeza, para colgarlos en el juego.
    - **Objetos:** las mallas se unen por material. El ajuste a la casilla (`fit`, `yaw`, `shift`) se hace en el juego, así que cambiarlo no pide reconvertir.
    - **Piezas de edificio** (`PIECES`, de los kits modulares): como los objetos, pero recortadas antes a la caja `keep` (en metros del FBX). Los kits van en módulos de 2,5 m y una casilla son 1,5 m: el juego los dibuja 1,2 veces más grandes (`KIT_SCALE`) y cada casilla de pared es la mitad central de un módulo, con su puerta o su ventana justo en ella. Con `parts` las mallas quedan separadas (la hoja de una puerta, que se abre).
    - **Atlas:** reducidos al tamaño del manifiesto y guardados en WebP.
    - **Animaciones** (`ANIMATIONS`, de «ANIMATION – Base Locomotion»): cada clip, sin raíz en movimiento, con el esqueleto del pack (solo los huesos que usa el juego) y todos los fotogramas. No se hornean transformaciones: el juego mide cada pose contra la pose en T del pack y la pasa a los huesos de cada personaje (`syntyAnims.ts`), así que el mismo clip sirve para los dos rigs de Synty.
-3. **gltf-transform** comprime cada GLB con meshopt sin tocar esqueletos, sombreros ni el mapa `part`.
+3. **gltf-transform** comprime cada GLB con meshopt sin tocar esqueletos, formas ni el mapa `part`.
 
 ## Añadir un modelo
 
 1. Busca el FBX en el pack, por ejemplo `POLYGON_Town_SourceFiles_v7/FBX/SM_Prop_Couch_03.fbx`.
 2. Añádelo al manifiesto en la tabla que toque:
-   - `CHARACTERS`, con sus `attach` (pelo, barba, sombrero) desde `SM_Chr_Attach_*`; para que se pueda elegir en el cuartel, también en `SURVIVOR_CHOICES`;
+   - `CHARACTERS`, con sus `attach` (pelo, barba, sombrero) desde `SM_Chr_Attach_*`, o uno entero de Sidekick con `sk(...)` y su atlas en `ATLASES` (`sidekickAtlas`);
+   - `OUTFITS` (un conjunto del cuartel: un preajuste o sus piezas con `clothes`) y las demás tablas del armario; Lore le pone nombre en `OUTFIT_NAMES`;
    - `ANIMATIONS`, con la ruta dentro del pack (los mismos nombres existen para el rig Sidekick), y en `MOTIONS` si es una de las que se mezclan;
    - `WEAPONS`;
-   - `HEADGEAR`;
    - `PROPS`;
    - `PIECES` (paredes, puertas y ventanas de edificio; las usa `buildings.ts`);
    - `BASE_MODELS` (la base en superficie, `strategy/bastion.ts`): se convierten como piezas enteras a `base-<id>.glb` y la base les da tamaño, giro y sitio. `fbx` es una ruta dentro del pack, porque Apocalypse guarda en `FBX/Collision` gemelos de colisión con el mismo nombre que un nombre suelto puede encontrar primero.
-3. Úsalo donde toque: `SQUAD_BODIES` / `UNIT_BODIES` (quién es quién), `UNIT_WEAPONS`, `HEAD_GEAR` o `PROP_SETS` (qué objeto dibuja cada pista de decorado).
+3. Úsalo donde toque: `UNIT_BODIES` (quién es quién), `UNIT_WEAPONS` o `PROP_SETS` (qué objeto dibuja cada pista de decorado).
 4. Ejecuta el conversor con su id y prueba el juego.
 
 Un objeto mal girado o de tamaño raro se arregla en su entrada de `PROPS`: `yaw` (cuartos de vuelta para que mire al norte, −Z), `fit` (casillas que ocupa su lado mayor) y `shift`.

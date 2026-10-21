@@ -138,7 +138,7 @@ describe('side quests', () => {
     expect(ibarra).toMatchObject({ traits: ['scarred'] });
     expect(totalBars(ibarra.skills)).toBeGreaterThanOrEqual(4);
     // Her model is a woman's, whatever name the recruit drew first.
-    expect(ibarra.appearance).toEqual(defaultAppearance(ibarra.owner, undefined, 'f'));
+    expect(ibarra.appearance).toEqual(defaultAppearance(ibarra.owner, undefined, 'f', ibarra.id));
     expect(squadMember(c, ibarra).will).toBeLessThan(squadMember(c, { ...ibarra, traits: [] }).will);
   });
 

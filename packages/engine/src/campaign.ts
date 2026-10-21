@@ -960,7 +960,7 @@ export function campaignOutdated(c: { version: number }): boolean {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 23;
+export const CAMPAIGN_VERSION = 24;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1130,8 +1130,9 @@ function soldierName(c: CampaignState, rng: Rng): { name: string; sex: 'f' | 'm'
  */
 function addSoldier(c: CampaignState, owner: Slot, rng: Rng): CampaignSoldier {
   const { name, sex } = soldierName(c, rng);
+  const id = newId(c, 'c');
   const s: CampaignSoldier = {
-    id: newId(c, 'c'),
+    id,
     name,
     owner,
     kills: 0,
@@ -1142,7 +1143,7 @@ function addSoldier(c: CampaignState, owner: Slot, rng: Rng): CampaignSoldier {
     alive: true,
     loadout: { utility: null, ammo: null },
     nickname: '',
-    appearance: defaultAppearance(owner, undefined, sex),
+    appearance: defaultAppearance(owner, undefined, sex, id),
     traits: [],
   };
   c.soldiers.push(s);
@@ -1958,7 +1959,7 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
     const s = addSoldier(c, q.owner ?? neediestPlayer(c), rng);
     if (r.name) {
       s.name = fill(r.name, q.names);
-      s.appearance = defaultAppearance(s.owner, undefined, sexOfPerson(s.name));
+      s.appearance = defaultAppearance(s.owner, undefined, sexOfPerson(s.name), s.id);
     }
     if (r.rank) seasoned(s, r.rank, rng);
     if (r.trait) s.traits.push(r.trait);
@@ -2503,9 +2504,9 @@ export function addPlayer(c: CampaignState, slot: Slot, rng: Rng): number {
   c.squad = c.squad.filter((id) => !rookies.some((s) => s.id === id));
   for (const s of rookies) {
     const sex = s.appearance.sex;
-    const wasDefault = JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.owner, undefined, sex));
+    const wasDefault = JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.owner, undefined, sex, s.id));
     s.owner = slot;
-    if (wasDefault) s.appearance = defaultAppearance(slot, undefined, sex);
+    if (wasDefault) s.appearance = defaultAppearance(slot, undefined, sex, s.id);
     s.loadout = { utility: null, ammo: null };
   }
   const recruits: CampaignSoldier[] = [];
@@ -3889,6 +3890,14 @@ export function migrateCampaign(old: CampaignState): CampaignState {
     }
     const o = Math.floor((c.bastion.width - was) / 2);
     if (o > 0 && c.siegePosts) for (const p of Object.values(c.siegePosts)) [p.x, p.y] = [p.x + o, p.y + o];
+  }
+  if (old.version < 24) {
+    // Sidekick figures (docs/SIDEKICK.md): a soldier nobody customized, all helmet and normal build as everyone,
+    // gets a head and a build of its own.
+    for (const s of c.soldiers) {
+      const sex = s.appearance.sex;
+      if (JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.owner, undefined, sex))) s.appearance = defaultAppearance(s.owner, undefined, sex, s.id);
+    }
   }
   for (const s of c.soldiers) {
     s.skills ??= { ...NO_SKILLS };

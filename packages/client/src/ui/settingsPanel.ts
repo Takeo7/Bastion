@@ -72,6 +72,8 @@ export function graphicsSettings(redraw: () => void): HTMLElement {
     // The enemy turn's speed, a slider (playtest 18/10 #6); the squad's own actions play at their own pace.
     speedRow(),
     row('autoPlan', SETTINGS_TEXT.plans, [[true, 'Sí'], [false, 'No']], SETTINGS_TEXT.plansAbout, redraw),
+    // Off by default (Arturo, 21/10): each outfit with its own colours, and only the ring underneath says whose.
+    row('squadTint', 'Ropa con el color del jugador', [[false, 'No'], [true, 'Sí']], 'Tiñe la ropa de los soldados con los colores de Personalizar y les pone el brazalete del color de su jugador.', redraw),
     row(
       'uiScale',
       'Interfaz',

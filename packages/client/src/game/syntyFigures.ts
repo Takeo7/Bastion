@@ -16,12 +16,8 @@ import {
   DEATHS,
   FOOTPRINT_FIT,
   HITS,
-  HEAD_GEAR,
-  HEADGEAR,
   PROPS,
-  SQUAD_BODIES,
   STANCE_ORDER,
-  SURVIVOR_CHOICES,
   SYNTY_BONES,
   SYNTY_SCALE,
   UNIT_BODIES,
@@ -32,7 +28,6 @@ import {
   type CharacterAsset,
   type CharacterId,
   type Death,
-  type HeadgearId,
   type PropId,
   type Hit,
   type Stance,
@@ -41,6 +36,8 @@ import {
   type WeaponId,
   type WeaponPartId,
 } from './syntyManifest';
+import { CIVIL_OUTFITS, dressOf, loadWardrobe, preloadWardrobe, wardrobeNow, type Dress } from './wardrobe';
+import { graphics, onGraphics } from '../settings';
 
 // Units as Synty characters (syntyManifest.ts says who is who). They keep the
 // rig contract of figures.ts (root, yaw, pivot, gunPivot, muzzle, flash,
@@ -212,6 +209,8 @@ interface Rest {
   fingers: FingerChain[];
   /** The body as its own mesh fills it at rest (its coat and kit and all), part by part: the arms and what it carries keep out of it. */
   bulk: Bulk | null;
+  /** Its arms' length, shoulder to wrist, against POLYGON's (REF_ARM): Sidekick's are shorter, and a rifle is held nearer. */
+  reach: number;
 }
 
 /** One of a hand's fingers (Synty's: the thumb, the index, the other three as one), from the knuckle out. */
@@ -265,6 +264,16 @@ const CLEAR_TURN = 1.5;
 const CLEAR_SLIDE = 0.25;
 /** After a search that found nothing clear, how many poses go by before the next (the last goal kept meanwhile). */
 const SEARCH_REST = 10;
+/**
+ * A rifle at low ready, from the right shoulder (model units, for an arm REF_ARM long; nearer for shorter arms): out
+ * across (a share of the shoulder's side), down, ahead, and at least `clear` ahead of the torso's front (a belly,
+ * a vest's pouches: the support arm comes round it); and how far it is tipped down and turned across the body.
+ * A torso that stands out more (its front `wide`, from the one to the other) holds it higher and flatter
+ * (downWide, tipWide): the support arm over the belly, not into it (Sidekick's heavy builds, playtest 21/10).
+ */
+export const LOW_READY = { across: 0.15, down: 0.22, ahead: 0.22, tip: 0.42, turn: 0.9, clear: 0.06, wide: [0.1, 0.15], downWide: 0.1, tipWide: 0.25 };
+/** POLYGON's soldiers' arm, shoulder to wrist (the hold above was made for it). */
+const REF_ARM = 0.407;
 /** Crouched at low ready, the weapon held this much higher and further ahead: over the knees, not into the thigh come up under it. */
 const CROUCH_LIFT = 0.11;
 const CROUCH_AHEAD = 0.05;
@@ -377,8 +386,10 @@ function restOf(model: THREE.Object3D): Rest {
   for (const side of ['L', 'R'] as const) {
     for (const [kind, count] of [['thumb', 3], ['index', 4], ['finger', 4]] as const) {
       const name = kind === 'thumb' ? 'Thumb' : kind === 'index' ? 'Index' : 'Finger';
-      const joints = Array.from({ length: count }, (_, j) => B[`${name}_0${j + 1}_${side}` as SyntyBone]);
-      if (joints.some((j) => !bones[j])) continue;
+      // As many joints as it has from the knuckle out (Sidekick's fingers have three, no tip: SIDEKICK).
+      const joints: number[] = [];
+      for (let j = 0; j < count && bones[B[`${name}_0${j + 1}_${side}` as SyntyBone]]; j++) joints.push(B[`${name}_0${j + 1}_${side}` as SyntyBone]);
+      if (joints.length < 2) continue;
       const axes = joints.map((j, k) => {
         const next = joints[k + 1];
         const from = next !== undefined ? p[j]! : p[joints[k - 1]!]!;
@@ -404,6 +415,7 @@ function restOf(model: THREE.Object3D): Rest {
     chest: p[B.Spine_03]!.y + 0.06,
     top,
     fingers,
+    reach: (p[B.Shoulder_L]!.distanceTo(p[B.Elbow_L]!) + p[B.Elbow_L]!.distanceTo(p[B.Hand_L]!)) / REF_ARM,
   };
   rests.set(model, rest);
   return rest;
@@ -561,8 +573,9 @@ const PISTOL_FORE: [number, number] = [-0.07, 0.01];
 
 /** What a Synty unit is made of. */
 interface Spec extends Armament {
-  character: CharacterId;
-  hat: HeadgearId | null;
+  /** Who it is: a character of the manifest, or a soldier put together from the wardrobe (`dress`: wardrobe.ts). */
+  character?: CharacterId;
+  dress?: Dress;
   /** Barracks colours: helmet, torso, arms, legs; null for a piece left as Synty painted it. */
   dyes: (string | null)[] | null;
   /** The owner's band colour; null for none. */
@@ -602,6 +615,23 @@ function plainMaterial(atlas: AtlasId): DyedMaterial {
 /** The night rim (synty.ts dyeRim) of who has no owner's band: a trace, so the dead stay dark. */
 const ENEMY_RIM = 0.22;
 
+/**
+ * Whether soldiers wear their players' colours (Ajustes, «Ropa con el color del jugador»: Arturo, 21/10): off, each
+ * in their clothes' own colours and without the band, the circle under them telling whose they are. The soldiers on
+ * screen are painted again when it changes.
+ */
+let squadTint = graphics().squadTint;
+const tinted = new Set<WeakRef<SyntyFigure>>();
+onGraphics((g) => {
+  if (g.squadTint === squadTint) return;
+  squadTint = g.squadTint;
+  for (const ref of tinted) {
+    const f = ref.deref();
+    if (f) f.repaint();
+    else tinted.delete(ref);
+  }
+});
+
 /** Puts a unit's meshes on the characters' layer (post.ts): seen and shadowed, left out of the occlusion's pre-pass. */
 function onUnitLayer(o: THREE.Object3D): void {
   o.traverse((c) => c.layers.set(UNIT_LAYER));
@@ -630,8 +660,6 @@ export class SyntyFigure implements FigureRig {
   /** For a figure on a plain material: its own, made for the first hit, and the meshes that swap to it. */
   private own: DyedMaterial | null = null;
   private readonly painted: THREE.Mesh[] = [];
-  /** The hat's meshes, on the body's material: they take its own with it (a flash, a fade). */
-  private readonly hatted: THREE.Mesh[] = [];
   /** Hand to weapon (fixed), so the gun lands where the pose puts it. */
   private readonly socket = new THREE.Group();
   /** Its weapons' models (cloned), which of them is in the hand, and where the others ride (hung from bones: stows). */
@@ -738,22 +766,32 @@ export class SyntyFigure implements FigureRig {
     // Unarmed: shots and effects start in front of the chest.
     this.gunPivot.position.set(0, this.chest, 0.3);
     this.yaw.add(this.gunPivot);
-    const c = CHARACTERS[spec.character] as CharacterAsset;
-    this.scale = CHARACTER_SCALE * (c.scale ?? 1);
+    const c = spec.dress ? null : (CHARACTERS[spec.character!] as CharacterAsset);
+    this.scale = CHARACTER_SCALE * (c?.scale ?? 1);
     // Each unit plays the clips from its own point, so a squad does not breathe in step.
-    const build: Build = c.female ? 'femn' : 'masc';
+    const build: Build = (spec.dress ? spec.dress.sex === 'f' : c?.female) ? 'femn' : 'masc';
     this.build = build;
     this.stance = spec.stance ? STANCE_ORDER.indexOf(spec.stance) : -1;
     const set = animSet(build, spec.dead);
     if (set) this.anim = this.driver(set);
     else void whenAnimSet(build, spec.dead).then((s) => (this.anim = this.driver(s)), () => undefined);
-    const h = spec.hat && HEADGEAR[spec.hat];
-    const now = [modelNow(c.pack, 'chr', spec.character), h ? modelNow(h.pack, 'hat', spec.hat!) : null] as const;
     const guns = gunsNow(spec);
-    if (now[0] && (!h || now[1]) && guns) this.fill(now[0], guns, now[1] ?? null);
+    if (spec.dress) {
+      const dress = spec.dress;
+      const now = wardrobeNow(dress);
+      if (now && guns) this.fill(now, guns);
+      else {
+        void Promise.all([loadWardrobe(dress), loadGuns(spec)])
+          .then(([m, g]) => this.fill(m, g))
+          .catch((e: unknown) => console.warn(`Synty: a ${dress.outfit} could not be dressed`, e));
+      }
+      return;
+    }
+    const now = modelNow(c!.pack, 'chr', spec.character!);
+    if (now && guns) this.fill(now, guns);
     else {
-      void Promise.all([loadModel(c.pack, 'chr', spec.character), loadGuns(spec), h ? loadModel(h.pack, 'hat', spec.hat!) : null])
-        .then(([m, g, hat]) => this.fill(m, g, hat))
+      void Promise.all([loadModel(c!.pack, 'chr', spec.character!), loadGuns(spec)])
+        .then(([m, g]) => this.fill(m, g))
         .catch((e: unknown) => console.warn(`Synty: ${spec.character} could not be dressed`, e));
     }
   }
@@ -776,7 +814,7 @@ export class SyntyFigure implements FigureRig {
   }
 
   /** Dresses the rig once its models are loaded. */
-  private fill(source: THREE.Group, guns: Guns, hat: THREE.Group | null): void {
+  private fill(source: THREE.Group, guns: Guns): void {
     const rest = restOf(source);
     this.rest = rest;
     const k = this.scale;
@@ -787,10 +825,12 @@ export class SyntyFigure implements FigureRig {
     const spec = this.spec;
     let material: DyedMaterial | null = null;
     const plain = !spec.dyes && !spec.band && !spec.skin;
+    // A soldier from the wardrobe is painted from a palette of their own.
+    const palette = source.userData.palette as THREE.Texture | undefined;
     model.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       this.atlas ??= atlasOf(o);
-      material ??= plain ? plainMaterial(atlasOf(o)) : dyedMaterial(atlasOf(o));
+      material ??= plain && !palette ? plainMaterial(atlasOf(o)) : dyedMaterial(atlasOf(o), palette);
       o.material = material;
       this.painted.push(o);
       o.castShadow = true;
@@ -813,11 +853,10 @@ export class SyntyFigure implements FigureRig {
           send();
         };
       }
-      // A hat or helmet from the barracks replaces the survivor's own hair and hat.
-      if (spec.hat && /^(hair|hat)/.test(o.name)) o.visible = false;
     });
     this.material = material;
     if (material) this.paint(material);
+    if (spec.dress) tinted.add(new WeakRef(this));
     this.bones = SYNTY_BONES.map((n) => model.getObjectByName(n) ?? null);
     // Each bone's matrix is made when write() poses it, not every frame, and the model's own nodes never move: a figure
     // posed less often (far off, at rest, out of sight: SYNTY_LOD) costs nothing in between, whatever its bones (the
@@ -833,21 +872,6 @@ export class SyntyFigure implements FigureRig {
     this.body.scale.setScalar(k);
     this.body.position.y = -this.hip;
     this.pivot.position.y = this.hip;
-
-    const head = this.bones[B.Head];
-    if (hat && head) {
-      const h = hat.clone();
-      h.traverse((o) => {
-        if (!(o instanceof THREE.Mesh) || !material) return;
-        o.material = material;
-        this.hatted.push(o);
-      });
-      // Drawn round the head joint in model axes; female heads are smaller.
-      h.quaternion.copy(rest.q[B.Head]!).invert();
-      if ((CHARACTERS[spec.character] as CharacterAsset).female) h.scale.setScalar(0.93);
-      onUnitLayer(h);
-      head.add(h);
-    }
 
     const hand = this.bones[B.Hand_R];
     if (hand) {
@@ -1063,16 +1087,26 @@ export class SyntyFigure implements FigureRig {
     else void loadGuns({ ...this.spec }).then(put, () => undefined);
   }
 
-  /** Barracks colours on the cloth, the owner's band on the arms. */
+  /** Its colours again (squadTint changed). */
+  repaint(): void {
+    if (this.material) this.paint(this.material);
+  }
+
+  /** Barracks colours on the cloth, the owner's band on the arms (a soldier from the wardrobe: only with squadTint). */
   private paint(m: DyedMaterial): void {
     const dyes = m.userData.dyes;
     const { dyes: colours, band } = this.spec;
-    colours?.forEach((c, i) => {
-      if (!c) return;
-      dyes.dyeColors.value[i + 1]!.set(c);
-      dyes.dyeAmount.value.setComponent(i, 0.6);
-    });
-    if (band) {
+    const tint = !this.spec.dress || squadTint;
+    dyes.dyeAmount.value.set(0, 0, 0, 0);
+    if (tint) {
+      colours?.forEach((c, i) => {
+        if (!c) return;
+        dyes.dyeColors.value[i + 1]!.set(c);
+        dyes.dyeAmount.value.setComponent(i, 0.6);
+      });
+    }
+    dyes.dyeBand.value = 0;
+    if (band && tint) {
       dyes.dyeColors.value[5]!.set(band);
       dyes.dyeBand.value = 1;
     }
@@ -1266,7 +1300,7 @@ export class SyntyFigure implements FigureRig {
 
   /** What the crowd knows this figure's body by: the same model, gait style and stance bake alike. */
   private get crowdKey(): string {
-    return `${this.spec.character}|${this.spec.style ?? ''}|${this.stance}`;
+    return `${this.spec.character ?? ''}|${this.spec.style ?? ''}|${this.stance}`;
   }
 
   /** Which of the crowd's loops the pose is, if it is one (0 shambling along, 1 standing); −1 if the figure has to pose it. */
@@ -1517,7 +1551,7 @@ export class SyntyFigure implements FigureRig {
       this.own.userData.dyes.dyeRim.value = ENEMY_RIM;
     }
     const use = lit ? this.own! : m;
-    if (this.painted[0]?.material !== use) for (const o of [...this.painted, ...this.hatted]) o.material = use;
+    if (this.painted[0]?.material !== use) for (const o of this.painted) o.material = use;
     if (lit) {
       this.own!.userData.dyes.dyeFlash.value = k;
       this.own!.userData.dyes.dyeFade.value = this.fade;
@@ -1691,9 +1725,16 @@ export class SyntyFigure implements FigureRig {
       v1.set(lerp(sh.x * 0.06, 0, aim), lerp(sh.y - 0.22, sh.y + 0.16, aim) + reload * 0.1, lerp(sh.z + 0.3, sh.z + 0.5, aim));
       e1.set((1 - aim) * 0.75 - p.recoil * 0.45 - reload * 0.6, reload * 0.2, reload * 0.9, 'YXZ');
     } else {
-      // Shouldered, the grip comes up level with the shoulder: the stock in its pocket, the sights at the eye.
-      v1.set(lerp(sh.x * 0.35, sh.x * 0.5, aim), lerp(sh.y - 0.27, sh.y - 0.02, aim) + reload * 0.08, lerp(sh.z + 0.22, sh.z + 0.19, aim));
-      e1.set((1 - aim) * 0.42 - p.recoil * 0.18 - reload * 0.5, (1 - aim) * 0.38 + reload * 0.2, reload * 0.9, 'YXZ');
+      // Shouldered, the grip comes up level with the shoulder: the stock in its pocket, the sights at the eye. At low
+      // ready nearer the shorter the arms (LOW_READY), so the support hand reaches the handguard.
+      const k = Math.min(1, r.reach);
+      const low = LOW_READY;
+      const front = r.bulk?.front ?? sh.z;
+      const wide = THREE.MathUtils.clamp((front - low.wide[0]!) / (low.wide[1]! - low.wide[0]!), 0, 1);
+      const ahead = Math.max(sh.z + low.ahead * k, front + low.clear);
+      const down = lerp(low.down, low.downWide, wide) * k;
+      v1.set(lerp(sh.x * low.across, sh.x * 0.5, aim), lerp(sh.y - down, sh.y - 0.02, aim) + reload * 0.08, lerp(ahead, sh.z + 0.19, aim));
+      e1.set((1 - aim) * lerp(low.tip, low.tipWide, wide) - p.recoil * 0.18 - reload * 0.5, (1 - aim) * low.turn + reload * 0.2, reload * 0.9, 'YXZ');
     }
     // Crouched at low ready: over the knees.
     if (!this.melee) {
@@ -2597,12 +2638,15 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
   const squad = SQUAD.has(template) || risen;
   // Without a look of its own (older saves), the plain one: the class no longer picks it (docs/FASE9.md).
   const head: HeadId = look?.head ?? 'helmet';
-  const build = look?.build ?? 'normal';
-  const bodies = sameSex(squad ? SQUAD_BODIES[build] : UNIT_BODIES[template], look?.sex ?? sex, squad);
-  if (!bodies?.length) return null;
-  // The barracks' «Personaje» if chosen, else one picked by the soldier's campaign id (the same everywhere).
-  const chosen = squad ? SURVIVOR_CHOICES.find((c) => c.id === look?.character)?.id : undefined;
-  const character = chosen ?? pick(bodies, seed ?? `${template}|${accent}|${JSON.stringify(look ?? null)}`);
+  const key = seed ?? `${template}|${accent}|${JSON.stringify(look ?? null)}`;
+  // A soldier (or one risen) from the wardrobe: their clothes (the barracks' «Personaje», else picked by their
+  // campaign id, the same everywhere), what is on their head and their build by their look; their face and hair by
+  // their id.
+  // (Who is rescued too, in a civilian's winter clothes.)
+  const dress = squad ? dressOf(look, key, look?.sex ?? sex, { risen }) : template === 'vip' ? dressOf(undefined, key, sex, { pool: CIVIL_OUTFITS, head: 'bare' }) : undefined;
+  const bodies = dress ? null : sameSex(UNIT_BODIES[template], look?.sex ?? sex);
+  if (!dress && !bodies?.length) return null;
+  const character = bodies ? pick(bodies, key) : undefined;
   const arms = armamentOf(template, (gear?.weapon ?? 1) as Tier, gear?.arms);
   let dyes: Spec['dyes'] = null;
   if (squad) {
@@ -2617,20 +2661,18 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
   }
   return new SyntyFigure({
     character,
+    dress,
     ...arms,
-    hat: squad ? HEAD_GEAR[head] : null,
     dyes,
     band: (squad && !risen) || template === 'vip' ? accent : null,
     dead: DEAD_TEMPLATES.has(template),
-    ...(risen ? { skin: RISEN_SKIN, own: true } : {}),
+    // (A risen soldier's grey skin is in their palette.)
+    ...(risen ? { own: true } : {}),
     scream: template === 'sectoid',
     style: gaitsOf(template).style,
     stance: DEAD_TEMPLATES.has(template) ? 'drunk' : LIVING_ENEMIES.has(template) ? 'aggressive' : undefined,
   });
 }
-
-/** A risen soldier's skin: grey with a little green, like the dead's. */
-const RISEN_SKIN = '#98a08a';
 
 /** The model of each of the Armería's weapons (docs/FASE8.md §A), by the soldier's weapon tier (1–3). */
 const FOUND_MODELS: Record<FoundWeaponId, WeaponId | [WeaponId, WeaponId, WeaponId]> = {
@@ -2673,18 +2715,11 @@ export function armamentOf(template: TemplateId, tier: Tier, arms?: Arms | null)
   };
 }
 
-/**
- * The bodies someone picked at random can have: those of their sex in the
- * list. A soldier whose build has none of it (no heavy women) takes any
- * survivor of that sex; anyone else, the whole list; so does whoever's sex is
- * unknown.
- */
-function sameSex(bodies: CharacterId[] | undefined, sex: 'f' | 'm' | undefined, squad: boolean): CharacterId[] | undefined {
+/** The bodies someone picked at random can have: those of their sex in the list, or the whole list (none of it, or their sex unknown). */
+function sameSex(bodies: CharacterId[] | undefined, sex: 'f' | 'm' | undefined): CharacterId[] | undefined {
   if (!sex || !bodies) return bodies;
-  const of = (id: CharacterId) => !!(CHARACTERS[id] as CharacterAsset).female === (sex === 'f');
-  const kept = bodies.filter(of);
-  if (kept.length) return kept;
-  return squad ? SURVIVOR_CHOICES.map((c) => c.id).filter(of) : bodies;
+  const kept = bodies.filter((id) => !!(CHARACTERS[id] as CharacterAsset).female === (sex === 'f'));
+  return kept.length ? kept : bodies;
 }
 
 /**
@@ -2693,15 +2728,15 @@ function sameSex(bodies: CharacterId[] | undefined, sex: 'f' | 'm' | undefined, 
  * a piece as Synty painted it) and a skin tone of their own if given.
  */
 export function voiceFigure(character: CharacterId, dyes: (string | null)[] | null = null, skin?: string): SyntyFigure {
-  return new SyntyFigure({ character, weapon: null, hat: null, dyes, band: null, dead: false, scream: false, skin });
+  return new SyntyFigure({ character, weapon: null, dyes, band: null, dead: false, scream: false, skin });
 }
 
 /** Starts loading every model and atlas the units use, so the first battle does not wait. */
 export function preloadSynty(): void {
-  const used = new Set<CharacterId>([...Object.values(SQUAD_BODIES).flat(), ...Object.values(UNIT_BODIES).flat()]);
+  const used = new Set<CharacterId>(Object.values(UNIT_BODIES).flat());
   for (const id of used) void loadModel(CHARACTERS[id].pack, 'chr', id).catch(() => undefined);
+  preloadWardrobe();
   for (const [id, w] of Object.entries(WEAPONS)) void loadModel(w.pack, 'wep', id).catch(() => undefined);
-  for (const [id, h] of Object.entries(HEADGEAR)) void loadModel(h.pack, 'hat', id).catch(() => undefined);
   for (const { prop } of Object.values(SIRENS)) if (prop) void loadModel(PROPS[prop].pack, 'prop', prop).catch(() => undefined);
   for (const build of ['masc', 'femn'] as const) {
     animSet(build);

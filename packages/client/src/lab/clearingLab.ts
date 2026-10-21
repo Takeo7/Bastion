@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { BASE_MAP, fellTree, freshBase, growBase, placePiece, Rng, type BaseState, type PieceId } from '@bastion/engine';
+import { BASE_MAP, BUILD_IDS, defaultAppearance, fellTree, freshBase, growBase, HEAD_IDS, placePiece, Rng, type Appearance, type BaseState, type BuildId, type HeadId, type PieceId } from '@bastion/engine';
 import type { ArmoryStock } from '../strategy/clearing';
+import { OUTFIT_CHOICES, setRoster } from '../game/wardrobe';
 import { ClearingArtView } from '../strategy/clearingArt';
 import { Stage, type StageSet } from '../strategy/stage';
 import '../styles.css';
@@ -91,8 +92,9 @@ const look = (x: number, z: number, distance = 30, yaw = 0) => {
 };
 look(c, c, 34);
 (window as unknown as { __claro: unknown }).__claro = {
-  /** The clearing's art itself (to look into it). */
+  /** The clearing's art itself (to look into it), and its stage (a shot of one's own: show(pos, target, fov)). */
   art,
+  show: (pos: [number, number, number], target: [number, number, number], fov = 38) => void stage.show('claro', { pos: new THREE.Vector3(...pos), target: new THREE.Vector3(...target), fov }, true),
   look,
   fell(x0: number, y0: number, x1: number, y1: number) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) fellTree(base, x, y);
@@ -120,18 +122,45 @@ look(c, c, 34);
    * The squad's screen: `n` soldiers by La Lata, the two commanders' halves (`alone`: one commander's, in one row, the
    * last `empty` places free); the debrief's, with its wounded and its fallen.
    */
-  escuadra(n = 6, debrief = false, mirror = false, alone = false, empty = 0) {
+  escuadra(n = 6, debrief = false, mirror = false, alone = false, empty = 0, looks: 'none' | 'default' | 'mixed' = 'none') {
     const templates = ['assault', 'sharpshooter', 'specialist', 'grenadier', 'rookie'] as const;
+    // The soldiers' looks: none (older saves), their player's as they join (by sex), or each a head and a build of their own.
+    const look = (i: number, color: string): Appearance | undefined => {
+      if (looks === 'none') return undefined;
+      const a = defaultAppearance(i < Math.ceil(n / 2) ? 0 : 1, color, i % 2 ? 'm' : 'f');
+      return looks === 'mixed' ? { ...a, head: HEAD_IDS[i % HEAD_IDS.length]!, build: BUILD_IDS[(i * 2) % BUILD_IDS.length]! } : a;
+    };
+    // Dressed as the campaign dresses its soldiers (wardrobe.ts setRoster), in the order they joined.
+    setRoster(Array.from({ length: n }, (_, i) => ({ id: `lab${i}`, appearance: look(i, '#e8a33a') })));
     art.setLineup([
       ...Array.from({ length: n }, (_, i) => ({
         template: templates[i % templates.length]!,
         color: alone || i < Math.ceil(n / 2) ? '#e8a33a' : '#4fb0e8',
+        appearance: look(i, alone || i < Math.ceil(n / 2) ? '#e8a33a' : '#4fb0e8'),
         seed: `lab${i}`,
         ...(debrief ? { status: i === 1 ? ('dead' as const) : i % 3 === 2 ? ('wounded' as const) : ('ok' as const) } : {}),
       })),
       ...Array.from({ length: empty }, () => null),
     ], { mirror, halves: !alone });
     void stage.show('claro', art.lineupShot(), true);
+  },
+  /**
+   * The wardrobe's outfits in a row (wardrobe.ts OUTFIT_CHOICES, from `from`), each on a soldier of `sex` ('f', 'm',
+   * or by turns: '') with `head` and `build`, in one player's colour.
+   */
+  armario(from = 0, n = 8, sex: '' | 'f' | 'm' = '', head: HeadId = 'bare', build: BuildId = 'normal') {
+    const outfits = OUTFIT_CHOICES.slice(from, from + n);
+    art.setLineup(
+      outfits.map((o, i) => ({
+        template: 'rookie' as const,
+        color: '#e8a33a',
+        appearance: { ...defaultAppearance(0, '#e8a33a', sex || (i % 2 ? 'm' : 'f')), head, build, character: o.id },
+        seed: `armario${from + i}`,
+      })),
+      { halves: false },
+    );
+    void stage.show('claro', art.lineupShot(), true);
+    return outfits.map((o) => o.id).join(' ');
   },
   subir: () => art.depart(),
   /** A siege's posts: six soldiers about the clearing, both commanders', one on the tower. */

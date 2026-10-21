@@ -95,6 +95,7 @@ import {
   contactBlocker,
   underMarea,
   NIGHT_TEXT,
+  OUTFIT_NAMES,
   LIVING_TIP,
   craftBlocker,
   dailyRations,
@@ -119,7 +120,6 @@ import {
   TECHS,
   TEMPLATES,
   TRAITS,
-  VISOR_COLORS,
   weaponTier,
   type Appearance,
   type ArmorPart,
@@ -170,6 +170,7 @@ import { storageKey } from '../net';
 import { append, clear, h } from '../ui/dom';
 import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from '../ui/quit';
 import { graphicsSettings, soundSettings } from '../ui/settingsPanel';
+import { graphics } from '../settings';
 import { GeoscapeSet, shownOffers } from './geoscape';
 import { ClearingSet, footprint, type ArmoryStock, type BaseCursor, type ClearingArt, type ClearingTool } from './clearing';
 import { ClearingArtView, type LineupEntry } from './clearingArt';
@@ -183,7 +184,7 @@ import { carriedProfile, kindOf, loadoutEl, modPanel, placeOf, profileOf, weapon
 import { soldierPortrait } from './portraits';
 import { barLines, learnedTags, roleDot, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
 import { deadlineEl } from '../ui/deadline';
-import { SURVIVOR_CHOICES } from '../game/syntyManifest';
+import { outfitOf, outfitsFor, preloadWardrobe, soldierSex } from '../game/wardrobe';
 
 export interface StrategyHandlers {
   send(cmd: CampaignCommand): void;
@@ -233,6 +234,9 @@ const PIECE_ICONS: Partial<Record<string, string>> = {
   turret: 'mh-machinegun',
 };
 const KIND_ICONS = { building: 'home', defence: 'mh-shield', trap: 'mh-targeted' } as const;
+
+/** Personalizar's colours with the clothes not dyed (Ajustes · «Ropa con el color del jugador», off by default). */
+const TINT_OFF = 'Para teñir la ropa, activa «Ropa con el color del jugador» en Ajustes.';
 
 /** A line with Lore's key words marked «**así**»: those in bold (Ana, 20/10 #15). */
 function marked(line: string): (string | HTMLElement)[] {
@@ -2425,7 +2429,14 @@ export class StrategyScreen {
         isMine && s.alive
           ? h(
               'button.x-btn.small',
-              { onclick: () => ((this.custom = { soldier: s.id, name: s.name, nickname: s.nickname ?? '', appearance: { ...(s.appearance ?? defaultAppearance(s.owner)) } }), this.render()) },
+              {
+                onclick: () => {
+                  // Every piece of the wardrobe on its way (5.7 MB, Arte): then each look over a choice takes a few ms.
+                  preloadWardrobe();
+                  this.custom = { soldier: s.id, name: s.name, nickname: s.nickname ?? '', appearance: { ...(s.appearance ?? defaultAppearance(s.owner, undefined, undefined, s.id)) } };
+                  this.render();
+                },
+              },
               'Personalizar',
             )
           : null,
@@ -2538,6 +2549,8 @@ export class StrategyScreen {
         ),
       );
     const look = d.appearance;
+    const worn = outfitOf(look.character);
+    const preview = (appearance: Appearance) => this.custom === d && this.showcase(SOLDIER, this.playerColor(s.owner), appearance, this.gearFor(this.c(), s), s.id);
     // What the headgear is painted with until it has its own colour: the armour (helmet), the trim (beret, cap, hood) or nothing.
     const hat = HEADS[look.head].paint;
     const follows = (piece: Piece) => partColor({ ...look, [piece]: undefined }, piece);
@@ -2576,11 +2589,13 @@ export class StrategyScreen {
       const color = piece === 'helmet' && hat ? colorOf(piece) : look[piece];
       if (color !== undefined) parts[piece] = color;
     }
+    // The colours only show with the clothes dyed (Ajustes, off by default: Arturo, 21/10); without, they wait there.
+    const tinted = graphics().squadTint;
     const copy: HTMLButtonElement = h(
       'button.x-btn.small',
       {
-        disabled: !!blocked || !others.length,
-        title: 'Guarda a este soldado y pinta a todos tus soldados con estos colores; cada uno conserva su nombre, su cabeza y su complexión.',
+        disabled: !!blocked || !others.length || !tinted,
+        title: tinted ? 'Guarda a este soldado y pinta a todos tus soldados con estos colores; cada uno conserva su nombre, su cabeza y su complexión.' : TINT_OFF,
         onclick: () => {
           // A second click confirms: it repaints the whole squad.
           if (!copy.classList.contains('armed')) {
@@ -2604,31 +2619,40 @@ export class StrategyScreen {
       h('h2.x-title', {}, displayName(d.name.trim() || s.name, d.nickname.trim())),
       text('name', 'Nombre', NAME_MAX, s.name),
       text('nickname', 'Apodo', NICKNAME_MAX, 'Sin apodo'),
-      // Which survivor the soldier is (Synty); unset, the one their id picks, the same in every screen.
+      // The clothes (Sidekick, Arte's wardrobe.ts): among those of the soldier's sex; unset, the ones their id picks,
+      // the same in every screen. Over one, the soldier on the pedestal wears it, and back to theirs on leaving.
       h(
         'div.x-field',
         {},
-        h('small', {}, 'Personaje'),
+        h('small', {}, 'Ropa'),
         h(
           'div.x-chips',
           {},
-          h(`button${look.character ? '' : '.on'}`, { title: 'El que le toque, siempre el mismo', onclick: () => set({ character: undefined }) }, 'Al azar'),
-          ...SURVIVOR_CHOICES.map((choice) => h(`button${look.character === choice.id ? '.on' : ''}`, { onclick: () => set({ character: choice.id }) }, choice.name)),
+          h(`button${worn ? '' : '.on'}`, { title: 'Una al azar, y no cambia.', onclick: () => set({ character: undefined }) }, 'Al azar'),
+          ...outfitsFor(soldierSex(look, s.id)).map((id) =>
+            h(
+              `button${worn === id ? '.on' : ''}`,
+              { onclick: () => set({ character: id }), onpointerenter: () => preview({ ...look, character: id }), onpointerleave: () => preview(look) },
+              OUTFIT_NAMES[id] ?? id,
+            ),
+          ),
         ),
       ),
       chips('Cabeza', HEAD_IDS, HEADS, look.head, (head) => set({ head })),
       chips('Complexión', BUILD_IDS, BUILDS, look.build, (build) => set({ build })),
       h('div.x-head', {}, 'Colores'),
+      tinted ? null : h('p.x-muted.tint-off', {}, TINT_OFF),
       h(
-        'div.x-parts',
-        {},
+        `div.x-parts${tinted ? '' : '.off'}`,
+        { inert: !tinted },
         armour,
         helmetRow,
         pieceRow('torso', 'Torso'),
         pieceRow('arms', 'Brazos'),
         pieceRow('legs', 'Piernas'),
-        row('Detalles', look.secondary, ARMOR_COLORS, (secondary) => ({ secondary }), note('rodilleras, ribetes, capa')),
-        row('Visor', look.visor, VISOR_COLORS, (visor) => ({ visor }), note('y luces del traje')),
+        // What the trim colours on these figures (Arte): the hood, beret or cap while it has no colour of its own. No
+        // visor row: Synty's figures draw none.
+        row('Detalles', look.secondary, ARMOR_COLORS, (secondary) => ({ secondary }), note('capucha, boina y gorra')),
         mark,
       ),
       h(
@@ -2637,7 +2661,8 @@ export class StrategyScreen {
         h('button.x-btn.small', { onclick: () => ((d.appearance = randomAppearance(new Rng(Date.now() >>> 0))), this.render()) }, 'Aleatorio'),
         h(
           'button.x-btn.small',
-          { title: 'Vuelve a los colores de tu jugador y al aspecto de serie', onclick: () => ((d.appearance = defaultAppearance(s.owner)), this.render()) },
+          // Its own look by its id (the engine's, Gameplay 21/10): not everyone back in a helmet.
+          { title: 'Vuelve al aspecto de serie de este soldado', onclick: () => ((d.appearance = defaultAppearance(s.owner, undefined, s.appearance?.sex, s.id)), this.render()) },
           'Restablecer',
         ),
         copy,

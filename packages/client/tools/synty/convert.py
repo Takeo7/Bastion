@@ -5,14 +5,15 @@
 # convert.ts writes jobs.json from the manifest and runs this; see README.md.
 # Every model comes out Y-up, in game units (SCALE: metres to tiles), without
 # images: each material is named after the atlas it uses and the game puts the
-# shared atlas texture on it. Three kinds of job:
+# shared atlas texture on it. The kinds of job:
 #
 #  - character: a skinned body. Bones get one naming (BONES) whatever the pack
 #    used, fingers, toes, IK and face bones go into their parent, and the
 #    attachments (hair, hats, packs) hang from their bone as rigid meshes. A
 #    second UV map, "part", tells the game which armour piece each corner is
 #    (u) and whether its texel is cloth it may dye (v): see PART.
-#  - headgear: a hat or helmet the game hangs from the head bone at run time.
+#  - sidekick: a Sidekick character, its parts one mesh on that skeleton (the dead, the living).
+#  - wardrobe: a piece of the soldiers' wardrobe (clothes, a face, hair, a beard, headwear), with its shapes.
 #  - prop / weapon: static meshes joined per material. Weapons are turned so
 #    the barrel points +Z with the grip at the origin; their muzzle goes in
 #    the node's extras.
@@ -28,6 +29,7 @@ import bpy
 import colorsys
 import json
 import math
+import re
 import sys
 from mathutils import Matrix, Vector
 
@@ -58,6 +60,14 @@ for side, suffixes in (('L', ('_l', '')), ('R', ('_r', '_1', '.001'))):
         for j in range(1, joints + 1):
             for suffix in suffixes:
                 BONES[f'{name}_0{j}{suffix}'] = f'{chain}_0{j}_{side}'
+
+# Sidekick's (the prototype: SIDEKICK in the manifest) name all five: thumb_01_l, index_01_l, middle_01_l, ring and
+# pinky, three joints each. Its middle finger is Synty's three in one; the ring and the little finger go with it
+# (sidekick(): their weights moved onto the middle's before the skeleton is cleaned).
+for side in ('L', 'R'):
+    for j in range(1, 4):
+        BONES[f'index_0{j}_{side.lower()}'] = f'Index_0{j}_{side}'
+        BONES[f'middle_0{j}_{side.lower()}'] = f'Finger_0{j}_{side}'
 
 # Armour piece of each bone, for the "part" UV (u = PART / 8 + 1/16).
 # 0 never dyed (head, hands, feet), 1 headgear, 2 torso, 3 arms, 4 legs, 5 the owner's band.
@@ -339,6 +349,255 @@ def character(job, scale):
     export(job['out'], skins=True)
 
 
+def sidekick_import(paths, shape):
+    """
+    Sidekick parts on one skeleton (the first's), the ring and little fingers folded onto the middle. `shape` sets
+    each part's shape keys: given the preset's sliders it applies them (a whole character), given the wardrobe's
+    shapes it keeps those as shape keys of their own and drops the rest (wardrobe()). Returns the skeleton, the
+    meshes, and the parts' own bones beyond the common skeleton (a strap's, a beard's: tors_dyn_01,
+    fchr_dyn_01_01_c), each to the one of the skeleton it hangs from.
+    """
+    meshes = []
+    extra = {}
+    imported = [import_fbx(path) for path in paths]
+    # The skeleton: the fullest of the parts' (some come with only the bones they hang from).
+    arm = max((o for objs in imported for o in objs if o.type == 'ARMATURE'), key=lambda o: len(o.data.bones))
+    for k, objs in enumerate(imported):
+        for o in objs:
+            if o.type == 'ARMATURE' and o is not arm:
+                for b in o.data.bones:
+                    if b.name in arm.data.bones:
+                        continue
+                    p = b.parent
+                    while p is not None and p.name not in arm.data.bones:
+                        p = p.parent
+                    if p is not None:
+                        extra[b.name] = p.name
+        for o in objs:
+            if o.type == 'MESH':
+                o['part'] = k
+                meshes.append(o)
+            elif o is not arm:
+                for c in list(o.children):
+                    unparent(c)
+                bpy.data.objects.remove(o)
+    for m in meshes:
+        world = m.matrix_world.copy()
+        m.parent = arm
+        m.matrix_world = world
+        mod = next((x for x in m.modifiers if x.type == 'ARMATURE'), None) or m.modifiers.new('Armature', 'ARMATURE')
+        mod.object = arm
+        shape(m)
+        # The ring and the little finger with the middle one (Synty's hands curl the three as one).
+        groups = {g.name: g for g in m.vertex_groups}
+        for g in list(m.vertex_groups):
+            hit = re.match(r'(ring|pinky)_(0\d_[lr])$', g.name)
+            if not hit:
+                continue
+            target = groups.get('middle_' + hit.group(2)) or m.vertex_groups.new(name='middle_' + hit.group(2))
+            groups[target.name] = target
+            for v in m.data.vertices:
+                for e in v.groups:
+                    if e.group == g.index and e.weight > 0:
+                        target.add([v.index], e.weight, 'ADD')
+            m.vertex_groups.remove(g)
+        keep_uv(m)
+    return arm, meshes, extra
+
+
+def apply_sliders(body):
+    """The preset's build on a part: its shape keys at the sliders' values, applied."""
+    def shape(m):
+        keys = m.data.shape_keys
+        if not keys:
+            return
+        for name, value in body.items():
+            if name in keys.key_blocks:
+                keys.key_blocks[name].value = value
+        bpy.ops.object.select_all(action='DESELECT')
+        m.select_set(True)
+        bpy.context.view_layer.objects.active = m
+        bpy.ops.object.shape_key_remove(all=True, apply_mix=True)
+    return shape
+
+
+def keep_shapes(shapes):
+    """
+    The wardrobe's shapes on a part, each a shape key of its own made from Sidekick's (its sliders at those values),
+    the rest dropped: a part without one of them gets it unchanged, so all of them join with the same keys.
+    """
+    def shape(m):
+        if not m.data.shape_keys:
+            m.shape_key_add(name='Basis')
+        blocks = m.data.shape_keys.key_blocks
+        basis = m.data.shape_keys.reference_key
+        made = []
+        for name, values in shapes.items():
+            for k in blocks:
+                k.value = 0
+            for key, value in values.items():
+                if key in blocks:
+                    blocks[key].value = value
+            made.append(m.shape_key_add(name='_' + name, from_mix=True))
+        for k in list(blocks):
+            if k != basis and k not in made:
+                m.shape_key_remove(k)
+        for k in made:
+            k.name = k.name[1:]
+            k.value = 0
+    return shape
+
+
+def sidekick_mesh(arm, meshes, extra, atlas, scale):
+    """The parts made one mesh on the cleaned skeleton, in game units, painted from `atlas`."""
+    bpy.ops.object.select_all(action='DESELECT')
+    for m in meshes:
+        m.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0]
+    if len(meshes) > 1:
+        bpy.ops.object.join()
+    mesh = bpy.context.view_layer.objects.active
+    # What rides on Sidekick's root (some attachments) goes with the hips, the root being no bone of ours; what rides
+    # on a part's own bones, with the bone they hang from.
+    moves = {**extra, 'root': 'pelvis'}
+    for g in list(mesh.vertex_groups):
+        if g.name not in moves:
+            continue
+        to = mesh.vertex_groups.get(moves[g.name]) or mesh.vertex_groups.new(name=moves[g.name])
+        for v in mesh.data.vertices:
+            for e in v.groups:
+                if e.group == g.index and e.weight > 0:
+                    to.add([v.index], e.weight, 'ADD')
+        mesh.vertex_groups.remove(g)
+    clean_skeleton(arm, [mesh])
+    bare = sum(1 for v in mesh.data.vertices if not any(e.weight > 0 for e in v.groups))
+    if bare:
+        print(f"[sidekick] {len(meshes)} parts: {bare} vertices with no bone", flush=True)
+    bake([arm, mesh], scale)
+    mesh.parent = arm
+    mod = next((x for x in mesh.modifiers if x.type == 'ARMATURE'), None) or mesh.modifiers.new('Armature', 'ARMATURE')
+    mod.object = arm
+    mesh.data.materials.clear()
+    mesh.data.materials.append(atlas_material(atlas))
+    for p in mesh.data.polygons:
+        p.material_index = 0
+    mesh.name = 'body'
+    mesh.data.name = 'body'
+    arm.name = 'rig'
+    return mesh
+
+
+# A Sidekick palette's cells that are the body's, not the clothes' (y * 16 + x): the skin, the eyes, the teeth, the hair.
+BODY_CELLS = [y * 16 + x for y in range(10, 15) for x in range(8)] + [9 * 16 + 3, 9 * 16 + 8]
+
+
+def part_cells(meshes, palettes):
+    """Each palette cell a part is painted from (y * 16 + x), and the palette of the preset that paints it (`palettes`, by part)."""
+    own = {}
+    loaded = {}
+    for m in meshes:
+        path = palettes[m['part']]
+        loaded.setdefault(path, Atlas(path, 32))
+        uv = m.data.uv_layers['map1'].data
+        for i in range(len(uv)):
+            own[min(15, int(uv[i].uv[0] * 16)) + min(15, int((1 - uv[i].uv[1]) * 16)) * 16] = loaded[path]
+    return own
+
+
+def unused(rgb):
+    """Sidekick's colour for a cell a palette has no use for: pure red."""
+    return rgb[0] > 0.99 and rgb[1] < 0.01 and rgb[2] < 0.01
+
+
+def write_palette(path, own, fallbacks, paint={}, size=256):
+    """
+    A character's palette made of its parts' (`own`: each cell's), every cell a block of its own, grown to `size`
+    without blending (as texture() grows a palette); a cell no part uses, or its palette left unused, from the first
+    of `fallbacks` that has a colour for it; `paint`, cells ('x,y') given a colour of their own.
+    """
+    backs = [Atlas(f, 32) for f in fallbacks]
+    k = size // 16
+    px = [0.0] * (size * size * 4)
+    for y in range(16):
+        for x in range(16):
+            u, v = (x + 0.5) / 16, 1 - (y + 0.5) / 16
+            rgb = own[y * 16 + x].rgb(u, v) if y * 16 + x in own else (1.0, 0.0, 0.0)
+            for b in backs:
+                if not unused(rgb):
+                    break
+                rgb = b.rgb(u, v)
+            rgb = paint.get(f'{x},{y}', rgb)
+            # Blender's rows go from the bottom.
+            for yy in range((15 - y) * k, (16 - y) * k):
+                for xx in range(x * k, (x + 1) * k):
+                    j = (yy * size + xx) * 4
+                    px[j:j + 4] = [rgb[0], rgb[1], rgb[2], 1.0]
+    img = bpy.data.images.new('palette', size, size, alpha=True)
+    img.pixels = px
+    img.file_format = 'WEBP'
+    img.filepath_raw = path
+    img.save(filepath=path, quality=100)
+
+
+def sidekick(job, scale):
+    """
+    A Sidekick character, whole (the dead, the living): its preset's parts on one skeleton, its build (the preset's
+    sliders) applied to the shape keys; then as any character: the skeleton cleaned to SYNTY_BONES, one mesh painted
+    from its palette, the squad's colours where its clothes are (`dye`).
+    """
+    reset()
+    arm, meshes, extra = sidekick_import(job['parts'], apply_sliders(job['body']))
+    if job.get('paletteOut'):
+        own = part_cells(meshes, job['palettes'])
+        if job.get('bodyPalette'):
+            dead = Atlas(job['bodyPalette'], 32)
+            for c in BODY_CELLS:
+                own[c] = dead
+        write_palette(job['paletteOut'], own, job['fallbacks'], job.get('paint', {}))
+    mesh = sidekick_mesh(arm, meshes, extra, job['atlas'], scale)
+    if job.get('dye'):
+        atlas = Atlas(job['atlasImage'], 256)
+        write_parts(mesh, arm, atlas, skins=skin_colours(mesh, atlas))
+    top = max((mesh.matrix_world @ v.co).z for v in mesh.data.vertices)
+    arm['height'] = round(top, 4)
+    print(f"[sidekick] {job['id']}: {len(job['parts'])} parts, {sum(len(p.vertices) - 2 for p in mesh.data.polygons)} triangles, {len(arm.data.bones)} bones, {top:.3f} tall", flush=True)
+    export(job['out'], skins=True)
+
+
+def wardrobe(job, scale):
+    """
+    A piece of the soldiers' wardrobe (the game puts a soldier together from them): Sidekick parts made one mesh on
+    our skeleton, its shapes kept (`shapes`: the body's sex and build, set at run time). The "part" map as a
+    character's: the squad's colours where the clothes are, measured on its preset's palette (`atlasImage`), the
+    skin being its cells there (`skins`); headgear takes the helmet colour, a face, hair and beards none. An outfit
+    carries its palette, a hex colour a cell (16 × 16, row by row from the top), in the rig's extras; headwear too,
+    and the cells it is painted from (`cells`), which keep their colours there on whatever outfit.
+    """
+    reset()
+    arm, meshes, extra = sidekick_import(job['parts'], keep_shapes(job['shapes']))
+    # Each part in its own preset's colours: the cells it is painted from, taken from that palette.
+    own = part_cells(meshes, job['palettes'])
+    mesh = sidekick_mesh(arm, meshes, extra, 'wardrobe', scale)
+    atlas = Atlas(job['atlasImage'], 32)
+    skins = [atlas.rgb(u, v) for u, v in job['skins']]
+    fixed = {'outfit': None, 'headwear': HEADGEAR}.get(job['piece'], 0)
+    write_parts(mesh, arm, atlas, fixed, skins)
+    if job['piece'] in ('outfit', 'headwear'):
+        fallback = Atlas(job['fallback'], 32)
+        def cell(x, y):
+            u, v = (x + 0.5) / 16, 1 - (y + 0.5) / 16
+            rgb = own.get(y * 16 + x, atlas).rgb(u, v)
+            return fallback.rgb(u, v) if unused(rgb) else rgb
+        arm['palette'] = ''.join('%02x%02x%02x' % tuple(round(c * 255) for c in cell(x, y)) for y in range(16) for x in range(16))
+        # What goes on the head keeps its own colours: the cells it is painted from (y * 16 + x), its palette's.
+        uv = mesh.data.uv_layers['map1'].data
+        arm['cells'] = sorted({min(15, int(uv[i].uv[0] * 16)) + min(15, int((1 - uv[i].uv[1]) * 16)) * 16 for i in range(len(uv))})
+    top = max((mesh.matrix_world @ v.co).z for v in mesh.data.vertices)
+    arm['height'] = round(top, 4)
+    print(f"[wardrobe] {job['id']}: {len(job['parts'])} parts, {sum(len(p.vertices) - 2 for p in mesh.data.polygons)} triangles, {len(mesh.data.vertices)} vertices, {len(arm.data.bones)} bones", flush=True)
+    export(job['out'], skins=True, morphs=True)
+
+
 def merge_attachments(arm, body, hung):
     """
     Joins the attachments into the skinned body, each moving with its bone,
@@ -358,34 +617,6 @@ def merge_attachments(arm, body, hung):
     body.select_set(True)
     bpy.context.view_layer.objects.active = body
     bpy.ops.object.join()
-
-
-def headgear(job, scale):
-    """A hat or helmet to hang from the head bone at run time: the joint at the origin, forward +Z (glTF)."""
-    reset()
-    objs = import_fbx(job['fbx'])
-    meshes = [o for o in objs if o.type == 'MESH']
-    for o in objs:
-        if o.type != 'MESH':
-            bpy.data.objects.remove(o)
-    for o in meshes:
-        unparent(o)
-        o.matrix_world = Matrix.Rotation(-math.pi / 2, 4, 'Z') @ Matrix.Scale(scale, 4) @ o.matrix_world
-    bake(meshes)
-    bpy.ops.object.select_all(action='DESELECT')
-    for m in meshes:
-        assign_atlases(m, None, job['atlas'])
-        keep_uv(m)
-        m.select_set(True)
-    bpy.context.view_layer.objects.active = meshes[0]
-    if len(meshes) > 1:
-        bpy.ops.object.join()
-    obj = bpy.context.view_layer.objects.active
-    obj.name = job['name']
-    obj.data.name = job['name']
-    if job.get('atlasImage'):
-        write_parts(obj, None, Atlas(job['atlasImage']), HEADGEAR if job.get('dye') else 0)
-    export(job['out'], skins=False)
 
 
 # -------------------------------------------------------------- props, guns
@@ -556,6 +787,23 @@ def texture(job):
     reset()
     img = bpy.data.images.load(job['src'])
     size = job['size']
+    if job.get('palette') and img.size[0] < size:
+        # A palette (Sidekick's 32 × 32 colours): grown with every colour a block of its own, none blended.
+        w, h = img.size
+        src = list(img.pixels)
+        k = size // w
+        out = bpy.data.images.new(img.name + '_big', w * k, h * k, alpha=True)
+        px = [0.0] * (w * k * h * k * 4)
+        for y in range(h * k):
+            for x in range(w * k):
+                i = ((y // k) * w + x // k) * 4
+                j = (y * w * k + x) * 4
+                px[j:j + 4] = src[i:i + 4]
+        out.pixels = px
+        out.file_format = 'WEBP'
+        out.filepath_raw = job['out']
+        out.save(filepath=job['out'], quality=100)
+        return
     if img.size[0] > size:
         img.scale(size, size)
     img.file_format = 'WEBP'
@@ -564,7 +812,7 @@ def texture(job):
 
 # -------------------------------------------------------------------- export
 
-def export(path, skins, animations=False):
+def export(path, skins, animations=False, morphs=False):
     bpy.ops.export_scene.gltf(
         filepath=path,
         export_format='GLB',
@@ -580,7 +828,9 @@ def export(path, skins, animations=False):
         export_anim_slide_to_zero=True,
         # Every bone keeps its track: a missing one would take the skeleton's rest from another clip.
         export_optimize_animation_size=False,
-        export_morph=False,
+        export_morph=morphs,
+        export_morph_normal=morphs,
+        export_morph_tangent=False,
         export_yup=True,
         export_apply=False,
         export_extras=True,
@@ -598,8 +848,10 @@ def main():
         print(f"[synty] {job['kind']}: {job['out']}", flush=True)
         if job['kind'] == 'character':
             character(job, scale)
-        elif job['kind'] == 'headgear':
-            headgear(job, scale)
+        elif job['kind'] == 'sidekick':
+            sidekick(job, scale)
+        elif job['kind'] == 'wardrobe':
+            wardrobe(job, scale)
         elif job['kind'] in ('prop', 'weapon'):
             static(job, scale)
         elif job['kind'] == 'texture':

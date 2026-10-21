@@ -2734,6 +2734,16 @@ dl.briefing {
   margin-bottom: 4px;
 }
 
+/* The colours with the clothes not dyed (Ajustes, off by default, Arturo 21/10): there, faint and out of reach. */
+.x-parts.off {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+
+.tint-off {
+  margin: 0 0 6px;
+}
+
 .x-part-head {
   display: flex;
   align-items: center;

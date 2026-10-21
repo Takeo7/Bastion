@@ -615,7 +615,7 @@ export function createMission(opts: MissionOptions): GameState {
         will: stats.will,
         armor: stats.armor,
         gear,
-        appearance: defaultAppearance(owner, undefined, sex),
+        appearance: defaultAppearance(owner, undefined, sex, name),
         lines,
       };
       units.push({ ...unit, ...armed(unit, { arms, mags: SPARE_MAGS }) });

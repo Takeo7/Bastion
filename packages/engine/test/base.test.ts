@@ -687,7 +687,6 @@ describe('customization', () => {
     run(c, { type: 'recruit' });
     const s = c.soldiers.at(-1)!;
     expect(s.board).toEqual([]);
-    expect(s.appearance).toEqual(defaultAppearance(0, undefined, sexOfName(s.name)));
-    expect(s.appearance.head).toBe('helmet');
+    expect(s.appearance).toEqual(defaultAppearance(0, undefined, sexOfName(s.name), s.id));
   });
 });

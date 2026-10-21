@@ -98,14 +98,30 @@ function mix(a: string, b: string, t: number): string {
   return '#' + out.map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
-/** The look soldiers had before customization: their player's colour (and their sex, when known). No classes any more (docs/FASE9.md). */
-export function defaultAppearance(owner: Slot, accent = PLAYER_COLORS[owner], sex?: 'f' | 'm'): Appearance {
+/** What a soldier starts with on the head (docs/SIDEKICK.md): mostly bare or a cap, now and then a hood, a beret, a helmet or a mask. */
+const START_HEADS: HeadId[] = ['bare', 'bare', 'bare', 'cap', 'cap', 'hood', 'beret', 'helmet', 'mask'];
+
+/** FNV-1a: the same number for the same soldier, everywhere. */
+function hashOf(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/**
+ * The look soldiers have before customization: their player's colour (and their sex, when known). No classes any
+ * more (docs/FASE9.md). With `seed` (the soldier's id), its own head and build, so that a squad of Sidekick figures
+ * isn't eight helmets alike (docs/SIDEKICK.md); without, the look of before, all helmets of a normal build, which
+ * migrateCampaign recognises.
+ */
+export function defaultAppearance(owner: Slot, accent = PLAYER_COLORS[owner], sex?: 'f' | 'm', seed?: string): Appearance {
+  const h = seed === undefined ? null : hashOf(seed);
   const out: Appearance = {
     primary: mix(accent, '#56605a', 0.55),
     secondary: accent,
     visor: '#9fe3ff',
-    head: 'helmet',
-    build: 'normal',
+    head: h === null ? 'helmet' : START_HEADS[h % START_HEADS.length]!,
+    build: h === null ? 'normal' : BUILD_IDS[(h >>> 8) % BUILD_IDS.length]!,
   };
   if (sex) out.sex = sex;
   return out;

@@ -25,6 +25,11 @@ export function atlasTexture(id: AtlasId): THREE.Texture {
     t.flipY = false;
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 4;
+    // A palette (Sidekick's: a colour a block): no smaller copies, or from afar its colours would run into each other.
+    if ('palette' in ATLASES[id] && ATLASES[id].palette) {
+      t.generateMipmaps = false;
+      t.minFilter = THREE.LinearFilter;
+    }
     textures.set(id, t);
   }
   return t;
@@ -138,8 +143,8 @@ export interface Dyes {
 
 export type DyedMaterial = THREE.MeshStandardMaterial & { userData: { dyes: Dyes } };
 
-/** A unit's own material on its pack's atlas (one program for all of them, uniforms apart). */
-export function dyedMaterial(atlas: AtlasId): DyedMaterial {
+/** A unit's own material on its pack's atlas, or on `map` (a soldier's own palette: wardrobe.ts); one program for all of them, uniforms apart. */
+export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial {
   const uniforms: Dyes = {
     dyeColors: { value: Array.from({ length: 6 }, () => new THREE.Color(1, 1, 1)) },
     dyeAmount: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -150,7 +155,7 @@ export function dyedMaterial(atlas: AtlasId): DyedMaterial {
     dyeRim: { value: 0 },
     dyeFade: { value: 1 },
   };
-  const m = new THREE.MeshStandardMaterial({ map: atlasTexture(atlas), roughness: 0.82, metalness: 0 }) as DyedMaterial;
+  const m = new THREE.MeshStandardMaterial({ map: map ?? atlasTexture(atlas), roughness: 0.82, metalness: 0 }) as DyedMaterial;
   m.userData.dyes = uniforms;
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms, { unitNight: NIGHT });

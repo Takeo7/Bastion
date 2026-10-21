@@ -42,6 +42,15 @@
   bottom: auto;
 }
 
+/* In Soldados the right side is the soldier's sheet (or Personalizar) down to the bottom (Gameplay, 21/10: the radio
+   covered its colours): the radio goes to the bottom centre, over the tabs, at the soldier's feet. */
+.strat[data-view='barracks'] .radio {
+  left: 0;
+  right: 0;
+  bottom: 62px;
+  margin: 0 auto;
+}
+
 @keyframes radio-in {
   from {
     opacity: 0;

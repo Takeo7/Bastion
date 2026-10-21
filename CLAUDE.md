@@ -16,8 +16,8 @@ Antes de nada, lee [docs/TRASPASO.md](docs/TRASPASO.md) (estado y decisiones) y 
 - **Repositorio:** `Takeo7/Bastion` es siempre privado, porque lleva modelos de Synty convertidos y la licencia no deja publicarlos. Nadie cambia su visibilidad.
 - **Puertos de los jugadores:** 3000, 3001 y 5173 nunca se usan ni se paran. Para probar, cada uno usa su puerto (tabla en EQUIPO.md).
 - **Arte:**
-  - solo Synty POLYGON, Kenney (CC0) o lo hecho por nosotros; tipografías OFL, como mucho dos familias;
-  - los originales de Synty viven en `assets-src/`, que no se sube;
+  - solo Synty POLYGON y Sidekick (con sus animaciones e interfaces), Kenney (CC0) o lo hecho por nosotros; nada de Synty SIMPLE ni MINI, que son de otro estilo; tipografías OFL, como mucho dos familias;
+  - los originales de Synty viven en `assets-src/`, que no se sube; todos los paquetes están en el disco externo, en `/Volumes/4T_White/50_INBOX/Synty`;
   - la conversión (`packages/client/tools/synty/convert.ts`, con Blender) se lanza siempre con ids explícitos, nunca entera.
 - **Opciones rechazadas:** no se vuelven a proponer (vóxel, Expediente, Holotáctico, Viñeta, CRT…). Se construye sobre lo elegido.
 - **Coordinación:** la sesión Gameplay reparte el trabajo por roles y revisa; nadie reescribe un archivo de otro rol. Los cambios en archivos ajenos son exactos y pequeños.

@@ -1,13 +1,12 @@
-import { PLAYER_COLORS, type Appearance, type Arms, type TemplateId, type Tier } from '@bastion/engine';
+import { PLAYER_COLORS, type Appearance, type Arms, type BuildId, type TemplateId, type Tier } from '@bastion/engine';
 import * as THREE from 'three';
 import type { Carried, FigurePose, FigureRig } from '../../game/figures';
 import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
 import { Renderer } from '../../game/renderer';
-import { SYNTY_HANDS, SYNTY_LOD, SyntyFigure } from '../../game/syntyFigures';
-import type { CharacterId } from '../../game/syntyManifest';
+import { LOW_READY, SYNTY_HANDS, SYNTY_LOD, SyntyFigure } from '../../game/syntyFigures';
 
 // Weapons lab (/armas.html): how every weapon sits in the hands of every kind
-// of body, pose by pose, in close-up. `__weapons.sheet(name, pose, bodies)`
+// of body, pose by pose, in close-up (bodies: the wardrobe's, 'police1:f:heavy'). `__weapons.sheet(name, pose, bodies)`
 // saves a contact sheet (rows: weapons; columns: bodies) to the dev server's
 // /__snap; poses: idle, aim, run, crouch, crouchAim, reload, throw, hit, climb,
 // dead, windup, strike; views: right, left, front, back. `__weapons.ARMS_CASES`
@@ -85,10 +84,14 @@ const POSES: Record<string, Partial<FigurePose>> = {
   strike: { aim: 1, swing: 1, lean: 0.5 },
 };
 
-const look = (character: CharacterId): Appearance => ({ primary: '#56605a', secondary: PLAYER_COLORS[0], visor: '#9fe3ff', head: 'bare', build: 'normal', character });
+/** A body's look: a character of the manifest, or one of the wardrobe's outfits with a sex and a build ('police1:f:heavy'). */
+const look = (body: string): Appearance => {
+  const [character, sex, build] = body.split(':') as [string, 'f' | 'm' | undefined, BuildId | undefined];
+  return { primary: '#56605a', secondary: PLAYER_COLORS[0], visor: '#9fe3ff', head: 'bare', build: build ?? 'normal', ...(sex ? { sex } : {}), character };
+};
 
 /** A body with a weapon, posed for `seconds` at 30 fps so the clips have blended in. */
-async function posed(template: TemplateId, tier: Tier, body: CharacterId | null, pose: Partial<FigurePose>, arms?: Arms, draw?: Carried): Promise<FigureRig> {
+async function posed(template: TemplateId, tier: Tier, body: string | null, pose: Partial<FigurePose>, arms?: Arms, draw?: Carried): Promise<FigureRig> {
   const squad = !['trooper', 'officer', 'lancer'].includes(template);
   const rig = buildUnit(template, PLAYER_COLORS[0], squad && body ? look(body) : undefined, { weapon: tier, arms }, `${template}${body}`);
   if (!isFigure(rig)) throw new Error(`${template} is not a figure`);
@@ -114,7 +117,7 @@ const VIEWS: Record<string, THREE.Vector3> = {
 async function sheet(
   name: string,
   poseName = 'idle',
-  bodies: CharacterId[] = ['soldierM', 'soldierF', 'hunter', 'mechanic', 'riotCop', 'coolF'],
+  bodies: string[] = ['survivor2:m:normal', 'survivor1:f:normal', 'police1:m:heavy', 'civilian2:f:heavy', 'survivor4:f:slim', 'outlaw1:m:slim'],
   cases = WEAPON_CASES,
   viewName = 'right',
   distance = 2.3,
@@ -160,4 +163,4 @@ async function sheet(
   return name;
 }
 
-(window as unknown as { __weapons: unknown }).__weapons = { sheet, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES, MOD_CASES, HANDS: SYNTY_HANDS };
+(window as unknown as { __weapons: unknown }).__weapons = { sheet, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES, MOD_CASES, HANDS: SYNTY_HANDS, LOW_READY };

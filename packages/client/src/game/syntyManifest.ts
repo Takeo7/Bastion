@@ -13,7 +13,7 @@ import type { BuildId, HeadId, TemplateId } from '@bastion/engine';
 /** Metres to game units: a tile is 1.5 m, so a 1.8 m survivor stands 1.2 tall. */
 export const SYNTY_SCALE = 1 / 1.5;
 
-export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza';
+export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza' | 'sidekickSurvivors' | 'sidekickZombies' | 'sidekickOutlaws' | 'sidekickCivilians' | 'sidekickPolice' | 'sidekickStarter';
 
 /**
  * Where each pack lives under assets-src/synty/. A pack that only comes as a
@@ -55,6 +55,14 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
   industrial: { dir: 'POLYGON_SinIdentificar_NaveIndustrialYMilitar_SourceFiles', atlas: 'military' },
   // «POLYGON Maps – Shopping Plaza»: for now only its Generic atlas (a roller shutter of the sheds pack is painted from it).
   plaza: { dir: 'POLYGON_ShoppingPlazaMap_SourceFiles', atlas: 'generic' },
+  // «SIDEKICK – Apocalypse Survivors» and «– Apocalypse Zombies» (the prototype, Arturo 21/10: SIDEKICK below): characters
+  // of parts on a skeleton of their own, each with its presets (.sk) and the palette it is painted from.
+  sidekickSurvivors: { dir: 'SIDEKICK_ApocalypseSurvivors_Extracted', unitypackage: 'SIDEKICK_Apocalypse_Survivors_Unity_2021_3_v1_0_4.unitypackage' },
+  sidekickZombies: { dir: 'SIDEKICK_ApocalypseZombies_Extracted', unitypackage: 'SIDEKICK_Apocalypse_Zombies_Unity_2021_3_v1_0_3.unitypackage' },
+  sidekickOutlaws: { dir: 'SIDEKICK_ApocalypseOutlaws_Extracted', unitypackage: 'SIDEKICK_Apocalypse_Outlaws_Unity_2021_3_v1_0_6.unitypackage' },
+  sidekickCivilians: { dir: 'SIDEKICK_ModernCivilians_Extracted', unitypackage: 'SIDEKICK_Modern_Civilians_Unity_2021_3_v1_0_2.unitypackage' },
+  sidekickPolice: { dir: 'SIDEKICK_ModernPolice_Extracted', unitypackage: 'SIDEKICK_Modern_Police_Unity_2021_3_v1_0_0.unitypackage' },
+  sidekickStarter: { dir: 'SIDEKICK_Starter_Extracted', unitypackage: 'SIDEKICK_Starter_Unity_2021_3_v1_0_4.unitypackage' },
 };
 
 /**
@@ -62,6 +70,14 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
  * The game loads each once and every model of the pack shares it.
  * `albedo` is how the pack's MaterialList calls it.
  */
+/**
+ * A whole Sidekick character's palette (16 × 16 colours, grown to 256 without blending them: `palette`), made with it
+ * of its parts' (`composed`: no source of its own, convert.ts).
+ */
+function sidekickAtlas(pack: PackId) {
+  return { pack, src: '', albedo: '', size: 256, palette: true, composed: true };
+}
+
 export const ATLASES = {
   apocalypse: { pack: 'apocalypse', src: 'Textures/PolygonApocalypse_Texture_01_A.png', albedo: 'PolygonApocalypse_01_A.png', size: 2048 },
   // Apocalypse's vehicles are painted from a texture of their own: the muddy one, for La Lata (playtest 18/10, #45).
@@ -86,12 +102,35 @@ export const ATLASES = {
   // The light grey one (galvanised), for the sheds' sheet metal (PIECES sheetGrey).
   containerGrey: { pack: 'woodland', src: 'Textures/Containers_04.png', albedo: 'Containers_04.png', size: 512 },
   generic: { pack: 'plaza', src: 'Generic/Textures/Generic_01_A.png', albedo: 'Generic_01_A.png', size: 1024 },
-} satisfies Record<string, { pack: PackId; src: string; albedo: string; size: number }>;
+  // Each whole Sidekick character's palette (CHARACTERS with `sidekick`), made with it of its parts' (convert.ts).
+  skZombie1: sidekickAtlas('sidekickZombies'),
+  skZombie2: sidekickAtlas('sidekickZombies'),
+  skZombie3: sidekickAtlas('sidekickZombies'),
+  skZombie4: sidekickAtlas('sidekickZombies'),
+  skZombie5: sidekickAtlas('sidekickZombies'),
+  skZombieCivil1: sidekickAtlas('sidekickCivilians'),
+  skZombieCivil2: sidekickAtlas('sidekickCivilians'),
+  skZombieCivil3: sidekickAtlas('sidekickCivilians'),
+  skZombieCivil4: sidekickAtlas('sidekickCivilians'),
+  skZombieCivil5: sidekickAtlas('sidekickCivilians'),
+  skZombieCivil6: sidekickAtlas('sidekickCivilians'),
+  skZombieCop1: sidekickAtlas('sidekickPolice'),
+  skZombieCop2: sidekickAtlas('sidekickPolice'),
+  skZombieCop3: sidekickAtlas('sidekickPolice'),
+  skZombieCop4: sidekickAtlas('sidekickPolice'),
+  skZombieSurv1: sidekickAtlas('sidekickSurvivors'),
+  skZombieSurv2: sidekickAtlas('sidekickSurvivors'),
+  skRaider1: sidekickAtlas('sidekickOutlaws'),
+  skRaider2: sidekickAtlas('sidekickOutlaws'),
+  skBoss: sidekickAtlas('sidekickOutlaws'),
+  skHunter1: sidekickAtlas('sidekickOutlaws'),
+  skHunter2: sidekickAtlas('sidekickOutlaws'),
+} satisfies Record<string, { pack: PackId; src: string; albedo: string; size: number; palette?: boolean; composed?: boolean }>;
 
 export type AtlasId = keyof typeof ATLASES;
 
 /** Kinds of converted model; a model's file is `<kind>-<id>.glb` in its pack's folder. */
-export type ModelKind = 'chr' | 'hat' | 'wep' | 'prop' | 'anim' | 'piece' | 'base' | 'fx' | 'ui';
+export type ModelKind = 'chr' | 'hat' | 'wep' | 'prop' | 'anim' | 'piece' | 'base' | 'fx' | 'ui' | 'ward';
 
 /** Path of a converted file under public/ (the game prefixes Vite's base URL). */
 export const syntyFile = (pack: PackId, file: string) => `models/synty/${pack}/${file}`;
@@ -143,6 +182,17 @@ export interface CharacterAsset {
   hair?: string[];
   female?: boolean;
   scale?: number;
+  /**
+   * A Sidekick character made whole (convert.ts): this preset's parts, not `fbx`'s; `drop`, its parts of these types
+   * left off; `swap`, others in for some types (any pack's); `undead`, a living preset made one of the dead (the
+   * zombies' head, face and bare body). Its palette is its atlas, the same id (sidekickAtlas).
+   */
+  sidekick?: string;
+  drop?: string[];
+  swap?: Record<string, string>;
+  undead?: boolean;
+  /** Cells of its palette painted another colour (`x,y` of its 16 × 16: a hex colour). */
+  paint?: Record<string, string>;
 }
 
 /**
@@ -166,47 +216,14 @@ const office = (fbx: string, attach: Attachment[] = [], female = false): Charact
 // Office draws its attachments facing as the body does: no quarter turn, or the earpieces sit on the face.
 const headset: Attachment = { fbx: 'SM_Chr_Attachment_Headset_02', bone: 'Head', name: 'headset', turn: 0 };
 
+/** A whole Sidekick character: its pack, its preset, and how it differs from it. */
+const sk = (pack: PackId, preset: string, more: Partial<CharacterAsset> = {}): CharacterAsset => ({ pack, fbx: '', sidekick: preset, ...more });
+/** What hangs at a Sidekick character's back and hips' sides: left off who carries weapons there. */
+const RIDES = ['AttachmentBack', 'AttachmentHipsLeft', 'AttachmentHipsRight'];
+
 export const CHARACTERS = {
-  // The squad: survivors of every kind.
-  soldierM: apoc('Soldier_Male_01'),
-  soldierF: apoc('Soldier_Female_01', [att('Soldier_Female_Hair_01', 'hair')], true),
-  hunter: apoc('Hunter_Male_01', [att('Hunter_Male_Beard_01', 'beard'), att('Hunter_Male_Hat_01', 'hat', true)]),
-  sheriff: apoc('Sheriff_Male_01', [att('Sheriff_Male_Hair_01', 'hair'), att('Sheriff_Male_Hat_01', 'hat', true)]),
-  wanderer: apoc('Wanderer_Male_01', [att('Wanderer_Male_Hair_01', 'hair'), att('Wanderer_Male_Beard_01', 'beard')]),
-  coolM: apoc('Cool_Male_01', [att('Cool_Male_Hair_01', 'hair')]),
-  mechanic: apoc('Mechanic_Female_01', [att('Mechanic_Female_Hair_01', 'hair')], true),
-  scout: apoc('Scout_Female_01', [att('Scout_Female_Hat_01', 'hat', true)], true),
-  coolF: apoc('Cool_Female_01', [att('Cool_Female_Hair_01', 'hair')], true),
-  punk: apoc('Punk_Female_01', [att('Punk_Female_Hair_01', 'hair')], true),
-  riotCop: apoc('RiotCop_Male_01', [att('RiotCop_Male_Hair_01', 'hair'), att('RiotCop_Male_Beard_01', 'beard')]),
-  eastern: apoc('Eastern_Female_01', [], true),
-  islander: apoc('Islander_Male_01', [att('Islander_Male_Hair_01', 'hair')]),
-  // Its glass visor comes drawn in another space and floats away: the hood alone reads fine.
-  hazmat: apoc('Hazmat_Male_01'),
+  // The nun: the radio's coro (strategy/portraits.ts).
   nun: apoc('Nun_Female_01', [att('Nun_Female_HipPouch_01', 'pouch', false, 'Hips')], true),
-  teenF: apoc('Teen_Female_01', [att('Teen_Female_Hair_01', 'hair'), att('Teen_Female_Glasses_01', 'glasses')], true),
-  // The Cuervos: raiders, their leaders and hunters.
-  criminal: apoc('Criminal_Male_01', [att('Criminal_Male_Hair_01', 'hair'), att('Criminal_Male_Beard_01', 'beard')]),
-  teen: apoc('Teen_Male_01', [att('Teen_Male_Hat_01', 'hat')]),
-  press: apoc('Press_Male_01', [att('Press_Male_Hair_01', 'hair'), att('Press_Male_Beard_01', 'beard'), att('Press_Male_Eyepatch_01', 'eyepatch')]),
-  biker: apoc('Biker_Male_01', [att('Biker_Male_Hair_01', 'hair'), att('Biker_Male_Beard_01', 'beard')]),
-  homeless: apoc('Homeless_Male_01', [att('Homeless_Male_Beard_01', 'beard')]),
-  emo: apoc('Emo_Female_01', [att('Emo_Female_Hair_01', 'hair')], true),
-  // Survivors to rescue.
-  nerd: apoc('Nerd_Female_01', [att('Nerd_Female_Hair_01', 'hair'), att('Nerd_Female_Glasses_01', 'glasses')], true),
-  business: apoc('Business_Male_01', [att('Business_Male_Hair_01', 'hair')]),
-  waitress: apoc('Waitress_Female_01', [att('Waitress_Female_Hair_01', 'hair')], true),
-  // The dead.
-  zMale: apoc('Zombie_Male_01', [att('Zombie_Male_Hair_01', 'hair')]),
-  zFemale: apoc('Zombie_Female_01', [att('Zombie_Female_Hair_01', 'hair')], true),
-  zFather: zombie('Zombie_Father_Male_01'),
-  zMother: zombie('Zombie_Mother_Female_01', true),
-  zHobo: zombie('Zombie_Hobo_Male_01'),
-  zShopKeeper: zombie('Zombie_ShopKeeper_Male_01'),
-  zGrandpa: zombie('Zombie_Grandpa_Male_01'),
-  zBusiness: zombie('Zombie_Business_Female_01', true),
-  zRoadworker: zombie('Zombie_Roadworker_Male_01'),
-  zPatient: zombie('Zombie_Patient_Female_01', true),
   // Corredores: the recently dead, still quick.
   zJock: zombie('Zombie_Jock_Male_01'),
   zCheerleader: zombie('Zombie_Cheerleader_Female_01', true),
@@ -228,54 +245,215 @@ export const CHARACTERS = {
   voiceVoz: office('Business_Female_04', [headset], true),
   voiceSimon: { pack: 'city', fbx: 'SK_Character_Male_Jacket' },
   voiceHalvorsen: { pack: 'city', fbx: 'SK_Character_BusinessWoman', female: true },
+  // Sidekick's (docs/SIDEKICK.md), whole: the dead, as Sidekick made them and the living made dead, in their clothes.
+  skZombie1: sk('sidekickZombies', 'ApocalypseZombie_01', { female: true }),
+  skZombie2: sk('sidekickZombies', 'ApocalypseZombie_02'),
+  // (Without the chainsaw at its belt.)
+  skZombie3: sk('sidekickZombies', 'ApocalypseZombie_03', { drop: ['AttachmentHipsFront'] }),
+  skZombie4: sk('sidekickZombies', 'ApocalypseZombie_04'),
+  skZombie5: sk('sidekickZombies', 'ApocalypseZombie_05'),
+  skZombieCivil1: sk('sidekickCivilians', 'ModernCivilian_01', { undead: true, female: true }),
+  skZombieCivil2: sk('sidekickCivilians', 'ModernCivilian_02', { undead: true, female: true }),
+  skZombieCivil3: sk('sidekickCivilians', 'ModernCivilian_03', { undead: true, female: true }),
+  skZombieCivil4: sk('sidekickCivilians', 'ModernCivilian_04', { undead: true }),
+  skZombieCivil5: sk('sidekickCivilians', 'ModernCivilian_05', { undead: true, female: true }),
+  skZombieCivil6: sk('sidekickCivilians', 'ModernCivilian_06', { undead: true }),
+  skZombieCop1: sk('sidekickPolice', 'ModernPolice_01', { undead: true }),
+  skZombieCop2: sk('sidekickPolice', 'ModernPolice_05', { undead: true }),
+  skZombieCop3: sk('sidekickPolice', 'ModernPolice_07', { undead: true }),
+  skZombieCop4: sk('sidekickPolice', 'ModernPolice_04', { undead: true, female: true }),
+  skZombieSurv1: sk('sidekickSurvivors', 'ApocalypseSurvivor_04', { undead: true }),
+  skZombieSurv2: sk('sidekickSurvivors', 'ApocalypseSurvivor_01', { undead: true, female: true }),
+  // The Cuervos, as Sidekick's outlaws: raiders, their leader, hunters. Without what hangs at their back and their
+  // hips' sides, where their weapons ride.
+  skRaider1: sk('sidekickOutlaws', 'ApocalypseOutlaw_03', { drop: RIDES }),
+  skRaider2: sk('sidekickOutlaws', 'ApocalypseOutlaw_05', { drop: RIDES }),
+  // (Its left knee pad is a goblin's, from a pack we haven't: the right one's set.)
+  skBoss: sk('sidekickOutlaws', 'ApocalypseOutlaw_02', { drop: RIDES, swap: { AttachmentKneeLeft: 'SK_APOC_OUTL_07_33AKNL_HU01' } }),
+  // (Its antlered skull's eyes dark, not glowing cyan: Arturo, 21/10, too sci-fi.)
+  skHunter1: sk('sidekickOutlaws', 'ApocalypseOutlaw_01', { drop: RIDES, paint: { '8,13': '2a2522' } }),
+  skHunter2: sk('sidekickOutlaws', 'ApocalypseOutlaw_04', { drop: RIDES, female: true }),
 } satisfies Record<string, CharacterAsset>;
 
 export type CharacterId = keyof typeof CHARACTERS;
 
+// ---------------------------------------------------------------- wardrobe
+
 /**
- * Who a soldier can be: the barracks' «Personaje» (Appearance.character).
- * `build` is the animation set they move with.
+ * The soldiers' wardrobe (docs/SIDEKICK.md): pieces of Sidekick characters that wardrobe.ts puts a soldier together
+ * from at run time, by their look (Appearance): the clothes from the neck down (OUTFITS), a face, the hair, a beard,
+ * what goes on the head. Each piece converts to one mesh on our skeleton (convert.py wardrobe) and keeps three shapes
+ * (WARDROBE_SHAPES) that the soldier's sex and build set. `preset` is the Sidekick preset whose palette the piece is
+ * measured on (what of it is cloth); an outfit's is its colours too, and without `parts` it wears its preset's, less
+ * what OUTFIT_LEAVES leaves.
  */
-export const SURVIVOR_CHOICES: { id: CharacterId; name: string; build: 'masc' | 'femn' }[] = [
-  { id: 'soldierM', name: 'Soldado', build: 'masc' },
-  { id: 'soldierF', name: 'Soldada', build: 'femn' },
-  { id: 'hunter', name: 'Cazador', build: 'masc' },
-  { id: 'sheriff', name: 'Sheriff', build: 'masc' },
-  { id: 'riotCop', name: 'Antidisturbios', build: 'masc' },
-  { id: 'mechanic', name: 'Mecánica', build: 'femn' },
-  { id: 'scout', name: 'Exploradora', build: 'femn' },
-  { id: 'wanderer', name: 'Trotamundos', build: 'masc' },
-  { id: 'hazmat', name: 'Químico', build: 'masc' },
-  { id: 'nun', name: 'Monja', build: 'femn' },
-  { id: 'eastern', name: 'Forastera', build: 'femn' },
-  { id: 'islander', name: 'Turista', build: 'masc' },
-  { id: 'coolM', name: 'Urbano', build: 'masc' },
-  { id: 'coolF', name: 'Urbana', build: 'femn' },
-  { id: 'punk', name: 'Punki', build: 'femn' },
-  { id: 'teenF', name: 'Estudiante', build: 'femn' },
+export interface WardrobeAsset {
+  pack: PackId;
+  preset: string;
+  parts?: string[];
+}
+
+/** The shapes each piece keeps, as Sidekick's sliders (0 to 1): a woman's body (none: a man's), slim, heavy (none: the middle build). */
+export const WARDROBE_SHAPES = {
+  feminine: { masculineFeminine: 1 },
+  slim: { defaultSkinny: 0.7 },
+  heavy: { defaultHeavy: 0.55, defaultBuff: 0.5 },
+} satisfies Record<string, Record<string, number>>;
+
+export type WardrobeShape = keyof typeof WARDROBE_SHAPES;
+
+/** What an outfit leaves of its preset: the head and all on it (pieces of their own), the back and the hips' sides (where the weapons ride). */
+export const OUTFIT_LEAVES = ['Head', 'Hair', 'EyebrowLeft', 'EyebrowRight', 'EyeLeft', 'EyeRight', 'EarLeft', 'EarRight', 'FacialHair', 'Nose', 'Teeth', 'Tongue', 'AttachmentHead', 'AttachmentFace', 'AttachmentBack', 'AttachmentHipsLeft', 'AttachmentHipsRight'];
+
+/** A Sidekick palette's skin cells (x, y of its 16 × 16, from the top left): face, ears, nose, hands, bare arms and legs. */
+export const SKIN_CELLS: readonly (readonly [number, number])[] = [
+  [0, 10], [1, 10], [2, 10], [0, 11], [1, 11], [2, 11], [0, 12], [1, 12], [2, 12], [0, 13], [1, 13], [2, 13], [0, 14], [1, 14],
+];
+
+/** Its hair's: the eyebrows, the hair and the beard. */
+export const HAIR_CELLS: readonly (readonly [number, number])[] = [[6, 10], [7, 10], [6, 11], [7, 11], [6, 12], [7, 12], [6, 14], [7, 14]];
+
+const survivors = (preset: string) => ({ pack: 'sidekickSurvivors' as PackId, preset: `ApocalypseSurvivor_${preset}` });
+const outlaws = (preset: string) => ({ pack: 'sidekickOutlaws' as PackId, preset: `ApocalypseOutlaw_${preset}` });
+const police = (preset: string) => ({ pack: 'sidekickPolice' as PackId, preset: `ModernPolice_${preset}` });
+const civilians = (preset: string) => ({ pack: 'sidekickCivilians' as PackId, preset: `ModernCivilian_${preset}` });
+
+/** A Sidekick part's name: its set (APOC_SURV_04, MDRN_CIVL_03; HUMN_BASE_01 the bare body's) and its code; or the name itself (SK_…). */
+const part = (set: string, code: string) => (set.startsWith('SK_') ? set : `SK_${set}_${code}_HU01`);
+
+/** An outfit made of sets' parts: the torso, the upper and lower arms, the hands, the hips, the legs and the feet (both sides of each), and what more. */
+const clothes = (c: { torso: string; upper: string; lower: string; hands: string; hips: string; legs: string; feet: string; more?: string[] }) => [
+  part(c.torso, '10TORS'),
+  part(c.upper, '11AUPL'), part(c.upper, '12AUPR'),
+  part(c.lower, '13ALWL'), part(c.lower, '14ALWR'),
+  part(c.hands, '15HNDL'), part(c.hands, '16HNDR'),
+  part(c.hips, '17HIPS'),
+  part(c.legs, '18LEGL'), part(c.legs, '19LEGR'),
+  part(c.feet, '20FOTL'), part(c.feet, '21FOTR'),
+  ...(c.more ?? []),
 ];
 
 /**
- * Survivors a soldier without a chosen «Personaje» is drawn from, by build;
- * the soldier's campaign id picks one, so it is the same one everywhere.
+ * The clothes a soldier can wear (the barracks' «Personaje»: Appearance.character), in the order the barracks shows
+ * them, and who wears them: `sexes`, a woman (f), a man (m) or either, the first the one the clothes were made for
+ * (Sidekick's parts fit either body). Winter clothes (the campaign is a winter's: playtest 21/10): long sleeves and
+ * trousers, boots; survivors first, a few policemen. Sober, The Last of Us more than Borderlands (Arturo, 21/10): no
+ * spikes, studs, bracers or colourful patches (the Cuervos' are). A mixed outfit names its parts; each keeps its own
+ * colours.
  */
-export const SQUAD_BODIES: Record<BuildId, CharacterId[]> = {
-  slim: ['scout', 'mechanic', 'coolF', 'punk', 'coolM', 'teenF', 'eastern'],
-  normal: ['soldierM', 'soldierF', 'hunter', 'wanderer', 'mechanic', 'scout', 'sheriff', 'coolF', 'islander', 'nun'],
-  heavy: ['soldierM', 'hunter', 'sheriff', 'riotCop', 'wanderer', 'hazmat'],
-};
+export const OUTFITS = {
+  survivor1: { ...survivors('01'), sexes: 'fm', parts: clothes({ torso: 'APOC_SURV_01', upper: 'APOC_SURV_03', lower: 'APOC_SURV_03', hands: 'APOC_SURV_01', hips: 'APOC_SURV_01', legs: 'APOC_SURV_01', feet: 'APOC_SURV_03' }) },
+  survivor2: { ...survivors('02'), sexes: 'mf' },
+  survivor3: { ...survivors('03'), sexes: 'fm' },
+  survivor4: { ...survivors('04'), sexes: 'mf' },
+  survivor5: { ...survivors('05'), sexes: 'mf' },
+  survivor6: { ...survivors('04'), sexes: 'mf', parts: clothes({ torso: 'APOC_SURV_03', upper: 'APOC_SURV_02', lower: 'APOC_SURV_03', hands: 'APOC_SURV_02', hips: 'APOC_SURV_06', legs: 'APOC_SURV_01', feet: 'APOC_SURV_02' }) },
+  survivor7: { ...outlaws('05'), sexes: 'mf', parts: clothes({ torso: 'APOC_OUTL_07', upper: 'APOC_OUTL_07', lower: 'APOC_SURV_03', hands: 'APOC_SURV_01', hips: 'APOC_SURV_04', legs: 'APOC_SURV_01', feet: 'APOC_SURV_01' }) },
+  survivor8: { ...survivors('01'), sexes: 'fm', parts: clothes({ torso: 'APOC_SURV_01', upper: 'MDRN_CIVL_09', lower: 'MDRN_CIVL_06', hands: 'APOC_SURV_02', hips: 'APOC_SURV_05', legs: 'APOC_SURV_02', feet: 'APOC_SURV_02' }) },
+  civilian1: { ...civilians('01'), sexes: 'fm', parts: clothes({ torso: 'MDRN_CIVL_03', upper: 'MDRN_CIVL_03', lower: 'MDRN_CIVL_03', hands: 'APOC_SURV_01', hips: 'APOC_SURV_04', legs: 'APOC_SURV_01', feet: 'APOC_SURV_01' }) },
+  civilian2: { ...civilians('06'), sexes: 'mf' },
+  civilian3: { ...civilians('06'), sexes: 'mf', parts: clothes({ torso: 'APOC_SURV_04', upper: 'MDRN_CIVL_09', lower: 'MDRN_CIVL_06', hands: 'MDRN_CIVL_01', hips: 'MDRN_CIVL_04', legs: 'MDRN_CIVL_07', feet: 'MDRN_CIVL_08' }) },
+  civilian4: { ...civilians('01'), sexes: 'fm', parts: clothes({ torso: 'APOC_SURV_05', upper: 'MDRN_CIVL_09', lower: 'MDRN_CIVL_02', hands: 'APOC_SURV_01', hips: 'APOC_SURV_04', legs: 'APOC_SURV_01', feet: 'APOC_SURV_01' }) },
+  police1: { ...police('03'), sexes: 'mf' },
+  police2: { ...police('08'), sexes: 'fm' },
+  police3: { ...police('06'), sexes: 'mf' },
+} satisfies Record<string, WardrobeAsset & { sexes: 'f' | 'm' | 'fm' | 'mf' }>;
+
+export type OutfitId = keyof typeof OUTFITS;
+
+const base = (n: number, part: string) => `SK_HUMN_BASE_${String(n).padStart(2, '0')}_${part}_HU01`;
+const species = { pack: 'sidekickSurvivors' as PackId, preset: 'HumanSpecies_01' };
+
+/** Faces: Sidekick's two heads, with their noses, ears and eyebrows (`n`: those of the parts numbered so). */
+const face = (head: number, n: number) => ({ ...species, parts: [base(head, '01HEAD'), base(1, '05EYEL'), base(1, '06EYER'), base(n, '07EARL'), base(n, '08EARR'), base(n, '35NOSE'), base(n, '03EBRL'), base(n, '04EBRR')] });
+
+export const FACES = {
+  face1: face(1, 1),
+  face2: face(1, 2),
+  face3: face(1, 3),
+  face4: face(1, 5),
+  face5: face(2, 6),
+  face6: face(2, 7),
+  face7: face(2, 8),
+  face8: face(2, 9),
+} satisfies Record<string, WardrobeAsset>;
+
+export type FaceId = keyof typeof FACES;
+
+const hair = (pack: PackId, part: string, sexes: 'f' | 'm') => ({ pack, preset: species.preset, parts: [part], sexes });
+
+/** Hair, a woman's or a man's, none punk (no mohawks, no shaved sides: Arturo, 21/10); HAIR_UNDER, what each wears under a helmet, a cap or a beret (none under a hood). */
+export const HAIRS = {
+  hairBun: hair('sidekickSurvivors', 'SK_APOC_SURV_01_02HAIR_HU01', 'f'),
+  hairBangs: hair('sidekickSurvivors', base(1, '02HAIR'), 'f'),
+  hairSidePony: hair('sidekickSurvivors', base(4, '02HAIR'), 'f'),
+  hairCurls: hair('sidekickSurvivors', base(5, '02HAIR'), 'f'),
+  hairPony: hair('sidekickSurvivors', base(7, '02HAIR'), 'f'),
+  hairLong: hair('sidekickSurvivors', base(9, '02HAIR'), 'f'),
+  hairTopBun: hair('sidekickSurvivors', base(10, '02HAIR'), 'f'),
+  hairPonyBangs: hair('sidekickCivilians', 'SK_MDRN_CIVL_02_02HAIR_HU01', 'f'),
+  hairStraight: hair('sidekickCivilians', 'SK_MDRN_CIVL_04_02HAIR_HU01', 'f'),
+  hairHighBun: hair('sidekickCivilians', 'SK_MDRN_CIVL_05_02HAIR_HU01', 'f'),
+  hairSwept: hair('sidekickCivilians', 'SK_MDRN_CIVL_06_02HAIR_HU01', 'f'),
+  hairUnderF: hair('sidekickPolice', 'SK_MDRN_POLC_02_02HAIR_HU01', 'f'),
+  hairFade: hair('sidekickSurvivors', base(2, '02HAIR'), 'm'),
+  hairMessy: hair('sidekickSurvivors', base(3, '02HAIR'), 'm'),
+  hairMedium: hair('sidekickSurvivors', base(1, '02HAIR'), 'm'),
+  hairBack: hair('sidekickSurvivors', base(8, '02HAIR'), 'm'),
+  hairShaggy: hair('sidekickCivilians', 'SK_MDRN_CIVL_03_02HAIR_HU01', 'm'),
+  hairLongM: hair('sidekickSurvivors', base(9, '02HAIR'), 'm'),
+  hairUnderM: hair('sidekickPolice', 'SK_MDRN_POLC_01_02HAIR_HU01', 'm'),
+} satisfies Record<string, WardrobeAsset & { sexes: 'f' | 'm' }>;
+
+export type HairId = keyof typeof HAIRS;
+
+/** The hair under a helmet, a cap or a beret, by sex. */
+export const HAIR_UNDER: Record<'f' | 'm', HairId> = { f: 'hairUnderF', m: 'hairUnderM' };
+
+const beard = (pack: PackId, part: string) => ({ pack, preset: species.preset, parts: [part] });
+
+/** Beards (men only, and not all of them). */
+export const BEARDS = {
+  beard1: beard('sidekickSurvivors', base(1, '09FCHR')),
+  beard2: beard('sidekickSurvivors', base(5, '09FCHR')),
+  beard3: beard('sidekickSurvivors', base(7, '09FCHR')),
+  beard4: beard('sidekickSurvivors', base(8, '09FCHR')),
+  beard5: beard('sidekickSurvivors', base(9, '09FCHR')),
+  beard6: beard('sidekickSurvivors', base(10, '09FCHR')),
+  beard7: beard('sidekickPolice', 'SK_MDRN_POLC_01_09FCHR_HU01'),
+  beard8: beard('sidekickPolice', 'SK_MDRN_POLC_02_09FCHR_HU01'),
+} satisfies Record<string, WardrobeAsset>;
+
+export type BeardId = keyof typeof BEARDS;
+
+/**
+ * What each head of the barracks puts on (Appearance.head; «A cara descubierta», nothing): the helmet's colour dyes
+ * it. `hair`: the hair under it (HAIR_UNDER), none (a hood) or the soldier's own (a mask).
+ */
+export const HEADWEAR = {
+  helmet: { ...survivors('02'), parts: ['SK_APOC_SURV_06_22AHED_HU01'], hair: 'under' },
+  hood: { ...survivors('03'), parts: ['SK_APOC_SURV_03_22AHED_HU01'], hair: 'none' },
+  beret: { ...civilians('06'), parts: ['SK_MDRN_CIVL_14_22AHED_HU01'], hair: 'under' },
+  cap: { ...survivors('02'), parts: ['SK_APOC_SURV_02_22AHED_HU01'], hair: 'under' },
+  mask: { ...survivors('03'), parts: ['SK_APOC_SURV_01_23AFAC_HU01'], hair: 'own' },
+} satisfies Record<Exclude<HeadId, 'bare'>, WardrobeAsset & { hair: 'under' | 'none' | 'own' }>;
+
+export type WardrobeKind = 'outfit' | 'face' | 'hair' | 'beard' | 'headwear';
+
+/** Every piece of the wardrobe by kind, for the converter and the loader (modelFile 'ward', `<kind>-<id>`: ward-outfit-police3.glb in its pack). */
+export const WARDROBE: Record<WardrobeKind, Record<string, WardrobeAsset>> = { outfit: OUTFITS, face: FACES, hair: HAIRS, beard: BEARDS, headwear: HEADWEAR };
+export const wardrobeFile = (kind: WardrobeKind, id: string) => modelFile(WARDROBE[kind][id]!.pack, 'ward', `${kind}-${id}`);
 
 /** Who each enemy and objective is (for now the alien templates stand in for the dead). */
 export const UNIT_BODIES: Partial<Record<TemplateId, CharacterId[]>> = {
-  zombie: ['zMale', 'zFemale', 'zFather', 'zMother', 'zHobo', 'zShopKeeper', 'zGrandpa', 'zBusiness', 'zRoadworker', 'zPatient'],
+  zombie: ['skZombie1', 'skZombie2', 'skZombie3', 'skZombie4', 'skZombie5', 'skZombieCivil1', 'skZombieCivil2', 'skZombieCivil3', 'skZombieCivil4', 'skZombieCivil5', 'skZombieCivil6', 'skZombieCop1', 'skZombieCop2', 'skZombieCop3', 'skZombieCop4', 'skZombieSurv1', 'skZombieSurv2'],
   xenoid: ['zJock', 'zCheerleader', 'zHoodie', 'zSchoolGirl'],
   mec: ['zRiotCop', 'zMilitary', 'zPolice', 'zFirefighter'],
   sectoid: ['zWretch'],
   bloater: ['zBlobber'],
-  trooper: ['criminal', 'teen', 'press'],
-  officer: ['biker'],
-  lancer: ['homeless', 'emo'],
-  vip: ['nerd', 'business', 'waitress'],
+  trooper: ['skRaider1', 'skRaider2'],
+  officer: ['skBoss'],
+  lancer: ['skHunter1', 'skHunter2'],
 };
 
 /** Templates that move like the dead: hunched, arms out, no weapon. */
@@ -469,29 +647,6 @@ const hits = (b: 'Masc' | 'Femn'): Hit[] => [
 ];
 
 export const HITS: Record<'masc' | 'femn', Hit[]> = { masc: hits('Masc'), femn: hits('Femn') };
-
-// ---------------------------------------------------------------- headgear
-
-/** Hats and helmets the barracks' heads put on (they hide the hair). Hung from the head bone. */
-export const HEADGEAR = {
-  helmet: { pack: 'apocalypse', fbx: 'SM_Chr_Attach_Soldier_Male_Helmet_01', dye: true },
-  cap: { pack: 'apocalypse', fbx: 'SM_Chr_Attach_Teen_Male_Hat_01', dye: true },
-  beanie: { pack: 'apocalypse', fbx: 'SM_Chr_Attach_Scout_Female_Hat_01', dye: true },
-  gasMask: { pack: 'apocalypse', fbx: 'SM_Chr_Attach_GasMask_01', dye: false },
-  hunterHat: { pack: 'apocalypse', fbx: 'SM_Chr_Attach_Hunter_Male_Hat_02', dye: true },
-} satisfies Record<string, { pack: PackId; fbx: string; dye: boolean }>;
-
-export type HeadgearId = keyof typeof HEADGEAR;
-
-/** What each head of the barracks wears; null: the survivor as they come (their own hair or hat). */
-export const HEAD_GEAR: Record<HeadId, HeadgearId | null> = {
-  helmet: 'helmet',
-  hood: 'hunterHat',
-  beret: 'beanie',
-  cap: 'cap',
-  mask: 'gasMask',
-  bare: null,
-};
 
 // ----------------------------------------------------------------- weapons
 

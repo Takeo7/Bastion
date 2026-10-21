@@ -40,6 +40,11 @@ export interface Member {
 }
 
 const CAPACITY = 32;
+/**
+ * The bake textures' width at most: a frame's vertices go in rows of this many (a Sidekick body has up to 21 000 and
+ * no texture may be wider than 16 384: 21/10), one strip of rows a frame.
+ */
+const STRIP_WIDTH = 4096;
 
 interface Body {
   key: string;
@@ -48,6 +53,9 @@ interface Body {
   next: { k: number; f: number } | null;
   pos: Uint16Array;
   nor: Uint8Array;
+  /** The textures' width, and how many of their rows a frame takes (STRIP_WIDTH). */
+  width: number;
+  strip: number;
   posTexture: THREE.DataTexture | null;
   norTexture: THREE.DataTexture | null;
   loops: CrowdLoop[];
@@ -55,7 +63,9 @@ interface Body {
   /** Each instance's loop row, frames, phase and rate (aCrowd). */
   params: THREE.InstancedBufferAttribute | null;
   free: number[];
+  /** Instances handed out so far (the mesh draws that many: the rest are never drawn) and room for them. */
   used: number;
+  capacity: number;
 }
 
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -73,6 +83,9 @@ function crowdPatch(material: THREE.Material, body: Body, time: { value: number 
       uniform highp sampler2D crowdPos;
       uniform highp sampler2D crowdNor;
       uniform float crowdTime;
+      // A frame's strip of rows (STRIP_WIDTH vertices a row): this vertex's place in it.
+      const int crowdWidth = ${body.width};
+      const int crowdStrip = ${body.strip};
       vec3 crowdNormal;
       vec3 crowdAt() {
         // The loop's frame now, and the next one: blended.
@@ -81,8 +94,9 @@ function crowdPatch(material: THREE.Material, body: Body, time: { value: number 
         float k = f - f0;
         int r0 = int(aCrowd.x + f0);
         int r1 = int(aCrowd.x + mod(f0 + 1.0, aCrowd.y));
-        ivec2 a = ivec2(gl_VertexID, r0);
-        ivec2 b = ivec2(gl_VertexID, r1);
+        ivec2 at = ivec2(gl_VertexID % crowdWidth, gl_VertexID / crowdWidth);
+        ivec2 a = ivec2(at.x, r0 * crowdStrip + at.y);
+        ivec2 b = ivec2(at.x, r1 * crowdStrip + at.y);
         crowdNormal = normalize(mix(texelFetch(crowdNor, a, 0).xyz, texelFetch(crowdNor, b, 0).xyz, k) * 2.0 - 1.0);
         return mix(texelFetch(crowdPos, a, 0).xyz, texelFetch(crowdPos, b, 0).xyz, k);
       }`;
@@ -116,12 +130,16 @@ export class Crowd {
     const b = baker();
     if (!b) return;
     const rows = b.loops.reduce((n, l) => n + l.frames, 0);
+    const width = Math.min(b.vertices, STRIP_WIDTH);
+    const strip = Math.ceil(b.vertices / width);
     const body: Body = {
       key,
       baker: b,
       next: { k: 0, f: 0 },
-      pos: new Uint16Array(b.vertices * rows * 4),
-      nor: new Uint8Array(b.vertices * rows * 4),
+      pos: new Uint16Array(width * strip * rows * 4),
+      nor: new Uint8Array(width * strip * rows * 4),
+      width,
+      strip,
       posTexture: null,
       norTexture: null,
       loops: [],
@@ -129,6 +147,7 @@ export class Crowd {
       params: null,
       free: [],
       used: 0,
+      capacity: CAPACITY,
     };
     let row = 0;
     for (const l of b.loops) {
@@ -154,8 +173,11 @@ export class Crowd {
     if (!body?.mesh) return null;
     let index = body.free.pop();
     if (index === undefined) {
-      if (body.used >= body.mesh.count) this.grow(body);
+      if (body.used >= body.capacity) this.grow(body);
       index = body.used++;
+      // Only as many drawn as handed out: a body's 32 places, drawn hidden, cost a Sidekick body 32 times its
+      // vertices a pass (21/10: 17 kinds of the dead).
+      body.mesh!.count = body.used;
     }
     return { key, index };
   }
@@ -197,7 +219,7 @@ export class Crowd {
         b.frame(k, f, scratchP, scratchN);
         const row = body.loops[k]!.row + f;
         for (let i = 0; i < b.vertices; i++) {
-          const o = (row * b.vertices + i) * 4;
+          const o = (((row * body.strip + Math.floor(i / body.width)) * body.width) + (i % body.width)) * 4;
           body.pos[o] = THREE.DataUtils.toHalfFloat(scratchP[i * 3]!);
           body.pos[o + 1] = THREE.DataUtils.toHalfFloat(scratchP[i * 3 + 1]!);
           body.pos[o + 2] = THREE.DataUtils.toHalfFloat(scratchP[i * 3 + 2]!);
@@ -216,8 +238,8 @@ export class Crowd {
   private finish(body: Body): void {
     const b = body.baker!;
     const rows = body.loops.reduce((n, l) => n + l.frames, 0);
-    body.posTexture = new THREE.DataTexture(body.pos, b.vertices, rows, THREE.RGBAFormat, THREE.HalfFloatType);
-    body.norTexture = new THREE.DataTexture(body.nor, b.vertices, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
+    body.posTexture = new THREE.DataTexture(body.pos, body.width, rows * body.strip, THREE.RGBAFormat, THREE.HalfFloatType);
+    body.norTexture = new THREE.DataTexture(body.nor, body.width, rows * body.strip, THREE.RGBAFormat, THREE.UnsignedByteType);
     for (const t of [body.posTexture, body.norTexture]) {
       t.minFilter = t.magFilter = THREE.NearestFilter;
       t.needsUpdate = true;
@@ -234,6 +256,7 @@ export class Crowd {
     mesh.frustumCulled = false;
     mesh.layers.set(UNIT_LAYER);
     for (let i = 0; i < CAPACITY; i++) mesh.setMatrixAt(i, HIDDEN);
+    mesh.count = body.used;
     body.params = new THREE.InstancedBufferAttribute(new Float32Array(CAPACITY * 4), 4);
     body.params.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute('aCrowd', body.params);
@@ -247,14 +270,16 @@ export class Crowd {
   /** Room for more of a body (twice as many). */
   private grow(body: Body): void {
     const old = body.mesh!;
-    const count = old.count * 2;
+    const count = body.capacity * 2;
+    body.capacity = count;
     const mesh = new THREE.InstancedMesh(old.geometry, old.material, count);
     mesh.customDepthMaterial = old.customDepthMaterial;
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.frustumCulled = false;
     mesh.layers.set(UNIT_LAYER);
     const m = new THREE.Matrix4();
-    for (let i = 0; i < count; i++) mesh.setMatrixAt(i, i < old.count ? (old.getMatrixAt(i, m), m) : HIDDEN);
+    for (let i = 0; i < count; i++) mesh.setMatrixAt(i, i < body.used ? (old.getMatrixAt(i, m), m) : HIDDEN);
+    mesh.count = body.used;
     const params = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
     params.setUsage(THREE.DynamicDrawUsage);
     (params.array as Float32Array).set(body.params!.array as Float32Array);

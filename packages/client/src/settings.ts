@@ -25,12 +25,17 @@ export interface GraphicsSettings {
   enemySpeed: number;
   /** «Seguir las rutas planeadas» (playtest 18/10 #3): a route planned without the command is walked when it comes. */
   autoPlan: boolean;
+  /**
+   * «Ropa con el color del jugador» (Arturo, 21/10): the soldiers' clothes dyed with their player's colours and
+   * the armband (Personalizar's colours); off, each outfit's own, and the ring under them says whose (Arte's wardrobe).
+   */
+  squadTint: boolean;
 }
 
 /** The enemy turn's speed slider: from half as fast to two and a half times. */
 export const ENEMY_SPEED = { min: 0.5, max: 2.5, step: 0.1 } as const;
 
-const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1, enemySpeed: 1, autoPlan: true };
+const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1, enemySpeed: 1, autoPlan: true, squadTint: false };
 const KEY = storageKey('graphics');
 /** Version of the stored settings: 2 made the resolution automatic by default. */
 const VERSION = 2;

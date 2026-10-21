@@ -4,7 +4,9 @@ import type { FigurePose, FigureRig } from '../../game/figures';
 import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
 import { Renderer } from '../../game/renderer';
 import { atlasMaterial } from '../../game/synty';
-import { PROPS, SURVIVOR_CHOICES, type PropId } from '../../game/syntyManifest';
+import { PROPS, UNIT_BODIES, type PropId } from '../../game/syntyManifest';
+import { voiceFigure } from '../../game/syntyFigures';
+import { OUTFIT_CHOICES } from '../../game/wardrobe';
 import { syntyProp, syntyPropsLoaded } from '../../game/syntyProps';
 import { portraitSrc, soldierPortrait } from '../../strategy/portraits';
 import '../../strategy/transmissions.css';
@@ -36,28 +38,39 @@ const POSES: Record<string, Partial<FigurePose>> = {
 };
 
 const P1 = PLAYER_COLORS[0];
-const ENEMIES: TemplateId[] = ['trooper', 'officer', 'lancer', 'zombie', 'zombie', 'xenoid', 'mec', 'sectoid', 'bloater', 'vip', 'relay'];
+/** The bosses and the objectives, as their templates draw them; the dead, the Cuervos and who is rescued body by body (UNIT_BODIES). */
+const ENEMIES: TemplateId[] = ['xenoid', 'mec', 'sectoid', 'bloater', 'vip', 'vip', 'relay'];
+const PEOPLE: TemplateId[] = ['zombie', 'trooper', 'officer', 'lancer', 'vip'];
 
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 30).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x77705f, roughness: 0.95 }));
 ground.position.set(10, 0, 8);
 ground.receiveShadow = true;
 scene.add(ground);
-renderer.fitMap(20, 16);
+renderer.fitMap(22, 16);
 
 const rigs: FigureRig[] = [];
 const look = (character: string): Appearance => ({ primary: '#56605a', secondary: P1, visor: '#9fe3ff', head: 'bare', build: 'normal', character });
 
-SURVIVOR_CHOICES.forEach((c, i) => {
-  const rig = buildUnit('rookie', P1, look(c.id), undefined, c.id);
+// Front row: the wardrobe's outfits, by turns on a woman and a man.
+OUTFIT_CHOICES.forEach((c, i) => {
+  const rig = buildUnit('rookie', P1, { ...look(c.id), sex: i % 2 ? 'm' : 'f' }, undefined, c.id);
   if (!isFigure(rig)) return;
-  rig.root.position.set(2 + i * 1.05, 0, 10);
+  rig.root.position.set(2 + i * 1.15, 0, 10);
+  scene.add(rig.root);
+  rigs.push(rig);
+});
+// Behind: the dead body by body; then the Cuervos and who is rescued, unarmed; then the bosses and the objectives.
+const people = PEOPLE.flatMap((t) => (UNIT_BODIES[t] ?? []).map((id) => ({ t, id })));
+people.forEach(({ id }, i) => {
+  const rig = voiceFigure(id);
+  rig.root.position.set(1 + (i % 17) * 1.15, 0, i < 17 ? 7 : 4);
   scene.add(rig.root);
   rigs.push(rig);
 });
 ENEMIES.forEach((t, i) => {
   const rig = buildUnit(t, '#ff4d4d', undefined, undefined, `${t}${i}`);
   if (!isFigure(rig)) return;
-  rig.root.position.set(3 + i * 1.4, 0, 7);
+  rig.root.position.set(12 + i * 1.6, 0, 4);
   scene.add(rig.root);
   rigs.push(rig);
 });

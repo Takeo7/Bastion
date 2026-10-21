@@ -102,7 +102,7 @@ describe("the soldier's sex (playtest 2026-10-13)", () => {
     for (const s of solo.soldiers.slice(2)) s.alive = false;
     run(solo, { type: 'recruit' });
     const recruit = solo.soldiers.at(-1)!;
-    expect(recruit.appearance).toEqual(defaultAppearance(0, undefined, sexOf(recruit.name)));
+    expect(recruit.appearance).toEqual(defaultAppearance(0, undefined, sexOf(recruit.name), recruit.id));
     // Written right after the build, like normalizeAppearance stores it, so default looks still compare equal.
     expect(Object.keys(recruit.appearance)).toEqual(['primary', 'secondary', 'visor', 'head', 'build', 'sex']);
     expect(Object.keys(normalizeAppearance({ ...recruit.appearance, character: 'hunter', legs: '#ffffff' }))).toEqual([
@@ -145,7 +145,7 @@ describe("the soldier's sex (playtest 2026-10-13)", () => {
     addPlayer(d, 1, new Rng(1));
     const moved = d.soldiers.filter((x) => x.owner === 1);
     expect(moved.length).toBeGreaterThan(0);
-    for (const m of moved) expect(m.appearance).toEqual(defaultAppearance(1, undefined, sexOfName(m.name)));
+    for (const m of moved) expect(m.appearance).toEqual(defaultAppearance(1, undefined, sexOfName(m.name), m.id));
   });
 
 
@@ -155,7 +155,22 @@ describe("the soldier's sex (playtest 2026-10-13)", () => {
     expect(squad.length).toBeGreaterThan(0);
     for (const u of squad) {
       expect(u.appearance?.sex).toBe(sexOf(u.name));
-      expect(u.appearance).toEqual(defaultAppearance(u.owner!, undefined, sexOf(u.name)));
+      expect(u.appearance).toEqual(defaultAppearance(u.owner!, undefined, sexOf(u.name), u.name));
     }
+  });
+
+  it('every soldier starts with a head and a build of its own, and a campaign of before gets them for the untouched ones (docs/SIDEKICK.md)', () => {
+    const c = createCampaign([0, 1], new Rng(5));
+    expect(new Set(c.soldiers.map((s) => s.appearance.head)).size).toBeGreaterThan(1);
+    expect(new Set(c.soldiers.map((s) => s.appearance.build)).size).toBeGreaterThan(1);
+    // A campaign of 0.8: everyone in the helmet and the normal build, but one customized.
+    const old = JSON.parse(JSON.stringify(c)) as CampaignState;
+    old.version = 23 as CampaignState['version'];
+    for (const s of old.soldiers) s.appearance = defaultAppearance(s.owner, undefined, s.appearance.sex);
+    const custom = old.soldiers[0]!;
+    custom.appearance = { ...custom.appearance, head: 'helmet', build: 'heavy' };
+    const m = migrateCampaign(old);
+    expect(m.soldiers[0]!.appearance).toEqual(custom.appearance);
+    for (const s of m.soldiers.slice(1)) expect(s.appearance).toEqual(defaultAppearance(s.owner, undefined, s.appearance.sex, s.id));
   });
 });

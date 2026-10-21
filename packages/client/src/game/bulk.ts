@@ -36,6 +36,8 @@ export interface Bulk {
   upper: [number, number];
   fore: [number, number];
   hand: number;
+  /** How far ahead the torso goes (its foremost point at rest, model space z, between the hips and the chest): a belly, a vest's pouches. */
+  front: number;
 }
 
 /** The bones a bulk is measured by (the figure's indices). */
@@ -150,6 +152,7 @@ export function bulkOf(model: THREE.Object3D, p: THREE.Vector3[], bones: BulkBon
   const upper: [number[], number[]] = [[], []];
   const fore: [number[], number[]] = [[], []];
   let found = false;
+  let front = -Infinity;
   model.traverse((o) => {
     if (!(o instanceof THREE.SkinnedMesh) || o.name !== 'body') return;
     found = true;
@@ -179,6 +182,7 @@ export function bulkOf(model: THREE.Object3D, p: THREE.Vector3[], bones: BulkBon
       const elbow = bones.elbows.indexOf(best);
       const f = elbow >= 0 ? fromSegment(v, p[best]!, p[bones.hands[elbow]!]!) : null;
       if (f !== null) fore[elbow]!.push(f);
+      if (torsoBones.includes(best) && torsoW >= TORSO_PURE && v.y > p[bones.hips]!.y && v.y < p[bones.spine[bones.spine.length - 1]!]!.y) front = Math.max(front, v.z);
       if ((torsoBones.includes(best) && torsoW >= TORSO_PURE) || bones.thighs.includes(best) || bones.shins.includes(best)) {
         let list = pieces.get(best);
         if (!list) pieces.set(best, (list = []));
@@ -207,6 +211,7 @@ export function bulkOf(model: THREE.Object3D, p: THREE.Vector3[], bones: BulkBon
     upper: [share(upper[0], 0.7, 0.045), share(upper[1], 0.7, 0.045)],
     fore: [share(fore[0], 0.7, 0.04), share(fore[1], 0.7, 0.04)],
     hand: 0.03,
+    front: Number.isFinite(front) ? front : p[bones.hips]!.z + 0.12,
   };
 }
 
