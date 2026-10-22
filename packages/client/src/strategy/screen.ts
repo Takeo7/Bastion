@@ -677,6 +677,8 @@ export class StrategyScreen {
     this.postPick = null;
     if (!posting) this.clearing.setPosts([]);
     this.clearing.setBuilding(view === 'facilities' || posting);
+    // The soldiers out about the clearing at their ease in the Asentamiento (Arte's clearingLife.ts, 22/10 #1).
+    this.clearingArt?.setLife?.(view === 'facilities' ? this.lifeEntries() : []);
     // Soldados and the Armería are fixed shots of the clearing (Arte's): the rig lets go of the camera,
     // and takes it back only once the stage has eased it home from one.
     const fixed = this.fixedShot(view);
@@ -767,6 +769,15 @@ export class StrategyScreen {
     const mirror = !!c && c.players.length > 1 && c.players[1] === this.mySlot;
     // A commander alone: one row, with no step in its middle between two halves (19/10, #2).
     this.clearingArt?.setLineup?.(entries, { mirror, halves: !!c && c.players.length > 1 });
+  }
+
+  /** Who is out about the clearing in the Asentamiento: the soldiers on their feet, both commanders' (a handful of them, but the squad by La Lata: Arte's). */
+  private lifeEntries(): LineupEntry[] {
+    const c = this.state;
+    if (!c) return [];
+    return c.soldiers
+      .filter((s) => s.alive && s.woundedDays <= 0)
+      .map((s) => ({ template: SOLDIER, color: this.playerColor(s.owner), appearance: s.appearance, gear: this.gearFor(c, s), seed: s.id }));
   }
 
   /** The soldier looked at, standing on the clearing: Soldados, and its customizer. */

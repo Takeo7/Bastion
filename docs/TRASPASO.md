@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 21/10 con la 0.9.3, la de la segunda tanda de notas de Ana del 21/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 22/10 con la 0.9.4, la de las notas de Arturo del 22/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.9.3)
+## 3. Estado (versión 0.9.4)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,12 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2 y v0.9.3 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3 y v0.9.4 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.9.4** (2026-10-22), las notas de Arturo del 22/10 ([PRUEBA-2026-10-22.md](PRUEBA-2026-10-22.md)):
+  - el Asentamiento con vida: hasta 6 soldados por el claro, junto a una hoguera encendida (sentados, en el suelo, uno calentándose las manos), apoyados en La Lata, paseando, hablando en pareja, bebiendo café o comiendo una barrita. Animaciones de Synty (Idles, Emotes) y de Mixamo (la segunda tanda, [MIXAMO.md](MIXAMO.md)), que solo se cargan en el Asentamiento;
+  - el tablero de habilidades no se mueve: sale entero y centrado, sin arrastre ni rueda;
+  - poses naturales: la pistola en reposo, a una mano junto al muslo, y a dos manos al apuntar; el fusil en reposo, a la cintura, con la mano izquierda bajo el guardamanos;
+  - las armas ya casi no atraviesan los brazos (de 264 casos a 12, de 1 a 3 cm, que no se ven en el juego); lo guardado tampoco (cuchillo y machete detrás de la cadera, la funda de la pistola más baja). Agachado, el fusil de la espalda va pegado en diagonal.
 - **Lo nuevo de la 0.9.3** (2026-10-21), la segunda tanda de Ana del 21/10 ([PRUEBA-2026-10-21.md](PRUEBA-2026-10-21.md) #29–#47):
   - el tiempo (Arturo): cada misión es un día y cada soldado come una ración al día; heridas, fiebre, obras, convoy y reloj de la Marea, ajustados a misiones (campaña v25, que convierte las partidas de antes). Cada Huerto da 5 raciones por nivel al día; la Chapistería quita un día a cada herida por nivel;
   - reclutar y comprar en la Armería se proponen al otro, como construir; fuera los bonus de cercanía («Junto a»); la Sala de radio, la Cuarentena y el Camposanto, desde la Caravana con toldo;

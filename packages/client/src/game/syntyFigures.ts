@@ -2,14 +2,17 @@ import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { HEADS, partColor, TEMPLATES, WORN_BELOW, type Alarm, type Appearance, type ArmorPart, type Arms, type FoundWeaponId, type HeadId, type TemplateId, type Tier } from '@bastion/engine';
-import { bulkOf, depthIn, easeShoulders, type Bulk } from './bulk';
+import { ARM_BINS, bulkOf, depthIn, easeShoulders, type Bulk } from './bulk';
 import { CROWD, type Baker, type Member } from './crowd';
 import type { Armament, Blow, Carried, FigurePose, FigureRig, Gear } from './figures';
 import { gaitsOf, type GaitMotion, type GaitStyle } from './gaits';
 import { UNIT_LAYER } from './post';
 import { atlasMaterial, atlasOf, dyedMaterial, loadModel, modelNow, type DyedMaterial } from './synty';
-import { AnimDriver, animSet, MOTION_ORDER, whenAnimSet, type ActionPlay, type AnimSet, type Build } from './syntyAnims';
+import { AnimDriver, animSet, campClips, MOTION_ORDER, whenAnimSet, type ActionPlay, type AnimSet, type Build } from './syntyAnims';
 import {
+  CAMP_LOOPS,
+  CAMP_MOVES,
+  CAMP_VARIATIONS,
   CHARACTER_SCALE,
   CHARACTERS,
   DEAD_TEMPLATES,
@@ -26,11 +29,15 @@ import {
   WEAPONS,
   type ActionId,
   type AtlasId,
+  type CampLoop,
+  type CampMove,
   type CharacterAsset,
   type CharacterId,
   type Death,
+  type PropAsset,
   type PropId,
   type Hit,
+  type Gesture,
   type Stance,
   type SyntyBone,
   type WeaponAsset,
@@ -186,8 +193,12 @@ const UNSEEN_EVERY = 1 / 8;
 const FAR2 = 24 * 24;
 /** The level of detail on or off (the horde lab compares both). */
 export const SYNTY_LOD = { on: true };
-/** The fingers posed by what each hand does, and the arms kept out of the chest (the weapons lab compares with and without). */
-export const SYNTY_HANDS = { fingers: true, elbows: true };
+/**
+ * The fingers posed by what each hand does, and the arms kept out of the chest (the weapons lab compares with and
+ * without); and out of the gun in the hand (`gun`: the arms' search, `fit`: a clip's gun turned about the wrist, `swing`:
+ * a clip's right elbow swung, `slide`: an aimed gun slid ahead; 22/10), the rifle at rest on `rest`.
+ */
+export const SYNTY_HANDS = { fingers: true, elbows: true, gun: true, fit: true, swing: true, slide: true, rest: 'rifleIdle' as ActionId };
 
 // --------------------------------------------------------------- rest pose
 
@@ -235,11 +246,11 @@ const PALM = new THREE.Vector3(0, -1, 0);
  * a dead one's claw, open to take something.
  */
 type HandPose = 'relaxed' | 'trigger' | 'grip' | 'support' | 'fist' | 'claw' | 'open';
-const HAND_POSES: Record<HandPose, { thumb: number[]; index: number[]; finger: number[] }> = {
+export const HAND_POSES: Record<HandPose, { thumb: number[]; index: number[]; finger: number[] }> = {
   relaxed: { thumb: [0.1, 0.15, 0.1], index: [0.25, 0.35, 0.25, 0], finger: [0.4, 0.5, 0.35, 0] },
-  trigger: { thumb: [0.35, 0.45, 0.35], index: [0.45, 0.35, 0.2, 0], finger: [1.2, 1.35, 0.9, 0] },
-  grip: { thumb: [0.45, 0.5, 0.4], index: [1.15, 1.3, 0.85, 0], finger: [1.25, 1.35, 0.9, 0] },
-  support: { thumb: [0.3, 0.25, 0.2], index: [0.75, 0.6, 0.4, 0], finger: [0.85, 0.7, 0.45, 0] },
+  trigger: { thumb: [0.7, 0.55, 0.4], index: [0.45, 0.35, 0.2, 0], finger: [1.2, 1.35, 0.9, 0] },
+  grip: { thumb: [0.9, 0.6, 0.45], index: [1.15, 1.3, 0.85, 0], finger: [1.25, 1.35, 0.9, 0] },
+  support: { thumb: [0.75, 0.5, 0.35], index: [1.0, 0.9, 0.6, 0], finger: [1.1, 1.0, 0.7, 0] },
   fist: { thumb: [0.6, 0.7, 0.5], index: [1.4, 1.5, 1.1, 0], finger: [1.45, 1.55, 1.1, 0] },
   claw: { thumb: [0.25, 0.3, 0.4], index: [0.15, 0.9, 0.8, 0], finger: [0.25, 1.0, 0.85, 0] },
   open: { thumb: [0, 0.05, 0.05], index: [0.05, 0.08, 0.05, 0], finger: [0.1, 0.12, 0.08, 0] },
@@ -259,6 +270,8 @@ const SWING_STEP = Math.PI / 30;
 const SWING_MAX = Math.PI / 2;
 const SPREAD_STEP = Math.PI / 45;
 const SPREAD_MAX = Math.PI / 4;
+/** The pistol at rest by the thigh, its arm turned out at most this far to keep it out of the thigh (spreadPistol). */
+const PISTOL_SPREAD_MAX = Math.PI / 9;
 const CLEAR_EASE = 12;
 /** How fast any of those moves may go at most (radians, or metres for a push, a second): never a jump from one frame to the next. */
 const CLEAR_TURN = 1.5;
@@ -278,6 +291,13 @@ const REF_ARM = 0.407;
 /** Crouched at low ready, the weapon held this much higher and further ahead: over the knees, not into the thigh come up under it. */
 const CROUCH_LIFT = 0.11;
 const CROUCH_AHEAD = 0.05;
+/**
+ * A blade, held by the hip, comes up and ahead further, over the knee, and levels at the front as on guard (the thighs
+ * come up and out round a hand by the hip: the blade went into the thigh, the hand into the holstered pistol).
+ */
+const BLADE_CROUCH_LIFT = 0.25;
+const BLADE_CROUCH_AHEAD = 0.22;
+const BLADE_CROUCH_LEVEL = 1.85;
 /**
  * A support arm that can't be got out of the body on the weapon however its elbow swings (a thick vest's armhole at
  * low ready, playtest 20/10 #1): it lets go and hangs at its side, the weapon in the right hand; back on it once it
@@ -305,6 +325,19 @@ const SWING_COST = 0.03;
 
 const ARM_FORE = [0.33, 0.66, 1];
 /**
+ * Where along an arm the gun in the hand is kept out of (armIn, inGun): the upper arm from near the shoulder (a stock
+ * set to it went in); on the hand that holds the gun, the forearm's half by the elbow (the stock through it): by the
+ * wrist it is beside the gun however the elbow swings, and the search found nothing clear there.
+ */
+const ARM_UPPER_GUN = [0.2, 0.45, 0.7, 1];
+const GUN_ROOM = 0.012;
+/** The forearm by the wrist (fitGun), and the grip's foot it keeps out of (in the gun's frame: under the bore, by the grip). */
+const ARM_CUFF = [0.6, 0.75, 0.88];
+const GRIP_FOOT = { z0: -0.07, z1: 0.03, top: -0.03 };
+const ARM_FORE_GUN = [0.05, 0.2, 0.35];
+/** The left forearm's, under the handguard to its middle (past the magazine). */
+const ARM_FORE_GUN_L = [0.05, 0.2, 0.35, 0.5];
+/**
  * The weapon in the hand out of the body: how far it tips up about the grip, is pushed ahead and is lifted at most
  * (crouched, the thigh comes up under the hand: ahead is along it), the ways it tries (cheapest first: a tip dearest,
  * the muzzle swung up across the body looks wrong), and how many points along it are looked at.
@@ -315,8 +348,53 @@ const GUN_LIFTS = [0, 0.04, 0.08, 0.12];
 const gunCost = (w: { tip: number; push: number; lift: number }) => (w.tip / (Math.PI / 4)) * 2 + w.push / 0.12 + w.lift / 0.12;
 const GUN_WAYS = GUN_TIPS.flatMap((tip) => GUN_PUSHES.flatMap((push) => GUN_LIFTS.map((lift) => ({ tip, push, lift })))).sort((a, b) => gunCost(a) - gunCost(b));
 const GUN_POINTS = 6;
+/**
+ * A clip's gun turned about the wrist out of the right arm (fitGun): how far it tips (about its side) and turns (about
+ * its up) at most, by what steps, the ways it tries (the least turned first), and what a radian of it costs against
+ * how deep it leaves the arm when none clears it.
+ */
+const FIT_TIP = 0;
+const FIT_YAW = 0.5;
+const FIT_STEP = 0.05;
+const fitCost = (w: { tip: number; yaw: number }) => Math.abs(w.tip) * 2 + Math.abs(w.yaw);
+const FIT_COST = 0.02;
+/** Where a thing held at the camp sits in the right fist (the gun socket's frame: y along the grip, z ahead), metres. */
+const ITEM_AT = new THREE.Vector3(0, 0.02, 0);
+// Turned most, tipped a little (tipped further, the stock went up into the upper arm, and the measure was worse).
+const FIT_WAYS = Array.from({ length: 9 }, (_, i) => (i - 4) * FIT_STEP)
+  .flatMap((tip) => Array.from({ length: 21 }, (_, j) => ({ tip, yaw: (j - 10) * FIT_STEP })))
+  .sort((a, b) => fitCost(a) - fitCost(b));
+/** How far ahead an aimed gun slides along itself at most out of the upper arm (slideGun), by what steps. */
+const SLIDE_MAX = 0.12;
+const SLIDE_STEP = 0.02;
+const SLIDE_UPPER = [0.1, 0.2, 0.35, 0.5, 0.7, 1];
+const SLIDE_ROOM = 0.012;
+/** How far a clip's right elbow swings at most out of the gun and the body (radians: further, it stood out like a wing). */
+const CLIP_SWING = 0.7;
 /** Which way a weapon at rest on the body is moved out of it: the slung gun back, the holster and the sheath out to the side. */
-const STOW_AWAY: Record<Carry, THREE.Vector3> = { weapon: new THREE.Vector3(0, 0, -1), sidearm: new THREE.Vector3(-1, 0, 0), belt: new THREE.Vector3(1, 0, 0) };
+/**
+ * The blade's sheath on the belt (hangStows): round from the left side towards the back (22/10: at the side, the left
+ * arm hanging by it went through it), how much room it keeps from the body, and which way it points (down and back).
+ */
+const BELT_OUT = new THREE.Vector3(0.62, 0, -0.78).normalize();
+const BELT_ROOM = 0.025;
+const BELT_ALONG = new THREE.Vector3(0.1, -1, -0.45);
+/** How far below the hip the pistol's holster rides on the right thigh. */
+const HOLSTER_DROP = 0.15;
+/**
+ * The gun slung on the back crouched (slingOnBack): where it rests on the back, how far out to either side of the
+ * spine, up from the chest's bone and down from the small of the back's (the right shoulder blade, the left of the
+ * small of the back), and the room it keeps from the body (metres).
+ */
+const SLING_SIDE = 0.06;
+const SLING_UP = 0.06;
+const SLING_DOWN = 0.02;
+const SLING_ROOM = 0.004;
+/** How much of the back's bow under the gun its middle goes into (the rest its ends stand off). */
+const SLING_SINK = 0.65;
+/** How near the line through the back its skin is looked for (metres either way, across and up it). */
+const SLING_NEAR = 0.035;
+const STOW_AWAY: Record<Carry, THREE.Vector3> = { weapon: new THREE.Vector3(0, 0, -1), sidearm: new THREE.Vector3(-1, 0, 0), belt: BELT_OUT };
 const RIGHT_PALM = new THREE.Vector3(1, 0, 0);
 /** Where a gun's grip sits from the right wrist, in the gun's frame. */
 const GRIP = RIGHT_FINGERS.clone().multiplyScalar(0.05).addScaledVector(RIGHT_PALM, 0.03);
@@ -391,11 +469,21 @@ function restOf(model: THREE.Object3D): Rest {
       const joints: number[] = [];
       for (let j = 0; j < count && bones[B[`${name}_0${j + 1}_${side}` as SyntyBone]]; j++) joints.push(B[`${name}_0${j + 1}_${side}` as SyntyBone]);
       if (joints.length < 2) continue;
+      // The hand's length (from the wrist to the knuckles), for the thumb: it closes across the palm towards the
+      // fingers' tips (22/10 #3: about the palm's line alone a Sidekick thumb, hanging down from the hand in the T-pose,
+      // only turned on itself and stood out straight).
+      const knuckle = bones[B[`Index_01_${side}` as SyntyBone]] ? p[B[`Index_01_${side}` as SyntyBone]]! : null;
+      const lengthways = knuckle ? knuckle.clone().sub(p[side === 'L' ? B.Hand_L : B.Hand_R]!).normalize() : null;
       const axes = joints.map((j, k) => {
         const next = joints[k + 1];
         const from = next !== undefined ? p[j]! : p[joints[k - 1]!]!;
         const to = next !== undefined ? p[next]! : p[j]!;
         const along = to.clone().sub(from).normalize();
+        if (kind === 'thumb' && lengthways) {
+          const towards = PALM.clone().add(lengthways).normalize();
+          const axis = along.clone().cross(towards).normalize();
+          return axis.applyQuaternion(q[j]!.clone().invert());
+        }
         return along.cross(PALM).normalize().applyQuaternion(q[j]!.clone().invert());
       });
       fingers.push({ side, kind, joints, axes });
@@ -440,6 +528,19 @@ const sf = new THREE.Vector3();
 const se = new THREE.Vector3();
 const sh2 = new THREE.Vector3();
 const gq = new THREE.Quaternion();
+const gi = new THREE.Quaternion();
+const gl = new THREE.Vector3();
+const ce = new THREE.Vector3();
+const fq0 = new THREE.Quaternion();
+const fq1 = new THREE.Quaternion();
+const fq2 = new THREE.Quaternion();
+const fp = new THREE.Vector3();
+const fh = new THREE.Vector3();
+const fp2 = new THREE.Vector3();
+const hq1 = new THREE.Quaternion();
+const hq2 = new THREE.Quaternion();
+const fq3 = new THREE.Vector3();
+
 const gx = new THREE.Vector3();
 const gp = new THREE.Vector3();
 const sq = new THREE.Quaternion();
@@ -448,6 +549,12 @@ const cq = new THREE.Quaternion();
 const iq = new THREE.Quaternion();
 const e1 = new THREE.Euler();
 const m1 = new THREE.Matrix4();
+/**
+ * The pistol at rest (direct; Arturo, 22/10 #3: not both arms out at the ready while nobody aims): the end of its clip
+ * (pistolRest: aimed, then lowered to the holster's idle), the pistol in the right hand by the thigh, the left arm
+ * free; eased forth and back over that stretch (seconds into it), a breath.
+ */
+const PISTOL_REST = { from: 5.3, to: 7.0 };
 /**
  * The throws' clips (direct), timed to the game's: the clip's moment the hand lets go (`release`, measured on it) at
  * the game's (`lets`, seconds into the throw: unitViews throwMotion, tossStone), `rate` times as fast; over by `end`.
@@ -473,6 +580,15 @@ function throwClipTime(k: keyof typeof THROWS, t: number): number {
 const hq = new THREE.Quaternion();
 const hr = new THREE.Quaternion();
 const m2 = new THREE.Matrix4();
+const sl2 = new THREE.Vector3();
+const sl3 = new THREE.Vector3();
+const sl4 = new THREE.Vector3();
+const sl5 = new THREE.Vector3();
+const sl6 = new THREE.Vector3();
+const sl7 = new THREE.Vector3();
+const sl8 = new THREE.Vector3();
+const sm1 = new THREE.Matrix4();
+const sm2 = new THREE.Matrix4();
 const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -497,6 +613,43 @@ interface Span {
   r: number;
   lo: number;
   hi: number;
+}
+
+/**
+ * A gun's shape along it, for the arms to keep out of (inGun; Arturo, 22/10: the rifle at rest went through the
+ * forearms): slice by slice along its barrel (z, its own frame), its middle across (x), how high and low it goes and
+ * half its width.
+ */
+interface Profile {
+  z0: number;
+  step: number;
+  slices: { x: number; lo: number; hi: number; r: number }[];
+}
+/** How many slices a gun's profile has. */
+const PROFILE_SLICES = 18;
+
+function profileOf(m: THREE.Object3D, box: THREE.Box3): Profile {
+  const step = (box.max.z - box.min.z) / PROFILE_SLICES || 1;
+  const acc = Array.from({ length: PROFILE_SLICES }, () => ({ x0: Infinity, x1: -Infinity, lo: Infinity, hi: -Infinity }));
+  const v = new THREE.Vector3();
+  m.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    const g = o.geometry.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < g.count; i++) {
+      v.fromBufferAttribute(g, i).applyMatrix4(o.matrixWorld);
+      const k = THREE.MathUtils.clamp(Math.floor((v.z - box.min.z) / step), 0, PROFILE_SLICES - 1);
+      const a = acc[k]!;
+      a.x0 = Math.min(a.x0, v.x);
+      a.x1 = Math.max(a.x1, v.x);
+      a.lo = Math.min(a.lo, v.y);
+      a.hi = Math.max(a.hi, v.y);
+    }
+  });
+  return {
+    z0: box.min.z,
+    step,
+    slices: acc.map((a) => (a.x0 > a.x1 ? { x: 0, lo: 0, hi: 0, r: 0 } : { x: (a.x0 + a.x1) / 2, lo: a.lo, hi: a.hi, r: (a.x1 - a.x0) / 2 })),
+  };
 }
 
 /**
@@ -533,6 +686,35 @@ function gunsNow(a: Armament): Guns | null {
   }
   for (const id of partsOf(a)) if (!modelNow(WEAPON_PARTS[id].pack, 'wep', id)) all = false;
   return all ? out : null;
+}
+
+/**
+ * The back's skin at rest where a gun slung on it lies (slingOnBack), from the body's mesh as bound: the hindmost of it
+ * near the line straight back from a point by the right shoulder blade, the middle of the back and the left of the
+ * small of the back (SLING_SIDE, SLING_UP, SLING_DOWN), each from its bone (Spine_03, Spine_02, Spine_01). Null with no
+ * body mesh.
+ */
+function backSkin(model: THREE.Object3D, toModel: THREE.Matrix4, rest: Rest): { top: THREE.Vector3; mid: THREE.Vector3; foot: THREE.Vector3 } | null {
+  const want = [
+    { bone: B.Spine_03, x: -SLING_SIDE, y: SLING_UP },
+    { bone: B.Spine_02, x: 0, y: 0 },
+    { bone: B.Spine_01, x: SLING_SIDE, y: -SLING_DOWN },
+  ].map((w) => ({ ...w, at: rest.p[w.bone]!.clone().add(new THREE.Vector3(w.x, w.y, 0)), z: Infinity }));
+  const v = new THREE.Vector3();
+  let found = false;
+  model.traverse((o) => {
+    if (!(o instanceof THREE.SkinnedMesh) || o.name !== 'body') return;
+    found = true;
+    const m = new THREE.Matrix4().multiplyMatrices(toModel, o.matrixWorld);
+    const pos = o.geometry.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      o.getVertexPosition(i, v).applyMatrix4(m);
+      for (const w of want) if (Math.abs(v.x - w.at.x) < SLING_NEAR && Math.abs(v.y - w.at.y) < SLING_NEAR && v.z < w.z) w.z = v.z;
+    }
+  });
+  if (!found || want.some((w) => w.z === Infinity)) return null;
+  const off = (w: (typeof want)[number]) => new THREE.Vector3(w.at.x, w.at.y, w.z).sub(rest.p[w.bone]!);
+  return { top: off(want[0]!), mid: off(want[1]!), foot: off(want[2]!) };
 }
 
 async function loadGuns(a: Armament): Promise<Guns> {
@@ -690,6 +872,18 @@ export class SyntyFigure implements FigureRig {
   /** Its weapons' models (cloned), which of them is in the hand, and where the others ride (hung from bones: stows). */
   private readonly carried: Partial<Record<Carry, THREE.Object3D>> = {};
   private drawn: Carry = 'weapon';
+  /** All its weapons on it, none in the hand (sling). */
+  private slung = false;
+  /** At the camp (camp): what it stays in there, whether it is there, and whether that is still to reach its driver (`campNow`: without easing). */
+  private campLoop: CampLoop | null = null;
+  private campOn = false;
+  private campDirty = false;
+  private campNow = false;
+  /** What it holds in the right hand at the camp (holdItem), its model there once loaded. */
+  private itemId: PropId | null = null;
+  private item: THREE.Object3D | null = null;
+  /** Kept upright (a cup), else as the fist turns it (a ration bar). */
+  private itemUpright = false;
   /** How far each finger joint is curled now (radians), easing to its hand's pose (hands). */
   private readonly curl = new Float32Array(N);
   private readonly stows: Partial<Record<Carry, THREE.Group>> = {};
@@ -736,6 +930,8 @@ export class SyntyFigure implements FigureRig {
   /** The weapon's actions playing this pose (direct), how much of the arms are theirs (over 0.5, all), and their clock. */
   private readonly plays: ActionPlay[] = [];
   private clipped = 0;
+  /** How much of the pistol's clips is its rest (direct): the left hand is free then (hands). */
+  private pistolRest = 0;
   private actClock = 0;
   /** A throw playing its clip (direct): a grenade's, a stone's; seconds since it began; and whether its clip has the arms. */
   private throwKind: keyof typeof THROWS | null = null;
@@ -786,12 +982,20 @@ export class SyntyFigure implements FigureRig {
   /** What each search last settled on (left elbow, right elbow, left arm, right arm, the weapon), and the poses to wait before the next. */
   private readonly goals = [0, 0, 0, 0];
   private readonly gunGoal = { tip: 0, push: 0, lift: 0 };
-  private readonly waits = [0, 0, 0, 0, 0];
+  private readonly waits = [0, 0, 0, 0, 0, 0, 0];
+  /** How far a clip's gun is turned about the wrist out of the right arm now (fitGun), and the search's last goal. */
+  private readonly gunFit = { tip: 0, yaw: 0 };
+  /** How far ahead along itself a clip's gun is slid now, aimed (slideGun). */
+  private slideOut = 0;
+  private readonly fitGoal = { tip: 0, yaw: 0 };
   /** The axis each elbow last bent about (reach): what it keeps to when its pole is no help. */
   private readonly bends = [new THREE.Vector3(), new THREE.Vector3()];
   /** Each elbow's swing round its shoulder–hand line out of the body (swingElbow), each arm's turn out to the side (spreadArm): left, right. */
   private readonly swing = [0, 0];
   private readonly spread = [0, 0];
+  /** The right arm's turn out to the side with the pistol at rest by the thigh, out of it (spreadPistol), and its search's last goal. */
+  private pistolOut = 0;
+  private pistolGoal = 0;
   /** How far the weapon in the hand is tipped up about its grip and pushed ahead out of the body now (clearGun). */
   private readonly gunFix = { tip: 0, push: 0, lift: 0 };
   /** How far the support hand has let go of the weapon to hang at the side (letGo): 0 on it, 1 hanging; and, aimed, slid back along it (0 to 1 of SLIDE_BACK). */
@@ -799,8 +1003,14 @@ export class SyntyFigure implements FigureRig {
   private slid = 0;
   /** Where the drawn weapon goes in its own frame: from its butt to its muzzle, the line down its middle and its girth (hold). */
   private gunSpan: Span | null = null;
+  /** The gun in the hand's shape along it (inGun), a firearm's only. */
+  private gunProfile: Profile | null = null;
   /** Where each weapon at rest on the body rides, in the model at rest (hangStows): what it is moved out of the body from. */
   private readonly stowRest: Partial<Record<Carry, THREE.Matrix4>> = {};
+  /** And how each sits on its bone there, and the bone's own measure in the model (slingOnBack moves the slung gun from it). */
+  /** Where the back's skin is at rest, for a gun slung on it to lie on (backSkin): from the chest's, the middle's and the small of the back's bones. */
+  private slingBack: { top: THREE.Vector3; mid: THREE.Vector3; foot: THREE.Vector3 } | null = null;
+  private readonly stowOn: Partial<Record<Carry, { at: THREE.Vector3; turn: THREE.Quaternion; scale: THREE.Vector3; bone: THREE.Vector3 }>> = {};
 
   constructor(private readonly spec: Spec) {
     if (spec.dead) this.gait.motion = WALK;
@@ -846,12 +1056,84 @@ export class SyntyFigure implements FigureRig {
   private driver(set: AnimSet): AnimDriver {
     const a = new AnimDriver(set, Math.random());
     a.setStance(this.stance, true);
+    this.campDirty = true;
     return a;
+  }
+
+  camp(loop: CampLoop | null, on = true, now = false): void {
+    if (loop === this.campLoop && on === this.campOn) return;
+    this.campLoop = on ? loop : null;
+    this.campOn = on;
+    this.campDirty = true;
+    this.campNow = now;
+  }
+
+  campMove(move: CampMove | null): number {
+    const a = this.anim;
+    const clips = campClips(this.build);
+    if (!a || !clips) return 1;
+    return a.campMove(move ? (clips.get(CAMP_MOVES[this.build][move]) ?? null) : null);
+  }
+
+  /**
+   * What it holds at the camp kept upright if it is to be (holdItem), facing as it does (a cup is held level, whatever
+   * way the fist is turned: along the grip, it lay along the forearm). By the hand's turn as last drawn: a frame
+   * behind, unseen.
+   */
+  private uprightItem(): void {
+    const item = this.item;
+    if (!item?.parent || !this.itemUpright) return;
+    item.parent.getWorldQuaternion(hq1);
+    this.root.getWorldQuaternion(hq2);
+    item.quaternion.copy(hq1.invert()).multiply(hq2);
+  }
+
+  holdItem(id: PropId | null, upright = false): void {
+    this.itemUpright = upright;
+    if (id === this.itemId) return;
+    this.itemId = id;
+    this.item?.removeFromParent();
+    this.item = null;
+    if (!id) return;
+    const a = PROPS[id] as PropAsset;
+    const put = (model: THREE.Group) => {
+      if (this.itemId !== id) return;
+      // In the fist as a gun's grip is (its socket): upright along the grip, its middle where the palm closes.
+      const m = model.clone();
+      const box = new THREE.Box3().setFromObject(model);
+      m.position.copy(box.getCenter(new THREE.Vector3())).negate().add(ITEM_AT);
+      const g = new THREE.Group();
+      g.add(m);
+      this.socket.add(g);
+      this.item = g;
+    };
+    const now = modelNow(a.pack, 'prop', id);
+    if (now) put(now);
+    else void loadModel(a.pack, 'prop', id).then(put, () => undefined);
+  }
+
+  /** The camp as asked (camp) onto the clips' driver, once they and the camp's clips are in. */
+  private applyCamp(a: AnimDriver): void {
+    const clips = this.campOn ? campClips(this.build) : null;
+    if (this.campOn && !clips) return;
+    a.campLoop(clips && this.campLoop ? (clips.get(CAMP_LOOPS[this.build][this.campLoop]) ?? null) : null, this.campNow);
+    a.campVariations(clips ? CAMP_VARIATIONS[this.build].map((id) => clips.get(id)).filter((c) => !!c) : null);
+    this.campDirty = this.campNow = false;
   }
 
   setStance(stance: Stance | null): void {
     this.stance = stance ? STANCE_ORDER.indexOf(stance) : -1;
     this.anim?.setStance(this.stance);
+  }
+
+  gesture(g: Gesture): boolean {
+    return this.anim?.gesture(g) ?? false;
+  }
+
+  sling(on: boolean): void {
+    if (on === this.slung) return;
+    this.slung = on;
+    if (this.rest) this.hold();
   }
 
   /** Dressed and moving with its clips (both load in the background). */
@@ -935,9 +1217,9 @@ export class SyntyFigure implements FigureRig {
   /**
    * Where the weapons not in the hand ride, hung from their bones (placed in
    * model space at rest): the main gun slung across the back, the barrel up
-   * over the right shoulder; the pistol in its holster on the right thigh,
-   * the muzzle down; the blade in its sheath at the left hip, pointing down
-   * and back.
+   * over the right shoulder; the pistol in its holster down the right
+   * thigh, the muzzle down; the blade in its sheath behind the left hip, on the
+   * belt as near the body as it stays clear of it, pointing down and back.
    */
   private hangStows(model: THREE.Object3D, rest: Rest): void {
     model.updateMatrixWorld(true);
@@ -950,17 +1232,29 @@ export class SyntyFigure implements FigureRig {
       const y = new THREE.Vector3().crossVectors(z, x);
       const place = new THREE.Matrix4().makeBasis(x, y, z).setPosition(at);
       const g = new THREE.Group();
-      new THREE.Matrix4().multiplyMatrices(toModel, b.matrixWorld).invert().multiply(place).decompose(g.position, g.quaternion, g.scale);
+      const onBone = new THREE.Matrix4().multiplyMatrices(toModel, b.matrixWorld);
+      onBone.clone().invert().multiply(place).decompose(g.position, g.quaternion, g.scale);
       b.add(g);
       this.stows[k] = g;
       this.stowRest[k] = place;
+      this.stowOn[k] = { at: g.position.clone(), turn: g.quaternion.clone(), scale: g.scale.clone(), bone: new THREE.Vector3().setFromMatrixScale(onBone) };
     };
+    this.slingBack = backSkin(model, toModel, rest);
     const s3 = rest.p[B.Spine_03]!;
     const hipL = rest.p[B.UpperLeg_L]!;
     const hipR = rest.p[B.UpperLeg_R]!;
     hang('weapon', B.Spine_03, new THREE.Vector3(0, s3.y + 0.02, s3.z - 0.11), new THREE.Vector3(-0.45, 0.9, 0), new THREE.Vector3(0, 0, -1));
-    hang('sidearm', B.UpperLeg_R, new THREE.Vector3(hipR.x - 0.075, hipR.y - 0.08, hipR.z + 0.01), new THREE.Vector3(0, -1, 0.1), new THREE.Vector3(0, 0, 1));
-    hang('belt', B.Hips, new THREE.Vector3(hipL.x + 0.075, hipL.y + 0.03, hipL.z - 0.02), new THREE.Vector3(0.12, -1, -0.4), new THREE.Vector3(0, 0, 1));
+    // (Down the thigh, its grip under a hand at the hip, 22/10: a blade's hand by the hip went into it.)
+    hang('sidearm', B.UpperLeg_R, new THREE.Vector3(hipR.x - 0.075, hipR.y - HOLSTER_DROP, hipR.z + 0.01), new THREE.Vector3(0, -1, 0.1), new THREE.Vector3(0, 0, 1));
+    const hips = rest.p[B.Hips]!;
+    const belt = new THREE.Vector3(hips.x, hipL.y + 0.03, hips.z);
+    const parts = rest.bulk?.parts;
+    if (parts) {
+      const inBody = () => parts.reduce((worst, g) => Math.max(worst, depthIn(g, belt, BELT_ROOM)), -1);
+      for (let k = 0; k < 60 && inBody() > 0; k++) belt.addScaledVector(BELT_OUT, 0.005);
+    } else belt.addScaledVector(BELT_OUT, 0.13);
+    const along = BELT_ALONG.clone().normalize();
+    hang('belt', B.Hips, belt, along, new THREE.Vector3().crossVectors(along, BELT_OUT));
   }
 
   /** Its weapons on it (fill, arm): the drawn one in the hand, the rest where they ride; what it carried before goes. */
@@ -981,6 +1275,7 @@ export class SyntyFigure implements FigureRig {
       const centre = box.getCenter(new THREE.Vector3());
       const r = Math.min(size.x, size.y) / 2;
       m.userData.span = { z0: box.min.z, z1: box.max.z, x: centre.x, y: centre.y, r, lo: Math.min(0, box.min.y + r - centre.y), hi: Math.max(0, box.max.y - r - centre.y) } satisfies Span;
+      m.userData.profile = profileOf(m, box);
       const muzzle = new THREE.Vector3(...(w.muzzle ?? (m.children[0]?.userData.muzzle as [number, number, number] | undefined) ?? [0, 0, 0.5]));
       if (k === 'weapon') this.mount(m, g.id, muzzle);
       m.userData.muzzle = muzzle.multiply(m.scale);
@@ -1028,9 +1323,60 @@ export class SyntyFigure implements FigureRig {
     }
   }
 
+  /**
+   * The gun slung on the back as the back bends (22/10, Gameplay: crouched, held rigid by the chest's bone, its barrel
+   * stood up over the head; turned across, it floated off the back): crouched (or crouch-walking), diagonal from the
+   * right shoulder blade to the left hip as the back is now (the body's girths: bulk.ts), pressed to it, out of it
+   * where it bows; standing, as it rides (hangStows); in between, eased by the crouch.
+   */
+  private slingOnBack(p: FigurePose): void {
+    const g = this.stows.weapon;
+    const on = this.stowOn.weapon;
+    if (!g || !on) return;
+    const m = g.children[0];
+    const span = m?.userData.span as Span | undefined;
+    const crouch = THREE.MathUtils.clamp(p.crouch, 0, 1);
+    g.position.copy(on.at);
+    g.quaternion.copy(on.turn);
+    g.scale.copy(on.scale);
+    if (crouch < 0.01 || !m || !span || !this.bodyAware || !this.rest?.bulk) return;
+    const back = this.slingBack;
+    if (!back) return;
+    const { d, p: pos } = this;
+    for (const i of SPINE) this.fk(i);
+    const s3 = B.Spine_03;
+    // Where it lies on the back as the back is now: the back's skin at the right shoulder blade, the middle and the left
+    // of the small of the back as they are at rest (hangStows), carried by their bones; the gun's line from the low one
+    // to the high one, out of the middle one where the back bows under it, the gun's half-thickness off the skin.
+    const top = sl4.copy(back.top).applyQuaternion(d[s3]!).add(pos[s3]!);
+    const foot = sl5.copy(back.foot).applyQuaternion(d[B.Spine_01]!).add(pos[B.Spine_01]!);
+    const bow = sl3.copy(back.mid).applyQuaternion(d[B.Spine_02]!).add(pos[B.Spine_02]!);
+    const along = sl6.copy(top).sub(foot).normalize();
+    const out = sl7.copy(Z).applyQuaternion(d[B.Spine_02]!).negate();
+    out.addScaledVector(along, -out.dot(along)).normalize();
+    const mid = sl8.copy(top).add(foot).multiplyScalar(0.5);
+    // (Straight on a back bowed under it, it would touch at the bow and stand off at both ends: the bow is shared out,
+    // its middle a little into the back, under the gun itself where nothing shows it, its ends nearer the back.)
+    const under = sl2.copy(bow).sub(mid);
+    mid.addScaledVector(out, Math.max(0, under.dot(out)) * (1 - SLING_SINK) + span.r + SLING_ROOM);
+    // Pressed so: along it, on its side (its flat against the back, its top up the slope and the magazine down it: on
+    // its magazine it stood off the back); the group where the gun's middle (at its model's offset in it, but along)
+    // comes to `mid`.
+    const side = sl2.crossVectors(out, along).normalize();
+    if (side.y < 0) side.negate();
+    sq.setFromRotationMatrix(m1.makeBasis(sl4.crossVectors(side, along), side, along));
+    const hug = sl3.set(m.position.x, m.position.y, 0).applyQuaternion(sq).negate().add(mid);
+    // As it rides now on its bone, in the model; eased from that by the crouch; back onto the bone.
+    const bone = sm1.compose(pos[s3]!, lq.copy(d[s3]!).multiply(this.rest!.q[s3]!), on.bone);
+    sm2.compose(on.at, on.turn, on.scale).premultiply(bone).decompose(sl5, cq, sl4);
+    sl5.lerp(hug, crouch);
+    cq.slerp(sq, crouch);
+    sm2.compose(sl5, cq, sl4.set(1, 1, 1)).premultiply(bone.invert()).decompose(g.position, g.quaternion, g.scale);
+  }
+
   /** The drawn weapon into the hand and the others where they ride; how the hand holds it, and where its muzzle is. */
   private hold(): void {
-    const held = this.carried[this.drawn];
+    const held = this.slung ? undefined : this.carried[this.drawn];
     for (const k of CARRIES) {
       const m = this.carried[k];
       if (!m || m === held) continue;
@@ -1053,6 +1399,7 @@ export class SyntyFigure implements FigureRig {
       this.foreY = fore?.[0] ?? 0;
       held.position.set(0, 0, 0);
       this.gunSpan = (held.userData.span as Span | undefined) ?? null;
+      this.gunProfile = this.melee ? null : ((held.userData.profile as Profile | undefined) ?? null);
       this.gunPivot.add(held);
       this.muzzle.position.copy(held.userData.muzzle as THREE.Vector3);
       // (Let go while the body lies, it stays on the ground until it gets up: pickUp.)
@@ -1067,6 +1414,7 @@ export class SyntyFigure implements FigureRig {
       this.melee = this.pistol = false;
       this.fore = this.foreY = 0;
       this.gunSpan = null;
+      this.gunProfile = null;
       this.muzzle.position.set(0, 0, 0);
       this.yaw.add(this.gunPivot);
       this.gunPivot.position.set(0, this.chest, 0.3);
@@ -1193,6 +1541,7 @@ export class SyntyFigure implements FigureRig {
       this.pivot.rotation.set(((-p.fall * Math.PI) / 2) * Math.cos(this.fallSide), 0, ((p.fall * Math.PI) / 2) * Math.sin(this.fallSide));
     }
     this.flashTo(p.flash * 0.8);
+    this.uprightItem();
     const r = this.rest;
     if (!r) {
       this.clock = time;
@@ -1308,7 +1657,10 @@ export class SyntyFigure implements FigureRig {
         this.letGo = 0;
       } else if (this.fore) {
         this.support(p);
-        this.letGoIf(p, upper, anim !== null, time);
+        // A clip's gun is where its own left hand holds it, the arm already clear of the body: the hand kept on the
+        // handguard, closed round it (22/10 #3: let go, it hung open by it, holding nothing).
+        if (this.clipped > 0.5) this.letGo = this.slid = 0;
+        else this.letGoIf(p, upper, anim !== null, time);
       } else if (anim) this.followArm('L', upper);
       else this.hang('L', p.run * Math.sin(time * 11 + p.phase) * 0.4);
       if (!throwing && !(search > 0.01) && !this.fore) this.spreadArm('L');
@@ -1352,6 +1704,7 @@ export class SyntyFigure implements FigureRig {
     const toss = (p.toss ?? 0) * live;
     if (toss > 0 && !dead && !this.thrown) this.tossArm(toss);
     this.hands(p, dt, live, climb, search, throwing, toss);
+    this.slingOnBack(p);
     this.write();
     this.poses++;
     if (clip) this.dropWeapon(Math.min(1, p.fall) * clip.seconds);
@@ -1701,6 +2054,7 @@ export class SyntyFigure implements FigureRig {
     if (this.action) this.clipped = this.action.share;
     a.play(plays);
     // A corpse stays as it fell. Only a unit at ease looks round now and then (not over the weapon's clips).
+    if (this.campDirty) this.applyCamp(a);
     if (p.fall < 1) a.update(dt, !plays.length && p.aim < 0.05 && p.hit < 0.01 && !(p.search ?? 0) && !dead);
     a.read(this.d, this.hipsShift);
     // The hips sway as the clip says; their height keeps the lower foot on the ground, whatever the
@@ -1721,6 +2075,7 @@ export class SyntyFigure implements FigureRig {
     const out = this.plays;
     out.length = 0;
     this.clipped = 0;
+    this.pistolRest = 0;
     this.thrown = false;
     this.struck = false;
     const a = this.anim;
@@ -1759,12 +2114,15 @@ export class SyntyFigure implements FigureRig {
     const reload = !this.pistol && spin > 0 && spin < 1 ? Math.min(1, spin / 0.12, (1 - spin) / 0.12) : 0;
     const held = live * (1 - reload);
     if (this.pistol) {
-      // Both hands on it, at the ready or aimed; crouched the same over the crouch's legs.
-      add('pistolReady', held * (1 - aim), true);
+      // At rest in the right hand by the thigh, the left arm free (PISTOL_REST); aimed in both hands; crouched the same
+      // over the crouch's legs.
+      const span = PISTOL_REST.to - PISTOL_REST.from;
+      this.pistolRest = held * (1 - aim);
+      add('pistolRest', this.pistolRest, true, PISTOL_REST.from + span * (0.5 - 0.5 * Math.cos((Math.PI * clock) / span)));
       add('pistolAim', held * aim, true);
     } else {
       // Standing (or moving) the rifle at low ready or shouldered over the legs' clips; kneeling, the whole body.
-      add('rifleLowered', held * (1 - crouch) * (1 - aim), true);
+      add(SYNTY_HANDS.rest, held * (1 - crouch) * (1 - aim), true);
       add('rifleAim', held * (1 - crouch) * aim, true);
       add('rifleKneel', held * crouch * (1 - aim), false);
       add('rifleKneelAim', held * crouch * aim, false);
@@ -1805,7 +2163,7 @@ export class SyntyFigure implements FigureRig {
    * The gun as the clips' hands hold it (direct): fast in the right hand (clipGrip), the right arm the clip's; a
    * blade as the hand holds it.
    */
-  private clipHold(): void {
+  private clipHold(aim = 0, crouch = 0): void {
     const r = this.rest!;
     const { d, p: pos } = this;
     for (let k = 0; k < ARMS.length; k++) this.fk(ARMS[k]!);
@@ -1826,7 +2184,97 @@ export class SyntyFigure implements FigureRig {
     if (this.clipGripKnown && !this.melee) hq.multiply(this.clipGrip);
     this.gunQ.copy(hq);
     this.gunP.copy(GRIP).applyQuaternion(this.gunQ).add(pos[B.Hand_R]!);
+    if (!this.melee && this.gunProfile) this.fitGun(1 - THREE.MathUtils.clamp(aim, 0, 1));
+    // Aimed, the gun slid ahead along itself out of the upper arm, the right hand reaching after it (22/10: our arms
+    // shorter than the clip's X Bot's, the stock went back past the shoulder into the arm).
+    if (!this.melee && !this.pistol && this.gunProfile && SYNTY_HANDS.slide && this.slideGun(aim)) {
+      const wrist = fp.copy(GRIP).applyQuaternion(this.gunQ).negate().add(this.gunP);
+      this.reach('R', wrist, fh.copy(pos[B.Elbow_R]!).sub(pos[B.Shoulder_R]!));
+      d[B.Hand_R]!.copy(this.gunQ).multiply(r.gripTurn);
+      return;
+    }
+    if (this.pistol && this.pistolRest > 0.5) this.spreadPistol();
+    else this.pistolOut = this.ease(this.pistolOut, 0);
+    // The right arm out of the gun and the body (22/10: the rifle at rest through the forearm and the upper arm, the
+    // clip's arm made for Mixamo's thinner one): the elbow swung round the shoulder–hand line, the hand and the gun
+    // where they are.
+    if (!this.melee && SYNTY_HANDS.swing) {
+      const s = pos[B.Shoulder_R]!;
+      const h = pos[B.Hand_R]!;
+      // (Standing at rest it swings little: further, it stood out like a wing; aimed or kneeling, the elbow comes up.)
+      const max = lerp(CLIP_SWING, SWING_MAX, THREE.MathUtils.clamp(Math.max(aim, crouch), 0, 1));
+      if (this.swingElbow('R', s, h, ce.copy(pos[B.Elbow_R]!), max)) {
+        sq.setFromAxisAngle(sa.copy(h).sub(s).normalize(), this.swing[1]!);
+        d[B.Shoulder_R]!.premultiply(sq);
+        d[B.Elbow_R]!.premultiply(sq);
+        this.fk(B.Elbow_R);
+      }
+    }
     d[B.Hand_R]!.copy(this.gunQ).multiply(r.gripTurn);
+  }
+
+  /**
+   * The pistol at rest by the thigh (PISTOL_REST) out of it (22/10: the muzzle in a heavy build's thigh): the right
+   * arm turned out at the shoulder, about the chest's forward line, the least that clears it (spreadArm's way), the gun
+   * with the hand; back in as far as it stays clear; eased.
+   */
+  private spreadPistol(): void {
+    const span = this.gunSpan;
+    if (!span || !this.bodyAware || !this.rest!.bulk || !SYNTY_HANDS.gun) {
+      this.pistolOut = 0;
+      return;
+    }
+    const { d, p: pos } = this;
+    const s = pos[B.Shoulder_R]!;
+    const axis = sa.copy(Z).applyQuaternion(d[B.Spine_03]!);
+    const depth = (angle: number) => {
+      sq.setFromAxisAngle(axis, -angle);
+      gq.copy(sq).multiply(this.gunQ);
+      fp.copy(this.gunP).sub(s).applyQuaternion(sq).add(s);
+      let worst = -1;
+      for (let k = 0; k < GUN_POINTS; k++) {
+        for (const y of [0, span.lo, span.hi]) {
+          gp.set(span.x, span.y + y, lerp(span.z0, span.z1, k / (GUN_POINTS - 1))).applyQuaternion(gq).add(fp);
+          worst = Math.max(worst, this.inBody(gp, span.r));
+        }
+      }
+      return worst;
+    };
+    const now = this.pistolOut;
+    let goal = now;
+    let least = depth(now);
+    if (least > TOUCH && this.waits[6]! > 0) {
+      this.waits[6]!--;
+      goal = this.pistolGoal;
+    } else if (least > TOUCH) {
+      let clear = false;
+      for (let a = now + SPREAD_STEP; a <= PISTOL_SPREAD_MAX + 1e-6; a += SPREAD_STEP) {
+        const dd = depth(a);
+        if (dd <= TOUCH) {
+          goal = a;
+          clear = true;
+          break;
+        }
+        if (dd < least) {
+          least = dd;
+          goal = a;
+        }
+      }
+      this.pistolGoal = goal;
+      this.waits[6] = clear ? 0 : SEARCH_REST;
+    } else if (now) {
+      const a = Math.max(0, now - SPREAD_STEP);
+      if (depth(a) <= TOUCH) goal = a;
+    }
+    this.pistolOut = this.ease(now, goal);
+    if (!this.pistolOut) return;
+    sq.setFromAxisAngle(axis, -this.pistolOut);
+    d[B.Shoulder_R]!.premultiply(sq);
+    d[B.Elbow_R]!.premultiply(sq);
+    this.fk(B.Elbow_R);
+    this.fk(B.Hand_R);
+    this.gunQ.premultiply(sq);
+    this.gunP.sub(s).applyQuaternion(sq).add(s);
   }
 
   /** Procedural legs, as figures.ts (combat stance, squat, stride, the dead drag a foot), until the clips load. */
@@ -1894,7 +2342,7 @@ export class SyntyFigure implements FigureRig {
    */
   private holdWeapon(p: FigurePose, lean: number): void {
     if (this.clipped > 0.5) {
-      this.clipHold();
+      this.clipHold(p.aim, THREE.MathUtils.clamp(p.crouch, 0, 1) * (1 - THREE.MathUtils.clamp(p.run, 0, 1)));
       return;
     }
     const r = this.rest!;
@@ -1904,8 +2352,10 @@ export class SyntyFigure implements FigureRig {
     const s3 = B.Spine_03;
     const reload = Math.sin(THREE.MathUtils.clamp(p.spin ?? 0, 0, 1) * Math.PI);
     if (this.melee) {
-      v1.set(sh.x * 1.1, lerp(r.hip + 0.02, sh.y + 0.08, aim), lerp(sh.z + 0.08, sh.z + 0.18, aim));
-      e1.set(lerp(1.15, -0.9, aim) - lean, 0, 0, 'YXZ');
+      // (By the hip, a little out and ahead of the holstered pistol's grip, 22/10: the hand was in it, the thigh swung
+      // up into it walking.)
+      v1.set(sh.x * lerp(1.25, 1.1, aim), lerp(r.hip + 0.02, sh.y + 0.08, aim), lerp(sh.z + 0.14, sh.z + 0.18, aim));
+      e1.set(lerp(1.15, -0.9, aim) - lean - THREE.MathUtils.clamp(p.crouch, 0, 1) * (1 - aim) * BLADE_CROUCH_LEVEL, 0, 0, 'YXZ');
     } else if (this.pistol) {
       // Low ready, both hands on it ahead of the belly, the muzzle at the ground in front; aimed (playtest 16/10
       // #3), square to the target with both arms almost straight, the gun in the middle and its sights at the eye.
@@ -1930,11 +2380,12 @@ export class SyntyFigure implements FigureRig {
       v1.set(sh.x * 0.45, r.hip + 0.1, sh.z + 0.14);
       e1.set(1.05, 0.55, 0, 'YXZ');
     }
-    // Crouched at low ready: over the knees.
-    if (!this.melee && !tucked) {
+    // Crouched at low ready: over the knees (a blade too, 22/10: by the hip it went into the thigh, the hand into the
+    // pistol's holster).
+    if (!tucked) {
       const low = THREE.MathUtils.clamp(p.crouch, 0, 1) * (1 - aim);
-      v1.y += low * CROUCH_LIFT;
-      v1.z += low * CROUCH_AHEAD;
+      v1.y += low * (this.melee ? BLADE_CROUCH_LIFT : CROUCH_LIFT);
+      v1.z += low * (this.melee ? BLADE_CROUCH_AHEAD : CROUCH_AHEAD);
     }
     this.gunQ.setFromEuler(e1);
     if (this.melee) this.gunQ.premultiply(d[s3]!);
@@ -2086,6 +2537,38 @@ export class SyntyFigure implements FigureRig {
     this.setArm(side, tmpU.copy(upper), tmpF.copy(fore));
   }
 
+  /** How far out the upper arm or the forearm on side `i` (0 left) goes round its bone at `f` along it (Bulk's bins). */
+  private armOut(i: number, upper: boolean, f: number): number {
+    const b = this.rest!.bulk!;
+    const along = upper ? b.upperAlong[i]! : b.foreAlong[i]!;
+    return along[THREE.MathUtils.clamp(Math.floor(f * ARM_BINS), 0, ARM_BINS - 1)]!;
+  }
+
+  /** How deep a ball of `radius` at `at` (model space, as posed now) is in the gun in the hand (its Profile); ≤ 0 clear. */
+  private inGun(at: THREE.Vector3, radius: number, part?: { z0: number; z1: number; top: number }): number {
+    const g = this.gunProfile!;
+    // (A little room kept: a sleeve's folds and a gun's sling go past the outlines measured.)
+    radius += GUN_ROOM;
+    const l = gl.copy(at).sub(this.gunP).applyQuaternion(gi.copy(this.gunQ).invert());
+    const k = Math.floor((l.z - g.z0) / g.step);
+    let worst = -1;
+    for (let n = k - 1; n <= k + 1; n++) {
+      const s0 = g.slices[n];
+      if (!s0 || s0.r <= 0) continue;
+      // Only a part of it (`part`: between z0 and z1 along it, below top): the grip's foot.
+      const zc = g.z0 + (n + 0.5) * g.step;
+      if (part && (zc < part.z0 || zc > part.z1 || s0.lo > part.top)) continue;
+      const s = part ? { ...s0, hi: Math.min(s0.hi, part.top) } : s0;
+      // The slice as a wall of its width: from its top to its bottom (in by its half-width), its middle across.
+      const a = s.lo + s.r;
+      const b = s.hi - s.r;
+      const y = a <= b ? THREE.MathUtils.clamp(l.y, a, b) : (s.lo + s.hi) / 2;
+      const z = THREE.MathUtils.clamp(l.z, g.z0 + n * g.step, g.z0 + (n + 1) * g.step);
+      worst = Math.max(worst, s.r + radius - Math.hypot(l.x - s.x, l.y - y, l.z - z));
+    }
+    return worst;
+  }
+
   /** How deep a ball of `radius` at `at` (model space, as posed now) is in the body: the deepest of its parts (bulk.ts); ≤ 0 clear. */
   private inBody(at: THREE.Vector3, radius: number): number {
     const r = this.rest!;
@@ -2120,6 +2603,20 @@ export class SyntyFigure implements FigureRig {
     let worst = this.inBody(h, b.hand);
     for (let k = from; k < ARM_UPPER.length; k++) worst = Math.max(worst, this.inBody(bp.lerpVectors(s, e, ARM_UPPER[k]!), b.upper[i]!));
     for (const f of ARM_FORE) worst = Math.max(worst, this.inBody(bp.lerpVectors(e, h, f), b.fore[i]!));
+    // And out of the gun in the hand (22/10: the rifle at rest through the forearms), but where a hand holds it: its
+    // wrist and the hand itself (the right one always; the left while it supports it).
+    if (this.gunProfile && this.armed && SYNTY_HANDS.gun) {
+      const holds = i === 1 || (this.fore > 0 && this.letGo < 0.5 && this.pistolRest < 0.5);
+      let gun = -1;
+      for (const f of ARM_UPPER_GUN) gun = Math.max(gun, this.inGun(bp.lerpVectors(s, e, f), this.armOut(i, true, f)));
+      for (const f of holds ? (i === 0 ? ARM_FORE_GUN_L : ARM_FORE_GUN) : ARM_FORE) gun = Math.max(gun, this.inGun(bp.lerpVectors(e, h, f), this.armOut(i, false, f)));
+      if (!holds) gun = Math.max(gun, this.inGun(h, b.hand));
+      // The right forearm by the wrist out of the grip's foot below the hand (the forearm turned to the hand's line).
+      if (i === 1) for (const f of ARM_CUFF) gun = Math.max(gun, this.inGun(bp.lerpVectors(e, h, f), this.armOut(1, false, f), GRIP_FOOT));
+      // Where nothing keeps the arm out of a wide body, the gun through it still counts on top (it shows more): the
+      // search then takes a swing clear of the gun at least.
+      worst = Math.max(worst, gun) + Math.max(0, gun - TOUCH);
+    }
     return worst;
   }
 
@@ -2141,7 +2638,7 @@ export class SyntyFigure implements FigureRig {
    * to the nearest that is clear (none: the shallowest), and back towards none as far as that stays clear; eased,
    * so it never jumps (playtest 20/10 #2). True if the elbow moved.
    */
-  private swingElbow(side: 'L' | 'R', s: THREE.Vector3, h: THREE.Vector3, elbow: THREE.Vector3): boolean {
+  private swingElbow(side: 'L' | 'R', s: THREE.Vector3, h: THREE.Vector3, elbow: THREE.Vector3, max = SWING_MAX): boolean {
     const i = side === 'L' ? 0 : 1;
     if (!this.bodyAware) {
       this.swing[i] = 0;
@@ -2162,10 +2659,10 @@ export class SyntyFigure implements FigureRig {
     } else if (deep > TOUCH) {
       let clear = false;
       const first = now < 0 ? -1 : 1;
-      search: for (let k = 1; k * SWING_STEP <= SWING_MAX * 2; k++) {
+      search: for (let k = 1; k * SWING_STEP <= max * 2; k++) {
         for (const sign of [first, -first]) {
           const a = now + sign * k * SWING_STEP;
-          if (Math.abs(a) > SWING_MAX) continue;
+          if (Math.abs(a) > max) continue;
           const dd = depth(a);
           if (dd <= TOUCH) {
             goal = a;
@@ -2248,6 +2745,122 @@ export class SyntyFigure implements FigureRig {
     for (const b of side === 'L' ? ARM_L : ARM_R) this.d[b]!.premultiply(sq);
     this.fk(el!);
     this.fk(hd!);
+  }
+
+  /**
+   * Aimed, how far ahead along itself the gun slides out of the right upper arm (SLIDE_STEP at a time, up to
+   * SLIDE_MAX), eased, `aim` of it; whether it is slid at all (the hand then reaches after it: clipHold).
+   */
+  private slideGun(aim: number): boolean {
+    const b = this.rest!.bulk;
+    const now = this.slideOut;
+    let goal = 0;
+    if (b && this.bodyAware && aim > 0.05) {
+      const pos = this.p;
+      const s = pos[B.Shoulder_R]!;
+      const ahead = fq3.set(0, 0, 1).applyQuaternion(this.gunQ);
+      const p0 = fp2.copy(this.gunP);
+      // The least slid that clears it; none: the one that leaves it shallowest.
+      let least = Infinity;
+      for (let push = 0; push <= SLIDE_MAX + 1e-6; push += SLIDE_STEP) {
+        this.gunP.copy(p0).addScaledVector(ahead, push);
+        // The upper arm as the clip has it (judged on the arm as it would reach after, the forearm went into the gun
+        // instead: measured, worse).
+        // (From closer to the shoulder, and a little more room: a coat's shoulders are wider than the arm's measure.)
+        const e = pos[B.Elbow_R]!;
+        let worst = -1;
+        for (const f of SLIDE_UPPER) worst = Math.max(worst, this.inGun(fp.lerpVectors(s, e, f), this.armOut(1, true, f) + SLIDE_ROOM));
+        if (worst <= TOUCH) {
+          goal = push;
+          break;
+        }
+        if (worst + push * 0.1 < least) {
+          least = worst + push * 0.1;
+          goal = push;
+        }
+      }
+      this.gunP.copy(p0);
+      goal *= THREE.MathUtils.clamp(aim, 0, 1);
+    }
+    this.slideOut = this.ease(now, goal, CLEAR_SLIDE);
+    if (this.slideOut <= 1e-4) return false;
+    this.gunP.addScaledVector(fq3.set(0, 0, 1).applyQuaternion(this.gunQ), this.slideOut);
+    return true;
+  }
+
+  /**
+   * A clip's gun turned about the wrist out of the right arm (22/10: a rifle's stock at rest through the forearm, the
+   * sleeve thicker than the clip's X Bot's): tipped and turned a little, the cheapest that clears it (FIT_WAYS), back
+   * towards none as far as that stays clear; eased; `free` of it (none aimed: the shot goes where it points).
+   */
+  private fitGun(free: number): void {
+    const fit = this.gunFit;
+    const b = this.rest!.bulk;
+    if (!b || !this.bodyAware || free <= 0 || !SYNTY_HANDS.fit) {
+      fit.tip = this.ease(fit.tip, 0);
+      fit.yaw = this.ease(fit.yaw, 0);
+    } else {
+      const pos = this.p;
+      const wrist = pos[B.Hand_R]!;
+      const s = pos[B.Shoulder_R]!;
+      const e = pos[B.Elbow_R]!;
+      const q0 = fq0.copy(this.gunQ);
+      // The left arm as it will reach for the handguard where the gun turns it (support): from its elbow as the clip has
+      // it to the handguard's grip.
+      const sL = pos[B.Shoulder_L]!;
+      const eL = pos[B.Elbow_L]!;
+      const supports = this.fore > 0 && !this.pistol;
+      const depth = (w: { tip: number; yaw: number }) => {
+        this.gunQ.copy(q0).multiply(rot(fq1, X, w.tip)).multiply(rot(fq2, Y, w.yaw));
+        this.gunP.copy(GRIP).applyQuaternion(this.gunQ).add(wrist);
+        let worst = -1;
+        for (const f of ARM_FORE_GUN) worst = Math.max(worst, this.inGun(fp.lerpVectors(e, wrist, f), this.armOut(1, false, f)));
+        for (const f of ARM_UPPER_GUN) worst = Math.max(worst, this.inGun(fp.lerpVectors(s, e, f), this.armOut(1, true, f)));
+        // The grip's foot below the hand out of the sleeve's cuff (the wrist bent the way the gun turns).
+        for (const f of ARM_CUFF) worst = Math.max(worst, this.inGun(fp.lerpVectors(e, wrist, f), this.armOut(1, false, f), GRIP_FOOT));
+        if (supports) {
+          const hand = fh.set(0.012, this.foreY, this.fore).add(FORE_WRIST).applyQuaternion(this.gunQ).add(this.gunP);
+          for (const f of ARM_FORE_GUN_L) worst = Math.max(worst, this.inGun(fp.lerpVectors(eL, hand, f), this.armOut(0, false, f)));
+          for (const f of ARM_UPPER_GUN) worst = Math.max(worst, this.inGun(fp.lerpVectors(sL, eL, f), this.armOut(0, true, f)));
+        }
+        return worst;
+      };
+      const allowed = (w: { tip: number; yaw: number }) => Math.abs(w.tip) <= FIT_TIP * free + 1e-6 && Math.abs(w.yaw) <= FIT_YAW * free + 1e-6;
+      let goal = { tip: fit.tip, yaw: fit.yaw };
+      let least = depth(fit);
+      if (least > TOUCH && this.waits[5]! > 0) {
+        this.waits[5]!--;
+        goal = { ...this.fitGoal };
+      } else if (least > TOUCH) {
+        let clear = false;
+        for (const way of FIT_WAYS) {
+          if (!allowed(way)) continue;
+          const dd = depth(way) + fitCost(way) * FIT_COST;
+          if (dd - fitCost(way) * FIT_COST <= TOUCH) {
+            goal = way;
+            clear = true;
+            break;
+          }
+          if (dd < least) {
+            least = dd;
+            goal = way;
+          }
+        }
+        Object.assign(this.fitGoal, goal);
+        this.waits[5] = clear ? 0 : SEARCH_REST;
+      } else if (fit.tip || fit.yaw) {
+        const back = { tip: fit.tip - Math.sign(fit.tip) * Math.min(Math.abs(fit.tip), FIT_STEP / 2), yaw: fit.yaw - Math.sign(fit.yaw) * Math.min(Math.abs(fit.yaw), FIT_STEP / 2) };
+        if (depth(back) <= TOUCH) goal = back;
+      }
+      if (!allowed(goal)) goal = { tip: THREE.MathUtils.clamp(goal.tip, -FIT_TIP * free, FIT_TIP * free), yaw: THREE.MathUtils.clamp(goal.yaw, -FIT_YAW * free, FIT_YAW * free) };
+      fit.tip = this.ease(fit.tip, goal.tip);
+      fit.yaw = this.ease(fit.yaw, goal.yaw);
+      this.gunQ.copy(q0);
+    }
+    if (fit.tip || fit.yaw) {
+      this.gunQ.multiply(rot(fq1, X, fit.tip)).multiply(rot(fq2, Y, fit.yaw));
+      this.gunP.copy(GRIP).applyQuaternion(this.gunQ).add(this.p[B.Hand_R]!);
+    }
   }
 
   /**
@@ -2419,7 +3032,10 @@ export class SyntyFigure implements FigureRig {
     const dead = this.spec.dead;
     const fallen = live < 0.5;
     const right: HandPose = fallen ? (this.armed ? 'grip' : 'relaxed') : dead ? 'claw' : this.armed ? (this.melee ? 'grip' : 'trigger') : climb > 0.5 ? 'grip' : search > 0.3 ? 'open' : 'relaxed';
-    const left: HandPose = fallen ? 'relaxed' : dead ? 'claw' : toss > 0 || throwing ? 'fist' : climb > 0.5 || (p.spin ?? 0) > 0.01 ? 'grip' : search > 0.3 ? 'open' : this.armed && this.fore && this.letGo < 0.5 ? 'support' : 'relaxed';
+    // The support hand closed under a rifle's handguard, round the right on a pistol's grip (22/10 #3: open, they held
+    // nothing); a pistol at rest is in the right hand alone.
+    const supports = this.armed && this.fore && this.letGo < 0.5 && this.pistolRest < 0.5;
+    const left: HandPose = fallen ? 'relaxed' : dead ? 'claw' : toss > 0 || throwing ? 'fist' : climb > 0.5 || (p.spin ?? 0) > 0.01 ? 'grip' : search > 0.3 ? 'open' : supports ? (this.pistol ? 'support' : 'grip') : 'relaxed';
     const k = dt > 0 ? 1 - Math.exp(-dt * HAND_EASE) : 1;
     const d = this.d;
     for (const chain of r.fingers) {

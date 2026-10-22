@@ -56,6 +56,10 @@ export interface ClearingArt {
   setVehicle?(vehicle: number): void;
   /** The siege's defenders standing at their posts (Arturo, 18/10 #58), tile (x, y) each; an empty list clears them. */
   setPosts?(posts: { entry: LineupEntry; x: number; y: number }[]): void;
+  /** The soldiers out about the clearing at their ease in the Asentamiento (Arturo, 22/10 #1); an empty list clears them. */
+  setLife?(entries: LineupEntry[]): void;
+  /** The tiles of what is being placed (null: nothing), for those about the clearing to walk off. */
+  keepClear?(cells: { x: number; y: number }[] | null): void;
 }
 
 /** What the Armería holds, as its corner shows it: the weapons found, the accessories bought (counts), the improvements loose (counts). */
@@ -668,6 +672,9 @@ export class ClearingSet implements StageSet {
 
     this.setGhost(ghostAt);
     this.setLineGhosts(lineAt);
+    // Those about the clearing walk off what is being placed (Arte's, 22/10 #1).
+    const placing = ghostAt ? pieceCells(ghostAt.piece, ghostAt.x, ghostAt.y, ghostAt.rot) : (lineAt?.cells ?? null);
+    this.art.keepClear?.(placing);
     this.showHint(hint, e);
     this.sendCursor(ghostAt ?? (lineAt ? { piece: lineAt.piece, rot: lineAt.rot, x: lineAt.cells[0]!.x, y: lineAt.cells[0]!.y } : null));
   }

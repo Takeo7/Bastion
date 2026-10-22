@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { bastionFootprint, bastionLot, bastionStage, cellsOf, createMission, onBastionLot, pieceAt, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type ItemId, type PieceId, type TemplateId, type WeaponModId } from '@bastion/engine';
-import { drawPiece, pieceMap, type PieceArt } from '../game/basePieces';
+import { drawPiece, pieceMap, pieceWear, type PieceArt } from '../game/basePieces';
 import { EvacBus } from '../game/evacBus';
+import { fxShape } from '../game/fx';
 import { MapView } from '../game/mapView';
 import { dayMood, runMapJobs } from '../game/renderer';
 import { graphics } from '../settings';
@@ -10,6 +11,7 @@ import { WEAPON_PARTS, WEAPONS, type AtlasId, type PropId, type WeaponId, type W
 import { foundModel } from '../game/syntyFigures';
 import type { Gear } from '../game/figures';
 import { buildUnit, IDLE_POSE, isFigure, type UnitRig } from '../game/models';
+import { ClearingLife, type Camp } from './clearingLife';
 import { STOREY } from '../game/coords';
 import { atlasTexture, loadModel } from '../game/synty';
 import { tween } from '../game/tween';
@@ -113,6 +115,11 @@ export class ClearingArtView implements ClearingArt {
   private readonly skyDome = new Sky('country');
   private postRigs = new Map<string, UnitRig>();
   private postsKey = '';
+  /** The soldiers out about the clearing while the Asentamiento is open (playtest 22/10 #1: clearingLife.ts). */
+  private readonly life = new ClearingLife();
+  /** The fires lit (basePieces.ts's fire pits are cold stones): a few licks of flame over each. */
+  private readonly flames = new CampFlames();
+  private lifeEntries: LineupEntry[] = [];
 
   constructor(snow = false) {
     this.snow = snow;
@@ -134,7 +141,38 @@ export class ClearingArtView implements ClearingArt {
     this.sky.intensity = m.skyIntensity;
     this.fill.color.set(m.fill);
     this.fill.intensity = m.fillIntensity;
-    this.group.add(this.map.group, this.bus.root, this.showcase, this.armoryCorner, this.lineup, this.posts, this.sun, this.sun.target, this.sky, this.fill, this.fill.target);
+    this.group.add(this.map.group, this.bus.root, this.showcase, this.armoryCorner, this.lineup, this.posts, this.life.group, this.flames.group, this.sun, this.sun.target, this.sky, this.fill, this.fill.target);
+  }
+
+  /** The soldiers out about the clearing at their ease (the Asentamiento's; an empty list clears them). */
+  setLife(entries: LineupEntry[]): void {
+    this.lifeEntries = entries;
+    this.relife();
+  }
+
+  /** Those about the clearing but the squad standing by La Lata (the same soldier was in both). */
+  private relife(): void {
+    const inRow = new Set(this.lineupEntries.map((e) => e?.seed).filter((s) => s));
+    this.life.set(this.lifeEntries.filter((e) => !e.seed || !inRow.has(e.seed)));
+    this.warm = Math.max(this.warm, 4);
+  }
+
+  /** What is being placed on the clearing (its tiles; null nothing): those about it walk off it. */
+  keepClear(cells: { x: number; y: number }[] | null): void {
+    this.life.keepClear(cells);
+  }
+
+  /** Whether those about the clearing keep off (x, z): La Lata with a step round it, the Armería's corner, Soldados' place. */
+  private lifeTaken(x: number, z: number): boolean {
+    const root = this.bus.root;
+    if (root.visible && !this.away) {
+      const dx = x - root.position.x;
+      const dz = z - root.position.z;
+      const along = dx * Math.sin(root.rotation.y) + dz * Math.cos(root.rotation.y);
+      const across = dx * Math.cos(root.rotation.y) - dz * Math.sin(root.rotation.y);
+      if (Math.abs(along) < this.bus.length / 2 + 1 && Math.abs(across) < this.bus.width / 2 + 1) return true;
+    }
+    return Math.hypot(x - this.armoryAt.x, z - this.armoryAt.z) < 2 || Math.hypot(x - this.soldierAt.x, z - this.soldierAt.z) < 1.5;
   }
 
   /** The sky and the haze of the battle on `scene` (the set's): its lights are this group's; the mountains round the valley. */
@@ -167,6 +205,68 @@ export class ClearingArtView implements ClearingArt {
     this.place = null;
     this.campPlaces(base);
     this.relineup();
+    this.life.setBase(base, (x, z) => this.lifeTaken(x, z));
+    const camp = () => {
+      const c = this.campOf(s);
+      this.life.setCamp(c);
+      this.flames.set(c.fires);
+    };
+    camp();
+    // Again once its props are in: what stands about the fires is measured by their models.
+    void syntyPropsLoaded().then(() => {
+      if (this.base === base) camp();
+    });
+  }
+
+  /**
+   * The clearing's camp for those about it (clearingLife.ts Camp): the fires and camp chairs basePieces.ts draws
+   * (its pieces drawn again, only noted: where each prop stands), and places along La Lata's long sides to lean at,
+   * off the squad's row.
+   */
+  private campOf(s: GameState): Camp {
+    const camp: Camp = { fires: [], seats: [], things: [], walls: [] };
+    const map = pieceMap(s);
+    if (map) {
+      const at = new THREE.Vector3();
+      const turn = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+      const yaw = new THREE.Euler();
+      const art: PieceArt = {
+        put(id, m) {
+          m.decompose(at, turn, scale);
+          if (id === 'bFirePit') camp.fires.push({ x: at.x, z: at.z });
+          else if (id === 'bCampChair') camp.seats.push({ x: at.x, z: at.z, yaw: yaw.setFromQuaternion(turn, 'YXZ').y });
+          else {
+            const box = propBox(id);
+            if (!box.isEmpty()) camp.things.push({ inverse: m.clone().invert(), min: box.min, max: box.max });
+          }
+        },
+        top: (id) => propBox(id).max.y || 0.3,
+        size: (id) => (propBox(id).isEmpty() ? new THREE.Vector3(1, 1, 1) : propBox(id).getSize(new THREE.Vector3())),
+      };
+      for (const spot of map.spots) drawPiece(s, map, spot, pieceWear(s, spot), art);
+    }
+    // La Lata's long sides, a shoulder to it, a quarter of its length from its middle either way.
+    const root = this.bus.root;
+    if (root.visible && !this.away) {
+      const dir = { x: Math.sin(root.rotation.y), z: Math.cos(root.rotation.y) };
+      const across = { x: dir.z, z: -dir.x };
+      const row = this.place?.spots ?? [];
+      for (const side of [1, -1] as const) {
+        for (const along of LEAN_ALONG) {
+          const k = along * this.bus.length;
+          const out = side * (this.bus.width / 2 + LEAN_OFF);
+          const p = { x: root.position.x + dir.x * k + across.x * out, z: root.position.z + dir.z * k + across.z * out };
+          if (row.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.4)) continue;
+          // Facing along it with it on the left (side 1, `across` to its left) or the right.
+          const face = Math.atan2(dir.x, dir.z) + (along > 0 ? 0 : Math.PI);
+          const left = { x: Math.cos(face), z: -Math.sin(face) };
+          const wallSide = left.x * across.x * side + left.z * across.z * side < 0 ? 1 : -1;
+          camp.walls.push({ ...p, yaw: face, side: wallSide });
+        }
+      }
+    }
+    return camp;
   }
 
   /**
@@ -595,6 +695,7 @@ export class ClearingArtView implements ClearingArt {
     if (key === this.lineupKey) return;
     this.lineupKey = key;
     this.lineupEntries = entries;
+    if (this.lifeEntries.length) this.relife();
     if (mirror !== this.mirror || halves !== this.halves) this.place = null;
     this.mirror = mirror;
     this.halves = halves;
@@ -990,6 +1091,9 @@ export class ClearingArtView implements ClearingArt {
       this.showcaseRig.root.rotation.y = this.showcaseYaw(time);
       if (isFigure(this.showcaseRig)) this.showcaseRig.applyPose(IDLE_POSE, time);
     }
+    // About the clearing at their ease, by the fire.
+    this.life.tick(dt, time);
+    this.flames.tick(time);
     // At their posts, at rest.
     for (const rig of this.postRigs.values()) if (isFigure(rig)) rig.applyPose({ ...IDLE_POSE, yaw: rig.root.userData.yaw, phase: rig.root.userData.phase }, time);
     // The squad breathes in line, the wounded slumped, and runs to board.
@@ -1003,6 +1107,64 @@ export class ClearingArtView implements ClearingArt {
     if (runMapJobs(gl) || this.warm > 0) gl.shadowMap.needsUpdate = true;
     if (this.warm > 0) this.warm--;
   }
+}
+
+/** How far from La Lata's side one leaning on it stands (its shoulder to the armour plates, tiles), and where along it (of its length from the middle: between the wheels). */
+const LEAN_OFF = 0.46;
+const LEAN_ALONG = [-0.1, 0.1];
+
+/** A fire's flames: how many licks, how tall at most and how far out from its middle (tiles), their colours (yellower than fire looks: past white the tone mapping turns a saturated orange pink), and how bright (to bloom). */
+const FLAME_LICKS = 6;
+const FLAME_TALL = 0.42;
+const FLAME_OUT = 0.13;
+const FLAME_COLORS = [0xffb030, 0xffd050, 0xff9a20, 0xffe080];
+const FLAME_GLOW = 1.3;
+
+/** The fires lit: over each fire pit a few licks of flame, each flickering on its own, turning slowly; no light of their own (a light more is a shader more). */
+class CampFlames {
+  readonly group = new THREE.Group();
+  private licks: { mesh: THREE.Mesh; size: number; phase: number; rate: number }[] = [];
+  private key = '';
+  private readonly materials = FLAME_COLORS.map((c) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(FLAME_GLOW) }));
+
+  set(fires: { x: number; z: number }[]): void {
+    const key = fires.map((f) => `${f.x.toFixed(2)},${f.z.toFixed(2)}`).join(' ');
+    if (key === this.key) return;
+    this.key = key;
+    this.group.clear();
+    this.licks = [];
+    fires.forEach((f, n) => {
+      for (let k = 0; k < FLAME_LICKS; k++) {
+        const mesh = new THREE.Mesh(fxShape('flame'), this.materials[k % this.materials.length]!);
+        const a = (k / FLAME_LICKS) * Math.PI * 2 + n;
+        const out = k === 0 ? 0 : FLAME_OUT * (0.6 + 0.4 * ((k * 37) % 5) / 4);
+        mesh.position.set(f.x + Math.cos(a) * out, 0.08, f.z + Math.sin(a) * out);
+        this.group.add(mesh);
+        this.licks.push({ mesh, size: FLAME_TALL * (k === 0 ? 1 : 0.55 + 0.1 * (k % 3)), phase: k * 1.7 + n * 3.1, rate: 5 + (k % 4) * 1.3 });
+      }
+    });
+  }
+
+  tick(time: number): void {
+    // (The shape loads with the effects: a stand-in until then.)
+    const shape = this.licks.length ? fxShape('flame') : null;
+    for (const l of this.licks) {
+      if (l.mesh.geometry !== shape) l.mesh.geometry = shape!;
+      const t = time * l.rate + l.phase;
+      const flick = 0.75 + 0.25 * Math.sin(t) * Math.sin(t * 0.37 + 1.1);
+      const s = l.size * flick;
+      l.mesh.scale.set(s * 0.55, s, s * 0.55);
+      l.mesh.position.y = 0.08 + s * 0.38;
+      l.mesh.rotation.y = time * 0.6 + l.phase;
+    }
+  }
+}
+
+/** A prop's box in its own frame (empty while it loads). */
+function propBox(id: PropId): THREE.Box3 {
+  const out = new THREE.Box3();
+  for (const part of syntyProp(id) ?? []) out.union((part.geometry.boundingBox ?? (part.geometry.computeBoundingBox(), part.geometry.boundingBox!)).clone().applyMatrix4(part.matrix));
+  return out;
 }
 
 /** The clearing as a battlefield with nobody on it: the map its siege would be fought on (under snow in winter). */

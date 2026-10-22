@@ -96,6 +96,31 @@ El paquete Sword Combat de Synty, que ya tenemos, trae una estocada y un tajo a 
 
 En total son 56 archivos; los ★, 26. Cada uno tarda unos segundos en bajar.
 
+## Segunda tanda (22/10)
+
+Para la nota 1 del 22/10, la vida del Asentamiento: los soldados sentados y junto al fuego.
+
+- Lo que ya se ha hecho usa clips que ya tenemos. Para estar de pie (brazos cruzados, manos en la cintura, pensativo) y para hablar en parejas (señalar, asentir, encogerse de hombros) sirven los de Synty, «ANIMATION – Idles» y «Emotes and Taunts».
+- Para la nota 3 (pistola y fusil en reposo) tampoco hace falta nada: la pistola baja junto al muslo sale del final de «Pistol Aim», que ya está bajada.
+- Synty no tiene nada para sentarse ni para calentarse las manos, así que eso es lo que falta.
+
+Se bajan igual que la primera tanda: X Bot, sin piel, 30 fps, In Place si aparece, sin Mirror. Van a la misma carpeta, `assets-src/mixamo/`.
+
+| | Nombre en Mixamo | Cuál | Para qué |
+|---|---|---|---|
+| ★ | Sitting Idle | todas | Sentado en una silla o en un banco del claro, quieto |
+| ★ | Sitting Talking | | Sentado, hablando con otro |
+| ★ | Stand To Sit | | Sentarse (de pie a sentado) |
+| ★ | Sit To Stand | | Levantarse |
+| ★ | Warming Hands | | Calentarse las manos junto al fuego, de pie |
+| | Sitting | todas | Sentado en el suelo |
+| | Talking | todas | Hablar de pie, otra forma de las de Synty |
+| | Arguing | | Discutir, de pie |
+| | Crouch Idle | | En cuclillas junto al fuego |
+
+- Si «Warming Hands» no aparece, busca «warm» o «fire» y baja lo más parecido; con «Sitting» y «Crouch», lo mismo. Apunta qué fue.
+- Son unos 12 archivos; los ★, 5 o 6.
+
 ## Después
 
 Arte las convierte con `packages/client/tools/synty/convert.ts`, con ids explícitos, como las de Synty. El juego las pasa del esqueleto de Mixamo a los de Synty y Sidekick, medidas desde la T-Pose. Los archivos de Mixamo no se suben; los convertidos, sí, como los de Synty.

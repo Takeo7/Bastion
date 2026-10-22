@@ -35,8 +35,8 @@ import { boardIconStyle, boardIconSvg } from './boardIcons';
 //   bounces and its outline pulses once; the neighbours open.
 // - The wave: the cells near the pointer rise with the distance, face and icon
 //   together, and settle slowly when it leaves.
-// - Moving: dragging pans, the wheel zooms towards the pointer (a trackpad's
-//   pinch comes as the wheel), within limits; it opens with the whole tree framed.
+// - Still: the whole tree framed and centred, scaled to the view; no panning
+//   nor zoom (Arturo, 22/10 #2: «es estática»).
 // - Keyboard: the arrows go from cell to cell (and consult); holding Enter or
 //   Space unlocks. Reduced motion: no wave, no bounce.
 //
@@ -74,12 +74,10 @@ const OUTER = 424;
 const HALF = 440;
 
 const HOLD_MS = 1000;
-/** Pointer travel (px) that turns a press into a drag. */
-const DRAG_PX = 10;
 /**
  * How far from its cell's centre (board units) the pointer may stray while it
- * holds it: the cell and a margin round it. A finger pressing a trackpad
- * creeps a few px, and 6 px turned the hold into a drag (Arturo, 16/10 #36).
+ * holds it: the cell and a margin round it (a finger pressing a trackpad
+ * creeps a few px: Arturo, 16/10 #36).
  */
 const HOLD_REACH = SIZE * 1.15;
 /** The wave: how high a cell rises (board units), how far it reaches (in cells' radii). */
@@ -124,15 +122,8 @@ export class HexBoard {
   private hold: Hold = null;
   /** Red's rising tone while a cell is held (audio/ui.ts cellHold): stopped if it is let go. */
   private holdSound: (() => void) | null = null;
-  /** The camera: pan (px from the middle) and zoom (px per board unit). */
-  private px = 0;
-  private py = 0;
+  /** The board's scale (px per board unit): the whole tree in the view, framed again when the view changes size. */
   private z = 1;
-  private framed = false;
-  /** The view's size the board was last framed for; a new size frames it again until the player moves it. */
-  private framedFor = '';
-  private moved = false;
-  private drag: { id: number; x: number; y: number; px: number; py: number; moved: boolean } | null = null;
   /** The pointer over the board, in board units (null outside). */
   private pointer: { x: number; y: number } | null = null;
   private frame = 0;
@@ -315,50 +306,19 @@ export class HexBoard {
     return Math.min(w, hh) / (2 * HALF);
   }
 
-  /** The camera within its limits: from the whole tree to four times closer, the tree never out of the view. */
-  private clamp(): void {
-    const fit = this.fitZoom();
-    this.z = Math.min(fit * 4, Math.max(fit * 0.9, this.z));
-    const { w, h: hh } = this.size();
-    const mx = Math.max(0, OUTER * this.z - w * 0.3);
-    const my = Math.max(0, OUTER * this.z - hh * 0.3);
-    this.px = Math.min(mx, Math.max(-mx, this.px));
-    this.py = Math.min(my, Math.max(-my, this.py));
-  }
-
+  /** The whole tree, centred and fitted to the view (no pan, no zoom of the player's). */
   private apply(): void {
     const { w, h: hh } = this.size();
     if (!w || !hh) return;
-    const size = `${w}x${hh}`;
-    if (!this.framed || (size !== this.framedFor && !this.moved)) {
-      this.z = this.fitZoom();
-      this.px = this.py = 0;
-      this.framed = true;
-      this.framedFor = size;
-    }
-    this.clamp();
+    this.z = this.fitZoom();
     this.svg.setAttribute('viewBox', `0 0 ${w} ${hh}`);
-    this.cam.setAttribute('transform', `translate(${(w / 2 + this.px).toFixed(1)} ${(hh / 2 + this.py).toFixed(1)}) scale(${this.z.toFixed(4)})`);
-  }
-
-  /** Zooms by `k` keeping the board point under (sx, sy) (px in the view) where it is. */
-  private zoomAt(k: number, sx: number, sy: number): void {
-    this.moved = true;
-    const { w, h: hh } = this.size();
-    const bx = (sx - w / 2 - this.px) / this.z;
-    const by = (sy - hh / 2 - this.py) / this.z;
-    const fit = this.fitZoom();
-    const z = Math.min(fit * 4, Math.max(fit * 0.9, this.z * k));
-    this.px = sx - w / 2 - bx * z;
-    this.py = sy - hh / 2 - by * z;
-    this.z = z;
-    this.apply();
+    this.cam.setAttribute('transform', `translate(${(w / 2).toFixed(1)} ${(hh / 2).toFixed(1)}) scale(${this.z.toFixed(4)})`);
   }
 
   /** The view's px to board units. */
   private toBoard(sx: number, sy: number): { x: number; y: number } {
     const { w, h: hh } = this.size();
-    return { x: (sx - w / 2 - this.px) / this.z, y: (sy - hh / 2 - this.py) / this.z };
+    return { x: (sx - w / 2) / this.z, y: (sy - hh / 2) / this.z };
   }
 
   private local(e: { clientX: number; clientY: number }): { x: number; y: number } {
@@ -414,10 +374,9 @@ export class HexBoard {
       } catch {
         /* a pointer the browser no longer tracks: the press still counts */
       }
-      this.drag = { id: e.pointerId, x: at.x, y: at.y, px: this.px, py: this.py, moved: false };
       const id = this.cellAt(e.target);
       if (id) {
-        this.focus(id, false);
+        this.focus(id);
         this.startHold(id, e.pointerId, at.x, at.y);
       }
     });
@@ -427,29 +386,14 @@ export class HexBoard {
       // While a cell is held the wave stays as it is: nothing moves under the pointer.
       if (!holding) this.pointer = this.toBoard(at.x, at.y);
       // A hold lets go once the pointer is well off its cell, measured on the board (not by what the
-      // wave has moved under it); until then the press never becomes a drag.
+      // wave has moved under it).
       if (holding) {
         const p = this.toBoard(at.x, at.y);
         const c = this.cells.get(holding.id)!;
         if (Math.hypot(p.x - c.x, p.y - c.y) > HOLD_REACH) this.cancelHold();
       }
-      const drag = this.drag;
-      if (drag && drag.id === e.pointerId) {
-        if (!drag.moved && !this.hold && Math.hypot(at.x - drag.x, at.y - drag.y) > DRAG_PX) {
-          drag.moved = true;
-          // Dragging is moving the board, never buying.
-          this.cancelHold();
-          v.classList.add('dragging');
-        }
-        if (drag.moved) {
-          this.moved = true;
-          this.px = drag.px + (at.x - drag.x);
-          this.py = drag.py + (at.y - drag.y);
-          this.apply();
-        }
-      }
       // Hovering consults (not while holding).
-      if (e.pointerType === 'mouse' && !this.drag?.moved && !this.hold) {
+      if (e.pointerType === 'mouse' && !this.hold) {
         const id = this.cellAt(e.target);
         if (id && id !== this.hovered && this.readable(id)) {
           uiSound('cellHover');
@@ -461,10 +405,6 @@ export class HexBoard {
     });
     const end = (e: PointerEvent) => {
       if (this.hold?.pointer === e.pointerId) this.cancelHold();
-      if (this.drag?.id === e.pointerId) {
-        this.drag = null;
-        v.classList.remove('dragging');
-      }
       if (e.pointerType !== 'mouse') {
         this.pointer = null;
         this.wave();
@@ -478,17 +418,6 @@ export class HexBoard {
         this.wave();
       }
     });
-    v.addEventListener(
-      'wheel',
-      (e) => {
-        e.preventDefault();
-        const at = this.local(e);
-        this.zoomAt(Math.exp(-e.deltaY * 0.0015), at.x, at.y);
-        this.pointer = this.toBoard(at.x, at.y);
-        this.wave();
-      },
-      { passive: false },
-    );
     // No menu or native drag to cut a press short.
     v.addEventListener('contextmenu', (e) => e.preventDefault());
     v.addEventListener('dragstart', (e) => e.preventDefault());
@@ -554,11 +483,11 @@ export class HexBoard {
         best = n;
       }
     }
-    if (best) this.focus(best, true);
+    if (best) this.focus(best);
   }
 
-  /** Moves the keyboard's focus to `id` (the roving tab stop), consulting it; `show`: the camera keeps it in view. */
-  private focus(id: CellId, show: boolean): void {
+  /** Moves the keyboard's focus to `id` (the roving tab stop), consulting it. The whole tree is always in view. */
+  private focus(id: CellId): void {
     const prev = this.cells.get(this.focused);
     prev?.g.setAttribute('tabindex', '-1');
     this.focused = id;
@@ -566,16 +495,5 @@ export class HexBoard {
     v.g.setAttribute('tabindex', '0');
     v.g.focus({ preventScroll: true });
     this.showCard(id);
-    if (!show) return;
-    // Into view if the keyboard has walked it off the edge.
-    const { w, h: hh } = this.size();
-    const sx = w / 2 + this.px + v.x * this.z;
-    const sy = hh / 2 + this.py + v.y * this.z;
-    const m = SIZE * this.z * 2;
-    if (sx < m) this.px += m - sx;
-    if (sx > w - m) this.px -= sx - (w - m);
-    if (sy < m) this.py += m - sy;
-    if (sy > hh - m) this.py -= sy - (hh - m);
-    this.apply();
   }
 }

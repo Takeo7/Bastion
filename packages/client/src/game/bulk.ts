@@ -35,6 +35,12 @@ export interface Bulk {
   parts: Girth[];
   upper: [number, number];
   fore: [number, number];
+  /** How far out the sleeves go at most round their bones (left, right), for a gun to keep clear of (22/10: through them). */
+  upperOut: [number, number];
+  foreOut: [number, number];
+  /** And so bin by bin along them (ARM_BINS, from the joint to the next: a coat's elbow bulges out twice as far). */
+  upperAlong: [number[], number[]];
+  foreAlong: [number[], number[]];
   hand: number;
   /** How far ahead the torso goes (its foremost point at rest, model space z, between the hips and the chest): a belly, a vest's pouches. */
   front: number;
@@ -134,6 +140,25 @@ function fromSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): numb
   return p.distanceTo(a.clone().addScaledVector(ab, t));
 }
 
+/** How many bins an arm's part is measured in along it (Bulk.upperAlong). */
+export const ARM_BINS = 5;
+
+/** Where along a part from a to b a point is (0 to 1), and how far from its line; null off its ends. */
+function alongSegment(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): { t: number; r: number } | null {
+  const ab = b.clone().sub(a);
+  const t = p.clone().sub(a).dot(ab) / ab.lengthSq();
+  if (t < 0 || t > 1) return null;
+  return { t, r: p.distanceTo(a.clone().addScaledVector(ab, t)) };
+}
+
+/** The radii of an arm's part bin by bin along it, at most (97 %), each at least the whole part's. */
+function radiiAlong(list: { t: number; r: number }[], least: number): number[] {
+  return Array.from({ length: ARM_BINS }, (_, k) => {
+    const bin = list.filter((q) => Math.min(ARM_BINS - 1, Math.floor(q.t * ARM_BINS)) === k).map((q) => q.r);
+    return bin.length >= 6 ? Math.max(least, share(bin, 0.97, least)) : least;
+  });
+}
+
 /** A value most of a list stays under (its k-th part, sorted). */
 function share(list: number[], k: number, fallback: number): number {
   if (!list.length) return fallback;
@@ -151,6 +176,8 @@ export function bulkOf(model: THREE.Object3D, p: THREE.Vector3[], bones: BulkBon
   const pieces = new Map<number, THREE.Vector3[]>();
   const upper: [number[], number[]] = [[], []];
   const fore: [number[], number[]] = [[], []];
+  const upperAt: [{ t: number; r: number }[], { t: number; r: number }[]] = [[], []];
+  const foreAt: [{ t: number; r: number }[], { t: number; r: number }[]] = [[], []];
   let found = false;
   let front = -Infinity;
   model.traverse((o) => {
@@ -179,9 +206,13 @@ export function bulkOf(model: THREE.Object3D, p: THREE.Vector3[], bones: BulkBon
       const side = bones.shoulders.indexOf(best);
       const u = side >= 0 ? fromSegment(v, p[best]!, p[bones.elbows[side]!]!) : null;
       if (u !== null) upper[side]!.push(u);
+      const ua = side >= 0 ? alongSegment(v, p[best]!, p[bones.elbows[side]!]!) : null;
+      if (ua) upperAt[side]!.push(ua);
       const elbow = bones.elbows.indexOf(best);
       const f = elbow >= 0 ? fromSegment(v, p[best]!, p[bones.hands[elbow]!]!) : null;
       if (f !== null) fore[elbow]!.push(f);
+      const fa = elbow >= 0 ? alongSegment(v, p[best]!, p[bones.hands[elbow]!]!) : null;
+      if (fa) foreAt[elbow]!.push(fa);
       if (torsoBones.includes(best) && torsoW >= TORSO_PURE && v.y > p[bones.hips]!.y && v.y < p[bones.spine[bones.spine.length - 1]!]!.y) front = Math.max(front, v.z);
       if ((torsoBones.includes(best) && torsoW >= TORSO_PURE) || bones.thighs.includes(best) || bones.shins.includes(best)) {
         let list = pieces.get(best);
@@ -210,6 +241,10 @@ export function bulkOf(model: THREE.Object3D, p: THREE.Vector3[], bones: BulkBon
     parts,
     upper: [share(upper[0], 0.7, 0.045), share(upper[1], 0.7, 0.045)],
     fore: [share(fore[0], 0.7, 0.04), share(fore[1], 0.7, 0.04)],
+    upperOut: [share(upper[0], 0.97, 0.055), share(upper[1], 0.97, 0.055)],
+    foreOut: [share(fore[0], 0.97, 0.05), share(fore[1], 0.97, 0.05)],
+    upperAlong: [radiiAlong(upperAt[0], share(upper[0], 0.97, 0.055)), radiiAlong(upperAt[1], share(upper[1], 0.97, 0.055))],
+    foreAlong: [radiiAlong(foreAt[0], share(fore[0], 0.97, 0.05)), radiiAlong(foreAt[1], share(fore[1], 0.97, 0.05))],
     hand: 0.03,
     front: Number.isFinite(front) ? front : p[bones.hips]!.z + 0.12,
   };

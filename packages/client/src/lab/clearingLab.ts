@@ -149,6 +149,28 @@ look(c, c, 34);
     void stage.show('claro', art.lineupShot(), true);
   },
   /**
+   * The Asentamiento with life (22/10 #1, clearingLife.ts): `n` soldiers of both players out about the clearing, seen
+   * from above as its screen has it (`distance`, `yaw` as look's); `colocar(x, y, w, h)` keeps a piece's tiles clear.
+   */
+  vida(n = 6, distance = 22, yaw = 0) {
+    const templates = ['assault', 'sharpshooter', 'specialist', 'grenadier', 'rookie'] as const;
+    setRoster(Array.from({ length: n }, (_, i) => ({ id: `vida${i}`, appearance: defaultAppearance((i % 2) as 0 | 1, i % 2 ? '#4fb0e8' : '#e8a33a', i % 3 ? 'm' : 'f') })));
+    art.setLife(
+      Array.from({ length: n }, (_, i) => ({
+        template: templates[i % templates.length]!,
+        color: i % 2 ? '#4fb0e8' : '#e8a33a',
+        appearance: defaultAppearance((i % 2) as 0 | 1, i % 2 ? '#4fb0e8' : '#e8a33a', i % 3 ? 'm' : 'f'),
+        seed: `vida${i}`,
+      })),
+    );
+    look(c, c, distance, yaw);
+  },
+  colocar(x: number, y: number, w = 1, h = 1) {
+    const cells = [];
+    for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) cells.push({ x: x + dx, y: y + dy });
+    art.keepClear(cells.length ? cells : null);
+  },
+  /**
    * The wardrobe's outfits in a row (wardrobe.ts OUTFIT_CHOICES, from `from`), each on a soldier of `sex` ('f', 'm',
    * or by turns: '') with `head` and `build`, in one player's colour.
    */

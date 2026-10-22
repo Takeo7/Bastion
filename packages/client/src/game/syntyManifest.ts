@@ -13,7 +13,7 @@ import type { BuildId, HeadId, TemplateId } from '@bastion/engine';
 /** Metres to game units: a tile is 1.5 m, so a 1.8 m survivor stands 1.2 tall. */
 export const SYNTY_SCALE = 1 / 1.5;
 
-export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza' | 'sidekickSurvivors' | 'sidekickZombies' | 'sidekickOutlaws' | 'sidekickCivilians' | 'sidekickPolice' | 'sidekickStarter' | 'natureGeneric' | 'mixamo';
+export type PackId = 'apocalypse' | 'cityZombies' | 'bossZombies' | 'town' | 'farm' | 'nature' | 'city' | 'baseLocomotion' | 'alpine' | 'snow' | 'idles' | 'emotes' | 'office' | 'particleFx' | 'construction' | 'military' | 'icons' | 'bowCombat' | 'swordCombat' | 'goblinLocomotion' | 'woodland' | 'industrial' | 'plaza' | 'sidekickSurvivors' | 'sidekickZombies' | 'sidekickOutlaws' | 'sidekickCivilians' | 'sidekickPolice' | 'sidekickStarter' | 'natureGeneric' | 'mixamo';
 
 /**
  * Where each pack lives under assets-src/synty/. A pack that only comes as a
@@ -32,6 +32,8 @@ export const PACKS: Record<PackId, { dir: string; materialList?: string; unitypa
   // «ANIMATION – Base Locomotion» and «ANIMATION – Idles»: clips only, no atlas.
   baseLocomotion: { dir: 'ANIMATION_BaseLocomotion_SourceFiles' },
   idles: { dir: 'ANIMATION_Idles_SourceFiles' },
+  // «ANIMATION – Emotes and Taunts»: a shrug and a calming hand for those talking on the clearing (22/10 #1).
+  emotes: { dir: 'ANIMATION_Emotes_SourceFiles' },
   // «ANIMATION – Bow Combat» and «ANIMATION – Sword Combat»: their deaths and hits (DEATHS), clips only.
   bowCombat: { dir: 'ANIMATION_BowCombat_SourceFiles' },
   swordCombat: { dir: 'ANIMATION_SwordCombat_SourceFiles' },
@@ -482,6 +484,7 @@ export const DEAD_TEMPLATES: ReadonlySet<TemplateId> = new Set<TemplateId>(['zom
  */
 const loco = (path: string) => ({ pack: 'baseLocomotion' as PackId, fbx: `Animations/Polygon/${path}` });
 const idle = (path: string) => ({ pack: 'idles' as PackId, fbx: `Animations/Polygon/${path}` });
+const emote = (path: string) => ({ pack: 'emotes' as PackId, fbx: `Animations/Polygon/${path}` });
 const bow = (path: string) => ({ pack: 'bowCombat' as PackId, fbx: `Animations/Polygon/${path}` });
 const sword = (path: string) => ({ pack: 'swordCombat' as PackId, fbx: `Animations/Polygon/${path}` });
 const goblin = (path: string) => ({ pack: 'goblinLocomotion' as PackId, fbx: `Animations/Polygon/Neutral/Locomotion/${path}` });
@@ -528,6 +531,100 @@ export const ANIMATIONS = {
   aggressiveFemn: idle('Feminine/Posture/Stances/A_POLY_IDL_Posture_Aggressive_Loop_Femn'),
   slumpedMasc: idle('Masculine/Posture/Stances/A_POLY_IDL_Posture_Slumped_Loop_Masc'),
   slumpedFemn: idle('Feminine/Posture/Stances/A_POLY_IDL_Posture_Slumped_Loop_Femn'),
+  // The clearing's soldiers at their ease (22/10 #1, clearingLife.ts): arms folded, hands on hips, a hand at the chin.
+  armsFoldedMasc: idle('Masculine/ArmsFolded/Stances/A_POLY_IDL_ArmsFolded_Casual_Loop_Masc'),
+  armsFoldedFemn: idle('Feminine/ArmsFolded/Stances/A_POLY_IDL_ArmsFolded_Casual_Loop_Femn'),
+  handsOnHipsMasc: idle('Masculine/HandsOnHips/Stances/A_POLY_IDL_HandsOnHips_Base_Loop_Masc'),
+  handsOnHipsFemn: idle('Feminine/HandsOnHips/Stances/A_POLY_IDL_HandsOnHips_Base_Loop_Femn'),
+  thoughtfulMasc: idle('Masculine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_R_Loop_Masc'),
+  thoughtfulFemn: idle('Feminine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_R_Loop_Femn'),
+  // And what they do talking (GESTURES): point ahead, nod, scratch the chin, shrug, calm the other down.
+  pointMasc: idle('Masculine/PointHand/Actions/A_POLY_IDL_PointHand_Index_F_Small_Masc'),
+  pointFemn: idle('Feminine/PointHand/Actions/A_POLY_IDL_PointHand_Index_F_Small_Femn'),
+  nodMasc: idle('Masculine/HeadNod/Actions/A_POLY_IDL_HeadNod_Small_Masc'),
+  nodFemn: idle('Feminine/HeadNod/Actions/A_POLY_IDL_HeadNod_Small_Femn'),
+  chinMasc: idle('Masculine/Thoughtful/Actions/A_POLY_IDL_Thoughtful_R_ChinScratch_Masc'),
+  chinFemn: idle('Feminine/Thoughtful/Actions/A_POLY_IDL_Thoughtful_R_ChinScratch_Femn'),
+  shrugMasc: emote('Masculine/Sad/A_POLY_EMOT_Sad_Shrug_Masc'),
+  shrugFemn: emote('Feminine/Sad/A_POLY_EMOT_Sad_Shrug_Femn'),
+  calmMasc: emote('Masculine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Masc'),
+  calmFemn: emote('Feminine/Reproach/A_POLY_EMOT_Reproach_CalmDown_Femn'),
+  // The camp (22/10 #1, Gameplay): leant on a wall, La Lata or a post, the back to it or a shoulder.
+  leanBackMasc: idle('Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFolded_Loop_Masc'),
+  leanBackFemn: idle('Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFolded_Loop_Femn'),
+  leanBackLegMasc: idle('Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFoldedLegUp_Loop_Masc'),
+  leanBackLegFemn: idle('Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_B_ArmsFoldedLegUp_Loop_Femn'),
+  leanBackBaseMasc: idle('Masculine/Lean/Stances/Base/A_POLY_IDL_Lean_B_Base_Loop_Masc'),
+  leanBackBaseFemn: idle('Feminine/Lean/Stances/Base/A_POLY_IDL_Lean_B_Base_Loop_Femn'),
+  leanLeftMasc: idle('Masculine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Loop_Masc'),
+  leanLeftFemn: idle('Feminine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Loop_Femn'),
+  leanRightMasc: idle('Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Loop_Masc'),
+  leanRightFemn: idle('Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Loop_Femn'),
+  // Into those two and out of them (CAMP_MOVES).
+  leanLeftInMasc: idle('Masculine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Enter_Masc'),
+  leanLeftInFemn: idle('Feminine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Enter_Femn'),
+  leanLeftOutMasc: idle('Masculine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Exit_Masc'),
+  leanLeftOutFemn: idle('Feminine/Lean/Stances/HandOnHip/A_POLY_IDL_Lean_L_HandOnHip_Exit_Femn'),
+  leanRightInMasc: idle('Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Enter_Masc'),
+  leanRightInFemn: idle('Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Enter_Femn'),
+  leanRightOutMasc: idle('Masculine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Exit_Masc'),
+  leanRightOutFemn: idle('Feminine/Lean/Stances/ArmsFolded/A_POLY_IDL_Lean_R_ArmsFolded_Exit_Femn'),
+  // And what one standing about does now and then there (CAMP_VARIATIONS): a stretch, a yawn, bored, the time, the
+  // hands and boots looked at for the cold, a shake of the head, a look up at the sky.
+  stretchArmsMasc: idle('Masculine/Stretch/Actions/A_POLY_IDL_Stretch_Arms_Masc'),
+  stretchArmsFemn: idle('Feminine/Stretch/Actions/A_POLY_IDL_Stretch_Arms_Femn'),
+  stretchShouldersMasc: idle('Masculine/Stretch/Actions/A_POLY_IDL_Stretch_Shoulders_Masc'),
+  stretchShouldersFemn: idle('Feminine/Stretch/Actions/A_POLY_IDL_Stretch_Shoulders_Femn'),
+  yawnMasc: idle('Masculine/Yawn/Actions/A_POLY_IDL_Yawn_Masc'),
+  yawnFemn: idle('Feminine/Yawn/Actions/A_POLY_IDL_Yawn_Femn'),
+  footTapMasc: idle('Masculine/Bored/Actions/A_POLY_IDL_Bored_FootTap_Masc'),
+  footTapFemn: idle('Feminine/Bored/Actions/A_POLY_IDL_Bored_FootTap_Femn'),
+  kickGroundMasc: idle('Masculine/Bored/Actions/A_POLY_IDL_Bored_KickGround_Masc'),
+  kickGroundFemn: idle('Feminine/Bored/Actions/A_POLY_IDL_Bored_KickGround_Femn'),
+  swingArmsMasc: idle('Masculine/Bored/Actions/A_POLY_IDL_Bored_SwingArms_Masc'),
+  swingArmsFemn: idle('Feminine/Bored/Actions/A_POLY_IDL_Bored_SwingArms_Femn'),
+  checkWatchMasc: idle('Masculine/CheckWatch/Actions/A_POLY_IDL_CheckWatch_Masc'),
+  checkWatchFemn: idle('Feminine/CheckWatch/Actions/A_POLY_IDL_CheckWatch_Femn'),
+  inspectHandsMasc: idle('Masculine/Inspect/Actions/A_POLY_IDL_Inspect_Hands_Masc'),
+  inspectHandsFemn: idle('Feminine/Inspect/Actions/A_POLY_IDL_Inspect_Hands_Femn'),
+  inspectFeetMasc: idle('Masculine/Inspect/Actions/A_POLY_IDL_Inspect_Feet_Masc'),
+  inspectFeetFemn: idle('Feminine/Inspect/Actions/A_POLY_IDL_Inspect_Feet_Femn'),
+  headShakeMasc: idle('Masculine/HeadShake/Actions/A_POLY_IDL_HeadShake_Small_Masc'),
+  headShakeFemn: idle('Feminine/HeadShake/Actions/A_POLY_IDL_HeadShake_Small_Femn'),
+  lookUpMasc: idle('Masculine/Look/Actions/A_POLY_IDL_Look_Up_Masc'),
+  lookUpFemn: idle('Feminine/Look/Actions/A_POLY_IDL_Look_Up_Femn'),
+  // Drinking from a metal cup, eating a ration bar (CAMP_ITEMS in the hand): bringing it up, holding it, a sip or a bite,
+  // putting it away.
+  drinkInMasc: idle('Masculine/Drink/Stances/A_POLY_IDL_Drink_Hold_Enter_Masc'),
+  drinkInFemn: idle('Feminine/Drink/Stances/A_POLY_IDL_Drink_Hold_Enter_Femn'),
+  drinkMasc: idle('Masculine/Drink/Stances/A_POLY_IDL_Drink_Hold_Loop_Masc'),
+  drinkFemn: idle('Feminine/Drink/Stances/A_POLY_IDL_Drink_Hold_Loop_Femn'),
+  drinkOutMasc: idle('Masculine/Drink/Stances/A_POLY_IDL_Drink_Hold_Exit_Masc'),
+  drinkOutFemn: idle('Feminine/Drink/Stances/A_POLY_IDL_Drink_Hold_Exit_Femn'),
+  sipMasc: idle('Masculine/Drink/Actions/A_POLY_IDL_Drink_Sip_Masc'),
+  sipFemn: idle('Feminine/Drink/Actions/A_POLY_IDL_Drink_Sip_Femn'),
+  eatInMasc: idle('Masculine/Eat/Stances/A_POLY_IDL_Eat_Hold_Enter_Masc'),
+  eatInFemn: idle('Feminine/Eat/Stances/A_POLY_IDL_Eat_Hold_Enter_Femn'),
+  eatMasc: idle('Masculine/Eat/Stances/A_POLY_IDL_Eat_Hold_Loop_Masc'),
+  eatFemn: idle('Feminine/Eat/Stances/A_POLY_IDL_Eat_Hold_Loop_Femn'),
+  eatOutMasc: idle('Masculine/Eat/Stances/A_POLY_IDL_Eat_Hold_Exit_Masc'),
+  eatOutFemn: idle('Feminine/Eat/Stances/A_POLY_IDL_Eat_Hold_Exit_Femn'),
+  biteMasc: idle('Masculine/Eat/Actions/A_POLY_IDL_Eat_Small_Masc'),
+  biteFemn: idle('Feminine/Eat/Actions/A_POLY_IDL_Eat_Small_Femn'),
+  // Mixamo's (docs/MIXAMO.md, the second batch: Synty has none): sat in a camp chair or on the ground by the fire,
+  // talking sat, sitting down and getting up; knelt warming the hands at it; squatting.
+  sitChair: mixamo('Sitting Idle 3'),
+  sitChairStill: mixamo('Sitting Idle 5'),
+  sitBreathe: mixamo('Sitting Idle'),
+  sitFloor: mixamo('Sitting Idle 2'),
+  sitReclined: mixamo('Sitting Idle 4'),
+  sitCrossed: mixamo('Sitting'),
+  sitTalk: mixamo('Sitting Talking'),
+  sitTalk2: mixamo('Sitting Talking 2'),
+  standToSit: mixamo('Stand To Sit'),
+  sitToStand: mixamo('Sit To Stand'),
+  warmHands: mixamo('Kneel'),
+  squat: mixamo('Crouch Idle'),
   // «ANIMATION – Bow Combat» and «– Sword Combat»: how a unit dies (DEATHS).
   deathHeadFMasc: bow('Masculine/Death/A_POLY_BOW_Death_Head_F_Masc'),
   deathHeadLMasc: bow('Masculine/Death/A_POLY_BOW_Death_Head_L_Masc'),
@@ -573,8 +670,9 @@ export const ANIMATIONS = {
   rifleTurnR180: mixamo('Rifle Turn 3'),
   rifleKneel: mixamo('Rifle Kneel Idle'),
   rifleKneelAim: mixamo('Idle Crouching Aiming'),
-  // The pistol in both hands: ready, aimed, fired.
-  pistolReady: mixamo('Pistol Idle 3'),
+  // The pistol: at rest in one hand by the thigh (the end of «Pistol Aim To Holster Idle», PISTOL_REST: Arturo, 22/10 #3,
+  // not both arms out at the ready while nobody aims), aimed in both, fired.
+  pistolRest: mixamo('Pistol Aim'),
   pistolAim: mixamo('Pistol Idle 2'),
   pistolFire: mixamo('Shooting'),
   // A grenade tossed with the rifle in the other hand; a stone picked up and thrown; mirrored, with the left, the gun
@@ -613,14 +711,93 @@ export const IDLE_VARIATIONS: Record<'masc' | 'femn', AnimationId[]> = {
  * the dead sway as if drunk, the living enemies stand squared up for a fight,
  * a badly wounded soldier slumps.
  */
-export type Stance = 'drunk' | 'aggressive' | 'slumped';
+export type Stance = 'drunk' | 'aggressive' | 'slumped' | 'armsFolded' | 'handsOnHips' | 'thoughtful';
 
-export const STANCE_ORDER: readonly Stance[] = ['drunk', 'aggressive', 'slumped'];
+export const STANCE_ORDER: readonly Stance[] = ['drunk', 'aggressive', 'slumped', 'armsFolded', 'handsOnHips', 'thoughtful'];
 
 export const STANCES: Record<'masc' | 'femn', Record<Stance, AnimationId>> = {
-  masc: { drunk: 'drunkMasc', aggressive: 'aggressiveMasc', slumped: 'slumpedMasc' },
-  femn: { drunk: 'drunkFemn', aggressive: 'aggressiveFemn', slumped: 'slumpedFemn' },
+  masc: { drunk: 'drunkMasc', aggressive: 'aggressiveMasc', slumped: 'slumpedMasc', armsFolded: 'armsFoldedMasc', handsOnHips: 'handsOnHipsMasc', thoughtful: 'thoughtfulMasc' },
+  femn: { drunk: 'drunkFemn', aggressive: 'aggressiveFemn', slumped: 'slumpedFemn', armsFolded: 'armsFoldedFemn', handsOnHips: 'handsOnHipsFemn', thoughtful: 'thoughtfulFemn' },
 };
+
+/** What a unit does once when asked (AnimDriver gesture: two talking on the clearing, clearingLife.ts), over its stance. */
+export type Gesture = 'point' | 'nod' | 'chin' | 'shrug' | 'calm';
+
+export const GESTURE_ORDER: readonly Gesture[] = ['point', 'nod', 'chin', 'shrug', 'calm'];
+
+export const GESTURES: Record<'masc' | 'femn', Record<Gesture, AnimationId>> = {
+  masc: { point: 'pointMasc', nod: 'nodMasc', chin: 'chinMasc', shrug: 'shrugMasc', calm: 'calmMasc' },
+  femn: { point: 'pointFemn', nod: 'nodFemn', chin: 'chinFemn', shrug: 'shrugFemn', calm: 'calmFemn' },
+};
+
+/**
+ * The camp's (the Asentamiento's life, 22/10 #1: clearingLife.ts), loaded only there (syntyAnims campClips): what one
+ * stays in instead of the idle, leant on something, sat or knelt by the fire; what one standing about there does now
+ * and then; sitting down and getting up.
+ */
+export type CampLoop = 'leanBack' | 'leanBackLeg' | 'leanBackBase' | 'leanLeft' | 'leanRight' | 'sitChair' | 'sitChairStill' | 'sitBreathe' | 'sitFloor' | 'sitReclined' | 'sitCrossed' | 'sitTalk' | 'sitTalk2' | 'warmHands' | 'squat' | 'drink' | 'eat';
+
+const campLoops = (b: 'Masc' | 'Femn'): Record<CampLoop, AnimationId> => ({
+  leanBack: `leanBack${b}`,
+  leanBackLeg: `leanBackLeg${b}`,
+  leanBackBase: `leanBackBase${b}`,
+  leanLeft: `leanLeft${b}`,
+  leanRight: `leanRight${b}`,
+  sitChair: 'sitChair',
+  sitChairStill: 'sitChairStill',
+  sitBreathe: 'sitBreathe',
+  sitFloor: 'sitFloor',
+  sitReclined: 'sitReclined',
+  sitCrossed: 'sitCrossed',
+  sitTalk: 'sitTalk',
+  sitTalk2: 'sitTalk2',
+  warmHands: 'warmHands',
+  squat: 'squat',
+  drink: `drink${b}`,
+  eat: `eat${b}`,
+});
+
+export const CAMP_LOOPS: Record<'masc' | 'femn', Record<CampLoop, AnimationId>> = { masc: campLoops('Masc'), femn: campLoops('Femn') };
+
+const campOnce = (b: 'Masc' | 'Femn'): AnimationId[] =>
+  (['stretchArms', 'stretchShoulders', 'yawn', 'footTap', 'kickGround', 'swingArms', 'checkWatch', 'inspectHands', 'inspectFeet', 'headShake', 'lookUp'] as const).map((n) => `${n}${b}` as AnimationId);
+
+export const CAMP_VARIATIONS: Record<'masc' | 'femn', AnimationId[]> = { masc: campOnce('Masc'), femn: campOnce('Femn') };
+
+/**
+ * Clips that are more than one thing (Mixamo's kneeling by a fire kneels down, warms the hands, gets up again and
+ * stands): the seconds of each part the camp plays, the one stayed in (played back and forth: its ends meet) and those
+ * into it and out of it (`${id}In`, `${id}Out` among the camp's clips: syntyAnims campClips).
+ */
+export const CAMP_PARTS: Partial<Record<AnimationId, { loop: [number, number]; into: [number, number]; out: [number, number] }>> = {
+  warmHands: { loop: [2.9, 6.3], into: [1.5, 2.9], out: [6.3, 7.5] },
+};
+
+/** What one holds in the right hand at the camp drinking or eating (CampLoop 'drink', 'eat'): a canteen's cup, a ration bar. */
+export const CAMP_ITEMS = { drink: 'campCup', eat: 'campBar' } as const satisfies Partial<Record<CampLoop, keyof typeof PROPS>>;
+
+/** Sitting down and getting up (from standing to sitting on a chair's height, and back); leaning on a wall and off it; kneeling and getting up. */
+export type CampMove = 'sitDown' | 'standUp' | 'leanLeftIn' | 'leanLeftOut' | 'leanRightIn' | 'leanRightOut' | 'kneelDown' | 'kneelUp' | 'drinkIn' | 'drinkOut' | 'sip' | 'eatIn' | 'eatOut' | 'bite';
+
+const campMoves = (b: 'Masc' | 'Femn'): Record<CampMove, string> => ({
+  sitDown: 'standToSit',
+  standUp: 'sitToStand',
+  leanLeftIn: `leanLeftIn${b}`,
+  leanLeftOut: `leanLeftOut${b}`,
+  leanRightIn: `leanRightIn${b}`,
+  leanRightOut: `leanRightOut${b}`,
+  kneelDown: 'warmHandsIn',
+  kneelUp: 'warmHandsOut',
+  drinkIn: `drinkIn${b}`,
+  drinkOut: `drinkOut${b}`,
+  sip: `sip${b}`,
+  eatIn: `eatIn${b}`,
+  eatOut: `eatOut${b}`,
+  bite: `bite${b}`,
+});
+
+/** Each move's clip among the camp's (an id, or a part of one: CAMP_PARTS). */
+export const CAMP_MOVES: Record<'masc' | 'femn', Record<CampMove, string>> = { masc: campMoves('Masc'), femn: campMoves('Femn') };
 
 /**
  * How a unit dies (Arturo, 2026-10-14: «al morir solo se desploman como si
@@ -698,7 +875,7 @@ export const HITS: Record<'masc' | 'femn', Hit[]> = { masc: hits('Masc'), femn: 
 export const ACTIONS = [
   'rifleIdle', 'rifleLowered', 'rifleAim', 'rifleFire', 'rifleReload',
   'rifleTurnL45', 'rifleTurnR45', 'rifleTurnL90', 'rifleTurnR90', 'rifleTurnL180', 'rifleTurnR180',
-  'rifleKneel', 'rifleKneelAim', 'pistolReady', 'pistolAim', 'pistolFire',
+  'rifleKneel', 'rifleKneelAim', 'pistolRest', 'pistolAim', 'pistolFire',
   'tossGrenade', 'throwStone', 'knifeStab', 'macheteSwing',
 ] as const satisfies readonly AnimationId[];
 
@@ -1002,6 +1179,10 @@ export const PROPS = {
   bFirePit: prop('apocalypse', 'SM_Prop_FirePit_01', { base: 'firePit' }),
   bWashingLine: prop('apocalypse', 'SM_Prop_WashingLine_01', { base: 'washingLine' }),
   bCampChair: prop('apocalypse', 'SM_Prop_Camp_Chair_01', { base: 'campChair' }),
+  // In the hand at the camp (clearingLife.ts: drinking, eating; CAMP_ITEMS), at the model's own size: a canteen's metal cup
+  // (Gameplay, 22/10: the green canteen in the fist read as a grenade), a ration bar.
+  campCup: prop('military', 'SM_Item_Canteen_Cup_01'),
+  campBar: prop('military', 'SM_Item_Meal_Bar_01'),
   bLongTable: prop('apocalypse', 'SM_Prop_Table_02', { base: 'longTable' }),
   bBlackboard: prop('apocalypse', 'SM_Prop_Blackboard_01', { base: 'blackboard' }),
   bRadioSet: prop('apocalypse', 'SM_Prop_Radio_01', { base: 'radioSet' }),

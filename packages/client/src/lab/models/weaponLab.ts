@@ -3,8 +3,11 @@ import * as THREE from 'three';
 import type { Carried, FigurePose, FigureRig } from '../../game/figures';
 import { buildUnit, IDLE_POSE, isFigure } from '../../game/models';
 import { Renderer } from '../../game/renderer';
-import { LOW_READY, SYNTY_HANDS, SYNTY_LOD, SyntyFigure } from '../../game/syntyFigures';
-import type { ActionId } from '../../game/syntyManifest';
+import { HAND_POSES, LOW_READY, SYNTY_HANDS, SYNTY_LOD, SyntyFigure } from '../../game/syntyFigures';
+import { atlasTexture } from '../../game/synty';
+import { whenCampClips } from '../../game/syntyAnims';
+import type { ActionId, CampLoop, PropId } from '../../game/syntyManifest';
+import { syntyProp, syntyPropsLoaded } from '../../game/syntyProps';
 
 // Weapons lab (/armas.html): how every weapon sits in the hands of every kind
 // of body, pose by pose, in close-up (bodies: the wardrobe's, 'police1:f:heavy'). `__weapons.sheet(name, pose, bodies)`
@@ -109,6 +112,8 @@ const VIEWS: Record<string, THREE.Vector3> = {
   left: new THREE.Vector3(1, 0.25, 0.6),
   front: new THREE.Vector3(0.25, 0.2, 1),
   back: new THREE.Vector3(-0.35, 0.3, -1),
+  // From the left, in front and below: the support hand under a handguard.
+  under: new THREE.Vector3(0.7, -0.35, 0.75),
 };
 
 /**
@@ -122,6 +127,8 @@ async function sheet(
   cases = WEAPON_CASES,
   viewName = 'right',
   distance = 2.3,
+  /** Looked at: between the hands, or one of them ('Hand_L', 'Hand_R'). */
+  focus = '',
 ): Promise<string> {
   const cell = 300;
   const out = document.createElement('canvas');
@@ -140,7 +147,7 @@ async function sheet(
       // On the hands: between the two, a little up towards the shoulders.
       rig.root.updateMatrixWorld(true);
       const hand = (n: string) => rig.root.getObjectByName(n)?.getWorldPosition(new THREE.Vector3()) ?? new THREE.Vector3(0, rig.chest ?? 0.85, 0.2);
-      const target = hand('Hand_L').add(hand('Hand_R')).multiplyScalar(0.5).add(new THREE.Vector3(0, 0.08, 0));
+      const target = focus ? hand(focus) : hand('Hand_L').add(hand('Hand_R')).multiplyScalar(0.5).add(new THREE.Vector3(0, 0.08, 0));
       camera.position.copy(target).addScaledVector(view, distance);
       camera.lookAt(target);
       // A square view of its own each time, whatever the page's (a hidden preview has none, and the renderer follows it).
@@ -211,6 +218,66 @@ async function act(name: string, id: ActionId, bodies: string[], times: number[]
   return name;
 }
 
+/**
+ * The camp's clips (CAMP_LOOPS) on `bodies`, their weapons slung as on the clearing: a row a clip, a column a body,
+ * `seconds` in, the whole body from `viewName`; `seat`, a prop (a camp chair) put `back` tiles behind it, facing as
+ * it does. Each cell says how high its hips are (tiles).
+ */
+async function camp(name: string, loops: (CampLoop | null)[], bodies: string[], viewName = 'front', distance = 3.4, seconds = 2, seat: PropId | null = null, back = 0.2, seatScale = 0.95, item: PropId | null = null, target = 0.6): Promise<string> {
+  const cell = 300;
+  const out = document.createElement('canvas');
+  out.width = cell * bodies.length;
+  out.height = cell * loops.length;
+  const g = out.getContext('2d')!;
+  g.font = '14px sans-serif';
+  const src = renderer.gl.domElement;
+  const camera = renderer.camera;
+  const view = (VIEWS[viewName] ?? VIEWS.front!).clone().normalize();
+  if (seat) syntyProp(seat);
+  await Promise.all([whenCampClips('masc'), whenCampClips('femn'), syntyPropsLoaded()]);
+  const chair = new THREE.Group();
+  for (const part of (seat && syntyProp(seat)) || []) {
+    const mesh = new THREE.Mesh(part.geometry, new THREE.MeshStandardMaterial({ map: atlasTexture(part.atlas), roughness: 0.85 }));
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.compose(new THREE.Vector3(0, 0, -back), new THREE.Quaternion(), new THREE.Vector3().setScalar(seatScale)).multiply(part.matrix);
+    chair.add(mesh);
+  }
+  scene.add(chair);
+  for (const [col, body] of bodies.entries()) {
+    for (const [row, loop] of loops.entries()) {
+      const c = WEAPON_CASES[0]!;
+      const rig = await posed(c.template, c.tier, body, {}, c.arms);
+      rig.sling?.(true);
+      rig.camp?.(loop, true);
+      rig.holdItem?.(item, loop === 'drink');
+      for (let t = 0; t < seconds; t += 1 / 30) rig.applyPose({ ...IDLE_POSE }, 2 + t);
+      scene.add(rig.root);
+      rig.root.updateMatrixWorld(true);
+      const hips = rig.root.getObjectByName('Hips')?.getWorldPosition(new THREE.Vector3()).y ?? 0;
+      const aim = new THREE.Vector3(0, target, 0);
+      camera.position.copy(aim).addScaledVector(view, distance);
+      camera.lookAt(aim);
+      renderer.gl.setPixelRatio(1);
+      renderer.gl.setSize(900, 900, false);
+      const { composer } = (renderer as unknown as { post: { composer: { setPixelRatio(r: number): void; setSize(w: number, h: number): void } } }).post;
+      composer.setPixelRatio(1);
+      composer.setSize(900, 900);
+      camera.fov = 40;
+      camera.aspect = 1;
+      camera.updateProjectionMatrix();
+      renderer.render(0);
+      const side = Math.min(src.width, src.height);
+      g.drawImage(src, (src.width - side) / 2, (src.height - side) / 2, side, side, col * cell, row * cell, cell, cell);
+      g.fillStyle = '#fff';
+      g.fillText(`${loop ?? 'idle'} · ${body} · caderas ${hips.toFixed(2)}`, col * cell + 6, row * cell + 16);
+      scene.remove(rig.root);
+    }
+  }
+  scene.remove(chair);
+  await fetch(`/__snap?name=${name}`, { method: 'POST', body: out.toDataURL('image/jpeg', 0.88) });
+  return name;
+}
+
 /** A stretch of a film (film): `seconds` long, the pose at each moment of it (`t` from 0 to 1), and its caption. */
 interface Scene {
   label: string;
@@ -264,10 +331,10 @@ export const FILM_SCENES: Record<string, Scene[]> = {
   knife: [{ label: 'Cuchillo', seconds: 1.3, pose: (t) => lunge(t * 1.3) }],
   machete: [{ label: 'Machete', seconds: 1.3, pose: (t) => lunge(t * 1.3) }],
   pistol: [
-    { label: 'Pistola a dos manos', seconds: 1.6, pose: () => ({}) },
-    { label: 'Apunta', seconds: 1, pose: (t) => ({ aim: ramp(t, 0, 0.35) }) },
+    { label: 'Pistola en reposo, junto al muslo', seconds: 2.4, pose: () => ({}) },
+    { label: 'Apunta a dos manos', seconds: 1.2, pose: (t) => ({ aim: ramp(t, 0, 0.4) }) },
     { label: 'Dispara', seconds: 1.2, pose: (t) => ({ aim: 1, recoil: Math.max(0, 1 - ((t * 1.2) % 0.4) / 0.15) * (t < 0.8 ? 1 : 0) }) },
-    { label: 'Baja el arma', seconds: 0.8, pose: (t) => ({ aim: 1 - ramp(t, 0, 0.4) }) },
+    { label: 'Baja el arma', seconds: 1.4, pose: (t) => ({ aim: 1 - ramp(t, 0, 0.5) }) },
   ],
 };
 
@@ -327,4 +394,4 @@ async function film(names: string[], body: string, from: number, count: number, 
   return out;
 }
 
-(window as unknown as { __weapons: unknown }).__weapons = { sheet, act, film, FILM_SCENES, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES, MOD_CASES, HANDS: SYNTY_HANDS, LOW_READY };
+(window as unknown as { __weapons: unknown }).__weapons = { sheet, act, film, camp, FILM_SCENES, posed, renderer, POSES, WEAPON_CASES, ARMS_CASES, MOD_CASES, HANDS: SYNTY_HANDS, HAND_POSES, LOW_READY };

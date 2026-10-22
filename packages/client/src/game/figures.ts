@@ -1,7 +1,7 @@
 import type { Arms, Tier, WeaponModId } from '@bastion/engine';
 import type { GaitMotion } from './gaits';
 import type { UnitRig } from './models';
-import type { Stance, WeaponId } from './syntyManifest';
+import type { CampLoop, CampMove, Gesture, PropId, Stance, WeaponId } from './syntyManifest';
 
 // What a unit's figure answers to (syntyFigures.ts makes them, the unit views
 // pose them every frame): the pose values and the equipment it shows. The
@@ -80,6 +80,20 @@ export interface FigureRig extends UnitRig {
   cutAway?: boolean;
   /** Which of its weapons is in the hand (Armament): the main one, the pistol from its holster, the blade from the belt. */
   draw?(which: Carried): void;
+  /** Its weapons all on it, the hands free (at ease on the clearing: clearingLife.ts); false, the one drawn in the hand again. */
+  sling?(on: boolean): void;
+  /** Makes a gesture once over how it stands (syntyManifest.ts GESTURES: those talking on the clearing); whether it began. */
+  gesture?(g: Gesture): boolean;
+  /**
+   * At the camp (the clearing: clearingLife.ts, syntyManifest.ts CAMP_LOOPS): stays in `loop` instead of how it stands
+   * (null: as it stands) and, standing, does the camp's things now and then (CAMP_VARIATIONS); `on` false, none of it;
+   * `now`, into it without easing (after a move into it).
+   */
+  camp?(loop: CampLoop | null, on?: boolean, now?: boolean): void;
+  /** Sits down or gets up, leans or comes off (CAMP_MOVES) once over what it does, holding its end; how far through, 0 to 1 (1 without its clips); null lets go. */
+  campMove?(move: CampMove | null): number;
+  /** Holds a thing in the right hand at the camp (syntyManifest.ts CAMP_ITEMS: a metal cup, a ration bar), its weapons slung, `upright` kept level (a cup); null, nothing. */
+  holdItem?(id: PropId | null, upright?: boolean): void;
   /** Other weapons on it (the engine's weaponEquipped), the main one in the hand. */
   arm?(a: Armament): void;
 }

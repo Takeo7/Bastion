@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadAnimation } from './synty';
-import { ACTIONS, ANIMATIONS, DEAD_MOTIONS, DEATHS, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type Motion } from './syntyManifest';
+import { ACTIONS, ANIMATIONS, CAMP_LOOPS, CAMP_MOVES, CAMP_PARTS, CAMP_VARIATIONS, DEAD_MOTIONS, DEATHS, GESTURE_ORDER, GESTURES, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type AnimationId, type Gesture, type Motion } from './syntyManifest';
 
 // Locomotion from «ANIMATION – Base Locomotion» on any Synty character. Each
 // unit plays the clips on its own proxy of the pack's skeleton (one mixer,
@@ -60,6 +60,8 @@ export interface AnimSet {
   actions: THREE.AnimationClip[];
   actionsUpper: THREE.AnimationClip[];
   actionsFree: THREE.AnimationClip[];
+  /** GESTURE_ORDER, in order (the living's), their upper body only: played once when asked, over the stance. */
+  gestures: THREE.AnimationClip[];
   /** Inverse model-space rotation of each bone in the T-pose. */
   restInv: THREE.Quaternion[];
   /** Each bone's parent among SYNTY_BONES (−1: the hips, under the fixed root). */
@@ -93,6 +95,7 @@ function prepare(
   deaths: THREE.AnimationClip[],
   hits: THREE.AnimationClip[],
   actions: THREE.AnimationClip[],
+  gestures: THREE.AnimationClip[],
 ): AnimSet {
   const proxy = tpose.clone();
   const mixer = new THREE.AnimationMixer(proxy);
@@ -119,6 +122,7 @@ function prepare(
     actions: actions.map(bodyOnly),
     actionsUpper: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
     actionsFree: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => FREE.has(t.name.split('.')[0]!)))),
+    gestures: gestures.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
     restInv: bones.map((b) => (b ? b.getWorldQuaternion(new THREE.Quaternion()).invert() : new THREE.Quaternion())),
     parent,
     rootQ: root.getWorldQuaternion(new THREE.Quaternion()),
@@ -158,17 +162,73 @@ export function whenAnimSet(build: Build, dead = false): Promise<AnimSet> {
     const variations = IDLE_VARIATIONS[build];
     const motions = MOTION_ORDER.map((m) => (dead && DEAD_MOTIONS[m]) || MOTIONS[build][m]);
     const actions = dead ? [] : ACTIONS;
-    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id), ...HITS[build].map((h) => h.id), ...actions];
+    const gestures = dead ? [] : GESTURE_ORDER.map((g) => GESTURES[build][g]);
+    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id), ...HITS[build].map((h) => h.id), ...actions, ...gestures];
     p = Promise.all([loadAnimation(ANIMATIONS.tpose.pack, 'tpose'), ...ids.map((id) => loadAnimation(ANIMATIONS[id].pack, id))]).then(([pose, ...loaded]) => {
       const clips = loaded.map((c) => c.clip);
       const at = [MOTION_ORDER.length, MOTION_ORDER.length + variations.length, MOTION_ORDER.length + variations.length + STANCE_ORDER.length];
       at.push(at[2]! + DEATHS[build].length);
       at.push(at[3]! + HITS[build].length);
-      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2], at[3]), clips.slice(at[3], at[4]), clips.slice(at[4]));
+      const acted = at[4]! + actions.length;
+      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2], at[3]), clips.slice(at[3], at[4]), clips.slice(at[4], acted), clips.slice(acted));
       ready.set(kit, set);
       return set;
     });
     loading.set(kit, p);
+  }
+  return p;
+}
+
+/**
+ * The camp's clips (CAMP_LOOPS, CAMP_VARIATIONS, CAMP_MOVES), a build's by id (and the parts of those that are more
+ * than one thing: CAMP_PARTS); loaded apart, when first asked for (the Asentamiento only).
+ */
+const campReady = new Map<Build, Map<string, THREE.AnimationClip>>();
+const campLoading = new Map<Build, Promise<Map<string, THREE.AnimationClip>>>();
+/** The camp loops played back and forth (a part whose ends meet only so). */
+const pingPong = new WeakSet<THREE.AnimationClip>();
+
+/** `clip` from `from` to `to` seconds, its ends sampled where they fall between keys. */
+function cut(clip: THREE.AnimationClip, from: number, to: number, name: string): THREE.AnimationClip {
+  const tracks = clip.tracks.map((t) => {
+    // (Each track's own interpolant: a quaternion's slerps. It is set at runtime, not in three's types.)
+    const at = (t as unknown as { createInterpolant(): THREE.Interpolant }).createInterpolant();
+    const times = [from, ...Array.from(t.times).filter((x) => x > from + 1e-4 && x < to - 1e-4), to];
+    const size = t.getValueSize();
+    const values = new Float32Array(times.length * size);
+    times.forEach((x, i) => values.set(at.evaluate(x) as ArrayLike<number>, i * size));
+    const Track = t.constructor as new (name: string, times: number[], values: Float32Array) => THREE.KeyframeTrack;
+    return new Track(t.name, times.map((x) => x - from), values);
+  });
+  return new THREE.AnimationClip(name, to - from, tracks);
+}
+
+/** A build's camp clips once loaded; null meanwhile (asking starts the load). */
+export function campClips(build: Build): Map<string, THREE.AnimationClip> | null {
+  const got = campReady.get(build);
+  if (!got) void whenCampClips(build).catch(() => undefined);
+  return got ?? null;
+}
+
+export function whenCampClips(build: Build): Promise<Map<string, THREE.AnimationClip>> {
+  let p = campLoading.get(build);
+  if (!p) {
+    const ids = [...new Set<AnimationId>([...Object.values(CAMP_LOOPS[build]), ...CAMP_VARIATIONS[build], ...Object.values(CAMP_MOVES[build]).filter((id): id is AnimationId => id in ANIMATIONS)])];
+    p = Promise.all(ids.map((id) => loadAnimation(ANIMATIONS[id].pack, id))).then((loaded) => {
+      const out = new Map<string, THREE.AnimationClip>(ids.map((id, i) => [id, bodyOnly(loaded[i]!.clip)] as const));
+      for (const [id, parts] of Object.entries(CAMP_PARTS)) {
+        const whole = out.get(id);
+        if (!whole || !parts) continue;
+        const loop = cut(whole, ...parts.loop, id);
+        pingPong.add(loop);
+        out.set(id, loop);
+        out.set(`${id}In`, cut(whole, ...parts.into, `${id}In`));
+        out.set(`${id}Out`, cut(whole, ...parts.out, `${id}Out`));
+      }
+      campReady.set(build, out);
+      return out;
+    });
+    campLoading.set(build, p);
   }
   return p;
 }
@@ -209,7 +269,19 @@ export class AnimDriver {
   private readonly actsUpper: THREE.AnimationAction[];
   private readonly actsFree: THREE.AnimationAction[];
   private readonly acting = new Set<THREE.AnimationAction>();
+  /** The gestures (GESTURE_ORDER), and the one being made. */
+  private readonly gestures: THREE.AnimationAction[];
+  private gesturing: THREE.AnimationAction | null = null;
   private wait = nextWait();
+  /** A camp clip stayed in instead of the idle (campLoop), and how far each one eased in or out has taken its place. */
+  private loop: THREE.AnimationAction | null = null;
+  private readonly loops = new Map<THREE.AnimationAction, number>();
+  /** A camp move playing once over the rest, held at its end (campMove: sitting down, getting up), and its share. */
+  private move: THREE.AnimationAction | null = null;
+  private moved = 0;
+  private moving = false;
+  /** The camp's variations in the plain ones' place, while set (campVariations). */
+  private camp: THREE.AnimationAction[] | null = null;
   private readonly bones: THREE.Object3D[];
   private readonly world = Array.from({ length: N }, () => new THREE.Quaternion());
   /** Blend weights (summing to 1) and playback speeds, in MOTION_ORDER. */
@@ -243,6 +315,12 @@ export class AnimDriver {
       return a;
     });
     this.held = new Float32Array(set.stances.length);
+    this.gestures = set.gestures.map((clip) => {
+      const a = this.mixer.clipAction(clip);
+      a.setLoop(THREE.LoopOnce, 1);
+      a.setEffectiveWeight(0);
+      return a;
+    });
     this.deaths = set.deaths.map((clip) => {
       const a = this.mixer.clipAction(clip);
       a.setLoop(THREE.LoopOnce, 1);
@@ -341,6 +419,62 @@ export class AnimDriver {
     a.time = (at - Math.floor(at)) * a.getClip().duration;
   }
 
+  /** Makes gesture `g` once (GESTURES) over what it stands in, its upper body; one already being made goes on. Whether it began. */
+  gesture(g: Gesture): boolean {
+    const next = this.gestures[GESTURE_ORDER.indexOf(g)];
+    if (!next || this.gesturing) return false;
+    next.reset().setEffectiveWeight(0).play();
+    this.gesturing = next;
+    return true;
+  }
+
+  /** Whether a gesture is being made. */
+  get busy(): boolean {
+    return !!this.gesturing;
+  }
+
+  /** Stays in camp clip `clip` (campClips: CAMP_LOOPS) instead of the idle, or none; `now` without easing into it. */
+  campLoop(clip: THREE.AnimationClip | null, now = false): void {
+    const next = clip ? this.mixer.clipAction(clip) : null;
+    if (next !== this.loop) {
+      this.loop = next;
+      if (next && !this.loops.has(next)) {
+        next.reset().setEffectiveWeight(0).play();
+        if (pingPong.has(clip!)) next.setLoop(THREE.LoopPingPong, Infinity);
+        this.loops.set(next, 0);
+      }
+    }
+    if (now) for (const a of this.loops.keys()) this.loops.set(a, a === next ? 1 : 0);
+  }
+
+  /**
+   * Plays camp move `clip` once (CAMP_MOVES) over whatever it does, eased in, and holds its last pose until another
+   * or none (eased out); how far through it is, 0 to 1 (1 also with none).
+   */
+  campMove(clip: THREE.AnimationClip | null): number {
+    const next = clip ? this.mixer.clipAction(clip) : null;
+    if (next && next !== this.move) {
+      this.move?.stop();
+      next.reset().setLoop(THREE.LoopOnce, 1);
+      next.clampWhenFinished = true;
+      next.setEffectiveWeight(0).play();
+      this.move = next;
+      this.moved = 0;
+    }
+    this.moving = !!next;
+    const m = this.move;
+    return m && next ? Math.min(1, m.time / m.getClip().duration) : 1;
+  }
+
+  /** Plays these (campClips: CAMP_VARIATIONS) now and then in the plain variations' place, or the plain ones again (null). */
+  campVariations(clips: THREE.AnimationClip[] | null): void {
+    this.camp = clips?.map((clip) => {
+      const a = this.mixer.clipAction(clip);
+      a.setLoop(THREE.LoopOnce, 1);
+      return a;
+    }) ?? null;
+  }
+
   /** Stands in stance `k` (STANCE_ORDER) instead of the plain idle, or −1; `now` without easing into it. */
   setStance(k: number, now = false): void {
     if (k === this.stance) return;
@@ -398,6 +532,40 @@ export class AnimDriver {
       else if (a.isRunning()) a.stop();
       stood += h;
     }
+    // A camp clip stayed in takes the idle's place too, the one before eased out.
+    for (const [a, held] of this.loops) {
+      const h = THREE.MathUtils.clamp(held + (a === this.loop ? ease : -ease), 0, 1);
+      if (h > 0) {
+        this.loops.set(a, h);
+        a.setEffectiveWeight(idle * h);
+      } else {
+        a.stop();
+        this.loops.delete(a);
+      }
+      stood += h;
+    }
+    // A camp move over everything (as a hit's share against the rest's 1), quickly in and out.
+    if (this.move) {
+      this.moved = THREE.MathUtils.clamp(this.moved + (this.moving ? dt : -dt) / BLEND, 0, 1);
+      const s = Math.min(0.97, this.moved);
+      this.move.setEffectiveWeight(s / (1 - s));
+      if (!this.moving && this.moved <= 0) {
+        this.move.stop();
+        this.move = null;
+      }
+    }
+    // A gesture over the upper body, eased in and out (against the rest's 1, as a hit's share: react).
+    const g = this.gesturing;
+    if (g) {
+      const length = g.getClip().duration;
+      if (!g.isRunning() || g.time >= length - 1e-3) {
+        g.stop();
+        this.gesturing = null;
+      } else {
+        const s = Math.min(0.95, Math.min(1, g.time / BLEND, (length - g.time) / BLEND) * idle);
+        g.setEffectiveWeight(s / (1 - s));
+      }
+    }
     let v = 0;
     const current = this.variation;
     if (current) {
@@ -409,10 +577,11 @@ export class AnimDriver {
         this.wait = nextWait();
       } else v = Math.min(1, current.time / BLEND, (length - current.time) / BLEND) * idle * (1 - stood) * this.keep;
       current.setEffectiveWeight(v);
-    } else if (calm && idle > 0.95 && !stood && this.variations.length) {
+    } else if (calm && idle > 0.95 && !stood && !this.gesturing && !this.move && (this.camp ?? this.variations).length) {
       this.wait -= dt;
       if (this.wait <= 0) {
-        const next = this.variations[Math.floor(Math.random() * this.variations.length)]!;
+        const pool = this.camp ?? this.variations;
+        const next = pool[Math.floor(Math.random() * pool.length)]!;
         next.reset().setEffectiveWeight(0).play();
         this.variation = next;
         this.keep = 1;
