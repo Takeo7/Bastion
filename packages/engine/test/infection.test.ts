@@ -149,6 +149,8 @@ describe('infection at the base', () => {
     const c = createCampaign(players, new Rng(2));
     // Nothing else interrupts the days.
     Object.assign(c, { nextEventDay: 999, nextMissionDay: 999, nextRumorDay: 999, nextFacilityDay: 999, nextSupplyDay: 999, nextDoomDay: 999 });
+    // Nor the siege (it comes straight after the first mission: Ana, 22/10).
+    c.siege.in = 99;
     const offer = c.offers[0]!;
     if (!run(c, { type: 'chooseMission', id: offer.id }, 0, [players[0]!]).ok) throw new Error('mission');
     const mission = createMission({ map: offer.map, slots: players, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });

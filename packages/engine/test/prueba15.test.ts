@@ -5,7 +5,7 @@ import { DIRS4 } from '../src/grid';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { ALARM_NAMES } from '../src/lore';
 import { Rng } from '../src/rng';
-import { executeCommand, Sim } from '../src/rules';
+import { executeCommand, runOutOfTime, Sim } from '../src/rules';
 import { createMission } from '../src/setup';
 import type { Command } from '../src/protocol';
 import type { GameState, Slot } from '../src/types';
@@ -183,5 +183,41 @@ describe('medicines where medicines are kept (#15)', () => {
         });
       }
     }
+  });
+});
+
+describe('the turn clock (Arturo, 22/10)', () => {
+  const field = () => stateFrom(['h.........', '..........', '..........', '..........']);
+
+  it('out of time, their soldiers with actions take cover where they have some, and the partner gets the command', () => {
+    const s = field();
+    const covered = addUnit(s, 's1', 'rookie', 0, 1);
+    const open = addUnit(s, 's2', 'rookie', 5, 2);
+    addUnit(s, 's3', 'rookie', 8, 0, { owner: 1 });
+    s.command = 0;
+    const events = runOutOfTime(s, 0, { connected: [0, 1], rng: new Rng(1) });
+    expect(events.filter((e) => e.t === 'hunker').map((e) => (e as { unit: string }).unit)).toEqual(['s1']);
+    expect(covered.ap).toBe(0);
+    expect(open.ap).toBe(2);
+    expect(s.ready).toEqual([true, false]);
+    expect(s.command).toBe(1);
+    expect(s.activeTeam).toBe('xcom');
+  });
+
+  it('with the partner done already, it ends the squad turn', () => {
+    const s = field();
+    addUnit(s, 's1', 'rookie', 0, 1);
+    addUnit(s, 's3', 'rookie', 8, 0, { owner: 1 });
+    s.command = 0;
+    s.ready = [false, true];
+    const events = runOutOfTime(s, 0, { connected: [0, 1], rng: new Rng(1) });
+    expect(events.some((e) => e.t === 'turnBegan' && e.team === 'alien')).toBe(true);
+  });
+
+  it('nothing for a player already done', () => {
+    const s = field();
+    addUnit(s, 's1', 'rookie', 0, 1);
+    s.ready = [true, false];
+    expect(runOutOfTime(s, 0, { connected: [0, 1], rng: new Rng(1) })).toEqual([]);
   });
 });

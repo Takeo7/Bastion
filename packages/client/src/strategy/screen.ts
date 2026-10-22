@@ -59,6 +59,7 @@ import {
   HEADS,
   HOME_REGION,
   ITEMS,
+  itemTag,
   itemsFree,
   itemUnlocked,
   levelUnlocks,
@@ -168,6 +169,7 @@ import type { Gear } from '../game/figures';
 import { gearOf } from '../game/models';
 import { storageKey } from '../net';
 import { append, clear, h } from '../ui/dom';
+import { marked } from '../ui/marks';
 import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from '../ui/quit';
 import { graphicsSettings, soundSettings } from '../ui/settingsPanel';
 import { graphics } from '../settings';
@@ -183,7 +185,7 @@ import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
 import { carriedProfile, kindOf, loadoutEl, modPanel, placeOf, profileOf, weaponCare, weaponDiff, weaponIcon, weaponMarks, weaponPick, weaponStats, type WeaponPickContext } from './arms';
 import { soldierPortrait } from './portraits';
-import { barLines, learnedTags, roleDot, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
+import { learnedTags, roleDot, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
 import { deadlineEl } from '../ui/deadline';
 import { outfitOf, outfitsFor, preloadWardrobe, soldierSex } from '../game/wardrobe';
 
@@ -239,10 +241,6 @@ const KIND_ICONS = { building: 'home', defence: 'mh-shield', trap: 'mh-targeted'
 /** Personalizar's colours with the clothes not dyed (Ajustes · «Ropa con el color del jugador», off by default). */
 const TINT_OFF = 'Para teñir la ropa, activa «Ropa con el color del jugador» en Ajustes.';
 
-/** A line with Lore's key words marked «**así**»: those in bold (Ana, 20/10 #15). */
-function marked(line: string): (string | HTMLElement)[] {
-  return line.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? h('strong', {}, part) : part));
-}
 
 interface Alert {
   tone: 'info' | 'good' | 'bad';
@@ -1305,6 +1303,8 @@ export class StrategyScreen {
       h(
         'div.strat-res',
         {},
+        // The day, always in sight (Ana and Arturo, 22/10 #48): a mission is a day, and so is a day waited.
+        h('span.strat-day', { 'data-tip-name': `Día ${c.day}`, 'data-tip': timeHelp(bastionLevel(c)) }, h('i', { 'aria-hidden': 'true' }), h('b', {}, `DÍA ${c.day}`)),
         // The names and lines are the glossary's (Lore), short for the medicines.
         this.withTip(h('span.strat-credits', { 'data-tip-name': 'Suministros', 'data-tip': GLOSSARY.Suministros }, h('i', {}, '§'), h('b', {}, String(c.credits)), this.owedEl(c, 'credits')), () => [
           // What Bielsa's convoy brings and when, first (#38); the glossary's line under it.
@@ -1389,7 +1389,6 @@ export class StrategyScreen {
     const net = eat - grow;
     const lasts = net > 0 ? Math.floor((c.food ?? 0) / net) : null;
     return [
-      h('p.tip-day', {}, `Día ${c.day}`),
       c.hungry ? h('p.tip-bad', {}, 'Hay hambre.') : null,
       h(
         'div.tip-figures',
@@ -1731,9 +1730,11 @@ export class StrategyScreen {
     const left = this.panel(
       'geo-left',
       'left',
-      // «Misiones», not «Operaciones» (Ana, 21/10 #25: it wasn't understood); the day at the end (#34: a mission is a day).
-      h('div.x-head', {}, 'Misiones', h('small.head-day', {}, `Día ${c.day}`)),
+      // «Misiones», not «Operaciones» (Ana, 21/10 #25: it wasn't understood). The day is on the top strip (#48).
+      h('div.x-head', {}, 'Misiones'),
       list,
+      // Or a day at the Bastión, without going out (Ana and Arturo, 22/10 #48), under what there is to go to.
+      this.waitDayEl(c),
       ...(threats.length
         ? [
             h('div.x-head', { title: GLOSSARY.Nido }, 'Nidos'),
@@ -1861,7 +1862,7 @@ export class StrategyScreen {
         h('div.alert-kicker', { className: 'alert-kicker bad' }, SIEGE_TEXT.name.toUpperCase()),
         h('h2.x-title', {}, o.name),
         h('p.x-sub', {}, o.night ? `El Bastión · ${NIGHT_TEXT.label}` : 'El Bastión'),
-        h('p.x-text', {}, offerBriefing(c, o)),
+        h('p.x-text.briefing-text', {}, ...marked(offerBriefing(c, o))),
         offerSignature(c, o) ? h('p.x-note', {}, offerSignature(c, o)) : null,
         h(
           'dl.briefing',
@@ -1893,7 +1894,7 @@ export class StrategyScreen {
       ),
       h('h2.x-title', {}, o.name),
       h('p.x-sub', {}, `${REGIONS[o.region].name} · ${biome}${o.night ? ` · ${NIGHT_TEXT.label}` : ''}${quest ? ` · paso ${quest.step + 1} de ${QUESTS[quest.id].steps.length}` : ''}`),
-      h('p.x-text', {}, offerBriefing(c, o)),
+      h('p.x-text.briefing-text', {}, ...marked(offerBriefing(c, o))),
       offerSignature(c, o) ? h('p.x-note', {}, offerSignature(c, o)) : null,
       // The living hold it (18/10 #47): the dead go for them too.
       o.living ? h('p.x-text.x-warn', {}, LIVING_TIP) : null,
@@ -2278,6 +2279,29 @@ export class StrategyScreen {
    * Nobody can go out (mustWait, docs/FASE12.md §11.6): only the hurt left, and nothing to recruit
    * with. Time passes with the missions, so here it passes by waiting, both agreeing as before.
    */
+  /**
+   * «Esperar un día» (Ana and Arturo, 22/10 #48): a day goes by at the Bastión as on a mission (rations, wounds, the
+   * Taller, the Marea), once both say so; alone, at once. Pressed, it waits for the other, and says so, as «Lanzar
+   * misión»; the other's yes is said on it. Not with a siege coming, nor while an event waits for its answer.
+   */
+  private waitDayEl(c: CampaignState): HTMLElement {
+    const ready = c.advanceReady[this.mySlot];
+    const partner = this.partner();
+    const together = !!partner?.connected && c.players.length > 1;
+    const partnerReady = together && !ready && c.advanceReady[partner!.slot];
+    const why = activeOffer(c)?.siege ? 'Viene el asedio: no se puede esperar.' : c.event ? 'Antes, responded al acontecimiento.' : '';
+    return h(
+      'div.wait-day',
+      {},
+      h(
+        `button.x-btn${ready ? '.ready' : partnerReady ? '.primary' : ''}`,
+        { disabled: !!why && !ready, title: `Un día sin salir: se come, se curan las heridas y avanzan el Taller y ${doomSubject(bastionLevel(c))}.`, onclick: () => this.send({ type: 'advance', ready: !ready }) },
+        ready ? 'Esperando…' : 'Esperar un día',
+      ),
+      why ? h('small.x-muted', {}, why) : ready && together ? h('small.x-muted', {}, `Falta ${partner!.name}`) : partnerReady ? h('small.wait-asked', {}, `${partner!.name} quiere esperar un día`) : null,
+    );
+  }
+
   private waitEl(c: CampaignState): HTMLElement | null {
     if (!mustWait(c)) return null;
     const ready = c.advanceReady[this.mySlot];
@@ -2313,11 +2337,16 @@ export class StrategyScreen {
     // The other player's only while they are away, to prepare them (Ana, 21/10 #30: each sees their own).
     const theirs = c.soldiers.filter((s) => s.owner !== this.mySlot && listed(s) && this.commands(s.owner)).sort((a, b) => Number(b.alive) - Number(a.alive) || b.board.length - a.board.length || totalBars(b.skills) - totalBars(a.skills));
     if (!this.soldier || ![...mine, ...theirs].some((s) => s.id === this.soldier)) this.soldier = mine.find((s) => s.alive)?.id ?? mine[0]?.id ?? theirs[0]?.id ?? null;
-    const row = (s: CampaignSoldier) =>
-      h(
-        `button.x-row.soldier${this.soldier === s.id ? '.selected' : ''}${s.alive ? '' : '.dim'}`,
+    // The soldiers by their faces, in a grid (Ana, 22/10 #49: «la cara de los soldados en cuadrícula»): the bust, the
+    // name they go by, the rank; in a corner, a talent to choose (▲) or what keeps them in (wounds, fever, fallen).
+    const row = (s: CampaignSoldier) => {
+      const points = s.owner === this.mySlot && this.hasPoints(s);
+      const state = s.alive && !s.infection && !s.woundedDays ? null : this.healthTag(c, s, true);
+      const tile = h(
+        `button.soldier-tile${this.soldier === s.id ? '.selected' : ''}${s.alive ? '' : '.dim'}`,
         {
-          style: { '--row-accent': this.playerColor(s.owner) },
+          style: { '--accent': this.playerColor(s.owner) },
+          title: displayName(s.name, s.nickname),
           onclick: () => {
             this.soldier = s.id;
             this.promoting = false;
@@ -2326,13 +2355,15 @@ export class StrategyScreen {
             this.render();
           },
         },
-        roleDot(s.board),
-        h('b', {}, displayName(s.name, s.nickname)),
+        h('span.st-face', { 'aria-hidden': 'true' }),
+        h('b.st-name', {}, s.nickname || s.name.split(' ')[0]!),
         veterancyBadge(s.board, s.appearance?.sex === 'f'),
-        s.owner === this.mySlot && this.hasPoints(s)
-          ? this.chip('▲', 'good', 'Talento por elegir')
-          : this.healthTag(c, s, true),
+        points ? h('span.st-points', { title: 'Talento por elegir' }, '▲') : null,
+        state,
       );
+      this.bustOn(tile, s);
+      return tile;
+    };
     const count = mine.filter((s) => s.alive).length;
     const cap = soldierCap(c);
     const price = recruitCost(c);
@@ -2358,10 +2389,10 @@ export class StrategyScreen {
         'barracks-left',
         'left',
         h('div.x-head', {}, 'Tus soldados'),
-        h('div.x-list', {}, ...mine.map(row)),
+        h('div.soldier-grid', {}, ...mine.map(row)),
         recruit,
         theirs.length ? h('div.x-head', {}, `De ${this.playerName(theirs[0]!.owner)}`, this.commands(theirs[0]!.owner) ? h('small', {}, ' · no está: los preparas tú') : null) : null,
-        h('div.x-list', {}, ...theirs.map(row)),
+        h('div.soldier-grid', {}, ...theirs.map(row)),
       ),
     );
     const s = c.soldiers.find((x) => x.id === this.soldier);
@@ -3018,7 +3049,7 @@ export class StrategyScreen {
             {},
             h('h1', {}, offer.name, offer.night ? h('small', {}, NIGHT_TEXT.label) : null),
             // What the mission is for, in view before choosing the squad (playtest 13/10: it was only a tooltip).
-            h('p.x-text', {}, offerBriefing(c, offer)),
+            h('p.x-text.briefing-text', {}, ...marked(offerBriefing(c, offer))),
             offer.living ? h('p.x-text.x-warn', {}, LIVING_TIP) : null,
           ),
           h(
@@ -3033,7 +3064,8 @@ export class StrategyScreen {
             ),
             status ? h('small.x-muted', {}, status) : null,
             // Not «Cancelar misión» here (#3: it read as the same as going back); it is on the mission's card on the map.
-            h('button.x-btn', { onclick: () => void this.go('barracks') }, 'Volver al Bastión'),
+            // The first mission is the only way in: no going back to the base before it (Ana, 22/10).
+            c.story.done === 0 && offer.story === 1 ? null : h('button.x-btn', { onclick: () => void this.go('barracks') }, 'Volver al Bastión'),
           ),
         ),
       ),
@@ -3157,18 +3189,6 @@ export class StrategyScreen {
 
   // ------------------------------------------------------------ debrief
 
-  /** What the wounds mean: who can't deploy, and until when. */
-  private woundedLine(c: CampaignState, squad: NonNullable<CampaignState['lastReport']>['squad']): HTMLElement | null {
-    const wounded = squad.filter((e) => e.status === 'wounded');
-    if (!wounded.length) return null;
-    const last = Math.max(...wounded.map((e) => e.woundedDays));
-    const text =
-      wounded.length === 1
-        ? `${displayName(wounded[0]!.name, c.soldiers.find((x) => x.id === wounded[0]!.id)?.nickname)} no podrá desplegar en ${missionsText(missionsFor(last))}.`
-        : `${wounded.length} heridos: no podrán desplegar en ${missionsText(missionsFor(last))} como mucho.`;
-    return h('p.x-text.x-warn', { title: 'La enfermería cura las heridas el doble de rápido' }, text);
-  }
-
   private renderDebrief(c: CampaignState): void {
     const report = c.lastReport;
     if (!report) {
@@ -3181,26 +3201,13 @@ export class StrategyScreen {
       return { template: SOLDIER, color: this.playerColor(e.owner), status: e.status === 'lost' ? 'dead' : e.status, appearance: s?.appearance, gear: s ? this.gearFor(c, s) : undefined, seed: e.id };
     });
     this.lineup(entries);
-    // The outcome in a line of figures; the details are in each chip's title, the story's page one click away.
-    const credits = (report.reward?.credits ?? 0) + report.salvage + (report.loot?.supplies ?? 0);
-    const creditsWhy = [
-      report.reward?.credits ? `Recompensa: ${report.reward.credits}` : '',
-      report.bodies ? `${report.bodies} cuerpos registrados: ${report.salvage}` : '',
-      report.loot?.supplies ? `Botín: ${report.loot.supplies}` : '',
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    const wounded = report.squad.filter((e) => e.status === 'wounded');
-    const fallen = report.squad.filter((e) => e.status === 'dead').length;
-    const tally = h(
-      'p.x-chips.debrief-tally',
-      {},
-      credits ? this.chip(`+${credits} §`, 'good', creditsWhy) : null,
+    // What came back, in pictures of one size (Ana, 22/10 #40: «iconos en vez de texto»), the mission's own thing
+    // bigger; then what changed for the base, as chips; the details in each one's title.
+    const haul = this.haulTiles(report);
+    const events = [
       report.levelTo > report.levelFrom ? this.chip(`¡${bastionLevelName(report.levelTo)}!`, 'good', Array.from({ length: report.levelTo - report.levelFrom }, (_, i) => this.unlocksText(report.levelFrom + i + 1)).join(' ')) : null,
       report.doomChange ? this.chip(report.doomChange > 0 ? `Reloj +${report.doomChange}` : `Reloj ${report.doomChange}`, report.doomChange > 0 ? 'bad' : 'good', doomChangeText(report.levelTo, report.doomChange)) : null,
-      fallen ? this.chip(`${fallen} ${fallen === 1 ? 'caído' : 'caídos'}`, 'bad') : null,
-      wounded.length ? this.chip(`${wounded.length} ${wounded.length === 1 ? 'herido' : 'heridos'}`, 'warn', this.woundedLine(c, report.squad)?.textContent ?? '') : null,
-    );
+    ].filter((x): x is HTMLElement => !!x);
     const story = report.victory && report.story ? STORY[report.story - 1]!.after : '';
     const close = () => {
       this.seenReport = this.reportKey(c);
@@ -3212,17 +3219,15 @@ export class StrategyScreen {
       this.lineup([]);
       void this.go('barracks');
     };
-    // Laid out as the Escuadra (Ana, 20/10 #26): the row centred, and under it one panel. Within it (Ana, 21/10 #24:
-    // «como si lo hiciera el maquetador sénior»), one column on one left edge: the result's plate and the mission's
-    // name on a head line, no «Informe de misión» over them; the figures; then what happened, a line each, all alike;
-    // the story's page last. «Continuar» apart on the right.
+    // Laid out as the Escuadra (Ana, 20/10 #26): the row centred, and under it one panel. Within it, one column (22/10
+    // #40): the result's plate on a line of its own, the mission's name under it; the haul; the few lines that say
+    // what pictures can't; and at the foot the story's page and «Continuar» on the right, as «Entendido» elsewhere.
+    // The bars filled are on each soldier's card, not here.
     const line = (tone: 'good' | 'warn' | 'bad' | '', ...content: (string | HTMLElement)[]) => h(`li.line${tone ? `.${tone}` : ''}`, {}, ...content);
     const lines = [
       // The base fell (report.fallen): what is lost, in red like the other warnings of the debrief.
       report.fallen ? line('bad', h('b', {}, `${BASE_SIEGE_TEXT.fallen}. `), BASE_SIEGE_TEXT.fallenLine) : null,
       this.damageLine(report.damage),
-      report.loot?.line ? line('good', report.loot.line) : null,
-      ...barLines(report.squad).map((text) => line('good', text)),
       report.night ? line('', NIGHT_TEXT.report) : null,
     ].filter((x): x is HTMLElement => !!x);
     this.viewEl.append(
@@ -3235,12 +3240,17 @@ export class StrategyScreen {
           h(
             'div.debrief-main',
             {},
-            h('div.debrief-head', {}, h('h1.debrief-result', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'), h('span.debrief-name', {}, report.missionName)),
-            tally,
+            h('h1.debrief-result', {}, report.victory ? 'MISIÓN CUMPLIDA' : 'MISIÓN FRACASADA'),
+            h('h2.debrief-name', {}, report.missionName),
+            haul.length || events.length ? h('div.debrief-haul', {}, ...haul, events.length ? h('div.debrief-events', {}, ...events) : null) : null,
             lines.length ? h('ul.debrief-lines', {}, ...lines) : null,
-            story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : null,
+            h(
+              'div.debrief-foot',
+              {},
+              story ? h('details.debrief-story', {}, h('summary', {}, 'Leer el parte'), h('p.x-text', {}, story)) : h('span'),
+              h('button.x-btn.big.primary', { onclick: close }, 'CONTINUAR'),
+            ),
           ),
-          h('div.squad-actions.debrief-actions', {}, h('button.x-btn.big.primary', { onclick: close }, 'CONTINUAR')),
         ),
       ),
     );
@@ -3263,6 +3273,40 @@ export class StrategyScreen {
     });
     this.viewEl.append(cards);
     this.anchorCards(cards, Math.max(report.squad.length, 1));
+  }
+
+  /**
+   * What a mission brought back, as tiles of one size (Ana, 22/10 #40): the supplies (reward, bodies and haul in one),
+   * rations, medicines, parts, each weapon found by its silhouette, each accessory, a recruit, La Lata's new vehicle;
+   * first and bigger, the thing the mission was for (a story's: «la insulina»). A figure under each, or nothing;
+   * the names in their titles.
+   */
+  private haulTiles(report: NonNullable<CampaignState['lastReport']>): HTMLElement[] {
+    const reward = report.reward ?? {};
+    const loot = report.loot;
+    const tile = (kind: string, figure: string, title: string, extra = '') =>
+      // The figure's line always there, empty without one, so every tile is as tall (Gameplay, 22/10).
+      h(`div.haul${extra}`, { 'data-haul': kind, title }, h('i.haul-pic', { 'aria-hidden': 'true' }), h('b', {}, figure || '\u00a0'));
+    const out: HTMLElement[] = [];
+    const goal = report.victory && report.story ? STORY[report.story - 1]?.item : undefined;
+    // Its name as the tag over whoever carries it in the field (Lore's itemTag: «INSULINA»).
+    if (goal) out.push(h('div.haul.goal', { 'data-haul': goal === 'la insulina' ? 'medicine' : 'objective', title: capitalize(goal) }, h('i.haul-pic', { 'aria-hidden': 'true' }), h('b', {}, itemTag(goal))));
+    const credits = (reward.credits ?? 0) + report.salvage + (loot?.supplies ?? 0);
+    const creditsWhy = [reward.credits ? `Recompensa: ${reward.credits}` : '', report.bodies ? `${report.bodies} cuerpos registrados: ${report.salvage}` : '', loot?.supplies ? `Botín: ${loot.supplies}` : ''].filter(Boolean).join(' · ');
+    if (credits) out.push(tile('supplies', `+${credits}`, `Suministros · ${creditsWhy}`));
+    const food = (reward.food ?? 0) + (loot?.food ?? 0);
+    if (food) out.push(tile('food', `+${food}`, 'Raciones'));
+    const medicines = (reward.medicines ?? 0) + (loot?.medicines ?? 0);
+    if (medicines) out.push(tile('medicines', `+${medicines}`, 'Medicinas'));
+    const parts = (reward.parts ?? 0) + (loot?.parts ?? 0) + (report.scrap ?? 0);
+    if (parts) out.push(tile('parts', `+${parts}`, 'Piezas'));
+    for (const w of loot?.weapons ?? []) out.push(tile(`w-${kindOf(w)}`, '', FOUND_WEAPONS[w].name, FOUND_WEAPONS[w].better ? '.better' : ''));
+    const items = new Map<ItemId, number>();
+    for (const item of loot?.items ?? []) items.set(item, (items.get(item) ?? 0) + 1);
+    for (const [item, n] of items) out.push(tile(item, n > 1 ? `×${n}` : '', ITEMS[item].name));
+    if (reward.recruit) out.push(tile('recruit', '+1', 'Un recluta'));
+    if (reward.vehicle) out.push(tile('vehicle', '', capitalize(VEHICLES[reward.vehicle]?.the ?? 'La Lata')));
+    return out;
   }
 
   // -------------------------------------------------------------- modal

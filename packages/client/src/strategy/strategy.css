@@ -105,10 +105,16 @@
   line-height: 1.35;
 }
 
-/* Lore's key words (marked «**así**»), to be read at a glance (Ana, 21/10 #14). */
+/* Lore's key words (marked «**así**»), to be read at a glance (Ana, 21/10 #14), and the objective («==así==», #28). */
 .x-text strong {
   font-weight: 800;
   color: var(--ink-blue);
+}
+
+mark.goal {
+  background: none;
+  font-weight: 700;
+  color: inherit;
 }
 
 /* Expediente pages: the story, smaller so it doesn't drown the sheet. */
@@ -513,7 +519,8 @@
 }
 
 .strat-credits,
-.strat-level {
+.strat-level,
+.strat-day {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -621,12 +628,6 @@
 
 .top-tip .tip-warn {
   color: #f0c27a;
-}
-
-.top-tip .tip-day {
-  color: var(--t-muted, #a1a79d);
-  font-size: 12px;
-  letter-spacing: 0.06em;
 }
 
 .top-tip .tip-num {
@@ -926,55 +927,134 @@
   min-width: 200px;
 }
 
-/* The debrief (Ana, 21/10 #24: «como si lo hiciera el maquetador sénior»): one column on one left edge, the result
-   and the mission on a head line over a hairline, the figures, what happened a line each, all alike; «Continuar»
-   apart, past a rule, in the middle of its own column. */
+/* The debrief (Ana, 21/10 #24 and 22/10 #40): one column on one left edge. The result's plate on a line of its own,
+   the mission's name under it; the haul as pictures of one size; the few lines left; at the foot the story's page
+   and «Continuar» on the right, as «Entendido» elsewhere. */
 .debrief-card {
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
-  padding: 14px 0 14px 20px;
+  padding: 16px 20px 14px;
 }
 
 .debrief-main {
   display: grid;
   align-content: start;
+  justify-items: start;
   gap: 10px;
   min-width: 0;
-  padding-right: 20px;
-}
-
-.debrief-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--x-line);
+  width: 100%;
 }
 
 .debrief-card.briefing-head:is(.victory, .defeat) h1.debrief-result {
   margin: 0;
   padding: 3px 12px 2px;
-  font-size: 20px;
-  letter-spacing: 0.1em;
+  font-size: 15px;
+  letter-spacing: 0.14em;
   transform: none;
 }
 
 .debrief-name {
+  margin: -2px 0 0;
   font-family: var(--font-display);
-  font-size: 19px;
+  font-size: 24px;
+  font-weight: 400;
   letter-spacing: 0.03em;
 }
 
-.debrief-card .debrief-tally {
-  justify-content: flex-start;
-  margin: 0;
+/* The haul: tiles of one size, a picture and its figure; the mission's own thing first, bigger, its name under it. */
+.debrief-haul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--x-line);
 }
 
-/* The figures read beside the lines under them, not as small print. */
-.debrief-card .debrief-tally .x-chip {
-  padding: 2px 8px;
-  font-size: 13px;
+.haul {
+  display: grid;
+  justify-items: center;
+  align-content: end;
+  gap: 2px;
+  width: 72px;
+  padding: 6px 4px 5px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.1));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  cursor: var(--cursor-arrow);
+}
+
+.haul-pic {
+  width: 52px;
+  height: 44px;
+  background: var(--hc, #ffd25a);
+  -webkit-mask: var(--hi) center / contain no-repeat;
+  mask: var(--hi) center / contain no-repeat;
+}
+
+.haul b {
+  font: 500 18px/1 var(--t-font-title, var(--font-display));
+  color: #fff;
+}
+
+.haul.goal {
+  width: 132px;
+  background: radial-gradient(ellipse at 50% 40%, rgba(242, 194, 48, 0.14), transparent 70%), linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.1));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(242, 194, 48, 0.45);
+}
+
+.haul.goal .haul-pic {
+  width: 104px;
+  height: 84px;
+}
+
+.haul.goal b {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--t-accent, #f2c230);
+}
+
+/* Pictures: the packs' silhouettes in the stores' colours, Arte's renders where there is one. */
+.haul[data-haul='supplies'] { --hi: url('/ui/synty/icons/mh-crate.webp'); }
+.haul[data-haul='parts'] { --hi: url('/ui/synty/icons/mh-repair.webp'); --hc: #b2c3d0; }
+.haul[data-haul='recruit'] { --hi: url('/ui/synty/icons/helmet.webp'); --hc: #eef0ea; }
+.haul[data-haul='objective'] { --hi: url('/ui/synty/icons/map-objective.webp'); --hc: var(--t-accent, #f2c230); }
+.haul[data-haul='w-rifle'] { --hi: url('/ui/synty/icons/rifle.webp'); }
+.haul[data-haul='w-shotgun'] { --hi: url('/ui/synty/icons/r-escopeta.webp'); }
+.haul[data-haul='w-sniper'] { --hi: url('/ui/synty/icons/sniper.webp'); }
+.haul[data-haul='w-cannon'] { --hi: url('/ui/synty/icons/mh-machinegun.webp'); }
+.haul[data-haul='w-sword'] { --hi: url('/ui/synty/icons/mh-machete.webp'); }
+.haul[data-haul='w-pistol'] { --hi: url('/ui/synty/icons/pistol.webp'); }
+.haul[data-haul^='w-'] { --hc: #d8dcd4; }
+.haul.better { --hc: #c58cff; }
+.haul[data-haul='fragGrenade'] { --hi: url('/ui/synty/icons/explosives.webp'); }
+.haul[data-haul='smokeGrenade'] { --hi: url('/ui/synty/icons/mh-smoke.webp'); }
+.haul[data-haul='flashbang'] { --hi: url('/ui/synty/icons/mh-flashbang.webp'); }
+.haul:is([data-haul='apRounds'], [data-haul='tracerRounds']) { --hi: url('/ui/synty/icons/mh-bullets.webp'); }
+.haul:is([data-haul='nanoVest'], [data-haul='armor']) { --hi: url('/ui/synty/icons/armor.webp'); }
+.haul[data-haul='mindShield'] { --hi: url('/ui/synty/icons/mh-headphones.webp'); }
+
+/* Arte's renders, in their own colours; framed with room round them, so a little closer, to match the silhouettes. */
+.haul:is([data-haul='food'], [data-haul='medicines'], [data-haul='medicine'], [data-haul='firstAid'], [data-haul='vehicle']) .haul-pic {
+  background: var(--hr) center / auto 150% no-repeat;
+  -webkit-mask: none;
+  mask: none;
+}
+
+.haul[data-haul='food'] { --hr: url('/ui/synty/renders/racion.webp'); }
+.haul:is([data-haul='medicines'], [data-haul='medicine'], [data-haul='firstAid']) { --hr: url('/ui/synty/renders/botiquin.webp'); }
+.haul[data-haul='vehicle'] { --hr: url('/ui/synty/renders/furgoneta.webp'); }
+
+/* What changed for the base (a level, the clock): chips, after the pictures. */
+.debrief-events {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: center;
+  gap: 6px;
+  margin-left: 6px;
 }
 
 .debrief-lines {
@@ -1021,14 +1101,18 @@
   vertical-align: 1px;
 }
 
-.debrief-card .debrief-story p {
-  margin: 6px 0 0;
+/* The foot: the story's page on the left, «Continuar» on the right, as «Entendido» elsewhere. */
+.debrief-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  margin-top: 4px;
 }
 
-.debrief-actions {
-  align-content: center;
-  padding: 0 20px;
-  border-left: 1px solid var(--x-line);
+.debrief-card .debrief-story p {
+  margin: 6px 0 0;
 }
 
 .squad-actions > small {
@@ -2834,10 +2918,6 @@ dl.briefing {
 
 /* ------------------------------------------------------------- debrief */
 
-.debrief-tally {
-  margin: 0;
-}
-
 /* The story's page after a chapter: there to read, not in the way. */
 .debrief-story summary {
   cursor: var(--cursor-hot);
@@ -2850,6 +2930,111 @@ dl.briefing {
 .debrief-story p {
   max-width: 68ch;
   margin: 4px 0 0;
+}
+
+/* «Esperar un día» on the Mapa (#48), under the missions: the button the panel's width, who waits under it. */
+.wait-day {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 2px;
+}
+
+.wait-day .x-btn {
+  width: 100%;
+}
+
+.wait-day small {
+  font-size: 12px;
+}
+
+.wait-day .wait-asked {
+  color: var(--t-accent, #f2c230);
+  font-weight: 700;
+}
+
+/* Soldados as faces in a grid (Ana, 22/10 #49): the bust in a sunken frame edged in its player's colour, the name it
+   goes by under it, the rank's chevrons on the face's corner; a talent to choose (▲) and what keeps it in (wounds,
+   fever, fallen) over it. Picked: lit in the accent. */
+.soldier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 6px;
+  margin: 2px 0 8px;
+}
+
+.soldier-tile {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 4px 6px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--t-panel-hi, rgba(46, 50, 52, 0.97));
+  box-shadow: inset 0 -3px 0 var(--accent);
+  color: var(--t-text, #eef0ea);
+  cursor: var(--cursor-hot);
+}
+
+.soldier-tile:hover {
+  background: var(--t-panel-hover, rgba(60, 64, 64, 0.98));
+}
+
+.soldier-tile.selected {
+  box-shadow: inset 0 -3px 0 var(--accent), inset 0 0 0 2px var(--t-accent, #f2c230);
+}
+
+.st-face {
+  width: 100%;
+  max-width: 64px;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background:
+    var(--portrait) 50% 24% / 120% auto no-repeat,
+    radial-gradient(circle at 50% 30%, #3a4246, #15181a 75%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.soldier-tile.dim .st-face {
+  filter: grayscale(1) brightness(0.55);
+}
+
+.st-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 12.5px/1.1 var(--t-font, sans-serif);
+}
+
+.soldier-tile .rank {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+.st-points {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--t-good, #8fd05a);
+  color: #14200a;
+  font-size: 10px;
+}
+
+.soldier-tile > .x-side {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.1;
 }
 
 /* ------------------------------------------------------------ recruiting */
@@ -2882,15 +3067,6 @@ dl.briefing {
 }
 
 /* «no está: los preparas tú» after a partner's name in a heading. */
-/* The day, at the end of the Mapa's head, after its rule (#34). */
-.x-head .head-day {
-  order: 2;
-  color: var(--t-muted, #a1a79d);
-  font-family: var(--t-font-title, var(--font-display));
-  font-size: 12px;
-  letter-spacing: 0.1em;
-}
-
 .x-head small {
   font-family: var(--font);
   font-size: 11px;

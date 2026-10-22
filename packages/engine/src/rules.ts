@@ -122,7 +122,7 @@ const EDGE_GAP = [12, 8, 0] as const;
 const EDGE_EVAC_GAP = 3;
 
 /** What leaves the dead's ways as they were (Sim.ways): neither the ground nor where the living stand changes. */
-const KEEPS_WAYS: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['abilityUsed', 'noise', 'forgot', 'smashed', 'shot', 'damaged', 'infected', 'stunned', 'disoriented', 'psi', 'overwatch', 'trapSprung']);
+const KEEPS_WAYS: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['abilityUsed', 'noise', 'forgot', 'hunting', 'smashed', 'shot', 'damaged', 'infected', 'stunned', 'disoriented', 'psi', 'overwatch', 'trapSprung']);
 
 /** How many more times in an enemy turn those waiting behind their own get to go on (Sim.runAlienTurn). */
 const JAM_PASSES = 2;
@@ -808,6 +808,20 @@ export class Sim {
       if (!u.alive || this.over) return;
     }
     flush();
+    if (u.team === 'xcom' && u.alive && !this.over) this.huntedBy(u);
+  }
+
+  /**
+   * The dead awake that see `u` where it is go after it (Unit.hunting, ai.ts takeZombieTurn: Arturo, 22/10), even
+   * if it is out of their sight again before their turn.
+   */
+  huntedBy(u: Unit): void {
+    for (const o of this.s.units) {
+      if (!o.alive || !TEMPLATES[o.template].undead || !hostileTo(o, u)) continue;
+      if (o.podId && !this.s.pods.some((p) => p.id === o.podId && p.active)) continue;
+      if (o.hunting?.id === u.id && o.hunting.missed === 0) continue;
+      if (canSee(this.s, o, u)) this.emit({ t: 'hunting', unit: o.id, target: u.id, missed: 0 });
+    }
   }
 
   /**
@@ -933,6 +947,8 @@ export class Sim {
     if (first.cause !== 'attacked' || first.unit) this.breakConcealment({ reason: EXPOSURE[first.cause], unit: first.unit, by: first.by, ...(seen && spotter ? { range } : {}) });
     for (const pod of pods) this.emit({ t: 'podActivated', pod: pod.id, ...whyOf(pod) });
     for (const pod of pods) this.scamper(pod.unitIds);
+    // Woken by the sight of a soldier: whoever of them sees them goes after them.
+    if (seen && spotted?.team === 'xcom' && spotted.alive && !this.over) this.huntedBy(spotted);
   }
 
   /** Free move to the best nearby cover, without spending actions. The dead don't take cover. */
@@ -1692,6 +1708,27 @@ export function executeCommand(s: GameState, cmd: Command, ctx: CommandContext):
   return { ok: true, events: sim.events };
 }
 
+
+/**
+ * `slot`'s clock ran out in the squad's turn (the host's turn clock: Arturo, 22/10): each of the soldiers they command
+ * with actions left takes cover where it has some (Cubrirse), the rest lose theirs, and they are done for the turn;
+ * the partner, if still playing, gets the command.
+ */
+export function runOutOfTime(s: GameState, slot: Slot, ctx: Omit<CommandContext, 'slot'>): GameEvent[] {
+  if (s.outcome || s.realtime || s.activeTeam !== 'xcom' || s.ready[slot]) return [];
+  const sim = new Sim(s, ctx.rng, ctx.connected);
+  const turn = s.turn;
+  for (const u of combatants(s, 'xcom')) {
+    if (sim.over) return sim.events;
+    if (u.ap > 0 && commandsFor(slot, u.owner, ctx.connected) && !abilityBlocker(s, u, 'hunker')) sim.perform(u, 'hunker');
+  }
+  if (s.activeUnit) sim.emit({ t: 'unitActive', unit: null });
+  sim.emit({ t: 'ready', slot, ready: true });
+  sim.maybeEndXcomTurn();
+  const partner: Slot = slot === 0 ? 1 : 0;
+  if (s.turn === turn && s.activeTeam === 'xcom' && !s.outcome && sim.canReceiveCommand(partner)) sim.passCommand(partner);
+  return sim.events;
+}
 
 /** Re-evaluates the end of turn, e.g. after a player disconnects. */
 export function syncTurn(s: GameState, ctx: Omit<CommandContext, 'slot'>): GameEvent[] {

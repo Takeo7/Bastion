@@ -2120,10 +2120,15 @@ export function raiseCost(p: BasePiece): { cost: number; level: number } | strin
 
 // ---------------------------------------------------------------- the sieges
 
-/** Missions before the first siege (docs/FASE12.md §11.5), and between one and the next: three, two once the Marea is half way. */
-export const SIEGE_FIRST_IN = 3;
+/**
+ * Missions before the first siege (docs/FASE12.md §11.5): it comes straight after the first mission, the only thing
+ * the base can do then (Ana, 22/10). Between one and the next: three, two once the Marea is half way.
+ */
+export const SIEGE_FIRST_IN = 1;
 export const SIEGE_EVERY = 3;
-/** The dead in the first siege; each one held brings SIEGE_GROWTH more, and every point of the Marea one more. */
+/** The dead in that first siege: a small one, with the base hardly built yet (Arturo, 22/10). */
+export const SIEGE_OPENING = 6;
+/** The dead a siege is counted from after that: each one held brings SIEGE_GROWTH more, and every point of the Marea one more. */
 export const SIEGE_FIRST = 14;
 export const SIEGE_GROWTH = 6;
 /** Days that go by with each mission (docs/FASE12.md §11.6): time is counted in missions, the clock inside in days. */
@@ -2326,7 +2331,7 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     flooded: [],
     base: { works: [] },
     bastion: freshClearing(rng),
-    siege: { in: SIEGE_FIRST_IN, count: SIEGE_FIRST, sides: [], held: 0 },
+    siege: { in: SIEGE_FIRST_IN, count: SIEGE_OPENING, sides: [], held: 0 },
     regions: freshRegions(),
     offers: [],
     activeMission: null,
@@ -3231,14 +3236,17 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
     }
 
     case 'advance': {
-      // Time goes by with the missions now (docs/FASE12.md §11.6): there is no waiting for news (only taking back a «ready»).
-      if (cmd.ready && !mustWait(c)) return { ok: false, error: 'Ya no se espera: el tiempo pasa con cada misión.' };
+      // Waiting a day at the Bastión (Ana and Arturo, 22/10): both say so, and a day goes by as on a mission's
+      // (rations eaten, wounds healing, the Taller's work, the Marea), without going out. Nobody able to go out, the
+      // days go by till someone can (docs/FASE12.md §11.6).
       if (cmd.ready && c.event) return { ok: false, error: 'Antes hay que decidir qué hacer con el acontecimiento.' };
+      if (cmd.ready && activeOffer(c)?.siege) return { ok: false, error: 'Viene el asedio: no hay otra cosa que hacer.' };
       c.advanceReady[slot] = cmd.ready;
       if (cmd.ready && everyoneReady(c.advanceReady, ctx.connected)) {
         c.advanceReady = [false, false];
-        // The days go by until someone can go out again (or something has to be decided first).
-        for (let i = 0; i < 60 && mustWait(c) && !c.event; i++) passDay(c, ctx.rng);
+        if (mustWait(c)) for (let i = 0; i < 60 && mustWait(c) && !c.event; i++) passDay(c, ctx.rng);
+        else passDay(c, ctx.rng);
+        syncMarea(c);
       }
       return { ok: true };
     }
@@ -3437,6 +3445,8 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   const meal = dailyRations(c);
   if ((c.food ?? 0) >= meal) {
     c.food = (c.food ?? 0) - meal;
+    // The day, always in view (Ana and Arturo, 22/10), with what it ate.
+    if (meal) log(c, `Día ${c.day}: se ${meal === 1 ? 'come 1 ración' : `comen ${meal} raciones`}.`);
   } else {
     c.food = 0;
     if (!c.hungry) {

@@ -1,3 +1,4 @@
+import { decorSightHeight } from './decor';
 import type { CoverLevel, GameState, Place, Pos, TileKind, Unit, Vec2 } from './types';
 
 /** Cardinal directions in N, E, S, W order (y grows southwards). */
@@ -188,8 +189,16 @@ export function isWindow(kind: TileKind | null): boolean {
 /** Top of the opaque column on a tile, in absolute storeys (raised floors are solid underneath). */
 export function sightTop(s: GameState, x: number, y: number): number {
   if (!inBounds(s, x, y)) return Infinity;
-  const kind = tileAt(s, x, y);
-  return elevAt(s, x, y) + OBSTACLE_HEIGHT[kind];
+  return elevAt(s, x, y) + groundSightHeight(s, tileIndex(s, x, y));
+}
+
+/**
+ * How tall what stands on ground tile `i` is for sight: its kind's height, but for full cover lower than the eyes,
+ * the object's own (decor.ts decorSightHeight: Arturo, 22/10). Cover goes by the kind alone.
+ */
+export function groundSightHeight(s: GameState, i: number): number {
+  const kind = s.tiles[i]!;
+  return (kind === 'high' ? decorSightHeight(s.decor, s.width, i) : null) ?? OBSTACLE_HEIGHT[kind];
 }
 
 /** Storeys of the building a tile belongs to (GameState.storeys): 0 outside one, and on maps without them. */
@@ -239,7 +248,7 @@ export function roofSide(s: GameState, x: number, y: number, h: number): 'under'
  * no part.
  */
 export function opaqueAtIndex(s: GameState, i: number, h: number): boolean {
-  if ((s.elev[i] ?? 0) + OBSTACLE_HEIGHT[s.tiles[i]!] > h + 1e-6) return true;
+  if ((s.elev[i] ?? 0) + groundSightHeight(s, i) > h + 1e-6) return true;
   const k = Math.floor(h + 1e-6);
   if (k < 1 || !s.levels || k > s.levels.length) return false;
   const kind = s.levels[k - 1]!.tiles[i] ?? null;

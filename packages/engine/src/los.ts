@@ -13,6 +13,7 @@ import {
   kindAt,
   levelCount,
   nodeOf,
+  groundSightHeight,
   obstacleHeight,
   opaqueAtIndex,
   placesOn,
@@ -22,7 +23,7 @@ import {
   tileIndex,
   toPos,
 } from './grid';
-import type { GameState, Place, Pos, Unit, Vec2 } from './types';
+import type { GameState, Place, Pos, TileKind, Unit, Vec2 } from './types';
 
 /**
  * The most windows a line of sight goes through (playtest 2026-10-16): from
@@ -329,16 +330,39 @@ export function isViewer(u: Unit, team: Unit['team']): boolean {
 
 /**
  * How far the squad sees the ground, past where it sees enemies (Arturo, 21/10: «que se vea hasta el final… y
- * luego un cono más pequeño de largo donde se detecten enemigos»): teamView.
+ * luego un cono más pequeño de largo donde se detecten enemigos»; 22/10: a long street, to its end, to the map's
+ * edge): across the whole map, teamView.
  */
-export const VIEW_REACH = 40;
+export function viewReach(s: GameState): number {
+  return Math.hypot(s.width, s.height);
+}
 
 /**
- * Places in the line of sight of any living unit of `team` within VIEW_REACH, day or night (Arturo, 21/10): the
- * ground the player sees, enemies or not. Enemies only show within teamVisibility.
+ * Places in the line of sight of any living unit of `team`, as far as the map goes, day or night (Arturo, 21/10
+ * and 22/10): the ground the player sees, enemies or not. Enemies only show within teamVisibility.
  */
 export function teamView(s: GameState, team: Unit['team']): boolean[] {
-  return teamVisibility(s, team, VIEW_REACH);
+  // Across the whole map it costs some 10 ms, and it changes only as the viewers move or the map does (a door, a
+  // wall blown through): the last one is kept for whatever else changes (the dead on their turn).
+  const viewers = s.units.filter((u) => isViewer(u, team)).map((u) => `${u.id}@${u.pos.x},${u.pos.y},${u.pos.z ?? 0}`);
+  const key = `${team}|${s.width}x${s.height}|${mapStamp(s)}|${viewers.join(';')}`;
+  if (lastView?.key !== key) lastView = { key, mask: teamVisibility(s, team, viewReach(s)) };
+  return lastView.mask.slice();
+}
+
+/** The last teamView worked out and what from (teamView). */
+let lastView: { key: string; mask: boolean[] } | null = null;
+
+/** A hash of what stops sight on the map: its tiles on every level and their heights. */
+function mapStamp(s: GameState): number {
+  let h = 0;
+  const add = (k: TileKind | null) => {
+    h = (Math.imul(h, 31) + (k === null ? 1 : k.charCodeAt(0) * 7 + k.length)) | 0;
+  };
+  for (const k of s.tiles) add(k);
+  for (const level of s.levels ?? []) for (const k of level.tiles) add(k);
+  for (const e of s.elev) h = (Math.imul(h, 31) + e) | 0;
+  return h;
 }
 
 /**
@@ -467,7 +491,7 @@ function sightGrid(s: GameState): SightGrid {
   window.fill(0);
   for (let i = 0; i < area; i++) {
     elev[i] = s.elev[i] ?? 0;
-    ground[i] = elev[i]! + obstacleHeight(s.tiles[i]!);
+    ground[i] = elev[i]! + groundSightHeight(s, i);
     if (isWindow(s.tiles[i]!)) window[i] = 1;
   }
   top.fill(-Infinity);

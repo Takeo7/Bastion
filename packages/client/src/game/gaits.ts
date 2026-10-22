@@ -1,5 +1,5 @@
 import type { TemplateId } from '@bastion/engine';
-import { CHARACTER_SCALE, SYNTY_SCALE } from './syntyManifest';
+import { CHARACTER_SCALE, SYNTY_SCALE, type AnimationId } from './syntyManifest';
 
 // How each kind of unit moves (docs/ARTE.md, «Velocidades»; Arturo, 2026-10-14:
 // «todos corren demasiado rápido y no se ve bien la animación de andar ni
@@ -20,12 +20,27 @@ export type GaitMotion = 'walk' | 'run' | 'sprint' | 'crouchWalk';
  * the planted foot's speed back along the ground, measured in the reference
  * lab (its median over the frames it is down, the figure posed in place).
  * Synty's «…_RootMotion» versions say walk 1.45, run 2.59 and sprint 7.24 m/s
- * (Goblin: 1.68, 3.62, 7.24); the dead's vary ±8 % from body to body.
+ * (Goblin: 1.68, 3.62, 7.24); the dead's vary ±8 % from body to body. The
+ * living's sprint by the foot the body is on, moving at the game's pace (22/10:
+ * at 6.9 the planted foot slid forward 14 % of the pace).
  */
 const CLIP_SPEED: Record<'living' | 'dead', Record<GaitMotion, number>> = {
-  living: { walk: 1.46, run: 2.4, sprint: 6.9, crouchWalk: 1.48 },
+  living: { walk: 1.46, run: 2.4, sprint: 5.95, crouchWalk: 1.48 },
   dead: { walk: 1.78, run: 2.95, sprint: 5.6, crouchWalk: 1.48 },
 };
+
+/**
+ * The same for the clips a soldier moves in with a gun (syntyManifest ARMED_MOTIONS: Mixamo's, 22/10 #15), measured
+ * so (by the foot the body is on, a frame at a time; Base Locomotion's come to 1.50, 2.33 and 5.95 that way). They are
+ * slow ones, with long strides: at the game's paces about 3 steps a second running, 4 sprinting.
+ */
+const ARMED_CLIP_SPEED: Partial<Record<AnimationId, number>> = { rifleWalk: 0.54, rifleRun: 1.84, rifleSprint: 2.89 };
+
+/** How much faster than Synty's clip for `motion` clip `id` plays for its feet to keep the same pace. */
+export function armedPace(motion: GaitMotion, id: AnimationId): number {
+  const own = ARMED_CLIP_SPEED[id];
+  return own ? CLIP_SPEED.living[motion] / own : 1;
+}
 
 /** Tiles a character's metre covers: the converted metre (SYNTY_SCALE), the characters drawn CHARACTER_SCALE larger. */
 const TILES_PER_METRE = SYNTY_SCALE * CHARACTER_SCALE;

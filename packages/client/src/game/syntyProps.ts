@@ -17,7 +17,7 @@ const parts = new Map<PropId, PropPart[]>();
 const pending = new Map<PropId, Promise<void>>();
 
 function prepare(id: PropId, model: THREE.Group): void {
-  const a = PROPS[id] as { fit?: number; stretch?: boolean; thick?: number; yaw?: number; shift?: [number, number]; origin?: boolean; deck?: number; sink?: number };
+  const a = PROPS[id] as { fit?: number; stretch?: boolean; thick?: number; yaw?: number; shift?: [number, number]; origin?: boolean; deck?: number; sink?: number; tall?: number };
   model.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
@@ -29,6 +29,7 @@ function prepare(id: PropId, model: THREE.Group): void {
   const scale = size.x >= size.z ? new THREE.Vector3(along, across, across) : new THREE.Vector3(across, across, along);
   // A deck one stands on, one storey up whatever its width took (a guard tower's on its legs).
   if (a.deck) scale.y = STOREY / (a.deck * SYNTY_SCALE);
+  if (a.tall) scale.y = a.tall / size.y;
   // Centred on the tile and on the floor (or sunk into it), turned to face north, then shifted along its own axes.
   const fit = new THREE.Matrix4()
     .makeTranslation(a.shift?.[0] ?? 0, -(a.sink ?? 0), a.shift?.[1] ?? 0)

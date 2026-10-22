@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { armedPace } from './gaits';
 import { loadAnimation } from './synty';
-import { ACTIONS, ANIMATIONS, CAMP_LOOPS, CAMP_MOVES, CAMP_PARTS, CAMP_VARIATIONS, DEAD_MOTIONS, DEATHS, GESTURE_ORDER, GESTURES, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type AnimationId, type Gesture, type Motion } from './syntyManifest';
+import { ACTIONS, ANIMATIONS, ARMED_MOTIONS, CAMP_LOOPS, CAMP_MOVES, CAMP_PARTS, CAMP_SPANS, CAMP_VARIATIONS, DEAD_MOTIONS, DEATHS, GESTURE_ORDER, GESTURES, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type AnimationId, type ArmedKind, type Gesture, type Motion } from './syntyManifest';
 
 // Locomotion from «ANIMATION – Base Locomotion» on any Synty character. Each
 // unit plays the clips on its own proxy of the pack's skeleton (one mixer,
@@ -29,6 +30,8 @@ function bodyOnly(clip: THREE.AnimationClip): THREE.AnimationClip {
 const HIPS = SYNTY_BONES.indexOf('Hips');
 /** The bones a hit reaction moves: from the spine up (the legs and hips keep what they do). */
 const UPPER = new Set(['Spine_01', 'Spine_02', 'Spine_03', 'Neck', 'Head', 'Clavicle_L', 'Clavicle_R', 'Shoulder_L', 'Shoulder_R', 'Elbow_L', 'Elbow_R', 'Hand_L', 'Hand_R']);
+/** The neck and head: what looks round over a weapon's clip (looks). */
+const HEAD = new Set(['Neck', 'Head']);
 /** The upper body but the gun arm (a throw's clip: the right hand keeps the gun). */
 const FREE = new Set([...UPPER].filter((b) => !b.endsWith('_R')));
 /** Seconds a death takes to blend in from the pose the unit had. */
@@ -62,6 +65,13 @@ export interface AnimSet {
   actionsFree: THREE.AnimationClip[];
   /** GESTURE_ORDER, in order (the living's), their upper body only: played once when asked, over the stance. */
   gestures: THREE.AnimationClip[];
+  /** The variations that look round, the neck and head only: played now and then over a weapon's clip at rest. */
+  looks: THREE.AnimationClip[];
+  /**
+   * Moving with a gun in the hands (ARMED_MOTIONS), in MOTION_ORDER: each motion's clip of its own (null: Synty's), how
+   * much faster than Synty's it plays (armedPace), and whether the arms are the moving clip's (its own or Synty's).
+   */
+  armed: Record<ArmedKind, { clips: (THREE.AnimationClip | null)[]; pace: number[]; arms: boolean[] }>;
   /** Inverse model-space rotation of each bone in the T-pose. */
   restInv: THREE.Quaternion[];
   /** Each bone's parent among SYNTY_BONES (−1: the hips, under the fixed root). */
@@ -96,6 +106,8 @@ function prepare(
   hits: THREE.AnimationClip[],
   actions: THREE.AnimationClip[],
   gestures: THREE.AnimationClip[],
+  looking: boolean[],
+  armedClips: Map<AnimationId, THREE.AnimationClip>,
 ): AnimSet {
   const proxy = tpose.clone();
   const mixer = new THREE.AnimationMixer(proxy);
@@ -123,12 +135,31 @@ function prepare(
     actionsUpper: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
     actionsFree: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => FREE.has(t.name.split('.')[0]!)))),
     gestures: gestures.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
+    looks: variations.filter((_, i) => looking[i]).map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => HEAD.has(t.name.split('.')[0]!)))),
+    armed: armedOf(armedClips),
     restInv: bones.map((b) => (b ? b.getWorldQuaternion(new THREE.Quaternion()).invert() : new THREE.Quaternion())),
     parent,
     rootQ: root.getWorldQuaternion(new THREE.Quaternion()),
     rootM: root.matrixWorld.clone(),
     hips: hips.getWorldPosition(new THREE.Vector3()),
   };
+}
+
+const ARMED_KINDS = Object.keys(ARMED_MOTIONS) as ArmedKind[];
+/** Every clip ARMED_MOTIONS names (not `own`). */
+const ARMED_IDS = [...new Set(ARMED_KINDS.flatMap((k) => Object.values(ARMED_MOTIONS[k]).filter((id): id is AnimationId => id !== 'own')))];
+
+function armedOf(clips: Map<AnimationId, THREE.AnimationClip>): AnimSet['armed'] {
+  const out = {} as AnimSet['armed'];
+  for (const kind of ARMED_KINDS) {
+    const of = MOTION_ORDER.map((m) => ARMED_MOTIONS[kind][m]);
+    out[kind] = {
+      clips: of.map((id) => (id && id !== 'own' ? bodyOnly(clips.get(id)!) : null)),
+      pace: of.map((id, k) => (id && id !== 'own' && k > 1 ? armedPace(MOTION_ORDER[k] as Exclude<Motion, 'idle' | 'crouchIdle'>, id) : 1)),
+      arms: of.map((id) => !!id),
+    };
+  }
+  return out;
 }
 
 /** When a death's hips stop moving (under 0.3 % of their height a frame), and a beat to lie still. */
@@ -163,14 +194,17 @@ export function whenAnimSet(build: Build, dead = false): Promise<AnimSet> {
     const motions = MOTION_ORDER.map((m) => (dead && DEAD_MOTIONS[m]) || MOTIONS[build][m]);
     const actions = dead ? [] : ACTIONS;
     const gestures = dead ? [] : GESTURE_ORDER.map((g) => GESTURES[build][g]);
-    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id), ...HITS[build].map((h) => h.id), ...actions, ...gestures];
+    const armed = dead ? [] : ARMED_IDS;
+    const ids = [...motions, ...variations, ...STANCE_ORDER.map((s) => STANCES[build][s]), ...DEATHS[build].map((d) => d.id), ...HITS[build].map((h) => h.id), ...actions, ...gestures, ...armed];
     p = Promise.all([loadAnimation(ANIMATIONS.tpose.pack, 'tpose'), ...ids.map((id) => loadAnimation(ANIMATIONS[id].pack, id))]).then(([pose, ...loaded]) => {
       const clips = loaded.map((c) => c.clip);
       const at = [MOTION_ORDER.length, MOTION_ORDER.length + variations.length, MOTION_ORDER.length + variations.length + STANCE_ORDER.length];
       at.push(at[2]! + DEATHS[build].length);
       at.push(at[3]! + HITS[build].length);
       const acted = at[4]! + actions.length;
-      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2], at[3]), clips.slice(at[3], at[4]), clips.slice(at[4], acted), clips.slice(acted));
+      const gestured = acted + gestures.length;
+      const armedClips = new Map(armed.map((id, i) => [id, clips[gestured + i]!] as const));
+      const set = prepare(pose!.scene, pose!.clip, clips.slice(0, at[0]), clips.slice(at[0], at[1]), clips.slice(at[1], at[2]), clips.slice(at[2], at[3]), clips.slice(at[3], at[4]), clips.slice(at[4], acted), clips.slice(acted, gestured), variations.map((id) => id.startsWith('look')), armedClips);
       ready.set(kit, set);
       return set;
     });
@@ -225,6 +259,10 @@ export function whenCampClips(build: Build): Promise<Map<string, THREE.Animation
         out.set(`${id}In`, cut(whole, ...parts.into, `${id}In`));
         out.set(`${id}Out`, cut(whole, ...parts.out, `${id}Out`));
       }
+      for (const [id, span] of Object.entries(CAMP_SPANS)) {
+        const whole = out.get(id);
+        if (whole && span) out.set(id, cut(whole, ...span, id));
+      }
       campReady.set(build, out);
       return out;
     });
@@ -240,6 +278,8 @@ const BLEND = 0.35;
 const CUT = 0.2;
 /** Seconds the idle takes to ease from one stance to another. */
 const STANCE_BLEND = 0.6;
+/** Seconds moving with a gun in the hands takes to come in as it is drawn, or to go. */
+const ARMED_BLEND = 0.3;
 const nextWait = () => 5 + Math.random() * 9;
 
 /** One unit's locomotion: a proxy skeleton and its mixer. */
@@ -282,8 +322,16 @@ export class AnimDriver {
   private moving = false;
   /** The camp's variations in the plain ones' place, while set (campVariations). */
   private camp: THREE.AnimationAction[] | null = null;
+  /** A look round over a weapon's clip at rest (set.looks), and the seconds until the next. */
+  private readonly looks: THREE.AnimationAction[];
+  private looking: THREE.AnimationAction | null = null;
+  private lookWait = nextWait();
   private readonly bones: THREE.Object3D[];
   private readonly world = Array.from({ length: N }, () => new THREE.Quaternion());
+  /** Moving with a gun in the hands (set.armed): each motion's clip of its own, the gun now held, and how far each is let in. */
+  private readonly armedActs: Record<ArmedKind, (THREE.AnimationAction | null)[]>;
+  private armedKind: ArmedKind | null = null;
+  private readonly armedHeld: Record<ArmedKind, number> = { rifle: 0, pistol: 0 };
   /** Blend weights (summing to 1) and playback speeds, in MOTION_ORDER. */
   readonly weights = new Float32Array(MOTION_ORDER.length);
   readonly speeds = new Float32Array(MOTION_ORDER.length).fill(1);
@@ -307,6 +355,17 @@ export class AnimDriver {
       a.setEffectiveWeight(0);
       return a;
     });
+    this.armedActs = {} as Record<ArmedKind, (THREE.AnimationAction | null)[]>;
+    for (const kind of ARMED_KINDS) {
+      this.armedActs[kind] = set.armed[kind].clips.map((clip) => {
+        if (!clip) return null;
+        const a = this.mixer.clipAction(clip);
+        a.play();
+        a.time = phase * clip.duration;
+        a.setEffectiveWeight(0);
+        return a;
+      });
+    }
     // Each starts playing when first stood in, so a crowd plays only the clips it uses.
     this.stances = set.stances.map((clip) => {
       const a = this.mixer.clipAction(clip);
@@ -316,6 +375,12 @@ export class AnimDriver {
     });
     this.held = new Float32Array(set.stances.length);
     this.gestures = set.gestures.map((clip) => {
+      const a = this.mixer.clipAction(clip);
+      a.setLoop(THREE.LoopOnce, 1);
+      a.setEffectiveWeight(0);
+      return a;
+    });
+    this.looks = set.looks.map((clip) => {
       const a = this.mixer.clipAction(clip);
       a.setLoop(THREE.LoopOnce, 1);
       a.setEffectiveWeight(0);
@@ -391,6 +456,22 @@ export class AnimDriver {
     for (const action of now) this.acting.add(action);
   }
 
+  /** Moves with gun `kind` in the hands from now on (ARMED_MOTIONS), eased in over `dt`; null, empty-handed (or a blade). */
+  armedAs(kind: ArmedKind | null, dt: number): void {
+    this.armedKind = kind;
+    for (const k of ARMED_KINDS) this.armedHeld[k] = THREE.MathUtils.clamp(this.armedHeld[k] + (k === kind ? dt : -dt) / ARMED_BLEND, 0, 1);
+  }
+
+  /** How much of the arms the moving clips have now (set.armed `arms`), by the weights as set: the gun held as they hold it. */
+  armedShare(): number {
+    const kind = this.armedKind;
+    if (!kind) return 0;
+    const arms = this.set.armed[kind].arms;
+    let share = 0;
+    for (let k = 0; k < arms.length; k++) if (arms[k]) share += this.weights[k]!;
+    return share * this.armedHeld[kind];
+  }
+
   /** How long action `id` lasts. */
   actSeconds(id: ActionId): number {
     return this.set.actions[ACTIONS.indexOf(id)]?.duration ?? 0;
@@ -451,12 +532,13 @@ export class AnimDriver {
    * Plays camp move `clip` once (CAMP_MOVES) over whatever it does, eased in, and holds its last pose until another
    * or none (eased out); how far through it is, 0 to 1 (1 also with none).
    */
-  campMove(clip: THREE.AnimationClip | null): number {
+  campMove(clip: THREE.AnimationClip | null, speed = 1): number {
     const next = clip ? this.mixer.clipAction(clip) : null;
     if (next && next !== this.move) {
       this.move?.stop();
       next.reset().setLoop(THREE.LoopOnce, 1);
       next.clampWhenFinished = true;
+      next.timeScale = speed;
       next.setEffectiveWeight(0).play();
       this.move = next;
       this.moved = 0;
@@ -464,6 +546,11 @@ export class AnimDriver {
     this.moving = !!next;
     const m = this.move;
     return m && next ? Math.min(1, m.time / m.getClip().duration) : 1;
+  }
+
+  /** How much of the pose the camp move has now (campMove), 0 to 1. */
+  get moveShare(): number {
+    return this.move ? Math.min(0.97, this.moved) : 0;
   }
 
   /** Plays these (campClips: CAMP_VARIATIONS) now and then in the plain variations' place, or the plain ones again (null). */
@@ -520,7 +607,7 @@ export class AnimDriver {
    * standing idle (the idle weight full) now and then plays a variation,
    * which takes its weight from the idle while it lasts.
    */
-  update(dt: number, calm: boolean): void {
+  update(dt: number, calm: boolean, look = false): void {
     const idle = this.weights[0]!;
     // The stance stood in takes the idle's place, the others give it back; those out of use stop.
     const ease = dt / STANCE_BLEND;
@@ -587,9 +674,40 @@ export class AnimDriver {
         this.keep = 1;
       }
     } else this.wait = Math.max(this.wait, 2);
+    // Holding a weapon at rest (`look`: its clip plays, so no variation), now and then a look round, the head only.
+    const l = this.looking;
+    if (l) {
+      const length = l.getClip().duration;
+      if (!l.isRunning() || l.time >= length - 1e-3 || !look) {
+        l.stop();
+        this.looking = null;
+        this.lookWait = nextWait();
+      } else {
+        const s = Math.min(0.9, Math.min(1, l.time / BLEND, (length - l.time) / BLEND));
+        l.setEffectiveWeight(s / (1 - s));
+      }
+    } else if (look && this.looks.length) {
+      this.lookWait -= dt;
+      if (this.lookWait <= 0) {
+        const next = this.looks[Math.floor(Math.random() * this.looks.length)]!;
+        next.reset().setEffectiveWeight(0).play();
+        this.looking = next;
+      }
+    }
     for (let k = 0; k < this.actions.length; k++) {
       const a = this.actions[k]!;
-      a.setEffectiveWeight(k === 0 ? idle * (1 - stood) - v : this.weights[k]!);
+      let w = k === 0 ? idle * (1 - stood) - v : this.weights[k]!;
+      // Moving with a gun: its own clip in Synty's place, at its own pace.
+      for (let j = 0; j < ARMED_KINDS.length; j++) {
+        const kind = ARMED_KINDS[j]!;
+        const own = this.armedActs[kind][k];
+        if (!own) continue;
+        const share = this.weights[k]! * this.armedHeld[kind];
+        own.setEffectiveWeight(share);
+        own.timeScale = this.speeds[k]! * this.set.armed[kind].pace[k]!;
+        w -= share;
+      }
+      a.setEffectiveWeight(Math.max(0, w));
       a.timeScale = this.speeds[k]!;
     }
     this.mixer.update(dt);

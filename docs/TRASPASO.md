@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 22/10 con la 0.9.4, la de las notas de Arturo del 22/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 22/10 con la 0.9.5, la de las notas de Arturo y Ana del 22/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 542 tests.
+   Deben pasar 551 tests.
 5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.9.4)
+## 3. Estado (versión 0.9.5)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,16 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3 y v0.9.4 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3, v0.9.4 y v0.9.5 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.9.5** (2026-10-22), las notas de Arturo y Ana con la 0.9.4 ([PRUEBA-2026-10-22.md](PRUEBA-2026-10-22.md) #7–#57). Desde esta versión, ninguna animación se da por hecha sin verla en movimiento (tiras de fotogramas revisadas por Gameplay):
+  - animaciones (Arte): los de la fila ya no se mueven a la vez; la pistola en reposo, quieta y en su funda; sentados en el centro de la silla; el cañón, al blanco al disparar; andar, correr y esprintar con el fusil bajo y cruzado (Mixamo, tercera tanda); subir a La Lata cada uno por su puerta (todoterreno) o de un paso por detrás;
+  - la vista: las fachadas se ven donde se ve la calle de delante; lo descubierto que ya no se ve, en gris (la niebla de guerra, más fuerte); lo nunca visto, negro; los interiores se descubren por habitaciones enteras; la línea de visión llega al final del mapa (los zombis, solo cerca); los objetos de cobertura completa más bajos que los ojos de un soldado dejan ver y disparar por encima (alturas medidas por Arte; grid.ts groundSightHeight);
+  - los zombis: el que os ve os persigue a donde vayáis aunque deje de veros, y os olvida tras 3 de sus turnos (Unit.hunting); además de los grupos, de 3 a 6 sueltos y quietos en casas y esquinas (setup.ts LURKERS);
+  - el reloj de turno (Arturo): 45 s por soldado de cada jugador, en una bolsa; solo corre el del que tiene el mando y nunca mientras se ve una acción o un cuadro; cada 5 s ahorrados, 1 s más al turno siguiente; a cero, sus soldados se cubren y acaba su turno (room.ts checkTurnClock, rules.ts runOutOfTime). Una barra bajo cada nombre, sin segundos;
+  - campaña: el primer asedio llega al volver de la primera misión y es pequeño (6); en la primera misión no se vuelve al Bastión; «Día N» siempre arriba y «Esperar un día» en el Mapa (los dos lo piden); evacuar o abandonar se aceptan solos a los 2 minutos, con la cuenta atrás en el centro;
+  - interfaz: la cámara al hombro al apuntar; la cámara se acerca cuando cae un soldado; barra de acciones solo con iconos; el informe de la misión con iconos; Soldados en cuadrícula de caras; TU TURNO hasta que se pulsa; volúmenes de 0 a 100 %; velocidad de los soldados en Ajustes; el alcance en casillas; esquinas redondeadas en la zona de movimiento; fuera el cuadro «De noche»; las cajas especiales, marcadas solo con un soldado cerca;
+  - textos: los resaltes, en negrita blanca; las presentaciones de misión, con las palabras clave en blanco y el objetivo en amarillo (Lore);
+  - sonido: el navajazo ya no suena a campana. Los sonidos grabados (CC0, [SONIDO.md](SONIDO.md)) están listos en el código y esperan a que se bajen.
 - **Lo nuevo de la 0.9.4** (2026-10-22), las notas de Arturo del 22/10 ([PRUEBA-2026-10-22.md](PRUEBA-2026-10-22.md)):
   - el Asentamiento con vida: hasta 6 soldados por el claro, junto a una hoguera encendida (sentados, en el suelo, uno calentándose las manos), apoyados en La Lata, paseando, hablando en pareja, bebiendo café o comiendo una barrita. Animaciones de Synty (Idles, Emotes) y de Mixamo (la segunda tanda, [MIXAMO.md](MIXAMO.md)), que solo se cargan en el Asentamiento;
   - el tablero de habilidades no se mueve: sale entero y centrado, sin arrastre ni rueda;

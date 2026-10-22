@@ -3,6 +3,8 @@ import { basename } from 'node:path';
 import {
   answerAbandon,
   callAbandon,
+  combatants,
+  runOutOfTime,
   activeOffer,
   offerMap,
   podsFor,
@@ -73,8 +75,15 @@ export type RoomMode = 'skirmish' | 'campaign';
 const RECONNECT_GRACE_MS = 30_000;
 /** The same for a player whose game was out of sight when it dropped (a laptop put to sleep): back, the turn and the command are still theirs. */
 const AWAY_GRACE_MS = 5 * 60_000;
-/** How long a joint decision waits for the partner's answer before it goes ahead (playtest 2026-10-14, #28: in case they left; 16/10: 90 s was too long). */
-const ANSWER_WAIT_MS = 30_000;
+/**
+ * How long a joint decision waits for the partner's answer before it goes ahead (playtest 2026-10-14, #28: in case they
+ * left; 16/10: 90 s was too long). Leaving the mission, two minutes (Arturo, 22/10: Ana was taken home unasked).
+ */
+const ANSWER_WAIT_MS: Record<DeadlineKind, number> = { proposal: 30_000, evac: 120_000, abandon: 120_000 };
+/** The squad's turn clock (Arturo, 22/10): each player gets this long for each soldier they command. */
+const TURN_MS_PER_SOLDIER = 45_000;
+/** Each this much a player has left at the end of the squad's turn is a second more in the next (Arturo, 22/10). */
+const SAVED_MS_PER_SECOND = 5_000;
 
 type AnyMessage = ClientMessage | CampaignMessage;
 
@@ -106,6 +115,16 @@ export class Room {
   private clock: ReturnType<typeof setInterval> | null = null;
   /** The last write of the save failed: the players were told once, and are told again only after one goes through. */
   private saveFailed = false;
+  /**
+   * The squad's turn clock (Arturo, 22/10; checkTurnClock): for the squad turn `turn`, each player's milliseconds
+   * `left` of their `total`; whose runs now (the holder of the command, while their screen shows nothing going on)
+   * and since when; and the seconds each saved last turn. Not saved: a restart gives the turn its clock afresh.
+   */
+  private turnClock: { turn: number; left: [number, number]; total: [number, number]; running: Slot | null; since: number; timer: ReturnType<typeof setTimeout> | null } | null = null;
+  /** Whose screen has played every event it was sent (the idle message): the turn clock waits while an action shows. */
+  private idle: [boolean, boolean] = [false, false];
+  /** The last turnClock message sent, so an unchanged one isn't sent again. */
+  private clockSent = '';
 
   constructor(
     private readonly store: SaveStore,
@@ -158,6 +177,7 @@ export class Room {
       if (!seat || seat.socket !== socket) return this.send(socket, { t: 'error', message: 'Identifícate primero.' });
       this.handle(seat, msg);
       this.syncClock();
+      this.checkTurnClock();
     });
 
     socket.on('close', () => {
@@ -168,6 +188,8 @@ export class Room {
       this.broadcastRoom();
       this.pauseRealtime();
       this.syncClock();
+      this.idle[seat.slot] = false;
+      this.checkTurnClock();
       setTimeout(() => this.resyncTurn(), (seat.away ? AWAY_GRACE_MS : RECONNECT_GRACE_MS) + 100);
     });
   }
@@ -220,11 +242,13 @@ export class Room {
     this.resyncTurn();
     // A proposal saved before the host restarted had no clock: it gets one when someone is back.
     this.checkWaits();
-    // Back in: how long the open decisions have left.
+    // Back in: how long the open decisions have left, and the turn clock.
     for (const kind of ['proposal', 'evac', 'abandon'] as const) {
       const wait = this.waits[kind];
       if (wait) this.send(socket, { t: 'deadline', kind, ms: Math.max(0, wait.at - Date.now()) });
     }
+    this.idle[seat.slot] = false;
+    this.send(socket, this.turnClockMessage());
     return seat;
   }
 
@@ -321,6 +345,9 @@ export class Room {
       case 'baseCursor':
         // What the partner has in hand on the base, passed on as it comes (docs/FASE12.md §11.7).
         if (this.phase === 'base') this.toPartner(seat, { t: 'baseCursor', slot: seat.slot, piece: msg.piece, x: msg.x, y: msg.y, rot: msg.rot });
+        break;
+      case 'idle':
+        this.idle[seat.slot] = msg.idle;
         break;
       case 'away': {
         // The partner hears of a change; whoever asked always gets an answer, its proof the socket is alive (net.ts).
@@ -567,6 +594,87 @@ export class Room {
     this.watch('evac', call && this.state ? `${this.state.turn}:${call.by}:${call.unit}` : null);
     const leave = this.phase === 'mission' && this.state && !this.state.outcome ? this.state.abandonCall : undefined;
     this.watch('abandon', leave ? `by:${leave.by}` : null);
+    this.checkTurnClock();
+  }
+
+  /**
+   * The squad's turn clock (Arturo, 22/10). Each player has TURN_MS_PER_SOLDIER for each soldier they command, and a
+   * second more for each SAVED_MS_PER_SECOND they had left at the end of the last turn. Only the holder of the command
+   * spends theirs, and only while their screen shows nothing going on (an action playing stops it), until they are
+   * done. At none left, their soldiers take cover and their turn is over (runOutOfTime). Called after anything that may
+   * change it; both screens hear whenever it starts, stops or changes.
+   */
+  private checkTurnClock(): void {
+    const s = this.state;
+    const c = this.turnClock;
+    const now = Date.now();
+    if (c && c.running !== null) {
+      c.left[c.running] = Math.max(0, c.left[c.running] - (now - c.since));
+      c.running = null;
+    }
+    if (c?.timer) {
+      clearTimeout(c.timer);
+      c.timer = null;
+    }
+    const on = this.phase === 'mission' && !!s && !s.outcome && !s.realtime && s.activeTeam === 'xcom';
+    if (!on) {
+      // Out of the squad's turn the clock waits; a new mission, or none, drops it.
+      if (!s || s.outcome || this.phase !== 'mission') this.turnClock = null;
+      this.sendTurnClock();
+      return;
+    }
+    const active = this.activeSlots();
+    if (!c || c.turn !== s.turn) {
+      // A new squad turn: each player's time, for the soldiers they command, and what they saved last turn.
+      const saved = (slot: Slot) => (c ? Math.floor(c.left[slot] / SAVED_MS_PER_SECOND) * 1000 : 0);
+      const soldiers = (slot: Slot) => combatants(s, 'xcom').filter((u) => u.owner === slot || u.owner === null || !active.includes(u.owner)).length;
+      const total = ([0, 1] as const).map((slot) => (soldiers(slot) ? soldiers(slot) * TURN_MS_PER_SOLDIER + saved(slot) : 0)) as [number, number];
+      this.turnClock = { turn: s.turn, left: [...total], total, running: null, since: now, timer: null };
+    }
+    const clock = this.turnClock!;
+    const holder = s.command !== undefined && active.includes(s.command) ? s.command : null;
+    if (holder !== null && !s.ready[holder] && this.idle[holder] && this.seats[holder]?.socket && clock.left[holder] > 0) {
+      clock.running = holder;
+      clock.since = now;
+      const turn = s.turn;
+      clock.timer = setTimeout(() => this.clockOut(holder, turn), clock.left[holder]);
+    }
+    this.sendTurnClock();
+  }
+
+  /** `slot`'s turn clock has run out (checkTurnClock): their soldiers take cover and they are done for the turn. */
+  private clockOut(slot: Slot, turn: number): void {
+    const s = this.state;
+    const c = this.turnClock;
+    if (!s || !c || c.turn !== turn || c.running !== slot || s.turn !== turn) return;
+    c.left[slot] = 0;
+    c.running = null;
+    c.timer = null;
+    const events = runOutOfTime(s, slot, { connected: this.activeSlots(), rng: this.rng });
+    console.log(`[room] Se acaba el tiempo de ${this.seats[slot]?.name ?? `el puesto ${slot + 1}`}: sus soldados se cubren.`);
+    if (events.length) {
+      this.broadcast({ t: 'events', events, seq: s.seq, by: null });
+      this.afterTactical();
+    }
+    this.checkWaits();
+  }
+
+  private turnClockMessage(): ServerMessage {
+    const c = this.turnClock;
+    const s = this.state;
+    if (!c || !s || s.activeTeam !== 'xcom' || s.outcome) return { t: 'turnClock', clocks: null };
+    const now = Date.now();
+    const one = (slot: Slot) => ({ left: c.running === slot ? Math.max(0, c.left[slot] - (now - c.since)) : c.left[slot], total: c.total[slot], running: c.running === slot });
+    return { t: 'turnClock', clocks: [one(0), one(1)] };
+  }
+
+  /** Both screens hear the turn clock when it starts, stops or changes. */
+  private sendTurnClock(): void {
+    const msg = this.turnClockMessage();
+    const key = msg.t === 'turnClock' && msg.clocks ? JSON.stringify(msg.clocks.map((k) => [Math.round(k.left / 100), k.total, k.running])) : 'null';
+    if (key === this.clockSent) return;
+    this.clockSent = key;
+    this.broadcast(msg);
   }
 
   private watch(kind: DeadlineKind, key: string | null): void {
@@ -578,9 +686,10 @@ export class Room {
       if (!key) this.broadcast({ t: 'deadline', kind, ms: null });
     }
     if (!key) return;
-    const timer = setTimeout(() => this.answerForPartner(kind, key), ANSWER_WAIT_MS);
-    this.waits[kind] = { key, at: Date.now() + ANSWER_WAIT_MS, since: Date.now(), timer };
-    this.broadcast({ t: 'deadline', kind, ms: ANSWER_WAIT_MS });
+    const ms = ANSWER_WAIT_MS[kind];
+    const timer = setTimeout(() => this.answerForPartner(kind, key), ms);
+    this.waits[kind] = { key, at: Date.now() + ms, since: Date.now(), timer };
+    this.broadcast({ t: 'deadline', kind, ms });
   }
 
   /** Who is to answer a question of `kind`: the one who didn't ask. */
@@ -689,6 +798,8 @@ export class Room {
   }
 
   private broadcast(msg: ServerMessage): void {
+    // What happened has to play on both screens before the turn clock goes on (checkTurnClock).
+    if (msg.t === 'events') this.idle = [false, false];
     const data = JSON.stringify(msg);
     for (const s of this.seats) if (s?.socket) s.socket.send(data);
   }

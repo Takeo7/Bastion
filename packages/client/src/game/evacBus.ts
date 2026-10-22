@@ -90,8 +90,9 @@ export class EvacBus {
   }
 
   /**
-   * Its leaves by the doorway each closes (`doorways`' order): each leaf goes with the doorway nearest it (a van's
-   * two back doors with its one doorway, a 4×4's each with its own).
+   * Its leaves by the doorway each closes (`doorways`' order): each leaf goes with the doorway nearest its middle, as
+   * shut (a van's two back doors with its one doorway, a 4×4's each with its own: by their hinges, a rear door's on the
+   * pillar between, both went with the front doorway, 22/10 #12).
    */
   leavesByDoorway(): number[][] {
     const m = this.mula;
@@ -101,7 +102,9 @@ export class EvacBus {
     m.body.updateMatrix();
     this.root.updateMatrix();
     m.doors.forEach((d, k) => {
-      const at = d.shut.clone().applyMatrix4(m.body.matrix).applyMatrix4(this.root.matrix).setY(0);
+      const middle = new THREE.Box3();
+      for (const o of d.leaf.children) if (o instanceof THREE.Mesh) middle.union((o.geometry.boundingBox ?? (o.geometry.computeBoundingBox(), o.geometry.boundingBox!)).clone().applyMatrix4(o.matrix));
+      const at = (middle.isEmpty() ? new THREE.Vector3() : middle.getCenter(new THREE.Vector3())).add(d.shut).applyMatrix4(m.body.matrix).applyMatrix4(this.root.matrix).setY(0);
       let best = 0;
       ways.forEach((w, j) => {
         if (w.distanceTo(at) < ways[best]!.distanceTo(at)) best = j;

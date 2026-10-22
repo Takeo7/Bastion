@@ -1159,9 +1159,9 @@ export function lootSummary(
 
 /** Reports for the Saqueo mission (`scavenge`), in the style of BRIEFINGS. */
 export const SCAVENGE_BRIEFINGS = [
-  `Se vació a toda prisa, con las puertas cerradas y las despensas llenas. Registrad lo que podáis y volved ${BUS.to}. Cada tiro llama a más.`,
-  `Nadie lo ha tocado desde el primer invierno. Llenad las mochilas y volved ${BUS.to}. Vendrán, y antes cuanto más ruido hagáis.`,
-  `Cuando empezó todo, había gente dentro, y lo que dejaron sigue allí. Registrad, cargad y volved ${BUS.to} antes de que la horda os encuentre.`,
+  `Se vació a toda prisa, con las puertas cerradas y **las despensas llenas**. ==Registrad lo que podáis y volved ${BUS.to}.== Cada tiro llama a más.`,
+  `Nadie lo ha tocado **desde el primer invierno**. ==Llenad las mochilas y volved ${BUS.to}.== Vendrán, y antes cuanto más ruido hagáis.`,
+  `Cuando empezó todo, había gente dentro, y lo que dejaron sigue allí. ==Registrad, cargad y volved ${BUS.to}== antes de que **la horda** os encuentre.`,
 ];
 
 /** The Saqueo mission's lines for the combat screen and the debrief. */
@@ -1378,7 +1378,7 @@ export function outingsMark(n: number): string {
 
 /** Its tooltip: time is missions now, and building is free of it (`level`: the Bastion's, for the doom's name). */
 export function timeHelp(level: number): string {
-  return `Cada misión es un día: se curan las heridas, se come y ${doomSubject(level)} avanza. Construir, comprar o reclutar no gasta tiempo.`;
+  return `Cada misión es un día, y esperar uno también: se curan las heridas, se come y ${doomSubject(level)} avanza. Construir, comprar o reclutar no gasta tiempo.`;
 }
 
 /** What locks a piece, an upgrade or a craft, by the Bastion's level: «Se desbloquea con la casa móvil.»; the palette's tag is its name (bastionLevelName). */
@@ -1524,9 +1524,9 @@ export function vehicleMissionName(tier: number, zone: string): string {
 
 /** An operation to bring back a better vehicle (#45), a Limpieza: who saw it, where, and that it is ours once the zone is clear. */
 export function vehicleBriefing(tier: number, zone: string): string {
-  if (tier >= 3) return 'El autobús sigue en Atalaya, en la cochera, donde lo dejamos al huir. Desde la cuesta se ve entero. Despejad la zona y La Lata vuelve a ser La Lata.';
-  if (tier === 2) return `Teo ha visto un camión de mudanzas ${inZone(zone)}, con medio depósito. Arranca, dice, si alguien empuja. Despejad la zona: el camión es nuestro.`;
-  return `Teo ha visto una furgoneta de reparto entera ${inZone(zone)}. Las ruedas aguantan. Despejad la zona: la furgoneta es nuestra.`;
+  if (tier >= 3) return '**El autobús** sigue en Atalaya, en la cochera, donde lo dejamos al huir. Desde la cuesta se ve entero. ==Despejad la zona== y La Lata vuelve a ser La Lata.';
+  if (tier === 2) return `Teo ha visto **un camión de mudanzas** ${inZone(zone)}, con medio depósito. Arranca, dice, si alguien empuja. ==Despejad la zona:== el camión es nuestro.`;
+  return `Teo ha visto **una furgoneta de reparto** entera ${inZone(zone)}. Las ruedas aguantan. ==Despejad la zona:== la furgoneta es nuestra.`;
 }
 
 const SEATS = ['cero', 'una', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez'];
@@ -1703,8 +1703,8 @@ export const NAMED_SEX: Record<string, 'f' | 'm'> = {
 export const PREMISE = {
   title: 'El claro',
   lines: [
-    'La infestación parece haber **aflojado este invierno**. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
-    'Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en **un claro del pinar**, sobre Bielsa, con una caravana y lo puesto. Necesitamos **comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.',
+    'La infestación parece haber aflojado este invierno. Las nevadas han dejado a muchos caminantes sepultados y, **aunque salir sigue siendo peligroso**, quizá sea el momento de volver a intentarlo.',
+    'Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en un claro del pinar, sobre Bielsa, con una caravana y lo puesto. Necesitamos **comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.',
     'Toca volver a sacar **La Lata**, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.',
   ],
 };
@@ -1846,36 +1846,36 @@ export function litNote(turns?: number): string {
 
 /** An ordinary sabotage's report, by what sounds (MissionOffer.alarm). */
 const SABOTAGE_BRIEFINGS: Record<Alarm, string> = {
-  police: 'Los Cuervos dejaron allí un coche patrulla con la sirena puesta y se fueron. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Apagadla antes de que termine la cuenta atrás.',
-  ambulance: 'Allí hay una ambulancia con la sirena atascada, y la batería aguanta. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Apagadla antes de que termine la cuenta atrás.',
-  factory: 'La alarma de una nave salta allí cada noche, sola, con la batería. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. Apagadla antes de que termine la cuenta atrás.',
+  police: 'Los Cuervos dejaron allí **un coche patrulla con la sirena puesta** y se fueron. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. ==Apagadla antes de que termine la cuenta atrás.==',
+  ambulance: 'Allí hay **una ambulancia con la sirena atascada**, y la batería aguanta. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. ==Apagadla antes de que termine la cuenta atrás.==',
+  factory: 'La alarma de **una nave** salta allí cada noche, sola, con la batería. Mientras suene, los muertos de toda la comarca vendrán hacia aquí. ==Apagadla antes de que termine la cuenta atrás.==',
 };
 
 /** Several reports per mission type; each offer always gets the same one. */
 const BRIEFINGS: Record<MissionKind, string[]> = {
   elimination: [
-    'Hace semanas que nadie puede acercarse: está lleno de muertos, y es paso obligado hacia la sierra. Que no quede ninguno.',
-    'Una manada de zombis ha cortado la única carretera con agua potable. Limpiad la zona.',
-    'Los muertos se han quedado allí, y por ahí pasa la ruta de la sierra. Abatidlos a todos.',
+    'Hace semanas que nadie puede acercarse: está **lleno de muertos**, y es paso obligado hacia la sierra. ==Que no quede ninguno.==',
+    'Una **manada de zombis** ha cortado la única carretera con agua potable. ==Limpiad la zona.==',
+    'Los muertos se han quedado allí, y por ahí pasa **la ruta de la sierra**. ==Abatidlos a todos.==',
   ],
   recovery: [
-    `Allí quedó el mapa de los pozos de la comarca. Sin él, el agua del verano es una apuesta. Recuperadlo y volved ${BUS.to}.`,
-    'Allí cayó un dron que alguien usaba para vigilar las carreteras. Lo que grabó dice por dónde pasan los muertos. Recuperadlo antes de que se acabe el tiempo.',
-    'Los Cuervos escondieron allí su libro de cuentas y no volvieron a por él: los muertos llegaron antes. Dice quién les paga y por dónde pasan. Traedlo.',
+    `Allí quedó **el mapa de los pozos** de la comarca. Sin él, el agua del verano es una apuesta. ==Recuperadlo y volved ${BUS.to}.==`,
+    'Allí cayó **un dron** que alguien usaba para vigilar las carreteras. Lo que grabó dice por dónde pasan los muertos. ==Recuperadlo antes de que se acabe el tiempo.==',
+    'Los Cuervos escondieron allí su **libro de cuentas** y no volvieron a por él: los muertos llegaron antes. Dice quién les paga y por dónde pasan. ==Traedlo.==',
   ],
   sabotage: [
-    'Algo suena allí cada noche, y los muertos de toda la comarca acuden. Que deje de sonar antes de que termine la cuenta atrás.',
-    'Cada noche suena una alarma junto a nuestras rutas. Apagadla a tiempo.',
+    'Algo suena allí cada noche, y **los muertos de toda la comarca** acuden. ==Que deje de sonar antes de que termine la cuenta atrás.==',
+    'Cada noche suena **una alarma** junto a nuestras rutas. ==Apagadla a tiempo.==',
   ],
   hack: [
-    'Hay una radio de emergencia en la zona, muerta desde el invierno. Arregladla y oiremos a quien queda. Si falla, el ruido atraerá a todo lo que ande cerca.',
-    'Los Cuervos montaron allí un repetidor y hablan por él. Ponedlo a nuestro favor y sabremos qué traman. Si falla, saltará la alarma.',
-    'Allí queda un equipo de radio entero. Ponedlo en marcha. Si falla, el ruido traerá compañía.',
+    'Hay **una radio de emergencia** en la zona, muerta desde el invierno. ==Arregladla== y oiremos a quien queda. Si falla, **el ruido** atraerá a todo lo que ande cerca.',
+    'Los Cuervos montaron allí **un repetidor** y hablan por él. ==Ponedlo a nuestro favor== y sabremos qué traman. Si falla, **saltará la alarma**.',
+    'Allí queda **un equipo de radio** entero. ==Ponedlo en marcha.== Si falla, **el ruido** traerá compañía.',
   ],
   rescue: [
-    'Los Cuervos se han llevado {a}. Si llegan a su campamento, no habrá otra ocasión. Que salga con vida.',
-    'Los Cuervos retienen {a} y piden gasolina a cambio. No vamos a pagar. Que vuelva con vida.',
-    'Los Cuervos han parado allí con sus prisioneros. Entre ellos va {who}, que sabe cosas que nos hacen falta. Que salga con vida.',
+    'Los Cuervos se han llevado {a}. Si llegan a su campamento, **no habrá otra ocasión**. ==Que salga con vida.==',
+    'Los Cuervos retienen {a} y piden gasolina a cambio. **No vamos a pagar.** ==Que vuelva con vida.==',
+    'Los Cuervos han parado allí con sus prisioneros. Entre ellos va **{who}**, que sabe cosas que nos hacen falta. ==Que salga con vida.==',
   ],
   scavenge: SCAVENGE_BRIEFINGS,
 };
@@ -1922,6 +1922,15 @@ export function briefingSignature(o: MissionOffer): string {
   return o.story ? STORY[o.story - 1]!.signature : '— N. A.';
 }
 
+/**
+ * The marks in a mission's presentation (Ana, 22/10 #28): **key words** in
+ * white bold, ==the objective== in yellow (UI renders them). Where a text is
+ * shown plain, without them.
+ */
+export function plainMarks(text: string): string {
+  return text.replace(/\*\*|==/g, '');
+}
+
 /** Morse's report for an operation, signed by the region's ally. */
 export function missionBriefing(o: MissionOffer, level: number, simon: SimonChoice = null): string {
   const text = briefingText(o, level, simon);
@@ -1931,11 +1940,11 @@ export function missionBriefing(o: MissionOffer, level: number, simon: SimonChoi
 function briefingText(o: MissionOffer, level: number, simon: SimonChoice): string {
   if (o.story) return storyBriefing(o.story, simon);
   if (o.final) {
-    return 'La Marea está en la sierra y la Congregación la empuja desde su campamento. La Lata se la llevará con la sirena; vosotros, al campamento. Abatid a todo lo que haya. No habrá otra oportunidad.';
+    return 'La Marea está en la sierra y la Congregación la empuja desde su campamento. La Lata se la llevará con la sirena; vosotros, al campamento. ==Abatid a todo lo que haya.== **No habrá otra oportunidad.**';
   }
   if (o.facility) {
     const effect = level >= PARTITURA_LEVEL ? 'acerca la Marea un kilómetro cada 3 misiones' : 'hace crecer la infestación cada 3 misiones';
-    return `Este Nido ${effect}. Lo mantiene vivo la alarma de una nave, que no deja de sonar: apagadla antes de que termine la cuenta atrás.`;
+    return `Este Nido ${effect}. Lo mantiene vivo **la alarma de una nave**, que no deja de sonar: ==apagadla antes de que termine la cuenta atrás.==`;
   }
   const options = BRIEFINGS[o.kind];
   const seed = briefingSeed(o);
@@ -2084,7 +2093,7 @@ export const STORY: StoryChapter[] = [
     difficulty: 1,
     reward: { credits: 90 },
     briefing:
-      'El consultorio de Bielsa, el pueblo de abajo, sigue cerrado. En su nevera quedaba insulina, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Buscad una entrada y traed la insulina.',
+      'El consultorio de Bielsa, el pueblo de abajo, sigue cerrado. En su nevera quedaba **insulina**, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. ==Buscad una entrada y traed la insulina.==',
     signature: '',
     item: 'la insulina',
     after: 'La insulina ya está en la caravana, en una caja con nieve. Hay para todo el invierno.',
@@ -2098,7 +2107,7 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 60 },
     prize: 'la Dra. Nwosu se une al Bastión (el botín vale un 25 % más)',
     briefing:
-      'Una doctora lleva una semana encerrada en el hospital de Tarbes, con el edificio lleno de zombis. Se llama Amara Nwosu y trabajaba en el Instituto Koper. Llegad hasta ella y sacadla con vida.',
+      'Una doctora lleva una semana encerrada en **el hospital de Tarbes**, con el edificio lleno de zombis. Se llama **Amara Nwosu** y trabajaba en el Instituto Koper. ==Llegad hasta ella y sacadla con vida.==',
     signature: '— N. A.',
     vip: 'Dra. Amara Nwosu',
     after: 'La Dra. Nwosu se queda en el Bastión. Sabe qué aprovechar de cada saqueo: el botín valdrá un 25 % más.',
@@ -2112,7 +2121,7 @@ export const STORY: StoryChapter[] = [
     difficulty: 2,
     reward: { credits: 80, doom: 1 },
     briefing:
-      'Los Cuervos tienen en los Llanos un coche patrulla con la sirena puesta, y la encienden cada noche: nos trae a media comarca. Quiero que se calle. Destruidlo antes de que termine la cuenta atrás.',
+      'Los Cuervos tienen en los Llanos **un coche patrulla con la sirena puesta**, y la encienden cada noche: nos trae a media comarca. Quiero que se calle. ==Destruidlo antes de que termine la cuenta atrás.==',
     signature: '— T. V.',
     after: 'La sirena se calló y los zombis del valle se dispersaron en un día. Teo lo apuntó todo. Esa misma semana empezó el deshielo.',
   },
@@ -2124,7 +2133,7 @@ export const STORY: StoryChapter[] = [
     difficulty: 2,
     reward: { credits: 120, doom: 1 },
     briefing:
-      'El repetidor del Pico Gris lleva muerto desde el invierno. Si lo arreglamos, oiremos a los demás enclaves del valle. Si falla, el ruido atraerá a todo lo que ande por el pantano.',
+      'El **repetidor del Pico Gris** lleva muerto desde el invierno. ==Arregladlo== y oiremos a los demás enclaves del valle. Si falla, **el ruido** atraerá a todo lo que ande por el pantano.',
     signature: '— N. A.',
     after: 'El repetidor vuelve a funcionar. Lo primero que hemos oído es a los demás enclaves avisando de lo mismo: la Marea.',
   },
@@ -2138,7 +2147,7 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 80, recruit: true },
     prize: 'una niña inmune a salvo en el Bastión',
     briefing:
-      'Simão entró en el campamento de los Cuervos a por la niña inmune, pero lo han descubierto. Sabe dónde la esconden. Llegad hasta él y sacadlo con vida.',
+      'Simão entró en el campamento de los Cuervos a por **la niña inmune**, pero lo han descubierto. Sabe dónde la esconden. ==Llegad hasta él y sacadlo con vida.==',
     signature: '— N. A.',
     vip: 'Simão Ferreira',
     after: 'Noor está en la enfermería. Se contagió hace un mes y sigue viva. Nwosu no ha dormido.',
@@ -2151,7 +2160,7 @@ export const STORY: StoryChapter[] = [
     difficulty: 3,
     reward: { credits: 150, doom: 1 },
     briefing:
-      'Los cuadernos del Instituto Koper siguen en el laboratorio donde empezó todo. Sin ellos no habrá vacuna. Recuperad los cuadernos y sacadlos por la zona de evacuación.',
+      'Los cuadernos del Instituto Koper siguen en el laboratorio donde empezó todo. **Sin ellos no habrá vacuna.** ==Recuperad los cuadernos y sacadlos por la zona de evacuación.==',
     signature: '— T. V.',
     item: 'los cuadernos',
     after: 'Los cuadernos ya están en el Bastión. Teo los ha leído enteros y lleva dos días sin hablar.',
@@ -2166,7 +2175,7 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 100 },
     prize: 'cómo parar la Marea (la misión final, con el Bastión en su último nivel)',
     briefing:
-      'Celia Marsh, la Voz de la Congregación, emite cada noche desde una vieja emisora de los Llanos. Es la única que sabe cómo parar la Marea. Asaltad la emisora, llegad hasta ella y sacadla con vida.',
+      '**Celia Marsh, la Voz** de la Congregación, emite cada noche desde una vieja emisora de los Llanos. Es la única que sabe cómo parar la Marea. ==Asaltad la emisora, llegad hasta ella y sacadla con vida.==',
     signature: '— N. A.',
     vip: 'Celia Marsh',
     after: 'La Voz está en el Bastión. Ha pasado una hora callada. Luego ha dicho cómo se para la Marea.',
@@ -2176,7 +2185,7 @@ export const STORY: StoryChapter[] = [
 /** Without Simão inside, «Los inmunes» is a break-in, straight for the girl. */
 const SIMON_REFUSED = {
   briefing:
-    'Sin nadie dentro, habrá que entrar a la fuerza en el campamento de los Cuervos. La niña inmune se llama Noor Haddad. Llegad hasta ella y sacadla con vida.',
+    'Sin nadie dentro, habrá que **entrar a la fuerza** en el campamento de los Cuervos. La niña inmune se llama **Noor Haddad**. ==Llegad hasta ella y sacadla con vida.==',
   vip: 'Noor Haddad',
 };
 

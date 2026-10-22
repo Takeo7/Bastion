@@ -492,7 +492,7 @@ const goblin = (path: string) => ({ pack: 'goblinLocomotion' as PackId, fbx: `An
  * A Mixamo clip by its file's name (docs/MIXAMO.md, assets-src/mixamo/LISTA.md), turned onto Synty's skeleton
  * (convert.py mixamo); `mirror`, left for right (a throw with the free hand: the gun is in the right).
  */
-const mixamo = (file: string, mirror = false) => ({ pack: 'mixamo' as PackId, fbx: file, ...(mirror ? { mirror } : {}) });
+const mixamo = (file: string, mirror = false, inPlace = false) => ({ pack: 'mixamo' as PackId, fbx: file, ...(mirror ? { mirror } : {}), ...(inPlace ? { inPlace } : {}) });
 
 export const ANIMATIONS = {
   tpose: loco('Neutral/Additive/TPose/A_TPose_Neut'),
@@ -625,6 +625,11 @@ export const ANIMATIONS = {
   sitToStand: mixamo('Sit To Stand'),
   warmHands: mixamo('Kneel'),
   squat: mixamo('Crouch Idle'),
+  // Into La Lata (22/10 #12): by a 4×4's side door, sat down sideways and the legs swung in (its left side's, and
+  // mirrored its right's); up the step at a van's or a lorry's back.
+  enterCar: mixamo('Entering Car'),
+  enterCarR: mixamo('Entering Car', true),
+  stepUp: mixamo('Ascending Stairs'),
   // «ANIMATION – Bow Combat» and «– Sword Combat»: how a unit dies (DEATHS).
   deathHeadFMasc: bow('Masculine/Death/A_POLY_BOW_Death_Head_F_Masc'),
   deathHeadLMasc: bow('Masculine/Death/A_POLY_BOW_Death_Head_L_Masc'),
@@ -659,6 +664,8 @@ export const ANIMATIONS = {
   // Mixamo (docs/MIXAMO.md): the rifle at rest, aimed, fired and reloaded, turning on the spot; kneeling.
   rifleIdle: mixamo('Rifle Idle'),
   rifleLowered: mixamo('Rifle Idle 4'),
+  // Another way of waiting with it (RIFLE_RESTS): «Rifle Idle Looking Around».
+  rifleIdleLook: mixamo('Rifle Idle 3'),
   rifleAim: mixamo('Rifle Aiming Idle'),
   rifleFire: mixamo('Firing Rifle'),
   rifleReload: mixamo('Reloading'),
@@ -682,7 +689,12 @@ export const ANIMATIONS = {
   // A knife's stab, a machete's swing.
   knifeStab: mixamo('Stabbing 3'),
   macheteSwing: mixamo('Standing Melee Attack Horizontal'),
-} satisfies Record<string, { pack: PackId; fbx: string; mirror?: boolean }>;
+  // Moving with it (ARMED_MOTIONS, 22/10 #15), the third batch: the rifle held low across the body walking, running
+  // and sprinting.
+  rifleWalk: mixamo('Rifle Walk'),
+  rifleRun: mixamo('Rifle Run'),
+  rifleSprint: mixamo('Sprint Forward'),
+} satisfies Record<string, { pack: PackId; fbx: string; mirror?: boolean; inPlace?: boolean }>;
 
 export type AnimationId = keyof typeof ANIMATIONS;
 
@@ -773,11 +785,27 @@ export const CAMP_PARTS: Partial<Record<AnimationId, { loop: [number, number]; i
   warmHands: { loop: [2.9, 6.3], into: [1.5, 2.9], out: [6.3, 7.5] },
 };
 
+/**
+ * Of moves that do more (Mixamo's getting into a car walks up to it first, and after sitting takes the wheel): the
+ * seconds the camp plays, from at the door, its hand to the handle, to sat with the legs in, shutting the door; of
+ * Mixamo's stairs, one step up and the other foot brought up to it.
+ */
+export const CAMP_SPANS: Partial<Record<AnimationId, [number, number]>> = { enterCar: [2.2, 8.4], enterCarR: [2.2, 8.4], stepUp: [0.3, 1.9] };
+
+/**
+ * The moves whose hips go as high as the clip has them, not kept on the feet (getting into a car the legs come off
+ * the ground and in: the feet kept down, the body sank under the seat; up a step).
+ */
+export const CAMP_FREE: ReadonlySet<CampMove> = new Set<CampMove>(['enterCar', 'enterCarR', 'stepUp']);
+
 /** What one holds in the right hand at the camp drinking or eating (CampLoop 'drink', 'eat'): a canteen's cup, a ration bar. */
 export const CAMP_ITEMS = { drink: 'campCup', eat: 'campBar' } as const satisfies Partial<Record<CampLoop, keyof typeof PROPS>>;
 
-/** Sitting down and getting up (from standing to sitting on a chair's height, and back); leaning on a wall and off it; kneeling and getting up. */
-export type CampMove = 'sitDown' | 'standUp' | 'leanLeftIn' | 'leanLeftOut' | 'leanRightIn' | 'leanRightOut' | 'kneelDown' | 'kneelUp' | 'drinkIn' | 'drinkOut' | 'sip' | 'eatIn' | 'eatOut' | 'bite';
+/**
+ * Sitting down and getting up (from standing to sitting on a chair's height, and back); leaning on a wall and off it;
+ * kneeling and getting up; into La Lata (22/10 #12): into a 4×4 by its side door, the left or the right, and up a step.
+ */
+export type CampMove = 'sitDown' | 'standUp' | 'leanLeftIn' | 'leanLeftOut' | 'leanRightIn' | 'leanRightOut' | 'kneelDown' | 'kneelUp' | 'drinkIn' | 'drinkOut' | 'sip' | 'eatIn' | 'eatOut' | 'bite' | 'enterCar' | 'enterCarR' | 'stepUp';
 
 const campMoves = (b: 'Masc' | 'Femn'): Record<CampMove, string> => ({
   sitDown: 'standToSit',
@@ -794,6 +822,9 @@ const campMoves = (b: 'Masc' | 'Femn'): Record<CampMove, string> => ({
   eatIn: `eatIn${b}`,
   eatOut: `eatOut${b}`,
   bite: `bite${b}`,
+  enterCar: 'enterCar',
+  enterCarR: 'enterCarR',
+  stepUp: 'stepUp',
 });
 
 /** Each move's clip among the camp's (an id, or a part of one: CAMP_PARTS). */
@@ -873,13 +904,36 @@ export const HITS: Record<'masc' | 'femn', Hit[]> = { masc: hits('Masc'), femn: 
  * One set for both builds; the living only.
  */
 export const ACTIONS = [
-  'rifleIdle', 'rifleLowered', 'rifleAim', 'rifleFire', 'rifleReload',
+  'rifleIdle', 'rifleLowered', 'rifleIdleLook', 'rifleAim', 'rifleFire', 'rifleReload',
   'rifleTurnL45', 'rifleTurnR45', 'rifleTurnL90', 'rifleTurnR90', 'rifleTurnL180', 'rifleTurnR180',
   'rifleKneel', 'rifleKneelAim', 'pistolRest', 'pistolAim', 'pistolFire',
   'tossGrenade', 'throwStone', 'knifeStab', 'macheteSwing',
 ] as const satisfies readonly AnimationId[];
 
 export type ActionId = (typeof ACTIONS)[number];
+
+/** A gun in the hands as a soldier moves (ARMED_MOTIONS): a two-handed one, or the pistol. */
+export type ArmedKind = 'rifle' | 'pistol';
+
+/**
+ * Moving with a gun in the hands (22/10 #15: «andar es raro», Synty's empty-handed legs with the arms posed over them):
+ * the whole body Mixamo's, the arms holding it as they go; `own`, Synty's clip with its own arms, the pistol in the
+ * swinging hand. Relaxed always (#16): the rifle low across the body, the pistol down. What a motion has none of keeps
+ * Synty's legs and the gun at rest over them: crouched with a rifle («Rifle Walking Crouched» is a sneak, its feet a
+ * seventh of the pace the game crouches at). Mixamo's pistol walk aims, its run holds it out ahead in one hand, and
+ * its sprint and crouch are empty-handed: the pistol goes in Synty's.
+ */
+export const ARMED_MOTIONS: Record<ArmedKind, Partial<Record<Motion, AnimationId | 'own'>>> = {
+  rifle: { walk: 'rifleWalk', run: 'rifleRun', sprint: 'rifleSprint' },
+  pistol: { walk: 'own', run: 'own', sprint: 'own', crouchWalk: 'own' },
+};
+
+/**
+ * How a soldier waits with a rifle, one to each (22/10 #7: not the whole lineup in the same clip): across the body, the
+ * muzzle lowered, looking about. Over the legs' clips, so only those that stand square: «Rifle Idle» and «Shaking Legs»
+ * stand side-on, the torso would twist off the hips.
+ */
+export const RIFLE_RESTS = ['rifleIdle', 'rifleLowered', 'rifleIdleLook'] as const satisfies readonly ActionId[];
 
 // ----------------------------------------------------------------- weapons
 
@@ -1042,6 +1096,8 @@ export interface PropAsset {
    * stood on the point it looked lifted off the ground (playtest 21/10 #12).
    */
   sink?: number;
+  /** Stood this tall (tiles), its height alone stretched to it (a shop's shelving as tall as a supermarket's). */
+  tall?: number;
   /**
    * Where in its atlas (Blender's UV) the slots painted from a texture we don't have take their one plain colour, and
    * the whole of the meshes named with one of `plainMeshes` (convert.py plain_slots): the caravan's windows (21/10 #32).
@@ -1253,6 +1309,8 @@ export const PROPS = {
   fencePanel: prop('farm', 'SM_Prop_Fence_Wood_01', { fit: 0.5, stretch: true, yaw: 1, shift: [0, -0.25] }),
   fenceWire: prop('farm', 'SM_Prop_Fence_Wire_01', { fit: 0.5, stretch: true, yaw: 1, shift: [0, -0.25] }),
   gatePost: prop('farm', 'SM_Prop_Fence_Fancy_Pole_01'),
+  // A yard's gate in full cover: a concrete pillar (22/10 #47: it had no model, and a city prop at random stood in).
+  gatePillar: prop('construction', 'SM_Prop_Fence_Concrete_Pillar_01'),
   hayBale: prop('farm', 'SM_Prop_Hay_Bale_Square_01', { fit: 0.9 }),
   hayRound: prop('farm', 'SM_Prop_Hay_Bale_Round_01', { fit: 0.95 }),
   // Indoors.
@@ -1273,9 +1331,9 @@ export const PROPS = {
   canFallen2: prop('apocalypse', 'SM_Item_Can_04', { fit: 0.06 }),
   canFallen3: prop('apocalypse', 'SM_Item_Can_07', { fit: 0.06 }),
   endDisplay: prop('city', 'SM_Prop_ShopInterior_Shelf_04', { fit: 1, yaw: 2 }),
-  shelfHigh: prop('apocalypse', 'SM_Prop_Shop_Shelf_01', { fit: 1, stretch: true, yaw: 1 }),
+  // (As tall as the supermarket's gondolas: at its own 1.13 one saw over it, 22/10 #47.)
+  shelfHigh: prop('apocalypse', 'SM_Prop_Shop_Shelf_01', { fit: 1, stretch: true, yaw: 1, tall: 1.35 }),
   bookshelf: prop('town', 'SM_Prop_Bookshelf_01', { fit: 1, stretch: true, yaw: 2 }),
-  bookshelf2: prop('town', 'SM_Prop_Bookshelf_02', { fit: 1, stretch: true, yaw: 2 }),
   // What a house's rooms have besides their cover (playtest 18/10, #36; homeFurnishing.ts): rugs, chairs at the
   // table, a lamp, plants, the bedside table, a desk chair, the towels; small things on tables and counters.
   // Cosmetic, never cover: one style of each for a house, at their true size (a tile is 1.5 m; `fit` is the longest
@@ -1598,6 +1656,7 @@ export const PROP_SETS = {
   fenceRails: ['fenceWire'],
   fenceBoards: ['fencePanel'],
   gatePost: ['gatePost'],
+  gatePillar: ['gatePillar'],
   hayBale: ['hayBale'],
   hayStack: ['hayRound'],
   shelfLow: ['shelfLow'],
@@ -1618,7 +1677,9 @@ export const PROP_SETS = {
   desk: ['desk', 'officeDesk', 'officeDesk2'],
   labBench: ['officeDesk2'],
   wardrobe: ['wardrobe'],
-  cabinet: ['cabinet', 'bookshelf', 'officeCabinet'],
+  // (Full cover all as tall, over the eyes: the office's filing cabinet, 1.01, is low cover: 22/10 #47.)
+  cabinet: ['cabinet', 'bookshelf'],
+  officeCabinet: ['officeCabinet'],
   rack: ['workShelf'],
   crates: ['crates', 'crate', 'palletStack', 'cementBags'],
   lootWeapons: ['lootWeapons'],

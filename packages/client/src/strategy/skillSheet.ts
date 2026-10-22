@@ -152,9 +152,10 @@ export function skillsBlock(s: SkillsOf, mine: boolean, onOpen: () => void): HTM
 
 /**
  * What a mission taught a soldier, for its card in the debrief: a tag per
- * line it learnt in («+5 DIS», Lore's whole line in its title), a badge per
- * line whose bars filled with what they added («▲ DISPARO +7 %»), and the
- * points they give.
+ * line it learnt in, by its whole name (Ana, 22/10 #41: «DIS, FOR… no se
+ * entienden»: «+5 Disparo», Lore's line in its title), a badge per line whose
+ * bars filled with what they added («▲ DISPARO +7 %»), and the points they
+ * give: «→ +1 Habilidad», the figure in a cell of the board.
  */
 export function learnedTags(e: Pick<ReportSoldier, 'name' | 'learned' | 'deeds' | 'bars'>): HTMLElement[] {
   const gained = SKILL_IDS.filter((id) => (e.learned?.[id] ?? 0) > 0);
@@ -164,7 +165,7 @@ export function learnedTags(e: Pick<ReportSoldier, 'name' | 'learned' | 'deeds' 
       h(
         'span.sk-learned',
         {},
-        ...gained.map((id) => h(`span.sk-tag.sk-${id}`, { title: learnedLine(id, e.learned![id], e.deeds ?? {}) }, `+${e.learned![id]} ${SKILLS[id].short}`)),
+        ...gained.map((id) => h(`span.sk-tag.sk-${id}`, { title: learnedLine(id, e.learned![id], e.deeds ?? {}) }, `+${e.learned![id]} ${SKILLS[id].name}`)),
       ),
     );
   for (const bar of e.bars ?? []) {
@@ -172,13 +173,8 @@ export function learnedTags(e: Pick<ReportSoldier, 'name' | 'learned' | 'deeds' 
     out.push(h(`small.promo.sk-up.sk-${bar.skill}`, { title: barLine(e.name, bar.skill, bar.growth) }, `▲ ${SKILLS[bar.skill].name.toUpperCase()} +${percent} %`));
   }
   const points = (e.bars ?? []).reduce((n, b) => n + b.growth.length, 0);
-  if (points) out.push(h('small.sk-talent-note', {}, points === 1 ? 'Un punto para el tablero' : `${points} puntos para el tablero`));
+  if (points) out.push(h('small.sk-talent-note', { title: 'Puntos para el tablero de habilidades' }, '→ ', h('span.sk-cell', {}, `+${points}`), points === 1 ? ' Habilidad' : ' Habilidades'));
   return out;
-}
-
-/** The bars a mission filled, in Lore's words, for the debrief's head: «Ana llena una barra de Disparo: +7 %…». */
-export function barLines(squad: Pick<ReportSoldier, 'name' | 'status' | 'bars'>[]): string[] {
-  return squad.filter((e) => e.status !== 'dead' && e.status !== 'lost').flatMap((e) => (e.bars ?? []).map((b) => barLine(e.name, b.skill, b.growth)));
 }
 
 // ------------------------------------------------------------------ the board

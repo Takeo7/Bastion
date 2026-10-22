@@ -90,10 +90,12 @@ export interface FigureRig extends UnitRig {
    * `now`, into it without easing (after a move into it).
    */
   camp?(loop: CampLoop | null, on?: boolean, now?: boolean): void;
-  /** Sits down or gets up, leans or comes off (CAMP_MOVES) once over what it does, holding its end; how far through, 0 to 1 (1 without its clips); null lets go. */
-  campMove?(move: CampMove | null): number;
+  /** Sits down or gets up, leans or comes off, gets into La Lata (CAMP_MOVES) once over what it does, at `speed`, holding its end; how far through, 0 to 1 (1 without its clips); null lets go. */
+  campMove?(move: CampMove | null, speed?: number): number;
   /** Holds a thing in the right hand at the camp (syntyManifest.ts CAMP_ITEMS: a metal cup, a ration bar), its weapons slung, `upright` kept level (a cup); null, nothing. */
   holdItem?(id: PropId | null, upright?: boolean): void;
+  /** Waits with a rifle in the `k`-th of its ways (syntyManifest.ts RIFLE_RESTS, round): side by side, each another (the lineup). */
+  restAs?(k: number): void;
   /** Other weapons on it (the engine's weaponEquipped), the main one in the hand. */
   arm?(a: Armament): void;
 }

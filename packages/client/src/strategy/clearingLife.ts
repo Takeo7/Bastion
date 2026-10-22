@@ -38,17 +38,32 @@ const RISE = 0.8;
 const STANDS: (Stance | null)[] = ['armsFolded', 'handsOnHips', null, 'thoughtful', 'armsFolded', null];
 const SAYS: Gesture[] = ['point', 'shrug', 'calm', 'chin', 'point'];
 /**
- * Round a fire: how far a camp chair's sitter sits ahead of it (its hips over the seat, tiles), and how far ahead of
+ * Round a fire: how far a camp chair's sitter sits ahead of its middle (its hips over the seat, tiles: at 0.2 they sat on
+ * its front edge, 22/10 #9), and how far ahead of
  * that it stands to sit down and gets up to (Mixamo's sitting down and getting up move the hips that far back and
  * forth: measured on our bodies, 22/10); how far out on the ground the others sit and the one knelt warming the
  * hands kneels, how far apart they keep, and the sitters' ways (on a chair, two near each other talk; on the
  * ground; knelt).
  */
-const SEAT_AHEAD = 0.2;
+const SEAT_AHEAD = 0;
 const SIT_SHIFT = 0.32;
-const FIRE_RING = 1.05;
-const FIRE_KNEEL = 0.8;
+/** (Sat on the ground, the feet 0.3 tiles off the fire's stones, 40 cm further than the one reclined had them: Gameplay, 22/10.) */
+const FIRE_RING = 1.15;
+/** (At 0.8 the hands were nearly in the flames: Gameplay, 22/10. Over them, 30 cm further back.) */
+const FIRE_KNEEL = 1;
 const FIRE_APART = 0.9;
+/** The places round a fire tried for those on the ground (seatRound), as many round it. */
+const ROUND_STEPS = 24;
+/** How far out behind one on the ground by a fire is kept clear too: the back and the gun slung on it (one knelt by a tent had it through the canvas). */
+const FIRE_BACK = 0.3;
+/**
+ * The camera looks from 45° and in 90° steps from there (camera.ts): two round a fire in a line with one of those
+ * looks are one behind the other, or one hides the fire (Gameplay, 22/10). How far apart across a look they are
+ * enough (tiles: a body and a half), and how much that weighs against how far round apart they are.
+ */
+const VIEWS_FROM = Math.PI / 4;
+const SIDE_BY = 0.6;
+const VIEWS_WEIGH = 3;
 /** How far round each fire the rest keep off (those round it sit within it): nobody walks through them. */
 const FIRE_CIRCLE = 1.7;
 /** How near the Camposanto's tiles a fire's circle may come (tiles): nobody sits warming the hands among the graves (Gameplay, 22/10). */
@@ -56,7 +71,8 @@ const GRAVES_OFF = 0.6;
 /** How far from a fire's middle one stands at least to sit down by it (its stones and flames). */
 const FIRE_CLEAR = 0.6;
 const ON_CHAIR: CampLoop[] = ['sitChair', 'sitChairStill', 'sitBreathe', 'sitCrossed'];
-const ON_GROUND: CampLoop[] = ['sitFloor', 'sitReclined', 'sitFloor'];
+/** (Not reclined: lying back on the path with the feet to the stones it read as a body, face down: Gameplay, 22/10.) */
+const ON_GROUND: CampLoop[] = ['sitFloor'];
 /**
  * Those standing about with no way of standing of their own drink from a metal cup or eat a ration bar now and then
  * (CAMP_ITEMS): the seconds between, how long they keep at it, and between one sip or bite and the next.
@@ -279,20 +295,27 @@ export class ClearingLife {
         settle(d, this.chairSpot(c, k === 1 ? 'sitTalk' : ON_CHAIR[Math.floor(r() * ON_CHAIR.length)]!));
         k++;
       }
-      // The rest on the ground round it, the last left over knelt nearer, warming the hands.
+      // The rest on the ground round it, the last left over knelt, warming the hands: each on a side of their own, as
+      // far round from the others as the free places let them (from the side, one knelt in front of who sat on a chair
+      // was in a row with them: Gameplay, 22/10).
+      const ground = sitters.slice(k);
+      const kneels = (j: number) => j === ground.length - 1 && k + j > 0;
       const start = r() * Math.PI * 2;
-      for (; k < sitters.length; k++) {
-        const d = sitters[k]!;
-        const kneel = k === sitters.length - 1 && k > 0;
-        const ring = kneel ? FIRE_KNEEL : FIRE_RING;
-        for (let step = 0; step < 12; step++) {
-          const a = start + step * (Math.PI / 6) + k * 0.9;
-          const at = { x: fire.x + Math.sin(a) * ring, z: fire.z + Math.cos(a) * ring };
-          if (!this.groundFree(at, taken)) continue;
-          settle(d, { loop: kneel ? 'warmHands' : ON_GROUND[k % ON_GROUND.length]!, at, yaw: Math.atan2(fire.x - at.x, fire.z - at.z), stand: at, into: kneel ? 'kneelDown' : null, out: kneel ? 'kneelUp' : null });
-          break;
-        }
-      }
+      const places = ground.map((_, j) => {
+        const ring = kneels(j) ? FIRE_KNEEL : FIRE_RING;
+        const round = (a: number, r: number) => ({ x: fire.x + Math.sin(a) * r, z: fire.z + Math.cos(a) * r });
+        return Array.from({ length: ROUND_STEPS }, (_, step) => start + (step * Math.PI * 2) / ROUND_STEPS)
+          .map((a) => ({ a, at: round(a, ring) }))
+          .filter((c) => this.groundFree(c.at, taken) && this.groundFree(round(c.a, ring + FIRE_BACK), []));
+      });
+      const there = sitters.slice(0, k).map((d) => ({ a: Math.atan2(d.at.x - fire.x, d.at.z - fire.z), at: d.at }));
+      const round = spreadRound(places, there, fire);
+      ground.forEach((d, j) => {
+        const c = round[j];
+        if (!c) return;
+        const kneel = kneels(j);
+        settle(d, { loop: kneel ? 'warmHands' : ON_GROUND[(k + j) % ON_GROUND.length]!, at: c.at, yaw: Math.atan2(fire.x - c.at.x, fire.z - c.at.z), stand: c.at, into: kneel ? 'kneelDown' : null, out: kneel ? 'kneelUp' : null });
+      });
     }
     for (const d of this.idlers.filter((o) => o.kind === 'lean')) {
       const wall = camp.walls.find((w) => this.groundFree(w, taken));
@@ -719,6 +742,57 @@ function nearTile(p: Vec, c: { x: number; y: number }, reach: number): boolean {
   const dx = Math.max(c.x - p.x, 0, p.x - (c.x + 1));
   const dz = Math.max(c.y - p.z, 0, p.z - (c.y + 1));
   return Math.hypot(dx, dz) < reach;
+}
+
+type RoundPlace = { a: number; at: Vec };
+
+/**
+ * One of its free `places` round `fire` to each on the ground (null for who can't have one), together: as many as can
+ * be, then the widest the narrowest angle between any two round it (with those already `there`, on its chairs) and
+ * the most apart across the camera's looks (VIEWS_FROM) any two and the fire are; none nearer another than FIRE_APART.
+ */
+function spreadRound(places: RoundPlace[][], there: RoundPlace[], fire: Vec): (RoundPlace | null)[] {
+  const apart = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  // How far apart across the looks two are (the nearer of the two ways the camera looks along: from either end the same).
+  const looks = [VIEWS_FROM, VIEWS_FROM + Math.PI / 2].map((y) => ({ x: Math.sin(y), z: Math.cos(y) }));
+  const across = (p: Vec, q: Vec) => Math.min(...looks.map((v) => Math.abs(v.x * (q.z - p.z) - v.z * (q.x - p.x))));
+  let best: (RoundPlace | null)[] = places.map(() => null);
+  let bestScore = -1;
+  const chosen: (RoundPlace | null)[] = [];
+  const pick = (j: number, round: RoundPlace[]) => {
+    if (j === places.length) {
+      let narrowest = Math.PI;
+      let side = SIDE_BY;
+      for (let i = 0; i < round.length; i++) {
+        side = Math.min(side, across(fire, round[i]!.at));
+        for (let k = i + 1; k < round.length; k++) {
+          narrowest = Math.min(narrowest, apart(round[i]!.a, round[k]!.a));
+          side = Math.min(side, across(round[i]!.at, round[k]!.at));
+        }
+      }
+      const score = chosen.filter(Boolean).length * 10 + narrowest + VIEWS_WEIGH * side;
+      if (score > bestScore) {
+        bestScore = score;
+        best = [...chosen];
+      }
+      return;
+    }
+    let any = false;
+    for (const c of places[j]!) {
+      if (chosen.some((o) => o && Math.hypot(o.at.x - c.at.x, o.at.z - c.at.z) < FIRE_APART)) continue;
+      any = true;
+      chosen.push(c);
+      pick(j + 1, [...round, c]);
+      chosen.pop();
+    }
+    if (!any) {
+      chosen.push(null);
+      pick(j + 1, round);
+      chosen.pop();
+    }
+  };
+  pick(0, there);
+  return best;
 }
 
 /** `yaw` turned towards `goal` by at most `step` (radians), the short way round. */

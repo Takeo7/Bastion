@@ -171,9 +171,25 @@
 }
 
 .lineup-card .sk-talent-note {
-  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
   font-weight: 700;
   color: var(--t-accent, #f2c230);
+}
+
+/* The points as a cell of the board (Ana, 22/10 #41): the figure in a pointy-top hexagon, the board's gold. */
+.sk-cell {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 27px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: var(--t-accent, #f2c230);
+  color: #1e1706;
+  font: 600 12px/1 var(--t-font-title, sans-serif);
 }
 
 /* The board's head: the name, the points left (lit when there are some) and the six lines' bars filled. */

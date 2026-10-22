@@ -268,6 +268,60 @@ function guideBeam(color: number, from = 0): THREE.Group {
   return g;
 }
 
+/** How far back from a corner of the move range its border turns (tiles): a soft bend, not a circle. */
+const CORNER_R = 0.24;
+
+/**
+ * A border's segments (x, y, z pairs, flat) with their right-angled corners rounded: where exactly two of them meet
+ * square, each stops `r` short of the corner and a curve joins them (a quadratic one, its control the corner, in
+ * four steps). Straight joins, loose ends and crossings (four meeting) stay as they are.
+ */
+function roundCorners(points: readonly number[], r: number): number[] {
+  const segs: number[][] = [];
+  for (let i = 0; i + 5 < points.length; i += 6) segs.push(points.slice(i, i + 6));
+  const key = (x: number, y: number, z: number) => `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
+  const at = new Map<string, { seg: number; end: 0 | 1 }[]>();
+  segs.forEach((sg, i) => {
+    for (const end of [0, 1] as const) {
+      const k = key(sg[end * 3]!, sg[end * 3 + 1]!, sg[end * 3 + 2]!);
+      const list = at.get(k) ?? [];
+      list.push({ seg: i, end });
+      at.set(k, list);
+    }
+  });
+  const arcs: number[] = [];
+  const trimmed = segs.map((sg) => sg.slice());
+  for (const list of at.values()) {
+    if (list.length !== 2) continue;
+    const [a, b] = list as [{ seg: number; end: 0 | 1 }, { seg: number; end: 0 | 1 }];
+    const sa = segs[a.seg]!;
+    const sb = segs[b.seg]!;
+    const v = [sa[a.end * 3]!, sa[a.end * 3 + 1]!, sa[a.end * 3 + 2]!] as const;
+    const far = (sg: number[], end: 0 | 1) => [sg[(1 - end) * 3]! - v[0], sg[(1 - end) * 3 + 2]! - v[2]] as const;
+    const [ax, az] = far(sa, a.end);
+    const [bx, bz] = far(sb, b.end);
+    const la = Math.hypot(ax, az);
+    const lb = Math.hypot(bx, bz);
+    // Square corners only (a straight join stays), and room on both for the bend.
+    if (!la || !lb || Math.abs(ax * bx + az * bz) > 1e-6 || la < r * 2 || lb < r * 2) continue;
+    const p1 = [v[0] + (ax / la) * r, v[1], v[2] + (az / la) * r];
+    const p2 = [v[0] + (bx / lb) * r, v[1], v[2] + (bz / lb) * r];
+    trimmed[a.seg]!.splice(a.end * 3, 3, ...p1);
+    trimmed[b.seg]!.splice(b.end * 3, 3, ...p2);
+    let prev = p1;
+    for (let k = 1; k <= 4; k++) {
+      const t = k / 4;
+      const w0 = (1 - t) * (1 - t);
+      const w1 = 2 * (1 - t) * t;
+      const w2 = t * t;
+      const next = [0, 1, 2].map((j) => w0 * p1[j]! + w1 * v[j]! + w2 * p2[j]!);
+      arcs.push(...prev, ...next);
+      prev = next;
+    }
+  }
+  return [...trimmed.flat(), ...arcs];
+}
+
 /**
  * Planning without the command (playtest 17/10 #49): the move's preview in
  * the player's colour, dimmed (18/10 #4: it was grey, and didn't show), so it
@@ -1014,11 +1068,14 @@ export class Overlays {
         }
       }
     }
+    // Its corners rounded a little (Ana, 22/10 #52: «más orgánicas, sin pasarse»); a hand's stroke has its own.
+    const walkLine = edges?.chalk ? walk : roundCorners(walk, CORNER_R);
+    const dashLine = edges?.chalk ? dash : roundCorners(dash, CORNER_R);
     this.fade.count = strips;
     (this.fade.material as THREE.MeshBasicMaterial).opacity = fade ? fade.alpha * (this.planning ? 0.5 : 1) : 0;
     this.fade.instanceMatrix.needsUpdate = true;
     if (this.fade.instanceColor) this.fade.instanceColor.needsUpdate = true;
-    for (const [edge, halo, shade, points] of [[this.walkEdge, this.walkHalo, this.walkShade, walk], [this.dashEdge, this.dashHalo, this.dashShade, dash]] as const) {
+    for (const [edge, halo, shade, points] of [[this.walkEdge, this.walkHalo, this.walkShade, walkLine], [this.dashEdge, this.dashHalo, this.dashShade, dashLine]] as const) {
       edge.visible = !!edges && points.length > 0;
       halo.visible = edge.visible && edges!.halo;
       // A chalk stroke's halo is already its shadow.

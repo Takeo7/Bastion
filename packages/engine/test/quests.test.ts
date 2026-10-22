@@ -124,6 +124,8 @@ describe('side quests', () => {
 
   it('Lindqvist (quest «ibarra») leads her own squad, and capturing her brings her back scarred', () => {
     const c = solo();
+    // Not about the sieges: the first one far off (it comes straight after the first mission: Ana, 22/10).
+    c.siege.in = 99;
     c.story.done = 1;
     levelTo(c, 3, new Rng(1));
     fly(c, questOffer(c, 'ibarra'), 'victory');
@@ -158,6 +160,8 @@ describe('side quests', () => {
 
   it('the numbers station adds a contact', () => {
     const c = solo();
+    // Not about the sieges: the first one far off (it comes straight after the first mission: Ana, 22/10).
+    c.siege.in = 99;
     c.day = 20;
     levelTo(c, 2, new Rng(1));
     const before = contactCapacity(c);

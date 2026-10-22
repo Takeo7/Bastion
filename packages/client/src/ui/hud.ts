@@ -44,6 +44,9 @@ import { wearMarks } from '../strategy/arms';
 import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from './quit';
 import { graphicsSettings, soundSettings } from './settingsPanel';
 import { typed } from './typed';
+import { marked } from './marks';
+import { deadlineEl, deadlineOf } from './deadline';
+import { turnClockOf } from '../turnClock';
 
 /**
  * What the action bar holds: the soldier's abilities, and the evacuation's own
@@ -51,6 +54,18 @@ import { typed } from './typed';
  * and the same for abandoning the mission (16/10): the wait, and the answer.
  */
 export type BarActionId = AbilityId | 'evac' | 'evacAccept' | 'evacRefuse' | 'abandon' | 'abandonAccept' | 'abandonRefuse' | MenuId;
+
+/** A call of the partner's waiting for this player's answer (hud.showCall): to leave in La Lata, or to abandon. */
+export interface CallView {
+  kind: 'evac' | 'abandon';
+  kicker: string;
+  title: string;
+  text: string;
+  /** Under the time left: what happens when it runs out. */
+  clockNote: string;
+  accept: { label: string; act: () => void };
+  refuse: { label: string; act: () => void };
+}
 
 /** The bar's actions with a menu (docs/FASE10.md §4): Lanzar, Vigilancia, Investigar. */
 export type MenuId = 'menu:throw' | 'menu:watch' | 'menu:investigate';
@@ -400,7 +415,7 @@ export class Hud {
   private readonly logLines: HTMLElement[] = [];
   private logOpen = false;
   private readonly menu = h('div.game-menu');
-  private readonly bannerEl = h('div.banner');
+  private readonly bannerEl = h('div.banner', { onclick: () => this.releaseBanner() });
   private readonly toastEl = h('div.toast');
   /** A key moment the partner caused, with «Ver (F)» (UX-REVISION-2 #36). */
   private readonly noticeEl = h('div.toast.partner-notice');
@@ -417,6 +432,9 @@ export class Hud {
   private biteNote = biteNote(true);
   private bannerTimer = 0;
   private toastTimer = 0;
+  /** The partner's call waiting for this player's answer, in the middle (callCard), and what it was drawn for. */
+  private callEl: HTMLElement | null = null;
+  private callKey = '';
 
 
   constructor(container: HTMLElement, private readonly handlers: HudHandlers) {
@@ -608,8 +626,12 @@ export class Hud {
     );
   }
 
+  /** Each player's turn clock in the top strip (tickClocks), by slot. */
+  private clockEls = new Map<Slot, HTMLElement>();
+
   setPlayers(players: PlayerInfo[], ready: [boolean, boolean], mySlot: Slot, busy: Set<Slot>, commander: Slot | null = null): void {
     clear(this.players);
+    this.clockEls.clear();
     this.paired = players.some((p) => p.slot !== mySlot);
     this.partnerOnline = players.find((p) => p.slot !== mySlot && p.connected)?.name ?? null;
     // Alone, the turn state is the end-turn button's business: a status here read as "you are waiting".
@@ -619,6 +641,9 @@ export class Hud {
       // Who holds the command is the turn label's business now («TURNO DE ANA»): here only the underline.
       // The window minimized or the laptop asleep: back soon, their turn waits for them.
       const status = !p.connected ? 'Desconectado' : p.away ? 'Ausente' : alone || holds ? '' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
+      // Their turn clock under the name (Arturo, 22/10 #45): a bar that drains, never seconds (tickClocks).
+      const clock = h('span.turn-clock', { 'aria-hidden': 'true' }, h('i'));
+      this.clockEls.set(p.slot, clock);
       this.players.append(
         h(
           `div.player${p.slot === mySlot ? '.me' : ''}${ready[p.slot] ? '.ready' : ''}${p.connected ? '' : '.offline'}${holds ? '.command' : ''}`,
@@ -626,9 +651,37 @@ export class Hud {
           h('span.dot'),
           h('span.name', {}, p.name),
           status ? h('span.status', {}, status) : null,
+          clock,
         ),
       );
     }
+    this.tickClocks();
+  }
+
+  /**
+   * The turn clocks, every frame (game.ts frame): how much of each player's time is left, as the bar's width; striped
+   * and moving while it runs, still while the screen shows what happened; amber when little is left, red at the end,
+   * breathing slowly. Gone outside the squad's turn.
+   */
+  tickClocks(): void {
+    for (const [slot, el] of this.clockEls) {
+      const c = turnClockOf(slot);
+      el.classList.toggle('none', !c);
+      if (!c) continue;
+      (el.firstElementChild as HTMLElement).style.width = `${(Math.max(0, Math.min(1, c.left)) * 100).toFixed(1)}%`;
+      el.classList.toggle('running', c.running);
+      el.classList.toggle('low', c.left < 0.25);
+      el.classList.toggle('out', c.left < 0.1);
+    }
+  }
+
+  /**
+   * Whether something the game put up covers the field to be read (the arrival card, «TU TURNO» held, the partner's
+   * question, a card of how something works): the turn clock doesn't run meanwhile (game.ts reportIdle). A sheet the
+   * player opened doesn't count.
+   */
+  get covering(): boolean {
+    return !!this.introClose || !!this.callEl || this.bannerEl.classList.contains('held') || (this.modal.classList.contains('show') && !this.modal.querySelector('.soldier-sheet, .enemy-file'));
   }
 
   /** What a bite does in this mission (playtest 15/10 #13), for the MORDISCO tags' tooltip. */
@@ -1047,9 +1100,10 @@ export class Hud {
         'aria-haspopup': a.options && a.options.length > 1 ? 'menu' : null,
         onclick,
       },
-      h('span.key', {}, a.hotkey),
+      // The icon alone (Ana, 22/10 #35): its name and its key are on the card on hover; the number keys still work.
       abilityIcon(a.icon ?? (a.id as AbilityId)),
-      h('span.label', {}, a.note && !a.enabled ? a.note : a.label),
+      // What to do first (20/10 #24: «Sin balas: recarga»), on a tag over the key, read without the card.
+      a.note && !a.enabled ? h('span.label', {}, a.note) : null,
       a.count !== undefined ? h('span.count', {}, `×${a.count}`) : null,
       a.cooldown ? h('span.cd', {}, String(a.cooldown)) : null,
       a.depleted ? h('span.stamp', { 'aria-label': 'Agotado' }) : null,
@@ -1291,15 +1345,27 @@ export class Hud {
     this.root.classList.toggle('waiting-command', !!view && !view.mine);
   }
 
-  /** `detail`: a line under the stamp saying why (who saw the squad…); it stays longer, to be read. */
-  banner(text: string, kind: 'xcom' | 'alien' | 'warn' = 'xcom', detail?: string): void {
+  /**
+   * `detail`: a line under the stamp saying why (who saw the squad…); it stays longer, to be read. `held`: it stays
+   * until it is clicked, or Intro or Esc pressed (Ana, 22/10 #50: «TU TURNO» went before it was seen); meanwhile it
+   * covers the field (covering: the turn clock waits).
+   */
+  banner(text: string, kind: 'xcom' | 'alien' | 'warn' = 'xcom', detail?: string, held = false): void {
     // The banner is a rubber stamp coming down.
     uiSound('stamp', { gain: 0.55 });
     clear(this.bannerEl);
-    append(this.bannerEl, text, detail ? h('small.banner-detail', {}, detail) : null);
-    this.bannerEl.className = `banner show ${kind}`;
+    append(this.bannerEl, text, detail ? h('small.banner-detail', {}, detail) : null, held ? h('small.banner-go', {}, 'Clic para seguir') : null);
+    this.bannerEl.className = `banner show ${kind}${held ? ' held' : ''}`;
     window.clearTimeout(this.bannerTimer);
-    this.bannerTimer = window.setTimeout(() => this.bannerEl.classList.remove('show'), detail ? 3600 : 1500);
+    if (!held) this.bannerTimer = window.setTimeout(() => this.bannerEl.classList.remove('show'), detail ? 3600 : 1500);
+  }
+
+  /** A held banner (banner's `held`) let go: by its click, or Intro or Esc. Whether there was one. */
+  releaseBanner(): boolean {
+    if (!this.bannerEl.classList.contains('held') || !this.bannerEl.classList.contains('show')) return false;
+    this.bannerEl.classList.remove('show', 'held');
+    uiSound('confirm');
+    return true;
   }
 
   /**
@@ -1327,7 +1393,8 @@ export class Hud {
       // The objective, the turns under it in the accent, then the briefing whole (playtest 19/10 #12).
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
       turns ? h('p.intro-turns', {}, turns) : null,
-      briefing ? h('p.intro-briefing', {}, briefing) : null,
+      // Lore's marks (#28): the key words in white bold, the objective in the accent.
+      briefing ? h('p.intro-briefing', {}, ...marked(briefing)) : null,
       // Only what closes it (playtest 18/10 #27; Ana, 20/10 #32), the same each time it is opened.
       h('div.intro-foot', {}, h('button.fire.intro-go', { type: 'button', onclick: close }, 'ENTENDIDO')),
     );
@@ -1407,6 +1474,39 @@ export class Hud {
     this.noticeEl.style.setProperty('--accent', color);
     // The partner's colour goes on the tape (styles.css): as text on paper, orange and light blue read poorly.
     append(this.noticeEl, h('span', {}, text), h('button.x-btn.small', { onclick: () => onSee?.() }, 'Ver (F)'));
+  }
+
+  /**
+   * The partner asks to leave or to abandon (Ana, 22/10 #39: it went through unseen after 30 s): for whoever must
+   * answer, a card in the middle of the screen with what is asked, the time left large, and the two answers. Null
+   * takes it away. The bar keeps its own buttons too.
+   */
+  showCall(call: CallView | null): void {
+    // Drawn again when the server's clock arrives (it may come after the call).
+    const key = call ? `${call.kind}:${call.title}:${deadlineOf(call.kind)?.at ?? ''}` : '';
+    if (key === this.callKey) return;
+    const sounded = !!this.callEl;
+    this.callKey = key;
+    this.callEl?.remove();
+    this.callEl = null;
+    if (!call) return;
+    const clock = deadlineEl(call.kind, (left) => left);
+    this.callEl = h(
+      `div.call-card.${call.kind}`,
+      { role: 'alertdialog', 'aria-label': call.title },
+      call.kicker ? h('div.call-kicker', {}, call.kicker) : null,
+      h('h2.call-title', {}, call.title),
+      h('p.call-text', {}, call.text),
+      clock ? h('div.call-clock', {}, clock, h('small', {}, call.clockNote)) : null,
+      h(
+        'div.call-actions',
+        {},
+        h('button.x-btn.call-refuse', { type: 'button', onclick: call.refuse.act }, call.refuse.label),
+        h('button.fire.call-accept', { type: 'button', onclick: call.accept.act }, call.accept.label),
+      ),
+    );
+    this.root.append(this.callEl);
+    if (!sounded) uiSound('bell');
   }
 
   toast(text: string): void {
@@ -1628,23 +1728,6 @@ export class Hud {
         ),
       ),
     );
-  }
-
-  /**
-   * The first night (playtest 17/10 #50: «la luz no está muy explicada»): a
-   * card under the turn bar with how the light works, until it is closed. Its
-   * lines stay in the «De noche» tag and the controls.
-   */
-  nightCard(title: string, lines: readonly string[]): void {
-    this.root.querySelector('.night-card')?.remove();
-    const card = h(
-      'div.night-card.panel',
-      { role: 'note' },
-      h('b', {}, title),
-      h('ul', {}, ...lines.map((line) => h('li', {}, line))),
-      h('button.fire', { onclick: () => card.remove() }, 'ENTENDIDO'),
-    );
-    this.root.append(card);
   }
 
   /** Before closing the game: it is saved; hosting it, the partner is left without it (ui/quit.ts). */

@@ -593,11 +593,14 @@ export const SOUNDS: Record<string, SoundDef> = {
     s.to(s.amp(s.filter(s.noise('white'), 'bandpass', [[0, 2200], [0.2, 800]], 2), [[0, 0], [0.09, 0.9], [0.25, 0.001]]));
   }),
   // The sword: a slash and the blade ringing.
-  'melee.sword': def('sfx', 0.8, (s) => {
-    s.to(s.amp(s.filter(s.noise('white'), 'highpass', 2200), hit(0, 0.002, 0.05, 0.9)));
-    s.to(s.metal(0.005, [2800, 4100, 5700].map((f) => s.vary(f, 0.03)), 0.55, 0.45));
-    s.to(s.amp(s.osc('sine', [[0, 120], [0.1, 60]]), hit(0, 0.003, 0.1, 0.6)));
-  }, { reverb: 0.15 }),
+  // A blade into the body (knife, machete): the cut through cloth and flesh, a dull thud under it and a wet tear.
+  // No metal ringing (Ana, 22/10 #53: it rang like a bell).
+  'melee.sword': def('sfx', 0.4, (s) => {
+    s.to(s.amp(s.filter(s.noise('pink'), 'bandpass', [[0, s.vary(2400)], [0.08, 900]], 1.2), [[0, 0], [0.01, 0.8], [0.1, 0.001]]));
+    s.to(s.amp(s.filter(s.noise('brown'), 'lowpass', 700, 0.6), hit(0.01, 0.002, 0.09, 1)));
+    s.to(s.amp(s.osc('sine', [[0.01, s.vary(130)], [0.1, 60]], 0.01, 0.15), hit(0.01, 0.003, 0.08, 0.6)));
+    s.to(s.filter(s.grains(0.015, 0.09, 6, 0.004, false), 'bandpass', 1600, 0.8), 0.5);
+  }, { variants: 4, reverb: 0.05 }),
   // Electric: a buzzing zap (the stun lance).
   'melee.stun': def('sfx', 0.5, (s) => {
     const z = s.filter(s.noise('white'), 'bandpass', 3000, 1.2);

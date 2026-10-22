@@ -97,15 +97,53 @@ export interface Grade {
   highlightTint: { value: THREE.Color };
   /** Blacks lifted to this colour: the captures' soft, pastel shade. */
   lift: { value: THREE.Color };
+  /**
+   * On top of each view's own (setVivid): its saturation times this, a vibrance (the colours half way to full the
+   * most), more contrast (about the frame's dark middle, none at white), its lift times this, and the middle tones
+   * brightened (black and white where they are).
+   */
+  vividSaturation: { value: number };
+  vibrance: { value: number };
+  vividContrast: { value: number };
+  vividLift: { value: number };
+  vividGain: { value: number };
+}
+
+/**
+ * How vivid the colours are over each view's grade (22/10 #46, Arturo: «los colores son muy planos»; three levels for
+ * him to choose from, 0 as it is): more saturation and vibrance (most in the colours half way to full: the fog of
+ * war's grey, the snow's near white and the warm cast of the street's greys stay as they are; boosting the dullest
+ * turned the ground orange), a little more contrast and the blacks a little less lifted, the middle tones brightened
+ * as much as that darkened them (about 0.5, the frame is mostly darker: it went 3 to 7 % dimmer).
+ */
+export const VIVID_LEVELS = [
+  { saturation: 1, vibrance: 0, contrast: 0, lift: 1, gain: 0 },
+  { saturation: 1.08, vibrance: 0.3, contrast: 0.15, lift: 0.8, gain: 0.08 },
+  { saturation: 1.16, vibrance: 0.6, contrast: 0.3, lift: 0.6, gain: 0.16 },
+] as const;
+
+/** The colours as vivid as level `k` of VIVID_LEVELS over every grade the chain is given (0, as they were). */
+export function setVivid(post: PostChain, k: number): void {
+  const v = VIVID_LEVELS[Math.max(0, Math.min(VIVID_LEVELS.length - 1, k))]!;
+  post.grade.vividSaturation.value = v.saturation;
+  post.grade.vibrance.value = v.vibrance;
+  post.grade.vividContrast.value = v.contrast;
+  post.grade.vividLift.value = v.lift;
+  post.grade.vividGain.value = v.gain;
 }
 
 /** Colour grade after tone mapping: saturation, contrast, split toning, lifted blacks and a soft vignette. */
 const GRADE_GLSL = /* glsl */ `
   float luma = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
-  gl_FragColor.rgb = mix(vec3(luma), gl_FragColor.rgb, saturation);
+  gl_FragColor.rgb = mix(vec3(luma), gl_FragColor.rgb, saturation * vividSaturation);
+  float chroma = max(max(gl_FragColor.r, gl_FragColor.g), gl_FragColor.b) - min(min(gl_FragColor.r, gl_FragColor.g), gl_FragColor.b);
+  gl_FragColor.rgb = mix(vec3(luma), gl_FragColor.rgb, 1.0 + vibrance * 4.0 * chroma * (1.0 - chroma));
   gl_FragColor.rgb = (gl_FragColor.rgb - 0.5) * contrast + 0.5;
+  gl_FragColor.rgb += vividContrast * (gl_FragColor.rgb - 0.3) * (1.0 - gl_FragColor.rgb);
   gl_FragColor.rgb *= mix(shadowTint, highlightTint, smoothstep(0.12, 0.7, luma));
-  gl_FragColor.rgb = lift + gl_FragColor.rgb * (1.0 - lift);
+  vec3 lifted = lift * vividLift;
+  gl_FragColor.rgb = lifted + gl_FragColor.rgb * (1.0 - lifted);
+  gl_FragColor.rgb += vividGain * gl_FragColor.rgb * (1.0 - gl_FragColor.rgb);
   vec2 d = vUv - 0.5;
   gl_FragColor.rgb *= 1.0 - vignette * dot(d, d) * 2.0;`;
 
@@ -123,11 +161,16 @@ class GradedOutputPass extends OutputPass {
       shadowTint: { value: new THREE.Color(1, 1, 1) },
       highlightTint: { value: new THREE.Color(1, 1, 1) },
       lift: { value: new THREE.Color(0, 0, 0) },
+      vividSaturation: { value: 1 },
+      vibrance: { value: 0 },
+      vividContrast: { value: 0 },
+      vividLift: { value: 1 },
+      vividGain: { value: 0 },
     });
     this.material.fragmentShader = this.material.fragmentShader
       .replace(
         'uniform sampler2D tDiffuse;',
-        'uniform sampler2D tDiffuse;\nuniform float saturation;\nuniform float contrast;\nuniform float vignette;\nuniform vec3 shadowTint;\nuniform vec3 highlightTint;\nuniform vec3 lift;',
+        'uniform sampler2D tDiffuse;\nuniform float saturation;\nuniform float contrast;\nuniform float vignette;\nuniform vec3 shadowTint;\nuniform vec3 highlightTint;\nuniform vec3 lift;\nuniform float vividSaturation;\nuniform float vibrance;\nuniform float vividContrast;\nuniform float vividLift;\nuniform float vividGain;',
       )
       .replace(/#ifdef SRGB_TRANSFER[\s\S]*?#endif/, (block) => block + GRADE_GLSL);
   }
@@ -198,6 +241,6 @@ export function postChain(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: T
     scene: pass,
     ao,
     bloom,
-    grade: { saturation: u.saturation, contrast: u.contrast, vignette: u.vignette, shadowTint: u.shadowTint, highlightTint: u.highlightTint, lift: u.lift },
+    grade: { saturation: u.saturation, contrast: u.contrast, vignette: u.vignette, shadowTint: u.shadowTint, highlightTint: u.highlightTint, lift: u.lift, vividSaturation: u.vividSaturation, vibrance: u.vibrance, vividContrast: u.vividContrast, vividLift: u.vividLift, vividGain: u.vividGain },
   };
 }

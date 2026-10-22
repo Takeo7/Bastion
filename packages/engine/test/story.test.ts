@@ -130,6 +130,8 @@ describe('story', () => {
 
   it('the final mission needs every chapter, and ends with a decision taken with both keys', () => {
     const c = createCampaign([0, 1], new Rng(4));
+    // Not about the sieges: the first one far off (it comes straight after the first mission: Ana, 22/10).
+    c.siege.in = 99;
     c.nextEventDay = 999;
     c.story.done = 6;
     c.story.simon = 'trusted';

@@ -9,6 +9,7 @@ import { Net, serverUrl, setHosts, storageKey } from './net';
 import { installReport, trace } from './report';
 import { StrategyScreen } from './strategy/screen';
 import { setDeadline } from './ui/deadline';
+import { setTurnClock } from './turnClock';
 import { applyUiTheme } from './ui/theme';
 import { Lobby } from './ui/lobby';
 
@@ -194,6 +195,10 @@ function handle(m: ServerMessage): void {
       setDeadline(m.kind, m.ms);
       base?.refresh();
       game?.refreshDeadline();
+      break;
+    // The squad's turn clock (Arturo, 22/10): the HUD draws it from turnClock.ts.
+    case 'turnClock':
+      setTurnClock(m.clocks);
       break;
     case 'ping':
       game?.onPing(m.slot, m.tile, m.kind);

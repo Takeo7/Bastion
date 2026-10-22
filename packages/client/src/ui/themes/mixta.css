@@ -122,7 +122,7 @@
 
 /* The big plates: steel with its rivets, never the pack's torn chalk frame. */
 :root[data-ui='mixta'] :is(.strat-left, .strat-right, .strat-center-top, .strat-center-bottom) > .x-panel,
-:root[data-ui='mixta'] :is(.menu-column, .menu-squad, .modal-card, .game-menu-card, .outcome-card, .unit-panel, .shot-panel, .radio, .mission-intro, .strat-modal .x-panel, .menu-modal .x-panel) {
+:root[data-ui='mixta'] :is(.menu-column, .menu-squad, .modal-card, .game-menu-card, .outcome-card, .unit-panel, .shot-panel, .radio, .mission-intro, .call-card, .strat-modal .x-panel, .menu-modal .x-panel) {
   background: var(--m-rivets), var(--t-sheet);
   box-shadow: var(--t-sheet-shadow);
   border: 0;
@@ -133,7 +133,7 @@
 /* The big plates in a steel frame of the packs (playtest 15/10 #5; Military Combat HUD, mh/frame-a, made grey
    so its teal doesn't fight the yellow), cut in nine and drawn outside the plate, so nothing moves. */
 :root[data-ui='mixta'] :is(.strat-left, .strat-right, .strat-center-top, .strat-center-bottom) > .x-panel,
-:root[data-ui='mixta'] :is(.menu-column, .menu-squad, .modal-card, .game-menu-card, .outcome-card, .unit-panel, .shot-panel, .mission-intro, .strat-modal .x-panel, .menu-modal .x-panel) {
+:root[data-ui='mixta'] :is(.menu-column, .menu-squad, .modal-card, .game-menu-card, .outcome-card, .unit-panel, .shot-panel, .mission-intro, .call-card, .strat-modal .x-panel, .menu-modal .x-panel) {
   border-image: url('/ui/synty/mh/frame-a.webp') 34 / 15px / 8px stretch;
 }
 

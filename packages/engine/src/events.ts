@@ -165,6 +165,11 @@ export type GameEvent =
   | { t: 'noise'; tile: Pos; radius: number; by?: string; heard: string[] }
   /** It reached what it heard and found nobody: it stops looking for it. */
   | { t: 'forgot'; unit: string }
+  /**
+   * One of the dead goes after `target`, a soldier it saw (Unit.hunting), `missed` of its turns since it last saw
+   * any of the living; null: it has forgotten them.
+   */
+  | { t: 'hunting'; unit: string; target: string | null; missed: number }
   /** A soldier searched the furniture on `tile`; `loot` went into the backpack (null: nothing). */
   | { t: 'searched'; unit: string; tile: Pos; loot: Loot | null }
   /** A room searched, by its id (loot.ts roomAt; docs/FASE8.md §B); what it turned up, as `searched`. */
@@ -717,6 +722,9 @@ export function applyEvent(s: GameState, e: GameEvent): void {
     }
     case 'forgot':
       unit(s, e.unit).heard = null;
+      break;
+    case 'hunting':
+      unit(s, e.unit).hunting = e.target ? { id: e.target, missed: e.missed } : null;
       break;
     case 'searched': {
       (s.searched ??= []).push(nodeOf(s, e.tile));

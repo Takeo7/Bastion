@@ -564,17 +564,44 @@ function wander(sim: Sim, u: Unit): void {
   if (path) sim.moveAlong(u, path, 1);
 }
 
+/** How many of its turns one of the dead follows a soldier it no longer sees before it forgets them (Arturo, 22/10). */
+export const HUNT_TURNS = 3;
+
 /**
  * One zombie's turn (docs/FASE2.md). No cover, no guns: it goes for the
- * nearest soldier it sees and bites; seeing nobody, it goes to the last noise
- * it heard, and having heard nothing, it wanders. The Chillón screams (and
- * every zombie within 16 tiles hears it) and keeps its distance; the Hinchado
- * walks up to a soldier and bursts. Cheap enough for a horde of twenty: one
- * reach per action and a sight check per soldier. In a siege they know where
- * the living are: seeing nobody, they go for the nearest soldier, and with no
- * way to them, they break one (advance; Arturo, 18/10).
+ * nearest soldier it sees and bites; seeing nobody, it follows the soldier it
+ * saw last wherever they go, for HUNT_TURNS of its turns (Unit.hunting,
+ * Arturo 22/10); with nobody to follow, it goes to the last noise it heard,
+ * and having heard nothing, it wanders. The Chillón screams (and every zombie
+ * within 16 tiles hears it) and keeps its distance; the Hinchado walks up to a
+ * soldier and bursts. Cheap enough for a horde of twenty: one reach per action
+ * and a sight check per soldier. In a siege they know where the living are:
+ * seeing nobody, they go for the nearest soldier, and with no way to them,
+ * they break one (advance; Arturo, 18/10).
  */
 export function takeZombieTurn(sim: Sim, u: Unit): void {
+  const sighting: Sighting = { prey: null };
+  zombieActions(sim, u, sighting);
+  if (!u.alive || sim.over) return;
+  // Whom it goes after next turn: the nearest it saw last this turn; or, seeing none of the living, the one it
+  // follows still, a turn more, till it forgets them (or they are gone: dead, out of the map).
+  const was = u.hunting;
+  if (sighting.prey) {
+    if (was?.id !== sighting.prey || was.missed !== 0) sim.emit({ t: 'hunting', unit: u.id, target: sighting.prey, missed: 0 });
+  } else if (was) {
+    const missed = was.missed + 1;
+    const there = foes(sim.s, u).some((e) => e.id === was.id);
+    sim.emit({ t: 'hunting', unit: u.id, target: there && missed < HUNT_TURNS ? was.id : null, missed });
+  }
+}
+
+/** Whom one of the dead saw this turn: the nearest of the living, the last time it saw any (takeZombieTurn). */
+interface Sighting {
+  prey: string | null;
+}
+
+/** One zombie's actions (takeZombieTurn), noting in `sighting` whom it saw. */
+function zombieActions(sim: Sim, u: Unit, sighting: Sighting): void {
   const s = sim.s;
   const abilities = abilitiesOf(u);
   const usable = (a: AbilityId) => abilities.includes(a) && !abilityBlocker(s, u, a);
@@ -584,6 +611,7 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
     const soldiers = foes(s, u);
     if (!soldiers.length) return;
     const seen = soldiers.filter((e) => canSee(s, u, e)).sort(byDistance(s, u.pos));
+    if (seen.length) sighting.prey = seen[0]!.id;
 
     if (abilities.includes('mindspin')) {
       // The Chillón: a scream at whoever it sees (one a turn for the whole horde), or a corpse raised.
@@ -645,6 +673,12 @@ export function takeZombieTurn(sim: Sim, u: Unit): void {
     if (s.mission.siege) {
       const prey = [...soldiers].sort(byDistance(s, u.pos))[0]!;
       if (advance(sim, u, prey.pos, 1)) continue;
+      return;
+    }
+    // Out of sight, the one it saw last: after them, wherever they are now, till it forgets them.
+    const hunted = u.hunting ? soldiers.find((e) => e.id === u.hunting!.id) : undefined;
+    if (hunted) {
+      if (advance(sim, u, hunted.pos, 1)) continue;
       return;
     }
     // Elsewhere, to the last noise heard, and having found nobody there, wandering.

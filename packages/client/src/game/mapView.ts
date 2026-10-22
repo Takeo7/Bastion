@@ -42,6 +42,9 @@ interface Palette {
   roof: number;
 }
 
+/** How near a soldier has to be for a special loot box's mark to show (Arturo, 22/10), in tiles. */
+const LOOT_MARK_REACH = 4;
+
 const PALETTES: Record<Biome, Palette> = {
   city: { ground: 0x9a9384, street: 0x585d63, floor: 0x8a705a, roof: 0x7d7a74 },
   wilds: { ground: 0x6a8a45, street: 0x9a8460, floor: 0x86705a, roof: 0x7a6a50 },
@@ -102,11 +105,13 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
     case 'fountainCorner':
       // Its basin is drawn whole (dressed); what is left of one shot up, rubble.
       return low ? 'rubble' : null;
+    case 'cabinet':
+      // Low, an office's filing cabinet (22/10 #47: as full cover, under the eyes).
+      return low ? 'officeCabinet' : kind;
     case 'kiosk':
     case 'statue':
     case 'fridge':
     case 'wardrobe':
-    case 'cabinet':
     case 'medicalShelf':
     case 'rack':
       return low ? null : kind;
@@ -114,7 +119,8 @@ function decorSet(kind: DecorKind, tile: 'low' | 'high', biome: Biome, site?: Si
       // By the forest road, broken boards (no rails).
       return low ? (site === 'roadside' ? 'woodFence' : 'fencePost') : null;
     case 'gatePost':
-      return low ? 'gatePost' : null;
+      // In full cover, a yard's gate: a concrete pillar (it had none: a city prop stood in at random, 22/10 #47).
+      return low ? 'gatePost' : 'gatePillar';
     case 'hay':
       return low ? 'hayBale' : 'hayStack';
     case 'shelf':
@@ -582,6 +588,7 @@ export class MapView {
     // The outline round what is played (docs/MAPAS.md §5.10) is dark under the fog, always, as beyond the edge
     // (playtest 20/10 #23, Arturo): only what is played is ever seen.
     this.fog.setShut(s.frame?.length && s.ground ? Uint8Array.from(s.ground, (g) => (g === 4 ? 1 : 0)) : null);
+    this.fog.setShells(s.storeys, s.width);
     this.fog.set([], [], true);
     this.fog.setFloors(s.elev);
     this.pieces = pieceMap(s);
@@ -1389,13 +1396,14 @@ export class MapView {
           return ok;
         }
       }
-      // Shelves as the building is (playtest 18/10, #36): a house's are its bookcases, one kind for the house, and an
-      // office's; a shop's or a warehouse's are shelving, but in a bookshop or a library (three in ten), all books.
+      // Shelves as the building is (playtest 18/10, #36): a house's are its bookcases, and an office's; a shop's or a
+      // warehouse's are shelving, but in a bookshop or a library (three in ten), all books. Full cover all over the eyes
+      // (22/10 #47): the tall bookcase (the low one, 0.68, one saw over), the tall cabinet (not the office's filing one).
       if ((look.kind === 'shelf' || look.kind === 'cabinet') && kind === 'high') {
         const bd = buildings.plan.buildings[buildings.plan.owner[i]!];
         const books = !!bd && (bd.kind === 'house' || bd.kind === 'office' || (bd.kind === 'shop' && shopTradeIn(s, bd) === 'books') || (bd.kind === 'hall' && bd.look < 0.3));
         const id: PropId =
-          look.kind === 'shelf' ? (books ? ((bd!.look * 7) % 1 < 0.5 ? 'bookshelf' : 'bookshelf2') : 'shelfHigh') : bd?.kind === 'house' ? 'cabinet' : pick < 0.5 ? 'officeCabinet' : 'cabinet';
+          look.kind === 'shelf' ? (books ? 'bookshelf' : 'shelfHigh') : 'cabinet';
         addSyntyId(id, placed(cx, base, cz, 1, 1, 1, turn * (Math.PI / 2)));
         return true;
       }
@@ -2175,14 +2183,21 @@ export class MapView {
     return this.bus && this.busWay !== null ? this.bus.depart(this.busWay) : Promise.resolve();
   }
 
-  /** The loot boxes' marks: those seen and still shut, but not on a storey the cutaway hides. */
+  /**
+   * The loot boxes' marks: those seen and still shut, with a soldier of the squad within LOOT_MARK_REACH (Arturo,
+   * 22/10: not across the map, only close by), but not on a storey the cutaway hides.
+   */
   private markLoot(): void {
     const s = this.shown;
     if (!s) return;
     const area = s.width * s.height;
+    const squad = s.units.filter((u) => u.alive && u.team === 'xcom' && !u.evacuated);
     this.lootMarks.update(this.explored.tiles, (place) => {
       const i = place % area;
-      return this.isCutAway({ x: i % s.width, y: Math.floor(i / s.width), z: Math.floor(place / area) });
+      const x = i % s.width;
+      const y = Math.floor(i / s.width);
+      if (!squad.some((u) => Math.hypot(u.pos.x - x, u.pos.y - y) <= LOOT_MARK_REACH)) return true;
+      return this.isCutAway({ x, y, z: Math.floor(place / area) });
     });
   }
 
@@ -2207,7 +2222,11 @@ export class MapView {
     if (!s) return;
     this.fogFloor = this.activeFloor();
     const levels = floorLevels(s, this.fogFloor);
-    this.fog.set(this.onFloor(s, this.visibility ?? []), this.onFloor(s, this.view ?? this.visibility ?? []), this.fresh);
+    // The floor in view's rooms, seen whole (Ana, 22/10 #36: fogOfWar.ts setRooms).
+    this.fog.setRooms(levels.map((z, i) => (z ? s.levels?.[z - 1]?.tiles[i] ?? null : s.tiles[i]!)), s.storeys, s.width);
+    // What was seen before stays under the fog of war, not the dark (Arturo, playtest 22/10 #13).
+    const seen = this.onFloor(s, this.explored.tiles);
+    this.fog.set(this.onFloor(s, this.visibility ?? []), this.onFloor(s, this.view ?? this.visibility ?? []).map((v, i) => v || seen[i]!), this.fresh);
     this.fog.setFloors(levels.map((z, i) => (z ? z : (s.elev[i] ?? 0))));
     if (NIGHT.value > 0.5) this.fog.setLit(this.onFloor(s, litMask(s)));
   }

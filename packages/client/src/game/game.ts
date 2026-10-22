@@ -80,14 +80,13 @@ import {
   biteLossLine,
   biteNote,
   ABANDON_TEXT,
+  BUS,
   ITEM_FINDS,
   ITEMS,
   abandonAsk,
-  abandonBarNotice,
   abandonRefusedLine,
   EVAC_BAR,
   evacAsk,
-  evacBarNotice,
   evacClock,
   evacDepartLine,
   evacPrompt,
@@ -158,6 +157,8 @@ import {
   searchSpot,
   inViewCone,
   sightOf,
+  RANGE_TABLES,
+  type RangeTable,
   sightOrigin,
   sightTo,
   STORY,
@@ -196,7 +197,7 @@ import {
 import type { Net, NetStatus } from '../net';
 import { deadlineLeft } from '../ui/deadline';
 import { clear } from '../ui/dom';
-import { Hud, isMenu, type AbilityView, type BarActionId, type MenuId, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
+import { Hud, isMenu, type AbilityView, type BarActionId, type CallView, type MenuId, type ItemOrder, type MissionView, type PackSlot, type PackView, type TargetView, type TurnOwner } from '../ui/hud';
 import { CameraRig, isTyping } from './camera';
 import { setTerrain, STOREY, tileToWorld, worldToTile } from './coords';
 import { Fx } from './fx';
@@ -213,7 +214,7 @@ import { UnitViews, type EnemyTag } from './unitViews';
 import { EdgeMarks, type EdgeMark } from './edgeMarks';
 import { playArrival } from './arrivals';
 import { planHasted, type Walker, type WalkPlan } from './walkPlan';
-import { overShoulder } from './shotCam';
+import { overShoulder, type ShoulderShot } from './shotCam';
 import { graphics } from '../settings';
 import { soldierPortrait } from '../strategy/portraits';
 import { skillsOf, treePanel } from '../strategy/skillSheet';
@@ -280,7 +281,6 @@ const RELOAD_FIRST = 'Sin balas: recarga';
 /** How long after the player last moved the camera the turn's changes leave it alone (#47: «que nunca pelee con el jugador»). */
 const TURN_CAMERA_QUIET_MS = 4000;
 /** The first night is explained once, on a card (per browser). */
-const NIGHT_SEEN_KEY = 'bastion.seenNight';
 
 /**
  * The loading veil (UX-REVISION-3 #1) waits at most this long for the map's
@@ -317,6 +317,8 @@ const BETWEEN = 0.5;
 const NEAR_ENOUGH = 5;
 /** The shot over the shoulder of an attack that kills (#11) stays this long once the target has fallen (s). */
 const KILL_HOLD = 0.5;
+/** And on one of ours fallen (Ana, 22/10 #21): long enough to see them lie still. */
+const DEATH_HOLD = 1.2;
 /** Events that start something new: a shot over the shoulder still on is let go before them. */
 const NEW_ACTION = new Set<GameEvent['t']>(['shot', 'moved', 'abilityUsed', 'explosive', 'stoneThrown', 'turnBegan', 'missionEnded']);
 /** The log's colour for enemies fighting each other (18/10 #47): neither ours nor against us. */
@@ -497,8 +499,20 @@ function damageValue(s: GameState, u: Unit, id: AbilityId): string | undefined {
     .join(' · ');
 }
 
-/** Where a weapon hits best, by its range (content.ts RangeTable), for the cards. */
-const RANGE_NAMES: Record<string, string> = { short: 'corto', medium: 'medio', long: 'largo', none: 'cuerpo a cuerpo' };
+/**
+ * Where a weapon hits without losing aim, in tiles (Ana, 22/10 #54: not «medio»), from its range table (content.ts
+ * RANGE_TABLES) up to how far the soldier sees: «hasta 11 casillas», «hasta 18 casillas», «desde 11 casillas».
+ */
+function reachText(table: RangeTable, sight: number): string {
+  if (table === 'none') return 'al lado';
+  const values = RANGE_TABLES[table];
+  const ok = (d: number) => values[Math.min(d, values.length - 1)]! >= 0;
+  let first = 1;
+  while (first < sight && !ok(first)) first++;
+  let last = first;
+  while (last < sight && ok(last + 1)) last++;
+  return first > 1 ? `desde ${first} casillas` : `hasta ${last} casillas`;
+}
 
 /**
  * An ability's figures on its card (playtest 19/10 #18: «siempre igual: la misma forma, el mismo color,
@@ -510,7 +524,7 @@ function abilityStats(s: GameState, u: Unit, id: AbilityId): [string, string][] 
   const need = apNeeded(u, id);
   const watch = id === 'overwatch' || id === 'killZone';
   const weapon = isAttack(id) ? attackWeapon(u, id) : watch ? attackWeapon(u, 'shoot') : null;
-  const reach = weapon ? RANGE_NAMES[weapon.range] : abilityRange(u, id) ? `${abilityRange(u, id)} casillas` : '';
+  const reach = weapon ? reachText(weapon.range, Math.floor(sightOf(u))) : abilityRange(u, id) ? `${abilityRange(u, id)} casillas` : '';
   const noise = watch ? attackWeapon(u, 'shoot').noise : noiseOf(s, u, id);
   const left = u.cooldowns[id] ?? 0;
   const stats: [string, string | number | undefined][] = [
@@ -742,6 +756,8 @@ export class Game {
   private lastShot: { target: string; result: ShotResult } | null = null;
   /** The target of the attack seen over the attacker's shoulder (#11), until it has fallen. */
   private killCam: string | null = null;
+  /** The aim's shot over the shoulder (updateAimCam): who aims at whom from where, '' with none. */
+  private aimCam = '';
   /** The units' flags hidden for that shot. */
   private flagsHidden = false;
   /** The one walking whom the camera goes along with (#4), while the camera is still the cinematic's (`epoch`). */
@@ -922,6 +938,14 @@ export class Game {
     // The battle's speed (tween.ts timeRate): the bodies follow it in unitViews; the effects here, and the camera while
     // events play, so it arrives in step with them (the player's own panning keeps its speed).
     const rate = timeRate();
+    // The turn clock (#45): drawn every frame; a card put up over the field stops this player's while it is read.
+    this.hud.tickClocks();
+    // The loading veil too: nothing can be done under it.
+    const covered = this.hud.covering || !!this.veiled;
+    if (covered !== this.covered) {
+      this.covered = covered;
+      this.reportIdle(!this.playing);
+    }
     // Along with the one walking, each frame (#4); the player taking the camera lets it go.
     if (this.walker) {
       if (this.rig.epoch !== this.walker.epoch) this.walker = null;
@@ -996,6 +1020,9 @@ export class Game {
     this.autoSelect();
     const focus = this.selected ? getUnit(this.state, this.selected) : this.state.units.find((u) => u.team === 'xcom');
     if (focus) this.rig.focus(tileToWorld(focus.pos), true);
+    // The host takes a screen just (re)joined as busy: its turn clock waits for this.
+    this.idleSent = null;
+    this.reportIdle(!this.playing);
     this.refreshInteractive();
     // Playing alone, with the partner's soldiers on the field: said from the start.
     this.commandChanged();
@@ -1085,19 +1112,9 @@ export class Game {
     if (s.realtime) void closed.then(() => this.state.realtime?.paused && this.rtPause(false));
     // With the living among the dead (18/10 #47), the log says they fight each other.
     if (s.units.some((u) => u.alive && u.team === 'alien' && !u.objective && !TEMPLATES[u.template].undead)) this.hud.log(LIVING_TIP, FEUD_COLOR);
-    // A night mission: the log keeps the rules. No radio in the middle of a mission (playtest 15/10 #8).
-    if (s.mission.night) {
-      this.hud.log(NIGHT_TEXT.rules.join(' '), '#2a4a7a');
-      // The first night ever, a card with how the light works, once the arrival card is closed (#50).
-      let seen = true;
-      try {
-        seen = localStorage.getItem(NIGHT_SEEN_KEY) === '1';
-        localStorage.setItem(NIGHT_SEEN_KEY, '1');
-      } catch {
-        /* storage unavailable: no card rather than one every night */
-      }
-      if (!seen) void closed.then(() => this.hud.nightCard(NIGHT_TEXT.label, NIGHT_TEXT.rules));
-    }
+    // A night mission: the log keeps the rules, and that is all (Arturo, 22/10 #57: the card «De noche» was out of
+    // place). No radio in the middle of a mission (playtest 15/10 #8).
+    if (s.mission.night) this.hud.log(NIGHT_TEXT.rules.join(' '), '#2a4a7a');
     void this.openingShot();
   }
 
@@ -1155,6 +1172,9 @@ export class Game {
     const epoch = this.rig.epoch;
     this.queue.push(...events.map((e) => ({ e, by, epoch })));
     this.refreshInteractive();
+    // The host takes this screen as busy with them till it says it is done (reportIdle), even if already playing.
+    this.idleSent = null;
+    if (this.playing) this.reportIdle(false);
     void this.pump();
   }
 
@@ -1344,9 +1364,27 @@ export class Game {
 
   // ============================================================== animation
 
+  /** What this screen last told the host: whether it has played everything it was sent (null: nothing yet). */
+  private idleSent: boolean | null = null;
+
+  /** A card over the field to be read (hud.covering): the turn clock waits for it as for what is playing. */
+  private covered = false;
+
+  /**
+   * Tells the host whether this screen still shows what happened: the squad's turn clock waits meanwhile (Arturo, 22/10),
+   * and while a card covers the field (the arrival's, «Entendido»: hud.covering).
+   */
+  private reportIdle(idle: boolean): void {
+    idle = idle && !this.covered;
+    if (this.idleSent === idle) return;
+    this.idleSent = idle;
+    this.net.send({ t: 'idle', idle });
+  }
+
   private async pump(): Promise<void> {
     if (this.playing) return;
     this.playing = true;
+    this.reportIdle(false);
     // No speed-up for a backlog (docs/UX-RITMO.md): the enemy turn arrives whole, and it played at ×2.5.
     while (this.queue.length) {
       // The enemy turn plays at the player's chosen speed (playtest 18/10 #6); the squad's own, at its own pace.
@@ -1376,9 +1414,9 @@ export class Game {
       this.current = null;
       this.noteResult(item);
       await this.settle(item, epoch);
-      // The one it killed has fallen: a moment more over the shoulder, then back.
+      // The one it killed has fallen: a moment more over the shoulder (on one of ours, longer), then back.
       if (this.killCam && item.e.t === 'died' && item.e.unit === this.killCam) {
-        await wait(KILL_HOLD);
+        await wait(getUnit(this.view, item.e.unit)?.team === 'xcom' ? DEATH_HOLD : KILL_HOLD);
         this.endKillCam();
       }
       // What a blast does to everyone in it plays at once (playtest 15/10 #16).
@@ -1395,6 +1433,7 @@ export class Game {
       await wait(hold);
     }
     this.playing = false;
+    this.reportIdle(true);
     this.refreshInteractive();
     if (this.planDue) {
       this.planDue = false;
@@ -1841,7 +1880,8 @@ export class Game {
               if (steps++ % 2 === 0) this.sfx.step(u, p);
             },
             e.ap,
-            this.grouped ? WALKERS_PACE * (this.groupPlans?.get(u.id)?.haste ?? 1) : 1,
+            // The squad at the pace Ajustes sets, to try (Ana, 22/10 #32: only how it looks).
+            this.grouped ? WALKERS_PACE * (this.groupPlans?.get(u.id)?.haste ?? 1) : u.team === 'xcom' ? graphics().walkSpeed : 1,
             this.groupPlans?.get(u.id)?.waits,
             this.groupPlans?.get(u.id)?.passes.slice(1),
           );
@@ -1872,6 +1912,8 @@ export class Game {
           const label = bite ? BITE_FLOAT : crit ? `CRÍTICO −${e.amount}` : shot === 'graze' ? `ROZADURA −${e.amount}` : `−${e.amount}`;
           this.fx.floatText(chest, label, crit ? 'crit' : 'damage');
         }
+        // One of ours hurt, short of dying (the death has its own): a scream if the dead bit them (Ana, 22/10 #20).
+        if (e.amount && target.team === 'xcom' && target.hp > e.amount) this.sfx.hurt(target, chest, !bite && !!from && TEMPLATES[from.template].undead);
         if (e.mitigated) {
           this.fx.floatText(chest.clone().setY(chest.y - 0.45), `BLINDAJE −${e.mitigated}`, 'info');
           this.sfx.impact('armor', chest);
@@ -1890,7 +1932,16 @@ export class Game {
           this.hud.log(`${capitalize(anEnemy(killer))} acaba con ${anEnemy(u)}.`, FEUD_COLOR);
         } else this.hud.log(u.team === 'xcom' ? `${u.name} ha caído en combate` : `${u.name} eliminado`, u.team === 'xcom' ? '#ff6b5a' : '#54d1ff');
         if (!this.shownToSquad(u)) return;
-        this.sfx.death(u, this.units.chestPos(u.id));
+        // One of ours falling with no attack framed first (a bite's toll, a blast, the fire): close on them (#21).
+        if (u.team === 'xcom' && !this.killCam && cam()) {
+          const shot = this.deathShot(u, killer);
+          if (shot) {
+            this.killCam = u.id;
+            this.rig.closeShot(shot.pos, shot.look);
+            await wait(0.35);
+          }
+        }
+        this.sfx.death(u, this.units.chestPos(u.id), killer);
         // The Hinchado bursts as it falls: the blast (the next event) doesn't wait for the body.
         if (TEMPLATES[u.template].abilities.includes('burst')) {
           void this.units.die(u.id);
@@ -2246,8 +2297,7 @@ export class Game {
       case 'evacCalled': {
         const ask = evacAsk(this.playerName(e.slot), this.evacSituation(v));
         this.hud.log(ask.title, PLAYER_COLORS[e.slot]);
-        // No window over the field (playtest 15/10 #10): the answer waits on the bar.
-        if (e.slot !== this.mySlot) this.hud.toast(evacBarNotice(this.playerName(e.slot)));
+        // The answer waits in the middle, with its clock (hud.showCall, Ana 22/10 #39), and on the bar.
         return;
       }
       case 'evacRefused': {
@@ -2260,7 +2310,6 @@ export class Game {
       case 'abandonCalled': {
         const ask = abandonAsk(this.playerName(e.slot));
         this.hud.log(ask, PLAYER_COLORS[e.slot]);
-        if (e.slot !== this.mySlot) this.hud.toast(abandonBarNotice(this.playerName(e.slot)));
         return;
       }
       case 'abandonRefused': {
@@ -2475,6 +2524,7 @@ export class Game {
       }
       case 'patrol':
       case 'forgot':
+      case 'hunting':
       // A light going on or out shows on the map (MapView draws the lights from the state): nothing to say.
       case 'lightOn':
       case 'lightOff':
@@ -2557,7 +2607,7 @@ export class Game {
           this.fx.floatText(this.units.chestPos(m.id), '!', 'alert');
           void this.units.alert(m.id);
         }
-        this.sfx.contact();
+        this.sfx.contact(center, members.some((m) => TEMPLATES[m.template].undead));
         const how = this.contactCause(e);
         this.hud.banner('¡CONTACTO!', 'alien', how);
         this.hud.log(`Contacto: ${members.map((m) => m.name).join(', ')} · ${how}`, '#ff6b5a');
@@ -2591,7 +2641,8 @@ export class Game {
         this.sfx.turn(e.team === 'alien', !v.concealed);
         // Whose turn opens: mine, the partner's (they hold the command) or the enemy's.
         const partner = e.team === 'xcom' && !!this.partnerHere() && e.command !== undefined && e.command !== this.mySlot;
-        this.hud.banner(e.team === 'alien' ? 'TURNO ENEMIGO' : partner ? `TURNO DE ${this.playerName(e.command).toUpperCase()}` : 'TU TURNO', e.team === 'xcom' ? 'xcom' : 'alien');
+        // This player's own stays until it is clicked (Ana, 22/10 #50), the turn clock waiting for it (hud.covering).
+        this.hud.banner(e.team === 'alien' ? 'TURNO ENEMIGO' : partner ? `TURNO DE ${this.playerName(e.command).toUpperCase()}` : 'TU TURNO', e.team === 'xcom' ? 'xcom' : 'alien', undefined, e.team === 'xcom' && !partner && !v.realtime);
         // The squad's turn: the camera to the soldier who plays first (#47).
         if (e.team === 'xcom') this.turnCamera(this.turnSoldier(v, e.command ?? this.mySlot, true));
         // Time running out (playtest 18/10 #8, #9, Lore's words): with 5 turns left, and on the last, after which
@@ -2608,7 +2659,7 @@ export class Game {
       case 'commandPassed': {
         this.sfx.command();
         if (this.partnerHere()) {
-          if (e.to === this.mySlot) this.hud.banner('TU TURNO', 'xcom', 'Tienes el mando: das tú las órdenes');
+          if (e.to === this.mySlot) this.hud.banner('TU TURNO', 'xcom', 'Tienes el mando: das tú las órdenes', !v.realtime);
           else this.hud.banner(`TURNO DE ${this.playerName(e.to).toUpperCase()}`, 'xcom', this.state.ready[this.mySlot] ? `Has terminado: juega ${this.playerName(e.to)}` : 'Mientras, puedes apuntar y planear');
         }
         // To the soldier who plays now: the one in play of whoever takes the command, or their first with actions (#47).
@@ -2646,7 +2697,8 @@ export class Game {
     // from where it strikes or shoots, at chest height, at the target's chest, where there is room for it (shotCam.ts).
     // Any other, framed from above.
     const from = samePlace(e.from, shooter.pos) ? this.units.chestPos(shooter.id) : tileToWorld(e.from).setY(this.units.chestPos(shooter.id).y);
-    const close = cam() && this.shownToSquad(shooter) && this.fells(e) ? overShoulder(v, from, chest, [shooter.id, target.id]) : null;
+    // One of ours it kills (Ana, 22/10 #21): framed close on them instead, the fall seen whole.
+    const close = !cam() || !this.fells(e) ? null : target.team === 'xcom' ? this.deathShot(target, shooter) : this.shownToSquad(shooter) ? overShoulder(v, from, chest, [shooter.id, target.id]) : null;
     if (close) {
       this.killCam = target.id;
       this.rig.closeShot(close.pos, close.look);
@@ -2730,6 +2782,22 @@ export class Game {
       if (NEW_ACTION.has(next.t)) return false;
     }
     return false;
+  }
+
+  /**
+   * One of ours about to fall (Ana, 22/10 #21: «la cámara se acerca y se ve entera»): close on them, from in front and
+   * a little aside, out towards whoever does it (or towards where the camera was), so the fall is seen whole and the
+   * one doing it in the frame where there is room (shotCam.ts overShoulder, from that point looking back at them).
+   * Null where there is no room: the camera stays as it is.
+   */
+  private deathShot(victim: Unit, by?: Unit): ShoulderShot | null {
+    const chest = this.units.chestPos(victim.id);
+    const toward = by && by.id !== victim.id ? this.units.worldPos(by.id) : this.renderer.camera.position.clone();
+    const out = new THREE.Vector3(toward.x - chest.x, 0, toward.z - chest.z);
+    if (out.lengthSq() < 0.01) out.set(0, 0, 1);
+    out.normalize().applyAxisAngle(THREE.Object3D.DEFAULT_UP, 0.6);
+    const from = chest.clone().addScaledVector(out, 2.6).setY(chest.y + 0.4);
+    return overShoulder(this.view, from, chest, [victim.id, ...(by ? [by.id] : [])]);
   }
 
   /** Back from the shot over the shoulder to where the camera was. */
@@ -4295,7 +4363,7 @@ export class Game {
     if (throwAt >= 0 && watchAt >= 0 && throwAt !== watchAt + 1) out.splice(watchAt + 1, 0, ...out.splice(throwAt, 1));
     // Real time: the space bar is the pause until something is armed.
     const space = !this.view.realtime;
-    return out.map((v, i) => ({ ...v, hotkey: i < 9 ? (v.id === 'shoot' && space ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '' }));
+    return out.map((v, i) => ({ ...v, hotkey: i < 9 ? (v.id === 'shoot' && space ? `${i + 1} · Espacio` : String(i + 1)) : i === 9 ? '0' : '' }));
   }
 
   /** A box beside the soldier, opened or not, that its hands reach (loot.ts searchSpot, reachesToSearch). */
@@ -4344,7 +4412,7 @@ export class Game {
       return {
         id,
         label: id === 'hack' ? `${def.name} · ${hackChance(this.state, u)}%` : def.name,
-        hotkey: i < 9 ? (id === 'shoot' ? `${i + 1} · Esp` : String(i + 1)) : i === 9 ? '0' : '',
+        hotkey: i < 9 ? (id === 'shoot' ? `${i + 1} · Espacio` : String(i + 1)) : i === 9 ? '0' : '',
         enabled: !reason,
         reason: reason ?? undefined,
         // Out of rounds in the magazine (Ana, 20/10 #24: Vigilancia off with rounds in the spare ones, and why only on
@@ -4431,6 +4499,30 @@ export class Game {
     );
     this.updateHover();
     this.refreshHud();
+    this.updateAimCam();
+  }
+
+  /**
+   * Aiming at an enemy (Ana, 22/10 #19): with a target picked, the camera goes over the shooter's shoulder at it
+   * (shotCam.ts overShoulder, as the attack that kills), another target, another shot; let go or fired, back to
+   * where it was. Not in real time, nor where there is no room for one; and never against the player: moving the
+   * camera takes it back (CameraRig.takeControl), until the next target.
+   */
+  private updateAimCam(): void {
+    const u = this.selectedUnit();
+    const t = this.currentTarget()?.unit;
+    const on = !!u && !!t && !this.view.realtime && !this.playing && t.team === 'alien' && this.shownToSquad(t);
+    const key = on ? `${u.id}:${t.id}:${u.pos.x},${u.pos.y},${u.pos.z ?? 0}` : '';
+    if (key === this.aimCam) return;
+    const was = !!this.aimCam;
+    this.aimCam = key;
+    if (!on) {
+      if (was && !this.killCam) this.rig.endCloseShot();
+      return;
+    }
+    const shot = overShoulder(this.view, this.units.chestPos(u.id), this.units.chestPos(t.id), [u.id, t.id]);
+    if (shot) this.rig.closeShot(shot.pos, shot.look);
+    else if (was) this.rig.endCloseShot();
   }
 
   /**
@@ -4572,6 +4664,41 @@ export class Game {
     }
     const waiting = evacWaiting(this.onlinePartner()?.name ?? 'el otro jugador');
     return [view('abandon', ABANDON_TEXT.accept, waiting, { enabled: false, reason: left ? proposalClock(left, true) : waiting })];
+  }
+
+  /**
+   * The partner's call waiting for this player's answer (Ana, 22/10 #39: it went through unseen): to leave in La Lata
+   * or to abandon, in the middle of the screen with its clock large (hud.showCall); none for one's own call.
+   */
+  private callView(): CallView | null {
+    const s = this.state;
+    if (s.outcome) return null;
+    const evac = s.evacCall;
+    if (evac && evac.by !== this.mySlot) {
+      const ask = evacAsk(this.playerName(evac.by), this.evacSituation(s));
+      return {
+        kind: 'evac',
+        kicker: s.mission.kind === 'elimination' ? 'Retirada' : 'Evacuación',
+        title: ask.title,
+        text: ask.text,
+        clockNote: `Sin respuesta, ${BUS.name} sale`,
+        accept: { label: EVAC_BAR.accept, act: () => this.useEvac('evacAccept') },
+        refuse: { label: EVAC_BAR.wait, act: () => this.useEvac('evacRefuse') },
+      };
+    }
+    const abandon = s.abandonCall;
+    if (abandon && abandon.by !== this.mySlot) {
+      return {
+        kind: 'abandon',
+        kicker: '',
+        title: abandonAsk(this.playerName(abandon.by)),
+        text: ABANDON_TEXT.stakes,
+        clockNote: 'Sin respuesta, se acepta sola',
+        accept: { label: ABANDON_TEXT.accept, act: () => this.net.send({ t: 'abandonAnswer', accept: true }) },
+        refuse: { label: ABANDON_TEXT.refuse, act: () => this.net.send({ t: 'abandonAnswer', accept: false }) },
+      };
+    }
+    return null;
   }
 
   /** Our soldiers in La Mula, on the state orders go by. */
@@ -4747,6 +4874,7 @@ export class Game {
     const sharing = !!partner && s.activeTeam === 'xcom' && !s.outcome;
     const mine = this.hasCommand();
     this.hud.setAbilities(this.abilities());
+    this.hud.showCall(this.callView());
 
     const panel = this.targetPanel();
     this.hud.setTarget(panel);
@@ -5246,6 +5374,9 @@ export class Game {
     window.addEventListener('pointerup', onUp);
     this.disposers.push(() => window.removeEventListener('pointerup', onUp));
     canvas.addEventListener('pointermove', (e) => {
+      // Mayús as it really is (Ana, 22/10 #56): let go outside the window (a screenshot's Cmd+Mayús+4, another app),
+      // its keyup never came, and the signal's yellow frame stayed for a cursor.
+      if (e.shiftKey !== this.signalKey) this.holdSignal(e.shiftKey);
       if (this.drag) {
         const dx = e.clientX - this.drag.x;
         const dy = e.clientY - this.drag.y;
@@ -5298,6 +5429,11 @@ export class Game {
       if (this.hud.introOpen && (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space' || e.code === 'Escape')) {
         e.preventDefault();
         if (e.code !== 'Escape') this.hud.closeIntro();
+        return;
+      }
+      // «TU TURNO» held till it is seen (#50): Intro or Esc let it go (and do nothing else).
+      if ((e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Escape') && this.hud.releaseBanner()) {
+        e.preventDefault();
         return;
       }
       // Real time (docs/TIEMPO-REAL.md §6b): the space bar stops the clock or lets it go on, X stops the picked one,
@@ -5436,9 +5572,12 @@ export class Game {
       setHurry(false);
       this.holdSignal(false);
     };
+    // Back to the window: nothing is held any more, whatever happened outside it.
+    const onFocus = () => this.holdSignal(false);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
-    this.disposers.push(() => window.removeEventListener('keyup', onKeyUp), () => window.removeEventListener('blur', onBlur));
+    window.addEventListener('focus', onFocus);
+    this.disposers.push(() => window.removeEventListener('keyup', onKeyUp), () => window.removeEventListener('blur', onBlur), () => window.removeEventListener('focus', onFocus));
   }
 
   /**

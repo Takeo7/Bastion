@@ -5,6 +5,7 @@ import { loopBuffer, sound } from '../audio/bank';
 import { SOUNDS } from '../audio/sounds';
 import { audio, type Loop } from '../audio/engine';
 import { music, type Piece } from '../audio/music';
+import { hasRecorded, loadRecorded, playRecorded } from '../audio/recorded';
 import { tileToWorld } from './coords';
 
 /** The sabotage's alarm, as the engine says which it is (s.mission.alarm, chosen by the campaign) and Arte's model shows. */
@@ -13,6 +14,14 @@ const SIRENS: Record<Alarm, string> = { police: 'siren.police', ambulance: 'sire
 const SIRENS_BY_MAP: Record<Biome, string> = { city: 'siren.police', wilds: 'siren.ambulance', facility: 'siren.alarm' };
 /** Seconds a siren takes to fall silent: a motor runs down (and its light with it); the electric ones cut out. */
 const SIREN_STOP: Record<string, number> = { 'siren.alarm': 2.5 };
+
+/** The dead walking (sfx deadWalk): at most one growl this often, from this far from where the camera looks, this likely. */
+const GROWL_GAP_MS = 4000;
+const GROWL_REACH = 18;
+const GROWL_CHANCE = 0.5;
+
+// The recorded sounds (audio/recorded.ts), fetched once sound can start.
+loadRecorded();
 /** The siren's level right beside it: steady under the fight, not over it. */
 const SIREN_LEVEL = 0.45;
 
@@ -93,6 +102,14 @@ export class Sfx {
   }
 
   melee(kind: 'swing' | 'sword' | 'stun' | 'claw', at?: THREE.Vector3): void {
+    // The dead's claw (zombies, runners, the Acorazado) bites: their snarl and the bite, recorded where there are.
+    if (kind === 'claw' && hasRecorded('zombie.bite')) {
+      playRecorded('zombie.attack', { ...this.place(at), spread: 0.06 });
+      playRecorded('zombie.bite', { ...this.place(at), delay: 0.12 });
+      return;
+    }
+    // A knife or a machete into the body: a recorded cut, where there is one (Ana, 22/10 #53).
+    if (kind === 'sword' && playRecorded('melee.blade', { ...this.place(at), spread: 0.06 })) return;
     this.at(`melee.${kind}`, at);
   }
 
@@ -150,6 +167,39 @@ export class Sfx {
   step(u: Unit, at?: THREE.Vector3): void {
     const t = u.template;
     this.at(t === 'mec' ? 'step.mec' : t === 'zombie' ? 'step.drag' : 'step', at, t === 'sectoid' || t === 'xenoid' ? 0.6 : 1, { spread: 0.1 });
+    if (TEMPLATES[t].undead) this.deadWalk(at);
+  }
+
+  // ------------------------------------------------------------ the dead and the hurt (Ana, 22/10 #20, #24)
+
+  /** When one of the dead last growled walking, and the steps heard since (the nearest of them growls). */
+  private growlAt = -Infinity;
+  private walking: THREE.Vector3[] = [];
+  private walkTimer = 0;
+
+  /**
+   * One of the dead walking: now and then one growls, the nearest to where the camera looks, and never a choir:
+   * one at a time, a few seconds apart (Gameplay, 22/10). Recorded growls only (docs/SONIDO.md).
+   */
+  private deadWalk(at?: THREE.Vector3): void {
+    if (!at || !hasRecorded('zombie.growl') || performance.now() - this.growlAt < GROWL_GAP_MS) return;
+    this.walking.push(at.clone());
+    if (this.walkTimer) return;
+    // The steps of a moment together (a group of the dead moves at once): the nearest is picked from them.
+    this.walkTimer = window.setTimeout(() => {
+      this.walkTimer = 0;
+      const focus = this.focus();
+      const nearest = this.walking.reduce((a, b) => (b.distanceTo(focus) < a.distanceTo(focus) ? b : a));
+      this.walking = [];
+      if (nearest.distanceTo(focus) > GROWL_REACH || Math.random() > GROWL_CHANCE) return;
+      this.growlAt = performance.now();
+      playRecorded('zombie.growl', { ...this.place(nearest, 0.8), spread: 0.08 });
+    }, 150);
+  }
+
+  /** A soldier hurt: a scream when the dead bite, a grunt otherwise; by their sex, never the same take twice running. */
+  hurt(u: Unit, at?: THREE.Vector3, bitten = false): void {
+    playRecorded(`soldier.${bitten ? 'scream' : 'pain'}.${u.appearance?.sex === 'f' ? 'f' : 'm'}`, { ...this.place(at), spread: 0.02 });
   }
 
   reload(at?: THREE.Vector3): void {
@@ -242,20 +292,27 @@ export class Sfx {
     sound('rescue');
   }
 
-  death(u: Unit, at?: THREE.Vector3): void {
+  /** `by`: who killed them; one of ours killed by the dead is eaten (Ana, 22/10 #20). */
+  death(u: Unit, at?: THREE.Vector3, by?: Unit): void {
     // The siren falls silent the moment it is destroyed, as its lights go out (Arte's models).
     if (u.objective && this.wail) this.silence(SIREN_STOP[this.wail.name] ?? 0);
     const t = u.template;
     const name = machine(u) ? 'death.robot' : t === 'sectoid' ? 'death.sectoid' : t === 'xenoid' ? 'death.runner' : t === 'zombie' || t === 'mec' ? 'death.zombie' : u.team === 'alien' ? 'death.advent' : 'death.human';
     // The Acorazado falls as the dead do, heavier.
     this.at(name, at, 1, t === 'mec' ? { rate: 0.85 } : {});
+    if (u.team !== 'xcom') return;
+    // One of ours: their scream, by their sex; eaten by the dead, the eating after it.
+    playRecorded(`soldier.scream.${u.appearance?.sex === 'f' ? 'f' : 'm'}`, { ...this.place(at), spread: 0.02 });
+    if (by && TEMPLATES[by.template].undead) playRecorded('zombie.eat', { ...this.place(at), delay: 0.5 });
   }
 
   // ------------------------------------------------------------ moments
 
   /** ¡Contacto!: the stinger, and the music turns tense. */
-  contact(): void {
-    sound('contact');
+  /** `at`, `dead`: where the ones who saw the squad are, and whether they are the dead, who shriek at it (Ana, 22/10 #24). */
+  contact(at?: THREE.Vector3, dead = false): void {
+    if (!playRecorded('sting', { gain: 0.9, spread: 0 })) sound('contact');
+    if (dead && at) playRecorded('zombie.alert', { ...this.place(at), delay: 0.2, spread: 0.06 });
     audio.duck(0.6, 0.8, 2);
     this.mood('tense');
   }

@@ -7,7 +7,7 @@ import { MapView } from '../game/mapView';
 import { dayMood, runMapJobs } from '../game/renderer';
 import { graphics } from '../settings';
 import { syntyProp, syntyPropsLoaded } from '../game/syntyProps';
-import { WEAPON_PARTS, WEAPONS, type AtlasId, type PropId, type WeaponId, type WeaponPartId } from '../game/syntyManifest';
+import { WEAPON_PARTS, WEAPONS, type AtlasId, type CampMove, type PropId, type WeaponId, type WeaponPartId } from '../game/syntyManifest';
 import { foundModel } from '../game/syntyFigures';
 import type { Gear } from '../game/figures';
 import { buildUnit, IDLE_POSE, isFigure, type UnitRig } from '../game/models';
@@ -15,6 +15,7 @@ import { ClearingLife, type Camp } from './clearingLife';
 import { STOREY } from '../game/coords';
 import { atlasTexture, loadModel } from '../game/synty';
 import { tween } from '../game/tween';
+import { whenCampClips } from '../game/syntyAnims';
 import type { ArmoryStock, ClearingArt } from './clearing';
 import { Sky } from '../game/sky';
 import { type Shot, type StageMood } from './stage';
@@ -723,6 +724,8 @@ export class ClearingArtView implements ClearingArt {
       const kept = before.get(who);
       const rig = kept ?? buildUnit(entry.template, entry.color, entry.appearance, entry.gear, entry.seed);
       this.lineupByWho.set(who, rig);
+      // (Side by side, each waits another way: 22/10 #7.)
+      if (isFigure(rig)) rig.restAs?.(i);
       rig.root.position.set(at.x, 0, at.z);
       if (!kept)
         rig.root.traverse((o) => {
@@ -896,12 +899,17 @@ export class ClearingArtView implements ClearingArt {
     await this.bus.loaded();
     const rigs = this.lineupRigs.filter((r) => r.root.visible);
     if (!rigs.length) return;
+    // (The clips of getting in are the camp's: loaded with the Asentamiento's life, but not for a build none of it has.)
+    await Promise.all([whenCampClips('masc'), whenCampClips('femn')]).catch(() => undefined);
+    if (this.bus.vehicle === 0) return this.boardCar(rigs);
     const root = this.bus.root;
     const centre = root.position.clone();
     const dir = new THREE.Vector3(Math.sin(root.rotation.y), 0, Math.cos(root.rotation.y));
     const across = new THREE.Vector3(dir.z, 0, -dir.x);
     const doors = this.bus.doorways();
     const half = this.bus.length / 2;
+    // (How many have taken each doorway so far: at a back one, two go up side by side, one each side of its middle.)
+    const taken = new Map<number, number>();
     const plans = rigs.map((rig, i) => {
       const from = rig.root.position.clone();
       const door = doors.reduce((a, b) => (a.distanceTo(from) <= b.distanceTo(from) ? a : b));
@@ -911,9 +919,19 @@ export class ClearingArtView implements ClearingArt {
       // rest of the row).
       const back = Math.abs(offset.dot(dir)) > half - 0.35;
       const normal = back ? dir.clone().multiplyScalar(Math.sign(offset.dot(dir)) || -1) : across.clone().multiplyScalar(Math.sign(offset.dot(across)) || 1);
-      const foot = door.clone().addScaledVector(normal, 0.55);
-      // Up and in through the doorway, on past its plane into the vehicle (19/10, #11: not through the body).
-      const inside = door.clone().addScaledVector(normal, -0.35);
+      // A double doorway's two leaves are one way in: one at a time through it (two at a back one, side by side).
+      const way = doors.findIndex((d) => d.distanceTo(door) < 0.7);
+      const nth = taken.get(way) ?? 0;
+      taken.set(way, nth + 1);
+      // (A lorry's tailgate is as wide as its back; a van's right leaf has its armour plate over it: by its left one.)
+      const lanes = back && this.bus.vehicle === 2 ? 2 : 1;
+      const lane = nth % lanes;
+      const across2 = new THREE.Vector3(normal.z, 0, -normal.x);
+      const aside = lanes > 1 ? across2.multiplyScalar(lane ? BOARD_LANE : -BOARD_LANE) : back ? across2.multiplyScalar(VAN_LEAF) : new THREE.Vector3();
+      const foot = door.clone().addScaledVector(normal, 0.55).add(aside);
+      // Up the step into the doorway, then on in past its plane, out of sight (19/10, #11: not through the body).
+      const doorway = door.clone().addScaledVector(normal, -0.1).add(aside);
+      const inside = door.clone().addScaledVector(normal, -0.1 - STEP_IN).add(aside);
       // Round its corner first, from behind it to a side door, or from its side to its back.
       const path = [from];
       const behind = from.clone().sub(centre).dot(dir) < -half;
@@ -929,20 +947,20 @@ export class ClearingArtView implements ClearingArt {
       // after the one before it (not all at once, on a word).
       const running = total / BOARD_SPEED + BOARD_EASE;
       const atFoot = running + i * BOARD_STAGGER;
-      // A double doorway's two leaves are one way in: one at a time through it.
-      const way = doors.findIndex((d) => d.distanceTo(door) < 0.7);
-      return { rig, run, lengths, total, foot, inside, door: way, atFoot, delay: i * BOARD_STAGGER, running };
+      return { rig, run, lengths, total, foot, doorway, inside, door: way, lane, atFoot, delay: i * BOARD_STAGGER, running, stepped: false, walked: false };
     });
     // One at a time at each door, the nearest first (out of the way of those behind, who run past where it stood):
     // each held back at its place in the row until the one before it has climbed in (they all made for the same
     // spot at once, a seventh of a second apart, and climbed in through one another).
     for (let d = 0; d < doors.length; d++) {
-      let free = -Infinity;
-      for (const p of plans.filter((q) => q.door === d).sort((a, b) => a.atFoot - b.atFoot)) {
-        const wait = Math.max(0, free - p.atFoot);
-        p.delay += wait;
-        p.atFoot += wait;
-        free = p.atFoot + CLIMB + DOOR_GAP;
+      for (const lane of [0, 1]) {
+        let free = -Infinity;
+        for (const p of plans.filter((q) => q.door === d && q.lane === lane).sort((a, b) => a.atFoot - b.atFoot)) {
+          const wait = Math.max(0, free - p.atFoot);
+          p.delay += wait;
+          p.atFoot += wait;
+          free = p.atFoot + STEP_TIME + DOOR_GAP;
+        }
       }
     }
     // Each doorway's doors: opening as its first gets to its foot, shutting once its last is in.
@@ -956,9 +974,11 @@ export class ClearingArtView implements ClearingArt {
       const which = doors.flatMap((w, j) => (w.distanceTo(doors[d]!) < 0.7 ? leaves[j] ?? [] : []));
       return { which, open: Math.max(0, first - DOOR_OPEN), shut: last + 0.08 };
     });
-    // How high it is in: the 4×4's sill, the van's floor, over the lorry's tailgate, the bus's step.
+    // How high it is in: the 4×4's sill, the van's floor, the lorry's bed (and over its tailgate), the bus's step.
     const rise = [0.22, 0.45, 0.62, 0.3][this.bus.vehicle] ?? 0.3;
+    const over = this.bus.vehicle === 2 ? TAILGATE_OVER : 0;
     const seconds = Math.max(...plans.map((p) => p.delay + p.running + CLIMB), ...ways.map((w) => (w ? w.shut + DOOR_OPEN : 0))) + 0.05;
+    for (const p of plans) if (isFigure(p.rig)) p.rig.sling?.(true);
     // The camera (playtest 21/10 #3, Ana: a shot of its own): from the row's shot down lower and a little in, turned
     // to between the row and the doorway most of them take (the whole row still in it, the door at its middle: in
     // close on the door, those at the far end ran in from out of the frame), then a slow push in on the door while
@@ -1001,11 +1021,35 @@ export class ClearingArtView implements ClearingArt {
         if (since <= 0) continue;
         d.climbing = climbing ? 1 : 0;
         if (climbing) {
-          // At the door, turned to it: a step up onto the sill (or the floor, the tailgate), stooping, and on in.
-          const c = Math.min(1, (since - p.running) / CLIMB);
-          p.rig.root.position.lerpVectors(p.foot, p.inside, THREE.MathUtils.smoothstep(c, 0.15, 1));
-          p.rig.root.position.y = rise * Math.min(1, c / 0.45) - 0.12 * Math.max(0, (c - 0.6) / 0.4);
+          // At the door, turned to it (22/10 #12: not stooped, «a caballo»): up the step, its feet as the clip has
+          // them (Mixamo's stairs, a step of it) and the rest of the floor's height the body's, then on in, walking.
+          const c = since - p.running;
+          d.climbing = 0;
           d.yaw = Math.atan2(p.inside.x - p.foot.x, p.inside.z - p.foot.z);
+          if (c < STEP_TIME) {
+            if (!p.stepped && isFigure(p.rig)) {
+              p.stepped = true;
+              p.rig.camp?.(null, true, true);
+              p.rig.campMove?.('stepUp', STEP_SPEED);
+            }
+            // Up first, then in (over a lorry's tailgate, a little higher as it goes over).
+            const k = c / STEP_TIME;
+            p.rig.root.position.lerpVectors(p.foot, p.doorway, THREE.MathUtils.smoothstep(k, 0.3, 1));
+            p.rig.root.position.y = (rise - STEP_RISE) * THREE.MathUtils.smoothstep(k, 0, 0.6) + over * Math.sin(Math.PI * THREE.MathUtils.smoothstep(k, 0.3, 1));
+            d.running = 0;
+            continue;
+          }
+          if (!p.walked && isFigure(p.rig)) {
+            p.walked = true;
+            p.rig.campMove?.(null);
+          }
+          // (Its feet back on the floor as the step's clip eases out: the floor's whole height the body's again.)
+          // Stooped under its roof, on in (upright, the head came out through a van's).
+          const w = Math.min(1, (c - STEP_TIME) / STEP_WALK);
+          p.rig.root.position.lerpVectors(p.doorway, p.inside, w);
+          p.rig.root.position.y = rise - STEP_RISE * Math.max(0, 1 - (c - STEP_TIME) / 0.35);
+          d.running = 0.4;
+          d.climbing = 1;
           continue;
         }
         // Picking up speed at the start, slowing at the door (a constant one between); the stride's weight with it.
@@ -1027,6 +1071,145 @@ export class ClearingArtView implements ClearingArt {
         }
       }
     });
+    // In, out of sight: as they were, for when they are next lined up.
+    for (const p of plans) {
+      if (!isFigure(p.rig)) continue;
+      p.rig.campMove?.(null);
+      p.rig.camp?.(null, false);
+      p.rig.sling?.(false);
+    }
+  }
+
+  /**
+   * Into the 4×4 (22/10 #12, Arturo: «se ponen a caballo y se meten de frente»; each by a door of their own, the driver
+   * first): each runs to beside its door, the gun slung, a hand to the handle, opens it, sits down sideways, swings the
+   * legs in and shuts it (Mixamo's «Entering Car», a left door's; mirrored for the right). The doors by the shortest runs
+   * all told; the driver's starts in first, each other a beat after the one before. Resolves once all are in.
+   */
+  private async boardCar(rigs: UnitRig[]): Promise<void> {
+    const root = this.bus.root;
+    const centre = root.position.clone();
+    const dir = new THREE.Vector3(Math.sin(root.rotation.y), 0, Math.cos(root.rotation.y));
+    const across = new THREE.Vector3(dir.z, 0, -dir.x);
+    const half = this.bus.length / 2;
+    const doors = this.bus.doorways();
+    const leaves = this.bus.leavesByDoorway();
+    const seat = bestDoors(rigs.map((r) => r.root.position), doors);
+    const plans = rigs.map((rig, i) => {
+      const door = doors[seat[i]!]!;
+      // Its side (+1 its left), out from it, and in.
+      const side = Math.sign(door.clone().sub(centre).dot(across)) || 1;
+      const out = across.clone().multiplyScalar(side);
+      const inward = out.clone().negate();
+      // The clip's ground (its start, facing the car, its front to the left on its left side): the car's side where the
+      // hand meets the handle, the seat in its doorway's middle; where it stands as the clip begins.
+      const origin = door.clone().addScaledVector(out, ENTER_SIDE).addScaledVector(dir, ENTER_ALONG);
+      const foot = origin.clone().addScaledVector(dir, ENTER_FROM[0]).addScaledVector(inward, ENTER_FROM[1]);
+      // Round the car's nearer end to a door on its far side.
+      const from = rig.root.position.clone();
+      const path = [from];
+      if (from.clone().sub(centre).dot(out) < 0) {
+        const end = Math.sign(from.clone().sub(centre).dot(dir)) || -1;
+        const corner = (s: number) => centre.clone().addScaledVector(dir, end * (half + 0.45)).addScaledVector(across, s * (this.bus.width / 2 + 0.55));
+        path.push(corner(-side), corner(side));
+      }
+      path.push(foot);
+      const lengths = path.slice(1).map((p, k) => p.distanceTo(path[k]!));
+      const total = lengths.reduce((a, b) => a + b, 0);
+      // (The hand that pulls the door to: the left, or the right in the mirrored clip.)
+      const hand = rig.root.getObjectByName(side > 0 ? 'Hand_L' : 'Hand_R') ?? null;
+      return { rig, path, lengths, total, origin, foot, inward, out, hand, move: (side > 0 ? 'enterCar' : 'enterCarR') as CampMove, door: seat[i]!, delay: i * BOARD_STAGGER, running: total / BOARD_SPEED + BOARD_EASE, start: 0, started: false, inside: false };
+    });
+    // The driver's in first; each other, once there, a beat after the one before (any that got to its door first waits
+    // there for it, facing it).
+    const driver = plans.find((p) => p.door === 0) ?? plans[0]!;
+    let next = driver.delay + driver.running;
+    for (const p of [driver, ...plans.filter((q) => q !== driver).sort((a, b) => a.delay + a.running - (b.delay + b.running))]) {
+      p.start = Math.max(p.delay + p.running, next);
+      next = p.start + ENTER_AFTER;
+    }
+    const length = ENTER_SECONDS / ENTER_SPEED;
+    const clip = (p: (typeof plans)[number], at: number) => (at - p.start) * ENTER_SPEED;
+    const seconds = Math.max(...plans.map((p) => p.start + length)) + 0.25;
+    // The camera as for the others (board): down lower and in, turned to between the row and the driver's door.
+    const cam = this.camera;
+    const onDoor = doors[driver.door]!.clone().setY(1.0);
+    const from = cam ? { pos: cam.position.clone(), look: this.lineupShot().target.clone() } : null;
+    const into = from ? { pos: from.pos.clone().lerp(onDoor.clone().setY(from.pos.y), 0.15).setY(THREE.MathUtils.lerp(from.pos.y, 1.7, 0.6)), look: from.look.clone().lerp(onDoor, 0.6).setY(1.0) } : null;
+    const look = new THREE.Vector3();
+    this.boardFrom = from?.pos ?? null;
+    for (const p of plans) if (isFigure(p.rig)) p.rig.sling?.(true);
+    await tween(seconds, (t) => {
+      const now = t * seconds;
+      if (cam && from && into) {
+        const k = THREE.MathUtils.smootherstep(Math.min(1, now / 1.4), 0, 1);
+        const push = Math.max(0, now - 1.4) / Math.max(0.5, seconds - 1.4);
+        cam.position.lerpVectors(from.pos, into.pos, k).lerp(onDoor, push * 0.1 * k);
+        cam.lookAt(look.lerpVectors(from.look, into.look, k).lerp(onDoor, THREE.MathUtils.smoothstep(push, 0, 1) * 0.6));
+      }
+      this.warm = Math.max(this.warm, 1);
+      for (const p of plans) {
+        const d = p.rig.root.userData;
+        const c = clip(p, now);
+        // Its door opened and shut by its hand, as the clip has it; pulled to no further than its hand is in (the clip's
+        // car is wider: shut on time, the arm stuck out through the panel). Gone in once the door is shut on it.
+        let open = c < ENTER_SHUT[0] ? THREE.MathUtils.clamp((c - ENTER_OPEN[0]) / (ENTER_OPEN[1] - ENTER_OPEN[0]), 0, 1) : 1 - THREE.MathUtils.clamp((c - ENTER_SHUT[0]) / (ENTER_SHUT[1] - ENTER_SHUT[0]), 0, 1);
+        open = THREE.MathUtils.smoothstep(open, 0, 1);
+        if (p.hand && c > ENTER_OPEN[1] && !p.inside) {
+          const reach = p.hand.getWorldPosition(handAt).sub(doors[p.door]!).dot(p.out);
+          open = Math.max(open, Math.asin(THREE.MathUtils.clamp((reach + ENTER_FIST) / (this.bus.length * ENTER_LEAF), 0, 1)) / ENTER_SWING);
+          if (c >= ENTER_SHUT[1] && reach < ENTER_IN) p.inside = true;
+        }
+        if (p.inside || c >= ENTER_SECONDS) open = 0;
+        this.bus.setDoors(leaves[p.door] ?? [], open);
+        p.rig.root.visible = !p.inside && c < ENTER_SECONDS;
+        const since = now - p.delay;
+        if (since <= 0) continue;
+        if (c >= 0) {
+          // Into the car: the clip moves the body, its ground stays (the hips' start offset eased off as it comes in).
+          if (!p.started && isFigure(p.rig)) {
+            p.started = true;
+            p.rig.camp?.(null, true, true);
+            p.rig.campMove?.(p.move, ENTER_SPEED);
+          }
+          const share = Math.min(0.97, (now - p.start) / ENTER_BLEND);
+          p.rig.root.position.lerpVectors(p.foot, p.origin, share);
+          d.running = d.climbing = 0;
+          d.yaw = turnToward(d.yaw, Math.atan2(p.inward.x, p.inward.z), BOARD_TURN / 60);
+          continue;
+        }
+        const running = since < p.running;
+        d.running = running ? 1 : 0;
+        if (!running) {
+          // There first: waiting at its door, facing it.
+          p.rig.root.position.copy(p.foot);
+          d.yaw = turnToward(d.yaw, Math.atan2(p.inward.x, p.inward.z), BOARD_TURN / 60);
+          continue;
+        }
+        const ease = Math.min(BOARD_EASE, p.running / 2);
+        const top = p.total / Math.max(0.01, p.running - ease);
+        const end = p.running - since;
+        let left = since < ease ? (0.5 * top * since * since) / ease : end < ease ? p.total - (0.5 * top * end * end) / ease : 0.5 * top * ease + top * (since - ease);
+        d.running = Math.min(1, 0.35 + 0.65 * Math.min(since, end, ease) / ease);
+        for (let s = 0; s < p.lengths.length; s++) {
+          const a = p.path[s]!;
+          const b = p.path[s + 1]!;
+          if (left <= p.lengths[s]! || s === p.lengths.length - 1) {
+            p.rig.root.position.lerpVectors(a, b, Math.min(1, left / (p.lengths[s]! || 1)));
+            d.yaw = turnToward(d.yaw, Math.atan2(b.x - a.x, b.z - a.z), BOARD_TURN / 60);
+            break;
+          }
+          left -= p.lengths[s]!;
+        }
+      }
+    });
+    // In, out of sight: as they were, for when they are next lined up.
+    for (const p of plans) {
+      if (!isFigure(p.rig)) continue;
+      p.rig.campMove?.(null);
+      p.rig.camp?.(null, false);
+      p.rig.sling?.(false);
+    }
   }
 
   /** The squad aboard (if it is lined up), then La Lata away down its track, out of the clearing; resolves once it is gone. */
@@ -1209,8 +1392,75 @@ function turnToward(yaw: number, goal: number, step: number): number {
   const d = Math.atan2(Math.sin(goal - yaw), Math.cos(goal - yaw));
   return yaw + THREE.MathUtils.clamp(d, -step, step);
 }
+/**
+ * Into the 4×4 (boardCar; Mixamo's «Entering Car», CAMP_SPANS' part of it, measured on our bodies): how far out from
+ * the car's side its ground stands (where the hand meets the handle) and ahead of the doorway's middle (where the hips
+ * sit down), where the hips are from it as the clip begins (back along the car, in), its seconds and the speed it
+ * plays at; when the hand opens the door and shuts it (the clip's seconds); how long it takes to come in, and how long
+ * after the one before each starts in.
+ */
+const ENTER_SIDE = 0.62;
+const ENTER_ALONG = 0.09;
+const ENTER_FROM: [number, number] = [-0.18, 0.36];
+const ENTER_SECONDS = 6.2;
+const ENTER_SPEED = 1.25;
+const ENTER_OPEN: [number, number] = [0.1, 1.2];
+const ENTER_SHUT: [number, number] = [5.3, 5.9];
+const ENTER_BLEND = 0.35;
+const ENTER_AFTER = 0.5;
+/** A 4×4's door leaf, its share of the car's length, and how far it swings open (radians: mula.ts CAR_DOOR_SWING). */
+const ENTER_LEAF = 0.17;
+const ENTER_SWING = 1.15;
+/**
+ * How far the door is kept off the hand's middle (tiles: the fist's half, and the panel's inside the car's widest, its
+ * bars and armour), and how far in from that widest the hand is in, the door shut on it.
+ */
+const ENTER_FIST = 0.2;
+const ENTER_IN = -0.12;
+const handAt = new THREE.Vector3();
+
+/** For each of those at `from`, a door of `doors` of its own, by the shortest runs all told (any more than doors share the nearest). */
+function bestDoors(from: THREE.Vector3[], doors: THREE.Vector3[]): number[] {
+  const n = Math.min(from.length, doors.length);
+  let best: number[] = [];
+  let bestCost = Infinity;
+  const pick = (k: number, taken: number[], cost: number) => {
+    if (cost >= bestCost) return;
+    if (k === n) {
+      bestCost = cost;
+      best = [...taken];
+      return;
+    }
+    for (let d = 0; d < doors.length; d++) {
+      if (taken.includes(d)) continue;
+      taken.push(d);
+      pick(k + 1, taken, cost + from[k]!.distanceTo(doors[d]!));
+      taken.pop();
+    }
+  };
+  pick(0, [], 0);
+  for (let k = n; k < from.length; k++) best.push(doors.reduce((a, b, j) => (b.distanceTo(from[k]!) < doors[a]!.distanceTo(from[k]!) ? j : a), 0));
+  return best;
+}
+
+/**
+ * Up into a van's or a lorry's back or the bus's door (board; Mixamo's «Ascending Stairs», a step of it: CAMP_SPANS):
+ * the speed it plays at and how long that takes, how high its hips go up (tiles: the rest of the floor's height the
+ * body's), and how long the walk on in takes and how far in it goes, out of sight; how far apart two going up side by
+ * side at a back doorway are from its middle.
+ */
+const STEP_SPEED = 1.3;
+const STEP_TIME = 1.6 / STEP_SPEED;
+const STEP_RISE = 0.17;
+const STEP_WALK = 0.45;
+const STEP_IN = 0.5;
+const BOARD_LANE = 0.3;
+/** A van's back: how far its left leaf's middle is from the doorway's (its right one has an armour plate over it). */
+const VAN_LEAF = 0.22;
+/** How much higher one goes over a lorry's tailgate than its bed (tiles). */
+const TAILGATE_OVER = 0.15;
 /** How long climbing in takes, from the door's foot (seconds), and how long after one the next gets to that door. */
-const CLIMB = 0.6;
+const CLIMB = STEP_TIME + STEP_WALK;
 const DOOR_GAP = 0.15;
 /** How long La Lata's doors take to open or shut as the squad gets in (s). */
 const DOOR_OPEN = 0.35;

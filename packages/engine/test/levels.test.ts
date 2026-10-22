@@ -943,9 +943,9 @@ describe('the enemy upstairs', () => {
   });
 });
 
-describe('the view (Arturo, 21/10)', () => {
-  it('reaches farther than the sight, day or night, and holds all of it', async () => {
-    const { teamView, teamVisibility, VIEW_REACH } = await import('../src/los');
+describe('the view (Arturo, 21/10 and 22/10)', () => {
+  it('reaches farther than the sight, to the end of the street, day or night, and holds all of it', async () => {
+    const { lineClear, peekOrigins, teamView, teamVisibility } = await import('../src/los');
     const { createMission } = await import('../src/setup');
     const { Rng } = await import('../src/rng');
     for (const night of [false, true]) {
@@ -955,14 +955,37 @@ describe('the view (Arturo, 21/10)', () => {
       const view = teamView(s, 'xcom');
       expect(sight.every((v, i) => !v || view[i])).toBe(true);
       expect(view.filter(Boolean).length).toBeGreaterThan(sight.filter(Boolean).length);
-      // Nothing past the reach of every soldier.
-      const squad = s.units.filter((u) => u.team === 'xcom' && u.alive);
-      view.forEach((v, i) => {
-        if (!v || i >= s.width * s.height) return;
-        const x = i % s.width;
-        const y = Math.floor(i / s.width);
-        expect(squad.some((u) => Math.hypot(u.pos.x - x, u.pos.y - y) <= VIEW_REACH)).toBe(true);
-      });
+      // As far as a soldier's line of sight goes, however far: straight down the street it stands in, to its end.
+      const u = s.units.find((v) => v.team === 'xcom' && v.alive)!;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        let x = u.pos.x;
+        let y = u.pos.y;
+        while (x + dx >= 0 && y + dy >= 0 && x + dx < s.width && y + dy < s.height && s.tiles[(y + dy) * s.width + x + dx] === 'floor') {
+          x += dx;
+          y += dy;
+          if (peekOrigins(s, u.pos).some((o) => lineClear(s, o, { x, y, z: 0 }))) expect(view[y * s.width + x]).toBe(true);
+        }
+      }
     }
+  });
+});
+
+describe('sight over what is lower than the eyes (Arturo, 22/10)', () => {
+  it('a stack of crates is full cover but is seen over; a container is not', async () => {
+    const { canSee } = await import('../src/los');
+    const { decorCode } = await import('../src/decor');
+    const { coverFrom } = await import('../src/grid');
+    const { stateFrom, addUnit } = await import('./helpers');
+    const s = stateFrom(['..........', '....H.....', '..........']);
+    const soldier = addUnit(s, 's1', 'rookie', 1, 1);
+    const zombie = addUnit(s, 'a1', 'zombie', 8, 1);
+    const at = 1 * s.width + 4;
+    s.decor = new Array(s.width * s.height).fill(0);
+    s.decor[at] = decorCode('crates');
+    expect(canSee(s, soldier, zombie)).toBe(true);
+    // Still full cover for whoever crouches behind it.
+    expect(coverFrom(s, 0, { x: 4, y: 1 })).toBe(2);
+    s.decor[at] = decorCode('container');
+    expect(canSee(s, soldier, zombie)).toBe(false);
   });
 });

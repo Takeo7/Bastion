@@ -78,13 +78,20 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
 
   | Quién | Un movimiento (azul) | Dos (amarilla) |
   |---|---|---|
-  | Los vivos (escuadra, Cuervos, VIP) | correr ×1,48 · 0,375 s | sprint ×0,81 · 0,24 s |
+  | Los vivos (escuadra, Cuervos, VIP) | correr ×1,48 · 0,375 s | sprint ×0,93 · 0,24 s |
   | Agachado | andar agachado ×1,27 · 0,71 s | |
   | Muerto común | andar ×0,91 · 0,82 s, arrastrando un pie | andar ×1,20 · 0,62 s |
   | Corredor | correr ×0,87 · 0,52 s, encorvado | sprint ×1,19 · 0,20 s |
   | Acorazado | andar ×0,93 · 0,80 s, pesado | andar ×1,24 · 0,60 s |
   | El Chillón | andar ×0,99 · 0,75 s | andar ×1,33 · 0,56 s |
   | El Hinchado | andar ×0,87 · 0,86 s, bamboleándose | andar ×1,16 · 0,64 s |
+
+  Con un arma en las manos, la escuadra se mueve con los clips de Mixamo (22/10 #15, `ARMED_MOTIONS`):
+  - con fusil (cualquier arma a dos manos), andar, correr y esprintar con el arma baja y cruzada; son clips lentos de zancada larga, que van a ×1,9 corriendo y esprintando, unos 3 y 4 pasos por segundo;
+  - agachado sigue con las piernas de Synty y el fusil en reposo, porque el de Mixamo es un paso sigiloso a un séptimo de la velocidad;
+  - con pistola, los de Synty, con la pistola baja en la mano que se balancea: el de Mixamo para andar apunta, el de correr la lleva por delante a una mano y los de esprintar y agachado son sin arma.
+
+  Medido moviendo el muñeco a la velocidad del juego, el pie apoyado se desliza entre un −3 % y un +2 %. El sprint de Synty estaba en 6,9 m/s y el pie se iba un 14 % hacia delante; ahora está en 5,95.
 
   Los que andan, un quinto más deprisa desde la prueba del 16/10 (#6). Son segundos por casilla; una diagonal tarda 1,4 veces más, una escalera de mano 1,2 s por planta y un tramo de escalera 1,6 veces la casilla. Todo va a la «Velocidad del combate» (`timeRate()` de `tween.ts`), los clips también.
 - **Impactos** (`HITS` en `syntyManifest.ts`): las reacciones de Bow Combat (siete por complexión) para un golpe y las de Sword Combat (cuatro, con traspié) para un crítico, según de dónde venga, medido por hacia dónde va la cabeza. Un mordisco o un tajo lo doblan hacia delante. Mueven solo de la cintura para arriba: quien está agachado tras la cobertura sigue agachado. El combate espera 0,4 s, como antes, y la cola de la reacción sigue mientras pasa lo siguiente; si muere, la caída arranca desde la pose de la reacción (0,2 s de fundido).
@@ -290,7 +297,10 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - hasta 8 en una fila, con la mitad de cada comandante y un hueco entre ellas; de 9 a 12, en dos filas. En el cliente del segundo jugador va en espejo (`setLineup(entries, { mirror: true })`, #51): cada uno ve a los suyos a la izquierda, junto a su nombre;
   - cada uno lleva un aro del color de su comandante, y los huecos vacíos uno gris;
   - en el informe, los heridos salen agachados y los caídos dejan una cruz de madera con una vela;
-  - con `depart()`, corren a las puertas uno tras otro, suben y La Lata se va.
+  - con `depart()`, corren a las puertas uno tras otro, con el arma colgada, suben y La Lata se va (22/10 #12, `board`, `boardCar`):
+    - en el todoterreno, cada uno por una puerta, el conductor primero y los demás medio segundo detrás uno de otro. Con «Entering Car» de Mixamo (el de la izquierda, y en espejo el de la derecha) cogen la manilla, abren, se sientan de lado, meten las piernas y cierran. La puerta va al ritmo de la mano del clip y no se cierra mientras la mano está fuera;
+    - en la furgoneta (por la hoja izquierda, porque la derecha lleva la plancha de blindaje), en el camión (de dos en dos, por encima del portón) y en el autobús (por el escalón de cada puerta), suben de un paso con un paso de «Ascending Stairs» y entran agachados.
+    - Estos clips van con la altura de cadera del propio clip, no con los pies pegados al suelo (`CAMP_FREE`).
 - **Los puestos del asedio** (prueba del 18/10, #58; `setPosts` en `ClearingArtView`): mientras cada jugador coloca a sus soldados por el claro, cada uno está de pie en su casilla, a la altura de su suelo (arriba, en un torreón), mirando al borde más cercano, por donde entran los muertos. Las figuras se conservan de un cambio a otro; el anillo y el nombre son de UI.
 - **La mochila del caído** (prueba del 18/10, #49; `dropped.ts`): lo que llevaba un soldado caído (`from`) es su mochila militar (`SM_Chr_Attach_Backpack_01` de Military) tumbada, con su arma principal al lado; una por casilla y por caído, hasta que no queda nada suyo.
 - **La Lata** en el claro (`EvacBus`): aparcada junto a la caravana en el hueco de pista más cercano sin piezas ni pinos debajo (a un lado del carril si el medio está ocupado), de cara a la salida; si no hay ninguno, está fuera. `depart()` se va por la pista; `arrive()` llega de frente, da la vuelta y se queda lista para salir.

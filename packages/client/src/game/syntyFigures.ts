@@ -10,6 +10,7 @@ import { UNIT_LAYER } from './post';
 import { atlasMaterial, atlasOf, dyedMaterial, loadModel, modelNow, type DyedMaterial } from './synty';
 import { AnimDriver, animSet, campClips, MOTION_ORDER, whenAnimSet, type ActionPlay, type AnimSet, type Build } from './syntyAnims';
 import {
+  CAMP_FREE,
   CAMP_LOOPS,
   CAMP_MOVES,
   CAMP_VARIATIONS,
@@ -20,6 +21,7 @@ import {
   FOOTPRINT_FIT,
   HITS,
   PROPS,
+  RIFLE_RESTS,
   STANCE_ORDER,
   SYNTY_BONES,
   SYNTY_SCALE,
@@ -196,9 +198,11 @@ export const SYNTY_LOD = { on: true };
 /**
  * The fingers posed by what each hand does, and the arms kept out of the chest (the weapons lab compares with and
  * without); and out of the gun in the hand (`gun`: the arms' search, `fit`: a clip's gun turned about the wrist, `swing`:
- * a clip's right elbow swung, `slide`: an aimed gun slid ahead; 22/10), the rifle at rest on `rest`.
+ * a clip's right elbow swung, `slide`: an aimed gun slid ahead; 22/10), the rifle at rest on `rest` for everyone (null,
+ * each on their own: Spec.rest); `aim`, aimed, the body turned and a pistol levelled for the barrel to point ahead
+ * (aimTurn); `move`, moving with a gun in the hands its clips (ARMED_MOTIONS).
  */
-export const SYNTY_HANDS = { fingers: true, elbows: true, gun: true, fit: true, swing: true, slide: true, rest: 'rifleIdle' as ActionId };
+export const SYNTY_HANDS = { fingers: true, elbows: true, gun: true, fit: true, swing: true, slide: true, rest: null as ActionId | null, aim: true, move: true };
 
 // --------------------------------------------------------------- rest pose
 
@@ -272,6 +276,8 @@ const SPREAD_STEP = Math.PI / 45;
 const SPREAD_MAX = Math.PI / 4;
 /** The pistol at rest by the thigh, its arm turned out at most this far to keep it out of the thigh (spreadPistol). */
 const PISTOL_SPREAD_MAX = Math.PI / 9;
+/** How fast the body turns to bring an aimed barrel round to where it faces (aimTurn), a second. */
+const AIM_TURN_EASE = 10;
 const CLEAR_EASE = 12;
 /** How fast any of those moves may go at most (radians, or metres for a push, a second): never a jump from one frame to the next. */
 const CLEAR_TURN = 1.5;
@@ -552,9 +558,10 @@ const m1 = new THREE.Matrix4();
 /**
  * The pistol at rest (direct; Arturo, 22/10 #3: not both arms out at the ready while nobody aims): the end of its clip
  * (pistolRest: aimed, then lowered to the holster's idle), the pistol in the right hand by the thigh, the left arm
- * free; eased forth and back over that stretch (seconds into it), a breath.
+ * free; eased forth and back over that stretch (seconds into it), a breath. (From 5.8 s: before it the hand is still
+ * coming down, 7 cm in 0.3 s, and going back over it the arm hopped every 3.4 s: 22/10 #8, measured on our bodies.)
  */
-const PISTOL_REST = { from: 5.3, to: 7.0 };
+const PISTOL_REST = { from: 5.8, to: 7.0 };
 /**
  * The throws' clips (direct), timed to the game's: the clip's moment the hand lets go (`release`, measured on it) at
  * the game's (`lets`, seconds into the throw: unitViews throwMotion, tossStone), `rate` times as fast; over by `end`.
@@ -794,6 +801,8 @@ interface Spec extends Armament {
   style?: GaitStyle;
   /** How it stands waiting (STANCES); unset, the plain idle. */
   stance?: Stance;
+  /** How it waits with a rifle (RIFLE_RESTS); unset, the first. */
+  rest?: ActionId;
   /** A skin tone instead of Synty's one; unset keeps it. */
   skin?: string;
   /** Always drawn by its own figure, never by the crowd (whose bodies have no clothes' colours nor hats): a risen soldier. */
@@ -879,6 +888,7 @@ export class SyntyFigure implements FigureRig {
   private campOn = false;
   private campDirty = false;
   private campNow = false;
+  private campMoving = false;
   /** What it holds in the right hand at the camp (holdItem), its model there once loaded. */
   private itemId: PropId | null = null;
   private item: THREE.Object3D | null = null;
@@ -932,7 +942,18 @@ export class SyntyFigure implements FigureRig {
   private clipped = 0;
   /** How much of the pistol's clips is its rest (direct): the left hand is free then (hands). */
   private pistolRest = 0;
-  private actClock = 0;
+  /**
+   * The weapon's clips' clock (direct), and how fast it runs for this one: from a time and at a rate of its own, so a
+   * row of them made at once doesn't all do the same thing together (22/10 #7: the squad's row at La Lata).
+   */
+  private actClock = Math.random() * 600;
+  /** How far the body is turned about its feet for the barrel to point where it faces (aimTurn). */
+  private aimYaw = 0;
+  /** In a camp move whose hips go as high as its clip has them (CAMP_FREE), or easing out of one. */
+  private freeMove = false;
+  private readonly actRate = 0.9 + Math.random() * 0.2;
+  /** How it waits with a rifle if told (restAs), else its own (Spec.rest). */
+  private restId: ActionId | null = null;
   /** A throw playing its clip (direct): a grenade's, a stone's; seconds since it began; and whether its clip has the arms. */
   private throwKind: keyof typeof THROWS | null = null;
   private throwT = 0;
@@ -1060,6 +1081,11 @@ export class SyntyFigure implements FigureRig {
     return a;
   }
 
+  /** In a camp clip now (sat, knelt, leant, drinking), or playing one into it or out of it. */
+  private get atCamp(): boolean {
+    return this.campOn && (this.campLoop !== null || this.campMoving);
+  }
+
   camp(loop: CampLoop | null, on = true, now = false): void {
     if (loop === this.campLoop && on === this.campOn) return;
     this.campLoop = on ? loop : null;
@@ -1068,11 +1094,14 @@ export class SyntyFigure implements FigureRig {
     this.campNow = now;
   }
 
-  campMove(move: CampMove | null): number {
+  campMove(move: CampMove | null, speed = 1): number {
+    this.campMoving = move !== null;
+    // (Kept on once let go of, until the move has eased out: its hips back on the feet as it goes.)
+    if (move) this.freeMove = CAMP_FREE.has(move);
     const a = this.anim;
     const clips = campClips(this.build);
     if (!a || !clips) return 1;
-    return a.campMove(move ? (clips.get(CAMP_MOVES[this.build][move]) ?? null) : null);
+    return a.campMove(move ? (clips.get(CAMP_MOVES[this.build][move]) ?? null) : null, speed);
   }
 
   /**
@@ -1086,6 +1115,10 @@ export class SyntyFigure implements FigureRig {
     item.parent.getWorldQuaternion(hq1);
     this.root.getWorldQuaternion(hq2);
     item.quaternion.copy(hq1.invert()).multiply(hq2);
+  }
+
+  restAs(k: number): void {
+    this.restId = RIFLE_RESTS[((k % RIFLE_RESTS.length) + RIFLE_RESTS.length) % RIFLE_RESTS.length]!;
   }
 
   holdItem(id: PropId | null, upright = false): void {
@@ -1324,6 +1357,24 @@ export class SyntyFigure implements FigureRig {
   }
 
   /**
+   * Aimed, the body turned about its feet for the barrel to point where it faces, at what it shoots (22/10 #14).
+   * Mixamo's aims turn the hips and the chest back over them; over the legs' clips, without the hips' turn, the barrel
+   * was 41° off to the left standing, 26–29° knelt, 57–60° with the pistol. By the gun's turn as posed (the body's own
+   * frame: its turn doesn't change it), eased.
+   */
+  private aimTurn(p: FigurePose, dt: number, live: number): void {
+    const gun = SYNTY_HANDS.aim && this.armed && !this.melee && !this.thrown && !this.struck && !(p.swing ?? 0);
+    const aim = gun ? THREE.MathUtils.smoothstep(p.aim, 0, 1) * live : 0;
+    let goal = 0;
+    if (aim > 0.001) {
+      v1.copy(Z).applyQuaternion(this.gunQ);
+      goal = -Math.atan2(v1.x, v1.z) * aim;
+    }
+    this.aimYaw += (goal - this.aimYaw) * Math.min(1, dt * AIM_TURN_EASE);
+    this.body.rotation.y = this.aimYaw;
+  }
+
+  /**
    * The gun slung on the back as the back bends (22/10, Gameplay: crouched, held rigid by the chest's bone, its barrel
    * stood up over the head; turned across, it floated off the back): crouched (or crouch-walking), diagonal from the
    * right shoulder blade to the left hip as the back is now (the body's girths: bulk.ts), pressed to it, out of it
@@ -1377,17 +1428,22 @@ export class SyntyFigure implements FigureRig {
   /** The drawn weapon into the hand and the others where they ride; how the hand holds it, and where its muzzle is. */
   private hold(): void {
     const held = this.slung ? undefined : this.carried[this.drawn];
+    // A pistol as the only gun rides in the holster, not slung across the back as a rifle does (22/10 #10: at the base,
+    // weapons all on them, it hung on the back).
+    const main = this.spec.weapon;
+    const pistolOnly = !!main && !!(WEAPONS[main] as { pistol?: boolean }).pistol && !this.carried.sidearm;
     for (const k of CARRIES) {
       const m = this.carried[k];
       if (!m || m === held) continue;
-      const stow = this.stows[k];
+      const ride: Carry = k === 'weapon' && pistolOnly ? 'sidearm' : k;
+      const stow = this.stows[ride];
       if (!stow) {
         m.removeFromParent();
         continue;
       }
       stow.add(m);
-      m.position.set(0, 0, k === 'weapon' ? -(m.userData.middle as number) : 0);
-      this.outOfBody(k, m);
+      m.position.set(0, 0, ride === 'weapon' ? -(m.userData.middle as number) : 0);
+      this.outOfBody(ride, m);
     }
     const id = held && this.spec[this.drawn];
     if (held && id && this.socket.parent) {
@@ -1684,8 +1740,12 @@ export class SyntyFigure implements FigureRig {
     } else if (anim) {
       this.followArm('L', upper);
       this.followArm('R', upper);
-      this.spreadArm('L');
-      this.spreadArm('R');
+      // (Sat, knelt or leant at the camp, or getting into it or out, the arms are the clip's: on the thighs, round the
+      // knees, they were taken for arms in the body and swung out, now and then: 22/10 #11.)
+      if (!this.atCamp) {
+        this.spreadArm('L');
+        this.spreadArm('R');
+      }
       if (search > 0.01) {
         // Both hands in, blended from the clip's arms.
         for (let i = 0; i < ARMS.length; i++) this.held[i]!.copy(d[ARMS[i]!]!);
@@ -1705,6 +1765,7 @@ export class SyntyFigure implements FigureRig {
     if (toss > 0 && !dead && !this.thrown) this.tossArm(toss);
     this.hands(p, dt, live, climb, search, throwing, toss);
     this.slingOnBack(p);
+    this.aimTurn(p, dt, live);
     this.write();
     this.poses++;
     if (clip) this.dropWeapon(Math.min(1, p.fall) * clip.seconds);
@@ -2038,6 +2099,8 @@ export class SyntyFigure implements FigureRig {
     a.speeds[WALK] = dead ? 0.9 : 1.2;
     a.speeds[CROUCH_WALK] = 1.6;
     a.speeds[g.motion] = g.speed;
+    // Moving with a gun in the hands, the clips that hold it (ARMED_MOTIONS: 22/10 #15).
+    a.armedAs(!SYNTY_HANDS.move || dead || this.death || !this.armed || this.melee || !this.fore ? null : this.pistol ? 'pistol' : 'rifle', dt);
     // A hit reaction over the upper body, eased in and out at its ends; over once `react` is back to 0.
     const h = this.hit;
     const react = p.react ?? 0;
@@ -2049,13 +2112,14 @@ export class SyntyFigure implements FigureRig {
       a.react(null);
       this.hit = null;
     }
-    this.actClock += dt;
+    this.actClock += dt * this.actRate;
     const plays = this.action ? [this.action] : this.direct(p);
     if (this.action) this.clipped = this.action.share;
     a.play(plays);
     // A corpse stays as it fell. Only a unit at ease looks round now and then (not over the weapon's clips).
     if (this.campDirty) this.applyCamp(a);
-    if (p.fall < 1) a.update(dt, !plays.length && p.aim < 0.05 && p.hit < 0.01 && !(p.search ?? 0) && !dead);
+    const still = p.aim < 0.05 && p.hit < 0.01 && !(p.search ?? 0) && !dead;
+    if (p.fall < 1) a.update(dt, !plays.length && still, plays.length > 0 && still && p.run < 0.05 && !this.thrown && !this.struck);
     a.read(this.d, this.hipsShift);
     // The hips sway as the clip says; their height keeps the lower foot on the ground, whatever the
     // difference between the clip's legs and this character's.
@@ -2063,6 +2127,11 @@ export class SyntyFigure implements FigureRig {
     hips.y = r.p[B.Hips]!.y;
     const lowest = Math.min(this.ankle(B.UpperLeg_L, B.LowerLeg_L, B.Ankle_L), this.ankle(B.UpperLeg_R, B.LowerLeg_R, B.Ankle_R));
     hips.y += r.p[B.Ankle_L]!.y - lowest;
+    // In a move that leaves the ground (CAMP_FREE: into a car, up a step), as high as the clip has them.
+    if (this.freeMove) {
+      if (!this.campMoving && a.moveShare <= 0) this.freeMove = false;
+      else hips.y = lerp(hips.y, r.p[B.Hips]!.y + this.hipsShift.y * r.hip, a.moveShare);
+    }
   }
 
   /**
@@ -2113,22 +2182,30 @@ export class SyntyFigure implements FigureRig {
     const spin = THREE.MathUtils.clamp(p.spin ?? 0, 0, 1);
     const reload = !this.pistol && spin > 0 && spin < 1 ? Math.min(1, spin / 0.12, (1 - spin) / 0.12) : 0;
     const held = live * (1 - reload);
+    // Moving, the arms the moving clips' (ARMED_MOTIONS) as far as they have them: the gun at rest gives way to them.
+    const moving = a.armedShare();
     if (this.pistol) {
       // At rest in the right hand by the thigh, the left arm free (PISTOL_REST); aimed in both hands; crouched the same
       // over the crouch's legs.
       const span = PISTOL_REST.to - PISTOL_REST.from;
-      this.pistolRest = held * (1 - aim);
+      this.pistolRest = held * (1 - aim) * (1 - moving);
       add('pistolRest', this.pistolRest, true, PISTOL_REST.from + span * (0.5 - 0.5 * Math.cos((Math.PI * clock) / span)));
       add('pistolAim', held * aim, true);
     } else {
       // Standing (or moving) the rifle at low ready or shouldered over the legs' clips; kneeling, the whole body.
-      add(SYNTY_HANDS.rest, held * (1 - crouch) * (1 - aim), true);
+      // Each their own way of waiting (RIFLE_RESTS); moving, all the first (one looking about would turn as they walk).
+      const rest = SYNTY_HANDS.rest ?? this.restId ?? this.spec.rest ?? RIFLE_RESTS[0];
+      const stand = held * (1 - crouch) * (1 - aim) * (1 - moving);
+      const run = THREE.MathUtils.clamp(p.run, 0, 1);
+      add(rest, rest === RIFLE_RESTS[0] ? stand : stand * (1 - run), true);
+      if (rest !== RIFLE_RESTS[0]) add(RIFLE_RESTS[0], stand * run, true);
       add('rifleAim', held * (1 - crouch) * aim, true);
       add('rifleKneel', held * crouch * (1 - aim), false);
       add('rifleKneelAim', held * crouch * aim, false);
       add('rifleReload', live * reload, true, spin * a.actSeconds('rifleReload'));
     }
     for (const play of out) this.clipped += play.share;
+    this.clipped += moving * (1 - aim) * held;
     return out;
   }
 
@@ -2209,6 +2286,14 @@ export class SyntyFigure implements FigureRig {
         d[B.Elbow_R]!.premultiply(sq);
         this.fk(B.Elbow_R);
       }
+    }
+    // Aimed, a pistol held level, the wrist bent down to it (22/10 #14: «Idle With Aimed Pistol» has it by the face,
+    // along the raised forearm, 20° up; knelt, 10–16°).
+    if (this.pistol && aim > 0 && SYNTY_HANDS.aim) {
+      v1.copy(Z).applyQuaternion(this.gunQ);
+      v2.set(v1.x, v1.y * (1 - THREE.MathUtils.clamp(aim, 0, 1)), v1.z).normalize();
+      this.gunQ.premultiply(sq.setFromUnitVectors(v1, v2));
+      this.gunP.copy(GRIP).applyQuaternion(this.gunQ).add(pos[B.Hand_R]!);
     }
     d[B.Hand_R]!.copy(this.gunQ).multiply(r.gripTurn);
   }
@@ -3483,6 +3568,8 @@ export function syntyFigure(template: TemplateId, accent: string, look?: Appeara
     scream: template === 'sectoid',
     style: gaitsOf(template).style,
     stance: DEAD_TEMPLATES.has(template) ? 'drunk' : LIVING_ENEMIES.has(template) ? 'aggressive' : undefined,
+    // (Each the same everywhere, by who they are.)
+    rest: pick(RIFLE_RESTS, `${key}|rest`),
   });
 }
 

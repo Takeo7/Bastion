@@ -740,6 +740,12 @@ export interface Unit {
   gear: ItemId[];
   /** Enemies: where the last noise it heard came from (docs/FASE2.md); it goes to look while it sees nobody. */
   heard?: Pos | null;
+  /**
+   * The dead: the soldier it last saw, whom it follows wherever they go while it sees none of the living, and how
+   * many of its turns have gone by since; after HUNT_TURNS of them it forgets them (Arturo, 22/10). Each its own:
+   * the dead don't tell each other.
+   */
+  hunting?: { id: string; missed: number } | null;
   /** Soldiers: what they found searching (BACKPACK_SLOTS at most). It counts if they get out or stand at a victory. */
   backpack?: Loot[];
   /** Backpack slots when not BACKPACK_SLOTS (the Chapistería's one more, docs/FASE8.md §C). */

@@ -148,7 +148,8 @@ describe('a town on its plan (docs/MAPAS.md phase 3)', () => {
       const l = generateLayout({ biome: 'city', kind: 'recovery', podSizes: [3], seed: seed * 7919 });
       expect(s.mission.turnsLeft).toBe(routeTurns('recovery', l.route!));
       // Eight groups at 48, eleven at 64 (docs/MAPAS.md §6) and a quarter more (20/10): thirteen; and the garrison, if the mission has one.
-      expect(s.pods.length).toBe(13 + (garrison('recovery', 2) ? 1 : 0));
+      // The lone dead of 22/10 (setup.ts LURKERS) come on top, in pods of their own (l1, l2…).
+      expect(s.pods.filter((p) => !p.id.startsWith('l')).length).toBe(13 + (garrison('recovery', 2) ? 1 : 0));
       expect(s.frame).toEqual(l.frame);
     }
   });

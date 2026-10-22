@@ -1,4 +1,5 @@
 import { audio } from './engine';
+import { bed } from './recorded';
 
 // The score, generated while it plays: a few synthesised instruments (pads,
 // soft keys, bass, drums, bells, drones) and one piece per mood, written bar
@@ -10,6 +11,10 @@ import { audio } from './engine';
 //   calm   — combat while concealed: a low drone and a heartbeat
 //   tense  — combat after contact: drums, an ostinato bass, chord stabs
 //   alien  — the enemy turn: a tritone drone and metal
+//
+// In combat, when the recordings are in (docs/SONIDO.md), beds take the score's
+// place (Ana, 22/10 #23: more air and dread than tune): an ambience while hidden,
+// a layer of tension over it after contact, mostly tension on the enemy's turn.
 
 export type Piece = 'base' | 'geo' | 'calm' | 'tense' | 'alien';
 
@@ -286,6 +291,78 @@ const SCORES: Record<Piece, Score> = {
   },
 };
 
+// ---------------------------------------------------------------- beds
+
+/** The combat's recorded layers (recorded.ts groups) and how loud each sits, by piece. */
+const BEDS: Partial<Record<Piece, { group: string; level: number }[]>> = {
+  calm: [{ group: 'bed.ambience', level: 0.8 }],
+  tense: [
+    { group: 'bed.ambience', level: 0.6 },
+    { group: 'bed.tension', level: 0.6 },
+  ],
+  alien: [
+    { group: 'bed.ambience', level: 0.3 },
+    { group: 'bed.tension', level: 0.85 },
+  ],
+};
+
+interface Layer {
+  el: HTMLAudioElement;
+  gain: GainNode;
+  /** The file's own level (its take's dB in the index). */
+  trim: number;
+}
+
+/** The beds playing: each group streamed from the page in a loop, crossfaded as the piece changes. */
+class Beds {
+  private layers = new Map<string, Layer>();
+
+  /** Whether there are beds to lay at all (the files may not be in). */
+  async available(): Promise<boolean> {
+    return !!(await bed('bed.ambience'));
+  }
+
+  /** To `wanted` (null: none) over `fade` seconds; a group already playing keeps its place in the loop. */
+  async set(wanted: { group: string; level: number }[] | null, fade: number): Promise<void> {
+    const ctx = audio.ctx;
+    const bus = audio.bus('music');
+    if (!ctx || !bus) return;
+    const now = ctx.currentTime;
+    for (const [group, layer] of this.layers) {
+      if (wanted?.some((w) => w.group === group)) continue;
+      this.layers.delete(group);
+      layer.gain.gain.cancelScheduledValues(now);
+      layer.gain.gain.setValueAtTime(layer.gain.gain.value, now);
+      layer.gain.gain.linearRampToValueAtTime(0, now + fade);
+      window.setTimeout(() => {
+        layer.el.pause();
+        layer.gain.disconnect();
+      }, (fade + 0.5) * 1000);
+    }
+    for (const w of wanted ?? []) {
+      let layer = this.layers.get(w.group);
+      if (!layer) {
+        const file = await bed(w.group);
+        if (!file || this.layers.has(w.group)) continue;
+        const el = new Audio(file.url);
+        el.loop = true;
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        ctx.createMediaElementSource(el).connect(gain).connect(bus);
+        layer = { el, gain, trim: Math.pow(10, file.db / 20) };
+        this.layers.set(w.group, layer);
+        void el.play().catch(() => {
+          /* not allowed to play yet: the next piece tries again */
+        });
+      }
+      const t = ctx.currentTime;
+      layer.gain.gain.cancelScheduledValues(t);
+      layer.gain.gain.setValueAtTime(layer.gain.gain.value, t);
+      layer.gain.gain.linearRampToValueAtTime(w.level * layer.trim, t + fade);
+    }
+  }
+}
+
 // ---------------------------------------------------------------- player
 
 interface Playing {
@@ -300,22 +377,37 @@ class Music {
   private wanted: Piece | null = null;
   private noise: AudioBuffer | null = null;
   private timer = 0;
+  private readonly beds = new Beds();
+  /** The last change asked for: a slower one (waiting on the beds' index) gives way to it. */
+  private asked = 0;
 
   /** Changes the music to `piece` (null: silence), fading over `fade` seconds. */
   play(piece: Piece | null, fade = 2.5): void {
     this.wanted = piece;
-    audio.onReady(() => this.apply(fade));
+    const asked = ++this.asked;
+    audio.onReady(() => void this.change(asked, fade));
+  }
+
+  /** The combat's pieces as beds, when there are any; everything else, and without them, the score. */
+  private async change(asked: number, fade: number): Promise<void> {
+    const piece = this.wanted;
+    const layers = piece ? BEDS[piece] : undefined;
+    const beds = !!layers && (await this.beds.available());
+    if (asked !== this.asked) return;
+    this.apply(beds ? null : piece, fade);
+    await this.beds.set(beds ? layers! : null, fade);
   }
 
   get current(): Piece | null {
     return this.wanted;
   }
 
-  private apply(fade: number): void {
+  /** The score to `piece` (null: none), fading over `fade` seconds. */
+  private apply(piece: Piece | null, fade: number): void {
     const ctx = audio.ctx;
     const bus = audio.bus('music');
     if (!ctx || !bus) return;
-    if (this.playing?.piece === this.wanted) return;
+    if ((this.playing?.piece ?? null) === piece) return;
     if (this.playing) {
       const old = this.playing.out;
       old.gain.cancelScheduledValues(ctx.currentTime);
@@ -324,7 +416,7 @@ class Music {
       window.setTimeout(() => old.disconnect(), (fade + 4) * 1000);
       this.playing = null;
     }
-    if (!this.wanted) return;
+    if (!piece) return;
     this.noise ??= noiseBuffer(ctx);
     const out = ctx.createGain();
     out.gain.setValueAtTime(0, ctx.currentTime);
@@ -336,7 +428,7 @@ class Music {
       send.gain.value = 0.35;
       out.connect(send).connect(verb);
     }
-    this.playing = { piece: this.wanted, out, bar: 0, next: ctx.currentTime + 0.1 };
+    this.playing = { piece, out, bar: 0, next: ctx.currentTime + 0.1 };
     if (!this.timer) this.timer = window.setInterval(() => this.schedule(), 120);
     this.schedule();
   }

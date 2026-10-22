@@ -823,6 +823,8 @@ def mixamo(job):
     T-pose (`target`, Base Locomotion's), in the world, both rigs facing the same way; the hips moved as far for
     their height. Frame by frame, at the clip's own rate, then exported as anim() exports. `mirror`: the clip's left
     for the right and the other way round, every turn reflected across the body's middle (a throw with the free hand).
+    `inPlace`: the hips' way along the ground taken out, evenly over the clip (one Mixamo couldn't make In Place: the
+    sprint, 3.3 m a cycle), so it ends where it began.
     """
     reset()
     scene = bpy.context.scene
@@ -902,10 +904,19 @@ def mixamo(job):
             walk(b)
     goal = dict(pairs)
     goal = {s: m for m, s in pairs}
+    drift = Vector((0, 0, 0))
+    if job.get('inPlace') and last > first:
+        scene.frame_set(first)
+        bpy.context.view_layer.update()
+        h0 = world(src, bone(src, 'Hips')).translation.copy()
+        scene.frame_set(last)
+        bpy.context.view_layer.update()
+        h1 = world(src, bone(src, 'Hips')).translation.copy()
+        drift = Vector(((h1.x - h0.x) / (last - first), (h1.y - h0.y) / (last - first), 0))
     for f in range(first, last + 1):
         scene.frame_set(f)
         bpy.context.view_layer.update()
-        hips = world(src, bone(src, 'Hips')).translation
+        hips = world(src, bone(src, 'Hips')).translation - drift * (f - first)
         moved = turn @ ((hips - hips_m0) * k)
         hips_s = hips_s0 + (reflect_v(moved) if mirror else moved)
         posed = {}

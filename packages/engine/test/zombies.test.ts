@@ -6,11 +6,11 @@ import { decorCode, decorOf } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { broughtBack, rollLoot, roomAt, searchable, searchableTiles, SEARCHABLE } from '../src/loot';
 import { lootSummary } from '../src/lore';
-import { canSee } from '../src/los';
-import { onlyWalks } from '../src/ai';
+import { canSee, facingTo } from '../src/los';
+import { HUNT_TURNS, onlyWalks } from '../src/ai';
 import { Rng } from '../src/rng';
 import { executeCommand, Sim } from '../src/rules';
-import { createMission, hordeWave, MISSION_NAMES } from '../src/setup';
+import { createMission, hordeWave, LURKERS, MISSION_NAMES } from '../src/setup';
 import type { GameState, Loot, Pod, Slot, Unit } from '../src/types';
 import { addUnit, raise, stateFrom } from './helpers';
 
@@ -338,6 +338,118 @@ describe('the dead', () => {
       for (const u of s.units) if (u.team === 'xcom') u.ap = 2;
     }
     expect(Date.now() - t0).toBeLessThan(3000);
+  });
+});
+
+describe('the dead follow whom they saw (Arturo, 22/10)', () => {
+  it('out of its sight, a zombie goes after the soldier it saw, wherever they are, for three of its turns; then it forgets them', () => {
+    // The soldier shut in a room far off: the zombie never sees them, and still makes for them.
+    const room = (y: number) => (y < 8 || y > 12 ? '.....' : y === 8 || y === 12 ? '#####' : '#...#');
+    const s = stateFrom(Array.from({ length: 21 }, (_, y) => '.'.repeat(28) + room(y) + '.'.repeat(7)));
+    s.activeTeam = 'alien';
+    s.concealed = false;
+    const soldier = addUnit(s, 's1', 'rookie', 30, 10, { hp: 50, maxHp: 50 });
+    const z = addUnit(s, 'a1', 'zombie', 5, 10, { hunting: { id: 's1', missed: 0 } });
+    pod(s, 'p1', true, [z]);
+    let x = z.pos.x;
+    for (let turn = 1; turn <= HUNT_TURNS; turn++) {
+      z.ap = 2;
+      const t = sim(s, turn);
+      t.runAlienTurn();
+      expect(canSee(s, z, soldier)).toBe(false);
+      // Straight at the room: not a wander.
+      if (turn < HUNT_TURNS) expect(z.pos.x).toBeGreaterThanOrEqual(x + 5);
+      x = z.pos.x;
+      expect(z.hunting).toEqual(turn < HUNT_TURNS ? { id: 's1', missed: turn } : null);
+    }
+    expect(x).toBeGreaterThanOrEqual(20);
+    // Forgotten: nothing more about them.
+    z.ap = 2;
+    const after = sim(s, 9);
+    after.runAlienTurn();
+    expect(of(after.events, 'hunting')).toEqual([]);
+  });
+
+  it('whoever it sees on its turn is whom it follows; seeing them again, it starts counting afresh', () => {
+    const s = field(30, 30);
+    s.activeTeam = 'alien';
+    s.concealed = false;
+    addUnit(s, 's1', 'rookie', 20, 10, { hp: 50, maxHp: 50 });
+    const z = addUnit(s, 'a1', 'zombie', 10, 10, { hunting: { id: 's1', missed: 2 } });
+    z.facing = facingTo(z.pos, { x: 20, y: 10 }) ?? z.facing;
+    pod(s, 'p1', true, [z]);
+    const t = sim(s);
+    t.runAlienTurn();
+    expect(of(t.events, 'hunting')).toEqual([{ t: 'hunting', unit: 'a1', target: 's1', missed: 0 }]);
+  });
+
+  it('the awake dead that see a soldier where they stop go after them; the asleep, the blind and the far, not', () => {
+    const s = stateFrom(['....................', '....................', '....................', '....................', '....................', '#########...........', '....................']);
+    const soldier = addUnit(s, 's1', 'rookie', 5, 2);
+    const awake = addUnit(s, 'a1', 'zombie', 9, 2);
+    awake.facing = facingTo(awake.pos, soldier.pos) ?? awake.facing;
+    const behind = addUnit(s, 'a2', 'zombie', 5, 6);
+    pod(s, 'p1', true, [awake, behind]);
+    const asleep = addUnit(s, 'a3', 'zombie', 2, 2);
+    asleep.facing = facingTo(asleep.pos, soldier.pos) ?? asleep.facing;
+    pod(s, 'p2', false, [asleep]);
+    expect(canSee(s, awake, soldier)).toBe(true);
+    expect(canSee(s, behind, soldier)).toBe(false);
+    const t = sim(s);
+    t.huntedBy(soldier);
+    expect(of(t.events, 'hunting')).toEqual([{ t: 'hunting', unit: 'a1', target: 's1', missed: 0 }]);
+  });
+});
+
+describe('the lone dead (Ana and Arturo, 22/10 #22)', () => {
+  it('over the patrols: in the houses and round the corners, standing still, far from where the squad starts', () => {
+    let inside = 0;
+    let outside = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      for (const difficulty of [1, 2, 3, 4]) {
+        const s = createMission({ map: { kind: 'generated', biome: 'city', seed }, slots: [0], rng: new Rng(seed), kind: 'scavenge', difficulty });
+        const lone = s.units.filter((u) => u.podId?.startsWith('l'));
+        expect(lone.length).toBeGreaterThan(0);
+        expect(lone.length).toBeLessThanOrEqual(LURKERS[difficulty]!);
+        const squad = s.units.filter((u) => u.team === 'xcom');
+        for (const z of lone) {
+          expect(z.template).toBe('zombie');
+          expect(s.pods.find((p) => p.id === z.podId)).toMatchObject({ active: false, patrol: [] });
+          expect(Math.min(...squad.map((u) => Math.hypot(u.pos.x - z.pos.x, u.pos.y - z.pos.y)))).toBeGreaterThanOrEqual(14);
+          if ((s.storeys?.[z.pos.y * s.width + z.pos.x] ?? 0) > 0) inside++;
+          else outside++;
+        }
+      }
+    }
+    expect(inside).toBeGreaterThan(0);
+    expect(outside).toBeGreaterThan(0);
+    // Never in a siege.
+    const siege = createMission({ map: { kind: 'handmade', id: 'bastion' }, slots: [0], rng: new Rng(1) });
+    expect(siege.units.some((u) => u.podId?.startsWith('l'))).toBe(false);
+  });
+});
+
+describe('surrounded (Ana, 22/10 #38)', () => {
+  it('the dead round the squad come for it when it steps aside, even facing where it stood: none wanders off', () => {
+    const s = field(20, 20);
+    s.concealed = false;
+    const a = addUnit(s, 's1', 'rookie', 9, 9, { hp: 50, maxHp: 50 });
+    const b = addUnit(s, 's2', 'rookie', 10, 9, { hp: 50, maxHp: 50, owner: 1 });
+    const zs = [[6, 6], [13, 6], [6, 12], [13, 12], [9, 5], [10, 13], [5, 9], [14, 9]].map(([x, y], k) => addUnit(s, `z${k}`, 'zombie', x!, y!));
+    for (const z of zs) z.facing = facingTo(z.pos, a.pos) ?? z.facing;
+    pod(s, 'p1', true, zs);
+    // They see the squad where it stands; it steps two tiles aside, behind some of them.
+    const seen = sim(s);
+    seen.huntedBy(a);
+    seen.huntedBy(b);
+    a.pos = { x: 9, y: 11, z: 0 };
+    b.pos = { x: 11, y: 11, z: 0 };
+    for (const z of zs) z.facing = facingTo(z.pos, { x: 9, y: 3 }) ?? z.facing;
+    const near = (z: Unit) => Math.min(...[a, b].map((u) => Math.hypot(u.pos.x - z.pos.x, u.pos.y - z.pos.y)));
+    const before = zs.map(near);
+    s.activeTeam = 'alien';
+    sim(s).runAlienTurn();
+    zs.forEach((z, k) => expect(near(z)).toBeLessThanOrEqual(Math.max(1.5, before[k]! - 1)));
   });
 });
 

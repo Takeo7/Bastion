@@ -65,8 +65,8 @@
   gap: 6px;
 }
 
-/* Each store in its own well: the pack's icon in the store's colour, the number in Oswald. */
-:root[data-ui='mixta'] :is(.strat-credits, .strat-level) {
+/* Each store in its own well: the pack's icon in the store's colour, the number in Oswald; the day's too (#48). */
+:root[data-ui='mixta'] :is(.strat-credits, .strat-level, .strat-day) {
   gap: 6px;
   padding: 4px 10px 4px 7px;
   border-radius: 2px;
@@ -95,6 +95,18 @@
 :root[data-ui='mixta'] .strat-credits {
   --ri: var(--mi-supplies);
   --rc: #ffd25a;
+}
+
+/* The day (Ana and Arturo, 22/10 #48): first of the wells, an hourglass, «DÍA 8». */
+:root[data-ui='mixta'] .strat-day {
+  --ri: url('/ui/synty/icons/mh-hourglass.webp');
+  --rc: #d6dbd2;
+  display: flex;
+  align-items: center;
+}
+
+:root[data-ui='mixta'] .strat-res .strat-day b {
+  letter-spacing: 0.04em;
 }
 
 /* What a pending proposal would spend (playtest 16/10 #5): after the number, in amber, paid on the yes. */
@@ -740,11 +752,24 @@
   color: #dfe2dc;
 }
 
-/* Lore's key words (marked «**así**»: the campaign's opening card), to be read at a glance (Ana, 21/10 #14: the
-   bold hardly showed): in the accent, heavier. */
-:root[data-ui='mixta'] .x-text strong {
+/* Lore's key words (marked «**así**»), to be read at a glance: heavier, in white (Ana, 21/10 #14; 22/10 #26: «el
+   amarillo por negrita en blanco»); the objective (marked «==así==», #28) in the accent. */
+:root[data-ui='mixta'] :is(.x-text, .intro-briefing) strong {
   font-weight: 800;
+  color: #fff;
+}
+
+:root[data-ui='mixta'] :is(.x-text, .intro-briefing) mark.goal {
+  padding: 0;
+  background: none;
+  font-weight: 700;
   color: var(--t-accent);
+}
+
+/* A mission's text on the Escuadra's foot and the Mapa's cards (#28: small on a big screen): a size up. */
+:root[data-ui='mixta'] .x-text.briefing-text {
+  font-size: 14.5px;
+  line-height: 1.4;
 }
 
 :root[data-ui='mixta'] .alert-actions {
@@ -1226,7 +1251,7 @@
 :root[data-ui='mixta'] .debrief-name {
   font-family: var(--t-font-title);
   font-weight: 600;
-  font-size: 22px;
+  font-size: 26px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #fff;
@@ -1243,11 +1268,11 @@
   color: #fff;
 }
 
-/* The debrief's plate on its head line (Ana, 21/10 #24): the mission's name's size, not a banner's. */
+/* The debrief's plate on a line of its own, over the mission's name (Ana, 22/10 #40): a stamp, not a banner. */
 :root[data-ui='mixta'] .debrief-card.briefing-head:is(.victory, .defeat) h1.debrief-result {
   margin: 0;
-  padding: 4px 14px 3px;
-  font-size: 22px;
+  padding: 3px 12px 2px;
+  font-size: 15px;
 }
 
 /* ============================================================ Ajustes rows */

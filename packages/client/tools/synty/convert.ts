@@ -360,7 +360,8 @@ for (const [id, a] of Object.entries(ANIMATIONS)) {
   if (a.pack === 'mixamo') {
     const dir = join(SOURCES, PACKS.mixamo.dir);
     const mirror = 'mirror' in a && a.mirror ? { mirror: true } : {};
-    add({ kind: 'mixamo', id, out: join(PUBLIC, modelFile(a.pack, 'anim', id)), fbx: join(dir, `${a.fbx}.fbx`), tpose: join(dir, 'T-Pose.fbx'), target: findFbx(ANIMATIONS.tpose.pack, ANIMATIONS.tpose.fbx), ...mirror });
+    const inPlace = 'inPlace' in a && a.inPlace ? { inPlace: true } : {};
+    add({ kind: 'mixamo', id, out: join(PUBLIC, modelFile(a.pack, 'anim', id)), fbx: join(dir, `${a.fbx}.fbx`), tpose: join(dir, 'T-Pose.fbx'), target: findFbx(ANIMATIONS.tpose.pack, ANIMATIONS.tpose.fbx), ...mirror, ...inPlace });
     continue;
   }
   add({ kind: 'anim', id, out: join(PUBLIC, modelFile(a.pack, 'anim', id)), fbx: findFbx(a.pack, a.fbx) });

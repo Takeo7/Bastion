@@ -383,7 +383,7 @@ function drawBastion(s: GameState, spot: PieceSpot, wear: PieceWear, art: PieceA
         yard.fill('bLongTable', table.u, table.v, 1.8, 0.8);
         for (const x of [0, 1]) {
           const chair = T(x, 7);
-          yard.put('bCampChair', chair.u, chair.v - 0.1, 2 + (r(50 + x) - 0.5) * 0.3, 0.95);
+          yard.put('bCampChair', chair.u, chair.v - 0.1, 2 + (r(50 + x) - 0.5) * 0.3, STOOL);
         }
         const gen = T(7, 3);
         yard.put('bPowerGenerator', gen.u, gen.v, 1, 0.75);
@@ -475,12 +475,18 @@ function drawBastion(s: GameState, spot: PieceSpot, wear: PieceWear, art: PieceA
     for (const x of [a, b]) {
       const chair = T(x, fy);
       // (Its front is its own +z: a quarter turn per π/2 from it.)
-      yard.put('bCampChair', chair.u, chair.v, Math.atan2(fire.u - chair.u, fire.v - chair.v) / (Math.PI / 2) + (r(40 + x) - 0.5) * 0.3, 0.95);
+      yard.put('bCampChair', chair.u, chair.v, Math.atan2(fire.u - chair.u, fire.v - chair.v) / (Math.PI / 2) + (r(40 + x) - 0.5) * 0.3, STOOL);
     }
   }
   const wood = T(0, 8);
   yard.put('bWoodPile', wood.u, wood.v, 1, 0.8);
 }
+
+/**
+ * The camp stool's size: its seat a quarter of a tile up, where the hips of those sat on it come down to with their
+ * feet on the ground (clearingLife.ts; 22/10 #9 and #11: at 0.95 it stood 9 cm over them, they sank into it).
+ */
+const STOOL = 0.7;
 
 /** The caravan's awning's scale and the barracón's water tower's (drawBastion). */
 const AWNING = 1.25;
@@ -641,7 +647,7 @@ const BUILDINGS: Partial<Record<PieceId, (lot: Lot, level: number) => void>> = {
     if (level < 2) {
       lot.fill('bFieldTent', -1.0, -0.6, 3.6, 2.5);
       lot.put('bFirePit', 1.5, 1.3, 0, 0.8);
-      lot.put('bCampChair', 0.7, 1.75, 1.3, 1);
+      lot.put('bCampChair', 0.7, 1.75, 1.3, STOOL);
       lot.put('bWoodPile', 2.2, -1.5, 1, 0.9);
       return;
     }
@@ -651,7 +657,7 @@ const BUILDINGS: Partial<Record<PieceId, (lot: Lot, level: number) => void>> = {
     lot.put('bWoodPile', -2.4, 1.85, 1, 0.8);
     if (level >= 3) {
       lot.put('bWashingLine', -0.9, 1.9, 0, 0.7);
-      lot.put('bCampChair', 0.85, 1.9, 2.4, 1);
+      lot.put('bCampChair', 0.85, 1.9, 2.4, STOOL);
     }
   },
   // Enfermería (6 × 5): a field tent with a first-aid box and a drip; the quarantine tent; a decontamination shower
@@ -713,7 +719,7 @@ const BUILDINGS: Partial<Record<PieceId, (lot: Lot, level: number) => void>> = {
       lot.put('cagePanel', -1.8, u, 1, [sx, 1, 1]);
       lot.put('cagePanel', 1.8, u, 1, [sx, 1, 1]);
     }
-    lot.put('bCampChair', 0.4, 0.3, 0.6, 1);
+    lot.put('bCampChair', 0.4, 0.3, 0.6, STOOL);
     if (level >= 2) {
       lot.put('bJerrycan', -1.2, 1.2, 0.4, 1);
       lot.put('bJerrycan', -0.9, 1.3, 1.4, 1);

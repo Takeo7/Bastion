@@ -1,13 +1,13 @@
 import { defaultAppearance } from './appearance';
 import { AP_PER_TURN, apPerTurn, clipOf, NIGHT, PISTOL_CLIP, REACTION_PENALTY, RECOVERY_TURNS, SIEGE, SOLDIER_NAMES, SPARE_MAGS, SQUAD_SIZE, TEMPLATES, WEAPONS, ZERO_MODS, type WeaponId } from './content';
 import { DIRS4, ground, toPos } from './grid';
-import { lightTiles } from './los';
+import { facingTo, lightTiles } from './los';
 import { armedTiles, baseLayout, PIECES, type BaseState } from './base';
 import { GEN_SIZE, generatedSize, generateLayout, handmadeLayout, type MissionLayout } from './mapgen';
 import { MAPS } from './maps';
 import { STORY } from './lore';
 import { repairStairAccess } from './stairAccess';
-import type { Rng } from './rng';
+import { Rng } from './rng';
 import { fighterStats, missionLines, recruitSkills, veteranSkills, type FighterStats, type MissionLines } from './skills';
 import type {
   Alarm,
@@ -531,6 +531,61 @@ export function missionLayout(map: MapSource, kind: MissionKind, podSizes: numbe
   return generateLayout({ biome: map.biome, kind: LAYOUT_KIND[kind] ?? kind, podSizes, seed: map.seed, ...(map.site ? { site: map.site } : {}), ...(map.medical ? { medical: map.medical } : {}), ...(itemOutdoors ? { itemOutdoors } : {}), ...(clinic ? { clinic } : {}), ...(hospital ? { hospital } : {}), ...(alarm ? { alarm } : {}) });
 }
 
+/**
+ * The lone dead of a mission, by its difficulty (1 to 4), over the patrols (Ana, 22/10: «que cuando entras en una casa
+ * pueda haber un zombi o dos, que cuando giras una esquina le tengas justo ahí»; Arturo: on top of them, a little
+ * harder). Each stands still where it is, facing anywhere, till it notices someone or hears something.
+ */
+export const LURKERS = [0, 3, 4, 5, 6];
+/** None of them this near where the squad starts, nor this near the bus. */
+const LURKER_CLEAR = 14;
+const LURKER_BUS = 5;
+/** Nor this near another of them, or the patrols. */
+const LURKER_GAP = 7;
+const LURKER_POD_GAP = 4;
+
+/**
+ * Where the lone dead wait (LURKERS): half inside the buildings, on a room's floor; half outside, just round a
+ * building's outer corner (one of its tiles diagonal to theirs, none beside), so one may be right there as the squad
+ * turns it. Never near where the squad starts, the bus or each other. On maps with buildings only.
+ */
+function lurkerSpots(layout: MissionLayout, units: readonly Unit[], count: number, rng: Rng): { pos: Pos; facing: number }[] {
+  const { width: w, height: h, tiles, storeys } = layout;
+  if (!storeys || count <= 0) return [];
+  const at = (x: number, y: number) => y * w + x;
+  const built = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && (storeys[at(x, y)] ?? 0) > 0;
+  const near = (x: number, y: number, ps: readonly Vec2[], d: number) => ps.some((p) => Math.hypot(p.x - x, p.y - y) < d);
+  const dead = units.filter((u) => u.team === 'alien').map((u) => u.pos);
+  const taken = new Set(units.map((u) => at(u.pos.x, u.pos.y)));
+  const inside: Vec2[] = [];
+  const corners: Vec2[] = [];
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = at(x, y);
+      if (tiles[i] !== 'floor' || (layout.elev[i] ?? 0) !== 0 || layout.ground?.[i] === 4 || taken.has(i)) continue;
+      if (near(x, y, layout.spawns, LURKER_CLEAR) || near(x, y, layout.evacZone, LURKER_BUS) || near(x, y, dead, LURKER_POD_GAP)) continue;
+      if (built(x, y)) inside.push({ x, y });
+      else if (!DIRS4.some((d) => built(x + d.x, y + d.y)) && [[1, 1], [1, -1], [-1, 1], [-1, -1]].filter(([dx, dy]) => built(x + dx!, y + dy!)).length === 1) corners.push({ x, y });
+    }
+  }
+  const out: { pos: Pos; facing: number }[] = [];
+  const draw = (from: Vec2[], n: number) => {
+    for (let tries = 0; tries < 60 && n > 0 && from.length; tries++) {
+      const p = from[rng.int(from.length)]!;
+      if (near(p.x, p.y, out.map((o) => o.pos), LURKER_GAP)) continue;
+      // Facing anywhere: a way round it, at random.
+      const d = DIRS4[rng.int(4)]!;
+      out.push({ pos: { x: p.x, y: p.y, z: 0 }, facing: facingTo(p, { x: p.x + d.x, y: p.y + d.y })! });
+      n--;
+    }
+  };
+  draw(inside, Math.ceil(count / 2));
+  draw(corners, count - out.length);
+  // Not enough corners: the rest inside, and the other way round.
+  draw(inside, count - out.length);
+  return out;
+}
+
 export function createMission(opts: MissionOptions): GameState {
   if (!opts.slots.length) throw new Error('A mission needs at least one player');
   const difficulty = opts.difficulty ?? 2;
@@ -652,6 +707,16 @@ export function createMission(opts: MissionOptions): GameState {
     });
     if (pod.unitIds.length) pods.push(pod);
   });
+  // Over the patrols, the lone dead that wait where they stand, in the houses and round the corners (Ana and Arturo, 22/10).
+  if (!layout.siege && opts.map.kind === 'generated' && plan.some((members) => members.some((t) => TEMPLATES[t].undead))) {
+    // Drawn from the map's own seed, so the rest of the mission is as it was.
+    lurkerSpots(layout, units, LURKERS[Math.min(difficulty, LURKERS.length - 1)]!, new Rng((opts.map.seed ^ 0x2f6b) >>> 0)).forEach((spot, k) => {
+      const id = `a${++alienIndex}`;
+      const pod: Pod = { id: `l${k + 1}`, active: false, unitIds: [id], patrol: [], patrolIndex: 0 };
+      units.push({ ...makeUnit(id, 'zombie', TEMPLATES.zombie.name, null, spot.pos, pod.id), facing: spot.facing });
+      pods.push(pod);
+    });
+  }
   const leader = opts.leader && units.find((u) => u.team === 'alien' && u.template === opts.leader!.template);
   if (leader) leader.name = opts.leader!.name;
 

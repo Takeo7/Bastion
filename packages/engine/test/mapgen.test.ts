@@ -5,7 +5,7 @@ import { GEN_SIZE, generateLayout, TOWN_SIZE, type MissionLayout } from '../src/
 import { roomAt } from '../src/loot';
 import { computeReach, destinations, maxMoveCost, stepCost } from '../src/path';
 import { Rng } from '../src/rng';
-import { createMission, garrison, MISSION_TURNS, missionTurns, podPlan, routeTurns } from '../src/setup';
+import { createMission, garrison, LURKERS, MISSION_TURNS, missionTurns, podPlan, routeTurns } from '../src/setup';
 import type { Biome, GameState, MissionKind, TileKind, Vec2 } from '../src/types';
 
 const BIOMES: Biome[] = ['city', 'wilds', 'facility'];
@@ -139,9 +139,12 @@ describe('procedural maps', () => {
           // A town's or the country's along the bus's doors (docs/MAPAS.md §4.5), 3 × 7; elsewhere, or where there is no room, 3 × 3.
           if (kind !== 'elimination') expect([9, 21], label).toContain(s.mission.evacZone.length);
           if (kind === 'hack') expect(near(s.mission.terminal!), `${label}: terminal`).toBe(true);
+          // The lone dead of 22/10 (setup.ts LURKERS) come on top: their own pods, l1, l2…
           const aliens = s.units.filter((u) => u.team === 'alien' && !u.objective);
+          const lone = aliens.filter((u) => u.podId?.startsWith('l'));
           // The plan, and the living enemy's whole strength from the start (playtest 2026-10-13).
-          expect(aliens.length, label).toBe(plan.flat().length + (garrison(kind, 2)?.length ?? 0));
+          expect(aliens.length - lone.length, label).toBe(plan.flat().length + (garrison(kind, 2)?.length ?? 0));
+          expect(lone.length, label).toBeLessThanOrEqual(LURKERS[2]!);
           for (const a of aliens) {
             const d = Math.min(...soldiers.map((x) => Math.hypot(x.pos.x - a.pos.x, x.pos.y - a.pos.y)));
             expect(d, `${label}: ${a.id} too close`).toBeGreaterThanOrEqual(12);
@@ -270,8 +273,8 @@ describe('procedural maps', () => {
       // Raised ground, or the storeys above the ground with their roofs (docs/FASE6-PLAN.md).
       roofs += s.elev.filter((e) => e > 0).length + (s.levels ?? []).reduce((n, l) => n + l.tiles.filter((t) => t !== null).length, 0);
       openings += s.tiles.filter((t) => t === 'door' || t === 'window').length;
-      // Every pod walks a round, but the living posted upstairs (docs/FASE6-PLAN.md), who stay put.
-      for (const pod of s.pods) if (!s.units.some((u) => u.podId === pod.id && u.pos.z > 0)) expect(pod.patrol.length).toBeGreaterThan(0);
+      // Every pod walks a round, but the living posted upstairs (docs/FASE6-PLAN.md) and the lone dead (22/10), who stay put.
+      for (const pod of s.pods) if (!pod.id.startsWith('l') && !s.units.some((u) => u.podId === pod.id && u.pos.z > 0)) expect(pod.patrol.length).toBeGreaterThan(0);
       hills += layout('wilds', 'elimination', seed).elev.filter((e) => e > 0).length;
     }
     expect(roofs).toBeGreaterThan(0);

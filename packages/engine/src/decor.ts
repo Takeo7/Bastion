@@ -208,6 +208,36 @@ function next(width: number, size: number, i: number, f: number): number {
   return x < 0 || y < 0 || x >= width || y * width >= size ? -1 : y * width + x;
 }
 
+/**
+ * How tall the objects that are full cover but lower than a soldier's eyes stand, for sight (Arturo, 22/10: «los
+ * campos de visión han de ser reales… no puede ser que ese objeto bajo tape la visión como si fuese una columna
+ * gigante»): sight goes over them (grid.ts groundSightHeight). Cover is the same. The rest stand a whole full
+ * cover's height, taller than the eyes. Measured on what is drawn (Arte, 22/10) and put on the rules' scale: a
+ * drawn soldier's eyes are at 1.24 world units, the rules' at EYE_HEIGHT (0.7 storeys, 1.61), so each drawn height
+ * counts 1.3 times, and whatever is below a drawn soldier's eyes is below the rules' too. In storeys.
+ */
+const SIGHT_HEIGHT: Partial<Record<DecorKind, number>> = {
+  // A gas tank lying on its legs, 1.09 drawn (playtest 22/10 #47).
+  tank: 0.62,
+  // Stacked: crates 1.11, pallets 1.11, drums 1.16; the big generator 1.16; a drinks fridge 1.07.
+  crates: 0.63,
+  pallets: 0.63,
+  drums: 0.66,
+  machine: 0.66,
+  drinksFridge: 0.6,
+  // A workshop's shelf 1.22, a water dispenser 1.20: just under the eyes.
+  rack: 0.69,
+  waterDispenser: 0.68,
+};
+
+/** For sight, the height of the object tile `i` is part of, when it is one of SIGHT_HEIGHT's; null for any other. */
+export function decorSightHeight(decor: readonly Decor[] | undefined, width: number, i: number): number | null {
+  if (!decor) return null;
+  const a = anchorOf(decor, width, i);
+  const look = a >= 0 ? decorOf(decor[a]) : null;
+  return (look && SIGHT_HEIGHT[look.kind]) ?? null;
+}
+
 /** The anchor of the object tile i is a part of (i itself for anything else dressed); -1 for nothing, or a part that leads nowhere. */
 export function anchorOf(decor: readonly Decor[], width: number, i: number): number {
   let j = i;

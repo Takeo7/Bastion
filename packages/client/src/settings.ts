@@ -30,12 +30,19 @@ export interface GraphicsSettings {
    * the armband (Personalizar's colours); off, each outfit's own, and the ring under them says whose (Arte's wardrobe).
    */
   squadTint: boolean;
+  /**
+   * «Velocidad de los soldados» (Ana, 22/10 #32): how fast the squad's soldiers walk and run on screen, as a rate
+   * (1 their gaits'); only how it looks, to find the right one: the rules don't change.
+   */
+  walkSpeed: number;
 }
 
 /** The enemy turn's speed slider: from half as fast to two and a half times. */
 export const ENEMY_SPEED = { min: 0.5, max: 2.5, step: 0.1 } as const;
+/** The soldiers' walking speed slider: from half as fast to twice. */
+export const WALK_SPEED = { min: 0.5, max: 2, step: 0.05 } as const;
 
-const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1, enemySpeed: 1, autoPlan: true, squadTint: false };
+const DEFAULTS: GraphicsSettings = { fps: 0, effects: 'high', shadows: true, resolution: 0, showFps: false, uiScale: 1, enemySpeed: 1, autoPlan: true, squadTint: false, walkSpeed: 1 };
 const KEY = storageKey('graphics');
 /** Version of the stored settings: 2 made the resolution automatic by default. */
 const VERSION = 2;

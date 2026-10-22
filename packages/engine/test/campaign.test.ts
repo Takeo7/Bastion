@@ -102,17 +102,28 @@ describe('shared decisions', () => {
 });
 
 describe('time', () => {
-  it('goes by with the missions: no waiting for news, and a «ready» taken back changes nothing', () => {
+  it('goes by with the missions, and a day at a time waiting at the Bastión, both agreeing (Ana and Arturo, 22/10)', () => {
     const c = createCampaign(both, new Rng(1));
-    expect(executeCampaignCommand(c, { type: 'advance', ready: true }, { slot: 0, connected: both, rng: new Rng(1) })).toEqual({ ok: false, error: 'Ya no se espera: el tiempo pasa con cada misión.' });
-    run(c, { type: 'advance', ready: false }, 0);
+    c.nextEventDay = 999;
+    // One alone waits for the other; a «ready» taken back changes nothing.
+    run(c, { type: 'advance', ready: true }, 0);
     expect(c.day).toBe(1);
+    run(c, { type: 'advance', ready: false }, 0);
+    run(c, { type: 'advance', ready: true }, 1);
+    expect(c.day).toBe(1);
+    // Both: a day goes by, and what it ate is in the log.
+    const food = c.food!;
+    run(c, { type: 'advance', ready: true }, 0);
+    expect(c.day).toBe(2);
+    expect(c.advanceReady).toEqual([false, false]);
+    expect(c.food).toBeLessThan(food);
+    expect(c.log.some((l) => l.text.startsWith('Día 2: se comen'))).toBe(true);
     const offer = c.offers.find((o) => !o.story)!;
     run(c, { type: 'chooseMission', id: offer.id }, 0, [0]);
     const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad: buildSquad(c), pods: offer.pods, difficulty: offer.difficulty });
     mission.outcome = 'victory';
     applyMissionResult(c, mission, new Rng(4));
-    expect(c.day).toBe(1 + DAYS_PER_MISSION);
+    expect(c.day).toBe(2 + DAYS_PER_MISSION);
   });
 
   it('wounds heal day by day; the enemy project ends the campaign at its maximum', () => {
@@ -352,6 +363,8 @@ describe('missions', () => {
 
   it('results come back: deaths, wounds, what each one learnt and rewards', () => {
     const { c, offer } = ready();
+    // Not about the sieges: the first one far off (it comes straight after the first mission: Ana, 22/10).
+    c.siege.in = 99;
     const squad = buildSquad(c);
     const mission = createMission({ map: offer.map, slots: both, rng: new Rng(3), kind: offer.kind, squad, pods: offer.pods, difficulty: offer.difficulty });
     const soldiers = mission.units.filter((u) => u.team === 'xcom');
@@ -608,6 +621,8 @@ describe('helping the players', () => {
 
   it('what to do now: the most pressing thing first', () => {
     const c = createCampaign(both, new Rng(1));
+    // Not about the sieges: the first one far off (it comes straight after the first mission: Ana, 22/10).
+    c.siege.in = 99;
     expect(nextSteps(c, 0)[0]).toMatchObject({ view: 'geoscape', label: 'Elige una misión', count: c.offers.length });
     // Operations don't expire (18/10 #39).
     expect(c.offers.every((o) => o.expiresDay === null)).toBe(true);
@@ -626,6 +641,8 @@ describe('helping the players', () => {
 
   it('after a bad mission, too few ready soldiers puts recruiting before the next operation', () => {
     const c = createCampaign([0], new Rng(1));
+    // Not about the sieges: the first one far off (it comes straight after the first mission: Ana, 22/10).
+    c.siege.in = 99;
     const mine = c.soldiers.filter((s) => s.owner === 0);
     for (const s of mine.slice(1)) s.woundedDays = 8;
     // The caravan is full: first a barracón for the recruits to sleep in.

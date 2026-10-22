@@ -121,6 +121,64 @@ Se bajan igual que la primera tanda: X Bot, sin piel, 30 fps, In Place si aparec
 - Si «Warming Hands» no aparece, busca «warm» o «fire» y baja lo más parecido; con «Sitting» y «Crouch», lo mismo. Apunta qué fue.
 - Son unos 12 archivos; los ★, 5 o 6.
 
+## Tercera tanda (22/10, con la 0.9.4)
+
+Para las notas 12 y 15 de [PRUEBA-2026-10-22.md](PRUEBA-2026-10-22.md): andar con el arma de verdad y subir a La Lata.
+
+- Ahora, al moverse, las piernas son el andar de Synty sin arma y los brazos los pone el código. Por eso andar queda raro.
+- En misión van siempre relajados (nota 16, decidido por Arturo). Hay que bajar las que llevan el arma bajada, cogida sin apuntar. No sirven las de andar apuntando.
+- Mismos ajustes que las otras tandas: X Bot, sin piel, 30 fps, sin Mirror, a `assets-src/mixamo/`.
+- **In Place, marcado en todas las de moverse.** El juego mueve al soldado; si el clip avanza, el soldado se va hacia delante y vuelve de golpe.
+
+### Fusil, en movimiento
+
+El fusil bajado, en las dos manos, cruzado delante del cuerpo y con el cañón hacia el suelo.
+
+| | Nombre en Mixamo | Cuál | Para qué |
+|---|---|---|---|
+| ★ | Rifle Walk | la del fusil bajado | Andar |
+| ★ | Rifle Run | la del fusil bajado | Correr |
+| ★ | Rifle Sprint | | Esprintar (mover dos acciones, el Corredor) |
+| ★ | Rifle Crouch Walk | | Andar agachado |
+| | Walking With Rifle | | Andar (otra) |
+| | Run With Rifle | | Correr (otra) |
+
+### Pistola, en movimiento
+
+La pistola en una mano, baja junto al muslo, como la llevan ahora en reposo.
+
+| | Nombre en Mixamo | Cuál | Para qué |
+|---|---|---|---|
+| ★ | Pistol Walk | la de la pistola bajada | Andar |
+| ★ | Pistol Run | la de la pistola bajada | Correr |
+| ★ | Pistol Sprint | | Esprintar |
+| ★ | Pistol Crouch Walk | | Andar agachado |
+
+### Subir a La Lata
+
+Ahora suben «a caballo y de frente». Tienen que entrar de lado: sentarse y meter las piernas. Para estas, In Place no hace falta: si aparece, sin marcar.
+
+| | Nombre en Mixamo | Cuál | Para qué |
+|---|---|---|---|
+| ★ | Entering Car | | Subir: de lado, sentarse y meter las piernas |
+| ★ | Exiting Car | | Bajar (para volver de la misión) |
+| | Getting In Car | | Subir (otra) |
+| | Climbing Stairs | | Por si no hay de coche: subir el escalón de la puerta |
+
+### Si un nombre no aparece
+
+| Para | Busca | Y baja |
+|---|---|---|
+| Fusil | «rifle walk», «rifle run», «rifle sprint», «rifle crouch» | la que lleva el fusil bajado; si todas apuntan, la que menos levanta el arma |
+| Pistola | «pistol walk», «pistol run», «pistol sprint», «pistol crouch» | la de la pistola en una mano, baja; si todas son a dos manos, la más relajada |
+| Esprintar | «sprint» | una con el arma bajada; si no hay, la de esprintar sin arma |
+| Agachado | «crouch walk», «crouched walking», «sneak» | una con el arma; si no hay, la de andar agachado sin arma |
+| Subir | «car», «vehicle», «get in», «enter», «climb» | lo que más se parezca a entrar sentándose de lado |
+
+- Apunta qué fue: el nombre exacto y la descripción, como en la segunda tanda.
+- Si en las de moverse no aparece In Place, bájala igual y apúntalo. Arte le quita el avance al convertirla.
+- Son unos 14 archivos; los ★, 10.
+
 ## Después
 
 Arte las convierte con `packages/client/tools/synty/convert.ts`, con ids explícitos, como las de Synty. El juego las pasa del esqueleto de Mixamo a los de Synty y Sidekick, medidas desde la T-Pose. Los archivos de Mixamo no se suben; los convertidos, sí, como los de Synty.

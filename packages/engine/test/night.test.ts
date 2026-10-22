@@ -328,8 +328,11 @@ describe('night', () => {
     const night = createMission({ map, slots: [0], rng: new Rng(1), kind: 'elimination', difficulty: 2, night: true });
     expect(day.mission.night).toBe(false);
     expect(night.mission.night).toBe(true);
-    expect(night.pods.length).toBe(day.pods.length + 1);
-    const extra = night.pods[night.pods.length - 1]!.unitIds.map((id) => night.units.find((u) => u.id === id)!.template);
+    // The lone dead (setup.ts LURKERS) are the same by night and by day, after the groups.
+    const groups = (s: typeof day) => s.pods.filter((p) => !p.id.startsWith('l'));
+    expect(groups(night).length).toBe(groups(day).length + 1);
+    expect(night.pods.length - groups(night).length).toBe(day.pods.length - groups(day).length);
+    const extra = groups(night)[groups(night).length - 1]!.unitIds.map((id) => night.units.find((u) => u.id === id)!.template);
     expect(extra).toEqual(nightPod(2));
     expect(night.tiles).toEqual(day.tiles);
     expect(night.lights!.length).toBeGreaterThan(4);

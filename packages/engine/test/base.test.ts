@@ -31,6 +31,7 @@ import {
   SIEGE_EVERY,
   SIEGE_FIRST,
   SIEGE_FIRST_IN,
+  SIEGE_OPENING,
   SIEGE_GROWTH,
   siegeHeard,
   siegePlan,
@@ -85,7 +86,10 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(c.version).toBe(CAMPAIGN_VERSION);
     expect(c.bastion.pieces.map((p) => p.piece)).toEqual(['caravan']);
     expect(c.base).toEqual({ works: [] });
-    expect(c.siege).toMatchObject({ in: SIEGE_FIRST_IN, count: SIEGE_FIRST, held: 0 });
+    expect(c.siege).toMatchObject({ in: SIEGE_FIRST_IN, count: SIEGE_OPENING, held: 0 });
+    // Straight after the first mission, and small (Ana and Arturo, 22/10).
+    expect(SIEGE_FIRST_IN).toBe(1);
+    expect(SIEGE_OPENING).toBeLessThan(SIEGE_FIRST);
     expect(c.siege.sides.length).toBeGreaterThanOrEqual(1);
     expect(c.siege.sides.length).toBeLessThanOrEqual(3);
     // Without a Sala de radio, only when.
@@ -316,7 +320,6 @@ describe('the sieges in the campaign (docs/FASE12.md §11.5)', () => {
       fly(c);
       lines.push(c.log[0]!.text);
     }
-    expect(lines[0]).toMatch(/Viene un asedio: llegará dentro de 2 misiones/);
     const siege = activeOffer(c)!;
     expect(siege).toMatchObject({ siege: true, name: 'Asedio', expiresDay: null });
     expect(c.squad.sort()).toEqual(c.soldiers.filter((s) => s.alive && s.woundedDays === 0 && !s.infection).map((s) => s.id).sort());
@@ -417,9 +420,11 @@ describe('the sieges in the campaign (docs/FASE12.md §11.5)', () => {
     // Until someone has healed, or enough suministros have come in to recruit.
     expect(home.woundedDays === 0 || c.credits >= recruitCost(c)).toBe(true);
     expect(c.day).toBeGreaterThan(day);
-    // Once someone can go out, there is no waiting again.
+    // Once someone can go out, waiting is a day at a time (Ana and Arturo, 22/10).
     expect(mustWait(c)).toBe(false);
-    expect(() => run(c, { type: 'advance', ready: true })).toThrow(/Ya no se espera/);
+    const now = c.day;
+    run(c, { type: 'advance', ready: true });
+    expect(c.day).toBe(now + 1);
   });
 
   it('one siege in three by night, never the first', () => {
@@ -593,6 +598,8 @@ describe('the world', () => {
 describe('alien bodies', () => {
   it('are sold after a won mission, and left behind after a lost one', () => {
     const c = solo();
+    // Two missions in a row, no siege between them.
+    c.siege.in = 5;
     const offer = c.offers[0]!;
     run(c, { type: 'chooseMission', id: offer.id });
     const mission = createMission({ map: { kind: 'handmade', id: 'plaza' }, slots: [0], rng: new Rng(2), pods: [['sectoid', 'trooper']] });

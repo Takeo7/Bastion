@@ -85,6 +85,8 @@ export const clientMessageSchema = z.discriminatedUnion('t', [
    * takes as proof the socket survived the sleep.
    */
   z.object({ t: z.literal('away'), away: z.boolean() }),
+  /** This screen has played every event it was sent (`idle`), or has some to play: the turn clock runs only meanwhile (Arturo, 22/10). */
+  z.object({ t: z.literal('idle'), idle: z.boolean() }),
 ]);
 
 export type ClientMessage = z.infer<typeof clientMessageSchema>;
@@ -222,8 +224,20 @@ export type ServerMessage =
    * milliseconds, counted on the client's own clock; `ms: null`, it was answered.
    */
   | { t: 'deadline'; kind: DeadlineKind; ms: number | null }
+  /**
+   * The squad's turn clock (Arturo, 22/10), each player's: `left` of `total` milliseconds, counting down on the
+   * client's own clock while `running`; null outside the squad's turn.
+   */
+  | { t: 'turnClock'; clocks: [TurnClock, TurnClock] | null }
   /** The server is shutting down (the host quit the app, or stopped it): the game is saved; don't wait for it to come back. */
   | { t: 'closing' }
   | { t: 'error'; message: string };
 
 export type DeadlineKind = 'proposal' | 'evac' | 'abandon';
+
+/** One player's turn clock (the turnClock message): milliseconds left of the turn's total, and whether it runs now. */
+export interface TurnClock {
+  left: number;
+  total: number;
+  running: boolean;
+}
