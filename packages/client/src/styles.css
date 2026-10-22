@@ -2347,8 +2347,20 @@ dl.controls dd {
   font-family: var(--font-display);
   font-size: 38px;
   font-weight: 400;
+  line-height: 1.08;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* A long name (Ana, 21/10 #43: «EL DEPÓSITO DE CONTENEDORES DE BRENA» ran off the card): smaller, and in two
+   lines at its spaces (the typed label is pre: let it wrap there; a word still never breaks). */
+.mission-intro h1 .typed {
+  white-space: pre-wrap;
+}
+
+.mission-intro h1.long {
+  font-size: 30px;
 }
 
 .mission-intro p {

@@ -572,8 +572,67 @@
   visibility: visible;
 }
 
-.top-tip span {
-  white-space: pre-line;
+/* A sentence a line (Ana, 21/10 #33), some figures first and big: what is said first reads first. */
+.top-tip p {
+  margin: 0;
+}
+
+.top-tip p + p {
+  margin-top: 4px;
+}
+
+.top-tip .tip-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  margin: 2px 0 6px;
+  color: var(--t-muted, #a1a79d);
+  font-size: 12.5px;
+}
+
+.top-tip .tip-figures em {
+  margin-right: 3px;
+  color: #fff;
+  font: 500 22px/1 var(--t-font-title, var(--font-display));
+  font-style: normal;
+}
+
+.top-tip .tip-good,
+.top-tip .tip-good em {
+  color: var(--t-good, #8fd05a);
+}
+
+.top-tip .tip-bad {
+  color: #ff8a78;
+  font-weight: 700;
+}
+
+.top-tip .tip-rule {
+  color: var(--t-muted, #a1a79d);
+  font-size: 12.5px;
+}
+
+.top-tip .tip-rule.first {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.top-tip .tip-warn {
+  color: #f0c27a;
+}
+
+.top-tip .tip-day {
+  color: var(--t-muted, #a1a79d);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.top-tip .tip-num {
+  color: #fff;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .top-tip b {
@@ -2434,8 +2493,7 @@ dl.briefing {
   --icon: var(--i-will);
 }
 
-.x-gear,
-.x-effect {
+.x-gear {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2824,6 +2882,15 @@ dl.briefing {
 }
 
 /* «no está: los preparas tú» after a partner's name in a heading. */
+/* The day, at the end of the Mapa's head, after its rule (#34). */
+.x-head .head-day {
+  order: 2;
+  color: var(--t-muted, #a1a79d);
+  font-family: var(--t-font-title, var(--font-display));
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
 .x-head small {
   font-family: var(--font);
   font-size: 11px;
@@ -2965,86 +3032,198 @@ dl.briefing {
   box-shadow: 0 0 0 1px rgba(240, 80, 60, 0.55);
 }
 
-.build-head {
+/* Construir and the Bastion's figures (Ana, 21/10 #35, #38, #40): panels one over the other in a column, each its
+   own steel sheet (the frame is drawn outside the plate: room for it between them). */
+.panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 8px;
+}
+
+.panel-stack > .x-panel {
+  flex: none;
+  margin: 0;
+  transform: none;
+}
+
+.strat-right.panel-stack > .x-panel::before,
+.strat-right.panel-stack > .x-panel::after {
+  content: none;
+}
+
+/* Talar: one tool, a wide key with its icon, its name and what a tree costs. */
+.fell-tile {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.fell-tool.on,
-.build-tab.on {
-  background: var(--t-primary, #f2c230);
-  color: var(--t-primary-ink, #1e1706);
-}
-
-.build-tabs {
-  display: flex;
-  gap: 4px;
-  margin: 6px 0 8px;
-}
-
-.build-tab {
-  flex: 1;
-  padding: 5px 4px;
-  border: 0;
-  border-radius: 2px;
-  background: var(--t-panel-lo, rgba(12, 14, 15, 0.92));
-  color: var(--t-muted, #a1a79d);
-  font: 700 12px/1 var(--t-font, sans-serif);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: var(--cursor-hot);
-}
-
-.piece-list {
-  display: grid;
-  gap: 4px;
-}
-
-/* One piece of the palette: its name and cost on a line, what it is for under it. */
-.piece-item {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 1px 8px;
-  padding: 6px 8px;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
   border: 0;
   border-radius: 2px;
   background: var(--t-panel-hi, rgba(46, 50, 52, 0.97));
   color: var(--t-text, #eef0ea);
-  text-align: left;
+  font: 700 15px/1 var(--t-font-title, sans-serif);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   cursor: var(--cursor-hot);
 }
 
-.piece-item:hover {
+.fell-tile:hover {
   background: var(--t-panel-hover, rgba(60, 64, 64, 0.98));
 }
 
-.piece-item.on {
+.fell-tile.on {
   box-shadow: inset 0 0 0 2px var(--t-accent, #f2c230);
 }
 
-.piece-name {
-  font: 700 14px/1.2 var(--t-font, sans-serif);
+.fell-tile .piece-cost {
+  margin-left: auto;
 }
 
+/* An axe, drawn in the store's colour. */
+.fell-ico {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background: var(--t-accent, #f2c230);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13.2 3.1c2.9-.6 6 .6 7.7 3.1l-4.6 4.6-1.6-1.6-8.9 8.9a1.6 1.6 0 0 1-2.3 0 1.6 1.6 0 0 1 0-2.3l8.9-8.9-1.6-1.6z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13.2 3.1c2.9-.6 6 .6 7.7 3.1l-4.6 4.6-1.6-1.6-8.9 8.9a1.6 1.6 0 0 1-2.3 0 1.6 1.6 0 0 1 0-2.3l8.9-8.9-1.6-1.6z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* The pieces of a panel: a grid of pictures (pieceIcons.ts), the name and the cost under each; what it does on hover. */
+.piece-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 5px;
+}
+
+.piece-tile {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  justify-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 4px 6px;
+  border: 0;
+  border-radius: 2px;
+  background: radial-gradient(ellipse at 50% 38%, rgba(255, 255, 255, 0.07), transparent 70%), var(--t-panel-hi, rgba(46, 50, 52, 0.97));
+  color: var(--t-text, #eef0ea);
+  text-align: center;
+  cursor: var(--cursor-hot);
+}
+
+.piece-tile:hover:not(:disabled) {
+  background: radial-gradient(ellipse at 50% 38%, rgba(255, 255, 255, 0.12), transparent 70%), var(--t-panel-hover, rgba(60, 64, 64, 0.98));
+}
+
+.piece-tile.on {
+  box-shadow: inset 0 0 0 2px var(--t-accent, #f2c230);
+}
+
+.piece-pic {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  max-width: 64px;
+}
+
+.piece-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.45));
+}
+
+/* Its picture on its way: a faint plate where it will be. */
+.piece-pic-wait {
+  width: 60%;
+  height: 40%;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.piece-tile .piece-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font: 600 11px/1.12 var(--t-font, sans-serif);
+  text-wrap: balance;
+}
+
+.piece-tile .new-tag {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+}
+
+/* A unique one already up: dimmed, ticked; one the stores can't pay: its cost in red. */
+.piece-tile.built {
+  opacity: 0.5;
+  cursor: var(--cursor-arrow);
+}
+
+.piece-tile.short .piece-cost {
+  color: var(--t-danger, #f0503c);
+}
+
+.piece-tile.short .piece-pic img {
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.45)) saturate(0.4) brightness(0.8);
+}
+
+/* A cost as the stores show it: the supplies' number in their gold with their icon, the parts after with theirs. */
 .piece-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: end;
   color: #ffd25a;
-  font: 700 13px/1.2 var(--t-font, sans-serif);
+  font: 600 13px/1 var(--t-font-title, sans-serif);
   white-space: nowrap;
 }
 
-.piece-line {
-  grid-column: 1 / -1;
-  color: var(--t-muted, #a1a79d);
-  font: 12px/1.3 var(--t-font, sans-serif);
+.piece-cost > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
-/* With the other one here, everything on the base is proposed (playtest 18/10 #55): said once, under the palette's
-   head and under a piece's actions; a proposal waiting, in red (.x-why), since nothing else goes down meanwhile. */
+.piece-cost > span::after {
+  content: '';
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  -webkit-mask: var(--mi-supplies) center / contain no-repeat;
+  mask: var(--mi-supplies) center / contain no-repeat;
+}
+
+.piece-cost > .cost-parts {
+  color: #b2c3d0;
+}
+
+.piece-cost > .cost-parts::after {
+  -webkit-mask-image: var(--mi-parts);
+  mask-image: var(--mi-parts);
+}
+
+.piece-cost small {
+  color: var(--t-muted, #a1a79d);
+  font: 500 11px/1 var(--t-font, sans-serif);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.piece-cost.built {
+  color: var(--t-good, #8fd05a);
+  font-size: 14px;
+}
+
+/* With the other one here, a proposal waiting: nothing else goes down meanwhile, said in red over the grids. */
 .build-vote {
   margin: 2px 0 6px;
-  color: var(--t-accent, #f2c230);
   font: 600 12.5px/1.3 var(--t-font, sans-serif);
 }
 
@@ -3052,25 +3231,125 @@ dl.briefing {
   color: var(--t-danger, #f0503c);
 }
 
-/* Locked by the Bastion's level: grey. Short of what it costs: the cost in red. */
-.piece-item.locked {
-  opacity: 0.45;
-  cursor: var(--cursor-arrow);
-}
-
-.piece-item.short .piece-cost {
-  color: var(--t-danger, #f0503c);
-}
-
 .build-keys {
-  margin: 8px 0 2px;
+  margin: 8px 0 0;
   color: var(--t-muted, #a1a79d);
   font: 12px/1.35 var(--t-font, sans-serif);
 }
 
+/* The Bastion in figures (#38): tiles of an icon, a number and what it is, two to a row. */
+.bastion-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.bstat {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 7px 8px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.1));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.bstat i {
+  grid-row: 1 / 3;
+  width: 22px;
+  height: 22px;
+  background: var(--t-muted, #a1a79d);
+  -webkit-mask: var(--ico) center / contain no-repeat;
+  mask: var(--ico) center / contain no-repeat;
+}
+
+.bstat b {
+  color: #fff;
+  font: 500 20px/1 var(--t-font-title, sans-serif);
+}
+
+.bstat small {
+  color: var(--t-muted, #a1a79d);
+  font: 600 11px/1.15 var(--t-font, sans-serif);
+}
+
+.bstat.good b {
+  color: var(--t-good, #8fd05a);
+}
+
+.bstat.warn b {
+  color: var(--t-accent, #f2c230);
+}
+
+.bstat.bad b {
+  color: var(--t-danger, #f0503c);
+}
+
+.bstat[data-icon='beds'] { --ico: url('/ui/synty/icons/mh-tent.webp'); }
+.bstat[data-icon='food'] { --ico: url('/ui/synty/icons/ah-hunger.webp'); }
+.bstat[data-icon='garden'] { --ico: url('/ui/synty/icons/mh-plants.webp'); }
+.bstat[data-icon='heal'] { --ico: url('/ui/synty/icons/mh-medkit.webp'); }
+.bstat[data-icon='garage'] { --ico: url('/ui/synty/icons/map-vehicle.webp'); }
+.bstat[data-icon='aim'] { --ico: url('/ui/synty/icons/mh-accuracy.webp'); }
+.bstat[data-icon='shop'] { --ico: url('/ui/synty/icons/mh-shop.webp'); }
+.bstat[data-icon='supplies'] { --ico: url('/ui/synty/icons/mh-crate.webp'); }
+.bstat[data-icon='squad'] { --ico: url('/ui/synty/icons/helmet.webp'); }
+.bstat[data-icon='will'] { --ico: url('/ui/synty/icons/mh-mind.webp'); }
+.bstat[data-icon='radio'] { --ico: url('/ui/synty/icons/mh-comms.webp'); }
+
+.bstat[data-icon='food'] i { background: #eab96c; }
+.bstat[data-icon='garden'] i { background: var(--t-good, #8fd05a); }
+.bstat[data-icon='beds'] i { background: #b2c3d0; }
+
 /* The card of a piece picked on the clearing. */
 .piece-close {
   float: right;
+}
+
+/* What it gives at its level, first and big (Ana, 21/10 #42), and its levels in a row under it, this one lit. */
+.piece-figure {
+  margin: 6px 0 4px;
+  color: var(--t-accent, #f2c230);
+  font: 500 22px/1.1 var(--t-font-title, sans-serif);
+}
+
+.piece-ladder {
+  display: flex;
+  gap: 4px;
+  margin: 2px 0 8px;
+}
+
+.piece-step {
+  display: grid;
+  flex: 1;
+  justify-items: center;
+  gap: 1px;
+  padding: 4px 2px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--t-muted, #a1a79d);
+}
+
+.piece-step small {
+  font: 600 10px/1 var(--t-font, sans-serif);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.piece-step b {
+  font: 500 16px/1.1 var(--t-font-title, sans-serif);
+}
+
+.piece-step.past {
+  color: var(--t-text, #eef0ea);
+}
+
+.piece-step.now {
+  background: rgba(242, 194, 48, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(242, 194, 48, 0.6);
+  color: var(--t-accent, #f2c230);
 }
 
 .piece-level-line {
@@ -3109,8 +3388,7 @@ dl.briefing {
   font-style: normal;
 }
 
-.piece-uses,
-.piece-beside {
+.piece-uses {
   margin: 4px 0;
   color: var(--t-muted, #a1a79d);
   font-size: 13px;

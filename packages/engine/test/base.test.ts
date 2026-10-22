@@ -116,7 +116,23 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     // With the other away, it is done at once.
     run(c, { type: 'dismantle', piece: placed.id }, 0, [0]);
     expect(c.bastion.pieces).not.toContain(placed);
+    // The shared supplies go to a vote too (Ana, 21/10 #31): a recruit for whoever proposes it, an accessory.
+    for (const s of c.soldiers.slice(4)) s.alive = false;
+    const soldiers = c.soldiers.length;
+    run(c, { type: 'recruit' }, 1, both);
+    expect(c.proposal?.action).toEqual({ type: 'recruit', for: 1 });
+    expect(c.soldiers.length).toBe(soldiers);
+    run(c, { type: 'vote', accept: true }, 0, both);
+    expect(c.soldiers.length).toBe(soldiers + 1);
+    expect(c.soldiers.at(-1)!.owner).toBe(1);
+    run(c, { type: 'buy', item: 'smokeGrenade' }, 0, both);
+    expect(c.inventory.smokeGrenade ?? 0).toBe(0);
+    run(c, { type: 'vote', accept: true }, 1, both);
+    expect(c.inventory.smokeGrenade).toBe(1);
+    // The Sala de radio, from the caravan with its awning (Ana, 21/10 #36).
     const radio = freeSpot(c, 'radio');
+    expect(() => run(c, { type: 'place', piece: 'radio', x: radio.x, y: radio.y, rot: 0 }, 0, both)).toThrow(/caravana con toldo/);
+    c.level = 2;
     run(c, { type: 'place', piece: 'radio', x: radio.x, y: radio.y, rot: 0 }, 0, both);
     expect(c.proposal?.text).toBe('construir una Sala de radio');
     expect(proposalCost(c, c.proposal!.action)).toBe(PIECES.radio.cost.supplies);
@@ -124,6 +140,7 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(hasRadio(c)).toBe(true);
     expect(siegeHeard(c)).toEqual({ in: c.siege.in, count: c.siege.count, sides: c.siege.sides });
     const wall = freeSpot(c, 'wall');
+    c.level = 1;
     expect(() => run(c, { type: 'place', piece: 'wall', x: wall.x, y: wall.y, rot: 0 }, 0, both)).toThrow(/caravana con toldo/);
     c.level = 2;
     c.parts = 0;
@@ -207,17 +224,17 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(() => run(c, { type: 'clear', plot: '3,5' } as unknown as CampaignCommand)).toThrow(/no existe/);
   });
 
-  it('a building works by its facility, better next to its partner (the caravan is the Cuartel and the Armería); broken, it stops', () => {
+  it('a building works by its facility, wherever it stands (Ana, 21/10 #41: nothing for being next to another); broken, it stops', () => {
     const c = solo();
     const far = raise(c, 'workshop');
     expect(shopPrice(c, 'smokeGrenade')).toBe(19);
     c.bastion.pieces = c.bastion.pieces.filter((p) => p !== far);
     const caravan = c.bastion.pieces[0]!;
     raise(c, 'workshop', 1, caravan);
-    expect(shopPrice(c, 'smokeGrenade')).toBe(15);
+    expect(shopPrice(c, 'smokeGrenade')).toBe(19);
     expect(recruitCost(c)).toBe(30);
     raise(c, 'training', 1, caravan);
-    expect(recruitCost(c)).toBe(20);
+    expect(recruitCost(c)).toBe(30);
     const infirmary = raise(c, 'infirmary');
     const rate = healRate(c);
     expect(rate).toBeGreaterThan(1);
@@ -225,15 +242,14 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(healRate(c)).toBe(1);
   });
 
-  it('the caravan sleeps the first eight; a barracón 2/3/4 beds, one more next to the caravan', () => {
+  it('the caravan sleeps the first eight; a barracón 2/3/4 beds', () => {
     const c = solo();
     expect(beds(c)).toBe(8);
     expect(() => run(c, { type: 'recruit' })).toThrow(/camas/);
     const away = raise(c, 'quarters');
-    const beside = c.bastion.pieces.some((p) => p.piece === 'caravan' && p.x <= away.x + 4 && away.x <= p.x + 4 && Math.abs(p.y - away.y) <= 3);
-    expect(beds(c)).toBe(10 + (beside ? 1 : 0));
+    expect(beds(c)).toBe(10);
     away.level = 3;
-    expect(beds(c)).toBe(12 + (beside ? 1 : 0));
+    expect(beds(c)).toBe(12);
     run(c, { type: 'recruit' });
     expect(bedsFree(c)).toBe(beds(c) - 9);
   });
@@ -257,7 +273,7 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     expect(contactCapacity(c)).toBeGreaterThanOrEqual(capacity + 2);
     run(c, { type: 'raise', piece: radio.id });
     expect(facilityLevel(c, 'listening')).toBe(1);
-    expect(listeningDelay(c)).toBeGreaterThanOrEqual(2);
+    expect(listeningDelay(c)).toBeGreaterThanOrEqual(1);
     expect(raiseCost(radio)).toBe('Ya está al máximo.');
     expect(raiseCost(c.bastion.pieces[0]!)).toBe('Eso no se mejora.');
   });
@@ -613,6 +629,7 @@ describe('equipment', () => {
     const mine = c.soldiers.find((s) => s.owner === 0)!;
     const theirs = c.soldiers.find((s) => s.owner === 1)!;
     run(c, { type: 'buy', item: 'smokeGrenade' }, 0, both);
+    run(c, { type: 'vote', accept: true }, 1, both);
     run(c, { type: 'equip', soldier: mine.id, slot: 'utility', item: 'smokeGrenade' }, 0, both);
     expect(itemsFree(c, 'smokeGrenade')).toBe(0);
     expect(() => run(c, { type: 'equip', soldier: theirs.id, slot: 'utility', item: 'smokeGrenade' }, 1, both)).toThrow(/libres/);
@@ -620,6 +637,7 @@ describe('equipment', () => {
     expect(() => run(c, { type: 'buy', item: 'mindShield' }, 0, both)).toThrow(/albergue ampliado/);
     // The belt has two places for any accessory (docs/FASE9.md §4); special rounds go no more.
     run(c, { type: 'buy', item: 'smokeGrenade' }, 0, both);
+    run(c, { type: 'vote', accept: true }, 1, both);
     run(c, { type: 'equip', soldier: mine.id, slot: 'ammo', item: 'smokeGrenade' }, 0, both);
     expect(itemsFree(c, 'smokeGrenade')).toBe(0);
     c.inventory.apRounds = 1;

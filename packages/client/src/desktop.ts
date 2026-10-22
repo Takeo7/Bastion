@@ -11,6 +11,8 @@ export interface DesktopBridge {
   toLauncher(note?: string): void;
   /** This window is the host's: quitting disconnects the partner until it is opened again. */
   hosting: boolean;
+  /** Out of full screen, for a screen with nothing else on Esc. */
+  leaveFullscreen(): void;
 }
 
 /** The app's bridge, or null in a browser. */

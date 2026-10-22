@@ -1113,13 +1113,18 @@ function grave(into: THREE.Group, at: { x: number; z: number }, facing: number, 
   into.add(candle);
 }
 
+/** A pack's atlas as a material of its own, shared. */
+function atlasLook(atlas: AtlasId): THREE.MeshStandardMaterial {
+  let material = atlasMaterials.get(atlas);
+  if (!material) atlasMaterials.set(atlas, (material = new THREE.MeshStandardMaterial({ map: atlasTexture(atlas), roughness: 0.85 })));
+  return material;
+}
+
 function propMeshes(id: PropId, m: THREE.Matrix4, into: THREE.Group): boolean {
   const parts = syntyProp(id);
   if (!parts) return false;
   for (const part of parts) {
-    let material = atlasMaterials.get(part.atlas);
-    if (!material) atlasMaterials.set(part.atlas, (material = new THREE.MeshStandardMaterial({ map: atlasTexture(part.atlas), roughness: 0.85 })));
-    const mesh = new THREE.Mesh(part.geometry, material);
+    const mesh = new THREE.Mesh(part.geometry, atlasLook(part.atlas));
     mesh.matrixAutoUpdate = false;
     mesh.matrix.copy(m).multiply(part.matrix);
     mesh.castShadow = mesh.receiveShadow = true;
@@ -1161,8 +1166,20 @@ function firstMaterial(o: THREE.Object3D): THREE.Material | undefined {
   return found;
 }
 
-/** A piece's models round its footprint's middle, in `material`; `lacking` if some are still loading. */
-function pieceGroup(id: PieceId, rot: number, level: number, material: THREE.Material, lacking: () => void): THREE.Object3D {
+/**
+ * A piece in its own colours, turned to the front, centred at the origin, once its models have loaded (UI: Construir's
+ * pictures, pieceIcons.ts; Ana, 21/10 #35).
+ */
+export async function pieceLook(id: PieceId, level = 1): Promise<THREE.Object3D> {
+  let missing = false;
+  const out = pieceGroup(id, 0, level, null, () => (missing = true));
+  if (!missing) return out;
+  await syntyPropsLoaded();
+  return pieceGroup(id, 0, level, null, () => undefined);
+}
+
+/** A piece's models round its footprint's middle, in `material` (null: each on its own atlas); `lacking` if some are still loading. */
+function pieceGroup(id: PieceId, rot: number, level: number, material: THREE.Material | null, lacking: () => void): THREE.Object3D {
   const def = PIECES[id];
   const [w, h] = rot % 2 ? [def.size[1], def.size[0]] : def.size;
   const width = w + 2;
@@ -1183,7 +1200,7 @@ function pieceGroup(id: PieceId, rot: number, level: number, material: THREE.Mat
       const parts = syntyProp(pid);
       if (!parts) lacking();
       for (const part of parts ?? []) {
-        const mesh = new THREE.Mesh(part.geometry, material);
+        const mesh = new THREE.Mesh(part.geometry, material ?? atlasLook(part.atlas));
         mesh.matrixAutoUpdate = false;
         mesh.matrix.copy(m).multiply(part.matrix);
         inner.add(mesh);

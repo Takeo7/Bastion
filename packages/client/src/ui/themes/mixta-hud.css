@@ -744,6 +744,10 @@
   text-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
 }
 
+:root[data-ui='mixta'] .mission-intro h1.long {
+  font-size: 36px;
+}
+
 :root[data-ui='mixta'] .mission-intro small {
   font-family: var(--t-font-title);
   font-weight: 500;

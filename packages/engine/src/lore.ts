@@ -5,7 +5,7 @@
  */
 import type { MissionOffer, MissionReward, RegionId } from './campaign';
 import type { Room } from './loot';
-import { DISMANTLE_BACK, FELL_COST, type PieceId } from './base';
+import { FELL_COST, type PieceId } from './base';
 import { FOUND_WEAPONS, NIGHT, TEMPLATES, THIRD_ACTION_RANK, type RangeTable } from './content';
 import { BAR_GROWTH, DEED_XP, RANK_STEP, SKILLS, VETERANCY, WILL_PER_RANK, type DeedId, type Deeds, type SkillId } from './skills';
 import type { Alarm, Biome, DecorKind, FoundWeaponId, ItemId, MissionKind, Site, TemplateId } from './types';
@@ -54,7 +54,7 @@ export function doomChangeText(level: number, delta: number): string {
 
 /** One line for each word of the world, for tooltips. */
 export const GLOSSARY: Record<string, string> = {
-  Pandemia: 'Empezó hace dos inviernos en el Instituto Galen. Quien se contagia muere en un día y se levanta como zombi.',
+  Pandemia: 'Empezó hace dos inviernos en el Instituto Koper. Quien se contagia muere en un día y se levanta como zombi.',
   Zombi: 'Va a por el vivo que ve. Si no ve a nadie, va hacia el último ruido que oyó.',
   Corredor: 'Zombi rápido que ve de lejos.',
   Acorazado: 'Zombi con chaleco y casco: tiene blindaje.',
@@ -67,28 +67,28 @@ export const GLOSSARY: Record<string, string> = {
   Sirena: 'Mientras suena, atrae a todos los zombis de la zona. Puede ser un coche patrulla, una ambulancia o la alarma de una nave.',
   Ruido: 'Cada acción hace ruido. Un disparo se oye a entre 12 y 22 casillas, según el arma; una granada, a 26; un registro, a 2. Los enemigos van a ver qué ha sido. El ruido no te descubre: te descubre que te vean.',
   Saqueo: 'Misión de registrar y volver con el botín. No hay límite de turnos, pero entran zombis por los bordes, y antes cuanto más ruido hagas.',
-  Registrar: 'Una acción dentro de una habitación. Da lo que haya según el sitio: comida y medicinas en las casas, piezas en las oficinas, comida en las tiendas, de todo en los almacenes. Cada habitación se registra una sola vez. Hace un poco de ruido.',
-  Cajas: 'Hasta tres por mapa, cada una de un tipo: armas, medicinas, munición o comida. Su marca queda en el mapa en cuanto se ve. Se abren con una acción, desde al lado, y siempre dan lo suyo.',
-  Mochila: 'Tres huecos por soldado, cuatro con la Chapistería. Soltar es gratis; pasar algo a un soldado de al lado cuesta una acción. Las armas y las medicinas se pueden usar ahí mismo. El botín solo cuenta si vuelve. Lo que llevaba un caído se queda en el suelo, y otro puede recogerlo.',
-  Armería: 'Las armas del Bastión: las encontradas, las que hace el Taller y las que llegan al subir de nivel. Cada una es de quien la lleva.',
-  Cargadores: 'Los de repuesto los hace el Taller: cada soldado sale con uno por tanda hecha, hasta tres. Valen para todas las armas. Recargar llena primero el arma principal y luego la pistola. Registrando se encuentran más.',
-  Suministros: 'Sirven para construir, reparar, subir de nivel, reclutar, equipar y contactar zonas. Se consiguen en las misiones y de los enclaves.',
-  Medicinas: 'Se cuentan en ✚. Tratar a un mordido cuesta 2 (1 con la Enfermería a nivel 2). Una dosis acorta la baja de un herido. En la misión, las de la mochila curan 3 con una acción.',
+  Registrar: 'Una acción, dentro de una habitación; cada una se registra una vez. Casas: comida y medicinas. Oficinas: piezas. Tiendas: comida. Almacenes: de todo.',
+  Cajas: 'Hasta tres por mapa: armas, medicinas, munición o comida. Se abren con una acción, desde al lado.',
+  Mochila: 'Tres huecos, cuatro con la Chapistería. Soltar no cuesta; pasar algo al de al lado, una acción. El botín cuenta si vuelve. Lo de un caído queda en el suelo.',
+  Armería: 'Las armas del Bastión. Cada una es de quien la lleva.',
+  Cargadores: 'Los hace el Taller: cada soldado sale con uno por tanda, hasta tres. Valen para todas las armas; recargar llena primero la principal.',
+  Suministros: 'Para construir, reparar, subir de nivel, reclutar, equipar y contactar zonas.',
+  Medicinas: 'Tratar a un mordido cuesta 2 ✚ (1 con la Enfermería a nivel 2). Una dosis quita una misión de baja a un herido. En la misión, curan 3 con una acción.',
   Mordisco: 'El de un zombi puede contagiar. En la misión, el contagiado pierde 1 de salud cada turno y, sin Cuarentena, no puede subir a La Lata. Al volver tiene fiebre: si no se le trata, se convierte. La Enfermería y la Cuarentena dan más tiempo. Si muere contagiado, se levanta.',
   Cuarentena: 'Sin ella, un mordido no puede subir a La Lata y se queda en la misión.',
-  Comida: 'Se cuenta en raciones. Cada misión son cinco días, y cada día se gasta una ración por cada cuatro soldados. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad.',
+  Comida: 'Cada soldado come una ración al día; una misión es un día. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad.',
   Huerto: 'Cada Huerto da 5 raciones por misión a nivel 1, 10 a nivel 2 y 15 a nivel 3.',
-  Piezas: 'Con ellas el Taller hace armas y armaduras mejores, y se reponen las trampas. Salen de almacenes, maleteros y oficinas, y del equipo de los Acorazados.',
+  Piezas: 'Para que el Taller haga armas y armaduras mejores, y para reponer trampas.',
   Noche: `De noche, a oscuras, tus soldados ven ${NIGHT_SIGHT} casillas en vez de ${DAY_SIGHT}. Una farola alumbra ${NIGHT.streetLight} casillas a su alrededor, y un foco, ${NIGHT.floodlight}. Hasta que te descubren, los enemigos notan a un soldado a oscuras a la mitad de distancia. Hay más zombis, y el botín vale la mitad más.`,
-  Enclave: 'Grupo de supervivientes con el que hay contacto por radio. Mientras su zona no caiga, manda suministros en cada convoy.',
+  Enclave: 'Supervivientes con los que hay un trato por radio: en cada convoy dejan lo pactado en un punto de cambio, mientras su zona no caiga. No son amigos.',
   Rumor: 'Algo que se oye por radio en una zona. Si se escucha durante unas misiones, se sabe qué es.',
   Encargo: 'Cadena de misiones y decisiones con un desenlace que se queda.',
   'Taller de oficios': 'Cada misión llena más las barras.',
-  'La Lata': `El vehículo que lleva a la escuadra y la espera en la zona de evacuación. Empieza siendo un todoterreno; luego, furgoneta, camión y autobús. Cuanto más grande, más soldados caben.`,
+  'La Lata': 'Lleva a la escuadra y la espera en la zona de evacuación. Todoterreno, furgoneta, camión y autobús: cada uno, más plazas.',
   Evacuar: `Se sale ${BUS.in} desde la zona de evacuación: lo pide un jugador y lo acepta el otro. Quien esté fuera cuando sale, se pierde. En una Limpieza, salir es retirarse, y la misión se pierde.`,
   Recluta: 'Superviviente recién llegado, con cuchillo y pistola.',
   Barras: 'Seis: Disparo, Cuerpo a cuerpo, Lanzar, Curar, Investigar y Forma física. Se llenan haciendo eso mismo en las misiones. Cada barra llena sube un poco su habilidad y da un punto para el tablero.',
-  Tablero: 'Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, siempre al lado de una que ya tenga. Lo comprado no se pierde.',
+  Tablero: 'Las habilidades de cada soldado, alrededor de su Instinto. Se compran con puntos de habilidad, al lado de una que ya tenga.',
   Veteranía: 'Cuenta los puntos gastados en el tablero: un rango cada cinco (Novato, Fogueado, Curtido, Veterano y Superviviente). Cada rango da +10 de voluntad, y desde Veterano hay una tercera acción por turno.',
 };
 
@@ -161,11 +161,11 @@ export interface RegionLore {
 }
 
 export const REGION_LORE: Record<RegionId, RegionLore> = {
-  weu: { ally: 'el Refugio de Brena', situation: 'Los pueblos de la sierra, bajo el Bastión. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
+  weu: { ally: 'el Refugio de Bielsa', situation: 'Los pueblos de la sierra, bajo el Bastión. La nieve y la altura frenan a los zombis; los Cuervos, no.' },
   afr: { ally: 'los del Hospital', situation: 'La primera ciudad caída. Calles llenas de zombis y farmacias que nadie ha terminado de vaciar.' },
   eas: { ally: 'la Red Callada', situation: 'Un embalse y una central muerta. La Red Callada sobrevivió hablando en lengua de signos: sin un ruido.' },
   eeu: { ally: 'los Pastores', situation: 'Valles cerrados y aldeas que aún resisten. Los Cuervos cobran aquí su peaje.' },
-  me: { ally: 'los del Instituto', situation: 'La ciudad muerta donde empezó todo. El Instituto Galen sigue en pie, y nadie quiere entrar.' },
+  me: { ally: 'los del Instituto', situation: 'La ciudad muerta donde empezó todo. El Instituto Koper sigue en pie, y nadie quiere entrar.' },
   na: { ally: 'los Camioneros', situation: 'La llanura por donde sube la Marea. Los camioneros la vigilan desde la carretera.' },
   sa: { ally: 'el Sindicato de la Mina', situation: 'Minas y carreteras cortadas. Los mineros resisten con túneles y dinamita.' },
   oce: { ally: 'las Bodegas', situation: 'Granjas, bodegas y un río. Es donde hay comida, y por eso donde más se pelea.' },
@@ -454,7 +454,7 @@ export const BOARD_ABOUT: Record<string, string> = {
   blastWave: 'La metralla vuela más lejos de lo que parece.',
   bandolier: 'Una cinta cruzada al pecho, y una granada más.',
   boulder: 'No hace falta que sea bonita, solo que pese.',
-  demolition: 'Abría galerías en la mina de Carvik con dinamita.',
+  demolition: 'Abría galerías en la mina de Rudnik con dinamita.',
   restoration: 'Una vuelta por todos, sin dejarse a nadie.',
   surgeon: 'Ha cosido en sitios peores que este.',
   lullaby: 'Sabe qué decir para que nadie salga corriendo.',
@@ -500,7 +500,7 @@ export const BOARD_ABOUT: Record<string, string> = {
   temperance: 'Ha oído gritos peores que los de un Chillón.',
   lynx: 'Ve moverse algo en la niebla antes que nadie.',
   bodge: 'No queda bonito, pero aguanta hasta casa.',
-  marathon: 'Va y vuelve de Brena sin parar.',
+  marathon: 'Va y vuelve de Bielsa sin parar.',
   ironBody: 'Las caídas, los golpes, el frío: todo le resbala.',
   poise: 'Nada le hace perder la calma.',
   feline: 'Cae de pie y sigue corriendo.',
@@ -525,7 +525,7 @@ export const BOARD_ABOUT: Record<string, string> = {
   cartridge: 'Cada hueco del cinturón, aprovechado.',
   flares: 'Para cuando hay que cegar a muchos a la vez.',
   lure: 'Los muertos van al ruido. Basta con decidir dónde suena.',
-  ironArm: 'Años cargando sacos en el puerto de Galen.',
+  ironArm: 'Años cargando sacos en el puerto de Koper.',
   sling: 'Una tira de cuero y un buen giro.',
   miracles: 'Lo que otros darían por perdido, se cose.',
   presence: 'Basta con que esté para que los demás se calmen.',
@@ -833,12 +833,12 @@ export function nestNoContactTip(id: RegionId, cost: number): string {
 
 /** «Qué hace» for a contact: who answers, what they send and what it opens. */
 export function contactAim(id: RegionId, income: number): string {
-  return `Hablar por radio con ${REGION_LORE[id].ally}: ${income} § en cada convoy mientras su zona no caiga, y se pueden asaltar sus Nidos.`;
+  return `Cerrar un trato por radio con ${REGION_LORE[id].ally}: ${income} § en cada convoy, en un punto de cambio, mientras su zona no caiga. Y se pueden asaltar sus Nidos.`;
 }
 
 /** «Qué hace» for listening to a rumour: what it may turn out to be. */
 export function rumorAim(zone: string): string {
-  return `Escuchar el rumor ${ofZone(zone)} unos días: puede ser un encargo, una misión mejor pagada, un alijo o nada.`;
+  return `Escuchar el rumor ${ofZone(zone)} unas misiones: puede ser un encargo, una misión mejor pagada, un alijo o nada.`;
 }
 
 /** «Qué hace» for an order to the Taller (progression.ts CRAFTS): its `kind` and `the`. */
@@ -1065,6 +1065,10 @@ export function quitGuestWarning(partner: string): string {
 export const HOST_CLOSED = {
   back: 'Cuando la vuelva a abrir, podrás entrar de nuevo.',
   retry: 'Volver a entrar',
+  /** «Volver a entrar» with the game still closed. */
+  notYet: 'Aún no está abierta.',
+  /** In the app: back to its start screen. */
+  home: 'Ir al inicio',
 };
 
 /** «Arturo ha cerrado la partida.»; without the host's name, a neutral one. */
@@ -1223,7 +1227,7 @@ export const PIECE_TEXT: Record<PieceId, PieceText> = {
   range: { name: 'Campo de tiro', the: 'el Campo de tiro', a: 'un Campo de tiro', line: 'Puntería para todos.', levels: ['Dianas de cartón en una trinchera del pinar.', 'Siluetas de zombi a cincuenta metros.', 'Blancos móviles, con una polea de Teo.'] },
   training: {
     name: 'Centro de entrenamiento', the: 'el Centro de entrenamiento', a: 'un Centro de entrenamiento',
-    line: 'Los reclutas llegan sabiendo más; junto a la caravana, reclutar cuesta menos.',
+    line: 'Los reclutas llegan sabiendo más.',
     levels: ['Un patio despejado y un horario.', 'Una semana de prácticas antes de salir.', 'Alguien que ya ha vuelto de fuera les enseña.'],
   },
   simulation: {
@@ -1233,7 +1237,7 @@ export const PIECE_TEXT: Record<PieceId, PieceText> = {
   },
   garage: {
     name: 'Chapistería', the: 'la Chapistería', a: 'una Chapistería',
-    line: 'Las heridas curan antes.',
+    line: 'Las heridas curan un día antes por nivel, y la mochila lleva un hueco más.',
     levels: [`${BUS.name} lleva camilla.`, 'Mantas y un botiquín fijo atrás.', `${BUS.name} ya no para a repostar con heridos dentro.`],
   },
   echoes: {
@@ -1255,6 +1259,40 @@ export const PIECE_TEXT: Record<PieceId, PieceText> = {
   turret: { name: 'Torreta', the: 'la torreta', a: 'una torreta', line: 'Dispara sola, en el turno enemigo, a lo que se acerque. Sin munición se calla; se recarga con piezas.' },
 };
 
+/**
+ * What a building gives at a level, for its card (Ana, 21/10 #42: the figure
+ * first, big): `short` for the ladder of levels («+5»), `full` for the line
+ * («+5 raciones por misión»). The engine sums them over the base (campaign.ts:
+ * gardenYield, beds, healRate, shopPrice, rangeAim, rewardMultiplier,
+ * garageCut, memorialWill, the training's seasoned, learningBonus,
+ * contactCapacity, the Cuarentena's fever days); these are one building on its
+ * own, and change with them. Defences, traps and the caravan count nothing.
+ */
+const PIECE_FIGURES: Partial<Record<PieceId, (level: number) => { short: string; full: string } | null>> = {
+  garden: (l) => ({ short: `+${5 * l}`, full: `+${5 * l} raciones por misión` }),
+  quarters: (l) => ({ short: `+${1 + l}`, full: `+${1 + l} camas` }),
+  infirmary: (l) => ({ short: `×${1 + l}`, full: `Heridas: curan ×${1 + l} de rápido` }),
+  workshop: (l) => ({ short: `−${25 + 10 * (l - 1)} %`, full: `Accesorios −${25 + 10 * (l - 1)} %` }),
+  range: (l) => ({ short: `+${[3, 6, 10][l - 1] ?? 10}`, full: `Puntería +${[3, 6, 10][l - 1] ?? 10}` }),
+  simulation: (l) => ({ short: `+${25 + 15 * (l - 1)} %`, full: `Suministros +${25 + 15 * (l - 1)} %` }),
+  garage: (l) => ({ short: `−${l}`, full: `Heridas: −${l} ${l === 1 ? 'día' : 'días'}` }),
+  memorial: (l) => (l >= 2 ? { short: `+${l === 2 ? 5 : 10}`, full: `Voluntad +${l === 2 ? 5 : 10}` } : null),
+  quarantine: (l) => (l >= 2 ? { short: `+${l - 1}`, full: `Fiebre: +${l - 1} ${l === 2 ? 'día' : 'días'}` } : null),
+  training: (l) => ({ short: `+${l}`, full: `Reclutas: +${l} ${l === 1 ? 'nivel' : 'niveles'}` }),
+  echoes: (l) => ({ short: `+${20 * l} %`, full: `Barras +${20 * l} %` }),
+  radio: (l) => ({ short: `+${1 + l}`, full: `+${1 + l} contactos` }),
+};
+
+/** A building's figure at `level`, for its card: «+5 raciones por misión»; null when it counts nothing. */
+export function pieceFigure(piece: PieceId, level: number): string | null {
+  return PIECE_FIGURES[piece]?.(level)?.full ?? null;
+}
+
+/** The same, the number alone, for the ladder of levels: «+5», «×2», «−25 %». */
+export function pieceFigureShort(piece: PieceId, level: number): string | null {
+  return PIECE_FIGURES[piece]?.(level)?.short ?? null;
+}
+
 /** A piece's state, a tag beside its name («Foso con pinchos · por reponer») and its line in the card; never gendered, the names are of both. */
 export const PIECE_STATE = {
   spent: 'por reponer',
@@ -1274,16 +1312,11 @@ export const BUILD_TEXT = {
   rotate: 'Girar',
   upgrade: 'Mejorar',
   rearm: 'Reponer',
-  fellTip: `Talar: cuesta ${FELL_COST} suministros, y el sitio queda libre.`,
-  dismantleTip: `Desmontar: se recupera ${DISMANTLE_BACK === 0.5 ? 'la mitad' : `el ${Math.round(DISMANTLE_BACK * 100)} %`} de lo que costó, menos si está dañado.`,
-  /** The palette's tabs, by PieceKind. */
-  tabs: { building: 'Edificios', defence: 'Defensas', trap: 'Automáticas' },
-  /** The card's kicker, by PieceKind (a building adds its level: buildingKicker). */
-  kinds: { building: 'EDIFICIO', defence: 'DEFENSA', trap: 'AUTOMÁTICA' },
+  /** The palette's panel titles. */
+  tabs: { building: 'Edificios', defence: 'Defensas' },
   paletteHelp: 'Elige una pieza y ponla en el claro: R la gira; Esc o el botón derecho la sueltan.',
   /** The bottom line, by what is in hand: felling, or nothing (a piece in hand: holdingLine). */
   felling: 'Arrastra sobre los árboles que quieras talar. Esc para dejarlo.',
-  idle: 'Pulsa una pieza del claro para repararla, mejorarla o desmontarla.',
   noTrees: 'Aquí no hay árboles: arrastra sobre el pinar.',
   /** A piece with the partner connected: its tag (it goes to a vote). */
   vote: 'se propone',
@@ -1345,7 +1378,7 @@ export function outingsMark(n: number): string {
 
 /** Its tooltip: time is missions now, and building is free of it (`level`: the Bastion's, for the doom's name). */
 export function timeHelp(level: number): string {
-  return `El tiempo pasa con cada misión: mientras la escuadra está fuera, en el Bastión se curan las heridas, se come y ${doomSubject(level)} avanza. Construir, comprar o reclutar no gasta tiempo.`;
+  return `Cada misión es un día: se curan las heridas, se come y ${doomSubject(level)} avanza. Construir, comprar o reclutar no gasta tiempo.`;
 }
 
 /** What locks a piece, an upgrade or a craft, by the Bastion's level: «Se desbloquea con la casa móvil.»; the palette's tag is its name (bastionLevelName). */
@@ -1378,20 +1411,12 @@ export function pieceHint(piece: PieceId, what: { hp?: [number, number]; state?:
   return what.hp ? `${name} · ${what.hp[0]}/${what.hp[1]}` : name;
 }
 
-/** The card's kicker for a building: «EDIFICIO · NIVEL 2». */
-export function buildingKicker(level: number): string {
-  return `${BUILD_TEXT.kinds.building} · NIVEL ${level}`;
-}
-
-/** The card's figures: «Aguante 12/30», «Usos 0/3», «Junto a: Enfermería, Huerto». */
+/** The card's figures: «Aguante 12/30», «Usos 0/3». */
 export function holdsLine(hp: number, full: number): string {
   return `Aguante ${hp}/${full}`;
 }
 export function usesLine(left: number, full: number): string {
   return `Usos ${left}/${full}`;
-}
-export function besideLine(names: readonly string[]): string {
-  return `Junto a: ${names.join(', ')}`;
 }
 
 /** The card's buttons with their price: «Reparar · 4 §», «Mejorar · 60 §», «Reponer · 1 pieza», «Desmontar · +12 §». */
@@ -1426,11 +1451,11 @@ export function buildShortLine(supplies: number, parts = 0): string {
 
 /**
  * What the rations are for (playtest 18/10 #37), for the top mark's tooltip:
- * five days a mission, a ration a day for every four soldiers (`perMission`:
- * dailyRations × DAYS_PER_MISSION).
+ * a ration a soldier a day, and a mission is one day (playtest 21/10 #34).
+ * The figures are on the bar above it (UI), so none here.
  */
-export function rationsHelp(perMission: number): string {
-  return `Cada día se gasta una ración por cada cuatro soldados, y una misión son cinco días: ahora, ${perMission} raciones por misión. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad. Se consiguen en las misiones, en los Huertos y de los enclaves.`;
+export function rationsHelp(_perMission?: number): string {
+  return 'Cada soldado come una ración al día; una misión es un día. Sin raciones hay hambre: −10 de voluntad en las misiones y las heridas curan a la mitad de velocidad.';
 }
 
 /** The agenda's line when there is food for less than two missions (`missions`: how many it lasts, 0 or 1). */
@@ -1679,12 +1704,12 @@ export const PREMISE = {
   title: 'El claro',
   lines: [
     'La infestación parece haber **aflojado este invierno**. Las nevadas han dejado a muchos caminantes sepultados y, aunque salir sigue siendo peligroso, quizá sea el momento de volver a intentarlo.',
-    'Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en **un claro del pinar**, sobre Brena, con una caravana y lo puesto. Necesitamos **comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.',
+    'Atalaya, la vieja estación militar, **cayó en otoño**. Los que salimos con vida hemos parado en **un claro del pinar**, sobre Bielsa, con una caravana y lo puesto. Necesitamos **comida, medicinas y suministros** si queremos llegar todos vivos al final de la temporada.',
     'Toca volver a sacar **La Lata**, ese trasto forrado con chapas que nos sacó de Atalaya, y salir a buscar lo que nos hace falta.',
   ],
 };
 
-/** Where an ordinary operation goes, by kind of map: it gives the mission its name («La gasolinera de Velsa»). */
+/** Where an ordinary operation goes, by kind of map: it gives the mission its name («La gasolinera de Sappada»). */
 const MISSION_PLACES: Record<Biome, string[]> = {
   city: ['El mercado', 'La comisaría', 'El colegio', 'El hospital', 'La estación de autobuses', 'El centro comercial', 'Los juzgados', 'La biblioteca'],
   wilds: ['La granja', 'El camping', 'El pinar', 'La ermita', 'La casa de campo'],
@@ -1700,7 +1725,7 @@ const SITE_PLACES: Record<Site, string[]> = {
   industrial: ['El polígono', 'Los muelles de carga', 'Las naves', 'El depósito de contenedores'],
 };
 
-/** An ordinary operation's name: a place in the zone, «El colegio de Corran», «La granja del Pantano Gris». */
+/** An ordinary operation's name: a place in the zone, «El colegio de Tarbes», «La granja del Pantano Gris». */
 export function missionName(biome: Biome, zone: string, seed: number, site?: Site): string {
   const places = site ? SITE_PLACES[site] : MISSION_PLACES[biome];
   return `${places[Math.abs(seed) % places.length]!} ${ofZone(zone)}`;
@@ -1711,17 +1736,17 @@ export function missionName(biome: Biome, zone: string, seed: number, site?: Sit
 /**
  * The places one knows the valley by, named small on its map under the zones'
  * names (Arte places them; docs/LORE.md «El mundo»). Each says something of its
- * zone: the Peaje is where the Cuervos charge Velsa its toll, the Emisora is
+ * zone: the Peaje is where the Cuervos charge Sappada its toll, the Emisora is
  * the Voz's, the Pico Gris holds the repeater of chapter 4.
  */
 export const LANDMARKS = {
-  /** The home: a clearing in the pines above Brena (the key is the old one, kept for the map). */
+  /** The home: a clearing in the pines above Bielsa (the key is the old one, kept for the map). */
   atalaya: 'El Bastión',
-  /** Brena: the old station, burnt in the autumn (Arturo, 18/10: «Atalaya cayó»); just its name, the drawing says the rest. */
+  /** Bielsa: the old station, burnt in the autumn (Arturo, 18/10: «Atalaya cayó»); just its name, the drawing says the rest. */
   ruins: 'Atalaya',
-  /** Brena: the village of the bells (quest «Las campanas de Telm»). */
-  telm: 'Telm',
-  /** Carvik: the Sindicato's mine. */
+  /** Bielsa: the village of the bells (quest «Las campanas de Tende»). */
+  telm: 'Tende',
+  /** Rudnik: the Sindicato's mine. */
   mine: 'Mina',
   /** El Pantano Gris: the reservoir's dam, its dead power plant and the peak with the repeater. */
   dam: 'Presa',
@@ -1729,12 +1754,12 @@ export const LANDMARKS = {
   peak: 'Pico Gris',
   /** La Vega: the Bodegas' cellars. */
   wineries: 'Bodegas',
-  /** Velsa: the Cuervos' toll on the road. */
+  /** Sappada: the Cuervos' toll on the road. */
   toll: 'Peaje',
-  /** Corran: chapter 2. */
+  /** Tarbes: chapter 2. */
   hospital: 'Hospital',
-  /** Galen: where it began, and its port. */
-  institute: 'Instituto Galen',
+  /** Koper: where it began, and its port. */
+  institute: 'Instituto Koper',
   port: 'Puerto',
   /** Los Llanos de Ceniza: the Voz's station, and the Camioneros' stop. */
   station: 'Emisora',
@@ -1835,7 +1860,7 @@ const BRIEFINGS: Record<MissionKind, string[]> = {
   ],
   recovery: [
     `Allí quedó el mapa de los pozos de la comarca. Sin él, el agua del verano es una apuesta. Recuperadlo y volved ${BUS.to}.`,
-    'Uno de sus mensajeros murió allí, a la intemperie. La saca del correo sigue junto al cuerpo. Recuperadla antes de que se acabe el tiempo.',
+    'Allí cayó un dron que alguien usaba para vigilar las carreteras. Lo que grabó dice por dónde pasan los muertos. Recuperadlo antes de que se acabe el tiempo.',
     'Los Cuervos escondieron allí su libro de cuentas y no volvieron a por él: los muertos llegaron antes. Dice quién les paga y por dónde pasan. Traedlo.',
   ],
   sabotage: [
@@ -1874,7 +1899,7 @@ function briefingSeed(o: MissionOffer): number {
  * lies in the street.
  */
 /** Never anything a search turns up (playtest 18/10 #13): the objective must not look like the loot. */
-const RECOVERY_ITEMS: { item: string; outdoors?: true }[] = [{ item: 'el mapa de los pozos' }, { item: 'la saca del correo', outdoors: true }, { item: 'el libro de cuentas' }];
+const RECOVERY_ITEMS: { item: string; outdoors?: true }[] = [{ item: 'el mapa de los pozos' }, { item: 'el dron', outdoors: true }, { item: 'el libro de cuentas' }];
 
 function ordinaryRecovery(o: MissionOffer): { item: string; outdoors?: true } | undefined {
   if (o.kind !== 'recovery' || o.story || o.quest || o.final || o.facility) return undefined;
@@ -1909,7 +1934,7 @@ function briefingText(o: MissionOffer, level: number, simon: SimonChoice): strin
     return 'La Marea está en la sierra y la Congregación la empuja desde su campamento. La Lata se la llevará con la sirena; vosotros, al campamento. Abatid a todo lo que haya. No habrá otra oportunidad.';
   }
   if (o.facility) {
-    const effect = level >= PARTITURA_LEVEL ? 'acerca la Marea un kilómetro cada catorce días' : 'hace crecer la infestación cada catorce días';
+    const effect = level >= PARTITURA_LEVEL ? 'acerca la Marea un kilómetro cada 3 misiones' : 'hace crecer la infestación cada 3 misiones';
     return `Este Nido ${effect}. Lo mantiene vivo la alarma de una nave, que no deja de sonar: apagadla antes de que termine la cuenta atrás.`;
   }
   const options = BRIEFINGS[o.kind];
@@ -1942,7 +1967,7 @@ export const EXPEDIENTE: ExpedientePage[] = [
     paragraphs: [
       'Hace dos inviernos llegó la Pandemia. Quien se contagia muere en un día y se levanta. Cayeron las ciudades, se fue el ejército y la radio se quedó muda.',
       'Atalaya era una estación militar: muros de hormigón, un refugio bajo tierra y una sola carretera. Aguantó dos años. En otoño llegó una horda y fue derecha a ella, como si alguien le hubiera enseñado el camino. Salimos en el todoterreno de Teo, con la caravana enganchada detrás. El autobús se quedó en la cochera de Atalaya, y el nombre de La Lata ha pasado al todoterreno.',
-      'Hemos parado en un claro del pinar, sobre Brena. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.',
+      'Hemos parado en un claro del pinar, sobre Bielsa. Lo que se levante aquí será el Bastión. Lo dirigen dos personas, y lo importante lo deciden juntas. El año pasado, en otro refugio, una líder sola lo vendió a los Cuervos a cambio de su vida.',
     ],
     note: 'Lo que entra por la puerta se apunta aquí. — N. A.',
   },
@@ -1987,10 +2012,10 @@ export const EXPEDIENTE: ExpedientePage[] = [
     note: 'No es un experimento. Es una niña. — A. N.',
   },
   {
-    title: 'Galen',
-    summary: 'La Pandemia salió del Instituto Galen. Teo estaba allí aquella noche.',
+    title: 'Koper',
+    summary: 'La Pandemia salió del Instituto Koper. Teo estaba allí aquella noche.',
     paragraphs: [
-      'Los cuadernos del Instituto Galen cuentan lo que pasó: buscaban una vacuna y crearon otra cosa. La primera muestra se perdió una noche de octubre.',
+      'Los cuadernos del Instituto Koper cuentan lo que pasó: buscaban una vacuna y crearon otra cosa. La primera muestra se perdió una noche de octubre.',
       'Aquella noche había un vigilante de guardia. Firmó el parte de entrada a las once y el de salida a las seis. Entre medias, una puerta quedó abierta.',
       'Ese vigilante era Teodor Vidić.',
     ],
@@ -2010,7 +2035,7 @@ export const EXPEDIENTE: ExpedientePage[] = [
     title: 'La vacuna',
     summary: 'La vacuna está lista y la Marea, en la sierra. Allí decidiréis los dos qué hacer con ella.',
     paragraphs: [
-      'La Dra. Nwosu ha terminado la vacuna: la sangre de Noor, los cuadernos de Galen y muchas noches sin dormir.',
+      'La Dra. Nwosu ha terminado la vacuna: la sangre de Noor, los cuadernos de Koper y muchas noches sin dormir.',
       'La Marea ya está en la sierra. Si la paramos, habrá que decidir qué hacemos con la vacuna, y eso lo decidiréis vosotros dos.',
     ],
     note: 'Volved. — N. A. y T. V.',
@@ -2052,14 +2077,14 @@ export const NWOSU_CHAPTER = 2;
 /** One story mission per Bastion level, in order; the final mission needs all of them. */
 export const STORY: StoryChapter[] = [
   {
-    title: 'El consultorio de Brena',
+    title: 'El consultorio de Bielsa',
     kind: 'recovery',
     biome: 'city',
     region: 'weu',
     difficulty: 1,
     reward: { credits: 90 },
     briefing:
-      'El consultorio de Brena, el pueblo de abajo, sigue cerrado. En su nevera quedaba insulina, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Buscad una entrada y traed la insulina.',
+      'El consultorio de Bielsa, el pueblo de abajo, sigue cerrado. En su nevera quedaba insulina, y con este frío puede que siga buena. En el campamento hay quien no pasará el invierno sin ella.\n\nLa nieve ha sepultado a muchos caminantes, pero no sabemos cómo estará el pueblo. Buscad una entrada y traed la insulina.',
     signature: '',
     item: 'la insulina',
     after: 'La insulina ya está en la caravana, en una caja con nieve. Hay para todo el invierno.',
@@ -2073,7 +2098,7 @@ export const STORY: StoryChapter[] = [
     reward: { credits: 60 },
     prize: 'la Dra. Nwosu se une al Bastión (el botín vale un 25 % más)',
     briefing:
-      'Una doctora lleva una semana encerrada en el hospital de Corran, con el edificio lleno de zombis. Se llama Amara Nwosu y trabajaba en el Instituto Galen. Llegad hasta ella y sacadla con vida.',
+      'Una doctora lleva una semana encerrada en el hospital de Tarbes, con el edificio lleno de zombis. Se llama Amara Nwosu y trabajaba en el Instituto Koper. Llegad hasta ella y sacadla con vida.',
     signature: '— N. A.',
     vip: 'Dra. Amara Nwosu',
     after: 'La Dra. Nwosu se queda en el Bastión. Sabe qué aprovechar de cada saqueo: el botín valdrá un 25 % más.',
@@ -2119,14 +2144,14 @@ export const STORY: StoryChapter[] = [
     after: 'Noor está en la enfermería. Se contagió hace un mes y sigue viva. Nwosu no ha dormido.',
   },
   {
-    title: 'Los cuadernos de Galen',
+    title: 'Los cuadernos de Koper',
     kind: 'recovery',
     biome: 'facility',
     region: 'me',
     difficulty: 3,
     reward: { credits: 150, doom: 1 },
     briefing:
-      'Los cuadernos del Instituto Galen siguen en el laboratorio donde empezó todo. Sin ellos no habrá vacuna. Recuperad los cuadernos y sacadlos por la zona de evacuación.',
+      'Los cuadernos del Instituto Koper siguen en el laboratorio donde empezó todo. Sin ellos no habrá vacuna. Recuperad los cuadernos y sacadlos por la zona de evacuación.',
     signature: '— T. V.',
     item: 'los cuadernos',
     after: 'Los cuadernos ya están en el Bastión. Teo los ha leído enteros y lleva dos días sin hablar.',
@@ -2171,7 +2196,7 @@ export type Ending = 'break' | 'record';
 
 export const ENDING_TITLES: Record<Ending, string> = {
   break: 'La vacuna, para todos',
-  record: 'La vacuna, para la Red',
+  record: 'La vacuna, para quienes cumplieron',
 };
 
 /** The last page of the campaign. */
@@ -2181,7 +2206,7 @@ export function epilogue(outcome: 'victory' | 'defeat', ending: Ending | null, d
       return 'La Marea se deshizo en la sierra. Esa noche, Morse leyó la fórmula de la vacuna por todas las frecuencias, despacio, dos veces. La oyeron los enclaves, la oyeron los Cuervos y la oyó quien quisiera oírla. Nadie sabe qué harán con ella. Por primera vez en dos inviernos, nadie se queda fuera.';
     }
     if (ending === 'record') {
-      return 'La Marea se deshizo en la sierra. La vacuna salió del Bastión en La Lata, enclave por enclave, solo para quienes estuvieron. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en una caja del refugio.';
+      return 'La Marea se deshizo en la sierra. La vacuna salió del Bastión en La Lata, punto de cambio por punto de cambio, solo para quienes cumplieron sus tratos. El valle sobrevive. Fuera de él, la radio sigue pidiendo ayuda. La fórmula se queda en el Bastión, bajo llave.';
     }
     return 'La Marea se ha deshecho en la sierra. Por primera vez en dos inviernos, el valle duerme sin oír pasos.';
   }

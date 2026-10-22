@@ -142,6 +142,23 @@ def assign_atlases(mesh, slots, default):
         mesh.data.materials.append(atlas_material(default))
 
 
+def plain_slots(mesh, slots, uv, meshes=()):
+    """The faces of the slots painted from a texture we don't have (a wire's alpha: no atlas of ours in the MaterialList)
+    put on one spot `uv` of the atlas, one plain colour (they came out striped with whatever the atlas has there); all
+    of a mesh named with one of `meshes`."""
+    if not uv or not mesh.data.uv_layers:
+        return
+    whole = any(n in mesh.name for n in meshes)
+    if not whole and not slots:
+        return
+    layer = mesh.data.uv_layers[0].data
+    for p in mesh.data.polygons:
+        i = p.material_index
+        if whole or (i < len(slots) and not slots[i]):
+            for l in p.loop_indices:
+                layer[l].uv = uv
+
+
 # --------------------------------------------------------------- characters
 
 def clean_skeleton(arm, meshes):
@@ -642,6 +659,7 @@ def static(job, scale):
     for m in meshes:
         assign_atlases(m, slots.get(m.name) or slots.get(m.data.name), job['atlas'])
         keep_uv(m)
+        plain_slots(m, slots.get(m.name) or slots.get(m.data.name), job.get('plain'), job.get('plainMeshes', ()))
     turn = Matrix.Rotation(-math.pi / 2, 4, 'Z') if job['kind'] == 'weapon' else Matrix()
     # Boxes in the FBX's metres: cut to `keep`, then `hole` taken out (a guard tower's hut off its deck).
     bake(meshes)
@@ -721,6 +739,7 @@ def piece(job, scale):
     for m in meshes:
         assign_atlases(m, slots.get(m.name) or slots.get(m.data.name), job['atlas'])
         keep_uv(m)
+        plain_slots(m, slots.get(m.name) or slots.get(m.data.name), job.get('plain'))
     # In the FBX's metres first, so the box is as the manifest gives it; then to game units.
     bake(meshes)
     for m in meshes:

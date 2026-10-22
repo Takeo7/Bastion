@@ -5,7 +5,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { AWARE_RANGE, DIRS4, VIEW_CONE, type CoverLevel, type Place, type Vec2 } from '@bastion/engine';
+import { DIRS4, type CoverLevel, type Place, type Vec2 } from '@bastion/engine';
 import { tileToWorld } from './coords';
 import { graphics } from '../settings';
 import { tileLook, type TileLook } from './tileLooks';
@@ -43,9 +43,12 @@ const IDENTITY = new THREE.Quaternion();
 /** The brightest the ground goes under a shade (shadeMaterial). */
 const SHADE = new THREE.Color(0x56606a);
 const COLOR_DETECT = new THREE.Color(0xff4a4a);
-/** The detection light at the enemy: its colour and how much of it there (it fades to nothing at the edge). Very faint (#30). */
-const DETECT_GLOW = new THREE.Color(0xff3a26);
-const DETECT_ALPHA = 0.22;
+/**
+ * Being seen, one red for all of it (Ana, 21/10 #46: three reds confused): what a hovered enemy sees, the move
+ * range's tiles where the squad would be noticed and their eye; the eye on the flags of those who see (styles.css
+ * .uflag.watching, the theme's danger).
+ */
+const SIGHT_RED = 0xf0503c;
 const COLOR_BLAST = new THREE.Color(0xff8a2a);
 /** A blast that can't be thrown there. */
 const COLOR_OFF = new THREE.Color(0x8a939c);
@@ -266,28 +269,6 @@ function guideBeam(color: number, from = 0): THREE.Group {
 }
 
 /**
- * The edge of what an enemy sees (Arturo, 17/10: the dead see in a cone, not
- * all round): its VIEW_CONE ahead out to `range`, and the AWARE_RANGE circle
- * all round, behind it too, as one closed line, a keyhole. Without a facing
- * (the living, an old save) the whole circle. World points round `c`.
- */
-function keyhole(c: THREE.Vector3, range: number, facing: number | undefined): number[] {
-  const out: number[] = [];
-  const at = (a: number, r: number) => out.push(c.x + Math.cos(a) * r, c.y, c.z + Math.sin(a) * r);
-  if (facing === undefined || range <= AWARE_RANGE) {
-    for (let i = 0; i <= 96; i++) at((i / 96) * Math.PI * 2, Math.max(range, AWARE_RANGE));
-    return out;
-  }
-  const half = (VIEW_CONE / 2) * (Math.PI / 180);
-  // The cone's far arc, then round behind it at arm's length, and back to where it began.
-  for (let i = 0; i <= 48; i++) at(facing - half + (i / 48) * 2 * half, range);
-  at(facing + half, AWARE_RANGE);
-  for (let i = 1; i <= 48; i++) at(facing + half + (i / 48) * (2 * Math.PI - 2 * half), AWARE_RANGE);
-  at(facing - half, range);
-  return out;
-}
-
-/**
  * Planning without the command (playtest 17/10 #49): the move's preview in
  * the player's colour, dimmed (18/10 #4: it was grey, and didn't show), so it
  * shows it isn't one's turn to order, like the plan's own line.
@@ -374,9 +355,6 @@ export class Overlays {
   private readonly smoke = new THREE.Group();
   /** Moves planned without the command (UX-REVISION-2 #35): a dashed line in the planner's colour. */
   private readonly plans = new THREE.Group();
-  /** While concealed: how close each enemy in sight lets a soldier get unseen (its cone and arm's length), as a faint red light. */
-  private readonly detection = new THREE.Group();
-  private readonly detectionMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide });
   /**
    * One enemy's field of view (Arturo, 17/10), under the pointer or aimed at:
    * the tiles it sees, in its cone and its line of sight, washed faintly; the
@@ -429,7 +407,7 @@ export class Overlays {
     // A four-segment ring is a square frame; turned 45° its sides follow the tile's.
     this.detect = new THREE.InstancedMesh(
       new THREE.RingGeometry(0.46, 0.63, 4).rotateZ(Math.PI / 4).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.95, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: SIGHT_RED, transparent: true, opacity: 0.95, depthWrite: false }),
       capacity,
     );
     this.detect.count = 0;
@@ -446,19 +424,19 @@ export class Overlays {
     this.hatch.position.y = 0.022;
     this.eyes = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(0.34, 0.34).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ map: loader.load(eyeUrl), color: 0xff4a4a, transparent: true, opacity: 0.95, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ map: loader.load(eyeUrl), color: SIGHT_RED, transparent: true, opacity: 0.95, depthWrite: false }),
       capacity,
     );
     this.eyes.count = 0;
     this.eyes.position.y = 0.03;
     this.seen = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xff5a3a, transparent: true, opacity: 0.14, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: SIGHT_RED, transparent: true, opacity: 0.16, depthWrite: false }),
       capacity,
     );
     this.noticed = new THREE.InstancedMesh(
       new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0.2, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: SIGHT_RED, transparent: true, opacity: 0.22, depthWrite: false }),
       capacity,
     );
     this.seen.count = this.noticed.count = 0;
@@ -537,7 +515,7 @@ export class Overlays {
     this.rangeRing.renderOrder = 9;
     this.note.element.className = 'tile-note';
     this.note.visible = false;
-    this.group.add(this.beacons, this.flares, this.breakBars, this.smoke, this.plans, this.detection, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.pathHalo, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.beacons, this.flares, this.breakBars, this.smoke, this.plans, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.pathHalo, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
     this.group.add(this.walkShade, this.dashShade, this.walkHalo, this.dashHalo, this.walkEdge, this.dashEdge, this.near, this.seen, this.noticed, this.sightEdge);
     this.group.add(this.spots, this.noises, this.note, this.fade, ...this.dots, this.pathDots, this.packTags);
     this.applyLook();
@@ -1129,40 +1107,6 @@ export class Overlays {
         this.plans.add(halo);
       }
       this.plans.add(line, ring);
-    }
-  }
-
-  /**
-   * Detection radii (playtest: «no he entendido por qué me han visto»): a
-   * concealed soldier ending a move inside one, in the enemy's line of sight,
-   * is noticed. The red frames on the move range say which tiles exactly.
-   */
-  setDetection(list: { pos: Place; radius: number; facing?: number }[]): void {
-    const key = JSON.stringify(list);
-    if (this.detection.userData.key === key) return;
-    this.detection.userData.key = key;
-    for (const child of [...this.detection.children] as THREE.Mesh[]) {
-      this.detection.remove(child);
-      child.geometry.dispose();
-    }
-    // A faint red light on the ground (playtest 18/10 #30: no dashed lines): brightest at the enemy and
-    // gone by the keyhole's edge, a fan of triangles from it with the colour fading out to the rim.
-    for (const d of list) {
-      const c = tileToWorld(d.pos, 0.05);
-      const rim = keyhole(c, d.radius, d.facing);
-      const pos = [c.x, c.y, c.z, ...rim];
-      // RGBA: the red at the enemy, gone (alpha 0) at the rim; a tint, not added light, so it shows on snow too.
-      const col = [DETECT_GLOW.r, DETECT_GLOW.g, DETECT_GLOW.b, DETECT_ALPHA];
-      for (let i = 0; i < rim.length / 3; i++) col.push(DETECT_GLOW.r, DETECT_GLOW.g, DETECT_GLOW.b, 0);
-      const index: number[] = [];
-      for (let i = 1; i < rim.length / 3; i++) index.push(0, i, i + 1);
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
-      geometry.setIndex(index);
-      const fan = new THREE.Mesh(geometry, this.detectionMaterial);
-      fan.renderOrder = 3;
-      this.detection.add(fan);
     }
   }
 

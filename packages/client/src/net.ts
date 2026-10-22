@@ -1,4 +1,4 @@
-import { HOST_CLOSED, hostClosedLine, REJOIN_LINE, type CampaignMessage, type ClientMessage, type HostAddress, type PlayerInfo, type ServerMessage, type Slot } from '@bastion/engine';
+import { HOST_CLOSED, hostClosedLine, QUIT_TEXT, REJOIN_LINE, type CampaignMessage, type ClientMessage, type HostAddress, type PlayerInfo, type ServerMessage, type Slot } from '@bastion/engine';
 import { desktop } from './desktop';
 import { post } from './report';
 import { h } from './ui/dom';
@@ -185,10 +185,12 @@ export class Net {
       if (msg.t === 'room') this.players = msg.players;
       if (msg.t === 'closing') {
         // The host closed the game (server index.ts shutdown): there is nobody to reconnect to. The host's own
-        // window (on this machine, by localhost) is closing with it, or its server was stopped there: no note.
+        // window is closing with it, or its server was stopped there: no note. The app knows which window hosts;
+        // a browser takes this machine's address for the host's.
         this.stopped = true;
         this.showRejoin(false);
-        if (!LOOPBACK.has(location.hostname)) hostClosed(this.players.find((p) => p.slot !== this.slot)?.name);
+        const app = desktop();
+        if (!(app ? app.hosting : LOOPBACK.has(location.hostname))) hostClosed(this.players.find((p) => p.slot !== this.slot)?.name);
       }
       for (const fn of this.messageHandlers) fn(msg);
     };
@@ -212,27 +214,61 @@ export class Net {
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /**
- * The host closed the game: in the desktop app, back to its start screen saying
- * so (where the game shows up again once reopened); in a browser, the note over
- * whatever was on screen and a way back in. Never «Conectando…» for ever.
+ * The host closed the game: a screen over whatever was up, saying so, and the
+ * ways on. Back in, once the host opens it again (until then it says it is not
+ * open yet); in the app, its start screen, or out of it. Never «Conectando…»
+ * for ever, nor the start screen in full screen with no way out (playtest 21/10
+ * #29): there, Esc takes it out of full screen.
  */
 function hostClosed(host?: string): void {
   const app = desktop();
-  // Lore's words (engine lore.ts).
-  if (app) return app.toLauncher(`${hostClosedLine(host)} ${HOST_CLOSED.back}`);
-  document.body.append(
+  const note = h('p.x-text', {}, HOST_CLOSED.back);
+  const retry: HTMLButtonElement = h(
+    'button.x-btn.primary',
+    {
+      onclick: async () => {
+        retry.disabled = true;
+        try {
+          if ((await fetch('/', { cache: 'no-store' })).ok) return location.reload();
+        } catch {
+          /* not open yet */
+        }
+        note.textContent = HOST_CLOSED.notYet;
+        retry.disabled = false;
+      },
+    },
+    HOST_CLOSED.retry,
+  );
+  const screen = h(
+    'div.menu-modal.host-closed',
+    { style: { position: 'fixed', zIndex: '1000' } },
     h(
-      'div.menu-modal',
-      { style: { position: 'fixed', zIndex: '1000' } },
+      'div.x-panel',
+      {},
+      h('h2.x-title', {}, hostClosedLine(host)),
+      note,
       h(
-        'div.x-panel',
+        'div.alert-actions',
         {},
-        h('h2.x-title', {}, hostClosedLine(host)),
-        h('p.x-text', {}, HOST_CLOSED.back),
-        h('div.alert-actions', {}, h('button.x-btn.primary', { onclick: () => location.reload() }, HOST_CLOSED.retry)),
+        retry,
+        app ? h('button.x-btn', { onclick: () => app.toLauncher() }, HOST_CLOSED.home) : null,
+        app ? h('button.x-btn', { onclick: () => app.quit() }, QUIT_TEXT.button) : null,
       ),
     ),
   );
+  if (app) {
+    document.addEventListener(
+      'keydown',
+      (e) => {
+        if (e.key !== 'Escape' || !screen.isConnected) return;
+        // The game's own menu is behind it, and has nothing to do now.
+        e.stopPropagation();
+        app.leaveFullscreen();
+      },
+      { capture: true },
+    );
+  }
+  document.body.append(screen);
 }
 
 export function serverUrl(): string {

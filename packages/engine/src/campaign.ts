@@ -42,7 +42,6 @@ import { bringsLootHome, broughtBack, type CarriedWeapon, type LootTotals } from
 import { fighterStats, learn, missionLines, NO_GROWTH, NO_SKILLS, oneMoreBar, recruitSkills, totalBars, unlockBlocker, veterancyRank, VETERANCY, type BarFilled, type Deeds, type Growth, type Skills } from './skills';
 import { BOARD_CELLS, type CellId } from './board';
 import {
-  besidePieces,
   dismantleBlocker,
   dismantleRefund,
   FELL_COST,
@@ -174,8 +173,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   quarters: {
     id: 'quarters',
     name: 'Barracón',
-    description: '+2 camas para soldados (+1 junto a la caravana). Literas de madera y una estufa que solo se enciende de noche.',
-    upgrades: ['+3 camas (+1 junto a la caravana). Un segundo piso de literas.', '+4 camas (+1 junto a la caravana). Mantas de verdad.'],
+    description: '+2 camas para soldados. Literas de madera y una estufa que solo se enciende de noche.',
+    upgrades: ['+3 camas. Un segundo piso de literas.', '+4 camas. Mantas de verdad.'],
     cost: 40,
     days: 2,
     level: 1,
@@ -194,8 +193,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   range: {
     id: 'range',
     name: 'Campo de tiro',
-    description: '+3 de puntería para todos los soldados (+2 junto al centro de entrenamiento). Dianas de cartón en una trinchera del pinar.',
-    upgrades: ['+6 de puntería (+2 junto al entrenamiento). Siluetas de zombi a cincuenta metros.', '+10 de puntería (+2 junto al entrenamiento). Blancos móviles, con una polea de Teo.'],
+    description: '+3 de puntería para todos los soldados. Dianas de cartón en una trinchera del pinar.',
+    upgrades: ['+6 de puntería. Siluetas de zombi a cincuenta metros.', '+10 de puntería. Blancos móviles, con una polea de Teo.'],
     cost: 90,
     days: 4,
     level: 2,
@@ -224,7 +223,7 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   garage: {
     id: 'garage',
     name: 'Chapistería',
-    description: 'Las heridas curan 1 día antes, nunca en menos de 1. La Lata lleva camilla.',
+    description: 'Las heridas curan 1 día antes, nunca en menos de 1, y la mochila lleva un hueco más. La Lata lleva camilla.',
     upgrades: ['Las heridas curan 2 días antes. Mantas y un botiquín fijo atrás.', 'Las heridas curan 3 días antes. La Lata ya no para a repostar con heridos dentro.'],
     cost: 110,
     days: 5,
@@ -234,8 +233,8 @@ export const FACILITIES: Record<FacilityId, FacilityDef> = {
   listening: {
     id: 'listening',
     name: 'Estación de escucha',
-    description: 'Los muertos avanzan 2 días más tarde (+2 junto al centro de comunicaciones) y hay una misión más a la vista. Morse oye antes lo que viene.',
-    upgrades: ['Los muertos, 4 días más tarde (+2 junto a comunicaciones).', 'Los muertos, 6 días más tarde (+2 junto a comunicaciones).'],
+    description: 'Los muertos avanzan una misión más tarde y hay una misión más a la vista. Morse oye antes lo que viene.',
+    upgrades: ['Los muertos, una misión más tarde.', 'Los muertos, dos misiones más tarde.'],
     cost: 120,
     days: 5,
     level: 4,
@@ -310,28 +309,9 @@ export const BUNKER_BEDS = 8;
 
 // ----------------------------------------------------------- the compound
 
-/** The buildings of before that pieces of the base stand for (BUILDING_PIECES): partners in ADJACENCY. */
+/** The buildings of before that pieces of the base stand for (BUILDING_PIECES). */
 export type FixedBuildingId = 'command' | 'barracks' | 'research' | 'engineering';
 export type BuildingId = FixedBuildingId | FacilityId;
-
-/** A facility works better next to a certain building: wall to wall. */
-export interface AdjacencyDef {
-  facility: FacilityId;
-  next: BuildingId;
-  /** Effect first, then a touch of the world. */
-  text: string;
-}
-
-export const ADJACENCY: AdjacencyDef[] = [
-  { facility: 'infirmary', next: 'barracks', text: 'Las heridas curan un grado más rápido (×3 a nivel 1). Nadie cruza la nieve con una herida abierta.' },
-  { facility: 'workshop', next: 'engineering', text: 'Accesorios un 15 % más baratos aún (−40 % a nivel 1). Las piezas pasan por un ventanuco.' },
-  { facility: 'simulation', next: 'research', text: '+15 % de suministros más (+40 % a nivel 1). Morse marca en el mapa lo que oye por radio.' },
-  { facility: 'relay', next: 'command', text: '+1 zona contactable. La antena, pegada a la sala de Morse, llega más lejos.' },
-  { facility: 'training', next: 'barracks', text: 'Reclutar cuesta 20 § en vez de 30. Los novatos se forman en casa.' },
-  { facility: 'quarters', next: 'barracks', text: 'Una cama más. La caravana presta la estufa.' },
-  { facility: 'range', next: 'training', text: '+2 de puntería más. Del aula a la galería sin cambiarse de botas.' },
-  { facility: 'listening', next: 'relay', text: 'Los muertos avanzan 2 días más tarde aún. Dos antenas oyen más que una.' },
-];
 
 export interface Construction {
   /** The Taller's piece on the base, where the work is done. */
@@ -347,23 +327,6 @@ export interface Construction {
 
 /** The pieces on the base that stand for a building of before (docs/FASE12.md §11.3): the caravan is the bunker, the Cuartel and the Armería. */
 const BUILDING_PIECES: Record<FixedBuildingId, PieceId> = { command: 'caravan', barracks: 'caravan', engineering: 'caravan', research: 'radio' };
-
-/**
- * The adjacency bonus a building on the base has as `facility` (its own; the
- * Sala de radio is the relay and the listening post too): its partner next to
- * it on the map (docs/FASE12.md §11.3).
- */
-export function pieceAdjacency(c: CampaignState, p: BasePiece, facility = PIECES[p.piece].facility): AdjacencyDef | null {
-  const def = facility && ADJACENCY.find((a) => a.facility === facility);
-  if (!def) return null;
-  const partner = (q: BasePiece) => (def.next in BUILDING_PIECES ? q.piece === BUILDING_PIECES[def.next as FixedBuildingId] : PIECES[q.piece].facility === def.next);
-  return besidePieces(c.bastion, p).some((q) => partner(q) && buildingWorks(q)) ? def : null;
-}
-
-/** Whether some built `facility` has its adjacency bonus. */
-export function hasAdjacency(c: CampaignState, facility: FacilityId): boolean {
-  return facilityPieces(c, facility).some((f) => !!pieceAdjacency(c, f.piece, facility));
-}
 
 // ------------------------------------------------------------------ regions
 
@@ -381,17 +344,17 @@ export interface RegionDef {
   income: number;
 }
 
-// The valley of Kessra (docs/FASE5.md): where each zone lies on the valley's map (Arturo's, 15/10:
+// The valley of Ossau (docs/FASE5.md): where each zone lies on the valley's map (Arturo's, 15/10:
 // x −15…15 and z −10…10, 51,2 of its pixels a unit) and the roads between them, the same ones La Lata
-// drives. Brena (Atalaya's zone) is up in the north-west; the Marea comes up from Los Llanos de
+// drives. Bielsa (Atalaya's zone) is up in the north-west; the Marea comes up from Los Llanos de
 // Ceniza in the south.
 export const REGIONS: Record<RegionId, RegionDef> = {
   na: { id: 'na', name: 'Los Llanos de Ceniza', x: 2.87, z: 6.95, roads: ['afr', 'me'], income: 35 },
-  sa: { id: 'sa', name: 'Carvik', x: -11.48, z: -0.98, roads: ['weu', 'afr'], income: 25 },
-  weu: { id: 'weu', name: 'Brena', x: -6.11, z: -5.86, roads: ['oce', 'sa', 'eeu'], income: 30 },
-  eeu: { id: 'eeu', name: 'Velsa', x: 12.64, z: -8.28, roads: ['weu', 'eas'], income: 25 },
-  afr: { id: 'afr', name: 'Corran', x: -6.56, z: 4.02, roads: ['oce', 'na', 'sa'], income: 25 },
-  me: { id: 'me', name: 'Galen', x: 10.82, z: -2.23, roads: ['oce', 'na'], income: 30 },
+  sa: { id: 'sa', name: 'Rudnik', x: -11.48, z: -0.98, roads: ['weu', 'afr'], income: 25 },
+  weu: { id: 'weu', name: 'Bielsa', x: -6.11, z: -5.86, roads: ['oce', 'sa', 'eeu'], income: 30 },
+  eeu: { id: 'eeu', name: 'Sappada', x: 12.64, z: -8.28, roads: ['weu', 'eas'], income: 25 },
+  afr: { id: 'afr', name: 'Tarbes', x: -6.56, z: 4.02, roads: ['oce', 'na', 'sa'], income: 25 },
+  me: { id: 'me', name: 'Koper', x: 10.82, z: -2.23, roads: ['oce', 'na'], income: 30 },
   eas: { id: 'eas', name: 'El Pantano Gris', x: 3.79, z: -6.25, roads: ['eeu', 'oce'], income: 35 },
   oce: { id: 'oce', name: 'La Vega', x: -0.39, z: -0.63, roads: ['weu', 'eas', 'afr', 'me'], income: 25 },
 };
@@ -427,14 +390,14 @@ export const HOME_REGION: RegionId = 'weu';
 /**
  * Zombie activity (`c.doom`) at which each zone falls under the Marea, by the
  * road stretches between it and Los Llanos, where it comes up from (docs/FASE5.md).
- * Brena never falls: at DOOM_MAX the campaign is lost.
+ * Bielsa never falls: at DOOM_MAX the campaign is lost.
  */
 export const MAREA_THRESHOLDS = [4, 6, 9, 10, 11];
 export const MAREA_SOURCE: RegionId = 'na';
 /** Nidos gather under the Marea or beside it this many times as often as elsewhere. */
 const NIDO_TIDE_WEIGHT = 3;
 
-/** The activity at which `id` falls under the Marea; null for Brena. */
+/** The activity at which `id` falls under the Marea; null for Bielsa. */
 export function mareaThreshold(id: RegionId): number | null {
   if (id === HOME_REGION) return null;
   return MAREA_THRESHOLDS[Math.min(roadHops(MAREA_SOURCE, id), MAREA_THRESHOLDS.length - 1)]!;
@@ -488,7 +451,7 @@ function syncMarea(c: CampaignState): boolean {
   return now.length !== before.length || now.some((x) => !before.includes(x));
 }
 
-/** Zones a road joins to Brena or to a zone already contacted: the radio reaches as far as the people do. */
+/** Zones a road joins to Bielsa or to a zone already contacted: the radio reaches as far as the people do. */
 function roadReachable(c: CampaignState, id: RegionId): boolean {
   return REGIONS[id].roads.some((n) => n === HOME_REGION || c.regions.find((r) => r.id === n)?.contacted);
 }
@@ -591,7 +554,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
   convoy: {
     id: 'convoy',
     title: 'Convoy emboscado',
-    text: 'Un convoy de un enclave aliado ha caído en una emboscada de los Cazadores cerca del Bastión.',
+    text: 'Un convoy de los Camioneros ha caído en una emboscada de los Cazadores cerca del Bastión. Pagan si alguien los saca de ahí.',
     options: [
       {
         label: 'Enviar a alguien a socorrerlo',
@@ -696,8 +659,8 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
         apply: (c) => ((c.ending = 'break'), (c.outcome = 'victory')),
       },
       {
-        label: 'Para la Red',
-        effect: 'La Lata reparte las dosis enclave por enclave, solo a quienes estuvieron. La fórmula se queda en el Bastión, bajo llave.',
+        label: 'Para quienes cumplieron',
+        effect: 'La Lata reparte las dosis solo a quienes cumplieron sus tratos. La fórmula se queda en el Bastión, bajo llave.',
         apply: (c) => ((c.ending = 'record'), (c.outcome = 'victory')),
       },
     ],
@@ -734,16 +697,31 @@ export function soldierCap(c: Pick<CampaignState, 'players'>): number {
   return c.players.length > 1 ? MAX_SOLDIERS_PER_PLAYER : 2 * MAX_SOLDIERS_PER_PLAYER;
 }
 export const DOOM_MAX = 12;
-const DOOM_INTERVAL = 12;
+/**
+ * A mission was five days of the Bastion's clock until 21/10; now it is one (Arturo, 21/10: «la misión, 1 día», with
+ * Ana's ration a soldier a day, docs/PRUEBA-2026-10-21.md #34). What is still written in those days of before (the
+ * Taller's works, wounds, the quests' waits) goes by in missions, one for every five of them, rounded up; the clock's
+ * own intervals below are counted in the days of now.
+ */
+export const OLD_DAYS_PER_MISSION = 5;
+
+/** `days` of before as days of now (one a mission): at least one. */
+export function oldDaysToNow(days: number): number {
+  return Math.max(1, Math.ceil(days / OLD_DAYS_PER_MISSION));
+}
+
+/** Days (missions) between the enemy clock's steps: 12 days of before were 2.4 missions. */
+const DOOM_INTERVAL = 2;
 // A mission takes no days (playtest 2026-10-14, docs/PRUEBA-2026-10-14.md P7):
 // time passes waiting for news, not flying out. Before, La Lata's trip took
 // 2 days and one more a road stretch (docs/FASE5.md).
 /** Least days between one story chapter won and the next one opening. */
-const STORY_GAP = 8;
-const FACILITY_DOOM_INTERVAL = 14;
+const STORY_GAP = 2;
+const FACILITY_DOOM_INTERVAL = 3;
 const MAX_FACILITIES = 3;
 const MAX_OFFERS = 3;
-const MONTH = 30;
+/** Days (missions) between Bielsa's convoys. */
+const MONTH = 6;
 /** Monthly payment from the Council before region income. */
 const BASE_INCOME = 60;
 /** Credits for each alien body sold after a won mission. */
@@ -844,7 +822,10 @@ export type ProposalAction =
   | { type: 'contact'; region: RegionId }
   | { type: 'event'; option: 0 | 1 }
   | { type: 'investigate'; id: string }
-  | { type: 'craft'; project: CraftId };
+  | { type: 'craft'; project: CraftId }
+  /** The shared supplies go to a vote too (Ana, 21/10 #31): a recruit for `for`, straight into the squad with `squad`; an accessory for the Armería. */
+  | { type: 'recruit'; for: Slot; squad?: boolean }
+  | { type: 'buy'; item: ItemId };
 
 export interface Proposal {
   by: Slot;
@@ -960,7 +941,7 @@ export function campaignOutdated(c: { version: number }): boolean {
 }
 
 /** Bumped when the campaign shape changes; older campaigns go through `migrateCampaign`. */
-export const CAMPAIGN_VERSION = 24;
+export const CAMPAIGN_VERSION = 25;
 
 export interface CampaignState {
   version: typeof CAMPAIGN_VERSION;
@@ -1195,23 +1176,27 @@ export function hasRadio(c: CampaignState): boolean {
   return (c.bastion?.pieces ?? []).some((p) => p.piece === 'radio' && buildingWorks(p));
 }
 
-/** The workshop takes 25/35/45 % off accessories, 15 % more next to the armoury. */
+/**
+ * The workshop takes 25/35/45 % off accessories. No bonus for standing next to
+ * anything any more (Ana, 21/10 #41: «quita lo de junto a… y si hay
+ * funcionalidad relacionada también»).
+ */
 export function shopPrice(c: CampaignState, id: ItemId): number {
   const cost = ITEMS[id].cost;
   const level = facilityLevel(c, 'workshop');
   if (!level) return cost;
-  const off = 0.25 + 0.1 * (level - 1) + (hasAdjacency(c, 'workshop') ? 0.15 : 0);
+  const off = 0.25 + 0.1 * (level - 1);
   return Math.round(cost * (1 - off));
 }
 
-/** A recruit costs less with the training centre next to the barracks. */
-export function recruitCost(c: CampaignState): number {
-  return hasAdjacency(c, 'training') ? 20 : RECRUIT_COST;
+/** What a recruit costs. */
+export function recruitCost(_c: CampaignState): number {
+  return RECRUIT_COST;
 }
 
-/** Beds in the Bastion: the caravan's, and each barracón's (2/3/4, one more next to the caravan). */
+/** Beds in the Bastion: the caravan's, and each barracón's (2/3/4). */
 export function beds(c: CampaignState): number {
-  return BUNKER_BEDS + facilityPieces(c, 'quarters').reduce((sum, f) => sum + 1 + f.level + (pieceAdjacency(c, f.piece) ? 1 : 0), 0);
+  return BUNKER_BEDS + facilityPieces(c, 'quarters').reduce((sum, f) => sum + 1 + f.level, 0);
 }
 
 /** Beds nobody sleeps in: recruiting needs one. */
@@ -1219,23 +1204,23 @@ export function bedsFree(c: CampaignState): number {
   return beds(c) - c.soldiers.filter((s) => s.alive).length;
 }
 
-/** Wound days healed each day: 1, and 2/3/4 with the infirmary (one more next to the Cuartel). */
+/** Wound days healed each day: 1, and 2/3/4 with the infirmary. */
 export function healRate(c: CampaignState): number {
   const level = facilityLevel(c, 'infirmary');
-  return level ? 1 + level + (hasAdjacency(c, 'infirmary') ? 1 : 0) : 1;
+  return level ? 1 + level : 1;
 }
 
 /**
  * The suministros an operation pays, with the Sala de mapas (Arturo, 18/10
  * #40: the Bastion has no experience now, so the maps find better pickings):
- * +25/40/55 %, 15 % more beside the Sala de radio.
+ * +25/40/55 %.
  */
 export function rewardMultiplier(c: CampaignState): number {
   const level = facilityLevel(c, 'simulation');
-  return level ? 1.25 + 0.15 * (level - 1) + (hasAdjacency(c, 'simulation') ? 0.15 : 0) : 1;
+  return level ? 1.25 + 0.15 * (level - 1) : 1;
 }
 
-/** Aim every soldier gets from the shooting range: 3/6/10, two more next to the training centre. */
+/** Aim every soldier gets from the shooting range: 3/6/10. */
 /** Will the Camposanto gives every soldier: +5 at level 2, +10 at level 3. */
 export function memorialWill(c: CampaignState): number {
   return [0, 0, 5, 10][facilityLevel(c, 'memorial')]!;
@@ -1243,11 +1228,11 @@ export function memorialWill(c: CampaignState): number {
 
 export function rangeAim(c: CampaignState): number {
   const level = facilityLevel(c, 'range');
-  return level ? [3, 6, 10][level - 1]! + (hasAdjacency(c, 'range') ? 2 : 0) : 0;
+  return level ? [3, 6, 10][level - 1]! : 0;
 }
 
 /**
- * Days La Lata's workshop (the Chapistería) takes off each wound (its stretcher): one a level.
+ * Days (missions) La Lata's workshop (the Chapistería) takes off each wound (its stretcher): one a level, one left at least.
  * Missions take no days any more (docs/PRUEBA-2026-10-14.md P7), so that is
  * what it does from level 1; it also gives a backpack slot (docs/FASE8.md).
  */
@@ -1255,10 +1240,10 @@ export function garageCut(c: CampaignState): { wounds: number } {
   return { wounds: facilityLevel(c, 'garage') };
 }
 
-/** Extra days between the enemy clock's steps: 2 per level of the listening post, 2 more next to the relay. */
+/** Extra days between the enemy clock's steps: 2 of before per level of the listening post. */
 export function listeningDelay(c: CampaignState): number {
   const level = facilityLevel(c, 'listening');
-  return level ? 2 * level + (hasAdjacency(c, 'listening') ? 2 : 0) : 0;
+  return level ? oldDaysToNow(2 * level) : 0;
 }
 
 /** Days a work takes with the works brigade (−25/40/50 %), at least one. */
@@ -1297,14 +1282,14 @@ export function mustWait(c: CampaignState): boolean {
 /** Medicines a campaign starts with. */
 export const START_MEDICINES = 2;
 /** Days a bitten soldier lasts at the base before turning; the Enfermería adds INFIRMARY_TURN_DAYS. */
-export const TURN_DAYS = 3;
-export const INFIRMARY_TURN_DAYS = 2;
-/** What curing a wound with medicines takes and gives: 1 ✚ for 3 recovery days fewer. */
+export const TURN_DAYS = 1;
+export const INFIRMARY_TURN_DAYS = 1;
+/** What curing a wound with medicines takes and gives: 1 ✚ for a day (a mission) of recovery fewer. */
 export const MEDICATE_COST = 1;
-export const MEDICATE_DAYS = 3;
+export const MEDICATE_DAYS = 1;
 /** The enclaves that send medicines while they are allies (contacted) and stand (no Nido in their region), 1 ✚ each every ENCLAVE_DAYS. */
 export const ENCLAVES: RegionId[] = ['oce', 'afr'];
-export const ENCLAVE_DAYS = 6;
+export const ENCLAVE_DAYS = 1;
 /** The cause the Caídos read for a soldier who turned (placeholder for Lore). */
 export const TURNED_CAUSE = 'Se convirtió';
 
@@ -1313,15 +1298,18 @@ export function treatCost(c: CampaignState): number {
   return facilityLevel(c, 'infirmary') >= 2 ? 1 : 2;
 }
 
-/** The day a bitten soldier turns, unless treated: 3 days after coming back, 5 with an Enfermería, and one more for each level of the Cuarentena past the first. */
+/** The day a bitten soldier turns, unless treated: the day after coming back, two with an Enfermería, and one more for each level of the Cuarentena past the first. */
 export function turnDay(c: CampaignState, s: CampaignSoldier): number | null {
   if (!s.infection) return null;
   return s.infection.since + TURN_DAYS + (facilityCount(c, 'infirmary') ? INFIRMARY_TURN_DAYS : 0) + Math.max(0, facilityLevel(c, 'quarantine') - 1);
 }
 
-/** Whether the bitten may board La Lata (playtest 2026-10-15, #13): only with a Cuarentena to take them to. */
+/**
+ * Whether the bitten may board La Lata (playtest 2026-10-15, #13): only with a Cuarentena to take them to, once the
+ * Bastion is big enough to build one (Ana, 21/10 #36: not at the caravan's level); before that, they board.
+ */
 export function hasQuarantine(c: CampaignState): boolean {
-  return facilityCount(c, 'quarantine') > 0;
+  return facilityCount(c, 'quarantine') > 0 || bastionLevel(c) < PIECES.quarantine.level;
 }
 
 /** An enclave that is an ally (contacted) and stands (no Nido in its region). */
@@ -1339,11 +1327,13 @@ function livingEnclaves(c: CampaignState): RegionId[] {
 
 /** Rations a campaign starts with (docs/FASE4.md). */
 export const START_FOOD = 16;
-/** The Bastion eats a ration a day for every 4 living soldiers, rounded up. */
-export const EATERS_PER_RATION = 4;
-/** La Vega, an ally standing, sends 2 rations every 4 days (besides its medicines). */
+/** The Bastion eats a ration a day for every living soldier (Ana, 21/10 #34). */
+export const EATERS_PER_RATION = 1;
+/** La Vega, an ally standing, sends 2 rations a day (besides its medicines). */
 export const LA_VEGA_FOOD = 2;
-export const LA_VEGA_FOOD_DAYS = 4;
+export const LA_VEGA_FOOD_DAYS = 1;
+/** Rations a Huerto grows a day (a mission), a level. */
+export const GARDEN_RATIONS = 5;
 /** Will every soldier goes on a mission without, while the Bastion is hungry. */
 export const HUNGRY_WILL = 10;
 
@@ -1352,10 +1342,30 @@ export function dailyRations(c: Pick<CampaignState, 'soldiers'>): number {
   return Math.ceil(c.soldiers.filter((s) => s.alive).length / EATERS_PER_RATION);
 }
 
-/** Rations the Huerto grows a day: one a level. */
+/** Rations the Huerto grows a day: five a level. */
 export function gardenYield(c: CampaignState): number {
   // Every Huerto that works gives its own (Arturo, 20/10: several of them, each its rations), by its level.
-  return facilityPieces(c, 'garden').reduce((sum, f) => sum + f.level, 0);
+  return facilityPieces(c, 'garden').reduce((sum, f) => sum + GARDEN_RATIONS * f.level, 0);
+}
+
+/** What Bielsa's next convoy brings (UI's «Bastión» panel): the base, and each zone with a deal not under the Marea. */
+export function convoyIncome(c: CampaignState): number {
+  return BASE_INCOME + c.regions.filter((r) => r.contacted && !underMarea(c, r.id)).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
+}
+
+/** Days (missions) until the next convoy. */
+export function convoyIn(c: Pick<CampaignState, 'day' | 'nextSupplyDay'>): number {
+  return Math.max(0, c.nextSupplyDay - c.day);
+}
+
+/** Rations eaten a mission (UI's «Bastión» panel): a day's. */
+export function rationsPerMission(c: Pick<CampaignState, 'soldiers'>): number {
+  return dailyRations(c) * DAYS_PER_MISSION;
+}
+
+/** Rations the Huertos grow a mission. */
+export function gardenPerMission(c: CampaignState): number {
+  return gardenYield(c) * DAYS_PER_MISSION;
 }
 
 /** Rations come in; with enough for a day again, the hunger is over. */
@@ -1478,7 +1488,7 @@ function turn(c: CampaignState, s: CampaignSoldier): void {
 export function contactCapacity(c: CampaignState): number {
   const quests = questOutcomes(c).reduce((sum, q) => sum + (q.outcome.contacts ?? 0), 0);
   const relays = facilityPieces(c, 'relay').reduce((sum, f) => sum + 1 + f.level, 0);
-  return 2 + relays + (hasAdjacency(c, 'relay') ? 1 : 0) + (hasTech(c, 'encryption') ? 1 : 0) + quests;
+  return 2 + relays + (hasTech(c, 'encryption') ? 1 : 0) + quests;
 }
 
 export function contactCost(c: CampaignState): number {
@@ -1509,7 +1519,7 @@ function pickKind(rng: Rng): MissionKind {
 
 /** Difficulty of a new operation: it grows with the days and, a little, with the missions flown (second playtest). */
 function difficultyNow(c: CampaignState, rng: Rng): number {
-  return Math.min(4, 1 + Math.floor(c.day / 18 + (c.missionsFlown ?? 0) / 10) + (rng.int(4) === 0 ? 1 : 0));
+  return Math.min(4, 1 + Math.floor((c.day * OLD_DAYS_PER_MISSION) / 18 + (c.missionsFlown ?? 0) / 10) + (rng.int(4) === 0 ? 1 : 0));
 }
 
 /** Every 4 missions flown the enemy sends one more to an operation, up to 2. */
@@ -1559,7 +1569,7 @@ function makeOffer(c: CampaignState, rng: Rng, final = false, at?: RegionId): Mi
   const living = final || kind === 'rescue';
   return byNight(withProvisions(withMedicines({
     id: newId(c, 'm'),
-    // An ordinary operation is named for where it goes (Lore): «El colegio de Corran».
+    // An ordinary operation is named for where it goes (Lore): «El colegio de Tarbes».
     name: final ? 'El campamento de la sierra' : missionName(biome, REGIONS[region].name, seed, site),
     kind,
     difficulty,
@@ -1760,7 +1770,7 @@ function vehicleDue(c: CampaignState): boolean {
 
 /**
  * An operation to bring back a better vehicle (#45): a Limpieza («despejad la
- * zona y es nuestro»); the bus, always at Atalaya, in Brena, a military station.
+ * zona y es nuestro»); the bus, always at Atalaya, in Bielsa, a military station.
  */
 function vehicleOffer(c: CampaignState, rng: Rng): MissionOffer {
   const tier = vehicleOf(c) + 1;
@@ -1802,7 +1812,7 @@ export function offerSignature(c: CampaignState, offer: MissionOffer): string {
 const MAX_QUESTS = 3;
 const MAX_RUMORS = 2;
 /** Days a rumour waits for someone to listen. */
-const RUMOR_LIFE = 10;
+const RUMOR_LIFE = 2;
 
 function questOf(c: CampaignState, offer: MissionOffer): QuestState | undefined {
   return offer.quest ? c.quests.find((q) => q.id === offer.quest) : undefined;
@@ -1814,7 +1824,7 @@ export function questAvailable(c: CampaignState, id: QuestId): boolean {
   const done = c.questLog[id];
   if (!done) return true;
   const retry = QUESTS[id].outcomes[done.outcome]?.retry;
-  return retry !== undefined && c.day >= done.day + retry;
+  return retry !== undefined && c.day >= done.day + oldDaysToNow(retry);
 }
 
 /** How the finished side quests ended. */
@@ -1951,7 +1961,7 @@ function finishQuest(c: CampaignState, q: QuestState, key: string, rng: Rng): vo
   for (const [item, n] of Object.entries(outcome.items ?? {}) as [ItemId, number][]) c.inventory[item] = (c.inventory[item] ?? 0) + n;
   if (outcome.doom) c.doom = Math.max(0, c.doom + outcome.doom);
   if (outcome.tech && !c.techs.includes(outcome.tech)) c.techs.push(outcome.tech);
-  if (outcome.delay) for (const w of c.base.works) w.daysLeft += outcome.delay;
+  if (outcome.delay) for (const w of c.base.works) w.daysLeft += oldDaysToNow(outcome.delay);
   const soldier = c.soldiers.find((s) => s.id === q.soldier && s.alive);
   if (outcome.trait && soldier && !soldier.traits.includes(outcome.trait)) soldier.traits.push(outcome.trait);
   if (outcome.recruit) {
@@ -2009,7 +2019,7 @@ function refreshQuests(c: CampaignState, rng: Rng): void {
     ['mole', (c.seen.sabotage ?? 0) >= 2],
     ['ibarra', level >= 3 && c.story.done >= 1],
     ['amara', c.story.done >= NWOSU_CHAPTER && contacted('afr')],
-    ['numbers', level >= 2 && c.day >= 20],
+    ['numbers', level >= 2 && c.day >= oldDaysToNow(20)],
   ];
   const next = due.find(([id, ready]) => ready && questAvailable(c, id));
   if (next) startQuest(c, next[0], rng);
@@ -2042,7 +2052,7 @@ function newRumor(c: CampaignState, rng: Rng): void {
   const pool = withQuest.length && rng.int(2) === 0 ? withQuest : contacted.length && rng.int(10) < 6 ? contacted : all;
   if (!pool.length) return;
   const region = rng.pick(pool);
-  const rumor: Rumor = { id: newId(c, 'r'), region, text: rng.pick(RUMOR_LINES), expiresDay: c.day + RUMOR_LIFE, daysLeft: 3 + rng.int(3) };
+  const rumor: Rumor = { id: newId(c, 'r'), region, text: rng.pick(RUMOR_LINES), expiresDay: c.day + RUMOR_LIFE, daysLeft: 1 };
   c.rumors.push(rumor);
   log(c, `Se habla de ${rumor.text}. Si lo escuchamos unos días, sabremos qué hay de cierto.`, 'info', { kicker: 'RUMOR', title: REGIONS[region].name, rumor: rumor.id });
 }
@@ -2117,7 +2127,7 @@ export const SIEGE_EVERY = 3;
 export const SIEGE_FIRST = 14;
 export const SIEGE_GROWTH = 6;
 /** Days that go by with each mission (docs/FASE12.md §11.6): time is counted in missions, the clock inside in days. */
-export const DAYS_PER_MISSION = 5;
+export const DAYS_PER_MISSION = 1;
 
 /** The sides a siege comes by: one to three of the four, at random. */
 function siegeSides(rng: Rng): number[] {
@@ -2274,7 +2284,7 @@ function freshRegions(): RegionState[] {
 
 /** The base's first line, and the same once the opening operation is chosen (placeholders for Lore). */
 const WELCOME = 'El Bastión entra en servicio. Elegid la primera misión.';
-const WELCOME_OPENING = 'Primera salida: la insulina del consultorio de Brena. La escuadra espera junto a La Lata.';
+const WELCOME_OPENING = 'Primera salida: la insulina del consultorio de Bielsa. La escuadra espera junto a La Lata.';
 
 /**
  * A new campaign opens with a mission (playtest 2026-10-13): the first story
@@ -2322,11 +2332,11 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     activeMission: null,
     squad: [],
     doom: 2,
-    nextMissionDay: 6,
-    nextDoomDay: 1 + DOOM_INTERVAL,
-    nextFacilityDay: 9,
+    nextMissionDay: 2,
+    nextDoomDay: 2 + DOOM_INTERVAL,
+    nextFacilityDay: 3,
     nextSupplyDay: 1 + MONTH,
-    nextEventDay: 5,
+    nextEventDay: 2,
     event: null,
     advanceReady: [false, false],
     launchReady: [false, false],
@@ -2341,7 +2351,7 @@ export function createCampaign(players: Slot[], rng: Rng): CampaignState {
     questEvent: null,
     rumors: [],
     listening: null,
-    nextRumorDay: 4,
+    nextRumorDay: 2,
     techs: [],
     seen: {},
     nextId: 0,
@@ -2697,6 +2707,10 @@ function proposalText(c: CampaignState, action: ProposalAction): string {
     }
     case 'craft':
       return `hacer en el Taller: ${CRAFTS[action.project].name.toLowerCase()}`;
+    case 'recruit':
+      return `reclutar un soldado (${recruitCost(c)} §)`;
+    case 'buy':
+      return `comprar ${ITEMS[action.item].name.toLowerCase()} (${shopPrice(c, action.item)} §)`;
   }
 }
 
@@ -2772,6 +2786,15 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       return null;
     case 'craft':
       return craftBlocker(c, action.project);
+    case 'recruit': {
+      const mine = c.soldiers.filter((s) => s.owner === action.for && s.alive).length;
+      if (mine >= soldierCap(c)) return `Máximo ${soldierCap(c)} soldados por jugador.`;
+      if (bedsFree(c) <= 0) return 'No quedan camas: para reclutar más, construid un Barracón.';
+      return canAfford(c, recruitCost(c)) ? null : 'No hay suministros suficientes.';
+    }
+    case 'buy':
+      if (!itemUnlocked(c, action.item)) return needsLevelLine(ITEMS[action.item].level);
+      return canAfford(c, shopPrice(c, action.item)) ? null : 'No hay suministros suficientes.';
   }
 }
 
@@ -2884,11 +2907,32 @@ function applyAction(c: CampaignState, action: ProposalAction, ctx: CampaignCont
       // A work like any other: a crew at the Taller, paid in suministros and parts.
       const def = CRAFTS[action.project];
       const shop = workshopPiece(c)!;
-      const days = workDays(c, def.days);
+      const days = oldDaysToNow(workDays(c, def.days));
       pay(c, def.cost);
       c.parts = (c.parts ?? 0) - def.parts;
       c.base.works.push({ plot: shop.id, kind: 'craft', facility: 'workshop', daysLeft: days, total: days, project: def.id });
       log(c, `El Taller se pone con ${def.the}: ${days} días.`);
+      break;
+    }
+    case 'recruit': {
+      const place = action.squad && c.activeMission ? squadPlace(c, action.for, ctx.connected) : null;
+      pay(c, recruitCost(c));
+      const s = addSoldier(c, action.for, rng);
+      // The training centre sends them in with something more learnt: a level for each of its own (its places in the
+      // squad are La Lata's now: 18/10 #45).
+      const trained = facilityLevel(c, 'training');
+      if (trained) seasoned(s, trained, rng);
+      log(c, `Llega a la escuadra: ${s.name} (${veterancyName(s)}).`);
+      if (place && !place.error) {
+        joinSquad(c, s, place);
+        c.launchReady = [false, false];
+      }
+      break;
+    }
+    case 'buy': {
+      pay(c, shopPrice(c, action.item));
+      c.inventory[action.item] = (c.inventory[action.item] ?? 0) + 1;
+      log(c, `Comprado: ${ITEMS[action.item].name}.`);
       break;
     }
   }
@@ -2924,6 +2968,10 @@ export function proposalCost(c: CampaignState, action: ProposalAction): number {
       return contactCost(c);
     case 'craft':
       return CRAFTS[action.project].cost;
+    case 'recruit':
+      return recruitCost(c);
+    case 'buy':
+      return shopPrice(c, action.item);
     default:
       return 0;
   }
@@ -3196,24 +3244,10 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
     }
 
     case 'recruit': {
-      const mine = c.soldiers.filter((s) => s.owner === slot && s.alive).length;
-      if (mine >= soldierCap(c)) return { ok: false, error: `Máximo ${soldierCap(c)} soldados por jugador.` };
-      if (bedsFree(c) <= 0) return { ok: false, error: 'No quedan camas: para reclutar más, construid un Barracón.' };
-      if (!canAfford(c, recruitCost(c))) return { ok: false, error: 'No hay suministros suficientes.' };
+      // With the other one here, the shared supplies go to a vote (Ana, 21/10 #31); alone, at once.
       const place = cmd.squad ? (c.activeMission ? squadPlace(c, slot, ctx.connected) : { error: 'Primero elegid una misión.' }) : null;
       if (place?.error) return { ok: false, error: place.error };
-      pay(c, recruitCost(c));
-      const s = addSoldier(c, slot, ctx.rng);
-      // The training centre sends them in with something more learnt: a level for each of its own (its places in the
-      // squad are La Lata's now: 18/10 #45).
-      const trained = facilityLevel(c, 'training');
-      if (trained) seasoned(s, trained, ctx.rng);
-      log(c, `Llega a la escuadra: ${s.name} (${veterancyName(s)}).`);
-      if (place) {
-        joinSquad(c, s, place);
-        c.launchReady = [false, false];
-      }
-      return { ok: true };
+      return propose(c, { type: 'recruit', for: slot, ...(cmd.squad ? { squad: true } : {}) }, ctx);
     }
 
     case 'customize': {
@@ -3242,16 +3276,8 @@ function runCampaignCommand(c: CampaignState, cmd: CampaignCommand, ctx: Campaig
       return { ok: true };
     }
 
-    case 'buy': {
-      const def = ITEMS[cmd.item];
-      if (!itemUnlocked(c, cmd.item)) return { ok: false, error: needsLevelLine(def.level) };
-      const cost = shopPrice(c, cmd.item);
-      if (!canAfford(c, cost)) return { ok: false, error: 'No hay suministros suficientes.' };
-      pay(c, cost);
-      c.inventory[cmd.item] = (c.inventory[cmd.item] ?? 0) + 1;
-      log(c, `Comprado: ${def.name}.`);
-      return { ok: true };
-    }
+    case 'buy':
+      return propose(c, { type: 'buy', item: cmd.item }, ctx);
 
     case 'equip': {
       const s = c.soldiers.find((x) => x.id === cmd.soldier);
@@ -3343,7 +3369,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
     log(c, `El rumor ${ofZone(REGIONS[r.region].name)} se ha enfriado.`);
   }
   if (c.day >= c.nextRumorDay) {
-    c.nextRumorDay = c.day + 7 + rng.int(5);
+    c.nextRumorDay = c.day + 1 + (rng.int(5) >= 2 ? 1 : 0);
     if (c.rumors.length < MAX_RUMORS) {
       newRumor(c, rng);
       stop = true;
@@ -3351,7 +3377,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   }
 
   if (c.day >= c.nextMissionDay) {
-    c.nextMissionDay = c.day + 5 + rng.int(3);
+    c.nextMissionDay = c.day + 1 + (rng.int(3) === 2 ? 1 : 0);
     if (c.offers.filter((o) => !o.final && !o.facility && !o.story).length < MAX_OFFERS + (facilityLevel(c, 'listening') ? 1 : 0)) {
       const offer = vehicleDue(c) && rng.int(3) === 0 ? vehicleOffer(c, rng) : makeOffer(c, rng);
       c.offers.push(offer);
@@ -3376,7 +3402,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   }
 
   if (c.day >= c.nextFacilityDay) {
-    c.nextFacilityDay = c.day + 20 + rng.int(7);
+    c.nextFacilityDay = c.day + 4 + (rng.int(7) >= 4 ? 1 : 0);
     const free = c.regions.filter((r) => !r.facility);
     if (c.regions.filter((r) => r.facility).length < MAX_FACILITIES && free.length) {
       // Nidos gather under the Marea or beside it, three times as often as elsewhere.
@@ -3435,15 +3461,14 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 
   if (c.day >= c.nextSupplyDay) {
     c.nextSupplyDay = c.day + MONTH;
-    // A zone under the Marea sends nothing.
-    const income = BASE_INCOME + c.regions.filter((r) => r.contacted && !underMarea(c, r.id)).reduce((sum, r) => sum + regionIncome(c, r.id), 0);
+    const income = convoyIncome(c);
     c.credits += income;
-    log(c, `Llega el convoy de Brena: Ruth Halvorsen manda ${income} suministros.`, 'good');
+    log(c, `Llega el convoy de Bielsa: Ruth Halvorsen manda ${income} suministros.`, 'good');
     stop = true;
   }
 
   if (c.day >= c.nextEventDay) {
-    c.nextEventDay = c.day + 9 + rng.int(5);
+    c.nextEventDay = c.day + 2 + (rng.int(5) >= 3 ? 1 : 0);
     const id = rng.pick((Object.keys(EVENTS) as Exclude<CampaignEventId, 'quest'>[]).filter((x) => !EVENTS[x].story));
     c.event = id;
     c.seen[id] = (c.seen[id] ?? 0) + 1;
@@ -3465,7 +3490,7 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 
 // ------------------------------------------------------------- deployment
 
-/** Days off a wound costs: these, and as many again per point of health lost. */
+/** Days of before off a wound costs: these, and as many again per point of health lost (oldDaysToNow). */
 const WOUND_DAYS = 2;
 
 /**
@@ -3693,7 +3718,8 @@ export function applyMissionResult(c: CampaignState, mission: GameState, rng: Rn
     }
     const lost = u.maxHp - u.hp;
     if (lost > 0) {
-      s.woundedDays = Math.max(1, WOUND_DAYS + lost * WOUND_DAYS - garageCut(c).wounds);
+      // The Chapistería takes a day (a mission) off each wound a level, one left at least.
+      s.woundedDays = Math.max(1, oldDaysToNow(WOUND_DAYS + lost * WOUND_DAYS) - garageCut(c).wounds);
       entry.status = 'wounded';
       entry.woundedDays = s.woundedDays;
     }
@@ -3898,7 +3924,34 @@ export function migrateCampaign(old: CampaignState): CampaignState {
       const sex = s.appearance.sex;
       if (JSON.stringify(s.appearance) === JSON.stringify(defaultAppearance(s.owner, undefined, sex))) s.appearance = defaultAppearance(s.owner, undefined, sex, s.id);
     }
+  }  if (old.version < 25) {
+    // A mission is one day now, not five (Arturo, 21/10, #34): what was still to come, in the days of before, comes
+    // in missions, one for every five of them, rounded up; what is past, the same way back.
+    const ahead = (day: number) => (day > c.day ? c.day + oldDaysToNow(day - c.day) : day);
+    const behind = (day: number) => (day < c.day ? c.day - Math.ceil((c.day - day) / OLD_DAYS_PER_MISSION) : day);
+    c.nextMissionDay = ahead(c.nextMissionDay);
+    c.nextDoomDay = ahead(c.nextDoomDay);
+    c.nextFacilityDay = ahead(c.nextFacilityDay);
+    c.nextSupplyDay = ahead(c.nextSupplyDay);
+    c.nextEventDay = ahead(c.nextEventDay);
+    c.nextRumorDay = ahead(c.nextRumorDay);
+    if (c.nextFoodDay !== undefined) c.nextFoodDay = ahead(c.nextFoodDay);
+    if (c.nextMedicineDay !== undefined) c.nextMedicineDay = ahead(c.nextMedicineDay);
+    if (c.story.nextDay !== undefined) c.story.nextDay = ahead(c.story.nextDay);
+    for (const r of c.regions) if (r.facility) r.facility.nextDoomDay = ahead(r.facility.nextDoomDay);
+    for (const o of c.offers) if (o.expiresDay !== null) o.expiresDay = ahead(o.expiresDay);
+    for (const r of c.rumors) {
+      r.expiresDay = ahead(r.expiresDay);
+      r.daysLeft = oldDaysToNow(r.daysLeft);
+    }
+    for (const w of c.base.works) w.daysLeft = oldDaysToNow(w.daysLeft);
+    for (const s of c.soldiers) {
+      if (s.woundedDays > 0) s.woundedDays = oldDaysToNow(s.woundedDays);
+      if (s.infection) s.infection.since = behind(s.infection.since);
+    }
+    for (const q of Object.values(c.questLog)) if (q) q.day = behind(q.day);
   }
+
   for (const s of c.soldiers) {
     s.skills ??= { ...NO_SKILLS };
     s.growth ??= { ...NO_GROWTH };

@@ -6027,7 +6027,7 @@ export interface GenOptions {
   seed: number;
   /** A recovery whose story puts the item out in the open (playtest 2026-10-14, #27): on a square or a car park, not in a room. */
   itemOutdoors?: boolean;
-  /** The opening's medicines belong inside Brena's furnished clinic. */
+  /** The opening's medicines belong inside Bielsa's furnished clinic. */
   clinic?: boolean;
   /** A hospital objective, including the rescue of Dr Nwosu. */
   hospital?: boolean;

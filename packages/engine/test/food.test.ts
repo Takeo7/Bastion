@@ -4,10 +4,15 @@ import {
   applyMissionResult,
   buildSquad,
   CAMPAIGN_VERSION,
+  convoyIn,
+  convoyIncome,
   craftBlocker,
   createCampaign,
   dailyRations,
   DAYS_PER_MISSION,
+  GARDEN_RATIONS,
+  gardenPerMission,
+  rationsPerMission,
   executeCampaignCommand,
   HUNGRY_WILL,
   LA_VEGA_FOOD,
@@ -60,16 +65,17 @@ function share(decor: DecorKind, what: 'food' | 'parts' | 'weapon', n = 4000): n
 }
 
 describe('food', () => {
-  it('the Bastion eats a ration a day for every 4 soldiers, rounded up', () => {
+  it('the Bastion eats a ration a day for every soldier, and a mission is a day (Ana and Arturo, 21/10 #34)', () => {
     const c = quiet();
+    expect(DAYS_PER_MISSION).toBe(1);
     expect(c.food).toBe(START_FOOD);
-    expect(dailyRations(c)).toBe(2);
-    days(c, 3);
-    expect(c.food).toBe(START_FOOD - 6);
+    const alive = c.soldiers.filter((s) => s.alive).length;
+    expect(dailyRations(c)).toBe(alive);
+    expect(rationsPerMission(c)).toBe(alive);
+    days(c, 1);
+    expect(c.food).toBe(START_FOOD - alive);
     c.soldiers[0]!.alive = false;
-    expect(dailyRations(c)).toBe(2);
-    for (const s of c.soldiers.slice(1, 4)) s.alive = false;
-    expect(dailyRations(c)).toBe(1);
+    expect(dailyRations(c)).toBe(alive - 1);
   });
 
   it('with no rations, hunger: less will on missions and wounds heal every other day, until food comes', () => {
@@ -85,25 +91,48 @@ describe('food', () => {
     c.hungry = false;
     expect(squadMember(c, fit).will).toBe(will + HUNGRY_WILL);
     c.hungry = true;
+    c.food = 0;
     // Two days of healing take four.
     wounded.woundedDays = 2;
     days(c, 2);
     expect(wounded.woundedDays).toBe(1);
     days(c, 2);
     expect(wounded.woundedDays).toBe(0);
-    // A Huerto brings rations: with enough for a day, the hunger ends.
+    // Huertos bring rations: with enough for a day, the hunger ends.
+    raise(c, 'garden', 3);
     raise(c, 'garden', 3);
     days(c, 1);
     expect(c.hungry).toBe(false);
-    expect(c.food).toBe(1);
+    expect(c.food).toBe(2 * 3 * GARDEN_RATIONS - dailyRations(c));
   });
 
-  it('the Huerto grows a ration a day for each level', () => {
+  it('a campaign of before (a mission, five days) comes over with what was to come in missions (21/10 #34)', () => {
+    const c = quiet();
+    const old = JSON.parse(JSON.stringify(c)) as CampaignState;
+    old.version = 24 as CampaignState['version'];
+    old.day = 31;
+    old.nextDoomDay = 43;
+    old.nextSupplyDay = 61;
+    old.soldiers[0]!.woundedDays = 8;
+    old.soldiers[1]!.infection = { since: 29 };
+    const m = migrateCampaign(old);
+    expect(m.version).toBe(CAMPAIGN_VERSION);
+    expect(m.day).toBe(31);
+    expect(m.nextDoomDay).toBe(31 + 3);
+    expect(m.nextSupplyDay).toBe(31 + 6);
+    expect(convoyIn(m)).toBe(6);
+    expect(m.soldiers[0]!.woundedDays).toBe(2);
+    expect(m.soldiers[1]!.infection).toEqual({ since: 30 });
+    expect(convoyIncome(m)).toBeGreaterThan(0);
+  });
+
+  it('the Huerto grows five rations a day (a mission) for each level', () => {
     const c = quiet();
     raise(c, 'garden', 2);
-    const food = c.food!;
+    expect(gardenPerMission(c)).toBe(10);
+    c.food = 100;
     days(c, 4);
-    expect(c.food).toBe(food + 4 * (2 - dailyRations(c)));
+    expect(c.food).toBe(100 + 4 * (10 - dailyRations(c)));
   });
 
   it('several Huertos, each its own rations (Arturo, 20/10)', () => {
@@ -111,9 +140,9 @@ describe('food', () => {
     raise(c, 'garden', 2);
     raise(c, 'garden', 1);
     expect(c.bastion.pieces.filter((p) => p.piece === 'garden')).toHaveLength(2);
-    const food = c.food!;
+    c.food = 100;
     days(c, 4);
-    expect(c.food).toBe(food + 4 * (2 + 1 - dailyRations(c)));
+    expect(c.food).toBe(100 + 4 * (GARDEN_RATIONS * (2 + 1) - dailyRations(c)));
   });
 
   it('La Vega, an ally standing, sends 2 rations every 4 days', () => {
@@ -157,7 +186,7 @@ describe('the Taller', () => {
     return { c, plot };
   }
 
-  it('making plate armour: Taller, Bastion level 4, 60 §, 4 parts and 3 days of a crew; then everyone wears it', () => {
+  it('making plate armour: Taller, Bastion level 4, 60 §, 4 parts and a day (a mission; 3 days of before) of a crew; then everyone wears it', () => {
     const none = quiet();
     expect(craftBlocker(none, 'armor2')).toBe('Hace falta el Taller.');
     const { c, plot } = workshop(1, 2);
@@ -169,11 +198,11 @@ describe('the Taller', () => {
     expect(run(c, { type: 'craft', project: 'armor2' }).ok).toBe(true);
     expect(c.credits).toBe(1000 - CRAFTS.armor2.cost);
     expect(c.parts).toBe(10 - CRAFTS.armor2.parts);
-    expect(c.base.works).toEqual([{ plot: plot.id, kind: 'craft', facility: 'workshop', daysLeft: 3, total: 3, project: 'armor2' }]);
+    expect(c.base.works).toEqual([{ plot: plot.id, kind: 'craft', facility: 'workshop', daysLeft: 1, total: 1, project: 'armor2' }]);
     expect(craftBlocker(c, 'armor2')).toBe('Ya se está haciendo.');
     const anyone = c.soldiers[0]!;
     expect(armorTier(c, anyone)).toBe(1);
-    days(c, 3);
+    days(c, 1);
     expect(c.crafted).toEqual(['armor2']);
     expect(armorTier(c, anyone)).toBe(2);
   });
@@ -204,7 +233,7 @@ describe('the Taller', () => {
     expect(two.c.proposal?.action).toEqual({ type: 'craft', project: 'armor3' });
     expect(two.c.base.works).toEqual([]);
     expect(run(two.c, { type: 'vote', accept: true }, 1, [0, 1]).ok).toBe(true);
-    expect(two.c.base.works[0]).toMatchObject({ kind: 'craft', project: 'armor3', total: 5 });
+    expect(two.c.base.works[0]).toMatchObject({ kind: 'craft', project: 'armor3', total: 1 });
   });
 });
 

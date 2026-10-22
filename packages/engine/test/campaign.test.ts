@@ -90,6 +90,7 @@ describe('shared decisions', () => {
   it('a rejected proposal changes nothing; alone, decisions apply directly', () => {
     // The Sala de radio is dear: it goes to a vote (docs/FASE12.md §11.7).
     const c = createCampaign(both, new Rng(1));
+    c.level = 2;
     const spot = freeSpot(c, 'radio');
     run(c, { type: 'place', piece: 'radio', x: spot.x, y: spot.y, rot: 0 }, 1);
     expect(c.proposal?.action).toEqual({ type: 'place', piece: 'radio', x: spot.x, y: spot.y, rot: 0 });
@@ -369,12 +370,12 @@ describe('missions', () => {
     expect(report.victory).toBe(true);
     expect(report.squad).toHaveLength(6);
     expect(report.squad.find((e) => e.id === soldiers[0]!.campaignId)?.status).toBe('dead');
-    expect(report.squad.find((e) => e.id === soldiers[1]!.campaignId)).toMatchObject({ status: 'wounded', woundedDays: 6 });
+    expect(report.squad.find((e) => e.id === soldiers[1]!.campaignId)).toMatchObject({ status: 'wounded', woundedDays: 2 });
     // Eighteen of Disparo, all of them (no cap: Arturo, 16/10).
     expect(report.squad.find((e) => e.id === soldiers[2]!.campaignId)).toMatchObject({ kills: 6, learned: { ...NO_SKILLS, shooting: 18, medicine: 2 }, deeds: { shot: 7, hit: 5, gunKill: 6, healOther: 1 } });
     expect(c.soldiers.find((s) => s.id === soldiers[0]!.campaignId)!.alive).toBe(false);
     // The report says how bad it was, and a mission takes no days (docs/PRUEBA-2026-10-14.md P7): it is all still to heal.
-    expect(c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays).toBe(6);
+    expect(c.soldiers.find((s) => s.id === soldiers[1]!.campaignId)!.woundedDays).toBe(2);
     expect(c.day).toBe(report.day);
     expect(veteran.skills).toEqual({ ...before, shooting: before.shooting + 18, medicine: before.medicine + 2 });
     expect(c.credits).toBe(credits + (offer.reward.credits ?? 0) + report.salvage);

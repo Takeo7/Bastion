@@ -89,13 +89,14 @@ const block = (w: number, h: number, tile: TileKind): PieceCell[] =>
  */
 export const PIECES: Record<PieceId, PieceDef> = {
   caravan: { id: 'caravan', name: 'Caravana', kind: 'building', size: [5, 2], tile: 'wall', cost: { supplies: 0 }, hp: 40, level: 1, unique: true },
-  radio: { id: 'radio', name: 'Sala de radio', kind: 'building', size: [4, 4], tile: 'wall', cost: { supplies: 60 }, hp: 30, level: 1, unique: true, facility: 'relay' },
+  // Not at the caravan's level (Ana, 21/10 #36): the radio, the Cuarentena and the Camposanto from the next.
+  radio: { id: 'radio', name: 'Sala de radio', kind: 'building', size: [4, 4], tile: 'wall', cost: { supplies: 60 }, hp: 30, level: 2, unique: true, facility: 'relay' },
   quarters: { id: 'quarters', name: 'Barracón', kind: 'building', size: [6, 5], tile: 'wall', cost: { supplies: 40 }, hp: 30, level: 1, facility: 'quarters' },
   infirmary: { id: 'infirmary', name: 'Enfermería', kind: 'building', size: [6, 5], tile: 'wall', cost: { supplies: 60 }, hp: 30, level: 1, unique: true, facility: 'infirmary' },
   workshop: { id: 'workshop', name: 'Taller', kind: 'building', size: [5, 4], tile: 'wall', cost: { supplies: 85 }, hp: 30, level: 1, unique: true, facility: 'workshop' },
   garden: { id: 'garden', name: 'Huerto', kind: 'building', size: [7, 6], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, facility: 'garden' },
-  quarantine: { id: 'quarantine', name: 'Cuarentena', kind: 'building', size: [4, 4], tile: 'wall', cost: { supplies: 50 }, hp: 30, level: 1, unique: true, facility: 'quarantine' },
-  memorial: { id: 'memorial', name: 'Camposanto', kind: 'building', size: [4, 4], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 1, unique: true, facility: 'memorial' },
+  quarantine: { id: 'quarantine', name: 'Cuarentena', kind: 'building', size: [4, 4], tile: 'wall', cost: { supplies: 50 }, hp: 30, level: 2, unique: true, facility: 'quarantine' },
+  memorial: { id: 'memorial', name: 'Camposanto', kind: 'building', size: [4, 4], tile: 'low', cost: { supplies: 40 }, hp: 20, level: 2, unique: true, facility: 'memorial' },
   range: { id: 'range', name: 'Campo de tiro', kind: 'building', size: [10, 3], tile: 'low', cost: { supplies: 90 }, hp: 20, level: 2, unique: true, facility: 'range' },
   training: { id: 'training', name: 'Centro de entrenamiento', kind: 'building', size: [5, 5], tile: 'wall', cost: { supplies: 140 }, hp: 30, level: 2, unique: true, facility: 'training' },
   simulation: { id: 'simulation', name: 'Sala de mapas', kind: 'building', size: [6, 6], tile: 'wall', cost: { supplies: 100 }, hp: 30, level: 3, unique: true, facility: 'simulation' },

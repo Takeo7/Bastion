@@ -1200,7 +1200,17 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
       )
       .replace(
         '#include <project_vertex>',
-        `#include <project_vertex>
+        `if (aAtlas < ${(CAP_ATLAS + 0.5).toFixed(1)} && aCut.x > 0.5) {
+          // A wall's cap (CAP_QUAD): down with its wall on the storey in view (the batch's vertices are the world's).
+          vec4 capState = cutState(aCut.x);
+          float capShown = cutFloor(capState);
+          if (aLevel > capShown - 0.5 && aLevel < capShown + 0.5 && aCut.y < ${ON_ROOF - 1}.0) {
+            float capFacing = dot(aCut.yz, aCut.yz) < 0.01 ? 1.0 : smoothstep(-0.15, 0.25, -dot(aCut.yz, cutView));
+            float capK = max(capState.g * capFacing, capState.b);
+            if (capK > 0.0) transformed.y = min(transformed.y, aCut.w + mix(${(STOREY + 0.05).toFixed(2)}, ${CUT_LOW.toFixed(2)}, capK));
+          }
+        }
+        #include <project_vertex>
         {
           vec4 cutWorld = vec4(transformed, 1.0);
           #ifdef USE_INSTANCING
@@ -1226,6 +1236,8 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
               if (k > 0.0) vCutTop = aCut.w + mix(${(STOREY + 0.05).toFixed(2)}, ${CUT_LOW.toFixed(2)}, k);
             }
           }
+          // A cap stands at the cut itself: never cut away by it.
+          if (aAtlas < ${(CAP_ATLAS + 0.5).toFixed(1)}) vCutTop = 1e4;
         }`,
       );
     shader.fragmentShader = shader.fragmentShader
@@ -1247,7 +1259,9 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
           }
           if (dyeUv.y < 0.25) diffuseColor.rgb *= dyeUv.x < 0.4167 ? vInner : (dyeUv.x > 0.506 ? vOuter : vec3(1.0));
         #endif
-        if (!gl_FrontFacing) diffuseColor.rgb = vec3(0.16, 0.15, 0.14);`,
+        if (!gl_FrontFacing) diffuseColor.rgb = vec3(0.16, 0.15, 0.14);
+        // A wall's cap: the section of a solid wall, a plain grey a little of the building's inside colour.
+        if (vAtlas < ${(CAP_ATLAS + 0.5).toFixed(1)}) diffuseColor.rgb = vec3(0.34, 0.32, 0.3) * mix(vec3(1.0), vInner, 0.35);`,
       );
   });
 }
@@ -1776,6 +1790,50 @@ KITS.shopFront = { ...KITS.brick, window: ['shopWindow'], door: ['shopDoor'], le
 
 /** Walls between rooms: Town's interior walls, whatever the building. */
 const BETWEEN: Kit = { ...KITS.house, wall: ['roomWall'], door: ['roomDoorWall'], lintel: ['roomLintel'] };
+
+/**
+ * The pieces with no cap (CAP_QUAD): a doorway's (a lid over it at waist height read as a wall, not a way through), the
+ * lintels over them, a gate's leaves, the wire along a fence's top and a fence's mesh, which is seen through.
+ */
+const NO_CAP = new Set<PieceId>([
+  ...[...Object.values(KITS), BETWEEN].flatMap((k) => [...k.door, ...k.lintel, ...(k.leaf ? [k.leaf] : []), ...(k.top ? [k.top] : [])]),
+  'fenceWall',
+  'fenceColumn',
+  'gateLeaf',
+  'gateLeafFar',
+]);
+
+/**
+ * A wall's cap (playtest 21/10 #47, Ana: in the cutaway the hollow between a wall's two faces showed, «que parezca un
+ * único muro»): a lid over a piece's footprint at its top, which the cutaway lowers with the wall (wallCutPatch). A
+ * unit square facing up, scaled to the piece's box.
+ */
+const CAP_QUAD = (() => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0], 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0, 0, 0], 2));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  return g;
+})();
+/** aAtlas of a cap: its colour is the cutaway's own (wallCutPatch), and its height follows the cut. */
+const CAP_ATLAS = -2;
+/** Each piece's footprint and top in its own frame, thickened (`${id}:${thick}:${square}`), for its cap; null without any. */
+const capBoxes = new Map<string, THREE.Box3 | null>();
+
+function capBox(parts: PiecePart[], thicken: THREE.Matrix4, key: string): THREE.Box3 | null {
+  let box = capBoxes.get(key);
+  if (box !== undefined) return box;
+  box = new THREE.Box3();
+  for (const part of parts) {
+    if (part.leaf) continue;
+    if (!part.geometry.boundingBox) part.geometry.computeBoundingBox();
+    box.union(part.geometry.boundingBox!.clone().applyMatrix4(thicken.clone().multiply(part.matrix)));
+  }
+  if (box.isEmpty()) box = null;
+  capBoxes.set(key, box);
+  return box;
+}
 
 /** Shop signs and how long each is (tiles): the long ones are scaled down to fit over a door. */
 const SIGNS: [PropId, number][] = [
@@ -2334,7 +2392,7 @@ export class BuildingsView {
       out: Vec2,
       between: boolean,
       b: number,
-      o: { along?: number; thick?: number; square?: boolean; tint?: boolean; open?: boolean; roof?: boolean; tall?: number; otherHinge?: boolean } = {},
+      o: { along?: number; thick?: number; square?: boolean; tint?: boolean; open?: boolean; roof?: boolean; tall?: number; otherHinge?: boolean; cap?: boolean } = {},
     ) => {
       const parts = pieceNow(id);
       if (!parts) {
@@ -2390,12 +2448,27 @@ export class BuildingsView {
         batch.inner.push(inner.r, inner.g, inner.b);
         (batch.level ??= []).push(storeyOf(building, base));
       }
+      // Its cap (CAP_QUAD), on the storey in view's walls (a façade's upper storeys go with the roof, under it): the
+      // first of a stretch's pieces (the wall itself; a window's frame in it stood out of the wall as a box) and posts.
+      if ((o.tint || o.cap) && !o.roof && !o.open && !NO_CAP.has(id)) {
+        const box = capBox(parts, thicken, `${id}:${thick}:${o.square ? 1 : 0}`);
+        if (box) {
+          let caps = batches.get('cap');
+          if (!caps) batches.set('cap', (caps = { geometry: CAP_QUAD, atlas: 'town', matrices: [], cut: [], outer: [], inner: [] }));
+          const lid = new THREE.Matrix4().makeTranslation(box.min.x, box.max.y, box.min.z).scale(new THREE.Vector3(box.max.x - box.min.x, 1, box.max.z - box.min.z));
+          caps.matrices.push(m.clone().multiply(lid));
+          caps.cut.push(b + 1, between ? 0 : out.x, between ? 0 : out.y, base);
+          caps.outer.push(outer.r, outer.g, outer.b);
+          caps.inner.push(inner.r, inner.g, inner.b);
+          (caps.level ??= []).push(storeyOf(building, base));
+        }
+      }
     };
     /** A list of pieces: the first one in the building's colours. */
     const putAll = (ids: PieceId[], x: number, z: number, base: number, out: Vec2, between: boolean, b: number, kit: Kit, open = false, roof = false, otherHinge = false) =>
       ids.forEach((id, k) => put(id, x, z, base, out, between, b, { thick: kit.thick, tint: k === 0, open, roof, otherHinge }));
     const post = (kit: Kit, x: number, z: number, base: number, out: Vec2, between: boolean, b: number, roof = false) =>
-      put(kit.post, x, z, base, out, between, b, { along: kit.postAlong, thick: kit.thick, square: kit.postSquare, roof });
+      put(kit.post, x, z, base, out, between, b, { along: kit.postAlong, thick: kit.thick, square: kit.postSquare, roof, cap: true });
     /** A window pane at (x, z), `base` its storey's floor (upper storeys' go with the roof). */
     const pane = (kitId: KitId, x: number, z: number, base: number, out: Vec2, between: boolean, b: number, roof: boolean) => {
       let p = glass.get(kitId);
@@ -2849,10 +2922,10 @@ export class BuildingsView {
     for (const [key, batch] of batches) {
       const material = this.materialFor(batch.atlas);
       // What stands on roofs and hangs on walls is no ground's occluder (the roofs aren't in the height field).
-      const occludes = !key.startsWith('roof:') && !key.startsWith('sign:');
-      // Its UVs moved into its pack's place in the packed texture, and which pack it is (for the dye).
+      const occludes = !key.startsWith('roof:') && !key.startsWith('sign:') && key !== 'cap';
+      // Its UVs moved into its pack's place in the packed texture, and which pack it is (for the dye; a cap's own mark).
       const uv = atlasRect(batch.atlas) ?? undefined;
-      const aAtlas = [atlasIndex(batch.atlas)];
+      const aAtlas = [key === 'cap' ? CAP_ATLAS : atlasIndex(batch.atlas)];
       batch.matrices.forEach((mm, k) =>
         merged.add(
           batch.geometry,

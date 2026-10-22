@@ -152,6 +152,15 @@
       #status.bad {
         color: var(--stamp);
       }
+      #quit {
+        border-bottom: 1px solid var(--paper-edge);
+      }
+      #fullscreen {
+        margin: 10px 0 0;
+      }
+      #fullscreen[hidden] {
+        display: none;
+      }
       footer {
         color: var(--faded);
         font-size: 11px;
@@ -181,6 +190,11 @@
         </div>
       </form>
       <p id="status" role="status" aria-live="polite"></p>
+      <!-- Always a way out, also in full screen with the menu bar hidden (playtest 21/10 #29). -->
+      <button class="choice" id="quit" type="button">
+        <strong>SALIR DE BASTIÓN</strong>
+      </button>
+      <p class="hint" id="fullscreen" hidden>Esc: salir de pantalla completa.</p>
       <footer id="version"></footer>
     </main>
     <script>
@@ -197,14 +211,14 @@
       async function attempt(run, waiting) {
         if (busy) return;
         busy = true;
-        document.querySelectorAll('button').forEach((b) => (b.disabled = true));
+        document.querySelectorAll('button:not(#quit)').forEach((b) => (b.disabled = true));
         say(waiting);
         const problem = await run();
         // On success the window is already loading the game.
         if (!problem) return;
         say(problem, true);
         busy = false;
-        document.querySelectorAll('button').forEach((b) => (b.disabled = false));
+        document.querySelectorAll('button:not(#quit)').forEach((b) => (b.disabled = false));
       }
       const PHASES = { lobby: 'en el menú', base: 'en la base', mission: 'en misión' };
       const lanHint = document.getElementById('lan-hint');
@@ -236,6 +250,9 @@
         }
       }
       api.onGames(showGames);
+      document.getElementById('quit').addEventListener('click', () => api.quit());
+      const fullscreen = document.getElementById('fullscreen');
+      api.onFullscreen((on) => (fullscreen.hidden = !on));
       document.getElementById('host').addEventListener('click', () => attempt(() => api.host(), 'Abriendo la partida…'));
       document.getElementById('join').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -245,6 +262,7 @@
         if (!info) return;
         address.value = info.last;
         if (info.games.length) showGames(info.games);
+        fullscreen.hidden = !info.fullscreen;
         document.getElementById('version').textContent = `versión ${info.version}${info.uncapped ? ' · sin tope de imágenes (medición)' : ''}`;
       });
     </script>

@@ -1322,7 +1322,8 @@ export class Hud {
       'div.mission-intro.open',
       {},
       kicker ? h('small', {}, kicker) : null,
-      h('h1', {}, type(title)),
+      // A long name smaller, in two lines (Ana, 21/10 #43).
+      h(`h1${title.length > 24 ? '.long' : ''}`, {}, type(title)),
       // The objective, the turns under it in the accent, then the briefing whole (playtest 19/10 #12).
       objective ? h('p.intro-objective', {}, h('b', {}, 'Objetivo: '), objective) : null,
       turns ? h('p.intro-turns', {}, turns) : null,

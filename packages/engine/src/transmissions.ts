@@ -27,7 +27,7 @@ export const SPEAKERS: Record<SpeakerId, Speaker> = {
   nwosu: { name: 'Dra. Amara Nwosu', role: 'Enfermería' },
   simon: { name: 'Simão Ferreira', role: 'Desertor de los Cuervos' },
   voz: { name: 'Celia Marsh, «la Voz»', role: 'La Congregación' },
-  halvorsen: { name: 'Ruth Halvorsen', role: 'Refugio de Brena' },
+  halvorsen: { name: 'Ruth Halvorsen', role: 'Refugio de Bielsa' },
   coro: { name: 'Voz sin nombre', role: 'Frecuencia de la Congregación' },
 };
 
@@ -89,12 +89,12 @@ const bitten = (c: CampaignState) => c.soldiers.filter((s) => s.alive && s.infec
 export const SCENES: Scene[] = [
   {
     id: 'council',
-    title: 'Carta del Refugio',
-    channel: 'Correo a pie · leída por Morse',
+    title: 'El trato con el Refugio',
+    channel: 'Onda corta · Refugio de Bielsa',
     when: (c) => c.day > 31,
     lines: [
-      { who: 'halvorsen', text: 'Al Bastión, del Refugio de Brena. Con esta carta sube el convoy con los suministros.' },
-      { who: 'halvorsen', text: 'Cada caja sale de una despensa que también pasa hambre. Esperamos resultados.' },
+      { who: 'halvorsen', text: 'Bastión, aquí el Refugio de Bielsa. Lo pactado está en el punto de cambio. No subáis más allá.' },
+      { who: 'halvorsen', text: 'Cada caja sale de una despensa que también pasa hambre. Si no cumplís, se acaba el trato.' },
     ],
   },
   {
@@ -109,13 +109,13 @@ export const SCENES: Scene[] = [
   },
   {
     id: 'ch2Before',
-    title: 'Una llamada de Corran',
+    title: 'Una llamada de Tarbes',
     channel: 'Onda corta · 7.040 kHz',
     when: (c) => chapterOpen(c, 2),
     lines: [
-      { who: 'morse', text: 'Llamada desde el hospital de Corran. Una doctora, encerrada en la tercera planta desde hace tres semanas.' },
-      { who: 'morse', text: 'Trabajaba en el Instituto Galen. Se le acaba el agua.' },
-      { who: 'teo', text: 'Si sabe algo del Galen, hay que sacarla.' },
+      { who: 'morse', text: 'Llamada desde el hospital de Tarbes. Una doctora, encerrada en la tercera planta desde hace tres semanas.' },
+      { who: 'morse', text: 'Trabajaba en el Instituto Koper. Se le acaba el agua.' },
+      { who: 'teo', text: 'Si sabe algo del Koper, hay que sacarla.' },
     ],
   },
   {
@@ -124,7 +124,7 @@ export const SCENES: Scene[] = [
     channel: 'Línea interna · Enfermería',
     when: (c) => c.story.done >= 2,
     lines: [
-      { who: 'nwosu', text: 'Amara Nwosu. Virología, Instituto Galen.' },
+      { who: 'nwosu', text: 'Amara Nwosu. Virología, Instituto Koper.' },
       { who: 'nwosu', text: 'Cuando cerraron las puertas salí con mis notas y nada más. Creo que hay una vacuna.' },
       { who: 'nwosu', text: 'Me faltan muestras, tiempo y una nevera que no se apague.' },
       { who: 'teo', text: 'La nevera es cosa mía.' },
@@ -160,7 +160,7 @@ export const SCENES: Scene[] = [
       { who: 'morse', text: 'Los Llanos de Ceniza no contestan desde ayer.' },
       { who: 'morse', text: 'El último mensaje era un hombre contando muertos desde un tejado. Paró en el doscientos.' },
       { who: 'teo', text: 'De allí ya no va a llegar nada.' },
-      { who: 'morse', text: 'Y lo que baja de los Llanos sube por las carreteras. Si la infestación sigue creciendo, las siguientes serán Corran y Galen.' },
+      { who: 'morse', text: 'Y lo que baja de los Llanos sube por las carreteras. Si la infestación sigue creciendo, las siguientes serán Tarbes y Koper.' },
     ],
   },
   {
@@ -216,7 +216,7 @@ export const SCENES: Scene[] = [
     when: (c) => bitten(c).length > 0,
     lines: [
       { who: 'nwosu', text: 'Treinta y nueve y subiendo. Es el mordisco. Está en la Cuarentena, con el cerrojo echado.' },
-      { who: 'nwosu', text: 'Tres días, alguno más con la Enfermería o con la Cuarentena mejor montada. Con el tratamiento, la fiebre baja.' },
+      { who: 'nwosu', text: 'Un día, alguno más con la Enfermería o con la Cuarentena mejor montada. Con el tratamiento, la fiebre baja.' },
       { who: 'nwosu', text: 'Cada tratamiento se lleva medicinas, y no nos sobran.' },
       { who: 'morse', text: 'Con fiebre no sale de misión. El tratamiento lo aprobáis los dos.' },
     ],
@@ -268,21 +268,21 @@ export const SCENES: Scene[] = [
   },
   {
     id: 'confession',
-    title: 'La noche de Galen',
+    title: 'La noche de Koper',
     channel: 'Sala de radio · 03:10',
     when: (c) => bastionLevel(c) >= 6,
     lines: [
-      { who: 'morse', text: 'Teo. Nwosu dice que en el Galen había un vigilante de noche. El último que vio el sótano.' },
+      { who: 'morse', text: 'Teo. Nwosu dice que en el Koper había un vigilante de noche. El último que vio el sótano.' },
       { who: 'teo', text: 'Era yo.' },
       { who: 'teo', text: 'Hacía las noches para estirar la pensión. A las tres y diez saltó una alarma en el sótano. Saltaba cada dos por tres. La apagué.' },
-      { who: 'teo', text: 'Tres semanas después, los muertos andaban por Corran.' },
+      { who: 'teo', text: 'Tres semanas después, los muertos andaban por Tarbes.' },
       { who: 'morse', text: 'Dos inviernos callado.' },
       { who: 'teo', text: 'Dos inviernos intentando arreglarlo.' },
     ],
   },
   {
     id: 'ch6After',
-    title: 'Los cuadernos de Galen',
+    title: 'Los cuadernos de Koper',
     channel: 'Sala de radio',
     when: (c) => c.story.done >= 6,
     lines: [
@@ -303,7 +303,7 @@ export const SCENES: Scene[] = [
       { who: 'nwosu', text: 'La vacuna está a semanas. Si la Marea nos deja esas semanas.' },
       { who: 'morse', text: 'No nos las va a dejar. Cada noche la Voz habla por radio, y la Marea gira hacia donde ella dice.' },
       { who: 'teo', text: 'Campanas y altavoces. La lleva como a un rebaño.' },
-      { who: 'morse', text: 'Es Celia Marsh. Hacía el programa de la tarde en Radio Corran.' },
+      { who: 'morse', text: 'Es Celia Marsh. Hacía el programa de la tarde en Radio Tarbes.' },
       { who: 'teo', text: 'Hay que sacarla de su emisora. Viva: solo ella sabe cómo se deshace la Marea.' },
     ],
   },
@@ -313,7 +313,7 @@ export const SCENES: Scene[] = [
     channel: 'El Bastión · bajo llave',
     when: (c) => c.story.done >= 7,
     lines: [
-      { who: 'voz', text: 'Buenas noches, Kessra. Están escuchando a la Voz.' },
+      { who: 'voz', text: 'Buenas noches, Ossau. Están escuchando a la Voz.' },
       { who: 'morse', text: 'Ya no está en antena. Aquí solo la oímos nosotros.' },
       { who: 'voz', text: 'Qué silencio tienen aquí arriba.' },
       { who: 'voz', text: 'La Marea no me obedece a mí. Obedece al ruido más fuerte. Mis campanas solo le enseñaban el camino.' },
@@ -347,13 +347,13 @@ export const SCENES: Scene[] = [
   },
   {
     id: 'endingRecord',
-    title: 'Para la Red',
-    channel: 'Frecuencia de la Red',
+    title: 'Para quienes cumplieron',
+    channel: 'Onda corta',
     when: (c) => c.ending === 'record',
     lines: [
       { who: 'teo', text: 'Última caja de dosis. Sale mañana en La Lata, para las bodegas.' },
       { who: 'morse', text: '¿Y la receta?' },
-      { who: 'nwosu', text: 'En el refugio, bajo llave.' },
+      { who: 'nwosu', text: 'Aquí, bajo llave.' },
       { who: 'morse', text: 'Anoche llamaron desde el otro lado de la sierra. Preguntaban por una vacuna.' },
       { who: 'teo', text: '¿Qué les dijiste?' },
       { who: 'morse', text: 'Que aquí no sabemos nada. El Bastión, cambio y corto.' },

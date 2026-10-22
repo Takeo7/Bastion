@@ -182,11 +182,25 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' };
   });
   w.on('closed', () => (win = null));
+  // Esc takes the start screen out of full screen: it has no menu of its own for it (playtest 21/10 #29, Ana stuck
+  // there). The game's pages keep Esc for their menu, and ask for it themselves where they have none (client net.ts).
+  w.webContents.on('before-input-event', (e, input) => {
+    if (input.type === 'keyDown' && input.key === 'Escape' && w.isFullScreen() && w.webContents.getURL().startsWith('file:')) {
+      e.preventDefault();
+      w.setFullScreen(false);
+    }
+  });
+  // The start screen says how to leave full screen while in it.
+  const fullscreen = () => {
+    if (w.webContents.getURL().startsWith('file:')) w.webContents.send('bastion:fullscreen', w.isFullScreen());
+  };
+  w.on('enter-full-screen', fullscreen);
+  w.on('leave-full-screen', fullscreen);
   return w;
 }
 
 /** Only the start screen (a file of the app) may ask to host or join; never a game page from the network. */
-function fromLauncher(e: IpcMainInvokeEvent): boolean {
+function fromLauncher(e: IpcMainInvokeEvent | IpcMainEvent): boolean {
   return e.senderFrame?.url.startsWith('file:') ?? false;
 }
 
@@ -233,7 +247,17 @@ function normalise(address: string): string | null {
 
 ipcMain.handle('bastion:info', (e) => {
   if (!fromLauncher(e)) return null;
-  return { last: readSettings().last ?? '', version: app.getVersion(), uncapped: UNCAPPED, games };
+  return { last: readSettings().last ?? '', version: app.getVersion(), uncapped: UNCAPPED, games, fullscreen: win?.isFullScreen() ?? false };
+});
+
+// «Salir de Bastión» on the start screen (playtest 21/10 #29): the app, and the server with it if it hosts.
+ipcMain.on('bastion:quitLauncher', (e) => {
+  if (fromLauncher(e)) app.quit();
+});
+
+// Out of full screen, asked by a page with nothing else for Esc (client net.ts, the host-closed screen).
+ipcMain.on('bastion:leaveFullscreen', (e) => {
+  if ((fromGame(e) || fromLauncher(e)) && win?.isFullScreen()) win.setFullScreen(false);
 });
 
 ipcMain.handle('bastion:host', async (e): Promise<string | null> => {
@@ -282,7 +306,8 @@ function buildMenu(): void {
       { type: 'separator' },
       { label: 'Pantalla completa', role: 'togglefullscreen' },
       ...(!app.isPackaged || UNCAPPED ? [{ label: 'Herramientas de desarrollo', role: 'toggleDevTools' } as MenuItemConstructorOptions] : []),
-      ...(mac ? [] : [{ type: 'separator' } as MenuItemConstructorOptions, { label: 'Salir', role: 'quit' } as MenuItemConstructorOptions]),
+      // Said outright, so it works in full screen too, with the menu bar hidden (playtest 21/10 #29).
+      ...(mac ? [] : [{ type: 'separator' } as MenuItemConstructorOptions, { label: 'Salir', role: 'quit', accelerator: process.platform === 'win32' ? 'Alt+F4' : 'Ctrl+Q' } as MenuItemConstructorOptions]),
     ],
   };
   // Without an Edit menu, macOS gives text fields no copy and paste.
@@ -307,7 +332,7 @@ function buildMenu(): void {
       { label: 'Ocultar los demás', role: 'hideOthers' },
       { label: 'Mostrar todo', role: 'unhide' },
       { type: 'separator' },
-      { label: 'Salir de Bastión', role: 'quit' },
+      { label: 'Salir de Bastión', role: 'quit', accelerator: 'Cmd+Q' },
     ],
   };
   Menu.setApplicationMenu(Menu.buildFromTemplate(mac ? [appMenu, game, edit] : [game, edit]));

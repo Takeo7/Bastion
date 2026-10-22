@@ -185,7 +185,7 @@ export const MAPS: Record<string, MapDef> = {
     },
   },
   // The base as a battlefield (docs/FASE12.md, hito 1): the old military
-  // station over Brena, its wall with a gate and a barricade on each side,
+  // station over Bielsa, its wall with a gate and a barricade on each side,
   // a raised watchtower on each corner (a ladder up from inside), and the
   // Sala de radio in the middle.
   bastion: {

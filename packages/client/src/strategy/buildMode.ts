@@ -8,11 +8,8 @@ import {
   levelUpBlocker,
   levelUpLine,
   nextLevel,
-  besideLine,
-  besidePieces,
   BUILD_TEXT,
   buildCostLine,
-  buildingKicker,
   buildingWorks,
   buildShortLine,
   dismantleBack,
@@ -27,6 +24,8 @@ import {
   PIECE_STATE,
   PIECE_TEXT,
   PIECES,
+  pieceFigure,
+  pieceFigureShort,
   placeBlocker,
   raiseCost,
   rearmCost,
@@ -41,15 +40,13 @@ import {
 import { h } from '../ui/dom';
 import type { ClearingTool } from './clearing';
 import { markNew } from './fresh';
+import { pieceIcon } from './pieceIcons';
 
 // Building on the clearing (docs/FASE12.md §11.7): the palette by kind, with
 // only what the Bastion's level allows (playtest 20/10 #13: what isn't had yet
 // isn't shown; what a level brings says «Nuevo») and what each thing costs in
 // sight, and the card of a piece picked on the map, with what can be done to
 // it. The pointer's side (the piece about to go down, felling) is clearing.ts.
-
-/** The palette's tabs, in order. */
-const KINDS: PieceKind[] = ['building', 'defence', 'trap'];
 
 /** Order within a tab: as the engine lists them (PIECES), which is cheapest-first within each kind more or less. */
 const ORDER = Object.keys(PIECES) as PieceId[];
@@ -64,11 +61,6 @@ function short(c: CampaignState, cost: { supplies: number; parts?: number }): { 
  * one at a time: while one waits for its yes or no, nothing else can be proposed (campaign.ts propose).
  */
 export const PENDING = 'Ya hay una propuesta pendiente.';
-
-/** The palette's and the card's note while the other one is here: what is done is proposed (#55). */
-export function voteNote(partner: string): string {
-  return `Con ${partner} en la partida, todo se propone: se hace y se paga cuando diga que sí.`;
-}
 
 /** Why `piece` can't be taken up at all (before choosing where): the level, only one, what it costs; a vote waiting. */
 export function pieceBlocker(c: CampaignState, piece: PieceId, voting = false): string | null {
@@ -125,7 +117,6 @@ export function placeLine(c: CampaignState, piece: PieceId, partnerHere: boolean
 
 export interface PaletteView {
   c: CampaignState;
-  kind: PieceKind;
   tool: ClearingTool;
   /** The partner, while connected (their name): everything goes to a vote (#55). */
   partner: string | null;
@@ -136,7 +127,6 @@ export interface PaletteView {
 }
 
 export interface PaletteHandlers {
-  kind(k: PieceKind): void;
   take(piece: PieceId): void;
   fell(): void;
   drop(): void;
@@ -144,56 +134,76 @@ export interface PaletteHandlers {
   seen?(key: string): void;
 }
 
-/** The palette: the felling tool, the tabs, and each piece of the tab with its cost or why not. */
-export function palette(v: PaletteView, on: PaletteHandlers): HTMLElement[] {
+/** The palette's panels under Talar, in order (Ana, 21/10 #40): what is built, then what defends, the automatic ones too. */
+const GROUPS: { title: string; kinds: PieceKind[] }[] = [
+  { title: BUILD_TEXT.tabs.building, kinds: ['building'] },
+  { title: BUILD_TEXT.tabs.defence, kinds: ['defence', 'trap'] },
+];
+
+/** Every piece the palette can show at `level` (the caravan is never built), for their pictures (pieceIcons.ts). */
+export function palettePieces(level: number): PieceId[] {
+  return ORDER.filter((id) => id !== 'caravan' && PIECES[id].level <= level);
+}
+
+/**
+ * The palette (Ana, 21/10 #35, #40): three panels one over the other, each its own steel sheet. Talar; then the
+ * buildings, and the defences with the automatic ones, each a grid of pictures with the name and the cost under,
+ * and what it does on hover. Only what the Bastion's level allows (#13); a unique one already up, ticked; one the
+ * stores can't pay, its cost in red.
+ */
+export function palette(v: PaletteView, on: PaletteHandlers): HTMLElement[][] {
   const { c, tool } = v;
   const level = bastionLevel(c);
   const felling = tool.kind === 'fell';
   const inHand = tool.kind === 'place' ? tool.piece : null;
-  // Only what the Bastion's level allows: the rest isn't said, not even greyed (#13).
-  const items = ORDER.filter((id) => PIECES[id].kind === v.kind && id !== 'caravan' && PIECES[id].level <= level).map((id) => {
+  const tile = (id: PieceId) => {
     const def = PIECES[id];
-    const why = pieceBlocker(c, id);
+    const built = !!def.unique && c.bastion.pieces.some((p) => p.piece === id);
+    const why = built ? null : pieceBlocker(c, id);
+    const pic = pieceIcon(id);
     const item = h(
-      `button.piece-item${why ? '.short' : ''}${inHand === id ? '.on' : ''}`,
+      `button.piece-tile${built ? '.built' : why ? '.short' : ''}${inHand === id ? '.on' : ''}`,
       {
         'data-piece': id,
-        title: `${PIECE_TEXT[id].line}${why ? `\n${why}` : ''}`,
+        disabled: built,
+        title: [PIECE_TEXT[id].line, why ?? ''].filter(Boolean).join('\n'),
         onclick: () => (inHand === id ? on.drop() : on.take(id)),
       },
+      h('span.piece-pic', {}, pic ? h('img', { src: pic, alt: '' }) : h('i.piece-pic-wait')),
       h('b.piece-name', {}, PIECE_TEXT[id].name),
-      h('span.piece-cost', {}, costLabel(def.cost)),
-      h('small.piece-line', {}, why && !/^Falta/.test(why) ? why : PIECE_TEXT[id].line),
+      built ? h('span.piece-cost.built', {}, '✓') : costEl(def.cost),
     );
     return markNew(item, !!v.isNew?.(`piece:${id}`), () => on.seen?.(`piece:${id}`));
+  };
+  // A proposal waiting (with the other one here): nothing else goes down meanwhile, said in red over the grids.
+  const pending = !!v.partner && !!c.proposal ? h('p.build-vote.x-why', {}, `${PENDING} ${c.proposal!.by === v.me ? `Espera a que ${v.partner} conteste.` : 'Contesta arriba.'}`) : null;
+  const keys = (kinds: PieceKind[]) => (inHand && kinds.includes(PIECES[inHand].kind) ? h('p.build-keys', {}, `${holdingLine(inHand)}${LINE_PIECES.has(inHand) ? ' Arrastra para poner una fila.' : ''}`) : null);
+  const fell: (HTMLElement | null)[] = [
+    h(
+      `button.fell-tile${felling ? '.on' : ''}`,
+      { title: BUILD_TEXT.felling, onclick: () => (felling ? on.drop() : on.fell()) },
+      h('span.fell-ico', { 'aria-hidden': 'true' }),
+      h('b', {}, BUILD_TEXT.fell),
+      costEl({ supplies: FELL_COST }, 'por árbol'),
+    ),
+    felling ? h('p.build-keys', {}, BUILD_TEXT.felling) : null,
+  ];
+  const groups = GROUPS.map(({ title, kinds }, i): (HTMLElement | null)[] => {
+    const ids = palettePieces(level).filter((id) => kinds.includes(PIECES[id].kind));
+    return [h('div.x-head', {}, title), i === 0 ? pending : null, h('div.piece-grid', {}, ...ids.map(tile)), keys(kinds)];
   });
-  // Said once for the whole palette, not under every piece (#55); a vote waiting, in red, since nothing goes down meanwhile.
-  const pending = !!v.partner && !!c.proposal;
-  return ([
-    h(
-      'div.x-head.build-head',
-      { title: BUILD_TEXT.paletteHelp },
-      BUILD_TEXT.build,
-      h(`button.x-btn.small.fell-tool${felling ? '.on' : ''}`, { title: `${BUILD_TEXT.fellTip} Arrastra un rectángulo sobre el pinar.`, onclick: () => (felling ? on.drop() : on.fell()) }, BUILD_TEXT.fell),
-    ),
-    v.partner ? h(`p.build-vote${pending ? '.x-why' : ''}`, {}, pending ? `${PENDING} ${c.proposal!.by === v.me ? `Espera a que ${v.partner} conteste.` : 'Contesta arriba.'}` : voteNote(v.partner)) : null,
-    h(
-      'div.build-tabs',
-      {},
-      ...KINDS.map((k) => h(`button.build-tab${v.kind === k ? '.on' : ''}`, { onclick: () => on.kind(k) }, BUILD_TEXT.tabs[k])),
-    ),
-    h('div.piece-list', {}, ...items),
-    h(
-      'p.build-keys',
-      {},
-      inHand ? `${holdingLine(inHand)}${LINE_PIECES.has(inHand) ? ' Arrastra para poner una fila.' : ''}` : felling ? BUILD_TEXT.felling : BUILD_TEXT.idle,
-    ),
-  ] as (HTMLElement | null)[]).filter((x): x is HTMLElement => !!x);
+  return [fell, ...groups].map((parts) => parts.filter((x): x is HTMLElement => !!x));
 }
 
-/** «15 §», «15 § · 1 pieza». */
-function costLabel(cost: { supplies: number; parts?: number }): string {
-  return cost.parts ? `${cost.supplies} § · ${cost.parts} ${cost.parts === 1 ? 'pieza' : 'piezas'}` : `${cost.supplies} §`;
+/** A cost as the stores show it: «40 §», and the parts after with their icon; `per`, small after it. */
+function costEl(cost: { supplies: number; parts?: number }, per = ''): HTMLElement {
+  return h(
+    'span.piece-cost',
+    {},
+    h('span.cost-supplies', {}, `${cost.supplies}`),
+    cost.parts ? h('span.cost-parts', { title: cost.parts === 1 ? '1 pieza' : `${cost.parts} piezas` }, `${cost.parts}`) : null,
+    per ? h('small', {}, per) : null,
+  );
 }
 
 export interface CardView {
@@ -215,18 +225,23 @@ export interface CardHandlers {
   seen?(key: string): void;
 }
 
-/** The card of a piece picked on the clearing: how it is, and mending, raising, setting again or taking it down. */
+/**
+ * The card of a piece picked on the clearing: what it gives (Ana, 21/10 #42: the figure first, big, and the levels
+ * under it), how it stands, and mending, raising, setting again or taking it down. No kicker, no «Junto a», no
+ * notes on what the buttons already say (#39, #41).
+ */
 export function pieceCard(v: CardView, on: CardHandlers): HTMLElement[] {
   const { c, piece: p } = v;
   const def = PIECES[p.piece];
   const text = PIECE_TEXT[p.piece];
   const level = p.level ?? 1;
   const building = def.kind === 'building' && p.piece !== 'caravan';
+  const figure = building ? pieceFigure(p.piece, level) : null;
   const out: (HTMLElement | null)[] = [
-    h('div.alert-kicker', {}, building ? buildingKicker(level) : BUILD_TEXT.kinds[def.kind]),
     // The Bastion itself by what it is now (Lore, 20/10: «Caravana», «Casa móvil»…).
     h('h2.x-title', {}, p.piece === 'caravan' ? bastionLevelName(bastionLevel(c)) : text.name, h('button.x-btn.small.piece-close', { title: 'Soltarla (Esc)', onclick: () => on.close() }, '✕')),
-    h('p.x-muted', {}, text.line),
+    figure ? h('p.piece-figure', {}, figure) : h('p.x-muted', {}, text.line),
+    building ? ladder(p.piece, level) : null,
     building && text.levels?.[level - 1] ? h('p.piece-level-line', {}, text.levels[level - 1]) : null,
   ];
 
@@ -243,8 +258,6 @@ export function pieceCard(v: CardView, on: CardHandlers): HTMLElement[] {
   if (def.charges) out.push(h('p.piece-uses', {}, usesLine(p.charges ?? 0, def.charges)));
   const state = def.kind === 'building' && !buildingWorks(p) ? PIECE_STATE.brokenLine : def.charges && !(p.charges ?? 0) ? (p.piece === 'turret' ? PIECE_STATE.silentLine : PIECE_STATE.spentLine) : null;
   if (state) out.push(h('p.x-why', {}, state));
-  const beside = besidePieces(c.bastion, p);
-  if (def.kind === 'building' && beside.length) out.push(h('p.piece-beside', {}, besideLine([...new Set(beside.map((b) => PIECE_TEXT[b.piece].name))])));
 
   // What can be done to it: nothing while a vote waits (#55), said on each.
   const actions: (HTMLElement | null)[] = [];
@@ -293,12 +306,23 @@ export function pieceCard(v: CardView, on: CardHandlers): HTMLElement[] {
             h('button.x-btn.small.bad', { onclick: () => on.send({ type: 'dismantle', piece: p.id }) }, BUILD_TEXT.dismantleYes),
             h('button.x-btn.small', { onclick: () => on.dismantle(false) }, BUILD_TEXT.dismantleNo),
           )
-        : button(actionPrice('dismantle', { supplies: back }), pending, () => on.dismantle(true), BUILD_TEXT.dismantleTip),
+        : button(actionPrice('dismantle', { supplies: back }), pending, () => on.dismantle(true)),
     );
   }
   out.push(h('div.piece-actions', {}, ...actions));
-  if (v.partner && !pending && actions.length) out.push(h('p.build-vote', {}, voteNote(v.partner)));
   return out.filter((x): x is HTMLElement => !!x);
+}
+
+/** A building's levels in a row, what each gives, the one it is at lit (#42): «Nivel 1 +5 · Nivel 2 +10 · Nivel 3 +15». */
+function ladder(piece: PieceId, level: number): HTMLElement | null {
+  const top = PIECE_TEXT[piece].levels?.length ?? 3;
+  const steps = Array.from({ length: top }, (_, i) => ({ n: i + 1, figure: pieceFigureShort(piece, i + 1) }));
+  if (!steps.some((s) => s.figure)) return null;
+  return h(
+    'div.piece-ladder',
+    {},
+    ...steps.map((s) => h(`span.piece-step${s.n === level ? '.now' : s.n < level ? '.past' : ''}`, {}, h('small', {}, `Nivel ${s.n}`), h('b', {}, s.figure ?? '—'))),
+  );
 }
 
 /** An action of the card: off with its reason under it when it can't be done; `tip` under it otherwise, `title` on hover. */

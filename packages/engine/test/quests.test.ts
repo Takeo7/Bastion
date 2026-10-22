@@ -61,7 +61,7 @@ const questOffer = (c: CampaignState, id: string) => c.offers.find((o) => o.ques
 /** Puts a rumour in `region`, listens to it and scans until it resolves. */
 function listen(c: CampaignState, region: RegionId) {
   c.regions.find((r) => r.id === region)!.contacted = true;
-  c.rumors = [{ id: 'r99', region, text: 'algo', expiresDay: c.day + 10, daysLeft: 2 }];
+  c.rumors = [{ id: 'r99', region, text: 'algo', expiresDay: c.day + 10, daysLeft: 1 }];
   run(c, { type: 'investigate', id: 'r99' });
   expect(c.listening).toBe('r99');
   advanceTime(c, new Rng(1));
@@ -75,7 +75,7 @@ describe('rumours', () => {
     c.nextRumorDay = c.day + 1;
     advanceTime(c, new Rng(1));
     expect(c.rumors).toHaveLength(1);
-    expect(c.log[0]!.alert?.kicker).toBe('RUMOR');
+    expect(c.log.some((l) => l.alert?.kicker === 'RUMOR')).toBe(true);
     const rumor = c.rumors[0]!;
     advanceUntil(c, () => c.day > rumor.expiresDay && !c.rumors.some((r) => r.id === rumor.id));
   });

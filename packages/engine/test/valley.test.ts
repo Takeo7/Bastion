@@ -27,7 +27,7 @@ import { Rng } from '../src/rng';
 import type { Slot } from '../src/types';
 import { raise } from './helpers';
 
-// Phase 5: the valley of Kessra (docs/FASE5.md).
+// Phase 5: the valley of Ossau (docs/FASE5.md).
 
 const ZONES = Object.keys(REGIONS) as RegionId[];
 const run = (c: CampaignState, cmd: CampaignCommand, slot: Slot = 0, connected: Slot[] = [0]) => executeCampaignCommand(c, cmd, { slot, connected, rng: new Rng(7) });
@@ -57,8 +57,8 @@ const wait = (c: CampaignState) => {
 describe('the valley', () => {
   // Lore, 2026-10-13: invented, neutral names.
   it('the zones have their names, and ordinary operations are named for the place they go', () => {
-    expect(REGIONS.weu.name).toBe('Brena');
-    expect([REGIONS.afr.name, REGIONS.eeu.name, REGIONS.me.name, REGIONS.sa.name]).toEqual(['Corran', 'Velsa', 'Galen', 'Carvik']);
+    expect(REGIONS.weu.name).toBe('Bielsa');
+    expect([REGIONS.afr.name, REGIONS.eeu.name, REGIONS.me.name, REGIONS.sa.name]).toEqual(['Tarbes', 'Sappada', 'Koper', 'Rudnik']);
     expect([REGIONS.oce.name, REGIONS.eas.name, REGIONS.na.name]).toEqual(['La Vega', 'El Pantano Gris', 'Los Llanos de Ceniza']);
     let ordinary = 0;
     for (let seed = 1; seed <= 12; seed++) {
@@ -104,9 +104,9 @@ describe('the valley', () => {
 });
 
 describe('contacting by road', () => {
-  it('only zones a road joins to Brena or to a contacted zone; the reason says where to go first', () => {
+  it('only zones a road joins to Bielsa or to a contacted zone; the reason says where to go first', () => {
     const c = quiet();
-    expect(contactBlocker(c, 'afr')).toBe('No hay carretera desde vuestras zonas: contactad antes con La Vega o Carvik.');
+    expect(contactBlocker(c, 'afr')).toBe('No hay carretera desde vuestras zonas: contactad antes con La Vega o Rudnik.');
     expect(contactBlocker(c, 'na')).toBe('No hay carretera desde vuestras zonas: contactad antes con La Vega.');
     expect(run(c, { type: 'contact', region: 'na' }).ok).toBe(false);
     expect(run(c, { type: 'contact', region: 'oce' }).ok).toBe(true);
@@ -118,7 +118,7 @@ describe('contacting by road', () => {
 });
 
 describe('the Marea', () => {
-  it('rises zone by zone from Los Llanos as the activity reaches each threshold; Brena only falls with the campaign', () => {
+  it('rises zone by zone from Los Llanos as the activity reaches each threshold; Bielsa only falls with the campaign', () => {
     const c = quiet();
     const at = (doom: number) => floodedZones({ doom }).sort();
     expect(at(3)).toEqual([]);

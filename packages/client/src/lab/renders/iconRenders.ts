@@ -1,5 +1,10 @@
+import { cellsOf, createMission, PIECES, placePiece, Rng, type BaseState, type PieceId } from '@bastion/engine';
 import * as THREE from 'three';
+import { piecesLoaded } from '../../game/buildings';
+import { MapView } from '../../game/mapView';
+import { runMapJobs } from '../../game/renderer';
 import { loadModel } from '../../game/synty';
+import { syntyPropsLoaded } from '../../game/syntyProps';
 import { UI_MODELS, type BaseModelId, type PackId, type WeaponId } from '../../game/syntyManifest';
 import { KitBatch, kitMesh, kitModel, loadBaseKit, loadKitModels } from '../../strategy/baseKit';
 import { buildLata, lataModels } from '../../strategy/mula';
@@ -37,7 +42,8 @@ function studio(subject: THREE.Object3D): THREE.Scene {
 function shoot(subject: THREE.Object3D, view: THREE.Vector3, margin = 0.06): string {
   const scene = studio(subject);
   subject.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(subject);
+  // A building's map: framed on its own tiles (the map round them is empty, but its meshes' boxes are the map's).
+  const box = subject.userData.frame instanceof THREE.Box3 ? subject.userData.frame.clone() : new THREE.Box3().setFromObject(subject);
   const fov = 18;
   const camera = new THREE.PerspectiveCamera(fov, 1, 0.01, 200);
   // Frame the box in the camera's own axes: its extent across and up, and its middle.
@@ -65,6 +71,42 @@ function shoot(subject: THREE.Object3D, view: THREE.Vector3, margin = 0.06): str
   camera.lookAt(target);
   renderer.render(scene, camera);
   return renderer.domElement.toDataURL('image/png');
+}
+
+/**
+ * A render cut square round what it shows, a little margin left (`fill`: a building's plot seen 3/4 is a lozenge in its
+ * frame's box, empty in the corners: UI scaled the icons up by 1.3 to make up for it).
+ */
+async function filled(url: string, margin = 0.03): Promise<string> {
+  const img = new Image();
+  await new Promise((resolve) => {
+    img.onload = resolve;
+    img.src = url;
+  });
+  const size = img.naturalWidth;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d')!;
+  g.drawImage(img, 0, 0);
+  const data = g.getImageData(0, 0, size, size).data;
+  let [x0, y0, x1, y1] = [size, size, -1, -1];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (data[(y * size + x) * 4 + 3]! < 8) continue;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+  }
+  if (x1 < 0) return url;
+  const side = Math.max(x1 - x0, y1 - y0) / (1 - margin * 2);
+  const out = document.createElement('canvas');
+  out.width = out.height = size;
+  const o = out.getContext('2d')!;
+  o.imageSmoothingQuality = 'high';
+  o.drawImage(img, (x0 + x1) / 2 - side / 2, (y0 + y1) / 2 - side / 2, side, side, 0, 0, size, size);
+  return out.toDataURL('image/png');
 }
 
 /** Resolves once every texture the subject wears has its image (or after ten seconds). */
@@ -198,6 +240,47 @@ const weapon = (id: WeaponId, tilt = 0) => async (): Promise<THREE.Object3D> => 
   return g;
 };
 
+/**
+ * One of the base's buildings for Construir's grid (playtest 21/10 #35, UI's strategy/pieceIcons.ts), as the clearing
+ * draws it: its walls and roof (the map's buildings, MapView), what stands in it and the ground under it, at level 1,
+ * on a little base of its own with nothing round it (MapView.only).
+ */
+const building = (id: PieceId) => async (): Promise<THREE.Object3D> => {
+  const size = 20;
+  const base: BaseState = { width: size, height: size, trees: [], felled: [], pieces: [], nextPiece: 1 };
+  const [w, h] = PIECES[id].size;
+  const piece = placePiece(base, id, Math.floor((size - w) / 2), Math.floor((size - h) / 2), 0);
+  const s = createMission({ map: { kind: 'base', base }, slots: [0], rng: new Rng(1), difficulty: 1 });
+  s.units = [];
+  delete s.traps;
+  await Promise.all([syntyPropsLoaded(), piecesLoaded()]);
+  const cells = cellsOf(piece);
+  const view = new MapView();
+  view.only = new Set(cells.map((c) => c.y * s.width + c.x));
+  view.build(s);
+  view.setVisibility(new Array<boolean>(s.width * s.height).fill(true));
+  view.litBeyond(true);
+  // Its occlusion baked and its fog settled.
+  for (let k = 0; k < 4; k++) {
+    runMapJobs(renderer);
+    view.tick(0.5);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const frame = new THREE.Box3();
+  for (const c of cells) frame.expandByPoint(new THREE.Vector3(c.x, 0, c.y)).expandByPoint(new THREE.Vector3(c.x + 1, 0, c.y + 1));
+  // As high as what stands on its tiles (its roof, a mast).
+  let top = 1.5;
+  view.group.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || o instanceof THREE.BatchedMesh) return;
+    const b = new THREE.Box3().setFromObject(o);
+    if (b.isEmpty() || b.max.x < frame.min.x || b.min.x > frame.max.x || b.max.z < frame.min.z || b.min.z > frame.max.z) return;
+    top = Math.max(top, Math.min(b.max.y, 8));
+  });
+  frame.max.y = top;
+  view.group.userData.frame = frame;
+  return view.group;
+};
+
 /** One of the battle maps' props (syntyManifest.ts, PROPS). */
 const prop = (pack: PackId, id: string) => async (): Promise<THREE.Object3D> => (await loadModel(pack, 'prop', id)).clone();
 
@@ -205,9 +288,10 @@ const prop = (pack: PackId, id: string) => async (): Promise<THREE.Object3D> => 
  * What to render: the subject and the direction it is seen from (its nose or
  * face towards +z); `masks`: only its white silhouettes are wanted; `trim`: as
  * the packs' weapon icons (public/ui/synty/icons), cut to the silhouette and
- * 128 wide, as tall as it comes; `light`: brighter than the rest by so much.
+ * 128 wide, as tall as it comes; `light`: brighter than the rest by so much; `fill`: cut square round what shows
+ * (filled).
  */
-const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.Vector3; masks?: boolean; trim?: boolean; light?: number }> = {
+const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.Vector3; masks?: boolean; trim?: boolean; light?: number; fill?: boolean }> = {
   // More nose than side: chunkier, so it still reads at 128 px.
   mula: { make: mulaIcon, view: new THREE.Vector3(0.95, 0.6, 1.45) },
   // A pure profile, both wheels showing, like the pack's weapon icons: what reads at 26 px.
@@ -241,6 +325,13 @@ const ICONS: Record<string, { make: () => Promise<THREE.Object3D>; view: THREE.V
   // right; a blade slanting up to the right, as the machete.
   escopeta: { make: weapon('shotgun'), view: new THREE.Vector3(-1, 0, 0), masks: true, trim: true },
   cuchillo: { make: weapon('knife', Math.PI / 4), view: new THREE.Vector3(-1, 0, 0), masks: true, trim: true },
+  // The base's buildings for Construir (piece-<id>): 3/4 from the left and above, their door towards the camera.
+  ...Object.fromEntries(
+    (['radio', 'quarters', 'infirmary', 'workshop', 'garden', 'quarantine', 'memorial', 'range', 'training', 'simulation', 'garage', 'echoes'] as PieceId[]).map((id) => [
+      `piece-${id}`,
+      { make: building(id), view: new THREE.Vector3(-1, 1.05, 1.25), fill: true },
+    ]),
+  ),
 };
 
 const shots = new Map<string, string>();
@@ -252,7 +343,7 @@ for (const [name, icon] of Object.entries(ICONS).filter(([n]) => !only || only.i
   void icon.make().then(async (subject) => {
     await painted(subject);
     renderer.toneMappingExposure = 1.1 * (icon.light ?? 1);
-    const url = shoot(subject, icon.view);
+    const url = icon.fill ? await filled(shoot(subject, icon.view)) : shoot(subject, icon.view);
     renderer.toneMappingExposure = 1.1;
     shots.set(name, url);
     const cell = document.createElement('figure');

@@ -510,6 +510,11 @@ export class MapView {
   readonly explored = new ExploredMemory();
   /** The state shown: the game applies events to it in place, so its seq is current. */
   private shown: GameState | null = null;
+  /**
+   * The only tiles whose ground and what stands on it are drawn, none round them (the renders lab's buildings, alone:
+   * lab/renders/iconRenders.ts); null, all of them.
+   */
+  only: Set<number> | null = null;
   /** The next sight update is the first of a mission: no fade. */
   private fresh = true;
   /** Some Synty props or pieces were still loading at the last rebuild (left out): rebuild when they arrive. */
@@ -1478,7 +1483,7 @@ export class MapView {
     // Where a pine was felled, its stump (flat: no cover) till something is built over it.
     if (pieces) {
       for (const i of s.base?.felled ?? []) {
-        if ((area && !area[i]) || s.tiles[i] !== 'floor' || pieces.at[i]! >= 0) continue;
+        if ((area && !area[i]) || s.tiles[i] !== 'floor' || pieces.at[i]! >= 0 || (this.only && !this.only.has(i))) continue;
         const x = i % s.width;
         const y = (i - x) / s.width;
         const k = 0.6 + hash(x, y, 21) * 0.35;
@@ -1496,7 +1501,7 @@ export class MapView {
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
         const i = y * s.width + x;
-        if (area && !area[i]) continue;
+        if ((area && !area[i]) || (this.only && !this.only.has(i))) continue;
         const kind = s.tiles[i]!;
         const e = s.elev[i] ?? 0;
         const base = e * STOREY;
@@ -1725,7 +1730,7 @@ export class MapView {
 
     // The base's pinar goes on past its edge, thinning out to nothing by a ragged line some tiles out (playtest 21/10
     // #27, Ana: no square cut): the same pines, sparser the further, its tracks' ways left open (the dead come in by them).
-    if (s.base && BEYOND.baseWood) {
+    if (s.base && BEYOND.baseWood && !this.only) {
       const { width: w, height: h } = s;
       const track = (x: number, y: number) => ground.kinds[THREE.MathUtils.clamp(y, 0, h - 1) * w + THREE.MathUtils.clamp(x, 0, w - 1)] === FLOOR.STREET;
       for (let y = -BASE_WOOD; y < h + BASE_WOOD; y++) {
@@ -1748,7 +1753,7 @@ export class MapView {
 
     // Ground cover (tufts, papers, leaves, drains…), scattered off the grid; no shadows.
     const coverLayers = new Map<string, Layer[]>();
-    for (const { id, matrix } of scatterCover(s, ground, COVER_DENSITY[graphics().effects], area)) {
+    for (const { id, matrix } of this.only ? [] : scatterCover(s, ground, COVER_DENSITY[graphics().effects], area)) {
       // Nothing grows through the base's buildings, nor through what is left of them.
       if (pieces) {
         const k = pieces.at[Math.floor(matrix.elements[14]!) * s.width + Math.floor(matrix.elements[12]!)] ?? -1;
@@ -1817,8 +1822,8 @@ export class MapView {
         if (this.shown === s) this.rebuild(s);
       });
     }
-    this.group.add(kit.surroundings);
-    if (kit.outskirts) this.group.add(kit.outskirts);
+    if (!this.only) this.group.add(kit.surroundings);
+    if (kit.outskirts && !this.only) this.group.add(kit.outskirts);
     // The night's lights are made when it's night (by day a rebuild needn't pay for them); a partial rebuild keeps them.
     if (!redo) {
       this.night?.dispose();

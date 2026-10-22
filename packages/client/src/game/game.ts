@@ -127,7 +127,6 @@ import {
   maxMoveCost,
   meleeTargets,
   MISSION_NAMES,
-  NIGHT,
   NIGHT_LABEL,
   NIGHT_TEXT,
   LIVING_TIP,
@@ -3009,7 +3008,6 @@ export class Game {
     this.overlays.setFallenPacks([...packs.values()]);
     this.overlays.setSmoke(this.view.smoke);
     this.drawPlans();
-    this.drawDetection();
     this.edge.set(this.marks());
   }
 
@@ -3023,23 +3021,6 @@ export class Game {
     if (v.concealed || v.outcome) return new Set();
     const squad = combatants(v, 'xcom');
     return new Set(v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && squad.some((u) => canSee(v, a, u))).map((a) => a.id));
-  }
-
-  /**
-   * While the squad is concealed and a soldier is selected, every enemy in
-   * sight shows its detection radius: how close a soldier can end a move
-   * without being noticed (playtest: «no he entendido por qué me han visto»).
-   * At night the ring is the one in the dark, half as wide (los.ts
-   * detectionTo); a lit tile is noticed from the whole day radius, and the
-   * move range frames those tiles in red.
-   */
-  private drawDetection(): void {
-    const v = this.view;
-    const show = v.concealed && !v.outcome && !!this.selectedUnit();
-    // Not one up on a storey the cutaway hides: its ring would float over the cut (its flag says where it is).
-    const watchers = show ? v.units.filter((a) => a.alive && a.team === 'alien' && this.visibleAliens.has(a.id) && TEMPLATES[a.template].detection > 0 && !this.mapView.isCutAway(a.pos)) : [];
-    // The enemies notice in their cone (and at arm's length all round): the ring is a keyhole (Arturo, 17/10; the living too, 18/10 #46).
-    this.overlays.setDetection(watchers.map((a) => ({ pos: a.pos, radius: this.darkDetection(a), facing: this.lookOf(a) })));
   }
 
   /**
@@ -3091,15 +3072,8 @@ export class Game {
     });
     if (!turning && !this.wasTurning) return;
     this.wasTurning = turning;
-    this.drawDetection();
     const watched = this.watched ? getUnit(this.view, this.watched) : undefined;
     if (watched?.alive) this.overlays.setVision({ ...this.visionOf(watched), facing: this.lookOf(watched) });
-  }
-
-  /** How close a soldier out of the light can get to `a` unseen: detectionTo's range on an unlit tile. */
-  private darkDetection(a: Unit): number {
-    const day = TEMPLATES[a.template].detection;
-    return this.view.mission.night ? day * NIGHT.detection : day;
   }
 
   private marks(): EdgeMark[] {
@@ -4443,7 +4417,6 @@ export class Game {
       const u = this.selectedUnit();
       if (!u || !this.canAct() || abilityBlocker(this.state, u, this.mode.ability)) this.cancelModeSilently();
     }
-    this.drawDetection();
     this.followLevel();
     // Without the command the range is still shown, fainter: it is for planning (#35). Only the active floor's.
     // Real time: no range (nothing counts actions); the pointer shows the way (rtHover).

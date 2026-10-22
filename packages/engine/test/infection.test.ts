@@ -17,6 +17,8 @@ import {
   type CampaignCommand,
   type CampaignSoldier,
   type CampaignState,
+  INFIRMARY_TURN_DAYS,
+  MEDICATE_DAYS,
 } from '../src/campaign';
 import { INFECTION, TEMPLATES } from '../src/content';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
@@ -161,7 +163,7 @@ describe('infection at the base', () => {
     return { c, report, sick, fallen: c.soldiers.find((s) => s.id === squad[count]!.campaignId)! };
   }
 
-  it('a soldier back with a bite has a fever: three days, five with an Enfermería, and no deploying', () => {
+  it('a soldier back with a bite has a fever: a day (a mission), two with an Enfermería, and no deploying', () => {
     const { c, report, sick, fallen } = bitten();
     const [s] = sick as [CampaignSoldier];
     expect(report.infected).toEqual([s.id]);
@@ -170,7 +172,7 @@ describe('infection at the base', () => {
     expect(fallen.infection).toBeUndefined();
     expect(turnDay(c, s)).toBe(c.day + TURN_DAYS);
     raise(c, 'infirmary');
-    expect(turnDay(c, s)).toBe(c.day + TURN_DAYS + 2);
+    expect(turnDay(c, s)).toBe(c.day + TURN_DAYS + INFIRMARY_TURN_DAYS);
     expect(soldierReady(s)).toBe(false);
     expect(defaultSquad(c, [0, 1])).not.toContain(s.id);
   });
@@ -233,20 +235,20 @@ describe('infection at the base', () => {
     expect(r.ok ? '' : r.error).toMatch(/fiebre/);
   });
 
-  it('medicines heal wounds: 1 ✚ for 3 days fewer', () => {
+  it('medicines heal wounds: 1 ✚ for a day (a mission) fewer', () => {
     const c = createCampaign([0], new Rng(1));
     expect(c.medicines).toBe(START_MEDICINES);
     const s = c.soldiers[0]!;
     expect(run(c, { type: 'medicate', soldier: s.id }, 0, [0]).ok).toBe(false);
-    s.woundedDays = 5;
+    s.woundedDays = 3;
     expect(run(c, { type: 'medicate', soldier: s.id }, 0, [0]).ok).toBe(true);
-    expect(s.woundedDays).toBe(2);
+    expect(s.woundedDays).toBe(3 - MEDICATE_DAYS);
     expect(c.medicines).toBe(START_MEDICINES - 1);
     c.medicines = 0;
     expect(run(c, { type: 'medicate', soldier: s.id }, 0, [0])).toEqual({ ok: false, error: 'No hay medicinas.' });
   });
 
-  it('La Vega and Corran send medicines every few days while they are allies and stand; some operations pay them too', () => {
+  it('La Vega and Tarbes send medicines every few days while they are allies and stand; some operations pay them too', () => {
     const c = createCampaign([0], new Rng(1));
     // No Marea to get in the way (docs/FASE5.md): the activity stays put.
     Object.assign(c, { nextEventDay: 999, nextMissionDay: 999, nextRumorDay: 999, nextFacilityDay: 999, nextSupplyDay: 999, nextDoomDay: 999 });
@@ -255,7 +257,13 @@ describe('infection at the base', () => {
       // The log is newest first (and short): what's new is what comes before the entry on top now.
       const mark = c.log[0];
       const start = c.medicines!;
-      for (let i = 0; i < 60 && c.day < until; i++) advanceTime(c, new Rng(7 + i));
+      // A day at a time: an event set for the next day stops the clock there (and is dropped).
+      for (let i = 0; i < 60 && c.day < until; i++) {
+        c.nextEventDay = c.day + 1;
+        advanceTime(c, new Rng(7 + i));
+        c.event = null;
+        c.nextEventDay = 999;
+      }
       const fresh = mark && c.log.includes(mark) ? c.log.slice(0, c.log.indexOf(mark)) : c.log;
       const convoys = fresh.filter((l) => /medicinas: \+/.test(l.text)).map((l) => Number(/\+(\d+) ✚/.exec(l.text)![1]));
       expect(c.medicines! - start).toBe(convoys.reduce((a, b) => a + b, 0));
@@ -269,7 +277,7 @@ describe('infection at the base', () => {
     const both = wait(c.day + 2 * ENCLAVE_DAYS);
     expect(both.length).toBeGreaterThanOrEqual(1);
     expect(both.every((n) => n === 2)).toBe(true);
-    // A Nido in La Vega: only Corran still sends.
+    // A Nido in La Vega: only Tarbes still sends.
     c.regions.find((r) => r.id === 'oce')!.facility = { nextDoomDay: 999 };
     const one = wait(c.day + 2 * ENCLAVE_DAYS);
     expect(one.length).toBeGreaterThanOrEqual(1);

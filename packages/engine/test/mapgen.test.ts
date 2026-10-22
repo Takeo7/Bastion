@@ -70,7 +70,7 @@ describe('procedural maps', () => {
       const s = createMission({
         map: { kind: 'generated', biome: 'city', seed: seed * 104729 },
         slots: seed % 2 ? [0] : [0, 1], rng: new Rng(seed), kind: 'recovery', difficulty: 1,
-        campaignMission: { id: 'opening', name: 'El consultorio de Brena', story: 1 },
+        campaignMission: { id: 'opening', name: 'El consultorio de Bielsa', story: 1 },
       });
       const label = `opening/${seed}`;
       expect(s.mission.kind, label).toBe('recovery');

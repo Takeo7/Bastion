@@ -865,6 +865,12 @@ export interface PropAsset {
    * stood on the point it looked lifted off the ground (playtest 21/10 #12).
    */
   sink?: number;
+  /**
+   * Where in its atlas (Blender's UV) the slots painted from a texture we don't have take their one plain colour, and
+   * the whole of the meshes named with one of `plainMeshes` (convert.py plain_slots): the caravan's windows (21/10 #32).
+   */
+  plain?: [number, number];
+  plainMeshes?: string[];
 }
 
 const prop = (pack: PackId, fbx: string, o: Omit<PropAsset, 'pack' | 'fbx'> = {}): PropAsset => ({ pack, fbx, ...o });
@@ -927,7 +933,10 @@ export const PROPS = {
   radioMastTop: prop('apocalypse', 'SM_Bld_RadioTower_Top_01', { origin: true }),
   // The new base (docs/FASE12.md §11, basePieces.ts): the caravan, and what is built by hand. A palisade's or a gate's
   // stakes run north–south as modelled; a half one from the post to the north edge, like a fence's.
-  caravan: prop('apocalypse', 'SK_Veh_Caravan_01', { fit: 3.9 }),
+  // Painted from Apocalypse's vehicle texture, La Lata's (21/10 #32: from the pack's atlas it came out a patchwork quilt,
+  // its windows shop signs): white, a blue band along it, mud along its foot; its windows one clean glass (the
+  // texture's has blood on it).
+  caravan: prop('apocalypse', 'SK_Veh_Caravan_01', { fit: 3.9, atlas: 'apocalypseVehicle', plain: [0.48, 0.05], plainMeshes: ['Glass'] }),
   // What the caravan grows into with the Bastion's level (playtest 18/10, #40; basePieces.ts drawBastion): a mobile
   // home on its skirt, its porch; Military's plywood barracón on stilts; a house with its porch and chimney. Each on the
   // FBX's own origin (its glass and its skirt are models of their own, made to fit it), at its own size.
@@ -1240,15 +1249,17 @@ export const PROPS = {
   container: prop('woodland', 'SM_Prop_Shipping_Container_01', { fit: 4.85, yaw: 2, atlas: 'containerRed' }),
   containerBlue: prop('woodland', 'SM_Prop_Shipping_Container_01', { fit: 4.85, yaw: 2, atlas: 'containerBlue' }),
   containerOrange: prop('woodland', 'SM_Prop_Shipping_Container_01', { fit: 4.85, yaw: 2, atlas: 'containerOrange' }),
-  waterTower: prop('apocalypse', 'SM_Bld_WaterTower_01', { fit: 2.3 }),
+  // Its grating (a wire's alpha texture of its own) plain rust (21/10 #32: in the atlas's stripes, like the workbench's
+  // pegboard; so the trolleys' baskets, the trash piles' rubble and the billboards' posters, below).
+  waterTower: prop('apocalypse', 'SM_Bld_WaterTower_01', { fit: 2.3, plain: [0.93, 0.06] }),
   razorWire: prop('military', 'SM_Prop_RazorWire_01', { fit: 1, stretch: true }),
   /** Round the sides of hills (buildings.ts stretches it to a storey). */
   cliff: prop('nature', 'SM_Rock_Wall_01', { fit: 1.4 }),
   cliff2: prop('nature', 'SM_Rock_Wall_02', { fit: 1.4 }),
   // Dressing (dressing.ts): what makes a street look lived in and left, as in Synty's captures.
   // Low cover too: piles of rubbish, junk and tyres (cityLow).
-  trashPile: prop('apocalypse', 'SM_Prop_TrashPile_02', { fit: 1.05 }),
-  trashPile2: prop('apocalypse', 'SM_Prop_TrashPile_03', { fit: 1.05 }),
+  trashPile: prop('apocalypse', 'SM_Prop_TrashPile_02', { fit: 1.05, plain: [0.1, 0.25] }),
+  trashPile2: prop('apocalypse', 'SM_Prop_TrashPile_03', { fit: 1.05, plain: [0.1, 0.25] }),
   junkPile: prop('apocalypse', 'SM_Prop_JunkPile_01', { fit: 1 }),
   tirePile: prop('apocalypse', 'SM_Prop_Tire_Pile_01', { fit: 1 }),
   // Street furniture: slim, at the kerb's corners.
@@ -1272,8 +1283,8 @@ export const PROPS = {
   luggageRetro: prop('apocalypse', 'SM_Prop_Luggage_Retro_01'),
   luggageOpen: prop('apocalypse', 'SM_Prop_Luggage_Open_01'),
   holdall: prop('apocalypse', 'SM_Item_Duffle_Bag_01'),
-  trolley: prop('apocalypse', 'SM_Prop_ShoppingCart_01'),
-  trolleyBroken: prop('apocalypse', 'SM_Prop_ShoppingCart_Broken_01'),
+  trolley: prop('apocalypse', 'SM_Prop_ShoppingCart_01', { plain: [0.09, 0.23] }),
+  trolleyBroken: prop('apocalypse', 'SM_Prop_ShoppingCart_Broken_01', { plain: [0.09, 0.23] }),
   cardboard2: prop('apocalypse', 'SM_Prop_CardboardBox_02', { fit: 0.45 }),
   cardboard4: prop('apocalypse', 'SM_Prop_CardboardBox_04', { fit: 0.45 }),
   // The Armería's bench (playtest 20/10 #29, Ana: a table and boxes with what there is): its grenades, its ammunition.
@@ -1326,8 +1337,9 @@ export const PROPS = {
   rollerShutter: prop('industrial', 'SM_Bld_Door_Roller_Large_01', { origin: true, atlas: 'generic' }),
   motelSign: prop('apocalypse', 'SM_Bld_Motel_Sign_01', { origin: true }),
   billboard: prop('apocalypse', 'SM_Prop_Billboard_Roof_01'),
-  billboardSign: prop('apocalypse', 'SM_Prop_Billboard_Sign_01'),
-  billboardSign2: prop('apocalypse', 'SM_Prop_Billboard_Sign_03'),
+  // Their posters' own texture is Synty's adverts, in English: a bare weathered board instead.
+  billboardSign: prop('apocalypse', 'SM_Prop_Billboard_Sign_01', { plain: [0.99, 0.78] }),
+  billboardSign2: prop('apocalypse', 'SM_Prop_Billboard_Sign_03', { plain: [0.99, 0.78] }),
   // Beyond the map's edge, where nobody walks: the city goes on.
   bus: prop('apocalypse', 'SM_Prop_Car_Wrecked_Bus_01'),
   van: prop('apocalypse', 'SM_Prop_Car_Wrecked_Van_01'),
@@ -1703,9 +1715,14 @@ export interface BaseAsset {
   drop?: string[];
   /** Painted from another atlas than its pack's (Apocalypse's vehicles). */
   atlas?: AtlasId;
+  /**
+   * Where in its atlas (Blender's UV) the slots painted from a texture we don't have take their one plain colour
+   * (convert.py plain_slots): the workbench's pegboard, a wire's alpha, came out in the atlas's stripes (21/10 #32).
+   */
+  plain?: [number, number];
 }
 
-const apocalypseAt = (name: string): BaseAsset => ({ pack: 'apocalypse', fbx: `FBX/${name}` });
+const apocalypseAt = (name: string, o: Omit<BaseAsset, 'pack' | 'fbx'> = {}): BaseAsset => ({ pack: 'apocalypse', fbx: `FBX/${name}`, ...o });
 const at = (pack: PackId, fbx: string, o: Omit<BaseAsset, 'pack' | 'fbx'> = {}): BaseAsset => ({ pack, fbx: `FBX/${fbx}`, ...o });
 
 export const BASE_MODELS = {
@@ -1734,7 +1751,7 @@ export const BASE_MODELS = {
   shackFrame: apocalypseAt('SM_Bld_Junk_Shelter_01'),
   shackTarp: apocalypseAt('SM_Bld_Junk_Shelter_01_Tarp'),
   climbFrame: apocalypseAt('SM_Bld_Junk_Shelter_02'),
-  waterTower: apocalypseAt('SM_Bld_WaterTower_01'),
+  waterTower: apocalypseAt('SM_Bld_WaterTower_01', { plain: [0.93, 0.06] }),
   lookout: at('alpine', 'Props/SM_Prop_Lookout_01'),
   // Furniture, tools and stores.
   bunkBed: apocalypseAt('SM_Prop_Bed_Bunk_01'),
@@ -1749,7 +1766,8 @@ export const BASE_MODELS = {
   powerBoxes: apocalypseAt('SM_Prop_PowerBoxes_01'),
   transformer: apocalypseAt('SM_Prop_Transformer_01'),
   powerGenerator: apocalypseAt('SM_Prop_Generator_01'),
-  workbench: apocalypseAt('SM_Prop_Workbench_01'),
+  // Its pegboard (a wire's alpha texture of its own) plain, a darker wood than its frame.
+  workbench: apocalypseAt('SM_Prop_Workbench_01', { plain: [0.93, 0.06] }),
   vice: apocalypseAt('SM_Prop_Vice_01'),
   anvil: apocalypseAt('SM_Prop_Anvil_01'),
   toolbox: apocalypseAt('SM_Prop_ToolBox_01'),
@@ -1792,7 +1810,7 @@ export const BASE_MODELS = {
   brickPile: apocalypseAt('SM_Prop_Wall_Brick_Pile_01'),
   rubbleHeap: apocalypseAt('SM_Prop_Rubble_Concrete_01'),
   burntHeap: apocalypseAt('SM_Prop_BurnPile_01'),
-  junkHeap: apocalypseAt('SM_Prop_TrashPile_01'),
+  junkHeap: apocalypseAt('SM_Prop_TrashPile_01', { plain: [0.1, 0.25] }),
   // The mountain: pines, rocks, drifts and the range behind.
   pine: at('nature', 'SM_Tree_PolyPine_01'),
   pineSmall: at('nature', 'SM_Tree_PolyPine_02'),
@@ -1842,12 +1860,13 @@ export const BASE_MODELS = {
   snowmobile: at('snow', 'SM_Veh_Snowmobile_01'),
   sled: at('snow', 'SM_Prop_Sled_01'),
   // Building sites, the works brigade and the trades workshop (POLYGON Construction).
-  siteDozer: at('construction', 'SM_Veh_Bulldozer_01'),
+  // Its tracks' texture of their own, plain dark (21/10 #32: in the atlas's stripes); the scaffold's boards plain grey.
+  siteDozer: at('construction', 'SM_Veh_Bulldozer_01', { plain: [0.08, 0.23] }),
   siteSpoil: at('construction', 'SM_Env_Dirt_Pile_03'),
   siteBarricade: at('construction', 'SM_Prop_Barrier_Plastic_01'),
   siteLamp: at('construction', 'SM_Prop_Light_Portable_01'),
   siteScaffold: at('construction', 'SM_Prop_Scaffold_02'),
-  siteScaffoldFull: at('construction', 'SM_Prop_Scaffold_Preset_01'),
+  siteScaffoldFull: at('construction', 'SM_Prop_Scaffold_Preset_01', { plain: [0.1, 0.28] }),
   siteMixer: at('construction', 'SM_Prop_Concrete_Mixer_01'),
   sitePortaloo: at('construction', 'SM_Prop_Portaloo_01'),
   siteBricks: at('construction', 'SM_Prop_Brick_Stack_01'),
@@ -1919,7 +1938,7 @@ export const BASE_MODELS = {
   mapBrickShed: apocalypseAt('SM_Bld_Warehouse_Brick_01'),
   mapWorks: apocalypseAt('SM_Bld_Industrial_Small_01'),
   mapTrailer: apocalypseAt('SM_Bld_Trailer_Damaged_01'),
-  mapTankTower: apocalypseAt('SM_Bld_WaterTower_01'),
+  mapTankTower: apocalypseAt('SM_Bld_WaterTower_01', { plain: [0.93, 0.06] }),
   mapCrane: apocalypseAt('SM_Bld_Crane_01'),
   mapBridge: apocalypseAt('SM_Env_Bridge_Clean_01'),
   mapWreckVan: apocalypseAt('SM_Prop_Car_Wrecked_Van_01'),

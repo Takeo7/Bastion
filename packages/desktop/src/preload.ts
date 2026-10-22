@@ -7,13 +7,19 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 if (location.protocol === 'file:') {
   contextBridge.exposeInMainWorld('bastion', {
-    info: (): Promise<{ last: string; version: string; uncapped: boolean; games: unknown[] } | null> => ipcRenderer.invoke('bastion:info'),
+    info: (): Promise<{ last: string; version: string; uncapped: boolean; games: unknown[]; fullscreen: boolean } | null> => ipcRenderer.invoke('bastion:info'),
     /** Resolves with what went wrong, or null once the game is loading. */
     host: (): Promise<string | null> => ipcRenderer.invoke('bastion:host'),
     join: (address: string): Promise<string | null> => ipcRenderer.invoke('bastion:join', address),
     /** The games heard on the local network, each time that list changes. */
     onGames: (fn: (games: { name: string; address: string; players: string[]; phase: string }[]) => void): void => {
       ipcRenderer.on('bastion:games', (_e, games) => fn(games));
+    },
+    /** Closes the app (playtest 21/10 #29: in full screen there was no way out). */
+    quit: (): void => ipcRenderer.send('bastion:quitLauncher'),
+    /** Whether the window is in full screen, each time that changes. */
+    onFullscreen: (fn: (on: boolean) => void): void => {
+      ipcRenderer.on('bastion:fullscreen', (_e, on) => fn(on === true));
     },
   });
 } else if (location.protocol === 'http:' || location.protocol === 'https:') {
@@ -22,6 +28,8 @@ if (location.protocol === 'file:') {
     quit: (): void => ipcRenderer.send('bastion:quit'),
     /** Back to the start screen (Ser anfitrión / Unirse), with `note` saying why if there is one. */
     toLauncher: (note?: string): void => ipcRenderer.send('bastion:toLauncher', note),
+    /** Out of full screen, for a screen with nothing else on Esc (the host closed the game). */
+    leaveFullscreen: (): void => ipcRenderer.send('bastion:leaveFullscreen'),
     /** This window is the host's: the game's server runs in this app, and quitting ends it for the partner. */
     hosting: ipcRenderer.sendSync('bastion:hosting') === true,
   });
