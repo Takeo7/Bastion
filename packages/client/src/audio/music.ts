@@ -1,5 +1,5 @@
 import { audio } from './engine';
-import { bed } from './recorded';
+import { bed, trace } from './recorded';
 
 // The score, generated while it plays: a few synthesised instruments (pads,
 // soft keys, bass, drums, bells, drones) and one piece per mood, written bar
@@ -327,6 +327,7 @@ class Beds {
     const ctx = audio.ctx;
     const bus = audio.bus('music');
     if (!ctx || !bus) return;
+    trace(`fondos: ${wanted ? wanted.map((w) => `${w.group} ${w.level}`).join(', ') : 'ninguno'}`);
     const now = ctx.currentTime;
     for (const [group, layer] of this.layers) {
       if (wanted?.some((w) => w.group === group)) continue;
@@ -344,6 +345,7 @@ class Beds {
       if (!layer) {
         const file = await bed(w.group);
         if (!file || this.layers.has(w.group)) continue;
+        trace(`fondo ${w.group} · ${file.url.replace(/^.*recorded\//, '')}`);
         const el = new Audio(file.url);
         el.loop = true;
         const gain = ctx.createGain();

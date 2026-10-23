@@ -319,6 +319,8 @@ const NEAR_ENOUGH = 5;
 const KILL_HOLD = 0.5;
 /** And on one of ours fallen (Ana, 22/10 #21): long enough to see them lie still. */
 const DEATH_HOLD = 1.2;
+/** Or, eaten (Arte's units.feed, once seen eating), a moment more. */
+const FEED_HOLD = 0.5;
 /** Events that start something new: a shot over the shoulder still on is let go before them. */
 const NEW_ACTION = new Set<GameEvent['t']>(['shot', 'moved', 'abilityUsed', 'explosive', 'stoneThrown', 'turnBegan', 'missionEnded']);
 /** The log's colour for enemies fighting each other (18/10 #47): neither ours nor against us. */
@@ -756,6 +758,8 @@ export class Game {
   private lastShot: { target: string; result: ShotResult } | null = null;
   /** The target of the attack seen over the attacker's shoulder (#11), until it has fallen. */
   private killCam: string | null = null;
+  /** How long the camera stays on one fallen after the death played (FEED_HOLD when eaten); null: the usual. */
+  private killHold: number | null = null;
   /** The aim's shot over the shoulder (updateAimCam): who aims at whom from where, '' with none. */
   private aimCam = '';
   /** The units' flags hidden for that shot. */
@@ -1416,7 +1420,8 @@ export class Game {
       await this.settle(item, epoch);
       // The one it killed has fallen: a moment more over the shoulder (on one of ours, longer), then back.
       if (this.killCam && item.e.t === 'died' && item.e.unit === this.killCam) {
-        await wait(getUnit(this.view, item.e.unit)?.team === 'xcom' ? DEATH_HOLD : KILL_HOLD);
+        await wait(this.killHold ?? (getUnit(this.view, item.e.unit)?.team === 'xcom' ? DEATH_HOLD : KILL_HOLD));
+        this.killHold = null;
         this.endKillCam();
       }
       // What a blast does to everyone in it plays at once (playtest 15/10 #16).
@@ -1948,7 +1953,20 @@ export class Game {
           await wait(0.15);
           return;
         }
-        await this.units.die(u.id);
+        // One of ours killed by one of the dead at hand: it goes down with the body and eats (Arte's units.feed, #21),
+        // as it falls; seen eating, a moment more and back (killHold).
+        const fall = this.units.die(u.id);
+        const eat = killer && this.units.canFeed(killer.id, u.id) ? this.units.feed(killer.id, u.id) : null;
+        await fall;
+        // One of ours seen falling close: the camera comes down to the body on the ground, and whoever is over it.
+        if (u.team === 'xcom' && this.killCam === u.id && cam()) {
+          const low = this.deathShot(u, killer, true);
+          if (low) this.rig.closeShot(low.pos, low.look);
+        }
+        if (eat) {
+          await eat;
+          this.killHold = FEED_HOLD;
+        }
         await wait(0.2);
         return;
       }
@@ -2714,7 +2732,9 @@ export class Game {
     if (weapon.melee) {
       await wait(cam() ? 0.2 : 0.05);
       this.sfx.melee('swing', this.units.chestPos(shooter.id));
-      await this.units.lunge(shooter.id, targetPos);
+      // One of the dead killing one of ours: it grabs them and bites the neck, and holds on till they fall (Arte's,
+      // #21: then it eats, in 'died'). The blow's effects on the bite, as on a lunge.
+      await this.units.lunge(shooter.id, targetPos, this.fells(e) && this.units.canFeed(shooter.id, target.id));
       if (hit) {
         const stun = e.ability === 'stunLance';
         this.fx.slash(chest, stun ? 0x6ad8ff : 0xe8f6ff);
@@ -2790,13 +2810,15 @@ export class Game {
    * one doing it in the frame where there is room (shotCam.ts overShoulder, from that point looking back at them).
    * Null where there is no room: the camera stays as it is.
    */
-  private deathShot(victim: Unit, by?: Unit): ShoulderShot | null {
-    const chest = this.units.chestPos(victim.id);
+  private deathShot(victim: Unit, by?: Unit, fallen = false): ShoulderShot | null {
+    // Fallen, the body where it lies (units.bodyPos), and whoever is over it (Arte's zombie eating, its head ~0.5 m up):
+    // the look comes down to them.
+    const chest = fallen ? this.units.bodyPos(victim.id).add(new THREE.Vector3(0, 0.25, 0)) : this.units.chestPos(victim.id);
     const toward = by && by.id !== victim.id ? this.units.worldPos(by.id) : this.renderer.camera.position.clone();
     const out = new THREE.Vector3(toward.x - chest.x, 0, toward.z - chest.z);
     if (out.lengthSq() < 0.01) out.set(0, 0, 1);
     out.normalize().applyAxisAngle(THREE.Object3D.DEFAULT_UP, 0.6);
-    const from = chest.clone().addScaledVector(out, 2.6).setY(chest.y + 0.4);
+    const from = chest.clone().addScaledVector(out, 2.6).setY(chest.y + (fallen ? 1.1 : 0.4));
     return overShoulder(this.view, from, chest, [victim.id, ...(by ? [by.id] : [])]);
   }
 

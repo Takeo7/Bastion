@@ -459,9 +459,14 @@ export function growBase(base: BaseState, size: number, rng: Rng): BasePiece[] {
   return down;
 }
 
-/** Why the tree at (x, y) can't be felled, or null if it can. */
+/**
+ * Why the tree at (x, y) can't be felled, or null if it can. Not in the band at the edge where nothing is built
+ * (BASE_EDGE): the forest goes on from there, and where felling stops is where the clearing ends (Ana, 22/10 #30).
+ */
 export function fellBlocker(base: BaseState, x: number, y: number): string | null {
-  return treeAt(base, x, y) ? null : 'Ahí no hay ningún árbol.';
+  if (!treeAt(base, x, y)) return 'Ahí no hay ningún árbol.';
+  if (x < BASE_EDGE || y < BASE_EDGE || x >= base.width - BASE_EDGE || y >= base.height - BASE_EDGE) return 'Ese ya es el bosque: no se tala.';
+  return null;
 }
 
 /** Fells the tree at (x, y): the ground is clear. 1 if there was one, else 0 (what it costs: FELL_COST each). */

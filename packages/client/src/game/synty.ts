@@ -143,6 +143,12 @@ export interface Dyes {
 
 export type DyedMaterial = THREE.MeshStandardMaterial & { userData: { dyes: Dyes } };
 
+/**
+ * A soft light from the camera on the characters alone, no shine (the base's: playtest 22/10 #42, the face against
+ * the sun was dark). Its colour times its strength, as a directional light's; black (none) unless the set drawing sets it.
+ */
+export const UNIT_FACE = { value: new THREE.Color(0, 0, 0) };
+
 /** A unit's own material on its pack's atlas, or on `map` (a soldier's own palette: wardrobe.ts); one program for all of them, uniforms apart. */
 export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial {
   const uniforms: Dyes = {
@@ -158,7 +164,7 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
   const m = new THREE.MeshStandardMaterial({ map: map ?? atlasTexture(atlas), roughness: 0.82, metalness: 0 }) as DyedMaterial;
   m.userData.dyes = uniforms;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms, { unitNight: NIGHT });
+    Object.assign(shader.uniforms, uniforms, { unitNight: NIGHT, unitFace: UNIT_FACE });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -182,7 +188,13 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
         uniform float dyeSkinOn;
         uniform float dyeRim;
         uniform float dyeFade;
-        uniform float unitNight;`,
+        uniform float unitNight;
+        uniform vec3 unitFace;`,
+      )
+      .replace(
+        '#include <lights_fragment_end>',
+        `#include <lights_fragment_end>
+        reflectedLight.indirectDiffuse += unitFace * saturate(dot(normal, normalize(vViewPosition))) * BRDF_Lambert(diffuseColor.rgb);`,
       )
       .replace(
         '#include <map_fragment>',

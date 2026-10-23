@@ -2806,7 +2806,10 @@ export class StrategyScreen {
           },
         )
       : null;
-    this.viewEl.append(this.stack('build-right', 'right', this.bastionStats(c), card));
+    // Walking the clearing in first person (Ana, 22/10 #43: to see whether the idea is any good): from the click, as
+    // the browser only lets the pointer be taken on a player's gesture; Esc brings everything back (walkAbout.ts).
+    const walk = [h('button.x-btn', { onclick: () => this.clearing.walkAbout(true) }, 'Andar por la base')];
+    this.viewEl.append(this.stack('build-right', 'right', this.bastionStats(c), walk, card));
   }
 
   /**

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { BASE_EDGE, BUILD_TEXT, buildingWorks, fellHint, pieceAt, pieceCells, pieceHint, PIECES, treeAt, type Appearance, type BasePiece, type BaseState, type FoundWeaponId, type ItemId, type PieceId, type TemplateId, type Vec2, type WeaponModId } from '@bastion/engine';
+import { BASE_EDGE, BUILD_TEXT, buildingWorks, fellBlocker, fellHint, pieceAt, pieceCells, pieceHint, PIECES, treeAt, type Appearance, type BasePiece, type BaseState, type FoundWeaponId, type ItemId, type PieceId, type TemplateId, type Vec2, type WeaponModId } from '@bastion/engine';
 import { CameraRig } from '../game/camera';
+import { WalkAbout } from './walkAbout';
 import type { Gear } from '../game/figures';
 import type { LineupEntry } from './clearingArt';
 import { STOREY } from '../game/coords';
@@ -32,6 +33,9 @@ export interface ClearingArt {
   dress?(scene: THREE.Scene): void;
   /** The camera it is seen with. */
   watch?(camera: THREE.Camera): void;
+  /** Whether one walking about the clearing in first person can't stand on tile x, y (walkAbout.ts), and what else stops it (x, z boxes). */
+  blocked?(x: number, y: number): boolean;
+  solids?(): THREE.Box2[];
   /** GPU work before a frame, and whether the shadow map is drawn again (StageSet.beforeRender). */
   beforeRender?(gl: THREE.WebGLRenderer): void;
   /** The soldier looked at in Soldados, standing on the clearing (null: nobody; `fallen`: their grave). */
@@ -156,6 +160,8 @@ export class ClearingSet implements StageSet {
   private tool: ClearingTool = { kind: 'look' };
   /** A fixed shot of the clearing is on (Soldados, the Armería): the camera and the pointer leave it alone. */
   private held = false;
+  /** Walking about it in first person (walkAbout: 22/10 #43), while on. */
+  private walk: WalkAbout | null = null;
   /** The building tools are out: the grid and the edge band show. */
   private building = false;
   private hoverTile: Vec2 | null = null;
@@ -263,6 +269,8 @@ export class ClearingSet implements StageSet {
 
   dispose(): void {
     window.clearTimeout(this.cursorTimer);
+    this.walk?.dispose();
+    this.walk = null;
     this.rig?.dispose();
     window.removeEventListener('pointerup', this.onUp);
     window.removeEventListener('keydown', this.onKey);
@@ -385,6 +393,30 @@ export class ClearingSet implements StageSet {
     }
   }
 
+  /**
+   * The clearing walked about in first person (22/10 #43, a test): on from where the camera looks, facing as it
+   * does; off again (Esc comes out by itself), the camera back to where it was. Call `on` from a click: the pointer is
+   * held by the view only then.
+   */
+  walkAbout(on: boolean): void {
+    if (on === !!this.walk || !this.stage) return;
+    if (!on) {
+      this.walk?.dispose();
+      this.walk = null;
+      this.hold(false);
+      return;
+    }
+    const camera = this.stage.camera;
+    this.hold(true);
+    const look = camera.getWorldDirection(new THREE.Vector3());
+    this.walk = new WalkAbout(camera, this.stage.element, (x, y) => this.art.blocked?.(x, y) ?? false, this.art.solids?.() ?? [], () => this.walkAbout(false), this.rig?.focusPoint ?? camera.position, Math.atan2(-look.x, -look.z));
+  }
+
+  /** Whether it is being walked about in first person. */
+  get walking(): boolean {
+    return !!this.walk;
+  }
+
   /** The camera goes to the middle of tile `t` (fractions allowed). */
   focusTile(t: { x: number; y: number }, instant = false): void {
     this.rig?.focus(new THREE.Vector3(t.x + 0.5, 0, t.y + 0.5), instant);
@@ -472,6 +504,7 @@ export class ClearingSet implements StageSet {
 
   tick(dt: number, time: number): void {
     if (!this.held) this.rig?.update(dt);
+    this.walk?.tick(dt);
     this.art.tick?.(dt, time);
     if (this.outline.visible) (this.outline.material as THREE.LineBasicMaterial).opacity = 0.7 + Math.sin(time * 4) * 0.3;
   }
@@ -579,7 +612,8 @@ export class ClearingSet implements StageSet {
     const out: Vec2[] = [];
     const [x0, x1] = [Math.min(box.from.x, box.to.x), Math.max(box.from.x, box.to.x)];
     const [y0, y1] = [Math.min(box.from.y, box.to.y), Math.max(box.from.y, box.to.y)];
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (treeAt(base, x, y)) out.push({ x, y });
+    // Only those that can be felled: not the forest's, past the clearing's edge (fellBlocker, Ana 22/10 #30).
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (!fellBlocker(base, x, y)) out.push({ x, y });
     return out;
   }
 

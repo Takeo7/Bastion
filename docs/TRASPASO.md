@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 22/10 con la 0.9.5, la de las notas de Arturo y Ana del 22/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 23/10 con la 0.9.6, la que cierra las notas de Arturo y Ana del 22/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.9.5)
+## 3. Estado (versión 0.9.6)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,14 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3, v0.9.4 y v0.9.5 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3, v0.9.4, v0.9.5 y v0.9.6 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.9.6** (2026-10-23), lo que quedaba de las notas del 22/10 ([PRUEBA-2026-10-22.md](PRUEBA-2026-10-22.md)):
+  - arreglo: en la 0.9.5 los zombis no cargaban sus clips (una excepción en syntyAnims.ts armedOf) y andaban y morían con lo procedural;
+  - los colores, más vivos (Arturo eligió el nivel 2: post.ts VIVID_DEFAULT), sin tocar la nieve ni la niebla de guerra;
+  - los sonidos grabados (CC0, [SONIDO.md](SONIDO.md)): gritos de soldado y soldada, zombis que gruñen, alertan, muerden y devoran, tajos, y en combate ambiente y tensión en lugar de la música;
+  - la muerte de un soldado a manos de un zombi: la cámara se acerca, el zombi le muerde el cuello y se arrodilla a comérselo hasta su siguiente acción (por ahora con el clip de arrodillarse; Arturo baja de Mixamo los de zombi, cuarta tanda de [MIXAMO.md](MIXAMO.md));
+  - la base: la cara de los soldados iluminada desde la cámara; fuera la mancha y la línea blanca de la oclusión en la nieve; el pinar sigue hasta el horizonte y la franja del borde ya no se tala; «Andar por la base» en primera persona;
+  - los letreros de las tiendas, según lo que venden (PETS fuera), y escondidos cuando su pared baja.
 - **Lo nuevo de la 0.9.5** (2026-10-22), las notas de Arturo y Ana con la 0.9.4 ([PRUEBA-2026-10-22.md](PRUEBA-2026-10-22.md) #7–#57). Desde esta versión, ninguna animación se da por hecha sin verla en movimiento (tiras de fotogramas revisadas por Gameplay):
   - animaciones (Arte): los de la fila ya no se mueven a la vez; la pistola en reposo, quieta y en su funda; sentados en el centro de la silla; el cañón, al blanco al disparar; andar, correr y esprintar con el fusil bajo y cruzado (Mixamo, tercera tanda); subir a La Lata cada uno por su puerta (todoterreno) o de un paso por detrás;
   - la vista: las fachadas se ven donde se ve la calle de delante; lo descubierto que ya no se ve, en gris (la niebla de guerra, más fuerte); lo nunca visto, negro; los interiores se descubren por habitaciones enteras; la línea de visión llega al final del mapa (los zombis, solo cerca); los objetos de cobertura completa más bajos que los ojos de un soldado dejan ver y disparar por encima (alturas medidas por Arte; grid.ts groundSightHeight);

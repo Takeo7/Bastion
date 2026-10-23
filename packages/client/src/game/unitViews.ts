@@ -9,6 +9,7 @@ import { clipSpeed, CROUCHED, gaitsOf, type Gait } from './gaits';
 import { CROWD } from './crowd';
 import { buildUnit, gearOf, IDLE_POSE, isFigure, type UnitRig } from './models';
 import { armamentOf, type Siren } from './syntyFigures';
+import { FEEDERS } from './syntyManifest';
 import { easeInOut, timeRate, tween, wait } from './tween';
 
 const ALIEN_COLOR = '#ff4d4d';
@@ -74,6 +75,16 @@ const VEIL_SPARE = 1.2;
 /** A melee lunge goes this far at most, and stops this far short of the target's middle (an adjacent one: 0.72 apart). */
 const LUNGE = 0.45;
 const LUNGE_SHORT = 0.72;
+/**
+ * One of the dead killing one of ours by the teeth (22/10 #21: lunge's bite, feed): it closes in this far from the
+ * middle of the one it bites, head to the neck; it goes down to the body once that has fallen this far (seconds), and
+ * kneels this far beside its chest (tiles), on the side nearer where it stood; and it is seen eating this long before
+ * feed resolves (the camera's shot then lets go), then eats on until its next move.
+ */
+const BITE_SHORT = 0.34;
+const FEED_WAIT = 0.4;
+const FEED_SIDE = 0.4;
+const FEED_SEEN = 0.8;
 /** What stands on a floor tile and takes it whole (furniture, crates, machines): no body steps out onto it nor falls across it. */
 const BULKY = new Set<DecorKind>([
   'shelf', 'counter', 'table', 'sofa', 'bed', 'desk', 'wardrobe', 'cabinet', 'rack', 'crates', 'barricade', 'tank', 'machine', 'forklift',
@@ -259,6 +270,10 @@ export class UnitViews {
   private cutAway: ((p: Place) => boolean) | null = null;
   /** The state last shown, for what a step lands on (a window's sill). */
   private shown: GameState | null = null;
+  /** The dead eating a body (feed), by who eats: whose, and the place it went to it from (it goes back there to move on). */
+  private readonly feeding = new Map<string, { victim: string; home: THREE.Vector3 }>();
+  /** The dead holding one of ours by the teeth (lunge's bite): where it struck from, until it feeds or lets go. */
+  private readonly biting = new Map<string, THREE.Vector3>();
   /** The bodies' clock: it runs at the battle's speed (tween.ts timeRate), so clips and sways keep pace with the tweens. */
   private bodyTime = 0;
 
@@ -648,6 +663,11 @@ export class UnitViews {
     dt *= timeRate();
     time = this.bodyTime += dt;
     CROWD.tick(dt);
+    // A body risen (or gone) under one eating it: it gets up (a body still falling is no risen one: fell, not yet dead).
+    for (const [id, f] of this.feeding) {
+      const body = this.views.get(f.victim);
+      if (!body || (!body.dead && !body.fell) || !body.rig.root.visible) void this.unfeed(id);
+    }
     for (const v of this.views.values()) {
       const p = v.pose;
       const k = 1 - Math.exp(-dt * 9);
@@ -754,6 +774,7 @@ export class UnitViews {
     const before = v.walk;
     const walk = (async () => {
       await before?.catch(() => undefined);
+      await this.unfeed(id);
       await this.walk(v, id, path, onStep, ap, pace, waits, passes);
     })();
     v.walk = walk;
@@ -1014,6 +1035,7 @@ export class UnitViews {
   async fall(id: string, to: Place): Promise<void> {
     const v = this.views.get(id);
     if (!v) return;
+    await this.unfeed(id);
     v.animating = true;
     const p = v.pose;
     const from = v.rig.root.position.clone();
@@ -1175,6 +1197,7 @@ export class UnitViews {
   async slide(id: string, to: THREE.Vector3, seconds = 0.2, release = true): Promise<void> {
     const v = this.views.get(id);
     if (!v) return;
+    await this.unfeed(id);
     v.animating = true;
     const from = v.rig.root.position.clone();
     await tween(seconds, (t) => v.rig.root.position.lerpVectors(from, to, easeInOut(t)));
@@ -1334,6 +1357,8 @@ export class UnitViews {
   async die(id: string, from?: THREE.Vector3): Promise<void> {
     const v = this.views.get(id);
     if (!v || v.dead) return;
+    // Killed at a body or with its teeth in one: down as it is.
+    this.stopFeeding(v);
     v.animating = true;
     v.flag.visible = false;
     // Its aim gone, and with it a lowering still to come and the step back at point blank.
@@ -1445,14 +1470,15 @@ export class UnitViews {
    * Melee strike: a quick lunge towards the target and back, stopping LUNGE_SHORT from its middle (one
    * beside: 0.28 of a tile, it went 0.45 and stood 0.55 from it), LUNGE at most (one on the diagonal).
    */
-  async lunge(id: string, target: THREE.Vector3): Promise<void> {
+  async lunge(id: string, target: THREE.Vector3, bite = false): Promise<void> {
     const v = this.views.get(id);
     if (!v) return;
+    await this.unfeed(id);
     this.face(id, target);
     const home = v.rig.root.position.clone();
     this.struck(target, home, true);
     const gap = Math.hypot(target.x - home.x, target.z - home.z);
-    const toward = target.clone().setY(home.y).sub(home).setLength(THREE.MathUtils.clamp(gap - LUNGE_SHORT, 0, LUNGE));
+    const toward = target.clone().setY(home.y).sub(home).setLength(THREE.MathUtils.clamp(gap - (bite ? BITE_SHORT : LUNGE_SHORT), 0, bite ? 1 : LUNGE));
     v.animating = true;
     // The knife or the machete from the belt (a soldier's Tajo); whoever has none strikes with what it holds.
     const rig = isFigure(v.rig) ? v.rig : null;
@@ -1464,11 +1490,29 @@ export class UnitViews {
       v.pose.aimFx = t;
       v.pose.swing = -easeInOut(t);
     });
-    await tween(0.14, (t) => {
-      v.pose.lean = -0.25 + 0.75 * t;
+    await tween(bite ? 0.2 : 0.14, (t) => {
+      v.pose.lean = -0.25 + (bite ? 0.9 : 0.75) * t;
       v.pose.swing = -1 + 2 * easeInOut(t);
-      v.rig.root.position.copy(home).addScaledVector(toward, t);
+      v.rig.root.position.copy(home).addScaledVector(toward, bite ? easeInOut(t) : t);
     });
+    if (bite) {
+      // Its hands on the shoulders, the teeth in the neck: it holds on (the body's fall lets it go: feed), and lets
+      // go by itself if no feeding follows.
+      this.biting.set(id, home);
+      await tween(0.22, (t) => (v.pose.lean = 0.65 + Math.sin(t * Math.PI) * 0.12));
+      void wait(2).then(() => {
+        if (this.biting.get(id) !== home) return;
+        this.biting.delete(id);
+        const from = v.rig.root.position.clone();
+        void tween(0.35, (t) => {
+          v.pose.lean = 0.65 * (1 - t);
+          v.pose.aimFx = 1 - t;
+          v.pose.swing = 1 - easeInOut(t);
+          v.rig.root.position.lerpVectors(from, home, easeInOut(t));
+        }).then(() => (v.animating = false));
+      });
+      return;
+    }
     void tween(0.35, (t) => {
       v.pose.lean = 0.5 * (1 - t);
       v.pose.aimFx = 1 - t;
@@ -1485,6 +1529,97 @@ export class UnitViews {
    * docs/FASE12.md §10): the dead one lunges at it with its arms. Resolves as
    * the blow lands, 0.34 s on; it steps back in 0.35 s more on its own.
    */
+  /**
+   * Whether `killer` eats `victim` once it has killed it (22/10 #21): one of the dead that bite (FEEDERS), beside it
+   * (the diagonal too) on its storey, and the victim one of ours.
+   */
+  canFeed(killer: string, victim: string): boolean {
+    const k = this.views.get(killer);
+    const b = this.views.get(victim);
+    const u = this.shown?.units.find((x) => x.id === victim);
+    if (!k || !b || k.dead || !FEEDERS.has(k.template) || !isFigure(k.rig) || !k.rig.feed || u?.team !== 'xcom') return false;
+    return (k.place.z ?? 0) === (b.place.z ?? 0) && Math.max(Math.abs(k.place.x - b.place.x), Math.abs(k.place.y - b.place.y)) <= 1;
+  }
+
+  /** A body's chest where it lies (its pose's: after a death clip, away from where it stood). */
+  bodyPos(id: string): THREE.Vector3 {
+    const v = this.views.get(id);
+    if (v && isFigure(v.rig) && v.rig.chestWorld) return v.rig.chestWorld(new THREE.Vector3());
+    return this.chestPos(id);
+  }
+
+  /**
+   * One of the dead at the body of one of ours it has just killed (canFeed; with the victim's die): it lets go as the
+   * body falls, goes down with it onto its knees over the chest and eats. Resolves once seen eating (FEED_SEEN); it
+   * eats on until its next move (unfeed), or until the body gets up or goes.
+   */
+  async feed(id: string, victim: string): Promise<void> {
+    const v = this.views.get(id);
+    const rig = v && isFigure(v.rig) ? v.rig : null;
+    const feed = rig?.feed?.bind(rig);
+    if (!v || !feed || !this.views.get(victim)) return;
+    v.animating = true;
+    const home = this.biting.get(id) ?? v.rig.root.position.clone();
+    this.biting.delete(id);
+    await wait(FEED_WAIT);
+    // Onto its knees over the chest, coming after it as the body goes down.
+    const start = v.rig.root.position.clone();
+    const spot = new THREE.Vector3();
+    const hips = new THREE.Vector3();
+    const head = new THREE.Vector3();
+    const body = this.views.get(victim)!;
+    const kneel = (t: number) => {
+      const chest = this.bodyPos(victim);
+      // Beside the body at its chest, across the way it lies, on the side nearer where it stood.
+      if (isFigure(body.rig) && body.rig.bodyLine) body.rig.bodyLine(hips, head);
+      else {
+        hips.copy(home);
+        head.copy(chest);
+      }
+      const across = new THREE.Vector3(head.z - hips.z, 0, hips.x - head.x);
+      if (across.lengthSq() < 1e-4) across.copy(home).sub(chest).setY(0);
+      if (across.lengthSq() < 1e-4) across.set(0, 0, 1);
+      across.normalize();
+      if (across.dot(home.clone().sub(chest)) < 0) across.negate();
+      spot.copy(chest).addScaledVector(across, FEED_SIDE).setY(home.y);
+      v.rig.root.position.lerpVectors(start, spot, easeInOut(Math.min(1, t * 1.3)));
+      v.pose.lean *= 0.9;
+      v.pose.swing = (v.pose.swing ?? 0) * 0.9;
+      this.face(id, chest);
+      return chest;
+    };
+    const down = feed('down', kneel(0));
+    await tween(Math.max(0.6, down), (t) => feed('down', kneel(t)));
+    v.pose.lean = 0;
+    v.pose.swing = 0;
+    v.pose.aimFx = 0;
+    feed('eat', this.bodyPos(victim));
+    this.feeding.set(id, { victim, home });
+    await wait(FEED_SEEN);
+  }
+
+  /** Up from a body it was eating (feed), back to where it went to it from, before whatever it does next. */
+  private async unfeed(id: string): Promise<void> {
+    this.biting.delete(id);
+    const f = this.feeding.get(id);
+    const v = this.views.get(id);
+    if (!f || !v) return;
+    this.feeding.delete(id);
+    const rig = isFigure(v.rig) ? v.rig : null;
+    const up = rig?.feed?.('up') ?? 0;
+    const from = v.rig.root.position.clone();
+    await tween(Math.max(0.35, up), (t) => v.rig.root.position.lerpVectors(from, f.home, easeInOut(Math.min(1, t * 1.25))));
+    rig?.feed?.(null);
+    v.animating = false;
+  }
+
+  /** Feeding or biting no more, at once, as it is (dead, or moving on in real time). */
+  private stopFeeding(v: UnitView): void {
+    this.biting.delete(v.id);
+    if (!this.feeding.delete(v.id)) return;
+    if (isFigure(v.rig)) v.rig.feed?.(null);
+  }
+
   async smash(id: string, tile: Place): Promise<void> {
     await this.lunge(id, this.standAt(tile));
   }
@@ -1641,6 +1776,7 @@ export class UnitViews {
   rtStep(id: string, path: Place[], seconds: number): Promise<void> {
     const v = this.views.get(id);
     if (!v || !path.length) return Promise.resolve();
+    this.stopFeeding(v);
     v.rt = true;
     v.rtGen++;
     // Its gun down to walk (an aim of before: rtDoing raises it again).

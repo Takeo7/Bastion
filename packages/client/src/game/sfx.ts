@@ -199,7 +199,11 @@ export class Sfx {
 
   /** A soldier hurt: a scream when the dead bite, a grunt otherwise; by their sex, never the same take twice running. */
   hurt(u: Unit, at?: THREE.Vector3, bitten = false): void {
-    playRecorded(`soldier.${bitten ? 'scream' : 'pain'}.${u.appearance?.sex === 'f' ? 'f' : 'm'}`, { ...this.place(at), spread: 0.02 });
+    const sex = u.appearance?.sex === 'f' ? 'f' : 'm';
+    if (bitten || !playRecorded(`soldier.pain.${sex}`, { ...this.place(at), spread: 0.02 })) {
+      // Without a grunt of their own (there are no women's among the recordings), a scream, quieter.
+      playRecorded(`soldier.scream.${sex}`, { ...this.place(at, bitten ? 1 : 0.7), spread: 0.02 });
+    }
   }
 
   reload(at?: THREE.Vector3): void {

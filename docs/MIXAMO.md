@@ -179,6 +179,36 @@ Ahora suben «a caballo y de frente». Tienen que entrar de lado: sentarse y met
 - Si en las de moverse no aparece In Place, bájala igual y apúntalo. Arte le quita el avance al convertirla.
 - Son unos 14 archivos; los ★, 10.
 
+## Cuarta tanda (23/10, nota 21)
+
+Para la nota 21 de [PRUEBA-2026-10-22.md](PRUEBA-2026-10-22.md): el zombi que mata a un soldado le muerde y luego se lo come.
+
+- Ahora el mordisco está hecho a mano. Para comer se usa el clip de arrodillarse junto al fuego del campamento, con los mordiscos y las manos sobre el cuerpo añadidos por código. Funciona, pero con clips de zombi de verdad quedará mejor (Arturo, 23/10).
+- Mismos ajustes que las otras tandas: X Bot, sin piel, 30 fps, sin Mirror, a `assets-src/mixamo/`.
+- In Place: márcalo si aparece. En estas el zombi no se desplaza, pero algunas se echan hacia delante.
+
+| | Nombre en Mixamo | Cuál | Para qué |
+|---|---|---|---|
+| ★ | Zombie Biting | todas | El golpe que mata: agarra al soldado y le muerde |
+| ★ | Zombie Eating | todas | De rodillas sobre el cuerpo, comiendo |
+| ★ | Zombie Kneel | si existe | Arrodillarse (de pie a de rodillas) |
+| ★ | Zombie Stand Up | la que se levanta desde de rodillas, si la hay | Levantarse después de comer |
+| | Zombie Neck Bite | | El mordisco al cuello (otra) |
+| | Zombie Attack | todas | Por si alguna agarra mejor que «Zombie Biting» |
+
+### Si un nombre no aparece
+
+| Para | Busca | Y baja |
+|---|---|---|
+| Morder | «zombie bite», «zombie grab», «zombie attack» | la que agarra con las dos manos y mete la cabeza hacia delante |
+| Comer | «zombie eat», «eating», «feeding», «kneeling» | una de rodillas o en cuclillas, con las manos y la cabeza hacia el suelo |
+| Arrodillarse | «kneel», «kneeling down», «stand to kneel» | la de pasar de pie a de rodillas, mejor sin arma |
+| Levantarse | «stand up», «kneel to stand», «getting up» | la de pasar de rodillas a de pie |
+
+- Apunta qué fue: el nombre exacto y la descripción, como en las otras tandas.
+- Si solo aparece «Zombie Eating», con ese basta para empezar: comer es lo que más se ve. Arrodillarse y levantarse pueden seguir saliendo del clip del campamento.
+- Son unos 4 a 6 archivos; los ★, 4.
+
 ## Después
 
 Arte las convierte con `packages/client/tools/synty/convert.ts`, con ids explícitos, como las de Synty. El juego las pasa del esqueleto de Mixamo a los de Synty y Sidekick, medidas desde la T-Pose. Los archivos de Mixamo no se suben; los convertidos, sí, como los de Synty.

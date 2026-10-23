@@ -798,6 +798,15 @@ export const CAMP_SPANS: Partial<Record<AnimationId, [number, number]>> = { ente
  */
 export const CAMP_FREE: ReadonlySet<CampMove> = new Set<CampMove>(['enterCar', 'enterCarR', 'stepUp']);
 
+/**
+ * The dead that eat one of ours they have just killed (22/10 #21): the biters (not the Chillón, who screams, nor the
+ * Hinchado, who bursts). Down on their knees over the body, at it, and up again for their next move: the knees from
+ * Mixamo's kneeling by a fire (its parts as the camp's: CAMP_PARTS), loaded with the dead's clips; the bites and the
+ * hands on the body go on top (syntyFigures feeding).
+ */
+export const FEEDERS: ReadonlySet<TemplateId> = new Set<TemplateId>(['zombie', 'xenoid', 'mec']);
+export const FEED_CLIP: AnimationId = 'warmHands';
+
 /** What one holds in the right hand at the camp drinking or eating (CampLoop 'drink', 'eat'): a canteen's cup, a ration bar. */
 export const CAMP_ITEMS = { drink: 'campCup', eat: 'campBar' } as const satisfies Partial<Record<CampLoop, keyof typeof PROPS>>;
 

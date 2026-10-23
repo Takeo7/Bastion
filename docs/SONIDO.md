@@ -6,7 +6,38 @@ Sonidos y música de fuera del juego: solo CC0 (dominio público, sin atribució
 - **En el repositorio:** solo lo recortado y convertido, en `packages/client/public/audio/`.
 - **De Freesound:** se usa la previsualización de alta calidad (OGG), que se descarga sin cuenta. La licencia CC0 cubre la obra entera, previsualización incluida.
 
-**Estado: propuesta, pendiente de revisar y de bajar.** Nada de esto está en el juego todavía. Licencias comprobadas una a una en la página de cada sonido el 22/10.
+**Estado: en el juego (22/10).** Licencias comprobadas una a una en la página de cada sonido; los 37 originales, bajados solo de estas direcciones y comprobados por duración frente a su página.
+
+## Cómo se rehace
+
+```bash
+node packages/client/tools/sound/convert.mjs --bajar
+```
+
+Sin `--bajar`, solo convierte lo que ya esté en `assets-src/sonido/`. El script ([convert.mjs](../packages/client/tools/sound/convert.mjs)) hace esto:
+
+- separa cada grabación en tomas por sus silencios;
+- las pasa a mono, con un volumen parejo y fundidas en los extremos;
+- deja los fondos enteros en estéreo, más bajos;
+- convierte todo a Opus en OGG: 64 kbps (el ffmpeg de Homebrew no trae libvorbis, y Chromium lee Opus);
+- escribe `public/audio/recorded/index.json`, que lee el juego (`client/src/audio/recorded.ts`).
+
+## Qué suena dónde
+
+| Grupo | Cuándo | Tomas | Peso |
+|---|---|---|---|
+| `zombie.growl` | un muerto andando, a la vista: como mucho uno cada 4 s, el más cercano a donde mira la cámara, la mitad de las veces | 11 | 204 KB |
+| `zombie.alert` | los muertos ven a la escuadra (con el golpe de tensión) | 4 | 92 KB |
+| `zombie.attack`, `zombie.bite` | la zarpa de un muerto acierta | 2 y 6 | 104 KB |
+| `zombie.eat` | uno de los nuestros muere a manos de un muerto (no de la infección) | 2 | 88 KB |
+| `soldier.scream.m/f` | mordido, o muere; según su sexo | 3 y 4 | 104 KB |
+| `soldier.pain.m` | herido sin mordisco (las mujeres, un grito más bajo) | 2 | 12 KB |
+| `melee.blade` | cuchillo o machete que acierta | 8 | 72 KB |
+| `sting` | contacto | 2 | 72 KB |
+| `bed.ambience` | fondo del combate: oculta, a 0,8; tras el contacto, a 0,6; en el turno enemigo, a 0,3 | 4 | 5,4 MB |
+| `bed.tension` | tras el contacto, a 0,6; en el turno enemigo, a 0,85 | 3 | 2,1 MB |
+
+Ninguna toma se repite dos veces seguidas; cada fondo se elige al azar entre los de su grupo. La base, el valle y el menú siguen con la música de siempre. Para ver qué ha sonado, con `?debug`: `window.__recorded`.
 
 ## Para qué (notas de Ana del 22/10)
 
@@ -76,4 +107,4 @@ Tajo y carne, sin metal que resuene. Para el machete no sirven los golpes de «m
 
 Descartadas por licencia (salían en la búsqueda de CC0 de OpenGameArt, pero piden atribución o compartir igual): *Dark ambiance* (CC-BY-SA), *Dark Fallout* (CC-BY-SA), *Post Apocalypse* de Alexandr Zhelanov (CC-BY), *Desolate* de Matthew Pablo (CC-BY), *Horror Soundtrack: The Hangar* (CC-BY).
 
-**En total:** 43 archivos, unos 30 MB de originales (12,5 MB de Freesound y 18 MB de OpenGameArt). En el repositorio, recortado y convertido: unos 6–8 MB.
+**En total:** 37 originales, 33 MB, en `assets-src/sonido/`. En el repositorio, 51 tomas y fondos: 8,1 MB, en `public/audio/recorded/`.

@@ -1,7 +1,11 @@
+import type { Vector3 } from 'three';
 import type { Arms, Tier, WeaponModId } from '@bastion/engine';
 import type { GaitMotion } from './gaits';
 import type { UnitRig } from './models';
 import type { CampLoop, CampMove, Gesture, PropId, Stance, WeaponId } from './syntyManifest';
+
+/** How far a feeding is (FigureRig.feed): getting down to the body, at it, getting up. */
+export type FeedPhase = 'down' | 'eat' | 'up';
 
 // What a unit's figure answers to (syntyFigures.ts makes them, the unit views
 // pose them every frame): the pose values and the equipment it shows. The
@@ -92,6 +96,15 @@ export interface FigureRig extends UnitRig {
   camp?(loop: CampLoop | null, on?: boolean, now?: boolean): void;
   /** Sits down or gets up, leans or comes off, gets into La Lata (CAMP_MOVES) once over what it does, at `speed`, holding its end; how far through, 0 to 1 (1 without its clips); null lets go. */
   campMove?(move: CampMove | null, speed?: number): number;
+  /**
+   * One of the dead eating a body (22/10 #21; syntyManifest.ts FEEDERS): 'down' onto its knees, 'eat' there (bites, its
+   * hands on the body at `at`, world), 'up' again, null none. The seconds 'down' or 'up' takes (0 without its clips).
+   */
+  feed?(phase: FeedPhase | null, at?: { x: number; y: number; z: number }): number;
+  /** Where its chest is as posed now (a body on the ground: where it lies), into `out`. */
+  chestWorld?(out: Vector3): Vector3;
+  /** Where its hips and its head are as posed now (a body on the ground: which way it lies), into `hips` and `head`. */
+  bodyLine?(hips: Vector3, head: Vector3): void;
   /** Holds a thing in the right hand at the camp (syntyManifest.ts CAMP_ITEMS: a metal cup, a ration bar), its weapons slung, `upright` kept level (a cup); null, nothing. */
   holdItem?(id: PropId | null, upright?: boolean): void;
   /** Waits with a rifle in the `k`-th of its ways (syntyManifest.ts RIFLE_RESTS, round): side by side, each another (the lineup). */

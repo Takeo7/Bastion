@@ -11,6 +11,7 @@ import { NIGHT } from './night';
 import { MedicalFinish } from './medicalFinish';
 import { atlasOf, atlasTexture, loadModel } from './synty';
 import { KIT_SCALE, PIECES, SYNTY_SCALE, type AtlasId, type PieceAsset, type PieceId, type PropId } from './syntyManifest';
+import { shopTradeIn } from './homeFurnishing';
 import { syntyProp } from './syntyProps';
 import { unitPosNow } from './unitViews';
 
@@ -1170,6 +1171,11 @@ const DITHER_GLSL = /* glsl */ `
 
 /** aCut's way out for pieces on a roof (a chimney, an air conditioner): they fade with the roof. */
 const ON_ROOF = 9;
+/**
+ * Added to aCut's way out (x) for a shop's sign: it fades while its building is cut on its storey at all, whichever
+ * way it looks. Facing away, it stood whole over its dropped wall and read as fallen in the street (22/10 #51).
+ */
+const SIGN_MARK = 4;
 
 /**
  * Walls that drop for the cutaway. Each instance carries aCut: its building
@@ -1229,6 +1235,9 @@ function wallCutPatch(material: THREE.Material, cut: Cutaway): void {
             if (aLevel > shown + 0.5) {
               // Above the storey in view (the roof, a façade's upper storeys, a building's real storeys): it fades.
               vCutFade = state.r;
+            } else if (aCut.y > ${SIGN_MARK - 1.5}) {
+              // A shop's sign on the storey in view: it goes (dithered) as its building is cut.
+              if (aLevel > shown - 0.5) vCutFade = max(state.g, state.b);
             } else if (aLevel > shown - 0.5 && aCut.y < ${ON_ROOF - 1}.0) {
               // On the storey in view: between rooms, or facing the camera, the walls drop.
               float facing = dot(aCut.yz, aCut.yz) < 0.01 ? 1.0 : smoothstep(-0.15, 0.25, -dot(aCut.yz, cutView));
@@ -1835,14 +1844,12 @@ function capBox(parts: PiecePart[], thicken: THREE.Matrix4, key: string): THREE.
   return box;
 }
 
-/** Shop signs and how long each is (tiles): the long ones are scaled down to fit over a door. */
-const SIGNS: [PropId, number][] = [
-  ['signShop', 1.7],
-  ['signFood', 2.2],
-  ['signMarket', 2.64],
-  ['signDiner', 1.97],
-  ['signPets', 3.41],
-];
+/**
+ * Shop signs and how long each is (tiles): the long ones are scaled down to fit over a door. Each says what is
+ * inside (playtest 22/10 #51: PETS over a shop with no pets in it, so not PETS): a grocer's FOOD, a café's DINER,
+ * a bookshop's plain SHOP (shopTradeIn: as its floor is furnished).
+ */
+const SIGNS = { signShop: 1.7, signFood: 2.2, signMarket: 2.64, signDiner: 1.97 } as const satisfies Partial<Record<PropId, number>>;
 /**
  * MARKET only over a supermarket's door (playtest 20/10 #18: not on a block of flats): a shop of one storey this
  * wide at least; the others' signs are the rest. On the band between the door's top and the storey's (it sat on
@@ -2613,8 +2620,9 @@ export class BuildingsView {
     /** A sign over a door, on the wall's outer face, its face out; it drops with the wall in the cutaway. */
     const sign = (bd: Building, x: number, z: number, base: number, out: Vec2) => {
       const market = bd.kind === 'shop' && bd.storeys === 1 && Math.min(bd.x1 - bd.x0, bd.y1 - bd.y0) + 1 >= MARKET_SPAN;
-      const signs = bd.market !== undefined ? SIGNS.filter(([id]) => id === 'signMarket') : SIGNS.filter(([id]) => (id === 'signMarket') === market || (market && id === 'signFood'));
-      const [id, length] = signs[Math.floor(hash(bd.x0, bd.y0, 70) * signs.length)]!;
+      const trade = bd.market !== undefined ? null : shopTradeIn(s, bd);
+      const id = trade === null ? 'signMarket' : trade === 'grocer' ? (market ? 'signMarket' : 'signFood') : trade === 'cafe' ? 'signDiner' : 'signShop';
+      const length = SIGNS[id];
       // A supermarket's double door: the sign over the middle of the two.
       if (bd.market !== undefined) {
         const along = out.x === 0 ? { x: 1, y: 0 } : { x: 0, y: 1 };
@@ -2636,7 +2644,7 @@ export class BuildingsView {
         let batch = batches.get(key);
         if (!batch) batches.set(key, (batch = { geometry: part.geometry, atlas: part.atlas, matrices: [], cut: [], outer: [], inner: [] }));
         batch.matrices.push(m.clone().multiply(part.matrix));
-        batch.cut.push(bd.index + 1, out.x, out.y, base);
+        batch.cut.push(bd.index + 1, out.x + SIGN_MARK, out.y, base);
         batch.outer.push(1, 1, 1);
         batch.inner.push(1, 1, 1);
       });
@@ -2760,7 +2768,8 @@ export class BuildingsView {
               putAll(outerKit.lintel, cx, cz, base, out, between, b, outerKit);
             } else putAll(kit.door, cx, cz, base, out, between, b, kit, kind === 'doorOpen', false, otherHinge);
             // A shop's name over its front door: the first door of its outline (whatever part of the map is being redone).
-            if (!level && !between && !plan.siege && building && signDoor.get(b) === i && (building.kind === 'shop' || (building.kind === 'office' && building.look < 0.35))) sign(building, cx, cz, base, out);
+            // Not an office's: none of the signs says what one holds (playtest 22/10 #51).
+            if (!level && !between && !plan.siege && building && signDoor.get(b) === i && building.kind === 'shop') sign(building, cx, cz, base, out);
             if (kit.leaf) {
               put(kit.leaf, cx, cz, base, out, between, b, { thick: kit.thick, open: kind === 'doorOpen', otherHinge });
               // Jambs either side of the leaf.

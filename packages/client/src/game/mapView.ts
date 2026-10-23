@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { kitModel } from '../strategy/baseKit';
-import { carPartner, decorOf, DIRS4, floorLevels, FURNITURE_OF_ITS_OWN, litMask, objectAt, roomAt, type Biome, type DecorKind, type GameState, type MarketSite, type Place, type Site, type TileKind } from '@bastion/engine';
+import { BASE_EDGE, carPartner, decorOf, DIRS4, floorLevels, FURNITURE_OF_ITS_OWN, litMask, objectAt, roomAt, type Biome, type DecorKind, type GameState, type MarketSite, type Place, type Site, type TileKind } from '@bastion/engine';
 import { graphics } from '../settings';
 import { StaticBatch, type Dirty, type UvRect } from './batch';
 import { atlasRect, mapAtlasTexture } from './mapAtlas';
@@ -29,7 +29,7 @@ import { medicalFurniture } from './medicalFurniture';
 import { contactPatch, GroundOcclusion } from './groundAO';
 import { atlasTexture } from './synty';
 import { CHARACTER_SCALE, FOOTPRINT_FIT, KIT_SCALE, PROPS, SYNTY_SCALE, type AtlasId, type PropId, type PropSet } from './syntyManifest';
-import { preloadSyntyProps, syntyProp, syntyPropsLoaded, syntySet } from './syntyProps';
+import { preloadSyntyProps, syntyProp, syntyPropsLoaded, syntySet, type PropPart } from './syntyProps';
 
 /**
  * The colours the ground shader leaves alone: the sides of the floor slabs
@@ -362,6 +362,8 @@ interface Kit {
   surroundings: THREE.Mesh;
   /** What lies beyond the edge, in the dark (outskirts.ts): the town's blocks, the sheds, the wood; null for the base. */
   outskirts: THREE.Mesh | null;
+  /** The base's pinar past its edge (baseWood), worked out once a map; its far pines' meshes, once they are loaded. */
+  wood: { trees: WoodTree[]; far: THREE.Group | null } | null;
   snowbank: THREE.MeshStandardMaterial | null;
   clinical: THREE.MeshStandardMaterial | null;
   clinicalWall: THREE.MeshStandardMaterial | null;
@@ -422,8 +424,22 @@ class TreeLayer {
  */
 const TRUNK_OCCLUDER = new THREE.CylinderGeometry(0.16, 0.24, 1.3, 6).translate(0, 0.65, 0);
 
-/** How far past its edge the base's pinar can go on (tiles; the line it thins out by wobbles inside that). */
-const BASE_WOOD = 12;
+/**
+ * How far past its edge the base's pinar goes on (tiles out, round at the corners): to where the haze has it all
+ * (clearingArt.ts fadeBeyond), so the eye never reaches its end (playtest 22/10 #30).
+ */
+const BASE_WOOD = 31;
+/** Out to here its pines are the map's own (their crowns fade over what is looked at: treeFade.ts); further, instanced and plain. */
+const BASE_WOOD_NEAR = 5;
+/**
+ * Past here, where the haze begins (clearingArt.ts fadeBeyond), its pines are all the simplest one at the others'
+ * heights (190 triangles, not 300 on average), and by its far end a third of them are left out: under the haze it
+ * reads the same, at about half the cost (measured in the app 22/10: +0.6 to +1.6 ms with every pine drawn).
+ */
+const BASE_WOOD_FAR = 14;
+const BASE_WOOD_THIN = [22, 0.35] as const;
+/** The far wood's one pine. */
+const FAR_PINE: PropId = 'pineLarge2';
 /** Whether it does (the clearing lab's `?sinbosque` turns it off, to weigh what it costs). */
 export const BEYOND = { baseWood: true };
 
@@ -471,6 +487,67 @@ function placed(x: number, y: number, z: number, sx: number, sy: number, sz: num
     new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw),
     new THREE.Vector3(sx, sy, sz),
   );
+}
+
+/** A pine of the base's wood past its edge: which, where, and how far out of the map it stands (tiles). */
+interface WoodTree {
+  id: PropId;
+  matrix: THREE.Matrix4;
+  out: number;
+}
+
+/**
+ * The base's pinar past its edge, out to BASE_WOOD (round at the corners): as thick as along the edge, in the strip
+ * nobody fells (BASE_EDGE), its stands and glades from a smooth noise of the engine's grain (base.ts freshBase), so
+ * the edge and the wood beyond read as one wood (playtest 22/10 #30); the tracks' ways left open. `street`: a tile is track.
+ */
+function baseWood(s: GameState, street: (i: number) => boolean): WoodTree[] {
+  const { width: w, height: h } = s;
+  let trees = 0;
+  let tiles = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (Math.min(x, y, w - 1 - x, h - 1 - y) >= BASE_EDGE || street(i)) continue;
+      tiles++;
+      if (s.tiles[i] === 'high' && decorOf(s.decor?.[i])?.kind === 'tree') trees++;
+    }
+  }
+  const share = tiles ? trees / tiles : 0.6;
+  const smooth = (t: number) => t * t * (3 - 2 * t);
+  const noise = (x: number, y: number) => {
+    const fx = x / 6;
+    const fy = y / 6;
+    const gx = Math.floor(fx);
+    const gy = Math.floor(fy);
+    const tx = smooth(fx - gx);
+    const ty = smooth(fy - gy);
+    const top = hash(gx, gy, 43) * (1 - tx) + hash(gx + 1, gy, 43) * tx;
+    const bottom = hash(gx, gy + 1, 43) * (1 - tx) + hash(gx + 1, gy + 1, 43) * tx;
+    return top * (1 - ty) + bottom * ty;
+  };
+  const track = (x: number, y: number) => street(THREE.MathUtils.clamp(y, 0, h - 1) * w + THREE.MathUtils.clamp(x, 0, w - 1));
+  const spots: { x: number; y: number; out: number; n: number }[] = [];
+  for (let y = -BASE_WOOD; y < h + BASE_WOOD; y++) {
+    for (let x = -BASE_WOOD; x < w + BASE_WOOD; x++) {
+      const out = Math.hypot(Math.max(-x, x - (w - 1), 0), Math.max(-y, y - (h - 1), 0));
+      if (out <= 0 || out > BASE_WOOD) continue;
+      const cx = THREE.MathUtils.clamp(x, 0, w - 1);
+      const cy = THREE.MathUtils.clamp(y, 0, h - 1);
+      if (track(cx, cy) || track(cx + 1, cy) || track(cx - 1, cy) || track(cx, cy + 1) || track(cx, cy - 1)) continue;
+      spots.push({ x, y, out, n: noise(x, y) });
+    }
+  }
+  // Where the noise is cut for that share (a smooth noise isn't spread evenly between 0 and 1).
+  const sorted = spots.map((p) => p.n).sort((a, b) => a - b);
+  const cut = sorted[Math.min(sorted.length - 1, Math.floor(share * sorted.length))] ?? 0;
+  const ids = syntySet('basePines');
+  const thin = (out: number) => BASE_WOOD_THIN[1] * THREE.MathUtils.smoothstep(out, BASE_WOOD_THIN[0], BASE_WOOD);
+  return spots.filter((p) => p.n < cut && hash(p.x, p.y, 44) >= thin(p.out)).map(({ x, y, out }) => {
+    const k = 0.8 + hash(x, y, 14) * 0.45;
+    const id = ids[Math.min(ids.length - 1, Math.floor(hash(x, y, 1) * ids.length))]!;
+    return { id, out, matrix: placed(x + 0.5 + (hash(x, y, 15) - 0.5) * 0.6, 0, y + 0.5 + (hash(x, y, 16) - 0.5) * 0.6, k, k * (0.9 + hash(x, y, 17) * 0.25), k, hash(x, y, 18) * Math.PI * 2) };
+  });
 }
 
 /** The rectangle covering both (either may be null: nothing changed there). */
@@ -642,6 +719,7 @@ export class MapView {
       batch: new StaticBatch(CHUNK), slab, ground: this.own(groundMaterial), atlas: new Map(), clinical: null, clinicalWall: null, clinicalDirt: null,
       surroundings: this.surroundings(s, PALETTES[s.biome] ?? PALETTES.city, ground),
       outskirts: this.outskirts(s, ground),
+      wood: null,
       snowbank: this.snow ? this.own(new THREE.MeshStandardMaterial({ map: snowTexture(), color: 0xe3f0ff, roughness: 0.98 })) : null,
     };
   }
@@ -660,6 +738,9 @@ export class MapView {
 
   private disposeKit(): void {
     this.kit?.batch.dispose();
+    this.kit?.wood?.far?.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) o.dispose();
+    });
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
     this.materials = [];
@@ -1736,27 +1817,13 @@ export class MapView {
       prop.forEach((part, k) => layers[k]!.add(d.matrix.clone().multiply(part.matrix)));
     }
 
-    // The base's pinar goes on past its edge, thinning out to nothing by a ragged line some tiles out (playtest 21/10
-    // #27, Ana: no square cut): the same pines, sparser the further, its tracks' ways left open (the dead come in by them).
+    // The base's pinar goes on past its edge as thick as along it (playtest 21/10 #27 and 22/10 #30, Ana: no square cut,
+    // trees as far as the eye goes): the same pines, its tracks' ways left open (the dead come in by them). The nearest
+    // are the map's; no shadow: it would fall off the map, in the haze (and the shadow map is the cost of them: 21/10).
     if (s.base && BEYOND.baseWood && !this.only) {
-      const { width: w, height: h } = s;
-      const track = (x: number, y: number) => ground.kinds[THREE.MathUtils.clamp(y, 0, h - 1) * w + THREE.MathUtils.clamp(x, 0, w - 1)] === FLOOR.STREET;
-      for (let y = -BASE_WOOD; y < h + BASE_WOOD; y++) {
-        for (let x = -BASE_WOOD; x < w + BASE_WOOD; x++) {
-          const out = Math.max(-x, x - (w - 1), -y, y - (h - 1));
-          if (out <= 0) continue;
-          // How far the wood reaches here: a slow wobble along the edge, and a little noise.
-          const reach = 4 + 7 * (0.5 + 0.5 * Math.sin(x * 0.21 + y * 0.17)) * (0.6 + 0.4 * hash(x >> 2, y >> 2, 41));
-          if (out > reach || hash(x, y, 42) > 0.8 * (1 - out / reach) ** 1.3) continue;
-          const cx = x < 0 ? 0 : x > w - 1 ? w - 1 : x;
-          const cy = y < 0 ? 0 : y > h - 1 ? h - 1 : y;
-          if (track(cx, cy) || track(cx + 1, cy) || track(cx - 1, cy) || track(cx, cy + 1) || track(cx, cy - 1)) continue;
-          const k = 0.8 + hash(x, y, 14) * 0.45;
-          // No shadow: it would fall off the map, in the haze (and the shadow map is the cost of them: 21/10).
-          const ids = syntySet('basePines');
-          addSyntyId(ids[Math.min(ids.length - 1, Math.floor(hash(x, y, 1) * ids.length))]!, placed(x + 0.5 + (hash(x, y, 15) - 0.5) * 0.6, 0, y + 0.5 + (hash(x, y, 16) - 0.5) * 0.6, k, k * (0.9 + hash(x, y, 17) * 0.25), k, hash(x, y, 18) * Math.PI * 2), false);
-        }
-      }
+      kit.wood ??= { trees: baseWood(s, (k) => ground.kinds[k] === FLOOR.STREET), far: null };
+      for (const t of kit.wood.trees) if (t.out <= BASE_WOOD_NEAR) addSyntyId(t.id, t.matrix, false);
+      kit.wood.far ??= this.farWood(kit.wood.trees, s);
     }
 
     // Ground cover (tufts, papers, leaves, drains…), scattered off the grid; no shadows.
@@ -1832,6 +1899,7 @@ export class MapView {
     }
     if (!this.only) this.group.add(kit.surroundings);
     if (kit.outskirts && !this.only) this.group.add(kit.outskirts);
+    if (kit.wood?.far && BEYOND.baseWood && !this.only) this.group.add(kit.wood.far);
     // The night's lights are made when it's night (by day a rebuild needn't pay for them); a partial rebuild keeps them.
     if (!redo) {
       this.night?.dispose();
@@ -1951,6 +2019,74 @@ export class MapView {
     ground.matrixAutoUpdate = false;
     ground.updateMatrix();
     return ground;
+  }
+
+  /**
+   * The base's pinar out of reach (past BASE_WOOD_NEAR): its pines instanced, a mesh by kind of pine and side of the
+   * map (each drawn only if in view: few draws, what it costs most), no shadows; null while a pine is loading (the
+   * map is rebuilt once they are).
+   */
+  private farWood(trees: WoodTree[], s: GameState): THREE.Group | null {
+    const props = new Map<PropId, PropPart[]>();
+    for (const id of [FAR_PINE, ...new Set(trees.map((t) => t.id))]) {
+      const prop = syntyProp(id);
+      if (!prop) {
+        this.waitingForProps = true;
+        return null;
+      }
+      props.set(id, prop);
+    }
+    // How tall each pine stands, for the simplest one to stand in for it past BASE_WOOD_FAR at its height.
+    const tall = (id: PropId) => Math.max(...props.get(id)!.map((part) => {
+      if (!part.geometry.boundingBox) part.geometry.computeBoundingBox();
+      return part.geometry.boundingBox!.clone().applyMatrix4(part.matrix).max.y;
+    }));
+    const lift = new Map<PropId, THREE.Matrix4>();
+    const far = trees.filter((t) => t.out > BASE_WOOD_NEAR).map((t) => {
+      if (t.out <= BASE_WOOD_FAR || t.id === FAR_PINE) return t;
+      let k = lift.get(t.id);
+      if (!k) {
+        // As tall, in proportion (the three are as slim, 2.7 to 3 times as tall as wide).
+        const r = tall(t.id) / tall(FAR_PINE);
+        lift.set(t.id, (k = new THREE.Matrix4().makeScale(r, r, r)));
+      }
+      return { ...t, id: FAR_PINE, matrix: t.matrix.clone().multiply(k) };
+    });
+    // As the map's trees (treeMaterial), on the pack's own atlas (these keep their own UVs); Lambert, a fraction of
+    // the cost of each pixel of crown (they overlap, and fill much of the view), and a matte pine looks the same.
+    const materials = new Map<AtlasId, THREE.Material>();
+    const material = (atlas: AtlasId) => {
+      let m = materials.get(atlas);
+      if (!m) {
+        m = new THREE.MeshLambertMaterial({ map: atlasTexture(atlas) });
+        this.snow?.patch(m);
+        materials.set(atlas, this.own(m));
+      }
+      return m;
+    };
+    const lots = new Map<string, WoodTree[]>();
+    for (const t of far) {
+      const e = t.matrix.elements;
+      const side = Math.floor((Math.atan2(e[14]! - s.height / 2, e[12]! - s.width / 2) / Math.PI + 1) * 2 + 0.5) % 4;
+      const key = `${t.id}|${side}`;
+      const lot = lots.get(key);
+      if (lot) lot.push(t);
+      else lots.set(key, [t]);
+    }
+    const group = new THREE.Group();
+    // Far in the haze: no ambient occlusion on it (post.ts SolidGTAO), nor its pre-pass's cost.
+    group.userData.noOcclusion = true;
+    const m = new THREE.Matrix4();
+    for (const lot of lots.values()) {
+      for (const part of props.get(lot[0]!.id)!) {
+        const mesh = new THREE.InstancedMesh(part.geometry, material(part.atlas), lot.length);
+        lot.forEach((t, k) => mesh.setMatrixAt(k, m.multiplyMatrices(t.matrix, part.matrix)));
+        mesh.computeBoundingSphere();
+        mesh.matrixAutoUpdate = false;
+        group.add(mesh);
+      }
+    }
+    return group;
   }
 
   /** What lies beyond the edge (outskirts.ts), under the fog's dark: one mesh, no shadows; null for the base. */

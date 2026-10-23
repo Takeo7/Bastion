@@ -41,7 +41,7 @@ import {
   type CampaignCommand,
   type CampaignState,
 } from '../src/campaign';
-import { armedTiles, bastionFootprint, bastionLot, FELL_COST, fellTree, PIECES, pieceCells } from '../src/base';
+import { armedTiles, BASE_EDGE, bastionFootprint, bastionLot, FELL_COST, fellBlocker, fellTree, PIECES, pieceCells } from '../src/base';
 import { abilitiesOf } from '../src/abilities';
 import { defaultAppearance } from '../src/appearance';
 import { sexOfName } from '../src/content';
@@ -191,19 +191,24 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
 
   it('felling costs and gives nothing; mending, setting again and taking down cost and give what they say', () => {
     const c = solo();
-    const tree = c.bastion.trees[0]!;
+    // The forest past the clearing's edge is not felled (Ana, 22/10 #30): where felling stops, the clearing ends.
+    const xy = (i: number) => ({ x: i % c.bastion.width, y: Math.floor(i / c.bastion.width) });
+    const edge = c.bastion.trees.find((i) => xy(i).x < BASE_EDGE || xy(i).y < BASE_EDGE)!;
+    expect(() => run(c, { type: 'fell', tiles: [xy(edge)] })).toThrow(/bosque/);
+    const fellable = () => c.bastion.trees.filter((i) => !fellBlocker(c.bastion, xy(i).x, xy(i).y));
+    const tree = fellable()[0]!;
     const credits = c.credits;
-    run(c, { type: 'fell', tiles: [{ x: tree % c.bastion.width, y: Math.floor(tree / c.bastion.width) }] });
+    run(c, { type: 'fell', tiles: [xy(tree)] });
     // Arturo, 18/10 #41: «solo cuesta recursos y no da nada».
     expect(c.credits).toBe(credits - FELL_COST);
     expect(c.bastion.trees).not.toContain(tree);
     // A tree listed twice is one tree, paid once.
-    const twice = c.bastion.trees[0]!;
+    const twice = fellable()[0]!;
     const at = { x: twice % c.bastion.width, y: Math.floor(twice / c.bastion.width) };
     run(c, { type: 'fell', tiles: [at, at] });
     expect(c.credits).toBe(credits - 2 * FELL_COST);
     // Many at once, dear together: to a vote with the partner here.
-    const many = c.bastion.trees.slice(0, 12).map((i) => ({ x: i % c.bastion.width, y: Math.floor(i / c.bastion.width) }));
+    const many = fellable().slice(0, 12).map(xy);
     c.players = [0, 1];
     run(c, { type: 'fell', tiles: many }, 0, both);
     expect(c.proposal?.text).toBe('talar 12 árboles');

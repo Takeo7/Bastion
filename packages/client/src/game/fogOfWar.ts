@@ -456,7 +456,13 @@ export class FogOfWar {
             // (past what the tactical view sees), into the haze, where the sky's horizon begins (sky.ts, 0.9.1).
             gl_FragColor.rgb = mix(fowDark, gl_FragColor.rgb, fowKnown);
             #ifdef USE_FOG
-              gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, smoothstep(fowFar.x, fowFar.y, length(fowOut)));
+              // The base's (fowEdge): only what lies past the map as the camera looks, where its wood ends; what is
+              // between the camera and the map, or beside it, stays clear (playtest 22/10 #30: the pines in front came
+              // out white). What the view reaches that far out it reaches looking out across the edge (fowPast > 0.5).
+              vec2 fowAway = fowCell - clamp(fowCell, vec2(0.0), fowSize);
+              float fowPast = dot(fowAway, vFowPos.xz - cameraPosition.xz) / max(length(fowAway) * length(vFowPos.xz - cameraPosition.xz), 1e-4);
+              float fowHaze = smoothstep(fowFar.x, fowFar.y, length(fowOut)) * mix(1.0, smoothstep(0.1, 0.5, fowPast), fowEdge);
+              gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fowHaze);
             #endif
           }`,
         );

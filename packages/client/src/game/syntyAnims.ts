@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { armedPace } from './gaits';
 import { loadAnimation } from './synty';
-import { ACTIONS, ANIMATIONS, ARMED_MOTIONS, CAMP_LOOPS, CAMP_MOVES, CAMP_PARTS, CAMP_SPANS, CAMP_VARIATIONS, DEAD_MOTIONS, DEATHS, GESTURE_ORDER, GESTURES, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type AnimationId, type ArmedKind, type Gesture, type Motion } from './syntyManifest';
+import { ACTIONS, ANIMATIONS, ARMED_MOTIONS, CAMP_LOOPS, CAMP_MOVES, CAMP_PARTS, CAMP_SPANS, CAMP_VARIATIONS, DEAD_MOTIONS, DEATHS, FEED_CLIP, GESTURE_ORDER, GESTURES, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type AnimationId, type ArmedKind, type Gesture, type Motion } from './syntyManifest';
 
 // Locomotion from «ANIMATION – Base Locomotion» on any Synty character. Each
 // unit plays the clips on its own proxy of the pack's skeleton (one mixer,
@@ -154,7 +154,11 @@ function armedOf(clips: Map<AnimationId, THREE.AnimationClip>): AnimSet['armed']
   for (const kind of ARMED_KINDS) {
     const of = MOTION_ORDER.map((m) => ARMED_MOTIONS[kind][m]);
     out[kind] = {
-      clips: of.map((id) => (id && id !== 'own' ? bodyOnly(clips.get(id)!) : null)),
+      // (The dead load none of these: their sets had none, and threw here, so their clips never came: 0.9.5.)
+      clips: of.map((id) => {
+        const clip = id && id !== 'own' ? clips.get(id) : undefined;
+        return clip ? bodyOnly(clip) : null;
+      }),
       pace: of.map((id, k) => (id && id !== 'own' && k > 1 ? armedPace(MOTION_ORDER[k] as Exclude<Motion, 'idle' | 'crouchIdle'>, id) : 1)),
       arms: of.map((id) => !!id),
     };
@@ -209,6 +213,8 @@ export function whenAnimSet(build: Build, dead = false): Promise<AnimSet> {
       return set;
     });
     loading.set(kit, p);
+    // The dead's feeding, ready by the first kill (22/10 #21).
+    if (dead) void whenFeedClips(build).catch(() => undefined);
   }
   return p;
 }
@@ -267,6 +273,40 @@ export function whenCampClips(build: Build): Promise<Map<string, THREE.Animation
       return out;
     });
     campLoading.set(build, p);
+  }
+  return p;
+}
+
+/** The dead's feeding (FEED_CLIP): down on the knees, the loop stayed in (back and forth) and up again. */
+export interface FeedClips {
+  down: THREE.AnimationClip;
+  loop: THREE.AnimationClip;
+  up: THREE.AnimationClip;
+}
+
+const feedLoading = new Map<Build, Promise<FeedClips>>();
+const feedReady = new Map<Build, FeedClips>();
+
+/** A build's feeding clips once loaded; null meanwhile (asking starts the load: the dead's clips ask at once). */
+export function feedClips(build: Build): FeedClips | null {
+  const got = feedReady.get(build);
+  if (!got) void whenFeedClips(build).catch(() => undefined);
+  return got ?? null;
+}
+
+export function whenFeedClips(build: Build): Promise<FeedClips> {
+  let p = feedLoading.get(build);
+  if (!p) {
+    p = loadAnimation(ANIMATIONS[FEED_CLIP].pack, FEED_CLIP).then((loaded) => {
+      const whole = bodyOnly(loaded.clip);
+      const parts = CAMP_PARTS[FEED_CLIP]!;
+      const loop = cut(whole, ...parts.loop, `${FEED_CLIP}Feed`);
+      pingPong.add(loop);
+      const set = { down: cut(whole, ...parts.into, `${FEED_CLIP}FeedIn`), loop, up: cut(whole, ...parts.out, `${FEED_CLIP}FeedOut`) };
+      feedReady.set(build, set);
+      return set;
+    });
+    feedLoading.set(build, p);
   }
   return p;
 }

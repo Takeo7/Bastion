@@ -49,7 +49,8 @@ export class SolidGTAO extends GTAOPass {
   override render(...args: Parameters<GTAOPass['render']>): void {
     const hidden: THREE.Object3D[] = [];
     this.scene.traverseVisible((o) => {
-      if (o instanceof THREE.Line || o instanceof THREE.Points || o instanceof THREE.Sprite) hidden.push(o);
+      // What says it needs none (the base's far wood, in the haze: mapView.ts farWood) stays out too.
+      if (o instanceof THREE.Line || o instanceof THREE.Points || o instanceof THREE.Sprite || o.userData.noOcclusion) hidden.push(o);
       else if (o instanceof THREE.Mesh) {
         const m = Array.isArray(o.material) ? o.material[0] : o.material;
         if (m && (m.transparent || m.blending === THREE.AdditiveBlending)) hidden.push(o);
@@ -111,7 +112,7 @@ export interface Grade {
 
 /**
  * How vivid the colours are over each view's grade (22/10 #46, Arturo: «los colores son muy planos»; three levels for
- * him to choose from, 0 as it is): more saturation and vibrance (most in the colours half way to full: the fog of
+ * him to choose from, 0 as it was; VIVID_DEFAULT the one he chose): more saturation and vibrance (most in the colours half way to full: the fog of
  * war's grey, the snow's near white and the warm cast of the street's greys stay as they are; boosting the dullest
  * turned the ground orange), a little more contrast and the blacks a little less lifted, the middle tones brightened
  * as much as that darkened them (about 0.5, the frame is mostly darker: it went 3 to 7 % dimmer).
@@ -122,7 +123,10 @@ export const VIVID_LEVELS = [
   { saturation: 1.16, vibrance: 0.6, contrast: 0.3, lift: 0.6, gain: 0.16 },
 ] as const;
 
-/** The colours as vivid as level `k` of VIVID_LEVELS over every grade the chain is given (0, as they were). */
+/** The level every post chain starts at (Arturo, 22/10 #46: «bastante más vivo», chosen from the three). */
+export const VIVID_DEFAULT = 2;
+
+/** The colours as vivid as level `k` of VIVID_LEVELS over every grade the chain is given (0, as they were before 22/10). */
 export function setVivid(post: PostChain, k: number): void {
   const v = VIVID_LEVELS[Math.max(0, Math.min(VIVID_LEVELS.length - 1, k))]!;
   post.grade.vividSaturation.value = v.saturation;
@@ -135,15 +139,17 @@ export function setVivid(post: PostChain, k: number): void {
 /** Colour grade after tone mapping: saturation, contrast, split toning, lifted blacks and a soft vignette. */
 const GRADE_GLSL = /* glsl */ `
   float luma = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
-  gl_FragColor.rgb = mix(vec3(luma), gl_FragColor.rgb, saturation * vividSaturation);
+  // (The more vivid colours, none in the darkest: the fog of war's and the night's shade stay as they are.)
+  float vivid = smoothstep(0.08, 0.24, luma);
+  gl_FragColor.rgb = mix(vec3(luma), gl_FragColor.rgb, saturation * mix(1.0, vividSaturation, vivid));
   float chroma = max(max(gl_FragColor.r, gl_FragColor.g), gl_FragColor.b) - min(min(gl_FragColor.r, gl_FragColor.g), gl_FragColor.b);
-  gl_FragColor.rgb = mix(vec3(luma), gl_FragColor.rgb, 1.0 + vibrance * 4.0 * chroma * (1.0 - chroma));
+  gl_FragColor.rgb = mix(vec3(luma), gl_FragColor.rgb, 1.0 + vibrance * vivid * 4.0 * chroma * (1.0 - chroma));
   gl_FragColor.rgb = (gl_FragColor.rgb - 0.5) * contrast + 0.5;
-  gl_FragColor.rgb += vividContrast * (gl_FragColor.rgb - 0.3) * (1.0 - gl_FragColor.rgb);
+  gl_FragColor.rgb += vividContrast * vivid * (gl_FragColor.rgb - 0.3) * (1.0 - gl_FragColor.rgb);
   gl_FragColor.rgb *= mix(shadowTint, highlightTint, smoothstep(0.12, 0.7, luma));
-  vec3 lifted = lift * vividLift;
+  vec3 lifted = lift * mix(1.0, vividLift, vivid);
   gl_FragColor.rgb = lifted + gl_FragColor.rgb * (1.0 - lifted);
-  gl_FragColor.rgb += vividGain * gl_FragColor.rgb * (1.0 - gl_FragColor.rgb);
+  gl_FragColor.rgb += vividGain * vivid * gl_FragColor.rgb * (1.0 - gl_FragColor.rgb);
   vec2 d = vUv - 0.5;
   gl_FragColor.rgb *= 1.0 - vignette * dot(d, d) * 2.0;`;
 
@@ -236,11 +242,13 @@ export function postChain(gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: T
   const output = new GradedOutputPass();
   composer.addPass(output);
   const u = output.uniforms as unknown as Grade;
-  return {
+  const chain: PostChain = {
     composer,
     scene: pass,
     ao,
     bloom,
     grade: { saturation: u.saturation, contrast: u.contrast, vignette: u.vignette, shadowTint: u.shadowTint, highlightTint: u.highlightTint, lift: u.lift, vividSaturation: u.vividSaturation, vibrance: u.vibrance, vividContrast: u.vividContrast, vividLift: u.vividLift, vividGain: u.vividGain },
   };
+  setVivid(chain, VIVID_DEFAULT);
+  return chain;
 }

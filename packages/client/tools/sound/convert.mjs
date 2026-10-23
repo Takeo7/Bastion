@@ -9,8 +9,8 @@
 // Short sounds: the separate takes in each file (cut where it falls silent),
 // mono, each brought to about the same loudness, faded at the ends. Beds: whole
 // and stereo, quieter; only their level changes, so one made to loop still does.
-// Needs ffmpeg.
-import { execFileSync } from 'node:child_process';
+// Opus in Ogg (Homebrew's ffmpeg has no libvorbis; Chromium plays Opus). Needs ffmpeg.
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,7 +62,7 @@ const SOURCES = [
   { name: 'oga-wastelands', url: oga('Juhani%20Junkala%20-%20Post%20Apocalyptic%20Wastelands%20%5BLoop%20Ready%5D.ogg'), group: 'bed.ambience', bed: 'loop' },
   { name: 'oga-emptycity', url: oga('EmptyCity.ogg'), group: 'bed.ambience', bed: 'loop' },
   { name: 'fs-785818', url: fs(785818, 16335323), group: 'bed.ambience', bed: 'fade' },
-  { name: 'fs-686762', url: fs(686762, 3983735), group: 'bed.ambience', bed: 'fade', max: 150 },
+  { name: 'fs-686762', url: fs(686762, 3983735), group: 'bed.ambience', bed: 'fade', max: 90 },
   { name: 'oga-bleedingout', url: oga('bleeding_out2_2.ogg'), group: 'bed.tension', bed: 'fade' },
   { name: 'fs-826597', url: fs(826597, 17484852), group: 'bed.tension', bed: 'fade' },
   { name: 'fs-871722', url: fs(871722, 413687), group: 'bed.tension', bed: 'fade' },
@@ -75,19 +75,21 @@ const SPAN = {
   'zombie.attack': [0.4, 2.5],
   'zombie.bite': [0.15, 2],
   'zombie.eat': [1, 4],
-  'soldier.scream.m': [0.4, 2.5],
-  'soldier.scream.f': [0.4, 2.5],
+  'soldier.scream.m': [0.3, 2.5],
+  'soldier.scream.f': [0.3, 2.5],
   'soldier.pain.m': [0.25, 1.5],
   'melee.blade': [0.12, 1],
   sting: [1, 6],
 };
 
-/** Short takes' loudness (mean, dB) and the most their peaks may reach; beds sit lower. */
+/** Short takes' loudness (mean, dB) and the most their peaks may reach (Opus lifts them a little); beds sit lower. */
 const TAKE_MEAN = -20;
 const BED_MEAN = -28;
-const PEAK = -1.5;
+const PEAK = -3;
 
 const run = (args) => execFileSync('ffmpeg', ['-hide_banner', '-nostats', ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+/** What an analysis pass reports: ffmpeg writes it to stderr, whether or not it fails. */
+const analyse = (args) => spawnSync('ffmpeg', ['-hide_banner', '-nostats', ...args, '-f', 'null', '-'], { encoding: 'utf8' }).stderr ?? '';
 
 function duration(file) {
   return Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], { encoding: 'utf8' }).trim());
@@ -95,25 +97,14 @@ function duration(file) {
 
 /** Mean and peak volume (dB) of `file` from `start`, `length` seconds long. */
 function levels(file, start = 0, length) {
-  const args = ['-ss', String(start), ...(length ? ['-t', String(length)] : []), '-i', file, '-af', 'volumedetect'];
-  let text;
-  try {
-    text = execFileSync('ffmpeg', ['-hide_banner', '-nostats', ...args, '-f', 'null', '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  } catch (e) {
-    text = String(e.stderr ?? '');
-  }
+  const text = analyse(['-ss', String(start), ...(length ? ['-t', String(length)] : []), '-i', file, '-af', 'volumedetect']);
   return { mean: Number(/mean_volume: (-?[\d.]+)/.exec(text)?.[1] ?? -20), peak: Number(/max_volume: (-?[\d.]+)/.exec(text)?.[1] ?? 0) };
 }
 
 /** Where `file` makes a sound: the spans between its silences, longest first. */
 function takes(file) {
   const total = duration(file);
-  let text = '';
-  try {
-    text = execFileSync('ffmpeg', ['-hide_banner', '-nostats', '-i', file, '-af', 'silencedetect=noise=-38dB:d=0.18', '-f', 'null', '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  } catch (e) {
-    text = String(e.stderr ?? '');
-  }
+  const text = analyse(['-i', file, '-af', 'silencedetect=noise=-38dB:d=0.18']);
   const starts = [...text.matchAll(/silence_start: (-?[\d.]+)/g)].map((m) => Math.max(0, Number(m[1])));
   const ends = [...text.matchAll(/silence_end: ([\d.]+)/g)].map((m) => Number(m[1]));
   const spans = [];
@@ -154,7 +145,7 @@ function convert() {
       const gain = Math.min(BED_MEAN - mean, PEAK - peak);
       const fades = s.bed === 'fade' ? `,afade=t=in:d=2,afade=t=out:st=${(total - 2).toFixed(2)}:d=2` : '';
       const out = join(dir, `${s.name}.ogg`);
-      run(['-y', '-t', String(total), '-i', file, '-af', `volume=${gain.toFixed(2)}dB${fades}`, '-ac', '2', '-ar', '44100', '-c:a', 'libvorbis', '-q:a', '3', out]);
+      run(['-y', '-t', String(total), '-i', file, '-af', `volume=${gain.toFixed(2)}dB${fades}`, '-ac', '2', '-ar', '48000', '-c:a', 'libopus', '-b:a', '64k', out]);
       (index[s.group] ??= []).push({ file: `${s.group.replace(/\./g, '-')}/${s.name}.ogg`, db: s.db ?? 0 });
       console.log(`${s.group} ← ${s.name} (fondo, ${total.toFixed(0)} s)`);
       continue;
@@ -171,7 +162,7 @@ function convert() {
       const gain = Math.min(TAKE_MEAN - mean, PEAK - peak);
       const out = join(dir, `${s.name}-${i + 1}.ogg`);
       const fade = Math.min(0.08, length / 4);
-      run(['-y', '-ss', a.toFixed(3), '-t', length.toFixed(3), '-i', file, '-af', `volume=${gain.toFixed(2)}dB,afade=t=in:d=0.01,afade=t=out:st=${(length - fade).toFixed(3)}:d=${fade.toFixed(3)}`, '-ac', '1', '-ar', '44100', '-c:a', 'libvorbis', '-q:a', '4', out]);
+      run(['-y', '-ss', a.toFixed(3), '-t', length.toFixed(3), '-i', file, '-af', `volume=${gain.toFixed(2)}dB,afade=t=in:d=0.01,afade=t=out:st=${(length - fade).toFixed(3)}:d=${fade.toFixed(3)}`, '-ac', '1', '-ar', '48000', '-c:a', 'libopus', '-b:a', '64k', out]);
       (index[s.group] ??= []).push({ file: `${s.group.replace(/\./g, '-')}/${s.name}-${i + 1}.ogg`, db: s.db ?? 0 });
     });
     console.log(`${s.group} ← ${s.name} (${spans.length} ${spans.length === 1 ? 'toma' : 'tomas'})`);

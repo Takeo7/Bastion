@@ -55,8 +55,11 @@ const PLAIN_MOOD: StageMood = {
   grade: { saturation: 1.0, contrast: 1.04, vignette: 0.22, shadowTint: [1, 1, 1], highlightTint: [1, 1, 1], lift: [0, 0, 0] },
 };
 
+/** How far in front of a point (tiles, in depth) what occludes it may stand: the battle's is 2 (post.ts). */
+const AO_THICKNESS = 0.6;
+
 /** Panels of the screens over the stage: a fitted shot keeps clear of them. */
-const PANELS = '.strat-top, .strat-nav, .strat-left, .strat-right, .squad-bottom';
+export const PANELS = '.strat-top, .strat-nav, .strat-left, .strat-right, .squad-bottom';
 
 /** One 3D set of the strategy layer (the Bastion cutaway, the geoscape). */
 export interface StageSet {
@@ -145,6 +148,9 @@ export class Stage {
     this.post = postChain(this.gl, new THREE.Scene(), this.camera);
     // A handful of characters, close up: in the occlusion's pre-pass, or it shows through them (post.ts).
     this.post.ao.withUnits = true;
+    // Only what is near in depth occludes: thicker, a soldier darkened the ground a tile behind him, with a light line
+    // between him and that shade, the occlusion being at half the size (playtest 22/10 #42, Ana's capture in the snow).
+    this.post.ao.updateGtaoMaterial({ thickness: AO_THICKNESS });
     this.element.append(this.gl.domElement, this.fade);
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(this.element);

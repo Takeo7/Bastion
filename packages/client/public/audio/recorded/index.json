@@ -1,0 +1,230 @@
+{
+  "zombie.growl": [
+    {
+      "file": "zombie-growl/fs-323819-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-555417-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-204820-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-769200-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-769200-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-769200-3.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-769200-4.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-769200-5.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-769200-6.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-612699-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-growl/fs-612699-2.ogg",
+      "db": 0
+    }
+  ],
+  "zombie.alert": [
+    {
+      "file": "zombie-alert/fs-435651-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-alert/fs-179345-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-alert/fs-703317-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-alert/fs-42201-1.ogg",
+      "db": 0
+    }
+  ],
+  "zombie.attack": [
+    {
+      "file": "zombie-attack/fs-213509-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-attack/fs-213509-2.ogg",
+      "db": 0
+    }
+  ],
+  "zombie.bite": [
+    {
+      "file": "zombie-bite/fs-155973-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-bite/fs-155973-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-bite/fs-155973-3.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-bite/fs-155973-4.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-bite/fs-445987-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-bite/fs-467701-1.ogg",
+      "db": 0
+    }
+  ],
+  "zombie.eat": [
+    {
+      "file": "zombie-eat/fs-448089-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "zombie-eat/fs-236331-1.ogg",
+      "db": 0
+    }
+  ],
+  "soldier.scream.m": [
+    {
+      "file": "soldier-scream-m/fs-221544-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "soldier-scream-m/fs-220819-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "soldier-scream-m/fs-813310-1.ogg",
+      "db": 0
+    }
+  ],
+  "soldier.pain.m": [
+    {
+      "file": "soldier-pain-m/fs-416839-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "soldier-pain-m/fs-416838-1.ogg",
+      "db": 0
+    }
+  ],
+  "soldier.scream.f": [
+    {
+      "file": "soldier-scream-f/fs-219659-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "soldier-scream-f/fs-618193-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "soldier-scream-f/fs-673306-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "soldier-scream-f/fs-845164-1.ogg",
+      "db": 0
+    }
+  ],
+  "melee.blade": [
+    {
+      "file": "melee-blade/fs-504615-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blade/fs-35213-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blade/fs-521030-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blade/fs-521030-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blade/fs-521030-3.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blade/fs-539535-1.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blade/fs-539535-2.ogg",
+      "db": 0
+    },
+    {
+      "file": "melee-blade/fs-539535-3.ogg",
+      "db": 0
+    }
+  ],
+  "sting": [
+    {
+      "file": "sting/fs-513332-1.ogg",
+      "db": -3
+    },
+    {
+      "file": "sting/fs-725225-1.ogg",
+      "db": -3
+    }
+  ],
+  "bed.ambience": [
+    {
+      "file": "bed-ambience/oga-wastelands.ogg",
+      "db": 0
+    },
+    {
+      "file": "bed-ambience/oga-emptycity.ogg",
+      "db": 0
+    },
+    {
+      "file": "bed-ambience/fs-785818.ogg",
+      "db": 0
+    },
+    {
+      "file": "bed-ambience/fs-686762.ogg",
+      "db": 0
+    }
+  ],
+  "bed.tension": [
+    {
+      "file": "bed-tension/oga-bleedingout.ogg",
+      "db": 0
+    },
+    {
+      "file": "bed-tension/fs-826597.ogg",
+      "db": 0
+    },
+    {
+      "file": "bed-tension/fs-871722.ogg",
+      "db": 0
+    }
+  ]
+}

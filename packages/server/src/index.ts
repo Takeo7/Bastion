@@ -42,6 +42,8 @@ const MIME: Record<string, string> = {
   '.webp': 'image/webp',
   '.glb': 'model/gltf-binary',
   '.wav': 'audio/wav',
+  // The recorded sounds (docs/SONIDO.md): Opus in Ogg.
+  '.ogg': 'audio/ogg',
 };
 
 /** Debug only (`--snapshots <dir>`): the client's `__bastion.snap()` posts frames here. */

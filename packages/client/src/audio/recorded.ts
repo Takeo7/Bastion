@@ -21,6 +21,15 @@ const buffers = new Map<string, AudioBuffer>();
 const loading = new Set<string>();
 const last = new Map<string, string>();
 
+/** Debugging (`?debug`, or the dev server): what played, for checking what sounds where (window.__recorded). */
+const TRACE = import.meta.env.DEV || new URLSearchParams(location.search).has('debug');
+export function trace(line: string): void {
+  if (!TRACE) return;
+  const log = ((window as unknown as { __recorded?: string[] }).__recorded ??= []);
+  log.push(`${(performance.now() / 1000).toFixed(1)} s · ${line}`);
+  if (log.length > 300) log.shift();
+}
+
 function loadIndex(): Promise<void> {
   indexing ??= fetch(`${BASE}index.json`)
     .then((r) => (r.ok ? (r.json() as Promise<Index>) : null))
@@ -73,6 +82,7 @@ export function playRecorded(group: string, o: PlayOptions & { spread?: number }
   const fresh = ready.length > 1 ? ready.filter((t) => t.file !== last.get(group)) : ready;
   const take = fresh[Math.floor(Math.random() * fresh.length)]!;
   last.set(group, take.file);
+  trace(`${group} · ${take.file}${o.pan !== undefined ? ` · pan ${o.pan.toFixed(2)}` : ''}${o.gain !== undefined ? ` · nivel ${o.gain.toFixed(2)}` : ''}`);
   const spread = o.spread ?? 0.04;
   audio.play(buffers.get(take.file)!, {
     ...o,

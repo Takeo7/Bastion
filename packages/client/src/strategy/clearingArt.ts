@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { bastionFootprint, bastionLot, bastionStage, cellsOf, createMission, onBastionLot, pieceAt, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type ItemId, type PieceId, type TemplateId, type WeaponModId } from '@bastion/engine';
+import { bastionFootprint, bastionLot, bastionStage, cellsOf, createMission, decorOf, onBastionLot, pieceAt, PIECES, Rng, treeAt, type Appearance, type BasePiece, type BaseState, type GameState, type ItemId, type PieceId, type TemplateId, type WeaponModId } from '@bastion/engine';
 import { drawPiece, pieceMap, pieceWear, type PieceArt } from '../game/basePieces';
 import { EvacBus } from '../game/evacBus';
 import { fxShape } from '../game/fx';
@@ -13,7 +13,7 @@ import type { Gear } from '../game/figures';
 import { buildUnit, IDLE_POSE, isFigure, type UnitRig } from '../game/models';
 import { ClearingLife, type Camp } from './clearingLife';
 import { STOREY } from '../game/coords';
-import { atlasTexture, loadModel } from '../game/synty';
+import { atlasTexture, loadModel, UNIT_FACE } from '../game/synty';
 import { tween } from '../game/tween';
 import { whenCampClips } from '../game/syntyAnims';
 import type { ArmoryStock, ClearingArt } from './clearing';
@@ -57,6 +57,8 @@ export class ClearingArtView implements ClearingArt {
   /** La Lata is out on a mission (gone down its track until it comes back); and while it drives, the vehicle a change asked for, for after. */
   private away = false;
   private driving: Promise<void> | null = null;
+  /** The clearing as its siege map has it (setBase): what one walking about it can stand on (blocked). */
+  private ground: GameState | null = null;
   /** The stage's camera (watch): the boarding moves it itself, a shot of its own (playtest 21/10 #3). */
   private camera: THREE.PerspectiveCamera | null = null;
   /** Where the boarding's camera started (the row's shot): it goes back out there as La Lata leaves. */
@@ -126,10 +128,11 @@ export class ClearingArtView implements ClearingArt {
     this.snow = snow;
     const m = (this.look = dayMood(snow));
     this.mood = { exposure: m.exposure, bloom: m.bloom, grade: m.grade };
-    // Nothing is played beyond the woods: past the edge the pinar goes on, lit, thinning out (mapView: playtest 21/10
-    // #27), into the haze under the mountains, not the dark.
+    // Nothing is played beyond the woods: past the edge the pinar goes on, lit, as thick as along it (mapView: playtest
+    // 21/10 #27, 22/10 #30), into the haze under the mountains, not the dark. The haze has it all where the wood ends
+    // (BASE_WOOD), and starts far enough out that the pines in front of a camera looking in from outside stay clear.
     this.map.litBeyond(true);
-    this.map.fadeBeyond(8, 30);
+    this.map.fadeBeyond(14, 31);
     this.sun.color.set(m.sun);
     this.sun.intensity = m.sunIntensity;
     this.sun.castShadow = true;
@@ -182,6 +185,9 @@ export class ClearingArtView implements ClearingArt {
     scene.fog = new THREE.FogExp2(this.look.haze, this.look.hazeDensity);
     this.skyDome.setMood(this.look, { night: false, snow: this.snow });
     scene.add(this.skyDome.group);
+    // The soldiers' soft light from the camera (synty.ts UNIT_FACE), on only while this scene is drawn: not the portraits'.
+    scene.onBeforeRender = () => void UNIT_FACE.value.set(this.look.fill).multiplyScalar(FACE_LIGHT);
+    scene.onAfterRender = () => void UNIT_FACE.value.setRGB(0, 0, 0);
   }
 
   /** The camera the clearing is seen with, for what the map does by it (its lamps, what fades). */
@@ -193,6 +199,7 @@ export class ClearingArtView implements ClearingArt {
   setBase(base: BaseState): void {
     const s = clearingState(base, this.snow);
     this.elev = s.elev;
+    this.ground = s;
     if (!this.built) {
       this.map.build(s);
       this.built = true;
@@ -1263,6 +1270,28 @@ export class ClearingArtView implements ClearingArt {
     this.fill.target.position.set(cx, 0, cz);
   }
 
+  /**
+   * Whether one walking about the clearing in first person (walkAbout.ts) can't stand on tile x, y: off the clearing,
+   * a pine standing, a building's wall, a defence or a bed (a low one with nothing on it is the siege's alone, unseen:
+   * no), a raised deck; floors and doorways can be.
+   */
+  blocked(x: number, y: number): boolean {
+    const s = this.ground;
+    if (!s || !this.base || x < 0 || y < 0 || x >= s.width || y >= s.height) return true;
+    const i = y * s.width + x;
+    const kind = s.tiles[i];
+    if ((s.elev[i] ?? 0) > 0) return true;
+    if (kind === 'low') return !!pieceAt(this.base, x, y) || !!decorOf(s.decor?.[i]);
+    return kind !== 'floor' && kind !== 'door' && kind !== 'doorOpen';
+  }
+
+  /** What else stops one walking about (walkAbout.ts), off the tiles: La Lata where it is parked (x, z boxes). */
+  solids(): THREE.Box2[] {
+    if (!this.bus.root.visible || this.away || this.driving) return [];
+    const box = new THREE.Box3().setFromObject(this.bus.root);
+    return box.isEmpty() ? [] : [new THREE.Box2(new THREE.Vector2(box.min.x, box.min.z), new THREE.Vector2(box.max.x, box.max.z))];
+  }
+
   pieceModel(piece: PieceId, rot: number, level = 1): THREE.Object3D {
     return pieceModel(piece, rot, level);
   }
@@ -1291,6 +1320,12 @@ export class ClearingArtView implements ClearingArt {
     if (this.warm > 0) this.warm--;
   }
 }
+
+/**
+ * How strong the soldiers' light from the camera is (synty.ts UNIT_FACE, in the fill's colour; the sun is 3.5): a face
+ * with the sun behind it reads, without a spotlight on it (playtest 22/10 #42). Not the battle's: seen from above.
+ */
+const FACE_LIGHT = 1.4;
 
 /** How far from La Lata's side one leaning on it stands (its shoulder to the armour plates, tiles), and where along it (of its length from the middle: between the wheels). */
 const LEAN_OFF = 0.46;
