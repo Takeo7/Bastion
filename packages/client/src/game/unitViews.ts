@@ -82,6 +82,8 @@ const LUNGE_SHORT = 0.72;
  * feed resolves (the camera's shot then lets go), then eats on until its next move.
  */
 const BITE_SHORT = 0.34;
+/** With its clip, it stands this far from the middle of the one it bites (tiles), the clip leaning it in to the neck. */
+const BITE_GAP = 0.42;
 const FEED_WAIT = 0.4;
 const FEED_SIDE = 0.4;
 const FEED_SEEN = 0.8;
@@ -1483,6 +1485,22 @@ export class UnitViews {
     // The knife or the machete from the belt (a soldier's Tajo); whoever has none strikes with what it holds.
     const rig = isFigure(v.rig) ? v.rig : null;
     rig?.draw?.('belt');
+    // The bite that kills, by its clip (syntyManifest FEED_CLIPS): into the neck, the clip leaning the head in; it holds
+    // on (the body's fall lets it go: feed), and lets go by itself if no feeding follows.
+    const bitten = bite ? (rig?.feed?.('bite') ?? 0) : 0;
+    if (bitten > 0) {
+      this.biting.set(id, home);
+      toward.setLength(THREE.MathUtils.clamp(gap - BITE_GAP, 0, 1));
+      await tween(bitten, (t) => v.rig.root.position.copy(home).addScaledVector(toward, easeInOut(Math.min(1, t * 1.6))));
+      void wait(2).then(() => {
+        if (this.biting.get(id) !== home) return;
+        this.biting.delete(id);
+        rig?.feed?.(null);
+        const from = v.rig.root.position.clone();
+        void tween(0.35, (t) => v.rig.root.position.lerpVectors(from, home, easeInOut(t))).then(() => (v.animating = false));
+      });
+      return;
+    }
     // Wound up (the body turned back, the dead's arms open), the stroke across or the grab, and back (Arturo, 2026-10-14:
     // the Tajo cuts, the bite grabs).
     await tween(0.2, (t) => {
@@ -1525,11 +1543,6 @@ export class UnitViews {
   }
 
   /**
-   * A blow on a siege's door or barricade at `tile` (the 'smashed' event,
-   * docs/FASE12.md §10): the dead one lunges at it with its arms. Resolves as
-   * the blow lands, 0.34 s on; it steps back in 0.35 s more on its own.
-   */
-  /**
    * Whether `killer` eats `victim` once it has killed it (22/10 #21): one of the dead that bite (FEEDERS), beside it
    * (the diagonal too) on its storey, and the victim one of ours.
    */
@@ -1568,7 +1581,7 @@ export class UnitViews {
     const hips = new THREE.Vector3();
     const head = new THREE.Vector3();
     const body = this.views.get(victim)!;
-    const kneel = (t: number) => {
+    const kneel = (t: number): void => {
       const chest = this.bodyPos(victim);
       // Beside the body at its chest, across the way it lies, on the side nearer where it stood.
       if (isFigure(body.rig) && body.rig.bodyLine) body.rig.bodyLine(hips, head);
@@ -1586,14 +1599,14 @@ export class UnitViews {
       v.pose.lean *= 0.9;
       v.pose.swing = (v.pose.swing ?? 0) * 0.9;
       this.face(id, chest);
-      return chest;
     };
-    const down = feed('down', kneel(0));
-    await tween(Math.max(0.6, down), (t) => feed('down', kneel(t)));
+    kneel(0);
+    const down = feed('down');
+    await tween(Math.max(0.6, down), (t) => kneel(t));
     v.pose.lean = 0;
     v.pose.swing = 0;
     v.pose.aimFx = 0;
-    feed('eat', this.bodyPos(victim));
+    feed('eat');
     this.feeding.set(id, { victim, home });
     await wait(FEED_SEEN);
   }
@@ -1620,6 +1633,11 @@ export class UnitViews {
     if (isFigure(v.rig)) v.rig.feed?.(null);
   }
 
+  /**
+   * A blow on a siege's door or barricade at `tile` (the 'smashed' event,
+   * docs/FASE12.md §10): the dead one lunges at it with its arms. Resolves as
+   * the blow lands, 0.34 s on; it steps back in 0.35 s more on its own.
+   */
   async smash(id: string, tile: Place): Promise<void> {
     await this.lunge(id, this.standAt(tile));
   }

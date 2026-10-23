@@ -624,6 +624,16 @@ export const ANIMATIONS = {
   standToSit: mixamo('Stand To Sit'),
   sitToStand: mixamo('Sit To Stand'),
   warmHands: mixamo('Kneel'),
+  // The dead killing one of ours and eating it (22/10 #21; MIXAMO.md's fourth batch, at 30 fps in mixamo-30fps): on
+  // the knees biting at one on the ground (Mixamo's «Zombie Biting»: there is no «Zombie Eating»), standing to bite at
+  // the ground and up again, down on the knees and up from them (a person's: the dead's stand-ups start lying down),
+  // a neck bitten again and again, a headbutt with a hand's grab.
+  zombieFeed: mixamo('../mixamo-30fps/Zombie Biting'),
+  zombieFeedFromStanding: mixamo('../mixamo-30fps/Zombie Biting 2'),
+  kneelDown: mixamo('../mixamo-30fps/Kneeling Down'),
+  kneelUp: mixamo('../mixamo-30fps/Standing'),
+  zombieNeckBite: mixamo('../mixamo-30fps/Zombie Neck Bite'),
+  zombieHeadbutt: mixamo('../mixamo-30fps/Zombie Headbutt'),
   squat: mixamo('Crouch Idle'),
   // Into La Lata (22/10 #12): by a 4×4's side door, sat down sideways and the legs swung in (its left side's, and
   // mirrored its right's); up the step at a van's or a lorry's back.
@@ -800,12 +810,18 @@ export const CAMP_FREE: ReadonlySet<CampMove> = new Set<CampMove>(['enterCar', '
 
 /**
  * The dead that eat one of ours they have just killed (22/10 #21): the biters (not the Chillón, who screams, nor the
- * Hinchado, who bursts). Down on their knees over the body, at it, and up again for their next move: the knees from
- * Mixamo's kneeling by a fire (its parts as the camp's: CAMP_PARTS), loaded with the dead's clips; the bites and the
- * hands on the body go on top (syntyFigures feeding).
+ * Hinchado, who bursts). Mixamo's (MIXAMO.md's fourth batch, loaded with the dead's clips: syntyAnims feedClips), each
+ * the seconds of it played: the bite that kills, into the neck of one standing (the first of «Zombie Neck Bite»'s
+ * bites); down on the knees (a person's: the dead's stand-ups start lying down), the eating stayed in (on the knees
+ * at one on the ground, looped: its ends meet), and up again.
  */
 export const FEEDERS: ReadonlySet<TemplateId> = new Set<TemplateId>(['zombie', 'xenoid', 'mec']);
-export const FEED_CLIP: AnimationId = 'warmHands';
+export const FEED_CLIPS = {
+  bite: ['zombieNeckBite', 0, 1.3],
+  down: ['kneelDown', 0.8, 2.77],
+  loop: ['zombieFeed', 0, 2.33],
+  up: ['kneelUp', 0, 2.6],
+} as const satisfies Record<string, readonly [AnimationId, number, number]>;
 
 /** What one holds in the right hand at the camp drinking or eating (CampLoop 'drink', 'eat'): a canteen's cup, a ration bar. */
 export const CAMP_ITEMS = { drink: 'campCup', eat: 'campBar' } as const satisfies Partial<Record<CampLoop, keyof typeof PROPS>>;

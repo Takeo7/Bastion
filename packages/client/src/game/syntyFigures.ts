@@ -587,19 +587,11 @@ function throwClipTime(k: keyof typeof THROWS, t: number): number {
 const hq = new THREE.Quaternion();
 const hr = new THREE.Quaternion();
 const m2 = new THREE.Matrix4();
-/** Feeding's own (toModel, handsOnBody): the pose's temporaries are in use around them. */
-const fm = new THREE.Matrix4();
-const fdq = new THREE.Quaternion();
-const fv1 = new THREE.Vector3();
-const fv2 = new THREE.Vector3();
-const fv3 = new THREE.Vector3();
 /**
- * The dead feeding (22/10 #21): how much faster than Mixamo's kneeling it goes down and up (a dead one drops), the
- * seconds of a bite, and how far either side of the body's chest its hands go (m).
+ * The dead feeding (22/10 #21): how much faster than Mixamo's it bites, goes down (a dead one drops) and gets up (its
+ * next move waits for that: the enemy's turn keeps its pace).
  */
-const FEED_SPEED = 1.4;
-const FEED_BITE = 1.25;
-const FEED_HANDS = 0.16;
+const FEED_SPEEDS = { bite: 1.3, down: 1.4, up: 2 } as const;
 const sl2 = new THREE.Vector3();
 const sl3 = new THREE.Vector3();
 const sl4 = new THREE.Vector3();
@@ -902,13 +894,8 @@ export class SyntyFigure implements FigureRig {
   private campDirty = false;
   private campNow = false;
   private campMoving = false;
-  /**
-   * One of the dead eating a body (feed: 22/10 #21): how far, where the body's chest is (world), and how much of the
-   * bites and of its hands on the body there is now (eased in once at it).
-   */
+  /** One of the dead killing and eating one of ours (feed: 22/10 #21): how far, its clips' (syntyManifest FEED_CLIPS). */
   private feedPhase: FeedPhase | null = null;
-  private readonly feedAt = new THREE.Vector3();
-  private feedK = 0;
   /** What it holds in the right hand at the camp (holdItem), its model there once loaded. */
   private itemId: PropId | null = null;
   private item: THREE.Object3D | null = null;
@@ -1124,14 +1111,13 @@ export class SyntyFigure implements FigureRig {
     return a.campMove(move ? (clips.get(CAMP_MOVES[this.build][move]) ?? null) : null, speed);
   }
 
-  feed(phase: FeedPhase | null, at?: { x: number; y: number; z: number }): number {
+  feed(phase: FeedPhase | null): number {
     this.feedPhase = phase;
-    if (at) this.feedAt.set(at.x, at.y, at.z);
     const a = this.anim;
     const clips = feedClips(this.build);
     if (!a || !clips) return 0;
-    // (Its stance, the dead's sway, takes the idle's place as the knees would: none while down at the body.)
-    a.setStance(phase === 'down' || phase === 'eat' ? -1 : this.stance);
+    // (Its stance, the dead's sway, takes the idle's place as the clips would: none while at it.)
+    a.setStance(phase && phase !== 'up' ? -1 : this.stance);
     if (phase === 'eat') {
       // Into the loop as the move down ends (it is where that leaves the body).
       a.campLoop(clips.loop, true);
@@ -1139,9 +1125,10 @@ export class SyntyFigure implements FigureRig {
       return 0;
     }
     a.campLoop(null);
-    const clip = phase === 'down' ? clips.down : phase === 'up' ? clips.up : null;
-    a.campMove(clip, FEED_SPEED);
-    return clip ? clip.duration / FEED_SPEED : 0;
+    const clip = phase ? clips[phase] : null;
+    const speed = phase ? FEED_SPEEDS[phase] : 1;
+    a.campMove(clip, speed);
+    return clip ? clip.duration / speed : 0;
   }
 
   /** Where the chest is as posed now, in the world: on a body on the ground, where it lies. */
@@ -1158,46 +1145,15 @@ export class SyntyFigure implements FigureRig {
     const top = this.bones[B.Head];
     if (!h || !top) {
       this.root.getWorldPosition(hips);
-      head.copy(hips).add(fv1.set(0, this.top, 0));
+      head.copy(hips);
+      head.y += this.top;
       return;
     }
     h.getWorldPosition(hips);
     top.getWorldPosition(head);
   }
 
-  /** A point in the world in the model space the pose works in (p, reach): through the skeleton's root, as write() goes the other way. */
-  private toModel(world: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
-    const r = this.rest!;
-    const frame = this.bones[B.Hips]?.parent;
-    if (!frame) return out.copy(this.p[B.Hips]!);
-    frame.updateWorldMatrix(true, false);
-    out.copy(world).applyMatrix4(fm.copy(frame.matrixWorld).invert());
-    return out.applyQuaternion(fdq.copy(r.rootQ).invert()).add(r.rootP);
-  }
 
-  /** A bite as it feeds (FEED_BITE a bite): how far the head is down at the body, how hard it tears back, its shake. */
-  private bite(t: number): { dip: number; tear: number; shake: number } {
-    const s = (((t / FEED_BITE) % 1) + 1) % 1;
-    const dip = THREE.MathUtils.smoothstep(s, 0, 0.3) * (1 - THREE.MathUtils.smoothstep(s, 0.36, 0.7));
-    const tear = s > 0.3 && s < 0.78 ? Math.sin(((s - 0.3) / 0.48) * Math.PI) : 0;
-    return { dip, tear, shake: Math.sin(s * 47) * tear };
-  }
-
-  /**
-   * Feeding: both hands on the body (feedAt, its chest), a shoulder's width apart across the figure, pulling up at it
-   * as the teeth tear; `k` of the way from the clip's arms.
-   */
-  private handsOnBody(b: { tear: number }, k: number): void {
-    const d = this.d;
-    for (let i = 0; i < ARMS.length; i++) this.held[i]!.copy(d[ARMS[i]!]!);
-    this.yaw.getWorldQuaternion(fdq);
-    const across = fv1.set(1, 0, 0).applyQuaternion(fdq).setY(0).normalize();
-    for (const [side, s] of [['L', 1], ['R', -1]] as const) {
-      fv2.copy(this.feedAt).addScaledVector(across, s * FEED_HANDS).add(fv3.set(0, 0.04 + b.tear * 0.09, 0));
-      this.reach(side, this.toModel(fv2, fv3), v4.set(s * 0.8, -0.6, -0.4));
-    }
-    for (let i = 0; i < ARMS.length; i++) d[ARMS[i]!]!.slerp(this.held[i]!, 1 - k);
-  }
 
   /**
    * What it holds at the camp kept upright if it is to be (holdItem), facing as it does (a cup is held level, whatever
@@ -1703,7 +1659,6 @@ export class SyntyFigure implements FigureRig {
     const dt = this.clock === -Infinity ? 0 : THREE.MathUtils.clamp(time - this.clock, 0, 0.25);
     this.clock = time;
     this.dt = dt;
-    this.feedK += ((this.feedPhase === 'eat' ? 1 : 0) - this.feedK) * Math.min(1, dt * 3);
     const { d, p: pos } = this;
     const dead = this.spec.dead;
     const shamble = dead ? 1 : 0;
@@ -1735,13 +1690,10 @@ export class SyntyFigure implements FigureRig {
     const search = dead ? 0 : (p.search ?? 0) * live;
     const breathe = anim || dead ? 0 : Math.sin(time * 2.1 + p.phase) * 0.015;
     const style = STYLES[this.spec.style ?? 'none'];
-    // Feeding on a body: down at it, bite by bite (handsOnBody puts the hands on it).
-    const fed = this.feedK > 0.01 && live > 0.5 ? this.bite(time + p.phase * 3) : null;
-    const munch = fed ? this.feedK : 0;
     // A hit's knock-back is the clip's when there is one; a little of it stays, for the jolt.
     const knock = p.hit * (this.hit ? 0.12 : 0.38);
     // (A throw's clip leans the body itself: direct.)
-    const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + (this.thrown || this.struck ? 0 : p.lean) - knock - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe + (fed ? (0.3 + fed.dip * 0.4) * munch : 0)) * live;
+    const lean = ((dead ? style.lean : 0) + (anim ? 0 : 0.28 * p.crouch) + (this.thrown || this.struck ? 0 : p.lean) - knock - p.recoil * 0.05 - scream * 0.5 + search * 0.45 + breathe) * live;
     // A two-handed gun blades the upper body: the support shoulder comes forward so that arm bends under
     // the gun instead of reaching across the chest; the gun and the head keep facing ahead (holdWeapon, the neck).
     // A pistol, hardly: it is held square to the target, both arms out.
@@ -1762,9 +1714,9 @@ export class SyntyFigure implements FigureRig {
     // Aiming a gun the head comes down and over to the stock, the eye behind the sights.
     const sight = this.armed && !this.melee && this.clipped <= 0.5 ? p.aim * live : 0;
     const neck = rot(this.neckTurn, Z, shamble * 0.32 * live - sight * 0.12)
-      .multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6 + grab * 0.4) * live + sight * 0.16 + (fed ? (0.25 + fed.dip * 0.7 - fed.tear * 0.35) * munch : 0)))
+      .multiply(rot(q2, X, (-lean * 0.55 + p.hit * 0.25 - scream * 0.6 + grab * 0.4) * live + sight * 0.16))
       .premultiply(upper)
-      .premultiply(rot(q2, Y, -this.blade * 0.85 + (fed ? fed.shake * 0.14 * munch : 0)));
+      .premultiply(rot(q2, Y, -this.blade * 0.85));
     if (!anim) d[B.Neck]!.copy(d[B.Hips]!);
     d[B.Neck]!.premultiply(neck);
     if (anim) d[B.Head]!.premultiply(neck);
@@ -1845,7 +1797,6 @@ export class SyntyFigure implements FigureRig {
         this.spreadArm('L');
         this.spreadArm('R');
       }
-      if (fed) this.handsOnBody(fed, munch);
       if (search > 0.01) {
         // Both hands in, blended from the clip's arms.
         for (let i = 0; i < ARMS.length; i++) this.held[i]!.copy(d[ARMS[i]!]!);

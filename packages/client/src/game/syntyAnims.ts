@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { armedPace } from './gaits';
 import { loadAnimation } from './synty';
-import { ACTIONS, ANIMATIONS, ARMED_MOTIONS, CAMP_LOOPS, CAMP_MOVES, CAMP_PARTS, CAMP_SPANS, CAMP_VARIATIONS, DEAD_MOTIONS, DEATHS, FEED_CLIP, GESTURE_ORDER, GESTURES, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type AnimationId, type ArmedKind, type Gesture, type Motion } from './syntyManifest';
+import { ACTIONS, ANIMATIONS, ARMED_MOTIONS, CAMP_LOOPS, CAMP_MOVES, CAMP_PARTS, CAMP_SPANS, CAMP_VARIATIONS, DEAD_MOTIONS, DEATHS, FEED_CLIPS, GESTURE_ORDER, GESTURES, HITS, IDLE_VARIATIONS, MOTIONS, STANCE_ORDER, STANCES, SYNTY_BONES, type ActionId, type AnimationId, type ArmedKind, type Gesture, type Motion } from './syntyManifest';
 
 // Locomotion from «ANIMATION – Base Locomotion» on any Synty character. Each
 // unit plays the clips on its own proxy of the pack's skeleton (one mixer,
@@ -277,12 +277,8 @@ export function whenCampClips(build: Build): Promise<Map<string, THREE.Animation
   return p;
 }
 
-/** The dead's feeding (FEED_CLIP): down on the knees, the loop stayed in (back and forth) and up again. */
-export interface FeedClips {
-  down: THREE.AnimationClip;
-  loop: THREE.AnimationClip;
-  up: THREE.AnimationClip;
-}
+/** The dead's feeding (FEED_CLIPS): the bite that kills, down on the knees, the eating stayed in (looped) and up again. */
+export type FeedClips = Record<keyof typeof FEED_CLIPS, THREE.AnimationClip>;
 
 const feedLoading = new Map<Build, Promise<FeedClips>>();
 const feedReady = new Map<Build, FeedClips>();
@@ -297,12 +293,10 @@ export function feedClips(build: Build): FeedClips | null {
 export function whenFeedClips(build: Build): Promise<FeedClips> {
   let p = feedLoading.get(build);
   if (!p) {
-    p = loadAnimation(ANIMATIONS[FEED_CLIP].pack, FEED_CLIP).then((loaded) => {
-      const whole = bodyOnly(loaded.clip);
-      const parts = CAMP_PARTS[FEED_CLIP]!;
-      const loop = cut(whole, ...parts.loop, `${FEED_CLIP}Feed`);
-      pingPong.add(loop);
-      const set = { down: cut(whole, ...parts.into, `${FEED_CLIP}FeedIn`), loop, up: cut(whole, ...parts.out, `${FEED_CLIP}FeedOut`) };
+    const parts = Object.entries(FEED_CLIPS) as [keyof FeedClips, readonly [AnimationId, number, number]][];
+    p = Promise.all(parts.map(([, [id]]) => loadAnimation(ANIMATIONS[id].pack, id))).then((loaded) => {
+      const set = {} as FeedClips;
+      parts.forEach(([part, [id, from, to]], k) => (set[part] = cut(bodyOnly(loaded[k]!.clip), from, to, `${id}:${part}`)));
       feedReady.set(build, set);
       return set;
     });
@@ -360,6 +354,8 @@ export class AnimDriver {
   private move: THREE.AnimationAction | null = null;
   private moved = 0;
   private moving = false;
+  /** The move before one that followed it straight on (the bite, then down on the knees: 22/10 #21), easing out under it. */
+  private before: { action: THREE.AnimationAction; share: number } | null = null;
   /** The camp's variations in the plain ones' place, while set (campVariations). */
   private camp: THREE.AnimationAction[] | null = null;
   /** A look round over a weapon's clip at rest (set.looks), and the seconds until the next. */
@@ -575,7 +571,10 @@ export class AnimDriver {
   campMove(clip: THREE.AnimationClip | null, speed = 1): number {
     const next = clip ? this.mixer.clipAction(clip) : null;
     if (next && next !== this.move) {
-      this.move?.stop();
+      // One straight after another: the first eases out under the next as it comes in (no going back to the idle between).
+      this.before?.action.stop();
+      this.before = this.move && this.moving && this.moved > 0 ? { action: this.move, share: Math.min(0.97, this.moved) } : null;
+      if (!this.before) this.move?.stop();
       next.reset().setLoop(THREE.LoopOnce, 1);
       next.clampWhenFinished = true;
       next.timeScale = speed;
@@ -671,7 +670,16 @@ export class AnimDriver {
       }
       stood += h;
     }
-    // A camp move over everything (as a hit's share against the rest's 1), quickly in and out.
+    // A camp move over everything (as a hit's share against the rest's 1), quickly in and out; one it took over from
+    // eases out as it comes in.
+    const b = this.before;
+    if (b) {
+      b.share = Math.max(0, b.share - dt / BLEND);
+      if (b.share <= 0) {
+        b.action.stop();
+        this.before = null;
+      } else b.action.setEffectiveWeight(b.share / (1 - b.share));
+    }
     if (this.move) {
       this.moved = THREE.MathUtils.clamp(this.moved + (this.moving ? dt : -dt) / BLEND, 0, 1);
       const s = Math.min(0.97, this.moved);
