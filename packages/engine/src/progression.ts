@@ -219,7 +219,8 @@ export const BASE_UNLOCKS: Record<string, { name: string; level: number; buildin
 export function levelUnlocks(level: number, facilities: Record<string, { name: string; level: number; building?: boolean }> = BASE_UNLOCKS): string[] {
   return [
     ...Object.values(TECHS).filter((t) => t.level === level).map((t) => t.name),
-    ...Object.values(ITEMS).filter((i) => i.level === level).map((i) => i.name),
+    // Belt accessories only: the special rounds are the weapons' mods now (docs/FASE9.md §4).
+    ...Object.values(ITEMS).filter((i) => i.level === level && i.slot === 'utility').map((i) => i.name),
     ...Object.values(facilities).filter((f) => f.level === level).map((f) => f.name),
     ...Object.values(facilities)
       .filter((f) => f.building !== false)

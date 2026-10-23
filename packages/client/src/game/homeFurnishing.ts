@@ -263,6 +263,30 @@ export function shopTradeIn(s: GameState, b: ShopSite): 'books' | 'cafe' | 'groc
   return shopTrade(b.look);
 }
 
+/** Shelves a grocer has at least to be signed FOOD (shopSign). */
+const GROCER_SHELVES = 3;
+
+/**
+ * What a shop's sign says (buildings.ts sign): only what its ground floor shows (playtest 23/10 #23: FOOD and DINER
+ * over shops that looked like neither, signed by their looks). A café with a café table at least, DINER; a grocer
+ * with its drinks fridge and shelves of stock (GROCER_SHELVES), FOOD; anything else a plain SHOP, as its counter and
+ * shelves say that much.
+ */
+export function shopSign(s: GameState, b: ShopSite): 'cafe' | 'grocer' | 'shop' {
+  let tables = 0;
+  let fridges = 0;
+  let shelves = 0;
+  for (let y = b.y0; y <= b.y1; y++) {
+    for (let x = b.x0; x <= b.x1; x++) {
+      const kind = decorOf(s.decor?.[y * s.width + x])?.kind;
+      if (kind === 'cafeTable') tables++;
+      else if (kind === 'drinksFridge') fridges++;
+      else if (kind === 'shelf') shelves++;
+    }
+  }
+  return tables ? 'cafe' : fridges && shelves >= GROCER_SHELVES ? 'grocer' : 'shop';
+}
+
 /**
  * The shops dressed as their trade (playtest 18/10, #36), on their ground
  * floor: a bookshop's books on its counter; a café's stools at the bar,

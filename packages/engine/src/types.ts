@@ -825,8 +825,8 @@ export interface Reinforcement {
  * (MissionState.reinforcements, each by its `side`, any of the four) and go
  * for the soldiers, breaking down the doors and barricades in their way
  * (GameState.breakables). The base falls when nobody is left to defend it;
- * it holds once enemy turn `hold` is over, or when every wave is in and down
- * (Arturo, 18/10).
+ * it holds once every wave is in and down (Ana, 23/10: not after a set turn;
+ * `hold` is from missions saved before, and no longer ends it).
  */
 export interface Siege {
   hold: number;

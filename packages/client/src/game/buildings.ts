@@ -11,7 +11,7 @@ import { NIGHT } from './night';
 import { MedicalFinish } from './medicalFinish';
 import { atlasOf, atlasTexture, loadModel } from './synty';
 import { KIT_SCALE, KIT_TILE, PIECES, SYNTY_SCALE, type AtlasId, type PieceAsset, type PieceId, type PropId } from './syntyManifest';
-import { shopTradeIn } from './homeFurnishing';
+import { shopSign } from './homeFurnishing';
 import { syntyProp } from './syntyProps';
 import { unitPosNow } from './unitViews';
 
@@ -1847,7 +1847,7 @@ function capBox(parts: PiecePart[], thicken: THREE.Matrix4, key: string): THREE.
 /**
  * Shop signs and how long each is (tiles): the long ones are scaled down to fit over a door. Each says what is
  * inside (playtest 22/10 #51: PETS over a shop with no pets in it, so not PETS): a grocer's FOOD, a café's DINER,
- * a bookshop's plain SHOP (shopTradeIn: as its floor is furnished).
+ * any other shop's plain SHOP (shopSign: only as its floor shows it, 23/10 #23).
  */
 const SIGNS = { signShop: 1.7, signFood: 2.2, signMarket: 2.64, signDiner: 1.97 } as const satisfies Partial<Record<PropId, number>>;
 /**
@@ -2620,7 +2620,7 @@ export class BuildingsView {
     /** A sign over a door, on the wall's outer face, its face out; it drops with the wall in the cutaway. */
     const sign = (bd: Building, x: number, z: number, base: number, out: Vec2) => {
       const market = bd.kind === 'shop' && bd.storeys === 1 && Math.min(bd.x1 - bd.x0, bd.y1 - bd.y0) + 1 >= MARKET_SPAN;
-      const trade = bd.market !== undefined ? null : shopTradeIn(s, bd);
+      const trade = bd.market !== undefined ? null : shopSign(s, bd);
       const id = trade === null ? 'signMarket' : trade === 'grocer' ? (market ? 'signMarket' : 'signFood') : trade === 'cafe' ? 'signDiner' : 'signShop';
       const length = SIGNS[id];
       // A supermarket's double door: the sign over the middle of the two.

@@ -3,13 +3,14 @@ import { abilityBlocker, canTargetTile, noiseOf } from '../src/abilities';
 import { applyMissionResult, buildSquad, CAMPAIGN_VERSION, createCampaign, executeCampaignCommand, medicineCures, migrateCampaign, type CampaignState } from '../src/campaign';
 import { HORDE, hordePoints, hostileTo, NOISE, TEMPLATES } from '../src/content';
 import { decorCode, decorOf } from '../src/decor';
+import { distance, samePos } from '../src/grid';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { broughtBack, rollLoot, roomAt, searchable, searchableTiles, SEARCHABLE } from '../src/loot';
 import { lootSummary } from '../src/lore';
 import { canSee, facingTo } from '../src/los';
 import { HUNT_TURNS, onlyWalks } from '../src/ai';
 import { Rng } from '../src/rng';
-import { executeCommand, Sim } from '../src/rules';
+import { executeCommand, Sim, SQUAD_LOUDER } from '../src/rules';
 import { createMission, hordeWave, LURKERS, MISSION_NAMES } from '../src/setup';
 import type { GameState, Loot, Pod, Slot, Unit } from '../src/types';
 import { addUnit, raise, stateFrom } from './helpers';
@@ -58,7 +59,7 @@ describe('noise', () => {
     pod(s, 'p3', false, [deaf]);
     const run = sim(s);
     run.makeNoise(soldier.pos, 12, soldier);
-    expect(of(run.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 2, y: 2, z: 0 }, radius: 12, by: 's1', heard: ['a2'] }]);
+    expect(of(run.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 2, y: 2, z: 0 }, radius: Math.round(12 * SQUAD_LOUDER * 10) / 10, by: 's1', heard: ['a2'] }]);
     expect(idle.heard).toEqual({ x: 2, y: 2, z: 0 });
     expect(busy.heard).toBeUndefined();
     expect(deaf.heard).toBeUndefined();
@@ -89,7 +90,7 @@ describe('noise', () => {
     expect(events.ok).toBe(true);
     if (!events.ok) return;
     expect(runner.ap).toBe(0);
-    expect(of(events.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 13, y: 1, z: 0 }, radius: NOISE.dash, by: 's1', heard: ['a1', 'a2'] }]);
+    expect(of(events.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 13, y: 1, z: 0 }, radius: Math.round(NOISE.dash * SQUAD_LOUDER * 10) / 10, by: 's1', heard: ['a1', 'a2'] }]);
     expect(s.concealed).toBe(true);
     expect(s.pods[0]!.active).toBe(false);
     // On their turn they come round the end of the wall, see the runner and only then wake up.
@@ -108,9 +109,9 @@ describe('noise', () => {
     const z = addUnit(s, 'a1', 'zombie', 9, 2);
     pod(s, 'p1', false, [z]);
     const r = executeCommand(s, { type: 'move', unit: 's1', to: { x: 4, y: 2 } }, ctx());
-    expect(r.ok && of(r.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 4, y: 1, z: 0 }, radius: NOISE.door, by: 's1', heard: [] }]);
+    expect(r.ok && of(r.events, 'noise')).toEqual([{ t: 'noise', tile: { x: 4, y: 1, z: 0 }, radius: Math.round(NOISE.door * SQUAD_LOUDER * 10) / 10, by: 's1', heard: [] }]);
     const w = executeCommand(s, { type: 'move', unit: 's2', to: { x: 5, y: 2 } }, ctx());
-    expect(w.ok && of(w.events, 'noise')[0]).toMatchObject({ tile: { x: 5, y: 1 }, radius: NOISE.breach });
+    expect(w.ok && of(w.events, 'noise')[0]).toMatchObject({ tile: { x: 5, y: 1 }, radius: Math.round(NOISE.breach * SQUAD_LOUDER * 10) / 10 });
   });
 
   it('a pod that finds nobody where it heard something forgets it and stays unaware', () => {
@@ -401,6 +402,66 @@ describe('the dead follow whom they saw (Arturo, 22/10)', () => {
   });
 });
 
+describe('a group comes all together (Ana, 23/10 #25)', () => {
+  it('a pod woken by a soldier turns to them and goes after them, all of it, not only whoever saw', () => {
+    const s = field(30, 30);
+    s.concealed = false;
+    const soldier = addUnit(s, 's1', 'rookie', 5, 15);
+    const seer = addUnit(s, 'a1', 'zombie', 12, 15);
+    seer.facing = facingTo(seer.pos, soldier.pos)!;
+    const others = [addUnit(s, 'a2', 'zombie', 13, 13), addUnit(s, 'a3', 'zombie', 13, 17)];
+    for (const o of others) o.facing = facingTo(soldier.pos, o.pos)!;
+    pod(s, 'p1', false, [seer, ...others]);
+    expect(others.some((o) => canSee(s, o, soldier))).toBe(false);
+    const t = sim(s);
+    t.activatePods(t.podsNoticing(soldier.pos), { cause: 'sighted', unit: 's1', by: 'a1' });
+    expect(s.pods[0]!.active).toBe(true);
+    for (const z of [seer, ...others]) {
+      expect(z.hunting).toEqual({ id: 's1', missed: 0 });
+      expect(canSee(s, z, soldier)).toBe(true);
+    }
+    // On their turn, the whole group comes.
+    s.activeTeam = 'alien';
+    for (const z of [seer, ...others]) z.ap = 2;
+    const before = others.map((o) => distance(o.pos, soldier.pos));
+    sim(s, 2).runAlienTurn();
+    others.forEach((o, i) => expect(distance(o.pos, soldier.pos)).toBeLessThan(before[i]! - 3));
+  });
+
+  it('an unaware pod walks its round even when its leader is boxed in by the rest', () => {
+    const s = stateFrom(['##############################', ...Array.from({ length: 11 }, () => '#.............................')]);
+    addUnit(s, 's1', 'rookie', 29, 11);
+    const group = [addUnit(s, 'a1', 'zombie', 1, 1), addUnit(s, 'a2', 'zombie', 2, 1), addUnit(s, 'a3', 'zombie', 1, 2), addUnit(s, 'a4', 'zombie', 2, 2)];
+    pod(s, 'p1', false, group).patrol = [{ x: 14, y: 8, z: 0 }, { x: 14, y: 1, z: 0 }];
+    s.activeTeam = 'alien';
+    for (const z of group) z.ap = 2;
+    sim(s).runAlienTurn();
+    expect(group.every((z) => z.pos.x + z.pos.y > 4)).toBe(true);
+  });
+
+  it('an unaware pod with nowhere to walk looks about, and wakes when it turns to a soldier in sight', () => {
+    const s = field(20, 20);
+    s.concealed = false;
+    const soldier = addUnit(s, 's1', 'rookie', 10, 3);
+    const z = addUnit(s, 'a1', 'zombie', 10, 10);
+    z.facing = facingTo(soldier.pos, z.pos)!;
+    pod(s, 'p1', false, [z]);
+    expect(canSee(s, z, soldier)).toBe(false);
+    let turned = 0;
+    for (let turn = 1; turn <= 20 && !s.pods[0]!.active; turn++) {
+      s.activeTeam = 'alien';
+      z.ap = 2;
+      const t = sim(s, turn);
+      t.runAlienTurn();
+      turned += of(t.events, 'turned').length;
+      expect(samePos(z.pos, { x: 10, y: 10, z: 0 })).toBe(true);
+    }
+    expect(turned).toBeGreaterThan(0);
+    expect(s.pods[0]!.active).toBe(true);
+    expect(z.hunting).toEqual({ id: 's1', missed: 0 });
+  });
+});
+
 describe('the lone dead (Ana and Arturo, 22/10 #22)', () => {
   it('over the patrols: in the houses and round the corners, standing still, far from where the squad starts', () => {
     let inside = 0;
@@ -561,7 +622,7 @@ describe('searching', () => {
     expect(found).toMatchObject({ unit: 's1', tile: { x: 3, y: 1 } });
     expect(found.loot?.medicines).toBeGreaterThanOrEqual(1);
     expect(u.backpack).toEqual([found.loot]);
-    expect(of(r.events, 'noise')[0]).toMatchObject({ tile: { x: 3, y: 1 }, radius: 2, heard: ['a1'] });
+    expect(of(r.events, 'noise')[0]).toMatchObject({ tile: { x: 3, y: 1 }, radius: Math.round(2 * SQUAD_LOUDER * 10) / 10, heard: ['a1'] });
     expect(u.ap).toBe(1);
     expect(s.searched).toEqual([1 * 8 + 3]);
     expect(searchable(s, { x: 3, y: 1, z: 0 })).toBe(false);

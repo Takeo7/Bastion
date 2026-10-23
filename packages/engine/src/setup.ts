@@ -461,11 +461,12 @@ export function garrison(kind: MissionKind, difficulty: number, living = false):
 const SIEGE_GROUP = 5;
 
 /**
- * The test siege's waves (docs/FASE12.md, hito 1): the first at the end of the
- * first enemy turn and then every other turn, more each time, each with its
- * own: a Corredor, a Hinchado, an Acorazado, and a Chillón with the last.
- * Every group of a wave by any of the four sides, at random (Arturo, 18/10:
- * they come from every front).
+ * A siege's waves (docs/FASE12.md, hito 1): five, more each time, each with its
+ * own: a Corredor, a Hinchado, an Acorazado, and a Chillón with the last. They
+ * overlap (Ana, 23/10: «que lleguen de todos lados y a la vez… no ha sido un
+ * asedio, ha sido esperar a que vengan»): one at the end of each of the first
+ * enemy turns, with a breath between the third and the fourth, and each one's
+ * groups spread over every side the siege comes by at once.
  */
 export function siegeWaves(difficulty: number, rng: Rng, plan?: { count: number; sides: number[] }): Reinforcement[] {
   const d = Math.max(1, Math.min(4, difficulty));
@@ -482,10 +483,10 @@ export function siegeWaves(difficulty: number, rng: Rng, plan?: { count: number;
   const many = (k: number, test: number) => (plan ? counts[k]! : test);
   const waves: { turn: number; units: TemplateId[] }[] = [
     { turn: 1, units: zombies(many(0, 3 + d)) },
-    { turn: 3, units: [...zombies(many(1, 4 + d)), 'xenoid'] },
-    { turn: 5, units: [...zombies(many(2, 4 + d)), 'bloater'] },
-    { turn: 7, units: [...zombies(many(3, 5 + d)), 'mec'] },
-    { turn: 9, units: [...zombies(many(4, 5 + d)), 'xenoid', 'sectoid'] },
+    { turn: 2, units: [...zombies(many(1, 4 + d)), 'xenoid'] },
+    { turn: 3, units: [...zombies(many(2, 4 + d)), 'bloater'] },
+    { turn: 5, units: [...zombies(many(3, 5 + d)), 'mec'] },
+    { turn: 6, units: [...zombies(many(4, 5 + d)), 'xenoid', 'sectoid'] },
   ];
   // By the sides the plan says (what the Sala de radio hears), or any of the four.
   const sides = plan?.sides.length ? plan.sides : [0, 1, 2, 3];
@@ -496,10 +497,14 @@ export function siegeWaves(difficulty: number, rng: Rng, plan?: { count: number;
     [first[i], first[j]] = [first[j]!, first[i]!];
   }
   const out: Reinforcement[] = [];
+  let next = rng.int(sides.length);
   for (const w of waves) {
-    for (let i = 0; i < w.units.length; i += SIEGE_GROUP) {
-      const side = out.length < first.length ? first[out.length]! : sides[rng.int(sides.length)]!;
-      out.push({ id: `r${out.length + 1}`, turn: w.turn, pos: null, units: w.units.slice(i, i + SIEGE_GROUP), landed: false, horde: true, side });
+    // Over every side at once: as many groups as sides (fewer for a wave too small to split), dealt round them.
+    const groups = Math.max(1, Math.min(sides.length, Math.ceil(w.units.length / 2), w.units.length));
+    const size = Math.min(SIEGE_GROUP, Math.ceil(w.units.length / groups));
+    for (let i = 0; i < w.units.length; i += size) {
+      const side = out.length < first.length ? first[out.length]! : sides[next++ % sides.length]!;
+      out.push({ id: `r${out.length + 1}`, turn: w.turn, pos: null, units: w.units.slice(i, i + size), landed: false, horde: true, side });
     }
   }
   return out;

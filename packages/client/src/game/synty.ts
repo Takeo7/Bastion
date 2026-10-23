@@ -127,6 +127,8 @@ export interface Dyes {
   dyeFlash: { value: number };
   /** Marked as the target being picked (unitViews highlight): 0 to 1, a red tint and a red glow on its edges. */
   dyeMark: { value: number };
+  /** A shade (unitViews shade): 0 to 1, dark all over but a faint edge, nothing of what it is. */
+  dyeShade: { value: number };
   /** A skin tone of its own (1 in dyeSkinOn), for the one swatch Synty paints every face and hand with. */
   dyeSkin: { value: THREE.Color };
   dyeSkinOn: { value: number };
@@ -184,6 +186,7 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
     dyeBand: { value: 0 },
     dyeFlash: { value: 0 },
     dyeMark: { value: 0 },
+    dyeShade: { value: 0 },
     dyeSkin: { value: new THREE.Color(1, 1, 1) },
     dyeSkinOn: { value: 0 },
     dyeRim: { value: 0 },
@@ -216,6 +219,7 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
         uniform float dyeBand;
         uniform float dyeFlash;
         uniform float dyeMark;
+        uniform float dyeShade;
         uniform vec3 dyeSkin;
         uniform float dyeSkinOn;
         uniform float dyeRim;
@@ -229,7 +233,10 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
         `#include <lights_fragment_end>
         // Their sky (UNIT_SKY) and the key from the camera's upper left (UNIT_FACE).
         reflectedLight.indirectDiffuse *= unitSky;
-        reflectedLight.indirectDiffuse += unitFace * saturate(dot(normal, normalize(vec3(-0.55, 0.6, 0.6)))) * BRDF_Lambert(diffuseColor.rgb);`,
+        reflectedLight.indirectDiffuse += unitFace * saturate(dot(normal, normalize(vec3(-0.55, 0.6, 0.6)))) * BRDF_Lambert(diffuseColor.rgb);
+        // A shade (dyeShade) takes no shine either: dark through, but for its edge.
+        reflectedLight.directSpecular *= 1.0 - dyeShade;
+        reflectedLight.indirectSpecular *= 1.0 - dyeShade;`,
       )
       .replace(
         '#include <map_fragment>',
@@ -259,7 +266,9 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
         // Its folds' own shade (ensureShade: baked by the converter, none where it has none).
         diffuseColor.rgb *= mix(1.0, vUnitShade, ${UNIT_SHADE.toFixed(2)});
         // Marked as the target: reddened (its glow is the emissive's).
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.0, 0.32, 0.26), 0.45 * dyeMark);`,
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.0, 0.32, 0.26), 0.45 * dyeMark);
+        // A shade: next to black, whatever it wears.
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.012, 0.014, 0.018), dyeShade);`,
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -275,7 +284,14 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
         }
         totalEmissiveRadiance += vec3(1.0, 0.23, 0.16) * dyeFlash;
         // Marked: a glow of its own, all over a little and most on its edges, so it reads by night and from above.
-        if (dyeMark > 0.0) totalEmissiveRadiance += vec3(1.0, 0.09, 0.05) * dyeMark * (0.1 + 1.2 * pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 2.0));`,
+        if (dyeMark > 0.0) totalEmissiveRadiance += vec3(1.0, 0.09, 0.05) * dyeMark * (0.1 + 1.2 * pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 2.0));
+        // A shade: no glow of its own (bands, flash, mark), only a cold edge that cuts it out of the mist; by day wider
+        // (UI: on the navy mist it was a black spot), at night thinner and a little brighter.
+        if (dyeShade > 0.0) {
+          totalEmissiveRadiance *= 1.0 - dyeShade;
+          float shadeEdge = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), mix(2.5, 4.0, unitNight));
+          totalEmissiveRadiance += mix(vec3(0.1, 0.12, 0.16), vec3(0.125, 0.15, 0.2), unitNight) * dyeShade * shadeEdge;
+        }`,
       );
   };
   m.customProgramCacheKey = () => 'synty-dye';

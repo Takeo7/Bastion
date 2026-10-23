@@ -274,17 +274,54 @@ export function patrolPod(sim: Sim, pod: Pod): void {
     // Nobody there, or no way to it.
     for (const m of members) if (m.heard) sim.emit({ t: 'forgot', unit: m.id });
   }
-  if (!pod.patrol.length) return;
+  if (!pod.patrol.length) {
+    lookRound(sim, pod, members);
+    return;
+  }
 
+  // Whoever of them can walk there goes first: the leader may be boxed in by the rest, and then the pod stood
+  // where it was all game, looking the same way (Ana, 23/10 #25).
+  const goFor = (goal: Pos) => {
+    for (const m of members) {
+      const path = walkPath(s, m, goal);
+      if (path) return { m, path };
+    }
+    return null;
+  };
   let index = pod.patrolIndex % pod.patrol.length;
-  let path = walkPath(s, leader, pod.patrol[index]!);
-  if (!path || arrived(s, leader.pos, pod.patrol[index]!, 2)) {
+  let walk = arrived(s, leader.pos, pod.patrol[index]!, 2) ? null : goFor(pod.patrol[index]!);
+  if (!walk) {
     index = (index + 1) % pod.patrol.length;
     sim.emit({ t: 'patrol', pod: pod.id, index });
-    path = walkPath(s, leader, pod.patrol[index]!);
+    walk = goFor(pod.patrol[index]!);
   }
-  if (path) sim.moveAlong(leader, path, 0);
-  follow(sim, pod, members, 1);
+  if (!walk) {
+    lookRound(sim, pod, members);
+    return;
+  }
+  sim.moveAlong(walk.m, walk.path, 0);
+  follow(sim, pod, [walk.m, ...members.filter((m) => m !== walk.m)], 1);
+}
+
+/** How likely one of an unaware pod standing about turns its head, each enemy turn. */
+const LOOK_ROUND = 0.5;
+
+/**
+ * An unaware pod with no round to walk looks about: each of them may turn to
+ * another of the eight ways, and seeing a soldier there, the pod wakes (Ana,
+ * 23/10 #25: a group facing away never saw the fight behind it).
+ */
+function lookRound(sim: Sim, pod: Pod, members: Unit[]): void {
+  for (const m of members) {
+    if (sim.over || sim.s.pods.find((p) => p.id === pod.id)?.active) return;
+    if (sim.rng.next() >= LOOK_ROUND) continue;
+    const d = DIRS8[sim.rng.int(DIRS8.length)]!;
+    const facing = Math.atan2(d.y, d.x);
+    if (facing === m.facing) continue;
+    sim.emit({ t: 'turned', unit: m.id, facing });
+    const spotted = sim.spottedFrom(m, m.pos);
+    if (spotted) sim.activatePods([pod.id], { cause: 'sighted', unit: spotted.id, by: m.id });
+  }
 }
 
 /** The rest of an unaware pod keep up with its leader (the first of `members`). */
@@ -393,8 +430,15 @@ export function takeAlienTurn(sim: Sim, u: Unit): void {
           sim.perform(u, 'shoot', { target: best.target });
           return;
         }
-      } else if (moveToward(sim, u, headFor(sim, u, enemies))) {
-        continue;
+      } else {
+        // No shot from here: a place in reach with one first (the window beside it, upstairs: Ana, 23/10 #21), else on toward them.
+        const cand = bestCandidate(s, u, reach, (p) => (enemies.some((e) => previewShot(s, u, e, { from: p })) ? tileScore(s, u, p, enemies, 0.5) : -Infinity));
+        const path = cand && cand.score > -Infinity && !samePos(cand.pos, u.pos) ? buildPath(s, u, reach, cand.pos) : null;
+        if (path) {
+          sim.moveAlong(u, path, 1);
+          continue;
+        }
+        if (moveToward(sim, u, headFor(sim, u, enemies))) continue;
       }
     } else if (best && best.hit >= 20 && usable('shoot')) {
       sim.perform(u, 'shoot', { target: best.target });

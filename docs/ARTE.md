@@ -127,6 +127,8 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - Los que llegan por el borde rodean las casillas donde se quedarán los otros, si pueden, y se apartan al pasar junto a otro, como al andar (`arrive`, con los `passes` del plan).
 - **Apuntar y bajar el arma:** cada vez que apunta cuenta (`aims`), y bajar el arma un rato después (`game.ts`) solo baja la suya. Antes, si volvía a apuntar en 1,45 s, la bajada pendiente le bajaba el arma nueva y le quitaba el paso atrás a quemarropa. Al morir se borra todo.
 - **El blanco marcado** (0.10.0; `highlight` en `unitViews.ts`, `mark` en `syntyFigures.ts`, `dyeMark` en `synty.ts`): al apuntar, el elegido tiene un tinte rojo suave y un brillo rojo propio, más fuerte en el borde de la silueta. Por ser emisivo se lee de noche y desde la vista táctica. Entra y sale en unos 0,17 s y late un poco. Mientras dura sale de la multitud horneada y lleva material propio, y solo ese.
+- **La sombra** (0.10.1, #26; `shade` en `unitViews.ts` y `syntyFigures.ts`, `dyeShade` en `synty.ts`): un enemigo que se oye y no se ve se dibuja en la niebla casi negro, sin brillos y con un borde frío, más ancho de día para que se lea sobre la niebla azul marino, y más fino y algo más claro de noche. No lleva bandera, anillo ni arma. Mientras dura, la sincronía no lo esconde y sale de la multitud. Al quitarla, vuelve a su color en unos 0,3 s si está a la vista (`forceVisible` antes) o desaparece de golpe si no. Si estaba oculto, entra de golpe, sin fundido.
+- **Material propio de las figuras** (destello, marca, fundido, sombra): se hace con el atlas con que se cargó la figura. Antes tomaba el de `apocalypse`, y los zombis Sidekick cambiaban de colores mientras duraba (desde la 0.9.0).
 - **El ping** (`ping` en `fx.ts`, 0.10.0): el haz mide 84 casillas y se dibuja sin prueba de profundidad ni niebla, así que se ve hasta arriba de la pantalla y a través de techos y paredes.
 - **El acabado** (23/10 #13, Arturo: «más pachangero y plano» que los renders de Synty):
   - **La sombra en los pliegues:** el shader de Sidekick en Unity oscurece los pliegues con una máscara (`_DarkAmount` 0,75), además de suciedad y brillo por color. Esas texturas vienen con la herramienta Sidekick para Unity, que no está en el disco. En su lugar, el conversor calcula en Blender la oclusión de cada pieza (`occlusion` en `convert.py`: Cycles, 32 muestras, a 0,12 casillas) y la exporta como color «ao». Así se han convertido las piezas del armario y los personajes Sidekick. `wardrobe.ts` la pasa al montar al soldado. El shader de las unidades oscurece con ella al 75 % (`UNIT_SHADE` en `synty.ts`). Toda malla de unidad sin «ao» recibe uno blanco (`ensureShade`), porque sin él saldría negra.
@@ -229,11 +231,11 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - `forklift`: no hay carretilla en los packs; el motor pone palés con bidones en su lugar;
   - la nave lleva su tira de claraboyas: su tejado no se pisa (`skylit` en `mapgen.ts`), para que nadie domine desde arriba el patio del objetivo.
 - **Dos estilos de ciudad,** mitad y mitad: cuadrícula y pueblo viejo. Hileras de tiendas, gasolinera, motel, casas con jardín, obras y control militar. Los bordes siguen la calle con vehículos abandonados.
-- **Los letreros de las tiendas** (22/10 #51: «un edificio dice PETS y no tiene nada que ver con mascotas»; `SIGNS` y `sign` en `buildings.ts`). Cada uno dice lo que hay dentro, según cómo está amueblada la planta baja (`shopTradeIn`):
+- **Los letreros de las tiendas** (22/10 #51: «un edificio dice PETS y no tiene nada que ver con mascotas»; `SIGNS` y `sign` en `buildings.ts`). Cada uno dice lo que se ve en la planta baja (`shopSign` en `homeFurnishing.ts`), nunca lo que diría su aspecto (23/10 #23: FOOD y DINER sobre tiendas que no parecían ni lo uno ni lo otro):
   - el supermercado, MARKET;
-  - la tienda de comestibles, FOOD, o MARKET si es de una planta y tan grande como un súper;
-  - el café, DINER;
-  - la librería, SHOP.
+  - la tienda de comestibles, FOOD (o MARKET si es de una planta y tan grande como un súper), solo con su nevera de bebidas y al menos tres estanterías (`GROCER_SHELVES`). Sus estanterías son las góndolas del súper, con género y algo saqueadas (`GROCER_SHELF` en `mapView.ts`); las de madera de Apocalypse no decían nada. No se usa la estantería de pared: las hay a los dos lados de un tabique, y con el tabique bajado en el corte se veía la espalda de la de atrás como un bloque oscuro;
+  - el café, DINER, solo con mesas de café;
+  - cualquier otra tienda, SHOP, que su mostrador y sus estanterías ya dicen.
   PETS no sale nunca, porque no hay tiendas de animales. Las oficinas ya no llevan letrero: ninguno dice lo que tiene una.
   Mientras el corte baja las paredes de su edificio, el letrero se desvanece con el mismo tramado (`SIGN_MARK` en `aCut`), mire hacia donde mire, y vuelve cuando suben. Antes, si su cara no miraba a la cámara, quedaba entero sobre la pared bajada y parecía caído en la acera.
 - **El escaparate y la puerta de cristal, de una casilla cada uno** (23/10 #10; `shopWindow` y `shopDoor` en `syntyManifest.ts`). Los módulos de Office miden dos casillas (2,5 m: un paño, un poste en medio y otro paño).
@@ -281,6 +283,9 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
     - en la segunda tanda (17/10), la ciudad pasa al 0,8 %, y el centro del charco de una farola sobre la acera, de 0,70 a 0,57 (la plaza a la luna está a 0,41).
     - Las zonas a la luz se siguen leyendo cálidas desde lejos.
 - **Niebla de guerra** (`fogOfWar.ts`, `explored.ts`) sobre los materiales, por planta.
+  - La textura de la niebla tiene un píxel por casilla. Para que un borde en diagonal salga como una línea y no en dientes (0.10.1, #20), lo que está a la vista, en vista y alumbrado se suaviza con un B-spline sobre las 4 × 4 casillas de alrededor. Se calcula en la CPU mientras la niebla cambia, en otra textura de 2 × 2 texels por casilla (`fowSoft`, `SOFT_UP`), y solo alrededor de las casillas que cambian en ese fotograma. El shader la lee una vez, para el suelo y para la casilla a la que mira cada fachada; la planta (alfa) se sigue leyendo casilla a casilla.
+  - Leída así, una casilla suelta o una línea diagonal de una casilla se queda entre 0,44 y 0,5. Por eso los umbrales son más bajos (a la vista, 0,2–0,5; en vista, 0,12–0,58): se ven enteras, y un borde recto sale un cuarto de casilla más allá.
+  - Coste: unos 0,3 ms de CPU por fotograma mientras dura un fundido; en la app compilada, en «medio», igual que la 0.10.0. El mismo B-spline en el shader (cuatro lecturas por fragmento) bajaba un 10–20 % los fps en el Mac, y se descartó.
 - **Coste:**
   - lo estático, fundido en pocas mallas (`batch.ts`), con sombras en caché;
   - la reconstrucción por trozos baja de 160–270 ms a 4–13 ms;
@@ -321,6 +326,7 @@ La explica [tools/synty/README.md](../packages/client/tools/synty/README.md).
   - más allá van en instancias, una malla por clase de pino y lado del mapa (cada una se dibuja solo si está a la vista). Llevan material Lambert, sin sombras ni oclusión ambiental (`noOcclusion` en `post.ts`);
   - desde las 14 casillas, donde empieza la neblina, todos son el pino más sencillo (`pineLarge2`, 190 triángulos), escalado a la altura del que sustituye; al final quedan dos tercios;
   - los pinos de fuera ya no daban sombra antes. En la nieve, el suelo entre sus troncos se ve algo más claro (Gameplay: por ahora, así);
+  - el bosque de fuera deja abiertos los caminos hasta el fondo y, frente a cualquier casilla abierta de la franja del borde (una senda de las de `siegeTrails`, Ana 23/10 #33, o un claro), una boca de 2,5 casillas (`BASE_WOOD_MOUTH`);
   - la neblina de la base cubre desde 14 casillas fuera hasta 31, donde acaba el bosque, y solo lo que queda al fondo visto desde la cámara (`fowEdge` en `fogOfWar.ts`). Con la cámara fuera mirando hacia dentro, los pinos de delante no salen blancos;
   - el coste, medido en la app (M2 Pro, 1600×868, sin tope, Asentamiento con el zoom al máximo): +0,45 a +0,6 ms por fotograma en «medio» y en «alto». «Medio» va a 149–184 fps. Con todos los pinos iguales, PBR y en la oclusión, era +0,6 a +1,6 ms.
 - **La caravana:** `SK_Veh_Caravan_01` de Apocalypse, a 4,35 × 1,6 casillas.

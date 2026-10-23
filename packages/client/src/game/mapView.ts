@@ -20,7 +20,7 @@ import { inwards, madeAs, towersOf, wearOf, type Wear } from './siegeDressing';
 import { DRAWN, drawPiece, pieceKey, pieceMap, pieceWear, terrainOf, type PieceMap } from './basePieces';
 import { SnowCover, snowyMission, snowTexture } from './snow';
 import { DroppedView } from './dropped';
-import { furnishBarns, furnishHomes, furnishOwnTiles, furnishShops, shopTradeIn } from './homeFurnishing';
+import { furnishBarns, furnishHomes, furnishOwnTiles, furnishShops, shopSign, shopTradeIn } from './homeFurnishing';
 import { aimTreeFade, treeFadePatch, TRUNK } from './treeFade';
 import { LOOT_KINDS, LootMarks, type LootKind, type LootSpot } from './lootMarks';
 import { EvacBus } from './evacBus';
@@ -438,6 +438,12 @@ const BASE_WOOD_NEAR = 5;
  */
 const BASE_WOOD_FAR = 14;
 const BASE_WOOD_THIN = [22, 0.35] as const;
+/**
+ * How far out (tiles) the wood past the edge leaves open the mouth of a way through the pines (the engine's
+ * siegeTrails, Ana 23/10 #33): it opens before any open tile of the band along the edge, the trails' among them.
+ * The tracks go on open as far as it goes.
+ */
+const BASE_WOOD_MOUTH = 2.5;
 /** The far wood's one pine. */
 const FAR_PINE: PropId = 'pineLarge2';
 /** Whether it does (the clearing lab's `?sinbosque` turns it off, to weigh what it costs). */
@@ -478,6 +484,8 @@ const SHELF_IDS = {
 } as const satisfies Record<string, readonly PropId[]>;
 
 const SHELF_TALL = 1.36;
+/** A grocer's shelves (23/10 #23): full, picked over or stripped, these odds (SHELF_IDS). */
+const GROCER_SHELF = [0.3, 0.45, 0.25];
 const END_TALL = 1.35;
 const WALL_SHELF_BACK = 0.28;
 
@@ -499,7 +507,8 @@ interface WoodTree {
 /**
  * The base's pinar past its edge, out to BASE_WOOD (round at the corners): as thick as along the edge, in the strip
  * nobody fells (BASE_EDGE), its stands and glades from a smooth noise of the engine's grain (base.ts freshBase), so
- * the edge and the wood beyond read as one wood (playtest 22/10 #30); the tracks' ways left open. `street`: a tile is track.
+ * the edge and the wood beyond read as one wood (playtest 22/10 #30); the tracks' ways left open, and the mouths of the
+ * ways through the pines (BASE_WOOD_MOUTH). `street`: a tile is track.
  */
 function baseWood(s: GameState, street: (i: number) => boolean): WoodTree[] {
   const { width: w, height: h } = s;
@@ -527,6 +536,11 @@ function baseWood(s: GameState, street: (i: number) => boolean): WoodTree[] {
     return top * (1 - ty) + bottom * ty;
   };
   const track = (x: number, y: number) => street(THREE.MathUtils.clamp(y, 0, h - 1) * w + THREE.MathUtils.clamp(x, 0, w - 1));
+  /** An open tile of the band along the edge (a trail, a glade): floor with nothing on it. */
+  const open = (x: number, y: number) => {
+    const i = THREE.MathUtils.clamp(y, 0, h - 1) * w + THREE.MathUtils.clamp(x, 0, w - 1);
+    return s.tiles[i] === 'floor' && !s.decor?.[i];
+  };
   const spots: { x: number; y: number; out: number; n: number }[] = [];
   for (let y = -BASE_WOOD; y < h + BASE_WOOD; y++) {
     for (let x = -BASE_WOOD; x < w + BASE_WOOD; x++) {
@@ -535,6 +549,7 @@ function baseWood(s: GameState, street: (i: number) => boolean): WoodTree[] {
       const cx = THREE.MathUtils.clamp(x, 0, w - 1);
       const cy = THREE.MathUtils.clamp(y, 0, h - 1);
       if (track(cx, cy) || track(cx + 1, cy) || track(cx - 1, cy) || track(cx, cy + 1) || track(cx, cy - 1)) continue;
+      if (out <= BASE_WOOD_MOUTH && (open(cx, cy) || open(cx + 1, cy) || open(cx - 1, cy) || open(cx, cy + 1) || open(cx, cy - 1))) continue;
       spots.push({ x, y, out, n: noise(x, y) });
     }
   }
@@ -1475,6 +1490,15 @@ export class MapView {
             }
           }
           return ok;
+        }
+        // A grocer's, as its FOOD sign says (shopSign, 23/10 #23: the shop's bare wooden shelving read as nothing):
+        // the supermarket's gondolas, goods both ways and picked over (GROCER_SHELF). Not its wall shelf: they stand
+        // either side of a room's wall, and with the wall cut away the far one's bare back showed, a dark block.
+        if (kind === 'high' && bd?.kind === 'shop' && shopSign(s, bd) === 'grocer') {
+          let pick = hash(x, y, 80);
+          let k = 0;
+          while (k < 2 && pick >= GROCER_SHELF[k]!) pick -= GROCER_SHELF[k++]!;
+          return addSyntyId(SHELF_IDS.gondola[k]!, placed(cx, base, cz, 1, SHELF_TALL, 1, turn * (Math.PI / 2)));
         }
       }
       // Shelves as the building is (playtest 18/10, #36): a house's are its bookcases, and an office's; a shop's or a

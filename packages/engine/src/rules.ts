@@ -121,8 +121,11 @@ const EDGE_GAP = [12, 8, 0] as const;
 /** Nor this close to the evac zone. */
 const EDGE_EVAC_GAP = 3;
 
+/** Everything the squad does makes this much more noise than its table says (Ana, 23/10: «un 15 % más de ruido»). */
+export const SQUAD_LOUDER = 1.15;
+
 /** What leaves the dead's ways as they were (Sim.ways): neither the ground nor where the living stand changes. */
-const KEEPS_WAYS: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['abilityUsed', 'noise', 'forgot', 'hunting', 'smashed', 'shot', 'damaged', 'infected', 'stunned', 'disoriented', 'psi', 'overwatch', 'trapSprung']);
+const KEEPS_WAYS: ReadonlySet<GameEvent['t']> = new Set<GameEvent['t']>(['abilityUsed', 'noise', 'forgot', 'hunting', 'turned', 'smashed', 'shot', 'damaged', 'infected', 'stunned', 'disoriented', 'psi', 'overwatch', 'trapSprung']);
 
 /** How many more times in an enemy turn those waiting behind their own get to go on (Sim.runAlienTurn). */
 const JAM_PASSES = 2;
@@ -898,10 +901,11 @@ export class Sim {
    * A noise of `radius` tiles at `tile` (docs/FASE2.md): every enemy within it
    * that isn't already fighting a soldier in sight remembers the spot and goes
    * to look, inactive pods too, without waking up. It never breaks concealment.
-   * The one who made it, and its pod, know what it was.
+   * The one who made it, and its pod, know what it was. What the squad does is heard SQUAD_LOUDER farther (Ana, 23/10).
    */
   makeNoise(tile: Pos, radius: number, by?: Unit): void {
     if (radius <= 0 || this.over) return;
+    if (by?.team === 'xcom') radius = Math.round(radius * SQUAD_LOUDER * 10) / 10;
     const heard = this.s.units
       .filter(
         (o) =>
@@ -947,7 +951,20 @@ export class Sim {
     if (first.cause !== 'attacked' || first.unit) this.breakConcealment({ reason: EXPOSURE[first.cause], unit: first.unit, by: first.by, ...(seen && spotter ? { range } : {}) });
     for (const pod of pods) this.emit({ t: 'podActivated', pod: pod.id, ...whyOf(pod) });
     for (const pod of pods) this.scamper(pod.unitIds);
-    // Woken by the sight of a soldier: whoever of them sees them goes after them.
+    // Woken by a soldier, seen or striking: the whole pod of the dead turns to them and goes after them, not only
+    // whoever saw (Ana, 23/10 #25: one of a group came, the rest stood by).
+    for (const pod of pods) {
+      const id = whyOf(pod).unit;
+      const prey = id ? getUnit(this.s, id) : undefined;
+      if (prey?.team !== 'xcom' || !prey.alive || this.over) continue;
+      for (const m of pod.unitIds.map((x) => getUnit(this.s, x))) {
+        if (!m?.alive || !TEMPLATES[m.template].undead || !hostileTo(m, prey)) continue;
+        const facing = facingTo(m.pos, prey.pos);
+        if (facing !== null && facing !== m.facing) this.emit({ t: 'turned', unit: m.id, facing });
+        if (m.hunting?.id !== prey.id || m.hunting.missed !== 0) this.emit({ t: 'hunting', unit: m.id, target: prey.id, missed: 0 });
+      }
+    }
+    // Woken by the sight of a soldier: whoever else of the dead sees them goes after them.
     if (seen && spotted?.team === 'xcom' && spotted.alive && !this.over) this.huntedBy(spotted);
   }
 
@@ -1274,8 +1291,8 @@ export class Sim {
     }
     // What the squad did on the enemy's move (overwatch, the blade on guard) fills bars too.
     this.settleBars();
-    // Pods still unaware walk their round, or go to look where they heard something.
-    for (const pod of this.s.pods.filter((p) => !p.active && (p.patrol.length || p.unitIds.some((id) => getUnit(this.s, id)?.heard)))) {
+    // Pods still unaware walk their round, or go to look where they heard something; with neither, they look about (ai.ts lookRound).
+    for (const pod of this.s.pods.filter((p) => !p.active)) {
       if (this.over) return;
       patrolPod(this, pod);
     }
@@ -1290,12 +1307,7 @@ export class Sim {
     }
     this.checkOutcome();
     if (this.over) return;
-    // A siege is held once its last turn is over: those still out there fall back (docs/FASE12.md §4).
-    const siege = this.s.mission.siege;
-    if (siege && turn >= siege.hold) {
-      this.emit({ t: 'missionEnded', outcome: 'victory', reason: 'objective' });
-      return;
-    }
+    // A siege ends only once every one of the dead is down (Ana, 23/10 #36: no falling back after a set turn).
     const left = this.s.mission.turnsLeft;
     if (left !== null && left - 1 <= 0 && !this.s.mission.objectiveDone) {
       // Time's up: La Lata leaves with whoever is in it (playtest 18/10, #8); the objective on board, it is a win.

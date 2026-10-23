@@ -99,6 +99,7 @@ import {
   hasAnyCover,
   hasPerk,
   breakableTip,
+  buildingWorks,
   GIVE_WAY_FLOAT,
   breachMark,
   giveWayLine,
@@ -942,6 +943,8 @@ export class Game {
     this.hud.log('Calidad ajustada para ir más fluido (Menú → Ajustes).');
   }
 
+  private readonly northProbe = [new THREE.Vector3(), new THREE.Vector3()] as const;
+
   /** Advances camera, poses and particles; called by the render loop. */
   frame(dt: number, time: number): void {
     // The battle's speed (tween.ts timeRate): the bodies follow it in unitViews; the effects here, and the camera while
@@ -962,6 +965,18 @@ export class Game {
     }
     this.rig.update(this.playing ? dt * rate : dt);
     this.renderer.shoulderShot = this.rig.closeUp;
+    // The siege's compass with the camera: where the map's north (−z) is on the screen, clockwise from up, as seen (the
+    // ground in perspective: the camera's heading alone was off by some 7°).
+    if (this.view?.mission.siege) {
+      const cam = this.renderer.camera;
+      const f = cam.getWorldDirection(this.northProbe[0]);
+      if (f.y < -0.05) {
+        const ground = this.northProbe[1].copy(cam.position).addScaledVector(f, -cam.position.y / f.y);
+        const a = this.northProbe[0].copy(ground).project(cam);
+        const b = ground.setZ(ground.z - 1).project(cam);
+        this.hud.turnCompass(Math.atan2((b.x - a.x) * cam.aspect, b.y - a.y));
+      }
+    }
     // The units' flags out of the shot over the shoulder (#11, Arte: the names and bars cluttered it), and the noise
     // rings (a line across it at eye level); the floats stay.
     if (this.rig.closeUp !== this.flagsHidden) {
@@ -1881,6 +1896,9 @@ export class Game {
         const into = this.shownToSquad(u) ? 0 : e.path.findIndex((p) => this.mapView.inSight(p));
         if (into < 0) return;
         if (into === 0) this.units.forceVisible(u.id);
+        // Up to there, its shade in the fog (Ana, 23/10 #26: the camera went along with nothing to see, and it was there
+        // all of a sudden): dark, nothing that says what it is, itself as it steps into sight.
+        else this.units.shade(u.id, true);
         // In a group of the dead (playGroup), the framing is the group's: no walker takes the camera. Otherwise the
         // camera goes along with the walker frame by frame, not tile by tile (Arturo, 21/10 #4: it went in jumps).
         if (!this.grouped) look(this.units.worldPos(u.id));
@@ -1893,7 +1911,10 @@ export class Game {
             e.path,
             (p) => {
               // At the tile before the first one seen: in sight as it steps into it.
-              if (steps + 1 === into) this.units.forceVisible(u.id);
+              if (steps + 1 === into) {
+                this.units.forceVisible(u.id);
+                this.units.shade(u.id, false);
+              }
               if (steps++ % 2 === 0) this.sfx.step(u, p);
             },
             e.ap,
@@ -1904,11 +1925,22 @@ export class Game {
           );
         } finally {
           if (this.walker?.id === u.id) this.walker = null;
+          this.units.shade(u.id, false);
         }
         return;
       }
-      case 'shot':
-        return this.playAttack(e, cam, look);
+      case 'shot': {
+        // One unseen striking or shooting at one we see (Ana, 23/10 #26: «un zombi ataca y no se le ve»): its shade for
+        // the attack, and on through the meal if it kills and eats ('died' lets it go).
+        const by = getUnit(v, e.unit)!;
+        const shade = !this.shownToSquad(by) && this.shownToSquad(getUnit(v, e.target)!);
+        if (shade) this.units.shade(by.id, true);
+        try {
+          return await this.playAttack(e, cam, look);
+        } finally {
+          if (shade && !(this.fells(e) && this.units.canFeed(by.id, e.target))) this.units.shade(by.id, false);
+        }
+      }
       case 'damaged': {
         const target = getUnit(v, e.unit)!;
         // The bite's toll as the squad's turn begins (playtest 15/10 #13): said as such, not as a hit.
@@ -1979,6 +2011,8 @@ export class Game {
           await eat;
           this.killHold = FEED_HOLD;
         }
+        // An unseen killer's shade ('shot'), once it has eaten.
+        if (killer && !this.shownToSquad(killer)) this.units.shade(killer.id, false);
         await wait(0.2);
         return;
       }
@@ -2555,6 +2589,8 @@ export class Game {
       case 'patrol':
       case 'forgot':
       case 'hunting':
+      // An enemy turning where it stands (#25): the model turns from the state (unitViews).
+      case 'turned':
       // A light going on or out shows on the map (MapView draws the lights from the state): nothing to say.
       case 'lightOn':
       case 'lightOff':
@@ -2668,6 +2704,8 @@ export class Game {
         if (e.team === 'xcom') this.rig.restoreZoom();
         // The dead that were eating get up as their turn ends, before the squad's opens (Arturo, 23/10 #4; Arte's).
         if (e.team === 'xcom') await this.units.standUpFed();
+        // No shade left over from their turn (#26: one that never came into sight after all).
+        if (e.team === 'xcom') for (const o of v.units) if (o.team !== 'xcom' && !this.shownToSquad(o)) this.units.shade(o.id, false);
         // An enemy turn nobody will see opens without its banner (docs/UX-RITMO.md): «TU TURNO» says enough.
         if (e.team === 'alien' && !this.enemyTurnShows()) return;
         this.sfx.turn(e.team === 'alien', !v.concealed);
@@ -3102,6 +3140,14 @@ export class Game {
     for (const pos of this.breaches()) beacons.push({ pos, color: 0xff8a2a });
     this.overlays.setBeacons(beacons);
     this.overlays.setFlares(m.reinforcements.filter((r) => r.pos && !r.landed).map((r) => r.pos!));
+    // A siege's compass (Ana, 23/10 #34), the next wave's sides in red: only with the Sala de radio standing (Arturo,
+    // 18/10 #20: without it, nobody says by where).
+    if (m.siege) {
+      const coming = m.reinforcements.filter((r) => !r.landed && r.side !== undefined);
+      const next = Math.min(...coming.map((r) => r.turn));
+      const radio = (this.view.base?.pieces ?? []).some((p) => p.piece === 'radio' && buildingWorks(p));
+      this.hud.setCompass(radio ? [...new Set(coming.filter((r) => r.turn === next).map((r) => r.side!))].sort() : []);
+    } else this.hud.setCompass(null);
     this.overlays.setBreakables(this.breakables());
     // Where a fallen soldier's rucksack lies (#49): «MOCHILA DE CHIARA», once per tile and soldier.
     const packs = new Map<string, { pos: Place; label: string }>();
@@ -4584,9 +4630,43 @@ export class Game {
       if (was && !this.killCam) this.rig.endCloseShot();
       return;
     }
-    const shot = overShoulder(this.view, this.units.chestPos(u.id), this.units.chestPos(t.id), [u.id, t.id]);
+    const shot = this.aimShot(u, t);
     if (shot) this.rig.closeShot(shot.pos, shot.look);
     else if (was) this.rig.endCloseShot();
+  }
+
+  /**
+   * The aim's shot over the shoulder; from in cover (a car, a wall to the chest) a shoulder's height doesn't see over
+   * it, and there was no shot at all (Ana, 23/10 #22: «con un solo enemigo no se pone la cámara»): then from higher,
+   * a little at a time, looking down over the cover.
+   */
+  private aimShot(u: Unit, t: Unit): ShoulderShot | null {
+    const from = this.units.chestPos(u.id);
+    const to = this.units.chestPos(t.id);
+    let first: ShoulderShot | null = null;
+    for (const rise of [0, 0.6, 1.2, 1.8, 2.6]) {
+      const shot = overShoulder(this.view, from.clone().setY(from.y + rise), to, [u.id, t.id]);
+      if (!shot) continue;
+      // Someone else between the camera and the target hid it (the squad bunched at the map's edge where it set off,
+      // one of them on the line of fire): higher, over their heads.
+      if (!this.bodyInWay(shot.pos, to, [u.id, t.id])) return shot;
+      first ??= shot;
+    }
+    return first;
+  }
+
+  /** Whether a body on show (not `skip`'s) stands across the line from `a` to `b`: a figure's height, a shoulder wide. */
+  private bodyInWay(a: THREE.Vector3, b: THREE.Vector3, skip: readonly string[]): boolean {
+    const bodies = this.view.units
+      .filter((o) => o.alive && !skip.includes(o.id) && (this.shownToSquad(o) || this.mapView.isVisible(o.pos.x, o.pos.y)))
+      .map((o) => this.units.worldPos(o.id));
+    const p = new THREE.Vector3();
+    const length = a.distanceTo(b);
+    for (let d = 0.2; d < length - 0.4; d += 0.2) {
+      p.lerpVectors(a, b, d / length);
+      if (bodies.some((f) => Math.hypot(p.x - f.x, p.z - f.z) < 0.3 && p.y > f.y && p.y < f.y + 1.8)) return true;
+    }
+    return false;
   }
 
   /**
@@ -4854,7 +4934,7 @@ export class Game {
   private missionView(): MissionView {
     const s = this.view;
     const m = s.mission;
-    if (m.siege) return this.siegeView(m.siege.hold);
+    if (m.siege) return this.siegeView();
     let objective = 'Eliminad a todos los hostiles';
     let objectiveTip: string | undefined;
     switch (m.kind) {
@@ -4905,12 +4985,12 @@ export class Game {
   }
 
   /**
-   * A siege's strip (docs/FASE12.md §10, Lore's words): «Asedio», hold to the
-   * last turn, the turns left (a count towards the win, not a threat) and
-   * when the next wave comes, not where (18/10 #20); or that none are coming
-   * any more.
+   * A siege's strip (docs/FASE12.md §10, Lore's words): «Asedio», kill them
+   * all (Ana, 23/10 #36: won with the last wave's last zombie, no turns to
+   * hold any more, so no count) and when the next wave comes, not where
+   * (18/10 #20); or that none are coming any more.
    */
-  private siegeView(hold: number): MissionView {
+  private siegeView(): MissionView {
     const s = this.view;
     const next = siegeWaves(s).find((w) => !w.landed);
     const wave = next
@@ -4919,10 +4999,9 @@ export class Game {
     return {
       kind: s.mission.kind,
       label: SIEGE_TEXT.name,
-      objective: siegeObjective(hold),
-      objectiveTip: siegeObjectiveTip(hold),
-      turnsLeft: Math.max(0, hold - s.turn + 1),
-      hold: true,
+      objective: siegeObjective(),
+      objectiveTip: siegeObjectiveTip(),
+      turnsLeft: null,
       alert: null,
       area: s.mapName,
       horde: null,

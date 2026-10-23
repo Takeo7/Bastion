@@ -14,6 +14,7 @@ import {
   weaponName,
   FOUND_WEAPONS,
   ITEMS,
+  liveSkills,
   magsCount,
   MISSION_NAMES,
   PISTOL_CLIP,
@@ -41,6 +42,7 @@ import type { NetStatus } from '../net';
 import { append, clear, h } from './dom';
 import { abilityIcon, arrowIcon } from './icons';
 import { wearMarks } from '../strategy/arms';
+import { skillHex } from '../strategy/skillSheet';
 import { canQuit, QUIT_BUTTON, quitGame, quitQuestion } from './quit';
 import { graphicsSettings, soundSettings } from './settingsPanel';
 import { typed } from './typed';
@@ -177,8 +179,6 @@ export interface MissionView {
   /** The objective in full, when the strip shows a short version. */
   objectiveTip?: string;
   turnsLeft: number | null;
-  /** The turns left are to hold out (a siege): the count runs towards the win, so it is never urgent. */
-  hold?: boolean;
   /** A siege's next wave: short, in full for its tooltip, and whether it comes in this turn. */
   wave?: { text: string; tip: string; urgent: boolean } | null;
   /** Urgent notice under the objective (reinforcements on the way). */
@@ -382,6 +382,18 @@ export class Hud {
    */
   /** The objective's card on the right, where the arrival card shrinks to; a click opens that card again (Ana, 20/10 #32). */
   private readonly goalDock = h('div.goal-dock.panel', { onclick: () => this.reopenIntro(), title: 'Ver la misión' }, this.mission);
+  /**
+   * A siege's compass (Ana, 23/10 #34), under the objective: N, E, S and O as the map has them (the radio's «por el
+   * norte»), turned with the camera (turnCompass); the sides the next wave comes in by, in red (setCompass). On the
+   * ground they were lost under the pines at the map's edge, far off the clearing.
+   */
+  private readonly compass = h(
+    'div.compass.panel.hidden',
+    {},
+    h('div.compass-rose', {}, h('i.compass-needle'), ...(['n', 'e', 's', 'o'] as const).map((d) => h(`span.compass-dir.${d}`, {}, d.toUpperCase()))),
+  );
+  private compassKey: string | null = null;
+  private compassTurn = NaN;
   /** What the arrival card said, to open it again from the objective's card. */
   private introArgs: Parameters<Hud['intro']> | null = null;
   /** Real time (docs/TIEMPO-REAL.md): the big «PAUSA» while the clock is stopped. */
@@ -468,7 +480,7 @@ export class Hud {
       this.abilities,
       this.target,
       h('div.turn-actions', {}, this.followBtn, this.goBtn, this.passBtn, this.watchBtn, this.endClock, this.endTurn),
-      (this.sideEl = h('div.side', {}, h('div.side-row', {}, menuButton), this.goalDock, this.logEl)),
+      (this.sideEl = h('div.side', {}, h('div.side-row', {}, menuButton), this.goalDock, this.compass, this.logEl)),
       this.bannerEl,
       this.rtPauseEl,
       this.rtSlowEl,
@@ -608,7 +620,7 @@ export class Hud {
       h('span.mission-kind', { title: m.area }, type((m.label ?? MISSION_NAMES[m.kind]).toUpperCase())),
       h('span.mission-goal', { title: m.objectiveTip ?? m.objective }, type(m.objective)),
       m.turnsLeft !== null
-        ? h(`span.timer${m.turnsLeft <= 3 && !m.hold ? '.urgent' : ''}`, { title: m.hold ? m.objectiveTip : undefined }, `${m.turnsLeft} ${m.turnsLeft === 1 ? 'TURNO' : 'TURNOS'}`)
+        ? h(`span.timer${m.turnsLeft <= 3 ? '.urgent' : ''}`, {}, `${m.turnsLeft} ${m.turnsLeft === 1 ? 'TURNO' : 'TURNOS'}`)
         : null,
       m.wave ? h(`span.timer.wave${m.wave.urgent ? '.urgent' : ''}`, { title: m.wave.tip }, m.wave.text) : null,
       m.horde ? this.hordeGauge(m.horde) : null,
@@ -616,6 +628,26 @@ export class Hud {
     );
   }
 
+
+  /** A siege's compass shown (`hot`: the DIRS4 sides the next wave comes in by, marked), or hidden (null). */
+  setCompass(hot: readonly number[] | null): void {
+    const key = hot ? hot.join(',') : null;
+    if (key === this.compassKey) return;
+    this.compassKey = key;
+    this.compass.classList.toggle('hidden', !hot);
+    if (!hot) return;
+    const names = ['el norte', 'el este', 'el sur', 'el oeste'];
+    this.compass.querySelectorAll('.compass-dir').forEach((el, i) => el.classList.toggle('hot', hot.includes(i)));
+    const by = hot.map((i) => names[i]!);
+    this.compass.title = by.length ? `La próxima oleada entra por ${by.length > 1 ? `${by.slice(0, -1).join(', ')} y ${by[by.length - 1]}` : by[0]}.` : 'Norte, este, sur y oeste del mapa.';
+  }
+
+  /** The compass turned so its N points where the map's north is on the screen (radians, clockwise from up). */
+  turnCompass(angle: number): void {
+    if (this.compassKey === null || Math.abs(angle - this.compassTurn) < 0.003) return;
+    this.compassTurn = angle;
+    this.compass.style.setProperty('--turn', `${angle}rad`);
+  }
 
   /** The horde's clock in the strip: a short bar that fills towards the next wave (full: it comes this turn). */
   private hordeGauge(horde: HordeView): HTMLElement {
@@ -729,7 +761,8 @@ export class Hud {
           title: u.automaton ? 'Va sola: nadie le da órdenes.' : !theirs ? 'Seleccionar' : mine ? 'Soldado del otro jugador: lo mandas tú mientras no está' : 'Soldado del otro jugador',
         },
         // Fase 9: soldiers have no class any more; only who isn't one (the VIP) says what it is.
-        h('div.card-name', {}, u.template === 'rookie' ? null : h('b.cls', {}, TEMPLATES[u.template].short), u.template === 'rookie' ? null : ' ', u.nickname ? `«${u.nickname}»` : u.name),
+        // Its best line's hexagon by the name (Ana, 23/10 #30), as on the base.
+        h('div.card-name', {}, u.lines ? skillHex(liveSkills(u.lines, u.deeds)) : null, u.template === 'rookie' ? null : h('b.cls', {}, TEMPLATES[u.template].short), u.template === 'rookie' ? null : ' ', u.nickname ? `«${u.nickname}»` : u.name),
         h(
           'div.card-row',
           {},
@@ -801,7 +834,7 @@ export class Hud {
         `div.unit-head${soldier ? '.opens' : ''}`,
         soldier ? { title: `${rank} · La hoja del soldado: tablero, estadísticas y lo que lleva (H)`, onclick: () => this.handlers.onSheet(u.id) } : { title: t.name },
         soldier ? h('span.rank', { title: rank }, ...Array.from({ length: u.rank }, () => h('i'))) : null,
-        h('span.unit-name', {}, type(displayName(u.name, u.nickname))),
+        h('span.unit-name', {}, u.lines ? skillHex(liveSkills(u.lines, u.deeds)) : null, type(displayName(u.name, u.nickname))),
         // The partner's soldier says whose, in the partner's colour (Arturo, 17/10), where the veterancy
         // goes: its chevrons and the sheet's tooltip still say it, and the name keeps its room.
         whose

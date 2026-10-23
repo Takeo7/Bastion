@@ -22,7 +22,7 @@ import { Rng } from '../src/rng';
 import { totalBars } from '../src/skills';
 import { createMission } from '../src/setup';
 import type { Slot } from '../src/types';
-import { levelTo } from './helpers';
+import { levelTo, raise } from './helpers';
 
 function run(c: CampaignState, cmd: CampaignCommand, slot: Slot = 0, connected: Slot[] = [0]) {
   const r = executeCampaignCommand(c, cmd, { slot, connected, rng: new Rng(5) });
@@ -70,8 +70,13 @@ function listen(c: CampaignState, region: RegionId) {
 }
 
 describe('rumours', () => {
-  it('appear while scanning, with a pop-up, and cool down if nobody listens', () => {
+  it('appear while scanning, with a pop-up, and cool down if nobody listens; none without a Sala de radio (Ana, 23/10)', () => {
     const c = solo();
+    // No radio, no rumours: they come over the air.
+    c.nextRumorDay = c.day + 1;
+    advanceTime(c, new Rng(1));
+    expect(c.rumors).toHaveLength(0);
+    raise(c, 'radio');
     c.nextRumorDay = c.day + 1;
     advanceTime(c, new Rng(1));
     expect(c.rumors).toHaveLength(1);
@@ -242,4 +247,16 @@ describe('side quests', () => {
     expect(found).toBeGreaterThanOrEqual(12);
   });
 
+});
+
+describe('what comes by radio (Ana, 23/10 #27)', () => {
+  it('the intercepted transmission only with a Sala de radio', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const c = createCampaign([0], new Rng(seed));
+      c.nextRumorDay = 999;
+      c.nextEventDay = c.day + 1;
+      advanceTime(c, new Rng(seed));
+      expect(c.event).not.toBe('signal');
+    }
+  });
 });

@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 23/10 con la 0.10.0, la última antes de pasar el cliente a Unity. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 23/10 con la 0.10.1, la última antes de pasar el cliente a Unity. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 553 tests.
+   Deben pasar 558 tests.
 5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.10.0)
+## 3. Estado (versión 0.10.1)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,8 +74,15 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3, v0.9.4, v0.9.5, v0.9.6, v0.9.7, v0.9.8 y v0.10.0 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
-- **Lo nuevo de la 0.10.0** (2026-10-23), la segunda tanda de Arturo del 23/10 ([PRUEBA-2026-10-23.md](PRUEBA-2026-10-23.md) #12–#18). Es la última versión con el cliente en Three.js: Arturo decidió pasar a Unity después de esta:
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3, v0.9.4, v0.9.5, v0.9.6, v0.9.7, v0.9.8, v0.10.0 y v0.10.1 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.10.1** (2026-10-23), las notas de Ana del 23/10 ([PRUEBA-2026-10-23.md](PRUEBA-2026-10-23.md) #19–#39). Es la última versión con el cliente en Three.js; después se pasa a Unity:
+  - el asedio: oleadas a los turnos 1, 2, 3, 5 y 6, repartidas entre 3 o 4 lados (setup.ts siegeWaves, campaign.ts siegeSides); sendas por el pinar cada 6 casillas (base.ts siegeTrails), con su boca en el bosque de fuera (mapView.ts baseWood); termina al caer el último zombi, no en un turno fijo; una rosa de los vientos en el HUD, con los lados de la próxima oleada en rojo si hay Sala de radio; al otro le sale que le esperan cuando uno pulsa Defender o Lanzar;
+  - los zombis: el grupo que despierta un soldado se gira hacia él y lo persigue entero (rules.ts activatePods, evento 'turned'); si el primero de un grupo está encajonado, anda otro (ai.ts patrolPod); el grupo sin ronda mira a su alrededor cada turno (ai.ts lookRound); la escuadra hace un 15 % más de ruido (rules.ts SQUAD_LOUDER); el que se mueve o ataca en la niebla se ve como una sombra (units.shade);
+  - las ventanas dejan ver solo si una punta de la línea está junto a ellas (los.ts WINDOW_SIGHT_REACH); los enemigos vivos sin tiro buscan una casilla con él antes de echar a andar (ai.ts), así que los de arriba se acercan a la ventana;
+  - sin Sala de radio no hay rumores ni lo que llega por radio (EventDef.radio); el hueco guardado de un soldado en la mitad del otro se suelta (campaign.ts squadPads); la munición especial ya no se vende ni sale entre lo nuevo de un nivel;
+  - interfaz: plano al hombro con un solo blanco; hexágono de la mejor habilidad (skillSheet.ts skillHex); el diario con una línea de cada cosa nueva; el «Nuevo» de la Armería; carteles DINER, FOOD y SHOP por lo que hay dentro (homeFurnishing.ts shopSign); los bordes de la niebla suaves (fogOfWar.ts, fowSoft);
+  - se quedó como estaba: las copas que se abren hacia la cámara (#35, Arturo).
+- **Lo nuevo de la 0.10.0** (2026-10-23), la segunda tanda de Arturo del 23/10 ([PRUEBA-2026-10-23.md](PRUEBA-2026-10-23.md) #12–#18):
   - el acabado de los soldados (Arturo eligió): en el Asentamiento, una luz principal cálida desde arriba a la izquierda de la cámara y la mitad de cielo; sombra en los pliegues de la ropa, calculada en Blender por pieza y guardada en los vértices; la saturación, en el nivel 1;
   - al apuntar, sin línea: el blanco se tiñe de rojo y su vida se ve también al hombro;
   - el reloj de turno, junto a Terminar turno;

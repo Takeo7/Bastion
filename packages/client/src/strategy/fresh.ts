@@ -34,7 +34,9 @@ export function levelThings(level: number): FreshThing[] {
     if (def.level === level) out.push({ key: `piece:${def.id}`, view: 'facilities' });
     if (def.kind === 'building') for (const to of [2, 3]) if (upgradeLevel(def.level, to) === level) out.push({ key: `raise:${def.id}:${to}`, view: 'facilities', raise: { piece: def.id, to } });
   }
-  for (const item of Object.values(ITEMS)) if (item.level === level) out.push({ key: `item:${item.id}`, view: 'engineering' });
+  // Only the belt's: the Armería shows nothing else, and an ammunition of level 2 (now the weapons' improvements) was
+  // new for ever, its «Nuevo» on the Armería's tab with nowhere to see it (Ana, 23/10 #39).
+  for (const item of Object.values(ITEMS)) if (item.level === level && item.slot === 'utility') out.push({ key: `item:${item.id}`, view: 'engineering' });
   for (const [key, at] of Object.entries(ARMOR_LEVELS)) if (at === level && at > 1) out.push({ key: `armor:${key}`, view: 'engineering' });
   for (const def of Object.values(CRAFTS)) if (def.kind !== 'armor' && craftLevel(def) === level && level > 1) out.push({ key: `craft:${def.id}`, view: 'engineering' });
   return out;

@@ -7,7 +7,7 @@ import { applyEvent, cloneState } from '../src/events';
 import { lineClear, sightOrigin } from '../src/los';
 import { buildPath, computeReach, destinations } from '../src/path';
 import { Rng } from '../src/rng';
-import { executeCommand } from '../src/rules';
+import { executeCommand, SQUAD_LOUDER } from '../src/rules';
 import { addUnit, stateFrom } from './helpers';
 
 const ctx = { slot: 0 as const, connected: [0 as const], rng: new Rng(1) };
@@ -120,7 +120,7 @@ describe('doors and windows', () => {
     expect(sightOrigin(s, u.pos, { x: 3, y: 3, z: 0 }, 18)).not.toBeNull();
     // As quiet as walking through it, heard from the door.
     const events = r.ok ? r.events : [];
-    expect(events.filter((e) => e.t === 'noise')).toEqual([{ t: 'noise', tile: door, radius: NOISE.door, by: 's1', heard: [] }]);
+    expect(events.filter((e) => e.t === 'noise')).toEqual([{ t: 'noise', tile: door, radius: Math.round(NOISE.door * SQUAD_LOUDER * 10) / 10, by: 's1', heard: [] }]);
     // Clients get there by the events alone.
     for (const e of events) applyEvent(host, e);
     expect(host.tiles).toEqual(s.tiles);

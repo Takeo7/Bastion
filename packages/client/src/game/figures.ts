@@ -64,6 +64,8 @@ export interface FigureRig extends UnitRig {
   veil?(on: boolean): void;
   /** Marked as the target being picked (unitViews highlight), or not: on figures that dye (syntyFigures.ts). */
   mark?(on: boolean): void;
+  /** A shade, or not (unitViews shade): on figures that dye. */
+  shade?(on: boolean, now?: boolean): void;
   /** How far ahead of its feet the muzzle of a long gun in its hands comes when shouldered (tiles); null for anything else. */
   aimReach?(): number | null;
   /**

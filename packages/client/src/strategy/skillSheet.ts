@@ -4,7 +4,6 @@ import {
   barReward,
   barsOf,
   BOARD_ABOUT,
-  boardRole,
   rankReward,
   RANK_STEP,
   THIRD_ACTION_RANK,
@@ -56,13 +55,20 @@ export const vetName = (rank: number, female = false) => (female ? VETERANCY[ran
 // ------------------------------------------------------------------ the lists
 
 /**
- * A soldier's role (playtest 16/10 #14): a dot in the colour of the line it
- * has bought most cells of on its board (board.ts boardRole); a hollow one
- * before it has bought any. No figures by the names.
+ * A soldier's strongest line by the name (Ana, 23/10 #30; it was the board's
+ * role, playtest 16/10 #14): a hexagon of the colour of the experience line
+ * it has most of, cut like a pie between the lines tied at the top; hollow
+ * before it has any. No figures by the names.
  */
-export function roleDot(board: readonly CellId[]): HTMLElement {
-  const role = boardRole(board);
-  return h(`span.role-dot${role ? `.sk-${role}` : '.none'}`, { title: role ? `Rol: ${SKILLS[role].name}` : 'Sin rol todavía: no ha seleccionado nada en el tablero' });
+export function skillHex(skills: Skills): HTMLElement {
+  const top = Math.max(...SKILL_IDS.map((id) => skills[id]));
+  const lines = top > 0 ? SKILL_IDS.filter((id) => skills[id] === top) : [];
+  const names = lines.map((id) => SKILLS[id].name);
+  const title = !lines.length ? 'Aún no ha practicado ninguna habilidad' : lines.length === 1 ? `Su mejor habilidad: ${names[0]}` : `Empatan sus mejores habilidades: ${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+  const el = h(`span.role-dot${lines.length ? '' : '.none'}`, { title });
+  const slice = 360 / lines.length;
+  if (lines.length) el.style.background = lines.length === 1 ? `var(--sk-${lines[0]})` : `conic-gradient(${lines.map((id, i) => `var(--sk-${id}) ${i * slice}deg ${(i + 1) * slice}deg`).join(', ')})`;
+  return el;
 }
 
 /** The veterancy as the packs' rank badge (one per step past Novato, none for a Novato), its name on hover. */

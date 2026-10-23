@@ -198,6 +198,10 @@ interface UnitView {
   rtBusyGen: number;
   /** It has been through sync once: what comes into sight after that fades in (FADE_IN). */
   synced: boolean;
+  /** In sight at the last sync, or put there (forceVisible): what it is left as when a shade ends. */
+  inSight: boolean;
+  /** A shade (shade): drawn out of sight, dark, with nothing that says what it is. */
+  shaded: boolean;
 }
 
 /** How high the blade is held on guard (the pose's aim): up in front, its point a little up. */
@@ -431,7 +435,7 @@ export class UnitViews {
 
     const view: UnitView = {
       id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, aiming: null, rt: false, rtAim: 0, rtGen: 0, rtLow: false, rtBusyGen: 0, synced: false,
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, aiming: null, rt: false, rtAim: 0, rtGen: 0, rtLow: false, rtBusyGen: 0, synced: false, inSight: false, shaded: false,
     };
     this.views.set(u.id, view);
     // Left outside when La Mula went (sync): standing, not dead.
@@ -477,16 +481,17 @@ export class UnitViews {
       // Mind control turns rings and flags hostile. The squad's own go without (18/10 #28): only the one picked has a ring.
       const color = unitColor(u);
       (v.ring.material as THREE.MeshBasicMaterial).color.set(color);
-      (v.ring.material as THREE.MeshBasicMaterial).visible = u.team !== 'xcom';
+      (v.ring.material as THREE.MeshBasicMaterial).visible = u.team !== 'xcom' && !v.shaded;
       v.flagEl.style.setProperty('--accent', color);
       v.flagEl.classList.toggle('alien', u.team === 'alien');
       v.flagEl.classList.toggle('xcom', u.team === 'xcom');
-      const shown = u.team === 'xcom' || u.objective || visibleAliens.has(u.id) || (v.dead && v.rig.root.visible);
+      v.inSight = u.team === 'xcom' || !!u.objective || visibleAliens.has(u.id) || (v.dead && v.rig.root.visible && !v.shaded);
+      const shown = v.inSight || v.shaded;
       // An enemy coming into sight fades in (not on the first look at the map: what is there at the start just is).
       if (shown && !v.rig.root.visible && v.synced && u.team !== 'xcom' && u.alive && isFigure(v.rig)) v.rig.fadeIn?.(FADE_IN);
       v.rig.root.visible = shown;
       v.synced = true;
-      v.flag.visible = shown && u.alive;
+      v.flag.visible = shown && u.alive && !v.shaded;
       v.pose.crouchTarget = u.hunkered || u.captive || v.rtLow ? 1 : 0;
       // The enemies see in a cone (los.ts inViewCone, the living too: 18/10 #46): standing still, the model looks
       // where the engine says, turning on the spot when that changes (a noise heard); a walk or a bite ends on the same angle.
@@ -651,6 +656,25 @@ export class UnitViews {
     // Out of the fog (a step into sight, a contact): faded in, as sync does (playtest 20/10 #10).
     if (!v.rig.root.visible && v.synced && !v.dead && isFigure(v.rig)) v.rig.fadeIn?.(FADE_IN);
     v.rig.root.visible = true;
+    v.inSight = true;
+  }
+
+  /**
+   * A shade (UI, 23/10 #26): one heard but not seen, drawn in the fog all the same, dark and with nothing that says
+   * what it is (syntyFigures shade): no flag, no ring, nothing in its hands. Off, it is itself again over a third of a
+   * second if it is in sight (forceVisible first), or gone at once if not. Sync leaves it drawn meanwhile.
+   */
+  shade(id: string, on: boolean): void {
+    const v = this.views.get(id);
+    if (!v || v.shaded === on) return;
+    v.shaded = on;
+    const u = this.shown?.units.find((x) => x.id === id);
+    const was = v.rig.root.visible;
+    v.rig.root.visible = on || v.inSight;
+    v.flag.visible = !on && v.inSight && !!u?.alive;
+    (v.ring.material as THREE.MeshBasicMaterial).visible = !on && !!u && u.team !== 'xcom';
+    // Out of the dark straight into it, or back out of sight: no easing anyone could see.
+    if (isFigure(v.rig)) v.rig.shade?.(on, on ? !was : !v.inSight);
   }
 
   /**

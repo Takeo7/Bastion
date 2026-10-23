@@ -30,16 +30,23 @@ import type { GameState, Place, Pos, TileKind, Unit, Vec2 } from './types';
  * outside, through a window, what is inside; never on out through a second one.
  */
 export const MAX_WINDOWS_SEEN_THROUGH = 1;
+/**
+ * How near a window (tiles, any way) one end of a line must be for it to go
+ * through (Ana, 23/10 #21): who looks from right at the glass sees out, and
+ * who stands right at it is seen; from further off, only the glass.
+ */
+export const WINDOW_SIGHT_REACH = 1;
 
 /**
  * Whether a line from `a`, `ha` storeys up, to `b`, `hb` up (by default a
  * unit's eyes and the body of whoever stands there, on their levels), sees
  * through: on a map with storeys, through floors and ceilings only where they
  * have a hole (lineThroughStoreys); without them, as it always did (lineFlat).
- * Either way, through MAX_WINDOWS_SEEN_THROUGH windows at most.
+ * Either way, through MAX_WINDOWS_SEEN_THROUGH windows at most, and only
+ * those within `windowReach` of `a` or `b` (WINDOW_SIGHT_REACH).
  */
-export function lineClear(s: GameState, a: Place, b: Place, ha = heightAt(s, toPos(a)) + EYE_HEIGHT, hb = heightAt(s, toPos(b)) + BODY_HEIGHT): boolean {
-  return s.levels ? lineThroughStoreys(s, a, b, ha, hb) : lineFlat(s, a, b, ha, hb);
+export function lineClear(s: GameState, a: Place, b: Place, ha = heightAt(s, toPos(a)) + EYE_HEIGHT, hb = heightAt(s, toPos(b)) + BODY_HEIGHT, windowReach = WINDOW_SIGHT_REACH): boolean {
+  return s.levels ? lineThroughStoreys(s, a, b, ha, hb, windowReach) : lineFlat(s, a, b, ha, hb, windowReach);
 }
 
 /**
@@ -52,7 +59,7 @@ export function lineClear(s: GameState, a: Place, b: Place, ha = heightAt(s, toP
  * When the line passes exactly through a corner it is blocked only if both
  * tiles beside the corner block (permissive, symmetric).
  */
-function lineFlat(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number): boolean {
+function lineFlat(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number, windowReach: number): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const nx = Math.abs(dx);
@@ -99,7 +106,7 @@ function lineFlat(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number): boole
     if (blocks(x, y) || throughRoof(x, y, lineAt(x, y))) return false;
     // A window counts where the line goes through it, on the ground floor (not over its roof).
     const i = y * s.width + x;
-    if (isWindow(s.tiles[i]!) && lineAt(x, y) < (s.elev[i] ?? 0) + 1 && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
+    if (isWindow(s.tiles[i]!) && lineAt(x, y) < (s.elev[i] ?? 0) + 1 && (farFromWindow(x, y, a, b, windowReach) || ++windows > MAX_WINDOWS_SEEN_THROUGH)) return false;
   }
   return true;
 }
@@ -114,7 +121,7 @@ function lineFlat(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number): boole
  * line goes straight up or down a single tile. Start and end tiles never
  * block, but their slabs count; corners as lineFlat.
  */
-function lineThroughStoreys(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number): boolean {
+function lineThroughStoreys(s: GameState, a: Vec2, b: Vec2, ha: number, hb: number, windowReach: number): boolean {
   if (a.x === b.x && a.y === b.y) return !slabsBetween(s, a.x, a.y, ha, hb);
   // Written for speed (the fog runs it tens of thousands of times): indices, no closures.
   const w = s.width;
@@ -174,11 +181,20 @@ function lineThroughStoreys(s: GameState, a: Vec2, b: Vec2, ha: number, hb: numb
     if (opaqueAtIndex(s, i, h)) return false;
     // A window on the floor the line crosses at: the ground's within its first storey, else that storey's.
     const k = Math.floor(h + 1e-6);
-    if (isWindow(h < (s.elev[i] ?? 0) + 1 ? s.tiles[i]! : k >= 1 ? (levels[k - 1]?.tiles[i] ?? null) : null) && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
+    if (
+      isWindow(h < (s.elev[i] ?? 0) + 1 ? s.tiles[i]! : k >= 1 ? (levels[k - 1]?.tiles[i] ?? null) : null) &&
+      (farFromWindow(x, y, a, b, windowReach) || ++windows > MAX_WINDOWS_SEEN_THROUGH)
+    )
+      return false;
     pi = i;
     ph = h;
   }
   return true;
+}
+
+/** Whether a window on (x, y) is further than `reach` from both ends of a line, `a` and `b`: it shows only the glass. */
+function farFromWindow(x: number, y: number, a: Vec2, b: Vec2, reach: number): boolean {
+  return Math.max(Math.abs(x - a.x), Math.abs(y - a.y)) > reach && Math.max(Math.abs(x - b.x), Math.abs(y - b.y)) > reach;
 }
 
 /** Whether a slab of tile (x, y) lies strictly between heights `a` and `b`. */
@@ -238,7 +254,8 @@ export function lightTiles(s: GameState, tile: Pos, radius: number, height: numb
   for (let y = tile.y - r; y <= tile.y + r; y++) {
     for (let x = tile.x - r; x <= tile.x + r; x++) {
       if (!inBounds(s, x, y) || distance(tile, { x, y }) > radius) continue;
-      for (const p of placesOn(s, x, y)) if (samePos(p, tile) || lineClear(s, tile, p, from)) out.push(nodeOf(s, p));
+      // Light gets out through a window from anywhere in the room.
+      for (const p of placesOn(s, x, y)) if (samePos(p, tile) || lineClear(s, tile, p, from, undefined, Infinity)) out.push(nodeOf(s, p));
     }
   }
   return out;
@@ -576,7 +593,13 @@ function gridLine(g: SightGrid, w: number, area: number, n: number, ax: number, 
     if (end) return true;
     if (gridOpaque(ground, top, area, n, i, h)) return false;
     const k = h < elev[i]! + 1 ? 0 : Math.floor(h + 1e-6);
-    if (k <= n && window[k * area + i] && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
+    // farFromWindow, written out.
+    if (
+      k <= n &&
+      window[k * area + i] &&
+      ((Math.max(Math.abs(x - ax), Math.abs(y - ay)) > WINDOW_SIGHT_REACH && Math.max(Math.abs(x - bx), Math.abs(y - by)) > WINDOW_SIGHT_REACH) || ++windows > MAX_WINDOWS_SEEN_THROUGH)
+    )
+      return false;
     pi = i;
     ph = h;
   }

@@ -5,7 +5,7 @@ import { decorOf } from '../src/decor';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { BODY_HEIGHT, elevAt, EYE_HEIGHT, posOf, sightTop } from '../src/grid';
 import { rollLoot } from '../src/loot';
-import { canSee, canSeeTile, detectionTo, isLit, lightTiles, lineClear, litMask, MAX_WINDOWS_SEEN_THROUGH, nightSight, sightOf, sightTo, teamVisibility } from '../src/los';
+import { canSee, canSeeTile, detectionTo, isLit, lightTiles, lineClear, litMask, MAX_WINDOWS_SEEN_THROUGH, nightSight, sightOf, sightTo, teamVisibility, WINDOW_SIGHT_REACH } from '../src/los';
 import { generateLayout } from '../src/mapgen';
 import { Rng } from '../src/rng';
 import { Sim } from '../src/rules';
@@ -31,7 +31,7 @@ function pod(s: GameState, id: string, active: boolean, units: Unit[]): Pod {
   return p;
 }
 
-/** lineClear as it was before storeys existed (commit 3655d07), to hold today's results against; with today's window rule (MAX_WINDOWS_SEEN_THROUGH). */
+/** lineClear as it was before storeys existed (commit 3655d07), to hold today's results against; with today's window rules (MAX_WINDOWS_SEEN_THROUGH, WINDOW_SIGHT_REACH). */
 function lineClearBefore(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y) + EYE_HEIGHT, hb = elevAt(s, b.x, b.y) + BODY_HEIGHT): boolean {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -65,7 +65,7 @@ function lineClearBefore(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y
     if (x === b.x && y === b.y) return true;
     if (blocks(x, y)) return false;
     const i = y * s.width + x;
-    if ((s.tiles[i] === 'window' || s.tiles[i] === 'windowBroken') && lineAt(x, y) < (s.elev[i] ?? 0) + 1 && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
+    if ((s.tiles[i] === 'window' || s.tiles[i] === 'windowBroken') && lineAt(x, y) < (s.elev[i] ?? 0) + 1 && ((Math.max(Math.abs(x - a.x), Math.abs(y - a.y)) > WINDOW_SIGHT_REACH && Math.max(Math.abs(x - b.x), Math.abs(y - b.y)) > WINDOW_SIGHT_REACH) || ++windows > MAX_WINDOWS_SEEN_THROUGH)) return false;
   }
   return true;
 }
@@ -90,12 +90,14 @@ describe('tall buildings', () => {
     expect(canSee(s, watcher, target)).toBe(false);
   });
 
-  it('through a ground-floor window, someone on the ground sees inside; from a rooftop, nobody does', () => {
+  it('through a ground-floor window, someone on the ground beside it sees inside; from a rooftop, nobody does', () => {
     const rows = ['............', '..#####.....', '..#...#.....', '..=...#.....', '..#...#.....', '..#####.....', '............'];
     const ground = stateFrom(rows);
     raise(ground, 2, 1, 6, 5, 3);
     const inside = { x: 4, y: 3, z: 0 };
-    expect(canSeeTile(ground, { x: 0, y: 3, z: 0 }, inside, 18)).toBe(true);
+    expect(canSeeTile(ground, { x: 1, y: 3, z: 0 }, inside, 18)).toBe(true);
+    // A step further back, the glass (Ana, 23/10 #21).
+    expect(canSeeTile(ground, { x: 0, y: 3, z: 0 }, inside, 18)).toBe(false);
     // The same wall without the window: nothing.
     const blind = stateFrom(rows.map((r) => r.replace('=', '#')));
     raise(blind, 2, 1, 6, 5, 3);
@@ -109,7 +111,7 @@ describe('tall buildings', () => {
     expect(lineClear(roof, { x: 0, y: 3 }, { x: 10, y: 3 }, 1.7, 1.5)).toBe(false);
   });
 
-  it('playtest 2026-10-13: from the street, a window, whole or broken, shows the room and lifts its fog', () => {
+  it('playtest 2026-10-13: from beside it, a window, whole or broken, shows the room and lifts its fog; from further off, nothing (23/10 #21)', () => {
     const rows = ['............', '..#####.....', '..#...#.....', '..=...#.....', '..#...#.....', '..#####.....', '............'];
     const room = (seen: boolean[]) => {
       const out: string[] = [];
@@ -121,16 +123,16 @@ describe('tall buildings', () => {
         const s = stateFrom(rows);
         s.tiles[3 * 12 + 2] = glass;
         raise(s, 2, 1, 6, 5, storeys);
-        // Two steps back: a wedge of the room behind the glass.
+        // Two steps back: the glass, and only what is right behind it.
         const watcher = addUnit(s, 's1', 'rookie', 0, 3);
         const label = `${glass}, ${storeys} storeys`;
-        expect(room(teamVisibility(s, 'xcom')), label).toEqual(['4,2', '5,2', '3,3', '4,3', '5,3', '4,4', '5,4']);
-        // Whoever is in there is seen too.
+        expect(room(teamVisibility(s, 'xcom')), label).toEqual(['3,3']);
         const inside = addUnit(s, 'a1', 'zombie', 5, 4);
-        expect(canSee(s, watcher, inside), label).toBe(true);
-        // Right at the glass: the whole room.
+        expect(canSee(s, watcher, inside), label).toBe(false);
+        // Right at the glass: the whole room, and whoever is in there.
         watcher.pos = { x: 1, y: 3, z: 0 };
         expect(room(teamVisibility(s, 'xcom')), label).toHaveLength(9);
+        expect(canSee(s, watcher, inside), label).toBe(true);
       }
     }
     // The same wall without the window: the room stays in the fog.
@@ -184,11 +186,12 @@ describe('tall buildings', () => {
     expect(lineClear(s, room, { x: 1, y: 2 }, 0.7, 1.55)).toBe(false);
     // Over the roof to the street beyond, as before.
     expect(lineClear(s, { x: 1, y: 2 }, { x: 13, y: 2 }, 1.7, 0.55)).toBe(lineClearBefore(s, { x: 1, y: 2 }, { x: 13, y: 2 }, 1.7, 0.55));
-    // A window is still a window, from the platform beside it or from the ground.
-    expect(lineClear(s, { x: 0, y: 3 }, { x: 6, y: 3 })).toBe(true);
+    // A window is still a window from beside it, and only from there (Ana, 23/10 #21).
+    expect(lineClear(s, { x: 0, y: 3 }, { x: 6, y: 3 })).toBe(false);
     const street = stateFrom(rows);
     raise(street, 4, 1, 8, 5, 1);
-    expect(lineClear(street, { x: 1, y: 3 }, { x: 6, y: 3 })).toBe(true);
+    expect(lineClear(street, { x: 3, y: 3 }, { x: 6, y: 3 })).toBe(true);
+    expect(lineClear(street, { x: 1, y: 3 }, { x: 6, y: 3 })).toBe(false);
   });
 
   it('the generator sets the storeys of each building, by its use and by its seed', () => {

@@ -30,6 +30,15 @@ import { STOREY } from './coords';
 // so what lies under the mist or cut away (buildings.ts) is left out of it too:
 // no occlusion shading in the mist, no outline of a roof that has faded.
 
+/**
+ * In sight, in view and lit, read smooth (Ana, 23/10 #20: a diagonal edge came out in steps): a cubic B-spline over
+ * the tiles round each point, worked out here while the fog changes, SOFT_UP texels a tile (fowSoft), and read in
+ * one blend. Read so, a tile alone or a diagonal line of tiles comes to under a half (0.44 to 0.5), so the shader's
+ * thresholds are lower: they show whole, and a straight edge goes a quarter of a tile further. (The B-spline in the
+ * shader, four reads a fragment, cost a tenth of the frame on the Mac.)
+ */
+const SOFT_UP = 2;
+
 /** Seconds a tile takes to come into sight or view or leave them; and to light up or go dark at night. */
 const SIGHT_FADE = 0.35;
 const LIT_FADE = 0.6;
@@ -109,6 +118,8 @@ export function extendShader(material: THREE.Material, key: string, patch: (shad
 export class FogOfWar {
   readonly uniforms = {
     fowMap: { value: new THREE.DataTexture(new Uint8Array([255, 255, 0, 255]), 1, 1) as THREE.DataTexture },
+    /** The same, in sight (red), in view (green) and lit (blue), smooth (SOFT_UP). */
+    fowSoft: { value: new THREE.DataTexture(new Uint8Array([255, 255, 0, 255]), 1, 1) as THREE.DataTexture },
     /** By tile, the storeys of its building (red, FLOOR_STEP a storey; 0 outside buildings), and the street along it at its best: in sight (green), seen (blue). */
     fowShell: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) as THREE.DataTexture },
     fowSize: { value: new THREE.Vector2(1, 1) },
@@ -160,6 +171,12 @@ export class FogOfWar {
   private lit = new Float32Array(0);
   private litGoal = new Uint8Array(0);
   private settled = true;
+  /** The soft copy (SOFT_UP): its rows smoothed (before its columns), and each texel's four tiles and their weights. */
+  private softRows = new Float32Array(0);
+  private softX = bsplineTaps(1, SOFT_UP);
+  private softY = bsplineTaps(1, SOFT_UP);
+  /** A new map: the soft copy is done whole the next time. */
+  private softAll = true;
   /** Tiles never in sight, whatever the squad sees: the outline round what is played, dark (playtest 20/10 #23); null, none. */
   private shut: Uint8Array | null = null;
   /** The buildings (setShells): each one's tiles, and the tiles outside it along its walls. */
@@ -200,6 +217,16 @@ export class FogOfWar {
     texture.minFilter = THREE.LinearFilter;
     texture.needsUpdate = true;
     this.uniforms.fowMap.value = texture;
+    this.uniforms.fowSoft.value.dispose();
+    const soft = new THREE.DataTexture(new Uint8Array(size * SOFT_UP * SOFT_UP * 4), width * SOFT_UP, height * SOFT_UP);
+    soft.magFilter = THREE.LinearFilter;
+    soft.minFilter = THREE.LinearFilter;
+    soft.needsUpdate = true;
+    this.uniforms.fowSoft.value = soft;
+    this.softRows = new Float32Array(size * SOFT_UP * 3);
+    this.softX = bsplineTaps(width, SOFT_UP);
+    this.softY = bsplineTaps(height, SOFT_UP);
+    this.softAll = true;
     // Tile by tile, no blend: which tile a wall's face stands in and which it looks onto.
     this.uniforms.fowShell.value.dispose();
     const shell = new THREE.DataTexture(new Uint8Array(size * 4), width, height);
@@ -327,7 +354,11 @@ export class FogOfWar {
       }
     }
     this.settled = false;
-    if (instant) this.update(0);
+    if (instant) {
+      // Straight to their goals, past update's watch for what changes: the soft copy whole.
+      this.softAll = true;
+      this.update(0);
+    }
   }
 
   /** Moves every tile towards its goal and uploads the texture while anything is still fading. */
@@ -338,10 +369,24 @@ export class FogOfWar {
     const litStep = dt / LIT_FADE;
     const data = this.uniforms.fowMap.value.image.data as Uint8Array;
     let moving = false;
+    // The tiles that change this frame, as a box: the soft copy is done again only round them.
+    const w = this.uniforms.fowSize.value.x;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -1;
+    let y1 = -1;
     for (let i = 0; i < this.size; i++) {
       const s = approach(this.sight[i]!, this.sightGoal[i]!, sightStep);
       const k = approach(this.known[i]!, this.knownGoal[i]!, sightStep);
       const l = approach(this.lit[i]!, this.litGoal[i]!, litStep);
+      if (s !== this.sight[i] || k !== this.known[i] || l !== this.lit[i]) {
+        const x = i % w;
+        const y = (i - x) / w;
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+        y0 = Math.min(y0, y);
+        y1 = Math.max(y1, y);
+      }
       this.sight[i] = s;
       this.known[i] = k;
       this.lit[i] = l;
@@ -364,7 +409,65 @@ export class FogOfWar {
       this.uniforms.fowShell.value.needsUpdate = true;
     }
     this.uniforms.fowMap.value.needsUpdate = true;
+    if (this.softAll) this.smoothen(0, 0, w - 1, this.uniforms.fowSize.value.y - 1);
+    else if (x1 >= 0) this.smoothen(x0, y0, x1, y1);
+    this.softAll = false;
     this.settled = !moving;
+  }
+
+  /**
+   * The soft copy of what is in sight, in view and lit (SOFT_UP), where the tiles from (x0, y0) to (x1, y1) reach:
+   * along their rows, then down the columns. The other rows smoothed stay as they were.
+   */
+  private smoothen(x0: number, y0: number, x1: number, y1: number): void {
+    const w = this.uniforms.fowSize.value.x;
+    const h = this.uniforms.fowSize.value.y;
+    const fw = w * SOFT_UP;
+    const rows = this.softRows;
+    const { at: ax, w: wx } = this.softX;
+    // A texel takes the tiles up to two away.
+    const fx0 = Math.max(0, (x0 - 2) * SOFT_UP);
+    const fx1 = Math.min(fw, (x1 + 3) * SOFT_UP);
+    for (let y = y0; y <= y1; y++) {
+      for (let x = fx0; x < fx1; x++) {
+        let s = 0;
+        let k = 0;
+        let l = 0;
+        for (let t = x * 4; t < x * 4 + 4; t++) {
+          const i = y * w + ax[t]!;
+          const c = wx[t]!;
+          s += c * this.sight[i]!;
+          k += c * this.known[i]!;
+          l += c * this.lit[i]!;
+        }
+        const o = (y * fw + x) * 3;
+        rows[o] = s;
+        rows[o + 1] = k;
+        rows[o + 2] = l;
+      }
+    }
+    const out = this.uniforms.fowSoft.value.image.data as Uint8Array;
+    const { at: ay, w: wy } = this.softY;
+    for (let y = Math.max(0, (y0 - 2) * SOFT_UP); y < Math.min(h * SOFT_UP, (y1 + 3) * SOFT_UP); y++) {
+      for (let x = fx0; x < fx1; x++) {
+        let s = 0;
+        let k = 0;
+        let l = 0;
+        for (let t = y * 4; t < y * 4 + 4; t++) {
+          const o = (ay[t]! * fw + x) * 3;
+          const c = wy[t]!;
+          s += c * rows[o]!;
+          k += c * rows[o + 1]!;
+          l += c * rows[o + 2]!;
+        }
+        const p = (y * fw + x) * 4;
+        out[p] = Math.round(s * 255);
+        out[p + 1] = Math.round(k * 255);
+        out[p + 2] = Math.round(l * 255);
+        out[p + 3] = 255;
+      }
+    }
+    this.uniforms.fowSoft.value.needsUpdate = true;
   }
 
   /** Makes a material of the map obey the fog; returns it. */
@@ -399,6 +502,7 @@ export class FogOfWar {
           varying vec3 vFowPos;
           varying vec2 vFowFront;
           uniform sampler2D fowMap;
+          uniform sampler2D fowSoft;
           uniform sampler2D fowShell;
           uniform vec2 fowSize;
           uniform float fowTime;
@@ -418,14 +522,16 @@ export class FogOfWar {
           `// Fog of war, blended between tile middles (the texture filters linearly): soft edges, no steps.
           vec2 fowCell = vFowPos.xz;
           vec4 fowTile = texture2D(fowMap, fowCell / fowSize);
+          // In sight, in view and lit, read smooth (SOFT_UP: hence the thresholds below); the floor (alpha) as it is.
+          fowTile.rgb = texture2D(fowSoft, fowCell / fowSize).rgb;
           vec2 fowOut = max(max(-fowCell, fowCell - fowSize), 0.0);
           // Beyond the edge the town goes on for a few tiles (dressing.ts: dressEdges) and fades into the haze.
           float fowInside = max(fowEdge, 1.0 - smoothstep(0.0, 6.0, length(fowOut)));
           // A mist drifting slowly; it also frays the edge of what is in sight.
           float fowMist = fowNoise(vFowPos.xz * 0.44 + vec2(fowTime * 0.05, fowTime * 0.03));
           // In sight; in view (the line of sight: the rest goes under the mist, seen before or not).
-          float fowSeen = smoothstep(0.3, 0.7, fowTile.r + (fowMist - 0.5) * 0.12) * fowInside;
-          float fowKnown = smoothstep(0.22, 0.78, fowTile.g + (fowMist - 0.5) * 0.4) * fowInside;
+          float fowSeen = smoothstep(0.2, 0.5, fowTile.r + (fowMist - 0.5) * 0.12) * fowInside;
+          float fowKnown = smoothstep(0.12, 0.58, fowTile.g + (fowMist - 0.5) * 0.4) * fowInside;
           // A building's outside (playtest 22/10 #13). Anything on or above its roof: as the street along the
           // building at its best. A face that looks out of it onto a tile outside: as that tile (seen from there).
           vec4 fowHome = texture2D(fowShell, fowCell / fowSize);
@@ -433,9 +539,9 @@ export class FogOfWar {
           float fowBuilt = step(0.5, fowStoreys) * (1.0 - step(0.001, length(fowOut)));
           float fowRoof = fowBuilt * step(fowStoreys * ${STOREY.toFixed(3)} - 0.15, vFowPos.y);
           float fowFace = (fowBuilt - fowRoof) * step(texture2D(fowShell, vFowFront / fowSize).r, 0.01);
-          vec4 fowAhead = texture2D(fowMap, vFowFront / fowSize);
-          fowSeen = max(fowSeen, max(smoothstep(0.3, 0.7, fowAhead.r + (fowMist - 0.5) * 0.12) * fowFace, smoothstep(0.3, 0.7, fowHome.g) * fowRoof));
-          fowKnown = max(fowKnown, max(smoothstep(0.22, 0.78, fowAhead.g + (fowMist - 0.5) * 0.4) * fowFace, smoothstep(0.22, 0.78, fowHome.b) * fowRoof));
+          vec4 fowAhead = texture2D(fowSoft, vFowFront / fowSize);
+          fowSeen = max(fowSeen, max(smoothstep(0.2, 0.5, fowAhead.r + (fowMist - 0.5) * 0.12) * fowFace, smoothstep(0.3, 0.7, fowHome.g) * fowRoof));
+          fowKnown = max(fowKnown, max(smoothstep(0.12, 0.58, fowAhead.g + (fowMist - 0.5) * 0.4) * fowFace, smoothstep(0.22, 0.78, fowHome.b) * fowRoof));
           // The fog of war, out of sight (no enemies show there): greyer and darker, under a haze that drifts.
           vec3 fowGrey = vec3(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)));
           vec3 fowFogged = mix(diffuseColor.rgb, fowGrey, ${FOG_GREY.toFixed(2)}) * ${FOG_DARK.toFixed(2)} + fowHaze * (${FOG_HAZE.toFixed(2)} + ${FOG_DRIFT.toFixed(2)} * fowMist);
@@ -498,8 +604,29 @@ export class FogOfWar {
 
   dispose(): void {
     this.uniforms.fowMap.value.dispose();
+    this.uniforms.fowSoft.value.dispose();
     this.uniforms.fowShell.value.dispose();
   }
+}
+
+/**
+ * A cubic B-spline's taps along a row of `n` tiles, `up` texels a tile: for each texel, the four tiles round its
+ * middle (clamped at the ends) and their weights.
+ */
+function bsplineTaps(n: number, up: number): { at: Int32Array; w: Float32Array } {
+  const at = new Int32Array(n * up * 4);
+  const w = new Float32Array(n * up * 4);
+  for (let x = 0; x < n * up; x++) {
+    const t = (x + 0.5) / up - 0.5;
+    const i = Math.floor(t);
+    const f = t - i;
+    const weights = [(1 - f) ** 3 / 6, (4 - 6 * f * f + 3 * f ** 3) / 6, (1 + 3 * f + 3 * f * f - 3 * f ** 3) / 6, f ** 3 / 6];
+    for (let k = 0; k < 4; k++) {
+      at[x * 4 + k] = Math.min(n - 1, Math.max(0, i - 1 + k));
+      w[x * 4 + k] = weights[k]!;
+    }
+  }
+  return { at, w };
 }
 
 function approach(value: number, goal: number, step: number): number {

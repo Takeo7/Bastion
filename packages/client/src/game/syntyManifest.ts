@@ -538,7 +538,10 @@ export const ANIMATIONS = {
   handsOnHipsFemn: idle('Feminine/HandsOnHips/Stances/A_POLY_IDL_HandsOnHips_Base_Loop_Femn'),
   thoughtfulMasc: idle('Masculine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_R_Loop_Masc'),
   thoughtfulFemn: idle('Feminine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_R_Loop_Femn'),
-  // A way of waiting with the pistol in the right hand (syntyFigures PISTOL_RESTS): thinking, the left hand to the chin.
+  // Ways of waiting with the pistol in the right hand (syntyFigures PISTOL_RESTS): standing up straight (the Idles pack's
+  // own; Locomotion's idle slouches a man's knees and shoulders: 23/10 #37), and thinking, the left hand to the chin.
+  restBaseMasc: idle('Masculine/Base/Stances/A_POLY_IDL_Base_Masc'),
+  restBaseFemn: idle('Feminine/Base/Stances/A_POLY_IDL_Base_Femn'),
   thoughtfulLMasc: idle('Masculine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_L_Loop_Masc'),
   thoughtfulLFemn: idle('Feminine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_L_Loop_Femn'),
   // And what they do talking (GESTURES): point ahead, nod, scratch the chin, shrug, calm the other down.
@@ -736,13 +739,13 @@ export const IDLE_VARIATIONS: Record<'masc' | 'femn', AnimationId[]> = {
  * the dead sway as if drunk, the living enemies stand squared up for a fight,
  * a badly wounded soldier slumps.
  */
-export type Stance = 'drunk' | 'aggressive' | 'slumped' | 'armsFolded' | 'handsOnHips' | 'thoughtful' | 'thoughtfulL';
+export type Stance = 'drunk' | 'aggressive' | 'slumped' | 'armsFolded' | 'handsOnHips' | 'thoughtful' | 'thoughtfulL' | 'restBase';
 
-export const STANCE_ORDER: readonly Stance[] = ['drunk', 'aggressive', 'slumped', 'armsFolded', 'handsOnHips', 'thoughtful', 'thoughtfulL'];
+export const STANCE_ORDER: readonly Stance[] = ['drunk', 'aggressive', 'slumped', 'armsFolded', 'handsOnHips', 'thoughtful', 'thoughtfulL', 'restBase'];
 
 export const STANCES: Record<'masc' | 'femn', Record<Stance, AnimationId>> = {
-  masc: { drunk: 'drunkMasc', aggressive: 'aggressiveMasc', slumped: 'slumpedMasc', armsFolded: 'armsFoldedMasc', handsOnHips: 'handsOnHipsMasc', thoughtful: 'thoughtfulMasc', thoughtfulL: 'thoughtfulLMasc' },
-  femn: { drunk: 'drunkFemn', aggressive: 'aggressiveFemn', slumped: 'slumpedFemn', armsFolded: 'armsFoldedFemn', handsOnHips: 'handsOnHipsFemn', thoughtful: 'thoughtfulFemn', thoughtfulL: 'thoughtfulLFemn' },
+  masc: { drunk: 'drunkMasc', aggressive: 'aggressiveMasc', slumped: 'slumpedMasc', armsFolded: 'armsFoldedMasc', handsOnHips: 'handsOnHipsMasc', thoughtful: 'thoughtfulMasc', thoughtfulL: 'thoughtfulLMasc', restBase: 'restBaseMasc' },
+  femn: { drunk: 'drunkFemn', aggressive: 'aggressiveFemn', slumped: 'slumpedFemn', armsFolded: 'armsFoldedFemn', handsOnHips: 'handsOnHipsFemn', thoughtful: 'thoughtfulFemn', thoughtfulL: 'thoughtfulLFemn', restBase: 'restBaseFemn' },
 };
 
 /** What a unit does once when asked (AnimDriver gesture: two talking on the clearing, clearingLife.ts), over its stance. */

@@ -1293,6 +1293,55 @@ export function pieceFigureShort(piece: PieceId, level: number): string | null {
   return PIECE_FIGURES[piece]?.(level)?.short ?? null;
 }
 
+/**
+ * A line of 40 letters at most for each new thing a level brings, under its
+ * name in the diary (Ana, 23/10 #38: «una muuuy pequeña descripción»). Keys:
+ * `piece:<PieceId>`, `tech:<TechId>`, `item:<ItemId>`; no full stop.
+ */
+export const NEW_BRIEF: Partial<Record<string, string>> = {
+  'piece:caravan': 'Camas y almacén',
+  'piece:radio': 'Avisa de los asedios y trae misiones',
+  'piece:quarters': 'Camas para soldados',
+  'piece:infirmary': 'Las heridas curan antes',
+  'piece:workshop': 'Armas y accesorios más baratos',
+  'piece:garden': 'Raciones en cada misión',
+  'piece:quarantine': 'Sin ella, un mordido no sube a La Lata',
+  'piece:memorial': 'Los caídos salen de la lista',
+  'piece:range': 'Puntería para todos',
+  'piece:training': 'Reclutas con más nivel',
+  'piece:simulation': 'Más suministros por misión',
+  'piece:garage': 'Heridas más cortas y +1 en la mochila',
+  'piece:echoes': 'Las barras se llenan más',
+  'piece:palisade': 'Barata y débil',
+  'piece:wall': 'Caro, pero aguanta mucho',
+  'piece:gate': 'Se abre y se cierra',
+  'piece:sandbags': 'Cobertura para disparar',
+  'piece:logs': 'Cobertura baja y barata',
+  'piece:tower': 'Más vista y ventaja de altura',
+  'piece:floodlight': 'De noche, alumbra a su alrededor',
+  'piece:wire': 'Quien lo cruza va más despacio',
+  'piece:mine': 'Estalla al pisarla; un uso',
+  'piece:spikes': 'Hiere a quien cae dentro',
+  'piece:snare': 'Atrapa al primero que lo pisa',
+  'piece:turret': 'Dispara sola a lo que se acerque',
+  'tech:magWeapons': 'El Taller hace culatas y silenciadores',
+  'tech:plateArmor': 'El Taller hace armadura: +2 de salud',
+  'tech:plasmaGrenades': 'Las granadas hacen +2 de daño',
+  'tech:encryption': 'Arreglar +20 y un contacto más',
+  'tech:plasmaWeapons': 'El Taller hace miras y cargadores',
+  'tech:nanoMedkit': 'Curas +2 y botiquines con un uso más',
+  'tech:predatorArmor': 'Armadura: +4 de salud y +1 de blindaje',
+  'tech:signal': 'Abre la misión final',
+  'item:fragGrenade': 'Dos granadas para el cinturón',
+  'item:smokeGrenade': 'Humo: −20 a acertar a quien está dentro',
+  'item:firstAid': 'Cura 4; dos usos',
+  'item:flashbang': 'Desorienta a los enemigos de la zona',
+  'item:tracerRounds': '+10 de puntería',
+  'item:nanoVest': '+2 de salud',
+  'item:apRounds': 'Ignora 1 de blindaje',
+  'item:mindShield': 'El grito del Chillón no afecta',
+};
+
 /** A piece's state, a tag beside its name («Foso con pinchos · por reponer») and its line in the card; never gendered, the names are of both. */
 export const PIECE_STATE = {
   spent: 'por reponer',
@@ -1560,8 +1609,11 @@ export const LIVING_TIP = 'Los muertos van a por cualquier vivo, también a por 
 
 export const BASE_SIEGE_TEXT = {
   here: 'Ya están aquí.',
-  /** A siege by night (one in three from the second): the squad starts in sight, so the dark only hides the dead from it. */
-  night: `Asedio de noche: a oscuras, tus soldados ven ${NIGHT_SIGHT} casillas en vez de ${DAY_SIGHT}; un foco alumbra ${NIGHT.floodlight} casillas a su alrededor. Los zombis ven como de día.`,
+  /** The notice's line under its title, and the offer's text. */
+  arrival: 'Salen del pinar y no dejan de salir. Coged las armas.',
+  /** A siege by night (one in three from the second), after `arrival`: what the dark does, not its rule. */
+  night: 'Es de noche: no se les ve hasta que están en la valla.',
+  /** The rule, for the help and the errors (not for the notice). */
   defenders: 'Defienden los sanos. Los heridos y los mordidos se quedan dentro.',
   fallen: 'El Bastión ha caído',
   fallenLine: 'Otra vez. Se pierde lo levantado y lo del almacén. Los que quedan huyen con la caravana y lo puesto, y vuelven a empezar en otro claro.',
@@ -1594,14 +1646,14 @@ export const SIEGE_TEXT = {
   wiped: 'El Bastión ha caído: no queda nadie para defenderlo',
 };
 
-/** The strip's objective (`hold`: SIEGE.hold, the last turn): «Aguantad hasta el turno 11». */
-export function siegeObjective(hold: number): string {
-  return `Aguantad hasta el turno ${hold}`;
+/** The strip's objective: a siege ends once every one of the dead is down (Ana, 23/10). `hold` is no longer used. */
+export function siegeObjective(_hold?: number): string {
+  return 'Acabad con todos';
 }
 
 /** The objective in full, for the card and the strip's tooltip. */
-export function siegeObjectiveTip(hold: number): string {
-  return `Aguantad hasta el final del turno ${hold} o acabad con todas las oleadas. Si caen todos, el Bastión cae.`;
+export function siegeObjectiveTip(_hold?: number): string {
+  return 'Acabad con todas las oleadas. Si caen todos, el Bastión cae.';
 }
 
 /** Which turn a wave lands at the end of (`turn`: Reinforcement.turn), seen on squad turn `now`: «este turno», «próximo turno», «turno 5». */
@@ -1964,8 +2016,8 @@ export interface ExpedientePage {
   /** The page in one line, for the level-up pop-up (the full page opens on request). */
   summary: string;
   paragraphs: string[];
-  /** Handwritten in the margin, signed. */
-  note: string;
+  /** Handwritten in the margin, signed; not every page has one. */
+  note?: string;
 }
 
 /** One page per Bastion level: what the Bastion has found out by then. */
@@ -1988,7 +2040,6 @@ export const EXPEDIENTE: ExpedientePage[] = [
       'Una puerta cerrada no los para: la empujan y pasan. Solo les tapa la vista. Para frenarlos sirve un paso estrecho, no una puerta.',
       'No todos los mordiscos contagian. El de un muerto corriente, uno de cada cuatro; el de un Acorazado, uno de cada tres. Los gases de un Hinchado, uno de cada dos.',
     ],
-    note: 'Si veis una cara conocida entre ellos, no es quien creéis. — T. V.',
   },
   {
     title: 'Los Cuervos',

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { doomName, MISSION_NAMES, outingsMark, SIEGE, SIEGE_TEXT, siegeObjective, type MissionKind, type PlayerInfo, type SkirmishMap, type Slot } from '@bastion/engine';
+import { doomName, MISSION_NAMES, outingsMark, SIEGE_TEXT, siegeObjective, type MissionKind, type PlayerInfo, type SkirmishMap, type Slot } from '@bastion/engine';
 import { inviteLinks, type InviteLink, type NetStatus } from '../net';
 import { GeoscapeSet } from '../strategy/geoscape';
 import { Stage } from '../strategy/stage';
@@ -325,7 +325,7 @@ export class Lobby {
         h('div.x-head', {}, 'Misión'),
         // On the Bastión it is always a siege (docs/FASE12.md §10): the kinds would choose nothing.
         map === 'bastion'
-          ? h('div.menu-options', {}, h('div.menu-option.on', {}, h('b', {}, SIEGE_TEXT.name), h('small', {}, siegeObjective(SIEGE.hold))))
+          ? h('div.menu-options', {}, h('div.menu-option.on', {}, h('b', {}, SIEGE_TEXT.name), h('small', {}, siegeObjective())))
           : h('div.menu-options', {}, ...MISSIONS.map((m) => option(this.mission, m.id, (v) => (this.mission = v), MISSION_NAMES[m.id], m.text))),
         h('div.x-head', {}, 'Mapa'),
         h('div.menu-options.two', {}, ...MAPS.filter((m) => !fixedMap || m.id === fixedMap).map((m) => option(map, m.id, (v) => (this.map = v), m.name, m.text))),

@@ -579,13 +579,17 @@ const PISTOL_HOLD = 6.4;
 const MARK_EASE = 6;
 const MARK_PULSE = 0.25;
 const MARK_RATE = 4.5;
+/** A shade's (shade) coming on and going (a second): on at once nearly, off over a third of a second. */
+const SHADE_IN = 12;
+const SHADE_OUT = 3.3;
 /**
  * How a soldier waits with the pistol (23/10 #1: one way for them all, as the rifle had: RIFLE_RESTS), by its way of
  * waiting with a rifle (restAs, Spec.rest), so a row's neighbours differ, and at ease always (Arturo: squared up read
- * as about to fight): the plain idle and its looks round and shifts of weight; the left hand on the hip; thinking, the
- * left hand to the chin. A stance of its own (slumped, wounded) goes first.
+ * as about to fight): standing up straight (the Idles pack's own: Locomotion's idle bent a man's knees and rounded his
+ * shoulders, and he looked hurt: 23/10 #37); the left hand on the hip; thinking, the left hand to the chin. A stance of
+ * its own (slumped, wounded) goes first.
  */
-const PISTOL_RESTS: readonly (Stance | null)[] = [null, 'handsOnHips', 'thoughtfulL'];
+const PISTOL_RESTS: readonly (Stance | null)[] = ['restBase', 'handsOnHips', 'thoughtfulL'];
 /**
  * The throws' clips (direct), timed to the game's: the clip's moment the hand lets go (`release`, measured on it) at
  * the game's (`lets`, seconds into the throw: unitViews throwMotion, tossStone), `rate` times as fast; over by `end`.
@@ -1013,6 +1017,11 @@ export class SyntyFigure implements FigureRig {
   private marked = false;
   private markK = 0;
   private markClock = -Infinity;
+  /** A shade (shade), and how far it is one. */
+  private shaded = false;
+  private shadeK = 0;
+  /** Its weapons put away for the shade (past half of it). */
+  private shadeBare = false;
   /** The stance the clips were last told (standing). */
   private stood = -1;
   /** The death it plays (DEATHS[build]), the seconds it takes and how far it is drawn in (model space: a cramped death); null standing. */
@@ -1668,7 +1677,7 @@ export class SyntyFigure implements FigureRig {
       this.fadeClock = time;
       for (const o of this.painted) o.castShadow = this.fade >= 1;
       // Its weapons have no dither of their own: they go, and come back, halfway.
-      for (const k of CARRIES) if (this.carried[k]) this.carried[k]!.visible = this.fade >= 0.5;
+      for (const k of CARRIES) if (this.carried[k]) this.carried[k]!.visible = this.fade >= 0.5 && this.shadeK <= 0.5;
     }
     // A dead one at ease is drawn with the crowd (crowd.ts): nothing of its own to pose.
     if (this.crowdPose(p, time)) return;
@@ -1691,7 +1700,13 @@ export class SyntyFigure implements FigureRig {
     const markDt = this.markClock === -Infinity ? 0 : THREE.MathUtils.clamp(time - this.markClock, 0, 0.25);
     this.markClock = time;
     this.markK = THREE.MathUtils.clamp(this.markK + (this.marked ? 1 : -1) * markDt * MARK_EASE, 0, 1);
-    this.flashTo(p.flash * 0.8, this.markK * (1 - MARK_PULSE * (0.5 + 0.5 * Math.sin(time * MARK_RATE))));
+    // A shade (shade), out quicker than in: what it is shows as it steps into sight. What it carries goes with it.
+    this.shadeK = THREE.MathUtils.clamp(this.shadeK + (this.shaded ? SHADE_IN : -SHADE_OUT) * markDt, 0, 1);
+    if (this.shadeK > 0.5 !== this.shadeBare) {
+      this.shadeBare = !this.shadeBare;
+      for (const k of CARRIES) if (this.carried[k]) this.carried[k]!.visible = !this.shadeBare && this.fade >= 0.5;
+    }
+    this.flashTo(p.flash * 0.8, this.markK * (1 - MARK_PULSE * (0.5 + 0.5 * Math.sin(time * MARK_RATE))), this.shadeK);
     this.uprightItem();
     const r = this.rest;
     if (!r) {
@@ -1886,7 +1901,7 @@ export class SyntyFigure implements FigureRig {
 
   /** Into the crowd if calm and its body is baked (starting the bake if not); false to pose the figure as ever. */
   private crowdPose(p: FigurePose, time: number): boolean {
-    const loop = this.spec.dead && !this.spec.own && !this.baking && !this.feedPhase && !this.marked && this.markK <= 0 && this.anim && this.model && CROWD.enabled && this.fade >= 1 ? this.calmLoop(p) : -1;
+    const loop = this.spec.dead && !this.spec.own && !this.baking && !this.feedPhase && !this.marked && this.markK <= 0 && !this.shaded && this.shadeK <= 0 && this.anim && this.model && CROWD.enabled && this.fade >= 1 ? this.calmLoop(p) : -1;
     if (loop < 0) {
       this.leaveCrowd();
       return false;
@@ -2106,19 +2121,21 @@ export class SyntyFigure implements FigureRig {
   }
 
   /** A hit's red flash, and its mark as the target (`mark`); a figure on the plain material takes its own while either lasts. */
-  private flashTo(k: number, mark = 0): void {
+  private flashTo(k: number, mark = 0, shade = 0): void {
     const m = this.material;
     if (!m) return;
     if (!m.userData.shared) {
       m.userData.dyes.dyeFlash.value = k;
       m.userData.dyes.dyeMark.value = mark;
+      m.userData.dyes.dyeShade.value = shade;
       m.userData.dyes.dyeFade.value = this.fade;
       return;
     }
     // A flash, its mark, or fading in: on a material of its own (the shared one is everyone's).
-    const lit = k > 0.005 || mark > 0.005 || this.fade < 1;
+    const lit = k > 0.005 || mark > 0.005 || shade > 0.005 || this.fade < 1;
     if (lit && !this.own) {
-      this.own = dyedMaterial(atlasOf(this.painted[0]!));
+      // Its atlas as loaded (fill): the painted meshes now wear the shared material, whose name is no atlas's.
+      this.own = dyedMaterial(this.atlas ?? atlasOf(this.painted[0]!));
       this.own.userData.dyes.dyeRim.value = ENEMY_RIM;
     }
     const use = lit ? this.own! : m;
@@ -2126,6 +2143,7 @@ export class SyntyFigure implements FigureRig {
     if (lit) {
       this.own!.userData.dyes.dyeFlash.value = k;
       this.own!.userData.dyes.dyeMark.value = mark;
+      this.own!.userData.dyes.dyeShade.value = shade;
       this.own!.userData.dyes.dyeFade.value = this.fade;
     }
   }
@@ -2133,6 +2151,12 @@ export class SyntyFigure implements FigureRig {
   /** Marked as the target being picked, or not (unitViews highlight): reddened and glowing, out of the crowd meanwhile. */
   mark(on: boolean): void {
     this.marked = on;
+  }
+
+  /** A shade or not (unitViews shade): dark, nothing of what it is or carries, out of the crowd meanwhile; `now`, at once. */
+  shade(on: boolean, now = false): void {
+    this.shaded = on;
+    if (now) this.shadeK = on ? 1 : 0;
   }
 
   /** Level of detail: whether the bones can stay as they are this frame (see CALM_EVERY). */

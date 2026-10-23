@@ -8,7 +8,7 @@ import { STORY } from '../src/lore';
 import { QUESTS, type QuestMission } from '../src/quests';
 import { Rng } from '../src/rng';
 import { computeReach } from '../src/path';
-import { executeCommand, Sim } from '../src/rules';
+import { executeCommand, Sim, SQUAD_LOUDER } from '../src/rules';
 import type { Command } from '../src/protocol';
 import type { GameState, MissionKind, TemplateId } from '../src/types';
 import { addUnit, stateFrom } from './helpers';
@@ -94,7 +94,7 @@ describe('hack', () => {
         const coming = events.find((e) => e.t === 'reinforcementsIncoming') as Extract<GameEvent, { t: 'reinforcementsIncoming' }>;
         expect(coming.r).toMatchObject({ horde: true, pos: null });
         expect(coming.r.units.every((t) => t !== 'trooper' && t !== 'officer' && t !== 'lancer')).toBe(true);
-        expect(events.find((e) => e.t === 'noise')).toMatchObject({ tile: s.mission.terminal!, radius: 16 });
+        expect(events.find((e) => e.t === 'noise')).toMatchObject({ tile: s.mission.terminal!, radius: Math.round(16 * SQUAD_LOUDER * 10) / 10 });
         expect(s.concealed).toBe(false);
         failed = s;
       }

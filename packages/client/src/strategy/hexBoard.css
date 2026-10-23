@@ -14,28 +14,38 @@
  * Sizes inside the SVG are in board units (a cell is 30 across its corners).
  */
 
+/* Each line's colour, also by name (skillSheet.ts skillHex cuts a hexagon between several). */
+:root {
+  --sk-shooting: #5aa9ec;
+  --sk-melee: #ec644e;
+  --sk-throwing: #a585ea;
+  --sk-medicine: #4fcaa3;
+  --sk-searching: #b7c64a;
+  --sk-fitness: #e57fae;
+}
+
 .sk-shooting {
-  --cc: #5aa9ec;
+  --cc: var(--sk-shooting);
 }
 
 .sk-melee {
-  --cc: #ec644e;
+  --cc: var(--sk-melee);
 }
 
 .sk-throwing {
-  --cc: #a585ea;
+  --cc: var(--sk-throwing);
 }
 
 .sk-medicine {
-  --cc: #4fcaa3;
+  --cc: var(--sk-medicine);
 }
 
 .sk-searching {
-  --cc: #b7c64a;
+  --cc: var(--sk-searching);
 }
 
 .sk-fitness {
-  --cc: #e57fae;
+  --cc: var(--sk-fitness);
 }
 
 .sk-core {

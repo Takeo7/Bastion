@@ -584,6 +584,46 @@ const PIECE_LOOK: Partial<Record<PieceId, DecorKind>> = { sandbags: 'barricade',
 /** Places round the caravan for the squad of a siege: every soldier both players can have. */
 const BASE_DEFENDERS = 24;
 
+/** How far apart along each side the ways through the pines start, and how far off the tracks. */
+const TRAIL_EVERY = 6;
+const TRAIL_TRACK_GAP = 4;
+
+/**
+ * Narrow ways through the pines for a siege (Ana, 23/10 #33): from every side, every TRAIL_EVERY tiles but by the
+ * tracks, winding in from the edge until the pines open, so the dead come out from between the trees and not only
+ * down the tracks. Only on the siege's map: the clearing's own pines stay as they are. Fixed by the base's size, so
+ * the same base always has the same ways.
+ */
+export function siegeTrails(base: BaseState): number[] {
+  const { width, height } = base;
+  const trees = new Set(base.trees);
+  const out = new Set<number>();
+  const mix = (a: number, b: number) => ((Math.imul(a, 73856093) ^ Math.imul(b, 19349663)) >>> 0) % 1000;
+  for (let side = 0; side < 4; side++) {
+    const span = side % 2 === 0 ? width : height;
+    const mid = (span - 1) / 2;
+    for (let k = 3; k < span - 3; k += TRAIL_EVERY) {
+      if (Math.abs(k - mid) < TRAIL_TRACK_GAP) continue;
+      // From the edge inwards, a step aside now and then; until two open tiles in a row past the band of the edge.
+      let along = k;
+      let open = 0;
+      for (let depth = 0; depth < span / 2 && open < 2; depth++) {
+        const [x, y] = side === 0 ? [along, depth] : side === 1 ? [width - 1 - depth, along] : side === 2 ? [along, height - 1 - depth] : [depth, along];
+        if (x < 0 || y < 0 || x >= width || y >= height) break;
+        const i = y * width + x;
+        if (trees.has(i)) {
+          out.add(i);
+          open = 0;
+        } else if (depth > BASE_EDGE + 1) open++;
+        const turn = mix(side * 1000 + k, depth);
+        if (turn < 220) along = Math.max(1, along - 1);
+        else if (turn > 780) along = Math.min(span - 2, along + 1);
+      }
+    }
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
 /**
  * The base as a battlefield for its siege (docs/FASE12.md §11.5): the pines
  * standing, every piece on its tiles (a building solid, a tower's deck a
@@ -601,6 +641,12 @@ export function baseLayout(base: BaseState): MissionLayout {
   for (const i of base.trees) {
     tiles[i] = 'high';
     decor[i] = decorCode('tree', i % 4);
+  }
+  // Ways through the pines (Ana, 23/10 #33: «no llegan de entre los árboles; sólo salen de los caminos»).
+  for (const i of siegeTrails(base)) {
+    if (tiles[i] !== 'high') continue;
+    tiles[i] = 'floor';
+    decor[i] = 0;
   }
   const breakables: Record<number, number> = {};
   for (const p of base.pieces) {

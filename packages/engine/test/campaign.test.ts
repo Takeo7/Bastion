@@ -25,6 +25,7 @@ import {
   nextSteps,
   soldierCap,
   squadPads,
+  syncPads,
   veteranEnemies,
   DOOM_MAX,
   executeCampaignCommand,
@@ -585,6 +586,33 @@ describe('helping the players', () => {
     run(c, { type: 'squad', soldier: before[4]!, on: false }, 1);
     run(c, { type: 'squad', soldier: spare.id, on: true }, 1);
     expect(squadPads(c)).toEqual([before[0], null, before[2], before[3], spare.id, before[5]]);
+  });
+
+  it("a pad kept on the other one's half is let go: each stands among their own (Ana, 23/10 #19)", () => {
+    const owner = (c: CampaignState) => (id: string | null) => c.soldiers.find((s) => s.id === id)?.owner;
+    // A squad picked across both halves (the partner away) stays where it stood, then each goes to their own half.
+    const c = createCampaign(both, new Rng(2));
+    c.vehicle = 1;
+    run(c, { type: 'chooseMission', id: c.offers[0]!.id }, 0);
+    run(c, { type: 'vote', accept: true }, 1);
+    const ids = squadPads(c) as string[];
+    c.pads = Object.fromEntries(ids.map((id, i) => [id, (i + 3) % 6]));
+    expect(squadPads(c).map(owner(c))).toEqual([0, 0, 0, 1, 1, 1]);
+    // Alone, the whole hangar; then a partner arrives, takes over rookies, and the squad is picked again.
+    const d = createCampaign([0], new Rng(3));
+    d.vehicle = 1;
+    run(d, { type: 'chooseMission', id: d.offers[0]!.id }, 0, [0]);
+    syncPads(d);
+    expect(squadPads(d).every((id) => owner(d)(id) === 0)).toBe(true);
+    addPlayer(d, 1, new Rng(1));
+    // Half each (more than half, and the rest would stand on the other half, as ever).
+    for (const id of d.squad.filter((x) => owner(d)(x) === 0).slice(3)) run(d, { type: 'squad', soldier: id, on: false }, 0);
+    for (const s of d.soldiers.filter((x) => x.owner === 1 && !d.squad.includes(x.id)).slice(0, 2)) run(d, { type: 'squad', soldier: s.id, on: true }, 1);
+    const pads = squadPads(d);
+    pads.forEach((id, i) => {
+      if (id) expect(owner(d)(id), `pad ${i}`).toBe(i < 3 ? 0 : 1);
+    });
+    expect(pads.filter((id) => owner(d)(id) === 1)).toHaveLength(2);
   });
 
   it('alone, a commander keeps both kits; a partner who arrives later takes over the untouched rookies', () => {

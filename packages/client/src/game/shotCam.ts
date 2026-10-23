@@ -152,12 +152,13 @@ function sees(s: GameState, pos: THREE.Vector3, to: THREE.Vector3): boolean {
 /**
  * Whether world point (x, y, z) is inside something solid: below the ground, what stands on a tile up to its height
  * (on the ground, a wall up to its building's top), or a slab, a storey's floor and the ceiling under it. Out of the
- * map, everything is.
+ * map, only under the ground: a soldier at the map's edge with their back to it had no shot over the shoulder at all
+ * (Ana, 23/10 #22), the camera behind them being off the map.
  */
 function solidAt(s: GameState, x: number, y: number, z: number, heights: Record<TileKind, number>): boolean {
   const tx = Math.floor(x);
   const ty = Math.floor(z);
-  if (!inBounds(s, tx, ty)) return true;
+  if (!inBounds(s, tx, ty)) return y < 0;
   const i = tileIndex(s, tx, ty);
   const h = y / STOREY;
   const base = s.elev[i] ?? 0;

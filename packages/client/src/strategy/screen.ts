@@ -25,7 +25,9 @@ import {
   contactCapacity,
   contactCost,
   costText,
+  NEW_BRIEF,
   PIECE_TEXT,
+  pieceFigure,
   PIECES,
   raiseCost,
   FELL_COST,
@@ -185,7 +187,7 @@ import { sound } from '../audio/bank';
 import { uiSound } from '../audio/ui';
 import { carriedProfile, kindOf, loadoutEl, modPanel, placeOf, profileOf, weaponCare, weaponDiff, weaponIcon, weaponMarks, weaponPick, weaponStats, type WeaponPickContext } from './arms';
 import { soldierPortrait } from './portraits';
-import { learnedTags, roleDot, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
+import { learnedTags, skillHex, skillsBlock, skillsOf, treePanel, veterancyBadge } from './skillSheet';
 import { deadlineEl } from '../ui/deadline';
 import { outfitOf, outfitsFor, preloadWardrobe, soldierSex } from '../game/wardrobe';
 
@@ -524,6 +526,12 @@ export class StrategyScreen {
     // The partner's proposal waits on its note (with «Ver»): it never takes this player away from what they are doing.
     const proposed = !!c.proposal && c.proposal.by !== this.mySlot && prev?.proposal?.text !== c.proposal.text;
     if (proposed) this.blink('.strat-proposal');
+    // The other one just said «a punto» for the mission (or the siege): heard, and its plate blinks (renderWaiting).
+    const partner = this.partner();
+    if (partner && c.launchReady[partner.slot] && prev && !prev.launchReady[partner.slot] && !c.launchReady[this.mySlot]) {
+      uiSound('bell');
+      this.blink('.strat-proposal');
+    }
     // One's own proposal that costs: said at once that nothing is paid until the yes (playtest 16/10 #5).
     if (c.proposal && c.proposal.by === this.mySlot && prev?.proposal?.text !== c.proposal.text && proposalCost(c, c.proposal.action)) {
       this.toast(`Propuesto a ${this.partner()?.name ?? 'el otro jugador'}: se paga cuando diga que sí.`);
@@ -1071,37 +1079,40 @@ export class StrategyScreen {
   }
 
   /**
-   * What a Bastion level brought, as a row of icons (Ana, 20/10 #31: wherever what an upgrade brings is shown):
-   * its techniques, belt items, pieces and buildings' upgrades, each its own icon or its family's, in the family's
-   * colour; «Name: what it is for» on hover. In the alert on going up.
+   * What a Bastion level brought (Ana, 20/10 #31), in the alert on going up: grouped as where each is found (Construir,
+   * the buildings going up a level, the Armería, the Bastion's advances), each its icon in its family's colour, its
+   * name and what it is in a few words under it (Ana, 23/10 #38: «no se sabe qué es cada cosa nueva»): a building's
+   * level, its figure («+3 camas»); anything else, Lore's NEW_BRIEF, or the first sentence of its line.
    */
-  private broughtIcons(level: number): HTMLElement[] {
-    const icon = (file: string, family: string, name: string, detail: string) =>
-      h(`span.unlock-icon.${family}`, { title: `${name}: ${detail}`, 'aria-label': name, style: { '--unlock-icon': `url('/ui/synty/icons/${file}.webp')` } });
+  private broughtList(level: number): HTMLElement | null {
+    const brief = (text: string, key = '') => NEW_BRIEF[key] ?? text.split(/(?<=\.)\s/)[0]!.replace(/\.$/, '');
+    const item = (file: string, family: string, name: string, line: string, detail = line) =>
+      h(
+        'div.unlock-item',
+        { title: `${name}: ${detail}` },
+        h(`span.unlock-icon.${family}`, { 'aria-hidden': 'true', style: { '--unlock-icon': `url('/ui/synty/icons/${file}.webp')` } }),
+        h('b', {}, name),
+        line ? h('small', {}, line) : null,
+      );
     const pieces = (Object.keys(PIECES) as (keyof typeof PIECES)[]).filter((id) => id !== 'caravan');
-    return [
-      ...Object.values(TECHS)
-        .filter((t) => t.level === level)
-        .map((t) => icon(TECH_ICONS[t.id] ?? 'mh-xp', 'xp', t.name, t.description)),
-      ...Object.values(ITEMS)
-        .filter((i) => i.level === level)
-        .map((i) => icon(ITEM_ICONS[i.id] ?? 'mh-crate', 'flag', i.name, i.description)),
-      ...pieces.filter((id) => PIECES[id].level === level).map((id) => icon(PIECE_ICONS[id] ?? KIND_ICONS[PIECES[id].kind], 'pick', PIECE_TEXT[id].name, PIECE_TEXT[id].line)),
-      // A building going up a level («Barracón, nivel 2»): its own icon, what that level does on hover.
-      ...pieces.flatMap((id) =>
-        PIECES[id].kind === 'building'
-          ? [2, 3]
-              .filter((to) => upgradeLevel(PIECES[id].level, to) === level)
-              .map((to) => icon(PIECE_ICONS[id] ?? KIND_ICONS.building, 'pick', `${PIECE_TEXT[id].name}, nivel ${to}`, PIECE_TEXT[id].levels?.[to - 1] ?? PIECE_TEXT[id].line))
-          : [],
-      ),
+    const groups: [string, HTMLElement[]][] = [
+      ['Para construir', pieces.filter((id) => PIECES[id].level === level).map((id) => item(PIECE_ICONS[id] ?? KIND_ICONS[PIECES[id].kind], 'pick', PIECE_TEXT[id].name, brief(PIECE_TEXT[id].line, `piece:${id}`), PIECE_TEXT[id].line))],
+      [
+        'Suben de nivel',
+        pieces.flatMap((id) =>
+          PIECES[id].kind === 'building'
+            ? [2, 3]
+                .filter((to) => upgradeLevel(PIECES[id].level, to) === level)
+                .map((to) => item(PIECE_ICONS[id] ?? KIND_ICONS.building, 'pick', `${PIECE_TEXT[id].name}, nivel ${to}`, pieceFigure(id, to) ?? brief(PIECE_TEXT[id].levels?.[to - 1] ?? ''), PIECE_TEXT[id].levels?.[to - 1] ?? PIECE_TEXT[id].line))
+            : [],
+        ),
+      ],
+      // The belt's only, as the Armería (fresh.ts, #39): an ammunition has nowhere to be seen there.
+      ['En la Armería', Object.values(ITEMS).filter((i) => i.level === level && i.slot === 'utility').map((i) => item(ITEM_ICONS[i.id] ?? 'mh-crate', 'flag', i.name, brief(i.description, `item:${i.id}`), i.description))],
+      ['Avances', Object.values(TECHS).filter((t) => t.level === level).map((t) => item(TECH_ICONS[t.id] ?? 'mh-xp', 'xp', t.name, brief(t.description, `tech:${t.id}`), t.description))],
     ];
-  }
-
-  /** broughtIcons under its heading, or nothing for a level that brought nothing. */
-  private broughtRow(level: number, heading: string): HTMLElement[] {
-    const icons = this.broughtIcons(level);
-    return icons.length ? [h('div.x-group', {}, heading), h('div.unlock-icons', {}, ...icons)] : [];
+    const shown = groups.filter(([, items]) => items.length);
+    return shown.length ? h('div.unlock-list', {}, ...shown.flatMap(([title, items]) => [h('div.unlock-group', {}, title), ...items])) : null;
   }
 
   /** "Armas magnéticas · Sala de simulación": what a Bastion level unlocks. */
@@ -1547,7 +1558,7 @@ export class StrategyScreen {
     clear(this.proposalEl);
     const p = c.proposal;
     this.proposalEl.classList.toggle('show', !!p);
-    if (!p) return;
+    if (!p) return this.renderWaiting(c);
     const { rows, see } = this.proposalDetail(c, p.action);
     const detail = rows.length ? h('dl.proposal-detail', {}, ...rows.flatMap(([label, text]) => [h('dt', {}, label), h('dd', {}, text)])) : null;
     const seeBtn = see ? h('button.x-btn.small', { onclick: see }, 'Ver') : null;
@@ -1578,6 +1589,31 @@ export class StrategyScreen {
         ),
       );
     }
+  }
+
+  /**
+   * The other one is ready to go (Ana, 23/10 #31: «Defender el Bastión» pressed, and Arturo didn't know): on the
+   * proposal's plate, with the way to the Escuadra. On the Escuadra only for a siege, placing defenders on the clearing;
+   * a mission's lineup has the plates over the panel (Ana, 21/10 #16).
+   */
+  private renderWaiting(c: CampaignState): void {
+    const partner = this.partner();
+    const offer = activeOffer(c);
+    if (!offer || !partner?.connected || !c.launchReady[partner.slot] || c.launchReady[this.mySlot] || this.view === 'debrief') return;
+    const here = this.view === 'squad';
+    if (here && !offer.siege) return;
+    this.proposalEl.classList.add('show');
+    this.proposalEl.classList.remove('mine');
+    append(
+      this.proposalEl,
+      h(
+        'div.proposal-text',
+        {},
+        h('div.proposal-kicker', {}, 'Te esperan'),
+        h('span', {}, h('b', { style: { color: this.playerColor(partner.slot) } }, partner.name), offer.siege ? ' está a punto para defender el Bastión.' : ` está a punto para salir: ${offer.name}.`),
+      ),
+      here ? null : h('div.proposal-actions', {}, h('button.x-btn.primary', { onclick: () => void this.go('squad') }, 'Ir a la Escuadra')),
+    );
   }
 
   private renderNav(c: CampaignState): void {
@@ -1645,8 +1681,16 @@ export class StrategyScreen {
 
   /** The pointer went over it: its «Nuevo» goes, and the tab's with it once nothing new is left there. */
   private readonly seenNew = (key: string): void => {
-    if (this.freshMarks.see(key) && this.state) this.renderNav(this.state);
+    if (!this.freshMarks.see(key) || !this.state) return;
+    this.renderNav(this.state);
+    // And the Armería's own tab, there and then (it waited for the next render).
+    for (const tab of this.root.querySelectorAll<HTMLElement>('[data-fresh-tab]')) if (!this.engFresh(this.state, tab.dataset.freshTab as 'items' | 'gear')) tab.querySelector('.new-tag')?.remove();
   };
+
+  /** Whether the Armería's tab `t` has something new on it (#39: it was only on the screen's tab). */
+  private engFresh(c: CampaignState, t: 'items' | 'gear'): boolean {
+    return this.freshMarks.fresh(bastionLevel(c)).some((f) => f.view === 'engineering' && f.key.startsWith('item:') === (t === 'items'));
+  }
 
   /** Where this player has something new that a level brought: Construir, the Armería (a building's upgrade, only if one can take it). */
   private freshViews(c: CampaignState): Set<FreshView> {
@@ -1989,9 +2033,16 @@ export class StrategyScreen {
     const tabs = h(
       'div.x-tabs',
       {},
-      ...(['items', 'gear'] as const).map((t) =>
-        h(`button${this.engTab === t ? '.on' : ''}`, { onclick: () => ((this.engTab = t), (this.engPick = null), this.render()) }, t === 'gear' ? 'Armamento' : 'Accesorios'),
-      ),
+      ...(['items', 'gear'] as const).map((t) => {
+        // The tab with something new a level brought, not looked at yet, says so (#39: it was only on the screen's).
+        const fresh = this.engFresh(c, t);
+        return h(
+          `button${this.engTab === t ? '.on' : ''}`,
+          { 'data-fresh-tab': t, onclick: () => ((this.engTab = t), (this.engPick = null), this.render()) },
+          t === 'gear' ? 'Armamento' : 'Accesorios',
+          fresh ? h('span.new-tag', {}, 'Nuevo') : null,
+        );
+      }),
     );
     const rows: HTMLElement[] = [];
     if (this.engTab === 'gear') {
@@ -2044,7 +2095,7 @@ export class StrategyScreen {
           h('b', {}, name),
           unlocked ? h('span.x-side', {}, '✓') : (this.craftChip(c, key) ?? this.chip('En el Taller', '', 'Se hace en el Taller')),
         );
-        rows.push(markNew(row, !unlocked && this.isNew(`armor:${key}`), () => this.seenNew(`armor:${key}`)));
+        rows.push(markNew(row, this.isNew(`armor:${key}`), () => this.seenNew(`armor:${key}`)));
       }
       // The Taller's weapons, munition and improvements (docs/FASE8.md §A, FASE9.md §5): munition three times, the rest again and again.
       rows.push(h('div.x-group', {}, 'Hacer en el Taller'));
@@ -2356,7 +2407,7 @@ export class StrategyScreen {
           },
         },
         h('span.st-face', { 'aria-hidden': 'true' }),
-        h('b.st-name', {}, s.nickname || s.name.split(' ')[0]!),
+        h('b.st-name', {}, skillHex(s.skills), s.nickname || s.name.split(' ')[0]!),
         veterancyBadge(s.board, s.appearance?.sex === 'f'),
         points ? h('span.st-points', { title: 'Talento por elegir' }, '▲') : null,
         state,
@@ -2471,7 +2522,7 @@ export class StrategyScreen {
         'barracks-right',
         'right',
         h('div.alert-kicker', {}, `${veterancyName(s).toUpperCase()} · ${own ? 'TUYO' : `DE ${this.playerName(s.owner).toUpperCase()}`}`),
-        h('h2.x-title', { title: `Misiones: ${s.missions} · Bajas: ${s.kills}` }, displayName(s.name, s.nickname)),
+        h('h2.x-title', { title: `Misiones: ${s.missions} · Bajas: ${s.kills}` }, skillHex(s.skills), displayName(s.name, s.nickname)),
         h('p.x-sub', {}, weaponLabel(c, s)),
         !own && isMine && s.alive ? h('p.x-muted', {}, `${this.playerName(s.owner)} no está: lo preparas tú hasta que vuelva.`) : null,
         isMine && s.alive
@@ -2922,7 +2973,7 @@ export class StrategyScreen {
       return h(
         `button.x-row.soldier${this.postPick === s.id ? '.selected' : ''}`,
         { style: { '--row-accent': this.playerColor(s.owner) }, disabled: !own, onclick: () => this.pickPost(this.postPick === s.id ? null : s.id) },
-        roleDot(s.board),
+        skillHex(s.skills),
         h('b', {}, displayName(s.name, s.nickname)),
         veterancyBadge(s.board, s.appearance?.sex === 'f'),
         posts[s.id] ? this.chip('Puesto', 'good', 'Empieza el asedio donde está en el claro') : this.chip('Junto al Bastión', '', 'Sin puesto: empieza junto al Bastión'),
@@ -2981,7 +3032,7 @@ export class StrategyScreen {
         `button.x-row.soldier${on ? '.selected' : ''}${ready ? '' : '.dim'}`,
         // In a siege who defends is the healthy, all of them: nothing to pick.
         { style: { '--row-accent': this.playerColor(s.owner) }, disabled: siege || s.owner !== this.mySlot || (!ready && !on), onclick: () => this.send({ type: 'squad', soldier: s.id, on: !on }) },
-        roleDot(s.board),
+        skillHex(s.skills),
         h('b', { title: gear.join(' · ') }, displayName(s.name, s.nickname)),
         veterancyBadge(s.board, s.appearance?.sex === 'f'),
         on ? this.chip('✓', 'good', 'En la escuadra') : ready ? h('span') : s.infection ? this.chip('Fiebre', 'bad', 'Mordido: necesita el tratamiento antes de salir') : this.chip(missionsText(missionsFor(s.woundedDays)), 'warn', 'Herido'),
@@ -3037,8 +3088,8 @@ export class StrategyScreen {
     // Down under the row, centred (Ana, 20/10 #16, as her drawing): who is ready over one panel, the mission on its
     // left (its name and what it is for, whole: no kicker, no «Botín · Brena · ★», no picture of the vehicle) and
     // the buttons on its right (playtest 19/10 #3; on a laptop the mission's window at the top hid the soldiers, #2).
-    // Who is ready is on the plates over the panel (Ana, 21/10 #16: no «Arturo espera para salir» here).
-    const status = siege ? BASE_SIEGE_TEXT.defenders : '';
+    // Who is ready is on the plates over the panel (Ana, 21/10 #16: no «Arturo espera para salir» here). No line under
+    // the button either (Ana, 23/10 #32: «Defienden los sanos…» is on the hangar's tooltip).
     this.viewEl.append(
       h(
         'div.squad-bottom',
@@ -3065,7 +3116,6 @@ export class StrategyScreen {
               // the ready board); pressed again, back.
               ready ? 'A PUNTO' : siege ? 'DEFENDER EL BASTIÓN' : 'LANZAR MISIÓN',
             ),
-            status ? h('small.x-muted', {}, status) : null,
             // Not «Cancelar misión» here (#3: it read as the same as going back); it is on the mission's card on the map.
             // The first mission is the only way in: no going back to the base before it (Ana, 22/10).
             c.story.done === 0 && offer.story === 1 ? null : h('button.x-btn', { onclick: () => void this.go('barracks') }, 'Volver al Bastión'),
@@ -3454,7 +3504,7 @@ export class StrategyScreen {
         alert.title ? h('h2.x-title', {}, alert.title) : null,
         ...(alert.body ?? []).map((p) => h('p.x-text', {}, ...marked(p))),
         h(`p.${alert.body ? 'x-muted' : 'x-text'}`, {}, alert.text),
-        ...(alert.brought ? this.broughtRow(alert.brought, 'Nuevo') : []),
+        alert.brought ? this.broughtList(alert.brought) : null,
         alert.note ? h('p.x-note', {}, alert.note) : null,
         h(
           'div.alert-actions',

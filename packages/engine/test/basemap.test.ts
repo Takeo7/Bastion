@@ -264,7 +264,7 @@ describe('the siege of the base', () => {
         expect(waves.flatMap((w) => w.units)).toHaveLength(count);
         expect(new Set(waves.map((w) => w.side))).toEqual(new Set(sides));
         // More each time, and the five specials as ever.
-        const sizes = [1, 3, 5, 7, 9].map((t) => waves.filter((w) => w.turn === t).reduce((n, w) => n + w.units.length, 0));
+        const sizes = [1, 2, 3, 5, 6].map((t) => waves.filter((w) => w.turn === t).reduce((n, w) => n + w.units.length, 0));
         expect(sizes.every((n, i) => i === 0 || n >= sizes[i - 1]!)).toBe(true);
         expect(waves.flatMap((w) => w.units).filter((u) => u !== 'zombie').sort()).toEqual(['bloater', 'mec', 'sectoid', 'xenoid', 'xenoid']);
       }

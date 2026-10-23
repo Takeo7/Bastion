@@ -497,6 +497,8 @@ export interface EventDef {
   text: string;
   /** Story events only come when the story calls them, never at random. */
   story?: true;
+  /** Heard on the radio: only with a Sala de radio (Ana, 23/10 #27). */
+  radio?: true;
   options: [EventOption, EventOption];
 }
 
@@ -545,6 +547,7 @@ export const EVENTS: Record<Exclude<CampaignEventId, 'quest'>, EventDef> = {
   signal: {
     id: 'signal',
     title: 'Transmisión interceptada',
+    radio: true,
     text: 'Morse ha captado en onda corta una transmisión cifrada de los Cuervos.',
     options: [
       { label: 'Descifrarla', effect: 'Una misión nueva', apply: (c, rng) => tipOff(c, rng) },
@@ -1792,7 +1795,7 @@ function vehicleOffer(c: CampaignState, rng: Rng): MissionOffer {
 export function offerBriefing(c: CampaignState, offer: MissionOffer): string {
   if (offer.reward.vehicle) return vehicleBriefing(offer.reward.vehicle, REGIONS[offer.region].name);
   // The dead at the base: nobody writes to warn of it (docs/FASE12.md §11.5).
-  if (offer.siege) return `${BASE_SIEGE_TEXT.here} ${SIEGE_TEXT.briefing} ${BASE_SIEGE_TEXT.defenders}${offer.night ? ` ${BASE_SIEGE_TEXT.night}` : ''}`;
+  if (offer.siege) return `${BASE_SIEGE_TEXT.arrival}${offer.night ? ` ${BASE_SIEGE_TEXT.night}` : ''}`;
   const q = questOf(c, offer);
   const step = q && QUESTS[q.id].steps[q.step];
   if (q && step?.type === 'mission') return fill(step.briefing, q.names);
@@ -2134,14 +2137,14 @@ export const SIEGE_GROWTH = 6;
 /** Days that go by with each mission (docs/FASE12.md §11.6): time is counted in missions, the clock inside in days. */
 export const DAYS_PER_MISSION = 1;
 
-/** The sides a siege comes by: one to three of the four, at random. */
+/** The sides a siege comes by: three or all four (Ana, 23/10: «que lleguen de todos lados»), at random. */
 function siegeSides(rng: Rng): number[] {
   const sides = [0, 1, 2, 3];
   for (let i = sides.length - 1; i > 0; i--) {
     const j = rng.int(i + 1);
     [sides[i], sides[j]] = [sides[j]!, sides[i]!];
   }
-  return sides.slice(0, 1 + rng.int(3)).sort();
+  return sides.slice(0, 3 + rng.int(2)).sort();
 }
 
 /** The next siege, once one is over: a few missions off, bigger than the last. */
@@ -2209,7 +2212,7 @@ function startSiege(c: CampaignState, rng: Rng): void {
   c.siegePosts = {};
   c.launchReady = [false, false];
   syncPads(c);
-  log(c, `${BASE_SIEGE_TEXT.here} ${BASE_SIEGE_TEXT.defenders}`, 'bad', { kicker: 'Asedio', title: BASE_SIEGE_TEXT.here });
+  log(c, BASE_SIEGE_TEXT.arrival, 'bad', { kicker: 'Asedio', title: BASE_SIEGE_TEXT.here });
 }
 
 /** The map a mission is fought on: a siege, on the base as it is now (§11.5); any other, its own. */
@@ -2662,12 +2665,13 @@ export function nextSteps(c: CampaignState, slot: Slot, partnerName = 'El otro j
     steps.push({ view: 'geoscape', label: 'Escucha un rumor', count: c.rumors.length, tone: 'info', go: { region: rumor.region, rumor: rumor.id } });
   }
 
-  // Before a mission: accessories on the shelf while someone in your squad has an empty slot.
+  // Before a mission: accessories on the shelf while someone in your squad has an empty place at the belt (both
+  // places of the Loadout take any accessory, docs/FASE9.md §4).
   if (mission) {
-    const free = (k: ItemSlot) => Object.values(ITEMS).filter((i) => i.slot === k).reduce((n, i) => n + Math.max(0, itemsFree(c, i.id)), 0);
+    const free = Object.values(ITEMS).filter((i) => i.slot === 'utility').reduce((n, i) => n + Math.max(0, itemsFree(c, i.id)), 0);
     const going = mine.filter((s) => c.squad.includes(s.id));
-    const fillable = (['utility', 'ammo'] as const).reduce((n, k) => n + Math.min(free(k), going.filter((s) => !s.loadout[k]).length), 0);
-    const first = going.find((s) => (['utility', 'ammo'] as const).some((k) => !s.loadout[k] && free(k) > 0));
+    const fillable = Math.min(free, going.reduce((n, s) => n + (['utility', 'ammo'] as const).filter((k) => !s.loadout[k]).length, 0));
+    const first = free > 0 ? going.find((s) => !s.loadout.utility || !s.loadout.ammo) : undefined;
     if (fillable && first) steps.push({ view: 'barracks', label: 'Equipa a tu escuadra con lo del almacén', count: fillable, tone: 'info', go: { soldier: first.id } });
   }
 
@@ -2798,6 +2802,8 @@ function validateAction(c: CampaignState, action: ProposalAction): string | null
       return canAfford(c, recruitCost(c)) ? null : 'No hay suministros suficientes.';
     }
     case 'buy':
+      // The special rounds are the weapons' mods now (docs/FASE9.md §4): nowhere to put them.
+      if (ITEMS[action.item].slot !== 'utility') return 'Eso ya no se vende: la munición especial se hace en el Taller.';
       if (!itemUnlocked(c, action.item)) return needsLevelLine(ITEMS[action.item].level);
       return canAfford(c, shopPrice(c, action.item)) ? null : 'No hay suministros suficientes.';
   }
@@ -3020,11 +3026,14 @@ export function squadPads(c: CampaignState): (string | null)[] {
   const max = squadMax(c);
   const out: (string | null)[] = Array.from({ length: max }, () => null);
   const kept = c.pads ?? {};
+  const half = Math.ceil(max / 2);
+  // A kept pad on the other one's half is let go: a rookie handed over by addPlayer, or a squad picked alone across
+  // both halves, stood among the partner's soldiers ever after (Ana, 23/10 #19).
+  const own = (id: string, pad: number) => c.players.length < 2 || (c.soldiers.find((s) => s.id === id)?.owner === c.players[0]) === (pad < half);
   for (const id of c.squad) {
     const pad = kept[id];
-    if (pad !== undefined && pad < max && out[pad] === null) out[pad] = id;
+    if (pad !== undefined && pad < max && out[pad] === null && own(id, pad)) out[pad] = id;
   }
-  const half = Math.ceil(max / 2);
   const all = Array.from({ length: max }, (_, i) => i);
   const left = all.slice(0, half);
   const right = all.slice(half);
@@ -3378,7 +3387,8 @@ function passDay(c: CampaignState, rng: Rng): boolean {
   }
   if (c.day >= c.nextRumorDay) {
     c.nextRumorDay = c.day + 1 + (rng.int(5) >= 2 ? 1 : 0);
-    if (c.rumors.length < MAX_RUMORS) {
+    // Rumours are heard on the radio: none without a Sala de radio (Ana, 23/10 #28).
+    if (c.rumors.length < MAX_RUMORS && hasRadio(c)) {
       newRumor(c, rng);
       stop = true;
     }
@@ -3479,7 +3489,8 @@ function passDay(c: CampaignState, rng: Rng): boolean {
 
   if (c.day >= c.nextEventDay) {
     c.nextEventDay = c.day + 2 + (rng.int(5) >= 3 ? 1 : 0);
-    const id = rng.pick((Object.keys(EVENTS) as Exclude<CampaignEventId, 'quest'>[]).filter((x) => !EVENTS[x].story));
+    // What comes by radio, only with a Sala de radio to hear it (Ana, 23/10 #27).
+    const id = rng.pick((Object.keys(EVENTS) as Exclude<CampaignEventId, 'quest'>[]).filter((x) => !EVENTS[x].story && (!EVENTS[x].radio || hasRadio(c))));
     c.event = id;
     c.seen[id] = (c.seen[id] ?? 0) + 1;
     log(c, `Acontecimiento: ${EVENTS[id].title}.`);

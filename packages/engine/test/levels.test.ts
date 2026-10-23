@@ -31,7 +31,7 @@ import {
   tileIndex,
   unitAt,
 } from '../src/grid';
-import { canSee, floorLevels, floorView, isLit, lightTiles, lineClear, MAX_WINDOWS_SEEN_THROUGH, peekOrigins, sightOf, teamVisibility } from '../src/los';
+import { canSee, floorLevels, floorView, isLit, lightTiles, lineClear, MAX_WINDOWS_SEEN_THROUGH, peekOrigins, sightOf, teamVisibility, WINDOW_SIGHT_REACH } from '../src/los';
 import { MAPS, parseMap } from '../src/maps';
 import { buildPath, COST_CLIMB, COST_DIAG, COST_DROP, COST_ORTHO, COST_VAULT, computeReach, destinations, stepBetween, stepCost, stepsFrom } from '../src/path';
 import { campaignCommandSchema, commandSchema } from '../src/protocol';
@@ -378,7 +378,8 @@ describe('la torre', () => {
  * lineClear as it was before storeys had floors (phase 5, with `storeys`), to
  * hold maps without them against; with the one rule added since, on purpose:
  * through two windows at most, counted where the line goes through them
- * (MAX_WINDOWS_SEEN_THROUGH, playtest 2026-10-14).
+ * (MAX_WINDOWS_SEEN_THROUGH, playtest 2026-10-14), and only those beside
+ * one end of the line (WINDOW_SIGHT_REACH, Ana 23/10 #21).
  */
 function lineClearPhase5(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y) + EYE_HEIGHT, hb = elevAt(s, b.x, b.y) + BODY_HEIGHT): boolean {
   const dx = b.x - a.x;
@@ -419,7 +420,7 @@ function lineClearPhase5(s: GameState, a: Vec2, b: Vec2, ha = elevAt(s, a.x, a.y
     }
     if (x === b.x && y === b.y) return !throughRoof(x, y, hb);
     if (blocks(x, y) || throughRoof(x, y, lineAt(x, y))) return false;
-    if (isWindow(tileAt(s, x, y)) && lineAt(x, y) < elevAt(s, x, y) + 1 && ++windows > MAX_WINDOWS_SEEN_THROUGH) return false;
+    if (isWindow(tileAt(s, x, y)) && lineAt(x, y) < elevAt(s, x, y) + 1 && ((Math.max(Math.abs(x - a.x), Math.abs(y - a.y)) > WINDOW_SIGHT_REACH && Math.max(Math.abs(x - b.x), Math.abs(y - b.y)) > WINDOW_SIGHT_REACH) || ++windows > MAX_WINDOWS_SEEN_THROUGH)) return false;
   }
   return true;
 }
@@ -516,6 +517,9 @@ describe('sight through storeys', () => {
     const s = building();
     expect(lineClear(s, at(12, 3), at(6, 3, 1))).toBe(true);
     expect(lineClear(s, at(6, 3, 1), at(12, 3))).toBe(true);
+    // Further into the room than beside it, from the street: the glass, not through it (Ana, 23/10 #21).
+    expect(lineClear(s, at(12, 3), at(4, 3, 1))).toBe(false);
+    expect(lineClear(s, at(4, 3, 1), at(12, 3))).toBe(false);
     const walled = building();
     walled.levels![0]!.tiles[tileIndex(walled, 7, 3)] = 'wall';
     expect(lineClear(walled, at(12, 3), at(6, 3, 1))).toBe(false);
@@ -534,6 +538,11 @@ describe('sight through storeys', () => {
     const below = addUnit(s, 's2', 'assault', 5, 3);
     expect(canSee(s, sniper, street)).toBe(true);
     expect(canSee(s, street, sniper)).toBe(true);
+    // A step back from the glass, neither (Ana, 23/10 #21).
+    sniper.pos = at(5, 3, 1);
+    expect(canSee(s, sniper, street)).toBe(false);
+    expect(canSee(s, street, sniper)).toBe(false);
+    sniper.pos = at(6, 3, 1);
     expect(canSee(s, sniper, below)).toBe(false);
     expect(canSee(s, below, sniper)).toBe(false);
     // From up there the shot has the height.

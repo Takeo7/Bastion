@@ -4,7 +4,7 @@ import { abilitiesOf } from '../src/abilities';
 import { apPerTurn } from '../src/content';
 import { applyEvent, cloneState, type GameEvent } from '../src/events';
 import { Rng } from '../src/rng';
-import { executeCommand, Sim } from '../src/rules';
+import { executeCommand, Sim, SQUAD_LOUDER } from '../src/rules';
 import {
   barCost,
   barsCost,
@@ -358,7 +358,7 @@ describe('the new actions (docs/FASE10.md §4)', () => {
     expect(z.hp).toBe(4);
     expect(u.ap).toBe(1);
     const noise = r.events.find((e) => e.t === 'noise') as { tile: { x: number; y: number }; radius: number } | undefined;
-    expect(noise).toMatchObject({ tile: { x: 8, y: 2 }, radius: 8 });
+    expect(noise).toMatchObject({ tile: { x: 8, y: 2 }, radius: Math.round(8 * SQUAD_LOUDER * 10) / 10 });
     expect(far.alive).toBe(true);
     expect(u.deeds).toEqual({ throw: 1, throwHit: 1 });
   });
@@ -371,7 +371,7 @@ describe('the new actions (docs/FASE10.md §4)', () => {
     const r = executeCommand(s, { type: 'ability', unit: 's1', ability: 'stone', tile: { x: 6, y: 6 } }, ctx());
     if (!r.ok) throw new Error(r.error);
     expect(r.events.find((e) => e.t === 'stoneThrown')).toMatchObject({ hit: null });
-    expect(r.events.find((e) => e.t === 'noise')).toMatchObject({ radius: 12 });
+    expect(r.events.find((e) => e.t === 'noise')).toMatchObject({ radius: Math.round(12 * SQUAD_LOUDER * 10) / 10 });
     expect(u.deeds).toEqual({ throw: 1 });
     const t = field();
     addUnit(t, 's1', 'rookie', 2, 2, { owner: 0, ...armed, mods: st.mods });

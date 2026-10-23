@@ -45,7 +45,7 @@ import { armedTiles, BASE_EDGE, bastionFootprint, bastionLot, FELL_COST, fellBlo
 import { abilitiesOf } from '../src/abilities';
 import { defaultAppearance } from '../src/appearance';
 import { sexOfName } from '../src/content';
-import { bastionLevel } from '../src/progression';
+import { bastionLevel, levelUnlocks } from '../src/progression';
 import { Rng } from '../src/rng';
 import { totalBars } from '../src/skills';
 import { createMission } from '../src/setup';
@@ -90,8 +90,9 @@ describe('the base on the map (docs/FASE12.md §11)', () => {
     // Straight after the first mission, and small (Ana and Arturo, 22/10).
     expect(SIEGE_FIRST_IN).toBe(1);
     expect(SIEGE_OPENING).toBeLessThan(SIEGE_FIRST);
-    expect(c.siege.sides.length).toBeGreaterThanOrEqual(1);
-    expect(c.siege.sides.length).toBeLessThanOrEqual(3);
+    // From three sides or all four (Ana, 23/10).
+    expect(c.siege.sides.length).toBeGreaterThanOrEqual(3);
+    expect(c.siege.sides.length).toBeLessThanOrEqual(4);
     // Without a Sala de radio, only when.
     expect(siegeHeard(c)).toEqual({ in: SIEGE_FIRST_IN });
   });
@@ -654,6 +655,12 @@ describe('equipment', () => {
     expect(itemsFree(c, 'smokeGrenade')).toBe(0);
     c.inventory.apRounds = 1;
     expect(() => run(c, { type: 'equip', soldier: mine.id, slot: 'ammo', item: 'apRounds' }, 0, both)).toThrow(/cinturón/);
+    // Nor are they sold, nor listed among what a level brings (UI, 23/10: they stood «new» for ever).
+    c.level = 4;
+    expect(() => run(c, { type: 'buy', item: 'tracerRounds' }, 0, both)).toThrow(/Taller/);
+    expect(levelUnlocks(2)).toContain('Granada aturdidora');
+    expect(levelUnlocks(2)).not.toContain('Munición trazadora');
+    expect(levelUnlocks(4)).not.toContain('Munición perforante');
   });
 
   it('equipment reaches the battlefield and is lost with its bearer', () => {

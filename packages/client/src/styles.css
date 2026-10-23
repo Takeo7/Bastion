@@ -1990,6 +1990,93 @@ em.whose {
   cursor: var(--cursor-hot);
 }
 
+/* A siege's compass (#34): a small dial under the objective, turned with the camera (--turn), its letters upright. */
+.hud .compass {
+  position: relative;
+  width: 66px;
+  height: 66px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.hud .compass.hidden {
+  display: none;
+}
+
+.compass-rose {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  transform: rotate(var(--turn, 0rad));
+}
+
+/* A needle from the middle to the north. */
+.compass-needle {
+  position: absolute;
+  left: calc(50% - 2px);
+  top: 16px;
+  width: 4px;
+  height: 12px;
+  background: var(--t-accent, #f2c230);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.compass-dir {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--t-text, #eef0ea);
+  transform: rotate(calc(-1 * var(--turn, 0rad)));
+}
+
+.compass-dir.n {
+  left: 50%;
+  top: 8px;
+  color: var(--t-accent, #f2c230);
+}
+
+.compass-dir.e {
+  left: calc(100% - 8px);
+  top: 50%;
+}
+
+.compass-dir.s {
+  left: 50%;
+  top: calc(100% - 8px);
+}
+
+.compass-dir.o {
+  left: 8px;
+  top: 50%;
+}
+
+/* The next wave's sides (with the Sala de radio). */
+.compass-dir.hot {
+  color: #ff6b5a;
+  animation: compass-hot 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes compass-hot {
+  to {
+    text-shadow: 0 0 8px rgba(255, 107, 90, 0.95);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compass-dir.hot {
+    animation: none;
+  }
+}
+
 .goal-dock.waiting {
   opacity: 0;
   visibility: hidden;

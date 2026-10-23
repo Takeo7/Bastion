@@ -93,9 +93,10 @@ describe('the base as a battlefield', () => {
     expect(holds.filter(([, hp]) => hp === SIEGE.door)).toHaveLength(13);
     expect(holds.filter(([, hp]) => hp === SIEGE.barricade)).toHaveLength(12);
     for (const [node] of holds) expect(['door', 'low']).toContain(s.tiles[Number(node)]);
-    // Five waves, in groups of five at most, each group by a side at random (Arturo, 18/10: from every front).
+    // Five waves that overlap, each over several sides at once (Ana, 23/10: from every side and together).
     const waves = s.mission.reinforcements;
-    expect([...new Set(waves.map((r) => r.turn))]).toEqual([1, 3, 5, 7, 9]);
+    expect([...new Set(waves.map((r) => r.turn))]).toEqual([1, 2, 3, 5, 6]);
+    for (const turn of [2, 3, 5, 6]) expect(new Set(waves.filter((r) => r.turn === turn).map((r) => r.side)).size).toBeGreaterThan(1);
     for (const r of waves) {
       expect(r.horde).toBe(true);
       expect(r.units.length).toBeLessThanOrEqual(5);
@@ -258,15 +259,14 @@ describe('how a siege ends', () => {
     expect([s.outcome, s.outcomeReason]).toEqual(['defeat', 'wiped']);
   });
 
-  it('held through its last enemy turn, or every wave in and down, the base stands', () => {
+  it('the base stands only once every wave is in and down, never after a set turn (Ana, 23/10)', () => {
     const s = yard();
     s.mission.reinforcements = [{ id: 'r1', turn: 20, pos: null, units: ['zombie'], landed: false, horde: true, side: 0 }];
     addUnit(s, 's1', 'rookie', 4, 3);
     s.turn = SIEGE.hold - 1;
     sim(s).runAlienTurn();
-    expect(s.outcome).toBeNull();
     sim(s).runAlienTurn();
-    expect([s.outcome, s.outcomeReason]).toEqual(['victory', 'objective']);
+    expect(s.outcome).toBeNull();
 
     const t = yard();
     t.mission.reinforcements = [{ id: 'r1', turn: 1, pos: null, units: ['zombie'], landed: true, horde: true, side: 0 }];

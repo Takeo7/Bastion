@@ -170,6 +170,8 @@ export type GameEvent =
    * any of the living; null: it has forgotten them.
    */
   | { t: 'hunting'; unit: string; target: string | null; missed: number }
+  /** An enemy turns where it stands to face `facing` (radians, Unit.facing): a pod woken by a soldier, the dead looking round. */
+  | { t: 'turned'; unit: string; facing: number }
   /** A soldier searched the furniture on `tile`; `loot` went into the backpack (null: nothing). */
   | { t: 'searched'; unit: string; tile: Pos; loot: Loot | null }
   /** A room searched, by its id (loot.ts roomAt; docs/FASE8.md §B); what it turned up, as `searched`. */
@@ -725,6 +727,9 @@ export function applyEvent(s: GameState, e: GameEvent): void {
       break;
     case 'hunting':
       unit(s, e.unit).hunting = e.target ? { id: e.target, missed: e.missed } : null;
+      break;
+    case 'turned':
+      unit(s, e.unit).facing = e.facing;
       break;
     case 'searched': {
       (s.searched ??= []).push(nodeOf(s, e.tile));
