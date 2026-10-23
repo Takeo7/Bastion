@@ -3,8 +3,20 @@ import * as THREE from 'three';
 const PITCH = THREE.MathUtils.degToRad(52);
 const MIN_DISTANCE = 9;
 const MAX_DISTANCE = 42;
-/** How quickly it goes into the shot over the shoulder and back out (per second, eased). */
-const CLOSE_RATE = 4;
+/**
+ * Seconds into the shot over the shoulder and back out, and from one such shot to another (Arturo, 23/10 #5: «más
+ * suaves»): each eased at both ends, never a cut.
+ */
+const CLOSE_IN = 0.8;
+const CLOSE_OUT = 0.9;
+const CLOSE_SWAP = 0.7;
+/**
+ * The camera sent somewhere (focus, a cinematic's zoom) gets there on a critically damped spring: it sets off gently,
+ * slows down before it arrives and never overshoots (#5: no jumps nor lurches). The player's own panning and zoom keep
+ * the quick follow they had.
+ */
+const SPRING = 5.5;
+const smoother = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 
 /**
  * XCOM-style tactical camera: fixed pitch, yaw in 90° steps (Q/E),
@@ -29,9 +41,17 @@ export class CameraRig {
   private readonly keys = new Set<string>();
   /** The shot over a shoulder, where it stands and what it looks at; kept while the camera goes back out of it. */
   private close: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
+  /** The shot it was in when another came (closeShot over closeShot), blended away over CLOSE_SWAP. */
+  private closeFrom: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
+  private swap = 1;
   private closeOn = false;
-  /** How far into it: 0 the rig's own view, 1 the shot (eased both ways). */
+  /** How far into it: 0 the rig's own view, 1 the shot (time-based; eased both ways where it is used). */
   private closeness = 0;
+  /** Sent there (focus, cinematicZoom), not moved by the player: the spring takes it (SPRING). */
+  private springing = false;
+  private zoomSpring = false;
+  private readonly targetVel = new THREE.Vector3();
+  private distanceVel = 0;
   private bounds = new THREE.Box2(new THREE.Vector2(0, 0), new THREE.Vector2(30, 30));
 
   /** `enabled`: whether the keys move it now (the base's clearing, strategy/clearing.ts, only while it is shown). */
@@ -81,6 +101,8 @@ export class CameraRig {
     this.takenAt = performance.now();
     this.savedDistance = null;
     this.closeOn = false;
+    this.springing = false;
+    this.targetVel.set(0, 0, 0);
   }
 
   /**
@@ -89,8 +111,20 @@ export class CameraRig {
    * `endCloseShot` (or the player taking the camera) goes back to it.
    */
   closeShot(pos: THREE.Vector3, look: THREE.Vector3): void {
+    // Already in one (another target, the body fallen): from where it is now to the new one, not a cut.
+    if (this.close && this.closeness > 0.05) this.closeFrom = this.shownClose();
+    else this.closeFrom = null;
+    this.swap = this.closeFrom ? 0 : 1;
     this.close = { pos: pos.clone(), look: look.clone() };
     this.closeOn = true;
+  }
+
+  /** The shot over the shoulder as shown now: between the last one and the new while they swap. */
+  private shownClose(): { pos: THREE.Vector3; look: THREE.Vector3 } {
+    const to = this.close!;
+    if (!this.closeFrom || this.swap >= 1) return { pos: to.pos.clone(), look: to.look.clone() };
+    const k = smoother(this.swap);
+    return { pos: this.closeFrom.pos.clone().lerp(to.pos, k), look: this.closeFrom.look.clone().lerp(to.look, k) };
   }
 
   endCloseShot(): void {
@@ -114,7 +148,11 @@ export class CameraRig {
   focus(p: THREE.Vector3, instant = false): void {
     this.desiredTarget.set(p.x, Math.max(0, p.y), p.z);
     this.clampTarget();
-    if (instant) this.target.copy(this.desiredTarget);
+    this.springing = !instant;
+    if (instant) {
+      this.target.copy(this.desiredTarget);
+      this.targetVel.set(0, 0, 0);
+    }
   }
 
   rotate(dir: number): void {
@@ -129,17 +167,21 @@ export class CameraRig {
 
   zoom(deltaY: number): void {
     this.savedDistance = null;
+    this.zoomSpring = false;
+    this.distanceVel = 0;
     this.desiredDistance = THREE.MathUtils.clamp(this.desiredDistance * (1 + deltaY * 0.001), MIN_DISTANCE, MAX_DISTANCE);
   }
 
   /** Temporarily moves closer for an action shot; `restoreZoom` goes back. */
   cinematicZoom(distance: number): void {
+    this.zoomSpring = true;
     if (this.savedDistance === null) this.savedDistance = this.desiredDistance;
     this.desiredDistance = THREE.MathUtils.clamp(Math.min(distance, this.savedDistance), MIN_DISTANCE, MAX_DISTANCE);
   }
 
   restoreZoom(): void {
     if (this.savedDistance === null) return;
+    this.zoomSpring = true;
     this.desiredDistance = this.savedDistance;
     this.savedDistance = null;
   }
@@ -157,6 +199,8 @@ export class CameraRig {
   }
 
   private pan(right: number, forward: number): void {
+    this.springing = false;
+    this.targetVel.set(0, 0, 0);
     const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     const rgt = new THREE.Vector3(-fwd.z, 0, fwd.x);
     this.desiredTarget.addScaledVector(rgt, right).addScaledVector(fwd, forward);
@@ -182,9 +226,30 @@ export class CameraRig {
     }
 
     const k = 1 - Math.exp(-dt * 7);
-    this.target.lerp(this.desiredTarget, k);
+    // Sent somewhere: on the spring, in small steps so it stays steady at a low frame rate. The player's: as before.
+    if (this.springing) {
+      const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
+      const h = dt / steps;
+      const d = new THREE.Vector3();
+      for (let i = 0; i < steps; i++) {
+        d.subVectors(this.desiredTarget, this.target).multiplyScalar(SPRING * SPRING).addScaledVector(this.targetVel, -2 * SPRING);
+        this.targetVel.addScaledVector(d, h);
+        this.target.addScaledVector(this.targetVel, h);
+      }
+      if (this.target.distanceTo(this.desiredTarget) < 0.005 && this.targetVel.lengthSq() < 1e-4) {
+        this.target.copy(this.desiredTarget);
+        this.targetVel.set(0, 0, 0);
+      }
+    } else this.target.lerp(this.desiredTarget, k);
     this.yaw += (this.desiredYaw - this.yaw) * k;
-    this.distance += (this.desiredDistance - this.distance) * k;
+    if (this.zoomSpring) {
+      const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
+      const h = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        this.distanceVel += (SPRING * SPRING * (this.desiredDistance - this.distance) - 2 * SPRING * this.distanceVel) * h;
+        this.distance += this.distanceVel * h;
+      }
+    } else this.distance += (this.desiredDistance - this.distance) * k;
 
     const horizontal = Math.cos(PITCH) * this.distance;
     this.camera.position.set(
@@ -192,15 +257,19 @@ export class CameraRig {
       Math.sin(PITCH) * this.distance,
       this.target.z + Math.cos(this.yaw) * horizontal,
     );
-    // Into the shot over a shoulder, or back out of it: between the two views, eased.
-    this.closeness += ((this.closeOn ? 1 : 0) - this.closeness) * (1 - Math.exp(-dt * CLOSE_RATE));
-    if (this.closeOn || this.closeness > 0.002) {
-      const w = THREE.MathUtils.smoothstep(this.closeness, 0, 1);
-      this.camera.position.lerp(this.close!.pos, w);
-      this.camera.lookAt(this.target.clone().lerp(this.close!.look, w));
+    // Into the shot over a shoulder, or back out of it: between the two views, over a set time, eased at both ends;
+    // and from one such shot to the next the same way.
+    this.closeness = this.closeOn ? Math.min(1, this.closeness + dt / CLOSE_IN) : Math.max(0, this.closeness - dt / CLOSE_OUT);
+    if (this.swap < 1) this.swap = Math.min(1, this.swap + dt / CLOSE_SWAP);
+    if (this.close && (this.closeOn || this.closeness > 0)) {
+      const w = smoother(this.closeness);
+      const shot = this.shownClose();
+      this.camera.position.lerp(shot.pos, w);
+      this.camera.lookAt(this.target.clone().lerp(shot.look, w));
     } else {
       this.closeness = 0;
       this.close = null;
+      this.closeFrom = null;
       this.camera.lookAt(this.target);
     }
 

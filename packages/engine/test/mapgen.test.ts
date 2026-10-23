@@ -503,3 +503,23 @@ describe('mission timers', () => {
     expect(plaza.mission.turnsLeft).toBe(MISSION_TURNS.recovery);
   });
 });
+
+describe('doors (playtest 23/10 #11)', () => {
+  it('no leaf of a double door on a building corner, where the wall that turns meets it', () => {
+    for (const biome of ['city', 'wilds', 'facility'] as const) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const m = createMission({ map: { kind: 'generated', biome, seed }, slots: [0], rng: new Rng(seed), kind: 'elimination' });
+        const k = (x: number, y: number) => m.tiles[y * m.width + x];
+        const door = (x: number, y: number) => k(x, y) === 'door';
+        const solid = (x: number, y: number) => k(x, y) === 'wall' || k(x, y) === 'window' || k(x, y) === 'windowBroken';
+        for (let y = 1; y < m.height - 1; y++) {
+          for (let x = 1; x < m.width - 1; x++) {
+            if (!door(x, y)) continue;
+            expect((door(x - 1, y) || door(x + 1, y)) && (solid(x, y - 1) || solid(x, y + 1)), `${biome}/${seed} ${x},${y}`).toBe(false);
+            expect((door(x, y - 1) || door(x, y + 1)) && (solid(x - 1, y) || solid(x + 1, y)), `${biome}/${seed} ${x},${y}`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+});

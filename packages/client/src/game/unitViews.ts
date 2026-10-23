@@ -53,6 +53,12 @@ const CLOSE_GAP = 0.3;
 const CLOSE_BACK = 0.3;
 /** How far to one side of a tile's middle a walker goes by another there (walkPlan.ts passes), in tiles. */
 const SWERVE = 0.24;
+/**
+ * Plain steps one after another are walked as one way (playtest 23/10 #6: a jolt at every tile, and a sharp turn at
+ * each corner): its corners rounded off within this of the tile's middle (tiles), sampled this many times round.
+ */
+const WALK_ROUND = 0.38;
+const WALK_ROUND_STEPS = 8;
 /** Real time (rtStep): how long one stands still after a step before easing to a stand (s: the host's tick is 0.1 s). */
 const RT_LINGER = 0.15;
 /** Real time: a step this much quicker than its trot (of its seconds) is run. */
@@ -178,6 +184,8 @@ interface UnitView {
   aims: number;
   /** On guard with the blade (Vigilancia cuerpo a cuerpo: Unit.watchMelee), as last shown. */
   guard: boolean;
+  /** Aimed at a target being picked (aimAt: 23/10 #3), or on guard towards it with a blade: where, and which. */
+  aiming: { at: THREE.Vector3; melee: boolean; sidearm: boolean } | null;
   /** Real time (rtStep): its steps keep clear of whoever they go by, and it stands only a while after the last. */
   rt: boolean;
   /** Real time: its aim as rtDoing raised it (raiseWeapon's number), 0 none. */
@@ -238,6 +246,63 @@ function wrapAngle(a: number): number {
   return Math.atan2(Math.sin(a), Math.cos(a));
 }
 
+/**
+ * A walk's way through `points` (where it is, then the tiles' middles) with each corner rounded off within WALK_ROUND
+ * of it (a quadratic curve through the corner's tile), sampled: the samples, how far along each is, and how far
+ * along each point after the first is passed (its corner's middle).
+ */
+interface Way {
+  samples: THREE.Vector3[];
+  along: number[];
+  marks: number[];
+  length: number;
+}
+
+function roundedWay(points: readonly THREE.Vector3[]): Way {
+  const samples = [points[0]!.clone()];
+  const marks: number[] = [];
+  const flat = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(b.x - a.x, b.z - a.z);
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    const c = points[i + 1];
+    const inner = flat(a, b);
+    const outer = c ? flat(b, c) : 0;
+    const r = c ? Math.min(WALK_ROUND, inner / 2, outer / 2) : 0;
+    if (r < 1e-3) {
+      samples.push(b.clone());
+      marks.push(samples.length - 1);
+      continue;
+    }
+    const p0 = b.clone().lerp(a, r / inner);
+    const p2 = b.clone().lerp(c!, r / outer);
+    samples.push(p0);
+    for (let j = 1; j <= WALK_ROUND_STEPS; j++) {
+      const t = j / WALK_ROUND_STEPS;
+      samples.push(p0.clone().multiplyScalar((1 - t) ** 2).addScaledVector(b, 2 * t * (1 - t)).addScaledVector(p2, t * t));
+      if (j === WALK_ROUND_STEPS / 2) marks.push(samples.length - 1);
+    }
+  }
+  const along = [0];
+  for (let k = 1; k < samples.length; k++) along.push(along[k - 1]! + flat(samples[k - 1]!, samples[k]!));
+  return { samples, along, marks: marks.map((k) => along[k]!), length: along[along.length - 1]! };
+}
+
+/** Where along `way`, `d` from its start, into `at`; the way it heads there into `heading`. */
+function onWay(way: Way, d: number, at: THREE.Vector3, heading: THREE.Vector3): void {
+  const { samples, along } = way;
+  let lo = 0;
+  let hi = along.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (along[mid]! <= d) lo = mid;
+    else hi = mid;
+  }
+  const span = along[hi]! - along[lo]!;
+  at.lerpVectors(samples[lo]!, samples[hi]!, span > 1e-6 ? THREE.MathUtils.clamp((d - along[lo]!) / span, 0, 1) : 1);
+  heading.subVectors(samples[hi]!, samples[lo]!);
+}
+
 /** A model's yaw (atan2(dx, dz), a model looks along +z) for the engine's Unit.facing (atan2(dy, dx) in tiles; y is +z). */
 function yawOf(facing: number): number {
   return wrapAngle(Math.PI / 2 - facing);
@@ -276,6 +341,8 @@ export class UnitViews {
   private readonly feeding = new Map<string, { victim: string; home: THREE.Vector3 }>();
   /** The dead holding one of ours by the teeth (lunge's bite): where it struck from, until it feeds or lets go. */
   private readonly biting = new Map<string, THREE.Vector3>();
+  /** Whose turn the state last shown was: the enemy's ending, those eating get up (standUpFed). */
+  private turnOf: GameState['activeTeam'] | null = null;
   /** The bodies' clock: it runs at the battle's speed (tween.ts timeRate), so clips and sways keep pace with the tweens. */
   private bodyTime = 0;
 
@@ -362,7 +429,7 @@ export class UnitViews {
 
     const view: UnitView = {
       id: u.id, rig, ring, flag, flagEl, pose, animating: false, dead: !u.alive && !u.evacuated && !u.lost, shadow: true, body: '', tag: '',
-      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, rt: false, rtAim: 0, rtGen: 0, rtLow: false, rtBusyGen: 0, synced: false,
+      place: { ...u.pos }, cut: false, template: u.template, blow: null, fell: null, arms: armsKey(u), walk: null, walks: 0, aims: 0, guard: false, aiming: null, rt: false, rtAim: 0, rtGen: 0, rtLow: false, rtBusyGen: 0, synced: false,
     };
     this.views.set(u.id, view);
     // Left outside when La Mula went (sync): standing, not dead.
@@ -382,6 +449,9 @@ export class UnitViews {
   /** Brings flags, visibility, persistent poses and idle positions in line with the shown state. */
   sync(s: GameState, visibleAliens: Set<string>, coverOf: (u: Unit) => 0 | 1 | 2 | null): void {
     this.shown = s;
+    // The enemy's turn over: those eating ours get up (playtest 23/10 #4: they ate on into the squad's turn).
+    if (this.turnOf === 'alien' && s.activeTeam !== 'alien') void this.standUpFed();
+    this.turnOf = s.activeTeam;
     const carrier = s.mission.item?.carrier ?? null;
     for (const u of s.units) {
       const v = this.views.get(u.id) ?? this.create(u);
@@ -864,6 +934,14 @@ export class UnitViews {
         const from = pos.clone();
         const to = this.standAt(step);
         const { kind, seconds } = this.stepOf(v.place, step, gait);
+        if (kind === 'flat' && !v.rt) {
+          // Plain steps, as many as follow with no wait among them: one way (walkRun).
+          let m = k + 1;
+          while (m < path.length && (waits?.[m] ?? 0) <= 0.02 && this.stepOf(path[m - 1]!, path[m]!, gait).kind === 'flat') m++;
+          await this.walkRun(v, path.slice(k, m), swerves?.slice(k, m), gait, onStep);
+          k = m - 1;
+          continue;
+        }
         this.face(id, to);
         const rise = to.y - from.y;
         if (kind === 'stairs') {
@@ -953,6 +1031,42 @@ export class UnitViews {
         }),
       );
     }
+  }
+
+  /**
+   * Plain steps one after another walked as one way (playtest 23/10 #6): through the tiles' middles (to one side
+   * where it goes by another: swerves), the corners rounded (roundedWay), at the gait's one speed all along (a
+   * diagonal is as fast as a straight step), facing where it heads; its place moves on (and onStep) as it goes by
+   * each tile.
+   */
+  private async walkRun(v: UnitView, steps: readonly Place[], swerves: readonly (THREE.Vector3 | null)[] | undefined, gait: Gait, onStep?: (p: THREE.Vector3) => void): Promise<void> {
+    const pos = v.rig.root.position;
+    const way = roundedWay([pos.clone(), ...steps.map((s, i) => {
+      const at = this.standAt(s);
+      const swerve = swerves?.[i];
+      return swerve ? at.add(swerve) : at;
+    })]);
+    const heading = new THREE.Vector3();
+    let passed = 0;
+    const pass = (d: number) => {
+      while (passed < steps.length && d >= way.marks[passed]! - 1e-6) {
+        v.place = { ...steps[passed]! };
+        onStep?.(pos);
+        passed++;
+      }
+    };
+    await tween(way.length * gait.seconds, (t) => {
+      // Fallen mid-way (real time): where it fell.
+      if (v.fell) return;
+      const d = t * way.length;
+      onWay(way, d, pos, heading);
+      if (heading.x || heading.z) {
+        v.pose.yawTarget = Math.atan2(heading.x, heading.z);
+        v.pose.turn = TURN;
+      }
+      pass(d);
+    });
+    pass(Infinity);
   }
 
   /**
@@ -1214,13 +1328,54 @@ export class UnitViews {
     const v = this.views.get(id);
     if (!v) return 0;
     const aim = ++v.aims;
+    // Already aimed while the target was picked (aimAt): the shot goes on from there, the gun not lowered first.
+    v.aiming = null;
     this.face(id, target);
     if (isFigure(v.rig)) v.rig.draw?.(sidearm ? 'sidearm' : 'weapon');
     this.struck(target, v.rig.root.position, false);
     // How close it is: at point blank the figure pulls a long gun back (syntyFigures.ts holdWeapon).
     v.pose.close = Math.hypot(target.x - v.rig.root.position.x, target.z - v.rig.root.position.z);
-    await tween(0.28, (t) => (v.pose.aimFx = easeInOut(t)));
+    const from = v.pose.aimFx;
+    if (from < 0.99) await tween(0.28 * (1 - from), (t) => (v.pose.aimFx = from + (1 - from) * easeInOut(t)));
+    v.pose.aimFx = 1;
     return aim;
+  }
+
+  /**
+   * Aimed at `at` while its target is picked (playtest 23/10 #3: over the shoulder it stood at rest): turned to it,
+   * the gun up (`sidearm`, the pistol beside a main gun: the shot picked is firesSidearm's); `melee`, the blade drawn
+   * and on guard towards it (GUARD_AIM). Null: back to how it stands. The same again changes nothing; another target,
+   * it turns to it with the gun kept up. A shot then goes on from the aim (raiseWeapon), with no call to lower it first.
+   */
+  aimAt(id: string, at: THREE.Vector3 | null, melee: boolean, sidearm = false): void {
+    const v = this.views.get(id);
+    if (!v || v.dead) return;
+    const was = v.aiming;
+    if (!at) {
+      if (!was) return;
+      v.aiming = null;
+      const own = ++v.aims;
+      const from = v.pose.aimFx;
+      void tween(0.3, (t) => {
+        if (v.aims === own) v.pose.aimFx = from * (1 - easeInOut(t));
+      }).then(() => {
+        if (v.aims !== own) return;
+        v.pose.close = 0;
+        if (isFigure(v.rig)) v.rig.draw?.(v.guard ? 'belt' : 'weapon');
+      });
+      return;
+    }
+    if (was && was.melee === melee && was.sidearm === sidearm && was.at.distanceToSquared(at) < 1e-4) return;
+    v.aiming = { at: at.clone(), melee, sidearm };
+    const own = ++v.aims;
+    this.face(id, at);
+    if (isFigure(v.rig)) v.rig.draw?.(melee ? 'belt' : sidearm ? 'sidearm' : 'weapon');
+    v.pose.close = melee ? 0 : Math.hypot(at.x - v.rig.root.position.x, at.z - v.rig.root.position.z);
+    const from = v.pose.aimFx;
+    const to = melee ? GUARD_AIM : 1;
+    void tween(0.3 * Math.min(1, Math.abs(to - from) + 0.2), (t) => {
+      if (v.aims === own) v.pose.aimFx = from + (to - from) * easeInOut(t);
+    });
   }
 
   /**
@@ -1564,7 +1719,7 @@ export class UnitViews {
   /**
    * One of the dead at the body of one of ours it has just killed (canFeed; with the victim's die): it lets go as the
    * body falls, goes down with it onto its knees over the chest and eats. Resolves once seen eating (FEED_SEEN); it
-   * eats on until its next move (unfeed), or until the body gets up or goes.
+   * eats on to the end of the enemy's turn (standUpFed) or its next move (unfeed), or until the body gets up or goes.
    */
   async feed(id: string, victim: string): Promise<void> {
     const v = this.views.get(id);
@@ -1609,6 +1764,14 @@ export class UnitViews {
     feed('eat');
     this.feeding.set(id, { victim, home });
     await wait(FEED_SEEN);
+  }
+
+  /**
+   * Everyone eating a body (feed) up and back where it went from: as the enemy's turn ends (sync does it by itself;
+   * the game may wait for it). Resolves once they are up.
+   */
+  async standUpFed(): Promise<void> {
+    await Promise.all([...this.feeding.keys()].map((id) => this.unfeed(id)));
   }
 
   /** Up from a body it was eating (feed), back to where it went to it from, before whatever it does next. */

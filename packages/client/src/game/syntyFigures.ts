@@ -274,8 +274,13 @@ const SWING_STEP = Math.PI / 30;
 const SWING_MAX = Math.PI / 2;
 const SPREAD_STEP = Math.PI / 45;
 const SPREAD_MAX = Math.PI / 4;
-/** The pistol at rest by the thigh, its arm turned out at most this far to keep it out of the thigh (spreadPistol). */
+/**
+ * The pistol at rest by the thigh, its arm turned out at most this far to keep it out of the thigh (spreadPistol); and
+ * back in only where it would be this far clear (23/10 #1: on the edge it went out and in again pose after pose, 124
+ * times in 9 s: the hand shook).
+ */
 const PISTOL_SPREAD_MAX = Math.PI / 9;
+const PISTOL_BACK_CLEAR = 0.01;
 /** How fast the body turns to bring an aimed barrel round to where it faces (aimTurn), a second. */
 const AIM_TURN_EASE = 10;
 const CLEAR_EASE = 12;
@@ -304,6 +309,14 @@ const CROUCH_AHEAD = 0.05;
 const BLADE_CROUCH_LIFT = 0.25;
 const BLADE_CROUCH_AHEAD = 0.22;
 const BLADE_CROUCH_LEVEL = 1.85;
+/**
+ * On guard (raised part way: unitViews GUARD_AIM), the blade's tip up, the hand a little higher and out to the side,
+ * so it reads beside the head from over the shoulder (23/10 #3: level ahead, the hand hid it); none of it at rest or
+ * in the blow itself (aim 0 and 1): radians, m, and a share of the hand's way out.
+ */
+const BLADE_GUARD_TIP = 0.6;
+const BLADE_GUARD_UP = 0.06;
+const BLADE_GUARD_OUT = 0.12;
 /**
  * A support arm that can't be got out of the body on the weapon however its elbow swings (a thick vest's armhole at
  * low ready, playtest 20/10 #1): it lets go and hangs at its side, the weapon in the right hand; back on it once it
@@ -556,12 +569,19 @@ const iq = new THREE.Quaternion();
 const e1 = new THREE.Euler();
 const m1 = new THREE.Matrix4();
 /**
- * The pistol at rest (direct; Arturo, 22/10 #3: not both arms out at the ready while nobody aims): the end of its clip
- * (pistolRest: aimed, then lowered to the holster's idle), the pistol in the right hand by the thigh, the left arm
- * free; eased forth and back over that stretch (seconds into it), a breath. (From 5.8 s: before it the hand is still
- * coming down, 7 cm in 0.3 s, and going back over it the arm hopped every 3.4 s: 22/10 #8, measured on our bodies.)
+ * The pistol at rest (direct; Arturo, 22/10 #3: not both arms out at the ready while nobody aims): the gun arm alone as
+ * its clip has it this far in (pistolRest: aimed, then lowered to the holster's idle), the pistol in the right hand by
+ * the thigh; the rest of the body waits as it would without it, in its own way (PISTOL_RESTS). (23/10 #1: the whole
+ * upper body eased forth and back over 5.8 to 7 s of the clip bobbed the head 5 cm every 1.2 s, the same for all.)
  */
-const PISTOL_REST = { from: 5.8, to: 7.0 };
+const PISTOL_HOLD = 6.4;
+/**
+ * How a soldier waits with the pistol (23/10 #1: one way for them all, as the rifle had: RIFLE_RESTS), by its way of
+ * waiting with a rifle (restAs, Spec.rest), so a row's neighbours differ, and at ease always (Arturo: squared up read
+ * as about to fight): the plain idle and its looks round and shifts of weight; the left hand on the hip; thinking, the
+ * left hand to the chin. A stance of its own (slumped, wounded) goes first.
+ */
+const PISTOL_RESTS: readonly (Stance | null)[] = [null, 'handsOnHips', 'thoughtfulL'];
 /**
  * The throws' clips (direct), timed to the game's: the clip's moment the hand lets go (`release`, measured on it) at
  * the game's (`lets`, seconds into the throw: unitViews throwMotion, tossStone), `rate` times as fast; over by `end`.
@@ -943,7 +963,7 @@ export class SyntyFigure implements FigureRig {
    * A weapon's action from Mixamo (ACTIONS) over the clips, `time` seconds in, taking `share` of the body, whole or
    * (`upper`) from the spine up; `raw`, with the procedural layers off (the weapons lab's look at a clip alone).
    */
-  action: { id: ActionId; time: number; share: number; upper: boolean | 'free'; raw?: boolean } | null = null;
+  action: { id: ActionId; time: number; share: number; upper: ActionPlay['upper']; raw?: boolean } | null = null;
   /** The weapon's actions playing this pose (direct), how much of the arms are theirs (over 0.5, all), and their clock. */
   private readonly plays: ActionPlay[] = [];
   private clipped = 0;
@@ -985,6 +1005,8 @@ export class SyntyFigure implements FigureRig {
   cutAway = false;
   /** The stance it stands in (STANCE_ORDER), −1 the plain idle. */
   private stance = -1;
+  /** The stance the clips were last told (standing). */
+  private stood = -1;
   /** The death it plays (DEATHS[build]), the seconds it takes and how far it is drawn in (model space: a cramped death); null standing. */
   private death: { k: number; seconds: number; tuck: { x: number; z: number } } | null = null;
   /** A death asked for before the clips loaded: taken once they have, the body lying. */
@@ -1083,7 +1105,7 @@ export class SyntyFigure implements FigureRig {
   /** Its clips' driver, standing as it should. */
   private driver(set: AnimSet): AnimDriver {
     const a = new AnimDriver(set, Math.random());
-    a.setStance(this.stance, true);
+    a.setStance((this.stood = this.standing()), true);
     this.campDirty = true;
     return a;
   }
@@ -1117,7 +1139,7 @@ export class SyntyFigure implements FigureRig {
     const clips = feedClips(this.build);
     if (!a || !clips) return 0;
     // (Its stance, the dead's sway, takes the idle's place as the clips would: none while at it.)
-    a.setStance(phase && phase !== 'up' ? -1 : this.stance);
+    a.setStance((this.stood = this.standing()));
     if (phase === 'eat') {
       // Into the loop as the move down ends (it is where that leaves the body).
       a.campLoop(clips.loop, true);
@@ -1207,7 +1229,16 @@ export class SyntyFigure implements FigureRig {
 
   setStance(stance: Stance | null): void {
     this.stance = stance ? STANCE_ORDER.indexOf(stance) : -1;
-    this.anim?.setStance(this.stance);
+    this.stood = this.standing();
+    this.anim?.setStance(this.stood);
+  }
+
+  /** The stance it stands in (STANCE_ORDER; −1 the plain idle): its own, else its way of waiting with the pistol (PISTOL_RESTS); none feeding. */
+  private standing(): number {
+    if (this.feedPhase && this.feedPhase !== 'up') return -1;
+    if (this.stance >= 0 || !this.armed || !this.pistol || this.melee || this.spec.dead) return this.stance;
+    const way = PISTOL_RESTS[Math.max(0, (RIFLE_RESTS as readonly ActionId[]).indexOf(this.restId ?? this.spec.rest ?? RIFLE_RESTS[0]))];
+    return way ? STANCE_ORDER.indexOf(way) : -1;
   }
 
   gesture(g: Gesture): boolean {
@@ -2170,7 +2201,11 @@ export class SyntyFigure implements FigureRig {
     // A corpse stays as it fell. Only a unit at ease looks round now and then (not over the weapon's clips).
     if (this.campDirty) this.applyCamp(a);
     const still = p.aim < 0.05 && p.hit < 0.01 && !(p.search ?? 0) && !dead;
-    if (p.fall < 1) a.update(dt, !plays.length && still, plays.length > 0 && still && p.run < 0.05 && !this.thrown && !this.struck);
+    // (The gun arm alone, the pistol at rest: the body as at ease, its variations and stance its own.)
+    const body = plays.some((play) => play.upper !== 'arm');
+    const stood = this.standing();
+    if (stood !== this.stood) a.setStance((this.stood = stood));
+    if (p.fall < 1) a.update(dt, !body && still, body && still && p.run < 0.05 && !this.thrown && !this.struck);
     a.read(this.d, this.hipsShift);
     // The hips sway as the clip says; their height keeps the lower foot on the ground, whatever the
     // difference between the clip's legs and this character's.
@@ -2207,7 +2242,7 @@ export class SyntyFigure implements FigureRig {
     // (left) hand's, runs so that it lets go when the game does; the gun stays in the right hand meanwhile.
     const clock = this.actClock;
     const loop = (id: ActionId) => clock % Math.max(0.01, a.actSeconds(id));
-    function add(id: ActionId, share: number, upper: boolean | 'free', time = loop(id)): void {
+    function add(id: ActionId, share: number, upper: ActionPlay['upper'], time = loop(id)): void {
       if (share > 0.001) out.push({ id, time, share, upper });
     }
     const toss = p.toss ?? 0;
@@ -2236,11 +2271,10 @@ export class SyntyFigure implements FigureRig {
     // Moving, the arms the moving clips' (ARMED_MOTIONS) as far as they have them: the gun at rest gives way to them.
     const moving = a.armedShare();
     if (this.pistol) {
-      // At rest in the right hand by the thigh, the left arm free (PISTOL_REST); aimed in both hands; crouched the same
+      // At rest in the right hand by the thigh, the gun arm alone (PISTOL_HOLD); aimed in both hands; crouched the same
       // over the crouch's legs.
-      const span = PISTOL_REST.to - PISTOL_REST.from;
       this.pistolRest = held * (1 - aim) * (1 - moving);
-      add('pistolRest', this.pistolRest, true, PISTOL_REST.from + span * (0.5 - 0.5 * Math.cos((Math.PI * clock) / span)));
+      add('pistolRest', this.pistolRest, 'arm', PISTOL_HOLD);
       add('pistolAim', held * aim, true);
     } else {
       // Standing (or moving) the rifle at low ready or shouldered over the legs' clips; kneeling, the whole body.
@@ -2400,7 +2434,7 @@ export class SyntyFigure implements FigureRig {
       this.waits[6] = clear ? 0 : SEARCH_REST;
     } else if (now) {
       const a = Math.max(0, now - SPREAD_STEP);
-      if (depth(a) <= TOUCH) goal = a;
+      if (depth(a) <= TOUCH - PISTOL_BACK_CLEAR) goal = a;
     }
     this.pistolOut = this.ease(now, goal);
     if (!this.pistolOut) return;
@@ -2490,8 +2524,9 @@ export class SyntyFigure implements FigureRig {
     if (this.melee) {
       // (By the hip, a little out and ahead of the holstered pistol's grip, 22/10: the hand was in it, the thigh swung
       // up into it walking.)
-      v1.set(sh.x * lerp(1.25, 1.1, aim), lerp(r.hip + 0.02, sh.y + 0.08, aim), lerp(sh.z + 0.14, sh.z + 0.18, aim));
-      e1.set(lerp(1.15, -0.9, aim) - lean - THREE.MathUtils.clamp(p.crouch, 0, 1) * (1 - aim) * BLADE_CROUCH_LEVEL, 0, 0, 'YXZ');
+      const guard = Math.sin(Math.PI * THREE.MathUtils.clamp(aim, 0, 1));
+      v1.set(sh.x * lerp(1.25, 1.1, aim) * (1 + BLADE_GUARD_OUT * guard), lerp(r.hip + 0.02, sh.y + 0.08, aim) + BLADE_GUARD_UP * guard, lerp(sh.z + 0.14, sh.z + 0.18, aim));
+      e1.set(lerp(1.15, -0.9, aim) - BLADE_GUARD_TIP * guard - lean - THREE.MathUtils.clamp(p.crouch, 0, 1) * (1 - aim) * BLADE_CROUCH_LEVEL, 0, 0, 'YXZ');
     } else if (this.pistol) {
       // Low ready, both hands on it ahead of the belly, the muzzle at the ground in front; aimed (playtest 16/10
       // #3), square to the target with both arms almost straight, the gun in the middle and its sights at the eye.

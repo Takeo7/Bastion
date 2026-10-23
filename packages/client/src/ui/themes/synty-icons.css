@@ -60,6 +60,23 @@
   --sicon-lines: hidden;
 }
 
+/* Disparar by the gun in hand (Arturo, 23/10 #7): the rifle above, the others here. */
+:root[data-ui='mixta'] [data-ability='shoot'][data-weapon='pistol'] {
+  --sicon: url('/ui/synty/icons/pistol.webp');
+}
+
+:root[data-ui='mixta'] [data-ability='shoot'][data-weapon='shotgun'] {
+  --sicon: url('/ui/synty/icons/r-escopeta.webp');
+}
+
+:root[data-ui='mixta'] [data-ability='shoot'][data-weapon='sniper'] {
+  --sicon: url('/ui/synty/icons/sniper.webp');
+}
+
+:root[data-ui='mixta'] [data-ability='shoot'][data-weapon='cannon'] {
+  --sicon: url('/ui/synty/icons/mh-machinegun.webp');
+}
+
 :root[data-ui='mixta'] [data-ability='slash'] {
   --sicon: url('/ui/synty/icons/mh-machete.webp');
   --sicon-fill: currentColor;

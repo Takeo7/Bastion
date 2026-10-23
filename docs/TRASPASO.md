@@ -1,6 +1,6 @@
 # Traspaso: estado del proyecto y cómo seguir en otra máquina
 
-Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 23/10 con la 0.9.7, la de la muerte a manos de un zombi con clips de Mixamo. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
+Escrito el 2026-10-14 con la versión 0.2.1 y puesto al día el 23/10 con la 0.9.8, la de las notas de Arturo del 23/10. Recoge lo hecho, las decisiones tomadas y lo que hay que llevar a mano a otra máquina, porque no está en GitHub. Las normas de trabajo están en [CLAUDE.md](../CLAUDE.md); los roles, en [EQUIPO.md](EQUIPO.md).
 
 ## 1. Qué no está en GitHub y hay que copiar a mano
 
@@ -35,7 +35,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    npx vitest run --root packages/engine
    ```
 
-   Deben pasar 551 tests.
+   Deben pasar 552 tests.
 5. **Probar en el navegador** (se juega con la aplicación; esto queda para probar):
 
    ```bash
@@ -56,7 +56,7 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
    Sale en `packages/desktop/dist/release/`. Las versiones de Windows (`npx electron-builder --config electron-builder.json --win`) y de Linux (`--linux`: AppImage y tar.gz) se construyen también desde el Mac, en `packages/desktop` ([PRUEBA-PC-3090.md](PRUEBA-PC-3090.md), paso 0); cómo va la firma, en [FIRMA.md](FIRMA.md).
 7. **Convertir modelos de Synty** (solo si se van a añadir más): hace falta **Blender**, y `assets-src/` copiado. Siempre con ids explícitos (ver `packages/client/tools/synty/README.md`).
 
-## 3. Estado (versión 0.9.7)
+## 3. Estado (versión 0.9.8)
 
 - **Juego:** combate por turnos cooperativo para dos, con el mando que se cede. La campaña tiene la base en un claro del pinar que se construye y se defiende en asedios ([FASE12.md](FASE12.md) §11), el valle, misiones, soldados que aprenden de lo que hacen ([FASE10.md](FASE10.md)), heridas y muerte permanente.
 - **Tema (zombis), las 5 fases hechas** ([LORE.md](LORE.md)):
@@ -74,7 +74,12 @@ Lo demás, código, modelos convertidos, sonidos, iconos y documentos, viene con
 - **Aplicación de escritorio** (Electron):
   - servidor dentro, «Ser anfitrión» y «Unirse», partidas en la red local, icono;
   - en Windows, la regla del cortafuegos;
-  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3, v0.9.4, v0.9.5, v0.9.6 y v0.9.7 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+  - releases v0.1.0, v0.2.0, v0.2.1, v0.2.6, v0.2.7, v0.2.8, v0.2.9, v0.3.0, v0.3.1, v0.4.0, v0.4.1, v0.4.2, v0.4.3, v0.4.4, v0.4.5, v0.5.0, v0.5.1, v0.6.0, v0.7.0, v0.7.1, v0.7.2, v0.8.0, v0.8.1, v0.8.2, v0.8.3, v0.8.4, v0.9.0, v0.9.1, v0.9.2, v0.9.3, v0.9.4, v0.9.5, v0.9.6, v0.9.7 y v0.9.8 en GitHub (la 0.5.0 y la 0.5.1, también con el paquete web; desde la 0.6.0, solo la aplicación de escritorio) (el repositorio es público desde el 6/10, y Arturo lo sabe: las releases también lo son); de la 0.2.2 a la 0.2.5 no están publicadas. Las builds de Mac, Windows y (desde la 0.2.7) Linux se construyen todas desde el Mac; la de Mac va con firma ad hoc ([FIRMA.md](FIRMA.md)). La de Linux sale sin probar en un Linux de verdad.
+- **Lo nuevo de la 0.9.8** (2026-10-23), las notas de Arturo del 23/10 ([PRUEBA-2026-10-23.md](PRUEBA-2026-10-23.md)):
+  - animaciones (Arte): andar de casilla en casilla como un solo camino a velocidad constante, con las esquinas redondeadas (unitViews.ts walkRun); al elegir el blanco, el soldado se gira y sube el arma, y en cuerpo a cuerpo se pone en guardia (units.aimAt, que llama UI); el zombi come en su turno y se levanta al empezar el de la escuadra; tres esperas relajadas con pistola, sin espasmos; las puertas del 4×4 ya no se atraviesan al subir; las puertas de tienda, sin poste en medio;
+  - interfaz (UI): la cámara, más suave (un muelle amortiguado y planos que se funden); Disparar con el icono del arma; TU TURNO se quita con cualquier acción;
+  - la niebla de guerra, con una bruma densa y oscura a ras de suelo en la zona sin enemigos (fogOfWar.ts MIST_LEVELS);
+  - mapgen: ninguna hoja de puerta doble en la esquina de un edificio (noCornerDoors).
 - **Lo nuevo de la 0.9.7** (2026-10-23): la muerte a manos de un zombi, con los clips de Mixamo de la cuarta tanda ([MIXAMO.md](MIXAMO.md); syntyManifest.ts FEED_CLIPS): se agarra al cuello y muerde («Zombie Neck Bite»), se arrodilla («Kneeling Down»), se come al caído de rodillas sobre él («Zombie Biting») y se levanta («Standing») en su siguiente acción. Un movimiento que sigue a otro se funde con él (AnimDriver.campMove), también en el campamento.
 - **Lo nuevo de la 0.9.6** (2026-10-23), lo que quedaba de las notas del 22/10 ([PRUEBA-2026-10-22.md](PRUEBA-2026-10-22.md)):
   - arreglo: en la 0.9.5 los zombis no cargaban sus clips (una excepción en syntyAnims.ts armedOf) y andaban y morían con lo procedural;

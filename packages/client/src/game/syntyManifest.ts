@@ -538,6 +538,9 @@ export const ANIMATIONS = {
   handsOnHipsFemn: idle('Feminine/HandsOnHips/Stances/A_POLY_IDL_HandsOnHips_Base_Loop_Femn'),
   thoughtfulMasc: idle('Masculine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_R_Loop_Masc'),
   thoughtfulFemn: idle('Feminine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_R_Loop_Femn'),
+  // A way of waiting with the pistol in the right hand (syntyFigures PISTOL_RESTS): thinking, the left hand to the chin.
+  thoughtfulLMasc: idle('Masculine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_L_Loop_Masc'),
+  thoughtfulLFemn: idle('Feminine/Thoughtful/Stances/A_POLY_IDL_Thoughtful_L_Loop_Femn'),
   // And what they do talking (GESTURES): point ahead, nod, scratch the chin, shrug, calm the other down.
   pointMasc: idle('Masculine/PointHand/Actions/A_POLY_IDL_PointHand_Index_F_Small_Masc'),
   pointFemn: idle('Feminine/PointHand/Actions/A_POLY_IDL_PointHand_Index_F_Small_Femn'),
@@ -733,13 +736,13 @@ export const IDLE_VARIATIONS: Record<'masc' | 'femn', AnimationId[]> = {
  * the dead sway as if drunk, the living enemies stand squared up for a fight,
  * a badly wounded soldier slumps.
  */
-export type Stance = 'drunk' | 'aggressive' | 'slumped' | 'armsFolded' | 'handsOnHips' | 'thoughtful';
+export type Stance = 'drunk' | 'aggressive' | 'slumped' | 'armsFolded' | 'handsOnHips' | 'thoughtful' | 'thoughtfulL';
 
-export const STANCE_ORDER: readonly Stance[] = ['drunk', 'aggressive', 'slumped', 'armsFolded', 'handsOnHips', 'thoughtful'];
+export const STANCE_ORDER: readonly Stance[] = ['drunk', 'aggressive', 'slumped', 'armsFolded', 'handsOnHips', 'thoughtful', 'thoughtfulL'];
 
 export const STANCES: Record<'masc' | 'femn', Record<Stance, AnimationId>> = {
-  masc: { drunk: 'drunkMasc', aggressive: 'aggressiveMasc', slumped: 'slumpedMasc', armsFolded: 'armsFoldedMasc', handsOnHips: 'handsOnHipsMasc', thoughtful: 'thoughtfulMasc' },
-  femn: { drunk: 'drunkFemn', aggressive: 'aggressiveFemn', slumped: 'slumpedFemn', armsFolded: 'armsFoldedFemn', handsOnHips: 'handsOnHipsFemn', thoughtful: 'thoughtfulFemn' },
+  masc: { drunk: 'drunkMasc', aggressive: 'aggressiveMasc', slumped: 'slumpedMasc', armsFolded: 'armsFoldedMasc', handsOnHips: 'handsOnHipsMasc', thoughtful: 'thoughtfulMasc', thoughtfulL: 'thoughtfulLMasc' },
+  femn: { drunk: 'drunkFemn', aggressive: 'aggressiveFemn', slumped: 'slumpedFemn', armsFolded: 'armsFoldedFemn', handsOnHips: 'handsOnHipsFemn', thoughtful: 'thoughtfulFemn', thoughtfulL: 'thoughtfulLFemn' },
 };
 
 /** What a unit does once when asked (AnimDriver gesture: two talking on the clearing, clearingLife.ts), over its stance. */
@@ -1860,10 +1863,12 @@ export const PIECES = {
   houseDoor: whole('town', 'SM_Bld_House_Door_01', [1.25, -0.1], { parts: true, leaf: 'SM_Bld_House_Door' }),
   houseWindow: whole('town', 'SM_Bld_House_Window_01', [1.25, -0.1], { drop: ['Glass'] }),
   // A shop's front at street level (playtest 20/10 #18): Office's glass walls, 2.5 m modules 3 m tall (as the bunker
-  // kit's): a shop window from floor to lintel (its pane the kit's), and a glass door beside a pane, seen through
-  // (their glass, painted from the atlas, came out brown).
-  shopWindow: whole('office', 'SM_Bld_Wall_Glass_01', [1.25, -0.075], { drop: ['01_Glass'] }),
-  shopDoor: whole('office', 'SM_Bld_Wall_Glass_Door_01', [1.25, -0.075], { parts: true, leaf: 'SM_Bld_Glass_Door_01', drop: ['Door_01_Glass'] }),
+  // kit's), seen through (their glass, painted from the atlas, came out brown). A module is two tiles wide, so each
+  // is cut to one (23/10 #10: whole, its posts stood in the doorways beside it): a shop window from floor to lintel,
+  // the tile-wide strip round its middle post (its pane the kit's); a glass door, the module's door half alone, from
+  // its end post to the post beside the pane (x = 0 to 1.2975), the doorway's middle (x = 0.67) on the tile's.
+  shopWindow: strip('office', 'SM_Bld_Wall_Glass_01', [1.25, -0.075], { drop: ['01_Glass'] }),
+  shopDoor: whole('office', 'SM_Bld_Wall_Glass_Door_01', [0.67, -0.075], { keep: [[-0.05, -50, -50], [1.299, 50, 50]], parts: true, leaf: 'SM_Bld_Glass_Door_01', drop: ['Door_01_Glass'] }),
   // Walls between rooms.
   roomWall: house('InteriorWall_01'),
   roomDoorWall: house('InteriorWall_Door_01', { parts: true, leaf: 'SM_Bld_House_InteriorWall_Door_02' }),

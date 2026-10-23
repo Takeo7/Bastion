@@ -1111,6 +1111,7 @@ export class ClearingArtView implements ClearingArt {
       // The clip's ground (its start, facing the car, its front to the left on its left side): the car's side where the
       // hand meets the handle, the seat in its doorway's middle; where it stands as the clip begins.
       const origin = door.clone().addScaledVector(out, ENTER_SIDE).addScaledVector(dir, ENTER_ALONG);
+      const front = door.clone().sub(centre).dot(dir) > 0;
       const foot = origin.clone().addScaledVector(dir, ENTER_FROM[0]).addScaledVector(inward, ENTER_FROM[1]);
       // Round the car's nearer end to a door on its far side.
       const from = rig.root.position.clone();
@@ -1125,14 +1126,17 @@ export class ClearingArtView implements ClearingArt {
       const total = lengths.reduce((a, b) => a + b, 0);
       // (The hand that pulls the door to: the left, or the right in the mirrored clip.)
       const hand = rig.root.getObjectByName(side > 0 ? 'Hand_L' : 'Hand_R') ?? null;
-      return { rig, path, lengths, total, origin, foot, inward, out, hand, move: (side > 0 ? 'enterCar' : 'enterCarR') as CampMove, door: seat[i]!, delay: i * BOARD_STAGGER, running: total / BOARD_SPEED + BOARD_EASE, start: 0, started: false, inside: false };
+      return { rig, path, lengths, total, origin, foot, inward, out, hand, side, front, move: (side > 0 ? 'enterCar' : 'enterCarR') as CampMove, door: seat[i]!, delay: i * BOARD_STAGGER, running: total / BOARD_SPEED + BOARD_EASE, start: 0, started: false, inside: false };
     });
     // The driver's in first; each other, once there, a beat after the one before (any that got to its door first waits
-    // there for it, facing it).
+    // there for it, facing it): those at the front doors, then those at the rear, each once the one in front on its side
+    // is in (its door wide open stood across their way in: 23/10 #2).
     const driver = plans.find((p) => p.door === 0) ?? plans[0]!;
     let next = driver.delay + driver.running;
-    for (const p of [driver, ...plans.filter((q) => q !== driver).sort((a, b) => a.delay + a.running - (b.delay + b.running))]) {
-      p.start = Math.max(p.delay + p.running, next);
+    const order = plans.filter((q) => q !== driver).sort((a, b) => Number(b.front) - Number(a.front) || a.delay + a.running - (b.delay + b.running));
+    for (const p of [driver, ...order]) {
+      const ahead = p.front ? null : plans.find((q) => q.front && q.side === p.side && (q === driver || order.indexOf(q) < order.indexOf(p)));
+      p.start = Math.max(p.delay + p.running, next, ahead ? ahead.start + ENTER_CLEAR : 0);
       next = p.start + ENTER_AFTER;
     }
     const length = ENTER_SECONDS / ENTER_SPEED;
@@ -1161,7 +1165,7 @@ export class ClearingArtView implements ClearingArt {
         // Its door opened and shut by its hand, as the clip has it; pulled to no further than its hand is in (the clip's
         // car is wider: shut on time, the arm stuck out through the panel). Gone in once the door is shut on it.
         let open = c < ENTER_SHUT[0] ? THREE.MathUtils.clamp((c - ENTER_OPEN[0]) / (ENTER_OPEN[1] - ENTER_OPEN[0]), 0, 1) : 1 - THREE.MathUtils.clamp((c - ENTER_SHUT[0]) / (ENTER_SHUT[1] - ENTER_SHUT[0]), 0, 1);
-        open = THREE.MathUtils.smoothstep(open, 0, 1);
+        open = THREE.MathUtils.smoothstep(open, 0, 1) * ENTER_WIDE;
         if (p.hand && c > ENTER_OPEN[1] && !p.inside) {
           const reach = p.hand.getWorldPosition(handAt).sub(doors[p.door]!).dot(p.out);
           open = Math.max(open, Math.asin(THREE.MathUtils.clamp((reach + ENTER_FIST) / (this.bus.length * ENTER_LEAF), 0, 1)) / ENTER_SWING);
@@ -1435,17 +1439,19 @@ function turnToward(yaw: number, goal: number, step: number): number {
  * after the one before each starts in.
  */
 const ENTER_SIDE = 0.62;
-const ENTER_ALONG = 0.09;
+const ENTER_ALONG = -0.12;
 const ENTER_FROM: [number, number] = [-0.18, 0.36];
 const ENTER_SECONDS = 6.2;
 const ENTER_SPEED = 1.25;
-const ENTER_OPEN: [number, number] = [0.1, 1.2];
+const ENTER_OPEN: [number, number] = [-0.35, 0.25];
 const ENTER_SHUT: [number, number] = [5.3, 5.9];
 const ENTER_BLEND = 0.35;
 const ENTER_AFTER = 0.5;
+const ENTER_CLEAR = 2.1;
 /** A 4×4's door leaf, its share of the car's length, and how far it swings open (radians: mula.ts CAR_DOOR_SWING). */
 const ENTER_LEAF = 0.17;
 const ENTER_SWING = 1.15;
+const ENTER_WIDE = 1.3;
 /**
  * How far the door is kept off the hand's middle (tiles: the fist's half, and the panel's inside the car's widest, its
  * bars and armour), and how far in from that widest the hand is in, the door shut on it.

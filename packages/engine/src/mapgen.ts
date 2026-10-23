@@ -6040,6 +6040,26 @@ export interface GenOptions {
 }
 
 /** Builds a full battlefield for a mission. Deterministic for a given seed. */
+/**
+ * A double door one of whose leaves came on a building's corner, where the wall that turns reaches it (playtest 23/10
+ * #11: whoever went in and turned brushed that wall's end): that leaf is wall, and the other a single door. Only
+ * where the other leaf is there, so no building loses its way in.
+ */
+function noCornerDoors(c: Canvas): void {
+  const isDoor = (x: number, y: number) => c.in(x, y) && c.get(x, y) === 'door';
+  const solid = (x: number, y: number) => c.in(x, y) && (c.get(x, y) === 'wall' || c.get(x, y) === 'window' || c.get(x, y) === 'windowBroken');
+  for (let y = 0; y < c.height; y++) {
+    for (let x = 0; x < c.width; x++) {
+      if (!isDoor(x, y)) continue;
+      // Its twin along the wall one way; the wall that turns, across it.
+      const along = isDoor(x - 1, y) || isDoor(x + 1, y) ? 'x' : isDoor(x, y - 1) || isDoor(x, y + 1) ? 'y' : null;
+      if (!along) continue;
+      const turns = along === 'x' ? solid(x, y - 1) || solid(x, y + 1) : solid(x - 1, y) || solid(x + 1, y);
+      if (turns) c.force(x, y, 'wall');
+    }
+  }
+}
+
 export function generateLayout(opts: GenOptions): MissionLayout {
   const rng = new Rng(opts.seed);
   const { biome, kind } = opts;
@@ -6281,6 +6301,8 @@ export function generateLayout(opts: GenOptions): MissionLayout {
     if (look.kind !== 'fountainCorner') return decorCode(look.kind, f);
     return decorCode(look.kind, D((look.facing + 3) % 4) === (f + 3) % 4 ? f : D((look.facing + 3) % 4));
   };
+  // Last, once every wall and door is where it stays (playtest 23/10 #11).
+  noCornerDoors(c);
   const tiles = new Array<TileKind>(FW * FH);
   const elev = new Array<number>(FW * FH);
   const ground = new Array<GroundKind>(FW * FH);

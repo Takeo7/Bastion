@@ -102,6 +102,8 @@ export interface AbilityView {
   depleted?: boolean;
   /** Its drawing when it isn't its id's (a menu shows its family's). */
   icon?: AbilityId;
+  /** Disparar's gun (Arturo, 23/10 #7): its picture on the key (synty-icons.css data-weapon). */
+  weapon?: string;
   /** A menu's choices: with two or more, pressing it opens them above it; with one, it is that one. */
   options?: AbilityView[];
 }
@@ -1096,6 +1098,7 @@ export class Hud {
       {
         disabled: !a.enabled,
         'data-ability': a.icon ?? a.id,
+        'data-weapon': a.weapon ?? null,
         'aria-label': `${a.name}. ${a.cost}. ${a.description}${a.reason && !a.enabled ? ` ${a.reason}` : ''}`,
         'aria-haspopup': a.options && a.options.length > 1 ? 'menu' : null,
         onclick,
@@ -1360,11 +1363,14 @@ export class Hud {
     if (!held) this.bannerTimer = window.setTimeout(() => this.bannerEl.classList.remove('show'), detail ? 3600 : 1500);
   }
 
-  /** A held banner (banner's `held`) let go: by its click, or Intro or Esc. Whether there was one. */
-  releaseBanner(): boolean {
+  /**
+   * A held banner (banner's `held`) let go: by its click, or Intro or Esc; `quiet`, by doing anything else in the
+   * game (game.ts, Arturo 23/10 #8), without its click. Whether there was one.
+   */
+  releaseBanner(quiet = false): boolean {
     if (!this.bannerEl.classList.contains('held') || !this.bannerEl.classList.contains('show')) return false;
     this.bannerEl.classList.remove('show', 'held');
-    uiSound('confirm');
+    if (!quiet) uiSound('confirm');
     return true;
   }
 

@@ -34,6 +34,8 @@ const UPPER = new Set(['Spine_01', 'Spine_02', 'Spine_03', 'Neck', 'Head', 'Clav
 const HEAD = new Set(['Neck', 'Head']);
 /** The upper body but the gun arm (a throw's clip: the right hand keeps the gun). */
 const FREE = new Set([...UPPER].filter((b) => !b.endsWith('_R')));
+/** The gun arm alone (the pistol at rest by the thigh: the rest of the body stands as it would without it). */
+const GUN_ARM = new Set(['Clavicle_R', 'Shoulder_R', 'Elbow_R', 'Hand_R']);
 /** Seconds a death takes to blend in from the pose the unit had. */
 const DEATH_BLEND = 0.2;
 
@@ -58,11 +60,12 @@ export interface AnimSet {
   hits: THREE.AnimationClip[];
   /**
    * ACTIONS, in order (the living's; none for the dead): whole; their upper body only (over the legs' clips); and that
-   * without the right arm (a throw: the gun arm keeps the gun).
+   * without the right arm (a throw: the gun arm keeps the gun); and the right arm alone.
    */
   actions: THREE.AnimationClip[];
   actionsUpper: THREE.AnimationClip[];
   actionsFree: THREE.AnimationClip[];
+  actionsArm: THREE.AnimationClip[];
   /** GESTURE_ORDER, in order (the living's), their upper body only: played once when asked, over the stance. */
   gestures: THREE.AnimationClip[];
   /** The variations that look round, the neck and head only: played now and then over a weapon's clip at rest. */
@@ -82,12 +85,15 @@ export interface AnimSet {
   hips: THREE.Vector3;
 }
 
-/** One of the weapon's actions as AnimDriver.play takes it: which, how far in, its share of the body: whole, upper, or that but the gun arm ('free'). */
+/**
+ * One of the weapon's actions as AnimDriver.play takes it: which, how far in, its share of the body: whole, upper, that
+ * but the gun arm ('free'), or the gun arm alone ('arm').
+ */
 export interface ActionPlay {
   id: ActionId;
   time: number;
   share: number;
-  upper: boolean | 'free';
+  upper: boolean | 'free' | 'arm';
 }
 
 /** A build's clips, the living's or the dead's. */
@@ -134,6 +140,7 @@ function prepare(
     actions: actions.map(bodyOnly),
     actionsUpper: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
     actionsFree: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => FREE.has(t.name.split('.')[0]!)))),
+    actionsArm: actions.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => GUN_ARM.has(t.name.split('.')[0]!)))),
     gestures: gestures.map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => UPPER.has(t.name.split('.')[0]!)))),
     looks: variations.filter((_, i) => looking[i]).map((c) => new THREE.AnimationClip(c.name, c.duration, c.tracks.filter((t) => HEAD.has(t.name.split('.')[0]!)))),
     armed: armedOf(armedClips),
@@ -342,6 +349,7 @@ export class AnimDriver {
   private readonly acts: THREE.AnimationAction[];
   private readonly actsUpper: THREE.AnimationAction[];
   private readonly actsFree: THREE.AnimationAction[];
+  private readonly actsArm: THREE.AnimationAction[];
   private readonly acting = new Set<THREE.AnimationAction>();
   /** The gestures (GESTURE_ORDER), and the one being made. */
   private readonly gestures: THREE.AnimationAction[];
@@ -432,6 +440,7 @@ export class AnimDriver {
     this.acts = set.actions.map((clip) => this.mixer.clipAction(clip));
     this.actsUpper = set.actionsUpper.map((clip) => this.mixer.clipAction(clip));
     this.actsFree = set.actionsFree.map((clip) => this.mixer.clipAction(clip));
+    this.actsArm = set.actionsArm.map((clip) => this.mixer.clipAction(clip));
     this.bones = SYNTY_BONES.map((n) => proxy.getObjectByName(n) ?? new THREE.Object3D());
   }
 
@@ -460,7 +469,7 @@ export class AnimDriver {
    * The weapon's action `id` (ACTIONS) `time` seconds in (looped by the caller for one that loops), taking `share` (0
    * to 1) of what the rest does: of the whole body, or (`upper`) from the spine up only; null lets go of it.
    */
-  act(id: ActionId | null, time = 0, share = 0, upper: boolean | 'free' = true): void {
+  act(id: ActionId | null, time = 0, share = 0, upper: ActionPlay['upper'] = true): void {
     this.play(id === null ? [] : [{ id, time, share, upper }]);
   }
 
@@ -477,7 +486,7 @@ export class AnimDriver {
     const now = new Set<THREE.AnimationAction>();
     for (const a of plays) {
       const k = ACTIONS.indexOf(a.id);
-      const action = (a.upper === 'free' ? this.actsFree : a.upper ? this.actsUpper : this.acts)[k];
+      const action = (a.upper === 'arm' ? this.actsArm : a.upper === 'free' ? this.actsFree : a.upper ? this.actsUpper : this.acts)[k];
       if (!action || a.share <= 0) continue;
       if (!this.acting.has(action)) {
         action.reset().play();

@@ -10,7 +10,7 @@ import { ATLAS_RECTS, atlasIndex, atlasRect, mapAtlasTexture, PACKED } from './m
 import { NIGHT } from './night';
 import { MedicalFinish } from './medicalFinish';
 import { atlasOf, atlasTexture, loadModel } from './synty';
-import { KIT_SCALE, PIECES, SYNTY_SCALE, type AtlasId, type PieceAsset, type PieceId, type PropId } from './syntyManifest';
+import { KIT_SCALE, KIT_TILE, PIECES, SYNTY_SCALE, type AtlasId, type PieceAsset, type PieceId, type PropId } from './syntyManifest';
 import { shopTradeIn } from './homeFurnishing';
 import { syntyProp } from './syntyProps';
 import { unitPosNow } from './unitViews';
@@ -1795,7 +1795,7 @@ KITS.medical = { ...KITS.bunker };
  * (m), the band over them the building's lintel, its sign on it (SIGN_UP).
  */
 const SHOP_FRONT_TALL = 1.86;
-KITS.shopFront = { ...KITS.brick, window: ['shopWindow'], door: ['shopDoor'], leaf: undefined, storey: 3 * STOREY / SHOP_FRONT_TALL, glass: [2.22, 2.71, 1.495, 0] };
+KITS.shopFront = { ...KITS.brick, window: ['shopWindow'], door: ['shopDoor'], leaf: undefined, storey: 3 * STOREY / SHOP_FRONT_TALL, glass: [KIT_TILE, 2.71, 1.495, 0] };
 
 /** Walls between rooms: Town's interior walls, whatever the building. */
 const BETWEEN: Kit = { ...KITS.house, wall: ['roomWall'], door: ['roomDoorWall'], lintel: ['roomLintel'] };

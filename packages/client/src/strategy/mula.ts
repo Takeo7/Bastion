@@ -46,8 +46,8 @@ export interface Mula {
  * height); the outer share of its width either side. Each hangs on its front edge and swings out.
  */
 const CAR_DOORS = [
-  { from: 0.435, to: 0.587 },
-  { from: 0.253, to: 0.435 },
+  { from: 0.435, to: 0.587, hinge: 0.13 },
+  { from: 0.253, to: 0.435, hinge: 0.13 },
 ];
 const CAR_DOOR_LOW = 0.09;
 const CAR_DOOR_HIGH = 0.845;
@@ -182,11 +182,11 @@ function carDoors(box: THREE.Box3) {
   const half = size.x / 2;
   const low = box.min.y + size.y * CAR_DOOR_LOW;
   const high = box.min.y + size.y * CAR_DOOR_HIGH;
-  const doors = [-1, 1].flatMap((side) => CAR_DOORS.map((d) => ({ side, z0: box.min.z + size.z * d.from, z1: box.min.z + size.z * d.to })));
+  const doors = [-1, 1].flatMap((side) => CAR_DOORS.map((d) => ({ side, z0: box.min.z + size.z * d.from, z1: box.min.z + size.z * d.to, hinge: d.hinge })));
   const leaves = doors.map((d) => {
     const leaf = new THREE.Group();
-    // On its front edge, at the body's side.
-    leaf.position.set(midX + d.side * half, 0, d.z1);
+    // On its front edge, `hinge` in from the body's widest (CAR_DOORS).
+    leaf.position.set(midX + d.side * (half - d.hinge), 0, d.z1);
     return leaf;
   });
   // A point behind the hinge swings out to its side: −x for the left (x < 0) side, turned the other way.

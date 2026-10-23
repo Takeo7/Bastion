@@ -760,6 +760,9 @@ export class Game {
   private killCam: string | null = null;
   /** How long the camera stays on one fallen after the death played (FEED_HOLD when eaten); null: the usual. */
   private killHold: number | null = null;
+  /** The aim's pose (updateAimPose): who aims, and at whom with what; and who fired from it (its gun left up). */
+  private aimPose: { unit: string; key: string } | null = null;
+  private aimFired: string | null = null;
   /** The aim's shot over the shoulder (updateAimCam): who aims at whom from where, '' with none. */
   private aimCam = '';
   /** The units' flags hidden for that shot. */
@@ -1163,6 +1166,8 @@ export class Game {
       return;
     }
     this.reachCache = null;
+    // This player's order answered: a shot fired from the aim is on its way (its gun goes on from there).
+    if (by === this.mySlot) this.aimFired = null;
     // Real time (docs/TIEMPO-REAL.md): no queue, each tick's events shown as they come.
     if (this.state.realtime) {
       if (by === this.mySlot) this.awaitingReply = false;
@@ -1185,6 +1190,11 @@ export class Game {
   onRejected(message: string): void {
     this.awaitingReply = false;
     this.hud.toast(message);
+    // A shot that won't go: the gun left up for it comes down (updateAimPose).
+    if (this.aimFired) {
+      this.units.aimAt(this.aimFired, null, false);
+      this.aimFired = null;
+    }
   }
 
   onPresence(slot: Slot, unit: string | null, tile: Place | null): void {
@@ -2654,6 +2664,8 @@ export class Game {
       }
       case 'turnBegan': {
         if (e.team === 'xcom') this.rig.restoreZoom();
+        // The dead that were eating get up as their turn ends, before the squad's opens (Arturo, 23/10 #4; Arte's).
+        if (e.team === 'xcom') await this.units.standUpFed();
         // An enemy turn nobody will see opens without its banner (docs/UX-RITMO.md): «TU TURNO» says enough.
         if (e.team === 'alien' && !this.enemyTurnShows()) return;
         this.sfx.turn(e.team === 'alien', !v.concealed);
@@ -4126,6 +4138,8 @@ export class Game {
       return;
     }
     this.send({ type: 'ability', unit: u.id, ability: this.mode.ability, target: this.targetId });
+    // Its gun stays up for the shot (updateAimPose).
+    this.aimFired = u.id;
     this.cancelMode();
   }
 
@@ -4433,6 +4447,8 @@ export class Game {
       const cooldown = rt ? this.rtCooldown(u, id) : (u.cooldowns[id] ?? 0);
       return {
         id,
+        // Disparar by the gun in hand (Arturo, 23/10 #7): its picture on the key, not always the rifle's.
+        ...(id === 'shoot' ? { weapon: attackWeapon(u, 'shoot').id } : {}),
         label: id === 'hack' ? `${def.name} · ${hackChance(this.state, u)}%` : def.name,
         hotkey: i < 9 ? (id === 'shoot' ? `${i + 1} · Espacio` : String(i + 1)) : i === 9 ? '0' : '',
         enabled: !reason,
@@ -4522,6 +4538,30 @@ export class Game {
     this.updateHover();
     this.refreshHud();
     this.updateAimCam();
+    this.updateAimPose();
+  }
+
+  /**
+   * The soldier aiming at the target picked (Arturo, 23/10 #3; Arte's units.aimAt): turned to it, the gun up, or on
+   * guard for a blow; another target, it turns with the gun up; let go, the gun down. Fired, it is left up: the shot
+   * goes on from it (raiseWeapon), and down only if the order is refused (onRejected). Not in real time (rtKeepAim).
+   */
+  private updateAimPose(): void {
+    const u = this.selectedUnit();
+    const option = this.currentTarget();
+    const t = option?.unit;
+    const ability = this.mode.kind === 'target' ? this.mode.ability : null;
+    const on = !!u && !!t && !!ability && !this.view.realtime && !this.playing && t.team === 'alien' && this.shownToSquad(t);
+    const key = on ? `${u.id}:${t.id}:${ability}` : '';
+    const was = this.aimPose;
+    if (key === (was?.key ?? '')) return;
+    // Let go: down, unless it fired (its shot takes the gun from there) or someone else now aims.
+    if (was && (!on || was.unit !== u!.id) && this.aimFired !== was.unit) this.units.aimAt(was.unit, null, false);
+    this.aimPose = on ? { unit: u.id, key } : null;
+    if (!on) return;
+    const melee = ABILITIES[ability].target === 'melee';
+    const sidearm = isAttack(ability) && firesSidearm(u, ability);
+    this.units.aimAt(u.id, tileToWorld(t.pos).add(new THREE.Vector3(0, 0.8, 0)), melee, sidearm);
   }
 
   /**
@@ -5453,11 +5493,13 @@ export class Game {
         if (e.code !== 'Escape') this.hud.closeIntro();
         return;
       }
-      // «TU TURNO» held till it is seen (#50): Intro or Esc let it go (and do nothing else).
+      // «TU TURNO» held till it is seen (#50): Intro or Esc let it go (and do nothing else); any other key, an action
+      // of the game, lets it go too and goes on (Arturo, 23/10 #8).
       if ((e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Escape') && this.hud.releaseBanner()) {
         e.preventDefault();
         return;
       }
+      if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) this.hud.releaseBanner(true);
       // Real time (docs/TIEMPO-REAL.md §6b): the space bar stops the clock or lets it go on, X stops the picked one,
       // 1–8 pick one's soldiers; what belongs to turns (abilities, ending the turn, the command) waits for a later step.
       if (this.state.realtime && !this.hud.covered) {
@@ -5594,6 +5636,14 @@ export class Game {
       setHurry(false);
       this.holdSignal(false);
     };
+    // Any click or wheel in the game lets «TU TURNO» go and does what it does (Arturo, 23/10 #8: aiming, it stayed
+    // in the middle); one on the banner itself only lets it go.
+    const onPress = (e: Event) => {
+      if (!(e.target as Element | null)?.closest?.('.banner')) this.hud.releaseBanner(true);
+    };
+    window.addEventListener('pointerdown', onPress, true);
+    window.addEventListener('wheel', onPress, true);
+    this.disposers.push(() => window.removeEventListener('pointerdown', onPress, true), () => window.removeEventListener('wheel', onPress, true));
     // Back to the window: nothing is held any more, whatever happened outside it.
     const onFocus = () => this.holdSignal(false);
     window.addEventListener('keyup', onKeyUp);

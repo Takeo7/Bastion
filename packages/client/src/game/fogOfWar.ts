@@ -59,6 +59,17 @@ const FOG_GREY = 0.55;
 const FOG_DARK = 0.62;
 const FOG_HAZE = 0.1;
 const FOG_DRIFT = 0.12;
+/**
+ * Over it, a mist (Arturo, 23/10: «ahora solo cambia de color, ¿se podría hacer una niebla suave?»; he chose it
+ * dense and dark): low and drifting, thickest at the ground and thinning by a soldier's head (MIST_HEIGHT, world
+ * units), in wisps that move slowly. Dark grey, not white, so it reads on snow too (MIST, MIST_NIGHT). How thick at
+ * most: MIST_LEVELS[k]; 0, none (only the colour).
+ */
+export const MIST_LEVELS = [0, 0.35, 0.6] as const;
+export const MIST_DEFAULT = 2;
+const MIST_HEIGHT = 2.2;
+const MIST = new THREE.Color(0x2e3640);
+const MIST_NIGHT = new THREE.Color(0x070d12);
 /** The haze's tint over what is seen but out of sight, by day and by night. */
 const HAZE = new THREE.Color(0xa9b8c8);
 const HAZE_NIGHT = new THREE.Color(0x10202a);
@@ -111,12 +122,16 @@ export class FogOfWar {
     fowFar: { value: new THREE.Vector2(24, 70) },
     /** 1: past the edge is as the edge is, lit (the base's clearing, MapView.litBeyond); 0, in the dark. */
     fowEdge: { value: 0 },
+    /** How thick the fog of war's mist is (MIST_LEVELS), and its tint by day or night. */
+    fowMistAmount: { value: MIST_LEVELS[MIST_DEFAULT] as number },
+    fowMistTint: { value: MIST.clone() },
   };
 
   /** Day or night: the haze's and the mist's tints (beyond the map's edge too), and whether lit tiles glow. (Snow changes none.) */
   setNight(on: boolean, _snow = false): void {
     this.uniforms.fowUnknown.value.copy(on ? UNKNOWN_NIGHT : UNKNOWN);
     this.uniforms.fowHaze.value.copy(on ? HAZE_NIGHT : HAZE);
+    this.uniforms.fowMistTint.value.copy(on ? MIST_NIGHT : MIST);
     this.uniforms.fowNight.value = on ? 1 : 0;
   }
 
@@ -391,6 +406,8 @@ export class FogOfWar {
           uniform vec3 fowHaze;
           uniform vec2 fowFar;
           uniform float fowEdge;
+          uniform float fowMistAmount;
+          uniform vec3 fowMistTint;
           uniform float fowNight;
           uniform vec3 fowLamp;
           uniform float fowAoPass;
@@ -452,6 +469,15 @@ export class FogOfWar {
             // everything reads), a little lighter higher up so tall shapes barely show; beyond the edge a little
             // more, the outskirts' outlines (outskirts.ts: the town going on, playtest 21/10 #17).
             vec3 fowDark = fowUnknown * (0.55 + 1.1 * fowMist) * (1.0 + (0.15 + 0.35 * (1.0 - fowInside)) * clamp(vFowPos.y / 5.0, 0.0, 1.0));
+            // The fog of war's mist (Arturo, 23/10): over what is seen but out of sight, low on the ground of the floor
+            // in view and thinning upwards, in two layers of wisps drifting different ways.
+            if (fowMistAmount > 0.0) {
+              float fowGround = fowTile.a * ${(255 / FLOOR_STEP).toFixed(3)} * ${STOREY.toFixed(3)};
+              float fowLow = 1.0 - smoothstep(0.0, ${MIST_HEIGHT.toFixed(2)}, vFowPos.y - fowGround);
+              float fowWisp = fowNoise(vFowPos.xz * 0.18 + vec2(fowTime * 0.04, -fowTime * 0.025)) * 0.6 + fowNoise(vFowPos.xz * 0.5 + vec2(-fowTime * 0.07, fowTime * 0.05)) * 0.4;
+              float fowVeil = fowMistAmount * fowKnown * (1.0 - fowSeen) * (0.3 + 0.7 * fowLow) * (0.5 + fowWisp);
+              gl_FragColor.rgb = mix(gl_FragColor.rgb, fowMistTint, clamp(fowVeil, 0.0, 0.85));
+            }
             // Beyond the map's edge the same (playtest 20/10 #23, Arturo: what is not played is dark, always); far out
             // (past what the tactical view sees), into the haze, where the sky's horizon begins (sky.ts, 0.9.1).
             gl_FragColor.rgb = mix(fowDark, gl_FragColor.rgb, fowKnown);
