@@ -135,6 +135,8 @@ const bubbleGeometry = new THREE.SphereGeometry(0.85, 20, 14);
 const missileGeometry = new THREE.CylinderGeometry(0.04, 0.05, 0.32, 6).rotateX(Math.PI / 2);
 const beamGeometry = new THREE.CylinderGeometry(0.5, 0.5, 14, 20, 1, true);
 const pingRingGeometry = new THREE.RingGeometry(0.42, 0.55, 32).rotateX(-Math.PI / 2);
+/** How tall a ping's beam stands (tiles): from the ground past the top of any camera's view. */
+const PING_HEIGHT = 84;
 /** Faceted, like Synty's blasts. */
 const blastGeometry = new THREE.IcosahedronGeometry(1, 1);
 const shellGeometry = new THREE.SphereGeometry(0.09, 10, 8);
@@ -585,10 +587,13 @@ export class Fx {
   /** Player marker: a coloured beam and pulsing rings for a few seconds. */
   ping(at: THREE.Vector3, color: string, enemy: boolean): void {
     const c = new THREE.Color(enemy ? '#ff4a4a' : color);
-    const beamMat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    // Up past the top of the screen and seen through whatever stands in front (0.10.0, Arturo: it stopped at a roof,
+    // hidden behind walls), the haze none of it.
+    const beamMat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false, side: THREE.DoubleSide });
     const beam = new THREE.Mesh(beamGeometry, beamMat);
-    beam.scale.set(0.12, 0.35, 0.12);
-    beam.position.copy(at).setY(at.y + 2.45);
+    beam.scale.set(0.12, PING_HEIGHT / 14, 0.12);
+    beam.position.copy(at).setY(at.y + PING_HEIGHT / 2);
+    beam.renderOrder = 20;
     this.spawn(beam, beamMat, { life: 3.5, opacity: 0.5 });
     for (let i = 0; i < 3; i++) {
       void wait(i * 0.45).then(() => {

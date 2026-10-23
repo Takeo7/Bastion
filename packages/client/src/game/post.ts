@@ -124,7 +124,7 @@ export const VIVID_LEVELS = [
 ] as const;
 
 /** The level every post chain starts at (Arturo, 22/10 #46: «bastante más vivo», chosen from the three). */
-export const VIVID_DEFAULT = 2;
+export const VIVID_DEFAULT = 1;
 
 /** The colours as vivid as level `k` of VIVID_LEVELS over every grade the chain is given (0, as they were before 22/10). */
 export function setVivid(post: PostChain, k: number): void {

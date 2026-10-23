@@ -467,7 +467,7 @@ export class Hud {
       this.unitPanel,
       this.abilities,
       this.target,
-      h('div.turn-actions', {}, this.followBtn, this.goBtn, this.passBtn, this.watchBtn, this.endTurn),
+      h('div.turn-actions', {}, this.followBtn, this.goBtn, this.passBtn, this.watchBtn, this.endClock, this.endTurn),
       (this.sideEl = h('div.side', {}, h('div.side-row', {}, menuButton), this.goalDock, this.logEl)),
       this.bannerEl,
       this.rtPauseEl,
@@ -628,12 +628,20 @@ export class Hud {
     );
   }
 
-  /** Each player's turn clock in the top strip (tickClocks), by slot. */
-  private clockEls = new Map<Slot, HTMLElement>();
+  /**
+   * The turn clocks, over «Terminar turno» (Arturo, 23/10: not under the names, and to be read at a glance): this
+   * player's a thick bar in their colour, the partner's a thin one under it (tickClocks).
+   */
+  private readonly endClock = h('div.end-clock', { 'aria-hidden': 'true' }, h('span.turn-clock.mine', {}, h('i')), h('span.turn-clock.theirs', {}, h('i')));
+  private clockSlots: { mine: Slot; theirs: Slot | null } = { mine: 0, theirs: null };
 
   setPlayers(players: PlayerInfo[], ready: [boolean, boolean], mySlot: Slot, busy: Set<Slot>, commander: Slot | null = null): void {
     clear(this.players);
-    this.clockEls.clear();
+    const partner = players.find((p) => p.slot !== mySlot);
+    this.clockSlots = { mine: mySlot, theirs: partner?.slot ?? null };
+    const [mineEl, theirsEl] = [...this.endClock.children] as HTMLElement[];
+    mineEl!.style.setProperty('--accent', players.find((p) => p.slot === mySlot)?.color ?? 'var(--t-accent)');
+    if (partner) theirsEl!.style.setProperty('--accent', partner.color);
     this.paired = players.some((p) => p.slot !== mySlot);
     this.partnerOnline = players.find((p) => p.slot !== mySlot && p.connected)?.name ?? null;
     // Alone, the turn state is the end-turn button's business: a status here read as "you are waiting".
@@ -643,9 +651,6 @@ export class Hud {
       // Who holds the command is the turn label's business now («TURNO DE ANA»): here only the underline.
       // The window minimized or the laptop asleep: back soon, their turn waits for them.
       const status = !p.connected ? 'Desconectado' : p.away ? 'Ausente' : alone || holds ? '' : ready[p.slot] ? 'Listo' : busy.has(p.slot) ? 'Con acciones' : 'Sin acciones';
-      // Their turn clock under the name (Arturo, 22/10 #45): a bar that drains, never seconds (tickClocks).
-      const clock = h('span.turn-clock', { 'aria-hidden': 'true' }, h('i'));
-      this.clockEls.set(p.slot, clock);
       this.players.append(
         h(
           `div.player${p.slot === mySlot ? '.me' : ''}${ready[p.slot] ? '.ready' : ''}${p.connected ? '' : '.offline'}${holds ? '.command' : ''}`,
@@ -653,7 +658,6 @@ export class Hud {
           h('span.dot'),
           h('span.name', {}, p.name),
           status ? h('span.status', {}, status) : null,
-          clock,
         ),
       );
     }
@@ -666,15 +670,19 @@ export class Hud {
    * breathing slowly. Gone outside the squad's turn.
    */
   tickClocks(): void {
-    for (const [slot, el] of this.clockEls) {
-      const c = turnClockOf(slot);
+    const [mineEl, theirsEl] = [...this.endClock.children] as HTMLElement[];
+    let any = false;
+    for (const [slot, el] of [[this.clockSlots.mine, mineEl!], [this.clockSlots.theirs, theirsEl!]] as const) {
+      const c = slot === null ? null : turnClockOf(slot);
       el.classList.toggle('none', !c);
+      if (c) any = true;
       if (!c) continue;
       (el.firstElementChild as HTMLElement).style.width = `${(Math.max(0, Math.min(1, c.left)) * 100).toFixed(1)}%`;
       el.classList.toggle('running', c.running);
       el.classList.toggle('low', c.left < 0.25);
       el.classList.toggle('out', c.left < 0.1);
     }
+    this.endClock.classList.toggle('none', !any);
   }
 
   /**

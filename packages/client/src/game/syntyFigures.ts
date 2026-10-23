@@ -7,7 +7,7 @@ import { CROWD, type Baker, type Member } from './crowd';
 import type { Armament, Blow, Carried, FeedPhase, FigurePose, FigureRig, Gear } from './figures';
 import { gaitsOf, type GaitMotion, type GaitStyle } from './gaits';
 import { UNIT_LAYER } from './post';
-import { atlasMaterial, atlasOf, dyedMaterial, loadModel, modelNow, type DyedMaterial } from './synty';
+import { atlasMaterial, atlasOf, dyedMaterial, ensureShade, loadModel, modelNow, type DyedMaterial } from './synty';
 import { AnimDriver, animSet, campClips, feedClips, MOTION_ORDER, whenAnimSet, type ActionPlay, type AnimSet, type Build } from './syntyAnims';
 import {
   CAMP_FREE,
@@ -575,6 +575,10 @@ const m1 = new THREE.Matrix4();
  * upper body eased forth and back over 5.8 to 7 s of the clip bobbed the head 5 cm every 1.2 s, the same for all.)
  */
 const PISTOL_HOLD = 6.4;
+/** The target's mark (mark): how fast it comes and goes (a second), and its breath, a share of it at this rate (radians a second). */
+const MARK_EASE = 6;
+const MARK_PULSE = 0.25;
+const MARK_RATE = 4.5;
 /**
  * How a soldier waits with the pistol (23/10 #1: one way for them all, as the rifle had: RIFLE_RESTS), by its way of
  * waiting with a rifle (restAs, Spec.rest), so a row's neighbours differ, and at ease always (Arturo: squared up read
@@ -1005,6 +1009,10 @@ export class SyntyFigure implements FigureRig {
   cutAway = false;
   /** The stance it stands in (STANCE_ORDER), −1 the plain idle. */
   private stance = -1;
+  /** Marked as the target (mark), and how far its mark is in. */
+  private marked = false;
+  private markK = 0;
+  private markClock = -Infinity;
   /** The stance the clips were last told (standing). */
   private stood = -1;
   /** The death it plays (DEATHS[build]), the seconds it takes and how far it is drawn in (model space: a cramped death); null standing. */
@@ -1275,6 +1283,7 @@ export class SyntyFigure implements FigureRig {
       this.atlas ??= atlasOf(o);
       material ??= plain && !palette ? plainMaterial(atlasOf(o)) : dyedMaterial(atlasOf(o), palette);
       o.material = material;
+      ensureShade(o.geometry);
       this.painted.push(o);
       o.castShadow = true;
       if (o instanceof THREE.SkinnedMesh) {
@@ -1678,7 +1687,11 @@ export class SyntyFigure implements FigureRig {
       this.pivot.position.y = lerp(this.hip, 0.14 * this.scale, p.fall) + p.hop;
       this.pivot.rotation.set(((-p.fall * Math.PI) / 2) * Math.cos(this.fallSide), 0, ((p.fall * Math.PI) / 2) * Math.sin(this.fallSide));
     }
-    this.flashTo(p.flash * 0.8);
+    // Marked as the target (mark), eased in and out, breathing a little.
+    const markDt = this.markClock === -Infinity ? 0 : THREE.MathUtils.clamp(time - this.markClock, 0, 0.25);
+    this.markClock = time;
+    this.markK = THREE.MathUtils.clamp(this.markK + (this.marked ? 1 : -1) * markDt * MARK_EASE, 0, 1);
+    this.flashTo(p.flash * 0.8, this.markK * (1 - MARK_PULSE * (0.5 + 0.5 * Math.sin(time * MARK_RATE))));
     this.uprightItem();
     const r = this.rest;
     if (!r) {
@@ -1873,7 +1886,7 @@ export class SyntyFigure implements FigureRig {
 
   /** Into the crowd if calm and its body is baked (starting the bake if not); false to pose the figure as ever. */
   private crowdPose(p: FigurePose, time: number): boolean {
-    const loop = this.spec.dead && !this.spec.own && !this.baking && !this.feedPhase && this.anim && this.model && CROWD.enabled && this.fade >= 1 ? this.calmLoop(p) : -1;
+    const loop = this.spec.dead && !this.spec.own && !this.baking && !this.feedPhase && !this.marked && this.markK <= 0 && this.anim && this.model && CROWD.enabled && this.fade >= 1 ? this.calmLoop(p) : -1;
     if (loop < 0) {
       this.leaveCrowd();
       return false;
@@ -2092,17 +2105,18 @@ export class SyntyFigure implements FigureRig {
     g.quaternion.slerpQuaternions(d.q, d.flat, u);
   }
 
-  /** A hit's red flash; a figure on the plain material takes its own while it lasts. */
-  private flashTo(k: number): void {
+  /** A hit's red flash, and its mark as the target (`mark`); a figure on the plain material takes its own while either lasts. */
+  private flashTo(k: number, mark = 0): void {
     const m = this.material;
     if (!m) return;
     if (!m.userData.shared) {
       m.userData.dyes.dyeFlash.value = k;
+      m.userData.dyes.dyeMark.value = mark;
       m.userData.dyes.dyeFade.value = this.fade;
       return;
     }
-    // A flash, or fading in: on a material of its own (the shared one is everyone's).
-    const lit = k > 0.005 || this.fade < 1;
+    // A flash, its mark, or fading in: on a material of its own (the shared one is everyone's).
+    const lit = k > 0.005 || mark > 0.005 || this.fade < 1;
     if (lit && !this.own) {
       this.own = dyedMaterial(atlasOf(this.painted[0]!));
       this.own.userData.dyes.dyeRim.value = ENEMY_RIM;
@@ -2111,8 +2125,14 @@ export class SyntyFigure implements FigureRig {
     if (this.painted[0]?.material !== use) for (const o of this.painted) o.material = use;
     if (lit) {
       this.own!.userData.dyes.dyeFlash.value = k;
+      this.own!.userData.dyes.dyeMark.value = mark;
       this.own!.userData.dyes.dyeFade.value = this.fade;
     }
+  }
+
+  /** Marked as the target being picked, or not (unitViews highlight): reddened and glowing, out of the crowd meanwhile. */
+  mark(on: boolean): void {
+    this.marked = on;
   }
 
   /** Level of detail: whether the bones can stay as they are this frame (see CALM_EVERY). */

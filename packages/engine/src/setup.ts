@@ -757,6 +757,15 @@ export function createMission(opts: MissionOptions): GameState {
     ...(siege ? { siege } : {}),
   };
 
+  // The squad starts looking into the map (Arturo, 23/10: «los soldados aparecen mirando al revés»): towards what the
+  // mission is about, or the map's middle. Only how they stand: the squad sees all round (los.ts inViewCone).
+  const ahead = layout.objectiveSpot ?? layout.item ?? layout.terminal ?? { x: (layout.width - 1) / 2, y: (layout.height - 1) / 2 };
+  for (const u of units) {
+    if (u.team !== 'xcom' || u.facing !== undefined || u.automaton) continue;
+    const f = facingTo(u.pos, ahead);
+    if (f !== null) u.facing = f;
+  }
+
   const tiles = [...layout.tiles];
   // The terminal only exists on hack missions (hand-made maps add it on demand).
   if (kind !== 'hack' && layout.terminal) tiles[layout.terminal.y * layout.width + layout.terminal.x] = 'floor';

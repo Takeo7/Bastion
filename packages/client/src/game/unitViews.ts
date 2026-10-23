@@ -329,6 +329,8 @@ export class UnitViews {
   private readonly selection: THREE.Mesh;
   private readonly partnerSelection: THREE.Mesh;
   private selectedId: string | null = null;
+  /** The target marked (highlight). */
+  private highlighted: string | null = null;
   /** How strong a hit's red flash shows (1 in battle; the trailer's close shots soften it: lab/trailer/sala.ts). */
   flashScale = 1;
   private hoveredId: string | null = null;
@@ -597,6 +599,24 @@ export class UnitViews {
       v.tag = tag;
       this.paintFlag(v);
     }
+  }
+
+  /**
+   * The target being picked (0.10.0, Arturo: the red line from the soldier went): marked on its body, reddened and
+   * glowing (syntyFigures mark), in the tactical view and over the shoulder alike; null, none. UI calls it each time the
+   * pick changes (into the aim, Tab, cancelled, fired).
+   */
+  highlight(id: string | null): void {
+    const was = this.highlighted ? this.views.get(this.highlighted) : undefined;
+    if (was && isFigure(was.rig)) was.rig.mark?.(false);
+    this.highlighted = id;
+    const v = id ? this.views.get(id) : undefined;
+    if (v && !v.dead && isFigure(v.rig)) v.rig.mark?.(true);
+  }
+
+  /** The target's flag kept in sight over the shoulder, where the others' go (UI's CSS: `.close-shot .uflag.target`); null, none. */
+  setTargetFlag(id: string | null): void {
+    for (const v of this.views.values()) v.flagEl.classList.toggle('target', v.id === id);
   }
 
   /** The enemies that see one of the squad: an eye on their flag (playtest 21/10 #11; game.ts watching). */

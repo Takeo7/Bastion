@@ -523,3 +523,20 @@ describe('doors (playtest 23/10 #11)', () => {
     }
   });
 });
+
+describe('the squad at the start (Arturo, 23/10)', () => {
+  it('looks into the map, towards what the mission is about or its middle, never at the edge behind it', () => {
+    for (const kind of ['elimination', 'recovery', 'hack'] as const) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const s = createMission({ map: { kind: 'generated', biome: 'city', seed }, slots: [0], rng: new Rng(seed), kind });
+        for (const u of s.units.filter((x) => x.team === 'xcom')) {
+          expect(u.facing, `${kind}/${seed} ${u.id}`).toBeDefined();
+          // A step that way gets nearer the middle of the map.
+          const mid = { x: (s.width - 1) / 2, y: (s.height - 1) / 2 };
+          const step = { x: u.pos.x + Math.cos(u.facing!) * 3, y: u.pos.y + Math.sin(u.facing!) * 3 };
+          expect(Math.hypot(step.x - mid.x, step.y - mid.y), `${kind}/${seed} ${u.id}`).toBeLessThan(Math.hypot(u.pos.x - mid.x, u.pos.y - mid.y) + 1);
+        }
+      }
+    }
+  });
+});

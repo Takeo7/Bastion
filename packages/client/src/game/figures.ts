@@ -62,6 +62,8 @@ export interface FigureRig extends UnitRig {
   fadeIn?(seconds: number): void;
   /** Out of the camera's way (the shot over a shoulder): dithered out, or back in. */
   veil?(on: boolean): void;
+  /** Marked as the target being picked (unitViews highlight), or not: on figures that dye (syntyFigures.ts). */
+  mark?(on: boolean): void;
   /** How far ahead of its feet the muzzle of a long gun in its hands comes when shouldered (tiles); null for anything else. */
   aimReach?(): number | null;
   /**

@@ -140,6 +140,20 @@ function shieldTexture(level: 1 | 2): THREE.CanvasTexture {
   return tex;
 }
 
+/** A round light, white in the middle and gone at the edge, for a tinted additive disc (the picked target's). */
+function glowTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+
 function flatRing(inner: number, outer: number, color: number, opacity: number): THREE.Mesh {
   const mesh = new THREE.Mesh(
     new THREE.RingGeometry(inner, outer, 36).rotateX(-Math.PI / 2),
@@ -394,6 +408,13 @@ export class Overlays {
   private readonly rangeRing = fatLine(0xffb070, 2);
   private readonly hover = flatRing(0.3, 0.42, 0xffffff, 0.9);
   private readonly targetRing = flatRing(0.5, 0.62, 0xff4a4a, 0.95);
+  /** Under a target picked (showAim's `marked`): a red light on its tile, bright in the middle, gone at the edge. */
+  private readonly targetGlow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.75, 40).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: glowTexture(), color: 0xff4a3a, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+  );
+  /** The ring is a picked target's (showAim's `marked`): it beats (tick). */
+  private ringMarked = false;
   private readonly blastCenter = flatRing(0.2, 0.32, 0xff8a2a, 1);
   private readonly partnerHover = flatRing(0.22, 0.3, 0xffffff, 0.8);
   private readonly evac: THREE.InstancedMesh;
@@ -569,7 +590,7 @@ export class Overlays {
     this.rangeRing.renderOrder = 9;
     this.note.element.className = 'tile-note';
     this.note.visible = false;
-    this.group.add(this.beacons, this.flares, this.breakBars, this.smoke, this.plans, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.pathHalo, this.path, this.aim, this.rangeRing, this.hover, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
+    this.group.add(this.beacons, this.flares, this.breakBars, this.smoke, this.plans, this.evac, this.item, this.tiles, this.hatch, this.detect, this.eyes, this.blast, this.breach, this.pathCasing, this.pathHalo, this.path, this.aim, this.rangeRing, this.hover, this.targetGlow, this.targetRing, this.blastCenter, this.partnerHover, ...this.shields);
     this.group.add(this.walkShade, this.dashShade, this.walkHalo, this.dashHalo, this.walkEdge, this.dashEdge, this.near, this.seen, this.noticed, this.sightEdge);
     this.group.add(this.spots, this.noises, this.note, this.fade, ...this.dots, this.pathDots, this.packTags);
     this.applyLook();
@@ -650,6 +671,12 @@ export class Overlays {
 
   /** Animates the objective beacon and the evac zone pulse. */
   tick(time: number): void {
+    // A picked target's ring beats slowly, and its light with it (#2).
+    if (this.ringMarked && this.targetRing.visible) {
+      const k = 0.5 + 0.5 * Math.sin(time * 4);
+      (this.targetRing.material as THREE.MeshBasicMaterial).opacity = 0.75 + 0.25 * k;
+      (this.targetGlow.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.3 * k;
+    } else (this.targetRing.material as THREE.MeshBasicMaterial).opacity = 0.95;
     if (this.item.visible) {
       const core = this.item.children[0]!;
       core.rotation.y = time * 1.2;
@@ -1279,15 +1306,23 @@ export class Overlays {
     });
   }
 
-  /** Line of fire and target ring; green for friendly targets. */
-  showAim(from: Vec2 | null, to: Vec2 | null, friendly = false): void {
+  /**
+   * The target ring, and the line of fire from `from`; green for friendly targets. `marked`: the target picked to
+   * shoot or strike (Arturo, 23/10 #2): no line from the soldier to it, its ring wider and lit, beating slowly (tick),
+   * and over it on the ground a soft red light.
+   */
+  showAim(from: Vec2 | null, to: Vec2 | null, friendly = false, marked = false): void {
     this.targetRing.visible = !!to;
-    this.aim.visible = !!from && !!to;
-    if (!from || !to) return;
+    this.targetGlow.visible = !!to && marked;
+    this.aim.visible = !!from && !!to && !marked;
+    this.ringMarked = marked;
+    if (!to) return;
     (this.targetRing.material as THREE.MeshBasicMaterial).color.set(friendly ? 0x4dff9a : 0xff4a4a);
     (this.aim.material as LineMaterial).color.set(friendly ? 0x4dff9a : 0xff5a5a);
     this.targetRing.position.copy(tileToWorld(to, 0.05));
-    reshape(this.aim, [...tileToWorld(from, 1.1).toArray(), ...tileToWorld(to, 1.1).toArray()]);
+    this.targetGlow.position.copy(tileToWorld(to, 0.04));
+    this.targetRing.scale.setScalar(marked ? 1.15 : 1);
+    if (from && !marked) reshape(this.aim, [...tileToWorld(from, 1.1).toArray(), ...tileToWorld(to, 1.1).toArray()]);
   }
 
   /**

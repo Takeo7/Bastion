@@ -125,6 +125,8 @@ export interface Dyes {
   /** The owner's band: 0 none, 1 painted. */
   dyeBand: { value: number };
   dyeFlash: { value: number };
+  /** Marked as the target being picked (unitViews highlight): 0 to 1, a red tint and a red glow on its edges. */
+  dyeMark: { value: number };
   /** A skin tone of its own (1 in dyeSkinOn), for the one swatch Synty paints every face and hand with. */
   dyeSkin: { value: THREE.Color };
   dyeSkinOn: { value: number };
@@ -144,10 +146,35 @@ export interface Dyes {
 export type DyedMaterial = THREE.MeshStandardMaterial & { userData: { dyes: Dyes } };
 
 /**
- * A soft light from the camera on the characters alone, no shine (the base's: playtest 22/10 #42, the face against
- * the sun was dark). Its colour times its strength, as a directional light's; black (none) unless the set drawing sets it.
+ * A key light on the characters alone, from above the camera and to its left as it looks (the base's: playtest 22/10
+ * #42, the face against the sun was dark; 23/10 #13: from the camera itself it lit them all alike, flat as a flash):
+ * its colour times its strength, as a directional light's, no shine; black (none) unless the set drawing sets it.
  */
 export const UNIT_FACE = { value: new THREE.Color(0, 0, 0) };
+/**
+ * And their sky as a share of the scene's: less where a set's key lights them (23/10 #13: Synty's renders, little
+ * fill; Arturo chose the key with half the sky, without the rim or the sheen tried with it). The battle's is all of it.
+ */
+export const UNIT_SKY = { value: 1 };
+
+/**
+ * How much a Sidekick piece's own shade darkens it in its folds (23/10 #13: the converter's baked occlusion, its "ao"
+ * colour; Synty's shader darkens them with a mask of its own at 0.75).
+ */
+const UNIT_SHADE = 0.75;
+const NO_SHADE = new Map<number, THREE.BufferAttribute>();
+
+/**
+ * A unit's geometry with its folds' shade (the "ao" colour the converter bakes on Sidekick's pieces: dyedMaterial reads
+ * it), or none at all where it has none (the other packs' characters): every geometry a dyed material draws has it.
+ */
+export function ensureShade(geometry: THREE.BufferGeometry): void {
+  if (geometry.getAttribute('color')) return;
+  const n = geometry.getAttribute('position').count;
+  let none = NO_SHADE.get(n);
+  if (!none) NO_SHADE.set(n, (none = new THREE.BufferAttribute(new Uint8Array(n).fill(255), 1, true)));
+  geometry.setAttribute('color', none);
+}
 
 /** A unit's own material on its pack's atlas, or on `map` (a soldier's own palette: wardrobe.ts); one program for all of them, uniforms apart. */
 export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial {
@@ -156,6 +183,7 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
     dyeAmount: { value: new THREE.Vector4(0, 0, 0, 0) },
     dyeBand: { value: 0 },
     dyeFlash: { value: 0 },
+    dyeMark: { value: 0 },
     dyeSkin: { value: new THREE.Color(1, 1, 1) },
     dyeSkinOn: { value: 0 },
     dyeRim: { value: 0 },
@@ -164,7 +192,7 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
   const m = new THREE.MeshStandardMaterial({ map: map ?? atlasTexture(atlas), roughness: 0.82, metalness: 0 }) as DyedMaterial;
   m.userData.dyes = uniforms;
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms, { unitNight: NIGHT, unitFace: UNIT_FACE });
+    Object.assign(shader.uniforms, uniforms, { unitNight: NIGHT, unitFace: UNIT_FACE, unitSky: UNIT_SKY });
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -172,29 +200,36 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
         #ifndef USE_UV1
           attribute vec2 uv1;
         #endif
-        varying vec2 vDyePart;`,
+        attribute vec4 color;
+        varying vec2 vDyePart;
+        varying float vUnitShade;`,
       )
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvDyePart = uv1;');
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvDyePart = uv1;\nvUnitShade = color.r;');
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
         varying vec2 vDyePart;
+        varying float vUnitShade;
         uniform vec3 dyeColors[6];
         uniform vec4 dyeAmount;
         uniform float dyeBand;
         uniform float dyeFlash;
+        uniform float dyeMark;
         uniform vec3 dyeSkin;
         uniform float dyeSkinOn;
         uniform float dyeRim;
         uniform float dyeFade;
         uniform float unitNight;
-        uniform vec3 unitFace;`,
+        uniform vec3 unitFace;
+        uniform float unitSky;`,
       )
       .replace(
         '#include <lights_fragment_end>',
         `#include <lights_fragment_end>
-        reflectedLight.indirectDiffuse += unitFace * saturate(dot(normal, normalize(vViewPosition))) * BRDF_Lambert(diffuseColor.rgb);`,
+        // Their sky (UNIT_SKY) and the key from the camera's upper left (UNIT_FACE).
+        reflectedLight.indirectDiffuse *= unitSky;
+        reflectedLight.indirectDiffuse += unitFace * saturate(dot(normal, normalize(vec3(-0.55, 0.6, 0.6)))) * BRDF_Lambert(diffuseColor.rgb);`,
       )
       .replace(
         '#include <map_fragment>',
@@ -220,7 +255,11 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
           // (No dynamic index into the vector: some drivers get it wrong.)
           float dyeK = dot(dyeAmount, vec4(equal(ivec4(dyePart - 1), ivec4(0, 1, 2, 3))));
           diffuseColor.rgb = mix(diffuseColor.rgb, dyed, dyeK);
-        }`,
+        }
+        // Its folds' own shade (ensureShade: baked by the converter, none where it has none).
+        diffuseColor.rgb *= mix(1.0, vUnitShade, ${UNIT_SHADE.toFixed(2)});
+        // Marked as the target: reddened (its glow is the emissive's).
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.0, 0.32, 0.26), 0.45 * dyeMark);`,
       )
       .replace(
         '#include <emissivemap_fragment>',
@@ -234,7 +273,9 @@ export function dyedMaterial(atlas: AtlasId, map?: THREE.Texture): DyedMaterial 
           totalEmissiveRadiance += vec3(0.42, 0.62, 0.8) * pow(rimFacing, 3.0) * 0.5 * nightK;
           totalEmissiveRadiance += diffuseColor.rgb * 0.07 * nightK;
         }
-        totalEmissiveRadiance += vec3(1.0, 0.23, 0.16) * dyeFlash;`,
+        totalEmissiveRadiance += vec3(1.0, 0.23, 0.16) * dyeFlash;
+        // Marked: a glow of its own, all over a little and most on its edges, so it reads by night and from above.
+        if (dyeMark > 0.0) totalEmissiveRadiance += vec3(1.0, 0.09, 0.05) * dyeMark * (0.1 + 1.2 * pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 2.0));`,
       );
   };
   m.customProgramCacheKey = () => 'synty-dye';

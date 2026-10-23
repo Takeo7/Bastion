@@ -360,6 +360,8 @@ function atRest(mesh: THREE.SkinnedMesh, weights: Partial<Record<WardrobeShape, 
   const nor = src.getAttribute('normal');
   const uv = src.getAttribute('uv');
   const part = src.getAttribute('uv1');
+  // Its folds' shade (the converter's baked "ao": synty.ts ensureShade), none where the piece has none.
+  const shade = src.getAttribute('color');
   const si = src.getAttribute('skinIndex');
   const sw = src.getAttribute('skinWeight');
   const n = pos.count;
@@ -380,7 +382,9 @@ function atRest(mesh: THREE.SkinnedMesh, weights: Partial<Record<WardrobeShape, 
   const D = new Float32Array(n * 2);
   const I = new Uint16Array(n * 4);
   const W = new Float32Array(n * 4);
+  const S = new Uint8Array(n);
   for (let v = 0; v < n; v++) {
+    S[v] = shade ? Math.round(THREE.MathUtils.clamp(shade.getX(v), 0, 1) * 255) : 255;
     mv.fromBufferAttribute(pos, v);
     mv0.copy(mv);
     mn.fromBufferAttribute(nor, v);
@@ -426,6 +430,7 @@ function atRest(mesh: THREE.SkinnedMesh, weights: Partial<Record<WardrobeShape, 
   out.setAttribute('uv1', new THREE.BufferAttribute(D, 2));
   out.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(I, 4));
   out.setAttribute('skinWeight', new THREE.BufferAttribute(W, 4));
+  out.setAttribute('color', new THREE.BufferAttribute(S, 1, true));
   const idx = src.getIndex();
   if (idx) out.setIndex(new THREE.Uint32BufferAttribute(Uint32Array.from(idx.array as ArrayLike<number>), 1));
   return { geometry: out, base: P0 };

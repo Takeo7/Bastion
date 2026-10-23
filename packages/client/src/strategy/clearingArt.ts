@@ -13,7 +13,7 @@ import type { Gear } from '../game/figures';
 import { buildUnit, IDLE_POSE, isFigure, type UnitRig } from '../game/models';
 import { ClearingLife, type Camp } from './clearingLife';
 import { STOREY } from '../game/coords';
-import { atlasTexture, loadModel, UNIT_FACE } from '../game/synty';
+import { atlasTexture, loadModel, UNIT_FACE, UNIT_SKY } from '../game/synty';
 import { tween } from '../game/tween';
 import { whenCampClips } from '../game/syntyAnims';
 import type { ArmoryStock, ClearingArt } from './clearing';
@@ -185,9 +185,16 @@ export class ClearingArtView implements ClearingArt {
     scene.fog = new THREE.FogExp2(this.look.haze, this.look.hazeDensity);
     this.skyDome.setMood(this.look, { night: false, snow: this.snow });
     scene.add(this.skyDome.group);
-    // The soldiers' soft light from the camera (synty.ts UNIT_FACE), on only while this scene is drawn: not the portraits'.
-    scene.onBeforeRender = () => void UNIT_FACE.value.set(this.look.fill).multiplyScalar(FACE_LIGHT);
-    scene.onAfterRender = () => void UNIT_FACE.value.setRGB(0, 0, 0);
+    // The soldiers' own key and sky (synty.ts UNIT_FACE, UNIT_SKY), only while this scene is drawn: not the portraits',
+    // nor the battle's.
+    scene.onBeforeRender = () => {
+      UNIT_FACE.value.copy(FACE_KEY).multiplyScalar(FACE_LIGHT);
+      UNIT_SKY.value = FACE_SKY;
+    };
+    scene.onAfterRender = () => {
+      UNIT_FACE.value.setRGB(0, 0, 0);
+      UNIT_SKY.value = 1;
+    };
   }
 
   /** The camera the clearing is seen with, for what the map does by it (its lamps, what fades). */
@@ -1326,10 +1333,15 @@ export class ClearingArtView implements ClearingArt {
 }
 
 /**
- * How strong the soldiers' light from the camera is (synty.ts UNIT_FACE, in the fill's colour; the sun is 3.5): a face
- * with the sun behind it reads, without a spotlight on it (playtest 22/10 #42). Not the battle's: seen from above.
+ * The soldiers' key on the clearing (synty.ts UNIT_FACE, from the camera's upper left; the sun is 3.5): a face with
+ * the sun behind it reads (playtest 22/10 #42) and the body has its light and shade (23/10 #13: from the camera, as it
+ * was, it lit them flat); their sky this share of the scene's (the one Arturo chose: the key from the side with half
+ * the sky). Not the battle's: seen from above.
  */
-const FACE_LIGHT = 1.4;
+const FACE_LIGHT = 2.4;
+const FACE_SKY = 0.6;
+/** The key's colour: a warm white whatever the day's fill (the snow's cool one greyed them). */
+const FACE_KEY = new THREE.Color(0xfff1e2);
 
 /** How far from La Lata's side one leaning on it stands (its shoulder to the armour plates, tiles), and where along it (of its length from the middle: between the wheels). */
 const LEAN_OFF = 0.46;

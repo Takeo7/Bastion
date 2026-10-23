@@ -760,6 +760,8 @@ export class Game {
   private killCam: string | null = null;
   /** How long the camera stays on one fallen after the death played (FEED_HOLD when eaten); null: the usual. */
   private killHold: number | null = null;
+  /** The enemy marked as the target picked (aim, #2): Arte's highlight on its body. */
+  private highlighted: string | null = null;
   /** The aim's pose (updateAimPose): who aims, and at whom with what; and who fired from it (its gun left up). */
   private aimPose: { unit: string; key: string } | null = null;
   private aimFired: string | null = null;
@@ -5072,10 +5074,21 @@ export class Game {
     this.refreshStatus();
   }
 
-  /** The aim line, kept: real time's pointer draws it again after its own (rtHover). */
+  /**
+   * The aim line, kept: real time's pointer draws it again after its own (rtHover). By turns, at an enemy picked to
+   * shoot or strike, no line (Arturo, 23/10 #2): the enemy marked instead, its ring lit and Arte's highlight on it.
+   */
   private aim(from: Vec2 | null, to: Vec2 | null, friendly = false): void {
     this.aimLine = from && to ? { from, to, friendly } : null;
-    this.overlays.showAim(from, to, friendly);
+    const target = this.mode.kind === 'target' && !friendly && !this.view.realtime ? this.currentTarget()?.unit : undefined;
+    const marked = !!target && !!to && samePlace(target.pos, to);
+    this.overlays.showAim(from, to, friendly, marked);
+    const id = marked ? target!.id : null;
+    if (id === this.highlighted) return;
+    this.highlighted = id;
+    // Its body lit red (Arte's highlight), and its flag kept over the shoulder, its health with it (#3).
+    this.units.highlight(id);
+    this.units.setTargetFlag(id);
   }
 
   /** Builds the target panel and draws the aim line for the current target. */
@@ -5191,8 +5204,9 @@ export class Game {
     this.updateCursor(hovered);
     this.units.setHovered(hovered && (hovered.team === 'xcom' || this.visibleAliens.has(hovered.id)) ? hovered.id : null);
     this.units.setTags(this.enemyTags(u, tile));
-    // An enemy under the pointer, or the one aimed at: what it sees (Arturo, 17/10: the dead see in a cone).
-    const watched = hovered && hovered.team === 'alien' && this.visibleAliens.has(hovered.id) ? hovered : this.currentTarget()?.unit;
+    // An enemy under the pointer: what it sees (Arturo, 17/10: the dead see in a cone). Not the one aimed at: its red
+    // over the ground drowned the target's own mark (Arturo, 23/10 #2).
+    const watched = hovered && hovered.team === 'alien' && this.visibleAliens.has(hovered.id) && this.mode.kind !== 'target' ? hovered : undefined;
     const shown = watched?.alive && watched.team === 'alien' && !this.view.outcome && !this.mapView.isCutAway(watched.pos) ? watched : null;
     this.watched = shown?.id ?? null;
     this.overlays.setVision(shown ? { ...this.visionOf(shown), facing: this.lookOf(shown) } : null);

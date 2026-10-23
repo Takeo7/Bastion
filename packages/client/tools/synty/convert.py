@@ -80,6 +80,11 @@ HEADGEAR = 1
 BAND = 5
 # The owner's band: this stretch of the upper arm, from the shoulder (0) to the elbow (1).
 BAND_SPAN = (0.18, 0.5)
+# A Sidekick piece's own shade in its folds (23/10 #13: Synty's shader darkens them with a mask we don't have): its
+# ambient occlusion, baked to a colour of its corners ("ao"), this many samples, out to this far (game units: the
+# hollow under a collar, a strap, a fold).
+AO_SAMPLES = 32
+AO_DISTANCE = 0.12
 
 
 def canonical(name):
@@ -556,6 +561,26 @@ def write_palette(path, own, fallbacks, paint={}, size=256):
     img.save(filepath=path, quality=100)
 
 
+def occlusion(mesh):
+    """The mesh's ambient occlusion by itself (the parts of one piece on one another), baked to its "ao" colour."""
+    scene = bpy.context.scene
+    scene.render.engine = 'CYCLES'
+    scene.cycles.device = 'CPU'
+    scene.cycles.samples = AO_SAMPLES
+    if scene.world is None:
+        scene.world = bpy.data.worlds.new('World')
+    scene.world.light_settings.distance = AO_DISTANCE
+    scene.render.bake.target = 'VERTEX_COLORS'
+    scene.render.bake.use_selected_to_active = False
+    me = mesh.data
+    attr = me.color_attributes.new(name='ao', type='FLOAT_COLOR', domain='POINT')
+    me.color_attributes.active_color = attr
+    bpy.ops.object.select_all(action='DESELECT')
+    mesh.select_set(True)
+    bpy.context.view_layer.objects.active = mesh
+    bpy.ops.object.bake(type='AO')
+
+
 def sidekick(job, scale):
     """
     A Sidekick character, whole (the dead, the living): its preset's parts on one skeleton, its build (the preset's
@@ -577,8 +602,9 @@ def sidekick(job, scale):
         write_parts(mesh, arm, atlas, skins=skin_colours(mesh, atlas))
     top = max((mesh.matrix_world @ v.co).z for v in mesh.data.vertices)
     arm['height'] = round(top, 4)
+    occlusion(mesh)
     print(f"[sidekick] {job['id']}: {len(job['parts'])} parts, {sum(len(p.vertices) - 2 for p in mesh.data.polygons)} triangles, {len(arm.data.bones)} bones, {top:.3f} tall", flush=True)
-    export(job['out'], skins=True)
+    export(job['out'], skins=True, colors='ao')
 
 
 def wardrobe(job, scale):
@@ -614,8 +640,9 @@ def wardrobe(job, scale):
         arm['cells'] = sorted({min(15, int(uv[i].uv[0] * 16)) + min(15, int((1 - uv[i].uv[1]) * 16)) * 16 for i in range(len(uv))})
     top = max((mesh.matrix_world @ v.co).z for v in mesh.data.vertices)
     arm['height'] = round(top, 4)
+    occlusion(mesh)
     print(f"[wardrobe] {job['id']}: {len(job['parts'])} parts, {sum(len(p.vertices) - 2 for p in mesh.data.polygons)} triangles, {len(mesh.data.vertices)} vertices, {len(arm.data.bones)} bones", flush=True)
-    export(job['out'], skins=True, morphs=True)
+    export(job['out'], skins=True, morphs=True, colors='ao')
 
 
 def merge_attachments(arm, body, hung):
@@ -1005,8 +1032,11 @@ def texture(job):
 
 # -------------------------------------------------------------------- export
 
-def export(path, skins, animations=False, morphs=False):
+def export(path, skins, animations=False, morphs=False, colors=None):
+    # (`colors`: the colour attribute of that name as the mesh's COLOR_0; else none, as the materials use none.)
+    extra = {'export_vertex_color': 'NAME', 'export_vertex_color_name': colors} if colors else {}
     bpy.ops.export_scene.gltf(
+        **extra,
         filepath=path,
         export_format='GLB',
         export_image_format='NONE',
