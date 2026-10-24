@@ -120,11 +120,12 @@ namespace Bastion.UI.Hud
             public const string Continue = "Continuar";
             public const string Settings = "Ajustes";
             public const string Controls = "Controles";
-            public const string Leave = "Volver al menú de inicio";
+            // «Menú principal», as everywhere else (Lore, 24/10): «inicio» read as the start screen, which is another.
+            public const string Leave = "Volver al menú principal";
             public const string Back = "‹ Volver";
             /// <summary>«Abandonar la misión» off while one's own call waits: the partner answers on their bar.</summary>
             public const string AbandonWaitingTip = "Contesta en su barra";
-            public const string LeaveTitle = "¿Volver al menú de inicio?";
+            public const string LeaveTitle = "¿Volver al menú principal?";
             public const string LeaveCampaign = "La misión queda guardada tal como está; «Continuar campaña» vuelve a ella.";
             public const string LeaveSkirmish = "La escaramuza se acaba.";
             public const string LeaveYes = "Volver al menú";

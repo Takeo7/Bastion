@@ -1,12 +1,11 @@
 # Bastión: normas para las sesiones de Claude
 
-Táctica por turnos cooperativa para dos jugadores (XCOM 2 con zombis). Monorepo TypeScript:
-- `packages/engine`: reglas, deterministas;
-- `packages/server`: anfitrión Node;
-- `packages/client`: Three.js;
-- `packages/desktop`: Electron.
+Táctica por turnos cooperativa para dos jugadores (XCOM 2 con zombis). Desde el 23/10 el juego se está pasando a Unity con todo en C# ([docs/UNITY.md](docs/UNITY.md)):
+- `engine-cs/`: las reglas en C#, deterministas, idénticas al bit con las de TypeScript; también la red (`package/Runtime/Net`);
+- `unity/Bastion/`: el proyecto de Unity 6.3 (URP), con el cliente;
+- `packages/`: la versión de TypeScript (engine, server, Three.js, Electron), congelada en la 0.10.1, solo para arreglos graves y como referencia del port.
 
-Antes de nada, lee [docs/TRASPASO.md](docs/TRASPASO.md) (estado y decisiones) y [docs/EQUIPO.md](docs/EQUIPO.md) (roles, archivos de cada uno y normas).
+Antes de nada, lee [docs/UNITY.md](docs/UNITY.md) (estado del port, lo que falta y cómo se trabaja), [docs/TRASPASO.md](docs/TRASPASO.md) (decisiones del juego) y [docs/EQUIPO.md](docs/EQUIPO.md) (roles, archivos de cada uno y normas).
 
 ## Normas fijas
 
@@ -25,6 +24,16 @@ Antes de nada, lee [docs/TRASPASO.md](docs/TRASPASO.md) (estado y decisiones) y 
 - **Rendimiento:** ≤4,2 ms por fotograma en «alto» en el PC de referencia (Windows, RTX 3090); en el Mac, «medio» a ≥30 fps. La telemetría va a `data/red.log`.
 
 ## Comprobar antes de entregar
+
+```bash
+dotnet test engine-cs/tests
+```
+
+```bash
+unity/tools/unity.sh
+```
+
+Si se toca `packages/` (solo arreglos graves de la 0.10.1):
 
 ```bash
 npm run typecheck

@@ -626,5 +626,27 @@ En `unity/Bastion/Assets/Bastion/UI/` (asmdef `Bastion.UI`). Compila en el proye
 | sí | Cono de visión de un enemigo y el ojo en su bandera; marcas de la misión (evacuación, balizas, objeto, bengalas) con flechas en el borde de la pantalla; notas de la casilla bajo el puntero |
 | sí | Planes sin el mando (se ven los del compañero y se recorren al llegar el mando) y señalar un sitio (G, Mayús+clic, clic con la rueda); Mayús+rueda cambia de planta |
 | sí | Menú del juego (Esc o «Menú»): Continuar, Ajustes (velocidad del turno enemigo, seguir las rutas planeadas), Controles con las reglas de la noche, y volver al menú, abandonar y salir, cada uno con su pregunta |
-| no | El camino sobre los peldaños de una escalera; el «§» de la fuente y los iconos de puertas |
-| no | En Ajustes: el sonido y los gráficos (cuando existan en Unity) y el tamaño de la interfaz; la hoja del soldado, la mochila y la ficha del enemigo |
+| sí | El camino (y los planes) sobre los peldaños de una escalera, a la altura de la 0.10.1 (`MapSpace.StairLift` de Arte, la misma con la que pisan las figuras); los iconos de puertas, dibujados con Painter2D (`LineIcon`); el «§» como la caja de suministros (`BastionSuministros.ttf`, fuente de reserva de Oswald y Barlow); las notas y las líneas de las banderas no se salen de la pantalla |
+| sí | Rendimiento: telemetría `[rend …]` al red.log del anfitrión cada 10 s (`Perf`, de perf.ts; la cpu es el trabajo del hilo principal, con la espera de la pantalla aparte), y en Ajustes Gráficos (Altos, Medios, Bajos: los niveles de calidad de Arte), Límite de FPS y Mostrar FPS (`GameSettings`); fuera del combate, 60 fps como mucho; `BASTION_PERFILAR=<fotogramas>` saca al registro los marcadores más caros (`Perfil`) |
+| sí | El suelo del mapa (en `Client/Map`, sobre MapSpace y el catálogo de Arte): `GroundMap` y `Bastion/Ground` (ground.ts: losas, bordillos, césped, asfalto con línea central, pasos de cebra, grietas, musgo; el campo y las instalaciones; el agua del canal), lo menudo (`GroundCover`: scatterCover con los mismos hashes, alcantarillas, sumideros, islas de surtidores) y la sombra de contacto horneada (`GroundOcclusion`, de groundAO.ts) |
+| sí | El marco fuera de juego (`FrameArt`, `FrameView`: frameArt.ts con lo que usa de dressing.ts; el canal, la vía, la autovía, el agua y el barranco), las calles vestidas (`StreetDressing`, de dressStreets: farolas, postes y cables, señales, bocas de riego y buzones, bolsas; `GroundView.Lamps` para las luces de noche de Arte), y el foco del corte de edificios de Arte desde el controlador |
+| no | En Ajustes: el sonido (cuando exista en Unity) y el tamaño de la interfaz; la hoja del soldado, la mochila y la ficha del enemigo |
+
+### 7.1 El estilo del HUD, aparcado (Arturo, 24/10)
+
+El HUD de verdad se queda con la Mixta de hoy. Arturo: «vamos a dejarlo como está y ya volveremos».
+
+- **Las cinco primeras** (Chatarra, Pavonado, Biselado, Mixta oxidada, Campaña) eran el HUD de hoy con piezas de Synty encima. Arturo dijo «ninguna»: quitadas, y no se vuelven a proponer.
+- **Las tres guardadas** siguen cómo enseña Synty sus paquetes en sus escenas de muestra:
+  - **Taller**, de Apocalypse HUD: la barra como un aparato con cilindros y contador, y el texto suelto sobre la escena.
+  - **Mando**, de Military Combat HUD: placas azul acero, escuadra numerada, hexágonos y el arma encima de Terminar turno.
+  - **Losetas**, de Modern Menus: losetas inclinadas y números en hexágonos.
+- **Dónde están:**
+  - las hojas de estilo, en `Assets/Bastion/UI/Propuestas/{Taller,Mando,Losetas}.uss`, generadas desde plantillas con `sprite("…")`;
+  - las piezas que se añaden y sus datos, en `Scripts/Hud/Lab/Temas.cs`;
+  - solo entran en las capturas del editor: `HudShots.PartidaTema` con `BASTION_TEMA=<nombre>` y la escena Partida (`BASTION_ROTULO=1` para el rótulo);
+  - las capturas, en `.dev-snapshots/ui/unity/tema-{Taller,Mando,Losetas}.png` y `temas3-hoja.png`.
+- **Las referencias:**
+  - las escenas de muestra de los tres paquetes, capturadas en un proyecto desechable, en `.dev-snapshots/ui/unity/referencias/` (una hoja por paquete y las pantallas que importan);
+  - lo que aportan las galerías de la web y el vídeo de Apocalypse, en `referencias/hoja-web.png`.
+- **Lo que es 3D:** solo los iconos de Modern Menus (139 mallas, con un shader graph de URP que el paquete no trae). Apocalypse y Military son sprites.

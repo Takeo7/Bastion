@@ -362,6 +362,7 @@ namespace Bastion.UI.Combat
                 Overlay.ShowPartner(partnerPicked != picked ? FeetOf(partnerPicked) : null, partnerColor);
             }
             Keys();
+            Cutaway();
             var mouse = Mouse.current;
             if (mouse == null || Rig == null) return;
             var at = mouse.position.ReadValue();
@@ -396,6 +397,26 @@ namespace Bastion.UI.Combat
         }
 
         float lastFloorWheel = -10;
+
+        /// <summary>The shot over a shoulder on now, and who is in it (the event player's).</summary>
+        public System.Func<(string attacker, string target)?> CloseFocus;
+
+        /// <summary>
+        /// What the buildings' cutaway opens for (Arte's Cutaway; game.ts mapView.watch): the picked soldier, the tile
+        /// under the pointer, the target, and in the shot over a shoulder who is in it. Field by field: its level is
+        /// MapView.ShowLevel's.
+        /// </summary>
+        void Cutaway()
+        {
+            var cut = Bastion.Client.Map.Cutaway.Current;
+            if (cut == null) return;
+            cut.Focus.selected = picked;
+            cut.Focus.hover = hover;
+            cut.Focus.target = mode == Mode.Target ? targetId : null;
+            var close = CloseFocus?.Invoke();
+            cut.Focus.closeAttacker = close?.attacker;
+            cut.Focus.closeTarget = close?.target;
+        }
 
         /// <summary>The keys (game.ts onKey), but the camera's (CameraRig: WASD, arrows, Q/E).</summary>
         void Keys()

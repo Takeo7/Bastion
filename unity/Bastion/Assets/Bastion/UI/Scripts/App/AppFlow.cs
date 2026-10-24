@@ -17,8 +17,15 @@ namespace Bastion.UI.App
     /// Over any scene, its own card and line: the host closed the game («Ana ha cerrado la partida»: back in, to the
     /// start screen, or out, as net.ts hostClosed did), nothing changing scene meanwhile; the seat opened in another
     /// window (to the start screen, saying so); and the network's state at the top.
+    ///
+    /// A document without a panel draws nothing (24/10: the app came up black): each one gets Resources/HudPanel, with
+    /// an error in the log. And `-shotOut &lt;file.png&gt; [-shotAfter &lt;seconds&gt;] [-shotQuit]` takes a picture of the
+    /// built app's screen, to check the apps themselves and not only the editor.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
+    // After UIDocument's own (−100), which makes the root this reads in OnEnable; before the screens (0), so a panel it
+    // puts on their documents is there when they draw.
+    [DefaultExecutionOrder(-50)]
     public sealed class AppFlow : MonoBehaviour
     {
         [SerializeField] string startScene = "Inicio";
@@ -28,11 +35,17 @@ namespace Bastion.UI.App
         NetLink link;
         VisualElement root;
         VisualElement card;
+        /// <summary>The veil under the card: over the whole screen, so the HUD's own cards don't show through (24/10).</summary>
+        VisualElement veil;
         Label cardNote;
         Label line;
         bool loading;
         bool rejoining;
         NetStatus status = NetStatus.Open;
+        Perf perf;
+        /// <summary>The start scene's two screens, found once (Unity's null again once the scene is gone).</summary>
+        StartScreen start;
+        RoomMenu room;
 
         void Awake()
         {
@@ -43,12 +56,61 @@ namespace Bastion.UI.App
             }
             instance = this;
             DontDestroyOnLoad(gameObject);
+            foreach (var doc in FindObjectsByType<UIDocument>(FindObjectsInactive.Include, FindObjectsSortMode.None)) PanelOf(doc);
             link = NetLink.Instance;
             link.HostClosed += OnHostClosed;
             link.Replaced += OnReplaced;
             link.Status += OnStatus;
             link.Rejoining += OnRejoining;
             SceneManager.sceneLoaded += OnSceneLoaded;
+            // The graphics settings kept on this computer, and how the game runs told to the host (Perf).
+            GameSettings.Apply();
+            perf = gameObject.AddComponent<Perf>();
+            perf.BattleScene = battleScene;
+            // BASTION_PERFILAR=<frames>: where the main thread's time goes, in the log (Perfil).
+            if (int.TryParse(System.Environment.GetEnvironmentVariable("BASTION_PERFILAR"), out var measured))
+                gameObject.AddComponent<Perfil>().Frames = measured;
+            var shot = Arg("-shotOut");
+            if (!string.IsNullOrEmpty(shot)) StartCoroutine(Shoot(shot));
+        }
+
+        /// <summary>
+        /// A document's panel: its own, else Resources/HudPanel (set on it), with an error saying so; null if even that is
+        /// missing.
+        /// </summary>
+        public static PanelSettings PanelOf(UIDocument doc)
+        {
+            if (doc.panelSettings != null || doc.parentUI != null) return doc.panelSettings;
+            var panel = Resources.Load<PanelSettings>("HudPanel");
+            Debug.LogError($"[app] UIDocument «{doc.name}» ({doc.gameObject.scene.name}) without PanelSettings: " + (panel != null ? "Resources/HudPanel put on it" : "Resources/HudPanel missing too, it draws nothing"));
+            if (panel != null) doc.panelSettings = panel;
+            return panel;
+        }
+
+        /// <summary>The value after a command-line flag; null without it.</summary>
+        static string Arg(string flag)
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            for (var i = 0; i < args.Length - 1; i++)
+                if (args[i] == flag) return args[i + 1];
+            return null;
+        }
+
+        /// <summary>
+        /// `-shotOut`: the screen as the player sees it, `-shotAfter` seconds in (6 unless said), saved where it says;
+        /// `-shotQuit` closes the app once it is written. Not in batch mode without graphics: there is no screen.
+        /// </summary>
+        System.Collections.IEnumerator Shoot(string path)
+        {
+            var after = float.TryParse(Arg("-shotAfter"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : 6;
+            yield return new WaitForSecondsRealtime(after);
+            var folder = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path));
+            if (!string.IsNullOrEmpty(folder)) System.IO.Directory.CreateDirectory(folder);
+            ScreenCapture.CaptureScreenshot(path);
+            // Written after the frame ends: up to three seconds, then whether it is there.
+            for (var i = 0; i < 60 && !System.IO.File.Exists(path); i++) yield return new WaitForSecondsRealtime(0.05f);
+            Debug.Log(System.IO.File.Exists(path) ? $"[app] screen saved: {path}" : $"[app] screen NOT saved: {path}");
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-shotQuit") >= 0) Quit();
         }
 
         void OnEnable()
@@ -73,6 +135,18 @@ namespace Bastion.UI.App
             line.style.paddingLeft = 10;
             line.style.paddingRight = 10;
             Ui.Show(line, false);
+            // Ajustes' «Mostrar FPS»: top right, beside the Menú tab in the battle (Perf places and fills it).
+            var counter = Ui.Text("", "app__fps font-title", root);
+            counter.pickingMode = PickingMode.Ignore;
+            counter.style.position = Position.Absolute;
+            counter.style.top = 8;
+            counter.style.right = 8;
+            counter.style.fontSize = 11;
+            counter.style.backgroundColor = new Color(0.07f, 0.08f, 0.08f, 0.94f);
+            counter.style.paddingLeft = 6;
+            counter.style.paddingRight = 6;
+            Ui.Show(counter, GameSettings.ShowFps);
+            if (perf != null) perf.Counter = counter;
         }
 
         void OnDestroy()
@@ -112,10 +186,11 @@ namespace Bastion.UI.App
         void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             loading = false;
+            GameSettings.InMenu = scene.name != battleScene;
             if (scene.name != battleScene) return;
             var hud = new GameObject("HUD");
             SceneManager.MoveGameObjectToScene(hud, scene);
-            hud.AddComponent<UIDocument>().panelSettings = GetComponent<UIDocument>().panelSettings;
+            hud.AddComponent<UIDocument>().panelSettings = PanelOf(GetComponent<UIDocument>());
             var root = hud.AddComponent<HudRoot>();
             hud.AddComponent<Bastion.UI.Combat.CombatSession>().Hud = root;
         }
@@ -127,10 +202,10 @@ namespace Bastion.UI.App
         }
 
         /// <summary>In the start scene: the start screen out of a room, its menu in one (one at a time on its document).</summary>
-        static void Screens(bool outside)
+        void Screens(bool outside)
         {
-            var start = FindFirstObjectByType<StartScreen>(FindObjectsInactive.Include);
-            var room = FindFirstObjectByType<RoomMenu>(FindObjectsInactive.Include);
+            if (start == null) start = FindFirstObjectByType<StartScreen>(FindObjectsInactive.Include);
+            if (room == null) room = FindFirstObjectByType<RoomMenu>(FindObjectsInactive.Include);
             if (start == null || room == null) return;
             if (start.enabled == outside && room.enabled == !outside) return;
             // The one going off first: the one coming on clears the document and draws itself.
@@ -147,7 +222,14 @@ namespace Bastion.UI.App
         {
             if (link.Hosting || card != null) return;
             var host = link.PartnerName;
-            card = Ui.El("card panel");
+            veil = Ui.El();
+            veil.style.position = Position.Absolute;
+            veil.style.left = 0;
+            veil.style.top = 0;
+            veil.style.right = 0;
+            veil.style.bottom = 0;
+            veil.style.backgroundColor = new Color(0.02f, 0.03f, 0.03f, 0.78f);
+            card = Ui.El("card panel", veil);
             card.style.position = Position.Absolute;
             card.style.alignSelf = Align.Center;
             card.style.top = Length.Percent(32);
@@ -159,7 +241,7 @@ namespace Bastion.UI.App
             actions.Add(retry);
             actions.Add(new Button(Home) { text = Lore.HostClosed.Home });
             actions.Add(new Button(Quit) { text = Lore.QuitText.Button });
-            root.Add(card);
+            root.Add(veil);
         }
 
         /// <summary>Back in, the same seat (NetLink keeps it by host): «Aún no está abierta» while it isn't.</summary>
@@ -195,7 +277,8 @@ namespace Bastion.UI.App
 
         void CloseCard()
         {
-            card?.RemoveFromHierarchy();
+            veil?.RemoveFromHierarchy();
+            veil = null;
             card = null;
             cardNote = null;
         }

@@ -1,0 +1,920 @@
+{
+ "kitScale": 1.2,
+ "pieces": {
+  "houseWall": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_ExteriorWall_GroundFloor_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_ExteriorWall_GroundFloor_01.fbx"
+  },
+  "houseDoorWall": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_ExteriorWall_GroundFloor_Door_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_ExteriorWall_GroundFloor_Door_01.fbx"
+  },
+  "houseWindowWall": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_ExteriorWall_GroundFloor_Window_01",
+   "centre": [
+    3.75,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     3.125,
+     -50,
+     -0.02
+    ],
+    [
+     4.375,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_ExteriorWall_GroundFloor_Window_01.fbx"
+  },
+  "houseLintel": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_ExteriorWall_GroundFloor_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.35
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_ExteriorWall_GroundFloor_01.fbx"
+  },
+  "houseCorner": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_ExteriorWall_GroundFloor_Corner_01",
+   "centre": [
+    -0.12,
+    -0.12
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     -50,
+     -50,
+     -0.02
+    ],
+    [
+     50,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_ExteriorWall_GroundFloor_Corner_01.fbx"
+  },
+  "houseDoor": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Door_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "parts": true,
+   "leaf": "SM_Bld_House_Door",
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Door_01.fbx"
+  },
+  "houseWindow": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_Window_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "drop": [
+    "Glass"
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_Window_01.fbx"
+  },
+  "shopWindow": {
+   "pack": "office",
+   "fbx": "SM_Bld_Wall_Glass_01",
+   "centre": [
+    1.25,
+    -0.075
+   ],
+   "run": "x",
+   "out": -1,
+   "drop": [
+    "01_Glass"
+   ],
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Office_SourceFiles/FBX/SM_Bld_Wall_Glass_01.fbx"
+  },
+  "shopDoor": {
+   "pack": "office",
+   "fbx": "SM_Bld_Wall_Glass_Door_01",
+   "centre": [
+    0.67,
+    -0.075
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     -0.05,
+     -50,
+     -50
+    ],
+    [
+     1.299,
+     50,
+     50
+    ]
+   ],
+   "parts": true,
+   "leaf": "SM_Bld_Glass_Door_01",
+   "drop": [
+    "Door_01_Glass"
+   ],
+   "src": "assets-src/synty/POLYGON_Office_SourceFiles/FBX/SM_Bld_Wall_Glass_Door_01.fbx"
+  },
+  "roomWall": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_InteriorWall_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_InteriorWall_01.fbx"
+  },
+  "roomDoorWall": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_InteriorWall_Door_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "parts": true,
+   "leaf": "SM_Bld_House_InteriorWall_Door_02",
+   "keep": [
+    [
+     0.625,
+     -50,
+     -0.02
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_InteriorWall_Door_01.fbx"
+  },
+  "roomLintel": {
+   "pack": "town",
+   "fbx": "SM_Bld_House_InteriorWall_01",
+   "centre": [
+    1.25,
+    -0.1
+   ],
+   "run": "x",
+   "out": -1,
+   "keep": [
+    [
+     0.625,
+     -50,
+     2.35
+    ],
+    [
+     1.875,
+     50,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Bld_House_InteriorWall_01.fbx"
+  },
+  "blockWindow": {
+   "pack": "city",
+   "fbx": "SM_Bld_Apartment_01",
+   "centre": [
+    0.025,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "unit": 100,
+   "storey": 3,
+   "keep": [
+    [
+     0.018750000000000003,
+     -0.004,
+     -0.0002
+    ],
+    [
+     0.03125,
+     0.004,
+     0.0302
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_City_SourceFiles_v6/FBX/SM_Bld_Apartment_01.fbx"
+  },
+  "blockPlain": {
+   "pack": "city",
+   "fbx": "SM_Bld_Apartment_01",
+   "centre": [
+    0.025,
+    0
+   ],
+   "run": "y",
+   "out": -1,
+   "unit": 100,
+   "storey": 3,
+   "keep": [
+    [
+     -0.004,
+     0.018750000000000003,
+     -0.0002
+    ],
+    [
+     0.004,
+     0.03125,
+     0.0302
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_City_SourceFiles_v6/FBX/SM_Bld_Apartment_01.fbx"
+  },
+  "blockTopWindow": {
+   "pack": "city",
+   "fbx": "SM_Bld_Apartment_02",
+   "centre": [
+    0.025,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "unit": 100,
+   "storey": 3,
+   "keep": [
+    [
+     0.018750000000000003,
+     -0.004,
+     -0.0002
+    ],
+    [
+     0.03125,
+     0.004,
+     0.0302
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_City_SourceFiles_v6/FBX/SM_Bld_Apartment_02.fbx"
+  },
+  "blockTopPlain": {
+   "pack": "city",
+   "fbx": "SM_Bld_Apartment_02",
+   "centre": [
+    0.025,
+    0
+   ],
+   "run": "y",
+   "out": -1,
+   "unit": 100,
+   "storey": 3,
+   "keep": [
+    [
+     -0.004,
+     0.018750000000000003,
+     -0.0002
+    ],
+    [
+     0.004,
+     0.03125,
+     0.0302
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_City_SourceFiles_v6/FBX/SM_Bld_Apartment_02.fbx"
+  },
+  "ladder": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Ladder_01",
+   "centre": [
+    0,
+    0.035
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 3,
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Prop_Ladder_01.fbx"
+  },
+  "bunkerWall": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Bunker_Wall_Concrete_x1_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     -50,
+     0.625,
+     -0.02
+    ],
+    [
+     50,
+     1.875,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Bunker_Wall_Concrete_x1_01.fbx"
+  },
+  "bunkerLintel": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Bunker_Wall_Concrete_x1_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     -50,
+     0.625,
+     2.1
+    ],
+    [
+     50,
+     1.875,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Bunker_Wall_Concrete_x1_01.fbx"
+  },
+  "bunkerWindow": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Bunker_Wall_Metal_Door_x1_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     -50,
+     0.625,
+     -0.02
+    ],
+    [
+     50,
+     1.875,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Bunker_Wall_Metal_Door_x1_01.fbx"
+  },
+  "bunkerSill": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Bunker_Wall_Concrete_x1_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     -50,
+     0.625,
+     -0.02
+    ],
+    [
+     50,
+     1.875,
+     1
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Bunker_Wall_Concrete_x1_01.fbx"
+  },
+  "metalDoor": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Metal_Door_01",
+   "centre": [
+    0.47,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "base": -1.07,
+   "parts": true,
+   "leaf": "SM_Bld_Metal_Door_01",
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Metal_Door_01.fbx"
+  },
+  "brickFace": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Warehouse_Brick_01",
+   "centre": [
+    -1.83,
+    -4.915
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     -2.455,
+     -5.215,
+     -0.02
+    ],
+    [
+     -1.205,
+     -4.615,
+     2.95
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Warehouse_Brick_01.fbx"
+  },
+  "brickLintel": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Warehouse_Brick_01",
+   "centre": [
+    -1.83,
+    -4.915
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     -2.455,
+     -5.215,
+     2.1
+    ],
+    [
+     -1.205,
+     -4.615,
+     2.95
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Warehouse_Brick_01.fbx"
+  },
+  "brickSill": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Warehouse_Brick_01",
+   "centre": [
+    -1.83,
+    -4.915
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     -2.455,
+     -5.215,
+     -0.02
+    ],
+    [
+     -1.205,
+     -4.615,
+     1
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Warehouse_Brick_01.fbx"
+  },
+  "fenceWall": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Wall_Quarantine_Bottom_01",
+   "centre": [
+    -2.5,
+    -0.47
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     -3.125,
+     -50,
+     -0.02
+    ],
+    [
+     -1.875,
+     50,
+     2.95
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Prop_Wall_Quarantine_Bottom_01.fbx"
+  },
+  "fenceColumn": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Wall_Quarantine_Column_Tall_01",
+   "centre": [
+    0,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "keep": [
+    [
+     -5,
+     -5,
+     -0.02
+    ],
+    [
+     5,
+     5,
+     3.4
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Prop_Wall_Quarantine_Column_Tall_01.fbx"
+  },
+  "barbedWire": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Wall_Quarantine_BarbedWire_01",
+   "centre": [
+    0,
+    0
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3,
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Prop_Wall_Quarantine_BarbedWire_01.fbx"
+  },
+  "gateLeaf": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Wall_Quarantine_GateDoor_02",
+   "centre": [
+    0.87,
+    0.08
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3.4,
+   "squeeze": 0.68,
+   "parts": true,
+   "leaf": "SM_Prop_Wall_Quarantine_GateDoor_02",
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Prop_Wall_Quarantine_GateDoor_02.fbx"
+  },
+  "gateLeafFar": {
+   "pack": "apocalypse",
+   "fbx": "SM_Prop_Wall_Quarantine_GateDoor_01",
+   "centre": [
+    -0.87,
+    0.08
+   ],
+   "run": "x",
+   "out": -1,
+   "storey": 3.4,
+   "squeeze": 0.68,
+   "hingeFar": true,
+   "parts": true,
+   "leaf": "SM_Prop_Wall_Quarantine_GateDoor_01",
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Prop_Wall_Quarantine_GateDoor_01.fbx"
+  },
+  "containerWall": {
+   "pack": "apocalypse",
+   "fbx": "SM_Bld_Bunker_Wall_Container_x1_01",
+   "centre": [
+    1.25,
+    0
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 3,
+   "keep": [
+    [
+     -50,
+     0.625,
+     -0.02
+    ],
+    [
+     50,
+     1.875,
+     50
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_Apocalypse_SourceFiles_v4/FBX/SM_Bld_Bunker_Wall_Container_x1_01.fbx"
+  },
+  "sheetGrey": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerGrey",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     0.03
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     2.56
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "sheetRed": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerRed",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     0.03
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     2.56
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "sheetBlue": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerBlue",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     0.03
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     2.56
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "sheetGreyLintel": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerGrey",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     1.81
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     2.56
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "sheetRedLintel": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerRed",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     1.81
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     2.56
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "sheetBlueLintel": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerBlue",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     1.81
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     2.56
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "sheetGreySill": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerGrey",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     0.03
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     0.86
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "sheetRedSill": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerRed",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     0.03
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     0.86
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "sheetBlueSill": {
+   "pack": "woodland",
+   "fbx": "SM_Prop_Shipping_Container_01",
+   "centre": [
+    2.3,
+    0.212
+   ],
+   "run": "y",
+   "out": 1,
+   "storey": 2.59,
+   "atlas": "containerBlue",
+   "keep": [
+    [
+     0.011999999999999983,
+     1.6749999999999998,
+     0.03
+    ],
+    [
+     0.41200000000000003,
+     2.925,
+     0.86
+    ]
+   ],
+   "src": "assets-src/synty/POLYGON_WoodlandApocalypseMap_SourceFiles/FBX/SM_Prop_Shipping_Container_01.fbx"
+  },
+  "wardrobeOpen": {
+   "pack": "town",
+   "fbx": "SM_Prop_Wardrobe_01",
+   "centre": [
+    0,
+    0.03
+   ],
+   "run": "x",
+   "out": -1,
+   "parts": true,
+   "storey": 2.9,
+   "src": "assets-src/synty/POLYGON_Town_SourceFiles_v7/FBX/SM_Prop_Wardrobe_01.fbx"
+  }
+ }
+}

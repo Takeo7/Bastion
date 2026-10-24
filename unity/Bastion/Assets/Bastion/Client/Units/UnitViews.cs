@@ -94,6 +94,8 @@ namespace Bastion.Client.Units
             public Pos place;
             public bool dead;
             public bool shaded;
+            /// <summary>On a storey its building's cutaway hides (Cutaway.Hides): its renderers off.</summary>
+            public bool cut;
             /// <summary>Its Sidekick figure's body (null: a stand-in), its build ("masc", "femn"), whether it moves as the dead.</summary>
             public FigureAnimator anim;
             public Animator animator;
@@ -154,8 +156,16 @@ namespace Bastion.Client.Units
 
         void Step(float dt)
         {
+            var cutaway = Map.Cutaway.Current;
             foreach (var v in views.Values)
             {
+                // What stands on a storey the cutaway hides isn't drawn (buildings.ts Cutaway.hides).
+                bool cut = cutaway != null && v.place != null && cutaway.Hides(v.place);
+                if (cut != v.cut)
+                {
+                    v.cut = cut;
+                    foreach (var r in v.root.GetComponentsInChildren<Renderer>(true)) r.enabled = !cut;
+                }
                 v.aim = Mathf.MoveTowards(v.aim, v.aiming && !v.dead && !v.crouched ? 1 : 0, dt / AimBlend);
                 v.anim?.Step(dt);
                 if (v.aim > 0) Straighten(v, AimStraighten * v.aim);
@@ -186,6 +196,9 @@ namespace Bastion.Client.Units
 
         // ------------------------------------------------------------ where things are (no waiting)
 
+        /// <summary>The state last shown (Sync), and whether unit `id` has a figure.</summary>
+        public GameState State => state;
+        public bool Has(string id) => id != null && views.ContainsKey(id);
         public Vector3 Feet(string id) => views.TryGetValue(id, out var v) ? v.root.position : Vector3.zero;
         public Vector3 Chest(string id) => Bone(id, HumanBodyBones.UpperChest) ?? Bone(id, HumanBodyBones.Chest) ?? Feet(id) + Vector3.up * 1.25f;
         public Vector3 Head(string id) => Figures.HeadOf(id) is Transform h ? h.position : Feet(id) + Vector3.up * 1.75f;
@@ -230,7 +243,7 @@ namespace Bastion.Client.Units
                 if (!u.Alive && !v.dead) Lie(v);
                 if (u.Alive && v.dead) Stand(v);
                 Pose(v, u);
-                v.root.position = MapSpace.TileToWorld(view, v.place);
+                v.root.position = MapSpace.StandAt(view, v.place);
                 int node = Bastion.Engine.Grid.NodeOf(view, u.Pos);
                 bool shown = u.Team == "xcom" || forced.Contains(u.Id) || v.shaded || (node >= 0 && node < inSight.Length && inSight[node]);
                 if (v.root.gameObject.activeSelf != shown) v.root.gameObject.SetActive(shown);
@@ -604,7 +617,7 @@ namespace Bastion.Client.Units
                     v.anim?.Motion("idle");
                     return;
                 }
-                to = MapSpace.TileToWorld(state, path[span.step]);
+                to = MapSpace.StandAt(state, path[span.step]);
                 Face(id, to);
                 v.anim?.Motion(gait.motion, clip);
             }
@@ -890,7 +903,7 @@ namespace Bastion.Client.Units
         {
             if (!views.TryGetValue(id, out var v) || state == null) return;
             var from = v.root.position;
-            var end = MapSpace.TileToWorld(state, to);
+            var end = MapSpace.StandAt(state, to);
             for (float t = 0; t < 0.5f; t += Time.deltaTime)
             {
                 float k = t / 0.5f;

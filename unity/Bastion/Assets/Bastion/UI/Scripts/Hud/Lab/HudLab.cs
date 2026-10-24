@@ -108,6 +108,11 @@ namespace Bastion.UI.Hud
                 case "resultado": outcomeState = (outcomeState + 1) % 3; break;
                 case "registro": hud.Log($"Línea {++logCount}: Mateo dispara al zombi y le quita 4.", logCount % 2 == 0 ? "#ff6b5a" : "#54d1ff"); break;
                 case "flotante": hud.Float(HeadOf("a1") ?? Vector3.zero, "CRÍTICO −5", "crit"); break;
+                // A search's find: the supplies' «§» (the crate, BastionSuministros) in the log and floating.
+                case "botin":
+                    hud.Log("Ana registra el despacho: una radio de manivela (+12 §) y 1 pieza.", "#ffb84d");
+                    hud.Float(HeadOf("s1") ?? Vector3.zero, "+12 §", "info");
+                    break;
                 case "asedio": siege = !siege; break;
                 case "hombro": close = !close; break;
                 case "llegada": hud.CloseIntro(); break;
@@ -290,6 +295,9 @@ namespace Bastion.UI.Hud
             stun.Cooldown = 2;
             stun.Enabled = false;
             bar.Abilities.Add(stun);
+            // The doors (our own drawings, LineIcon): one to open beside the soldier, none to close.
+            bar.Abilities.Add(A("openDoor", "Abrir puerta", "9", "Gratis", "Abre la puerta de al lado."));
+            bar.Abilities.Add(A("closeDoor", "Cerrar puerta", "", "Gratis", "Cierra la puerta de al lado.", false));
             return bar;
         }
 

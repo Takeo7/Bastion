@@ -79,6 +79,9 @@ namespace Bastion.UI.Combat
         /// <summary>What starts something new: the shot over the shoulder of the last one ends before it.</summary>
         static bool NewAction(GameEvent e) => e is ShotEvent || e is MovedEvent || e is AbilityUsedEvent || e is ExplosiveEvent || e is StoneThrownEvent || e is TurnBeganEvent || e is MissionEndedEvent;
 
+        /// <summary>The shot over a shoulder on now, and who is in it (the attacker, the target): the buildings' cutaway leaves its room whole.</summary>
+        public (string attacker, string target)? CloseFocus => control.Rig != null && control.Rig.CloseUp ? (lastAttacker, killCam) : ((string, string)?)null;
+
         void StartKillCam(string id, (Vector3 pos, Vector3 look) shot)
         {
             killCam = id;

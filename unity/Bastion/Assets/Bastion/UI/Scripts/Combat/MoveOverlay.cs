@@ -348,10 +348,11 @@ namespace Bastion.UI.Combat
             if (s != null && from != null && path != null && path.Count > 0)
             {
                 var color = Alpha(planning ? PlanTint : dash ? DashPath : WalkPath, 0.95f);
-                var prev = Board.TileToWorld(s, from, 0.08f * T);
+                // Up a flight of stairs it rides the treads, not the floor under them.
+                var prev = Board.WayPoint(s, from, 0.08f * T);
                 foreach (var p in path)
                 {
-                    var at = Board.TileToWorld(s, p, 0.08f * T);
+                    var at = Board.WayPoint(s, p, 0.08f * T);
                     build.Line(prev, at, PathPx, color);
                     under.Line(prev, at, PathShadePx, Shade);
                     prev = at;

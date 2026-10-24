@@ -136,6 +136,19 @@ Esto se rehace en C# y en shaders de URP:
 | `Bastion.Client` | `Assets/Bastion/Client` | El cliente del juego: el mapa, las unidades, la niebla. Ve al motor y a URP. |
 | `Bastion.Editor` | `Assets/Bastion/Editor` | Solo en el editor: las capturas y las herramientas de importar. |
 
+La configuración del proyecto que es de Arte la pone `Bastion.EditorTools.ProjectSetup.Run` (se puede volver a lanzar):
+- empresa «Bastion-Unity», producto «Bastion» (sin tilde: da nombre al ejecutable del Mac, y con tilde la firma ad hoc no vale; el nombre con tilde que ve el jugador lo pone `AppBuild` en el Info.plist) e identificador `com.takeo7.bastion.unity` (el de Electron es `com.takeo7.bastion`). Los datos de la app van a `~/Library/Application Support/Bastion-Unity/Bastion` en el Mac y a `AppData/LocalLow/Bastion-Unity/Bastion` en Windows, no a la carpeta de la app de Electron (`…/Application Support/Bastion`);
+- `enableFrameTimingStats`, para que `FrameTimingManager` dé los tiempos de la CPU y de la tarjeta;
+- tres niveles de calidad, que los Ajustes de UI buscan por su nombre. El editor y las capturas usan «Alto».
+
+| Nivel | Recurso de URP | Renderizador | Sombras | SSAO | Posproceso | Escala |
+|---|---|---|---|---|---|---|
+| Bajo | `Mobile_RPAsset` | `Bajo_Renderer` | 1 cascada, 1024, duras | no | no | 0,8 |
+| Medio | `Medio_RPAsset` | `Mobile_Renderer` | 2 cascadas, 1024, duras | no | sí | 1 |
+| Alto | `PC_RPAsset` | `PC_Renderer` | 4 cascadas, 2048, suaves | sí | sí | 1 |
+
+La regla: «alto» en ≤4,2 ms por fotograma en la 3090, «medio» a ≥30 fps en el Mac. Los tres renderizadores llevan el pase de la niebla (`FogFeatureMake`).
+
 Unity se maneja desde la línea de órdenes, con dos guiones de `unity/tools/`. Los dos esperan a que termine otro Unity lanzado con ellos, y Unity no abre el proyecto si el editor ya lo tiene abierto. El registro va a `unity/Bastion/Logs/batch.log`, y al final se imprimen sus errores.
 
 ```bash
@@ -181,8 +194,14 @@ unity/tools/unity.sh -executeMethod Bastion.EditorTools.FxArtMake.Run -quit
 ```
 
 ```bash
+unity/tools/unity.sh -executeMethod Bastion.EditorTools.SourceProps.Run -quit
+```
+
+```bash
 unity/tools/unity.sh -executeMethod Bastion.EditorTools.MapCatalogMake.Run -quit
 ```
+
+`SourceProps.Run`, antes que el catálogo, importa a `Assets/Synty/Extra` los modelos que solo están en los archivos fuente de su paquete y no en el de Unity (la basura suelta, `SM_Prop_Trash_02`), con el material del paquete.
 
 Rehacen los dos recursos del juego que apuntan a Synty: `Resources/FxArt.asset` (las formas y sprites de Particle FX para los efectos) y `Resources/MapCatalog.asset` (los modelos y materiales del mapa por nombre, porque en la app no hay AssetDatabase). Se rehacen tras importar otra vez los paquetes, y MapCatalog también cuando cambian las piezas de `MapArt.json`. Hoy el catálogo tiene 307 modelos. Los mapas de ciudad no piden nada que falte: lo comprueba `MapCatalogMake.Check`, que construye con el catálogo cada estado de golden de un bioma (`BASTION_BIOME`, ciudad si no se dice). Faltan los de Alpine y Woodland, que van después del hito 1 (Gameplay, 24/10), y unas pocas piezas que el Apocalypse de Unity no trae (la camilla, la ambulancia). Donde Unity arma una pieza de otra forma que los FBX de origen de la 0.10.1, `MapLab.UnityNames` da el nombre de Unity: la maceta con planta es el prefab `SM_Prop_Pot_Street_01`.
 
@@ -195,7 +214,20 @@ Pone en la lista de la compilación Inicio y Partida, y en Partida lo que cuelga
 ### La escena Partida y el reproductor de UI
 
 - `Battlefield.Current.Show(estado)`: lo llama UI con cada estado entero (al empezar, al volver, tras un resync). Construye el mapa desde el catálogo, solo si cambió su firma (MapId, tamaño, casillas, decorado, plantas y elevaciones); si es el mismo mapa con casillas distintas, rehace solo esas.
-- `MapView.Current.Rebuild(visto)`: lo llama UI al asentarse un tileChanged o un floorBroken (una puerta que se abre es un tileChanged). Rehace las casillas cambiadas y lo que estaba encima de ellas (un coche entero), y la losa de su planta. MapBuilder apunta qué objeto hay en cada casilla para eso. Una puerta abierta es, por ahora, un hueco en el muro.
+- `MapView.Current.Rebuild(visto)`: lo llama UI al asentarse un tileChanged o un floorBroken (una puerta que se abre es un tileChanged). Rehace las casillas cambiadas y lo que estaba encima de ellas (un coche entero), y la losa de su planta. MapBuilder apunta qué objeto hay en cada casilla para eso.
+
+Los muros de los edificios son las piezas de Synty, como en la 0.10.1:
+- `BuildingPlan` es el de `buildings.ts`, igual que el TS en los 106 estados de `engine-cs/golden`. Se hace una vez por mapa y sigue al estado (`Follow`).
+- `WallLayout.Of(estado, plan)` es `buildWalls`. Da cada pieza, cada cristal y cada cosa colgada del muro (la persiana de una nave, el cartel de una tienda, el del motel) con su matriz en el mundo de la 0.10.1, en casillas. Todavía no lleva las fachadas del terreno alto (`layRaised`), los pretiles, lo que hay en los tejados ni las tapas de los muros.
+- `WallsView` junta las piezas de cada trozo de 8×8 casillas y cada planta en una malla por material. Las hojas de las puertas van aparte, abiertas un cuarto de vuelta hacia dentro o cerradas. Al rehacer el mapa se calcula entero (unos ms) y solo se rehacen los trozos que cambian.
+- Las piezas salen del FBX original de Synty, cortadas con Blender (`unity/tools/pieces-cut.py`), y su sitio en la casilla viene de `Resources/Pieces.json` (`pieces-json.mts`). `PieceMake.Run` hace `PieceCatalog.asset`. Por cada material de Synty que usan las piezas crea uno de `Bastion/Building` con su textura, en `Client/Map/Materials`. También crea el cristal (`Shaders/Glass.mat`) y los dos materiales de parches, «Suelos» y «Tejados».
+- `BuildingSurfaces` (el `buildStatic` y el `redoUpper` de `buildings.ts`) da los suelos, tejados, escaleras y la tapa del terreno alto; `roofProps` da lo que va en los tejados. `BuildingLooks` da los colores de cada edificio (`looksOf`). Los dos salen idénticos al bit con el TS en los 108 estados de golden. MapBuilder los dibuja: cada planta en su `Storeys[k]`, los tejados en `Roofs` y la azotea pisable en su planta. También pone los pretiles.
+- El shader `Shaders/Building.shader`, con URP iluminado y sus cuatro pasadas, pinta dos cosas. Las piezas usan la textura de su paquete, y en la franja de arriba se tiñe el yeso con el color de dentro y las tablas con el de fuera, como en `wallCutPatch`; la cara de atrás sale oscura. Los suelos y tejados (`_SWATCH`) son un parche de la textura de Town repetido sobre el plano del mundo, como en `swatchPatch`. Los colores van por vértice en TEXCOORD2 y 3, porque son lineales y pueden pasar de 1.
+- El suelo de la calle es de UI (`GroundView`, a partir de `ground.ts`).
+- La luz (`Client/Light/Mood.cs`, los MOODS de `renderer.ts`): el sol con sombras, el relleno que sigue a la cámara, la luz de cielo como ambiente de tres colores y la bruma exponencial al cuadrado, de día o de noche (`Mood.For(estado)`). Las intensidades de three van divididas por π (su BRDF es albedo/π y la de URP no). Después del posproceso de URP, `Shaders/Grade.shader` hace la exposición, el tonemapping Khronos Neutral de three y la gradación de `post.ts` en valores sRGB, con el nivel «vivo» 1. `GradeMake.Run` pone ese pase en los tres renderizadores, deja la gradación de URP en HDR y, en el perfil de volumen que usan los tres recursos de URP (`SampleSceneProfile`), quita el tonemapping y la viñeta de URP y pone el brillo de la 0.10.1.
+- `HomeFurnishing` es `homeFurnishing.ts` (alfombras, lámparas, sillas alrededor de las mesas, toallas…): igual que el TS en los 107 estados de golden. MapBuilder lo pone al construir y lo rehace con cada cambio.
+- `MapArt.UnityTurn`: los modelos que el paquete de Unity trae girados respecto a su FBX de origen, con el que se ajustó la 0.10.1 (los cuatro coches destrozados de Apocalypse, un cuarto de vuelta). Lo usan `MapBuilder.Place` y el `PropParts` de UI.
+- El corte (`Cutaway`, el de `buildings.ts`) va en «Mapa». Cada fotograma decide qué edificios se abren, a partir de la cámara, el foco de UI (`Cutaway.Focus`: el elegido, el blanco, el cursor, la planta, los tejados y el plano al hombro) y lo que ve la escuadra. Deja un texel por edificio en `_CutMap`. `Bastion/Building` lo lee en `BuildingCut.hlsl`, también en las pasadas de profundidad para que la niebla y la SSAO lo vean. Los muebles de las plantas, lo que hay en las azoteas y los carteles se apuntan con `Track` y se apagan con su planta; las figuras se apagan con `Hides`. `MapView.ShowLevel` ya no apaga plantas: pasa la planta al corte.
 - `UnitViews.Current`: las figuras. `Sync(visto)` las crea, quita y coloca. Lo que se espera (MoveAlong, RaiseWeapon, HitReact, Die…) devuelve `Awaitable` con CancellationToken, y los momentos dentro de una animación llegan como `Action onHit`: el golpe, la granada que sale de la mano, cada mordisco. Los nombres son los de unitViews.ts de la 0.10.1.
 - `Fx.Current`: los efectos, con los tamaños, velocidades y tiempos de fx.ts (en casillas). Bullet, GrenadeArc, Stone, PsiBeam, Explosion y Missiles se esperan; los demás, no.
 - Los ritmos de paso son los de gaits.ts (vivos 0,375 s por casilla en un movimiento y 0,24 en una carrera; zombi 0,82/0,62…; la diagonal, √2), con un solo reloj para todo el paseo.
@@ -203,7 +235,7 @@ Pone en la lista de la compilación Inicio y Partida, y en Partida lo que cuelga
 - Los clips son humanoides: Mecanim los pasa a Sidekick sin el proxy de huesos de la 0.10.1. `FigureAnimator` (PlayableGraph a mano) mezcla los seis del MOTION_ORDER, uno sobre la parte de arriba (un golpe, una acción; con AvatarMask) y uno sobre el cuerpo entero (una muerte, que se queda en su último fotograma). La velocidad de cada clip, la de gaits.ts (`Gaits.ClipSpeed`); las muertes acaban cuando el cuerpo se queda quieto (`FigureCatalog.Settle`, medido como el settleOf de la 0.10.1: 1,0–1,6 s).
 - El arma va en la palma derecha y apunta a la izquierda mientras las dos manos están en ella; esa postura se aprende en el marco de la mano derecha y se mantiene rígida cuando la izquierda suelta (el clipGrip de la 0.10.1). En reposo, uno de RIFLE_RESTS por soldado; al moverse, los clips de Mixamo con armedPace; apuntando, `rifleAim` con el tronco enderezado 18° (los brazos compensan para que el fusil siga a nivel); el disparo, `rifleFire` encima. Agachado, de rodillas (`rifleKneel`, `rifleKneelAim`). Los lanzamientos van sobre la parte de arriba menos el brazo del arma (la máscara «free»).
 - Las esperas: borrachos los muertos, agresivos los Cuervos, encorvado el soldado bajo la mitad de su vida. Comer, como unitViews.ts feed y unfeed: muerde en el Lunge, se arrodilla junto al pecho del caído, come en bucle y vuelve a su sitio al levantarse.
-- La niebla de guerra (`Fog`, en «Niebla»): una textura de casillas (en vista, visto, el suelo de cada una) que lee una pasada a pantalla completa (`Bastion/Fog`, un FullScreenPassRendererFeature en los dos renderers, `FogFeatureMake.Run`) en la posición de cada píxel sacada de la profundidad. Así cubre también los modelos de Synty, cuyos shaders no se tocan. UI la llama con el estado visto (`Fog.Current.Show`) cada vez que hace Sync; los enemigos fuera de vista se ocultan en `UnitViews.Sync`.
+- La niebla de guerra (`Fog`, en «Niebla»): una textura de casillas (en vista, visto, el suelo de cada una) que lee una pasada a pantalla completa (`Bastion/Fog`, un FullScreenPassRendererFeature en los dos renderers, `FogFeatureMake.Run`) en la posición de cada píxel sacada de la profundidad. Así cubre también los modelos de Synty, cuyos shaders no se tocan. UI la llama con el estado visto (`Fog.Current.Show`) cada vez que hace Sync; los enemigos fuera de vista se ocultan en `UnitViews.Sync`. Como en la 0.10.1, un muro se ve como la casilla a la que da (la normal de cada píxel, de la textura de normales de URP), un tejado como la mejor calle a lo largo de su edificio (una segunda textura, la de los edificios), y una habitación vista en parte se ve entera con sus muros. Todo en la planta a la vista (`MapView.ShowLevel`, Los.FloorLevels); lo explorado se guarda por nodo.
 - Qué clip hace cada papel sale de `Resources/Anims.json` (`unity/tools/anims-json.mts`, de syntyManifest.ts). Los clips, los prefabs de los presets y sus mapas de color, de `Resources/FigureCatalog.asset` (`FigureCatalogMake.Run`).
 - Tira de ejemplo: `CombatLab.Shoot` (andar, dos disparos, morir, granada) con `-shotPlay -shotFrames 90 -shotFps 10`; los efectos de cerca, `CombatLab.Effects`; Partida sin UI, `CombatLab.Partida`.
 
@@ -235,4 +267,6 @@ La cámara del juego: 52° hacia abajo, 40° de campo de visión, 24 casillas (3
 - **Un color global de shader no se pasa a lineal** (`Shader.SetGlobalColor`): la niebla salía azul clara en vez de oscura. Se le pasa `color.linear`.
 - **Las capturas en modo juego iban a 4:3 hasta disparar** (la pantalla de batchmode): lo que el HUD colocaba en el calentamiento quedaba una quinta parte más lejos del centro. Shots pone el aspecto y el panel de la foto desde el primer fotograma.
 - **`Grid` choca con `UnityEngine.Grid`** también en el cliente: `Bastion.Engine.Grid` escrito entero.
+- **El primer fotograma de cada pasada sale mal** en batchmode: sin la luz ambiente ni los reflejos hechos, el cielo alumbra menos y los materiales de Synty salen teñidos de lo que tuviera la GPU (rojo, rosa, azul, distinto cada vez; el árbol negro o rojo de antes era esto). Shots dibuja uno y lo tira antes de la primera foto. En modo juego no pasa: espera diez fotogramas.
+- **Coches cruzados en sus casillas**: los prefabs de coches de Apocalypse en Unity van a lo largo de z; los FBX de origen, a lo largo de x. Se ve mal en las filas de aparcamiento a distancia, pero `BASTION_CARS=1` en MapLab lo dice coche por coche.
 - **Sidekick en tiempo de ejecución:** su `DatabaseManager` hay que abrirlo (`GetDbConnection`) antes de buscar piezas, y quien lo use necesita las referencias a `SidekickCharacters` y `Gilzoide.SqliteNet`.

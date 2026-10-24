@@ -12,9 +12,9 @@ namespace Bastion.UI.EditorTools
     /// </summary>
     public static class HudShots
     {
-        const string Folder = "Assets/Bastion/UI/Settings";
-        const string ThemePath = Folder + "/HudTheme.tss";
-        const string PanelPath = Folder + "/HudPanel.asset";
+        // In Resources: the app falls back on the panel from there (AppFlow.PanelOf).
+        const string ThemePath = "Assets/Bastion/UI/Resources/HudTheme.tss";
+        const string PanelPath = AppScenes.PanelPath;
 
         /// <summary>As it starts: the arrival card over the HUD.</summary>
         public static void Arrival() => Mount();
@@ -36,6 +36,9 @@ namespace Bastion.UI.EditorTools
 
         /// <summary>The mission won.</summary>
         public static void Outcome() => Mount("llegada", "resultado");
+
+        /// <summary>A search's find: «+12 §» in the log and floating, the supplies' sign drawn as the crate.</summary>
+        public static void Loot() => Mount("llegada", "registro", "botin");
 
         /// <summary>Over the shoulder: only the target's flag stays.</summary>
         public static void Shoulder() => Mount("llegada", "disparo", "hombro");
@@ -63,6 +66,9 @@ namespace Bastion.UI.EditorTools
             screen.AddComponent<UIDocument>().panelSettings = Panel();
             screen.AddComponent<Bastion.UI.Start.RoomMenu>();
             screen.AddComponent<RoomLab>();
+            // BASTION_TEMA: one of the proposals over the room's sheets (Assets/Bastion/UI/Propuestas).
+            var tema = System.Environment.GetEnvironmentVariable("BASTION_TEMA");
+            if (!string.IsNullOrEmpty(tema)) screen.AddComponent<Temas>().Tema = tema;
         }
 
         /// <summary>
@@ -118,6 +124,42 @@ namespace Bastion.UI.EditorTools
                 lab.Golden = "city-3-elimination";
                 lab.InScene = true;
                 lab.Menu = System.Environment.GetEnvironmentVariable("BASTION_MENU") ?? "menu";
+            };
+        }
+
+        /// <summary>In «Partida», a recorded state (BASTION_LAB_GOLDEN's, city-11-scavenge by default): a path up a flight of stairs.</summary>
+        public static void PartidaStairs()
+        {
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                var hud = new GameObject("HUD");
+                hud.AddComponent<UIDocument>().panelSettings = Panel();
+                var lab = new GameObject("CombatLab").AddComponent<Bastion.UI.Combat.CombatLab>();
+                lab.Hud = hud.AddComponent<HudRoot>();
+                lab.Golden = System.Environment.GetEnvironmentVariable("BASTION_LAB_GOLDEN") ?? "city-11-scavenge";
+                lab.InScene = true;
+                lab.Stairs = true;
+            };
+        }
+
+        /// <summary>
+        /// The HUD's proposals for Arturo: «Partida», city-3-elimination up to its first shot, aimed and not fired (the shot's
+        /// panel over a zombie), with BASTION_TEMA's sheet (Assets/Bastion/UI/Propuestas) over the HUD's; none, today's.
+        /// </summary>
+        public static void PartidaTema()
+        {
+            EditorApplication.playModeStateChanged += change =>
+            {
+                if (change != PlayModeStateChange.EnteredPlayMode) return;
+                var hud = new GameObject("HUD");
+                hud.AddComponent<UIDocument>().panelSettings = Panel();
+                var lab = new GameObject("CombatLab").AddComponent<Bastion.UI.Combat.CombatLab>();
+                lab.Hud = hud.AddComponent<HudRoot>();
+                hud.AddComponent<Temas>().Tema = System.Environment.GetEnvironmentVariable("BASTION_TEMA") ?? "";
+                lab.Golden = "city-3-elimination";
+                lab.ToShot = true;
+                lab.InScene = true;
             };
         }
 

@@ -91,6 +91,10 @@ namespace Bastion.EditorTools
                 return;
             }
             for (float t = 0; t < warm; t += 1 / fps) Step(1 / fps);
+            // A frame drawn and thrown away first: the first one a run draws has the ambient light and the reflections
+            // not yet made (a darker sky light, and a tint of whatever the GPU had over the Synty materials: red, pink,
+            // blue, a different one each run).
+            Render(camera, width, height, null);
 
             if (frames <= 1)
             {
@@ -266,7 +270,7 @@ namespace Bastion.EditorTools
             picture.Apply();
             RenderTexture.active = was;
             if (over != null) Lay(picture, over);
-            File.WriteAllBytes(path, picture.EncodeToPNG());
+            if (path != null) File.WriteAllBytes(path, picture.EncodeToPNG());
             UnityEngine.Object.DestroyImmediate(picture);
             target.Release();
             UnityEngine.Object.DestroyImmediate(target);

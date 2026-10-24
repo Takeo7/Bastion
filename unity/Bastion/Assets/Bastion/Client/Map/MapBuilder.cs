@@ -35,6 +35,31 @@ namespace Bastion.Client.Map
             return v;
         }
 
+        /// <summary>Where a unit on place p stands (unitViews.ts standAt): its tile's middle on its floor, or on the treads of a flight of stairs.</summary>
+        public static Vector3 StandAt(GameState s, Pos p) => TileToWorld(s, p, StairLift(s, p));
+
+        /// <summary>
+        /// How high over its tile's floor a unit on place p stands (unitViews.ts stairLift): on the treads of a building's
+        /// flight of stairs (engine Flights), else 0. Metres.
+        /// </summary>
+        public static float StairLift(GameState s, Pos p)
+        {
+            if (s == null || p == null || p.X < 0 || p.Y < 0 || p.X >= s.Width || p.Y >= s.Height) return 0;
+            var on = Flights.FlightAt(s, new Pos { X = p.X, Y = p.Y, Z = p.Z });
+            return on == null ? 0 : FlightHeight(on.Step + 0.5f, on.Flight.Tiles.Count);
+        }
+
+        /// <summary>
+        /// How high the feet are over the floor of a flight of `n` tiles, `a` tiles up it from the back edge of its lowest
+        /// tile (unitViews.ts flightHeight): half a riser over the treads' front edges, from its foot up to its landing's
+        /// floor. Its treads as BuildingSurfaces lays them: nine for a flight of one tile, six a tile for longer ones.
+        /// </summary>
+        public static float FlightHeight(float a, int n)
+        {
+            int treads = n == 1 ? 9 : 6 * n;
+            return Mathf.Clamp(a / n * Storey + Storey / (2 * treads), 0, Storey);
+        }
+
         /// <summary>
         /// The game's camera (0.10.1's camera.ts): 52° down, 40° of view, `distance` tiles from `target`, turned `yaw`
         /// degrees from the south (0.10.1 starts at 45°: from the south-east, looking north-west).
@@ -48,6 +73,12 @@ namespace Bastion.Client.Map
             camera.transform.position = target + new Vector3(Mathf.Sin(yaw * Mathf.Deg2Rad) * h, Mathf.Sin(pitch) * d, -Mathf.Cos(yaw * Mathf.Deg2Rad) * h);
             camera.transform.LookAt(target);
         }
+
+        /// <summary>
+        /// From 0.10.1's frame to Unity's: there x east, y up, z south (the map's rows), in metres here; Unity's z is north.
+        /// A matrix that places something in that frame, as Unity's.
+        /// </summary>
+        public static Matrix4x4 FromGame(Matrix4x4 game) => Matrix4x4.Scale(new Vector3(1, 1, -1)) * game;
 
         /// <summary>The tile under a point of the world (its x and y; the storey is the caller's).</summary>
         public static Vector2Int WorldToTile(Vector3 v) => new Vector2Int(Mathf.FloorToInt(v.x / Tile), Mathf.FloorToInt(-v.z / Tile));
@@ -85,9 +116,9 @@ namespace Bastion.Client.Map
     }
 
     /// <summary>
-    /// The map from the state, a first pass of 0.10.1's mapView.ts: the ground a colour by what its tiles are, the
-    /// buildings' walls as blocks of their height (Synty's kits come next), and the decor as Synty's props as 0.10.1
-    /// picked, turned and fitted them. `prefabOf` gives a prop's model by its Synty name.
+    /// The map from the state, 0.10.1's mapView.ts: the ground (UI's GroundView), the buildings in Synty's kit pieces
+    /// (WallLayout, WallsView) with their floors, roofs and stairs (BuildingSurfaces), and the decor as Synty's props as
+    /// 0.10.1 picked, turned and fitted them. `prefabOf` gives a prop's model by its Synty name.
     /// </summary>
     public sealed class MapBuilder
     {
@@ -95,7 +126,6 @@ namespace Bastion.Client.Map
         readonly Func<string, GameObject> prefabOf;
         readonly Func<string, Material> materialOf;
         readonly Transform root;
-        readonly Dictionary<string, Material> materials = new Dictionary<string, Material>();
         /// <summary>Props asked for that have no model (a pack not imported, a name not found), once each.</summary>
         public readonly HashSet<string> Missing = new HashSet<string>();
         public int Placed { get; private set; }
@@ -139,13 +169,28 @@ namespace Bastion.Client.Map
         public Transform Roofs { get; private set; }
 
         Transform[] walls = Array.Empty<Transform>();
+        BuildingPlan plan;
+        WallsView wallsView;
         Transform[] props = Array.Empty<Transform>();
-        GameObject[] slabs = Array.Empty<GameObject>();
+        /// <summary>The storeys' floors (with their stairs) and the decks of roofs one walks on, made again when a slab is blown through; the parapets.</summary>
+        readonly List<GameObject> upper = new List<GameObject>();
+        GameObject parapets;
+        /// <summary>What the rooms have besides their cover (HomeFurnishing: rugs, lamps, chairs round a table…).</summary>
+        readonly List<GameObject> furnished = new List<GameObject>();
+        /// <summary>The ground, its textures and marks (UI's GroundView: ground.ts).</summary>
+        GroundView ground;
+        int holesMade;
+        readonly Dictionary<int, (Vector3 outer, Vector3 inner)> looks = new Dictionary<int, (Vector3, Vector3)>();
         /// <summary>What stands on each tile of each storey (Key), and the tiles each thing stands on: what goes when they change.</summary>
         readonly Dictionary<long, List<GameObject>> onTile = new Dictionary<long, List<GameObject>>();
         readonly Dictionary<GameObject, List<long>> tilesOf = new Dictionary<GameObject, List<long>>();
 
         static long Key(int k, int i) => ((long)k << 32) | (uint)i;
+
+        /// <summary>The buildings as 0.10.1 read them off the map (buildings.ts BuildingPlan), on the state as it is now.</summary>
+        public BuildingPlan Plan => plan;
+        /// <summary>The walls' pieces laid, and those not in the catalog.</summary>
+        public WallsView Walls => wallsView;
 
         public void Build()
         {
@@ -153,7 +198,6 @@ namespace Bastion.Client.Map
             Storeys = new Transform[levels];
             walls = new Transform[levels];
             props = new Transform[levels];
-            slabs = new GameObject[levels];
             for (int k = 0; k < levels; k++)
             {
                 Storeys[k] = new GameObject($"Planta {k}").transform;
@@ -165,22 +209,48 @@ namespace Bastion.Client.Map
             }
             Roofs = new GameObject("Tejados").transform;
             Roofs.SetParent(root, false);
-            Ground(Storeys[0]);
+            plan = new BuildingPlan(s);
+            ground = new GroundView();
+            ground.Build(s, plan, Storeys[0]);
+            BuildingParts();
+            wallsView = new WallsView(walls, s.Width, (parent, id) => Place(parent, id, Vector3.zero, 0), LooksOf, plan);
+            wallsView.Lay(WallLayout.Of(s, plan));
             for (int k = 0; k < levels; k++)
             {
-                if (k > 0) slabs[k] = Slab(Storeys[k], k);
                 int n = TilesOf(k).Count;
-                for (int i = 0; i < n; i++) Wall(k, i);
                 var done = new HashSet<int>();
                 for (int i = 0; i < n; i++) Decor(k, i, done);
             }
-            RoofSlabs();
+            Furnish();
+        }
+
+        /// <summary>
+        /// What a house's, a shop's, a barn's rooms have besides their cover (homeFurnishing.ts, mapView.ts): cosmetic, on
+        /// clear floor only, fading with its storey; none where the wall it stood by was blown down. Made again whole
+        /// when the map changes (a few hundred models).
+        /// </summary>
+        void Furnish()
+        {
+            foreach (var o in furnished) DestroyNow(o);
+            furnished.Clear();
+            var all = HomeFurnishing.Homes(s).Concat(HomeFurnishing.Shops(s, plan.Buildings)).Concat(HomeFurnishing.Barns(s, plan.Buildings)).Concat(HomeFurnishing.OwnTiles(s));
+            foreach (var f in all)
+            {
+                int i = f.y * s.Width + f.x;
+                if (f.z < 0 || f.z >= Storeys.Length || (f.z > 0 && s.Levels?[f.z - 1]?.Tiles == null) || plan.Breached(i, f.z)) continue;
+                var o = PlaceGame(props[f.z], f.id, f.matrix);
+                if (o == null) continue;
+                if (!f.cast) foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                int b = i >= 0 && i < plan.Owner.Length ? plan.Owner[i] : -1;
+                if (f.z > 0 && b >= 0) Cutaway.Current?.Track(o, b, f.z);
+                furnished.Add(o);
+            }
         }
 
         /// <summary>
         /// The map brought to `next` (the same map: a door opened, cover blown away, a floor given way; mapView.ts
         /// rebuild): only the tiles that changed are made again, with whatever stood over them too (a car over a tile
-        /// that changed), and the slab of a storey whose tiles changed. How many tiles were made again; -1 if `next` has
+        /// that changed), and the storeys' floors if a slab was blown through. How many tiles were made again; -1 if `next` has
         /// other storeys (build it whole).
         /// </summary>
         public int Update(GameState next)
@@ -201,7 +271,11 @@ namespace Bastion.Client.Map
                 }
             }
             s = next;
+            plan?.Follow(next);
             if (changed.Count == 0) return 0;
+            ground?.Rebuild(next, changed.Where(key => key >> 32 == 0).Select(key => (int)(uint)key).ToList());
+            // The walls laid again whole; only the chunks whose pieces changed are made again.
+            wallsView?.Lay(WallLayout.Of(s, plan));
             // What stood on a changed tile goes, and every tile it stood on is made again.
             var redo = new HashSet<long>(changed);
             foreach (long key in changed)
@@ -213,20 +287,21 @@ namespace Bastion.Client.Map
                     Drop(o);
                 }
             }
-            var done = new Dictionary<int, HashSet<int>>();
-            foreach (int k in redo.Select(key => (int)(key >> 32)).Distinct())
+            // A slab blown through since: the storeys' floors and decks again, with its hole; the parapets as they are.
+            int holes = Holes();
+            if (holes != holesMade)
             {
-                if (k > 0)
-                {
-                    DestroyNow(slabs[k]);
-                    slabs[k] = Slab(Storeys[k], k);
-                }
-                done[k] = new HashSet<int>();
+                holesMade = holes;
+                var (storeys, decks) = BuildingSurfaces.Upper(s, plan);
+                Upper(storeys, decks);
             }
+            Parapets();
+            Furnish();
+            var done = new Dictionary<int, HashSet<int>>();
+            foreach (int k in redo.Select(key => (int)(key >> 32)).Distinct()) done[k] = new HashSet<int>();
             foreach (long key in redo)
             {
                 int k = (int)(key >> 32), i = (int)(uint)key;
-                Wall(k, i);
                 Decor(k, i, done[k]);
             }
             return redo.Count;
@@ -237,6 +312,9 @@ namespace Bastion.Client.Map
         {
             if (o == null) return;
             var keys = tiles.Select(i => Key(k, i)).ToList();
+            // On a building's storey: it fades with the storey in the cutaway (floorFadePatch).
+            int first = tiles.FirstOrDefault();
+            if (k > 0 && plan != null && first >= 0 && first < plan.Owner.Length && plan.Owner[first] >= 0) Cutaway.Current?.Track(o, plan.Owner[first], k);
             tilesOf[o] = keys;
             foreach (long key in keys)
             {
@@ -261,8 +339,6 @@ namespace Bastion.Client.Map
             else UnityEngine.Object.DestroyImmediate(o);
         }
 
-        static bool IsWall(string t) => t == "wall" || t == "window" || t == "windowBroken" || t == "door" || t == "doorOpen";
-
         int GroundAt(int i) => s.Ground != null && i < s.Ground.Count ? s.Ground[i] : 0;
 
         /// <summary>Storey k's tiles (the ground's, or a level's: null where it has no slab).</summary>
@@ -274,100 +350,165 @@ namespace Bastion.Client.Map
 
         static List<int> DecorOf(GameState state, int k) => (k == 0 ? state.Decor : state.Levels[k - 1].Decor) ?? new List<int>();
 
-        /// <summary>One plane under the map, a texel a tile: out of play dark, streets asphalt, insides floor, yards dirt, the rest by the biome.</summary>
-        void Ground(Transform storey)
+        /// <summary>A building's colours on its walls (BuildingLooks: outer and inner), once a building.</summary>
+        (Vector3 outer, Vector3 inner) LooksOf(int b)
         {
-            var texture = new Texture2D(s.Width, s.Height, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp, name = "Ground" };
-            var open = s.Biome == Biomes.Wilds ? new Color(0.42f, 0.5f, 0.3f) : s.Biome == Biomes.Facility ? new Color(0.58f, 0.58f, 0.56f) : new Color(0.72f, 0.7f, 0.66f);
-            for (int y = 0; y < s.Height; y++)
-            {
-                for (int x = 0; x < s.Width; x++)
-                {
-                    int i = y * s.Width + x;
-                    int g = GroundAt(i);
-                    var c = g == 4 ? new Color(0.17f, 0.18f, 0.2f) : g == 1 ? new Color(0.27f, 0.28f, 0.3f) : g == 2 ? new Color(0.6f, 0.55f, 0.48f) : g == 3 ? new Color(0.45f, 0.4f, 0.32f) : open;
-                    // The texture's rows go up from the bottom; the map's go south from the top, so row y is texel row height-1-y.
-                    texture.SetPixel(x, s.Height - 1 - y, c);
-                }
-            }
-            texture.Apply();
-            var ground = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            ground.name = "Suelo";
-            ground.transform.SetParent(storey, false);
-            ground.transform.SetPositionAndRotation(new Vector3(s.Width * MapSpace.Tile / 2, 0, -s.Height * MapSpace.Tile / 2), Quaternion.Euler(90, 0, 0));
-            ground.transform.localScale = new Vector3(s.Width * MapSpace.Tile, s.Height * MapSpace.Tile, 1);
-            var m = new Material(Lit("ground", Color.white)) { mainTexture = texture };
-            ground.GetComponent<Renderer>().sharedMaterial = m;
-            UnityEngine.Object.DestroyImmediate(ground.GetComponent<Collider>());
-        }
-
-        /// <summary>Storey k's slab: a quad over each tile it has (not its walls), in one mesh.</summary>
-        GameObject Slab(Transform storey, int k)
-        {
-            var tiles = TilesOf(k);
-            return Quads(storey, "Losa", Lit("slab", new Color(0.6f, 0.55f, 0.48f)), k * MapSpace.Storey + 0.02f, i => i < tiles.Count && tiles[i] != null && !IsWall(tiles[i]));
-        }
-
-        /// <summary>Over each building's top storey, its roof: a quad on every tile of it (GameState.storeys), in one mesh.</summary>
-        void RoofSlabs()
-        {
-            if (s.Storeys == null) return;
-            int top = s.Storeys.Where((n, i) => GroundAt(i) != 4).DefaultIfEmpty(0).Max();
-            for (int n = 1; n <= top; n++)
-            {
-                int storeys = n;
-                Quads(Roofs, $"Tejado {n}", Lit("roof", new Color(0.4f, 0.4f, 0.42f)), n * MapSpace.Storey + 0.02f, i => s.Storeys[i] == storeys && GroundAt(i) != 4);
-            }
-        }
-
-        GameObject Quads(Transform parent, string name, Material material, float height, Func<int, bool> on)
-        {
-            var vertices = new List<Vector3>();
-            var triangles = new List<int>();
-            for (int i = 0; i < s.Width * s.Height; i++)
-            {
-                if (!on(i)) continue;
-                int x = i % s.Width, y = i / s.Width;
-                int v = vertices.Count;
-                vertices.Add(new Vector3(x * MapSpace.Tile, height, -y * MapSpace.Tile));
-                vertices.Add(new Vector3((x + 1) * MapSpace.Tile, height, -y * MapSpace.Tile));
-                vertices.Add(new Vector3((x + 1) * MapSpace.Tile, height, -(y + 1) * MapSpace.Tile));
-                vertices.Add(new Vector3(x * MapSpace.Tile, height, -(y + 1) * MapSpace.Tile));
-                triangles.AddRange(new[] { v, v + 1, v + 2, v, v + 2, v + 3 });
-            }
-            if (vertices.Count == 0) return null;
-            var mesh = new Mesh { name = name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
-            mesh.SetVertices(vertices);
-            mesh.SetTriangles(triangles, 0);
-            mesh.RecalculateNormals();
-            var o = new GameObject(name);
-            o.transform.SetParent(parent, false);
-            o.AddComponent<MeshFilter>().sharedMesh = mesh;
-            o.AddComponent<MeshRenderer>().sharedMaterial = material;
-            return o;
+            if (looks.TryGetValue(b, out var l)) return l;
+            var of = BuildingLooks.Of(plan.Buildings[b]);
+            return looks[b] = (new Vector3((float)of.outer.r, (float)of.outer.g, (float)of.outer.b), new Vector3((float)of.inner.r, (float)of.inner.g, (float)of.inner.b));
         }
 
         /// <summary>
-        /// Tile i of storey k as a wall, window or door, a block a storey tall (the outline left out); an open door a
-        /// gap, until Synty's kits.
+        /// The buildings' floors, roofs, stairs and the tops of raised ground (BuildingSurfaces, buildings.ts buildStatic),
+        /// what stands on the roofs (roofProps) and the parapets of flats (layParapets), in Bastion/Building's swatches:
+        /// the ground floor's and raised ground's on the ground storey, each storey's floor and stairs on its own (so the
+        /// storey in view hides what is above it), the roofs on Roofs, a deck one walks on on its storey.
         /// </summary>
-        void Wall(int k, int i)
+        void BuildingParts()
         {
-            var tiles = TilesOf(k);
-            if (i >= tiles.Count) return;
-            string t = tiles[i];
-            if (t == null || !IsWall(t) || t == "doorOpen" || (k == 0 && GroundAt(i) == 4)) return;
-            int x = i % s.Width, y = i / s.Width;
-            var block = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            block.name = t;
-            block.transform.SetParent(walls[k], false);
-            block.transform.localPosition = MapSpace.World(x, y, k) + Vector3.up * MapSpace.Storey / 2;
-            block.transform.localScale = new Vector3(MapSpace.Tile, MapSpace.Storey, MapSpace.Tile);
-            block.GetComponent<Renderer>().sharedMaterial = t.StartsWith("window")
-                ? Lit("window", new Color(0.45f, 0.55f, 0.62f))
-                : t.StartsWith("door") ? Lit("door", new Color(0.45f, 0.33f, 0.25f)) : Lit("wall", new Color(0.66f, 0.64f, 0.6f));
-            UnityEngine.Object.DestroyImmediate(block.GetComponent<Collider>());
-            Own(block, k, new[] { i });
+            var set = BuildingSurfaces.Of(s, plan);
+            // The cutaway of these buildings, measured to their roofs (Building.top, just set).
+            (root.GetComponent<Cutaway>() ?? root.gameObject.AddComponent<Cutaway>()).Reset(plan);
+            var catalog = PieceCatalog.Load();
+            Draw(Storeys[0], "Suelos", set.Floors, catalog?.floors, false);
+            Draw(Storeys[0], "Terreno alto", set.Raised, catalog?.floors, false, weathered: true);
+            Draw(Storeys[0], "Macizos", set.Solid, catalog?.floors, true);
+            Draw(Roofs, "Tejados", set.Roofs, catalog?.roofs, true, fades: true, weathered: true);
+            holesMade = Holes();
+            Upper(set.Storeys, set.Decks);
+            Parapets();
+            foreach (var b in plan.Buildings)
+            {
+                if (b.kind == BuildingKinds.Ruin) continue;
+                var parent = b.walkableRoof ? Storeys[Mathf.Clamp(b.storeys, 0, Storeys.Length - 1)] : Roofs;
+                foreach (var r in BuildingSurfaces.RoofProps(b, (x, y) => BuildingSurfaces.DeckAt(plan, b, x, y)))
+                    Cutaway.Current?.Track(PlaceGame(parent, r.id, Matrix4x4.Translate(new Vector3((float)r.x, (float)r.y, (float)r.z)) * Pieces.RotationY((float)r.yaw)), b.index, b.storeys);
+            }
+        }
+
+        /// <summary>How many slabs have been blown through (BuildingPlan.Holed).</summary>
+        int Holes()
+        {
+            int n = 0;
+            for (int k = 1; k <= (s.Levels?.Count ?? 0); k++)
+                for (int i = 0; i < s.Width * s.Height; i++)
+                    if (plan.Holed(i, k)) n++;
+            return n;
+        }
+
+        /// <summary>The storeys' floors and stairs, each on its storey (what is above the top one with it), and the decks; those there were go.</summary>
+        void Upper(Surfaces storeys, Surfaces decks)
+        {
+            foreach (var o in upper) DestroyNow(o);
+            upper.Clear();
+            var catalog = PieceCatalog.Load();
+            for (int k = 0; k < Storeys.Length; k++)
+            {
+                int level = k;
+                bool Here(int l) => l == level || (level == Storeys.Length - 1 && l > level);
+                upper.Add(Draw(Storeys[k], "Plantas", storeys, catalog?.floors, true, Here, true));
+                upper.Add(Draw(Storeys[k], "Azoteas", decks, catalog?.roofs, true, Here, true, true));
+            }
+            upper.RemoveAll(o => o == null);
+        }
+
+        /// <summary>
+        /// The parapets along the roof edges of flats (buildings.ts layParapets): on raised flats' low cover with nothing
+        /// else on it, brick to the parapet's height and a stone coping, on every side above lower ground.
+        /// </summary>
+        void Parapets()
+        {
+            DestroyNow(parapets);
+            int w = s.Width, h = s.Height;
+            int Elev(int x, int y) => x < 0 || y < 0 || x >= w || y >= h || y * w + x >= s.Elev.Count ? 0 : s.Elev[y * w + x];
+            var surfaces = new Surfaces();
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int i = y * w + x;
+                    bool holds = plan.Raised[i] == BuildingPlan.RaisedFlats && s.Tiles[i] == TileKinds.Low
+                        && (s.Decor == null || i >= s.Decor.Count || Bastion.Engine.Decor.DecorOf(s.Decor[i]) == null);
+                    if (!holds) continue;
+                    int e = Elev(x, y);
+                    foreach (var d in Bastion.Engine.Grid.Dirs4)
+                    {
+                        if (Elev(x + d.X, y + d.Y) >= e) continue;
+                        double ex = x + 0.5 + d.X * 0.5, ez = y + 0.5 + d.Y * 0.5, top = e * BuildingSurfaces.Storey;
+                        double ax = d.X != 0 ? 0 : 0.5, az = d.X != 0 ? 0.5 : 0;
+                        double ix = -d.X * BuildingSurfaces.ParapetThick, iz = -d.Y * BuildingSurfaces.ParapetThick;
+                        var lo = new Vec3d(Math.Min(ex - ax, ex + ix), top, Math.Min(ez - az, ez + iz));
+                        var hi = new Vec3d(Math.Max(ex + ax, ex + ix), top + BuildingSurfaces.Parapet, Math.Max(ez + az, ez + iz));
+                        surfaces.Box(lo, hi, Swatch.Flat, BuildingSurfaces.Brick, -1);
+                        surfaces.Box(new Vec3d(lo.x - 0.03, hi.y, lo.z - 0.03), new Vec3d(hi.x + 0.03, hi.y + 0.07, hi.z + 0.03), Swatch.Flat, BuildingSurfaces.Stone, -1);
+                    }
+                }
+            parapets = Draw(walls[0], "Pretiles", surfaces, PieceCatalog.Load()?.floors, true);
+        }
+
+        /// <summary>
+        /// Surfaces as a mesh in Unity's world (metres, z the other way, so every triangle turned round to keep its front),
+        /// with what Bastion/Building's swatches read: the plane (TEXCOORD0), the patch (1), the colour (2), and with
+        /// `fades` the building (+1) and storey they fade with in the cutaway (3), and whether they are `weathered` (roofs:
+        /// weatherPatch); only the triangles of the storeys `keep`
+        /// takes, if it is given. Null if there are none.
+        /// </summary>
+        static GameObject Draw(Transform parent, string name, Surfaces from, Material material, bool shadows, Func<int, bool> keep = null, bool fades = false, bool weathered = false)
+        {
+            if (from == null || from.Empty || material == null) return null;
+            var positions = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var planes = new List<Vector2>();
+            var patches = new List<Vector4>();
+            var colours = new List<Vector4>();
+            var cuts = new List<Vector4>();
+            int n = from.Vertices;
+            var corners = new int[3];
+            for (int t = 0; t + 2 < n; t += 3)
+            {
+                if (keep != null && !keep(Mathf.RoundToInt(from.Levels[t]))) continue;
+                corners[0] = t;
+                corners[1] = t + 2;
+                corners[2] = t + 1;
+                foreach (int v in corners)
+                {
+                    positions.Add(new Vector3(from.Position[v * 3] * MapSpace.Tile, from.Position[v * 3 + 1] * MapSpace.Tile, -from.Position[v * 3 + 2] * MapSpace.Tile));
+                    normals.Add(new Vector3(from.Normal[v * 3], from.Normal[v * 3 + 1], -from.Normal[v * 3 + 2]));
+                    planes.Add(new Vector2(from.Plane[v * 2], from.Plane[v * 2 + 1]));
+                    patches.Add(new Vector4(from.Patch[v * 4], from.Patch[v * 4 + 1], from.Patch[v * 4 + 2], from.Patch[v * 4 + 3]));
+                    colours.Add(new Vector4(from.Color[v * 3], from.Color[v * 3 + 1], from.Color[v * 3 + 2], 1));
+                    cuts.Add(new Vector4(from.Roof[v], from.Levels[v], fades ? 1 : 0, weathered ? 1 : 0));
+                }
+            }
+            if (positions.Count == 0) return null;
+            var mesh = new Mesh { name = name, indexFormat = positions.Count > 65535 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16 };
+            mesh.SetVertices(positions);
+            mesh.SetNormals(normals);
+            mesh.SetUVs(0, planes);
+            mesh.SetUVs(1, patches);
+            mesh.SetUVs(2, colours);
+            mesh.SetUVs(3, cuts);
+            mesh.SetTriangles(Enumerable.Range(0, positions.Count).ToArray(), 0);
+            mesh.RecalculateBounds();
+            var o = new GameObject(name);
+            o.transform.SetParent(parent, false);
+            o.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var r = o.AddComponent<MeshRenderer>();
+            r.sharedMaterial = material;
+            r.shadowCastingMode = shadows ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
+            return o;
+        }
+
+        /// <summary>A catalog model at 0.10.1's matrix (tiles): its placement turned into Unity's (S·m·S, metres) over the model as Place sets it up.</summary>
+        GameObject PlaceGame(Transform parent, string id, Matrix4x4 game)
+        {
+            var o = Place(parent, id, Vector3.zero, 0);
+            if (o == null) return null;
+            var flip = Matrix4x4.Scale(new Vector3(1, 1, -1));
+            var m = flip * WallsView.InMetres(game) * flip;
+            o.transform.localPosition = m.GetPosition();
+            o.transform.localRotation = m.rotation;
+            o.transform.localScale = new Vector3(m.GetColumn(0).magnitude, m.GetColumn(1).magnitude, m.GetColumn(2).magnitude);
+            return o;
         }
 
         /// <summary>
@@ -396,6 +537,7 @@ namespace Bastion.Client.Map
                 Own(Thing(props[k], thing, floor), k, thing.Tiles);
                 return;
             }
+            if (Fountain(k, i, look, tiles, decor, done)) return;
             if (look.Kind == "part") return;
             bool low = tile == "low";
             string set = MapArt.DecorSet(look.Kind, low, s.Biome, s.Site);
@@ -409,9 +551,141 @@ namespace Bastion.Client.Map
             float yaw = wiggle == 2 ? MapArt.Hash(x, y, 7) * 360 : turn * 90 + (wiggle == 1 ? (MapArt.Hash(x, y, 6) - 0.5f) * 0.16f * Mathf.Rad2Deg : 0);
             cx += (MapArt.Hash(x, y, 4) - 0.5f) * 2 * shift;
             cz += (MapArt.Hash(x, y, 5) - 0.5f) * 2 * shift;
+            if (Furnished(k, i, look, low, turn, floor)) return;
             var ids = MapArt.Set(set);
             string id = ids[Mathf.Min(ids.Length - 1, Mathf.FloorToInt(MapArt.Hash(x, y, 1) * ids.Length))];
             Own(Place(props[k], id, new Vector3(cx * MapSpace.Tile, floor, -cz * MapSpace.Tile), -yaw), k, new[] { i });
+        }
+
+        /// <summary>A square's fountain (mapView.ts FOUNTAIN): its rim's pieces low, the statue in the middle of a big one high.</summary>
+        static readonly Dictionary<string, string> FountainParts = new Dictionary<string, string> { ["fountain"] = "low", ["fountainCorner"] = "low", ["statue"] = "high" };
+
+        /// <summary>
+        /// A square's fountain (mapView.ts): the basin whole over its 3 × 3 (the statue its top) or its 2 × 2, while all of
+        /// it stands, from the middle of its block; shot up, its pieces are rubble (MapArt.DecorSet). By the forest road the
+        /// statue is the lumberjack's.
+        /// </summary>
+        bool Fountain(int k, int i, DecorLook look, IList<string> tiles, IList<int> decor, HashSet<int> done)
+        {
+            if (!FountainParts.ContainsKey(look.Kind) || (look.Kind == "statue" && s.Site == "roadside")) return false;
+            int w = s.Width, h = s.Height;
+            var block = new List<int> { i };
+            var seen = new HashSet<int> { i };
+            for (int n = 0; n < block.Count; n++)
+            {
+                int tx = block[n] % w, ty = block[n] / w;
+                foreach (var d in Bastion.Engine.Grid.Dirs4)
+                {
+                    int nx = tx + d.X, ny = ty + d.Y, j = ny * w + nx;
+                    if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen.Contains(j) || j >= decor.Count) continue;
+                    var other = Bastion.Engine.Decor.DecorOf(decor[j]);
+                    if (other == null || !FountainParts.ContainsKey(other.Kind)) continue;
+                    seen.Add(j);
+                    block.Add(j);
+                }
+            }
+            int x0 = block.Min(t => t % w), y0 = block.Min(t => t / w);
+            int bw = block.Max(t => t % w) - x0 + 1, bh = block.Max(t => t / w) - y0 + 1;
+            bool whole = block.All(t => t < tiles.Count && tiles[t] == FountainParts[Bastion.Engine.Decor.DecorOf(decor[t]).Kind]);
+            if (!whole || bw != bh || bw < 2) return false;
+            int anchor = (y0 + bh / 2) * w + x0 + bw / 2;
+            if (!done.Add(anchor)) return true;
+            var basin = Place(props[k], "fountainWhole", new Vector3((x0 + bw / 2f) * MapSpace.Tile, k * MapSpace.Storey, -(y0 + bh / 2f) * MapSpace.Tile), 0);
+            if (basin != null) basin.transform.localScale = Vector3.one * (bw / 3f);
+            Own(basin, k, block);
+            return true;
+        }
+
+        /// <summary>A supermarket's shelving as stocked as it is: the odds of each look (full, gaps, bare, empty) by stock (mapView.ts SHELF_LOOKS).</summary>
+        static readonly float[][] ShelfLooks = { new[] { 0.6f, 0.4f, 0, 0 }, new[] { 0.1f, 0.3f, 0.4f, 0.2f }, new[] { 0, 0.1f, 0.45f, 0.45f } };
+        static readonly string[] Gondolas = { "gondola", "gondolaGaps", "gondolaBare", "gondolaEmpty" };
+        static readonly string[] WallShelves = { "wallShelf", "wallShelfGaps", "wallShelfBare", "wallShelfEmpty" };
+        /// <summary>A grocer's shelves: full, picked over or stripped, these odds.</summary>
+        static readonly float[] GrocerShelf = { 0.3f, 0.45f, 0.25f };
+        /// <summary>The shelving stretched up from its models' height at a tile long (to 1.35 m), a row's low end to 0.75; a wall shelf this far back (tiles).</summary>
+        const float ShelfTall = 1.36f, EndTall = 1.35f, WallShelfBack = 0.28f;
+
+        /// <summary>
+        /// Furniture as its building is (mapView.ts addDecor): a shop's counter its own; a supermarket's shelving, gondolas
+        /// with goods both ways, along its walls wall shelves, a row's low end a display turned to the checkouts; a
+        /// grocer's (its FOOD sign) the supermarket's gondolas; tall shelves a house's or an office's (or a bookshop's)
+        /// bookcases, else shelving; a tall cabinet. Not yet: what fell off a supermarket's shelves.
+        /// </summary>
+        bool Furnished(int k, int i, DecorLook look, bool low, int turn, float floor)
+        {
+            if (look.Kind != "counter" && look.Kind != "shelf" && look.Kind != "cabinet") return false;
+            int x = i % s.Width, y = i / s.Width;
+            float cx = x + 0.5f, cz = y + 0.5f;
+            int b = plan != null && i < plan.Owner.Length ? plan.Owner[i] : -1;
+            var bd = b >= 0 && b < plan.Buildings.Count ? plan.Buildings[b] : null;
+            string id;
+            float tall = 1;
+            int quarter = turn;
+            if (look.Kind == "counter")
+            {
+                if (!low) return false;
+                id = bd != null && bd.kind != BuildingKinds.House ? "shopCounter" : "counter";
+            }
+            else if (look.Kind == "shelf" && bd?.market != null)
+            {
+                var back = Bastion.Engine.Grid.Dirs4[(look.Facing + 2) % 4];
+                int at = (y + back.Y) * s.Width + x + back.X;
+                string behind = at >= 0 && at < s.Tiles.Count ? s.Tiles[at] : null;
+                bool wall = behind == "wall" || behind == "window" || behind == "windowBroken";
+                var odds = ShelfLooks[MarketStock(x, y)];
+                float pick = MapArt.Hash(x, y, 80);
+                int n = 0;
+                while (n < 3 && pick >= odds[n]) pick -= odds[n++];
+                id = low ? "endDisplay" : (wall ? WallShelves : Gondolas)[n];
+                quarter = low ? (4 - bd.market.Value) % 4 : turn;
+                tall = low ? EndTall : ShelfTall;
+                float push = wall && !low ? WallShelfBack : 0;
+                cx += back.X * push;
+                cz += back.Y * push;
+            }
+            else if (look.Kind == "shelf" && !low && bd?.kind == BuildingKinds.Shop && WallLayout.ShopSign(s, bd) == "grocer")
+            {
+                float pick = MapArt.Hash(x, y, 80);
+                int n = 0;
+                while (n < 2 && pick >= GrocerShelf[n]) pick -= GrocerShelf[n++];
+                id = Gondolas[n];
+                tall = ShelfTall;
+            }
+            else if (!low)
+            {
+                bool books = bd != null && (bd.kind == BuildingKinds.House || bd.kind == BuildingKinds.Office || (bd.kind == BuildingKinds.Shop && ShopTradeIn(bd) == "books") || (bd.kind == BuildingKinds.Hall && bd.look < 0.3));
+                id = look.Kind == "shelf" ? (books ? "bookshelf" : "shelfHigh") : "cabinet";
+            }
+            else return false;
+            var placed = Place(props[k], id, new Vector3(cx * MapSpace.Tile, floor, -cz * MapSpace.Tile), -quarter * 90);
+            if (placed != null) placed.transform.localScale = new Vector3(1, tall, 1);
+            Own(placed, k, new[] { i });
+            return true;
+        }
+
+        /// <summary>A supermarket's stock where (x, y) is (mapView.ts marketStock): 0 stocked, 1 stocked but searched since, 2 stripped.</summary>
+        int MarketStock(int x, int y)
+        {
+            var m = s.Markets?.FirstOrDefault(q => x >= q.X && x < q.X + q.W && y >= q.Y && y < q.Y + q.H);
+            if (m == null || m.Stock != MarketStocks.Full) return 2;
+            LootRoom room = null;
+            for (int n = 0; n < m.W * m.H && room == null; n++) room = Looting.RoomAt(s, new Pos { X = m.X + n % m.W, Y = m.Y + n / m.W, Z = 0 });
+            return room != null && s.RoomsSearched != null && s.RoomsSearched.Contains(room.Id) ? 1 : 0;
+        }
+
+        /// <summary>A shop's trade as its floor shows it (homeFurnishing.ts shopTradeIn), else by its looks.</summary>
+        string ShopTradeIn(Building b)
+        {
+            for (int y = b.y0; y <= b.y1; y++)
+                for (int x = b.x0; x <= b.x1; x++)
+                {
+                    int i = y * s.Width + x;
+                    string kind = s.Decor != null && i < s.Decor.Count ? Bastion.Engine.Decor.DecorOf(s.Decor[i])?.Kind : null;
+                    if (kind == "cafeTable") return "cafe";
+                    if (kind == "readingTable") return "books";
+                    if (kind == "drinksFridge") return "grocer";
+                }
+            return b.look < 0.3 ? "books" : b.look < 0.55 ? "cafe" : "grocer";
         }
 
         /// <summary>An object over several tiles, from its anchor: its model in the middle of its tiles, turned the way it faces.</summary>
@@ -512,7 +786,7 @@ namespace Bastion.Client.Map
             // Its own turn to face north (0.10.1's quarter turns, the other way round here), then where it goes.
             var turned = new GameObject("turn").transform;
             turned.SetParent(holder, false);
-            turned.localRotation = Quaternion.Euler(0, -art.yaw * 90, 0);
+            turned.localRotation = Quaternion.Euler(0, -(art.yaw - MapArt.UnityTurn(art.fbx)) * 90, 0);
             if (art.shift != null && art.shift.Length >= 2) turned.localPosition = new Vector3(art.shift[0] * MapSpace.Tile, 0, -art.shift[1] * MapSpace.Tile);
             model.transform.SetParent(turned, false);
             holder.SetPositionAndRotation(at, Quaternion.Euler(0, yaw, 0));
@@ -535,14 +809,6 @@ namespace Bastion.Client.Map
                 }
             }
             return b;
-        }
-
-        Material Lit(string key, Color colour)
-        {
-            if (materials.TryGetValue(key, out var m)) return m;
-            m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = key, color = colour };
-            m.SetFloat("_Smoothness", 0.05f);
-            return materials[key] = m;
         }
     }
 }

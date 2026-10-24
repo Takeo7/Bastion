@@ -1,0 +1,250 @@
+/*
+   Proposal «Losetas» (Modern Menus as its main menus): thick slanted tiles tinted bright on dark blue, frames with cut
+   corners, gold for what is pressed, every key with its number in a hexagon (Temas.Losetas places those), the
+   objective on a ribbon.
+*/
+
+.hud {
+    --t-text: #ffffff;
+    --t-muted: #a9c3ec;
+    --t-accent: #ffc83a;
+    --t-accent-soft: rgba(255, 200, 58, 0.05);
+    --t-primary: #ffc83a;
+    --t-primary-hover: #ffd75e;
+    --t-primary-ink: #14203a;
+    --t-panel: rgba(20, 32, 58, 0.94);
+    --t-panel-hi: rgba(29, 58, 120, 0.94);
+    --t-tag: rgba(20, 32, 58, 0.9);
+    --m-steel: rgb(29, 58, 120);
+    --m-steel-hi: rgb(40, 76, 150);
+}
+
+.hud .panel {
+    rotate: 0;
+    border-width: 0;
+}
+
+/* The framed cards: a cut-corner frame over dark blue. */
+.hud .shot-panel,
+.hud .unit-panel,
+.hud .goal-dock {
+    background-color: rgba(20, 32, 58, 0.95);
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Frame_Box_Medium_01.png?fileID=1537655665&guid=67ae88deafb59544686d0fbf5beb4e99&type=3#SPR_ModernMenus_Frame_Box_Medium_01");
+    -unity-background-image-tint-color: #8fd0ff;
+    -unity-slice-scale: 0.06px;
+    border-radius: 6px;
+}
+
+/* ------------------------------------------------------------------ the squad: slanted tiles */
+
+.hud .squad,
+.hud .log {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+}
+
+.hud .squad {
+    width: 238px;
+    padding: 0;
+}
+
+.squad-card {
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_02.png?fileID=1537655665&guid=fcff50df683cffa49befe9d0f6a77b99&type=3#SPR_ModernMenus_Button_02");
+    -unity-background-image-tint-color: rgb(29, 58, 120);
+    -unity-slice-scale: 0.16px;
+    background-color: rgba(0, 0, 0, 0);
+    margin-bottom: 4px;
+    padding: 2px 22px 3px 4px;
+    align-items: center;
+}
+
+.squad-card--selected {
+    -unity-background-image-tint-color: #ffc83a;
+}
+
+.squad-card--selected .squad-card__name {
+    color: #14203a;
+}
+
+.squad-card__accent {
+    width: 28px;
+    height: 28px;
+    margin: 0 6px 0 6px;
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_10_Angled_Right.png?fileID=21300000&guid=c9570025e3c62b541a3a8e1fd6b06004&type=3#SPR_ModernMenus_Button_10_Angled_Right");
+    justify-content: center;
+}
+
+.tema-number {
+    -unity-text-align: middle-center;
+    font-size: 14px;
+    color: #14203a;
+}
+
+.pip--on {
+    background-color: #3fd0ff;
+}
+
+.pips--ap .pip--on {
+    background-color: #ff5c9d;
+}
+
+.squad-card--selected .pip--on {
+    background-color: #14203a;
+}
+
+/* ------------------------------------------------------------------ the soldier */
+
+.hud .unit-panel {
+    padding: 12px 16px 10px;
+}
+
+.stat-icon {
+    -unity-background-image-tint-color: #3fd0ff;
+}
+
+/* ------------------------------------------------------------------ the bar: slanted keys, hexagons with numbers */
+
+.hud .abilities {
+    left: 50%;
+    right: auto;
+    translate: -50% 0;
+    bottom: 26px;
+    padding: 0;
+}
+
+.hud .ability {
+    width: 62px;
+    height: 54px;
+    margin: 0 2px;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_03.png?fileID=1537655665&guid=def1aa62194f83d45bb3a46958be3cb6&type=3#SPR_ModernMenus_Button_03");
+    -unity-background-image-tint-color: rgb(29, 58, 120);
+    -unity-slice-scale: 0.17px;
+    border-width: 0;
+}
+
+.hud .ability:hover {
+    -unity-background-image-tint-color: rgb(40, 76, 150);
+}
+
+.hud .ability--active {
+    -unity-background-image-tint-color: #ffc83a;
+    border-width: 0;
+}
+
+.ability__icon {
+    -unity-background-image-tint-color: #ffffff;
+}
+
+.ability--active .ability__icon {
+    -unity-background-image-tint-color: #14203a;
+}
+
+.tema-key {
+    position: absolute;
+    top: -12px;
+    left: -2px;
+    width: 26px;
+    height: 26px;
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_10_Angled_Right.png?fileID=21300000&guid=c9570025e3c62b541a3a8e1fd6b06004&type=3#SPR_ModernMenus_Button_10_Angled_Right");
+    -unity-background-image-tint-color: #3fd0ff;
+    color: #14203a;
+    font-size: 13px;
+    -unity-text-align: middle-center;
+}
+
+/* ------------------------------------------------------------------ the shot */
+
+.hud .shot-panel {
+    width: 262px;
+    padding: 18px 20px 18px;
+}
+
+.shot-title {
+    color: #8fd0ff;
+}
+
+.fire {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_03.png?fileID=1537655665&guid=def1aa62194f83d45bb3a46958be3cb6&type=3#SPR_ModernMenus_Button_03");
+    -unity-background-image-tint-color: #ffc83a;
+    -unity-slice-scale: 0.2px;
+    color: #14203a;
+    border-width: 0;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.cancel,
+.cycle {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_03.png?fileID=1537655665&guid=def1aa62194f83d45bb3a46958be3cb6&type=3#SPR_ModernMenus_Button_03");
+    -unity-background-image-tint-color: rgb(29, 58, 120);
+    -unity-slice-scale: 0.2px;
+    border-width: 0;
+}
+
+/* ------------------------------------------------------------------ the top and the right */
+
+.floor-ind,
+.player,
+.tag,
+.menu-button,
+.turn__in-play {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_02.png?fileID=1537655665&guid=fcff50df683cffa49befe9d0f6a77b99&type=3#SPR_ModernMenus_Button_02");
+    -unity-background-image-tint-color: rgba(20, 32, 58, 0.94);
+    -unity-slice-scale: 0.14px;
+    border-width: 0;
+    padding-left: 14px;
+    padding-right: 14px;
+}
+
+/* The objective's kind on a magenta ribbon. */
+.hud .goal-dock {
+    padding: 10px 14px 10px;
+}
+
+.mission-kind {
+    align-self: flex-start;
+    padding: 2px 26px 4px;
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Banner_01.png?fileID=21300000&guid=e426da6d200b2b84b9c55157338b2303&type=3#SPR_ModernMenus_Banner_01");
+    -unity-background-image-tint-color: #e4357a;
+    color: #ffffff;
+    font-size: 20px;
+}
+
+.hud .log {
+    background-color: rgba(0, 0, 0, 0);
+    padding: 0;
+}
+
+.log__line {
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_02.png?fileID=1537655665&guid=fcff50df683cffa49befe9d0f6a77b99&type=3#SPR_ModernMenus_Button_02");
+    -unity-background-image-tint-color: rgba(20, 32, 58, 0.9);
+    -unity-slice-scale: 0.12px;
+    padding: 3px 18px;
+    margin-bottom: 3px;
+}
+
+/* «Terminar turno»: a big gold slanted tile, as the menus' «Continue». */
+.end-turn {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_03.png?fileID=1537655665&guid=def1aa62194f83d45bb3a46958be3cb6&type=3#SPR_ModernMenus_Button_03");
+    -unity-background-image-tint-color: #ffc83a;
+    -unity-slice-scale: 0.3px;
+    border-width: 0;
+}
+
+.end-turn__label,
+.end-turn__detail {
+    color: #14203a;
+}
+
+.turn-btn {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceModernMenus/Sprites/ModernMenus/SPR_ModernMenus_Button_02.png?fileID=1537655665&guid=fcff50df683cffa49befe9d0f6a77b99&type=3#SPR_ModernMenus_Button_02");
+    -unity-background-image-tint-color: rgba(20, 32, 58, 0.94);
+    -unity-slice-scale: 0.14px;
+    border-width: 0;
+}

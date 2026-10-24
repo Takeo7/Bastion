@@ -50,6 +50,19 @@ namespace Bastion.Client.Map
             return footprints.TryGetValue(id, out var f) ? f : null;
         }
 
+        /// <summary>
+        /// Models that Synty's Unity package has turned against its source FBX (which 0.10.1's art was set against): the
+        /// quarter turns to take off 0.10.1's yaw. Apocalypse's wrecked cars lie along z here, along x there (24/10: every
+        /// car of city-7 stood across its tiles).
+        /// </summary>
+        static readonly Dictionary<string, int> UnityTurns = new Dictionary<string, int>
+        {
+            ["SM_Prop_Car_Wrecked_01"] = 1, ["SM_Prop_Car_Wrecked_Rusted_01"] = 1, ["SM_Prop_Car_Wrecked_SUV_01"] = 1, ["SM_Prop_Car_Wrecked_OpenBoot_01"] = 1,
+        };
+
+        /// <summary>The quarter turns a model's Unity prefab stands from its source FBX (0 for most).</summary>
+        public static int UnityTurn(string fbx) => fbx != null && UnityTurns.TryGetValue(System.IO.Path.GetFileName(fbx), out int k) ? k : 0;
+
         public static PropArt Prop(string id)
         {
             Load();

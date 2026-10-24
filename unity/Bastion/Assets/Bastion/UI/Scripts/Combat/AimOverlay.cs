@@ -221,10 +221,10 @@ namespace Bastion.UI.Combat
                 foreach (var (from, path, colour) in list)
                 {
                     var c = new Color32(colour.r, colour.g, colour.b, 0xe6);
-                    var prev = Board.TileToWorld(s, from, 0.1f * T);
+                    var prev = Board.WayPoint(s, from, 0.1f * T);
                     foreach (var p in path)
                     {
-                        var at = Board.TileToWorld(s, p, 0.1f * T);
+                        var at = Board.WayPoint(s, p, 0.1f * T);
                         build.Line(prev, at, 1.8f, c);
                         prev = at;
                     }

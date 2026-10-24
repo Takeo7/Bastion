@@ -57,11 +57,14 @@ namespace Bastion.Client
             var builder = map.Build(state, catalog.PrefabOf(), catalog.MaterialOf());
             built = signature;
             place = where;
+            // The mission's light, by day or by night.
+            Mood.For(state);
             // A new map's fog: what the squad sees from where it starts, at once.
             Fog.Current?.Reset(state);
             Fog.Current?.Show(state, true);
-            Debug.Log($"[battlefield] {state.MapId} {state.Width}×{state.Height}: {builder.Placed} props in {clock.ElapsedMilliseconds} ms"
-                + (builder.Missing.Count > 0 ? "; missing: " + string.Join(", ", builder.Missing.OrderBy(m => m)) : ""));
+            var missing = builder.Missing.Concat(builder.Walls?.Missing ?? Enumerable.Empty<string>()).OrderBy(m => m).ToList();
+            Debug.Log($"[battlefield] {state.MapId} {state.Width}×{state.Height}: {builder.Placed} props and {builder.Walls?.Laid} wall pieces in {clock.ElapsedMilliseconds} ms"
+                + (missing.Count > 0 ? "; missing: " + string.Join(", ", missing) : ""));
         }
 
         /// <summary>What the map is built from (where it is, its tiles, decor and storeys): the same, nothing to build again.</summary>

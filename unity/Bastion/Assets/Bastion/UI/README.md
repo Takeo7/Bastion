@@ -17,10 +17,12 @@ Scripts/Hud/       HudRoot (el componente del UIDocument), HudViews (las vistas)
                    GoalCard (con la rosa del asedio), Log, UnitFlags (marcas y textos flotantes), Banner,
                    Cards (llamada, llegada, resultado), Notes, EdgeMarks (flechas en el borde), GameMenu (el menú
                    de Esc y sus preguntas)
-  Draw/            lo que USS no dibuja: el hexágono de habilidad, el dial de impacto, la aguja, el triángulo
+  Draw/            lo que USS no dibuja: el hexágono de habilidad, el dial de impacto, la aguja, el triángulo, el ojo,
+                   y los iconos que eran dibujos nuestros (LineIcon: las puertas)
   Lab/             HudLab y RoomLab: vistas inventadas para recorrer los estados
 Scripts/Start/     StartScreen (nombre, crear, unirse, partidas en la red local), RoomMenu (la sala) y sus textos
-Scripts/App/       AppFlow: de la pantalla de inicio a la sala y a la partida, el aviso de conexión
+Scripts/App/       AppFlow: de la pantalla de inicio a la sala y a la partida, el aviso de conexión; GameSettings (los
+                   gráficos de Ajustes), Perf (la telemetría al red.log del anfitrión y el contador de FPS)
 Scripts/Combat/    CombatController (en seis archivos: elegir, puntero y teclas; Orders, los modos y las órdenes;
                    Bar, la barra; Hud, el presentador; Plans, los planes y señalar; Menu, el menú del juego),
                    CombatSession (la red en Partida), EventPlayer (los eventos uno a uno, con las animaciones de
@@ -29,8 +31,10 @@ Scripts/Combat/    CombatController (en seis archivos: elegir, puntero y teclas;
                    habilidades), MeshBuilder, Board, CombatLab
 Editor/            HudShots (escenas para las capturas), HudFonts y HudIcons (generan los assets),
                    AppScenes (la escena Inicio), UiSheets (reimporta los USS)
-Fonts/             Oswald y Barlow (OFL) y sus Font Assets estáticos
-Settings/          HudPanel (PanelSettings: 1440×900, mitad ancho y mitad alto) y HudTheme
+Fonts/             Oswald y Barlow (OFL) y sus Font Assets estáticos; BastionSuministros (el «§» como la caja, nuestro,
+                   de tools/ui/suministros-font.py), su fuente de reserva
+Resources/         además de las plantillas: HudPanel (PanelSettings: 1440×900, mitad ancho y mitad alto) y
+                   HudTheme; AppFlow pone HudPanel a cualquier documento que llegue sin panel
 ```
 
 ## Cómo funciona
@@ -65,7 +69,5 @@ Con todos los módulos: si falta uno (GridModule, por ejemplo), un nombre como `
 
 ## Pendiente
 
-- El camino sobre los peldaños de una escalera.
-- El «§» de la fuente, y los iconos de puertas (abrir y cerrar).
-- En Ajustes: el sonido y los gráficos, cuando existan en Unity, y el tamaño de la interfaz.
+- En Ajustes: el sonido, cuando exista en Unity, y el tamaño de la interfaz.
 - La mochila, la hoja del soldado y la ficha del enemigo.

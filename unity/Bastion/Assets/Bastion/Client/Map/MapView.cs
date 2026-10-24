@@ -6,7 +6,7 @@ namespace Bastion.Client.Map
 {
     /// <summary>
     /// The map in the scene (Partida): built from the state (MapBuilder), storey by storey, and the storey in view, which
-    /// UI's controller decides (ShowLevel): what stands above it is not drawn, so its floor and what is on it show.
+    /// UI's controller decides (ShowLevel): the buildings' cutaway (Cutaway) opens them down to it.
     /// </summary>
     public sealed class MapView : MonoBehaviour
     {
@@ -62,14 +62,20 @@ namespace Bastion.Client.Map
         }
 
         /// <summary>
-        /// The storey in view (0 the ground): those above it and the roofs are not drawn. Levels or more: the whole map,
-        /// roofs and all (as it is built).
+        /// The storey in view (0 the ground): the cutaway's chosen storey (Cutaway.Focus.level), the buildings with storeys
+        /// above it open down to it; and the fog's.
         /// </summary>
         public void ShowLevel(int level)
         {
             Level = Mathf.Clamp(level, 0, storeys.Length);
-            for (int k = 0; k < storeys.Length; k++) storeys[k].gameObject.SetActive(k <= Level);
-            if (roofs != null) roofs.gameObject.SetActive(Level >= storeys.Length);
+            // Every storey stands: what is above the one in view fades building by building in the cutaway (buildings.ts
+            // Focus.level), as the roofs do.
+            for (int k = 0; k < storeys.Length; k++) storeys[k].gameObject.SetActive(true);
+            if (roofs != null) roofs.gameObject.SetActive(true);
+            var cutaway = GetComponent<Cutaway>();
+            if (cutaway != null) cutaway.Focus.level = Level;
+            // The fog is the storey in view's.
+            Fog.Current?.Refog();
         }
 
         void OnDestroy()

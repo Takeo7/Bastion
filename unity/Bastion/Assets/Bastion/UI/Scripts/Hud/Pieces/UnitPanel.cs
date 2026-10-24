@@ -10,6 +10,9 @@ namespace Bastion.UI.Hud
     /// </summary>
     public sealed class UnitPanel
     {
+        /// <summary>Whether the soldier's sheet is in Unity yet (Lore, 24/10: the panel mustn't promise a key that does nothing).</summary>
+        const bool SheetExists = false;
+
         readonly VisualElement host;
         readonly IHudHandlers handlers;
         readonly TooltipLayer tips;
@@ -38,12 +41,11 @@ namespace Bastion.UI.Hud
             var tree = host;
 
             var head = tree.Q("head");
-            head.EnableInClassList("unit-head--opens", view.Soldier);
-            if (view.Soldier)
-            {
-                tips.Attach(head, view.RankName + HudText.Squad.SheetTip);
-                head.RegisterCallback<ClickEvent>(_ => handlers.OnSheet(shownId));
-            }
+            // The soldier's sheet (H, a click on the name) only once it exists in Unity: till then nothing says it opens.
+            var opens = view.Soldier && SheetExists;
+            head.EnableInClassList("unit-head--opens", opens);
+            tips.Attach(head, opens ? view.RankName + HudText.Squad.SheetTip : view.RankName);
+            if (opens) head.RegisterCallback<ClickEvent>(_ => handlers.OnSheet(shownId));
             var rank = tree.Q("rank");
             for (var i = 0; i < view.Rank; i++) Ui.El("rank__chevron", rank);
             Ui.Show(rank, view.Rank > 0);

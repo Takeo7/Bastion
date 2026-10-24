@@ -1,0 +1,321 @@
+/*
+   Proposal «Taller» (Apocalypse HUD as its ARPG demo, top-down as ours): the bar a bolted machine at the bottom, with
+   canisters and a counter (Temas.Taller places them), the keys in rusty frames and numbered underneath; the rest loose
+   over the scene on thin dark strips, yellow for what matters.
+*/
+
+.hud {
+    --t-text: #f1ead8;
+    --t-muted: #bdb39c;
+    --t-accent: #e4d64b;
+    --t-accent-soft: rgba(228, 214, 75, 0.05);
+    --t-primary: #e4d64b;
+    --t-primary-hover: #efe36a;
+    --t-primary-ink: #17150c;
+    --t-panel: rgba(0, 0, 0, 0);
+    --t-panel-hi: rgba(0, 0, 0, 0.5);
+    --t-tag: rgba(0, 0, 0, 0.72);
+    --m-steel: rgba(22, 21, 19, 0.96);
+    --m-steel-hi: rgba(38, 36, 32, 0.96);
+}
+
+/* Loose: no plates, the strips carry the text. */
+.hud .panel,
+.hud .squad,
+.hud .unit-panel,
+.hud .goal-dock,
+.hud .log,
+.hud .compass {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border-width: 0;
+    rotate: 0;
+}
+
+/* ------------------------------------------------------------------ the squad, top left: dark strips */
+
+.hud .squad {
+    width: 236px;
+    padding: 0;
+}
+
+.squad-card {
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.7);
+    -unity-slice-scale: 0.3px;
+    background-color: rgba(0, 0, 0, 0);
+    margin-bottom: 4px;
+    padding: 3px 10px 4px 8px;
+    border-width: 0;
+}
+
+.squad-card--selected {
+    -unity-background-image-tint-color: rgba(40, 36, 10, 0.86);
+}
+
+.squad-card--selected .squad-card__name {
+    color: #e4d64b;
+}
+
+.pip--on {
+    background-color: #e05a52;
+}
+
+.pips--ap .pip--on {
+    background-color: #e4d64b;
+}
+
+/* ------------------------------------------------------------------ the stats, bottom left: wired rows */
+
+.hud .unit-panel {
+    left: 48px;
+    bottom: 34px;
+    width: 230px;
+    padding: 0;
+}
+
+.unit-head {
+    margin-bottom: 4px;
+}
+
+.unit-name {
+    font-size: 20px;
+}
+
+.unit-stats {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.stat {
+    margin: 0 0 4px 0;
+    padding: 2px 10px 2px 3px;
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.72);
+    -unity-slice-scale: 0.25px;
+}
+
+.stat-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 6px;
+    background-color: rgb(36, 36, 36);
+    border-width: 2px;
+    border-color: rgb(150, 138, 112);
+    border-radius: 3px;
+}
+
+.unit-weapon {
+    padding: 3px 10px 3px 3px;
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.72);
+    -unity-slice-scale: 0.25px;
+    border-width: 0;
+}
+
+/* ------------------------------------------------------------------ the bar: the machine (its parts in Temas) */
+
+.hud .abilities {
+    left: 50%;
+    right: auto;
+    translate: -50% 0;
+    bottom: 44px;
+    padding: 10px 12px;
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/Apocalypse/SPR_Apocalypse_Box_Rusty_01.png?fileID=1537655665&guid=edb823c75a862d344b0a0a8d8cb1d690&type=3#SPR_Apocalypse_Box_Rusty_01");
+    -unity-slice-scale: 0.13px;
+    background-color: rgba(18, 17, 15, 0.97);
+    border-radius: 12px;
+}
+
+.hud .ability {
+    width: 52px;
+    height: 52px;
+    margin: 0 3px;
+    background-color: rgb(20, 19, 17);
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/Apocalypse/SPR_Apocalypse_Box_Rusty_01.png?fileID=1537655665&guid=edb823c75a862d344b0a0a8d8cb1d690&type=3#SPR_Apocalypse_Box_Rusty_01");
+    -unity-slice-scale: 0.08px;
+    border-width: 0;
+    border-radius: 6px;
+}
+
+.hud .ability--active {
+    -unity-background-image-tint-color: #f0dc5a;
+    border-width: 0;
+}
+
+.ability__icon {
+    -unity-background-image-tint-color: #f1ead8;
+}
+
+/* Its number under it, on a dark tile. */
+.tema-key {
+    position: absolute;
+    top: 72px;
+    left: 50%;
+    translate: -50% 0;
+    width: 24px;
+    height: 24px;
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgb(36, 36, 36);
+    -unity-slice-scale: 0.15px;
+    color: #ffffff;
+    font-size: 14px;
+    -unity-text-align: middle-center;
+}
+
+.tema-tube__well {
+    position: absolute;
+    left: 9%;
+    right: 11%;
+    top: 31%;
+    bottom: 31%;
+    background-color: rgb(14, 13, 12);
+}
+
+.tema-tube__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background-color: #d8504a;
+}
+
+.tema-tube {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.tema-tube > .tema-piece {
+    -unity-slice-scale: 0.2px;
+}
+
+.tema-tube__text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: 14px;
+    color: #ffffff;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+}
+
+.tema-counter {
+    -unity-slice-scale: 0.1px;
+    background-color: rgb(16, 16, 14);
+    border-radius: 6px;
+}
+
+.tema-counter__text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: 26px;
+    color: #8fe36b;
+}
+
+/* ------------------------------------------------------------------ the shot: a rusty machine box */
+
+.hud .shot-panel {
+    width: 266px;
+    padding: 22px 22px 20px;
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/Apocalypse/SPR_Apocalypse_Box_Rusty_01.png?fileID=1537655665&guid=edb823c75a862d344b0a0a8d8cb1d690&type=3#SPR_Apocalypse_Box_Rusty_01");
+    -unity-slice-scale: 0.14px;
+    background-color: rgba(18, 17, 15, 0.95);
+    border-radius: 14px;
+}
+
+.shot-title {
+    color: #e4d64b;
+}
+
+.fire {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_02.png?fileID=1537655665&guid=7a314f21b40cab54cabe85512bda9ace&type=3#SPR_HUD_Apocalypse_Box_Small_02");
+    -unity-background-image-tint-color: #e4d64b;
+    -unity-slice-scale: 0.35px;
+    color: #17150c;
+    border-width: 0;
+}
+
+.cancel,
+.cycle {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgb(46, 43, 38);
+    -unity-slice-scale: 0.25px;
+    border-width: 0;
+}
+
+/* ------------------------------------------------------------------ the top and the right: loose */
+
+.floor-ind,
+.player,
+.tag,
+.turn__in-play {
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.72);
+    -unity-slice-scale: 0.25px;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+}
+
+.menu-button {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.75);
+    -unity-slice-scale: 0.25px;
+    border-width: 0;
+}
+
+/* The objective: a yellow triangle and a box to tick (Temas), no plate. */
+.hud .goal-dock {
+    padding: 2px 4px 6px 36px;
+}
+
+.mission-kind {
+    color: #e4d64b;
+    font-size: 24px;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+}
+
+.mission-goal {
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+}
+
+.hud .log {
+    padding: 0;
+}
+
+.log__line {
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.74);
+    -unity-slice-scale: 0.25px;
+    padding: 3px 10px;
+    margin-bottom: 3px;
+}
+
+/* «Terminar turno»: a torn yellow plate, as the demos' «Next». */
+.end-turn {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_02.png?fileID=1537655665&guid=7a314f21b40cab54cabe85512bda9ace&type=3#SPR_HUD_Apocalypse_Box_Small_02");
+    -unity-background-image-tint-color: #e4d64b;
+    -unity-slice-scale: 0.4px;
+    border-width: 0;
+}
+
+.end-turn__label,
+.end-turn__detail {
+    color: #17150c;
+}
+
+.turn-btn {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: url("project://database/Assets/Synty/InterfaceApocalypseHUD/Sprites/HUD/SPR_HUD_Apocalypse_Box_Small_01.png?fileID=1537655665&guid=d0a606263eb61cf488eb457eb006e03c&type=3#SPR_HUD_Apocalypse_Box_Small_01");
+    -unity-background-image-tint-color: rgba(0, 0, 0, 0.75);
+    -unity-slice-scale: 0.25px;
+    border-width: 0;
+}

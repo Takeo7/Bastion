@@ -291,6 +291,7 @@ MonoBehaviour:
   - SM_Prop_Trailer_Deck_01
   - SM_Prop_Trailer_Dish_01
   - SM_Prop_Trailer_Steps_01
+  - SM_Prop_Trash_02
   - SM_Prop_TrashBag_01
   - SM_Prop_TrashBag_02
   - SM_Prop_TrashBag_04
@@ -601,6 +602,7 @@ MonoBehaviour:
   - {fileID: 1822764765446270, guid: 909a64f5f84944349922bf0955f0a2e9, type: 3}
   - {fileID: 1432733820810678, guid: feb6f593b9182fe498a4552dcd466f3a, type: 3}
   - {fileID: 1952118272984496, guid: c2ea664ce58b8704595fad730dfd92cd, type: 3}
+  - {fileID: 919132149155446097, guid: ebf8d88937c2b4b08a6078487c7ff569, type: 3}
   - {fileID: 1424496007241718, guid: 43223205572f7034585ff939a4ce68f3, type: 3}
   - {fileID: 1549555536886264, guid: ff051e4530ccab14a804db371451c42a, type: 3}
   - {fileID: 1691975346107528, guid: cef34b95eb085aa4296d0f72f7f1e240, type: 3}

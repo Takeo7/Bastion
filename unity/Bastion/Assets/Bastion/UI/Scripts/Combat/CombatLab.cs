@@ -60,6 +60,9 @@ namespace Bastion.UI.Combat
         /// </summary>
         public string Menu = "";
 
+        /// <summary>The pointer on a tile a soldier reaches up (or down) a flight of stairs: the path on the treads.</summary>
+        public bool Stairs;
+
         /// <summary>Ana in too, with a plan for one of the soldiers, and a ping of hers on a tile ahead.</summary>
         public bool Plans;
 
@@ -173,6 +176,7 @@ namespace Bastion.UI.Combat
                 player = new EventPlayer(control, destroyCancellationToken);
                 player.Load(mine);
                 control.Busy = player.IsBusy;
+                control.CloseFocus = () => player.CloseFocus;
             }
 
             if (turn != null && player != null)
@@ -180,6 +184,7 @@ namespace Bastion.UI.Combat
                 PlaySoon(turn.Events);
                 return;
             }
+            if (Stairs && UpStairs(mine, rig)) return;
             var u = shot != null ? mine.Units.First(x => x.Id == shot.Unit) : mine.Units.FirstOrDefault(x => x.Team == Teams.Xcom && x.Alive && x.Ap > 0);
             if (u == null) return;
             control.Pick(u.Id, false);
@@ -202,6 +207,50 @@ namespace Bastion.UI.Combat
             if (ends.Count == 0) return;
             var max = ends.Max(d => d.Cost);
             control.Hover(ends.OrderBy(d => Mathf.Abs(d.Cost - max * 0.7f)).First().Pos);
+        }
+
+        /// <summary>A soldier and a tile it reaches over a flight of stairs, picked and pointed at, the camera between; false if none.</summary>
+        bool UpStairs(GameState s, CameraRig rig, bool moved = false)
+        {
+            foreach (var u in s.Units.Where(x => x.Team == Teams.Xcom && x.Alive && x.Ap > 0))
+            {
+                var reach = Paths.ComputeReach(s, u, Paths.MaxMoveCost(u));
+                foreach (var d in Paths.Destinations(s, u, reach))
+                {
+                    var path = Paths.BuildPath(s, u, reach, d.Pos);
+                    if (path == null || !path.Any(p => Flights.FlightAt(s, p) != null)) continue;
+                    control.Pick(u.Id, false);
+                    rig.Focus(Vector3.Lerp(Board.TileToWorld(s, u.Pos), Board.TileToWorld(s, d.Pos), 0.5f), true);
+                    // From the soldier's floor, close: the flight under the storey above, which that floor's view takes away.
+                    control.OnFloor(u.Pos.Z - control.Level);
+                    rig.CinematicZoom(12 * Board.Tile);
+                    control.Hover(d.Pos);
+                    Debug.Log($"[lab] stairs: {u.Id} at {u.Pos.X},{u.Pos.Y},{u.Pos.Z} to {d.Pos.X},{d.Pos.Y},{d.Pos.Z}");
+                    return true;
+                }
+            }
+            if (moved)
+            {
+                Debug.Log("[lab] stairs: none in reach");
+                return false;
+            }
+            // None in reach: the first soldier put at the foot of a flight of several tiles (the lab's own state only).
+            var first = s.Units.FirstOrDefault(x => x.Team == Teams.Xcom && x.Alive && x.Ap > 0);
+            for (var z = 0; first != null && z < 4; z++)
+                for (var y = 0; y < s.Height; y++)
+                    for (var x = 0; x < s.Width; x++)
+                    {
+                        var on = Flights.LongFlightAt(s, new Pos { X = x, Y = y, Z = z });
+                        if (on == null || on.Step != 0) continue;
+                        var foot = Flights.FlightFoot(on.Flight);
+                        if (!Grid.InBounds(s, foot.X, foot.Y) || !Flights.CanStopAt(s, foot) || Grid.UnitAt(s, foot) != null) continue;
+                        first.Pos = foot;
+                        player?.Load(s);
+                        Debug.Log($"[lab] stairs: {first.Id} put at the foot {foot.X},{foot.Y},{foot.Z}");
+                        return UpStairs(s, rig, true);
+                    }
+            Debug.Log("[lab] stairs: no flight on the map");
+            return false;
         }
 
         /// <summary>Ana's plan for the second soldier, to a tile it reaches 70 % of the way, and her ping by the first.</summary>

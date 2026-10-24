@@ -27,18 +27,8 @@ namespace Bastion.EditorTools
             return Bastion.Net.Json.Read<GameState>(file["state"].ToString(Newtonsoft.Json.Formatting.None));
         }
 
-        /// <summary>The scene's sun and ambient light, by day or by night (until the game's own lighting).</summary>
-        internal static void Lighting(bool day)
-        {
-            var sun = UnityEngine.Object.FindFirstObjectByType<UnityEngine.Light>();
-            sun.color = day ? new Color(1f, 0.94f, 0.84f) : new Color(0.6f, 0.72f, 1f);
-            sun.intensity = day ? 1.6f : 0.35f;
-            sun.transform.rotation = Quaternion.Euler(48, -35, 0);
-            RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.62f, 0.68f, 0.78f);
-            RenderSettings.ambientEquatorColor = new Color(0.52f, 0.52f, 0.5f);
-            RenderSettings.ambientGroundColor = new Color(0.32f, 0.3f, 0.27f);
-        }
+        /// <summary>The game's light (Bastion.Client.Mood), by day or by night.</summary>
+        internal static void Lighting(bool day) => Bastion.Client.Mood.Show(day ? Bastion.Client.Mood.Day : Bastion.Client.Mood.Night);
 
         /// <summary>The map of `state` in a MapView of its own ("Mapa").</summary>
         internal static MapView Map(GameState state, string name)
@@ -46,7 +36,7 @@ namespace Bastion.EditorTools
             var view = new GameObject("Mapa").AddComponent<MapView>();
             var clock = System.Diagnostics.Stopwatch.StartNew();
             var builder = view.Build(state, Prefabs(), Materials());
-            Debug.Log($"[map] {name}: {state.Width}×{state.Height}, {builder.Placed} props in {clock.ElapsedMilliseconds} ms; missing: {string.Join(", ", builder.Missing.OrderBy(m => m))}");
+            Debug.Log($"[map] {name}: {state.Width}×{state.Height}, {builder.Placed} props and {builder.Walls?.Laid} wall pieces in {clock.ElapsedMilliseconds} ms; missing: {string.Join(", ", builder.Missing.Concat(builder.Walls?.Missing ?? Enumerable.Empty<string>()).OrderBy(m => m))}");
             return view;
         }
 
@@ -59,6 +49,34 @@ namespace Bastion.EditorTools
             var root = view.transform;
             // BASTION_LEVEL: the storey in view (UI's controller decides it in the game).
             if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_LEVEL"), out int level)) view.ShowLevel(level);
+            // The cutaway's focus (UI's controller sets it in the game): BASTION_SELECT=1 the squad's first soldier selected,
+            // BASTION_HOVER=x,y,z the cursor there, BASTION_ROOFS=1 the roofs on (the camera drawn back).
+            var cutaway = view.GetComponent<Cutaway>();
+            if (cutaway != null)
+            {
+                if (Environment.GetEnvironmentVariable("BASTION_SELECT") == "1") cutaway.Focus.selected = state.Units.FirstOrDefault(u => u.Alive && u.Team == "xcom")?.Id;
+                var hover = Environment.GetEnvironmentVariable("BASTION_HOVER")?.Split(',');
+                if (hover != null && hover.Length >= 2)
+                {
+                    // The cursor's storey the active one, as the controller has it.
+                    cutaway.Focus.hover = new Pos { X = int.Parse(hover[0]), Y = int.Parse(hover[1]), Z = hover.Length > 2 ? int.Parse(hover[2]) : 0 };
+                    cutaway.Focus.level = cutaway.Focus.hover.Z;
+                }
+                cutaway.Focus.roofs = Environment.GetEnvironmentVariable("BASTION_ROOFS") == "1";
+                Debug.Log($"[map] cutaway focus: selected {cutaway.Focus.selected ?? "-"}, hover {(cutaway.Focus.hover == null ? "-" : $"{cutaway.Focus.hover.X},{cutaway.Focus.hover.Y},{cutaway.Focus.hover.Z}")}");
+            }
+            // BASTION_HIDE=glass,signs,shutters: those left out of the picture (to tell what draws what).
+            var hide = (Environment.GetEnvironmentVariable("BASTION_HIDE") ?? "").Split(',');
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                bool glass = r.sharedMaterial != null && r.sharedMaterial.name == "Cristal";
+                bool sign = r.GetComponentsInParent<Transform>().Any(t => t.name.StartsWith("sign") || t.name == "motelSign");
+                bool shutter = r.GetComponentsInParent<Transform>().Any(t => t.name == "rollerShutter");
+                if ((glass && hide.Contains("glass")) || (sign && hide.Contains("signs")) || (shutter && hide.Contains("shutters"))) r.enabled = false;
+            }
+            // Lights brought in with the models (none should be: the map's light is the scene's).
+            var lights = root.GetComponentsInChildren<UnityEngine.Light>(true);
+            if (lights.Length > 0) Debug.LogWarning("[map] lights in the map: " + string.Join("; ", lights.GroupBy(l => $"{l.transform.parent?.name}/{l.name} {l.type} {l.color}").Select(g => $"{g.Key} ×{g.Count()}")));
             // The cars' models and materials, to check their paints.
             var cars = root.GetComponentsInChildren<Transform>().Where(t => t.parent != null && t.parent.name == "Decorado" && t.name.StartsWith("car"));
             Debug.Log("[map] cars: " + string.Join("; ", cars.GroupBy(c => c.name + " " + string.Join("+", c.GetComponentsInChildren<Renderer>().SelectMany(r => r.sharedMaterials).Select(m => m != null ? m.name : "-").Distinct())).Select(g => $"{g.Key} ×{g.Count()}")));
@@ -68,8 +86,8 @@ namespace Bastion.EditorTools
             camera.farClipPlane = 800;
             var target = new Vector3(state.Width * MapSpace.Tile / 2, 0, -state.Height * MapSpace.Tile / 2);
             MapSpace.Aim(camera, target, 40);
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.72f, 0.78f, 0.86f);
+            // Its background the haze, the fill light along it.
+            Lighting(day);
             // BASTION_CHANGE=0|1: the map as a mission changes it (a door opened, a car's tile cleared, an upper floor's tile
             // given way), the camera on the door; with 1 the changes made (MapView.Rebuild), with 0 not, to compare.
             string change = Environment.GetEnvironmentVariable("BASTION_CHANGE");
@@ -104,6 +122,48 @@ namespace Bastion.EditorTools
                 fog.Show(state, true);
                 var squad = state.Units.Where(u => u.Alive && u.Team == "xcom").Select(u => $"{u.Id} ({u.Pos.X},{u.Pos.Y},{u.Pos.Z})");
                 Debug.Log($"[map] fog: {fog.Counts().sight} tiles in sight, {fog.Counts().known} seen of {state.Width * state.Height}; squad {string.Join(", ", squad)}");
+            }
+            // BASTION_AT=x,y,distance[,storey]: on tile (x, y) (on that storey's floor), so many tiles off (reference.ts:
+            // rig.focus on the tile's middle).
+            var at = Environment.GetEnvironmentVariable("BASTION_AT")?.Split(',');
+            if (at != null && at.Length >= 3)
+                MapSpace.Aim(camera, MapSpace.World(int.Parse(at[0]), int.Parse(at[1]), at.Length > 3 ? int.Parse(at[3]) : 0), float.Parse(at[2], System.Globalization.CultureInfo.InvariantCulture));
+            // BASTION_SHADOWTEST=x,y: a cube 2 m over tile (x, y), to see whose shadow falls where.
+            var shadowTest = Environment.GetEnvironmentVariable("BASTION_SHADOWTEST")?.Split(',');
+            if (shadowTest != null && shadowTest.Length >= 2)
+            {
+                var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                cube.transform.position = MapSpace.World(int.Parse(shadowTest[0]), int.Parse(shadowTest[1])) + Vector3.up * 2.5f;
+                cube.transform.localScale = Vector3.one * 0.8f;
+            }
+            // BASTION_NAMED=rug: every model whose name starts so, its box in the world.
+            string named = Environment.GetEnvironmentVariable("BASTION_NAMED");
+            if (named != null)
+                foreach (Transform t in root.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith(named) && t.parent != null && t.parent.name == "Decorado"))
+                {
+                    var rs = t.GetComponentsInChildren<Renderer>(true);
+                    var box = rs.Length > 0 ? rs.Select(r => r.bounds).Aggregate((a, b) => { a.Encapsulate(b); return a; }) : new Bounds(t.position, Vector3.zero);
+                    Debug.Log($"[map] {t.name} at tile {MapSpace.WorldToTile(box.center)}: y {box.min.y:0.###}–{box.max.y:0.###} m, active {t.gameObject.activeInHierarchy}, {rs.Length} renderers");
+                }
+            // BASTION_CARS=1: every car the map has, its facing and which way its model's long side lies.
+            if (Environment.GetEnvironmentVariable("BASTION_CARS") == "1" && state.Decor != null)
+                foreach (Transform car in root.GetComponentsInChildren<Transform>().Where(t => t.name.StartsWith("car") && t.parent != null && t.parent.name == "Decorado"))
+                {
+                    var box = car.GetComponentsInChildren<Renderer>().Select(r => r.bounds).Aggregate((a, b) => { a.Encapsulate(b); return a; });
+                    var tile = MapSpace.WorldToTile(box.center);
+                    var thing = Bastion.Engine.Decor.ObjectAt(state.Decor, state.Width, tile.y * state.Width + tile.x);
+                    Debug.Log($"[map] car {car.name} at {tile.x},{tile.y}: facing {thing?.Facing.ToString() ?? "?"} ({thing?.Tiles.Count ?? 0} tiles), long side {(box.size.x > box.size.z ? "east–west" : "north–south")}");
+                }
+            // BASTION_THING=i: what the engine makes of the object over ground tile i (its tiles, anchor, facing).
+            if (int.TryParse(Environment.GetEnvironmentVariable("BASTION_THING"), out int thingAt) && state.Decor != null)
+            {
+                var thing = Bastion.Engine.Decor.ObjectAt(state.Decor, state.Width, thingAt);
+                Debug.Log(thing == null ? $"[map] no object at {thingAt}" : $"[map] object at {thingAt}: {thing.Kind} facing {thing.Facing}, anchor {thing.Anchor}, tiles {string.Join(" ", thing.Tiles)}");
+                // What stands there: each model's box in the world (its long side along x is east–west).
+                var here = MapSpace.World(thingAt % state.Width, thingAt / state.Width);
+                foreach (var r in root.GetComponentsInChildren<Renderer>())
+                    if (Vector3.Distance(new Vector3(r.bounds.center.x, 0, r.bounds.center.z), new Vector3(here.x, 0, here.z)) < 3 * MapSpace.Tile && r.transform.root == root.root)
+                        Debug.Log($"[map]   {r.transform.parent?.name}/{r.name}: centre {r.bounds.center}, size {r.bounds.size}");
             }
             // BASTION_FIND=<decor kind>: close on the first tile of the ground's decor of that kind, 10 tiles off.
             string find = Environment.GetEnvironmentVariable("BASTION_FIND");

@@ -162,8 +162,11 @@ namespace Bastion.UI.Hud
             btn.EnableInClassList("ability--active", a.Active);
             btn.EnableInClassList("ability--free", a.Free);
             btn.EnableInClassList("ability--depleted", a.Depleted);
-            var sprite = icon?.Invoke(!string.IsNullOrEmpty(a.Weapon) ? "weapon:" + a.Weapon : a.Icon ?? a.Id);
+            var iconId = !string.IsNullOrEmpty(a.Weapon) ? "weapon:" + a.Weapon : a.Icon ?? a.Id;
+            var sprite = icon?.Invoke(iconId);
             if (sprite != null) btn.Q("icon").style.backgroundImage = new StyleBackground(sprite);
+            // Our own drawings where Synty has none (the doors).
+            else if (LineIcon.Has(iconId)) btn.Q("icon").Add(new LineIcon(iconId));
             var note = btn.Q<Label>("note");
             Ui.Show(note, !a.Enabled && !string.IsNullOrEmpty(a.Note));
             note.text = a.Note ?? "";
